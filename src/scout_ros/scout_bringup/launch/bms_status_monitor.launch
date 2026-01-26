@@ -1,0 +1,12 @@
+<launch>
+    <arg name="topic" default="/BMS_status" />
+    <arg name="period" default="60.0" />
+
+    <node pkg="scout_bringup"
+          type="bms_status_monitor.py"
+          name="bms_status_monitor"
+          output="screen">
+        <param name="topic" value="$(arg topic)" />
+        <param name="period" value="$(arg period)" />
+    </node>
+</launch>
