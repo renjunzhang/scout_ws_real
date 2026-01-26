@@ -1,0 +1,35 @@
+# Catkin/cmake build outputs
+build/
+devel/
+install/
+install_isolated/
+devel_isolated/
+build_isolated/
+log/
+logs/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+
+# Catkin tooling state
+.catkin_tools/
+.catkin_workspace
+
+# Generated/packaging artifacts
+*.egg-info/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor backups
+.vscode/
+*.swp
+*.swo
+
+# Large ROS bag files
+*.bag
+*.bag.active
