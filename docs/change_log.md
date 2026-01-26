@@ -8,7 +8,7 @@
 ### 监听状态的脚本
     roslaunch scout_bringup bms_status_monitor.launch     topic:=/BMS_status     period:=60.0
 ## 2.启动键盘控制
-    roslaunch scout_teleop teleop_twist_keyboard.launch
+    roslaunch scout_bringup scout_teleop_keyboard.launch
 ## 3.启动激光雷达
     这个在sick_ws里面，有一个nanoscan3_bringup包：
     roslaunch nanoscan3_bringup nanoscan3_front.launch use_rviz:=false
