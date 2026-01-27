@@ -3,8 +3,8 @@
   <!-- 用途：在已知地图上进行机器人定位 -->
   
   <!-- ===== 地图配置 ===== -->
-  <!-- 默认地图路径：scout_apps/maps -->
-  <arg name="map_file" default="$(env HOME)/scout_ws/src/scout_apps/maps/map122.yaml" />
+  <!-- 默认地图路径：scout_maps 包内 maps 目录 -->
+  <arg name="map_file" default="$(find scout_maps)/maps/map122.yaml" />
   
   <!-- ===== 传感器配置 ===== -->
   <arg name="scan_topic" default="/scan_front" />

@@ -22,8 +22,8 @@ roslaunch nanoscan3_mapping scout_nanoscan3_gmapping.launch use_rviz:=true
 # 终端 4：控制机器人移动建图
 rosrun teleop_twist_keyboard teleop_twist_keyboard.py
 
-# 建图完成后保存地图（统一放到 scout_apps/maps）
-rosrun map_server map_saver -f ~/scout_ws/src/scout_apps/maps/map122
+# 建图完成后保存地图（统一放到 scout_maps 包内）
+rosrun map_server map_saver -f $(rospack find scout_maps)/maps/map122
 ```
 
 ### 第二步：定位（使用 AMCL）
@@ -37,7 +37,7 @@ roslaunch nanoscan3_bringup nanoscan3_front.launch
 
 # 终端 3：启动 AMCL 定位（可按需指定地图）
 roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true \
-  map_file:=/home/a/scout_ws/src/scout_apps/maps/map122.yaml
+  map_file:=$(rospack find scout_maps)/maps/map122.yaml
 
 # 在 RViz 中使用 "2D Pose Estimate" 设置初始位姿
 # 之后机器人会自动跟踪定位
@@ -88,7 +88,7 @@ roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true \
 ```
 nanoscan3_localization/
 ├── launch/
-│   └── scout_nanoscan3_amcl.launch    # AMCL 定位启动文件（默认读取 scout_apps/maps/map122.yaml）
+│   └── scout_nanoscan3_amcl.launch    # AMCL 定位启动文件（默认读取 scout_maps/maps/map122.yaml）
 ├── config/
 │   └── amcl.rviz                       # RViz 配置文件
 └── README.md                            # 本说明文档
@@ -96,7 +96,7 @@ nanoscan3_localization/
 
 ### 地图文件位置
 
-地图文件统一存放在 `/home/a/scout_ws/src/scout_apps/maps`，例如：`map122.yaml` / `map122.pgm`。
+地图文件统一存放在 `scout_maps` 包内的 `maps/` 目录，例如：`map122.yaml` / `map122.pgm`。
 
 ## 依赖安装
 
