@@ -28,3 +28,6 @@
      roslaunch scout_bringup bms_status_monitor.launch topic:=/BMS_status period:=60.0
      ```
   3. 需要其他频率可调整 `period` 参数（单位秒）。
+
+## 2026-01-27
+- Gmapping 无地图显示的问题确认：RViz 需添加 `Map` 显示并选择 `/map`，且 `Fixed Frame` 设为 `map`。
