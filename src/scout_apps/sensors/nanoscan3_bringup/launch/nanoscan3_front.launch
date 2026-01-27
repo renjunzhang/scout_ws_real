@@ -1,0 +1,58 @@
+<launch>
+  <!-- Network args -->
+  <arg name="sensor_ip"     default="192.168.50.11" />
+  <arg name="host_ip"       default="192.168.50.1" />
+  <!-- 0 表示自动选择可用 UDP 端口，避免端口冲突 -->
+  <arg name="host_udp_port" default="0" />
+
+  <!-- Project-level naming -->
+  <arg name="frame_id"      default="nanoscan3_front" />
+
+  <!-- 机器人基座帧（通常为 base_link 或 base_footprint） -->
+  <arg name="base_frame"    default="base_link" />
+
+  <!-- 激光外参（base_frame -> frame_id）默认值，按实际标定修改 -->
+  <arg name="x" default="0.125" />
+  <arg name="y" default="-0.0425" />
+  <arg name="z" default="0.155" />
+  <arg name="roll"  default="0.0" />
+  <arg name="pitch" default="0.0" />
+  <arg name="yaw"   default="0.0" />
+
+  <!-- Start sick_safetyscanners driver node -->
+  <node pkg="sick_safetyscanners"
+        type="sick_safetyscanners_node"
+        name="sick_safetyscanners_front"
+        output="screen">
+
+    <param name="sensor_ip"     value="$(arg sensor_ip)" />
+    <param name="host_ip"       value="$(arg host_ip)" />
+    <param name="host_udp_port" value="$(arg host_udp_port)" />
+    <param name="frame_id"      value="$(arg frame_id)" />
+
+    <!-- Remap driver's relative topic "scan" to a stable project API -->
+    <remap from="scan" to="/scan_front" />
+  </node>
+
+  <node pkg="laser_filters"
+        type="scan_to_scan_filter_chain"
+        name="scan_front_filter"
+        output="screen">
+    <rosparam command="load" file="$(find nanoscan3_bringup)/config/scan_front_filter.yaml" />
+    <remap from="scan" to="/scan_front" />
+    <remap from="scan_filtered" to="/scan_front_filtered" />
+  </node>
+    <!-- 在 bringup 阶段发布 base_frame -> frame_id 的静态 TF，
+     确保即使未启动 mapping 也能看到完整的传感器链路 -->
+    <node pkg="tf" type="static_transform_publisher" name="tf_base_to_front_laser"
+      args="$(arg x) $(arg y) $(arg z) $(arg roll) $(arg pitch) $(arg yaw) $(arg base_frame) $(arg frame_id) 100" />
+
+    <!-- 无显示环境时默认关闭 RViz，可按需改为 true -->
+    <arg name="use_rviz" default="false" />
+  <arg name="rviz_config" default="$(find nanoscan3_bringup)/rviz/nanoscan3_front.rviz" />
+  <node if="$(arg use_rviz)"
+        pkg="rviz" type="rviz" name="rviz"
+        args="-d $(arg rviz_config)"
+         output="screen" />
+
+</launch>

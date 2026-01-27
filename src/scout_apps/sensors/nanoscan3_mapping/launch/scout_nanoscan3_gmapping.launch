@@ -1,0 +1,28 @@
+<launch>
+  <!-- ===== 输入：你已手动启动雷达驱动，scan topic 为 /scan_front ===== -->
+  <arg name="scan_topic" default="/scan_front" />
+  <!-- 雷达消息 header.frame_id 应该等于这个 -->
+  <arg name="laser_frame" default="nanoscan3_front" />
+
+  <!-- ===== 输入：底盘侧应提供 odom->base_frame 的 TF（gmapping 需要） ===== -->
+  <!-- 注意：有些底盘用 base_footprint -->
+  <arg name="base_frame" default="base_link" />
+
+    <!-- 可选：用于联调的“假” odom->base_frame 静态 TF（不要用于建图） -->
+    <arg name="fake_odom_tf" default="false" />
+    <node if="$(arg fake_odom_tf)" pkg="tf" type="static_transform_publisher" name="tf_fake_odom_to_base"
+      args="0 0 0 0 0 0 odom $(arg base_frame) 30" />
+
+  <!-- 2) gmapping（只订阅 scan_topic） -->
+  <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
+    <remap from="scan" to="$(arg scan_topic)" />
+  </node>
+
+  <!-- 3) （可选）启动 RViz：默认关闭，避免无显示环境报错 -->
+  <arg name="use_rviz" default="false" />
+  <arg name="rviz_config" default="$(find nanoscan3_mapping)/rviz/gmapping_front.rviz" />
+  <node if="$(arg use_rviz)"
+        pkg="rviz" type="rviz" name="rviz"
+        args="-d $(arg rviz_config)"
+        output="screen" />
+</launch>
