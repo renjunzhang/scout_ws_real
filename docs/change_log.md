@@ -15,6 +15,9 @@
 ## 4.建图
     这个也是在sick_ws里面，有一个nanoscan3_mapping包：
     roslaunch nanoscan3_mapping scout_nanoscan3_gmapping.launch fake_odom_tf:=true use_rviz:=true
+## 5.定位
+    新开一个终端，运行：
+    roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true
 
 
 # 修改记录（scout_ws）
