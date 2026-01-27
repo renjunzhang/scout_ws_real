@@ -31,3 +31,11 @@
 
 ## 2026-01-27
 - Gmapping 无地图显示的问题确认：RViz 需添加 `Map` 显示并选择 `/map`，且 `Fixed Frame` 设为 `map`。
+- 将 `nanoscan3_bringup` 与 `nanoscan3_mapping` 从 sick_ws 复制到本工作空间：`src/scout_apps/sensors/nanoscan3_bringup`、`src/scout_apps/sensors/nanoscan3_mapping`。
+
+## 2026-01-28（计划）
+- 当前 TF 链路确认：
+  - `scout_mini_robot_base.launch` 发布 `odom -> base_link`。
+  - `nanoscan3_front.launch` 发布 `base_link -> nanoscan3_front`，并提供 `/scan_front_filtered`。
+  - `scout_nanoscan3_gmapping.launch` 发布 `map -> odom`，形成 `map -> odom -> base_link -> nanoscan3_front`。
+- 计划：将建图/定位算法从 Gmapping 切换为 Cartographer。
