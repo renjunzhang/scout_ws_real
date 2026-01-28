@@ -39,9 +39,36 @@
 - 修正地图配置：`map122.yaml` 的 `image` 改为相对路径 `map122.pgm`，避免硬编码绝对路径。
 - 更新文档说明：补充 `sensors/说明.md` 三个功能包说明，并同步 `nanoscan3_localization/README.md` 的地图保存与启动示例。
 
-## 2026-01-28（计划）
+## 2026-01-28
 - 当前 TF 链路确认：
   - `scout_mini_robot_base.launch` 发布 `odom -> base_link`。
   - `nanoscan3_front.launch` 发布 `base_link -> nanoscan3_front`，并提供 `/scan_front_filtered`。
   - `scout_nanoscan3_gmapping.launch` 发布 `map -> odom`，形成 `map -> odom -> base_link -> nanoscan3_front`。
 - 计划：将建图/定位算法从 Gmapping 切换为 Cartographer。
+
+- **新建 `control` 模块包结构**：
+  - 创建 `slosh_models` 包：液体晃动建模库
+    - 从 `/home/a/scout_ws/docs` 迁移 `liquid_slosh_model.cpp/h` 和 `mpc_vel_tracker.cpp/h`
+    - 将命名空间从 `communication_rs485` 改为 `slosh_models`
+    - 添加标准 ROS 包结构（CMakeLists.txt, package.xml）
+    - 包含配置文件 `slosh_params.yaml`
+  - 创建 `scout_local_planner` 包：MPC局部规划器
+    - 集成 `slosh_models` 库
+    - 提供局部路径跟踪功能，支持液体晃动抑制软约束
+    - 添加 ROS 节点、配置文件和 launch 文件
+    - 话题：订阅 `/odom`, `/global_path`，发布 `/cmd_vel`, `/slosh_height`
+
+- **新建 `navigation` 模块包结构**：
+  - 创建 `scout_global_planner` 包：全局路径规划器框架
+    - 预留自定义规划器接口
+    - 添加全局规划参数配置 `global_planner.yaml`
+    - 支持与 ROS 导航栈集成（move_base）
+
+- **更新说明文档**：
+  - 更新 `control/说明.md`：详细说明控制模块的包结构、使用方法和修改记录
+  - 更新 `navigation/说明.md`：说明导航模块的功能和集成方式
+
+- **代码迁移说明**：
+  - 原始液体建模代码位于 `/home/a/scout_ws/docs`，已迁移至 `control/slosh_models`
+  - MPC控制器已封装为 ROS 节点，可独立运行
+  - 液体晃动约束使用增广状态空间法，通过 OSQP 求解器实现

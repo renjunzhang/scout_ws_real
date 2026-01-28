@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>slosh_models</name>
+  <version>1.0.0</version>
+  <description>
+    液体晃动动力学模型库，基于2D Mass-Spring-Damper等效模型。
+    提供液体晃动预测和MPC速度跟踪器，支持液体晃动抑制软约束。
+  </description>
+
+  <maintainer email="user@todo.todo">user</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>roscpp</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>eigen_conversions</depend>
+
+  <build_depend>eigen</build_depend>
+  <build_export_depend>eigen</build_export_depend>
+  <exec_depend>eigen</exec_depend>
+
+  <!-- OSQP求解器 -->
+  <build_depend>osqp</build_depend>
+  <exec_depend>osqp</exec_depend>
+
+  <export>
+  </export>
+</package>

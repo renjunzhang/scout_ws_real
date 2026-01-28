@@ -1,0 +1,26 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>scout_local_planner</name>
+  <version>1.0.0</version>
+  <description>
+    Scout机器人局部路径规划器，基于MPC（模型预测控制），
+    集成液体晃动抑制软约束，用于运输液体容器场景。
+  </description>
+
+  <maintainer email="user@todo.todo">user</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>roscpp</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  <depend>slosh_models</depend>
+
+  <export>
+  </export>
+</package>
