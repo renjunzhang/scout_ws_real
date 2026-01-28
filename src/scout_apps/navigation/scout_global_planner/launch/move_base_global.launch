@@ -8,6 +8,8 @@
   <!-- Local planner is required by move_base, but output cmd_vel is remapped -->
   <arg name="base_local_planner" default="dwa_local_planner/DWAPlannerROS" />
   <arg name="cmd_vel_out" default="move_base_cmd_vel" />
+  <arg name="use_rviz" default="false" />
+  <arg name="rviz_config" default="$(find scout_global_planner)/rviz/scout_global_planner.rviz" />
 
   <group ns="$(arg ns)">
     <node pkg="move_base" type="move_base" name="move_base" output="screen">
@@ -28,4 +30,8 @@
       <remap from="cmd_vel" to="$(arg cmd_vel_out)" />
     </node>
   </group>
+
+  <!-- Optional RViz for quick testing -->
+  <node if="$(arg use_rviz)" pkg="rviz" type="rviz" name="rviz"
+        args="-d $(arg rviz_config)" output="screen" />
 </launch>

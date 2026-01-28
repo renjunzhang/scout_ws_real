@@ -18,7 +18,9 @@
 ## 5.定位
     新开一个终端，运行：
     roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true
-
+## 6.全局规划
+    roslaunch scout_global_planner move_base_global.launch
+    
 
 # 修改记录（scout_ws）
 
@@ -72,6 +74,11 @@
   - 原始液体建模代码位于 `/home/a/scout_ws/docs`，已迁移至 `control/slosh_models`
   - MPC控制器已封装为 ROS 节点，可独立运行
   - 液体晃动约束使用增广状态空间法，通过 OSQP 求解器实现
+
+- **全局规划对接与测试步骤**：
+  - 启动：`roslaunch scout_global_planner move_base_global.launch use_rviz:=true`
+  - RViz 中设置 Fixed Frame 为 `map`，并将 “2D Nav Goal” 话题改为 `/scout/goal`
+  - 观察 `/scout/global_path` 是否发布 `nav_msgs/Path`
 
 - **OSQP 和依赖安装（新工控机配置参考）**：
   > 注意：Ubuntu 20.04 apt 源中没有 libosqp-dev，需要从源码安装。
