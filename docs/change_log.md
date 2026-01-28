@@ -14,7 +14,7 @@
     roslaunch nanoscan3_bringup nanoscan3_front.launch use_rviz:=false
 ## 4.建图
     这个也是在sick_ws里面，有一个nanoscan3_mapping包：
-    roslaunch nanoscan3_mapping scout_nanoscan3_gmapping.launch fake_odom_tf:=true use_rviz:=true
+    roslaunch nanoscan3_mapping scout_nanoscan3_gmapping.launch fake_odom_tf:=false use_rviz:=true
 ## 5.定位
     新开一个终端，运行：
     roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true
@@ -82,7 +82,9 @@
        ros-noetic-nav-core ros-noetic-costmap-2d ros-noetic-base-local-planner \
        ros-noetic-tf2 ros-noetic-tf2-ros ros-noetic-tf \
        ros-noetic-laser-geometry ros-noetic-laser-filters \
-       ros-noetic-amcl ros-noetic-gmapping ros-noetic-eigen-conversions
+       ros-noetic-amcl ros-noetic-gmapping ros-noetic-eigen-conversions \
+       ros-noetic-sick-safetyscanners ros-noetic-rviz \
+       ros-noetic-teleop-twist-keyboard ros-noetic-map-server
      ```
   
   2. **下载本地 CMake 3.18+**（用于编译 OSQP，不替换系统 CMake）：
