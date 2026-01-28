@@ -746,7 +746,32 @@ path_handler:
 
 ## 十、代码修改清单
 
-### 第 1 步需要创建/修改的文件
+### 0. 全局规划对接（最小可用）
+
+**目标**：先保证能稳定产出 `/scout/global_path`（`nav_msgs/Path`，`frame_id=map`），供局部 MPC 使用。  
+**建议**：先用 `move_base` 自带全局规划器（`navfn`/`global_planner`），`scout_global_planner` 先只做配置与 remap。
+
+```
+navigation/
+└── scout_global_planner/
+    ├── config/
+    │   └── global_planner.yaml          # [已有/补充] 全局规划参数
+    ├── launch/
+    │   └── move_base_global.launch      # [新建] move_base + remap -> /scout/global_path
+    ├── CMakeLists.txt                   # [已有]
+    └── package.xml                      # [已有]
+```
+
+> 说明：如果尚未接入 `move_base`，也可先用离线路径或录制路径作为 `/scout/global_path` 的输入。
+
+#### 操作清单（按执行顺序）
+1. 启动 SLAM/定位与 TF：确保 `map -> odom -> base_link` 完整
+2. 启动地图服务：确认 `/map` 已发布
+3. 启动全局规划：`roslaunch scout_global_planner move_base_global.launch`
+4. 在 RViz 将 “2D Nav Goal” 话题改为 `/scout/goal`
+5. 验证输出：`/scout/global_path` 能持续发布
+
+### 第 1 步需要创建/修改的文件（局部 MPC 核心）
 
 ```
 scout_local_planner/
@@ -780,7 +805,7 @@ scout_local_planner/
 └── package.xml                    # [新建]
 ```
 
-### 第 2 步需要添加的文件
+### 第 2 步需要添加的文件（晃动扩展）
 
 ```
 slosh_models/

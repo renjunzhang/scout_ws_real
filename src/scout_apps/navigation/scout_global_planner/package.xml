@@ -20,6 +20,10 @@
   <depend>costmap_2d</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
+  <exec_depend>move_base</exec_depend>
+  <exec_depend>navfn</exec_depend>
+  <exec_depend>global_planner</exec_depend>
+  <exec_depend>dwa_local_planner</exec_depend>
 
   <export>
   </export>

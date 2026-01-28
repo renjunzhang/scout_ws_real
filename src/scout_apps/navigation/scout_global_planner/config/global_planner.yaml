@@ -1,5 +1,11 @@
 # Scout 全局规划器配置
 
+# move_base 全局参数
+planner_frequency: 1.0
+controller_frequency: 5.0
+planner_patience: 5.0
+controller_patience: 5.0
+
 # 全局代价地图参数
 global_costmap:
   global_frame: map
@@ -9,6 +15,9 @@ global_costmap:
   static_map: true
   rolling_window: false
   resolution: 0.05
+  plugins:
+    - {name: static_layer, type: "costmap_2d::StaticLayer"}
+    - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
 
   # 膨胀层
   inflation_layer:
@@ -17,6 +26,30 @@ global_costmap:
     inflation_radius: 0.5
 
   # 静态层
+  static_layer:
+    enabled: true
+    map_topic: /map
+
+# 局部代价地图参数（move_base 仍需初始化）
+local_costmap:
+  global_frame: odom
+  robot_base_frame: base_link
+  update_frequency: 5.0
+  publish_frequency: 2.0
+  static_map: false
+  rolling_window: true
+  width: 10.0
+  height: 10.0
+  resolution: 0.05
+  plugins:
+    - {name: static_layer, type: "costmap_2d::StaticLayer"}
+    - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
+
+  inflation_layer:
+    enabled: true
+    cost_scaling_factor: 3.0
+    inflation_radius: 0.5
+
   static_layer:
     enabled: true
     map_topic: /map
@@ -39,3 +72,9 @@ GlobalPlanner:
 
   # 路径规划频率
   planner_frequency: 1.0
+
+# navfn 可选参数（若使用 navfn/NavfnROS）
+NavfnROS:
+  allow_unknown: false
+  use_dijkstra: true
+  visualize_potential: false
