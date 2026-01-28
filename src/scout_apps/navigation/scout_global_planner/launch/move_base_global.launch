@@ -20,8 +20,8 @@
       <rosparam file="$(find scout_global_planner)/config/global_planner.yaml" command="load" />
 
       <!-- Remap plan output to a stable API -->
-      <remap from="GlobalPlanner/plan" to="global_path" />
-      <remap from="NavfnROS/plan" to="global_path" />
+      <remap from="~GlobalPlanner/plan" to="global_path" />
+      <remap from="~NavfnROS/plan" to="global_path" />
 
       <!-- Optional: use /scout/goal instead of /move_base_simple/goal -->
       <remap from="move_base_simple/goal" to="goal" />
