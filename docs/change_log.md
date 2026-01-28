@@ -72,3 +72,64 @@
   - 原始液体建模代码位于 `/home/a/scout_ws/docs`，已迁移至 `control/slosh_models`
   - MPC控制器已封装为 ROS 节点，可独立运行
   - 液体晃动约束使用增广状态空间法，通过 OSQP 求解器实现
+
+- **OSQP 和依赖安装（新工控机配置参考）**：
+  > 注意：Ubuntu 20.04 apt 源中没有 libosqp-dev，需要从源码安装。
+  
+  1. **安装 ROS 导航相关依赖**：
+     ```bash
+     sudo apt-get install ros-noetic-ros-base ros-noetic-roscpp \
+       ros-noetic-nav-core ros-noetic-costmap-2d ros-noetic-base-local-planner \
+       ros-noetic-tf2 ros-noetic-tf2-ros ros-noetic-tf \
+       ros-noetic-laser-geometry ros-noetic-laser-filters \
+       ros-noetic-amcl ros-noetic-gmapping ros-noetic-eigen-conversions
+     ```
+  
+  2. **下载本地 CMake 3.18+**（用于编译 OSQP，不替换系统 CMake）：
+     ```bash
+     cd ~
+     wget https://github.com/Kitware/CMake/releases/download/v3.18.6/cmake-3.18.6-Linux-x86_64.tar.gz
+     tar -xzf cmake-3.18.6-Linux-x86_64.tar.gz
+     export PATH=~/cmake-3.18.6-Linux-x86_64/bin:$PATH
+     ```
+  
+  3. **从源码安装 OSQP v0.6.2**（注意使用 v0.6.2 分支，最新版需要 CMake 3.18+）：
+     ```bash
+     cd ~
+     git clone --recursive -b v0.6.2 https://github.com/osqp/osqp
+     cd osqp && mkdir build && cd build
+     cmake ..
+     make -j4
+     sudo make install
+     ```
+  
+  4. **安装 osqp-eigen**：
+     ```bash
+     cd ~
+     git clone https://github.com/robotology/osqp-eigen.git
+     cd osqp-eigen && mkdir build && cd build
+     cmake ..
+     make -j4
+     sudo make install
+     sudo ldconfig
+     ```
+  
+  5. **编译工作空间**：
+     ```bash
+     source /opt/ros/noetic/setup.bash
+     cd ~/scout_ws
+     catkin_make -j4
+     source devel/setup.bash
+     ```
+
+- **创建 scout_global_planner 的 include 目录**（避免 CMake 报错）：
+  ```bash
+  mkdir -p ~/scout_ws/src/scout_apps/navigation/scout_global_planner/include/scout_global_planner
+  ```
+
+- **编译成功的包**：
+  - `slosh_models` - 液体晃动模型库（已集成 OSQP 求解器）
+  - `scout_local_planner` - MPC 局部规划器
+  - `scout_global_planner` - 全局规划器框架
+  - `nanoscan3_bringup/mapping/localization` - 激光雷达相关
+  - `scout_base/bringup/msgs` - 底盘驱动相关
