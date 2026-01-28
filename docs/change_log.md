@@ -76,9 +76,10 @@
   - 液体晃动约束使用增广状态空间法，通过 OSQP 求解器实现
 
 - **全局规划对接与测试步骤**：
-  - 启动：`roslaunch scout_global_planner move_base_global.launch use_rviz:=true`
-  - RViz 中设置 Fixed Frame 为 `map`，并将 “2D Nav Goal” 话题改为 `/scout/goal`
-  - 观察 `/scout/global_path` 是否发布 `nav_msgs/Path`
+  - 启动：`roslaunch scout_global_planner move_base_global.launch`
+  - RViz 中设置 Fixed Frame 为 `map`，并将 "2D Nav Goal" 话题改为 `/scout/goal`
+  - 全局路径话题：`/scout/move_base/GlobalPlanner/plan`（类型 `nav_msgs/Path`）
+  - 在 RViz 中添加 `Path` 显示并选择该话题即可查看规划路径
 
 - **OSQP 和依赖安装（新工控机配置参考）**：
   > 注意：Ubuntu 20.04 apt 源中没有 libosqp-dev，需要从源码安装。
@@ -91,7 +92,8 @@
        ros-noetic-laser-geometry ros-noetic-laser-filters \
        ros-noetic-amcl ros-noetic-gmapping ros-noetic-eigen-conversions \
        ros-noetic-sick-safetyscanners ros-noetic-rviz \
-       ros-noetic-teleop-twist-keyboard ros-noetic-map-server
+       ros-noetic-teleop-twist-keyboard ros-noetic-map-server \
+       ros-noetic-move-base ros-noetic-global-planner ros-noetic-dwa-local-planner
      ```
   
   2. **下载本地 CMake 3.18+**（用于编译 OSQP，不替换系统 CMake）：

@@ -32,6 +32,6 @@
   </group>
 
   <!-- Optional RViz for quick testing -->
-  <node if="$(arg use_rviz)" pkg="rviz" type="rviz" name="rviz"
-        args="-d $(arg rviz_config)" output="screen" />
+  <!-- <node if="$(arg use_rviz)" pkg="rviz" type="rviz" name="rviz"
+        args="-d $(arg rviz_config)" output="screen" /> -->
 </launch>
