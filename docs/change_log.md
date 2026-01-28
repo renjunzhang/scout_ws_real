@@ -78,8 +78,12 @@
 - **全局规划对接与测试步骤**：
   - 启动：`roslaunch scout_global_planner move_base_global.launch`
   - RViz 中设置 Fixed Frame 为 `map`，并将 "2D Nav Goal" 话题改为 `/scout/goal`
-  - 全局路径话题：`/scout/move_base/GlobalPlanner/plan`（类型 `nav_msgs/Path`）
+  - 全局路径话题：`/scout/global_path`（类型 `nav_msgs/Path`）
   - 在 RViz 中添加 `Path` 显示并选择该话题即可查看规划路径
+
+- **全局路径话题 remap 修复**：
+  - 将 move_base 私有话题 `~GlobalPlanner/plan` 与 `~NavfnROS/plan` 重映射为 `/scout/global_path`
+  - 修正 `/scout/global_path` 无输出问题，路径可在 RViz 显示
 
 - **OSQP 和依赖安装（新工控机配置参考）**：
   > 注意：Ubuntu 20.04 apt 源中没有 libosqp-dev，需要从源码安装。
@@ -144,3 +148,15 @@
   - `scout_global_planner` - 全局规划器框架
   - `nanoscan3_bringup/mapping/localization` - 激光雷达相关
   - `scout_base/bringup/msgs` - 底盘驱动相关
+
+## 2026-01-29（计划）
+- 完成 `scout_local_planner` 的 **MPC 主体 + 晃动扩展**（第 1 步与第 2 步合并推进），参照 `docs/change_plan.md`：
+  - 基础类型与数据结构：`types.h`
+  - 局部三次样条：`cubic_spline.h/.cpp`
+  - 路径处理与 Frenet 转换：`path_handler.h/.cpp`
+  - 差速动力学模型：`diff_drive_model.h/.cpp`
+  - 晃动动力学扩展：`diff_drive_slosh_model.h/.cpp`
+  - MPC 求解器框架：`mpc_solver.h/.cpp`
+  - 晃动约束模块：`slosh_models/slosh_constraint.h/.cpp`
+  - 配置文件与启动入口：`config/mpc_params.yaml`、`launch/test_mpc.launch`
+- 验证：对接 `/scout/global_path`，生成速度指令并输出晃动相关调试话题（如 `slosh_height`）
