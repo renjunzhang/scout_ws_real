@@ -1,0 +1,56 @@
+<launch>
+    <arg name="world_name" default="/home/a/scout_ws/src/scout_ros/scout_description/worlds/maze_course.world" />
+    <arg name="gui" default="true" />
+    <arg name="paused" default="false" />
+    <arg name="use_sim_time" default="true" />
+    <arg name="headless" default="false" />
+    <arg name="verbose" default="false" />
+
+    <arg name="robot_namespace" default="/" />
+    <arg name="x" default="0.0" />
+    <arg name="y" default="0.0" />
+    <arg name="z" default="0.1" />
+
+    <param name="use_sim_time" value="$(arg use_sim_time)" />
+
+    <include file="$(find scout_description)/launch/empty_world.launch">
+        <arg name="world_name" value="$(arg world_name)" />
+        <arg name="paused" value="$(arg paused)" />
+        <arg name="use_sim_time" value="$(arg use_sim_time)" />
+        <arg name="gui" value="$(arg gui)" />
+        <arg name="headless" value="$(arg headless)" />
+        <arg name="verbose" value="$(arg verbose)" />
+    </include>
+
+    <param
+        name="robot_description"
+        command="$(find xacro)/xacro '$(find scout_description)/urdf/scout_mini.urdf.xacro'
+            robot_namespace:=$(arg robot_namespace)
+            urdf_extras:=$(find scout_description)/urdf/scout_mini_skid_steer.gazebo" />
+
+    <rosparam file="$(find scout_description)/config/scout_mini_pid.yaml" command="load" />
+    <rosparam file="$(find scout_description)/config/scout_mini_controllers.yaml" command="load" />
+
+    <node
+        name="spawn_scout_mini"
+        pkg="gazebo_ros"
+        type="spawn_model"
+        args="-urdf -param robot_description -model scout_mini -x $(arg x) -y $(arg y) -z $(arg z)" />
+
+    <node
+        name="controller_spawner"
+        pkg="controller_manager"
+        type="spawner"
+        args="joint_state_controller" />
+
+    <node
+        name="robot_state_publisher"
+        pkg="robot_state_publisher"
+        type="robot_state_publisher" />
+
+    <node
+        name="tf_footprint_base"
+        pkg="tf"
+        type="static_transform_publisher"
+        args="0 0 0 0 0 0 base_link base_footprint 40" />
+</launch>

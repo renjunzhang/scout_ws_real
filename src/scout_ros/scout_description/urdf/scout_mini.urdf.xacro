@@ -22,6 +22,18 @@
     <xacro:property name="wheel_length" value="0.8e-01" />
     <xacro:property name="wheel_radius" value="1.600e-01" />
 
+    <xacro:property name="frame_length" value="0.35" />
+    <xacro:property name="frame_width" value="0.27" />
+    <xacro:property name="frame_height" value="0.14" />
+    <xacro:property name="frame_profile" value="0.04" />
+    <xacro:property name="frame_z_offset" value="-0.05" />
+
+    <material name="aluminum">
+        <color rgba="0.7 0.7 0.7 1" />
+    </material>
+
+    <xacro:include filename="$(find sick_safetyscanners_description)/urdf/nanoscan3.urdf.xacro" />
+
     <!-- Base link -->
     <link name="base_link">
         <visual>
@@ -63,10 +75,10 @@
     <xacro:scout_mini_wheel wheel_prefix="front_right">
         <origin xyz="${wheelbase/2} ${-track/2} ${wheel_vertical_offset}" rpy="1.57 0 0" />
     </xacro:scout_mini_wheel>
-    <xacro:scout_mini_wheel wheel_prefix="front_left">
+    <xacro:scout_mini_wheel wheel_prefix="front_left" axis_sign="1">
         <origin xyz="${wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="-1.57 0 0" />
     </xacro:scout_mini_wheel>
-    <xacro:scout_mini_wheel wheel_prefix="rear_left">
+    <xacro:scout_mini_wheel wheel_prefix="rear_left" axis_sign="1">
         <origin xyz="${-wheelbase/2} ${track/2} ${wheel_vertical_offset}" rpy="-1.57 0 0" />
     </xacro:scout_mini_wheel>
     <xacro:scout_mini_wheel wheel_prefix="rear_right">
@@ -88,6 +100,80 @@
         <parent link="base_link" />
         <child link="rear_mount" />
     </joint>
+
+    <!-- Aluminum frame (40x40) -->
+    <joint name="frame_joint" type="fixed">
+        <origin xyz="0 0 ${base_z_size/2 + frame_z_offset}" rpy="0 0 0" />
+        <parent link="base_link" />
+        <child link="frame_link" />
+    </joint>
+
+    <link name="frame_link">
+        <!-- Vertical posts -->
+        <visual>
+            <origin xyz="${frame_length/2 - frame_profile/2} ${frame_width/2 - frame_profile/2} ${frame_height/2}" rpy="0 0 0" />
+            <geometry>
+                <box size="${frame_profile} ${frame_profile} ${frame_height}" />
+            </geometry>
+            <material name="aluminum" />
+        </visual>
+        <visual>
+            <origin xyz="${frame_length/2 - frame_profile/2} ${-(frame_width/2 - frame_profile/2)} ${frame_height/2}" rpy="0 0 0" />
+            <geometry>
+                <box size="${frame_profile} ${frame_profile} ${frame_height}" />
+            </geometry>
+            <material name="aluminum" />
+        </visual>
+        <visual>
+            <origin xyz="${-(frame_length/2 - frame_profile/2)} ${frame_width/2 - frame_profile/2} ${frame_height/2}" rpy="0 0 0" />
+            <geometry>
+                <box size="${frame_profile} ${frame_profile} ${frame_height}" />
+            </geometry>
+            <material name="aluminum" />
+        </visual>
+        <visual>
+            <origin xyz="${-(frame_length/2 - frame_profile/2)} ${-(frame_width/2 - frame_profile/2)} ${frame_height/2}" rpy="0 0 0" />
+            <geometry>
+                <box size="${frame_profile} ${frame_profile} ${frame_height}" />
+            </geometry>
+            <material name="aluminum" />
+        </visual>
+
+        <!-- Top perimeter (4 bars) -->
+        <visual>
+            <origin xyz="0 ${frame_width/2 - frame_profile/2} ${frame_height - frame_profile/2}" rpy="0 0 0" />
+            <geometry>
+                <box size="${frame_length - 2*frame_profile} ${frame_profile} ${frame_profile}" />
+            </geometry>
+            <material name="aluminum" />
+        </visual>
+        <visual>
+            <origin xyz="0 ${-(frame_width/2 - frame_profile/2)} ${frame_height - frame_profile/2}" rpy="0 0 0" />
+            <geometry>
+                <box size="${frame_length - 2*frame_profile} ${frame_profile} ${frame_profile}" />
+            </geometry>
+            <material name="aluminum" />
+        </visual>
+        <visual>
+            <origin xyz="${frame_length/2 - frame_profile/2} 0 ${frame_height - frame_profile/2}" rpy="0 0 0" />
+            <geometry>
+                <box size="${frame_profile} ${frame_width - 2*frame_profile} ${frame_profile}" />
+            </geometry>
+            <material name="aluminum" />
+        </visual>
+        <visual>
+            <origin xyz="${-(frame_length/2 - frame_profile/2)} 0 ${frame_height - frame_profile/2}" rpy="0 0 0" />
+            <geometry>
+                <box size="${frame_profile} ${frame_width - 2*frame_profile} ${frame_profile}" />
+            </geometry>
+            <material name="aluminum" />
+        </visual>
+    </link>
+
+    <!-- NanoScan3 2D激光雷达 -->
+    <xacro:nanoscan3 prefix="nano" parent_link="base_link" topic="/scan" robot_namespace="$(arg robot_namespace)">
+        <origin xyz="0.13 -0.045 ${base_z_size/2 + frame_height + frame_z_offset}" rpy="0 0 1.57079632679"/>
+    </xacro:nanoscan3>
 
     <!-- Additional definitions -->
     <xacro:include filename="$(arg urdf_extras)" />
