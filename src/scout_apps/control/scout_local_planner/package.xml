@@ -3,15 +3,23 @@
   <name>scout_local_planner</name>
   <version>1.0.0</version>
   <description>
-    Scout机器人局部路径规划器，基于MPC（模型预测控制），
-    集成液体晃动抑制软约束，用于运输液体容器场景。
+    Scout 机器人 MPC 局部路径规划器
+    
+    特性：
+    - Frenet MPC 路径跟踪
+    - 加速度控制输入
+    - 局部三次样条路径处理
+    - 液体晃动抑制（第 2 步）
+    - OSQP 二次规划求解器
   </description>
 
   <maintainer email="user@todo.todo">user</maintainer>
   <license>BSD</license>
+  <url type="website">https://github.com/your_repo/scout_local_planner</url>
 
   <buildtool_depend>catkin</buildtool_depend>
 
+  <!-- ROS 依赖 -->
   <depend>roscpp</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
@@ -19,7 +27,14 @@
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
-  <depend>slosh_models</depend>
+  
+  <!-- 系统依赖 -->
+  <build_depend>eigen</build_depend>
+  <build_export_depend>eigen</build_export_depend>
+  <exec_depend>eigen</exec_depend>
+  
+  <!-- OSQP 求解器 (ROS vendor package) -->
+  <depend>osqp_vendor</depend>
 
   <export>
   </export>

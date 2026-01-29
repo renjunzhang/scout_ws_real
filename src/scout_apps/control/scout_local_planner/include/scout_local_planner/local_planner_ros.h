@@ -1,0 +1,103 @@
+/**
+ * @file local_planner_ros.h
+ * @brief ROS 接口
+ * 
+ * 独立节点模式的 MPC 局部规划器
+ */
+
+#pragma once
+
+#include "scout_local_planner/types.h"
+#include "scout_local_planner/path_handler.h"
+#include "scout_local_planner/mpc_solver.h"
+
+#include <ros/ros.h>
+#include <nav_msgs/Path.h>
+#include <nav_msgs/Odometry.h>
+#include <geometry_msgs/Twist.h>
+#include <geometry_msgs/PoseStamped.h>
+#include <std_msgs/String.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/buffer.h>
+
+#include <memory>
+#include <mutex>
+
+namespace scout_local_planner {
+
+class LocalPlannerROS {
+public:
+    LocalPlannerROS();
+    ~LocalPlannerROS();
+    
+    /**
+     * @brief 初始化
+     */
+    bool initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh);
+    
+    /**
+     * @brief 主循环
+     */
+    void run();
+
+private:
+    // ====== 回调函数 ======
+    void globalPathCallback(const nav_msgs::Path::ConstPtr& msg);
+    void odomCallback(const nav_msgs::Odometry::ConstPtr& msg);
+    
+    // ====== 控制循环 ======
+    void controlLoop(const ros::TimerEvent& event);
+    
+    // ====== 辅助函数 ======
+    void loadParameters(ros::NodeHandle& pnh);
+    void publishCmdVel(double v, double omega);
+    void publishLocalPath(const std::vector<StateVector>& predicted_states);
+    void publishStatus();
+    void updateState();
+    
+    // ====== 状态机 ======
+    void transitionTo(PlannerState new_state);
+    
+private:
+    // ROS
+    ros::NodeHandle nh_;
+    ros::Subscriber global_path_sub_;
+    ros::Subscriber odom_sub_;
+    ros::Publisher cmd_vel_pub_;
+    ros::Publisher local_path_pub_;
+    ros::Publisher status_pub_;
+    ros::Timer control_timer_;
+    
+    // TF
+    std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+    
+    // 核心组件
+    PathHandler path_handler_;
+    MPCSolver mpc_solver_;
+    
+    // 参数
+    MPCParams mpc_params_;
+    VehicleParams vehicle_params_;
+    PathHandlerParams path_params_;
+    double control_rate_ = 20.0;  // Hz
+    std::string base_frame_ = "base_link";
+    std::string map_frame_ = "map";
+    
+    // 状态
+    PlannerState state_ = PlannerState::IDLE;
+    geometry_msgs::PoseStamped current_pose_;
+    double current_v_ = 0.0;
+    double current_omega_ = 0.0;
+    ControlVector last_control_ = ControlVector::Zero();
+    
+    // 线程安全
+    std::mutex mutex_;
+    bool has_odom_ = false;
+    bool has_path_ = false;
+    
+    // 调试
+    bool verbose_ = false;
+};
+
+}  // namespace scout_local_planner

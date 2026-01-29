@@ -12,15 +12,15 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_ros
   tf2_geometry_msgs
-  slosh_models
 )
 
 find_package(Eigen3 REQUIRED)
+find_package(osqp_vendor REQUIRED)
 
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs slosh_models
+  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs
   DEPENDS EIGEN3
 )
 
@@ -28,27 +28,41 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
+  ${osqp_vendor_INCLUDE_DIRS}
 )
 
+# ============================================================================
 # 局部规划器库
+# ============================================================================
 add_library(${PROJECT_NAME}
-  src/local_planner.cpp
+  src/cubic_spline.cpp
+  src/path_handler.cpp
+  src/diff_drive_model.cpp
+  src/cost_function.cpp
+  src/constraint_manager.cpp
+  src/mpc_solver.cpp
+  src/local_planner_ros.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
+  osqp
 )
 
+# ============================================================================
 # 局部规划器节点
-add_executable(${PROJECT_NAME}_node src/local_planner_node.cpp)
-target_link_libraries(${PROJECT_NAME}_node
+# ============================================================================
+add_executable(local_planner_node src/local_planner_node.cpp)
+target_link_libraries(local_planner_node
   ${PROJECT_NAME}
   ${catkin_LIBRARIES}
 )
 
+# ============================================================================
 # 安装
-install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_node
+# ============================================================================
+install(TARGETS ${PROJECT_NAME} local_planner_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
