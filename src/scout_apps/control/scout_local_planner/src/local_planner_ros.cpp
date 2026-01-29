@@ -172,13 +172,20 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     return;
                 }
                 
-                // 3. 构建当前状态
+                // 3. 构建当前状态（避免初始状态越界导致不可行）
+                auto clamp = [](double v, double lo, double hi) {
+                    return std::max(lo, std::min(hi, v));
+                };
+
+                double v_clamped = clamp(current_v_, vehicle_params_.v_min, vehicle_params_.v_max);
+                double omega_clamped = clamp(current_omega_, -vehicle_params_.omega_max, vehicle_params_.omega_max);
+
                 StateVector current_state;
                 current_state(StateIndex::E_L) = frenet.e_l;
                 current_state(StateIndex::E_C) = frenet.e_c;
                 current_state(StateIndex::E_THETA) = frenet.e_theta;
-                current_state(StateIndex::V) = current_v_;
-                current_state(StateIndex::OMEGA) = current_omega_;
+                current_state(StateIndex::V) = v_clamped;
+                current_state(StateIndex::OMEGA) = omega_clamped;
                 
                 // 4. 设置上一步控制量
                 mpc_solver_.setPreviousControl(last_control_);

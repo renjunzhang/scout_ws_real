@@ -218,21 +218,17 @@ bool MPCSolver::buildQP(
             triplets.emplace_back(row + i, x_k1_idx + i, 1.0);
         }
         
-        // x[k] 的系数：-A
+        // x[k] 的系数：-A（固定稀疏结构，避免 OSQP 反复重建）
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < nx; ++j) {
-                if (std::abs(A_dyn(i, j)) > 1e-10) {
-                    triplets.emplace_back(row + i, x_k_idx + j, -A_dyn(i, j));
-                }
+                triplets.emplace_back(row + i, x_k_idx + j, -A_dyn(i, j));
             }
         }
         
-        // u[k] 的系数：-B
+        // u[k] 的系数：-B（固定稀疏结构）
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < nu; ++j) {
-                if (std::abs(B_dyn(i, j)) > 1e-10) {
-                    triplets.emplace_back(row + i, u_k_idx + j, -B_dyn(i, j));
-                }
+                triplets.emplace_back(row + i, u_k_idx + j, -B_dyn(i, j));
             }
         }
         

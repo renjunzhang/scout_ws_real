@@ -197,9 +197,6 @@ void CostFunction::buildQPCost(
     g = Eigen::VectorXd::Zero(nz);
     
     auto add_upper_triplet = [&triplets](int row, int col, double value) {
-        if (std::abs(value) < 1e-10) {
-            return;
-        }
         if (row <= col) {
             triplets.emplace_back(row, col, value);
         } else {
@@ -236,9 +233,7 @@ void CostFunction::buildQPCost(
         // 填充 H 矩阵（状态部分）
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < nx; ++j) {
-                if (std::abs(Q_total(i, j)) > 1e-10) {
-                    add_upper_triplet(x_idx + i, x_idx + j, Q_total(i, j));
-                }
+                add_upper_triplet(x_idx + i, x_idx + j, Q_total(i, j));
             }
         }
         
@@ -249,9 +244,7 @@ void CostFunction::buildQPCost(
         if (k < N) {
             for (int i = 0; i < nu; ++i) {
                 for (int j = 0; j < nu; ++j) {
-                    if (std::abs(R_total(i, j)) > 1e-10) {
-                        add_upper_triplet(u_idx + i, u_idx + j, R_total(i, j));
-                    }
+                    add_upper_triplet(u_idx + i, u_idx + j, R_total(i, j));
                 }
             }
             g.segment(u_idx, nu) += r_total;
