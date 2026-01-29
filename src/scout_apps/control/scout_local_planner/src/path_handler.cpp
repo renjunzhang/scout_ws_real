@@ -18,6 +18,7 @@ PathHandler::PathHandler() = default;
 void PathHandler::setParams(const PathHandlerParams& params) {
     std::lock_guard<std::mutex> lock(mutex_);
     params_ = params;
+    base_frame_ = params.base_frame;
 }
 
 void PathHandler::setTFBuffer(std::shared_ptr<tf2_ros::Buffer> tf_buffer) {
@@ -90,18 +91,30 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     if (!fitLocalSpline(path_points, window_start, window_end)) {
         return false;
     }
-    
+
+    // 4.1 更新当前弧长位置（基于最新样条）
+    {
+        double tmp_e_l = 0.0;
+        double tmp_e_c = 0.0;
+        double tmp_e_theta = 0.0;
+        const Eigen::Vector2d robot_pos(0.0, 0.0);
+        const double robot_theta = 0.0;
+        computeFrenetProjection(robot_pos, robot_theta,
+                                tmp_e_l, tmp_e_c, tmp_e_theta);
+    }
+
     // 5. 生成参考点序列
     ref_points.clear();
     ref_points.reserve(N);
     
     double total_len = local_spline_.getTotalLength();
-    
+    double base_s = std::min(current_s_ + params_.lookahead_distance, total_len);
+
     for (int k = 0; k < N; ++k) {
         ReferencePoint ref;
         
         // 沿路径推进
-        double s = current_s_ + k * dt * v_des;
+        double s = base_s + k * dt * v_des;
         s = std::min(s, total_len);  // 不超过样条末端
         
         // 计算参考点信息
@@ -116,6 +129,9 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
         
         ref_points.push_back(ref);
     }
+
+    // 路径在持续使用时保持有效，避免静态路径超时
+    path_timestamp_ = ros::Time::now();
     
     return true;
 }
@@ -127,12 +143,13 @@ bool PathHandler::getFrenetState(FrenetState& frenet) {
         return false;
     }
     
-    // 机器人在 base_link 坐标系下位置为原点 (0, 0)
-    // 航向需要从 TF 获取
-    double robot_theta = tf2::getYaw(robot_pose_.pose.orientation);
+    // 路径已变换到 base_link 坐标系
+    // 在 base_link 坐标系中：
+    // - 机器人位置为原点 (0, 0)
+    // - 机器人航向为 0（X 轴正方向）
+    double robot_theta = 0.0;  // 在 base_link 坐标系下，机器人航向始终为 0
     
     // 计算 Frenet 误差
-    // 机器人位置相对于 base_link 是 (0, 0)
     Eigen::Vector2d robot_pos(0.0, 0.0);
     
     computeFrenetProjection(robot_pos, robot_theta, 
@@ -144,23 +161,33 @@ bool PathHandler::getFrenetState(FrenetState& frenet) {
 bool PathHandler::isGoalReached() const {
     std::lock_guard<std::mutex> lock(mutex_);
     
-    if (!has_path_ || global_path_.poses.empty()) {
+    if (!has_path_ || global_path_.poses.empty() || !tf_buffer_) {
         return false;
     }
     
-    // 获取目标点（路径最后一点）
-    const auto& goal = global_path_.poses.back().pose;
-    const auto& robot = robot_pose_.pose;
+    // 获取目标点（路径最后一点，在 map 坐标系）
+    geometry_msgs::PoseStamped goal_in_map;
+    goal_in_map.header = global_path_.header;
+    goal_in_map.pose = global_path_.poses.back().pose;
     
-    // 计算距离
-    double dx = goal.position.x - robot.position.x;
-    double dy = goal.position.y - robot.position.y;
+    // 将目标点变换到 base_link 坐标系
+    geometry_msgs::PoseStamped goal_in_base;
+    try {
+        goal_in_base = tf_buffer_->transform(goal_in_map, base_frame_, ros::Duration(0.1));
+    } catch (tf2::TransformException& ex) {
+        ROS_WARN_THROTTLE(1.0, "[PathHandler] TF error in isGoalReached: %s", ex.what());
+        return false;
+    }
+    
+    // 在 base_link 坐标系中，机器人在原点
+    // 计算到目标的距离
+    double dx = goal_in_base.pose.position.x;
+    double dy = goal_in_base.pose.position.y;
     double dist = std::sqrt(dx * dx + dy * dy);
     
-    // 计算航向误差
-    double goal_yaw = tf2::getYaw(goal.orientation);
-    double robot_yaw = tf2::getYaw(robot.orientation);
-    double yaw_err = std::abs(goal_yaw - robot_yaw);
+    // 计算航向误差（目标在 base_link 中的朝向）
+    double goal_yaw_in_base = tf2::getYaw(goal_in_base.pose.orientation);
+    double yaw_err = std::abs(goal_yaw_in_base);
     while (yaw_err > M_PI) yaw_err -= 2 * M_PI;
     yaw_err = std::abs(yaw_err);
     
@@ -205,7 +232,7 @@ bool PathHandler::transformPathToBaseLink(const nav_msgs::Path& path_in,
     geometry_msgs::TransformStamped tf_map_to_base;
     try {
         tf_map_to_base = tf_buffer_->lookupTransform(
-            "base_link", path_in.header.frame_id,
+            base_frame_, path_in.header.frame_id,
             ros::Time(0), ros::Duration(0.1));
     } catch (tf2::TransformException& ex) {
         ROS_WARN_THROTTLE(1.0, "[PathHandler] TF error: %s", ex.what());

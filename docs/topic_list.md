@@ -2,6 +2,23 @@
 
 > 仅记录当前工作区配置与文档中明确涉及的话题，按模块分类。
 > 若节点放在 `/scout` 命名空间下，下面的相对话题会自动变为 `/scout/...`。
+> 部分话题为“配置/规划”用途，实际是否存在取决于对应节点是否已启动。
+
+---
+
+## 0) 当前系统已观测话题（2026-01-29）
+
+| 话题 | 说明 |
+|------|------|
+| `/BMS_status` | 电池状态 |
+| `/cmd_vel` | 速度控制 |
+| `/odom` | 里程计 |
+| `/rosout` | ROS 日志 |
+| `/rosout_agg` | ROS 日志聚合 |
+| `/rs_status` | 底盘状态（类型待确认） |
+| `/scout_light_control` | 灯光控制 |
+| `/scout_status` | 底盘状态 |
+| `/tf` | 坐标变换 |
 
 ---
 
@@ -21,11 +38,11 @@
 
 | 话题 | 类型 | 发布方 | 订阅方 | 说明 |
 |------|------|--------|--------|------|
-| `global_path` | `nav_msgs/Path` | move_base | scout_local_planner | 全局路径输入（通常在 `/scout/global_path`） |
-| `odom` | `nav_msgs/Odometry` | 底盘驱动 | scout_local_planner | 里程计输入 |
-| `cmd_vel` | `geometry_msgs/Twist` | scout_local_planner | 底盘驱动 | 速度控制输出 |
-| `local_path` | `nav_msgs/Path` | scout_local_planner | RViz（可选） | 局部轨迹可视化 |
-| `slosh_height` | `std_msgs/Float64` | scout_local_planner | 监控（可选） | 当前液面晃动高度 |
+| `/scout/global_path` | `nav_msgs/Path` | move_base | scout_local_planner | 全局路径输入 |
+| `/odom` | `nav_msgs/Odometry` | 底盘驱动 | scout_local_planner | 里程计输入 |
+| `/cmd_vel` | `geometry_msgs/Twist` | scout_local_planner | 底盘驱动 | 速度控制输出 |
+| `/local_path` | `nav_msgs/Path` | scout_local_planner | RViz（可选） | 局部轨迹可视化 |
+| `/slosh_height` | `std_msgs/Float64` | scout_local_planner | 监控（可选） | 晃动高度输出（第 2 步集成后启用） |
 
 ---
 
@@ -62,5 +79,14 @@
 |------|------|--------|--------|------|
 | `/BMS_status` | `scout_msgs/BMSStatus` | 底盘驱动/监控节点 | 监控端 | 电池状态 |
 | `/scout_status` | `scout_msgs/ScoutStatus` | 底盘驱动 | 监控端 | 底盘状态 |
-| `/rs_status` | `scout_msgs/ScoutStatus` | 底盘驱动 | 监控端 | 运行状态（不同固件可能复用） |
-| `/scout_light_control` | `scout_msgs/ScoutLightCmd` | 上层控制 | 底盘驱动 | 灯光控制 |
+| `/rs_status` | `scout_msgs/ScoutStatus`（待确认） | 底盘驱动 | 监控端 | 运行状态（不同固件可能复用） |
+| `/scout_light_control` | `scout_msgs/ScoutLightCmd`（待确认） | 上层控制 | 底盘驱动 | 灯光控制 |
+
+---
+
+## 7) 系统话题（ROS）
+
+| 话题 | 类型 | 发布方 | 订阅方 | 说明 |
+|------|------|--------|--------|------|
+| `/rosout` | `rosgraph_msgs/Log` | ROS core | 工具节点 | 日志输出 |
+| `/rosout_agg` | `rosgraph_msgs/Log` | ROS core | 工具节点 | 日志聚合 |

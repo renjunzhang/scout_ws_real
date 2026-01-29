@@ -121,6 +121,7 @@ private:
 private:
     PathHandlerParams params_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+    std::string base_frame_ = "base_link";  // 可配置的 base frame
     
     // 全局路径（map 坐标系）
     nav_msgs::Path global_path_;

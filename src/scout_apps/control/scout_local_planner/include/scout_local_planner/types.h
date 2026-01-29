@@ -151,6 +151,7 @@ struct PathHandlerParams {
     double yaw_tolerance = 0.1;       // 航向容差 (rad)
     double path_timeout = 5.0;        // 路径超时时间 (s)
     int min_path_points = 2;          // 最少路径点数
+    std::string base_frame = "base_link";  // 机器人坐标系
 };
 
 //==============================================================================

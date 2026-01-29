@@ -93,6 +93,9 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("base_frame", base_frame_, std::string("base_link"));
     pnh.param("map_frame", map_frame_, std::string("map"));
     pnh.param("verbose", verbose_, false);
+    
+    // 将 base_frame 传递给 path_handler
+    path_params_.base_frame = base_frame_;
 }
 
 void LocalPlannerROS::globalPathCallback(const nav_msgs::Path::ConstPtr& msg) {
@@ -119,6 +122,9 @@ void LocalPlannerROS::odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
     // 更新位姿（从 odom 消息中提取）
     current_pose_.header = msg->header;
     current_pose_.pose = msg->pose.pose;
+    
+    // 更新 PathHandler 的机器人状态（关键！）
+    path_handler_.updateRobotState(current_pose_, current_v_, current_omega_);
 }
 
 void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {

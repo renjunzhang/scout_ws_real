@@ -203,6 +203,7 @@ public:
 private:
     std::vector<CostTermPtr> cost_terms_;
     MPCParams params_;
+    ControlVector u_prev_ = ControlVector::Zero();
 };
 
 }  // namespace scout_local_planner

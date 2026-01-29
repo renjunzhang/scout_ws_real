@@ -20,6 +20,8 @@
     roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true
 ## 6.全局规划
     roslaunch scout_global_planner move_base_global.launch
+## 7.MPC局部规划
+    roslaunch scout_local_planner test_mpc.launch
     
 
 # 修改记录（scout_ws）
@@ -150,13 +152,16 @@
   - `scout_base/bringup/msgs` - 底盘驱动相关
 
 ## 2026-01-29（计划）
-- 完成 `scout_local_planner` 的 **MPC 主体 + 晃动扩展**（第 1 步与第 2 步合并推进），参照 `docs/change_plan.md`：
-  - 基础类型与数据结构：`types.h`
-  - 局部三次样条：`cubic_spline.h/.cpp`
+- 先跑通 **简单 MPC**（不含液体晃动），参照 `docs/change_plan.md`：
   - 路径处理与 Frenet 转换：`path_handler.h/.cpp`
   - 差速动力学模型：`diff_drive_model.h/.cpp`
-  - 晃动动力学扩展：`diff_drive_slosh_model.h/.cpp`
   - MPC 求解器框架：`mpc_solver.h/.cpp`
-  - 晃动约束模块：`slosh_models/slosh_constraint.h/.cpp`
   - 配置文件与启动入口：`config/mpc_params.yaml`、`launch/test_mpc.launch`
-- 验证：对接 `/scout/global_path`，生成速度指令并输出晃动相关调试话题（如 `slosh_height`）
+- 验证：对接 `/scout/global_path`，稳定输出 `/cmd_vel`
+
+## 2026-01-30（计划）
+- 进行 **液体晃动模型集成（第 2 步）**，参照 `docs/change_plan.md`：
+  - 晃动动力学扩展：`diff_drive_slosh_model.h/.cpp`
+  - 晃动约束模块：`slosh_models/slosh_constraint.h/.cpp`
+  - 状态扩展与代价/约束调整（`types.h` / `cost_function.*` / `constraint_manager.*`）
+  - 输出晃动调试话题（如 `slosh_height`）

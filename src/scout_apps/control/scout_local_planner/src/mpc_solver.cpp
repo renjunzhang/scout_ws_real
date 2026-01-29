@@ -201,14 +201,13 @@ bool MPCSolver::buildQP(
     
     // ----- 动力学约束：x[k+1] = A*x[k] + B*u[k] + c -----
     // 改写为：x[k+1] - A*x[k] - B*u[k] = c
+    StateVector x_lin = x0;
+    ControlVector u_lin = u_prev_;
+
     for (int k = 0; k < N; ++k) {
         int x_k_idx = k * (nx + nu);
         int u_k_idx = x_k_idx + nx;
         int x_k1_idx = (k + 1) * (nx + nu);
-        
-        // 在 x0 附近线性化
-        StateVector x_lin = x0;  // 简化：使用初始状态线性化
-        ControlVector u_lin = ControlVector::Zero();
         
         Eigen::MatrixXd A_dyn, B_dyn;
         Eigen::VectorXd c_dyn;
@@ -244,6 +243,10 @@ bool MPCSolver::buildQP(
         }
         
         row += nx;
+
+        // 更新名义轨迹用于下一步线性化
+        x_lin = dynamics_model_->predict(x_lin, u_lin, refs[k], dt);
+        u_lin.setZero();
     }
     
     // ----- 边界约束 -----
@@ -329,7 +332,30 @@ bool MPCSolver::updateOSQP() {
         
         osqp_initialized_ = true;
     } else {
-        // 更新现有问题
+        // 更新现有问题 - 每个周期都需要更新 P, A, q, l, u
+        // 因为线性化和参考点每周期都变化
+        
+        // 更新 P 矩阵（仅更新数值，结构不变）
+        // 注意：如果稀疏结构变化，需要重新 setup
+        c_int P_nnz = static_cast<c_int>(P_x_.size());
+        c_int A_nnz = static_cast<c_int>(A_x_.size());
+        
+        // 检查结构是否变化
+        if (P_nnz != osqp_data_->P->nzmax || A_nnz != osqp_data_->A->nzmax) {
+            // 结构变化，需要重新初始化
+            ROS_WARN_THROTTLE(1.0, "[MPCSolver] Matrix structure changed, reinitializing OSQP");
+            cleanupOSQP();
+            osqp_initialized_ = false;
+            return updateOSQP();  // 递归调用重新初始化
+        }
+        
+        // 更新 P 矩阵数值
+        osqp_update_P(osqp_work_, P_x_.data(), OSQP_NULL, P_nnz);
+        
+        // 更新 A 矩阵数值
+        osqp_update_A(osqp_work_, A_x_.data(), OSQP_NULL, A_nnz);
+        
+        // 更新线性项和边界
         osqp_update_lin_cost(osqp_work_, q_data_.data());
         osqp_update_bounds(osqp_work_, l_data_.data(), u_data_.data());
     }

@@ -132,10 +132,7 @@ void ControlRateCost::getQuadraticCost(
     q_contrib = Eigen::VectorXd::Zero(nx);
     r_contrib = Eigen::VectorXd::Zero(nu);
     
-    // 控制变化率代价需要在 QP 中特殊处理
-    // 这里只返回对角元素，实际的耦合项在 buildQPCost 中处理
-    R_contrib(ControlIndex::A, ControlIndex::A) = params_.R_da;
-    R_contrib(ControlIndex::ANG_ACC, ControlIndex::ANG_ACC) = params_.R_dalpha;
+    // 控制变化率代价需要跨步耦合，在 buildQPCost 中统一处理
 }
 
 //==============================================================================
@@ -199,6 +196,17 @@ void CostFunction::buildQPCost(
     std::vector<Eigen::Triplet<double>> triplets;
     g = Eigen::VectorXd::Zero(nz);
     
+    auto add_upper_triplet = [&triplets](int row, int col, double value) {
+        if (std::abs(value) < 1e-10) {
+            return;
+        }
+        if (row <= col) {
+            triplets.emplace_back(row, col, value);
+        } else {
+            triplets.emplace_back(col, row, value);
+        }
+    };
+
     // 对每个时间步
     for (int k = 0; k <= N; ++k) {
         int x_idx = k * (nx + nu);  // x_k 在 z 中的起始索引
@@ -229,7 +237,7 @@ void CostFunction::buildQPCost(
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < nx; ++j) {
                 if (std::abs(Q_total(i, j)) > 1e-10) {
-                    triplets.emplace_back(x_idx + i, x_idx + j, Q_total(i, j));
+                    add_upper_triplet(x_idx + i, x_idx + j, Q_total(i, j));
                 }
             }
         }
@@ -242,11 +250,54 @@ void CostFunction::buildQPCost(
             for (int i = 0; i < nu; ++i) {
                 for (int j = 0; j < nu; ++j) {
                     if (std::abs(R_total(i, j)) > 1e-10) {
-                        triplets.emplace_back(u_idx + i, u_idx + j, R_total(i, j));
+                        add_upper_triplet(u_idx + i, u_idx + j, R_total(i, j));
                     }
                 }
             }
             g.segment(u_idx, nu) += r_total;
+        }
+    }
+
+    // 控制变化率代价：跨步耦合项 (u_k - u_{k-1})^2
+    if (N > 0 && (params_.R_da > 0.0 || params_.R_dalpha > 0.0)) {
+        // k = 0：与上一时刻控制 u_prev 的差分
+        {
+            int u_idx = nx;  // k=0 的控制起始索引
+            add_upper_triplet(u_idx + ControlIndex::A,
+                              u_idx + ControlIndex::A,
+                              2.0 * params_.R_da);
+            add_upper_triplet(u_idx + ControlIndex::ANG_ACC,
+                              u_idx + ControlIndex::ANG_ACC,
+                              2.0 * params_.R_dalpha);
+
+            g(u_idx + ControlIndex::A) += -2.0 * params_.R_da * u_prev_(ControlIndex::A);
+            g(u_idx + ControlIndex::ANG_ACC) += -2.0 * params_.R_dalpha * u_prev_(ControlIndex::ANG_ACC);
+        }
+
+        // k = 1..N-1：相邻控制差分
+        for (int k = 1; k < N; ++k) {
+            int u_idx = k * (nx + nu) + nx;
+            int u_prev_idx = (k - 1) * (nx + nu) + nx;
+
+            add_upper_triplet(u_idx + ControlIndex::A,
+                              u_idx + ControlIndex::A,
+                              2.0 * params_.R_da);
+            add_upper_triplet(u_prev_idx + ControlIndex::A,
+                              u_prev_idx + ControlIndex::A,
+                              2.0 * params_.R_da);
+            add_upper_triplet(u_idx + ControlIndex::A,
+                              u_prev_idx + ControlIndex::A,
+                              -2.0 * params_.R_da);
+
+            add_upper_triplet(u_idx + ControlIndex::ANG_ACC,
+                              u_idx + ControlIndex::ANG_ACC,
+                              2.0 * params_.R_dalpha);
+            add_upper_triplet(u_prev_idx + ControlIndex::ANG_ACC,
+                              u_prev_idx + ControlIndex::ANG_ACC,
+                              2.0 * params_.R_dalpha);
+            add_upper_triplet(u_idx + ControlIndex::ANG_ACC,
+                              u_prev_idx + ControlIndex::ANG_ACC,
+                              -2.0 * params_.R_dalpha);
         }
     }
     
@@ -255,6 +306,7 @@ void CostFunction::buildQPCost(
 }
 
 void CostFunction::setPreviousControl(const ControlVector& u_prev) {
+    u_prev_ = u_prev;
     for (auto& term : cost_terms_) {
         auto rate_cost = std::dynamic_pointer_cast<ControlRateCost>(term);
         if (rate_cost) {
