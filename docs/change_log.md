@@ -159,6 +159,14 @@
   - 配置文件与启动入口：`config/mpc_params.yaml`、`launch/test_mpc.launch`
 - 验证：对接 `/scout/global_path`，稳定输出 `/cmd_vel`
 
+### 2026-01-29（实际修改）
+- 修正 MPC 控制变化率代价：加入 `(u_k - u_{k-1})^2` 跨步耦合项，避免被当作额外 `u^2`。
+- 参考点生成前更新 `current_s_`，并让 `lookahead_distance` 生效。
+- 线性化名义轨迹随步推进（不再固定 x0）。
+- 路径持续使用时刷新时间戳，避免静态路径 5s 超时停住。
+- 更新 `docs/topic_list.md`：补充 `/rosout`、`/rosout_agg` 等观测话题并校对命名空间。
+- 启动 test_mpc.launch 则对接 `/scout/global_path`，稳定输出 `/cmd_vel`
+
 ## 2026-01-30（计划）
 - 进行 **液体晃动模型集成（第 2 步）**，参照 `docs/change_plan.md`：
   - 晃动动力学扩展：`diff_drive_slosh_model.h/.cpp`
