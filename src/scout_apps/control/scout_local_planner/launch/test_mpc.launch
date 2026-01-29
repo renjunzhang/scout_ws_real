@@ -1,33 +1,13 @@
-<!-- Scout Mini MPC 局部规划器测试启动文件 -->
+<!-- Scout Mini MPC 局部规划器启动文件 -->
+<!-- 
+  使用说明：
+  1. 先启动底盘、雷达、定位
+  2. 启动全局规划：roslaunch scout_global_planner move_base_global.launch
+  3. 再启动本 launch 文件
+-->
 <launch>
   <!-- 参数 -->
-  <arg name="use_sim" default="false" doc="是否使用仿真"/>
-  <arg name="map_file" default="" doc="地图文件路径"/>
   <arg name="verbose" default="false" doc="是否输出调试信息"/>
-  
-  <!-- ========== 地图服务（如果提供了地图文件）========== -->
-  <group if="$(eval map_file != '')">
-    <node name="map_server" pkg="map_server" type="map_server" 
-          args="$(arg map_file)"/>
-  </group>
-  
-  <!-- ========== 全局规划（使用 move_base 的 global_planner）========== -->
-  <node pkg="move_base" type="move_base" name="move_base" output="screen">
-    <!-- 禁用内置局部规划器 -->
-    <param name="base_local_planner" value=""/>
-    
-    <!-- 全局规划器 -->
-    <param name="base_global_planner" value="navfn/NavfnROS"/>
-    
-    <!-- remap 全局路径输出 -->
-    <remap from="~NavfnROS/plan" to="/global_path"/>
-    
-    <!-- 代价地图参数 -->
-    <rosparam file="$(find scout_local_planner)/config/costmap_common.yaml" 
-              command="load" ns="global_costmap"/>
-    <rosparam file="$(find scout_local_planner)/config/global_costmap.yaml" 
-              command="load"/>
-  </node>
   
   <!-- ========== MPC 局部规划器（独立节点）========== -->
   <node pkg="scout_local_planner" type="local_planner_node" 
@@ -44,10 +24,5 @@
     <remap from="odom" to="/odom"/>
     <remap from="cmd_vel" to="/cmd_vel"/>
   </node>
-  
-  <!-- ========== RViz 可视化 ========== -->
-  <node pkg="rviz" type="rviz" name="rviz" 
-        args="-d $(find scout_local_planner)/config/mpc_test.rviz"
-        if="$(arg use_sim)"/>
         
 </launch>
