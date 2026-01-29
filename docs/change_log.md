@@ -1,4 +1,5 @@
 # 启动前的注意工作
+codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
 ## 1.将底盘和工控机连接并建立 CAN 通信
     sudo modprobe gs_usb   # 若需要
     sudo ip link set can0 down 2>/dev/null || true
@@ -10,11 +11,16 @@
 ## 2.启动键盘控制
     roslaunch scout_bringup scout_teleop_keyboard.launch
 ## 3.启动激光雷达
-    这个在sick_ws里面，有一个nanoscan3_bringup包：
-    roslaunch nanoscan3_bringup nanoscan3_front.launch use_rviz:=false
+    工作区内 nanoscan3_bringup 包：
+    真实雷达：
+      roslaunch nanoscan3_bringup nanoscan3_front.launch use_rviz:=false
+    仿真雷达：
+      roslaunch nanoscan3_bringup nanoscan3_front_sim.launch use_rviz:=false
 ## 4.建图
     这个也是在sick_ws里面，有一个nanoscan3_mapping包：
     roslaunch nanoscan3_mapping scout_nanoscan3_gmapping.launch fake_odom_tf:=false use_rviz:=true
+    仿真建图：
+      roslaunch nanoscan3_mapping scout_nanoscan3_gmapping_sim.launch use_rviz:=true
 ## 5.定位
     新开一个终端，运行：
     roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true
