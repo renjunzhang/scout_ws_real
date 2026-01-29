@@ -29,7 +29,7 @@
     <xacro:property name="frame_z_offset" value="-0.05" />
 
     <material name="aluminum">
-        <color rgba="0.7 0.7 0.7 1" />
+        <color rgba="0 0 0 1" />
     </material>
 
     <xacro:include filename="$(find sick_safetyscanners_description)/urdf/nanoscan3.urdf.xacro" />

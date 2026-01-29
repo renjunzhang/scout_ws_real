@@ -32,8 +32,10 @@
     <remap from="scan_filtered" to="/scan_front_filtered" />
   </node>
 
-  <!-- base_frame -> frame_id 静态 TF -->
-  <node pkg="tf" type="static_transform_publisher" name="tf_base_to_front_laser"
+  <!-- base_frame -> frame_id 静态 TF（默认关闭，避免与 URDF 中的雷达 TF 冲突） -->
+  <arg name="publish_static_tf" default="false" />
+  <node if="$(arg publish_static_tf)"
+        pkg="tf" type="static_transform_publisher" name="tf_base_to_front_laser"
         args="$(arg x) $(arg y) $(arg z) $(arg roll) $(arg pitch) $(arg yaw) $(arg base_frame) $(arg frame_id) 100" />
 
   <!-- RViz -->

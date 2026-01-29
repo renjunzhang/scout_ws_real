@@ -1,32 +1,49 @@
 # 启动前的注意工作
 codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
-## 1.将底盘和工控机连接并建立 CAN 通信
+## 实物流程
+### 1. 将底盘和工控机连接并建立 CAN 通信
     sudo modprobe gs_usb   # 若需要
     sudo ip link set can0 down 2>/dev/null || true
     sudo ip link set can0 up type can bitrate 500000
     candump can0          # 如需监听
     roslaunch scout_bringup scout_mini_robot_base.launch
-### 监听状态的脚本
+#### 监听状态的脚本
     roslaunch scout_bringup bms_status_monitor.launch     topic:=/BMS_status     period:=60.0
-## 2.启动键盘控制
+### 2. 启动键盘控制
     roslaunch scout_bringup scout_teleop_keyboard.launch
-## 3.启动激光雷达
+### 3. 启动激光雷达（真实）
     工作区内 nanoscan3_bringup 包：
-    真实雷达：
-      roslaunch nanoscan3_bringup nanoscan3_front.launch use_rviz:=false
-    仿真雷达：
-      roslaunch nanoscan3_bringup nanoscan3_front_sim.launch use_rviz:=false
-## 4.建图
+    roslaunch nanoscan3_bringup nanoscan3_front.launch use_rviz:=false
+### 4. 建图（真实）
     这个也是在sick_ws里面，有一个nanoscan3_mapping包：
     roslaunch nanoscan3_mapping scout_nanoscan3_gmapping.launch fake_odom_tf:=false use_rviz:=true
-    仿真建图：
-      roslaunch nanoscan3_mapping scout_nanoscan3_gmapping_sim.launch use_rviz:=true
-## 5.定位
+### 5. 定位（真实）
     新开一个终端，运行：
     roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true
-## 6.全局规划
+### 6. 全局规划
     roslaunch scout_global_planner move_base_global.launch
-## 7.MPC局部规划
+### 7. MPC 局部规划
+    roslaunch scout_local_planner test_mpc.launch
+
+## 仿真流程
+### 1. 启动仿真环境
+    roslaunch scout_description scout_mini_gazebo.launch use_rviz:=false
+### 2. 启动键盘控制（仿真）
+    roslaunch scout_bringup scout_teleop_keyboard.launch
+### 3. 启动激光雷达（仿真，可选）
+    工作区内 nanoscan3_bringup 包：
+    roslaunch nanoscan3_bringup nanoscan3_front_sim.launch use_rviz:=false
+    说明：
+    - 该 launch 会把 `/scan` relay 成 `/scan_front`，供旧的建图/定位流程使用。
+    - 当前仿真已统一使用 `/scan`，此步可省略。
+    - 如需启动该 launch，保持 `publish_static_tf:=false`，避免与 URDF 中雷达 TF 冲突。
+### 4. 建图（仿真）
+    roslaunch nanoscan3_mapping scout_nanoscan3_gmapping_sim.launch use_rviz:=true
+### 5. 定位（仿真）
+    roslaunch nanoscan3_localization scout_nanoscan3_amcl_sim.launch use_rviz:=true
+### 6. 全局规划
+    roslaunch scout_global_planner move_base_global.launch
+### 7. MPC 局部规划
     roslaunch scout_local_planner test_mpc.launch
     
 
@@ -172,6 +189,10 @@ codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
 - 路径持续使用时刷新时间戳，避免静态路径 5s 超时停住。
 - 更新 `docs/topic_list.md`：补充 `/rosout`、`/rosout_agg` 等观测话题并校对命名空间。
 - 启动 test_mpc.launch 则对接 `/scout/global_path`，稳定输出 `/cmd_vel`
+
+## 2026-01-29（文档更新）
+- 将启动流程拆分为“实物流程”和“仿真流程”，明确各步骤对应的启动命令。
+- 仿真流程补充说明：`nanoscan3_front_sim.launch` 仅用于将 `/scan` relay 为 `/scan_front`，当前仿真统一使用 `/scan` 可省略；如需启用需保持 `publish_static_tf:=false` 以避免 TF 冲突。
 
 ## 2026-01-30（计划）
 - 进行 **液体晃动模型集成（第 2 步）**，参照 `docs/change_plan.md`：

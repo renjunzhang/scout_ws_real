@@ -1,0 +1,80 @@
+<launch>
+  <!-- ===== AMCL 定位 Launch 文件 ===== -->
+  <!-- 用途：在已知地图上进行机器人定位 -->
+  
+  <!-- ===== 地图配置 ===== -->
+  <!-- 默认地图路径：scout_maps 包内 maps 目录 -->
+  <arg name="map_file" default="$(find scout_maps)/maps/map122.yaml" />
+  
+  <!-- ===== 传感器配置 ===== -->
+  <arg name="scan_topic" default="/scan" />
+  <arg name="laser_frame" default="nano_nanoscan3_sensor_link" />
+  
+  <!-- ===== 坐标系配置 ===== -->
+  <arg name="base_frame" default="base_footprint" />
+  <arg name="odom_frame" default="odom" />
+  <arg name="global_frame" default="map" />
+  
+  <!-- ===== 初始位姿（可选，用于设置机器人初始位置）===== -->
+  <arg name="initial_pose_x" default="0.0" />
+  <arg name="initial_pose_y" default="0.0" />
+  <arg name="initial_pose_a" default="0.0" />
+  
+  <!-- 1) 加载地图 -->
+  <node pkg="map_server" type="map_server" name="map_server" args="$(arg map_file)" output="screen" />
+  
+  <!-- 2) 启动 AMCL 定位节点 -->
+  <node pkg="amcl" type="amcl" name="amcl" output="screen">
+    <!-- 重映射话题 -->
+    <remap from="scan" to="$(arg scan_topic)" />
+    
+    <!-- 坐标系设置 -->
+    <param name="odom_frame_id" value="$(arg odom_frame)" />
+    <param name="base_frame_id" value="$(arg base_frame)" />
+    <param name="global_frame_id" value="$(arg global_frame)" />
+    
+    <!-- 初始位姿 -->
+    <param name="initial_pose_x" value="$(arg initial_pose_x)" />
+    <param name="initial_pose_y" value="$(arg initial_pose_y)" />
+    <param name="initial_pose_a" value="$(arg initial_pose_a)" />
+    
+    <!-- AMCL 核心参数 -->
+    <param name="min_particles" value="500" />
+    <param name="max_particles" value="5000" />
+    <param name="kld_err" value="0.05" />
+    <param name="kld_z" value="0.99" />
+    
+    <!-- 更新频率 -->
+    <param name="update_min_d" value="0.2" />  <!-- 移动 0.2m 更新一次 -->
+    <param name="update_min_a" value="0.5" />  <!-- 旋转 0.5rad 更新一次 -->
+    
+    <!-- 激光模型参数 -->
+    <param name="laser_max_range" value="25.0" />
+    <param name="laser_min_range" value="0.15" />
+    <param name="laser_max_beams" value="60" />
+    <param name="laser_z_hit" value="0.5" />
+    <param name="laser_z_short" value="0.05" />
+    <param name="laser_z_max" value="0.05" />
+    <param name="laser_z_rand" value="0.5" />
+    <param name="laser_sigma_hit" value="0.2" />
+    <param name="laser_lambda_short" value="0.1" />
+    <param name="laser_likelihood_max_dist" value="2.0" />
+    <param name="laser_model_type" value="likelihood_field" />
+    
+    <!-- 里程计模型参数（需根据实际底盘调整）-->
+    <param name="odom_model_type" value="diff" />  <!-- diff-差速，omni-全向 -->
+    <param name="odom_alpha1" value="0.2" />  <!-- 旋转产生的旋转噪声 -->
+    <param name="odom_alpha2" value="0.2" />  <!-- 平移产生的旋转噪声 -->
+    <param name="odom_alpha3" value="0.2" />  <!-- 平移产生的平移噪声 -->
+    <param name="odom_alpha4" value="0.2" />  <!-- 旋转产生的平移噪声 -->
+    
+    <!-- 重定位参数 -->
+    <param name="recovery_alpha_slow" value="0.0" />
+    <param name="recovery_alpha_fast" value="0.0" />
+  </node>
+  
+  <!-- 3) （可选）启动 RViz 可视化 -->
+  <arg name="use_rviz" default="false" />
+  <node if="$(arg use_rviz)" pkg="rviz" type="rviz" name="rviz" 
+        args="-d $(find nanoscan3_localization)/rviz/amcl.rviz" />
+</launch>

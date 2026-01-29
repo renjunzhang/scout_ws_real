@@ -5,6 +5,7 @@
     <arg name="use_sim_time" default="true" />
     <arg name="headless" default="false" />
     <arg name="verbose" default="false" />
+    <arg name="use_rviz" default="true" />
 
     <arg name="robot_namespace" default="/" />
     <arg name="x" default="0.0" />
@@ -47,6 +48,13 @@
         name="robot_state_publisher"
         pkg="robot_state_publisher"
         type="robot_state_publisher" />
+
+    <node
+        if="$(arg use_rviz)"
+        name="rviz"
+        pkg="rviz"
+        type="rviz"
+        args="-d $(find scout_description)/rviz/scout_mini_gazebo.rviz" />
 
     <node
         name="tf_footprint_base"
