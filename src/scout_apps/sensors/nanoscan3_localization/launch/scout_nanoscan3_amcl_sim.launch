@@ -7,7 +7,7 @@
   <arg name="map_file" default="$(find scout_maps)/maps/map122.yaml" />
   
   <!-- ===== 传感器配置 ===== -->
-  <arg name="scan_topic" default="/scan" />
+  <arg name="scan_topic" default="/scan_front" />
   <arg name="laser_frame" default="nano_nanoscan3_sensor_link" />
   
   <!-- ===== 坐标系配置 ===== -->

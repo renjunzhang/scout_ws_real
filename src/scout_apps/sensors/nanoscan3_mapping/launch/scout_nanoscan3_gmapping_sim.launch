@@ -1,6 +1,6 @@
 <launch>
   <!-- 仿真建图：默认订阅 /scan_front -->
-  <arg name="scan_topic" default="/scan" />
+  <arg name="scan_topic" default="/scan_front" />
   <arg name="laser_frame" default="nano_nanoscan3_sensor_link" />
   <arg name="base_frame" default="base_footprint" />
   <arg name="odom_frame" default="odom" />
