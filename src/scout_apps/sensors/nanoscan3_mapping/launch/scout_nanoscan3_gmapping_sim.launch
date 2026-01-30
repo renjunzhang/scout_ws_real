@@ -11,12 +11,40 @@
   <node if="$(arg fake_odom_tf)" pkg="tf" type="static_transform_publisher" name="tf_fake_odom_to_base"
         args="0 0 0 0 0 0 odom $(arg base_frame) 30" />
 
-  <!-- gmapping -->
+  <!-- gmapping (仿真优化参数) -->
   <node pkg="gmapping" type="slam_gmapping" name="slam_gmapping" output="screen">
+    <!-- 坐标系 -->
     <param name="base_frame" value="$(arg base_frame)" />
     <param name="odom_frame" value="$(arg odom_frame)" />
     <param name="map_frame" value="$(arg map_frame)" />
     <remap from="scan" to="$(arg scan_topic)" />
+
+    <!-- 地图分辨率 -->
+    <param name="delta" value="0.05" />          <!-- 5cm 栅格 -->
+    <param name="maxUrange" value="8.0" />       <!-- 激光最大可用距离 -->
+    <param name="maxRange" value="10.0" />       <!-- 激光最大测量距离 -->
+
+    <!-- 里程计误差模型（关键！增大容忍度） -->
+    <param name="srr" value="0.2" />             <!-- 平移引起的平移误差 (默认0.1) -->
+    <param name="srt" value="0.2" />             <!-- 平移引起的旋转误差 (默认0.2) -->
+    <param name="str" value="0.2" />             <!-- 旋转引起的平移误差 (默认0.1) -->
+    <param name="stt" value="0.4" />             <!-- 旋转引起的旋转误差 (默认0.2) ⬆️ 滑移转向重点 -->
+
+    <!-- 粒子滤波 -->
+    <param name="particles" value="80" />        <!-- 粒子数（越多越稳但越慢） -->
+    <param name="minimumScore" value="100" />    <!-- 匹配最低分（防止错误匹配） -->
+
+    <!-- 更新阈值（降低以更频繁更新） -->
+    <param name="linearUpdate" value="0.2" />    <!-- 移动0.2m更新一次 -->
+    <param name="angularUpdate" value="0.25" />  <!-- 旋转0.25rad≈14°更新一次 -->
+    <param name="temporalUpdate" value="2.0" />  <!-- 静止2秒也更新 -->
+
+    <!-- 扫描匹配 -->
+    <param name="iterations" value="5" />        <!-- 匹配迭代次数 -->
+    <param name="lsigma" value="0.075" />        <!-- 似然sigma -->
+    <param name="ogain" value="3.0" />           <!-- 似然增益 -->
+    <param name="lstep" value="0.05" />          <!-- 线性搜索步长 -->
+    <param name="astep" value="0.05" />          <!-- 角度搜索步长 -->
   </node>
 
   <!-- RViz -->

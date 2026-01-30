@@ -1,0 +1,23 @@
+<launch>
+  <!-- Cartographer 仿真建图 -->
+  <arg name="scan_topic" default="/scan_front" />
+  <arg name="odom_topic" default="/odom" />
+  <arg name="use_rviz" default="true" />
+
+  <!-- Cartographer 节点 -->
+  <node name="cartographer_node" pkg="cartographer_ros" type="cartographer_node" 
+        args="-configuration_directory $(find nanoscan3_mapping)/config
+              -configuration_basename scout_2d_sim.lua"
+        output="screen">
+    <remap from="scan" to="$(arg scan_topic)" />
+    <remap from="odom" to="$(arg odom_topic)" />
+  </node>
+
+  <!-- Cartographer 栅格地图发布 -->
+  <node name="cartographer_occupancy_grid_node" pkg="cartographer_ros" 
+        type="cartographer_occupancy_grid_node" args="-resolution 0.05" />
+
+  <!-- RViz -->
+  <node if="$(arg use_rviz)" name="rviz" pkg="rviz" type="rviz"
+        args="-d $(find nanoscan3_mapping)/rviz/cartographer_sim.rviz" output="screen" />
+</launch>
