@@ -43,6 +43,7 @@ codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
     
     方式二：Cartographer（推荐，精度更高）
     # 需先 source Cartographer 工作空间
+    source ~/scout_ws/devel/setup.bash
     source ~/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/setup.bash
     roslaunch nanoscan3_mapping scout_nanoscan3_cartographer_sim.launch
     
@@ -204,6 +205,26 @@ codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
 ## 2026-01-29（文档更新）
 - 将启动流程拆分为“实物流程”和“仿真流程”，明确各步骤对应的启动命令。
 - 仿真流程补充说明：`nanoscan3_front_sim.launch` 仅用于将 `/scan` relay 为 `/scan_front`，当前仿真统一使用 `/scan` 可省略；如需启用需保持 `publish_static_tf:=false` 以避免 TF 冲突。
+
+## 2026-01-30（Cartographer 修复）
+- **Cartographer 编译修复**：
+  - 问题：运行时报错 `libglog.so.1: cannot open shared object file`
+  - 根因：`.bashrc` 中包含 Conan 版本的 glog (0.6.0)、gflags、ceres-solver 路径，这些库依赖 `libglog.so.1`，而系统只有 `libglog.so.0` (glog 0.4.0)
+  - 解决：
+    1. 从源码重新编译 Cartographer，确保使用系统 glog/gflags/ceres
+    2. 注释掉 `~/.bashrc` 中冲突的 Conan 路径（gflags、glog、ceres-solver）
+    3. 保留 osqp 和 libunwind 的 Conan 路径（MPC 模块需要）
+  - 已创建启动脚本：`nanoscan3_mapping/scripts/start_cartographer_clean.sh`
+  - 编译命令参考：
+    ```bash
+    cd ~/scout_ws/src/scout_apps/sensors/cartographer_ws
+    source /opt/ros/noetic/setup.bash
+    catkin_make_isolated --install --use-ninja -j4 -DCMAKE_BUILD_TYPE=Release \
+      --source src --build build_isolated --devel devel_isolated --install-space install_isolated
+    ```
+  - 重要：新终端需要关闭旧的、重新打开才能使 `.bashrc` 更改生效
+
+- **备份文件**：`~/.bashrc.backup.YYYYMMDD_HHMMSS`
 
 ## 2026-01-30（计划）
 - 进行 **液体晃动模型集成（第 2 步）**，参照 `docs/change_plan.md`：
