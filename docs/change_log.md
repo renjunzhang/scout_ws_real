@@ -17,6 +17,8 @@ codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
 ### 4. 建图（真实）
     这个也是在sick_ws里面，有一个nanoscan3_mapping包：
     roslaunch nanoscan3_mapping scout_nanoscan3_gmapping.launch fake_odom_tf:=false use_rviz:=true
+#### Cartographer 建图（直接打开新终端，不要手动 source）
+    roslaunch nanoscan3_mapping scout_nanoscan3_cartographer_sim.launch
 ### 5. 定位（真实）
     新开一个终端，运行：
     roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true
@@ -206,25 +208,74 @@ codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
 - 将启动流程拆分为“实物流程”和“仿真流程”，明确各步骤对应的启动命令。
 - 仿真流程补充说明：`nanoscan3_front_sim.launch` 仅用于将 `/scan` relay 为 `/scan_front`，当前仿真统一使用 `/scan` 可省略；如需启用需保持 `publish_static_tf:=false` 以避免 TF 冲突。
 
-## 2026-01-30（Cartographer 修复）
-- **Cartographer 编译修复**：
-  - 问题：运行时报错 `libglog.so.1: cannot open shared object file`
-  - 根因：`.bashrc` 中包含 Conan 版本的 glog (0.6.0)、gflags、ceres-solver 路径，这些库依赖 `libglog.so.1`，而系统只有 `libglog.so.0` (glog 0.4.0)
-  - 解决：
-    1. 从源码重新编译 Cartographer，确保使用系统 glog/gflags/ceres
-    2. 注释掉 `~/.bashrc` 中冲突的 Conan 路径（gflags、glog、ceres-solver）
-    3. 保留 osqp 和 libunwind 的 Conan 路径（MPC 模块需要）
-  - 已创建启动脚本：`nanoscan3_mapping/scripts/start_cartographer_clean.sh`
-  - 编译命令参考：
-    ```bash
-    cd ~/scout_ws/src/scout_apps/sensors/cartographer_ws
-    source /opt/ros/noetic/setup.bash
-    catkin_make_isolated --install --use-ninja -j4 -DCMAKE_BUILD_TYPE=Release \
-      --source src --build build_isolated --devel devel_isolated --install-space install_isolated
-    ```
-  - 重要：新终端需要关闭旧的、重新打开才能使 `.bashrc` 更改生效
+## 2026-01-30（Cartographer 修复与环境配置）
 
-- **备份文件**：`~/.bashrc.backup.YYYYMMDD_HHMMSS`
+### 问题 1：libglog.so.1 找不到
+- **现象**：运行时报错 `libglog.so.1: cannot open shared object file`
+- **根因**：`~/.bashrc` 中 Conan 版本的 glog (0.6.0) 依赖 `libglog.so.1`，而系统只有 `libglog.so.0`
+- **解决**：注释掉 `~/.bashrc` 中冲突的 Conan 路径（gflags、glog、ceres-solver），保留 osqp 和 libunwind
+
+### 问题 2：cartographer_ros 包找到错误路径
+- **现象**：`rospack find cartographer_ros` 返回 `chemist_robot3.0` 工作空间中的源码目录
+- **根因**：`~/.bashrc` 中 source 了多个工作空间，`chemist_robot3.0` 含有未编译的 cartographer_ros 源码
+- **解决**：从 `~/.bashrc` 中删除 `source /home/a/chemist_robot3.0/devel/setup.bash`
+
+### 问题 3：手动 source 覆盖环境
+- **现象**：打开终端后手动执行 `source ~/scout_ws/devel/setup.bash`，导致 cartographer_ws 路径丢失
+- **根因**：`~/.bashrc` 已按正确顺序配置了 source，手动 source 会覆盖后续配置
+- **解决**：**不要手动 source**，直接打开新终端即可
+
+### 最终 ~/.bashrc 配置（关键部分）
+```bash
+# scout_ws 主工作空间
+source ~/scout_ws/devel/setup.bash
+
+# Cartographer 工作空间（必须在主工作空间之后）
+export CATKIN_SETUP_UTIL_ARGS="--extend"
+source ~/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/setup.bash
+export ROS_PACKAGE_PATH=/home/a/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/share:$ROS_PACKAGE_PATH
+```
+
+### Cartographer 仿真建图启动命令
+```bash
+# 终端 1：启动仿真环境
+roslaunch scout_description scout_mini_gazebo.launch use_rviz:=false
+
+# 终端 2：键盘控制
+roslaunch scout_bringup scout_teleop_keyboard.launch
+
+# 终端 3：激光雷达（仿真）
+roslaunch nanoscan3_bringup nanoscan3_front_sim.launch use_rviz:=false
+
+# 终端 4：Cartographer 建图（直接打开新终端，不要手动 source）
+roslaunch nanoscan3_mapping scout_nanoscan3_cartographer_sim.launch
+```
+
+### 保存地图
+```bash
+# Cartographer 需要先调用服务完成轨迹，再保存
+rosservice call /finish_trajectory 0
+rosservice call /write_state "{filename: '/home/a/scout_ws/src/scout_apps/scout_maps/maps/map_carto.pbstream'}"
+
+# 转换为标准地图格式
+rosrun cartographer_ros cartographer_pbstream_to_ros_map \
+  -pbstream_filename=/home/a/scout_ws/src/scout_apps/scout_maps/maps/map_carto.pbstream \
+  -map_filestem=/home/a/scout_ws/src/scout_apps/scout_maps/maps/map_carto \
+  -resolution=0.05
+```
+
+### 验证环境配置
+```bash
+# 新终端中执行
+rospack find cartographer_ros
+# 应输出：/home/a/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/share/cartographer_ros
+
+rospack find nanoscan3_mapping
+# 应输出：/home/a/scout_ws/src/scout_apps/sensors/nanoscan3_mapping
+
+ldd ~/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/lib/cartographer_ros/cartographer_node | grep "not found"
+# 应无输出
+```
 
 ## 2026-01-30（计划）
 - 进行 **液体晃动模型集成（第 2 步）**，参照 `docs/change_plan.md`：

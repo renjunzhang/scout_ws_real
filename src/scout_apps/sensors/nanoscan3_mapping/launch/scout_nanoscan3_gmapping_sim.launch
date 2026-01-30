@@ -24,27 +24,34 @@
     <param name="maxUrange" value="8.0" />       <!-- 激光最大可用距离 -->
     <param name="maxRange" value="10.0" />       <!-- 激光最大测量距离 -->
 
-    <!-- 里程计误差模型（关键！增大容忍度） -->
-    <param name="srr" value="0.05" />             <!-- 平移引起的平移误差 (默认0.1) -->
-    <param name="srt" value="0.05" />             <!-- 平移引起的旋转误差 (默认0.2) -->
-    <param name="str" value="0.05" />             <!-- 旋转引起的平移误差 (默认0.1) -->
-    <param name="stt" value="0.05" />             <!-- 旋转引起的旋转误差 (默认0.2) ⬆️ 滑移转向重点 -->
+    <!-- 里程计误差模型（仿真滑移转向 odom 误差大，必须大幅放宽） -->
+    <param name="srr" value="0.2" />             <!-- 平移引起的平移误差 ⬆️ -->
+    <param name="srt" value="0.2" />             <!-- 平移引起的旋转误差 ⬆️ -->
+    <param name="str" value="0.2" />             <!-- 旋转引起的平移误差 ⬆️ -->
+    <param name="stt" value="0.5" />             <!-- 旋转引起的旋转误差 ⬆️ 滑移转向重点！ -->
 
-    <!-- 粒子滤波 -->
-    <param name="particles" value="100" />        <!-- 粒子数（越多越稳但越慢） -->
-    <param name="minimumScore" value="100" />    <!-- 匹配最低分（防止错误匹配） -->
+    <!-- 粒子滤波（更多粒子覆盖更大误差范围） -->
+    <param name="particles" value="200" />       <!-- 粒子数 ⬆️ 仿真误差大需要更多粒子 -->
+    <param name="minimumScore" value="200" />    <!-- 匹配最低分（稍微放宽，避免丢失匹配） -->
+    <param name="resampleThreshold" value="0.5" /> <!-- 重采样阈值 -->
 
-    <!-- 更新阈值（降低以更频繁更新） -->
-    <param name="linearUpdate" value="0.2" />    <!-- 移动0.2m更新一次 -->
-    <param name="angularUpdate" value="0.25" />  <!-- 旋转0.25rad≈14°更新一次 -->
-    <param name="temporalUpdate" value="2.0" />  <!-- 静止2秒也更新 -->
+    <!-- 更新阈值（降低更新频率，减少跳变） -->
+    <param name="linearUpdate" value="0.3" />    <!-- 移动0.3m更新一次 ⬆️ -->
+    <param name="angularUpdate" value="0.3" />   <!-- 旋转0.3rad≈17°更新一次 ⬆️ -->
+    <param name="temporalUpdate" value="3.0" />  <!-- 静止3秒才更新 ⬆️ -->
 
-    <!-- 扫描匹配 -->
-    <param name="iterations" value="5" />        <!-- 匹配迭代次数 -->
-    <param name="lsigma" value="0.075" />        <!-- 似然sigma -->
+    <!-- 扫描匹配（更精细的搜索） -->
+    <param name="iterations" value="10" />       <!-- 匹配迭代次数 ⬆️ 更精确 -->
+    <param name="lsigma" value="0.05" />         <!-- 似然sigma ⬇️ 更严格 -->
     <param name="ogain" value="3.0" />           <!-- 似然增益 -->
-    <param name="lstep" value="0.05" />          <!-- 线性搜索步长 -->
-    <param name="astep" value="0.05" />          <!-- 角度搜索步长 -->
+    <param name="lstep" value="0.03" />          <!-- 线性搜索步长 ⬇️ 更精细 -->
+    <param name="astep" value="0.03" />          <!-- 角度搜索步长 ⬇️ 更精细 -->
+    
+    <!-- 额外稳定性参数 -->
+    <param name="llsamplerange" value="0.01" />  <!-- 似然线性采样范围 -->
+    <param name="llsamplestep" value="0.01" />   <!-- 似然线性采样步长 -->
+    <param name="lasamplerange" value="0.005" /> <!-- 似然角度采样范围 -->
+    <param name="lasamplestep" value="0.005" />  <!-- 似然角度采样步长 -->
   </node>
 
   <!-- RViz -->
