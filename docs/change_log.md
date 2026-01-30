@@ -38,7 +38,18 @@ codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
     - 当前仿真已统一使用 `/scan`，此步可省略。
     - 如需启动该 launch，保持 `publish_static_tf:=false`，避免与 URDF 中雷达 TF 冲突。
 ### 4. 建图（仿真）
+    方式一：Gmapping（默认）
     roslaunch nanoscan3_mapping scout_nanoscan3_gmapping_sim.launch use_rviz:=true
+    
+    方式二：Cartographer（推荐，精度更高）
+    # 需先 source Cartographer 工作空间
+    source ~/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/setup.bash
+    roslaunch nanoscan3_mapping scout_nanoscan3_cartographer_sim.launch
+    
+    说明：
+    - Cartographer 需从源码编译，安装步骤见 sensors/说明.md
+    - Cartographer 使用在线相关性扫描匹配，对仿真里程计噪声更鲁棒
+    - 建图完成后保存：rosrun map_server map_saver -f ~/scout_ws/src/scout_apps/scout_maps/maps/map_carto
 ### 5. 定位（仿真）
     roslaunch nanoscan3_localization scout_nanoscan3_amcl_sim.launch use_rviz:=true
 ### 6. 全局规划
