@@ -55,6 +55,7 @@ codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
     - 建图完成后保存：rosrun map_server map_saver -f ~/scout_ws/src/scout_apps/scout_maps/maps/map_carto
 ### 5. 定位（仿真）
     roslaunch nanoscan3_localization scout_nanoscan3_amcl_sim.launch use_rviz:=true
+    roslaunch nanoscan3_localization scout_nanoscan3_cartographer_localization_sim.launch
 ### 6. 全局规划
     roslaunch scout_global_planner move_base_global.launch
 ### 7. MPC 局部规划

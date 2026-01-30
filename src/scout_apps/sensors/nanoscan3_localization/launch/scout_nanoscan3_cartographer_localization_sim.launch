@@ -1,0 +1,43 @@
+<launch>
+  <!-- ===== Cartographer 纯定位 Launch 文件 (仿真) ===== -->
+  <!-- 用途：加载已有的 .pbstream 地图进行定位，不更新地图 -->
+  <!-- 使用方法：
+       1. 先用 Cartographer 建图并保存 .pbstream 文件
+       2. 启动本 launch 加载地图进行定位
+  -->
+
+  <!-- ===== 地图配置 ===== -->
+  <!-- 默认地图路径：scout_maps 包内的 pbstream 文件 -->
+  <arg name="map_file" default="$(find scout_maps)/maps/map_carto.pbstream" />
+  
+  <!-- ===== 传感器配置 ===== -->
+  <arg name="scan_topic" default="/scan_front" />
+  <arg name="odom_topic" default="/odom" />
+  
+  <!-- ===== 可视化配置 ===== -->
+  <arg name="use_rviz" default="true" />
+
+  <!-- ===== 初始位姿（可选）===== -->
+  <!-- Cartographer 会自动进行全局定位，通常不需要手动设置初始位姿 -->
+  <!-- 如需指定，可通过 initial_pose 话题发布 -->
+
+  <!-- 1) Cartographer 定位节点 -->
+  <node name="cartographer_node" pkg="cartographer_ros" type="cartographer_node" 
+        args="-configuration_directory $(find nanoscan3_localization)/config
+              -configuration_basename scout_2d_localization_sim.lua
+              -load_state_filename $(arg map_file)"
+        output="screen">
+    <!-- 话题重映射 -->
+    <remap from="scan" to="$(arg scan_topic)" />
+    <remap from="odom" to="$(arg odom_topic)" />
+  </node>
+
+  <!-- 2) 栅格地图发布（用于 RViz 显示和导航） -->
+  <node name="cartographer_occupancy_grid_node" pkg="cartographer_ros" 
+        type="cartographer_occupancy_grid_node" args="-resolution 0.05" />
+
+  <!-- 3) RViz 可视化 -->
+  <node if="$(arg use_rviz)" name="rviz" pkg="rviz" type="rviz"
+        args="-d $(find nanoscan3_localization)/rviz/cartographer_localization.rviz" 
+        output="screen" />
+</launch>
