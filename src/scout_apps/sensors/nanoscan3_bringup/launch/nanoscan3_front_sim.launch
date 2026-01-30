@@ -5,7 +5,7 @@
   <arg name="enable_filter" default="false" />
 
   <!-- 坐标系与外参（按仿真模型修改） -->
-  <arg name="frame_id"   default="nano_nanoscan3_sensor_link" />
+  <arg name="frame_id"   default="nanoscan3_front" />
   <arg name="base_frame" default="base_link" />
   <arg name="x" default="0.125" />
   <arg name="y" default="-0.0425" />
@@ -14,12 +14,15 @@
   <arg name="pitch" default="0.0" />
   <arg name="yaw"   default="0.0" />
 
-  <!-- 将仿真 /scan 转成统一输出话题 -->
-  <node pkg="topic_tools"
-        type="relay"
+  <!-- 将仿真 /scan 转成统一输出话题，并对齐 frame_id -->
+  <node pkg="nanoscan3_bringup"
+        type="scan_relay.py"
         name="scan_front_relay"
-        args="$(arg sim_scan_topic) $(arg scan_topic_out)"
-        output="screen" />
+        output="screen">
+    <param name="input" value="$(arg sim_scan_topic)" />
+    <param name="output" value="$(arg scan_topic_out)" />
+    <param name="frame_id" value="$(arg frame_id)" />
+  </node>
 
   <!-- 可选滤波 -->
   <node pkg="laser_filters"
@@ -36,7 +39,11 @@
   <arg name="publish_static_tf" default="false" />
   <node if="$(arg publish_static_tf)"
         pkg="tf" type="static_transform_publisher" name="tf_base_to_front_laser"
-        args="$(arg x) $(arg y) $(arg z) $(arg roll) $(arg pitch) $(arg yaw) $(arg base_frame) $(arg frame_id) 100" />
+        args="$(arg x) $(arg y) $(arg z) $(arg yaw) $(arg pitch) $(arg roll) $(arg base_frame) $(arg frame_id) 100" />
+
+  <!-- 别名 TF：让 nanoscan3_front 与仿真真实雷达帧对齐 -->
+  <node pkg="tf" type="static_transform_publisher" name="tf_front_alias"
+        args="0 0 0 0 0 0 nano_nanoscan3_sensor_link $(arg frame_id) 100" />
 
   <!-- RViz -->
   <arg name="use_rviz" default="false" />
