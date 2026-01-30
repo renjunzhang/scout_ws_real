@@ -1,6 +1,6 @@
 <launch>
   <!-- Namespace for all planning nodes -->
-  <arg name="ns" default="/scout" />
+  <arg name="ns" default="/" />
 
   <!-- Simulation time -->
   <arg name="use_sim_time" default="true" />
@@ -10,7 +10,8 @@
 
   <!-- Local planner is required by move_base, but output cmd_vel is remapped -->
   <arg name="base_local_planner" default="dwa_local_planner/DWAPlannerROS" />
-  <arg name="cmd_vel_out" default="move_base_cmd_vel" />
+  <arg name="cmd_vel_out" default="/cmd_vel" />
+  <arg name="remap_goal" default="false" />
   <arg name="use_rviz" default="false" />
   <arg name="rviz_config" default="$(find scout_global_planner)/rviz/scout_global_planner.rviz" />
 
@@ -22,14 +23,14 @@
       <param name="base_local_planner" value="$(arg base_local_planner)" />
 
       <!-- Load planner + costmap params into move_base private namespace -->
-      <rosparam file="$(find scout_global_planner)/config/global_planner.yaml" command="load" />
+      <rosparam file="$(find scout_global_planner)/config/global_planner_sim.yaml" command="load" />
 
       <!-- Remap plan output to a stable API -->
       <remap from="~GlobalPlanner/plan" to="global_path" />
       <remap from="~NavfnROS/plan" to="global_path" />
 
-      <!-- Optional: use /scout/goal instead of /move_base_simple/goal -->
-      <remap from="move_base_simple/goal" to="goal" />
+      <!-- Optional: use /goal instead of /move_base_simple/goal -->
+      <remap if="$(arg remap_goal)" from="move_base_simple/goal" to="goal" />
 
       <!-- Prevent move_base from publishing to /cmd_vel used by local MPC -->
       <remap from="cmd_vel" to="$(arg cmd_vel_out)" />

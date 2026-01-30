@@ -1,5 +1,6 @@
 # 启动前的注意工作
 codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
+codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
 ## 实物流程
 ### 1. 将底盘和工控机连接并建立 CAN 通信
     sudo modprobe gs_usb   # 若需要
@@ -55,9 +56,10 @@ codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
     - 建图完成后保存：rosrun map_server map_saver -f ~/scout_ws/src/scout_apps/scout_maps/maps/map_carto
 ### 5. 定位（仿真）
     roslaunch nanoscan3_localization scout_nanoscan3_amcl_sim.launch use_rviz:=true
+    不能source，source会覆盖cartographer的环境
     roslaunch nanoscan3_localization scout_nanoscan3_cartographer_localization_sim.launch
 ### 6. 全局规划
-    roslaunch scout_global_planner move_base_global.launch
+    roslaunch scout_global_planner move_base_global_sim.launch ns:=/scout remap_goal:=true
 ### 7. MPC 局部规划
     roslaunch scout_local_planner test_mpc.launch
     
@@ -189,15 +191,8 @@ codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
   - `nanoscan3_bringup/mapping/localization` - 激光雷达相关
   - `scout_base/bringup/msgs` - 底盘驱动相关
 
-## 2026-01-29（计划）
-- 先跑通 **简单 MPC**（不含液体晃动），参照 `docs/change_plan.md`：
-  - 路径处理与 Frenet 转换：`path_handler.h/.cpp`
-  - 差速动力学模型：`diff_drive_model.h/.cpp`
-  - MPC 求解器框架：`mpc_solver.h/.cpp`
-  - 配置文件与启动入口：`config/mpc_params.yaml`、`launch/test_mpc.launch`
-- 验证：对接 `/scout/global_path`，稳定输出 `/cmd_vel`
 
-### 2026-01-29（实际修改）
+## 2026-01-29（实际修改）
 - 修正 MPC 控制变化率代价：加入 `(u_k - u_{k-1})^2` 跨步耦合项，避免被当作额外 `u^2`。
 - 参考点生成前更新 `current_s_`，并让 `lookahead_distance` 生效。
 - 线性化名义轨迹随步推进（不再固定 x0）。
@@ -205,7 +200,7 @@ codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
 - 更新 `docs/topic_list.md`：补充 `/rosout`、`/rosout_agg` 等观测话题并校对命名空间。
 - 启动 test_mpc.launch 则对接 `/scout/global_path`，稳定输出 `/cmd_vel`
 
-## 2026-01-29（文档更新）
+### 2026-01-29（文档更新）
 - 将启动流程拆分为“实物流程”和“仿真流程”，明确各步骤对应的启动命令。
 - 仿真流程补充说明：`nanoscan3_front_sim.launch` 仅用于将 `/scan` relay 为 `/scan_front`，当前仿真统一使用 `/scan` 可省略；如需启用需保持 `publish_static_tf:=false` 以避免 TF 冲突。
 
@@ -277,8 +272,18 @@ rospack find nanoscan3_mapping
 ldd ~/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/lib/cartographer_ros/cartographer_node | grep "not found"
 # 应无输出
 ```
+### 对于仿真的全局规划的修改
+- 仿真全局规划：新增 `scout_global_planner/config/global_planner_sim.yaml`，降低静态层阈值并启用未知区域跟踪，避免 Cartographer 地图代价（~99）导致路径穿墙。
+- `move_base_global_sim.launch` 改为加载仿真配置，补充 `remap_goal` 参数，默认将 `cmd_vel` 输出到 `/cmd_vel`，并保持根命名空间启动。
+- 更新 Cartographer 定位 RViz 配置：`nanoscan3_localization/rviz/cartographer_localization.rviz` 增加机器人模型/TF/坐标轴显示，便于仿真定位调试。
 
-## 2026-01-30（计划）
+## 2026-01-31（计划）
+- 首先进行 **简单 MPC**（不含液体晃动），参照 `docs/change_plan.md`：
+  - 路径处理与 Frenet 转换：`path_handler.h/.cpp`
+  - 差速动力学模型：`diff_drive_model.h/.cpp`
+  - MPC 求解器框架：`mpc_solver.h/.cpp`
+  - 配置文件与启动入口：`config/mpc_params.yaml`、`launch/test_mpc.launch`
+- 验证：对接 `/scout/global_path`，稳定输出 `/cmd_vel
 - 进行 **液体晃动模型集成（第 2 步）**，参照 `docs/change_plan.md`：
   - 晃动动力学扩展：`diff_drive_slosh_model.h/.cpp`
   - 晃动约束模块：`slosh_models/slosh_constraint.h/.cpp`
