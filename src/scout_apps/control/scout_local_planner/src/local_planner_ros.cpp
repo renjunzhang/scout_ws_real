@@ -42,6 +42,10 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     // 发布者
     cmd_vel_pub_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 1);
     local_path_pub_ = nh_.advertise<nav_msgs::Path>("local_path", 1);
+    if (path_params_.publish_smoothed_path) {
+        smoothed_path_pub_ = nh_.advertise<nav_msgs::Path>(
+            path_params_.smoothed_path_topic, 1);
+    }
     status_pub_ = nh_.advertise<std_msgs::String>("mpc_status", 1);
     
     // 控制定时器
@@ -87,6 +91,13 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("path_handler/goal_tolerance", path_params_.goal_tolerance, 0.1);
     pnh.param("path_handler/yaw_tolerance", path_params_.yaw_tolerance, 0.1);
     pnh.param("path_handler/path_timeout", path_params_.path_timeout, 5.0);
+    pnh.param("path_handler/publish_smoothed_path",
+              path_params_.publish_smoothed_path, false);
+    pnh.param("path_handler/smoothed_path_topic",
+              path_params_.smoothed_path_topic,
+              std::string("global_path_smooth"));
+    pnh.param("path_handler/smoothed_path_points",
+              path_params_.smoothed_path_points, 80);
     
     // 其他参数
     pnh.param("control_rate", control_rate_, 20.0);
@@ -163,6 +174,8 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     publishCmdVel(0.0, 0.0);
                     return;
                 }
+
+                publishSmoothedPath();
                 
                 // 2. 获取 Frenet 误差
                 FrenetState frenet;
@@ -259,6 +272,18 @@ void LocalPlannerROS::publishCmdVel(double v, double omega) {
     cmd.linear.x = v;
     cmd.angular.z = omega;
     cmd_vel_pub_.publish(cmd);
+}
+
+void LocalPlannerROS::publishSmoothedPath() {
+    if (!path_params_.publish_smoothed_path || !smoothed_path_pub_) {
+        return;
+    }
+
+    nav_msgs::Path path_out;
+    if (!path_handler_.getSmoothedPath(path_out, path_params_.smoothed_path_points)) {
+        return;
+    }
+    smoothed_path_pub_.publish(path_out);
 }
 
 void LocalPlannerROS::publishLocalPath(const std::vector<StateVector>& predicted_states) {

@@ -92,6 +92,14 @@ public:
      */
     double getSplineTotalLength() const;
 
+    /**
+     * @brief 获取平滑后的路径（基于局部样条，base_link 坐标系）
+     * @param path_out 输出路径
+     * @param num_samples 采样点数
+     * @return 是否成功
+     */
+    bool getSmoothedPath(nav_msgs::Path& path_out, int num_samples) const;
+
 private:
     /**
      * @brief 将路径从 map 变换到 base_link

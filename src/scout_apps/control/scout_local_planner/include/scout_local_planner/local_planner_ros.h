@@ -52,6 +52,7 @@ private:
     void loadParameters(ros::NodeHandle& pnh);
     void publishCmdVel(double v, double omega);
     void publishLocalPath(const std::vector<StateVector>& predicted_states);
+    void publishSmoothedPath();
     void publishStatus();
     void updateState();
     
@@ -65,6 +66,7 @@ private:
     ros::Subscriber odom_sub_;
     ros::Publisher cmd_vel_pub_;
     ros::Publisher local_path_pub_;
+    ros::Publisher smoothed_path_pub_;
     ros::Publisher status_pub_;
     ros::Timer control_timer_;
     

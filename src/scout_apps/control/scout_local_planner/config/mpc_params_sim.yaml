@@ -51,7 +51,7 @@ path_handler:
   goal_tolerance: 0.1      # 到达目标位置容差 (m)
   yaw_tolerance: 0.1       # 到达目标航向容差 (rad)
   path_timeout: 5.0        # 路径超时时间 (s)
-  publish_smoothed_path: false        # 是否发布平滑路径
+  publish_smoothed_path: true         # 是否发布平滑路径
   smoothed_path_topic: "/scout/global_path_smooth"  # 平滑路径话题名
   smoothed_path_points: 80            # 平滑路径采样点数
 

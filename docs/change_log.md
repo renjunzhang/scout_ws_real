@@ -61,7 +61,7 @@ codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
 ### 6. 全局规划
     roslaunch scout_global_planner move_base_global_sim.launch ns:=/scout remap_goal:=true
 ### 7. MPC 局部规划
-    roslaunch scout_local_planner test_mpc.launch
+    roslaunch scout_local_planner test_mpc_sim.launch
     
 
 # 修改记录（scout_ws）
@@ -289,3 +289,27 @@ ldd ~/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/lib/carto
   - 晃动约束模块：`slosh_models/slosh_constraint.h/.cpp`
   - 状态扩展与代价/约束调整（`types.h` / `cost_function.*` / `constraint_manager.*`）
   - 输出晃动调试话题（如 `slosh_height`）
+
+## 2026-01-31（实改：MPC 平滑路径与仿真/实物对齐）
+- **MPC 新增平滑路径可选发布**  
+  - 内部仍基于“局部三次样条”生成参考点，MPC 控制逻辑不变。  
+  - 新增参数：`path_handler.publish_smoothed_path`、`path_handler.smoothed_path_topic`、`path_handler.smoothed_path_points`。  
+  - 仿真默认开启：`config/mpc_params_sim.yaml` → `/scout/global_path_smooth`。  
+  - 平滑路径 frame_id 为 `base_link`（局部样条在 base_link 坐标系）。
+
+- **仿真 vs 实物：MPC 输入/输出/命名空间/TF 对齐（便于移植）**  
+  - **实物启动**：`scout_local_planner/launch/test_mpc.launch`  
+  - **仿真启动**：`scout_local_planner/launch/test_mpc_sim.launch`  
+  - **输入话题（两者一致）**：  
+    - 全局路径：`/scout/global_path`（`nav_msgs/Path`）  
+    - 里程计：`/odom`（`nav_msgs/Odometry`）  
+    - TF：`map -> odom -> base_link`（PathHandler 内部使用 TF 将路径转到 base_link）  
+  - **输出话题（两者一致）**：  
+    - 速度指令：`/cmd_vel`（`geometry_msgs/Twist`）  
+    - 预测轨迹：`/local_path`（`nav_msgs/Path`）  
+    - 状态信息：`/mpc_status`  
+  - **仿真特有**：  
+    - 使用 `mpc_params_sim.yaml`，默认发布 `/scout/global_path_smooth`（仅可视化，不参与控制）。  
+    - 仿真有 `/clock`，use_sim_time 生效。  
+  - **实物特有**：  
+    - 使用 `mpc_params.yaml`，默认不发布平滑路径话题。

@@ -7,6 +7,7 @@
 
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/utils.h>
+#include <tf2/LinearMath/Quaternion.h>
 
 #include <algorithm>
 #include <cmath>
@@ -213,6 +214,44 @@ bool PathHandler::isPathValid() const {
 double PathHandler::getSplineTotalLength() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return local_spline_.getTotalLength();
+}
+
+bool PathHandler::getSmoothedPath(nav_msgs::Path& path_out, int num_samples) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!local_spline_.isValid()) {
+        return false;
+    }
+
+    const double total_len = local_spline_.getTotalLength();
+    if (total_len <= 1e-6 || num_samples < 2) {
+        return false;
+    }
+
+    path_out.header.stamp = ros::Time::now();
+    path_out.header.frame_id = base_frame_;
+    path_out.poses.clear();
+    path_out.poses.reserve(static_cast<size_t>(num_samples));
+
+    for (int i = 0; i < num_samples; ++i) {
+        const double s = total_len * static_cast<double>(i) / (num_samples - 1);
+        const Eigen::Vector2d pos = local_spline_.evaluate(s);
+        const double theta = local_spline_.evaluateTheta(s);
+
+        geometry_msgs::PoseStamped pose;
+        pose.header = path_out.header;
+        pose.pose.position.x = pos.x();
+        pose.pose.position.y = pos.y();
+        pose.pose.position.z = 0.0;
+
+        tf2::Quaternion q;
+        q.setRPY(0.0, 0.0, theta);
+        pose.pose.orientation = tf2::toMsg(q);
+
+        path_out.poses.push_back(pose);
+    }
+
+    return true;
 }
 
 //==============================================================================

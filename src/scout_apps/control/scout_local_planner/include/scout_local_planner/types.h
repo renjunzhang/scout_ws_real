@@ -152,6 +152,9 @@ struct PathHandlerParams {
     double path_timeout = 5.0;        // 路径超时时间 (s)
     int min_path_points = 2;          // 最少路径点数
     std::string base_frame = "base_link";  // 机器人坐标系
+    bool publish_smoothed_path = false;     // 是否发布平滑路径
+    std::string smoothed_path_topic = "global_path_smooth";  // 平滑路径话题名
+    int smoothed_path_points = 80;          // 平滑路径采样点数
 };
 
 //==============================================================================
