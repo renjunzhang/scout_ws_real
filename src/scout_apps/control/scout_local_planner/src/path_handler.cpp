@@ -130,6 +130,11 @@ bool PathHandler::updateGlobalPath(const nav_msgs::Path& path) {
     global_path_ = path;
     path_timestamp_ = ros::Time::now();
     has_path_ = true;
+
+    // 重置弧长跟踪
+    s_initialized_ = false;
+    s_global_ = 0.0;
+    last_projection_s_ = 0.0;
     
     // 重置最近点索引
     closest_idx_ = 0;
@@ -170,9 +175,39 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     if (path_points.size() < 2) {
         return false;
     }
+
+    // 1.2 计算路径累计弧长（基于当前 path_points）
+    std::vector<double> path_s;
+    path_s.reserve(path_points.size());
+    path_s.push_back(0.0);
+    for (size_t i = 1; i < path_points.size(); ++i) {
+        const double d = (path_points[i] - path_points[i - 1]).norm();
+        path_s.push_back(path_s.back() + d);
+    }
     
     // 2. 找最近点
     closest_idx_ = findClosestPointIndex(path_points);
+
+    // 2.1 基于全局路径索引更新全局弧长（用于稳定推进）
+    double s_proj = 0.0;
+    if (closest_idx_ >= 0 &&
+        static_cast<size_t>(closest_idx_) < path_s.size()) {
+        s_proj = path_s[static_cast<size_t>(closest_idx_)];
+    }
+    if (!s_initialized_) {
+        s_global_ = s_proj;
+        last_projection_s_ = s_proj;
+        s_initialized_ = true;
+    } else {
+        const double ds = s_proj - last_projection_s_;
+        if (std::abs(ds) < params_.s_jump_threshold) {
+            s_global_ += ds;
+        } else {
+            // 路径跳变或重规划：重置弧长
+            s_global_ = s_proj;
+        }
+        last_projection_s_ = s_proj;
+    }
     
     // 3. 截取窗口 [idx-window_back, idx+N+window_forward]
     int window_start = std::max(0, closest_idx_ - params_.window_back);
@@ -216,6 +251,19 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     ref_points.reserve(N);
     
     double total_len = local_spline_.getTotalLength();
+
+    // 4.3 使用全局弧长映射到局部样条，减少 s 抖动
+    if (!path_s.empty() && window_start >= 0 &&
+        static_cast<size_t>(window_end) < path_s.size()) {
+        const double s_start = path_s[static_cast<size_t>(window_start)];
+        const double s_end = path_s[static_cast<size_t>(window_end)];
+        const double window_len = std::max(1e-6, s_end - s_start);
+        const double scale = total_len / window_len;
+        double s_local = (s_global_ - s_start) * scale;
+        s_local = std::max(0.0, std::min(total_len, s_local));
+        current_s_ = s_local;
+    }
+
     double base_s = std::min(current_s_ + params_.lookahead_distance, total_len);
 
     double s = base_s;

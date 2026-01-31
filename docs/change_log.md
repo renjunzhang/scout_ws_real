@@ -25,6 +25,8 @@ codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
     roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true
 ### 6. 全局规划
     roslaunch scout_global_planner move_base_global.launch
+    # 实物对齐：global_planner.yaml 已加入 transform_tolerance: 0.2（global_costmap/local_costmap）
+    # 默认改为旁路速度话题：move_base 输出 /scout/move_base_cmd_vel，不抢占 /cmd_vel
 ### 7. MPC 局部规划
     roslaunch scout_local_planner test_mpc.launch
 
@@ -340,5 +342,17 @@ ldd ~/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/lib/carto
 - **A. 安全版（推荐）**  
   只对局部窗口做 B‑spline 平滑（base_link 坐标系），不改变全局路径，避免穿墙。  
   → 仅影响 MPC 内部参考点。  
----
 
+## 2026-01-31（仿真：MPC 速度与响应调优）
+- `mpc_params_sim.yaml` 调整以提升速度响应与转弯执行：
+  - 降低 `Q_ec/Q_etheta`，提高 `Q_v`
+  - 降低 `R_a/R_alpha/R_da/R_dalpha`
+  - 提高 `v_max/a_max/alpha_max`
+  - 放宽 `max_lat_accel`，提高 `min_ref_speed`
+  - 提高 `max_tan_accel/max_tan_decel`，将 `goal_speed` 调到 0.4
+  - 增大 `omega_max/alpha_max` 并降低 `R_alpha`，提升转向能力
+
+## 2026-01-31（仿真：原地对齐模式）
+- 新增 Heading Align：航向误差过大时 `v=0` 原地转向
+- 参数：`heading_align/enable`、`enter_angle`、`exit_angle`、`omega_gain`、`max_omega`
+- 仿真默认开启，实物默认关闭

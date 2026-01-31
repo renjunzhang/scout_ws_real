@@ -16,6 +16,8 @@ mpc:
   use_contour_lag: false   # 启用 contour + lag 误差结构
   Q_contour: 10.0          # contour（横向误差）权重
   Q_lag: 1.0               # lag（纵向误差）权重
+  enable_omega_ff: false   # 启用角速度前馈
+  Q_omega_ff: 0.0          # 角速度前馈权重
   
   # 控制权重
   R_a: 1.0                 # 加速度权重
@@ -59,6 +61,7 @@ path_handler:
   smoothed_path_points: 80            # 平滑路径采样点数
   window_back: 2                      # 样条窗口向后点数
   window_forward: 2                   # 样条窗口向前额外点数
+  s_jump_threshold: 0.5               # 弧长跳变阈值 (m)
   resample_spacing: 0.0               # 路径重采样间隔 (m)
   max_lat_accel: 0.0                  # 最大横向加速度 (m/s^2)
   min_ref_speed: 0.0                  # 参考速度下限 (m/s)
@@ -85,3 +88,13 @@ safety:
   infeasible_decel: 1.0          # 不可行时制动减速度 (m/s^2)
   infeasible_omega_scale: 0.0    # 不可行时角速度缩放
   infeasible_min_speed: 0.0      # 不可行时线速度下限 (m/s)
+
+# =============================================================================
+# 原地对齐模式（航向误差过大时原地转向）
+# =============================================================================
+heading_align:
+  enable: false
+  enter_angle: 0.8         # 进入阈值 (rad)
+  exit_angle: 0.4          # 退出阈值 (rad)
+  omega_gain: 1.5
+  max_omega: 0.0           # <=0 使用 vehicle.omega_max

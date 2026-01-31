@@ -165,6 +165,11 @@ private:
     // 速度曲线
     std::vector<double> s_samples_;
     std::vector<double> v_samples_;
+
+    // 全局弧长（用于平滑推进）
+    double s_global_ = 0.0;
+    double last_projection_s_ = 0.0;
+    bool s_initialized_ = false;
     
     // 线程安全
     mutable std::mutex mutex_;

@@ -25,6 +25,7 @@ double StateTrackingCost::evaluate(
     double e_c = x(StateIndex::E_C);
     double e_theta = x(StateIndex::E_THETA);
     double v = x(StateIndex::V);
+    double omega = x(StateIndex::OMEGA);
     
     double cost = 0.0;
     if (params_.use_contour_lag) {
@@ -36,6 +37,10 @@ double StateTrackingCost::evaluate(
     }
     cost += params_.Q_etheta * e_theta * e_theta;
     cost += params_.Q_v * (v - ref.v_ref) * (v - ref.v_ref);
+    if (params_.enable_omega_ff) {
+        double omega_ref = ref.v_ref * ref.kappa;
+        cost += params_.Q_omega_ff * (omega - omega_ref) * (omega - omega_ref);
+    }
     
     return cost;
 }
@@ -65,6 +70,9 @@ void StateTrackingCost::getQuadraticCost(
     }
     Q_contrib(StateIndex::E_THETA, StateIndex::E_THETA) = params_.Q_etheta;
     Q_contrib(StateIndex::V, StateIndex::V) = params_.Q_v;
+    if (params_.enable_omega_ff) {
+        Q_contrib(StateIndex::OMEGA, StateIndex::OMEGA) = params_.Q_omega_ff;
+    }
     
     // 注意：v_ref 的线性项会在 buildQPCost 中根据 refs 添加
     // q_contrib(StateIndex::V) = -2 * params_.Q_v * v_ref;
@@ -238,6 +246,10 @@ void CostFunction::buildQPCost(
         // 添加 v_ref 的线性项
         if (k < static_cast<int>(refs.size())) {
             q_total(StateIndex::V) -= 2.0 * params_.Q_v * refs[k].v_ref;
+            if (params_.enable_omega_ff) {
+                double omega_ref = refs[k].v_ref * refs[k].kappa;
+                q_total(StateIndex::OMEGA) -= 2.0 * params_.Q_omega_ff * omega_ref;
+            }
         }
         
         // 填充 H 矩阵（状态部分）

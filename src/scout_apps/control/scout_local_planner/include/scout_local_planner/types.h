@@ -113,6 +113,10 @@ struct MPCParams {
     bool use_contour_lag = false;
     double Q_contour = 10.0; // 横向误差（contour）权重
     double Q_lag = 1.0;      // 纵向误差（lag）权重
+
+    // 角速度前馈（基于曲率）
+    bool enable_omega_ff = false;
+    double Q_omega_ff = 0.0;
     
     // 控制权重
     double R_a = 1.0;       // 加速度权重
@@ -162,6 +166,7 @@ struct PathHandlerParams {
     int smoothed_path_points = 80;          // 平滑路径采样点数
     int window_back = 2;               // 样条拟合窗口：向后点数
     int window_forward = 2;            // 样条拟合窗口：向前额外点数
+    double s_jump_threshold = 0.5;     // 弧长跳变阈值 (m)
     double resample_spacing = 0.0;     // 路径重采样间隔 (m)，<=0 表示不重采样
     double max_lat_accel = 0.0;        // 最大横向加速度 (m/s^2)，<=0 表示不限制
     double min_ref_speed = 0.0;        // 参考速度下限 (m/s)

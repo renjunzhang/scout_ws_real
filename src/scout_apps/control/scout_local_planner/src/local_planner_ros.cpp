@@ -75,6 +75,8 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/use_contour_lag", mpc_params_.use_contour_lag, false);
     pnh.param("mpc/Q_contour", mpc_params_.Q_contour, mpc_params_.Q_ec);
     pnh.param("mpc/Q_lag", mpc_params_.Q_lag, mpc_params_.Q_el);
+    pnh.param("mpc/enable_omega_ff", mpc_params_.enable_omega_ff, false);
+    pnh.param("mpc/Q_omega_ff", mpc_params_.Q_omega_ff, 0.0);
     pnh.param("mpc/R_a", mpc_params_.R_a, 1.0);
     pnh.param("mpc/R_alpha", mpc_params_.R_alpha, 1.0);
     pnh.param("mpc/R_da", mpc_params_.R_da, 0.1);
@@ -96,6 +98,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("path_handler/path_timeout", path_params_.path_timeout, 5.0);
     pnh.param("path_handler/window_back", path_params_.window_back, 2);
     pnh.param("path_handler/window_forward", path_params_.window_forward, 2);
+    pnh.param("path_handler/s_jump_threshold", path_params_.s_jump_threshold, 0.5);
     pnh.param("path_handler/resample_spacing", path_params_.resample_spacing, 0.0);
     pnh.param("path_handler/max_lat_accel", path_params_.max_lat_accel, 0.0);
     pnh.param("path_handler/min_ref_speed", path_params_.min_ref_speed, 0.0);
@@ -122,6 +125,13 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("safety/infeasible_decel", infeasible_decel_, 1.0);
     pnh.param("safety/infeasible_omega_scale", infeasible_omega_scale_, 0.0);
     pnh.param("safety/infeasible_min_speed", infeasible_min_speed_, 0.0);
+
+    // 原地对齐模式
+    pnh.param("heading_align/enable", heading_align_enable_, false);
+    pnh.param("heading_align/enter_angle", heading_align_enter_, 0.8);
+    pnh.param("heading_align/exit_angle", heading_align_exit_, 0.4);
+    pnh.param("heading_align/omega_gain", heading_align_omega_gain_, 1.5);
+    pnh.param("heading_align/max_omega", heading_align_max_omega_, 0.0);
     
     // 将 base_frame 传递给 path_handler
     path_params_.base_frame = base_frame_;
@@ -161,6 +171,10 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
     
     // 更新状态
     updateState();
+
+    if (state_ != PlannerState::TRACKING) {
+        heading_align_active_ = false;
+    }
     
     // 发布状态
     publishStatus();
@@ -200,6 +214,31 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 if (!path_handler_.getFrenetState(frenet)) {
                     ROS_WARN_THROTTLE(1.0, "[LocalPlannerROS] Failed to get Frenet state");
                     publishCmdVel(0.0, 0.0);
+                    return;
+                }
+
+                // 2.1 原地对齐模式：航向误差过大时先原地转向
+                if (heading_align_enable_) {
+                    const double abs_theta = std::abs(frenet.e_theta);
+                    if (!heading_align_active_ && abs_theta > heading_align_enter_) {
+                        heading_align_active_ = true;
+                    } else if (heading_align_active_ && abs_theta < heading_align_exit_) {
+                        heading_align_active_ = false;
+                    }
+                }
+
+                if (heading_align_active_) {
+                    const double max_omega = heading_align_max_omega_ > 1e-6
+                        ? heading_align_max_omega_
+                        : vehicle_params_.omega_max;
+                    // e_theta = theta_robot - theta_path，需取负号使其朝路径方向收敛
+                    double omega = -heading_align_omega_gain_ * frenet.e_theta;
+                    omega = std::max(-max_omega, std::min(max_omega, omega));
+                    publishCmdVel(0.0, omega);
+
+                    if (verbose_) {
+                        ROS_INFO_THROTTLE(0.5, "[Align] e_theta=%.3f, omega=%.3f", frenet.e_theta, omega);
+                    }
                     return;
                 }
                 

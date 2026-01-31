@@ -10,7 +10,7 @@
 
   <!-- Local planner is required by move_base, but output cmd_vel is remapped -->
   <arg name="base_local_planner" default="dwa_local_planner/DWAPlannerROS" />
-  <arg name="cmd_vel_out" default="/cmd_vel" />
+  <arg name="cmd_vel_out" default="/scout/move_base_cmd_vel" />
   <arg name="remap_goal" default="false" />
   <arg name="use_rviz" default="false" />
   <arg name="rviz_config" default="$(find scout_global_planner)/rviz/scout_global_planner.rviz" />

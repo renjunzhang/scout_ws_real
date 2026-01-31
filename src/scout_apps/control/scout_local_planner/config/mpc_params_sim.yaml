@@ -5,25 +5,27 @@
 # =============================================================================
 mpc:
   # 预测参数
-  N: 20                    # 预测步长
-  dt: 0.05                 # 时间步长 (s)，与控制周期匹配
+  N: 30                    # 预测步长
+  dt: 0.1                  # 时间步长 (s)
   
   # 状态权重（Frenet 误差）
   Q_el: 1.0                # 纵向误差权重（沿路径方向）
-  Q_ec: 20.0               # 横向误差权重（主要关注！）
-  Q_etheta: 12.0           # 航向误差权重
-  Q_v: 1.5                 # 速度跟踪权重（v_ref 只在这里！）
+  Q_ec: 40.0               # 横向误差权重（更贴路径）
+  Q_etheta: 12.0           # 航向误差权重（更贴路径）
+  Q_v: 15.0                # 速度跟踪权重（显著提高）
   use_contour_lag: true    # 启用 contour + lag 误差结构
   Q_contour: 20.0          # contour（横向误差）权重
-  Q_lag: 2.0               # lag（纵向误差）权重
+  Q_lag: 1.0               # lag（纵向误差）权重
+  enable_omega_ff: true    # 启用角速度前馈
+  Q_omega_ff: 5.0          # 角速度前馈权重
   
   # 控制权重
-  R_a: 1.0                 # 加速度权重
-  R_alpha: 0.5             # 角加速度权重
+  R_a: 0.8                 # 加速度权重（进一步降低惩罚）
+  R_alpha: 1.0             # 角加速度权重（进一步降低惩罚）
   
   # 控制变化率权重（平滑控制）
-  R_da: 0.1                # 加速度变化权重
-  R_dalpha: 0.05           # 角加速度变化权重
+  R_da: 0.02               # 加速度变化权重
+  R_dalpha: 0.02           # 角加速度变化权重
   
   # 液体晃动权重（第 2 步启用）
   Q_slosh: 0.0             # 设为 0 表示不启用晃动抑制
@@ -34,13 +36,13 @@ mpc:
 # =============================================================================
 vehicle:
   # 速度约束
-  v_max: 1.8               # 最大线速度 (m/s)
+  v_max: 2.0               # 最大线速度 (m/s)
   v_min: -0.3              # 最小线速度 (m/s)，负值表示倒车
-  omega_max: 2.5           # 最大角速度 (rad/s)
+  omega_max: 3.5           # 最大角速度 (rad/s)
   
   # 加速度约束
-  a_max: 0.8               # 最大线加速度 (m/s²)
-  alpha_max: 3.0           # 最大角加速度 (rad/s²)
+  a_max: 1.5               # 最大线加速度 (m/s²)
+  alpha_max: 7.0           # 最大角加速度 (rad/s²)
   
   # 车辆几何
   track_width: 0.456       # Scout Mini 轮距 (m)
@@ -59,21 +61,22 @@ path_handler:
   smoothed_path_points: 80            # 平滑路径采样点数
   window_back: 4                      # 样条窗口向后点数
   window_forward: 6                   # 样条窗口向前额外点数
+  s_jump_threshold: 0.5               # 弧长跳变阈值 (m)
   resample_spacing: 0.05              # 路径重采样间隔 (m)
-  max_lat_accel: 1.3                  # 最大横向加速度 (m/s^2)
-  min_ref_speed: 0.2                  # 参考速度下限 (m/s)
+  max_lat_accel: 4.0                  # 最大横向加速度 (m/s^2)
+  min_ref_speed: 0.8                  # 参考速度下限 (m/s)
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
-  max_tan_accel: 1.5                  # 最大切向加速度 (m/s^2)
-  max_tan_decel: 1.5                  # 最大切向减速度 (m/s^2)
-  goal_speed: 0.0                     # 末端期望速度 (m/s)
+  max_tan_accel: 3.5                  # 最大切向加速度 (m/s^2)
+  max_tan_decel: 3.5                  # 最大切向减速度 (m/s^2)
+  goal_speed: 0.4                     # 末端期望速度 (m/s)
   use_bspline_smoothing: true         # 启用局部 B-spline 平滑
   bspline_samples_per_segment: 8      # 每段采样点数
 
 # =============================================================================
 # 节点参数
 # =============================================================================
-control_rate: 20.0         # 控制频率 (Hz)
+control_rate: 10.0         # 控制频率 (Hz)
 base_frame: "base_link"    # 机器人坐标系
 map_frame: "map"           # 地图坐标系
 verbose: false             # 是否输出调试信息
@@ -85,3 +88,13 @@ safety:
   infeasible_decel: 1.0          # 不可行时制动减速度 (m/s^2)
   infeasible_omega_scale: 0.0    # 不可行时角速度缩放
   infeasible_min_speed: 0.0      # 不可行时线速度下限 (m/s)
+
+# =============================================================================
+# 原地对齐模式（航向误差过大时原地转向）
+# =============================================================================
+heading_align:
+  enable: true
+  enter_angle: 0.5         # 进入阈值 (rad)
+  exit_angle: 0.3          # 退出阈值 (rad)
+  omega_gain: 1.5
+  max_omega: 0.0           # <=0 使用 vehicle.omega_max
