@@ -85,6 +85,9 @@ private:
     double control_rate_ = 20.0;  // Hz
     std::string base_frame_ = "base_link";
     std::string map_frame_ = "map";
+    double infeasible_decel_ = 1.0;       // 不可行时制动减速度 (m/s^2)
+    double infeasible_omega_scale_ = 0.0; // 不可行时角速度缩放
+    double infeasible_min_speed_ = 0.0;   // 不可行时线速度下限 (m/s)
     
     // 状态
     PlannerState state_ = PlannerState::IDLE;

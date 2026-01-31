@@ -11,8 +11,99 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace scout_local_planner {
+
+namespace {
+
+std::vector<Eigen::Vector2d> resamplePath(const std::vector<Eigen::Vector2d>& points,
+                                          double spacing) {
+    if (points.size() < 2 || spacing <= 1e-6) {
+        return points;
+    }
+
+    std::vector<double> cum_dist;
+    cum_dist.reserve(points.size());
+    cum_dist.push_back(0.0);
+
+    for (size_t i = 1; i < points.size(); ++i) {
+        double d = (points[i] - points[i - 1]).norm();
+        cum_dist.push_back(cum_dist.back() + d);
+    }
+
+    const double total = cum_dist.back();
+    if (total <= spacing) {
+        return points;
+    }
+
+    std::vector<Eigen::Vector2d> out;
+    out.reserve(static_cast<size_t>(total / spacing) + 2);
+    out.push_back(points.front());
+
+    double s = spacing;
+    size_t idx = 1;
+    while (s < total && idx < points.size()) {
+        while (idx < points.size() && cum_dist[idx] < s) {
+            ++idx;
+        }
+        if (idx >= points.size()) {
+            break;
+        }
+        const double s0 = cum_dist[idx - 1];
+        const double s1 = cum_dist[idx];
+        const double t = (s1 - s0) > 1e-9 ? (s - s0) / (s1 - s0) : 0.0;
+        const Eigen::Vector2d p = points[idx - 1] + t * (points[idx] - points[idx - 1]);
+        out.push_back(p);
+        s += spacing;
+    }
+
+    if ((out.back() - points.back()).norm() > 1e-6) {
+        out.push_back(points.back());
+    }
+
+    return out;
+}
+
+std::vector<Eigen::Vector2d> bsplineSmooth(const std::vector<Eigen::Vector2d>& control_points,
+                                            int samples_per_segment) {
+    if (control_points.size() < 4 || samples_per_segment < 1) {
+        return control_points;
+    }
+
+    std::vector<Eigen::Vector2d> pts;
+    pts.reserve(control_points.size() + 6);
+    for (int i = 0; i < 3; ++i) {
+        pts.push_back(control_points.front());
+    }
+    pts.insert(pts.end(), control_points.begin(), control_points.end());
+    for (int i = 0; i < 3; ++i) {
+        pts.push_back(control_points.back());
+    }
+
+    std::vector<Eigen::Vector2d> out;
+    out.reserve((pts.size() - 3) * samples_per_segment + 1);
+
+    for (size_t i = 0; i + 3 < pts.size(); ++i) {
+        for (int j = 0; j < samples_per_segment; ++j) {
+            double t = static_cast<double>(j) / samples_per_segment;
+            double t2 = t * t;
+            double t3 = t2 * t;
+            double b0 = (-t3 + 3 * t2 - 3 * t + 1) / 6.0;
+            double b1 = (3 * t3 - 6 * t2 + 4) / 6.0;
+            double b2 = (-3 * t3 + 3 * t2 + 3 * t + 1) / 6.0;
+            double b3 = t3 / 6.0;
+            Eigen::Vector2d p = b0 * pts[i] + b1 * pts[i + 1] + b2 * pts[i + 2] + b3 * pts[i + 3];
+            out.push_back(p);
+        }
+    }
+
+    // 末端补点
+    out.push_back(control_points.back());
+    return out;
+}
+
+}  // namespace
 
 PathHandler::PathHandler() = default;
 
@@ -70,6 +161,11 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     if (!transformPathToBaseLink(global_path_, path_points)) {
         return false;
     }
+
+    // 1.1 可选：按固定间隔重采样
+    if (params_.resample_spacing > 0.0) {
+        path_points = resamplePath(path_points, params_.resample_spacing);
+    }
     
     if (path_points.size() < 2) {
         return false;
@@ -78,18 +174,26 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     // 2. 找最近点
     closest_idx_ = findClosestPointIndex(path_points);
     
-    // 3. 截取窗口 [idx-2, idx+N+2]
-    int window_start = std::max(0, closest_idx_ - 2);
+    // 3. 截取窗口 [idx-window_back, idx+N+window_forward]
+    int window_start = std::max(0, closest_idx_ - params_.window_back);
     int window_end = std::min(static_cast<int>(path_points.size()) - 1, 
-                              closest_idx_ + N + 2);
+                              closest_idx_ + N + params_.window_forward);
     
     if (window_end - window_start < 2) {
         ROS_WARN_THROTTLE(1.0, "[PathHandler] Window too small for spline fitting");
         return false;
     }
     
-    // 4. 局部样条拟合
-    if (!fitLocalSpline(path_points, window_start, window_end)) {
+    // 4. 局部样条拟合（可选 B-spline 平滑）
+    std::vector<Eigen::Vector2d> window_points;
+    window_points.reserve(static_cast<size_t>(window_end - window_start + 1));
+    for (int i = window_start; i <= window_end; ++i) {
+        window_points.push_back(path_points[i]);
+    }
+    if (params_.use_bspline_smoothing) {
+        window_points = bsplineSmooth(window_points, params_.bspline_samples_per_segment);
+    }
+    if (!fitLocalSpline(window_points)) {
         return false;
     }
 
@@ -104,6 +208,9 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
                                 tmp_e_l, tmp_e_c, tmp_e_theta);
     }
 
+    // 4.2 更新速度曲线
+    updateSpeedProfile(v_des);
+
     // 5. 生成参考点序列
     ref_points.clear();
     ref_points.reserve(N);
@@ -111,22 +218,47 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     double total_len = local_spline_.getTotalLength();
     double base_s = std::min(current_s_ + params_.lookahead_distance, total_len);
 
+    double s = base_s;
     for (int k = 0; k < N; ++k) {
         ReferencePoint ref;
         
-        // 沿路径推进
-        double s = base_s + k * dt * v_des;
-        s = std::min(s, total_len);  // 不超过样条末端
-        
+        // 沿路径推进（时间化速度）
+        if (params_.time_parameterize) {
+            const double v_ref = getSpeedAtS(s);
+            s = std::min(s, total_len);
+            double s_next = s + v_ref * dt;
+            s_next = std::min(s_next, total_len);
+            // 使用当前 s 采样点
+            ref.v_ref = v_ref;
+            ref.v_path = v_ref;
+            // 更新下一步 s
+            s = s_next;
+        } else {
+            s = std::min(base_s + k * dt * v_des, total_len);
+            s = std::min(s, total_len);  // 不超过样条末端
+        }
+
         // 计算参考点信息
         Eigen::Vector2d pos = local_spline_.evaluate(s);
         ref.x = pos.x();
         ref.y = pos.y();
         ref.theta_path = local_spline_.evaluateTheta(s);
         ref.kappa = local_spline_.evaluateKappa(s);
-        ref.v_path = v_des;
+        if (!params_.time_parameterize) {
+            double v_ref = v_des;
+            if (params_.max_lat_accel > 0.0) {
+                double kappa_abs = std::abs(ref.kappa);
+                if (kappa_abs > 1e-4) {
+                    v_ref = std::min(v_ref, std::sqrt(params_.max_lat_accel / kappa_abs));
+                }
+            }
+            if (params_.min_ref_speed > 0.0) {
+                v_ref = std::max(v_ref, params_.min_ref_speed);
+            }
+            ref.v_path = v_ref;
+            ref.v_ref = v_ref;
+        }
         ref.s = s;
-        ref.v_ref = v_des;  // 代价函数用
         
         ref_points.push_back(ref);
     }
@@ -186,8 +318,32 @@ bool PathHandler::isGoalReached() const {
     double dy = goal_in_base.pose.position.y;
     double dist = std::sqrt(dx * dx + dy * dy);
     
-    // 计算航向误差（目标在 base_link 中的朝向）
-    double goal_yaw_in_base = tf2::getYaw(goal_in_base.pose.orientation);
+    // 计算航向误差（使用路径末端切线方向，而非终点姿态）
+    double goal_yaw_in_base = 0.0;
+    const size_t n = global_path_.poses.size();
+    if (n >= 2) {
+        geometry_msgs::PoseStamped p1_map, p2_map;
+        p1_map.header = global_path_.header;
+        p2_map.header = global_path_.header;
+        p1_map.pose = global_path_.poses[n - 2].pose;
+        p2_map.pose = global_path_.poses[n - 1].pose;
+
+        geometry_msgs::PoseStamped p1_base, p2_base;
+        try {
+            p1_base = tf_buffer_->transform(p1_map, base_frame_, ros::Duration(0.1));
+            p2_base = tf_buffer_->transform(p2_map, base_frame_, ros::Duration(0.1));
+        } catch (tf2::TransformException& ex) {
+            ROS_WARN_THROTTLE(1.0, "[PathHandler] TF error in goal yaw: %s", ex.what());
+            return false;
+        }
+
+        const double dx = p2_base.pose.position.x - p1_base.pose.position.x;
+        const double dy = p2_base.pose.position.y - p1_base.pose.position.y;
+        if (std::hypot(dx, dy) > 1e-6) {
+            goal_yaw_in_base = std::atan2(dy, dx);
+        }
+    }
+
     double yaw_err = std::abs(goal_yaw_in_base);
     while (yaw_err > M_PI) yaw_err -= 2 * M_PI;
     yaw_err = std::abs(yaw_err);
@@ -394,13 +550,123 @@ bool PathHandler::fitLocalSpline(const std::vector<Eigen::Vector2d>& points,
     for (int i = start_idx; i <= end_idx; ++i) {
         window_points.push_back(points[i]);
     }
-    
-    if (!local_spline_.fit(window_points)) {
+    return fitLocalSpline(window_points);
+}
+
+bool PathHandler::fitLocalSpline(const std::vector<Eigen::Vector2d>& window_points) {
+    if (window_points.size() < 2) {
+        ROS_WARN_THROTTLE(1.0, "[PathHandler] Window too small for spline fitting");
+        return false;
+    }
+
+    std::vector<Eigen::Vector2d> filtered;
+    filtered.reserve(window_points.size());
+    const double min_dist = 1e-4;
+    for (const auto& p : window_points) {
+        if (filtered.empty() || (p - filtered.back()).norm() > min_dist) {
+            filtered.push_back(p);
+        }
+    }
+
+    if (filtered.size() < 2) {
+        ROS_WARN_THROTTLE(1.0, "[PathHandler] Filtered window too small for spline fitting");
+        return false;
+    }
+
+    if (!local_spline_.fit(filtered)) {
         ROS_WARN_THROTTLE(1.0, "[PathHandler] Failed to fit local spline");
         return false;
     }
     
     return true;
+}
+
+void PathHandler::updateSpeedProfile(double v_des) {
+    s_samples_.clear();
+    v_samples_.clear();
+
+    if (!params_.time_parameterize || !local_spline_.isValid()) {
+        return;
+    }
+
+    const double total_len = local_spline_.getTotalLength();
+    if (total_len <= 1e-6) {
+        return;
+    }
+
+    const double ds = std::max(1e-3, params_.speed_profile_ds);
+    const int n = static_cast<int>(std::ceil(total_len / ds)) + 1;
+    s_samples_.reserve(n);
+    v_samples_.reserve(n);
+
+    for (int i = 0; i < n; ++i) {
+        const double s = std::min(total_len, i * ds);
+        s_samples_.push_back(s);
+
+        double v = v_des;
+        if (params_.max_lat_accel > 0.0) {
+            double kappa_abs = std::abs(local_spline_.evaluateKappa(s));
+            if (kappa_abs > 1e-4) {
+                v = std::min(v, std::sqrt(params_.max_lat_accel / kappa_abs));
+            }
+        }
+        v_samples_.push_back(v);
+    }
+
+    // 末端速度
+    if (!v_samples_.empty()) {
+        v_samples_.back() = std::min(v_samples_.back(), std::max(0.0, params_.goal_speed));
+    }
+
+    // 前向遍历（加速限制）
+    if (params_.max_tan_accel > 0.0) {
+        for (size_t i = 1; i < v_samples_.size(); ++i) {
+            double v_prev = v_samples_[i - 1];
+            double v_lim = std::sqrt(std::max(0.0, v_prev * v_prev + 2.0 * params_.max_tan_accel * ds));
+            v_samples_[i] = std::min(v_samples_[i], v_lim);
+        }
+    }
+
+    // 反向遍历（减速限制）
+    double max_decel = params_.max_tan_decel > 0.0 ? params_.max_tan_decel : params_.max_tan_accel;
+    if (max_decel > 0.0) {
+        for (int i = static_cast<int>(v_samples_.size()) - 2; i >= 0; --i) {
+            double v_next = v_samples_[i + 1];
+            double v_lim = std::sqrt(std::max(0.0, v_next * v_next + 2.0 * max_decel * ds));
+            v_samples_[i] = std::min(v_samples_[i], v_lim);
+        }
+    }
+
+    // 参考速度下限（末端除外）
+    if (params_.min_ref_speed > 0.0 && v_samples_.size() >= 2) {
+        for (size_t i = 0; i + 1 < v_samples_.size(); ++i) {
+            v_samples_[i] = std::max(v_samples_[i], params_.min_ref_speed);
+        }
+    }
+}
+
+double PathHandler::getSpeedAtS(double s) const {
+    if (s_samples_.empty() || v_samples_.empty()) {
+        return 0.0;
+    }
+    if (s <= s_samples_.front()) {
+        return v_samples_.front();
+    }
+    if (s >= s_samples_.back()) {
+        return v_samples_.back();
+    }
+
+    auto it = std::upper_bound(s_samples_.begin(), s_samples_.end(), s);
+    size_t idx = static_cast<size_t>(std::distance(s_samples_.begin(), it));
+    if (idx == 0) {
+        return v_samples_.front();
+    }
+    double s0 = s_samples_[idx - 1];
+    double s1 = s_samples_[idx];
+    double v0 = v_samples_[idx - 1];
+    double v1 = v_samples_[idx];
+    double t = (s1 - s0) > 1e-9 ? (s - s0) / (s1 - s0) : 0.0;
+    return v0 + t * (v1 - v0);
 }
 
 }  // namespace scout_local_planner

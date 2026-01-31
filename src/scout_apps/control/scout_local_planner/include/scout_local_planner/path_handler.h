@@ -126,6 +126,21 @@ private:
     bool fitLocalSpline(const std::vector<Eigen::Vector2d>& points,
                         int start_idx, int end_idx);
 
+    /**
+     * @brief 对给定窗口点拟合样条
+     */
+    bool fitLocalSpline(const std::vector<Eigen::Vector2d>& window_points);
+
+    /**
+     * @brief 更新路径速度曲线 v(s)
+     */
+    void updateSpeedProfile(double v_des);
+
+    /**
+     * @brief 查询弧长 s 处的参考速度
+     */
+    double getSpeedAtS(double s) const;
+
 private:
     PathHandlerParams params_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -146,6 +161,10 @@ private:
     CubicSpline2D local_spline_;
     double current_s_ = 0.0;  // 当前在样条上的弧长位置
     int closest_idx_ = 0;     // 最近点索引
+
+    // 速度曲线
+    std::vector<double> s_samples_;
+    std::vector<double> v_samples_;
     
     // 线程安全
     mutable std::mutex mutex_;

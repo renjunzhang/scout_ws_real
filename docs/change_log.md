@@ -313,3 +313,32 @@ ldd ~/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/lib/carto
     - 仿真有 `/clock`，use_sim_time 生效。  
   - **实物特有**：  
     - 使用 `mpc_params.yaml`，默认不发布平滑路径话题。
+  
+- **路径处理增强**  
+  - 新增参数：`window_back` / `window_forward`（样条窗口）、`resample_spacing`（路径重采样）、`max_lat_accel`（曲率限速）、`min_ref_speed`（参考速度下限）。  
+  - 路径可按固定间距重采样，减少折线噪声；参考速度根据曲率自动限速。
+- **终点航向判定修复**  
+  - `isGoalReached()` 使用路径末端**切线方向**作为目标航向，避免终点姿态默认值导致不收敛。
+- **仿真参数调优**  
+  - 提升线速度与转弯能力：`v_max`、`a_max`、`omega_max`、`alpha_max`、`Q_v`、`lookahead_distance`、`max_lat_accel` 等在 `mpc_params_sim.yaml` 调整。
+
+## 2026-01-31（计划：借鉴 mpc_planner 的改进思路）
+- **目标**：在现有 `scout_local_planner` 上逐步引入更强的轨迹跟踪与速度规划能力，不替换为 move_base 插件。  
+- **改进思路（按顺序实施）**：
+  1. **时间化速度规划 v(s)**  
+     - 基于路径弧长生成速度曲线 `v(s)`  
+     - 前向/后向遍历约束加减速，得到可行速度分布  
+     - MPC 按时间采样参考点（真正时间化，而非固定 v_ref）  
+  2. **contour + lag 误差结构**  
+     - 强化横向/纵向误差分离，提升转弯稳定性  
+     - 与现有 Frenet 误差对齐，优化权重结构  
+  3. **第三步：安全退化策略说明**  
+     - 求解失败时执行“制动/降速”逻辑  
+     - 防止指令突变或停滞，提升鲁棒性  
+
+## 2026-01-31（计划：路径平滑方案）
+- **A. 安全版（推荐）**  
+  只对局部窗口做 B‑spline 平滑（base_link 坐标系），不改变全局路径，避免穿墙。  
+  → 仅影响 MPC 内部参考点。  
+---
+

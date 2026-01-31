@@ -13,6 +13,9 @@ mpc:
   Q_ec: 10.0               # 横向误差权重（主要关注！）
   Q_etheta: 5.0            # 航向误差权重
   Q_v: 1.0                 # 速度跟踪权重（v_ref 只在这里！）
+  use_contour_lag: false   # 启用 contour + lag 误差结构
+  Q_contour: 10.0          # contour（横向误差）权重
+  Q_lag: 1.0               # lag（纵向误差）权重
   
   # 控制权重
   R_a: 1.0                 # 加速度权重
@@ -54,6 +57,18 @@ path_handler:
   publish_smoothed_path: false        # 是否发布平滑路径
   smoothed_path_topic: "/scout/global_path_smooth"  # 平滑路径话题名
   smoothed_path_points: 80            # 平滑路径采样点数
+  window_back: 2                      # 样条窗口向后点数
+  window_forward: 2                   # 样条窗口向前额外点数
+  resample_spacing: 0.0               # 路径重采样间隔 (m)
+  max_lat_accel: 0.0                  # 最大横向加速度 (m/s^2)
+  min_ref_speed: 0.0                  # 参考速度下限 (m/s)
+  time_parameterize: false            # 启用时间化速度规划 v(s)
+  speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
+  max_tan_accel: 0.0                  # 最大切向加速度 (m/s^2)
+  max_tan_decel: 0.0                  # 最大切向减速度 (m/s^2)
+  goal_speed: 0.0                     # 末端期望速度 (m/s)
+  use_bspline_smoothing: false        # 启用局部 B-spline 平滑
+  bspline_samples_per_segment: 8      # 每段采样点数
 
 # =============================================================================
 # 节点参数
@@ -62,3 +77,11 @@ control_rate: 20.0         # 控制频率 (Hz)
 base_frame: "base_link"    # 机器人坐标系
 map_frame: "map"           # 地图坐标系
 verbose: false             # 是否输出调试信息
+
+# =============================================================================
+# 安全退化策略（求解不可行时）
+# =============================================================================
+safety:
+  infeasible_decel: 1.0          # 不可行时制动减速度 (m/s^2)
+  infeasible_omega_scale: 0.0    # 不可行时角速度缩放
+  infeasible_min_speed: 0.0      # 不可行时线速度下限 (m/s)

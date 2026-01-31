@@ -108,6 +108,11 @@ struct MPCParams {
     double Q_ec = 10.0;     // 横向误差权重（主要关注）
     double Q_etheta = 5.0;  // 航向误差权重
     double Q_v = 1.0;       // 速度误差权重
+
+    // Contour + Lag 误差结构（可选）
+    bool use_contour_lag = false;
+    double Q_contour = 10.0; // 横向误差（contour）权重
+    double Q_lag = 1.0;      // 纵向误差（lag）权重
     
     // 控制权重
     double R_a = 1.0;       // 加速度权重
@@ -155,6 +160,18 @@ struct PathHandlerParams {
     bool publish_smoothed_path = false;     // 是否发布平滑路径
     std::string smoothed_path_topic = "global_path_smooth";  // 平滑路径话题名
     int smoothed_path_points = 80;          // 平滑路径采样点数
+    int window_back = 2;               // 样条拟合窗口：向后点数
+    int window_forward = 2;            // 样条拟合窗口：向前额外点数
+    double resample_spacing = 0.0;     // 路径重采样间隔 (m)，<=0 表示不重采样
+    double max_lat_accel = 0.0;        // 最大横向加速度 (m/s^2)，<=0 表示不限制
+    double min_ref_speed = 0.0;        // 参考速度下限 (m/s)
+    bool time_parameterize = false;   // 是否启用时间化速度规划 v(s)
+    double speed_profile_ds = 0.05;   // 速度曲线采样间隔 (m)
+    double max_tan_accel = 0.0;       // 最大切向加速度 (m/s^2)，<=0 表示不限制
+    double max_tan_decel = 0.0;       // 最大切向减速度 (m/s^2)，<=0 表示不限制
+    double goal_speed = 0.0;          // 末端期望速度 (m/s)
+    bool use_bspline_smoothing = false; // 是否对局部窗口做 B-spline 平滑
+    int bspline_samples_per_segment = 8; // B-spline 每段采样点数
 };
 
 //==============================================================================

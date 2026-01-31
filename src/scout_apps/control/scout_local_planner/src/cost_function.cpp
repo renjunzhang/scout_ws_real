@@ -27,8 +27,13 @@ double StateTrackingCost::evaluate(
     double v = x(StateIndex::V);
     
     double cost = 0.0;
-    cost += params_.Q_el * e_l * e_l;
-    cost += params_.Q_ec * e_c * e_c;
+    if (params_.use_contour_lag) {
+        cost += params_.Q_lag * e_l * e_l;
+        cost += params_.Q_contour * e_c * e_c;
+    } else {
+        cost += params_.Q_el * e_l * e_l;
+        cost += params_.Q_ec * e_c * e_c;
+    }
     cost += params_.Q_etheta * e_theta * e_theta;
     cost += params_.Q_v * (v - ref.v_ref) * (v - ref.v_ref);
     
@@ -51,8 +56,13 @@ void StateTrackingCost::getQuadraticCost(
     r_contrib = Eigen::VectorXd::Zero(nu);
     
     // 状态权重矩阵
-    Q_contrib(StateIndex::E_L, StateIndex::E_L) = params_.Q_el;
-    Q_contrib(StateIndex::E_C, StateIndex::E_C) = params_.Q_ec;
+    if (params_.use_contour_lag) {
+        Q_contrib(StateIndex::E_L, StateIndex::E_L) = params_.Q_lag;
+        Q_contrib(StateIndex::E_C, StateIndex::E_C) = params_.Q_contour;
+    } else {
+        Q_contrib(StateIndex::E_L, StateIndex::E_L) = params_.Q_el;
+        Q_contrib(StateIndex::E_C, StateIndex::E_C) = params_.Q_ec;
+    }
     Q_contrib(StateIndex::E_THETA, StateIndex::E_THETA) = params_.Q_etheta;
     Q_contrib(StateIndex::V, StateIndex::V) = params_.Q_v;
     

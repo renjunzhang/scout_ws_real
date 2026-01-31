@@ -72,6 +72,9 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/Q_ec", mpc_params_.Q_ec, 10.0);
     pnh.param("mpc/Q_etheta", mpc_params_.Q_etheta, 5.0);
     pnh.param("mpc/Q_v", mpc_params_.Q_v, 1.0);
+    pnh.param("mpc/use_contour_lag", mpc_params_.use_contour_lag, false);
+    pnh.param("mpc/Q_contour", mpc_params_.Q_contour, mpc_params_.Q_ec);
+    pnh.param("mpc/Q_lag", mpc_params_.Q_lag, mpc_params_.Q_el);
     pnh.param("mpc/R_a", mpc_params_.R_a, 1.0);
     pnh.param("mpc/R_alpha", mpc_params_.R_alpha, 1.0);
     pnh.param("mpc/R_da", mpc_params_.R_da, 0.1);
@@ -91,6 +94,18 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("path_handler/goal_tolerance", path_params_.goal_tolerance, 0.1);
     pnh.param("path_handler/yaw_tolerance", path_params_.yaw_tolerance, 0.1);
     pnh.param("path_handler/path_timeout", path_params_.path_timeout, 5.0);
+    pnh.param("path_handler/window_back", path_params_.window_back, 2);
+    pnh.param("path_handler/window_forward", path_params_.window_forward, 2);
+    pnh.param("path_handler/resample_spacing", path_params_.resample_spacing, 0.0);
+    pnh.param("path_handler/max_lat_accel", path_params_.max_lat_accel, 0.0);
+    pnh.param("path_handler/min_ref_speed", path_params_.min_ref_speed, 0.0);
+    pnh.param("path_handler/time_parameterize", path_params_.time_parameterize, false);
+    pnh.param("path_handler/speed_profile_ds", path_params_.speed_profile_ds, 0.05);
+    pnh.param("path_handler/max_tan_accel", path_params_.max_tan_accel, 0.0);
+    pnh.param("path_handler/max_tan_decel", path_params_.max_tan_decel, 0.0);
+    pnh.param("path_handler/goal_speed", path_params_.goal_speed, 0.0);
+    pnh.param("path_handler/use_bspline_smoothing", path_params_.use_bspline_smoothing, false);
+    pnh.param("path_handler/bspline_samples_per_segment", path_params_.bspline_samples_per_segment, 8);
     pnh.param("path_handler/publish_smoothed_path",
               path_params_.publish_smoothed_path, false);
     pnh.param("path_handler/smoothed_path_topic",
@@ -104,6 +119,9 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("base_frame", base_frame_, std::string("base_link"));
     pnh.param("map_frame", map_frame_, std::string("map"));
     pnh.param("verbose", verbose_, false);
+    pnh.param("safety/infeasible_decel", infeasible_decel_, 1.0);
+    pnh.param("safety/infeasible_omega_scale", infeasible_omega_scale_, 0.0);
+    pnh.param("safety/infeasible_min_speed", infeasible_min_speed_, 0.0);
     
     // 将 base_frame 传递给 path_handler
     path_params_.base_frame = base_frame_;
@@ -227,7 +245,24 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 } else {
                     ROS_WARN_THROTTLE(1.0, "[LocalPlannerROS] MPC solve failed: %s", 
                                       solution.status_msg.c_str());
-                    publishCmdVel(0.0, 0.0);
+                    double dt = control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
+                    double v = current_v_;
+                    double decel = std::max(0.0, infeasible_decel_);
+                    if (std::abs(v) > 1e-3) {
+                        double sign = v >= 0.0 ? 1.0 : -1.0;
+                        v -= sign * decel * dt;
+                        if (sign > 0.0) {
+                            v = std::max(v, infeasible_min_speed_);
+                            if (v < 0.0) v = 0.0;
+                        } else {
+                            v = std::min(v, -infeasible_min_speed_);
+                            if (v > 0.0) v = 0.0;
+                        }
+                    } else {
+                        v = 0.0;
+                    }
+                    double omega = current_omega_ * infeasible_omega_scale_;
+                    publishCmdVel(v, omega);
                 }
             }
             break;
