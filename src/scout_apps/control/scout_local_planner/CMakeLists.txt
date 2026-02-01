@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_ros
   tf2_geometry_msgs
+  slosh_models
 )
 
 find_package(Eigen3 REQUIRED)
@@ -20,7 +21,7 @@ find_package(osqp_vendor REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs
+  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs slosh_models
   DEPENDS EIGEN3
 )
 
@@ -42,6 +43,7 @@ add_library(${PROJECT_NAME}
   src/constraint_manager.cpp
   src/mpc_solver.cpp
   src/local_planner_ros.cpp
+  src/slosh_integration.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}

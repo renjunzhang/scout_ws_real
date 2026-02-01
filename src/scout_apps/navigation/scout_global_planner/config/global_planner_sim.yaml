@@ -76,7 +76,7 @@ GlobalPlanner:
   visualize_potential: false
 
   # 路径规划频率
-  planner_frequency: 1.0
+  planner_frequency: 0.1
 
 # navfn 可选参数（若使用 navfn/NavfnROS）
 NavfnROS:

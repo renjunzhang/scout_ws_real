@@ -25,7 +25,7 @@ double StateTrackingCost::evaluate(
     double e_c = x(StateIndex::E_C);
     double e_theta = x(StateIndex::E_THETA);
     double v = x(StateIndex::V);
-    double omega = x(StateIndex::OMEGA);
+    double omega = u(ControlIndex::OMEGA);  // ω 现在是控制量！
     
     double cost = 0.0;
     if (params_.use_contour_lag) {
@@ -70,9 +70,7 @@ void StateTrackingCost::getQuadraticCost(
     }
     Q_contrib(StateIndex::E_THETA, StateIndex::E_THETA) = params_.Q_etheta;
     Q_contrib(StateIndex::V, StateIndex::V) = params_.Q_v;
-    if (params_.enable_omega_ff) {
-        Q_contrib(StateIndex::OMEGA, StateIndex::OMEGA) = params_.Q_omega_ff;
-    }
+    // 注意：omega_ff 现在应用到控制量，在 ControlCost 中处理
     
     // 注意：v_ref 的线性项会在 buildQPCost 中根据 refs 添加
     // q_contrib(StateIndex::V) = -2 * params_.Q_v * v_ref;
@@ -92,9 +90,9 @@ double ControlCost::evaluate(
     int k) const {
     
     double a = u(ControlIndex::A);
-    double alpha = u(ControlIndex::ANG_ACC);
+    double omega = u(ControlIndex::OMEGA);
     
-    return params_.R_a * a * a + params_.R_alpha * alpha * alpha;
+    return params_.R_a * a * a + params_.R_omega * omega * omega;
 }
 
 void ControlCost::getQuadraticCost(
@@ -113,7 +111,7 @@ void ControlCost::getQuadraticCost(
     r_contrib = Eigen::VectorXd::Zero(nu);
     
     R_contrib(ControlIndex::A, ControlIndex::A) = params_.R_a;
-    R_contrib(ControlIndex::ANG_ACC, ControlIndex::ANG_ACC) = params_.R_alpha;
+    R_contrib(ControlIndex::OMEGA, ControlIndex::OMEGA) = params_.R_omega;
 }
 
 //==============================================================================
@@ -130,9 +128,9 @@ double ControlRateCost::evaluate(
     int k) const {
     
     double da = u(ControlIndex::A) - u_prev_(ControlIndex::A);
-    double dalpha = u(ControlIndex::ANG_ACC) - u_prev_(ControlIndex::ANG_ACC);
+    double domega = u(ControlIndex::OMEGA) - u_prev_(ControlIndex::OMEGA);
     
-    return params_.R_da * da * da + params_.R_dalpha * dalpha * dalpha;
+    return params_.R_da * da * da + params_.R_domega * domega * domega;
 }
 
 void ControlRateCost::getQuadraticCost(
@@ -246,9 +244,10 @@ void CostFunction::buildQPCost(
         // 添加 v_ref 的线性项
         if (k < static_cast<int>(refs.size())) {
             q_total(StateIndex::V) -= 2.0 * params_.Q_v * refs[k].v_ref;
-            if (params_.enable_omega_ff) {
+            // omega_ff: ω 现在是控制量，所以添加到 r_total
+            if (params_.enable_omega_ff && k < N) {
                 double omega_ref = refs[k].v_ref * refs[k].kappa;
-                q_total(StateIndex::OMEGA) -= 2.0 * params_.Q_omega_ff * omega_ref;
+                r_total(ControlIndex::OMEGA) -= 2.0 * params_.Q_omega_ff * omega_ref;
             }
         }
         
@@ -274,19 +273,19 @@ void CostFunction::buildQPCost(
     }
 
     // 控制变化率代价：跨步耦合项 (u_k - u_{k-1})^2
-    if (N > 0 && (params_.R_da > 0.0 || params_.R_dalpha > 0.0)) {
+    if (N > 0 && (params_.R_da > 0.0 || params_.R_domega > 0.0)) {
         // k = 0：与上一时刻控制 u_prev 的差分
         {
             int u_idx = nx;  // k=0 的控制起始索引
             add_upper_triplet(u_idx + ControlIndex::A,
                               u_idx + ControlIndex::A,
                               2.0 * params_.R_da);
-            add_upper_triplet(u_idx + ControlIndex::ANG_ACC,
-                              u_idx + ControlIndex::ANG_ACC,
-                              2.0 * params_.R_dalpha);
+            add_upper_triplet(u_idx + ControlIndex::OMEGA,
+                              u_idx + ControlIndex::OMEGA,
+                              2.0 * params_.R_domega);
 
             g(u_idx + ControlIndex::A) += -2.0 * params_.R_da * u_prev_(ControlIndex::A);
-            g(u_idx + ControlIndex::ANG_ACC) += -2.0 * params_.R_dalpha * u_prev_(ControlIndex::ANG_ACC);
+            g(u_idx + ControlIndex::OMEGA) += -2.0 * params_.R_domega * u_prev_(ControlIndex::OMEGA);
         }
 
         // k = 1..N-1：相邻控制差分
@@ -304,15 +303,15 @@ void CostFunction::buildQPCost(
                               u_prev_idx + ControlIndex::A,
                               -2.0 * params_.R_da);
 
-            add_upper_triplet(u_idx + ControlIndex::ANG_ACC,
-                              u_idx + ControlIndex::ANG_ACC,
-                              2.0 * params_.R_dalpha);
-            add_upper_triplet(u_prev_idx + ControlIndex::ANG_ACC,
-                              u_prev_idx + ControlIndex::ANG_ACC,
-                              2.0 * params_.R_dalpha);
-            add_upper_triplet(u_idx + ControlIndex::ANG_ACC,
-                              u_prev_idx + ControlIndex::ANG_ACC,
-                              -2.0 * params_.R_dalpha);
+            add_upper_triplet(u_idx + ControlIndex::OMEGA,
+                              u_idx + ControlIndex::OMEGA,
+                              2.0 * params_.R_domega);
+            add_upper_triplet(u_prev_idx + ControlIndex::OMEGA,
+                              u_prev_idx + ControlIndex::OMEGA,
+                              2.0 * params_.R_domega);
+            add_upper_triplet(u_idx + ControlIndex::OMEGA,
+                              u_prev_idx + ControlIndex::OMEGA,
+                              -2.0 * params_.R_domega);
         }
     }
     

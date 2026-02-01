@@ -18,27 +18,28 @@ namespace scout_local_planner {
 //==============================================================================
 
 struct StateIndex {
-    // 基础状态（第 1 步：5 维）
+    // 基础状态（4 维）- 直接 ω 控制模式
     static constexpr int E_L = 0;       // 纵向误差 (lag error)
     static constexpr int E_C = 1;       // 横向误差 (contour error)
     static constexpr int E_THETA = 2;   // 航向误差
     static constexpr int V = 3;         // 线速度
-    static constexpr int OMEGA = 4;     // 角速度
+    // 注意：ω 不再是状态，而是控制量！
     
-    // 晃动状态（第 2 步添加：4 维）
-    // static constexpr int ETA_X = 5;      // X方向模态位移
-    // static constexpr int ETA_X_DOT = 6;  // X方向模态速度
-    // static constexpr int ETA_Y = 7;      // Y方向模态位移
-    // static constexpr int ETA_Y_DOT = 8;  // Y方向模态速度
+    // 晃动状态（4 维）- 来自 slosh_models::LiquidSloshModel
+    // 状态向量: [xn, vxn, yn, vyn] (模态位移和速度)
+    static constexpr int ETA_X = 4;      // X方向模态位移 [m]
+    static constexpr int ETA_X_DOT = 5;  // X方向模态速度 [m/s]
+    static constexpr int ETA_Y = 6;      // Y方向模态位移 [m]
+    static constexpr int ETA_Y_DOT = 7;  // Y方向模态速度 [m/s]
     
-    static constexpr int BASE_DIM = 5;      // 基础状态维度
-    static constexpr int SLOSH_DIM = 0;     // 晃动状态维度（第 2 步改为 4）
-    static constexpr int TOTAL_DIM = BASE_DIM + SLOSH_DIM;
+    static constexpr int BASE_DIM = 4;      // 基础状态维度
+    static constexpr int SLOSH_DIM = 4;     // 晃动状态维度
+    static constexpr int TOTAL_DIM = BASE_DIM + SLOSH_DIM;  // 8维增广状态
 };
 
 struct ControlIndex {
     static constexpr int A = 0;         // 线加速度
-    static constexpr int ANG_ACC = 1;   // 角加速度 (避免与 OSQP 的 ALPHA 宏冲突)
+    static constexpr int OMEGA = 1;     // 角速度（直接控制，更平滑！）
     
     static constexpr int DIM = 2;       // 控制维度
 };
@@ -120,11 +121,11 @@ struct MPCParams {
     
     // 控制权重
     double R_a = 1.0;       // 加速度权重
-    double R_alpha = 1.0;   // 角加速度权重
+    double R_omega = 0.1;   // 角速度权重（直接控制）
     
     // 控制变化率权重
     double R_da = 0.1;      // 加速度变化权重
-    double R_dalpha = 0.1;  // 角加速度变化权重
+    double R_domega = 0.1;  // 角速度变化权重
     
     // 晃动权重（第 2 步启用）
     double Q_slosh = 0.0;   // 设为 0 表示不启用

@@ -78,9 +78,9 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/enable_omega_ff", mpc_params_.enable_omega_ff, false);
     pnh.param("mpc/Q_omega_ff", mpc_params_.Q_omega_ff, 0.0);
     pnh.param("mpc/R_a", mpc_params_.R_a, 1.0);
-    pnh.param("mpc/R_alpha", mpc_params_.R_alpha, 1.0);
+    pnh.param("mpc/R_omega", mpc_params_.R_omega, 0.1);
     pnh.param("mpc/R_da", mpc_params_.R_da, 0.1);
-    pnh.param("mpc/R_dalpha", mpc_params_.R_dalpha, 0.1);
+    pnh.param("mpc/R_domega", mpc_params_.R_domega, 0.1);
     pnh.param("mpc/Q_slosh", mpc_params_.Q_slosh, 0.0);
     
     // 车辆参数
@@ -243,19 +243,19 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 }
                 
                 // 3. 构建当前状态（避免初始状态越界导致不可行）
+                // 注意：ω 现在是控制量，不在状态中！
                 auto clamp = [](double v, double lo, double hi) {
                     return std::max(lo, std::min(hi, v));
                 };
 
                 double v_clamped = clamp(current_v_, vehicle_params_.v_min, vehicle_params_.v_max);
-                double omega_clamped = clamp(current_omega_, -vehicle_params_.omega_max, vehicle_params_.omega_max);
 
                 StateVector current_state;
+                current_state.setZero();  // 初始化所有状态（包括晃动状态）
                 current_state(StateIndex::E_L) = frenet.e_l;
                 current_state(StateIndex::E_C) = frenet.e_c;
                 current_state(StateIndex::E_THETA) = frenet.e_theta;
                 current_state(StateIndex::V) = v_clamped;
-                current_state(StateIndex::OMEGA) = omega_clamped;
                 
                 // 4. 设置上一步控制量
                 mpc_solver_.setPreviousControl(last_control_);

@@ -1,9 +1,19 @@
 /**
  * @file diff_drive_model.cpp
- * @brief 差速底盘 Frenet 动力学模型实现
+ * @brief 差速底盘 Frenet 动力学模型实现 (直接 ω 控制模式)
+ * 
+ * 状态：x = [e_l, e_c, e_θ, v]ᵀ (4维)
+ * 控制：u = [a, ω]ᵀ (直接控制角速度，更平滑！)
+ * 
+ * 动力学：
+ *   e_l_dot = v - v_path
+ *   e_c_dot = v * e_θ
+ *   e_θ_dot = ω - κ(s) * v
+ *   v_dot = a
  */
 
 #include "scout_local_planner/diff_drive_model.h"
+#include "scout_local_planner/slosh_integration.h"
 #include <cmath>
 
 namespace scout_local_planner {
@@ -17,40 +27,64 @@ StateVector DiffDriveModel::predict(
     const ReferencePoint& ref,
     double dt) const {
     
+    // ========== 基础状态动力学 (4维) ==========
     // 提取当前状态
     double e_l = x(StateIndex::E_L);
     double e_c = x(StateIndex::E_C);
     double e_theta = x(StateIndex::E_THETA);
     double v = x(StateIndex::V);
-    double omega = x(StateIndex::OMEGA);
     
-    // 提取控制量
+    // 提取控制量（直接 ω 控制！）
     double a = u(ControlIndex::A);
-    double alpha = u(ControlIndex::ANG_ACC);
+    double omega = u(ControlIndex::OMEGA);  // 直接控制角速度
     
     // 提取参考信息
     double kappa = ref.kappa;
     double v_path = ref.v_path;
     
     // Frenet 动力学（小角度简化，欧拉法离散化）
-    // e_l_dot ≈ v - v_path
-    // e_c_dot ≈ v * e_theta
-    // e_theta_dot ≈ omega - kappa * v
-    // v_dot = a
-    // omega_dot = alpha
-    
+    // 注意：ω 是控制量，直接使用，无需积分！
     StateVector x_next;
     x_next(StateIndex::E_L) = e_l + dt * (v - v_path);
     x_next(StateIndex::E_C) = e_c + dt * v * e_theta;
     x_next(StateIndex::E_THETA) = e_theta + dt * (omega - kappa * v);
     x_next(StateIndex::V) = v + dt * a;
-    x_next(StateIndex::OMEGA) = omega + dt * alpha;
     
     // 速度约束（硬裁剪）
     x_next(StateIndex::V) = std::max(params_.v_min, 
                              std::min(params_.v_max, x_next(StateIndex::V)));
-    x_next(StateIndex::OMEGA) = std::max(-params_.omega_max,
-                                 std::min(params_.omega_max, x_next(StateIndex::OMEGA)));
+    
+    // ========== 晃动状态动力学 (4维) ==========
+    if (StateIndex::SLOSH_DIM > 0) {
+        if (slosh_integration_ != nullptr && slosh_integration_->isConfigured()) {
+            // 从当前增广状态提取晃动状态
+            Eigen::Vector4d x_slosh_curr;
+            x_slosh_curr << x(StateIndex::ETA_X), 
+                            x(StateIndex::ETA_X_DOT),
+                            x(StateIndex::ETA_Y), 
+                            x(StateIndex::ETA_Y_DOT);
+            
+            // 加速度映射：
+            // ax = a (纵向加速度)
+            // ay = v * omega (离心加速度，横向)
+            double ax = a;
+            double ay = v * omega;  // 直接计算横向加速度！
+            
+            // 预测下一步晃动状态
+            Eigen::Vector4d x_slosh_next = slosh_integration_->predictSlosh(x_slosh_curr, ax, ay);
+            
+            x_next(StateIndex::ETA_X) = x_slosh_next(0);
+            x_next(StateIndex::ETA_X_DOT) = x_slosh_next(1);
+            x_next(StateIndex::ETA_Y) = x_slosh_next(2);
+            x_next(StateIndex::ETA_Y_DOT) = x_slosh_next(3);
+        } else {
+            // 无晃动模型时保持状态不变
+            x_next(StateIndex::ETA_X) = x(StateIndex::ETA_X);
+            x_next(StateIndex::ETA_X_DOT) = x(StateIndex::ETA_X_DOT);
+            x_next(StateIndex::ETA_Y) = x(StateIndex::ETA_Y);
+            x_next(StateIndex::ETA_Y_DOT) = x(StateIndex::ETA_Y_DOT);
+        }
+    }
     
     return x_next;
 }
@@ -75,12 +109,12 @@ void DiffDriveModel::linearize(
     double kappa = ref.kappa;
     double v_path = ref.v_path;
     
-    // 初始化矩阵
+    // 初始化增广矩阵
     A = Eigen::MatrixXd::Identity(nx, nx);
     B = Eigen::MatrixXd::Zero(nx, nu);
     c = Eigen::VectorXd::Zero(nx);
     
-    // ====== A 矩阵（∂f/∂x）======
+    // ====== 基础状态部分 A 矩阵（∂f/∂x）======
     // 对于离散化后的系统 x[k+1] = x[k] + dt * f(x[k], u[k])
     // A = I + dt * (∂f_continuous/∂x)
     
@@ -94,24 +128,44 @@ void DiffDriveModel::linearize(
     
     // ∂(e_theta_dot)/∂v = -kappa
     A(StateIndex::E_THETA, StateIndex::V) = dt * (-kappa);
-    // ∂(e_theta_dot)/∂omega = 1
-    A(StateIndex::E_THETA, StateIndex::OMEGA) = dt * 1.0;
+    // 注意：ω 是控制量，不在状态中！
     
-    // v_dot = a, omega_dot = alpha（线性，已在 Identity 中）
-    
-    // ====== B 矩阵（∂f/∂u）======
+    // ====== 基础状态部分 B 矩阵（∂f/∂u）======
     // ∂(v_dot)/∂a = 1
     B(StateIndex::V, ControlIndex::A) = dt;
-    // ∂(omega_dot)/∂alpha = 1
-    B(StateIndex::OMEGA, ControlIndex::ANG_ACC) = dt;
+    // ∂(e_theta_dot)/∂omega = 1 （直接控制！）
+    B(StateIndex::E_THETA, ControlIndex::OMEGA) = dt;
     
-    // ====== c 常数项（仿射项）======
-    // c = f(x_ref, u_ref) - A * x_ref - B * u_ref
-    // 对于线性系统，c 主要来自 v_path
+    // ====== 基础状态部分 c 常数项 ======
     c(StateIndex::E_L) = -dt * v_path;
     
-    // 注意：对于非线性项 v * e_theta，线性化后有仿射项
-    // 这里简化处理，假设 e_theta 较小
+    // ====== 晃动状态部分（如果启用）======
+    if (StateIndex::SLOSH_DIM > 0) {
+        if (slosh_integration_ != nullptr && slosh_integration_->isConfigured()) {
+            // 获取晃动模型的离散矩阵
+            Eigen::Matrix4d A_slosh;
+            Eigen::Matrix<double, 4, 2> B_slosh;
+            slosh_integration_->getDiscreteMatrices(A_slosh, B_slosh);
+            
+            // 填充增广 A 矩阵的晃动部分
+            A.block<4, 4>(StateIndex::ETA_X, StateIndex::ETA_X) = A_slosh;
+            
+            // 填充增广 B 矩阵的晃动部分
+            // ax = a, ay = v * omega
+            // ∂晃动/∂a = B_slosh[:, 0]
+            B(StateIndex::ETA_X, ControlIndex::A) = B_slosh(0, 0);
+            B(StateIndex::ETA_X_DOT, ControlIndex::A) = B_slosh(1, 0);
+            B(StateIndex::ETA_Y, ControlIndex::A) = B_slosh(2, 0);
+            B(StateIndex::ETA_Y_DOT, ControlIndex::A) = B_slosh(3, 0);
+            
+            // ∂晃动/∂omega = B_slosh[:, 1] * v（离心力贡献）
+            B(StateIndex::ETA_X, ControlIndex::OMEGA) = B_slosh(0, 1) * v;
+            B(StateIndex::ETA_X_DOT, ControlIndex::OMEGA) = B_slosh(1, 1) * v;
+            B(StateIndex::ETA_Y, ControlIndex::OMEGA) = B_slosh(2, 1) * v;
+            B(StateIndex::ETA_Y_DOT, ControlIndex::OMEGA) = B_slosh(3, 1) * v;
+        }
+        // 如果无晃动模型，A 已初始化为单位阵（状态保持）
+    }
 }
 
 }  // namespace scout_local_planner

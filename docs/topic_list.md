@@ -6,7 +6,9 @@
 
 ---
 
-## 0) 当前系统已观测话题（2026-01-29）
+## 0) 当前系统已观测话题
+
+### 实车环境（2026-01-29）
 
 | 话题 | 说明 |
 |------|------|
@@ -19,6 +21,58 @@
 | `/scout_light_control` | 灯光控制 |
 | `/scout_status` | 底盘状态 |
 | `/tf` | 坐标变换 |
+
+### 仿真环境完整话题列表（2026-02-01）
+
+| 话题 | 类型 | 说明 |
+|------|------|------|
+| `/clicked_point` | `geometry_msgs/PointStamped` | RViz 点击点 |
+| `/clock` | `rosgraph_msgs/Clock` | 仿真时钟 |
+| `/cmd_vel` | `geometry_msgs/Twist` | 速度控制输出（scout_local_planner → 底盘） |
+| `/constraint_list` | `visualization_msgs/MarkerArray` | Cartographer 约束可视化 |
+| `/initialpose` | `geometry_msgs/PoseWithCovarianceStamped` | AMCL 初始位姿 |
+| `/joint_states` | `sensor_msgs/JointState` | 关节状态 |
+| `/landmark_poses_list` | `visualization_msgs/MarkerArray` | Cartographer 地标可视化 |
+| `/local_path` | `nav_msgs/Path` | MPC 预测轨迹可视化 |
+| `/map` | `nav_msgs/OccupancyGrid` | 静态地图 |
+| `/map_updates` | `map_msgs/OccupancyGridUpdate` | 地图增量更新 |
+| `/mpc_status` | `std_msgs/String` | MPC 求解状态 |
+| `/odom` | `nav_msgs/Odometry` | 里程计 |
+| `/scan` | `sensor_msgs/LaserScan` | 激光扫描（主） |
+| `/scan_front` | `sensor_msgs/LaserScan` | 前置激光扫描 |
+| `/scan_matched_points2` | `sensor_msgs/PointCloud2` | Cartographer 匹配点云 |
+| `/scout/global_path` | `nav_msgs/Path` | 全局路径（move_base → local_planner） |
+| `/scout/global_path_smooth` | `nav_msgs/Path` | **局部平滑路径**（local_planner 可视化输出） |
+| `/scout/goal` | `geometry_msgs/PoseStamped` | 导航目标点 |
+| `/scout/move_base_cmd_vel` | `geometry_msgs/Twist` | move_base 原始速度输出（已重映射，不使用） |
+| `/scout/odom` | `nav_msgs/Odometry` | 命名空间内里程计 |
+| `/submap_list` | `cartographer_ros_msgs/SubmapList` | Cartographer 子图列表 |
+| `/tf` / `/tf_static` | `tf2_msgs/TFMessage` | 坐标变换 |
+| `/trajectory_node_list` | `visualization_msgs/MarkerArray` | Cartographer 轨迹节点 |
+
+### move_base 内部话题（仿真）
+
+| 话题 | 说明 |
+|------|------|
+| `/scout/move_base/DWAPlannerROS/*` | DWA 局部规划器相关（cost_cloud, global_plan, local_plan） |
+| `/scout/move_base/GlobalPlanner/potential` | 全局规划势场 |
+| `/scout/move_base/cancel` | 取消导航目标 |
+| `/scout/move_base/current_goal` | 当前目标 |
+| `/scout/move_base/feedback` / `result` / `status` | ActionLib 反馈 |
+| `/scout/move_base/goal` | ActionLib 目标 |
+| `/scout/move_base/global_costmap/costmap` | 全局代价地图 |
+| `/scout/move_base/local_costmap/costmap` | 局部代价地图 |
+| `/scout/move_base/recovery_status` | 恢复状态 |
+
+### Gazebo 仿真话题
+
+| 话题 | 说明 |
+|------|------|
+| `/gazebo/link_states` / `model_states` | 仿真状态 |
+| `/gazebo/set_link_state` / `set_model_state` | 设置状态服务 |
+| `/gazebo/parameter_*` | 参数服务 |
+| `/gazebo/performance_metrics` | 性能指标 |
+| `/gazebo_ros_control/pid_gains/*/...` | PID 参数（四轮） |
 
 ---
 

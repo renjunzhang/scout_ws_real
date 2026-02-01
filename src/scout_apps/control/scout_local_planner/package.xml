@@ -28,6 +28,9 @@
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
   
+  <!-- 液体晃动模型库 -->
+  <depend>slosh_models</depend>
+  
   <!-- 系统依赖 -->
   <build_depend>eigen</build_depend>
   <build_export_depend>eigen</build_export_depend>

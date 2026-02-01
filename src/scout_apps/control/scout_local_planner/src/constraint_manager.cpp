@@ -20,23 +20,21 @@ Eigen::VectorXd StateBoundsConstraint::evaluate(
     const StateVector& x,
     const ControlVector& u) const {
     
-    Eigen::VectorXd c(2);
+    // 只约束 v（ω 现在是控制量，在 ControlBoundsConstraint 中约束）
+    Eigen::VectorXd c(1);
     c(0) = x(StateIndex::V);
-    c(1) = x(StateIndex::OMEGA);
     return c;
 }
 
 Eigen::VectorXd StateBoundsConstraint::lowerBound() const {
-    Eigen::VectorXd l(2);
+    Eigen::VectorXd l(1);
     l(0) = params_.v_min;
-    l(1) = -params_.omega_max;
     return l;
 }
 
 Eigen::VectorXd StateBoundsConstraint::upperBound() const {
-    Eigen::VectorXd u(2);
+    Eigen::VectorXd u(1);
     u(0) = params_.v_max;
-    u(1) = params_.omega_max;
     return u;
 }
 
@@ -53,21 +51,21 @@ Eigen::VectorXd ControlBoundsConstraint::evaluate(
     
     Eigen::VectorXd c(2);
     c(0) = u(ControlIndex::A);
-    c(1) = u(ControlIndex::ANG_ACC);
+    c(1) = u(ControlIndex::OMEGA);  // ω 现在是控制量
     return c;
 }
 
 Eigen::VectorXd ControlBoundsConstraint::lowerBound() const {
     Eigen::VectorXd l(2);
     l(0) = -params_.a_max;
-    l(1) = -params_.alpha_max;
+    l(1) = -params_.omega_max;  // 角速度约束
     return l;
 }
 
 Eigen::VectorXd ControlBoundsConstraint::upperBound() const {
     Eigen::VectorXd u(2);
     u(0) = params_.a_max;
-    u(1) = params_.alpha_max;
+    u(1) = params_.omega_max;  // 角速度约束
     return u;
 }
 
@@ -165,24 +163,21 @@ void ConstraintManager::buildQPConstraints(
         
         for (const auto& constraint : constraints_) {
             if (constraint->name() == "StateBoundsConstraint") {
-                // 状态约束：提取 v 和 omega
-                // c = [v, omega]' = [0,0,0,1,0; 0,0,0,0,1] * x
+                // 状态约束：仅约束 v（ω 现在是控制量，不在状态中）
+                // c = [v]' = [0,0,0,1] * x (4D state)
                 triplets.emplace_back(constraint_idx, x_idx + StateIndex::V, 1.0);
-                triplets.emplace_back(constraint_idx + 1, x_idx + StateIndex::OMEGA, 1.0);
                 
                 Eigen::VectorXd lb = constraint->lowerBound();
                 Eigen::VectorXd ub = constraint->upperBound();
                 l(constraint_idx) = lb(0);
-                l(constraint_idx + 1) = lb(1);
                 u(constraint_idx) = ub(0);
-                u(constraint_idx + 1) = ub(1);
                 
-                constraint_idx += 2;
+                constraint_idx += 1;
             }
             else if (constraint->name() == "ControlBoundsConstraint" && k < N) {
-                // 控制约束：提取 a 和 alpha
+                // 控制约束：提取 a 和 omega
                 triplets.emplace_back(constraint_idx, u_idx + ControlIndex::A, 1.0);
-                triplets.emplace_back(constraint_idx + 1, u_idx + ControlIndex::ANG_ACC, 1.0);
+                triplets.emplace_back(constraint_idx + 1, u_idx + ControlIndex::OMEGA, 1.0);
                 
                 Eigen::VectorXd lb = constraint->lowerBound();
                 Eigen::VectorXd ub = constraint->upperBound();

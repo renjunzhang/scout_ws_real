@@ -375,7 +375,7 @@ void MPCSolver::extractSolution(MPCSolution& solution) {
     for (int k = 0; k < N; ++k) {
         int u_idx = k * (nx + nu) + nx;
         solution.u_optimal[k](ControlIndex::A) = z[u_idx];
-        solution.u_optimal[k](ControlIndex::ANG_ACC) = z[u_idx + 1];
+        solution.u_optimal[k](ControlIndex::OMEGA) = z[u_idx + 1];
     }
     
     // 提取状态轨迹
@@ -390,10 +390,9 @@ void MPCSolver::extractSolution(MPCSolution& solution) {
     // 第一个控制量
     solution.u_first = solution.u_optimal[0];
     
-    // 输出速度（从预测的下一步状态读取）
-    // 注意：cmd_vel = [v, ω]，不是 [a, α]！
+    // 输出速度：v 从预测状态读取，ω 直接从控制量读取（直接控制！）
     solution.v_cmd = solution.x_predicted[1](StateIndex::V);
-    solution.omega_cmd = solution.x_predicted[1](StateIndex::OMEGA);
+    solution.omega_cmd = solution.u_first(ControlIndex::OMEGA);  // ω 是控制量！
 }
 
 void MPCSolver::warmStart() {
