@@ -23,6 +23,8 @@ codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
 ### 5. 定位（真实）
     新开一个终端，运行：
     roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true
+    或者使用cartographer定位
+    roslaunch nanoscan3_localization scout_nanoscan3_cartographer_localization.launch
 ### 6. 全局规划
     roslaunch scout_global_planner move_base_global.launch
     # 实物对齐：global_planner.yaml 已加入 transform_tolerance: 0.2（global_costmap/local_costmap）
