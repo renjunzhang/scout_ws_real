@@ -30,6 +30,9 @@ global_costmap:
   static_layer:
     enabled: true
     map_topic: /map
+    track_unknown_space: true
+    unknown_cost_value: 255
+    lethal_cost_threshold: 65
 
 # 局部代价地图参数（move_base 仍需初始化）
 local_costmap:
@@ -73,7 +76,7 @@ GlobalPlanner:
   visualize_potential: false
 
   # 路径规划频率
-  planner_frequency: 1.0
+  planner_frequency: 0.1
 
 # navfn 可选参数（若使用 navfn/NavfnROS）
 NavfnROS:

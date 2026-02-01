@@ -19,7 +19,7 @@ codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
     这个也是在sick_ws里面，有一个nanoscan3_mapping包：
     roslaunch nanoscan3_mapping scout_nanoscan3_gmapping.launch fake_odom_tf:=false use_rviz:=true
 #### Cartographer 建图（直接打开新终端，不要手动 source）
-    roslaunch nanoscan3_mapping scout_nanoscan3_cartographer_sim.launch
+    roslaunch nanoscan3_mapping scout_nanoscan3_cartographer.launch
 ### 5. 定位（真实）
     新开一个终端，运行：
     roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true

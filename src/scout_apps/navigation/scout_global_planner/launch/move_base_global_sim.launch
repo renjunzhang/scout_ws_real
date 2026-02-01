@@ -1,6 +1,6 @@
 <launch>
   <!-- Namespace for all planning nodes -->
-  <arg name="ns" default="/" />
+  <arg name="ns" default="/scout" />
 
   <!-- Simulation time -->
   <arg name="use_sim_time" default="true" />
@@ -11,7 +11,7 @@
   <!-- Local planner is required by move_base, but output cmd_vel is remapped -->
   <arg name="base_local_planner" default="dwa_local_planner/DWAPlannerROS" />
   <arg name="cmd_vel_out" default="/scout/move_base_cmd_vel" />
-  <arg name="remap_goal" default="false" />
+  <arg name="remap_goal" default="true" />
   <arg name="use_rviz" default="false" />
   <arg name="rviz_config" default="$(find scout_global_planner)/rviz/scout_global_planner.rviz" />
 
