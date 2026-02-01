@@ -117,7 +117,7 @@ void PathHandler::setTFBuffer(std::shared_ptr<tf2_ros::Buffer> tf_buffer) {
     tf_buffer_ = tf_buffer;
 }
 
-bool PathHandler::updateGlobalPath(const nav_msgs::Path& path) {
+bool PathHandler::updateGlobalPath(const nav_msgs::Path& path, double v_des) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     // 检查路径有效性
@@ -139,6 +139,49 @@ bool PathHandler::updateGlobalPath(const nav_msgs::Path& path) {
     // 重置最近点索引
     closest_idx_ = 0;
     current_s_ = 0.0;
+
+    // 重置速度曲线
+    speed_profile_s_.clear();
+    speed_profile_v_.clear();
+    speed_profile_valid_ = false;
+    speed_profile_v_des_ = v_des;
+    global_spline_ = CubicSpline2D();
+    global_spline_length_ = 0.0;
+
+    // 构建全局样条（map 坐标系）
+    std::vector<Eigen::Vector2d> global_points;
+    global_points.reserve(path.poses.size());
+    for (const auto& pose : path.poses) {
+        global_points.emplace_back(pose.pose.position.x, pose.pose.position.y);
+    }
+
+    // 可选：重采样 + B-spline 平滑
+    if (params_.resample_spacing > 0.0) {
+        global_points = resamplePath(global_points, params_.resample_spacing);
+    }
+    if (params_.use_bspline_smoothing) {
+        global_points = bsplineSmooth(global_points, params_.bspline_samples_per_segment);
+    }
+
+    // 过滤重复点（避免样条参数不单调）
+    std::vector<Eigen::Vector2d> filtered;
+    filtered.reserve(global_points.size());
+    const double min_dist = 1e-4;
+    for (const auto& p : global_points) {
+        if (!std::isfinite(p.x()) || !std::isfinite(p.y())) {
+            continue;
+        }
+        if (filtered.empty() || (p - filtered.back()).norm() > min_dist) {
+            filtered.push_back(p);
+        }
+    }
+
+    if (filtered.size() >= 2 && global_spline_.fit(filtered)) {
+        global_spline_length_ = global_spline_.getTotalLength();
+        updateSpeedProfile(v_des);
+    } else {
+        ROS_WARN_THROTTLE(1.0, "[PathHandler] Failed to fit global spline for speed profile");
+    }
     
     ROS_INFO("[PathHandler] Received new path with %zu points", path.poses.size());
     return true;
@@ -243,8 +286,11 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
                                 tmp_e_l, tmp_e_c, tmp_e_theta);
     }
 
-    // 4.2 更新速度曲线
-    updateSpeedProfile(v_des);
+    // 4.2 速度曲线由全局路径更新时一次性计算，这里只在必要时补算
+    if (params_.time_parameterize &&
+        (!speed_profile_valid_ || std::abs(v_des - speed_profile_v_des_) > 1e-3)) {
+        updateSpeedProfile(v_des);
+    }
 
     // 5. 生成参考点序列
     ref_points.clear();
@@ -253,45 +299,62 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     double total_len = local_spline_.getTotalLength();
 
     // 4.3 使用全局弧长映射到局部样条，减少 s 抖动
+    double s_start = 0.0;
+    double s_end = 0.0;
+    bool has_window_s = false;
     if (!path_s.empty() && window_start >= 0 &&
         static_cast<size_t>(window_end) < path_s.size()) {
-        const double s_start = path_s[static_cast<size_t>(window_start)];
-        const double s_end = path_s[static_cast<size_t>(window_end)];
+        s_start = path_s[static_cast<size_t>(window_start)];
+        s_end = path_s[static_cast<size_t>(window_end)];
         const double window_len = std::max(1e-6, s_end - s_start);
         const double scale = total_len / window_len;
         double s_local = (s_global_ - s_start) * scale;
         s_local = std::max(0.0, std::min(total_len, s_local));
         current_s_ = s_local;
+        has_window_s = true;
     }
 
-    double base_s = std::min(current_s_ + params_.lookahead_distance, total_len);
+    double base_s_global = s_global_ + params_.lookahead_distance;
+    if (has_window_s) {
+        base_s_global = std::min(std::max(base_s_global, s_start), s_end);
+    }
 
-    double s = base_s;
+    double s_global = has_window_s ? base_s_global : std::min(current_s_ + params_.lookahead_distance, total_len);
     for (int k = 0; k < N; ++k) {
         ReferencePoint ref;
         
         // 沿路径推进（时间化速度）
+        double s_local = s_global;
         if (params_.time_parameterize) {
-            const double v_ref = getSpeedAtS(s);
-            s = std::min(s, total_len);
-            double s_next = s + v_ref * dt;
-            s_next = std::min(s_next, total_len);
+            double v_ref = getSpeedAtS(s_global);
+            if (v_ref <= 1e-6) {
+                v_ref = v_des;
+            }
+            double s_next = s_global + v_ref * dt;
+            if (has_window_s) {
+                s_global = std::min(s_next, s_end);
+                const double window_len = std::max(1e-6, s_end - s_start);
+                const double scale = total_len / window_len;
+                s_local = (s_global - s_start) * scale;
+            } else {
+                s_global = std::min(s_next, total_len);
+                s_local = s_global;
+            }
+            s_local = std::max(0.0, std::min(total_len, s_local));
             // 使用当前 s 采样点
             ref.v_ref = v_ref;
             ref.v_path = v_ref;
-            // 更新下一步 s
-            s = s_next;
         } else {
-            s = std::min(base_s + k * dt * v_des, total_len);
-            s = std::min(s, total_len);  // 不超过样条末端
+            s_local = std::min(current_s_ + params_.lookahead_distance + k * dt * v_des, total_len);
+            s_local = std::min(s_local, total_len);  // 不超过样条末端
         }
 
         // 计算参考点信息
-        Eigen::Vector2d pos = local_spline_.evaluate(s);
+        Eigen::Vector2d pos = local_spline_.evaluate(s_local);
         ref.x = pos.x();
         ref.y = pos.y();
-        ref.theta_path = local_spline_.evaluateTheta(s);
-        ref.kappa = local_spline_.evaluateKappa(s);
+        ref.theta_path = local_spline_.evaluateTheta(s_local);
+        ref.kappa = local_spline_.evaluateKappa(s_local);
         if (!params_.time_parameterize) {
             double v_ref = v_des;
             if (params_.max_lat_accel > 0.0) {
@@ -306,7 +369,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
             ref.v_path = v_ref;
             ref.v_ref = v_ref;
         }
-        ref.s = s;
+        ref.s = s_local;
         
         ref_points.push_back(ref);
     }
@@ -630,89 +693,96 @@ bool PathHandler::fitLocalSpline(const std::vector<Eigen::Vector2d>& window_poin
 }
 
 void PathHandler::updateSpeedProfile(double v_des) {
-    s_samples_.clear();
-    v_samples_.clear();
+    speed_profile_s_.clear();
+    speed_profile_v_.clear();
+    speed_profile_valid_ = false;
+    speed_profile_v_des_ = v_des;
 
-    if (!params_.time_parameterize || !local_spline_.isValid()) {
+    if (!params_.time_parameterize || !global_spline_.isValid()) {
         return;
     }
 
-    const double total_len = local_spline_.getTotalLength();
+    const double total_len = global_spline_length_ > 1e-6
+        ? global_spline_length_
+        : global_spline_.getTotalLength();
     if (total_len <= 1e-6) {
         return;
     }
 
     const double ds = std::max(1e-3, params_.speed_profile_ds);
     const int n = static_cast<int>(std::ceil(total_len / ds)) + 1;
-    s_samples_.reserve(n);
-    v_samples_.reserve(n);
+    speed_profile_s_.reserve(n);
+    speed_profile_v_.reserve(n);
 
     for (int i = 0; i < n; ++i) {
         const double s = std::min(total_len, i * ds);
-        s_samples_.push_back(s);
+        speed_profile_s_.push_back(s);
 
         double v = v_des;
         if (params_.max_lat_accel > 0.0) {
-            double kappa_abs = std::abs(local_spline_.evaluateKappa(s));
+            double kappa_abs = std::abs(global_spline_.evaluateKappa(s));
             if (kappa_abs > 1e-4) {
                 v = std::min(v, std::sqrt(params_.max_lat_accel / kappa_abs));
             }
         }
-        v_samples_.push_back(v);
+        speed_profile_v_.push_back(v);
     }
 
     // 末端速度
-    if (!v_samples_.empty()) {
-        v_samples_.back() = std::min(v_samples_.back(), std::max(0.0, params_.goal_speed));
+    if (!speed_profile_v_.empty()) {
+        speed_profile_v_.back() = std::min(speed_profile_v_.back(),
+                                           std::max(0.0, params_.goal_speed));
     }
 
     // 前向遍历（加速限制）
     if (params_.max_tan_accel > 0.0) {
-        for (size_t i = 1; i < v_samples_.size(); ++i) {
-            double v_prev = v_samples_[i - 1];
+        for (size_t i = 1; i < speed_profile_v_.size(); ++i) {
+            double v_prev = speed_profile_v_[i - 1];
             double v_lim = std::sqrt(std::max(0.0, v_prev * v_prev + 2.0 * params_.max_tan_accel * ds));
-            v_samples_[i] = std::min(v_samples_[i], v_lim);
+            speed_profile_v_[i] = std::min(speed_profile_v_[i], v_lim);
         }
     }
 
     // 反向遍历（减速限制）
     double max_decel = params_.max_tan_decel > 0.0 ? params_.max_tan_decel : params_.max_tan_accel;
     if (max_decel > 0.0) {
-        for (int i = static_cast<int>(v_samples_.size()) - 2; i >= 0; --i) {
-            double v_next = v_samples_[i + 1];
+        for (int i = static_cast<int>(speed_profile_v_.size()) - 2; i >= 0; --i) {
+            double v_next = speed_profile_v_[i + 1];
             double v_lim = std::sqrt(std::max(0.0, v_next * v_next + 2.0 * max_decel * ds));
-            v_samples_[i] = std::min(v_samples_[i], v_lim);
+            speed_profile_v_[i] = std::min(speed_profile_v_[i], v_lim);
         }
     }
 
     // 参考速度下限（末端除外）
-    if (params_.min_ref_speed > 0.0 && v_samples_.size() >= 2) {
-        for (size_t i = 0; i + 1 < v_samples_.size(); ++i) {
-            v_samples_[i] = std::max(v_samples_[i], params_.min_ref_speed);
+    if (params_.min_ref_speed > 0.0 && speed_profile_v_.size() >= 2) {
+        for (size_t i = 0; i + 1 < speed_profile_v_.size(); ++i) {
+            speed_profile_v_[i] = std::max(speed_profile_v_[i], params_.min_ref_speed);
         }
     }
+
+    speed_profile_valid_ = true;
 }
 
 double PathHandler::getSpeedAtS(double s) const {
-    if (s_samples_.empty() || v_samples_.empty()) {
+    if (!speed_profile_valid_ || speed_profile_s_.empty() || speed_profile_v_.empty()) {
         return 0.0;
     }
-    if (s <= s_samples_.front()) {
-        return v_samples_.front();
+    if (s <= speed_profile_s_.front()) {
+        return speed_profile_v_.front();
     }
-    if (s >= s_samples_.back()) {
-        return v_samples_.back();
+    if (s >= speed_profile_s_.back()) {
+        return speed_profile_v_.back();
     }
 
-    auto it = std::upper_bound(s_samples_.begin(), s_samples_.end(), s);
-    size_t idx = static_cast<size_t>(std::distance(s_samples_.begin(), it));
+    auto it = std::upper_bound(speed_profile_s_.begin(), speed_profile_s_.end(), s);
+    size_t idx = static_cast<size_t>(std::distance(speed_profile_s_.begin(), it));
     if (idx == 0) {
-        return v_samples_.front();
+        return speed_profile_v_.front();
     }
-    double s0 = s_samples_[idx - 1];
-    double s1 = s_samples_[idx];
-    double v0 = v_samples_[idx - 1];
-    double v1 = v_samples_[idx];
+    double s0 = speed_profile_s_[idx - 1];
+    double s1 = speed_profile_s_[idx];
+    double v0 = speed_profile_v_[idx - 1];
+    double v1 = speed_profile_v_[idx];
     double t = (s1 - s0) > 1e-9 ? (s - s0) / (s1 - s0) : 0.0;
     return v0 + t * (v1 - v0);
 }

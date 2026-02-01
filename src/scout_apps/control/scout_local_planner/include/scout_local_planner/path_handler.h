@@ -41,9 +41,10 @@ public:
     /**
      * @brief 更新全局路径
      * @param path 全局路径（frame_id 应为 "map"）
+     * @param v_des 期望速度（用于一次性生成 v(s)）
      * @return 是否成功
      */
-    bool updateGlobalPath(const nav_msgs::Path& path);
+    bool updateGlobalPath(const nav_msgs::Path& path, double v_des);
     
     /**
      * @brief 更新机器人位姿
@@ -162,9 +163,15 @@ private:
     double current_s_ = 0.0;  // 当前在样条上的弧长位置
     int closest_idx_ = 0;     // 最近点索引
 
-    // 速度曲线
-    std::vector<double> s_samples_;
-    std::vector<double> v_samples_;
+    // 全局样条（用于一次性速度曲线）
+    CubicSpline2D global_spline_;
+    double global_spline_length_ = 0.0;
+
+    // 速度曲线（全局 v(s)）
+    std::vector<double> speed_profile_s_;
+    std::vector<double> speed_profile_v_;
+    double speed_profile_v_des_ = 0.0;
+    bool speed_profile_valid_ = false;
 
     // 全局弧长（用于平滑推进）
     double s_global_ = 0.0;

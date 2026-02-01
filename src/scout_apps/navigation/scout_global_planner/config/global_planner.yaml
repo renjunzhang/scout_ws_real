@@ -10,7 +10,7 @@ controller_patience: 5.0
 global_costmap:
   global_frame: map
   robot_base_frame: base_link
-  transform_tolerance: 0.2
+  transform_tolerance: 0.5
   update_frequency: 5.0
   publish_frequency: 2.0
   static_map: true
@@ -35,7 +35,7 @@ global_costmap:
 local_costmap:
   global_frame: odom
   robot_base_frame: base_link
-  transform_tolerance: 0.2
+  transform_tolerance: 0.5
   update_frequency: 5.0
   publish_frequency: 2.0
   static_map: false
@@ -83,4 +83,4 @@ NavfnROS:
 
 # DWA（占位）避免 TF 轻微延迟导致 local plan 失败
 DWAPlannerROS:
-  transform_tolerance: 0.2
+  transform_tolerance: 0.5

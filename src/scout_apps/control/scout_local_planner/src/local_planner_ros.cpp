@@ -140,7 +140,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
 void LocalPlannerROS::globalPathCallback(const nav_msgs::Path::ConstPtr& msg) {
     std::lock_guard<std::mutex> lock(mutex_);
     
-    if (path_handler_.updateGlobalPath(*msg)) {
+    if (path_handler_.updateGlobalPath(*msg, vehicle_params_.v_max * 0.8)) {
         has_path_ = true;
         
         if (state_ == PlannerState::IDLE || 
