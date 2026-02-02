@@ -56,6 +56,7 @@ private:
     void publishSmoothedPath();
     void publishStatus();
     void updateState();
+    void resetWarmStart(bool keep_u_prev);
     
     // ====== 状态机 ======
     void transitionTo(PlannerState new_state);
@@ -96,6 +97,7 @@ private:
     double heading_align_exit_ = 0.4;    // 退出阈值 (rad)
     double heading_align_omega_gain_ = 1.5;
     double heading_align_max_omega_ = 0.0; // <=0 表示使用 vehicle_params_.omega_max
+    double heading_align_start_dist_ = 0.5; // 只在起点附近生效 (m)
     bool heading_align_active_ = false;
     
     // 状态

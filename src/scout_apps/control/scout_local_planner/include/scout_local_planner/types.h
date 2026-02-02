@@ -118,6 +118,11 @@ struct MPCParams {
     // 角速度前馈（基于曲率）
     bool enable_omega_ff = false;
     double Q_omega_ff = 0.0;
+
+    // 终端权重放大（k==N）
+    double terminal_factor_ec = 1.0;
+    double terminal_factor_etheta = 1.0;
+    double terminal_factor_v = 1.0;
     
     // 控制权重
     double R_a = 1.0;       // 加速度权重
@@ -149,6 +154,7 @@ struct VehicleParams {
     // 加速度约束
     double a_max = 0.5;     // 最大线加速度 (m/s²)
     double alpha_max = 1.0; // 最大角加速度 (rad/s²)
+    double j_max = 0.0;     // 最大线加加速度 (m/s^3)，用于 Δa 约束
     
     // 车辆几何
     double track_width = 0.456;  // Scout Mini 轮距 (m)

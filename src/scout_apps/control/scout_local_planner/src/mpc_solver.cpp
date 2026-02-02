@@ -439,4 +439,12 @@ void MPCSolver::warmStart() {
     }
 }
 
+void MPCSolver::resetWarmStart(bool keep_u_prev) {
+    z_prev_.resize(0);
+    if (!keep_u_prev) {
+        u_prev_.setZero();
+    }
+    cost_function_.setPreviousControl(u_prev_);
+}
+
 }  // namespace scout_local_planner

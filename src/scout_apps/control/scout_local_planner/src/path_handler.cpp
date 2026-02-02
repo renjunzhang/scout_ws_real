@@ -149,17 +149,27 @@ bool PathHandler::updateGlobalPath(const nav_msgs::Path& path, double v_des) {
     global_spline_ = CubicSpline2D();
     global_spline_length_ = 0.0;
 
-    // 构建全局样条（map 坐标系）
-    std::vector<Eigen::Vector2d> global_points;
-    global_points.reserve(path.poses.size());
+    // 缓存全局路径（map 坐标系）
+    global_points_map_.clear();
+    global_points_map_.reserve(path.poses.size());
     for (const auto& pose : path.poses) {
-        global_points.emplace_back(pose.pose.position.x, pose.pose.position.y);
+        global_points_map_.emplace_back(pose.pose.position.x, pose.pose.position.y);
     }
-
-    // 可选：重采样 + B-spline 平滑
     if (params_.resample_spacing > 0.0) {
-        global_points = resamplePath(global_points, params_.resample_spacing);
+        global_points_map_ = resamplePath(global_points_map_, params_.resample_spacing);
     }
+    global_path_s_.clear();
+    global_path_s_.push_back(0.0);
+    for (size_t i = 1; i < global_points_map_.size(); ++i) {
+        const double d = (global_points_map_[i] - global_points_map_[i - 1]).norm();
+        global_path_s_.push_back(global_path_s_.back() + d);
+    }
+    global_cache_valid_ = global_points_map_.size() >= 2;
+    reset_hint_ = true;
+
+    // 构建全局样条（map 坐标系）
+    std::vector<Eigen::Vector2d> global_points = global_points_map_;
+    // 可选：B-spline 平滑（仅用于速度曲线）
     if (params_.use_bspline_smoothing) {
         global_points = bsplineSmooth(global_points, params_.bspline_samples_per_segment);
     }
@@ -204,6 +214,10 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     if (!has_path_ || !has_robot_state_) {
         return false;
     }
+
+    if (!global_cache_valid_ || global_points_map_.size() < 2 || global_path_s_.size() != global_points_map_.size()) {
+        return false;
+    }
     
     // 1. 获取 map->base 变换，并在 map 坐标系中找最近点
     if (!tf_buffer_) {
@@ -227,30 +241,8 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     const Eigen::Vector2d robot_pos_map(tf_base_to_map.getOrigin().x(),
                                         tf_base_to_map.getOrigin().y());
 
-    // 1.1 使用 map 坐标系下的路径点（仅变换窗口）
-    std::vector<Eigen::Vector2d> path_points_map;
-    path_points_map.reserve(global_path_.poses.size());
-    for (const auto& pose : global_path_.poses) {
-        path_points_map.emplace_back(pose.pose.position.x, pose.pose.position.y);
-    }
-
-    // 1.2 可选：按固定间隔重采样（map 坐标系）
-    if (params_.resample_spacing > 0.0) {
-        path_points_map = resamplePath(path_points_map, params_.resample_spacing);
-    }
-
-    if (path_points_map.size() < 2) {
-        return false;
-    }
-
-    // 1.3 计算路径累计弧长（map 坐标系）
-    std::vector<double> path_s;
-    path_s.reserve(path_points_map.size());
-    path_s.push_back(0.0);
-    for (size_t i = 1; i < path_points_map.size(); ++i) {
-        const double d = (path_points_map[i] - path_points_map[i - 1]).norm();
-        path_s.push_back(path_s.back() + d);
-    }
+    const std::vector<Eigen::Vector2d>& path_points_map = global_points_map_;
+    const std::vector<double>& path_s = global_path_s_;
     
     // 2. 找最近点（map 坐标系）
     closest_idx_ = findClosestPointIndex(path_points_map, robot_pos_map);
@@ -259,19 +251,23 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     double s_proj = 0.0;
     if (closest_idx_ >= 0 &&
         static_cast<size_t>(closest_idx_) < path_s.size()) {
-        s_proj = path_s[static_cast<size_t>(closest_idx_)];
+        s_proj = projectToPathS(robot_pos_map, closest_idx_, path_points_map, path_s);
     }
     if (!s_initialized_) {
         s_global_ = s_proj;
         last_projection_s_ = s_proj;
         s_initialized_ = true;
     } else {
-        const double ds = s_proj - last_projection_s_;
+        double ds = s_proj - last_projection_s_;
         if (std::abs(ds) < params_.s_jump_threshold) {
+            if (robot_v_ > -0.05 && ds < 0.0) {
+                ds = 0.0;  // 前进时不允许倒退
+            }
             s_global_ += ds;
         } else {
             // 路径跳变或重规划：重置弧长
             s_global_ = s_proj;
+            reset_hint_ = true;
         }
         last_projection_s_ = s_proj;
     }
@@ -281,7 +277,8 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     int window_end = std::min(static_cast<int>(path_points_map.size()) - 1, 
                               closest_idx_ + N + params_.window_forward);
     
-    if (window_end - window_start < 2) {
+    // 允许只有 2 个点（线性样条），避免临近终点时窗口过短导致失败
+    if (window_end - window_start < 1) {
         ROS_WARN_THROTTLE(1.0, "[PathHandler] Window too small for spline fitting");
         return false;
     }
@@ -341,48 +338,55 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
         has_window_s = true;
     }
 
-    double base_s_global = s_global_ + params_.lookahead_distance;
-    if (has_window_s) {
-        base_s_global = std::min(std::max(base_s_global, s_start), s_end);
-    }
-
-    double s_global = has_window_s ? base_s_global : std::min(current_s_ + params_.lookahead_distance, total_len);
+    const double total_len_global = (!path_s.empty()) ? path_s.back() : total_len;
+    double s_progress = std::max(0.0, std::min(total_len_global, s_global_));
+    double s_geom_local = std::min(current_s_ + params_.lookahead_distance, total_len);
     for (int k = 0; k < N; ++k) {
         ReferencePoint ref;
         
         // 沿路径推进（时间化速度）
-        double s_local = s_global;
         if (params_.time_parameterize) {
-            double v_ref = getSpeedAtS(s_global);
-            if (v_ref <= 1e-6) {
-                v_ref = v_des;
-            }
-            double s_next = s_global + v_ref * dt;
+            // 速度参考用 s_progress（不加 lookahead），几何参考用 s_geom
+            double s_local = s_geom_local;
             if (has_window_s) {
-                s_global = std::min(s_next, s_end);
+                double s_geom_global = s_progress + params_.lookahead_distance;
+                s_geom_global = std::min(std::max(s_geom_global, s_start), s_end);
                 const double window_len = std::max(1e-6, s_end - s_start);
                 const double scale = total_len / window_len;
-                s_local = (s_global - s_start) * scale;
-            } else {
-                s_global = std::min(s_next, total_len);
-                s_local = s_global;
+                s_local = (s_geom_global - s_start) * scale;
             }
             s_local = std::max(0.0, std::min(total_len, s_local));
+
+            double v_ref = speed_profile_valid_ ? getSpeedAtS(s_progress) : v_des;
+
             // 使用当前 s 采样点
             ref.v_ref = v_ref;
             ref.v_path = v_ref;
-        } else {
-            s_local = std::min(current_s_ + params_.lookahead_distance + k * dt * v_des, total_len);
-            s_local = std::min(s_local, total_len);  // 不超过样条末端
-        }
 
-        // 计算参考点信息
-        Eigen::Vector2d pos = local_spline_.evaluate(s_local);
-        ref.x = pos.x();
-        ref.y = pos.y();
-        ref.theta_path = local_spline_.evaluateTheta(s_local);
-        ref.kappa = local_spline_.evaluateKappa(s_local);
-        if (!params_.time_parameterize) {
+            // 推进到下一步（仅推进 progress，避免 lookahead 提前衰减速度）
+            s_progress = std::min(s_progress + v_ref * dt, total_len_global);
+            if (!has_window_s) {
+                s_geom_local = std::min(s_geom_local + v_ref * dt, total_len);
+            }
+
+            // 计算参考点信息
+            Eigen::Vector2d pos = local_spline_.evaluate(s_local);
+            ref.x = pos.x();
+            ref.y = pos.y();
+            ref.theta_path = local_spline_.evaluateTheta(s_local);
+            ref.kappa = local_spline_.evaluateKappa(s_local);
+            ref.s = s_local;
+        } else {
+            double s_local = std::min(current_s_ + params_.lookahead_distance + k * dt * v_des, total_len);
+            s_local = std::min(s_local, total_len);  // 不超过样条末端
+
+            // 计算参考点信息
+            Eigen::Vector2d pos = local_spline_.evaluate(s_local);
+            ref.x = pos.x();
+            ref.y = pos.y();
+            ref.theta_path = local_spline_.evaluateTheta(s_local);
+            ref.kappa = local_spline_.evaluateKappa(s_local);
+
             double v_ref = v_des;
             if (params_.max_lat_accel > 0.0) {
                 double kappa_abs = std::abs(ref.kappa);
@@ -395,8 +399,8 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
             }
             ref.v_path = v_ref;
             ref.v_ref = v_ref;
+            ref.s = s_local;
         }
-        ref.s = s_local;
         
         ref_points.push_back(ref);
     }
@@ -503,6 +507,18 @@ bool PathHandler::isPathValid() const {
     }
     
     return true;
+}
+
+bool PathHandler::consumeResetHint() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    bool flag = reset_hint_;
+    reset_hint_ = false;
+    return flag;
+}
+
+double PathHandler::getGlobalProgress() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return s_global_;
 }
 
 double PathHandler::getSplineTotalLength() const {
@@ -715,6 +731,73 @@ bool PathHandler::fitLocalSpline(const std::vector<Eigen::Vector2d>& window_poin
     }
     
     return true;
+}
+
+double PathHandler::projectToPathS(const Eigen::Vector2d& point,
+                                   int closest_idx,
+                                   const std::vector<Eigen::Vector2d>& points,
+                                   const std::vector<double>& path_s) const {
+    const int n = static_cast<int>(points.size());
+    if (n < 2 || closest_idx < 0 || closest_idx >= n ||
+        static_cast<int>(path_s.size()) != n) {
+        return (closest_idx >= 0 && closest_idx < n && !path_s.empty())
+            ? path_s[static_cast<size_t>(closest_idx)]
+            : 0.0;
+    }
+
+    auto project_on_segment = [&](int i0, int i1, double& s_out, double& dist2_out) {
+        const Eigen::Vector2d& a = points[static_cast<size_t>(i0)];
+        const Eigen::Vector2d& b = points[static_cast<size_t>(i1)];
+        Eigen::Vector2d ab = b - a;
+        const double ab2 = ab.squaredNorm();
+        if (ab2 < 1e-12) {
+            s_out = path_s[static_cast<size_t>(i0)];
+            dist2_out = (point - a).squaredNorm();
+            return;
+        }
+        double t = (point - a).dot(ab) / ab2;
+        t = std::max(0.0, std::min(1.0, t));
+        const Eigen::Vector2d proj = a + t * ab;
+        dist2_out = (point - proj).squaredNorm();
+
+        double seg_len = path_s[static_cast<size_t>(i1)] - path_s[static_cast<size_t>(i0)];
+        if (seg_len < 1e-9) {
+            seg_len = std::sqrt(ab2);
+        }
+        s_out = path_s[static_cast<size_t>(i0)] + t * seg_len;
+    };
+
+    int i0 = 0;
+    int i1 = 1;
+    double s_best = path_s[static_cast<size_t>(closest_idx)];
+    double d2_best = std::numeric_limits<double>::infinity();
+
+    if (closest_idx <= 0) {
+        i0 = 0;
+        i1 = 1;
+        project_on_segment(i0, i1, s_best, d2_best);
+        return s_best;
+    }
+    if (closest_idx >= n - 1) {
+        i0 = n - 2;
+        i1 = n - 1;
+        project_on_segment(i0, i1, s_best, d2_best);
+        return s_best;
+    }
+
+    // 对相邻两段做投影，取距离更小者
+    double s1 = 0.0;
+    double d21 = 0.0;
+    project_on_segment(closest_idx - 1, closest_idx, s1, d21);
+
+    double s2 = 0.0;
+    double d22 = 0.0;
+    project_on_segment(closest_idx, closest_idx + 1, s2, d22);
+
+    if (d21 <= d22) {
+        return s1;
+    }
+    return s2;
 }
 
 void PathHandler::updateSpeedProfile(double v_des) {

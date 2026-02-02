@@ -250,6 +250,20 @@ void CostFunction::buildQPCost(
                 r_total(ControlIndex::OMEGA) -= 2.0 * params_.Q_omega_ff * omega_ref;
             }
         }
+
+        // 终端权重放大（k == N）
+        if (k == N) {
+            if (params_.terminal_factor_ec > 0.0) {
+                Q_total(StateIndex::E_C, StateIndex::E_C) *= params_.terminal_factor_ec;
+            }
+            if (params_.terminal_factor_etheta > 0.0) {
+                Q_total(StateIndex::E_THETA, StateIndex::E_THETA) *= params_.terminal_factor_etheta;
+            }
+            if (params_.terminal_factor_v > 0.0) {
+                Q_total(StateIndex::V, StateIndex::V) *= params_.terminal_factor_v;
+                q_total(StateIndex::V) *= params_.terminal_factor_v;
+            }
+        }
         
         // 填充 H 矩阵（状态部分）
         for (int i = 0; i < nx; ++i) {

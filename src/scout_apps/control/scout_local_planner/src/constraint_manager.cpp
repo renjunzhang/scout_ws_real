@@ -234,7 +234,8 @@ void ConstraintManager::buildQPConstraints(
 
     // 可选：加速度变化率约束（Δa）
     if (enable_accel_rate_) {
-        const double da_max = params_.a_max * dt_;
+        const double j_max = params_.j_max > 0.0 ? params_.j_max : params_.a_max;
+        const double da_max = j_max * dt_;
         for (int k = 0; k < N; ++k) {
             int u_k_idx = k * (nx + nu) + nx;
             if (k == 0) {

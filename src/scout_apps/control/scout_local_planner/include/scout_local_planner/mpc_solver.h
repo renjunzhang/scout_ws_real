@@ -80,6 +80,7 @@ public:
      * @brief 更新 MPC 参数
      */
     void setMPCParams(const MPCParams& params);
+    void resetWarmStart(bool keep_u_prev = true);
 
 private:
     /**

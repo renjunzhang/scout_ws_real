@@ -50,9 +50,7 @@ StateVector DiffDriveModel::predict(
     x_next(StateIndex::E_THETA) = e_theta + dt * (omega - kappa * v);
     x_next(StateIndex::V) = v + dt * a;
     
-    // 速度约束（硬裁剪）
-    x_next(StateIndex::V) = std::max(params_.v_min, 
-                             std::min(params_.v_max, x_next(StateIndex::V)));
+    // 速度约束由 QP 约束处理，避免非光滑裁剪影响线性化一致性
     
     // ========== 晃动状态动力学 (4维) ==========
     if (StateIndex::SLOSH_DIM > 0) {
@@ -166,6 +164,10 @@ void DiffDriveModel::linearize(
         }
         // 如果无晃动模型，A 已初始化为单位阵（状态保持）
     }
+
+    // 仿射项：保证线性化与名义轨迹一致
+    StateVector x_next_nom = predict(x, u, ref, dt);
+    c = x_next_nom - A * x - B * u;
 }
 
 }  // namespace scout_local_planner

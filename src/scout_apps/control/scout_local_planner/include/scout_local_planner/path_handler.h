@@ -82,11 +82,21 @@ public:
      * @brief 检查路径是否有效
      */
     bool isPathValid() const;
+
+    /**
+     * @brief 消费 reset 提示（路径跳变/重规划）
+     */
+    bool consumeResetHint();
     
     /**
      * @brief 获取路径上最近点的弧长
      */
     double getCurrentArcLength() const { return current_s_; }
+
+    /**
+     * @brief 获取全局路径上的弧长进度（从起点累计）
+     */
+    double getGlobalProgress() const;
     
     /**
      * @brief 获取局部样条的总长度
@@ -139,6 +149,14 @@ private:
     void updateSpeedProfile(double v_des);
 
     /**
+     * @brief 将点投影到路径线段上，返回连续弧长 s
+     */
+    double projectToPathS(const Eigen::Vector2d& point,
+                          int closest_idx,
+                          const std::vector<Eigen::Vector2d>& points,
+                          const std::vector<double>& path_s) const;
+
+    /**
      * @brief 查询弧长 s 处的参考速度
      */
     double getSpeedAtS(double s) const;
@@ -152,6 +170,12 @@ private:
     nav_msgs::Path global_path_;
     ros::Time path_timestamp_;
     bool has_path_ = false;
+
+    // 全局路径缓存（map 坐标系）
+    std::vector<Eigen::Vector2d> global_points_map_;
+    std::vector<double> global_path_s_;
+    bool global_cache_valid_ = false;
+    bool reset_hint_ = false;
     
     // 机器人状态
     geometry_msgs::PoseStamped robot_pose_;

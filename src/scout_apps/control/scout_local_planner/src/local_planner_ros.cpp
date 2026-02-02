@@ -78,6 +78,9 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/Q_lag", mpc_params_.Q_lag, mpc_params_.Q_el);
     pnh.param("mpc/enable_omega_ff", mpc_params_.enable_omega_ff, false);
     pnh.param("mpc/Q_omega_ff", mpc_params_.Q_omega_ff, 0.0);
+    pnh.param("mpc/terminal_factor_ec", mpc_params_.terminal_factor_ec, 1.0);
+    pnh.param("mpc/terminal_factor_etheta", mpc_params_.terminal_factor_etheta, 1.0);
+    pnh.param("mpc/terminal_factor_v", mpc_params_.terminal_factor_v, 1.0);
     pnh.param("mpc/R_a", mpc_params_.R_a, 1.0);
     pnh.param("mpc/R_omega", mpc_params_.R_omega, 0.1);
     pnh.param("mpc/R_da", mpc_params_.R_da, 0.1);
@@ -92,6 +95,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("vehicle/omega_max", vehicle_params_.omega_max, 1.0);
     pnh.param("vehicle/a_max", vehicle_params_.a_max, 0.5);
     pnh.param("vehicle/alpha_max", vehicle_params_.alpha_max, 1.0);
+    pnh.param("vehicle/j_max", vehicle_params_.j_max, 0.0);
     pnh.param("vehicle/track_width", vehicle_params_.track_width, 0.456);
     
     // 路径处理参数
@@ -135,6 +139,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("heading_align/exit_angle", heading_align_exit_, 0.4);
     pnh.param("heading_align/omega_gain", heading_align_omega_gain_, 1.5);
     pnh.param("heading_align/max_omega", heading_align_max_omega_, 0.0);
+    pnh.param("heading_align/start_distance", heading_align_start_dist_, 0.5);
     
     // 将 base_frame 传递给 path_handler
     path_params_.base_frame = base_frame_;
@@ -145,6 +150,7 @@ void LocalPlannerROS::globalPathCallback(const nav_msgs::Path::ConstPtr& msg) {
     
     if (path_handler_.updateGlobalPath(*msg, vehicle_params_.v_max * 0.8)) {
         has_path_ = true;
+        resetWarmStart(true);
         
         if (state_ == PlannerState::IDLE || 
             state_ == PlannerState::REACHED ||
@@ -174,6 +180,11 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
     
     // 更新状态
     updateState();
+
+    // 路径跳变/重规划提示：重置 warm-start
+    if (path_handler_.consumeResetHint()) {
+        resetWarmStart(true);
+    }
 
     if (state_ != PlannerState::TRACKING) {
         heading_align_active_ = false;
@@ -220,14 +231,27 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     return;
                 }
 
-                // 2.1 原地对齐模式：航向误差过大时先原地转向
-                if (heading_align_enable_) {
+                // 2.1 原地对齐模式：只在起点附近生效
+                bool allow_heading_align = heading_align_enable_;
+                if (allow_heading_align) {
+                    const double start_dist = std::max(0.0, heading_align_start_dist_);
+                    const double s_progress = path_handler_.getGlobalProgress();
+                    if (s_progress > start_dist) {
+                        allow_heading_align = false;
+                        heading_align_active_ = false;
+                    }
+                }
+
+                // 航向误差过大时先原地转向（仅限起点）
+                if (allow_heading_align) {
                     const double abs_theta = std::abs(frenet.e_theta);
                     if (!heading_align_active_ && abs_theta > heading_align_enter_) {
                         heading_align_active_ = true;
                     } else if (heading_align_active_ && abs_theta < heading_align_exit_) {
                         heading_align_active_ = false;
                     }
+                } else {
+                    heading_align_active_ = false;
                 }
 
                 if (heading_align_active_) {
@@ -332,6 +356,7 @@ void LocalPlannerROS::updateState() {
     // 检查是否到达目标
     if (state_ == PlannerState::TRACKING && path_handler_.isGoalReached()) {
         transitionTo(PlannerState::REACHED);
+        resetWarmStart(false);
     }
 }
 
@@ -371,7 +396,21 @@ void LocalPlannerROS::publishLocalPath(const std::vector<StateVector>& predicted
     
     nav_msgs::Path path;
     path.header.stamp = ros::Time::now();
-    path.header.frame_id = base_frame_;
+    const std::string out_frame = map_frame_.empty() ? base_frame_ : map_frame_;
+    path.header.frame_id = out_frame;
+
+    geometry_msgs::TransformStamped tf_base_to_out;
+    bool use_tf = false;
+    if (out_frame != base_frame_ && tf_buffer_) {
+        try {
+            tf_base_to_out = tf_buffer_->lookupTransform(
+                out_frame, base_frame_, ros::Time(0), ros::Duration(0.05));
+            use_tf = true;
+        } catch (tf2::TransformException& ex) {
+            ROS_WARN_THROTTLE(1.0, "[LocalPlannerROS] TF error in local_path: %s", ex.what());
+            path.header.frame_id = base_frame_;
+        }
+    }
     
     // 预测的是 Frenet 误差：使用参考点恢复到笛卡尔坐标
     if (refs.empty()) {
@@ -395,18 +434,26 @@ void LocalPlannerROS::publishLocalPath(const std::vector<StateVector>& predicted
         const double py = ref.y + e_l * sin_t + e_c * cos_t;
         const double theta = ref.theta_path + e_theta;
 
-        geometry_msgs::PoseStamped pose;
-        pose.header = path.header;
-
-        pose.pose.position.x = px;
-        pose.pose.position.y = py;
-        pose.pose.position.z = 0.0;
+        geometry_msgs::PoseStamped pose_base;
+        pose_base.header = path.header;
+        pose_base.header.frame_id = base_frame_;
+        pose_base.pose.position.x = px;
+        pose_base.pose.position.y = py;
+        pose_base.pose.position.z = 0.0;
 
         tf2::Quaternion q;
         q.setRPY(0.0, 0.0, theta);
-        pose.pose.orientation = tf2::toMsg(q);
-        
-        path.poses.push_back(pose);
+        pose_base.pose.orientation = tf2::toMsg(q);
+
+        if (use_tf) {
+            geometry_msgs::PoseStamped pose_out;
+            tf2::doTransform(pose_base, pose_out, tf_base_to_out);
+            pose_out.header.frame_id = out_frame;
+            path.poses.push_back(pose_out);
+        } else {
+            pose_base.header.frame_id = path.header.frame_id;
+            path.poses.push_back(pose_base);
+        }
     }
     
     local_path_pub_.publish(path);
@@ -420,6 +467,13 @@ void LocalPlannerROS::publishStatus() {
     std_msgs::String msg;
     msg.data = plannerStateToString(state_);
     status_pub_.publish(msg);
+}
+
+void LocalPlannerROS::resetWarmStart(bool keep_u_prev) {
+    mpc_solver_.resetWarmStart(keep_u_prev);
+    if (!keep_u_prev) {
+        last_control_.setZero();
+    }
 }
 
 }  // namespace scout_local_planner

@@ -18,3 +18,36 @@
 - 参数与配置调整：
   - 新增 `mpc.constrain_omega_rate / mpc.constrain_accel_rate`（`config/mpc_params*.yaml`）。
   - 仿真参数：`path_handler.min_ref_speed` 与 `path_handler.goal_speed` 设为 0，终点可停车（`config/mpc_params_sim.yaml`）。
+- 动力学一致性与终点稳定性增强：
+  - `DiffDriveModel::predict()` 去掉 `v` 硬裁剪，避免非光滑动力学引起抖动。
+  - `DiffDriveModel::linearize()` 使用 `c = predict(x,u) - A*x - B*u`，保证双线性项线性化一致。
+  - `PathHandler::getReferencePoints()` 修复 time_parameterize 的 v_ref 回退逻辑，仅在速度曲线无效时 fallback。
+  - `s_global_` 在前进时禁止倒退（ds<0 钳制），降低参考点抖动。
+- 参考与可视化优化：
+  - `local_path` 发布支持 map frame（内部 base->map 变换，避免 RViz 误判）。
+  - time_parameterize 模式下按每步 `v_ref` 推进弧长，终点更平滑。
+- 路径缓存与 warm-start：
+  - `PathHandler` 缓存 `global_points_map_ / global_path_s_`，避免每周期重采样与弧长重算。
+  - 新路径/跳变触发 reset hint，`LocalPlannerROS` 重置 warm-start。
+  - `MPCSolver::resetWarmStart()` 新增，可选择保留/清零 `u_prev_`。
+- 配置补充：
+  - 新增 `mpc.terminal_factor_ec / terminal_factor_etheta / terminal_factor_v`（终端权重）。
+  - 新增 `vehicle.j_max`，Δa 约束使用 `j_max * dt`。
+  - 仿真 `max_tan_accel/max_tan_decel` 下调至 `<= a_max`。
+- 起点对齐优化：
+  - `heading_align` 仅在起点附近生效，新增 `heading_align/start_distance`；
+  - 超过起点距离阈值后强制关闭对齐，避免终点附近被原地对齐锁住。
+- 参数调整（仿真配置）：
+  - `vehicle.v_min` 设为 0 禁止倒车，避免终点附近负速度抖动。
+  - `vehicle.a_max` 与 `path_handler.max_tan_accel/decel` 提高到 2.0，缩短制动距离，避免过早减速。
+  - 降低 `mpc.terminal_factor_etheta` 与 `mpc.terminal_factor_v`，减少终点前过早原地转向。
+- 终点前提前停的修复方案（待实施，先记录）：
+  - **优先方案（根因修复）**：
+    - 解耦速度参考与几何前视：`v_ref` 用 `s_progress` 查表，不叠加 `lookahead`；几何采样仍用 `s_geom = s_progress + lookahead`。
+    - `s_proj` 从“最近离散点弧长”改为“最近线段投影弧长”，避免靠近终点时 `s` 突跳到末端。
+  - **兜底方案（输出端防死区）**：
+    - 非终点停区，强制 `|v_cmd| >= min_cmd_speed`；停区内允许 `v_cmd -> 0`。
+    - 建议新增 `output/min_cmd_speed`、`output/stop_zone_dist` 等参数，数值如 `0.06` / `0.25`。
+- 终点前提前停修复（已实施）：
+  - `PathHandler` 新增线段投影弧长 `projectToPathS()`，用连续弧长更新 `s_global_`，避免靠近终点 `s` 突跳。
+  - time_parameterize 模式解耦：`v_ref` 基于 `s_progress`，几何采样仍用 `s_progress + lookahead`，避免提前衰减速度参考。

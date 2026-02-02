@@ -18,6 +18,9 @@ mpc:
   Q_lag: 1.0               # lag（纵向误差）权重
   enable_omega_ff: false   # 启用角速度前馈
   Q_omega_ff: 0.0          # 角速度前馈权重
+  terminal_factor_ec: 1.0
+  terminal_factor_etheta: 1.0
+  terminal_factor_v: 1.0
   
   # 控制权重
   R_a: 1.0                 # 加速度权重
@@ -47,6 +50,7 @@ vehicle:
   # 加速度约束
   a_max: 0.5               # 最大线加速度 (m/s²)
   alpha_max: 1.0           # 最大角加速度 (rad/s²)
+  j_max: 0.0               # 最大线加加速度 (m/s^3)
   
   # 车辆几何
   track_width: 0.456       # Scout Mini 轮距 (m)
@@ -102,3 +106,4 @@ heading_align:
   exit_angle: 0.4          # 退出阈值 (rad)
   omega_gain: 1.5
   max_omega: 0.0           # <=0 使用 vehicle.omega_max
+  start_distance: 0.5      # 只在起点附近生效 (m)
