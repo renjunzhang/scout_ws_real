@@ -1,0 +1,28 @@
+<!-- Scout Mini TEB 局部规划（仿真）便捷启动 -->
+<!--
+  使用说明：
+  1. 先启动底盘、雷达、定位
+  2. 再启动本 launch（内部会启动 move_base，并固定 mode:=teb）
+-->
+<launch>
+  <arg name="ns" default="/scout" />
+  <arg name="use_sim_time" default="true" />
+  <arg name="base_global_planner" default="global_planner/GlobalPlanner" />
+  <arg name="base_local_planner" default="teb_local_planner/TebLocalPlannerROS" />
+  <arg name="cmd_vel_out_teb" default="/cmd_vel" />
+  <arg name="remap_goal" default="true" />
+  <arg name="use_rviz" default="false" />
+  <arg name="rviz_config" default="$(find scout_global_planner)/rviz/scout_global_planner.rviz" />
+
+  <include file="$(find scout_global_planner)/launch/move_base_global_sim.launch">
+    <arg name="ns" value="$(arg ns)" />
+    <arg name="use_sim_time" value="$(arg use_sim_time)" />
+    <arg name="base_global_planner" value="$(arg base_global_planner)" />
+    <arg name="mode" value="teb" />
+    <arg name="base_local_planner" value="$(arg base_local_planner)" />
+    <arg name="cmd_vel_out_teb" value="$(arg cmd_vel_out_teb)" />
+    <arg name="remap_goal" value="$(arg remap_goal)" />
+    <arg name="use_rviz" value="$(arg use_rviz)" />
+    <arg name="rviz_config" value="$(arg rviz_config)" />
+  </include>
+</launch>
