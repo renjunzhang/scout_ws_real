@@ -1,0 +1,3 @@
+[submodule "src/scout_apps/control/teb_local_planner"]
+	path = src/scout_apps/control/teb_local_planner
+	url = https://github.com/rst-tu-dortmund/teb_local_planner.git
