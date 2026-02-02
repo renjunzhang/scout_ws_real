@@ -126,6 +126,10 @@ struct MPCParams {
     // 控制变化率权重
     double R_da = 0.1;      // 加速度变化权重
     double R_domega = 0.1;  // 角速度变化权重
+
+    // 控制变化率约束（硬约束）
+    bool constrain_omega_rate = true;   // 是否约束 Δω
+    bool constrain_accel_rate = false;  // 是否约束 Δa（可选）
     
     // 晃动权重（第 2 步启用）
     double Q_slosh = 0.0;   // 设为 0 表示不启用

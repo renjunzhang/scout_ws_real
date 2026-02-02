@@ -26,6 +26,10 @@ mpc:
   # 控制变化率权重（平滑控制）
   R_da: 0.1                # 加速度变化权重
   R_domega: 1.0            # 角速度变化权重
+
+  # 控制变化率约束（硬约束）
+  constrain_omega_rate: true
+  constrain_accel_rate: false
   
   # 液体晃动权重（第 2 步启用）
   Q_slosh: 0.0             # 设为 0 表示不启用晃动抑制
@@ -64,12 +68,12 @@ path_handler:
   s_jump_threshold: 0.5               # 弧长跳变阈值 (m)
   resample_spacing: 0.05              # 路径重采样间隔 (m)
   max_lat_accel: 4.0                  # 最大横向加速度 (m/s^2)
-  min_ref_speed: 0.8                  # 参考速度下限 (m/s)
+  min_ref_speed: 0.0                  # 参考速度下限 (m/s)
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
   max_tan_accel: 3.5                  # 最大切向加速度 (m/s^2)
   max_tan_decel: 3.5                  # 最大切向减速度 (m/s^2)
-  goal_speed: 0.4                     # 末端期望速度 (m/s)
+  goal_speed: 0.0                     # 末端期望速度 (m/s)
   use_bspline_smoothing: true         # 启用局部 B-spline 平滑
   bspline_samples_per_segment: 12      # 每段采样点数
 

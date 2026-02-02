@@ -21,7 +21,50 @@ git remote set-url origin https://github.com/renjunzhang/scout_ws_real
 
 （当前默认分支为 `master`）
 
-## 2. 常用工作流
+## 2. 将新克隆仓库“链接到自己的仓库”
+
+适用于：你在 `scout_ws` 里 clone 了一个新的第三方仓库，希望把它纳入你自己的仓库管理。
+
+推荐优先使用 **subtree**（把代码并入主仓库，便于统一管理）。若希望保持对方仓库为独立历史、可单独更新，则用 **submodule**。
+
+### 方案 A：subtree（推荐）
+
+把第三方仓库合并进你的仓库历史（可选使用 `--squash` 压缩提交）。
+
+```bash
+# 在主仓库根目录执行
+# 例：将某仓库导入到指定目录
+git subtree add --prefix=src/scout_apps/control/xxx_repo https://github.com/owner/xxx_repo.git <branch> --squash
+
+# 之后推送到你自己的仓库
+git push
+```
+
+更新 subtree：
+
+```bash
+git subtree pull --prefix=src/scout_apps/control/xxx_repo https://github.com/owner/xxx_repo.git <branch> --squash
+```
+
+### 方案 B：submodule（保持独立仓库）
+
+```bash
+git submodule add https://github.com/owner/xxx_repo.git src/scout_apps/control/xxx_repo
+git add .gitmodules src/scout_apps/control/xxx_repo
+git commit -m "Add xxx_repo as submodule"
+git push
+```
+
+更新 submodule：
+
+```bash
+git submodule update --remote --merge
+git add src/scout_apps/control/xxx_repo
+git commit -m "Update submodule xxx_repo"
+git push
+```
+
+## 3. 常用工作流
 
 在仓库根目录 `~/scout_ws` 下操作。
 
@@ -51,7 +94,7 @@ git push
 git add -p src/
 ```
 
-## 3. 分支管理
+## 4. 分支管理
 
 ```bash
 # 新功能分支
@@ -72,7 +115,7 @@ git merge --no-ff feature/your-topic
 git push
 ```
 
-## 4. 变更审查
+## 5. 变更审查
 
 ```bash
 # 查看提交历史（简洁图形）
@@ -85,7 +128,7 @@ git diff
 git diff --cached
 ```
 
-## 5. 忽略与清理
+## 6. 忽略与清理
 
 - 根目录已有 `.gitignore`，已忽略 `build/`、`devel/`、`install/`、`*.bag` 等编译/大型产物。
 - 包内 `src/ugv_sdk/.gitignore` 保留包特有的忽略规则，避免误提交临时文件。
@@ -96,7 +139,7 @@ git rm -r --cached build devel install
 git commit -m "移除已跟踪的编译输出"
 ```
 
-## 6. 远端与认证
+## 7. 远端与认证
 
 使用 GitHub 推送时建议使用 Personal Access Token（PAT）。可选地启用凭据助手（注意安全）：
 
@@ -107,7 +150,7 @@ git config --global credential.helper cache
 git config --global credential.helper store
 ```
 
-## 7. 解决冲突（简要）
+## 8. 解决冲突（简要）
 
 ```bash
 # 线性集成更新
@@ -129,7 +172,7 @@ git add <冲突文件>
 git merge --continue
 ```
 
-## 8. 临时保存
+## 9. 临时保存
 
 ```bash
 # 暂存当前工作区（不提交）
@@ -140,7 +183,7 @@ git stash list
 git stash pop
 ```
 
-## 9. 回滚与恢复（慎用）
+## 10. 回滚与恢复（慎用）
 
 ```bash
 # 恢复某文件到 HEAD 状态（覆盖未提交改动）
@@ -157,7 +200,7 @@ git revert <commit-hash>
 git reset --hard <commit-hash>
 ```
 
-## 10. 新环境克隆
+## 11. 新环境克隆
 
 ```bash
 # 在新机器或环境中

@@ -114,12 +114,30 @@ bool ConstraintManager::checkConstraints(
     return true;
 }
 
-int ConstraintManager::totalConstraints() const {
-    int total = 0;
+int ConstraintManager::totalConstraints(int N) const {
+    int num_state_constraints = 0;
+    int num_control_constraints = 0;
     for (const auto& constraint : constraints_) {
-        total += constraint->numConstraints();
+        if (constraint->name() == "StateBoundsConstraint") {
+            num_state_constraints += constraint->numConstraints();
+        } else if (constraint->name() == "ControlBoundsConstraint") {
+            num_control_constraints += constraint->numConstraints();
+        }
     }
+    int total = (N + 1) * num_state_constraints + N * num_control_constraints;
+    if (enable_omega_rate_) total += N;
+    if (enable_accel_rate_) total += N;
     return total;
+}
+
+void ConstraintManager::setControlRateConstraints(bool enable_omega,
+                                                  bool enable_accel,
+                                                  double dt,
+                                                  const ControlVector& u_prev) {
+    enable_omega_rate_ = enable_omega;
+    enable_accel_rate_ = enable_accel;
+    dt_ = dt;
+    u_prev_ = u_prev;
 }
 
 void ConstraintManager::buildQPConstraints(
@@ -149,6 +167,8 @@ void ConstraintManager::buildQPConstraints(
     // 状态约束：每个时间步都有
     // 控制约束：只有 N 步（最后一步没有控制）
     int total_constraints = (N + 1) * num_state_constraints + N * num_control_constraints;
+    if (enable_omega_rate_) total_constraints += N;
+    if (enable_accel_rate_) total_constraints += N;
     
     std::vector<Eigen::Triplet<double>> triplets;
     l = Eigen::VectorXd::Zero(total_constraints);
@@ -188,6 +208,47 @@ void ConstraintManager::buildQPConstraints(
                 
                 constraint_idx += 2;
             }
+        }
+    }
+
+    // 控制变化率约束：-alpha_max*dt <= omega_k - omega_{k-1} <= alpha_max*dt
+    if (enable_omega_rate_) {
+        const double domega_max = params_.alpha_max * dt_;
+        for (int k = 0; k < N; ++k) {
+            int u_k_idx = k * (nx + nu) + nx;
+            if (k == 0) {
+                // u_0 - u_prev
+                triplets.emplace_back(constraint_idx, u_k_idx + ControlIndex::OMEGA, 1.0);
+                l(constraint_idx) = u_prev_(ControlIndex::OMEGA) - domega_max;
+                u(constraint_idx) = u_prev_(ControlIndex::OMEGA) + domega_max;
+            } else {
+                int u_prev_idx = (k - 1) * (nx + nu) + nx;
+                triplets.emplace_back(constraint_idx, u_k_idx + ControlIndex::OMEGA, 1.0);
+                triplets.emplace_back(constraint_idx, u_prev_idx + ControlIndex::OMEGA, -1.0);
+                l(constraint_idx) = -domega_max;
+                u(constraint_idx) = domega_max;
+            }
+            constraint_idx += 1;
+        }
+    }
+
+    // 可选：加速度变化率约束（Δa）
+    if (enable_accel_rate_) {
+        const double da_max = params_.a_max * dt_;
+        for (int k = 0; k < N; ++k) {
+            int u_k_idx = k * (nx + nu) + nx;
+            if (k == 0) {
+                triplets.emplace_back(constraint_idx, u_k_idx + ControlIndex::A, 1.0);
+                l(constraint_idx) = u_prev_(ControlIndex::A) - da_max;
+                u(constraint_idx) = u_prev_(ControlIndex::A) + da_max;
+            } else {
+                int u_prev_idx = (k - 1) * (nx + nu) + nx;
+                triplets.emplace_back(constraint_idx, u_k_idx + ControlIndex::A, 1.0);
+                triplets.emplace_back(constraint_idx, u_prev_idx + ControlIndex::A, -1.0);
+                l(constraint_idx) = -da_max;
+                u(constraint_idx) = da_max;
+            }
+            constraint_idx += 1;
         }
     }
     

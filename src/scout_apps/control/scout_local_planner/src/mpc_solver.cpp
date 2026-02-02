@@ -176,6 +176,13 @@ bool MPCSolver::buildQP(
     int num_dynamics_constraints = N * nx;  // 每步 nx 个等式约束
     int num_initial_constraints = nx;        // 初始状态
     
+    // 设置控制变化率约束（基于上一时刻控制量）
+    constraint_manager_.setControlRateConstraints(
+        mpc_params_.constrain_omega_rate,
+        mpc_params_.constrain_accel_rate,
+        dt,
+        u_prev_);
+
     // 获取边界约束
     Eigen::SparseMatrix<double> A_bounds;
     Eigen::VectorXd l_bounds, u_bounds;
@@ -201,8 +208,17 @@ bool MPCSolver::buildQP(
     
     // ----- 动力学约束：x[k+1] = A*x[k] + B*u[k] + c -----
     // 改写为：x[k+1] - A*x[k] - B*u[k] = c
+    // 从上一周期解恢复控制序列，用于名义轨迹线性化
+    std::vector<ControlVector> u_prev_seq(static_cast<size_t>(N), u_prev_);
+    if (z_prev_.size() == nz_) {
+        for (int k = 0; k < N; ++k) {
+            int u_idx = k * (nx + nu) + nx;
+            u_prev_seq[k](ControlIndex::A) = z_prev_(u_idx + ControlIndex::A);
+            u_prev_seq[k](ControlIndex::OMEGA) = z_prev_(u_idx + ControlIndex::OMEGA);
+        }
+    }
+
     StateVector x_lin = x0;
-    ControlVector u_lin = u_prev_;
 
     for (int k = 0; k < N; ++k) {
         int x_k_idx = k * (nx + nu);
@@ -211,6 +227,7 @@ bool MPCSolver::buildQP(
         
         Eigen::MatrixXd A_dyn, B_dyn;
         Eigen::VectorXd c_dyn;
+        const ControlVector& u_lin = u_prev_seq[k];
         dynamics_model_->linearize(x_lin, u_lin, refs[k], dt, A_dyn, B_dyn, c_dyn);
         
         // x[k+1] 的系数：I
@@ -242,7 +259,6 @@ bool MPCSolver::buildQP(
 
         // 更新名义轨迹用于下一步线性化
         x_lin = dynamics_model_->predict(x_lin, u_lin, refs[k], dt);
-        u_lin.setZero();
     }
     
     // ----- 边界约束 -----

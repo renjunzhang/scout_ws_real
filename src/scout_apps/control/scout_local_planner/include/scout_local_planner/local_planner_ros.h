@@ -51,7 +51,8 @@ private:
     // ====== 辅助函数 ======
     void loadParameters(ros::NodeHandle& pnh);
     void publishCmdVel(double v, double omega);
-    void publishLocalPath(const std::vector<StateVector>& predicted_states);
+    void publishLocalPath(const std::vector<StateVector>& predicted_states,
+                          const std::vector<ReferencePoint>& refs);
     void publishSmoothedPath();
     void publishStatus();
     void updateState();

@@ -7,6 +7,7 @@
 
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+#include <tf2/LinearMath/Quaternion.h>
 
 namespace scout_local_planner {
 
@@ -81,6 +82,8 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/R_omega", mpc_params_.R_omega, 0.1);
     pnh.param("mpc/R_da", mpc_params_.R_da, 0.1);
     pnh.param("mpc/R_domega", mpc_params_.R_domega, 0.1);
+    pnh.param("mpc/constrain_omega_rate", mpc_params_.constrain_omega_rate, true);
+    pnh.param("mpc/constrain_accel_rate", mpc_params_.constrain_accel_rate, false);
     pnh.param("mpc/Q_slosh", mpc_params_.Q_slosh, 0.0);
     
     // 车辆参数
@@ -272,7 +275,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     last_control_ = solution.u_first;
                     
                     // 发布预测轨迹
-                    publishLocalPath(solution.x_predicted);
+                    publishLocalPath(solution.x_predicted, ref_points);
                     
                     if (verbose_) {
                         ROS_INFO_THROTTLE(0.5, 
@@ -360,7 +363,8 @@ void LocalPlannerROS::publishSmoothedPath() {
     smoothed_path_pub_.publish(path_out);
 }
 
-void LocalPlannerROS::publishLocalPath(const std::vector<StateVector>& predicted_states) {
+void LocalPlannerROS::publishLocalPath(const std::vector<StateVector>& predicted_states,
+                                       const std::vector<ReferencePoint>& refs) {
     if (local_path_pub_.getNumSubscribers() == 0) {
         return;
     }
@@ -369,20 +373,38 @@ void LocalPlannerROS::publishLocalPath(const std::vector<StateVector>& predicted
     path.header.stamp = ros::Time::now();
     path.header.frame_id = base_frame_;
     
-    // 注意：这里预测的是 Frenet 误差，不是笛卡尔坐标
-    // 简化处理：假设沿 x 方向
-    double x = 0.0;
-    for (size_t i = 0; i < predicted_states.size(); ++i) {
+    // 预测的是 Frenet 误差：使用参考点恢复到笛卡尔坐标
+    if (refs.empty()) {
+        return;
+    }
+
+    const size_t n_states = predicted_states.size();
+    const size_t n_refs = refs.size();
+
+    for (size_t i = 0; i < n_states; ++i) {
+        const ReferencePoint& ref = refs[std::min(i, n_refs - 1)];
+        const StateVector& x_state = predicted_states[i];
+
+        const double e_l = x_state(StateIndex::E_L);
+        const double e_c = x_state(StateIndex::E_C);
+        const double e_theta = x_state(StateIndex::E_THETA);
+        const double cos_t = std::cos(ref.theta_path);
+        const double sin_t = std::sin(ref.theta_path);
+
+        const double px = ref.x + e_l * cos_t - e_c * sin_t;
+        const double py = ref.y + e_l * sin_t + e_c * cos_t;
+        const double theta = ref.theta_path + e_theta;
+
         geometry_msgs::PoseStamped pose;
         pose.header = path.header;
-        
-        // 使用速度积分位置（简化）
-        if (i > 0) {
-            x += predicted_states[i](StateIndex::V) * mpc_params_.dt;
-        }
-        pose.pose.position.x = x;
-        pose.pose.position.y = predicted_states[i](StateIndex::E_C);  // 横向误差
+
+        pose.pose.position.x = px;
+        pose.pose.position.y = py;
         pose.pose.position.z = 0.0;
+
+        tf2::Quaternion q;
+        q.setRPY(0.0, 0.0, theta);
+        pose.pose.orientation = tf2::toMsg(q);
         
         path.poses.push_back(pose);
     }

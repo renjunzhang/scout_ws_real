@@ -1,0 +1,20 @@
+2026-02-02
+- 约束维度修复（`include/scout_local_planner/constraint_manager.h/.cpp`）：
+  - `StateBoundsConstraint::numConstraints()` 改为 1，仅约束 `v`，与实际 `evaluate()`/上下界一致。
+  - 约束构建时保持 A/l/u 行数严格匹配。
+- 控制变化率硬约束（`constraint_manager.{h,cpp}` + `mpc_solver.cpp`）：
+  - 新增 Δω 约束（可选 Δa），k=0 使用 `u_prev_` 做边界：`u0 - u_prev ∈ [-alpha_max*dt, +alpha_max*dt]`。
+  - 约束总数计算与 `buildQPConstraints()` 对齐，避免维度不一致。
+- 线性化改进（`src/mpc_solver.cpp`）：
+  - 从 `z_prev_` 恢复整段 `u_prev_seq`，滚动预测得到名义 `x_lin`；
+  - 每个 k 用 `(x_lin, u_prev_seq[k])` 线性化，避免 k>0 用 0。
+- 预测轨迹可视化修正（`src/local_planner_ros.cpp`）：
+  - `local_path` 发布由“简单积分”改为“参考点 + Frenet 误差”恢复到笛卡尔坐标；
+  - 轨迹姿态用 `theta_path + e_theta` 还原。
+- PathHandler 性能优化（`path_handler.{h,cpp}`）：
+  - 最近点搜索改在 map 坐标系完成，仅对“最近点窗口”做 map->base 变换；
+  - 允许窗口仅 2 点时线性样条拟合（避免终点处失败）；
+  - `findClosestPointIndex()` 接口新增 `robot_pos` 参数。
+- 参数与配置调整：
+  - 新增 `mpc.constrain_omega_rate / mpc.constrain_accel_rate`（`config/mpc_params*.yaml`）。
+  - 仿真参数：`path_handler.min_ref_speed` 与 `path_handler.goal_speed` 设为 0，终点可停车（`config/mpc_params_sim.yaml`）。

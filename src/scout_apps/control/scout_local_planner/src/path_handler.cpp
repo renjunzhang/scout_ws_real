@@ -8,6 +8,7 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/utils.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <tf2/LinearMath/Transform.h>
 
 #include <algorithm>
 #include <cmath>
@@ -204,32 +205,55 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
         return false;
     }
     
-    // 1. 将路径变换到 base_link 坐标系
-    std::vector<Eigen::Vector2d> path_points;
-    if (!transformPathToBaseLink(global_path_, path_points)) {
+    // 1. 获取 map->base 变换，并在 map 坐标系中找最近点
+    if (!tf_buffer_) {
+        ROS_ERROR_THROTTLE(1.0, "[PathHandler] TF buffer not set");
         return false;
     }
 
-    // 1.1 可选：按固定间隔重采样
+    geometry_msgs::TransformStamped tf_map_to_base_msg;
+    try {
+        tf_map_to_base_msg = tf_buffer_->lookupTransform(
+            base_frame_, global_path_.header.frame_id,
+            ros::Time(0), ros::Duration(0.1));
+    } catch (tf2::TransformException& ex) {
+        ROS_WARN_THROTTLE(1.0, "[PathHandler] TF error: %s", ex.what());
+        return false;
+    }
+
+    tf2::Transform tf_map_to_base;
+    tf2::fromMsg(tf_map_to_base_msg.transform, tf_map_to_base);
+    const tf2::Transform tf_base_to_map = tf_map_to_base.inverse();
+    const Eigen::Vector2d robot_pos_map(tf_base_to_map.getOrigin().x(),
+                                        tf_base_to_map.getOrigin().y());
+
+    // 1.1 使用 map 坐标系下的路径点（仅变换窗口）
+    std::vector<Eigen::Vector2d> path_points_map;
+    path_points_map.reserve(global_path_.poses.size());
+    for (const auto& pose : global_path_.poses) {
+        path_points_map.emplace_back(pose.pose.position.x, pose.pose.position.y);
+    }
+
+    // 1.2 可选：按固定间隔重采样（map 坐标系）
     if (params_.resample_spacing > 0.0) {
-        path_points = resamplePath(path_points, params_.resample_spacing);
+        path_points_map = resamplePath(path_points_map, params_.resample_spacing);
     }
-    
-    if (path_points.size() < 2) {
+
+    if (path_points_map.size() < 2) {
         return false;
     }
 
-    // 1.2 计算路径累计弧长（基于当前 path_points）
+    // 1.3 计算路径累计弧长（map 坐标系）
     std::vector<double> path_s;
-    path_s.reserve(path_points.size());
+    path_s.reserve(path_points_map.size());
     path_s.push_back(0.0);
-    for (size_t i = 1; i < path_points.size(); ++i) {
-        const double d = (path_points[i] - path_points[i - 1]).norm();
+    for (size_t i = 1; i < path_points_map.size(); ++i) {
+        const double d = (path_points_map[i] - path_points_map[i - 1]).norm();
         path_s.push_back(path_s.back() + d);
     }
     
-    // 2. 找最近点
-    closest_idx_ = findClosestPointIndex(path_points);
+    // 2. 找最近点（map 坐标系）
+    closest_idx_ = findClosestPointIndex(path_points_map, robot_pos_map);
 
     // 2.1 基于全局路径索引更新全局弧长（用于稳定推进）
     double s_proj = 0.0;
@@ -254,7 +278,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     
     // 3. 截取窗口 [idx-window_back, idx+N+window_forward]
     int window_start = std::max(0, closest_idx_ - params_.window_back);
-    int window_end = std::min(static_cast<int>(path_points.size()) - 1, 
+    int window_end = std::min(static_cast<int>(path_points_map.size()) - 1, 
                               closest_idx_ + N + params_.window_forward);
     
     if (window_end - window_start < 2) {
@@ -262,11 +286,14 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
         return false;
     }
     
-    // 4. 局部样条拟合（可选 B-spline 平滑）
+    // 4. 局部样条拟合（仅变换窗口，减少 TF 负担）
     std::vector<Eigen::Vector2d> window_points;
     window_points.reserve(static_cast<size_t>(window_end - window_start + 1));
     for (int i = window_start; i <= window_end; ++i) {
-        window_points.push_back(path_points[i]);
+        const Eigen::Vector2d& p_map = path_points_map[static_cast<size_t>(i)];
+        const tf2::Vector3 p_map_tf(p_map.x(), p_map.y(), 0.0);
+        const tf2::Vector3 p_base_tf = tf_map_to_base * p_map_tf;
+        window_points.emplace_back(p_base_tf.x(), p_base_tf.y());
     }
     if (params_.use_bspline_smoothing) {
         window_points = bsplineSmooth(window_points, params_.bspline_samples_per_segment);
@@ -559,11 +586,9 @@ bool PathHandler::transformPathToBaseLink(const nav_msgs::Path& path_in,
     return true;
 }
 
-int PathHandler::findClosestPointIndex(const std::vector<Eigen::Vector2d>& points) const {
+int PathHandler::findClosestPointIndex(const std::vector<Eigen::Vector2d>& points,
+                                       const Eigen::Vector2d& robot_pos) const {
     if (points.empty()) return 0;
-    
-    // 机器人在 base_link 坐标系下位置为 (0, 0)
-    Eigen::Vector2d robot_pos(0.0, 0.0);
     
     double min_dist = std::numeric_limits<double>::max();
     int closest_idx = 0;

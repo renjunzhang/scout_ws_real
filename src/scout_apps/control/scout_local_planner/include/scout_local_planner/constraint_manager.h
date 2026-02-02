@@ -73,14 +73,13 @@ using ConstraintPtr = std::shared_ptr<ConstraintBase>;
  * @brief 状态边界约束
  * 
  * v_min ≤ v ≤ v_max
- * -omega_max ≤ omega ≤ omega_max
  */
 class StateBoundsConstraint : public ConstraintBase {
 public:
     StateBoundsConstraint(const VehicleParams& params);
     
     std::string name() const override { return "StateBoundsConstraint"; }
-    int numConstraints() const override { return 2; }  // v, omega
+    int numConstraints() const override { return 1; }  // v
     
     Eigen::VectorXd evaluate(
         const StateVector& x,
@@ -169,11 +168,27 @@ public:
     /**
      * @brief 获取总约束数
      */
-    int totalConstraints() const;
+    int totalConstraints(int N) const;
+
+    /**
+     * @brief 设置控制变化率约束参数
+     * @param enable_omega 是否启用角速度变化率约束
+     * @param enable_accel 是否启用加速度变化率约束
+     * @param dt 离散时间步长
+     * @param u_prev 上一时刻控制量（用于 k=0）
+     */
+    void setControlRateConstraints(bool enable_omega,
+                                   bool enable_accel,
+                                   double dt,
+                                   const ControlVector& u_prev);
 
 private:
     std::vector<ConstraintPtr> constraints_;
     VehicleParams params_;
+    bool enable_omega_rate_ = false;
+    bool enable_accel_rate_ = false;
+    double dt_ = 0.0;
+    ControlVector u_prev_ = ControlVector::Zero();
 };
 
 }  // namespace scout_local_planner

@@ -26,6 +26,10 @@ mpc:
   # 控制变化率权重（平滑控制）
   R_da: 0.2                # 加速度变化权重
   R_domega: 0.1            # 角速度变化权重
+
+  # 控制变化率约束（硬约束）
+  constrain_omega_rate: true
+  constrain_accel_rate: false
   
   # 液体晃动权重（第 2 步启用）
   Q_slosh: 0.0             # 设为 0 表示不启用晃动抑制

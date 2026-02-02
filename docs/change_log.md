@@ -73,6 +73,8 @@ codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
     roslaunch scout_global_planner move_base_global_sim.launch mode:=teb
 ### 7. MPC 局部规划
     roslaunch scout_local_planner test_mpc_sim.launch
+    或者
+    roslaunch teb_local_planner test_teb_sim.launch
     
 
 

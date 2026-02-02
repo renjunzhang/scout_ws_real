@@ -112,7 +112,8 @@ private:
      * @brief 找到路径上距离机器人最近的点
      * @return 最近点的索引
      */
-    int findClosestPointIndex(const std::vector<Eigen::Vector2d>& points) const;
+    int findClosestPointIndex(const std::vector<Eigen::Vector2d>& points,
+                              const Eigen::Vector2d& robot_pos) const;
     
     /**
      * @brief 计算点到样条的投影（Frenet 坐标）
