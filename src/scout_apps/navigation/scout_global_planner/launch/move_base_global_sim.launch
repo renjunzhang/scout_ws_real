@@ -8,9 +8,12 @@
   <!-- Choose global planner plugin: global_planner/GlobalPlanner or navfn/NavfnROS -->
   <arg name="base_global_planner" default="global_planner/GlobalPlanner" />
 
-  <!-- Local planner is required by move_base, but output cmd_vel is remapped -->
-  <arg name="base_local_planner" default="dwa_local_planner/DWAPlannerROS" />
-  <arg name="cmd_vel_out" default="/scout/move_base_cmd_vel" />
+  <!-- Local planner mode: mpc | teb -->
+  <arg name="mode" default="mpc" />
+  <arg name="base_local_planner" default="teb_local_planner/TebLocalPlannerROS" />
+  <arg name="base_local_planner_fallback" default="dwa_local_planner/DWAPlannerROS" />
+  <arg name="cmd_vel_out_teb" default="/cmd_vel" />
+  <arg name="cmd_vel_out_mpc" default="/scout/move_base_cmd_vel" />
   <arg name="remap_goal" default="true" />
   <arg name="use_rviz" default="false" />
   <arg name="rviz_config" default="$(find scout_global_planner)/rviz/scout_global_planner.rviz" />
@@ -20,10 +23,12 @@
   <group ns="$(arg ns)">
     <node pkg="move_base" type="move_base" name="move_base" output="screen">
       <param name="base_global_planner" value="$(arg base_global_planner)" />
-      <param name="base_local_planner" value="$(arg base_local_planner)" />
+      <param if="$(eval mode == 'teb')" name="base_local_planner" value="$(arg base_local_planner)" />
+      <param unless="$(eval mode == 'teb')" name="base_local_planner" value="$(arg base_local_planner_fallback)" />
 
       <!-- Load planner + costmap params into move_base private namespace -->
       <rosparam file="$(find scout_global_planner)/config/global_planner_sim.yaml" command="load" />
+      <rosparam if="$(eval mode == 'teb')" file="$(find scout_global_planner)/config/teb_local_planner.yaml" command="load" />
 
       <!-- Remap plan output to a stable API -->
       <remap from="~GlobalPlanner/plan" to="global_path" />
@@ -32,8 +37,10 @@
       <!-- Optional: use /goal instead of /move_base_simple/goal -->
       <remap if="$(arg remap_goal)" from="move_base_simple/goal" to="goal" />
 
-      <!-- Prevent move_base from publishing to /cmd_vel used by local MPC -->
-      <remap from="cmd_vel" to="$(arg cmd_vel_out)" />
+      <!-- teb mode: move_base directly controls robot -->
+      <remap if="$(eval mode == 'teb')" from="cmd_vel" to="$(arg cmd_vel_out_teb)" />
+      <!-- mpc mode: keep move_base cmd_vel separate -->
+      <remap unless="$(eval mode == 'teb')" from="cmd_vel" to="$(arg cmd_vel_out_mpc)" />
     </node>
   </group>
 

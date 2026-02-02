@@ -26,11 +26,17 @@ codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
     或者使用cartographer定位
     roslaunch nanoscan3_localization scout_nanoscan3_cartographer_localization.launch
 ### 6. 全局规划
-    roslaunch scout_global_planner move_base_global.launch
-    # 实物对齐：global_planner.yaml 已加入 transform_tolerance: 0.2（global_costmap/local_costmap）
+    # 实物对齐：global_planner.yaml 已加入 transform_tolerance（global_costmap/local_costmap）
     # 默认改为旁路速度话题：move_base 输出 /scout/move_base_cmd_vel，不抢占 /cmd_vel
+    roslaunch scout_global_planner move_base_global.launch mode:=mpc
+    roslaunch scout_global_planner move_base_global.launch mode:=teb
 ### 7. MPC 局部规划
     roslaunch scout_local_planner test_mpc.launch
+
+
+
+
+
 
 ## 仿真流程
 ### 1. 启动仿真环境
@@ -63,10 +69,16 @@ codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
     不能source，source会覆盖cartographer的环境
     roslaunch nanoscan3_localization scout_nanoscan3_cartographer_localization_sim.launch
 ### 6. 全局规划
-    roslaunch scout_global_planner move_base_global_sim.launch ns:=/scout remap_goal:=true
+    roslaunch scout_global_planner move_base_global_sim.launch mode:=mpc
+    roslaunch scout_global_planner move_base_global_sim.launch mode:=teb
 ### 7. MPC 局部规划
     roslaunch scout_local_planner test_mpc_sim.launch
     
+
+
+
+
+
 
 # 修改记录（scout_ws）
 
