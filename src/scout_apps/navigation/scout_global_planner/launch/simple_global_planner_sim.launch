@@ -1,0 +1,44 @@
+<launch>
+  <arg name="ns" default="/scout" />
+  <arg name="use_sim_time" default="true" />
+
+  <arg name="map_topic" default="/map" />
+  <arg name="global_path_topic" default="global_path" />
+  <arg name="planner_frequency" default="2.0" />
+  <arg name="allow_unknown" default="false" />
+  <arg name="occ_threshold" default="65" />
+  <arg name="inflation_radius" default="0.5" />
+  <arg name="base_frame" default="base_link" />
+  <arg name="map_frame" default="map" />
+  <arg name="remap_goal" default="true" />
+  <arg name="shortcut_smoothing" default="true" />
+  <arg name="smooth_path" default="true" />
+  <arg name="smooth_weight_data" default="0.2" />
+  <arg name="smooth_weight_smooth" default="0.4" />
+  <arg name="smooth_tolerance" default="1e-4" />
+  <arg name="smooth_max_iterations" default="200" />
+
+  <param name="use_sim_time" value="$(arg use_sim_time)" />
+
+  <group ns="$(arg ns)">
+    <node pkg="scout_global_planner" type="simple_global_planner_node"
+          name="simple_global_planner" output="screen">
+      <param name="map_frame" value="$(arg map_frame)" />
+      <param name="base_frame" value="$(arg base_frame)" />
+      <param name="planner_frequency" value="$(arg planner_frequency)" />
+      <param name="allow_unknown" value="$(arg allow_unknown)" />
+      <param name="occ_threshold" value="$(arg occ_threshold)" />
+      <param name="inflation_radius" value="$(arg inflation_radius)" />
+      <param name="shortcut_smoothing" value="$(arg shortcut_smoothing)" />
+      <param name="smooth_path" value="$(arg smooth_path)" />
+      <param name="smooth_weight_data" value="$(arg smooth_weight_data)" />
+      <param name="smooth_weight_smooth" value="$(arg smooth_weight_smooth)" />
+      <param name="smooth_tolerance" value="$(arg smooth_tolerance)" />
+      <param name="smooth_max_iterations" value="$(arg smooth_max_iterations)" />
+
+      <remap from="map" to="$(arg map_topic)" />
+      <remap from="global_path" to="$(arg global_path_topic)" />
+      <remap if="$(arg remap_goal)" from="move_base_simple/goal" to="goal" />
+    </node>
+  </group>
+</launch>

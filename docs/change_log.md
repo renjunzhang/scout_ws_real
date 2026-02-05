@@ -30,6 +30,8 @@ codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
     # 默认改为旁路速度话题：move_base 输出 /scout/move_base_cmd_vel，不抢占 /cmd_vel
     roslaunch scout_global_planner move_base_global.launch mode:=mpc
     roslaunch scout_global_planner move_base_global.launch mode:=teb
+    或者启动自己的简单全局规划器
+    roslaunch scout_global_planner simple_global_planner_sim.launch
 ### 7. MPC 局部规划
     roslaunch scout_local_planner test_mpc.launch
 
@@ -71,6 +73,8 @@ codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
 ### 6. 全局规划
     roslaunch scout_global_planner move_base_global_sim.launch mode:=mpc
     roslaunch scout_global_planner move_base_global_sim.launch mode:=teb
+    或者启动自己的简单全局规划器
+    roslaunch scout_global_planner simple_global_planner_sim.launch
 ### 7. MPC 局部规划
     roslaunch scout_local_planner test_mpc_sim.launch
     或者
@@ -269,12 +273,12 @@ roslaunch nanoscan3_mapping scout_nanoscan3_cartographer_sim.launch
 ```bash
 # Cartographer 需要先调用服务完成轨迹，再保存
 rosservice call /finish_trajectory 0
-rosservice call /write_state "{filename: '/home/a/scout_ws/src/scout_apps/scout_maps/maps/map_carto.pbstream'}"
+rosservice call /write_state "{filename: '/home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_2.pbstream'}"
 
 # 转换为标准地图格式
 rosrun cartographer_ros cartographer_pbstream_to_ros_map \
-  -pbstream_filename=/home/a/scout_ws/src/scout_apps/scout_maps/maps/map_carto.pbstream \
-  -map_filestem=/home/a/scout_ws/src/scout_apps/scout_maps/maps/map_carto \
+  -pbstream_filename=/home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_2.pbstream \
+  -map_filestem=/home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_2 \
   -resolution=0.05
 ```
 
