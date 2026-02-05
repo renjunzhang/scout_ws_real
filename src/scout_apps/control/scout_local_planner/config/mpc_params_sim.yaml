@@ -101,7 +101,7 @@ safety:
 # 原地对齐模式（航向误差过大时原地转向）
 # =============================================================================
 heading_align:
-  enable: true
+  enable: false
   enter_angle: 1.2         # 进入阈值 (rad) ~69° - 提高以避免直道误触发
   exit_angle: 0.6          # 退出阈值 (rad) ~34°
   omega_gain: 1.5

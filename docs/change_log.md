@@ -31,7 +31,7 @@ codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
     roslaunch scout_global_planner move_base_global.launch mode:=mpc
     roslaunch scout_global_planner move_base_global.launch mode:=teb
     或者启动自己的简单全局规划器
-    roslaunch scout_global_planner simple_global_planner_sim.launch
+    roslaunch scout_global_planner simple_global_planner.launch
 ### 7. MPC 局部规划
     roslaunch scout_local_planner test_mpc.launch
 

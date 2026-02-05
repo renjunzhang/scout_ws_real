@@ -417,6 +417,30 @@ void LocalPlannerROS::publishLocalPath(const std::vector<StateVector>& predicted
         return;
     }
 
+    // 可视化起点：当前 base_link 原点（确保 local_path 从车体开始）
+    {
+        geometry_msgs::PoseStamped pose_base;
+        pose_base.header = path.header;
+        pose_base.header.frame_id = base_frame_;
+        pose_base.pose.position.x = 0.0;
+        pose_base.pose.position.y = 0.0;
+        pose_base.pose.position.z = 0.0;
+
+        tf2::Quaternion q0;
+        q0.setRPY(0.0, 0.0, 0.0);
+        pose_base.pose.orientation = tf2::toMsg(q0);
+
+        if (use_tf) {
+            geometry_msgs::PoseStamped pose_out;
+            tf2::doTransform(pose_base, pose_out, tf_base_to_out);
+            pose_out.header.frame_id = out_frame;
+            path.poses.push_back(pose_out);
+        } else {
+            pose_base.header.frame_id = path.header.frame_id;
+            path.poses.push_back(pose_base);
+        }
+    }
+
     const size_t n_states = predicted_states.size();
     const size_t n_refs = refs.size();
 
