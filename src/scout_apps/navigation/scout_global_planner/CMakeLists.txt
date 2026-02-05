@@ -11,6 +11,8 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   nav_core
   costmap_2d
+  actionlib
+  mbf_msgs
   tf2
   tf2_ros
   tf2_geometry_msgs
@@ -19,7 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs nav_core costmap_2d tf2 tf2_ros tf2_geometry_msgs
+  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs nav_core costmap_2d actionlib mbf_msgs tf2 tf2_ros tf2_geometry_msgs
 )
 
 include_directories(
@@ -34,6 +36,13 @@ add_executable(simple_global_planner_node
 target_link_libraries(simple_global_planner_node ${catkin_LIBRARIES})
 add_dependencies(simple_global_planner_node ${catkin_EXPORTED_TARGETS})
 
+# MBF GetPath publisher node
+add_executable(mbf_path_publisher_node
+  src/mbf_path_publisher_node.cpp
+)
+target_link_libraries(mbf_path_publisher_node ${catkin_LIBRARIES})
+add_dependencies(mbf_path_publisher_node ${catkin_EXPORTED_TARGETS})
+
 # 安装
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
@@ -43,6 +52,6 @@ install(DIRECTORY config launch
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
 
-install(TARGETS simple_global_planner_node
+install(TARGETS simple_global_planner_node mbf_path_publisher_node
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

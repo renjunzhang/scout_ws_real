@@ -1,0 +1,56 @@
+<launch>
+  <!-- Namespace for all planning nodes -->
+  <arg name="ns" default="/scout" />
+
+  <!-- Simulation time -->
+  <arg name="use_sim_time" default="false" />
+
+  <!-- Choose global planner plugin: global_planner/GlobalPlanner or navfn/NavfnROS -->
+  <arg name="base_global_planner" default="global_planner/GlobalPlanner" />
+  <arg name="planner_name" default="GlobalPlanner" />
+
+  <!-- Keep cmd_vel isolated from MPC -->
+  <arg name="cmd_vel_out" default="/scout/move_base_cmd_vel" />
+  <arg name="global_path_topic" default="global_path" />
+  <arg name="goal_topic" default="goal" />
+  <arg name="replan_frequency" default="1.0" />
+  <arg name="tolerance" default="0.0" />
+
+  <param name="use_sim_time" value="$(arg use_sim_time)" />
+
+  <group ns="$(arg ns)">
+    <node pkg="mbf_costmap_nav" type="mbf_costmap_nav" name="mbf_costmap_nav" output="screen">
+      <!-- Load costmap + planner params -->
+      <rosparam file="$(find scout_global_planner)/config/global_planner.yaml" command="load" />
+
+      <!-- Disable recovery behaviors (only use GetPath) -->
+      <param name="recovery_enabled" value="false" />
+
+      <!-- Plugin lists -->
+      <rosparam param="planners" subst_value="true">
+        - name: $(arg planner_name)
+          type: $(arg base_global_planner)
+      </rosparam>
+      <rosparam param="controllers">[]</rosparam>
+      <rosparam param="recovery_behaviors">[]</rosparam>
+
+      <!-- Do not let MBF control the robot -->
+      <remap from="cmd_vel" to="$(arg cmd_vel_out)" />
+    </node>
+
+    <node pkg="scout_global_planner" type="mbf_path_publisher_node"
+          name="mbf_path_publisher" output="screen">
+      <param name="map_frame" value="map" />
+      <param name="action_name" value="mbf_costmap_nav/get_path" />
+      <param name="planner_name" value="$(arg planner_name)" />
+      <param name="global_path_topic" value="$(arg global_path_topic)" />
+      <param name="goal_topic" value="$(arg goal_topic)" />
+      <param name="replan_frequency" value="$(arg replan_frequency)" />
+      <param name="tolerance" value="$(arg tolerance)" />
+      <param name="cancel_before_replan" value="true" />
+
+      <remap from="goal" to="$(arg goal_topic)" />
+      <remap from="global_path" to="$(arg global_path_topic)" />
+    </node>
+  </group>
+</launch>
