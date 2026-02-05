@@ -279,7 +279,7 @@ rosservice call /write_state "{filename: '/home/geist/scout_ws/src/scout_apps/sc
 rosrun cartographer_ros cartographer_pbstream_to_ros_map \
   -pbstream_filename=/home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_2.pbstream \
   -map_filestem=/home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_2 \
-  -resolution=0.05
+  -resolution=0.02
 ```
 
 ### 验证环境配置
