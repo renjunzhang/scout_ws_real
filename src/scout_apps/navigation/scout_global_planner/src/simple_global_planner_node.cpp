@@ -73,6 +73,7 @@ private:
         pnh_.param("smooth_weight_smooth", smooth_weight_smooth_, 0.4);
         pnh_.param("smooth_tolerance", smooth_tolerance_, 1e-4);
         pnh_.param("smooth_max_iterations", smooth_max_iterations_, 200);
+        pnh_.param("path_resolution", path_resolution_, 0.1);  // 路径点最大间隔(米)
     }
 
     void mapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg) {
@@ -308,6 +309,36 @@ private:
         return out;
     }
 
+    /**
+     * @brief 对路径进行重采样，确保相邻点间距不超过 path_resolution_
+     */
+    std::vector<Point2D> resamplePath(const std::vector<Point2D>& path) const {
+        if (path.size() < 2 || path_resolution_ <= 0.0) {
+            return path;
+        }
+        std::vector<Point2D> resampled;
+        resampled.push_back(path.front());
+
+        for (size_t i = 1; i < path.size(); ++i) {
+            const Point2D& prev = resampled.back();
+            const Point2D& curr = path[i];
+            const double dx = curr.x - prev.x;
+            const double dy = curr.y - prev.y;
+            const double dist = std::hypot(dx, dy);
+
+            if (dist > path_resolution_) {
+                // 需要插值
+                const int n_segments = static_cast<int>(std::ceil(dist / path_resolution_));
+                for (int j = 1; j < n_segments; ++j) {
+                    const double t = static_cast<double>(j) / n_segments;
+                    resampled.push_back(Point2D{prev.x + t * dx, prev.y + t * dy});
+                }
+            }
+            resampled.push_back(curr);
+        }
+        return resampled;
+    }
+
     std::vector<Point2D> smoothPath(const std::vector<Point2D>& path) const {
         if (path.size() < 3) {
             return path;
@@ -451,6 +482,9 @@ private:
             points = smoothPath(points);
         }
 
+        // 对路径重采样，确保点间距不超过 path_resolution_
+        points = resamplePath(points);
+
         path_out.header.stamp = ros::Time::now();
         path_out.header.frame_id = map_frame_;
         path_out.poses.clear();
@@ -530,6 +564,7 @@ private:
     double inflation_radius_ = 0.0;
     double inflation_resolution_ = 0.0;
     int inflation_radius_cells_ = 0;
+    double path_resolution_ = 0.1;  // 路径点最大间隔(米)
     std::vector<uint8_t> inflated_occ_;
     std::vector<std::pair<int, int>> inflation_offsets_;
 };
