@@ -1,6 +1,30 @@
 # 启动前的注意工作
 codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
 codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
+
+## ⚠️ 编译注意事项
+
+### catkin_make 白名单问题
+如果之前使用过白名单编译单个包：
+```bash
+catkin_make -DCATKIN_WHITELIST_PACKAGES=scout_global_planner
+```
+
+**白名单会被缓存！** 后续 `catkin_make` 只会编译白名单中的包，其他包的修改不会生效。
+
+**清除白名单**（恢复编译所有包）：
+```bash
+catkin_make -DCATKIN_WHITELIST_PACKAGES=""
+```
+
+### 验证包是否被编译
+```bash
+catkin_make 2>&1 | grep "processing catkin package"
+# 应看到所有需要的包，如 scout_local_planner、scout_global_planner 等
+```
+
+---
+
 ## 实物流程
 ### 1. 将底盘和工控机连接并建立 CAN 通信
     sudo modprobe gs_usb   # 若需要

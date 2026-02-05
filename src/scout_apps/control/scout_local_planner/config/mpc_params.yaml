@@ -24,11 +24,11 @@ mpc:
   
   # 控制权重
   R_a: 0.8                 # 加速度权重（进一步降低惩罚）
-  R_omega: 0.5             # 角速度权重（直接控制，不是角加速度！）
+  R_omega: 3.0             # 角速度权重 - 增大以减少激进转向，缓解定位漂移
   
   # 控制变化率权重（平滑控制）
   R_da: 0.1                # 加速度变化权重
-  R_domega: 1.0            # 角速度变化权重
+  R_domega: 5.0            # 角速度变化权重 - 增大以平滑转向
 
   # 控制变化率约束（硬约束）
   constrain_omega_rate: true
@@ -43,13 +43,13 @@ mpc:
 # =============================================================================
 vehicle:
   # 速度约束
-  v_max: 2.0               # 最大线速度 (m/s)
+  v_max: 1.5               # 最大线速度 (m/s) - 实物保守
   v_min: 0.0               # 最小线速度 (m/s)，禁用倒车
-  omega_max: 3.5           # 最大角速度 (rad/s)
+  omega_max: 1.5           # 最大角速度 (rad/s) - 降低以减轻定位漂移
   
   # 加速度约束
   a_max: 2.0               # 最大线加速度 (m/s²)
-  alpha_max: 7.0           # 最大角加速度 (rad/s²)
+  alpha_max: 4.0           # 最大角加速度 (rad/s²) - 降低以平滑转向
   j_max: 0.0               # 最大线加加速度 (m/s^3)
   
   # 车辆几何
@@ -61,8 +61,8 @@ vehicle:
 # =============================================================================
 path_handler:
   lookahead_distance: 0.6  # 前视距离 (m)
-  goal_tolerance: 0.1      # 到达目标位置容差 (m)
-  yaw_tolerance: 0.1       # 到达目标航向容差 (rad)
+  goal_tolerance: 0.25     # 到达目标位置容差 (m) - 实物放宽
+  yaw_tolerance: 0.15      # 到达目标航向容差 (rad) - 实物放宽
   path_timeout: 5.0        # 路径超时时间 (s)
   publish_smoothed_path: true         # 是否发布平滑路径
   smoothed_path_topic: "/scout/global_path_smooth"  # 平滑路径话题名

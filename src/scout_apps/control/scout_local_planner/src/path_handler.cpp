@@ -836,10 +836,20 @@ void PathHandler::updateSpeedProfile(double v_des) {
         speed_profile_v_.push_back(v);
     }
 
-    // 末端速度
+    // 末端速度（使用 goal_tolerance 作为安全余量，提前到达容差区后即视为终点）
+    const double goal_margin = std::max(0.0, params_.goal_tolerance);
     if (!speed_profile_v_.empty()) {
         speed_profile_v_.back() = std::min(speed_profile_v_.back(),
                                            std::max(0.0, params_.goal_speed));
+        // 容差区内的点也设为终点速度
+        for (int i = static_cast<int>(speed_profile_v_.size()) - 1; i >= 0; --i) {
+            double dist_to_end = total_len - speed_profile_s_[static_cast<size_t>(i)];
+            if (dist_to_end < goal_margin) {
+                speed_profile_v_[static_cast<size_t>(i)] = std::max(0.0, params_.goal_speed);
+            } else {
+                break;
+            }
+        }
     }
 
     // 前向遍历（加速限制）
@@ -851,8 +861,10 @@ void PathHandler::updateSpeedProfile(double v_des) {
         }
     }
 
-    // 反向遍历（减速限制）
+    // 反向遍历（减速限制，使用保守系数确保实物能停住）
+    const double decel_safety_factor = 0.8;  // 保守减速系数
     double max_decel = params_.max_tan_decel > 0.0 ? params_.max_tan_decel : params_.max_tan_accel;
+    max_decel *= decel_safety_factor;  // 实物减速能力通常弱于理论值
     if (max_decel > 0.0) {
         for (int i = static_cast<int>(speed_profile_v_.size()) - 2; i >= 0; --i) {
             double v_next = speed_profile_v_[i + 1];
