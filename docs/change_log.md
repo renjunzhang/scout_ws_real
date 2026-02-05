@@ -372,3 +372,54 @@ ldd ~/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/lib/carto
 - 新增 Heading Align：航向误差过大时 `v=0` 原地转向
 - 参数：`heading_align/enable`、`enter_angle`、`exit_angle`、`omega_gain`、`max_omega`
 - 仿真默认开启，实物默认关闭
+
+## 2026-02-05（Cartographer 定位启动问题修复）
+
+### 日常启动 Cartographer 定位（实物）
+
+> ⚠️ **重要**：打开新终端后**不要手动 source**，直接运行即可。手动 `source devel/setup.bash` 会覆盖 `~/.bashrc` 中的 cartographer 环境配置。
+
+```bash
+# 终端 1：底盘
+roslaunch scout_bringup scout_mini_robot_base.launch
+
+# 终端 2：激光雷达
+roslaunch nanoscan3_bringup nanoscan3_front.launch use_rviz:=false
+
+# 终端 3：Cartographer 定位（直接打开新终端运行）
+roslaunch nanoscan3_localization scout_nanoscan3_cartographer_localization.launch
+```
+
+### 遇到的问题：Cannot locate node of type [cartographer_node]
+
+**错误信息**：
+```
+ERROR: cannot launch node of type [cartographer_ros/cartographer_node]: Cannot locate node of type [cartographer_node] in package [cartographer_ros]. Make sure file exists in package path and permission is set to executable (chmod +x)
+```
+
+**根本原因**：
+- `catkin_make_isolated --install` 编译方式将可执行文件安装到 `install_isolated/lib/cartographer_ros/` 目录
+- 但 `rosrun`/`roslaunch` 只在 `install_isolated/share/cartographer_ros/` 目录下查找可执行文件
+- 两个目录之间没有自动创建链接
+
+**解决方案**：在 `share/cartographer_ros/` 目录下创建到 `lib/cartographer_ros/` 可执行文件的符号链接
+
+```bash
+CARTO_INSTALL=~/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated
+cd ${CARTO_INSTALL}/share/cartographer_ros
+ln -sf ../../lib/cartographer_ros/cartographer_node .
+ln -sf ../../lib/cartographer_ros/cartographer_occupancy_grid_node .
+ln -sf ../../lib/cartographer_ros/cartographer_offline_node .
+ln -sf ../../lib/cartographer_ros/cartographer_assets_writer .
+ln -sf ../../lib/cartographer_ros/cartographer_pbstream_to_ros_map .
+ln -sf ../../lib/cartographer_ros/cartographer_pbstream_map_publisher .
+```
+
+**验证修复**：
+```bash
+# 新终端中执行
+rosrun cartographer_ros cartographer_node --help
+# 应显示帮助信息，不报错
+```
+
+**备注**：此问题在重新编译 Cartographer 后可能需要再次创建符号链接。
