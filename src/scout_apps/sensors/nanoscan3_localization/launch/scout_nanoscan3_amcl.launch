@@ -39,14 +39,14 @@
     <param name="initial_pose_a" value="$(arg initial_pose_a)" />
     
     <!-- AMCL 核心参数 -->
-    <param name="min_particles" value="500" />
-    <param name="max_particles" value="5000" />
+    <param name="min_particles" value="800" />   <!-- 提高最小粒子数以增强鲁棒性 -->
+    <param name="max_particles" value="8000" />  <!-- 提高最大粒子数 -->
     <param name="kld_err" value="0.05" />
     <param name="kld_z" value="0.99" />
     
-    <!-- 更新频率 -->
-    <param name="update_min_d" value="0.2" />  <!-- 移动 0.2m 更新一次 -->
-    <param name="update_min_a" value="0.5" />  <!-- 旋转 0.5rad 更新一次 -->
+    <!-- 更新频率 - 更频繁更新以应对快速运动 -->
+    <param name="update_min_d" value="0.1" />  <!-- 移动 0.1m 更新一次 -->
+    <param name="update_min_a" value="0.2" />  <!-- 旋转 0.2rad 更新一次 -->
     
     <!-- 激光模型参数 -->
     <param name="laser_max_range" value="25.0" />
@@ -61,12 +61,15 @@
     <param name="laser_likelihood_max_dist" value="2.0" />
     <param name="laser_model_type" value="likelihood_field" />
     
-    <!-- 里程计模型参数（需根据实际底盘调整）-->
-    <param name="odom_model_type" value="diff" />  <!-- diff-差速，omni-全向 -->
-    <param name="odom_alpha1" value="0.2" />  <!-- 旋转产生的旋转噪声 -->
-    <param name="odom_alpha2" value="0.2" />  <!-- 平移产生的旋转噪声 -->
-    <param name="odom_alpha3" value="0.2" />  <!-- 平移产生的平移噪声 -->
-    <param name="odom_alpha4" value="0.2" />  <!-- 旋转产生的平移噪声 -->
+    <!-- 里程计模型参数 - 增大噪声参数以容忍刹车/转弯时的里程计漂移 -->
+    <param name="odom_model_type" value="diff" />  <!-- diff-差速 -->
+    <param name="odom_alpha1" value="0.5" />  <!-- 旋转产生的旋转噪声 - 增大 -->
+    <param name="odom_alpha2" value="0.5" />  <!-- 平移产生的旋转噪声 - 增大 -->
+    <param name="odom_alpha3" value="0.3" />  <!-- 平移产生的平移噪声 -->
+    <param name="odom_alpha4" value="0.5" />  <!-- 旋转产生的平移噪声 - 增大（大角速度时更不可靠）-->
+    
+    <!-- TF 容忍度 -->
+    <param name="transform_tolerance" value="0.5" />  <!-- 增加 TF 时间容忍度 -->
     
     <!-- 重定位参数 -->
     <param name="recovery_alpha_slow" value="0.0" />

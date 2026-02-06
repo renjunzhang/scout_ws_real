@@ -448,14 +448,18 @@ void LocalPlannerROS::publishLocalPath(const std::vector<StateVector>& predicted
         const ReferencePoint& ref = refs[std::min(i, n_refs - 1)];
         const StateVector& x_state = predicted_states[i];
 
+        // 获取 Frenet 误差
         const double e_l = x_state(StateIndex::E_L);
         const double e_c = x_state(StateIndex::E_C);
         const double e_theta = x_state(StateIndex::E_THETA);
         const double cos_t = std::cos(ref.theta_path);
         const double sin_t = std::sin(ref.theta_path);
 
-        const double px = ref.x + e_l * cos_t - e_c * sin_t;
-        const double py = ref.y + e_l * sin_t + e_c * cos_t;
+        // 还原到笛卡尔坐标：只使用横向误差 e_c，忽略纵向误差 e_l
+        // 这样在弯道上不会产生锯齿状效果
+        // 纵向误差主要影响速度跟踪，对可视化位置影响较小
+        const double px = ref.x - e_c * sin_t;
+        const double py = ref.y + e_c * cos_t;
         const double theta = ref.theta_path + e_theta;
 
         geometry_msgs::PoseStamped pose_base;

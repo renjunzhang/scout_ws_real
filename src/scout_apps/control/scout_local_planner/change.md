@@ -198,3 +198,585 @@ codex resume 019c1d22-5c8c-7852-a9ca-2a2646325970
 8. 局部样条窗口过短（`Window too small` 警告）。
 9. OSQP 重建频繁（`Matrix structure changed` 警告）。
 10. 输出 v_cmd 取 `x_predicted[1]`，若模型/线性化异常会导致 v 抖动（打印 `x_predicted[0..2].V`）。
+
+---
+
+# 2026-02-06 MPC 局部规划器完整源码讲解与技术审计
+
+> 文档目的：作为后续维护、调参、升级 MPCC 的技术基线，完整覆盖架构、数学模型、代码实现与易错点。
+
+---
+
+## 1. 项目结构总览
+
+### 1.1 目录布局
+
+```
+scout_local_planner/
+├── include/scout_local_planner/
+│   ├── types.h                  # 状态/控制索引、参数结构、解结构
+│   ├── local_planner_ros.h      # ROS 节点封装
+│   ├── mpc_solver.h             # QP 构建与 OSQP 接口
+│   ├── path_handler.h           # 路径处理、Frenet 误差
+│   ├── diff_drive_model.h       # 差速底盘动力学
+│   ├── cost_function.h          # 代价函数（H/g 构建）
+│   ├── constraint_manager.h     # 约束管理（A/l/u 构建）
+│   ├── cubic_spline_2d.h        # 二维三次样条
+│   └── slosh_integration.h      # 液体晃动模型接口
+├── src/
+│   ├── local_planner_ros.cpp    # 入口节点实现
+│   ├── mpc_solver.cpp           # QP 核心实现
+│   ├── path_handler.cpp         # 路径与 v(s) 实现
+│   ├── diff_drive_model.cpp     # 动力学实现
+│   ├── cost_function.cpp        # 代价实现
+│   └── constraint_manager.cpp   # 约束实现
+├── config/
+│   ├── mpc_params.yaml          # 实物参数（保守）
+│   └── mpc_params_sim.yaml      # 仿真参数（激进）
+└── launch/
+    ├── scout_local_planner.launch
+    └── scout_local_planner_sim.launch
+```
+
+### 1.2 模块职责与调用链
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    LocalPlannerROS                           │
+│  - ROS I/O, 状态机, 参数加载, 控制循环                        │
+│  - 发布: cmd_vel, local_path, mpc_status                     │
+└───────────────┬──────────────────────────────────────────────┘
+                │ 1. getReferencePoints()
+                ▼
+┌──────────────────────────────────────────────────────────────┐
+│                      PathHandler                             │
+│  - 全局路径缓存, 局部样条拟合                                  │
+│  - Frenet 误差计算, 速度曲线 v(s) 生成                        │
+└───────────────┬──────────────────────────────────────────────┘
+                │ 2. solve(x0, refs)
+                ▼
+┌──────────────────────────────────────────────────────────────┐
+│                       MPCSolver                              │
+│  - 构建 QP (H, g, A, l, u)                                   │
+│  - 调用 OSQP 求解, 热启动                                     │
+├──────────────────────────────────────────────────────────────┤
+│ CostFunction │ ConstraintManager │ DiffDriveModel           │
+│  - buildQPCost()   - buildQPConstraints()   - linearize()   │
+└───────────────┬──────────────────────────────────────────────┘
+                │ 3. osqp_solve()
+                ▼
+┌──────────────────────────────────────────────────────────────┐
+│                        OSQP                                  │
+│  - 稀疏 QP 求解器 (osqp-vendor / osqp-eigen)                 │
+└───────────────┬──────────────────────────────────────────────┘
+                │ 4. extractSolution()
+                ▼
+┌──────────────────────────────────────────────────────────────┐
+│                     控制输出                                  │
+│  v_cmd = x_predicted[1].V                                    │
+│  ω_cmd = u_optimal[0].OMEGA （直接控制！）                    │
+└──────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2. ROS 接口与数据流
+
+### 2.1 Topic 订阅
+
+| Topic 名称 | 消息类型 | 作用 |
+|-----------|---------|-----|
+| `global_path` | `nav_msgs/Path` | 全局规划路径（来自 A*/Dijkstra/TEB） |
+| `odom` | `nav_msgs/Odometry` | 里程计（v, ω 来自底盘反馈） |
+
+### 2.2 Topic 发布
+
+| Topic 名称 | 消息类型 | 作用 |
+|-----------|---------|-----|
+| `cmd_vel` | `geometry_msgs/Twist` | 控制指令（linear.x, angular.z） |
+| `local_path` | `nav_msgs/Path` | MPC 预测轨迹（可视化） |
+| `mpc_status` | `std_msgs/String` | 状态机与求解状态 |
+| `global_path_smooth` | `nav_msgs/Path` | 平滑后的局部样条（可选） |
+
+### 2.3 TF 依赖
+
+```
+map → odom → base_link
+      └───────┘ 通常由里程计/定位系统维护
+```
+
+- `PathHandler` 需要 `map → base_link` 变换
+- 局部样条在 `base_link` 坐标系下拟合
+
+### 2.4 参数加载路径
+
+```yaml
+mpc/*          → MPCParams
+vehicle/*      → VehicleParams
+path_handler/* → PathHandlerParams
+control_rate   → 控制频率 (Hz)
+safety/*       → 不可行时的降级策略
+heading_align/* → 原地对齐参数
+```
+
+---
+
+## 3. 状态/控制量与维度定义
+
+### 3.1 状态向量 $x_k \in \mathbb{R}^8$
+
+| 索引 | 符号 | 含义 | 单位 |
+|------|-----|------|-----|
+| 0 | $e_l$ | 纵向误差（lag error） | m |
+| 1 | $e_c$ | 横向误差（contour error） | m |
+| 2 | $e_\theta$ | 航向误差 | rad |
+| 3 | $v$ | 线速度 | m/s |
+| 4 | $\eta_x$ | X方向晃动模态位移 | m |
+| 5 | $\dot{\eta}_x$ | X方向晃动模态速度 | m/s |
+| 6 | $\eta_y$ | Y方向晃动模态位移 | m |
+| 7 | $\dot{\eta}_y$ | Y方向晃动模态速度 | m/s |
+
+**关键设计**：$\omega$ **不是状态，而是控制量**！这是实现平滑控制的关键。
+
+### 3.2 控制向量 $u_k \in \mathbb{R}^2$
+
+| 索引 | 符号 | 含义 | 单位 |
+|------|-----|------|-----|
+| 0 | $a$ | 线加速度 | m/s² |
+| 1 | $\omega$ | 角速度（直接控制） | rad/s |
+
+### 3.3 决策变量 $z$
+
+$$z = \begin{bmatrix} x_0 \\ u_0 \\ x_1 \\ u_1 \\ \vdots \\ x_{N-1} \\ u_{N-1} \\ x_N \end{bmatrix} \in \mathbb{R}^{n_z}$$
+
+- 维度：$n_z = N \cdot (n_x + n_u) + n_x = N \cdot 10 + 8$
+- 默认 $N=40$：$n_z = 408$
+
+### 3.4 索引公式
+
+```cpp
+int x_idx = k * (nx + nu);       // x_k 在 z 中的起始索引
+int u_idx = x_idx + nx;           // u_k 在 z 中的起始索引
+```
+
+---
+
+## 4. 参考轨迹与 Frenet 误差
+
+### 4.1 路径处理流程
+
+```
+updateGlobalPath()
+    │
+    ├─→ 重采样 (resample_spacing)
+    ├─→ 构建全局样条 (global_spline_)
+    └─→ 生成速度曲线 v(s) (updateSpeedProfile)
+         │
+         ├─→ 曲率限速: v ≤ √(max_lat_accel / κ)
+         ├─→ 前向加速限制
+         ├─→ 反向减速限制 (×0.8 保守系数)
+         └─→ 末端 goal_tolerance 范围内速度→goal_speed
+```
+
+### 4.2 参考点生成 (`getReferencePoints`)
+
+1. **最近点查找**：在 `map` 坐标系下找 `closest_idx`
+2. **弧长投影**：`projectToPathS()` 得到连续 `s_proj` → 更新 `s_global_`
+3. **局部窗口**：`[idx-window_back, idx+N+window_forward]`
+4. **样条拟合**：仅对窗口点做 `map→base` 变换后拟合 `CubicSpline2D`
+5. **参考点采样**：
+
+```cpp
+// 速度参考用 s_progress（不加 lookahead），避免提前减速
+double v_ref = getSpeedAtS(s_progress);
+
+// 几何参考用 s_geom = s_progress + lookahead
+double s_geom = s_progress + lookahead_distance;
+ref.x = local_spline_.evaluate(s_geom).x();
+ref.kappa = local_spline_.evaluateKappa(s_geom);
+```
+
+### 4.3 Frenet 误差计算 (`computeFrenetProjection`)
+
+```cpp
+// 在 base_link 坐标系中，机器人在原点
+Eigen::Vector2d robot_pos(0, 0);
+double robot_theta = 0;
+
+// 找样条上最近点
+Eigen::Vector2d closest = spline.evaluate(best_s);
+double theta_path = spline.evaluateTheta(best_s);
+Eigen::Vector2d error = robot_pos - closest;
+
+// Frenet 分解
+Eigen::Vector2d tangent(cos(theta_path), sin(theta_path));
+Eigen::Vector2d normal(-sin(theta_path), cos(theta_path));
+
+e_l = error.dot(tangent);      // 纵向误差
+e_c = error.dot(normal);       // 横向误差
+e_theta = robot_theta - theta_path;  // 航向误差（归一化到 [-π, π]）
+```
+
+---
+
+## 5. 动力学模型
+
+### 5.1 连续时间 Frenet 动力学
+
+$$\begin{aligned}
+\dot{e}_l &= v - v_{path} \\
+\dot{e}_c &= v \cdot e_\theta \\
+\dot{e}_\theta &= \omega - \kappa \cdot v \\
+\dot{v} &= a
+\end{aligned}$$
+
+**注意**：$\omega$ 是控制量，直接作用于 $\dot{e}_\theta$，无需通过 $\alpha$ 积分！
+
+### 5.2 离散化（显式欧拉）
+
+$$x_{k+1} = x_k + dt \cdot f(x_k, u_k, ref_k)$$
+
+代码实现 (`diff_drive_model.cpp::predict`):
+```cpp
+x_next(E_L) = e_l + dt * (v - v_path);
+x_next(E_C) = e_c + dt * v * e_theta;
+x_next(E_THETA) = e_theta + dt * (omega - kappa * v);
+x_next(V) = v + dt * a;
+```
+
+### 5.3 线性化
+
+状态方程线性化：$x_{k+1} = A_k x_k + B_k u_k + c_k$
+
+**A 矩阵** ($\partial f / \partial x$)：
+$$A = I + dt \cdot \begin{bmatrix}
+0 & 0 & 0 & 1 \\
+0 & 0 & v & e_\theta \\
+0 & 0 & 0 & -\kappa \\
+0 & 0 & 0 & 0
+\end{bmatrix}$$
+
+**B 矩阵** ($\partial f / \partial u$)：
+$$B = dt \cdot \begin{bmatrix}
+0 & 0 \\
+0 & 0 \\
+0 & 1 \\
+1 & 0
+\end{bmatrix}$$
+
+**仿射项**（保证线性化与名义轨迹一致）：
+$$c = predict(x, u) - A \cdot x - B \cdot u$$
+
+### 5.4 液体晃动模型（可选）
+
+当 `Q_slosh > 0` 时启用：
+- 晃动状态由 `SloshIntegration` 模块预测
+- 横向加速度：$a_y = v \cdot \omega$（离心力）
+- 线性化时添加对应 A/B 块
+
+---
+
+## 6. 代价函数
+
+### 6.1 QP 目标形式
+
+$$\min_z \frac{1}{2} z^T H z + g^T z$$
+
+### 6.2 代价项分解
+
+| 代价项 | 公式 | 参数 |
+|-------|-----|------|
+| 横向误差 | $Q_{ec} \cdot e_c^2$ 或 $Q_{contour} \cdot e_c^2$ | `Q_ec` / `Q_contour` |
+| 纵向误差 | $Q_{el} \cdot e_l^2$ 或 $Q_{lag} \cdot e_l^2$ | `Q_el` / `Q_lag` |
+| 航向误差 | $Q_{e\theta} \cdot e_\theta^2$ | `Q_etheta` |
+| 速度跟踪 | $Q_v \cdot (v - v_{ref})^2$ | `Q_v` |
+| 加速度 | $R_a \cdot a^2$ | `R_a` |
+| 角速度 | $R_\omega \cdot \omega^2$ | `R_omega` |
+| 加速度变化 | $R_{da} \cdot (a_k - a_{k-1})^2$ | `R_da` |
+| 角速度变化 | $R_{d\omega} \cdot (\omega_k - \omega_{k-1})^2$ | `R_domega` |
+| 角速度前馈 | $Q_{\omega ff} \cdot (\omega - v_{ref} \cdot \kappa)^2$ | `Q_omega_ff` |
+
+### 6.3 终端代价放大
+
+当 $k = N$ 时：
+```cpp
+Q(E_C, E_C) *= terminal_factor_ec;
+Q(E_THETA, E_THETA) *= terminal_factor_etheta;
+Q(V, V) *= terminal_factor_v;
+g(V) *= terminal_factor_v;
+```
+
+### 6.4 H 矩阵结构
+
+```
+H = diag([Q_0, R_0, Q_1, R_1, ..., Q_{N-1}, R_{N-1}, Q_N])
+    + 变化率耦合项
+```
+
+变化率耦合（以 $R_{d\omega}$ 为例）：
+$$\sum_{k=0}^{N-1} R_{d\omega} \cdot (\omega_k - \omega_{k-1})^2$$
+
+展开后在 H 中添加：
+- 对角线：$+2R_{d\omega}$（每个 $\omega_k$ 和 $\omega_{k-1}$）
+- 非对角线：$-2R_{d\omega}$（$\omega_k$ 与 $\omega_{k-1}$ 的交叉项）
+
+---
+
+## 7. 约束
+
+### 7.1 约束矩阵结构
+
+$$l \leq A z \leq u$$
+
+约束行数：$n_c = n_x + N \cdot n_x + n_{bounds}$
+
+### 7.2 初始条件约束
+
+$$x_0 = \bar{x}_0 \quad (n_x \text{ 行等式约束})$$
+
+### 7.3 动力学约束
+
+$$x_{k+1} - A_k x_k - B_k u_k = c_k \quad (N \cdot n_x \text{ 行等式约束})$$
+
+在约束矩阵中表示为：
+```
+[I, 0, -A_k, -B_k, 0, ...] * z = c_k
+```
+
+### 7.4 状态边界
+
+$$v_{min} \leq v_k \leq v_{max}, \quad k = 0, \ldots, N$$
+
+共 $N+1$ 行。
+
+### 7.5 控制边界
+
+$$\begin{aligned}
+-a_{max} &\leq a_k \leq a_{max} \\
+-\omega_{max} &\leq \omega_k \leq \omega_{max}
+\end{aligned}, \quad k = 0, \ldots, N-1$$
+
+共 $2N$ 行。
+
+### 7.6 控制变化率约束（硬约束）
+
+$$-\alpha_{max} \cdot dt \leq \omega_k - \omega_{k-1} \leq \alpha_{max} \cdot dt$$
+
+- 当 $k=0$ 时使用 $u_{prev}$
+- 可选：加速度变化率约束（`constrain_accel_rate`）
+
+### 7.7 约束维度汇总
+
+| 约束类型 | 行数 |
+|---------|-----|
+| 初始条件 | $n_x = 8$ |
+| 动力学 | $N \cdot n_x = 320$ |
+| 状态边界 | $N + 1 = 41$ |
+| 控制边界 | $2N = 80$ |
+| ω变化率 | $N = 40$ (可选) |
+| a变化率 | $N = 40$ (可选) |
+| **总计** | $n_c = 489$ (含ω变化率) |
+
+---
+
+## 8. 求解器与 Warm-start
+
+### 8.1 OSQP 配置
+
+```cpp
+osqp_settings_->verbose = false;
+osqp_settings_->warm_start = true;
+osqp_settings_->polish = true;
+osqp_settings_->eps_abs = 1e-4;
+osqp_settings_->eps_rel = 1e-4;
+osqp_settings_->max_iter = 4000;
+```
+
+### 8.2 求解流程
+
+```cpp
+bool MPCSolver::solve(const StateVector& x0, const std::vector<ReferencePoint>& refs) {
+    // 1. 构建 QP
+    buildQP(x0, refs);  // 生成 P_, q_, A_, l_, u_
+    
+    // 2. 更新 OSQP 工作空间
+    updateOSQP();       // CSC 格式转换，warm_start 设置
+    
+    // 3. 热启动
+    warmStart();        // z_prev_ 前移一拍
+    
+    // 4. 求解
+    osqp_solve(osqp_work_);
+    
+    // 5. 提取解
+    extractSolution(solution_);
+    
+    return (osqp_work_->info->status_val == OSQP_SOLVED);
+}
+```
+
+### 8.3 热启动策略
+
+```cpp
+void MPCSolver::warmStart() {
+    // 将上一次解前移一步：z_init[k] = z_prev[k+1]
+    for (int k = 0; k < N - 1; ++k) {
+        z_init.segment(k*(nx+nu), nx+nu) = z_prev_.segment((k+1)*(nx+nu), nx+nu);
+    }
+    // 最后一步复制
+    z_init.segment((N-1)*(nx+nu), nx+nu) = z_prev_.segment((N-1)*(nx+nu), nx+nu);
+    z_init.segment(N*(nx+nu), nx) = z_prev_.segment(N*(nx+nu), nx);
+    
+    osqp_warm_start_x(osqp_work_, z_init.data());
+}
+```
+
+### 8.4 重置时机
+
+- 收到新路径
+- 弧长跳变超过 `s_jump_threshold`
+- 求解失败
+
+---
+
+## 9. 关键参数对照表
+
+### 9.1 MPC 参数 (`mpc/*`)
+
+| 参数 | 仿真值 | 实物值 | 作用 |
+|-----|--------|--------|-----|
+| `N` | 40 | 40 | 预测步长 |
+| `dt` | 0.05 | 0.05 | 时间步长 (s) |
+| `Q_ec` / `Q_contour` | 60 | 30 | 横向误差权重 |
+| `Q_etheta` | 12 | 12 | 航向误差权重 |
+| `Q_v` | 15 | 15 | 速度跟踪权重 |
+| `R_a` | 0.8 | 0.8 | 加速度权重 |
+| `R_omega` | 0.5 | **3.0** | 角速度权重（实物增大）|
+| `R_domega` | 1.0 | **5.0** | 角速度变化权重（实物增大）|
+
+### 9.2 车辆参数 (`vehicle/*`)
+
+| 参数 | 仿真值 | 实物值 | 作用 |
+|-----|--------|--------|-----|
+| `v_max` | 2.0 | **1.5** | 最大线速度 (m/s) |
+| `omega_max` | 2.5 | **1.5** | 最大角速度 (rad/s) |
+| `a_max` | 2.0 | 2.0 | 最大线加速度 (m/s²) |
+| `alpha_max` | 7.0 | **4.0** | 最大角加速度 (rad/s²) |
+
+### 9.3 路径处理参数 (`path_handler/*`)
+
+| 参数 | 仿真值 | 实物值 | 作用 |
+|-----|--------|--------|-----|
+| `goal_tolerance` | 0.1 | **0.25** | 到达目标容差 (m) |
+| `yaw_tolerance` | 0.1 | **0.15** | 航向容差 (rad) |
+| `lookahead_distance` | 0.6 | 0.6 | 前视距离 (m) |
+| `max_lat_accel` | 2.0 | 2.0 | 最大横向加速度 (m/s²) |
+| `max_tan_decel` | 2.0 | 2.0 | 最大切向减速度 (m/s²) |
+| `decel_safety_factor` | - | 0.8 | 减速保守系数（硬编码）|
+
+---
+
+## 10. 常见问题排查清单
+
+### 10.1 路径跟踪偏差大
+
+| 症状 | 可能原因 | 排查方法 | 解决方案 |
+|-----|---------|---------|---------|
+| 横向偏差大 | `Q_ec` 过小 | 打印 `e_c` | 增大 `Q_ec` 或 `Q_contour` |
+| 切弯严重 | `lookahead_distance` 过大 | 减小 lookahead | 减小到 0.3~0.6m |
+| 弯道超速 | `max_lat_accel` 过大 | 打印 `v_ref` 和 `kappa` | 减小到 1.5~2.0 |
+
+### 10.2 终点不收敛
+
+| 症状 | 可能原因 | 排查方法 | 解决方案 |
+|-----|---------|---------|---------|
+| 距终点0.3m停住 | `goal_tolerance` 过小 | 打印距离 | 增大到 0.25m |
+| 终点速度过快 | 减速余量不足 | 打印 `v_ref` 和 `s_progress` | 增大 `decel_safety_factor` |
+| 绕终点打转 | `yaw_tolerance` 过小 | 打印航向误差 | 增大到 0.15 rad |
+
+### 10.3 控制不平滑
+
+| 症状 | 可能原因 | 排查方法 | 解决方案 |
+|-----|---------|---------|---------|
+| ω 抖动 | `R_omega`/`R_domega` 过小 | 打印 `omega_cmd` | 增大到 3.0/5.0 |
+| 急加急减 | `R_da` 过小 | 打印 `a_cmd` | 增大 `R_da` |
+| ω 变化受限 | `alpha_max` 过小 | 打印 Δω 是否饱和 | 增大 `alpha_max` |
+
+### 10.4 求解问题
+
+| 症状 | 可能原因 | 排查方法 | 解决方案 |
+|-----|---------|---------|---------|
+| OSQP 失败 | 约束不可行 | 打印 `osqp_work_->info->status_val` | 检查初始状态是否越界 |
+| 频繁重建 | 矩阵结构变化 | 观察 `Matrix structure changed` 日志 | 检查动态约束启用情况 |
+| 求解变慢 | 热启动失效 | 打印 `solve_time_ms` | 检查 `z_prev_` 重置时机 |
+
+### 10.5 TF / 坐标系问题
+
+| 症状 | 可能原因 | 排查方法 | 解决方案 |
+|-----|---------|---------|---------|
+| 路径漂移 | TF 延迟 | 观察 `[PathHandler] TF error` | 检查 TF 发布频率 |
+| 位置跳变 | 定位抖动 | 打印 `s_global_` 变化 | 增大 `s_jump_threshold` |
+| 样条拟合失败 | 窗口过短 | 观察 `Window too small` | 增大 `window_forward` |
+
+---
+
+## 附录 A：与 MPCC 的差异
+
+| 方面 | 当前实现 | MPCC |
+|-----|---------|------|
+| 进度 $s$ | 外部计算，不参与优化 | 作为状态/控制变量 |
+| 路径参数化 | 固定参考轨迹 | 软约束 + 进度动力学 |
+| contour/lag | 仅体现在权重 | 与 $s$ 绑定的真正误差 |
+| 障碍约束 | 无 | 可行走廊约束 |
+
+升级路径：
+1. 引入 $s$ 作为控制变量
+2. 添加进度动力学 $\dot{s} = v_{progress}$
+3. 将 $e_c, e_l$ 定义为相对于 $s$ 的真正 contour/lag 误差
+4. 添加道路走廊约束
+
+---
+
+## 附录 B：代码片段速查
+
+### B.1 状态向量索引
+
+```cpp
+// types.h
+struct StateIndex {
+    static constexpr int E_L = 0, E_C = 1, E_THETA = 2, V = 3;
+    static constexpr int ETA_X = 4, ETA_X_DOT = 5, ETA_Y = 6, ETA_Y_DOT = 7;
+    static constexpr int TOTAL_DIM = 8;
+};
+
+struct ControlIndex {
+    static constexpr int A = 0, OMEGA = 1;
+    static constexpr int DIM = 2;
+};
+```
+
+### B.2 决策变量索引
+
+```cpp
+// mpc_solver.cpp
+const int nx = StateIndex::TOTAL_DIM;  // 8
+const int nu = ControlIndex::DIM;       // 2
+const int nz = N * (nx + nu) + nx;      // N*10 + 8
+
+// x_k 的起始索引
+int x_idx = k * (nx + nu);
+// u_k 的起始索引
+int u_idx = x_idx + nx;
+```
+
+### B.3 控制输出
+
+```cpp
+// local_planner_ros.cpp
+double v_cmd = solution.x_predicted[1](StateIndex::V);
+double omega_cmd = solution.u_first(ControlIndex::OMEGA);  // 直接控制！
+```
+
+---
+
+*文档结束*

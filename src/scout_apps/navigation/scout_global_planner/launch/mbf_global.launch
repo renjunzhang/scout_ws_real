@@ -13,7 +13,7 @@
   <arg name="cmd_vel_out" default="/scout/move_base_cmd_vel" />
   <arg name="global_path_topic" default="global_path" />
   <arg name="goal_topic" default="goal" />
-  <arg name="replan_frequency" default="1.0" />
+  <arg name="replan_frequency" default="0.0" />
   <arg name="tolerance" default="0.0" />
 
   <param name="use_sim_time" value="$(arg use_sim_time)" />

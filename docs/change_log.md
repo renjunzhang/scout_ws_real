@@ -1,6 +1,4 @@
 # 启动前的注意工作
-codex resume 019c0077-7115-79e1-8ae1-b85f3309a15a
-codex resume 019c0a43-c32b-71f1-b6e9-938e78ce16dc
 
 ## ⚠️ 编译注意事项
 
@@ -56,6 +54,8 @@ catkin_make 2>&1 | grep "processing catkin package"
     roslaunch scout_global_planner move_base_global.launch mode:=teb
     或者启动自己的简单全局规划器
     roslaunch scout_global_planner simple_global_planner.launch
+    或者启动MBF全局规划器
+    roslaunch scout_global_planner mbf_global.launch
 ### 7. MPC 局部规划
     roslaunch scout_local_planner test_mpc.launch
 
@@ -99,10 +99,15 @@ catkin_make 2>&1 | grep "processing catkin package"
     roslaunch scout_global_planner move_base_global_sim.launch mode:=teb
     或者启动自己的简单全局规划器
     roslaunch scout_global_planner simple_global_planner_sim.launch
+    或者启动MBF全局规划器
+    roslaunch scout_global_planner mbf_global_sim.launch
 ### 7. MPC 局部规划
     roslaunch scout_local_planner test_mpc_sim.launch
     或者
     roslaunch teb_local_planner test_teb_sim.launch
+
+
+
     
 
 
@@ -111,7 +116,6 @@ catkin_make 2>&1 | grep "processing catkin package"
 
 
 # 修改记录（scout_ws）
-
 ## 2026-01-26
 - 调整 BMS 监控默认输出周期：`bms_status_monitor.py` 与 `bms_status_monitor.launch` 的 `period` 默认由 180 秒改为 60 秒，便于更快看到电池状态。
 - 运行方式：
@@ -177,7 +181,7 @@ catkin_make 2>&1 | grep "processing catkin package"
   > 注意：Ubuntu 20.04 apt 源中没有 libosqp-dev，需要从源码安装。
   
   1. **安装 ROS 导航相关依赖**：
-     ```bash
+    ```bash
      sudo apt-get install ros-noetic-ros-base ros-noetic-roscpp \
        ros-noetic-nav-core ros-noetic-costmap-2d ros-noetic-base-local-planner \
        ros-noetic-tf2 ros-noetic-tf2-ros ros-noetic-tf \
@@ -451,3 +455,64 @@ rosrun cartographer_ros cartographer_node --help
 ```
 
 **备注**：此问题在重新编译 Cartographer 后可能需要再次创建符号链接。
+
+
+
+
+## 2026-02-05
+- 新增 MBF 全局规划 launch（实物/仿真）：
+  - `scout_global_planner/launch/mbf_global.launch`
+  - `scout_global_planner/launch/mbf_global_sim.launch`
+  - 仅维护 costmap + GetPath，不控制底盘，`cmd_vel` 旁路到 `/scout/move_base_cmd_vel`。
+- 新增 MBF GetPath 路径发布节点：
+  - `scout_global_planner/src/mbf_path_publisher_node.cpp`
+  - 订阅 `goal`，调用 `mbf_costmap_nav/get_path`，发布到 `/scout/global_path`。
+- 修复 MBF planners 参数替换问题：
+  - `mbf_global*.launch` 中 `planners` 增加 `subst_value="true"`。
+- `scout_global_planner` 增加依赖与编译目标：
+  - CMake 增加 `actionlib`、`mbf_msgs`，新增可执行 `mbf_path_publisher_node`。
+  - `package.xml` 增加依赖 `actionlib`、`mbf_msgs`。
+- simple_global_planner 增加硬膨胀：
+  - `simple_global_planner_node.cpp` 新增 `inflation_radius`，构建膨胀栅格用于 A* 与平滑。
+  - `simple_global_planner*.launch` 新增参数 `inflation_radius`（默认 0.35m）。
+- simple_global_planner 改为每周期重算路径（方案 A）。
+- MPC 本地轨迹可视化起点对齐：
+  - `scout_local_planner/src/local_planner_ros.cpp` 的 `publishLocalPath()` 先插入 base_link 原点，确保 `/local_path` 从车体起点显示。
+
+
+
+
+## 2026-02-06（实物定位优化与 MPC 参数调整）
+
+### 问题：刹车和大角速度时定位漂移
+- **根本原因**：差速底盘在急刹车时轮子打滑、大角速度时里程计累积误差
+
+### 修复 1：MPC 参数调整（减少极端运动）
+- `mpc_params.yaml` 调整：
+  | 参数 | 原值 | 新值 | 原因 |
+  |-----|-----|-----|------|
+  | `v_max` | 1.5 | 1.0 | 降低最大速度 |
+  | `omega_max` | 1.5 | 1.0 | 降低最大角速度 |
+  | `a_max` | 2.0 | 1.5 | 减少刹车打滑 |
+  | `alpha_max` | 4.0 | 2.5 | 平滑转向 |
+  | `max_tan_decel` | 2.0 | 1.2 | 减少急刹车 |
+  | `max_lat_accel` | 2.0 | 1.5 | 减少激进转弯 |
+  | `s_jump_threshold` | 0.5 | 0.8 | 容忍定位抖动 |
+
+### 修复 2：AMCL 参数优化
+- `scout_nanoscan3_amcl.launch` 调整：
+  - 粒子数：500-5000 → 800-8000（提高鲁棒性）
+  - 更新频率：0.2m/0.5rad → 0.1m/0.2rad（更频繁更新）
+  - 里程计噪声：alpha1-4 从 0.2 增大到 0.3-0.5（容忍漂移）
+  - 新增 `transform_tolerance: 0.5`
+
+### 修复 3：Cartographer 定位参数优化
+- `scout_2d_localization.lua` 调整：
+  - 搜索窗口：0.15m/30° → 0.25m/45°（容忍更大漂移）
+  - 增加运动滤波器配置，更频繁更新
+  - 增大 `rotation_weight` 减少大角速度时的漂移
+
+### 修复 4：TF 时间戳问题
+- `path_handler.cpp::isGoalReached()` 修复：
+  - 原问题：使用 `global_path_.header.stamp` 导致 TF 查询过期
+  - 修复：改用 `ros::Time(0)` 获取最新变换

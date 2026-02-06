@@ -1,4 +1,4 @@
-# Scout Mini MPC 局部规划器参数
+# Scout Mini MPC 局部规划器参数（实物）
 
 # =============================================================================
 # MPC 参数
@@ -11,24 +11,24 @@ mpc:
   # 状态权重（Frenet 误差）
   Q_el: 1.0                # 纵向误差权重（沿路径方向）
   Q_ec: 60.0               # 横向误差权重（更贴路径）
-  Q_etheta: 12.0           # 航向误差权重（更贴路径）
-  Q_v: 15.0                # 速度跟踪权重（显著提高）
+  Q_etheta: 25.0           # 航向误差权重 - 提高以减少直线摇摆
+  Q_v: 15.0                # 速度跟踪权重
   use_contour_lag: true    # 启用 contour + lag 误差结构
-  Q_contour: 30.0          # contour（横向误差）权重
+  Q_contour: 40.0          # contour（横向误差）权重 - 提高以更贴路径
   Q_lag: 1.0               # lag（纵向误差）权重
   enable_omega_ff: true    # 启用角速度前馈
-  Q_omega_ff: 3.0          # 角速度前馈权重
+  Q_omega_ff: 5.0          # 角速度前馈权重 - 提高以更快响应曲率
   terminal_factor_ec: 5.0
-  terminal_factor_etheta: 2.0
+  terminal_factor_etheta: 3.0  # 提高终端航向权重
   terminal_factor_v: 2.0
   
   # 控制权重
-  R_a: 0.8                 # 加速度权重（进一步降低惩罚）
-  R_omega: 3.0             # 角速度权重 - 增大以减少激进转向，缓解定位漂移
+  R_a: 0.8                 # 加速度权重
+  R_omega: 2.0             # 角速度权重 - 适当降低以提高响应
   
   # 控制变化率权重（平滑控制）
   R_da: 0.1                # 加速度变化权重
-  R_domega: 5.0            # 角速度变化权重 - 增大以平滑转向
+  R_domega: 3.0            # 角速度变化权重 - 适当降低以提高响应
 
   # 控制变化率约束（硬约束）
   constrain_omega_rate: true
@@ -43,13 +43,13 @@ mpc:
 # =============================================================================
 vehicle:
   # 速度约束
-  v_max: 1.5               # 最大线速度 (m/s) - 实物保守
+  v_max: 1.0               # 最大线速度 (m/s) - 实物保守，降低以减少刹车时打滑
   v_min: 0.0               # 最小线速度 (m/s)，禁用倒车
-  omega_max: 1.5           # 最大角速度 (rad/s) - 降低以减轻定位漂移
+  omega_max: 1.0           # 最大角速度 (rad/s) - 降低以减轻定位漂移
   
   # 加速度约束
-  a_max: 2.0               # 最大线加速度 (m/s²)
-  alpha_max: 4.0           # 最大角加速度 (rad/s²) - 降低以平滑转向
+  a_max: 1.5               # 最大线加速度 (m/s²) - 降低以减少刹车打滑
+  alpha_max: 2.5           # 最大角加速度 (rad/s²) - 降低以平滑转向
   j_max: 0.0               # 最大线加加速度 (m/s^3)
   
   # 车辆几何
@@ -60,23 +60,23 @@ vehicle:
 # 路径处理参数
 # =============================================================================
 path_handler:
-  lookahead_distance: 0.6  # 前视距离 (m)
+  lookahead_distance: 0.5  # 前视距离 (m) - 降低以减少切弯
   goal_tolerance: 0.25     # 到达目标位置容差 (m) - 实物放宽
-  yaw_tolerance: 0.15      # 到达目标航向容差 (rad) - 实物放宽
+  yaw_tolerance: 0.2       # 到达目标航向容差 (rad) - 进一步放宽
   path_timeout: 5.0        # 路径超时时间 (s)
   publish_smoothed_path: true         # 是否发布平滑路径
   smoothed_path_topic: "/scout/global_path_smooth"  # 平滑路径话题名
   smoothed_path_points: 80            # 平滑路径采样点数
   window_back: 4                      # 样条窗口向后点数
   window_forward: 48                   # 样条窗口向前额外点数
-  s_jump_threshold: 0.5               # 弧长跳变阈值 (m)
+  s_jump_threshold: 0.8               # 弧长跳变阈值 (m) - 增大以容忍定位抖动
   resample_spacing: 0.05              # 路径重采样间隔 (m)
-  max_lat_accel: 2.0                  # 最大横向加速度 (m/s^2)
+  max_lat_accel: 1.5                  # 最大横向加速度 (m/s^2) - 降低以减少激进转弯
   min_ref_speed: 0.0                  # 参考速度下限 (m/s)
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
-  max_tan_accel: 2.0                  # 最大切向加速度 (m/s^2) <= a_max
-  max_tan_decel: 2.0                  # 最大切向减速度 (m/s^2) <= a_max
+  max_tan_accel: 1.5                  # 最大切向加速度 (m/s^2) - 降低以平滑加速
+  max_tan_decel: 1.2                  # 最大切向减速度 (m/s^2) - 降低以减少刹车打滑
   goal_speed: 0.0                     # 末端期望速度 (m/s)
   use_bspline_smoothing: false        # 关闭局部 B-spline 平滑（提高贴合度）
   bspline_samples_per_segment: 12      # 每段采样点数
@@ -101,7 +101,7 @@ safety:
 # 原地对齐模式（航向误差过大时原地转向）
 # =============================================================================
 heading_align:
-  enable: true
+  enable: false
   enter_angle: 1.2         # 进入阈值 (rad) ~69° - 提高以避免直道误触发
   exit_angle: 0.6          # 退出阈值 (rad) ~34°
   omega_gain: 1.5

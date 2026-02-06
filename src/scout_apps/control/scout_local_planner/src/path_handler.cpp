@@ -440,49 +440,47 @@ bool PathHandler::isGoalReached() const {
         return false;
     }
     
-    // 获取目标点（路径最后一点，在 map 坐标系）
-    geometry_msgs::PoseStamped goal_in_map;
-    goal_in_map.header = global_path_.header;
-    goal_in_map.pose = global_path_.poses.back().pose;
-    
-    // 将目标点变换到 base_link 坐标系
-    geometry_msgs::PoseStamped goal_in_base;
+    // 使用 lookupTransform + ros::Time(0) 获取最新变换，避免路径时间戳过期
+    geometry_msgs::TransformStamped tf_map_to_base;
     try {
-        goal_in_base = tf_buffer_->transform(goal_in_map, base_frame_, ros::Duration(0.1));
+        tf_map_to_base = tf_buffer_->lookupTransform(
+            base_frame_, global_path_.header.frame_id,
+            ros::Time(0), ros::Duration(0.1));
     } catch (tf2::TransformException& ex) {
         ROS_WARN_THROTTLE(1.0, "[PathHandler] TF error in isGoalReached: %s", ex.what());
         return false;
     }
     
+    // 手动变换目标点到 base_link
+    const auto& goal_pose = global_path_.poses.back().pose;
+    tf2::Transform tf_transform;
+    tf2::fromMsg(tf_map_to_base.transform, tf_transform);
+    
+    tf2::Vector3 goal_map(goal_pose.position.x, goal_pose.position.y, 0.0);
+    tf2::Vector3 goal_base = tf_transform * goal_map;
+    
     // 在 base_link 坐标系中，机器人在原点
     // 计算到目标的距离
-    double dx = goal_in_base.pose.position.x;
-    double dy = goal_in_base.pose.position.y;
+    double dx = goal_base.x();
+    double dy = goal_base.y();
     double dist = std::sqrt(dx * dx + dy * dy);
     
     // 计算航向误差（使用路径末端切线方向，而非终点姿态）
     double goal_yaw_in_base = 0.0;
     const size_t n = global_path_.poses.size();
     if (n >= 2) {
-        geometry_msgs::PoseStamped p1_map, p2_map;
-        p1_map.header = global_path_.header;
-        p2_map.header = global_path_.header;
-        p1_map.pose = global_path_.poses[n - 2].pose;
-        p2_map.pose = global_path_.poses[n - 1].pose;
+        const auto& p1_pose = global_path_.poses[n - 2].pose;
+        const auto& p2_pose = global_path_.poses[n - 1].pose;
+        
+        tf2::Vector3 p1_map(p1_pose.position.x, p1_pose.position.y, 0.0);
+        tf2::Vector3 p2_map(p2_pose.position.x, p2_pose.position.y, 0.0);
+        tf2::Vector3 p1_base = tf_transform * p1_map;
+        tf2::Vector3 p2_base = tf_transform * p2_map;
 
-        geometry_msgs::PoseStamped p1_base, p2_base;
-        try {
-            p1_base = tf_buffer_->transform(p1_map, base_frame_, ros::Duration(0.1));
-            p2_base = tf_buffer_->transform(p2_map, base_frame_, ros::Duration(0.1));
-        } catch (tf2::TransformException& ex) {
-            ROS_WARN_THROTTLE(1.0, "[PathHandler] TF error in goal yaw: %s", ex.what());
-            return false;
-        }
-
-        const double dx = p2_base.pose.position.x - p1_base.pose.position.x;
-        const double dy = p2_base.pose.position.y - p1_base.pose.position.y;
-        if (std::hypot(dx, dy) > 1e-6) {
-            goal_yaw_in_base = std::atan2(dy, dx);
+        const double tdx = p2_base.x() - p1_base.x();
+        const double tdy = p2_base.y() - p1_base.y();
+        if (std::hypot(tdx, tdy) > 1e-6) {
+            goal_yaw_in_base = std::atan2(tdy, tdx);
         }
     }
 
