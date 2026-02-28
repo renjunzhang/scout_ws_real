@@ -87,6 +87,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/R_domega", mpc_params_.R_domega, 0.1);
     pnh.param("mpc/constrain_omega_rate", mpc_params_.constrain_omega_rate, true);
     pnh.param("mpc/constrain_accel_rate", mpc_params_.constrain_accel_rate, false);
+    pnh.param("mpc/terminal_ramp_steps", mpc_params_.terminal_ramp_steps, 1);
     pnh.param("mpc/Q_slosh", mpc_params_.Q_slosh, 0.0);
     
     // 车辆参数
@@ -141,6 +142,10 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("heading_align/max_omega", heading_align_max_omega_, 0.0);
     pnh.param("heading_align/start_distance", heading_align_start_dist_, 0.5);
     
+    // cmd_vel 低通滤波参数
+    pnh.param("filter/alpha_v", cmd_filter_alpha_v_, 0.3);
+    pnh.param("filter/alpha_omega", cmd_filter_alpha_omega_, 0.4);
+
     // 将 base_frame 传递给 path_handler
     path_params_.base_frame = base_frame_;
 }
@@ -370,9 +375,21 @@ void LocalPlannerROS::transitionTo(PlannerState new_state) {
 }
 
 void LocalPlannerROS::publishCmdVel(double v, double omega) {
+    // 停车指令直接下发，同时重置滤波器状态
+    if (std::abs(v) < 1e-6 && std::abs(omega) < 1e-6) {
+        filtered_v_ = 0.0;
+        filtered_omega_ = 0.0;
+    } else {
+        // 一阶指数移动平均（EMA）低通滤波
+        filtered_v_ = cmd_filter_alpha_v_ * v
+                     + (1.0 - cmd_filter_alpha_v_) * filtered_v_;
+        filtered_omega_ = cmd_filter_alpha_omega_ * omega
+                        + (1.0 - cmd_filter_alpha_omega_) * filtered_omega_;
+    }
+
     geometry_msgs::Twist cmd;
-    cmd.linear.x = v;
-    cmd.angular.z = omega;
+    cmd.linear.x = filtered_v_;
+    cmd.angular.z = filtered_omega_;
     cmd_vel_pub_.publish(cmd);
 }
 
@@ -501,6 +518,8 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev) {
     mpc_solver_.resetWarmStart(keep_u_prev);
     if (!keep_u_prev) {
         last_control_.setZero();
+        filtered_v_ = 0.0;
+        filtered_omega_ = 0.0;
     }
 }
 

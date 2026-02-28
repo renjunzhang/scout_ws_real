@@ -251,17 +251,27 @@ void CostFunction::buildQPCost(
             }
         }
 
-        // 终端权重放大（k == N）
-        if (k == N) {
-            if (params_.terminal_factor_ec > 0.0) {
-                Q_total(StateIndex::E_C, StateIndex::E_C) *= params_.terminal_factor_ec;
-            }
-            if (params_.terminal_factor_etheta > 0.0) {
-                Q_total(StateIndex::E_THETA, StateIndex::E_THETA) *= params_.terminal_factor_etheta;
-            }
-            if (params_.terminal_factor_v > 0.0) {
-                Q_total(StateIndex::V, StateIndex::V) *= params_.terminal_factor_v;
-                q_total(StateIndex::V) *= params_.terminal_factor_v;
+        // 渐进式终端权重：最后 ramp_steps 步线性递增到 terminal_factor
+        {
+            const int ramp_steps = std::max(1, params_.terminal_ramp_steps);
+            const int ramp_start = N - ramp_steps;  // 开始递增的时间步
+            if (k >= ramp_start && k <= N) {
+                // alpha ∈ (0, 1]，k == ramp_start 时 alpha = 1/ramp_steps，k == N 时 alpha = 1
+                double alpha = static_cast<double>(k - ramp_start + 1)
+                             / static_cast<double>(ramp_steps + 1);
+                if (params_.terminal_factor_ec > 0.0) {
+                    double factor = 1.0 + alpha * (params_.terminal_factor_ec - 1.0);
+                    Q_total(StateIndex::E_C, StateIndex::E_C) *= factor;
+                }
+                if (params_.terminal_factor_etheta > 0.0) {
+                    double factor = 1.0 + alpha * (params_.terminal_factor_etheta - 1.0);
+                    Q_total(StateIndex::E_THETA, StateIndex::E_THETA) *= factor;
+                }
+                if (params_.terminal_factor_v > 0.0) {
+                    double factor = 1.0 + alpha * (params_.terminal_factor_v - 1.0);
+                    Q_total(StateIndex::V, StateIndex::V) *= factor;
+                    q_total(StateIndex::V) *= factor;
+                }
             }
         }
         

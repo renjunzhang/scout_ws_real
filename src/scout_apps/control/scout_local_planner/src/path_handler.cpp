@@ -667,6 +667,25 @@ void PathHandler::computeFrenetProjection(const Eigen::Vector2d& point,
             best_s = s;
         }
     }
+
+    // Newton 迭代精化（最小化 ||C(s) - point||^2）
+    // f(s) = (C(s)-P) · C'(s) = 0  →  s ← s - f/f'
+    // f'(s) = C'(s)·C'(s) + (C(s)-P)·C''(s)
+    for (int iter = 0; iter < 3; ++iter) {
+        Eigen::Vector2d c_s = local_spline_.evaluate(best_s);
+        double dx = local_spline_.splineX().evaluateDerivative(best_s);
+        double dy = local_spline_.splineY().evaluateDerivative(best_s);
+        double ddx = local_spline_.splineX().evaluateSecondDerivative(best_s);
+        double ddy = local_spline_.splineY().evaluateSecondDerivative(best_s);
+        Eigen::Vector2d diff = c_s - point;
+        double f  = diff.x() * dx + diff.y() * dy;
+        double fp = dx * dx + dy * dy + diff.x() * ddx + diff.y() * ddy;
+        if (std::abs(fp) < 1e-12) break;
+        double s_new = best_s - f / fp;
+        s_new = std::max(0.0, std::min(total_len, s_new));
+        if (std::abs(s_new - best_s) < 1e-8) break;
+        best_s = s_new;
+    }
     
     current_s_ = best_s;
     
@@ -868,6 +887,31 @@ void PathHandler::updateSpeedProfile(double v_des) {
             double v_next = speed_profile_v_[i + 1];
             double v_lim = std::sqrt(std::max(0.0, v_next * v_next + 2.0 * max_decel * ds));
             speed_profile_v_[i] = std::min(speed_profile_v_[i], v_lim);
+        }
+    }
+
+    // 高斯平滑：消除 v(s) 在曲率突变处的阶梯抖动
+    // 双向滑动窗口均值，半径 = 5 个采样点
+    {
+        const int half_w = 5;
+        const size_t nv = speed_profile_v_.size();
+        if (nv > static_cast<size_t>(2 * half_w + 1)) {
+            std::vector<double> smoothed(nv);
+            for (size_t i = 0; i < nv; ++i) {
+                double sum = 0.0;
+                int cnt = 0;
+                for (int j = -half_w; j <= half_w; ++j) {
+                    int idx = static_cast<int>(i) + j;
+                    if (idx >= 0 && idx < static_cast<int>(nv)) {
+                        sum += speed_profile_v_[static_cast<size_t>(idx)];
+                        ++cnt;
+                    }
+                }
+                smoothed[i] = sum / cnt;
+                // 平滑结果不能超过原始约束值（取 min 保证安全）
+                smoothed[i] = std::min(smoothed[i], speed_profile_v_[i]);
+            }
+            speed_profile_v_ = smoothed;
         }
     }
 

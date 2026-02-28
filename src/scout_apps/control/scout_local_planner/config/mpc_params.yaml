@@ -21,18 +21,19 @@ mpc:
   terminal_factor_ec: 5.0
   terminal_factor_etheta: 3.0  # 提高终端航向权重
   terminal_factor_v: 2.0
+  terminal_ramp_steps: 5       # 渐进式终端权重：最后 5 步线性递增
   
   # 控制权重
   R_a: 0.8                 # 加速度权重
   R_omega: 2.0             # 角速度权重 - 适当降低以提高响应
   
   # 控制变化率权重（平滑控制）
-  R_da: 0.1                # 加速度变化权重
+  R_da: 0.5                # 加速度变化权重——配合 jerk 约束提高
   R_domega: 3.0            # 角速度变化权重 - 适当降低以提高响应
 
   # 控制变化率约束（硬约束）
   constrain_omega_rate: true
-  constrain_accel_rate: false
+  constrain_accel_rate: true
   
   # 液体晃动权重（第 2 步启用）
   Q_slosh: 0.0             # 设为 0 表示不启用晃动抑制
@@ -50,7 +51,7 @@ vehicle:
   # 加速度约束
   a_max: 1.5               # 最大线加速度 (m/s²) - 降低以减少刹车打滑
   alpha_max: 2.5           # 最大角加速度 (rad/s²) - 降低以平滑转向
-  j_max: 0.0               # 最大线加加速度 (m/s^3)
+  j_max: 3.0               # 最大线加加速度 (m/s^3)——jerk 约束
   
   # 车辆几何
   track_width: 0.456       # Scout Mini 轮距 (m)
@@ -84,7 +85,7 @@ path_handler:
 # =============================================================================
 # 节点参数
 # =============================================================================
-control_rate: 10.0         # 控制频率 (Hz)
+control_rate: 20.0         # 控制频率 (Hz)——20 Hz 与 MPC dt=0.05 对齐
 base_frame: "base_link"    # 机器人坐标系
 map_frame: "map"           # 地图坐标系
 verbose: false             # 是否输出调试信息
@@ -107,3 +108,10 @@ heading_align:
   omega_gain: 1.5
   max_omega: 0.0           # <=0 使用 vehicle.omega_max
   start_distance: 0.5      # 只在起点附近生效 (m)
+
+# =============================================================================
+# cmd_vel 低通滤波（EMA）
+# =============================================================================
+filter:
+  alpha_v: 0.3             # 线速度滤波系数 (0,1]，越大响应越快
+  alpha_omega: 0.4         # 角速度滤波系数 (0,1]

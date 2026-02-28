@@ -406,9 +406,20 @@ void MPCSolver::extractSolution(MPCSolution& solution) {
     // 第一个控制量
     solution.u_first = solution.u_optimal[0];
     
-    // 输出速度：v 从预测状态读取，ω 直接从控制量读取（直接控制！）
-    solution.v_cmd = solution.x_predicted[1](StateIndex::V);
-    solution.omega_cmd = solution.u_first(ControlIndex::OMEGA);  // ω 是控制量！
+    // v/ω 输出半步时间对齐：补偿执行器传输延迟
+    // v_cmd = v_0 + a_0 * 0.5*dt（半步外推，对齐到 t + 0.5*dt）
+    {
+        double v0 = solution.x_predicted[0](StateIndex::V);
+        double a0 = solution.u_first(ControlIndex::A);
+        solution.v_cmd = v0 + a0 * 0.5 * mpc_params_.dt;
+    }
+    // omega_cmd = 首两步均值（对齐到 t + 0.5*dt）
+    if (N >= 2) {
+        solution.omega_cmd = 0.5 * (solution.u_optimal[0](ControlIndex::OMEGA)
+                                   + solution.u_optimal[1](ControlIndex::OMEGA));
+    } else {
+        solution.omega_cmd = solution.u_first(ControlIndex::OMEGA);
+    }
 }
 
 void MPCSolver::warmStart() {

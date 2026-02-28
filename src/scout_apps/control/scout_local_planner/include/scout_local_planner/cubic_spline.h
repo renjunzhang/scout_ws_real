@@ -128,6 +128,12 @@ public:
      */
     bool isValid() const { return spline_x_.isValid() && spline_y_.isValid(); }
 
+    /**
+     * @brief 访问内部 x(s) 样条（用于 Newton 投影等）
+     */
+    const CubicSpline& splineX() const { return spline_x_; }
+    const CubicSpline& splineY() const { return spline_y_; }
+
 private:
     CubicSpline spline_x_;
     CubicSpline spline_y_;

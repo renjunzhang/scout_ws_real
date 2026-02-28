@@ -114,6 +114,12 @@ private:
     
     // 调试
     bool verbose_ = false;
+
+    // cmd_vel 低通滤波（EMA）
+    double filtered_v_ = 0.0;
+    double filtered_omega_ = 0.0;
+    double cmd_filter_alpha_v_ = 0.3;     // v 滤波系数，越大响应越快
+    double cmd_filter_alpha_omega_ = 0.4; // omega 滤波系数
 };
 
 }  // namespace scout_local_planner

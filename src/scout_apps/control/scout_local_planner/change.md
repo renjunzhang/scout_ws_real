@@ -1,3 +1,234 @@
+# 后续接入：液体晃动模型 (Slosh Integration Roadmap)
+
+> 当前状态：`DiffDriveModel` 的 `predict()` / `linearize()` 已包含完整的增广晃动动力学
+> （`A_slosh`、`B_slosh`、`ay = v * ω` 离心耦合），`SloshIntegration` 类已完整实现。
+> **但尚未接线**：`LocalPlannerROS` / `MPCSolver` 没有实例化 `SloshIntegration`，
+> 没有调用 `setSloshIntegration()`，`CostFunction` 也没有添加 slosh 代价项。
+> 以下是接入所需的全部步骤。
+
+## 步骤 1：实例化 SloshIntegration 并注入 DiffDriveModel
+
+**文件**：`local_planner_ros.h`、`local_planner_ros.cpp`
+
+```cpp
+// === local_planner_ros.h ===
+// 新增成员:
+#include "scout_local_planner/slosh_integration.h"
+SloshIntegration slosh_integration_;
+
+// === local_planner_ros.cpp::loadParameters() ===
+// 加载 slosh 参数:
+SloshParams slosh_params;
+pnh.param("slosh/container_radius",  slosh_params.container_radius, 0.15);
+pnh.param("slosh/liquid_height",     slosh_params.liquid_height, 0.20);
+pnh.param("slosh/liquid_density",    slosh_params.liquid_density, 1000.0);
+pnh.param("slosh/damping_ratio",     slosh_params.damping_ratio, 0.05);
+pnh.param("slosh/mode_index",        slosh_params.mode_index, 1);
+pnh.param("slosh/offset_x",          slosh_params.offset_x, 0.0);
+pnh.param("slosh/offset_y",          slosh_params.offset_y, 0.0);
+slosh_params.dt = mpc_params_.dt;  // 与 MPC 步长一致
+
+// === local_planner_ros.cpp::initialize() ===
+// 初始化 slosh 模型（在 mpc_solver_.initialize 之前）:
+if (mpc_params_.Q_slosh > 0.0) {
+    if (slosh_integration_.configure(slosh_params)) {
+        ROS_INFO("[LocalPlannerROS] Slosh model configured");
+    } else {
+        ROS_WARN("[LocalPlannerROS] Failed to configure slosh model, disabling");
+        mpc_params_.Q_slosh = 0.0;
+    }
+}
+
+// 注入到 MPC 求解器内的 DiffDriveModel:
+mpc_solver_.setSloshIntegration(&slosh_integration_);  // 需新增此方法
+```
+
+## 步骤 2：MPCSolver 传递 SloshIntegration 指针
+
+**文件**：`mpc_solver.h`、`mpc_solver.cpp`
+
+```cpp
+// === mpc_solver.h ===
+#include "scout_local_planner/slosh_integration.h"
+void setSloshIntegration(SloshIntegration* slosh);
+
+// === mpc_solver.cpp ===
+void MPCSolver::setSloshIntegration(SloshIntegration* slosh) {
+    model_.setSloshIntegration(slosh);  // DiffDriveModel 已有此接口
+}
+```
+
+> `DiffDriveModel::setSloshIntegration()` 已存在。一旦指针非空且 `isConfigured()`，
+> `predict()` 和 `linearize()` 就会**自动**使用增广晃动动力学，无需改动。
+
+## 步骤 3：添加晃动代价项到 CostFunction
+
+**文件**：`cost_function.h`、`cost_function.cpp`
+
+```cpp
+// === cost_function.h ===
+class SloshCost : public CostTermBase {
+public:
+    SloshCost(double Q_slosh, const Eigen::Matrix4d& H_slosh);
+    std::string name() const override { return "SloshCost"; }
+    // ...
+private:
+    double Q_slosh_;
+    Eigen::Matrix4d H_slosh_;  // 从 SloshIntegration::getSloshCostMatrix() 获取
+};
+
+// === cost_function.cpp::buildQPCost() 或 initialize() ===
+// 条件添加:
+if (params_.Q_slosh > 0.0 && slosh_integration->isConfigured()) {
+    auto H_slosh = slosh_integration->getSloshCostMatrix(params_.Q_slosh);
+    // 在 Q_total 的 [ETA_X:ETA_Y_DOT, ETA_X:ETA_Y_DOT] 子块添加 H_slosh:
+    Q_total.block<4,4>(StateIndex::ETA_X, StateIndex::ETA_X) += H_slosh;
+}
+```
+
+> `SloshIntegration::getSloshCostMatrix(Q_slosh)` 已实现，返回
+> $H_{slosh} = Q_{slosh} \cdot h_{coeff}^2 \cdot I_{4\times4}$，
+> 将液面高度 $\eta = h_{coeff} \cdot \|x_{slosh}\|$ 的二次惩罚映射到状态空间。
+
+## 步骤 4：初始化增广状态中的晃动分量
+
+**文件**：`local_planner_ros.cpp::controlLoop()`
+
+```cpp
+// 当前代码: current_state.setZero() 已将 η 初始化为 0
+// 更精确的做法：从 SloshIntegration 的内部状态填充
+if (mpc_params_.Q_slosh > 0.0 && slosh_integration_.isConfigured()) {
+    slosh_integration_.writeToAugmentedState(current_state);  // 已实现
+}
+
+// 在每次 MPC 求解后，用实际控制输入更新 slosh 内部状态（状态估计）:
+if (solution.success && mpc_params_.Q_slosh > 0.0) {
+    double ax = solution.u_first(ControlIndex::A);
+    double ay = current_v_ * solution.omega_cmd;
+    slosh_integration_.update(ax, ay, current_omega_);
+}
+```
+
+## 步骤 5：（可选）液面高度硬约束
+
+**文件**：`constraint_manager.h`、`constraint_manager.cpp`
+
+```cpp
+// 在 StateIndex::ETA_X 和 ETA_Y 上添加上下界:
+// |η_x| ≤ slosh_height_max / h_coeff
+// |η_y| ≤ slosh_height_max / h_coeff
+// 或直接对状态 η 添加线性约束行。
+// 当前 slosh_height_max = 0.05 m 已在 YAML 配置。
+```
+
+## 步骤 6：YAML 配置
+
+**文件**：`config/mpc_params.yaml`、`config/mpc_params_sim.yaml`
+
+```yaml
+# 启用晃动抑制:
+mpc:
+  Q_slosh: 5.0              # > 0 即启用
+  slosh_height_max: 0.05    # 液面约束 (m)
+
+# 晃动模型参数（需根据实际容器标定）:
+slosh:
+  container_radius: 0.15    # 容器内半径 [m]
+  liquid_height: 0.20       # 液体静液高度 [m]
+  liquid_density: 1000.0    # 液体密度 [kg/m³]
+  damping_ratio: 0.05       # 阻尼比
+  mode_index: 1             # 模态阶数
+  offset_x: 0.0             # 容器偏心距 x [m]
+  offset_y: 0.0             # 容器偏心距 y [m]
+```
+
+## 关键注意事项
+
+1. **已就绪的代码**（无需改动）：
+   - `DiffDriveModel::predict()` — 已有 `ay = v * omega` 离心耦合 + `predictSlosh()`
+   - `DiffDriveModel::linearize()` — 已有 `A_slosh`、`B_slosh[:,0]→a`、`B_slosh[:,1]*v→ω`
+   - `SloshIntegration` 全部接口 — `configure()`、`getDiscreteMatrices()`、`predictSlosh()`、
+     `getSloshCostMatrix()`、`writeToAugmentedState()`、`update()`
+   - `types.h` 状态维度 — `TOTAL_DIM=8`，晃动索引 `ETA_X..ETA_Y_DOT` 已定义
+
+2. **需要新写的代码**（约 60 行）：
+   - `MPCSolver::setSloshIntegration()` 传递指针（~5 行）
+   - `LocalPlannerROS` 实例化 + 参数加载 + 注入（~25 行）
+   - `CostFunction` 添加 `H_slosh` 到 Q 矩阵（~15 行）
+   - `controlLoop()` 状态填充 + 内部更新（~10 行）
+
+3. **液面高度硬约束**是可选的增强项，初期建议仅用软约束（`Q_slosh`）验证效果。
+
+4. **参数标定**：`container_radius`、`liquid_height`、`damping_ratio` 需根据实际容器测量。
+   `damping_ratio` 建议从 0.05 开始，通过实物 step response 实验确定。
+
+5. **性能影响**：增广状态从 4D 变为 8D 有效（当前 QP 维度 408 已按 8D 分配），
+   slosh 子系统矩阵是常数（不依赖状态），不增加线性化计算量。
+
+---
+
+# 2025-02-28 — 平滑性改进
+
+## 1. cmd_vel 低通滤波（EMA）
+- **文件**：`include/scout_local_planner/local_planner_ros.h`、`src/local_planner_ros.cpp`
+- `publishCmdVel()` 增加一阶指数移动平均（EMA）滤波器，消除控制指令高频抖动。
+  - `filtered_v = α_v * v + (1 − α_v) * filtered_v_prev`
+  - `filtered_omega = α_omega * ω + (1 − α_omega) * filtered_omega_prev`
+- 停车指令（v≈0 且 ω≈0）直接下发并重置滤波器状态，避免缓慢趋零。
+- `resetWarmStart(false)` 同步清零滤波器状态。
+- 新增 YAML 参数 `filter/alpha_v`（默认 0.3）、`filter/alpha_omega`（默认 0.4）。
+
+## 2. 控制频率 10 → 20 Hz
+- **文件**：`config/mpc_params.yaml`、`config/mpc_params_sim.yaml`
+- `control_rate: 10.0` → `20.0`，与 MPC 预测步长 dt = 0.05 s 对齐，
+  消除 "2 个预测周期才出一步控制" 带来的阶梯感。
+
+## 3. 启用 jerk 约束（加速度变化率硬约束）
+- **文件**：`config/mpc_params.yaml`、`config/mpc_params_sim.yaml`
+- `constrain_accel_rate: false` → `true`
+- `j_max: 0.0` → `3.0`（m/s³），激活 `constraint_manager.cpp` 中已有的
+  Δa 硬约束逻辑：`|a_k − a_{k−1}| ≤ j_max × dt`。
+- `R_da: 0.1` → `0.5`，配合 jerk 硬约束同步加强软惩罚。
+- **液体晃动模型接口无影响**：jerk 约束仅作用于加速度控制通道 (ControlIndex::A)，
+  不修改 DiffDriveModel 的 slosh 耦合（`a_lat = v * ω`）与 B_slosh 矩阵。
+
+## 4. Frenet 投影 Newton 法精化
+- **文件**：`src/path_handler.cpp`、`include/scout_local_planner/cubic_spline.h`
+- `computeFrenetProjection()` 在原有粗搜 50 + 细搜 20 之后，追加 **3 步 Newton 迭代**。
+  - 目标：最小化 $\|C(s) - P\|^2$，令 $f(s) = (C(s)-P) \cdot C'(s) = 0$。
+  - 迭代公式：$s \leftarrow s - f/f'$，其中 $f'(s) = C'(s)^2 + (C(s)-P)\cdot C''(s)$。
+  - 收敛精度 $\sim 10^{-8}$ m，消除曲率突变处 ~1 cm 级噪声。
+- `CubicSpline2D` 新增 `splineX()` / `splineY()` 公开访问器，供 Newton 法获取一阶/二阶导数。
+- **液体晃动接口无影响**：仅改变投影精度，不涉及动力学。
+
+## 5. 速度曲线高斯平滑
+- **文件**：`src/path_handler.cpp`
+- `updateSpeedProfile()` 在前向/反向遍历之后增加一趟 **滑动窗口均值平滑**
+  （半径 5 个采样点），消除曲率突变处 v(s) 的阶梯跳变。
+- 平滑结果取 `min(smoothed, original)` 保证不超过安全约束值。
+- 仅作用于预处理阶段，不影响运行时 MPC 求解。
+
+## 6. 渐进式终端权重
+- **文件**：`src/cost_function.cpp`、`include/scout_local_planner/types.h`、
+  `src/local_planner_ros.cpp`、`config/mpc_params.yaml`、`config/mpc_params_sim.yaml`
+- 原实现：仅 k==N 时权重放大 → 预测尾部与中段不连续，引起收敛振荡。
+- 新实现：**最后 `terminal_ramp_steps` 步线性递增**到 `terminal_factor`。
+  - $\alpha(k) = (k - k_{start} + 1) / (ramp\_steps + 1)$
+  - $Q(k) = Q_{base} \times [1 + \alpha \times (factor - 1)]$
+- `MPCParams` 新增 `terminal_ramp_steps`（默认 1 保持兼容，YAML 设为 5）。
+- **液体晃动接口无影响**：仅改变 Q 矩阵对角项数值。
+
+## 7. v/ω 输出半步时间对齐
+- **文件**：`src/mpc_solver.cpp`
+- 原实现：`v_cmd = x_predicted[1].v`（t+dt）、`omega_cmd = u[0].ω`（t+0）→ 时间不对齐。
+- 新实现：
+  - $v_{cmd} = v_0 + a_0 \times 0.5 \cdot dt$ — **半步外推**，对齐到 $t + 0.5dt$
+  - $\omega_{cmd} = 0.5 \times (\omega_0 + \omega_1)$ — **首两步均值**，对齐到 $t + 0.5dt$
+- 消除 v 和 ω 的时间偏移引起的轨迹扭动。
+- **液体晃动接口无影响**：仅改变输出提取方式。
+
+---
+
 # 2026-02-02
 codex resume 019c1d22-5c8c-7852-a9ca-2a2646325970
 - 约束维度修复（`include/scout_local_planner/constraint_manager.h/.cpp`）：

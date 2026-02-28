@@ -123,6 +123,7 @@ struct MPCParams {
     double terminal_factor_ec = 1.0;
     double terminal_factor_etheta = 1.0;
     double terminal_factor_v = 1.0;
+    int terminal_ramp_steps = 1;  // 渐进式终端权重的步数（>1 时线性递增）
     
     // 控制权重
     double R_a = 1.0;       // 加速度权重
