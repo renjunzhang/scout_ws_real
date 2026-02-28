@@ -1,0 +1,117 @@
+# Scout Mini 全向轮 MPC 局部规划器参数（仿真）
+#
+# 仿真环境约束更宽松，速度/加速度限制更大
+
+# =============================================================================
+# MPC 参数
+# =============================================================================
+mpc:
+  # 预测参数
+  N: 40                    # 预测步长
+  dt: 0.05                 # 时间步长 (s)
+  
+  # 状态权重（Frenet 误差）
+  Q_el: 1.0                # 纵向误差权重
+  Q_ec: 60.0               # 横向误差权重
+  Q_etheta: 12.0           # 航向误差权重
+  Q_vx: 15.0               # 纵向速度跟踪权重
+  Q_vy: 10.0               # 横向速度权重（惩罚不必要的横移）
+  use_contour_lag: true     # 启用 contour + lag 误差结构
+  Q_contour: 30.0           # contour（横向误差）权重
+  Q_lag: 1.0                # lag（纵向误差）权重
+  enable_omega_ff: true     # 启用角速度前馈
+  Q_omega_ff: 3.0           # 角速度前馈权重
+  terminal_factor_ec: 5.0
+  terminal_factor_etheta: 2.0
+  terminal_factor_vx: 2.0
+  
+  # 控制权重
+  R_ax: 0.8                # 纵向加速度权重
+  R_ay: 1.0                # 横向加速度权重
+  R_omega: 0.5             # 角速度权重
+  
+  # 控制变化率权重（平滑控制）
+  R_dax: 0.1               # 纵向加速度变化权重
+  R_day: 0.2               # 横向加速度变化权重
+  R_domega: 1.0            # 角速度变化权重
+
+  # 控制变化率约束（硬约束）
+  constrain_omega_rate: true
+  constrain_accel_rate: false
+  
+  # 液体晃动权重
+  Q_slosh: 0.0             # 设为 0 表示不启用晃动抑制
+  slosh_height_max: 0.05   # 液面高度约束 (m)
+
+# =============================================================================
+# 车辆参数（Scout Mini 全向轮 - 仿真）
+# =============================================================================
+vehicle:
+  # 速度约束
+  vx_max: 2.0              # 最大纵向速度 (m/s)
+  vx_min: 0.0              # 最小纵向速度 (m/s)，禁用倒车
+  vy_max: 1.0              # 最大横向速度 (m/s)
+  omega_max: 3.5           # 最大角速度 (rad/s)
+  
+  # 加速度约束
+  ax_max: 2.0              # 最大纵向加速度 (m/s²)
+  ay_max: 1.5              # 最大横向加速度 (m/s²)
+  alpha_max: 7.0           # 最大角加速度 (rad/s²)
+  jx_max: 0.0              # 最大纵向加加速度 (m/s^3)
+  
+  # 车辆几何
+  track_width: 0.456       # Scout Mini 轮距 (m)
+  wheelbase: 0.451         # Scout Mini 轴距 (m)
+  wheel_radius: 0.09       # 轮半径 (m)
+
+# =============================================================================
+# 路径处理参数
+# =============================================================================
+path_handler:
+  lookahead_distance: 0.6  # 前视距离 (m)
+  goal_tolerance: 0.1      # 到达目标位置容差 (m)
+  yaw_tolerance: 0.1       # 到达目标航向容差 (rad)
+  path_timeout: 5.0        # 路径超时时间 (s)
+  publish_smoothed_path: true
+  smoothed_path_topic: "/scout/global_path_smooth"
+  smoothed_path_points: 80
+  window_back: 4
+  window_forward: 48
+  s_jump_threshold: 0.5
+  resample_spacing: 0.05
+  max_lat_accel: 2.0
+  min_ref_speed: 0.0
+  time_parameterize: true
+  speed_profile_ds: 0.05
+  max_tan_accel: 2.0
+  max_tan_decel: 2.0
+  goal_speed: 0.0
+  use_bspline_smoothing: true
+  bspline_samples_per_segment: 12
+
+# =============================================================================
+# 节点参数
+# =============================================================================
+control_rate: 10.0         # 控制频率 (Hz)
+base_frame: "base_link"    # 机器人坐标系
+map_frame: "map"           # 地图坐标系
+verbose: false             # 是否输出调试信息
+
+# =============================================================================
+# 安全退化策略（求解不可行时）
+# =============================================================================
+safety:
+  infeasible_decel: 1.0          # 不可行时制动减速度 (m/s^2)
+  infeasible_omega_scale: 0.0    # 不可行时角速度缩放
+  infeasible_min_speed: 0.0      # 不可行时线速度下限 (m/s)
+
+# =============================================================================
+# 原地对齐模式（航向误差过大时原地转向）
+# =============================================================================
+heading_align:
+  enable: false
+  enter_angle: 1.2         # 进入阈值 (rad) ~69°
+  exit_angle: 0.6          # 退出阈值 (rad) ~34°
+  omega_gain: 1.5
+  max_omega: 0.0           # <=0 使用 vehicle.omega_max
+  start_distance: 0.5      # 只在起点附近生效 (m)

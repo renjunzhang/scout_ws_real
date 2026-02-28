@@ -1,0 +1,44 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>scout_omni_local_planner</name>
+  <version>1.0.0</version>
+  <description>
+    Scout Mini 全向轮底盘 MPC 局部路径规划器
+    
+    特性：
+    - 全向轮运动学建模（v_x, v_y, ω 三自由度）
+    - Frenet MPC 路径跟踪
+    - 支持横向直接消除误差
+    - 局部三次样条路径处理
+    - 液体晃动抑制（可选）
+    - OSQP 二次规划求解器
+  </description>
+
+  <maintainer email="user@todo.todo">user</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <!-- ROS 依赖 -->
+  <depend>roscpp</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
+  
+  <!-- 液体晃动模型库 -->
+  <depend>slosh_models</depend>
+  
+  <!-- 系统依赖 -->
+  <build_depend>eigen</build_depend>
+  <build_export_depend>eigen</build_export_depend>
+  <exec_depend>eigen</exec_depend>
+  
+  <!-- OSQP 求解器 -->
+  <depend>osqp_vendor</depend>
+
+  <export>
+  </export>
+</package>
