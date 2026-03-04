@@ -145,6 +145,11 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     // cmd_vel 低通滤波参数
     pnh.param("filter/alpha_v", cmd_filter_alpha_v_, 0.3);
     pnh.param("filter/alpha_omega", cmd_filter_alpha_omega_, 0.4);
+    pnh.param("filter/kappa_boost", cmd_filter_kappa_boost_, 0.5);
+
+    // 路径相似性检测阈值
+    pnh.param("path_handler/path_change_threshold",
+              path_params_.path_change_threshold, 0.3);
 
     // 将 base_frame 传递给 path_handler
     path_params_.base_frame = base_frame_;
@@ -155,7 +160,9 @@ void LocalPlannerROS::globalPathCallback(const nav_msgs::Path::ConstPtr& msg) {
     
     if (path_handler_.updateGlobalPath(*msg, vehicle_params_.v_max * 0.8)) {
         has_path_ = true;
-        resetWarmStart(true);
+        // 注：不在此处无条件 resetWarmStart()。
+        // 路径是否显著变化由 PathHandler 的 reset_hint_ 标记，
+        // controlLoop() 通过 consumeResetHint() 统一决定是否重置。
         
         if (state_ == PlannerState::IDLE || 
             state_ == PlannerState::REACHED ||
@@ -383,8 +390,11 @@ void LocalPlannerROS::publishCmdVel(double v, double omega) {
         // 一阶指数移动平均（EMA）低通滤波
         filtered_v_ = cmd_filter_alpha_v_ * v
                      + (1.0 - cmd_filter_alpha_v_) * filtered_v_;
-        filtered_omega_ = cmd_filter_alpha_omega_ * omega
-                        + (1.0 - cmd_filter_alpha_omega_) * filtered_omega_;
+        // 曲率自适应 EMA：|omega| 大时自动提升 alpha（减弱滤波），避免急弯滞后
+        double effective_alpha_omega = std::max(0.0, std::min(1.0,
+            cmd_filter_alpha_omega_ + cmd_filter_kappa_boost_ * std::abs(omega)));
+        filtered_omega_ = effective_alpha_omega * omega
+                        + (1.0 - effective_alpha_omega) * filtered_omega_;
     }
 
     geometry_msgs::Twist cmd;

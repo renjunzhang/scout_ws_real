@@ -244,9 +244,10 @@ void CostFunction::buildQPCost(
         // 添加 v_ref 的线性项
         if (k < static_cast<int>(refs.size())) {
             q_total(StateIndex::V) -= 2.0 * params_.Q_v * refs[k].v_ref;
-            // omega_ff: ω 现在是控制量，所以添加到 r_total
+            // omega_ff: Q_omega_ff*(ω - ω_ref)^2 展开 → 二次项 + 线性项
             if (params_.enable_omega_ff && k < N) {
                 double omega_ref = refs[k].v_ref * refs[k].kappa;
+                R_total(ControlIndex::OMEGA, ControlIndex::OMEGA) += params_.Q_omega_ff;
                 r_total(ControlIndex::OMEGA) -= 2.0 * params_.Q_omega_ff * omega_ref;
             }
         }
@@ -276,9 +277,11 @@ void CostFunction::buildQPCost(
         }
         
         // 填充 H 矩阵（状态部分）
+        // OSQP 目标函数为 min 1/2 z'Pz + q'z
+        // 代价 Q*e^2 展开为 1/2*(2Q)*e^2 + 0*e → P 对角需要 2*Q
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < nx; ++j) {
-                add_upper_triplet(x_idx + i, x_idx + j, Q_total(i, j));
+                add_upper_triplet(x_idx + i, x_idx + j, 2.0 * Q_total(i, j));
             }
         }
         
@@ -289,7 +292,7 @@ void CostFunction::buildQPCost(
         if (k < N) {
             for (int i = 0; i < nu; ++i) {
                 for (int j = 0; j < nu; ++j) {
-                    add_upper_triplet(u_idx + i, u_idx + j, R_total(i, j));
+                    add_upper_triplet(u_idx + i, u_idx + j, 2.0 * R_total(i, j));
                 }
             }
             g.segment(u_idx, nu) += r_total;

@@ -127,15 +127,55 @@ bool PathHandler::updateGlobalPath(const nav_msgs::Path& path, double v_des) {
                           path.poses.size());
         return false;
     }
+
+    // ---------- 路径相似性检测 ----------
+    // 若新路径与当前路径"相似"（终点偏差和路径长度比均在阈值内），
+    // 则跳过 s_global / warm-start 的完整重置，避免 MPC 参考突变。
+    bool path_similar = false;
+    if (has_path_ && global_cache_valid_ && global_points_map_.size() >= 2 &&
+        path.poses.size() >= 2 && params_.path_change_threshold > 0.0) {
+        // 终点距离
+        Eigen::Vector2d new_end(path.poses.back().pose.position.x,
+                                path.poses.back().pose.position.y);
+        double end_dist = (new_end - global_points_map_.back()).norm();
+
+        // 新路径长度（快速累加）
+        double new_length = 0.0;
+        for (size_t i = 1; i < path.poses.size(); ++i) {
+            double dx = path.poses[i].pose.position.x - path.poses[i-1].pose.position.x;
+            double dy = path.poses[i].pose.position.y - path.poses[i-1].pose.position.y;
+            new_length += std::sqrt(dx*dx + dy*dy);
+        }
+        double old_length = global_path_s_.empty() ? 0.0 : global_path_s_.back();
+        double length_ratio = (old_length > 0.01) ? new_length / old_length : 0.0;
+
+        // 采样中点距离（如果路径足够长）
+        double mid_dist = 0.0;
+        if (path.poses.size() >= 4 && global_points_map_.size() >= 4) {
+            Eigen::Vector2d new_mid(
+                path.poses[path.poses.size() / 2].pose.position.x,
+                path.poses[path.poses.size() / 2].pose.position.y);
+            Eigen::Vector2d old_mid = global_points_map_[global_points_map_.size() / 2];
+            mid_dist = (new_mid - old_mid).norm();
+        }
+
+        path_similar = (end_dist < params_.path_change_threshold &&
+                        mid_dist < params_.path_change_threshold * 2.0 &&
+                        length_ratio > 0.7 && length_ratio < 1.3);
+    }
     
     global_path_ = path;
     path_timestamp_ = ros::Time::now();
     has_path_ = true;
 
-    // 重置弧长跟踪
-    s_initialized_ = false;
-    s_global_ = 0.0;
-    last_projection_s_ = 0.0;
+    if (!path_similar) {
+        // 路径显著变化：完整重置弧长跟踪
+        s_initialized_ = false;
+        s_global_ = 0.0;
+        last_projection_s_ = 0.0;
+        reset_hint_ = true;
+    }
+    // 路径相似时：保持 s_global_ / s_initialized_ 连续，不触发 warm-start 重置
     
     // 重置最近点索引
     closest_idx_ = 0;
@@ -165,7 +205,7 @@ bool PathHandler::updateGlobalPath(const nav_msgs::Path& path, double v_des) {
         global_path_s_.push_back(global_path_s_.back() + d);
     }
     global_cache_valid_ = global_points_map_.size() >= 2;
-    reset_hint_ = true;
+    // 注：reset_hint_ 已在上方 !path_similar 分支中按需设置，此处不再无条件覆盖
 
     // 构建全局样条（map 坐标系）
     std::vector<Eigen::Vector2d> global_points = global_points_map_;

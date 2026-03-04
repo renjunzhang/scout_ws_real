@@ -120,6 +120,7 @@ private:
     double filtered_omega_ = 0.0;
     double cmd_filter_alpha_v_ = 0.3;     // v 滤波系数，越大响应越快
     double cmd_filter_alpha_omega_ = 0.4; // omega 滤波系数
+    double cmd_filter_kappa_boost_ = 0.5; // 曲率自适应增益：alpha += boost * |omega|
 };
 
 }  // namespace scout_local_planner

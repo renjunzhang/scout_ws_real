@@ -189,6 +189,7 @@ struct PathHandlerParams {
     double goal_speed = 0.0;          // 末端期望速度 (m/s)
     bool use_bspline_smoothing = false; // 是否对局部窗口做 B-spline 平滑
     int bspline_samples_per_segment = 8; // B-spline 每段采样点数
+    double path_change_threshold = 0.3;  // 路径相似性阈值 (m)，低于此值视为相同路径
 };
 
 //==============================================================================

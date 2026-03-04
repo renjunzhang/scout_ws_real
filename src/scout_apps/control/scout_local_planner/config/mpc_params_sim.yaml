@@ -9,23 +9,24 @@ mpc:
   dt: 0.05                  # 时间步长 (s)
   
   # 状态权重（Frenet 误差）
-  Q_el: 1.0                # 纵向误差权重（沿路径方向）
-  Q_ec: 60.0               # 横向误差权重（更贴路径）
-  Q_etheta: 12.0           # 航向误差权重（更贴路径）
-  Q_v: 15.0                # 速度跟踪权重（显著提高）
+  # 注：change #11 修复了 OSQP P 矩阵 2x 系数，此处权重值已做相应调整
+  Q_el: 0.5                # 纵向误差权重（沿路径方向）
+  Q_ec: 30.0               # 横向误差权重（更贴路径）
+  Q_etheta: 6.0            # 航向误差权重（更贴路径）
+  Q_v: 8.0                 # 速度跟踪权重（修复后 v_ref 目标正确）
   use_contour_lag: true    # 启用 contour + lag 误差结构
-  Q_contour: 30.0          # contour（横向误差）权重
-  Q_lag: 1.0               # lag（纵向误差）权重
+  Q_contour: 15.0          # contour（横向误差）权重
+  Q_lag: 0.5               # lag（纵向误差）权重
   enable_omega_ff: true    # 启用角速度前馈
-  Q_omega_ff: 3.0          # 角速度前馈权重
+  Q_omega_ff: 1.5          # 角速度前馈权重（修复后 omega_ref 目标正确）
   terminal_factor_ec: 5.0
   terminal_factor_etheta: 2.0
   terminal_factor_v: 2.0
   terminal_ramp_steps: 5       # 渐进式终端权重：最后 5 步线性递增
   
   # 控制权重
-  R_a: 0.8                 # 加速度权重（进一步降低惩罚）
-  R_omega: 0.5             # 角速度权重（直接控制，不是角加速度！）
+  R_a: 0.4                 # 加速度权重
+  R_omega: 0.25            # 角速度权重（直接控制）
   
   # 控制变化率权重（平滑控制）
   R_da: 0.5                # 加速度变化权重——配合 jerk 约束提高
@@ -81,6 +82,7 @@ path_handler:
   goal_speed: 0.0                     # 末端期望速度 (m/s)
   use_bspline_smoothing: true         # 启用局部 B-spline 平滑
   bspline_samples_per_segment: 12      # 每段采样点数
+  path_change_threshold: 0.3           # 路径相似性阈值 (m)，低于此值视为重复路径，跳过重置
 
 # =============================================================================
 # 节点参数
@@ -114,4 +116,5 @@ heading_align:
 # =============================================================================
 filter:
   alpha_v: 0.3             # 线速度滤波系数 (0,1]，越大响应越快
-  alpha_omega: 0.4         # 角速度滤波系数 (0,1]
+  alpha_omega: 0.4         # 角速度滤波基础系数 (0,1]
+  kappa_boost: 0.5         # 曲率自适应增益: alpha_eff = min(1, alpha + boost*|ω|)

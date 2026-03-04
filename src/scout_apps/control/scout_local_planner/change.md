@@ -1,3 +1,81 @@
+# 实物实验指南
+
+## 实验前检查
+
+1. **先仿真验证**：`roslaunch scout_local_planner scout_local_planner_sim.launch`，
+   确认 `mpc_status` 持续 `TRACKING`、`local_path` 可视化正常、无 crash。
+2. **低速起步**：确认 `mpc_params.yaml` 中 `v_max: 1.0`，实验从 0.3 m/s 开始。
+3. **急停就绪**：遥控器能随时接管，或能通过 `rostopic pub /cmd_vel` 覆盖控制。
+
+## 实验时观察
+
+| 观察项 | 方法 | 正常表现 |
+|--------|------|----------|
+| MPC 状态 | `rostopic echo /mpc_status` | 持续 `TRACKING` |
+| 求解时间 | `verbose: true` 看终端 | < 5 ms |
+| 弯道横向偏差 | RViz 对比 `local_path` 与 `global_path_smooth` | e_c < 10 cm |
+| ω 响应 | `rqt_plot /cmd_vel/angular/z` | 弯道入口快速上升，无延迟平台 |
+| 路径重规划 | 终端 `[PathHandler] Received new path` | 相似路径不触发 warm-start 重置 |
+
+## 实验流程
+
+1. **空旷直线** — 确认基本跟踪正常、无发散
+2. **单个大弯（R > 1 m）** — 观察 omega_ff 效果、横向偏差
+3. **S 弯连续弯道** — 观察自适应 EMA、弯道过渡平滑度
+4. **窄走廊 + 高频重规划** — 观察路径相似性检测是否生效
+5. **逐步提速**：0.3 → 0.5 → 0.8 → 1.0 m/s，每档确认无异常再加
+
+## 调参指南
+
+> 配置文件：`config/mpc_params.yaml`（实物）、`config/mpc_params_sim.yaml`（仿真）
+
+### 第一轮：确认 omega_ff 弯道效果
+
+| 参数 | 当前值 | 作用 | 调法 |
+|------|--------|------|------|
+| `Q_omega_ff` | 5.0 | 弯道 ω 追踪力度 | **核心**。弯道偏大→降到 3.0；弯道欠转→升到 8.0~10.0 |
+| `R_omega` | 2.0 | ω 绝对值惩罚 | 与 `Q_omega_ff` 竞争。弯道仍欠转→降到 1.0 |
+
+**判断**：`rqt_plot` 对比 `cmd_vel/angular/z` 与理论 $\omega_{ref} = v \cdot \kappa$，
+修复后弯道 ω 应接近 $\omega_{ref}$。
+
+### 第二轮：滤波平滑度
+
+| 参数 | 当前值 | 调法 |
+|------|--------|------|
+| `filter/alpha_omega` | 0.4 | 直线段平滑度。降到 0.2→更滑但延迟大；升到 0.6→响应快但可能有高频 |
+| `filter/kappa_boost` | 0.5 | 弯道滤波减弱力度。升到 0.8→弯道几乎直通；降到 0.3→弯道仍有一定滤波 |
+| `filter/alpha_v` | 0.3 | 线速度平滑度，一般不用动 |
+
+**判断**：直线段看 `cmd_vel` 是否抖，弯道入口看是否有阶梯延迟。
+
+### 第三轮：路径相似性阈值
+
+| 参数 | 当前值 | 调法 |
+|------|--------|------|
+| `path_handler/path_change_threshold` | 0.3 | 升到 0.5→更多路径视为相似；降到 0.15→更敏感 |
+
+**判断**：路径确实变了但车走老路→阈值太高，降低。仍频繁重置→阈值太低，提高。
+
+### 第四轮：MPC 权重微调
+
+| 现象 | 参数 | 方向 |
+|------|------|------|
+| 直线摇摆 | `Q_etheta` (25.0) | 升到 30~40 |
+| 弯道切内弯 | `Q_ec`/`Q_contour` (60/40) | 升到 80/60 |
+| 加减速太猛 | `R_a`/`R_da` (0.8/0.5) | 升到 1.2/0.8 |
+| 转向太慢 | `R_domega` (3.0) | 降到 2.0 |
+| 终点停不稳 | `terminal_factor_v` (2.0) | 升到 3.0~5.0 |
+
+### 调参原则
+
+- **每次只动一个参数**，跑同一段路径对比效果。
+- **出现异常先回退速度**，不要在高速下调参。
+- 仿真参数调好后，实物上可先用相同值，再根据实际表现微调
+  （实物通常需要比仿真稍高的 `R_a`/`R_da` 来补偿传动延迟）。
+
+---
+
 # 后续接入：液体晃动模型 (Slosh Integration Roadmap)
 
 > 当前状态：`DiffDriveModel` 的 `predict()` / `linearize()` 已包含完整的增广晃动动力学
@@ -164,6 +242,166 @@ slosh:
 
 5. **性能影响**：增广状态从 4D 变为 8D 有效（当前 QP 维度 408 已按 8D 分配），
    slosh 子系统矩阵是常数（不依赖状态），不增加线性化计算量。
+
+---
+
+# 2026-02-28 — 已知问题修复（3/4 项）
+
+## 8. omega_ff 二次项补全 — 弯道稳态偏差修复
+- **文件**：`src/cost_function.cpp`
+- **问题**：`evaluate()` 中代价为完整的 $Q_{\omega ff}(\omega - \omega_{ref})^2$，
+  但 `buildQPCost()` 只写了线性项 `r -= 2·Q_omega_ff·omega_ref`，
+  **缺失** `R(OMEGA,OMEGA) += Q_omega_ff` 二次项。QP 的 H 矩阵与连续代价不一致。
+- **影响**：弯道处 OSQP 没有独立 $\omega^2$ 惩罚来匹配 $\omega_{ref}$，
+  求解器倾向欠转，产生稳态横向偏差。
+- **修复**：在 `buildQPCost()` 的 omega_ff 分支中追加 1 行：
+  `R_total(ControlIndex::OMEGA, ControlIndex::OMEGA) += params_.Q_omega_ff;`
+- 现在 QP 的 $H$ 矩阵与 `evaluate()` 完全一致：
+  $\frac{1}{2}\omega^T (R_\omega + Q_{\omega ff}) \omega - Q_{\omega ff}\omega_{ref}\omega$
+
+## 9. 路径相似性检测 — 抑制高频重规划抖动
+- **文件**：`src/path_handler.cpp`、`include/scout_local_planner/types.h`、
+  `src/local_planner_ros.cpp`、`config/mpc_params.yaml`、`config/mpc_params_sim.yaml`
+- **问题**：全局规划器每次重发路径（即使几乎不变），`updateGlobalPath()` 都会
+  `s_global_=0; s_initialized_=false; reset_hint_=true`，导致 MPC warm-start 重置、
+  弧长跳变、参考序列不连续。
+- **修复**：
+  1. `updateGlobalPath()` 起始处新增相似性检测：
+     - 比较新旧路径的 **终点距离**、**中点距离**、**路径长度比**。
+     - 若三项均在阈值内（`path_change_threshold`=0.3 m、长度比 0.7~1.3），
+       视为"相似路径"，跳过 `s_global_` 重置和 `reset_hint_`。
+     - 仅更新路径点和样条拟合，保持弧长跟踪连续。
+  2. 删除 `updateGlobalPath()` 末尾无条件 `reset_hint_ = true`
+     （之前在相似性分支之后又覆盖写了一遍，导致检测形同虚设）。
+  3. 删除 `globalPathCallback()` 中无条件 `resetWarmStart(true)`
+     （改为仅由 `controlLoop()` 通过 `consumeResetHint()` 统一决定重置）。
+- 新增参数 `path_handler/path_change_threshold`（默认 0.3 m）。
+
+## 10. 曲率自适应 EMA — 缓解急弯跟踪滞后
+- **文件**：`src/local_planner_ros.cpp`、`include/scout_local_planner/local_planner_ros.h`、
+  `config/mpc_params.yaml`、`config/mpc_params_sim.yaml`
+- **问题**：固定 EMA 系数（`alpha_omega=0.4`）在急弯（$|\omega| > 0.8$）处
+  将 $\omega$ 响应拉伸 2~3 个控制周期（100~150 ms），入弯切内弯、出弯甩外弯。
+- **修复**：`publishCmdVel()` 中角速度 EMA 改为自适应系数：
+  $\alpha_{eff} = \text{clamp}(\alpha_{base} + \text{kappa\_boost} \times |\omega|,\; 0,\; 1)$
+  - 直线（$\omega \approx 0$）：$\alpha_{eff} = 0.4$（强滤波）
+  - 中弯（$\omega = 0.8$）：$\alpha_{eff} = 0.8$（轻滤波）
+  - 急弯（$\omega \geq 1.2$）：$\alpha_{eff} = 1.0$（无滤波，直通）
+  - 双边 `clamp` 防止参数误设为负值
+- 线速度 EMA 保持固定 `alpha_v`（急加减由 jerk 约束控制）。
+- 新增参数 `filter/kappa_boost`（默认 0.5）。
+
+## 关于问题 3（差速简化模型打滑/侧偏）
+
+## 11. OSQP P 矩阵 2x 系数修复 — 速度跟踪目标纠正
+
+- **文件**：`src/cost_function.cpp`、`config/mpc_params.yaml`、`config/mpc_params_sim.yaml`
+- **问题**：OSQP 目标函数为 $\min \frac{1}{2}z^T P z + q^T z$。
+  代码中二次项 `Q_total` / `R_total` 直接写入 P 对角（缺少 $\times 2$），
+  而线性项（如 `q -= 2·Q_v·v_ref`）中的系数 `2.0` 是按 OSQP 标准写的。
+  
+  以速度跟踪为例，代价 $Q_v(v - v_{ref})^2$ 展开后 OSQP 应有：
+  
+  | 项 | 正确值 | 修复前 | 后果 |
+  |---|---|---|---|
+  | $P_{v,v}$ | $2Q_v$ | $Q_v$ | ❌ 半权 |
+  | $q_v$ | $-2Q_v v_{ref}$ | $-2Q_v v_{ref}$ | ✅ |
+
+  带入极值条件：$\frac{\partial}{\partial v}\left(\frac{1}{2}Q_v v^2 - 2Q_v v_{ref} v\right)=0$
+  → $v^* = 2v_{ref}$（**错误**，应为 $v_{ref}$）。
+
+  **实际影响**：
+  - $v_{ref}=0.8$ → 优化目标 $1.6$，被 $v_{max}=1.0$ 截断 → 始终全速
+  - 弯道速度规划（前/后向遍历 + 横向加速度限制）在 QP 层失效
+  - 零参考项（$e_l, e_c, e_\theta$）有效权重为用户设定值的一半
+  - 控制变化率代价（已有 `2.0`）相对基础代价过重 2 倍
+
+- **修复**：`buildQPCost()` 中将 `Q_total` / `R_total` 写入 P 矩阵时统一乘 `2.0`：
+  ```cpp
+  add_upper_triplet(x_idx + i, x_idx + j, 2.0 * Q_total(i, j));
+  add_upper_triplet(u_idx + i, u_idx + j, 2.0 * R_total(i, j));
+  ```
+  控制变化率部分已有 `2.0 * R_da`、`2.0 * R_domega`，无需修改。
+
+- **参数调整**：所有 yaml 二次项权重减半以保持相同行为基准，
+  同时 $Q_v$ 和 $Q_{\omega ff}$ 可适当微调（修复后首次追踪正确目标）：
+  
+  | 参数 | 旧值 | 新值 | 说明 |
+  |---|---|---|---|
+  | Q_ec | 60 | 30 | 有效权重不变 |
+  | Q_etheta | 25 | 12.5 | 有效权重不变 |
+  | Q_contour | 40 | 20 | 有效权重不变 |
+  | Q_v | 15 | 8 | 旧有效 7.5→新有效 8，且目标正确 |
+  | Q_omega_ff | 5 | 2.5 | 有效权重不变，目标正确 |
+  | R_a | 0.8 | 0.4 | 有效权重不变 |
+  | R_omega | 2.0 | 1.0 | 有效权重不变 |
+  | R_da / R_domega | 不变 | 不变 | 已有 2.0 前缀 |
+
+- **编译**：✅ 通过
+
+- **不在本次修改范围**：需要实物标定数据（ICR 参数或侧偏角 β 曲线）。
+- 当前差速运动学在低速（< 0.5 m/s）下足够精确。
+- 高速弯道偏差主要靠 MPC 闭环反馈校正（`e_c`/`e_theta` 误差反馈）。
+- 修复 omega_ff 二次项 + 曲率自适应 EMA 后，弯道跟踪精度已显著提升，
+  残余打滑补偿可作为后续增量优化。
+
+---
+
+# 已知问题 / Known Limitations (截至 2026-02-28)
+
+### 1. ~~omega_ff 二次项缺失~~ ✅ 已修复（变更 #8）
+
+角速度前馈目标代价为 $Q_{\omega ff}(\omega - \omega_{ref})^2$，展开后 QP 应包含：
+
+| 项 | 应在 QP 中 | 当前状态 |
+|---|---|---|
+| $Q_{\omega ff}\,\omega^2$ | `R(OMEGA,OMEGA) += Q_omega_ff` | ✅ **已修复** |
+| $-2\,Q_{\omega ff}\,\omega_{ref}\,\omega$ | `r(OMEGA) -= 2*Q_omega_ff*omega_ref` | ✅ 已有 |
+| $Q_{\omega ff}\,\omega_{ref}^2$ | 常数项，不影响优化 | — |
+
+- **根因**：`ControlCost::getQuadraticCost()` 仅写入 `R_a`、`R_omega`，未追加 `Q_omega_ff`；
+  `buildQPCost()` 只补了线性项。`evaluate()` 中的完整二次形式与 QP 不一致。
+- **影响**：QP 没有独立的 $\omega^2$ 二次惩罚来匹配 $\omega_{ref}$，
+  弯道处求解器倾向于"欠转" — $\omega$ 响应比预期低，产生稳态横向偏差。
+- **修复方案**（~3 行）：在 `ControlCost::getQuadraticCost()` 或 `buildQPCost()` 中，
+  当 `enable_omega_ff` 时，追加 `R_total(OMEGA,OMEGA) += params_.Q_omega_ff`。
+
+### 2. ~~全局路径高频重发抖动~~ ✅ 已缓解（变更 #9）
+
+- 全局规划器（move_base_flex / global_planner）在窄通道或终点附近可能只发布
+  **2~3 个路径点**，且高频（~5 Hz）重新规划。
+- 每次重发后 `PathHandler` 重新拟合样条、重置 `s_global_`，
+  导致参考曲率 $\kappa$ 和 $v_{ref}$ 帧间突变，MPC 的 QP 参考序列不连续。
+- **缓解措施**（当前已有）：`s_global_` 禁止倒退、速度曲线平滑、EMA 滤波器。
+- **根本解决**：上游保证全局路径点数 ≥ 10；或在 `PathHandler` 中增加
+  路径变化检测（Hausdorff 距离阈值），仅在变化显著时才接受新路径。
+
+### 3. 差速简化模型 — 高速弯道打滑/侧偏未建模
+
+- 当前 `DiffDriveModel` 假设纯差速运动学：
+  $\dot{x} = v\cos\theta$，$\dot{y} = v\sin\theta$，$\dot{\theta} = \omega$。
+- Scout Mini 实物为**四轮差速**（skid-steer），高速转弯时存在：
+  - **纵向打滑**：驱动轮与地面滑移，实际速度 < 指令速度；
+  - **侧偏角**：整车质心运动方向 ≠ 车体朝向，产生横向漂移。
+- 低速（< 0.5 m/s）影响较小；中高速（> 0.8 m/s）弯道偏差明显。
+- **改进方向**：
+  - 引入等效侧偏角 $\beta$：$\dot{\theta} = \omega$，$v_x = v\cos\beta$，$v_y = v\sin\beta$；
+  - 或使用 ICR（瞬时旋转中心）模型对 skid-steer 建模；
+  - 最简方案：用实测 v/ω→实际 v/ω 的查表补偿。
+
+### 4. ~~EMA 急弯跟踪滞后~~ ✅ 已缓解（变更 #10）
+
+- EMA 滤波器（`alpha_v=0.3`、`alpha_omega=0.4`）+ jerk 硬约束（`j_max=3.0`）+
+  Δω 变化率约束共同作用，使输出指令高频平滑。
+- **代价**：在急弯（$\kappa > 2\,\text{m}^{-1}$）处，$\omega$ 需要快速阶跃，
+  但滤波器 + 约束将响应拉伸 2~3 个控制周期（100~150 ms），产生跟踪滞后。
+- 滞后表现为弯道入口"切内弯"、出口"甩外弯"。
+- **缓解方案**：
+  - 曲率自适应 EMA：$\alpha_\omega(k) = \min(1,\; \alpha_{base} + c \cdot |\kappa|)$，
+    高曲率时自动减弱滤波（$\alpha \to 1$ 即无滤波）；
+  - 或改用二阶 Butterworth 低通（相位延迟更可控）；
+  - 或在 MPC 代价中直接惩罚 $(\omega_k - \omega_{ref,k})^2$（已有 omega_ff），
+    修复问题 1 后 MPC 自身就能更好地跟踪曲率，减少对后处理滤波的依赖。
 
 ---
 
