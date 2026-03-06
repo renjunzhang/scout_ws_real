@@ -4,6 +4,7 @@
  */
 
 #include "scout_local_planner/local_planner_ros.h"
+#include "scout_local_planner/diff_drive_model.h"
 
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -33,6 +34,33 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
         ROS_ERROR("[LocalPlannerROS] Failed to initialize MPC solver");
         return false;
     }
+
+    // 初始化液体晃动集成 (P0-A)
+    if (slosh_integration_.configure(slosh_params_)) {
+        slosh_enabled_ = true;
+        // 注入到动力学模型（需要 dynamic_pointer_cast 到 DiffDriveModel）
+        auto diff_model = std::dynamic_pointer_cast<DiffDriveModel>(
+            mpc_solver_.getDynamicsModel());
+        if (diff_model) {
+            diff_model->setSloshIntegration(&slosh_integration_);
+
+            // 计算等效 QP 权重: Q_slosh_eta = Q_slosh * height_coeff²
+            // 使得 J_slosh = Q_slosh * η² ≈ Q_slosh_eta * (xn² + yn²)
+            double h_coeff = slosh_integration_.getModalParams().height_coeff;
+            mpc_params_.Q_slosh_eta = mpc_params_.Q_slosh * h_coeff * h_coeff;
+            // 将更新后的参数同步到求解器（CostFunction 会用到 Q_slosh_eta）
+            mpc_solver_.setMPCParams(mpc_params_);
+
+            ROS_INFO("[LocalPlannerROS] Slosh integration enabled (Q_slosh=%.2f, h_coeff=%.4f, Q_slosh_eta=%.4f)",
+                     mpc_params_.Q_slosh, h_coeff, mpc_params_.Q_slosh_eta);
+        } else {
+            slosh_enabled_ = false;
+            ROS_WARN("[LocalPlannerROS] DiffDriveModel cast failed, slosh disabled");
+        }
+    } else {
+        slosh_enabled_ = false;
+        ROS_WARN("[LocalPlannerROS] Slosh integration configure failed, running without slosh");
+    }
     
     // 订阅者
     global_path_sub_ = nh_.subscribe("global_path", 1, 
@@ -48,6 +76,15 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
             path_params_.smoothed_path_topic, 1);
     }
     status_pub_ = nh_.advertise<std_msgs::String>("mpc_status", 1);
+
+    // slosh 调试发布者
+    slosh_state_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("slosh/state", 1);
+    slosh_height_pub_ = nh_.advertise<std_msgs::Float32>("slosh/height", 1);
+    slosh_ax_est_pub_ = nh_.advertise<std_msgs::Float32>("slosh/ax_est", 1);
+    slosh_ay_est_pub_ = nh_.advertise<std_msgs::Float32>("slosh/ay_est", 1);
+    slosh_alpha_est_pub_ = nh_.advertise<std_msgs::Float32>("slosh/alpha_est", 1);
+    mpc_solve_ms_pub_ = nh_.advertise<std_msgs::Float32>("mpc/solve_ms", 1);
+    mpc_status_val_pub_ = nh_.advertise<std_msgs::Int32>("mpc/status_val", 1);
     
     // 控制定时器
     control_timer_ = nh_.createTimer(
@@ -89,7 +126,23 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/constrain_accel_rate", mpc_params_.constrain_accel_rate, false);
     pnh.param("mpc/terminal_ramp_steps", mpc_params_.terminal_ramp_steps, 1);
     pnh.param("mpc/Q_slosh", mpc_params_.Q_slosh, 0.0);
-    
+    pnh.param("mpc/slosh_height_max", mpc_params_.slosh_height_max, 0.05);
+
+    // 液体晃动模型参数
+    pnh.param("slosh/container_radius", slosh_params_.container_radius, 0.15);
+    pnh.param("slosh/liquid_height", slosh_params_.liquid_height, 0.20);
+    pnh.param("slosh/liquid_density", slosh_params_.liquid_density, 1000.0);
+    pnh.param("slosh/damping_ratio", slosh_params_.damping_ratio, 0.05);
+    pnh.param("slosh/mode_index", slosh_params_.mode_index, 1);
+    pnh.param("slosh/offset_x", slosh_params_.offset_x, 0.0);
+    pnh.param("slosh/offset_y", slosh_params_.offset_y, 0.0);
+    pnh.param("slosh/use_parabola_term", slosh_params_.use_parabola_term, true);
+    pnh.param("slosh/use_linear_model", slosh_params_.use_linear_model, true);
+    slosh_params_.dt = mpc_params_.dt;  // 与 MPC 时间步长一致
+
+    // 加速度估计 EMA 滤波系数
+    pnh.param("slosh_estimator/accel_filter_alpha", accel_filter_alpha_, 0.3);
+
     // 车辆参数
     pnh.param("vehicle/v_max", vehicle_params_.v_max, 1.0);
     pnh.param("vehicle/v_min", vehicle_params_.v_min, -0.3);
@@ -177,6 +230,7 @@ void LocalPlannerROS::odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
     
     current_v_ = msg->twist.twist.linear.x;
     current_omega_ = msg->twist.twist.angular.z;
+    current_odom_time_ = msg->header.stamp;
     has_odom_ = true;
     
     // 更新位姿（从 odom 消息中提取）
@@ -289,12 +343,48 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
 
                 double v_clamped = clamp(current_v_, vehicle_params_.v_min, vehicle_params_.v_max);
 
+                // 3.0 加速度估计 + slosh 状态更新 (P0-B)
+                if (slosh_enabled_) {
+                    if (has_prev_odom_ && !prev_odom_time_.isZero()) {
+                        // 用真实 odom 时间戳差分，避免假定固定控制周期
+                        double dt_odom = (current_odom_time_ - prev_odom_time_).toSec();
+                        if (dt_odom > 1e-4 && dt_odom < 1.0) {  // 合理范围保护
+                            // 差分估计原始加速度
+                            double ax_raw = (current_v_ - prev_v_) / dt_odom;
+                            double alpha_raw = (current_omega_ - prev_omega_) / dt_odom;
+                            // 横向加速度近似：离心力 ay ≈ v * omega
+                            double ay_raw = current_v_ * current_omega_;
+
+                        // EMA 低通滤波
+                        ax_filtered_ = accel_filter_alpha_ * ax_raw + (1.0 - accel_filter_alpha_) * ax_filtered_;
+                        ay_filtered_ = accel_filter_alpha_ * ay_raw + (1.0 - accel_filter_alpha_) * ay_filtered_;
+                        alpha_filtered_ = accel_filter_alpha_ * alpha_raw + (1.0 - accel_filter_alpha_) * alpha_filtered_;
+
+                        // 更新晃动模型
+                        // 注意(MPC_INTEGRATION_NOTES §4.3)：当 offset_x/y=0 时，
+                        // LiquidSloshModel::update() 的旋转修正项为零，
+                        // 与 DiffDriveModel::predict/linearize 中的 predictSlosh() 一致。
+                        // 若未来开启偏心项，必须同步修改 predictSlosh() 的输入映射！
+                        slosh_integration_.update(ax_filtered_, ay_filtered_, current_omega_, alpha_filtered_);
+                        }
+                    }
+                    prev_v_ = current_v_;
+                    prev_omega_ = current_omega_;
+                    prev_odom_time_ = current_odom_time_;
+                    has_prev_odom_ = true;
+                }
+
                 StateVector current_state;
                 current_state.setZero();  // 初始化所有状态（包括晃动状态）
                 current_state(StateIndex::E_L) = frenet.e_l;
                 current_state(StateIndex::E_C) = frenet.e_c;
                 current_state(StateIndex::E_THETA) = frenet.e_theta;
                 current_state(StateIndex::V) = v_clamped;
+
+                // 将晃动模型的实际状态写入 x0 (P0-A: 状态注入)
+                if (slosh_enabled_) {
+                    slosh_integration_.writeToAugmentedState(current_state);
+                }
                 
                 // 4. 设置上一步控制量
                 mpc_solver_.setPreviousControl(last_control_);
@@ -312,6 +402,9 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     
                     // 发布预测轨迹
                     publishLocalPath(solution.x_predicted, ref_points);
+
+                    // 发布 slosh 调试信息
+                    publishSloshDebug(solution.solve_time_ms, true);
                     
                     if (verbose_) {
                         ROS_INFO_THROTTLE(0.5, 
@@ -341,6 +434,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     }
                     double omega = current_omega_ * infeasible_omega_scale_;
                     publishCmdVel(v, omega);
+                    publishSloshDebug(0.0, false);
                 }
             }
             break;
@@ -530,6 +624,76 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev) {
         last_control_.setZero();
         filtered_v_ = 0.0;
         filtered_omega_ = 0.0;
+    }
+    // slosh 重置策略 (参考 MPC_INTEGRATION_NOTES §6.1)：
+    // - keep_u_prev=false（到达终点/ERROR）：完全重置 slosh + 滤波器
+    // - keep_u_prev=true （路径跳变/重规划）：保留 slosh 物理连续性，只重置滤波器
+    if (slosh_enabled_) {
+        if (!keep_u_prev) {
+            slosh_integration_.reset();
+        }
+        // 加速度滤波器始终重置，避免旧差分值污染新路径段
+        ax_filtered_ = 0.0;
+        ay_filtered_ = 0.0;
+        alpha_filtered_ = 0.0;
+        has_prev_odom_ = false;
+        prev_odom_time_ = ros::Time(0);
+    }
+}
+
+void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok) {
+    // slosh 状态 [η_x, η̇_x, η_y, η̇_y]
+    if (slosh_state_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32MultiArray msg;
+        msg.data.resize(4);
+        if (slosh_enabled_) {
+            Eigen::Vector4d s = slosh_integration_.getSloshState();
+            msg.data[0] = static_cast<float>(s(0));
+            msg.data[1] = static_cast<float>(s(1));
+            msg.data[2] = static_cast<float>(s(2));
+            msg.data[3] = static_cast<float>(s(3));
+        }
+        slosh_state_pub_.publish(msg);
+    }
+
+    // 液面高度标量
+    if (slosh_height_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = slosh_enabled_
+                   ? static_cast<float>(slosh_integration_.getSloshHeight())
+                   : 0.0f;
+        slosh_height_pub_.publish(msg);
+    }
+
+    // MPC 求解耗时
+    if (mpc_solve_ms_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(solve_time_ms);
+        mpc_solve_ms_pub_.publish(msg);
+    }
+
+    // MPC 求解状态 (1=ok, 0=fail)
+    if (mpc_status_val_pub_.getNumSubscribers() > 0) {
+        std_msgs::Int32 msg;
+        msg.data = solve_ok ? 1 : 0;
+        mpc_status_val_pub_.publish(msg);
+    }
+
+    // 加速度估计值（论文实验用）
+    if (slosh_ax_est_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(ax_filtered_);
+        slosh_ax_est_pub_.publish(msg);
+    }
+    if (slosh_ay_est_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(ay_filtered_);
+        slosh_ay_est_pub_.publish(msg);
+    }
+    if (slosh_alpha_est_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(alpha_filtered_);
+        slosh_alpha_est_pub_.publish(msg);
     }
 }
 

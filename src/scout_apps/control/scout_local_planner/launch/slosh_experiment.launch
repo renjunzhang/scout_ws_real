@@ -1,0 +1,45 @@
+<!-- 液体晃动抑制消融实验 launch 文件 -->
+<!--
+  使用方式：
+    # 基线 (无晃动抑制)
+    roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=0
+
+    # 消融实验 (典型值: 5, 10, 20)
+    roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=10
+
+    # 仿真模式
+    roslaunch scout_local_planner slosh_experiment.launch sim:=true Q_slosh:=10
+
+  实验建议：
+    1. 每组 Q_slosh 跑 3~5 次相同路径
+    2. 同时运行 record_slosh_experiment.sh 录制 rosbag
+    3. 实验路径应包含：直线加速、急弯、连续 S 弯
+-->
+<launch>
+  <!-- ======== 实验参数 ======== -->
+  <arg name="Q_slosh" default="0.0"  doc="晃动抑制权重 (消融变量: 0/5/10/20)"/>
+  <arg name="sim"     default="false" doc="是否使用仿真参数 (true=sim, false=real)"/>
+  <arg name="verbose" default="false" doc="是否输出调试信息"/>
+
+  <!-- 根据 sim 选择参数文件 -->
+  <arg name="config_file" default="$(eval 'mpc_params_sim.yaml' if arg('sim') == 'true' else 'mpc_params.yaml')"/>
+
+  <!-- ========== MPC 局部规划器 ========== -->
+  <node pkg="scout_local_planner" type="local_planner_node"
+        name="scout_local_planner" output="screen">
+
+    <!-- 加载基础参数 -->
+    <rosparam file="$(find scout_local_planner)/config/$(arg config_file)"
+              command="load"/>
+
+    <!-- 实验参数覆盖 (YAML 之后、节点 init 之前) -->
+    <param name="verbose"    value="$(arg verbose)"/>
+    <param name="mpc/Q_slosh" value="$(arg Q_slosh)"/>
+
+    <!-- 话题 remap -->
+    <remap from="global_path" to="/scout/global_path"/>
+    <remap from="odom"        to="/odom"/>
+    <remap from="cmd_vel"     to="/cmd_vel"/>
+  </node>
+
+</launch>

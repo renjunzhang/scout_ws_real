@@ -77,17 +77,16 @@ Eigen::Matrix4d SloshIntegration::getSloshCostMatrix(double Q_slosh) const {
     }
     
     // 液面高度 η = h_coeff * sqrt(xn² + yn²)
-    // 简化代价: J = Q_slosh * (xn² + yn²)
-    // 即只惩罚位移，不惩罚速度
-    // H_slosh = Q_slosh * diag([1, 0, 1, 0])
+    // 代价: J = Q_slosh * η² ≈ Q_slosh * h_coeff² * (xn² + yn²)
+    // 只惩罚模态位移，不惩罚模态速度
+    // H_slosh = Q_slosh * h_coeff² * diag([1, 0, 1, 0])
+    double h_coeff = slosh_model_.getModalParams().height_coeff;
+    double Q_eta = Q_slosh * h_coeff * h_coeff;
+    
     Eigen::Matrix4d H;
     H.setZero();
-    H(0, 0) = Q_slosh;  // xn²
-    H(2, 2) = Q_slosh;  // yn²
-    
-    // 更精确的方法是使用 height_coeff 加权
-    // double h_coeff = slosh_model_.getModalParams().height_coeff;
-    // H *= h_coeff * h_coeff;
+    H(0, 0) = Q_eta;  // h_coeff² * xn²
+    H(2, 2) = Q_eta;  // h_coeff² * yn²
     
     return H;
 }

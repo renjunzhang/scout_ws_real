@@ -137,9 +137,12 @@ struct MPCParams {
     bool constrain_omega_rate = true;   // 是否约束 Δω
     bool constrain_accel_rate = false;  // 是否约束 Δa（可选）
     
-    // 晃动权重（第 2 步启用）
-    double Q_slosh = 0.0;   // 设为 0 表示不启用
+    // 晃动权重
+    double Q_slosh = 0.0;   // YAML 配置值：惩罚液面高度平方 (设为 0 表示不启用)
     double slosh_height_max = 0.05;  // 液面高度约束 (m)
+    // 运行时由 local_planner_ros 计算: Q_slosh_eta = Q_slosh * height_coeff²
+    // cost_function 直接用此值乘 ETA_X² / ETA_Y²
+    double Q_slosh_eta = 0.0;
 };
 
 //==============================================================================

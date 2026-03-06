@@ -10,6 +10,7 @@
 #include "scout_local_planner/types.h"
 #include "scout_local_planner/path_handler.h"
 #include "scout_local_planner/mpc_solver.h"
+#include "scout_local_planner/slosh_integration.h"
 
 #include <ros/ros.h>
 #include <nav_msgs/Path.h>
@@ -17,6 +18,9 @@
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <std_msgs/String.h>
+#include <std_msgs/Float32.h>
+#include <std_msgs/Float32MultiArray.h>
+#include <std_msgs/Int32.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 
@@ -55,6 +59,7 @@ private:
                           const std::vector<ReferencePoint>& refs);
     void publishSmoothedPath();
     void publishStatus();
+    void publishSloshDebug(double solve_time_ms, bool solve_ok);
     void updateState();
     void resetWarmStart(bool keep_u_prev);
     
@@ -114,6 +119,31 @@ private:
     
     // 调试
     bool verbose_ = false;
+
+    // ====== 液体晃动集成 (P0-A) ======
+    SloshIntegration slosh_integration_;
+    bool slosh_enabled_ = false;
+    SloshParams slosh_params_;
+
+    // 加速度估计（odom 差分 + EMA 低通）
+    double prev_v_ = 0.0;
+    double prev_omega_ = 0.0;
+    ros::Time prev_odom_time_;        // 上一次 odom 时间戳
+    ros::Time current_odom_time_;     // 当前 odom 时间戳
+    bool has_prev_odom_ = false;
+    double ax_filtered_ = 0.0;
+    double ay_filtered_ = 0.0;      // 横向 ≈ v * omega（离心加速度近似）
+    double alpha_filtered_ = 0.0;
+    double accel_filter_alpha_ = 0.3;  // EMA 滤波系数
+
+    // slosh 调试发布
+    ros::Publisher slosh_state_pub_;
+    ros::Publisher slosh_height_pub_;
+    ros::Publisher slosh_ax_est_pub_;
+    ros::Publisher slosh_ay_est_pub_;
+    ros::Publisher slosh_alpha_est_pub_;
+    ros::Publisher mpc_solve_ms_pub_;
+    ros::Publisher mpc_status_val_pub_;
 
     // cmd_vel 低通滤波（EMA）
     double filtered_v_ = 0.0;

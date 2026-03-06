@@ -39,6 +39,11 @@ public:
      * @brief 设置动力学模型
      */
     void setDynamicsModel(DynamicsModelPtr model);
+
+    /**
+     * @brief 获取动力学模型（用于外部注入如 slosh）
+     */
+    DynamicsModelPtr getDynamicsModel() const { return dynamics_model_; }
     
     /**
      * @brief 添加约束

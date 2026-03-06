@@ -57,12 +57,36 @@ catkin_make 2>&1 | grep "processing catkin package"
     或者启动MBF全局规划器
     roslaunch scout_global_planner mbf_global.launch
 ### 7. MPC 局部规划
+    # 普通启动（Q_slosh=0，无晃动抑制）
     roslaunch scout_local_planner test_mpc.launch
 
+    # 带晃动抑制的启动（论文实验用）
+    roslaunch scout_local_planner test_mpc.launch Q_slosh:=10.0
 
+    # 或使用实验专用 launch（等价，参数更集中）
+    roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=10
 
+### 8. 录制实验数据（与第 7 步同时，另开终端）
+    cd $(rospack find scout_local_planner)
+    ./scripts/record_slosh_experiment.sh 10           # 参数 = 当前 Q_slosh 值
+    # bag 输出到 ~/slosh_bags/slosh_Q10_20260306_*.bag
+    # Ctrl+C 停止录制
 
+### 🔧 关键参数速查（mpc_params.yaml）
+| 参数 | 当前值 | 说明 | 实验时是否需要改 |
+|------|--------|------|:---:|
+| `mpc/Q_slosh` | 0.0 | 晃动抑制权重（消融变量：0/5/10/20） | ✅ 通过 launch arg 切换 |
+| `mpc/Q_ec` | 30.0 | 横向误差权重 | 一般不改 |
+| `mpc/Q_v` | 8.0 | 速度跟踪权重 | 一般不改 |
+| `vehicle/v_max` | 1.0 | 最大线速度 (m/s) | 按实验场景调 |
+| `vehicle/omega_max` | 1.0 | 最大角速度 (rad/s) | 按实验场景调 |
+| `slosh/container_radius` | 0.15 | 容器半径 (m) | ✅ 按实物量测 |
+| `slosh/liquid_height` | 0.20 | 液面高度 (m) | ✅ 按实物量测 |
+| `slosh/liquid_density` | 1000.0 | 液体密度 (kg/m³) | 水=1000 |
+| `slosh/damping_ratio` | 0.05 | 阻尼比 | 按容器材质调 |
+| `slosh_estimator/accel_filter_alpha` | 0.3 | EMA 滤波系数 (0,1] | 实物抖动大可降低 |
 
+---
 
 ## 仿真流程
 ### 1. 启动仿真环境
@@ -102,9 +126,30 @@ catkin_make 2>&1 | grep "processing catkin package"
     或者启动MBF全局规划器
     roslaunch scout_global_planner mbf_global_sim.launch
 ### 7. MPC 局部规划
+    # 普通启动（Q_slosh=0，无晃动抑制）
     roslaunch scout_local_planner test_mpc_sim.launch
-    或者
+
+    # 带晃动抑制的启动（论文实验用）
+    roslaunch scout_local_planner test_mpc_sim.launch Q_slosh:=10.0
+
+    # 或使用实验专用 launch（自动选 sim YAML）
+    roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=10 sim:=true
+
+    # TEB 对比实验
     roslaunch teb_local_planner test_teb_sim.launch
+
+### 8. 录制实验数据（与第 7 步同时，另开终端）
+    cd $(rospack find scout_local_planner)
+    ./scripts/record_slosh_experiment.sh 10           # 参数 = 当前 Q_slosh 值
+
+### 🔧 关键参数速查（mpc_params_sim.yaml）
+| 参数 | 当前值 | 说明 | 实验时是否需要改 |
+|------|--------|------|:---:|
+| `mpc/Q_slosh` | 0.0 | 晃动抑制权重（消融变量：0/5/10/20） | ✅ 通过 launch arg 切换 |
+| `vehicle/v_max` | 2.0 | 最大线速度 (m/s) | 仿真可保持较大 |
+| `vehicle/omega_max` | 3.5 | 最大角速度 (rad/s) | 仿真可保持较大 |
+| `slosh/container_radius` | 0.15 | 容器半径 (m) | ✅ 按实验设定 |
+| `slosh/liquid_height` | 0.20 | 液面高度 (m) | ✅ 按实验设定 |
 
 
 
@@ -516,3 +561,205 @@ rosrun cartographer_ros cartographer_node --help
 - `path_handler.cpp::isGoalReached()` 修复：
   - 原问题：使用 `global_path_.header.stamp` 导致 TF 查询过期
   - 修复：改用 `ros::Time(0)` 获取最新变换
+
+---
+
+## 2026-03-06 P0-A：液体晃动状态注入（slosh integration wiring）
+
+### 目的
+将 `SloshIntegration` 晃动模型实际接入 MPC 控制回路，使 x0 的晃动维度 [η_x, η̇_x, η_y, η̇_y] 反映真实液体状态，不再永远为零。
+
+**关键约束**：`Q_slosh` 保持 0.0，本步仅验证"状态真的活了"，不改 QP 目标函数。
+
+### 修改文件
+
+#### 1. `local_planner_ros.h`
+- 新增 `#include "slosh_integration.h"` 及 `std_msgs/Float32.h`, `Float32MultiArray.h`, `Int32.h`
+- 新增成员：
+  - `SloshIntegration slosh_integration_` — 晃动模型实例
+  - `bool slosh_enabled_` — 运行时开关
+  - `SloshParams slosh_params_` — 从 YAML 加载的晃动参数
+  - 加速度估计状态：`prev_v_`, `prev_omega_`, `has_prev_odom_`, `ax_filtered_`, `ay_filtered_`, `alpha_filtered_`, `accel_filter_alpha_`
+  - 调试发布者：`slosh_state_pub_`, `slosh_height_pub_`, `mpc_solve_ms_pub_`, `mpc_status_val_pub_`
+- 新增方法：`publishSloshDebug(double solve_time_ms, bool solve_ok)`
+
+#### 2. `local_planner_ros.cpp`
+- **loadParameters()**：新增读取 `slosh/*`（container_radius, liquid_height, liquid_density, damping_ratio, mode_index, offset_x, offset_y, use_parabola_term, use_linear_model）、`slosh_estimator/accel_filter_alpha`、`mpc/slosh_height_max`
+- **initialize()**：调用 `slosh_integration_.configure(slosh_params_)`，通过 `dynamic_pointer_cast<DiffDriveModel>` 获取模型并调用 `setSloshIntegration()`，创建 4 个调试发布者
+- **controlLoop()**：
+  - 加速度估计：odom 差分 → EMA 低通滤波（`ax`, `ay≈v*ω`, `alpha`）
+  - 调用 `slosh_integration_.update(ax, ay, omega, alpha)` 推进模型
+  - 调用 `slosh_integration_.writeToAugmentedState(x0)` 将 [η_x, η̇_x, η_y, η̇_y] 写入 MPC 初始状态
+  - MPC 求解后调用 `publishSloshDebug()`
+- **resetWarmStart()**：重置 `slosh_integration_.reset()` 和加速度滤波状态
+- **publishSloshDebug()**：发布 `/slosh/state`（Float32MultiArray[4]）、`/slosh/height`（Float32）、`/mpc/solve_ms`（Float32）、`/mpc/status_val`（Int32）
+
+#### 3. `mpc_solver.h`
+- 新增 `getDynamicsModel()` getter 方法
+
+#### 4. `mpc_params.yaml`（实物）& `mpc_params_sim.yaml`（仿真）
+- 新增 `slosh:` 参数块（container_radius=0.15, liquid_height=0.20, ...）
+- 新增 `slosh_estimator:` 参数块（accel_filter_alpha=0.3）
+
+### 验证方法
+```bash
+# 运行后检查 slosh 话题
+rostopic echo /slosh/state     # 应看到非零、随运动变化的 [η_x, η̇_x, η_y, η̇_y]
+rostopic echo /slosh/height    # 应看到随加减速/转弯波动的液面高度值
+rostopic hz /mpc/solve_ms      # 确认发布频率 ~20Hz
+```
+
+### 后续（P0-B）
+在确认状态注入正确后，将 `Q_slosh` 设为非零值以在 QP 代价函数中惩罚晃动。
+
+---
+
+## P0-B：晃动软代价闭环 + 动力学/估计一致性修复
+
+### 目的
+让 `Q_slosh` 真正进入 QP 目标函数，使优化器能感知并抑制液体晃动；同时修复 P0-A 遗留的 4 个一致性问题。
+
+### 修复清单
+
+#### Fix #1: linearize() 缺失的 ∂ay/∂v 耦合项
+- **文件**: `diff_drive_model.cpp` linearize()
+- **问题**: `ay = v * omega` 在 predict() 中被正确使用，但 linearize() 只写了 `∂ay/∂omega = v`（→ B 矩阵），遗漏了 `∂ay/∂v = omega`（→ A 矩阵）。导致速度变化对横向晃动激励的灵敏度被低估，转弯时优化器判断偏乐观。
+- **修复**: 新增 `A(ETA_*, V) += B_slosh[:,1] * omega_lin`，从线性化点的 omega 提取偏导
+
+#### Fix #2: 加速度估计改用真实 odom 时间戳差分
+- **文件**: `local_planner_ros.h` + `local_planner_ros.cpp`
+- **问题**: 原实现用固定 `1/control_rate_` 做差分，实物 odom 频率抖动时 ax/alpha 会被系统性算错，直接污染晃动注入状态
+- **修复**:
+  - `odomCallback()` 缓存 `current_odom_time_`
+  - `controlLoop()` 用 `(current_odom_time_ - prev_odom_time_).toSec()` 做差分
+  - 增加合理性保护 `1e-4 < dt_odom < 1.0`
+
+#### Fix #3: DiffDriveModel 注入失败时关闭 slosh
+- **文件**: `local_planner_ros.cpp` initialize()
+- **问题**: `dynamic_pointer_cast<DiffDriveModel>` 失败时，`slosh_enabled_` 仍为 true，会继续更新 slosh 并写入 x0，但求解器模型不预测这些状态 → 静默失配
+- **修复**: cast 失败时 `slosh_enabled_ = false`
+
+#### Fix #4: `getSloshCostMatrix()` 乘 height_coeff²
+- **文件**: `slosh_integration.cpp`
+- **问题**: 原实现返回 `diag([Q_slosh, 0, Q_slosh, 0])`，缺少 height_coeff² 缩放，与"惩罚液面高度平方"的物理语义不一致
+- **修复**: `Q_eta = Q_slosh * h_coeff²`，返回 `diag([Q_eta, 0, Q_eta, 0])`
+
+#### Fix #5: cost_function 加 Q_slosh 软代价
+- **文件**: `types.h` + `cost_function.cpp` + `local_planner_ros.cpp`
+- **机制**:
+  1. `types.h::MPCParams` 新增 `Q_slosh_eta` 字段（运行时计算）
+  2. `local_planner_ros.cpp` initialize() 在 slosh 配置成功后计算 `Q_slosh_eta = Q_slosh * height_coeff²`，通过 `setMPCParams()` 同步到求解器
+  3. `cost_function.cpp::StateTrackingCost::getQuadraticCost()` 读取 `Q_slosh_eta`，写入 `Q_total(ETA_X, ETA_X)` 和 `Q_total(ETA_Y, ETA_Y)`
+  4. 经由 `buildQPCost()` 统一乘 2.0 进入 OSQP P 矩阵（与 Change #11 一致）
+- **安全性**: `Q_slosh=0.0` 时 `Q_slosh_eta=0.0`，QP 完全不受影响（向后兼容）
+
+### 当前 Q_slosh 仍为 0.0
+代码路径已完备，但 YAML 配置保持 `Q_slosh: 0.0`。验证方法：
+
+```bash
+# 设为非零值测试晃动抑制效果
+rosparam set /local_planner_node/mpc/Q_slosh 5.0
+# 对比 /slosh/height 的 RMS
+```
+
+### 修改文件汇总
+| 文件 | 修改内容 |
+|------|---------|
+| `diff_drive_model.cpp` | linearize() 补 A[:, V] 晃动耦合 |
+| `local_planner_ros.h` | 新增 `prev_odom_time_`, `current_odom_time_` |
+| `local_planner_ros.cpp` | odom 时间戳缓存; 真实 dt 差分; cast 失败关闭 slosh; 计算 Q_slosh_eta; resetWarmStart 重置时间戳 |
+| `slosh_integration.cpp` | getSloshCostMatrix 乘 height_coeff² |
+| `types.h` | MPCParams 新增 Q_slosh_eta |
+| `cost_function.cpp` | StateTrackingCost 加 ETA_X/ETA_Y 软代价 |
+
+---
+
+## 方案 2：论文实验基础设施
+
+### 目的
+在 P0-B（Solution 1 闭环修复）基础上，添加论文消融实验所需的完整观测、参数切换和数据录制能力。
+
+### 改动清单
+
+#### 1. 加速度估计调试话题（3 个新 publisher）
+- **文件**: `local_planner_ros.h` + `local_planner_ros.cpp`
+- **新增话题**:
+  - `/slosh/ax_est` (Float32) — EMA 滤波后的纵向加速度估计
+  - `/slosh/ay_est` (Float32) — EMA 滤波后的横向加速度估计（v·ω）
+  - `/slosh/alpha_est` (Float32) — EMA 滤波后的角加速度估计
+- **用途**: 论文图表中展示加速度激励与晃动响应的因果关系
+
+#### 2. launch 文件 Q_slosh 参数覆盖
+- **文件**: `test_mpc.launch`, `test_mpc_sim.launch`
+- **改动**: 新增 `<arg name="Q_slosh" default="0.0"/>`，在 YAML 加载后通过 `<param name="mpc/Q_slosh">` 覆盖
+- **用法**:
+  ```bash
+  # 基线 (Q_slosh=0, 与原始行为完全一致)
+  roslaunch scout_local_planner test_mpc.launch
+
+  # 消融实验
+  roslaunch scout_local_planner test_mpc.launch Q_slosh:=10.0
+  ```
+
+#### 3. 消融实验专用 launch
+- **文件**: `launch/slosh_experiment.launch`（新建）
+- **功能**: 统一入口，支持 `Q_slosh`, `sim`, `verbose` 三个参数
+- **用法**:
+  ```bash
+  roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=10 sim:=true
+  ```
+
+#### 4. rosbag 录制脚本
+- **文件**: `scripts/record_slosh_experiment.sh`（新建，已 chmod +x）
+- **录制话题**: /slosh/*, /mpc/*, /cmd_vel, /odom, /scout/global_path, /local_path, /tf, /tf_static
+- **输出**: `~/slosh_bags/slosh_Q{value}_{date}.bag`
+- **用法**:
+  ```bash
+  ./scripts/record_slosh_experiment.sh 10           # Q=10
+  ./scripts/record_slosh_experiment.sh 10 trial_3   # 自定义后缀
+  ```
+
+### 论文消融实验 SOP（标准操作流程）
+
+```bash
+# ① 启动底盘 + 雷达 + 定位 + 全局规划（见实物流程）
+
+# ② 在不同终端分别运行：
+# 终端 A：MPC 规划器（切换 Q_slosh）
+roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=0    # 基线
+# 或
+roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=10   # 消融
+
+# 终端 B：rosbag 录制
+cd $(rospack find scout_local_planner)
+./scripts/record_slosh_experiment.sh 0     # 与 Q_slosh 值对应
+# 或
+./scripts/record_slosh_experiment.sh 10
+
+# ③ 跑相同路径 → Ctrl+C 停止录制 → 切换 Q_slosh → 重复
+
+# ④ 数据分析
+# bag 文件在 ~/slosh_bags/，可用 plotjuggler 或 Python 分析
+```
+
+### 全部调试话题汇总（7 个）
+
+| 话题 | 类型 | 内容 |
+|------|------|------|
+| `/slosh/state` | Float32MultiArray | [η_x, η̇_x, η_y, η̇_y] |
+| `/slosh/height` | Float32 | 液面波高 (m) |
+| `/slosh/ax_est` | Float32 | 纵向加速度估计 (m/s²) |
+| `/slosh/ay_est` | Float32 | 横向加速度估计 (m/s²) |
+| `/slosh/alpha_est` | Float32 | 角加速度估计 (rad/s²) |
+| `/mpc/solve_ms` | Float32 | QP 求解耗时 (ms) |
+| `/mpc/status_val` | Int32 | 求解状态 (1=ok, 0=fail) |
+
+### 修改文件汇总
+| 文件 | 修改内容 |
+|------|---------|
+| `local_planner_ros.h` | 新增 3 个 accel est publisher 声明 |
+| `local_planner_ros.cpp` | 注册 3 个 publisher; publishSloshDebug 发布 ax/ay/alpha |
+| `test_mpc.launch` | 新增 Q_slosh arg + param 覆盖 |
+| `test_mpc_sim.launch` | 同上 |
+| `slosh_experiment.launch` | 新建：消融实验统一入口 |
+| `record_slosh_experiment.sh` | 新建：rosbag 录制脚本 |

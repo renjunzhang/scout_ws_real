@@ -37,6 +37,11 @@ double StateTrackingCost::evaluate(
     }
     cost += params_.Q_etheta * e_theta * e_theta;
     cost += params_.Q_v * (v - ref.v_ref) * (v - ref.v_ref);
+    if (params_.Q_slosh_eta > 0.0) {
+        double eta_x = x(StateIndex::ETA_X);
+        double eta_y = x(StateIndex::ETA_Y);
+        cost += params_.Q_slosh_eta * (eta_x * eta_x + eta_y * eta_y);
+    }
     if (params_.enable_omega_ff) {
         double omega_ref = ref.v_ref * ref.kappa;
         cost += params_.Q_omega_ff * (omega - omega_ref) * (omega - omega_ref);
@@ -70,6 +75,14 @@ void StateTrackingCost::getQuadraticCost(
     }
     Q_contrib(StateIndex::E_THETA, StateIndex::E_THETA) = params_.Q_etheta;
     Q_contrib(StateIndex::V, StateIndex::V) = params_.Q_v;
+
+    // 晃动软代价: J_slosh = Q_slosh_eta * (eta_x² + eta_y²)
+    // 其中 Q_slosh_eta = Q_slosh * height_coeff² (由 local_planner_ros 计算)
+    if (params_.Q_slosh_eta > 0.0) {
+        Q_contrib(StateIndex::ETA_X, StateIndex::ETA_X) = params_.Q_slosh_eta;
+        Q_contrib(StateIndex::ETA_Y, StateIndex::ETA_Y) = params_.Q_slosh_eta;
+    }
+
     // 注意：omega_ff 现在应用到控制量，在 ControlCost 中处理
     
     // 注意：v_ref 的线性项会在 buildQPCost 中根据 refs 添加

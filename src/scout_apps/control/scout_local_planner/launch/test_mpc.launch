@@ -8,6 +8,7 @@
 <launch>
   <!-- 参数 -->
   <arg name="verbose" default="false" doc="是否输出调试信息"/>
+  <arg name="Q_slosh" default="0.0" doc="晃动抑制权重 (0=关闭, 建议实验值: 5/10/20)"/>
   
   <!-- ========== MPC 局部规划器（独立节点）========== -->
   <node pkg="scout_local_planner" type="local_planner_node" 
@@ -18,6 +19,9 @@
     
     <!-- 覆盖 verbose 参数 -->
     <param name="verbose" value="$(arg verbose)"/>
+    
+    <!-- 实验参数覆盖：Q_slosh 在 YAML 加载后覆盖，确保在节点 init 前生效 -->
+    <param name="mpc/Q_slosh" value="$(arg Q_slosh)"/>
     
     <!-- 话题 remap -->
     <remap from="global_path" to="/scout/global_path"/>

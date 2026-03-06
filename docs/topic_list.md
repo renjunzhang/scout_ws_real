@@ -36,11 +36,19 @@
 | `/local_path` | `nav_msgs/Path` | MPC 预测轨迹可视化 |
 | `/map` | `nav_msgs/OccupancyGrid` | 静态地图 |
 | `/map_updates` | `map_msgs/OccupancyGridUpdate` | 地图增量更新 |
+| `/mpc/solve_ms` | `std_msgs/Float32` | MPC 单次求解耗时（ms） |
+| `/mpc/status_val` | `std_msgs/Int32` | MPC 求解结果标志（1=成功，0=失败） |
 | `/mpc_status` | `std_msgs/String` | MPC 求解状态 |
 | `/odom` | `nav_msgs/Odometry` | 里程计 |
 | `/scan` | `sensor_msgs/LaserScan` | 激光扫描（主） |
 | `/scan_front` | `sensor_msgs/LaserScan` | 前置激光扫描 |
 | `/scan_matched_points2` | `sensor_msgs/PointCloud2` | Cartographer 匹配点云 |
+| `/slosh/alpha_est` | `std_msgs/Float32` | 角加速度估计（EMA 后） |
+| `/slosh/ax_est` | `std_msgs/Float32` | 纵向加速度估计（EMA 后） |
+| `/slosh/ay_est` | `std_msgs/Float32` | 横向加速度估计（EMA 后，当前近似 `v*omega`） |
+| `/slosh/height` | `std_msgs/Float32` | 液面晃动高度估计 |
+| `/slosh/state` | `std_msgs/Float32MultiArray` | 液体晃动状态 `[eta_x, eta_x_dot, eta_y, eta_y_dot]` |
+| `/scout/current_goal` | `geometry_msgs/PoseStamped` | MBF 当前导航目标回显 |
 | `/scout/global_path` | `nav_msgs/Path` | 全局路径（move_base → local_planner） |
 | `/scout/global_path_smooth` | `nav_msgs/Path` | **局部平滑路径**（local_planner 可视化输出） |
 | `/scout/goal` | `geometry_msgs/PoseStamped` | 导航目标点 |
@@ -86,6 +94,21 @@
 
 > 说明：move_base 插件原始私有话题 `~GlobalPlanner/plan` / `~NavfnROS/plan` 已在 launch 中 remap 到 `/scout/global_path`。
 
+### 当前 MBF 模式（`mbf_global*.launch`）
+
+| 话题 | 类型 | 发布方 | 订阅方 | 说明 |
+|------|------|--------|--------|------|
+| `/scout/goal` | `geometry_msgs/PoseStamped` | RViz / 上层任务 | `mbf_path_publisher` | 目标点输入 |
+| `/scout/global_path` | `nav_msgs/Path` | `mbf_path_publisher_node` | `scout_local_planner` | MBF `GetPath` 结果转发后的统一全局路径 |
+| `/scout/current_goal` | `geometry_msgs/PoseStamped` | `mbf_costmap_nav` | 调试/可视化 | MBF 当前处理中的目标 |
+| `/scout/move_base_cmd_vel` | `geometry_msgs/Twist` | `mbf_costmap_nav` | 无（旁路） | MBF 的 `cmd_vel` 被隔离输出，不参与底盘控制 |
+| `/scout/mbf_costmap_nav/GlobalPlanner/plan` | `nav_msgs/Path` | MBF 全局规划插件 | 调试/可视化 | 插件内部原始路径输出；下游实际跟踪仍以 `/scout/global_path` 为准 |
+| `/scout/mbf_costmap_nav/get_path/*` | `actionlib` 相关话题 | `mbf_costmap_nav` / `mbf_path_publisher` | 调试 | `GetPath` action 的 goal/feedback/result/status |
+| `/scout/mbf_costmap_nav/global_costmap/costmap` | `nav_msgs/OccupancyGrid` | `mbf_costmap_nav` | 全局规划插件 / RViz | MBF 全局代价地图 |
+| `/scout/mbf_costmap_nav/local_costmap/costmap` | `nav_msgs/OccupancyGrid` | `mbf_costmap_nav` | 调试/插件 | MBF 局部代价地图（当前不直接驱动 MPC） |
+
+> 说明：当前 MBF launch 已禁用恢复行为和 controller，主要使用 `mbf_costmap_nav/get_path` 生成全局路径，再由 `mbf_path_publisher_node` 转发到 `/scout/global_path`。
+
 ---
 
 ## 2) 局部规划（scout_local_planner）
@@ -96,7 +119,15 @@
 | `/odom` | `nav_msgs/Odometry` | 底盘驱动 | scout_local_planner | 里程计输入 |
 | `/cmd_vel` | `geometry_msgs/Twist` | scout_local_planner | 底盘驱动 | 速度控制输出 |
 | `/local_path` | `nav_msgs/Path` | scout_local_planner | RViz（可选） | 局部轨迹可视化 |
-| `/slosh_height` | `std_msgs/Float64` | scout_local_planner | 监控（可选） | 晃动高度输出（第 2 步集成后启用） |
+| `/scout/global_path_smooth` | `nav_msgs/Path` | scout_local_planner | RViz（可选） | 局部平滑/重采样后的路径可视化 |
+| `/mpc_status` | `std_msgs/String` | scout_local_planner | 监控（可选） | MPC 状态机状态 |
+| `/mpc/solve_ms` | `std_msgs/Float32` | scout_local_planner | 监控（可选） | 单次求解耗时 |
+| `/mpc/status_val` | `std_msgs/Int32` | scout_local_planner | 监控（可选） | 求解结果标志（1=成功，0=失败） |
+| `/slosh/state` | `std_msgs/Float32MultiArray` | scout_local_planner | 监控（可选） | 液体晃动状态 `[eta_x, eta_x_dot, eta_y, eta_y_dot]` |
+| `/slosh/height` | `std_msgs/Float32` | scout_local_planner | 监控（可选） | 晃动高度输出 |
+| `/slosh/ax_est` | `std_msgs/Float32` | scout_local_planner | 监控（可选） | 纵向加速度估计 |
+| `/slosh/ay_est` | `std_msgs/Float32` | scout_local_planner | 监控（可选） | 横向加速度估计 |
+| `/slosh/alpha_est` | `std_msgs/Float32` | scout_local_planner | 监控（可选） | 角加速度估计 |
 
 ---
 

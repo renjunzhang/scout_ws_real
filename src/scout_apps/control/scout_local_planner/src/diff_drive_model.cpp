@@ -65,8 +65,11 @@ StateVector DiffDriveModel::predict(
             // 加速度映射：
             // ax = a (纵向加速度)
             // ay = v * omega (离心加速度，横向)
+            // 注意(MPC_INTEGRATION_NOTES §4.3)：此处 predictSlosh() 不做旋转修正，
+            // 与 LiquidSloshModel::update() 在 offset_x/y=0 时一致。
+            // 若未来开启偏心项，必须在此处也加入旋转修正项！
             double ax = a;
-            double ay = v * omega;  // 直接计算横向加速度！
+            double ay = v * omega;
             
             // 预测下一步晃动状态
             Eigen::Vector4d x_slosh_next = slosh_integration_->predictSlosh(x_slosh_curr, ax, ay);
@@ -148,19 +151,28 @@ void DiffDriveModel::linearize(
             // 填充增广 A 矩阵的晃动部分
             A.block<4, 4>(StateIndex::ETA_X, StateIndex::ETA_X) = A_slosh;
             
-            // 填充增广 B 矩阵的晃动部分
-            // ax = a, ay = v * omega
-            // ∂晃动/∂a = B_slosh[:, 0]
+            // 填充增广 B 矩阵和 A 矩阵的晃动耦合部分
+            // ay = v * omega → 输入 u_slosh = [ax, ay] = [a, v*omega]
+            //
+            // ∂(slosh)/∂a = B_slosh[:, 0]  (纵向加速度)
             B(StateIndex::ETA_X, ControlIndex::A) = B_slosh(0, 0);
             B(StateIndex::ETA_X_DOT, ControlIndex::A) = B_slosh(1, 0);
             B(StateIndex::ETA_Y, ControlIndex::A) = B_slosh(2, 0);
             B(StateIndex::ETA_Y_DOT, ControlIndex::A) = B_slosh(3, 0);
             
-            // ∂晃动/∂omega = B_slosh[:, 1] * v（离心力贡献）
+            // ∂(slosh)/∂omega = B_slosh[:, 1] * v  (∂ay/∂omega = v)
             B(StateIndex::ETA_X, ControlIndex::OMEGA) = B_slosh(0, 1) * v;
             B(StateIndex::ETA_X_DOT, ControlIndex::OMEGA) = B_slosh(1, 1) * v;
             B(StateIndex::ETA_Y, ControlIndex::OMEGA) = B_slosh(2, 1) * v;
             B(StateIndex::ETA_Y_DOT, ControlIndex::OMEGA) = B_slosh(3, 1) * v;
+            
+            // ∂(slosh)/∂v = B_slosh[:, 1] * omega  (∂ay/∂v = omega)
+            // 关键耦合项：速度变化对横向晃动激励的灵敏度
+            double omega_lin = u(ControlIndex::OMEGA);
+            A(StateIndex::ETA_X, StateIndex::V) += B_slosh(0, 1) * omega_lin;
+            A(StateIndex::ETA_X_DOT, StateIndex::V) += B_slosh(1, 1) * omega_lin;
+            A(StateIndex::ETA_Y, StateIndex::V) += B_slosh(2, 1) * omega_lin;
+            A(StateIndex::ETA_Y_DOT, StateIndex::V) += B_slosh(3, 1) * omega_lin;
         }
         // 如果无晃动模型，A 已初始化为单位阵（状态保持）
     }
