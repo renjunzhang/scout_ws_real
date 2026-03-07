@@ -127,6 +127,7 @@ int ConstraintManager::totalConstraints(int N) const {
     int total = (N + 1) * num_state_constraints + N * num_control_constraints;
     if (enable_omega_rate_) total += N;
     if (enable_accel_rate_) total += N;
+    if (enable_slosh_box_constraint_) total += 2 * (N + 1);
     return total;
 }
 
@@ -138,6 +139,11 @@ void ConstraintManager::setControlRateConstraints(bool enable_omega,
     enable_accel_rate_ = enable_accel;
     dt_ = dt;
     u_prev_ = u_prev;
+}
+
+void ConstraintManager::setSloshBoxConstraint(bool enable, double eta_bar) {
+    enable_slosh_box_constraint_ = enable && eta_bar > 0.0;
+    slosh_eta_bar_ = std::max(0.0, eta_bar);
 }
 
 void ConstraintManager::buildQPConstraints(
@@ -169,6 +175,7 @@ void ConstraintManager::buildQPConstraints(
     int total_constraints = (N + 1) * num_state_constraints + N * num_control_constraints;
     if (enable_omega_rate_) total_constraints += N;
     if (enable_accel_rate_) total_constraints += N;
+    if (enable_slosh_box_constraint_) total_constraints += 2 * (N + 1);
     
     std::vector<Eigen::Triplet<double>> triplets;
     l = Eigen::VectorXd::Zero(total_constraints);
@@ -208,6 +215,18 @@ void ConstraintManager::buildQPConstraints(
                 
                 constraint_idx += 2;
             }
+        }
+
+        if (enable_slosh_box_constraint_) {
+            triplets.emplace_back(constraint_idx, x_idx + StateIndex::ETA_X, 1.0);
+            l(constraint_idx) = -slosh_eta_bar_;
+            u(constraint_idx) = slosh_eta_bar_;
+            ++constraint_idx;
+
+            triplets.emplace_back(constraint_idx, x_idx + StateIndex::ETA_Y, 1.0);
+            l(constraint_idx) = -slosh_eta_bar_;
+            u(constraint_idx) = slosh_eta_bar_;
+            ++constraint_idx;
         }
     }
 

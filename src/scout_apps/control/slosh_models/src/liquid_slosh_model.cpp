@@ -103,6 +103,15 @@ bool LiquidSloshModel::configure(const Params& params) {
 
 void LiquidSloshModel::reset() {
   state_.setZero();
+  last_omega_z_ = 0.0;
+}
+
+void LiquidSloshModel::setState(const Eigen::Vector4d& state) {
+  if (!state.allFinite()) {
+    ROS_WARN_THROTTLE(1.0, "[LiquidSloshModel] Ignore non-finite state injection");
+    return;
+  }
+  state_ = state;
 }
 
 void LiquidSloshModel::update(const Eigen::Vector2d& accel_base,

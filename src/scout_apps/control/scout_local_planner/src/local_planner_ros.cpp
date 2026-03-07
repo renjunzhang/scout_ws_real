@@ -9,6 +9,9 @@
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <tf2/LinearMath/Quaternion.h>
+#include <cmath>
+#include <limits>
+#include <algorithm>
 
 namespace scout_local_planner {
 
@@ -48,6 +51,40 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
             // 使得 J_slosh = Q_slosh * η² ≈ Q_slosh_eta * (xn² + yn²)
             double h_coeff = slosh_integration_.getModalParams().height_coeff;
             mpc_params_.Q_slosh_eta = mpc_params_.Q_slosh * h_coeff * h_coeff;
+
+            if (mpc_params_.enable_slosh_box_constraint) {
+                if (h_coeff <= 1e-9) {
+                    ROS_WARN("[LocalPlannerROS] height_coeff too small, disabling slosh box constraint");
+                    mpc_params_.enable_slosh_box_constraint = false;
+                    mpc_params_.slosh_eta_bar = 0.0;
+                } else {
+                    const double omega_budget = std::max(0.0, vehicle_params_.omega_max);
+                    double eta_parabola_budget = 0.0;
+                    if (slosh_params_.use_parabola_term) {
+                        const double R = slosh_params_.container_radius;
+                        eta_parabola_budget = (R * R * omega_budget * omega_budget) / (4.0 * 9.81);
+                    }
+
+                    const double eta_modal_budget =
+                        std::max(0.0, mpc_params_.slosh_height_max - eta_parabola_budget);
+                    const double denom = h_coeff * std::sqrt(2.0);
+                    mpc_params_.slosh_eta_bar = denom > 1e-9 ? eta_modal_budget / denom : 0.0;
+
+                    if (mpc_params_.slosh_eta_bar <= 1e-9) {
+                        ROS_WARN("[LocalPlannerROS] Modal budget too small after parabola reservation, disabling slosh box constraint");
+                        mpc_params_.enable_slosh_box_constraint = false;
+                        mpc_params_.slosh_eta_bar = 0.0;
+                    } else {
+                        ROS_INFO("[LocalPlannerROS] Slosh box constraint enabled: eta_bar=%.5f (height_max=%.4f, parabola_budget=%.4f)",
+                                 mpc_params_.slosh_eta_bar,
+                                 mpc_params_.slosh_height_max,
+                                 eta_parabola_budget);
+                    }
+                }
+            } else {
+                mpc_params_.slosh_eta_bar = 0.0;
+            }
+
             // 将更新后的参数同步到求解器（CostFunction 会用到 Q_slosh_eta）
             mpc_solver_.setMPCParams(mpc_params_);
 
@@ -83,6 +120,11 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     slosh_ax_est_pub_ = nh_.advertise<std_msgs::Float32>("slosh/ax_est", 1);
     slosh_ay_est_pub_ = nh_.advertise<std_msgs::Float32>("slosh/ay_est", 1);
     slosh_alpha_est_pub_ = nh_.advertise<std_msgs::Float32>("slosh/alpha_est", 1);
+    slosh_episode_id_pub_ = nh_.advertise<std_msgs::Int32>("slosh/episode_id", 1);
+    slosh_height_pred_max_pub_ = nh_.advertise<std_msgs::Float32>("slosh/height_pred_max", 1);
+    slosh_constraint_active_pub_ = nh_.advertise<std_msgs::Int32>("slosh/constraint_active", 1);
+    slosh_v_des_eff_pub_ = nh_.advertise<std_msgs::Float32>("slosh/v_des_eff", 1);
+    slosh_speed_governor_active_pub_ = nh_.advertise<std_msgs::Int32>("slosh/speed_governor_active", 1);
     mpc_solve_ms_pub_ = nh_.advertise<std_msgs::Float32>("mpc/solve_ms", 1);
     mpc_status_val_pub_ = nh_.advertise<std_msgs::Int32>("mpc/status_val", 1);
     
@@ -127,6 +169,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/terminal_ramp_steps", mpc_params_.terminal_ramp_steps, 1);
     pnh.param("mpc/Q_slosh", mpc_params_.Q_slosh, 0.0);
     pnh.param("mpc/slosh_height_max", mpc_params_.slosh_height_max, 0.05);
+    pnh.param("mpc/enable_slosh_box_constraint", mpc_params_.enable_slosh_box_constraint, false);
 
     // 液体晃动模型参数
     pnh.param("slosh/container_radius", slosh_params_.container_radius, 0.15);
@@ -156,6 +199,8 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("path_handler/lookahead_distance", path_params_.lookahead_distance, 1.0);
     pnh.param("path_handler/goal_tolerance", path_params_.goal_tolerance, 0.1);
     pnh.param("path_handler/yaw_tolerance", path_params_.yaw_tolerance, 0.1);
+    pnh.param("path_handler/goal_capture_distance", path_params_.goal_capture_distance, 0.4);
+    pnh.param("path_handler/goal_capture_min_speed", path_params_.goal_capture_min_speed, 0.08);
     pnh.param("path_handler/path_timeout", path_params_.path_timeout, 5.0);
     pnh.param("path_handler/window_back", path_params_.window_back, 2);
     pnh.param("path_handler/window_forward", path_params_.window_forward, 2);
@@ -199,6 +244,17 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("filter/alpha_v", cmd_filter_alpha_v_, 0.3);
     pnh.param("filter/alpha_omega", cmd_filter_alpha_omega_, 0.4);
     pnh.param("filter/kappa_boost", cmd_filter_kappa_boost_, 0.5);
+    pnh.param("experiment/reached_debug_duration", reached_debug_duration_, 5.0);
+
+    // slosh-aware 速度治理
+    pnh.param("slosh_speed_governor/enable", slosh_speed_governor_enable_, false);
+    pnh.param("slosh_speed_governor/k_eta", slosh_k_eta_, 0.0);
+    pnh.param("slosh_speed_governor/ay_max_base", slosh_ay_max_base_, 0.0);
+    pnh.param("slosh_speed_governor/v_des_min", slosh_v_des_min_, 0.0);
+    pnh.param("slosh_speed_governor/eta_deadband", slosh_eta_deadband_, 0.3);
+    pnh.param("slosh_speed_governor/eta_exit_ratio", slosh_eta_exit_ratio_, 0.2);
+    pnh.param("slosh_speed_governor/preview_distance", slosh_preview_distance_, 1.0);
+    pnh.param("slosh_speed_governor/min_active_steps", slosh_min_active_steps_, 10);
 
     // 路径相似性检测阈值
     pnh.param("path_handler/path_change_threshold",
@@ -255,6 +311,10 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
     if (state_ != PlannerState::TRACKING) {
         heading_align_active_ = false;
     }
+
+    // slosh 估计与调试输出不应只局限于 TRACKING。
+    // 到达终点后的残余晃动衰减也需要继续观测。
+    updateSloshEstimate();
     
     // 发布状态
     publishStatus();
@@ -271,20 +331,120 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
             // 到达目标，停止
             publishCmdVel(0.0, 0.0);
             ROS_INFO_THROTTLE(5.0, "[LocalPlannerROS] Goal reached");
+            if (reached_time_.isZero() ||
+                (ros::Time::now() - reached_time_).toSec() <= reached_debug_duration_) {
+                publishSloshDebug(last_solve_time_ms_, last_solve_ok_);
+            }
             break;
             
         case PlannerState::TRACKING:
             // 执行 MPC 控制
             {
+                double v_des_cmd = vehicle_params_.v_max * 0.8;
+                double v_des_target = v_des_cmd;
+                last_speed_governor_active_ = 0;
+
                 // 1. 获取参考点
                 std::vector<ReferencePoint> ref_points;
                 if (!path_handler_.getReferencePoints(
                         mpc_params_.N, mpc_params_.dt, 
-                        vehicle_params_.v_max * 0.8,  // 期望速度
+                        v_des_cmd,  // 期望速度
                         ref_points)) {
                     ROS_WARN_THROTTLE(1.0, "[LocalPlannerROS] Failed to get reference points");
                     publishCmdVel(0.0, 0.0);
                     return;
+                }
+
+                // 阶段 4：残余晃动感知的速度治理
+                const double goal_dist = path_handler_.getGoalDistance();
+                const bool near_goal_capture =
+                    std::isfinite(goal_dist) &&
+                    goal_dist > path_params_.goal_tolerance &&
+                    goal_dist < path_params_.goal_capture_distance;
+
+                if (near_goal_capture || !slosh_speed_governor_enable_ || !slosh_enabled_) {
+                    slosh_governor_latched_ = false;
+                    slosh_governor_hold_steps_ = 0;
+                }
+
+                if (slosh_speed_governor_enable_ &&
+                    slosh_enabled_ &&
+                    !ref_points.empty() &&
+                    !near_goal_capture) {
+                    const double slosh_height = slosh_integration_.getSloshHeight();
+                    const double height_risk = std::max(slosh_height, last_predicted_height_max_);
+                    const double height_limit = std::max(1e-6, mpc_params_.slosh_height_max);
+                    const double eta_ratio = height_risk / height_limit;
+                    const double eta_deadband = std::max(0.0, std::min(0.99, slosh_eta_deadband_));
+                    const double eta_exit_ratio =
+                        std::max(0.0, std::min(eta_deadband, slosh_eta_exit_ratio_));
+                    const double ay_max_base = slosh_ay_max_base_ > 1e-6
+                        ? slosh_ay_max_base_
+                        : path_params_.max_lat_accel;
+
+                    if (!slosh_governor_latched_) {
+                        if (eta_ratio > eta_deadband) {
+                            slosh_governor_latched_ = true;
+                            slosh_governor_hold_steps_ = std::max(0, slosh_min_active_steps_);
+                        }
+                    } else {
+                        if (slosh_governor_hold_steps_ > 0) {
+                            --slosh_governor_hold_steps_;
+                        }
+                        if (slosh_governor_hold_steps_ <= 0 && eta_ratio < eta_exit_ratio) {
+                            slosh_governor_latched_ = false;
+                        }
+                    }
+
+                    if (ay_max_base > 1e-6 && slosh_governor_latched_) {
+                        const double eta_excess = std::max(0.0, eta_ratio - eta_deadband);
+                        const double scale = 1.0 / (1.0 + std::max(0.0, slosh_k_eta_) * eta_excess);
+                        const double ay_budget_eff = ay_max_base * scale;
+                        const double kappa_preview =
+                            path_handler_.getMaxCurvatureAhead(path_params_.lookahead_distance,
+                                                               slosh_preview_distance_);
+                        if (kappa_preview > 1e-4) {
+                            double v_cap = std::sqrt(std::max(0.0, ay_budget_eff / (kappa_preview + 1e-9)));
+                            v_des_target = std::max(slosh_v_des_min_, std::min(v_des_cmd, v_cap));
+                        }
+                    }
+                }
+
+                // 对 v_des_eff 做变化率限制，避免每周期参考速度突跳引起求解震荡
+                {
+                    const double prev_v_des = last_v_des_eff_ > 1e-6 ? last_v_des_eff_ : v_des_cmd;
+                    const double accel_limit = path_params_.max_tan_accel > 1e-6
+                        ? path_params_.max_tan_accel
+                        : std::max(1e-6, vehicle_params_.a_max);
+                    const double decel_limit = path_params_.max_tan_decel > 1e-6
+                        ? path_params_.max_tan_decel
+                        : accel_limit;
+
+                    const double v_lo = std::max(slosh_v_des_min_, prev_v_des - decel_limit * mpc_params_.dt);
+                    const double v_hi = prev_v_des + accel_limit * mpc_params_.dt;
+                    const double v_des_eff = std::max(v_lo, std::min(v_hi, v_des_target));
+                    last_v_des_eff_ = std::max(slosh_v_des_min_, std::min(v_des_cmd, v_des_eff));
+
+                    if (slosh_governor_latched_ && last_v_des_eff_ < v_des_cmd - 1e-3) {
+                        last_speed_governor_active_ = 1;
+                    }
+                }
+
+                if (last_speed_governor_active_) {
+                    std::vector<ReferencePoint> ref_points_governed;
+                    if (path_handler_.getReferencePoints(
+                            mpc_params_.N, mpc_params_.dt,
+                            last_v_des_eff_,
+                            ref_points_governed)) {
+                        ref_points.swap(ref_points_governed);
+                    } else {
+                        last_speed_governor_active_ = 0;
+                        last_v_des_eff_ = v_des_cmd;
+                        slosh_governor_latched_ = false;
+                        slosh_governor_hold_steps_ = 0;
+                    }
+                } else {
+                    last_v_des_eff_ = v_des_cmd;
                 }
 
                 publishSmoothedPath();
@@ -343,37 +503,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
 
                 double v_clamped = clamp(current_v_, vehicle_params_.v_min, vehicle_params_.v_max);
 
-                // 3.0 加速度估计 + slosh 状态更新 (P0-B)
-                if (slosh_enabled_) {
-                    if (has_prev_odom_ && !prev_odom_time_.isZero()) {
-                        // 用真实 odom 时间戳差分，避免假定固定控制周期
-                        double dt_odom = (current_odom_time_ - prev_odom_time_).toSec();
-                        if (dt_odom > 1e-4 && dt_odom < 1.0) {  // 合理范围保护
-                            // 差分估计原始加速度
-                            double ax_raw = (current_v_ - prev_v_) / dt_odom;
-                            double alpha_raw = (current_omega_ - prev_omega_) / dt_odom;
-                            // 横向加速度近似：离心力 ay ≈ v * omega
-                            double ay_raw = current_v_ * current_omega_;
-
-                        // EMA 低通滤波
-                        ax_filtered_ = accel_filter_alpha_ * ax_raw + (1.0 - accel_filter_alpha_) * ax_filtered_;
-                        ay_filtered_ = accel_filter_alpha_ * ay_raw + (1.0 - accel_filter_alpha_) * ay_filtered_;
-                        alpha_filtered_ = accel_filter_alpha_ * alpha_raw + (1.0 - accel_filter_alpha_) * alpha_filtered_;
-
-                        // 更新晃动模型
-                        // 注意(MPC_INTEGRATION_NOTES §4.3)：当 offset_x/y=0 时，
-                        // LiquidSloshModel::update() 的旋转修正项为零，
-                        // 与 DiffDriveModel::predict/linearize 中的 predictSlosh() 一致。
-                        // 若未来开启偏心项，必须同步修改 predictSlosh() 的输入映射！
-                        slosh_integration_.update(ax_filtered_, ay_filtered_, current_omega_, alpha_filtered_);
-                        }
-                    }
-                    prev_v_ = current_v_;
-                    prev_omega_ = current_omega_;
-                    prev_odom_time_ = current_odom_time_;
-                    has_prev_odom_ = true;
-                }
-
                 StateVector current_state;
                 current_state.setZero();  // 初始化所有状态（包括晃动状态）
                 current_state(StateIndex::E_L) = frenet.e_l;
@@ -404,6 +533,12 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     publishLocalPath(solution.x_predicted, ref_points);
 
                     // 发布 slosh 调试信息
+                    last_solve_time_ms_ = solution.solve_time_ms;
+                    last_solve_ok_ = true;
+                    last_predicted_height_max_ = computePredictedSloshHeightMax(solution);
+                    last_constraint_active_ =
+                        (mpc_params_.slosh_height_max > 0.0 &&
+                         last_predicted_height_max_ > mpc_params_.slosh_height_max) ? 1 : 0;
                     publishSloshDebug(solution.solve_time_ms, true);
                     
                     if (verbose_) {
@@ -434,6 +569,10 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     }
                     double omega = current_omega_ * infeasible_omega_scale_;
                     publishCmdVel(v, omega);
+                    last_solve_time_ms_ = 0.0;
+                    last_solve_ok_ = false;
+                    last_predicted_height_max_ = std::numeric_limits<double>::quiet_NaN();
+                    last_constraint_active_ = -1;
                     publishSloshDebug(0.0, false);
                 }
             }
@@ -462,17 +601,93 @@ void LocalPlannerROS::updateState() {
     // 检查是否到达目标
     if (state_ == PlannerState::TRACKING && path_handler_.isGoalReached()) {
         transitionTo(PlannerState::REACHED);
-        resetWarmStart(false);
+        // 到达终点后保留 slosh 内部状态一段时间，便于观测残余晃动衰减。
+        resetWarmStart(false, false);
     }
 }
 
 void LocalPlannerROS::transitionTo(PlannerState new_state) {
     if (state_ != new_state) {
+        if (new_state == PlannerState::TRACKING && state_ != PlannerState::TRACKING) {
+            ++episode_id_;
+        }
+        if (new_state == PlannerState::REACHED) {
+            reached_time_ = ros::Time::now();
+        } else if (state_ == PlannerState::REACHED) {
+            reached_time_ = ros::Time(0);
+        }
         ROS_INFO("[LocalPlannerROS] State: %s -> %s",
                  plannerStateToString(state_).c_str(),
                  plannerStateToString(new_state).c_str());
         state_ = new_state;
     }
+}
+
+void LocalPlannerROS::updateSloshEstimate() {
+    if (!slosh_enabled_) {
+        return;
+    }
+
+    if (has_prev_odom_ && !prev_odom_time_.isZero() && !current_odom_time_.isZero()) {
+        // 用真实 odom 时间戳差分，避免假定固定控制周期
+        double dt_odom = (current_odom_time_ - prev_odom_time_).toSec();
+        if (dt_odom > 1e-4 && dt_odom < 1.0) {
+            double ax_raw = (current_v_ - prev_v_) / dt_odom;
+            double alpha_raw = (current_omega_ - prev_omega_) / dt_odom;
+            double ay_raw = current_v_ * current_omega_;
+
+            ax_filtered_ = accel_filter_alpha_ * ax_raw + (1.0 - accel_filter_alpha_) * ax_filtered_;
+            ay_filtered_ = accel_filter_alpha_ * ay_raw + (1.0 - accel_filter_alpha_) * ay_filtered_;
+            alpha_filtered_ = accel_filter_alpha_ * alpha_raw + (1.0 - accel_filter_alpha_) * alpha_filtered_;
+
+            // 注意：当 offset_x/y=0 时，这里的更新与 DiffDriveModel 的 slosh 输入映射一致。
+            slosh_integration_.update(ax_filtered_, ay_filtered_, current_omega_, alpha_filtered_);
+        }
+    }
+
+    prev_v_ = current_v_;
+    prev_omega_ = current_omega_;
+    prev_odom_time_ = current_odom_time_;
+    has_prev_odom_ = true;
+}
+
+double LocalPlannerROS::computePredictedSloshHeightMax(const MPCSolution& solution) const {
+    if (!slosh_enabled_ || solution.x_predicted.empty()) {
+        return 0.0;
+    }
+
+    const double h_coeff = slosh_integration_.getModalParams().height_coeff;
+    const double R = slosh_params_.container_radius;
+    const double g = 9.81;
+
+    double height_max = 0.0;
+    const size_t n_states = solution.x_predicted.size();
+    const size_t n_inputs = solution.u_optimal.size();
+
+    for (size_t k = 0; k < n_states; ++k) {
+        const StateVector& xk = solution.x_predicted[k];
+        const double eta_x = xk(StateIndex::ETA_X);
+        const double eta_y = xk(StateIndex::ETA_Y);
+        const double eta_modal = h_coeff * std::hypot(eta_x, eta_y);
+
+        double omega_k = 0.0;
+        if (n_inputs > 0) {
+            if (k < n_inputs) {
+                omega_k = solution.u_optimal[k](ControlIndex::OMEGA);
+            } else {
+                omega_k = solution.u_optimal.back()(ControlIndex::OMEGA);
+            }
+        }
+
+        double eta_parabola = 0.0;
+        if (slosh_params_.use_parabola_term) {
+            eta_parabola = (R * R * omega_k * omega_k) / (4.0 * g);
+        }
+
+        height_max = std::max(height_max, eta_modal + eta_parabola);
+    }
+
+    return height_max;
 }
 
 void LocalPlannerROS::publishCmdVel(double v, double omega) {
@@ -618,7 +833,7 @@ void LocalPlannerROS::publishStatus() {
     status_pub_.publish(msg);
 }
 
-void LocalPlannerROS::resetWarmStart(bool keep_u_prev) {
+void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {
     mpc_solver_.resetWarmStart(keep_u_prev);
     if (!keep_u_prev) {
         last_control_.setZero();
@@ -626,10 +841,10 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev) {
         filtered_omega_ = 0.0;
     }
     // slosh 重置策略 (参考 MPC_INTEGRATION_NOTES §6.1)：
-    // - keep_u_prev=false（到达终点/ERROR）：完全重置 slosh + 滤波器
+    // - keep_u_prev=false（ERROR/手动复位）：可选择完全重置 slosh + 滤波器
     // - keep_u_prev=true （路径跳变/重规划）：保留 slosh 物理连续性，只重置滤波器
     if (slosh_enabled_) {
-        if (!keep_u_prev) {
+        if (reset_slosh && !keep_u_prev) {
             slosh_integration_.reset();
         }
         // 加速度滤波器始终重置，避免旧差分值污染新路径段
@@ -639,9 +854,43 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev) {
         has_prev_odom_ = false;
         prev_odom_time_ = ros::Time(0);
     }
+    last_v_des_eff_ = 0.0;
+    last_speed_governor_active_ = 0;
+    slosh_governor_latched_ = false;
+    slosh_governor_hold_steps_ = 0;
 }
 
 void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok) {
+    if (slosh_episode_id_pub_.getNumSubscribers() > 0) {
+        std_msgs::Int32 msg;
+        msg.data = episode_id_;
+        slosh_episode_id_pub_.publish(msg);
+    }
+
+    if (slosh_height_pred_max_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(last_predicted_height_max_);
+        slosh_height_pred_max_pub_.publish(msg);
+    }
+
+    if (slosh_constraint_active_pub_.getNumSubscribers() > 0) {
+        std_msgs::Int32 msg;
+        msg.data = last_constraint_active_;
+        slosh_constraint_active_pub_.publish(msg);
+    }
+
+    if (slosh_v_des_eff_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(last_v_des_eff_);
+        slosh_v_des_eff_pub_.publish(msg);
+    }
+
+    if (slosh_speed_governor_active_pub_.getNumSubscribers() > 0) {
+        std_msgs::Int32 msg;
+        msg.data = last_speed_governor_active_;
+        slosh_speed_governor_active_pub_.publish(msg);
+    }
+
     // slosh 状态 [η_x, η̇_x, η_y, η̇_y]
     if (slosh_state_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32MultiArray msg;

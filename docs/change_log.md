@@ -66,6 +66,19 @@ catkin_make 2>&1 | grep "processing catkin package"
     # 或使用实验专用 launch（等价，参数更集中）
     roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=10
 
+    # 液体晃动实验
+    roslaunch scout_local_planner slosh_experiment.launch \
+    Q_slosh:=5 \
+    enable_slosh_box_constraint:=true \
+    slosh_speed_governor_enable:=true \
+    slosh_speed_governor_k_eta:=2.5 \
+    slosh_speed_governor_eta_deadband:=0.3 \
+    slosh_speed_governor_eta_exit_ratio:=0.2 \
+    slosh_speed_governor_min_active_steps:=10 \
+    slosh_speed_governor_ay_max_base:=0.6 \
+    slosh_speed_governor_v_des_min:=0.2 \
+    slosh_speed_governor_preview_distance:=1.0
+
 ### 8. 录制实验数据（与第 7 步同时，另开终端）
     cd $(rospack find scout_local_planner)
     ./scripts/record_slosh_experiment.sh 10           # 参数 = 当前 Q_slosh 值
@@ -137,6 +150,20 @@ catkin_make 2>&1 | grep "processing catkin package"
 
     # TEB 对比实验
     roslaunch teb_local_planner test_teb_sim.launch
+
+    # 液体晃动实验
+    roslaunch scout_local_planner slosh_experiment.launch \
+    sim:=true \
+    Q_slosh:=5 \
+    enable_slosh_box_constraint:=true \
+    slosh_speed_governor_enable:=true \
+    slosh_speed_governor_k_eta:=2.5 \
+    slosh_speed_governor_eta_deadband:=0.3 \
+    slosh_speed_governor_eta_exit_ratio:=0.2 \
+    slosh_speed_governor_min_active_steps:=10 \
+    slosh_speed_governor_ay_max_base:=0.6 \
+    slosh_speed_governor_v_des_min:=0.2 \
+    slosh_speed_governor_preview_distance:=1.0
 
 ### 8. 录制实验数据（与第 7 步同时，另开终端）
     cd $(rospack find scout_local_planner)

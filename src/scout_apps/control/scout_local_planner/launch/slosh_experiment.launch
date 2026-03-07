@@ -18,8 +18,21 @@
 <launch>
   <!-- ======== 实验参数 ======== -->
   <arg name="Q_slosh" default="0.0"  doc="晃动抑制权重 (消融变量: 0/5/10/20)"/>
+  <arg name="enable_slosh_box_constraint" default="false" doc="是否启用第一版液面峰值盒约束代理"/>
   <arg name="sim"     default="false" doc="是否使用仿真参数 (true=sim, false=real)"/>
   <arg name="verbose" default="false" doc="是否输出调试信息"/>
+  <arg name="filter_alpha_v" default="1.0" doc="实验模式: 线速度 EMA 系数，1.0 表示关闭额外低通"/>
+  <arg name="filter_alpha_omega" default="1.0" doc="实验模式: 角速度 EMA 系数，1.0 表示关闭额外低通"/>
+  <arg name="filter_kappa_boost" default="0.0" doc="实验模式: 关闭曲率自适应 EMA 增益"/>
+  <arg name="reached_debug_duration" default="5.0" doc="到达终点后继续输出 slosh debug 的时长（秒）"/>
+  <arg name="slosh_speed_governor_enable" default="false" doc="是否启用残余晃动感知的速度治理"/>
+  <arg name="slosh_speed_governor_k_eta" default="2.5" doc="速度治理液面高度比例缩放系数"/>
+  <arg name="slosh_speed_governor_ay_max_base" default="0.0" doc="速度治理横向加速度预算"/>
+  <arg name="slosh_speed_governor_v_des_min" default="0.0" doc="速度治理后的最低参考速度"/>
+  <arg name="slosh_speed_governor_eta_deadband" default="0.3" doc="速度治理液面比例死区"/>
+  <arg name="slosh_speed_governor_eta_exit_ratio" default="0.2" doc="速度治理退出阈值（滞回）"/>
+  <arg name="slosh_speed_governor_preview_distance" default="1.0" doc="速度治理前方曲率预览长度"/>
+  <arg name="slosh_speed_governor_min_active_steps" default="10" doc="速度治理最少保持周期数"/>
 
   <!-- 根据 sim 选择参数文件 -->
   <arg name="config_file" default="$(eval 'mpc_params_sim.yaml' if arg('sim') == 'true' else 'mpc_params.yaml')"/>
@@ -33,8 +46,21 @@
               command="load"/>
 
     <!-- 实验参数覆盖 (YAML 之后、节点 init 之前) -->
-    <param name="verbose"    value="$(arg verbose)"/>
+    <param name="verbose" value="$(arg verbose)"/>
     <param name="mpc/Q_slosh" value="$(arg Q_slosh)"/>
+    <param name="mpc/enable_slosh_box_constraint" value="$(arg enable_slosh_box_constraint)"/>
+    <param name="filter/alpha_v" value="$(arg filter_alpha_v)"/>
+    <param name="filter/alpha_omega" value="$(arg filter_alpha_omega)"/>
+    <param name="filter/kappa_boost" value="$(arg filter_kappa_boost)"/>
+    <param name="experiment/reached_debug_duration" value="$(arg reached_debug_duration)"/>
+    <param name="slosh_speed_governor/enable" value="$(arg slosh_speed_governor_enable)"/>
+    <param name="slosh_speed_governor/k_eta" value="$(arg slosh_speed_governor_k_eta)"/>
+    <param name="slosh_speed_governor/ay_max_base" value="$(arg slosh_speed_governor_ay_max_base)"/>
+    <param name="slosh_speed_governor/v_des_min" value="$(arg slosh_speed_governor_v_des_min)"/>
+    <param name="slosh_speed_governor/eta_deadband" value="$(arg slosh_speed_governor_eta_deadband)"/>
+    <param name="slosh_speed_governor/eta_exit_ratio" value="$(arg slosh_speed_governor_eta_exit_ratio)"/>
+    <param name="slosh_speed_governor/preview_distance" value="$(arg slosh_speed_governor_preview_distance)"/>
+    <param name="slosh_speed_governor/min_active_steps" value="$(arg slosh_speed_governor_min_active_steps)"/>
 
     <!-- 话题 remap -->
     <remap from="global_path" to="/scout/global_path"/>

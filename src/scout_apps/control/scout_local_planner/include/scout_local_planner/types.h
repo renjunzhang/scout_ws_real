@@ -140,9 +140,11 @@ struct MPCParams {
     // 晃动权重
     double Q_slosh = 0.0;   // YAML 配置值：惩罚液面高度平方 (设为 0 表示不启用)
     double slosh_height_max = 0.05;  // 液面高度约束 (m)
+    bool enable_slosh_box_constraint = false;  // 是否启用一阶盒约束代理
     // 运行时由 local_planner_ros 计算: Q_slosh_eta = Q_slosh * height_coeff²
     // cost_function 直接用此值乘 ETA_X² / ETA_Y²
     double Q_slosh_eta = 0.0;
+    double slosh_eta_bar = 0.0;  // 运行时换算得到的模态位移盒约束阈值
 };
 
 //==============================================================================
@@ -173,6 +175,8 @@ struct PathHandlerParams {
     double lookahead_distance = 1.0;  // 前视距离 (m)
     double goal_tolerance = 0.1;      // 到达目标容差 (m)
     double yaw_tolerance = 0.1;       // 航向容差 (rad)
+    double goal_capture_distance = 0.4;   // 近终点捕获区半径 (m)
+    double goal_capture_min_speed = 0.08; // 捕获区内最低参考速度 (m/s)
     double path_timeout = 5.0;        // 路径超时时间 (s)
     int min_path_points = 2;          // 最少路径点数
     std::string base_frame = "base_link";  // 机器人坐标系

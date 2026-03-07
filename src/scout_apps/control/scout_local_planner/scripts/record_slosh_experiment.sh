@@ -9,14 +9,21 @@
 #   ./record_slosh_experiment.sh 10 trial_3     # Q_slosh=10, 自定义后缀
 #
 # 录制内容：
-#   - 晃动状态：/slosh/state, /slosh/height, /slosh/ax_est, /slosh/ay_est, /slosh/alpha_est
+#   - 晃动状态：/slosh/state, /slosh/height, /slosh/height_pred_max
+#                /slosh/ax_est, /slosh/ay_est, /slosh/alpha_est
+#                /slosh/episode_id, /slosh/constraint_active
+#                /slosh/v_des_eff, /slosh/speed_governor_active
 #   - MPC 性能：/mpc/solve_ms, /mpc/status_val, /mpc_status
 #   - 控制指令：/cmd_vel
 #   - 里程计：  /odom
-#   - 路径：    /scout/global_path, /local_path
+#   - 目标/路径：/scout/goal, /scout/current_goal, /scout/global_path, /local_path
 #   - TF：      /tf, /tf_static
+#   - 仿真时钟：/clock（仿真时存在，实物可忽略）
 #
-# 输出路径：~/slosh_bags/slosh_Q{value}_{date}_{suffix}.bag
+# 输出路径：
+#   1. 若设置环境变量 SLOSH_BAG_DIR，则优先使用它
+#   2. 若存在 /data/$USER，则使用 /data/$USER/slosh_bags
+#   3. 否则退回 ~/slosh_bags（适合实物）
 # ============================================================================
 
 set -euo pipefail
@@ -27,7 +34,13 @@ SUFFIX="${2:-}"
 DATE_STR=$(date +%Y%m%d_%H%M%S)
 
 # 目录
-BAG_DIR="${HOME}/slosh_bags"
+if [[ -n "${SLOSH_BAG_DIR:-}" ]]; then
+    BAG_DIR="${SLOSH_BAG_DIR}"
+elif [[ -d "/data/${USER}" ]]; then
+    BAG_DIR="/data/${USER}/slosh_bags"
+else
+    BAG_DIR="${HOME}/slosh_bags"
+fi
 mkdir -p "${BAG_DIR}"
 
 # 文件名
@@ -44,9 +57,14 @@ TOPICS=(
     # 晃动观测
     /slosh/state
     /slosh/height
+    /slosh/height_pred_max
     /slosh/ax_est
     /slosh/ay_est
     /slosh/alpha_est
+    /slosh/episode_id
+    /slosh/constraint_active
+    /slosh/v_des_eff
+    /slosh/speed_governor_active
 
     # MPC 性能
     /mpc/solve_ms
@@ -57,10 +75,15 @@ TOPICS=(
     /cmd_vel
     /odom
 
-    # 路径
+    # 目标与路径
+    /scout/goal
+    /scout/current_goal
     /scout/global_path
     /scout/global_path_smooth
     /local_path
+
+    # 仿真时钟（实物环境无此话题也不影响录制）
+    /clock
 
     # TF (用于回放可视化)
     /tf

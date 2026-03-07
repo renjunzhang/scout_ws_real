@@ -280,6 +280,13 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     const tf2::Transform tf_base_to_map = tf_map_to_base.inverse();
     const Eigen::Vector2d robot_pos_map(tf_base_to_map.getOrigin().x(),
                                         tf_base_to_map.getOrigin().y());
+    double goal_dist_base = 0.0;
+    if (!global_path_.poses.empty()) {
+        const auto& goal_pose = global_path_.poses.back().pose;
+        const tf2::Vector3 goal_map(goal_pose.position.x, goal_pose.position.y, 0.0);
+        const tf2::Vector3 goal_base = tf_map_to_base * goal_map;
+        goal_dist_base = std::hypot(goal_base.x(), goal_base.y());
+    }
 
     const std::vector<Eigen::Vector2d>& path_points_map = global_points_map_;
     const std::vector<double>& path_s = global_path_s_;
@@ -381,6 +388,9 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     const double total_len_global = (!path_s.empty()) ? path_s.back() : total_len;
     double s_progress = std::max(0.0, std::min(total_len_global, s_global_));
     double s_geom_local = std::min(current_s_ + params_.lookahead_distance, total_len);
+    const double decel_safety_factor = 0.8;
+    double max_decel = params_.max_tan_decel > 0.0 ? params_.max_tan_decel : params_.max_tan_accel;
+    max_decel *= decel_safety_factor;
     for (int k = 0; k < N; ++k) {
         ReferencePoint ref;
         
@@ -397,7 +407,46 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
             }
             s_local = std::max(0.0, std::min(total_len, s_local));
 
+            // 计算参考点信息
+            Eigen::Vector2d pos = local_spline_.evaluate(s_local);
+            ref.x = pos.x();
+            ref.y = pos.y();
+            ref.theta_path = local_spline_.evaluateTheta(s_local);
+            ref.kappa = local_spline_.evaluateKappa(s_local);
+            ref.s = s_local;
+
             double v_ref = speed_profile_valid_ ? getSpeedAtS(s_progress) : v_des;
+            double v_curve_cap = v_des;
+            if (params_.max_lat_accel > 0.0) {
+                const double kappa_abs = std::abs(ref.kappa);
+                if (kappa_abs > 1e-4) {
+                    v_curve_cap = std::min(v_curve_cap, std::sqrt(params_.max_lat_accel / kappa_abs));
+                }
+            }
+
+            // 末端停车既要看路径弧长剩余，也要看欧氏 goal 距离。
+            // 否则 s_progress 已到路径末端但车体仍横向偏离 goal 时，v_ref 会过早掉到 0。
+            if (max_decel > 1e-6) {
+                const double remain_s = std::max(0.0, total_len_global - s_progress);
+                const double remain_goal = std::max(0.0, goal_dist_base - params_.goal_tolerance);
+                if (remain_goal > remain_s + 1e-3) {
+                    double v_goal_capture =
+                        std::sqrt(std::max(0.0,
+                                           params_.goal_speed * params_.goal_speed +
+                                           2.0 * max_decel * remain_goal));
+                    v_goal_capture = std::min(v_goal_capture, v_curve_cap);
+                    v_ref = std::max(v_ref, v_goal_capture);
+                }
+            }
+
+            v_ref = std::min(v_ref, v_curve_cap);
+
+            // 终点捕获区内保持最低参考速度，避免距离尚未达标时过早停死。
+            if (goal_dist_base > params_.goal_tolerance &&
+                goal_dist_base < params_.goal_capture_distance &&
+                params_.goal_capture_min_speed > 1e-6) {
+                v_ref = std::max(v_ref, params_.goal_capture_min_speed);
+            }
 
             // 使用当前 s 采样点
             ref.v_ref = v_ref;
@@ -408,14 +457,6 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
             if (!has_window_s) {
                 s_geom_local = std::min(s_geom_local + v_ref * dt, total_len);
             }
-
-            // 计算参考点信息
-            Eigen::Vector2d pos = local_spline_.evaluate(s_local);
-            ref.x = pos.x();
-            ref.y = pos.y();
-            ref.theta_path = local_spline_.evaluateTheta(s_local);
-            ref.kappa = local_spline_.evaluateKappa(s_local);
-            ref.s = s_local;
         } else {
             double s_local = std::min(current_s_ + params_.lookahead_distance + k * dt * v_des, total_len);
             s_local = std::min(s_local, total_len);  // 不超过样条末端
@@ -529,6 +570,63 @@ bool PathHandler::isGoalReached() const {
     yaw_err = std::abs(yaw_err);
     
     return (dist < params_.goal_tolerance && yaw_err < params_.yaw_tolerance);
+}
+
+double PathHandler::getGoalDistance() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!has_path_ || global_path_.poses.empty() || !tf_buffer_) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    geometry_msgs::TransformStamped tf_map_to_base;
+    try {
+        tf_map_to_base = tf_buffer_->lookupTransform(
+            base_frame_, global_path_.header.frame_id,
+            ros::Time(0), ros::Duration(0.1));
+    } catch (tf2::TransformException& ex) {
+        ROS_WARN_THROTTLE(1.0, "[PathHandler] TF error in getGoalDistance: %s", ex.what());
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+
+    const auto& goal_pose = global_path_.poses.back().pose;
+    tf2::Transform tf_transform;
+    tf2::fromMsg(tf_map_to_base.transform, tf_transform);
+    const tf2::Vector3 goal_map(goal_pose.position.x, goal_pose.position.y, 0.0);
+    const tf2::Vector3 goal_base = tf_transform * goal_map;
+    return std::hypot(goal_base.x(), goal_base.y());
+}
+
+double PathHandler::getMaxCurvatureAhead(double lookahead_dist, double preview_dist) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!global_spline_.isValid()) {
+        return 0.0;
+    }
+
+    const double total_len = global_spline_length_ > 1e-6
+        ? global_spline_length_
+        : global_spline_.getTotalLength();
+    if (total_len <= 1e-6) {
+        return 0.0;
+    }
+
+    const double start_s = std::max(0.0, std::min(total_len, s_global_ + std::max(0.0, lookahead_dist)));
+    const double end_s = std::max(start_s, std::min(total_len, start_s + std::max(0.0, preview_dist)));
+    if (end_s - start_s < 1e-6) {
+        return std::abs(global_spline_.evaluateKappa(start_s));
+    }
+
+    const double ds_hint = params_.resample_spacing > 1e-3 ? params_.resample_spacing : 0.05;
+    const int samples = std::max(5, static_cast<int>(std::ceil((end_s - start_s) / ds_hint)) + 1);
+
+    double max_kappa = 0.0;
+    for (int i = 0; i < samples; ++i) {
+        const double ratio = samples > 1 ? static_cast<double>(i) / static_cast<double>(samples - 1) : 0.0;
+        const double s = start_s + (end_s - start_s) * ratio;
+        max_kappa = std::max(max_kappa, std::abs(global_spline_.evaluateKappa(s)));
+    }
+    return max_kappa;
 }
 
 bool PathHandler::isPathValid() const {

@@ -49,6 +49,9 @@ bool SloshIntegration::configure(const SloshParams& params) {
 }
 
 void SloshIntegration::reset() {
+    if (!configured_) {
+        return;
+    }
     slosh_model_.reset();
 }
 
@@ -59,15 +62,24 @@ void SloshIntegration::getDiscreteMatrices(Eigen::Matrix4d& A_slosh,
 }
 
 void SloshIntegration::update(double ax, double ay, double omega_z, double alpha_z) {
+    if (!configured_) {
+        return;
+    }
     Eigen::Vector2d accel(ax, ay);
     slosh_model_.update(accel, omega_z, alpha_z);
 }
 
 Eigen::Vector4d SloshIntegration::getSloshState() const {
+    if (!configured_) {
+        return Eigen::Vector4d::Zero();
+    }
     return slosh_model_.getState();
 }
 
 double SloshIntegration::getSloshHeight() const {
+    if (!configured_) {
+        return 0.0;
+    }
     return slosh_model_.getSloshHeight();
 }
 
@@ -104,12 +116,23 @@ void SloshIntegration::writeToAugmentedState(StateVector& x_augmented) const {
 }
 
 void SloshIntegration::readFromAugmentedState(const StateVector& x_augmented) {
-    // 注意：这只是读取状态用于外部逻辑，不直接设置内部 slosh_model_ 状态
-    // 如需设置，需要在 LiquidSloshModel 添加 setState() 方法
+    if (!configured_) {
+        return;
+    }
+
+    Eigen::Vector4d slosh_state;
+    slosh_state << x_augmented(StateIndex::ETA_X),
+                   x_augmented(StateIndex::ETA_X_DOT),
+                   x_augmented(StateIndex::ETA_Y),
+                   x_augmented(StateIndex::ETA_Y_DOT);
+    slosh_model_.setState(slosh_state);
 }
 
 Eigen::Vector4d SloshIntegration::predictSlosh(const Eigen::Vector4d& x_slosh_curr,
                                                 double ax, double ay) const {
+    if (!configured_) {
+        return x_slosh_curr;
+    }
     Eigen::Vector2d u(ax, ay);
     return A_discrete_ * x_slosh_curr + B_discrete_ * u;
 }

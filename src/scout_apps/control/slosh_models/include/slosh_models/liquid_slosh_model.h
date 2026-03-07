@@ -122,6 +122,14 @@ public:
   Eigen::Vector4d getState() const { return state_; }
 
   /**
+   * @brief 直接设置完整状态向量
+   * @param state [xn, vxn, yn, vyn]
+   *
+   * 用于与外部估计器/MPC 增广状态做一致化同步。
+   */
+  void setState(const Eigen::Vector4d& state);
+
+  /**
    * @brief 获取离散状态矩阵 (用于外部MPC集成)
    * @param Ad 输出: 状态转移矩阵 (4x4)
    * @param Bd 输出: 输入矩阵 (4x2)

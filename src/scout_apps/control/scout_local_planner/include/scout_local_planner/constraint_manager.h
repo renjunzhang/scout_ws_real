@@ -182,11 +182,20 @@ public:
                                    double dt,
                                    const ControlVector& u_prev);
 
+    /**
+     * @brief 设置液体晃动盒约束代理
+     * @param enable 是否启用
+     * @param eta_bar 模态位移盒约束阈值
+     */
+    void setSloshBoxConstraint(bool enable, double eta_bar);
+
 private:
     std::vector<ConstraintPtr> constraints_;
     VehicleParams params_;
     bool enable_omega_rate_ = false;
     bool enable_accel_rate_ = false;
+    bool enable_slosh_box_constraint_ = false;
+    double slosh_eta_bar_ = 0.0;
     double dt_ = 0.0;
     ControlVector u_prev_ = ControlVector::Zero();
 };

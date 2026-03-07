@@ -39,6 +39,7 @@ mpc:
   # 液体晃动权重（第 2 步启用）
   Q_slosh: 0.0             # 设为 0 表示不启用晃动抑制
   slosh_height_max: 0.05   # 液面高度约束 (m)
+  enable_slosh_box_constraint: false  # 第一版盒约束代理（ETA_X/ETA_Y），默认关闭
 
 # =============================================================================
 # 车辆参数（Scout Mini）
@@ -65,6 +66,8 @@ path_handler:
   lookahead_distance: 0.6  # 前视距离 (m)
   goal_tolerance: 0.1      # 到达目标位置容差 (m)
   yaw_tolerance: 0.1       # 到达目标航向容差 (rad)
+  goal_capture_distance: 0.45   # 终点捕获区；进入后维持最低参考速度，避免提前停死
+  goal_capture_min_speed: 0.10  # 捕获区最低参考速度 (m/s)
   path_timeout: 5.0        # 路径超时时间 (s)
   publish_smoothed_path: true         # 是否发布平滑路径
   smoothed_path_topic: "/scout/global_path_smooth"  # 平滑路径话题名
@@ -138,3 +141,16 @@ filter:
   alpha_v: 0.3             # 线速度滤波系数 (0,1]，越大响应越快
   alpha_omega: 0.4         # 角速度滤波基础系数 (0,1]
   kappa_boost: 0.5         # 曲率自适应增益: alpha_eff = min(1, alpha + boost*|ω|)
+
+# =============================================================================
+# slosh-aware 速度治理（阶段 4）
+# =============================================================================
+slosh_speed_governor:
+  enable: false            # 根据当前残余晃动降低参考速度
+  k_eta: 2.5               # 液面高度比例缩放系数（配合 eta_deadband）
+  ay_max_base: 0.0         # 横向加速度预算；<=0 时回退到 path_handler/max_lat_accel
+  v_des_min: 0.0           # 调速后的最低参考速度
+  eta_deadband: 0.3        # 低于此液面比例不干预
+  eta_exit_ratio: 0.2      # 退出阈值（滞回），低于此比例才释放 governor
+  preview_distance: 1.0    # 前方曲率预览长度 (m)
+  min_active_steps: 10     # 最少保持周期数，避免阈值附近抖动

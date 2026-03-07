@@ -60,8 +60,10 @@ private:
     void publishSmoothedPath();
     void publishStatus();
     void publishSloshDebug(double solve_time_ms, bool solve_ok);
+    void updateSloshEstimate();
+    double computePredictedSloshHeightMax(const MPCSolution& solution) const;
     void updateState();
-    void resetWarmStart(bool keep_u_prev);
+    void resetWarmStart(bool keep_u_prev, bool reset_slosh = true);
     
     // ====== 状态机 ======
     void transitionTo(PlannerState new_state);
@@ -136,14 +138,42 @@ private:
     double alpha_filtered_ = 0.0;
     double accel_filter_alpha_ = 0.3;  // EMA 滤波系数
 
+    // slosh-aware 速度治理（阶段 4）
+    bool slosh_speed_governor_enable_ = false;
+    double slosh_k_eta_ = 0.0;
+    double slosh_ay_max_base_ = 0.0;
+    double slosh_v_des_min_ = 0.0;
+    double slosh_eta_deadband_ = 0.3;
+    double slosh_eta_exit_ratio_ = 0.2;
+    double slosh_preview_distance_ = 1.0;
+    int slosh_min_active_steps_ = 10;
+    bool slosh_governor_latched_ = false;
+    int slosh_governor_hold_steps_ = 0;
+    double last_v_des_eff_ = 0.0;
+    int last_speed_governor_active_ = 0;
+
     // slosh 调试发布
     ros::Publisher slosh_state_pub_;
     ros::Publisher slosh_height_pub_;
     ros::Publisher slosh_ax_est_pub_;
     ros::Publisher slosh_ay_est_pub_;
     ros::Publisher slosh_alpha_est_pub_;
+    ros::Publisher slosh_episode_id_pub_;
+    ros::Publisher slosh_height_pred_max_pub_;
+    ros::Publisher slosh_constraint_active_pub_;
+    ros::Publisher slosh_v_des_eff_pub_;
+    ros::Publisher slosh_speed_governor_active_pub_;
     ros::Publisher mpc_solve_ms_pub_;
     ros::Publisher mpc_status_val_pub_;
+
+    // 实验 episode 标记
+    int episode_id_ = 0;
+    ros::Time reached_time_;
+    double reached_debug_duration_ = 5.0;  // 到达终点后继续输出调试信息的时长
+    double last_solve_time_ms_ = 0.0;
+    bool last_solve_ok_ = false;
+    double last_predicted_height_max_ = 0.0;
+    int last_constraint_active_ = -1;  // -1=unknown, 0=inactive, 1=active
 
     // cmd_vel 低通滤波（EMA）
     double filtered_v_ = 0.0;
