@@ -141,6 +141,20 @@ catkin_make 2>&1 | grep "processing catkin package"
 ### 8. 录制实验数据（与第 7 步同时，另开终端）
     cd $(rospack find scout_local_planner)
     ./scripts/record_slosh_experiment.sh 10           # 参数 = 当前 Q_slosh 值
+#### 消融实验
+    rosrun scout_local_planner send_fixed_goal.py \
+    --goal-topic /scout/goal \
+    --frame map \
+    --x 1.00 \
+    --y 1.12 \
+    --yaw 0.0
+
+    rosrun scout_local_planner send_fixed_goal.py \
+    --goal-topic /scout/goal \
+    --frame map \
+    --x 0.5 \
+    --y 1.12 \
+    --yaw 0.0
 
 ### 🔧 关键参数速查（mpc_params_sim.yaml）
 | 参数 | 当前值 | 说明 | 实验时是否需要改 |

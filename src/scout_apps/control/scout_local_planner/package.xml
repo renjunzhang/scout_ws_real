@@ -21,6 +21,7 @@
 
   <!-- ROS 依赖 -->
   <depend>roscpp</depend>
+  <depend>rospy</depend>
   <depend>std_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>

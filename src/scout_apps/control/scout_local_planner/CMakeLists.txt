@@ -61,6 +61,11 @@ target_link_libraries(local_planner_node
   ${catkin_LIBRARIES}
 )
 
+catkin_install_python(PROGRAMS
+  scripts/send_fixed_goal.py
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
 # ============================================================================
 # 安装
 # ============================================================================
@@ -76,4 +81,9 @@ install(DIRECTORY include/${PROJECT_NAME}/
 
 install(DIRECTORY config launch
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
+
+install(PROGRAMS
+  scripts/record_slosh_experiment.sh
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
