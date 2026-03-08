@@ -2,6 +2,117 @@
 
 本文档说明 `test_mpc.launch`、`test_mpc_sim.launch`、`slosh_experiment.launch` 三个启动文件的区别，以及推荐使用场景。
 
+## 实物调参指导
+
+### 先按这个顺序调，不要一开始同时改很多项
+
+1. 先做纯跟踪基线  
+   - 先用 `test_mpc.launch`，或者用 `slosh_experiment.launch` 但保持：
+     - `Q_slosh:=0`
+     - `enable_slosh_box_constraint:=false`
+     - `slosh_speed_governor_enable:=false`
+   - 目的：先把“路径跟踪”调顺，再加 anti-slosh。
+
+2. 先调约束和路径层，再调权重  
+   - 先看：
+     - `vehicle/v_max`
+     - `vehicle/omega_max`
+     - `vehicle/a_max`
+     - `vehicle/alpha_max`
+     - `path_handler/lookahead_distance`
+     - `path_handler/max_lat_accel`
+     - `path_handler/max_tan_accel`
+     - `path_handler/max_tan_decel`
+   - 再看：
+     - `Q_ec / Q_contour / Q_etheta / Q_v`
+     - `R_omega / R_domega / R_a / R_da`
+
+3. 每次只改 1~2 个参数，单次改动控制在 10%~30%  
+   - 不要一边改 `lookahead_distance`，一边改 `Q_ec`，再一边开 `Q_slosh`。
+
+4. 先看基础跟踪，再看终点，再看 anti-slosh  
+   - 基础跟踪没稳之前，不要急着开：
+     - `Q_slosh`
+     - `enable_slosh_box_constraint`
+     - `slosh_speed_governor_enable`
+
+### 实物调参时建议同时观察的话题
+
+```bash
+rostopic echo /mpc_status
+rostopic echo /mpc/status_val
+rostopic echo /cmd_vel
+rostopic echo /local_path
+rostopic echo /scout/global_path
+```
+
+如果在做 anti-slosh 实验，再额外看：
+
+```bash
+rostopic echo /slosh/height_pred_max
+rostopic echo /slosh/v_des_eff
+rostopic echo /slosh/speed_governor_active
+```
+
+### 常见问题 -> 优先调整哪些参数
+
+| 现象 | 优先看哪些参数 | 调整方向 |
+|---|---|---|
+| 跟踪不顺滑、角速度发抖、`cmd_vel.angular.z` 锯齿 | `R_domega`、`R_omega`、`lookahead_distance`、`vehicle/alpha_max`、`vehicle/omega_max` | 先增大 `R_domega`；再适当增大 `R_omega`；必要时增大 `lookahead_distance`（如 `0.5 -> 0.6/0.7`）；若还太激进，降低 `alpha_max` 或 `omega_max` |
+| 车总是扭来扭去、左右摆头 | `Q_ec/Q_contour`、`Q_etheta`、`R_domega`、`lookahead_distance` | 一般是横向纠偏太猛或航向收敛不稳；可适当降低 `Q_ec/Q_contour`，提高 `Q_etheta`，再提高 `R_domega`；`lookahead_distance` 太小也会更容易来回摆 |
+| 速度不快、明显偏保守 | `slosh_speed_governor_enable`、`/slosh/speed_governor_active`、`/slosh/v_des_eff`、`vehicle/v_max`、`path_handler/max_lat_accel`、`path_handler/max_tan_accel`、`Q_v`、`R_a` | 先确认是不是 governor 在限速；如果是基础跟踪调参，先关闭 anti-slosh；若 governor 没介入仍然慢，再逐步增大 `v_max`、`max_lat_accel`、`max_tan_accel`，必要时提高 `Q_v` 或适当减小 `R_a` |
+| 直线还行，但弯道跟不上、切弯、贴墙 | `Q_ec/Q_contour`、`Q_etheta`、`lookahead_distance`、`path_handler/max_lat_accel`、`vehicle/omega_max` | 如果切弯太厉害，先提高 `Q_ec/Q_contour`；如果弯中姿态跟不住，再提高 `Q_etheta`；如果前视太大导致抄近路，可适当减小 `lookahead_distance`；如果响应能力不够，再小步提高 `omega_max` |
+| 终点附近提前停住、很难进 `REACHED` | `goal_capture_distance`、`goal_capture_min_speed`、`goal_tolerance`、`yaw_tolerance` | 先小幅增大 `goal_capture_distance` 或 `goal_capture_min_speed`，避免最后一段速度掉死；仍不进 `REACHED` 时，再适当放宽 `goal_tolerance / yaw_tolerance` |
+| 求解失败、`/mpc/status_val` 频繁为 0 | `vehicle/*` 约束、`path_handler/max_*`、`enable_slosh_box_constraint`、`slosh_speed_governor_enable` | 先降低激进程度：减小 `v_max/omega_max/max_lat_accel/max_tan_accel`；调基础跟踪时先关闭盒约束和 governor；先保证可行性，再追求性能 |
+
+### 当前实物参数的调参建议
+
+当前 `mpc_params.yaml` 是偏保守的实物版本，特点是：
+
+- `vehicle/v_max = 1.0`
+- `vehicle/omega_max = 1.0`
+- `vehicle/a_max = 1.5`
+- `vehicle/alpha_max = 2.5`
+- `path_handler/lookahead_distance = 0.5`
+- `path_handler/max_lat_accel = 1.5`
+
+这套配置的目标是先稳，不是先快。  
+如果你现在的主要问题是“太慢”，建议按这个顺序试：
+
+1. `vehicle/v_max: 1.0 -> 1.2`
+2. `path_handler/max_lat_accel: 1.5 -> 1.8`
+3. `vehicle/omega_max: 1.0 -> 1.2`
+4. `path_handler/max_tan_accel: 1.5 -> 1.8`
+
+如果你现在的主要问题是“扭来扭去”，建议按这个顺序试：
+
+1. `R_domega: 3.0 -> 4.0`
+2. `lookahead_distance: 0.5 -> 0.6`
+3. `Q_etheta: 12.5 -> 14.0`
+4. 若仍过猛，再把 `alpha_max: 2.5 -> 2.0`
+
+### anti-slosh 参数怎么调
+
+只有在基础跟踪已经稳定后，再调这组：
+
+- `Q_slosh`
+- `enable_slosh_box_constraint`
+- `slosh_speed_governor_enable`
+- `slosh_speed_governor_k_eta`
+- `slosh_speed_governor_ay_max_base`
+
+建议顺序：
+
+1. `Q_slosh:=0` 跑通基础跟踪
+2. `Q_slosh:=5` 打开 soft cost
+3. 再打开 `enable_slosh_box_constraint:=true`
+4. 最后再打开 `slosh_speed_governor_enable:=true`
+
+当前工程建议仍然是：
+
+- **实物默认实验点优先用 `Q_slosh:=5`**
+- 不建议一开始就上 `Q_slosh:=10` 并同时打开所有 anti-slosh 机制
+
 ## 三者区别总表
 
 | launch 文件 | 配置文件 | 默认场景 | 默认 `Q_slosh` | 额外实验参数覆盖 | 适用用途 | 推荐程度 |
