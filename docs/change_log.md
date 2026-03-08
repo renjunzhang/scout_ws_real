@@ -82,22 +82,32 @@ catkin_make 2>&1 | grep "processing catkin package"
 ### 8. 录制实验数据（与第 7 步同时，另开终端）
     cd $(rospack find scout_local_planner)
     ./scripts/record_slosh_experiment.sh 10           # 参数 = 当前 Q_slosh 值
-    # bag 输出到 ~/slosh_bags/slosh_Q10_20260306_*.bag
+    # bag 默认输出到 /data/$USER/slosh_bags；若无 /data 则回退到 ~/slosh_bags
     # Ctrl+C 停止录制
 
 ### 🔧 关键参数速查（mpc_params.yaml）
 | 参数 | 当前值 | 说明 | 实验时是否需要改 |
 |------|--------|------|:---:|
 | `mpc/Q_slosh` | 0.0 | 晃动抑制权重（消融变量：0/5/10/20） | ✅ 通过 launch arg 切换 |
+| `mpc/slosh_height_max` | 0.05 | 液面高度阈值 (m) | ✅ 做峰值约束实验时关注 |
+| `mpc/enable_slosh_box_constraint` | false | 第一版液面盒约束代理开关 | ✅ 约束实验时切换 |
 | `mpc/Q_ec` | 30.0 | 横向误差权重 | 一般不改 |
 | `mpc/Q_v` | 8.0 | 速度跟踪权重 | 一般不改 |
 | `vehicle/v_max` | 1.0 | 最大线速度 (m/s) | 按实验场景调 |
 | `vehicle/omega_max` | 1.0 | 最大角速度 (rad/s) | 按实验场景调 |
+| `path_handler/goal_capture_distance` | 0.50 | 终点捕获区距离 (m) | 终点不收敛时重点看 |
+| `path_handler/goal_capture_min_speed` | 0.08 | 捕获区最低参考速度 (m/s) | 终点不收敛时重点看 |
 | `slosh/container_radius` | 0.15 | 容器半径 (m) | ✅ 按实物量测 |
 | `slosh/liquid_height` | 0.20 | 液面高度 (m) | ✅ 按实物量测 |
 | `slosh/liquid_density` | 1000.0 | 液体密度 (kg/m³) | 水=1000 |
 | `slosh/damping_ratio` | 0.05 | 阻尼比 | 按容器材质调 |
 | `slosh_estimator/accel_filter_alpha` | 0.3 | EMA 滤波系数 (0,1] | 实物抖动大可降低 |
+| `slosh_speed_governor/enable` | false | 残余晃动感知速度治理开关 | ✅ 阶段 4 实验切换 |
+| `slosh_speed_governor/k_eta` | 2.5 | 液面高度比例缩放系数 | governor 调参核心项 |
+| `slosh_speed_governor/eta_deadband` | 0.3 | 死区阈值 | governor 调参核心项 |
+| `slosh_speed_governor/eta_exit_ratio` | 0.2 | 退出阈值（滞回） | governor 稳定性关键项 |
+| `slosh_speed_governor/preview_distance` | 1.0 | 前方曲率预览长度 (m) | governor 调参核心项 |
+| `slosh_speed_governor/min_active_steps` | 10 | 最少保持周期数 | governor 稳定性关键项 |
 
 ---
 
@@ -187,12 +197,34 @@ catkin_make 2>&1 | grep "processing catkin package"
 | 参数 | 当前值 | 说明 | 实验时是否需要改 |
 |------|--------|------|:---:|
 | `mpc/Q_slosh` | 0.0 | 晃动抑制权重（消融变量：0/5/10/20） | ✅ 通过 launch arg 切换 |
+| `mpc/slosh_height_max` | 0.05 | 液面高度阈值 (m) | ✅ 做峰值约束实验时关注 |
+| `mpc/enable_slosh_box_constraint` | false | 第一版液面盒约束代理开关 | ✅ 约束实验时切换 |
 | `vehicle/v_max` | 2.0 | 最大线速度 (m/s) | 仿真可保持较大 |
 | `vehicle/omega_max` | 3.5 | 最大角速度 (rad/s) | 仿真可保持较大 |
+| `path_handler/goal_capture_distance` | 0.45 | 终点捕获区距离 (m) | 终点不收敛时重点看 |
+| `path_handler/goal_capture_min_speed` | 0.10 | 捕获区最低参考速度 (m/s) | 终点不收敛时重点看 |
 | `slosh/container_radius` | 0.15 | 容器半径 (m) | ✅ 按实验设定 |
 | `slosh/liquid_height` | 0.20 | 液面高度 (m) | ✅ 按实验设定 |
+| `slosh_speed_governor/enable` | false | 残余晃动感知速度治理开关 | ✅ 阶段 4 实验切换 |
+| `slosh_speed_governor/k_eta` | 2.5 | 液面高度比例缩放系数 | governor 调参核心项 |
+| `slosh_speed_governor/eta_deadband` | 0.3 | 死区阈值 | governor 调参核心项 |
+| `slosh_speed_governor/eta_exit_ratio` | 0.2 | 退出阈值（滞回） | governor 稳定性关键项 |
+| `slosh_speed_governor/preview_distance` | 1.0 | 前方曲率预览长度 (m) | governor 调参核心项 |
+| `slosh_speed_governor/min_active_steps` | 10 | 最少保持周期数 | governor 稳定性关键项 |
 
-
+### 9.实验数据分析
+  结束实验后，使用 extract_slosh_metrics.py 提取晃动指标（需安装 rosbag；脚本本身只依赖 Python 标准库）
+  只提取单个 bag：
+  python3 src/scout_apps/control/scout_local_planner/scripts/extract_slosh_metrics.py \
+    /data/a/slosh_bags/slosh_Q5_20260307_160207.bag \
+    /data/a/slosh_bags/slosh_Q10_20260307_160423.bag \
+    --per-episode \
+    --csv /tmp/slosh_metrics.csv
+  如果要扫整个目录：
+  python3 src/scout_apps/control/scout_local_planner/scripts/extract_slosh_metrics.py \
+    /data/a/slosh_bags \
+    --per-episode \
+    --csv /tmp/slosh_metrics.csv
 
     
 

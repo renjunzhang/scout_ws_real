@@ -63,6 +63,7 @@ target_link_libraries(local_planner_node
 
 catkin_install_python(PROGRAMS
   scripts/send_fixed_goal.py
+  scripts/extract_slosh_metrics.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
