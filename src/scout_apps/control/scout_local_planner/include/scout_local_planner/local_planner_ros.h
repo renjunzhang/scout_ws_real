@@ -15,6 +15,7 @@
 #include <ros/ros.h>
 #include <nav_msgs/Path.h>
 #include <nav_msgs/Odometry.h>
+#include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <std_msgs/String.h>
@@ -48,6 +49,7 @@ private:
     // ====== 回调函数 ======
     void globalPathCallback(const nav_msgs::Path::ConstPtr& msg);
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg);
+    void imuCallback(const sensor_msgs::Imu::ConstPtr& msg);
     
     // ====== 控制循环 ======
     void controlLoop(const ros::TimerEvent& event);
@@ -73,6 +75,7 @@ private:
     ros::NodeHandle nh_;
     ros::Subscriber global_path_sub_;
     ros::Subscriber odom_sub_;
+    ros::Subscriber imu_sub_;
     ros::Publisher cmd_vel_pub_;
     ros::Publisher local_path_pub_;
     ros::Publisher smoothed_path_pub_;
@@ -134,9 +137,25 @@ private:
     ros::Time current_odom_time_;     // 当前 odom 时间戳
     bool has_prev_odom_ = false;
     double ax_filtered_ = 0.0;
-    double ay_filtered_ = 0.0;      // 横向 ≈ v * omega（离心加速度近似）
-    double alpha_filtered_ = 0.0;
+    double ay_filtered_ = 0.0;      // odom 横向估计：v * omega（离心加速度近似）
+    double alpha_filtered_ = 0.0;   // odom 角加速度估计
+    double ay_est_used_ = 0.0;      // 实际注入 slosh 模型的横向加速度
+    double alpha_est_used_ = 0.0;   // 实际注入 slosh 模型的角加速度
     double accel_filter_alpha_ = 0.3;  // EMA 滤波系数
+
+    // IMU 接口预留（阶段 7）
+    bool use_imu_lateral_accel_ = false;
+    bool use_imu_yaw_rate_ = false;
+    bool use_imu_alpha_z_ = false;
+    std::string imu_topic_ = "/imu/data";
+    double imu_filter_alpha_ = 0.3;
+    bool has_imu_ = false;
+    bool has_prev_imu_ = false;
+    ros::Time prev_imu_time_;
+    double imu_ay_filtered_ = 0.0;
+    double imu_omega_z_filtered_ = 0.0;
+    double imu_alpha_filtered_ = 0.0;
+    double prev_imu_omega_z_ = 0.0;
 
     // slosh-aware 速度治理（阶段 4）
     bool slosh_speed_governor_enable_ = false;

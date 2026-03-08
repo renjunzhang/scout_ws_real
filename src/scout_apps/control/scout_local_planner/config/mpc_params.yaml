@@ -114,6 +114,11 @@ slosh:
 # =============================================================================
 slosh_estimator:
   accel_filter_alpha: 0.3    # EMA 滤波系数 (0,1]，越小越平滑
+  use_imu_lateral_accel: false  # 是否使用 IMU 横向加速度替代 v*omega
+  use_imu_yaw_rate: false       # 是否使用 IMU 角速度 z 替代 odom omega
+  use_imu_alpha_z: false        # 是否使用 IMU 角速度差分得到 alpha_z
+  imu_topic: /imu/data          # IMU 话题
+  imu_filter_alpha: 0.3         # IMU 数据 EMA 滤波系数
 
 # =============================================================================
 # 安全退化策略（求解不可行时）

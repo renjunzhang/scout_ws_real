@@ -8,19 +8,93 @@
 
 ## 0) 当前系统已观测话题
 
-### 实车环境（2026-01-29）
+### 实车环境完整话题列表（2026-03-08，MBF + MPC + slosh）
+
+#### 核心导航与控制
+
+| 话题 | 说明 |
+|------|------|
+| `/cmd_vel` | 最终下发到底盘的速度指令 |
+| `/local_path` | MPC 局部轨迹可视化 |
+| `/mpc/solve_ms` | MPC 单次求解耗时 |
+| `/mpc/status_val` | MPC 求解状态（1=成功，0=失败） |
+| `/mpc_status` | MPC 状态机状态 |
+| `/odom` | 里程计 |
+| `/scout/current_goal` | 当前 goal 回显 |
+| `/scout/global_path` | 全局路径输入 |
+| `/scout/global_path_smooth` | 平滑/重采样后的路径可视化 |
+| `/scout/goal` | 导航目标输入 |
+| `/scout/move_base_cmd_vel` | MBF/move_base 旁路速度输出（不直接控车） |
+
+#### 液体晃动与实验调试
+
+| 话题 | 说明 |
+|------|------|
+| `/slosh/alpha_est` | 角加速度估计 |
+| `/slosh/ax_est` | 纵向加速度估计 |
+| `/slosh/ay_est` | 横向加速度估计 |
+| `/slosh/constraint_active` | 预测峰值是否越过阈值 |
+| `/slosh/episode_id` | 当前实验 episode 编号 |
+| `/slosh/height` | 实际液面高度估计 |
+| `/slosh/height_pred_max` | 预测域内最大液面高度 |
+| `/slosh/speed_governor_active` | 速度治理是否介入 |
+| `/slosh/state` | slosh 状态 `[eta_x, eta_x_dot, eta_y, eta_y_dot]` |
+| `/slosh/v_des_eff` | governor 生效后的参考速度 |
+
+#### MBF 与 costmap
+
+| 话题 | 说明 |
+|------|------|
+| `/scout/mbf_costmap_nav/GlobalPlanner/plan` | MBF 全局规划插件原始输出路径 |
+| `/scout/mbf_costmap_nav/GlobalPlanner/potential` | GlobalPlanner 势场 |
+| `/scout/mbf_costmap_nav/current_goal` | MBF 当前目标 |
+| `/scout/mbf_costmap_nav/get_path/*` | `GetPath` action 相关话题 |
+| `/scout/mbf_costmap_nav/exe_path/*` | `ExePath` action 相关话题（当前主要作内部话题保留） |
+| `/scout/mbf_costmap_nav/move_base/*` | `move_base` action 兼容接口 |
+| `/scout/mbf_costmap_nav/recovery/*` | recovery action 兼容接口 |
+| `/scout/mbf_costmap_nav/global_costmap/costmap` | 全局代价地图 |
+| `/scout/mbf_costmap_nav/global_costmap/costmap_updates` | 全局代价地图增量更新 |
+| `/scout/mbf_costmap_nav/global_costmap/footprint` | 全局代价地图足迹 |
+| `/scout/mbf_costmap_nav/local_costmap/costmap` | 局部代价地图 |
+| `/scout/mbf_costmap_nav/local_costmap/costmap_updates` | 局部代价地图增量更新 |
+| `/scout/mbf_costmap_nav/local_costmap/footprint` | 局部代价地图足迹 |
+| `/scout/mbf_costmap_nav/*/parameter_descriptions` | MBF/GlobalPlanner/costmap 动态参数描述 |
+| `/scout/mbf_costmap_nav/*/parameter_updates` | MBF/GlobalPlanner/costmap 动态参数更新 |
+
+#### 传感器与定位/建图
+
+| 话题 | 说明 |
+|------|------|
+| `/clicked_point` | RViz 点击点 |
+| `/extended_laser_scan` | 扩展激光扫描 |
+| `/initialpose` | 初始位姿输入 |
+| `/landmark_poses_list` | Cartographer 地标可视化 |
+| `/map` | 地图 |
+| `/map_updates` | 地图增量更新 |
+| `/output_paths` | 定位/建图输出路径集合 |
+| `/raw_data` | 原始雷达数据 |
+| `/scan_front` | 前向激光扫描 |
+| `/scan_front_filtered` | 过滤后的前向激光扫描 |
+| `/scan_matched_points2` | 匹配点云 |
+| `/submap_list` | 子图列表 |
+| `/trajectory_node_list` | 轨迹节点列表 |
+
+#### 底盘/BMS/系统
 
 | 话题 | 说明 |
 |------|------|
 | `/BMS_status` | 电池状态 |
-| `/cmd_vel` | 速度控制 |
-| `/odom` | 里程计 |
+| `/constraint_list` | Cartographer 约束列表可视化 |
+| `/diagnostics` | 诊断信息 |
 | `/rosout` | ROS 日志 |
 | `/rosout_agg` | ROS 日志聚合 |
-| `/rs_status` | 底盘状态（类型待确认） |
+| `/rs_status` | 底盘运行状态 |
 | `/scout_light_control` | 灯光控制 |
 | `/scout_status` | 底盘状态 |
-| `/tf` | 坐标变换 |
+| `/sick_safetyscanners_front/parameter_descriptions` | 雷达动态参数描述 |
+| `/sick_safetyscanners_front/parameter_updates` | 雷达动态参数更新 |
+| `/tf` | 动态坐标变换 |
+| `/tf_static` | 静态坐标变换 |
 
 ### 仿真环境完整话题列表（2026-02-01）
 

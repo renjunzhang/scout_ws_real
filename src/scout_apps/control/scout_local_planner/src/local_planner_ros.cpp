@@ -104,6 +104,15 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
                                       &LocalPlannerROS::globalPathCallback, this);
     odom_sub_ = nh_.subscribe("odom", 1, 
                                &LocalPlannerROS::odomCallback, this);
+    if (use_imu_lateral_accel_ || use_imu_yaw_rate_ || use_imu_alpha_z_) {
+        imu_sub_ = nh_.subscribe(imu_topic_, 10,
+                                 &LocalPlannerROS::imuCallback, this);
+        ROS_INFO("[LocalPlannerROS] IMU interface enabled: topic=%s, ay=%s, omega_z=%s, alpha_z=%s",
+                 imu_topic_.c_str(),
+                 use_imu_lateral_accel_ ? "on" : "off",
+                 use_imu_yaw_rate_ ? "on" : "off",
+                 use_imu_alpha_z_ ? "on" : "off");
+    }
     
     // 发布者
     cmd_vel_pub_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 1);
@@ -185,6 +194,11 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
 
     // 加速度估计 EMA 滤波系数
     pnh.param("slosh_estimator/accel_filter_alpha", accel_filter_alpha_, 0.3);
+    pnh.param("slosh_estimator/use_imu_lateral_accel", use_imu_lateral_accel_, false);
+    pnh.param("slosh_estimator/use_imu_yaw_rate", use_imu_yaw_rate_, false);
+    pnh.param("slosh_estimator/use_imu_alpha_z", use_imu_alpha_z_, false);
+    pnh.param("slosh_estimator/imu_topic", imu_topic_, std::string("/imu/data"));
+    pnh.param("slosh_estimator/imu_filter_alpha", imu_filter_alpha_, 0.3);
 
     // 车辆参数
     pnh.param("vehicle/v_max", vehicle_params_.v_max, 1.0);
@@ -295,6 +309,45 @@ void LocalPlannerROS::odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
     
     // 更新 PathHandler 的机器人状态（关键！）
     path_handler_.updateRobotState(current_pose_, current_v_, current_omega_);
+}
+
+void LocalPlannerROS::imuCallback(const sensor_msgs::Imu::ConstPtr& msg) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    const ros::Time stamp = msg->header.stamp.isZero() ? ros::Time::now() : msg->header.stamp;
+
+    const double ay_raw = msg->linear_acceleration.y;
+    const double omega_z_raw = msg->angular_velocity.z;
+
+    if (!has_imu_) {
+        imu_ay_filtered_ = ay_raw;
+        imu_omega_z_filtered_ = omega_z_raw;
+        imu_alpha_filtered_ = 0.0;
+        prev_imu_omega_z_ = omega_z_raw;
+        prev_imu_time_ = stamp;
+        has_imu_ = true;
+        has_prev_imu_ = true;
+        return;
+    }
+
+    imu_ay_filtered_ =
+        imu_filter_alpha_ * ay_raw + (1.0 - imu_filter_alpha_) * imu_ay_filtered_;
+    imu_omega_z_filtered_ =
+        imu_filter_alpha_ * omega_z_raw + (1.0 - imu_filter_alpha_) * imu_omega_z_filtered_;
+
+    if (has_prev_imu_) {
+        const double dt_imu = (stamp - prev_imu_time_).toSec();
+        if (dt_imu > 1e-4 && dt_imu < 1.0) {
+            const double alpha_raw = (omega_z_raw - prev_imu_omega_z_) / dt_imu;
+            imu_alpha_filtered_ =
+                imu_filter_alpha_ * alpha_raw + (1.0 - imu_filter_alpha_) * imu_alpha_filtered_;
+        }
+    }
+
+    prev_imu_omega_z_ = omega_z_raw;
+    prev_imu_time_ = stamp;
+    has_imu_ = true;
+    has_prev_imu_ = true;
 }
 
 void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
@@ -639,11 +692,25 @@ void LocalPlannerROS::updateSloshEstimate() {
             ax_filtered_ = accel_filter_alpha_ * ax_raw + (1.0 - accel_filter_alpha_) * ax_filtered_;
             ay_filtered_ = accel_filter_alpha_ * ay_raw + (1.0 - accel_filter_alpha_) * ay_filtered_;
             alpha_filtered_ = accel_filter_alpha_ * alpha_raw + (1.0 - accel_filter_alpha_) * alpha_filtered_;
-
-            // 注意：当 offset_x/y=0 时，这里的更新与 DiffDriveModel 的 slosh 输入映射一致。
-            slosh_integration_.update(ax_filtered_, ay_filtered_, current_omega_, alpha_filtered_);
         }
     }
+
+    const bool use_imu_ay = use_imu_lateral_accel_ && has_imu_;
+    const bool use_imu_omega = use_imu_yaw_rate_ && has_imu_;
+    const bool use_imu_alpha = use_imu_alpha_z_ && has_imu_ && has_prev_imu_;
+
+    if ((use_imu_lateral_accel_ || use_imu_yaw_rate_ || use_imu_alpha_z_) && !has_imu_) {
+        ROS_WARN_THROTTLE(2.0, "[LocalPlannerROS] IMU input requested but no IMU message received on %s, fallback to odom-based slosh estimate",
+                          imu_topic_.c_str());
+    }
+
+    ay_est_used_ = use_imu_ay ? imu_ay_filtered_ : ay_filtered_;
+    const double omega_for_slosh = use_imu_omega ? imu_omega_z_filtered_ : current_omega_;
+    alpha_est_used_ = use_imu_alpha ? imu_alpha_filtered_ : alpha_filtered_;
+
+    // 当 offset_x/y=0 时，odom fallback 与 DiffDriveModel 的 slosh 输入映射一致；
+    // 接入 IMU 后，优先使用实物测得的横向激励/角运动信息。
+    slosh_integration_.update(ax_filtered_, ay_est_used_, omega_for_slosh, alpha_est_used_);
 
     prev_v_ = current_v_;
     prev_omega_ = current_omega_;
@@ -936,12 +1003,12 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok) {
     }
     if (slosh_ay_est_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32 msg;
-        msg.data = static_cast<float>(ay_filtered_);
+        msg.data = static_cast<float>(ay_est_used_);
         slosh_ay_est_pub_.publish(msg);
     }
     if (slosh_alpha_est_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32 msg;
-        msg.data = static_cast<float>(alpha_filtered_);
+        msg.data = static_cast<float>(alpha_est_used_);
         slosh_alpha_est_pub_.publish(msg);
     }
 }

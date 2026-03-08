@@ -68,6 +68,19 @@ roslaunch scout_local_planner slosh_experiment.launch \
   slosh_speed_governor_enable:=true
 ```
 
+### 5. 实物 IMU 预留实验
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  Q_slosh:=5 \
+  enable_slosh_box_constraint:=true \
+  slosh_speed_governor_enable:=true \
+  slosh_use_imu_lateral_accel:=true \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_alpha_z:=true \
+  slosh_imu_topic:=/imu/data
+```
+
 ## `slosh_experiment.launch` 常用参数
 
 | 参数 | 作用 | 常用值 |
@@ -83,10 +96,15 @@ roslaunch scout_local_planner slosh_experiment.launch \
 | `slosh_speed_governor_ay_max_base` | 横向加速度预算 | `0.6`（实验常用起点） |
 | `slosh_speed_governor_v_des_min` | 调速后的最低参考速度 | `0.2` |
 | `slosh_speed_governor_preview_distance` | 前方曲率预览长度 | `1.0` |
+| `slosh_use_imu_lateral_accel` | 是否用 IMU `linear_acceleration.y` 替代 `v*omega` | `true / false` |
+| `slosh_use_imu_yaw_rate` | 是否用 IMU `angular_velocity.z` 替代 odom `omega` | `true / false` |
+| `slosh_use_imu_alpha_z` | 是否用 IMU 角速度差分替代 `alpha_z` | `true / false` |
+| `slosh_imu_topic` | IMU 输入话题 | `/imu/data` |
+| `slosh_imu_filter_alpha` | IMU 数据 EMA 滤波系数 | `0.3` |
 
 ## 实际使用建议
 
 - 如果你只是想确认 MPC 能不能跟踪路径，不要先上 `slosh_experiment.launch`。
 - 如果你要录 bag、做 `Q=0/5/10` 对比，直接用 `slosh_experiment.launch`，不要混用 `test_mpc*.launch`。
 - `test_mpc_sim.launch` 当前默认 `Q_slosh=5.0`，这更像“带一定 anti-slosh 倾向的仿真默认入口”，不是严格的消融基线。
-
+- 如果要验证阶段 7，优先只切换 `slosh_use_imu_*` 和 `slosh_imu_topic`，不要同时再改一组 governor 参数。

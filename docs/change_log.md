@@ -222,9 +222,9 @@ catkin_make 2>&1 | grep "processing catkin package"
     --csv /tmp/slosh_metrics.csv
   如果要扫整个目录：
   python3 src/scout_apps/control/scout_local_planner/scripts/extract_slosh_metrics.py \
-    /data/a/slosh_bags \
+    /data/a/slosh_bags/0308 \
     --per-episode \
-    --csv /tmp/slosh_metrics.csv
+    --csv /data/a/slosh_bags/0308_data_processing/slosh_metrics.csv
 
     
 

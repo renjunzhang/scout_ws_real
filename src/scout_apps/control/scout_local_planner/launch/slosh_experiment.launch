@@ -33,6 +33,11 @@
   <arg name="slosh_speed_governor_eta_exit_ratio" default="0.2" doc="速度治理退出阈值（滞回）"/>
   <arg name="slosh_speed_governor_preview_distance" default="1.0" doc="速度治理前方曲率预览长度"/>
   <arg name="slosh_speed_governor_min_active_steps" default="10" doc="速度治理最少保持周期数"/>
+  <arg name="slosh_use_imu_lateral_accel" default="false" doc="是否使用 IMU 横向加速度替代 v*omega"/>
+  <arg name="slosh_use_imu_yaw_rate" default="false" doc="是否使用 IMU 角速度 z 替代 odom omega"/>
+  <arg name="slosh_use_imu_alpha_z" default="false" doc="是否使用 IMU 角速度差分替代 alpha_z"/>
+  <arg name="slosh_imu_topic" default="/imu/data" doc="IMU 话题"/>
+  <arg name="slosh_imu_filter_alpha" default="0.3" doc="IMU 数据 EMA 滤波系数"/>
 
   <!-- 根据 sim 选择参数文件 -->
   <arg name="config_file" default="$(eval 'mpc_params_sim.yaml' if arg('sim') == 'true' else 'mpc_params.yaml')"/>
@@ -61,6 +66,11 @@
     <param name="slosh_speed_governor/eta_exit_ratio" value="$(arg slosh_speed_governor_eta_exit_ratio)"/>
     <param name="slosh_speed_governor/preview_distance" value="$(arg slosh_speed_governor_preview_distance)"/>
     <param name="slosh_speed_governor/min_active_steps" value="$(arg slosh_speed_governor_min_active_steps)"/>
+    <param name="slosh_estimator/use_imu_lateral_accel" value="$(arg slosh_use_imu_lateral_accel)"/>
+    <param name="slosh_estimator/use_imu_yaw_rate" value="$(arg slosh_use_imu_yaw_rate)"/>
+    <param name="slosh_estimator/use_imu_alpha_z" value="$(arg slosh_use_imu_alpha_z)"/>
+    <param name="slosh_estimator/imu_topic" value="$(arg slosh_imu_topic)"/>
+    <param name="slosh_estimator/imu_filter_alpha" value="$(arg slosh_imu_filter_alpha)"/>
 
     <!-- 话题 remap -->
     <remap from="global_path" to="/scout/global_path"/>
