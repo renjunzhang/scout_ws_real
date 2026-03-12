@@ -4,6 +4,10 @@
 
 ## 实物调参指导
 
+> 当前实物默认配置已关闭输出端 EMA：
+> `filter/alpha_v=1.0`、`filter/alpha_omega=1.0`、`filter/kappa_boost=0.0`。
+> 后续基础跟踪调参都默认基于“无额外输出低通”的执行链进行。
+
 ### 先按这个顺序调，不要一开始同时改很多项
 
 1. 先做纯跟踪基线  
@@ -59,7 +63,7 @@ rostopic echo /slosh/speed_governor_active
 | 现象 | 优先看哪些参数 | 调整方向 |
 |---|---|---|
 | 跟踪不顺滑、角速度发抖、`cmd_vel.angular.z` 锯齿 | `R_domega`、`R_omega`、`lookahead_distance`、`vehicle/alpha_max`、`vehicle/omega_max` | 先增大 `R_domega`；再适当增大 `R_omega`；必要时增大 `lookahead_distance`（如 `0.5 -> 0.6/0.7`）；若还太激进，降低 `alpha_max` 或 `omega_max` |
-| 车总是扭来扭去、左右摆头 | `Q_ec/Q_contour`、`Q_etheta`、`R_domega`、`lookahead_distance` | 一般是横向纠偏太猛或航向收敛不稳；可适当降低 `Q_ec/Q_contour`，提高 `Q_etheta`，再提高 `R_domega`；`lookahead_distance` 太小也会更容易来回摆 |
+| 车总是扭来扭去、左右摆头 | `R_omega`、`R_domega`、`lookahead_distance`、`Q_ec/Q_contour`、`Q_etheta` | 先增大 `R_omega/R_domega` 和 `lookahead_distance`，优先压低过激转向；若仍明显摆头，再适当降低 `Q_ec/Q_contour` 和 `Q_etheta`，减少“立刻贴回路径”的冲动 |
 | 速度不快、明显偏保守 | `slosh_speed_governor_enable`、`/slosh/speed_governor_active`、`/slosh/v_des_eff`、`vehicle/v_max`、`path_handler/max_lat_accel`、`path_handler/max_tan_accel`、`Q_v`、`R_a` | 先确认是不是 governor 在限速；如果是基础跟踪调参，先关闭 anti-slosh；若 governor 没介入仍然慢，再逐步增大 `v_max`、`max_lat_accel`、`max_tan_accel`，必要时提高 `Q_v` 或适当减小 `R_a` |
 | 直线还行，但弯道跟不上、切弯、贴墙 | `Q_ec/Q_contour`、`Q_etheta`、`lookahead_distance`、`path_handler/max_lat_accel`、`vehicle/omega_max` | 如果切弯太厉害，先提高 `Q_ec/Q_contour`；如果弯中姿态跟不住，再提高 `Q_etheta`；如果前视太大导致抄近路，可适当减小 `lookahead_distance`；如果响应能力不够，再小步提高 `omega_max` |
 | 终点附近提前停住、很难进 `REACHED` | `goal_capture_distance`、`goal_capture_min_speed`、`goal_tolerance`、`yaw_tolerance` | 先小幅增大 `goal_capture_distance` 或 `goal_capture_min_speed`，避免最后一段速度掉死；仍不进 `REACHED` 时，再适当放宽 `goal_tolerance / yaw_tolerance` |
@@ -86,10 +90,10 @@ rostopic echo /slosh/speed_governor_active
 
 如果你现在的主要问题是“扭来扭去”，建议按这个顺序试：
 
-1. `R_domega: 3.0 -> 4.0`
-2. `lookahead_distance: 0.5 -> 0.6`
-3. `Q_etheta: 12.5 -> 14.0`
-4. 若仍过猛，再把 `alpha_max: 2.5 -> 2.0`
+1. `R_omega: 1.0 -> 2.0`
+2. `R_domega: 3.0 -> 5.0`
+3. `lookahead_distance: 0.5 -> 0.6`
+4. 若仍明显摆头，再尝试 `Q_ec: 30.0 -> 20.0`、`Q_etheta: 12.5 -> 8.0`
 
 ### anti-slosh 参数怎么调
 
