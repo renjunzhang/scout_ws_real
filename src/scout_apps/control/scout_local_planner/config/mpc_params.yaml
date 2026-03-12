@@ -11,11 +11,11 @@ mpc:
   # 状态权重（Frenet 误差）
   # 注：change #11 修复了 OSQP P 矩阵 2x 系数，此处权重值已做相应调整
   Q_el: 0.5                # 纵向误差权重（沿路径方向）
-  Q_ec: 30.0               # 横向误差权重（更贴路径）
-  Q_etheta: 12.5           # 航向误差权重 - 减少直线摇摆
-  Q_v: 8.0                 # 速度跟踪权重（修复后 v_ref 目标正确）
+  Q_ec: 36.0               # 横向误差权重（更贴路径）
+  Q_etheta: 10           # 航向误差权重 - 减少直线摇摆
+  Q_v: 9.0                 # 速度跟踪权重（修复后 v_ref 目标正确）
   use_contour_lag: true    # 启用 contour + lag 误差结构
-  Q_contour: 20.0          # contour（横向误差）权重
+  Q_contour: 28.0          # contour（横向误差）权重
   Q_lag: 0.5               # lag（纵向误差）权重
   enable_omega_ff: true    # 启用角速度前馈
   Q_omega_ff: 2.5          # 角速度前馈权重（修复后 omega_ref 目标正确）
@@ -26,11 +26,11 @@ mpc:
   
   # 控制权重
   R_a: 0.4                 # 加速度权重
-  R_omega: 1.0             # 角速度权重
+  R_omega: 2.0             # 角速度权重
   
   # 控制变化率权重（平滑控制）
   R_da: 0.5                # 加速度变化权重——配合 jerk 约束提高
-  R_domega: 3.0            # 角速度变化权重 - 适当降低以提高响应
+  R_domega: 5.0            # 角速度变化权重 - 适当降低以提高响应
 
   # 控制变化率约束（硬约束）
   constrain_omega_rate: true
@@ -46,7 +46,7 @@ mpc:
 # =============================================================================
 vehicle:
   # 速度约束
-  v_max: 1.0               # 最大线速度 (m/s) - 实物保守，降低以减少刹车时打滑
+  v_max: 3.0               # 最大线速度 (m/s) - 实物保守，降低以减少刹车时打滑
   v_min: 0.0               # 最小线速度 (m/s)，禁用倒车
   omega_max: 1.0           # 最大角速度 (rad/s) - 降低以减轻定位漂移
   
@@ -63,8 +63,8 @@ vehicle:
 # 路径处理参数
 # =============================================================================
 path_handler:
-  lookahead_distance: 0.5  # 前视距离 (m) - 降低以减少切弯
-  goal_tolerance: 0.25     # 到达目标位置容差 (m) - 实物放宽
+  lookahead_distance: 0.60  # 前视距离 (m) - 降低以减少切弯
+  goal_tolerance: 0.15     # 到达目标位置容差 (m) - 实物放宽
   yaw_tolerance: 0.2       # 到达目标航向容差 (rad) - 进一步放宽
   goal_capture_distance: 0.50   # 终点捕获区；进入后维持最低参考速度，避免提前停死
   goal_capture_min_speed: 0.08  # 捕获区最低参考速度 (m/s)
@@ -76,7 +76,7 @@ path_handler:
   window_forward: 48                   # 样条窗口向前额外点数
   s_jump_threshold: 0.8               # 弧长跳变阈值 (m) - 增大以容忍定位抖动
   resample_spacing: 0.05              # 路径重采样间隔 (m)
-  max_lat_accel: 1.5                  # 最大横向加速度 (m/s^2) - 降低以减少激进转弯
+  max_lat_accel: 2.0                  # 最大横向加速度 (m/s^2) - 降低以减少激进转弯
   min_ref_speed: 0.0                  # 参考速度下限 (m/s)
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
