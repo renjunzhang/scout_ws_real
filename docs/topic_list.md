@@ -249,3 +249,292 @@
 |------|------|--------|--------|------|
 | `/rosout` | `rosgraph_msgs/Log` | ROS core | 工具节点 | 日志输出 |
 | `/rosout_agg` | `rosgraph_msgs/Log` | ROS core | 工具节点 | 日志聚合 |
+
+
+## 8) 数据流链路详解
+
+### 8.1 全局路径 → MPC 控制指令 完整链路
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  全局规划器（move_base / MBF / simple_global_planner）              │
+│  输出: nav_msgs::Path（几何路径）                                   │
+│  常见信息: x, y, yaw                                                │
+│  不直接包含: vx, vy, omega, 时间参数化轨迹                         │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │
+                           │ /scout/global_path (nav_msgs::Path)
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  LocalPlannerROS::globalPathCallback()                              │
+│  → path_handler_.updateGlobalPath(path, v_des)                      │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  PathHandler（scout_local_planner 内部类）                          │
+│                                                                     │
+│  ① updateGlobalPath(path, v_des)                                    │
+│     - 缓存原始 global_path（通常是 map 系）                         │
+│     - 做路径相似性检测，必要时设置 reset_hint                       │
+│     - 可选重采样：resamplePath()                                    │
+│     - 构建 global_spline_（全局样条）                               │
+│     - 调用 updateSpeedProfile(v_des) 生成 v(s)                      │
+│                                                                     │
+│  ② updateSpeedProfile(v_des)                                        │
+│     - 基于 global_spline_ 生成速度曲线 v(s)                         │
+│     - 主要步骤：                                                    │
+│       1) 曲率限速: v <= sqrt(max_lat_accel / |kappa|)              │
+│       2) 前向加速扫描                                               │
+│       3) 反向减速扫描                                               │
+│     - 末端会按 goal_speed 收尾                                      │
+│     - 注意：goal_capture_min_speed 不在这里生效                     │
+│                                                                     │
+│  ③ getReferencePoints(N, dt, v_des, ref_points)                     │
+│     - 只把“局部窗口”从 global_path frame 变换到 base_link           │
+│     - 拟合 local_spline_（局部样条）                                │
+│     - 若 time_parameterize=true：                                   │
+│       用 s_progress + v_ref*dt 推进参考序列                         │
+│     - 终点捕获区在这里补最低参考速度：                              │
+│       goal_capture_min_speed                                        │
+│     - 输出 vector<ReferencePoint>                                   │
+│                                                                     │
+│  ④ getFrenetState(frenet)                                           │
+│     - 在 base_link 下用 local_spline_ 投影                          │
+│     - 输出 e_l / e_c / e_theta                                      │
+│                                                                     │
+│  ⑤ getMaxCurvatureAhead(lookahead_dist, preview_dist)               │
+│     - 基于 s_global_ 和 global_spline_                              │
+│     - 返回前方窗口最大 |kappa|                                       │
+│                                                                     │
+│  ⑥ isGoalReached() / getGoalDistance()                              │
+│     - 在 base_link 下检查终点距离                                   │
+│     - yaw 使用路径末端切线方向，不是直接用 goal.pose.orientation    │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │
+                           │ ref_points[0..N-1], frenet
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│  LocalPlannerROS::controlLoop()                                     │
+│                                                                     │
+│  ① updateSloshEstimate()                                            │
+│     - odom 差分估计 ax / alpha                                      │
+│     - ay 默认用 v * omega 近似                                      │
+│     - 若阶段 7 IMU 参数启用且有数据，可切到 IMU ay / omega / alpha  │
+│                                                                     │
+│  ② speed governor（外环启发式速度治理）                              │
+│     - 基础速度目标: v_des_cmd = vehicle.v_max * 0.8                 │
+│     - 输入: slosh_height, predicted_height_max, kappa_preview       │
+│     - 输出: v_des_eff                                                │
+│     - 若激活，不是直接改 refs[k]，而是重新调用                      │
+│       getReferencePoints(..., v_des_eff, ...)                        │
+│                                                                     │
+│  ③ 构建 MPC 初始状态 x0                                             │
+│     x0 = [e_l, e_c, e_theta, v,                                     │
+│           eta_x, eta_x_dot, eta_y, eta_y_dot]                        │
+│                                                                     │
+│  ④ MPCSolver::solve(x0, ref_points)                                 │
+│     - 线性化动力学                                                  │
+│     - 构建 QP                                                       │
+│     - OSQP 求解                                                     │
+│     - 提取 v_cmd / omega_cmd / x_predicted / u_optimal              │
+│                                                                     │
+│  ⑤ publishCmdVel(v_cmd, omega_cmd)                                  │
+│     - 执行端做 EMA 低通                                              │
+│     - 发布 /cmd_vel                                                 │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │
+                           │ /cmd_vel
+                           ▼
+                      底盘驱动执行
+```
+
+### 8.2 MBF 相关的话题前后关系
+
+如果你用的是 `mbf_global.launch` / `mbf_global_sim.launch`，当前链路是：
+
+- 输入 goal：
+  - `/scout/goal`
+- MBF 内部 action：
+  - `/scout/mbf_costmap_nav/get_path`
+- MBF / 插件内部可见话题：
+  - `/scout/mbf_costmap_nav/GlobalPlanner/plan`
+  - `/scout/mbf_costmap_nav/GlobalPlanner/potential`
+- 统一发布给局部规划器的全局路径：
+  - `/scout/global_path`
+
+也就是说：
+
+- **MBF 负责生成并发布全局几何路径**
+- **PathHandler 负责把 `/scout/global_path` 处理成 MPC 的局部参考序列**
+- `/scout/global_path_smooth` 是 local planner 侧的平滑路径可视化，不是 MBF 直接输出
+- `/local_path` 是 MPC 预测/局部轨迹可视化，也不是 MBF 输出
+
+### 8.3 关键接口数据结构
+
+#### ReferencePoint（PathHandler → MPCSolver）
+
+当前真实结构为：
+
+```cpp
+struct ReferencePoint {
+  double x;           // 路径点 x 坐标（base_link 系）
+  double y;           // 路径点 y 坐标（base_link 系）
+  double theta_path;  // 路径切线方向 [rad]
+  double kappa;       // 路径曲率 [1/m]
+  double v_path;      // 路径推进速度 [m/s]
+  double s;           // 弧长参数
+  double v_ref;       // 参考速度 [m/s]
+};
+```
+
+说明：
+
+- `ReferencePoint` **没有**单独的 `omega_ref` 字段
+- 当前 `omega_ref` 是在代价函数里临时计算：
+  - `omega_ref = v_ref * kappa`
+
+#### StateVector（MPC 增广状态，8 维）
+
+```text
+索引  名称          含义
+[0]   E_L           纵向误差 (m)
+[1]   E_C           横向误差 (m)
+[2]   E_THETA       航向误差 (rad)
+[3]   V             线速度 (m/s)
+[4]   ETA_X         X方向模态位移 [m]
+[5]   ETA_X_DOT     X方向模态速度 [m/s]
+[6]   ETA_Y         Y方向模态位移 [m]
+[7]   ETA_Y_DOT     Y方向模态速度 [m/s]
+```
+
+#### ControlVector（MPC 控制量，2 维）
+
+```text
+索引  名称          含义                    约束范围
+[0]   A             纵向加速度 (m/s²)       [-a_max, a_max]
+[1]   OMEGA         角速度 (rad/s)          [-omega_max, omega_max]
+```
+
+### 8.4 当前代价函数与约束的真实含义
+
+当前 MPC 本质上是 tracking MPC。核心目标是：
+
+- 跟踪误差最小：
+  - `e_l`
+  - `e_c`
+  - `e_theta`
+- 跟踪参考速度：
+  - `v -> v_ref`
+- 控制平滑：
+  - `a`
+  - `omega`
+  - `Δa`
+  - `Δomega`
+- 可选曲率前馈：
+  - `omega_ref = v_ref * kappa`
+- 可选 slosh 软代价：
+  - `Q_slosh_eta * (eta_x^2 + eta_y^2)`
+
+当前主要约束有：
+
+- 状态约束：
+  - `v_min <= v <= v_max`
+- 控制约束：
+  - `|a| <= a_max`
+  - `|omega| <= omega_max`
+- 控制变化率约束：
+  - `|a_k - a_{k-1}| <= j_max * dt`（若启用）
+  - `|omega_k - omega_{k-1}| <= alpha_max * dt`
+- 第一版 slosh 盒约束（若启用）：
+  - `|eta_x| <= eta_bar`
+  - `|eta_y| <= eta_bar`
+  - 其中 `eta_bar` 不是简单 `slosh_height_max / height_coeff`
+  - 当前实现会先扣掉抛物面项预算，再除以 `height_coeff * sqrt(2)`
+
+### 8.5 当前不是 MPCC，而是“局部参考跟踪型 MPC”
+
+当前系统的真实定位是：
+
+- ROS 接口上：局部规划器
+- 优化本质上：参考路径跟踪型 MPC
+
+它不是 MPCC 的原因是：
+
+- 没有把路径进度 `s` 放进优化变量
+- 没有 progress reward
+- 没有把走廊/障碍物半空间约束作为主几何约束并入优化
+- 参考轨迹是 `PathHandler` 先生成，再由 `MPCSolver` 去跟踪
+
+所以当前主范式是：
+
+- `global_path -> local reference -> MPC tracking`
+
+而不是：
+
+- `progress + geometry + obstacle + control` 的统一联合优化
+
+### 8.6 speed governor 外环 vs MPC 内环 的职责分离
+
+```
+                          ┌──────────────────────────┐
+                          │  PathHandler             │
+                          │  生成 ref_points         │
+                          └────────────┬─────────────┘
+                                       │
+                    ┌──────────────────▼──────────────────┐
+                    │  Speed Governor（外环启发式）        │
+                    │                                     │
+                    │  输入:                               │
+                    │    - slosh_height（当前估计）        │
+                    │    - predicted_height_max（预测峰值）│
+                    │    - kappa_preview（前方曲率）       │
+                    │                                     │
+                    │  输出:                               │
+                    │    v_des_eff                         │
+                    │                                     │
+                    │  实现方式:                           │
+                    │    重新生成一套 ref_points，而不是   │
+                    │    直接就地改 refs[k].v_ref         │
+                    └──────────────────┬──────────────────┘
+                                       │
+                    ┌──────────────────▼──────────────────┐
+                    │  MPC 求解器（内环优化）              │
+                    │                                     │
+                    │  目标:                               │
+                    │    - 跟踪 ref_points                 │
+                    │    - 最小化 e_c, e_l, e_theta       │
+                    │    - 跟踪 v_ref                      │
+                    │    - 最小化 slosh 软代价             │
+                    │    - 最小化控制量和变化率            │
+                    │                                     │
+                    │  局限:                               │
+                    │    当前仍是 tracking MPC，不是 MPCC  │
+                    └──────────────────┬──────────────────┘
+                                       │
+                                       ▼
+                                   /cmd_vel
+```
+
+总结：
+
+- Governor 负责“预测域外的启发式风险治理”
+- MPC 负责“预测域内的最优跟踪与约束满足”
+- 两者当前是互补关系，而不是重复关系
+
+### 8.7 输出与可视化注意点
+
+- `MPCSolver` 当前输出不是旧版的：
+  - `v_cmd != x_1(V)`
+  - `omega_cmd != u_0(OMEGA)`
+- 当前实际提取方式是：
+  - `v_cmd = v0 + 0.5 * a0 * dt`
+  - `omega_cmd = 0.5 * (omega0 + omega1)`
+
+- `publishCmdVel()` 当前角速度滤波是：
+  - `effective_alpha_omega = clamp(alpha_omega + kappa_boost * |omega|, 0, 1)`
+  - 然后再做 EMA
+
+- `/local_path` 当前是预测轨迹可视化：
+  - 起点强制放在当前 `base_link` 原点
+  - 位置恢复时主要使用 `e_c`，刻意忽略 `e_l`，以减少弯道可视化锯齿
