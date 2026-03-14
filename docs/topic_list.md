@@ -95,6 +95,7 @@ geist@geist:~$ rostopic list
 /slosh/episode_id
 /slosh/height
 /slosh/height_pred_max
+/slosh/q_slosh_eta
 /slosh/speed_governor_active
 /slosh/state
 /slosh/v_des_eff
@@ -135,6 +136,7 @@ geist@geist:~$ rostopic list
 | `/slosh/episode_id` | 当前实验 episode 编号 |
 | `/slosh/height` | 实际液面高度估计 |
 | `/slosh/height_pred_max` | 预测域内最大液面高度 |
+| `/slosh/q_slosh_eta` | 实际进入 QP 的液体软代价权重 |
 | `/slosh/speed_governor_active` | 速度治理是否介入 |
 | `/slosh/state` | slosh 状态 `[eta_x, eta_x_dot, eta_y, eta_y_dot]` |
 | `/slosh/v_des_eff` | governor 生效后的参考速度 |
@@ -219,6 +221,7 @@ geist@geist:~$ rostopic list
 | `/slosh/ax_est` | `std_msgs/Float32` | 纵向加速度估计（EMA 后） |
 | `/slosh/ay_est` | `std_msgs/Float32` | 横向加速度估计（EMA 后，当前近似 `v*omega`） |
 | `/slosh/height` | `std_msgs/Float32` | 液面晃动高度估计 |
+| `/slosh/q_slosh_eta` | `std_msgs/Float32` | 实际进入 QP 的液体软代价权重 |
 | `/slosh/state` | `std_msgs/Float32MultiArray` | 液体晃动状态 `[eta_x, eta_x_dot, eta_y, eta_y_dot]` |
 | `/scout/current_goal` | `geometry_msgs/PoseStamped` | MBF 当前导航目标回显 |
 | `/scout/global_path` | `nav_msgs/Path` | 全局路径（move_base → local_planner） |
@@ -297,6 +300,7 @@ geist@geist:~$ rostopic list
 | `/mpc/status_val` | `std_msgs/Int32` | scout_local_planner | 监控（可选） | 求解结果标志（1=成功，0=失败） |
 | `/slosh/state` | `std_msgs/Float32MultiArray` | scout_local_planner | 监控（可选） | 液体晃动状态 `[eta_x, eta_x_dot, eta_y, eta_y_dot]` |
 | `/slosh/height` | `std_msgs/Float32` | scout_local_planner | 监控（可选） | 晃动高度输出 |
+| `/slosh/q_slosh_eta` | `std_msgs/Float32` | scout_local_planner | 监控（可选） | 实际进入 QP 的液体软代价权重 |
 | `/slosh/ax_est` | `std_msgs/Float32` | scout_local_planner | 监控（可选） | 纵向加速度估计 |
 | `/slosh/ay_est` | `std_msgs/Float32` | scout_local_planner | 监控（可选） | 横向加速度估计 |
 | `/slosh/alpha_est` | `std_msgs/Float32` | scout_local_planner | 监控（可选） | 角加速度估计 |

@@ -131,6 +131,7 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     slosh_alpha_est_pub_ = nh_.advertise<std_msgs::Float32>("slosh/alpha_est", 1);
     slosh_episode_id_pub_ = nh_.advertise<std_msgs::Int32>("slosh/episode_id", 1);
     slosh_height_pred_max_pub_ = nh_.advertise<std_msgs::Float32>("slosh/height_pred_max", 1);
+    slosh_q_slosh_eta_pub_ = nh_.advertise<std_msgs::Float32>("slosh/q_slosh_eta", 1);
     slosh_constraint_active_pub_ = nh_.advertise<std_msgs::Int32>("slosh/constraint_active", 1);
     slosh_v_des_eff_pub_ = nh_.advertise<std_msgs::Float32>("slosh/v_des_eff", 1);
     slosh_speed_governor_active_pub_ = nh_.advertise<std_msgs::Int32>("slosh/speed_governor_active", 1);
@@ -938,6 +939,12 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok) {
         std_msgs::Float32 msg;
         msg.data = static_cast<float>(last_predicted_height_max_);
         slosh_height_pred_max_pub_.publish(msg);
+    }
+
+    if (slosh_q_slosh_eta_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(slosh_enabled_ ? mpc_params_.Q_slosh_eta : 0.0);
+        slosh_q_slosh_eta_pub_.publish(msg);
     }
 
     if (slosh_constraint_active_pub_.getNumSubscribers() > 0) {

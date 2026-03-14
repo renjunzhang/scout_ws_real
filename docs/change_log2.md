@@ -91,6 +91,13 @@
   - 先验证 `Q_slosh`、box constraint、speed governor 接入后系统是否稳定、是否有可观测收益
 - 后续待具备相机或其他可信液面观测后，再回到 `omega_eff / zeta_eff` 辨识与模型校正
 
+### 增加 soft cost 调试话题
+
+- 修改文件：[local_planner_ros.h](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/include/scout_local_planner/local_planner_ros.h)、[local_planner_ros.cpp](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/src/local_planner_ros.cpp)、[record_slosh_experiment.sh](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh)、[topic_list.md](/home/a/scout_ws/docs/topic_list.md)
+- 新增发布话题：`/slosh/q_slosh_eta`
+- 语义：发布当前实际进入 QP 的液体软代价权重 `Q_slosh_eta`
+- 目的：下一轮实验可直接在 bag 中确认 soft cost 是否真的生效，而不必只靠 launch 参数推断
+
 ### 当前 anti-slosh MPC 实验执行顺序
 
 - 前置条件：

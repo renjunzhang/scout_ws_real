@@ -10,6 +10,7 @@
 #
 # 录制内容：
 #   - 晃动状态：/slosh/state, /slosh/height, /slosh/height_pred_max
+#                /slosh/q_slosh_eta
 #                /slosh/ax_est, /slosh/ay_est, /slosh/alpha_est
 #                /slosh/episode_id, /slosh/constraint_active
 #                /slosh/v_des_eff, /slosh/speed_governor_active
@@ -58,6 +59,7 @@ TOPICS=(
     /slosh/state
     /slosh/height
     /slosh/height_pred_max
+    /slosh/q_slosh_eta
     /slosh/ax_est
     /slosh/ay_est
     /slosh/alpha_est

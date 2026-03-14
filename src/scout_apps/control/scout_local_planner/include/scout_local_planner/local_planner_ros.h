@@ -179,6 +179,7 @@ private:
     ros::Publisher slosh_alpha_est_pub_;
     ros::Publisher slosh_episode_id_pub_;
     ros::Publisher slosh_height_pred_max_pub_;
+    ros::Publisher slosh_q_slosh_eta_pub_;
     ros::Publisher slosh_constraint_active_pub_;
     ros::Publisher slosh_v_des_eff_pub_;
     ros::Publisher slosh_speed_governor_active_pub_;
