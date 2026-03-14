@@ -48,7 +48,23 @@ local_costmap:
   resolution: 0.05
   plugins:
     - {name: static_layer, type: "costmap_2d::StaticLayer"}
+    - {name: obstacle_layer, type: "costmap_2d::ObstacleLayer"}
     - {name: inflation_layer, type: "costmap_2d::InflationLayer"}
+
+  # 障碍层：当前只作为局部代价地图基础设施，供后续避障研究使用；
+  # scout_local_planner 目前仍未订阅 costmap，MPC 继续只做 tracking。
+  obstacle_layer:
+    enabled: true
+    observation_sources: scan
+    scan:
+      data_type: LaserScan
+      topic: /scan_front
+      sensor_frame: nanoscan3_front
+      marking: true
+      clearing: true
+      obstacle_range: 4.0
+      raytrace_range: 4.5
+      inf_is_valid: true
 
   inflation_layer:
     enabled: true
