@@ -90,3 +90,72 @@
   - 使用已更新的试管参数初值
   - 先验证 `Q_slosh`、box constraint、speed governor 接入后系统是否稳定、是否有可观测收益
 - 后续待具备相机或其他可信液面观测后，再回到 `omega_eff / zeta_eff` 辨识与模型校正
+
+### 当前 anti-slosh MPC 实验执行顺序
+
+- 前置条件：
+  - 已启动底盘、雷达、定位、MBF 全局规划
+  - 确认 `/scout/global_path`、`/odom`、`/cmd_vel` 存在
+  - 使用同一条测试路线，尽量保持每组实验路径一致
+
+1. 组 A：基线（无晃动抑制）
+   - 启动命令：
+     - `roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=0`
+   - 建议重复次数：
+     - `3 ~ 5` 次
+   - 重点观察话题：
+     - `/mpc/status_val`
+     - `/mpc/solve_ms`
+     - `/cmd_vel`
+     - `/local_path`
+     - `/slosh/height_pred_max`
+     - `/slosh/height`
+
+2. 组 B：只开 slosh soft cost
+   - 启动命令：
+     - `roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=5`
+   - 建议重复次数：
+     - `3 ~ 5` 次
+   - 重点观察话题：
+     - `/mpc/status_val`
+     - `/mpc/solve_ms`
+     - `/cmd_vel`
+     - `/slosh/height_pred_max`
+     - `/slosh/height`
+     - `/slosh/ax_est`
+     - `/slosh/ay_est`
+
+3. 组 C：soft cost + box constraint
+   - 启动命令：
+     - `roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=5 enable_slosh_box_constraint:=true`
+   - 建议重复次数：
+     - `3 ~ 5` 次
+   - 重点观察话题：
+     - `/mpc/status_val`
+     - `/mpc/solve_ms`
+     - `/cmd_vel`
+     - `/slosh/height_pred_max`
+     - `/slosh/constraint_active`
+     - `/slosh/height`
+
+4. 组 D：soft cost + box constraint + speed governor
+   - 启动命令：
+     - `roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=5 enable_slosh_box_constraint:=true slosh_speed_governor_enable:=true`
+   - 建议重复次数：
+     - `3 ~ 5` 次
+   - 重点观察话题：
+     - `/mpc/status_val`
+     - `/mpc/solve_ms`
+     - `/cmd_vel`
+     - `/slosh/height_pred_max`
+     - `/slosh/constraint_active`
+     - `/slosh/v_des_eff`
+     - `/slosh/speed_governor_active`
+     - `/slosh/height`
+
+- 每组实验结束后，优先比较以下现象：
+  - 是否出现求解失败或控制发散
+  - `/slosh/height_pred_max` 是否明显下降
+  - `/cmd_vel` 是否变得过于保守或抖动
+  - box constraint / governor 是否频繁触发
+  - 到点成功率和轨迹跟踪是否明显退化
