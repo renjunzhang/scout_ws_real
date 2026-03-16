@@ -8,13 +8,16 @@
 
 ## 实物话题列表
 
-geist@geist:~$ rostopic list
+当前实车环境实测：
+
+```text
 /BMS_status
 /clicked_point
 /cmd_vel
 /constraint_list
 /diagnostics
 /extended_laser_scan
+/imu/data
 /initialpose
 /landmark_poses_list
 /local_path
@@ -103,11 +106,12 @@ geist@geist:~$ rostopic list
 /tf
 /tf_static
 /trajectory_node_list
-
+/wit/mag
+```
 
 ## 0) 当前系统已观测话题
 
-### 实车环境完整话题列表（2026-03-08，MBF + MPC + slosh）
+### 实车环境完整话题列表（2026-03-16，MBF + MPC + slosh + IMU）
 
 #### 核心导航与控制
 
@@ -119,6 +123,7 @@ geist@geist:~$ rostopic list
 | `/mpc/status_val` | MPC 求解状态（1=成功，0=失败） |
 | `/mpc_status` | MPC 状态机状态 |
 | `/odom` | 里程计 |
+| `/imu/data` | IMU 原始输入（`sensor_msgs/Imu`） |
 | `/scout/current_goal` | 当前 goal 回显 |
 | `/scout/global_path` | 全局路径输入 |
 | `/scout/global_path_smooth` | 平滑/重采样后的路径可视化 |
@@ -178,6 +183,22 @@ geist@geist:~$ rostopic list
 | `/scan_matched_points2` | 匹配点云 |
 | `/submap_list` | 子图列表 |
 | `/trajectory_node_list` | 轨迹节点列表 |
+| `/wit/mag` | IMU 磁力计输出 |
+
+#### IMU 接入现状（2026-03-16）
+
+- 实车上已经观测到真实 IMU 话题：
+  - `/imu/data`
+  - `/wit/mag`
+- 电脑端与实车端都已验证 `/imu/data` 可发布，当前实测频率约 `50 Hz`
+- 当前设备串口波特率已改为：
+  - `115200`
+- 当前厂家脚本会发布：
+  - `frame_id=base_link`（消息头配置值）
+  - `linear_acceleration` 含重力分量
+- 因此，当前 IMU 结论应更新为：
+  - “真实 IMU 话题已接入并可见”
+  - 但“是否可直接无预处理用于 planner 的 lateral accel / alpha_z”仍需动态验证
 
 #### 底盘/BMS/系统
 
@@ -292,6 +313,7 @@ geist@geist:~$ rostopic list
 |------|------|--------|--------|------|
 | `/scout/global_path` | `nav_msgs/Path` | move_base | scout_local_planner | 全局路径输入 |
 | `/odom` | `nav_msgs/Odometry` | 底盘驱动 | scout_local_planner | 里程计输入 |
+| `/imu/data` | `sensor_msgs/Imu` | `wit_ros_imu` | scout_local_planner（启用 IMU 参数时） | IMU 输入，当前代码会直接读取 `linear_acceleration.y` / `angular_velocity.z` |
 | `/cmd_vel` | `geometry_msgs/Twist` | scout_local_planner | 底盘驱动 | 速度控制输出 |
 | `/local_path` | `nav_msgs/Path` | scout_local_planner | RViz（可选） | 局部轨迹可视化 |
 | `/scout/global_path_smooth` | `nav_msgs/Path` | scout_local_planner | RViz（可选） | 局部平滑/重采样后的路径可视化 |
@@ -323,6 +345,18 @@ geist@geist:~$ rostopic list
 |------|------|--------|--------|------|
 | `/scan_front` | `sensor_msgs/LaserScan` | nanoscan3_bringup | gmapping / amcl | 前置激光雷达扫描 |
 | `/scan_front_filtered` | `sensor_msgs/LaserScan` | nanoscan3_bringup | 可选 | 过滤后的扫描 |
+
+### 4.1 IMU（wit_ros_imu）
+
+| 话题 | 类型 | 发布方 | 订阅方 | 说明 |
+|------|------|--------|--------|------|
+| `/imu/data` | `sensor_msgs/Imu` | `wit_ros_imu` | `scout_local_planner`（启用 IMU 参数时） | IMU 主输出，当前实测约 `50 Hz` |
+| `/wit/mag` | `sensor_msgs/MagneticField` | `wit_ros_imu` | 当前主要用于监控/调试 | 磁力计输出 |
+
+> 说明：
+> - 当前实测 `/imu/data` 已经在实车出现，不再是“预留未接入”状态。
+> - 当前驱动发布的 `linear_acceleration` 含重力分量。
+> - 是否直接把 `/imu/data` 用作 planner 输入，仍取决于轴向、符号和静止输出验证结果。
 
 ---
 

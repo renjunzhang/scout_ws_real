@@ -278,7 +278,8 @@ sudo usermod -aG dialout $USER
 
 - ROS 版本：`noetic`
 - IMU 实际串口：`/dev/ttyUSB0`
-- 厂家脚本默认波特率：`9600`
+- 当前设备实际波特率：`115200`
+- 厂家脚本出厂默认波特率：`9600`
 - 厂家脚本本身就是一个 Python ROS 节点
 - 节点参数只需要：
   - `~port`
@@ -309,7 +310,7 @@ sudo chmod 666 /dev/ttyUSB0
 chmod +x /home/a/scout_ws/src/wit_ros_imu/scripts/wit_normal_ros.py
 source /opt/ros/noetic/setup.bash
 source /home/a/scout_ws/devel/setup.bash
-rosrun wit_ros_imu wit_normal_ros.py _port:=/dev/ttyUSB0 _baud:=9600 wit/imu:=/imu/data
+rosrun wit_ros_imu wit_normal_ros.py _port:=/dev/ttyUSB0 _baud:=115200 wit/imu:=/imu/data
 ```
 
 终端 3：
@@ -338,6 +339,14 @@ rostopic echo -n1 /wit/mag
 - 这条路线的目的只是先确认驱动和串口正常，不处理 RViz
 - 如果这条路线能成功，再决定是否继续按厂家 PDF 的 `ros1Imu_ws + roslaunch` 方式整理
 
+更新：
+
+- 当前设备后续已把输出频率提升到 `50 Hz`
+- 当前设备波特率已改到 `115200`
+- 因此在工控机或后续实机验证时，应优先使用：
+  - `baud:=115200`
+- 如果仍使用 `9600`，节点会因为串口参数不匹配而无法正常工作
+
 ### 2.6C 本机实际 bring-up 结果（2026-03-16）
 
 本机最终采用的是：
@@ -354,13 +363,13 @@ sudo chmod 666 /dev/ttyUSB0
 chmod +x /home/a/scout_ws/src/wit_ros_imu/scripts/wit_normal_ros.py
 source /opt/ros/noetic/setup.bash
 source /home/a/scout_ws/devel/setup.bash
-rosrun wit_ros_imu wit_normal_ros.py _port:=/dev/ttyUSB0 _baud:=9600 wit/imu:=/imu/data
+rosrun wit_ros_imu wit_normal_ros.py _port:=/dev/ttyUSB0 _baud:=115200 wit/imu:=/imu/data
 ```
 
 节点启动输出：
 
 ```text
-IMU Type: Normal Port:/dev/ttyUSB0 baud:9600
+IMU Type: Normal Port:/dev/ttyUSB0 baud:115200
 Serial port opened successfully...
 ```
 
@@ -369,8 +378,8 @@ Serial port opened successfully...
 - `rostopic list` 中已看到：
   - `/imu/data`
   - `/wit/mag`
-- `rostopic hz /imu/data` 实测频率约：
-  - `10.018 Hz`
+- `rostopic hz /imu/data` 当前实测频率约：
+  - `50 Hz`
 
 实际 `rostopic echo -n1 /imu/data` 关键字段：
 
@@ -387,6 +396,7 @@ Serial port opened successfully...
 3. `/wit/mag` 也在发布
 4. 当前静止样本里 `linear_acceleration.z` 约为 `9.83`
 5. 这说明该驱动当前发布的加速度数据**包含重力分量**
+6. 当前 `50 Hz` 已高于本项目 `20 Hz` 的控制频率，可满足阶段 7 的实机验证和后续 anti-slosh 接入
 
 因此，这一步虽然已经满足“电脑端 bring-up 成功”，但还**不能**直接推出：
 
@@ -510,6 +520,12 @@ vim rviz_and_imu.launch
 ```
 
 如果你在上位机工具里改过波特率，这里也必须同步修改。
+
+当前你的实际设备已经改成：
+
+```xml
+<param name="baud" value="115200"/>
+```
 
 ### 2.11 启动厂家驱动
 
@@ -728,7 +744,275 @@ rosrun tf tf_echo base_link imu_link
 
 ---
 
-## 7. 如果核验不过，当前项目里的处理原则
+## 7. 最小 IMU 验证 bag 流程
+
+这一节的目标不是直接做导航，而是最小代价确认：
+
+1. IMU 原始数据质量够不够
+2. `omega_z` 能不能先直接用
+3. `linear_acceleration.y` 是否需要预处理
+4. 后续是否值得打开 `slosh_use_imu_*`
+
+### 7.1 推荐启动组合
+
+最小验证时，不需要先启动全局规划和 local planner。  
+建议只开：
+
+1. 底盘
+2. IMU
+3. 键盘遥控
+4. rosbag 录制
+
+例如：
+
+```bash
+roslaunch scout_bringup scout_mini_robot_base.launch
+roslaunch scout_bringup scout_imu.launch port:=/dev/ttyUSB0 baud:=115200
+roslaunch scout_bringup scout_teleop_keyboard.launch
+```
+
+如果你想顺便比较当前项目内部的估计链路，再额外开：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=0
+```
+
+说明：
+
+- `Q_slosh:=0` 时 local planner 不做晃动抑制，但仍可发布 `/slosh/ax_est`、`/slosh/ay_est`、`/slosh/alpha_est`
+- 如果当前只是纯 IMU 验证，不开 local planner 也可以
+
+### 7.2 录包方式
+
+#### 方式 A：最小 IMU-only bag（推荐先做这个）
+
+```bash
+mkdir -p ~/imu_bags
+rosbag record -O ~/imu_bags/imu_check_$(date +%Y%m%d_%H%M%S) \
+  /imu/data \
+  /wit/mag \
+  /odom \
+  /cmd_vel \
+  /tf \
+  /tf_static
+```
+
+#### 方式 B：项目对齐 bag（要比较 `/slosh/*` 时用）
+
+```bash
+cd $(rospack find scout_local_planner)
+./scripts/record_slosh_experiment.sh 0 imu_check
+```
+
+说明：
+
+- 现在 `record_slosh_experiment.sh` 已经会同时录：
+  - `/imu/data`
+  - `/wit/mag`
+  - `/odom`
+  - `/cmd_vel`
+  - `/slosh/ax_est`
+  - `/slosh/ay_est`
+  - `/slosh/alpha_est`
+- 如果你要判断“当前 IMU 数据是否需要处理”，方式 B 更适合做项目内对比
+
+### 7.3 推荐动作序列
+
+找空旷、安全、低速环境，按下面顺序做一遍即可：
+
+1. 静止 5 秒
+2. 低速直线匀速前进 3 到 5 秒
+3. 低速直线轻踩加速，再轻踩减速
+4. 原地左转 2 到 3 秒
+5. 静止 2 秒
+6. 原地右转 2 到 3 秒
+7. 静止 2 秒
+8. 低速左转弧线 3 到 5 秒
+9. 静止 2 秒
+10. 低速右转弧线 3 到 5 秒
+11. 最后静止 5 秒
+
+关键要求：
+
+- 动作幅度小、速度低，优先看信号方向和质量，不追求激烈激励
+- 每个动作之间留 2 秒静止段，后面离线看图会容易很多
+
+### 7.4 最重要的看图话题
+
+最少看这 6 条：
+
+1. `/imu/data/angular_velocity/z`
+2. `/imu/data/linear_acceleration/x`
+3. `/imu/data/linear_acceleration/y`
+4. `/imu/data/linear_acceleration/z`
+5. `/odom/twist/twist/angular/z`
+6. `/odom/twist/twist/linear/x`
+
+如果你录的是方式 B，再额外看：
+
+7. `/slosh/ay_est`
+8. `/slosh/alpha_est`
+9. `/slosh/ax_est`
+
+### 7.5 每段动作应该看到什么
+
+#### 静止段
+
+看：
+
+- `imu.angular_velocity.z`
+- `imu.linear_acceleration.x`
+- `imu.linear_acceleration.y`
+- `imu.linear_acceleration.z`
+
+期望：
+
+- `angular_velocity.z` 接近 0
+- `linear_acceleration.x` 接近 0
+- `linear_acceleration.y` 接近 0
+- `linear_acceleration.z` 接近 `+9.8`
+
+这一步主要判断：
+
+- 零偏大不大
+- 加速度是否带重力
+- `z` 轴是否基本朝上
+
+#### 直线加减速段
+
+看：
+
+- `imu.linear_acceleration.x`
+- `imu.linear_acceleration.y`
+- `imu.angular_velocity.z`
+
+期望：
+
+- 加速时 `linear_acceleration.x > 0`
+- 减速时 `linear_acceleration.x < 0`
+- `linear_acceleration.y` 仍接近 0
+- `angular_velocity.z` 仍接近 0
+
+这一步主要判断：
+
+- `x` 轴是否真的是车头方向
+- 直线运动时横向串扰大不大
+
+#### 原地左/右转段
+
+看：
+
+- `imu.angular_velocity.z`
+- `odom.twist.twist.angular.z`
+
+期望：
+
+- 左转时 `imu.angular_velocity.z > 0`
+- 右转时 `imu.angular_velocity.z < 0`
+- 与 `odom.angular.z` 符号一致
+
+这一步主要判断：
+
+- `z` 角速度符号是否正确
+- IMU 和 odom 的转向符号是否一致
+
+#### 左/右弧线段
+
+看：
+
+- `imu.angular_velocity.z`
+- `imu.linear_acceleration.y`
+- `odom.twist.twist.angular.z`
+- `odom.twist.twist.linear.x`
+
+在 `x` 前、`y` 左、`z` 上的约定下，期望：
+
+- 左转弧线：
+  - `angular_velocity.z > 0`
+  - `linear_acceleration.y > 0`
+- 右转弧线：
+  - `angular_velocity.z < 0`
+  - `linear_acceleration.y < 0`
+
+这一步主要判断：
+
+- `y` 轴方向是否正确
+- `linear_acceleration.y` 是否有明显可解释的动态响应
+
+### 7.6 最关键的比较图
+
+如果你录了 `/odom`，很值得做这两个对比：
+
+#### 图 1：`imu.angular_velocity.z` vs `odom.angular.z`
+
+看点：
+
+- 符号是否一致
+- 峰值出现时间是否接近
+- IMU 是否明显更平滑或更抖
+
+结论规则：
+
+- 如果两者符号都一致、走势接近：`use_imu_yaw_rate` 可以优先考虑启用
+- 如果符号相反：先不要启用，先修轴向/坐标定义
+
+#### 图 2：`imu.linear_acceleration.y` vs `v * omega`
+
+其中：
+
+```text
+v * omega = odom.twist.twist.linear.x * odom.twist.twist.angular.z
+```
+
+看点：
+
+- 左弧线时两者是否都为正
+- 右弧线时两者是否都为负
+- 趋势是否大体一致
+- IMU 是否带明显静态偏置
+
+结论规则：
+
+- 如果符号一致、趋势合理、静止偏置小：`linear_acceleration.y` 可能可以直接用
+- 如果静止偏置明显、左右弧线响应不干净：先做预处理，再考虑启用
+
+### 7.7 什么时候说明“需要处理”
+
+满足下面任一条，我就建议你先做预处理，不要直接把 IMU 全量接进 planner：
+
+1. 静止时 `|angular_velocity.z|` 长期明显不接近 0
+2. 静止时 `linear_acceleration.y` 有明显常值偏置
+3. 左转/右转时 `angular_velocity.z` 符号和 odom 相反
+4. 左弧线/右弧线时 `linear_acceleration.y` 符号不稳定
+5. `linear_acceleration.y` 在直线段也有很大波动
+6. `imu ay` 与 `v*omega` 完全不同相或长期反号
+
+对你当前项目，处理优先级建议是：
+
+1. 先保证 `omega_z` 路线可用
+2. 再决定 `linear_acceleration.y` 是否要去偏置/重力补偿
+3. 最后再考虑 `alpha_z` 是否直接用 IMU 差分
+
+### 7.8 当前最小启用策略建议
+
+如果这次 bag 看下来：
+
+- `omega_z` 很干净
+- `linear_acceleration.y` 还不够放心
+
+那么阶段 7 最小验证时，建议先只开：
+
+```text
+slosh_use_imu_yaw_rate:=true
+slosh_use_imu_lateral_accel:=false
+slosh_use_imu_alpha_z:=false
+```
+
+如果后面 `ay` 验证也通过，再逐步打开 `slosh_use_imu_lateral_accel`。
+
+---
+
+## 8. 如果核验不过，当前项目里的处理原则
 
 如果上位机阶段发现任一问题：
 
@@ -754,7 +1038,7 @@ slosh_use_imu_alpha_z:=false
 
 ---
 
-## 8. 后续接入 `scout_local_planner` 的前置条件
+## 9. 后续接入 `scout_local_planner` 的前置条件
 
 只有在下面条件都满足后，才进入阶段 7 的 planner 接入验证：
 
@@ -782,9 +1066,9 @@ roslaunch scout_local_planner slosh_experiment.launch \
 
 ---
 
-## 9. 一页版执行清单
+## 10. 一页版执行清单
 
-### 9.1 电脑端
+### 10.1 电脑端
 
 ```bash
 echo $ROS_DISTRO
@@ -824,7 +1108,7 @@ sudo chmod 666 /dev/ttyUSB0
 chmod +x /home/a/scout_ws/src/wit_ros_imu/scripts/wit_normal_ros.py
 source /opt/ros/noetic/setup.bash
 source /home/a/scout_ws/devel/setup.bash
-rosrun wit_ros_imu wit_normal_ros.py _port:=/dev/ttyUSB0 _baud:=9600 wit/imu:=/imu/data
+rosrun wit_ros_imu wit_normal_ros.py _port:=/dev/ttyUSB0 _baud:=115200 wit/imu:=/imu/data
 
 # 再新开终端验证
 source /opt/ros/noetic/setup.bash
@@ -854,7 +1138,7 @@ rostopic echo -n1 /imu/data
 rostopic hz /imu/data
 ```
 
-### 9.2 上位机
+### 10.2 上位机
 
 ```bash
 rostopic list | grep imu
@@ -872,7 +1156,7 @@ rostopic echo /imu/data/linear_acceleration/y
 - `angular_velocity.z` 符号
 - `linear_acceleration.y` 轴向与符号
 
-### 9.3 工控机实测结果（2026-03-16）
+### 10.3 工控机实测结果（2026-03-16）
 
 本次工控机实际已完成：
 

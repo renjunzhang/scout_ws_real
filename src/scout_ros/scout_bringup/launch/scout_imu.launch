@@ -1,6 +1,6 @@
 <launch>
     <arg name="port" default="/dev/imu_usb" />
-    <arg name="baud" default="9600" />
+    <arg name="baud" default="115200" />
     <arg name="frame_id" default="base_link" />
     <arg name="imu_topic" default="/imu/data" />
     <arg name="mag_topic" default="/wit/mag" />

@@ -14,6 +14,7 @@
 #                /slosh/ax_est, /slosh/ay_est, /slosh/alpha_est
 #                /slosh/episode_id, /slosh/constraint_active
 #                /slosh/v_des_eff, /slosh/speed_governor_active
+#   - IMU 原始输入：/imu/data, /wit/mag
 #   - MPC 性能：/mpc/solve_ms, /mpc/status_val, /mpc_status
 #   - 控制指令：/cmd_vel
 #   - 里程计：  /odom
@@ -67,6 +68,10 @@ TOPICS=(
     /slosh/constraint_active
     /slosh/v_des_eff
     /slosh/speed_governor_active
+
+    # IMU 原始输入
+    /imu/data
+    /wit/mag
 
     # MPC 性能
     /mpc/solve_ms
