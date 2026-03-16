@@ -47,6 +47,22 @@ catkin_make 2>&1 | grep "processing catkin package"
     roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true
     或者使用cartographer定位
     roslaunch nanoscan3_localization scout_nanoscan3_cartographer_localization.launch
+### 5.5 启动 IMU（真实，做 IMU / anti-slosh 实验时建议单独启动）
+    # 推荐使用独立 launch，不要复用厂家自带的 rviz_and_imu.launch
+    # 原因：工控机上通常不需要 RViz，而且需要单独控制 port / topic / frame_id
+    roslaunch scout_bringup scout_imu.launch
+
+    # 如果 udev 绑定还没配好，可先临时直连串口
+    roslaunch scout_bringup scout_imu.launch port:=/dev/ttyUSB0
+
+    # 启动后先检查
+    rostopic list | grep imu
+    rostopic echo -n1 /imu/data
+    rostopic hz /imu/data
+
+    # 说明：
+    # 1. 这一步对普通导航不是硬依赖，但对阶段 7 的 IMU 接入验证是必做步骤
+    # 2. 建议放在定位之后、全局规划之前，先把 /imu/data 独立确认好，再继续后面的 planner 链路
 ### 6. 全局规划
     # 实物对齐：global_planner.yaml 已加入 transform_tolerance（global_costmap/local_costmap）
     # 默认改为旁路速度话题：move_base 输出 /scout/move_base_cmd_vel，不抢占 /cmd_vel

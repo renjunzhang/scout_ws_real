@@ -1,0 +1,16 @@
+<launch>
+    <arg name="type" default="normal" doc="type [normal, modbus]"/>
+    <arg name="port" default="/dev/imu_usb" doc="serial port, e.g. /dev/imu_usb or /dev/ttyUSB0"/>
+    <arg name="baud" default="9600" doc="serial baudrate"/>
+    <arg name="frame_id" default="base_link" doc="frame_id published in IMU and mag headers"/>
+    <arg name="imu_topic" default="/imu/data" doc="output IMU topic"/>
+    <arg name="mag_topic" default="/wit/mag" doc="output magnetic field topic"/>
+
+    <node pkg="wit_ros_imu" type="wit_$(arg type)_ros.py" name="imu" output="screen">
+        <param name="port" type="str" value="$(arg port)"/>
+        <param name="baud" type="int" value="$(arg baud)"/>
+        <param name="frame_id" type="str" value="$(arg frame_id)"/>
+        <remap from="/wit/imu" to="$(arg imu_topic)"/>
+        <remap from="/wit/mag" to="$(arg mag_topic)"/>
+    </node>
+</launch>

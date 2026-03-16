@@ -1,0 +1,15 @@
+<launch>
+    <arg name="port" default="/dev/imu_usb" />
+    <arg name="baud" default="9600" />
+    <arg name="frame_id" default="base_link" />
+    <arg name="imu_topic" default="/imu/data" />
+    <arg name="mag_topic" default="/wit/mag" />
+
+    <include file="$(find wit_ros_imu)/launch/imu_only.launch">
+        <arg name="port" value="$(arg port)" />
+        <arg name="baud" value="$(arg baud)" />
+        <arg name="frame_id" value="$(arg frame_id)" />
+        <arg name="imu_topic" value="$(arg imu_topic)" />
+        <arg name="mag_topic" value="$(arg mag_topic)" />
+    </include>
+</launch>
