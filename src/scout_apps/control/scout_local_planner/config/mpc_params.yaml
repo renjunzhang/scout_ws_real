@@ -15,7 +15,7 @@ mpc:
   Q_etheta: 10           # 航向误差权重 - 减少直线摇摆
   Q_v: 9.0                 # 速度跟踪权重（修复后 v_ref 目标正确）
   use_contour_lag: true    # 启用 contour + lag 误差结构
-  Q_contour: 28.0          # contour（横向误差）权重
+  Q_contour: 32.0          # contour（横向误差）权重
   Q_lag: 0.5               # lag（纵向误差）权重
   enable_omega_ff: true    # 启用角速度前馈
   Q_omega_ff: 2.5          # 角速度前馈权重（修复后 omega_ref 目标正确）
@@ -99,10 +99,10 @@ verbose: false             # 是否输出调试信息
 # 液体晃动模型参数（P0-A: 状态注入）
 # =============================================================================
 slosh:
-  container_radius: 0.014    # 试管内半径 (m)，按直径 28 mm 取值
-  liquid_height: 0.055       # 液面高度 (m)，按当前测量约 55 mm 取值
-  liquid_density: 1000.0     # 液体密度 (kg/m³)，水
-  damping_ratio: 0.12        # 初始阻尼比猜测，待实物辨识修正
+  container_radius: 0.15     # 容器半径 (m)
+  liquid_height: 0.20        # 液面高度 (m)
+  liquid_density: 1000.0     # 液体密度 (kg/m³)
+  damping_ratio: 0.05        # 阻尼比
   mode_index: 1              # 晃动模态阶数
   offset_x: 0.0              # 容器相对 base_link X 偏移 (m)
   offset_y: 0.0              # 容器相对 base_link Y 偏移 (m)
@@ -143,9 +143,9 @@ heading_align:
 # cmd_vel 低通滤波（EMA）
 # =============================================================================
 filter:
-  alpha_v: 1.0             # 实物默认关闭输出 EMA，避免预测-执行相位滞后
-  alpha_omega: 1.0         # 实物默认关闭输出 EMA，角速度直接按 MPC 输出执行
-  kappa_boost: 0.0         # 关闭曲率自适应 EMA，保持执行链与预测一致
+  alpha_v: 0.3             # 线速度滤波系数 (0,1]，越大响应越快
+  alpha_omega: 0.4         # 角速度滤波基础系数 (0,1]
+  kappa_boost: 0.5         # 曲率自适应增益: alpha_eff = min(1, alpha + boost*|ω|)
 
 # =============================================================================
 # slosh-aware 速度治理（阶段 4）

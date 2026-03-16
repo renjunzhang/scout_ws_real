@@ -871,3 +871,62 @@ rostopic echo /imu/data/linear_acceleration/y
 - 静止输出
 - `angular_velocity.z` 符号
 - `linear_acceleration.y` 轴向与符号
+
+### 9.3 工控机实测结果（2026-03-16）
+
+本次工控机实际已完成：
+
+1. 依赖确认：`pyserial` 已安装（`Requirement already satisfied`）
+2. `udev` 规则已安装到系统：
+  - `/etc/udev/rules.d/imu_usb.rules`
+3. 规则已重载：
+  - `sudo udevadm control --reload-rules`
+  - `sudo udevadm trigger`
+4. 软链接已生效：
+  - `/dev/imu_usb -> ttyUSB0`
+5. 实际串口权限：
+  - `/dev/ttyUSB0` 为 `crw-rw-rw-`
+6. `scout_imu.launch` 已可启动并发布：
+  - `/imu/data`
+  - `/wit/mag`
+
+本次实测 `rostopic echo -n1 /imu/data` 关键字段：
+
+- `header.frame_id: "base_link"`
+- `angular_velocity.z: 0.0`
+- `linear_acceleration.x: 0.08134765625000001`
+- `linear_acceleration.y: 0.0765625`
+- `linear_acceleration.z: 9.838281250000001`
+
+结论：
+
+- 厂家驱动在工控机端已可稳定运行
+- `linear_acceleration.z` 约 `9.84`，当前数据仍表现为包含重力分量
+
+### 9.4 关于 `(.venv)` 提示
+
+如果终端前缀出现 `(.venv)`，表示当前 shell 激活了 Python 虚拟环境。
+
+- 对本 IMU 节点（ROS Noetic + `python3`）来说，不是必须条件
+- 退出方式：
+
+```bash
+deactivate
+```
+
+- 若 `deactivate` 提示不存在，说明当前终端其实没有激活 venv
+
+建议：工控机日常运行 IMU 驱动时，优先使用系统 Python（`/usr/bin/python3`）即可。
+
+### 9.5 当前配置是否长期生效
+
+当前配置“基本可长期生效”，前提是硬件接法不变：
+
+1. `udev` 规则文件放在 `/etc/udev/rules.d/`，重启后仍在
+2. `scout_imu.launch` 默认使用 `/dev/imu_usb`，不受 `ttyUSBx` 编号漂移影响
+3. 脚本 shebang 已改为 `python3`，Noetic 环境可直接运行
+
+但有两点仍需注意：
+
+- `sudo usermod -aG dialout $USER` 需要“重新登录”后才对当前用户会话生效
+- 若后续接入其它同类 USB 串口设备（同为 `1a86:7523`），建议再加更细粒度规则（按物理端口或序列号）以避免歧义

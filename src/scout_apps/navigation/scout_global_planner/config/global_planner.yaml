@@ -24,7 +24,7 @@ global_costmap:
   inflation_layer:
     enabled: true
     cost_scaling_factor: 3.0
-    inflation_radius: 0.55
+    inflation_radius: 0.60
 
   # 静态层
   static_layer:
