@@ -166,3 +166,21 @@
   - `/cmd_vel` 是否变得过于保守或抖动
   - box constraint / governor 是否频繁触发
   - 到点成功率和轨迹跟踪是否明显退化
+
+### 2026-03-17 代码对齐结论补充（MPC 融合位置）
+
+- 当前 anti-slosh 不是只加在某一个位置，而是“**模型 + 代价 + 约束 + 外环治理**”协同：
+  - 模型层：MPC 增广状态含 `[ETA_X, ETA_X_DOT, ETA_Y, ETA_Y_DOT]`，并在 `DiffDriveModel::predict/linearize` 中引入 `A_slosh/B_slosh` 与 `ay=v*omega` 耦合。
+  - 代价层：`Q_slosh_eta` 进入状态二次型，惩罚 `ETA_X^2 + ETA_Y^2`（软约束）。
+  - 约束层：可选 `enable_slosh_box_constraint`，对 `ETA_X/ETA_Y` 施加盒约束。
+  - 控制外环：可选 speed governor，按液面风险压低 `v_des`，不直接改动 QP 结构。
+- 因此回答“是在代价函数还是运动学模型中加入”：**两者都有**，且还叠加了可选约束和外环速度治理。
+
+### 2026-03-17 数学化架构文档补充
+
+- 新增文档：`docs/mpc_数学化架构总结.md`
+- 内容包括：
+  - 当前项目 MPC 的数学化问题定义（决策变量、动力学、代价、约束）
+  - 增广状态 `ETA_X/ETA_X_DOT/ETA_Y/ETA_Y_DOT` 的物理含义
+  - 关闭液面约束/软代价后的结构退化分析
+  - 通用 MPC 与本项目 MPC 的数学化对比
