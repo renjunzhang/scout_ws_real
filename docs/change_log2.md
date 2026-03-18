@@ -345,3 +345,72 @@
   - 增广状态 `ETA_X/ETA_X_DOT/ETA_Y/ETA_Y_DOT` 的物理含义
   - 关闭液面约束/软代价后的结构退化分析
   - 通用 MPC 与本项目 MPC 的数学化对比
+
+### 2026-03-18 IMU 最小闭环验证计划
+
+- 当前判断：
+  - IMU 话题 `/imu/data` 已经 bring-up 成功
+  - 但若按默认参数启动 `scout_local_planner`，IMU 仍未真正接入 `slosh estimator`
+  - 原因是 `slosh_estimator/use_imu_lateral_accel`、`use_imu_yaw_rate`、`use_imu_alpha_z` 默认全为 `false`
+- 因此今天的目标不是“一次把 IMU 全部接进来”，而是先完成：
+  - `yaw_rate` 最小闭环验证
+  - 确认 planner 在启用 IMU 后仍稳定
+  - 确认估计量趋势合理、无明显发散
+
+#### 今日验证命令
+
+1. 对照组（不用 IMU）：
+
+   ```bash
+   roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=5
+   ```
+
+2. 实验组（只开 IMU yaw rate）：
+
+   ```bash
+   roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=5 slosh_use_imu_yaw_rate:=true
+   ```
+
+3. 今日明确不打开：
+   - `slosh_use_imu_lateral_accel:=true`
+   - `slosh_use_imu_alpha_z:=true`
+
+#### 今日动作结构
+
+- 每组先跑同一套简单动作，不先上复杂导航：
+  - 静止 `10 s`
+  - 原地顺时针转
+  - 原地逆时针转
+  - 低速直行
+  - 低速左弧线
+  - 低速右弧线
+- 若以上都稳定，再补一组带全局路径的短路线
+
+#### 今日重点观测话题
+
+- `/imu/data`
+- `/odom`
+- `/cmd_vel`
+- `/slosh/ay_est`
+- `/slosh/alpha_est`
+- `/slosh/height`
+- `/slosh/height_pred_max`
+- `/mpc/status_val`
+- `/mpc/solve_ms`
+
+#### 今日判据
+
+- 启用 `slosh_use_imu_yaw_rate:=true` 后：
+  - `scout_local_planner` 不出现持续求解失败
+  - `/mpc/status_val` 不明显劣化
+  - `/mpc/solve_ms` 不明显升高
+  - `/slosh/height_pred_max` 不出现异常尖峰
+  - 转弯时估计量符号和变化趋势保持合理
+- 如果这些都满足，则认为：
+  - IMU `yaw_rate` 已具备接入 anti-slosh 链路的基础条件
+
+#### 今日暂不下结论的部分
+
+- 不根据今天结果直接认定 `IMU` 一定优于 `odom`
+- 不根据今天结果直接启用 `linear_acceleration.y`
+- 不根据今天结果直接启用 `alpha_z`
