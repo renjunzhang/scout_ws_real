@@ -16,8 +16,7 @@
 #                /slosh/v_des_eff, /slosh/speed_governor_active
 #   - IMU 原始输入：/imu/data, /wit/mag
 #   - MPC 性能：/mpc/solve_ms, /mpc/status_val, /mpc_status
-#   - 控制指令：/cmd_vel
-#   - 里程计：  /odom
+#   - 控制/底盘状态：/cmd_vel, /odom, /scout_status, /rs_status
 #   - 目标/路径：/scout/goal, /scout/current_goal, /scout/global_path, /local_path
 #   - TF：      /tf, /tf_static
 #   - 仿真时钟：/clock（仿真时存在，实物可忽略）
@@ -81,6 +80,8 @@ TOPICS=(
     # 控制与状态
     /cmd_vel
     /odom
+    /scout_status
+    /rs_status
 
     # 目标与路径
     /scout/goal

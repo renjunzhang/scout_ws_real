@@ -166,3 +166,164 @@
   - `/cmd_vel` 是否变得过于保守或抖动
   - box constraint / governor 是否频繁触发
   - 到点成功率和轨迹跟踪是否明显退化
+
+## 2026-03-16
+
+### IMU 厂家层 bring-up 打通
+
+- 新增文档：[配置IMU.md](/home/a/scout_ws/docs/配置IMU.md)
+- 今日完成了 IMU 从“电脑端独立 bring-up”到“工控机端独立 bring-up”的整理与实测记录
+- 电脑端已确认可直接通过厂家包 `wit_ros_imu` 跑出：
+  - `/imu/data`
+  - `/wit/mag`
+- 初始问题定位：
+  - 厂家默认 `imu_usb.rules` 只匹配 `10c4:ea60`
+  - 当前实物 IMU 实际枚举为 `1a86:7523`（CH341 USB-Serial）
+  - 因此 `/dev/imu_usb` 未自动生成，当前先以 `/dev/ttyUSB0` 跑通
+- 电脑端最终验证结果：
+  - `/imu/data` 正常输出
+  - `/wit/mag` 正常输出
+  - 最初频率约 `10 Hz`
+- 后续在实物端已将 IMU 输出提升到：
+  - `50 Hz`
+  - `115200 baud`
+
+### IMU 启动链路补齐
+
+- 新增文件：[scout_imu.launch](/home/a/scout_ws/src/scout_ros/scout_bringup/launch/scout_imu.launch)
+- 新增文件：[imu_only.launch](/home/a/scout_ws/src/wit_ros_imu/launch/imu_only.launch)
+- 修改文件：[wit_normal_ros.py](/home/a/scout_ws/src/wit_ros_imu/scripts/wit_normal_ros.py)
+- 修改文件：[package.xml](/home/a/scout_ws/src/scout_ros/scout_bringup/package.xml)
+- 改动内容：
+  - 为 `wit_ros_imu` 增加独立 `imu_only.launch`
+  - 在 `scout_bringup` 中增加统一入口 `scout_imu.launch`
+  - 驱动脚本支持通过参数配置 `frame_id`
+  - `scout_bringup` 显式声明对 `wit_ros_imu` 的运行依赖
+- 当前约定：
+  - `port` 默认可传 `/dev/ttyUSB0`
+  - `baud` 默认改为 `115200`
+  - `frame_id` 可配置，当前默认仍为 `base_link`
+
+### 实物流程与话题清单同步更新
+
+- 修改文件：[change_log.md](/home/a/scout_ws/docs/change_log.md)
+- 修改文件：[topic_list.md](/home/a/scout_ws/docs/topic_list.md)
+- 改动内容：
+  - 在实物流程中新增 `5.5 启动 IMU`
+  - 明确 IMU 属于“实物 anti-slosh 实验建议单独启动”的链路
+  - 记录当前实车完整话题清单
+  - 补充 `/imu/data`、`/wit/mag` 的实车接入现状
+  - 标注当前 IMU 频率已提升至 `50 Hz`
+
+### 实验录包脚本补充 IMU 和底盘状态
+
+- 修改文件：[record_slosh_experiment.sh](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh)
+- 今日补录的话题：
+  - `/imu/data`
+  - `/wit/mag`
+  - `/scout_status`
+  - `/rs_status`
+- 目的：
+  - 实物端可同时回看 IMU 原始输入、底盘速度状态、遥控器状态
+  - 避免遥控器控制时 `/cmd_vel` 全零导致后处理误判
+
+### IMU 安装方向与数据质量阶段性结论
+
+- 当前已确认 IMU 物理安装满足：
+  - `x` 轴朝车头
+- 当前项目内部使用的车体坐标约定继续保持：
+  - `x` 前
+  - `y` 左
+  - `z` 上
+- 两个实车 bag 的阶段性分析结论如下：
+
+#### 1. `/home/a/下载/slosh_bags/imu_check_20260316_163517.bag`
+
+- 动作包含：
+  - 静止
+  - 缓慢前进
+  - 顺时针旋转约 `180°`
+  - 静止
+  - 加速前进
+  - 逆时针旋转约 `180°`
+- 结论：
+  - `angular_velocity.z` 与 `odom.twist.twist.angular.z` 符号一致
+  - 顺时针时 `omega_z < 0`
+  - 逆时针时 `omega_z > 0`
+  - `omega_z` 可视为当前最可信的一路 IMU 输入
+  - 该包没有充分覆盖左/右弧线，因此尚不足以单独判定 `linear_acceleration.y` 可直接接入 planner
+
+#### 2. `/home/a/下载/slosh_bags/imu_check_20260316_165703.bag`
+
+- 动作包含：
+  - 静止
+  - 前进 + 顺时针持续转
+  - 原地顺时针
+  - 直行前进
+  - 原地逆时针
+  - 前进 + 逆时针持续转
+- 结论：
+  - 纯转向段中，`imu wz` 与 `odom angz` 相关性约 `0.999`
+  - IMU 角速度幅值整体比 odom 稍大，约高 `8% ~ 10%`
+  - 顺时针弧线段 `ay < 0`
+  - 逆时针弧线段 `ay > 0`
+  - 说明 `y` 轴方向与车体约定基本一致
+- 但同时确认：
+  - `linear_acceleration` 当前保留重力分量
+  - 静止时 `ax` 长期存在约 `+0.2 m/s^2` 量级偏置
+  - 静止时 `ay` 偏置会随姿态/地面条件变化
+- 因此当前工程建议为：
+  - `slosh_use_imu_yaw_rate` 可优先尝试
+  - `slosh_use_imu_lateral_accel` 不建议直接裸开
+  - `slosh_use_imu_alpha_z` 可在 `50 Hz` 条件下进一步评估，但不应先于 `yaw_rate` 验证
+
+### 当前静止样本的解释
+
+- 当前静止 `rostopic echo /imu/data` 样本呈现：
+  - `angular_velocity.z ≈ 0`
+  - `linear_acceleration.z ≈ 9.83`
+  - `linear_acceleration.x ≈ 0.19`
+  - `linear_acceleration.y ≈ 0`
+- 解释：
+  - `z` 轴朝上基本成立
+  - IMU 工作正常
+  - 加速度数据中包含重力
+  - `x/y` 方向静止时仍存在小偏置，不能把当前 `linear_acceleration` 直接当作已补偿的纯线加速度
+
+### 明天的 Todos
+
+1. 先做 `yaw_rate` 最小接入验证。
+   - 在 `scout_local_planner` 中仅启用 `slosh_use_imu_yaw_rate:=true`
+   - 暂不启用 `slosh_use_imu_lateral_accel`
+   - 暂不启用 `slosh_use_imu_alpha_z`
+
+2. 评估 `linear_acceleration.y` 的最小预处理方案。
+   - 方案优先级：
+     - 先做静止零偏扣除
+     - 再加 EMA 低通
+     - 若仍不稳定，再考虑重力补偿
+
+3. 明确 planner 接 IMU 前后的对比验证项。
+   - 记录启用前后：
+     - `/cmd_vel`
+     - `/odom`
+     - `/imu/data`
+     - `/slosh/ay_est`
+     - `/slosh/alpha_est`
+     - `/mpc/status_val`
+     - `/mpc/solve_ms`
+
+4. 复核 `frame_id` 使用策略。
+   - 评估是否继续使用 `base_link`
+   - 或单独切成 `imu_link` 再在后端显式处理
+
+5. 视情况修正 `udev` 规则。
+   - 将当前设备 `1a86:7523` 写入 `imu_usb.rules`
+   - 使 `/dev/imu_usb` 能稳定映射到实物 IMU
+
+6. 如时间允许，补一轮“专门针对 lateral accel 的验证 bag”。
+   - 静止
+   - 低速左弧线
+   - 静止
+   - 低速右弧线
+   - 静止
