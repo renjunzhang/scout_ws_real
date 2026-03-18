@@ -414,3 +414,138 @@
 - 不根据今天结果直接认定 `IMU` 一定优于 `odom`
 - 不根据今天结果直接启用 `linear_acceleration.y`
 - 不根据今天结果直接启用 `alpha_z`
+
+### 2026-03-18 终点停靠门槛与 IMU yaw 调试补充
+
+- 修改文件：
+  - `src/scout_apps/control/scout_local_planner/include/scout_local_planner/types.h`
+  - `src/scout_apps/control/scout_local_planner/src/path_handler.cpp`
+  - `src/scout_apps/control/scout_local_planner/include/scout_local_planner/local_planner_ros.h`
+  - `src/scout_apps/control/scout_local_planner/src/local_planner_ros.cpp`
+  - `src/scout_apps/control/scout_local_planner/config/mpc_params.yaml`
+  - `src/scout_apps/control/scout_local_planner/config/mpc_params_sim.yaml`
+  - `src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh`
+- 改动内容：
+  - 在 `path_handler` 中新增 `goal_reached_max_speed` 与 `goal_reached_max_omega`
+  - `isGoalReached()` 现在不仅检查位置/航向容差，也要求当前线速度和角速度足够低
+  - 目的：避免机器人以较高速度刚进入容差区就切到 `REACHED`，随后因实物惯性继续冲过终点
+  - 新增调试话题：
+    - `/slosh/omega_est_used`
+    - `/slosh/imu_omega_z_filtered`
+  - 语义：
+    - `/slosh/omega_est_used` 表示当前真正送入 `slosh_integration_.update()` 的角速度
+    - `/slosh/imu_omega_z_filtered` 表示 IMU `angular_velocity.z` 的 EMA 滤波值
+  - 目的：后续对照 bag 时可直接判断 `slosh_use_imu_yaw_rate:=true` 后，slosh 链路是否真的切到了 IMU yaw
+  - 录包脚本已补录以上两个新话题，避免再次出现“bag 里能看到 IMU 原始值，但无法直接确认 planner 实际采用值”的歧义
+
+### 2026-03-18 终点停靠回归修正
+
+- 问题：
+  - 上一版把 `REACHED` 判定直接改成“位置/航向容差 + 当前 odom 速度门槛”后，实车出现“始终不进入 REACHED、每个点都不停”的回归
+- 原因：
+  - 控制器在 `TRACKING` 状态下并不会因为这个判定门槛自动触发制动
+  - 结果变成“只有已经很慢时才允许到达”，但系统本身又未先进入主动刹停阶段，因此会长期卡在 `TRACKING`
+- 修正：
+  - `PathHandler::isGoalReached()` 恢复为只检查位置/航向容差
+  - `LocalPlannerROS` 中新增“goal stop pending”两阶段停靠逻辑：
+    - 先在进入目标容差区后持续发布 `0` 速制动
+    - 再等待 `odom` 线速度/角速度降到 `goal_reached_max_speed / goal_reached_max_omega` 以下
+    - 只有此时才真正切换到 `REACHED`
+- 结果：
+  - 避免了“高速直接判到达后惯性冲过头”
+  - 也避免了“永远达不到低速门槛、导致永不 REACHED”的回归
+
+### 2026-03-18 `slosh_Q5IMU_test2_20260318_163215.bag` 阶段性结论
+
+- 分析对象：
+  - `/home/geist/slosh_bags/slosh_Q5IMU_test2_20260318_163215.bag`
+- 当前状态：
+  - IMU yaw rate 已确认真正融入 slosh 链路
+  - 证据是：
+    - `/slosh/omega_est_used` 与 `/slosh/imu_omega_z_filtered` 全程一致
+    - 二者平均绝对误差为 `0`
+    - `/slosh/omega_est_used` 与 `/odom.twist.twist.angular.z` 存在明显差异，平均绝对误差约 `0.0336`，最大约 `0.3677`
+  - 因此当前 bag 中，`slosh_use_imu_yaw_rate:=true` 不是“参数看起来打开了”，而是 slosh 估计实际已经在使用 IMU yaw
+- 终点停靠状态：
+  - 前两个目标点的终点停靠逻辑已基本正常
+  - bag 中两次进入 `REACHED` 时，odom 速度约为：
+    - 第 1 次：`odom_v ≈ 0.029 m/s`，`odom_w ≈ -0.040 rad/s`
+    - 第 2 次：`odom_v ≈ 0.024 m/s`，`odom_w ≈ -0.010 rad/s`
+  - 说明“两阶段停靠”修正已经生效，不再是旧版那种高速切 `REACHED` 后惯性冲过终点
+- 第三个目标点的问题性质：
+  - 第三个目标点没有收敛，不是“已经到终点但不切 REACHED”
+  - 更准确地说，是第三段 `TRACKING` 本身已经明显偏离参考路径，随后实车接近障碍物，用户在风险增大后切到了遥控模式
+  - bag 中 `control_mode` 在 `46.465 s` 由 `1` 切到 `3`，对应人为接管
+  - 该段在切遥控前的路径跟踪指标约为：
+    - 平均路径偏差 `0.226 m`
+    - 最大路径偏差 `0.937 m`
+    - 离目标点最近距离仍有 `0.648 m`
+  - 因此第三段的主矛盾不是 near-goal creeping，而是 tracking 精度不足
+- 第三个目标点的控制健康状态：
+  - 第三段 `TRACKING` 早期即出现 `10` 次 MPC 求解失败
+  - 失败时刻集中在：
+    - `37.029 s`
+    - `37.094 s`
+    - `37.158 s`
+    - `37.196 s`
+    - `37.242 s`
+    - `37.301 s`
+    - `37.349 s`
+    - `37.412 s`
+    - `37.720 s`
+    - `37.775 s`
+  - 说明第三段在用户切遥控前很早就进入了不健康的跟踪状态
+- 对当前系统行为的判断：
+  - 当前 `scout_local_planner` 仍然是 tracking MPC，不是 obstacle-aware MPC
+  - 因此参数调优的目标是“尽量更贴参考路径”，而不是“保证绕开贴边障碍物”
+  - 如果全局路径本身就贴障碍物很近，或跟踪误差累积到 `0.3 ~ 1.0 m` 量级，撞障碍物在机制上是可能发生的
+
+#### 当前优先测试与修正项
+
+- 第一优先级：先让第三段更贴参考路径，不先继续改终点停靠逻辑
+  - 原因：
+    - 前两个目标点已证明当前 `REACHED` 低速切换逻辑基本正常
+    - 第三个目标点的问题发生在“到终点之前很久”，先修 tracking 才有意义
+- 第二优先级：先降第三段的跟踪激进度，再决定是否继续提高贴路径权重
+  - 建议第一轮只做最小调参，不同时大改多项
+  - 建议先测：
+    - `vehicle/v_max: 3.0 -> 2.0`
+    - `path_handler/max_lat_accel: 2.0 -> 1.2`
+    - `path_handler/lookahead_distance: 0.60 -> 0.45`
+  - 目的：
+    - 降低默认巡航目标速度
+    - 降低弯道允许速度
+    - 减少几何前视导致的切弯和贴障碍物风险
+- 第三优先级：若第一轮后仍偏离较大，再提高 tracking 误差权重
+  - 注意：
+    - 当前配置 `use_contour_lag: true`
+    - 因此实际生效的横向权重是 `Q_contour`，不是 `Q_ec`
+  - 第二轮候选参数：
+    - `mpc/Q_contour: 32 -> 40`
+    - `mpc/Q_etheta: 10 -> 12`
+    - `mpc/terminal_factor_ec: 5 -> 7`
+    - `mpc/terminal_factor_etheta: 3 -> 5`
+- 当前不建议优先做的调整：
+  - 暂不优先降低 `R_omega` 或 `R_domega`
+  - 原因：
+    - 第三段已经出现较明显的角速度饱和和求解失败
+    - 这时若进一步放松角速度惩罚，容易让控制更激进，而不是更稳定
+- near-goal 参数暂列为次要问题：
+  - 如果后续第三段 tracking 修稳后，仍出现“最后几厘米收不住”或“终点前 creeping 过快”，再单独测试：
+    - `goal_capture_min_speed`
+    - `goal_capture_distance`
+    - `max_tan_decel`
+  - 当前这三个参数不是本 bag 的主矛盾
+
+#### 下一轮测试口径
+
+- 固定实验前提：
+  - 继续录制以下调试话题：
+    - `/slosh/omega_est_used`
+    - `/slosh/imu_omega_z_filtered`
+  - 全程尽量保持底盘 `control_mode=1`
+  - 同一路线只改一组参数，不混改 IMU 开关和 tracking 参数
+- 建议测试顺序：
+  1. 保持 `slosh_use_imu_yaw_rate:=true` 不变，只做第一轮最小调参
+  2. 若第三段贴路径明显改善，再考虑第二轮权重调参
+  3. 若第三段贴路径改善后，末端仍有收敛问题，再回头单独测 near-goal 参数

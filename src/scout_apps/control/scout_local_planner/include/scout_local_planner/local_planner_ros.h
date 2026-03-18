@@ -156,6 +156,7 @@ private:
     double imu_omega_z_filtered_ = 0.0;
     double imu_alpha_filtered_ = 0.0;
     double prev_imu_omega_z_ = 0.0;
+    double omega_est_used_ = 0.0;     // 实际注入 slosh 模型的角速度
 
     // slosh-aware 速度治理（阶段 4）
     bool slosh_speed_governor_enable_ = false;
@@ -183,6 +184,8 @@ private:
     ros::Publisher slosh_constraint_active_pub_;
     ros::Publisher slosh_v_des_eff_pub_;
     ros::Publisher slosh_speed_governor_active_pub_;
+    ros::Publisher slosh_omega_est_used_pub_;
+    ros::Publisher slosh_imu_omega_z_filtered_pub_;
     ros::Publisher mpc_solve_ms_pub_;
     ros::Publisher mpc_status_val_pub_;
 
@@ -194,6 +197,7 @@ private:
     bool last_solve_ok_ = false;
     double last_predicted_height_max_ = 0.0;
     int last_constraint_active_ = -1;  // -1=unknown, 0=inactive, 1=active
+    bool goal_stop_pending_ = false;   // 已进入目标容差区，先发 0 速制动，待车体实际减速后切 REACHED
 
     // cmd_vel 低通滤波（EMA）
     double filtered_v_ = 0.0;

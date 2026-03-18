@@ -12,6 +12,7 @@
 #   - 晃动状态：/slosh/state, /slosh/height, /slosh/height_pred_max
 #                /slosh/q_slosh_eta
 #                /slosh/ax_est, /slosh/ay_est, /slosh/alpha_est
+#                /slosh/omega_est_used, /slosh/imu_omega_z_filtered
 #                /slosh/episode_id, /slosh/constraint_active
 #                /slosh/v_des_eff, /slosh/speed_governor_active
 #   - IMU 原始输入：/imu/data, /wit/mag
@@ -63,6 +64,8 @@ TOPICS=(
     /slosh/ax_est
     /slosh/ay_est
     /slosh/alpha_est
+    /slosh/omega_est_used
+    /slosh/imu_omega_z_filtered
     /slosh/episode_id
     /slosh/constraint_active
     /slosh/v_des_eff

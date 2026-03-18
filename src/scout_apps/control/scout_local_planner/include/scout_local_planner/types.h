@@ -175,6 +175,8 @@ struct PathHandlerParams {
     double lookahead_distance = 1.0;  // 前视距离 (m)
     double goal_tolerance = 0.1;      // 到达目标容差 (m)
     double yaw_tolerance = 0.1;       // 航向容差 (rad)
+    double goal_reached_max_speed = 0.08;  // 判定 REACHED 的最大线速度 (m/s)
+    double goal_reached_max_omega = 0.15;  // 判定 REACHED 的最大角速度 (rad/s)
     double goal_capture_distance = 0.4;   // 近终点捕获区半径 (m)
     double goal_capture_min_speed = 0.08; // 捕获区内最低参考速度 (m/s)
     double path_timeout = 5.0;        // 路径超时时间 (s)

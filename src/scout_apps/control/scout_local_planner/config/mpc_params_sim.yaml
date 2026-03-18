@@ -66,6 +66,8 @@ path_handler:
   lookahead_distance: 0.6  # 前视距离 (m)
   goal_tolerance: 0.1      # 到达目标位置容差 (m)
   yaw_tolerance: 0.1       # 到达目标航向容差 (rad)
+  goal_reached_max_speed: 0.08  # 仅在低速时允许切到 REACHED
+  goal_reached_max_omega: 0.15  # 仅在低角速度时允许切到 REACHED
   goal_capture_distance: 0.45   # 终点捕获区；进入后维持最低参考速度，避免提前停死
   goal_capture_min_speed: 0.10  # 捕获区最低参考速度 (m/s)
   path_timeout: 5.0        # 路径超时时间 (s)

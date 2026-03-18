@@ -135,6 +135,8 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     slosh_constraint_active_pub_ = nh_.advertise<std_msgs::Int32>("slosh/constraint_active", 1);
     slosh_v_des_eff_pub_ = nh_.advertise<std_msgs::Float32>("slosh/v_des_eff", 1);
     slosh_speed_governor_active_pub_ = nh_.advertise<std_msgs::Int32>("slosh/speed_governor_active", 1);
+    slosh_omega_est_used_pub_ = nh_.advertise<std_msgs::Float32>("slosh/omega_est_used", 1);
+    slosh_imu_omega_z_filtered_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_omega_z_filtered", 1);
     mpc_solve_ms_pub_ = nh_.advertise<std_msgs::Float32>("mpc/solve_ms", 1);
     mpc_status_val_pub_ = nh_.advertise<std_msgs::Int32>("mpc/status_val", 1);
     
@@ -214,6 +216,10 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("path_handler/lookahead_distance", path_params_.lookahead_distance, 1.0);
     pnh.param("path_handler/goal_tolerance", path_params_.goal_tolerance, 0.1);
     pnh.param("path_handler/yaw_tolerance", path_params_.yaw_tolerance, 0.1);
+    pnh.param("path_handler/goal_reached_max_speed",
+              path_params_.goal_reached_max_speed, 0.08);
+    pnh.param("path_handler/goal_reached_max_omega",
+              path_params_.goal_reached_max_omega, 0.15);
     pnh.param("path_handler/goal_capture_distance", path_params_.goal_capture_distance, 0.4);
     pnh.param("path_handler/goal_capture_min_speed", path_params_.goal_capture_min_speed, 0.08);
     pnh.param("path_handler/path_timeout", path_params_.path_timeout, 5.0);
@@ -394,6 +400,14 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
         case PlannerState::TRACKING:
             // 执行 MPC 控制
             {
+                if (goal_stop_pending_) {
+                    last_v_des_eff_ = 0.0;
+                    last_speed_governor_active_ = 0;
+                    publishCmdVel(0.0, 0.0);
+                    publishSloshDebug(last_solve_time_ms_, last_solve_ok_);
+                    return;
+                }
+
                 double v_des_cmd = vehicle_params_.v_max * 0.8;
                 double v_des_target = v_des_cmd;
                 last_speed_governor_active_ = 0;
@@ -652,9 +666,25 @@ void LocalPlannerROS::updateState() {
         return;
     }
     
-    // 检查是否到达目标
-    if (state_ == PlannerState::TRACKING && path_handler_.isGoalReached()) {
+    if (state_ != PlannerState::TRACKING) {
+        goal_stop_pending_ = false;
+        return;
+    }
+
+    const bool goal_pose_reached = path_handler_.isGoalReached();
+    if (!goal_pose_reached) {
+        goal_stop_pending_ = false;
+        return;
+    }
+
+    goal_stop_pending_ = true;
+
+    const bool speed_low =
+        std::abs(current_v_) < path_params_.goal_reached_max_speed &&
+        std::abs(current_omega_) < path_params_.goal_reached_max_omega;
+    if (speed_low) {
         transitionTo(PlannerState::REACHED);
+        goal_stop_pending_ = false;
         // 到达终点后保留 slosh 内部状态一段时间，便于观测残余晃动衰减。
         resetWarmStart(false, false);
     }
@@ -707,6 +737,7 @@ void LocalPlannerROS::updateSloshEstimate() {
 
     ay_est_used_ = use_imu_ay ? imu_ay_filtered_ : ay_filtered_;
     const double omega_for_slosh = use_imu_omega ? imu_omega_z_filtered_ : current_omega_;
+    omega_est_used_ = omega_for_slosh;
     alpha_est_used_ = use_imu_alpha ? imu_alpha_filtered_ : alpha_filtered_;
 
     // 当 offset_x/y=0 时，odom fallback 与 DiffDriveModel 的 slosh 输入映射一致；
@@ -963,6 +994,18 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok) {
         std_msgs::Int32 msg;
         msg.data = last_speed_governor_active_;
         slosh_speed_governor_active_pub_.publish(msg);
+    }
+
+    if (slosh_omega_est_used_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(omega_est_used_);
+        slosh_omega_est_used_pub_.publish(msg);
+    }
+
+    if (slosh_imu_omega_z_filtered_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(has_imu_ ? imu_omega_z_filtered_ : 0.0);
+        slosh_imu_omega_z_filtered_pub_.publish(msg);
     }
 
     // slosh 状态 [η_x, η̇_x, η_y, η̇_y]
