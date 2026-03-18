@@ -13,6 +13,7 @@
 #                /slosh/q_slosh_eta
 #                /slosh/ax_est, /slosh/ay_est, /slosh/alpha_est
 #                /slosh/omega_est_used, /slosh/imu_omega_z_filtered
+#                /slosh/imu_ay_bias, /slosh/imu_ay_filtered, /slosh/imu_ay_bias_ready
 #                /slosh/episode_id, /slosh/constraint_active
 #                /slosh/v_des_eff, /slosh/speed_governor_active
 #   - IMU 原始输入：/imu/data, /wit/mag
@@ -66,6 +67,9 @@ TOPICS=(
     /slosh/alpha_est
     /slosh/omega_est_used
     /slosh/imu_omega_z_filtered
+    /slosh/imu_ay_bias
+    /slosh/imu_ay_filtered
+    /slosh/imu_ay_bias_ready
     /slosh/episode_id
     /slosh/constraint_active
     /slosh/v_des_eff

@@ -556,3 +556,142 @@
   1. 保持 `slosh_use_imu_yaw_rate:=true` 不变，只做第一轮最小调参
   2. 若第三段贴路径明显改善，再考虑第二轮权重调参
   3. 若第三段贴路径改善后，末端仍有收敛问题，再回头单独测 near-goal 参数
+
+### 2026-03-18 阶段 3：IMU ay 零偏扣除启动
+
+- 背景：
+  - 阶段 2 专用 bag `/home/geist/slosh_bags/slosh_Q5_20260318_200204_stage2_ay.bag` 表明：
+    - `imu ay` 左右转方向信息有价值
+    - 但静止段存在稳定负偏置，约 `-0.04 m/s²`
+    - 左弧线时均值虽然为正，但符号占比不够干净，不能直接裸用
+  - 因此结论是：
+    - `ay` 值得继续做
+    - 但不能直接开启 `slosh_use_imu_lateral_accel:=true`
+- 本轮实现：
+  - 在 `LocalPlannerROS::imuCallback()` 中加入阶段 3 的最小预处理：
+    - 连续静止窗口估计 `imu_ay_bias`
+    - 在线执行 `ay_raw - imu_ay_bias`
+    - 再进入 IMU ay 的 EMA 低通
+  - 新增参数：
+    - `slosh_estimator/imu_ay_bias_compensation_enable`
+    - `slosh_estimator/imu_ay_bias_init_duration`
+    - `slosh_estimator/imu_ay_bias_static_v_max`
+    - `slosh_estimator/imu_ay_bias_static_omega_max`
+    - `slosh_estimator/imu_ay_bias_min_samples`
+  - 新增调试话题：
+    - `/slosh/imu_ay_bias`
+    - `/slosh/imu_ay_filtered`
+    - `/slosh/imu_ay_bias_ready`
+  - 录包脚本已补录以上三个话题
+- 为了便于阶段 3 验证，还补了两项工程支持：
+  - `slosh_experiment.launch` 新增 `cmd_vel_topic` 参数
+    - 可把 planner 输出重定向到调试话题，避免与底盘直控脚本抢 `/cmd_vel`
+  - `controlLoop()` 在 `IDLE/ERROR` 下也持续发布 slosh/IMU 调试话题
+    - 这样即使 planner 不负责开车，也能在阶段 3 bag 中观测 bias 扣除效果
+- 新增工具：
+  - `scripts/analyze_imu_ay_stage2.py` 已升级：
+    - 若 bag 中存在 `/slosh/imu_ay_filtered`
+    - 会自动输出“原始 imu ay”和“扣零偏后 imu ay”两套统计结果
+
+### 2026-03-18 阶段 3 首包结果
+
+- 分析 bag：
+  - `/home/geist/slosh_bags/slosh_Q5_20260318_202134_stage3_ay_bias.bag`
+- 结果：
+  - bias 扣除链路工作正常：
+    - `/slosh/imu_ay_bias_ready = 1`
+    - `/slosh/imu_ay_bias ≈ -0.0795`
+  - 扣偏置后，`imu ay` 质量明显提升：
+    - 静止均值：`-0.0528 -> +0.0264`
+    - 左转均值：`+0.0182 -> +0.1062`
+    - 右转均值：`-0.1564 -> -0.0809`
+    - 与 `v*omega` 相关性：`0.366 -> 0.701`
+- 当前判断：
+  - 阶段 3 的最小预处理是有效的
+  - 但仍存在小幅残余静止偏差，不建议直接把 `slosh_use_imu_lateral_accel:=true` 带入复杂导航
+  - 下一步应先做：
+    - `slosh_use_imu_lateral_accel:=true`
+    - 固定动作、无复杂路径的专用验证
+
+### 2026-03-18 阶段 3 稳健 bias 估计调整
+
+- 背景：
+  - `slosh_Q5_20260318_202834_stage3_ay_enabled.bag` 证明：
+    - `slosh_use_imu_lateral_accel:=true` 时，`/slosh/ay_est` 已经真正切到 `/slosh/imu_ay_filtered`
+    - 但旧版 bias 估计存在“扣过头”问题
+      - 原始静止 `imu_ay` 均值约 `-0.0571`
+      - 已锁定 bias 却达到 `-0.0994`
+      - 导致静止段出现正残差，右转有效幅值被明显抵消
+- 本轮修正：
+  - `imu ay` bias 只允许在启动后的第一段静止窗口内锁定一次
+  - 不再用原始 `ay_raw` 的普通均值直接估计 bias
+  - 改为：
+    - 静止窗口内先做一层专用 EMA
+    - 再对 EMA 后样本做 trimmed mean
+  - 若机器人在第一段静止窗口结束前未满足 `init_duration + min_samples`
+    - 本次运行不再继续补做 bias 估计
+- 新增参数：
+  - `slosh_estimator/imu_ay_bias_estimator_alpha`
+  - `slosh_estimator/imu_ay_bias_trim_ratio`
+- 当前待验证：
+  - 重新录制 `stage3_ay_enabled` 专用 bag
+  - 重点看：
+    - `/slosh/imu_ay_bias`
+    - `/slosh/imu_ay_filtered`
+    - 左右转时 `imu_ay_filtered` 的符号占比
+    - 静止段残余偏差是否明显收敛到接近 `0`
+
+### 2026-03-18 阶段 3 稳健 bias 估计复测结果
+
+- 分析 bag：
+  - `/home/geist/slosh_bags/slosh_Q5_20260318_205505_stage3_ay_enabled_v2.bag`
+- 结果：
+  - 稳健 bias 估计较上一包明显改善：
+    - `static imu_ay_filtered mean: +0.0426 -> -0.0204`
+    - `left-turn imu_ay_filtered mean: +0.1352 -> +0.0515`
+    - `right-turn imu_ay_filtered mean: -0.0233 -> -0.1441`
+    - `corr(imu_ay_filtered, v*omega): 0.6429 -> 0.7252`
+  - 左右转符号一致性已明显改善：
+    - 左转正值占比约 `0.795`
+    - 右转负值占比约 `0.967`
+  - `imu_ay_bias_ready_ratio = 0.639`
+    - 该现象符合“只在第一段静止结束时锁定一次 bias”的新逻辑
+  - 从 bag 话题范围看，锁定后的 bias 约为 `-0.0317`
+- 当前判断：
+  - 阶段 3 基本通过
+  - `slosh_use_imu_lateral_accel` 链路可进入低风险导航 A/B 测试
+  - 在拿到导航 A/B 结果前，仍不建议把 `slosh_use_imu_lateral_accel:=true` 直接作为默认正式配置
+- 本轮修改文件：
+  - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/include/scout_local_planner/local_planner_ros.h`
+  - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/src/local_planner_ros.cpp`
+  - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params.yaml`
+  - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params_sim.yaml`
+  - `/home/geist/scout_ws/docs/融入IMU.md`
+  - `/home/geist/scout_ws/docs/change_log2.md`
+
+### 2026-03-18 阶段 4 测试脚本补充
+
+- 新增脚本：
+  - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/run_imu_stage4_sequence.py`
+- 用途：
+  - 自动执行阶段 4 的 `alpha_z` 专用动作
+  - 顺序为：
+    - 静止
+    - 原地左转起转
+    - 左转停下
+    - 静止
+    - 原地右转起转
+    - 右转停下
+    - 静止
+- 默认参数：
+  - `stop-1 = 5s`
+  - `left-duration = 2s`
+  - `left-stop = 2s`
+  - `stop-2 = 3s`
+  - `right-duration = 2s`
+  - `right-stop = 2s`
+  - `stop-3 = 5s`
+  - `omega = 0.60 rad/s`
+- 同步更新：
+  - `CMakeLists.txt` 已加入该脚本安装列表
+  - `融入IMU.md` 已补充阶段 4 的脚本入口和推荐运行方式

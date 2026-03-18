@@ -27,6 +27,7 @@
 
 #include <memory>
 #include <mutex>
+#include <vector>
 
 namespace scout_local_planner {
 
@@ -149,10 +150,26 @@ private:
     bool use_imu_alpha_z_ = false;
     std::string imu_topic_ = "/imu/data";
     double imu_filter_alpha_ = 0.3;
+    bool imu_ay_bias_compensation_enable_ = true;
+    double imu_ay_bias_init_duration_ = 3.0;
+    double imu_ay_bias_static_v_max_ = 0.03;
+    double imu_ay_bias_static_omega_max_ = 0.03;
+    int imu_ay_bias_min_samples_ = 100;
+    double imu_ay_bias_estimator_alpha_ = 0.15;
+    double imu_ay_bias_trim_ratio_ = 0.10;
     bool has_imu_ = false;
     bool has_prev_imu_ = false;
     ros::Time prev_imu_time_;
     double imu_ay_filtered_ = 0.0;
+    double imu_ay_bias_ = 0.0;
+    double imu_ay_unbiased_ = 0.0;
+    bool imu_ay_bias_ready_ = false;
+    ros::Time imu_ay_bias_window_start_;
+    bool imu_ay_bias_window_started_ = false;
+    bool imu_ay_bias_window_closed_ = false;
+    bool imu_ay_bias_window_ema_initialized_ = false;
+    double imu_ay_bias_window_ema_ = 0.0;
+    std::vector<double> imu_ay_bias_samples_;
     double imu_omega_z_filtered_ = 0.0;
     double imu_alpha_filtered_ = 0.0;
     double prev_imu_omega_z_ = 0.0;
@@ -186,6 +203,9 @@ private:
     ros::Publisher slosh_speed_governor_active_pub_;
     ros::Publisher slosh_omega_est_used_pub_;
     ros::Publisher slosh_imu_omega_z_filtered_pub_;
+    ros::Publisher slosh_imu_ay_bias_pub_;
+    ros::Publisher slosh_imu_ay_filtered_pub_;
+    ros::Publisher slosh_imu_ay_bias_ready_pub_;
     ros::Publisher mpc_solve_ms_pub_;
     ros::Publisher mpc_status_val_pub_;
 

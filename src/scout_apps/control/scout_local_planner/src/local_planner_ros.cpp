@@ -15,6 +15,37 @@
 
 namespace scout_local_planner {
 
+namespace {
+
+double computeTrimmedMean(std::vector<double> samples, double trim_ratio) {
+    if (samples.empty()) {
+        return 0.0;
+    }
+
+    std::sort(samples.begin(), samples.end());
+
+    const double clamped_trim = std::max(0.0, std::min(0.49, trim_ratio));
+    std::size_t trim_count = static_cast<std::size_t>(
+        std::floor(static_cast<double>(samples.size()) * clamped_trim));
+    if (trim_count * 2 >= samples.size()) {
+        trim_count = 0;
+    }
+
+    const std::size_t begin = trim_count;
+    const std::size_t end = samples.size() - trim_count;
+    if (begin >= end) {
+        return samples[samples.size() / 2];
+    }
+
+    double sum = 0.0;
+    for (std::size_t i = begin; i < end; ++i) {
+        sum += samples[i];
+    }
+    return sum / static_cast<double>(end - begin);
+}
+
+}  // namespace
+
 LocalPlannerROS::LocalPlannerROS() = default;
 LocalPlannerROS::~LocalPlannerROS() = default;
 
@@ -112,6 +143,15 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
                  use_imu_lateral_accel_ ? "on" : "off",
                  use_imu_yaw_rate_ ? "on" : "off",
                  use_imu_alpha_z_ ? "on" : "off");
+        ROS_INFO("[LocalPlannerROS] IMU ay bias compensation: %s (init=%.2fs, |v|<%.3f, |omega|<%.3f, min_samples=%d)",
+                 imu_ay_bias_compensation_enable_ ? "on" : "off",
+                 imu_ay_bias_init_duration_,
+                 imu_ay_bias_static_v_max_,
+                 imu_ay_bias_static_omega_max_,
+                 imu_ay_bias_min_samples_);
+        ROS_INFO("[LocalPlannerROS] IMU ay bias estimator: first_static_only, ema_alpha=%.2f, trim_ratio=%.2f",
+                 imu_ay_bias_estimator_alpha_,
+                 imu_ay_bias_trim_ratio_);
     }
     
     // 发布者
@@ -137,6 +177,9 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     slosh_speed_governor_active_pub_ = nh_.advertise<std_msgs::Int32>("slosh/speed_governor_active", 1);
     slosh_omega_est_used_pub_ = nh_.advertise<std_msgs::Float32>("slosh/omega_est_used", 1);
     slosh_imu_omega_z_filtered_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_omega_z_filtered", 1);
+    slosh_imu_ay_bias_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_ay_bias", 1);
+    slosh_imu_ay_filtered_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_ay_filtered", 1);
+    slosh_imu_ay_bias_ready_pub_ = nh_.advertise<std_msgs::Int32>("slosh/imu_ay_bias_ready", 1);
     mpc_solve_ms_pub_ = nh_.advertise<std_msgs::Float32>("mpc/solve_ms", 1);
     mpc_status_val_pub_ = nh_.advertise<std_msgs::Int32>("mpc/status_val", 1);
     
@@ -202,6 +245,20 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("slosh_estimator/use_imu_alpha_z", use_imu_alpha_z_, false);
     pnh.param("slosh_estimator/imu_topic", imu_topic_, std::string("/imu/data"));
     pnh.param("slosh_estimator/imu_filter_alpha", imu_filter_alpha_, 0.3);
+    pnh.param("slosh_estimator/imu_ay_bias_compensation_enable",
+              imu_ay_bias_compensation_enable_, true);
+    pnh.param("slosh_estimator/imu_ay_bias_init_duration",
+              imu_ay_bias_init_duration_, 3.0);
+    pnh.param("slosh_estimator/imu_ay_bias_static_v_max",
+              imu_ay_bias_static_v_max_, 0.03);
+    pnh.param("slosh_estimator/imu_ay_bias_static_omega_max",
+              imu_ay_bias_static_omega_max_, 0.03);
+    pnh.param("slosh_estimator/imu_ay_bias_min_samples",
+              imu_ay_bias_min_samples_, 100);
+    pnh.param("slosh_estimator/imu_ay_bias_estimator_alpha",
+              imu_ay_bias_estimator_alpha_, 0.15);
+    pnh.param("slosh_estimator/imu_ay_bias_trim_ratio",
+              imu_ay_bias_trim_ratio_, 0.10);
 
     // 车辆参数
     pnh.param("vehicle/v_max", vehicle_params_.v_max, 1.0);
@@ -325,9 +382,73 @@ void LocalPlannerROS::imuCallback(const sensor_msgs::Imu::ConstPtr& msg) {
 
     const double ay_raw = msg->linear_acceleration.y;
     const double omega_z_raw = msg->angular_velocity.z;
+    bool ay_bias_just_initialized = false;
+
+    if (imu_ay_bias_compensation_enable_ &&
+        !imu_ay_bias_ready_ &&
+        !imu_ay_bias_window_closed_) {
+        const bool static_for_bias =
+            has_odom_ &&
+            std::abs(current_v_) < imu_ay_bias_static_v_max_ &&
+            std::abs(current_omega_) < imu_ay_bias_static_omega_max_;
+
+        if (static_for_bias) {
+            if (!imu_ay_bias_window_started_) {
+                imu_ay_bias_window_started_ = true;
+                imu_ay_bias_window_start_ = stamp;
+                imu_ay_bias_window_ema_initialized_ = false;
+                imu_ay_bias_window_ema_ = 0.0;
+                imu_ay_bias_samples_.clear();
+            }
+
+            if (!imu_ay_bias_window_ema_initialized_) {
+                imu_ay_bias_window_ema_ = ay_raw;
+                imu_ay_bias_window_ema_initialized_ = true;
+            } else {
+                imu_ay_bias_window_ema_ =
+                    imu_ay_bias_estimator_alpha_ * ay_raw +
+                    (1.0 - imu_ay_bias_estimator_alpha_) * imu_ay_bias_window_ema_;
+            }
+            imu_ay_bias_samples_.push_back(imu_ay_bias_window_ema_);
+        } else if (imu_ay_bias_window_started_) {
+            const double elapsed = (stamp - imu_ay_bias_window_start_).toSec();
+            const int min_samples = std::max(1, imu_ay_bias_min_samples_);
+            const int sample_count = static_cast<int>(imu_ay_bias_samples_.size());
+
+            if (elapsed >= imu_ay_bias_init_duration_ && sample_count >= min_samples) {
+                imu_ay_bias_ = computeTrimmedMean(imu_ay_bias_samples_, imu_ay_bias_trim_ratio_);
+                imu_ay_bias_ready_ = true;
+                ay_bias_just_initialized = true;
+                ROS_INFO("[LocalPlannerROS] IMU ay bias initialized from first static window: bias=%.5f, samples=%d, static_window=%.3fs, estimator=EMA(alpha=%.2f)+trimmed_mean(trim=%.2f)",
+                         imu_ay_bias_,
+                         sample_count,
+                         elapsed,
+                         imu_ay_bias_estimator_alpha_,
+                         imu_ay_bias_trim_ratio_);
+            } else {
+                ROS_WARN("[LocalPlannerROS] IMU ay bias not initialized: first static window too short (elapsed=%.3fs, samples=%d, need>=%.3fs and >=%d). Bias compensation will stay disabled for this run.",
+                         elapsed,
+                         sample_count,
+                         imu_ay_bias_init_duration_,
+                         min_samples);
+            }
+
+            imu_ay_bias_window_closed_ = true;
+            imu_ay_bias_window_started_ = false;
+            imu_ay_bias_window_ema_initialized_ = false;
+            imu_ay_bias_samples_.clear();
+        } else if (has_odom_) {
+            imu_ay_bias_window_closed_ = true;
+            ROS_WARN("[LocalPlannerROS] IMU ay bias not initialized: robot moved before the first static window. Bias compensation will stay disabled for this run.");
+        }
+    }
+
+    const double ay_bias =
+        (imu_ay_bias_compensation_enable_ && imu_ay_bias_ready_) ? imu_ay_bias_ : 0.0;
+    imu_ay_unbiased_ = ay_raw - ay_bias;
 
     if (!has_imu_) {
-        imu_ay_filtered_ = ay_raw;
+        imu_ay_filtered_ = imu_ay_unbiased_;
         imu_omega_z_filtered_ = omega_z_raw;
         imu_alpha_filtered_ = 0.0;
         prev_imu_omega_z_ = omega_z_raw;
@@ -337,8 +458,12 @@ void LocalPlannerROS::imuCallback(const sensor_msgs::Imu::ConstPtr& msg) {
         return;
     }
 
-    imu_ay_filtered_ =
-        imu_filter_alpha_ * ay_raw + (1.0 - imu_filter_alpha_) * imu_ay_filtered_;
+    if (ay_bias_just_initialized) {
+        imu_ay_filtered_ = imu_ay_unbiased_;
+    } else {
+        imu_ay_filtered_ =
+            imu_filter_alpha_ * imu_ay_unbiased_ + (1.0 - imu_filter_alpha_) * imu_ay_filtered_;
+    }
     imu_omega_z_filtered_ =
         imu_filter_alpha_ * omega_z_raw + (1.0 - imu_filter_alpha_) * imu_omega_z_filtered_;
 
@@ -385,6 +510,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
         case PlannerState::ERROR:
             // 停止
             publishCmdVel(0.0, 0.0);
+            publishSloshDebug(last_solve_time_ms_, last_solve_ok_);
             break;
             
         case PlannerState::REACHED:
@@ -1006,6 +1132,24 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok) {
         std_msgs::Float32 msg;
         msg.data = static_cast<float>(has_imu_ ? imu_omega_z_filtered_ : 0.0);
         slosh_imu_omega_z_filtered_pub_.publish(msg);
+    }
+
+    if (slosh_imu_ay_bias_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(imu_ay_bias_compensation_enable_ ? imu_ay_bias_ : 0.0);
+        slosh_imu_ay_bias_pub_.publish(msg);
+    }
+
+    if (slosh_imu_ay_filtered_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(has_imu_ ? imu_ay_filtered_ : 0.0);
+        slosh_imu_ay_filtered_pub_.publish(msg);
+    }
+
+    if (slosh_imu_ay_bias_ready_pub_.getNumSubscribers() > 0) {
+        std_msgs::Int32 msg;
+        msg.data = (imu_ay_bias_compensation_enable_ && imu_ay_bias_ready_) ? 1 : 0;
+        slosh_imu_ay_bias_ready_pub_.publish(msg);
     }
 
     // slosh 状态 [η_x, η̇_x, η_y, η̇_y]

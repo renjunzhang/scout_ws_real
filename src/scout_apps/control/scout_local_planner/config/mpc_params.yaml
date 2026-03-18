@@ -121,6 +121,13 @@ slosh_estimator:
   use_imu_alpha_z: false        # 是否使用 IMU 角速度差分得到 alpha_z
   imu_topic: /imu/data          # IMU 话题
   imu_filter_alpha: 0.3         # IMU 数据 EMA 滤波系数
+  imu_ay_bias_compensation_enable: true  # 阶段 3：是否对 IMU ay 做静止零偏扣除
+  imu_ay_bias_init_duration: 3.0         # 估计 ay 零偏所需的连续静止时长 (s)
+  imu_ay_bias_static_v_max: 0.03         # 判定静止的最大 |v| (m/s)
+  imu_ay_bias_static_omega_max: 0.03     # 判定静止的最大 |omega| (rad/s)
+  imu_ay_bias_min_samples: 100           # 锁定 ay 零偏前要求的最少 IMU 样本数
+  imu_ay_bias_estimator_alpha: 0.15      # 第一段静止窗口内用于 bias 估计的 EMA 系数
+  imu_ay_bias_trim_ratio: 0.10           # 对 EMA 后 ay 做 trimmed mean 时两端裁剪比例
 
 # =============================================================================
 # 安全退化策略（求解不可行时）
