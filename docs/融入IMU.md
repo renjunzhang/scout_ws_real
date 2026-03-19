@@ -93,6 +93,25 @@ roslaunch scout_bringup scout_imu.launch
 roslaunch scout_bringup scout_imu.launch port:=/dev/ttyUSB0 baud:=115200
 ```
 
+如果你已经准备开始规范 IMU frame，推荐改用：
+
+```bash
+roslaunch scout_bringup scout_imu_with_tf.launch \
+  imu_frame:=imu_link \
+  imu_x:=0.13 \
+  imu_y:=-0.13 \
+  imu_z:=0.0 \
+  imu_roll:=0.0 \
+  imu_pitch:=0.0 \
+  imu_yaw:=0.0
+```
+
+说明：
+
+- 这一步的目标是把 `base_link -> imu_link` 的静态 TF 建起来
+- 当前可以先接受“粗测值”
+- 不要因为先有了静态 TF，就立刻把这些值拿去做 `ay` 杠杆臂补偿
+
 ### 2.2 通过标准
 
 执行：

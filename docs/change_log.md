@@ -55,6 +55,16 @@ catkin_make 2>&1 | grep "processing catkin package"
     # 如果 udev 绑定还没配好，可先临时直连串口
     roslaunch scout_bringup scout_imu.launch port:=/dev/ttyUSB0
 
+    # 如果要把 IMU frame 规范成 imu_link，并同时发布 base_link -> imu_link 静态 TF
+    roslaunch scout_bringup scout_imu_with_tf.launch \
+    imu_frame:=imu_link \
+    imu_x:=0.13 \
+    imu_y:=-0.13 \
+    imu_z:=0.0 \
+    imu_roll:=0.0 \
+    imu_pitch:=0.0 \
+    imu_yaw:=0.0
+
     # 启动后先检查
     rostopic list | grep imu
     rostopic echo -n1 /imu/data

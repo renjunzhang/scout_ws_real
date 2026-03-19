@@ -546,6 +546,27 @@
     - `scout_local_planner/config/mpc_params.yaml`
     - `scout_local_planner/config/mpc_params_sim.yaml`
   - 后续如果修改 `(R, h, zeta)`，应优先修改上述 planner YAML，而不是只改 `slosh_models/config/slosh_params.yaml`
+
+### 2026-03-19 `imu_link` 静态 TF 方案整理
+
+- 背景：
+  - 当前 IMU 安装平移量只有粗测值，例如：
+    - `imu_rx = +0.13 m`
+    - `imu_ry = -0.13 m`
+  - 这类粗测值暂时不适合直接拿去做 `ay` 杠杆臂补偿
+  - 但可以先用于把 `imu_link` 语义和 `TF` 树理顺
+- 新增文件：
+  - [scout_imu_with_tf.launch](/home/a/scout_ws/src/scout_ros/scout_bringup/launch/scout_imu_with_tf.launch)
+- 方案：
+  - 继续复用 `scout_imu.launch` 启动厂家 IMU 驱动
+  - 同时额外发布 `base_link -> imu_link` 静态 TF
+  - 默认把 IMU 消息头 `frame_id` 改为 `imu_link`
+- 当前约定：
+  - 这套静态 TF 方案当前用于：
+    - 理顺 frame 语义
+    - 便于 RViz / tf 工具核对安装位姿
+    - 为后续如需精细外参补偿预留统一入口
+  - 当前不据此直接修改 `scout_local_planner` 里的 `ay` 补偿逻辑
     - `mpc/Q_etheta: 10 -> 12`
     - `mpc/terminal_factor_ec: 5 -> 7`
     - `mpc/terminal_factor_etheta: 3 -> 5`

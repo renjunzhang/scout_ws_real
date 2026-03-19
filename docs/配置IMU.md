@@ -425,6 +425,7 @@ Serial port opened successfully...
 
 - [imu_only.launch](/home/a/scout_ws/src/wit_ros_imu/launch/imu_only.launch)
 - [scout_imu.launch](/home/a/scout_ws/src/scout_ros/scout_bringup/launch/scout_imu.launch)
+- [scout_imu_with_tf.launch](/home/a/scout_ws/src/scout_ros/scout_bringup/launch/scout_imu_with_tf.launch)
 
 推荐工控机端使用：
 
@@ -465,6 +466,31 @@ roslaunch scout_bringup scout_imu.launch frame_id:=imu_link
 - 这只会改变消息头里的 `frame_id`
 - 不会自动帮你做 TF 旋转
 - 也不会自动做重力补偿
+
+如果你要把 IMU frame 语义理顺，推荐改用：
+
+```bash
+roslaunch scout_bringup scout_imu_with_tf.launch \
+  imu_frame:=imu_link \
+  imu_x:=0.13 \
+  imu_y:=-0.13 \
+  imu_z:=0.0 \
+  imu_roll:=0.0 \
+  imu_pitch:=0.0 \
+  imu_yaw:=0.0
+```
+
+这个 launch 会同时做两件事：
+
+- IMU 消息头改成 `imu_link`
+- 发布 `base_link -> imu_link` 的静态 TF
+
+注意：
+
+- 这里的 `imu_x / imu_y / imu_z / imu_roll / imu_pitch / imu_yaw` 可以先填“粗测值”
+- 当前阶段这样做的目的，是把 TF 语义和可视化理顺
+- 不是立刻拿这些粗测值去做 `ay` 杠杆臂补偿
+- 如果后续量测更精确，再只改这个静态 TF 即可
 
 ### 2.7 建独立工作空间
 
@@ -631,6 +657,10 @@ rosrun tf tf_echo base_link imu_link
 
 - 当前 `scout_local_planner` 不会根据 `frame_id` 自动旋转 IMU 数据
 - 所以 `frame_id` 不是拿来“看一眼就完了”，而是要确认实际安装方向是否已经和 `base_link` 对齐
+- 静态 TF 当前主要用于：
+  - 保证 `imu_link` 语义正确
+  - 便于 RViz / tf 工具核对安装位置
+  - 为后续若要做严格外参补偿保留统一入口
 
 如果 `frame_id` 正常，但 IMU 实际装歪了，当前代码仍然会直接吃错轴数据。
 

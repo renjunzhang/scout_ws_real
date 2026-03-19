@@ -1,0 +1,34 @@
+<launch>
+    <arg name="port" default="/dev/imu_usb" />
+    <arg name="baud" default="115200" />
+    <arg name="imu_topic" default="/imu/data" />
+    <arg name="mag_topic" default="/wit/mag" />
+
+    <arg name="base_frame" default="base_link" />
+    <arg name="imu_frame" default="imu_link" />
+
+    <!--
+      说明：
+      1. 这组外参可先填“粗测值”，用于明确 TF 语义与可视化，不用于直接做 ay 杠杆臂补偿。
+      2. tf/static_transform_publisher 欧拉角参数顺序为 yaw pitch roll。
+    -->
+    <arg name="imu_x" default="0.13" />
+    <arg name="imu_y" default="-0.13" />
+    <arg name="imu_z" default="0.0" />
+    <arg name="imu_roll" default="0.0" />
+    <arg name="imu_pitch" default="0.0" />
+    <arg name="imu_yaw" default="0.0" />
+    <arg name="publish_static_tf" default="true" />
+
+    <include file="$(find scout_bringup)/launch/scout_imu.launch">
+        <arg name="port" value="$(arg port)" />
+        <arg name="baud" value="$(arg baud)" />
+        <arg name="frame_id" value="$(arg imu_frame)" />
+        <arg name="imu_topic" value="$(arg imu_topic)" />
+        <arg name="mag_topic" value="$(arg mag_topic)" />
+    </include>
+
+    <node if="$(arg publish_static_tf)"
+          pkg="tf" type="static_transform_publisher" name="tf_base_to_imu"
+          args="$(arg imu_x) $(arg imu_y) $(arg imu_z) $(arg imu_yaw) $(arg imu_pitch) $(arg imu_roll) $(arg base_frame) $(arg imu_frame) 40" />
+</launch>
