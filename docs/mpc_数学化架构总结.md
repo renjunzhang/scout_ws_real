@@ -88,6 +88,20 @@ a_k\\a_{y,k}
 
 因此该项目是“Frenet 跟踪 + 晃动线性子系统”增广模型，并在 \(a_y=v\omega\) 处发生耦合。
 
+工程上还要补一条当前实现的边界条件：
+
+- 默认配置里 `slosh/offset_x = 0`、`slosh/offset_y = 0`
+- 因而在线估计侧 `LiquidSloshModel::update()` 里的旋转修正
+\[
+a_{cx}=a_x-\alpha_z r_y-\omega_z^2 r_x,\quad
+a_{cy}=a_y+\alpha_z r_x-\omega_z^2 r_y
+\]
+会退化为 \(a_{cx}=a_x,\ a_{cy}=a_y\)
+- 所以在当前零偏心配置下，`alpha_z` 与 `yaw_rate` 不会实质改变 **modal state propagation**
+- 但 `yaw_rate` 仍会通过抛物面项进入当前高度监测，因此在 governor 打开时仍可能通过风险链路间接影响控制
+
+这也是为什么当前版本里，真正直接改变模态状态演化的 IMU 通道主要是 `a_y`，而不是 `alpha_z`。
+
 进一步说，当前 QP 在每个 horizon 上实际使用的是：
 \[
 \mathbf x_{k+1}=\mathbf A_k\mathbf x_k+\mathbf B_k\mathbf u_k+\mathbf c_k
@@ -95,6 +109,9 @@ a_k\\a_{y,k}
 
 这里的 \((\mathbf A_k,\mathbf B_k,\mathbf c_k)\) 不是固定常数，而是围绕当前名义轨迹逐步线性化得到的时变仿射模型。  
 根源就是 \(a_y=v\omega\) 这类乘积项会让动力学耦合随步变化。
+
+若后续试管不再位于机体旋转中心，且准备把 `offset_x/offset_y` 设为非零，则必须把同样的偏心旋转修正同步并入预测模型与线性化。  
+否则在线估计器和 MPC 优化器将对应两套不同的物理世界：前者按偏心容器传播，后者仍按中心容器传播。
 
 ## 3) 代价函数（项目特化）
 

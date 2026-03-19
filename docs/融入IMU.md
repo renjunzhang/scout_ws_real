@@ -34,6 +34,47 @@
 - `slosh_use_imu_lateral_accel:=true` 目前还不建议正式启用
 - `slosh_use_imu_alpha_z:=true` 目前还不建议正式启用
 
+### 0.1 当前零偏心配置下，IMU 三路输入的真实作用边界
+
+当前运行配置里，试管偏心参数还是：
+
+- `slosh/offset_x = 0.0`
+- `slosh/offset_y = 0.0`
+
+这会带来一个很关键的工程事实：
+
+- `LiquidSloshModel::update()` 里的旋转修正项会退化
+- 因此 `alpha_z` 对当前 **modal state 更新**几乎没有实质作用
+- `yaw_rate` 仍然会进入当前高度监测中的抛物面项
+- 如果启用了 speed governor，`yaw_rate` 还会通过当前高度风险链路间接影响速度治理
+- 真正直接进入当前 slosh 状态传播、会改变主模态演化的 IMU 通道，其实是 `linear_acceleration.y`
+
+所以在当前 `offset_x = offset_y = 0` 的版本里，IMU 融入的优先级应理解为：
+
+1. `yaw_rate` 值得保留，但不要高估它对主模态传播的贡献
+2. `ay` 才是最值得投入预处理和标定精力的通道
+3. `alpha_z` 可以继续保留验证入口，但短期不是最高优先级
+
+### 0.2 后续若试管不在机体中心，修改方案应这样做
+
+如果后续把试管安装到机体旋转中心之外，不能只改 `slosh/offset_x`、`slosh/offset_y` 就结束。  
+要保证 **估计器和优化器使用同一套物理假设**，至少要同步做下面几件事：
+
+1. 先量清楚试管中心相对机体旋转中心的几何关系，并写入：
+   - `slosh/offset_x`
+   - `slosh/offset_y`
+2. 保持估计侧继续使用旋转修正：
+   - `a_cx = a_x - alpha_z * r_y - omega_z^2 * r_x`
+   - `a_cy = a_y + alpha_z * r_x - omega_z^2 * r_y`
+3. 把同样的偏心旋转修正并入 `DiffDriveModel::predict()` 和 `DiffDriveModel::linearize()`，不能再只用 `a_y = v * omega`
+4. 如果希望 `alpha_z` 在 MPC 预测域内也真正发挥作用，就要给预测侧提供一致的 `alpha_z` 近似，而不是只在在线估计侧使用它
+5. 完成以上同步后，再重新评估：
+   - `slosh_use_imu_alpha_z`
+   - `slosh_use_imu_lateral_accel`
+   - `Q_slosh` 的物理解释
+
+否则会出现“估计器按偏心容器在算，优化器仍按中心容器在算”的不一致，论文和实验解释都会被污染。
+
 ---
 
 ## 1. 总原则
@@ -700,6 +741,9 @@ roslaunch scout_local_planner slosh_experiment.launch \
 3. 再做 EMA
 
 所以它天然比 `yaw_rate` 更脆弱。
+
+另外还要明确一点：在当前 `slosh/offset_x = 0`、`slosh/offset_y = 0` 的默认配置下，`alpha_z` 对主模态状态传播的直接作用本来就很弱。  
+所以阶段 4 的意义主要是“为后续偏心容器版本预留验证入口”，而不是说明它已经是当前版本里最关键的 IMU 通道。
 
 ### 6.2 验证动作
 
