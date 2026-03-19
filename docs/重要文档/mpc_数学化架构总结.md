@@ -8,6 +8,132 @@
 - 当前每个控制周期求解的并不是固定 LTI QP，而是围绕名义轨迹 successive linearization 后得到的**affine time-varying QP**。
 - 终点最后一小段当前也不是“全程由 MPC 连续优化到停下”，而是 near-goal 进入 `goal_stop_pending_` 后由外层状态机直接发布 `0` 速制动。
 
+## 目录
+
+- 0) 参数入口速查
+- 1) 当前项目 MPC 的优化问题
+- 2) 运动学/动力学模型（项目特化）
+  - 2.1 基础 Frenet 跟踪子系统（4 维）
+  - 2.2 液体晃动增广子系统（4 维）
+- 3) 代价函数（项目特化）
+- 4) 约束系统（项目特化）
+  - 4.1 等式约束
+  - 4.2 不等式约束
+- 5) 回答核心问题：没有“液面约束层”会怎样？
+- 6) 通用 MPC 与本项目 MPC 的数学化对比
+  - 6.1 通用 MPC（抽象）
+  - 6.2 本项目 MPC（工程落地）
+- 7) 监测量与终点行为的工程语义
+  - 7.1 `/slosh/height_pred_max`
+  - 7.2 near-goal 行为
+
+## 0) 参数入口速查
+
+当前文档里提到的参数，运行时主要有 3 个入口：
+
+- 实物默认参数真源：
+  - `/home/a/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params.yaml`
+- 仿真默认参数真源：
+  - `/home/a/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params_sim.yaml`
+- 实验时常用 launch 覆盖入口：
+  - `/home/a/scout_ws/src/scout_apps/control/scout_local_planner/launch/slosh_experiment.launch`
+
+优先级上，一般是：
+
+- YAML 提供默认值
+- `slosh_experiment.launch` 在启动时再覆盖一部分实验参数
+
+### 0.1 代价函数相关参数
+
+- 跟踪项权重：
+  - `mpc/Q_el`: 纵向 lag 误差权重（未启用 contour/lag 结构时使用）
+  - `mpc/Q_ec`: 横向 contour 误差权重（未启用 contour/lag 结构时使用）
+  - `mpc/Q_etheta`: 航向误差权重
+  - `mpc/Q_v`: 速度跟踪误差 `v-v_ref` 的权重
+- contour / lag 结构：
+  - `mpc/use_contour_lag`: 是否用 contour/lag 误差定义替代原始 `e_c/e_l`
+  - `mpc/Q_contour`: contour 横向误差权重
+  - `mpc/Q_lag`: lag 纵向误差权重
+- 角速度前馈项：
+  - `mpc/enable_omega_ff`: 是否加入 `(\omega-\omega_ref)^2` 这一项
+  - `mpc/Q_omega_ff`: 角速度前馈项的权重
+- 控制项权重：
+  - `mpc/R_a`: 线加速度控制量 `a` 的惩罚权重
+  - `mpc/R_omega`: 角速度控制量 `omega` 的惩罚权重
+- 控制变化率项权重：
+  - `mpc/R_da`: 相邻时刻加速度变化 `Δa` 的惩罚权重
+  - `mpc/R_domega`: 相邻时刻角速度变化 `Δomega` 的惩罚权重
+- 终端渐进权重：
+  - `mpc/terminal_factor_ec`: 预测末段横向误差权重放大倍数
+  - `mpc/terminal_factor_etheta`: 预测末段航向误差权重放大倍数
+  - `mpc/terminal_factor_v`: 预测末段速度误差权重放大倍数
+  - `mpc/terminal_ramp_steps`: 末段渐进放大权重的步数
+- slosh 软代价：
+  - `mpc/Q_slosh`: 晃动抑制主权重，最终映射到 `Q_slosh_eta`
+
+其中：
+
+- `Q_slosh = 0` 表示不加入 slosh 软代价
+- `Q_slosh > 0` 表示把 `eta_x / eta_y` 的二次惩罚加入 cost
+- `enable_omega_ff = true` 表示额外加入 `(\omega-\omega_ref)^2` 这一项，作用是让 MPC 输出更接近一个预设的参考角速度（通常来自路径曲率）
+
+### 0.2 约束与 near-goal 相关参数
+
+- slosh 盒约束：
+  - `mpc/enable_slosh_box_constraint`: 是否启用第一版 `ETA_X/ETA_Y` modal proxy 盒约束
+  - `mpc/slosh_height_max`: 允许的液面高度预算，用于计算盒约束阈值
+- 控制边界与变化率边界：
+  - `vehicle/v_max`: 最大线速度上界
+  - `vehicle/omega_max`: 最大角速度上界
+  - `vehicle/a_max`: 最大线加速度上界
+  - `vehicle/alpha_max`: 最大角加速度上界，对应 `omega` 变化率约束
+  - `vehicle/j_max`: 最大 jerk 上界，对应 `a` 变化率约束
+  - `mpc/constrain_omega_rate`: 是否启用角速度变化率硬约束
+  - `mpc/constrain_accel_rate`: 是否启用加速度变化率硬约束
+- near-goal / 路径处理：
+  - `path_handler/lookahead_distance`: 前视距离，影响参考点采样与转弯激进程度
+  - `path_handler/goal_tolerance`: 判定到达目标的位置容差
+  - `path_handler/yaw_tolerance`: 判定到达目标的航向容差
+  - `path_handler/goal_reached_max_speed`: 允许切到 `REACHED` 的最大线速度
+  - `path_handler/goal_reached_max_omega`: 允许切到 `REACHED` 的最大角速度
+  - `path_handler/goal_capture_distance`: 终点捕获区半径
+  - `path_handler/goal_capture_min_speed`: 捕获区内维持的最低参考速度
+  - `path_handler/max_tan_accel`: 速度曲线生成时的最大切向加速度
+  - `path_handler/max_tan_decel`: 速度曲线生成时的最大切向减速度
+  - `path_handler/goal_speed`: 路径终点的目标参考速度
+
+### 0.3 slosh 模型相关参数
+
+- 容器与液体参数：
+  - `slosh/container_radius`: 容器内半径
+  - `slosh/liquid_height`: 静止液面高度
+  - `slosh/liquid_density`: 液体密度
+  - `slosh/damping_ratio`: 主模态阻尼比
+  - `slosh/mode_index`: 当前采用的晃动模态阶数
+- 模型口径：
+  - `slosh/use_linear_model`: 是否使用线性高度系数映射；当前不切换传播动力学
+  - `slosh/use_parabola_term`: 是否在高度监测中叠加 `R^2\omega^2/4g` 抛物面项
+- 安装偏心：
+  - `slosh/offset_x`: 容器相对机体旋转中心的 X 偏心
+  - `slosh/offset_y`: 容器相对机体旋转中心的 Y 偏心
+
+### 0.4 IMU / 实验覆盖常用参数
+
+这些通常优先在 `slosh_experiment.launch` 里改：
+
+- `Q_slosh`: 实验时覆盖 `mpc/Q_slosh`，控制 slosh 软代价是否启用及其强度
+- `enable_slosh_box_constraint`: 实验时覆盖盒约束开关
+- `slosh_use_imu_yaw_rate`: 是否用 IMU `angular_velocity.z` 替代 odom `omega`
+- `slosh_use_imu_lateral_accel`: 是否用 IMU `linear_acceleration.y` 替代 `v*omega`
+- `slosh_use_imu_alpha_z`: 是否用 IMU 差分得到的 `alpha_z`
+- `slosh_imu_topic`: IMU 话题名，默认 `/imu/data`
+- `slosh_imu_filter_alpha`: IMU 输入的 EMA 滤波系数
+- `slosh_imu_ay_bias_compensation_enable`: 是否启用 `ay` 静止零偏扣除
+- `slosh_imu_ay_bias_init_duration`: 估计 `ay` 零偏所需的连续静止时间
+- `slosh_speed_governor_enable`: 是否启用外环残余晃动感知速度治理
+
+如果你只是做实物实验切换，优先改 launch 覆盖值；如果你要改“默认系统行为”，再回到 `mpc_params.yaml`。
+
 ## 1) 当前项目 MPC 的优化问题
 
 设预测步长为 \(N\)，状态维度 \(n_x=8\)，控制维度 \(n_u=2\)。
@@ -138,6 +264,41 @@ Q_{\text{slosh},\eta}=Q_{\text{slosh}}\cdot h_{\text{coeff}}^2
 \]
 
 也就是说，软代价直接惩罚的是主模态广义坐标对应的二次型，而不是把“总液面高度”本身直接作为 QP 状态去惩罚。
+
+若按“标量惩罚项个数”理解，当前代码更准确的口径是：
+
+- 基础 tracking cost：4 项
+  - \(e_l\) / \(e_c\) / \(e_\theta\) / \((v-v_{\text{ref}})\)
+- 基础 control cost：2 项
+  - \(a\) / \(\omega\)
+- 基础 control-rate cost：2 项
+  - \(\Delta a\) / \(\Delta\omega\)
+
+因此默认基础骨架可以理解为 **4 + 2 + 2 = 8 项**。
+
+在此之上，还有两类可选增强：
+
+- slosh 软代价：2 项
+  - \(\eta_x^2\) / \(\eta_y^2\)
+- `omega_ff` 项：1 项
+  - \((\omega-\omega_{\text{ref}})^2\)
+
+所以：
+
+- 不开 slosh、不开 `omega_ff` 时，可理解为 **8 项基础惩罚**
+- 开 slosh 时，可理解为 **8 + 2 = 10 项**
+- 再开 `omega_ff` 时，可理解为 **11 项**
+
+这里还要补一条当前实现细节：
+
+- terminal ramp 不是“新增 cost 项”
+- 它只是把预测域末段已有的 \(e_c/e_\theta/v\) 权重渐进放大
+
+因此论文或文档里若要写“当前 cost 有多少项”，建议写成：
+
+- **基础 8 项 + 可选 2 项 slosh + 可选 1 项 omega feedforward**
+
+比简单写成一个固定整数更准确。
 
 ## 4) 约束系统（项目特化）
 

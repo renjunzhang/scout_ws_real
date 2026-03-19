@@ -100,7 +100,7 @@
 
 ### 增加 soft cost 调试话题
 
-- 修改文件：[local_planner_ros.h](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/include/scout_local_planner/local_planner_ros.h)、[local_planner_ros.cpp](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/src/local_planner_ros.cpp)、[record_slosh_experiment.sh](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh)、[topic_list.md](/home/a/scout_ws/docs/topic_list.md)
+- 修改文件：[local_planner_ros.h](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/include/scout_local_planner/local_planner_ros.h)、[local_planner_ros.cpp](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/src/local_planner_ros.cpp)、[record_slosh_experiment.sh](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh)、[topic_list.md](/home/a/scout_ws/docs/重要文档/topic_list.md)
 - 新增发布话题：`/slosh/q_slosh_eta`
 - 语义：发布当前实际进入 QP 的液体软代价权重 `Q_slosh_eta`
 - 目的：下一轮实验可直接在 bag 中确认 soft cost 是否真的生效，而不必只靠 launch 参数推断
@@ -178,7 +178,7 @@
 
 ### IMU 厂家层 bring-up 打通
 
-- 新增文档：[配置IMU.md](/home/a/scout_ws/docs/配置IMU.md)
+- 新增文档：[配置IMU.md](/home/a/scout_ws/docs/重要文档/配置IMU.md)
 - 今日完成了 IMU 从“电脑端独立 bring-up”到“工控机端独立 bring-up”的整理与实测记录
 - 电脑端已确认可直接通过厂家包 `wit_ros_imu` 跑出：
   - `/imu/data`
@@ -213,8 +213,8 @@
 
 ### 实物流程与话题清单同步更新
 
-- 修改文件：[change_log.md](/home/a/scout_ws/docs/change_log.md)
-- 修改文件：[topic_list.md](/home/a/scout_ws/docs/topic_list.md)
+- 修改文件：[change_log.md](/home/a/scout_ws/docs/重要文档/change_log.md)
+- 修改文件：[topic_list.md](/home/a/scout_ws/docs/重要文档/topic_list.md)
 - 改动内容：
   - 在实物流程中新增 `5.5 启动 IMU`
   - 明确 IMU 属于“实物 anti-slosh 实验建议单独启动”的链路
@@ -530,70 +530,6 @@
   - 第二轮候选参数：
     - `mpc/Q_contour: 32 -> 40`
 
-### 2026-03-19 slosh 参数真源收口
-
-- 问题：
-  - 文档里已经把 28 mm 试管参数更新成 `container_radius = 0.014 m`、`liquid_height = 0.055 m`、`damping_ratio = 0.12`
-  - 但 `slosh_experiment.launch` 实际只加载 `scout_local_planner/config/mpc_params*.yaml`
-  - 而运行时代码 `LocalPlannerROS::loadParameters()` 也是直接从当前节点的 `slosh/*` 读取参数
-  - 因此如果 `mpc_params*.yaml` 仍保留旧值，实物实验实际用到的就仍是旧的大容器参数
-- 修正：
-  - 将 `scout_local_planner/config/mpc_params.yaml` 中 `slosh/*` 更新为 28 mm 试管参数
-  - 将 `scout_local_planner/config/mpc_params_sim.yaml` 中 `slosh/*` 也同步到同一组参数，避免 `sim` / `real` 两套实验入口语义分裂
-  - 将 `slosh_models/config/slosh_params.yaml` 明确标注为“参考示例文件，不是 `scout_local_planner` 的运行时真源”
-- 当前约定：
-  - `scout_local_planner` 的 slosh 参数真源为：
-    - `scout_local_planner/config/mpc_params.yaml`
-    - `scout_local_planner/config/mpc_params_sim.yaml`
-  - 后续如果修改 `(R, h, zeta)`，应优先修改上述 planner YAML，而不是只改 `slosh_models/config/slosh_params.yaml`
-
-### 2026-03-19 `imu_link` 静态 TF 方案整理
-
-- 背景：
-  - 当前 IMU 安装平移量只有粗测值，例如：
-    - `imu_rx = +0.13 m`
-    - `imu_ry = -0.13 m`
-  - 这类粗测值暂时不适合直接拿去做 `ay` 杠杆臂补偿
-  - 但可以先用于把 `imu_link` 语义和 `TF` 树理顺
-- 新增文件：
-  - [scout_imu_with_tf.launch](/home/a/scout_ws/src/scout_ros/scout_bringup/launch/scout_imu_with_tf.launch)
-- 方案：
-  - 继续复用 `scout_imu.launch` 启动厂家 IMU 驱动
-  - 同时额外发布 `base_link -> imu_link` 静态 TF
-  - 默认把 IMU 消息头 `frame_id` 改为 `imu_link`
-- 当前约定：
-  - 这套静态 TF 方案当前用于：
-    - 理顺 frame 语义
-    - 便于 RViz / tf 工具核对安装位姿
-    - 为后续如需精细外参补偿预留统一入口
-  - 当前不据此直接修改 `scout_local_planner` 里的 `ay` 补偿逻辑
-    - `mpc/Q_etheta: 10 -> 12`
-    - `mpc/terminal_factor_ec: 5 -> 7`
-    - `mpc/terminal_factor_etheta: 3 -> 5`
-- 当前不建议优先做的调整：
-  - 暂不优先降低 `R_omega` 或 `R_domega`
-  - 原因：
-    - 第三段已经出现较明显的角速度饱和和求解失败
-    - 这时若进一步放松角速度惩罚，容易让控制更激进，而不是更稳定
-- near-goal 参数暂列为次要问题：
-  - 如果后续第三段 tracking 修稳后，仍出现“最后几厘米收不住”或“终点前 creeping 过快”，再单独测试：
-    - `goal_capture_min_speed`
-    - `goal_capture_distance`
-    - `max_tan_decel`
-  - 当前这三个参数不是本 bag 的主矛盾
-
-#### 下一轮测试口径
-
-- 固定实验前提：
-  - 继续录制以下调试话题：
-    - `/slosh/omega_est_used`
-    - `/slosh/imu_omega_z_filtered`
-  - 全程尽量保持底盘 `control_mode=1`
-  - 同一路线只改一组参数，不混改 IMU 开关和 tracking 参数
-- 建议测试顺序：
-  1. 保持 `slosh_use_imu_yaw_rate:=true` 不变，只做第一轮最小调参
-  2. 若第三段贴路径明显改善，再考虑第二轮权重调参
-  3. 若第三段贴路径改善后，末端仍有收敛问题，再回头单独测 near-goal 参数
 
 ### 2026-03-18 阶段 3：IMU ay 零偏扣除启动
 
@@ -733,3 +669,206 @@
 - 同步更新：
   - `CMakeLists.txt` 已加入该脚本安装列表
   - `融入IMU.md` 已补充阶段 4 的脚本入口和推荐运行方式
+
+
+
+### 2026-03-19 slosh 参数真源收口
+
+- 问题：
+  - 文档里已经把 28 mm 试管参数更新成 `container_radius = 0.014 m`、`liquid_height = 0.055 m`、`damping_ratio = 0.12`
+  - 但 `slosh_experiment.launch` 实际只加载 `scout_local_planner/config/mpc_params*.yaml`
+  - 而运行时代码 `LocalPlannerROS::loadParameters()` 也是直接从当前节点的 `slosh/*` 读取参数
+  - 因此如果 `mpc_params*.yaml` 仍保留旧值，实物实验实际用到的就仍是旧的大容器参数
+- 修正：
+  - 将 `scout_local_planner/config/mpc_params.yaml` 中 `slosh/*` 更新为 28 mm 试管参数
+  - 将 `scout_local_planner/config/mpc_params_sim.yaml` 中 `slosh/*` 也同步到同一组参数，避免 `sim` / `real` 两套实验入口语义分裂
+  - 将 `slosh_models/config/slosh_params.yaml` 明确标注为“参考示例文件，不是 `scout_local_planner` 的运行时真源”
+- 当前约定：
+  - `scout_local_planner` 的 slosh 参数真源为：
+    - `scout_local_planner/config/mpc_params.yaml`
+    - `scout_local_planner/config/mpc_params_sim.yaml`
+  - 后续如果修改 `(R, h, zeta)`，应优先修改上述 planner YAML，而不是只改 `slosh_models/config/slosh_params.yaml`
+
+### 2026-03-19 `imu_link` 静态 TF 方案整理
+
+- 背景：
+  - 当前 IMU 安装平移量只有粗测值，例如：
+    - `imu_rx = +0.13 m`
+    - `imu_ry = -0.13 m`
+  - 这类粗测值暂时不适合直接拿去做 `ay` 杠杆臂补偿
+  - 但可以先用于把 `imu_link` 语义和 `TF` 树理顺
+- 新增文件：
+  - [scout_imu_with_tf.launch](/home/a/scout_ws/src/scout_ros/scout_bringup/launch/scout_imu_with_tf.launch)
+- 方案：
+  - 继续复用 `scout_imu.launch` 启动厂家 IMU 驱动
+  - 同时额外发布 `base_link -> imu_link` 静态 TF
+  - 默认把 IMU 消息头 `frame_id` 改为 `imu_link`
+- 当前约定：
+  - 这套静态 TF 方案当前用于：
+    - 理顺 frame 语义
+    - 便于 RViz / tf 工具核对安装位姿
+    - 为后续如需精细外参补偿预留统一入口
+  - 当前不据此直接修改 `scout_local_planner` 里的 `ay` 补偿逻辑
+    - `mpc/Q_etheta: 10 -> 12`
+    - `mpc/terminal_factor_ec: 5 -> 7`
+    - `mpc/terminal_factor_etheta: 3 -> 5`
+- 当前不建议优先做的调整：
+  - 暂不优先降低 `R_omega` 或 `R_domega`
+  - 原因：
+    - 第三段已经出现较明显的角速度饱和和求解失败
+    - 这时若进一步放松角速度惩罚，容易让控制更激进，而不是更稳定
+- near-goal 参数暂列为次要问题：
+  - 如果后续第三段 tracking 修稳后，仍出现“最后几厘米收不住”或“终点前 creeping 过快”，再单独测试：
+    - `goal_capture_min_speed`
+    - `goal_capture_distance`
+    - `max_tan_decel`
+  - 当前这三个参数不是本 bag 的主矛盾
+
+#### 下一轮测试口径
+
+- 固定实验前提：
+  - 继续录制以下调试话题：
+    - `/slosh/omega_est_used`
+    - `/slosh/imu_omega_z_filtered`
+  - 全程尽量保持底盘 `control_mode=1`
+  - 同一路线只改一组参数，不混改 IMU 开关和 tracking 参数
+- 建议测试顺序：
+  1. 保持 `slosh_use_imu_yaw_rate:=true` 不变，只做第一轮最小调参
+  2. 若第三段贴路径明显改善，再考虑第二轮权重调参
+  3. 若第三段贴路径改善后，末端仍有收敛问题，再回头单独测 near-goal 参数
+
+
+
+## 2026-03-20
+
+### 文档总览更新：`总结1.md`
+
+- 修改文件：[总结1.md](/home/a/scout_ws/docs/重要文档/总结1.md)
+- 本轮将项目总览文档按当前真实实现状态重新对齐，重点更新了：
+  - 实机 IMU 接入现状
+  - `slosh_models` 当前运行口径
+  - `LocalPlannerROS` 中 `imuCallback()` 的实际处理链
+  - 阶段 7 / anti-slosh 当前状态与已知局限
+- 关键口径调整：
+  - 明确当前实机 `/imu/data` 已稳定接入，约 `50 Hz / 115200`
+  - 明确当前默认安全配置是：
+    - `yaw_rate=true`
+    - `lateral_accel=false`
+    - `alpha_z=false`
+  - 明确当前状态传播仍是 L 动力学，`use_linear_model` 主要切高度系数
+  - 明确当前运行语义是：
+    - L dynamics
+    - L height coefficient
+    - `L + parabola term` 监测高度
+  - 明确当前 `offset_x = offset_y = 0` 时：
+    - `alpha_z / yaw_rate` 对主模态传播直接作用较弱
+    - 真正直接改变模态传播的 IMU 通道主要是 `ay`
+
+### 文档目录补齐：`总结1.md`
+
+- 修改文件：[总结1.md](/home/a/scout_ws/docs/重要文档/总结1.md)
+- 将目录补齐到当前 `## / ###` 结构，新增了各章小节入口
+- 这样后续再维护 IMU、MPC、slosh 相关段落时，目录和正文结构能保持一致
+
+### MPC 数学文档补强：`mpc_数学化架构总结.md`
+
+- 修改文件：[mpc_数学化架构总结.md](/home/a/scout_ws/docs/重要文档/mpc_数学化架构总结.md)
+- 开头新增：
+  - 目录
+  - 参数入口速查
+- 参数入口速查中明确了 3 个真实入口：
+  - 实物默认参数真源：`mpc_params.yaml`
+  - 仿真默认参数真源：`mpc_params_sim.yaml`
+  - 实验时常用覆盖入口：`slosh_experiment.launch`
+- 同时把常用参数改成“参数名 + 同行解释”的格式，涵盖：
+  - cost 权重
+  - near-goal / 约束参数
+  - `slosh` 模型参数
+  - IMU / 实验覆盖参数
+
+### cost 项数与语义说明补充
+
+- 修改文件：[mpc_数学化架构总结.md](/home/a/scout_ws/docs/重要文档/mpc_数学化架构总结.md)
+- 补充了“当前 cost 到底有几类、几项”的更精确口径：
+  - 基础 tracking：4 项
+  - 基础 control：2 项
+  - 基础 control-rate：2 项
+  - 因此基础骨架可理解为 `8` 项
+  - 可选 slosh：`2` 项
+  - 可选 `omega_ff`：`1` 项
+- 同时明确：
+  - `terminal ramp` 不是新增 cost 项，只是末段权重放大
+  - 当前 `Q_slosh > 0` 时才会真正把 slosh 软代价加入 QP
+  - 当前 `enable_omega_ff = true` 时会加入 `(\omega-\omega_ref)^2`
+
+### IMU 文档可读性整理：`配置IMU.md` 与 `融入IMU.md`
+
+- 修改文件：
+  - [配置IMU.md](/home/a/scout_ws/docs/重要文档/配置IMU.md)
+  - [融入IMU.md](/home/a/scout_ws/docs/重要文档/融入IMU.md)
+- 处理内容：
+  - 两份文档开头都补上了目录
+  - `配置IMU.md` 的目录与正文编号重新对齐
+  - 修正了 `10.4 / 10.5` 这两个尾部小节的编号残留
+- 目的：
+  - 便于后续按“bring-up / 工控机核验 / IMU 融入阶段”快速跳读
+
+### 论文路线状态定位：`20260314进一步修改方案.md`
+
+- 修改文件：[20260314进一步修改方案.md](/home/a/scout_ws/docs/重要文档/20260314进一步修改方案.md)
+- 将“投稿前必须完成的里程碑”改成带状态的版本，统一使用：
+  - `已完成`
+  - `部分完成`
+  - `未开始`
+- 当前定位更新为：
+  - `P0`：基本完成
+  - `P1`：只完成了一部分
+  - `P2`：大多未开始
+- 这样后续看论文主线时，可以直接区分：
+  - 哪些只是工程上已经跑通
+  - 哪些还没有形成投稿级证据链
+
+### 论文建模总结补目录：`Slosh Dynamics论文中建模总结.md`
+
+- 修改文件：[Slosh Dynamics论文中建模总结.md](/home/a/scout_ws/docs/重要文档/Slosh%20Dynamics论文中建模总结.md)
+- 在文档开头新增目录
+- 目录按当前结构展开到：
+  - `L / NL`
+  - 高度映射
+  - 工程对应关系
+- 便于后续快速对照论文与当前 `slosh_models` 实现
+
+### 今日修改范围说明
+
+- 本轮主要是**文档与当前实现状态的对齐**，没有新增控制逻辑代码改动
+- 核心目标是把以下几件事写清楚：
+  - 当前 IMU 融入真实进度
+  - 当前 slosh 模型真实口径
+  - 当前 cost / 参数入口 / 文档目录结构
+  - 当前论文路线完成到哪一步
+
+### 重要文档目录重组：迁移到 `docs/重要文档/`
+
+- 修改范围：
+  - [总结1.md](/home/a/scout_ws/docs/重要文档/总结1.md)
+  - [mpc_数学化架构总结.md](/home/a/scout_ws/docs/重要文档/mpc_数学化架构总结.md)
+  - [Slosh Dynamics论文中建模总结.md](/home/a/scout_ws/docs/重要文档/Slosh%20Dynamics论文中建模总结.md)
+  - [配置IMU.md](/home/a/scout_ws/docs/重要文档/配置IMU.md)
+  - [融入IMU.md](/home/a/scout_ws/docs/重要文档/融入IMU.md)
+  - [20260319进一步修改方案.md](/home/a/scout_ws/docs/重要文档/20260319进一步修改方案.md)
+  - [20260314进一步修改方案.md](/home/a/scout_ws/docs/重要文档/20260314进一步修改方案.md)
+  - [change_log2.md](/home/a/scout_ws/docs/重要文档/change_log2.md)
+  - [change_log.md](/home/a/scout_ws/docs/重要文档/change_log.md)
+  - [topic_list.md](/home/a/scout_ws/docs/重要文档/topic_list.md)
+  - [重要文档列表.md](/home/a/scout_ws/docs/重要文档列表.md)
+- 本轮处理内容：
+  - 以上文件的**真实位置**统一迁移到 `/home/a/scout_ws/docs/重要文档/`
+  - 工作区内这些重要文档之间的**内部绝对链接**统一改到新路径
+  - `docs` 根目录下原先保留的兼容符号链接已删除
+- 本轮确认结果：
+  - 旧路径 `/home/a/scout_ws/docs/*.md` 的硬编码引用已清理
+  - 当前这些重要文档只保留 `docs/重要文档/` 这一套正式路径
+- 边界说明：
+  - 这一步的核心是**目录重组和链接修正**
+  - **没有新增技术结论，也没有修改控制逻辑**
+  - 除了内部路径更新外，没有因为“迁移文件”而重写正文内容
