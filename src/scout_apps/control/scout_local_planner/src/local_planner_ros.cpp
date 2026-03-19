@@ -227,10 +227,10 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/enable_slosh_box_constraint", mpc_params_.enable_slosh_box_constraint, false);
 
     // 液体晃动模型参数
-    pnh.param("slosh/container_radius", slosh_params_.container_radius, 0.15);
-    pnh.param("slosh/liquid_height", slosh_params_.liquid_height, 0.20);
+    pnh.param("slosh/container_radius", slosh_params_.container_radius, 0.014);
+    pnh.param("slosh/liquid_height", slosh_params_.liquid_height, 0.055);
     pnh.param("slosh/liquid_density", slosh_params_.liquid_density, 1000.0);
-    pnh.param("slosh/damping_ratio", slosh_params_.damping_ratio, 0.05);
+    pnh.param("slosh/damping_ratio", slosh_params_.damping_ratio, 0.12);
     pnh.param("slosh/mode_index", slosh_params_.mode_index, 1);
     pnh.param("slosh/offset_x", slosh_params_.offset_x, 0.0);
     pnh.param("slosh/offset_y", slosh_params_.offset_y, 0.0);

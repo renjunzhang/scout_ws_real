@@ -198,6 +198,14 @@ roslaunch scout_local_planner slosh_experiment.launch \
 
 ## `slosh_experiment.launch` 常用参数
 
+说明：
+`slosh_experiment.launch` 实际加载的 slosh 参数真源是：
+
+- `scout_local_planner/config/mpc_params.yaml`
+- `scout_local_planner/config/mpc_params_sim.yaml`
+
+`slosh_models/config/slosh_params.yaml` 当前仅保留为建模参考示例，不会被该 launch 自动加载。
+
 | 参数 | 作用 | 常用值 |
 |---|---|---|
 | `sim` | 是否加载仿真参数文件 | `true / false` |

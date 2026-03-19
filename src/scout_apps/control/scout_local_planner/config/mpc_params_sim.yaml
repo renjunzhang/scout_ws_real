@@ -101,10 +101,10 @@ verbose: false             # 是否输出调试信息
 # 液体晃动模型参数（P0-A: 状态注入）
 # =============================================================================
 slosh:
-  container_radius: 0.15     # 容器半径 (m)
-  liquid_height: 0.20        # 液面高度 (m)
+  container_radius: 0.014    # 28 mm 试管内半径 (m)
+  liquid_height: 0.055       # 当前试管液面高度 (m)
   liquid_density: 1000.0     # 液体密度 (kg/m³)
-  damping_ratio: 0.05        # 阻尼比
+  damping_ratio: 0.12        # 28 mm 水试管初始阻尼比
   mode_index: 1              # 晃动模态阶数
   offset_x: 0.0              # 容器相对 base_link X 偏移 (m)
   offset_y: 0.0              # 容器相对 base_link Y 偏移 (m)

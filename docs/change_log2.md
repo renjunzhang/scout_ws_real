@@ -529,6 +529,23 @@
     - 因此实际生效的横向权重是 `Q_contour`，不是 `Q_ec`
   - 第二轮候选参数：
     - `mpc/Q_contour: 32 -> 40`
+
+### 2026-03-19 slosh 参数真源收口
+
+- 问题：
+  - 文档里已经把 28 mm 试管参数更新成 `container_radius = 0.014 m`、`liquid_height = 0.055 m`、`damping_ratio = 0.12`
+  - 但 `slosh_experiment.launch` 实际只加载 `scout_local_planner/config/mpc_params*.yaml`
+  - 而运行时代码 `LocalPlannerROS::loadParameters()` 也是直接从当前节点的 `slosh/*` 读取参数
+  - 因此如果 `mpc_params*.yaml` 仍保留旧值，实物实验实际用到的就仍是旧的大容器参数
+- 修正：
+  - 将 `scout_local_planner/config/mpc_params.yaml` 中 `slosh/*` 更新为 28 mm 试管参数
+  - 将 `scout_local_planner/config/mpc_params_sim.yaml` 中 `slosh/*` 也同步到同一组参数，避免 `sim` / `real` 两套实验入口语义分裂
+  - 将 `slosh_models/config/slosh_params.yaml` 明确标注为“参考示例文件，不是 `scout_local_planner` 的运行时真源”
+- 当前约定：
+  - `scout_local_planner` 的 slosh 参数真源为：
+    - `scout_local_planner/config/mpc_params.yaml`
+    - `scout_local_planner/config/mpc_params_sim.yaml`
+  - 后续如果修改 `(R, h, zeta)`，应优先修改上述 planner YAML，而不是只改 `slosh_models/config/slosh_params.yaml`
     - `mpc/Q_etheta: 10 -> 12`
     - `mpc/terminal_factor_ec: 5 -> 7`
     - `mpc/terminal_factor_etheta: 3 -> 5`

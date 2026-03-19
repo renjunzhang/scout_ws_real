@@ -1,4 +1,13 @@
 # 液体晃动控制参数配置示例
+#
+# 说明：
+# 1. 本文件当前仅保留为建模/调参参考示例。
+# 2. `scout_local_planner` 运行时不会自动加载本文件。
+# 3. `slosh_experiment.launch` / `test_mpc*.launch` 实际使用的参数真源是：
+#    - `scout_local_planner/config/mpc_params.yaml`
+#    - `scout_local_planner/config/mpc_params_sim.yaml`
+# 4. 因此如果要修改实际实验使用的 `(container_radius, liquid_height, damping_ratio)`，
+#    应优先修改上述 planner YAML，而不是只改本文件。
 
 # ============================================
 # 液体晃动建模参数 (Liquid Slosh Modeling)

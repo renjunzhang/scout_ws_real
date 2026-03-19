@@ -137,7 +137,7 @@ rostopic hz /imu/data
 ```bash
 roslaunch scout_local_planner slosh_experiment.launch \
   Q_slosh:=5 \
-  slosh_use_imu_yaw_rate:=false \
+  slosh_use_imu_yaw_rate:=true \
   slosh_use_imu_lateral_accel:=false \
   slosh_use_imu_alpha_z:=false
 ```

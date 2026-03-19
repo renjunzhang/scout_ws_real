@@ -113,10 +113,10 @@ catkin_make 2>&1 | grep "processing catkin package"
 | `vehicle/omega_max` | 1.0 | 最大角速度 (rad/s) | 按实验场景调 |
 | `path_handler/goal_capture_distance` | 0.50 | 终点捕获区距离 (m) | 终点不收敛时重点看 |
 | `path_handler/goal_capture_min_speed` | 0.08 | 捕获区最低参考速度 (m/s) | 终点不收敛时重点看 |
-| `slosh/container_radius` | 0.15 | 容器半径 (m) | ✅ 按实物量测 |
-| `slosh/liquid_height` | 0.20 | 液面高度 (m) | ✅ 按实物量测 |
+| `slosh/container_radius` | 0.014 | 28 mm 试管内半径 (m) | ✅ 按实物量测 |
+| `slosh/liquid_height` | 0.055 | 当前试管液面高度 (m) | ✅ 按实物量测 |
 | `slosh/liquid_density` | 1000.0 | 液体密度 (kg/m³) | 水=1000 |
-| `slosh/damping_ratio` | 0.05 | 阻尼比 | 按容器材质调 |
+| `slosh/damping_ratio` | 0.12 | 28 mm 水试管初始阻尼比 | 按辨识实验继续修正 |
 | `slosh_estimator/accel_filter_alpha` | 0.3 | EMA 滤波系数 (0,1] | 实物抖动大可降低 |
 | `slosh_speed_governor/enable` | false | 残余晃动感知速度治理开关 | ✅ 阶段 4 实验切换 |
 | `slosh_speed_governor/k_eta` | 2.5 | 液面高度比例缩放系数 | governor 调参核心项 |
@@ -124,6 +124,9 @@ catkin_make 2>&1 | grep "processing catkin package"
 | `slosh_speed_governor/eta_exit_ratio` | 0.2 | 退出阈值（滞回） | governor 稳定性关键项 |
 | `slosh_speed_governor/preview_distance` | 1.0 | 前方曲率预览长度 (m) | governor 调参核心项 |
 | `slosh_speed_governor/min_active_steps` | 10 | 最少保持周期数 | governor 稳定性关键项 |
+
+说明：
+当前 `scout_local_planner` 实验入口实际读取的 slosh 参数真源是 [mpc_params.yaml](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params.yaml)；`slosh_models/config/slosh_params.yaml` 仅保留为建模参考示例，不会被 `slosh_experiment.launch` 自动加载。
 
 ---
 
@@ -219,8 +222,10 @@ catkin_make 2>&1 | grep "processing catkin package"
 | `vehicle/omega_max` | 3.5 | 最大角速度 (rad/s) | 仿真可保持较大 |
 | `path_handler/goal_capture_distance` | 0.45 | 终点捕获区距离 (m) | 终点不收敛时重点看 |
 | `path_handler/goal_capture_min_speed` | 0.10 | 捕获区最低参考速度 (m/s) | 终点不收敛时重点看 |
-| `slosh/container_radius` | 0.15 | 容器半径 (m) | ✅ 按实验设定 |
-| `slosh/liquid_height` | 0.20 | 液面高度 (m) | ✅ 按实验设定 |
+| `slosh/container_radius` | 0.014 | 28 mm 试管内半径 (m) | ✅ 按实验设定 |
+| `slosh/liquid_height` | 0.055 | 当前试管液面高度 (m) | ✅ 按实验设定 |
+| `slosh/liquid_density` | 1000.0 | 液体密度 (kg/m³) | 水=1000 |
+| `slosh/damping_ratio` | 0.12 | 28 mm 水试管初始阻尼比 | 按辨识实验继续修正 |
 | `slosh_speed_governor/enable` | false | 残余晃动感知速度治理开关 | ✅ 阶段 4 实验切换 |
 | `slosh_speed_governor/k_eta` | 2.5 | 液面高度比例缩放系数 | governor 调参核心项 |
 | `slosh_speed_governor/eta_deadband` | 0.3 | 死区阈值 | governor 调参核心项 |
@@ -687,7 +692,7 @@ rosrun cartographer_ros cartographer_node --help
 - 新增 `getDynamicsModel()` getter 方法
 
 #### 4. `mpc_params.yaml`（实物）& `mpc_params_sim.yaml`（仿真）
-- 新增 `slosh:` 参数块（container_radius=0.15, liquid_height=0.20, ...）
+- 新增 `slosh:` 参数块（当前运行时真源；现按 28 mm 试管参数维护）
 - 新增 `slosh_estimator:` 参数块（accel_filter_alpha=0.3）
 
 ### 验证方法
