@@ -670,6 +670,36 @@
   - `CMakeLists.txt` 已加入该脚本安装列表
   - `融入IMU.md` 已补充阶段 4 的脚本入口和推荐运行方式
 
+### 2026-03-20 按 20260319 方案冻结默认安全配置
+
+- 依据：
+  - `20260319进一步修改方案.md` 已明确当前默认安全配置应为：
+    - `slosh_use_imu_yaw_rate:=true`
+    - `slosh_use_imu_lateral_accel:=false`
+    - `slosh_use_imu_alpha_z:=false`
+  - 同时明确：
+    - `alpha_z` 暂不作为当前主线
+    - 当前最高优先级是先完成 `lateral_accel` 的低风险导航 A/B
+- 本轮修改：
+  - 将 `use_imu_yaw_rate` 的默认值从 `false` 冻结为 `true`
+    - 覆盖代码默认成员
+    - 覆盖 YAML 默认参数
+    - 覆盖 `slosh_experiment.launch` 的默认 launch 参数
+  - 保持：
+    - `slosh_use_imu_lateral_accel = false`
+    - `slosh_use_imu_alpha_z = false`
+  - 将 `launch/README.md` 的“实物 IMU 预留实验”示例改成当前主线推荐配置
+    - 不再默认展示“三个 IMU 开关全开”的入口
+    - 额外补充 `lateral_accel` 低风险导航 A/B 的推荐命令
+- 本轮修改文件：
+  - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/include/scout_local_planner/local_planner_ros.h`
+  - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/src/local_planner_ros.cpp`
+  - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params.yaml`
+  - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params_sim.yaml`
+  - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/launch/slosh_experiment.launch`
+  - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/launch/README.md`
+  - `/home/geist/scout_ws/docs/重要文档/change_log2.md`
+
 
 
 ### 2026-03-19 slosh 参数真源收口

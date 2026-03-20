@@ -183,16 +183,29 @@ roslaunch scout_local_planner slosh_experiment.launch \
   slosh_speed_governor_enable:=true
 ```
 
-### 5. 实物 IMU 预留实验
+### 5. 实物 IMU 当前默认安全配置
 
 ```bash
 roslaunch scout_local_planner slosh_experiment.launch \
   Q_slosh:=5 \
   enable_slosh_box_constraint:=true \
   slosh_speed_governor_enable:=true \
-  slosh_use_imu_lateral_accel:=true \
   slosh_use_imu_yaw_rate:=true \
-  slosh_use_imu_alpha_z:=true \
+  slosh_use_imu_lateral_accel:=false \
+  slosh_use_imu_alpha_z:=false \
+  slosh_imu_topic:=/imu/data
+```
+
+如果要做 `lateral_accel` 的低风险导航 A/B，再只改这一项：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  Q_slosh:=5 \
+  enable_slosh_box_constraint:=true \
+  slosh_speed_governor_enable:=true \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_lateral_accel:=true \
+  slosh_use_imu_alpha_z:=false \
   slosh_imu_topic:=/imu/data
 ```
 

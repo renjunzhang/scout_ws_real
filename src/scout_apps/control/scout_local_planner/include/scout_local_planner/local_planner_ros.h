@@ -146,7 +146,7 @@ private:
 
     // IMU 接口预留（阶段 7）
     bool use_imu_lateral_accel_ = false;
-    bool use_imu_yaw_rate_ = false;
+    bool use_imu_yaw_rate_ = true;
     bool use_imu_alpha_z_ = false;
     std::string imu_topic_ = "/imu/data";
     double imu_filter_alpha_ = 0.3;

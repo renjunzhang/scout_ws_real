@@ -241,7 +241,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     // 加速度估计 EMA 滤波系数
     pnh.param("slosh_estimator/accel_filter_alpha", accel_filter_alpha_, 0.3);
     pnh.param("slosh_estimator/use_imu_lateral_accel", use_imu_lateral_accel_, false);
-    pnh.param("slosh_estimator/use_imu_yaw_rate", use_imu_yaw_rate_, false);
+    pnh.param("slosh_estimator/use_imu_yaw_rate", use_imu_yaw_rate_, true);
     pnh.param("slosh_estimator/use_imu_alpha_z", use_imu_alpha_z_, false);
     pnh.param("slosh_estimator/imu_topic", imu_topic_, std::string("/imu/data"));
     pnh.param("slosh_estimator/imu_filter_alpha", imu_filter_alpha_, 0.3);
