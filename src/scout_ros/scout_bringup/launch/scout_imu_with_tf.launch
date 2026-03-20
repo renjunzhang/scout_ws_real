@@ -12,8 +12,8 @@
       1. 这组外参可先填“粗测值”，用于明确 TF 语义与可视化，不用于直接做 ay 杠杆臂补偿。
       2. tf/static_transform_publisher 欧拉角参数顺序为 yaw pitch roll。
     -->
-    <arg name="imu_x" default="0.13" />
-    <arg name="imu_y" default="-0.13" />
+    <arg name="imu_x" default="0.10" />
+    <arg name="imu_y" default="-0.045" />
     <arg name="imu_z" default="0.0" />
     <arg name="imu_roll" default="0.0" />
     <arg name="imu_pitch" default="0.0" />

@@ -109,6 +109,18 @@
 - 用于先把 TF 语义、RViz 可视化和 frame 关系理顺
 - **不代表已经完成高精度 IMU 外参标定**
 
+当前已确认的一条几何前提是：
+
+- **试管中心 = 机体旋转中心 = 当前零偏心假设对应的 `base_link`**
+- 当前量到的粗测关系是：
+  - `tube_center -> imu_center = (+0.10, -0.045) m`
+- 因此当前默认静态 TF 先记为：
+  - `imu_x = 0.10`
+  - `imu_y = -0.045`
+- 这组值的含义是：
+  - IMU 中心位于试管中心前方 `10 cm`
+  - IMU 中心位于试管中心右侧 `4.5 cm`
+
 更关键的是：
 
 - 当前 `scout_local_planner` 还没有把这组 IMU 平移外参真正用于 `ay` 杠杆臂补偿
@@ -225,8 +237,8 @@ roslaunch scout_bringup scout_imu.launch port:=/dev/ttyUSB0 baud:=115200
 ```bash
 roslaunch scout_bringup scout_imu_with_tf.launch \
   imu_frame:=imu_link \
-  imu_x:=0.13 \
-  imu_y:=-0.13 \
+  imu_x:=0.10 \
+  imu_y:=-0.045 \
   imu_z:=0.0 \
   imu_roll:=0.0 \
   imu_pitch:=0.0 \
