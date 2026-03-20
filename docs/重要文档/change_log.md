@@ -450,12 +450,12 @@ roslaunch nanoscan3_mapping scout_nanoscan3_cartographer_sim.launch
 ```bash
 # Cartographer 需要先调用服务完成轨迹，再保存
 rosservice call /finish_trajectory 0
-rosservice call /write_state "{filename: '/home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_3.pbstream'}"
+rosservice call /write_state "{filename: '/home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_4.pbstream'}"
 
 # 转换为标准地图格式
 rosrun cartographer_ros cartographer_pbstream_to_ros_map \
-  -pbstream_filename=/home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_3.pbstream \
-  -map_filestem=/home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_3 \
+  -pbstream_filename=/home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_4.pbstream \
+  -map_filestem=/home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_4 \
   -resolution=0.02
 ```
 

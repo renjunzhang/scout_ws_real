@@ -3,7 +3,7 @@
   <!-- 用途：加载已有的 .pbstream 地图进行定位，不更新地图 -->
 
   <!-- ===== 地图配置 ===== -->
-  <arg name="map_file" default="$(find scout_maps)/maps/map_carto122_3.pbstream" />
+  <arg name="map_file" default="$(find scout_maps)/maps/map_carto122_4.pbstream" />
 
   <!-- ===== 传感器配置 ===== -->
   <arg name="scan_topic" default="/scan_front" />

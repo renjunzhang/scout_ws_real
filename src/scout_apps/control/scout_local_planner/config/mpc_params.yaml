@@ -12,7 +12,7 @@ mpc:
   # 注：change #11 修复了 OSQP P 矩阵 2x 系数，此处权重值已做相应调整
   Q_el: 0.5                # 纵向误差权重（沿路径方向）
   Q_ec: 36.0               # 横向误差权重（更贴路径）
-  Q_etheta: 10           # 航向误差权重 - 减少直线摇摆
+  Q_etheta: 15           # 航向误差权重 - 减少直线摇摆
   Q_v: 9.0                 # 速度跟踪权重（修复后 v_ref 目标正确）
   use_contour_lag: true    # 启用 contour + lag 误差结构
   Q_contour: 32.0          # contour（横向误差）权重
@@ -63,8 +63,8 @@ vehicle:
 # 路径处理参数
 # =============================================================================
 path_handler:
-  lookahead_distance: 0.60  # 前视距离 (m) - 降低以减少切弯
-  goal_tolerance: 0.15     # 到达目标位置容差 (m) - 实物放宽
+  lookahead_distance: 0.70  # 前视距离 (m) - 降低以减少切弯
+  goal_tolerance: 0.20     # 到达目标位置容差 (m) - 实物放宽
   yaw_tolerance: 0.2       # 到达目标航向容差 (rad) - 进一步放宽
   goal_reached_max_speed: 0.08  # 仅在低速时允许切到 REACHED，避免高速判到达后惯性冲过头
   goal_reached_max_omega: 0.15  # 仅在低角速度时允许切到 REACHED
