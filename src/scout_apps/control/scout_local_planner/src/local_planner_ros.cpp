@@ -527,14 +527,14 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
             // 执行 MPC 控制
             {
                 if (goal_stop_pending_) {
-                    last_v_des_eff_ = 0.0;
+                    // 终点最后一段继续交给 MPC 收敛，但将目标速度压到 0，
+                    // 避免“进容差区后外层直接砍零”带来的冲过头与滑行。
+                    slosh_governor_latched_ = false;
+                    slosh_governor_hold_steps_ = 0;
                     last_speed_governor_active_ = 0;
-                    publishCmdVel(0.0, 0.0);
-                    publishSloshDebug(last_solve_time_ms_, last_solve_ok_);
-                    return;
                 }
 
-                double v_des_cmd = vehicle_params_.v_max * 0.8;
+                double v_des_cmd = goal_stop_pending_ ? 0.0 : vehicle_params_.v_max * 0.8;
                 double v_des_target = v_des_cmd;
                 last_speed_governor_active_ = 0;
 

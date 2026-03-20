@@ -217,7 +217,7 @@ private:
     bool last_solve_ok_ = false;
     double last_predicted_height_max_ = 0.0;
     int last_constraint_active_ = -1;  // -1=unknown, 0=inactive, 1=active
-    bool goal_stop_pending_ = false;   // 已进入目标容差区，先发 0 速制动，待车体实际减速后切 REACHED
+    bool goal_stop_pending_ = false;   // 已进入目标容差区，等待低速切换 REACHED；期间仍由 MPC 继续减速和纠偏
 
     // cmd_vel 低通滤波（EMA）
     double filtered_v_ = 0.0;

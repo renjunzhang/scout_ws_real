@@ -18,6 +18,19 @@ namespace scout_local_planner {
 
 namespace {
 
+double normalizeAngle(double angle) {
+    while (angle > M_PI) angle -= 2.0 * M_PI;
+    while (angle < -M_PI) angle += 2.0 * M_PI;
+    return angle;
+}
+
+bool hasUsableOrientation(const geometry_msgs::Quaternion& q_msg) {
+    const double norm_sq =
+        q_msg.x * q_msg.x + q_msg.y * q_msg.y +
+        q_msg.z * q_msg.z + q_msg.w * q_msg.w;
+    return std::isfinite(norm_sq) && norm_sq > 1e-9;
+}
+
 std::vector<Eigen::Vector2d> resamplePath(const std::vector<Eigen::Vector2d>& points,
                                           double spacing) {
     if (points.size() < 2 || spacing <= 1e-6) {
@@ -546,28 +559,45 @@ bool PathHandler::isGoalReached() const {
     double dy = goal_base.y();
     double dist = std::sqrt(dx * dx + dy * dy);
     
-    // 计算航向误差（使用路径末端切线方向，而非终点姿态）
+    // 计算航向误差：
+    // 1. 优先使用 goal pose 自身 orientation
+    // 2. 若不可用，再回退到路径尾部的非退化切线
     double goal_yaw_in_base = 0.0;
-    const size_t n = global_path_.poses.size();
-    if (n >= 2) {
-        const auto& p1_pose = global_path_.poses[n - 2].pose;
-        const auto& p2_pose = global_path_.poses[n - 1].pose;
-        
-        tf2::Vector3 p1_map(p1_pose.position.x, p1_pose.position.y, 0.0);
-        tf2::Vector3 p2_map(p2_pose.position.x, p2_pose.position.y, 0.0);
-        tf2::Vector3 p1_base = tf_transform * p1_map;
-        tf2::Vector3 p2_base = tf_transform * p2_map;
+    bool has_goal_yaw = false;
 
-        const double tdx = p2_base.x() - p1_base.x();
-        const double tdy = p2_base.y() - p1_base.y();
-        if (std::hypot(tdx, tdy) > 1e-6) {
-            goal_yaw_in_base = std::atan2(tdy, tdx);
+    if (hasUsableOrientation(goal_pose.orientation)) {
+        const double goal_yaw_map = tf2::getYaw(goal_pose.orientation);
+        const double map_to_base_yaw = tf2::getYaw(tf_transform.getRotation());
+        goal_yaw_in_base = normalizeAngle(goal_yaw_map + map_to_base_yaw);
+        has_goal_yaw = std::isfinite(goal_yaw_in_base);
+    }
+
+    if (!has_goal_yaw) {
+        const size_t n = global_path_.poses.size();
+        for (size_t tail = n; tail >= 2; --tail) {
+            const auto& p1_pose = global_path_.poses[tail - 2].pose;
+            const auto& p2_pose = global_path_.poses[tail - 1].pose;
+
+            tf2::Vector3 p1_map(p1_pose.position.x, p1_pose.position.y, 0.0);
+            tf2::Vector3 p2_map(p2_pose.position.x, p2_pose.position.y, 0.0);
+            tf2::Vector3 p1_base = tf_transform * p1_map;
+            tf2::Vector3 p2_base = tf_transform * p2_map;
+
+            const double tdx = p2_base.x() - p1_base.x();
+            const double tdy = p2_base.y() - p1_base.y();
+            if (std::hypot(tdx, tdy) > 1e-6) {
+                goal_yaw_in_base = std::atan2(tdy, tdx);
+                has_goal_yaw = true;
+                break;
+            }
+
+            if (tail == 2) {
+                break;
+            }
         }
     }
 
-    double yaw_err = std::abs(goal_yaw_in_base);
-    while (yaw_err > M_PI) yaw_err -= 2 * M_PI;
-    yaw_err = std::abs(yaw_err);
+    double yaw_err = has_goal_yaw ? std::abs(normalizeAngle(goal_yaw_in_base)) : 0.0;
     
     return (dist < params_.goal_tolerance && yaw_err < params_.yaw_tolerance);
 }
