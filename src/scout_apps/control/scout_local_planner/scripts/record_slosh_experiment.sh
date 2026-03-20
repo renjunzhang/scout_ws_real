@@ -20,6 +20,15 @@
 #   - MPC 性能：/mpc/solve_ms, /mpc/status_val, /mpc_status
 #   - 控制/底盘状态：/cmd_vel, /odom, /scout_status, /rs_status
 #   - 目标/路径：/scout/goal, /scout/current_goal, /scout/global_path, /local_path
+#   - 终点/摇摆根因排查：
+#                /scout/move_base_cmd_vel
+#                /scout/mbf_costmap_nav/current_goal
+#                /scout/mbf_costmap_nav/exe_path/feedback
+#                /scout/mbf_costmap_nav/exe_path/result
+#                /scout/mbf_costmap_nav/exe_path/status
+#                /scout/mbf_costmap_nav/move_base/feedback
+#                /scout/mbf_costmap_nav/move_base/result
+#                /scout/mbf_costmap_nav/move_base/status
 #   - TF：      /tf, /tf_static
 #   - 仿真时钟：/clock（仿真时存在，实物可忽略）
 #
@@ -96,6 +105,14 @@ TOPICS=(
     /scout/global_path
     /scout/global_path_smooth
     /local_path
+    /scout/move_base_cmd_vel
+    /scout/mbf_costmap_nav/current_goal
+    /scout/mbf_costmap_nav/exe_path/feedback
+    /scout/mbf_costmap_nav/exe_path/result
+    /scout/mbf_costmap_nav/exe_path/status
+    /scout/mbf_costmap_nav/move_base/feedback
+    /scout/mbf_costmap_nav/move_base/result
+    /scout/mbf_costmap_nav/move_base/status
 
     # 仿真时钟（实物环境无此话题也不影响录制）
     /clock

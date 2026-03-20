@@ -698,6 +698,7 @@
   - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params_sim.yaml`
   - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/launch/slosh_experiment.launch`
   - `/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/launch/README.md`
+  - `/home/geist/scout_ws/docs/20260320测试流程命令.md`
   - `/home/geist/scout_ws/docs/重要文档/change_log2.md`
 
 
