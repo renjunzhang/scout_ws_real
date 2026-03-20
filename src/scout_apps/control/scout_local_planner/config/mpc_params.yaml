@@ -68,8 +68,8 @@ path_handler:
   yaw_tolerance: 0.2       # 到达目标航向容差 (rad) - 进一步放宽
   goal_reached_max_speed: 0.08  # 仅在低速时允许切到 REACHED，避免高速判到达后惯性冲过头
   goal_reached_max_omega: 0.15  # 仅在低角速度时允许切到 REACHED
-  goal_capture_distance: 0.50   # 终点捕获区；进入后维持最低参考速度，避免提前停死
-  goal_capture_min_speed: 0.08  # 捕获区最低参考速度 (m/s)
+  goal_capture_distance: 0.25   # 终点捕获区；进入后维持最低参考速度，避免提前停死
+  goal_capture_min_speed: 0.00  # 捕获区最低参考速度 (m/s)
   path_timeout: 5.0        # 路径超时时间 (s)
   publish_smoothed_path: true         # 是否发布平滑路径
   smoothed_path_topic: "/scout/global_path_smooth"  # 平滑路径话题名
@@ -83,7 +83,7 @@ path_handler:
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
   max_tan_accel: 1.5                  # 最大切向加速度 (m/s^2) - 降低以平滑加速
-  max_tan_decel: 1.2                  # 最大切向减速度 (m/s^2) - 降低以减少刹车打滑
+  max_tan_decel: 0.7                  # 最大切向减速度 (m/s^2) - 降低以减少刹车打滑
   goal_speed: 0.0                     # 末端期望速度 (m/s)
   use_bspline_smoothing: false        # 关闭局部 B-spline 平滑（提高贴合度）
   bspline_samples_per_segment: 12      # 每段采样点数

@@ -798,12 +798,27 @@ void LocalPlannerROS::updateState() {
     }
 
     const bool goal_pose_reached = path_handler_.isGoalReached();
-    if (!goal_pose_reached) {
-        goal_stop_pending_ = false;
+    const double goal_dist = path_handler_.getGoalDistance();
+    const double goal_stop_release_dist =
+        std::max(path_params_.goal_capture_distance, path_params_.goal_tolerance + 0.15);
+
+    if (goal_stop_pending_) {
+        // 终点边界附近允许短暂滑出 pose gate，但不要立刻释放 pending stop。
+        // 否则会出现“进圈一帧开始刹车 -> 滑出一帧又恢复巡航参考”的 limit cycle。
+        const bool should_release =
+            !std::isfinite(goal_dist) || goal_dist > goal_stop_release_dist;
+        if (should_release) {
+            goal_stop_pending_ = false;
+        }
+    }
+
+    if (!goal_stop_pending_ && !goal_pose_reached) {
         return;
     }
 
-    goal_stop_pending_ = true;
+    if (goal_pose_reached) {
+        goal_stop_pending_ = true;
+    }
 
     const bool speed_low =
         std::abs(current_v_) < path_params_.goal_reached_max_speed &&

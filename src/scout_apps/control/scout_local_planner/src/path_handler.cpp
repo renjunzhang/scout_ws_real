@@ -428,8 +428,9 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
             ref.kappa = local_spline_.evaluateKappa(s_local);
             ref.s = s_local;
 
-            double v_ref = speed_profile_valid_ ? getSpeedAtS(s_progress) : v_des;
-            double v_curve_cap = v_des;
+            const double v_des_cap = std::max(0.0, v_des);
+            double v_ref = speed_profile_valid_ ? getSpeedAtS(s_progress) : v_des_cap;
+            double v_curve_cap = v_des_cap;
             if (params_.max_lat_accel > 0.0) {
                 const double kappa_abs = std::abs(ref.kappa);
                 if (kappa_abs > 1e-4) {
@@ -439,7 +440,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
 
             // 末端停车既要看路径弧长剩余，也要看欧氏 goal 距离。
             // 否则 s_progress 已到路径末端但车体仍横向偏离 goal 时，v_ref 会过早掉到 0。
-            if (max_decel > 1e-6) {
+            if (v_des_cap > 1e-6 && max_decel > 1e-6) {
                 const double remain_s = std::max(0.0, total_len_global - s_progress);
                 const double remain_goal = std::max(0.0, goal_dist_base - params_.goal_tolerance);
                 if (remain_goal > remain_s + 1e-3) {
@@ -453,6 +454,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
             }
 
             v_ref = std::min(v_ref, v_curve_cap);
+            v_ref = std::min(v_ref, v_des_cap);
 
             // 终点捕获区内保持最低参考速度，避免距离尚未达标时过早停死。
             if (goal_dist_base > params_.goal_tolerance &&
@@ -460,6 +462,11 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
                 params_.goal_capture_min_speed > 1e-6) {
                 v_ref = std::max(v_ref, params_.goal_capture_min_speed);
             }
+
+            // 外部传入的 v_des 必须是硬上界。否则 goal_stop_pending_ 时即便上层将
+            // v_des_cmd 压到 0，time-parameterized speed profile 仍可能把 v_ref 抬回正值，
+            // 导致终点区继续前冲。
+            v_ref = std::min(v_ref, v_des_cap);
 
             // 使用当前 s 采样点
             ref.v_ref = v_ref;
