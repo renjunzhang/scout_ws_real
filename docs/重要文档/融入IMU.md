@@ -1,5 +1,51 @@
 # IMU 融入步骤
 
+## 2026-03-21 关键结论
+
+- IMU 融入已经从“接口开发阶段”进入“证据收尾阶段”。
+- 当前已经可以稳定保留：
+  - `slosh_use_imu_yaw_rate:=true`
+- 当前已经完成：
+  - `IMU ay` 的零偏扣除 + EMA 预处理链路
+  - `slosh_use_imu_lateral_accel` 在 `Q_slosh=0` 和 `Q_slosh=5` 下的首轮 A/B
+- 当前最关键的工程结论是：
+  - `lateral_accel=true` 已经**真实接入**
+  - 但从当前 A/B 证据看，**还没有显示出足够明确的收益**
+  - 因此默认安全配置继续保持：
+    - `yaw_rate=true / lateral_accel=false / alpha_z=false`
+- 当前 `alpha_z` 不再是主线：
+  - 在 `offset_x = offset_y = 0` 的零偏心配置下，`alpha_z` 对主模态传播作用很弱
+- 当前 IMU 外参也不再作为主线任务：
+  - 已有粗测值和静态 TF 入口
+  - 尚未做高精度控制补偿
+  - 这件事只有在未来决定正式长期采用 `IMU ay` 时才需要继续深挖
+- 当前下一步主线应切换到：
+  - **建立 RealSense 真实液面测量链**
+  - 用外部测量来判断 anti-slosh 是否真的降低液面峰值和残余振荡
+
+## 当前状态摘要
+
+- 已完成：
+  - IMU bring-up、`/imu/data` 稳定发布、`50 Hz / 115200`
+  - `yaw_rate` 最小闭环验证
+  - `ay` 预处理链路打通
+  - `Q_slosh=0` 和 `Q_slosh=5` 两轮 `lateral_accel` A/B
+- 当前准确结论：
+  - `yaw_rate` 值得保留
+  - `lateral_accel` 已可接入，但当前证据不足以支持默认打开
+  - `alpha_z` 暂不推进
+- 当前推荐默认配置：
+  - `slosh_use_imu_yaw_rate:=true`
+  - `slosh_use_imu_lateral_accel:=false`
+  - `slosh_use_imu_alpha_z:=false`
+- 当前不建议继续做的事：
+  - 不继续围绕 `alpha_z` 投入
+  - 不把 IMU 外参标定作为眼前主线
+  - 不把 `IMU ay` 直接包装成已经严格标定后的正式输入
+- 当前更值得做的事：
+  - 建立真实液面测量链
+  - 用真实液面指标反过来决定 `lateral_accel` 是否值得正式启用
+
 ## 目录
 
 - 0. 目标与边界

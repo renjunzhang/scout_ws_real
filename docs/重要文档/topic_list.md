@@ -98,10 +98,18 @@
 /slosh/episode_id
 /slosh/height
 /slosh/height_pred_max
+/slosh/imu_ay_bias
+/slosh/imu_ay_bias_ready
+/slosh/imu_ay_filtered
+/slosh/imu_omega_z_filtered
+/slosh/omega_est_used
 /slosh/q_slosh_eta
 /slosh/speed_governor_active
 /slosh/state
 /slosh/v_des_eff
+/terminal/goal_info
+/terminal/mode
+/terminal/recovery_latched
 /submap_list
 /tf
 /tf_static
@@ -141,10 +149,18 @@
 | `/slosh/episode_id` | 当前实验 episode 编号 |
 | `/slosh/height` | 实际液面高度估计 |
 | `/slosh/height_pred_max` | 预测域内最大液面高度 |
+| `/slosh/imu_ay_bias` | IMU `ay` 静止零偏估计值 |
+| `/slosh/imu_ay_bias_ready` | IMU `ay` 零偏是否初始化完成（`1=完成`） |
+| `/slosh/imu_ay_filtered` | 预处理后的 IMU 横向加速度 |
+| `/slosh/imu_omega_z_filtered` | 预处理后的 IMU `omega_z` |
+| `/slosh/omega_est_used` | 当前真正注入 slosh 模型的角速度输入 |
 | `/slosh/q_slosh_eta` | 实际进入 QP 的液体软代价权重 |
 | `/slosh/speed_governor_active` | 速度治理是否介入 |
 | `/slosh/state` | slosh 状态 `[eta_x, eta_x_dot, eta_y, eta_y_dot]` |
 | `/slosh/v_des_eff` | governor 生效后的参考速度 |
+| `/terminal/goal_info` | 终点相对几何信息 `[dx, dy, dist, bearing, goal_yaw_err, has_goal_yaw, position_reached, pose_reached]` |
+| `/terminal/mode` | 近终点当前控制模式（如 `NONE / APPROACH_POINT / ALIGN_TO_POINT / ALIGN_FINAL_YAW / GOAL_STOP_PENDING / REACHED`） |
+| `/terminal/recovery_latched` | terminal recovery 是否已经锁存 |
 
 #### MBF 与 costmap
 
@@ -199,6 +215,23 @@
 - 因此，当前 IMU 结论应更新为：
   - “真实 IMU 话题已接入并可见”
   - 但“是否可直接无预处理用于 planner 的 lateral accel / alpha_z”仍需动态验证
+
+#### 终点与 terminal 调试话题（2026-03-21）
+
+- 当前 `scout_local_planner` 已新增真实 terminal 调试话题：
+  - `/terminal/mode`
+  - `/terminal/recovery_latched`
+  - `/terminal/goal_info`
+- 这些话题的作用是：
+  - 不再靠离线脚本猜测 near-goal 行为
+  - 直接观察当前终点阶段到底处于：
+    - 普通 tracking
+    - `APPROACH_POINT`
+    - `ALIGN_TO_POINT`
+    - `ALIGN_FINAL_YAW`
+    - `GOAL_STOP_PENDING`
+    - `REACHED`
+- 因此当前终点/近终点问题排查时，`/terminal/*` 已成为比 `/mpc_status` 更直接的主观测量
 
 #### 底盘/BMS/系统
 

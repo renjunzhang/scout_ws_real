@@ -6,7 +6,10 @@
 
 - 这是**结构化 QP 的 tracking MPC**，不是自由空间 NMPC。
 - 当前每个控制周期求解的并不是固定 LTI QP，而是围绕名义轨迹 successive linearization 后得到的**affine time-varying QP**。
-- 终点最后一小段当前也不是“全程由 MPC 连续优化到停下”，而是 near-goal 进入 `goal_stop_pending_` 后由外层状态机直接发布 `0` 速制动。
+- 终点最后一小段当前也不是“全程由 MPC 连续优化到停下”，而是：
+  - 近终点先可能进入外层 `terminal recovery`
+  - `GOAL_STOP_PENDING` 下仍由 MPC 负责最后一段减速与纠偏
+  - 只有到达低速门槛后才切到 `REACHED`
 
 ## 目录
 

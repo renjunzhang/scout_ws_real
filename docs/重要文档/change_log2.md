@@ -1051,3 +1051,94 @@
 - 修改原因：
   - 先让 terminal recovery 进入真实失效区
   - 在新的 bag 证明 terminal mode 真的开始触发之前，不再继续改 recovery 逻辑
+
+### 基于 `slosh_Q0_20260321_154102_terminal_debug3.bag` 与 `slosh_Q0_20260321_155446_terminal_debug4.bag` 的终点结论修正
+
+- 后续新 bag 表明：
+  - terminal recovery 已经真正进入：
+    - `APPROACH_POINT`
+    - `ALIGN_TO_POINT`
+    - `ALIGN_FINAL_YAW`
+    - `GOAL_STOP_PENDING`
+    - `REACHED`
+  - 第一个 goal 已可稳定进入 `REACHED`
+  - “第二个 goal 不能规划”并非结构性问题，后续复测证明是一次发送失败/流程问题，不是 terminal 逻辑本体问题
+- 因此截至今天收尾，终点问题应重新定性为：
+  - **terminal 收敛链已从“结构性不收敛”修到“可用版本”**
+  - 当前主线不再是继续深挖 terminal，而是冻结这条链，转回 IMU/真实液面测量
+
+### IMU `lateral_accel` A/B：`Q_slosh=0`
+
+- 分析 bag：
+  - [slosh_Q0_20260321_161120_imu_lateral_A_run1.bag](/home/a/下载/slosh_bags/debug0320/slosh_Q0_20260321_161120_imu_lateral_A_run1.bag)
+  - [slosh_Q0_20260321_161426_imu_lateral_B_run1.bag](/home/a/下载/slosh_bags/debug0320/slosh_Q0_20260321_161426_imu_lateral_B_run1.bag)
+- 关键结论：
+  - A、B 两组都可到达 `REACHED`
+  - `yaw_rate` 两组都稳定来自 IMU
+  - B 组 `ay_est` 已真实切到 IMU：
+    - A 组：`/slosh/ay_est` 与 `/slosh/imu_ay_filtered` RMS 约 `0.1086`
+    - B 组：RMS `0.0`
+  - 这轮说明：
+    - `slosh_use_imu_lateral_accel:=true` 已真实接入
+    - 但还不能单靠这轮就宣布“默认应打开”
+
+### IMU `lateral_accel` A/B：`Q_slosh=5`
+
+- 首轮分析 bag：
+  - [slosh_Q5_20260321_163303_imu_lateral_A_run1.bag](/home/a/下载/slosh_bags/debug0320/slosh_Q5_20260321_163303_imu_lateral_A_run1.bag)
+  - [slosh_Q5_20260321_163519_imu_lateral_B_run1.bag](/home/a/下载/slosh_bags/debug0320/slosh_Q5_20260321_163519_imu_lateral_B_run1.bag)
+- 发现问题：
+  - 首轮 A 组 `imu_ay_bias_ready` 在开始 `TRACKING` 后才置 `1`
+  - 因此首轮 `Q=5` A/B 不完全公平
+- 补录 A 组：
+  - [slosh_Q5_20260321_164417_imu_lateral_A_run1.bag](/home/a/下载/slosh_bags/debug0320/slosh_Q5_20260321_164417_imu_lateral_A_run1.bag)
+  - 该包中 `imu_ay_bias_ready` 在开始 `TRACKING` 前已完成
+- 当前准确结论：
+  - `lateral_accel=true` 已经真实接入
+  - 但从目前 `Q=5` 的可比样本看，**尚未显示出明确收益**
+  - 也没有显示出明显灾难性回归
+  - 因此当前默认安全配置继续保持：
+    - `slosh_use_imu_yaw_rate:=true`
+    - `slosh_use_imu_lateral_accel:=false`
+    - `slosh_use_imu_alpha_z:=false`
+
+### RealSense 方案收束：当前下一步主线切到真实液面测量链
+
+- 更新/完善文档：
+  - [Realsense方案.md](/home/a/scout_ws/docs/重要文档/Realsense方案.md)
+- 当前收口结论：
+  - 不再继续围绕 `alpha_z` 或 IMU 外参深挖
+  - 下一步主线是建立 **RealSense 真实液面测量链**
+  - 第一版只做：
+    - `1` 个相机
+    - `RGB` 侧视
+    - 黑墨水
+    - 固定 ROI
+    - 输出 `height_peak_mm / height_peak_rel_mm / meniscus_valid`
+  - 第一版不做：
+    - depth 主测量
+    - 双相机
+    - 视觉结果直接进控制器
+- 结合你补充的安装信息，文档也明确记录：
+  - 镜头最边缘距离试管中心约 `12 cm`
+  - 这个距离从分辨率角度是可行的，当前优先检查对焦、入镜和反光，而不是继续拉远距离
+
+### 文档收口与主线更新
+
+- 更新文档：
+  - [总结1.md](/home/a/scout_ws/docs/重要文档/总结1.md)
+  - [融入IMU.md](/home/a/scout_ws/docs/重要文档/融入IMU.md)
+  - [change_log.md](/home/a/scout_ws/docs/重要文档/change_log.md)
+  - [重要文档列表.md](/home/a/scout_ws/docs/重要文档列表.md)
+- 本轮文档更新的核心：
+  - 在 `总结1.md` 与 `融入IMU.md` 开头增加“2026-03-21 关键结论”
+  - 明确：
+    - terminal 链已经进入可用状态
+    - IMU 当前保留 `yaw_rate`，`lateral_accel` 暂不默认开启，`alpha_z` 暂缓
+    - 当前下一步主线是 RealSense 真实液面测量
+  - `change_log.md` 的实物流程中，`MPC` 局部规划主入口统一改成：
+    - `roslaunch scout_local_planner slosh_experiment.launch ...`
+    - `test_mpc.launch` 降级为最小局部规划器检查入口
+  - `重要文档列表.md` 补入：
+    - [20260320代码修改方案.md](/home/a/scout_ws/docs/重要文档/20260320代码修改方案.md)
+    - [Realsense方案.md](/home/a/scout_ws/docs/重要文档/Realsense方案.md)

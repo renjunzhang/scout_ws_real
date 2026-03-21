@@ -83,20 +83,30 @@ catkin_make 2>&1 | grep "processing catkin package"
     或者启动MBF全局规划器
     roslaunch scout_global_planner mbf_global.launch
 ### 7. MPC 局部规划
-    # 普通启动（Q_slosh=0，无晃动抑制）
-    roslaunch scout_local_planner test_mpc.launch
+    # 当前实物主入口：统一使用实验专用 launch
+    # 原因：
+    # 1. 当前默认安全 IMU 配置已经固化在这条链里
+    # 2. 实验口径默认关闭额外输出 EMA
+    # 3. Q_slosh / IMU 开关 / speed governor 参数集中管理
 
-    # 带晃动抑制的启动（论文实验用）
-    roslaunch scout_local_planner test_mpc.launch Q_slosh:=10.0
+    # 基线（Q_slosh=0，无晃动抑制）
+    roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=0
 
-    # 或使用实验专用 launch（等价，参数更集中）
-    roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=10
+    # 当前推荐的 anti-slosh 实物启动（默认安全 IMU 配置）
+    roslaunch scout_local_planner slosh_experiment.launch \
+    Q_slosh:=5 \
+    slosh_use_imu_yaw_rate:=true \
+    slosh_use_imu_lateral_accel:=false \
+    slosh_use_imu_alpha_z:=false
 
-    # 液体晃动实验
+    # 带盒约束与 speed governor 的实验版本
     roslaunch scout_local_planner slosh_experiment.launch \
     Q_slosh:=5 \
     enable_slosh_box_constraint:=true \
     slosh_speed_governor_enable:=true \
+    slosh_use_imu_yaw_rate:=true \
+    slosh_use_imu_lateral_accel:=false \
+    slosh_use_imu_alpha_z:=false \
     slosh_speed_governor_k_eta:=2.5 \
     slosh_speed_governor_eta_deadband:=0.3 \
     slosh_speed_governor_eta_exit_ratio:=0.2 \
@@ -104,6 +114,9 @@ catkin_make 2>&1 | grep "processing catkin package"
     slosh_speed_governor_ay_max_base:=0.6 \
     slosh_speed_governor_v_des_min:=0.2 \
     slosh_speed_governor_preview_distance:=1.0
+
+    # test_mpc.launch 现在只建议用于最小局部规划器检查
+    roslaunch scout_local_planner test_mpc.launch
 
 ### 8. 录制实验数据（与第 7 步同时，另开终端）
     cd $(rospack find scout_local_planner)
