@@ -153,8 +153,8 @@ heading_align:
 # =============================================================================
 terminal_recovery:
   enable: true
-  enter_distance: 0.35      # 进入近终点恢复区的距离阈值 (m)
-  release_distance: 0.55    # 明显离开近终点区后才释放 recovery 锁存 (m)
+  enter_distance: 0.70      # 进入近终点恢复区的距离阈值 (m)
+  release_distance: 1.00    # 明显离开近终点区后才释放 recovery 锁存 (m)
   goal_behind_x: -0.05      # goal 落到车后时的 x 阈值 (m)
   align_angle: 1.0          # bearing 过大时先原地转向 (rad)
   approach_slow_angle: 0.45 # bearing 偏大时降低前进速度 (rad)

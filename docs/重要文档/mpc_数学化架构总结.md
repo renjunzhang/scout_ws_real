@@ -397,9 +397,21 @@ h_{\text{modal,budget}}=\max\left(0,\ h_{\max}-h_{\text{parabola,budget}}\right)
 当前 near-goal 逻辑不能表述成“全程由 MPC 连续优化到停下”。  
 更准确的说法是：
 
-1. 平时由 tracking MPC 生成控制；
-2. 进入目标容差区后，外层状态机置 `goal_stop_pending_`；
-3. 此时直接发布 `cmd_vel = 0` 制动；
-4. 等 odom 速度和角速度低于阈值后，再切到 `REACHED`。
+1. 远场仍由 tracking MPC 生成控制；
+2. 接近终点时，可能先进入外层 terminal recovery；
+3. terminal recovery 当前有 3 个 mode：
+   - `ALIGN_TO_POINT`
+   - `APPROACH_POINT`
+   - `ALIGN_FINAL_YAW`
+4. 这些 mode 下，控制不是由 MPC 求解器给出，而是外层显式控制律直接发布 `cmd_vel`；
+5. 当目标 pose 已达标后，状态机置 `goal_stop_pending_`；
+6. `goal_stop_pending_` 下，系统仍然走 MPC，只是把 `v_des_cmd` 压到 `0`，由 MPC 负责最后一段减速与纠偏；
+7. 只有当位置/姿态达标且速度、角速度都足够低时，才切到 `REACHED`。
 
-因此当前实现是“tracking MPC + 外层终点硬停监督”，不是严格的 terminal MPC stop。
+因此当前实现更准确的工程语义是：
+
+- 远场：tracking MPC
+- 近终点恢复：外层 terminal recovery
+- 最后收尾：`goal_stop_pending_` 下的 MPC 减速
+
+它不是“全程由 MPC 独立完成终点收敛”，也不是旧版本那种“进入目标容差区后直接外层硬切零速”的实现。

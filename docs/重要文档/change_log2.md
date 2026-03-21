@@ -1018,3 +1018,36 @@
   - terminal recovery 已经不是“完全没进”
   - 但截至今天结束，**还不能宣布终点已经稳定收敛**
   - 下一步应优先使用新的 `/terminal/*` 真实调试话题做离线回放判因，而不是继续盲目扫参数
+
+### 基于 `slosh_Q0_20260321_153105_terminal_debug2.bag` 的终点新结论
+
+- 这条 bag 已经录到了新的真实 debug 话题：
+  - `/terminal/mode`
+  - `/terminal/recovery_latched`
+  - `/terminal/goal_info`
+- 直接结论：
+  - 当前不是“terminal recovery 写错了却没收敛”
+  - 而是 **terminal recovery 根本没有被触发**
+- bag 里的直接证据：
+  - `/terminal/mode` 全程只有：
+    - `IDLE`
+    - `NONE`
+  - `/terminal/recovery_latched` 全程为 `0`
+  - `/terminal/goal_info` 的最小 `dist` 约为 `0.583 m`
+  - 而当时 `terminal_recovery/enter_distance` 仅为 `0.35 m`
+- 因此当前最准确的判断是：
+  - terminal 接管太晚
+  - 车还没有进入 terminal band，就已经把 goal 推到车后
+  - 于是整个终点阶段仍然是 normal tracking 在控
+
+### 参数收口：放大 terminal 触发半径
+
+- 修改文件：
+  - [mpc_params.yaml](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params.yaml)
+  - [mpc_params_sim.yaml](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params_sim.yaml)
+- 修改内容：
+  - `terminal_recovery/enter_distance: 0.35 -> 0.70`
+  - `terminal_recovery/release_distance: 0.55 -> 1.00`
+- 修改原因：
+  - 先让 terminal recovery 进入真实失效区
+  - 在新的 bag 证明 terminal mode 真的开始触发之前，不再继续改 recovery 逻辑
