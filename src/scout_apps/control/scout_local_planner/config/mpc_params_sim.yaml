@@ -149,6 +149,23 @@ heading_align:
   start_distance: 0.5      # 只在起点附近生效 (m)
 
 # =============================================================================
+# 终点恢复（near-goal terminal recovery）
+# =============================================================================
+terminal_recovery:
+  enable: true
+  enter_distance: 0.35      # 进入近终点恢复区的距离阈值 (m)
+  release_distance: 0.55    # 明显离开近终点区后才释放 recovery 锁存 (m)
+  goal_behind_x: -0.05      # goal 落到车后时的 x 阈值 (m)
+  align_angle: 1.0          # bearing 过大时先原地转向 (rad)
+  approach_slow_angle: 0.45 # bearing 偏大时降低前进速度 (rad)
+  bearing_gain: 1.8         # 朝向 goal 点的角速度增益
+  final_yaw_gain: 1.5       # 最终朝向补偿增益
+  max_omega: 0.8            # 终点恢复阶段角速度上限；<=0 用 vehicle.omega_max
+  dist_gain: 0.8            # 靠近终点的位置误差到速度的比例增益
+  v_min: 0.05               # 终点恢复阶段最小前进速度 (m/s)
+  v_max: 0.18               # 终点恢复阶段最大前进速度 (m/s)
+
+# =============================================================================
 # cmd_vel 低通滤波（EMA）
 # =============================================================================
 filter:

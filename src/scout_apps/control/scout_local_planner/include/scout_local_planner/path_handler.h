@@ -85,6 +85,13 @@ public:
     double getGoalDistance() const;
 
     /**
+     * @brief 获取终点几何信息（base_link 下）
+     * @param goal_info 输出：终点位置 / 朝向 / 到达门限判断
+     * @return 是否成功
+     */
+    bool getGoalInfo(GoalInfo& goal_info) const;
+
+    /**
      * @brief 获取前方窗口内的最大曲率绝对值（基于全局样条）
      * @param lookahead_dist 起始前视距离
      * @param preview_dist 预览窗口长度
@@ -174,6 +181,11 @@ private:
      * @brief 查询弧长 s 处的参考速度
      */
     double getSpeedAtS(double s) const;
+
+    /**
+     * @brief 在已持锁前提下计算终点几何信息
+     */
+    bool computeGoalInfoLocked(GoalInfo& goal_info) const;
 
 private:
     PathHandlerParams params_;

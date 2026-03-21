@@ -96,6 +96,29 @@ struct FrenetState {
 };
 
 //==============================================================================
+// 终点几何信息
+//==============================================================================
+
+struct GoalInfo {
+    bool valid = false;
+
+    // goal 在 base_link 坐标系下的位置
+    double dx = 0.0;
+    double dy = 0.0;
+    double dist = 0.0;
+    double bearing = 0.0;  // atan2(dy, dx)
+
+    // 终点姿态信息（若可用）
+    bool has_goal_yaw = false;
+    double goal_yaw_in_base = 0.0;
+    double goal_yaw_err = 0.0;  // 机器人在 base_link 下 yaw=0，因此与 goal_yaw_in_base 同号
+
+    // 门限判断
+    bool position_reached = false;
+    bool pose_reached = false;
+};
+
+//==============================================================================
 // MPC 参数结构
 //==============================================================================
 

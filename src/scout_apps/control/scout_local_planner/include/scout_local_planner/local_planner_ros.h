@@ -47,6 +47,13 @@ public:
     void run();
 
 private:
+    enum class TerminalMode {
+        NONE = 0,
+        ALIGN_TO_POINT,
+        APPROACH_POINT,
+        ALIGN_FINAL_YAW
+    };
+
     // ====== 回调函数 ======
     void globalPathCallback(const nav_msgs::Path::ConstPtr& msg);
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg);
@@ -63,8 +70,13 @@ private:
     void publishSmoothedPath();
     void publishStatus();
     void publishSloshDebug(double solve_time_ms, bool solve_ok);
+    void publishTerminalDebug();
     void updateSloshEstimate();
     double computePredictedSloshHeightMax(const MPCSolution& solution) const;
+    bool computeTerminalRecoveryCmd(const GoalInfo& goal,
+                                    double& v_cmd,
+                                    double& omega_cmd,
+                                    TerminalMode& mode) const;
     void updateState();
     void resetWarmStart(bool keep_u_prev, bool reset_slosh = true);
     
@@ -110,6 +122,21 @@ private:
     double heading_align_max_omega_ = 0.0; // <=0 表示使用 vehicle_params_.omega_max
     double heading_align_start_dist_ = 0.5; // 只在起点附近生效 (m)
     bool heading_align_active_ = false;
+
+    // 终点恢复（terminal recovery）
+    bool terminal_recovery_enable_ = true;
+    bool terminal_recovery_latched_ = false;
+    double terminal_enter_distance_ = 0.35;
+    double terminal_release_distance_ = 0.55;
+    double terminal_goal_behind_x_ = -0.05;
+    double terminal_align_angle_ = 1.0;
+    double terminal_approach_slow_angle_ = 0.45;
+    double terminal_bearing_gain_ = 1.8;
+    double terminal_final_yaw_gain_ = 1.5;
+    double terminal_max_omega_ = 0.0;  // <=0 表示使用 vehicle_params_.omega_max
+    double terminal_dist_gain_ = 0.8;
+    double terminal_v_min_ = 0.05;
+    double terminal_v_max_ = 0.18;
     
     // 状态
     PlannerState state_ = PlannerState::IDLE;
@@ -208,6 +235,9 @@ private:
     ros::Publisher slosh_imu_ay_bias_ready_pub_;
     ros::Publisher mpc_solve_ms_pub_;
     ros::Publisher mpc_status_val_pub_;
+    ros::Publisher terminal_mode_pub_;
+    ros::Publisher terminal_recovery_latched_pub_;
+    ros::Publisher terminal_goal_info_pub_;
 
     // 实验 episode 标记
     int episode_id_ = 0;
@@ -218,6 +248,9 @@ private:
     double last_predicted_height_max_ = 0.0;
     int last_constraint_active_ = -1;  // -1=unknown, 0=inactive, 1=active
     bool goal_stop_pending_ = false;   // 已进入目标容差区，等待低速切换 REACHED；期间仍由 MPC 继续减速和纠偏
+    std::string terminal_mode_debug_ = "NONE";
+    GoalInfo terminal_goal_info_debug_;
+    bool terminal_goal_info_valid_ = false;
 
     // cmd_vel 低通滤波（EMA）
     double filtered_v_ = 0.0;

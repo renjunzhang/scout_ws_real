@@ -536,102 +536,22 @@ bool PathHandler::getFrenetState(FrenetState& frenet) {
 
 bool PathHandler::isGoalReached() const {
     std::lock_guard<std::mutex> lock(mutex_);
-    
-    if (!has_path_ || global_path_.poses.empty() || !tf_buffer_) {
-        return false;
-    }
-    
-    // 使用 lookupTransform + ros::Time(0) 获取最新变换，避免路径时间戳过期
-    geometry_msgs::TransformStamped tf_map_to_base;
-    try {
-        tf_map_to_base = tf_buffer_->lookupTransform(
-            base_frame_, global_path_.header.frame_id,
-            ros::Time(0), ros::Duration(0.1));
-    } catch (tf2::TransformException& ex) {
-        ROS_WARN_THROTTLE(1.0, "[PathHandler] TF error in isGoalReached: %s", ex.what());
-        return false;
-    }
-    
-    // 手动变换目标点到 base_link
-    const auto& goal_pose = global_path_.poses.back().pose;
-    tf2::Transform tf_transform;
-    tf2::fromMsg(tf_map_to_base.transform, tf_transform);
-    
-    tf2::Vector3 goal_map(goal_pose.position.x, goal_pose.position.y, 0.0);
-    tf2::Vector3 goal_base = tf_transform * goal_map;
-    
-    // 在 base_link 坐标系中，机器人在原点
-    // 计算到目标的距离
-    double dx = goal_base.x();
-    double dy = goal_base.y();
-    double dist = std::sqrt(dx * dx + dy * dy);
-    
-    // 计算航向误差：
-    // 1. 优先使用 goal pose 自身 orientation
-    // 2. 若不可用，再回退到路径尾部的非退化切线
-    double goal_yaw_in_base = 0.0;
-    bool has_goal_yaw = false;
-
-    if (hasUsableOrientation(goal_pose.orientation)) {
-        const double goal_yaw_map = tf2::getYaw(goal_pose.orientation);
-        const double map_to_base_yaw = tf2::getYaw(tf_transform.getRotation());
-        goal_yaw_in_base = normalizeAngle(goal_yaw_map + map_to_base_yaw);
-        has_goal_yaw = std::isfinite(goal_yaw_in_base);
-    }
-
-    if (!has_goal_yaw) {
-        const size_t n = global_path_.poses.size();
-        for (size_t tail = n; tail >= 2; --tail) {
-            const auto& p1_pose = global_path_.poses[tail - 2].pose;
-            const auto& p2_pose = global_path_.poses[tail - 1].pose;
-
-            tf2::Vector3 p1_map(p1_pose.position.x, p1_pose.position.y, 0.0);
-            tf2::Vector3 p2_map(p2_pose.position.x, p2_pose.position.y, 0.0);
-            tf2::Vector3 p1_base = tf_transform * p1_map;
-            tf2::Vector3 p2_base = tf_transform * p2_map;
-
-            const double tdx = p2_base.x() - p1_base.x();
-            const double tdy = p2_base.y() - p1_base.y();
-            if (std::hypot(tdx, tdy) > 1e-6) {
-                goal_yaw_in_base = std::atan2(tdy, tdx);
-                has_goal_yaw = true;
-                break;
-            }
-
-            if (tail == 2) {
-                break;
-            }
-        }
-    }
-
-    double yaw_err = has_goal_yaw ? std::abs(normalizeAngle(goal_yaw_in_base)) : 0.0;
-    
-    return (dist < params_.goal_tolerance && yaw_err < params_.yaw_tolerance);
+    GoalInfo goal_info;
+    return computeGoalInfoLocked(goal_info) && goal_info.pose_reached;
 }
 
 double PathHandler::getGoalDistance() const {
     std::lock_guard<std::mutex> lock(mutex_);
-
-    if (!has_path_ || global_path_.poses.empty() || !tf_buffer_) {
+    GoalInfo goal_info;
+    if (!computeGoalInfoLocked(goal_info)) {
         return std::numeric_limits<double>::quiet_NaN();
     }
+    return goal_info.dist;
+}
 
-    geometry_msgs::TransformStamped tf_map_to_base;
-    try {
-        tf_map_to_base = tf_buffer_->lookupTransform(
-            base_frame_, global_path_.header.frame_id,
-            ros::Time(0), ros::Duration(0.1));
-    } catch (tf2::TransformException& ex) {
-        ROS_WARN_THROTTLE(1.0, "[PathHandler] TF error in getGoalDistance: %s", ex.what());
-        return std::numeric_limits<double>::quiet_NaN();
-    }
-
-    const auto& goal_pose = global_path_.poses.back().pose;
-    tf2::Transform tf_transform;
-    tf2::fromMsg(tf_map_to_base.transform, tf_transform);
-    const tf2::Vector3 goal_map(goal_pose.position.x, goal_pose.position.y, 0.0);
-    const tf2::Vector3 goal_base = tf_transform * goal_map;
-    return std::hypot(goal_base.x(), goal_base.y());
+bool PathHandler::getGoalInfo(GoalInfo& goal_info) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return computeGoalInfoLocked(goal_info);
 }
 
 double PathHandler::getMaxCurvatureAhead(double lookahead_dist, double preview_dist) const {
@@ -1122,6 +1042,83 @@ double PathHandler::getSpeedAtS(double s) const {
     double v1 = speed_profile_v_[idx];
     double t = (s1 - s0) > 1e-9 ? (s - s0) / (s1 - s0) : 0.0;
     return v0 + t * (v1 - v0);
+}
+
+bool PathHandler::computeGoalInfoLocked(GoalInfo& info) const {
+    info = GoalInfo();
+
+    if (!has_path_ || global_path_.poses.empty() || !tf_buffer_) {
+        return false;
+    }
+
+    geometry_msgs::TransformStamped tf_map_to_base;
+    try {
+        tf_map_to_base = tf_buffer_->lookupTransform(
+            base_frame_, global_path_.header.frame_id,
+            ros::Time(0), ros::Duration(0.1));
+    } catch (tf2::TransformException& ex) {
+        ROS_WARN_THROTTLE(1.0, "[PathHandler] TF error in getGoalInfo: %s", ex.what());
+        return false;
+    }
+
+    const auto& goal_pose = global_path_.poses.back().pose;
+
+    tf2::Transform tf_transform;
+    tf2::fromMsg(tf_map_to_base.transform, tf_transform);
+
+    const tf2::Vector3 goal_map(goal_pose.position.x, goal_pose.position.y, 0.0);
+    const tf2::Vector3 goal_base = tf_transform * goal_map;
+
+    info.dx = goal_base.x();
+    info.dy = goal_base.y();
+    info.dist = std::hypot(info.dx, info.dy);
+    info.bearing = std::atan2(info.dy, info.dx);
+
+    if (hasUsableOrientation(goal_pose.orientation)) {
+        const double goal_yaw_map = tf2::getYaw(goal_pose.orientation);
+        const double map_to_base_yaw = tf2::getYaw(tf_transform.getRotation());
+        info.goal_yaw_in_base = normalizeAngle(goal_yaw_map + map_to_base_yaw);
+        info.goal_yaw_err = info.goal_yaw_in_base;
+        info.has_goal_yaw = std::isfinite(info.goal_yaw_in_base);
+    }
+
+    if (!info.has_goal_yaw) {
+        const size_t n = global_path_.poses.size();
+        for (size_t tail = n; tail >= 2; --tail) {
+            const auto& p1_pose = global_path_.poses[tail - 2].pose;
+            const auto& p2_pose = global_path_.poses[tail - 1].pose;
+
+            const tf2::Vector3 p1_map(p1_pose.position.x, p1_pose.position.y, 0.0);
+            const tf2::Vector3 p2_map(p2_pose.position.x, p2_pose.position.y, 0.0);
+            const tf2::Vector3 p1_base = tf_transform * p1_map;
+            const tf2::Vector3 p2_base = tf_transform * p2_map;
+
+            const double tdx = p2_base.x() - p1_base.x();
+            const double tdy = p2_base.y() - p1_base.y();
+            if (std::hypot(tdx, tdy) > 1e-6) {
+                info.goal_yaw_in_base = std::atan2(tdy, tdx);
+                info.goal_yaw_err = info.goal_yaw_in_base;
+                info.has_goal_yaw = true;
+                break;
+            }
+
+            if (tail == 2) {
+                break;
+            }
+        }
+    }
+
+    info.position_reached = info.dist < params_.goal_tolerance;
+    if (info.has_goal_yaw) {
+        info.pose_reached =
+            info.position_reached &&
+            std::abs(normalizeAngle(info.goal_yaw_err)) < params_.yaw_tolerance;
+    } else {
+        info.pose_reached = info.position_reached;
+    }
+
+    info.valid = true;
+    return true;
 }
 
 }  // namespace scout_local_planner

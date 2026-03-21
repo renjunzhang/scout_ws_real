@@ -29,6 +29,9 @@
 #                /scout/mbf_costmap_nav/move_base/feedback
 #                /scout/mbf_costmap_nav/move_base/result
 #                /scout/mbf_costmap_nav/move_base/status
+#                /terminal/mode
+#                /terminal/recovery_latched
+#                /terminal/goal_info
 #   - TF：      /tf, /tf_static
 #   - 仿真时钟：/clock（仿真时存在，实物可忽略）
 #
@@ -113,6 +116,9 @@ TOPICS=(
     /scout/mbf_costmap_nav/move_base/feedback
     /scout/mbf_costmap_nav/move_base/result
     /scout/mbf_costmap_nav/move_base/status
+    /terminal/mode
+    /terminal/recovery_latched
+    /terminal/goal_info
 
     # 仿真时钟（实物环境无此话题也不影响录制）
     /clock

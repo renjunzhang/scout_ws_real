@@ -182,6 +182,9 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     slosh_imu_ay_bias_ready_pub_ = nh_.advertise<std_msgs::Int32>("slosh/imu_ay_bias_ready", 1);
     mpc_solve_ms_pub_ = nh_.advertise<std_msgs::Float32>("mpc/solve_ms", 1);
     mpc_status_val_pub_ = nh_.advertise<std_msgs::Int32>("mpc/status_val", 1);
+    terminal_mode_pub_ = nh_.advertise<std_msgs::String>("terminal/mode", 1);
+    terminal_recovery_latched_pub_ = nh_.advertise<std_msgs::Int32>("terminal/recovery_latched", 1);
+    terminal_goal_info_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("terminal/goal_info", 1);
     
     // 控制定时器
     control_timer_ = nh_.createTimer(
@@ -317,6 +320,20 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("heading_align/omega_gain", heading_align_omega_gain_, 1.5);
     pnh.param("heading_align/max_omega", heading_align_max_omega_, 0.0);
     pnh.param("heading_align/start_distance", heading_align_start_dist_, 0.5);
+
+    // 终点恢复（near-goal terminal recovery）
+    pnh.param("terminal_recovery/enable", terminal_recovery_enable_, true);
+    pnh.param("terminal_recovery/enter_distance", terminal_enter_distance_, 0.35);
+    pnh.param("terminal_recovery/release_distance", terminal_release_distance_, 0.55);
+    pnh.param("terminal_recovery/goal_behind_x", terminal_goal_behind_x_, -0.05);
+    pnh.param("terminal_recovery/align_angle", terminal_align_angle_, 1.0);
+    pnh.param("terminal_recovery/approach_slow_angle", terminal_approach_slow_angle_, 0.45);
+    pnh.param("terminal_recovery/bearing_gain", terminal_bearing_gain_, 1.8);
+    pnh.param("terminal_recovery/final_yaw_gain", terminal_final_yaw_gain_, 1.5);
+    pnh.param("terminal_recovery/max_omega", terminal_max_omega_, 0.0);
+    pnh.param("terminal_recovery/dist_gain", terminal_dist_gain_, 0.8);
+    pnh.param("terminal_recovery/v_min", terminal_v_min_, 0.05);
+    pnh.param("terminal_recovery/v_max", terminal_v_max_, 0.18);
     
     // cmd_vel 低通滤波参数
     pnh.param("filter/alpha_v", cmd_filter_alpha_v_, 0.3);
@@ -491,6 +508,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
     // 路径跳变/重规划提示：重置 warm-start
     if (path_handler_.consumeResetHint()) {
         resetWarmStart(true);
+        terminal_recovery_latched_ = false;
     }
 
     if (state_ != PlannerState::TRACKING) {
@@ -500,9 +518,38 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
     // slosh 估计与调试输出不应只局限于 TRACKING。
     // 到达终点后的残余晃动衰减也需要继续观测。
     updateSloshEstimate();
+
+    terminal_goal_info_valid_ =
+        path_handler_.getGoalInfo(terminal_goal_info_debug_) && terminal_goal_info_debug_.valid;
+    if (!terminal_goal_info_valid_) {
+        terminal_goal_info_debug_ = GoalInfo();
+    }
+
+    switch (state_) {
+        case PlannerState::IDLE:
+            terminal_mode_debug_ = "IDLE";
+            break;
+        case PlannerState::ERROR:
+            terminal_mode_debug_ = "ERROR";
+            break;
+        case PlannerState::REACHED:
+            terminal_mode_debug_ = "REACHED";
+            break;
+        case PlannerState::TRACKING:
+        default:
+            if (goal_stop_pending_) {
+                terminal_mode_debug_ = "GOAL_STOP_PENDING";
+            } else if (terminal_recovery_latched_) {
+                terminal_mode_debug_ = "TERMINAL_LATCHED";
+            } else {
+                terminal_mode_debug_ = "NONE";
+            }
+            break;
+    }
     
     // 发布状态
     publishStatus();
+    publishTerminalDebug();
     
     // 根据状态机执行
     switch (state_) {
@@ -526,6 +573,74 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
         case PlannerState::TRACKING:
             // 执行 MPC 控制
             {
+                GoalInfo goal_info;
+                const bool has_goal_info = path_handler_.getGoalInfo(goal_info);
+
+                if (terminal_recovery_enable_ && !goal_stop_pending_) {
+                    if (terminal_recovery_latched_) {
+                        const bool should_release =
+                            !has_goal_info ||
+                            !goal_info.valid ||
+                            !std::isfinite(goal_info.dist) ||
+                            goal_info.dist > terminal_release_distance_;
+                        if (should_release) {
+                            terminal_recovery_latched_ = false;
+                        }
+                    } else if (has_goal_info &&
+                               goal_info.valid &&
+                               std::isfinite(goal_info.dist) &&
+                               goal_info.dist < terminal_enter_distance_) {
+                        terminal_recovery_latched_ = true;
+                    }
+                } else {
+                    terminal_recovery_latched_ = false;
+                }
+
+                if (terminal_recovery_enable_ &&
+                    terminal_recovery_latched_ &&
+                    has_goal_info &&
+                    goal_info.valid &&
+                    !goal_stop_pending_) {
+                    double term_v = 0.0;
+                    double term_omega = 0.0;
+                    TerminalMode term_mode = TerminalMode::NONE;
+                    if (computeTerminalRecoveryCmd(goal_info, term_v, term_omega, term_mode)) {
+                        heading_align_active_ = false;
+                        switch (term_mode) {
+                            case TerminalMode::ALIGN_TO_POINT:
+                                terminal_mode_debug_ = "ALIGN_TO_POINT";
+                                break;
+                            case TerminalMode::APPROACH_POINT:
+                                terminal_mode_debug_ = "APPROACH_POINT";
+                                break;
+                            case TerminalMode::ALIGN_FINAL_YAW:
+                                terminal_mode_debug_ = "ALIGN_FINAL_YAW";
+                                break;
+                            case TerminalMode::NONE:
+                            default:
+                                terminal_mode_debug_ = "NONE";
+                                break;
+                        }
+                        terminal_goal_info_debug_ = goal_info;
+                        terminal_goal_info_valid_ = true;
+                        publishCmdVel(term_v, term_omega);
+                        publishTerminalDebug();
+
+                        if (verbose_) {
+                            ROS_INFO_THROTTLE(
+                                0.5,
+                                "[TerminalRecovery] mode=%d dist=%.3f bearing=%.3f yaw_err=%.3f cmd=(%.3f, %.3f)",
+                                static_cast<int>(term_mode),
+                                goal_info.dist,
+                                goal_info.bearing,
+                                goal_info.goal_yaw_err,
+                                term_v,
+                                term_omega);
+                        }
+                        return;
+                    }
+                }
+
                 if (goal_stop_pending_) {
                     // 终点最后一段继续交给 MPC 收敛，但将目标速度压到 0，
                     // 避免“进容差区后外层直接砍零”带来的冲过头与滑行。
@@ -774,6 +889,79 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
     }
 }
 
+bool LocalPlannerROS::computeTerminalRecoveryCmd(const GoalInfo& goal,
+                                                 double& v_cmd,
+                                                 double& omega_cmd,
+                                                 TerminalMode& mode) const {
+    v_cmd = 0.0;
+    omega_cmd = 0.0;
+    mode = TerminalMode::NONE;
+
+    if (!goal.valid) {
+        return false;
+    }
+
+    auto clamp = [](double x, double lo, double hi) {
+        return std::max(lo, std::min(hi, x));
+    };
+
+    const double omega_max =
+        terminal_max_omega_ > 1e-6 ? terminal_max_omega_ : vehicle_params_.omega_max;
+
+    const bool goal_behind = goal.dx < terminal_goal_behind_x_;
+    const double abs_bearing = std::abs(goal.bearing);
+
+    // 位置已到但姿态还没到：不要退回 normal tracking。
+    // 先把 goal 点几何关系对准，再补 final yaw。
+    if (goal.position_reached && !goal.pose_reached) {
+        const bool need_point_align = goal.dx <= 0.0 || abs_bearing >= 0.30;
+        if (need_point_align) {
+            mode = TerminalMode::ALIGN_TO_POINT;
+            omega_cmd = clamp(terminal_bearing_gain_ * goal.bearing,
+                              -omega_max, omega_max);
+            return true;
+        }
+
+        if (goal.has_goal_yaw &&
+            std::abs(goal.goal_yaw_err) > path_params_.yaw_tolerance) {
+            mode = TerminalMode::ALIGN_FINAL_YAW;
+            omega_cmd = clamp(terminal_final_yaw_gain_ * goal.goal_yaw_err,
+                              -omega_max, omega_max);
+            return true;
+        }
+
+        return false;
+    }
+
+    // goal 在车后，或当前 bearing 太大：先原地对准 goal 点。
+    const bool bearing_large = abs_bearing > terminal_align_angle_;
+    if (goal_behind || bearing_large) {
+        mode = TerminalMode::ALIGN_TO_POINT;
+        omega_cmd = clamp(terminal_bearing_gain_ * goal.bearing,
+                          -omega_max, omega_max);
+        return true;
+    }
+
+    // goal 在前方、距离还未达标：低速靠近。
+    if (goal.dist > path_params_.goal_tolerance) {
+        mode = TerminalMode::APPROACH_POINT;
+
+        double v = clamp(terminal_dist_gain_ * goal.dist,
+                         terminal_v_min_,
+                         terminal_v_max_);
+        if (abs_bearing > terminal_approach_slow_angle_) {
+            v *= 0.4;
+        }
+
+        v_cmd = std::max(0.0, std::min(v, terminal_v_max_));
+        omega_cmd = clamp(terminal_bearing_gain_ * goal.bearing,
+                          -omega_max, omega_max);
+        return true;
+    }
+
+    return false;
+}
+
 void LocalPlannerROS::updateState() {
     // 检查数据是否有效
     if (!has_odom_) {
@@ -794,6 +982,7 @@ void LocalPlannerROS::updateState() {
     
     if (state_ != PlannerState::TRACKING) {
         goal_stop_pending_ = false;
+        terminal_recovery_latched_ = false;
         return;
     }
 
@@ -826,6 +1015,7 @@ void LocalPlannerROS::updateState() {
     if (speed_low) {
         transitionTo(PlannerState::REACHED);
         goal_stop_pending_ = false;
+        terminal_recovery_latched_ = false;
         // 到达终点后保留 slosh 内部状态一段时间，便于观测残余晃动衰减。
         resetWarmStart(false, false);
     }
@@ -1071,6 +1261,45 @@ void LocalPlannerROS::publishStatus() {
     std_msgs::String msg;
     msg.data = plannerStateToString(state_);
     status_pub_.publish(msg);
+}
+
+void LocalPlannerROS::publishTerminalDebug() {
+    if (terminal_mode_pub_.getNumSubscribers() > 0) {
+        std_msgs::String msg;
+        msg.data = terminal_mode_debug_;
+        terminal_mode_pub_.publish(msg);
+    }
+
+    if (terminal_recovery_latched_pub_.getNumSubscribers() > 0) {
+        std_msgs::Int32 msg;
+        msg.data = terminal_recovery_latched_ ? 1 : 0;
+        terminal_recovery_latched_pub_.publish(msg);
+    }
+
+    if (terminal_goal_info_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32MultiArray msg;
+        msg.data.resize(8, 0.0f);
+
+        if (!terminal_goal_info_valid_) {
+            const float nan = std::numeric_limits<float>::quiet_NaN();
+            msg.data[0] = nan;
+            msg.data[1] = nan;
+            msg.data[2] = nan;
+            msg.data[3] = nan;
+            msg.data[4] = nan;
+        } else {
+            msg.data[0] = static_cast<float>(terminal_goal_info_debug_.dx);
+            msg.data[1] = static_cast<float>(terminal_goal_info_debug_.dy);
+            msg.data[2] = static_cast<float>(terminal_goal_info_debug_.dist);
+            msg.data[3] = static_cast<float>(terminal_goal_info_debug_.bearing);
+            msg.data[4] = static_cast<float>(terminal_goal_info_debug_.goal_yaw_err);
+            msg.data[5] = terminal_goal_info_debug_.has_goal_yaw ? 1.0f : 0.0f;
+            msg.data[6] = terminal_goal_info_debug_.position_reached ? 1.0f : 0.0f;
+            msg.data[7] = terminal_goal_info_debug_.pose_reached ? 1.0f : 0.0f;
+        }
+
+        terminal_goal_info_pub_.publish(msg);
+    }
 }
 
 void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {

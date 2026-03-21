@@ -903,3 +903,118 @@
   - 这一步的核心是**目录重组和链接修正**
   - **没有新增技术结论，也没有修改控制逻辑**
   - 除了内部路径更新外，没有因为“迁移文件”而重写正文内容
+
+## 2026-03-21
+
+### 终点问题重新定性：主矛盾不在 slosh，而在 terminal behavior
+
+- 基于多条 `Q=0` bag 的复盘，明确当前终点不收敛的主问题不是 `Q_slosh`、不是 IMU，也不是全局路径更新频率。
+- 当前更准确的定位是：
+  - base tracking / terminal logic 仍不完整
+  - 冲过终点后 goal 落到车后，系统仍长期停留在 forward-only tracking 语义里
+  - 终点阶段缺少稳定的 recovery / align 结构
+
+### `test_mpc.launch` 与 `slosh_experiment.launch` 默认滤波口径对齐
+
+- 修改文件：[test_mpc.launch](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/launch/test_mpc.launch)
+- 处理内容：
+  - 将默认滤波覆盖改成与 `slosh_experiment.launch` 一致：
+    - `filter_alpha_v = 1.0`
+    - `filter_alpha_omega = 1.0`
+    - `filter_kappa_boost = 0.0`
+- 目的：
+  - 消除“实验 launch 已关闭输出 EMA、而 `test_mpc.launch` 又重新打开默认滤波”带来的对照混乱
+
+### 新增终点专项方案文档：`20260320代码修改方案.md`
+
+- 新增文件：[20260320代码修改方案.md](/home/a/scout_ws/docs/重要文档/20260320代码修改方案.md)
+- 文档内容：
+  - 将终点问题拆成“已修复项 / 当前主因 / 下一刀 / 当前不建议继续改的项”
+  - 明确当前最短路径是：
+    1. 修 terminal stop 链
+    2. 补 terminal recovery
+    3. 再看是否需要做执行滞后 A/B
+
+### 终点 stop 链修正：不再硬切零速，且 `v_des=0` 真正压住 `v_ref`
+
+- 修改文件：
+  - [path_handler.cpp](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/src/path_handler.cpp)
+  - [local_planner_ros.cpp](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/src/local_planner_ros.cpp)
+  - [local_planner_ros.h](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/include/scout_local_planner/local_planner_ros.h)
+- 本轮落地内容：
+  - `goal_stop_pending_` 不再一进容差区就直接 `publishCmdVel(0,0)`
+  - 改成由 MPC 继续收最后一段，只把 `v_des_cmd` 压到 `0`
+  - `PathHandler::getReferencePoints()` 中，外部传入的 `v_des` 现在作为 `v_ref` 的硬上界
+  - 修复了“上层要求停，但 time-parameterized speed profile 仍给正速度参考”的结构错误
+  - `goal_stop_pending_` 增加最小锁存 / 滞回释放，避免一帧滑出容差就立刻恢复巡航
+
+### 终点几何出口统一：新增 `GoalInfo`
+
+- 修改文件：
+  - [types.h](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/include/scout_local_planner/types.h)
+  - [path_handler.h](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/include/scout_local_planner/path_handler.h)
+  - [path_handler.cpp](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/src/path_handler.cpp)
+- 本轮落地内容：
+  - 新增统一的终点几何结构 `GoalInfo`
+  - `PathHandler` 新增 `getGoalInfo()`
+  - `isGoalReached()`、`getGoalDistance()` 改成复用统一终点几何出口
+  - 终点 yaw 判定优先使用 goal pose 自身 orientation；不可用时才回退到路径尾部非退化切线
+
+### 最小 terminal recovery 已接入
+
+- 修改文件：
+  - [local_planner_ros.cpp](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/src/local_planner_ros.cpp)
+  - [local_planner_ros.h](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/include/scout_local_planner/local_planner_ros.h)
+  - [mpc_params.yaml](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params.yaml)
+  - [mpc_params_sim.yaml](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/config/mpc_params_sim.yaml)
+- 本轮落地内容：
+  - 在 `TRACKING` 分支最前面接入最小 terminal recovery
+  - 第一版 mode：
+    - `ALIGN_TO_POINT`
+    - `APPROACH_POINT`
+    - `ALIGN_FINAL_YAW`
+  - 后续又做了两次小修：
+    - 调整 mode 优先级，先对准 goal 点，再补 final yaw
+    - 补最小锁存，填平 `position_reached && !pose_reached` 时掉回 `NONE` 的空档
+
+### 新增离线观察脚本：`observe_terminal_recovery.py`
+
+- 新增文件：[observe_terminal_recovery.py](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/observe_terminal_recovery.py)
+- 作用：
+  - 在 bag 回放时，用 `/scout/goal`、`/odom`、`/cmd_vel_replay`、`/tf` 粗看 terminal recovery 是否触发
+- 当前结论：
+  - 这个脚本只能做启发式初筛
+  - 在代码连续修改后，单靠它推断内部真实 mode 已不够可靠
+
+### 新增真实 terminal debug 话题
+
+- 修改文件：
+  - [local_planner_ros.cpp](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/src/local_planner_ros.cpp)
+  - [record_slosh_experiment.sh](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh)
+- 新增话题：
+  - `/terminal/mode`
+  - `/terminal/recovery_latched`
+  - `/terminal/goal_info`
+- `goal_info` 当前数组顺序：
+  - `[dx, dy, dist, bearing, goal_yaw_err, has_goal_yaw, position_reached, pose_reached]`
+- 目的：
+  - 不再靠外部脚本猜测 terminal mode
+  - 直接观测 planner 内部当前到底处于：
+    - `NONE`
+    - `TERMINAL_LATCHED`
+    - `GOAL_STOP_PENDING`
+    - `ALIGN_TO_POINT`
+    - `APPROACH_POINT`
+    - `ALIGN_FINAL_YAW`
+    - `REACHED`
+
+### 编译与验证
+
+- 已多次执行：
+  - `source /opt/ros/noetic/setup.bash && catkin_make --pkg scout_local_planner -j1`
+- 结果：
+  - `scout_local_planner` 与 `local_planner_node` 均编译通过
+- 当前验证结论：
+  - terminal recovery 已经不是“完全没进”
+  - 但截至今天结束，**还不能宣布终点已经稳定收敛**
+  - 下一步应优先使用新的 `/terminal/*` 真实调试话题做离线回放判因，而不是继续盲目扫参数
