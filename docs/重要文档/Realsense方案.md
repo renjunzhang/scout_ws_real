@@ -11,9 +11,11 @@
   - 6. 测量链第一版怎么做
     - 6.1 当前推荐输出
     - 6.2 当前推荐处理流程
-    - 6.3 当前推荐对比指标
-    - 6.4 第一版最小落地清单
-    - 6.5 预留 ROS 接口
+    - 6.3 当前运行形态：实时发布 + 离线验收
+    - 6.4 当前推荐对比指标
+    - 6.5 第一版最小落地清单
+    - 6.6 预留 ROS 接口
+    - 6.7 基于当前代码审查的下一轮最小修改方案
   - 7. 需要不要把 `RealSense_ws` 移进项目
   - 8. 推荐移植方式
   - 9. 第一轮实验建议
@@ -38,6 +40,14 @@
     - 试管是否完整入镜
     - 画面是否有明显反光/遮挡
   - 第一版不要把视觉结果直接接入控制器，先只作为**外部测量/验证链**。
+  - 当前这条链路的定位是：
+    - **不闭环**
+    - **可实时发布**
+    - **以离线 bag 分析作为主验收口径**
+  - 当前已经跑通的离线脚本应被定位为：
+    - **可运行的 first-pass PoC**
+    - **还不是最终可信液面测量器**
+    - **当前最需要修的不是继续堆阈值，而是测量定义、输出语义和时序鲁棒性**
   - 第一版实现顺序应固定为：
     - **先离线跑 ROS bag 图像**
     - **再封装成 ROS 节点**
@@ -380,28 +390,50 @@
 
   ### 6.1 当前推荐输出
 
-  第一版不要做太复杂，建议视觉节点输出下面这些量：
+  当前这版文档需要把“测量定义”和“输出语义”分开。
 
-  - height_left_mm
-      - 左侧观测液面高度
-  - height_right_mm
-      - 右侧观测液面高度
-  - height_peak_mm
-      - 当前帧观测平面内的最大液面高度
-  - height_peak_rel_mm
-      - 相对静止液面的最大抬升量
+  第一版真正推荐优先输出的是**像素域**和**相对量**：
+
+  - height_left_px
+      - 左侧固定评估点处的液面像素位置
+  - height_right_px
+      - 右侧固定评估点处的液面像素位置
+  - height_peak_px
+      - 当前观测平面内的最高液面像素位置
+  - height_left_rel_px
+      - 左侧相对静止液面的抬升量
+  - height_right_rel_px
+      - 右侧相对静止液面的抬升量
+  - height_peak_rel_px
+      - 当前帧相对静止液面的最大抬升量
   - meniscus_valid
       - 当前帧液面检测是否有效
+  - meniscus_confidence
+      - 当前帧测量置信度或质量评分
 
-  如果你想更简化，第一版甚至可以只输出：
+  当背景标尺补齐后，再增加：
 
+  - height_left_rel_mm
+      - 左侧相对静止液面的抬升量
+  - height_right_rel_mm
+      - 右侧相对静止液面的抬升量
   - height_peak_rel_mm
+      - 当前帧相对静止液面的最大抬升量
 
   这里建议把口径说清楚：
 
   - 第一版测到的不是“完整 3D 真值最大液面高度”
-  - 而是单相机侧视观测平面内的液面高度量
+  - 也不是严格物理意义上的“绝对液面高度”
+  - 而是单相机侧视观测平面内的**表观液面相对抬升量**
   - 这个口径已经足够支持当前 anti-slosh A/B 对比
+
+  当前不建议在第一版里把：
+
+  - height_left_mm
+  - height_right_mm
+  - height_peak_mm
+
+  当成正式对外口径，因为如果只是把 ROI 内像素行坐标直接乘 `mm_per_pixel`，它更接近“带比例的像素位置”，还不是物理上可 defend 的绝对高度。
 
   ### 6.2 当前推荐处理流程
 
@@ -413,16 +445,18 @@
       - 试管左右内壁
       - 静止液面基线
   3. 固定 ROI，只裁试管区域
-  4. 由于已经加入黑墨水，优先做灰度或 HSV V 通道阈值分割
-  5. 只在试管内部区域内提取液体暗区
-  6. 对每一列从上往下扫描，找到液体区域的第一个像素，形成液面候选点
-  7. 对候选点做中值滤波或稳健拟合，得到液面线
-  8. 计算：
-      - 左侧液面高度
-      - 右侧液面高度
-      - 最大抬升量
-  9. 用标尺或静态标定把像素换成毫米
+  4. 在有条件时先做去畸变和 tube 轴线对正
+  5. 由于已经加入黑墨水，优先做灰度或 HSV V 通道阈值分割
+  6. 只在试管内部区域内提取液体暗区
+  7. 先在**中央可信区域**提取液面候选点，而不是优先依赖靠壁区域
+  8. 对候选点做稳健拟合，得到液面线
+  9. 在固定的内部评估点上读取：
+      - 左侧液面位置
+      - 右侧液面位置
+      - 最大相对抬升量
   10. 若阈值分割失败，再回退到边缘检测附近搜索
+  11. 引入上一帧先验、跳变门控和更严格的有效性判据
+  12. 在背景标尺补齐后，再把相对抬升量从像素域换成毫米
 
   当前不建议第一版就做：
 
@@ -431,7 +465,41 @@
   - depth 融合
   - 三维液面重建
 
-  ### 6.3 当前推荐对比指标
+  ### 6.3 当前运行形态：实时发布 + 离线验收
+
+  当前方案容易混淆的一点是：
+
+  - 这是不是闭环控制链？
+  - 这是不是只做事后分析？
+
+  当前更准确的定位是：
+
+  - **不是控制闭环**
+  - **是外部真实液面证据链**
+  - **可以实时发布**
+  - **但主验收和论文证据应以离线分析为主**
+
+  更具体地说：
+
+  - 实时层：
+      - 视觉节点可以实时订阅图像
+      - 实时发布 `/liquid_measurement/...`
+      - 实时输出 `debug_image`
+      - 方便现场检查液面线是否提对
+  - 验收层：
+      - 录制 rosbag
+      - 事后统一提取 `height_peak_rel_px(t)` 等时序
+      - 背景标尺补齐后，再统一提取 `height_peak_rel_mm(t)` 等时序
+      - 统一比较 `Q_slosh=0` 与 `Q_slosh=5`
+      - 生成峰值、残余振荡、衰减时间等指标
+
+  因此第一版最推荐的工程顺序仍然是：
+
+  1. 先把**离线脚本**跑通
+  2. 再封装成**实时 ROS 节点**
+  3. 但实验结论仍主要依赖**事后离线分析**
+
+  ### 6.4 当前推荐对比指标
 
   第一轮实验建议直接比较：
 
@@ -447,11 +515,16 @@
   - Q_slosh=0
   - Q_slosh=5
 
+  当前更建议直接对比的基础量是：
+
+  - height_peak_rel_px(t)
+  - 后续补标尺后的 height_peak_rel_mm(t)
+
   等视觉链稳定后，再考虑追加：
 
   - lateral_accel=false/true
 
-  ### 6.4 第一版最小落地清单
+  ### 6.5 第一版最小落地清单
 
   第一版真正要落地的，只有下面这些：
 
@@ -459,17 +532,37 @@
   2. 先写一个离线脚本直接跑 bag 或 topic dump
   3. 固定一个只覆盖单个试管的 ROI
   4. 检测液面边界/液面线/最高点
-  5. 用标尺或静态标定把像素换成毫米
-  6. 发布或导出：
-      - height_left_mm
-      - height_right_mm
-      - height_peak_mm
-      - height_peak_rel_mm
-      - meniscus_valid
+  5. 先稳定输出像素域时序
+  6. 在背景标尺补齐后，再把相对抬升量换成毫米
   7. 输出 debug 图像或视频，确认液面线叠加正确
   8. 录 bag，对比：
       - Q_slosh=0
       - Q_slosh=5
+
+  第一版优先发布或导出：
+
+  - height_left_px
+  - height_right_px
+  - height_peak_px
+  - height_left_rel_px
+  - height_right_rel_px
+  - height_peak_rel_px
+  - meniscus_valid
+  - meniscus_confidence
+
+  背景标尺补齐后再追加：
+
+  - height_left_rel_mm
+  - height_right_rel_mm
+  - height_peak_rel_mm
+
+  当前不建议第一版正式对外使用：
+
+  - height_left_mm
+  - height_right_mm
+  - height_peak_mm
+
+  原因是它们很容易退化成“ROI 坐标乘比例”的伪绝对量，不利于论文表述。
 
   第一版不要求：
 
@@ -482,7 +575,7 @@
   如果沿用你当前 scout_local_planner/scripts/record_slosh_experiment.sh，
   要额外把相机话题补进 rosbag；因为当前主录包链路默认录的是控制/估计相关话题，不是视觉图像。
 
-  ### 6.5 预留 ROS 接口
+  ### 6.6 预留 ROS 接口
 
   为了后面不反复改话题名，建议第一版先把接口名字固定成下面这样。
 
@@ -508,21 +601,39 @@
 
   #### 建议输出接口
 
-  - /liquid_measurement/height_left_mm
+  - /liquid_measurement/height_left_px
       - 类型：std_msgs/Float32
-      - 作用：左侧观测液面高度
-  - /liquid_measurement/height_right_mm
+      - 作用：左侧固定评估点处的液面像素位置
+  - /liquid_measurement/height_right_px
       - 类型：std_msgs/Float32
-      - 作用：右侧观测液面高度
-  - /liquid_measurement/height_peak_mm
+      - 作用：右侧固定评估点处的液面像素位置
+  - /liquid_measurement/height_peak_px
       - 类型：std_msgs/Float32
-      - 作用：当前帧观测平面内的最大液面高度
+      - 作用：当前帧观测平面内的最高液面像素位置
+  - /liquid_measurement/height_left_rel_px
+      - 类型：std_msgs/Float32
+      - 作用：左侧相对静止液面的抬升量
+  - /liquid_measurement/height_right_rel_px
+      - 类型：std_msgs/Float32
+      - 作用：右侧相对静止液面的抬升量
+  - /liquid_measurement/height_peak_rel_px
+      - 类型：std_msgs/Float32
+      - 作用：相对静止液面的最大抬升量
+  - /liquid_measurement/height_left_rel_mm
+      - 类型：std_msgs/Float32
+      - 作用：左侧相对静止液面的抬升量
+  - /liquid_measurement/height_right_rel_mm
+      - 类型：std_msgs/Float32
+      - 作用：右侧相对静止液面的抬升量
   - /liquid_measurement/height_peak_rel_mm
       - 类型：std_msgs/Float32
       - 作用：相对静止液面的最大抬升量
   - /liquid_measurement/meniscus_valid
       - 类型：std_msgs/Int32
       - 作用：当前帧液面检测是否有效，1=有效，0=无效
+  - /liquid_measurement/meniscus_confidence
+      - 类型：std_msgs/Float32
+      - 作用：当前帧测量置信度或质量评分
   - /liquid_measurement/debug_image
       - 类型：sensor_msgs/Image
       - 作用：叠加 ROI、液面线和高度文本的调试图像
@@ -545,6 +656,8 @@
       - 作用：像素到毫米换算系数
   - calibration/still_level_px
       - 作用：静止液面像素基线
+  - calibration/still_level_line
+      - 作用：后续升级为两点定义的静止液面参考线
   - processing/use_color_threshold
       - 作用：是否启用颜色/亮度分割
   - processing/use_edge_fallback
@@ -553,6 +666,14 @@
       - 作用：在 Otsu 或基础阈值上增加人工偏移
   - processing/central_band_ratio
       - 作用：只使用试管中间多少比例的列来拟合液面
+  - processing/use_temporal_gate
+      - 作用：是否启用上一帧先验和跳变门控
+  - processing/max_frame_jump_px
+      - 作用：允许的最大帧间液面跳变量
+  - processing/max_fit_residual_px
+      - 作用：判定拟合是否可信的最大残差
+  - processing/max_slope_abs
+      - 作用：判定液面线斜率是否在合理范围内
 
   #### 当前接口边界
 
@@ -563,6 +684,53 @@
   - 离线对比分析
 
   不要在第一版里把这些话题直接喂给 scout_local_planner。
+
+  ### 6.7 基于当前代码审查的下一轮最小修改方案
+
+  当前已经跑通的离线脚本，定位应当是：
+
+  - 可运行的 first-pass PoC
+  - 不是最终可信液面测量器
+
+  当前代码最主要的问题，不是“阈值再调一调”，而是：
+
+  - 测量定义还不够严格
+  - 输出语义和物理量定义还不完全一致
+  - 时序鲁棒性还不够
+  - 几何校正层还没有落地
+
+  按优先级，下一轮最小修改顺序建议固定为：
+
+  1. 先重写测量定义
+      - 不再用靠近左右内壁的 side window 直接出数
+      - 改成“中央可信区域候选点 + 鲁棒直线拟合 + 固定内部评估点读数”
+      - 这样输出的 `left/right/peak` 才更接近文档想表达的“观测平面内液面线”
+  2. 再修正输出语义
+      - 在背景标尺和参考原点没完全收紧前，不把绝对 `height_*_mm` 当正式口径
+      - 第一版主口径优先用 `height_*_rel_px`
+      - 标尺补齐后再正式启用 `height_*_rel_mm`
+  3. 再加入时序先验与更严格的有效性判据
+      - 引入上一帧液面线先验
+      - 增加帧间跳变门控
+      - 把 slope、拟合残差、一致性检查纳入 `meniscus_valid`
+      - 同时输出 `meniscus_confidence`
+  4. 最后补几何校正层
+      - 引入 `/camera/color/camera_info`
+      - 先做去畸变
+      - 再做 tube 轴线对正
+      - 后续再考虑更完整的圆柱几何校正
+
+  这里要特别说明：
+
+  - 几何校正当然重要
+  - 但如果测量定义本身还是错的，先做 undistort 也不能解决“读到的不是你想比较的量”这个核心问题
+
+  所以当前文档推荐的工程顺序是：
+
+  - **先修测量定义**
+  - **再修输出语义**
+  - **再加时序鲁棒性**
+  - **再补几何校正**
 
   ## 7. 需要不要把 RealSense_ws 移进项目
 
@@ -710,9 +878,3 @@
   ## 当前一句话建议
 
   先用 1 个 RealSense 做 RGB 侧视液面测量，利用你现在已经加入黑墨水这一条件，优先走“固定 ROI + 阈值分割 + 液面线提取”的离线优先路线；把 realsense-ros 的源码并入 scout_ws，不要搬整个 RealSense_ws；先验证“有无 anti-slosh 时液面峰值是否下降”，不要一上来追求 depth、双相机或完整 2D / 3D 真值重建。
-
-
-  如果你愿意，我下一步可以继续直接给你两样东西：
-
-  1. `realsense_liquid_measurement` 包结构草案
-  2. `extract_liquid_height_from_bag.py` 的第一版脚本骨架

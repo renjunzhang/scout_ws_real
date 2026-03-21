@@ -1142,3 +1142,157 @@
   - `重要文档列表.md` 补入：
     - [20260320代码修改方案.md](/home/a/scout_ws/docs/重要文档/20260320代码修改方案.md)
     - [Realsense方案.md](/home/a/scout_ws/docs/重要文档/Realsense方案.md)
+
+## 2026-03-22
+
+### RealSense 液面测量包骨架落地
+
+- 新增包：[realsense_liquid_measurement](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement)
+- 当前已建立的核心文件：
+  - [CMakeLists.txt](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/CMakeLists.txt)
+  - [package.xml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/package.xml)
+  - [README.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/README.md)
+  - [liquid_measurement.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/liquid_measurement.yaml)
+  - [calibrate_liquid_roi.py](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/calibrate_liquid_roi.py)
+  - [annotate_liquid_roi.py](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/annotate_liquid_roi.py)
+  - [extract_liquid_height_from_bag.py](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/extract_liquid_height_from_bag.py)
+- 包定位已明确为：
+  - 先服务于 **RealSense RGB 离线证据链**
+  - 当前不接入 `scout_local_planner` 闭环
+  - 当前主口径为 `height_peak_rel_px`
+
+### 离线标定链打通
+
+- 当前静止 bag：
+  - [/data/a/bags/realsense_session_2026-03-21_17-48-52.bag](/data/a/bags/realsense_session_2026-03-21_17-48-52.bag)
+- 当前运动 bag：
+  - [/data/a/bags/realsense_session_2026-03-21_17-47-55.bag](/data/a/bags/realsense_session_2026-03-21_17-47-55.bag)
+- 已实现流程：
+  1. 用 [calibrate_liquid_roi.py](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/calibrate_liquid_roi.py) 从 bag 导出 RGB 参考图
+  2. 用 [annotate_liquid_roi.py](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/annotate_liquid_roi.py) 做人工标定
+  3. 当前先用 `px_only` 模式，不依赖背景标尺
+- 当前已保存的参考标定文件：
+  - [frame_000000_calibration.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration.yaml)
+  - [frame_000000_annotated.png](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_annotated.png)
+- 当前标定文件中已经固定：
+  - `roi`
+  - `tube_inner.x_left / x_right`
+  - `calibration.still_level_px`
+  - `mm_per_pixel = null`
+
+### 提取脚本从 PoC 推到可用离线测量链
+
+- 重点修改文件：
+  - [extract_liquid_height_from_bag.py](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/extract_liquid_height_from_bag.py)
+- 当前主流程已不是最早的简单列扫描，而是：
+  - 灰度预处理 + CLAHE
+  - Otsu + bias
+  - 开闭运算
+  - 保留底部连通液体区域
+  - 中央可信带候选点
+  - 液面线拟合
+  - 固定内部评估点读数
+  - 时间门控
+- 当前正式输出已收紧为：
+  - `height_left_px`
+  - `height_right_px`
+  - `height_peak_px`
+  - `height_left_rel_px`
+  - `height_right_rel_px`
+  - `height_peak_rel_px`
+  - `meniscus_confidence`
+  - `fit_rms_px`
+  - `fit_slope`
+  - `temporal_jump_px`
+  - `temporal_gate_passed`
+- 今日已明确不再把绝对 `height_left_mm / height_right_mm / height_peak_mm` 当作正式输出语义
+- 当前如果 `mm_per_pixel = null`，脚本仍然正常运行，但 `*_rel_mm` 留空
+
+### 静止包自动归零基线完成
+
+- 在 [extract_liquid_height_from_bag.py](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/extract_liquid_height_from_bag.py) 中新增：
+  - `--auto-zero-baseline`
+  - `--baseline-frame-count`
+  - `--baseline-stat`
+  - `--write-adjusted-calibration`
+- 当前静止包已实际完成自动归零：
+  - 原静止基线相对偏移约 `5 px`
+  - 自动归零后建议：
+    - `still_level_px ≈ 175.949570`
+- 自动生成修正后的标定文件：
+  - [frame_000000_calibration_auto_zero.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_auto_zero.yaml)
+- 归零后，静止包的 `height_peak_rel_px` 已基本回到 `0 px` 附近，可作为运动包分析基线
+
+### 运动包验证结果
+
+- 使用修正后的标定文件运行运动 bag：
+  - [frame_000000_calibration_auto_zero.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_auto_zero.yaml)
+  - [/data/a/bags/realsense_session_2026-03-21_17-47-55.bag](/data/a/bags/realsense_session_2026-03-21_17-47-55.bag)
+- 当前终端摘要结果：
+  - `processed frames = 751`
+  - `valid frames = 552`
+  - `valid ratio = 73.5%`
+  - `max height_peak_rel_px = 18.236`
+- 当前输出目录：
+  - [/data/a/bags/realsense_session_2026-03-21_17-47-55_liquid_measurement](/data/a/bags/realsense_session_2026-03-21_17-47-55_liquid_measurement)
+- 当前主要输出文件：
+  - [liquid_height.csv](/data/a/bags/realsense_session_2026-03-21_17-47-55_liquid_measurement/liquid_height.csv)
+  - [liquid_debug.mp4](/data/a/bags/realsense_session_2026-03-21_17-47-55_liquid_measurement/liquid_debug.mp4)
+  - [liquid_height_peak_curve.png](/data/a/bags/realsense_session_2026-03-21_17-47-55_liquid_measurement/liquid_height_peak_curve.png)
+- 当前阶段性判断：
+  - 这条链已经可以作为 **相对抬升量证据链**
+  - 但还不能当成高精度绝对液位真值链
+
+### 曲线图与 README 说明补齐
+
+- 更新文件：
+  - [README.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/README.md)
+  - [package.xml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/package.xml)
+  - [Realsense具体修改过程.md](/home/a/scout_ws/docs/Realsense具体修改过程.md)
+- 当前曲线图行为已调整为：
+  - 默认主图只画 `height_peak_rel_px`
+  - 有效点按 `meniscus_confidence` 着色
+  - 右侧颜色条显示 `meniscus_confidence`
+  - 自动标注当前最高峰对应的 `peak_rel_px` 与 `confidence`
+  - 无效帧以灰色 `x` 标出
+- README 当前已补充：
+  - 各脚本用法
+  - 自动归零流程
+  - 曲线图怎么读
+  - `CSV` 各字段语义
+- `package.xml` 已新增：
+  - `python3-matplotlib`
+
+### 今日关于“检测质量本身”的结论
+
+- 当前确认：
+  - 标尺只能把 `px` 转成 `mm`
+  - 不能自动提升有效帧比例，也不能自动消除假峰
+- 当前更重要的问题是：
+  - 运动阶段仍有假峰
+  - 峰值报告规则还不够硬
+  - 标定仍然是“单点/双 x”简化版本
+- 今日已形成的下一步路线：
+  1. 先固定采集条件
+  2. 再做最小几何正确性
+  3. 再强化主检测器
+  4. 再强化峰值接受规则
+- 其中“最小几何正确性”当前已确定应前移，包括：
+  - `still_level_line`
+  - `left_wall_line / right_wall_line`
+  - `tube_axis_line`
+
+### 今日收尾状态
+
+- 今日已经完成：
+  - 包骨架建立
+  - 标定链打通
+  - 自动归零
+  - 静止/运动 bag 跑通
+  - 曲线图输出
+  - README 与过程文档补齐
+- 明日继续重点：
+  - 线标定替代单点/双 x 标定
+  - ROI 旋正
+  - `accept_for_peak_report` 硬门槛
+  - 更强的假峰抑制

@@ -1,0 +1,34 @@
+source:
+  image: /data/a/bags/realsense_session_2026-03-21_17-48-52_frames/frame_000000.png
+  mode: px_only
+roi:
+  x: 776
+  y: 197
+  w: 243
+  h: 408
+tube_inner:
+  x_left: 8
+  x_right: 235
+calibration:
+  still_level_px: 175.94956970214844
+  mm_per_pixel: null
+reference_points_image:
+  left_wall:
+  - 784
+  - 342
+  right_wall:
+  - 1011
+  - 409
+  still_level:
+  - 912
+  - 378
+  ruler_point_a: null
+  ruler_point_b: null
+  ruler_distance_mm: null
+auto_zero_baseline:
+  applied: true
+  source_calibration: /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration.yaml
+  baseline_stat: median
+  baseline_frame_count: 80
+  baseline_center_rel_px: 5.050432205200195
+  suggested_still_level_px: 175.94956970214844
