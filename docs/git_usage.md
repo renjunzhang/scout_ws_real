@@ -218,3 +218,26 @@ git status
 - 采用 `git pull --rebase` 保持线性历史，减少无意义的合并提交。
 - 小步提交、清晰备注，分支开发，PR 合并。
 - 发生冲突先阅读冲突标记，逐个文件解决再继续流程。
+
+## 12. Codex 沙箱 bwrap 故障记录（2026-03-21）
+
+现象：
+- 执行命令时在 shell 启动前失败，报错：`bwrap: Unknown option --argv0`。
+
+定位：
+- Ubuntu 20.04 仓库默认 `bubblewrap` 为 `0.4.0`，不支持 `--argv0`（该参数在 `0.9.0` 引入）。
+
+本机处理：
+- 在用户目录编译安装 `bubblewrap 0.9.0` 到 `~/.local/bin/bwrap`。
+- 验证：`bwrap --version` 输出 `0.9.0`，`bwrap --help` 中包含 `--argv0`。
+- 为了避免旧会话/执行器继续走沙箱导致异常，写入 `~/.codex/config.toml`：
+
+```toml
+model = "gpt-5.4"
+approval_policy = "never"
+sandbox_mode = "danger-full-access"
+```
+
+说明：
+- `codex --help` 与 `codex --version` 正常，不代表沙箱链路一定正常。
+- 若仍出现旧错误，通常是旧会话未退出；需彻底重启 Codex 会话。
