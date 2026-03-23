@@ -20,13 +20,28 @@ processing:
   blur_kernel: 5
   threshold_mode: otsu_bias
   threshold_bias: -10
+  use_adaptive_threshold: true
+  adaptive_block_size: 31
+  adaptive_c_offset: 7.0
   use_edge_fallback: true
   use_temporal_gate: true
   central_band_ratio: 0.6
   evaluation_x_ratio: 0.25
   min_valid_columns: 20
+  min_body_span_ratio: 0.32
+  candidate_blend_tolerance_px: 2.5
+  candidate_edge_agreement_px: 3.5
+  peak_neighborhood_half_width: 12
   max_frame_jump_px: 8.0
   max_fit_residual_px: 4.0
   max_slope_abs: 0.35
   morphology_open_kernel: 3
   morphology_close_kernel: 5
+  report_min_confidence: 0.73
+  report_min_central_coverage: 0.4
+  report_min_peak_distance_to_top_px: 12.0
+  report_min_peak_body_span_ratio: 0.3
+  report_max_fit_rms_px: 1.9
+  report_max_temporal_jump_px: 4.5
+  report_max_peak_local_rms_px: 1.6
+  report_max_peak_edge_dominance: 0.55

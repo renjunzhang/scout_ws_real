@@ -16,6 +16,22 @@
 #                /slosh/imu_ay_bias, /slosh/imu_ay_filtered, /slosh/imu_ay_bias_ready
 #                /slosh/episode_id, /slosh/constraint_active
 #                /slosh/v_des_eff, /slosh/speed_governor_active
+#   - RealSense 原始输入：
+#                /camera/color/image_raw
+#                /camera/color/camera_info
+#   - 视觉液面测量：
+#                /liquid_measurement/height_left_px
+#                /liquid_measurement/height_right_px
+#                /liquid_measurement/height_peak_px
+#                /liquid_measurement/height_left_rel_px
+#                /liquid_measurement/height_right_rel_px
+#                /liquid_measurement/height_peak_rel_px
+#                /liquid_measurement/height_left_rel_mm
+#                /liquid_measurement/height_right_rel_mm
+#                /liquid_measurement/height_peak_rel_mm
+#                /liquid_measurement/meniscus_valid
+#                /liquid_measurement/meniscus_confidence
+#                /liquid_measurement/debug_image
 #   - IMU 原始输入：/imu/data, /wit/mag
 #   - MPC 性能：/mpc/solve_ms, /mpc/status_val, /mpc_status
 #   - 控制/底盘状态：/cmd_vel, /odom, /scout_status, /rs_status
@@ -86,6 +102,24 @@ TOPICS=(
     /slosh/constraint_active
     /slosh/v_des_eff
     /slosh/speed_governor_active
+
+    # RealSense 原始图像
+    /camera/color/image_raw
+    /camera/color/camera_info
+
+    # 视觉液面测量（节点存在时会自动录到；节点未启动时不影响 rosbag record）
+    /liquid_measurement/height_left_px
+    /liquid_measurement/height_right_px
+    /liquid_measurement/height_peak_px
+    /liquid_measurement/height_left_rel_px
+    /liquid_measurement/height_right_rel_px
+    /liquid_measurement/height_peak_rel_px
+    /liquid_measurement/height_left_rel_mm
+    /liquid_measurement/height_right_rel_mm
+    /liquid_measurement/height_peak_rel_mm
+    /liquid_measurement/meniscus_valid
+    /liquid_measurement/meniscus_confidence
+    /liquid_measurement/debug_image
 
     # IMU 原始输入
     /imu/data

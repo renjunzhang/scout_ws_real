@@ -7,6 +7,86 @@
 - 但它会让进入目标容差区后的最后一小段控制暂时绕开 MPC，因此终点最后一段的 anti-slosh 最优性会弱于“全程由 MPC 连续减速”的版本。
 - 当前版本更偏向“先保证终点能停住、避免冲过头”的工程折中；如果后续要进一步兼顾终点收敛和液体残余晃动，应优先改 near-goal `v_ref` 连续衰减逻辑，而不是继续叠加硬停分支。
 
+## 2026-03-23
+
+### RealSense 液面检测可靠性继续收口
+
+- 修改文件：
+  - [extract_liquid_height_from_bag.py](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/extract_liquid_height_from_bag.py)
+  - [liquid_measurement.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/liquid_measurement.yaml)
+  - [annotate_liquid_roi.py](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/annotate_liquid_roi.py)
+  - [README.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/README.md)
+  - [改进文档0322.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/改进文档0322.md)
+
+### 本轮完成内容
+
+- 在 `annotate_liquid_roi.py` 中补齐第二版几何自检：
+  - 左右壁线纵向覆盖率不足告警
+  - 轴线纵向覆盖率不足告警
+  - 左右壁线覆盖高度差过大告警
+- 固定候选标定验收规则：
+  - 先写候选 YAML
+  - 先过静止 bag
+  - 再过运动 bag
+  - 两边都不过度退化，才允许升级成主标定
+- 在 `extract_liquid_height_from_bag.py` 中新增峰值邻域一致性指标：
+  - `peak_local_support_ratio`
+  - `peak_local_rms_px`
+  - `peak_edge_dominance`
+- 这些指标已写入：
+  - `liquid_height.csv`
+  - debug overlay
+- 试验过把 `peak_edge_dominance` 直接作为硬拒绝条件
+  - 结果是 `reportable` 帧数明显下降
+  - 但 `max reported peak_rel_px` 没有继续下降
+- 最终决定：
+  - 保留 `peak_local_rms_px` 作为 `accept_for_peak_report` 的硬门槛
+  - `peak_edge_dominance` 只保留为：
+    - `meniscus_confidence` 的软评分项
+    - CSV/调试诊断量
+
+### 当前回归结果
+
+- 静止 bag：
+  - `valid = 550 / 607`
+  - `reportable = 427 / 607`
+  - `report median ≈ -0.005 px`
+  - `report p90 ≈ 0.309 px`
+  - `report p95 ≈ 0.373 px`
+  - `max reported peak_rel_px ≈ 0.549`
+- 运动 bag：
+  - `valid = 466 / 751`
+  - `reportable = 328 / 751`
+  - `report median ≈ 0.458 px`
+  - `report p90 ≈ 1.024 px`
+  - `report p95 ≈ 1.181 px`
+  - `max reported peak_rel_px ≈ 3.181`
+
+### 当前阶段结论
+
+- 这轮继续提高了报告曲线的可解释性
+- `peak_local_rms_px` 这条主线有效，应当保留
+- `peak_edge_dominance` 目前更适合作为软评分和诊断量，而不是硬拒绝条件
+- 后续如果继续压尾部，应优先从：
+  - 靠壁惩罚
+  - 峰值局部支持证据
+  - 候选主体一致性
+  继续细化，而不是简单再加一条硬阈值
+
+### 当日收口
+
+- 将 `liquid_height_peak_curve.png` 改成双层显示：
+  - 浅灰色 `valid peak_rel_px`
+  - 彩色 `reported peak_rel_px`
+  - 灰色 `x` 表示 `valid=1` 但 `accept_for_peak_report=0`
+- 目的：
+  - 直接区分“检测到了但被拒绝”和“真正没有进入报告曲线”
+- 同时把候选标定和验证输出的推荐目录统一改到：
+  - `/data/a/realsense_validation/candidates/`
+  - `/data/a/realsense_validation/verify/static/`
+  - `/data/a/realsense_validation/verify/motion/`
+- 不再推荐把这类中间验证结果放在 `/tmp`
+
 ## 2026-03-14
 
 ### MBF 局部代价地图基础设施补齐
@@ -1248,7 +1328,7 @@
 - 更新文件：
   - [README.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/README.md)
   - [package.xml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/package.xml)
-  - [Realsense具体修改过程.md](/home/a/scout_ws/docs/Realsense具体修改过程.md)
+  - [改进文档0322.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/改进文档0322.md)
 - 当前曲线图行为已调整为：
   - 默认主图只画 `height_peak_rel_px`
   - 有效点按 `meniscus_confidence` 着色
@@ -1296,3 +1376,102 @@
   - ROI 旋正
   - `accept_for_peak_report` 硬门槛
   - 更强的假峰抑制
+
+### RealSense 可靠性增强第一轮：主体约束 + 报告门槛收紧
+
+- 重点修改文件：
+  - [extract_liquid_height_from_bag.py](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/extract_liquid_height_from_bag.py)
+  - [liquid_measurement.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/liquid_measurement.yaml)
+  - [frame_000000_calibration_line_auto_zero_peak.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_line_auto_zero_peak.yaml)
+  - [README.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/README.md)
+  - [改进文档0322.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/改进文档0322.md)
+
+- 本轮改动目的：
+  - 继续降低运动 bag 中的极端假峰
+  - 让 `accept_for_peak_report` 更接近“正式统计可接受峰值”
+  - 保持静止 bag 的基线稳定，不因收紧门槛把静止结果一起破坏
+
+- 本轮在主检测器中新增/强化：
+  - `adaptive threshold` 备选分支
+  - `global threshold + adaptive threshold` 合并后的 dark mask
+  - `bottom-connected` 主体清理后再做候选列提取
+  - `body span` 约束
+    - 不再看液面线所在单行的横向宽度
+    - 改成看液面线下方一小段液体主体的横向宽度
+  - debug / CSV 新增：
+    - `body_span_rejected_columns`
+    - `peak_body_span_ratio`
+
+- `accept_for_peak_report` 当前门槛已收紧为同时考虑：
+  - `valid`
+  - `meniscus_confidence`
+  - `central_coverage`
+  - `fit_rms_px`
+  - `peak_body_span_ratio`
+  - `temporal_jump_px`
+  - `peak_distance_to_top_px`
+
+- 本轮确定的当前主参数为：
+  - `report_min_confidence = 0.73`
+  - `report_min_central_coverage = 0.40`
+  - `report_min_peak_body_span_ratio = 0.30`
+  - `report_max_fit_rms_px = 1.9`
+  - `report_max_temporal_jump_px = 4.5`
+
+- 说明：
+  - 这组参数不是拍脑袋给的
+  - 是先用当前静止/运动 bag 导出的 `csv` 做离线筛选模拟后，再回写到脚本和配置中的折中结果
+
+### RealSense 主标定重新按新检测器归零
+
+- 由于本轮主检测器发生变化，原先的 `peak-target auto-zero` 基线不再完全匹配新检测器
+- 因此对当前主标定重新做了一轮 `peak-target auto-zero`
+- 当前主标定继续使用：
+  - [frame_000000_calibration_line_auto_zero_peak.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_line_auto_zero_peak.yaml)
+- 当前更新后的关键值：
+  - `still_level_px = 171.058319`
+
+### RealSense 可靠性增强第一轮回归结果
+
+- 静止 bag 回归结果：
+  - 使用当前主标定：
+    - [frame_000000_calibration_line_auto_zero_peak.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_line_auto_zero_peak.yaml)
+  - 结果：
+    - `processed = 607`
+    - `valid = 550`
+    - `reportable = 439`
+    - `valid median peak_rel_px ≈ -0.034`
+    - `reported median peak_rel_px ≈ 0.002`
+    - `reported p90 ≈ 0.320`
+    - `max reported peak_rel_px ≈ 0.542`
+  - 判断：
+    - 静止包仍保持接近 `0`
+    - 本轮收紧没有把静止基线搞坏
+
+- 运动 bag 回归结果：
+  - 结果：
+    - `processed = 751`
+    - `valid = 473`
+    - `reportable = 344`
+    - `valid median peak_rel_px ≈ 0.433`
+    - `reported median peak_rel_px ≈ 0.514`
+    - `reported p90 ≈ 1.138`
+    - `max reported peak_rel_px ≈ 3.825`
+  - 判断：
+    - 相比之前的 line-based 主线，这一轮已明显压低极端报告峰值
+    - 当前链路更接近“可正式做相对峰值对比”的状态
+
+### 当前阶段性结论更新
+
+- 当前 `realsense_liquid_measurement` 已经从“能跑通的离线 PoC”推进到“可回归、可调门槛的证据链”
+- 当前主线继续保持：
+  - 单相机
+  - RGB
+  - line-based 标定
+  - `peak-target auto-zero`
+  - 不闭环，只做证据链
+- 下一轮继续重点：
+  - `annotate_liquid_roi.py` 几何自检
+  - dark / edge 融合继续加强
+  - `accept_for_peak_report` 再细化
+  - 补真实标尺后验证 `*_rel_mm`

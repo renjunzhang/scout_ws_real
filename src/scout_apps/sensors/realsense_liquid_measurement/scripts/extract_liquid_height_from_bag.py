@@ -35,6 +35,11 @@ class Calibration:
     still_level_px: float
     mm_per_pixel: Optional[float]
     mode: str
+    left_wall_line: np.ndarray
+    right_wall_line: np.ndarray
+    still_level_line: np.ndarray
+    tube_axis_line: np.ndarray
+    rotation_deg: float = 0.0
 
 
 @dataclass
@@ -42,6 +47,7 @@ class ProcessingConfig:
     blur_kernel: int = 5
     threshold_bias: int = -10
     use_clahe: bool = True
+    use_adaptive_threshold: bool = True
     use_edge_fallback: bool = True
     use_temporal_gate: bool = True
     min_valid_columns: int = 20
@@ -52,6 +58,20 @@ class ProcessingConfig:
     max_slope_abs: float = 0.35
     morphology_open_kernel: int = 3
     morphology_close_kernel: int = 5
+    adaptive_block_size: int = 31
+    adaptive_c_offset: float = 7.0
+    min_body_span_ratio: float = 0.32
+    candidate_blend_tolerance_px: float = 2.5
+    candidate_edge_agreement_px: float = 3.5
+    peak_neighborhood_half_width: int = 12
+    report_min_confidence: float = 0.73
+    report_min_central_coverage: float = 0.40
+    report_min_peak_distance_to_top_px: float = 12.0
+    report_min_peak_body_span_ratio: float = 0.30
+    report_max_fit_rms_px: float = 1.9
+    report_max_temporal_jump_px: float = 4.5
+    report_max_peak_local_rms_px: float = 1.6
+    report_max_peak_edge_dominance: float = 0.55
 
 
 @dataclass
@@ -171,6 +191,12 @@ def parse_args():
         help="Statistic used for static auto-zero baseline estimation.",
     )
     parser.add_argument(
+        "--baseline-target",
+        choices=["peak", "center", "left", "right"],
+        default="peak",
+        help="Which reported quantity to drive to zero during auto-zero baseline estimation.",
+    )
+    parser.add_argument(
         "--write-adjusted-calibration",
         default="",
         help="Optional path for the auto-zero-adjusted calibration YAML. Defaults to <calibration_stem>_auto_zero.yaml next to the input calibration.",
@@ -209,6 +235,7 @@ def load_processing_config(path: Optional[Path]) -> Tuple[Dict, ProcessingConfig
         blur_kernel=int(processing.get("blur_kernel", defaults.blur_kernel)),
         threshold_bias=int(processing.get("threshold_bias", defaults.threshold_bias)),
         use_clahe=bool(processing.get("use_clahe", defaults.use_clahe)),
+        use_adaptive_threshold=bool(processing.get("use_adaptive_threshold", defaults.use_adaptive_threshold)),
         use_edge_fallback=bool(processing.get("use_edge_fallback", defaults.use_edge_fallback)),
         use_temporal_gate=bool(processing.get("use_temporal_gate", defaults.use_temporal_gate)),
         min_valid_columns=int(processing.get("min_valid_columns", defaults.min_valid_columns)),
@@ -219,8 +246,149 @@ def load_processing_config(path: Optional[Path]) -> Tuple[Dict, ProcessingConfig
         max_slope_abs=float(processing.get("max_slope_abs", defaults.max_slope_abs)),
         morphology_open_kernel=int(processing.get("morphology_open_kernel", defaults.morphology_open_kernel)),
         morphology_close_kernel=int(processing.get("morphology_close_kernel", defaults.morphology_close_kernel)),
+        adaptive_block_size=int(processing.get("adaptive_block_size", defaults.adaptive_block_size)),
+        adaptive_c_offset=float(processing.get("adaptive_c_offset", defaults.adaptive_c_offset)),
+        min_body_span_ratio=float(processing.get("min_body_span_ratio", defaults.min_body_span_ratio)),
+        candidate_blend_tolerance_px=float(
+            processing.get("candidate_blend_tolerance_px", defaults.candidate_blend_tolerance_px)
+        ),
+        candidate_edge_agreement_px=float(
+            processing.get("candidate_edge_agreement_px", defaults.candidate_edge_agreement_px)
+        ),
+        peak_neighborhood_half_width=int(
+            processing.get("peak_neighborhood_half_width", defaults.peak_neighborhood_half_width)
+        ),
+        report_min_confidence=float(processing.get("report_min_confidence", defaults.report_min_confidence)),
+        report_min_central_coverage=float(
+            processing.get("report_min_central_coverage", defaults.report_min_central_coverage)
+        ),
+        report_min_peak_distance_to_top_px=float(
+            processing.get("report_min_peak_distance_to_top_px", defaults.report_min_peak_distance_to_top_px)
+        ),
+        report_min_peak_body_span_ratio=float(
+            processing.get("report_min_peak_body_span_ratio", defaults.report_min_peak_body_span_ratio)
+        ),
+        report_max_fit_rms_px=float(processing.get("report_max_fit_rms_px", defaults.report_max_fit_rms_px)),
+        report_max_temporal_jump_px=float(
+            processing.get("report_max_temporal_jump_px", defaults.report_max_temporal_jump_px)
+        ),
+        report_max_peak_local_rms_px=float(
+            processing.get("report_max_peak_local_rms_px", defaults.report_max_peak_local_rms_px)
+        ),
+        report_max_peak_edge_dominance=float(
+            processing.get("report_max_peak_edge_dominance", defaults.report_max_peak_edge_dominance)
+        ),
     )
     return config_dict, config
+
+
+def parse_line_points(raw_value, name: str) -> np.ndarray:
+    array = np.asarray(raw_value, dtype=np.float32)
+    if array.shape != (2, 2):
+        raise ValueError(f"{name} must be a 2x2 point list.")
+    return array
+
+
+def make_vertical_line(x_value: float, height: int) -> np.ndarray:
+    return np.asarray([[float(x_value), 0.0], [float(x_value), float(max(0, height - 1))]], dtype=np.float32)
+
+
+def make_horizontal_line(y_value: float, width: int) -> np.ndarray:
+    return np.asarray([[0.0, float(y_value)], [float(max(0, width - 1)), float(y_value)]], dtype=np.float32)
+
+
+def line_mean_x(line: np.ndarray) -> float:
+    return float(np.mean(line[:, 0]))
+
+
+def line_mean_y(line: np.ndarray) -> float:
+    return float(np.mean(line[:, 1]))
+
+
+def evaluate_line_y_from_points(line: np.ndarray, x_value: float) -> float:
+    x0, y0 = float(line[0, 0]), float(line[0, 1])
+    x1, y1 = float(line[1, 0]), float(line[1, 1])
+    if abs(x1 - x0) < 1e-6:
+        return 0.5 * (y0 + y1)
+    alpha = (float(x_value) - x0) / (x1 - x0)
+    return float(y0 + alpha * (y1 - y0))
+
+
+def transform_line(line: np.ndarray, matrix: np.ndarray) -> np.ndarray:
+    return cv2.transform(line.reshape(1, -1, 2), matrix)[0]
+
+
+def copy_calibration_with_geometry(
+    base: Calibration,
+    left_wall_line: np.ndarray,
+    right_wall_line: np.ndarray,
+    still_level_line: np.ndarray,
+    tube_axis_line: np.ndarray,
+    rotation_deg: float,
+) -> Calibration:
+    x_left = int(round(line_mean_x(left_wall_line)))
+    x_right = int(round(line_mean_x(right_wall_line)))
+    center_x = 0.5 * (x_left + x_right)
+    still_level_px = evaluate_line_y_from_points(still_level_line, center_x)
+
+    if x_left > x_right:
+        left_wall_line, right_wall_line = right_wall_line, left_wall_line
+        x_left, x_right = x_right, x_left
+
+    x_left = int(np.clip(x_left, 0, max(0, base.roi_w - 2)))
+    x_right = int(np.clip(x_right, x_left + 1, max(x_left + 1, base.roi_w - 1)))
+    still_level_px = float(np.clip(still_level_px, 0.0, max(0.0, base.roi_h - 1.0)))
+
+    return Calibration(
+        roi_x=base.roi_x,
+        roi_y=base.roi_y,
+        roi_w=base.roi_w,
+        roi_h=base.roi_h,
+        x_left=x_left,
+        x_right=x_right,
+        still_level_px=still_level_px,
+        mm_per_pixel=base.mm_per_pixel,
+        mode=base.mode,
+        left_wall_line=np.asarray(left_wall_line, dtype=np.float32),
+        right_wall_line=np.asarray(right_wall_line, dtype=np.float32),
+        still_level_line=np.asarray(still_level_line, dtype=np.float32),
+        tube_axis_line=np.asarray(tube_axis_line, dtype=np.float32),
+        rotation_deg=float(rotation_deg),
+    )
+
+
+def rectify_roi_and_calibration(roi_bgr: np.ndarray, calibration: Calibration) -> Tuple[np.ndarray, Calibration]:
+    axis = calibration.tube_axis_line
+    dx = float(axis[1, 0] - axis[0, 0])
+    dy = float(axis[1, 1] - axis[0, 1])
+    if abs(dx) < 1e-6 and abs(dy) < 1e-6:
+        return roi_bgr, calibration
+
+    theta_deg = math.degrees(math.atan2(dy, dx))
+    rotate_deg = 90.0 - theta_deg
+    if abs(rotate_deg) < 1e-4:
+        return roi_bgr, calibration
+
+    center = ((calibration.roi_w - 1) * 0.5, (calibration.roi_h - 1) * 0.5)
+    matrix = cv2.getRotationMatrix2D(center, rotate_deg, 1.0)
+    rotated = cv2.warpAffine(
+        roi_bgr,
+        matrix,
+        (calibration.roi_w, calibration.roi_h),
+        flags=cv2.INTER_LINEAR,
+        borderMode=cv2.BORDER_CONSTANT,
+        borderValue=(255, 255, 255),
+    )
+
+    rectified = copy_calibration_with_geometry(
+        calibration,
+        transform_line(calibration.left_wall_line, matrix),
+        transform_line(calibration.right_wall_line, matrix),
+        transform_line(calibration.still_level_line, matrix),
+        transform_line(calibration.tube_axis_line, matrix),
+        calibration.rotation_deg + rotate_deg,
+    )
+    return rotated, rectified
 
 
 def load_calibration(path: Path) -> Calibration:
@@ -229,6 +397,7 @@ def load_calibration(path: Path) -> Calibration:
     tube_inner = data.get("tube_inner", {})
     calib = data.get("calibration", {})
     source = data.get("source", {})
+    geometry_roi = data.get("geometry_roi", {})
 
     required = ["x", "y", "w", "h"]
     for key in required:
@@ -244,16 +413,53 @@ def load_calibration(path: Path) -> Calibration:
     if mm_per_pixel is not None:
         mm_per_pixel = float(mm_per_pixel)
 
+    roi_w = int(roi["w"])
+    roi_h = int(roi["h"])
+    x_left = int(tube_inner["x_left"])
+    x_right = int(tube_inner["x_right"])
+    still_level_px = float(calib["still_level_px"])
+
+    left_wall_line = parse_line_points(
+        geometry_roi.get("left_wall_line", make_vertical_line(x_left, roi_h)),
+        "geometry_roi.left_wall_line",
+    )
+    right_wall_line = parse_line_points(
+        geometry_roi.get("right_wall_line", make_vertical_line(x_right, roi_h)),
+        "geometry_roi.right_wall_line",
+    )
+    still_level_line = parse_line_points(
+        geometry_roi.get("still_level_line", make_horizontal_line(still_level_px, roi_w)),
+        "geometry_roi.still_level_line",
+    )
+    default_axis_x = 0.5 * (x_left + x_right)
+    tube_axis_line = parse_line_points(
+        geometry_roi.get("tube_axis_line", make_vertical_line(default_axis_x, roi_h)),
+        "geometry_roi.tube_axis_line",
+    )
+
     calibration = Calibration(
         roi_x=int(roi["x"]),
         roi_y=int(roi["y"]),
-        roi_w=int(roi["w"]),
-        roi_h=int(roi["h"]),
-        x_left=int(tube_inner["x_left"]),
-        x_right=int(tube_inner["x_right"]),
-        still_level_px=float(calib["still_level_px"]),
+        roi_w=roi_w,
+        roi_h=roi_h,
+        x_left=x_left,
+        x_right=x_right,
+        still_level_px=still_level_px,
         mm_per_pixel=mm_per_pixel,
         mode=str(source.get("mode", "unknown")),
+        left_wall_line=left_wall_line,
+        right_wall_line=right_wall_line,
+        still_level_line=still_level_line,
+        tube_axis_line=tube_axis_line,
+    )
+
+    calibration = copy_calibration_with_geometry(
+        calibration,
+        calibration.left_wall_line,
+        calibration.right_wall_line,
+        calibration.still_level_line,
+        calibration.tube_axis_line,
+        calibration.rotation_deg,
     )
 
     if calibration.roi_w <= 0 or calibration.roi_h <= 0:
@@ -302,6 +508,19 @@ def compute_threshold(gray_tube: np.ndarray, bias: int) -> Tuple[int, np.ndarray
     return threshold_value, mask
 
 
+def compute_adaptive_threshold(gray_tube: np.ndarray, block_size: int, c_offset: float) -> np.ndarray:
+    block_size = odd_kernel_size(block_size)
+    block_size = max(3, block_size)
+    return cv2.adaptiveThreshold(
+        gray_tube,
+        255,
+        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+        cv2.THRESH_BINARY_INV,
+        block_size,
+        float(c_offset),
+    )
+
+
 def cleanup_threshold_mask(mask: np.ndarray, config: ProcessingConfig) -> np.ndarray:
     cleaned = mask.copy()
 
@@ -343,6 +562,67 @@ def keep_bottom_connected_region(mask: np.ndarray) -> np.ndarray:
     return kept
 
 
+def combine_dark_masks(global_mask: np.ndarray, adaptive_mask: Optional[np.ndarray], config: ProcessingConfig) -> np.ndarray:
+    combined = global_mask.copy()
+    if adaptive_mask is not None:
+        combined = cv2.bitwise_or(combined, adaptive_mask)
+    return cleanup_threshold_mask(combined, config)
+
+
+def row_body_span_ratio(mask: np.ndarray) -> np.ndarray:
+    if mask.size == 0:
+        return np.zeros(0, dtype=np.float32)
+    width = float(mask.shape[1])
+    if width <= 0.0:
+        return np.zeros(mask.shape[0], dtype=np.float32)
+    return np.count_nonzero(mask > 0, axis=1).astype(np.float32) / width
+
+
+def body_span_ratio_at_y(
+    profile: np.ndarray,
+    y_value: float,
+    band_half_height: int = 2,
+    look_below: bool = False,
+) -> float:
+    if profile.size == 0 or not np.isfinite(y_value):
+        return 0.0
+    center = int(round(float(y_value)))
+    band_half_height = max(0, int(band_half_height))
+    if look_below:
+        y0 = max(0, center + 1)
+        y1 = min(profile.shape[0], center + 1 + max(1, 2 * band_half_height + 1))
+    else:
+        y0 = max(0, center - band_half_height)
+        y1 = min(profile.shape[0], center + band_half_height + 1)
+    if y1 <= y0:
+        return 0.0
+    return float(np.max(profile[y0:y1]))
+
+
+def enforce_body_span_on_candidates(
+    values: np.ndarray,
+    span_profile: np.ndarray,
+    min_span_ratio: float,
+    band_half_height: int = 2,
+    look_below: bool = False,
+) -> Tuple[np.ndarray, int]:
+    filtered = values.copy()
+    rejected = 0
+    min_span_ratio = max(0.0, float(min_span_ratio))
+    for idx in range(filtered.shape[0]):
+        if not np.isfinite(filtered[idx]):
+            continue
+        if body_span_ratio_at_y(
+            span_profile,
+            filtered[idx],
+            band_half_height=band_half_height,
+            look_below=look_below,
+        ) < min_span_ratio:
+            filtered[idx] = np.nan
+            rejected += 1
+    return filtered, rejected
+
+
 def sustained_dark_start(column_mask: np.ndarray, min_run: int, min_fraction: float = 0.65) -> Optional[int]:
     column = (column_mask > 0).astype(np.uint8)
     if column.size < min_run:
@@ -356,7 +636,9 @@ def sustained_dark_start(column_mask: np.ndarray, min_run: int, min_fraction: fl
     return int(hits[0])
 
 
-def edge_candidates(gray_tube: np.ndarray, anchor_profile: np.ndarray, search_half_band: int) -> Tuple[np.ndarray, float]:
+def edge_candidates(
+    gray_tube: np.ndarray, anchor_profile: np.ndarray, search_half_band: int
+) -> Tuple[np.ndarray, float, np.ndarray]:
     gradient = -cv2.Sobel(gray_tube, cv2.CV_32F, 0, 1, ksize=3)
     candidates = np.full(gray_tube.shape[1], np.nan, dtype=np.float32)
     scores = np.full(gray_tube.shape[1], np.nan, dtype=np.float32)
@@ -375,7 +657,7 @@ def edge_candidates(gray_tube: np.ndarray, anchor_profile: np.ndarray, search_ha
 
     valid_scores = scores[np.isfinite(scores)]
     if valid_scores.size == 0:
-        return candidates, np.inf
+        return candidates, np.inf, scores
 
     score_threshold = float(np.mean(valid_scores) + 1.0 * np.std(valid_scores))
     for idx in range(gray_tube.shape[1]):
@@ -384,7 +666,164 @@ def edge_candidates(gray_tube: np.ndarray, anchor_profile: np.ndarray, search_ha
         anchor_y = float(anchor_profile[idx])
         y0 = max(0, int(round(anchor_y)) - search_half_band)
         candidates[idx] = float(y0 + int(np.argmax(gradient[y0 : min(gray_tube.shape[0], int(round(anchor_y)) + search_half_band + 1), idx])))
-    return candidates, score_threshold
+    return candidates, score_threshold, scores
+
+
+def normalize_edge_scores(scores: np.ndarray, score_threshold: float) -> np.ndarray:
+    normalized = np.full(scores.shape, np.nan, dtype=np.float32)
+    valid = scores[np.isfinite(scores)]
+    if valid.size == 0:
+        return normalized
+    p50 = float(np.percentile(valid, 50))
+    p90 = float(np.percentile(valid, 90))
+    scale = max(1e-6, p90 - p50)
+    finite_mask = np.isfinite(scores)
+    normalized[finite_mask] = np.clip((scores[finite_mask] - score_threshold) / scale, 0.0, 1.0)
+    return normalized
+
+
+def candidate_quality_score(
+    y_value: float,
+    expected_y: float,
+    span_profile: np.ndarray,
+    reference_edge_y: Optional[float],
+    normalized_edge_strength: float,
+    config: ProcessingConfig,
+) -> float:
+    span = body_span_ratio_at_y(span_profile, y_value, band_half_height=3, look_below=True)
+    proximity = max(
+        0.0,
+        1.0 - abs(float(y_value) - float(expected_y)) / max(config.max_frame_jump_px * 1.5, 6.0),
+    )
+    if reference_edge_y is None or not np.isfinite(reference_edge_y):
+        edge_agreement = 0.0
+    else:
+        edge_agreement = max(
+            0.0,
+            1.0 - abs(float(y_value) - float(reference_edge_y)) / max(config.candidate_edge_agreement_px, 1e-6),
+        )
+    return float(0.48 * span + 0.24 * proximity + 0.18 * edge_agreement + 0.10 * normalized_edge_strength)
+
+
+def fuse_column_candidates(
+    primary: np.ndarray,
+    fallback: np.ndarray,
+    expected_profile: np.ndarray,
+    span_profile: np.ndarray,
+    edge_score_norm: np.ndarray,
+    config: ProcessingConfig,
+) -> Tuple[np.ndarray, Dict[str, int], np.ndarray]:
+    fused = np.full(primary.shape, np.nan, dtype=np.float32)
+    source_labels = np.zeros(primary.shape, dtype=np.uint8)
+    stats = {
+        "primary_selected_columns": 0,
+        "edge_selected_columns": 0,
+        "blended_columns": 0,
+    }
+
+    for idx in range(primary.shape[0]):
+        primary_y = primary[idx]
+        fallback_y = fallback[idx]
+        expected_y = expected_profile[idx]
+        edge_strength = 0.0 if not np.isfinite(edge_score_norm[idx]) else float(edge_score_norm[idx])
+
+        primary_valid = np.isfinite(primary_y)
+        fallback_valid = np.isfinite(fallback_y)
+
+        if primary_valid and fallback_valid:
+            if abs(float(primary_y) - float(fallback_y)) <= config.candidate_blend_tolerance_px:
+                primary_score = candidate_quality_score(
+                    float(primary_y), float(expected_y), span_profile, float(fallback_y), edge_strength, config
+                )
+                fallback_score = candidate_quality_score(
+                    float(fallback_y), float(expected_y), span_profile, float(fallback_y), edge_strength, config
+                )
+                primary_weight = max(0.2, primary_score + 0.05)
+                fallback_weight = max(0.2, fallback_score + 0.05)
+                fused[idx] = float(
+                    (primary_weight * float(primary_y) + fallback_weight * float(fallback_y))
+                    / (primary_weight + fallback_weight)
+                )
+                source_labels[idx] = 3
+                stats["blended_columns"] += 1
+            else:
+                primary_score = candidate_quality_score(
+                    float(primary_y), float(expected_y), span_profile, float(fallback_y), edge_strength, config
+                )
+                fallback_score = candidate_quality_score(
+                    float(fallback_y), float(expected_y), span_profile, float(fallback_y), edge_strength, config
+                )
+                if fallback_score > primary_score + 0.05:
+                    fused[idx] = float(fallback_y)
+                    source_labels[idx] = 2
+                    stats["edge_selected_columns"] += 1
+                else:
+                    fused[idx] = float(primary_y)
+                    source_labels[idx] = 1
+                    stats["primary_selected_columns"] += 1
+        elif primary_valid:
+            fused[idx] = float(primary_y)
+            source_labels[idx] = 1
+            stats["primary_selected_columns"] += 1
+        elif fallback_valid:
+            fused[idx] = float(fallback_y)
+            source_labels[idx] = 2
+            stats["edge_selected_columns"] += 1
+
+    return fused, stats, source_labels
+
+
+def peak_neighborhood_metrics(
+    profile_y: np.ndarray,
+    source_labels: np.ndarray,
+    fit_coeff: Optional[np.ndarray],
+    peak_eval_x: Optional[float],
+    half_width: int,
+) -> Dict[str, Optional[float]]:
+    if fit_coeff is None or peak_eval_x is None or profile_y.size == 0:
+        return {
+            "peak_local_support_ratio": None,
+            "peak_local_rms_px": None,
+            "peak_edge_dominance": None,
+        }
+
+    half_width = max(2, int(half_width))
+    center_idx = int(round(float(peak_eval_x)))
+    x0 = max(0, center_idx - half_width)
+    x1 = min(profile_y.shape[0], center_idx + half_width + 1)
+    if x1 <= x0:
+        return {
+            "peak_local_support_ratio": None,
+            "peak_local_rms_px": None,
+            "peak_edge_dominance": None,
+        }
+
+    local_values = profile_y[x0:x1]
+    local_labels = source_labels[x0:x1]
+    valid_mask = np.isfinite(local_values)
+    support_ratio = float(np.count_nonzero(valid_mask)) / float(x1 - x0)
+    if np.count_nonzero(valid_mask) == 0:
+        return {
+            "peak_local_support_ratio": support_ratio,
+            "peak_local_rms_px": None,
+            "peak_edge_dominance": None,
+        }
+
+    xs = np.arange(x0, x1, dtype=np.float32)[valid_mask]
+    ys = local_values[valid_mask].astype(np.float32)
+    predicted = fit_coeff[0] * xs + fit_coeff[1]
+    local_rms = float(np.sqrt(np.mean(np.square(ys - predicted))))
+
+    labels_valid = local_labels[valid_mask]
+    edge_ratio = float(np.count_nonzero(labels_valid == 2)) / float(labels_valid.size)
+    blend_ratio = float(np.count_nonzero(labels_valid == 3)) / float(labels_valid.size)
+    edge_dominance = float(min(1.0, edge_ratio + 0.5 * blend_ratio))
+
+    return {
+        "peak_local_support_ratio": support_ratio,
+        "peak_local_rms_px": local_rms,
+        "peak_edge_dominance": edge_dominance,
+    }
 
 
 def reject_outliers(values: np.ndarray, roi_h: int) -> np.ndarray:
@@ -505,7 +944,18 @@ def detect_liquid_profile(
     expected_profile = expected_profile_from_state(tube_gray.shape[1], previous_state, calibration.still_level_px)
 
     threshold_value, threshold_mask_raw = compute_threshold(tube_gray, config.threshold_bias)
-    threshold_mask = cleanup_threshold_mask(threshold_mask_raw, config)
+    threshold_mask_global = cleanup_threshold_mask(threshold_mask_raw, config)
+    adaptive_mask_raw = None
+    threshold_mask_adaptive = None
+    if config.use_adaptive_threshold:
+        adaptive_mask_raw = compute_adaptive_threshold(
+            tube_gray,
+            config.adaptive_block_size,
+            config.adaptive_c_offset,
+        )
+        threshold_mask_adaptive = cleanup_threshold_mask(adaptive_mask_raw, config)
+    threshold_mask = combine_dark_masks(threshold_mask_global, threshold_mask_adaptive, config)
+    span_profile = row_body_span_ratio(threshold_mask)
 
     min_run = max(5, int(round(calibration.roi_h * 0.06)))
     primary = np.full(tube_gray.shape[1], np.nan, dtype=np.float32)
@@ -513,16 +963,40 @@ def detect_liquid_profile(
         y = sustained_dark_start(threshold_mask[:, idx], min_run=min_run)
         if y is not None:
             primary[idx] = float(y)
+    primary, body_span_rejected_primary = enforce_body_span_on_candidates(
+        primary,
+        span_profile,
+        config.min_body_span_ratio,
+        band_half_height=3,
+        look_below=True,
+    )
 
     fallback = np.full_like(primary, np.nan)
     edge_threshold = None
+    edge_scores = np.full_like(primary, np.nan)
     if config.use_edge_fallback:
-        search_half_band = max(10, int(round(config.max_frame_jump_px * 1.5))) if previous_state is not None else max(18, tube_gray.shape[0] // 5)
-        fallback, edge_threshold = edge_candidates(tube_gray, expected_profile, search_half_band)
-
-    combined = primary.copy()
-    fill_mask = ~np.isfinite(combined) & np.isfinite(fallback)
-    combined[fill_mask] = fallback[fill_mask]
+        search_half_band = (
+            max(10, int(round(config.max_frame_jump_px * 1.5)))
+            if previous_state is not None
+            else max(18, tube_gray.shape[0] // 5)
+        )
+        fallback, edge_threshold, edge_scores = edge_candidates(tube_gray, expected_profile, search_half_band)
+        fallback, _ = enforce_body_span_on_candidates(
+            fallback,
+            span_profile,
+            max(0.18, 0.7 * config.min_body_span_ratio),
+            band_half_height=3,
+            look_below=True,
+        )
+    edge_score_norm = normalize_edge_scores(edge_scores, edge_threshold)
+    combined, fusion_stats, source_labels = fuse_column_candidates(
+        primary,
+        fallback,
+        expected_profile,
+        span_profile,
+        edge_score_norm,
+        config,
+    )
     temporal_rejected_columns = 0
     temporal_recovered_columns = 0
     if config.use_temporal_gate and previous_state is not None:
@@ -563,6 +1037,11 @@ def detect_liquid_profile(
     fit_slope = None
     temporal_jump_px = None
     temporal_gate_passed = previous_state is None
+    peak_distance_to_top_px = None
+    peak_eval_x = None
+    peak_local_support_ratio = None
+    peak_local_rms_px = None
+    peak_edge_dominance = None
 
     fit_valid = False
     if fit_result is not None:
@@ -574,11 +1053,27 @@ def detect_liquid_profile(
         left_y = evaluate_line(fit_coeff, left_eval_x)
         right_y = evaluate_line(fit_coeff, right_eval_x)
         center_y = evaluate_line(fit_coeff, center_eval_x)
-        peak_y = min(left_y, right_y)
+        if left_y <= right_y:
+            peak_y = left_y
+            peak_eval_x = float(left_eval_x)
+        else:
+            peak_y = right_y
+            peak_eval_x = float(right_eval_x)
         left_rel_px = calibration.still_level_px - left_y
         right_rel_px = calibration.still_level_px - right_y
         center_rel_px = calibration.still_level_px - center_y
         peak_rel_px = calibration.still_level_px - peak_y
+        peak_distance_to_top_px = max(0.0, float(peak_y))
+        local_metrics = peak_neighborhood_metrics(
+            combined,
+            source_labels,
+            fit_coeff,
+            peak_eval_x,
+            config.peak_neighborhood_half_width,
+        )
+        peak_local_support_ratio = local_metrics["peak_local_support_ratio"]
+        peak_local_rms_px = local_metrics["peak_local_rms_px"]
+        peak_edge_dominance = local_metrics["peak_edge_dominance"]
 
         if previous_state is not None:
             temporal_jump_px = max(
@@ -604,20 +1099,81 @@ def detect_liquid_profile(
         jump_score = 1.0
     else:
         jump_score = max(0.0, 1.0 - temporal_jump_px / max(config.max_frame_jump_px, 1e-6))
-    confidence = float(np.clip(0.35 * coverage + 0.25 * rms_score + 0.15 * slope_score + 0.25 * jump_score, 0.0, 1.0))
+    if peak_distance_to_top_px is None:
+        top_boundary_score = 0.0
+    else:
+        top_boundary_score = min(
+            1.0,
+            peak_distance_to_top_px / max(config.report_min_peak_distance_to_top_px, 1e-6),
+        )
+    peak_body_span_ratio = (
+        0.0
+        if peak_y is None
+        else body_span_ratio_at_y(span_profile, peak_y, band_half_height=3, look_below=True)
+    )
+    local_support_score = (
+        0.0
+        if peak_local_support_ratio is None
+        else min(1.0, peak_local_support_ratio / 0.55)
+    )
+    local_rms_score = (
+        0.0
+        if peak_local_rms_px is None
+        else max(0.0, 1.0 - peak_local_rms_px / max(config.report_max_peak_local_rms_px, 1e-6))
+    )
+    edge_dominance_score = (
+        0.0
+        if peak_edge_dominance is None
+        else max(0.0, 1.0 - peak_edge_dominance / max(config.report_max_peak_edge_dominance, 1e-6))
+    )
+    body_span_score = min(
+        1.0,
+        peak_body_span_ratio / max(config.report_min_peak_body_span_ratio, 1e-6),
+    )
+    confidence = float(
+        np.clip(
+            0.21 * coverage
+            + 0.18 * rms_score
+            + 0.08 * slope_score
+            + 0.14 * jump_score
+            + 0.11 * top_boundary_score
+            + 0.14 * body_span_score
+            + 0.06 * local_support_score
+            + 0.05 * local_rms_score
+            + 0.03 * edge_dominance_score,
+            0.0,
+            1.0,
+        )
+    )
 
     valid = (
         valid_columns >= config.min_valid_columns
         and central_valid_columns >= max(6, int(round(0.35 * max(1, central_end - central_start))))
         and fit_valid
     )
+    accept_for_peak_report = (
+        valid
+        and confidence >= config.report_min_confidence
+        and coverage >= config.report_min_central_coverage
+        and fit_rms_px is not None
+        and fit_rms_px <= config.report_max_fit_rms_px
+        and peak_distance_to_top_px is not None
+        and peak_distance_to_top_px >= config.report_min_peak_distance_to_top_px
+        and peak_body_span_ratio >= config.report_min_peak_body_span_ratio
+        and (temporal_jump_px is None or temporal_jump_px <= config.report_max_temporal_jump_px)
+        and peak_local_rms_px is not None
+        and peak_local_rms_px <= config.report_max_peak_local_rms_px
+    )
 
     return {
         "gray": gray,
         "threshold_mask": threshold_mask,
         "threshold_mask_raw": threshold_mask_raw,
+        "threshold_mask_global": threshold_mask_global,
+        "threshold_mask_adaptive": threshold_mask_adaptive,
         "threshold_value": threshold_value,
         "edge_threshold": edge_threshold,
+        "edge_score_norm": edge_score_norm,
         "profile_y": combined,
         "central_start": central_start,
         "central_end": central_end,
@@ -636,12 +1192,23 @@ def detect_liquid_profile(
         "confidence": confidence,
         "valid_columns": valid_columns,
         "central_valid_columns": central_valid_columns,
+        "central_coverage": coverage,
         "temporal_rejected_columns": temporal_rejected_columns,
         "temporal_recovered_columns": temporal_recovered_columns,
         "temporal_jump_px": temporal_jump_px,
         "temporal_gate_passed": temporal_gate_passed,
+        "peak_distance_to_top_px": peak_distance_to_top_px,
+        "peak_body_span_ratio": peak_body_span_ratio,
+        "peak_local_support_ratio": peak_local_support_ratio,
+        "peak_local_rms_px": peak_local_rms_px,
+        "peak_edge_dominance": peak_edge_dominance,
+        "accept_for_peak_report": bool(accept_for_peak_report),
         "threshold_columns": int(np.count_nonzero(np.isfinite(primary))),
         "edge_columns": int(np.count_nonzero(np.isfinite(fallback))),
+        "body_span_rejected_columns": body_span_rejected_primary,
+        "primary_selected_columns": fusion_stats["primary_selected_columns"],
+        "edge_selected_columns": fusion_stats["edge_selected_columns"],
+        "blended_columns": fusion_stats["blended_columns"],
         "fit_coeff": fit_coeff,
         "fit_rms_px": fit_rms_px,
         "fit_points": fit_points,
@@ -669,11 +1236,34 @@ def make_debug_frame(
     h, w = canvas.shape[:2]
 
     cv2.rectangle(canvas, (0, 0), (w - 1, h - 1), (0, 255, 255), 1)
-    cv2.line(canvas, (calibration.x_left, 0), (calibration.x_left, h - 1), (255, 0, 0), 1)
-    cv2.line(canvas, (calibration.x_right, 0), (calibration.x_right, h - 1), (0, 128, 255), 1)
-
-    still_y = int(round(calibration.still_level_px))
-    cv2.line(canvas, (0, still_y), (w - 1, still_y), (0, 255, 0), 1)
+    cv2.line(
+        canvas,
+        tuple(np.round(calibration.left_wall_line[0]).astype(int)),
+        tuple(np.round(calibration.left_wall_line[1]).astype(int)),
+        (255, 0, 0),
+        1,
+    )
+    cv2.line(
+        canvas,
+        tuple(np.round(calibration.right_wall_line[0]).astype(int)),
+        tuple(np.round(calibration.right_wall_line[1]).astype(int)),
+        (0, 128, 255),
+        1,
+    )
+    cv2.line(
+        canvas,
+        tuple(np.round(calibration.still_level_line[0]).astype(int)),
+        tuple(np.round(calibration.still_level_line[1]).astype(int)),
+        (0, 255, 0),
+        1,
+    )
+    cv2.line(
+        canvas,
+        tuple(np.round(calibration.tube_axis_line[0]).astype(int)),
+        tuple(np.round(calibration.tube_axis_line[1]).astype(int)),
+        (255, 0, 255),
+        1,
+    )
 
     central_start = int(detection["central_start"])
     central_end = int(detection["central_end"])
@@ -730,7 +1320,7 @@ def make_debug_frame(
     status_text = "VALID" if detection["valid"] else "INVALID"
     status_color = (0, 200, 0) if detection["valid"] else (0, 0, 255)
     text_lines = [
-        f"frame={frame_index} t={stamp_sec:.3f}s {status_text}",
+        f"frame={frame_index} t={stamp_sec:.3f}s {status_text} report={'Y' if detection['accept_for_peak_report'] else 'N'}",
         "thr={} cols={} fit_pts={} conf={:.2f}".format(
             detection["threshold_value"],
             detection["valid_columns"],
@@ -748,16 +1338,48 @@ def make_debug_frame(
         )
     if detection["fit_rms_px"] is not None and detection["fit_slope"] is not None:
         text_lines.append(
-            "fit_rms_px={:.2f} slope={:.3f}".format(
+            "fit_rms_px={:.2f} slope={:.3f} cov={:.2f} span={:.2f}".format(
                 detection["fit_rms_px"],
                 detection["fit_slope"],
+                detection["central_coverage"],
+                detection["peak_body_span_ratio"],
             )
         )
     if detection["temporal_jump_px"] is not None:
         text_lines.append(
-            "jump_px={:.2f} gate={}".format(
+            "jump_px={:.2f} gate={} body_rej={} blend={}".format(
                 detection["temporal_jump_px"],
                 "ok" if detection["temporal_gate_passed"] else "reject",
+                detection["body_span_rejected_columns"],
+                detection["blended_columns"],
+            )
+        )
+    else:
+        text_lines.append(
+            "body_rej={} prim={} edge={} blend={}".format(
+                detection["body_span_rejected_columns"],
+                detection["primary_selected_columns"],
+                detection["edge_selected_columns"],
+                detection["blended_columns"],
+            )
+        )
+    if detection["peak_distance_to_top_px"] is not None:
+        text_lines.append(
+            "peak_top_margin={:.1f}px rot={:.2f}deg".format(
+                detection["peak_distance_to_top_px"],
+                calibration.rotation_deg,
+            )
+        )
+    if (
+        detection["peak_local_support_ratio"] is not None
+        or detection["peak_local_rms_px"] is not None
+        or detection["peak_edge_dominance"] is not None
+    ):
+        text_lines.append(
+            "peak_local support={:.2f} rms={:.2f} edge_dom={:.2f}".format(
+                0.0 if detection["peak_local_support_ratio"] is None else detection["peak_local_support_ratio"],
+                0.0 if detection["peak_local_rms_px"] is None else detection["peak_local_rms_px"],
+                0.0 if detection["peak_edge_dominance"] is None else detection["peak_edge_dominance"],
             )
         )
 
@@ -799,24 +1421,48 @@ def summarize_values(values: List[float], stat: str) -> Optional[float]:
     return float(np.median(data))
 
 
+def baseline_measurement_from_detection(detection: Dict, target: str) -> Tuple[Optional[float], Optional[float]]:
+    mapping = {
+        "peak": ("peak_y", "peak_rel_px"),
+        "center": ("center_y", "center_rel_px"),
+        "left": ("left_y", "left_rel_px"),
+        "right": ("right_y", "right_rel_px"),
+    }
+    y_key, rel_key = mapping[target]
+    return detection.get(y_key), detection.get(rel_key)
+
+
 def write_adjusted_calibration_yaml(
     input_calibration_path: Path,
     output_path: Path,
     suggested_still_level_px: float,
-    baseline_center_rel_px: float,
+    baseline_target: str,
+    baseline_target_rel_px: float,
     baseline_frame_count: int,
     baseline_stat: str,
 ):
     data = load_yaml(input_calibration_path)
     calibration = data.setdefault("calibration", {})
+    previous_still = float(calibration.get("still_level_px", suggested_still_level_px))
     calibration["still_level_px"] = float(suggested_still_level_px)
+
+    geometry_roi = data.get("geometry_roi", {})
+    still_line = geometry_roi.get("still_level_line")
+    if isinstance(still_line, list) and len(still_line) == 2:
+        delta = float(suggested_still_level_px) - previous_still
+        geometry_roi["still_level_line"] = [
+            [float(still_line[0][0]), float(still_line[0][1]) + delta],
+            [float(still_line[1][0]), float(still_line[1][1]) + delta],
+        ]
+        data["geometry_roi"] = geometry_roi
 
     auto_zero = data.setdefault("auto_zero_baseline", {})
     auto_zero["applied"] = True
     auto_zero["source_calibration"] = str(input_calibration_path)
+    auto_zero["baseline_target"] = baseline_target
     auto_zero["baseline_stat"] = baseline_stat
     auto_zero["baseline_frame_count"] = int(baseline_frame_count)
-    auto_zero["baseline_center_rel_px"] = float(baseline_center_rel_px)
+    auto_zero["baseline_target_rel_px"] = float(baseline_target_rel_px)
     auto_zero["suggested_still_level_px"] = float(suggested_still_level_px)
 
     with output_path.open("w", encoding="utf-8") as stream:
@@ -829,7 +1475,8 @@ def generate_peak_curve_plot(
     stamp_seconds: List[float],
     peak_rel_px_values: List[Optional[float]],
     confidence_values: List[Optional[float]],
-    valid_flags: List[bool],
+    detection_valid_flags: List[bool],
+    reportable_flags: List[bool],
     peak_rel_mm_values: List[Optional[float]],
     include_confidence: bool,
 ) -> bool:
@@ -845,7 +1492,8 @@ def generate_peak_curve_plot(
 
     peak_rel_px = np.asarray([np.nan if value is None else float(value) for value in peak_rel_px_values], dtype=np.float32)
     confidence = np.asarray([np.nan if value is None else float(value) for value in confidence_values], dtype=np.float32)
-    valid = np.asarray(valid_flags, dtype=bool)
+    detection_valid = np.asarray(detection_valid_flags, dtype=bool)
+    reportable = np.asarray(reportable_flags, dtype=bool)
     peak_rel_mm = np.asarray([np.nan if value is None else float(value) for value in peak_rel_mm_values], dtype=np.float32)
 
     if include_confidence:
@@ -855,36 +1503,63 @@ def generate_peak_curve_plot(
         fig, ax_curve = plt.subplots(1, 1, figsize=(12, 4.8))
         ax_conf = None
 
-    ax_curve.plot(frames[valid], peak_rel_px[valid], color="#90caf9", linewidth=1.2, alpha=0.85, label="valid peak_rel_px")
-    valid_plot_mask = valid & np.isfinite(peak_rel_px)
-    scatter = None
+    valid_plot_mask = detection_valid & np.isfinite(peak_rel_px)
+    reportable_plot_mask = reportable & np.isfinite(peak_rel_px)
+    withheld_plot_mask = valid_plot_mask & ~reportable_plot_mask
+
     if np.any(valid_plot_mask):
-        scatter = ax_curve.scatter(
+        ax_curve.plot(
             frames[valid_plot_mask],
             peak_rel_px[valid_plot_mask],
-            c=confidence[valid_plot_mask],
+            color="#b0bec5",
+            linewidth=1.0,
+            alpha=0.8,
+            label="valid peak_rel_px",
+        )
+    if np.any(reportable_plot_mask):
+        ax_curve.plot(
+            frames[reportable_plot_mask],
+            peak_rel_px[reportable_plot_mask],
+            color="#90caf9",
+            linewidth=1.2,
+            alpha=0.90,
+            label="reported peak_rel_px",
+        )
+
+    scatter = None
+    if np.any(reportable_plot_mask):
+        scatter = ax_curve.scatter(
+            frames[reportable_plot_mask],
+            peak_rel_px[reportable_plot_mask],
+            c=confidence[reportable_plot_mask],
             cmap="viridis",
             vmin=0.0,
             vmax=1.0,
             s=16,
             linewidths=0.0,
-            label="valid point (colored by confidence)",
+            label="reported point (colored by confidence)",
         )
-    if np.any(~valid):
-        invalid_frames = frames[~valid]
+    if np.any(withheld_plot_mask):
         ax_curve.scatter(
-            invalid_frames,
-            np.zeros_like(invalid_frames, dtype=np.float32),
+            frames[withheld_plot_mask],
+            peak_rel_px[withheld_plot_mask],
             color="#9e9e9e",
             s=10,
             marker="x",
             alpha=0.6,
-            label="invalid frame",
+            label="valid but not reportable",
         )
 
     if np.any(np.isfinite(peak_rel_mm)):
         ax_curve_mm = ax_curve.twinx()
-        ax_curve_mm.plot(frames[valid], peak_rel_mm[valid], color="#2e7d32", linewidth=1.0, alpha=0.55, label="valid peak_rel_mm")
+        ax_curve_mm.plot(
+            frames[reportable & np.isfinite(peak_rel_mm)],
+            peak_rel_mm[reportable & np.isfinite(peak_rel_mm)],
+            color="#2e7d32",
+            linewidth=1.0,
+            alpha=0.55,
+            label="reported peak_rel_mm",
+        )
         ax_curve_mm.set_ylabel("peak_rel_mm")
 
     ax_curve.axhline(0.0, color="#616161", linewidth=1.0, linestyle="--")
@@ -897,7 +1572,7 @@ def generate_peak_curve_plot(
         cbar = fig.colorbar(scatter, ax=ax_curve, pad=0.02)
         cbar.set_label("meniscus_confidence")
 
-        max_idx = np.nanargmax(np.where(valid_plot_mask, peak_rel_px, np.nan))
+        max_idx = np.nanargmax(np.where(reportable_plot_mask, peak_rel_px, np.nan))
         peak_x = frames[max_idx]
         peak_y = peak_rel_px[max_idx]
         peak_conf = confidence[max_idx]
@@ -978,17 +1653,20 @@ def main():
 
     processed_frames = 0
     valid_frames = 0
+    reportable_frames = 0
     max_peak_rel_px = None
+    max_reported_peak_rel_px = None
     writer = None
     previous_state: Optional[TemporalState] = None
-    baseline_center_y_samples: List[float] = []
-    baseline_center_rel_px_samples: List[float] = []
+    baseline_target_y_samples: List[float] = []
+    baseline_target_rel_px_samples: List[float] = []
     plot_frame_indices: List[int] = []
     plot_stamp_seconds: List[float] = []
     plot_peak_rel_px_values: List[Optional[float]] = []
     plot_peak_rel_mm_values: List[Optional[float]] = []
     plot_confidence_values: List[Optional[float]] = []
-    plot_valid_flags: List[bool] = []
+    plot_detection_valid_flags: List[bool] = []
+    plot_reportable_flags: List[bool] = []
 
     with rosbag.Bag(str(bag_path), "r") as bag:
         image_topics = image_topics_in_bag(bag)
@@ -1020,6 +1698,7 @@ def main():
                     "threshold_value",
                     "valid_columns",
                     "central_valid_columns",
+                    "central_coverage",
                     "fit_points",
                     "fit_rms_px",
                     "fit_slope",
@@ -1027,6 +1706,16 @@ def main():
                     "temporal_gate_passed",
                     "temporal_rejected_columns",
                     "temporal_recovered_columns",
+                    "body_span_rejected_columns",
+                    "primary_selected_columns",
+                    "edge_selected_columns",
+                    "blended_columns",
+                    "peak_distance_to_top_px",
+                    "peak_body_span_ratio",
+                    "peak_local_support_ratio",
+                    "peak_local_rms_px",
+                    "peak_edge_dominance",
+                    "accept_for_peak_report",
                     "height_left_px",
                     "height_right_px",
                     "height_peak_px",
@@ -1069,7 +1758,13 @@ def main():
                     return 5
 
                 roi_bgr = image[y0:y1, x0:x1].copy()
-                detection = detect_liquid_profile(roi_bgr, calibration, processing, previous_state=previous_state)
+                rectified_roi_bgr, rectified_calibration = rectify_roi_and_calibration(roi_bgr, calibration)
+                detection = detect_liquid_profile(
+                    rectified_roi_bgr,
+                    rectified_calibration,
+                    processing,
+                    previous_state=previous_state,
+                )
 
                 if detection["valid"]:
                     valid_frames += 1
@@ -1077,15 +1772,19 @@ def main():
                         max_peak_rel_px = detection["peak_rel_px"]
                     if (
                         args.auto_zero_baseline
-                        and len(baseline_center_y_samples) < max(1, args.baseline_frame_count)
-                        and detection["center_y"] is not None
-                        and detection["center_rel_px"] is not None
+                        and len(baseline_target_y_samples) < max(1, args.baseline_frame_count)
                     ):
-                        baseline_center_y_samples.append(float(detection["center_y"]))
-                        baseline_center_rel_px_samples.append(float(detection["center_rel_px"]))
+                        target_y, target_rel_px = baseline_measurement_from_detection(detection, args.baseline_target)
+                        if target_y is not None and target_rel_px is not None:
+                            baseline_target_y_samples.append(float(target_y))
+                            baseline_target_rel_px_samples.append(float(target_rel_px))
                     new_state = build_temporal_state(detection)
                     if new_state is not None:
                         previous_state = new_state
+                if detection["accept_for_peak_report"]:
+                    reportable_frames += 1
+                    if max_reported_peak_rel_px is None or detection["peak_rel_px"] > max_reported_peak_rel_px:
+                        max_reported_peak_rel_px = detection["peak_rel_px"]
 
                 left_rel_mm = maybe_mm(detection["left_rel_px"], calibration.mm_per_pixel)
                 right_rel_mm = maybe_mm(detection["right_rel_px"], calibration.mm_per_pixel)
@@ -1100,6 +1799,7 @@ def main():
                         detection["threshold_value"],
                         detection["valid_columns"],
                         detection["central_valid_columns"],
+                        csv_value(detection["central_coverage"]),
                         detection["fit_points"],
                         csv_value(detection["fit_rms_px"]),
                         csv_value(detection["fit_slope"]),
@@ -1107,6 +1807,16 @@ def main():
                         int(detection["temporal_gate_passed"]),
                         detection["temporal_rejected_columns"],
                         detection["temporal_recovered_columns"],
+                        detection["body_span_rejected_columns"],
+                        detection["primary_selected_columns"],
+                        detection["edge_selected_columns"],
+                        detection["blended_columns"],
+                        csv_value(detection["peak_distance_to_top_px"]),
+                        csv_value(detection["peak_body_span_ratio"]),
+                        csv_value(detection["peak_local_support_ratio"]),
+                        csv_value(detection["peak_local_rms_px"]),
+                        csv_value(detection["peak_edge_dominance"]),
+                        int(detection["accept_for_peak_report"]),
                         csv_value(detection["left_y"]),
                         csv_value(detection["right_y"]),
                         csv_value(detection["peak_y"]),
@@ -1124,10 +1834,11 @@ def main():
                 plot_peak_rel_px_values.append(None if detection["peak_rel_px"] is None else float(detection["peak_rel_px"]))
                 plot_peak_rel_mm_values.append(None if peak_rel_mm is None else float(peak_rel_mm))
                 plot_confidence_values.append(float(detection["confidence"]))
-                plot_valid_flags.append(bool(detection["valid"]))
+                plot_detection_valid_flags.append(bool(detection["valid"]))
+                plot_reportable_flags.append(bool(detection["accept_for_peak_report"]))
 
                 if not args.skip_debug_video:
-                    debug_frame = make_debug_frame(roi_bgr, calibration, image_counter, stamp_sec, detection)
+                    debug_frame = make_debug_frame(rectified_roi_bgr, rectified_calibration, image_counter, stamp_sec, detection)
                     if writer is None:
                         writer = open_video_writer(
                             debug_video_path,
@@ -1157,10 +1868,13 @@ def main():
     valid_ratio = valid_frames / float(processed_frames)
     print(f"[OK] processed frames: {processed_frames}")
     print(f"[OK] valid frames: {valid_frames} ({valid_ratio:.1%})")
+    print(f"[OK] reportable peak frames: {reportable_frames}")
     if max_peak_rel_px is not None:
         print(f"[OK] max height_peak_rel_px: {max_peak_rel_px:.3f}")
     else:
         print("[WARN] no valid peak height detected.")
+    if max_reported_peak_rel_px is not None:
+        print(f"[OK] max reported height_peak_rel_px: {max_reported_peak_rel_px:.3f}")
     print(f"[OK] csv: {csv_path}")
     if not args.skip_debug_video and debug_video_path.exists():
         print(f"[OK] debug video: {debug_video_path}")
@@ -1171,7 +1885,8 @@ def main():
             plot_stamp_seconds,
             plot_peak_rel_px_values,
             plot_confidence_values,
-            plot_valid_flags,
+            plot_detection_valid_flags,
+            plot_reportable_flags,
             plot_peak_rel_mm_values,
             args.plot_confidence,
         ):
@@ -1182,12 +1897,12 @@ def main():
         print("[INFO] calibration.mm_per_pixel is null, so *_rel_mm columns are left empty.")
 
     if args.auto_zero_baseline:
-        baseline_center_y = summarize_values(baseline_center_y_samples, args.baseline_stat)
-        baseline_center_rel_px = summarize_values(baseline_center_rel_px_samples, args.baseline_stat)
-        if baseline_center_y is None or baseline_center_rel_px is None:
+        baseline_target_y = summarize_values(baseline_target_y_samples, args.baseline_stat)
+        baseline_target_rel_px = summarize_values(baseline_target_rel_px_samples, args.baseline_stat)
+        if baseline_target_y is None or baseline_target_rel_px is None:
             print("[WARN] auto-zero baseline requested, but no valid baseline samples were collected.")
         else:
-            suggested_still_level_px = baseline_center_y
+            suggested_still_level_px = baseline_target_y
             adjusted_path = (
                 Path(args.write_adjusted_calibration).expanduser().resolve()
                 if args.write_adjusted_calibration
@@ -1197,14 +1912,16 @@ def main():
                 calibration_path,
                 adjusted_path,
                 suggested_still_level_px=suggested_still_level_px,
-                baseline_center_rel_px=baseline_center_rel_px,
-                baseline_frame_count=len(baseline_center_y_samples),
+                baseline_target=args.baseline_target,
+                baseline_target_rel_px=baseline_target_rel_px,
+                baseline_frame_count=len(baseline_target_y_samples),
                 baseline_stat=args.baseline_stat,
             )
             print(
-                "[OK] auto-zero baseline: used {} valid frame(s), center_rel_px={} ({})".format(
-                    len(baseline_center_y_samples),
-                    f"{baseline_center_rel_px:.6f}",
+                "[OK] auto-zero baseline: used {} valid frame(s), {}_rel_px={} ({})".format(
+                    len(baseline_target_y_samples),
+                    args.baseline_target,
+                    f"{baseline_target_rel_px:.6f}",
                     args.baseline_stat,
                 )
             )
