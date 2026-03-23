@@ -71,7 +71,7 @@
 
 ### 3.1 录包脚本
 
-- [record_slosh_experiment.sh](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh)
+- [record_slosh_experiment.sh](/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh)
 
 当前脚本已经包含：
 
@@ -88,7 +88,7 @@
 
 ### 3.2 目标发送脚本
 
-- [send_fixed_goal.py](/home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/send_fixed_goal.py)
+- [send_fixed_goal.py](/home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/send_fixed_goal.py)
 
 作用：
 

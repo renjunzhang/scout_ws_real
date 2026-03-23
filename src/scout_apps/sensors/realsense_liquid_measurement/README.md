@@ -9,6 +9,7 @@
   - [当前结构](#当前结构)
   - [当前整理步骤](#当前整理步骤)
   - [当前代码流程图](#当前代码流程图)
+  - [RealSense ROS 编译脚本](#realsense-ros-编译脚本)
   - [当前推荐用法](#当前推荐用法)
   - [第二步：手动标定 ROI 和参考几何](#第二步手动标定-roi-和参考几何)
     - [模式 A：没有背景标尺，先打通通路](#模式-a没有背景标尺先打通通路)
@@ -32,13 +33,19 @@ realsense_liquid_measurement/
 │   ├── frame_000000_calibration_line_auto_zero_peak.yaml
 │   └── frame_000000_annotated.png
 └── scripts/
+    ├── build_realsense_ros_local.sh
     ├── calibrate_liquid_roi.py
     ├── annotate_liquid_roi.py
-    └── extract_liquid_height_from_bag.py
+    ├── extract_liquid_height_from_bag.py
+    └── realsense_ros_env_local.sh
 ```
 
 各部分职责：
 
+- `scripts/build_realsense_ros_local.sh`
+  - 为 `src/third_party/realsense-ros` 补齐本地依赖并定向编译 `realsense2_description`、`realsense2_camera`
+- `scripts/realsense_ros_env_local.sh`
+  - 给运行期补充工作区本地 `librealsense2` 和 `ddynamic_reconfigure` 环境变量
 - `scripts/calibrate_liquid_roi.py`
   - 从静止 bag 导出参考帧和 `frames.csv`
 - `scripts/annotate_liquid_roi.py`
@@ -53,6 +60,8 @@ realsense_liquid_measurement/
   - 当前主标定文件
 - `改进文档0322.md`
   - 记录为什么这样改、当前结论、下一步改进方向
+
+其中 `build_realsense_ros_local.sh` 会把缺失的 RealSense 依赖包下载并解包到工作区根目录下的 `.ros_deps/` 和 `.ros_deps_cache/`。这两个目录属于本机环境缓存，不建议提交。
 
 当前外部目录约定：
 
@@ -189,6 +198,11 @@ flowchart TB
 - `scripts/annotate_liquid_roi.py`
 - `scripts/extract_liquid_height_from_bag.py`
 
+另外补充了两个 RealSense ROS 构建辅助脚本：
+
+- `scripts/build_realsense_ros_local.sh`
+- `scripts/realsense_ros_env_local.sh`
+
 第一个脚本的作用是：
 
 - 读取 rosbag 中的 RGB 图像话题
@@ -212,6 +226,47 @@ flowchart TB
 
 - 如果不显式指定 `--out-dir`，脚本会把导出的帧写到 **bag 同目录**
 - 也就是说，你当前的 bag 在 `/data/a/bags` 下时，导出结果默认也会落在 `/data/a/bags/<bag_stem>_frames/`
+
+## RealSense ROS 编译脚本
+
+如果当前机器没有系统安装 `ddynamic_reconfigure` 或 `librealsense2`，可以直接使用包内脚本在工作区本地准备依赖并编译 `src/third_party/realsense-ros`。
+
+脚本位置：
+
+- [build_realsense_ros_local.sh](/home/geist/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/build_realsense_ros_local.sh)
+- [realsense_ros_env_local.sh](/home/geist/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/realsense_ros_env_local.sh)
+
+两个脚本的职责：
+
+- `build_realsense_ros_local.sh`
+  - 检查工作区根目录下的 `.ros_deps/opt/ros/noetic`
+  - 如果缺依赖，就下载 `ros-noetic-ddynamic-reconfigure` 和 `ros-noetic-librealsense2`
+  - 把包解到工作区本地 `.ros_deps/`
+  - 最后执行 `catkin_make --pkg realsense2_description realsense2_camera`
+- `realsense_ros_env_local.sh`
+  - 用 `source` 方式加载
+  - 补齐 `CMAKE_PREFIX_PATH`、`ROS_PACKAGE_PATH`、`LD_LIBRARY_PATH`、`PKG_CONFIG_PATH`
+  - 让运行时能够找到本地 `.ros_deps/` 里的 RealSense 相关库
+
+推荐用法：
+
+1. 编译 `realsense-ros`：
+
+```bash
+/home/geist/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/build_realsense_ros_local.sh
+```
+
+2. 运行依赖本地 RealSense 库的 ROS 节点前，先加载环境：
+
+```bash
+source /home/geist/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/realsense_ros_env_local.sh
+```
+
+补充说明：
+
+- 这两个脚本本身可以提交到仓库
+- `.ros_deps/` 和 `.ros_deps_cache/` 是本地环境目录，不建议提交
+- 如果机器上的 `apt` 配置了不可用代理，构建脚本会自动尝试去掉代理变量后重新下载
 
 ## 当前推荐用法
 

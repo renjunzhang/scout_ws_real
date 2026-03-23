@@ -47,7 +47,7 @@ catkin_make 2>&1 | grep "processing catkin package"
     roslaunch nanoscan3_localization scout_nanoscan3_amcl.launch use_rviz:=true
     或者使用cartographer定位
     roslaunch nanoscan3_localization scout_nanoscan3_cartographer_localization.launch
-### 5.5 启动 IMU（真实，做 IMU / anti-slosh 实验时建议单独启动）
+### 5.1 启动 IMU（真实，做 IMU / anti-slosh 实验时建议单独启动）
     # 推荐使用独立 launch，不要复用厂家自带的 rviz_and_imu.launch
     # 原因：工控机上通常不需要 RViz，而且需要单独控制 port / topic / frame_id
     roslaunch scout_bringup scout_imu.launch
@@ -56,14 +56,7 @@ catkin_make 2>&1 | grep "processing catkin package"
     roslaunch scout_bringup scout_imu.launch port:=/dev/ttyUSB0
 
     # 如果要把 IMU frame 规范成 imu_link，并同时发布 base_link -> imu_link 静态 TF
-    roslaunch scout_bringup scout_imu_with_tf.launch \
-    imu_frame:=imu_link \
-    imu_x:=0.13 \
-    imu_y:=-0.13 \
-    imu_z:=0.0 \
-    imu_roll:=0.0 \
-    imu_pitch:=0.0 \
-    imu_yaw:=0.0
+    roslaunch scout_bringup scout_imu_with_tf.launch
 
     # 启动后先检查
     rostopic list | grep imu
@@ -73,6 +66,28 @@ catkin_make 2>&1 | grep "processing catkin package"
     # 说明：
     # 1. 这一步对普通导航不是硬依赖，但对阶段 7 的 IMU 接入验证是必做步骤
     # 2. 建议放在定位之后、全局规划之前，先把 /imu/data 独立确认好，再继续后面的 planner 链路
+### 5.2 启动 RealSense 相机（真实）
+    # 首次部署或重新编译 realsense-ros 时，先执行本地构建脚本
+    /home/geist/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/build_realsense_ros_local.sh
+
+    # 新终端启动前先加载 ROS、工作区和本地 RealSense 运行环境
+    source /opt/ros/noetic/setup.bash
+    source /home/geist/scout_ws/devel/setup.bash
+    source /home/geist/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/realsense_ros_env_local.sh
+
+    # 启动 RealSense 相机
+    roslaunch realsense2_camera rs_camera.launch
+
+    # 如果需要彩色坐标系下的对齐深度，再使用
+    roslaunch realsense2_camera rs_camera.launch align_depth:=true
+
+    # 启动后先检查
+    rostopic hz /camera/color/image_raw
+    rostopic hz /camera/depth/image_rect_raw
+
+    # 说明：
+    # 1. 这一步依赖前面已经安装好 RealSense udev 规则，并且当前用户具备设备访问权限
+    # 2. 如果 RViz 中能看到图像，但终端偶发出现 libusb warning，可先以图像/频率是否稳定为准
 ### 6. 全局规划
     # 实物对齐：global_planner.yaml 已加入 transform_tolerance（global_costmap/local_costmap）
     # 默认改为旁路速度话题：move_base 输出 /scout/move_base_cmd_vel，不抢占 /cmd_vel
