@@ -6,14 +6,20 @@
 
 - 这是**结构化 QP 的 tracking MPC**，不是自由空间 NMPC。
 - 当前每个控制周期求解的并不是固定 LTI QP，而是围绕名义轨迹 successive linearization 后得到的**affine time-varying QP**。
-- 终点最后一小段当前也不是“全程由 MPC 连续优化到停下”，而是：
-  - 近终点先可能进入外层 `terminal recovery`
-  - `GOAL_STOP_PENDING` 下仍由 MPC 负责最后一段减速与纠偏
+- 当前 near-goal 控制结构是：
+  - 远场：tracking MPC
+  - 近终点恢复：外层 `terminal recovery`
+  - 最后收尾：`GOAL_STOP_PENDING` 下由 MPC 负责最后一段减速与纠偏
   - 只有到达低速门槛后才切到 `REACHED`
 
 ## 目录
 
 - 0) 参数入口速查
+  - 0.1 代价函数相关参数
+  - 0.2 约束与 near-goal 相关参数
+  - 0.3 slosh 模型相关参数
+  - 0.4 IMU / 实验覆盖常用参数
+  - 0.5 上游参考路径语义
 - 1) 当前项目 MPC 的优化问题
 - 2) 运动学/动力学模型（项目特化）
   - 2.1 基础 Frenet 跟踪子系统（4 维）
@@ -27,8 +33,10 @@
   - 6.1 通用 MPC（抽象）
   - 6.2 本项目 MPC（工程落地）
 - 7) 监测量与终点行为的工程语义
-  - 7.1 `/slosh/height_pred_max`
-  - 7.2 near-goal 行为
+  - 7.1 `/slosh/height`
+  - 7.2 `/slosh/height_pred_max`
+  - 7.3 与视觉 `height_peak_rel_mm` 的关系
+  - 7.4 near-goal 行为
 
 ## 0) 参数入口速查
 
@@ -136,6 +144,35 @@
 - `slosh_speed_governor_enable`: 是否启用外环残余晃动感知速度治理
 
 如果你只是做实物实验切换，优先改 launch 覆盖值；如果你要改“默认系统行为”，再回到 `mpc_params.yaml`。
+
+### 0.5 上游参考路径语义
+
+当前 `scout_local_planner` 的上游输入是 `/scout/global_path`，类型为 `nav_msgs/Path`。
+
+这条路径本质上提供的是**几何路径**：
+
+- `x`
+- `y`
+- `pose orientation`（可视为 `yaw` 入口）
+
+它**不直接提供**：
+
+- 速度轨迹
+- 角速度轨迹
+- 时间参数化轨迹
+
+因此当前项目不是“上游直接给完整时参参考轨迹，MPC 原样跟踪”，而是：
+
+1. 上游给几何路径；
+2. `PathHandler` 在本地做截窗、样条拟合和参考生成；
+3. 中间参考点里的 `theta_path` 由局部样条切线在线计算；
+4. `time_parameterize=true` 时，再由 `PathHandler` 内部生成 `v(s)` 并按 `dt` 采样成 `v_ref`。
+
+要特别区分两类“航向”：
+
+- 路径中间参考点的航向，当前主要是样条切线方向 `theta_path`
+- 终点姿态判定时，当前优先使用 goal pose 自身 `orientation`
+- 只有当 goal `orientation` 不可用时，才回退到路径尾部切线方向
 
 ## 1) 当前项目 MPC 的优化问题
 
@@ -384,7 +421,40 @@ h_{\text{modal,budget}}=\max\left(0,\ h_{\max}-h_{\text{parabola,budget}}\right)
 
 ## 7) 监测量与终点行为的工程语义
 
-### 7.1 `/slosh/height_pred_max`
+### 7.1 `/slosh/height`
+
+当前 `/slosh/height` 的语义是：
+
+\[
+h_{\text{now}} = \eta_{\text{slosh}} + \eta_{\text{parabola}}
+\]
+
+其中：
+
+\[
+\eta_{\text{slosh}} = \text{height\_coeff}\cdot\sqrt{x_n^2+y_n^2}
+\]
+\[
+\eta_{\text{parabola}} = \frac{R^2\omega_z^2}{4g}
+\quad (\text{仅当 use\_parabola\_term=true})
+\]
+
+工程上更准确的解释是：
+
+- 它是**当前时刻模型估计的液面最大抬升高度**
+- 它是**相对静止液面**的高度增量
+- 它是**模型输出量**，不是视觉/传感器实测值
+
+因此它可以理解成：
+
+- 当前模型认为“液面最高点大约抬了多少”
+
+但不要把它误写成：
+
+- 已被相机直接测到的真实最高点
+- 完整 3D 液面重建结果
+
+### 7.2 `/slosh/height_pred_max`
 
 当前 `/slosh/height_pred_max` 的语义是：
 
@@ -395,10 +465,52 @@ h_{\text{modal,budget}}=\max\left(0,\ h_{\max}-h_{\text{parabola,budget}}\right)
 也就是“预测域内 modal height 再叠加 predicted \(\omega\) 对应 parabola term”的监测值。  
 它用于监测和调试，不等价于“QP 已经对总液面高度直接施加了 hard constraint”。
 
-### 7.2 near-goal 行为
+与 `/slosh/height` 的区别是：
 
-当前 near-goal 逻辑不能表述成“全程由 MPC 连续优化到停下”。  
-更准确的说法是：
+- `/slosh/height`
+  - 当前时刻的模型瞬时估计
+- `/slosh/height_pred_max`
+  - 整个预测时域内的最大监测值
+
+因此：
+
+- 如果要看“当前这一刻模型估计了多少”，优先看 `/slosh/height`
+- 如果要看“这一拍 MPC 预判未来最危险会到多高”，优先看 `/slosh/height_pred_max`
+
+### 7.3 与视觉 `height_peak_rel_mm` 的关系
+
+当前视觉链输出的 `height_peak_rel_mm` 更准确的语义是：
+
+- 单相机侧视观测平面内
+- 当前帧最高表观液面
+- 相对静止液面的抬升量
+
+补充当前工程口径：
+
+- 若 calibration 的 `mm_per_pixel` 仍为空，则当前主回归通常先看 `height_peak_rel_px`
+- 只有在标尺补齐、`mm_per_pixel` 非空时，`height_peak_rel_mm` 才是可直接使用的毫米口径
+
+它不是：
+
+- 模型内部状态
+- 预测域峰值上界
+- 完整 3D 真液面高度
+
+因此当前比较关系应写成：
+
+- 逐帧对齐比较：
+  - `height_peak_rel_mm` vs `/slosh/height`
+- 峰值包络/保守性比较：
+  - `height_peak_rel_mm` vs `/slosh/height_pred_max`
+
+也就是说：
+
+- `/slosh/height` 更适合作为视觉逐帧误差的主比较对象
+- `/slosh/height_pred_max` 更适合作为“模型预测上界是否保守”的参考对象
+
+### 7.4 near-goal 行为
+
+当前 near-goal 控制结构可以直接表述为：
 
 1. 远场仍由 tracking MPC 生成控制；
 2. 接近终点时，可能先进入外层 terminal recovery；
@@ -411,10 +523,8 @@ h_{\text{modal,budget}}=\max\left(0,\ h_{\max}-h_{\text{parabola,budget}}\right)
 6. `goal_stop_pending_` 下，系统仍然走 MPC，只是把 `v_des_cmd` 压到 `0`，由 MPC 负责最后一段减速与纠偏；
 7. 只有当位置/姿态达标且速度、角速度都足够低时，才切到 `REACHED`。
 
-因此当前实现更准确的工程语义是：
+因此当前实现的工程语义是：
 
 - 远场：tracking MPC
 - 近终点恢复：外层 terminal recovery
 - 最后收尾：`goal_stop_pending_` 下的 MPC 减速
-
-它不是“全程由 MPC 独立完成终点收敛”，也不是旧版本那种“进入目标容差区后直接外层硬切零速”的实现。

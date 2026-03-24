@@ -1,0 +1,71 @@
+source:
+  image: /data/a/bags/realsense_session_2026-03-21_17-48-52_frames/frame_000000.png
+  mode: px_only
+  annotated_at: '2026-03-22T16:24:16'
+roi:
+  x: 774
+  y: 203
+  w: 251
+  h: 412
+tube_inner:
+  x_left: 12
+  x_right: 237
+calibration:
+  still_level_px: 171.05831909179688
+  mm_per_pixel: 0.14073524998570924
+geometry_roi:
+  left_wall_line:
+  - - 8
+    - 98
+  - - 15
+    - 316
+  right_wall_line:
+  - - 239
+    - 81
+  - - 235
+    - 311
+  still_level_line:
+  - - 73.0
+    - 171.05831909179688
+  - - 189.0
+    - 171.05831909179688
+  tube_axis_line:
+  - - 143
+    - 92
+  - - 149
+    - 333
+reference_points_image:
+  left_wall_line:
+  - - 782
+    - 301
+  - - 789
+    - 519
+  right_wall_line:
+  - - 1013
+    - 284
+  - - 1009
+    - 514
+  still_level_line:
+  - - 847
+    - 376
+  - - 963
+    - 376
+  tube_axis_line:
+  - - 917
+    - 295
+  - - 923
+    - 536
+  ruler_point_a: null
+  ruler_point_b: null
+  ruler_distance_mm: 29.0
+geometry_checks:
+  warning_count: 0
+  warnings: []
+auto_zero_baseline:
+  applied: true
+  source_calibration: /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_line_auto_zero_peak.yaml
+  baseline_target: peak
+  baseline_stat: median
+  baseline_frame_count: 80
+  baseline_target_rel_px: -2.064450979232788
+  suggested_still_level_px: 171.05831909179688

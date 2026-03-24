@@ -31,6 +31,10 @@ processing:
   min_body_span_ratio: 0.32
   candidate_blend_tolerance_px: 2.5
   candidate_edge_agreement_px: 3.5
+  peak_side_margin_ratio: 0.06
+  peak_side_band_ratio: 0.22
+  peak_side_top_fraction: 0.22
+  peak_side_min_columns: 6
   peak_neighborhood_half_width: 12
   max_frame_jump_px: 8.0
   max_fit_residual_px: 4.0

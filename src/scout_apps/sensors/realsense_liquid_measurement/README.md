@@ -15,6 +15,9 @@
     - [模式 A：没有背景标尺，先打通通路](#模式-a没有背景标尺先打通通路)
     - [模式 B：有背景标尺时再做毫米标定](#模式-b有背景标尺时再做毫米标定)
   - [第三步：批量提取液面像素时序](#第三步批量提取液面像素时序)
+  - [逐帧调试脚本](#逐帧调试脚本)
+    - [原理](#原理)
+    - [用法](#用法)
   - [曲线图怎么看](#曲线图怎么看)
   - [CSV 字段说明](#csv-字段说明)
 
@@ -37,6 +40,7 @@ realsense_liquid_measurement/
     ├── calibrate_liquid_roi.py
     ├── annotate_liquid_roi.py
     ├── extract_liquid_height_from_bag.py
+    ├── debug_liquid_vs_mpc_frame_by_frame.py
     └── realsense_ros_env_local.sh
 ```
 
@@ -54,10 +58,17 @@ realsense_liquid_measurement/
 - `scripts/extract_liquid_height_from_bag.py`
   - 用 calibration + bag 批量提液面
   - 输出 `liquid_height.csv`、`liquid_debug.mp4`、`liquid_height_peak_curve.png`
+- `scripts/debug_liquid_vs_mpc_frame_by_frame.py`
+  - 构建逐帧调试 session
+  - 把实物照片、ROI 调试图、`/slosh/height`、`/slosh/height_pred_max` 和当前帧误差放到同一个交互式查看器里
+- `scripts/compare_realsense_vs_mpc_slosh.py`
+  - 对齐视觉 `height_peak_rel_mm` 与 `/slosh/height`、`/slosh/height_pred_max`
+  - 只在 calibration 的 `mm_per_pixel` 非空时有意义
 - `config/liquid_measurement.yaml`
   - 当前主处理参数
 - `config/frame_000000_calibration_line_auto_zero_peak.yaml`
   - 当前主标定文件
+  - 当前主回归口径是 `px-only`，`mm_per_pixel: null`
 - `改进文档0322.md`
   - 记录为什么这样改、当前结论、下一步改进方向
 
@@ -78,8 +89,10 @@ realsense_liquid_measurement/
 
 - 主配置：
   - [liquid_measurement.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/liquid_measurement.yaml)
-- 主标定：
+- 主标定（当前 `px-only` 主回归口径）：
   - [frame_000000_calibration_line_auto_zero_peak.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_line_auto_zero_peak.yaml)
+- `mm` 调试/对比标定（仅在需要 `height_*_rel_mm` 时使用）：
+  - [frame_000000_calibration_line_auto_zero_peak_provisional_29mm.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_line_auto_zero_peak_provisional_29mm.yaml)
 
 ## 当前整理步骤
 
@@ -102,6 +115,11 @@ realsense_liquid_measurement/
      - `height_peak_rel_px`
      - `accept_for_peak_report`
      - `liquid_height_peak_curve.png`
+
+补充说明：
+
+- 如果当前使用的是主标定 `frame_000000_calibration_line_auto_zero_peak.yaml`，主观察量应优先看 `px` 口径
+- 只有当 calibration 的 `mm_per_pixel` 非空时，`height_*_rel_mm`、逐帧 `mm` 调试和 `compare_realsense_vs_mpc_slosh.py` 才有意义
 
 ## 当前代码流程图
 
@@ -474,6 +492,165 @@ python3 /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scr
   --calibration /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_line_auto_zero_peak.yaml
 ```
 
+## 逐帧调试脚本
+
+### 原理
+
+这个脚本的目标不是重新实现一套新算法，而是把**当前液面检测结果**和 **MPC 的 `/slosh/height`、`/slosh/height_pred_max`** 放到同一个逐帧调试入口里。
+
+它内部做的事分 3 步：
+
+1. 读取 bag 里的 `/camera/color/image_raw`
+2. 对每一帧复用当前主检测链：
+   - `ROI` 裁剪
+   - `tube_axis_line` 旋正
+   - 液面检测
+   - 计算：
+     - `height_peak_rel_px`
+     - `height_peak_rel_mm`
+     - `valid`
+     - `accept_for_peak_report`
+     - `meniscus_confidence`
+3. 按同一个时间基准插值得到当前帧对应的：
+   - `/slosh/height`
+   - `/slosh/height_pred_max`
+   - `/cmd_vel`
+   - `/imu/data`
+
+所以这条脚本本质上是在回答：
+
+- 这一帧视觉到底看到了什么
+- 这一帧算法为什么接受或拒绝
+- 这一帧视觉高度和 `/slosh/height` 差多少
+- 差异更像来自：
+  - 实物液面
+  - 几何标定
+  - 候选列融合
+  - 报告门槛
+
+它会缓存两类图：
+
+- `photo/`
+  - 原始实物照片预览，带 ROI 框
+- `roi_debug/`
+  - 当前检测器输出的 ROI 调试图
+
+以及两类索引文件：
+
+- `debug_session.json`
+- `debug_session.csv`
+
+其中：
+
+- GUI 模式适合你拖动进度条、逐帧看图
+- `--show-frame-index` 适合你已知某一帧，直接在终端查：
+  - `height_peak_rel_mm`
+  - `/slosh/height`
+  - `/slosh/height_pred_max`
+
+### 用法
+
+如果你现在想逐帧看：
+
+- 实物照片
+- 当前 ROI 检测图
+- `height_peak_rel_px / mm`
+- `*_signed` 调试量
+- `/slosh/height`
+- `/slosh/height_pred_max`
+- 当前帧误差
+
+可以直接用：
+
+```bash
+python3 /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/debug_liquid_vs_mpc_frame_by_frame.py \
+  --bag /data/a/slosh_bags/TestOnRealCar/slosh_QQ0_1_20260323_164428.bag \
+  --calibration /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_line_auto_zero_peak_provisional_29mm.yaml \
+  --out-dir /data/a/realsense_validation/debug/Q0_1_frame_debug
+```
+
+这条脚本会先：
+
+1. 逐帧跑液面检测
+2. 缓存：
+   - 原始实物照片预览
+   - ROI 调试图
+   - `debug_session.json`
+   - `debug_session.csv`
+3. 然后自动打开交互式逐帧查看器
+
+如果你只想先建缓存，不立刻打开窗口：
+
+```bash
+python3 /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/debug_liquid_vs_mpc_frame_by_frame.py \
+  --bag /data/a/slosh_bags/TestOnRealCar/slosh_QQ0_1_20260323_164428.bag \
+  --calibration /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_line_auto_zero_peak_provisional_29mm.yaml \
+  --out-dir /data/a/realsense_validation/debug/Q0_1_frame_debug \
+  --skip-viewer
+```
+
+如果缓存已经建好，只想复用缓存再打开：
+
+```bash
+python3 /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/debug_liquid_vs_mpc_frame_by_frame.py \
+  --bag /data/a/slosh_bags/TestOnRealCar/slosh_QQ0_1_20260323_164428.bag \
+  --calibration /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_line_auto_zero_peak_provisional_29mm.yaml \
+  --out-dir /data/a/realsense_validation/debug/Q0_1_frame_debug \
+  --reuse-cache
+```
+
+如果你不想打开查看器，只想指定某一帧并在终端直接查看这帧的：
+
+- `height_peak_rel_mm`
+- `/slosh/height`
+- `/slosh/height_pred_max`
+
+可以直接用：
+
+```bash
+python3 /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/debug_liquid_vs_mpc_frame_by_frame.py \
+  --bag /data/a/slosh_bags/TestOnRealCar/slosh_QQ0_1_20260323_164428.bag \
+  --calibration /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/frame_000000_calibration_line_auto_zero_peak_provisional_29mm.yaml \
+  --out-dir /data/a/realsense_validation/debug/Q0_1_frame_debug \
+  --reuse-cache \
+  --skip-viewer \
+  --show-frame-index 527
+```
+
+查看器按键：
+
+- 窗口顶部 `cache_idx` 进度条
+  - 直接拖动到想看的缓存帧
+- `a / d`
+  - 上一帧 / 下一帧
+- `w / s`
+  - 前后跳 `10` 帧
+- `z / e`
+  - 前后跳 `50` 帧
+- `g`
+  - 在终端输入要跳到的缓存索引
+- `h`
+  - 显示/隐藏帮助
+- `q` 或 `Esc`
+  - 退出
+
+这套脚本适合排查：
+
+- 为什么这一帧被 `report gate` 拒绝
+- 为什么当前帧视觉和 `/slosh/height` 差很多
+- 当前高峰到底是实物上真的液面抬高，还是视觉误检
+
+`--show-frame-index` 模式适合这种场景：
+
+- 你已经知道想看哪一帧
+- 当前终端不方便打开 GUI 窗口
+- 你只想核对这一帧的：
+  - `height_peak_rel_mm`
+  - `/slosh/height`
+  - `/slosh/height_pred_max`
+  - `valid / accept_for_peak_report / confidence`
+
+
 更稳的当前推荐做法是：**先生成候选标定，再决定是否升级成主标定**。
 
 推荐流程：
@@ -590,6 +767,8 @@ python3 /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scr
   - 在图像里液面越高，`y` 越小，所以抬升量按 `still_level_px - current_y` 计算
 - `height_*_rel_mm`
   - 只有在背景标尺补齐并得到 `mm_per_pixel` 后才有意义
+  - 当前主标定 `frame_000000_calibration_line_auto_zero_peak.yaml` 仍是 `mm_per_pixel: null`
+  - README 里涉及 `mm` 的逐帧示例默认配合 `frame_000000_calibration_line_auto_zero_peak_provisional_29mm.yaml` 这类带标尺标定使用
 - `meniscus_confidence`
   - 是当前帧的综合质量分数，综合了覆盖率、拟合残差、斜率、时间门控、液体主体宽度以及峰值邻域一致性
 - `temporal_jump_px`
@@ -699,22 +878,35 @@ python3 /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scr
 - `accept_for_peak_report`
   - 是否允许该帧进入正式峰值统计
   - 这是比 `valid` 更严格的一层硬门槛
+- `left_peak_source / right_peak_source / peak_source`
+  - 当前左侧 / 右侧 / 最高液面值来自哪种测量
+  - `band` 表示来自两侧候选列的稳健侧峰值
+  - `fit` 表示该侧退回到了拟合线代理值
+- `left_band_support_ratio / right_band_support_ratio`
+  - 左右侧峰值搜索带内，有效候选列覆盖比例
+  - 值越低，说明该侧“最高液面”证据更弱
 - `height_left_px`
-  - 拟合液面线在左侧固定内部评估点上的位置
+  - 左侧液面稳健侧峰值对应的像素高度
 - `height_right_px`
-  - 拟合液面线在右侧固定内部评估点上的位置
+  - 右侧液面稳健侧峰值对应的像素高度
 - `height_peak_px`
-  - 当前帧左右评估点中更高那一侧对应的位置
+  - 当前帧左右稳健侧峰值中更高那一侧对应的位置
+- `height_left_rel_px_signed / height_right_rel_px_signed / height_peak_rel_px_signed`
+  - 相对静止基线的有符号抬升量
+  - 这些字段主要用于 `auto-zero` 和调试
+  - 它们可能出现负值，表示当前拟合/侧峰值比静止基线略低
 - `height_left_rel_px`
-  - 左侧液面相对静止基线的抬升量
+  - 左侧液面相对静止基线的非负抬升量
 - `height_right_rel_px`
-  - 右侧液面相对静止基线的抬升量
+  - 右侧液面相对静止基线的非负抬升量
 - `height_peak_rel_px`
-  - 当前帧最高液面相对静止基线的抬升量
+  - 当前帧最高液面相对静止基线的非负抬升量
   - 这是当前最关键的主指标
+- `height_left_rel_mm_signed / height_right_rel_mm_signed / height_peak_rel_mm_signed`
+  - 上述有符号像素抬升量换算到毫米后的调试字段
 - `height_left_rel_mm`
-  - 左侧相对抬升量的毫米值，仅在有标尺时有效
+  - 左侧非负相对抬升量的毫米值，仅在有标尺时有效
 - `height_right_rel_mm`
-  - 右侧相对抬升量的毫米值，仅在有标尺时有效
+  - 右侧非负相对抬升量的毫米值，仅在有标尺时有效
 - `height_peak_rel_mm`
-  - 最高液面相对抬升量的毫米值，仅在有标尺时有效
+  - 最高液面非负相对抬升量的毫米值，仅在有标尺时有效

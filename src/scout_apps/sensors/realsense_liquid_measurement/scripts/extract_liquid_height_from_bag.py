@@ -63,6 +63,10 @@ class ProcessingConfig:
     min_body_span_ratio: float = 0.32
     candidate_blend_tolerance_px: float = 2.5
     candidate_edge_agreement_px: float = 3.5
+    peak_side_margin_ratio: float = 0.06
+    peak_side_band_ratio: float = 0.22
+    peak_side_top_fraction: float = 0.22
+    peak_side_min_columns: int = 6
     peak_neighborhood_half_width: int = 12
     report_min_confidence: float = 0.73
     report_min_central_coverage: float = 0.40
@@ -254,6 +258,18 @@ def load_processing_config(path: Optional[Path]) -> Tuple[Dict, ProcessingConfig
         ),
         candidate_edge_agreement_px=float(
             processing.get("candidate_edge_agreement_px", defaults.candidate_edge_agreement_px)
+        ),
+        peak_side_margin_ratio=float(
+            processing.get("peak_side_margin_ratio", defaults.peak_side_margin_ratio)
+        ),
+        peak_side_band_ratio=float(
+            processing.get("peak_side_band_ratio", defaults.peak_side_band_ratio)
+        ),
+        peak_side_top_fraction=float(
+            processing.get("peak_side_top_fraction", defaults.peak_side_top_fraction)
+        ),
+        peak_side_min_columns=int(
+            processing.get("peak_side_min_columns", defaults.peak_side_min_columns)
         ),
         peak_neighborhood_half_width=int(
             processing.get("peak_neighborhood_half_width", defaults.peak_neighborhood_half_width)
@@ -853,6 +869,85 @@ def central_band_bounds(width: int, ratio: float) -> Tuple[int, int]:
     return start, end
 
 
+def side_band_bounds(width: int, margin_ratio: float, band_ratio: float) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+    width = max(1, int(width))
+    margin = int(round(width * float(np.clip(margin_ratio, 0.0, 0.35))))
+    band_width = max(6, int(round(width * float(np.clip(band_ratio, 0.08, 0.45)))))
+
+    left_start = min(width - 1, margin)
+    left_end = min(width, left_start + band_width)
+    if left_end - left_start < 2:
+        left_start = 0
+        left_end = min(width, max(2, band_width))
+
+    right_end = max(1, width - margin)
+    right_start = max(0, right_end - band_width)
+    if right_end - right_start < 2:
+        right_end = width
+        right_start = max(0, width - max(2, band_width))
+
+    if left_end > right_start:
+        center = width // 2
+        left_end = min(left_end, center)
+        right_start = max(right_start, center)
+        if left_end - left_start < 2:
+            left_start = 0
+            left_end = max(2, center)
+        if right_end - right_start < 2:
+            right_start = min(width - 2, center)
+            right_end = width
+
+    return (left_start, left_end), (right_start, right_end)
+
+
+def robust_band_peak(
+    profile_y: np.ndarray,
+    x_start: int,
+    x_end: int,
+    min_columns: int,
+    top_fraction: float,
+) -> Dict[str, Optional[float]]:
+    x_start = max(0, int(x_start))
+    x_end = min(profile_y.shape[0], int(x_end))
+    band_width = max(0, x_end - x_start)
+    if band_width <= 0:
+        return {
+            "y": None,
+            "x": None,
+            "support_ratio": 0.0,
+            "valid_columns": 0,
+        }
+
+    band_values = profile_y[x_start:x_end]
+    valid_mask = np.isfinite(band_values)
+    valid_columns = int(np.count_nonzero(valid_mask))
+    support_ratio = valid_columns / float(band_width)
+    if valid_columns < max(2, int(min_columns)):
+        return {
+            "y": None,
+            "x": None,
+            "support_ratio": support_ratio,
+            "valid_columns": valid_columns,
+        }
+
+    xs = np.arange(x_start, x_end, dtype=np.float32)[valid_mask]
+    ys = band_values[valid_mask].astype(np.float32)
+    keep_count = min(
+        ys.size,
+        max(int(min_columns), int(math.ceil(ys.size * float(np.clip(top_fraction, 0.05, 0.5))))),
+    )
+    order = np.argsort(ys)[:keep_count]
+    top_xs = xs[order]
+    top_ys = ys[order]
+
+    return {
+        "y": float(np.median(top_ys)),
+        "x": float(np.median(top_xs)),
+        "support_ratio": support_ratio,
+        "valid_columns": valid_columns,
+    }
+
+
 def robust_line_fit(xs: np.ndarray, ys: np.ndarray, max_residual_px: float) -> Optional[Dict]:
     valid = np.isfinite(xs) & np.isfinite(ys)
     xs = xs[valid].astype(np.float32)
@@ -1022,11 +1117,20 @@ def detect_liquid_profile(
     if right_eval_x <= left_eval_x:
         right_eval_x = min(width - 1, left_eval_x + 1)
     center_eval_x = 0.5 * (left_eval_x + right_eval_x)
+    (left_band_start, left_band_end), (right_band_start, right_band_end) = side_band_bounds(
+        width,
+        config.peak_side_margin_ratio,
+        config.peak_side_band_ratio,
+    )
 
     left_y = None
     right_y = None
     center_y = None
     peak_y = None
+    left_rel_px_signed = None
+    right_rel_px_signed = None
+    center_rel_px_signed = None
+    peak_rel_px_signed = None
     left_rel_px = None
     right_rel_px = None
     center_rel_px = None
@@ -1039,6 +1143,15 @@ def detect_liquid_profile(
     temporal_gate_passed = previous_state is None
     peak_distance_to_top_px = None
     peak_eval_x = None
+    left_peak_x = None
+    right_peak_x = None
+    left_peak_source = "missing"
+    right_peak_source = "missing"
+    peak_source = "missing"
+    left_band_support_ratio = 0.0
+    right_band_support_ratio = 0.0
+    left_band_valid_columns = 0
+    right_band_valid_columns = 0
     peak_local_support_ratio = None
     peak_local_rms_px = None
     peak_edge_dominance = None
@@ -1050,19 +1163,66 @@ def detect_liquid_profile(
         fit_points = fit_result["count"]
         fit_slope = float(fit_coeff[0])
 
-        left_y = evaluate_line(fit_coeff, left_eval_x)
-        right_y = evaluate_line(fit_coeff, right_eval_x)
-        center_y = evaluate_line(fit_coeff, center_eval_x)
-        if left_y <= right_y:
+        left_fit_y = evaluate_line(fit_coeff, left_eval_x)
+        right_fit_y = evaluate_line(fit_coeff, right_eval_x)
+        center_fit_y = evaluate_line(fit_coeff, center_eval_x)
+        peak_fit_y = min(left_fit_y, right_fit_y)
+
+        left_band_peak = robust_band_peak(
+            combined,
+            left_band_start,
+            left_band_end,
+            config.peak_side_min_columns,
+            config.peak_side_top_fraction,
+        )
+        right_band_peak = robust_band_peak(
+            combined,
+            right_band_start,
+            right_band_end,
+            config.peak_side_min_columns,
+            config.peak_side_top_fraction,
+        )
+        left_band_support_ratio = float(left_band_peak["support_ratio"])
+        right_band_support_ratio = float(right_band_peak["support_ratio"])
+        left_band_valid_columns = int(left_band_peak["valid_columns"])
+        right_band_valid_columns = int(right_band_peak["valid_columns"])
+
+        if left_band_peak["y"] is not None:
+            left_y = float(left_band_peak["y"])
+            left_peak_x = float(left_band_peak["x"])
+            left_peak_source = "band"
+        else:
+            left_y = left_fit_y
+            left_peak_x = float(left_eval_x)
+            left_peak_source = "fit"
+        if right_band_peak["y"] is not None:
+            right_y = float(right_band_peak["y"])
+            right_peak_x = float(right_band_peak["x"])
+            right_peak_source = "band"
+        else:
+            right_y = right_fit_y
+            right_peak_x = float(right_eval_x)
+            right_peak_source = "fit"
+
+        center_y = center_fit_y
+        left_rel_px_signed = calibration.still_level_px - left_y
+        right_rel_px_signed = calibration.still_level_px - right_y
+        center_rel_px_signed = calibration.still_level_px - center_y
+        left_rel_px = max(0.0, left_rel_px_signed)
+        right_rel_px = max(0.0, right_rel_px_signed)
+        center_rel_px = max(0.0, center_rel_px_signed)
+
+        if left_rel_px_signed >= right_rel_px_signed:
             peak_y = left_y
-            peak_eval_x = float(left_eval_x)
+            peak_eval_x = float(left_band_peak["x"]) if left_band_peak["x"] is not None else float(left_eval_x)
+            peak_source = f"left_{left_peak_source}"
         else:
             peak_y = right_y
-            peak_eval_x = float(right_eval_x)
-        left_rel_px = calibration.still_level_px - left_y
-        right_rel_px = calibration.still_level_px - right_y
-        center_rel_px = calibration.still_level_px - center_y
-        peak_rel_px = calibration.still_level_px - peak_y
+            peak_eval_x = float(right_band_peak["x"]) if right_band_peak["x"] is not None else float(right_eval_x)
+            peak_source = f"right_{right_peak_source}"
+
+        peak_rel_px_signed = max(left_rel_px_signed, right_rel_px_signed)
+        peak_rel_px = max(0.0, peak_rel_px_signed)
         peak_distance_to_top_px = max(0.0, float(peak_y))
         local_metrics = peak_neighborhood_metrics(
             combined,
@@ -1184,10 +1344,27 @@ def detect_liquid_profile(
         "right_y": right_y,
         "center_y": center_y,
         "peak_y": peak_y,
+        "left_rel_px_signed": left_rel_px_signed,
+        "right_rel_px_signed": right_rel_px_signed,
+        "center_rel_px_signed": center_rel_px_signed,
+        "peak_rel_px_signed": peak_rel_px_signed,
         "left_rel_px": left_rel_px,
         "right_rel_px": right_rel_px,
         "center_rel_px": center_rel_px,
         "peak_rel_px": peak_rel_px,
+        "left_peak_source": left_peak_source,
+        "right_peak_source": right_peak_source,
+        "peak_source": peak_source,
+        "left_peak_x": left_peak_x,
+        "right_peak_x": right_peak_x,
+        "left_band_start": left_band_start,
+        "left_band_end": left_band_end,
+        "right_band_start": right_band_start,
+        "right_band_end": right_band_end,
+        "left_band_support_ratio": left_band_support_ratio,
+        "right_band_support_ratio": right_band_support_ratio,
+        "left_band_valid_columns": left_band_valid_columns,
+        "right_band_valid_columns": right_band_valid_columns,
         "valid": bool(valid),
         "confidence": confidence,
         "valid_columns": valid_columns,
@@ -1269,6 +1446,34 @@ def make_debug_frame(
     central_end = int(detection["central_end"])
     cv2.line(canvas, (calibration.x_left + central_start, 0), (calibration.x_left + central_start, h - 1), (180, 180, 0), 1)
     cv2.line(canvas, (calibration.x_left + central_end - 1, 0), (calibration.x_left + central_end - 1, h - 1), (180, 180, 0), 1)
+    cv2.line(
+        canvas,
+        (calibration.x_left + int(detection["left_band_start"]), 0),
+        (calibration.x_left + int(detection["left_band_start"]), h - 1),
+        (80, 170, 255),
+        1,
+    )
+    cv2.line(
+        canvas,
+        (calibration.x_left + int(detection["left_band_end"] - 1), 0),
+        (calibration.x_left + int(detection["left_band_end"] - 1), h - 1),
+        (80, 170, 255),
+        1,
+    )
+    cv2.line(
+        canvas,
+        (calibration.x_left + int(detection["right_band_start"]), 0),
+        (calibration.x_left + int(detection["right_band_start"]), h - 1),
+        (80, 170, 255),
+        1,
+    )
+    cv2.line(
+        canvas,
+        (calibration.x_left + int(detection["right_band_end"] - 1), 0),
+        (calibration.x_left + int(detection["right_band_end"] - 1), h - 1),
+        (80, 170, 255),
+        1,
+    )
 
     profile_y = detection["profile_y"]
     xs = np.flatnonzero(np.isfinite(profile_y))
@@ -1313,9 +1518,11 @@ def make_debug_frame(
     cv2.line(canvas, (right_eval_x, 0), (right_eval_x, h - 1), (120, 120, 255), 1)
 
     if detection["left_y"] is not None:
-        cv2.circle(canvas, (left_eval_x, int(round(detection["left_y"]))), 4, (255, 0, 0), -1)
+        left_peak_x = calibration.x_left + int(round(float(detection["left_peak_x"])))
+        cv2.circle(canvas, (left_peak_x, int(round(detection["left_y"]))), 4, (255, 0, 0), -1)
     if detection["right_y"] is not None:
-        cv2.circle(canvas, (right_eval_x, int(round(detection["right_y"]))), 4, (0, 128, 255), -1)
+        right_peak_x = calibration.x_left + int(round(float(detection["right_peak_x"])))
+        cv2.circle(canvas, (right_peak_x, int(round(detection["right_y"]))), 4, (0, 128, 255), -1)
 
     status_text = "VALID" if detection["valid"] else "INVALID"
     status_color = (0, 200, 0) if detection["valid"] else (0, 0, 255)
@@ -1334,6 +1541,15 @@ def make_debug_frame(
                 detection["left_rel_px"],
                 detection["right_rel_px"],
                 detection["peak_rel_px"],
+            )
+        )
+    if detection["peak_rel_px_signed"] is not None:
+        text_lines.append(
+            "signed left={:.1f} right={:.1f} peak={:.1f} src={}".format(
+                detection["left_rel_px_signed"],
+                detection["right_rel_px_signed"],
+                detection["peak_rel_px_signed"],
+                detection["peak_source"],
             )
         )
     if detection["fit_rms_px"] is not None and detection["fit_slope"] is not None:
@@ -1382,6 +1598,14 @@ def make_debug_frame(
                 0.0 if detection["peak_edge_dominance"] is None else detection["peak_edge_dominance"],
             )
         )
+    text_lines.append(
+        "band_support L={:.2f}({}) R={:.2f}({})".format(
+            detection["left_band_support_ratio"],
+            detection["left_band_valid_columns"],
+            detection["right_band_support_ratio"],
+            detection["right_band_valid_columns"],
+        )
+    )
 
     y_text = 18
     for idx, line in enumerate(text_lines):
@@ -1423,10 +1647,10 @@ def summarize_values(values: List[float], stat: str) -> Optional[float]:
 
 def baseline_measurement_from_detection(detection: Dict, target: str) -> Tuple[Optional[float], Optional[float]]:
     mapping = {
-        "peak": ("peak_y", "peak_rel_px"),
-        "center": ("center_y", "center_rel_px"),
-        "left": ("left_y", "left_rel_px"),
-        "right": ("right_y", "right_rel_px"),
+        "peak": ("peak_y", "peak_rel_px_signed"),
+        "center": ("center_y", "center_rel_px_signed"),
+        "left": ("left_y", "left_rel_px_signed"),
+        "right": ("right_y", "right_rel_px_signed"),
     }
     y_key, rel_key = mapping[target]
     return detection.get(y_key), detection.get(rel_key)
@@ -1716,12 +1940,25 @@ def main():
                     "peak_local_rms_px",
                     "peak_edge_dominance",
                     "accept_for_peak_report",
+                    "left_peak_source",
+                    "right_peak_source",
+                    "peak_source",
+                    "left_band_support_ratio",
+                    "right_band_support_ratio",
+                    "left_band_valid_columns",
+                    "right_band_valid_columns",
                     "height_left_px",
                     "height_right_px",
                     "height_peak_px",
+                    "height_left_rel_px_signed",
+                    "height_right_rel_px_signed",
+                    "height_peak_rel_px_signed",
                     "height_left_rel_px",
                     "height_right_rel_px",
                     "height_peak_rel_px",
+                    "height_left_rel_mm_signed",
+                    "height_right_rel_mm_signed",
+                    "height_peak_rel_mm_signed",
                     "height_left_rel_mm",
                     "height_right_rel_mm",
                     "height_peak_rel_mm",
@@ -1786,6 +2023,9 @@ def main():
                     if max_reported_peak_rel_px is None or detection["peak_rel_px"] > max_reported_peak_rel_px:
                         max_reported_peak_rel_px = detection["peak_rel_px"]
 
+                left_rel_mm_signed = maybe_mm(detection["left_rel_px_signed"], calibration.mm_per_pixel)
+                right_rel_mm_signed = maybe_mm(detection["right_rel_px_signed"], calibration.mm_per_pixel)
+                peak_rel_mm_signed = maybe_mm(detection["peak_rel_px_signed"], calibration.mm_per_pixel)
                 left_rel_mm = maybe_mm(detection["left_rel_px"], calibration.mm_per_pixel)
                 right_rel_mm = maybe_mm(detection["right_rel_px"], calibration.mm_per_pixel)
                 peak_rel_mm = maybe_mm(detection["peak_rel_px"], calibration.mm_per_pixel)
@@ -1817,12 +2057,25 @@ def main():
                         csv_value(detection["peak_local_rms_px"]),
                         csv_value(detection["peak_edge_dominance"]),
                         int(detection["accept_for_peak_report"]),
+                        detection["left_peak_source"],
+                        detection["right_peak_source"],
+                        detection["peak_source"],
+                        csv_value(detection["left_band_support_ratio"]),
+                        csv_value(detection["right_band_support_ratio"]),
+                        detection["left_band_valid_columns"],
+                        detection["right_band_valid_columns"],
                         csv_value(detection["left_y"]),
                         csv_value(detection["right_y"]),
                         csv_value(detection["peak_y"]),
+                        csv_value(detection["left_rel_px_signed"]),
+                        csv_value(detection["right_rel_px_signed"]),
+                        csv_value(detection["peak_rel_px_signed"]),
                         csv_value(detection["left_rel_px"]),
                         csv_value(detection["right_rel_px"]),
                         csv_value(detection["peak_rel_px"]),
+                        csv_value(left_rel_mm_signed),
+                        csv_value(right_rel_mm_signed),
+                        csv_value(peak_rel_mm_signed),
                         csv_value(left_rel_mm),
                         csv_value(right_rel_mm),
                         csv_value(peak_rel_mm),

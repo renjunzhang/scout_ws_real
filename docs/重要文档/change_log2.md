@@ -2,10 +2,19 @@
 
 ## 当前已知缺陷
 
-- 终点停靠修正目前是通过 `LocalPlannerROS` 的 `goal_stop_pending_` 在外层状态机里直接发布 `cmd_vel = 0` 实现的，而不是由 MPC 在终点最后一段连续优化减速完成。
+- 以上方 2026-03-21 之后的代码真源为准，`goal_stop_pending_` 当前**已经不是**外层状态机直接发布 `cmd_vel = 0` 的硬停实现。
+- 当前更准确的终点链口径是：
+  - 远场：tracking MPC
+  - 近终点恢复：外层 `terminal recovery`
+  - 最后收尾：`goal_stop_pending_` 下把 `v_des_cmd` 压到 `0`，再由 MPC 继续做最后一段减速与纠偏
 - 这不会破坏当前 MPC 的 8 维增广状态结构，也不会移除 `Q_slosh` 的液体晃动抑制代价项。
-- 但它会让进入目标容差区后的最后一小段控制暂时绕开 MPC，因此终点最后一段的 anti-slosh 最优性会弱于“全程由 MPC 连续减速”的版本。
-- 当前版本更偏向“先保证终点能停住、避免冲过头”的工程折中；如果后续要进一步兼顾终点收敛和液体残余晃动，应优先改 near-goal `v_ref` 连续衰减逻辑，而不是继续叠加硬停分支。
+- 当前真正仍然存在的边界，不是旧版“进圈后硬切零速”，而是：
+  - near-goal 仍有一段外层 `terminal recovery` 显式控制律
+  - 因此终点最后一小段的 anti-slosh 最优性仍弱于“全程纯 MPC 收敛”的版本
+- 如果后续要进一步兼顾终点收敛和液体残余晃动，应优先继续收口：
+  - near-goal 模式切换
+  - `terminal recovery` 与 MPC 收尾的一致性
+  - near-goal `v_ref` / residual slosh 的连续性
 
 ## 2026-03-23
 
@@ -86,6 +95,18 @@
   - `/data/a/realsense_validation/verify/static/`
   - `/data/a/realsense_validation/verify/motion/`
 - 不再推荐把这类中间验证结果放在 `/tmp`
+- 新增逐帧离线调试脚本：
+  - `debug_liquid_vs_mpc_frame_by_frame.py`
+  - 可同屏查看：
+    - 实物全图
+    - ROI 调试图
+    - 视觉 `peak_rel_px/mm`
+    - `/slosh/height`
+    - `/slosh/height_pred_max`
+    - `/cmd_vel`
+    - `/imu/data`
+  - 同时支持非 GUI 场景：
+    - 可通过 `--show-frame-index N` 直接在终端查看指定帧的关键数值
 
 ## 2026-03-14
 
@@ -1475,3 +1496,40 @@
   - dark / edge 融合继续加强
   - `accept_for_peak_report` 再细化
   - 补真实标尺后验证 `*_rel_mm`
+
+### RealSense 最高液面定义进一步收紧
+
+- 发现一个重要语义问题：
+  - 之前主输出 `height_peak_rel_px` 仍可能出现负值
+  - 这说明它本质上还混着“有符号调试代理量”的语义
+- 本轮做了两件事：
+  - 左右/最高液面优先改为来自两侧候选列的稳健侧峰值
+  - 把输出拆成：
+    - `*_rel_px_signed / *_rel_mm_signed`
+      - 调试和 `auto-zero` 使用
+    - `*_rel_px / *_rel_mm`
+      - 非负最高液面主输出
+- 同时新增：
+  - `left_peak_source / right_peak_source / peak_source`
+  - `left_band_support_ratio / right_band_support_ratio`
+
+### 本轮回归结论
+
+- 小样本和完整静止包验证表明：
+  - 新的 `height_peak_rel_px` 已不再出现负值
+  - signed 调试量仍保留负值，方便基线排查
+- 说明“负数问题”主要是输出定义问题，而不是单位问题
+- 下一步要继续确认：
+  - 新的非负最高液面定义是否会把实车运动峰值抬得过高
+
+### RealSense vs MPC 对比口径更新
+
+- 对比脚本默认不再使用放大系数拟合
+- 新默认口径改为：
+  - 视觉曲线按初始时间窗口做零点对齐
+  - `/slosh/height` 和 `/slosh/height_pred_max` 也各自按初始时间窗口做零点对齐
+- 这样生成的图和 `aligned.csv` 更接近：
+  - “零点对齐后的原始逐帧比较”
+  - 而不是“调比例后的拟合比较”
+- 如果以后确实要看探索性的比例拟合：
+  - 只能显式打开 `--fit-scale-to-height`
