@@ -1689,6 +1689,7 @@ def write_adjusted_calibration_yaml(
     auto_zero["baseline_target_rel_px"] = float(baseline_target_rel_px)
     auto_zero["suggested_still_level_px"] = float(suggested_still_level_px)
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("w", encoding="utf-8") as stream:
         yaml.safe_dump(data, stream, sort_keys=False, allow_unicode=False)
 

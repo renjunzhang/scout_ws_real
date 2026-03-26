@@ -114,10 +114,9 @@ catkin_make 2>&1 | grep "processing catkin package"
     slosh_use_imu_lateral_accel:=false \
     slosh_use_imu_alpha_z:=false
 
-    # 带盒约束与 speed governor 的实验版本
+    # 更激烈路径下才建议尝试的增强实验版本（优先只开 speed governor，暂不默认打开盒约束）
     roslaunch scout_local_planner slosh_experiment.launch \
     Q_slosh:=5 \
-    enable_slosh_box_constraint:=true \
     slosh_speed_governor_enable:=true \
     slosh_use_imu_yaw_rate:=true \
     slosh_use_imu_lateral_accel:=false \
@@ -218,11 +217,10 @@ catkin_make 2>&1 | grep "processing catkin package"
     # TEB 对比实验
     roslaunch teb_local_planner test_teb_sim.launch
 
-    # 液体晃动实验
+    # 液体晃动增强实验（优先只开 speed governor，暂不默认打开盒约束）
     roslaunch scout_local_planner slosh_experiment.launch \
     sim:=true \
     Q_slosh:=5 \
-    enable_slosh_box_constraint:=true \
     slosh_speed_governor_enable:=true \
     slosh_speed_governor_k_eta:=2.5 \
     slosh_speed_governor_eta_deadband:=0.3 \
