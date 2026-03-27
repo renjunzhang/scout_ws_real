@@ -36,6 +36,26 @@
 #   - MPC 性能：/mpc/solve_ms, /mpc/status_val, /mpc_status
 #   - 控制/底盘状态：/cmd_vel, /odom, /scout_status, /rs_status
 #   - 目标/路径：/scout/goal, /scout/current_goal, /scout/global_path, /local_path
+#   - 避障实现/接口核查：
+#                /scan_front
+#                /map, /map_updates
+#                /scout/mbf_costmap_nav/GlobalPlanner/plan
+#                /scout/mbf_costmap_nav/GlobalPlanner/potential
+#                /scout/mbf_costmap_nav/get_path/goal
+#                /scout/mbf_costmap_nav/get_path/feedback
+#                /scout/mbf_costmap_nav/get_path/result
+#                /scout/mbf_costmap_nav/get_path/status
+#                /scout/mbf_costmap_nav/local_costmap/costmap
+#                /scout/mbf_costmap_nav/local_costmap/costmap_updates
+#                /scout/mbf_costmap_nav/local_costmap/footprint
+#                /scout/mbf_costmap_nav/global_costmap/costmap
+#                /scout/mbf_costmap_nav/global_costmap/costmap_updates
+#                /scout/mbf_costmap_nav/global_costmap/footprint
+#                /scout/mbf_costmap_nav/local_costmap/parameter_updates
+#                /scout/mbf_costmap_nav/local_costmap/inflation_layer/parameter_updates
+#                /scout/mbf_costmap_nav/local_costmap/obstacle_layer/parameter_updates
+#                /scout/mbf_costmap_nav/global_costmap/parameter_updates
+#                /scout/mbf_costmap_nav/global_costmap/inflation_layer/parameter_updates
 #   - 终点/摇摆根因排查：
 #                /scout/move_base_cmd_vel
 #                /scout/mbf_costmap_nav/current_goal
@@ -136,12 +156,34 @@ TOPICS=(
     /scout_status
     /rs_status
 
+    # 避障实现/接口核查
+    /scan_front
+    /map
+    /map_updates
+
     # 目标与路径
     /scout/goal
     /scout/current_goal
     /scout/global_path
     /scout/global_path_smooth
     /local_path
+    /scout/mbf_costmap_nav/GlobalPlanner/plan
+    /scout/mbf_costmap_nav/GlobalPlanner/potential
+    /scout/mbf_costmap_nav/get_path/goal
+    /scout/mbf_costmap_nav/get_path/feedback
+    /scout/mbf_costmap_nav/get_path/result
+    /scout/mbf_costmap_nav/get_path/status
+    /scout/mbf_costmap_nav/global_costmap/costmap
+    /scout/mbf_costmap_nav/global_costmap/costmap_updates
+    /scout/mbf_costmap_nav/global_costmap/footprint
+    /scout/mbf_costmap_nav/global_costmap/parameter_updates
+    /scout/mbf_costmap_nav/global_costmap/inflation_layer/parameter_updates
+    /scout/mbf_costmap_nav/local_costmap/costmap
+    /scout/mbf_costmap_nav/local_costmap/costmap_updates
+    /scout/mbf_costmap_nav/local_costmap/footprint
+    /scout/mbf_costmap_nav/local_costmap/parameter_updates
+    /scout/mbf_costmap_nav/local_costmap/inflation_layer/parameter_updates
+    /scout/mbf_costmap_nav/local_costmap/obstacle_layer/parameter_updates
     /scout/move_base_cmd_vel
     /scout/mbf_costmap_nav/current_goal
     /scout/mbf_costmap_nav/exe_path/feedback

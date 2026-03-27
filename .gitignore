@@ -37,3 +37,4 @@ __pycache__/
 # Cartographer 独立工作空间（源码编译，不提交）
 src/scout_apps/sensors/cartographer_ws/
 cartographer/
+MPC-D-CBF/
