@@ -53,6 +53,8 @@ realsense_liquid_measurement/
     ├── extract_liquid_height_v2_from_bag.py
     ├── annotate_liquid_roi.py
     ├── extract_liquid_height_from_bag.py
+    ├── analyze_realsense_center_vs_slosh_0325.py
+    ├── replay_slosh_model_from_bag.py
     └── realsense_ros_env_local.sh
 ```
 
@@ -142,12 +144,38 @@ realsense_liquid_measurement/
     - `imu_ay`
   - 输出 `.npz`、样本表和 metadata，给后续晃动高度回归使用
 
-### 6. 路径与激励可比性分析
+### 6. slosh model 离线重放
+
+- `scripts/replay_slosh_model_from_bag.py`
+  - 使用 bag 中已记录的 `/slosh/ax_est`、`/slosh/ay_est`、`/slosh/omega_est_used`、`/slosh/alpha_est`、`/slosh/state`
+  - 离线重放当前工程里的 slosh 动力学，并与 bag 原始 `/slosh/height`、`/slosh/height_pred_max`、RealSense 主液面曲线做对比
+  - 支持 `--replay-mode`：
+    - `linear_engineering`：当前工程 `Lp` 逻辑
+    - `paper_nl`：论文 Eq.(11) 的 Paper NL 动力学重放
+    - `both`：同图对比两条离线重放曲线
+  - 支持改动 `liquid_height`、`damping_ratio`、`mode_index`、`L/NL 高度映射`、`parabola term`
+  - `paper_nl` 模式使用 `RK4` 做单模态积分，输出：
+    - `paper_nl_modal_height`
+    - `paper_nl_total_height`
+  - 默认输出到 `/data/a/realsense_validation_v2/debug/<bag批次>/slosh_replay/<bag_stem>/`
+  - 用于回答“当前 bag 的 `/slosh/height` 是怎么来的”“把参数从 `0.055` 改到 `0.058` 会不会明显变化”
+
+### 7. 路径与激励可比性分析
 
 - `scripts/compare_bag_paths_and_excitation_0325.py`
   - 对比 `0325` 试验中各 bag 的 `odom` 路径、`cmd_vel`、平面激励和液体响应
   - 先判断 `Q0/Q5` bag 是否同任务可比，再讨论抑制是否有效
   - 输出单 bag 指标、pairwise 对比表、轨迹图、激励图和 README
+
+### 8. RealSense vs /slosh/height 误差分析
+
+- `scripts/analyze_realsense_center_vs_slosh_0325.py`
+  - 面向 `0325` 批次，按 bag 分析 `height_center_rel_mm_bias_corrected_v2` 对 `/slosh/height` 的 raw/zero-align 误差与偏置
+  - 输出每包 summary、top outlier 表、每包曲线图和 README
+  - 用于回答：
+    - 哪个 bag 最接近
+    - 哪个 bag 偏置最明显
+    - 坏点更像视觉检测问题还是模型/残余偏置问题
 
 其中 `build_realsense_ros_local.sh` 会把缺失的 RealSense 依赖包下载并解包到工作区根目录下的 `.ros_deps/` 和 `.ros_deps_cache/`。这两个目录属于本机环境缓存，不建议提交。
 

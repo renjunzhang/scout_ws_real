@@ -899,3 +899,146 @@
     - `scripts/compare_bag_paths_and_excitation_0325.py`
   - 规划独立输出目录：
     - `/data/a/realsense_validation_v2/verify/0325/path_compare/`
+
+## 2026-03-28 新增 slosh model 离线重放脚本
+
+- 新增文件：
+  - `scripts/replay_slosh_model_from_bag.py`
+- 目的：
+  - 基于 bag 中已记录的 `/slosh/ax_est`、`/slosh/ay_est`、`/slosh/omega_est_used`、`/slosh/alpha_est`、`/slosh/state`
+  - 离线重放当前工程里的 slosh 动力学
+  - 对比：
+    - bag 原始 `/slosh/height`
+    - bag 原始 `/slosh/height_pred_max`
+    - RealSense 主液面 `height_center_rel_mm_bias_corrected_v2`
+- 模型口径：
+  - 明确按当前工程实现重放 `Lp` 版本：
+    - 状态更新仍是线性 MSD 的离散模型
+    - `--use-nonlinear-model` 只切换高度映射系数 `L -> NL`
+    - 不会把动力学本体变成论文里的完整非线性 EOM
+- 参数覆盖：
+  - 支持命令行改动：
+    - `liquid_height`
+    - `damping_ratio`
+    - `mode_index`
+    - `offset_x/offset_y`
+    - `L/NL height mapping`
+    - `parabola term on/off`
+- 输出：
+  - `slosh_recomputed_compare.png`
+  - `slosh_recomputed_aligned.csv`
+  - `slosh_recomputed_summary.json`
+- 实现修正：
+  - 修复 CSV 表头在未启用 zero-align 时出现空列名的问题
+  - 新增 `recomputed_vs_realsense` 指标，避免只看到 `bag_vs_realsense` 而无法判断参数改动有没有实际收益
+- 本地验证：
+  - `python3 -m py_compile scripts/replay_slosh_model_from_bag.py`
+  - `Q5_test1` 烟雾测试：
+    - 默认参数 `h=0.055, L, parabola=on`
+    - `bag vs recomputed`: `MAE=0.000982 mm`, `RMSE=0.007245 mm`, `Corr=0.999073`
+    - `recomputed vs RealSense`: `MAE=0.106636 mm`, `RMSE=0.179012 mm`, `Corr=0.407366`
+  - `Q5_test1` 参数敏感性：
+    - `h=0.055 -> 0.058` 对曲线几乎没有影响
+    - 切到 `NL` 高度映射后：
+      - `bag vs recomputed`: `MAE=0.016439 mm`, `RMSE=0.030573 mm`, `Corr=0.999074`
+      - `recomputed vs RealSense`: `MAE=0.102455 mm`, `RMSE=0.168740 mm`, `Corr=0.407512`
+- 当前结论：
+  - bag 中记录的 `/slosh/*` 输入足以高精度复现当前 `/slosh/height`
+  - 只把 `liquid_height` 从 `0.055` 改到 `0.058`，对当前场景的输出几乎没有可见影响
+  - 单看 `Q5_test1`，`NL` 高度映射相对 `L` 只带来很小的 RealSense 拟合改善，暂时不够支撑直接改线上配置
+  - 默认输出目录已从“bag 同目录”改为：
+    - `/data/a/realsense_validation_v2/debug/<bag批次>/slosh_replay/<bag_stem>/`
+    - 当前 `0325` 数据如果不显式传 `--out-dir`，会自动落到 `/data/a/realsense_validation_v2/debug/0325/slosh_replay/<bag_stem>/`
+
+## 2026-03-28 修复 paper_nl 重放输出并完成首轮对比
+
+- 修复文件：
+  - `scripts/replay_slosh_model_from_bag.py`
+- 修复内容：
+  - 修复 `paper_nl_total_height` 中抛物面项被重复乘以 `1000` 的量纲错误
+  - 把 `paper_nl_modal_height`、`paper_nl_total_height` 正式写入 `slosh_recomputed_aligned.csv`
+  - 新增 `bag_vs_paper_nl`、`paper_nl_vs_realsense` 指标，并在 `--replay-mode paper_nl/both` 时打印到终端和写入 `summary.json`
+- 本地验证：
+  - `python3 -m py_compile scripts/replay_slosh_model_from_bag.py`
+  - `linear_engineering` 验证目录：
+    - `/data/a/realsense_validation_v2/debug/0325/slosh_replay/replay_review_linear_fix`
+  - `paper_nl` 验证目录：
+    - `/data/a/realsense_validation_v2/debug/0325/slosh_replay/replay_review_paper_nl_fix`
+- `Q5_test1` 修复后结果：
+  - `bag_vs_recomputed`:
+    - `MAE=0.000982 mm`
+    - `RMSE=0.007245 mm`
+    - `Corr=0.999073`
+  - `bag_vs_paper_nl`:
+    - `MAE=0.017071 mm`
+    - `RMSE=0.032493 mm`
+    - `Corr=0.997182`
+  - `recomputed_vs_realsense`:
+    - `MAE=0.106636 mm`
+    - `RMSE=0.179012 mm`
+    - `Corr=0.407366`
+  - `paper_nl_vs_realsense`:
+    - `MAE=0.103687 mm`
+    - `RMSE=0.170847 mm`
+    - `Corr=0.392996`
+- 当前判断：
+  - 在 `Q5_test1` 这包上，论文 `paper_nl` 与 bag 当前工程 `/slosh/height` 的变化趋势和幅值都相当接近
+  - `paper_nl` 相对当前工程 `Lp` 只带来了很小的误差变化，不足以改变现阶段主结论
+  - 可以继续把主精力放回 `RealSense` 与 `/slosh/height` 的分析，而不是先重构在线 slosh model
+  - `paper_nl_replay_plan.md` 的核心内容已经并入 `README.md` 与本日志，原计划文件可以删除
+
+## 2026-03-28 新增 0325 分 bag RealSense center vs /slosh/height 分析
+
+- 新增文件：
+  - `scripts/analyze_realsense_center_vs_slosh_0325.py`
+- 目标：
+  - 按 bag 分析 `height_center_rel_mm_bias_corrected_v2` 对 `/slosh/height` 的误差、偏置和坏点
+  - 同时保留：
+    - raw 误差（不做 zero-align）
+    - zero-align 误差（如果该 bag 已有 `mpc_realsense_aligned_v2.csv`）
+- 输出目录：
+  - `/data/a/realsense_validation_v2/verify/0325/center_vs_slosh_analysis/`
+- 输出文件：
+  - `center_vs_slosh_summary.csv`
+  - `center_vs_slosh_outliers.csv`
+  - `center_vs_slosh_summary.json`
+  - `README.md`
+  - `<bag>_center_vs_slosh.png`
+- 本地验证：
+  - `python3 -m py_compile scripts/analyze_realsense_center_vs_slosh_0325.py`
+  - 正式输出已生成到上述目录
+- `0325` 当前结果：
+  - `Q0_static`:
+    - `raw_bias_median=0.011131 mm`
+    - `raw_MAE=0.016701 mm`
+  - `Q5_static`:
+    - `raw_bias_median=0.000000 mm`
+    - `raw_MAE=0.000000 mm`
+    - 但 `reportable=5/762`，静止包通过率过低，不能把它当成强结论
+  - `Q0_test1`:
+    - `raw_bias_median=0.007978 mm`
+    - `raw_MAE=0.089600 mm`
+    - `zero_MAE=0.187325 mm`
+  - `Q5_test1`:
+    - `raw_bias_median=0.000000 mm`
+    - `raw_MAE=0.182175 mm`
+    - `zero_MAE=0.184293 mm`
+  - `Q5_test2`:
+    - `raw_bias_median≈0`
+    - `raw_MAE=0.016438 mm`
+    - `zero_MAE=0.016438 mm`
+    - 当前是最干净的一包
+  - `Q5_test3`:
+    - `raw_bias_median≈0`
+    - `raw_MAE=0.078259 mm`
+    - `zero_MAE=0.196902 mm`
+- 坏点判断：
+  - 多数 top outlier 没有表现出明显的 `low_confidence / high_fit_rms`
+  - 当前更像：
+    - 模型与视觉主液面的残余不一致
+    - 或者小幅偏置/时序差异
+  - 而不是单纯的视觉检测崩坏
+- 当前结论：
+  - `Q5_test2` 可以作为后续主样本
+  - `Q5_test1` 是当前最值得继续做坏点深挖的一包
+  - `Q0_static/Q0_test1` 仍有轻微正偏置，但量级已经很小

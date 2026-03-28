@@ -38,3 +38,4 @@ __pycache__/
 src/scout_apps/sensors/cartographer_ws/
 cartographer/
 MPC-D-CBF/
+tmp_center_slosh_analysis_smoke/
