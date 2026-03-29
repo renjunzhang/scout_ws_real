@@ -1,4 +1,32 @@
-在年# 新的高度分析方案 Log
+# 新的高度分析方案 Log
+
+## 当前核心目标
+
+**当前主目标：验证 `/slosh/height` 能否估计“当前时刻的主液面高度”。**
+
+- 当前主观测口径：
+  - `height_center_rel_mm_bias_corrected_v2`
+- `peak` 与 `/slosh/height_pred_max` 不作为本阶段主结论口径
+- 后续所有日志结论，默认优先参考：
+  - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/`
+
+## 当前效果与判断
+
+- 当前最新主基线：
+  - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/`
+- 当前主结论：
+  - `/slosh/height` 已经可以作为“当前时刻主液面高度”的工程估计量使用
+  - 但它还不能当绝对真值标准
+- 当前最能代表效果的指标：
+  - `Q5_static`: `raw_MAE = 0.007837 mm`
+  - `Q5_test1`: `raw_MAE = 0.093253 mm`
+  - `Q5_test2`: `raw_MAE = 0.092495 mm`
+  - `Q5_test3`: `raw_MAE = 0.063274 mm`
+  - `Q0_test1`: `raw_MAE = 0.189001 mm`
+- 当前限制：
+  - `Q5_test1` 仍有少量模型侧局部低估段
+  - 视觉 `center` 也仍有少量近静态异常帧
+  - `Q0` 与 `Q5` 运动 bag 的路径和激励不严格可比，不能直接据此下“Q=5 必然更优”的强结论
 
 ## 说明
 
@@ -1042,3 +1070,328 @@
   - `Q5_test2` 可以作为后续主样本
   - `Q5_test1` 是当前最值得继续做坏点深挖的一包
   - `Q0_static/Q0_test1` 仍有轻微正偏置，但量级已经很小
+
+## 2026-03-29 新增 Q5_test1 / Q5_test2 相位差与坏点分段分析
+
+- 新增文件：
+  - `scripts/analyze_q5_phase_and_outliers_0325.py`
+- 目标：
+  - 用 `Q5_test2` 作为主参考包
+  - 单独深挖 `Q5_test1` 的相位差和大误差分段
+  - 避免只看全局误差均值，改成：
+    - `lag sweep`
+    - 近零最优 lag
+    - 大误差分段
+- 输出目录：
+  - `/data/a/realsense_validation_v2/verify/0325/q5_phase_outlier_analysis/`
+- 输出文件：
+  - `phase_summary.csv`
+  - `phase_summary.json`
+  - `Q5_test1_outlier_segments.csv`
+  - `Q5_test1_segments/*.png`
+  - `Q5_test1_lag_sweep.png`
+  - `Q5_test1_lag_overlay.png`
+  - `Q5_test2_lag_sweep.png`
+  - `Q5_test2_lag_overlay.png`
+  - `README.md`
+- 本地验证：
+  - `python3 -m py_compile scripts/analyze_q5_phase_and_outliers_0325.py`
+  - `python3 scripts/analyze_q5_phase_and_outliers_0325.py --help`
+  - 正式输出已生成到上述目录
+- 当前结果：
+  - `Q5_test1`
+    - `lag=0`: `MAE=0.197789 mm`, `RMSE=0.292501 mm`, `Corr=0.175171`
+    - 近零最优 lag：`-240 ms`
+    - 近零最优 lag 下：`Corr=0.366997`, `RMSE=0.252165 mm`
+    - 全局最优相关 lag：`1010 ms`
+    - 但这个量级接近重复振荡周期，不能直接当作物理时延
+  - `Q5_test2`
+    - `lag=0`: `MAE=0.016438 mm`, `RMSE=0.059554 mm`, `Corr=0.718568`
+    - 近零最优 lag：`-250 ms`
+    - 近零最优 lag 下：`Corr=0.836447`, `RMSE=0.046396 mm`
+    - 全局最优相关 lag：`-760 ms`
+    - 同样更像周期性重复，而不是直接物理时延
+  - `Q5_test1` 当前坏点阈值：`abs(error) >= 0.624032 mm`
+  - 导出的高误差分段共 `3` 段：
+    - `frames 893-894`
+    - `frame 970`
+    - `frame 1047`
+- 现阶段判断：
+  - `Q5_test1` 和 `Q5_test2` 的近零最优 lag 都在约 `-250 ms`，说明两包都存在类似量级的时序偏移
+  - 但 `Q5_test1` 即使允许近零 lag 修正，相关性和 RMSE 仍明显差于 `Q5_test2`
+  - 所以 `Q5_test1` 的问题不只是相位差，还包含更明显的幅值/模型不一致或局部异常时段
+  - 下一步应优先看：
+    - `Q5_test1` 三个高误差分段对应的实物画面
+    - 这些分段里 `RealSense center` 和 `/slosh/height` 的幅值谁在偏大/偏小
+
+## 2026-03-29 新增 Center 位置可视复核图导出
+
+- 新增文件：
+  - `scripts/render_center_overlay_review_0325.py`
+- 目标：
+  - 针对 `Q5_test1` 高误差分段，导出干净的 ROI 复核图
+  - 在同一张图上直接叠加：
+    - `0 mm`
+    - `RealSense center`
+    - `/slosh/height` 映射后的高度线
+  - 用来判断：
+    - `RealSense center` 是否在视觉上偏高
+    - `/slosh/height` 是否更像偏低
+- 输出目录：
+  - `/data/a/realsense_validation_v2/verify/0325/q5_phase_outlier_analysis/center_overlay_review/`
+- 输出文件：
+  - `review_summary.csv`
+  - `README.md`
+  - `segment_*/frame_*_review.png`
+- 本地验证：
+  - `python3 -m py_compile scripts/render_center_overlay_review_0325.py`
+  - `python3 scripts/render_center_overlay_review_0325.py --help`
+  - 正式输出已生成
+- 当前状态：
+  - 已按 `Q5_test1_outlier_segments.csv` 导出 `16` 张复核图
+  - 可直接逐帧判断红线（`RealSense center`）和蓝线（`/slosh/height`）谁更贴近真实液面
+  - 脚本现已支持 `--visual-zero-offset-mm`
+    - 正值会把 `0 mm / RealSense center / /slosh/height` 三条线一起在 ROI 中上移
+    - 用于快速验证“零位整体低了约 0.2 mm”这类系统偏差假设
+  - 已正式导出 `0.2 mm` 偏移版本：
+    - `/data/a/realsense_validation_v2/verify/0325/q5_phase_outlier_analysis/center_overlay_review_offset_0p2mm/`
+
+## 2026-03-29 annotate_height_ruler_v2.py 支持前后两条静止液面线取中线
+
+- 修改文件：
+  - `scripts/annotate_height_ruler_v2.py`
+- 新增参数：
+  - `--still-level-mode`
+    - `single_line`：旧流程，点击一条可见静止液面线
+    - `front_back_midpoint`：新流程，分别点击前后两条可见静止液面线，脚本自动取中线作为 `0 mm`
+- 实现方式：
+  - 交互上新增：
+    - `still_front_left / still_front_right`
+    - `still_back_left / still_back_right`
+  - 保存时：
+    - `geometry_roi.still_level_line` 仍写入中线，保持提取脚本兼容
+    - 额外记录：
+      - `geometry_roi.still_level_front_line`
+      - `geometry_roi.still_level_back_line`
+      - `height_mapping.height_zero_annotation_mode`
+- 兼容性：
+  - 旧单线模式不变
+  - `extract_liquid_height_v2_from_bag.py` 无需修改，继续读取 `still_level_line`
+- 本地验证：
+  - `python3 -m py_compile scripts/annotate_height_ruler_v2.py`
+  - `python3 scripts/annotate_height_ruler_v2.py --help`
+- 当前建议：
+  - 对你现在能同时看到试管前后两条液面线的静止图，优先使用：
+    - `--still-level-mode front_back_midpoint`
+
+## 2026-03-29 0325 新零位重标后，按新 bias 重新提取并汇总 Q5
+
+- 新标定文件：
+  - `/data/a/realsense_validation_v2/calibration/0325/scene_0325_multiscale_raw_rezero.yaml`
+- 备份策略：
+  - 不覆盖旧目录
+  - 旧结果保留在：
+    - `/data/a/realsense_validation_v2/verify/0325_rezero/`
+  - 新 bias 重跑结果写到：
+    - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/`
+- 新 bias 选取：
+  - 基于新 `Q5_static` 的 `height_center_rel_mm_v2` reportable 中位数
+  - 取值：`1.233421 mm`
+- 重跑对象：
+  - `Q5_static`
+  - `Q5_test1`
+  - `Q5_test2`
+- 汇总分析目录：
+  - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/center_vs_slosh_analysis/`
+- 当前结果：
+  - `Q5_static`
+    - `raw_bias_median=0.000000 mm`
+    - `raw_MAE=0.007837 mm`
+    - `reportable=461/762`
+  - `Q5_test1`
+    - `raw_bias_median=0.041769 mm`
+    - `raw_MAE=0.093253 mm`
+    - `reportable=435/2363`
+  - `Q5_test2`
+    - `raw_bias_median=0.046210 mm`
+    - `raw_MAE=0.092495 mm`
+    - `reportable=24/1080`
+- 当前判断：
+  - `front_back_midpoint` 的静止液面零位定义是有效的
+  - 旧 `0.978398 mm` bias 在新零位下已失效
+  - 换成 `1.233421 mm` 后，`Q5_static` 已基本贴零
+  - `Q5_test1 / Q5_test2` 也回到 `~0.09 mm` 量级，明显好于仅重标零位、不改 bias 的版本
+
+## 2026-03-29 基于 0325_rezero_bias 重跑 Q5 相位差与坏点分析
+
+- 输出目录：
+  - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/q5_phase_outlier_analysis/`
+- 关键文件：
+  - `phase_summary.csv`
+  - `Q5_test1_outlier_segments.csv`
+  - `center_overlay_review/`
+- 当前结果：
+  - `Q5_test1`
+    - `lag=0`: `MAE=0.141411 mm`, `RMSE=0.213660 mm`, `Corr=0.452617`
+    - 近零最优 lag：`-60 ms`
+    - 近零最优 lag 下：`Corr=0.549369`, `RMSE=0.200139 mm`
+    - `reportable_frames=192`
+  - `Q5_test2`
+    - `lag=0`: `MAE=0.092495 mm`, `RMSE=0.121033 mm`, `Corr=0.688187`
+    - 近零最优 lag：`-190 ms`
+    - 近零最优 lag 下：`Corr=0.721093`, `RMSE=0.107795 mm`
+    - `reportable_frames=24`
+- `Q5_test1` 当前高误差分段：
+  - `frames 888-925`
+  - `frame 954`
+  - `frame 650`
+  - `frame 1004`
+  - `frame 75`
+  - `frames 777-795`
+- 可视复核：
+  - 已基于新分段导出：
+    - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/q5_phase_outlier_analysis/center_overlay_review/`
+  - 共 `36` 张复核图
+- 当前判断：
+  - 重新标定零位并更新 bias 后，`Q5_test1` 相比旧版本已经明显改善
+  - 但 `Q5_test1` 仍然弱于 `Q5_test2`
+  - 剩余差异不再像“整体零位问题”，而更像：
+    - 少量局部异常时段
+    - 外加小幅近零 lag
+  - 人工逐段复核结论（基于 `center_overlay_review/`）：
+    - `segment_01 (frames 888-925)`: `/slosh/height` 偏低更明显
+    - `segment_02 (frame 954)`: `/slosh/height` 偏低更明显
+    - `segment_03 (frame 650)`: `/slosh/height` 偏低更明显
+    - `segment_04 (frame 1004)`: `RealSense center` 与 `/slosh/height` 两边都差不多
+    - `segment_05 (frame 75)`: `RealSense center` 偏高更明显
+    - `segment_06 (frames 777-795)`: `RealSense center` 与 `/slosh/height` 两边都差不多
+  - 汇总：
+    - `6` 段里有 `3` 段更像 `/slosh/height` 偏低
+    - `1` 段更像 `RealSense center` 偏高
+    - `2` 段两边都存在偏差
+  - 这说明：
+    - `Q5_test1` 的残余误差主因更偏向模型侧局部低估，而不是视觉 `center` 系统性偏高
+    - 但视觉侧也仍然存在少量局部异常帧，不能把所有误差都归到模型
+
+## 2026-03-29 Q5_test1 分段输入与状态分析
+
+- 新增脚本：
+  - `scripts/analyze_q5_test1_segment_inputs_0325.py`
+- 目的：
+  - 针对 `0325_rezero_bias/Q5_test1` 的坏点段，逐段查看：
+    - `RealSense center` vs `/slosh/height`
+    - `/slosh/ax_est`、`/slosh/ay_est`
+    - `/slosh/omega_est_used`、`/slosh/alpha_est`
+    - `/slosh/state = [eta_x, eta_x_dot, eta_y, eta_y_dot]`
+- 输出目录：
+  - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/q5_segment_input_analysis/`
+- 关键文件：
+  - `segment_input_state_summary.csv`
+  - `segment_input_state_summary.json`
+  - `segments/*.png`
+  - `README.md`
+- 验证：
+  - `python3 -m py_compile scripts/analyze_q5_test1_segment_inputs_0325.py`
+  - `python3 scripts/analyze_q5_test1_segment_inputs_0325.py --help`
+  - `/tmp/q5_segment_input_analysis_smoke/` 烟雾测试通过
+- 当前结果摘要：
+  - `segment_01 (888-925)`
+    - `max|error|=1.026055 mm`
+    - `max|ay|=0.500183 m/s²`
+    - `max|omega|=0.996788 rad/s`
+    - `max|eta_modal|=0.000413 m`
+  - `segment_02 (954)`
+    - `max|error|=1.008308 mm`
+    - `max|ay|=0.574966 m/s²`
+    - `max|omega|=1.026435 rad/s`
+    - `max|eta_modal|=0.000471 m`
+  - `segment_03 (650)`
+    - `max|error|=0.621469 mm`
+    - `max|ax|=0.336933 m/s²`
+    - `max|ay|=0.015271 m/s²`
+    - `max|omega|=0.121857 rad/s`
+    - `max|eta_modal|=0.000330 m`
+  - `segment_04 (1004)`
+    - `mean_error=-0.237278 mm`
+    - 该段不是模型低估，而更像两边都在附近、甚至 `/slosh/height` 略高
+  - `segment_05 (75)`
+    - `max|error|=0.467041 mm`
+    - `ax/ay/omega/alpha/state` 都接近 `0`
+    - 该段更像视觉 `center` 局部偏高或残余零位/检测问题，不像模型动态低估
+  - `segment_06 (777-795)`
+    - `max|error|=0.443032 mm`
+    - `max|omega|=1.128924 rad/s`
+    - 但 `max|ay|=0.069333 m/s²`、`max|eta_modal|=0.000188 m`
+- 当前判断：
+  - `Q5_test1` 的高误差段不是单一原因
+  - `segment_01/02` 确实更像模型在较强横向激励和较大模态位移下局部偏低
+  - `segment_03` 更像前后向主导激励下的局部低估
+  - `segment_05` 说明视觉侧仍有少量局部异常，不能把所有残余误差归到 `/slosh/height`
+  - 总体上：
+    - `/slosh/height` 作为“当前时刻主液面高度”估计是可用的
+    - 但 `Q5_test1` 在局部动态段仍存在模型侧低估，且少量静态/近静态帧存在视觉侧异常
+
+## 2026-03-29 补跑 0325_rezero_bias 缺失 bag 并刷新总对比图
+
+- 目的：
+  - 把 `0325_rezero_bias` 从原来的半套结果补齐到全套 `6` 个 bag
+  - 统一在同一套：
+    - `scene_0325_multiscale_raw_rezero.yaml`
+    - `center_bias_correction_mm = 1.233421`
+    下查看 `center_vs_slosh`
+- 新补跑 bag：
+  - `Q0_static`
+  - `Q0_test1`
+  - `Q5_test3`
+- 输出目录：
+  - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/Q0_static/`
+  - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/Q0_test1/`
+  - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/Q5_test3/`
+- 刷新后的总分析目录：
+  - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/center_vs_slosh_analysis/`
+- 当前摘要：
+  - `Q0_static`
+    - `raw_bias_median=0.125361 mm`
+    - `raw_MAE=0.134216 mm`
+    - `reportable=9/631`
+  - `Q5_static`
+    - `raw_bias_median=0.000000 mm`
+    - `raw_MAE=0.007837 mm`
+    - `reportable=461/762`
+  - `Q0_test1`
+    - `raw_bias_median=0.142784 mm`
+    - `raw_MAE=0.189001 mm`
+    - `reportable=181/1241`
+  - `Q5_test1`
+    - `raw_bias_median=0.041769 mm`
+    - `raw_MAE=0.093253 mm`
+    - `reportable=435/2363`
+  - `Q5_test2`
+    - `raw_bias_median=0.046210 mm`
+    - `raw_MAE=0.092495 mm`
+    - `reportable=24/1080`
+  - `Q5_test3`
+    - `raw_bias_median=0.040547 mm`
+    - `raw_MAE=0.063274 mm`
+    - `reportable=297/1319`
+- 当前判断：
+  - `0325_rezero_bias` 现在已经是完整主基线
+  - `Q5` 三个运动包整体上优于 `Q0_test1`
+  - 其中：
+    - `Q5_test3` 当前最好
+    - `Q5_test1 / Q5_test2` 居中
+    - `Q0_test1` 明显更差
+  - `Q0_static` 的通过帧很少，不能把它和 `Q5_static` 直接并列为强静态结论
+
+## 2026-03-29 同步结果目录 README 结论
+
+- 已将当前主结论同步到：
+  - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/center_vs_slosh_analysis/README.md`
+- 同步目的：
+  - 让结果目录本身就能直接回答“当前效果如何、当前判断是什么”
+  - 避免主文档和结果目录 README 结论不一致
+- 当前结果目录 README 已明确写入：
+  - `/slosh/height` 已经可以作为“当前时刻主液面高度”的工程估计量使用
+  - 但它还不能当绝对真值标准
+  - `Q5_test3` 当前最好，`Q5_test1/Q5_test2` 居中，`Q0_test1` 明显更差
+  - 当前不能仅凭这批 `Q0/Q5` bag 的幅值差，直接下“Q=5 必然优于 Q=0”的强结论

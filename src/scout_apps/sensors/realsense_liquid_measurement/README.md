@@ -2,6 +2,44 @@
 
 `realsense_liquid_measurement` 用于承载 RealSense 液面测量链的离线脚本与后续实时节点。
 
+## 当前核心目标
+
+**当前主目标：验证 `/slosh/height` 能否估计“当前时刻的主液面高度”。**
+
+- 主对比口径固定为：
+  - `height_center_rel_mm_bias_corrected_v2`
+- 当前不把 `peak` 当主验证目标：
+  - `height_peak_rel_mm_v2` 只保留诊断意义
+- 当前所有 `0325` 主结论，优先基于：
+  - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/`
+
+## 当前效果与判断
+
+基于 `0325_rezero_bias` 这套最新主基线：
+
+- 静止包 `Q5_static`
+  - `raw_MAE = 0.007837 mm`
+  - `raw_bias_median = 0.000000 mm`
+  - 说明当前 `0 mm` 重标和 `1.233421 mm` bias 修正后，静态主液面已经基本贴零
+- 运动包
+  - `Q5_test1`: `raw_MAE = 0.093253 mm`, `raw_corr = 0.521`, `reportable = 435/2363`
+  - `Q5_test2`: `raw_MAE = 0.092495 mm`, `raw_corr = 0.688`, `reportable = 24/1080`
+  - `Q5_test3`: `raw_MAE = 0.063274 mm`, `raw_corr = 0.430`, `reportable = 297/1319`
+  - `Q0_test1`: `raw_MAE = 0.189001 mm`, `raw_corr = 0.420`, `reportable = 181/1241`
+- 当前判断
+  - `/slosh/height` 已经可以作为“当前时刻主液面高度”的工程估计量使用
+  - 但它还不能当绝对真值标准
+  - 当前更合理的口径是：
+    - 主判断指标：`/slosh/height`
+    - 离线对照基准：`height_center_rel_mm_bias_corrected_v2`
+    - 辅助检查：坏点段复核、少量人工目检
+- 当前剩余问题
+  - `Q5_test1` 仍有少量局部时段更像模型侧低估
+  - 视觉 `center` 也仍存在少量近静态异常帧，不能把所有误差都归到模型
+- 当前限制
+  - `Q0_test1` 与 `Q5_test1/2/3` 的路径和激励并不严格可比
+  - 因此不能仅凭这批 bag 的幅值差，直接下结论说 `Q=5` 一定比 `Q=0` 更好
+
 ## 目录
 
 - [realsense\_liquid\_measurement](#realsense_liquid_measurement)
@@ -41,6 +79,8 @@ realsense_liquid_measurement/
 │   └── frame_000000_annotated.png
 └── scripts/
     ├── analyze_human_labels_vs_realsense_v2.py
+    ├── analyze_q5_phase_and_outliers_0325.py
+    ├── analyze_q5_test1_segment_inputs_0325.py
     ├── annotate_height_ruler_v2.py
     ├── build_realsense_ros_local.sh
     ├── calibrate_liquid_roi.py
@@ -55,6 +95,7 @@ realsense_liquid_measurement/
     ├── extract_liquid_height_from_bag.py
     ├── analyze_realsense_center_vs_slosh_0325.py
     ├── replay_slosh_model_from_bag.py
+    ├── render_center_overlay_review_0325.py
     └── realsense_ros_env_local.sh
 ```
 
@@ -76,7 +117,7 @@ realsense_liquid_measurement/
 
 ## 脚本用途总览
 
-按当前实际用途，`scripts/` 下脚本可以分成 6 类。
+按当前实际用途，`scripts/` 下脚本可以分成 11 类。
 
 ### 1. 环境与 RealSense ROS 构建
 
@@ -110,6 +151,9 @@ realsense_liquid_measurement/
 - `scripts/annotate_height_ruler_v2.py`
   - 在静止参考图上标注 v2 多标尺点
   - 固定输出 `旋正后 ROI` 坐标系下的 `height_mapping.reference_points`
+  - 支持 `--still-level-mode front_back_midpoint`
+    - 可同时标注前后两条可见静止液面线
+    - 脚本自动取中线作为 `0 mm / still_level_line`
 - `scripts/extract_liquid_height_v2_from_bag.py`
   - 用 v2 多标尺 calibration 做 `piecewise-linear` 高度映射
   - 输出双口径结果：
@@ -176,6 +220,50 @@ realsense_liquid_measurement/
     - 哪个 bag 最接近
     - 哪个 bag 偏置最明显
     - 坏点更像视觉检测问题还是模型/残余偏置问题
+
+### 9. Q5 重点相位差与坏点深挖
+
+- `scripts/analyze_q5_phase_and_outliers_0325.py`
+  - 面向 `Q5_test1` 和 `Q5_test2`，单独分析 `RealSense center` 对 `/slosh/height` 的 lag sweep、近零最优 lag 和坏点分段
+  - 输出：
+    - `phase_summary.csv/json`
+    - `Q5_test1_outlier_segments.csv`
+    - `Q5_test1_segments/*.png`
+    - `README.md`
+  - 用于回答：
+    - `Q5_test1` 相比 `Q5_test2` 是否存在更明显的相位差
+    - `Q5_test1` 的大误差是否集中在少数时段
+    - 这些时段更像纯时延问题，还是幅值/模型不一致问题
+
+### 10. Center 位置可视复核
+
+- `scripts/render_center_overlay_review_0325.py`
+  - 从 `debug_session.csv` 和 `scene_0325_multiscale_raw.yaml` 生成干净的 ROI 复核图
+  - 在同一张图上叠加：
+    - `0 mm`
+    - `RealSense center`
+    - `/slosh/height` 映射高度
+  - 用于回答：
+    - `RealSense center` 在视觉上是否偏高
+    - `/slosh/height` 是否更像偏低
+    - 目标坏点段里到底是谁更偏离真实液面
+
+### 11. Q5_test1 输入与状态分段分析
+
+- `scripts/analyze_q5_test1_segment_inputs_0325.py`
+  - 面向 `0325_rezero_bias/Q5_test1` 的高误差坏点段
+  - 逐段导出：
+    - `RealSense center` vs `/slosh/height`
+    - `/slosh/ax_est`、`/slosh/ay_est`
+    - `/slosh/omega_est_used`、`/slosh/alpha_est`
+    - `/slosh/state = [eta_x, eta_x_dot, eta_y, eta_y_dot]`
+  - 输出：
+    - `segment_input_state_summary.csv/json`
+    - `segments/*.png`
+    - `README.md`
+  - 用于回答：
+    - `/slosh/height` 局部偏低时，对应的输入激励和状态量级是什么
+    - `Q5_test1` 的残余误差更像模型侧低估，还是视觉 `center` 局部偏高
 
 其中 `build_realsense_ros_local.sh` 会把缺失的 RealSense 依赖包下载并解包到工作区根目录下的 `.ros_deps/` 和 `.ros_deps_cache/`。这两个目录属于本机环境缓存，不建议提交。
 

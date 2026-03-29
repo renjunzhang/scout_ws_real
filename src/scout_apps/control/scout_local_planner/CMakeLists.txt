@@ -64,6 +64,7 @@ target_link_libraries(local_planner_node
 
 catkin_install_python(PROGRAMS
   scripts/send_fixed_goal.py
+  scripts/fixed_global_path_runner.py
   scripts/extract_slosh_metrics.py
   scripts/analyze_imu_ay_stage2.py
   scripts/run_imu_stage2_sequence.py

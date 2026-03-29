@@ -7,7 +7,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -28,6 +28,8 @@ class PreparedAnnotation:
     left_wall_line: Tuple[Point, Point]
     right_wall_line: Tuple[Point, Point]
     still_level_line: Tuple[Point, Point]
+    still_level_front_line: Optional[Tuple[Point, Point]]
+    still_level_back_line: Optional[Tuple[Point, Point]]
     tube_axis_line: Tuple[Point, Point]
     ruler_points_image: List[Point]
     ruler_points_rectified_roi: np.ndarray
@@ -88,6 +90,15 @@ def parse_args():
         default=8.0,
         help="Warn if rectified ruler-point x spread exceeds this value. Default: 8.0 px",
     )
+    parser.add_argument(
+        "--still-level-mode",
+        choices=("single_line", "front_back_midpoint"),
+        default="single_line",
+        help=(
+            "How to annotate 0 mm. single_line: click one visible still-liquid line. "
+            "front_back_midpoint: click front and back visible still-liquid lines, and the script uses their midpoint."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -126,6 +137,10 @@ def sort_line_by_y(p1: Point, p2: Point) -> Tuple[Point, Point]:
 
 def sort_line_by_x(p1: Point, p2: Point) -> Tuple[Point, Point]:
     return (p1, p2) if p1.x <= p2.x else (p2, p1)
+
+
+def midpoint_point(p1: Point, p2: Point) -> Point:
+    return Point(int(round(0.5 * (p1.x + p2.x))), int(round(0.5 * (p1.y + p2.y))))
 
 
 def avg_x(points: Sequence[Point]) -> float:
@@ -222,16 +237,37 @@ def geometry_checks(roi, left_wall_line, right_wall_line, still_level_line, tube
     return warnings
 
 
-def build_sorted_geometry(state: Dict[str, Point]) -> Tuple[Tuple[Point, Point], Tuple[Point, Point], Tuple[Point, Point], Tuple[Point, Point]]:
+def build_sorted_geometry(
+    state: Dict[str, Point],
+    still_level_mode: str,
+) -> Tuple[
+    Tuple[Point, Point],
+    Tuple[Point, Point],
+    Tuple[Point, Point],
+    Tuple[Point, Point],
+    Optional[Tuple[Point, Point]],
+    Optional[Tuple[Point, Point]],
+]:
     left_wall_line = sort_line_by_y(state["left_wall_top"], state["left_wall_bottom"])
     right_wall_line = sort_line_by_y(state["right_wall_top"], state["right_wall_bottom"])
-    still_level_line = sort_line_by_x(state["still_left"], state["still_right"])
     tube_axis_line = sort_line_by_y(state["axis_top"], state["axis_bottom"])
+    still_level_front_line: Optional[Tuple[Point, Point]] = None
+    still_level_back_line: Optional[Tuple[Point, Point]] = None
+
+    if still_level_mode == "front_back_midpoint":
+        still_level_front_line = sort_line_by_x(state["still_front_left"], state["still_front_right"])
+        still_level_back_line = sort_line_by_x(state["still_back_left"], state["still_back_right"])
+        still_level_line = sort_line_by_x(
+            midpoint_point(still_level_front_line[0], still_level_back_line[0]),
+            midpoint_point(still_level_front_line[1], still_level_back_line[1]),
+        )
+    else:
+        still_level_line = sort_line_by_x(state["still_left"], state["still_right"])
 
     if avg_x(list(left_wall_line)) > avg_x(list(right_wall_line)):
         left_wall_line, right_wall_line = right_wall_line, left_wall_line
 
-    return left_wall_line, right_wall_line, still_level_line, tube_axis_line
+    return left_wall_line, right_wall_line, still_level_line, tube_axis_line, still_level_front_line, still_level_back_line
 
 
 def line_to_roi_array(points: Sequence[Point], roi) -> np.ndarray:
@@ -277,8 +313,16 @@ def prepare_annotation(
     ruler_points_image: Sequence[Point],
     ruler_heights_mm: Sequence[float],
     max_ruler_x_spread_px: float,
+    still_level_mode: str,
 ) -> PreparedAnnotation:
-    left_wall_line, right_wall_line, still_level_line, tube_axis_line = build_sorted_geometry(state)
+    (
+        left_wall_line,
+        right_wall_line,
+        still_level_line,
+        tube_axis_line,
+        still_level_front_line,
+        still_level_back_line,
+    ) = build_sorted_geometry(state, still_level_mode)
     warnings = geometry_checks(roi, left_wall_line, right_wall_line, still_level_line, tube_axis_line)
     errors: List[str] = []
 
@@ -288,6 +332,8 @@ def prepare_annotation(
             left_wall_line=left_wall_line,
             right_wall_line=right_wall_line,
             still_level_line=still_level_line,
+            still_level_front_line=still_level_front_line,
+            still_level_back_line=still_level_back_line,
             tube_axis_line=tube_axis_line,
             ruler_points_image=list(ruler_points_image),
             ruler_points_rectified_roi=np.empty((0, 2), dtype=np.float32),
@@ -328,6 +374,8 @@ def prepare_annotation(
         left_wall_line=left_wall_line,
         right_wall_line=right_wall_line,
         still_level_line=still_level_line,
+        still_level_front_line=still_level_front_line,
+        still_level_back_line=still_level_back_line,
         tube_axis_line=tube_axis_line,
         ruler_points_image=list(ruler_points_image),
         ruler_points_rectified_roi=ruler_points_rectified,
@@ -344,6 +392,7 @@ def write_yaml(
     prepared: PreparedAnnotation,
     ruler_heights_mm: Sequence[float],
     physical_ruler_zero_mm: float,
+    still_level_mode: str,
 ):
     x, y, _w, _h = roi
     left_x = int(round(avg_x(list(prepared.left_wall_line)) - x))
@@ -397,6 +446,7 @@ def write_yaml(
             "mapping_coordinate_frame": "rectified_roi",
             "x_usage": "record_only",
             "ruler_click_semantics": "line_center",
+            "height_zero_annotation_mode": str(still_level_mode),
             "physical_ruler_zero_mm": float(physical_ruler_zero_mm),
             "reference_points": height_mapping_reference_points,
         },
@@ -408,6 +458,11 @@ def write_yaml(
             "warnings": list(prepared.warnings),
         },
     }
+
+    if prepared.still_level_front_line is not None:
+        data["geometry_roi"]["still_level_front_line"] = rel_line(prepared.still_level_front_line, roi)
+    if prepared.still_level_back_line is not None:
+        data["geometry_roi"]["still_level_back_line"] = rel_line(prepared.still_level_back_line, roi)
 
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as stream:
@@ -446,31 +501,61 @@ def main():
         "right_wall_bottom": None,
         "still_left": None,
         "still_right": None,
+        "still_front_left": None,
+        "still_front_right": None,
+        "still_back_left": None,
+        "still_back_right": None,
         "axis_top": None,
         "axis_bottom": None,
     }
     ruler_points_image: List[Point] = []
 
-    order = [
-        "left_wall_top",
-        "left_wall_bottom",
-        "right_wall_top",
-        "right_wall_bottom",
-        "still_left",
-        "still_right",
-        "axis_top",
-        "axis_bottom",
-    ]
-    labels = {
-        "left_wall_top": "Step 1: click LEFT inner wall near top",
-        "left_wall_bottom": "Step 2: click LEFT inner wall near bottom",
-        "right_wall_top": "Step 3: click RIGHT inner wall near top",
-        "right_wall_bottom": "Step 4: click RIGHT inner wall near bottom",
-        "still_left": "Step 5: click LEFT point on upper visible still-liquid edge",
-        "still_right": "Step 6: click RIGHT point on upper visible still-liquid edge",
-        "axis_top": "Step 7: click tube-axis point near top center",
-        "axis_bottom": "Step 8: click tube-axis point near bottom center",
-    }
+    if args.still_level_mode == "front_back_midpoint":
+        order = [
+            "left_wall_top",
+            "left_wall_bottom",
+            "right_wall_top",
+            "right_wall_bottom",
+            "still_front_left",
+            "still_front_right",
+            "still_back_left",
+            "still_back_right",
+            "axis_top",
+            "axis_bottom",
+        ]
+        labels = {
+            "left_wall_top": "Step 1: click LEFT inner wall near top",
+            "left_wall_bottom": "Step 2: click LEFT inner wall near bottom",
+            "right_wall_top": "Step 3: click RIGHT inner wall near top",
+            "right_wall_bottom": "Step 4: click RIGHT inner wall near bottom",
+            "still_front_left": "Step 5: click LEFT point on FRONT visible still-liquid edge",
+            "still_front_right": "Step 6: click RIGHT point on FRONT visible still-liquid edge",
+            "still_back_left": "Step 7: click LEFT point on BACK visible still-liquid edge",
+            "still_back_right": "Step 8: click RIGHT point on BACK visible still-liquid edge",
+            "axis_top": "Step 9: click tube-axis point near top center",
+            "axis_bottom": "Step 10: click tube-axis point near bottom center",
+        }
+    else:
+        order = [
+            "left_wall_top",
+            "left_wall_bottom",
+            "right_wall_top",
+            "right_wall_bottom",
+            "still_left",
+            "still_right",
+            "axis_top",
+            "axis_bottom",
+        ]
+        labels = {
+            "left_wall_top": "Step 1: click LEFT inner wall near top",
+            "left_wall_bottom": "Step 2: click LEFT inner wall near bottom",
+            "right_wall_top": "Step 3: click RIGHT inner wall near top",
+            "right_wall_bottom": "Step 4: click RIGHT inner wall near bottom",
+            "still_left": "Step 5: click LEFT point on visible still-liquid edge",
+            "still_right": "Step 6: click RIGHT point on visible still-liquid edge",
+            "axis_top": "Step 7: click tube-axis point near top center",
+            "axis_bottom": "Step 8: click tube-axis point near bottom center",
+        }
 
     pending_warnings: List[str] = []
     pending_errors: List[str] = []
@@ -497,7 +582,15 @@ def main():
 
         draw_line(canvas, state, "left_wall_top", "left_wall_bottom", (255, 0, 0), 2)
         draw_line(canvas, state, "right_wall_top", "right_wall_bottom", (0, 128, 255), 2)
-        draw_line(canvas, state, "still_left", "still_right", (0, 255, 0), 2)
+        if args.still_level_mode == "front_back_midpoint":
+            draw_line(canvas, state, "still_front_left", "still_front_right", (0, 200, 0), 1)
+            draw_line(canvas, state, "still_back_left", "still_back_right", (0, 255, 255), 1)
+            if line_complete(state, "still_front_left", "still_front_right") and line_complete(state, "still_back_left", "still_back_right"):
+                mid_left = midpoint_point(state["still_front_left"], state["still_back_left"])
+                mid_right = midpoint_point(state["still_front_right"], state["still_back_right"])
+                cv2.line(canvas, (mid_left.x, mid_left.y), (mid_right.x, mid_right.y), (0, 255, 0), 2)
+        else:
+            draw_line(canvas, state, "still_left", "still_right", (0, 255, 0), 2)
         draw_line(canvas, state, "axis_top", "axis_bottom", (255, 0, 255), 2)
 
         point_colors = {
@@ -507,6 +600,10 @@ def main():
             "right_wall_bottom": (0, 128, 255),
             "still_left": (0, 255, 0),
             "still_right": (0, 255, 0),
+            "still_front_left": (0, 200, 0),
+            "still_front_right": (0, 200, 0),
+            "still_back_left": (0, 255, 255),
+            "still_back_right": (0, 255, 255),
             "axis_top": (255, 0, 255),
             "axis_bottom": (255, 0, 255),
         }
@@ -534,12 +631,17 @@ def main():
             prompt = labels[step[1]]
         else:
             height_mm = args.ruler_heights_mm[step[1]]
-            prompt = f"Step {9 + step[1]}: click ruler point for {format_height(height_mm)} (line center)"
+            prompt = f"Step {len(order) + 1 + step[1]}: click ruler point for {format_height(height_mm)} (line center)"
         cv2.putText(canvas, prompt, (20, 62), cv2.FONT_HERSHEY_SIMPLEX, 0.56, (0, 255, 0), 2)
 
         info_lines = [
             "Geometry clicks must stay inside ROI. Ruler points may be outside ROI.",
             "Ruler heights come from --ruler-heights-mm; click points strictly in that order.",
+            (
+                "0 mm mode: click FRONT/BACK visible still-liquid lines; script uses their midpoint."
+                if args.still_level_mode == "front_back_midpoint"
+                else "0 mm mode: click one visible still-liquid line."
+            ),
             "v1 mapping uses rectified ROI y only. x is recorded for consistency checks only.",
             "Keys: Enter=validate/save, u=undo last click, r=reset all, q/Esc=quit",
         ]
@@ -655,6 +757,7 @@ def main():
                 ruler_points_image=ruler_points_image,
                 ruler_heights_mm=args.ruler_heights_mm,
                 max_ruler_x_spread_px=args.max_ruler_x_spread_px,
+                still_level_mode=args.still_level_mode,
             )
 
             if prepared.errors:
@@ -687,6 +790,7 @@ def main():
         ruler_points_image=ruler_points_image,
         ruler_heights_mm=args.ruler_heights_mm,
         max_ruler_x_spread_px=args.max_ruler_x_spread_px,
+        still_level_mode=args.still_level_mode,
     )
     if prepared.errors:
         print("[ERROR] annotation checks failed before saving.", file=sys.stderr)
@@ -704,6 +808,7 @@ def main():
         prepared,
         args.ruler_heights_mm,
         args.physical_ruler_zero_mm,
+        args.still_level_mode,
     )
 
     output_image.parent.mkdir(parents=True, exist_ok=True)

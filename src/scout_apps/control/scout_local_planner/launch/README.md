@@ -244,3 +244,118 @@ roslaunch scout_local_planner slosh_experiment.launch \
 - 如果你要录 bag、做 `Q=0/5/10` 对比，直接用 `slosh_experiment.launch`，不要混用 `test_mpc*.launch`。
 - `test_mpc_sim.launch` 当前默认 `Q_slosh=5.0`，这更像“带一定 anti-slosh 倾向的仿真默认入口”，不是严格的消融基线。
 - 如果要验证阶段 7，优先只切换 `slosh_use_imu_*` 和 `slosh_imu_topic`，不要同时再改一组 governor 参数。
+
+## 固定全局路径重放实验
+
+如果你要做更严格的 `Q0/Q5` 对照，推荐把“上游实时规划”和“局部控制输入”分开：
+
+1. 第一次先用实时规划拿到一条 `global_path`
+2. 把这条路径锁存到文件
+3. 让机器人回到这条路径的起点姿态
+4. 再让 `scout_local_planner` 只吃固定路径重放话题
+
+推荐不要让固定路径脚本和上游全局规划器同时往同一个 `/scout/global_path` 发消息。
+更稳的做法是：
+
+- 上游实时规划仍然发：
+  - `/scout/global_path`
+- 固定路径脚本改发：
+  - `/scout/global_path_fixed`
+- `slosh_experiment.launch` 改为：
+  - `global_path_topic:=/scout/global_path_fixed`
+
+### 1. 锁存第一次实时规划路径
+
+先启动上游全局规划链，等它第一次生成目标路径后，运行：
+
+```bash
+rosrun scout_local_planner fixed_global_path_runner.py \
+  --mode capture \
+  --input-topic /scout/global_path \
+  --path-file /tmp/fixed_path_run1.json
+```
+
+这一步只做一件事：
+
+- 收到第一条非空 `nav_msgs/Path`
+- 保存成固定路径文件
+
+### 2. 回到固定路径起点
+
+固定路径文件保存后，建议把机器人重新放回或导航回这条路径的起点姿态。
+
+如果你只是想快速把起点 pose 发出去，可以直接用：
+
+```bash
+rosrun scout_local_planner fixed_global_path_runner.py \
+  --mode goal_only \
+  --path-file /tmp/fixed_path_run1.json \
+  --publish-start-goal \
+  --goal-topic /scout/goal
+```
+
+但要注意：
+
+- `--publish-start-goal` 只是辅助动作
+- 真正“去起点”是否生效，取决于当时是否还有 live planner 在消费 `/scout/goal` 和实时 `/scout/global_path`
+
+更稳的做法仍然是：
+
+- 人工把车放回起点
+- 或在 live-path 阶段先完成回起点，再切到 fixed-path 实验
+
+### 3. 用固定路径做 `Q0/Q5` 对照
+
+Q0 基线：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path_fixed \
+  Q_slosh:=0 \
+  enable_slosh_box_constraint:=false \
+  slosh_speed_governor_enable:=false
+```
+
+Q5 实验：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path_fixed \
+  Q_slosh:=5 \
+  enable_slosh_box_constraint:=false \
+  slosh_speed_governor_enable:=false
+```
+
+然后在每次正式起跑前运行固定路径重放：
+
+```bash
+rosrun scout_local_planner fixed_global_path_runner.py \
+  --mode replay \
+  --path-file /tmp/fixed_path_run1.json \
+  --output-topic /scout/global_path_fixed \
+  --base-frame base_link \
+  --start-pos-tol 0.05 \
+  --start-yaw-tol 0.10 \
+  --start-hold-sec 0.5 \
+  --publish-rate 2.0
+```
+
+这个脚本会：
+
+- 读取固定路径文件
+- 检查机器人是否已经回到该路径起点附近
+- 只有在起点位置和朝向都满足阈值后，才开始持续重放固定路径
+
+### 4. 当前最推荐的实验口径
+
+如果你要先证明“纯 `Q_slosh` 是否有效”，建议第一轮只改：
+
+- `Q_slosh`
+
+先不要同时改：
+
+- `enable_slosh_box_constraint`
+- `slosh_speed_governor_enable`
+- `slosh_use_imu_lateral_accel`
+
+否则变量太多，后面的因果解释会重新变脏。
