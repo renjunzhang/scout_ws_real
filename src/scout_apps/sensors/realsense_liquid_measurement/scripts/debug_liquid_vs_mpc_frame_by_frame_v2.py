@@ -307,16 +307,20 @@ def draw_zero_reference_on_full_photo(
     cv2.line(photo, p0, p1, (0, 255, 255), 2, cv2.LINE_AA)
 
 
-def load_human_labels(path: Path) -> Dict[int, Optional[float]]:
+def load_human_labels(path: Path) -> Dict[int, Dict[str, Optional[float]]]:
     if not path.exists():
         return {}
-    labels = {}
+    labels: Dict[int, Dict[str, Optional[float]]] = {}
     with path.open("r", newline="", encoding="utf-8") as handle:
         reader = csv.DictReader(handle)
         for row in reader:
             frame_index = int(row["frame_index"])
-            value = row.get("human_height_mm", "").strip()
-            labels[frame_index] = None if value == "" else float(value)
+            height_raw = row.get("human_height_mm", "").strip()
+            peak_raw = row.get("human_peak_mm", "").strip()
+            labels[frame_index] = {
+                "human_height_mm": None if height_raw == "" else float(height_raw),
+                "human_peak_mm": None if peak_raw == "" else float(peak_raw),
+            }
     return labels
 
 
@@ -329,6 +333,7 @@ def write_human_labels_csv(path: Path, records: List[Dict]):
                 "stamp",
                 "relative_time_s",
                 "human_height_mm",
+                "human_peak_mm",
                 "center_rel_mm_v2",
                 "peak_rel_mm_v2",
                 "slosh_height_mm",
@@ -336,15 +341,17 @@ def write_human_labels_csv(path: Path, records: List[Dict]):
             ]
         )
         for record in records:
-            value = record.get("human_height_mm")
-            if value is None:
+            height_value = record.get("human_height_mm")
+            peak_value = record.get("human_peak_mm")
+            if height_value is None and peak_value is None:
                 continue
             writer.writerow(
                 [
                     record["frame_index"],
                     f"{record['stamp']:.9f}",
                     f"{record['relative_time_s']:.9f}",
-                    f"{float(value):.6f}",
+                    "" if height_value is None else f"{float(height_value):.6f}",
+                    "" if peak_value is None else f"{float(peak_value):.6f}",
                     "" if record.get("center_rel_mm_v2") is None else f"{float(record['center_rel_mm_v2']):.6f}",
                     "" if record.get("peak_rel_mm_v2") is None else f"{float(record['peak_rel_mm_v2']):.6f}",
                     "" if record.get("slosh_height_mm") is None else f"{float(record['slosh_height_mm']):.6f}",
@@ -378,6 +385,7 @@ def write_session_csv(path: Path, records: List[Dict]):
         "slosh_height_mm",
         "slosh_pred_mm",
         "human_height_mm",
+        "human_peak_mm",
         "cmd_vel_linear_x",
         "cmd_vel_angular_z",
         "imu_ax",
@@ -414,6 +422,7 @@ def describe_record(record: Dict) -> str:
         f"center_rel_mm_v2: {record.get('center_rel_mm_v2')}",
         f"peak_rel_mm_v2: {record.get('peak_rel_mm_v2')}",
         f"human_height_mm: {record.get('human_height_mm')}",
+        f"human_peak_mm: {record.get('human_peak_mm')}",
         f"/slosh/height [mm]: {record.get('slosh_height_mm')}",
         f"/slosh/height_pred_max [mm]: {record.get('slosh_pred_mm')}",
         f"fit_rms_px_v2: {record.get('fit_rms_px_v2')}",
@@ -454,13 +463,14 @@ def draw_history_plot(
 
     center_mm = [record.get("center_rel_mm_v2") for record in records]
     peak_mm = [record.get("peak_rel_mm_v2") for record in records]
-    human_mm = [record.get("human_height_mm") for record in records]
+    human_center_mm = [record.get("human_height_mm") for record in records]
+    human_peak_mm = [record.get("human_peak_mm") for record in records]
     mpc_mm = [record.get("slosh_height_mm") for record in records]
     pred_mm = [record.get("slosh_pred_mm") for record in records]
 
     finite_values = [
         float(value)
-        for series in (center_mm, peak_mm, human_mm, mpc_mm, pred_mm)
+        for series in (center_mm, peak_mm, human_center_mm, human_peak_mm, mpc_mm, pred_mm)
         for value in series
         if value is not None and math.isfinite(value)
     ]
@@ -495,13 +505,14 @@ def draw_history_plot(
     to_points(mpc_mm, (64, 180, 255), thick=2)
     to_points(peak_mm, (196, 128, 255), thick=1)
     to_points(pred_mm, (96, 96, 255), thick=1)
-    to_points(human_mm, (0, 220, 120), scatter=True)
+    to_points(human_center_mm, (0, 220, 120), scatter=True)
+    to_points(human_peak_mm, (0, 180, 255), scatter=True)
 
     cursor_x = plot_x + int(round((cursor_idx / float(x_span)) * (plot_w - 1)))
     cv2.line(canvas, (cursor_x, plot_y), (cursor_x, plot_y + plot_h - 1), (0, 255, 255), 1)
     cv2.putText(
         canvas,
-        "history: center(main) / slosh / peak(diag) / pred / human",
+        "history: center(main) / slosh / peak(diag) / pred / human-center / human-peak",
         (plot_x + 6, plot_y + 18),
         cv2.FONT_HERSHEY_SIMPLEX,
         0.45,
@@ -511,24 +522,33 @@ def draw_history_plot(
     )
 
 
-def draw_input_box(canvas: np.ndarray, origin: Tuple[int, int], width: int, current_value, input_mode: bool, input_buffer: str):
+def draw_input_box(
+    canvas: np.ndarray,
+    origin: Tuple[int, int],
+    width: int,
+    current_value,
+    input_mode: bool,
+    input_buffer: str,
+    title_base: str,
+    active_hint: str,
+):
     x0, y0 = origin
     box_h = 56
     cv2.rectangle(canvas, (x0, y0), (x0 + width - 1, y0 + box_h - 1), (80, 80, 80), 1)
     if input_mode:
         cv2.rectangle(canvas, (x0 + 1, y0 + 1), (x0 + width - 2, y0 + box_h - 2), (32, 48, 32), -1)
-        title = "Human Height Input [editing]"
+        title = f"{title_base} [editing]"
         body = input_buffer if input_buffer else "_"
         hint = "type number in mm, Enter save, Backspace edit, Esc cancel"
         title_color = (120, 255, 120)
     else:
         cv2.rectangle(canvas, (x0 + 1, y0 + 1), (x0 + width - 2, y0 + box_h - 2), (24, 24, 24), -1)
-        title = "Human Height Input"
+        title = title_base
         if current_value is None:
             body = "unlabeled"
         else:
             body = f"{float(current_value):.3f} mm"
-        hint = "press i to edit, x to clear current label"
+        hint = active_hint
         title_color = (220, 220, 220)
     cv2.putText(canvas, title, (x0 + 8, y0 + 18), cv2.FONT_HERSHEY_SIMPLEX, 0.5, title_color, 1, cv2.LINE_AA)
     cv2.putText(canvas, body, (x0 + 8, y0 + 38), cv2.FONT_HERSHEY_SIMPLEX, 0.68, (255, 255, 255), 1, cv2.LINE_AA)
@@ -545,9 +565,9 @@ def compose_view(
     photo_width: int,
     roi_width: int,
     history_window: int,
-    input_mode: bool,
+    input_target: Optional[str],
     input_buffer: str,
-) -> Tuple[np.ndarray, Tuple[int, int, int, int]]:
+) -> Tuple[np.ndarray, Dict[str, Tuple[int, int, int, int]]]:
     del history_window
 
     photo_show = resize_to_width(photo, photo_width)
@@ -558,11 +578,14 @@ def compose_view(
     slosh_height = finite_float(record.get("slosh_height_mm"))
     slosh_pred = finite_float(record.get("slosh_pred_mm"))
     human_height = finite_float(record.get("human_height_mm"))
+    human_peak = finite_float(record.get("human_peak_mm"))
 
     err_center_height = None if center_mm is None or slosh_height is None else center_mm - slosh_height
     err_peak_pred = None if peak_mm is None or slosh_pred is None else peak_mm - slosh_pred
     err_human_center = None if human_height is None or center_mm is None else human_height - center_mm
     err_human_slosh = None if human_height is None or slosh_height is None else human_height - slosh_height
+    err_human_peak_diag = None if human_peak is None or peak_mm is None else human_peak - peak_mm
+    err_human_peak_slosh = None if human_peak is None or slosh_height is None else human_peak - slosh_height
 
     lines = [
         f"cache_idx={cursor_idx} frame={record['frame_index']} rel_t={format_value(record['relative_time_s'], 2)}s",
@@ -571,16 +594,19 @@ def compose_view(
         f"RS visual peak={format_value(peak_mm, 3)} mm src={record.get('peak_source_v2', 'n/a')}",
         f"/slosh/height={format_value(slosh_height, 3)} mm",
         f"/slosh/height_pred_max={format_value(slosh_pred, 3)} mm",
-        f"human label={format_value(human_height, 3)} mm",
+        f"human center={format_value(human_height, 3)} mm",
+        f"human peak={format_value(human_peak, 3)} mm",
         f"err center-vs-height={format_value(err_center_height, 3)} mm",
         f"err peak-vs-pred={format_value(err_peak_pred, 3)} mm",
         f"err human-center={format_value(err_human_center, 3)} mm",
-        f"err human-slosh={format_value(err_human_slosh, 3)} mm",
+        f"err human-center-vs-slosh={format_value(err_human_slosh, 3)} mm",
+        f"err human-peak-vs-peak={format_value(err_human_peak_diag, 3)} mm",
+        f"err human-peak-vs-slosh={format_value(err_human_peak_slosh, 3)} mm",
         f"cmd_vx={format_value(record.get('cmd_vel_linear_x'), 3)}  cmd_wz={format_value(record.get('cmd_vel_angular_z'), 3)}",
         f"imu_ax={format_value(record.get('imu_ax'), 3)}  imu_ay={format_value(record.get('imu_ay'), 3)}",
         f"fit_rms={format_value(record.get('fit_rms_px_v2'), 3)}  peak_local_rms={format_value(record.get('peak_local_rms_px_v2'), 3)}",
         f"Lband={format_value(record.get('left_band_support_ratio_v2'), 2)}  Rband={format_value(record.get('right_band_support_ratio_v2'), 2)}",
-        f"keys: a/d +/-{SMALL_STEP_FRAMES}, w/s +/-10, e/z +/-50, g jump, i label, x clear, h help, q quit",
+        f"keys: a/d +/-{SMALL_STEP_FRAMES}, w/s +/-10, e/z +/-50, g jump, i center, p peak, x/c clear, h help, q quit",
     ]
 
     panel_w = max(roi_show.shape[1], 620)
@@ -615,14 +641,27 @@ def compose_view(
 
     overlay_w = max(260, min(photo_show.shape[1] - 24, 420))
     overlay_x = 12
-    overlay_y = max(12, photo_show.shape[0] - 72)
-    overlay_rect = draw_input_box(
+    peak_overlay_y = max(12, photo_show.shape[0] - 72)
+    center_overlay_y = max(12, peak_overlay_y - 64)
+    center_rect = draw_input_box(
         canvas,
-        (overlay_x, overlay_y),
+        (overlay_x, center_overlay_y),
         overlay_w,
         human_height,
-        input_mode,
+        input_target == "human_height_mm",
         input_buffer,
+        "Human Center Input",
+        "press i to edit, x to clear center label",
+    )
+    peak_rect = draw_input_box(
+        canvas,
+        (overlay_x, peak_overlay_y),
+        overlay_w,
+        human_peak,
+        input_target == "human_peak_mm",
+        input_buffer,
+        "Human Peak Input",
+        "press p to edit, c to clear peak label",
     )
 
     panel_y = roi_show.shape[0]
@@ -632,7 +671,7 @@ def compose_view(
     history_y = panel_y + 26 + len(lines) * 22 + 12
     history_h = max(min_history_h, canvas_h - history_y - 16)
     draw_history_plot(canvas, (right_x + 10, history_y), (panel_w - 20, history_h), records, cursor_idx)
-    return canvas, overlay_rect
+    return canvas, {"human_height_mm": center_rect, "human_peak_mm": peak_rect}
 
 
 def build_session(args, out_dir: Path) -> Dict:
@@ -772,7 +811,8 @@ def build_session(args, out_dir: Path) -> Dict:
                 "cmd_vel_angular_z": interpolate_value(stamp_sec, auxiliary["cmd_vel_t"], auxiliary["cmd_vel_angular_z"]),
                 "imu_ax": interpolate_value(stamp_sec, auxiliary["imu_t"], auxiliary["imu_ax"]),
                 "imu_ay": interpolate_value(stamp_sec, auxiliary["imu_t"], auxiliary["imu_ay"]),
-                "human_height_mm": human_labels.get(int(image_counter)),
+                "human_height_mm": human_labels.get(int(image_counter), {}).get("human_height_mm"),
+                "human_peak_mm": human_labels.get(int(image_counter), {}).get("human_peak_mm"),
             }
 
             full_photo = image.copy()
@@ -816,8 +856,8 @@ def load_session(out_dir: Path) -> Dict:
         return json.load(handle)
 
 
-def save_human_label(out_dir: Path, manifest: Dict, idx: int, value: Optional[float]):
-    manifest["records"][idx]["human_height_mm"] = None if value is None else float(value)
+def save_manual_label(out_dir: Path, manifest: Dict, idx: int, field: str, value: Optional[float]):
+    manifest["records"][idx][field] = None if value is None else float(value)
     persist_session(out_dir, manifest)
 
 
@@ -832,29 +872,31 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
     idx = int(np.clip(args.start_index, 0, len(records) - 1))
     state = {
         "idx": idx,
-        "input_mode": False,
+        "input_target": None,
         "input_buffer": "",
-        "overlay_rect_display": None,
+        "overlay_rect_display": {},
     }
 
     def on_trackbar(pos):
         state["idx"] = int(np.clip(pos, 0, len(records) - 1))
 
-    def begin_edit_current():
+    def begin_edit_current(field: str):
         current_record = records[int(np.clip(state["idx"], 0, len(records) - 1))]
-        current = current_record.get("human_height_mm")
-        state["input_mode"] = True
+        current = current_record.get(field)
+        state["input_target"] = field
         state["input_buffer"] = "" if current is None else f"{float(current):.3f}"
 
     def on_mouse(event, x_pos, y_pos, _flags, _userdata):
         if event != cv2.EVENT_LBUTTONDOWN:
             return
-        rect = state.get("overlay_rect_display")
-        if rect is None:
+        rects = state.get("overlay_rect_display") or {}
+        if not rects:
             return
-        rect_x, rect_y, rect_w, rect_h = rect
-        if rect_x <= x_pos <= rect_x + rect_w and rect_y <= y_pos <= rect_y + rect_h:
-            begin_edit_current()
+        for field, rect in rects.items():
+            rect_x, rect_y, rect_w, rect_h = rect
+            if rect_x <= x_pos <= rect_x + rect_w and rect_y <= y_pos <= rect_y + rect_h:
+                begin_edit_current(field)
+                break
 
     cv2.createTrackbar(trackbar_name, WINDOW_NAME, idx, trackbar_max, on_trackbar)
     cv2.setMouseCallback(WINDOW_NAME, on_mouse)
@@ -876,18 +918,21 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
             args.photo_width,
             args.roi_width,
             args.history_window,
-            bool(state["input_mode"]),
+            state["input_target"],
             str(state["input_buffer"]),
         )
         display = resize_to_fit(canvas, args.window_max_width, args.window_max_height)
         scale_x = display.shape[1] / float(canvas.shape[1])
         scale_y = display.shape[0] / float(canvas.shape[0])
-        state["overlay_rect_display"] = (
-            int(round(overlay_rect_canvas[0] * scale_x)),
-            int(round(overlay_rect_canvas[1] * scale_y)),
-            int(round(overlay_rect_canvas[2] * scale_x)),
-            int(round(overlay_rect_canvas[3] * scale_y)),
-        )
+        state["overlay_rect_display"] = {
+            field: (
+                int(round(rect[0] * scale_x)),
+                int(round(rect[1] * scale_y)),
+                int(round(rect[2] * scale_x)),
+                int(round(rect[3] * scale_y)),
+            )
+            for field, rect in overlay_rect_canvas.items()
+        }
         if show_help:
             help_lines = [
                 "click viewer once to focus the window",
@@ -896,8 +941,9 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
                 "w/s: -10 / +10 frames",
                 "z/e: -50 / +50 frames",
                 "g: jump to index",
-                "i or click box: edit human height label [mm]",
-                "x: clear human label",
+                "i or click box: edit human center label [mm]",
+                "p or click box: edit human peak label [mm]",
+                "x: clear center label, c: clear peak label",
                 "h: toggle help",
                 "q or Esc: quit",
             ]
@@ -909,17 +955,17 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
         key = cv2.waitKeyEx(0)
         ascii_key = normalized_ascii_key(key)
 
-        if state["input_mode"]:
+        if state["input_target"] is not None:
             if key in (27,) or ascii_key == 27:
-                state["input_mode"] = False
+                state["input_target"] = None
                 state["input_buffer"] = ""
                 continue
             if key in (13, 10) or ascii_key in (13, 10):
                 raw = str(state["input_buffer"]).strip()
                 value = None if raw == "" else float(raw)
-                save_human_label(out_dir, manifest, idx, value)
+                save_manual_label(out_dir, manifest, idx, str(state["input_target"]), value)
                 records = manifest.get("records", records)
-                state["input_mode"] = False
+                state["input_target"] = None
                 state["input_buffer"] = ""
                 continue
             if key in (8, 127) or ascii_key in (8, 127):
@@ -936,10 +982,17 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
             show_help = not show_help
             continue
         if key_matches_char(key, "i", "I"):
-            begin_edit_current()
+            begin_edit_current("human_height_mm")
+            continue
+        if key_matches_char(key, "p", "P"):
+            begin_edit_current("human_peak_mm")
             continue
         if key_matches_char(key, "x", "X"):
-            save_human_label(out_dir, manifest, idx, None)
+            save_manual_label(out_dir, manifest, idx, "human_height_mm", None)
+            records = manifest.get("records", records)
+            continue
+        if key_matches_char(key, "c", "C"):
+            save_manual_label(out_dir, manifest, idx, "human_peak_mm", None)
             records = manifest.get("records", records)
             continue
         if key_matches_char(key, "d", "D", " ") or key in (83, 2555904):

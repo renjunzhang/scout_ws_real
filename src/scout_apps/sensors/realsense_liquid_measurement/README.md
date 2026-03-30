@@ -4,12 +4,18 @@
 
 ## 当前核心目标
 
-**当前主目标：验证 `/slosh/height` 能否估计“当前时刻的主液面高度”。**
+**最终业务目标：证明在同任务、同路径、可比激励下，`Q=5` 时液体晃动比 `Q=0` 更轻微。**
 
-- 主对比口径固定为：
+**当前主目标：验证 `/slosh/height` 能否估计“当前时刻的液面峰值高度（MSH）”。**
+
+- 当前必须区分两个物理量：
+  - `/slosh/height`：模型当前时刻的总最大液面抬升，语义更接近 `MSH`
+  - `height_center_rel_mm_bias_corrected_v2`：图像中央主液面高度，不是峰值真值
+- 当前主对比口径暂时仍保留：
   - `height_center_rel_mm_bias_corrected_v2`
-- 当前不把 `peak` 当主验证目标：
-  - `height_peak_rel_mm_v2` 只保留诊断意义
+- 但它现在只应视为：
+  - 过渡性的工程代理
+  - 不是 `/slosh/height` 的严格同量真值
 - 当前所有 `0325` 主结论，优先基于：
   - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/`
 
@@ -27,18 +33,27 @@
   - `Q5_test3`: `raw_MAE = 0.063274 mm`, `raw_corr = 0.430`, `reportable = 297/1319`
   - `Q0_test1`: `raw_MAE = 0.189001 mm`, `raw_corr = 0.420`, `reportable = 181/1241`
 - 当前判断
-  - `/slosh/height` 已经可以作为“当前时刻主液面高度”的工程估计量使用
-  - 但它还不能当绝对真值标准
+  - 从代码语义上，`/slosh/height` 更接近“当前时刻液面峰值高度（MSH）”
+  - 因此此前所有 `center vs /slosh/height` 结论，都应理解为：
+    - 工程近似验证
+    - 不是严格的同量对比
   - 当前更合理的口径是：
     - 主判断指标：`/slosh/height`
-    - 离线对照基准：`height_center_rel_mm_bias_corrected_v2`
-    - 辅助检查：坏点段复核、少量人工目检
+    - 过渡性视觉代理：`height_center_rel_mm_bias_corrected_v2`
+    - 后续严格真值：人工或更稳健的视觉峰值口径
 - 当前剩余问题
   - `Q5_test1` 仍有少量局部时段更像模型侧低估
   - 视觉 `center` 也仍存在少量近静态异常帧，不能把所有误差都归到模型
 - 当前限制
   - `Q0_test1` 与 `Q5_test1/2/3` 的路径和激励并不严格可比
   - 因此不能仅凭这批 bag 的幅值差，直接下结论说 `Q=5` 一定比 `Q=0` 更好
+  - 对 `0330/Q0_test2 vs Q5_test2` 而言，当前最新证据是：
+    - `/slosh/height` 的主活动段幅值 `Q5 < Q0`
+    - 且 `/local_path` 平滑性没有出现“Q5 明显更平滑”的解释性差异
+    - 因此这批数据对“Q=5 抑制液体晃动”给出了正向但仍非最终的证据
+  - 当前还缺：
+    - 少量 `human_peak_mm` 人工峰值标签
+    - 用来对 `/slosh/height ~= 当前 MSH` 做严格验证
 
 ## 目录
 
@@ -50,6 +65,7 @@
   - [当前代码流程图](#当前代码流程图)
   - [RealSense ROS 编译脚本](#realsense-ros-编译脚本)
   - [当前推荐用法](#当前推荐用法)
+  - [结果分析教程](#结果分析教程)
   - [第二步：手动标定 ROI 和参考几何](#第二步手动标定-roi-和参考几何)
     - [模式 A：没有背景标尺，先打通通路](#模式-a没有背景标尺先打通通路)
     - [模式 B：有背景标尺时再做毫米标定](#模式-b有背景标尺时再做毫米标定)
@@ -81,6 +97,7 @@ realsense_liquid_measurement/
     ├── analyze_human_labels_vs_realsense_v2.py
     ├── analyze_q5_phase_and_outliers_0325.py
     ├── analyze_q5_test1_segment_inputs_0325.py
+    ├── analyze_paired_q0_q5_0330.py
     ├── annotate_height_ruler_v2.py
     ├── build_realsense_ros_local.sh
     ├── calibrate_liquid_roi.py
@@ -117,7 +134,7 @@ realsense_liquid_measurement/
 
 ## 脚本用途总览
 
-按当前实际用途，`scripts/` 下脚本可以分成 11 类。
+按当前实际用途，`scripts/` 下脚本可以分成 12 类。
 
 ### 1. 环境与 RealSense ROS 构建
 
@@ -166,7 +183,10 @@ realsense_liquid_measurement/
   - `peak` 只保留为诊断量
 - `scripts/debug_liquid_vs_mpc_frame_by_frame_v2.py`
   - 构建 v2 逐帧调试与人工标注会话
-  - 支持查看 `RS visual peak`、`/slosh/height` 和录入 `human_height_mm`
+  - 支持查看 `RS visual peak`、`/slosh/height`
+  - 支持录入：
+    - `human_height_mm`
+    - `human_peak_mm`
 
 ### 4. 人工标签质量分析
 
@@ -264,6 +284,54 @@ realsense_liquid_measurement/
   - 用于回答：
     - `/slosh/height` 局部偏低时，对应的输入激励和状态量级是什么
     - `Q5_test1` 的残余误差更像模型侧低估，还是视觉 `center` 局部偏高
+
+### 12. 0330 同路径 Q0/Q5 成对比较
+
+- `scripts/analyze_paired_q0_q5_0330.py`
+  - 面向 `0330` 批次的两对同路径 bag：
+    - `Q0_test1 vs Q5_test1`
+    - `Q0_test2 vs Q5_test2`
+  - 统一沿用上一批的静止基准和 bias，不使用 `0330/Q0_static` 重新定零位
+  - 输出：
+    - `paired_q0_q5_summary.csv/json`
+    - 每对的路径/激励/响应对比图
+    - `README.md`
+  - 用于回答：
+    - 同一路径下 `Q0/Q5` 的运动激励是否真的接近
+    - 在沿用旧静止基准的前提下，`Q0/Q5` 的 `/slosh/height` 与 `RealSense center` 相对幅值谁更大
+
+### 13. 0330 test2 分段幅值与 /local_path 平滑性深挖
+
+- `scripts/analyze_q0_q5_test2_deep_0330.py`
+  - 面向 `0330_rezero_bias` 下最可比的一对：
+    - `Q0_test2`
+    - `Q5_test2`
+  - 输出：
+    - `segment_amplitude_summary.csv`
+    - `local_path_smoothness_summary.csv`
+    - `segment_local_path_smoothness.csv`
+    - `test2_segment_amplitude.png`
+    - `test2_local_path_smoothness.png`
+    - `test2_local_path_topdown.png`
+    - `test2_odom_topdown.png`
+    - `test2_odom_kinematics.png`
+    - `README.md`
+  - 用于回答：
+    - `Q5_test2` 的更小液面响应是不是只因为 `/local_path` 更平滑
+    - 主活动段里，`Q5` 相比 `Q0` 到底小了多少
+  - 当前结论：
+    - 主活动段 `segment_01 [5.94, 15.64] s` 中：
+      - `Q5/Q0 /slosh/height p90 ratio = 0.966`
+      - `Q5/Q0 /slosh/height max ratio = 0.689`
+      - `Q5/Q0 /slosh/height area ratio = 0.704`
+    - 但 `local_path` 平滑性没有显示 `Q5` 明显更平滑：
+      - `heading_tv ratio = 0.989`
+      - `curvature_change ratio = 1.100`
+      - `shape_delta ratio = 1.004`
+    - 因此：
+      - `Q5_test2` 的更小液面响应不太像只是路径更平滑导致
+      - 这可以作为“Q=5 抑制有效”的正向证据
+      - 但还需要少量 `human_peak_mm` 标签做严格峰值验证
 
 其中 `build_realsense_ros_local.sh` 会把缺失的 RealSense 依赖包下载并解包到工作区根目录下的 `.ros_deps/` 和 `.ros_deps_cache/`。这两个目录属于本机环境缓存，不建议提交。
 
@@ -509,6 +577,152 @@ python3 /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scr
   --out-png <verify_motion_dir>/mpc_realsense_comparison_v2.png \
   --out-csv <verify_motion_dir>/mpc_realsense_aligned_v2.csv
 ```
+
+## 结果分析教程
+
+提取完成后，不建议直接盯一张曲线图下结论。当前更稳的后处理顺序是：
+
+1. 先看单包 `RealSense vs /slosh/height`
+2. 再看同路径 `Q0/Q5` 成对比较
+3. 再看 `test2` 这种主样本的分段幅值和路径平滑性
+4. 最后才做人工峰值标注，给 `/slosh/height ~= 当前 MSH` 做严格验证
+
+下面按问题来选脚本。
+
+### A. 想看单个 bag 里 `RealSense` 和 `/slosh/height` 是否同趋势
+
+用：
+- `scripts/analyze_realsense_center_vs_slosh_0325.py`
+
+它做的事：
+- 从 bag 里读 `/slosh/height`
+- 从 `liquid_height_v2.csv` 里读 `RealSense` 代理口径
+- 画单包对比图
+- 输出每包误差、偏置、相关性
+
+典型输出：
+- `<verify_root>/center_vs_slosh_analysis/*.png`
+- `<verify_root>/center_vs_slosh_analysis/center_vs_slosh_summary.csv`
+- `<verify_root>/center_vs_slosh_analysis/README.md`
+
+什么时候用：
+- 先判断某个 bag 值不值得继续深挖
+- 看当前零位/bias 是否明显不对
+
+### B. 想比较同一路径下 `Q0` 和 `Q5` 谁晃得更大
+
+用：
+- `scripts/analyze_paired_q0_q5_0330.py`
+
+它做的事：
+- 按成对 bag 比较：
+  - `Q0_test1 vs Q5_test1`
+  - `Q0_test2 vs Q5_test2`
+- 同时读：
+  - `odom`
+  - `cmd_vel`
+  - `/slosh/height`
+  - `RealSense` 代理
+- 输出路径相似度、激励量级比值、液面幅值比值
+
+典型输出：
+- `<verify_root>/paired_q0_q5_analysis/paired_q0_q5_summary.csv`
+- `<verify_root>/paired_q0_q5_analysis/*.png`
+- `<verify_root>/paired_q0_q5_analysis/README.md`
+
+什么时候用：
+- 想先回答“Q=5 有没有比 Q=0 更轻微”的业务问题
+- 但还不打算做人工真值标注
+
+当前 `0330` 的用法：
+- 旧静止基准版本：
+  - `/data/a/realsense_validation_v2/verify/0330_prev_static_ref/paired_q0_q5_analysis/`
+- 新 `0330` static 重定零位版本：
+  - `/data/a/realsense_validation_v2/verify/0330_rezero_bias/paired_q0_q5_analysis/`
+
+### C. 想证明 `Q5` 更小不是因为路径更平滑
+
+用：
+- `scripts/analyze_q0_q5_test2_deep_0330.py`
+
+它做的事：
+- 只盯当前最可比的一对：`Q0_test2 vs Q5_test2`
+- 先切出主活动段
+- 再分别输出：
+  - `slosh/visual` 分段幅值图
+  - `/local_path` 平滑性时序图
+  - `/local_path` 俯视图
+  - `odom` 实际轨迹俯视图
+  - `odom` 速度/加速度时序图
+
+典型输出：
+- `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/test2_segment_amplitude.png`
+- `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/test2_local_path_smoothness.png`
+- `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/test2_local_path_topdown.png`
+- `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/test2_odom_topdown.png`
+- `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/test2_odom_kinematics.png`
+- `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/segment_amplitude_summary.csv`
+- `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/local_path_smoothness_summary.csv`
+- `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/README.md`
+
+怎么看：
+- 先看 `test2_segment_amplitude.png`
+  - 主看 `/slosh/height`
+  - 当前视觉虚线只是代理，不是严格峰值真值
+- 再看 `test2_local_path_smoothness.png`
+  - 判断 `Q5` 是否只是路径更新更平滑
+- 再看 `test2_local_path_topdown.png` 和 `test2_odom_topdown.png`
+  - 区分规划路径和实际轨迹
+- 最后看 `test2_odom_kinematics.png`
+  - 判断 `Q0/Q5` 的实际速度、加速度是否也明显不同
+
+### D. 想复现 bag 里的 `/slosh/height` 是怎么来的
+
+用：
+- `scripts/replay_slosh_model_from_bag.py`
+
+它做的事：
+- 从 bag 里读取 `/slosh/ax_est`、`/slosh/ay_est`、`/slosh/omega_est_used`、`/slosh/alpha_est`、`/slosh/state`
+- 离线重放当前工程 slosh model
+- 可切换：
+  - `linear_engineering`
+  - `paper_nl`
+  - `both`
+
+什么时候用：
+- 判断当前 `/slosh/height` 是不是模型本身的结果
+- 比较工程模型和论文 `paper_nl` 的差异
+
+### E. 想逐帧看图，并给明天的严格验证打标签
+
+用：
+- `scripts/debug_liquid_vs_mpc_frame_by_frame_v2.py`
+
+当前两类人工标签：
+- `human_height_mm`
+  - 中央主液面高度
+- `human_peak_mm`
+  - 当前峰值高度
+
+当前建议：
+- 如果只是做业务判断，先不大规模手标
+- 如果要严格验证 `/slosh/height ~= 当前 MSH`，明天优先补 `human_peak_mm`
+
+### 当前最推荐的明日继续顺序
+
+1. 打开：
+   - `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/test2_segment_amplitude.png`
+   - `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/test2_local_path_smoothness.png`
+   - `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/test2_odom_topdown.png`
+   - `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/test2_odom_kinematics.png`
+2. 先确认：
+   - `Q5_test2` 的液面响应是否确实小于 `Q0_test2`
+   - 这种差异是否不能被“路径更平滑”解释
+3. 再打开：
+   - `/data/a/realsense_validation_v2/debug/0330/Q0_test2/`
+   - `/data/a/realsense_validation_v2/debug/0330/Q5_test2/`
+4. 小批量补 `human_peak_mm`
+5. 再做 `/slosh/height` 对人工峰值真值的严格比较
 
 ## 第二步：手动标定 ROI 和参考几何
 
@@ -757,14 +971,16 @@ python3 /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scr
    - `/slosh/height`
    - `/cmd_vel`
    - `/imu/data`
-   - 人工标签入口 `human_height_mm`
+   - 人工标签入口：
+     - `human_height_mm`
+     - `human_peak_mm`
 
 所以这条脚本本质上是在回答：
 
 - 这一帧视觉到底看到了什么
 - `center` 和 `peak` 谁更贴近真实液面
 - 这一帧视觉高度和 `/slosh/height` 差多少
-- 人眼判断高度和当前算法差多少
+- 人眼判断的 `center` 和 `peak` 分别与当前算法差多少
 
 它会缓存两类图：
 
@@ -870,12 +1086,16 @@ python3 /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scr
   - 前后跳 `50` 帧
 - `g`
   - 在终端输入要跳到的缓存索引
-- `i` 或鼠标点击 `Human Height Input`
-  - 进入人工标签编辑
+- `i` 或鼠标点击 `Human Center Input`
+  - 编辑 `human_height_mm`
+- `p` 或鼠标点击 `Human Peak Input`
+  - 编辑 `human_peak_mm`
 - `Enter`
-  - 保存当前 `human_height_mm`
+  - 保存当前正在编辑的人工标签
 - `x`
-  - 清空当前帧标签
+  - 清空当前帧 `human_height_mm`
+- `c`
+  - 清空当前帧 `human_peak_mm`
 - `q` 或 `Esc`
   - 退出或取消当前编辑
 

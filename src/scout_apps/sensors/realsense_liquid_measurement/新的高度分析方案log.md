@@ -2,11 +2,16 @@
 
 ## 当前核心目标
 
-**当前主目标：验证 `/slosh/height` 能否估计“当前时刻的主液面高度”。**
+**最终业务目标：证明在同任务、同路径、可比激励下，`Q=5` 时液体晃动比 `Q=0` 更轻微。**
 
-- 当前主观测口径：
-  - `height_center_rel_mm_bias_corrected_v2`
-- `peak` 与 `/slosh/height_pred_max` 不作为本阶段主结论口径
+**当前主目标：验证 `/slosh/height` 能否估计“当前时刻的液面峰值高度（MSH）”。**
+
+- 当前必须区分：
+  - `/slosh/height`：模型当前时刻的总最大液面抬升，语义更接近 `MSH`
+  - `height_center_rel_mm_bias_corrected_v2`：图像中央主液面高度，只是工程代理
+- `peak` 与 `/slosh/height_pred_max` 仍不作为当前主结论口径：
+  - 前者当前不够稳
+  - 后者是预测时域峰值，不是当前时刻
 - 后续所有日志结论，默认优先参考：
   - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/`
 
@@ -15,8 +20,8 @@
 - 当前最新主基线：
   - `/data/a/realsense_validation_v2/verify/0325_rezero_bias/`
 - 当前主结论：
-  - `/slosh/height` 已经可以作为“当前时刻主液面高度”的工程估计量使用
-  - 但它还不能当绝对真值标准
+  - `/slosh/height` 的物理语义更接近当前 `MSH`
+  - 现有 `center vs /slosh/height` 结论只能算工程近似，不是严格同量验证
 - 当前最能代表效果的指标：
   - `Q5_static`: `raw_MAE = 0.007837 mm`
   - `Q5_test1`: `raw_MAE = 0.093253 mm`
@@ -39,6 +44,29 @@
   - 下一步是什么
 
 ## 2026-03-25
+
+## 2026-03-30 目标口径修正
+
+### 本次修正
+
+- 重新核对论文总结、`getSloshHeight()` 和 `/slosh/height` 的代码定义
+- 结论明确：
+  - `/slosh/height` 不是“中央主液面高度”
+  - 它更接近“当前时刻总最大液面抬升”，也就是当前 `MSH` 的工程实现
+- 因此将主目标从：
+  - “验证 `/slosh/height` 能否估计当前主液面高度”
+  - 修正为：
+  - “验证 `/slosh/height` 能否估计当前时刻液面峰值高度（MSH）”
+
+### 影响
+
+- `height_center_rel_mm_bias_corrected_v2` 不再是严格主真值
+- 现有 `center vs /slosh/height` 图和指标仍保留，但应重新解释为：
+  - 工程代理验证
+  - 不是严格同量对比
+- 后续更短路径应转向：
+  - 建立更稳健的视觉峰值真值口径
+  - 再严格验证 `/slosh/height`
 
 ### 初始化
 
@@ -1395,3 +1423,207 @@
   - 但它还不能当绝对真值标准
   - `Q5_test3` 当前最好，`Q5_test1/Q5_test2` 居中，`Q0_test1` 明显更差
   - 当前不能仅凭这批 `Q0/Q5` bag 的幅值差，直接下“Q=5 必然优于 Q=0”的强结论
+
+## 2026-03-30 0330 批次沿用旧静止基准的四包初分析
+
+- 用户约束：
+  - `0330` 这批先只分析：
+    - `Q0_test1`
+    - `Q5_test1`
+    - `Q0_test2`
+    - `Q5_test2`
+  - 不允许使用 `0330/Q0_static` 重新定义零位或重估 bias
+  - 统一沿用旧静止基准：
+    - calibration: `/data/a/realsense_validation_v2/calibration/0325/scene_0325_multiscale_raw_rezero.yaml`
+    - `center_bias_correction_mm = 1.233421`
+- 新输出目录：
+  - `/data/a/realsense_validation_v2/verify/0330_prev_static_ref/`
+- 脚本改动：
+  - `scripts/analyze_realsense_center_vs_slosh_0325.py`
+    - 新增 `--labels`
+    - bag 文件名匹配逻辑增加“按 label 自身拆词”的兜底，兼容 `0330` 和 `0325` 两种命名风格
+- 四包提取结果：
+  - `Q0_test1`
+    - `reportable=57/1132`
+  - `Q5_test1`
+    - `reportable=45/793`
+  - `Q0_test2`
+    - `reportable=36/776`
+  - `Q5_test2`
+    - `reportable=29/677`
+- `center_vs_slosh` 汇总：
+  - `Q0_test1`
+    - `raw_bias_median = -0.179177 mm`
+    - `raw_MAE = 0.190127 mm`
+  - `Q5_test1`
+    - `raw_bias_median = -0.171473 mm`
+    - `raw_MAE = 0.218189 mm`
+  - `Q0_test2`
+    - `raw_bias_median = -0.128244 mm`
+    - `raw_MAE = 0.149617 mm`
+  - `Q5_test2`
+    - `raw_bias_median = -0.177680 mm`
+    - `raw_MAE = 0.182075 mm`
+- 当前判断：
+  - 这四包全部出现同向负偏，优先怀疑“跨天沿用旧静止基准”带来的系统性零位偏差
+  - 因此这批结果目前更适合做：
+    - 同批内 `Q0/Q5` 相对比较
+    - 趋势和量级观察
+  - 不适合直接拿来下绝对误差结论
+  - 在当前旧静止基准下：
+    - `Q5_test1` 没有优于 `Q0_test1`
+    - `Q5_test2` 也没有优于 `Q0_test2`
+  - 但这个结论仍然受“旧零位跨天复用”影响，不能过度解释
+
+## 2026-03-30 0330 同路径 Q0/Q5 成对比较
+
+- 新增脚本：
+  - `scripts/analyze_paired_q0_q5_0330.py`
+- 目的：
+  - 不使用 `0330/Q0_static` 重新定零位
+  - 在统一沿用旧静止基准的条件下，只比较两对“同一路径” bag：
+    - `Q0_test1 vs Q5_test1`
+    - `Q0_test2 vs Q5_test2`
+- 输出目录：
+  - `/data/a/realsense_validation_v2/verify/0330_prev_static_ref/paired_q0_q5_analysis/`
+- 核心结果：
+  - `Q0_test1 vs Q5_test1`
+    - `path_shape_mean_distance = 0.122 m`
+    - `duration_ratio = 1.428`
+    - `speed_p90_ratio = 1.325`
+    - `ay_p90_ratio = 1.433`
+    - `Q5/Q0 /slosh/height p90 ratio = 1.163`
+    - `Q5/Q0 RealSense center p90 ratio = 0.849`
+  - `Q0_test2 vs Q5_test2`
+    - `path_shape_mean_distance = 0.056 m`
+    - `duration_ratio = 1.145`
+    - `speed_p90_ratio = 1.035`
+    - `ay_p90_ratio = 1.153`
+    - `Q5/Q0 /slosh/height p90 ratio = 0.972`
+    - `Q5/Q0 RealSense center p90 ratio = 0.955`
+- 当前判断：
+  - `test2` 这对更像“同任务可比”，路径和激励都更接近
+  - 在 `test2` 上：
+    - `/slosh/height` 与 `RealSense center` 都显示 `Q5` 略小于 `Q0`
+    - 这可以作为“Q5 略优于 Q0”的弱证据
+  - `test1` 这对不够干净：
+    - 虽然路径形状还算接近，但时长、速度、`ay` 差异偏大
+    - `/slosh/height` 认为 `Q5 > Q0`
+    - `RealSense center` 认为 `Q5 < Q0`
+    - 这对不能直接拿来下稳定结论
+  - 因此：
+    - `0330` 这批里，优先参考 `test2`
+    - `test1` 目前更适合当“需继续排查激励差异”的样例
+
+## 2026-03-30 逐帧标注器新增峰值真值入口
+
+- 修改：
+  - `scripts/debug_liquid_vs_mpc_frame_by_frame_v2.py`
+- 目的：
+  - 既保留 `human_height_mm` 作为中央主液面标签
+  - 又新增 `human_peak_mm` 作为当前峰值高度标签
+  - 为后续严格验证 `/slosh/height ~= 当前 MSH` 提供人工真值入口
+- 交互更新：
+  - `i`：编辑 `human_height_mm`
+  - `p`：编辑 `human_peak_mm`
+  - `x`：清空 `human_height_mm`
+  - `c`：清空 `human_peak_mm`
+  - 也支持鼠标点击各自输入框进入编辑
+- 输出更新：
+  - `debug_session.csv/json` 现在同时保存：
+    - `human_height_mm`
+    - `human_peak_mm`
+  - `human_labels.csv` 也新增 `human_peak_mm`
+- 验证：
+  - `python3 -m py_compile scripts/debug_liquid_vs_mpc_frame_by_frame_v2.py` 通过
+
+## 2026-03-30 0330 用本批 static 重新定零位并重跑四个运动 bag
+
+- 背景：
+  - 用户明确指出：
+    - `0330` 的静止液面今天只看到一条弯 meniscus
+    - 中间高、两边低
+  - 因此不能继续机械沿用 `0325` 的零位直觉
+- 新标定：
+  - `/data/a/realsense_validation_v2/calibration/0330/scene_0330_multiscale_raw_rezero.yaml`
+- 关键处理：
+  - 先用 `Q0_static` 跑一遍提取
+  - 再从静止包估计新的 `center_bias`
+  - 得到：
+    - `center_bias_correction_mm = 0.9157025`
+- 重跑输出：
+  - `/data/a/realsense_validation_v2/verify/0330_rezero_bias/`
+- 单包结果：
+  - `Q0_test1`: `raw_bias_median = 0.361 mm`, `raw_MAE = 0.396 mm`
+  - `Q0_test2`: `raw_bias_median = 0.424 mm`, `raw_MAE = 0.386 mm`
+  - `Q5_test1`: `raw_bias_median = 0.103 mm`, `raw_MAE = 0.142 mm`
+  - `Q5_test2`: `raw_bias_median = 0.334 mm`, `raw_MAE = 0.352 mm`
+- 当前判断：
+  - `0330` 这批今天的单条弯 meniscus 会显著影响 `center` 的解释
+  - 后续如果继续拿 `center` 和 `/slosh/height` 对比，必须始终记住：
+    - `center` 只是工程代理
+    - 不是严格峰值真值
+
+## 2026-03-30 0330 test2 分段幅值与 /local_path 平滑性深挖
+
+- 新增脚本：
+  - `scripts/analyze_q0_q5_test2_deep_0330.py`
+- 目的：
+  - 针对当前最可比的一对 `Q0_test2 vs Q5_test2`
+  - 单独量化主活动段里的液面响应幅值差异
+  - 再检查 `/local_path` 是否更平滑，从而解释这种差异
+- 输出目录：
+  - `/data/a/realsense_validation_v2/verify/0330_rezero_bias/test2_deep_analysis/`
+- 主活动段：
+  - `segment_01 = [5.94, 15.64] s`
+- 分段幅值结果：
+  - `Q5/Q0 /slosh/height p90 ratio = 0.966`
+  - `Q5/Q0 /slosh/height max ratio = 0.689`
+  - `Q5/Q0 /slosh/height area ratio = 0.704`
+  - `Q5/Q0 center p90 ratio = 1.087`
+  - `Q5/Q0 center max ratio = 0.534`
+- /local_path 平滑性结果：
+  - 整包：
+    - `heading_tv_mean_deg`: `Q0 = 298.557`, `Q5 = 295.469`
+    - `curvature_change_abs_p90_mean`: `Q0 = 5.284`, `Q5 = 5.863`
+    - `shape_delta_prev_mean_m`: `Q0 = 0.0433`, `Q5 = 0.0448`
+  - 主活动段：
+    - `Q5/Q0 heading_tv ratio = 0.989`
+    - `Q5/Q0 curvature_change ratio = 1.100`
+    - `Q5/Q0 shape_delta ratio = 1.004`
+- 当前判断：
+  - `Q5_test2` 的液面响应确实小于 `Q0_test2`
+  - 但这种差异不太像是“Q5 的 local_path 更平滑”导致的
+  - 因此：
+    - `Q5` 抑制项对液体晃动更轻微这件事，当前已经有正向证据
+    - 但还不能当最终证明
+  - 还缺的最后一环是：
+    - 少量 `human_peak_mm` 标签
+    - 用来直接验证 `/slosh/height ~= 当前 MSH`
+- 明天代办：
+  - 使用：
+    - `/data/a/realsense_validation_v2/debug/0330/Q0_test2/`
+    - `/data/a/realsense_validation_v2/debug/0330/Q5_test2/`
+  - 小批量补 `human_peak_mm`
+  - 再做 `/slosh/height` 对人工峰值真值的严格比较
+
+## 2026-03-30 README 补充后处理分析教程
+
+- 修改：
+  - `README.md`
+- 新增内容：
+  - “结果分析教程”一节
+  - 按问题整理了后处理脚本的使用顺序：
+    - 单包 `RealSense vs /slosh/height`
+    - 同路径 `Q0/Q5` 成对比较
+    - `test2` 分段幅值与 `/local_path` 平滑性深挖
+    - slosh model 离线重放
+    - 逐帧人工峰值标签
+- 目的：
+  - 避免后续继续分析时依赖聊天记录回忆
+  - 让“明天继续改进”可以直接按 README 操作
+- 当前结论：
+  - `0330_rezero_bias/test2_deep_analysis/` 已经是当前最该优先看的结果目录
+  - 明天最短路径仍然是：
+    - 先确认 `Q5_test2` 的液面响应更小且不只是路径更平滑
+    - 再补少量 `human_peak_mm`

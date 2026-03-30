@@ -26,6 +26,7 @@ BAG_PATTERNS = {
     "Q0_static": ("qq0", "static"),
     "Q5_static": ("qq5", "static"),
     "Q0_test1": ("qq0", "test1"),
+    "Q0_test2": ("qq0", "test2"),
     "Q5_test1": ("qq5", "test1"),
     "Q5_test2": ("qq5", "test2"),
     "Q5_test3": ("qq5", "test3"),
@@ -61,6 +62,11 @@ def parse_args():
     parser.add_argument("--verify-root", default=str(DEFAULT_VERIFY_ROOT))
     parser.add_argument("--bag-root", default=str(DEFAULT_BAG_ROOT))
     parser.add_argument("--out-dir", required=True, help="Output directory for summary tables, plots, and README.")
+    parser.add_argument(
+        "--labels",
+        default="",
+        help="Optional comma-separated labels to analyze. Default: all known verify dirs under verify-root.",
+    )
     parser.add_argument(
         "--center-column",
         default="height_center_rel_mm_bias_corrected_v2",
@@ -139,13 +145,19 @@ def mean_or_nan(values: Iterable[float]) -> float:
 
 
 def find_bag_path(label: str, bag_root: Path) -> Path:
+    pattern_sets: List[Tuple[str, ...]] = []
     tokens = BAG_PATTERNS.get(label)
-    if tokens is None:
+    if tokens is not None:
+        pattern_sets.append(tuple(tokens))
+    fallback_tokens = tuple(part for part in label.lower().split("_") if part)
+    if fallback_tokens not in pattern_sets:
+        pattern_sets.append(fallback_tokens)
+    if not pattern_sets:
         raise RuntimeError(f"no bag pattern for {label}")
     matches = []
     for bag_path in sorted(bag_root.glob("*.bag")):
         bag_name = bag_path.name.lower()
-        if all(token in bag_name for token in tokens):
+        if any(all(token in bag_name for token in pattern_set) for pattern_set in pattern_sets):
             matches.append(bag_path)
     if not matches:
         raise RuntimeError(f"no bag matched {label} under {bag_root}")
@@ -289,11 +301,11 @@ def plot_bag(out_path: Path, label: str, raw_rows: Sequence[Dict[str, object]], 
     plt.close(fig)
 
 
-def build_readme(path: Path, summaries: Sequence[SummaryRow], outlier_rows: Sequence[Dict[str, object]]):
+def build_readme(path: Path, verify_root: Path, summaries: Sequence[SummaryRow], outlier_rows: Sequence[Dict[str, object]]):
     lines = [
         "# RealSense Center vs /slosh/height 分 bag 分析",
         "",
-        "本目录汇总 `0325` 批次中 `height_center_rel_mm_bias_corrected_v2` 对 `/slosh/height` 的按 bag 误差、偏置和坏点分析。",
+        f"本目录汇总 `{verify_root.name}` 下 `height_center_rel_mm_bias_corrected_v2` 对 `/slosh/height` 的按 bag 误差、偏置和坏点分析。",
         "",
         "主要输出：",
         "- `center_vs_slosh_summary.csv`: 每个 bag 的误差、偏置、zero-align 指标",
@@ -332,7 +344,10 @@ def main():
     out_dir = Path(args.out_dir).expanduser().resolve()
     ensure_dir(out_dir)
 
-    labels = [label for label in BAG_PATTERNS.keys() if (verify_root / label).is_dir()]
+    if args.labels.strip():
+        labels = [item.strip() for item in args.labels.split(",") if item.strip()]
+    else:
+        labels = [label for label in BAG_PATTERNS.keys() if (verify_root / label).is_dir()]
     if not labels:
         raise SystemExit(f"[ERROR] no known verify dirs under {verify_root}")
 
@@ -476,7 +491,7 @@ def main():
             indent=2,
         )
 
-    build_readme(out_dir / "README.md", summaries, outlier_rows)
+    build_readme(out_dir / "README.md", verify_root, summaries, outlier_rows)
     print(f"[OK] summary csv: {summary_csv}")
     print(f"[OK] outlier csv: {outlier_csv}")
     print(f"[OK] summary json: {summary_json}")
