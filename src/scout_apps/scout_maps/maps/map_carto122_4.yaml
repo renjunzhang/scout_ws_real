@@ -1,6 +1,6 @@
 image: /home/geist/scout_ws/src/scout_apps/scout_maps/maps/map_carto122_4.pgm
 resolution: 0.02
-origin: [-9.83698, -4.02048, 0.0]
+origin: [-6.50179, -15.3532, 0.0]
 negate: 0
 occupied_thresh: 0.65
 free_thresh: 0.196
