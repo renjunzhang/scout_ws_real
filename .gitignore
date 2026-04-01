@@ -39,3 +39,5 @@ src/scout_apps/sensors/cartographer_ws/
 cartographer/
 MPC-D-CBF/
 tmp_center_slosh_analysis_smoke/
+src/scout_apps/sensors/realsense_liquid_measurement/fsl_artifacts/
+src/scout_apps/sensors/realsense_liquid_measurement/fsl_runs/

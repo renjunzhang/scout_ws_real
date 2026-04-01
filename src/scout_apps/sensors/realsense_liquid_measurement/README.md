@@ -87,6 +87,8 @@ realsense_liquid_measurement/
 ├── package.xml
 ├── README.md
 ├── 改进文档0322.md
+├── 监督学习方案.md
+├── 监督学习方案log.md
 ├── config/
 │   ├── liquid_measurement.yaml
 │   ├── liquid_measurement_v2.yaml
@@ -94,10 +96,17 @@ realsense_liquid_measurement/
 │   ├── frame_000000_calibration_line_auto_zero_peak_provisional_29mm.yaml
 │   └── frame_000000_annotated.png
 └── scripts/
+    ├── SL_build_supervised_manifest.py
+    ├── SL_eval_baseline.py
+    ├── SL_infer_on_debug_session.py
+    ├── SL_make_splits.py
+    ├── SL_supervised_common.py
+    ├── SL_train_baseline.py
     ├── analyze_human_labels_vs_realsense_v2.py
+    ├── analyze_paired_q0_q5_0330.py
+    ├── analyze_q0_q5_test2_deep_0330.py
     ├── analyze_q5_phase_and_outliers_0325.py
     ├── analyze_q5_test1_segment_inputs_0325.py
-    ├── analyze_paired_q0_q5_0330.py
     ├── annotate_height_ruler_v2.py
     ├── build_realsense_ros_local.sh
     ├── calibrate_liquid_roi.py
@@ -131,10 +140,14 @@ realsense_liquid_measurement/
   - 旧 `v1 mm` 调试示例标定
 - `改进文档0322.md`
   - 旧版改进记录
+- `监督学习方案.md`
+  - 当前 `MSH-first` 监督学习主方案
+- `监督学习方案log.md`
+  - 当前监督学习方案的结构框架与修改日志
 
 ## 脚本用途总览
 
-按当前实际用途，`scripts/` 下脚本可以分成 12 类。
+按当前实际用途，`scripts/` 下脚本可以分成 14 类。
 
 ### 1. 环境与 RealSense ROS 构建
 
@@ -208,7 +221,64 @@ realsense_liquid_measurement/
     - `imu_ay`
   - 输出 `.npz`、样本表和 metadata，给后续晃动高度回归使用
 
-### 6. slosh model 离线重放
+### 6. 监督学习最小闭环
+
+- `scripts/SL_build_supervised_manifest.py`
+  - 从一个或多个 `debug_session` 目录聚合统一监督学习 manifest
+  - 合并：
+    - `debug_session.csv`
+    - `debug_session.json`
+    - `human_labels.csv`
+  - 输出：
+    - `SL_supervised_manifest.csv`
+    - `SL_supervised_manifest_metadata.json`
+  - 当前支持：
+    - `all / any / peak / center` 标签过滤
+    - 自动补齐 `bag_id / date_id / session_id`
+    - 统一携带 `peak_rel_mm_v2`、`center_rel_mm_v2`、`slosh_height_mm` 等现有字段
+- `scripts/SL_make_splits.py`
+  - 基于 `SL_supervised_manifest.csv` 生成监督学习切分
+  - 当前支持按：
+    - `bag_id`
+    - `date_id`
+    - `session_id`
+    做 group-level `train / val / test` 切分
+  - 输出：
+    - `SL_supervised_splits.json`
+    - `SL_supervised_split_groups.csv`
+  - 会显式拒绝 group 数量不足的伪有效切分
+- `scripts/SL_supervised_common.py`
+  - `SL_` 监督学习链的共享工具模块
+  - 包含：
+    - manifest/split 读取
+    - 动力学特征构造
+    - 历史窗口样本构造
+    - 标准化
+    - 回归指标与 bag-wise 指标
+- `scripts/SL_train_baseline.py`
+  - 当前 `SL_` 训练入口
+  - 已实现 `B2` dynamics-only baseline：
+    - `b2_mlp`
+    - `b2_tcn`
+  - 输入：
+    - `SL_supervised_manifest.csv`
+    - `SL_supervised_splits.json`
+  - 输出 checkpoint、history CSV、summary JSON
+- `scripts/SL_eval_baseline.py`
+  - 当前 `SL_` 评估入口
+  - 对 `B0 / B1 / B2` 做统一 split 评估
+  - 输出：
+    - frame-wise predictions CSV
+    - bag-wise metrics CSV
+    - summary JSON
+- `scripts/SL_infer_on_debug_session.py`
+  - 当前 `SL_` 整包推理入口
+  - 用训练好的 checkpoint 在单个 `debug_session` 上做逐帧推理
+  - 输出：
+    - `SL_infer_predictions_<task>.csv`
+    - `SL_infer_summary_<task>.json`
+
+### 7. slosh model 离线重放
 
 - `scripts/replay_slosh_model_from_bag.py`
   - 使用 bag 中已记录的 `/slosh/ax_est`、`/slosh/ay_est`、`/slosh/omega_est_used`、`/slosh/alpha_est`、`/slosh/state`
@@ -224,14 +294,14 @@ realsense_liquid_measurement/
   - 默认输出到 `/data/a/realsense_validation_v2/debug/<bag批次>/slosh_replay/<bag_stem>/`
   - 用于回答“当前 bag 的 `/slosh/height` 是怎么来的”“把参数从 `0.055` 改到 `0.058` 会不会明显变化”
 
-### 7. 路径与激励可比性分析
+### 8. 路径与激励可比性分析
 
 - `scripts/compare_bag_paths_and_excitation_0325.py`
   - 对比 `0325` 试验中各 bag 的 `odom` 路径、`cmd_vel`、平面激励和液体响应
   - 先判断 `Q0/Q5` bag 是否同任务可比，再讨论抑制是否有效
   - 输出单 bag 指标、pairwise 对比表、轨迹图、激励图和 README
 
-### 8. RealSense vs /slosh/height 误差分析
+### 9. RealSense vs /slosh/height 误差分析
 
 - `scripts/analyze_realsense_center_vs_slosh_0325.py`
   - 面向 `0325` 批次，按 bag 分析 `height_center_rel_mm_bias_corrected_v2` 对 `/slosh/height` 的 raw/zero-align 误差与偏置
@@ -241,7 +311,7 @@ realsense_liquid_measurement/
     - 哪个 bag 偏置最明显
     - 坏点更像视觉检测问题还是模型/残余偏置问题
 
-### 9. Q5 重点相位差与坏点深挖
+### 10. Q5 重点相位差与坏点深挖
 
 - `scripts/analyze_q5_phase_and_outliers_0325.py`
   - 面向 `Q5_test1` 和 `Q5_test2`，单独分析 `RealSense center` 对 `/slosh/height` 的 lag sweep、近零最优 lag 和坏点分段
@@ -255,7 +325,7 @@ realsense_liquid_measurement/
     - `Q5_test1` 的大误差是否集中在少数时段
     - 这些时段更像纯时延问题，还是幅值/模型不一致问题
 
-### 10. Center 位置可视复核
+### 11. Center 位置可视复核
 
 - `scripts/render_center_overlay_review_0325.py`
   - 从 `debug_session.csv` 和 `scene_0325_multiscale_raw.yaml` 生成干净的 ROI 复核图
@@ -268,7 +338,7 @@ realsense_liquid_measurement/
     - `/slosh/height` 是否更像偏低
     - 目标坏点段里到底是谁更偏离真实液面
 
-### 11. Q5_test1 输入与状态分段分析
+### 12. Q5_test1 输入与状态分段分析
 
 - `scripts/analyze_q5_test1_segment_inputs_0325.py`
   - 面向 `0325_rezero_bias/Q5_test1` 的高误差坏点段
@@ -285,7 +355,7 @@ realsense_liquid_measurement/
     - `/slosh/height` 局部偏低时，对应的输入激励和状态量级是什么
     - `Q5_test1` 的残余误差更像模型侧低估，还是视觉 `center` 局部偏高
 
-### 12. 0330 同路径 Q0/Q5 成对比较
+### 13. 0330 同路径 Q0/Q5 成对比较
 
 - `scripts/analyze_paired_q0_q5_0330.py`
   - 面向 `0330` 批次的两对同路径 bag：
@@ -300,7 +370,7 @@ realsense_liquid_measurement/
     - 同一路径下 `Q0/Q5` 的运动激励是否真的接近
     - 在沿用旧静止基准的前提下，`Q0/Q5` 的 `/slosh/height` 与 `RealSense center` 相对幅值谁更大
 
-### 13. 0330 test2 分段幅值与 /local_path 平滑性深挖
+### 14. 0330 test2 分段幅值与 /local_path 平滑性深挖
 
 - `scripts/analyze_q0_q5_test2_deep_0330.py`
   - 面向 `0330_rezero_bias` 下最可比的一对：
@@ -359,6 +429,8 @@ realsense_liquid_measurement/
 - 方案文档：
   - [新的高度分析方案.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/新的高度分析方案.md)
   - [对比路径方案.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/对比路径方案.md)
+  - [监督学习方案.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/监督学习方案.md)
+  - [监督学习方案log.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/监督学习方案log.md)
 
 ## 当前整理步骤
 

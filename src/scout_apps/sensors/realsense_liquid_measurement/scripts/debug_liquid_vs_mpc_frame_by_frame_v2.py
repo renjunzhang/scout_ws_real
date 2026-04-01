@@ -112,6 +112,12 @@ def parse_args():
         default=90,
         help="JPEG quality used for cached photo/debug frames.",
     )
+    parser.add_argument(
+        "--viewer-zero-offset-px",
+        type=float,
+        default=None,
+        help="Initial manual offset for the displayed zero line in rectified-ROI pixels. Negative moves it up.",
+    )
     return parser.parse_args()
 
 
@@ -307,6 +313,11 @@ def draw_zero_reference_on_full_photo(
     cv2.line(photo, p0, p1, (0, 255, 255), 2, cv2.LINE_AA)
 
 
+def persist_manifest_json(out_dir: Path, manifest: Dict):
+    with (out_dir / "debug_session.json").open("w", encoding="utf-8") as handle:
+        json.dump(manifest, handle, ensure_ascii=False, indent=2)
+
+
 def load_human_labels(path: Path) -> Dict[int, Dict[str, Optional[float]]]:
     if not path.exists():
         return {}
@@ -404,8 +415,7 @@ def write_session_csv(path: Path, records: List[Dict]):
 
 def persist_session(out_dir: Path, manifest: Dict):
     records = manifest.get("records", [])
-    with (out_dir / "debug_session.json").open("w", encoding="utf-8") as handle:
-        json.dump(manifest, handle, ensure_ascii=False, indent=2)
+    persist_manifest_json(out_dir, manifest)
     write_session_csv(out_dir / "debug_session.csv", records)
     write_human_labels_csv(out_dir / "human_labels.csv", records)
 
@@ -567,6 +577,7 @@ def compose_view(
     history_window: int,
     input_target: Optional[str],
     input_buffer: str,
+    viewer_zero_offset_px: float,
 ) -> Tuple[np.ndarray, Dict[str, Tuple[int, int, int, int]]]:
     del history_window
 
@@ -606,7 +617,11 @@ def compose_view(
         f"imu_ax={format_value(record.get('imu_ax'), 3)}  imu_ay={format_value(record.get('imu_ay'), 3)}",
         f"fit_rms={format_value(record.get('fit_rms_px_v2'), 3)}  peak_local_rms={format_value(record.get('peak_local_rms_px_v2'), 3)}",
         f"Lband={format_value(record.get('left_band_support_ratio_v2'), 2)}  Rband={format_value(record.get('right_band_support_ratio_v2'), 2)}",
-        f"keys: a/d +/-{SMALL_STEP_FRAMES}, w/s +/-10, e/z +/-50, g jump, i center, p peak, x/c clear, h help, q quit",
+        f"viewer zero offset={float(viewer_zero_offset_px):+.1f} px",
+        (
+            f"keys: a/d +/-{SMALL_STEP_FRAMES}, w/s +/-10, e/z +/-50, g jump, "
+            "r/f zero +/-1px, t/v zero +/-5px, b reset zero, i/p label, x/c clear, h help, q quit"
+        ),
     ]
 
     panel_w = max(roi_show.shape[1], 620)
@@ -771,7 +786,6 @@ def build_session(args, out_dir: Path) -> Dict:
             peak_point_roi = inverse_transform_point(rectification_matrix, peak_x_rect, peak_y_rect)
 
             debug_roi = rectified_roi_bgr.copy()
-            draw_zero_reference_on_rectified_roi(debug_roi, calibration_v2.zero_y_rect)
 
             record = {
                 "frame_index": int(image_counter),
@@ -816,14 +830,6 @@ def build_session(args, out_dir: Path) -> Dict:
             }
 
             full_photo = image.copy()
-            draw_zero_reference_on_full_photo(
-                full_photo,
-                rectification_matrix,
-                calibration_v2.legacy.roi_x,
-                calibration_v2.legacy.roi_y,
-                calibration_v2.legacy.roi_w,
-                calibration_v2.zero_y_rect,
-            )
 
             photo_path = photo_dir / f"frame_{image_counter:06d}.jpg"
             roi_path = roi_dir / f"frame_{image_counter:06d}.jpg"
@@ -842,6 +848,7 @@ def build_session(args, out_dir: Path) -> Dict:
         "config": str(config_path),
         "image_topic": image_topic,
         "out_dir": str(out_dir),
+        "viewer_zero_offset_px": 0.0 if args.viewer_zero_offset_px is None else float(args.viewer_zero_offset_px),
         "records": manifest_records,
     }
     persist_session(out_dir, manifest)
@@ -861,10 +868,39 @@ def save_manual_label(out_dir: Path, manifest: Dict, idx: int, field: str, value
     persist_session(out_dir, manifest)
 
 
+def save_viewer_zero_offset(out_dir: Path, manifest: Dict, value: float):
+    manifest["viewer_zero_offset_px"] = float(value)
+    persist_manifest_json(out_dir, manifest)
+
+
+def load_viewer_zero_context(manifest: Dict) -> Optional[Dict]:
+    calibration_raw = str(manifest.get("calibration", "")).strip()
+    if not calibration_raw:
+        return None
+    calibration_path = Path(calibration_raw).expanduser().resolve()
+    if not calibration_path.exists():
+        return None
+    calibration_v2 = load_v2_calibration(calibration_path)
+    rectification_matrix, _ = compute_rectification_matrix(calibration_v2.legacy)
+    return {
+        "base_zero_y_rect": float(calibration_v2.zero_y_rect),
+        "rectification_matrix": rectification_matrix,
+        "roi_x": int(calibration_v2.legacy.roi_x),
+        "roi_y": int(calibration_v2.legacy.roi_y),
+        "roi_w": int(calibration_v2.legacy.roi_w),
+    }
+
+
 def open_viewer(manifest: Dict, args, out_dir: Path):
     records = manifest.get("records", [])
     if not records:
         raise RuntimeError("debug session has no records")
+    zero_context = load_viewer_zero_context(manifest)
+    manifest_offset = finite_float(manifest.get("viewer_zero_offset_px"))
+    initial_zero_offset = manifest_offset if args.viewer_zero_offset_px is None else float(args.viewer_zero_offset_px)
+    if initial_zero_offset is None:
+        initial_zero_offset = 0.0
+    manifest["viewer_zero_offset_px"] = float(initial_zero_offset)
 
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
     trackbar_name = "cache_idx"
@@ -875,6 +911,7 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
         "input_target": None,
         "input_buffer": "",
         "overlay_rect_display": {},
+        "viewer_zero_offset_px": float(initial_zero_offset),
     }
 
     def on_trackbar(pos):
@@ -908,6 +945,17 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
         roi_debug = cv2.imread(record["roi_debug_path"], cv2.IMREAD_COLOR)
         if photo is None or roi_debug is None:
             raise RuntimeError(f"failed to load cached images for frame {record['frame_index']}")
+        if zero_context is not None:
+            zero_y_rect = float(zero_context["base_zero_y_rect"]) + float(state["viewer_zero_offset_px"])
+            draw_zero_reference_on_rectified_roi(roi_debug, zero_y_rect)
+            draw_zero_reference_on_full_photo(
+                photo,
+                zero_context["rectification_matrix"],
+                int(zero_context["roi_x"]),
+                int(zero_context["roi_y"]),
+                int(zero_context["roi_w"]),
+                zero_y_rect,
+            )
 
         canvas, overlay_rect_canvas = compose_view(
             photo,
@@ -920,6 +968,7 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
             args.history_window,
             state["input_target"],
             str(state["input_buffer"]),
+            float(state["viewer_zero_offset_px"]),
         )
         display = resize_to_fit(canvas, args.window_max_width, args.window_max_height)
         scale_x = display.shape[1] / float(canvas.shape[1])
@@ -941,6 +990,9 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
                 "w/s: -10 / +10 frames",
                 "z/e: -50 / +50 frames",
                 "g: jump to index",
+                "r/f: zero line up/down by 1 px",
+                "t/v: zero line up/down by 5 px",
+                "b: reset zero line offset to 0 px",
                 "i or click box: edit human center label [mm]",
                 "p or click box: edit human peak label [mm]",
                 "x: clear center label, c: clear peak label",
@@ -994,6 +1046,26 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
         if key_matches_char(key, "c", "C"):
             save_manual_label(out_dir, manifest, idx, "human_peak_mm", None)
             records = manifest.get("records", records)
+            continue
+        if key_matches_char(key, "r", "R"):
+            state["viewer_zero_offset_px"] = float(state["viewer_zero_offset_px"]) - 1.0
+            save_viewer_zero_offset(out_dir, manifest, float(state["viewer_zero_offset_px"]))
+            continue
+        if key_matches_char(key, "f", "F"):
+            state["viewer_zero_offset_px"] = float(state["viewer_zero_offset_px"]) + 1.0
+            save_viewer_zero_offset(out_dir, manifest, float(state["viewer_zero_offset_px"]))
+            continue
+        if key_matches_char(key, "t", "T"):
+            state["viewer_zero_offset_px"] = float(state["viewer_zero_offset_px"]) - 5.0
+            save_viewer_zero_offset(out_dir, manifest, float(state["viewer_zero_offset_px"]))
+            continue
+        if key_matches_char(key, "v", "V"):
+            state["viewer_zero_offset_px"] = float(state["viewer_zero_offset_px"]) + 5.0
+            save_viewer_zero_offset(out_dir, manifest, float(state["viewer_zero_offset_px"]))
+            continue
+        if key_matches_char(key, "b", "B"):
+            state["viewer_zero_offset_px"] = 0.0
+            save_viewer_zero_offset(out_dir, manifest, 0.0)
             continue
         if key_matches_char(key, "d", "D", " ") or key in (83, 2555904):
             idx = min(len(records) - 1, idx + SMALL_STEP_FRAMES)
