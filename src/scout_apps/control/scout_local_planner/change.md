@@ -97,10 +97,10 @@ SloshIntegration slosh_integration_;
 // === local_planner_ros.cpp::loadParameters() ===
 // 加载 slosh 参数:
 SloshParams slosh_params;
-pnh.param("slosh/container_radius",  slosh_params.container_radius, 0.014);
-pnh.param("slosh/liquid_height",     slosh_params.liquid_height, 0.055);
+pnh.param("slosh/container_radius",  slosh_params.container_radius, 0.0185);
+pnh.param("slosh/liquid_height",     slosh_params.liquid_height, 0.058);
 pnh.param("slosh/liquid_density",    slosh_params.liquid_density, 1000.0);
-pnh.param("slosh/damping_ratio",     slosh_params.damping_ratio, 0.12);
+pnh.param("slosh/damping_ratio",     slosh_params.damping_ratio, 0.05);
 pnh.param("slosh/mode_index",        slosh_params.mode_index, 1);
 pnh.param("slosh/offset_x",          slosh_params.offset_x, 0.0);
 pnh.param("slosh/offset_y",          slosh_params.offset_y, 0.0);
@@ -211,10 +211,10 @@ mpc:
 
 # 晃动模型参数（需根据实际容器标定）:
 slosh:
-  container_radius: 0.014   # 28 mm 试管内半径 [m]
-  liquid_height: 0.055      # 当前试管液体静液高度 [m]
+  container_radius: 0.0185  # 37 mm 试管内半径 [m]
+  liquid_height: 0.058      # 当前试管液体静液高度 [m]
   liquid_density: 1000.0    # 液体密度 [kg/m³]
-  damping_ratio: 0.12       # 28 mm 水试管初始阻尼比
+  damping_ratio: 0.05       # 37 mm 水试管采集阶段初始阻尼比
   mode_index: 1             # 模态阶数
   offset_x: 0.0             # 容器偏心距 x [m]
   offset_y: 0.0             # 容器偏心距 y [m]

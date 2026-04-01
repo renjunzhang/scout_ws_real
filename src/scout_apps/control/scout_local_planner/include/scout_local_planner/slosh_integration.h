@@ -30,13 +30,13 @@ namespace scout_local_planner {
  */
 struct SloshParams {
     // 容器参数
-    double container_radius = 0.014;  ///< 28 mm 试管内半径 [m]
-    double liquid_height = 0.055;     ///< 当前试管液体静液高度 [m]
+    double container_radius = 0.0185; ///< 37 mm 试管内半径 [m]
+    double liquid_height = 0.058;     ///< 当前试管液体静液高度 [m]
     double liquid_density = 1000.0;   ///< 液体密度 [kg/m³]
     
     // 模态参数
     int mode_index = 1;               ///< 使用的模态阶数 (1=第一阶)
-    double damping_ratio = 0.12;      ///< 28 mm 水试管初始阻尼比
+    double damping_ratio = 0.05;      ///< 37 mm 水试管采集阶段初始阻尼比
     
     // 偏心参数 (容器相对底盘旋转中心)
     double offset_x = 0.0;            ///< 容器偏心距 x [m]

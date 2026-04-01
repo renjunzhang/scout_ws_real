@@ -756,10 +756,10 @@ eta_parabola_budget = R^2 * omega_budget^2 / (4g)
 - 作为 `Q_slosh * height_coeff^2` 写法的“已跑通实现模板”；
 - 用于对照 `scout_local_planner` 的接入方式。
 
-### 10.4 当前阶段的模型可信边界（实物 28 mm 试管）
+### 10.4 当前阶段的模型可信边界（实物 37 mm 试管）
 
-按 `docs/change_log2.md`，当前实物主参数已对齐到 28 mm 水试管（半径 0.014 m、液高 0.055 m），
-并把阻尼比调到可用初值（`damping_ratio=0.12`）。
+当前实物主参数按 37 mm 水试管采集阶段初值设置（半径 0.0185 m、液高 0.058 m），
+阻尼比先采用中性初值（`damping_ratio=0.05`）。
 
 现阶段结论是：
 

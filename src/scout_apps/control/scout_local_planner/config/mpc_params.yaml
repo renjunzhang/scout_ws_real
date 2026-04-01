@@ -51,9 +51,9 @@ vehicle:
   omega_max: 1.0           # 最大角速度 (rad/s) - 降低以减轻定位漂移
   
   # 加速度约束
-  a_max: 1.5               # 最大线加速度 (m/s²) - 降低以减少刹车打滑
+  a_max: 2.0               # 最大线加速度 (m/s²) - 提高以增强加减速能力
   alpha_max: 2.5           # 最大角加速度 (rad/s²) - 降低以平滑转向
-  j_max: 3.0               # 最大线加加速度 (m/s^3)——jerk 约束
+  j_max: 4.0               # 最大线加加速度 (m/s^3)——提高以减少加减速响应滞后
   
   # 车辆几何
   track_width: 0.456       # Scout Mini 轮距 (m)
@@ -82,8 +82,8 @@ path_handler:
   min_ref_speed: 0.0                  # 参考速度下限 (m/s)
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
-  max_tan_accel: 1.5                  # 最大切向加速度 (m/s^2) - 降低以平滑加速
-  max_tan_decel: 0.7                  # 最大切向减速度 (m/s^2) - 降低以减少刹车打滑
+  max_tan_accel: 2.0                  # 最大切向加速度 (m/s^2) - 提高以加快速度建立
+  max_tan_decel: 1.0                  # 最大切向减速度 (m/s^2) - 提高以增强制动收敛
   goal_speed: 0.0                     # 末端期望速度 (m/s)
   use_bspline_smoothing: false        # 关闭局部 B-spline 平滑（提高贴合度）
   bspline_samples_per_segment: 12      # 每段采样点数
@@ -101,10 +101,10 @@ verbose: false             # 是否输出调试信息
 # 液体晃动模型参数（P0-A: 状态注入）
 # =============================================================================
 slosh:
-  container_radius: 0.014    # 28 mm 试管内半径 (m)
-  liquid_height: 0.055       # 当前试管液面高度 (m)
+  container_radius: 0.0185   # 37 mm 试管内半径 (m)
+  liquid_height: 0.058       # 当前试管液面高度 (m)
   liquid_density: 1000.0     # 液体密度 (kg/m³)
-  damping_ratio: 0.12        # 28 mm 水试管初始阻尼比
+  damping_ratio: 0.05        # 37 mm 水试管采集阶段初始阻尼比
   mode_index: 1              # 晃动模态阶数
   offset_x: 0.0              # 容器相对 base_link X 偏移 (m)
   offset_y: 0.0              # 容器相对 base_link Y 偏移 (m)
