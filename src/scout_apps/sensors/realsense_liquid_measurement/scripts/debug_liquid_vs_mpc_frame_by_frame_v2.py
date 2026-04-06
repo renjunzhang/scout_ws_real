@@ -8,7 +8,7 @@ import json
 import math
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -80,6 +80,11 @@ def parse_args():
         help="Only build cache/CSV and do not open the interactive viewer.",
     )
     parser.add_argument("--start-index", type=int, default=0, help="Viewer start index in cached records.")
+    parser.add_argument(
+        "--candidate-csv",
+        default="",
+        help="Optional candidate-frame CSV. Press J/L in viewer to jump between candidate frames.",
+    )
     parser.add_argument(
         "--show-frame-index",
         type=int,
@@ -891,11 +896,80 @@ def load_viewer_zero_context(manifest: Dict) -> Optional[Dict]:
     }
 
 
+def load_candidate_cache_indices(manifest: Dict, out_dir: Path, candidate_csv_path: str) -> List[int]:
+    csv_raw = str(candidate_csv_path).strip()
+    if csv_raw == "":
+        return []
+    csv_path = Path(csv_raw).expanduser().resolve()
+    if not csv_path.exists():
+        raise RuntimeError(f"candidate csv not found: {csv_path}")
+
+    records = manifest.get("records", [])
+    if not records:
+        return []
+
+    session_name = out_dir.name
+    bag_raw = str(manifest.get("bag", "")).strip()
+    bag_id = Path(bag_raw).stem if bag_raw else ""
+    debug_dir = str(out_dir.resolve())
+
+    frame_to_cache_idx: Dict[int, int] = {}
+    for cache_idx, record in enumerate(records):
+        frame_index = finite_float(record.get("frame_index"))
+        if frame_index is None:
+            continue
+        frame_to_cache_idx[int(frame_index)] = int(cache_idx)
+
+    candidate_indices: List[int] = []
+    seen = set()
+    with csv_path.open("r", newline="", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        for row in reader:
+            row_session = str(row.get("session_name", "")).strip()
+            row_bag_id = str(row.get("bag_id", "")).strip()
+            row_debug_dir = str(row.get("debug_dir", "")).strip()
+            if row_session != session_name and row_bag_id != bag_id and row_debug_dir != debug_dir:
+                continue
+            frame_index = finite_float(row.get("frame_index"))
+            if frame_index is None:
+                continue
+            cache_idx = frame_to_cache_idx.get(int(frame_index))
+            if cache_idx is None or cache_idx in seen:
+                continue
+            seen.add(cache_idx)
+            candidate_indices.append(int(cache_idx))
+    return sorted(candidate_indices)
+
+
+def find_candidate_position(candidate_indices: Sequence[int], cache_idx: int) -> Optional[int]:
+    if not candidate_indices:
+        return None
+    pos = bisect.bisect_left(candidate_indices, int(cache_idx))
+    if pos < len(candidate_indices) and int(candidate_indices[pos]) == int(cache_idx):
+        return int(pos)
+    return None
+
+
+def jump_candidate_index(candidate_indices: Sequence[int], current_idx: int, direction: int) -> Optional[int]:
+    if not candidate_indices:
+        return None
+    if direction >= 0:
+        pos = bisect.bisect_right(candidate_indices, int(current_idx))
+        if pos >= len(candidate_indices):
+            pos = 0
+        return int(candidate_indices[pos])
+    pos = bisect.bisect_left(candidate_indices, int(current_idx)) - 1
+    if pos < 0:
+        pos = len(candidate_indices) - 1
+    return int(candidate_indices[pos])
+
+
 def open_viewer(manifest: Dict, args, out_dir: Path):
     records = manifest.get("records", [])
     if not records:
         raise RuntimeError("debug session has no records")
     zero_context = load_viewer_zero_context(manifest)
+    candidate_indices = load_candidate_cache_indices(manifest, out_dir, args.candidate_csv)
     manifest_offset = finite_float(manifest.get("viewer_zero_offset_px"))
     initial_zero_offset = manifest_offset if args.viewer_zero_offset_px is None else float(args.viewer_zero_offset_px)
     if initial_zero_offset is None:
@@ -971,6 +1045,17 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
             float(state["viewer_zero_offset_px"]),
         )
         display = resize_to_fit(canvas, args.window_max_width, args.window_max_height)
+        candidate_pos = find_candidate_position(candidate_indices, idx)
+        candidate_status = (
+            "candidate frames: off"
+            if not candidate_indices
+            else (
+                f"candidate {candidate_pos + 1}/{len(candidate_indices)}"
+                if candidate_pos is not None
+                else f"between candidates (total={len(candidate_indices)})"
+            )
+        )
+        draw_text_block(display, [candidate_status], (20, 28), color=(255, 220, 120))
         scale_x = display.shape[1] / float(canvas.shape[1])
         scale_y = display.shape[0] / float(canvas.shape[0])
         state["overlay_rect_display"] = {
@@ -993,6 +1078,7 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
                 "r/f: zero line up/down by 1 px",
                 "t/v: zero line up/down by 5 px",
                 "b: reset zero line offset to 0 px",
+                "j/l: previous / next candidate frame",
                 "i or click box: edit human center label [mm]",
                 "p or click box: edit human peak label [mm]",
                 "x: clear center label, c: clear peak label",
@@ -1106,6 +1192,18 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
                     cv2.setTrackbarPos(trackbar_name, WINDOW_NAME, idx)
             except Exception:
                 pass
+            continue
+        if key_matches_char(key, "l", "L"):
+            next_idx = jump_candidate_index(candidate_indices, idx, +1)
+            if next_idx is not None:
+                state["idx"] = next_idx
+                cv2.setTrackbarPos(trackbar_name, WINDOW_NAME, next_idx)
+            continue
+        if key_matches_char(key, "j", "J"):
+            prev_idx = jump_candidate_index(candidate_indices, idx, -1)
+            if prev_idx is not None:
+                state["idx"] = prev_idx
+                cv2.setTrackbarPos(trackbar_name, WINDOW_NAME, prev_idx)
             continue
 
     cv2.destroyAllWindows()

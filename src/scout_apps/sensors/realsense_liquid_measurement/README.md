@@ -60,6 +60,8 @@
 - [realsense\_liquid\_measurement](#realsense_liquid_measurement)
   - [目录](#目录)
   - [当前结构](#当前结构)
+  - [包内文件与目录说明](#包内文件与目录说明)
+  - [scripts 逐个文件说明](#scripts-逐个文件说明)
   - [脚本用途总览](#脚本用途总览)
   - [当前整理步骤](#当前整理步骤)
   - [当前代码流程图](#当前代码流程图)
@@ -84,66 +86,202 @@
 ```text
 realsense_liquid_measurement/
 ├── CMakeLists.txt
-├── package.xml
+├── FSL测试方案总结.md
 ├── README.md
+├── package.xml
 ├── 改进文档0322.md
+├── 对比路径方案.md
+├── 对比路径方案log.md
+├── 新的高度分析方案.md
+├── 新的高度分析方案log.md
 ├── 监督学习方案.md
 ├── 监督学习方案log.md
+├── 监督学习方案总结v1.md
 ├── config/
-│   ├── liquid_measurement.yaml
-│   ├── liquid_measurement_v2.yaml
-│   ├── frame_000000_calibration_line_auto_zero_peak.yaml
-│   ├── frame_000000_calibration_line_auto_zero_peak_provisional_29mm.yaml
-│   └── frame_000000_annotated.png
-└── scripts/
-    ├── SL_build_supervised_manifest.py
-    ├── SL_eval_baseline.py
-    ├── SL_infer_on_debug_session.py
-    ├── SL_make_splits.py
-    ├── SL_supervised_common.py
-    ├── SL_train_baseline.py
-    ├── analyze_human_labels_vs_realsense_v2.py
-    ├── analyze_paired_q0_q5_0330.py
-    ├── analyze_q0_q5_test2_deep_0330.py
-    ├── analyze_q5_phase_and_outliers_0325.py
-    ├── analyze_q5_test1_segment_inputs_0325.py
-    ├── annotate_height_ruler_v2.py
-    ├── build_realsense_ros_local.sh
-    ├── calibrate_liquid_roi.py
-    ├── compare_bag_paths_and_excitation_0325.py
-    ├── compare_realsense_vs_mpc_slosh.py
-    ├── compare_realsense_vs_mpc_slosh_v2.py
-    ├── debug_liquid_vs_mpc_frame_by_frame.py
-    ├── debug_liquid_vs_mpc_frame_by_frame_v2.py
-    ├── export_slosh_dynamics_dataset.py
-    ├── extract_liquid_height_v2_from_bag.py
-    ├── annotate_liquid_roi.py
-    ├── extract_liquid_height_from_bag.py
-    ├── analyze_realsense_center_vs_slosh_0325.py
-    ├── replay_slosh_model_from_bag.py
-    ├── render_center_overlay_review_0325.py
-    └── realsense_ros_env_local.sh
+├── fsl_artifacts/
+├── fsl_runs/
+├── sl_artifacts/
+├── sl_runs/
+├── slosh_replay_runs/
+├── scripts/
+└── v2_runs/
 ```
 
-各部分职责：
+当前结构的理解方式是：
 
-- `scripts/`
-  - 承载离线标定、提取、对比、逐帧调试、人工标注分析和训练数据导出脚本
-- `config/liquid_measurement_v2.yaml`
-  - 当前推荐主配置
-- `config/liquid_measurement.yaml`
-  - v1 兼容配置
-- `config/frame_000000_calibration_line_auto_zero_peak.yaml`
-  - 旧 `v1 auto-zero peak` 示例标定
-  - 仅用于兼容旧流程，不再是当前主标定口径
-- `config/frame_000000_calibration_line_auto_zero_peak_provisional_29mm.yaml`
-  - 旧 `v1 mm` 调试示例标定
+- `config/` 放配置与示例标定文件；
+- `scripts/` 放离线标定、提取、对比、监督学习、重放和 debug 脚本；
+- `fsl_*` 目录放伪标签预训练链的中间产物与实验结果；
+- `sl_*` 目录放人工真值监督学习链的中间产物与实验结果；
+- `slosh_replay_runs/` 放 `/slosh/height` 离线重放实验结果；
+- `v2_runs/` 放旧 `v2` 几何链在新批次数据上的对比输出。
+
+## 包内文件与目录说明
+
+### 根目录文件
+
+- `CMakeLists.txt`
+  - ROS 包构建入口，定义本包的编译与安装规则。
+- `package.xml`
+  - ROS 包元信息与依赖声明。
+- `README.md`
+  - 当前包的总说明文档，记录主线流程、脚本分类和推荐用法。
 - `改进文档0322.md`
-  - 旧版改进记录
+  - 早期 `0322` 阶段的改进记录，主要保留历史背景，不再是当前主线。
+- `新的高度分析方案.md`
+  - 旧版液面高度分析主方案文档，承载 `v2` 几何链时期的设计思路。
+- `新的高度分析方案log.md`
+  - 与上面旧方案对应的日志与阶段性分析记录。
+- `对比路径方案.md`
+  - 面向 `Q0/Q5` 路径与激励可比性的分析方案文档。
+- `对比路径方案log.md`
+  - 上述路径对比方案的过程日志。
 - `监督学习方案.md`
-  - 当前 `MSH-first` 监督学习主方案
+  - 当前 `MSH-first` 监督学习主方案文档，是现阶段主线技术文档。
 - `监督学习方案log.md`
-  - 当前监督学习方案的结构框架与修改日志
+  - 当前监督学习主线的结构框架、阶段决策和实验日志。
+- `监督学习方案总结v1.md`
+  - 当前阶段的压缩版结论，适合快速汇报和回顾。
+- `FSL测试方案总结.md`
+  - `FSL` 视觉伪标签预训练链的阶段性总结。
+
+### 目录一句话说明
+
+- `config/`
+  - 存放液面测量参数配置、旧示例标定和调试用示例图片。
+- `scripts/`
+  - 存放本包所有可执行脚本，是离线分析与监督学习主入口。
+- `fsl_artifacts/`
+  - 存放 `FSL` 伪标签预训练的数据 manifest、split 和中间组织产物。
+- `fsl_runs/`
+  - 存放 `FSL` 伪标签预训练的 checkpoint、summary、曲线图和对比输出。
+- `sl_artifacts/`
+  - 存放人工真值 `SL` 训练所需 manifest、split 和派生 ROI 数据集。
+- `sl_runs/`
+  - 存放人工真值 `SL` 模型训练结果、曲线图和图像级 debug 输出。
+- `slosh_replay_runs/`
+  - 存放不同 slosh 参数或输入源下的离线重放结果，用于验证 bag 内 `/slosh/height` 来源。
+- `v2_runs/`
+  - 存放旧 `v2` 几何链在新批次 bag 上的对齐评估结果。
+
+### `config/` 目录文件
+
+- `config/liquid_measurement_v2.yaml`
+  - 当前推荐主配置，服务于 `v2` 多标尺标定与提取链。
+- `config/liquid_measurement.yaml`
+  - `v1` 兼容配置，主要供旧流程回放和对照使用。
+- `config/frame_000000_calibration_line_auto_zero_peak.yaml`
+  - 旧 `v1 auto-zero peak` 示例标定，仅用于兼容旧流程。
+- `config/frame_000000_calibration_line_auto_zero_peak_provisional_29mm.yaml`
+  - 旧 `v1` 毫米映射调试标定示例。
+- `config/frame_000000_annotated.png`
+  - 对应旧示例标定的示意图。
+
+## scripts 逐个文件说明
+
+下面按文件逐个说明 `scripts/` 下当前保留脚本的职责。若只想看主线，优先关注 `annotate_height_ruler_v2.py`、`extract_liquid_height_v2_from_bag.py`、`debug_liquid_vs_mpc_frame_by_frame_v2.py`、`SL_export_raw_rectified_roi.py`、`SL_train_visual_human.py`。
+
+### FSL 伪标签预训练链
+
+- `scripts/FSL_run_pseudolabel_pretrain.py`
+  - 基于 bag 级 split 跑最小伪标签预训练闭环，主要验证 `0330/0401` 中 `SL/FSL` 的数据切分和基线结果。
+- `scripts/FSL_train_visual_pseudolabel.py`
+  - 用单帧 ROI 图像学习 `slosh_height_mm` 伪标签，形成 `FSL` 视觉预训练主入口。
+- `scripts/FSL_eval_visual_vs_human.py`
+  - 用人工 `human_peak_mm` 对 `FSL` 视觉模型和 `/slosh/height` 做外部 holdout 评估。
+- `scripts/FSL_plot_visual_pseudolabel_curves.py`
+  - 绘制 `FSL` 伪标签模型在 `val/test` 上的目标曲线、预测曲线和基线曲线。
+
+### SL 人工真值监督学习链
+
+- `scripts/SL_build_supervised_manifest.py`
+  - 聚合多个 `debug_session` 目录，统一生成监督学习 manifest 和 metadata。
+- `scripts/SL_make_splits.py`
+  - 基于 manifest 按 `bag/date/session` 做 group-level `train/val/test` 切分。
+- `scripts/SL_supervised_common.py`
+  - `SL`/`FSL` 训练评估共享工具模块，包含 manifest 读取、指标计算、特征构造等公共逻辑。
+- `scripts/SL_train_baseline.py`
+  - 训练 `B2 dynamics-only` 基线，当前支持 `b2_mlp` 和 `b2_tcn`。
+- `scripts/SL_eval_baseline.py`
+  - 统一评估 `B0/B1/B2` 基线并输出 frame-wise、bag-wise 指标。
+- `scripts/SL_infer_on_debug_session.py`
+  - 使用训练好的 checkpoint 在单个 `debug_session` 上做逐帧推理和导出。
+- `scripts/SL_export_raw_rectified_roi.py`
+  - 从缓存全图和 calibration 中导出无叠加的 `raw rectified ROI`，为 `SL` 视觉训练准备正式输入。
+- `scripts/SL_export_center_half_roi.py`
+  - 从 `raw ROI` 派生“上下各裁 1/4”的 `center-half ROI`，用于固定 crop ablation。
+- `scripts/SL_train_visual_human.py`
+  - 当前主线训练脚本，做单帧 `ROI -> human_peak_mm` 真标签回归。
+- `scripts/SL_train_visual_temporal_human.py`
+  - 当前最小短时序视觉对照实验，做 `K` 帧 ROI 序列到 `human_peak_mm` 的回归。
+- `scripts/SL_plot_visual_human_curves.py`
+  - 绘制人工真值 `SL` 模型与 `human_peak`、`/slosh/height`、可选 replay 曲线的对比图。
+- `scripts/SL_plot_slosh_vs_visual_only.py`
+  - 只保留 `SL visual` 与 `/slosh/height` 两条曲线进行直接对比。
+- `scripts/SL_render_visual_prediction_debug.py`
+  - 生成逐帧图像级 debug 图，直接显示 `human / SL / slosh` 及其误差。
+- `scripts/SL_select_candidate_frames.py`
+  - 基于当前 best 模型、`/slosh/height` 和 `v2` 置信度筛选“下一轮最值得人工补标”的候选帧。
+
+### v1 标定与提取链
+
+- `scripts/calibrate_liquid_roi.py`
+  - 从静止 bag 导出参考帧和 `frames.csv`，作为人工标定输入。
+- `scripts/annotate_liquid_roi.py`
+  - 在参考帧上手工标 `ROI`、内壁、静止液面、试管轴线和可选标尺点，输出 `v1` calibration。
+- `scripts/extract_liquid_height_from_bag.py`
+  - 使用 `v1` calibration 提取液面时序，输出 `liquid_height.csv`、debug video 和曲线图。
+- `scripts/compare_realsense_vs_mpc_slosh.py`
+  - 对齐 `v1` RealSense 结果与 `/slosh/height`、`/slosh/height_pred_max`。
+- `scripts/debug_liquid_vs_mpc_frame_by_frame.py`
+  - `v1` 逐帧复核器，把原图、ROI 图和 `/slosh/*` 数值放到同一查看器中。
+
+### v2 多标尺标定与提取链
+
+- `scripts/annotate_height_ruler_v2.py`
+  - 当前 `v2` 主标定脚本，在静止图上标 `ROI`、壁线、still level、tube axis 和多标尺点。
+- `scripts/extract_liquid_height_v2_from_bag.py`
+  - 当前 `v2` 主提取脚本，输出 `center/peak` 双口径液面高度以及置信度字段。
+- `scripts/compare_realsense_vs_mpc_slosh_v2.py`
+  - 当前 `v2` 主对比脚本，对齐 `RealSense v2` 与 `/slosh/height`。
+- `scripts/debug_liquid_vs_mpc_frame_by_frame_v2.py`
+  - 当前主逐帧调试和人工标注器，支持录入 `human_peak_mm`、候选帧跳转和零线微调。
+
+### 人工标签与误差分析
+
+- `scripts/analyze_human_labels_vs_realsense_v2.py`
+  - 对 `human labels / RealSense v2 / /slosh/height` 做误差、偏置和校正分析。
+
+### 动力学数据导出与 replay
+
+- `scripts/export_slosh_dynamics_dataset.py`
+  - 从 `debug_session.csv` 导出固定历史窗口的动力学训练样本。
+- `scripts/replay_slosh_model_from_bag.py`
+  - 基于 bag 内 `/slosh/*` 状态和输入离线重放 slosh model，用于验证 `/slosh/height` 来源和参数敏感性。
+
+### 路径可比性与专题分析
+
+- `scripts/compare_bag_paths_and_excitation_0325.py`
+  - 比较 `0325` 各 bag 的路径、速度和激励量级，用来判断 `Q0/Q5` 是否同任务可比。
+- `scripts/analyze_realsense_center_vs_slosh_0325.py`
+  - 面向 `0325` 的 `center vs /slosh/height` 单包误差、偏置和 outlier 分析。
+- `scripts/analyze_q5_phase_and_outliers_0325.py`
+  - 深挖 `Q5_test1/Q5_test2` 的相位差、局部坏点和 lag 敏感性。
+- `scripts/render_center_overlay_review_0325.py`
+  - 在干净 ROI 图上叠加 `0 mm / RealSense center / /slosh/height`，做视觉复核。
+- `scripts/analyze_q5_test1_segment_inputs_0325.py`
+  - 面向 `Q5_test1` 坏点段，导出 `slosh` 输入和状态，判断误差更像视觉侧还是模型侧。
+- `scripts/analyze_paired_q0_q5_0330.py`
+  - 对 `0330` 同路径 `Q0/Q5` 成对 bag 做路径、激励和响应比较。
+- `scripts/analyze_q0_q5_test2_deep_0330.py`
+  - 深挖 `0330/Q0_test2 vs Q5_test2` 的分段幅值和 `/local_path` 平滑性差异。
+
+### 环境与构建
+
+- `scripts/build_realsense_ros_local.sh`
+  - 在工作区本地补 RealSense 依赖并编译 `realsense-ros`。
+- `scripts/realsense_ros_env_local.sh`
+  - 运行本地 `realsense-ros` 前，用于补齐环境变量。
 
 ## 脚本用途总览
 

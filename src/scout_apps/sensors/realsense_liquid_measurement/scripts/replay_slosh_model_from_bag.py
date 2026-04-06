@@ -52,6 +52,8 @@ class SloshReplayParams:
     use_linear_model: bool
     use_parabola_term: bool
     replay_mode: str
+    ay_source: str
+    omega_source: str
 
 
 def parse_args():
@@ -159,6 +161,21 @@ def parse_args():
         default="linear_engineering",
         help="Replay mode: linear_engineering (Lp code) or paper_nl (Eq 11 full RK4) or both.",
     )
+    parser.add_argument(
+        "--ay-source",
+        choices=["slosh_ay_est", "slosh_imu_ay_filtered", "imu_data_y"],
+        default="slosh_ay_est",
+        help=(
+            "Lateral-acceleration source used for recomputed slosh height. "
+            "Default: slosh_ay_est."
+        ),
+    )
+    parser.add_argument(
+        "--omega-source",
+        choices=["slosh_omega_est_used", "slosh_imu_omega_z_filtered", "cmd_vel_omega", "odom_omega"],
+        default="slosh_omega_est_used",
+        help="Yaw-rate source used for recomputed slosh height. Default: slosh_omega_est_used.",
+    )
     return parser.parse_args()
 
 
@@ -203,6 +220,8 @@ def derive_params(args) -> Tuple[SloshReplayParams, Dict]:
         use_linear_model=bool(args.use_linear_model if args.use_linear_model is not None else slosh_cfg.get("use_linear_model", True)),
         use_parabola_term=bool(args.use_parabola_term if args.use_parabola_term is not None else slosh_cfg.get("use_parabola_term", True)),
         replay_mode=args.replay_mode,
+        ay_source=str(args.ay_source),
+        omega_source=str(args.omega_source),
     )
     return params, config_data
 
@@ -348,11 +367,14 @@ def load_bag_series(bag_path: Path) -> Dict[str, List]:
         "/slosh/height_pred_max": [],
         "/slosh/ax_est": [],
         "/slosh/ay_est": [],
+        "/slosh/imu_ay_filtered": [],
+        "/slosh/imu_omega_z_filtered": [],
         "/slosh/omega_est_used": [],
         "/slosh/alpha_est": [],
         "/slosh/state": [],
         "/cmd_vel": [],
         "/odom": [],
+        "/imu/data": [],
     }
     start_time = None
     with rosbag.Bag(str(bag_path)) as bag:
@@ -363,7 +385,14 @@ def load_bag_series(bag_path: Path) -> Dict[str, List]:
                 topics[topic].append((ts, float(msg.data) * 1000.0))
             elif topic == "/slosh/height_pred_max":
                 topics[topic].append((ts, float(msg.data) * 1000.0))
-            elif topic in ("/slosh/ax_est", "/slosh/ay_est", "/slosh/omega_est_used", "/slosh/alpha_est"):
+            elif topic in (
+                "/slosh/ax_est",
+                "/slosh/ay_est",
+                "/slosh/imu_ay_filtered",
+                "/slosh/imu_omega_z_filtered",
+                "/slosh/omega_est_used",
+                "/slosh/alpha_est",
+            ):
                 topics[topic].append((ts, float(msg.data)))
             elif topic == "/slosh/state":
                 values = list(msg.data)
@@ -373,6 +402,17 @@ def load_bag_series(bag_path: Path) -> Dict[str, List]:
                 topics[topic].append((ts, (float(msg.linear.x), float(msg.angular.z))))
             elif topic == "/odom":
                 topics[topic].append((ts, (float(msg.twist.twist.linear.x), float(msg.twist.twist.angular.z))))
+            elif topic == "/imu/data":
+                topics[topic].append(
+                    (
+                        ts,
+                        (
+                            float(msg.linear_acceleration.x),
+                            float(msg.linear_acceleration.y),
+                            float(msg.angular_velocity.z),
+                        ),
+                    )
+                )
     if start_time is None:
         raise RuntimeError(f"failed to read bag start time: {bag_path}")
     if not topics["/slosh/height"]:
@@ -386,9 +426,23 @@ def load_bag_series(bag_path: Path) -> Dict[str, List]:
 
 def maybe_fallback_series(raw_topics: Dict[str, List]) -> Dict[str, Tuple[List[float], List[float]]]:
     scalar = {}
-    for name in ("/slosh/height", "/slosh/height_pred_max", "/slosh/ax_est", "/slosh/ay_est", "/slosh/omega_est_used", "/slosh/alpha_est"):
+    for name in (
+        "/slosh/height",
+        "/slosh/height_pred_max",
+        "/slosh/ax_est",
+        "/slosh/ay_est",
+        "/slosh/imu_ay_filtered",
+        "/slosh/imu_omega_z_filtered",
+        "/slosh/omega_est_used",
+        "/slosh/alpha_est",
+    ):
         entries = raw_topics.get(name, [])
         scalar[name] = ([ts for ts, _ in entries], [value for _, value in entries])
+
+    imu_entries = raw_topics.get("/imu/data", [])
+    scalar["/imu/data/ax"] = ([ts for ts, values in imu_entries], [values[0] for _, values in imu_entries])
+    scalar["/imu/data/ay"] = ([ts for ts, values in imu_entries], [values[1] for _, values in imu_entries])
+    scalar["/imu/data/omega_z"] = ([ts for ts, values in imu_entries], [values[2] for _, values in imu_entries])
 
     if not scalar["/slosh/omega_est_used"][0]:
         cmd_entries = raw_topics.get("/cmd_vel", [])
@@ -420,6 +474,29 @@ def maybe_fallback_series(raw_topics: Dict[str, List]) -> Dict[str, Tuple[List[f
         scalar["/slosh/alpha_est"] = (omega_times, alpha_values)
 
     return scalar
+
+
+def select_scalar_series(scalar: Dict[str, Tuple[List[float], List[float]]], source_name: str) -> Tuple[List[float], List[float]]:
+    source_map = {
+        "slosh_ay_est": "/slosh/ay_est",
+        "slosh_imu_ay_filtered": "/slosh/imu_ay_filtered",
+        "imu_data_y": "/imu/data/ay",
+        "slosh_omega_est_used": "/slosh/omega_est_used",
+        "slosh_imu_omega_z_filtered": "/slosh/imu_omega_z_filtered",
+        "cmd_vel_omega": "/cmd_vel/omega",
+        "odom_omega": "/odom/omega",
+    }
+    key = source_map.get(source_name, "")
+    if key == "/cmd_vel/omega":
+        raise RuntimeError("internal error: cmd_vel_omega should be prepared before select_scalar_series")
+    if key == "/odom/omega":
+        raise RuntimeError("internal error: odom_omega should be prepared before select_scalar_series")
+    if not key:
+        raise RuntimeError(f"unsupported source: {source_name}")
+    times, values = scalar.get(key, ([], []))
+    if not times:
+        raise RuntimeError(f"bag is missing requested source {source_name} ({key})")
+    return times, values
 
 
 def load_liquid_center_series(path: Path, center_column: str, liquid_filter: str) -> Tuple[List[float], List[float]]:
@@ -575,8 +652,24 @@ def replay_series(raw: Dict, params: SloshReplayParams, modal: Dict[str, float],
     bag_height_mm = scalar["/slosh/height"][1]
     pred_interp_mm = interpolate_scalar(out_times, *scalar["/slosh/height_pred_max"]) if scalar["/slosh/height_pred_max"][0] else [math.nan] * len(out_times)
     ax_interp = interpolate_scalar(out_times, *scalar["/slosh/ax_est"])
-    ay_interp = interpolate_scalar(out_times, *scalar["/slosh/ay_est"])
-    omega_interp = interpolate_scalar(out_times, *scalar["/slosh/omega_est_used"])
+    ay_times, ay_values = select_scalar_series(scalar, params.ay_source)
+    ay_interp = interpolate_scalar(out_times, ay_times, ay_values)
+
+    if params.omega_source == "cmd_vel_omega":
+        cmd_entries = topics.get("/cmd_vel", [])
+        omega_times = [ts for ts, _ in cmd_entries]
+        omega_values = [value[1] for _, value in cmd_entries]
+        if not omega_times:
+            raise RuntimeError("bag is missing /cmd_vel required by omega-source=cmd_vel_omega")
+    elif params.omega_source == "odom_omega":
+        odom_entries = topics.get("/odom", [])
+        omega_times = [ts for ts, _ in odom_entries]
+        omega_values = [value[1] for _, value in odom_entries]
+        if not omega_times:
+            raise RuntimeError("bag is missing /odom required by omega-source=odom_omega")
+    else:
+        omega_times, omega_values = select_scalar_series(scalar, params.omega_source)
+    omega_interp = interpolate_scalar(out_times, omega_times, omega_values)
     alpha_interp = interpolate_scalar(out_times, *scalar["/slosh/alpha_est"])
 
     state_entries = topics["/slosh/state"]
@@ -655,6 +748,8 @@ def replay_series(raw: Dict, params: SloshReplayParams, modal: Dict[str, float],
         "ay_est_mps2": ay_interp,
         "omega_est_radps": omega_interp,
         "alpha_est_radps2": alpha_interp,
+        "ay_source": params.ay_source,
+        "omega_source": params.omega_source,
         "bag_state": bag_state_interp,
         "replay_state": replay_state_rows,
         "replay_modal_only_mm": modal_only_mm,
@@ -773,6 +868,8 @@ def plot_comparison(
         f" | h={params.liquid_height_m:.3f} m"
         f" | {'L' if params.use_linear_model else 'NL'}"
         f" | parabola={'on' if params.use_parabola_term else 'off'}"
+        f" | ay={params.ay_source}"
+        f" | omega={params.omega_source}"
         + (" | initial-zero-aligned" if zero_align_enabled else "")
     )
     ax1.grid(True, alpha=0.25)
@@ -911,6 +1008,10 @@ def main():
         "offsets_mm": offsets,
         "params": asdict(params),
         "modal": modal,
+        "input_sources": {
+            "ay_source": params.ay_source,
+            "omega_source": params.omega_source,
+        },
         "metrics": metrics,
         "liquid_csv": str(Path(args.liquid_csv).expanduser().resolve()) if args.liquid_csv else "",
         "liquid_filter": args.liquid_filter if args.liquid_csv else "",
@@ -934,6 +1035,8 @@ def main():
         f"mode={params.mode_index}, "
         f"model={'L' if params.use_linear_model else 'NL'}, "
         f"parabola={'on' if params.use_parabola_term else 'off'}, "
+        f"ay_source={params.ay_source}, "
+        f"omega_source={params.omega_source}, "
         f"replay_mode={params.replay_mode}"
     )
     print(
