@@ -287,15 +287,46 @@ def inverse_transform_point(matrix: np.ndarray, x_px: Optional[float], y_px: Opt
     return float(transformed[0]), float(transformed[1])
 
 
+def draw_rectified_horizontal_reference_on_rectified_roi(
+    roi_image: np.ndarray,
+    y_rect: Optional[float],
+    color: Tuple[int, int, int],
+    thickness: int = 2,
+):
+    y_value = finite_float(y_rect)
+    if y_value is None:
+        return
+    y_px = int(round(np.clip(y_value, 0.0, max(0.0, float(roi_image.shape[0] - 1)))))
+    cv2.line(roi_image, (0, y_px), (roi_image.shape[1] - 1, y_px), color, thickness, cv2.LINE_AA)
+
+
+def draw_rectified_horizontal_reference_on_full_photo(
+    photo: np.ndarray,
+    rectification_matrix: np.ndarray,
+    roi_x: int,
+    roi_y: int,
+    roi_w: int,
+    y_rect: Optional[float],
+    color: Tuple[int, int, int],
+    thickness: int = 2,
+):
+    y_value = finite_float(y_rect)
+    if y_value is None:
+        return
+    left_pt = inverse_transform_point(rectification_matrix, 0.0, y_value)
+    right_pt = inverse_transform_point(rectification_matrix, float(max(0, roi_w - 1)), y_value)
+    if left_pt is None or right_pt is None:
+        return
+    p0 = (roi_x + int(round(left_pt[0])), roi_y + int(round(left_pt[1])))
+    p1 = (roi_x + int(round(right_pt[0])), roi_y + int(round(right_pt[1])))
+    cv2.line(photo, p0, p1, color, thickness, cv2.LINE_AA)
+
+
 def draw_zero_reference_on_rectified_roi(
     roi_image: np.ndarray,
     zero_y_rect: Optional[float],
 ):
-    zero_y = finite_float(zero_y_rect)
-    if zero_y is None:
-        return
-    y_px = int(round(np.clip(zero_y, 0.0, max(0.0, float(roi_image.shape[0] - 1)))))
-    cv2.line(roi_image, (0, y_px), (roi_image.shape[1] - 1, y_px), (0, 255, 255), 2, cv2.LINE_AA)
+    draw_rectified_horizontal_reference_on_rectified_roi(roi_image, zero_y_rect, (0, 255, 255), thickness=2)
 
 
 def draw_zero_reference_on_full_photo(
@@ -306,16 +337,16 @@ def draw_zero_reference_on_full_photo(
     roi_w: int,
     zero_y_rect: Optional[float],
 ):
-    zero_y = finite_float(zero_y_rect)
-    if zero_y is None:
-        return
-    left_pt = inverse_transform_point(rectification_matrix, 0.0, zero_y)
-    right_pt = inverse_transform_point(rectification_matrix, float(max(0, roi_w - 1)), zero_y)
-    if left_pt is None or right_pt is None:
-        return
-    p0 = (roi_x + int(round(left_pt[0])), roi_y + int(round(left_pt[1])))
-    p1 = (roi_x + int(round(right_pt[0])), roi_y + int(round(right_pt[1])))
-    cv2.line(photo, p0, p1, (0, 255, 255), 2, cv2.LINE_AA)
+    draw_rectified_horizontal_reference_on_full_photo(
+        photo,
+        rectification_matrix,
+        roi_x,
+        roi_y,
+        roi_w,
+        zero_y_rect,
+        (0, 255, 255),
+        thickness=2,
+    )
 
 
 def persist_manifest_json(out_dir: Path, manifest: Dict):
@@ -331,11 +362,13 @@ def load_human_labels(path: Path) -> Dict[int, Dict[str, Optional[float]]]:
         reader = csv.DictReader(handle)
         for row in reader:
             frame_index = int(row["frame_index"])
-            height_raw = row.get("human_height_mm", "").strip()
-            peak_raw = row.get("human_peak_mm", "").strip()
+            height_raw = str(row.get("human_height_mm", "") or "").strip()
+            peak_raw = str(row.get("human_peak_mm", "") or "").strip()
+            peak_y_rect_raw = str(row.get("human_peak_y_rect_px", "") or "").strip()
             labels[frame_index] = {
                 "human_height_mm": None if height_raw == "" else float(height_raw),
                 "human_peak_mm": None if peak_raw == "" else float(peak_raw),
+                "human_peak_y_rect_px": None if peak_y_rect_raw == "" else float(peak_y_rect_raw),
             }
     return labels
 
@@ -350,6 +383,7 @@ def write_human_labels_csv(path: Path, records: List[Dict]):
                 "relative_time_s",
                 "human_height_mm",
                 "human_peak_mm",
+                "human_peak_y_rect_px",
                 "center_rel_mm_v2",
                 "peak_rel_mm_v2",
                 "slosh_height_mm",
@@ -359,7 +393,8 @@ def write_human_labels_csv(path: Path, records: List[Dict]):
         for record in records:
             height_value = record.get("human_height_mm")
             peak_value = record.get("human_peak_mm")
-            if height_value is None and peak_value is None:
+            peak_y_rect_value = record.get("human_peak_y_rect_px")
+            if height_value is None and peak_value is None and peak_y_rect_value is None:
                 continue
             writer.writerow(
                 [
@@ -368,6 +403,7 @@ def write_human_labels_csv(path: Path, records: List[Dict]):
                     f"{record['relative_time_s']:.9f}",
                     "" if height_value is None else f"{float(height_value):.6f}",
                     "" if peak_value is None else f"{float(peak_value):.6f}",
+                    "" if peak_y_rect_value is None else f"{float(peak_y_rect_value):.3f}",
                     "" if record.get("center_rel_mm_v2") is None else f"{float(record['center_rel_mm_v2']):.6f}",
                     "" if record.get("peak_rel_mm_v2") is None else f"{float(record['peak_rel_mm_v2']):.6f}",
                     "" if record.get("slosh_height_mm") is None else f"{float(record['slosh_height_mm']):.6f}",
@@ -402,6 +438,7 @@ def write_session_csv(path: Path, records: List[Dict]):
         "slosh_pred_mm",
         "human_height_mm",
         "human_peak_mm",
+        "human_peak_y_rect_px",
         "cmd_vel_linear_x",
         "cmd_vel_angular_z",
         "imu_ax",
@@ -438,6 +475,7 @@ def describe_record(record: Dict) -> str:
         f"peak_rel_mm_v2: {record.get('peak_rel_mm_v2')}",
         f"human_height_mm: {record.get('human_height_mm')}",
         f"human_peak_mm: {record.get('human_peak_mm')}",
+        f"human_peak_y_rect_px: {record.get('human_peak_y_rect_px')}",
         f"/slosh/height [mm]: {record.get('slosh_height_mm')}",
         f"/slosh/height_pred_max [mm]: {record.get('slosh_pred_mm')}",
         f"fit_rms_px_v2: {record.get('fit_rms_px_v2')}",
@@ -583,7 +621,8 @@ def compose_view(
     input_target: Optional[str],
     input_buffer: str,
     viewer_zero_offset_px: float,
-) -> Tuple[np.ndarray, Dict[str, Tuple[int, int, int, int]]]:
+    pick_peak_y_rect_mode: bool,
+) -> Tuple[np.ndarray, Dict[str, Tuple[int, int, int, int]], Tuple[int, int, int, int]]:
     del history_window
 
     photo_show = resize_to_width(photo, photo_width)
@@ -595,6 +634,7 @@ def compose_view(
     slosh_pred = finite_float(record.get("slosh_pred_mm"))
     human_height = finite_float(record.get("human_height_mm"))
     human_peak = finite_float(record.get("human_peak_mm"))
+    human_peak_y_rect = finite_float(record.get("human_peak_y_rect_px"))
 
     err_center_height = None if center_mm is None or slosh_height is None else center_mm - slosh_height
     err_peak_pred = None if peak_mm is None or slosh_pred is None else peak_mm - slosh_pred
@@ -612,6 +652,7 @@ def compose_view(
         f"/slosh/height_pred_max={format_value(slosh_pred, 3)} mm",
         f"human center={format_value(human_height, 3)} mm",
         f"human peak={format_value(human_peak, 3)} mm",
+        f"human peak y_rect={format_value(human_peak_y_rect, 1)} px",
         f"err center-vs-height={format_value(err_center_height, 3)} mm",
         f"err peak-vs-pred={format_value(err_peak_pred, 3)} mm",
         f"err human-center={format_value(err_human_center, 3)} mm",
@@ -624,8 +665,13 @@ def compose_view(
         f"Lband={format_value(record.get('left_band_support_ratio_v2'), 2)}  Rband={format_value(record.get('right_band_support_ratio_v2'), 2)}",
         f"viewer zero offset={float(viewer_zero_offset_px):+.1f} px",
         (
+            "peak y pick mode=ON: click inside rectified ROI to save human_peak_y_rect_px"
+            if pick_peak_y_rect_mode
+            else "peak y pick mode=off"
+        ),
+        (
             f"keys: a/d +/-{SMALL_STEP_FRAMES}, w/s +/-10, e/z +/-50, g jump, "
-            "r/f zero +/-1px, t/v zero +/-5px, b reset zero, i/p label, x/c clear, h help, q quit"
+            "r/f zero +/-1px, t/v zero +/-5px, b reset zero, i/p mm label, y pick peak-y, u clear peak-y, x/c clear, h help, q quit"
         ),
     ]
 
@@ -641,6 +687,7 @@ def compose_view(
     canvas[: photo_show.shape[0], : photo_show.shape[1]] = photo_show
     right_x = photo_show.shape[1]
     canvas[: roi_show.shape[0], right_x : right_x + roi_show.shape[1]] = roi_show
+    roi_rect = (right_x, 0, roi_show.shape[1], roi_show.shape[0])
 
     photo_status = (
         f"RS visual peak={format_value(peak_mm, 3)} mm    "
@@ -691,7 +738,7 @@ def compose_view(
     history_y = panel_y + 26 + len(lines) * 22 + 12
     history_h = max(min_history_h, canvas_h - history_y - 16)
     draw_history_plot(canvas, (right_x + 10, history_y), (panel_w - 20, history_h), records, cursor_idx)
-    return canvas, {"human_height_mm": center_rect, "human_peak_mm": peak_rect}
+    return canvas, {"human_height_mm": center_rect, "human_peak_mm": peak_rect}, roi_rect
 
 
 def build_session(args, out_dir: Path) -> Dict:
@@ -832,6 +879,7 @@ def build_session(args, out_dir: Path) -> Dict:
                 "imu_ay": interpolate_value(stamp_sec, auxiliary["imu_t"], auxiliary["imu_ay"]),
                 "human_height_mm": human_labels.get(int(image_counter), {}).get("human_height_mm"),
                 "human_peak_mm": human_labels.get(int(image_counter), {}).get("human_peak_mm"),
+                "human_peak_y_rect_px": human_labels.get(int(image_counter), {}).get("human_peak_y_rect_px"),
             }
 
             full_photo = image.copy()
@@ -865,7 +913,14 @@ def load_session(out_dir: Path) -> Dict:
     if not manifest_path.exists():
         raise FileNotFoundError(str(manifest_path))
     with manifest_path.open("r", encoding="utf-8") as handle:
-        return json.load(handle)
+        manifest = json.load(handle)
+    label_overrides = load_human_labels(out_dir / "human_labels.csv")
+    for record in manifest.get("records", []):
+        override = label_overrides.get(int(record.get("frame_index", -1)), {})
+        record["human_height_mm"] = override.get("human_height_mm", record.get("human_height_mm"))
+        record["human_peak_mm"] = override.get("human_peak_mm", record.get("human_peak_mm"))
+        record["human_peak_y_rect_px"] = override.get("human_peak_y_rect_px", record.get("human_peak_y_rect_px"))
+    return manifest
 
 
 def save_manual_label(out_dir: Path, manifest: Dict, idx: int, field: str, value: Optional[float]):
@@ -985,6 +1040,9 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
         "input_target": None,
         "input_buffer": "",
         "overlay_rect_display": {},
+        "roi_rect_display": None,
+        "roi_source_shape": None,
+        "pick_peak_y_rect_mode": False,
         "viewer_zero_offset_px": float(initial_zero_offset),
     }
 
@@ -994,12 +1052,25 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
     def begin_edit_current(field: str):
         current_record = records[int(np.clip(state["idx"], 0, len(records) - 1))]
         current = current_record.get(field)
+        state["pick_peak_y_rect_mode"] = False
         state["input_target"] = field
         state["input_buffer"] = "" if current is None else f"{float(current):.3f}"
 
     def on_mouse(event, x_pos, y_pos, _flags, _userdata):
         if event != cv2.EVENT_LBUTTONDOWN:
             return
+        roi_rect = state.get("roi_rect_display")
+        roi_source_shape = state.get("roi_source_shape")
+        if state.get("pick_peak_y_rect_mode") and roi_rect and roi_source_shape:
+            roi_x, roi_y, roi_w, roi_h = roi_rect
+            if roi_x <= x_pos <= roi_x + roi_w and roi_y <= y_pos <= roi_y + roi_h:
+                local_y = float(np.clip(y_pos - roi_y, 0, max(0, roi_h - 1)))
+                src_h = int(roi_source_shape[0])
+                if src_h > 0 and roi_h > 0:
+                    y_rect = float(np.clip((local_y / float(roi_h)) * src_h, 0.0, max(0.0, float(src_h - 1))))
+                    save_manual_label(out_dir, manifest, int(state["idx"]), "human_peak_y_rect_px", y_rect)
+                    state["pick_peak_y_rect_mode"] = False
+                return
         rects = state.get("overlay_rect_display") or {}
         if not rects:
             return
@@ -1030,8 +1101,21 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
                 int(zero_context["roi_w"]),
                 zero_y_rect,
             )
+            human_peak_y_rect = finite_float(record.get("human_peak_y_rect_px"))
+            if human_peak_y_rect is not None:
+                draw_rectified_horizontal_reference_on_rectified_roi(roi_debug, human_peak_y_rect, (255, 0, 255), thickness=2)
+                draw_rectified_horizontal_reference_on_full_photo(
+                    photo,
+                    zero_context["rectification_matrix"],
+                    int(zero_context["roi_x"]),
+                    int(zero_context["roi_y"]),
+                    int(zero_context["roi_w"]),
+                    human_peak_y_rect,
+                    (255, 0, 255),
+                    thickness=2,
+                )
 
-        canvas, overlay_rect_canvas = compose_view(
+        canvas, overlay_rect_canvas, roi_rect_canvas = compose_view(
             photo,
             roi_debug,
             record,
@@ -1043,6 +1127,7 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
             state["input_target"],
             str(state["input_buffer"]),
             float(state["viewer_zero_offset_px"]),
+            bool(state["pick_peak_y_rect_mode"]),
         )
         display = resize_to_fit(canvas, args.window_max_width, args.window_max_height)
         candidate_pos = find_candidate_position(candidate_indices, idx)
@@ -1067,6 +1152,13 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
             )
             for field, rect in overlay_rect_canvas.items()
         }
+        state["roi_rect_display"] = (
+            int(round(roi_rect_canvas[0] * scale_x)),
+            int(round(roi_rect_canvas[1] * scale_y)),
+            int(round(roi_rect_canvas[2] * scale_x)),
+            int(round(roi_rect_canvas[3] * scale_y)),
+        )
+        state["roi_source_shape"] = tuple(int(v) for v in roi_debug.shape[:2])
         if show_help:
             help_lines = [
                 "click viewer once to focus the window",
@@ -1081,6 +1173,8 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
                 "j/l: previous / next candidate frame",
                 "i or click box: edit human center label [mm]",
                 "p or click box: edit human peak label [mm]",
+                "y: toggle peak-y pick mode, then click rectified ROI",
+                "u: clear human_peak_y_rect_px",
                 "x: clear center label, c: clear peak label",
                 "h: toggle help",
                 "q or Esc: quit",
@@ -1124,6 +1218,16 @@ def open_viewer(manifest: Dict, args, out_dir: Path):
             continue
         if key_matches_char(key, "p", "P"):
             begin_edit_current("human_peak_mm")
+            continue
+        if key_matches_char(key, "y", "Y"):
+            state["pick_peak_y_rect_mode"] = not bool(state["pick_peak_y_rect_mode"])
+            state["input_target"] = None
+            state["input_buffer"] = ""
+            continue
+        if key_matches_char(key, "u", "U"):
+            state["pick_peak_y_rect_mode"] = False
+            save_manual_label(out_dir, manifest, idx, "human_peak_y_rect_px", None)
+            records = manifest.get("records", records)
             continue
         if key_matches_char(key, "x", "X"):
             save_manual_label(out_dir, manifest, idx, "human_height_mm", None)

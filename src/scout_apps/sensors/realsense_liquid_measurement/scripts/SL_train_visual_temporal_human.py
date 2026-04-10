@@ -45,20 +45,90 @@ def parse_args():
     parser.add_argument("--image-height", type=int, default=96, help="Resized image height. Default: 96.")
     parser.add_argument("--image-width", type=int, default=192, help="Resized image width. Default: 192.")
     parser.add_argument("--hidden-dim", type=int, default=64, help="Frame embedding / MLP hidden dim. Default: 64.")
+    parser.add_argument(
+        "--temporal-head",
+        choices=("mean", "gru", "tcn"),
+        default="mean",
+        help="Temporal aggregation head. Default: mean.",
+    )
+    parser.add_argument(
+        "--anchor-current-frame",
+        action="store_true",
+        help=(
+            "Concatenate the current-frame feature with the temporal summary before regression. "
+            "Recommended when the label is still current-frame peak."
+        ),
+    )
+    parser.add_argument(
+        "--temporal-kernel-size",
+        type=int,
+        default=3,
+        help="Kernel size for the TCN head. Used only when --temporal-head=tcn. Default: 3.",
+    )
     parser.add_argument("--epochs", type=int, default=60, help="Number of training epochs. Default: 60.")
     parser.add_argument("--batch-size", type=int, default=16, help="Mini-batch size. Default: 16.")
     parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate. Default: 1e-3.")
     parser.add_argument("--weight-decay", type=float, default=1e-5, help="AdamW weight decay. Default: 1e-5.")
     parser.add_argument("--patience", type=int, default=10, help="Early-stop patience on val MAE. Default: 10.")
+    parser.add_argument(
+        "--enable-target-weighting",
+        action="store_true",
+        help=(
+            "Enable target-amplitude weighting for the training loss. "
+            "Recommended for reducing underestimation on rare high-peak frames."
+        ),
+    )
+    parser.add_argument(
+        "--target-weight-thresholds",
+        default="0.5,1.0",
+        help=(
+            "Comma-separated target thresholds in target units. "
+            "Used only when --enable-target-weighting is set. Default: 0.5,1.0"
+        ),
+    )
+    parser.add_argument(
+        "--target-weight-values",
+        default="1.0,1.5,3.0",
+        help=(
+            "Comma-separated loss weights for each target bin. "
+            "Count must equal len(thresholds)+1. Default: 1.0,1.5,3.0"
+        ),
+    )
     parser.add_argument("--seed", type=int, default=7, help="Random seed. Default: 7.")
     parser.add_argument("--device", default="auto", help="Torch device: auto/cpu/cuda. Default: auto.")
     parser.add_argument("--show-first", type=int, default=5, help="Print the first N val/test rows. Default: 5.")
     return parser.parse_args()
 
 
-class MinimalTemporalVisualRegressor(nn.Module):
-    def __init__(self, hidden_dim: int):
+class TemporalConvHead(nn.Module):
+    def __init__(self, hidden_dim: int, kernel_size: int):
         super().__init__()
+        kernel_size = max(1, int(kernel_size))
+        left_padding = max(0, kernel_size - 1)
+        self.net = nn.Sequential(
+            nn.ConstantPad1d((left_padding, 0), 0.0),
+            nn.Conv1d(int(hidden_dim), int(hidden_dim), kernel_size=kernel_size),
+            nn.ReLU(),
+            nn.ConstantPad1d((left_padding, 0), 0.0),
+            nn.Conv1d(int(hidden_dim), int(hidden_dim), kernel_size=kernel_size),
+            nn.ReLU(),
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.net(x)
+
+
+class MinimalTemporalVisualRegressor(nn.Module):
+    def __init__(
+        self,
+        hidden_dim: int,
+        temporal_head: str = "mean",
+        anchor_current_frame: bool = False,
+        temporal_kernel_size: int = 3,
+    ):
+        super().__init__()
+        self.temporal_head_type = str(temporal_head)
+        self.anchor_current_frame = bool(anchor_current_frame)
         self.features = nn.Sequential(
             nn.Conv2d(1, 16, kernel_size=3, padding=1),
             nn.ReLU(),
@@ -74,8 +144,24 @@ class MinimalTemporalVisualRegressor(nn.Module):
             nn.Linear(flattened_dim, int(hidden_dim)),
             nn.ReLU(),
         )
-        self.temporal_head = nn.Sequential(
-            nn.Linear(int(hidden_dim), int(hidden_dim)),
+        if self.temporal_head_type == "gru":
+            self.temporal_module = nn.GRU(
+                input_size=int(hidden_dim),
+                hidden_size=int(hidden_dim),
+                batch_first=True,
+            )
+        elif self.temporal_head_type == "tcn":
+            self.temporal_module = TemporalConvHead(
+                hidden_dim=int(hidden_dim),
+                kernel_size=int(temporal_kernel_size),
+            )
+        elif self.temporal_head_type == "mean":
+            self.temporal_module = None
+        else:
+            raise RuntimeError(f"unsupported temporal head: {temporal_head}")
+        regressor_in_dim = int(hidden_dim) * (2 if self.anchor_current_frame else 1)
+        self.regressor = nn.Sequential(
+            nn.Linear(regressor_in_dim, int(hidden_dim)),
             nn.ReLU(),
             nn.Linear(int(hidden_dim), 1),
         )
@@ -86,8 +172,17 @@ class MinimalTemporalVisualRegressor(nn.Module):
         flat = x.reshape(batch_size * num_frames, channels, height, width)
         frame_features = self.frame_head(self.features(flat))
         frame_features = frame_features.reshape(batch_size, num_frames, -1)
-        pooled = torch.mean(frame_features, dim=1)
-        return self.temporal_head(pooled).squeeze(-1)
+        if self.temporal_head_type == "gru":
+            temporal_features, _hidden = self.temporal_module(frame_features)
+            summary = temporal_features[:, -1, :]
+        elif self.temporal_head_type == "tcn":
+            temporal_features = self.temporal_module(frame_features.transpose(1, 2))
+            summary = temporal_features[:, :, -1]
+        else:
+            summary = torch.mean(frame_features, dim=1)
+        if self.anchor_current_frame:
+            summary = torch.cat([summary, frame_features[:, -1, :]], dim=1)
+        return self.regressor(summary).squeeze(-1)
 
 
 class TemporalSequenceDataset(Dataset):
@@ -126,7 +221,12 @@ class TemporalSequenceDataset(Dataset):
         x = np.stack(seq_images, axis=0)
         x = ((x - self.image_mean) / self.image_std).astype(np.float32)
         y = (float(sample["y"]) - self.target_mean) / self.target_std
-        return torch.from_numpy(x), torch.tensor(y, dtype=torch.float32)
+        loss_weight = float(sample.get("loss_weight", 1.0))
+        return (
+            torch.from_numpy(x),
+            torch.tensor(y, dtype=torch.float32),
+            torch.tensor(loss_weight, dtype=torch.float32),
+        )
 
 
 def ensure_dir(path: Path):
@@ -155,6 +255,8 @@ def load_session_frame_table(debug_session_csv: Path, image_column: str) -> Dict
         if frame_index < 0 or image_path == "":
             continue
         ordered.append((frame_index, image_path))
+    if not ordered:
+        raise RuntimeError(f"no usable {image_column} rows in session csv: {debug_session_csv}")
     ordered.sort(key=lambda item: item[0])
     frame_indices = [item[0] for item in ordered]
     frame_paths = {frame_idx: image_path for frame_idx, image_path in ordered}
@@ -180,6 +282,48 @@ def resolve_history_indices(frame_indices: Sequence[int], current_frame: int, hi
     return out
 
 
+def session_key_from_row(row: Dict[str, str]) -> str:
+    debug_session_csv = str(row.get("debug_session_csv", "")).strip()
+    if debug_session_csv != "":
+        return debug_session_csv
+    bag_id = str(row.get("bag_id", "")).strip()
+    if bag_id != "":
+        return bag_id
+    return str(row.get("session_id", "")).strip()
+
+
+def build_session_frame_tables_from_rows(
+    rows: Sequence[Dict[str, str]],
+    image_column: str,
+) -> Dict[str, Dict[str, object]]:
+    grouped: Dict[str, List[Tuple[int, str]]] = {}
+    for row in rows:
+        session_key = session_key_from_row(row)
+        if session_key == "":
+            continue
+        frame_index = int(float(row.get("frame_index", -1)))
+        image_path = str(row.get(image_column, "")).strip()
+        if frame_index < 0 or image_path == "":
+            continue
+        if not Path(image_path).exists():
+            continue
+        grouped.setdefault(session_key, []).append((frame_index, image_path))
+    session_tables: Dict[str, Dict[str, object]] = {}
+    for session_key, pairs in grouped.items():
+        pairs.sort(key=lambda item: item[0])
+        frame_indices: List[int] = []
+        frame_paths: Dict[int, str] = {}
+        for frame_index, image_path in pairs:
+            frame_indices.append(int(frame_index))
+            frame_paths[int(frame_index)] = image_path
+        if frame_indices:
+            session_tables[session_key] = {
+                "frame_indices": frame_indices,
+                "frame_paths": frame_paths,
+            }
+    return session_tables
+
+
 def build_sequence_samples(
     rows: Sequence[Dict[str, str]],
     image_column: str,
@@ -187,11 +331,11 @@ def build_sequence_samples(
     history_frames: int,
     history_step: int,
 ) -> Tuple[List[Dict[str, object]], Dict[str, int]]:
-    session_cache: Dict[str, Dict[str, object]] = {}
+    session_cache = build_session_frame_tables_from_rows(rows, image_column)
     samples: List[Dict[str, object]] = []
     skip_counts = {
         "missing_target": 0,
-        "missing_session_csv": 0,
+        "missing_session_frames": 0,
         "missing_image_path": 0,
         "image_not_found": 0,
         "session_load_error": 0,
@@ -201,22 +345,23 @@ def build_sequence_samples(
         if target is None:
             skip_counts["missing_target"] += 1
             continue
-        session_csv_raw = str(row.get("debug_session_csv", "")).strip()
-        if session_csv_raw == "":
-            skip_counts["missing_session_csv"] += 1
-            continue
-        session_csv = Path(session_csv_raw).expanduser()
-        cache_key = str(session_csv)
-        if cache_key not in session_cache:
+        cache_key = session_key_from_row(row)
+        frame_table = session_cache.get(cache_key)
+        if frame_table is None or not frame_table["frame_indices"]:
+            session_csv_raw = str(row.get("debug_session_csv", "")).strip()
+            if session_csv_raw == "":
+                skip_counts["missing_session_frames"] += 1
+                continue
+            session_csv = Path(session_csv_raw).expanduser()
             if not session_csv.exists():
-                skip_counts["missing_session_csv"] += 1
+                skip_counts["missing_session_frames"] += 1
                 continue
             try:
-                session_cache[cache_key] = load_session_frame_table(session_csv, image_column)
+                frame_table = load_session_frame_table(session_csv, image_column)
             except RuntimeError:
                 skip_counts["session_load_error"] += 1
                 continue
-        frame_table = session_cache[cache_key]
+            session_cache[cache_key] = frame_table
         current_frame = int(float(row.get("frame_index", -1)))
         history_indices = resolve_history_indices(
             frame_indices=frame_table["frame_indices"],
@@ -294,6 +439,117 @@ def target_stats_from_samples(samples: Sequence[Dict[str, object]]) -> Dict[str,
     return {"mean": mean, "std": std}
 
 
+def parse_float_list(raw_text: str, arg_name: str) -> List[float]:
+    values: List[float] = []
+    text = str(raw_text).strip()
+    if text == "":
+        return values
+    for piece in text.split(","):
+        token = piece.strip()
+        if token == "":
+            continue
+        try:
+            value = float(token)
+        except ValueError as exc:
+            raise RuntimeError(f"failed to parse {arg_name}: {raw_text}") from exc
+        if not np.isfinite(value):
+            raise RuntimeError(f"{arg_name} contains non-finite value: {token}")
+        values.append(float(value))
+    return values
+
+
+def resolve_target_weight(target: float, thresholds: Sequence[float], weights: Sequence[float]) -> float:
+    for idx, threshold in enumerate(thresholds):
+        if float(target) <= float(threshold):
+            return float(weights[idx])
+    return float(weights[-1])
+
+
+def build_target_weighting_config(args) -> Dict[str, object]:
+    if not bool(args.enable_target_weighting):
+        return {"enabled": False, "thresholds": [], "weights": []}
+    thresholds = parse_float_list(str(args.target_weight_thresholds), "--target-weight-thresholds")
+    weights = parse_float_list(str(args.target_weight_values), "--target-weight-values")
+    if not weights:
+        raise RuntimeError("target weighting enabled but --target-weight-values is empty")
+    if len(weights) != len(thresholds) + 1:
+        raise RuntimeError("target weighting requires len(weights) == len(thresholds) + 1")
+    prev_threshold = None
+    for threshold in thresholds:
+        if prev_threshold is not None and float(threshold) <= float(prev_threshold):
+            raise RuntimeError("--target-weight-thresholds must be strictly increasing")
+        prev_threshold = float(threshold)
+    for weight in weights:
+        if float(weight) <= 0.0:
+            raise RuntimeError("--target-weight-values must be positive")
+    return {
+        "enabled": True,
+        "thresholds": [float(value) for value in thresholds],
+        "weights": [float(value) for value in weights],
+    }
+
+
+def attach_loss_weights(
+    samples: Sequence[Dict[str, object]],
+    weighting_config: Dict[str, object],
+) -> List[Dict[str, object]]:
+    if not bool(weighting_config.get("enabled", False)):
+        return [dict(sample, loss_weight=1.0) for sample in samples]
+    thresholds = [float(value) for value in weighting_config.get("thresholds", [])]
+    weights = [float(value) for value in weighting_config.get("weights", [])]
+    weighted_samples: List[Dict[str, object]] = []
+    for sample in samples:
+        updated = dict(sample)
+        updated["loss_weight"] = resolve_target_weight(float(sample["y"]), thresholds, weights)
+        weighted_samples.append(updated)
+    return weighted_samples
+
+
+def summarize_target_weighting(
+    samples: Sequence[Dict[str, object]],
+    weighting_config: Dict[str, object],
+) -> List[Dict[str, object]]:
+    thresholds = [float(value) for value in weighting_config.get("thresholds", [])]
+    weights = [float(value) for value in weighting_config.get("weights", [])]
+    if not bool(weighting_config.get("enabled", False)):
+        return [
+            {
+                "lower_bound": None,
+                "upper_bound": None,
+                "weight": 1.0,
+                "count": len(samples),
+                "fraction": 0.0 if not samples else 1.0,
+            }
+        ]
+    summary_rows: List[Dict[str, object]] = []
+    lower = None
+    total = max(1, len(samples))
+    for idx, weight in enumerate(weights):
+        upper = thresholds[idx] if idx < len(thresholds) else None
+        count = 0
+        for sample in samples:
+            target = float(sample["y"])
+            if lower is None:
+                in_bin = target <= float(upper) if upper is not None else True
+            elif upper is None:
+                in_bin = target > float(lower)
+            else:
+                in_bin = float(lower) < target <= float(upper)
+            if in_bin:
+                count += 1
+        summary_rows.append(
+            {
+                "lower_bound": lower,
+                "upper_bound": upper,
+                "weight": float(weight),
+                "count": count,
+                "fraction": float(count / total),
+            }
+        )
+        lower = upper
+    return summary_rows
+
+
 def dataset_to_loader(dataset: Dataset, batch_size: int, shuffle: bool) -> DataLoader:
     return DataLoader(dataset, batch_size=max(1, int(batch_size)), shuffle=bool(shuffle))
 
@@ -309,7 +565,8 @@ def predict_dataset(
     preds: List[float] = []
     model.eval()
     with torch.no_grad():
-        for batch_x, _ in loader:
+        for batch in loader:
+            batch_x = batch[0]
             batch_x = batch_x.to(device=device)
             pred_norm = model(batch_x).detach().cpu().numpy()
             preds.extend(
@@ -404,6 +661,7 @@ def write_predictions_csv(path: Path, rows: Sequence[Dict[str, object]]):
         "pred_peak_rel_mm_v2_affine",
         "baseline_center_rel_mm_v2",
         "pred_center_rel_mm_v2_affine",
+        "pred_visual",
         "pred_visual_temporal",
     ]
     with path.open("w", newline="", encoding="utf-8") as handle:
@@ -467,6 +725,9 @@ def main() -> int:
             image_height=int(args.image_height),
             image_width=int(args.image_width),
         )
+        target_weighting = build_target_weighting_config(args)
+        train_samples = attach_loss_weights(train_samples, target_weighting)
+        target_weighting_summary = summarize_target_weighting(train_samples, target_weighting)
         target_stats = target_stats_from_samples(train_samples)
 
         train_dataset = TemporalSequenceDataset(
@@ -496,9 +757,14 @@ def main() -> int:
 
         train_loader = dataset_to_loader(train_dataset, batch_size=int(args.batch_size), shuffle=True)
 
-        model = MinimalTemporalVisualRegressor(hidden_dim=int(args.hidden_dim)).to(device=device)
+        model = MinimalTemporalVisualRegressor(
+            hidden_dim=int(args.hidden_dim),
+            temporal_head=str(args.temporal_head),
+            anchor_current_frame=bool(args.anchor_current_frame),
+            temporal_kernel_size=int(args.temporal_kernel_size),
+        ).to(device=device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=float(args.lr), weight_decay=float(args.weight_decay))
-        criterion = nn.HuberLoss(delta=1.0)
+        criterion = nn.HuberLoss(delta=1.0, reduction="none")
 
         best_state = None
         best_epoch = -1
@@ -510,12 +776,14 @@ def main() -> int:
             model.train()
             running_loss = 0.0
             batch_count = 0
-            for batch_x, batch_y in train_loader:
+            for batch_x, batch_y, batch_weight in train_loader:
                 batch_x = batch_x.to(device=device)
                 batch_y = batch_y.to(device=device)
+                batch_weight = batch_weight.to(device=device)
                 optimizer.zero_grad()
                 pred_y = model(batch_x)
-                loss = criterion(pred_y, batch_y)
+                per_sample_loss = criterion(pred_y, batch_y)
+                loss = torch.sum(per_sample_loss * batch_weight) / torch.clamp(torch.sum(batch_weight), min=1e-6)
                 loss.backward()
                 optimizer.step()
                 running_loss += float(loss.item())
@@ -583,7 +851,7 @@ def main() -> int:
 
         torch.save(
             {
-                "model_type": "sl_visual_temporal_regressor_v1",
+                "model_type": "sl_visual_temporal_regressor_v2",
                 "target_column": str(args.target_column),
                 "image_column": str(args.image_column),
                 "history_frames": history_frames,
@@ -591,6 +859,10 @@ def main() -> int:
                 "image_height": int(args.image_height),
                 "image_width": int(args.image_width),
                 "hidden_dim": int(args.hidden_dim),
+                "temporal_head": str(args.temporal_head),
+                "anchor_current_frame": bool(args.anchor_current_frame),
+                "temporal_kernel_size": int(args.temporal_kernel_size),
+                "target_weighting": target_weighting,
                 "image_mean": image_mean.tolist(),
                 "image_std": image_std.tolist(),
                 "target_mean": float(target_stats["mean"]),
@@ -631,6 +903,7 @@ def main() -> int:
                         "pred_peak_rel_mm_v2_affine": peak_affine_pred,
                         "baseline_center_rel_mm_v2": sample["baseline_center_raw"],
                         "pred_center_rel_mm_v2_affine": center_affine_pred,
+                        "pred_visual": float(pred),
                         "pred_visual_temporal": float(pred),
                     }
                 )
@@ -680,6 +953,10 @@ def main() -> int:
             "image_height": int(args.image_height),
             "image_width": int(args.image_width),
             "hidden_dim": int(args.hidden_dim),
+            "temporal_head": str(args.temporal_head),
+            "anchor_current_frame": bool(args.anchor_current_frame),
+            "temporal_kernel_size": int(args.temporal_kernel_size),
+            "target_weighting": target_weighting_summary,
             "best_epoch": int(best_epoch),
             "best_val_mae": float(best_val_mae),
             "num_train_samples": len(train_samples),
@@ -714,8 +991,15 @@ def main() -> int:
         print(
             f"[OK] samples train={len(train_samples)} val={len(val_samples)} test={len(test_samples)} "
             f"| image_column={args.image_column} target={args.target_column} "
-            f"| history_frames={history_frames} history_step={history_step}"
+            f"| history_frames={history_frames} history_step={history_step} "
+            f"| temporal_head={args.temporal_head} anchor_current_frame={bool(args.anchor_current_frame)}"
         )
+        if bool(target_weighting.get("enabled", False)):
+            print(
+                f"[OK] target weighting enabled"
+                f" | thresholds={target_weighting['thresholds']}"
+                f" | weights={target_weighting['weights']}"
+            )
         print(f"[OK] baseline test slosh raw mae: {summary['baseline_metrics']['test_slosh_raw']['mae']}")
         print(f"[OK] baseline test peak affine mae: {summary['baseline_metrics']['test_peak_affine']['mae']}")
         print(f"[OK] baseline test center affine mae: {summary['baseline_metrics']['test_center_affine']['mae']}")

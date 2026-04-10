@@ -8,7 +8,7 @@ import math
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -22,6 +22,8 @@ from extract_liquid_height_v2_from_bag import load_v2_calibration
 
 
 DEFAULT_OUT_DIR = "/data/a/realsense_validation_v2/sl_candidate_frames/0401_train_hard_examples"
+AMPLITUDE_BINS_ASC = ["<=0.2", "0.2-0.5", "0.5-1.0", "1.0-2.0", ">2.0"]
+AMPLITUDE_BINS_DESC = list(reversed(AMPLITUDE_BINS_ASC))
 
 
 def parse_args():
@@ -105,6 +107,25 @@ def parse_args():
         type=float,
         default=5.0,
         help="Cap for peak_rel_mm_v2 when it participates in amplitude scoring. Default: 5.0.",
+    )
+    parser.add_argument(
+        "--selection-mode",
+        choices=["topk", "mixed_bins"],
+        default="topk",
+        help="Selection strategy. 'topk' keeps old behavior; 'mixed_bins' applies per-bag amplitude quotas.",
+    )
+    parser.add_argument(
+        "--mixed-quota-json",
+        default="",
+        help=(
+            "Optional JSON file describing per-session mixed-bin quotas. "
+            "Used only when --selection-mode mixed_bins."
+        ),
+    )
+    parser.add_argument(
+        "--skip-all-scored-csv",
+        action="store_true",
+        help="Do not write the large all-scored CSV. Recommended when only selected rows are needed.",
     )
     parser.add_argument("--device", default="auto", help="Torch device: auto/cpu/cuda. Default: auto.")
     parser.add_argument("--batch-size", type=int, default=64, help="Prediction batch size. Default: 64.")
@@ -316,6 +337,19 @@ def bool_accept(raw_value: str) -> bool:
     return text in {"1", "true", "yes"}
 
 
+def amplitude_bin_name(amplitude_signal_mm: float) -> str:
+    value = float(amplitude_signal_mm)
+    if value <= 0.2:
+        return "<=0.2"
+    if value <= 0.5:
+        return "0.2-0.5"
+    if value <= 1.0:
+        return "0.5-1.0"
+    if value <= 2.0:
+        return "1.0-2.0"
+    return ">2.0"
+
+
 def score_row(
     row: Dict[str, object],
     confidence_threshold: float,
@@ -373,6 +407,7 @@ def score_row(
     updated = dict(row)
     updated["score"] = float(score)
     updated["amplitude_signal_mm"] = float(amplitude_signal)
+    updated["amplitude_bin"] = amplitude_bin_name(float(amplitude_signal))
     updated["disagreement_signal_mm"] = float(disagreement_signal)
     updated["v2_fail_signal"] = float(v2_fail_signal)
     updated["low_conf_signal"] = float(low_conf_signal)
@@ -380,10 +415,57 @@ def score_row(
     return updated
 
 
+def load_mixed_quota_plan(path: Path) -> Dict[str, Dict[str, Any]]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise RuntimeError(f"mixed quota json root must be an object: {path}")
+    normalized: Dict[str, Dict[str, Any]] = {}
+    for key, value in data.items():
+        if not isinstance(value, dict):
+            raise RuntimeError(f"mixed quota entry must be an object: {key}")
+        entry: Dict[str, Any] = {}
+        for bin_name in AMPLITUDE_BINS_ASC:
+            if bin_name in value:
+                entry[bin_name] = int(value[bin_name])
+        if "_top_k" in value:
+            entry["_top_k"] = int(value["_top_k"])
+        if "_fallback_fill" in value:
+            entry["_fallback_fill"] = bool(value["_fallback_fill"])
+        normalized[str(key)] = entry
+    return normalized
+
+
+def choose_from_ranked(
+    ranked_rows: Sequence[Dict[str, object]],
+    chosen: List[Dict[str, object]],
+    chosen_frames: List[int],
+    chosen_row_ids: set,
+    limit: int,
+    min_frame_gap: int,
+) -> int:
+    added = 0
+    for row in ranked_rows:
+        if added >= int(limit):
+            break
+        row_id = str(row.get("row_id", ""))
+        frame_index = int(row.get("frame_index", -1))
+        if row_id in chosen_row_ids:
+            continue
+        if any(abs(frame_index - prev) < int(min_frame_gap) for prev in chosen_frames):
+            continue
+        chosen.append(dict(row))
+        chosen_frames.append(frame_index)
+        chosen_row_ids.add(row_id)
+        added += 1
+    return added
+
+
 def select_top_candidates(
     scored_rows: Sequence[Dict[str, object]],
     top_k_per_bag: int,
     min_frame_gap: int,
+    selection_mode: str = "topk",
+    mixed_quota_plan: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> List[Dict[str, object]]:
     grouped: Dict[str, List[Dict[str, object]]] = defaultdict(list)
     for row in scored_rows:
@@ -401,15 +483,57 @@ def select_top_candidates(
         )
         chosen: List[Dict[str, object]] = []
         chosen_frames: List[int] = []
-        for row in ranked:
-            frame_index = int(row.get("frame_index", -1))
-            if any(abs(frame_index - prev) < int(min_frame_gap) for prev in chosen_frames):
-                continue
-            row["rank_in_bag"] = len(chosen) + 1
-            chosen.append(row)
-            chosen_frames.append(frame_index)
-            if len(chosen) >= int(top_k_per_bag):
-                break
+        chosen_row_ids = set()
+
+        session_name = str(ranked[0].get("session_name", "")) if ranked else ""
+        bag_plan = {}
+        if mixed_quota_plan:
+            bag_plan = (
+                mixed_quota_plan.get(session_name)
+                or mixed_quota_plan.get(bag_id)
+                or mixed_quota_plan.get("default")
+                or {}
+            )
+
+        if selection_mode == "mixed_bins" and bag_plan:
+            bag_top_k = int(bag_plan.get("_top_k", top_k_per_bag))
+            fallback_fill = bool(bag_plan.get("_fallback_fill", True))
+            rows_by_bin: Dict[str, List[Dict[str, object]]] = {name: [] for name in AMPLITUDE_BINS_ASC}
+            for row in ranked:
+                rows_by_bin[str(row.get("amplitude_bin", ""))].append(row)
+            for bin_name in AMPLITUDE_BINS_DESC:
+                target = int(bag_plan.get(bin_name, 0))
+                if target <= 0:
+                    continue
+                choose_from_ranked(
+                    ranked_rows=rows_by_bin.get(bin_name, []),
+                    chosen=chosen,
+                    chosen_frames=chosen_frames,
+                    chosen_row_ids=chosen_row_ids,
+                    limit=target,
+                    min_frame_gap=min_frame_gap,
+                )
+            if fallback_fill and len(chosen) < bag_top_k:
+                choose_from_ranked(
+                    ranked_rows=ranked,
+                    chosen=chosen,
+                    chosen_frames=chosen_frames,
+                    chosen_row_ids=chosen_row_ids,
+                    limit=bag_top_k - len(chosen),
+                    min_frame_gap=min_frame_gap,
+                )
+        else:
+            choose_from_ranked(
+                ranked_rows=ranked,
+                chosen=chosen,
+                chosen_frames=chosen_frames,
+                chosen_row_ids=chosen_row_ids,
+                limit=int(top_k_per_bag),
+                min_frame_gap=min_frame_gap,
+            )
+
+        for idx, row in enumerate(chosen, start=1):
+            row["rank_in_bag"] = idx
         selected.extend(chosen)
     return sorted(selected, key=lambda row: (str(row.get("bag_id", "")), int(row.get("rank_in_bag", 0))))
 
@@ -429,6 +553,12 @@ def main() -> int:
         checkpoint_path = Path(args.checkpoint).expanduser().resolve()
         checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
         device = choose_device(args.device)
+        mixed_quota_plan = None
+        if str(args.selection_mode) == "mixed_bins":
+            quota_json = str(args.mixed_quota_json).strip()
+            if not quota_json:
+                raise RuntimeError("--selection-mode mixed_bins requires --mixed-quota-json")
+            mixed_quota_plan = load_mixed_quota_plan(Path(quota_json).expanduser().resolve())
 
         all_rows: List[Dict[str, str]] = []
         for debug_dir in debug_dirs:
@@ -466,6 +596,8 @@ def main() -> int:
             scored_rows=scored_rows,
             top_k_per_bag=int(args.top_k_per_bag),
             min_frame_gap=int(args.min_frame_gap),
+            selection_mode=str(args.selection_mode),
+            mixed_quota_plan=mixed_quota_plan,
         )
 
         out_dir = Path(args.out_dir).expanduser().resolve()
@@ -488,6 +620,7 @@ def main() -> int:
             "confidence_v2",
             "accept_for_peak_report_v2",
             "amplitude_signal_mm",
+            "amplitude_bin",
             "disagreement_signal_mm",
             "score",
             "reason",
@@ -496,9 +629,11 @@ def main() -> int:
             "debug_dir",
         ]
         write_csv(selected_csv, selected_rows, ["rank_in_bag"] + common_fields)
-        write_csv(all_csv, scored_rows, common_fields)
+        if not bool(args.skip_all_scored_csv):
+            write_csv(all_csv, scored_rows, common_fields)
 
         bag_counts = Counter(str(row.get("bag_id", "")) for row in selected_rows)
+        selected_bin_counts = Counter(str(row.get("amplitude_bin", "")) for row in selected_rows)
         payload = {
             "checkpoint": str(checkpoint_path),
             "device": str(device),
@@ -517,15 +652,21 @@ def main() -> int:
                 "v2_fail_bonus": float(args.v2_fail_bonus),
                 "low_confidence_bonus": float(args.low_confidence_bonus),
                 "peak_v2_cap_mm": float(args.peak_v2_cap_mm),
+                "selection_mode": str(args.selection_mode),
+                "mixed_quota_json": str(args.mixed_quota_json).strip(),
+                "skip_all_scored_csv": bool(args.skip_all_scored_csv),
             },
             "selected_bag_counts": dict(bag_counts),
+            "selected_amplitude_bin_counts": dict(selected_bin_counts),
             "selected_csv": str(selected_csv),
-            "all_scored_csv": str(all_csv),
+            "all_scored_csv": None if bool(args.skip_all_scored_csv) else str(all_csv),
+            "mixed_quota_plan": mixed_quota_plan,
         }
         summary_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
         print(f"[OK] selected csv: {selected_csv}")
-        print(f"[OK] all scored csv: {all_csv}")
+        if not bool(args.skip_all_scored_csv):
+            print(f"[OK] all scored csv: {all_csv}")
         print(f"[OK] summary json: {summary_json}")
         print(
             f"[OK] debug_dirs={len(debug_dirs)} input_rows={len(input_rows)} "

@@ -105,7 +105,8 @@ def parse_args():
         default="all",
         help=(
             "Row filter. all=keep all rows, any=rows with any human label, "
-            "peak=rows with human_peak_mm, center=rows with human_height_mm."
+            "peak=rows with any human peak label (mm or y_rect), "
+            "center=rows with any human center label (mm or y_rect)."
         ),
     )
     parser.add_argument(
@@ -201,6 +202,8 @@ def load_human_label_overrides(path: Path) -> Dict[int, Dict[str, Optional[float
         for row in reader:
             frame_index = int(float(row["frame_index"]))
             overrides[frame_index] = {
+                "human_peak_y_rect_px": finite_float(row.get("human_peak_y_rect_px")),
+                "human_center_y_rect_px": finite_float(row.get("human_center_y_rect_px")),
                 "human_height_mm": finite_float(row.get("human_height_mm")),
                 "human_peak_mm": finite_float(row.get("human_peak_mm")),
             }
@@ -259,6 +262,12 @@ def session_rows_to_manifest(debug_dir: Path) -> Tuple[List[Dict[str, str]], Dic
     for raw in rows:
         frame_index = int(float(raw["frame_index"]))
         override = label_overrides.get(frame_index, {})
+        human_peak_y_rect_px = override.get("human_peak_y_rect_px")
+        if human_peak_y_rect_px is None:
+            human_peak_y_rect_px = finite_float(raw.get("human_peak_y_rect_px"))
+        human_center_y_rect_px = override.get("human_center_y_rect_px")
+        if human_center_y_rect_px is None:
+            human_center_y_rect_px = finite_float(raw.get("human_center_y_rect_px"))
         human_peak_mm = override.get("human_peak_mm")
         if human_peak_mm is None:
             human_peak_mm = finite_float(raw.get("human_peak_mm"))
@@ -266,8 +275,8 @@ def session_rows_to_manifest(debug_dir: Path) -> Tuple[List[Dict[str, str]], Dic
         if human_height_mm is None:
             human_height_mm = finite_float(raw.get("human_height_mm"))
 
-        has_peak = human_peak_mm is not None
-        has_center = human_height_mm is not None
+        has_peak = human_peak_mm is not None or human_peak_y_rect_px is not None
+        has_center = human_height_mm is not None or human_center_y_rect_px is not None
         has_any = has_peak or has_center
 
         if has_peak:
@@ -296,8 +305,8 @@ def session_rows_to_manifest(debug_dir: Path) -> Tuple[List[Dict[str, str]], Dic
             "relative_time_s": str(raw.get("relative_time_s", "")),
             "photo_path": str(raw.get("photo_path", "")),
             "roi_debug_path": str(raw.get("roi_debug_path", "")),
-            "human_peak_y_rect_px": "",
-            "human_center_y_rect_px": "",
+            "human_peak_y_rect_px": "" if human_peak_y_rect_px is None else f"{human_peak_y_rect_px:.3f}",
+            "human_center_y_rect_px": "" if human_center_y_rect_px is None else f"{human_center_y_rect_px:.3f}",
             "human_peak_mm": "" if human_peak_mm is None else f"{human_peak_mm:.6f}",
             "human_height_mm": "" if human_height_mm is None else f"{human_height_mm:.6f}",
             "has_human_peak_label": bool_text(has_peak),

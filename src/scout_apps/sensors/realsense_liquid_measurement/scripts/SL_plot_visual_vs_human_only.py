@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plot only SL-visual vs /slosh/height curves and summarize their human-label errors."""
+"""Plot only SL visual prediction vs human peak labels."""
 
 import argparse
 import csv
@@ -23,10 +23,7 @@ else:
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description=(
-            "Plot only current SL visual output and bag /slosh/height from an SL predictions CSV, "
-            "and write a focused summary relative to human_peak_mm."
-        )
+        description="Plot only current SL visual output and human peak labels from an SL predictions CSV."
     )
     parser.add_argument("--predictions-csv", required=True, help="Path to SL_visual_human_predictions.csv.")
     parser.add_argument("--out-dir", required=True, help="Output directory for plots and summary files.")
@@ -74,7 +71,11 @@ def regression_metrics(targets: Sequence[float], preds: Sequence[float]) -> Dict
     rmse = float((sum(error * error for error in errors) / len(errors)) ** 0.5)
     bias_mean = float(sum(errors) / len(errors))
     sorted_errors = sorted(errors)
-    bias_median = float(sorted_errors[len(sorted_errors) // 2])
+    mid = len(sorted_errors) // 2
+    if len(sorted_errors) % 2 == 0:
+        bias_median = float(0.5 * (sorted_errors[mid - 1] + sorted_errors[mid]))
+    else:
+        bias_median = float(sorted_errors[mid])
     corr = None
     if len(targets) >= 2:
         mean_t = float(sum(targets) / len(targets))
@@ -115,7 +116,6 @@ def write_bagwise_csv(path: Path, rows: Sequence[Dict[str, object]]):
         "split",
         "bag_id",
         "session_name",
-        "model_name",
         "count",
         "mae",
         "rmse",
@@ -154,7 +154,7 @@ def residual_series(rows: Sequence[Dict[str, str]], pred_column: str) -> List[Op
     return residuals
 
 
-def bag_metric_text(rows: Sequence[Dict[str, str]], pred_column: str) -> str:
+def bag_mae_text(rows: Sequence[Dict[str, str]], pred_column: str) -> str:
     targets = []
     preds = []
     for row in rows:
@@ -188,73 +188,6 @@ def bag_bias_text(rows: Sequence[Dict[str, str]], pred_column: str) -> str:
     return f"bias={float(bias_mean):+.4f} mm"
 
 
-def summarize_by_bin(rows: Sequence[Dict[str, str]]) -> Dict[str, Dict[str, object]]:
-    bins = [
-        ("low_<=0.2", lambda target: target <= 0.2),
-        ("mid_0.2_0.5", lambda target: 0.2 < target <= 0.5),
-        ("high_>0.5", lambda target: target > 0.5),
-    ]
-    summary: Dict[str, Dict[str, object]] = {}
-    for name, predicate in bins:
-        targets = []
-        slosh = []
-        visual = []
-        for row in rows:
-            target = finite_float(row.get("target_human_peak_mm"))
-            slosh_pred = finite_float(row.get("baseline_slosh_height_mm"))
-            visual_pred = finite_float(row.get("pred_visual"))
-            if target is None or slosh_pred is None or visual_pred is None:
-                continue
-            if not predicate(float(target)):
-                continue
-            targets.append(float(target))
-            slosh.append(float(slosh_pred))
-            visual.append(float(visual_pred))
-        if not targets:
-            continue
-        summary[name] = {
-            "count": len(targets),
-            "slosh_raw": regression_metrics(targets, slosh),
-            "visual": regression_metrics(targets, visual),
-        }
-    return summary
-
-
-def summarize_rowwise_wins(rows: Sequence[Dict[str, str]]) -> Dict[str, object]:
-    total = 0
-    visual_better = 0
-    slosh_better = 0
-    equal = 0
-    gains = []
-    for row in rows:
-        target = finite_float(row.get("target_human_peak_mm"))
-        slosh_pred = finite_float(row.get("baseline_slosh_height_mm"))
-        visual_pred = finite_float(row.get("pred_visual"))
-        if target is None or slosh_pred is None or visual_pred is None:
-            continue
-        total += 1
-        slosh_error = abs(float(slosh_pred) - float(target))
-        visual_error = abs(float(visual_pred) - float(target))
-        gains.append(float(slosh_error - visual_error))
-        if visual_error + 1e-12 < slosh_error:
-            visual_better += 1
-        elif slosh_error + 1e-12 < visual_error:
-            slosh_better += 1
-        else:
-            equal += 1
-    gains_sorted = sorted(gains)
-    return {
-        "count": total,
-        "visual_better_rows": visual_better,
-        "slosh_better_rows": slosh_better,
-        "equal_rows": equal,
-        "visual_better_ratio": None if total == 0 else float(visual_better / total),
-        "slosh_better_ratio": None if total == 0 else float(slosh_better / total),
-        "mean_abs_error_gain_mm": None if total == 0 else float(sum(gains) / total),
-        "median_abs_error_gain_mm": None if total == 0 else float(gains_sorted[len(gains_sorted) // 2]),
-    }
-
-
 def make_plot(path: Path, grouped_rows: Dict[Tuple[str, str, str], List[Dict[str, str]]], selected_splits: Sequence[str]):
     if plt is None:
         raise RuntimeError(f"matplotlib unavailable: {PLOT_IMPORT_ERROR}")
@@ -268,43 +201,12 @@ def make_plot(path: Path, grouped_rows: Dict[Tuple[str, str, str], List[Dict[str
 
     for axis, ((split_name, session_name, _bag_id), rows) in zip(axes, panels):
         time_values = [finite_float(row.get("relative_time_s")) or 0.0 for row in rows]
-        slosh_values = [finite_float(row.get("baseline_slosh_height_mm")) for row in rows]
+        human_values = [finite_float(row.get("target_human_peak_mm")) for row in rows]
         visual_values = [finite_float(row.get("pred_visual")) for row in rows]
-        axis.plot(time_values, slosh_values, color="#5b8fd1", linewidth=1.6, label="bag /slosh/height")
+        axis.plot(time_values, human_values, color="#202020", linewidth=1.7, label="human peak")
         axis.plot(time_values, visual_values, color="#d9485f", linewidth=1.6, label="SL visual")
         axis.set_title(f"{split_name}: {session_name}")
         axis.set_ylabel("height (mm)")
-        axis.grid(True, alpha=0.25)
-        axis.legend(loc="upper right", fontsize=9)
-    axes[-1].set_xlabel("relative_time_s")
-    fig.tight_layout()
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
-
-
-def make_error_plot(path: Path, grouped_rows: Dict[Tuple[str, str, str], List[Dict[str, str]]], selected_splits: Sequence[str]):
-    if plt is None:
-        raise RuntimeError(f"matplotlib unavailable: {PLOT_IMPORT_ERROR}")
-    panels = [item for item in grouped_rows.items() if item[0][0] in selected_splits]
-    if not panels:
-        raise RuntimeError("no rows matched selected splits for plotting")
-
-    fig, axes = plt.subplots(len(panels), 1, figsize=(14, 3.2 * len(panels)), sharex=False)
-    if len(panels) == 1:
-        axes = [axes]
-
-    for axis, ((split_name, session_name, _bag_id), rows) in zip(axes, panels):
-        time_values = [finite_float(row.get("relative_time_s")) or 0.0 for row in rows]
-        slosh_abs_error = absolute_error_series(rows, "baseline_slosh_height_mm")
-        visual_abs_error = absolute_error_series(rows, "pred_visual")
-        axis.plot(time_values, slosh_abs_error, color="#5b8fd1", linewidth=1.6, label="|/slosh/height - human|")
-        axis.plot(time_values, visual_abs_error, color="#d9485f", linewidth=1.6, label="|SL visual - human|")
-        axis.set_title(
-            f"{split_name}: {session_name} | "
-            f"visual {bag_metric_text(rows, 'pred_visual')}, "
-            f"slosh {bag_metric_text(rows, 'baseline_slosh_height_mm')}"
-        )
-        axis.set_ylabel("abs error (mm)")
         axis.grid(True, alpha=0.25)
         axis.legend(loc="upper right", fontsize=9)
     axes[-1].set_xlabel("relative_time_s")
@@ -326,17 +228,39 @@ def make_residual_plot(path: Path, grouped_rows: Dict[Tuple[str, str, str], List
 
     for axis, ((split_name, session_name, _bag_id), rows) in zip(axes, panels):
         time_values = [finite_float(row.get("relative_time_s")) or 0.0 for row in rows]
-        slosh_residual = residual_series(rows, "baseline_slosh_height_mm")
         visual_residual = residual_series(rows, "pred_visual")
-        axis.plot(time_values, slosh_residual, color="#5b8fd1", linewidth=1.6, label="/slosh/height - human")
         axis.plot(time_values, visual_residual, color="#d9485f", linewidth=1.6, label="SL visual - human")
         axis.axhline(0.0, color="#666666", linestyle="--", linewidth=1.0)
         axis.set_title(
             f"{split_name}: {session_name} | "
-            f"visual {bag_bias_text(rows, 'pred_visual')}, "
-            f"slosh {bag_bias_text(rows, 'baseline_slosh_height_mm')}"
+            f"{bag_mae_text(rows, 'pred_visual')}, {bag_bias_text(rows, 'pred_visual')}"
         )
         axis.set_ylabel("residual (mm)")
+        axis.grid(True, alpha=0.25)
+        axis.legend(loc="upper right", fontsize=9)
+    axes[-1].set_xlabel("relative_time_s")
+    fig.tight_layout()
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+
+
+def make_error_plot(path: Path, grouped_rows: Dict[Tuple[str, str, str], List[Dict[str, str]]], selected_splits: Sequence[str]):
+    if plt is None:
+        raise RuntimeError(f"matplotlib unavailable: {PLOT_IMPORT_ERROR}")
+    panels = [item for item in grouped_rows.items() if item[0][0] in selected_splits]
+    if not panels:
+        raise RuntimeError("no rows matched selected splits for plotting")
+
+    fig, axes = plt.subplots(len(panels), 1, figsize=(14, 3.2 * len(panels)), sharex=False)
+    if len(panels) == 1:
+        axes = [axes]
+
+    for axis, ((split_name, session_name, _bag_id), rows) in zip(axes, panels):
+        time_values = [finite_float(row.get("relative_time_s")) or 0.0 for row in rows]
+        visual_abs_error = absolute_error_series(rows, "pred_visual")
+        axis.plot(time_values, visual_abs_error, color="#d9485f", linewidth=1.6, label="|SL visual - human|")
+        axis.set_title(f"{split_name}: {session_name} | {bag_mae_text(rows, 'pred_visual')}")
+        axis.set_ylabel("abs error (mm)")
         axis.grid(True, alpha=0.25)
         axis.legend(loc="upper right", fontsize=9)
     axes[-1].set_xlabel("relative_time_s")
@@ -359,80 +283,50 @@ def main() -> int:
             raise RuntimeError(f"no rows matched splits={selected_splits}")
 
         grouped = group_rows(filtered_rows)
-        all_png = out_dir / "SL_vs_slosh_only_all.png"
-        make_plot(all_png, grouped, selected_splits)
-        all_residual_png = out_dir / "SL_vs_slosh_only_residual_all.png"
-        make_residual_plot(all_residual_png, grouped, selected_splits)
-        all_error_png = out_dir / "SL_vs_slosh_only_error_all.png"
-        make_error_plot(all_error_png, grouped, selected_splits)
+        make_plot(out_dir / "SL_vs_human_only_all.png", grouped, selected_splits)
+        make_residual_plot(out_dir / "SL_vs_human_only_residual_all.png", grouped, selected_splits)
+        make_error_plot(out_dir / "SL_vs_human_only_error_all.png", grouped, selected_splits)
         for split_name in selected_splits:
-            split_png = out_dir / f"SL_vs_slosh_only_{split_name}.png"
-            make_plot(split_png, grouped, [split_name])
-            make_residual_plot(out_dir / f"SL_vs_slosh_only_residual_{split_name}.png", grouped, [split_name])
-            make_error_plot(out_dir / f"SL_vs_slosh_only_error_{split_name}.png", grouped, [split_name])
+            make_plot(out_dir / f"SL_vs_human_only_{split_name}.png", grouped, [split_name])
+            make_residual_plot(out_dir / f"SL_vs_human_only_residual_{split_name}.png", grouped, [split_name])
+            make_error_plot(out_dir / f"SL_vs_human_only_error_{split_name}.png", grouped, [split_name])
 
         summary: Dict[str, object] = {
             "predictions_csv": str(predictions_csv),
             "selected_splits": selected_splits,
             "num_rows": len(filtered_rows),
+            "overall": {},
         }
-
-        summary["overall"] = {}
         bagwise_rows: List[Dict[str, object]] = []
+
         for split_name in selected_splits:
             split_rows = [row for row in filtered_rows if str(row.get("split", "")) == split_name]
             targets = [float(row["target_human_peak_mm"]) for row in split_rows]
-            slosh = [float(row["baseline_slosh_height_mm"]) for row in split_rows]
             visual = [float(row["pred_visual"]) for row in split_rows]
-            summary["overall"][split_name] = {
-                "slosh_raw": regression_metrics(targets, slosh),
-                "visual": regression_metrics(targets, visual),
-                "rowwise_win_stats": summarize_rowwise_wins(split_rows),
-            }
+            summary["overall"][split_name] = regression_metrics(targets, visual)
 
-            split_grouped = group_rows(split_rows)
-            for (group_split, session_name, bag_id), group_rows_rows in split_grouped.items():
-                group_targets = [float(row["target_human_peak_mm"]) for row in group_rows_rows]
-                group_slosh = [float(row["baseline_slosh_height_mm"]) for row in group_rows_rows]
-                group_visual = [float(row["pred_visual"]) for row in group_rows_rows]
-                bagwise_rows.append(
-                    {
-                        "split": group_split,
-                        "bag_id": bag_id,
-                        "session_name": session_name,
-                        "model_name": "slosh_raw",
-                        **regression_metrics(group_targets, group_slosh),
-                    }
-                )
-                bagwise_rows.append(
-                    {
-                        "split": group_split,
-                        "bag_id": bag_id,
-                        "session_name": session_name,
-                        "model_name": "visual",
-                        **regression_metrics(group_targets, group_visual),
-                    }
-                )
+        for (split_name, session_name, bag_id), rows in grouped.items():
+            if split_name not in selected_splits:
+                continue
+            targets = [float(row["target_human_peak_mm"]) for row in rows]
+            visual = [float(row["pred_visual"]) for row in rows]
+            metrics = regression_metrics(targets, visual)
+            bagwise_rows.append(
+                {
+                    "split": split_name,
+                    "bag_id": bag_id,
+                    "session_name": session_name,
+                    **metrics,
+                }
+            )
 
-        test_rows = [row for row in filtered_rows if str(row.get("split", "")) == "test"]
-        if test_rows:
-            summary["test_target_bins"] = summarize_by_bin(test_rows)
-
-        summary_json = out_dir / "SL_vs_slosh_only_summary.json"
-        bagwise_csv = out_dir / "SL_vs_slosh_only_bagwise.csv"
+        summary_json = out_dir / "SL_vs_human_only_summary.json"
         with summary_json.open("w", encoding="utf-8") as handle:
             json.dump(summary, handle, ensure_ascii=False, indent=2)
-        write_bagwise_csv(bagwise_csv, bagwise_rows)
-
-        print(f"[OK] combined png: {all_png}")
-        print(f"[OK] combined residual png: {all_residual_png}")
-        print(f"[OK] combined error png: {all_error_png}")
-        for split_name in selected_splits:
-            print(f"[OK] split png: {out_dir / f'SL_vs_slosh_only_{split_name}.png'}")
-            print(f"[OK] split residual png: {out_dir / f'SL_vs_slosh_only_residual_{split_name}.png'}")
-            print(f"[OK] split error png: {out_dir / f'SL_vs_slosh_only_error_{split_name}.png'}")
-        print(f"[OK] summary json: {summary_json}")
-        print(f"[OK] bagwise csv: {bagwise_csv}")
+        write_bagwise_csv(out_dir / "SL_vs_human_only_bagwise.csv", bagwise_rows)
+        print(f"[OK] all curve png: {out_dir / 'SL_vs_human_only_all.png'}")
+        print(f"[OK] all residual png: {out_dir / 'SL_vs_human_only_residual_all.png'}")
+        print(f"[OK] all error png: {out_dir / 'SL_vs_human_only_error_all.png'}")
         return 0
     except Exception as exc:  # pylint: disable=broad-except
         print(f"[ERROR] {exc}", file=sys.stderr)
@@ -440,4 +334,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())

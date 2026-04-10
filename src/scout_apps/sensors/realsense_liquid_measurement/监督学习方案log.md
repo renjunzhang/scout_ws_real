@@ -1848,3 +1848,943 @@ bag-wise test：
 - 现阶段最稳的主线仍然是 `raw ROI single-frame v1`；
 - `hard-candidate` 补标重训是一次有价值的失败实验，说明“只补极端难例”会把训练分布带偏；
 - 若继续补标，应优先尝试“高峰值难例 + 中等难度正常峰值”的混合补标，而不是继续只追 `v2_fail + low_conf` 极端样本。
+
+### 17. 当前收敛状态与下一轮混合补标配额
+
+当前结论：
+
+- 当前 best `SL_visual_human_0401_raw_roi_v1` 已经完成一轮正常收敛训练，不是“轮数不够”的问题；
+- 训练历史共 `27` 轮，`best_epoch = 17`，对应 `best_val_mae = 0.1852 mm`；
+- held-out `test` 为 `0.1905 mm`，说明当前 best 已形成稳定泛化，但方法本身还没有达到最终上限。
+
+当前人工标签总量（`0401` 全部 session）：
+
+- 总计 `1603` 条 `human_peak_mm`
+- 分布为：
+  - `Q0_test1 = 212`
+  - `Q0_test2 = 193`
+  - `Q0_test3 = 162`
+  - `Q10_test1 = 195`
+  - `Q10_test2 = 139`
+  - `Q5_static = 78`
+  - `Q5_test1 = 209`
+  - `Q5_test2 = 195`
+  - `Q5_test3 = 220`
+
+当前主线 best 对应的训练口径不是全部 `1603` 条，而是较早冻结的 human split：
+
+- `train = 636`
+- `val = 162`
+- `test = 554`
+
+当前 `train-human` 的幅值分布（`Q0_test1/Q0_test2/Q5_test1/Q5_test2`）：
+
+- `<= 0.2 mm`: `486`
+- `0.2 ~ 0.5 mm`: `134`
+- `0.5 ~ 1.0 mm`: `75`
+- `1.0 ~ 2.0 mm`: `88`
+- `> 2.0 mm`: `26`
+
+判断：
+
+- 当前误差主因不是“再多训几轮”；
+- 当前更像是：
+  - 高峰值样本仍偏少；
+  - 之前那轮新增样本过于偏向 `v2_fail + low_conf` 极端难例；
+  - 导致训练分布被带偏。
+
+因此，下一轮不应继续“只补极端难例”，而应执行一版**混合补标**。
+
+建议的下一轮补标总量：
+
+- 先补 `120` 条左右，不要一次再扩太大；
+- 只补 `train-human`，不动当前 `val/test`。
+
+建议的幅值配额：
+
+- `0.2 ~ 0.5 mm`: `+20`
+- `0.5 ~ 1.0 mm`: `+40`
+- `1.0 ~ 2.0 mm`: `+40`
+- `> 2.0 mm`: `+20`
+
+也就是说，下一轮补标重点应放在：
+
+- 中等峰值正常样本；
+- 高峰值但视觉仍可判的样本；
+- 少量极高峰值样本；
+- 不再主动补大量 `<= 0.2 mm` 的近零帧。
+
+建议的每个 train bag 配额：
+
+- `Q0_test1`: `+30`
+  - `0.2 ~ 0.5`: `6`
+  - `0.5 ~ 1.0`: `10`
+  - `1.0 ~ 2.0`: `9`
+  - `> 2.0`: `5`
+- `Q0_test2`: `+30`
+  - `0.2 ~ 0.5`: `5`
+  - `0.5 ~ 1.0`: `8`
+  - `1.0 ~ 2.0`: `10`
+  - `> 2.0`: `7`
+- `Q5_test1`: `+25`
+  - `0.2 ~ 0.5`: `4`
+  - `0.5 ~ 1.0`: `8`
+  - `1.0 ~ 2.0`: `8`
+  - `> 2.0`: `5`
+- `Q5_test2`: `+35`
+  - `0.2 ~ 0.5`: `5`
+  - `0.5 ~ 1.0`: `14`
+  - `1.0 ~ 2.0`: `13`
+  - `> 2.0`: `3`
+
+这里故意把 `Q5_test2` 的中高峰值配额拉高，是因为它当前 train 分布里：
+
+- `0.5 ~ 1.0 mm` 只有 `12`
+- `> 2.0 mm` 只有 `2`
+
+它是目前最值得补平的一个 train bag。
+
+当前建议：
+
+- 下一步可以继续补标；
+- 但方向应是“混合补标”，不是“再来一轮极端难例补标”；
+- 若执行这轮补标，补完后再重训并与 `raw ROI v1` 做一次严格 held-out 对比，再决定是否升级主线 best。
+
+### 18. 混合补标候选脚本升级与新清单
+
+为了支持上面的“混合补标”策略，本次升级了：
+
+- `scripts/SL_select_candidate_frames.py`
+
+新增能力：
+
+- 支持 `--selection-mode mixed_bins`
+- 支持 `--mixed-quota-json <path>`
+- 支持为每个 bag 指定不同的幅值区间配额
+- 支持 `--skip-all-scored-csv`
+  - 只输出精选候选清单和 summary
+  - 不再额外生成大体积 `all_scored.csv`
+
+本次新增的配额配置文件：
+
+- `config/SL_candidate_selection_0401_mixed_v1.json`
+
+当前这版配置按 session 分配：
+
+- `Q0_test1`: `30`
+- `Q0_test2`: `30`
+- `Q5_test1`: `25`
+- `Q5_test2`: `35`
+
+理论目标幅值配额是：
+
+- `0.2 ~ 0.5`
+- `0.5 ~ 1.0`
+- `1.0 ~ 2.0`
+- `> 2.0`
+
+并且默认不主动补 `<= 0.2`。
+
+本次输出目录：
+
+- `/data/a/realsense_validation_v2/sl_candidate_frames/0401_train_mixed_examples_v1/`
+
+主要文件：
+
+- `SL_candidate_frames_selected.csv`
+- `SL_candidate_frames_summary.json`
+
+本次结果：
+
+- 输入未标帧：`4360`
+- 预测成功：`4360`
+- 选出候选帧：`120`
+
+按 bag 分布：
+
+- `Q0_test1 = 30`
+- `Q0_test2 = 30`
+- `Q5_test1 = 25`
+- `Q5_test2 = 35`
+
+按最终选中幅值区间分布：
+
+- `> 2.0`: `6`
+- `1.0 ~ 2.0`: `44`
+- `0.5 ~ 1.0`: `39`
+- `0.2 ~ 0.5`: `26`
+- `<= 0.2`: `5`
+
+说明：
+
+- 最终仍混入了 `5` 条 `<= 0.2` 的样本，这是因为某些 bag 在严格配额 + `min_frame_gap=10` 下不够填满，脚本按 `_fallback_fill=true` 用次优样本补齐了总配额；
+- 但总体上，这版已经明显比上一轮更偏向中高峰值，而不是只追 `v2_fail + low_conf` 极端难例。
+
+当前建议：
+
+- 下一轮训练集补标，优先使用：
+  - `/data/a/realsense_validation_v2/sl_candidate_frames/0401_train_mixed_examples_v1/SL_candidate_frames_selected.csv`
+- 标完后再重训，并继续拿当前 holdout `val/test` 做严格对比；
+- 在新结果超过 `raw ROI v1` 前，不修改主线 best 口径。
+
+### 19. 最小超参调优（基于当前 809 条 train）
+
+本轮针对 `SL_train_visual_human.py` 做了一次最小超参调优，只改：
+
+- `lr`
+- `batch_size`
+
+不改：
+
+- `hidden_dim`
+- `epochs`
+- `patience`
+- 模型结构
+
+说明：
+
+- 这轮调参是基于**当前最新 train 分布**进行的，也就是 `train = 809`；
+- 因此同组对照的 baseline 不是旧 `raw ROI v1`，而是：
+  - `sl_runs/SL_visual_human_0401_raw_roi_v2_after_train_candidates/`
+- 旧 `raw ROI v1` 仍保留为历史 best reference，但它对应的是更早的 `train = 636` 版本。
+
+本轮实验：
+
+- `E0`：现有 baseline
+  - `SL_visual_human_0401_raw_roi_v2_after_train_candidates`
+- `E1`：`lr=5e-4, batch=32`
+  - `sl_runs/SL_visual_human_0401_raw_roi_tune_E1_lr5e4_bs32/`
+- `E2`：`lr=5e-4, batch=16`
+  - `sl_runs/SL_visual_human_0401_raw_roi_tune_E2_lr5e4_bs16/`
+- `E3`：`lr=3e-4, batch=16`
+  - `sl_runs/SL_visual_human_0401_raw_roi_tune_E3_lr3e4_bs16/`
+
+结果汇总：
+
+- `E0`（809 baseline）
+  - `best_epoch = 8`
+  - `best_val_mae = 0.201529`
+  - `test_mae = 0.212807`
+  - `test_corr = 0.870828`
+- `E1`（`5e-4, 32`）
+  - `best_epoch = 13`
+  - `best_val_mae = 0.198028`
+  - `test_mae = 0.215172`
+  - `test_corr = 0.854577`
+- `E2`（`5e-4, 16`）
+  - `best_epoch = 10`
+  - `best_val_mae = 0.200505`
+  - `test_mae = 0.209013`
+  - `test_corr = 0.867943`
+- `E3`（`3e-4, 16`）
+  - `best_epoch = 12`
+  - `best_val_mae = 0.195516`
+  - `test_mae = 0.211902`
+  - `test_corr = 0.864889`
+
+历史旧 best reference：
+
+- `raw ROI v1`
+  - `train = 636`
+  - `best_epoch = 17`
+  - `best_val_mae = 0.185208`
+  - `test_mae = 0.190480`
+  - `test_corr = 0.893188`
+
+当前判断：
+
+- 这轮最小调参是有一点作用的：
+  - 在 `809 train` 这条线上，`E2` 把 `test_mae` 从 `0.2128` 降到了 `0.2090`
+- 但改善很小，而且没有恢复到旧 `raw ROI v1` 的 `0.1905`
+- 因此可以下一个更明确的结论：
+  - 当前主瓶颈**不是这些优化超参数**
+  - 主瓶颈仍然更像：
+    - train 数据分布被带偏；
+    - 高峰值样本仍不够平衡；
+    - 单帧 `human_peak_mm` 任务本身较难
+
+结论：
+
+- `E2` 可以保留为“当前 809-train 版本里最好的超参结果”
+- 但它**不能**升级为新的主线 best
+- 当前主线 best 仍保持为：
+  - `sl_runs/SL_visual_human_0401_raw_roi_v1/`
+
+## 增量补充 `human_peak_y_rect_px`
+
+本轮没有改动现有 `human_peak_mm / human_height_mm` 标注语义，只在现有标注链上**增量补充**了一个第一性视觉标签：
+
+- `human_peak_y_rect_px`
+
+目的：
+
+- 让后续监督学习可以先学 `peak_y_rect`，再经固定 `F(y)` 映射到 `peak_mm`
+- 把“人眼找峰值位置”和“y->mm 映射误差”拆开
+- 不删除、不覆盖现有 `mm` 标签
+
+本轮代码改动：
+
+- `scripts/debug_liquid_vs_mpc_frame_by_frame_v2.py`
+  - `human_labels.csv` / `debug_session.csv` / `debug_session.json` 现在都支持保存 `human_peak_y_rect_px`
+  - 旧 `human_peak_mm / human_height_mm` 读写逻辑保持不变
+  - viewer 新增：
+    - `y`：切换 `peak-y` 点选模式
+    - 在点选模式下，鼠标点击 rectified ROI，可保存当前帧 `human_peak_y_rect_px`
+    - `u`：清除当前帧 `human_peak_y_rect_px`
+  - viewer 会用洋红色水平线显示已保存的 `human_peak_y_rect_px`
+  - `reuse-cache` 时会从 `human_labels.csv` 回填 `human_peak_y_rect_px`，避免旧 `debug_session.json` 漏掉新字段
+
+- `scripts/SL_build_supervised_manifest.py`
+  - manifest 构建时会读取并透传：
+    - `human_peak_y_rect_px`
+    - `human_center_y_rect_px`
+  - `has_human_peak_label / has_human_center_label` 现在允许由 `mm` 或 `y_rect` 任一标签触发
+
+可回退性：
+
+- 旧 `human_labels.csv` 没有 `human_peak_y_rect_px` 列时，仍可正常加载
+- 旧 `debug_session.json` 没有该字段时，`reuse-cache` 仍可正常打开
+- 本轮改动是**加字段、加交互、加 manifest 透传**，不是替换旧链路
+- 因此如果后续放弃 `y_rect` 路线，现有 `mm` 标注、现有 `SL` 训练和现有分析脚本都还能照旧使用
+
+自检：
+
+- `debug_liquid_vs_mpc_frame_by_frame_v2.py` 已通过 `py_compile`
+- `SL_build_supervised_manifest.py` 已通过 `py_compile`
+- 以 `debug_reannotate/0401/Q0_test1` 做 smoke test，manifest 构建成功
+- 以 `--reuse-cache --skip-viewer` 加载旧 session，兼容链路正常
+
+## `human_peak_y_rect_px` 回填清单
+
+为避免重新人工筛帧，本轮额外生成了一份 `0401` 的 `peak_y_rect` 回填清单：
+
+- `/data/a/realsense_validation_v2/sl_candidate_frames/0401_peak_y_rect_backfill_v1/SL_candidate_frames_selected.csv`
+- `/data/a/realsense_validation_v2/sl_candidate_frames/0401_peak_y_rect_backfill_v1/SL_candidate_frames_summary.json`
+
+筛选规则：
+
+- 只选**已经有 `human_peak_mm`**
+- 且**还没有 `human_peak_y_rect_px`**
+
+当前统计：
+
+- `Q0_test1`: `212`
+- `Q0_test2`: `193`
+- `Q5_test1`: `209`
+- `Q5_test2`: `195`
+- `Q0_test3`: `162`
+- `Q5_test3`: `220`
+- `Q10_test1`: `195`
+- `Q10_test2`: `139`
+- 合计：`1525`
+
+交互口径：
+
+- 打开 viewer 时传入该 candidate csv
+- `J / L` 用于在“待补 `peak_y_rect` 的帧”之间跳转
+- `Y` 进入 `peak-y` 点选模式
+- 鼠标点击 rectified ROI 保存 `human_peak_y_rect_px`
+- `U` 清除当前帧 `human_peak_y_rect_px`
+
+当前已先启动：
+
+- `Q0_test1`
+
+### `train-human` 的 `peak_y_rect` 回填进度
+
+当前 `0401` 的 `train-human` 4 个 bag 已完成 `human_peak_y_rect_px` 回填，且都与已有 `human_peak_mm` 一一对齐：
+
+- `Q0_test1`: `212 / 212`
+- `Q0_test2`: `193 / 193`
+- `Q5_test1`: `209 / 209`
+- `Q5_test2`: `195 / 195`
+
+当前判断：
+
+- `train-human` 的 `peak_y_rect` 已经具备启动第一版 `y_rect` 监督学习训练的条件
+- 如果继续往前补，则下一批应是：
+  - `Q0_test3`
+  - `Q5_test3`
+  - `Q10_test1`
+  - `Q10_test2`
+
+## 第一版 `human_peak_y_rect_px` 单帧训练
+
+本轮在 `0401` 的 `peak_y_rect` 回填完成后，启动了第一版单帧视觉监督学习：
+
+- 输入：`raw_rectified_roi_path`
+- 目标：`human_peak_y_rect_px`
+- 脚本：
+  - `scripts/SL_train_visual_human.py`
+- run：
+  - `sl_runs/SL_visual_human_peak_y_rect_0401_raw_roi_v1/`
+
+为避免单位混乱，本轮先对 `SL_train_visual_human.py` 做了最小修正：
+
+- 当 `target_column` 是 `px` 目标时：
+  - 保留视觉训练与 `px` 误差统计
+  - 不再错误地把 `/slosh/height mm`、`peak_rel_mm_v2`、`center_rel_mm_v2` 直接拿来当同单位 baseline
+- 旧 `human_peak_mm` 训练链保持不变
+
+数据链：
+
+- 新 fresh manifest：
+  - `sl_artifacts/SL_human_peak_y_rect_manifest_0401_all_v1/SL_supervised_manifest.csv`
+- 复用旧 raw ROI 路径后的 manifest：
+  - `sl_artifacts/SL_human_peak_y_rect_manifest_0401_all_raw_roi_v1/SL_supervised_manifest_raw_roi.csv`
+- split：
+  - `sl_artifacts/SL_human_peak_y_rect_manifest_0401_all_raw_roi_v1/SL_supervised_splits.json`
+
+说明：
+
+- 该 raw-roi manifest 复用了旧 `SL_human_peak_manifest_0401_all_raw_roi/` 中已有的 `raw_rectified_roi_path`
+- 本轮没有重新导出大体积 raw ROI 图像，只更新了标签列
+- split 统计里仍能看到 `Q5_static` 这个 group，但它没有 `human_peak_y_rect_px`，训练时会被 `missing_target` 自动跳过
+
+结果：
+
+- `best_epoch = 10`
+- `best_val_mae = 2.2533 px`
+- `test_mae = 2.3765 px`
+- `test_rmse = 3.2494 px`
+- `test_corr = 0.8911`
+
+按 `0401` 当前标定的平均比例：
+
+- `avg_px_per_mm ≈ 9.3198`
+- 因此 `2.3765 px` 大约对应 `0.255 mm`
+
+当前判断：
+
+- 第一版 `y_rect` 路线是可训练、可收敛的
+- 但从粗略量级看，它目前还**没有明显优于**当前直接回归 `human_peak_mm` 的主线 best（`test MAE = 0.1905 mm`）
+- 因此这条线当前更像：
+  - 一个结构上更干净的监督目标验证；
+  - 但还不是新的主线 best
+
+下一步若继续沿 `y_rect` 走，最值钱的是：
+
+- 用固定 `F(y)` 把 `pred_peak_y_rect_px` 映射回 `pred_peak_mm`
+- 再和 `human_peak_mm`、`/slosh/height` 做同口径比较
+
+## `human_peak_y_rect_px` 预测投回 `mm` 的同口径比较
+
+本轮新增了一个轻量评估脚本：
+
+- `scripts/SL_project_y_rect_predictions_to_mm.py`
+
+作用：
+
+- 读取 `SL_visual_human_peak_y_rect_0401_raw_roi_v1/SL_visual_human_predictions.csv`
+- 读取 `SL_human_peak_y_rect_manifest_0401_all_raw_roi_v1/SL_supervised_manifest_raw_roi.csv`
+- 用每帧对应 calibration 的固定 `F(y)`，把：
+  - `pred_peak_y_rect_px -> pred_peak_mm`
+  - `human_peak_y_rect_px -> target_peak_mm_from_human_y`
+- 再与：
+  - `human_peak_mm`
+  - `slosh_height_mm`
+  做同口径比较
+
+产物目录：
+
+- `sl_runs/SL_visual_human_peak_y_rect_0401_raw_roi_v1/projected_mm_compare/`
+
+关键文件：
+
+- `SL_y_rect_projected_mm_predictions.csv`
+- `SL_y_rect_projected_mm_summary.json`
+- `SL_y_rect_projected_mm_bagwise.csv`
+- `SL_y_rect_projected_mm_all.png`
+- `SL_y_rect_projected_mm_val.png`
+- `SL_y_rect_projected_mm_test.png`
+
+结果：
+
+- `val`
+  - `SL y->mm`: `MAE = 0.2468 mm`, `Corr = 0.9243`
+  - `bag /slosh/height`: `MAE = 0.2776 mm`, `Corr = 0.3869`
+- `test`
+  - `SL y->mm`: `MAE = 0.2554 mm`, `Corr = 0.8947`
+  - `bag /slosh/height`: `MAE = 0.2973 mm`, `Corr = 0.5101`
+
+bag-wise：
+
+- `Q10_test1`
+  - `SL y->mm = 0.2426 mm`
+  - `/slosh/height = 0.2863 mm`
+- `Q10_test2`
+  - `SL y->mm = 0.3491 mm`
+  - `/slosh/height = 0.2960 mm`
+- `Q5_test3`
+  - `SL y->mm = 0.2076 mm`
+  - `/slosh/height = 0.3079 mm`
+
+与当前主线 best 的关系：
+
+- 当前主线 best 仍是：
+  - `sl_runs/SL_visual_human_0401_raw_roi_v1/`
+- 它直接回归 `human_peak_mm`，held-out `test MAE = 0.1905 mm`
+- 因此：
+  - `SL y->mm` 比 `/slosh/height` 好；
+  - 但目前仍没有超过直接回归 `human_peak_mm` 的主线 best
+
+额外观察：
+
+- `human_peak_y_rect_px -> human_peak_mm` 的固定映射一致性并不高：
+  - `val` 上 `|F(human_y_rect) - human_peak_mm| MAE = 0.2964 mm`
+  - `test` 上 `|F(human_y_rect) - human_peak_mm| MAE = 0.3124 mm`
+
+这说明当前两层人工标签之间还存在可见差异：
+
+- `human_peak_mm` 不是固定由 `human_peak_y_rect_px` 严格派生出来的
+- 因此 `y_rect` 路线投回 `mm` 后没有超过旧主线 best，并不只说明模型不够强，也说明标签体系本身还没有完全收紧到同一口径
+
+当前判断：
+
+- `human_peak_y_rect_px` 路线是值得保留的结构化分支；
+- 它投回 `mm` 后整体优于 `/slosh/height`；
+- 但在当前标签一致性水平下，它还不是新的主线 best；
+- 当前主线 best 仍继续使用：
+  - `SL_visual_human_0401_raw_roi_v1`
+
+## 标签调整后的整套重训与当前 best 刷新
+
+本轮由于部分人工标签被重新调整，对依赖人工真值的主链进行了整套刷新：
+
+- fresh manifest：
+  - `sl_artifacts/SL_human_peak_manifest_0401_all_relabel_refresh_v1/`
+- 复用旧 raw ROI 路径后的 manifest：
+  - `sl_artifacts/SL_human_peak_manifest_0401_all_raw_roi_relabel_refresh_v1/`
+- 为避免把静态帧混入主训练，本轮实际训练使用：
+  - `SL_supervised_manifest_raw_roi_motion_only.csv`
+- 新 split：
+  - `splits_mm_motion_only/SL_supervised_splits.json`
+  - `splits_y_rect_motion_only/SL_supervised_splits.json`
+
+说明：
+
+- 本轮没有重新导出 raw ROI 图像，只复用了旧的 `raw_rectified_roi_path`
+- 为保持主线口径一致，`Q5_static` 被从本轮 `motion_only` manifest 中排除
+- 新 manifest 的 `train/val/test` 行数为：
+  - `train = 809`
+  - `val = 162`
+  - `test = 554`
+
+### 1. `human_peak_mm` 主线重训
+
+run：
+
+- `sl_runs/SL_visual_human_0401_raw_roi_relabel_refresh_v1/`
+
+结果：
+
+- `best_epoch = 4`
+- `best_val_mae = 0.1837 mm`
+- `test_mae = 0.2402 mm`
+- `test_rmse = 0.3658 mm`
+- `test_corr = 0.8586`
+
+对比：
+
+- 同口径 `/slosh/height`：`test MAE = 0.2973 mm`
+- 因此这轮重训仍然优于 `/slosh/height`
+- 但它没有超过旧主线 best
+
+已刷新产物：
+
+- `SL_visual_human_training_history.png`
+- `curves_visual_vs_human_only/`
+- `curves_slosh_vs_visual_only/`
+- `debug_images_test/`
+
+### 2. `human_peak_y_rect_px` 分支重训
+
+run：
+
+- `sl_runs/SL_visual_human_peak_y_rect_0401_raw_roi_relabel_refresh_v1/`
+
+结果：
+
+- `best_epoch = 10`
+- `best_val_mae = 2.2533 px`
+- `test_mae = 2.3765 px`
+- `test_corr = 0.8911`
+
+说明：
+
+- 这组结果与上一版基本一致
+- 说明本轮标签修改对 `y_rect` 分支影响不大
+
+其 `y_rect -> mm` 投影结果：
+
+- `val`: `MAE = 0.2468 mm`
+- `test`: `MAE = 0.2554 mm`
+- 仍优于 `/slosh/height`
+- 但仍未超过 `human_peak_mm` 主线 best
+
+### 3. 旧主线 best 在新标签下的重评分
+
+仅重训还不够，因为旧主线 best 的 summary 已经绑定旧标签。为此本轮对旧主线 best 做了“新标签重评分”：
+
+- 来源模型：
+  - `sl_runs/SL_visual_human_0401_raw_roi_v1/`
+- 重评分目录：
+  - `sl_runs/SL_visual_human_0401_raw_roi_v1/relabel_refresh_eval_v1/`
+
+做法：
+
+- 不重新训练旧模型
+- 直接把旧 predictions 按 `row_id` 对齐到本轮新标签 manifest
+- 重新生成：
+  - `curves_visual_vs_human_only/`
+  - `curves_slosh_vs_visual_only/`
+  - `debug_images_test/`
+
+重评分结果：
+
+- `val`
+  - `visual MAE = 0.1586 mm`
+  - `/slosh/height = 0.2776 mm`
+- `test`
+  - `visual MAE = 0.1869 mm`
+  - `/slosh/height = 0.2973 mm`
+
+关键判断：
+
+- 在**当前最新标签口径**下，旧主线 best 仍然优于本轮新重训：
+  - 旧主线 best 重评分：`test MAE = 0.1869 mm`
+  - 新重训 refresh：`test MAE = 0.2402 mm`
+- 因此当前真正应保留的 mainline best 是：
+  - `sl_runs/SL_visual_human_0401_raw_roi_v1/`
+  - 但应以 `relabel_refresh_eval_v1/` 下的新标签重评分结果作为当前解释口径
+
+### 4. 本轮阶段结论
+
+- “改了标签就整套重训”这一步是必要的；
+- 但重训本身没有自动带来更好的模型；
+- 当前最新标签下，**最好的仍然是旧单帧 raw ROI 主线模型的重评分结果**，不是本轮新权重；
+- 因此后续继续推进时，应把：
+  - `SL_visual_human_0401_raw_roi_v1/relabel_refresh_eval_v1/`
+  视为当前最新标签口径下的主参考结果。
+
+## 当前是否还应先调超参
+
+本轮在重新整理标签后，补做了一个“先不要立刻调超参”的诊断。
+
+### 1. 当前几条线分别训练了多少轮
+
+- 旧主线 best：
+  - `SL_visual_human_0401_raw_roi_v1`
+  - 实际训练 `27` 轮
+  - `best_epoch = 17`
+- 新标签后的 `human_peak_mm` 重训：
+  - `SL_visual_human_0401_raw_roi_relabel_refresh_v1`
+  - 实际训练 `14` 轮
+  - `best_epoch = 4`
+- 新标签后的 `human_peak_y_rect_px` 分支：
+  - `SL_visual_human_peak_y_rect_0401_raw_roi_relabel_refresh_v1`
+  - 实际训练 `20` 轮
+  - `best_epoch = 10`
+
+判断：
+
+- 这几条线都不是“还没训够”
+- best epoch 都在前半段，已经属于收敛到平台区
+- 因此当前主要矛盾不是 epoch / lr 没调好
+
+### 2. `viewer_zero_offset_px` 不是主因
+
+逐个 session 检查 `debug_session.json` 后发现：
+
+- `Q0_test1`: `0.0`
+- `Q0_test2`: `0.0`
+- `Q0_test3`: `0.0`
+- `Q10_test1`: `0.0`
+- `Q10_test2`: `0.0`
+- `Q5_test2`: `0.0`
+- `Q5_test3`: `0.0`
+- 只有 `Q5_test1`: `1.0`
+
+说明：
+
+- 大部分 `0401` 运动包并没有人为改动 viewer zero line
+- `Q5_test1` 的 `1 px` 偏移大约只相当于 `0.1 mm` 量级
+- 它不足以解释当前全局约 `0.30 mm` 的 `y_rect -> mm` 不一致
+
+### 3. `human_peak_y_rect_px` 和 `human_peak_mm` 的差异是 session 级真实存在的
+
+在 `0401` 的 8 个 motion bags 上，把 `human_peak_y_rect_px` 通过固定 `F(y)` 映射回 `mm`，再与 `human_peak_mm` 比较：
+
+- `Q0_test1`: `MAE = 0.3356 mm`
+- `Q0_test2`: `0.3171 mm`
+- `Q0_test3`: `0.2964 mm`
+- `Q10_test1`: `0.3385 mm`
+- `Q10_test2`: `0.2654 mm`
+- `Q5_test1`: `0.3955 mm`
+- `Q5_test2`: `0.3038 mm`
+- `Q5_test3`: `0.3190 mm`
+
+这说明：
+
+- `y_rect` 和 `mm` 的差异不是某一个 bag 偶发坏掉
+- 而是整批标签体系就存在稳定的不一致
+- 尤其 `Q5_test1` 最大，和它的 `viewer_zero_offset_px=1.0` 有一定关系，但仍解释不完
+
+### 4. `human_peak_mm` 也不是单纯的“0.5 mm 粗标”
+
+统计 `human_peak_mm` 值后：
+
+- 只有约 `41.8%` 的值是严格 `0.5 mm` 档
+- 约 `79.7%` 的值是严格 `0.1 mm` 档
+
+最常见值包括：
+
+- `0.0`
+- `0.1`
+- `0.2`
+- `0.3`
+- `0.15`
+- `0.4`
+- `0.5`
+- `1.2`
+- `0.35`
+
+说明：
+
+- 当前 `human_peak_mm` 并不是单纯“按 0.5 mm 粗取整”的标签
+- 但它仍然带有明显的人工估值成分
+- 因此它和点击式 `y_rect` 的差异，不能简单归结为“mm 量化”
+
+### 5. 当前建议
+
+因此下一步不建议先把主要精力放在超参数，而应优先做：
+
+- 先抽样检查一批 `|F(y_rect) - human_peak_mm|` 最大的帧；
+- 明确以后主标签到底以哪一个为准：
+  - `human_peak_mm`
+  - 还是 `human_peak_y_rect_px`
+- 如果确认 `y_rect` 更接近第一性视觉量，则后续主线应逐步改成：
+  - 主监督学 `human_peak_y_rect_px`
+  - `human_peak_mm` 作为固定 `F(y)` 派生量与对比量
+
+当前结论：
+
+- **现在不是继续盲目调超参的时候；**
+- **当前最值钱的是先收紧 `human_peak_y_rect_px ↔ human_peak_mm` 的标签一致性。**
+
+## `human_peak_y_rect_px` 与 `human_peak_mm` 最大分歧帧清单
+
+为便于后续人工复核，本轮新增了一个轻量脚本：
+
+- `scripts/SL_select_y_rect_mm_disagreement_frames.py`
+
+作用：
+
+- 读取最新标签 manifest：
+  - `sl_artifacts/SL_human_peak_manifest_0401_all_raw_roi_relabel_refresh_v1/SL_supervised_manifest_raw_roi_motion_only.csv`
+- 对每条同时具有：
+  - `human_peak_y_rect_px`
+  - `human_peak_mm`
+  的记录，使用固定 `F(y)` 计算：
+  - `projected_peak_mm_from_y_rect`
+- 再按：
+  - `abs_gap_mm = |F(human_peak_y_rect_px) - human_peak_mm|`
+  排序
+- 对每个 bag 做时间去重后，导出最大分歧帧清单
+
+输出目录：
+
+- `/data/a/realsense_validation_v2/sl_candidate_frames/0401_y_rect_mm_disagreement_v1/`
+
+关键文件：
+
+- `SL_candidate_frames_selected.csv`
+- `SL_candidate_frames_summary.json`
+
+当前设置：
+
+- 每 bag 选 `25` 帧
+- 相邻帧最小间隔 `10`
+- 共 `8` 个 motion bags
+- 最终导出 `200` 条候选帧
+
+session 级统计：
+
+- `Q5_test1`: mean abs gap `0.3955 mm`, max `1.3975 mm`
+- `Q10_test1`: `0.3385 mm`, max `1.2353 mm`
+- `Q0_test1`: `0.3356 mm`, max `0.9728 mm`
+- `Q5_test3`: `0.3190 mm`, max `1.2353 mm`
+- `Q0_test2`: `0.3171 mm`, max `1.4226 mm`
+- `Q5_test2`: `0.3038 mm`, max `1.1476 mm`
+- `Q0_test3`: `0.2964 mm`, max `1.0979 mm`
+- `Q10_test2`: `0.2654 mm`, max `0.7852 mm`
+
+按“选中后的高分歧帧”看，优先级最高的是：
+
+- `Q5_test1`
+- `Q5_test2`
+- `Q5_test3`
+- `Q10_test1`
+
+Top 5 全局分歧帧：
+
+- `Q0_test2 frame 837`: `human=1.2`, `F(y)=2.6226`, gap `+1.4226`
+- `Q5_test1 frame 791`: `human=0.9`, `F(y)=2.2975`, gap `+1.3975`
+- `Q5_test1 frame 956`: `human=3.8`, `F(y)=5.1961`, gap `+1.3961`
+- `Q10_test1 frame 637`: `human=2.2`, `F(y)=3.4353`, gap `+1.2353`
+- `Q0_test2 frame 334`: `human=2.2`, `F(y)=3.4353`, gap `+1.2353`
+
+说明：
+
+- 这些高分歧帧当前几乎都是 `F(y_rect) > human_peak_mm`
+- 这和前面的 session 级统计一致，说明不是零散噪声，而是标签口径存在系统性偏差
+
+后续用法：
+
+- 这份 `SL_candidate_frames_selected.csv` 可以直接作为 viewer 的 `--candidate-csv`
+- 打开后用：
+  - `Y` 进入 `peak-y` 点选模式
+  - `J / L` 在高分歧候选帧之间跳转
+
+当前建议：
+
+- 如果下一步开始人工复核，优先从：
+  - `Q5_test1`
+  - `Q5_test2`
+  - `Q5_test3`
+  开始
+- 这一步的目标不是继续补数据量，而是先统一：
+  - `human_peak_y_rect_px`
+  - `human_peak_mm`
+  的定义和对应关系
+
+### 当前复核进度
+
+- `Q5_test1` 已完成一轮 `y_rect vs mm` 高分歧帧复核
+- 当前 `Q5_test1` 仍保持完整：
+  - `human_peak_mm = 209`
+  - `human_peak_y_rect_px = 209`
+  - `both = 209`
+- `Q5_test2` 也已完成一轮复核，当前仍保持完整：
+  - `human_peak_mm = 195`
+  - `human_peak_y_rect_px = 195`
+  - `both = 195`
+- `Q5_test3` 也已完成一轮复核，当前仍保持完整：
+  - `human_peak_mm = 220`
+  - `human_peak_y_rect_px = 220`
+  - `both = 220`
+- `Q10_test1` 也已完成一轮复核，当前仍保持完整：
+  - `human_peak_mm = 195`
+  - `human_peak_y_rect_px = 195`
+  - `both = 195`
+- `Q10_test2` 也已完成一轮复核，当前仍保持完整：
+  - `human_peak_mm = 139`
+  - `human_peak_y_rect_px = 139`
+  - `both = 139`
+- 当前 `0401` motion bags 的 `y_rect vs mm` 高分歧复核已全部完成：
+  - `Q0_test1`
+  - `Q0_test2`
+  - `Q5_test1`
+  - `Q5_test2`
+  - `Q0_test3`
+  - `Q5_test3`
+  - `Q10_test1`
+  - `Q10_test2`
+- 下一步不再继续开新 bag，应回到：
+  - 重新生成 manifest
+  - 重跑 `y_rect` 分支训练与 `y->mm` 投影评估
+  - 再判断 `human_peak_y_rect_px` 是否足以升级为新的主线监督目标
+
+### 复核后 `y_rect` 重训 v2
+
+- 基于最新复核后的 8 个 motion bags，重新生成了新的 `raw_roi + y_rect` manifest：
+  - [SL_supervised_manifest_raw_roi_motion_only.csv](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_artifacts/SL_human_peak_y_rect_manifest_0401_all_raw_roi_relabel_refresh_v2/SL_supervised_manifest_raw_roi_motion_only.csv)
+- 这次没有重复导出 raw ROI 图片，只复用了旧 `raw_rectified_roi_path`，仅刷新了：
+  - `human_peak_mm`
+  - `human_peak_y_rect_px`
+  - 标签相关元数据
+- 新 run：
+  - [SL_visual_human_peak_y_rect_0401_raw_roi_relabel_refresh_v2](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_human_peak_y_rect_0401_raw_roi_relabel_refresh_v2)
+- `y_rect(px)` 训练结果：
+  - `best_epoch = 10`
+  - `best_val_mae = 2.2533 px`
+  - `test_mae = 2.3712 px`
+  - `test_corr = 0.8856`
+- 相比上一版 `y_rect` 重训：
+  - `test_mae(px): 2.3765 -> 2.3712`
+  - 有极小幅改善，但量级很小
+- `y -> mm` 投影结果：
+  - [projected_mm_compare](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_human_peak_y_rect_0401_raw_roi_relabel_refresh_v2/projected_mm_compare)
+  - `val: 0.2468 mm`
+  - `test: 0.2579 mm`
+  - `/slosh/height(test): 0.2957 mm`
+- `human_peak_y_rect_px -> mm` 与 `human_peak_mm` 的一致性在 `test` 上略有改善：
+  - `0.3124 mm -> 0.3049 mm`
+- 但当前结论不变：
+  - 这条 `y_rect` 主线仍然优于 `/slosh/height`
+  - 但仍未超过当前 `mm` 主线 best
+  - 当前最新标签口径下，仍应以旧主线重评分结果作为 best：
+    - [relabel_refresh_eval_v1](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_human_0401_raw_roi_v1/relabel_refresh_eval_v1)
+    - `test_mae = 0.1869 mm`
+
+### 复核后 `human_peak_mm` 重训 v2
+
+- 基于最新人工修正后的 `human_peak_mm`，重新生成了新的 `raw_roi + mm` manifest：
+  - [SL_supervised_manifest_raw_roi_motion_only.csv](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_artifacts/SL_human_peak_manifest_0401_all_raw_roi_relabel_refresh_v2/SL_supervised_manifest_raw_roi_motion_only.csv)
+- 这次同样没有重复导出 raw ROI 图片，只刷新了标签与 manifest。
+- 新 run：
+  - [SL_visual_human_0401_raw_roi_relabel_refresh_v2](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_human_0401_raw_roi_relabel_refresh_v2)
+- 训练结果：
+  - `best_epoch = 4`
+  - `best_val_mae = 0.1677 mm`
+  - `test_mae = 0.2290 mm`
+  - `test_corr = 0.8419`
+- 相比上一版 `mm` 重训：
+  - `test_mae: 0.2402 -> 0.2290`
+  - 有明确改善
+- 但相比当前最新标签口径下的主线 best：
+  - [relabel_refresh_eval_v1](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_human_0401_raw_roi_v1/relabel_refresh_eval_v1)
+  - `test_mae = 0.1869 mm`
+  - 这轮新重训仍未超过旧主线重评分结果
+- 当前口径下的结论更新为：
+  - 新的 `mm` 重训优于 `/slosh/height(test=0.2957 mm)`
+  - 也优于上一版 `mm` 重训
+  - 但仍不能替代当前 best
+  - 当前 best 仍然是旧主线 `v1 raw ROI` 在新标签下的重评分结果
+
+### `relabel_refresh_v2` 对比图补充
+
+- 已为 [SL_visual_human_0401_raw_roi_relabel_refresh_v2](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_human_0401_raw_roi_relabel_refresh_v2) 补齐两套对比图：
+  - [curves_visual_vs_human_only](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_human_0401_raw_roi_relabel_refresh_v2/curves_visual_vs_human_only)
+  - [curves_slosh_vs_visual_only](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_human_0401_raw_roi_relabel_refresh_v2/curves_slosh_vs_visual_only)
+- `SL vs human` 当前指标：
+  - `val_mae = 0.1677 mm`
+  - `test_mae = 0.2290 mm`
+- `SL vs /slosh/height` 当前指标：
+  - `test visual = 0.2290 mm`
+  - `test slosh = 0.2957 mm`
+
+### `sl_runs` 阶段性归档
+
+- 已将当前不再作为主线的 10 个旧 run 归档到：
+  - [/data/a/scout_ws/sl_runs_archive_20260408](/data/a/scout_ws/sl_runs_archive_20260408)
+- 归档后 `sl_runs` 目录只保留 3 条当前相关 run：
+  - [SL_visual_human_0401_raw_roi_v1](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_human_0401_raw_roi_v1)
+  - [SL_visual_human_0401_raw_roi_relabel_refresh_v2](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_human_0401_raw_roi_relabel_refresh_v2)
+  - [SL_visual_human_peak_y_rect_0401_raw_roi_relabel_refresh_v2](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_human_peak_y_rect_0401_raw_roi_relabel_refresh_v2)
+- 当前归档目录大小：
+  - `32M`
+
+### `FSL` 结果目录归档
+
+- 在不影响当前 `SL` 主线的前提下，已将 `FSL` 相关结果目录移出工作区：
+  - `fsl_artifacts`
+  - `fsl_runs`
+- 新归档位置：
+  - [/data/a/scout_ws/fsl_archive_20260408](/data/a/scout_ws/fsl_archive_20260408)
+- 当前大小：
+  - `fsl_artifacts = 25M`
+  - `fsl_runs = 6.2M`
+- 说明：
+  - `FSL` 的脚本与文档仍保留在仓库内
+  - 当前 `SL` 主线不依赖这两个目录，因此不受影响
