@@ -207,6 +207,13 @@ catkin_make 2>&1 | grep "processing catkin package"
 ### 7. MPC 局部规划
     # 普通启动（Q_slosh=0，无晃动抑制）
     roslaunch scout_local_planner test_mpc_sim.launch
+    
+    # 当前推荐的 anti-slosh 仿真启动（默认安全 IMU 配置）
+    roslaunch scout_local_planner slosh_experiment.launch \
+    sim:=true \
+    Q_slosh:=5 \
+    enable_slosh_box_constraint:=true \
+    risk_scheduler_enable:=true
 
     # 带晃动抑制的启动（论文实验用）
     roslaunch scout_local_planner test_mpc_sim.launch Q_slosh:=10.0

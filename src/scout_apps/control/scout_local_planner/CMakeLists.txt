@@ -70,6 +70,7 @@ catkin_install_python(PROGRAMS
   scripts/analyze_imu_ay_stage2.py
   scripts/run_imu_stage2_sequence.py
   scripts/run_imu_stage4_sequence.py
+  scripts/sim_imu_from_odom.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
