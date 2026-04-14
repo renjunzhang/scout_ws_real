@@ -1,11 +1,11 @@
-<!-- 液体晃动抑制消融实验 launch 文件 -->
+<!-- 液体晃动抑制消融实验 launch 文件（仿真专用） -->
 <!--
   使用方式：
-    # 基线 (无晃动抑制)
-    roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=0
+    # 仿真基线 (无晃动抑制)
+    roslaunch scout_local_planner slosh_experiment_sim.launch Q_slosh:=0
 
-    # 消融实验 (典型值: 5, 10, 20)
-    roslaunch scout_local_planner slosh_experiment.launch Q_slosh:=10
+    # 仿真消融实验 (典型值: 5, 10, 20)
+    roslaunch scout_local_planner slosh_experiment_sim.launch Q_slosh:=10
 
   实验建议：
     1. 每组 Q_slosh 跑 3~5 次相同路径
@@ -44,8 +44,8 @@
   <node pkg="scout_local_planner" type="local_planner_node"
         name="scout_local_planner" output="screen">
 
-    <!-- 加载基础参数 -->
-    <rosparam file="$(find scout_local_planner)/config/mpc_params.yaml"
+    <!-- 加载仿真基础参数 -->
+    <rosparam file="$(find scout_local_planner)/config/mpc_params_sim.yaml"
               command="load"/>
 
     <!-- 实验参数覆盖 (YAML 之后、节点 init 之前) -->

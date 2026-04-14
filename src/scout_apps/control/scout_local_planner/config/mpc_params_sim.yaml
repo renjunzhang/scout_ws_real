@@ -7,15 +7,16 @@ mpc:
   # 预测参数
   N: 40                    # 预测步长
   dt: 0.05                  # 时间步长 (s)
+  cmd_vel_lead_time: 0.15   # 仿真专用输出速度前瞻时间；补偿 Gazebo 速度反馈滞后
   
   # 状态权重（Frenet 误差）
   # 注：change #11 修复了 OSQP P 矩阵 2x 系数，此处权重值已做相应调整
   Q_el: 0.5                # 纵向误差权重（沿路径方向）
   Q_ec: 30.0               # 横向误差权重（更贴路径）
-  Q_etheta: 6.0            # 航向误差权重（更贴路径）
+  Q_etheta: 10.0           # 航向误差权重（更贴路径）
   Q_v: 8.0                 # 速度跟踪权重（修复后 v_ref 目标正确）
   use_contour_lag: true    # 启用 contour + lag 误差结构
-  Q_contour: 15.0          # contour（横向误差）权重
+  Q_contour: 45.0          # contour（横向误差）权重
   Q_lag: 0.5               # lag（纵向误差）权重
   enable_omega_ff: true    # 启用角速度前馈
   Q_omega_ff: 1.5          # 角速度前馈权重（修复后 omega_ref 目标正确）
@@ -48,11 +49,11 @@ vehicle:
   # 速度约束
   v_max: 2.0               # 最大线速度 (m/s)
   v_min: 0.0               # 最小线速度 (m/s)，禁用倒车
-  omega_max: 3.5           # 最大角速度 (rad/s)
+  omega_max: 2.0           # 最大角速度 (rad/s)
   
   # 加速度约束
   a_max: 2.0               # 最大线加速度 (m/s²)
-  alpha_max: 7.0           # 最大角加速度 (rad/s²)
+  alpha_max: 4.0           # 最大角加速度 (rad/s²)
   j_max: 3.0               # 最大线加加速度 (m/s^3)——jerk 约束
   
   # 车辆几何
@@ -63,7 +64,7 @@ vehicle:
 # 路径处理参数
 # =============================================================================
 path_handler:
-  lookahead_distance: 0.6  # 前视距离 (m)
+  lookahead_distance: 0.35 # 前视距离 (m)，仿真贴线优先
   goal_tolerance: 0.1      # 到达目标位置容差 (m)
   yaw_tolerance: 0.1       # 到达目标航向容差 (rad)
   goal_reached_max_speed: 0.08  # 仅在低速时允许切到 REACHED
@@ -78,14 +79,14 @@ path_handler:
   window_forward: 48                   # 样条窗口向前额外点数
   s_jump_threshold: 0.5               # 弧长跳变阈值 (m)
   resample_spacing: 0.05              # 路径重采样间隔 (m)
-  max_lat_accel: 2.0                  # 最大横向加速度 (m/s^2)
+  max_lat_accel: 1.2                  # 最大横向加速度 (m/s^2)，限制弯中速度以提升贴线
   min_ref_speed: 0.0                  # 参考速度下限 (m/s)
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
   max_tan_accel: 2.0                  # 最大切向加速度 (m/s^2) <= a_max
   max_tan_decel: 2.0                  # 最大切向减速度 (m/s^2) <= a_max
   goal_speed: 0.0                     # 末端期望速度 (m/s)
-  use_bspline_smoothing: true         # 启用局部 B-spline 平滑
+  use_bspline_smoothing: false        # 关闭局部 B-spline 平滑（提高对全局路径贴合）
   bspline_samples_per_segment: 12      # 每段采样点数
   path_change_threshold: 0.3           # 路径相似性阈值 (m)，低于此值视为重复路径，跳过重置
 

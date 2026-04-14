@@ -219,6 +219,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     // MPC 参数
     pnh.param("mpc/N", mpc_params_.N, 20);
     pnh.param("mpc/dt", mpc_params_.dt, 0.05);
+    pnh.param("mpc/cmd_vel_lead_time", mpc_params_.cmd_vel_lead_time, -1.0);
     pnh.param("mpc/Q_el", mpc_params_.Q_el, 1.0);
     pnh.param("mpc/Q_ec", mpc_params_.Q_ec, 10.0);
     pnh.param("mpc/Q_etheta", mpc_params_.Q_etheta, 5.0);

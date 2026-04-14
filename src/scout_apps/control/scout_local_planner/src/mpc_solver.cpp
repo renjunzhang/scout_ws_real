@@ -8,6 +8,7 @@
 #include "scout_local_planner/mpc_solver.h"
 #include "scout_local_planner/diff_drive_model.h"
 
+#include <algorithm>
 #include <chrono>
 #include <ros/ros.h>
 
@@ -416,12 +417,15 @@ void MPCSolver::extractSolution(MPCSolution& solution) {
     // 第一个控制量
     solution.u_first = solution.u_optimal[0];
     
-    // v/ω 输出半步时间对齐：补偿执行器传输延迟
-    // v_cmd = v_0 + a_0 * 0.5*dt（半步外推，对齐到 t + 0.5*dt）
+    // v/ω 输出时间对齐：默认半步外推；仿真可单独调大前瞻时间以补偿 Gazebo 速度反馈滞后
     {
         double v0 = solution.x_predicted[0](StateIndex::V);
         double a0 = solution.u_first(ControlIndex::A);
-        solution.v_cmd = v0 + a0 * 0.5 * mpc_params_.dt;
+        const double lead_time = mpc_params_.cmd_vel_lead_time >= 0.0
+            ? mpc_params_.cmd_vel_lead_time
+            : 0.5 * mpc_params_.dt;
+        solution.v_cmd = std::max(vehicle_params_.v_min,
+                                  std::min(vehicle_params_.v_max, v0 + a0 * lead_time));
     }
     // omega_cmd = 首两步均值（对齐到 t + 0.5*dt）
     if (N >= 2) {

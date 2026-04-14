@@ -126,6 +126,7 @@ struct MPCParams {
     // 预测参数
     int N = 20;             // 预测步长
     double dt = 0.05;       // 时间步长 (s)
+    double cmd_vel_lead_time = -1.0;  // 输出速度前瞻时间；<0 时沿用 0.5*dt
     
     // 状态权重
     double Q_el = 1.0;      // 纵向误差权重

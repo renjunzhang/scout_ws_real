@@ -1,6 +1,6 @@
 # scout_local_planner launch 说明
 
-本文档说明 `test_mpc.launch`、`test_mpc_sim.launch`、`slosh_experiment.launch` 三个启动文件的区别，以及推荐使用场景。
+本文档说明 `test_mpc.launch`、`test_mpc_sim.launch`、`slosh_experiment.launch`、`slosh_experiment_sim.launch` 四个启动文件的区别，以及推荐使用场景。
 
 ## 实物调参指导
 
@@ -123,13 +123,14 @@ rostopic echo /slosh/speed_governor_active
 |---|---|---|---:|---|---|---|
 | `test_mpc.launch` | `config/mpc_params.yaml` | 实物 | `0.0` | 无 | 日常实物 MPC 跟踪、普通导航 | 实物日常使用推荐 |
 | `test_mpc_sim.launch` | `config/mpc_params_sim.yaml` | 仿真 | `5.0` | 无 | 日常仿真 MPC 跟踪、快速验证 | 仿真日常使用推荐 |
-| `slosh_experiment.launch` | `config/mpc_params.yaml` 或 `config/mpc_params_sim.yaml` | 实物/仿真（由 `sim` 决定） | `0.0` | 有，集中覆盖 anti-slosh 实验参数 | 液体晃动抑制实验、消融对比、参数扫描 | anti-slosh 实验推荐 |
+| `slosh_experiment.launch` | `config/mpc_params.yaml` | 实物 | `0.0` | 有，集中覆盖 anti-slosh 实验参数 | 实物液体晃动抑制实验、消融对比、参数扫描 | 实物 anti-slosh 实验推荐 |
+| `slosh_experiment_sim.launch` | `config/mpc_params_sim.yaml` | 仿真 | `0.0` | 有，集中覆盖 anti-slosh 实验参数 | 仿真液体晃动抑制实验、消融对比、参数扫描 | 仿真 anti-slosh 实验推荐 |
 
 ## 关键差异
 
-| 对比项 | `test_mpc.launch` | `test_mpc_sim.launch` | `slosh_experiment.launch` |
+| 对比项 | `test_mpc.launch` | `test_mpc_sim.launch` | `slosh_experiment.launch` / `slosh_experiment_sim.launch` |
 |---|---|---|---|
-| 是否区分实物/仿真 | 只用于实物 | 只用于仿真 | 通过 `sim:=true/false` 切换 |
+| 是否区分实物/仿真 | 只用于实物 | 只用于仿真 | 两个固定入口分别用于实物/仿真 |
 | 是否只暴露少量参数 | 是 | 是 | 否，集中暴露实验参数 |
 | 是否默认关闭执行端额外 EMA | 否 | 否 | 是，默认 `filter/alpha_v=1.0`、`filter/alpha_omega=1.0`、`filter/kappa_boost=0.0` |
 | 是否适合做 `Q_slosh` 消融 | 一般 | 一般 | 是 |
@@ -148,7 +149,8 @@ rostopic echo /slosh/speed_governor_active
 因此：
 
 - **普通 MPC 跟踪 / 日常导航**：优先用 `test_mpc.launch` 或 `test_mpc_sim.launch`
-- **液体晃动抑制实验 / 消融分析**：优先用 `slosh_experiment.launch`
+- **实物液体晃动抑制实验 / 消融分析**：优先用 `slosh_experiment.launch`
+- **仿真液体晃动抑制实验 / 消融分析**：优先用 `slosh_experiment_sim.launch`
 
 ## 推荐启动方式
 
@@ -176,8 +178,7 @@ roslaunch scout_local_planner slosh_experiment.launch \
 ### 4. 仿真液体晃动实验
 
 ```bash
-roslaunch scout_local_planner slosh_experiment.launch \
-  sim:=true \
+roslaunch scout_local_planner slosh_experiment_sim.launch \
   Q_slosh:=5 \
   enable_slosh_box_constraint:=true \
   slosh_speed_governor_enable:=true
@@ -215,6 +216,9 @@ roslaunch scout_local_planner slosh_experiment.launch \
 `slosh_experiment.launch` 实际加载的 slosh 参数真源是：
 
 - `scout_local_planner/config/mpc_params.yaml`
+
+`slosh_experiment_sim.launch` 实际加载的 slosh 参数真源是：
+
 - `scout_local_planner/config/mpc_params_sim.yaml`
 
 `slosh_models/config/slosh_params.yaml` 当前仅保留为建模参考示例，不会被该 launch 自动加载。
@@ -241,7 +245,8 @@ roslaunch scout_local_planner slosh_experiment.launch \
 ## 实际使用建议
 
 - 如果你只是想确认 MPC 能不能跟踪路径，不要先上 `slosh_experiment.launch`。
-- 如果你要录 bag、做 `Q=0/5/10` 对比，直接用 `slosh_experiment.launch`，不要混用 `test_mpc*.launch`。
+- 如果你要在实物上录 bag、做 `Q=0/5/10` 对比，直接用 `slosh_experiment.launch`，不要混用 `test_mpc*.launch`。
+- 如果你要在仿真里录 bag、做 `Q=0/5/10` 对比，直接用 `slosh_experiment_sim.launch`，不要混用 `test_mpc*.launch`。
 - `test_mpc_sim.launch` 当前默认 `Q_slosh=5.0`，这更像“带一定 anti-slosh 倾向的仿真默认入口”，不是严格的消融基线。
 - 如果要验证阶段 7，优先只切换 `slosh_use_imu_*` 和 `slosh_imu_topic`，不要同时再改一组 governor 参数。
 
