@@ -24,6 +24,42 @@
 - 先记录第一次规划出的路径，再让 Q0/Q5 都复用同一条 `/scout/global_path`
 - 正式 tracking 前，先将机器人移回固定路径起点并对齐，再开始局部跟踪
 
+### `launch_fixed_path_slosh_stack.sh`
+
+固定路径 slosh 实验的一键启动脚本，按顺序启动：
+- `nanoscan3_localization scout_nanoscan3_cartographer_localization.launch`
+- `scout_global_planner mbf_global.launch`
+- `scout_local_planner slosh_experiment.launch`
+
+默认让 local planner 订阅 `/scout/global_path_fixed`，并保持第一轮有效性验证的固定口径：
+- `enable_slosh_box_constraint=false`
+- `slosh_speed_governor_enable=false`
+- `filter_alpha_v=1.0`
+- `filter_alpha_omega=1.0`
+- `slosh_use_imu_lateral_accel=false`
+- `slosh_use_imu_yaw_rate=true`
+
+用法：
+```bash
+rosrun scout_local_planner launch_fixed_path_slosh_stack.sh 0
+rosrun scout_local_planner launch_fixed_path_slosh_stack.sh 5
+rosrun scout_local_planner launch_fixed_path_slosh_stack.sh 10
+```
+
+脚本会在启动 `nanoscan3_localization scout_nanoscan3_cartographer_localization.launch` 后暂停，等待定位准确度达到 `70%` 后再继续启动 global planner 和 local planner。当前 Cartographer launch 中没有明确的“定位准确度百分比”ROS topic，因此默认是人工确认门：看到定位准确度达到 `70%` 后按 Enter 继续。
+
+如果后续已有可读的准确度话题，可以用环境变量启用自动等待：
+```bash
+LOCALIZATION_ACCURACY_TOPIC=/your/localization_accuracy_topic \
+LOCALIZATION_ACCURACY_THRESHOLD=70 \
+rosrun scout_local_planner launch_fixed_path_slosh_stack.sh 5
+```
+
+如果需要临时换固定路径话题：
+```bash
+GLOBAL_PATH_TOPIC=/scout/global_path_fixed rosrun scout_local_planner launch_fixed_path_slosh_stack.sh 5
+```
+
 ### `record_slosh_experiment.sh`
 
 `rosbag` 录包脚本，用于记录 anti-slosh MPC 实验相关话题。

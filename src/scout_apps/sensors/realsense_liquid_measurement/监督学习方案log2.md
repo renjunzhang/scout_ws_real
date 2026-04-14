@@ -1561,3 +1561,43 @@ seed sweep 之后，当前结论应更新为：
 - 控制器对比实验
 
 而不是再做大范围无约束模型搜索。
+
+## 2026-04-14 补充：current best 的 loss 口径
+
+用户追问 `SL_visual_temporal_human_history_curves.png` 中是否包含 `val_loss` 和 `test_loss`。
+
+核对结果：
+
+- 原始 history 文件只包含：
+  - `train_loss`
+  - `train_mae`
+  - `val_mae`
+- 原训练脚本没有逐 epoch 保存 `val_loss`
+- 原训练脚本没有逐 epoch 保存 `test_loss`
+- `test` 只在训练结束后用 best checkpoint 做最终评估，不参与 early stopping
+
+本次补充复算了 best checkpoint 上的 final split loss，输出到：
+
+- `SL_visual_temporal_human_final_losses.json`
+- `SL_visual_temporal_human_final_losses.csv`
+- `SL_visual_temporal_human_training_evidence_ppt.png`
+
+完整路径：
+
+- [/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_temporal_human_0401_raw_roi_relabel_refresh_v2_gru_anchor_weighted_seed11_v1/SL_visual_temporal_human_final_losses.json](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_temporal_human_0401_raw_roi_relabel_refresh_v2_gru_anchor_weighted_seed11_v1/SL_visual_temporal_human_final_losses.json)
+- [/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_temporal_human_0401_raw_roi_relabel_refresh_v2_gru_anchor_weighted_seed11_v1/SL_visual_temporal_human_final_losses.csv](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_temporal_human_0401_raw_roi_relabel_refresh_v2_gru_anchor_weighted_seed11_v1/SL_visual_temporal_human_final_losses.csv)
+- [/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_temporal_human_0401_raw_roi_relabel_refresh_v2_gru_anchor_weighted_seed11_v1/SL_visual_temporal_human_training_evidence_ppt.png](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/sl_runs/SL_visual_temporal_human_0401_raw_roi_relabel_refresh_v2_gru_anchor_weighted_seed11_v1/SL_visual_temporal_human_training_evidence_ppt.png)
+
+复算数值：
+
+| split | weighted Huber loss | unweighted Huber loss | MAE | RMSE |
+|---|---:|---:|---:|---:|
+| `train` | `0.0870` | `0.0509` | `0.1167 mm` | `0.2109 mm` |
+| `val` | `0.1078` | `0.0643` | `0.1537 mm` | `0.2269 mm` |
+| `test` | `0.1353` | `0.0743` | `0.1567 mm` | `0.2494 mm` |
+
+注意：
+
+- 这里的 loss 是 `HuberLoss(delta=1.0)`，计算在归一化 target 空间
+- 它不是 `mm`
+- 对论文/PPT，建议优先展示 `MAE/RMSE/Corr/>0.3mm`，而不是把归一化 Huber loss 当作主要效果指标
