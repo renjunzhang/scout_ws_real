@@ -70,7 +70,6 @@ catkin_install_python(PROGRAMS
   scripts/analyze_imu_ay_stage2.py
   scripts/run_imu_stage2_sequence.py
   scripts/run_imu_stage4_sequence.py
-  scripts/sim_imu_from_odom.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
@@ -93,5 +92,6 @@ install(DIRECTORY config launch
 
 install(PROGRAMS
   scripts/record_slosh_experiment.sh
+  scripts/launch_sim_nav_stack.sh
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

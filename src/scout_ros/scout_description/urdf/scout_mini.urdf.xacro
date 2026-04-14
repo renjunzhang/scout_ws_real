@@ -69,6 +69,28 @@
         <child link="inertial_link" />
     </joint>
 
+    <!-- IMU frame: match the real scout_imu_with_tf.launch coarse mounting pose. -->
+    <link name="imu_link">
+        <inertial>
+            <mass value="0.01" />
+            <origin xyz="0 0 0" />
+            <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <box size="0.03 0.03 0.01" />
+            </geometry>
+            <material name="aluminum" />
+        </visual>
+    </link>
+
+    <joint name="base_to_imu_joint" type="fixed">
+        <origin xyz="0.10 -0.045 0.0" rpy="0 0 0" />
+        <parent link="base_link" />
+        <child link="imu_link" />
+    </joint>
+
     <!-- Scout wheel macros -->
     <!-- wheel labeled from 0 to 3, conter-clockwise, starting from front right wheel -->
     <!-- motor 1 and 2 (left side) are mechanically installed in a reversed direction -->

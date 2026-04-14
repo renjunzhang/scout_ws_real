@@ -168,6 +168,9 @@ catkin_make 2>&1 | grep "processing catkin package"
 ---
 
 ## 仿真流程
+### 启动前 6 步的脚本
+    source /home/a/scout_ws/devel/setup.bash
+    rosrun scout_local_planner launch_sim_nav_stack.sh
 ### 1. 启动仿真环境
     roslaunch scout_description scout_mini_gazebo.launch use_rviz:=false
 ### 2. 启动键盘控制（仿真）
@@ -207,7 +210,7 @@ catkin_make 2>&1 | grep "processing catkin package"
 ### 7. MPC 局部规划
     # 普通启动（Q_slosh=0，无晃动抑制）
     roslaunch scout_local_planner test_mpc_sim.launch
-    
+
     # 当前推荐的 anti-slosh 仿真启动（默认安全 IMU 配置）
     roslaunch scout_local_planner slosh_experiment.launch \
     sim:=true \
@@ -240,6 +243,8 @@ catkin_make 2>&1 | grep "processing catkin package"
 ### 8. 录制实验数据（与第 7 步同时，另开终端）
     cd $(rospack find scout_local_planner)
     ./scripts/record_slosh_experiment.sh 10           # 参数 = 当前 Q_slosh 值
+
+    SLOSH_BAG_MODE=sim /home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh 5 sim_risk_day2
 #### 消融实验
     rosrun scout_local_planner send_fixed_goal.py \
     --goal-topic /scout/goal \

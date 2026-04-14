@@ -16,6 +16,8 @@
 #                /slosh/imu_ay_bias, /slosh/imu_ay_filtered, /slosh/imu_ay_bias_ready
 #                /slosh/episode_id, /slosh/constraint_active
 #                /slosh/v_des_eff, /slosh/speed_governor_active
+#   - 风险调度器：/risk_scheduler/rho_k, /risk_scheduler/r_k, /risk_scheduler/u_k
+#                /risk_scheduler/Q_eta_k, /risk_scheduler/fallback_active
 #   - RealSense 原始输入：
 #                /camera/color/image_raw
 #                /camera/color/camera_info
@@ -73,8 +75,10 @@
 #
 # 输出路径：
 #   1. 若设置环境变量 SLOSH_BAG_DIR，则优先使用它
-#   2. 若存在 /data/$USER，则使用 /data/$USER/slosh_bags
-#   3. 否则退回 ~/slosh_bags（适合实物）
+#   2. 若存在 /data/$USER，实物默认沿用 /data/$USER/slosh_bags
+#   3. 仿真设置 SLOSH_BAG_MODE=sim 时使用 /data/$USER/slosh_bags/sim
+#   4. 否则退回 ~/slosh_bags（适合实物）
+#   SLOSH_BAG_MODE 默认 real
 # ============================================================================
 
 set -euo pipefail
@@ -83,14 +87,23 @@ set -euo pipefail
 Q_SLOSH="${1:-0}"
 SUFFIX="${2:-}"
 DATE_STR=$(date +%Y%m%d_%H%M%S)
+SLOSH_BAG_MODE="${SLOSH_BAG_MODE:-real}"
 
 # 目录
 if [[ -n "${SLOSH_BAG_DIR:-}" ]]; then
     BAG_DIR="${SLOSH_BAG_DIR}"
 elif [[ -d "/data/${USER}" ]]; then
-    BAG_DIR="/data/${USER}/slosh_bags"
+    if [[ "${SLOSH_BAG_MODE}" == "sim" ]]; then
+        BAG_DIR="/data/${USER}/slosh_bags/sim"
+    else
+        BAG_DIR="/data/${USER}/slosh_bags"
+    fi
 else
-    BAG_DIR="${HOME}/slosh_bags"
+    if [[ "${SLOSH_BAG_MODE}" == "sim" ]]; then
+        BAG_DIR="${HOME}/slosh_bags/sim"
+    else
+        BAG_DIR="${HOME}/slosh_bags"
+    fi
 fi
 mkdir -p "${BAG_DIR}"
 
@@ -122,6 +135,13 @@ TOPICS=(
     /slosh/constraint_active
     /slosh/v_des_eff
     /slosh/speed_governor_active
+
+    # 风险调度器
+    /risk_scheduler/rho_k
+    /risk_scheduler/r_k
+    /risk_scheduler/u_k
+    /risk_scheduler/Q_eta_k
+    /risk_scheduler/fallback_active
 
     # RealSense 原始图像
     /camera/color/image_raw
@@ -208,6 +228,7 @@ echo "============================================"
 echo "  液体晃动抑制实验录制"
 echo "============================================"
 echo "  Q_slosh  = ${Q_SLOSH}"
+echo "  mode     = ${SLOSH_BAG_MODE}"
 echo "  输出文件 = ${BAG_PATH}.bag"
 echo "  话题数   = ${#TOPICS[@]}"
 echo "============================================"
