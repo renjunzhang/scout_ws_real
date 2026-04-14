@@ -121,12 +121,25 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
 
             ROS_INFO("[LocalPlannerROS] Slosh integration enabled (Q_slosh=%.2f, h_coeff=%.4f, Q_slosh_eta=%.4f)",
                      mpc_params_.Q_slosh, h_coeff, mpc_params_.Q_slosh_eta);
+
+            // 初始化风险调度器（需要 h_coeff）
+            if (risk_scheduler_enable_) {
+                rs_h_coeff_ = h_coeff;
+                pub_rho_k_    = nh_.advertise<std_msgs::Float32>("/risk_scheduler/rho_k", 1);
+                pub_r_k_      = nh_.advertise<std_msgs::Float32>("/risk_scheduler/r_k", 1);
+                pub_u_k_      = nh_.advertise<std_msgs::Float32>("/risk_scheduler/u_k", 1);
+                pub_Q_eta_k_  = nh_.advertise<std_msgs::Float32>("/risk_scheduler/Q_eta_k", 1);
+                pub_fallback_ = nh_.advertise<std_msgs::Bool>("/risk_scheduler/fallback_active", 1);
+                ROS_INFO("[LocalPlannerROS] RiskScheduler enabled (h_coeff=%.4f)", rs_h_coeff_);
+            }
         } else {
             slosh_enabled_ = false;
+            risk_scheduler_enable_ = false;
             ROS_WARN("[LocalPlannerROS] DiffDriveModel cast failed, slosh disabled");
         }
     } else {
         slosh_enabled_ = false;
+        risk_scheduler_enable_ = false;
         ROS_WARN("[LocalPlannerROS] Slosh integration configure failed, running without slosh");
     }
     
@@ -357,6 +370,33 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
 
     // 将 base_frame 传递给 path_handler
     path_params_.base_frame = base_frame_;
+
+    // ρ_k 风险自适应调度器参数
+    pnh.param("risk_scheduler/enable", risk_scheduler_enable_, false);
+    if (risk_scheduler_enable_) {
+        RiskSchedulerParams rs_params;
+        pnh.param("risk_scheduler/gamma",                 rs_params.gamma,                 5.0);
+        pnh.param("risk_scheduler/rho_0",                 rs_params.rho_0,                 0.3);
+        pnh.param("risk_scheduler/rate_limit_per_step",   rs_params.rate_limit_per_step,   0.05);
+        pnh.param("risk_scheduler/Q_eta_min",             rs_params.Q_eta_min,             0.0);
+        pnh.param("risk_scheduler/Q_eta_max",             rs_params.Q_eta_max,             10.0);
+        pnh.param("risk_scheduler/eta_bar_max",           rs_params.eta_bar_max,           0.05);
+        pnh.param("risk_scheduler/delta_eta_bar",         rs_params.delta_eta_bar,         0.02);
+        pnh.param("risk_scheduler/beta",                  rs_params.beta,                  0.3);
+        pnh.param("risk_scheduler/w_h",                   rs_params.w_h,                   0.4);
+        pnh.param("risk_scheduler/w_e",                   rs_params.w_e,                   0.3);
+        pnh.param("risk_scheduler/w_t",                   rs_params.w_t,                   0.3);
+        pnh.param("risk_scheduler/w_r",                   rs_params.w_r,                   0.7);
+        pnh.param("risk_scheduler/w_u",                   rs_params.w_u,                   0.3);
+        pnh.param("risk_scheduler/u_threshold_high",      rs_params.u_threshold_high,      0.8);
+        pnh.param("risk_scheduler/u_high_count_trigger",  rs_params.u_high_count_trigger,  10);
+        pnh.param("risk_scheduler/imu_timeout_s",         rs_params.imu_timeout_s,         0.1);
+        pnh.param("risk_scheduler/a_uncert_max",          rs_params.a_uncert_max,          0.5);
+        pnh.param("risk_scheduler/Q_eta_fix",             rs_params.Q_eta_fix,             5.0);
+        pnh.param("risk_scheduler/eta_bar_fix",           rs_params.eta_bar_fix,           0.04);
+        pnh.param("risk_scheduler/d_goal_thresh",         rs_params.d_goal_thresh,         1.0);
+        risk_scheduler_.init(rs_params);
+    }
 }
 
 void LocalPlannerROS::globalPathCallback(const nav_msgs::Path::ConstPtr& msg) {
@@ -649,14 +689,42 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     last_speed_governor_active_ = 0;
                 }
 
-                double v_des_cmd = goal_stop_pending_ ? 0.0 : vehicle_params_.v_max * 0.8;
+                // ── ρ_k 风险调度器 outer loop ──────────────────────────
+                const double v_nominal = vehicle_params_.v_max * 0.8;
+                if (risk_scheduler_enable_ && slosh_enabled_ && !goal_stop_pending_) {
+                    const double d_goal_rs = path_handler_.getGoalDistance();
+                    const ros::Time imu_stamp_rs = has_imu_ ? prev_imu_time_ : ros::Time(0);
+
+                    risk_output_ = risk_scheduler_.update(
+                        last_predicted_height_max_,   // 上一周期预测液面高度
+                        E_slosh_prev_,                // 上一周期模态能量
+                        std::isfinite(d_goal_rs) ? d_goal_rs : 1e6,
+                        imu_ay_unbiased_,             // IMU 横向加速度（已去零偏）
+                        current_v_ * current_omega_,  // 运动学离心估计
+                        imu_stamp_rs,
+                        imu_ay_bias_ready_,
+                        v_nominal
+                    );
+
+                    // 将调度输出注入 MPC 参数（solve() 前完成）
+                    mpc_params_.Q_slosh_eta = risk_output_.Q_eta_k * rs_h_coeff_ * rs_h_coeff_;
+                    if (mpc_params_.enable_slosh_box_constraint && rs_h_coeff_ > 1e-9) {
+                        const double denom = rs_h_coeff_ * std::sqrt(2.0);
+                        mpc_params_.slosh_eta_bar = risk_output_.eta_bar_k / denom;
+                    }
+                    mpc_solver_.setMPCParams(mpc_params_);
+                }
+
+                double v_des_cmd = goal_stop_pending_ ? 0.0 :
+                    (risk_scheduler_enable_ && slosh_enabled_) ?
+                    risk_output_.v_ref_eff_k : v_nominal;
                 double v_des_target = v_des_cmd;
                 last_speed_governor_active_ = 0;
 
                 // 1. 获取参考点
                 std::vector<ReferencePoint> ref_points;
                 if (!path_handler_.getReferencePoints(
-                        mpc_params_.N, mpc_params_.dt, 
+                        mpc_params_.N, mpc_params_.dt,
                         v_des_cmd,  // 期望速度
                         ref_points)) {
                     ROS_WARN_THROTTLE(1.0, "[LocalPlannerROS] Failed to get reference points");
@@ -849,11 +917,35 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         (mpc_params_.slosh_height_max > 0.0 &&
                          last_predicted_height_max_ > mpc_params_.slosh_height_max) ? 1 : 0;
                     publishSloshDebug(solution.solve_time_ms, true);
-                    
+
+                    // 保存本周期模态能量，供下周期风险调度器使用
+                    if (risk_scheduler_enable_ && slosh_enabled_) {
+                        const Eigen::Vector4d ss = slosh_integration_.getSloshState();
+                        E_slosh_prev_ = ss(0) * ss(0) + ss(2) * ss(2);
+
+                        // 发布风险调度器调试话题
+                        {
+                            std_msgs::Float32 msg;
+                            msg.data = static_cast<float>(risk_output_.rho_k);
+                            pub_rho_k_.publish(msg);
+                            msg.data = static_cast<float>(risk_output_.r_k);
+                            pub_r_k_.publish(msg);
+                            msg.data = static_cast<float>(risk_output_.u_k);
+                            pub_u_k_.publish(msg);
+                            msg.data = static_cast<float>(risk_output_.Q_eta_k);
+                            pub_Q_eta_k_.publish(msg);
+                        }
+                        {
+                            std_msgs::Bool bmsg;
+                            bmsg.data = risk_output_.fallback_active;
+                            pub_fallback_.publish(bmsg);
+                        }
+                    }
+
                     if (verbose_) {
-                        ROS_INFO_THROTTLE(0.5, 
+                        ROS_INFO_THROTTLE(0.5,
                             "[MPC] e_c=%.3f, e_theta=%.3f, v=%.3f, omega=%.3f, solve_time=%.1fms",
-                            frenet.e_c, frenet.e_theta, 
+                            frenet.e_c, frenet.e_theta,
                             solution.v_cmd, solution.omega_cmd,
                             solution.solve_time_ms);
                     }

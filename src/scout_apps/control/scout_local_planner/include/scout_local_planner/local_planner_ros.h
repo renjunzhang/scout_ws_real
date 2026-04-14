@@ -11,6 +11,7 @@
 #include "scout_local_planner/path_handler.h"
 #include "scout_local_planner/mpc_solver.h"
 #include "scout_local_planner/slosh_integration.h"
+#include "scout_local_planner/risk_scheduler.h"
 
 #include <ros/ros.h>
 #include <nav_msgs/Path.h>
@@ -18,6 +19,7 @@
 #include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Float32.h>
 #include <std_msgs/Float32MultiArray.h>
@@ -215,6 +217,19 @@ private:
     int slosh_governor_hold_steps_ = 0;
     double last_v_des_eff_ = 0.0;
     int last_speed_governor_active_ = 0;
+
+    // ====== ρ_k 风险自适应调度器 ======
+    bool                risk_scheduler_enable_ = false;
+    RiskScheduler       risk_scheduler_;
+    RiskSchedulerOutput risk_output_;
+    double              rs_h_coeff_ = 1.0;   // height_coeff 缓存，用于 Q_eta→Q_slosh_eta 换算
+    double              E_slosh_prev_ = 0.0; // 上一周期模态能量 (η_x² + η_y²)，供 risk_scheduler 使用
+    // 风险调度器调试发布
+    ros::Publisher pub_rho_k_;
+    ros::Publisher pub_r_k_;
+    ros::Publisher pub_u_k_;
+    ros::Publisher pub_Q_eta_k_;
+    ros::Publisher pub_fallback_;
 
     // slosh 调试发布
     ros::Publisher slosh_state_pub_;

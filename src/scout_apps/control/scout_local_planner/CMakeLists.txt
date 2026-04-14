@@ -45,6 +45,7 @@ add_library(${PROJECT_NAME}
   src/mpc_solver.cpp
   src/local_planner_ros.cpp
   src/slosh_integration.cpp
+  src/risk_scheduler.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}
