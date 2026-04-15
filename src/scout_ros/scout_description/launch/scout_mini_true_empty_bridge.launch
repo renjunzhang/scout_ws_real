@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="world_name" default="/home/a/scout_ws/src/scout_ros/scout_description/worlds/empty.world"/>
+  <arg name="gui" default="true"/>
+  <arg name="headless" default="false"/>
+  <arg name="paused" default="false"/>
+  <arg name="use_sim_time" default="true"/>
+  <arg name="use_rviz" default="false"/>
+  <arg name="enable_imu_bridge" default="true" />
+  <arg name="enable_odom_tf_bridge" default="false" />
+  <arg name="imu_topic" default="/imu/data" />
+  <arg name="imu_frame" default="imu_link" />
+  <arg name="odom_topic" default="/odom" />
+  <arg name="odom_frame" default="odom" />
+  <arg name="base_frame" default="base_footprint" />
+
+  <arg name="sim_scan_topic" default="/scan" />
+  <arg name="scan_topic_out" default="/scan_front" />
+  <arg name="scan_frame" default="nanoscan3_front" />
+  <arg name="laser_source_frame" default="laser_link" />
+  <arg name="enable_filter" default="false" />
+
+  <include file="/home/a/scout_ws/src/scout_ros/scout_description/launch/scout_mini_true_empty_abs_imu.launch">
+    <arg name="world_name" value="$(arg world_name)"/>
+    <arg name="gui" value="$(arg gui)"/>
+    <arg name="headless" value="$(arg headless)"/>
+    <arg name="paused" value="$(arg paused)"/>
+    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+  </include>
+
+  <node pkg="nanoscan3_bringup"
+        type="scan_relay.py"
+        name="scan_front_relay"
+        output="screen">
+    <param name="input" value="$(arg sim_scan_topic)" />
+    <param name="output" value="$(arg scan_topic_out)" />
+    <param name="frame_id" value="$(arg scan_frame)" />
+  </node>
+
+  <node pkg="laser_filters"
+        type="scan_to_scan_filter_chain"
+        name="scan_front_filter"
+        output="screen"
+        if="$(arg enable_filter)">
+    <rosparam command="load" file="$(find nanoscan3_bringup)/config/scan_front_filter.yaml" />
+    <remap from="scan" to="$(arg scan_topic_out)" />
+    <remap from="scan_filtered" to="/scan_front_filtered" />
+  </node>
+
+  <node pkg="tf" type="static_transform_publisher" name="tf_front_alias"
+        args="0 0 0 0 0 0 $(arg laser_source_frame) $(arg scan_frame) 100" />
+
+  <node pkg="tf" type="static_transform_publisher" name="tf_footprint_base"
+        args="0 0 0 0 0 0 base_footprint base_link 40" />
+
+  <node if="$(arg enable_imu_bridge)"
+        pkg="nanoscan3_bringup"
+        type="imu_frame_relay.py"
+        name="imu_frame_relay"
+        output="screen">
+    <param name="input" value="/imu/data_raw" />
+    <param name="output" value="$(arg imu_topic)" />
+    <param name="frame_id" value="$(arg imu_frame)" />
+  </node>
+
+  <node if="$(arg enable_odom_tf_bridge)"
+        pkg="nanoscan3_bringup"
+        type="odom_tf_broadcaster.py"
+        name="odom_tf_broadcaster"
+        output="screen">
+    <param name="odom_topic" value="$(arg odom_topic)" />
+    <param name="odom_frame" value="$(arg odom_frame)" />
+    <param name="base_frame" value="$(arg base_frame)" />
+  </node>
+
+  <node if="$(arg use_rviz)"
+        pkg="rviz" type="rviz" name="rviz"
+        args="-d $(find nanoscan3_bringup)/rviz/nanoscan3_front_sim.rviz"
+        output="screen" />
+</launch>

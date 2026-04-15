@@ -12,7 +12,7 @@
   
   <!-- ===== 传感器配置 ===== -->
   <arg name="scan_topic" default="/scan_front" />
-  <arg name="odom_topic" default="/odom" />
+  <arg name="odom_topic" default="/odom_carto" />
   
   <!-- ===== 可视化配置 ===== -->
   <arg name="use_rviz" default="true" />
@@ -22,6 +22,14 @@
   <!-- 如需指定，可通过 initial_pose 话题发布 -->
 
   <!-- 1) Cartographer 定位节点 -->
+  <node pkg="nanoscan3_bringup"
+        type="odom_monotonic_relay.py"
+        name="odom_monotonic_relay"
+        output="screen">
+    <param name="input" value="/odom" />
+    <param name="output" value="$(arg odom_topic)" />
+  </node>
+
   <node name="cartographer_node" pkg="cartographer_ros" type="cartographer_node" 
         args="-configuration_directory $(find nanoscan3_localization)/config
               -configuration_basename scout_2d_localization_sim.lua

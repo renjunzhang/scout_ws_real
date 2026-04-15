@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="world_name" default="/home/a/scout_ws/src/scout_ros/scout_description/worlds/empty.world"/>
+  <arg name="gui" default="false"/>
+  <arg name="headless" default="false"/>
+  <arg name="paused" default="false"/>
+  <arg name="use_sim_time" default="true"/>
+
+  <include file="/home/a/scout_ws/src/scout_ros/scout_description/launch/empty_world.launch">
+    <arg name="world_name" value="$(arg world_name)"/>
+    <arg name="gui" value="$(arg gui)"/>
+    <arg name="headless" value="$(arg headless)"/>
+    <arg name="paused" value="$(arg paused)"/>
+    <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+  </include>
+
+  <include file="/home/a/scout_ws/src/scout_ros/scout_description/launch/spawn_scout_mini_abs_imu.launch"/>
+</launch>

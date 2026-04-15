@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<robot name="official_scout_mini_imu_extras" xmlns:xacro="http://ros.org/wiki/xacro">
+  <!-- Match the current real IMU mounting pose used by scout_imu_with_tf.launch -->
+  <link name="imu_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.01" />
+      <inertia ixx="1e-6" ixy="0" ixz="0" iyy="1e-6" iyz="0" izz="1e-6" />
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="0.03 0.03 0.01" />
+      </geometry>
+      <material name="imu_gray">
+        <color rgba="0.2 0.2 0.2 1.0" />
+      </material>
+    </visual>
+  </link>
+
+  <joint name="base_to_imu_joint" type="fixed">
+    <origin xyz="0.10 -0.045 0.0" rpy="0 0 0" />
+    <parent link="base_link" />
+    <child link="imu_link" />
+  </joint>
+
+  <gazebo>
+    <plugin name="imu_plugin" filename="libgazebo_ros_imu.so">
+      <alwaysOn>true</alwaysOn>
+      <robotNamespace>/</robotNamespace>
+      <bodyName>imu_link</bodyName>
+      <frameName>imu_link</frameName>
+      <topicName>/imu/data_raw</topicName>
+      <serviceName>imu_service</serviceName>
+      <gaussianNoise>0.0</gaussianNoise>
+      <updateRate>50.0</updateRate>
+      <imu>
+        <noise>
+          <type>gaussian</type>
+          <rate>
+            <mean>0.0</mean>
+            <stddev>2e-4</stddev>
+            <bias_mean>0.0</bias_mean>
+            <bias_stddev>0.0</bias_stddev>
+          </rate>
+          <accel>
+            <mean>0.0</mean>
+            <stddev>1.7e-2</stddev>
+            <bias_mean>0.0</bias_mean>
+            <bias_stddev>0.0</bias_stddev>
+          </accel>
+        </noise>
+      </imu>
+    </plugin>
+  </gazebo>
+</robot>

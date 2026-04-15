@@ -10,3 +10,18 @@
 - 拆分 anti-slosh 实验入口：`slosh_experiment.launch` 固定加载实物 `mpc_params.yaml`，新增 `slosh_experiment_sim.launch` 固定加载仿真 `mpc_params_sim.yaml`。
 - 根据 `slosh_Q5_20260414_213501_test1.bag` 初步分析，仿真 `/local_path` 与全局路径偏离偏大，收敛仿真配置：关闭 B-spline 平滑、提高 `Q_contour`，并降低 `cmd_vel_lead_time`、`omega_max`、`alpha_max`，避免高线速度配大角速度导致 Gazebo 行为过激。
 - 继续收敛仿真贴线参数：降低 `lookahead_distance`，提高 `Q_contour/Q_etheta`，并降低 `max_lat_accel`，优先让仿真车贴全局路径后再处理 Gazebo 翘头问题。
+- 对照 AgileX 官方 `ugv_gazebo_sim` 后，保留本地 NanoScan/IMU 集成，但将 Scout Mini 轮距、轴距、轮子半径、轮子惯量和轮子 collision 调整到官方 Mini 物理口径，避免 mesh collision 和错误轮径导致 Gazebo 陷地/翘头。
+- 继续排查 Gazebo 翘头问题时，确认本地 `scout_mini_gazebo.launch` 与官方 `scout_mini_playpen.launch` 加载的并不是同一套 Mini 模型链；官方链速度表现正常，而本地链高速时仍容易翘头。
+- 确认本地 `empty.world` 缺少官方 `weston_robot_empty.world` 中的 `<physics>` 配置；补入官方 ODE 物理参数后，`scout_mini_true_empty.launch` 在真空世界中的速度表现恢复正常。
+- 新增官方真空世界入口 `scout_mini_true_empty.launch`，用于避免系统 `/opt/ros/noetic/share/gazebo_ros/launch/empty_world.launch` 额外 spawn `wall/obstacle`。
+- 尝试在本地 `scout_ws` 内做“官方底盘 + 本地 IMU/NanoScan”混合模型，但运行态仍不稳定：模型可静态显示，发速度后轮子/车体异常，说明该方向的混合建模尚不自洽。
+- 转向以官方模型为底座继续接入本项目接口：在 `/data/a/official_scout_ws` 新增 `mini_with_nav.xacro`、`scout_mini_with_nav.gazebo`、`spawn_scout_mini_with_nav.launch`、`scout_mini_maze_nav.launch`，目标是保留官方稳定底盘，同时补入 `/imu/data`、NanoScan `/scan`，并使用本项目 `maze_course.world`。
+- 当前阶段只完成了官方底盘 + IMU/NanoScan + 本项目 world 的静态结构对齐与 launch/xacro 展开检查；尚未完成运行态稳定验证，仍存在“发速度后模型异常”的风险，后续需要继续调试官方底盘与新增传感器接口组合的动力学一致性。
+- 继续收敛后，放弃“本地混合模型”，改为官方绝对路径模型 + 本地 bridge 层：`scout_mini_true_empty_bridge.launch` 负责接入 `/scan_front`、`/imu/data`、`imu_link`、`nanoscan3_front`，并直接使用本项目 `maze_course.world`。
+- 为避免官方与本地 `scout_description` 同名包冲突，在 `/data/a/official_scout_ws` 新增 `mini_abs.xacro`、`scout_mini_true_empty_abs.launch` 等绝对路径入口，解决 RViz `RobotModel` mesh 无法解析的问题。
+- 从仿真 world 层确认：`maze_course.world` 加入官方 ODE physics 后，官方底盘在该场景中的速度表现恢复正常；激光上方遮挡件 `box_link` 已从官方仿真模型中移除，2D 激光 `/scan_front` 恢复可用，当前频率约 `11 Hz`。
+- IMU 方案继续收敛：不再把 `/odom -> /imu/data` 作为正式方案，改为在官方底盘 `urdf_extras` 中挂载 Gazebo 真 IMU，并按实物记录的位姿 `x=0.10, y=-0.045, z=0.0` 安装 `imu_link`。
+- Gazebo 真 IMU 当前通过 `/imu/data_raw -> imu_frame_relay.py -> /imu/data` 提供最终话题；`/imu/data` 频率约 `50 Hz`，`header.frame_id=imu_link`，`base_link -> imu_link` 外参验证通过。
+- Cartographer 纯定位仿真中新增 `odom_monotonic_relay.py`，将 `/odom` 过滤为严格递增时间戳的 `/odom_carto`，解决 `map_by_time.h` 中重复 odom 时间戳导致的崩溃。
+- 当前验证通过的 TF/定位口径为：Cartographer 配置 `published_frame=base_footprint`、`provide_odom_frame=true`，形成 `map -> odom -> base_footprint -> base_link` 单根树；在此结构下，bridge + localization + MBF + local planner 可顺序启动并正常规划/跟踪。
+- 更新 `launch_sim_nav_stack.sh`：切换为官方 bridge + Cartographer sim + MBF sim 启动链；不再单独启动 `nanoscan3_front_sim.launch`；定位刷新动作收缩为仅后退 `1s`，取消原地自转。

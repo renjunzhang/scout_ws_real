@@ -1,0 +1,26 @@
+<launch>
+  <arg name="x" default="0.0"/>
+  <arg name="y" default="0.0"/>
+  <arg name="z" default="0.0"/>
+  <arg name="yaw" default="0.0"/>
+  <arg name="robot_namespace" default="/"/>
+
+  <include file="/home/a/scout_ws/src/scout_ros/scout_description/launch/scout_mini_stock_abs_imu.launch">
+    <arg name="robot_namespace" value="$(arg robot_namespace)" />
+  </include>
+
+  <node name="spawn_scout_model" pkg="gazebo_ros" type="spawn_model" args="-x $(arg x)
+            -y $(arg y)
+            -z $(arg z)
+            -Y $(arg yaw)
+            -unpause
+            -urdf
+            -param robot_description
+            -model 'scout$(arg robot_namespace)'" />
+
+  <rosparam file="/data/a/official_scout_ws/src/scout_gazebo_sim/config/scout_v2_control.yaml" command="load"/>
+
+  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="scout_state_controller scout_motor_fr_controller scout_motor_fl_controller scout_motor_rl_controller scout_motor_rr_controller"/>
+
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+</launch>

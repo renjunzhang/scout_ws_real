@@ -9,15 +9,21 @@ SPAWN_Y="${SPAWN_Y:-0.2}"
 SPAWN_Z="${SPAWN_Z:-0.1}"
 GAZEBO_WAIT_S="${GAZEBO_WAIT_S:-8}"
 SENSOR_WAIT_S="${SENSOR_WAIT_S:-3}"
-LOCALIZATION_WAIT_S="${LOCALIZATION_WAIT_S:-5}"
+LOCALIZATION_WAIT_S="${LOCALIZATION_WAIT_S:-3}"
 LOCALIZATION_BACKUP_S="${LOCALIZATION_BACKUP_S:-4}"
-LOCALIZATION_BACKUP_V="${LOCALIZATION_BACKUP_V:--0.42}"
-LOCALIZATION_SPIN_S="${LOCALIZATION_SPIN_S:-10}"
-LOCALIZATION_SPIN_OMEGA="${LOCALIZATION_SPIN_OMEGA:-0.45}"
+LOCALIZATION_BACKUP_V="${LOCALIZATION_BACKUP_V:--0.12}"
+LOCALIZATION_SPIN_S="${LOCALIZATION_SPIN_S:-0}"
+LOCALIZATION_SPIN_OMEGA="${LOCALIZATION_SPIN_OMEGA:-0.8}"
+
 
 if [[ -f /opt/ros/noetic/setup.bash ]]; then
     # shellcheck disable=SC1091
     source /opt/ros/noetic/setup.bash
+fi
+
+if [[ -f /data/a/official_scout_ws/devel_isolated/setup.bash ]]; then
+    # shellcheck disable=SC1091
+    source /data/a/official_scout_ws/devel_isolated/setup.bash
 fi
 
 if [[ -f /home/a/scout_ws/devel/setup.bash ]]; then
@@ -90,9 +96,6 @@ refresh_localization_motion() {
     publish_cmd_for_duration "Backing up to refresh localization" \
         "${LOCALIZATION_BACKUP_S}" "${LOCALIZATION_BACKUP_V}" "0.0"
 
-    publish_cmd_for_duration "Spinning in place to refresh localization" \
-        "${LOCALIZATION_SPIN_S}" "0.0" "${LOCALIZATION_SPIN_OMEGA}"
-
     rostopic pub -1 /cmd_vel geometry_msgs/Twist \
         "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" >/dev/null 2>&1 || true
 }
@@ -100,18 +103,12 @@ refresh_localization_motion() {
 echo "[launch_sim_nav_stack] USE_RVIZ=${USE_RVIZ}"
 echo "[launch_sim_nav_stack] spawn pose: x=${SPAWN_X}, y=${SPAWN_Y}, z=${SPAWN_Z}"
 
-start_launch "Gazebo Scout Mini" \
-    scout_description scout_mini_gazebo.launch \
-    use_rviz:="${USE_RVIZ}" \
-    x:="${SPAWN_X}" \
-    y:="${SPAWN_Y}" \
-    z:="${SPAWN_Z}"
+start_launch "Official Scout Mini bridge" \
+    /home/a/scout_ws/src/scout_ros/scout_description/launch/scout_mini_true_empty_bridge.launch \
+    gui:="${USE_RVIZ}" \
+    enable_odom_tf_bridge:=false \
+    world_name:=/home/a/scout_ws/src/scout_ros/scout_description/worlds/maze_course.world
 sleep "${GAZEBO_WAIT_S}"
-
-start_launch "NanoScan3 front sim" \
-    nanoscan3_bringup nanoscan3_front_sim.launch \
-    use_rviz:="${USE_RVIZ}"
-sleep "${SENSOR_WAIT_S}"
 
 start_launch "Cartographer localization sim" \
     nanoscan3_localization scout_nanoscan3_cartographer_localization_sim.launch
@@ -124,7 +121,7 @@ refresh_localization_motion
 
 echo "[launch_sim_nav_stack] Simulation navigation stack started."
 echo "[launch_sim_nav_stack] Start the local planner separately, for example:"
-echo "  roslaunch scout_local_planner slosh_experiment.launch sim:=true Q_slosh:=5 enable_slosh_box_constraint:=true risk_scheduler_enable:=true"
+echo "  roslaunch scout_local_planner slosh_experiment_sim.launch Q_slosh:=5 risk_scheduler_enable:=true"
 echo "[launch_sim_nav_stack] Press Ctrl+C to stop all launched processes."
 
 wait -n "${pids[@]}"
