@@ -170,9 +170,19 @@ catkin_make 2>&1 | grep "processing catkin package"
 ## 仿真流程
 ### 启动前 6 步的脚本
     source /home/a/scout_ws/devel/setup.bash
-    rosrun scout_local_planner launch_sim_nav_stack.sh
+    USE_RVIZ=true rosrun scout_local_planner launch_sim_nav_stack.sh
 ### 1. 启动仿真环境
     roslaunch scout_description scout_mini_gazebo.launch use_rviz:=false
+    roslaunch scout_gazebo_sim scout_mini_true_empty.launch gui:=true
+
+    source /opt/ros/noetic/setup.bash
+    source /data/a/official_scout_ws/devel_isolated/setup.bash
+    source /home/a/scout_ws/devel/setup.bash
+    roslaunch /home/a/scout_ws/src/scout_ros/scout_description/launch/scout_mini_true_empty_bridge.launch \
+      gui:=true \
+      enable_odom_tf_bridge:=false \
+      world_name:=/home/a/scout_ws/src/scout_ros/scout_description/worlds/maze_course.world
+    然后跳过启动激光雷达，直接启动定位
 ### 2. 启动键盘控制（仿真）
     roslaunch scout_bringup scout_teleop_keyboard.launch
 ### 3. 启动激光雷达（仿真，可选）
