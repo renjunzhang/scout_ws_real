@@ -421,6 +421,14 @@ rosrun scout_local_planner analyze_day3_abc_smoke.py \
 - C 组 `/risk_scheduler/fallback_active` 不应长期占主导
 - 三组均能进入 `TRACKING`，且 MPC 不出现全程失败
 
+当前未录 bag 的人工观察：
+
+- A/B 组可能无法稳定 `goal reached`
+- C 组更容易 `goal reached`
+- 这说明 `risk_scheduler_enable=true` 可能通过降低有效参考速度或提高晃动权重，改善终点段可达性
+- 因此第一轮 A/B/C smoke 不把 A/B 终点到达作为硬验收；A/B 只要求链路正常、能进入 `TRACKING`、IMU ay 相关话题正常、不明显发散
+- C 组则重点确认 `/risk_scheduler/u_k` 非零、fallback 不长期占主导，并记录是否能到达 `REACHED`
+
 ---
 
 ## 实物阶段顺延项
