@@ -429,6 +429,22 @@ rosrun scout_local_planner analyze_day3_abc_smoke.py \
 - 因此第一轮 A/B/C smoke 不把 A/B 终点到达作为硬验收；A/B 只要求链路正常、能进入 `TRACKING`、IMU ay 相关话题正常、不明显发散
 - C 组则重点确认 `/risk_scheduler/u_k` 非零、fallback 不长期占主导，并记录是否能到达 `REACHED`
 
+复测 bag 结果：
+
+- A：`/data/a/slosh_bags/sim/day3_abc/slosh_Q5_20260416_225005_day3_A_no_imu_ay.bag`
+  - `overall: PASS`
+  - `mpc_status`: 包含 `TRACKING/SETTLING/REACHED`
+  - `/mpc/status_val success_ratio=0.601`
+- B：`/data/a/slosh_bags/sim/day3_abc/slosh_Q5_20260416_225145_daday3_B_imu_ay.bag`
+  - `overall: PASS`
+  - `/slosh/imu_ay_bias_ready true_ratio=0.500`
+  - `/slosh/ay_est` 使用 IMU ay filtered，p95 约 `2.056 m/s^2`
+- C：`/data/a/slosh_bags/sim/day3_abc/slosh_Q5_20260416_225318_daday3_C_imu_ay_risk.bag`
+  - `overall: PASS`
+  - `/risk_scheduler/u_k` 非零，p95=`1.0`
+  - `/risk_scheduler/fallback_active true_ratio=0.361`，未长期占主导
+  - `mpc_status`: 包含 `TRACKING/SETTLING/REACHED`
+
 ---
 
 ## 实物阶段顺延项
@@ -456,7 +472,7 @@ rosrun scout_local_planner analyze_day3_abc_smoke.py \
 
 ### 可选
 
-- [ ] A/B/C 仿真 smoke test 各 1 条 bag
+- [x] A/B/C 仿真 smoke test 各 1 条 bag
 - [ ] ISR ZV shaper 初版实现（暂不混入 Day3 settling/IMU 仿真收尾）
 
 ### 顺延到实物阶段

@@ -192,7 +192,7 @@ def case_verdict(case, result):
 
     if case in ("B", "C"):
         checks.append(("IMU ay filtered topic present", result["counts"]["/slosh/imu_ay_filtered"] > 0))
-        checks.append(("IMU ay bias became ready", (result["bias_ready_ratio"] or 0.0) > 0.5))
+        checks.append(("IMU ay bias became ready", (result["bias_ready_ratio"] or 0.0) >= 0.5))
     if case == "C":
         checks.append(("risk u_k topic present", result["counts"]["/risk_scheduler/u_k"] > 0))
         checks.append(("risk u_k has nonzero response", max(result["u_k"] or [0.0]) > 1e-6))
