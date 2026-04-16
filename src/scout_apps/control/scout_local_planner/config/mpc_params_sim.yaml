@@ -71,7 +71,7 @@ path_handler:
   goal_reached_max_omega: 0.15  # 仅在低角速度时允许切到 REACHED
   goal_capture_distance: 0.45   # 终点捕获区；进入后维持最低参考速度，避免提前停死
   goal_capture_min_speed: 0.10  # 捕获区最低参考速度 (m/s)
-  path_timeout: 5.0        # 路径超时时间 (s)
+  path_timeout: 30.0       # 仿真全局路径不一定持续刷新，放宽以避免终点附近误进 ERROR
   publish_smoothed_path: true         # 是否发布平滑路径
   smoothed_path_topic: "/scout/global_path_smooth"  # 平滑路径话题名
   smoothed_path_points: 80            # 平滑路径采样点数
@@ -165,6 +165,22 @@ terminal_recovery:
   dist_gain: 0.8            # 靠近终点的位置误差到速度的比例增益
   v_min: 0.05               # 终点恢复阶段最小前进速度 (m/s)
   v_max: 0.18               # 终点恢复阶段最大前进速度 (m/s)
+
+# =============================================================================
+# 终点残余晃动收敛（T2 settling）
+# =============================================================================
+settling:
+  enable: true              # 进入 goal pose 后切换到 SETTLING，而不是直接 REACHED
+  timeout_s: 3.0            # 最长停留时间，超时后强制 REACHED
+  release_distance: 0.45    # 若离开 goal pose 且距离大于此值，则退回 TRACKING
+  eta_tol: 0.0015           # |eta_x|/|eta_y| 收敛阈值 (m)
+  eta_dot_tol: 0.03         # |eta_dot| 收敛阈值 (m/s)
+  speed_tol: 0.05           # 线速度收敛阈值 (m/s)
+  omega_tol: 0.10           # 角速度收敛阈值 (rad/s)
+  required_steps: 0         # <=0 时按 ceil(4π / ω0 / dt) 自动计算
+  Q_v: 30.0                 # SETTLING 期间速度收敛权重
+  Q_eta: 10.0               # SETTLING 期间晃动惩罚权重
+  eta_bar: 0.04             # SETTLING 期间液面约束上界 (m)
 
 # =============================================================================
 # cmd_vel 低通滤波（EMA）

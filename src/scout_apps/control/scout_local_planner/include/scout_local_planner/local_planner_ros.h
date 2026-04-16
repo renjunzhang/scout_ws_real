@@ -79,6 +79,8 @@ private:
                                     double& v_cmd,
                                     double& omega_cmd,
                                     TerminalMode& mode) const;
+    int computeSettlingRequiredSteps() const;
+    void publishSettlingTime(bool timeout);
     void updateState();
     void resetWarmStart(bool keep_u_prev, bool reset_slosh = true);
     
@@ -139,6 +141,21 @@ private:
     double terminal_dist_gain_ = 0.8;
     double terminal_v_min_ = 0.05;
     double terminal_v_max_ = 0.18;
+
+    // 终点残余晃动收敛（T2 settling）
+    bool settling_enable_ = false;
+    double settling_timeout_s_ = 3.0;
+    double settling_release_distance_ = 0.45;
+    double settling_eta_tol_ = 0.0015;
+    double settling_eta_dot_tol_ = 0.03;
+    double settling_speed_tol_ = 0.05;
+    double settling_omega_tol_ = 0.10;
+    int settling_required_steps_override_ = 0;
+    double settling_q_v_ = 30.0;
+    double settling_q_eta_ = 10.0;
+    double settling_eta_bar_ = 0.04;
+    int settling_step_count_ = 0;
+    ros::Time settling_enter_time_;
     
     // 状态
     PlannerState state_ = PlannerState::IDLE;
@@ -248,6 +265,7 @@ private:
     ros::Publisher slosh_imu_ay_bias_pub_;
     ros::Publisher slosh_imu_ay_filtered_pub_;
     ros::Publisher slosh_imu_ay_bias_ready_pub_;
+    ros::Publisher slosh_settling_time_pub_;
     ros::Publisher mpc_solve_ms_pub_;
     ros::Publisher mpc_status_val_pub_;
     ros::Publisher terminal_mode_pub_;

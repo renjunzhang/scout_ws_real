@@ -257,6 +257,7 @@ struct MPCSolution {
 enum class PlannerState {
     IDLE,       // 等待全局路径
     TRACKING,   // 正在跟踪路径
+    SETTLING,   // 终点附近残余晃动收敛
     REACHED,    // 到达目标点
     ERROR       // 异常状态
 };
@@ -265,6 +266,7 @@ inline std::string plannerStateToString(PlannerState state) {
     switch (state) {
         case PlannerState::IDLE:     return "IDLE";
         case PlannerState::TRACKING: return "TRACKING";
+        case PlannerState::SETTLING: return "SETTLING";
         case PlannerState::REACHED:  return "REACHED";
         case PlannerState::ERROR:    return "ERROR";
         default:                     return "UNKNOWN";

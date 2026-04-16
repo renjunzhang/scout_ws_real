@@ -81,6 +81,7 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
             // 计算等效 QP 权重: Q_slosh_eta = Q_slosh * height_coeff²
             // 使得 J_slosh = Q_slosh * η² ≈ Q_slosh_eta * (xn² + yn²)
             double h_coeff = slosh_integration_.getModalParams().height_coeff;
+            rs_h_coeff_ = h_coeff;
             mpc_params_.Q_slosh_eta = mpc_params_.Q_slosh * h_coeff * h_coeff;
 
             if (mpc_params_.enable_slosh_box_constraint) {
@@ -124,7 +125,6 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
 
             // 初始化风险调度器（需要 h_coeff）
             if (risk_scheduler_enable_) {
-                rs_h_coeff_ = h_coeff;
                 pub_rho_k_    = nh_.advertise<std_msgs::Float32>("/risk_scheduler/rho_k", 1);
                 pub_r_k_      = nh_.advertise<std_msgs::Float32>("/risk_scheduler/r_k", 1);
                 pub_u_k_      = nh_.advertise<std_msgs::Float32>("/risk_scheduler/u_k", 1);
@@ -193,6 +193,7 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     slosh_imu_ay_bias_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_ay_bias", 1);
     slosh_imu_ay_filtered_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_ay_filtered", 1);
     slosh_imu_ay_bias_ready_pub_ = nh_.advertise<std_msgs::Int32>("slosh/imu_ay_bias_ready", 1);
+    slosh_settling_time_pub_ = nh_.advertise<std_msgs::Float32>("slosh/settling_time", 1, true);
     mpc_solve_ms_pub_ = nh_.advertise<std_msgs::Float32>("mpc/solve_ms", 1);
     mpc_status_val_pub_ = nh_.advertise<std_msgs::Int32>("mpc/status_val", 1);
     terminal_mode_pub_ = nh_.advertise<std_msgs::String>("terminal/mode", 1);
@@ -348,6 +349,19 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("terminal_recovery/dist_gain", terminal_dist_gain_, 0.8);
     pnh.param("terminal_recovery/v_min", terminal_v_min_, 0.05);
     pnh.param("terminal_recovery/v_max", terminal_v_max_, 0.18);
+
+    // 终点残余晃动收敛（T2 settling）
+    pnh.param("settling/enable", settling_enable_, false);
+    pnh.param("settling/timeout_s", settling_timeout_s_, 3.0);
+    pnh.param("settling/release_distance", settling_release_distance_, 0.45);
+    pnh.param("settling/eta_tol", settling_eta_tol_, 0.0015);
+    pnh.param("settling/eta_dot_tol", settling_eta_dot_tol_, 0.03);
+    pnh.param("settling/speed_tol", settling_speed_tol_, 0.05);
+    pnh.param("settling/omega_tol", settling_omega_tol_, 0.10);
+    pnh.param("settling/required_steps", settling_required_steps_override_, 0);
+    pnh.param("settling/Q_v", settling_q_v_, 30.0);
+    pnh.param("settling/Q_eta", settling_q_eta_, 10.0);
+    pnh.param("settling/eta_bar", settling_eta_bar_, 0.04);
     
     // cmd_vel 低通滤波参数
     pnh.param("filter/alpha_v", cmd_filter_alpha_v_, 0.3);
@@ -573,6 +587,9 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
         case PlannerState::ERROR:
             terminal_mode_debug_ = "ERROR";
             break;
+        case PlannerState::SETTLING:
+            terminal_mode_debug_ = "SETTLING";
+            break;
         case PlannerState::REACHED:
             terminal_mode_debug_ = "REACHED";
             break;
@@ -611,13 +628,15 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
             }
             break;
             
+        case PlannerState::SETTLING:
         case PlannerState::TRACKING:
             // 执行 MPC 控制
             {
+                const bool settling_active = (state_ == PlannerState::SETTLING);
                 GoalInfo goal_info;
                 const bool has_goal_info = path_handler_.getGoalInfo(goal_info);
 
-                if (terminal_recovery_enable_ && !goal_stop_pending_) {
+                if (!settling_active && terminal_recovery_enable_ && !goal_stop_pending_) {
                     if (terminal_recovery_latched_) {
                         const bool should_release =
                             !has_goal_info ||
@@ -637,7 +656,8 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     terminal_recovery_latched_ = false;
                 }
 
-                if (terminal_recovery_enable_ &&
+                if (!settling_active &&
+                    terminal_recovery_enable_ &&
                     terminal_recovery_latched_ &&
                     has_goal_info &&
                     goal_info.valid &&
@@ -692,7 +712,11 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
 
                 // ── ρ_k 风险调度器 outer loop ──────────────────────────
                 const double v_nominal = vehicle_params_.v_max * 0.8;
-                if (risk_scheduler_enable_ && slosh_enabled_ && !goal_stop_pending_) {
+                MPCParams runtime_mpc_params = mpc_params_;
+                if (!settling_active &&
+                    risk_scheduler_enable_ &&
+                    slosh_enabled_ &&
+                    !goal_stop_pending_) {
                     const double d_goal_rs = path_handler_.getGoalDistance();
                     const ros::Time imu_stamp_rs = has_imu_ ? prev_imu_time_ : ros::Time(0);
 
@@ -708,15 +732,38 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     );
 
                     // 将调度输出注入 MPC 参数（solve() 前完成）
-                    mpc_params_.Q_slosh_eta = risk_output_.Q_eta_k * rs_h_coeff_ * rs_h_coeff_;
-                    if (mpc_params_.enable_slosh_box_constraint && rs_h_coeff_ > 1e-9) {
+                    runtime_mpc_params.Q_slosh_eta = risk_output_.Q_eta_k * rs_h_coeff_ * rs_h_coeff_;
+                    if (runtime_mpc_params.enable_slosh_box_constraint && rs_h_coeff_ > 1e-9) {
                         const double denom = rs_h_coeff_ * std::sqrt(2.0);
-                        mpc_params_.slosh_eta_bar = risk_output_.eta_bar_k / denom;
+                        runtime_mpc_params.slosh_eta_bar = risk_output_.eta_bar_k / denom;
                     }
-                    mpc_solver_.setMPCParams(mpc_params_);
+                } else if (settling_active) {
+                    runtime_mpc_params.Q_el = 0.0;
+                    runtime_mpc_params.Q_ec = 0.0;
+                    runtime_mpc_params.Q_etheta = 0.0;
+                    runtime_mpc_params.Q_contour = 0.0;
+                    runtime_mpc_params.Q_lag = 0.0;
+                    runtime_mpc_params.enable_omega_ff = false;
+                    runtime_mpc_params.Q_omega_ff = 0.0;
+                    runtime_mpc_params.Q_v = std::max(runtime_mpc_params.Q_v, settling_q_v_);
+                    runtime_mpc_params.terminal_factor_ec = 1.0;
+                    runtime_mpc_params.terminal_factor_etheta = 1.0;
+                    runtime_mpc_params.terminal_factor_v =
+                        std::max(1.0, runtime_mpc_params.terminal_factor_v);
+                    runtime_mpc_params.Q_slosh =
+                        std::max(runtime_mpc_params.Q_slosh, settling_q_eta_);
+                    runtime_mpc_params.Q_slosh_eta =
+                        runtime_mpc_params.Q_slosh * rs_h_coeff_ * rs_h_coeff_;
+                    if (slosh_enabled_ &&
+                        runtime_mpc_params.enable_slosh_box_constraint &&
+                        rs_h_coeff_ > 1e-9) {
+                        const double denom = rs_h_coeff_ * std::sqrt(2.0);
+                        runtime_mpc_params.slosh_eta_bar = settling_eta_bar_ / denom;
+                    }
                 }
+                mpc_solver_.setMPCParams(runtime_mpc_params);
 
-                double v_des_cmd = goal_stop_pending_ ? 0.0 :
+                double v_des_cmd = (goal_stop_pending_ || settling_active) ? 0.0 :
                     (risk_scheduler_enable_ && slosh_enabled_) ?
                     risk_output_.v_ref_eff_k : v_nominal;
                 double v_des_target = v_des_cmd;
@@ -745,7 +792,8 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     slosh_governor_hold_steps_ = 0;
                 }
 
-                if (slosh_speed_governor_enable_ &&
+                if (!settling_active &&
+                    slosh_speed_governor_enable_ &&
                     slosh_enabled_ &&
                     !ref_points.empty() &&
                     !near_goal_capture) {
@@ -1055,6 +1103,44 @@ bool LocalPlannerROS::computeTerminalRecoveryCmd(const GoalInfo& goal,
     return false;
 }
 
+int LocalPlannerROS::computeSettlingRequiredSteps() const {
+    if (settling_required_steps_override_ > 0) {
+        return settling_required_steps_override_;
+    }
+
+    const double fallback_steps =
+        std::ceil(0.5 / std::max(1e-6, mpc_params_.dt));
+    if (!slosh_enabled_) {
+        return std::max(1, static_cast<int>(fallback_steps));
+    }
+
+    const double omega_n = slosh_integration_.getModalParams().omega_n;
+    if (omega_n <= 1e-6) {
+        return std::max(1, static_cast<int>(fallback_steps));
+    }
+
+    return std::max(
+        1,
+        static_cast<int>(std::ceil((4.0 * M_PI / omega_n) / mpc_params_.dt)));
+}
+
+void LocalPlannerROS::publishSettlingTime(bool timeout) {
+    const double duration_s = settling_enter_time_.isZero()
+        ? settling_step_count_ * mpc_params_.dt
+        : (ros::Time::now() - settling_enter_time_).toSec();
+    if (!std::isfinite(duration_s) || duration_s < 0.0) {
+        return;
+    }
+
+    std_msgs::Float32 msg;
+    msg.data = static_cast<float>(duration_s);
+    slosh_settling_time_pub_.publish(msg);
+
+    ROS_INFO("[LocalPlannerROS] SETTLING finished by %s, settling_time=%.3fs",
+             timeout ? "timeout" : "convergence",
+             duration_s);
+}
+
 void LocalPlannerROS::updateState() {
     // 检查数据是否有效
     if (!has_odom_) {
@@ -1066,14 +1152,14 @@ void LocalPlannerROS::updateState() {
     }
     
     if (!path_handler_.isPathValid()) {
-        if (state_ == PlannerState::TRACKING) {
+        if (state_ == PlannerState::TRACKING || state_ == PlannerState::SETTLING) {
             transitionTo(PlannerState::ERROR);
             ROS_WARN("[LocalPlannerROS] Path invalid or timeout");
         }
         return;
     }
     
-    if (state_ != PlannerState::TRACKING) {
+    if (state_ != PlannerState::TRACKING && state_ != PlannerState::SETTLING) {
         goal_stop_pending_ = false;
         terminal_recovery_latched_ = false;
         return;
@@ -1083,6 +1169,43 @@ void LocalPlannerROS::updateState() {
     const double goal_dist = path_handler_.getGoalDistance();
     const double goal_stop_release_dist =
         std::max(path_params_.goal_capture_distance, path_params_.goal_tolerance + 0.15);
+
+    if (state_ == PlannerState::SETTLING) {
+        terminal_recovery_latched_ = false;
+        goal_stop_pending_ = false;
+
+        const bool should_release =
+            !goal_pose_reached &&
+            (!std::isfinite(goal_dist) || goal_dist > settling_release_distance_);
+        if (should_release) {
+            transitionTo(PlannerState::TRACKING);
+            return;
+        }
+
+        ++settling_step_count_;
+
+        const Eigen::Vector4d ss = slosh_integration_.getSloshState();
+        const bool slosh_small =
+            std::abs(ss(0)) < settling_eta_tol_ &&
+            std::abs(ss(1)) < settling_eta_dot_tol_ &&
+            std::abs(ss(2)) < settling_eta_tol_ &&
+            std::abs(ss(3)) < settling_eta_dot_tol_;
+        const bool speed_low =
+            std::abs(current_v_) < settling_speed_tol_ &&
+            std::abs(current_omega_) < settling_omega_tol_;
+        const bool enough_time = settling_step_count_ >= computeSettlingRequiredSteps();
+        const bool timeout =
+            settling_timeout_s_ > 0.0 &&
+            settling_step_count_ * mpc_params_.dt >= settling_timeout_s_;
+
+        if ((enough_time && slosh_small && speed_low) || timeout) {
+            publishSettlingTime(timeout);
+            transitionTo(PlannerState::REACHED);
+            terminal_recovery_latched_ = false;
+            resetWarmStart(false, false);
+        }
+        return;
+    }
 
     if (goal_stop_pending_) {
         // 终点边界附近允许短暂滑出 pose gate，但不要立刻释放 pending stop。
@@ -1099,6 +1222,12 @@ void LocalPlannerROS::updateState() {
     }
 
     if (goal_pose_reached) {
+        if (settling_enable_ && slosh_enabled_) {
+            transitionTo(PlannerState::SETTLING);
+            goal_stop_pending_ = false;
+            terminal_recovery_latched_ = false;
+            return;
+        }
         goal_stop_pending_ = true;
     }
 
@@ -1118,6 +1247,14 @@ void LocalPlannerROS::transitionTo(PlannerState new_state) {
     if (state_ != new_state) {
         if (new_state == PlannerState::TRACKING && state_ != PlannerState::TRACKING) {
             ++episode_id_;
+        }
+        if (new_state == PlannerState::SETTLING || state_ == PlannerState::SETTLING) {
+            settling_step_count_ = 0;
+        }
+        if (new_state == PlannerState::SETTLING) {
+            settling_enter_time_ = ros::Time::now();
+        } else if (state_ == PlannerState::SETTLING) {
+            settling_enter_time_ = ros::Time(0);
         }
         if (new_state == PlannerState::REACHED) {
             reached_time_ = ros::Time::now();
