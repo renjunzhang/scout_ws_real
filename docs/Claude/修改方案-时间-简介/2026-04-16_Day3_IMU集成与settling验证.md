@@ -338,6 +338,89 @@ git commit -m "Day 3: add T2 settling time publication and sim validation"
 
 这一步只作为工程 smoke test，不替代实物 A/B/C 实验。
 
+推荐 bag 目录：
+
+```bash
+mkdir -p /data/a/slosh_bags/sim/day3_abc
+```
+
+每组启动局部规划前，先确保仿真导航骨架已启动：
+
+```bash
+rosrun scout_local_planner launch_sim_nav_stack.sh
+```
+
+### A 组：不用 IMU ay
+
+```bash
+roslaunch scout_local_planner slosh_experiment_sim.launch \
+  Q_slosh:=5.0 \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_lateral_accel:=false \
+  risk_scheduler_enable:=false
+```
+
+录包建议：
+
+```bash
+SLOSH_BAG_DIR=/data/a/slosh_bags/sim/day3_abc \
+SLOSH_BAG_MODE=sim \
+rosrun scout_local_planner record_slosh_experiment.sh 5 day3_A_no_imu_ay
+```
+
+### B 组：启用 IMU ay
+
+```bash
+roslaunch scout_local_planner slosh_experiment_sim.launch \
+  Q_slosh:=5.0 \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_lateral_accel:=true \
+  risk_scheduler_enable:=false
+```
+
+录包建议：
+
+```bash
+SLOSH_BAG_DIR=/data/a/slosh_bags/sim/day3_abc \
+SLOSH_BAG_MODE=sim \
+rosrun scout_local_planner record_slosh_experiment.sh 5 day3_B_imu_ay
+```
+
+### C 组：启用 IMU ay + risk scheduler
+
+```bash
+roslaunch scout_local_planner slosh_experiment_sim.launch \
+  Q_slosh:=5.0 \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_lateral_accel:=true \
+  risk_scheduler_enable:=true
+```
+
+录包建议：
+
+```bash
+SLOSH_BAG_DIR=/data/a/slosh_bags/sim/day3_abc \
+SLOSH_BAG_MODE=sim \
+rosrun scout_local_planner record_slosh_experiment.sh 5 day3_C_imu_ay_risk
+```
+
+三条 bag 完成后离线分析：
+
+```bash
+rosrun scout_local_planner analyze_day3_abc_smoke.py \
+  A=/data/a/slosh_bags/sim/day3_abc/<A组bag>.bag \
+  B=/data/a/slosh_bags/sim/day3_abc/<B组bag>.bag \
+  C=/data/a/slosh_bags/sim/day3_abc/<C组bag>.bag
+```
+
+通过标准：
+
+- A/B/C 三组均有 `/imu/data`
+- B/C 组 `/slosh/imu_ay_bias_ready` 大部分时间为 `true`
+- C 组 `/risk_scheduler/u_k` 有非零响应
+- C 组 `/risk_scheduler/fallback_active` 不应长期占主导
+- 三组均能进入 `TRACKING`，且 MPC 不出现全程失败
+
 ---
 
 ## 实物阶段顺延项
@@ -361,12 +444,12 @@ git commit -m "Day 3: add T2 settling time publication and sim validation"
 - [x] 仿真链 `bridge + localization + MBF + local planner` 可启动
 - [x] 仿真中验证 `SETTLING` 能进入、退出或 timeout
 - [x] 实物默认 `settling.enable` 策略确认
-- [ ] T2 settling 仿真闭环提交
+- [x] T2 settling 仿真闭环提交
 
 ### 可选
 
 - [ ] A/B/C 仿真 smoke test 各 1 条 bag
-- [ ] ISR ZV shaper 初版实现
+- [ ] ISR ZV shaper 初版实现（暂不混入 Day3 settling/IMU 仿真收尾）
 
 ### 顺延到实物阶段
 

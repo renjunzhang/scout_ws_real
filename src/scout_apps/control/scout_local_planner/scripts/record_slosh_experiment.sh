@@ -135,6 +135,7 @@ TOPICS=(
     /slosh/constraint_active
     /slosh/v_des_eff
     /slosh/speed_governor_active
+    /slosh/settling_time
 
     # 风险调度器
     /risk_scheduler/rho_k
