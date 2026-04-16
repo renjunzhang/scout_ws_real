@@ -37,6 +37,15 @@
   <arg name="slosh_imu_ay_bias_compensation_enable" default="true" doc="是否对 IMU ay 做静止零偏扣除"/>
   <arg name="slosh_imu_ay_bias_init_duration" default="3.0" doc="估计 IMU ay 零偏所需的连续静止时长"/>
   <arg name="risk_scheduler_enable" default="false" doc="是否启用 rho_k 风险自适应调度器"/>
+  <arg name="risk_scheduler_gamma" default="5.0" doc="rho_k sigmoid 斜率"/>
+  <arg name="risk_scheduler_rho_0" default="0.3" doc="rho_k sigmoid 中点"/>
+  <arg name="risk_scheduler_rate_limit_per_step" default="0.05" doc="Q_eta / eta_bar / v_eff 每步变化率限制"/>
+  <arg name="risk_scheduler_beta" default="0.3" doc="高风险时 v_ref 最大折扣比例"/>
+  <arg name="risk_scheduler_Q_eta_min" default="0.0" doc="低风险 Q_eta 下限"/>
+  <arg name="risk_scheduler_Q_eta_max" default="10.0" doc="高风险 Q_eta 上限"/>
+  <arg name="settling_eta_tol" default="0.0015" doc="SETTLING |eta| 收敛阈值 (m)"/>
+  <arg name="settling_eta_dot_tol" default="0.03" doc="SETTLING |eta_dot| 收敛阈值 (m/s)"/>
+  <arg name="settling_timeout_s" default="3.0" doc="SETTLING 最长停留时间 (s)"/>
   <arg name="cmd_vel_topic" default="/cmd_vel" doc="planner 输出的 cmd_vel 话题；阶段 3 可改到调试话题避免与底盘直控冲突"/>
   <arg name="global_path_topic" default="/scout/global_path" doc="local planner 订阅的全局路径话题；固定路径重放实验时可改到 /scout/global_path_fixed"/>
 
@@ -72,6 +81,15 @@
     <param name="slosh_estimator/imu_ay_bias_compensation_enable" value="$(arg slosh_imu_ay_bias_compensation_enable)"/>
     <param name="slosh_estimator/imu_ay_bias_init_duration" value="$(arg slosh_imu_ay_bias_init_duration)"/>
     <param name="risk_scheduler/enable" value="$(arg risk_scheduler_enable)"/>
+    <param name="risk_scheduler/gamma" value="$(arg risk_scheduler_gamma)"/>
+    <param name="risk_scheduler/rho_0" value="$(arg risk_scheduler_rho_0)"/>
+    <param name="risk_scheduler/rate_limit_per_step" value="$(arg risk_scheduler_rate_limit_per_step)"/>
+    <param name="risk_scheduler/beta" value="$(arg risk_scheduler_beta)"/>
+    <param name="risk_scheduler/Q_eta_min" value="$(arg risk_scheduler_Q_eta_min)"/>
+    <param name="risk_scheduler/Q_eta_max" value="$(arg risk_scheduler_Q_eta_max)"/>
+    <param name="settling/eta_tol" value="$(arg settling_eta_tol)"/>
+    <param name="settling/eta_dot_tol" value="$(arg settling_eta_dot_tol)"/>
+    <param name="settling/timeout_s" value="$(arg settling_timeout_s)"/>
 
     <!-- 话题 remap -->
     <remap from="global_path" to="$(arg global_path_topic)"/>
