@@ -227,6 +227,9 @@ catkin_make 2>&1 | grep "processing catkin package"
     risk_scheduler_enable:=true \
     enable_slosh_box_constraint:=false
 
+    # 脚本启动
+    rosrun scout_local_planner run_day4_profile.sh
+
     # 带晃动抑制的启动（论文实验用）
     roslaunch scout_local_planner test_mpc_sim.launch Q_slosh:=10.0
 

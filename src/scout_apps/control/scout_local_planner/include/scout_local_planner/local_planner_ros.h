@@ -235,6 +235,7 @@ private:
     int imu_ay_bias_min_samples_ = 100;
     double imu_ay_bias_estimator_alpha_ = 0.15;
     double imu_ay_bias_trim_ratio_ = 0.10;
+    double imu_ay_scale_ = 1.0;   // 离线标定比例系数：calibrated = (raw - bias) * scale
     bool has_imu_ = false;
     bool has_prev_imu_ = false;
     ros::Time prev_imu_time_;

@@ -279,6 +279,8 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
               imu_ay_bias_estimator_alpha_, 0.15);
     pnh.param("slosh_estimator/imu_ay_bias_trim_ratio",
               imu_ay_bias_trim_ratio_, 0.10);
+    pnh.param("slosh_estimator/imu_ay_scale",
+              imu_ay_scale_, 1.0);
 
     // 车辆参数
     pnh.param("vehicle/v_max", vehicle_params_.v_max, 1.0);
@@ -566,7 +568,7 @@ void LocalPlannerROS::imuCallback(const sensor_msgs::Imu::ConstPtr& msg) {
 
     const double ay_bias =
         (imu_ay_bias_compensation_enable_ && imu_ay_bias_ready_) ? imu_ay_bias_ : 0.0;
-    imu_ay_unbiased_ = ay_raw - ay_bias;
+    imu_ay_unbiased_ = (ay_raw - ay_bias) * imu_ay_scale_;
 
     if (!has_imu_) {
         imu_ay_filtered_ = imu_ay_unbiased_;
