@@ -87,16 +87,130 @@ GLOBAL_PATH_TOPIC=/scout/global_path_fixed rosrun scout_local_planner launch_fix
 
 ### `extract_slosh_metrics.py`
 
-从 bag 文件中提取 slosh/MPC 实验指标的离线分析脚本，默认聚焦 `TRACKING` 阶段。
+从 bag 文件中提取 slosh/MPC 实验指标的离线分析脚本。
 
 可提取内容包括：
 - `/slosh/height`、`/slosh/height_pred_max` 的峰值和统计量
 - `/mpc/solve_ms`、`/mpc/status_val` 的求解性能
 - governor、约束触发、速度命令等运行指标
+- 按 `mpc_status` 分段统计成功率（`TRACKING / SETTLING / REACHED / IDLE` 各段单独输出），避免整包 success_ratio 被 near-goal 段污染
 
 适用场景：
 - 比较不同参数组下的晃动指标和控制开销
+- 判断 success_ratio 低的根因来自哪个阶段
 - 批量导出 CSV 做进一步统计
+
+### `analyze_settling_day3.py`
+
+Day 3 T2 settling 验证专用分析脚本，从 bag 中检查 settling 状态机的进出行为。
+
+关注内容包括：
+- `mpc_status` 是否经过 `TRACKING → SETTLING → REACHED` 完整链路
+- `/slosh/settling_time` 是否正常发布及其数值
+- `SETTLING` 阶段的 `status_val` 成功率
+- `/risk_scheduler/u_k`、`fallback_active`、`rho_k` 在 settling 阶段的行为
+
+适用场景：
+- 验证 T2 settling 状态机能否在实物/仿真中正常进出
+- 排查"SETTLING 一直没进入"或"settling_time 没发布"的问题
+
+### `analyze_day3_abc_smoke.py`
+
+Day 3 A/B/C 配置对照的仿真 smoke 检查脚本，对比三种 IMU 使用配置下的关键指标。
+
+三种配置：
+- A：`yaw_rate=true, lateral_accel=false`（默认）
+- B：`yaw_rate=true, lateral_accel=true`
+- C：`yaw_rate=true, lateral_accel=true + risk_scheduler`
+
+关注内容：
+- 各配置的 `TRACKING success rate`、`solve_ms p95`
+- `/slosh/height p95`、`fallback_active true_ratio`
+- IMU ay bias ready 比例、`imu_ay_filtered` 与 `ay_est` 的一致性
+
+用法：
+```bash
+rosrun scout_local_planner analyze_day3_abc_smoke.py \
+  A=<bag_A> B=<bag_B> C=<bag_C>
+```
+
+### `analyze_sim_speed_issue.py`
+
+仿真 MPC 速度偏慢问题诊断脚本，从 bag 中分析机器人在哪些阶段速度低于预期。
+
+关注内容：
+- 低速（默认阈值 0.25 m/s）帧数占比及分布
+- `/slosh/v_des_eff` 与实际 `/cmd_vel` 的差异
+- `risk_scheduler/rho_k`、`Q_eta_k`、`fallback_active` 在低速段的状态
+- `terminal/mode` 是否在 near-goal 段拉低整体速度
+
+适用场景：
+- 区分"全程慢"还是"near-goal 段慢"
+- 判断速度低是 risk scheduler 激进还是 terminal recovery 保守
+
+### `analyze_global_path_duplicates.py`
+
+定位 `/scout/global_path` 中重复点/极短段的脚本，输出每个可疑位置的索引和坐标。
+
+关注内容：
+- 段长低于阈值（默认 1e-3 m）的相邻点对
+- 每对可疑短段的 `idx → idx+1`、段长、前后点坐标
+
+适用场景：
+- 确认全局路径发布链是否存在重复 waypoint
+- 为 `PathHandler::sanitizePolyline` 的阈值设置提供依据
+
+### `analyze_tracking_infeasible.py`
+
+TRACKING 阶段 OSQP -3 根因分析脚本，将 solver 失败时刻与路径几何异常对齐。
+
+关注内容：
+- `/mpc/status_val` 失败时刻最近的 `/mpc/reference_path`、`/scout/global_path_smooth` 几何量（max_kappa、max_dkappa、min_seg）
+- 失败事件的几何特征分布（按路径来源分层）
+- 判断失败主因：全局路径几何过激 / 局部参考几何病态 / 非几何主导
+
+适用场景：
+- 定位 TRACKING infeasible 的真正根因
+- 区分"geometric failure"和"constraint structure failure"（如 u_prev 冻结）
+
+### `analyze_global_path_prefix_window.py`
+
+分析 `/scout/global_path` 前段窗口几何的专项脚本，面向"路径起步阶段 fitLocalSpline 频繁失败"场景。
+
+关注内容：
+- 前 K 个路径点（默认 89 个，对应 `closest_idx=0, end=88` 的典型失败窗口）的段长、航向跳变和曲率变化率
+- 最短段、最大航向跳变的具体索引和坐标
+
+用法：
+```bash
+python3 analyze_global_path_prefix_window.py <bag> --window-size 89
+```
+
+适用场景：
+- 定位前段局部窗口几何过激的具体点位
+- 判断是单点折返尖刺还是正常大曲率弯道
+
+### `diagnose_speed_profile.py`
+
+速度剖面限速来源诊断脚本，对单条 bag 分析当前速度慢的根因属于哪一候选。
+
+三类候选根因：
+- **A**：`global_spline kappa` 远大于实际路径几何（cubic spline 二阶导数放大）
+- **B**：`dkappa` 有限差分噪声放大（`dkappa >> 100 1/m²`）
+- **C**：局部 reactive cap 仍在主导全局速度剖面（速度剖面计算正确，但被执行层重写）
+
+输出内容：
+- 全局平滑路径的 kappa/dkappa 统计及各项 `v_geom_min`（a_lat / omega / alpha 三约束）
+- 实际 cmd_vel 速度分布（均值、中位数、低速段占比）
+
+用法：
+```bash
+python3 diagnose_speed_profile.py <bag> --omega-max 2.0 --alpha-max 4.0 --a-lat-max 1.0
+```
+
+适用场景：
+- 判断速度慢的主因在规划层还是执行层
+- 验证 P1 v_plan/v_exec 解耦是否真正生效
 
 ### `observe_terminal_recovery.py`
 
@@ -153,6 +267,60 @@ Stage-4 IMU `alpha_z` 验证动作脚本，向 `/cmd_vel` 发布一组固定的�
 适用场景：
 - 采集 IMU 角加速度/角速度变化验证 bag
 - 为 Stage-4 相关分析提供标准化激励
+
+### `validate_sim_imu.py`
+
+在线验证仿真 IMU 话题质量的脚本（需要 ROS 节点在线，非离线 bag 分析）。
+
+关注内容：
+- `/imu/data` 频率、时间戳一致性、`frame_id`
+- IMU `linear_acceleration.y` 与运动学估计 `v * omega` 的偏差
+- TF `imu_link` 是否可查询
+
+适用场景：
+- 仿真首次接入真 IMU 时的链路验收
+- 确认 Gazebo IMU 插件输出与 `/odom` 时间戳对齐
+
+### `launch_sim_nav_stack.sh`
+
+仿真导航栈一键启动脚本，顺序拉起 Gazebo、Cartographer 定位、全局规划器。
+
+支持环境变量配置：
+- `USE_RVIZ`：是否启动 RViz（默认 false）
+- `SPAWN_X/Y/Z`：机器人初始位置
+- `GAZEBO_WAIT_S`：等待 Gazebo 就绪时间
+- `LOCALIZATION_BACKUP_V`：定位初始化倒退速度
+
+用法：
+```bash
+rosrun scout_local_planner launch_sim_nav_stack.sh
+USE_RVIZ=true rosrun scout_local_planner launch_sim_nav_stack.sh
+```
+
+注意：本脚本只启动到全局规划器，不启动 local planner。local planner 需要单独用 `slosh_experiment_sim.launch` 启动，以便灵活传入实验参数。
+
+### `run_day4_profile.sh`
+
+Day 4 仿真参数组合包装脚本，统一管理 baseline / conservative / no_imu_ay / relaxed_settling 四组预定义参数，避免手工切换时漏参。
+
+支持的 profile：
+
+| profile | 说明 |
+|---|---|
+| `baseline` | Day4 C baseline，默认参数 |
+| `conservative` | 保守风险调度（gamma=3.0, rho_0=0.4, rate_limit=0.02, beta=0.2） |
+| `no_imu_ay` | 关闭 IMU 横向加速度，保留风险调度 |
+| `relaxed_settling` | 放宽 settling 终止阈值（eta_tol=0.002, eta_dot_tol=0.05） |
+
+用法：
+```bash
+rosrun scout_local_planner run_day4_profile.sh conservative
+rosrun scout_local_planner run_day4_profile.sh conservative Q_slosh:=10
+```
+
+适用场景：
+- Day 4 仿真参数 sweep，快速切换对照组
+- 复现指定参数组的仿真 bag
 
 ## 推荐用法
 

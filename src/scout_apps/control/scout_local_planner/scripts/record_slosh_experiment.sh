@@ -186,6 +186,7 @@ TOPICS=(
     /scout/goal
     /scout/current_goal
     /scout/global_path
+    /scout/global_path_fixed
     /scout/global_path_smooth
     /mpc/reference_path
     /local_path
