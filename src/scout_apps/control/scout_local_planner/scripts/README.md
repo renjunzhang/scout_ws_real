@@ -12,6 +12,17 @@
 - 手动触发一次固定终点跟踪
 - 做对照实验时保证 goal pose 一致
 
+### `sim_fixed_goal_tool.py`
+
+仿真专用固定 goal 工具，支持：
+- `capture`：抓取当前 `/scout/goal` 并保存为 JSON
+- `show`：显示已保存 goal 的 `frame/x/y/yaw`
+- `replay`：从 JSON 重发同一个 goal 到 `/scout/goal`
+
+适用场景：
+- Day4/Day5 仿真实验要求终点完全一致
+- 不再依赖 RViz 手点 goal，避免人为偏差
+
 ### `fixed_global_path_runner.py`
 
 固定 `/scout/global_path` 的采集与回放工具，支持以下模式：

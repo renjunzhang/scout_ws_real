@@ -187,6 +187,7 @@ TOPICS=(
     /scout/current_goal
     /scout/global_path
     /scout/global_path_smooth
+    /mpc/reference_path
     /local_path
     /scout/mbf_costmap_nav/GlobalPlanner/plan
     /scout/mbf_costmap_nav/GlobalPlanner/potential

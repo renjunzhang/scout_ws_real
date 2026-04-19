@@ -223,6 +223,8 @@ struct PathHandlerParams {
     bool use_bspline_smoothing = false; // 是否对局部窗口做 B-spline 平滑
     int bspline_samples_per_segment = 8; // B-spline 每段采样点数
     double path_change_threshold = 0.3;  // 路径相似性阈值 (m)，低于此值视为相同路径
+    double speed_profile_omega_max = 0.0; // v(s) 规划用 ω_max (rad/s)，<=0 不限制
+    double speed_profile_alpha_max = 0.0; // v(s) 规划用 α_max (rad/s²)，<=0 不限制
 };
 
 //==============================================================================

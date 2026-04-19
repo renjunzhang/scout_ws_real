@@ -69,9 +69,10 @@ private:
     void publishCmdVel(double v, double omega);
     void publishLocalPath(const std::vector<StateVector>& predicted_states,
                           const std::vector<ReferencePoint>& refs);
+    void publishReferencePath(const std::vector<ReferencePoint>& refs);
     void publishSmoothedPath();
     void publishStatus();
-    void publishSloshDebug(double solve_time_ms, bool solve_ok);
+    void publishSloshDebug(double solve_time_ms, bool solve_ok, bool publish_solver_debug = true);
     void publishTerminalDebug();
     void updateSloshEstimate();
     double computePredictedSloshHeightMax(const MPCSolution& solution) const;
@@ -95,6 +96,7 @@ private:
     ros::Subscriber imu_sub_;
     ros::Publisher cmd_vel_pub_;
     ros::Publisher local_path_pub_;
+    ros::Publisher reference_path_pub_;
     ros::Publisher smoothed_path_pub_;
     ros::Publisher status_pub_;
     ros::Timer control_timer_;
@@ -117,6 +119,20 @@ private:
     double infeasible_decel_ = 1.0;       // 不可行时制动减速度 (m/s^2)
     double infeasible_omega_scale_ = 0.0; // 不可行时角速度缩放
     double infeasible_min_speed_ = 0.0;   // 不可行时线速度下限 (m/s)
+    bool tracking_feasibility_guard_enable_ = true;
+    int tracking_feas_fail_trigger_count_ = 3;
+    int tracking_feas_fail_strong_trigger_count_ = 6;
+    int tracking_feas_release_success_count_ = 5;
+    double tracking_feas_v_cap_mild_ = 0.5;
+    double tracking_feas_v_cap_strong_ = 0.3;
+    double tracking_reentry_v_cap_ = 0.6;
+    int tracking_reentry_ramp_steps_ = 10;
+    bool tracking_curvature_speed_cap_enable_ = true;
+    double tracking_curvature_preview_distance_ = 1.5;
+    double tracking_curvature_rate_preview_distance_ = 1.0;
+    double tracking_curvature_min_speed_ = 0.25;
+    double tracking_curvature_rate_min_speed_ = 0.25;
+    double tracking_curvature_rate_gain_ = 1.0;
 
     // 原地对齐模式（heading align）
     bool heading_align_enable_ = false;
@@ -284,6 +300,10 @@ private:
     std::string terminal_mode_debug_ = "NONE";
     GoalInfo terminal_goal_info_debug_;
     bool terminal_goal_info_valid_ = false;
+    int tracking_solve_fail_streak_ = 0;
+    int tracking_solve_success_streak_ = 0;
+    int tracking_reentry_ramp_steps_left_ = 0;
+    bool tracking_feasibility_recovery_active_ = false;
 
     // cmd_vel 低通滤波（EMA）
     double filtered_v_ = 0.0;

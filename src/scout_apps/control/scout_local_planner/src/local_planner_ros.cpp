@@ -170,6 +170,7 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     // 发布者
     cmd_vel_pub_ = nh_.advertise<geometry_msgs::Twist>("cmd_vel", 1);
     local_path_pub_ = nh_.advertise<nav_msgs::Path>("local_path", 1);
+    reference_path_pub_ = nh_.advertise<nav_msgs::Path>("mpc/reference_path", 1);
     if (path_params_.publish_smoothed_path) {
         smoothed_path_pub_ = nh_.advertise<nav_msgs::Path>(
             path_params_.smoothed_path_topic, 1);
@@ -311,6 +312,8 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("path_handler/goal_speed", path_params_.goal_speed, 0.0);
     pnh.param("path_handler/use_bspline_smoothing", path_params_.use_bspline_smoothing, false);
     pnh.param("path_handler/bspline_samples_per_segment", path_params_.bspline_samples_per_segment, 8);
+    pnh.param("path_handler/speed_profile_omega_max", path_params_.speed_profile_omega_max, 0.0);
+    pnh.param("path_handler/speed_profile_alpha_max", path_params_.speed_profile_alpha_max, 0.0);
     pnh.param("path_handler/publish_smoothed_path",
               path_params_.publish_smoothed_path, false);
     pnh.param("path_handler/smoothed_path_topic",
@@ -327,6 +330,34 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("safety/infeasible_decel", infeasible_decel_, 1.0);
     pnh.param("safety/infeasible_omega_scale", infeasible_omega_scale_, 0.0);
     pnh.param("safety/infeasible_min_speed", infeasible_min_speed_, 0.0);
+    pnh.param("safety/tracking_feasibility_guard_enable",
+              tracking_feasibility_guard_enable_, true);
+    pnh.param("safety/tracking_feas_fail_trigger_count",
+              tracking_feas_fail_trigger_count_, 3);
+    pnh.param("safety/tracking_feas_fail_strong_trigger_count",
+              tracking_feas_fail_strong_trigger_count_, 6);
+    pnh.param("safety/tracking_feas_release_success_count",
+              tracking_feas_release_success_count_, 5);
+    pnh.param("safety/tracking_feas_v_cap_mild",
+              tracking_feas_v_cap_mild_, 0.5);
+    pnh.param("safety/tracking_feas_v_cap_strong",
+              tracking_feas_v_cap_strong_, 0.3);
+    pnh.param("safety/tracking_reentry_v_cap",
+              tracking_reentry_v_cap_, 0.6);
+    pnh.param("safety/tracking_reentry_ramp_steps",
+              tracking_reentry_ramp_steps_, 10);
+    pnh.param("safety/tracking_curvature_speed_cap_enable",
+              tracking_curvature_speed_cap_enable_, true);
+    pnh.param("safety/tracking_curvature_preview_distance",
+              tracking_curvature_preview_distance_, 1.5);
+    pnh.param("safety/tracking_curvature_rate_preview_distance",
+              tracking_curvature_rate_preview_distance_, 1.0);
+    pnh.param("safety/tracking_curvature_min_speed",
+              tracking_curvature_min_speed_, 0.25);
+    pnh.param("safety/tracking_curvature_rate_min_speed",
+              tracking_curvature_rate_min_speed_, 0.25);
+    pnh.param("safety/tracking_curvature_rate_gain",
+              tracking_curvature_rate_gain_, 1.0);
 
     // 原地对齐模式
     pnh.param("heading_align/enable", heading_align_enable_, false);
@@ -385,6 +416,15 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
 
     // 将 base_frame 传递给 path_handler
     path_params_.base_frame = base_frame_;
+
+    // 将运动学约束桥接到速度剖面规划。
+    // 仅在未显式配置 speed_profile_* 时才退回 vehicle 约束，避免规划层预算被强制绑死到 MPC 硬约束。
+    if (path_params_.speed_profile_omega_max <= 1e-6) {
+        path_params_.speed_profile_omega_max = vehicle_params_.omega_max;
+    }
+    if (path_params_.speed_profile_alpha_max <= 1e-6) {
+        path_params_.speed_profile_alpha_max = vehicle_params_.alpha_max;
+    }
 
     // ρ_k 风险自适应调度器参数
     pnh.param("risk_scheduler/enable", risk_scheduler_enable_, false);
@@ -564,6 +604,22 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
     if (path_handler_.consumeResetHint()) {
         resetWarmStart(true);
         terminal_recovery_latched_ = false;
+        tracking_solve_fail_streak_ = 0;
+        tracking_solve_success_streak_ = 0;
+        tracking_feasibility_recovery_active_ = false;
+        {
+            int ramp = std::max(0, tracking_reentry_ramp_steps_);
+            if (tracking_curvature_speed_cap_enable_ && path_params_.max_lat_accel > 0.0) {
+                const double kappa_start = path_handler_.getMaxCurvatureAhead(
+                    0.0, tracking_curvature_preview_distance_);
+                if (kappa_start > 1e-4 &&
+                    std::sqrt(path_params_.max_lat_accel / kappa_start) <
+                        tracking_reentry_v_cap_) {
+                    ramp *= 2;
+                }
+            }
+            tracking_reentry_ramp_steps_left_ = ramp;
+        }
     }
 
     if (state_ != PlannerState::TRACKING) {
@@ -615,7 +671,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
         case PlannerState::ERROR:
             // 停止
             publishCmdVel(0.0, 0.0);
-            publishSloshDebug(last_solve_time_ms_, last_solve_ok_);
+            publishSloshDebug(last_solve_time_ms_, last_solve_ok_, false);
             break;
             
         case PlannerState::REACHED:
@@ -624,7 +680,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
             ROS_INFO_THROTTLE(5.0, "[LocalPlannerROS] Goal reached");
             if (reached_time_.isZero() ||
                 (ros::Time::now() - reached_time_).toSec() <= reached_debug_duration_) {
-                publishSloshDebug(last_solve_time_ms_, last_solve_ok_);
+                publishSloshDebug(last_solve_time_ms_, last_solve_ok_, false);
             }
             break;
             
@@ -763,9 +819,91 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 }
                 mpc_solver_.setMPCParams(runtime_mpc_params);
 
-                double v_des_cmd = (goal_stop_pending_ || settling_active) ? 0.0 :
+                double v_des_cmd_raw = (goal_stop_pending_ || settling_active) ? 0.0 :
                     (risk_scheduler_enable_ && slosh_enabled_) ?
                     risk_output_.v_ref_eff_k : v_nominal;
+                double v_des_cmd = v_des_cmd_raw;
+                int reentry_steps_dbg = tracking_reentry_ramp_steps_left_;
+                int tracking_fail_streak_dbg = tracking_solve_fail_streak_;
+                int tracking_feas_active_dbg = tracking_feasibility_recovery_active_ ? 1 : 0;
+                if (state_ == PlannerState::TRACKING &&
+                    !goal_stop_pending_ &&
+                    !settling_active &&
+                    tracking_feasibility_guard_enable_) {
+                    if (tracking_reentry_ramp_steps_left_ > 0) {
+                        const int total_steps = std::max(1, tracking_reentry_ramp_steps_);
+                        const int step_index =
+                            std::max(0, total_steps - tracking_reentry_ramp_steps_left_);
+                        const double alpha = static_cast<double>(step_index + 1) /
+                                             static_cast<double>(total_steps);
+                        const double ramp_floor = std::max(0.0, tracking_reentry_v_cap_);
+                        const double ramp_cap =
+                            ramp_floor + alpha * std::max(0.0, v_des_cmd_raw - ramp_floor);
+                        v_des_cmd = std::min(v_des_cmd, ramp_cap);
+                        --tracking_reentry_ramp_steps_left_;
+                    }
+
+                    if (tracking_solve_fail_streak_ >= tracking_feas_fail_strong_trigger_count_) {
+                        v_des_cmd = std::min(v_des_cmd, tracking_feas_v_cap_strong_);
+                        tracking_feasibility_recovery_active_ = true;
+                    } else if (tracking_solve_fail_streak_ >= tracking_feas_fail_trigger_count_) {
+                        v_des_cmd = std::min(v_des_cmd, tracking_feas_v_cap_mild_);
+                        tracking_feasibility_recovery_active_ = true;
+                    }
+
+                    tracking_fail_streak_dbg = tracking_solve_fail_streak_;
+                    tracking_feas_active_dbg = tracking_feasibility_recovery_active_ ? 1 : 0;
+                }
+                double kappa_preview_dbg = 0.0;
+                double dkappa_preview_dbg = 0.0;
+                if (state_ == PlannerState::TRACKING &&
+                    !goal_stop_pending_ &&
+                    !settling_active &&
+                    tracking_curvature_speed_cap_enable_) {
+                    double v_curve_cap = std::max(0.0, v_des_cmd);
+                    if (path_params_.max_lat_accel > 1e-6) {
+                        kappa_preview_dbg = path_handler_.getMaxCurvatureAhead(
+                            path_params_.lookahead_distance,
+                            tracking_curvature_preview_distance_);
+                        if (kappa_preview_dbg > 1e-4) {
+                            const double v_cap_kappa =
+                                std::sqrt(std::max(0.0, path_params_.max_lat_accel /
+                                                         (kappa_preview_dbg + 1e-9)));
+                            // omega_max 硬约束：v × kappa ≤ omega_max
+                            // 该 cap 可低于 tracking_curvature_min_speed_，因路径几何确实要求低速
+                            const double v_cap_omega =
+                                (vehicle_params_.omega_max > 1e-3)
+                                    ? vehicle_params_.omega_max / (kappa_preview_dbg + 1e-9)
+                                    : v_cap_kappa;
+                            // 几何综合限速：取横向加速度 cap 与 omega_max cap 的较小值
+                            const double v_cap_geom = std::min(v_cap_kappa, v_cap_omega);
+                            // 若几何限速低于 min_speed，说明路径确实无法以 min_speed 行驶，降速优先
+                            const double v_floor = std::min(tracking_curvature_min_speed_, v_cap_geom);
+                            v_curve_cap = std::min(v_curve_cap, std::max(v_floor, v_cap_geom));
+                        }
+                    }
+                    if (vehicle_params_.alpha_max > 1e-6) {
+                        dkappa_preview_dbg = path_handler_.getMaxCurvatureRateAhead(
+                            path_params_.lookahead_distance,
+                            tracking_curvature_rate_preview_distance_);
+                        if (dkappa_preview_dbg > 1e-4) {
+                            const double v_cap_dkappa =
+                                std::sqrt(std::max(0.0, tracking_curvature_rate_gain_ *
+                                                         vehicle_params_.alpha_max /
+                                                         (dkappa_preview_dbg + 1e-9)));
+                            // alpha_max 硬约束：v² × dkappa ≤ alpha_max
+                            // 该 cap 可低于 tracking_curvature_rate_min_speed_，
+                            // 因路径几何（高 dkappa 段）确实要求低速
+                            const double v_floor_dkappa =
+                                std::min(tracking_curvature_rate_min_speed_, v_cap_dkappa);
+                            v_curve_cap =
+                                std::min(v_curve_cap,
+                                         std::max(v_floor_dkappa, v_cap_dkappa));
+                        }
+                    }
+                    v_des_cmd = std::min(v_des_cmd, v_curve_cap);
+                }
+
                 double v_des_target = v_des_cmd;
                 last_speed_governor_active_ = 0;
 
@@ -773,7 +911,8 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 std::vector<ReferencePoint> ref_points;
                 if (!path_handler_.getReferencePoints(
                         mpc_params_.N, mpc_params_.dt,
-                        v_des_cmd,  // 期望速度
+                        v_des_cmd,  // 执行层速度上限
+                        v_nominal,  // 规划层名义速度，用于 v(s)
                         ref_points)) {
                     ROS_WARN_THROTTLE(1.0, "[LocalPlannerROS] Failed to get reference points");
                     publishCmdVel(0.0, 0.0);
@@ -861,6 +1000,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     if (path_handler_.getReferencePoints(
                             mpc_params_.N, mpc_params_.dt,
                             last_v_des_eff_,
+                            v_nominal,
                             ref_points_governed)) {
                         ref_points.swap(ref_points_governed);
                     } else {
@@ -881,6 +1021,29 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     ROS_WARN_THROTTLE(1.0, "[LocalPlannerROS] Failed to get Frenet state");
                     publishCmdVel(0.0, 0.0);
                     return;
+                }
+
+                const double s_progress_dbg = path_handler_.getGlobalProgress();
+                if (tracking_reentry_ramp_steps_left_ > 0) {
+                    const ReferencePoint& ref0_dbg = ref_points.front();
+                    ROS_INFO_THROTTLE(
+                        0.5,
+                        "[LocalPlannerROS][Reentry] s=%.3f e_l=%.3f e_c=%.3f e_theta=%.3f "
+                        "v=%.3f omega=%.3f u_prev=(%.3f, %.3f) ref0=(x=%.3f y=%.3f th=%.3f v=%.3f k=%.3f) ramp_left=%d",
+                        std::isfinite(s_progress_dbg) ? s_progress_dbg : -1.0,
+                        frenet.e_l,
+                        frenet.e_c,
+                        frenet.e_theta,
+                        current_v_,
+                        current_omega_,
+                        last_control_(ControlIndex::A),
+                        last_control_(ControlIndex::OMEGA),
+                        ref0_dbg.x,
+                        ref0_dbg.y,
+                        ref0_dbg.theta_path,
+                        ref0_dbg.v_ref,
+                        ref0_dbg.kappa,
+                        tracking_reentry_ramp_steps_left_);
                 }
 
                 // 2.1 原地对齐模式：只在起点附近生效
@@ -957,10 +1120,28 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     
                     // 发布预测轨迹
                     publishLocalPath(solution.x_predicted, ref_points);
+                    publishReferencePath(ref_points);
 
                     // 发布 slosh 调试信息
                     last_solve_time_ms_ = solution.solve_time_ms;
                     last_solve_ok_ = true;
+                    if (state_ == PlannerState::TRACKING) {
+                        tracking_solve_fail_streak_ = 0;
+                        ++tracking_solve_success_streak_;
+                        if (tracking_feasibility_recovery_active_ &&
+                            tracking_solve_success_streak_ >=
+                                std::max(1, tracking_feas_release_success_count_)) {
+                            tracking_feasibility_recovery_active_ = false;
+                            tracking_solve_success_streak_ = 0;
+                            ROS_INFO_THROTTLE(
+                                1.0,
+                                "[LocalPlannerROS] TRACKING feasibility recovery released after stable solves");
+                        }
+                    } else {
+                        tracking_solve_fail_streak_ = 0;
+                        tracking_solve_success_streak_ = 0;
+                        tracking_feasibility_recovery_active_ = false;
+                    }
                     last_predicted_height_max_ = computePredictedSloshHeightMax(solution);
                     last_constraint_active_ =
                         (mpc_params_.slosh_height_max > 0.0 &&
@@ -1001,6 +1182,66 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 } else {
                     ROS_WARN_THROTTLE(1.0, "[LocalPlannerROS] MPC solve failed: %s", 
                                       solution.status_msg.c_str());
+                    {
+                        const Eigen::Vector4d ss = slosh_enabled_
+                            ? slosh_integration_.getSloshState()
+                            : Eigen::Vector4d::Zero();
+                        const double goal_dist_dbg = path_handler_.getGoalDistance();
+                        const double s_progress_dbg = path_handler_.getGlobalProgress();
+                        ROS_WARN_THROTTLE(
+                            0.5,
+                            "[LocalPlannerROS][SolveFail] state=%s term_mode=%s goal_dist=%.3f s=%.3f "
+                            "v=%.3f omega=%.3f solve_ms=%.3f "
+                            "e=(%.3f, %.3f, %.3f) u_prev=(%.3f, %.3f) ref0=(v=%.3f k=%.3f) "
+                            "eta=(%.4f, %.4f) eta_dot=(%.4f, %.4f) "
+                            "Qv=%.2f Qeta=%.2f eta_bar=%.4f "
+                            "v_des=%.3f v_des_raw=%.3f fallback=%d fail_streak=%d feas_active=%d reentry=%d "
+                            "kappa=%.4f dkappa=%.4f",
+                            plannerStateToString(state_).c_str(),
+                            terminal_mode_debug_.c_str(),
+                            std::isfinite(goal_dist_dbg) ? goal_dist_dbg : -1.0,
+                            std::isfinite(s_progress_dbg) ? s_progress_dbg : -1.0,
+                            current_v_,
+                            current_omega_,
+                            solution.solve_time_ms,
+                            frenet.e_l,
+                            frenet.e_c,
+                            frenet.e_theta,
+                            last_control_(ControlIndex::A),
+                            last_control_(ControlIndex::OMEGA),
+                            ref_points.empty() ? 0.0 : ref_points.front().v_ref,
+                            ref_points.empty() ? 0.0 : ref_points.front().kappa,
+                            ss(0), ss(2), ss(1), ss(3),
+                            runtime_mpc_params.Q_v,
+                            runtime_mpc_params.Q_slosh_eta,
+                            runtime_mpc_params.slosh_eta_bar,
+                            last_v_des_eff_,
+                            v_des_cmd_raw,
+                            (risk_scheduler_enable_ && slosh_enabled_ && risk_output_.fallback_active) ? 1 : 0,
+                            tracking_fail_streak_dbg,
+                            tracking_feas_active_dbg,
+                            reentry_steps_dbg,
+                            kappa_preview_dbg,
+                            dkappa_preview_dbg);
+                    }
+                    if (state_ == PlannerState::TRACKING) {
+                        ++tracking_solve_fail_streak_;
+                        tracking_solve_success_streak_ = 0;
+                        if (tracking_feasibility_guard_enable_ &&
+                            tracking_solve_fail_streak_ >=
+                                std::max(1, tracking_feas_fail_trigger_count_)) {
+                            tracking_feasibility_recovery_active_ = true;
+                            ROS_WARN_THROTTLE(
+                                1.0,
+                                "[LocalPlannerROS] TRACKING feasibility recovery active: fail_streak=%d v_cap=%.2f/%.2f",
+                                tracking_solve_fail_streak_,
+                                tracking_feas_v_cap_mild_,
+                                tracking_feas_v_cap_strong_);
+                        }
+                    } else {
+                        tracking_solve_fail_streak_ = 0;
+                        tracking_solve_success_streak_ = 0;
+                    }
                     double dt = control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
                     double v = current_v_;
                     double decel = std::max(0.0, infeasible_decel_);
@@ -1019,6 +1260,15 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     }
                     double omega = current_omega_ * infeasible_omega_scale_;
                     publishCmdVel(v, omega);
+                    // 同步更新 last_control_，使下一周期的 alpha 约束基于实际命令值。
+                    // 若不更新，u_prev.omega 会冻结在最后一次成功的解，导致
+                    // |omega_0 - u_prev.omega| ≤ alpha_max·dt 持续给 omega_0 施加
+                    // 与当前低速停止状态不符的下限，MPC QP 可能陷入永久不可行。
+                    last_control_(ControlIndex::A) =
+                        std::abs(current_v_) > 1e-3
+                            ? (v - current_v_) / (control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt)
+                            : 0.0;
+                    last_control_(ControlIndex::OMEGA) = omega;
                     last_solve_time_ms_ = 0.0;
                     last_solve_ok_ = false;
                     last_predicted_height_max_ = std::numeric_limits<double>::quiet_NaN();
@@ -1247,6 +1497,27 @@ void LocalPlannerROS::transitionTo(PlannerState new_state) {
     if (state_ != new_state) {
         if (new_state == PlannerState::TRACKING && state_ != PlannerState::TRACKING) {
             ++episode_id_;
+            {
+                // 基础 ramp；若起点曲率超出 reentry_v_cap 对应横向加速度，加倍保守
+                int ramp = std::max(0, tracking_reentry_ramp_steps_);
+                if (tracking_curvature_speed_cap_enable_ && path_params_.max_lat_accel > 0.0) {
+                    const double kappa_start = path_handler_.getMaxCurvatureAhead(
+                        0.0, tracking_curvature_preview_distance_);
+                    if (kappa_start > 1e-4 &&
+                        std::sqrt(path_params_.max_lat_accel / kappa_start) <
+                            tracking_reentry_v_cap_) {
+                        ramp *= 2;
+                    }
+                }
+                tracking_reentry_ramp_steps_left_ = ramp;
+            }
+            tracking_solve_fail_streak_ = 0;
+            tracking_solve_success_streak_ = 0;
+            tracking_feasibility_recovery_active_ = false;
+        } else if (new_state != PlannerState::TRACKING) {
+            tracking_solve_fail_streak_ = 0;
+            tracking_solve_success_streak_ = 0;
+            tracking_feasibility_recovery_active_ = false;
         }
         if (new_state == PlannerState::SETTLING || state_ == PlannerState::SETTLING) {
             settling_step_count_ = 0;
@@ -1483,6 +1754,56 @@ void LocalPlannerROS::publishLocalPath(const std::vector<StateVector>& predicted
     local_path_pub_.publish(path);
 }
 
+void LocalPlannerROS::publishReferencePath(const std::vector<ReferencePoint>& refs) {
+    if (reference_path_pub_.getNumSubscribers() == 0 || refs.empty()) {
+        return;
+    }
+
+    nav_msgs::Path path;
+    path.header.stamp = ros::Time::now();
+    const std::string out_frame = map_frame_.empty() ? base_frame_ : map_frame_;
+    path.header.frame_id = out_frame;
+
+    geometry_msgs::TransformStamped tf_base_to_out;
+    bool use_tf = false;
+    if (out_frame != base_frame_ && tf_buffer_) {
+        try {
+            tf_base_to_out = tf_buffer_->lookupTransform(
+                out_frame, base_frame_, ros::Time(0), ros::Duration(0.05));
+            use_tf = true;
+        } catch (tf2::TransformException& ex) {
+            ROS_WARN_THROTTLE(1.0, "[LocalPlannerROS] TF error in reference_path: %s", ex.what());
+            path.header.frame_id = base_frame_;
+        }
+    }
+
+    path.poses.reserve(refs.size());
+    for (const auto& ref : refs) {
+        geometry_msgs::PoseStamped pose_base;
+        pose_base.header = path.header;
+        pose_base.header.frame_id = base_frame_;
+        pose_base.pose.position.x = ref.x;
+        pose_base.pose.position.y = ref.y;
+        pose_base.pose.position.z = 0.0;
+
+        tf2::Quaternion q;
+        q.setRPY(0.0, 0.0, ref.theta_path);
+        pose_base.pose.orientation = tf2::toMsg(q);
+
+        if (use_tf) {
+            geometry_msgs::PoseStamped pose_out;
+            tf2::doTransform(pose_base, pose_out, tf_base_to_out);
+            pose_out.header.frame_id = out_frame;
+            path.poses.push_back(pose_out);
+        } else {
+            pose_base.header.frame_id = path.header.frame_id;
+            path.poses.push_back(pose_base);
+        }
+    }
+
+    reference_path_pub_.publish(path);
+}
+
 void LocalPlannerROS::publishStatus() {
     if (status_pub_.getNumSubscribers() == 0) {
         return;
@@ -1559,7 +1880,7 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {
     slosh_governor_hold_steps_ = 0;
 }
 
-void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok) {
+void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok, bool publish_solver_debug) {
     if (slosh_episode_id_pub_.getNumSubscribers() > 0) {
         std_msgs::Int32 msg;
         msg.data = episode_id_;
@@ -1649,18 +1970,20 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok) {
         slosh_height_pub_.publish(msg);
     }
 
-    // MPC 求解耗时
-    if (mpc_solve_ms_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(solve_time_ms);
-        mpc_solve_ms_pub_.publish(msg);
-    }
+    if (publish_solver_debug) {
+        // 仅在本周期真正执行过 MPC solve 时发布 solver 调试，
+        // 避免 REACHED/IDLE/ERROR 把上一帧结果重复刷到 bag 中。
+        if (mpc_solve_ms_pub_.getNumSubscribers() > 0) {
+            std_msgs::Float32 msg;
+            msg.data = static_cast<float>(solve_time_ms);
+            mpc_solve_ms_pub_.publish(msg);
+        }
 
-    // MPC 求解状态 (1=ok, 0=fail)
-    if (mpc_status_val_pub_.getNumSubscribers() > 0) {
-        std_msgs::Int32 msg;
-        msg.data = solve_ok ? 1 : 0;
-        mpc_status_val_pub_.publish(msg);
+        if (mpc_status_val_pub_.getNumSubscribers() > 0) {
+            std_msgs::Int32 msg;
+            msg.data = solve_ok ? 1 : 0;
+            mpc_status_val_pub_.publish(msg);
+        }
     }
 
     // 加速度估计值（论文实验用）

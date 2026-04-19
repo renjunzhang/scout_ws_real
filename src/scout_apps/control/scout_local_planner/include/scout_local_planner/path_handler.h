@@ -59,11 +59,12 @@ public:
      * @brief 获取 MPC 所需的参考点序列
      * @param N 预测步数
      * @param dt 时间步长
-     * @param v_des 期望速度
+     * @param v_exec 执行层速度上限
+     * @param v_plan 规划层名义速度，用于 v(s) 速度剖面
      * @param ref_points 输出：参考点序列
      * @return 是否成功
      */
-    bool getReferencePoints(int N, double dt, double v_des,
+    bool getReferencePoints(int N, double dt, double v_exec, double v_plan,
                             std::vector<ReferencePoint>& ref_points);
     
     /**
@@ -98,6 +99,14 @@ public:
      * @return 最大 |kappa|，失败时返回 0
      */
     double getMaxCurvatureAhead(double lookahead_dist, double preview_dist) const;
+
+    /**
+     * @brief 获取前方窗口内的最大曲率变化率绝对值 |dκ/ds|（基于全局样条）
+     * @param lookahead_dist 起始前视距离
+     * @param preview_dist 预览窗口长度
+     * @return 最大 |dκ/ds|，失败时返回 0
+     */
+    double getMaxCurvatureRateAhead(double lookahead_dist, double preview_dist) const;
     
     /**
      * @brief 检查路径是否有效
@@ -197,11 +206,16 @@ private:
     ros::Time path_timestamp_;
     bool has_path_ = false;
 
-    // 全局路径缓存（map 坐标系）
+    // 全局路径缓存（map 坐标系，原始清洗版，供 path_similar 检测）
     std::vector<Eigen::Vector2d> global_points_map_;
     std::vector<double> global_path_s_;
     bool global_cache_valid_ = false;
     bool reset_hint_ = false;
+
+    // 平滑全局路径缓存（B-spline 平滑版，供 getReferencePoints 取局部窗口）
+    std::vector<Eigen::Vector2d> global_points_map_smooth_;
+    std::vector<double>          global_path_s_smooth_;
+    bool                         global_smooth_valid_ = false;
     
     // 机器人状态
     geometry_msgs::PoseStamped robot_pose_;

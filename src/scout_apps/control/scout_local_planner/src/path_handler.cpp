@@ -117,6 +117,262 @@ std::vector<Eigen::Vector2d> bsplineSmooth(const std::vector<Eigen::Vector2d>& c
     return out;
 }
 
+std::vector<Eigen::Vector2d> sanitizePolyline(const std::vector<Eigen::Vector2d>& points,
+                                              double min_spacing) {
+    std::vector<Eigen::Vector2d> filtered;
+    filtered.reserve(points.size());
+    const double spacing = std::max(1e-4, min_spacing);
+    for (const auto& p : points) {
+        if (!std::isfinite(p.x()) || !std::isfinite(p.y())) {
+            continue;
+        }
+        if (filtered.empty() || (p - filtered.back()).norm() > spacing) {
+            filtered.push_back(p);
+        }
+    }
+    return filtered;
+}
+
+double wrappedAngleDiff(double a, double b) {
+    return std::atan2(std::sin(a - b), std::cos(a - b));
+}
+
+double estimateMaxCurvature(const std::vector<Eigen::Vector2d>& points);
+double estimateMaxCurvatureRate(const std::vector<Eigen::Vector2d>& points);
+
+double estimateNominalSpacing(const std::vector<Eigen::Vector2d>& points) {
+    if (points.size() < 2) {
+        return 0.02;
+    }
+
+    std::vector<double> segs;
+    segs.reserve(points.size() - 1);
+    for (size_t i = 1; i < points.size(); ++i) {
+        const double d = (points[i] - points[i - 1]).norm();
+        if (std::isfinite(d) && d > 1e-6) {
+            segs.push_back(d);
+        }
+    }
+    if (segs.empty()) {
+        return 0.02;
+    }
+
+    const size_t mid = segs.size() / 2;
+    std::nth_element(segs.begin(), segs.begin() + mid, segs.end());
+    return std::max(0.01, std::min(0.05, segs[mid]));
+}
+
+std::vector<Eigen::Vector2d> removeSinglePointSpikes(const std::vector<Eigen::Vector2d>& points) {
+    if (points.size() < 4) {
+        return points;
+    }
+
+    std::vector<Eigen::Vector2d> cleaned;
+    cleaned.reserve(points.size());
+    cleaned.push_back(points.front());
+
+    for (size_t i = 1; i + 1 < points.size(); ++i) {
+        const Eigen::Vector2d& prev = cleaned.back();
+        const Eigen::Vector2d& curr = points[i];
+        const Eigen::Vector2d& next = points[i + 1];
+
+        const double seg_in = (curr - prev).norm();
+        const double seg_out = (next - curr).norm();
+        if (seg_in < 1e-6 || seg_out < 1e-6) {
+            continue;
+        }
+
+        const double h_in = std::atan2(curr.y() - prev.y(), curr.x() - prev.x());
+        const double h_out = std::atan2(next.y() - curr.y(), next.x() - curr.x());
+        const double turn = std::abs(wrappedAngleDiff(h_out, h_in));
+        const double direct = (next - prev).norm();
+
+        const bool sharp_reversal = turn > 1.2;            // ~69 deg
+        const bool spike_like = direct > 1e-6 && direct < 1.8 * std::max(seg_in, seg_out);
+        if (sharp_reversal && spike_like) {
+            continue;
+        }
+
+        cleaned.push_back(curr);
+    }
+
+    cleaned.push_back(points.back());
+    return cleaned;
+}
+
+std::vector<Eigen::Vector2d> repairPrefixWindowGeometry(
+    const std::vector<Eigen::Vector2d>& points,
+    double sanitize_spacing,
+    int bspline_samples_per_segment) {
+    std::vector<Eigen::Vector2d> current = points;
+    if (current.size() < 6) {
+        return current;
+    }
+
+    const double nominal_spacing = estimateNominalSpacing(current);
+    const int samples = std::max(4, bspline_samples_per_segment);
+
+    for (int iter = 0; iter < 5; ++iter) {
+        const double before_kappa = estimateMaxCurvature(current);
+        const double before_dkappa = estimateMaxCurvatureRate(current);
+        // 目标：cubic spline 插值后 kappa ≤ ~12.5（omega_max/v_des）、dkappa ≤ ~360（alpha_max/v_des²）。
+        // cubic spline 的放大因子约为 kappa×1.8、dkappa×4.5，故在窗口点集上需达到：
+        // kappa ≤ 7.0（→cubic spline ≈12.6）、dkappa ≤ 80（→cubic spline ≈360）。
+        if (before_kappa <= 7.0 && before_dkappa <= 80.0) {
+            break;
+        }
+
+        std::vector<Eigen::Vector2d> candidate = bsplineSmooth(current, samples);
+        candidate = resamplePath(candidate, nominal_spacing);
+        candidate = sanitizePolyline(candidate, std::max(sanitize_spacing, 0.5 * nominal_spacing));
+        candidate = removeSinglePointSpikes(candidate);
+        candidate = sanitizePolyline(candidate, std::max(sanitize_spacing, 0.5 * nominal_spacing));
+
+        if (candidate.size() < 6) {
+            break;
+        }
+
+        const double after_kappa = estimateMaxCurvature(candidate);
+        const double after_dkappa = estimateMaxCurvatureRate(candidate);
+        const bool improved =
+            (after_kappa < before_kappa - 1e-3) || (after_dkappa < before_dkappa - 1e-3);
+        if (!improved) {
+            break;
+        }
+
+        current.swap(candidate);
+    }
+
+    return current;
+}
+
+double estimateMaxCurvature(const std::vector<Eigen::Vector2d>& points) {
+    if (points.size() < 3) {
+        return 0.0;
+    }
+    double max_kappa = 0.0;
+    for (size_t i = 1; i + 1 < points.size(); ++i) {
+        const double ab = (points[i] - points[i - 1]).norm();
+        const double bc = (points[i + 1] - points[i]).norm();
+        const double ac = (points[i + 1] - points[i - 1]).norm();
+        const double denom = ab * bc * ac;
+        if (denom < 1e-9) {
+            continue;
+        }
+        const double area2 = std::abs((points[i].x() - points[i - 1].x()) * (points[i + 1].y() - points[i - 1].y()) -
+                                      (points[i].y() - points[i - 1].y()) * (points[i + 1].x() - points[i - 1].x()));
+        const double kappa = 2.0 * area2 / denom;
+        max_kappa = std::max(max_kappa, kappa);
+    }
+    return max_kappa;
+}
+
+double estimateMaxCurvatureRate(const std::vector<Eigen::Vector2d>& points) {
+    if (points.size() < 4) {
+        return 0.0;
+    }
+    std::vector<double> kappas;
+    std::vector<double> s_centers;
+    kappas.reserve(points.size());
+    s_centers.reserve(points.size());
+
+    double s_acc = 0.0;
+    for (size_t i = 1; i + 1 < points.size(); ++i) {
+        const double ab = (points[i] - points[i - 1]).norm();
+        const double bc = (points[i + 1] - points[i]).norm();
+        const double ac = (points[i + 1] - points[i - 1]).norm();
+        const double denom = ab * bc * ac;
+        s_acc += ab;
+        if (denom < 1e-9) {
+            continue;
+        }
+        const double area2 = std::abs((points[i].x() - points[i - 1].x()) * (points[i + 1].y() - points[i - 1].y()) -
+                                      (points[i].y() - points[i - 1].y()) * (points[i + 1].x() - points[i - 1].x()));
+        kappas.push_back(2.0 * area2 / denom);
+        s_centers.push_back(s_acc);
+    }
+
+    if (kappas.size() < 2) {
+        return 0.0;
+    }
+
+    double max_dkappa = 0.0;
+    for (size_t i = 1; i < kappas.size(); ++i) {
+        const double ds = std::max(1e-6, s_centers[i] - s_centers[i - 1]);
+        max_dkappa = std::max(max_dkappa, std::abs(kappas[i] - kappas[i - 1]) / ds);
+    }
+    return max_dkappa;
+}
+
+std::vector<double> estimateDiscreteCurvatureSamples(const std::vector<Eigen::Vector2d>& points,
+                                                     const std::vector<double>& path_s) {
+    std::vector<double> kappa(points.size(), 0.0);
+    if (points.size() < 3 || path_s.size() != points.size()) {
+        return kappa;
+    }
+
+    for (size_t i = 1; i + 1 < points.size(); ++i) {
+        const double ab = (points[i] - points[i - 1]).norm();
+        const double bc = (points[i + 1] - points[i]).norm();
+        const double ac = (points[i + 1] - points[i - 1]).norm();
+        const double denom = ab * bc * ac;
+        if (denom < 1e-9) {
+            continue;
+        }
+        const double area2 = std::abs((points[i].x() - points[i - 1].x()) * (points[i + 1].y() - points[i - 1].y()) -
+                                      (points[i].y() - points[i - 1].y()) * (points[i + 1].x() - points[i - 1].x()));
+        kappa[i] = 2.0 * area2 / denom;
+    }
+    if (points.size() >= 2) {
+        kappa.front() = kappa[1];
+        kappa.back() = kappa[kappa.size() - 2];
+    }
+    return kappa;
+}
+
+std::vector<double> estimateDiscreteCurvatureRateSamples(const std::vector<double>& kappa,
+                                                         const std::vector<double>& path_s) {
+    std::vector<double> dkappa(kappa.size(), 0.0);
+    if (kappa.size() < 3 || path_s.size() != kappa.size()) {
+        return dkappa;
+    }
+
+    for (size_t i = 1; i + 1 < kappa.size(); ++i) {
+        const double ds = std::max(1e-6, path_s[i + 1] - path_s[i - 1]);
+        dkappa[i] = std::abs(kappa[i + 1] - kappa[i - 1]) / ds;
+    }
+    if (kappa.size() >= 2) {
+        dkappa.front() = dkappa[1];
+        dkappa.back() = dkappa[dkappa.size() - 2];
+    }
+    return dkappa;
+}
+
+double interpolateByArcLength(const std::vector<double>& path_s,
+                              const std::vector<double>& values,
+                              double s_query) {
+    if (path_s.empty() || values.empty() || path_s.size() != values.size()) {
+        return 0.0;
+    }
+    if (s_query <= path_s.front()) {
+        return values.front();
+    }
+    if (s_query >= path_s.back()) {
+        return values.back();
+    }
+    auto it = std::upper_bound(path_s.begin(), path_s.end(), s_query);
+    size_t idx = static_cast<size_t>(std::distance(path_s.begin(), it));
+    if (idx == 0) {
+        return values.front();
+    }
+    const double s0 = path_s[idx - 1];
+    const double s1 = path_s[idx];
+    const double v0 = values[idx - 1];
+    const double v1 = values[idx];
+    const double t = (s1 - s0) > 1e-9 ? (s_query - s0) / (s1 - s0) : 0.0;
+    return v0 + t * (v1 - v0);
+}
+
 }  // namespace
 
 PathHandler::PathHandler() = default;
@@ -203,13 +459,29 @@ bool PathHandler::updateGlobalPath(const nav_msgs::Path& path, double v_des) {
     global_spline_length_ = 0.0;
 
     // 缓存全局路径（map 坐标系）
-    global_points_map_.clear();
-    global_points_map_.reserve(path.poses.size());
+    std::vector<Eigen::Vector2d> raw_global_points;
+    raw_global_points.reserve(path.poses.size());
     for (const auto& pose : path.poses) {
-        global_points_map_.emplace_back(pose.pose.position.x, pose.pose.position.y);
+        raw_global_points.emplace_back(pose.pose.position.x, pose.pose.position.y);
     }
+    const double sanitize_spacing = params_.resample_spacing > 1e-3
+        ? std::max(1e-3, 0.2 * params_.resample_spacing)
+        : 0.01;
+    global_points_map_ = sanitizePolyline(raw_global_points, sanitize_spacing);
+    global_points_map_ = removeSinglePointSpikes(global_points_map_);
     if (params_.resample_spacing > 0.0) {
         global_points_map_ = resamplePath(global_points_map_, params_.resample_spacing);
+        global_points_map_ = sanitizePolyline(global_points_map_, sanitize_spacing);
+        global_points_map_ = removeSinglePointSpikes(global_points_map_);
+    }
+    if (global_points_map_.size() < static_cast<size_t>(params_.min_path_points)) {
+        ROS_WARN_THROTTLE(1.0,
+                          "[PathHandler] Sanitized global path too small: raw=%zu filtered=%zu",
+                          path.poses.size(),
+                          global_points_map_.size());
+        has_path_ = false;
+        global_cache_valid_ = false;
+        return false;
     }
     global_path_s_.clear();
     global_path_s_.push_back(0.0);
@@ -220,25 +492,42 @@ bool PathHandler::updateGlobalPath(const nav_msgs::Path& path, double v_des) {
     global_cache_valid_ = global_points_map_.size() >= 2;
     // 注：reset_hint_ 已在上方 !path_similar 分支中按需设置，此处不再无条件覆盖
 
-    // 构建全局样条（map 坐标系）
-    std::vector<Eigen::Vector2d> global_points = global_points_map_;
-    // 可选：B-spline 平滑（仅用于速度曲线）
-    if (params_.use_bspline_smoothing) {
-        global_points = bsplineSmooth(global_points, params_.bspline_samples_per_segment);
+    // 构建平滑全局缓存（供 getReferencePoints 取局部窗口使用）。
+    // 与 global_spline_（仅用于速度曲线）不同，这里把平滑结果写回缓存，
+    // 使局部窗口直接从平滑点集中取点，避免锐角段在局部样条中产生病态曲率。
+    global_smooth_valid_ = false;
+    global_points_map_smooth_.clear();
+    global_path_s_smooth_.clear();
+    if (params_.use_bspline_smoothing && global_points_map_.size() >= 4) {
+        const double rs = params_.resample_spacing > 1e-3
+            ? params_.resample_spacing
+            : sanitize_spacing * 5.0;
+        std::vector<Eigen::Vector2d> sm =
+            bsplineSmooth(global_points_map_, params_.bspline_samples_per_segment);
+        sm = resamplePath(sm, rs);
+        sm = sanitizePolyline(sm, sanitize_spacing);
+        sm = removeSinglePointSpikes(sm);
+        if (sm.size() >= static_cast<size_t>(params_.min_path_points)) {
+            global_points_map_smooth_ = std::move(sm);
+            global_path_s_smooth_.push_back(0.0);
+            for (size_t i = 1; i < global_points_map_smooth_.size(); ++i) {
+                global_path_s_smooth_.push_back(
+                    global_path_s_smooth_.back() +
+                    (global_points_map_smooth_[i] - global_points_map_smooth_[i - 1]).norm());
+            }
+            global_smooth_valid_ = true;
+        }
     }
 
-    // 过滤重复点（避免样条参数不单调）
-    std::vector<Eigen::Vector2d> filtered;
-    filtered.reserve(global_points.size());
-    const double min_dist = 1e-4;
-    for (const auto& p : global_points) {
-        if (!std::isfinite(p.x()) || !std::isfinite(p.y())) {
-            continue;
-        }
-        if (filtered.empty() || (p - filtered.back()).norm() > min_dist) {
-            filtered.push_back(p);
-        }
+    // 构建全局样条（map 坐标系）
+    std::vector<Eigen::Vector2d> global_points =
+        global_smooth_valid_ ? global_points_map_smooth_ : global_points_map_;
+    // 无 smooth cache 时，保留单次 B-spline 作为退化路径。
+    if (!global_smooth_valid_ && params_.use_bspline_smoothing) {
+        global_points = bsplineSmooth(global_points, params_.bspline_samples_per_segment);
     }
+    std::vector<Eigen::Vector2d> filtered = sanitizePolyline(global_points, sanitize_spacing);
+    filtered = removeSinglePointSpikes(filtered);
 
     if (filtered.size() >= 2 && global_spline_.fit(filtered)) {
         global_spline_length_ = global_spline_.getTotalLength();
@@ -260,15 +549,24 @@ void PathHandler::updateRobotState(const geometry_msgs::PoseStamped& pose,
     has_robot_state_ = true;
 }
 
-bool PathHandler::getReferencePoints(int N, double dt, double v_des,
+bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_plan,
                                       std::vector<ReferencePoint>& ref_points) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     if (!has_path_ || !has_robot_state_) {
+        ROS_WARN_THROTTLE(1.0,
+                          "[PathHandler] getReferencePoints failed: has_path=%d has_robot_state=%d",
+                          has_path_ ? 1 : 0,
+                          has_robot_state_ ? 1 : 0);
         return false;
     }
 
     if (!global_cache_valid_ || global_points_map_.size() < 2 || global_path_s_.size() != global_points_map_.size()) {
+        ROS_WARN_THROTTLE(1.0,
+                          "[PathHandler] getReferencePoints failed: global cache invalid (cache=%d points=%zu s_size=%zu)",
+                          global_cache_valid_ ? 1 : 0,
+                          global_points_map_.size(),
+                          global_path_s_.size());
         return false;
     }
     
@@ -284,7 +582,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
             base_frame_, global_path_.header.frame_id,
             ros::Time(0), ros::Duration(0.1));
     } catch (tf2::TransformException& ex) {
-        ROS_WARN_THROTTLE(1.0, "[PathHandler] TF error: %s", ex.what());
+        ROS_WARN_THROTTLE(1.0, "[PathHandler] getReferencePoints failed: TF error: %s", ex.what());
         return false;
     }
 
@@ -301,8 +599,11 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
         goal_dist_base = std::hypot(goal_base.x(), goal_base.y());
     }
 
-    const std::vector<Eigen::Vector2d>& path_points_map = global_points_map_;
-    const std::vector<double>& path_s = global_path_s_;
+    // 优先使用平滑缓存；平滑缓存无效时退回原始清洗缓存
+    const std::vector<Eigen::Vector2d>& path_points_map =
+        global_smooth_valid_ ? global_points_map_smooth_ : global_points_map_;
+    const std::vector<double>& path_s =
+        global_smooth_valid_ ? global_path_s_smooth_ : global_path_s_;
     
     // 2. 找最近点（map 坐标系）
     closest_idx_ = findClosestPointIndex(path_points_map, robot_pos_map);
@@ -339,7 +640,9 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
     
     // 允许只有 2 个点（线性样条），避免临近终点时窗口过短导致失败
     if (window_end - window_start < 1) {
-        ROS_WARN_THROTTLE(1.0, "[PathHandler] Window too small for spline fitting");
+        ROS_WARN_THROTTLE(1.0,
+                          "[PathHandler] getReferencePoints failed: window too small (closest_idx=%d start=%d end=%d path_size=%zu)",
+                          closest_idx_, window_start, window_end, path_points_map.size());
         return false;
     }
     
@@ -352,10 +655,48 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
         const tf2::Vector3 p_base_tf = tf_map_to_base * p_map_tf;
         window_points.emplace_back(p_base_tf.x(), p_base_tf.y());
     }
-    if (params_.use_bspline_smoothing) {
+    const double local_sanitize_spacing = params_.resample_spacing > 1e-3
+        ? std::max(1e-3, 0.2 * params_.resample_spacing)
+        : 0.01;
+    const size_t window_points_raw = window_points.size();
+    window_points = sanitizePolyline(window_points, local_sanitize_spacing);
+    window_points = removeSinglePointSpikes(window_points);
+    if (params_.use_bspline_smoothing && !global_smooth_valid_) {
         window_points = bsplineSmooth(window_points, params_.bspline_samples_per_segment);
+        window_points = sanitizePolyline(window_points, local_sanitize_spacing);
+        window_points = removeSinglePointSpikes(window_points);
+    }
+    const double before_kappa = estimateMaxCurvature(window_points);
+    const double before_dkappa = estimateMaxCurvatureRate(window_points);
+    // 对所有曲率超标的窗口做迭代 B-spline 修复（不限于路径起步阶段）。
+    // 原因：1 次 B-spline 平滑后 cubic spline 插值仍可能产生 4× dkappa 放大；
+    // 迭代修复（最多 3 次）可将输入 dkappa 降至 cubic spline 可接受的范围。
+    if ((before_kappa > 10.0) || (before_dkappa > 150.0)) {
+        std::vector<Eigen::Vector2d> repaired =
+            repairPrefixWindowGeometry(window_points,
+                                       local_sanitize_spacing,
+                                       params_.bspline_samples_per_segment);
+        const double after_kappa = estimateMaxCurvature(repaired);
+        const double after_dkappa = estimateMaxCurvatureRate(repaired);
+        if (repaired.size() != window_points.size() ||
+            after_kappa + 1e-3 < before_kappa ||
+            after_dkappa + 1e-3 < before_dkappa) {
+            ROS_INFO_THROTTLE(
+                1.0,
+                "[PathHandler] window repaired: raw=%zu repaired=%zu max_kappa %.3f->%.3f max_dkappa %.3f->%.3f",
+                window_points.size(),
+                repaired.size(),
+                before_kappa,
+                after_kappa,
+                before_dkappa,
+                after_dkappa);
+        }
+        window_points.swap(repaired);
     }
     if (!fitLocalSpline(window_points)) {
+        ROS_WARN_THROTTLE(1.0,
+                          "[PathHandler] getReferencePoints failed: local spline rejected (closest_idx=%d start=%d end=%d raw=%zu filtered=%zu s_global=%.3f)",
+                          closest_idx_, window_start, window_end, window_points_raw, window_points.size(), s_global_);
         return false;
     }
 
@@ -372,8 +713,8 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
 
     // 4.2 速度曲线由全局路径更新时一次性计算，这里只在必要时补算
     if (params_.time_parameterize &&
-        (!speed_profile_valid_ || std::abs(v_des - speed_profile_v_des_) > 1e-3)) {
-        updateSpeedProfile(v_des);
+        (!speed_profile_valid_ || std::abs(v_plan - speed_profile_v_des_) > 1e-3)) {
+        updateSpeedProfile(v_plan);
     }
 
     // 5. 生成参考点序列
@@ -428,9 +769,10 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
             ref.kappa = local_spline_.evaluateKappa(s_local);
             ref.s = s_local;
 
-            const double v_des_cap = std::max(0.0, v_des);
-            double v_ref = speed_profile_valid_ ? getSpeedAtS(s_progress) : v_des_cap;
-            double v_curve_cap = v_des_cap;
+            const double v_exec_cap = std::max(0.0, v_exec);
+            const double v_plan_cap = std::max(0.0, v_plan);
+            double v_ref = speed_profile_valid_ ? getSpeedAtS(s_progress) : v_plan_cap;
+            double v_curve_cap = v_exec_cap;
             if (params_.max_lat_accel > 0.0) {
                 const double kappa_abs = std::abs(ref.kappa);
                 if (kappa_abs > 1e-4) {
@@ -440,7 +782,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
 
             // 末端停车既要看路径弧长剩余，也要看欧氏 goal 距离。
             // 否则 s_progress 已到路径末端但车体仍横向偏离 goal 时，v_ref 会过早掉到 0。
-            if (v_des_cap > 1e-6 && max_decel > 1e-6) {
+            if (v_plan_cap > 1e-6 && max_decel > 1e-6) {
                 const double remain_s = std::max(0.0, total_len_global - s_progress);
                 const double remain_goal = std::max(0.0, goal_dist_base - params_.goal_tolerance);
                 if (remain_goal > remain_s + 1e-3) {
@@ -454,7 +796,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
             }
 
             v_ref = std::min(v_ref, v_curve_cap);
-            v_ref = std::min(v_ref, v_des_cap);
+            v_ref = std::min(v_ref, v_plan_cap);
 
             // 终点捕获区内保持最低参考速度，避免距离尚未达标时过早停死。
             if (goal_dist_base > params_.goal_tolerance &&
@@ -466,7 +808,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
             // 外部传入的 v_des 必须是硬上界。否则 goal_stop_pending_ 时即便上层将
             // v_des_cmd 压到 0，time-parameterized speed profile 仍可能把 v_ref 抬回正值，
             // 导致终点区继续前冲。
-            v_ref = std::min(v_ref, v_des_cap);
+            v_ref = std::min(v_ref, v_exec_cap);
 
             // 使用当前 s 采样点
             ref.v_ref = v_ref;
@@ -478,7 +820,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
                 s_geom_local = std::min(s_geom_local + v_ref * dt, total_len);
             }
         } else {
-            double s_local = std::min(current_s_ + params_.lookahead_distance + k * dt * v_des, total_len);
+            double s_local = std::min(current_s_ + params_.lookahead_distance + k * dt * v_exec, total_len);
             s_local = std::min(s_local, total_len);  // 不超过样条末端
 
             // 计算参考点信息
@@ -488,7 +830,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_des,
             ref.theta_path = local_spline_.evaluateTheta(s_local);
             ref.kappa = local_spline_.evaluateKappa(s_local);
 
-            double v_ref = v_des;
+            double v_ref = std::min(std::max(0.0, v_plan), std::max(0.0, v_exec));
             if (params_.max_lat_accel > 0.0) {
                 double kappa_abs = std::abs(ref.kappa);
                 if (kappa_abs > 1e-4) {
@@ -584,6 +926,45 @@ double PathHandler::getMaxCurvatureAhead(double lookahead_dist, double preview_d
         max_kappa = std::max(max_kappa, std::abs(global_spline_.evaluateKappa(s)));
     }
     return max_kappa;
+}
+
+double PathHandler::getMaxCurvatureRateAhead(double lookahead_dist, double preview_dist) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (!global_spline_.isValid()) {
+        return 0.0;
+    }
+
+    const double total_len = global_spline_length_ > 1e-6
+        ? global_spline_length_
+        : global_spline_.getTotalLength();
+    if (total_len <= 1e-6) {
+        return 0.0;
+    }
+
+    const double start_s = std::max(0.0, std::min(total_len, s_global_ + std::max(0.0, lookahead_dist)));
+    const double end_s = std::max(start_s, std::min(total_len, start_s + std::max(0.0, preview_dist)));
+    if (end_s - start_s < 1e-6) {
+        return 0.0;
+    }
+
+    const double ds_hint = params_.resample_spacing > 1e-3 ? params_.resample_spacing : 0.05;
+    const int samples = std::max(5, static_cast<int>(std::ceil((end_s - start_s) / ds_hint)) + 1);
+    const double ds = (end_s - start_s) / static_cast<double>(std::max(1, samples - 1));
+    if (ds < 1e-6) {
+        return 0.0;
+    }
+
+    double prev_kappa = global_spline_.evaluateKappa(start_s);
+    double max_kappa_rate = 0.0;
+    for (int i = 1; i < samples; ++i) {
+        const double ratio = static_cast<double>(i) / static_cast<double>(samples - 1);
+        const double s = start_s + (end_s - start_s) * ratio;
+        const double kappa = global_spline_.evaluateKappa(s);
+        max_kappa_rate = std::max(max_kappa_rate, std::abs(kappa - prev_kappa) / ds);
+        prev_kappa = kappa;
+    }
+    return max_kappa_rate;
 }
 
 bool PathHandler::isPathValid() const {
@@ -819,26 +1200,62 @@ bool PathHandler::fitLocalSpline(const std::vector<Eigen::Vector2d>& points,
 
 bool PathHandler::fitLocalSpline(const std::vector<Eigen::Vector2d>& window_points) {
     if (window_points.size() < 2) {
-        ROS_WARN_THROTTLE(1.0, "[PathHandler] Window too small for spline fitting");
+        ROS_WARN_THROTTLE(1.0,
+                          "[PathHandler] fitLocalSpline failed: raw window too small (%zu)",
+                          window_points.size());
         return false;
     }
 
-    std::vector<Eigen::Vector2d> filtered;
-    filtered.reserve(window_points.size());
-    const double min_dist = 1e-4;
-    for (const auto& p : window_points) {
-        if (filtered.empty() || (p - filtered.back()).norm() > min_dist) {
-            filtered.push_back(p);
-        }
-    }
+    const double sanitize_spacing = params_.resample_spacing > 1e-3
+        ? std::max(1e-3, 0.2 * params_.resample_spacing)
+        : 0.01;
+    std::vector<Eigen::Vector2d> filtered = sanitizePolyline(window_points, sanitize_spacing);
+    filtered = removeSinglePointSpikes(filtered);
 
     if (filtered.size() < 2) {
-        ROS_WARN_THROTTLE(1.0, "[PathHandler] Filtered window too small for spline fitting");
+        ROS_WARN_THROTTLE(1.0,
+                          "[PathHandler] fitLocalSpline failed: sanitized window too small (raw=%zu filtered=%zu)",
+                          window_points.size(),
+                          filtered.size());
         return false;
     }
 
-    if (!local_spline_.fit(filtered)) {
-        ROS_WARN_THROTTLE(1.0, "[PathHandler] Failed to fit local spline");
+    // 局部窗口已经来自 smooth cache 时，不再直接对稠密点列做 cubic spline。
+    // 先按较稳的拟合间距降采样，避免高密度点列 + cubic spline 叠加造成曲率过冲。
+    const double nominal_spacing = estimateNominalSpacing(filtered);
+    const double fit_spacing = std::min(0.12, std::max(0.08, 2.5 * nominal_spacing));
+    std::vector<Eigen::Vector2d> fit_points = resamplePath(filtered, fit_spacing);
+    fit_points = sanitizePolyline(fit_points, std::max(sanitize_spacing, 0.5 * fit_spacing));
+    fit_points = removeSinglePointSpikes(fit_points);
+
+    if (fit_points.size() < 2) {
+        ROS_WARN_THROTTLE(1.0,
+                          "[PathHandler] fitLocalSpline failed: fit window too small (raw=%zu filtered=%zu fit=%zu)",
+                          window_points.size(),
+                          filtered.size(),
+                          fit_points.size());
+        return false;
+    }
+
+    const double max_kappa_pre = estimateMaxCurvature(fit_points);
+    const double max_dkappa_pre = estimateMaxCurvatureRate(fit_points);
+    // 阈值基于 smooth cache 质量校准：smooth cache 窗口点集 kappa 通常 ≤17、dkappa ≤350，
+    // cubic spline 拟合后输出会进一步平滑（参考 /mpc/reference_path 实测 kappa≤7、dkappa≤178）。
+    // 保留阈值作为最后安全阀，仍能拦截原始路径级别的病态几何（kappa=68、dkappa=2380）。
+    if (max_kappa_pre > 30.0 || max_dkappa_pre > 500.0) {
+        ROS_WARN_THROTTLE(
+            1.0,
+            "[PathHandler] fitLocalSpline failed: pathological geometry rejected (points=%zu max_kappa=%.3f max_dkappa=%.3f)",
+            fit_points.size(),
+            max_kappa_pre,
+            max_dkappa_pre);
+        return false;
+    }
+
+    if (!local_spline_.fit(fit_points)) {
+        ROS_WARN_THROTTLE(1.0,
+                          "[PathHandler] fitLocalSpline failed: spline fit error (points=%zu)",
+                          fit_points.size());
         return false;
     }
     
@@ -922,9 +1339,13 @@ void PathHandler::updateSpeedProfile(double v_des) {
         return;
     }
 
-    const double total_len = global_spline_length_ > 1e-6
-        ? global_spline_length_
-        : global_spline_.getTotalLength();
+    const std::vector<Eigen::Vector2d>& profile_points_src =
+        global_smooth_valid_ ? global_points_map_smooth_ : global_points_map_;
+    const std::vector<double>& profile_s_src =
+        global_smooth_valid_ ? global_path_s_smooth_ : global_path_s_;
+    const double total_len = (!profile_s_src.empty())
+        ? profile_s_src.back()
+        : (global_spline_length_ > 1e-6 ? global_spline_length_ : global_spline_.getTotalLength());
     if (total_len <= 1e-6) {
         return;
     }
@@ -933,20 +1354,73 @@ void PathHandler::updateSpeedProfile(double v_des) {
     const int n = static_cast<int>(std::ceil(total_len / ds)) + 1;
     speed_profile_s_.reserve(n);
     speed_profile_v_.reserve(n);
+    std::vector<double> v_lat_cap(static_cast<size_t>(n), v_des);
+    std::vector<double> v_omega_cap(static_cast<size_t>(n), v_des);
+    std::vector<double> v_alpha_cap(static_cast<size_t>(n), v_des);
+    std::vector<double> v_geom_cap(static_cast<size_t>(n), v_des);
+
+    // 第一步：基于 smooth cache 的离散几何采样 kappa / dkappa。
+    // 不再用 cubic spline 的二阶导数做速度剖面限速，避免导数放大导致系统性过慢。
+    // 同时对几何源做更粗的重采样，避免 5cm 级局部抖动直接放大到 alpha 限速。
+    const double profile_geom_spacing = std::max(0.10, 2.0 * ds);
+    std::vector<Eigen::Vector2d> profile_points = resamplePath(profile_points_src, profile_geom_spacing);
+    profile_points = sanitizePolyline(profile_points, 0.5 * profile_geom_spacing);
+    profile_points = removeSinglePointSpikes(profile_points);
+    std::vector<double> profile_s;
+    profile_s.reserve(profile_points.size());
+    if (!profile_points.empty()) {
+        profile_s.push_back(0.0);
+        for (size_t i = 1; i < profile_points.size(); ++i) {
+            profile_s.push_back(profile_s.back() + (profile_points[i] - profile_points[i - 1]).norm());
+        }
+    }
+
+    const std::vector<double> discrete_kappa =
+        estimateDiscreteCurvatureSamples(profile_points, profile_s);
+    const std::vector<double> discrete_dkappa =
+        estimateDiscreteCurvatureRateSamples(discrete_kappa, profile_s);
+    std::vector<double> kappa_arr(static_cast<size_t>(n));
+    std::vector<double> dkappa_arr(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) {
+        const double s = std::min(total_len, i * ds);
+        kappa_arr[static_cast<size_t>(i)] = interpolateByArcLength(profile_s, discrete_kappa, s);
+        dkappa_arr[static_cast<size_t>(i)] = interpolateByArcLength(profile_s, discrete_dkappa, s);
+    }
 
     for (int i = 0; i < n; ++i) {
         const double s = std::min(total_len, i * ds);
         speed_profile_s_.push_back(s);
 
         double v = v_des;
-        if (params_.max_lat_accel > 0.0) {
-            double kappa_abs = std::abs(global_spline_.evaluateKappa(s));
-            if (kappa_abs > 1e-4) {
-                v = std::min(v, std::sqrt(params_.max_lat_accel / kappa_abs));
+        const double kappa_abs = std::abs(kappa_arr[static_cast<size_t>(i)]);
+
+        // 横向加速度约束：v² × κ ≤ a_lat_max
+        if (params_.max_lat_accel > 0.0 && kappa_abs > 1e-4) {
+            const double v_cap = std::sqrt(params_.max_lat_accel / kappa_abs);
+            v_lat_cap[static_cast<size_t>(i)] = v_cap;
+            v = std::min(v, v_cap);
+        }
+        // 角速度约束：v × κ ≤ ω_max  →  v ≤ ω_max / κ
+        if (params_.speed_profile_omega_max > 1e-3 && kappa_abs > 1e-4) {
+            const double v_cap = params_.speed_profile_omega_max / kappa_abs;
+            v_omega_cap[static_cast<size_t>(i)] = v_cap;
+            v = std::min(v, v_cap);
+        }
+        // 角加速度约束：v² × |κ'| ≤ α_max  →  v ≤ √(α_max / |κ'|)
+        if (params_.speed_profile_alpha_max > 1e-6) {
+            const double dkappa_abs = std::abs(dkappa_arr[static_cast<size_t>(i)]);
+            if (dkappa_abs > 1e-4) {
+                const double v_cap = std::sqrt(params_.speed_profile_alpha_max / dkappa_abs);
+                v_alpha_cap[static_cast<size_t>(i)] = v_cap;
+                v = std::min(v, v_cap);
             }
         }
+
+        v_geom_cap[static_cast<size_t>(i)] = v;
         speed_profile_v_.push_back(v);
     }
+
+    const std::vector<double> v_before_terminal = speed_profile_v_;
 
     // 末端速度（使用 goal_tolerance 作为安全余量，提前到达容差区后即视为终点）
     const double goal_margin = std::max(0.0, params_.goal_tolerance);
@@ -964,6 +1438,8 @@ void PathHandler::updateSpeedProfile(double v_des) {
         }
     }
 
+    const std::vector<double> v_before_accel_pass = speed_profile_v_;
+
     // 前向遍历（加速限制）
     if (params_.max_tan_accel > 0.0) {
         for (size_t i = 1; i < speed_profile_v_.size(); ++i) {
@@ -973,10 +1449,12 @@ void PathHandler::updateSpeedProfile(double v_des) {
         }
     }
 
-    // 反向遍历（减速限制，使用保守系数确保实物能停住）
-    const double decel_safety_factor = 0.8;  // 保守减速系数
+    const std::vector<double> v_before_decel_pass = speed_profile_v_;
+
+    // 反向遍历（减速限制，使用保守系数确保终点前可稳定收敛）
+    const double decel_safety_factor = 0.8;
     double max_decel = params_.max_tan_decel > 0.0 ? params_.max_tan_decel : params_.max_tan_accel;
-    max_decel *= decel_safety_factor;  // 实物减速能力通常弱于理论值
+    max_decel *= decel_safety_factor;
     if (max_decel > 0.0) {
         for (int i = static_cast<int>(speed_profile_v_.size()) - 2; i >= 0; --i) {
             double v_next = speed_profile_v_[i + 1];
@@ -1018,6 +1496,58 @@ void PathHandler::updateSpeedProfile(double v_des) {
     }
 
     speed_profile_valid_ = true;
+
+    // 诊断日志：打出 kappa/dkappa/v 分布，区分"全局spline放大"与"dkappa噪声"两类根因
+    {
+        const size_t nk = kappa_arr.size();
+        double kappa_max = 0.0, dkappa_max = 0.0, v_geom_min = v_des, v_profile_min = v_des;
+        size_t dom_nominal = 0, dom_lat = 0, dom_omega = 0, dom_alpha = 0;
+        size_t accel_limited = 0, decel_limited = 0;
+        for (size_t i = 0; i < nk; ++i) {
+            const double k = std::abs(kappa_arr[i]);
+            kappa_max = std::max(kappa_max, k);
+            dkappa_max = std::max(dkappa_max, std::abs(dkappa_arr[i]));
+        }
+        // v_geom_min：仅几何约束，不含前向/后向 pass
+        if (kappa_max > 1e-4) {
+            if (params_.speed_profile_omega_max > 1e-3)
+                v_geom_min = std::min(v_geom_min, params_.speed_profile_omega_max / kappa_max);
+            if (params_.max_lat_accel > 0.0)
+                v_geom_min = std::min(v_geom_min, std::sqrt(params_.max_lat_accel / kappa_max));
+        }
+        if (dkappa_max > 1e-4 && params_.speed_profile_alpha_max > 1e-6)
+            v_geom_min = std::min(v_geom_min, std::sqrt(params_.speed_profile_alpha_max / dkappa_max));
+        for (size_t i = 0; i < speed_profile_v_.size(); ++i) {
+            const double v = speed_profile_v_[i];
+            v_profile_min = std::min(v_profile_min, v);
+            const double vg = v_geom_cap[i];
+            const double eps = 1e-3;
+            if (std::abs(vg - v_des) <= eps) {
+                ++dom_nominal;
+            } else if (std::abs(vg - v_lat_cap[i]) <= eps) {
+                ++dom_lat;
+            } else if (std::abs(vg - v_omega_cap[i]) <= eps) {
+                ++dom_omega;
+            } else if (std::abs(vg - v_alpha_cap[i]) <= eps) {
+                ++dom_alpha;
+            }
+            if (std::abs(v_before_decel_pass[i] - v_before_accel_pass[i]) > eps) {
+                ++accel_limited;
+            }
+            if (std::abs(v - v_before_decel_pass[i]) > eps) {
+                ++decel_limited;
+            }
+        }
+
+        ROS_INFO("[SpeedProfile] n=%zu ds=%.3f "
+                 "kappa_max=%.3f dkappa_max=%.1f "
+                 "v_geom_min=%.3f v_profile_min=%.3f v_des=%.3f "
+                 "dom(nom/lat/omega/alpha)=%zu/%zu/%zu/%zu "
+                 "pass(accel/decel)=%zu/%zu",
+                 nk, ds, kappa_max, dkappa_max, v_geom_min, v_profile_min, v_des,
+                 dom_nominal, dom_lat, dom_omega, dom_alpha,
+                 accel_limited, decel_limited);
+    }
 }
 
 double PathHandler::getSpeedAtS(double s) const {

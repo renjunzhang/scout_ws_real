@@ -12,6 +12,8 @@ from collections import defaultdict
 
 import rosbag
 
+STATUS_BUCKETS = ("TRACKING", "SETTLING", "REACHED", "IDLE")
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -88,10 +90,56 @@ def in_tracking(segments, ts):
     return False
 
 
+def status_at(segments, ts):
+    for start, end, status in segments:
+        if start <= ts < end:
+            return status
+    if segments and ts >= segments[-1][1]:
+        return segments[-1][2]
+    return "UNKNOWN"
+
+
+def summarize_status_buckets(samples):
+    summary = {}
+    for status, values in samples.items():
+        total = len(values)
+        if total <= 0:
+            continue
+        solved = sum(1 for value in values if value == 1)
+        summary[status] = {
+            "count": total,
+            "solve_fail_count": total - solved,
+            "success_ratio": round(solved / total, 3),
+        }
+    return summary
+
+
+def format_status_breakdown(summary):
+    parts = []
+    seen = set()
+    for status in STATUS_BUCKETS:
+        if status not in summary:
+            continue
+        seen.add(status)
+        item = summary[status]
+        parts.append(
+            f"{status}: n={item['count']} success={item['success_ratio']:.3f} fail={item['solve_fail_count']}"
+        )
+    for status in sorted(summary.keys()):
+        if status in seen:
+            continue
+        item = summary[status]
+        parts.append(
+            f"{status}: n={item['count']} success={item['success_ratio']:.3f} fail={item['solve_fail_count']}"
+        )
+    return " | ".join(parts)
+
+
 def collect_metrics(bag_path, tracking_only=True):
     start_time, end_time, transitions, segments = get_status_segments(bag_path)
 
     metrics = defaultdict(list)
+    status_val_by_status = defaultdict(list)
     goals = []
     global_path_count = 0
     episodes = set()
@@ -124,7 +172,9 @@ def collect_metrics(bag_path, tracking_only=True):
             elif topic == "/mpc/solve_ms":
                 metrics["solve_ms"].append(float(msg.data))
             elif topic == "/mpc/status_val":
-                metrics["status_val"].append(int(msg.data))
+                value = int(msg.data)
+                metrics["status_val"].append(value)
+                status_val_by_status[status_at(segments, ts)].append(value)
             elif topic == "/slosh/speed_governor_active":
                 metrics["governor"].append(int(msg.data))
             elif topic == "/slosh/v_des_eff":
@@ -149,6 +199,7 @@ def collect_metrics(bag_path, tracking_only=True):
     )
     governor_on = sum(1 for x in metrics["governor"] if x == 1)
     governor_total = len(metrics["governor"])
+    status_breakdown = summarize_status_buckets(status_val_by_status)
 
     row = {
         "bag_path": bag_path,
@@ -168,6 +219,9 @@ def collect_metrics(bag_path, tracking_only=True):
         "solve_ms_mean": round(safe_mean(metrics["solve_ms"]), 3),
         "solve_ms_max": round(safe_max(metrics["solve_ms"]), 3),
         "solve_fail_count": sum(1 for x in metrics["status_val"] if x != 1),
+        "solve_success_ratio": round(
+            sum(1 for x in metrics["status_val"] if x == 1) / len(metrics["status_val"]), 3
+        ) if metrics["status_val"] else float("nan"),
         "constraint_active_count": sum(1 for x in metrics["constraint"] if x == 1),
         "governor_active_count": governor_on,
         "governor_active_ratio": round(governor_on / governor_total, 3) if governor_total else 0.0,
@@ -175,11 +229,18 @@ def collect_metrics(bag_path, tracking_only=True):
         "v_des_eff_min": round(min(metrics["v_des_eff"]), 3) if metrics["v_des_eff"] else float("nan"),
         "cmd_vx_rms": round(rms(metrics["vx"]), 3),
         "cmd_wz_rms": round(rms(metrics["wz"]), 3),
+        "status_val_breakdown": format_status_breakdown(status_breakdown),
         "status_transitions": " | ".join(
             f"{round(ts - start_time, 3)}:{status}" for ts, status in transitions
         ),
         "goals": " | ".join(f"({x},{y})" for x, y in goals),
     }
+    for status in STATUS_BUCKETS:
+        item = status_breakdown.get(status)
+        key = status.lower()
+        row[f"{key}_status_val_count"] = item["count"] if item else 0
+        row[f"{key}_success_ratio"] = item["success_ratio"] if item else float("nan")
+        row[f"{key}_solve_fail_count"] = item["solve_fail_count"] if item else 0
 
     episode_rows = []
     for index, (seg_start, seg_end, status) in enumerate(tracking_segments, start=1):
@@ -257,9 +318,11 @@ def print_summary(rows, per_episode_rows, per_episode):
             f"height_max={row['height_max_m']}m "
             f"pred_rms={row['height_pred_rms_m']}m "
             f"solve_mean={row['solve_ms_mean']}ms "
+            f"success={row['solve_success_ratio']} "
             f"fail={row['solve_fail_count']} "
             f"gov_ratio={row['governor_active_ratio']}"
         )
+        print(f"  status_val by mpc_status: {row['status_val_breakdown']}")
     if per_episode and per_episode_rows:
         print("\n按 episode 明细:")
         for row in per_episode_rows:

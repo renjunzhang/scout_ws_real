@@ -65,10 +65,14 @@ target_link_libraries(local_planner_node
 
 catkin_install_python(PROGRAMS
   scripts/send_fixed_goal.py
+  scripts/sim_fixed_goal_tool.py
   scripts/fixed_global_path_runner.py
   scripts/extract_slosh_metrics.py
   scripts/analyze_imu_ay_stage2.py
   scripts/analyze_sim_speed_issue.py
+  scripts/analyze_tracking_infeasible.py
+  scripts/analyze_global_path_duplicates.py
+  scripts/analyze_global_path_prefix_window.py
   scripts/analyze_settling_day3.py
   scripts/analyze_day3_abc_smoke.py
   scripts/run_imu_stage2_sequence.py
@@ -96,5 +100,6 @@ install(DIRECTORY config launch
 install(PROGRAMS
   scripts/record_slosh_experiment.sh
   scripts/launch_sim_nav_stack.sh
+  scripts/run_day4_profile.sh
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
