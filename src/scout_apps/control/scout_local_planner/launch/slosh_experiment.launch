@@ -36,6 +36,11 @@
   <arg name="slosh_imu_filter_alpha" default="0.3" doc="IMU 数据 EMA 滤波系数"/>
   <arg name="slosh_imu_ay_bias_compensation_enable" default="true" doc="是否对 IMU ay 做静止零偏扣除"/>
   <arg name="slosh_imu_ay_bias_init_duration" default="3.0" doc="估计 IMU ay 零偏所需的连续静止时长"/>
+  <arg name="input_shaping_enable" default="false" doc="是否启用 ISR/ZV input shaping baseline"/>
+  <arg name="input_shaping_type" default="zv" doc="input shaping 类型，当前仅支持 zv"/>
+  <arg name="input_shaping_use_model_params" default="true" doc="是否使用当前 slosh 模态参数生成 shaper"/>
+  <arg name="input_shaping_omega0_override" default="0.0" doc="input shaping 频率覆盖值，非正时使用模型参数"/>
+  <arg name="input_shaping_zeta_override" default="0.0" doc="input shaping 阻尼比覆盖值，非正时使用模型参数"/>
   <arg name="risk_scheduler_enable" default="false" doc="是否启用 rho_k 风险自适应调度器"/>
   <arg name="cmd_vel_topic" default="/cmd_vel" doc="planner 输出的 cmd_vel 话题；阶段 3 可改到调试话题避免与底盘直控冲突"/>
   <arg name="global_path_topic" default="/scout/global_path" doc="local planner 订阅的全局路径话题；固定路径重放实验时可改到 /scout/global_path_fixed"/>
@@ -71,6 +76,11 @@
     <param name="slosh_estimator/imu_filter_alpha" value="$(arg slosh_imu_filter_alpha)"/>
     <param name="slosh_estimator/imu_ay_bias_compensation_enable" value="$(arg slosh_imu_ay_bias_compensation_enable)"/>
     <param name="slosh_estimator/imu_ay_bias_init_duration" value="$(arg slosh_imu_ay_bias_init_duration)"/>
+    <param name="input_shaping/enable" value="$(arg input_shaping_enable)"/>
+    <param name="input_shaping/type" value="$(arg input_shaping_type)"/>
+    <param name="input_shaping/use_model_params" value="$(arg input_shaping_use_model_params)"/>
+    <param name="input_shaping/omega0_override" value="$(arg input_shaping_omega0_override)"/>
+    <param name="input_shaping/zeta_override" value="$(arg input_shaping_zeta_override)"/>
     <param name="risk_scheduler/enable" value="$(arg risk_scheduler_enable)"/>
 
     <!-- 话题 remap -->

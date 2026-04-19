@@ -46,6 +46,11 @@
   <arg name="settling_eta_tol" default="0.0015" doc="SETTLING |eta| 收敛阈值 (m)"/>
   <arg name="settling_eta_dot_tol" default="0.03" doc="SETTLING |eta_dot| 收敛阈值 (m/s)"/>
   <arg name="settling_timeout_s" default="3.0" doc="SETTLING 最长停留时间 (s)"/>
+  <arg name="input_shaping_enable" default="false" doc="是否启用 ISR/ZV input shaping baseline"/>
+  <arg name="input_shaping_type" default="zv" doc="input shaping 类型，当前仅支持 zv"/>
+  <arg name="input_shaping_use_model_params" default="true" doc="是否使用当前 slosh 模态参数生成 shaper"/>
+  <arg name="input_shaping_omega0_override" default="0.0" doc="input shaping 频率覆盖值，非正时使用模型参数"/>
+  <arg name="input_shaping_zeta_override" default="0.0" doc="input shaping 阻尼比覆盖值，非正时使用模型参数"/>
   <arg name="cmd_vel_topic" default="/cmd_vel" doc="planner 输出的 cmd_vel 话题；阶段 3 可改到调试话题避免与底盘直控冲突"/>
   <arg name="global_path_topic" default="/scout/global_path" doc="local planner 订阅的全局路径话题；固定路径重放实验时可改到 /scout/global_path_fixed"/>
 
@@ -90,6 +95,11 @@
     <param name="settling/eta_tol" value="$(arg settling_eta_tol)"/>
     <param name="settling/eta_dot_tol" value="$(arg settling_eta_dot_tol)"/>
     <param name="settling/timeout_s" value="$(arg settling_timeout_s)"/>
+    <param name="input_shaping/enable" value="$(arg input_shaping_enable)"/>
+    <param name="input_shaping/type" value="$(arg input_shaping_type)"/>
+    <param name="input_shaping/use_model_params" value="$(arg input_shaping_use_model_params)"/>
+    <param name="input_shaping/omega0_override" value="$(arg input_shaping_omega0_override)"/>
+    <param name="input_shaping/zeta_override" value="$(arg input_shaping_zeta_override)"/>
 
     <!-- 话题 remap -->
     <remap from="global_path" to="$(arg global_path_topic)"/>

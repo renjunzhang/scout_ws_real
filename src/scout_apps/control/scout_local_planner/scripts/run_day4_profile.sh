@@ -11,11 +11,13 @@ Profiles:
   conservative       Day4 conservative risk recommended init
   no_imu_ay          Day4 no IMU ay control
   relaxed_settling   Day4 relaxed settling check
+  isr                ISR / ZV input shaping baseline
 
 Examples:
   rosrun scout_local_planner run_day4_profile.sh baseline
   rosrun scout_local_planner run_day4_profile.sh conservative
   rosrun scout_local_planner run_day4_profile.sh no_imu_ay
+  rosrun scout_local_planner run_day4_profile.sh isr
   rosrun scout_local_planner run_day4_profile.sh conservative Q_slosh:=10
 EOF
   exit 1
@@ -66,6 +68,15 @@ case "${PROFILE}" in
       "settling_eta_tol:=0.002"
       "settling_eta_dot_tol:=0.05"
       "settling_timeout_s:=3.0"
+    )
+    ;;
+  isr)
+    PROFILE_ARGS+=(
+      "input_shaping_enable:=true"
+      "input_shaping_type:=zv"
+      "input_shaping_use_model_params:=true"
+      "risk_scheduler_enable:=false"
+      "Q_slosh:=0.0"
     )
     ;;
   *)
