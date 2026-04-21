@@ -350,7 +350,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("safety/tracking_reentry_ramp_steps",
               tracking_reentry_ramp_steps_, 10);
     pnh.param("safety/tracking_curvature_speed_cap_enable",
-              tracking_curvature_speed_cap_enable_, true);
+              tracking_curvature_speed_cap_enable_, false);
     pnh.param("safety/tracking_curvature_preview_distance",
               tracking_curvature_preview_distance_, 1.5);
     pnh.param("safety/tracking_curvature_rate_preview_distance",
