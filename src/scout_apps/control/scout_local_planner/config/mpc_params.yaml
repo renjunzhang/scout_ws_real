@@ -31,7 +31,7 @@ mpc:
   
   # 控制变化率权重（平滑控制）
   R_da: 0.5                # 加速度变化权重——配合 jerk 约束提高
-  R_domega: 4.5            # 角速度变化权重 - 适当降低以提高响应
+  R_domega: 4.0            # 角速度变化权重 - 再小步降低，改善弯道转向建立
 
   # 控制变化率约束（硬约束）
   constrain_omega_rate: true
@@ -64,7 +64,7 @@ vehicle:
 # 路径处理参数
 # =============================================================================
 path_handler:
-  lookahead_distance: 0.50  # 前视距离 (m) - 降低以减少切弯
+  lookahead_distance: 0.45  # 前视距离 (m) - 继续小步下调，减轻实物切弯/抄近路
   goal_tolerance: 0.20     # 到达目标位置容差 (m) - 实物放宽
   yaw_tolerance: 0.2       # 到达目标航向容差 (rad) - 进一步放宽
   goal_reached_max_speed: 0.08  # 仅在低速时允许切到 REACHED，避免高速判到达后惯性冲过头

@@ -85,6 +85,20 @@ GLOBAL_PATH_TOPIC=/scout/global_path_fixed rosrun scout_local_planner launch_fix
 - 录制 Q0/Q5 对照 bag
 - 录制 IMU 标定或终点恢复行为分析 bag
 
+### `record_slosh_debug.sh`
+
+轻量级调试录包脚本，面向实物参数整定与根因定位。
+
+与 `record_slosh_experiment.sh` 的区别：
+- 不录 RealSense 原始图像
+- 不录地图、costmap、MBF 大量接口话题
+- 只保留 `cmd_vel / odom / mpc_status / v_des_eff / terminal / 路径几何 / IMU / TF` 等核心诊断信号
+
+适用场景：
+- 实物 `Q0/Q5` 调参
+- 配合 `diagnose_real_tuning.py` 快速判断下一轮该调哪些参数
+- 需要更小 bag 体积、方便从工控机拷回开发机
+
 ### `extract_slosh_metrics.py`
 
 从 bag 文件中提取 slosh/MPC 实验指标的离线分析脚本。
