@@ -881,11 +881,11 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                             const double v_cap_kappa =
                                 std::sqrt(std::max(0.0, path_params_.max_lat_accel /
                                                          (kappa_preview_dbg + 1e-9)));
-                            // omega_max 硬约束：v × kappa ≤ omega_max
-                            // 该 cap 可低于 tracking_curvature_min_speed_，因路径几何确实要求低速
+                            // 规划层 omega 上限：使用 speed_profile_omega_max（与 v(s) 剖面一致）
+                            // 与 QP 硬约束 vehicle_params_.omega_max 解耦，避免双重压速
                             const double v_cap_omega =
-                                (vehicle_params_.omega_max > 1e-3)
-                                    ? vehicle_params_.omega_max / (kappa_preview_dbg + 1e-9)
+                                (path_params_.speed_profile_omega_max > 1e-3)
+                                    ? path_params_.speed_profile_omega_max / (kappa_preview_dbg + 1e-9)
                                     : v_cap_kappa;
                             // 几何综合限速：取横向加速度 cap 与 omega_max cap 的较小值
                             const double v_cap_geom = std::min(v_cap_kappa, v_cap_omega);

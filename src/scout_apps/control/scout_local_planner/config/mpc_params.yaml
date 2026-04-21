@@ -49,7 +49,7 @@ vehicle:
   # 速度约束
   v_max: 3.0               # 最大线速度 (m/s) - 实物保守，降低以减少刹车时打滑
   v_min: 0.0               # 最小线速度 (m/s)，禁用倒车
-  omega_max: 1.0           # 最大角速度 (rad/s) - 降低以减轻定位漂移
+  omega_max: 1.5           # 最大角速度 (rad/s) QP硬约束；1.0→1.5（原1.0因定位漂移保守，可回退）
   
   # 加速度约束
   a_max: 2.0               # 最大线加速度 (m/s²) - 提高以增强加减速能力
@@ -79,7 +79,8 @@ path_handler:
   window_forward: 48                   # 样条窗口向前额外点数
   s_jump_threshold: 0.8               # 弧长跳变阈值 (m) - 增大以容忍定位抖动
   resample_spacing: 0.05              # 路径重采样间隔 (m)
-  max_lat_accel: 2.0                  # 最大横向加速度 (m/s^2) - 降低以减少激进转弯
+  max_lat_accel: 2.0                  # 最大横向加速度 (m/s^2)
+  speed_profile_omega_max: 1.5        # 规划层角速度上限（与 vehicle/omega_max 一致）；显式配置避免自动桥接后难以排查
   min_ref_speed: 0.0                  # 参考速度下限 (m/s)
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
@@ -202,6 +203,17 @@ slosh_speed_governor:
   eta_exit_ratio: 0.2      # 退出阈值（滞回），低于此比例才释放 governor
   preview_distance: 1.0    # 前方曲率预览长度 (m)
   min_active_steps: 10     # 最少保持周期数，避免阈值附近抖动
+
+# =============================================================================
+# 安全/速度保护参数（safety）
+#   不在 yaml 里写时均使用代码默认值，建议显式写出便于排查
+# =============================================================================
+safety:
+  tracking_curvature_preview_distance: 0.8      # 曲率预览长度 (m)；默认1.5，v(s)后向DP已覆盖减速，预览只做最后保护
+  tracking_curvature_rate_preview_distance: 0.6 # dkappa 预览长度 (m)；默认1.0，同理缩短
+  tracking_curvature_min_speed: 0.25            # 曲率限速下限 (m/s)
+  tracking_reentry_v_cap: 0.8                   # 重入TRACKING初始速度上限 (m/s)；默认0.6，适当放宽
+  tracking_reentry_ramp_steps: 5                # 重入爬坡步数；默认10步(0.5s)，缩短到5步
 
 # =============================================================================
 # ρ_k 风险自适应调度器

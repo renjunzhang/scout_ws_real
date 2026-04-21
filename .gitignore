@@ -45,3 +45,4 @@ src/scout_apps/sensors/realsense_liquid_measurement/v2_runs
 src/scout_apps/sensors/realsense_liquid_measurement/slosh_replay_runs
 src/scout_apps/sensors/realsense_liquid_measurement/sl_runs
 src/scout_apps/sensors/realsense_liquid_measurement/sl_artifacts
+src/scout_apps/scout_maps

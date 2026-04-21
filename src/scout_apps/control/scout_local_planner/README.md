@@ -33,9 +33,11 @@ PathHandler::getReferencePoints(v_exec, v_plan)
   └─ 输出 ref_points[0..N]
         │
         ▼
-RiskScheduler::update(eta, eta_dot, v, kappa)
-  ├─ risk = w_r * range_k + w_u * usage_k
-  ├─ s(ρ) = sigmoid, rate-limited
+RiskScheduler::update(h_pred_max_prev, E_slosh_prev, d_goal,
+                      a_y_imu, v_omega, imu_stamp, imu_bias_ready, v_ref)
+  ├─ r_k = w_h*h_risk + w_e*e_risk + w_t*t_risk  (physical risk, frozen monitor)
+  ├─ u_k = |a_y_imu - v*ω| / a_uncert_max        (IMU excitation uncertainty)
+  ├─ ρ_k = w_r*r_k + w_u*u_k, s(ρ)=sigmoid, rate-limited
   └─ 输出 Q_eta_k, eta_bar_k, v_ref_eff_k
         │
         ▼
@@ -126,11 +128,14 @@ J = Σ_{k=0}^{N-1} [
 
 ```cpp
 // 不是standard "apply first element"
-v_cmd = z[IDX_V] + 0.5 * z[IDX_A] * dt;         // 步内中点速度
-omega_cmd = 0.5 * (z[IDX_OMEGA] + z_next[IDX_OMEGA]); // 步内平均角速度
+// lead_time = cmd_vel_lead_time（>=0时直接用）或 0.5*dt（<0时退回midpoint）
+// 实物 mpc_params.yaml: cmd_vel_lead_time=-1.0 → 0.5*dt
+// 仿真 mpc_params_sim.yaml: cmd_vel_lead_time=0.15（补偿 Gazebo 速度反馈滞后）
+v_cmd     = v0 + a0 * lead_time;
+omega_cmd = 0.5 * (ω_0 + ω_1);    // 首两步均值（固定，不受 lead_time 影响）
 ```
 
-这是midpoint extraction，对差速驱动的非线性运动学补偿。
+这是可配置前瞻提取（`mpc_solver.cpp:424`），默认退回 midpoint extraction。
 
 ---
 
@@ -211,28 +216,47 @@ h = h_coeff * sqrt(η_x² + η_y²) + [R²*ω²/(4g)]
 ### 核心逻辑
 
 ```
-range_k  = max(|η_x|, |η_y|) / η_bar_nominal
-usage_k  = |η̄_current - η̄_desired| / η_bar_range   （约束利用率）
+// ── r_k：物理风险（来自上一周期冻结的 monitor rollout）──
+h_risk = h_pred_max_prev / eta_bar_max              // 液面预测高度占比
+e_risk = E_slosh_prev / (2 * eta_bar_max²)          // 模态能量占比（两轴满量程估计）
+t_risk = max(0, 1 - d_goal / d_goal_thresh)         // 终点接近度（d_goal < d_goal_thresh 时激活）
+r_k    = clip(w_h*h_risk + w_e*e_risk + w_t*t_risk, 0, 1)
 
-ρ_k = w_r * range_k + w_u * usage_k
+// ── u_k：激励不确定性（独立 IMU 观测，与 r_k 解耦）──
+u_k = clip(|a_y_imu - v*ω| / a_uncert_max, 0, 1)
+
+// ── ρ_k 合成 ──
+ρ_k = clip(w_r * r_k + w_u * u_k, 0, 1)
 s_k = sigmoid(gamma * (ρ_k - rho_0))
 
-// Rate-limited
+// Rate-limited（每步最大变化量 = rate_limit_per_step × 满量程）
 Q_eta_k   = Q_eta_min + s_k * (Q_eta_max - Q_eta_min)
-eta_bar_k = eta_bar_max - s_k * (eta_bar_max - eta_bar_min)
+eta_bar_k = eta_bar_max - s_k * delta_eta_bar
 v_ref_eff = v_ref * (1 - beta * s_k)
 ```
 
-### 参数（当前仿真推荐初值）
+### 参数（当前 `mpc_params.yaml` 值）
 
-| 参数 | 推荐值 | 含义 |
+| 参数 | 当前值 | 含义 |
 |---|---|---|
-| gamma | 3.0 | sigmoid陡峭度 |
-| rho_0 | 0.4 | 激活阈值 |
-| rate_limit_per_step | 0.02 | 每步最大变化量 |
-| beta | 0.2 | 速度压制强度 |
+| gamma | 5.0 | sigmoid陡峭度 |
+| rho_0 | 0.3 | sigmoid中点（低于此值不显著干预） |
+| rate_limit_per_step | 0.05 | 每步最大变化量（5%/步） |
+| beta | 0.3 | 速度压制上限（最多折减30%） |
+| a_uncert_max | 0.5 | u_k归一化分母 (m/s²) |
+| w_r / w_u | 0.7 / 0.3 | r_k 与 u_k 合成权重 |
 
-`fallback_active=true` 表示RiskScheduler内部保守回退（非MPC失败fallback，命名有歧义）。
+### fallback 触发条件（任一触发即切固定保守参数）
+
+```
+1. IMU 最近消息距今 > imu_timeout_s=0.1s
+2. imu_bias_ready=false（bias 估计窗口未完成）
+3. u_k > u_threshold_high=0.8，连续 u_high_count_trigger=10 步
+```
+
+fallback 期间输出固定值：`Q_eta_fix=5.0, eta_bar_fix=0.04`，`v_ref_eff=v_ref`（不折减）。
+
+`fallback_active=true` 是内部状态标志，不是 MPC 求解失败的 fallback，两者命名有歧义需注意。
 
 ---
 
@@ -242,17 +266,32 @@ v_ref_eff = v_ref * (1 - beta * s_k)
 
 ```
 v_geom = min(
-    sqrt(a_lat_max / |κ|),        // 横向加速度约束
-    omega_max / |κ|,               // 角速度约束（P1前缺失这项，已修复）
-    cbrt(a_lat_max / |dκ/ds|)     // 角加速度代理约束
+    sqrt(a_lat_max / |κ|),          // 横向加速度约束（path_handler.cpp:1398）
+    omega_max / |κ|,                 // 角速度约束（path_handler.cpp:1404）
+    sqrt(alpha_max / |dκ/ds|)       // 角加速度代理约束（path_handler.cpp:1413）
 )
 ```
+
+注意：第三项是 **sqrt**（平方根），不是 cbrt。推导：`v² * |dκ/ds| ≤ alpha_max` → `v ≤ sqrt(alpha_max / |dκ/ds|)`。
 
 ### 几何来源（P1后）
 
 - 曲率来自 `global_points_map_smooth_` 的**离散有限差分**，不是cubic spline的解析导数
 - cubic spline导数对dκ/ds有约4倍放大效应（实测验证），已放弃
 - 采样粗化：先重采样到 `profile_geom_spacing = max(0.10, 2×speed_profile_ds)`，再计算几何
+
+### `speed_profile_omega_max` 桥接行为
+
+`mpc_params.yaml` 未显式配置 `path_handler/speed_profile_omega_max` 时，代码自动桥接（`local_planner_ros.cpp:432`）：
+
+```cpp
+if (path_params_.speed_profile_omega_max <= 1e-6)
+    path_params_.speed_profile_omega_max = vehicle_params_.omega_max;
+```
+
+实物 `vehicle/omega_max=1.0`，这意味着 κ≥1.0 的弯道速度上限由 `omega_max/κ` 主导（比 `sqrt(max_lat_accel/κ)` 更紧）。若要解耦，需在 yaml 里显式写 `speed_profile_omega_max: <值>`。`speed_profile_alpha_max` 同理桥接到 `vehicle/alpha_max`。
+
+同样的桥接约束在 TRACKING 主循环里也有一份（`tracking_curvature_speed_cap`，`local_planner_ros.cpp:874`），形成双重几何限速。
 
 ### v_plan / v_exec解耦（P1）
 
@@ -308,12 +347,23 @@ ALIGN_FINAL_YAW   → 原地旋转到目标朝向（纯几何）
 ## §9 可行性保护机制
 
 ```
-fail_streak >= 3: v_des_cmd → 0.5 m/s（降速）
-fail_streak >= 6: v_des_cmd → 0.3 m/s（进一步降速）
-5次连续成功: 恢复原始v_des
+fail_streak >= 3: v_des_cmd → 0.5 m/s（降速，mild cap）
+fail_streak >= 6: v_des_cmd → 0.3 m/s（进一步降速，strong cap）
+5次连续成功:      恢复原始 v_des
 ```
 
 失败时 `cmd_vel` 保持上一周期值（不发零速），避免急停。
+
+### TRACKING 重入速度爬坡
+
+每次进入 TRACKING（新路径、IDLE→TRACKING）时，触发 `tracking_reentry_ramp_steps=10` 步爬坡：
+
+```
+v_des_cmd = min(v_des_cmd, tracking_reentry_v_cap_ + α*(v_des_raw - tracking_reentry_v_cap_))
+```
+
+`tracking_reentry_v_cap_=0.6 m/s`，α 从 0 线性增到 1，10 步后恢复正常（共 0.5s @ 20Hz）。  
+若弯道入口正好在路径起点，爬坡 + 曲率限速会叠加，前 0.5s 明显慢。
 
 ### 已修复的典型失败链
 
@@ -328,11 +378,18 @@ fail_streak >= 6: v_des_cmd → 0.3 m/s（进一步降速）
 
 ## §10 防晃抑制：三层结构
 
-### 第一层：外层参考整形
+### 第零层：速度剖面几何限速（静态，路径加载时计算）
 
-- RiskScheduler压制v_ref_eff（减速）
-- RiskScheduler收紧η̄（加强约束）
-- 速度剖面几何限速（间接，通过减速减小离心激励）
+- `v_geom = min(sqrt(a_lat/κ), omega_max/κ, sqrt(alpha_max/dκ))`
+- 对整条路径的 v(s) 预先压速，非实时
+- **与后续各层相互独立**，不能互相替代
+
+### 第一层：外层参考整形（实时，每控制周期）
+
+- RiskScheduler 压制 v_ref_eff（减速，幅度最多 beta=30%）
+- RiskScheduler 收紧 η̄（加强约束）
+- TRACKING 曲率预览二次压速（`tracking_curvature_speed_cap`，与第零层使用相同公式但实时 preview）
+- slosh_speed_governor：独立的残余晃动感知限速，基于当前 η/η_bar 比值实时截断 v_des，有死区（`eta_deadband`）和滞回（`eta_exit_ratio`），与 RiskScheduler 同时生效时两套机制各自独立叠加
 
 ### 第二层：MPC内层
 
@@ -468,7 +525,7 @@ MPC的晃动抑制通过**软代价**实现（Q_η项），而不是刚性约束
 1. **ω_n、ζ的实测值**：代码中从参数服务器读取，当前仿真和实物值未固定在代码里
 2. **容器几何参数**：R（等效摆长）、液位高度等，影响h_coeff计算
 3. **仿真到实物的gap**：当前仿真bag收敛（test7基线），实物验证尚未进行
-4. **ISR ZV Shaper参数**：ω_d、t1、A1/A2，来自辨识结果，尚未实现
+4. **ISR ZV Shaper 已实现**（提交 `ea1c07a`），但 ω_d、ζ 的实测辨识值尚未完成，当前使用模型参数或手动覆盖值；`input_shaping_enable=false` 默认关闭，实验时需要在 launch 里开启
 5. **侧视相机标定**：RealSense的液面测量结果与模型估计h的对比，尚未完成
 
 ---
@@ -494,4 +551,4 @@ MPC的晃动抑制通过**软代价**实现（Q_η项），而不是刚性约束
 
 ---
 
-*最后更新：2026-04-19。以 `src/` 代码为准，如有冲突以代码为准。*
+*最后更新：2026-04-20。以 `src/` 代码为准，如有冲突以代码为准。*
