@@ -31,7 +31,7 @@ mpc:
   
   # 控制变化率权重（平滑控制）
   R_da: 0.5                # 加速度变化权重——配合 jerk 约束提高
-  R_domega: 5.0            # 角速度变化权重 - 适当降低以提高响应
+  R_domega: 4.5            # 角速度变化权重 - 适当降低以提高响应
 
   # 控制变化率约束（硬约束）
   constrain_omega_rate: true
@@ -53,7 +53,7 @@ vehicle:
   
   # 加速度约束
   a_max: 2.0               # 最大线加速度 (m/s²) - 提高以增强加减速能力
-  alpha_max: 2.5           # 最大角加速度 (rad/s²) - 降低以平滑转向
+  alpha_max: 3.5           # 最大角加速度 (rad/s²) - 降低以平滑转向
   j_max: 4.0               # 最大线加加速度 (m/s^3)——提高以减少加减速响应滞后
   
   # 车辆几何
@@ -132,12 +132,19 @@ slosh_estimator:
   imu_ay_bias_trim_ratio: 0.10           # 对 EMA 后 ay 做 trimmed mean 时两端裁剪比例
 
 # =============================================================================
-# 安全退化策略（求解不可行时）
+# 安全退化策略 + 速度保护（safety）
+#   infeasible_*：求解不可行时的退化行为
+#   tracking_curvature_*：TRACKING 模式曲率/重入限速
 # =============================================================================
 safety:
   infeasible_decel: 1.0          # 不可行时制动减速度 (m/s^2)
   infeasible_omega_scale: 0.0    # 不可行时角速度缩放
   infeasible_min_speed: 0.0      # 不可行时线速度下限 (m/s)
+  tracking_curvature_preview_distance: 0.8      # 曲率预览长度 (m)；默认1.5，v(s)后向DP已覆盖减速，预览只做最后保护
+  tracking_curvature_rate_preview_distance: 0.6 # dkappa 预览长度 (m)；默认1.0，同理缩短
+  tracking_curvature_min_speed: 0.25            # 曲率限速下限 (m/s)
+  tracking_reentry_v_cap: 0.8                   # 重入TRACKING初始速度上限 (m/s)；默认0.6，适当放宽
+  tracking_reentry_ramp_steps: 5                # 重入爬坡步数；默认10步(0.5s)，缩短到5步
 
 # =============================================================================
 # 原地对齐模式（航向误差过大时原地转向）
@@ -203,17 +210,6 @@ slosh_speed_governor:
   eta_exit_ratio: 0.2      # 退出阈值（滞回），低于此比例才释放 governor
   preview_distance: 1.0    # 前方曲率预览长度 (m)
   min_active_steps: 10     # 最少保持周期数，避免阈值附近抖动
-
-# =============================================================================
-# 安全/速度保护参数（safety）
-#   不在 yaml 里写时均使用代码默认值，建议显式写出便于排查
-# =============================================================================
-safety:
-  tracking_curvature_preview_distance: 0.8      # 曲率预览长度 (m)；默认1.5，v(s)后向DP已覆盖减速，预览只做最后保护
-  tracking_curvature_rate_preview_distance: 0.6 # dkappa 预览长度 (m)；默认1.0，同理缩短
-  tracking_curvature_min_speed: 0.25            # 曲率限速下限 (m/s)
-  tracking_reentry_v_cap: 0.8                   # 重入TRACKING初始速度上限 (m/s)；默认0.6，适当放宽
-  tracking_reentry_ramp_steps: 5                # 重入爬坡步数；默认10步(0.5s)，缩短到5步
 
 # =============================================================================
 # ρ_k 风险自适应调度器
