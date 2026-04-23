@@ -287,6 +287,51 @@ realsense_liquid_measurement/
 - `scripts/debug_liquid_vs_mpc_frame_by_frame_v2.py`
   - 当前主逐帧调试和人工标注器，支持录入 `human_peak_mm`、候选帧跳转和零线微调。
 
+### RGB / 红色液体链
+
+- `scripts/RGB_calibrate.py`
+  - 旧 RGB 椭圆液面标定脚本。
+  - 适用于“液面可见为椭圆上下沿”的旧图像条件，支持 `trace-zero-mm`、`near-edge-only` 等模式。
+  - 当前已不再是红色液体阶段的主链，但保留用于历史回溯和黑色液体阶段兼容。
+- `scripts/RGB_infer_from_bag.py`
+  - 旧 RGB 椭圆液面推理脚本。
+  - 基于灰度梯度、双边缘/单边缘、near-edge 修正等逻辑输出液面高度。
+  - 当前不作为红色液体阶段的主分析入口，但保留用于旧包复核。
+- `scripts/red_liquid_calibrate.py`
+  - 当前红色液体主标定脚本。
+  - 在参考帧上标定：
+    - `ROI`
+    - 试管左右内壁
+    - 三条竖直高度标尺（`left / center / right`）
+  - 输出 `red_liquid_3rulers.yaml` 之类的三标尺标定文件。
+- `scripts/red_liquid_infer_from_bag.py`
+  - 当前红色液体主推理脚本。
+  - 基于 HSV 红色分割、底部连通域过滤、三 band 高度映射，输出：
+    - `h_left / h_center / h_right`
+    - `h_mm_final`
+    - `h_mm_corr`
+    - `h_mm_smooth_corr`
+  - 单包曲线会额外绘制 `max(L,C,R)`，但单包 CSV 不写 `h_max_lcr`；该汇总指标由批量 compare 脚本计算。
+  - 当前还支持：
+    - `debug_frames/`
+    - `debug_frames_clear/`
+    - `zero-correction`
+    - `temporal smoothing`
+- `scripts/red_liquid_sample_hsv.py`
+  - 从原始参考帧中人工点击红色液柱主体像素，统计 HSV 分布并给出建议阈值。
+  - 用于收紧 `red_liquid_infer_from_bag.py` 的 HSV 参数，避免继续依赖拍脑袋阈值。
+- `scripts/plot_red_liquid_group_compare.py`
+  - 当前红色液体 compare 批量分析入口。
+  - 面向 `0422` compare bag 分三组批量生成：
+    - `visual_compare`
+    - `visual_max_compare`
+    - `/slosh/height_compare`
+  - 当前已支持三种时间对齐：
+    - `bag_start`
+    - `tracking_start`
+    - `motion_start`
+  - 并按 `group / align / figure-type` 输出结构化结果目录。
+
 ### 人工标签与误差分析
 
 - `scripts/analyze_human_labels_vs_realsense_v2.py`
@@ -378,6 +423,21 @@ realsense_liquid_measurement/
   - 支持录入：
     - `human_height_mm`
     - `human_peak_mm`
+
+### 3.5 RGB / 红色液体主线
+
+- `scripts/RGB_calibrate.py`
+  - 旧 RGB 椭圆液面标定工具，适合黑色液体或仍可见椭圆上下沿的图像条件。
+- `scripts/RGB_infer_from_bag.py`
+  - 旧 RGB 椭圆液面推理工具，当前主要用于旧链回归和历史结果复核。
+- `scripts/red_liquid_calibrate.py`
+  - 红色液体阶段主标定入口，生成三标尺高度映射 YAML。
+- `scripts/red_liquid_sample_hsv.py`
+  - 对原始帧做 HSV 取色，得到红色液体更稳的分割阈值。
+- `scripts/red_liquid_infer_from_bag.py`
+  - 红色液体阶段主推理入口，输出三标尺液面高度曲线和 debug 图。
+- `scripts/plot_red_liquid_group_compare.py`
+  - 按 `group / align / figure-type` 批量输出红色液体 compare 图和汇总表。
 
 ### 4. 人工标签质量分析
 

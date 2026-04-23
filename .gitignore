@@ -46,3 +46,5 @@ src/scout_apps/sensors/realsense_liquid_measurement/slosh_replay_runs
 src/scout_apps/sensors/realsense_liquid_measurement/sl_runs
 src/scout_apps/sensors/realsense_liquid_measurement/sl_artifacts
 src/scout_apps/scout_maps
+.tmp_red_group_compare_0422
+.tmp_red_liquid_results/block2_q5_fullres
