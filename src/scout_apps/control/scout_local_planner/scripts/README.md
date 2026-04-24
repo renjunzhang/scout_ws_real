@@ -47,6 +47,7 @@
 - `straight`
 - `single_turn`
 - `s_curve`
+- `mixed`
 - `multi_s`
 - `sharp_turn`
 

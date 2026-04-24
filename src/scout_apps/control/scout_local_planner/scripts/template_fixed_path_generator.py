@@ -49,7 +49,7 @@ def parse_args():
     )
     parser.add_argument(
         "--template",
-        choices=("straight", "single_turn", "s_curve", "multi_s", "sharp_turn"),
+        choices=("straight", "single_turn", "s_curve", "mixed", "multi_s", "sharp_turn"),
         required=True,
         help="Template geometry used between the current robot pose and the clicked goal.",
     )
@@ -212,6 +212,8 @@ class TemplateFixedPathGenerator:
         sign = 1.0 if self.args.side == "left" else -1.0
         if self.args.template == "sharp_turn":
             amplitude *= 1.4
+        elif self.args.template == "mixed":
+            amplitude *= 0.95
         elif self.args.template == "multi_s":
             amplitude *= 0.9
         return sign * amplitude
@@ -225,6 +227,16 @@ class TemplateFixedPathGenerator:
             return [(0.0, 0.0), (0.25 * L, 0.0), (0.55 * L, A), (0.82 * L, 0.35 * A), (L, 0.0)]
         if self.args.template == "s_curve":
             return [(0.0, 0.0), (0.25 * L, A), (0.50 * L, 0.0), (0.75 * L, -A), (L, 0.0)]
+        if self.args.template == "mixed":
+            return [
+                (0.0, 0.0),
+                (0.18 * L, 0.0),
+                (0.34 * L, 0.55 * A),
+                (0.50 * L, 0.55 * A),
+                (0.64 * L, -0.80 * A),
+                (0.82 * L, 0.65 * A),
+                (L, 0.0),
+            ]
         if self.args.template == "multi_s":
             return [
                 (0.0, 0.0),
