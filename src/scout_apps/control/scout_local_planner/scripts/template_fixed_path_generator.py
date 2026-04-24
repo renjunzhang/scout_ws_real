@@ -55,7 +55,7 @@ def parse_args():
     )
     parser.add_argument(
         "--goal-topic",
-        default="/move_base_simple/goal",
+        default="/scout/goal",
         help="Topic providing the clicked terminal goal pose.",
     )
     parser.add_argument(
