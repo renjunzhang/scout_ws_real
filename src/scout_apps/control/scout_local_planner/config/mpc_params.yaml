@@ -81,6 +81,7 @@ path_handler:
   resample_spacing: 0.05              # 路径重采样间隔 (m)
   max_lat_accel: 2.0                  # 最大横向加速度 (m/s^2)
   speed_profile_omega_max: 1.5        # 规划层角速度上限（与 vehicle/omega_max 一致）；显式配置避免自动桥接后难以排查
+  speed_profile_alpha_max: 5.0        # 规划层角加速度上限（与 vehicle/alpha_max 一致）；显式配置避免桥接值隐式变化
   min_ref_speed: 0.0                  # 参考速度下限 (m/s)
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
@@ -140,6 +141,8 @@ safety:
   infeasible_decel: 1.0          # 不可行时制动减速度 (m/s^2)
   infeasible_omega_scale: 0.0    # 不可行时角速度缩放
   infeasible_min_speed: 0.0      # 不可行时线速度下限 (m/s)
+  tracking_feasibility_guard_enable: true      # TRACKING solve fail 后的恢复限速保护
+  tracking_curvature_speed_cap_enable: false   # 主实验固定关闭；避免局部 reactive cap 盖过主贡献
   tracking_curvature_preview_distance: 0.8      # 曲率预览长度 (m)；默认1.5，v(s)后向DP已覆盖减速，预览只做最后保护
   tracking_curvature_rate_preview_distance: 0.6 # dkappa 预览长度 (m)；默认1.0，同理缩短
   tracking_curvature_min_speed: 0.25            # 曲率限速下限 (m/s)

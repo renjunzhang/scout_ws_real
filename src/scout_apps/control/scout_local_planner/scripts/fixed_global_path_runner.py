@@ -78,6 +78,11 @@ def parse_args():
         help="Start replay immediately instead of waiting to re-enter the captured start pose.",
     )
     parser.add_argument(
+        "--manual-start",
+        action="store_true",
+        help="Wait for a terminal Enter before start gating/replay, useful for manual pose adjustment on the robot.",
+    )
+    parser.add_argument(
         "--start-pos-tol",
         type=float,
         default=0.05,
@@ -409,6 +414,17 @@ class FixedGlobalPathRunner:
                 )
             rate.sleep()
 
+    def wait_for_manual_start(self):
+        if not self.args.manual_start:
+            return
+        rospy.loginfo(
+            "Manual start armed. Adjust the robot pose, then press Enter to continue."
+        )
+        try:
+            input("Press Enter to continue fixed-path replay...")
+        except EOFError:
+            rospy.logwarn("stdin is unavailable; continuing fixed-path replay immediately")
+
     def replay_path(self, path_msg):
         if self.path_pub is None:
             return
@@ -478,6 +494,7 @@ def main():
     runner.publish_start_goal(path_msg)
     if args.mode == "goal_only":
         return
+    runner.wait_for_manual_start()
     runner.wait_until_at_start(path_msg)
     runner.replay_path(path_msg)
 

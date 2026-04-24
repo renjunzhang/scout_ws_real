@@ -35,6 +35,26 @@
 - 先记录第一次规划出的路径，再让 Q0/Q5 都复用同一条 `/scout/global_path`
 - 正式 tracking 前，先将机器人移回固定路径起点并对齐，再开始局部跟踪
 
+补充能力：
+- `--manual-start`：实物场景下先人工摆位，按 Enter 后再进入起点门控 / replay
+- `--skip-start-wait`：直接跳过起点门控，用于快速 debug
+
+### `template_fixed_path_generator.py`
+
+从当前机器人位姿到点击终点，自动生成标准化固定路径模板并发布到 `/scout/global_path_fixed`。
+
+当前支持模板：
+- `straight`
+- `single_turn`
+- `s_curve`
+- `multi_s`
+- `sharp_turn`
+
+适用场景：
+- 空旷场地快速生成可重复的直线 / 单弯 / S 弯 / 连续 S 弯实验路径
+- 生成后直接给 `slosh_experiment.launch global_path_topic:=/scout/global_path_fixed`
+- 可选同时保存为 JSON，供后续 fixed-path replay 复用
+
 ### `launch_fixed_path_slosh_stack.sh`
 
 固定路径 slosh 实验的一键启动脚本，按顺序启动：
@@ -239,33 +259,26 @@ python3 diagnose_speed_profile.py <bag> --omega-max 2.0 --alpha-max 4.0 --a-lat-
 - 分析 near-goal/terminal recovery 行为是否合理
 - 排查“到点后转不正”“终点附近抖动”之类问题
 
-### `run_imu_stage2_sequence.py`
+### `imu_ay_tool.py`
 
-Stage-2 IMU `a_y` 验证动作脚本，向 `/cmd_vel` 发布一组固定的低速动作序列。
+IMU 横向加速度一体化工具，合并 Stage-2 标准动作、离线健康检查和 `imu_ay_scale` 标定。
 
-典型序列：
-- 静止
-- 左转弧线
-- 静止
-- 右转弧线
-- 静止
+子命令：
+- `sequence`：向 `/cmd_vel` 发布固定低速动作序列：静止、左弧线、静止、右弧线、静止。
+- `analyze`：读取 bag 中的 `/imu/data`、`/odom` 和 `/slosh/imu_ay_*`，检查静止残差、左右转符号、与 `v*omega` 的相关性。
+- `calibrate`：从单个标定 bag 估计 `slosh_estimator/imu_ay_scale`，输出 YAML，可选保存验证图。
+
+典型用法：
+```bash
+rosrun scout_local_planner imu_ay_tool.py sequence --linear 0.30 --omega 0.30
+python3 scripts/imu_ay_tool.py analyze /path/to/imu_calib.bag
+python3 scripts/imu_ay_tool.py calibrate /path/to/imu_calib.bag --output /data/a/imu_calib/imu_ay_calibration.yaml --plot
+```
 
 适用场景：
 - 采集 IMU 横向加速度 `a_y` 标定 bag
-- 为 `analyze_imu_ay_stage2.py` 提供标准化输入
-
-### `analyze_imu_ay_stage2.py`
-
-Stage-2 IMU 横向加速度质量离线分析脚本。
-
-主要功能：
-- 读取 bag 中的 IMU、里程计和 `/slosh/imu_ay_*` 话题
-- 自动识别静止、直行、左转、右转等区段
-- 评估 bias、滤波输出和可用性结论
-
-适用场景：
 - 判断 IMU `a_y` 是否已经达到可接入控制器的质量
-- 给 Stage-2 横向加速度链路做验收
+- 生成可写入 launch / yaml 的 `imu_ay_scale`
 
 ### `run_imu_stage4_sequence.py`
 

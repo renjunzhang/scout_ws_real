@@ -272,63 +272,69 @@ def aligned_xy(ts: List[float], vals: List[Optional[float]], t0: float) -> Tuple
 
 def plot_group_visual(group_name: str, items: List[Tuple[str, Dict]], out_path: Path, align_key: str):
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.figure(figsize=(12, 5))
+    fig, ax = plt.subplots(figsize=(12, 5))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
     for idx, (label, result) in enumerate(items):
         color = COLORS[idx % len(COLORS)]
         t0 = float(result["align_times"].get(align_key, 0.0))
         xs1, ys1 = aligned_xy(result["rel_t"], result["h_smooth_corr"], t0)
         xs2, ys2 = aligned_xy(result["rel_t"], result["h_max_lcr"], t0)
         if xs2:
-            plt.plot(xs2, ys2, linewidth=1.2, alpha=0.35, color=color, linestyle="--", label=f"{label} max(L,C,R)")
+            ax.plot(xs2, ys2, linewidth=1.2, alpha=0.35, color=color, linestyle="--", label=f"{label} max(L,C,R)")
         if xs1:
-            plt.plot(xs1, ys1, linewidth=2.2, color=color, label=f"{label} corr+smooth")
-    plt.xlabel("Time (s)")
-    plt.ylabel("Liquid height (mm)")
-    plt.title(f"{group_name}: visual red-liquid comparison ({align_key})")
-    plt.grid(True, alpha=0.25)
-    plt.legend(loc="upper right", fontsize=8, ncol=2)
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=300, facecolor="#1a1a1a")
-    plt.close()
+            ax.plot(xs1, ys1, linewidth=2.2, color=color, label=f"{label} corr+smooth")
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Liquid height (mm)")
+    ax.set_title(f"{group_name}: visual red-liquid comparison ({align_key})")
+    ax.grid(True, alpha=0.25)
+    ax.legend(loc="upper right", fontsize=8, ncol=2)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=300, facecolor="white", edgecolor="white")
+    plt.close(fig)
 
 
 def plot_group_visual_max(group_name: str, items: List[Tuple[str, Dict]], out_path: Path, align_key: str):
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.figure(figsize=(12, 5))
+    fig, ax = plt.subplots(figsize=(12, 5))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
     for idx, (label, result) in enumerate(items):
         color = COLORS[idx % len(COLORS)]
         t0 = float(result["align_times"].get(align_key, 0.0))
         xs, ys = aligned_xy(result["rel_t"], result["h_max_lcr"], t0)
         if xs:
-            plt.plot(xs, ys, linewidth=2.0, color=color, label=label)
-    plt.xlabel("Time (s)")
-    plt.ylabel("Liquid height (mm)")
-    plt.title(f"{group_name}: max(L,C,R) comparison ({align_key})")
-    plt.grid(True, alpha=0.25)
-    plt.legend(loc="upper right", fontsize=9)
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=300, facecolor="#1a1a1a")
-    plt.close()
+            ax.plot(xs, ys, linewidth=2.0, color=color, label=label)
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Liquid height (mm)")
+    ax.set_title(f"{group_name}: max(L,C,R) comparison ({align_key})")
+    ax.grid(True, alpha=0.25)
+    ax.legend(loc="upper right", fontsize=9)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=300, facecolor="white", edgecolor="white")
+    plt.close(fig)
 
 
 def plot_group_slosh_height(group_name: str, items: List[Tuple[str, Dict]], out_path: Path, align_key: str):
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.figure(figsize=(12, 5))
+    fig, ax = plt.subplots(figsize=(12, 5))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
     for idx, (label, result) in enumerate(items):
         color = COLORS[idx % len(COLORS)]
         t0 = float(result["align_times"].get(align_key, 0.0))
         xs, ys = aligned_xy(result["rel_t"], result["vals_mm"], t0)
         if not xs:
             continue
-        plt.plot(xs, ys, linewidth=2.0, color=color, label=label)
-    plt.xlabel("Time (s)")
-    plt.ylabel("/slosh/height (mm)")
-    plt.title(f"{group_name}: /slosh/height comparison ({align_key})")
-    plt.grid(True, alpha=0.25)
-    plt.legend(loc="upper right", fontsize=9)
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=300, facecolor="#1a1a1a")
-    plt.close()
+        ax.plot(xs, ys, linewidth=2.0, color=color, label=label)
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("/slosh/height (mm)")
+    ax.set_title(f"{group_name}: /slosh/height comparison ({align_key})")
+    ax.grid(True, alpha=0.25)
+    ax.legend(loc="upper right", fontsize=9)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=300, facecolor="white", edgecolor="white")
+    plt.close(fig)
 
 
 def main() -> int:

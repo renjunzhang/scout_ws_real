@@ -67,15 +67,15 @@ catkin_install_python(PROGRAMS
   scripts/send_fixed_goal.py
   scripts/sim_fixed_goal_tool.py
   scripts/fixed_global_path_runner.py
+  scripts/template_fixed_path_generator.py
   scripts/extract_slosh_metrics.py
-  scripts/analyze_imu_ay_stage2.py
+  scripts/imu_ay_tool.py
   scripts/analyze_sim_speed_issue.py
   scripts/analyze_tracking_infeasible.py
   scripts/analyze_global_path_duplicates.py
   scripts/analyze_global_path_prefix_window.py
   scripts/analyze_settling_day3.py
   scripts/analyze_day3_abc_smoke.py
-  scripts/run_imu_stage2_sequence.py
   scripts/run_imu_stage4_sequence.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

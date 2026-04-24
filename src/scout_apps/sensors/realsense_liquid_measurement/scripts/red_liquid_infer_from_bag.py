@@ -622,7 +622,9 @@ def save_plot(
         return
     t0 = stamps[0] if stamps else 0.0
 
-    plt.figure(figsize=(12, 5))
+    fig, ax = plt.subplots(figsize=(12, 5))
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
 
     if has_rulers:
         # Per-frame max of the three ruler estimates
@@ -633,8 +635,8 @@ def save_plot(
                 xs_max.append(st - t0)
                 ys_max.append(float(max(valid)))
         if xs_max:
-            plt.plot(xs_max, ys_max, linewidth=1.8, color="#FF8C00",
-                     alpha=0.9, label="max(L,C,R)")
+            ax.plot(xs_max, ys_max, linewidth=1.8, color="#FF8C00",
+                    alpha=0.9, label="max(L,C,R)")
 
         # Smoothed zero-corrected curve
         xs_sc, ys_sc = [], []
@@ -643,11 +645,11 @@ def save_plot(
                 xs_sc.append(st - t0)
                 ys_sc.append(hsc)
         if xs_sc:
-            plt.plot(xs_sc, ys_sc, linewidth=2.2, color="cyan",
-                     label="corr+smooth")
+            ax.plot(xs_sc, ys_sc, linewidth=2.2, color="#00AEEF",
+                    label="corr+smooth")
 
-        plt.ylabel("Liquid height h_mm")
-        plt.legend(loc="upper right", fontsize=8)
+        ax.set_ylabel("Liquid height h_mm")
+        ax.legend(loc="upper right", fontsize=8)
     else:
         xs, ys = [], []
         for st, ytops in zip(stamps, y_tops_all):
@@ -656,15 +658,15 @@ def save_plot(
                 xs.append(st - t0)
                 ys.append(yt)
         if xs:
-            plt.plot(xs, ys, linewidth=1.5)
-        plt.ylabel("Red top y (px, ROI)")
+            ax.plot(xs, ys, linewidth=1.5)
+        ax.set_ylabel("Red top y (px, ROI)")
 
-    plt.xlabel("Time (s)")
-    plt.title("Red liquid top boundary")
-    plt.grid(True, alpha=0.25)
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=300, facecolor="#1a1a1a")
-    plt.close()
+    ax.set_xlabel("Time (s)")
+    ax.set_title("Red liquid top boundary")
+    ax.grid(True, alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=300, facecolor="white", edgecolor="white")
+    plt.close(fig)
     print(f"[OK] saved curve plot: {out_path}")
 
 
