@@ -4,9 +4,39 @@
 set -euo pipefail
 
 USE_RVIZ="${USE_RVIZ:-false}"
+SIM_ENV="${SIM_ENV:-open}"
+
+case "${SIM_ENV}" in
+    open)
+        DEFAULT_WORLD_NAME="/home/a/scout_ws/src/scout_ros/scout_description/worlds/open_walled.world"
+        DEFAULT_MAP_FILE="/home/a/scout_ws/src/scout_apps/scout_maps/maps/map_sim_empty.pbstream"
+        ;;
+    maze)
+        DEFAULT_WORLD_NAME="/home/a/scout_ws/src/scout_ros/scout_description/worlds/maze_course.world"
+        DEFAULT_MAP_FILE="/home/a/scout_ws/src/scout_apps/scout_maps/maps/map_carto.pbstream"
+        ;;
+    custom)
+        DEFAULT_WORLD_NAME=""
+        DEFAULT_MAP_FILE=""
+        ;;
+    *)
+        echo "[launch_sim_nav_stack] ERROR: unsupported SIM_ENV='${SIM_ENV}' (use open, maze, or custom)." >&2
+        exit 2
+        ;;
+esac
+
+WORLD_NAME="${WORLD_NAME:-${DEFAULT_WORLD_NAME}}"
+MAP_FILE="${MAP_FILE:-${DEFAULT_MAP_FILE}}"
+if [[ -z "${WORLD_NAME}" || -z "${MAP_FILE}" ]]; then
+    echo "[launch_sim_nav_stack] ERROR: SIM_ENV=custom requires WORLD_NAME and MAP_FILE." >&2
+    exit 2
+fi
 SPAWN_X="${SPAWN_X:--1.0}"
 SPAWN_Y="${SPAWN_Y:-0.2}"
 SPAWN_Z="${SPAWN_Z:-0.1}"
+SPAWN_YAW="${SPAWN_YAW:-0.0}"
+SPAWN_WHEEL_CONTROLLERS="${SPAWN_WHEEL_CONTROLLERS:-false}"
+ENABLE_ODOM_TF_BRIDGE="${ENABLE_ODOM_TF_BRIDGE:-false}"
 GAZEBO_WAIT_S="${GAZEBO_WAIT_S:-8}"
 SENSOR_WAIT_S="${SENSOR_WAIT_S:-3}"
 LOCALIZATION_WAIT_S="${LOCALIZATION_WAIT_S:-3}"
@@ -101,17 +131,28 @@ refresh_localization_motion() {
 }
 
 echo "[launch_sim_nav_stack] USE_RVIZ=${USE_RVIZ}"
-echo "[launch_sim_nav_stack] spawn pose: x=${SPAWN_X}, y=${SPAWN_Y}, z=${SPAWN_Z}"
+echo "[launch_sim_nav_stack] SIM_ENV=${SIM_ENV}"
+echo "[launch_sim_nav_stack] world: ${WORLD_NAME}"
+echo "[launch_sim_nav_stack] map: ${MAP_FILE}"
+echo "[launch_sim_nav_stack] spawn pose: x=${SPAWN_X}, y=${SPAWN_Y}, z=${SPAWN_Z}, yaw=${SPAWN_YAW}"
+echo "[launch_sim_nav_stack] spawn_wheel_controllers=${SPAWN_WHEEL_CONTROLLERS}"
+echo "[launch_sim_nav_stack] enable_odom_tf_bridge=${ENABLE_ODOM_TF_BRIDGE}"
 
 start_launch "Official Scout Mini bridge" \
     /home/a/scout_ws/src/scout_ros/scout_description/launch/scout_mini_true_empty_bridge.launch \
     gui:="${USE_RVIZ}" \
-    enable_odom_tf_bridge:=false \
-    world_name:=/home/a/scout_ws/src/scout_ros/scout_description/worlds/maze_course.world
+    enable_odom_tf_bridge:="${ENABLE_ODOM_TF_BRIDGE}" \
+    world_name:="${WORLD_NAME}" \
+    x:="${SPAWN_X}" \
+    y:="${SPAWN_Y}" \
+    z:="${SPAWN_Z}" \
+    yaw:="${SPAWN_YAW}" \
+    spawn_wheel_controllers:="${SPAWN_WHEEL_CONTROLLERS}"
 sleep "${GAZEBO_WAIT_S}"
 
 start_launch "Cartographer localization sim" \
-    nanoscan3_localization scout_nanoscan3_cartographer_localization_sim.launch
+    nanoscan3_localization scout_nanoscan3_cartographer_localization_sim.launch \
+    map_file:="${MAP_FILE}"
 sleep "${LOCALIZATION_WAIT_S}"
 
 start_launch "MBF global planner sim" \

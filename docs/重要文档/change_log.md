@@ -169,8 +169,39 @@ catkin_make 2>&1 | grep "processing catkin package"
 
 ## 仿真流程
 ### 启动前 6 步的脚本
-    source /home/a/scout_ws/devel/setup.bash
-    USE_RVIZ=true rosrun scout_local_planner launch_sim_nav_stack.sh
+脚本会一次启动 Gazebo 底盘、仿真雷达桥接、Cartographer 定位和 MBF 全局规划；局部 MPC 仍单独启动。
+
+开阔场地（`open_walled.world` + `map_sim_empty.pbstream`）：
+```bash
+source /home/a/scout_ws/devel/setup.bash
+SIM_ENV=open USE_RVIZ=true \
+SPAWN_X=0.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
+rosrun scout_local_planner launch_sim_nav_stack.sh
+```
+
+旧迷宫场地（`maze_course.world` + `map_carto.pbstream`）：
+```bash
+source /home/a/scout_ws/devel/setup.bash
+SIM_ENV=maze USE_RVIZ=true \
+rosrun scout_local_planner launch_sim_nav_stack.sh
+```
+
+手动指定环境和地图：
+```bash
+source /home/a/scout_ws/devel/setup.bash
+SIM_ENV=custom USE_RVIZ=true \
+WORLD_NAME=/home/a/scout_ws/src/scout_ros/scout_description/worlds/open_walled.world \
+MAP_FILE=/home/a/scout_ws/src/scout_apps/scout_maps/maps/map_sim_empty.pbstream \
+SPAWN_X=0.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
+rosrun scout_local_planner launch_sim_nav_stack.sh
+```
+
+说明：
+- `WORLD_NAME` 和 `MAP_FILE` 会覆盖 `SIM_ENV` 的默认值。
+- `open` 是当前 MPC 仿真验证推荐环境。
+- 一键定位脚本默认 `ENABLE_ODOM_TF_BRIDGE=false`，由 Cartographer localization 发布 `map -> odom -> base_footprint`；建图手动流程才打开 `enable_odom_tf_bridge:=true`。
+- 启动局部 MPC 示例：`roslaunch scout_local_planner slosh_experiment_sim.launch Q_slosh:=5 risk_scheduler_enable:=false input_shaping_enable:=false enable_slosh_box_constraint:=false`
+	    
 ### 1. 启动仿真环境
     roslaunch scout_description scout_mini_gazebo.launch use_rviz:=false
     roslaunch scout_gazebo_sim scout_mini_true_empty.launch gui:=true

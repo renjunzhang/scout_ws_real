@@ -8,7 +8,7 @@
 
   <!-- ===== 地图配置 ===== -->
   <!-- 默认地图路径：scout_maps 包内的 pbstream 文件 -->
-  <arg name="map_file" default="$(find scout_maps)/maps/map_carto.pbstream" />
+  <arg name="map_file" default="$(find scout_maps)/maps/map_sim_empty.pbstream" />
   
   <!-- ===== 传感器配置 ===== -->
   <arg name="scan_topic" default="/scan_front" />

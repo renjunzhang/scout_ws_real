@@ -1,8 +1,17 @@
 <launch>
   <!-- Cartographer 仿真建图 -->
   <arg name="scan_topic" default="/scan_front" />
-  <arg name="odom_topic" default="/odom" />
+  <arg name="odom_raw_topic" default="/odom" />
+  <arg name="odom_topic" default="/odom_carto" />
   <arg name="use_rviz" default="true" />
+
+  <node pkg="nanoscan3_bringup"
+        type="odom_monotonic_relay.py"
+        name="odom_monotonic_relay"
+        output="screen">
+    <param name="input" value="$(arg odom_raw_topic)" />
+    <param name="output" value="$(arg odom_topic)" />
+  </node>
 
   <!-- Cartographer 节点 -->
   <node name="cartographer_node" pkg="cartographer_ros" type="cartographer_node" 

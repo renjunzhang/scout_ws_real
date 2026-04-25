@@ -4,6 +4,7 @@
   <arg name="z" default="0.0"/>
   <arg name="yaw" default="0.0"/>
   <arg name="robot_namespace" default="/"/>
+  <arg name="spawn_wheel_controllers" default="true"/>
 
   <include file="/home/a/scout_ws/src/scout_ros/scout_description/launch/scout_mini_stock_abs_imu.launch">
     <arg name="robot_namespace" value="$(arg robot_namespace)" />
@@ -20,7 +21,9 @@
 
   <rosparam file="/data/a/official_scout_ws/src/scout_gazebo_sim/config/scout_v2_control.yaml" command="load"/>
 
-  <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="scout_state_controller scout_motor_fr_controller scout_motor_fl_controller scout_motor_rl_controller scout_motor_rr_controller"/>
+  <node unless="$(arg spawn_wheel_controllers)" name="state_controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="scout_state_controller"/>
+
+  <node if="$(arg spawn_wheel_controllers)" name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false" output="screen" args="scout_state_controller scout_motor_fr_controller scout_motor_fl_controller scout_motor_rl_controller scout_motor_rr_controller"/>
 
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 </launch>

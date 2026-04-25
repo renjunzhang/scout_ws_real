@@ -5,6 +5,11 @@
   <arg name="headless" default="false"/>
   <arg name="paused" default="false"/>
   <arg name="use_sim_time" default="true"/>
+  <arg name="x" default="0.0"/>
+  <arg name="y" default="0.0"/>
+  <arg name="z" default="0.0"/>
+  <arg name="yaw" default="0.0"/>
+  <arg name="spawn_wheel_controllers" default="true"/>
 
   <include file="/home/a/scout_ws/src/scout_ros/scout_description/launch/empty_world.launch">
     <arg name="world_name" value="$(arg world_name)"/>
@@ -14,5 +19,11 @@
     <arg name="use_sim_time" value="$(arg use_sim_time)"/>
   </include>
 
-  <include file="/home/a/scout_ws/src/scout_ros/scout_description/launch/spawn_scout_mini_abs_imu.launch"/>
+  <include file="/home/a/scout_ws/src/scout_ros/scout_description/launch/spawn_scout_mini_abs_imu.launch">
+    <arg name="x" value="$(arg x)"/>
+    <arg name="y" value="$(arg y)"/>
+    <arg name="z" value="$(arg z)"/>
+    <arg name="yaw" value="$(arg yaw)"/>
+    <arg name="spawn_wheel_controllers" value="$(arg spawn_wheel_controllers)"/>
+  </include>
 </launch>

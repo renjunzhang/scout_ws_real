@@ -5,6 +5,11 @@
   <arg name="headless" default="false"/>
   <arg name="paused" default="false"/>
   <arg name="use_sim_time" default="true"/>
+  <arg name="x" default="0.0"/>
+  <arg name="y" default="0.0"/>
+  <arg name="z" default="0.0"/>
+  <arg name="yaw" default="0.0"/>
+  <arg name="spawn_wheel_controllers" default="true"/>
   <arg name="use_rviz" default="false"/>
   <arg name="enable_imu_bridge" default="true" />
   <arg name="enable_odom_tf_bridge" default="false" />
@@ -26,6 +31,11 @@
     <arg name="headless" value="$(arg headless)"/>
     <arg name="paused" value="$(arg paused)"/>
     <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+    <arg name="x" value="$(arg x)"/>
+    <arg name="y" value="$(arg y)"/>
+    <arg name="z" value="$(arg z)"/>
+    <arg name="yaw" value="$(arg yaw)"/>
+    <arg name="spawn_wheel_controllers" value="$(arg spawn_wheel_controllers)"/>
   </include>
 
   <node pkg="nanoscan3_bringup"
