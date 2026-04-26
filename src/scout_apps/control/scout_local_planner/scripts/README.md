@@ -117,6 +117,33 @@ GLOBAL_PATH_TOPIC=/scout/global_path_fixed rosrun scout_local_planner launch_fix
 - 录制 Q0/Q5 对照 bag
 - 录制 IMU 标定或终点恢复行为分析 bag
 
+### `run_sim_fixed_path_bag.sh`
+
+仿真固定路径单次 trial wrapper。脚本启动一次录制一个 bag，并按顺序完成：
+- 等待仿真/定位稳定
+- 启动 `rosbag record`
+- 用 `fixed_global_path_runner.py --mode replay --publish-once-keepalive` 发布指定固定路径
+- 启动 `slosh_experiment_sim.launch`
+- `Ctrl+C` 时停止 MPC、路径发布和录包
+
+常用方式：
+```bash
+PATH_ID=P2_s_curve CONDITION=FAS_Q5_DOT RUN_ID=01 \
+START_DELAY=30 \
+rosrun scout_local_planner run_sim_fixed_path_bag.sh
+```
+
+常用变量：
+- `PATH_ID`: `P0_straight / P1_single_turn / P2_s_curve / P3_mixed`
+- `CONDITION`: `NOM / FAS_Q5 / FAS_Q5_DOT / FAS_Q10 / PROP_Q5 / ISR`
+- `RUN_ID`: bag run 编号
+- `START_DELAY`: 启动后等待秒数；默认 `30`
+- `APPROACH_START_ENABLE`: 默认 `false`；固定路径应从定位刷新后的当前位姿采集
+- `RECORD_DURATION`: 固定录制秒数；默认 `0` 表示手动 `Ctrl+C`
+- `PATH_PUBLISH_ONCE_KEEPALIVE`: 默认 `true`，只发布一次 latched 路径并保持发布者存活，避免重复触发 `PathHandler` 新路径逻辑
+- `FIXED_PATH_DIR`: 默认 `/data/a/fixed_paths/sim`
+- `BAG_DIR`: 默认 `/data/a/slosh_bags/sim/YYYYMMDD`
+
 ### `record_slosh_debug.sh`
 
 轻量级调试录包脚本，面向实物参数整定与根因定位。
