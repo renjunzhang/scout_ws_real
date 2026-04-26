@@ -43,6 +43,17 @@
 
 从当前机器人位姿到点击终点，自动生成标准化固定路径模板并发布到 `/scout/global_path_fixed`。默认等待 RViz `2D Nav Goal` 发布到 `/scout/goal`。
 
+仿真 open 场景采集固定路径时，推荐加 `--start-heading current`，让路径起点朝向等于当前车头方向：
+```bash
+rosrun scout_local_planner template_fixed_path_generator.py \
+  --template s_curve \
+  --start-heading current \
+  --goal-topic /scout/goal \
+  --output-topic /scout/global_path_fixed \
+  --path-file /data/a/fixed_paths/sim/P2_s_curve.json
+```
+使用该模式时，RViz 终点需要点在当前车头前方。
+
 当前支持模板：
 - `straight`
 - `single_turn`

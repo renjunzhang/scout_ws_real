@@ -120,6 +120,12 @@ BAG_PATH="${BAG_DIR}/${BAG_NAME}"
 TOPICS=(
     # 晃动观测
     /slosh/state
+    /slosh/eta_norm
+    /slosh/eta_dot_norm
+    /slosh/modal_energy
+    /slosh/modal_energy_norm
+    /slosh/excitation_ay_abs
+    /slosh/excitation_alpha_abs
     /slosh/height
     /slosh/height_pred_max
     /slosh/q_slosh_eta
@@ -135,6 +141,8 @@ TOPICS=(
     /slosh/constraint_active
     /slosh/v_des_eff
     /slosh/speed_governor_active
+    /slosh/speed_cap_active
+    /slosh/speed_cap_v_limit
     /slosh/settling_time
 
     # 风险调度器

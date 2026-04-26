@@ -121,6 +121,16 @@ def parse_args():
         help="Template bending side for asymmetric path templates.",
     )
     parser.add_argument(
+        "--start-heading",
+        choices=("goal_chord", "current"),
+        default="goal_chord",
+        help=(
+            "Path initial heading mode. goal_chord preserves the old behavior and points "
+            "the template from start to clicked goal; current uses the robot's current "
+            "heading as the initial path tangent while still ending at the clicked goal."
+        ),
+    )
+    parser.add_argument(
         "--smooth-iterations",
         type=int,
         default=3,
@@ -307,7 +317,18 @@ class TemplateFixedPathGenerator:
             out.append(points[-1])
         return out
 
-    def build_world_points(self, start_x, start_y, goal_x, goal_y):
+    @staticmethod
+    def rotate_to_world(start_x, start_y, theta, local_pts):
+        cos_t = math.cos(theta)
+        sin_t = math.sin(theta)
+        world_pts = []
+        for x_local, y_local in local_pts:
+            world_x = start_x + cos_t * x_local - sin_t * y_local
+            world_y = start_y + sin_t * x_local + cos_t * y_local
+            world_pts.append((world_x, world_y))
+        return world_pts
+
+    def build_chord_heading_points(self, start_x, start_y, goal_x, goal_y):
         dx = goal_x - start_x
         dy = goal_y - start_y
         chord_length = math.hypot(dx, dy)
@@ -318,14 +339,45 @@ class TemplateFixedPathGenerator:
         control_pts = self.control_points_local(chord_length, amplitude)
         smooth_pts = self.chaikin_open(control_pts, self.args.smooth_iterations)
         local_pts = self.resample_polyline(smooth_pts, self.args.spacing)
-        cos_t = math.cos(theta)
-        sin_t = math.sin(theta)
-        world_pts = []
-        for x_local, y_local in local_pts:
-            world_x = start_x + cos_t * x_local - sin_t * y_local
-            world_y = start_y + sin_t * x_local + cos_t * y_local
-            world_pts.append((world_x, world_y))
-        return world_pts
+        return self.rotate_to_world(start_x, start_y, theta, local_pts)
+
+    def build_current_heading_points(self, start_x, start_y, start_yaw, goal_x, goal_y):
+        dx = goal_x - start_x
+        dy = goal_y - start_y
+        cos_t = math.cos(-start_yaw)
+        sin_t = math.sin(-start_yaw)
+        goal_x_local = cos_t * dx - sin_t * dy
+        goal_y_local = sin_t * dx + cos_t * dy
+
+        if goal_x_local < 0.30:
+            raise RuntimeError(
+                "Clicked goal must be at least 0.30 m in front of the robot for "
+                "--start-heading current"
+            )
+
+        chord_length = math.hypot(goal_x_local, goal_y_local)
+        amplitude = self.compute_amplitude(chord_length)
+        control_pts = self.control_points_local(goal_x_local, amplitude)
+
+        shaped_pts = []
+        for x_local, y_local in control_pts:
+            t = max(0.0, min(1.0, x_local / goal_x_local))
+            # Cubic blend keeps the start tangent aligned with the current robot heading.
+            y_goal_blend = (t ** 3) * goal_y_local
+            shaped_pts.append((x_local, y_local + y_goal_blend))
+
+        if len(shaped_pts) >= 2:
+            guard_x = min(0.50, max(0.10, 0.15 * goal_x_local))
+            shaped_pts.insert(1, (guard_x, 0.0))
+
+        smooth_pts = self.chaikin_open(shaped_pts, self.args.smooth_iterations)
+        local_pts = self.resample_polyline(smooth_pts, self.args.spacing)
+        return self.rotate_to_world(start_x, start_y, start_yaw, local_pts)
+
+    def build_world_points(self, start_x, start_y, start_yaw, goal_x, goal_y):
+        if self.args.start_heading == "current":
+            return self.build_current_heading_points(start_x, start_y, start_yaw, goal_x, goal_y)
+        return self.build_chord_heading_points(start_x, start_y, goal_x, goal_y)
 
     @staticmethod
     def world_points_to_path(frame_id, world_pts):
@@ -386,17 +438,18 @@ def main():
     generator = TemplateFixedPathGenerator(args)
     goal_msg = generator.wait_for_goal()
     frame_id = goal_msg.header.frame_id
-    start_x, start_y, _ = generator.lookup_start_pose(frame_id)
+    start_x, start_y, start_yaw = generator.lookup_start_pose(frame_id)
     goal_x = float(goal_msg.pose.position.x)
     goal_y = float(goal_msg.pose.position.y)
-    world_pts = generator.build_world_points(start_x, start_y, goal_x, goal_y)
+    world_pts = generator.build_world_points(start_x, start_y, start_yaw, goal_x, goal_y)
     path_msg = generator.world_points_to_path(frame_id, world_pts)
 
     rospy.loginfo(
-        "Generated template path %s with %d poses in frame %s",
+        "Generated template path %s with %d poses in frame %s (start_heading=%s)",
         args.template,
         len(path_msg.poses),
         frame_id,
+        args.start_heading,
     )
 
     if path_file is not None:

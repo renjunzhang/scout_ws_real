@@ -298,6 +298,12 @@ private:
     ros::Publisher slosh_imu_ay_bias_pub_;
     ros::Publisher slosh_imu_ay_filtered_pub_;
     ros::Publisher slosh_imu_ay_bias_ready_pub_;
+    ros::Publisher slosh_eta_norm_pub_;
+    ros::Publisher slosh_eta_dot_norm_pub_;
+    ros::Publisher slosh_modal_energy_pub_;
+    ros::Publisher slosh_modal_energy_norm_pub_;
+    ros::Publisher slosh_excitation_ay_abs_pub_;
+    ros::Publisher slosh_excitation_alpha_abs_pub_;
     ros::Publisher slosh_settling_time_pub_;
     ros::Publisher mpc_solve_ms_pub_;
     ros::Publisher mpc_status_val_pub_;

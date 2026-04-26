@@ -169,6 +169,11 @@ struct MPCParams {
     // cost_function 直接用此值乘 ETA_X² / ETA_Y²
     double Q_slosh_eta = 0.0;
     double slosh_eta_bar = 0.0;  // 运行时换算得到的模态位移盒约束阈值
+    // P1: eta_dot 速度代价（直接 QP 权重，不经 height_coeff 缩放）
+    double Q_slosh_eta_dot = 0.0;
+    // P2: terminal slosh 能量代价放大系数（在 terminal ramp 步叠加；需对应 base cost > 0 才生效）
+    double terminal_factor_slosh_eta = 0.0;
+    double terminal_factor_slosh_eta_dot = 0.0;
 };
 
 //==============================================================================

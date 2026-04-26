@@ -42,6 +42,11 @@ double StateTrackingCost::evaluate(
         double eta_y = x(StateIndex::ETA_Y);
         cost += params_.Q_slosh_eta * (eta_x * eta_x + eta_y * eta_y);
     }
+    if (params_.Q_slosh_eta_dot > 0.0) {
+        double eta_x_dot = x(StateIndex::ETA_X_DOT);
+        double eta_y_dot = x(StateIndex::ETA_Y_DOT);
+        cost += params_.Q_slosh_eta_dot * (eta_x_dot * eta_x_dot + eta_y_dot * eta_y_dot);
+    }
     if (params_.enable_omega_ff) {
         double omega_ref = ref.v_ref * ref.kappa;
         cost += params_.Q_omega_ff * (omega - omega_ref) * (omega - omega_ref);
@@ -81,6 +86,11 @@ void StateTrackingCost::getQuadraticCost(
     if (params_.Q_slosh_eta > 0.0) {
         Q_contrib(StateIndex::ETA_X, StateIndex::ETA_X) = params_.Q_slosh_eta;
         Q_contrib(StateIndex::ETA_Y, StateIndex::ETA_Y) = params_.Q_slosh_eta;
+    }
+    // P1: eta_dot 速度代价 J_slosh_dot = Q_slosh_eta_dot * (eta_x_dot² + eta_y_dot²)
+    if (params_.Q_slosh_eta_dot > 0.0) {
+        Q_contrib(StateIndex::ETA_X_DOT, StateIndex::ETA_X_DOT) = params_.Q_slosh_eta_dot;
+        Q_contrib(StateIndex::ETA_Y_DOT, StateIndex::ETA_Y_DOT) = params_.Q_slosh_eta_dot;
     }
 
     // 注意：omega_ff 现在应用到控制量，在 ControlCost 中处理
@@ -285,6 +295,19 @@ void CostFunction::buildQPCost(
                     double factor = 1.0 + alpha * (params_.terminal_factor_v - 1.0);
                     Q_total(StateIndex::V, StateIndex::V) *= factor;
                     q_total(StateIndex::V) *= factor;
+                }
+                // P2: terminal slosh 能量代价（η 和 η̇ 独立放大，构成总模态能量惩罚）
+                if (params_.terminal_factor_slosh_eta > 0.0 &&
+                    Q_total(StateIndex::ETA_X, StateIndex::ETA_X) > 0.0) {
+                    double factor = 1.0 + alpha * (params_.terminal_factor_slosh_eta - 1.0);
+                    Q_total(StateIndex::ETA_X, StateIndex::ETA_X) *= factor;
+                    Q_total(StateIndex::ETA_Y, StateIndex::ETA_Y) *= factor;
+                }
+                if (params_.terminal_factor_slosh_eta_dot > 0.0 &&
+                    Q_total(StateIndex::ETA_X_DOT, StateIndex::ETA_X_DOT) > 0.0) {
+                    double factor = 1.0 + alpha * (params_.terminal_factor_slosh_eta_dot - 1.0);
+                    Q_total(StateIndex::ETA_X_DOT, StateIndex::ETA_X_DOT) *= factor;
+                    Q_total(StateIndex::ETA_Y_DOT, StateIndex::ETA_Y_DOT) *= factor;
                 }
             }
         }

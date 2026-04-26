@@ -39,6 +39,9 @@ mpc:
   
   # 液体晃动权重（第 2 步启用）
   Q_slosh: 0.0             # 设为 0 表示不启用晃动抑制
+  Q_slosh_eta_dot: 0.0     # P1: eta_dot 速度惩罚权重，默认关闭（直接 QP 权重，不经 height_coeff 缩放）
+  terminal_factor_slosh_eta: 0.0      # P2: terminal η 代价放大系数，0=关闭；需 Q_slosh>0 才生效
+  terminal_factor_slosh_eta_dot: 0.0  # P2: terminal η̇ 代价放大系数，0=关闭；需 Q_slosh_eta_dot>0 才生效
   slosh_height_max: 0.05   # 液面高度约束 (m)
   enable_slosh_box_constraint: false  # 第一版盒约束代理（ETA_X/ETA_Y），默认关闭
 

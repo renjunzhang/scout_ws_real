@@ -15,6 +15,7 @@
 <launch>
   <!-- ======== 实验参数 ======== -->
   <arg name="Q_slosh" default="0.0"  doc="晃动抑制权重 (消融变量: 0/5/10/20)"/>
+  <arg name="Q_slosh_eta_dot" default="0.0" doc="P1: eta_dot 速度惩罚权重，默认关闭；建议从 0.01~0.1 开始调"/>
   <arg name="enable_slosh_box_constraint" default="false" doc="是否启用第一版液面峰值盒约束代理"/>
   <arg name="verbose" default="false" doc="是否输出调试信息"/>
   <arg name="filter_alpha_v" default="1.0" doc="实验模式: 线速度 EMA 系数，1.0 表示关闭额外低通"/>
@@ -57,6 +58,7 @@
     <!-- 实验参数覆盖 (YAML 之后、节点 init 之前) -->
     <param name="verbose" value="$(arg verbose)"/>
     <param name="mpc/Q_slosh" value="$(arg Q_slosh)"/>
+    <param name="mpc/Q_slosh_eta_dot" value="$(arg Q_slosh_eta_dot)"/>
     <param name="mpc/enable_slosh_box_constraint" value="$(arg enable_slosh_box_constraint)"/>
     <param name="filter/alpha_v" value="$(arg filter_alpha_v)"/>
     <param name="filter/alpha_omega" value="$(arg filter_alpha_omega)"/>

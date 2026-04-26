@@ -121,8 +121,8 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
             // 将更新后的参数同步到求解器（CostFunction 会用到 Q_slosh_eta）
             mpc_solver_.setMPCParams(mpc_params_);
 
-            ROS_INFO("[LocalPlannerROS] Slosh integration enabled (Q_slosh=%.2f, h_coeff=%.4f, Q_slosh_eta=%.4f)",
-                     mpc_params_.Q_slosh, h_coeff, mpc_params_.Q_slosh_eta);
+            ROS_INFO("[LocalPlannerROS] Slosh integration enabled (Q_slosh=%.2f, h_coeff=%.4f, Q_slosh_eta=%.4f, Q_slosh_eta_dot=%.4f)",
+                     mpc_params_.Q_slosh, h_coeff, mpc_params_.Q_slosh_eta, mpc_params_.Q_slosh_eta_dot);
 
             // 初始化风险调度器（需要 h_coeff）
             if (risk_scheduler_enable_) {
@@ -195,6 +195,12 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     slosh_imu_ay_bias_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_ay_bias", 1);
     slosh_imu_ay_filtered_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_ay_filtered", 1);
     slosh_imu_ay_bias_ready_pub_ = nh_.advertise<std_msgs::Int32>("slosh/imu_ay_bias_ready", 1);
+    slosh_eta_norm_pub_ = nh_.advertise<std_msgs::Float32>("slosh/eta_norm", 1);
+    slosh_eta_dot_norm_pub_ = nh_.advertise<std_msgs::Float32>("slosh/eta_dot_norm", 1);
+    slosh_modal_energy_pub_ = nh_.advertise<std_msgs::Float32>("slosh/modal_energy", 1);
+    slosh_modal_energy_norm_pub_ = nh_.advertise<std_msgs::Float32>("slosh/modal_energy_norm", 1);
+    slosh_excitation_ay_abs_pub_ = nh_.advertise<std_msgs::Float32>("slosh/excitation_ay_abs", 1);
+    slosh_excitation_alpha_abs_pub_ = nh_.advertise<std_msgs::Float32>("slosh/excitation_alpha_abs", 1);
     slosh_settling_time_pub_ = nh_.advertise<std_msgs::Float32>("slosh/settling_time", 1, true);
     mpc_solve_ms_pub_ = nh_.advertise<std_msgs::Float32>("mpc/solve_ms", 1);
     mpc_status_val_pub_ = nh_.advertise<std_msgs::Int32>("mpc/status_val", 1);
@@ -243,6 +249,9 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/constrain_accel_rate", mpc_params_.constrain_accel_rate, false);
     pnh.param("mpc/terminal_ramp_steps", mpc_params_.terminal_ramp_steps, 1);
     pnh.param("mpc/Q_slosh", mpc_params_.Q_slosh, 0.0);
+    pnh.param("mpc/Q_slosh_eta_dot", mpc_params_.Q_slosh_eta_dot, 0.0);
+    pnh.param("mpc/terminal_factor_slosh_eta", mpc_params_.terminal_factor_slosh_eta, 0.0);
+    pnh.param("mpc/terminal_factor_slosh_eta_dot", mpc_params_.terminal_factor_slosh_eta_dot, 0.0);
     pnh.param("mpc/slosh_height_max", mpc_params_.slosh_height_max, 0.05);
     pnh.param("mpc/enable_slosh_box_constraint", mpc_params_.enable_slosh_box_constraint, false);
 
@@ -2072,18 +2081,60 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok, boo
         slosh_imu_ay_bias_ready_pub_.publish(msg);
     }
 
+    Eigen::Vector4d slosh_state = Eigen::Vector4d::Zero();
+    if (slosh_enabled_) {
+        slosh_state = slosh_integration_.getSloshState();
+    }
+
+    const double eta_norm =
+        std::hypot(static_cast<double>(slosh_state(0)), static_cast<double>(slosh_state(2)));
+    const double eta_dot_norm =
+        std::hypot(static_cast<double>(slosh_state(1)), static_cast<double>(slosh_state(3)));
+    const double omega0 = slosh_enabled_ ? slosh_integration_.getModalParams().omega_n : 0.0;
+    const double modal_energy =
+        omega0 * omega0 * eta_norm * eta_norm + eta_dot_norm * eta_dot_norm;
+    const double modal_energy_norm = std::sqrt(std::max(0.0, modal_energy));
+
     // slosh 状态 [η_x, η̇_x, η_y, η̇_y]
     if (slosh_state_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32MultiArray msg;
         msg.data.resize(4);
-        if (slosh_enabled_) {
-            Eigen::Vector4d s = slosh_integration_.getSloshState();
-            msg.data[0] = static_cast<float>(s(0));
-            msg.data[1] = static_cast<float>(s(1));
-            msg.data[2] = static_cast<float>(s(2));
-            msg.data[3] = static_cast<float>(s(3));
-        }
+        msg.data[0] = static_cast<float>(slosh_state(0));
+        msg.data[1] = static_cast<float>(slosh_state(1));
+        msg.data[2] = static_cast<float>(slosh_state(2));
+        msg.data[3] = static_cast<float>(slosh_state(3));
         slosh_state_pub_.publish(msg);
+    }
+
+    if (slosh_eta_norm_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(eta_norm);
+        slosh_eta_norm_pub_.publish(msg);
+    }
+    if (slosh_eta_dot_norm_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(eta_dot_norm);
+        slosh_eta_dot_norm_pub_.publish(msg);
+    }
+    if (slosh_modal_energy_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(modal_energy);
+        slosh_modal_energy_pub_.publish(msg);
+    }
+    if (slosh_modal_energy_norm_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(modal_energy_norm);
+        slosh_modal_energy_norm_pub_.publish(msg);
+    }
+    if (slosh_excitation_ay_abs_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(std::abs(ay_est_used_));
+        slosh_excitation_ay_abs_pub_.publish(msg);
+    }
+    if (slosh_excitation_alpha_abs_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(std::abs(alpha_est_used_));
+        slosh_excitation_alpha_abs_pub_.publish(msg);
     }
 
     // 液面高度标量

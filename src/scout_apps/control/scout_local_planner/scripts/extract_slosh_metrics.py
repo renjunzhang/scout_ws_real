@@ -146,11 +146,18 @@ def collect_metrics(bag_path, tracking_only=True):
     metadata_topics = {"/slosh/episode_id", "/scout/goal", "/scout/global_path"}
 
     topics = [
+        "/slosh/state",
         "/slosh/height",
         "/slosh/height_pred_max",
+        "/slosh/modal_energy",
+        "/slosh/modal_energy_norm",
+        "/slosh/ay_est",
+        "/slosh/alpha_est",
         "/mpc/solve_ms",
         "/mpc/status_val",
         "/slosh/speed_governor_active",
+        "/slosh/speed_cap_active",
+        "/slosh/speed_cap_v_limit",
         "/slosh/v_des_eff",
         "/slosh/constraint_active",
         "/slosh/episode_id",
@@ -167,8 +174,22 @@ def collect_metrics(bag_path, tracking_only=True):
 
             if topic == "/slosh/height":
                 metrics["height"].append(float(msg.data))
+            elif topic == "/slosh/state":
+                if len(msg.data) >= 4:
+                    eta_norm = math.hypot(float(msg.data[0]), float(msg.data[2]))
+                    eta_dot_norm = math.hypot(float(msg.data[1]), float(msg.data[3]))
+                    metrics["eta_norm"].append(eta_norm)
+                    metrics["eta_dot_norm"].append(eta_dot_norm)
             elif topic == "/slosh/height_pred_max":
                 metrics["pred"].append(float(msg.data))
+            elif topic == "/slosh/modal_energy":
+                metrics["modal_energy"].append(float(msg.data))
+            elif topic == "/slosh/modal_energy_norm":
+                metrics["modal_energy_norm"].append(float(msg.data))
+            elif topic == "/slosh/ay_est":
+                metrics["excitation_ay_abs"].append(abs(float(msg.data)))
+            elif topic == "/slosh/alpha_est":
+                metrics["excitation_alpha_abs"].append(abs(float(msg.data)))
             elif topic == "/mpc/solve_ms":
                 metrics["solve_ms"].append(float(msg.data))
             elif topic == "/mpc/status_val":
@@ -177,6 +198,10 @@ def collect_metrics(bag_path, tracking_only=True):
                 status_val_by_status[status_at(segments, ts)].append(value)
             elif topic == "/slosh/speed_governor_active":
                 metrics["governor"].append(int(msg.data))
+            elif topic == "/slosh/speed_cap_active":
+                metrics["speed_cap_active"].append(int(msg.data))
+            elif topic == "/slosh/speed_cap_v_limit":
+                metrics["speed_cap_v_limit"].append(float(msg.data))
             elif topic == "/slosh/v_des_eff":
                 metrics["v_des_eff"].append(float(msg.data))
             elif topic == "/slosh/constraint_active":
@@ -199,6 +224,8 @@ def collect_metrics(bag_path, tracking_only=True):
     )
     governor_on = sum(1 for x in metrics["governor"] if x == 1)
     governor_total = len(metrics["governor"])
+    speed_cap_on = sum(1 for x in metrics["speed_cap_active"] if x == 1)
+    speed_cap_total = len(metrics["speed_cap_active"])
     status_breakdown = summarize_status_buckets(status_val_by_status)
 
     row = {
@@ -216,6 +243,12 @@ def collect_metrics(bag_path, tracking_only=True):
         "height_max_m": round(safe_max(metrics["height"]), 6),
         "height_pred_rms_m": round(rms(metrics["pred"]), 6),
         "height_pred_max_m": round(safe_max(metrics["pred"]), 6),
+        "eta_norm_rms_m": round(rms(metrics["eta_norm"]), 6),
+        "eta_dot_norm_rms_mps": round(rms(metrics["eta_dot_norm"]), 6),
+        "modal_energy_rms": round(rms(metrics["modal_energy"]), 6),
+        "modal_energy_norm_rms": round(rms(metrics["modal_energy_norm"]), 6),
+        "excitation_ay_abs_mean": round(safe_mean(metrics["excitation_ay_abs"]), 3),
+        "excitation_alpha_abs_mean": round(safe_mean(metrics["excitation_alpha_abs"]), 3),
         "solve_ms_mean": round(safe_mean(metrics["solve_ms"]), 3),
         "solve_ms_max": round(safe_max(metrics["solve_ms"]), 3),
         "solve_fail_count": sum(1 for x in metrics["status_val"] if x != 1),
@@ -225,6 +258,10 @@ def collect_metrics(bag_path, tracking_only=True):
         "constraint_active_count": sum(1 for x in metrics["constraint"] if x == 1),
         "governor_active_count": governor_on,
         "governor_active_ratio": round(governor_on / governor_total, 3) if governor_total else 0.0,
+        "speed_cap_active_count": speed_cap_on,
+        "speed_cap_active_ratio": round(speed_cap_on / speed_cap_total, 3) if speed_cap_total else 0.0,
+        "speed_cap_v_limit_mean": round(safe_mean(metrics["speed_cap_v_limit"]), 3),
+        "speed_cap_v_limit_min": round(min(metrics["speed_cap_v_limit"]), 3) if metrics["speed_cap_v_limit"] else float("nan"),
         "v_des_eff_mean": round(safe_mean(metrics["v_des_eff"]), 3),
         "v_des_eff_min": round(min(metrics["v_des_eff"]), 3) if metrics["v_des_eff"] else float("nan"),
         "cmd_vx_rms": round(rms(metrics["vx"]), 3),
@@ -317,10 +354,13 @@ def print_summary(rows, per_episode_rows, per_episode):
             f"height_rms={row['height_rms_m']}m "
             f"height_max={row['height_max_m']}m "
             f"pred_rms={row['height_pred_rms_m']}m "
+            f"eta_dot_rms={row['eta_dot_norm_rms_mps']}m/s "
+            f"energy_norm_rms={row['modal_energy_norm_rms']} "
             f"solve_mean={row['solve_ms_mean']}ms "
             f"success={row['solve_success_ratio']} "
             f"fail={row['solve_fail_count']} "
             f"gov_ratio={row['governor_active_ratio']}"
+            f" speed_cap_ratio={row['speed_cap_active_ratio']}"
         )
         print(f"  status_val by mpc_status: {row['status_val_breakdown']}")
     if per_episode and per_episode_rows:

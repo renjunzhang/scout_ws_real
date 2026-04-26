@@ -74,9 +74,18 @@ TOPICS=(
     /local_path
 
     # 关键观测与底盘状态
+    /slosh/state
+    /slosh/eta_norm
+    /slosh/eta_dot_norm
+    /slosh/modal_energy
+    /slosh/modal_energy_norm
+    /slosh/excitation_ay_abs
+    /slosh/excitation_alpha_abs
     /slosh/height
     /slosh/height_pred_max
     /slosh/q_slosh_eta
+    /slosh/speed_cap_active
+    /slosh/speed_cap_v_limit
     /imu/data
     /scout_status
     /rs_status

@@ -119,6 +119,11 @@ def parse_args():
         help="Number of replay publishes. Zero means publish until Ctrl-C.",
     )
     parser.add_argument(
+        "--publish-once-keepalive",
+        action="store_true",
+        help="Publish the latched fixed path once, then keep the publisher alive without re-sending it.",
+    )
+    parser.add_argument(
         "--wait-path-subscriber-timeout",
         type=float,
         default=2.0,
@@ -447,6 +452,19 @@ class FixedGlobalPathRunner:
             len(replay_msg.poses),
             replay_msg.header.frame_id,
         )
+
+        if self.args.publish_once_keepalive:
+            now = rospy.Time.now()
+            replay_msg.header.stamp = now
+            for pose in replay_msg.poses:
+                pose.header.stamp = now
+            self.path_pub.publish(replay_msg)
+            rospy.loginfo(
+                "Published fixed path once to %s and keeping the latched publisher alive",
+                self.args.output_topic,
+            )
+            rospy.spin()
+            return
 
         while not rospy.is_shutdown():
             now = rospy.Time.now()
