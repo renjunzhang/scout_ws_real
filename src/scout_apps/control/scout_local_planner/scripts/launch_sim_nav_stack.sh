@@ -44,6 +44,10 @@ LOCALIZATION_BACKUP_S="${LOCALIZATION_BACKUP_S:-4}"
 LOCALIZATION_BACKUP_V="${LOCALIZATION_BACKUP_V:--0.12}"
 LOCALIZATION_SPIN_S="${LOCALIZATION_SPIN_S:-0}"
 LOCALIZATION_SPIN_OMEGA="${LOCALIZATION_SPIN_OMEGA:-0.8}"
+OPEN_LOCALIZATION_FORWARD_S="${OPEN_LOCALIZATION_FORWARD_S:-3}"
+OPEN_LOCALIZATION_FORWARD_V="${OPEN_LOCALIZATION_FORWARD_V:-0.15}"
+OPEN_LOCALIZATION_TURN_S="${OPEN_LOCALIZATION_TURN_S:-1}"
+OPEN_LOCALIZATION_TURN_OMEGA="${OPEN_LOCALIZATION_TURN_OMEGA:-0.5}"
 
 
 if [[ -f /opt/ros/noetic/setup.bash ]]; then
@@ -123,6 +127,18 @@ publish_cmd_for_duration() {
 }
 
 refresh_localization_motion() {
+    if [[ "${SIM_ENV}" == "open" ]]; then
+        publish_cmd_for_duration "Moving forward to refresh open-world localization" \
+            "${OPEN_LOCALIZATION_FORWARD_S}" "${OPEN_LOCALIZATION_FORWARD_V}" "0.0"
+        publish_cmd_for_duration "Turning clockwise to refresh open-world localization" \
+            "${OPEN_LOCALIZATION_TURN_S}" "0.0" "-${OPEN_LOCALIZATION_TURN_OMEGA}"
+        publish_cmd_for_duration "Turning counter-clockwise to refresh open-world localization" \
+            "${OPEN_LOCALIZATION_TURN_S}" "0.0" "${OPEN_LOCALIZATION_TURN_OMEGA}"
+        rostopic pub -1 /cmd_vel geometry_msgs/Twist \
+            "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}" >/dev/null 2>&1 || true
+        return
+    fi
+
     publish_cmd_for_duration "Backing up to refresh localization" \
         "${LOCALIZATION_BACKUP_S}" "${LOCALIZATION_BACKUP_V}" "0.0"
 

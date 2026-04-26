@@ -175,7 +175,7 @@ catkin_make 2>&1 | grep "processing catkin package"
 ```bash
 source /home/a/scout_ws/devel/setup.bash
 SIM_ENV=open USE_RVIZ=true \
-SPAWN_X=0.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
+SPAWN_X=-4.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
 rosrun scout_local_planner launch_sim_nav_stack.sh
 ```
 

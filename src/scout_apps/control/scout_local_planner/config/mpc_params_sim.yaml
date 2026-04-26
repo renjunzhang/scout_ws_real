@@ -1,4 +1,4 @@
-# Scout Mini MPC 局部规划器参数
+# Scout Mini MPC 局部规划器参数（仿真）
 
 # =============================================================================
 # MPC 参数
@@ -11,9 +11,9 @@ mpc:
   
   # 状态权重（Frenet 误差）
   # 注：change #11 修复了 OSQP P 矩阵 2x 系数，此处权重值已做相应调整
-  Q_el: 0.5                # 纵向误差权重（沿路径方向）
-  Q_ec: 30.0               # 横向误差权重（更贴路径）
-  Q_etheta: 10.0           # 航向误差权重（更贴路径）
+  Q_el: 0.7                # 纵向误差权重（沿路径方向）
+  Q_ec: 35.0               # 横向误差权重（更贴路径）
+  Q_etheta: 15.0           # 航向误差权重（更贴路径）
   Q_v: 8.0                 # 速度跟踪权重（修复后 v_ref 目标正确）
   use_contour_lag: true    # 启用 contour + lag 误差结构
   Q_contour: 45.0          # contour（横向误差）权重
@@ -47,14 +47,14 @@ mpc:
 # =============================================================================
 vehicle:
   # 速度约束
-  v_max: 2.5               # 最大线速度 (m/s)；2.0→2.5，v_nominal=2.0 m/s
+  v_max: 3.0               # 最大线速度 (m/s)；2.0→2.5，v_nominal=2.0 m/s
   v_min: 0.0               # 最小线速度 (m/s)，禁用倒车
-  omega_max: 3.0           # 最大角速度 (rad/s)；2.0→3.0 恢复，转弯慢主因之一
+  omega_max: 1.5           # 最大角速度 (rad/s)；2.0→3.0 恢复，转弯慢主因之一
   
   # 加速度约束
   a_max: 2.0               # 最大线加速度 (m/s²)
-  alpha_max: 6.0           # 最大角加速度 (rad/s²)；4.0→6.0 部分恢复（原7.0）
-  j_max: 3.0               # 最大线加加速度 (m/s^3)——jerk 约束
+  alpha_max: 5.0           # 最大角加速度 (rad/s²)；4.0→6.0 部分恢复（原7.0）
+  j_max: 4.0               # 最大线加加速度 (m/s^3)——jerk 约束
   
   # 车辆几何
   track_width: 0.456       # Scout Mini 轮距 (m)
@@ -64,11 +64,11 @@ vehicle:
 # 路径处理参数
 # =============================================================================
 path_handler:
-  lookahead_distance: 0.35 # 前视距离 (m)，仿真贴线优先
-  goal_tolerance: 0.1      # 到达目标位置容差 (m)
-  yaw_tolerance: 0.1       # 到达目标航向容差 (rad)
+  lookahead_distance: 0.45 # 前视距离 (m)，仿真贴线优先
+  goal_tolerance: 0.2      # 到达目标位置容差 (m)
+  yaw_tolerance: 0.5       # 到达目标航向容差 (rad)
   goal_reached_max_speed: 0.08  # 仅在低速时允许切到 REACHED
-  goal_reached_max_omega: 0.15  # 仅在低角速度时允许切到 REACHED
+  goal_reached_max_omega: 0.75  # 仅在低角速度时允许切到 REACHED
   goal_capture_distance: 0.45   # 终点捕获区；进入后维持最低参考速度，避免提前停死
   goal_capture_min_speed: 0.10  # 捕获区最低参考速度 (m/s)
   path_timeout: 30.0       # 仿真全局路径不一定持续刷新，放宽以避免终点附近误进 ERROR
@@ -80,8 +80,8 @@ path_handler:
   s_jump_threshold: 0.5               # 弧长跳变阈值 (m)
   resample_spacing: 0.05              # 路径重采样间隔 (m)
   max_lat_accel: 2.0                  # 最大横向加速度 (m/s^2)；1.2→2.0 恢复，Q_contour=45 足以保持贴线
-  speed_profile_omega_max: 3.0        # 规划层角速度上限（与 vehicle/omega_max 一致）
-  speed_profile_alpha_max: 20.0       # 规划层角加速度上限（与 vehicle/alpha_max 一致）；显式配置避免桥接值隐式变化
+  speed_profile_omega_max: 1.5        # 规划层角速度上限（与 vehicle/omega_max 一致）
+  speed_profile_alpha_max: 5.0        # 规划层角加速度上限（与 vehicle/alpha_max 一致）
   min_ref_speed: 0.0                  # 参考速度下限 (m/s)
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
@@ -133,12 +133,21 @@ slosh_estimator:
   imu_ay_bias_trim_ratio: 0.10           # 对 EMA 后 ay 做 trimmed mean 时两端裁剪比例
 
 # =============================================================================
-# 安全退化策略（求解不可行时）
+# 安全退化策略 + 速度保护（safety）
+#   infeasible_*：求解不可行时的退化行为
+#   tracking_curvature_*：TRACKING 模式曲率/重入限速
 # =============================================================================
 safety:
   infeasible_decel: 1.0          # 不可行时制动减速度 (m/s^2)
   infeasible_omega_scale: 0.0    # 不可行时角速度缩放
   infeasible_min_speed: 0.0      # 不可行时线速度下限 (m/s)
+  tracking_feasibility_guard_enable: true      # TRACKING solve fail 后的恢复限速保护
+  tracking_curvature_speed_cap_enable: false   # 仿真主口径默认关闭；若做 cap 对比需单独显式打开
+  tracking_curvature_preview_distance: 0.8      # 曲率预览长度 (m)；默认1.5，缩短减少提前制动
+  tracking_curvature_rate_preview_distance: 0.6 # dkappa 预览长度 (m)；默认1.0
+  tracking_curvature_min_speed: 0.3             # 曲率限速下限 (m/s)
+  tracking_reentry_v_cap: 0.9                   # 重入TRACKING初始速度上限 (m/s)；默认0.6
+  tracking_reentry_ramp_steps: 5                # 重入爬坡步数；默认10步
 
 # =============================================================================
 # 原地对齐模式（航向误差过大时原地转向）
@@ -204,18 +213,6 @@ slosh_speed_governor:
   eta_exit_ratio: 0.2      # 退出阈值（滞回），低于此比例才释放 governor
   preview_distance: 1.0    # 前方曲率预览长度 (m)
   min_active_steps: 10     # 最少保持周期数，避免阈值附近抖动
-
-# =============================================================================
-# 安全/速度保护参数（safety）
-# =============================================================================
-safety:
-  tracking_feasibility_guard_enable: true      # TRACKING solve fail 后的恢复限速保护
-  tracking_curvature_speed_cap_enable: false   # 仿真主口径默认关闭；若做 cap 对比需单独显式打开
-  tracking_curvature_preview_distance: 0.8      # 曲率预览长度 (m)；默认1.5，缩短减少提前制动
-  tracking_curvature_rate_preview_distance: 0.6 # dkappa 预览长度 (m)；默认1.0
-  tracking_curvature_min_speed: 0.3             # 曲率限速下限 (m/s)
-  tracking_reentry_v_cap: 0.9                   # 重入TRACKING初始速度上限 (m/s)；默认0.6
-  tracking_reentry_ramp_steps: 5                # 重入爬坡步数；默认10步
 
 # =============================================================================
 # ρ_k 风险自适应调度器
