@@ -70,6 +70,8 @@ catkin_install_python(PROGRAMS
   scripts/template_fixed_path_generator.py
   scripts/extract_slosh_metrics.py
   scripts/analyze_slosh_peak_precursors.py
+  scripts/offline_pmg_replay.py
+  scripts/diagnose_p3_failure_modes.py
   scripts/imu_ay_tool.py
   scripts/analyze_sim_speed_issue.py
   scripts/analyze_tracking_infeasible.py

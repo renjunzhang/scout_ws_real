@@ -59,15 +59,6 @@ INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-}"
 INPUT_SHAPING_TYPE="${INPUT_SHAPING_TYPE:-zv}"
 ENABLE_SLOSH_BOX_CONSTRAINT="${ENABLE_SLOSH_BOX_CONSTRAINT:-false}"
 SLOSH_SPEED_GOVERNOR_ENABLE="${SLOSH_SPEED_GOVERNOR_ENABLE:-false}"
-SLOSH_SPEED_CAP_ENABLE="${SLOSH_SPEED_CAP_ENABLE:-}"
-SLOSH_SPEED_CAP_MODE="${SLOSH_SPEED_CAP_MODE:-}"
-SLOSH_SPEED_CAP_AY_LIMIT="${SLOSH_SPEED_CAP_AY_LIMIT:-0.8}"
-SLOSH_SPEED_CAP_DKAPPA_LIMIT_WEIGHT="${SLOSH_SPEED_CAP_DKAPPA_LIMIT_WEIGHT:-0.0}"
-SLOSH_SPEED_CAP_DKAPPA_THRESHOLD="${SLOSH_SPEED_CAP_DKAPPA_THRESHOLD:-0.0}"
-SLOSH_SPEED_CAP_MIN_V="${SLOSH_SPEED_CAP_MIN_V:-0.4}"
-SLOSH_SPEED_CAP_PREVIEW_DISTANCE="${SLOSH_SPEED_CAP_PREVIEW_DISTANCE:-1.0}"
-SLOSH_SPEED_CAP_ACTIVATION_RATIO="${SLOSH_SPEED_CAP_ACTIVATION_RATIO:-0.9}"
-SLOSH_SPEED_CAP_MAX_SLOWDOWN_RATIO="${SLOSH_SPEED_CAP_MAX_SLOWDOWN_RATIO:-0.75}"
 
 case "${CONDITION}" in
     NOM)
@@ -115,42 +106,6 @@ case "${CONDITION}" in
         RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
         ;;
-    SPEED_CAP)
-        Q_SLOSH="${Q_SLOSH:-0}"
-        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        SLOSH_SPEED_CAP_ENABLE="${SLOSH_SPEED_CAP_ENABLE:-true}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
-        INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
-        ;;
-    FAS_Q5_SPEED_CAP)
-        Q_SLOSH="${Q_SLOSH:-5}"
-        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        SLOSH_SPEED_CAP_ENABLE="${SLOSH_SPEED_CAP_ENABLE:-true}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
-        INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
-        ;;
-    DKAPPA_CAP)
-        Q_SLOSH="${Q_SLOSH:-0}"
-        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        SLOSH_SPEED_CAP_ENABLE="${SLOSH_SPEED_CAP_ENABLE:-true}"
-        SLOSH_SPEED_CAP_MODE="${SLOSH_SPEED_CAP_MODE:-dkappa_only}"
-        SLOSH_SPEED_CAP_DKAPPA_LIMIT_WEIGHT="${SLOSH_SPEED_CAP_DKAPPA_LIMIT_WEIGHT:-0.15}"
-        SLOSH_SPEED_CAP_DKAPPA_THRESHOLD="${SLOSH_SPEED_CAP_DKAPPA_THRESHOLD:-8.0}"
-        SLOSH_SPEED_CAP_PREVIEW_DISTANCE="${SLOSH_SPEED_CAP_PREVIEW_DISTANCE:-0.30}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
-        INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
-        ;;
-    FAS_Q5_DKAPPA_CAP)
-        Q_SLOSH="${Q_SLOSH:-5}"
-        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        SLOSH_SPEED_CAP_ENABLE="${SLOSH_SPEED_CAP_ENABLE:-true}"
-        SLOSH_SPEED_CAP_MODE="${SLOSH_SPEED_CAP_MODE:-dkappa_only}"
-        SLOSH_SPEED_CAP_DKAPPA_LIMIT_WEIGHT="${SLOSH_SPEED_CAP_DKAPPA_LIMIT_WEIGHT:-0.15}"
-        SLOSH_SPEED_CAP_DKAPPA_THRESHOLD="${SLOSH_SPEED_CAP_DKAPPA_THRESHOLD:-8.0}"
-        SLOSH_SPEED_CAP_PREVIEW_DISTANCE="${SLOSH_SPEED_CAP_PREVIEW_DISTANCE:-0.30}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
-        INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
-        ;;
     CUSTOM)
         Q_SLOSH="${Q_SLOSH:-0}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
@@ -159,13 +114,10 @@ case "${CONDITION}" in
         ;;
     *)
         echo "[run_sim_fixed_path_bag] ERROR: unsupported CONDITION='${CONDITION}'" >&2
-        echo "Use NOM, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, SPEED_CAP, FAS_Q5_SPEED_CAP, DKAPPA_CAP, FAS_Q5_DKAPPA_CAP, PROP_Q5, ISR, or CUSTOM." >&2
+        echo "Use NOM, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, PROP_Q5, ISR, or CUSTOM." >&2
         exit 2
         ;;
 esac
-
-SLOSH_SPEED_CAP_ENABLE="${SLOSH_SPEED_CAP_ENABLE:-false}"
-SLOSH_SPEED_CAP_MODE="${SLOSH_SPEED_CAP_MODE:-curvature}"
 
 if [[ "${PATH_MODE}" != "replay" && "${PATH_MODE}" != "template_goal" ]]; then
     echo "[run_sim_fixed_path_bag] ERROR: unsupported PATH_MODE='${PATH_MODE}' (use replay or template_goal)" >&2
@@ -271,6 +223,63 @@ pose:
     z: ${TEMPLATE_GOAL_QZ}
     w: ${TEMPLATE_GOAL_QW}
 " >/dev/null
+}
+
+write_config_summary() {
+    local config_path="${BAG_PATH}.txt"
+    local git_head
+    local git_status
+    git_head="$(git -C /home/a/scout_ws rev-parse --short HEAD 2>/dev/null || echo unknown)"
+    git_status="$(git -C /home/a/scout_ws status --short 2>/dev/null || true)"
+
+    cat > "${config_path}" <<EOF
+bag_path=${BAG_PATH}.bag
+bag_name=${BAG_NAME}
+bag_date=${BAG_DATE}
+bag_time=${BAG_TIME}
+git_head=${git_head}
+
+PATH_ID=${PATH_ID}
+CONDITION=${CONDITION}
+RUN_ID=${RUN_ID}
+PATH_MODE=${PATH_MODE}
+TEMPLATE_NAME=${TEMPLATE_NAME}
+PATH_FILE=${PATH_FILE}
+GLOBAL_PATH_TOPIC=${GLOBAL_PATH_TOPIC}
+TEMPLATE_GOAL_TOPIC=${TEMPLATE_GOAL_TOPIC}
+TEMPLATE_GOAL_FRAME=${TEMPLATE_GOAL_FRAME}
+TEMPLATE_GOAL_X=${TEMPLATE_GOAL_X}
+TEMPLATE_GOAL_Y=${TEMPLATE_GOAL_Y}
+TEMPLATE_GOAL_Z=${TEMPLATE_GOAL_Z}
+TEMPLATE_GOAL_QX=${TEMPLATE_GOAL_QX}
+TEMPLATE_GOAL_QY=${TEMPLATE_GOAL_QY}
+TEMPLATE_GOAL_QZ=${TEMPLATE_GOAL_QZ}
+TEMPLATE_GOAL_QW=${TEMPLATE_GOAL_QW}
+
+Q_SLOSH=${Q_SLOSH}
+Q_SLOSH_ETA_DOT=${Q_SLOSH_ETA_DOT}
+TERMINAL_FACTOR_SLOSH_ETA=${TERMINAL_FACTOR_SLOSH_ETA}
+TERMINAL_FACTOR_SLOSH_ETA_DOT=${TERMINAL_FACTOR_SLOSH_ETA_DOT}
+RISK_SCHEDULER_ENABLE=${RISK_SCHEDULER_ENABLE}
+INPUT_SHAPING_ENABLE=${INPUT_SHAPING_ENABLE}
+INPUT_SHAPING_TYPE=${INPUT_SHAPING_TYPE}
+ENABLE_SLOSH_BOX_CONSTRAINT=${ENABLE_SLOSH_BOX_CONSTRAINT}
+SLOSH_SPEED_GOVERNOR_ENABLE=${SLOSH_SPEED_GOVERNOR_ENABLE}
+
+git_status:
+${git_status}
+EOF
+
+    echo "[run_sim_fixed_path_bag] Wrote config summary: ${config_path}"
+}
+
+publish_config_summary() {
+    local summary
+    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; input_shaping=${INPUT_SHAPING_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}"
+    rostopic pub -l /experiment/config_summary std_msgs/String "data: '${summary}'" >/dev/null &
+    local pid=$!
+    pids+=("${pid}")
+    sleep 1
 }
 
 wait_until_fixed_path_start() {
@@ -389,6 +398,7 @@ TOPICS=(
     /terminal/mode
     /terminal/recovery_latched
     /terminal/goal_info
+    /experiment/config_summary
     /slosh/state
     /slosh/eta_norm
     /slosh/eta_dot_norm
@@ -410,8 +420,6 @@ TOPICS=(
     /slosh/constraint_active
     /slosh/v_des_eff
     /slosh/speed_governor_active
-    /slosh/speed_cap_active
-    /slosh/speed_cap_v_limit
     /risk_scheduler/rho_k
     /risk_scheduler/r_k
     /risk_scheduler/u_k
@@ -460,15 +468,6 @@ MPC_ARGS=(
     input_shaping_type:="${INPUT_SHAPING_TYPE}"
     enable_slosh_box_constraint:="${ENABLE_SLOSH_BOX_CONSTRAINT}"
     slosh_speed_governor_enable:="${SLOSH_SPEED_GOVERNOR_ENABLE}"
-    slosh_speed_cap_enable:="${SLOSH_SPEED_CAP_ENABLE}"
-    slosh_speed_cap_mode:="${SLOSH_SPEED_CAP_MODE}"
-    slosh_speed_cap_ay_limit:="${SLOSH_SPEED_CAP_AY_LIMIT}"
-    slosh_speed_cap_dkappa_limit_weight:="${SLOSH_SPEED_CAP_DKAPPA_LIMIT_WEIGHT}"
-    slosh_speed_cap_dkappa_threshold:="${SLOSH_SPEED_CAP_DKAPPA_THRESHOLD}"
-    slosh_speed_cap_min_v:="${SLOSH_SPEED_CAP_MIN_V}"
-    slosh_speed_cap_preview_distance:="${SLOSH_SPEED_CAP_PREVIEW_DISTANCE}"
-    slosh_speed_cap_activation_ratio:="${SLOSH_SPEED_CAP_ACTIVATION_RATIO}"
-    slosh_speed_cap_max_slowdown_ratio:="${SLOSH_SPEED_CAP_MAX_SLOWDOWN_RATIO}"
 )
 
 APPROACH_MPC_ARGS=(
@@ -500,14 +499,14 @@ echo "  term_factor_eta      = ${TERMINAL_FACTOR_SLOSH_ETA}"
 echo "  term_factor_eta_dot  = ${TERMINAL_FACTOR_SLOSH_ETA_DOT}"
 echo "  risk_scheduler       = ${RISK_SCHEDULER_ENABLE}"
 echo "  input_shaping        = ${INPUT_SHAPING_ENABLE}"
-echo "  slosh_speed_cap      = ${SLOSH_SPEED_CAP_ENABLE} (mode=${SLOSH_SPEED_CAP_MODE}, ay_limit=${SLOSH_SPEED_CAP_AY_LIMIT}, dkappa_weight=${SLOSH_SPEED_CAP_DKAPPA_LIMIT_WEIGHT}, dkappa_threshold=${SLOSH_SPEED_CAP_DKAPPA_THRESHOLD})"
-echo "  speed_cap_gate       = activation=${SLOSH_SPEED_CAP_ACTIVATION_RATIO}, max_slowdown=${SLOSH_SPEED_CAP_MAX_SLOWDOWN_RATIO}"
 echo "  approach_start       = ${APPROACH_START_ENABLE}"
 echo "  start_delay          = ${START_DELAY}s"
 echo "  start_gate           = ${START_GATE}"
 echo "  path_once_keepalive  = ${PATH_PUBLISH_ONCE_KEEPALIVE}"
 echo "  record_duration      = ${RECORD_DURATION}s (0 means Ctrl+C)"
 echo "============================================================"
+
+write_config_summary
 
 if [[ "${START_DELAY}" != "0" && "${START_DELAY}" != "0.0" ]]; then
     echo "[run_sim_fixed_path_bag] Waiting ${START_DELAY}s for sim/nav stack to settle..."
@@ -533,6 +532,7 @@ fi
 
 start_bg "rosbag record" rosbag record -O "${BAG_PATH}" "${TOPICS[@]}"
 sleep "${RECORD_WARMUP_S}"
+publish_config_summary
 
 if [[ "${PATH_MODE}" == "template_goal" ]]; then
     start_bg "template path generator" "${TEMPLATE_ARGS[@]}"

@@ -135,7 +135,7 @@ rosrun scout_local_planner run_sim_fixed_path_bag.sh
 
 常用变量：
 - `PATH_ID`: `P0_straight / P1_single_turn / P2_s_curve / P3_mixed`
-- `CONDITION`: `NOM / FAS_Q5 / FAS_Q5_DOT / FAS_Q10 / PROP_Q5 / ISR`
+- `CONDITION`: `NOM / FAS_Q5 / FAS_Q5_DOT / FAS_Q10 / FAS_Q5_TERM / PROP_Q5 / ISR / CUSTOM`
 - `RUN_ID`: bag run 编号
 - `START_DELAY`: 启动后等待秒数；默认 `30`
 - `APPROACH_START_ENABLE`: 默认 `false`；固定路径应从定位刷新后的当前位姿采集
@@ -172,6 +172,26 @@ rosrun scout_local_planner run_sim_fixed_path_bag.sh
 - 比较不同参数组下的晃动指标和控制开销
 - 判断 success_ratio 低的根因来自哪个阶段
 - 批量导出 CSV 做进一步统计
+
+### `analyze_slosh_peak_precursors.py`
+
+离线检查液面峰值前的主要激励源，用于判断 anti-slosh 速度剖面是否触发错位。
+
+关注内容：
+- 在 `TRACKING && terminal/mode==NONE` 口径下找 `/slosh/height`、`eta_dot` 或 `modal_energy_norm` 峰值
+- 统计峰值前 `0.5/1.0/1.5s` 窗口中的 `odom_ay`、`kappa`、`omega`、`domega`、`v_des_eff`
+- 导出 CSV，便于比较 P2/P3 中真正的峰前激励段
+
+用法：
+```bash
+rosrun scout_local_planner analyze_slosh_peak_precursors.py \
+  --peak-signal height \
+  --top-k 3 \
+  --csv /tmp/peak_precursors.csv \
+  /data/a/slosh_bags/sim/20260428/20260428_P3_mixed_PROFILE_SELECTIVE_run01_191925.bag
+```
+
+说明：`PROFILE_* / OUTPUT_GUARD / PMG_*` 属于 2026-04-27 至 2026-04-29 的失败路线，控制器入口已从主线撤回；离线脚本仍可分析这些历史 bag。
 
 ### `analyze_settling_day3.py`
 

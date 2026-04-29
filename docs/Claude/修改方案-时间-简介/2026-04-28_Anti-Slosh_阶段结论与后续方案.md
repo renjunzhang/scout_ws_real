@@ -356,3 +356,107 @@ guard_first_lead_s   0.843
 不设计简单调阈值的 OUTPUT_GUARD_V2。
 若继续改代码，V2 必须针对 cmd_domega 积分、激励持续时间、tracking 误差和相位窗口，而不是只降低 ay_limit。
 ```
+
+## 10. 2026-04-29 PMG 离线到闭环结论
+
+PMG 路线的证据链：
+
+```text
+lateral-only PMG:
+  P2 有小幅信号
+  P3 h_p95 +0.6%，离线否决
+
+D1:
+  P3 eta_x energy ratio ≈ 0.975
+  说明 P3 主导通道是 longitudinal，而不是 lateral
+
+D2:
+  corr_ax_vref ≈ -0.11
+  corr_ax_track ≈ -0.62
+  status_fail_ratio = 0
+  说明 P3 eta_x 激励不像路径速度剖面或 recovery 直接造成，更像 MPC 主动决策形成的 ax 脉冲
+
+D3 longitudinal replay:
+  P3 NOM h_p95 -18.14%
+  P2 NOM h_p95 -6.75%
+
+combined replay:
+  P3 NOM h_p95 -19.00%
+  P2 NOM h_p95 -12.98%
+  omega_n / zeta ±20% 鲁棒性通过
+```
+
+闭环验证后，PMG controller 路线被否决为通用方案。
+
+P2 闭环结果：
+
+```text
+P2 PMG combined:
+  h_rms       -11.3%
+  h_p95       -14.4%
+  energy      -5.7%
+  eta_dot     +51.2%
+  ay_p95      -21.7%
+  solve_success_ratio = 1.0
+
+P2 PMG_LONG:
+  h_p95       -13.4%
+  eta_dot     +48.0%
+  active_x    0.050
+
+P2 PMG_LAT:
+  h_p95       +5.0%
+  eta_dot     -16.0%
+  active_y    0.010
+```
+
+关键判断：
+
+- `PMG_LONG` 是 P2 `eta_dot` 上升的主要来源；
+- `PMG_LAT` 不抬高 `eta_dot`，但不能降低 `h_p95`；
+- combined 在 P2 上由 x 通道主导，因此不能作为 P2/P3 统一默认 controller；
+- PMG 的 signed cap 目标只约束 `eta` 峰值，没有约束 `eta_dot`，会把二阶模态能量从位移项推到速度项；
+- 这不是简单阈值或触发时机问题，而是 cap 目标本身的结构性盲点。
+
+离线 replay 可信度复核：
+
+```text
+P2 longitudinal replay:
+  eta_dot: 0.0116 -> 0.0139 约 +19%
+
+P2 combined replay:
+  eta_dot: 0.0116 -> 0.0161 约 +39%
+
+P2 closed-loop:
+  PMG_LONG eta_dot +48%
+  PMG combined eta_dot +51%
+```
+
+结论：
+
+- 离线 replay 没有漏掉 `eta_dot` 风险，只是之前决策过度关注 `h_p95`；
+- 闭环 MPC 会进一步放大 cap 后的 `eta_dot` 风险；
+- 未来任何 output-cap 类机制，离线阶段必须把 `eta_dot` 和 modal energy 设为硬门槛，不能只看 `h_p95`。
+
+最终决策：
+
+```text
+PMG 不进入实物主线。
+不继续录 P3 PMG_LONG。
+不写 PMG η_dot 增强版。
+不引入路径分类器选择 PMG_LONG/PMG_LAT。
+```
+
+工程处理：
+
+- PMG C++ 入口可保留为默认关闭的消融入口；
+- 文档和提交信息必须明确：`offline positive, closed-loop P2 eta_dot FAIL, not validated for real deployment`；
+- 后续主线应转向真实液面视觉测量、P3 路径可达性审查、或 `omega_n/zeta` 专项自由衰减辨识。
+
+推荐下一步：
+
+```text
+优先做真液面视觉测量。
+理由：当前所有控制策略都依赖 /slosh/height 模型估计；
+若模型估计与真实液面在高动态下不一致，继续设计 controller 只是在优化内部 proxy。
+```
