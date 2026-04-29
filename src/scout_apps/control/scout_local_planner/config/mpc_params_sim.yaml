@@ -31,7 +31,7 @@ mpc:
   
   # 控制变化率权重（平滑控制）
   R_da: 0.5                # 加速度变化权重——配合 jerk 约束提高
-  R_domega: 1.0            # 角速度变化权重
+  R_domega: 4.0            # 角速度变化权重 - 与实物配置对齐
 
   # 控制变化率约束（硬约束）
   constrain_omega_rate: true
@@ -218,19 +218,6 @@ slosh_speed_governor:
   min_active_steps: 10     # 最少保持周期数，避免阈值附近抖动
 
 # =============================================================================
-# P3B：曲率前馈 slosh 限速（默认关闭）
-# =============================================================================
-slosh_speed_cap:
-  enable: false            # 根据前方曲率主动限制参考速度；默认关闭，保持旧行为
-  mode: curvature          # curvature=旧 P3B；dkappa_only=只在曲率变化/换向段限速
-  ay_limit: 0.8            # 目标横向加速度上限 (m/s^2)，v <= sqrt(ay_limit / |kappa|)
-  dkappa_limit_weight: 0.0 # >0 时启用曲率变化限速：alpha_budget = weight * vehicle/alpha_max
-  dkappa_threshold: 0.0    # dkappa 触发阈值 (1/m^2)，0=沿用旧行为
-  min_v: 0.4               # 限速后的最低参考速度；若要严格服从几何 cap 可设为 0
-  preview_distance: 1.0    # 前方曲率预览长度 (m)
-  activation_ratio: 0.9    # 仅当几何 cap 低于当前 v_des 的该比例时触发，避免小幅全程裁剪
-  max_slowdown_ratio: 0.75 # 单次裁剪最低保留当前 v_des 的比例，避免慢速通过伪改善
-
 # ρ_k 风险自适应调度器
 #   统一调度 Q_eta、η̄、v_ref_eff 三个 QP 参数
 #   enable: false → 所有参数固定为 yaml 中的静态值（zero risk scheduling）

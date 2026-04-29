@@ -201,8 +201,6 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     slosh_modal_energy_norm_pub_ = nh_.advertise<std_msgs::Float32>("slosh/modal_energy_norm", 1);
     slosh_excitation_ay_abs_pub_ = nh_.advertise<std_msgs::Float32>("slosh/excitation_ay_abs", 1);
     slosh_excitation_alpha_abs_pub_ = nh_.advertise<std_msgs::Float32>("slosh/excitation_alpha_abs", 1);
-    slosh_speed_cap_active_pub_ = nh_.advertise<std_msgs::Int32>("slosh/speed_cap_active", 1);
-    slosh_speed_cap_v_limit_pub_ = nh_.advertise<std_msgs::Float32>("slosh/speed_cap_v_limit", 1);
     slosh_settling_time_pub_ = nh_.advertise<std_msgs::Float32>("slosh/settling_time", 1, true);
     mpc_solve_ms_pub_ = nh_.advertise<std_msgs::Float32>("mpc/solve_ms", 1);
     mpc_status_val_pub_ = nh_.advertise<std_msgs::Int32>("mpc/status_val", 1);
@@ -430,17 +428,6 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("slosh_speed_governor/eta_exit_ratio", slosh_eta_exit_ratio_, 0.2);
     pnh.param("slosh_speed_governor/preview_distance", slosh_preview_distance_, 1.0);
     pnh.param("slosh_speed_governor/min_active_steps", slosh_min_active_steps_, 10);
-
-    // P3B：曲率前馈 slosh 限速（默认关闭）
-    pnh.param("slosh_speed_cap/enable", slosh_speed_cap_enable_, false);
-    pnh.param("slosh_speed_cap/mode", slosh_speed_cap_mode_, std::string("curvature"));
-    pnh.param("slosh_speed_cap/ay_limit", slosh_speed_cap_ay_limit_, 0.8);
-    pnh.param("slosh_speed_cap/dkappa_limit_weight", slosh_speed_cap_dkappa_weight_, 0.0);
-    pnh.param("slosh_speed_cap/dkappa_threshold", slosh_speed_cap_dkappa_threshold_, 0.0);
-    pnh.param("slosh_speed_cap/min_v", slosh_speed_cap_min_v_, 0.4);
-    pnh.param("slosh_speed_cap/preview_distance", slosh_speed_cap_preview_distance_, 1.0);
-    pnh.param("slosh_speed_cap/activation_ratio", slosh_speed_cap_activation_ratio_, 0.9);
-    pnh.param("slosh_speed_cap/max_slowdown_ratio", slosh_speed_cap_max_slowdown_ratio_, 0.75);
 
     // 路径相似性检测阈值
     pnh.param("path_handler/path_change_threshold",
@@ -940,62 +927,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
 
                 double v_des_target = v_des_cmd;
                 last_speed_governor_active_ = 0;
-                last_slosh_speed_cap_active_ = 0;
-                last_slosh_speed_cap_v_limit_ = v_des_cmd;
-
-                if (state_ == PlannerState::TRACKING &&
-                    !goal_stop_pending_ &&
-                    !settling_active &&
-                    slosh_speed_cap_enable_) {
-                    double v_cap = std::max(0.0, v_des_cmd);
-                    const double preview_distance =
-                        std::max(0.0, slosh_speed_cap_preview_distance_);
-                    const bool dkappa_only = (slosh_speed_cap_mode_ == "dkappa_only");
-
-                    if (!dkappa_only && slosh_speed_cap_ay_limit_ > 1e-6) {
-                        const double kappa_preview = path_handler_.getMaxCurvatureAhead(
-                            path_params_.lookahead_distance, preview_distance);
-                        if (kappa_preview > 1e-4) {
-                            const double v_cap_kappa = std::sqrt(
-                                std::max(0.0, slosh_speed_cap_ay_limit_ /
-                                                   (kappa_preview + 1e-9)));
-                            v_cap = std::min(v_cap, v_cap_kappa);
-                        }
-                    }
-
-                    if (slosh_speed_cap_dkappa_weight_ > 1e-6 &&
-                        vehicle_params_.alpha_max > 1e-6) {
-                        const double dkappa_preview = path_handler_.getMaxCurvatureRateAhead(
-                            path_params_.lookahead_distance, preview_distance);
-                        const double dkappa_threshold =
-                            std::max(1e-4, slosh_speed_cap_dkappa_threshold_);
-                        if (dkappa_preview > dkappa_threshold) {
-                            const double alpha_budget =
-                                slosh_speed_cap_dkappa_weight_ * vehicle_params_.alpha_max;
-                            const double v_cap_dkappa = std::sqrt(
-                                std::max(0.0, alpha_budget / (dkappa_preview + 1e-9)));
-                            v_cap = std::min(v_cap, v_cap_dkappa);
-                        }
-                    }
-
-                    const double activation_ratio = std::min(
-                        1.0, std::max(0.0, slosh_speed_cap_activation_ratio_));
-                    const double max_slowdown_ratio = std::min(
-                        1.0, std::max(0.0, slosh_speed_cap_max_slowdown_ratio_));
-                    if (v_des_cmd > 1e-3 &&
-                        v_cap < activation_ratio * v_des_cmd - 1e-3) {
-                        const double speed_floor = std::max(
-                            std::max(0.0, slosh_speed_cap_min_v_),
-                            max_slowdown_ratio * v_des_cmd);
-                        const double limited_v = std::min(v_des_cmd, std::max(speed_floor, v_cap));
-                        if (limited_v < v_des_cmd - 1e-3) {
-                            v_des_cmd = limited_v;
-                            last_slosh_speed_cap_active_ = 1;
-                        }
-                    }
-                    last_slosh_speed_cap_v_limit_ = v_des_cmd;
-                }
-                v_des_target = v_des_cmd;
 
                 // 1. 获取参考点
                 std::vector<ReferencePoint> ref_points;
@@ -1969,8 +1900,6 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {
     }
     last_v_des_eff_ = 0.0;
     last_speed_governor_active_ = 0;
-    last_slosh_speed_cap_active_ = 0;
-    last_slosh_speed_cap_v_limit_ = 0.0;
     slosh_governor_latched_ = false;
     slosh_governor_hold_steps_ = 0;
     resetInputShaper();
@@ -2120,18 +2049,6 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok, boo
         std_msgs::Int32 msg;
         msg.data = last_speed_governor_active_;
         slosh_speed_governor_active_pub_.publish(msg);
-    }
-
-    if (slosh_speed_cap_active_pub_.getNumSubscribers() > 0) {
-        std_msgs::Int32 msg;
-        msg.data = last_slosh_speed_cap_active_;
-        slosh_speed_cap_active_pub_.publish(msg);
-    }
-
-    if (slosh_speed_cap_v_limit_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(last_slosh_speed_cap_v_limit_);
-        slosh_speed_cap_v_limit_pub_.publish(msg);
     }
 
     if (slosh_omega_est_used_pub_.getNumSubscribers() > 0) {

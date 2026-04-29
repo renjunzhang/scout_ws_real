@@ -268,19 +268,6 @@ private:
     double last_v_des_eff_ = 0.0;
     int last_speed_governor_active_ = 0;
 
-    // P3B：曲率前馈 slosh 限速（默认关闭，不依赖当前 eta）
-    bool slosh_speed_cap_enable_ = false;
-    std::string slosh_speed_cap_mode_ = "curvature";
-    double slosh_speed_cap_ay_limit_ = 0.8;
-    double slosh_speed_cap_dkappa_weight_ = 0.0;
-    double slosh_speed_cap_dkappa_threshold_ = 0.0;
-    double slosh_speed_cap_min_v_ = 0.4;
-    double slosh_speed_cap_preview_distance_ = 1.0;
-    double slosh_speed_cap_activation_ratio_ = 0.9;
-    double slosh_speed_cap_max_slowdown_ratio_ = 0.75;
-    double last_slosh_speed_cap_v_limit_ = 0.0;
-    int last_slosh_speed_cap_active_ = 0;
-
     // ====== ρ_k 风险自适应调度器 ======
     bool                risk_scheduler_enable_ = false;
     RiskScheduler       risk_scheduler_;
@@ -317,8 +304,6 @@ private:
     ros::Publisher slosh_modal_energy_norm_pub_;
     ros::Publisher slosh_excitation_ay_abs_pub_;
     ros::Publisher slosh_excitation_alpha_abs_pub_;
-    ros::Publisher slosh_speed_cap_active_pub_;
-    ros::Publisher slosh_speed_cap_v_limit_pub_;
     ros::Publisher slosh_settling_time_pub_;
     ros::Publisher mpc_solve_ms_pub_;
     ros::Publisher mpc_status_val_pub_;

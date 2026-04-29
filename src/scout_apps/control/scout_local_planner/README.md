@@ -5,6 +5,56 @@
 
 ---
 
+## 关键代码文件索引
+
+快速理解当前 MPC，请优先看以下文件：
+
+| 文件 | 职责 |
+|---|---|
+| `src/local_planner_ros.cpp` / `include/scout_local_planner/local_planner_ros.h` | ROS 节点主逻辑、状态机、参数读取、速度治理、slosh debug topic 发布 |
+| `src/mpc_solver.cpp` / `include/scout_local_planner/mpc_solver.h` | OSQP QP 构建、求解、warm start、解提取 |
+| `src/cost_function.cpp` / `include/scout_local_planner/cost_function.h` | MPC 二次代价，包括 tracking、速度、控制、slosh η/η̇、terminal slosh |
+| `src/diff_drive_model.cpp` / `include/scout_local_planner/diff_drive_model.h` | 8 维增广状态的线性化动力学，含 Frenet tracking 与 slosh 激励耦合 |
+| `src/constraint_manager.cpp` / `include/scout_local_planner/constraint_manager.h` | 速度、加速度、角速度、控制变化率、η 盒约束 |
+| `src/path_handler.cpp` / `include/scout_local_planner/path_handler.h` | 全局路径清洗/平滑、参考点生成、速度剖面 |
+| `src/risk_scheduler.cpp` / `include/scout_local_planner/risk_scheduler.h` | 风险调度器，输出 `Q_eta_k / eta_bar_k / v_ref_eff` |
+| `src/slosh_integration.cpp` / `include/scout_local_planner/slosh_integration.h` | 运行时 slosh 状态传播与 `/slosh/height` 估计 |
+| `config/mpc_params.yaml` | 实物默认参数 |
+| `config/mpc_params_sim.yaml` | 仿真默认参数，当前 `R_domega` 已对齐实物 |
+| `launch/slosh_experiment.launch` | 实物实验入口 |
+| `launch/slosh_experiment_sim.launch` | 仿真实验入口 |
+| `scripts/run_sim_fixed_path_bag.sh` | 固定终点/固定路径仿真录包脚本，支持当前主线 launch 可用的 `NOM / FAS_* / PROP_Q5 / ISR / CUSTOM` |
+| `scripts/extract_slosh_metrics.py` | 离线指标提取：height、energy、eta_dot、tracking error、odom ay、历史消融 active ratio、lag correlation |
+| `scripts/template_fixed_path_generator.py` | 从当前位姿到终点生成模板路径 |
+| `scripts/fixed_global_path_runner.py` | 固定路径采集/回放 |
+
+---
+
+## 当前状态快照（2026-04-29）
+
+当前系统仍是**基于全局路径局部参考的 8 维增广 tracking MPC**，不是 MPCC，也不是 NMPC。核心 MPC 结构没有变：状态含 `e_l, e_c, e_theta, v, eta_x, eta_x_dot, eta_y, eta_y_dot`，控制为 `a, omega`。
+
+当前主线保留的 anti-slosh 相关能力：
+
+| 模块 | 当前状态 |
+|---|---|
+| `Q_slosh` | 保留，用于惩罚 `eta_x^2 + eta_y^2`，但历史实验显示单独调大不稳定 |
+| `Q_slosh_eta_dot` | 保留，用于惩罚 `eta_dot`；历史实验显示不构成稳定主线 |
+| `terminal_factor_slosh_eta / eta_dot` | 保留，用于 terminal slosh cost；历史实验显示不构成稳定主线 |
+| `risk_scheduler` | 保留为默认关闭/可配置机制 |
+| `input_shaping` | 保留为默认关闭/可配置机制 |
+| `scripts/extract_slosh_metrics.py` | 保留并扩展，用于复盘历史 bag 和后续离线分析 |
+| `scripts/run_sim_fixed_path_bag.sh` | 保留固定终点/固定路径录包流程，但已移除失败控制器入口的启动条件 |
+
+截至 2026-04-29 的实验判断：
+
+- MPC 内部 slosh cost、`GOV_AY`、`PROFILE_*`、`OUTPUT_GUARD`、PMG 均未形成可作为主线的通用方案。
+- `OUTPUT_GUARD` 只在 `P2_s_curve` 上出现“无显著减速 + 多指标下降”的局部正例，不能泛化到 `P3_mixed`。
+- PMG 离线曾给出正信号，但仿真闭环暴露 `eta_dot` 明显上升，已不进入实物主线。
+- 当前证据说明：**继续在 MPC 控制器输出层或 QP cost 内堆 anti-slosh 项，成功率低；下一阶段应转向轨迹/速度生成层的可验证方案。**
+
+---
+
 ## §0 一句话定位
 
 当前是一个**基于全局路径局部参考的8维增广跟踪MPC**，在差速机器人Frenet误差动力学上叠加了线性液体晃动模态子系统，用OSQP求解时变仿射QP，配合外层风险调度器和终点状态机。
@@ -530,6 +580,37 @@ MPC的晃动抑制通过**软代价**实现（Q_η项），而不是刚性约束
 
 ---
 
+## §15 当前核心问题（2026-04-27）
+
+当前失败更像是**控制结构问题为主，代价函数设置问题为辅**。
+
+已经排除或弱化的方向：
+
+| 方向 | 当前结论 |
+|---|---|
+| 单独增大 `Q_slosh` | 不稳定，容易改变相位而非稳定降晃 |
+| 增加 `Q_slosh_eta_dot` | P1 失败，`eta_dot_rms` 可能反升 |
+| terminal slosh cost | P2 不稳定，改善难以归因，激励不可比 |
+| preview κ / dκ 前馈限速 | P3B/P3C 失败；实测 odom κ 与 reference κ 差异较大，前馈偏乐观 |
+| 增大 `R_da/R_domega` | P4 失败；tracking 可改善，但实际 `odom_ay_abs_p95 / odom_kappa_abs_p95` 反向恶化 |
+| 反应式 `GOV_AY` 只削 `v_des` | 可降低 `odom_ay_abs_p95`，但可能抬高 `odom_kappa_abs_p95`、延长激励时间，height/energy 不稳定 |
+
+关键观察：
+
+- `/slosh/height` 是模型估计，不是真值测量；实物红色液体视觉和 `/slosh/height` 曾给出不同判断。
+- 当前 MPC 中 slosh 是状态和软代价，但车辆未来激励与液体相位之间没有被稳定约束。
+- 只压某个单点指标（`eta`、`eta_dot`、`ay_p95`、`cmd_dwz`）可能把激励搬到更差的相位或更长持续时间。
+- `GOV_AY threshold=1.0` 说明：`odom_ay_abs_p95` 降低不等于 `h_rms / modal_energy` 降低。
+
+当前推荐的下一步方向：
+
+1. 先把诊断指标补齐并固定口径：`h_rms / h_p95 / h_peak / modal_energy_norm_rms / eta_dot_rms / odom_ay_abs_p95 / odom_kappa_abs_p95 / track_dist_p95 / task_time / solve_success_ratio`。
+2. 检查 `GOV_AY` 激活时段相对弯道、`height` 峰值、`eta_dot` 峰值是否“削晚了”。
+3. 若继续改控制结构，应从“预测式低激励速度规划”或“v 与 omega 联合限幅”入手，而不是继续只调 `Q_slosh*`、`R_domega` 或单个 `ay_threshold`。
+4. 在没有稳定仿真证据前，不建议把当前 anti-slosh 改动推到实物主实验。
+
+---
+
 ## 附录：14条常见论文写作错误
 
 | # | 错误写法 | 正确写法/原因 |
@@ -551,4 +632,4 @@ MPC的晃动抑制通过**软代价**实现（Q_η项），而不是刚性约束
 
 ---
 
-*最后更新：2026-04-20。以 `src/` 代码为准，如有冲突以代码为准。*
+*最后更新：2026-04-27。以 `src/` 代码为准，如有冲突以代码为准。*
