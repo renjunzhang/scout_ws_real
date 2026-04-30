@@ -32,6 +32,13 @@
   <arg name="slosh_speed_governor_eta_exit_ratio" default="0.2" doc="速度治理退出阈值（滞回）"/>
   <arg name="slosh_speed_governor_preview_distance" default="1.0" doc="速度治理前方曲率预览长度"/>
   <arg name="slosh_speed_governor_min_active_steps" default="10" doc="速度治理最少保持周期数"/>
+  <arg name="energy_profile_enable" default="false" doc="是否启用 PROFILE_ENERGY Step1 几何低激励速度剖面"/>
+  <arg name="energy_profile_lat_accel" default="1.2" doc="PROFILE_ENERGY_GEO 横向加速度预算"/>
+  <arg name="energy_profile_omega_max" default="1.1" doc="PROFILE_ENERGY_GEO 角速度预算"/>
+  <arg name="energy_profile_alpha_max" default="3.0" doc="PROFILE_ENERGY_GEO 角加速度预算，含 ax*kappa"/>
+  <arg name="energy_profile_ax_max" default="1.2" doc="PROFILE_ENERGY_GEO 切向加速度预算"/>
+  <arg name="energy_profile_decel_max" default="1.2" doc="PROFILE_ENERGY_GEO 切向减速度预算"/>
+  <arg name="energy_profile_min_v" default="0.35" doc="PROFILE_ENERGY_GEO 最低参考速度"/>
   <arg name="slosh_use_imu_lateral_accel" default="false" doc="是否使用 IMU 横向加速度替代 v*omega"/>
   <arg name="slosh_use_imu_yaw_rate" default="true" doc="当前默认安全配置：使用 IMU 角速度 z 替代 odom omega"/>
   <arg name="slosh_use_imu_alpha_z" default="false" doc="是否使用 IMU 角速度差分替代 alpha_z"/>
@@ -84,6 +91,13 @@
     <param name="slosh_speed_governor/eta_exit_ratio" value="$(arg slosh_speed_governor_eta_exit_ratio)"/>
     <param name="slosh_speed_governor/preview_distance" value="$(arg slosh_speed_governor_preview_distance)"/>
     <param name="slosh_speed_governor/min_active_steps" value="$(arg slosh_speed_governor_min_active_steps)"/>
+    <param name="path_handler/energy_profile_enable" value="$(arg energy_profile_enable)"/>
+    <param name="path_handler/energy_profile_lat_accel" value="$(arg energy_profile_lat_accel)"/>
+    <param name="path_handler/energy_profile_omega_max" value="$(arg energy_profile_omega_max)"/>
+    <param name="path_handler/energy_profile_alpha_max" value="$(arg energy_profile_alpha_max)"/>
+    <param name="path_handler/energy_profile_ax_max" value="$(arg energy_profile_ax_max)"/>
+    <param name="path_handler/energy_profile_decel_max" value="$(arg energy_profile_decel_max)"/>
+    <param name="path_handler/energy_profile_min_v" value="$(arg energy_profile_min_v)"/>
     <param name="slosh_estimator/use_imu_lateral_accel" value="$(arg slosh_use_imu_lateral_accel)"/>
     <param name="slosh_estimator/use_imu_yaw_rate" value="$(arg slosh_use_imu_yaw_rate)"/>
     <param name="slosh_estimator/use_imu_alpha_z" value="$(arg slosh_use_imu_alpha_z)"/>

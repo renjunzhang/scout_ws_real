@@ -1358,6 +1358,32 @@ void PathHandler::updateSpeedProfile(double v_des) {
     std::vector<double> v_omega_cap(static_cast<size_t>(n), v_des);
     std::vector<double> v_alpha_cap(static_cast<size_t>(n), v_des);
     std::vector<double> v_geom_cap(static_cast<size_t>(n), v_des);
+    const bool energy_profile = params_.energy_profile_enable;
+    const double lat_accel_limit =
+        (energy_profile && params_.energy_profile_lat_accel > 0.0)
+            ? params_.energy_profile_lat_accel
+            : params_.max_lat_accel;
+    const double omega_limit =
+        (energy_profile && params_.energy_profile_omega_max > 1e-3)
+            ? params_.energy_profile_omega_max
+            : params_.speed_profile_omega_max;
+    const double alpha_limit =
+        (energy_profile && params_.energy_profile_alpha_max > 1e-6)
+            ? params_.energy_profile_alpha_max
+            : params_.speed_profile_alpha_max;
+    const double accel_limit =
+        (energy_profile && params_.energy_profile_ax_max > 0.0)
+            ? params_.energy_profile_ax_max
+            : params_.max_tan_accel;
+    const double decel_limit =
+        (energy_profile && params_.energy_profile_decel_max > 0.0)
+            ? params_.energy_profile_decel_max
+            : params_.max_tan_decel;
+    const double min_profile_speed =
+        (energy_profile && params_.energy_profile_min_v > 0.0)
+            ? params_.energy_profile_min_v
+            : params_.min_ref_speed;
+    const double alpha_ax_budget = std::max(accel_limit, decel_limit);
 
     // 第一步：基于 smooth cache 的离散几何采样 kappa / dkappa。
     // 不再用 cubic spline 的二阶导数做速度剖面限速，避免导数放大导致系统性过慢。
@@ -1395,22 +1421,28 @@ void PathHandler::updateSpeedProfile(double v_des) {
         const double kappa_abs = std::abs(kappa_arr[static_cast<size_t>(i)]);
 
         // 横向加速度约束：v² × κ ≤ a_lat_max
-        if (params_.max_lat_accel > 0.0 && kappa_abs > 1e-4) {
-            const double v_cap = std::sqrt(params_.max_lat_accel / kappa_abs);
+        if (lat_accel_limit > 0.0 && kappa_abs > 1e-4) {
+            const double v_cap = std::sqrt(lat_accel_limit / kappa_abs);
             v_lat_cap[static_cast<size_t>(i)] = v_cap;
             v = std::min(v, v_cap);
         }
         // 角速度约束：v × κ ≤ ω_max  →  v ≤ ω_max / κ
-        if (params_.speed_profile_omega_max > 1e-3 && kappa_abs > 1e-4) {
-            const double v_cap = params_.speed_profile_omega_max / kappa_abs;
+        if (omega_limit > 1e-3 && kappa_abs > 1e-4) {
+            const double v_cap = omega_limit / kappa_abs;
             v_omega_cap[static_cast<size_t>(i)] = v_cap;
             v = std::min(v, v_cap);
         }
-        // 角加速度约束：v² × |κ'| ≤ α_max  →  v ≤ √(α_max / |κ'|)
-        if (params_.speed_profile_alpha_max > 1e-6) {
+        // 角加速度约束：alpha = ax*kappa + v²*dkappa。
+        // Step1 几何消融启用时，先为 ax*kappa 预留最坏加减速预算。
+        if (alpha_limit > 1e-6) {
             const double dkappa_abs = std::abs(dkappa_arr[static_cast<size_t>(i)]);
             if (dkappa_abs > 1e-4) {
-                const double v_cap = std::sqrt(params_.speed_profile_alpha_max / dkappa_abs);
+                const double alpha_budget = energy_profile
+                    ? alpha_limit - alpha_ax_budget * kappa_abs
+                    : alpha_limit;
+                const double v_cap = alpha_budget > 0.0
+                    ? std::sqrt(alpha_budget / dkappa_abs)
+                    : 0.0;
                 v_alpha_cap[static_cast<size_t>(i)] = v_cap;
                 v = std::min(v, v_cap);
             }
@@ -1441,10 +1473,10 @@ void PathHandler::updateSpeedProfile(double v_des) {
     const std::vector<double> v_before_accel_pass = speed_profile_v_;
 
     // 前向遍历（加速限制）
-    if (params_.max_tan_accel > 0.0) {
+    if (accel_limit > 0.0) {
         for (size_t i = 1; i < speed_profile_v_.size(); ++i) {
             double v_prev = speed_profile_v_[i - 1];
-            double v_lim = std::sqrt(std::max(0.0, v_prev * v_prev + 2.0 * params_.max_tan_accel * ds));
+            double v_lim = std::sqrt(std::max(0.0, v_prev * v_prev + 2.0 * accel_limit * ds));
             speed_profile_v_[i] = std::min(speed_profile_v_[i], v_lim);
         }
     }
@@ -1453,7 +1485,7 @@ void PathHandler::updateSpeedProfile(double v_des) {
 
     // 反向遍历（减速限制，使用保守系数确保终点前可稳定收敛）
     const double decel_safety_factor = 0.8;
-    double max_decel = params_.max_tan_decel > 0.0 ? params_.max_tan_decel : params_.max_tan_accel;
+    double max_decel = decel_limit > 0.0 ? decel_limit : accel_limit;
     max_decel *= decel_safety_factor;
     if (max_decel > 0.0) {
         for (int i = static_cast<int>(speed_profile_v_.size()) - 2; i >= 0; --i) {
@@ -1489,9 +1521,10 @@ void PathHandler::updateSpeedProfile(double v_des) {
     }
 
     // 参考速度下限（末端除外）
-    if (params_.min_ref_speed > 0.0 && speed_profile_v_.size() >= 2) {
+    if (min_profile_speed > 0.0 && speed_profile_v_.size() >= 2) {
+        const double v_floor = std::min(v_des, min_profile_speed);
         for (size_t i = 0; i + 1 < speed_profile_v_.size(); ++i) {
-            speed_profile_v_[i] = std::max(speed_profile_v_[i], params_.min_ref_speed);
+            speed_profile_v_[i] = std::max(speed_profile_v_[i], v_floor);
         }
     }
 
@@ -1510,13 +1543,18 @@ void PathHandler::updateSpeedProfile(double v_des) {
         }
         // v_geom_min：仅几何约束，不含前向/后向 pass
         if (kappa_max > 1e-4) {
-            if (params_.speed_profile_omega_max > 1e-3)
-                v_geom_min = std::min(v_geom_min, params_.speed_profile_omega_max / kappa_max);
-            if (params_.max_lat_accel > 0.0)
-                v_geom_min = std::min(v_geom_min, std::sqrt(params_.max_lat_accel / kappa_max));
+            if (omega_limit > 1e-3)
+                v_geom_min = std::min(v_geom_min, omega_limit / kappa_max);
+            if (lat_accel_limit > 0.0)
+                v_geom_min = std::min(v_geom_min, std::sqrt(lat_accel_limit / kappa_max));
         }
-        if (dkappa_max > 1e-4 && params_.speed_profile_alpha_max > 1e-6)
-            v_geom_min = std::min(v_geom_min, std::sqrt(params_.speed_profile_alpha_max / dkappa_max));
+        if (dkappa_max > 1e-4 && alpha_limit > 1e-6) {
+            const double alpha_budget = energy_profile
+                ? alpha_limit - alpha_ax_budget * kappa_max
+                : alpha_limit;
+            v_geom_min = std::min(v_geom_min,
+                                  alpha_budget > 0.0 ? std::sqrt(alpha_budget / dkappa_max) : 0.0);
+        }
         for (size_t i = 0; i < speed_profile_v_.size(); ++i) {
             const double v = speed_profile_v_[i];
             v_profile_min = std::min(v_profile_min, v);
@@ -1539,12 +1577,13 @@ void PathHandler::updateSpeedProfile(double v_des) {
             }
         }
 
-        ROS_INFO("[SpeedProfile] n=%zu ds=%.3f "
+        ROS_INFO("[SpeedProfile] mode=%s n=%zu ds=%.3f "
                  "kappa_max=%.3f dkappa_max=%.1f "
                  "v_geom_min=%.3f v_profile_min=%.3f v_des=%.3f "
                  "dom(nom/lat/omega/alpha)=%zu/%zu/%zu/%zu "
                  "pass(accel/decel)=%zu/%zu",
-                 nk, ds, kappa_max, dkappa_max, v_geom_min, v_profile_min, v_des,
+                 energy_profile ? "PROFILE_ENERGY_GEO" : "NOM", nk, ds,
+                 kappa_max, dkappa_max, v_geom_min, v_profile_min, v_des,
                  dom_nominal, dom_lat, dom_omega, dom_alpha,
                  accel_limited, decel_limited);
     }

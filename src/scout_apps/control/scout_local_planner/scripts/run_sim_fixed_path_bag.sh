@@ -59,6 +59,13 @@ INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-}"
 INPUT_SHAPING_TYPE="${INPUT_SHAPING_TYPE:-zv}"
 ENABLE_SLOSH_BOX_CONSTRAINT="${ENABLE_SLOSH_BOX_CONSTRAINT:-false}"
 SLOSH_SPEED_GOVERNOR_ENABLE="${SLOSH_SPEED_GOVERNOR_ENABLE:-false}"
+ENERGY_PROFILE_ENABLE="${ENERGY_PROFILE_ENABLE:-false}"
+ENERGY_PROFILE_LAT_ACCEL="${ENERGY_PROFILE_LAT_ACCEL:-1.2}"
+ENERGY_PROFILE_OMEGA_MAX="${ENERGY_PROFILE_OMEGA_MAX:-1.1}"
+ENERGY_PROFILE_ALPHA_MAX="${ENERGY_PROFILE_ALPHA_MAX:-3.0}"
+ENERGY_PROFILE_AX_MAX="${ENERGY_PROFILE_AX_MAX:-1.2}"
+ENERGY_PROFILE_DECEL_MAX="${ENERGY_PROFILE_DECEL_MAX:-1.2}"
+ENERGY_PROFILE_MIN_V="${ENERGY_PROFILE_MIN_V:-0.35}"
 
 case "${CONDITION}" in
     NOM)
@@ -66,6 +73,13 @@ case "${CONDITION}" in
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
         RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
+        ;;
+    PROFILE_ENERGY_GEO)
+        Q_SLOSH="${Q_SLOSH:-0}"
+        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
+        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
+        INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
+        ENERGY_PROFILE_ENABLE=true
         ;;
     FAS_Q5)
         Q_SLOSH="${Q_SLOSH:-5}"
@@ -114,7 +128,7 @@ case "${CONDITION}" in
         ;;
     *)
         echo "[run_sim_fixed_path_bag] ERROR: unsupported CONDITION='${CONDITION}'" >&2
-        echo "Use NOM, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, PROP_Q5, ISR, or CUSTOM." >&2
+        echo "Use NOM, PROFILE_ENERGY_GEO, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, PROP_Q5, ISR, or CUSTOM." >&2
         exit 2
         ;;
 esac
@@ -265,6 +279,13 @@ INPUT_SHAPING_ENABLE=${INPUT_SHAPING_ENABLE}
 INPUT_SHAPING_TYPE=${INPUT_SHAPING_TYPE}
 ENABLE_SLOSH_BOX_CONSTRAINT=${ENABLE_SLOSH_BOX_CONSTRAINT}
 SLOSH_SPEED_GOVERNOR_ENABLE=${SLOSH_SPEED_GOVERNOR_ENABLE}
+ENERGY_PROFILE_ENABLE=${ENERGY_PROFILE_ENABLE}
+ENERGY_PROFILE_LAT_ACCEL=${ENERGY_PROFILE_LAT_ACCEL}
+ENERGY_PROFILE_OMEGA_MAX=${ENERGY_PROFILE_OMEGA_MAX}
+ENERGY_PROFILE_ALPHA_MAX=${ENERGY_PROFILE_ALPHA_MAX}
+ENERGY_PROFILE_AX_MAX=${ENERGY_PROFILE_AX_MAX}
+ENERGY_PROFILE_DECEL_MAX=${ENERGY_PROFILE_DECEL_MAX}
+ENERGY_PROFILE_MIN_V=${ENERGY_PROFILE_MIN_V}
 
 git_status:
 ${git_status}
@@ -275,7 +296,7 @@ EOF
 
 publish_config_summary() {
     local summary
-    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; input_shaping=${INPUT_SHAPING_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}"
+    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; input_shaping=${INPUT_SHAPING_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}; energy_profile=${ENERGY_PROFILE_ENABLE}"
     rostopic pub -l /experiment/config_summary std_msgs/String "data: '${summary}'" >/dev/null &
     local pid=$!
     pids+=("${pid}")
@@ -468,6 +489,13 @@ MPC_ARGS=(
     input_shaping_type:="${INPUT_SHAPING_TYPE}"
     enable_slosh_box_constraint:="${ENABLE_SLOSH_BOX_CONSTRAINT}"
     slosh_speed_governor_enable:="${SLOSH_SPEED_GOVERNOR_ENABLE}"
+    energy_profile_enable:="${ENERGY_PROFILE_ENABLE}"
+    energy_profile_lat_accel:="${ENERGY_PROFILE_LAT_ACCEL}"
+    energy_profile_omega_max:="${ENERGY_PROFILE_OMEGA_MAX}"
+    energy_profile_alpha_max:="${ENERGY_PROFILE_ALPHA_MAX}"
+    energy_profile_ax_max:="${ENERGY_PROFILE_AX_MAX}"
+    energy_profile_decel_max:="${ENERGY_PROFILE_DECEL_MAX}"
+    energy_profile_min_v:="${ENERGY_PROFILE_MIN_V}"
 )
 
 APPROACH_MPC_ARGS=(
@@ -499,6 +527,7 @@ echo "  term_factor_eta      = ${TERMINAL_FACTOR_SLOSH_ETA}"
 echo "  term_factor_eta_dot  = ${TERMINAL_FACTOR_SLOSH_ETA_DOT}"
 echo "  risk_scheduler       = ${RISK_SCHEDULER_ENABLE}"
 echo "  input_shaping        = ${INPUT_SHAPING_ENABLE}"
+echo "  energy_profile       = ${ENERGY_PROFILE_ENABLE}"
 echo "  approach_start       = ${APPROACH_START_ENABLE}"
 echo "  start_delay          = ${START_DELAY}s"
 echo "  start_gate           = ${START_GATE}"
