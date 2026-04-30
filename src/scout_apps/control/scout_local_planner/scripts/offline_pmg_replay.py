@@ -69,6 +69,71 @@ def parse_args():
         action="store_true",
         help="Run signed longitudinal + lateral PMG counterfactual replay.",
     )
+    parser.add_argument(
+        "--profile-energy-rollout",
+        action="store_true",
+        help=(
+            "Run PROFILE_ENERGY Step-0 signed linear-modal rollout validation. "
+            "This validates model timing/risk-window fidelity before PathHandler changes."
+        ),
+    )
+    parser.add_argument(
+        "--easp-dt-max",
+        type=float,
+        default=0.05,
+        help="Maximum internal rollout step for PROFILE_ENERGY validation. Default: 0.05s.",
+    )
+    parser.add_argument(
+        "--easp-energy-ratio-threshold",
+        type=float,
+        default=0.8,
+        help="Risk flag threshold against candidate rollout modal_energy_norm p95.",
+    )
+    parser.add_argument(
+        "--easp-eta-dot-ratio-threshold",
+        type=float,
+        default=0.8,
+        help="Risk flag threshold against candidate rollout eta_dot_norm p95.",
+    )
+    parser.add_argument(
+        "--easp-peak-window",
+        type=float,
+        default=0.5,
+        help="Allowed time window for high-risk recall around predicted risk samples.",
+    )
+    parser.add_argument(
+        "--easp-max-peak-time-error",
+        type=float,
+        default=0.5,
+        help="Fail threshold for height peak timing error. Default: 0.5s.",
+    )
+    parser.add_argument(
+        "--easp-min-eta-dot-corr",
+        type=float,
+        default=0.6,
+        help="Fail threshold for eta_dot replay correlation. Default: 0.6.",
+    )
+    parser.add_argument(
+        "--easp-min-risk-recall",
+        type=float,
+        default=0.7,
+        help="Fail threshold for high-risk window recall. Default: 0.7.",
+    )
+    parser.add_argument(
+        "--easp-lag-scan",
+        type=float,
+        default=0.25,
+        help="Report-only eta_dot lag scan range for diagnosing timestamp/integration offset.",
+    )
+    parser.add_argument(
+        "--easp-input-shift",
+        type=float,
+        default=0.0,
+        help=(
+            "Seconds added to the replay input lookup time. "
+            "Use -0.05/0/+0.05 to diagnose whether /slosh/ax_est and /slosh/ay_est are published before or after state integration."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -264,6 +329,18 @@ def discrete_lateral_step(eta, eta_dot, uy, dt, omega_n, zeta):
     eta_next = phi[0][0] * eta + phi[0][1] * eta_dot + phi[0][2] * uy
     dot_next = phi[1][0] * eta + phi[1][1] * eta_dot + phi[1][2] * uy
     return float(eta_next), float(dot_next)
+
+
+def bounded_modal_step(eta, eta_dot, u, dt, omega_n, zeta, dt_max):
+    if dt <= 0.0:
+        return eta, eta_dot
+    if dt_max <= 0.0:
+        dt_max = dt
+    steps = max(1, int(math.ceil(dt / dt_max)))
+    sub_dt = dt / steps
+    for _ in range(steps):
+        eta, eta_dot = discrete_lateral_step(eta, eta_dot, u, sub_dt, omega_n, zeta)
+    return eta, eta_dot
 
 
 def eta_after_constant_u(eta, eta_dot, uy, dt, omega_n, zeta):
@@ -841,6 +918,213 @@ def interp_bool(series, ts):
     return math.isfinite(value) and value >= 0.5
 
 
+def max_time(samples):
+    finite = [(t, v) for t, v in samples if math.isfinite(v)]
+    if not finite:
+        return float("nan")
+    return max(finite, key=lambda item: item[1])[0]
+
+
+def windowed_recall(actual_high_times, predicted_times, tolerance):
+    if not actual_high_times:
+        return float("nan")
+    if not predicted_times:
+        return 0.0
+    predicted_times = sorted(predicted_times)
+    hits = 0
+    for ts in actual_high_times:
+        idx = bisect.bisect_left(predicted_times, ts)
+        hit = False
+        for candidate_idx in (idx - 1, idx):
+            if 0 <= candidate_idx < len(predicted_times):
+                if abs(predicted_times[candidate_idx] - ts) <= tolerance:
+                    hit = True
+                    break
+        if hit:
+            hits += 1
+    return hits / len(actual_high_times)
+
+
+def best_lagged_corr(reference, candidate, max_lag, step=0.05):
+    if not reference or not candidate:
+        return float("nan"), float("nan")
+    best_lag = float("nan")
+    best_corr = float("nan")
+    steps = max(0, int(round(max_lag / step)))
+    for idx in range(-steps, steps + 1):
+        lag = idx * step
+        xs = []
+        ys = []
+        for ts, value in reference:
+            shifted = interp(candidate, ts + lag)
+            if math.isfinite(value) and math.isfinite(shifted):
+                xs.append(value)
+                ys.append(shifted)
+        corr = pearson(xs, ys)
+        if not math.isfinite(corr):
+            continue
+        if not math.isfinite(best_corr) or abs(corr) > abs(best_corr):
+            best_lag = lag
+            best_corr = corr
+    return best_lag, best_corr
+
+
+def profile_energy_rollout_bag(row, cfg, args):
+    omega_n, height_coeff = modal_params(cfg)
+    series = read_bag_series(row["bag"])
+    windows = main_windows(row["bag"])
+    state_samples = [(t, s) for t, s in series["state"] if in_windows(t, windows)]
+    if not state_samples:
+        return {}
+
+    eta_x = float(state_samples[0][1][0])
+    eta_x_dot = float(state_samples[0][1][1])
+    eta_y = float(state_samples[0][1][2])
+    eta_y_dot = float(state_samples[0][1][3])
+    last_t = state_samples[0][0]
+
+    measured_h = []
+    measured_eta_dot = []
+    measured_energy_norm = []
+    measured_eta_x = []
+    measured_eta_x_dot = []
+    rollout_h = []
+    rollout_eta_dot = []
+    rollout_energy_norm = []
+    rollout_eta_x = []
+    rollout_eta_x_dot = []
+    rollout_eta_y = []
+    ax_values = []
+    ay_values = []
+
+    for ts, state in state_samples:
+        if ts != last_t:
+            dt = min(max(ts - last_t, 0.0), 0.2)
+            input_t = last_t + args.easp_input_shift
+            ux = interp(series["slosh_ax"], input_t)
+            uy = interp(series["slosh_ay"], input_t)
+            ux = ux if math.isfinite(ux) else 0.0
+            uy = uy if math.isfinite(uy) else 0.0
+            eta_x, eta_x_dot = bounded_modal_step(
+                eta_x, eta_x_dot, ux, dt, omega_n, cfg["zeta"], args.easp_dt_max
+            )
+            eta_y, eta_y_dot = bounded_modal_step(
+                eta_y, eta_y_dot, uy, dt, omega_n, cfg["zeta"], args.easp_dt_max
+            )
+            last_t = ts
+
+        measured_eta = math.hypot(float(state[0]), float(state[2]))
+        measured_dot = math.hypot(float(state[1]), float(state[3]))
+        measured_energy = math.sqrt(max(0.0, omega_n * omega_n * measured_eta * measured_eta + measured_dot * measured_dot))
+        replay_eta = math.hypot(eta_x, eta_y)
+        replay_dot = math.hypot(eta_x_dot, eta_y_dot)
+        replay_energy = math.sqrt(max(0.0, omega_n * omega_n * replay_eta * replay_eta + replay_dot * replay_dot))
+        ux_now = interp(series["slosh_ax"], ts + args.easp_input_shift)
+        uy_now = interp(series["slosh_ay"], ts + args.easp_input_shift)
+
+        measured_h.append((ts, height_coeff * measured_eta))
+        measured_eta_dot.append((ts, measured_dot))
+        measured_energy_norm.append((ts, measured_energy))
+        measured_eta_x.append((ts, abs(float(state[0]))))
+        measured_eta_x_dot.append((ts, abs(float(state[1]))))
+        rollout_h.append((ts, height_coeff * replay_eta))
+        rollout_eta_dot.append((ts, replay_dot))
+        rollout_energy_norm.append((ts, replay_energy))
+        rollout_eta_x.append((ts, abs(eta_x)))
+        rollout_eta_x_dot.append((ts, abs(eta_x_dot)))
+        rollout_eta_y.append((ts, abs(eta_y)))
+        ax_values.append(ux_now if math.isfinite(ux_now) else 0.0)
+        ay_values.append(uy_now if math.isfinite(uy_now) else 0.0)
+
+    measured_h_values = [v for _, v in measured_h]
+    rollout_h_values = [v for _, v in rollout_h]
+    measured_eta_dot_values = [v for _, v in measured_eta_dot]
+    rollout_eta_dot_values = [v for _, v in rollout_eta_dot]
+    measured_energy_values = [v for _, v in measured_energy_norm]
+    rollout_energy_values = [v for _, v in rollout_energy_norm]
+
+    measured_h_p95 = percentile(measured_h_values, 95)
+    rollout_h_p95 = percentile(rollout_h_values, 95)
+    h_p95_rel_error = (
+        abs(rollout_h_p95 - measured_h_p95) / measured_h_p95 if measured_h_p95 > 1e-9 else float("nan")
+    )
+
+    measured_peak_t = max_time(measured_h)
+    rollout_peak_t = max_time(rollout_h)
+    peak_time_error = abs(rollout_peak_t - measured_peak_t) if math.isfinite(measured_peak_t) and math.isfinite(rollout_peak_t) else float("nan")
+
+    eta_dot_corr = pearson(measured_eta_dot_values, rollout_eta_dot_values)
+    eta_dot_best_lag, eta_dot_best_lag_corr = best_lagged_corr(
+        measured_eta_dot, rollout_eta_dot, args.easp_lag_scan
+    )
+    eta_dot_rms_rel_error = (
+        abs(rms(rollout_eta_dot_values) - rms(measured_eta_dot_values)) / rms(measured_eta_dot_values)
+        if rms(measured_eta_dot_values) > 1e-9
+        else float("nan")
+    )
+
+    energy_ref = percentile(rollout_energy_values, 95)
+    eta_dot_ref = percentile(rollout_eta_dot_values, 95)
+    risk_times = []
+    for (ts, energy), (_, eta_dot) in zip(rollout_energy_norm, rollout_eta_dot):
+        energy_norm = energy / energy_ref if energy_ref > 1e-9 else 0.0
+        eta_dot_norm = eta_dot / eta_dot_ref if eta_dot_ref > 1e-9 else 0.0
+        if energy_norm >= args.easp_energy_ratio_threshold or eta_dot_norm >= args.easp_eta_dot_ratio_threshold:
+            risk_times.append(ts)
+
+    actual_h_threshold = percentile(measured_h_values, 95)
+    actual_eta_dot_threshold = percentile(measured_eta_dot_values, 95)
+    actual_high_times = [
+        ts
+        for (ts, h), (_, eta_dot) in zip(measured_h, measured_eta_dot)
+        if h >= actual_h_threshold or eta_dot >= actual_eta_dot_threshold
+    ]
+    risk_recall = windowed_recall(actual_high_times, risk_times, args.easp_peak_window)
+
+    eta_x_energy = [(omega_n * v) ** 2 for _, v in measured_eta_x]
+    eta_y_energy = [(omega_n * v) ** 2 for _, v in [(t, abs(s[2])) for t, s in state_samples]]
+    ex_mean = mean(eta_x_energy)
+    ey_mean = mean(eta_y_energy)
+    total_e = ex_mean + ey_mean
+
+    pass_checks = [
+        math.isfinite(h_p95_rel_error) and h_p95_rel_error <= args.max_p95_error,
+        math.isfinite(peak_time_error) and peak_time_error <= args.easp_max_peak_time_error,
+        math.isfinite(eta_dot_corr) and eta_dot_corr >= args.easp_min_eta_dot_corr,
+        math.isfinite(risk_recall) and risk_recall >= args.easp_min_risk_recall,
+    ]
+
+    return {
+        "easp_samples": len(state_samples),
+        "easp_dt_max": args.easp_dt_max,
+        "easp_input_shift_s": args.easp_input_shift,
+        "easp_measured_h_p95": measured_h_p95,
+        "easp_rollout_h_p95": rollout_h_p95,
+        "easp_h_p95_rel_error": h_p95_rel_error,
+        "easp_measured_h_rms": rms(measured_h_values),
+        "easp_rollout_h_rms": rms(rollout_h_values),
+        "easp_peak_time_error_s": peak_time_error,
+        "easp_eta_dot_corr": eta_dot_corr,
+        "easp_eta_dot_best_lag_s": eta_dot_best_lag,
+        "easp_eta_dot_best_lag_corr": eta_dot_best_lag_corr,
+        "easp_eta_dot_rms_rel_error": eta_dot_rms_rel_error,
+        "easp_measured_eta_dot_rms": rms(measured_eta_dot_values),
+        "easp_rollout_eta_dot_rms": rms(rollout_eta_dot_values),
+        "easp_measured_energy_norm_p95": percentile(measured_energy_values, 95),
+        "easp_rollout_energy_norm_p95": energy_ref,
+        "easp_risk_active_ratio": len(risk_times) / len(rollout_energy_norm) if rollout_energy_norm else float("nan"),
+        "easp_risk_recall": risk_recall,
+        "easp_eta_x_energy_ratio": ex_mean / total_e if total_e > 1e-12 else float("nan"),
+        "easp_eta_x_rms": rms([v for _, v in measured_eta_x]),
+        "easp_eta_x_dot_rms": rms([v for _, v in measured_eta_x_dot]),
+        "easp_rollout_eta_x_rms": rms([v for _, v in rollout_eta_x]),
+        "easp_rollout_eta_x_dot_rms": rms([v for _, v in rollout_eta_x_dot]),
+        "easp_ax_abs_p95": percentile([abs(v) for v in ax_values], 95),
+        "easp_ay_abs_p95": percentile([abs(v) for v in ay_values], 95),
+        "easp_verdict": "PASS" if all(pass_checks) else "FAIL",
+    }
+
+
 def write_csv(path, rows):
     if not path or not rows:
         return
@@ -916,6 +1200,9 @@ def main():
             y_threshold = y_thresholds.get(row["path_id"], float("nan"))
             if math.isfinite(x_threshold) and math.isfinite(y_threshold):
                 row.update(combined_replay_bag(row, cfg, args, x_threshold, y_threshold))
+    if args.profile_energy_rollout:
+        for row in rows:
+            row.update(profile_energy_rollout_bag(row, cfg, args))
 
     for row in rows:
         print(os.path.basename(row["bag"]))
@@ -970,6 +1257,19 @@ def main():
                 f"h_p95={row['combined_h_p95']:.6g} "
                 f"eta_x_energy_p95={row['combined_eta_x_energy_p95']:.6g}"
             )
+        if args.profile_energy_rollout and "easp_verdict" in row:
+            print(
+                "- profile_energy_rollout: "
+                f"{row['easp_verdict']} "
+                f"input_shift={row['easp_input_shift_s']:.2f}s "
+                f"h_p95_err={row['easp_h_p95_rel_error']:.3f} "
+                f"peak_dt={row['easp_peak_time_error_s']:.3f}s "
+                f"eta_dot_corr={row['easp_eta_dot_corr']:.3f} "
+                f"eta_dot_best={row['easp_eta_dot_best_lag_corr']:.3f}@{row['easp_eta_dot_best_lag_s']:.2f}s "
+                f"risk_recall={row['easp_risk_recall']:.3f} "
+                f"eta_x_ratio={row['easp_eta_x_energy_ratio']:.3f} "
+                f"ax_p95={row['easp_ax_abs_p95']:.3f}"
+            )
 
     pass_count = sum(1 for row in rows if row["verdict"] == "PASS")
     print(f"\noverall: {pass_count}/{len(rows)} bags passed baseline replay")
@@ -998,6 +1298,19 @@ def main():
                 f"active_mean={mean([r['combined_active_ratio'] for r in combined_rows]):.3f} "
                 f"active_x_mean={mean([r['combined_active_x_ratio'] for r in combined_rows]):.3f} "
                 f"active_y_mean={mean([r['combined_active_y_ratio'] for r in combined_rows]):.3f}"
+            )
+    if args.profile_energy_rollout:
+        easp_rows = [row for row in rows if "easp_verdict" in row]
+        if easp_rows:
+            pass_count = sum(1 for row in easp_rows if row["easp_verdict"] == "PASS")
+            print(
+                "profile_energy_rollout summary: "
+                f"{pass_count}/{len(easp_rows)} pass "
+                f"h_p95_err_mean={mean([r['easp_h_p95_rel_error'] for r in easp_rows]):.3f} "
+                f"peak_dt_mean={mean([r['easp_peak_time_error_s'] for r in easp_rows]):.3f}s "
+                f"eta_dot_corr_mean={mean([r['easp_eta_dot_corr'] for r in easp_rows]):.3f} "
+                f"eta_dot_best_corr_mean={mean([r['easp_eta_dot_best_lag_corr'] for r in easp_rows]):.3f} "
+                f"risk_recall_mean={mean([r['easp_risk_recall'] for r in easp_rows]):.3f}"
             )
     write_csv(args.csv, rows)
     if args.csv:
