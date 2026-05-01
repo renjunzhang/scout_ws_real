@@ -815,3 +815,58 @@ MPC 代价函数主动抑制了液体晃动。
 ```text
 model-estimated slosh height / /slosh/height indicators
 ```
+
+## 13. 2026-05-01 执行后结论：触发停止条件
+
+执行结果：
+
+```text
+PROFILE_ENERGY_GEO_FAST:
+  tracking +20.3%
+  h_p95 +0.3%
+  eta_dot -18.7%
+
+PROFILE_ENERGY run05/run06:
+  tracking +23.3%
+  h_p95 -8.7%
+  eta_dot -25.6%
+  ay_p95 -8.7%
+
+PROFILE_ENERGY light-geometry run07/run08:
+  tracking +16.5%
+  h_p95 -8.0%
+  eta_dot -17.6%
+  ay_p95 +5.4%
+  track_p95 +34.4%
+```
+
+判断：
+
+```text
+rollout correction 相对 geometry-only 有明确 slosh 指标收益；
+但无法同时满足 tracking_time <= +15%、ay_p95 不升、tracking 不恶化。
+```
+
+因此本方案已触发停止条件：
+
+```text
+P2 tracking_time > +15%
+ay_p95 上升
+tracking_p95 明显恶化
+```
+
+后续不再继续 `PROFILE_ENERGY` 参数扫，不录 P3 `PROFILE_ENERGY`。
+
+本方案保留为：
+
+```text
+reference-first speed-profile 层的边界/负结果；
+geometry-only 与 rollout-corrected profile 的消融证据；
+转向更上游轨迹/路径几何生成层的依据。
+```
+
+后续方案见：
+
+```text
+docs/Claude/修改方案-时间-简介/2026-05-01_Anti-Slosh_轨迹几何层重设计方案.md
+```
