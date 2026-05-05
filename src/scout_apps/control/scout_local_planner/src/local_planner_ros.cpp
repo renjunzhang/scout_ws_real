@@ -207,6 +207,16 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     terminal_mode_pub_ = nh_.advertise<std_msgs::String>("terminal/mode", 1);
     terminal_recovery_latched_pub_ = nh_.advertise<std_msgs::Int32>("terminal/recovery_latched", 1);
     terminal_goal_info_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("terminal/goal_info", 1);
+    ref_v_ref_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_ref", 1);
+    ref_v_path_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_path", 1);
+    ref_kappa_pub_ = nh_.advertise<std_msgs::Float32>("reference/kappa", 1);
+    ref_s_pub_ = nh_.advertise<std_msgs::Float32>("reference/s", 1);
+    ref_implied_ax_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_ax", 1);
+    ref_implied_ay_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_ay", 1);
+    ref_implied_jerk_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_jerk", 1);
+    ref_implied_ax_abs_p95_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_ax_abs_p95", 1);
+    ref_implied_ay_abs_p95_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_ay_abs_p95", 1);
+    ref_implied_jerk_abs_p95_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_jerk_abs_p95", 1);
     
     // 控制定时器
     control_timer_ = nh_.createTimer(
@@ -1042,6 +1052,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 }
 
                 applyInputShaping(ref_points);
+                publishReferenceExecutionDebug(ref_points);
 
                 publishSmoothedPath();
                 
@@ -2019,6 +2030,92 @@ void LocalPlannerROS::applyInputShaping(std::vector<ReferencePoint>& refs) {
         hist.pop_front();
     }
     input_shaping_v_history_.swap(hist);
+}
+
+void LocalPlannerROS::publishReferenceExecutionDebug(const std::vector<ReferencePoint>& refs) {
+    if (refs.empty()) {
+        return;
+    }
+
+    auto publish_float = [](ros::Publisher& pub, double value) {
+        if (pub.getNumSubscribers() <= 0) {
+            return;
+        }
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(value);
+        pub.publish(msg);
+    };
+
+    auto abs_p95 = [](std::vector<double> values) {
+        values.erase(
+            std::remove_if(values.begin(), values.end(),
+                           [](double v) { return !std::isfinite(v); }),
+            values.end());
+        if (values.empty()) {
+            return 0.0;
+        }
+        for (double& value : values) {
+            value = std::abs(value);
+        }
+        std::sort(values.begin(), values.end());
+        const double pos = 0.95 * static_cast<double>(values.size() - 1);
+        const size_t lo = static_cast<size_t>(std::floor(pos));
+        const size_t hi = static_cast<size_t>(std::ceil(pos));
+        if (lo == hi) {
+            return values[lo];
+        }
+        const double r = pos - static_cast<double>(lo);
+        return values[lo] * (1.0 - r) + values[hi] * r;
+    };
+
+    const double dt = std::max(1e-6, mpc_params_.dt);
+    std::vector<double> ax_values;
+    std::vector<double> ay_values;
+    std::vector<double> jerk_values;
+    ax_values.reserve(refs.size());
+    ay_values.reserve(refs.size());
+    jerk_values.reserve(refs.size());
+
+    double first_ax = 0.0;
+    double first_jerk = 0.0;
+    bool has_first_ax = false;
+    double prev_ax = 0.0;
+    bool has_prev_ax = false;
+
+    for (size_t i = 0; i < refs.size(); ++i) {
+        const double v = std::max(0.0, refs[i].v_ref);
+        ay_values.push_back(v * v * refs[i].kappa);
+        if (i + 1 < refs.size()) {
+            const double v_next = std::max(0.0, refs[i + 1].v_ref);
+            const double ax = (v_next - v) / dt;
+            ax_values.push_back(ax);
+            if (!has_first_ax) {
+                first_ax = ax;
+                has_first_ax = true;
+            }
+            if (has_prev_ax) {
+                const double jerk = (ax - prev_ax) / dt;
+                jerk_values.push_back(jerk);
+                if (jerk_values.size() == 1) {
+                    first_jerk = jerk;
+                }
+            }
+            prev_ax = ax;
+            has_prev_ax = true;
+        }
+    }
+
+    const ReferencePoint& ref0 = refs.front();
+    publish_float(ref_v_ref_pub_, ref0.v_ref);
+    publish_float(ref_v_path_pub_, ref0.v_path);
+    publish_float(ref_kappa_pub_, ref0.kappa);
+    publish_float(ref_s_pub_, ref0.s);
+    publish_float(ref_implied_ax_pub_, has_first_ax ? first_ax : 0.0);
+    publish_float(ref_implied_ay_pub_, ay_values.empty() ? 0.0 : ay_values.front());
+    publish_float(ref_implied_jerk_pub_, first_jerk);
+    publish_float(ref_implied_ax_abs_p95_pub_, abs_p95(ax_values));
+    publish_float(ref_implied_ay_abs_p95_pub_, abs_p95(ay_values));
+    publish_float(ref_implied_jerk_abs_p95_pub_, abs_p95(jerk_values));
 }
 
 void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok, bool publish_solver_debug) {

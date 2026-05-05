@@ -52,6 +52,10 @@ PATH_PUBLISH_ONCE_KEEPALIVE="${PATH_PUBLISH_ONCE_KEEPALIVE:-true}"
 
 Q_SLOSH="${Q_SLOSH:-}"
 Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-}"
+MPC_Q_V="${MPC_Q_V:-8.0}"
+MPC_R_A="${MPC_R_A:-0.4}"
+MPC_R_DA="${MPC_R_DA:-0.5}"
+MPC_CMD_VEL_LEAD_TIME="${MPC_CMD_VEL_LEAD_TIME:-0.15}"
 TERMINAL_FACTOR_SLOSH_ETA="${TERMINAL_FACTOR_SLOSH_ETA:-0.0}"
 TERMINAL_FACTOR_SLOSH_ETA_DOT="${TERMINAL_FACTOR_SLOSH_ETA_DOT:-0.0}"
 RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-}"
@@ -66,6 +70,7 @@ ENERGY_PROFILE_ALPHA_MAX="${ENERGY_PROFILE_ALPHA_MAX:-3.0}"
 ENERGY_PROFILE_AX_MAX="${ENERGY_PROFILE_AX_MAX:-1.2}"
 ENERGY_PROFILE_DECEL_MAX="${ENERGY_PROFILE_DECEL_MAX:-1.2}"
 ENERGY_PROFILE_MIN_V="${ENERGY_PROFILE_MIN_V:-0.35}"
+VEHICLE_V_MAX="${VEHICLE_V_MAX:-3.0}"
 
 case "${CONDITION}" in
     NOM)
@@ -80,6 +85,18 @@ case "${CONDITION}" in
         RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
         ENERGY_PROFILE_ENABLE=true
+        ;;
+    PROFILE_REF_V2)
+        # V2 constrained reference smoke: use custom/radius geometry plus
+        # PathHandler v(s) caps only. Keep MPC slosh terms disabled.
+        Q_SLOSH="${Q_SLOSH:-0}"
+        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
+        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
+        INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
+        ENERGY_PROFILE_ENABLE=true
+        ENERGY_PROFILE_OMEGA_MAX=999.0
+        ENERGY_PROFILE_ALPHA_MAX=999.0
+        ENERGY_PROFILE_MIN_V=0.0
         ;;
     FAS_Q5)
         Q_SLOSH="${Q_SLOSH:-5}"
@@ -128,7 +145,7 @@ case "${CONDITION}" in
         ;;
     *)
         echo "[run_sim_fixed_path_bag] ERROR: unsupported CONDITION='${CONDITION}'" >&2
-        echo "Use NOM, PROFILE_ENERGY_GEO, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, PROP_Q5, ISR, or CUSTOM." >&2
+        echo "Use NOM, PROFILE_ENERGY_GEO, PROFILE_REF_V2, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, PROP_Q5, ISR, or CUSTOM." >&2
         exit 2
         ;;
 esac
@@ -272,6 +289,10 @@ TEMPLATE_GOAL_QW=${TEMPLATE_GOAL_QW}
 
 Q_SLOSH=${Q_SLOSH}
 Q_SLOSH_ETA_DOT=${Q_SLOSH_ETA_DOT}
+MPC_Q_V=${MPC_Q_V}
+MPC_R_A=${MPC_R_A}
+MPC_R_DA=${MPC_R_DA}
+MPC_CMD_VEL_LEAD_TIME=${MPC_CMD_VEL_LEAD_TIME}
 TERMINAL_FACTOR_SLOSH_ETA=${TERMINAL_FACTOR_SLOSH_ETA}
 TERMINAL_FACTOR_SLOSH_ETA_DOT=${TERMINAL_FACTOR_SLOSH_ETA_DOT}
 RISK_SCHEDULER_ENABLE=${RISK_SCHEDULER_ENABLE}
@@ -286,6 +307,7 @@ ENERGY_PROFILE_ALPHA_MAX=${ENERGY_PROFILE_ALPHA_MAX}
 ENERGY_PROFILE_AX_MAX=${ENERGY_PROFILE_AX_MAX}
 ENERGY_PROFILE_DECEL_MAX=${ENERGY_PROFILE_DECEL_MAX}
 ENERGY_PROFILE_MIN_V=${ENERGY_PROFILE_MIN_V}
+VEHICLE_V_MAX=${VEHICLE_V_MAX}
 
 git_status:
 ${git_status}
@@ -296,7 +318,7 @@ EOF
 
 publish_config_summary() {
     local summary
-    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; input_shaping=${INPUT_SHAPING_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}; energy_profile=${ENERGY_PROFILE_ENABLE}"
+    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; input_shaping=${INPUT_SHAPING_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}; energy_profile=${ENERGY_PROFILE_ENABLE}; vehicle_v_max=${VEHICLE_V_MAX}"
     rostopic pub -l /experiment/config_summary std_msgs/String "data: '${summary}'" >/dev/null &
     local pid=$!
     pids+=("${pid}")
@@ -420,6 +442,16 @@ TOPICS=(
     /terminal/recovery_latched
     /terminal/goal_info
     /experiment/config_summary
+    /reference/v_ref
+    /reference/v_path
+    /reference/kappa
+    /reference/s
+    /reference/implied_ax
+    /reference/implied_ay
+    /reference/implied_jerk
+    /reference/implied_ax_abs_p95
+    /reference/implied_ay_abs_p95
+    /reference/implied_jerk_abs_p95
     /slosh/state
     /slosh/eta_norm
     /slosh/eta_dot_norm
@@ -482,6 +514,10 @@ MPC_ARGS=(
     global_path_topic:="${GLOBAL_PATH_TOPIC}"
     Q_slosh:="${Q_SLOSH}"
     Q_slosh_eta_dot:="${Q_SLOSH_ETA_DOT}"
+    mpc_Q_v:="${MPC_Q_V}"
+    mpc_R_a:="${MPC_R_A}"
+    mpc_R_da:="${MPC_R_DA}"
+    mpc_cmd_vel_lead_time:="${MPC_CMD_VEL_LEAD_TIME}"
     terminal_factor_slosh_eta:="${TERMINAL_FACTOR_SLOSH_ETA}"
     terminal_factor_slosh_eta_dot:="${TERMINAL_FACTOR_SLOSH_ETA_DOT}"
     risk_scheduler_enable:="${RISK_SCHEDULER_ENABLE}"
@@ -496,6 +532,7 @@ MPC_ARGS=(
     energy_profile_ax_max:="${ENERGY_PROFILE_AX_MAX}"
     energy_profile_decel_max:="${ENERGY_PROFILE_DECEL_MAX}"
     energy_profile_min_v:="${ENERGY_PROFILE_MIN_V}"
+    vehicle_v_max:="${VEHICLE_V_MAX}"
 )
 
 APPROACH_MPC_ARGS=(
@@ -523,11 +560,16 @@ echo "  TEMPLATE_GOAL        = ${TEMPLATE_GOAL_TOPIC} (${TEMPLATE_GOAL_X}, ${TEM
 echo "  BAG_PATH             = ${BAG_PATH}.bag"
 echo "  Q_slosh              = ${Q_SLOSH}"
 echo "  Q_slosh_eta_dot      = ${Q_SLOSH_ETA_DOT}"
+echo "  mpc_Q_v              = ${MPC_Q_V}"
+echo "  mpc_R_a              = ${MPC_R_A}"
+echo "  mpc_R_da             = ${MPC_R_DA}"
+echo "  cmd_vel_lead_time    = ${MPC_CMD_VEL_LEAD_TIME}"
 echo "  term_factor_eta      = ${TERMINAL_FACTOR_SLOSH_ETA}"
 echo "  term_factor_eta_dot  = ${TERMINAL_FACTOR_SLOSH_ETA_DOT}"
 echo "  risk_scheduler       = ${RISK_SCHEDULER_ENABLE}"
 echo "  input_shaping        = ${INPUT_SHAPING_ENABLE}"
 echo "  energy_profile       = ${ENERGY_PROFILE_ENABLE}"
+echo "  vehicle_v_max        = ${VEHICLE_V_MAX}"
 echo "  approach_start       = ${APPROACH_START_ENABLE}"
 echo "  start_delay          = ${START_DELAY}s"
 echo "  start_gate           = ${START_GATE}"

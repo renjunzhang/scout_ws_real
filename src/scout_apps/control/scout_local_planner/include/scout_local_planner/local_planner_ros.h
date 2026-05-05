@@ -71,6 +71,7 @@ private:
     void publishLocalPath(const std::vector<StateVector>& predicted_states,
                           const std::vector<ReferencePoint>& refs);
     void publishReferencePath(const std::vector<ReferencePoint>& refs);
+    void publishReferenceExecutionDebug(const std::vector<ReferencePoint>& refs);
     void publishSmoothedPath();
     void publishStatus();
     void publishSloshDebug(double solve_time_ms, bool solve_ok, bool publish_solver_debug = true);
@@ -310,6 +311,16 @@ private:
     ros::Publisher terminal_mode_pub_;
     ros::Publisher terminal_recovery_latched_pub_;
     ros::Publisher terminal_goal_info_pub_;
+    ros::Publisher ref_v_ref_pub_;
+    ros::Publisher ref_v_path_pub_;
+    ros::Publisher ref_kappa_pub_;
+    ros::Publisher ref_s_pub_;
+    ros::Publisher ref_implied_ax_pub_;
+    ros::Publisher ref_implied_ay_pub_;
+    ros::Publisher ref_implied_jerk_pub_;
+    ros::Publisher ref_implied_ax_abs_p95_pub_;
+    ros::Publisher ref_implied_ay_abs_p95_pub_;
+    ros::Publisher ref_implied_jerk_abs_p95_pub_;
 
     // 实验 episode 标记
     int episode_id_ = 0;

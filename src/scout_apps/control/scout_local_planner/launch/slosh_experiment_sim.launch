@@ -16,6 +16,10 @@
   <!-- ======== 实验参数 ======== -->
   <arg name="Q_slosh" default="0.0"  doc="晃动抑制权重 (消融变量: 0/5/10/20)"/>
   <arg name="Q_slosh_eta_dot" default="0.0" doc="P1: eta_dot 速度惩罚权重，默认关闭；建议从 0.01~0.1 开始调"/>
+  <arg name="mpc_Q_v" default="8.0" doc="速度跟踪权重覆盖，用于 reference execution 消融"/>
+  <arg name="mpc_R_a" default="0.4" doc="加速度控制权重覆盖，用于 reference execution 消融"/>
+  <arg name="mpc_R_da" default="0.5" doc="加速度变化权重覆盖，用于 reference execution 消融"/>
+  <arg name="mpc_cmd_vel_lead_time" default="0.15" doc="cmd_vel 输出前瞻时间覆盖；仿真默认 0.15"/>
   <arg name="terminal_factor_slosh_eta" default="0.0" doc="P2: terminal η 代价放大系数，0=关闭；首轮建议 5~10；需 Q_slosh>0"/>
   <arg name="terminal_factor_slosh_eta_dot" default="0.0" doc="P2: terminal η̇ 代价放大系数，0=关闭；首轮建议 5~10；需 Q_slosh_eta_dot>0"/>
   <arg name="enable_slosh_box_constraint" default="false" doc="是否启用第一版液面峰值盒约束代理"/>
@@ -61,6 +65,7 @@
   <arg name="input_shaping_use_model_params" default="true" doc="是否使用当前 slosh 模态参数生成 shaper"/>
   <arg name="input_shaping_omega0_override" default="0.0" doc="input shaping 频率覆盖值，非正时使用模型参数"/>
   <arg name="input_shaping_zeta_override" default="0.0" doc="input shaping 阻尼比覆盖值，非正时使用模型参数"/>
+  <arg name="vehicle_v_max" default="3.0" doc="覆盖 vehicle/v_max；anti-slosh path candidate 可用 1.75 使 v_nominal=1.40"/>
   <arg name="cmd_vel_topic" default="/cmd_vel" doc="planner 输出的 cmd_vel 话题；阶段 3 可改到调试话题避免与底盘直控冲突"/>
   <arg name="global_path_topic" default="/scout/global_path" doc="local planner 订阅的全局路径话题；固定路径重放实验时可改到 /scout/global_path_fixed"/>
 
@@ -76,6 +81,10 @@
     <param name="verbose" value="$(arg verbose)"/>
     <param name="mpc/Q_slosh" value="$(arg Q_slosh)"/>
     <param name="mpc/Q_slosh_eta_dot" value="$(arg Q_slosh_eta_dot)"/>
+    <param name="mpc/Q_v" value="$(arg mpc_Q_v)"/>
+    <param name="mpc/R_a" value="$(arg mpc_R_a)"/>
+    <param name="mpc/R_da" value="$(arg mpc_R_da)"/>
+    <param name="mpc/cmd_vel_lead_time" value="$(arg mpc_cmd_vel_lead_time)"/>
     <param name="mpc/terminal_factor_slosh_eta" value="$(arg terminal_factor_slosh_eta)"/>
     <param name="mpc/terminal_factor_slosh_eta_dot" value="$(arg terminal_factor_slosh_eta_dot)"/>
     <param name="mpc/enable_slosh_box_constraint" value="$(arg enable_slosh_box_constraint)"/>
@@ -120,6 +129,7 @@
     <param name="input_shaping/use_model_params" value="$(arg input_shaping_use_model_params)"/>
     <param name="input_shaping/omega0_override" value="$(arg input_shaping_omega0_override)"/>
     <param name="input_shaping/zeta_override" value="$(arg input_shaping_zeta_override)"/>
+    <param name="vehicle/v_max" value="$(arg vehicle_v_max)"/>
 
     <!-- 话题 remap -->
     <remap from="global_path" to="$(arg global_path_topic)"/>

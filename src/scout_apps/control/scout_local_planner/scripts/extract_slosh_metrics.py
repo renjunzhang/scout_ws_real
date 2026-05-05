@@ -28,6 +28,7 @@ KNOWN_CONDITIONS = (
     "ENERGY_WIN",
     "PROFILE_WINDOW",
     "PROFILE_RISK",
+    "PROFILE_REF_V2",
     "PROFILE_ENERGY_GEO",
     "PROFILE_ENERGY",
     "OUTPUT_GUARD",
@@ -42,6 +43,7 @@ KNOWN_CONDITIONS = (
     "FAS_Q5",
     "NOM",
     "ISR",
+    "CUSTOM",
 )
 D0_GROUP_METRICS = (
     "tracking_time_s",
@@ -476,6 +478,9 @@ def collect_metrics(
     prev_cmd_ts = None
     prev_cmd_vx = None
     prev_cmd_wz = None
+    prev_odom_ts = None
+    prev_odom_vx = None
+    prev_odom_ax = None
 
     topics = [
         "/slosh/state",
@@ -495,6 +500,16 @@ def collect_metrics(
         "/slosh/output_guard_ay_limit",
         "/slosh/v_des_eff",
         "/slosh/constraint_active",
+        "/reference/v_ref",
+        "/reference/v_path",
+        "/reference/kappa",
+        "/reference/s",
+        "/reference/implied_ax",
+        "/reference/implied_ay",
+        "/reference/implied_jerk",
+        "/reference/implied_ax_abs_p95",
+        "/reference/implied_ay_abs_p95",
+        "/reference/implied_jerk_abs_p95",
         "/slosh/episode_id",
         "/cmd_vel",
         "/odom",
@@ -576,6 +591,26 @@ def collect_metrics(
                 metrics["v_des_eff"].append(float(msg.data))
             elif topic == "/slosh/constraint_active":
                 metrics["constraint"].append(int(msg.data))
+            elif topic == "/reference/v_ref":
+                metrics["ref_v_ref"].append(float(msg.data))
+            elif topic == "/reference/v_path":
+                metrics["ref_v_path"].append(float(msg.data))
+            elif topic == "/reference/kappa":
+                metrics["ref_kappa_abs"].append(abs(float(msg.data)))
+            elif topic == "/reference/s":
+                metrics["ref_s"].append(float(msg.data))
+            elif topic == "/reference/implied_ax":
+                metrics["ref_implied_ax_abs"].append(abs(float(msg.data)))
+            elif topic == "/reference/implied_ay":
+                metrics["ref_implied_ay_abs"].append(abs(float(msg.data)))
+            elif topic == "/reference/implied_jerk":
+                metrics["ref_implied_jerk_abs"].append(abs(float(msg.data)))
+            elif topic == "/reference/implied_ax_abs_p95":
+                metrics["ref_implied_ax_abs_p95_horizon"].append(float(msg.data))
+            elif topic == "/reference/implied_ay_abs_p95":
+                metrics["ref_implied_ay_abs_p95_horizon"].append(float(msg.data))
+            elif topic == "/reference/implied_jerk_abs_p95":
+                metrics["ref_implied_jerk_abs_p95_horizon"].append(float(msg.data))
             elif topic == "/slosh/episode_id":
                 episodes.add(int(msg.data))
             elif topic == "/cmd_vel":
@@ -600,6 +635,16 @@ def collect_metrics(
                 metrics["odom_ay"].append(ay)
                 metrics["odom_ay_abs"].append(abs(ay))
                 series["odom_ay_abs"].append((ts, abs(ay)))
+                if prev_odom_ts is not None:
+                    dt = ts - prev_odom_ts
+                    if dt > 1e-6:
+                        ax = (vx - prev_odom_vx) / dt
+                        metrics["odom_ax_abs"].append(abs(ax))
+                        if prev_odom_ax is not None:
+                            metrics["odom_jerk_abs"].append(abs((ax - prev_odom_ax) / dt))
+                        prev_odom_ax = ax
+                prev_odom_ts = ts
+                prev_odom_vx = vx
                 if abs(vx) > 0.05:
                     metrics["odom_kappa_abs"].append(abs(wz / vx))
                 odom_samples.append((ts, {
@@ -726,6 +771,12 @@ def collect_metrics(
         "output_guard_ay_limit_mean": round(safe_mean(metrics["output_guard_ay_limit"]), 3),
         "v_des_eff_mean": round(safe_mean(metrics["v_des_eff"]), 3),
         "v_des_eff_min": round(min(metrics["v_des_eff"]), 3) if metrics["v_des_eff"] else float("nan"),
+        "ref_v_ref_mean": round(safe_mean(metrics["ref_v_ref"]), 3),
+        "ref_v_path_mean": round(safe_mean(metrics["ref_v_path"]), 3),
+        "ref_kappa_abs_p95": round(percentile(metrics["ref_kappa_abs"], 95), 3),
+        "ref_implied_ax_abs_p95": round(percentile(metrics["ref_implied_ax_abs_p95_horizon"], 95), 3),
+        "ref_implied_ay_abs_p95": round(percentile(metrics["ref_implied_ay_abs_p95_horizon"], 95), 3),
+        "ref_implied_jerk_abs_p95": round(percentile(metrics["ref_implied_jerk_abs_p95_horizon"], 95), 3),
         "cmd_vx_rms": round(rms(metrics["vx"]), 3),
         "cmd_wz_rms": round(rms(metrics["wz"]), 3),
         "cmd_dvx_rms_mps2": round(rms(metrics["cmd_dvx"]), 3),
@@ -735,6 +786,8 @@ def collect_metrics(
         "odom_ay_abs_mean": round(safe_mean(metrics["odom_ay_abs"]), 3),
         "odom_ay_abs_rms": round(rms(metrics["odom_ay"]), 3),
         "odom_ay_abs_p95": round(percentile(metrics["odom_ay_abs"], 95), 3),
+        "odom_ax_abs_p95": round(percentile(metrics["odom_ax_abs"], 95), 3),
+        "odom_jerk_abs_p95": round(percentile(metrics["odom_jerk_abs"], 95), 3),
         "odom_kappa_abs_p95": round(percentile(metrics["odom_kappa_abs"], 95), 3),
         "track_dist_rms_m": round(rms(metrics["track_dist"]), 3),
         "track_dist_p95_m": round(percentile(metrics["track_dist"], 95), 3),
@@ -751,6 +804,15 @@ def collect_metrics(
         ),
         "goals": " | ".join(f"({x},{y})" for x, y in goals),
     }
+    row["exec_ax_to_ref_p95_ratio"] = round(
+        row["odom_ax_abs_p95"] / row["ref_implied_ax_abs_p95"], 3
+    ) if row["ref_implied_ax_abs_p95"] and not math.isnan(row["ref_implied_ax_abs_p95"]) else float("nan")
+    row["exec_ay_to_ref_p95_ratio"] = round(
+        row["odom_ay_abs_p95"] / row["ref_implied_ay_abs_p95"], 3
+    ) if row["ref_implied_ay_abs_p95"] and not math.isnan(row["ref_implied_ay_abs_p95"]) else float("nan")
+    row["exec_jerk_to_ref_p95_ratio"] = round(
+        row["odom_jerk_abs_p95"] / row["ref_implied_jerk_abs_p95"], 3
+    ) if row["ref_implied_jerk_abs_p95"] and not math.isnan(row["ref_implied_jerk_abs_p95"]) else float("nan")
     for status in STATUS_BUCKETS:
         item = status_breakdown.get(status)
         key = status.lower()

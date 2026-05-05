@@ -128,10 +128,11 @@ def parse_args():
     parser.add_argument(
         "--easp-input-shift",
         type=float,
-        default=0.0,
+        default=0.05,
         help=(
             "Seconds added to the replay input lookup time. "
-            "Use -0.05/0/+0.05 to diagnose whether /slosh/ax_est and /slosh/ay_est are published before or after state integration."
+            "Default +0.05s matches recorded /slosh/state integration timing; "
+            "use -0.05/0/+0.05 to diagnose whether /slosh/ax_est and /slosh/ay_est are published before or after state integration."
         ),
     )
     return parser.parse_args()

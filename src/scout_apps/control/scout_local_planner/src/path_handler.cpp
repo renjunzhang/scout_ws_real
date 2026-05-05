@@ -750,14 +750,19 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
         
         // 沿路径推进（时间化速度）
         if (params_.time_parameterize) {
-            // 速度参考用 s_progress（不加 lookahead），几何参考用 s_geom
+            // 默认速度参考用 s_progress（不加 lookahead），几何参考用 s_geom。
+            // PROFILE_REF_V2/energy profile 需要速度与几何同弧长采样，否则低曲率段速度
+            // 会和 lookahead 高曲率几何配对，重新生成高 ay reference。
+            const bool energy_profile = params_.energy_profile_enable;
+            double s_geom_global = s_progress + params_.lookahead_distance;
             double s_local = s_geom_local;
             if (has_window_s) {
-                double s_geom_global = s_progress + params_.lookahead_distance;
                 s_geom_global = std::min(std::max(s_geom_global, s_start), s_end);
                 const double window_len = std::max(1e-6, s_end - s_start);
                 const double scale = total_len / window_len;
                 s_local = (s_geom_global - s_start) * scale;
+            } else {
+                s_geom_global = s_local;
             }
             s_local = std::max(0.0, std::min(total_len, s_local));
 
@@ -771,12 +776,17 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
 
             const double v_exec_cap = std::max(0.0, v_exec);
             const double v_plan_cap = std::max(0.0, v_plan);
-            double v_ref = speed_profile_valid_ ? getSpeedAtS(s_progress) : v_plan_cap;
+            const double speed_s = energy_profile ? s_geom_global : s_progress;
+            double v_ref = speed_profile_valid_ ? getSpeedAtS(speed_s) : v_plan_cap;
             double v_curve_cap = v_exec_cap;
-            if (params_.max_lat_accel > 0.0) {
+            const double lat_accel_limit =
+                (energy_profile && params_.energy_profile_lat_accel > 0.0)
+                    ? params_.energy_profile_lat_accel
+                    : params_.max_lat_accel;
+            if (lat_accel_limit > 0.0) {
                 const double kappa_abs = std::abs(ref.kappa);
                 if (kappa_abs > 1e-4) {
-                    v_curve_cap = std::min(v_curve_cap, std::sqrt(params_.max_lat_accel / kappa_abs));
+                    v_curve_cap = std::min(v_curve_cap, std::sqrt(lat_accel_limit / kappa_abs));
                 }
             }
 
@@ -795,15 +805,15 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
                 }
             }
 
-            v_ref = std::min(v_ref, v_curve_cap);
-            v_ref = std::min(v_ref, v_plan_cap);
-
             // 终点捕获区内保持最低参考速度，避免距离尚未达标时过早停死。
             if (goal_dist_base > params_.goal_tolerance &&
                 goal_dist_base < params_.goal_capture_distance &&
                 params_.goal_capture_min_speed > 1e-6) {
                 v_ref = std::max(v_ref, params_.goal_capture_min_speed);
             }
+
+            v_ref = std::min(v_ref, v_curve_cap);
+            v_ref = std::min(v_ref, v_plan_cap);
 
             // 外部传入的 v_des 必须是硬上界。否则 goal_stop_pending_ 时即便上层将
             // v_des_cmd 压到 0，time-parameterized speed profile 仍可能把 v_ref 抬回正值，
@@ -846,6 +856,33 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
         }
         
         ref_points.push_back(ref);
+    }
+
+    if (params_.time_parameterize && params_.energy_profile_enable && ref_points.size() >= 2) {
+        const double accel_limit = params_.energy_profile_ax_max > 0.0
+            ? params_.energy_profile_ax_max
+            : params_.max_tan_accel;
+        const double decel_base = params_.energy_profile_decel_max > 0.0
+            ? params_.energy_profile_decel_max
+            : params_.max_tan_decel;
+        const double decel_limit = decel_base * 0.8;
+        const double step_dt = std::max(1e-6, dt);
+
+        if (accel_limit > 0.0) {
+            for (size_t i = 1; i < ref_points.size(); ++i) {
+                const double v_lim = ref_points[i - 1].v_ref + accel_limit * step_dt;
+                ref_points[i].v_ref = std::min(ref_points[i].v_ref, v_lim);
+                ref_points[i].v_path = ref_points[i].v_ref;
+            }
+        }
+        if (decel_limit > 0.0) {
+            for (int i = static_cast<int>(ref_points.size()) - 2; i >= 0; --i) {
+                const double v_lim = ref_points[static_cast<size_t>(i + 1)].v_ref + decel_limit * step_dt;
+                ref_points[static_cast<size_t>(i)].v_ref =
+                    std::min(ref_points[static_cast<size_t>(i)].v_ref, v_lim);
+                ref_points[static_cast<size_t>(i)].v_path = ref_points[static_cast<size_t>(i)].v_ref;
+            }
+        }
     }
 
     // 路径在持续使用时保持有效，避免静态路径超时
