@@ -283,9 +283,41 @@ anti_slosh_path_post_processor
 scout_local_planner MPC tracker
 ```
 
+当前已实现第一版最小在线节点：
+
+```text
+scripts/anti_slosh_path_post_processor.py
+launch/anti_slosh_path_post_processor.launch
+```
+
+它支持：
+
+```text
+raw nav_msgs/Path -> sanitize -> resample -> original/mild/medium/strong 候选
+-> drift/length/endpoint/direction gate -> kappa/dkappa score -> publish processed path
+```
+
+它暂不支持：
+
+```text
+costmap collision check
+slosh ODE rollout
+SLSQP/global optimization
+```
+
+因此第一版在线节点只适用于：
+
+```text
+open field
+known safe corridor
+fixed-path/低障碍风险验证
+```
+
+不能用于证明 maze / 任意复杂地图下安全。
+
 ### 9.1 ROS 接口
 
-建议新增节点：
+新增节点：
 
 ```text
 scripts/anti_slosh_path_post_processor.py
@@ -305,7 +337,14 @@ scripts/anti_slosh_path_post_processor.py
 /anti_slosh_path/debug/mild             nav_msgs/Path
 /anti_slosh_path/debug/medium           nav_msgs/Path
 /anti_slosh_path/debug/strong           nav_msgs/Path
-/anti_slosh_path/metrics                std_msgs/Float32MultiArray 或 DiagnosticArray
+/anti_slosh_path/metrics                std_msgs/Float32MultiArray
+```
+
+`/anti_slosh_path/metrics.layout.dim[0].label` 记录字段顺序：
+
+```text
+selected_index,score,length_ratio,max_drift_m,endpoint_error_m,
+kappa_p95,kappa_max,dkappa_p95,dkappa_max,candidate_count,accepted_count
 ```
 
 `scout_local_planner` 启动时改为订阅：
@@ -464,10 +503,10 @@ scout_local_planner subscribes /scout/global_path_anti_slosh
 roslaunch scout_global_planner mbf_global_sim.launch \
   global_path_topic:=/scout/global_path_raw
 
-rosrun scout_local_planner anti_slosh_path_post_processor.py \
-  _input_topic:=/scout/global_path_raw \
-  _output_topic:=/scout/global_path_anti_slosh \
-  _publish_debug:=true
+roslaunch scout_local_planner anti_slosh_path_post_processor.launch \
+  input_topic:=/scout/global_path_raw \
+  output_topic:=/scout/global_path_anti_slosh \
+  publish_debug:=true
 
 roslaunch scout_local_planner slosh_experiment_sim.launch \
   global_path_topic:=/scout/global_path_anti_slosh \
