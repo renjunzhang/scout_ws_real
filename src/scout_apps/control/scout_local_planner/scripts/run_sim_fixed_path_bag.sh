@@ -9,8 +9,9 @@ RUN_ID="${RUN_ID:-01}"
 
 FIXED_PATH_DIR="${FIXED_PATH_DIR:-/data/a/fixed_paths/sim}"
 PATH_FILE="${PATH_FILE:-${FIXED_PATH_DIR}/${PATH_ID}.json}"
-GLOBAL_PATH_TOPIC="${GLOBAL_PATH_TOPIC:-/scout/global_path_fixed}"
+GLOBAL_PATH_TOPIC="${GLOBAL_PATH_TOPIC:-}"
 PATH_MODE="${PATH_MODE:-replay}"  # replay / template_goal
+DEFAULT_GLOBAL_PATH_TOPIC=""
 
 TEMPLATE_NAME="${TEMPLATE_NAME:-}"
 TEMPLATE_START_HEADING="${TEMPLATE_START_HEADING:-current}"
@@ -25,6 +26,23 @@ TEMPLATE_GOAL_QZ="${TEMPLATE_GOAL_QZ:-0.9992705515413127}"
 TEMPLATE_GOAL_QW="${TEMPLATE_GOAL_QW:-0.03818854307669733}"
 TEMPLATE_GENERATOR_WARMUP_S="${TEMPLATE_GENERATOR_WARMUP_S:-1}"
 MPC_WARMUP_S="${MPC_WARMUP_S:-1}"
+POST_PROCESSOR_ENABLE="${POST_PROCESSOR_ENABLE:-false}"
+POST_PROCESSOR_INPUT_TOPIC="${POST_PROCESSOR_INPUT_TOPIC:-/scout/global_path}"
+POST_PROCESSOR_OUTPUT_TOPIC="${POST_PROCESSOR_OUTPUT_TOPIC:-/scout/global_path_anti_slosh}"
+POST_PROCESSOR_DS="${POST_PROCESSOR_DS:-}"
+POST_PROCESSOR_MAX_CANDIDATE_LEVEL="${POST_PROCESSOR_MAX_CANDIDATE_LEVEL:-medium}"
+POST_PROCESSOR_TARGET_KAPPA_RATIO="${POST_PROCESSOR_TARGET_KAPPA_RATIO:-0.35}"
+POST_PROCESSOR_COLLISION_CHECK="${POST_PROCESSOR_COLLISION_CHECK:-}"
+POST_PROCESSOR_COSTMAP_TOPIC="${POST_PROCESSOR_COSTMAP_TOPIC:-/scout/mbf_costmap_nav/global_costmap/costmap}"
+POST_PROCESSOR_MIN_LENGTH_RATIO="${POST_PROCESSOR_MIN_LENGTH_RATIO:-}"
+POST_PROCESSOR_MIN_SEGMENT_LENGTH="${POST_PROCESSOR_MIN_SEGMENT_LENGTH:-}"
+POST_PROCESSOR_AY_RATIO_LIMIT="${POST_PROCESSOR_AY_RATIO_LIMIT:-}"
+POST_PROCESSOR_PREDICT_V_MAX="${POST_PROCESSOR_PREDICT_V_MAX:-}"
+POST_PROCESSOR_PREDICT_AY_MAX="${POST_PROCESSOR_PREDICT_AY_MAX:-}"
+POST_PROCESSOR_PREDICT_A_MAX="${POST_PROCESSOR_PREDICT_A_MAX:-}"
+POST_PROCESSOR_MILD_ITERS="${POST_PROCESSOR_MILD_ITERS:-}"
+POST_PROCESSOR_MILD_GAIN="${POST_PROCESSOR_MILD_GAIN:-}"
+POST_PROCESSOR_MILD_MAX_DRIFT="${POST_PROCESSOR_MILD_MAX_DRIFT:-}"
 
 BAG_DATE="${BAG_DATE:-$(date +%Y%m%d)}"
 BAG_TIME="${BAG_TIME:-$(date +%H%M%S)}"
@@ -53,9 +71,9 @@ PATH_PUBLISH_ONCE_KEEPALIVE="${PATH_PUBLISH_ONCE_KEEPALIVE:-true}"
 Q_SLOSH="${Q_SLOSH:-}"
 Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-}"
 MPC_Q_V="${MPC_Q_V:-8.0}"
-MPC_R_A="${MPC_R_A:-0.4}"
-MPC_R_DA="${MPC_R_DA:-0.5}"
-MPC_CMD_VEL_LEAD_TIME="${MPC_CMD_VEL_LEAD_TIME:-0.15}"
+MPC_R_A="${MPC_R_A:-}"
+MPC_R_DA="${MPC_R_DA:-}"
+MPC_CMD_VEL_LEAD_TIME="${MPC_CMD_VEL_LEAD_TIME:-}"
 TERMINAL_FACTOR_SLOSH_ETA="${TERMINAL_FACTOR_SLOSH_ETA:-0.0}"
 TERMINAL_FACTOR_SLOSH_ETA_DOT="${TERMINAL_FACTOR_SLOSH_ETA_DOT:-0.0}"
 RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-}"
@@ -70,7 +88,7 @@ ENERGY_PROFILE_ALPHA_MAX="${ENERGY_PROFILE_ALPHA_MAX:-3.0}"
 ENERGY_PROFILE_AX_MAX="${ENERGY_PROFILE_AX_MAX:-1.2}"
 ENERGY_PROFILE_DECEL_MAX="${ENERGY_PROFILE_DECEL_MAX:-1.2}"
 ENERGY_PROFILE_MIN_V="${ENERGY_PROFILE_MIN_V:-0.35}"
-VEHICLE_V_MAX="${VEHICLE_V_MAX:-3.0}"
+VEHICLE_V_MAX="${VEHICLE_V_MAX:-}"
 
 case "${CONDITION}" in
     NOM)
@@ -143,16 +161,96 @@ case "${CONDITION}" in
         RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
         ;;
+    RAW_TUNED)
+        Q_SLOSH="${Q_SLOSH:-0}"
+        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
+        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
+        INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
+        ENERGY_PROFILE_ENABLE=false
+        MPC_R_A="${MPC_R_A:-1.0}"
+        MPC_R_DA="${MPC_R_DA:-2.0}"
+        MPC_CMD_VEL_LEAD_TIME="${MPC_CMD_VEL_LEAD_TIME:-0.05}"
+        VEHICLE_V_MAX="${VEHICLE_V_MAX:-2.0}"
+        DEFAULT_GLOBAL_PATH_TOPIC="/scout/global_path"
+        ;;
+    GEOREF_TUNED)
+        Q_SLOSH="${Q_SLOSH:-0}"
+        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
+        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
+        INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
+        ENERGY_PROFILE_ENABLE=false
+        MPC_R_A="${MPC_R_A:-1.0}"
+        MPC_R_DA="${MPC_R_DA:-2.0}"
+        MPC_CMD_VEL_LEAD_TIME="${MPC_CMD_VEL_LEAD_TIME:-0.05}"
+        VEHICLE_V_MAX="${VEHICLE_V_MAX:-2.0}"
+        POST_PROCESSOR_ENABLE=true
+        POST_PROCESSOR_DS="${POST_PROCESSOR_DS:-0.03}"
+        POST_PROCESSOR_COLLISION_CHECK="${POST_PROCESSOR_COLLISION_CHECK:-true}"
+        POST_PROCESSOR_MIN_LENGTH_RATIO="${POST_PROCESSOR_MIN_LENGTH_RATIO:-0.985}"
+        POST_PROCESSOR_AY_RATIO_LIMIT="${POST_PROCESSOR_AY_RATIO_LIMIT:-1.0}"
+        POST_PROCESSOR_PREDICT_V_MAX="${POST_PROCESSOR_PREDICT_V_MAX:-2.0}"
+        POST_PROCESSOR_PREDICT_AY_MAX="${POST_PROCESSOR_PREDICT_AY_MAX:-2.0}"
+        POST_PROCESSOR_PREDICT_A_MAX="${POST_PROCESSOR_PREDICT_A_MAX:-1.0}"
+        POST_PROCESSOR_MILD_ITERS="${POST_PROCESSOR_MILD_ITERS:-8}"
+        POST_PROCESSOR_MILD_GAIN="${POST_PROCESSOR_MILD_GAIN:-0.20}"
+        POST_PROCESSOR_MILD_MAX_DRIFT="${POST_PROCESSOR_MILD_MAX_DRIFT:-0.04}"
+        DEFAULT_GLOBAL_PATH_TOPIC="/scout/global_path_anti_slosh"
+        ;;
+    GEOREF_ORIGINAL)
+        # Ablation: keep the online post-processor topic chain, but only allow
+        # the original candidate. This isolates resampling/latching from
+        # geometry smoothing candidate selection.
+        Q_SLOSH="${Q_SLOSH:-0}"
+        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
+        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
+        INPUT_SHAPING_ENABLE="${INPUT_SHAPING_ENABLE:-false}"
+        ENERGY_PROFILE_ENABLE=false
+        MPC_R_A="${MPC_R_A:-1.0}"
+        MPC_R_DA="${MPC_R_DA:-2.0}"
+        MPC_CMD_VEL_LEAD_TIME="${MPC_CMD_VEL_LEAD_TIME:-0.05}"
+        VEHICLE_V_MAX="${VEHICLE_V_MAX:-2.0}"
+        POST_PROCESSOR_ENABLE=true
+        POST_PROCESSOR_DS="${POST_PROCESSOR_DS:-0.03}"
+        POST_PROCESSOR_MAX_CANDIDATE_LEVEL=original
+        POST_PROCESSOR_COLLISION_CHECK="${POST_PROCESSOR_COLLISION_CHECK:-false}"
+        POST_PROCESSOR_MIN_SEGMENT_LENGTH="${POST_PROCESSOR_MIN_SEGMENT_LENGTH:-0.005}"
+        DEFAULT_GLOBAL_PATH_TOPIC="/scout/global_path_anti_slosh"
+        ;;
     *)
         echo "[run_sim_fixed_path_bag] ERROR: unsupported CONDITION='${CONDITION}'" >&2
-        echo "Use NOM, PROFILE_ENERGY_GEO, PROFILE_REF_V2, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, PROP_Q5, ISR, or CUSTOM." >&2
+        echo "Use NOM, PROFILE_ENERGY_GEO, PROFILE_REF_V2, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, PROP_Q5, ISR, CUSTOM, RAW_TUNED, GEOREF_TUNED, or GEOREF_ORIGINAL." >&2
         exit 2
         ;;
 esac
 
-if [[ "${PATH_MODE}" != "replay" && "${PATH_MODE}" != "template_goal" ]]; then
-    echo "[run_sim_fixed_path_bag] ERROR: unsupported PATH_MODE='${PATH_MODE}' (use replay or template_goal)" >&2
+if [[ "${PATH_MODE}" != "replay" && "${PATH_MODE}" != "template_goal" && "${PATH_MODE}" != "global_goal" ]]; then
+    echo "[run_sim_fixed_path_bag] ERROR: unsupported PATH_MODE='${PATH_MODE}' (use replay, template_goal, or global_goal)" >&2
     exit 2
+fi
+
+POST_PROCESSOR_COLLISION_CHECK="${POST_PROCESSOR_COLLISION_CHECK:-false}"
+POST_PROCESSOR_DS="${POST_PROCESSOR_DS:-0.10}"
+POST_PROCESSOR_MIN_LENGTH_RATIO="${POST_PROCESSOR_MIN_LENGTH_RATIO:-0.995}"
+POST_PROCESSOR_MIN_SEGMENT_LENGTH="${POST_PROCESSOR_MIN_SEGMENT_LENGTH:-0.02}"
+POST_PROCESSOR_AY_RATIO_LIMIT="${POST_PROCESSOR_AY_RATIO_LIMIT:-1.0}"
+POST_PROCESSOR_PREDICT_V_MAX="${POST_PROCESSOR_PREDICT_V_MAX:-2.0}"
+POST_PROCESSOR_PREDICT_AY_MAX="${POST_PROCESSOR_PREDICT_AY_MAX:-2.0}"
+POST_PROCESSOR_PREDICT_A_MAX="${POST_PROCESSOR_PREDICT_A_MAX:-1.0}"
+POST_PROCESSOR_MILD_ITERS="${POST_PROCESSOR_MILD_ITERS:-18}"
+POST_PROCESSOR_MILD_GAIN="${POST_PROCESSOR_MILD_GAIN:-0.35}"
+POST_PROCESSOR_MILD_MAX_DRIFT="${POST_PROCESSOR_MILD_MAX_DRIFT:-0.08}"
+MPC_R_A="${MPC_R_A:-0.4}"
+MPC_R_DA="${MPC_R_DA:-0.5}"
+MPC_CMD_VEL_LEAD_TIME="${MPC_CMD_VEL_LEAD_TIME:-0.15}"
+VEHICLE_V_MAX="${VEHICLE_V_MAX:-3.0}"
+if [[ -z "${GLOBAL_PATH_TOPIC}" ]]; then
+    if [[ -n "${DEFAULT_GLOBAL_PATH_TOPIC}" ]]; then
+        GLOBAL_PATH_TOPIC="${DEFAULT_GLOBAL_PATH_TOPIC}"
+    elif [[ "${PATH_MODE}" == "global_goal" ]]; then
+        GLOBAL_PATH_TOPIC="/scout/global_path"
+    else
+        GLOBAL_PATH_TOPIC="/scout/global_path_fixed"
+    fi
 fi
 
 if [[ "${PATH_MODE}" == "template_goal" && -z "${TEMPLATE_NAME}" ]]; then
@@ -277,6 +375,23 @@ PATH_MODE=${PATH_MODE}
 TEMPLATE_NAME=${TEMPLATE_NAME}
 PATH_FILE=${PATH_FILE}
 GLOBAL_PATH_TOPIC=${GLOBAL_PATH_TOPIC}
+POST_PROCESSOR_ENABLE=${POST_PROCESSOR_ENABLE}
+POST_PROCESSOR_INPUT_TOPIC=${POST_PROCESSOR_INPUT_TOPIC}
+POST_PROCESSOR_OUTPUT_TOPIC=${POST_PROCESSOR_OUTPUT_TOPIC}
+POST_PROCESSOR_DS=${POST_PROCESSOR_DS}
+POST_PROCESSOR_MAX_CANDIDATE_LEVEL=${POST_PROCESSOR_MAX_CANDIDATE_LEVEL}
+POST_PROCESSOR_TARGET_KAPPA_RATIO=${POST_PROCESSOR_TARGET_KAPPA_RATIO}
+POST_PROCESSOR_COLLISION_CHECK=${POST_PROCESSOR_COLLISION_CHECK}
+POST_PROCESSOR_COSTMAP_TOPIC=${POST_PROCESSOR_COSTMAP_TOPIC}
+POST_PROCESSOR_MIN_LENGTH_RATIO=${POST_PROCESSOR_MIN_LENGTH_RATIO}
+POST_PROCESSOR_MIN_SEGMENT_LENGTH=${POST_PROCESSOR_MIN_SEGMENT_LENGTH}
+POST_PROCESSOR_AY_RATIO_LIMIT=${POST_PROCESSOR_AY_RATIO_LIMIT}
+POST_PROCESSOR_PREDICT_V_MAX=${POST_PROCESSOR_PREDICT_V_MAX}
+POST_PROCESSOR_PREDICT_AY_MAX=${POST_PROCESSOR_PREDICT_AY_MAX}
+POST_PROCESSOR_PREDICT_A_MAX=${POST_PROCESSOR_PREDICT_A_MAX}
+POST_PROCESSOR_MILD_ITERS=${POST_PROCESSOR_MILD_ITERS}
+POST_PROCESSOR_MILD_GAIN=${POST_PROCESSOR_MILD_GAIN}
+POST_PROCESSOR_MILD_MAX_DRIFT=${POST_PROCESSOR_MILD_MAX_DRIFT}
 TEMPLATE_GOAL_TOPIC=${TEMPLATE_GOAL_TOPIC}
 TEMPLATE_GOAL_FRAME=${TEMPLATE_GOAL_FRAME}
 TEMPLATE_GOAL_X=${TEMPLATE_GOAL_X}
@@ -318,7 +433,7 @@ EOF
 
 publish_config_summary() {
     local summary
-    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; input_shaping=${INPUT_SHAPING_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}; energy_profile=${ENERGY_PROFILE_ENABLE}; vehicle_v_max=${VEHICLE_V_MAX}"
+    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; post_processor=${POST_PROCESSOR_ENABLE}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; input_shaping=${INPUT_SHAPING_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}; energy_profile=${ENERGY_PROFILE_ENABLE}; vehicle_v_max=${VEHICLE_V_MAX}"
     rostopic pub -l /experiment/config_summary std_msgs/String "data: '${summary}'" >/dev/null &
     local pid=$!
     pids+=("${pid}")
@@ -431,8 +546,15 @@ TOPICS=(
     /scout/goal
     /scout/current_goal
     /scout/global_path
+    /scout/global_path_anti_slosh
     /scout/global_path_fixed
     /scout/global_path_smooth
+    /anti_slosh_path/metrics
+    /anti_slosh_path/candidate_report
+    /anti_slosh_path/debug/original
+    /anti_slosh_path/debug/mild
+    /anti_slosh_path/debug/medium
+    /anti_slosh_path/debug/strong
     /mpc/reference_path
     /local_path
     /mpc/solve_ms
@@ -535,6 +657,27 @@ MPC_ARGS=(
     vehicle_v_max:="${VEHICLE_V_MAX}"
 )
 
+POST_PROCESSOR_ARGS=(
+    scout_local_planner anti_slosh_path_post_processor.launch
+    input_topic:="${POST_PROCESSOR_INPUT_TOPIC}"
+    output_topic:="${POST_PROCESSOR_OUTPUT_TOPIC}"
+    ds:="${POST_PROCESSOR_DS}"
+    publish_debug:=true
+    max_candidate_level:="${POST_PROCESSOR_MAX_CANDIDATE_LEVEL}"
+    target_kappa_ratio:="${POST_PROCESSOR_TARGET_KAPPA_RATIO}"
+    min_length_ratio:="${POST_PROCESSOR_MIN_LENGTH_RATIO}"
+    min_segment_length:="${POST_PROCESSOR_MIN_SEGMENT_LENGTH}"
+    ay_ratio_limit:="${POST_PROCESSOR_AY_RATIO_LIMIT}"
+    enable_collision_check:="${POST_PROCESSOR_COLLISION_CHECK}"
+    costmap_topic:="${POST_PROCESSOR_COSTMAP_TOPIC}"
+    prediction_v_max:="${POST_PROCESSOR_PREDICT_V_MAX}"
+    prediction_ay_max_budget:="${POST_PROCESSOR_PREDICT_AY_MAX}"
+    prediction_a_max:="${POST_PROCESSOR_PREDICT_A_MAX}"
+    mild_iters:="${POST_PROCESSOR_MILD_ITERS}"
+    mild_gain:="${POST_PROCESSOR_MILD_GAIN}"
+    mild_max_drift:="${POST_PROCESSOR_MILD_MAX_DRIFT}"
+)
+
 APPROACH_MPC_ARGS=(
     scout_local_planner slosh_experiment_sim.launch
     global_path_topic:="${APPROACH_GLOBAL_PATH_TOPIC}"
@@ -556,6 +699,11 @@ echo "  PATH_MODE            = ${PATH_MODE}"
 echo "  TEMPLATE_NAME        = ${TEMPLATE_NAME}"
 echo "  PATH_FILE            = ${PATH_FILE}"
 echo "  GLOBAL_PATH_TOPIC    = ${GLOBAL_PATH_TOPIC}"
+echo "  post_processor       = ${POST_PROCESSOR_ENABLE}"
+echo "  post_ds              = ${POST_PROCESSOR_DS}"
+echo "  post_collision_check = ${POST_PROCESSOR_COLLISION_CHECK}"
+echo "  post_max_level       = ${POST_PROCESSOR_MAX_CANDIDATE_LEVEL}"
+echo "  post_mild            = iters=${POST_PROCESSOR_MILD_ITERS}, gain=${POST_PROCESSOR_MILD_GAIN}, drift=${POST_PROCESSOR_MILD_MAX_DRIFT}"
 echo "  TEMPLATE_GOAL        = ${TEMPLATE_GOAL_TOPIC} (${TEMPLATE_GOAL_X}, ${TEMPLATE_GOAL_Y})"
 echo "  BAG_PATH             = ${BAG_PATH}.bag"
 echo "  Q_slosh              = ${Q_SLOSH}"
@@ -605,12 +753,22 @@ start_bg "rosbag record" rosbag record -O "${BAG_PATH}" "${TOPICS[@]}"
 sleep "${RECORD_WARMUP_S}"
 publish_config_summary
 
+if [[ "${POST_PROCESSOR_ENABLE}" == "true" ]]; then
+    start_bg "anti-slosh path post-processor" roslaunch "${POST_PROCESSOR_ARGS[@]}"
+    sleep 1
+fi
+
 if [[ "${PATH_MODE}" == "template_goal" ]]; then
     start_bg "template path generator" "${TEMPLATE_ARGS[@]}"
     sleep "${TEMPLATE_GENERATOR_WARMUP_S}"
     start_bg "MPC ${CONDITION}" roslaunch "${MPC_ARGS[@]}"
     sleep "${MPC_WARMUP_S}"
     echo "[run_sim_fixed_path_bag] Publishing template goal on ${TEMPLATE_GOAL_TOPIC}"
+    publish_template_goal
+elif [[ "${PATH_MODE}" == "global_goal" ]]; then
+    start_bg "MPC ${CONDITION}" roslaunch "${MPC_ARGS[@]}"
+    sleep "${MPC_WARMUP_S}"
+    echo "[run_sim_fixed_path_bag] Publishing global goal on ${TEMPLATE_GOAL_TOPIC}"
     publish_template_goal
 else
     start_bg "fixed path replay" "${REPLAY_ARGS[@]}"
