@@ -236,7 +236,103 @@ reference-constrained MPC v/a/jerk hard-bound
 固定几何路径下可行空间有限，单纯调 MPC cost 很难稳定跨路径压低 /slosh/height。
 ```
 
-## 7. 当前边界
+## 7. 05-07 增强消融：Slosh-Score GeoRef
+
+为保留模型引导候选评分的论文创新点，追加实现了：
+
+```text
+GEOREF_SLOSH_SCORE_TUNED:
+  Online GeoRef candidate generation
+  + signed linear-modal slosh rollout candidate score
+  + 普通 MPC tracking
+```
+
+它仍然保持：
+
+```text
+Q_slosh=0
+Q_slosh_eta_dot=0
+risk_scheduler=false
+energy_profile=false
+input_shaping=false
+slosh_speed_governor=false
+```
+
+即 slosh model 不回到 MPC cost 当主控制权威，而是用于 candidate scoring。
+
+### ay125 调优结果
+
+最终较合理的 tuned 点：
+
+```text
+POST_PROCESSOR_AY_RATIO_LIMIT=1.25
+slosh_score_w_energy=1.0
+slosh_score_w_eta_dot=0.5
+slosh_score_w_terminal=0.2
+slosh_score_w_kappa=0.5
+slosh_score_w_dkappa=0.3
+slosh_score_w_ay=1.5
+```
+
+候选选择稳定性：
+
+```text
+run01: selected=medium
+run02: selected=original，medium 被 ay gate 拦下
+run03: selected=medium
+
+selected medium = 2/3
+```
+
+`GEOREF_SLOSH_SCORE_TUNED ay125` 相对 `GEOREF_TUNED x3`：
+
+```text
+tracking     -4.90%
+h_rms        +1.22%
+h_p95        +6.35%
+h_max        +6.29%
+eta_dot_rms  -36.01%
+energy_rms   -1.15%
+odom_ay_p95  +6.62%
+track_p95    -0.21%
+```
+
+按 `GEOREF_TUNED` 三包波动：
+
+```text
+h_p95 / h_max / odom_ay 的变差都在 1 sigma 内；
+eta_dot_rms 改善约 -5.22 sigma；
+energy 基本持平。
+```
+
+阶段判断：
+
+```text
+Slosh-score tuned 不是全指标优于 geometry-only GeoRef。
+它最明确的收益是 eta_dot_rms 显著下降；
+但 /slosh/height p95/max 和 odom_ay 没有均值优势，只能说在噪声范围内未显著恶化。
+```
+
+因此论文定位应为：
+
+```text
+主方法:
+  Online geometry-risk GeoRef + normal MPC
+
+增强消融:
+  Slosh-score GeoRef，说明 linear-modal rollout scoring 可以进一步压低 modal velocity
+
+负结果:
+  原始 GEOREF_SLOSH_SCORE、ay140、GEOREF_CONSTRAINED、旧 MPC soft-cost/输出裁剪路线
+```
+
+不能写成：
+
+```text
+Slosh-score GeoRef 全面优于 geometry-only GeoRef。
+```
+
+## 8. 当前边界
 
 已成立：
 
@@ -245,6 +341,7 @@ open_user_goal 仿真三包均值正结果；
 matched slow baseline 不能解释收益；
 original-only baseline 不能解释收益；
 reference-constrained MPC 增强路线已被负结果排除。
+slosh-score tuned 可作为 eta-dot-oriented 增强消融，但不是主方法替代。
 ```
 
 未成立：
@@ -263,7 +360,7 @@ RealSense 真液面与 /slosh/height 一致性
 如果实物视觉液面与 /slosh/height 改善方向不一致，不能声明真实液面晃动被抑制。
 ```
 
-## 8. 实物验证口径
+## 9. 实物验证口径
 
 下一步优先做开阔场地实物验证：
 
@@ -313,7 +410,7 @@ solve_success >= 0.97
 /anti_slosh_path/debug/strong
 ```
 
-## 9. 论文当前写法
+## 10. 论文当前写法
 
 推荐标题方向：
 
@@ -329,6 +426,16 @@ Online Low-Excitation Geometric Reference Generation for Slosh-Aware MPC Trackin
 并通过普通 MPC 在车辆约束下跟踪该参考，从而降低液体晃动观测指标。
 ```
 
+可选增强消融表述：
+
+```text
+进一步将线性模态晃动 rollout 引入候选路径评分。
+该变体没有全面改善 /slosh/height，
+但在 open_user_goal x3 中显著降低 eta_dot_rms，
+说明 slosh model 更适合作为候选风险诊断和 modal-velocity-oriented scoring，
+而不是 MPC soft cost 主控制权威。
+```
+
 不要写：
 
 ```text
@@ -338,7 +445,7 @@ MPC soft cost 主动抑制了液体晃动。
 方法已证明实物真液面下降。
 ```
 
-## 10. 下一步
+## 11. 下一步
 
 优先级：
 

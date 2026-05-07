@@ -47,9 +47,15 @@ def sanitize_points(points, min_segment_length):
     if not points:
         return []
     out = [points[0]]
-    for point in points[1:]:
+    for point in points[1:-1]:
         if dist(out[-1], point) >= min_segment_length:
             out.append(point)
+    if len(points) > 1:
+        last = points[-1]
+        if dist(out[-1], last) >= min_segment_length or len(out) < 2:
+            out.append(last)
+        else:
+            out[-1] = last
     return out
 
 
@@ -130,6 +136,24 @@ class AntiSloshPathPostProcessor:
         self.predict_a_max = max(0.01, float(rospy.get_param("~prediction/a_max", 1.0)))
         self.predict_v_init = max(0.0, float(rospy.get_param("~prediction/v_init", 0.0)))
 
+        self.slosh_score_enable = bool(rospy.get_param("~slosh_score/enable", False))
+        self.slosh_omega_n = max(0.01, float(rospy.get_param("~slosh_score/omega_n", 31.25)))
+        self.slosh_zeta = max(0.0, float(rospy.get_param("~slosh_score/zeta", 0.05)))
+        self.slosh_rollout_dt = max(0.005, float(rospy.get_param("~slosh_score/dt", 0.05)))
+        self.slosh_v_floor = max(0.01, float(rospy.get_param("~slosh_score/v_floor", 0.05)))
+        self.slosh_height_coeff = float(rospy.get_param("~slosh_score/height_coeff", 1.0))
+        self.slosh_container_radius = max(0.0, float(rospy.get_param("~slosh_score/container_radius", 0.0185)))
+        self.slosh_use_parabola = bool(rospy.get_param("~slosh_score/use_parabola_term", True))
+        self.w_slosh_h = float(rospy.get_param("~slosh_score/w_h", 0.0))
+        self.w_slosh_energy = float(rospy.get_param("~slosh_score/w_energy", 1.0))
+        self.w_slosh_eta_dot = float(rospy.get_param("~slosh_score/w_eta_dot", 0.5))
+        self.w_slosh_terminal = float(rospy.get_param("~slosh_score/w_terminal", 0.2))
+        self.w_slosh_kappa = float(rospy.get_param("~slosh_score/w_kappa", 1.0))
+        self.w_slosh_dkappa = float(rospy.get_param("~slosh_score/w_dkappa", 0.5))
+        self.w_slosh_ay = float(rospy.get_param("~slosh_score/w_ay", 0.0))
+        self.w_slosh_length = float(rospy.get_param("~slosh_score/w_length", 0.3))
+        self.w_slosh_drift = float(rospy.get_param("~slosh_score/w_drift", 0.5))
+
         self.w_kappa = float(rospy.get_param("~score/w_kappa", 1.0))
         self.w_dkappa = float(rospy.get_param("~score/w_dkappa", 0.5))
         self.w_length = float(rospy.get_param("~score/w_length", 0.3))
@@ -141,6 +165,7 @@ class AntiSloshPathPostProcessor:
             ("original", 0, 0.0, 0.0),
             ("mild", self._candidate_param("mild", "iters", 18), self._candidate_param("mild", "gain", 0.35), self._candidate_param("mild", "max_drift", 0.08)),
             ("medium", self._candidate_param("medium", "iters", 40), self._candidate_param("medium", "gain", 0.45), self._candidate_param("medium", "max_drift", 0.12)),
+            ("mid", self._candidate_param("mid", "iters", 24), self._candidate_param("mid", "gain", 0.30), self._candidate_param("mid", "max_drift", 0.07)),
             ("strong", self._candidate_param("strong", "iters", 56), self._candidate_param("strong", "gain", 0.55), self._candidate_param("strong", "max_drift", 0.18)),
         ]
         self.candidate_levels = {name: i for i, (name, _, _, _) in enumerate(self.candidate_specs)}
@@ -156,7 +181,7 @@ class AntiSloshPathPostProcessor:
         self.candidate_report_pub = rospy.Publisher("/anti_slosh_path/candidate_report", String, queue_size=1)
         self.debug_pubs = {}
         if self.publish_debug:
-            for name in ("original", "mild", "medium", "strong"):
+            for name in ("original", "mild", "medium", "mid", "strong"):
                 self.debug_pubs[name] = rospy.Publisher(
                     f"/anti_slosh_path/debug/{name}", NavPath, queue_size=1, latch=True
                 )
@@ -176,11 +201,12 @@ class AntiSloshPathPostProcessor:
         self.sub = rospy.Subscriber(self.input_topic, NavPath, self.path_callback, queue_size=1)
 
         rospy.loginfo(
-            "[anti_slosh_path_post_processor] %s -> %s ds=%.3f max_drift=%.3f",
+            "[anti_slosh_path_post_processor] %s -> %s ds=%.3f max_drift=%.3f slosh_score=%s",
             self.input_topic,
             self.output_topic,
             self.ds,
             self.max_drift,
+            self.slosh_score_enable,
         )
 
     def _candidate_param(self, name, key, default):
@@ -193,11 +219,16 @@ class AntiSloshPathPostProcessor:
         """Forward speed rollout with curvature speed cap; returns (ay_p95, vmax)."""
         if len(points) < 2:
             return (float("inf"), 0.0)
+        _, _, v_values, _, ay_values = self.forward_profile(points)
+        return (percentile([abs(v) for v in ay_values], 95.0), max(v_values) if v_values else 0.0)
+
+    def forward_profile(self, points):
         s = cumulative_s(points)
         kappa = curvature_series(points)
         v_prev = min(self.predict_v_init, self.predict_v_max)
+        v_values = []
+        ax_values = []
         ay_values = []
-        vmax = v_prev
         for i, k in enumerate(kappa):
             if i == 0:
                 ds = 0.0
@@ -210,10 +241,96 @@ class AntiSloshPathPostProcessor:
                 v_curv = self.predict_v_max
             v_accel = math.sqrt(max(0.0, v_prev * v_prev + 2.0 * self.predict_a_max * ds))
             v = min(self.predict_v_max, v_curv, v_accel)
-            ay_values.append(v * v * k_abs)
-            vmax = max(vmax, v)
+            ax = (v * v - v_prev * v_prev) / (2.0 * ds) if ds > 1e-6 else 0.0
+            v_values.append(v)
+            ax_values.append(ax)
+            ay_values.append(v * v * k)
             v_prev = v
-        return (percentile(ay_values, 95.0), vmax)
+        return s, kappa, v_values, ax_values, ay_values
+
+    @staticmethod
+    def interp_piecewise(times, values, query_t):
+        if not times:
+            return 0.0
+        if query_t <= times[0]:
+            return values[0]
+        if query_t >= times[-1]:
+            return values[-1]
+        lo = 0
+        hi = len(times) - 1
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if times[mid] < query_t:
+                lo = mid + 1
+            else:
+                hi = mid
+        i = max(1, lo)
+        t0 = times[i - 1]
+        t1 = times[i]
+        if t1 <= t0:
+            return values[i]
+        r = (query_t - t0) / (t1 - t0)
+        return values[i - 1] * (1.0 - r) + values[i] * r
+
+    def rollout_slosh_metrics(self, points):
+        if len(points) < 2:
+            return {
+                "slosh_h_p95": float("inf"),
+                "slosh_h_max": float("inf"),
+                "slosh_h_modal_p95": float("inf"),
+                "slosh_h_parabola_p95": float("inf"),
+                "slosh_eta_dot_rms": float("inf"),
+                "slosh_energy_rms": float("inf"),
+                "slosh_terminal_E": float("inf"),
+            }
+        s, kappa, _, ax_values, ay_values = self.forward_profile(points)
+        times = [0.0]
+        _, _, v_values, _, _ = self.forward_profile(points)
+        omega_values = [v * k for v, k in zip(v_values, kappa)]
+        for i in range(1, len(s)):
+            ds = max(0.0, s[i] - s[i - 1])
+            times.append(times[-1] + ds / max(self.slosh_v_floor, v_values[i]))
+
+        eta_x = eta_x_dot = eta_y = eta_y_dot = 0.0
+        eta_dot_norm = []
+        energy = []
+        height_modal = []
+        height_parabola = []
+        height_total = []
+        wn2 = self.slosh_omega_n * self.slosh_omega_n
+        damping = 2.0 * self.slosh_zeta * self.slosh_omega_n
+        radius2_over_4g = (self.slosh_container_radius * self.slosh_container_radius) / (4.0 * 9.81)
+        t_end = times[-1] if times else 0.0
+        steps = max(1, int(math.ceil(t_end / self.slosh_rollout_dt)))
+        for step in range(steps + 1):
+            query_t = min(t_end, step * self.slosh_rollout_dt)
+            ux = self.interp_piecewise(times, ax_values, query_t)
+            uy = self.interp_piecewise(times, ay_values, query_t)
+            omega = self.interp_piecewise(times, omega_values, query_t)
+            ddx = -damping * eta_x_dot - wn2 * eta_x - ux
+            ddy = -damping * eta_y_dot - wn2 * eta_y - uy
+            eta_x_dot += ddx * self.slosh_rollout_dt
+            eta_y_dot += ddy * self.slosh_rollout_dt
+            eta_x += eta_x_dot * self.slosh_rollout_dt
+            eta_y += eta_y_dot * self.slosh_rollout_dt
+            eta_dot = math.hypot(eta_x_dot, eta_y_dot)
+            e = wn2 * (eta_x * eta_x + eta_y * eta_y) + eta_x_dot * eta_x_dot + eta_y_dot * eta_y_dot
+            modal = self.slosh_height_coeff * math.hypot(eta_x, eta_y)
+            parabola = radius2_over_4g * omega * omega if self.slosh_use_parabola else 0.0
+            eta_dot_norm.append(eta_dot)
+            energy.append(e)
+            height_modal.append(modal)
+            height_parabola.append(parabola)
+            height_total.append(modal + parabola)
+        return {
+            "slosh_h_p95": percentile(height_total, 95.0),
+            "slosh_h_max": max(height_total) if height_total else float("inf"),
+            "slosh_h_modal_p95": percentile(height_modal, 95.0),
+            "slosh_h_parabola_p95": percentile(height_parabola, 95.0),
+            "slosh_eta_dot_rms": math.sqrt(sum(v * v for v in eta_dot_norm) / len(eta_dot_norm)) if eta_dot_norm else float("inf"),
+            "slosh_energy_rms": math.sqrt(sum(v * v for v in energy) / len(energy)) if energy else float("inf"),
+            "slosh_terminal_E": energy[-1] if energy else float("inf"),
+        }
 
     def check_candidate_collision(self, points, path_frame, skip_check):
         """Return (status, idx, cost)."""
@@ -282,8 +399,15 @@ class AntiSloshPathPostProcessor:
 
         for index, (name, iters, gain, drift_limit) in enumerate(self.candidate_specs):
             candidate = base if name == "original" else smooth_path(base, int(iters), float(gain), float(drift_limit))
+            if name != "original":
+                candidate = sanitize_points(candidate, self.min_segment_length)
             row = self.evaluate_candidate(index, name, candidate, base, base_metrics, base_length, msg.header.frame_id)
             rows.append((row, candidate))
+
+        if self.slosh_score_enable:
+            self.apply_slosh_scores(rows)
+
+        for row, candidate in rows:
             if row["accepted"] and (best is None or row["score"] < best[0]["score"]):
                 best = (row, candidate)
 
@@ -345,11 +469,22 @@ class AntiSloshPathPostProcessor:
             + self.w_shortening * shortening_penalty
             + self.w_over_smooth * over_smooth_penalty
         )
+        slosh_metrics = self.rollout_slosh_metrics(candidate) if self.slosh_score_enable else {
+            "slosh_h_p95": 0.0,
+            "slosh_h_max": 0.0,
+            "slosh_h_modal_p95": 0.0,
+            "slosh_h_parabola_p95": 0.0,
+            "slosh_eta_dot_rms": 0.0,
+            "slosh_energy_rms": 0.0,
+            "slosh_terminal_E": 0.0,
+        }
         return {
             "index": index,
             "name": name,
             "accepted": accepted,
             "score": score,
+            "geometry_score": score,
+            "slosh_score": score,
             "length_ratio": length_ratio,
             "kappa_ratio": kappa_ratio,
             "dkappa_ratio": dkappa_ratio,
@@ -364,8 +499,39 @@ class AntiSloshPathPostProcessor:
             "collision_idx": col_idx,
             "collision_cost": col_cost,
             "reject_reason": "accepted" if accepted else "|".join(reject_reasons),
+            **slosh_metrics,
             **metrics,
         }
+
+    def apply_slosh_scores(self, rows):
+        accepted = [row for row, _ in rows if row["accepted"]]
+        if len(accepted) < 2:
+            return
+        max_h = max(max(0.0, row["slosh_h_p95"]) for row in accepted)
+        max_energy = max(max(0.0, row["slosh_energy_rms"]) for row in accepted)
+        max_eta_dot = max(max(0.0, row["slosh_eta_dot_rms"]) for row in accepted)
+        max_terminal = max(max(0.0, row["slosh_terminal_E"]) for row in accepted)
+        max_kappa = max(max(0.0, row["kappa_p95"]) for row in accepted)
+        max_dkappa = max(max(0.0, row["dkappa_p95"]) for row in accepted)
+        max_drift = max(max(0.0, row["max_drift_m"]) for row in accepted)
+        for row, _ in rows:
+            if not row["accepted"]:
+                continue
+            norm = lambda value, ref: value / max(1e-6, ref)
+            length_penalty = max(0.0, row["length_ratio"] - 1.0)
+            slosh_score = (
+                self.w_slosh_h * norm(row["slosh_h_p95"], max_h)
+                + self.w_slosh_energy * norm(row["slosh_energy_rms"], max_energy)
+                + self.w_slosh_eta_dot * norm(row["slosh_eta_dot_rms"], max_eta_dot)
+                + self.w_slosh_terminal * norm(row["slosh_terminal_E"], max_terminal)
+                + self.w_slosh_kappa * norm(row["kappa_p95"], max_kappa)
+                + self.w_slosh_dkappa * norm(row["dkappa_p95"], max_dkappa)
+                + self.w_slosh_ay * max(0.0, row["predicted_ay_ratio"])
+                + self.w_slosh_length * length_penalty
+                + self.w_slosh_drift * norm(row["max_drift_m"], max_drift)
+            )
+            row["slosh_score"] = slosh_score
+            row["score"] = slosh_score
 
     def publish_outputs(self, raw_msg, rows, best):
         best_row, best_points = best
@@ -417,7 +583,8 @@ class AntiSloshPathPostProcessor:
                 "{name}:accepted={accepted},reason={reason},score={score:.3f},"
                 "len={length:.3f},drift={drift:.3f},end={end:.3f},"
                 "k95={k95:.3f},dk95={dk95:.3f},kr={kr:.3f},dkr={dkr:.3f},"
-                "ayr={ayr:.3f},vmaxp={vmaxp:.3f},{col}".format(
+                "ayr={ayr:.3f},vmaxp={vmaxp:.3f},gscore={gscore:.3f},sscore={sscore:.3f},"
+                "sH={sH:.3g},sHm={sHm:.3g},sHp={sHp:.3g},sE={sE:.3g},sEdot={sEdot:.3g},{col}".format(
                     name=row["name"],
                     accepted=int(row["accepted"]),
                     reason=row["reject_reason"],
@@ -431,6 +598,13 @@ class AntiSloshPathPostProcessor:
                     dkr=row["dkappa_ratio"],
                     ayr=row["predicted_ay_ratio"],
                     vmaxp=row["predicted_vmax"],
+                    gscore=row["geometry_score"],
+                    sscore=row["slosh_score"],
+                    sE=row["slosh_energy_rms"],
+                    sEdot=row["slosh_eta_dot_rms"],
+                    sH=row["slosh_h_p95"],
+                    sHm=row["slosh_h_modal_p95"],
+                    sHp=row["slosh_h_parabola_p95"],
                     col=col_str,
                 )
             )

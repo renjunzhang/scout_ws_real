@@ -1,6 +1,6 @@
 # Online GeoRef + MPC 跟踪方案
 
-更新时间：2026-05-06
+更新时间：2026-05-07
 
 本文档记录当前 anti-slosh 主线。旧 `README.md` 描述的是增广 slosh MPC / risk scheduler / 输出裁剪等历史方案，不代表当前最有效的实现。
 
@@ -90,6 +90,15 @@ MPC 仍是原 tracking MPC：
 求解器: OSQP
 ```
 
+可选增强变体：
+
+```text
+GEOREF_SLOSH_SCORE_TUNED:
+  在 candidate score 中加入线性模态 slosh rollout 指标；
+  仍然不改 MPC，不打开 Q_slosh；
+  当前定位为 slosh-state-aware variant / ablation，不是主方法替代。
+```
+
 ## 4. Post-Processor 当前实现
 
 文件：
@@ -113,6 +122,7 @@ launch/anti_slosh_path_post_processor.launch
 /anti_slosh_path/candidate_report
 /anti_slosh_path/debug/original
 /anti_slosh_path/debug/mild
+/anti_slosh_path/debug/mid
 /anti_slosh_path/debug/medium
 /anti_slosh_path/debug/strong
 ```
@@ -122,6 +132,7 @@ launch/anti_slosh_path_post_processor.launch
 ```text
 original
 mild smoothing
+mid smoothing       # 仅 tuned/实验条件启用
 medium smoothing
 strong smoothing
 ```
@@ -140,6 +151,30 @@ predicted ay ratio 诊断/门控
 ```
 
 score 目标不是最小曲率，而是中等程度降低曲率和曲率变化，避免过度拉直路径后引入更大的速度/jerk 激励。
+
+可选 slosh-score scoring：
+
+```text
+enable: slosh_score_enable=true
+condition: GEOREF_SLOSH_SCORE_TUNED
+
+对 accepted candidate 做 signed linear-modal rollout:
+  eta_x_ddot + 2ζω_n eta_x_dot + ω_n² eta_x = -ax
+  eta_y_ddot + 2ζω_n eta_y_dot + ω_n² eta_y = -ay
+
+score 中加入:
+  slosh_energy_rms
+  slosh_eta_dot_rms
+  terminal_energy
+  predicted_ay_ratio penalty
+```
+
+边界：
+
+```text
+slosh-score 只在 candidate 通过 hard gates 后参与排序；
+如果候选被 ay/min_seg/collision 等 gate 拦下，score 不会改变选择。
+```
 
 当前 open 验证中主要有效状态：
 
@@ -323,9 +358,85 @@ GeoRef 收益来自 geometry smoothing candidate selection，
 不是来自 topic chain、latching 或 original fallback。
 ```
 
-## 7. 当前推荐启动方式
+## 7. Slosh-Score Tuned Variant
 
-### 7.1 仿真环境
+`GEOREF_SLOSH_SCORE_TUNED` 是 05-07 追加的模型引导评分变体，目的不是替换主方法，
+而是验证 “linear modal slosh rollout 是否能在 geometry-only GeoRef 之上进一步降低模态速度”。
+
+调优后的关键参数：
+
+```text
+POST_PROCESSOR_AY_RATIO_LIMIT=1.25
+min_segment_length=0.005
+max_candidate_level=medium
+
+slosh score:
+  w_h=0.0
+  w_energy=1.0
+  w_eta_dot=0.5
+  w_terminal=0.2
+  w_kappa=0.5
+  w_dkappa=0.3
+  w_ay=1.5
+  w_length=0.3
+  w_drift=0.5
+```
+
+ay125 三包候选选择：
+
+```text
+run01: selected=medium
+run02: selected=original，medium 被 ay gate 拦下
+run03: selected=medium
+
+selected medium = 2/3
+```
+
+`GEOREF_SLOSH_SCORE_TUNED ay125` 相对 `GEOREF_TUNED x3`：
+
+```text
+tracking     -4.90%
+h_rms        +1.22%
+h_p95        +6.35%
+h_max        +6.29%
+eta_dot_rms  -36.01%
+energy_rms   -1.15%
+odom_ay_p95  +6.62%
+track_p95    -0.21%
+```
+
+按 `GEOREF_TUNED` 三包波动：
+
+```text
+h_p95 / h_max / odom_ay 的变差都在 1 sigma 内；
+eta_dot_rms 改善约 -5.22 sigma；
+energy 基本持平。
+```
+
+当前定位：
+
+```text
+可以作为 slosh-state-aware / eta-dot suppressing variant；
+不能写成全面优于 geometry-only GeoRef；
+不建议继续靠放松 ay gate 或大幅调权重硬救。
+```
+
+推荐论文表述：
+
+```text
+Adding linear-modal slosh rollout to the candidate score further reduces modal velocity,
+while height and lateral acceleration remain within the observed variation of the geometry-only GeoRef baseline.
+```
+
+不推荐表述：
+
+```text
+Slosh-score GeoRef outperforms geometry-only GeoRef on all slosh metrics.
+```
+
+## 8. 当前推荐启动方式
+
+### 8.1 仿真环境
 
 ```bash
 source /home/a/scout_ws/devel/setup.bash
@@ -334,7 +445,7 @@ SPAWN_X=-4.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
 rosrun scout_local_planner launch_sim_nav_stack.sh
 ```
 
-### 7.2 RAW_TUNED 录包
+### 8.2 RAW_TUNED 录包
 
 ```bash
 PATH_MODE=global_goal CONDITION=RAW_TUNED PATH_ID=open_user_goal RUN_ID=01 \
@@ -345,7 +456,7 @@ GOAL_QW=0.2078317791364693 \
 rosrun scout_local_planner run_sim_fixed_path_bag.sh
 ```
 
-### 7.3 GEOREF_TUNED 录包
+### 8.3 GEOREF_TUNED 录包
 
 ```bash
 PATH_MODE=global_goal CONDITION=GEOREF_TUNED PATH_ID=open_user_goal RUN_ID=01 \
@@ -364,7 +475,37 @@ open 场地可关闭 collision_check。
 maze/实物必须打开 collision_check，并确认 global costmap 正常。
 ```
 
-### 7.4 手动启动 Online GeoRef
+### 8.4 GEOREF_SLOSH_SCORE_TUNED 录包
+
+```bash
+PATH_MODE=global_goal CONDITION=GEOREF_SLOSH_SCORE_TUNED PATH_ID=open_user_goal RUN_ID=ay125_01 \
+GOAL_X=-3.1570560932159424 \
+GOAL_Y=-2.897411346435547 \
+GOAL_QZ=-0.978164583074326 \
+GOAL_QW=0.2078317791364693 \
+POST_PROCESSOR_COLLISION_CHECK=false \
+POST_PROCESSOR_AY_RATIO_LIMIT=1.25 \
+rosrun scout_local_planner run_sim_fixed_path_bag.sh
+```
+
+每包后检查：
+
+```bash
+rostopic echo -b <bag> -n1 /anti_slosh_path/candidate_report
+```
+
+`selected=original` 不计为 slosh-score 有效选择样本。
+
+说明：
+
+```text
+GEOREF_SLOSH_SCORE_TUNED 会额外启用 mid candidate，
+给 height-oriented slosh score 提供 mild 和 medium 之间的候选形态。
+GEOREF_TUNED 默认 max_candidate_level=medium，不启用 mid，
+因此主线 geometry-only 结果不受影响。
+```
+
+### 8.5 手动启动 Online GeoRef
 
 启动 post-processor：
 
@@ -396,7 +537,7 @@ roslaunch scout_local_planner slosh_experiment.launch \
 
 如果是仿真并需要调 sim 专用参数，使用 `slosh_experiment_sim.launch`。
 
-## 8. 实物验证口径
+## 9. 实物验证口径
 
 实物验证详见：
 
@@ -424,7 +565,7 @@ GEOREF_REAL:
 
 实物第一轮建议在开阔场地做，不在 maze/窄走廊做。若 `/slosh/height` 降低但视觉真液面不降低，不能声明真实液体晃动被抑制。
 
-## 9. 不再作为主线的方案
+## 10. 不再作为主线的方案
 
 已否定或降级为 failure analysis：
 
@@ -436,11 +577,13 @@ OUTPUT_GUARD
 PMG lateral / longitudinal / combined
 PROFILE_ENERGY speed-only profile
 PROFILE_REF_V2 fixed-geometry speed/reference correction
+GEOREF_CONSTRAINED reference-budget MPC
+GEOREF_SLOSH_SCORE 原始版
 ```
 
 这些可以作为论文消融和负结果，但不应继续作为当前 proposed controller。
 
-## 10. 当前边界与下一步
+## 11. 当前边界与下一步
 
 已成立：
 

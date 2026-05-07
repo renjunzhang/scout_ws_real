@@ -596,3 +596,200 @@ and select a low-excitation path before MPC tracking.
 但同一模态晃动模型用于候选几何参考的风险评价，
 从而在 MPC 跟踪前选择低晃动风险路径。
 ```
+
+## 12. 2026-05-07 在线接入状态
+
+虽然 Step 0 结果更接近 SATURATED，用户仍要求为了论文创新点接入在线节点。
+
+当前工程处理：
+
+```text
+已接入 slosh_score 在线评分；
+默认 slosh_score_enable=false；
+不改 MPC；
+不改 hard gate；
+不影响 GEOREF_TUNED；
+新增 GEOREF_SLOSH_SCORE 作为 ablation condition。
+```
+
+修改文件：
+
+```text
+scripts/anti_slosh_path_post_processor.py
+launch/anti_slosh_path_post_processor.launch
+scripts/run_sim_fixed_path_bag.sh
+```
+
+上线边界：
+
+```text
+GEOREF_SLOSH_SCORE 不是当前 proposed method 的替代主线；
+它是 Ours ablation / candidate scoring 增强入口；
+必须通过 B1 Geometry-only GeoRef vs Ours Slosh-score GeoRef x3 对比后，才允许写成主方法。
+```
+
+当前预期：
+
+```text
+由于 Step 0 中 slosh_winner == geometry_winner == medium，
+第一轮 GEOREF_SLOSH_SCORE 大概率复现 GEOREF_TUNED，
+未必产生额外收益。
+```
+
+验证入口：
+
+```bash
+PATH_MODE=global_goal CONDITION=GEOREF_SLOSH_SCORE PATH_ID=open_user_goal RUN_ID=01 \
+GOAL_X=-3.1570560932159424 \
+GOAL_Y=-2.897411346435547 \
+GOAL_QZ=-0.978164583074326 \
+GOAL_QW=0.2078317791364693 \
+POST_PROCESSOR_COLLISION_CHECK=false \
+RECORD_DURATION=25 \
+rosrun scout_local_planner run_sim_fixed_path_bag.sh
+```
+
+检查：
+
+```bash
+rostopic echo -b <bag> -n1 /anti_slosh_path/candidate_report
+```
+
+有效 report 应包含：
+
+```text
+gscore
+sscore
+sE
+sEdot
+```
+
+## 13. 2026-05-07 x3 验证后的收束
+
+已完成 open_user_goal `GEOREF_SLOSH_SCORE` x3：
+
+```text
+/data/a/slosh_bags/sim/20260507/20260507_open_user_goal_GEOREF_SLOSH_SCORE_run01_160044.bag
+/data/a/slosh_bags/sim/20260507/20260507_open_user_goal_GEOREF_SLOSH_SCORE_run02_160357.bag
+/data/a/slosh_bags/sim/20260507/20260507_open_user_goal_GEOREF_SLOSH_SCORE_run03_160614.bag
+```
+
+关键现象：
+
+```text
+run01: selected=medium，有效 non-original slosh-score 样本
+run02: no candidate passed gates，fallback original
+run03: selected=original，mild/medium 被 ay gate reject
+```
+
+三包均值结论：
+
+```text
+GEOREF_SLOSH_SCORE 相对 GEOREF_TUNED:
+  tracking     -6.70%
+  h_rms        +12.59%
+  h_p95        +10.34%
+  h_max        +19.87%
+  eta_dot_rms  -0.19%
+  energy_rms   +11.66%
+  odom_ay_p95  +72.30%
+```
+
+判定：
+
+```text
+GEOREF_SLOSH_SCORE 当前版本不通过主方法门槛。
+它没有超过 geometry-only GEOREF_TUNED，
+且 run02/run03 出现 original fallback / ay gate reject，
+说明 score + gate 组合稳定性不足。
+```
+
+后续定位：
+
+```text
+1. 主线回到 GEOREF_TUNED geometry-only online GeoRef + normal MPC。
+2. Slosh score 保留为默认关闭 ablation 和离线诊断工具。
+3. 不建议继续通过放松 gate 或重调权重硬救该路线；
+   否则会引入新的调参自由度，并削弱当前 geometry-only 正结果的干净性。
+4. 论文中可写成：
+   slosh model was further evaluated as an online candidate scoring signal,
+   but did not outperform the simpler geometry-risk scoring under the current candidate set.
+```
+
+## 14. GEOREF_SLOSH_SCORE_TUNED 调优版
+
+由于论文仍需要保留 “slosh-model-guided candidate scoring” 的实现入口，
+新增 `GEOREF_SLOSH_SCORE_TUNED`，与旧 `GEOREF_SLOSH_SCORE` 分开。
+
+调优目标不是直接追求 `/slosh/height` 单包下降，而是先解决旧版的工程失败模式：
+
+```text
+旧版 run02/run03:
+  candidate 在进入 slosh score 前被 min_seg / ay gate 拦下；
+  score 没有真正参与选择；
+  最终 fallback original。
+```
+
+调优原则：
+
+```text
+1. 让合理 candidate 能进入 scoring。
+2. 不大幅放松安全 gate。
+3. 对 predicted_ay_ratio 加 score penalty，避免横向激励反弹。
+4. 保持 Q_slosh=0，MPC 仍是 normal tracking MPC。
+5. 不覆盖 GEOREF_TUNED，所有结果作为独立 condition 对比。
+```
+
+实现改动：
+
+```text
+candidate 平滑后再 sanitize；
+min_segment_length: 0.02 -> 0.005，仅 tuned condition 生效；
+ay_ratio_limit: 1.00 -> 1.05；
+新增 slosh_score_w_ay=1.5；
+降低 kappa/dkappa 几何权重，让 slosh energy/eta_dot/ay 参与主排序。
+```
+
+默认参数：
+
+```text
+condition: GEOREF_SLOSH_SCORE_TUNED
+
+slosh score:
+  w_h=0.0
+  w_energy=1.0
+  w_eta_dot=0.5
+  w_terminal=0.2
+  w_kappa=0.5
+  w_dkappa=0.3
+  w_ay=1.5
+  w_length=0.3
+  w_drift=0.5
+```
+
+第一步验收只看 candidate_report：
+
+```text
+accepted >= 2
+selected != original
+ayr <= 1.05
+gscore/sscore/sE/sEdot 均有效
+```
+
+第二步才录 x3，对比 `GEOREF_TUNED`：
+
+```text
+h_p95 不升
+energy 不升
+eta_dot 不升
+odom_ay_p95 不升
+tracking_time 不超过 GEOREF_TUNED +5%
+selected 至少 2/3 为 non-original
+```
+
+如果调优版仍不满足，则结论收束为：
+
+```text
+slosh rollout score 当前更适合离线解释与风险诊断，
+不适合作为 online candidate selection 的主权威。
+```

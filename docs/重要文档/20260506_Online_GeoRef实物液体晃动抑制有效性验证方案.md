@@ -2,6 +2,8 @@
 
 日期：2026-05-06
 
+更新：2026-05-07，补充 Slosh-score tuned 仿真结论与实物第一轮边界。
+
 ## 1. 验证目标
 
 本方案只验证一件事：
@@ -27,6 +29,8 @@ MBF 全局路径
 MPC 内部 Q_slosh 软代价
 OUTPUT_GUARD / PMG / cmd_vel 后处理
 PathHandler 内 PROFILE_ENERGY 速度剖面
+GEOREF_CONSTRAINED reference-budget MPC
+GEOREF_SLOSH_SCORE_TUNED online slosh-score variant
 ```
 
 所以实物验证时，MPC 内部防晃项必须关闭：
@@ -39,6 +43,14 @@ risk_scheduler_enable=false
 energy_profile_enable=false
 input_shaping_enable=false
 slosh_speed_governor_enable=false
+```
+
+当前 05-07 仿真结论：
+
+```text
+GEOREF_TUNED geometry-only 是当前主线；
+GEOREF_SLOSH_SCORE_TUNED 能降低 eta_dot，但没有证明 /slosh/height 优于 GEOREF_TUNED；
+因此实物第一轮只验证 RAW_REAL vs GEOREF_REAL，不验证 Slosh-score tuned。
 ```
 
 ## 2. 成功标准
@@ -78,6 +90,8 @@ RAW_REAL
 GEOREF_REAL
   /scout/global_path -> post-processor -> /scout/global_path_anti_slosh -> MPC
   Q_slosh=0
+  使用 geometry-risk GEOREF_TUNED 参数
+  不启用 slosh_score_enable
 
 ORIGINAL_REAL，可选
   启动 post-processor，但 max_candidate_level=original
@@ -89,6 +103,19 @@ SLOW_REAL，可选
 ```
 
 论文主表至少需要 RAW_REAL 和 GEOREF_REAL。ORIGINAL_REAL / SLOW_REAL 用于排除“只是换 topic”或“只是慢了”。
+
+明确不进入第一阶段：
+
+```text
+GEOREF_SLOSH_SCORE_TUNED_REAL
+  原因：仿真中只证明 eta_dot 有改善，未证明 /slosh/height 优于 GEOREF_TUNED。
+
+GEOREF_CONSTRAINED_REAL
+  原因：仿真中相对普通 GeoRef 让 /slosh/height、eta_dot、energy 变差。
+
+Q_slosh_REAL
+  原因：旧 soft-cost 主线已跨多轮失败，不能和 reference-first 实物验证混在一起。
+```
 
 ## 4. 场地要求
 
@@ -347,6 +374,7 @@ GEOREF_REAL 正式实验还必须记录以下话题：
 /anti_slosh_path/candidate_report
 /anti_slosh_path/debug/original
 /anti_slosh_path/debug/mild
+/anti_slosh_path/debug/mid
 /anti_slosh_path/debug/medium
 /anti_slosh_path/debug/strong
 ```
@@ -367,6 +395,7 @@ rosbag record -O /data/$USER/slosh_bags/real/georef_diag_$(date +%Y%m%d_%H%M%S) 
   /anti_slosh_path/candidate_report \
   /anti_slosh_path/debug/original \
   /anti_slosh_path/debug/mild \
+  /anti_slosh_path/debug/mid \
   /anti_slosh_path/debug/medium \
   /anti_slosh_path/debug/strong
 ```
@@ -425,12 +454,25 @@ GeoRef 诊断指标：
 
 ```text
 selected candidate
+accepted candidate count
 kappa ratio
 predicted ay ratio
 path length ratio
 max drift
 collision gate pass/fail
 ```
+
+若后续单独验证 Slosh-score tuned，额外记录并解析：
+
+```text
+sH   predicted total height p95 = modal + parabola
+sHm  predicted modal height p95
+sHp  predicted parabola height p95
+sE   predicted modal energy
+sEdot predicted eta_dot
+```
+
+但这些不作为第一轮实物主线指标。
 
 视觉真值指标，如果 RealSense 可用：
 
@@ -468,3 +510,193 @@ MPC 代价函数主动抑制了液体晃动。
 
 不要在失败后直接打开 `Q_slosh=5` 或旧 speed governor，因为那会混淆路线归因。
 
+## 14. 第一轮实物执行建议
+
+推荐最小执行顺序：
+
+```text
+1. 空车或少液量低速检查 RAW_REAL 是否能安全到达目标。
+2. 加液后录 RAW_REAL x1，确认定位、MPC、/slosh/height、录包完整。
+3. 录 GEOREF_REAL x1，检查 candidate_report selected != original。
+4. 若前两包都安全，再补 RAW_REAL/GEOREF_REAL 到各 3 包。
+5. 3 包完成后再决定是否做 ORIGINAL_REAL / SLOW_REAL。
+```
+
+每包结束后立即做：
+
+```bash
+rostopic echo -b /data/$USER/slosh_bags/real/<bag>.bag -n1 /anti_slosh_path/candidate_report
+python3 /home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/extract_slosh_metrics.py \
+  /data/$USER/slosh_bags/real/<bag>.bag
+```
+
+若实物机器路径不是 `/home/a/scout_ws`，替换为实际工作区路径。
+
+## 15. 固定路径 replay 补充实验
+
+当前主验证是在线 MBF 同起点同终点对比，不是固定路径 replay。
+
+固定路径 replay 的用途是补充 controlled experiment：
+
+```text
+先用 MBF 生成并保存一条 /scout/global_path；
+之后 RAW_REAL_FIXED 和 GEOREF_REAL_FIXED 都复用同一条 JSON path；
+这样可以排除 MBF 每次重新规划导致的路径差异。
+```
+
+边界：
+
+```text
+固定路径 replay 不替代第一轮在线验证；
+它用于论文补充对比：“在完全相同原始路径输入下，GeoRef 后处理是否降低晃动”。
+```
+
+### 15.1 保存一条 MBF 路径
+
+先按实物流程启动：
+
+```text
+底盘 / 雷达 / 定位 / mbf_global
+```
+
+然后发布目标，等 `/scout/global_path` 出现。保存路径：
+
+```bash
+mkdir -p /data/$USER/fixed_paths/real
+
+rosrun scout_local_planner fixed_global_path_runner.py \
+  --mode capture \
+  --input-topic /scout/global_path \
+  --path-file /data/$USER/fixed_paths/real/open_goal_A.json \
+  --capture-timeout 30
+```
+
+检查：
+
+```bash
+python3 -m json.tool /data/$USER/fixed_paths/real/open_goal_A.json | head
+```
+
+### 15.2 RAW_REAL_FIXED
+
+RAW 固定路径不启动 post-processor。
+
+终端 1：启动 MPC，订阅固定路径 topic：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path_fixed \
+  Q_slosh:=0 \
+  Q_slosh_eta_dot:=0 \
+  enable_slosh_box_constraint:=false \
+  risk_scheduler_enable:=false \
+  energy_profile_enable:=false \
+  input_shaping_enable:=false \
+  slosh_speed_governor_enable:=false \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_lateral_accel:=false \
+  slosh_use_imu_alpha_z:=false
+```
+
+终端 2：回到路径起点后 replay 固定路径：
+
+```bash
+rosrun scout_local_planner fixed_global_path_runner.py \
+  --mode replay \
+  --path-file /data/$USER/fixed_paths/real/open_goal_A.json \
+  --output-topic /scout/global_path_fixed \
+  --manual-start \
+  --start-pos-tol 0.08 \
+  --start-yaw-tol 0.15 \
+  --publish-once-keepalive
+```
+
+如果不想等待起点 gate，可临时加：
+
+```text
+--skip-start-wait
+```
+
+但正式对比不推荐跳过。
+
+### 15.3 GEOREF_REAL_FIXED
+
+GEOREF 固定路径需要：
+
+```text
+/scout/global_path_fixed
+  -> anti_slosh_path_post_processor
+  -> /scout/global_path_anti_slosh
+  -> MPC
+```
+
+终端 1：启动 post-processor：
+
+```bash
+roslaunch scout_local_planner anti_slosh_path_post_processor.launch \
+  input_topic:=/scout/global_path_fixed \
+  output_topic:=/scout/global_path_anti_slosh \
+  ds:=0.03 \
+  max_candidate_level:=medium \
+  publish_debug:=true \
+  enable_collision_check:=true \
+  costmap_topic:=/scout/mbf_costmap_nav/global_costmap/costmap \
+  ay_ratio_limit:=1.0 \
+  prediction_v_max:=2.0 \
+  prediction_ay_max_budget:=2.0 \
+  prediction_a_max:=1.0
+```
+
+终端 2：启动 MPC，订阅后处理路径：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path_anti_slosh \
+  Q_slosh:=0 \
+  Q_slosh_eta_dot:=0 \
+  enable_slosh_box_constraint:=false \
+  risk_scheduler_enable:=false \
+  energy_profile_enable:=false \
+  input_shaping_enable:=false \
+  slosh_speed_governor_enable:=false \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_lateral_accel:=false \
+  slosh_use_imu_alpha_z:=false
+```
+
+终端 3：回到同一起点后 replay 同一条固定路径：
+
+```bash
+rosrun scout_local_planner fixed_global_path_runner.py \
+  --mode replay \
+  --path-file /data/$USER/fixed_paths/real/open_goal_A.json \
+  --output-topic /scout/global_path_fixed \
+  --manual-start \
+  --start-pos-tol 0.08 \
+  --start-yaw-tol 0.15 \
+  --publish-once-keepalive
+```
+
+### 15.4 固定路径 replay 录包注意
+
+固定路径实验也要录：
+
+```text
+/scout/global_path_fixed
+/scout/global_path_anti_slosh
+/anti_slosh_path/candidate_report
+/anti_slosh_path/debug/original
+/anti_slosh_path/debug/mild
+/anti_slosh_path/debug/mid
+/anti_slosh_path/debug/medium
+/anti_slosh_path/debug/strong
+```
+
+有效性要求：
+
+```text
+RAW_REAL_FIXED 和 GEOREF_REAL_FIXED 必须使用同一个 path-file。
+每包前机器人必须回到 path-file 第一个 pose 附近。
+GEOREF_REAL_FIXED 中 selected=original 的包不算 GeoRef 有效样本。
+若 fixed path 本身离障碍太近，先换路径，不要强行验证 anti-slosh。
+```
