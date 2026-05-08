@@ -1,0 +1,60 @@
+# OSCRS container/slosh parameters.
+#
+# This file mirrors the observer-compatible `slosh:` block used by
+# mpc_params*.yaml. Keep SI units here so offline OSCRS rollout and the
+# online slosh observer can be compared without unit conversions.
+
+slosh:
+  container_radius: 0.0185
+  liquid_height: 0.058
+  liquid_density: 1000.0
+  damping_ratio: 0.05
+  mode_index: 1
+  offset_x: 0.0
+  offset_y: 0.0
+  use_parabola_term: true
+  use_linear_model: true
+
+# Online rollout defaults used by anti_slosh_path_post_processor.py. Launch
+# args / run_sim env vars may still override these values.
+slosh_score:
+  enable: false
+  omega_n: 31.25
+  height_coeff: 1.8186978156753892
+  w_h: 0.0
+  w_energy: 1.0
+  w_eta_dot: 0.5
+  w_terminal: 0.2
+  w_kappa: 1.0
+  w_dkappa: 0.5
+  w_ay: 0.0
+  w_length: 0.3
+  w_drift: 0.5
+
+oscrs:
+  height_coeff_mode: observer_linear  # observer_linear | ferrari_closed_form | manual
+  height_coeff_manual: 0.0
+  rollout_dt: 0.05
+  v_floor: 0.05
+  settle_duration: 2.0
+  eta_lim_mm: 25.0
+  eta_p95_lim_mm: 20.0
+  residual_ratio: 0.2
+
+  # RA-L §4.1 Layer 2 score: weighted sum of slosh/geom indicators, batch-normalized
+  # within current planning cycle's S_full set. use_legacy_score=true keeps the
+  # pre-RA-L score (2*h_max/eta_lim + h_residual/residual_lim + 0.2*geom).
+  score:
+    use_legacy_score: false
+    batch_normalize: true
+    w_h_p95: 1.0
+    w_energy_rms: 0.3
+    w_eta_dot_rms: 0.3
+    w_terminal_E: 0.2
+    w_geom: 0.2
+
+  # RA-L §4.1 fallback: when no candidate passes the hard gate, publish a
+  # one-shot alarm and let the post-processor keep geometry_best.
+  alarm:
+    topic: /anti_slosh_path/safety_alarm
+    rate_limit_sec: 5.0

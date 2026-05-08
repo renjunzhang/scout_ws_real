@@ -21,6 +21,8 @@
 #   - RealSense 原始输入：
 #                /camera/color/image_raw
 #                /camera/color/camera_info
+#                /camera/depth/image_rect_raw
+#                /camera/depth/camera_info
 #   - 视觉液面测量：
 #                /liquid_measurement/height_left_px
 #                /liquid_measurement/height_right_px
@@ -38,6 +40,8 @@
 #   - MPC 性能：/mpc/solve_ms, /mpc/status_val, /mpc_status
 #   - 控制/底盘状态：/cmd_vel, /odom, /scout_status, /rs_status
 #   - 目标/路径：/scout/goal, /scout/current_goal, /scout/global_path, /local_path
+#                /scout/global_path_anti_slosh
+#                /anti_slosh_path/metrics, /anti_slosh_path/candidate_report
 #   - 避障实现/接口核查：
 #                /scan_front
 #                /map, /map_updates
@@ -155,6 +159,8 @@ TOPICS=(
     # RealSense 原始图像
     /camera/color/image_raw
     /camera/color/camera_info
+    /camera/depth/image_rect_raw
+    /camera/depth/camera_info
 
     # 视觉液面测量（节点存在时会自动录到；节点未启动时不影响 rosbag record）
     /liquid_measurement/height_left_px
@@ -169,6 +175,13 @@ TOPICS=(
     /liquid_measurement/meniscus_valid
     /liquid_measurement/meniscus_confidence
     /liquid_measurement/debug_image
+
+    # RA-L D5 视觉 GT (extract_visual_height.py 输出；节点未启动时自动跳过)
+    /slosh/h_visual
+    /slosh/h_visual_quality
+
+    # RA-L §4.1 SAFETY_ALARM topic (post-processor 在 hard gate 全失败时一次性发布)
+    /anti_slosh_path/safety_alarm
 
     # IMU 原始输入
     /imu/data
@@ -194,8 +207,16 @@ TOPICS=(
     /scout/goal
     /scout/current_goal
     /scout/global_path
+    /scout/global_path_anti_slosh
     /scout/global_path_fixed
     /scout/global_path_smooth
+    /anti_slosh_path/metrics
+    /anti_slosh_path/candidate_report
+    /anti_slosh_path/debug/original
+    /anti_slosh_path/debug/mild
+    /anti_slosh_path/debug/medium
+    /anti_slosh_path/debug/mid
+    /anti_slosh_path/debug/strong
     /mpc/reference_path
     /local_path
     /scout/mbf_costmap_nav/GlobalPlanner/plan

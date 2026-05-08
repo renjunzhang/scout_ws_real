@@ -1,0 +1,52 @@
+# RA-L investment proposal D6: 4 open scenarios for OSCRS validation.
+#
+# STATUS (2026-05-08): run_sim_fixed_path_bag.sh can consume this file via
+# SCENARIO=<name> for open-field global-goal simulation. The script currently
+# reads only goal pose and switches PATH_MODE=global_goal; map/world selection
+# remains controlled by the outer launch stack.
+#
+# For real experiments this file remains a contract/checklist rather than an
+# automatic recorder input.
+#
+# The map_sim / map_real fields are placeholders — sim/real map names depend
+# on the launch stack and are tracked separately in the experiment log.
+
+scenarios:
+  - name: open_user_goal
+    map_sim: open_field_v1
+    map_real: open_lab_v1
+    start: {x: 0.0, y: 0.0, yaw: 0.0}
+    goal:  {x: -3.1570560932159424, y: -2.897411346435547, yaw: -2.722877025604248}
+    expected_path_length_m: ~4.3
+    notes: captured open-field user goal from 2026-05-06; geometry-only selector picks medium
+
+  - name: open_goal_c
+    map_sim: open_field_v1
+    map_real: open_lab_v1
+    start: {x: 0.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 4.5, y: -3.0, yaw: -0.5}
+    expected_path_length_m: ~8.9
+    notes: angled goal inside open_walled safe area; tests selector under non-axial heading
+
+  - name: open_long_path
+    map_sim: open_field_v2_long
+    map_real: open_lab_v2_long
+    start: {x: 0.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 12.0, y: 0.0, yaw: 0.0}
+    expected_path_length_m: ">=12.0"
+    notes: long path saturation regime; expect more residual oscillation
+
+  - name: open_with_obstacle_pair
+    map_sim: open_field_v3_obs_pair
+    map_real: open_lab_v3_obs_pair
+    start: {x: 0.0, y: 0.0, yaw: 0.0}
+    goal:  {x: 6.0, y: 0.0, yaw: 0.0}
+    obstacles:
+      - {x: 3.0, y:  0.6, r: 0.4}
+      - {x: 3.0, y: -0.6, r: 0.4}
+    expected_path_length_m: ~6.5
+    notes: collision gate and slosh gate active simultaneously
+
+# Per RA-L D6: 4 scenarios x 3 conditions (RAW / GEOREF_TUNED / GEOREF_OSCRS_ACTIVE)
+# x 5 bags = 60 sim bags + 60 real bags. Real may compress to 4 x 3 x 3 = 36 bags
+# if hardware time is constrained.

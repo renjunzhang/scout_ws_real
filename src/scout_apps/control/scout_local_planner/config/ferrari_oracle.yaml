@@ -1,0 +1,46 @@
+# Ferrari 2026 RA-L offline NLP oracle for Scout differential drive.
+#
+# Solves the assigned-path time-optimal problem from §III-A of Ferrari et al.
+# adapted to Scout: heading is tied to the path tangent (no lateral a_x DoF),
+# only the motion law s(t) is optimised. Same modal slosh model and damping
+# as the online OSCRS rollout (oscrs_container.yaml).
+
+oracle:
+  solver: ipopt
+  ipopt:
+    max_iter: 500
+    tol: 1.0e-6
+    acceptable_tol: 1.0e-4
+    print_level: 3
+    linear_solver: mumps
+  collocation:
+    n_nodes: 200          # Ferrari default 151; longer paths benefit from more nodes
+    poly_degree: 3        # cubic Lagrange polynomials
+  bounds:
+    v_max: 1.0            # m/s, ~50 % of Scout absolute max
+    v_min: 0.05           # m/s, avoid singular omega when stationary
+    dt_max: 0.5           # s, keeps variable-step slosh integration numerically bounded
+    a_max: 0.8            # m/s^2; aligned with predict_a_max in run_sim
+    jerk_max: 4.0         # m/s^3
+    omega_max: 1.5        # rad/s; differential drive yaw rate cap
+  constraints:
+    eta_lim_mm: 25.0      # same gate as OSCRS hard gate (oscrs.eta_lim_mm)
+    residual_ratio: 0.20  # Ferrari residual gate: h(t > t_end) <= 0.2 * eta_lim
+    settle_duration: 2.0  # zero-input free response window appended to path
+    use_parabola_term: true
+  scout_specific:
+    differential_drive: true
+    nonholonomic: true
+    heading_from_tangent: true
+  output:
+    csv: docs/Claude/分析数据/ferrari_oracle_<scenario>.csv
+    fields:
+      - s
+      - t
+      - v
+      - a
+      - omega
+      - kappa
+      - eta_x
+      - eta_y
+      - h_total

@@ -1,31 +1,30 @@
-# Online GeoRef + MPC 跟踪方案
+# Online GeoRef / OSCRS Reference Generation + MPC Tracking
 
-更新时间：2026-05-07
+更新时间：2026-05-08
 
-本文档记录当前 anti-slosh 主线。旧 `README.md` 描述的是增广 slosh MPC / risk scheduler / 输出裁剪等历史方案，不代表当前最有效的实现。
+本文档记录当前推荐的 anti-slosh 工程结构。旧 `README.md` 仍可作为历史 MPC/slosh-cost 方案记录，但不代表当前主线。
 
 ## 1. 当前结论
 
-当前有效路线是：
+当前系统采用 reference-first 结构：
 
 ```text
-MBF 全局路径
-  -> anti_slosh_path_post_processor 在线几何后处理
+MBF global path
+  -> anti_slosh_path_post_processor
   -> /scout/global_path_anti_slosh
-  -> 普通 MPC 跟踪
+  -> normal MPC tracking
   -> /cmd_vel
 ```
 
-核心判断：
+核心原则：
 
 ```text
-防晃收益来自 MPC 前端的低激励几何参考生成；
-不是来自 MPC 内部 slosh soft cost；
-不是来自 cmd_vel 后处理；
-不是来自简单降速。
+防晃逻辑放在 MPC 前端的参考路径生成/选择层；
+MPC 只作为 constrained tracking layer；
+不再依赖 Q_slosh、eta_dot soft cost、输出裁剪或 cmd_vel 后处理作为主防晃机制。
 ```
 
-当前成功配置中，MPC 内部防晃项全部关闭：
+主线实验中 MPC 内部防晃项必须关闭：
 
 ```text
 Q_slosh=0
@@ -37,75 +36,109 @@ input_shaping_enable=false
 slosh_speed_governor_enable=false
 ```
 
-## 2. 与旧方案的区别
+## 2. 三条实物对比线
 
-| 项目 | 旧 README 风险自适应 MPC | 当前 Online GeoRef |
-|---|---|---|
-| 防晃位置 | MPC cost / constraint / scheduler / output guard | MPC 前端路径几何参考 |
-| MPC 角色 | tracking + anti-slosh 同时承担 | 只做 constrained tracking |
-| 主要控制对象 | `Q_slosh`、`eta_dot`、`rho_k`、输出 cap | `kappa`、`dkappa`、路径激励、执行一致性 |
-| 已验证正信号 | 不稳定，跨路径失败 | open 场景同目标三包正结果 |
-| 实物验证口径 | 曾建议 `Q_slosh=5` | 当前必须 `Q_slosh=0`，只验证 GeoRef |
-| 论文定位 | 风险自适应 MPC 主动压晃 | 低激励几何参考生成 + MPC 跟踪 |
+正式实物有效性验证只比较三条线。
 
-论文中不能写成：
+### RAW_REAL
 
 ```text
-MPC 代价函数主动抑制液体晃动。
-```
-
-应写成：
-
-```text
-将防晃逻辑前移到几何参考生成层，并由 MPC 在车辆约束下跟踪该低激励参考。
-```
-
-## 3. 系统结构
-
-```text
-/scout/goal
-  ↓
-scout_global_planner mbf_global.launch
-  ↓
 /scout/global_path
-  ↓
-anti_slosh_path_post_processor.py
-  ↓
-/scout/global_path_anti_slosh
-  ↓
-scout_local_planner slosh_experiment(.launch/.sim.launch)
-  ↓
-/cmd_vel
+  -> normal MPC tracking
 ```
 
-`anti_slosh_path_post_processor.py` 不发布速度命令，也不是新的控制器。它只修改 `nav_msgs/Path` 的几何形状。
+含义：MBF 原始全局路径 baseline，不启动 post-processor。
 
-MPC 仍是原 tracking MPC：
+### GEOREF_TUNED_STRONG_REAL
 
 ```text
-输入路径: /scout/global_path 或 /scout/global_path_anti_slosh
-输出: /cmd_vel
-控制变量: a, omega
-约束: v, a, omega, da, domega
-求解器: OSQP
+/scout/global_path
+  -> geometry-only GeoRef candidate selection
+  -> /scout/global_path_anti_slosh
+  -> normal MPC tracking
 ```
 
-可选增强变体：
+含义：只用几何指标选择候选路径。它是 Online GeoRef 主线，也是 OSCRS 的公平 baseline。
+
+实物主表使用：
 
 ```text
-GEOREF_SLOSH_SCORE_TUNED:
-  在 candidate score 中加入线性模态 slosh rollout 指标；
-  仍然不改 MPC，不打开 Q_slosh；
-  当前定位为 slosh-state-aware variant / ablation，不是主方法替代。
+max_candidate_level=strong
+oscrs_shadow_enable=false
+oscrs_active_enable=false
 ```
 
-## 4. Post-Processor 当前实现
+注意：历史 open_user_goal 仿真正结果主要来自 medium/调参版本。和 OSCRS_ACTIVE 做公平对比时，GeoRef baseline 必须使用同一 candidate set，即 `strong`。
 
-文件：
+### GEOREF_OSCRS_ACTIVE_REAL
+
+```text
+/scout/global_path
+  -> same GeoRef candidate set
+  -> OSCRS hard gate + normalized slosh/geometry score
+  -> /scout/global_path_anti_slosh
+  -> normal MPC tracking
+```
+
+含义：RA-L/Ferrari 整合方案的在线落地线。OSCRS 不使用实时液面高度闭环；它在路径执行前对候选参考做 slosh rollout，按 `eta_lim / residual / score` 选择路径。
+
+实物主表使用：
+
+```text
+max_candidate_level=strong
+oscrs_shadow_enable=true
+oscrs_active_enable=true
+```
+
+有效 OSCRS 样本必须通过 `candidate_report` 解释：
+
+```text
+summary:selected=strong,geo=medium,oscrs=strong,active=1,fallback=0,fb=0,orig_safe=1,takeover=1
+```
+
+字段含义：
+
+```text
+active=1     OSCRS active selector 已开启
+fb=0         OSCRS 选中非 original 且通过 hard gate
+takeover=1   OSCRS 选择不同于 geometry_best 的候选，实际改变参考路径
+takeover=0   OSCRS 运行了，但与 geometry-only 选择相同，不能计为 OSCRS 额外物理贡献
+```
+
+## 3. 与旧 MPC 方案的区别
+
+| 项目 | 旧方案 | 当前方案 |
+|---|---|---|
+| 防晃位置 | MPC cost / risk scheduler / output guard / speed cap | MPC 前端 reference generation / selection |
+| MPC 角色 | 同时承担 tracking 和 anti-slosh 决策 | 只做 constrained tracking |
+| 主变量 | `Q_slosh`、`Q_eta_dot`、`rho_k`、cmd_vel cap | candidate path、`kappa/dkappa`、slosh rollout gate、OSCRS score |
+| 当前主表 | 不再使用 | RAW / GeoRef / OSCRS 三线 |
+| 论文表述 | 不应写“MPC 代价函数主动消晃” | 写“低激励参考选择 + MPC 跟踪” |
+
+不进入当前主表的历史方案：
+
+```text
+Q_slosh / Q_slosh_eta_dot / terminal slosh cost
+Q_modal_energy / Q_ay_pred
+risk scheduler
+OUTPUT_GUARD
+PMG lateral / longitudinal / combined
+PROFILE_ENERGY speed-only profile
+PROFILE_REF_V2 fixed-geometry speed/reference correction
+GEOREF_CONSTRAINED reference-budget MPC
+GEOREF_SLOSH_SCORE_TUNED
+```
+
+这些可以作为 failure analysis / ablation，不作为当前推荐控制器。
+
+## 4. Post-Processor
+
+主要文件：
 
 ```text
 scripts/anti_slosh_path_post_processor.py
 launch/anti_slosh_path_post_processor.launch
+config/oscrs_container.yaml
 ```
 
 订阅：
@@ -120,6 +153,8 @@ launch/anti_slosh_path_post_processor.launch
 ```text
 /scout/global_path_anti_slosh
 /anti_slosh_path/candidate_report
+/anti_slosh_path/metrics
+/anti_slosh_path/safety_alarm
 /anti_slosh_path/debug/original
 /anti_slosh_path/debug/mild
 /anti_slosh_path/debug/mid
@@ -127,17 +162,17 @@ launch/anti_slosh_path_post_processor.launch
 /anti_slosh_path/debug/strong
 ```
 
-候选生成：
+候选集合：
 
 ```text
 original
-mild smoothing
-mid smoothing       # 仅 tuned/实验条件启用
-medium smoothing
-strong smoothing
+mild
+mid
+medium
+strong
 ```
 
-gate：
+通用 hard gates：
 
 ```text
 max_drift
@@ -146,382 +181,178 @@ endpoint_error
 min_segment_length
 path direction
 max_candidate_level
-collision check，启用时使用 global costmap inflation
-predicted ay ratio 诊断/门控
+collision check
+predicted ay ratio
 ```
 
-score 目标不是最小曲率，而是中等程度降低曲率和曲率变化，避免过度拉直路径后引入更大的速度/jerk 激励。
+## 5. GeoRef Selection
 
-可选 slosh-score scoring：
+`GEOREF_TUNED_STRONG_REAL` 使用 geometry score：
 
 ```text
-enable: slosh_score_enable=true
-condition: GEOREF_SLOSH_SCORE_TUNED
-
-对 accepted candidate 做 signed linear-modal rollout:
-  eta_x_ddot + 2ζω_n eta_x_dot + ω_n² eta_x = -ax
-  eta_y_ddot + 2ζω_n eta_y_dot + ω_n² eta_y = -ay
-
-score 中加入:
-  slosh_energy_rms
-  slosh_eta_dot_rms
-  terminal_energy
-  predicted_ay_ratio penalty
+score = target_kappa_penalty
+      + dkappa_ratio
+      + length/drift/shortening/over-smooth penalty
 ```
 
-边界：
+推荐实物启动参数：
 
 ```text
-slosh-score 只在 candidate 通过 hard gates 后参与排序；
-如果候选被 ay/min_seg/collision 等 gate 拦下，score 不会改变选择。
+ds=0.03
+max_candidate_level=strong
+enable_collision_check=true
+ay_ratio_limit=1.0
+prediction_v_max=2.0
+prediction_ay_max_budget=2.0
+prediction_a_max=1.0
 ```
 
-当前 open 验证中主要有效状态：
+如果路径改得太弱且 `/slosh/height` 不降，优先提高候选强度；如果路径贴墙、绕路过多或 tracking 变差，降低 gain/max_drift 或候选等级。不要通过重新打开 MPC 防晃项补救。
+
+## 6. OSCRS Selection
+
+`GEOREF_OSCRS_ACTIVE_REAL` 使用同一候选集合，但选择规则变为：
 
 ```text
-selected candidate = medium 或 mild
-selected original 只能说明 fallback，不算 GeoRef 有效样本
+1. 对 accepted candidate 做 signed linear modal slosh rollout；
+2. 计算 h_p95、modal_energy_rms、eta_dot_rms、terminal_E、residual height；
+3. 用 eta_lim 与 residual_ratio 做 hard gate；
+4. 在 feasible non-original candidates 中用 batch-normalized score 选最小者；
+5. 若无 feasible non-original candidate，则 fallback 到 geometry_best，并在 candidate_report 中记录 fb。
 ```
 
-重要语义修正：
+核心模型口径：
 
 ```text
-selected=original 时，/scout/global_path_anti_slosh 直接转发原始 MBF path；
-不再发布重采样后的 original。
+eta_x_ddot + 2*zeta*omega_n*eta_x_dot + omega_n^2*eta_x = -ax_eff
+eta_y_ddot + 2*zeta*omega_n*eta_y_dot + omega_n^2*eta_y = -ay_eff
+
+ax_eff = ax - alpha * offset_y - omega^2 * offset_x
+ay_eff = ay + alpha * offset_x - omega^2 * offset_y
+
+height = linear modal height + optional parabola term
 ```
 
-## 5. 仿真主结果
-
-主验证场景：
+默认参数入口：
 
 ```text
-SIM_ENV=open
-目标 open_user_goal:
-  x=-3.1570560932159424
-  y=-2.897411346435547
-  qz=-0.978164583074326
-  qw=0.2078317791364693
+config/oscrs_container.yaml
 ```
 
-RAW_TUNED 三包：
+关键字段：
 
 ```text
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_RAW_TUNED_run01_190008.bag
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_RAW_TUNED_run02_190809.bag
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_RAW_TUNED_run03_191300.bag
+slosh.container_radius
+slosh.liquid_height
+slosh.damping_ratio
+slosh.offset_x
+slosh.offset_y
+oscrs.eta_lim_mm
+oscrs.residual_ratio
+oscrs.settle_duration
+oscrs.score/w_h_p95
+oscrs.score/w_energy_rms
+oscrs.score/w_eta_dot_rms
+oscrs.score/w_terminal_E
+oscrs.score/w_geom
 ```
 
-GEOREF_TUNED 三包：
+`fb` 语义：
 
 ```text
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_GEOREF_TUNED_run01_190153.bag
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_GEOREF_TUNED_run02_190940.bag
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_GEOREF_TUNED_run03_191424.bag
+fb=0  OSCRS 选中非 original 且通过 hard gate
+fb=1  original slosh-safe，但无非 original feasible candidate
+fb=2  有 geometry candidate，但 slosh hard gate 失败
+fb=3  无可用 geometry candidate
 ```
 
-GEOREF_TUNED 相对 RAW_TUNED 三包均值：
+`/anti_slosh_path/safety_alarm` 只在所有候选 hard gate 全失败时发布，用于实物安全复盘。
+
+## 7. Normal MPC Tracking
+
+MPC 启动文件：
 
 ```text
-active_s       +5.5%
-h_rms          -18.7%
-h_p95          -18.6%
-h_max          -6.6%
-eta_dot_rms    -11.5%
-energy_rms     -18.2%
-ay_p95         -38.5%
-ax_p95         -18.5%
-alpha_p95      -13.7%
-ref_ay_p95     -42.0%
-ref_ax_p95     -91.4%
-ref_jerk_p95   -80.5%
+launch/slosh_experiment.launch
 ```
 
-阶段性结论：
+RAW 输入：
 
 ```text
-在 open_user_goal 上，Online GeoRef 在 tracking time +15% 门槛内降低了 /slosh/height 的 rms/p95/max、
-eta_dot、modal energy 以及主要执行激励。
+global_path_topic:=/scout/global_path
 ```
 
-边界：
+GeoRef / OSCRS 输入：
 
 ```text
-这不是任意目标泛化证明。
-这不是实物真液面证明。
-这不保证每一包每一个瞬时峰值都单调下降。
+global_path_topic:=/scout/global_path_anti_slosh
 ```
 
-## 6. Baseline 结果
-
-### 6.1 RAW_SLOW_MATCHED
-
-目的：排除“只是慢了”。
-
-配置：
-
-```text
-原始 MBF path
-不启用 GeoRef
-vehicle_v_max=1.90
-其余 tracking 参数与 RAW/GEOREF 保持一致
-```
-
-SLOW 三包：
-
-```text
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_slow_RAW_TUNED_run01_192143.bag
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_slow_RAW_TUNED_run02_192317.bag
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_slow_RAW_TUNED_run03_192452.bag
-```
-
-SLOW vs RAW：
-
-```text
-active_s       +3.3%
-h_rms          -9.1%
-h_p95          -1.7%
-h_max          +22.0%
-eta_dot_rms    +40.6%
-energy_rms     -4.8%
-ay_p95         -19.7%
-alpha_p95      +15.2%
-```
-
-GEOREF vs SLOW：
-
-```text
-active_s       +2.1%
-h_rms          -10.7%
-h_p95          -17.3%
-h_max          -23.4%
-eta_dot_rms    -37.0%
-energy_rms     -14.1%
-ay_p95         -23.3%
-alpha_p95      -25.1%
-```
-
-结论：
-
-```text
-简单降速不能解释 GeoRef 收益；慢速 baseline 甚至让 h_max 和 eta_dot 变差。
-```
-
-### 6.2 修正版 GEOREF_ORIGINAL
-
-目的：排除“只是换 topic / post-processor chain”。
-
-修正版语义：
-
-```text
-max_candidate_level=original
-selected=original 时直接转发原始 MBF path，不重采样
-```
-
-ORIGINAL_FIXED 三包：
-
-```text
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_original_fixed_GEOREF_ORIGINAL_run01_195728.bag
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_original_fixed_GEOREF_ORIGINAL_run02_195902.bag
-/data/a/slosh_bags/sim/20260506/20260506_open_user_goal_original_fixed_GEOREF_ORIGINAL_run03_200200.bag
-```
-
-ORIGINAL_FIXED vs RAW：
-
-```text
-active_s       +7.2%
-h_rms          -10.9%
-h_p95          -0.6%
-h_max          +15.5%
-eta_dot_rms    +39.1%
-energy_rms     -6.3%
-ay_p95         -18.3%
-alpha_p95      +12.3%
-```
-
-GEOREF vs ORIGINAL_FIXED：
-
-```text
-active_s       -1.5%
-h_rms          -8.8%
-h_p95          -18.1%
-h_max          -19.1%
-eta_dot_rms    -36.3%
-energy_rms     -12.7%
-ay_p95         -24.7%
-alpha_p95      -23.1%
-```
-
-结论：
-
-```text
-GeoRef 收益来自 geometry smoothing candidate selection，
-不是来自 topic chain、latching 或 original fallback。
-```
-
-## 7. Slosh-Score Tuned Variant
-
-`GEOREF_SLOSH_SCORE_TUNED` 是 05-07 追加的模型引导评分变体，目的不是替换主方法，
-而是验证 “linear modal slosh rollout 是否能在 geometry-only GeoRef 之上进一步降低模态速度”。
-
-调优后的关键参数：
-
-```text
-POST_PROCESSOR_AY_RATIO_LIMIT=1.25
-min_segment_length=0.005
-max_candidate_level=medium
-
-slosh score:
-  w_h=0.0
-  w_energy=1.0
-  w_eta_dot=0.5
-  w_terminal=0.2
-  w_kappa=0.5
-  w_dkappa=0.3
-  w_ay=1.5
-  w_length=0.3
-  w_drift=0.5
-```
-
-ay125 三包候选选择：
-
-```text
-run01: selected=medium
-run02: selected=original，medium 被 ay gate 拦下
-run03: selected=medium
-
-selected medium = 2/3
-```
-
-`GEOREF_SLOSH_SCORE_TUNED ay125` 相对 `GEOREF_TUNED x3`：
-
-```text
-tracking     -4.90%
-h_rms        +1.22%
-h_p95        +6.35%
-h_max        +6.29%
-eta_dot_rms  -36.01%
-energy_rms   -1.15%
-odom_ay_p95  +6.62%
-track_p95    -0.21%
-```
-
-按 `GEOREF_TUNED` 三包波动：
-
-```text
-h_p95 / h_max / odom_ay 的变差都在 1 sigma 内；
-eta_dot_rms 改善约 -5.22 sigma；
-energy 基本持平。
-```
-
-当前定位：
-
-```text
-可以作为 slosh-state-aware / eta-dot suppressing variant；
-不能写成全面优于 geometry-only GeoRef；
-不建议继续靠放松 ay gate 或大幅调权重硬救。
-```
-
-推荐论文表述：
-
-```text
-Adding linear-modal slosh rollout to the candidate score further reduces modal velocity,
-while height and lateral acceleration remain within the observed variation of the geometry-only GeoRef baseline.
-```
-
-不推荐表述：
-
-```text
-Slosh-score GeoRef outperforms geometry-only GeoRef on all slosh metrics.
-```
-
-## 8. 当前推荐启动方式
-
-### 8.1 仿真环境
+主表固定关闭：
 
 ```bash
-source /home/a/scout_ws/devel/setup.bash
-SIM_ENV=open USE_RVIZ=true \
-SPAWN_X=-4.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
-rosrun scout_local_planner launch_sim_nav_stack.sh
+Q_slosh:=0 \
+Q_slosh_eta_dot:=0 \
+enable_slosh_box_constraint:=false \
+risk_scheduler_enable:=false \
+energy_profile_enable:=false \
+input_shaping_enable:=false \
+slosh_speed_governor_enable:=false
 ```
 
-### 8.2 RAW_TUNED 录包
+这保证三条线只差参考路径来源，不差 MPC、不差速度治理、不差旧防晃模块。
 
-```bash
-PATH_MODE=global_goal CONDITION=RAW_TUNED PATH_ID=open_user_goal RUN_ID=01 \
-GOAL_X=-3.1570560932159424 \
-GOAL_Y=-2.897411346435547 \
-GOAL_QZ=-0.978164583074326 \
-GOAL_QW=0.2078317791364693 \
-rosrun scout_local_planner run_sim_fixed_path_bag.sh
-```
+## 8. 实物运行命令
 
-### 8.3 GEOREF_TUNED 录包
-
-```bash
-PATH_MODE=global_goal CONDITION=GEOREF_TUNED PATH_ID=open_user_goal RUN_ID=01 \
-GOAL_X=-3.1570560932159424 \
-GOAL_Y=-2.897411346435547 \
-GOAL_QZ=-0.978164583074326 \
-GOAL_QW=0.2078317791364693 \
-POST_PROCESSOR_COLLISION_CHECK=false \
-rosrun scout_local_planner run_sim_fixed_path_bag.sh
-```
-
-说明：
+完整 SOP 见：
 
 ```text
-open 场地可关闭 collision_check。
-maze/实物必须打开 collision_check，并确认 global costmap 正常。
+docs/重要文档/20260508_Online_GeoRef_OSCRS实物录包SOP.md
 ```
 
-### 8.4 GEOREF_SLOSH_SCORE_TUNED 录包
+### RAW_REAL
 
 ```bash
-PATH_MODE=global_goal CONDITION=GEOREF_SLOSH_SCORE_TUNED PATH_ID=open_user_goal RUN_ID=ay125_01 \
-GOAL_X=-3.1570560932159424 \
-GOAL_Y=-2.897411346435547 \
-GOAL_QZ=-0.978164583074326 \
-GOAL_QW=0.2078317791364693 \
-POST_PROCESSOR_COLLISION_CHECK=false \
-POST_PROCESSOR_AY_RATIO_LIMIT=1.25 \
-rosrun scout_local_planner run_sim_fixed_path_bag.sh
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path \
+  Q_slosh:=0 \
+  Q_slosh_eta_dot:=0 \
+  enable_slosh_box_constraint:=false \
+  risk_scheduler_enable:=false \
+  energy_profile_enable:=false \
+  input_shaping_enable:=false \
+  slosh_speed_governor_enable:=false \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_lateral_accel:=false \
+  slosh_use_imu_alpha_z:=false
 ```
 
-每包后检查：
+### GEOREF_TUNED_STRONG_REAL
 
-```bash
-rostopic echo -b <bag> -n1 /anti_slosh_path/candidate_report
-```
-
-`selected=original` 不计为 slosh-score 有效选择样本。
-
-说明：
-
-```text
-GEOREF_SLOSH_SCORE_TUNED 会额外启用 mid candidate，
-给 height-oriented slosh score 提供 mild 和 medium 之间的候选形态。
-GEOREF_TUNED 默认 max_candidate_level=medium，不启用 mid，
-因此主线 geometry-only 结果不受影响。
-```
-
-### 8.5 手动启动 Online GeoRef
-
-启动 post-processor：
+Post-processor：
 
 ```bash
 roslaunch scout_local_planner anti_slosh_path_post_processor.launch \
   input_topic:=/scout/global_path \
   output_topic:=/scout/global_path_anti_slosh \
+  oscrs_config:=/home/a/scout_ws/src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml \
   ds:=0.03 \
-  max_candidate_level:=medium \
+  max_candidate_level:=strong \
   publish_debug:=true \
   enable_collision_check:=true \
   costmap_topic:=/scout/mbf_costmap_nav/global_costmap/costmap \
-  ay_ratio_limit:=1.0
+  ay_ratio_limit:=1.0 \
+  prediction_v_max:=2.0 \
+  prediction_ay_max_budget:=2.0 \
+  prediction_a_max:=1.0 \
+  mild_iters:=8 \
+  mild_gain:=0.20 \
+  mild_max_drift:=0.04 \
+  oscrs_shadow_enable:=false \
+  oscrs_active_enable:=false
 ```
 
-启动 MPC tracker：
+MPC：
 
 ```bash
 roslaunch scout_local_planner slosh_experiment.launch \
@@ -532,81 +363,223 @@ roslaunch scout_local_planner slosh_experiment.launch \
   risk_scheduler_enable:=false \
   energy_profile_enable:=false \
   input_shaping_enable:=false \
-  slosh_speed_governor_enable:=false
+  slosh_speed_governor_enable:=false \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_lateral_accel:=false \
+  slosh_use_imu_alpha_z:=false
 ```
 
-如果是仿真并需要调 sim 专用参数，使用 `slosh_experiment_sim.launch`。
+### GEOREF_OSCRS_ACTIVE_REAL
 
-## 9. 实物验证口径
+Post-processor：
 
-实物验证详见：
-
-```text
-docs/重要文档/20260506_Online_GeoRef实物液体晃动抑制有效性验证方案.md
+```bash
+roslaunch scout_local_planner anti_slosh_path_post_processor.launch \
+  input_topic:=/scout/global_path \
+  output_topic:=/scout/global_path_anti_slosh \
+  oscrs_config:=/home/a/scout_ws/src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml \
+  ds:=0.03 \
+  max_candidate_level:=strong \
+  publish_debug:=true \
+  enable_collision_check:=true \
+  costmap_topic:=/scout/mbf_costmap_nav/global_costmap/costmap \
+  ay_ratio_limit:=1.0 \
+  prediction_v_max:=2.0 \
+  prediction_ay_max_budget:=2.0 \
+  prediction_a_max:=1.0 \
+  mild_iters:=8 \
+  mild_gain:=0.20 \
+  mild_max_drift:=0.04 \
+  oscrs_shadow_enable:=true \
+  oscrs_active_enable:=true
 ```
 
-第一轮实物验证必须保持：
+MPC 同 `GEOREF_TUNED_STRONG_REAL`。
 
-```text
-RAW_REAL:
-  /scout/global_path -> MPC
+## 9. 仿真通路验证
 
-GEOREF_REAL:
-  /scout/global_path -> anti_slosh_path_post_processor -> /scout/global_path_anti_slosh -> MPC
+启动 open 仿真：
 
-两者都:
-  Q_slosh=0
-  Q_slosh_eta_dot=0
-  risk_scheduler=false
-  energy_profile=false
-  input_shaping=false
-  slosh_speed_governor=false
+```bash
+source /home/a/scout_ws/devel/setup.bash
+SIM_ENV=open USE_RVIZ=true \
+SPAWN_X=-4.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
+rosrun scout_local_planner launch_sim_nav_stack.sh
 ```
 
-实物第一轮建议在开阔场地做，不在 maze/窄走廊做。若 `/slosh/height` 降低但视觉真液面不降低，不能声明真实液体晃动被抑制。
+OSCRS active 通路验证命令示例：
 
-## 10. 不再作为主线的方案
+```bash
+source /home/a/scout_ws/devel/setup.bash
 
-已否定或降级为 failure analysis：
-
-```text
-Q_slosh / Q_slosh_eta_dot / terminal slosh cost
-Q_modal_energy / Q_ay_pred
-risk scheduler
-OUTPUT_GUARD
-PMG lateral / longitudinal / combined
-PROFILE_ENERGY speed-only profile
-PROFILE_REF_V2 fixed-geometry speed/reference correction
-GEOREF_CONSTRAINED reference-budget MPC
-GEOREF_SLOSH_SCORE 原始版
+PATH_MODE=global_goal \
+PATH_ID=open_custom_goal \
+CONDITION=GEOREF_OSCRS_ACTIVE \
+RUN_ID=yamlcheck01 \
+START_DELAY=10 \
+RECORD_DURATION=0 \
+TEMPLATE_GOAL_X=-3.014343023300171 \
+TEMPLATE_GOAL_Y=2.987114429473877 \
+TEMPLATE_GOAL_QZ=0.9999403278718936 \
+TEMPLATE_GOAL_QW=0.010924316704027428 \
+rosrun scout_local_planner run_sim_fixed_path_bag.sh
 ```
 
-这些可以作为论文消融和负结果，但不应继续作为当前 proposed controller。
+检查 takeover：
 
-## 11. 当前边界与下一步
-
-已成立：
-
-```text
-open_user_goal 三包均值显示 Online GeoRef 降低 /slosh/height、eta_dot、energy、ay/ax/alpha，
-tracking time 增加在 +15% 内。
-RAW_SLOW_MATCHED 和 GEOREF_ORIGINAL 已排除简单降速和 topic chain 解释。
+```bash
+python3 src/scout_apps/control/scout_local_planner/scripts/check_oscrs_takeover.py \
+  <bag> --require-takeover
 ```
 
-未成立：
+最近通路验证 bag：
 
 ```text
-任意目标泛化
-maze / 窄通道安全验证
-实物真实液面验证
-MPC 内部 slosh cost 有效性
+/data/a/slosh_bags/sim/20260508/20260508_open_custom_goal_GEOREF_OSCRS_ACTIVE_runyamlcheck01_173329.bag
 ```
 
-下一步优先级：
+结果：
 
 ```text
-1. 按实物验证方案在开阔场地做 RAW_REAL vs GEOREF_REAL。
-2. 正式实物实验前，把 GeoRef 诊断话题补进 record_slosh_experiment.sh。
-3. 如果实物 open 通过，再考虑第二目标和视觉液面真值验证。
-4. maze 只在 raw tracking/collision 本身安全后再进入，不用于当前主结论。
+reports=29
+active_reports=29
+takeover_reports=5
+fallback_reports=11
+fb_counts={'2': 9, '0': 18, '3': 2}
+selected_counts={'strong': 17, 'medium': 5, 'mid': 5, 'original': 2}
+```
+
+结论：代码通路顺畅，但这不是有效性证明。
+
+## 10. 录包
+
+实物录包脚本：
+
+```text
+scripts/record_slosh_experiment.sh
+```
+
+已覆盖关键话题：
+
+```text
+/scout/goal
+/scout/global_path
+/scout/global_path_anti_slosh
+/anti_slosh_path/candidate_report
+/anti_slosh_path/metrics
+/anti_slosh_path/safety_alarm
+/anti_slosh_path/debug/*
+/slosh/state
+/slosh/height
+/slosh/height_pred_max
+/slosh/modal_energy
+/slosh/modal_energy_norm
+/slosh/h_visual
+/slosh/h_visual_quality
+/camera/color/image_raw
+/camera/depth/image_rect_raw
+/imu/data
+/odom
+/cmd_vel
+/mpc_status
+/tf
+/tf_static
+```
+
+录包示例：
+
+```bash
+cd $(rospack find scout_local_planner)
+SLOSH_BAG_DIR=/data/$USER/slosh_bags/real/20260508_phase1 \
+./scripts/record_slosh_experiment.sh 0 GEOREF_OSCRS_ACTIVE_REAL_open_goal_run01
+```
+
+## 11. 调参纪律
+
+调参原则见：
+
+```text
+docs/重要文档/20260508_Online_GeoRef_OSCRS实物录包SOP.md
+```
+
+最重要的规则：
+
+```text
+一次只改一类参数；
+RAW / GEOREF / OSCRS 三条线的 MPC 参数保持一致；
+不得通过重新打开 Q_slosh / speed governor / PROFILE_ENERGY 来救主表；
+每次调参记录参数名、旧值、新值、对应 bag、修改原因。
+```
+
+推荐顺序：
+
+```text
+1. 先确认 candidate_report、active、fb、takeover 字段正常；
+2. 先修 collision / costmap / frame 安全问题；
+3. 再调 GeoRef 候选强度；
+4. 再调 OSCRS hard gate；
+5. 最后调 OSCRS score 权重。
+```
+
+停止条件：
+
+```text
+连续 2 包碰撞、人工接管或定位失效；
+OSCRS takeover=1 但 h/eta_dot/energy 明显劣于 GeoRef；
+OSCRS takeover 长期为 0，此时记录为 candidate set saturated，不继续盲调 score。
+```
+
+## 12. 实物判定
+
+第一阶段只在 open 场地做，不在 maze/窄走廊做。
+
+每个 condition 至少 3 包，正式结果优先 5 包均值。
+
+GeoRef 成功标准：
+
+```text
+GEOREF_TUNED_STRONG_REAL 相对 RAW_REAL:
+  /slosh/height h_rms 下降
+  /slosh/height h_p95 下降，目标 >= 10%
+  modal_energy_rms 下降，目标 >= 10%
+  eta_dot_rms 不上升
+  tracking_time <= RAW * 1.15
+  ay_p95 不上升
+  solve_success_ratio >= 0.97
+  无碰撞、无人工接管、无明显定位丢失
+```
+
+OSCRS 成功标准：
+
+```text
+GEOREF_OSCRS_ACTIVE_REAL 相对 GEOREF_TUNED_STRONG_REAL:
+  takeover=1 的包中，h_p95 / h_rms / h_max 至少一项进一步下降；
+  eta_dot 不显著上升；
+  candidate_report 能解释 selected path。
+```
+
+如果使用 RGB 离线视觉真值：
+
+```text
+视觉 h_p95 / h_max 的改善方向必须与 /slosh/height 一致。
+如果 /slosh/height 下降但 RGB 真液面不降，不能声明真实液体晃动被抑制。
+```
+
+## 13. 当前未完成项
+
+```text
+1. 实物 RAW_REAL / GEOREF_TUNED_STRONG_REAL / GEOREF_OSCRS_ACTIVE_REAL 有效性对比尚未完成。
+2. OSCRS 已完成在线 active 通路，但尚未证明实物收益。
+3. Ferrari oracle 当前只作为离线上界/参考工具，曲线路径 NLP 仍未稳定收敛。
+4. RGB 视觉真值走离线处理链，最终论文结论需要与 /slosh/height 交叉验证。
+```
+
+## 14. 推荐下一步
+
+```text
+1. 做 GEOREF_OSCRS_ACTIVE_REAL smoke x1；
+2. 按 RAW -> GEOREF -> OSCRS 交错顺序录同一 open goal；
+3. 每条线先录 3 包，若安全和数据质量正常扩到 5 包；
+4. 用 /slosh/height 和 RGB 离线真值共同判断；
+5. 实物结果出来前，不再用单包仿真宣称 OSCRS 有效。
 ```

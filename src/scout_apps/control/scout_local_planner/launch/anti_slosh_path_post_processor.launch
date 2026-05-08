@@ -1,6 +1,7 @@
 <launch>
   <arg name="input_topic" default="/scout/global_path"/>
   <arg name="output_topic" default="/scout/global_path_anti_slosh"/>
+  <arg name="oscrs_config" default="$(find scout_local_planner)/config/oscrs_container.yaml"/>
   <arg name="ds" default="0.10"/>
   <arg name="publish_debug" default="true"/>
   <arg name="max_candidate_level" default="medium"/>
@@ -40,6 +41,8 @@
   <arg name="slosh_score_v_floor" default="0.05"/>
   <arg name="slosh_score_height_coeff" default="1.0"/>
   <arg name="slosh_score_container_radius" default="0.0185"/>
+  <arg name="slosh_score_offset_x" default="0.0"/>
+  <arg name="slosh_score_offset_y" default="0.0"/>
   <arg name="slosh_score_use_parabola_term" default="true"/>
   <arg name="slosh_score_w_h" default="0.0"/>
   <arg name="slosh_score_w_energy" default="1.0"/>
@@ -50,11 +53,26 @@
   <arg name="slosh_score_w_ay" default="0.0"/>
   <arg name="slosh_score_w_length" default="0.3"/>
   <arg name="slosh_score_w_drift" default="0.5"/>
+  <arg name="oscrs_shadow_enable" default="false"/>
+  <arg name="oscrs_active_enable" default="false"/>
+  <arg name="oscrs_eta_lim_mm" default="25.0"/>
+  <arg name="oscrs_residual_ratio" default="0.2"/>
+  <arg name="oscrs_settle_duration" default="2.0"/>
+  <arg name="oscrs_use_legacy_score" default="false"/>
+  <arg name="oscrs_score_batch_normalize" default="true"/>
+  <arg name="oscrs_score_w_h_p95" default="1.0"/>
+  <arg name="oscrs_score_w_energy_rms" default="0.3"/>
+  <arg name="oscrs_score_w_eta_dot_rms" default="0.3"/>
+  <arg name="oscrs_score_w_terminal_E" default="0.2"/>
+  <arg name="oscrs_score_w_geom" default="0.2"/>
+  <arg name="oscrs_alarm_topic" default="/anti_slosh_path/safety_alarm"/>
+  <arg name="oscrs_alarm_rate_limit_sec" default="5.0"/>
 
   <node pkg="scout_local_planner" type="anti_slosh_path_post_processor.py"
         name="anti_slosh_path_post_processor" output="screen">
     <param name="input_topic" value="$(arg input_topic)"/>
     <param name="output_topic" value="$(arg output_topic)"/>
+    <param name="oscrs_config" value="$(arg oscrs_config)"/>
     <param name="ds" value="$(arg ds)"/>
     <param name="publish_debug" value="$(arg publish_debug)"/>
     <param name="max_candidate_level" value="$(arg max_candidate_level)"/>
@@ -104,6 +122,8 @@
     <param name="slosh_score/v_floor" value="$(arg slosh_score_v_floor)"/>
     <param name="slosh_score/height_coeff" value="$(arg slosh_score_height_coeff)"/>
     <param name="slosh_score/container_radius" value="$(arg slosh_score_container_radius)"/>
+    <param name="slosh_score/offset_x" value="$(arg slosh_score_offset_x)"/>
+    <param name="slosh_score/offset_y" value="$(arg slosh_score_offset_y)"/>
     <param name="slosh_score/use_parabola_term" value="$(arg slosh_score_use_parabola_term)"/>
     <param name="slosh_score/w_h" value="$(arg slosh_score_w_h)"/>
     <param name="slosh_score/w_energy" value="$(arg slosh_score_w_energy)"/>
@@ -114,5 +134,19 @@
     <param name="slosh_score/w_ay" value="$(arg slosh_score_w_ay)"/>
     <param name="slosh_score/w_length" value="$(arg slosh_score_w_length)"/>
     <param name="slosh_score/w_drift" value="$(arg slosh_score_w_drift)"/>
+    <param name="oscrs/shadow_enable" value="$(arg oscrs_shadow_enable)"/>
+    <param name="oscrs/active_enable" value="$(arg oscrs_active_enable)"/>
+    <param name="oscrs/eta_lim_mm" value="$(arg oscrs_eta_lim_mm)"/>
+    <param name="oscrs/residual_ratio" value="$(arg oscrs_residual_ratio)"/>
+    <param name="oscrs/settle_duration" value="$(arg oscrs_settle_duration)"/>
+    <param name="oscrs/score/use_legacy_score" value="$(arg oscrs_use_legacy_score)"/>
+    <param name="oscrs/score/batch_normalize" value="$(arg oscrs_score_batch_normalize)"/>
+    <param name="oscrs/score/w_h_p95" value="$(arg oscrs_score_w_h_p95)"/>
+    <param name="oscrs/score/w_energy_rms" value="$(arg oscrs_score_w_energy_rms)"/>
+    <param name="oscrs/score/w_eta_dot_rms" value="$(arg oscrs_score_w_eta_dot_rms)"/>
+    <param name="oscrs/score/w_terminal_E" value="$(arg oscrs_score_w_terminal_E)"/>
+    <param name="oscrs/score/w_geom" value="$(arg oscrs_score_w_geom)"/>
+    <param name="oscrs/alarm/topic" value="$(arg oscrs_alarm_topic)"/>
+    <param name="oscrs/alarm/rate_limit_sec" value="$(arg oscrs_alarm_rate_limit_sec)"/>
   </node>
 </launch>

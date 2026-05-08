@@ -12,6 +12,7 @@ candidate. Collision checks rely on the global costmap's inflation layer
 import math
 
 import rospy
+import yaml
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import Path as NavPath
@@ -21,6 +22,7 @@ from generate_anti_slosh_path_candidates import (
     cumulative_s,
     curvature_series,
     dist,
+    dkappa_series,
     path_metrics,
     percentile,
     resample_path,
@@ -113,6 +115,7 @@ def clamp(value, lo, hi):
 
 class AntiSloshPathPostProcessor:
     def __init__(self):
+        self.config = self.load_config(str(rospy.get_param("~oscrs_config", "")))
         self.input_topic = rospy.get_param("~input_topic", "/scout/global_path_raw")
         self.output_topic = rospy.get_param("~output_topic", "/scout/global_path_anti_slosh")
         self.ds = max(0.02, float(rospy.get_param("~ds", 0.10)))
@@ -136,23 +139,40 @@ class AntiSloshPathPostProcessor:
         self.predict_a_max = max(0.01, float(rospy.get_param("~prediction/a_max", 1.0)))
         self.predict_v_init = max(0.0, float(rospy.get_param("~prediction/v_init", 0.0)))
 
-        self.slosh_score_enable = bool(rospy.get_param("~slosh_score/enable", False))
-        self.slosh_omega_n = max(0.01, float(rospy.get_param("~slosh_score/omega_n", 31.25)))
-        self.slosh_zeta = max(0.0, float(rospy.get_param("~slosh_score/zeta", 0.05)))
-        self.slosh_rollout_dt = max(0.005, float(rospy.get_param("~slosh_score/dt", 0.05)))
-        self.slosh_v_floor = max(0.01, float(rospy.get_param("~slosh_score/v_floor", 0.05)))
-        self.slosh_height_coeff = float(rospy.get_param("~slosh_score/height_coeff", 1.0))
-        self.slosh_container_radius = max(0.0, float(rospy.get_param("~slosh_score/container_radius", 0.0185)))
-        self.slosh_use_parabola = bool(rospy.get_param("~slosh_score/use_parabola_term", True))
-        self.w_slosh_h = float(rospy.get_param("~slosh_score/w_h", 0.0))
-        self.w_slosh_energy = float(rospy.get_param("~slosh_score/w_energy", 1.0))
-        self.w_slosh_eta_dot = float(rospy.get_param("~slosh_score/w_eta_dot", 0.5))
-        self.w_slosh_terminal = float(rospy.get_param("~slosh_score/w_terminal", 0.2))
-        self.w_slosh_kappa = float(rospy.get_param("~slosh_score/w_kappa", 1.0))
-        self.w_slosh_dkappa = float(rospy.get_param("~slosh_score/w_dkappa", 0.5))
-        self.w_slosh_ay = float(rospy.get_param("~slosh_score/w_ay", 0.0))
-        self.w_slosh_length = float(rospy.get_param("~slosh_score/w_length", 0.3))
-        self.w_slosh_drift = float(rospy.get_param("~slosh_score/w_drift", 0.5))
+        self.slosh_score_enable = bool(self.param_or_cfg("~slosh_score/enable", "slosh_score.enable", False))
+        self.slosh_omega_n = max(0.01, float(self.param_or_cfg("~slosh_score/omega_n", "slosh_score.omega_n", 31.25)))
+        self.slosh_zeta = max(0.0, float(self.param_or_cfg("~slosh_score/zeta", "slosh.damping_ratio", 0.05)))
+        self.slosh_rollout_dt = max(0.005, float(self.param_or_cfg("~slosh_score/dt", "oscrs.rollout_dt", 0.05)))
+        self.slosh_v_floor = max(0.01, float(self.param_or_cfg("~slosh_score/v_floor", "oscrs.v_floor", 0.05)))
+        self.slosh_height_coeff = float(self.param_or_cfg("~slosh_score/height_coeff", "slosh_score.height_coeff", 1.0))
+        self.slosh_container_radius = max(0.0, float(self.param_or_cfg("~slosh_score/container_radius", "slosh.container_radius", 0.0185)))
+        self.slosh_offset_x = float(self.param_or_cfg("~slosh_score/offset_x", "slosh.offset_x", 0.0))
+        self.slosh_offset_y = float(self.param_or_cfg("~slosh_score/offset_y", "slosh.offset_y", 0.0))
+        self.slosh_use_parabola = bool(self.param_or_cfg("~slosh_score/use_parabola_term", "slosh.use_parabola_term", True))
+        self.w_slosh_h = float(self.param_or_cfg("~slosh_score/w_h", "slosh_score.w_h", 0.0))
+        self.w_slosh_energy = float(self.param_or_cfg("~slosh_score/w_energy", "slosh_score.w_energy", 1.0))
+        self.w_slosh_eta_dot = float(self.param_or_cfg("~slosh_score/w_eta_dot", "slosh_score.w_eta_dot", 0.5))
+        self.w_slosh_terminal = float(self.param_or_cfg("~slosh_score/w_terminal", "slosh_score.w_terminal", 0.2))
+        self.w_slosh_kappa = float(self.param_or_cfg("~slosh_score/w_kappa", "slosh_score.w_kappa", 1.0))
+        self.w_slosh_dkappa = float(self.param_or_cfg("~slosh_score/w_dkappa", "slosh_score.w_dkappa", 0.5))
+        self.w_slosh_ay = float(self.param_or_cfg("~slosh_score/w_ay", "slosh_score.w_ay", 0.0))
+        self.w_slosh_length = float(self.param_or_cfg("~slosh_score/w_length", "slosh_score.w_length", 0.3))
+        self.w_slosh_drift = float(self.param_or_cfg("~slosh_score/w_drift", "slosh_score.w_drift", 0.5))
+        self.oscrs_shadow_enable = bool(rospy.get_param("~oscrs/shadow_enable", False))
+        self.oscrs_active_enable = bool(rospy.get_param("~oscrs/active_enable", False))
+        self.oscrs_eta_lim = max(1e-6, float(self.param_or_cfg("~oscrs/eta_lim_mm", "oscrs.eta_lim_mm", 25.0)) / 1000.0)
+        self.oscrs_residual_ratio = max(0.0, float(self.param_or_cfg("~oscrs/residual_ratio", "oscrs.residual_ratio", 0.2)))
+        self.oscrs_settle_duration = max(0.0, float(self.param_or_cfg("~oscrs/settle_duration", "oscrs.settle_duration", 2.0)))
+        self.oscrs_use_legacy_score = bool(self.param_or_cfg("~oscrs/score/use_legacy_score", "oscrs.score.use_legacy_score", False))
+        self.oscrs_score_batch_norm = bool(self.param_or_cfg("~oscrs/score/batch_normalize", "oscrs.score.batch_normalize", True))
+        self.oscrs_score_w_h_p95 = float(self.param_or_cfg("~oscrs/score/w_h_p95", "oscrs.score.w_h_p95", 1.0))
+        self.oscrs_score_w_energy = float(self.param_or_cfg("~oscrs/score/w_energy_rms", "oscrs.score.w_energy_rms", 0.3))
+        self.oscrs_score_w_eta_dot = float(self.param_or_cfg("~oscrs/score/w_eta_dot_rms", "oscrs.score.w_eta_dot_rms", 0.3))
+        self.oscrs_score_w_terminal = float(self.param_or_cfg("~oscrs/score/w_terminal_E", "oscrs.score.w_terminal_E", 0.2))
+        self.oscrs_score_w_geom = float(self.param_or_cfg("~oscrs/score/w_geom", "oscrs.score.w_geom", 0.2))
+        self.oscrs_alarm_topic = str(self.param_or_cfg("~oscrs/alarm/topic", "oscrs.alarm.topic", "/anti_slosh_path/safety_alarm"))
+        self.oscrs_alarm_rate_limit = max(0.0, float(self.param_or_cfg("~oscrs/alarm/rate_limit_sec", "oscrs.alarm.rate_limit_sec", 5.0)))
+        self.oscrs_alarm_last_t = 0.0
 
         self.w_kappa = float(rospy.get_param("~score/w_kappa", 1.0))
         self.w_dkappa = float(rospy.get_param("~score/w_dkappa", 0.5))
@@ -179,6 +199,7 @@ class AntiSloshPathPostProcessor:
         self.path_pub = rospy.Publisher(self.output_topic, NavPath, queue_size=1, latch=True)
         self.metrics_pub = rospy.Publisher("/anti_slosh_path/metrics", Float32MultiArray, queue_size=1)
         self.candidate_report_pub = rospy.Publisher("/anti_slosh_path/candidate_report", String, queue_size=1)
+        self.safety_alarm_pub = rospy.Publisher(self.oscrs_alarm_topic, String, queue_size=1, latch=True)
         self.debug_pubs = {}
         if self.publish_debug:
             for name in ("original", "mild", "medium", "mid", "strong"):
@@ -201,16 +222,44 @@ class AntiSloshPathPostProcessor:
         self.sub = rospy.Subscriber(self.input_topic, NavPath, self.path_callback, queue_size=1)
 
         rospy.loginfo(
-            "[anti_slosh_path_post_processor] %s -> %s ds=%.3f max_drift=%.3f slosh_score=%s",
+            "[anti_slosh_path_post_processor] %s -> %s ds=%.3f max_drift=%.3f slosh_score=%s oscrs_shadow=%s oscrs_active=%s",
             self.input_topic,
             self.output_topic,
             self.ds,
             self.max_drift,
             self.slosh_score_enable,
+            self.oscrs_shadow_enable,
+            self.oscrs_active_enable,
         )
 
     def _candidate_param(self, name, key, default):
         return rospy.get_param(f"~candidates/{name}/{key}", default)
+
+    def load_config(self, path):
+        if not path:
+            return {}
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                data = yaml.safe_load(handle) or {}
+            rospy.loginfo("[anti_slosh_path_post_processor] loaded oscrs_config=%s", path)
+            return data
+        except (OSError, yaml.YAMLError) as exc:
+            rospy.logwarn("[anti_slosh_path_post_processor] failed to load oscrs_config=%s: %s", path, exc)
+            return {}
+
+    def cfg(self, dotted_key, default):
+        cur = self.config
+        for key in dotted_key.split("."):
+            if not isinstance(cur, dict) or key not in cur:
+                return default
+            cur = cur[key]
+        return cur
+
+    def param_or_cfg(self, param_name, cfg_key, default):
+        value = rospy.get_param(param_name, default)
+        if value == default:
+            return self.cfg(cfg_key, default)
+        return value
 
     def costmap_callback(self, msg):
         self.latest_costmap = msg
@@ -225,6 +274,7 @@ class AntiSloshPathPostProcessor:
     def forward_profile(self, points):
         s = cumulative_s(points)
         kappa = curvature_series(points)
+        dkappa = dkappa_series(points, kappa)
         v_prev = min(self.predict_v_init, self.predict_v_max)
         v_values = []
         ax_values = []
@@ -242,9 +292,15 @@ class AntiSloshPathPostProcessor:
             v_accel = math.sqrt(max(0.0, v_prev * v_prev + 2.0 * self.predict_a_max * ds))
             v = min(self.predict_v_max, v_curv, v_accel)
             ax = (v * v - v_prev * v_prev) / (2.0 * ds) if ds > 1e-6 else 0.0
+            omega = v * k
+            alpha = ax * k + v * v * dkappa[i]
+            # Acceleration at the container centre when it is offset from the yaw axis.
+            # Defaults are zero, preserving the old origin-centred rollout.
+            ax_eff = ax - alpha * self.slosh_offset_y - omega * omega * self.slosh_offset_x
+            ay_eff = v * v * k + alpha * self.slosh_offset_x - omega * omega * self.slosh_offset_y
             v_values.append(v)
-            ax_values.append(ax)
-            ay_values.append(v * v * k)
+            ax_values.append(ax_eff)
+            ay_values.append(ay_eff)
             v_prev = v
         return s, kappa, v_values, ax_values, ay_values
 
@@ -301,12 +357,17 @@ class AntiSloshPathPostProcessor:
         damping = 2.0 * self.slosh_zeta * self.slosh_omega_n
         radius2_over_4g = (self.slosh_container_radius * self.slosh_container_radius) / (4.0 * 9.81)
         t_end = times[-1] if times else 0.0
-        steps = max(1, int(math.ceil(t_end / self.slosh_rollout_dt)))
+        t_final = t_end + (self.oscrs_settle_duration if (self.oscrs_shadow_enable or self.oscrs_active_enable) else 0.0)
+        steps = max(1, int(math.ceil(t_final / self.slosh_rollout_dt)))
         for step in range(steps + 1):
-            query_t = min(t_end, step * self.slosh_rollout_dt)
-            ux = self.interp_piecewise(times, ax_values, query_t)
-            uy = self.interp_piecewise(times, ay_values, query_t)
-            omega = self.interp_piecewise(times, omega_values, query_t)
+            query_t = step * self.slosh_rollout_dt
+            in_motion = query_t <= t_end
+            if in_motion:
+                ux = self.interp_piecewise(times, ax_values, query_t)
+                uy = self.interp_piecewise(times, ay_values, query_t)
+                omega = self.interp_piecewise(times, omega_values, query_t)
+            else:
+                ux = uy = omega = 0.0
             ddx = -damping * eta_x_dot - wn2 * eta_x - ux
             ddy = -damping * eta_y_dot - wn2 * eta_y - uy
             eta_x_dot += ddx * self.slosh_rollout_dt
@@ -317,14 +378,21 @@ class AntiSloshPathPostProcessor:
             e = wn2 * (eta_x * eta_x + eta_y * eta_y) + eta_x_dot * eta_x_dot + eta_y_dot * eta_y_dot
             modal = self.slosh_height_coeff * math.hypot(eta_x, eta_y)
             parabola = radius2_over_4g * omega * omega if self.slosh_use_parabola else 0.0
-            eta_dot_norm.append(eta_dot)
-            energy.append(e)
-            height_modal.append(modal)
-            height_parabola.append(parabola)
-            height_total.append(modal + parabola)
+            if in_motion:
+                eta_dot_norm.append(eta_dot)
+                energy.append(e)
+                height_modal.append(modal)
+                height_parabola.append(parabola)
+                height_total.append(modal + parabola)
+            else:
+                height_total.append(modal + parabola)
+        tracking_count = len(eta_dot_norm)
+        residual_height = height_total[tracking_count:] if len(height_total) > tracking_count else []
+        tracking_height = height_total[:tracking_count] if tracking_count > 0 else height_total
         return {
-            "slosh_h_p95": percentile(height_total, 95.0),
-            "slosh_h_max": max(height_total) if height_total else float("inf"),
+            "slosh_h_p95": percentile(tracking_height, 95.0),
+            "slosh_h_max": max(tracking_height) if tracking_height else float("inf"),
+            "slosh_h_residual_max": max(residual_height) if residual_height else 0.0,
             "slosh_h_modal_p95": percentile(height_modal, 95.0),
             "slosh_h_parabola_p95": percentile(height_parabola, 95.0),
             "slosh_eta_dot_rms": math.sqrt(sum(v * v for v in eta_dot_norm) / len(eta_dot_norm)) if eta_dot_norm else float("inf"),
@@ -418,7 +486,17 @@ class AntiSloshPathPostProcessor:
             )
             best = rows[0]
 
-        self.publish_outputs(msg, rows, best)
+        geometry_best = best
+        if (self.oscrs_shadow_enable or self.oscrs_active_enable) and not self.oscrs_use_legacy_score:
+            self.apply_oscrs_score(rows)
+        oscrs_best = self.select_oscrs_candidate(rows)
+        any_feasible = any(row["oscrs_feasible"] for row, _ in rows)
+        if (self.oscrs_shadow_enable or self.oscrs_active_enable) and not any_feasible:
+            self.publish_safety_alarm(rows, geometry_best[0])
+        if self.oscrs_active_enable and oscrs_best is not None:
+            best = oscrs_best
+
+        self.publish_outputs(msg, rows, best, geometry_best, oscrs_best)
 
     def evaluate_candidate(self, index, name, candidate, base, base_metrics, base_length, path_frame):
         metrics = path_metrics(candidate, base)
@@ -469,15 +547,29 @@ class AntiSloshPathPostProcessor:
             + self.w_shortening * shortening_penalty
             + self.w_over_smooth * over_smooth_penalty
         )
-        slosh_metrics = self.rollout_slosh_metrics(candidate) if self.slosh_score_enable else {
+        slosh_metrics = self.rollout_slosh_metrics(candidate) if (self.slosh_score_enable or self.oscrs_shadow_enable or self.oscrs_active_enable) else {
             "slosh_h_p95": 0.0,
             "slosh_h_max": 0.0,
+            "slosh_h_residual_max": 0.0,
             "slosh_h_modal_p95": 0.0,
             "slosh_h_parabola_p95": 0.0,
             "slosh_eta_dot_rms": 0.0,
             "slosh_energy_rms": 0.0,
             "slosh_terminal_E": 0.0,
         }
+        oscrs_height_pass = slosh_metrics["slosh_h_max"] <= self.oscrs_eta_lim
+        oscrs_residual_limit = self.oscrs_residual_ratio * self.oscrs_eta_lim
+        oscrs_residual_pass = slosh_metrics["slosh_h_residual_max"] <= oscrs_residual_limit
+        oscrs_feasible = accepted and oscrs_height_pass and oscrs_residual_pass
+        oscrs_violation = (
+            max(0.0, slosh_metrics["slosh_h_max"] / max(self.oscrs_eta_lim, 1e-9) - 1.0)
+            + max(0.0, slosh_metrics["slosh_h_residual_max"] / max(oscrs_residual_limit, 1e-9) - 1.0)
+        )
+        oscrs_score = (
+            2.0 * slosh_metrics["slosh_h_max"] / max(self.oscrs_eta_lim, 1e-9)
+            + slosh_metrics["slosh_h_residual_max"] / max(oscrs_residual_limit, 1e-9)
+            + 0.2 * score
+        )
         return {
             "index": index,
             "name": name,
@@ -499,9 +591,86 @@ class AntiSloshPathPostProcessor:
             "collision_idx": col_idx,
             "collision_cost": col_cost,
             "reject_reason": "accepted" if accepted else "|".join(reject_reasons),
+            "oscrs_feasible": oscrs_feasible,
+            "oscrs_height_pass": oscrs_height_pass,
+            "oscrs_residual_pass": oscrs_residual_pass,
+            "oscrs_violation": oscrs_violation,
+            "oscrs_score": oscrs_score,
+            "oscrs_eta_lim": self.oscrs_eta_lim,
+            "oscrs_residual_limit": oscrs_residual_limit,
             **slosh_metrics,
             **metrics,
         }
+
+    def select_oscrs_candidate(self, rows):
+        # S_full per RA-L §4.1: non-original feasible candidates only.
+        # If only `original` passes the gate, return None so the post-processor
+        # falls back to geometry_best; candidate_report fb stays 3 and
+        # takeover stays 0, keeping "OSCRS truly took over" distinct from
+        # "OSCRS chose to keep the raw path".
+        feasible = [
+            (row, points)
+            for row, points in rows
+            if row["oscrs_feasible"] and row["name"] != "original"
+        ]
+        if feasible:
+            return min(feasible, key=lambda item: item[0]["oscrs_score"])
+        return None
+
+    def apply_oscrs_score(self, rows):
+        """RA-L §4.1 Layer 2: weighted sum of slosh+geom indicators, batch-normalized
+        within the current planning cycle's S_full set. S_full is the set of
+        non-original feasible candidates. Original keeps its legacy score so the
+        candidate_report still shows comparable osc values for diagnostics."""
+        feasible = [
+            row for row, _ in rows
+            if row["oscrs_feasible"] and row["name"] != "original"
+        ]
+        if len(feasible) == 0:
+            return
+        if self.oscrs_score_batch_norm and len(feasible) >= 2:
+            max_h_p95 = max(max(0.0, row["slosh_h_p95"]) for row in feasible)
+            max_energy = max(max(0.0, row["slosh_energy_rms"]) for row in feasible)
+            max_eta_dot = max(max(0.0, row["slosh_eta_dot_rms"]) for row in feasible)
+            max_terminal = max(max(0.0, row["slosh_terminal_E"]) for row in feasible)
+            max_geom = max(max(0.0, row["geometry_score"]) for row in feasible)
+        else:
+            max_h_p95 = max_energy = max_eta_dot = max_terminal = max_geom = 1.0
+        for row in feasible:
+            norm = lambda value, ref: value / max(1e-9, ref)
+            row["oscrs_score"] = (
+                self.oscrs_score_w_h_p95 * norm(row["slosh_h_p95"], max_h_p95)
+                + self.oscrs_score_w_energy * norm(row["slosh_energy_rms"], max_energy)
+                + self.oscrs_score_w_eta_dot * norm(row["slosh_eta_dot_rms"], max_eta_dot)
+                + self.oscrs_score_w_terminal * norm(row["slosh_terminal_E"], max_terminal)
+                + self.oscrs_score_w_geom * norm(row["geometry_score"], max_geom)
+            )
+
+    def publish_safety_alarm(self, rows, geometry_row):
+        now = rospy.get_time()
+        if self.oscrs_alarm_rate_limit > 0 and (now - self.oscrs_alarm_last_t) < self.oscrs_alarm_rate_limit:
+            return
+        self.oscrs_alarm_last_t = now
+        feasible_count = sum(1 for row, _ in rows if row["oscrs_feasible"])
+        min_violation = min(
+            (row["oscrs_violation"] for row, _ in rows if row["accepted"]),
+            default=float("inf"),
+        )
+        msg = (
+            "hard_gate_failed=1,feasible_count={fc},min_violation={mv:.4g},"
+            "geometry_best={gb},eta_lim_mm={el:.1f}".format(
+                fc=feasible_count,
+                mv=min_violation if min_violation != float("inf") else -1.0,
+                gb=geometry_row["name"],
+                el=self.oscrs_eta_lim * 1000.0,
+            )
+        )
+        self.safety_alarm_pub.publish(String(data=msg))
+        rospy.logwarn(
+            "[anti_slosh_path_post_processor] OSCRS SAFETY_ALARM %s; falling back to geometry_best=%s",
+            msg,
+            geometry_row["name"],
+        )
 
     def apply_slosh_scores(self, rows):
         accepted = [row for row, _ in rows if row["accepted"]]
@@ -533,7 +702,7 @@ class AntiSloshPathPostProcessor:
             row["slosh_score"] = slosh_score
             row["score"] = slosh_score
 
-    def publish_outputs(self, raw_msg, rows, best):
+    def publish_outputs(self, raw_msg, rows, best, geometry_best, oscrs_best):
         best_row, best_points = best
         header = raw_msg.header
         if not header.frame_id:
@@ -555,7 +724,7 @@ class AntiSloshPathPostProcessor:
         else:
             self.path_pub.publish(path_to_msg(best_points, header))
         self.publish_metrics(best_row, rows)
-        self.publish_candidate_report(rows)
+        self.publish_candidate_report(rows, best_row, geometry_best[0], oscrs_best[0] if oscrs_best else None)
         rospy.loginfo_throttle(
             1.0,
             "[anti_slosh_path_post_processor] selected=%s score=%.3f accepted=%d/%d k95=%.3f dk95=%.3f drift=%.3f",
@@ -568,8 +737,46 @@ class AntiSloshPathPostProcessor:
             best_row["max_drift_m"],
         )
 
-    def publish_candidate_report(self, rows):
+    def publish_candidate_report(self, rows, best_row, geometry_row, oscrs_row):
         parts = []
+        oscrs_name = oscrs_row["name"] if oscrs_row else "none"
+        original_row = next((row for row, _ in rows if row["name"] == "original"), None)
+        original_safe = bool(original_row is not None and original_row["oscrs_feasible"])
+        accepted_non_original = any(row["accepted"] and row["name"] != "original" for row, _ in rows)
+        if not (self.oscrs_shadow_enable or self.oscrs_active_enable):
+            oscrs_fallback_code = -1
+        elif oscrs_row is not None and oscrs_row["oscrs_feasible"]:
+            # Non-original OSCRS candidate selected from S_full.
+            oscrs_fallback_code = 0
+        elif original_safe:
+            # Slosh-safe but no non-original candidate passed the full gate.
+            oscrs_fallback_code = 1
+        elif accepted_non_original:
+            # Geometry candidates exist, but slosh hard gate failed.
+            oscrs_fallback_code = 2
+        else:
+            # No usable geometry candidate beyond the raw fallback.
+            oscrs_fallback_code = 3
+        oscrs_fallback = int(self.oscrs_active_enable and oscrs_fallback_code != 0)
+        oscrs_takeover = int(
+            self.oscrs_active_enable
+            and oscrs_row is not None
+            and oscrs_row["oscrs_feasible"]
+            and best_row["name"] == oscrs_row["name"]
+            and best_row["name"] != geometry_row["name"]
+        )
+        parts.append(
+            "summary:selected={selected},geo={geo},oscrs={oscrs},active={active},fallback={fallback},fb={fb},orig_safe={orig_safe},takeover={takeover}".format(
+                selected=best_row["name"],
+                geo=geometry_row["name"],
+                oscrs=oscrs_name,
+                active=int(self.oscrs_active_enable),
+                fallback=oscrs_fallback,
+                fb=oscrs_fallback_code,
+                orig_safe=int(original_safe),
+                takeover=oscrs_takeover,
+            )
+        )
         for row, _ in rows:
             if row["collision_status"] == "collision":
                 col_str = "col=hit:idx={}:cost={}".format(row["collision_idx"], row["collision_cost"])
@@ -584,7 +791,8 @@ class AntiSloshPathPostProcessor:
                 "len={length:.3f},drift={drift:.3f},end={end:.3f},"
                 "k95={k95:.3f},dk95={dk95:.3f},kr={kr:.3f},dkr={dkr:.3f},"
                 "ayr={ayr:.3f},vmaxp={vmaxp:.3f},gscore={gscore:.3f},sscore={sscore:.3f},"
-                "sH={sH:.3g},sHm={sHm:.3g},sHp={sHp:.3g},sE={sE:.3g},sEdot={sEdot:.3g},{col}".format(
+                "sH={sH:.3g},sHm={sHm:.3g},sHp={sHp:.3g},sHr={sHr:.3g},"
+                "sE={sE:.3g},sEdot={sEdot:.3g},os={os},oh={oh},or={or_},ov={ov:.3g},osc={osc:.3g},{col}".format(
                     name=row["name"],
                     accepted=int(row["accepted"]),
                     reason=row["reject_reason"],
@@ -605,6 +813,12 @@ class AntiSloshPathPostProcessor:
                     sH=row["slosh_h_p95"],
                     sHm=row["slosh_h_modal_p95"],
                     sHp=row["slosh_h_parabola_p95"],
+                    sHr=row["slosh_h_residual_max"],
+                    os=int(row["oscrs_feasible"]),
+                    oh=int(row["oscrs_height_pass"]),
+                    or_=int(row["oscrs_residual_pass"]),
+                    ov=row["oscrs_violation"],
+                    osc=row["oscrs_score"],
                     col=col_str,
                 )
             )
