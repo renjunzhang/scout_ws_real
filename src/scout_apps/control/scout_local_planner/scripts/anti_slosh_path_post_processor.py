@@ -26,8 +26,8 @@ from generate_anti_slosh_path_candidates import (
     path_metrics,
     percentile,
     resample_path,
-    smooth_path,
 )
+from candidate_generators import generate_georef_candidates
 
 
 METRIC_LABEL = (
@@ -120,6 +120,7 @@ class AntiSloshPathPostProcessor:
         self.output_topic = rospy.get_param("~output_topic", "/scout/global_path_anti_slosh")
         self.ds = max(0.02, float(rospy.get_param("~ds", 0.10)))
         self.publish_debug = bool(rospy.get_param("~publish_debug", True))
+        self.fixed_candidate_name = str(rospy.get_param("~fixed_candidate_name", "")).strip().lower()
 
         self.min_segment_length = max(1e-4, float(rospy.get_param("~gates/min_segment_length", 0.02)))
         self.max_drift = max(0.0, float(rospy.get_param("~gates/max_drift", 0.18)))
@@ -473,10 +474,12 @@ class AntiSloshPathPostProcessor:
         base_metrics = path_metrics(base, base)
         base_length = max(1e-6, base_metrics["length_m"])
 
-        for index, (name, iters, gain, drift_limit) in enumerate(self.candidate_specs):
-            candidate = base if name == "original" else smooth_path(base, int(iters), float(gain), float(drift_limit))
-            if name != "original":
-                candidate = sanitize_points(candidate, self.min_segment_length)
+        # 候选生成 G（OSCRS 方法层 §3.1，当前实例 = GeoRef smoothing）。
+        # 实际选择 S（hard gate + score + fallback）保留在本文件内。
+        candidates = generate_georef_candidates(
+            base, self.candidate_specs, self.min_segment_length, sanitize_points,
+        )
+        for index, (name, candidate) in enumerate(candidates):
             row = self.evaluate_candidate(index, name, candidate, base, base_metrics, base_length, msg.header.frame_id)
             rows.append((row, candidate))
 
@@ -495,11 +498,32 @@ class AntiSloshPathPostProcessor:
             best = rows[0]
 
         geometry_best = best
-        if (self.oscrs_shadow_enable or self.oscrs_active_enable) and not self.oscrs_use_legacy_score:
-            self.apply_oscrs_score(rows)
-        oscrs_best = self.select_oscrs_candidate(rows)
-        if self.oscrs_active_enable and oscrs_best is not None:
-            best = oscrs_best
+        oscrs_best = None
+        if self.fixed_candidate_name:
+            fixed = next((item for item in rows if item[0]["name"] == self.fixed_candidate_name), None)
+            if fixed is None:
+                rospy.logwarn_throttle(
+                    1.0,
+                    "[anti_slosh_path_post_processor] fixed_candidate_name=%s not found; publishing original",
+                    self.fixed_candidate_name,
+                )
+                best = rows[0]
+            elif fixed[0]["accepted"]:
+                best = fixed
+            else:
+                rospy.logwarn_throttle(
+                    1.0,
+                    "[anti_slosh_path_post_processor] fixed candidate %s rejected (%s); publishing original",
+                    self.fixed_candidate_name,
+                    fixed[0]["reject_reason"],
+                )
+                best = rows[0]
+        else:
+            if (self.oscrs_shadow_enable or self.oscrs_active_enable) and not self.oscrs_use_legacy_score:
+                self.apply_oscrs_score(rows)
+            oscrs_best = self.select_oscrs_candidate(rows)
+            if self.oscrs_active_enable and oscrs_best is not None:
+                best = oscrs_best
         # B2 fix: alarm fires when the path actually being published is not
         # slosh-feasible (covers shadow, fb=1 with non-original geometry_best,
         # fb=2, fb=3). Previously we only checked "no candidate at all is

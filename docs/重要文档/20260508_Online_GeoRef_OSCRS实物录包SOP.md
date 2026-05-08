@@ -2,19 +2,20 @@
 
 日期：2026-05-08
 
-本 SOP 是 `docs/重要文档/20260506有效性验证方案.md` 的执行清单。目标是把 `RAW_REAL / GEOREF_TUNED_STRONG_REAL / GEOREF_OSCRS_ACTIVE_REAL` 的录包流程固定下来，避免正式实验时混入起点、目标、液位、相机、MPC 参数或 OSCRS 配置差异。
+本 SOP 是 `docs/重要文档/20260506有效性验证方案.md` 的执行清单。目标是把 `RAW_REAL / GEOREF_FIXED_STRONG_REAL / GEOREF_TUNED_STRONG_REAL / GEOREF_OSCRS_ACTIVE_REAL` 的录包流程固定下来，避免正式实验时混入起点、目标、液位、相机、MPC 参数或 OSCRS 配置差异。
 
 ## 1. 实验条件
 
-同一目标点依次录三条线：
+同一目标点依次录四条线：
 
 ```text
 RAW_REAL
+GEOREF_FIXED_STRONG_REAL
 GEOREF_TUNED_STRONG_REAL
 GEOREF_OSCRS_ACTIVE_REAL
 ```
 
-每条线最低 3 包，推荐 5 包。第一轮只做一个 open goal；第一轮通过后再扩展其他 goal。
+每条线最低 3 包，推荐 5 包。第一轮只做一个 open goal；第一轮通过后再扩展其他 goal。若时间不足，`GEOREF_FIXED_STRONG_REAL` 可先录 3 包作为 ablation。
 
 ## 2. 每包前 Checklist
 
@@ -111,7 +112,7 @@ anti_slosh_path_post_processor.launch 启动参数
 3. 再调 GeoRef 候选强度：
    路径改得太弱，且 h 不降：提高 max_candidate_level，或增大 strong_gain / strong_iters / strong_max_drift。
    路径贴墙、绕路过多、tracking 变差：降低 max_candidate_level，或减小 gain / max_drift。
-   这一步只看 geometry-only GEOREF_TUNED_STRONG_REAL，不混入 OSCRS。
+   这一步先看 fixed strong 是否可行，再看 geometry-only GEOREF_TUNED_STRONG_REAL，不混入 OSCRS。
 
 4. 再调 OSCRS hard gate：
    fb=0：OSCRS 选中非 original 且通过 hard gate，通路正常。
@@ -229,6 +230,49 @@ roslaunch scout_local_planner anti_slosh_path_post_processor.launch \
 ```
 
 终端 2：MPC。
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path_anti_slosh \
+  Q_slosh:=0 \
+  Q_slosh_eta_dot:=0 \
+  enable_slosh_box_constraint:=false \
+  risk_scheduler_enable:=false \
+  energy_profile_enable:=false \
+  input_shaping_enable:=false \
+  slosh_speed_governor_enable:=false \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_lateral_accel:=false \
+  slosh_use_imu_alpha_z:=false
+```
+
+## 6A. GEOREF_FIXED_STRONG_REAL
+
+终端 1：fixed strong post-processor。该 baseline 固定发布 `strong` 候选；如果 strong 被 gate 拒绝，则回退 original。它不启用 geometry-only selector，也不启用 OSCRS selector。
+
+```bash
+roslaunch scout_local_planner anti_slosh_path_post_processor.launch \
+  input_topic:=/scout/global_path \
+  output_topic:=/scout/global_path_anti_slosh \
+  oscrs_config:=/home/a/scout_ws/src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml \
+  ds:=0.03 \
+  max_candidate_level:=strong \
+  fixed_candidate_name:=strong \
+  publish_debug:=true \
+  enable_collision_check:=true \
+  costmap_topic:=/scout/mbf_costmap_nav/global_costmap/costmap \
+  ay_ratio_limit:=1.0 \
+  prediction_v_max:=2.0 \
+  prediction_ay_max_budget:=2.0 \
+  prediction_a_max:=1.0 \
+  mild_iters:=8 \
+  mild_gain:=0.20 \
+  mild_max_drift:=0.04 \
+  oscrs_shadow_enable:=false \
+  oscrs_active_enable:=false
+```
+
+终端 2：同一 MPC。
 
 ```bash
 roslaunch scout_local_planner slosh_experiment.launch \
@@ -418,9 +462,11 @@ RGB 图像看不到液面 ROI，且该包要用于视觉结论
 
 ```text
 RAW_REAL_run01
+GEOREF_FIXED_STRONG_REAL_run01
 GEOREF_TUNED_STRONG_REAL_run01
 GEOREF_OSCRS_ACTIVE_REAL_run01
 RAW_REAL_run02
+GEOREF_FIXED_STRONG_REAL_run02
 GEOREF_TUNED_STRONG_REAL_run02
 GEOREF_OSCRS_ACTIVE_REAL_run02
 ...

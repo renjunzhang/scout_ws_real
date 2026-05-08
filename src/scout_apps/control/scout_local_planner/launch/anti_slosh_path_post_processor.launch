@@ -5,6 +5,7 @@
   <arg name="ds" default="0.10"/>
   <arg name="publish_debug" default="true"/>
   <arg name="max_candidate_level" default="medium"/>
+  <arg name="fixed_candidate_name" default=""/>
 
   <arg name="max_drift" default="0.18"/>
   <arg name="max_length_ratio" default="1.15"/>
@@ -76,6 +77,7 @@
     <param name="ds" value="$(arg ds)"/>
     <param name="publish_debug" value="$(arg publish_debug)"/>
     <param name="max_candidate_level" value="$(arg max_candidate_level)"/>
+    <param name="fixed_candidate_name" value="$(arg fixed_candidate_name)"/>
     <param name="costmap_topic" value="$(arg costmap_topic)"/>
 
     <param name="gates/max_drift" value="$(arg max_drift)"/>
