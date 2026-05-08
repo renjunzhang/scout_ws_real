@@ -389,6 +389,14 @@ class AntiSloshPathPostProcessor:
         tracking_count = len(eta_dot_norm)
         residual_height = height_total[tracking_count:] if len(height_total) > tracking_count else []
         tracking_height = height_total[:tracking_count] if tracking_count > 0 else height_total
+        # B7 note: slosh_terminal_E is the modal energy at the END OF THE
+        # MOTION PHASE (right before the residual settling segment), not at
+        # the end of the 2 s zero-input free response. We score on this value
+        # because it represents "energy still to be settled" once the vehicle
+        # stops; the residual gate (slosh_h_residual_max <= 0.2*eta_lim)
+        # already enforces that this energy must decay enough not to cross
+        # the threshold. Switching to "post-settle" energy would always be
+        # bounded by the residual gate and add no information.
         return {
             "slosh_h_p95": percentile(tracking_height, 95.0),
             "slosh_h_max": max(tracking_height) if tracking_height else float("inf"),
@@ -490,11 +498,16 @@ class AntiSloshPathPostProcessor:
         if (self.oscrs_shadow_enable or self.oscrs_active_enable) and not self.oscrs_use_legacy_score:
             self.apply_oscrs_score(rows)
         oscrs_best = self.select_oscrs_candidate(rows)
-        any_feasible = any(row["oscrs_feasible"] for row, _ in rows)
-        if (self.oscrs_shadow_enable or self.oscrs_active_enable) and not any_feasible:
-            self.publish_safety_alarm(rows, geometry_best[0])
         if self.oscrs_active_enable and oscrs_best is not None:
             best = oscrs_best
+        # B2 fix: alarm fires when the path actually being published is not
+        # slosh-feasible (covers shadow, fb=1 with non-original geometry_best,
+        # fb=2, fb=3). Previously we only checked "no candidate at all is
+        # feasible", which silently let through the case where original was
+        # slosh-safe but geometry_best (a non-original smoothing) failed the
+        # hard gate.
+        if (self.oscrs_shadow_enable or self.oscrs_active_enable) and not best[0]["oscrs_feasible"]:
+            self.publish_safety_alarm(rows, geometry_best[0], best[0])
 
         self.publish_outputs(msg, rows, best, geometry_best, oscrs_best)
 
@@ -621,21 +634,23 @@ class AntiSloshPathPostProcessor:
         """RA-L §4.1 Layer 2: weighted sum of slosh+geom indicators, batch-normalized
         within the current planning cycle's S_full set. S_full is the set of
         non-original feasible candidates. Original keeps its legacy score so the
-        candidate_report still shows comparable osc values for diagnostics."""
+        candidate_report still shows comparable osc values for diagnostics.
+
+        B5 fix: always batch-normalize (even for |S_full|=1, where each ratio
+        becomes 1.0). This keeps the osc field on a consistent [0, sum(weights)]
+        scale across planning cycles, regardless of how many candidates pass
+        the hard gate."""
         feasible = [
             row for row, _ in rows
             if row["oscrs_feasible"] and row["name"] != "original"
         ]
-        if len(feasible) == 0:
+        if not feasible or not self.oscrs_score_batch_norm:
             return
-        if self.oscrs_score_batch_norm and len(feasible) >= 2:
-            max_h_p95 = max(max(0.0, row["slosh_h_p95"]) for row in feasible)
-            max_energy = max(max(0.0, row["slosh_energy_rms"]) for row in feasible)
-            max_eta_dot = max(max(0.0, row["slosh_eta_dot_rms"]) for row in feasible)
-            max_terminal = max(max(0.0, row["slosh_terminal_E"]) for row in feasible)
-            max_geom = max(max(0.0, row["geometry_score"]) for row in feasible)
-        else:
-            max_h_p95 = max_energy = max_eta_dot = max_terminal = max_geom = 1.0
+        max_h_p95 = max(max(0.0, row["slosh_h_p95"]) for row in feasible)
+        max_energy = max(max(0.0, row["slosh_energy_rms"]) for row in feasible)
+        max_eta_dot = max(max(0.0, row["slosh_eta_dot_rms"]) for row in feasible)
+        max_terminal = max(max(0.0, row["slosh_terminal_E"]) for row in feasible)
+        max_geom = max(max(0.0, row["geometry_score"]) for row in feasible)
         for row in feasible:
             norm = lambda value, ref: value / max(1e-9, ref)
             row["oscrs_score"] = (
@@ -646,7 +661,7 @@ class AntiSloshPathPostProcessor:
                 + self.oscrs_score_w_geom * norm(row["geometry_score"], max_geom)
             )
 
-    def publish_safety_alarm(self, rows, geometry_row):
+    def publish_safety_alarm(self, rows, geometry_row, published_row):
         now = rospy.get_time()
         if self.oscrs_alarm_rate_limit > 0 and (now - self.oscrs_alarm_last_t) < self.oscrs_alarm_rate_limit:
             return
@@ -658,18 +673,19 @@ class AntiSloshPathPostProcessor:
         )
         msg = (
             "hard_gate_failed=1,feasible_count={fc},min_violation={mv:.4g},"
-            "geometry_best={gb},eta_lim_mm={el:.1f}".format(
+            "geometry_best={gb},published={pb},eta_lim_mm={el:.1f}".format(
                 fc=feasible_count,
                 mv=min_violation if min_violation != float("inf") else -1.0,
                 gb=geometry_row["name"],
+                pb=published_row["name"],
                 el=self.oscrs_eta_lim * 1000.0,
             )
         )
         self.safety_alarm_pub.publish(String(data=msg))
         rospy.logwarn(
-            "[anti_slosh_path_post_processor] OSCRS SAFETY_ALARM %s; falling back to geometry_best=%s",
+            "[anti_slosh_path_post_processor] OSCRS SAFETY_ALARM %s; published=%s slosh-fail",
             msg,
-            geometry_row["name"],
+            published_row["name"],
         )
 
     def apply_slosh_scores(self, rows):

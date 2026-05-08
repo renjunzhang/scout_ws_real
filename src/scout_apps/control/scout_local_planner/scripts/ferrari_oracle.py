@@ -171,29 +171,65 @@ def dkappa_from_path(points, kappa):
     return dkappa
 
 
+def damping_ratio_ferrari_eq3(R, h, dynamic_viscosity, density, xi=XI_11):
+    """Ferrari 2026 RA-L eq.(3): ζ_n from R, h, dynamic viscosity υ and density μ.
+
+        ζ_n = 0.92 · sqrt( υ / μ / (g·R³) )
+              · [ 1 + 0.318 / sinh(ξ·h/R) · (1 + (1−h/R) / cosh(ξ·h/R)) ].
+
+    B3 fix (LV4): replaces the previous yaml-fixed 0.05 default with a
+    physics-derived value, so the offline oracle can answer "where does the
+    damping ratio come from?" without pointing at a hand-tuned observer fit.
+    """
+    xi_h_R = xi * h / R
+    bracket = 1.0 + (0.318 / math.sinh(xi_h_R)) * (
+        1.0 + (1.0 - h / R) / math.cosh(xi_h_R)
+    )
+    return 0.92 * math.sqrt(dynamic_viscosity / density / (G * R ** 3)) * bracket
+
+
 def slosh_modal_params(container):
     slosh = container.get("slosh", {}) or {}
     R = float(slosh.get("container_radius", 0.0185))
     h = float(slosh.get("liquid_height", 0.058))
     rho = float(slosh.get("liquid_density", 1000.0))
-    zeta = float(slosh.get("damping_ratio", 0.05))
+    nu = float(slosh.get("liquid_dynamic_viscosity", 1.0e-3))
     offset_x = float(slosh.get("offset_x", 0.0))
     offset_y = float(slosh.get("offset_y", 0.0))
     xi = XI_11
     m_f = rho * math.pi * R * R * h
     m_n = m_f * (2.0 * R * math.tanh(xi * h / R)) / (xi * h * (xi * xi - 1.0))
     omega_n = math.sqrt(max(G * (xi / R) * math.tanh(xi * h / R), 0.0))
-    mode = (container.get("oscrs", {}) or {}).get("height_coeff_mode", "observer_linear")
-    if mode == "ferrari_closed_form":
+
+    zeta_mode = str(slosh.get("damping_ratio_mode", "manual")).lower()
+    zeta_manual = float(slosh.get("damping_ratio", 0.05))
+    if zeta_mode == "ferrari_physics":
+        zeta = damping_ratio_ferrari_eq3(R, h, nu, rho, xi)
+    else:
+        zeta = zeta_manual
+
+    height_mode = str(
+        (container.get("oscrs", {}) or {}).get("height_coeff_mode", "observer_linear")
+    ).lower()
+    height_manual = float(
+        (container.get("oscrs", {}) or {}).get("height_coeff_manual", 0.0)
+    )
+    if height_mode == "ferrari_closed_form":
         height_coeff = (xi * xi * h * m_n) / (m_f * R)
+    elif height_mode == "manual" and height_manual > 0.0:
+        # B4 fix: manual mode now actually consumes height_coeff_manual.
+        height_coeff = height_manual
     else:
         height_coeff = (4.0 * h * m_n) / (m_f * R)
     return {
         "R": R,
         "h": h,
         "zeta": zeta,
+        "zeta_mode": zeta_mode,
+        "zeta_manual": zeta_manual,
         "omega_n": omega_n,
         "height_coeff": height_coeff,
+        "height_mode": height_mode,
         "offset_x": offset_x,
         "offset_y": offset_y,
     }
@@ -224,6 +260,8 @@ def build_nlp(path_pts, oracle_cfg, modal, args):
     omega_max = float(bounds["omega_max"])
     eta_lim = cons["eta_lim_mm"] / 1000.0
     residual_lim = cons["residual_ratio"] * eta_lim
+    # B1 fix: slosh ODE sub-stepping inside each segment.
+    slosh_substeps = max(1, int(coll.get("slosh_substeps", 1)))
 
     opti = ca.Opti()
     v = opti.variable(n)              # speed at each path node (m/s)
@@ -275,13 +313,24 @@ def build_nlp(path_pts, oracle_cfg, modal, args):
 
     # Jerk bound between consecutive tangential-accel segments.
     # j ≈ (a[i+1] - a[i]) / dt_avg, with dt_avg = (dt[i] + dt[i+1]) / 2.
+    # B6 fix: also bound the implicit step from rest into a[0] and from
+    # a[n-2] back to rest, otherwise the start/end can carry an unbounded
+    # jerk impulse the optimiser is free to exploit.
     if jerk_max > 0.0:
         for i in range(n - 2):
             dt_avg = 0.5 * (dt[i] + dt[i + 1])
             opti.subject_to(a[i + 1] - a[i] <= jerk_max * dt_avg)
             opti.subject_to(a[i + 1] - a[i] >= -jerk_max * dt_avg)
+        opti.subject_to(a[0] <= jerk_max * dt[0])
+        opti.subject_to(a[0] >= -jerk_max * dt[0])
+        opti.subject_to(a[n - 2] <= jerk_max * dt[n - 2])
+        opti.subject_to(a[n - 2] >= -jerk_max * dt[n - 2])
 
-    # Slosh ODE in container frame: ax = a_tangential, ay = v^2 * kappa (centripetal)
+    # Slosh ODE in container frame: ax = a_tangential, ay = v^2 * kappa (centripetal).
+    # Within segment i, the tangential accel is held constant at a[i] (segment-wise
+    # piecewise-constant). B9 note: alpha at node i+1 is therefore evaluated with a[i]
+    # as well, since alpha = a·κ + v²·dκ/ds is a property of segment i; reading a[i+1]
+    # would step into the next segment's accel and make alpha discontinuous at the node.
     for i in range(n - 1):
         omega_i = v[i] * kappa_arr[i]
         omega_ip1 = v[i + 1] * kappa_arr[i + 1]
@@ -293,13 +342,26 @@ def build_nlp(path_pts, oracle_cfg, modal, args):
         ay_i = v[i] * v[i] * kappa_arr[i]
         ay_ip1 = v[i + 1] * v[i + 1] * kappa_arr[i + 1]
         ay = 0.5 * (ay_i + ay_ip1) + alpha * offset_x - omega_sq * offset_y
-        # Semi-implicit Euler over dt[i] for modal coords
-        ddx = -2.0 * zeta * omega_n * eta_x_dot[i] - omega_n * omega_n * eta_x[i] - ax
-        ddy = -2.0 * zeta * omega_n * eta_y_dot[i] - omega_n * omega_n * eta_y[i] - ay
-        opti.subject_to(eta_x_dot[i + 1] == eta_x_dot[i] + ddx * dt[i])
-        opti.subject_to(eta_y_dot[i + 1] == eta_y_dot[i] + ddy * dt[i])
-        opti.subject_to(eta_x[i + 1] == eta_x[i] + eta_x_dot[i + 1] * dt[i])
-        opti.subject_to(eta_y[i + 1] == eta_y[i] + eta_y_dot[i + 1] * dt[i])
+        # B1 fix: split dt[i] into K sub-steps so semi-implicit Euler stays
+        # stable when v→0 makes dt[i] approach dt_max. ax/ay are held constant
+        # across the K sub-steps (same midpoint-averaged values online uses
+        # over its 0.05 s grid). Symbolic chain depth = K; no extra opti vars.
+        dt_sub = dt[i] / slosh_substeps
+        ex_sub = eta_x[i]
+        ey_sub = eta_y[i]
+        exd_sub = eta_x_dot[i]
+        eyd_sub = eta_y_dot[i]
+        for _ in range(slosh_substeps):
+            ddx = -2.0 * zeta * omega_n * exd_sub - omega_n * omega_n * ex_sub - ax
+            ddy = -2.0 * zeta * omega_n * eyd_sub - omega_n * omega_n * ey_sub - ay
+            exd_sub = exd_sub + ddx * dt_sub
+            eyd_sub = eyd_sub + ddy * dt_sub
+            ex_sub = ex_sub + exd_sub * dt_sub
+            ey_sub = ey_sub + eyd_sub * dt_sub
+        opti.subject_to(eta_x_dot[i + 1] == exd_sub)
+        opti.subject_to(eta_y_dot[i + 1] == eyd_sub)
+        opti.subject_to(eta_x[i + 1] == ex_sub)
+        opti.subject_to(eta_y[i + 1] == ey_sub)
 
     # Hard gate: eta_pred(t) <= eta_lim throughout the path
     for i in range(n):
@@ -485,7 +547,9 @@ def solve_straight_analytic(path_pts, oracle_cfg, modal, args):
         "a_abs_max_m_s2": max(abs(r["a"]) for r in rows),
         "omega_n_used": modal["omega_n"],
         "zeta_used": modal["zeta"],
+        "zeta_mode": modal.get("zeta_mode", "manual"),
         "height_coeff_used": modal["height_coeff"],
+        "height_coeff_mode": modal.get("height_mode", "observer_linear"),
     }
     if args.out_summary:
         os.makedirs(os.path.dirname(args.out_summary) or ".", exist_ok=True)
@@ -519,15 +583,15 @@ def write_outputs(opti, vars_, sol, args):
             + parabola_coeff * omega_path * omega_path
         )
         rows.append({
-            "s": s_grid[i],
-            "t": t,
+            "s": float(s_grid[i]),
+            "t": float(t),
             "v": float(v_val[i]),
             "a": float(a_val[i - 1]) if i > 0 else 0.0,
-            "omega": omega_path,
-            "kappa": kappa_arr[i],
+            "omega": float(omega_path),
+            "kappa": float(kappa_arr[i]),
             "eta_x": float(eta_x_val[i]),
             "eta_y": float(eta_y_val[i]),
-            "h_total": h_total,
+            "h_total": float(h_total),
         })
         if i < n - 1:
             t += float(dt_val[i])
@@ -538,16 +602,20 @@ def write_outputs(opti, vars_, sol, args):
         writer.writeheader()
         writer.writerows(rows)
 
+    # NOTE: every numeric in summary must be a Python float, not a numpy scalar
+    # or CasADi DM, otherwise yaml.safe_dump raises RepresenterError.
     summary = {
         "scenario": args.scenario,
-        "n_nodes": n,
-        "tracking_time_s": float(sum(dt_val)),
-        "h_total_max_mm": max(r["h_total"] for r in rows) * 1000.0,
-        "v_max_m_s": max(r["v"] for r in rows),
-        "a_abs_max_m_s2": max(abs(r["a"]) for r in rows),
-        "omega_n_used": modal["omega_n"],
-        "zeta_used": modal["zeta"],
-        "height_coeff_used": modal["height_coeff"],
+        "n_nodes": int(n),
+        "tracking_time_s": float(sum(float(x) for x in dt_val)),
+        "h_total_max_mm": float(max(r["h_total"] for r in rows) * 1000.0),
+        "v_max_m_s": float(max(r["v"] for r in rows)),
+        "a_abs_max_m_s2": float(max(abs(r["a"]) for r in rows)),
+        "omega_n_used": float(modal["omega_n"]),
+        "zeta_used": float(modal["zeta"]),
+        "zeta_mode": str(modal.get("zeta_mode", "manual")),
+        "height_coeff_used": float(modal["height_coeff"]),
+        "height_coeff_mode": str(modal.get("height_mode", "observer_linear")),
     }
     if args.out_summary:
         os.makedirs(os.path.dirname(args.out_summary) or ".", exist_ok=True)
@@ -581,6 +649,10 @@ def main():
                     "path_topic": args.path_topic,
                     "n_nodes_override": args.n_nodes,
                     "max_iter_override": args.max_iter,
+                    "zeta_used": modal["zeta"],
+                    "zeta_mode": modal.get("zeta_mode", "manual"),
+                    "height_coeff_used": modal["height_coeff"],
+                    "height_coeff_mode": modal.get("height_mode", "observer_linear"),
                     "error": str(exc).splitlines()[0],
                 }, handle, sort_keys=False)
         sys.stderr.write(f"oracle failed to converge: {exc}\n")

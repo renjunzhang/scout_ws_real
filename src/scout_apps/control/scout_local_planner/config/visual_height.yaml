@@ -1,46 +1,75 @@
-# Side-view RealSense D435i + ArUco visual height pipeline (RA-L D5).
+# 侧视 RealSense D435i + ArUco 视觉液面提取管线 (RA-L D5)。
 #
-# Container has ArUco markers attached to its sides; the markers anchor a ROI
-# on the colour image and provide the mm-per-pixel scale. Hough/Canny finds
-# the liquid line within the ROI; the height is the perpendicular distance
-# from a fiducial (top-edge ArUco) down to the liquid line, in mm.
+# 容器侧面贴两枚 ArUco：top_marker 锚定 ROI 起点；scale_marker 提供 mm/px 比例。
+# 在 ROI 内用 Canny + Hough 找液面线；液面高度 = top_marker 下沿到液面线的 mm 距离。
+#
+# 状态：骨架。容器 ArUco 实物粘贴位置、ROI mm 偏置、Hough 阈值需要实物相机标定后
+#       才能产出可信数据；当前默认值仅保证管线能跑通。
 
 visual:
   camera: realsense_d435i
+
+  # ============================================================
+  # ROS topic 配置（与录包脚本对齐）
+  # ============================================================
   topics:
-    color: /camera/color/image_raw
-    info: /camera/color/camera_info
-    output_height: /slosh/h_visual
-    output_quality: /slosh/h_visual_quality
+    color: /camera/color/image_raw                  # 彩色图输入
+    info: /camera/color/camera_info                 # 内参（暂未消费，留作后续畸变校正）
+    output_height: /slosh/h_visual                  # 液面高度输出 (Float32, mm)
+    output_quality: /slosh/h_visual_quality         # 置信度输出 (Float32, [0,1])
+
+  # ============================================================
+  # ArUco 检测（Tier 1：粘贴方案变了必须改）
+  # ============================================================
   aruco:
-    dictionary: DICT_4X4_50
-    marker_size_mm: 30
-    n_markers_on_container: 2     # one at top edge, one at fixed offset for scale
-    top_marker_id: 0
-    scale_marker_id: 1
+    dictionary: DICT_4X4_50         # 4x4 字典 50 ID，足够编码 2 枚 marker
+    marker_size_mm: 30              # 实物边长 (mm)，决定 mm/px 比例
+    n_markers_on_container: 2       # top + scale 两枚
+    top_marker_id: 0                # 容器顶沿（锚定 ROI 起点）
+    scale_marker_id: 1              # 已知偏置位置（标定 mm/px）
     detector_params:
       adaptiveThreshWinSizeMin: 5
       adaptiveThreshWinSizeMax: 23
       adaptiveThreshWinSizeStep: 6
+
+  # ============================================================
+  # ROI 定义（Tier 2：容器尺寸变了改）
+  # ============================================================
   roi:
-    method: aruco_anchored        # ROI placed below top_marker, width = scale_marker offset
-    margin_px: 8
-    height_below_top_marker_mm: 80   # how far below the top marker to look for liquid
+    method: aruco_anchored          # ROI 由 top_marker 下沿向下展开
+    margin_px: 8                    # ROI 上下左右像素留白
+    height_below_top_marker_mm: 80  # 向下扫描多深（容器深度 + 余量）
+
+  # ============================================================
+  # 液面线提取（Tier 1：实物标定时必调）
+  # ============================================================
   liquid_edge:
     method: canny_hough
-    blur_kernel: 5
-    canny_low: 40
-    canny_high: 140
-    hough_threshold: 25
-    hough_min_line_length_px: 30
-    hough_max_line_gap_px: 5
-    angle_tolerance_deg: 8        # accept lines within this of horizontal
+    blur_kernel: 5                  # 高斯模糊核大小，奇数
+    canny_low: 40                   # Canny 低阈值
+    canny_high: 140                 # Canny 高阈值
+    hough_threshold: 25             # Hough 累加器阈值
+    hough_min_line_length_px: 30    # 最小线段长度（短了忽略反光等噪声）
+    hough_max_line_gap_px: 5        # 同一线段允许的最大间断
+    angle_tolerance_deg: 8          # 接受偏离水平多少度内的线（容许相机俯仰）
+
+  # ============================================================
+  # 发布行为（Tier 3：不常调）
+  # ============================================================
   publishing:
-    rate_hz: 30
-    drop_if_no_aruco: true
-    drop_if_no_line: true
+    rate_hz: 30                     # 期望帧率（实际跟相机一致）
+    drop_if_no_aruco: true          # 检测不到 marker 时不发 NaN（true = 直接丢弃）
+    drop_if_no_line: true           # 检测不到液面线时不发 NaN
+
+  # ============================================================
+  # 静止基线自动归零（Tier 3：液体放好后头几秒）
+  # ============================================================
   static_baseline:
-    record_first_n_seconds: 3.0   # capture liquid baseline before motion
-    use_baseline_as_zero: true
+    record_first_n_seconds: 3.0     # 录前 N 秒做液面静止基线 (mm)
+    use_baseline_as_zero: true      # 后续 h_visual 减基线得相对位移
+
+  # ============================================================
+  # 时间同步（compute_ferrari_indices.py / check_time_sync.py 消费）
+  # ============================================================
   sync:
-    tolerance_ms: 50              # pair /slosh/height with /image_raw within this
+    tolerance_ms: 50                # /slosh/height 与 /image_raw 的最大允许时间差

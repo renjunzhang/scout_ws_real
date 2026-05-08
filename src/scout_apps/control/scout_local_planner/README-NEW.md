@@ -570,7 +570,9 @@ GEOREF_OSCRS_ACTIVE_REAL 相对 GEOREF_TUNED_STRONG_REAL:
 ```text
 1. 实物 RAW_REAL / GEOREF_TUNED_STRONG_REAL / GEOREF_OSCRS_ACTIVE_REAL 有效性对比尚未完成。
 2. OSCRS 已完成在线 active 通路，但尚未证明实物收益。
-3. Ferrari oracle 当前只作为离线上界/参考工具，曲线路径 NLP 仍未稳定收敛。
+3. Ferrari oracle 当前只作为离线上界/参考工具；已加入 slosh ODE 子步积分、
+   Ferrari damping 公式、height coeff mode 和起止 jerk 约束，但曲线路径 NLP
+   仍需更多真实路径收敛验证。
 4. RGB 视觉真值走离线处理链，最终论文结论需要与 /slosh/height 交叉验证。
 ```
 

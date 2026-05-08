@@ -1,46 +1,76 @@
-# Ferrari 2026 RA-L offline NLP oracle for Scout differential drive.
+# Ferrari 2026 RA-L 离线 NLP oracle，针对 Scout 差速底盘改写。
 #
-# Solves the assigned-path time-optimal problem from §III-A of Ferrari et al.
-# adapted to Scout: heading is tied to the path tangent (no lateral a_x DoF),
-# only the motion law s(t) is optimised. Same modal slosh model and damping
-# as the online OSCRS rollout (oscrs_container.yaml).
+# 求解 §III-A 的"指定路径时间最优"问题，对 Scout 的简化：
+#   - 航向锁定为路径切线（无 a_x 横向自由度）
+#   - 唯一决策变量是运动律 s(t)
+# 模态晃动模型与阻尼比与在线 OSCRS rollout 完全同口径（见 oscrs_container.yaml）。
 
 oracle:
   solver: ipopt
+
+  # ============================================================
+  # 求解器参数（Tier 3：收敛困难时才放宽）
+  # ============================================================
   ipopt:
-    max_iter: 500
-    tol: 1.0e-6
-    acceptable_tol: 1.0e-4
-    print_level: 3
-    linear_solver: mumps
+    max_iter: 500              # 单次 NLP 迭代上限
+    tol: 1.0e-6                # 主收敛容差
+    acceptable_tol: 1.0e-4     # 备选容差（达到也算收敛）
+    print_level: 3             # IPOPT 输出冗余度 (0=静默, 5=详细)
+    linear_solver: mumps       # MUMPS 是 IPOPT 默认；ma27/ma57 需 HSL 授权
+
+  # ============================================================
+  # 离散化（Tier 2：路径长度或 ω_n 变化时调）
+  # ============================================================
   collocation:
-    n_nodes: 200          # Ferrari default 151; longer paths benefit from more nodes
-    poly_degree: 3        # cubic Lagrange polynomials
+    n_nodes: 200               # 路径节点数。Ferrari 默认 151，长路径调高
+    poly_degree: 3             # 占位（W3+ 工作）：当前实现是 direct multiple-shooting
+                               # + 半隐式 Euler 子细分，poly_degree 暂未消费；升级到
+                               # Lagrange polynomial collocation 时该字段才生效。
+    # B1 修复：把每个 segment 的 slosh ODE 拆成 K 个子步，使 ω_n·dt_sub << 1
+    # （半隐式 Euler 稳定边界）。当 ω_n ≈ 31.25 rad/s、dt_max=0.5s 时 K=10
+    # 保证 dt_sub ≤ 0.05s，与在线 OSCRS rollout 同步长。
+    slosh_substeps: 10
+
+  # ============================================================
+  # 平台动力学边界（Tier 2：换平台或调速度上限时改）
+  # ============================================================
   bounds:
-    v_max: 1.0            # m/s, ~50 % of Scout absolute max
-    v_min: 0.05           # m/s, avoid singular omega when stationary
-    dt_max: 0.5           # s, keeps variable-step slosh integration numerically bounded
-    a_max: 0.8            # m/s^2; aligned with predict_a_max in run_sim
-    jerk_max: 4.0         # m/s^3
-    omega_max: 1.5        # rad/s; differential drive yaw rate cap
+    v_max: 1.0                 # 最大速度 (m/s)，~Scout 绝对极限的 50%
+    v_min: 0.05                # 内部节点最小速度，避免 v→0 时 ω 与 dt 奇异
+    dt_max: 0.5                # 单 segment 时长上限 (s)；防止 slosh 数值不稳定
+    a_max: 0.8                 # 切向加速度上限 (m/s²)，与 run_sim 的 predict_a_max 对齐
+    jerk_max: 4.0              # jerk 上限 (m/s³)，含起止边界
+    omega_max: 1.5             # 差速底盘 yaw rate 上限 (rad/s)
+
+  # ============================================================
+  # OSCRS 兼容硬约束（Tier 1：与 oscrs_container.yaml 必须同步）
+  # ============================================================
   constraints:
-    eta_lim_mm: 25.0      # same gate as OSCRS hard gate (oscrs.eta_lim_mm)
-    residual_ratio: 0.20  # Ferrari residual gate: h(t > t_end) <= 0.2 * eta_lim
-    settle_duration: 2.0  # zero-input free response window appended to path
-    use_parabola_term: true
+    eta_lim_mm: 25.0           # η 上限 (mm)；与 oscrs.eta_lim_mm 必须一致
+    residual_ratio: 0.20       # 残振 gate = ratio × eta_lim_mm；Ferrari 文献 0.2
+    settle_duration: 2.0       # 路径末尾零输入残振响应时长 (s)
+    use_parabola_term: true    # 是否在 η_total 中加入离心抛物面项
+
+  # ============================================================
+  # Scout 平台说明性字段（仅供脚本调用方对照检查，不进 NLP）
+  # ============================================================
   scout_specific:
-    differential_drive: true
-    nonholonomic: true
-    heading_from_tangent: true
+    differential_drive: true   # 差速底盘
+    nonholonomic: true         # 非完整约束
+    heading_from_tangent: true # 航向 = 路径切线（不可独立控制）
+
+  # ============================================================
+  # 输出格式
+  # ============================================================
   output:
     csv: docs/Claude/分析数据/ferrari_oracle_<scenario>.csv
     fields:
-      - s
-      - t
-      - v
-      - a
-      - omega
-      - kappa
-      - eta_x
-      - eta_y
-      - h_total
+      - s        # 弧长 (m)
+      - t        # 时间 (s)
+      - v        # 速度 (m/s)
+      - a        # 切向加速度 (m/s²)
+      - omega    # yaw rate (rad/s)
+      - kappa    # 路径曲率 (1/m)
+      - eta_x    # 模态位移 x
+      - eta_y    # 模态位移 y
+      - h_total  # 预测晃动高度 (m)

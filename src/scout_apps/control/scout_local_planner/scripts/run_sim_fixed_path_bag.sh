@@ -1,5 +1,124 @@
 #!/usr/bin/env bash
-# Run one fixed-path simulation trial: record bag, replay path, then start MPC.
+# ============================================================================
+# run_sim_fixed_path_bag.sh
+# ============================================================================
+#
+# 功能：
+#   一次性跑一个仿真 trial，并自动录 bag。脚本会按 CONDITION 配置 MPC /
+#   post-processor，然后根据 PATH_MODE 选择“固定轨迹 replay”或“固定终点 goal”。
+#
+# 这个脚本功能很多，最容易混淆的是：
+#
+#   固定 goal  ≠ 固定轨迹
+#
+#   1. 固定 goal / MBF 全局规划路径
+#      - 你固定的是目标点 `/scout/goal`。
+#      - MBF / global planner 根据当前地图、起点、costmap 实时重新生成
+#        `/scout/global_path`。
+#      - 适合验证 Online GeoRef / OSCRS 是否能接在真实全局规划器后面。
+#      - 同一个 goal 不保证每次 global path 字节级完全一致；这是真实在线规划。
+#
+#   2. 固定轨迹 / JSON replay
+#      - 你固定的是一条已经保存好的 path JSON。
+#      - 脚本直接把这条 path 发布到 `/scout/global_path_fixed` 或指定话题。
+#      - 不经过 MBF 重新规划。
+#      - 适合离线消融、重复跑 P2/P3、控制变量最干净。
+#
+# PATH_MODE 三种模式：
+#
+#   PATH_MODE=replay
+#     固定轨迹 replay。默认模式。
+#     输入: PATH_FILE 或 FIXED_PATH_DIR/PATH_ID.json
+#     常见用途: P2_s_curve / P3_mixed 等固定路径复现实验。
+#
+#   PATH_MODE=global_goal
+#     固定终点 goal。脚本发布 `/scout/goal`，让 MBF 生成 `/scout/global_path`。
+#     输入: TEMPLATE_GOAL_X/Y/QZ/QW 或 SCENARIO。
+#     常见用途: open 场地同终点 RAW vs GeoRef vs OSCRS 对比。
+#
+#   PATH_MODE=template_goal
+#     从当前位姿到 goal 生成模板轨迹，如 s_curve / mixed / sharp_turn。
+#     输入: TEMPLATE_NAME + goal。
+#     注意: 这不是 MBF 全局路径，而是模板生成器输出的固定形状 path。
+#
+# SCENARIO 快捷模式：
+#   如果设置 SCENARIO=<name>，脚本从 config/scenarios.yaml 读取 goal，
+#   自动切到 PATH_MODE=global_goal。
+#   当前脚本只消费 scenarios.yaml 里的 goal 字段；start/map/notes 只是 checklist。
+#
+# CONDITION 常用值：
+#   RAW_TUNED
+#     MBF raw path -> normal MPC。不开 post-processor。
+#
+#   GEOREF_TUNED
+#     MBF/global/fixed path -> geometry-only post-processor -> normal MPC。
+#
+#   GEOREF_OSCRS_SHADOW
+#     控制行为等同 GEOREF_TUNED，只额外输出 OSCRS candidate_report 诊断。
+#
+#   GEOREF_OSCRS_ACTIVE
+#     同一 candidate set，但 selector 切到 OSCRS hard gate + score。
+#     用于验证 OSCRS active 通路和后续实物平行主线。
+#
+#   NOM / CUSTOM / PROFILE_* / PMG_* 等
+#     历史固定路径或旧方案消融入口；不要混入当前 RAW/GeoRef/OSCRS 主表。
+#
+# 常用命令：固定 goal，MBF 全局规划，OSCRS active
+#   source /home/a/scout_ws/devel/setup.bash
+#   PATH_MODE=global_goal \
+#   PATH_ID=open_custom_goal \
+#   CONDITION=GEOREF_OSCRS_ACTIVE \
+#   RUN_ID=active01 \
+#   START_DELAY=10 \
+#   RECORD_DURATION=0 \
+#   TEMPLATE_GOAL_X=-3.014343023300171 \
+#   TEMPLATE_GOAL_Y=2.987114429473877 \
+#   TEMPLATE_GOAL_QZ=0.9999403278718936 \
+#   TEMPLATE_GOAL_QW=0.010924316704027428 \
+#   rosrun scout_local_planner run_sim_fixed_path_bag.sh
+#
+# 常用命令：固定轨迹 replay，P2_s_curve
+#   source /home/a/scout_ws/devel/setup.bash
+#   PATH_MODE=replay \
+#   PATH_ID=P2_s_curve \
+#   CONDITION=GEOREF_OSCRS_ACTIVE \
+#   RUN_ID=active01 \
+#   START_DELAY=10 \
+#   RECORD_DURATION=0 \
+#   rosrun scout_local_planner run_sim_fixed_path_bag.sh
+#
+# 常用命令：从 scenarios.yaml 读取 goal
+#   source /home/a/scout_ws/devel/setup.bash
+#   SCENARIO=open_user_goal \
+#   CONDITION=GEOREF_OSCRS_ACTIVE \
+#   RUN_ID=active01 \
+#   START_DELAY=10 \
+#   RECORD_DURATION=0 \
+#   rosrun scout_local_planner run_sim_fixed_path_bag.sh
+#
+# 重要参数：
+#   RECORD_DURATION=0
+#     手动 Ctrl+C 停止录包；非 0 时自动停止。
+#
+#   TEMPLATE_GOAL_REPEAT_COUNT / TEMPLATE_GOAL_REPEAT_RATE
+#     固定 goal 发布次数和频率。默认多发几次，避免 planner 尚未订阅时丢 goal。
+#
+#   POST_PROCESSOR_MAX_CANDIDATE_LEVEL
+#     GeoRef / OSCRS 候选强度上限: mild / mid / medium / strong。
+#
+#   POST_PROCESSOR_OSCRS_ACTIVE_ENABLE
+#     通常不要手工设；CONDITION=GEOREF_OSCRS_ACTIVE 会自动设置。
+#
+# 输出：
+#   默认 bag:
+#     /data/a/slosh_bags/sim/YYYYMMDD/YYYYMMDD_<PATH_ID>_<CONDITION>_run<RUN_ID>_<HHMMSS>.bag
+#
+# 注意：
+#   - 如果你传了 TEMPLATE_GOAL_X/Y/QZ/QW 但没显式设置 PATH_MODE，
+#     脚本会自动切到 PATH_MODE=global_goal，避免误跑默认 P2_s_curve replay。
+#   - 如果你要测试“真实在线全局规划 + post-processor”，用 global_goal 或 SCENARIO。
+#   - 如果你要最干净地重复一条路径，用 replay。
+# ============================================================================
 
 set -euo pipefail
 
@@ -329,6 +448,9 @@ case "${CONDITION}" in
     GEOREF_OSCRS_ACTIVE)
         # Parallel line to GEOREF_TUNED: same MPC, speed cap, gates, and
         # candidate set; only the candidate selector switches to OSCRS.
+        # B8 fix: ACTIVE alone enables the same slosh rollout/scoring/alarm
+        # path as SHADOW (post_processor treats `shadow OR active` identically
+        # for diagnostics); the previous extra SHADOW=true was redundant.
         Q_SLOSH="${Q_SLOSH:-0}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
         RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
@@ -340,7 +462,6 @@ case "${CONDITION}" in
         VEHICLE_V_MAX="${VEHICLE_V_MAX:-2.0}"
         POST_PROCESSOR_ENABLE=true
         POST_PROCESSOR_OSCRS_ACTIVE_ENABLE=true
-        POST_PROCESSOR_OSCRS_SHADOW_ENABLE=true
         POST_PROCESSOR_SLOSH_SCORE_ENABLE=false
         POST_PROCESSOR_SLOSH_SCORE_W_H="${POST_PROCESSOR_SLOSH_SCORE_W_H:-0.0}"
         POST_PROCESSOR_SLOSH_SCORE_HEIGHT_COEFF="${POST_PROCESSOR_SLOSH_SCORE_HEIGHT_COEFF:-1.8186978156753892}"

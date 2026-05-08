@@ -1,15 +1,18 @@
-# RA-L investment proposal D6: 4 open scenarios for OSCRS validation.
+# RA-L 投稿方案 D6：4 个开放场景，用于 OSCRS 验证。
 #
-# STATUS (2026-05-08): run_sim_fixed_path_bag.sh can consume this file via
-# SCENARIO=<name> for open-field global-goal simulation. The script currently
-# reads only goal pose and switches PATH_MODE=global_goal; map/world selection
-# remains controlled by the outer launch stack.
+# 状态（2026-05-08）：run_sim_fixed_path_bag.sh 已支持 SCENARIO=<name> 读本文件，
+# 用于开放场景 global-goal 仿真。脚本只消费 goal 并把 PATH_MODE 切到 global_goal；
+# 地图 / world 仍由外层 launch 栈选择。
 #
-# For real experiments this file remains a contract/checklist rather than an
-# automatic recorder input.
+# 实物录包时本文件仍只是 contract / checklist，不是录包脚本输入。
 #
-# The map_sim / map_real fields are placeholders — sim/real map names depend
-# on the launch stack and are tracked separately in the experiment log.
+# 字段消费表 (B10 修复 — 明确哪些字段会被脚本读取，哪些只是 checklist)：
+#   goal                      -> run_sim 读取 (转 TEMPLATE_GOAL_X/Y/QZ/QW)
+#   start                     -> checklist only (操作员手动摆放机器人初始位置)
+#   map_sim, map_real         -> checklist only (由外层 launch / 实验记录管理)
+#   expected_path_length_m    -> checklist only (录包长度 sanity 上限)
+#   obstacles                 -> checklist only (实物 / 仿真世界中物理摆放)
+#   notes                     -> checklist only
 
 scenarios:
   - name: open_user_goal
@@ -18,7 +21,7 @@ scenarios:
     start: {x: 0.0, y: 0.0, yaw: 0.0}
     goal:  {x: -3.1570560932159424, y: -2.897411346435547, yaw: -2.722877025604248}
     expected_path_length_m: ~4.3
-    notes: captured open-field user goal from 2026-05-06; geometry-only selector picks medium
+    notes: 2026-05-06 用户在开放场地实拍的目标点；geometry-only 选 medium 候选
 
   - name: open_goal_c
     map_sim: open_field_v1
@@ -26,7 +29,7 @@ scenarios:
     start: {x: 0.0, y: 0.0, yaw: 0.0}
     goal:  {x: 4.5, y: -3.0, yaw: -0.5}
     expected_path_length_m: ~8.9
-    notes: angled goal inside open_walled safe area; tests selector under non-axial heading
+    notes: 开放区内带斜向终点 yaw，测试非轴向航向下选择器是否仍稳定
 
   - name: open_long_path
     map_sim: open_field_v2_long
@@ -34,7 +37,7 @@ scenarios:
     start: {x: 0.0, y: 0.0, yaw: 0.0}
     goal:  {x: 12.0, y: 0.0, yaw: 0.0}
     expected_path_length_m: ">=12.0"
-    notes: long path saturation regime; expect more residual oscillation
+    notes: 长路径饱和工况，残振比短路径明显，hard gate 命中率会下降
 
   - name: open_with_obstacle_pair
     map_sim: open_field_v3_obs_pair
@@ -45,8 +48,7 @@ scenarios:
       - {x: 3.0, y:  0.6, r: 0.4}
       - {x: 3.0, y: -0.6, r: 0.4}
     expected_path_length_m: ~6.5
-    notes: collision gate and slosh gate active simultaneously
+    notes: collision gate 与 slosh gate 同时生效，测试两层硬门是否互不干扰
 
-# Per RA-L D6: 4 scenarios x 3 conditions (RAW / GEOREF_TUNED / GEOREF_OSCRS_ACTIVE)
-# x 5 bags = 60 sim bags + 60 real bags. Real may compress to 4 x 3 x 3 = 36 bags
-# if hardware time is constrained.
+# RA-L D6 录包矩阵：4 场景 × 3 条件 (RAW / GEOREF_TUNED / GEOREF_OSCRS_ACTIVE)
+# × 5 包 = 60 包仿真 + 60 包实物。硬件时间紧时实物可压到 4×3×3 = 36 包。

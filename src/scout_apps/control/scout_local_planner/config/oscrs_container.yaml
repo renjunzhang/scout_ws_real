@@ -1,26 +1,41 @@
-# OSCRS container/slosh parameters.
+# OSCRS 容器与晃动模型参数。
 #
-# This file mirrors the observer-compatible `slosh:` block used by
-# mpc_params*.yaml. Keep SI units here so offline OSCRS rollout and the
-# online slosh observer can be compared without unit conversions.
+# 本文件与 mpc_params*.yaml 中的 `slosh:` 块对齐（observer 兼容口径）。
+# 全部使用 SI 单位，离线 OSCRS rollout 与在线晃动观测器可直接比较，无需换算。
 
+# ============================================================
+# 容器物理 — 换容器 / 换液体时必须重新辨识 ω_n / ζ
+# ============================================================
 slosh:
-  container_radius: 0.0185
-  liquid_height: 0.058
-  liquid_density: 1000.0
-  damping_ratio: 0.05
-  mode_index: 1
-  offset_x: 0.0
-  offset_y: 0.0
-  use_parabola_term: true
-  use_linear_model: true
+  container_radius: 0.0185      # 试管内半径 R (m)
+  liquid_height: 0.058          # 静止液面到容器底高度 h (m)
+  liquid_density: 1000.0        # 液体密度 ρ (kg/m³)，水=1000
+  # 动力黏度 (Pa·s)。仅当 `damping_ratio_mode: ferrari_physics` 时被消费，
+  # 用于 Ferrari 论文式(3) 物理推导 ζ_n。默认为 20 °C 水。
+  liquid_dynamic_viscosity: 1.0e-3
+  damping_ratio: 0.05           # ζ (manual 模式下直接使用；observer 拟合值)
+  # ζ 的取值方式：
+  #   manual          -> 直接读上面的 damping_ratio （默认；与在线 observer 对齐）。
+  #   ferrari_physics -> 由 R/h/ν/μ 通过 Ferrari 2026 式(3) 物理推导。
+  # 在线 post-processor 只读 damping_ratio (D2 路径 C：在线维持 observer 口径)；
+  # 此 mode 仅由 ferrari_oracle.py 离线 ablation 消费。
+  damping_ratio_mode: manual
+  mode_index: 1                 # 一阶模态 (RA-L 方案只用 1 阶)
+  offset_x: 0.0                 # 容器中心相对机身 yaw 轴的纵向偏置 (m)
+  offset_y: 0.0                 # 横向偏置 (m)；非零会激活 alpha·offset 与 ω²·offset 项
+  use_parabola_term: true       # 是否在 η_total 中加入离心抛物面项 ω²·R²/(4g)
+  use_linear_model: true        # 线性 MSD α=0 (Ferrari 2026 §II 选择)
 
-# Online rollout defaults used by anti_slosh_path_post_processor.py. Launch
-# args / run_sim env vars may still override these values.
+# ============================================================
+# 在线 rollout 默认参数 — anti_slosh_path_post_processor.py 使用
+# launch args / run_sim 的 POST_PROCESSOR_SLOSH_SCORE_* 仍可覆盖
+# 默认这些权重 enable=false 时不生效；OSCRS active 路径走下面的 oscrs.score
+# ============================================================
 slosh_score:
-  enable: false
-  omega_n: 31.25
-  height_coeff: 1.8186978156753892
+  enable: false                 # 是否启用 legacy slosh score (与 OSCRS 互斥)
+  omega_n: 31.25                # 一阶模态频率 (rad/s)；与容器 R/h 物理值耦合
+  height_coeff: 1.8186978156753892   # 模态位移到 η 的标定系数 (observer_linear 口径)
+  # legacy slosh score 权重（仅当 use_legacy_score=true 或 slosh_score.enable=true 才生效）
   w_h: 0.0
   w_energy: 1.0
   w_eta_dot: 0.5
@@ -31,30 +46,49 @@ slosh_score:
   w_length: 0.3
   w_drift: 0.5
 
+# ============================================================
+# OSCRS 主配置 (RA-L §4.1)
+# Layer 1: hard gate (η_lim + 残振)
+# Layer 2: weighted score (S_full batch-normalized)
+# Fallback: SAFETY_ALARM topic
+# ============================================================
 oscrs:
-  height_coeff_mode: observer_linear  # observer_linear | ferrari_closed_form | manual
+  # height_coeff 取值方式：
+  #   observer_linear      -> 4·h·m_n / (m_F·R)，与在线 observer 对齐 (默认)。
+  #   ferrari_closed_form  -> ξ²·h·m_n / (m_F·R)，Ferrari 2026 式(13)。
+  #   manual               -> 使用下面 height_coeff_manual 数值（必须 > 0 才生效，
+  #                           否则自动 fallback 到 observer_linear）。
+  # 此 mode 仅由 ferrari_oracle.py 离线消费；
+  # 在线 post-processor 直接读 slosh_score.height_coeff (D2 路径 C：在线维持 observer)。
+  height_coeff_mode: observer_linear
   height_coeff_manual: 0.0
-  rollout_dt: 0.05
-  v_floor: 0.05
-  settle_duration: 2.0
-  eta_lim_mm: 25.0
-  eta_p95_lim_mm: 20.0
-  residual_ratio: 0.2
 
-  # RA-L §4.1 Layer 2 score: weighted sum of slosh/geom indicators, batch-normalized
-  # within current planning cycle's S_full set. use_legacy_score=true keeps the
-  # pre-RA-L score (2*h_max/eta_lim + h_residual/residual_lim + 0.2*geom).
+  # rollout 数值参数（一般不动）
+  rollout_dt: 0.05              # 在线 slosh ODE 半隐式 Euler 步长 (s)
+  v_floor: 0.05                 # rollout 时间反推的最小速度，避免 ds/v 爆炸
+  settle_duration: 2.0          # 路径末尾追加的零输入残振段时长 (s)
+
+  # === Layer 1 hard gate (核心安全约束，Tier 1 调参点) ===
+  eta_lim_mm: 25.0              # η 上限 (mm)。仿真饱和→放 30；实物紧→收 20
+  eta_p95_lim_mm: 20.0          # P95 高度软上限 (诊断用，不构成 gate)
+  residual_ratio: 0.2           # 残振 gate = residual_ratio × eta_lim_mm；Ferrari 论文 0.2
+
+  # === Layer 2 score (Tier 1 调参点)
+  # use_legacy_score=true 退回 RA-L 之前的 score (2*h_max/eta_lim + h_residual/residual_lim + 0.2*geom)
+  # batch_normalize=true 时各 metric 在 S_full 内归一到 [0,1]，权重和=score 上界
+  # ===
   score:
     use_legacy_score: false
     batch_normalize: true
-    w_h_p95: 1.0
-    w_energy_rms: 0.3
-    w_eta_dot_rms: 0.3
-    w_terminal_E: 0.2
-    w_geom: 0.2
+    w_h_p95: 1.0                # 跟踪段 P95 高度
+    w_energy_rms: 0.3           # 模态能量 RMS
+    w_eta_dot_rms: 0.3          # 模态速度 RMS（残振速率）
+    w_terminal_E: 0.2           # motion-end 能量（残振门已覆盖 post-settle，此项给小）
+    w_geom: 0.2                 # 几何 score 透传（向 GEOREF_TUNED 选择靠拢）
 
-  # RA-L §4.1 fallback: when no candidate passes the hard gate, publish a
-  # one-shot alarm and let the post-processor keep geometry_best.
+  # === Fallback / SAFETY_ALARM (RA-L §4.1)
+  # 当 published 路径 not oscrs_feasible 时一次性告警；rate_limit 内合并多次违例
+  # ===
   alarm:
     topic: /anti_slosh_path/safety_alarm
     rate_limit_sec: 5.0

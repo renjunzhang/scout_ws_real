@@ -2,6 +2,154 @@
 
 本目录存放 `scout_local_planner` 相关的实验辅助脚本，主要用于固定目标/固定路径实验、录包、离线指标提取，以及 IMU 标定验证。
 
+## 分类索引
+
+当前主线是：
+
+```text
+MBF global path
+  -> Online GeoRef / OSCRS path post-processor
+  -> normal MPC tracking
+  -> bag / offline analysis
+```
+
+优先看下面几类。
+
+### A. Online GeoRef / OSCRS 在线主线
+
+这些文件直接参与当前 `RAW_REAL / GEOREF_TUNED_STRONG_REAL / GEOREF_OSCRS_ACTIVE_REAL` 主线。
+
+```text
+anti_slosh_path_post_processor.py
+  在线 path post-processor。
+  GEOREF_TUNED: geometry-only candidate selection。
+  GEOREF_OSCRS_ACTIVE: 同一候选集 + OSCRS hard gate + score selection。
+  发布 /scout/global_path_anti_slosh、candidate_report、debug paths、safety_alarm。
+
+check_oscrs_takeover.py
+  检查 bag 中 OSCRS 是否 active、是否 takeover、fallback 分布。
+  用于区分"OSCRS 运行了"和"OSCRS 实际改变了参考路径"。
+
+analyze_oscrs_candidates.py
+  离线复算候选路径的 OSCRS 指标，输出每个 candidate 的 feasible / score / fallback 依据。
+
+summarize_oscrs_step2.py
+  汇总 OSCRS Step 2 判据，生成 PASS / SATURATED / FAIL 结论。
+
+check_oscrs_model_consistency.py
+  检查 OSCRS 预测高度与 bag 中 /slosh/height 的一致性。
+
+compute_modal_params.py
+  换容器/液位/液体后，重算 omega_n / height_coeff / Ferrari zeta，
+  并同步 config/oscrs_container.yaml。
+```
+
+配套配置不在 `scripts/` 下，但必须一起看：
+
+```text
+../config/oscrs_container.yaml
+  OSCRS 容器物理量、height gate、residual gate、score 权重。
+
+../config/scenarios.yaml
+  仿真 open 场景 goal 列表；run_sim 可用 SCENARIO=<name> 读取 goal。
+
+../launch/anti_slosh_path_post_processor.launch
+  post-processor 启动参数，实物和仿真都走这里。
+```
+
+### B. 仿真/实物录包与固定 goal / 固定轨迹
+
+```text
+run_sim_fixed_path_bag.sh
+  仿真单包 wrapper。支持固定轨迹 replay、固定 goal/global planner、
+  template path 三种 PATH_MODE。当前最容易误用，文件头有详细说明。
+
+record_slosh_experiment.sh
+  实物/仿真通用 rosbag 录制脚本，覆盖 slosh、MPC、GeoRef/OSCRS、
+  RealSense、IMU、TF、costmap 等关键话题。
+
+send_fixed_goal.py
+  向 /scout/goal 重复发布同一个 PoseStamped，适合实物同终点对比。
+
+fixed_global_path_runner.py
+  采集/回放固定 /scout/global_path JSON。
+  用于"固定轨迹"而不是"固定 goal"。
+
+template_fixed_path_generator.py
+  从当前位姿到 goal 生成 straight / single_turn / s_curve / mixed 等模板路径。
+  这是模板固定轨迹，不是 MBF 全局路径。
+```
+
+固定 goal 与固定轨迹的区别：
+
+```text
+固定 goal:
+  固定的是 /scout/goal。
+  MBF 每次根据当前地图、起点、costmap 重新生成 /scout/global_path。
+  适合验证 Online GeoRef / OSCRS 是否能接在真实全局规划器后面。
+
+固定轨迹:
+  固定的是已经保存好的 path JSON。
+  不经过 MBF 重新规划。
+  适合重复跑 P2/P3 和旧方案消融。
+```
+
+### C. Ferrari / RA-L 离线参考与视觉指标
+
+```text
+ferrari_oracle.py
+  Ferrari 2026 RA-L assigned-path time-optimal oracle 的 Scout 改写。
+  当前作为离线上界/参考工具，不进入在线控制链。
+
+compute_ferrari_indices.py
+  计算 Ferrari 风格指标，可接 /slosh/h_visual topic 或 RGB 离线 CSV。
+
+extract_visual_height.py
+  RealSense 侧视 + ArUco + Canny/Hough 的视觉液面高度骨架。
+  当前主要作为实物 D5 视觉 GT 管线骨架。
+
+check_time_sync.py
+  检查 /slosh/height 与图像时间戳配对质量。
+```
+
+配套配置：
+
+```text
+../config/ferrari_oracle.yaml
+../config/visual_height.yaml
+```
+
+### D. 指标提取与历史分析
+
+```text
+extract_slosh_metrics.py
+  主指标提取脚本，统计 /slosh/height、eta_dot、energy、tracking_time、
+  solve_success_ratio 等。
+
+analyze_slosh_peak_precursors.py
+analyze_path_geometry_slosh_triggers.py
+diagnose_reference_execution_chain.py
+diagnose_georef_budget_gap.py
+diagnose_slosh_guided_georef_score.py
+  GeoRef/旧方案失效分析脚本。
+
+offline_pmg_replay.py
+diagnose_p3_failure_modes.py
+  PMG / P3 failure history 分析，当前不是主线控制器。
+```
+
+### E. IMU / 旧阶段诊断
+
+```text
+imu_ay_tool.py
+validate_sim_imu.py
+analyze_day3_abc_smoke.py
+analyze_settling_day3.py
+diagnose_real_tuning.py
+```
+
+这些脚本仍可用于 IMU 标定、settling 状态机和旧风险调度器分析，但不属于当前 GeoRef/OSCRS 主表。
+
 ## 脚本列表
 
 ### `send_fixed_goal.py`
@@ -116,6 +264,79 @@ GLOBAL_PATH_TOPIC=/scout/global_path_fixed rosrun scout_local_planner launch_fix
 适用场景：
 - 录制 Q0/Q5 对照 bag
 - 录制 IMU 标定或终点恢复行为分析 bag
+
+### `compute_modal_params.py`
+
+OSCRS / Ferrari 模型参数一致性工具。换容器、换液位或换液体后，用这个脚本从一手物理量重算模态派生量，并同步 `config/oscrs_container.yaml`。
+
+输入物理量：
+- `R`: 容器内半径，单位 m
+- `h`: 静止液面高度，单位 m
+- `rho`: 液体密度，单位 kg/m³
+- `nu`: 液体动力黏度，单位 Pa·s
+
+派生量：
+- `omega_n`: 一阶模态频率，Ferrari 式(2)
+- `height_coeff_observer`: 在线 observer 口径，`4*h*m_n/(m_F*R)`
+- `height_coeff_ferrari`: Ferrari 闭式口径，`xi^2*h*m_n/(m_F*R)`
+- `zeta_ferrari`: Ferrari 式(3) 物理阻尼比
+
+只检查当前 `oscrs_container.yaml` 是否与物理量一致，不写文件：
+
+```bash
+python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.py \
+  --yaml src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml
+```
+
+临时指定一组新容器 / 液体参数，只打印派生量：
+
+```bash
+python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.py \
+  --R 0.025 \
+  --h 0.070 \
+  --rho 900 \
+  --nu 5.0e-2
+```
+
+手工修改 `oscrs_container.yaml` 中的 `slosh.container_radius / liquid_height / liquid_density / liquid_dynamic_viscosity` 后，同步写回派生量：
+
+```bash
+python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.py \
+  --yaml src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml \
+  --write
+```
+
+写回内容：
+- `slosh_score.omega_n`
+- `slosh_score.height_coeff`
+
+注意：默认不会覆盖 `slosh.damping_ratio`。当前在线 observer 默认仍使用 manual/observer 拟合阻尼口径；Ferrari 物理阻尼只打印出来作为参考。
+
+如果要做 Ferrari 物理阻尼 ablation，可显式写回：
+
+```bash
+python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.py \
+  --yaml src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml \
+  --write \
+  --write-zeta-ferrari
+```
+
+如需保留原文件，只导出派生量块：
+
+```bash
+python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.py \
+  --R 0.025 \
+  --h 0.070 \
+  --rho 900 \
+  --nu 5.0e-2 \
+  --emit-yaml /data/a/slosh_bags/analysis/modal_params_25mm_70mm.yaml
+```
+
+使用纪律：
+- 改容器或液位后，先运行只检查模式；
+- 只有确认物理量正确后再加 `--write`；
+- 不要把 `--write-zeta-ferrari` 当默认操作，除非这轮实验明确要比较 Ferrari 物理阻尼；
+- 写回后用 `git diff config/oscrs_container.yaml` 检查实际改动。
 
 ### `run_sim_fixed_path_bag.sh`
 
