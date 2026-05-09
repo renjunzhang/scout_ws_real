@@ -30,6 +30,12 @@ check_oscrs_takeover.py
   检查 bag 中 OSCRS 是否 active、是否 takeover、fallback 分布。
   用于区分"OSCRS 运行了"和"OSCRS 实际改变了参考路径"。
 
+validate_georef_oscrs_bag.py
+  单包行为验收脚本。检查 RAW / GEOREF_TUNED / GEOREF_FIXED_STRONG /
+  GEOREF_OSCRS_ACTIVE 是否走了预期路径，汇总 selected/fb/takeover、
+  safety_alarm、/scout/global_path_anti_slosh 和基础 h/eta_dot 指标。
+  takeover smoke 时使用 --require-non-original 或 --require-takeover。
+
 analyze_oscrs_candidates.py
   离线复算候选路径的 OSCRS 指标，输出每个 candidate 的 feasible / score / fallback 依据。
 

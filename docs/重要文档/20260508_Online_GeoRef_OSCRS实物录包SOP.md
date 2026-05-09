@@ -114,6 +114,11 @@ anti_slosh_path_post_processor.launch 启动参数
    路径贴墙、绕路过多、tracking 变差：降低 max_candidate_level，或减小 gain / max_drift。
    这一步先看 fixed strong 是否可行，再看 geometry-only GEOREF_TUNED_STRONG_REAL，不混入 OSCRS。
 
+   若 candidate_report 显示所有非 original 都因为 `ay:...>1.000` 被拒绝：
+   先把 `ay_ratio_limit` 临时放宽到 `3.0` 跑 1 包 takeover smoke。
+   这一步只验证 GeoRef/OSCRS 是否能真正发布非 original，不作为正式有效性结果。
+   smoke 通过后再根据闭环 `odom_ay_p95` 回收阈值，建议尝试 `2.0 -> 1.5`。
+
 4. 再调 OSCRS hard gate：
    fb=0：OSCRS 选中非 original 且通过 hard gate，通路正常。
    fb=1：只有 original slosh-safe，候选集饱和或非原候选没优势。

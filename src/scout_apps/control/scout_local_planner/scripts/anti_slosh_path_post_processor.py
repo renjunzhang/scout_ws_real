@@ -545,7 +545,11 @@ class AntiSloshPathPostProcessor:
         ay_ratio = safe_ratio(ay_p95, base_ay_p95)
         if len(candidate) < 3:
             reject_reasons.append(f"too_few_points:{len(candidate)}")
-        if metrics["min_seg_m"] < self.min_segment_length:
+        # `original` is already the planner-provided path after resampling.
+        # A short tail segment can appear at the endpoint and should not make
+        # the safety fallback itself invalid; keep the min-segment gate for
+        # generated candidates where it indicates a malformed smoothing result.
+        if name != "original" and metrics["min_seg_m"] < self.min_segment_length:
             reject_reasons.append(f"min_seg:{metrics['min_seg_m']:.3f}<{self.min_segment_length:.3f}")
         if metrics["max_drift_m"] > self.max_drift:
             reject_reasons.append(f"drift:{metrics['max_drift_m']:.3f}>{self.max_drift:.3f}")
