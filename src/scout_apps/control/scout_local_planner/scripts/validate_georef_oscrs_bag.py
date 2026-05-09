@@ -31,6 +31,69 @@ SUMMARY_RE = re.compile(r"summary:([^;]+)")
 ROW_RE = re.compile(r"(original|mild|medium|mid|strong):([^;]+)")
 
 
+# 参数实际位置表：让 diagnose() 给出"哪个文件哪个键"而不是只说"调 X"。
+# default 值与代码当前默认保持一致；改 launch/yaml 时请同步本表。
+PKG_REL_ROOT = "src/scout_apps/control/scout_local_planner"
+PARAM_LOCATIONS = {
+    # post_processor launch args
+    "ay_ratio_limit":           ("launch/anti_slosh_path_post_processor.launch", '<arg name="ay_ratio_limit">',           "1.0",     "候选 ay 与 baseline ay 比上限；硬门"),
+    "max_candidate_level":      ("launch/anti_slosh_path_post_processor.launch", '<arg name="max_candidate_level">',      "medium",  "候选强度封顶 (original|mild|mid|medium|strong)"),
+    "fixed_candidate_name":     ("launch/anti_slosh_path_post_processor.launch", '<arg name="fixed_candidate_name">',     '""',      "fixed mode 强制选定的候选名"),
+    "min_segment_length":       ("launch/anti_slosh_path_post_processor.launch", '<arg name="min_segment_length">',       "0.02",    "sanitize 段长阈值"),
+    "enable_collision_check":   ("launch/anti_slosh_path_post_processor.launch", '<arg name="enable_collision_check">',   "false",   "是否对候选做 costmap 碰撞检查"),
+    "costmap_topic":            ("launch/anti_slosh_path_post_processor.launch", '<arg name="costmap_topic">',            "/scout/mbf_costmap_nav/global_costmap/costmap", "全局 costmap topic"),
+    "collision_threshold":      ("launch/anti_slosh_path_post_processor.launch", '<arg name="collision_threshold">',      "50",      "costmap 碰撞代价上限 0-100"),
+    "prediction_v_max":         ("launch/anti_slosh_path_post_processor.launch", '<arg name="prediction_v_max">',         "2.0",     "OSCRS rollout 速度上限；必须与 MPC 真实速度上限一致"),
+    "prediction_ay_max_budget": ("launch/anti_slosh_path_post_processor.launch", '<arg name="prediction_ay_max_budget">', "2.0",     "OSCRS rollout 横向加速度预算"),
+    "mild_iters":               ("launch/anti_slosh_path_post_processor.launch", '<arg name="mild_iters">',               "18",      "mild 平滑迭代次数"),
+    "mild_gain":                ("launch/anti_slosh_path_post_processor.launch", '<arg name="mild_gain">',                "0.35",    "mild 平滑增益"),
+    "mild_max_drift":           ("launch/anti_slosh_path_post_processor.launch", '<arg name="mild_max_drift">',           "0.08",    "mild 平滑最大偏移"),
+    "oscrs_active_enable":      ("launch/anti_slosh_path_post_processor.launch", '<arg name="oscrs_active_enable">',      "false",   "OSCRS 是否实际接管"),
+    "oscrs_shadow_enable":      ("launch/anti_slosh_path_post_processor.launch", '<arg name="oscrs_shadow_enable">',      "false",   "OSCRS 是否运行 shadow rollout"),
+    # oscrs yaml keys
+    "oscrs.eta_lim_mm":         ("config/oscrs_container.yaml", "slosh_score.eta_lim_mm",         "25.0",              "η peak 上限 (mm)；hard gate sH < eta_lim_mm/1000"),
+    "oscrs.residual_ratio":     ("config/oscrs_container.yaml", "slosh_score.residual_ratio",     "0.2",               "残振 gate = residual_ratio × eta_lim_mm；Ferrari 论文 0.2"),
+    "oscrs.height_coeff_mode":  ("config/oscrs_container.yaml", "slosh_score.height_coeff_mode",  "observer_linear",   "晃动高度系数估计模式"),
+}
+
+
+def _hint_block(symptom, *param_actions):
+    """生成多行建议：症状 + 每个参数的 (位置, default, 含义)。
+
+    param_actions: list[(key, action_text)]，key 在 PARAM_LOCATIONS 中。
+    """
+    lines = [symptom]
+    for key, action in param_actions:
+        entry = PARAM_LOCATIONS.get(key)
+        if entry is None:
+            lines.append(f"  · {key}: {action}")
+            continue
+        rel_file, locator, default, comment = entry
+        lines.append(f"  · {key}: {action}")
+        lines.append(f"    位置 {PKG_REL_ROOT}/{rel_file} {locator} (default={default}) — {comment}")
+    return "\n".join(lines)
+
+
+def _latest_sH_summary(data):
+    """从最后一帧 candidate_rows 中提取每条候选的 sH (m) 与 accepted。"""
+    if not data.get("candidate_rows"):
+        return ""
+    last = data["candidate_rows"][-1]
+    parts = []
+    for name in ("original", "mild", "mid", "medium", "strong"):
+        if name not in last:
+            continue
+        sH = last[name].get("sH")
+        if sH is None:
+            continue
+        try:
+            sH_mm = float(sH) * 1000.0
+            parts.append(f"{name}={sH_mm:.1f}mm")
+        except ValueError:
+            continue
+    return ", ".join(parts)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bag")
@@ -248,34 +311,114 @@ def diagnose(mode, data, failures, warnings, args):
     if mode != "raw" and data["global_path_anti_slosh"] <= 0:
         suggestions.append("检查 post-processor output_topic、MPC global_path_topic，以及 /scout/global_path 是否有输入。")
 
-    if reject_counts.get("ay", 0) > 0 and non_original_count <= 0:
-        suggestions.append("非 original 被 ay gate 拦住：先把 ay_ratio_limit 临时放宽到 3.0 做 takeover smoke；通过后再试 2.0 -> 1.5。")
-    elif reject_counts.get("ay", 0) > 0:
-        suggestions.append("部分候选被 ay gate 拦住：若 takeover 不足，可小幅放宽 ay_ratio_limit；若 odom_ay_p95 偏高则回收阈值。")
+    # mild 是否实际通过 gate（accepted=1）。若通过但 selector 仍选 original,
+    # 说明问题不在 gate 而在 selector 评分（SAFE mild 下 mild gscore 比 original 大）。
+    mild_accepted = any(
+        rows.get("mild", {}).get("accepted") == "1"
+        for rows in data["candidate_rows"]
+    )
 
-    if any(key in reject_counts for key in ("collision", "no_costmap", "frame_mismatch")):
-        suggestions.append("碰撞/地图 gate 异常：优先检查 costmap_topic、frame_id、collision_threshold，不要先关闭 collision check。")
+    if reject_counts.get("ay", 0) > 0 and non_original_count <= 0 and not mild_accepted:
+        suggestions.append(_hint_block(
+            "非 original 候选被 ay gate 全部拦住：",
+            ("ay_ratio_limit", "临时 1.0 → 3.0 做 takeover smoke；smoke 通过后回收 2.0 → 1.5；若 odom_ay_p95 偏高再继续收紧。"),
+        ))
+    elif reject_counts.get("ay", 0) > 0 and failures:
+        # 部分候选被 ay 拦只在已有 failure 时才提示，避免在 PASS 包里产生噪声建议。
+        suggestions.append(_hint_block(
+            "部分候选被 ay gate 拦住：",
+            ("ay_ratio_limit", "若 takeover 不足可小幅放宽；若 odom_ay_p95 偏高则回收。"),
+        ))
 
-    if any(key in reject_counts for key in ("drift", "length", "short", "direction", "endpoint", "min_seg")):
-        suggestions.append("几何候选被基础 gate 拒绝：调小 smoothing gain/drift，或降低 max_candidate_level；min_seg 问题可检查 ds/min_segment_length。")
+    if any(key in reject_counts for key in ("collision", "no_costmap", "frame_mismatch")) and failures:
+        suggestions.append(_hint_block(
+            "碰撞 / 地图 gate 异常 — 不要先关 collision check，按下面顺序排查：",
+            ("costmap_topic", "确认 topic 与 MBF 实际发布一致；frame_id 应与 path frame_id 同。"),
+            ("collision_threshold", "由 50 提到 90 → 100 试 1 包 smoke；仍 collision:idx=0 才考虑下一步。"),
+            ("enable_collision_check", "只在开阔场地通路 smoke 时临时 false；正式包必须 true。"),
+        ))
+
+    if any(key in reject_counts for key in ("drift", "length", "short", "direction", "endpoint", "min_seg")) and failures:
+        suggestions.append(_hint_block(
+            "几何候选被基础 gate 拒绝：",
+            ("mild_gain", "降低 gain 减少与 original 的偏离。"),
+            ("mild_max_drift", "降低 max_drift 让候选不偏离 baseline。"),
+            ("max_candidate_level", "降低封顶（如 medium → mild），过滤掉过强候选。"),
+            ("min_segment_length", "min_seg 问题：检查 ds 与本参数比例。"),
+        ))
+
+    # geometry / OSCRS 模式：mild 通过 gate 但 selector 仍选 original = SAFE mild 下
+    # geometry-only score 认为 mild 无收益。这是 condition 设计上可保留的诊断结果，
+    # 不建议改 selector 语义"不许选 original"——那会把 TUNED 变成 FIXED 的变体，
+    # 丢失 selector baseline 的意义。
+    if (mode in ("georef", "oscrs")
+            and args.require_non_original
+            and non_original_count == 0
+            and mild_accepted):
+        suggestions.append(_hint_block(
+            "selector 选了 original 而非 mild — mild 通过 gate 但 geometry-only score "
+            "在 SAFE mild 下认为 mild 无收益。若必须让 selector 选 mild，只能强化 mild 的几何差异：",
+            ("mild_iters", "提升迭代次数（同时会增加与 original 的偏离）。"),
+            ("mild_gain", "提升 gain。"),
+            ("mild_max_drift", "放宽 max_drift（同时监控 ay 不超）。"),
+        ))
+        suggestions.append(
+            "推荐：把当前结果当作 'SAFE mild 下 geometry-only selector 倾向 original' 的诊断证据保留，"
+            "不要为通过 --require-non-original 而调 mild 参数；先把 RAW vs FIXED_MILD 的主验证线跑出来。"
+        )
 
     if mode == "fixed" and args.require_non_original and non_original_count <= 0:
-        suggestions.append("fixed candidate 没接管：先看候选拒绝原因；若是 collision/no_costmap/frame_mismatch，修 costmap；若是 ay，放宽 ay_ratio_limit；若是 drift/endpoint/direction，降低 gain/max_drift。")
+        suggestions.append(_hint_block(
+            "fixed candidate 没接管 — 先看候选拒绝原因：",
+            ("fixed_candidate_name", "确认本 launch 设的候选名是否被 gate 直接 reject（看 last_candidate_reasons）。"),
+            ("ay_ratio_limit", "若被 ay 拦：临时放宽。"),
+            ("collision_threshold", "若被 collision 拦：阈值上调到 90/100。"),
+        ))
 
     if mode == "oscrs":
         if active_count <= 0:
-            suggestions.append("OSCRS 没 active：检查 oscrs_active_enable:=true，确认使用 GEOREF_OSCRS_ACTIVE_REAL 启动段。")
+            suggestions.append(_hint_block(
+                "OSCRS 没 active：",
+                ("oscrs_active_enable", "确认 launch 命令传了 :=true（GEOREF_OSCRS_ACTIVE_REAL 段）。"),
+                ("oscrs_shadow_enable", "active 通常需要 shadow 同时为 true。"),
+            ))
         if fb_values and set(fb_values) == {"3"}:
-            suggestions.append("fb=3 表示无可用几何候选：先修 ay_ratio_limit/costmap/geometry gate，OSCRS score 暂时不用调。")
+            suggestions.append(_hint_block(
+                "fb=3 表示无可用几何候选 — 先修几何 gate，不要先调 OSCRS score：",
+                ("ay_ratio_limit", "若是 ay 全 reject：临时放宽到 3.0。"),
+                ("collision_threshold", "若是 collision：阈值上调。"),
+                ("max_candidate_level", "若是 level cap：放开到 medium 看候选集是否变充裕。"),
+            ))
         elif fb_values and "2" in fb_values:
-            suggestions.append("fb=2 表示几何可行但 slosh hard gate 失败：先检查 oscrs.eta_lim_mm、residual_ratio、height_coeff_mode，不要直接调 score。")
+            sH_summary = _latest_sH_summary(data)
+            extra = f"  本包候选 sH = [{sH_summary}]" if sH_summary else ""
+            suggestions.append(_hint_block(
+                "fb=2 表示几何可行但 slosh hard gate 失败 — 不要直接调 score。" + extra,
+                ("oscrs.eta_lim_mm", "由 25 临时放到 40 (留 mild 5-10mm 余量)，先看能否产生 fb=0；正式包再回收。"),
+                ("oscrs.residual_ratio", "默认 0.2 (Ferrari)；除非 sHr 主导否则不动。"),
+                ("oscrs.height_coeff_mode", "若 observer_linear 与实测明显不符再换模式。"),
+                ("max_candidate_level", "SAFE mild 候选不足时可临时 → medium，但需复核 medium 在你场地不会过冲。"),
+            ))
+            suggestions.append(
+                "约束：不要降低 prediction_v_max 来救 OSCRS — rollout 与 MPC 真实速度上限口径必须一致，"
+                "压低 rollout 速度会让 hard gate 自欺，实车不一定真的低晃。"
+            )
         elif fb_values and "1" in fb_values:
-            suggestions.append("fb=1 表示只有 original slosh-safe：候选集可能饱和或太弱，先看候选 slosh 指标，再考虑加强 GeoRef 或调 eta_lim。")
+            suggestions.append(_hint_block(
+                "fb=1 表示只有 original slosh-safe — 候选集饱和或太弱：",
+                ("max_candidate_level", "若 SAFE mild 下饱和，可临时放到 medium。"),
+                ("oscrs.eta_lim_mm", "若希望让更多候选通过 hard gate 才能放宽 eta_lim。"),
+                ("mild_gain", "提升 mild 强度，但会使 mild 偏离 original 更多。"),
+            ))
         if args.require_takeover and takeover_count <= 0:
-            suggestions.append("需要 takeover 但 takeover=0：OSCRS 与 geometry selector 选同一路径或回退；先确认 --require-non-original 通过，再看 score 权重。")
+            suggestions.append(
+                "需要 takeover 但 takeover=0：OSCRS 与 geometry selector 选了同一路径或回退；"
+                "先确认 --require-non-original 通过，再看 OSCRS score 权重 "
+                f"({PKG_REL_ROOT}/config/oscrs_container.yaml slosh_score.score.*)."
+            )
 
     if data["safety_alarm"] > 0:
-        suggestions.append("有 safety_alarm：该包不要进正式有效性统计；先看 fb/reject reason，修 gate 后重录。")
+        suggestions.append("有 safety_alarm：该包不要进正式有效性统计；先看 fb/reject reason，按上面定位修 gate 后重录。")
 
     if not suggestions and not failures:
         if mode == "raw":

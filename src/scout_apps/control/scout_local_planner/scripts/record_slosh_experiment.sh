@@ -74,6 +74,10 @@
 #                /terminal/mode
 #                /terminal/recovery_latched
 #                /terminal/goal_info
+#   - 定位漂移排查：
+#                /amcl_pose, /particlecloud
+#                /tracked_pose, /submap_list, /trajectory_node_list
+#                /diagnostics, /rosout
 #   - TF：      /tf, /tf_static
 #   - 仿真时钟：/clock（仿真时存在，实物可忽略）
 #
@@ -247,6 +251,19 @@ TOPICS=(
     /terminal/mode
     /terminal/recovery_latched
     /terminal/goal_info
+
+    # 定位漂移 / scan-map mismatch 排查
+    # AMCL 常用输出
+    /amcl_pose
+    /particlecloud
+    # Cartographer 常用输出（不存在时 rosbag 自动跳过）
+    /tracked_pose
+    /submap_list
+    /trajectory_node_list
+    # ROS warning / driver diagnostics
+    /diagnostics
+    /diagnostics_agg
+    /rosout
 
     # 仿真时钟（实物环境无此话题也不影响录制）
     /clock
