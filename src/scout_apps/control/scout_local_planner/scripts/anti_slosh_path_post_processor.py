@@ -13,7 +13,7 @@ import math
 
 import rospy
 import yaml
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Quaternion
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import Path as NavPath
 from std_msgs.msg import Float32MultiArray, MultiArrayDimension, String
@@ -77,7 +77,16 @@ def direction_preserved(points, reference):
     return ax * bx + ay * by >= 0.0
 
 
-def path_to_msg(points, header):
+def copy_orientation(orientation):
+    q = Quaternion()
+    q.x = orientation.x
+    q.y = orientation.y
+    q.z = orientation.z
+    q.w = orientation.w
+    return q
+
+
+def path_to_msg(points, header, endpoint_orientations=None):
     msg = NavPath()
     msg.header = header
     msg.poses = []
@@ -87,6 +96,15 @@ def path_to_msg(points, header):
         pose.pose.position.x = point[0]
         pose.pose.position.y = point[1]
         pose.pose.position.z = 0.0
+        if endpoint_orientations and i == 0:
+            pose.pose.orientation = copy_orientation(endpoint_orientations[0])
+            msg.poses.append(pose)
+            continue
+        if endpoint_orientations and i == len(points) - 1:
+            pose.pose.orientation = copy_orientation(endpoint_orientations[1])
+            msg.poses.append(pose)
+            continue
+
         if i + 1 < len(points):
             yaw = math.atan2(points[i + 1][1] - point[1], points[i + 1][0] - point[0])
         elif i > 0:
@@ -752,12 +770,18 @@ class AntiSloshPathPostProcessor:
         if not header.frame_id:
             header.frame_id = "map"
         header.stamp = rospy.Time.now()
+        endpoint_orientations = None
+        if raw_msg.poses:
+            endpoint_orientations = (
+                raw_msg.poses[0].pose.orientation,
+                raw_msg.poses[-1].pose.orientation,
+            )
 
         if self.publish_debug:
             for row, points in rows:
                 pub = self.debug_pubs.get(row["name"])
                 if pub and pub.get_num_connections() > 0:
-                    pub.publish(path_to_msg(points, header))
+                    pub.publish(path_to_msg(points, header, endpoint_orientations))
 
         if best_row["name"] == "original":
             out_msg = raw_msg
@@ -766,7 +790,7 @@ class AntiSloshPathPostProcessor:
                 out_msg.header.frame_id = header.frame_id
             self.path_pub.publish(out_msg)
         else:
-            self.path_pub.publish(path_to_msg(best_points, header))
+            self.path_pub.publish(path_to_msg(best_points, header, endpoint_orientations))
         self.publish_metrics(best_row, rows)
         self.publish_candidate_report(rows, best_row, geometry_best[0], oscrs_best[0] if oscrs_best else None)
         rospy.loginfo_throttle(
