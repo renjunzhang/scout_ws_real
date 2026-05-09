@@ -13,7 +13,7 @@ Examples:
   # Takeover smoke after relaxing ay_ratio_limit: must publish non-original.
   python3 validate_georef_oscrs_bag.py bag.bag --mode oscrs --require-non-original
 
-  # Strong fixed baseline smoke: must select strong or another non-original.
+  # Fixed baseline smoke: must select the configured non-original candidate.
   python3 validate_georef_oscrs_bag.py bag.bag --mode fixed --require-non-original
 """
 
@@ -177,8 +177,8 @@ def validate(mode, data, args):
 
     if mode == "fixed":
         selected = {row.get("selected", "missing") for row in reports}
-        if "strong" not in selected and args.require_non_original:
-            failures.append("fixed strong smoke did not select strong/non-original")
+        if not any(item not in ("", None, "original", "missing") for item in selected) and args.require_non_original:
+            failures.append("fixed candidate smoke did not select a non-original candidate")
 
     if mode == "oscrs":
         if report_count and active_count != report_count:
@@ -259,8 +259,8 @@ def diagnose(mode, data, failures, warnings, args):
     if any(key in reject_counts for key in ("drift", "length", "short", "direction", "endpoint", "min_seg")):
         suggestions.append("几何候选被基础 gate 拒绝：调小 smoothing gain/drift，或降低 max_candidate_level；min_seg 问题可检查 ds/min_segment_length。")
 
-    if mode == "fixed" and args.require_non_original and "strong" not in selected:
-        suggestions.append("fixed strong 没接管：优先放宽 ay_ratio_limit；若 strong 仍被 geometry gate 拒绝，降低 strong_gain/strong_max_drift。")
+    if mode == "fixed" and args.require_non_original and non_original_count <= 0:
+        suggestions.append("fixed candidate 没接管：先看候选拒绝原因；若是 collision/no_costmap/frame_mismatch，修 costmap；若是 ay，放宽 ay_ratio_limit；若是 drift/endpoint/direction，降低 gain/max_drift。")
 
     if mode == "oscrs":
         if active_count <= 0:
@@ -321,6 +321,23 @@ def print_summary(path, mode, data, failures, warnings):
                 for key in ("selected", "geo", "oscrs", "active", "fallback", "fb", "takeover")
             )
         )
+    reject_counts = candidate_reject_reasons(data)
+    if reject_counts:
+        print(f"reject_reason_counts={reject_counts}")
+    if data["candidate_rows"]:
+        last_rows = data["candidate_rows"][-1]
+        compact = []
+        for name in ("original", "mild", "medium", "mid", "strong"):
+            if name not in last_rows:
+                continue
+            row = last_rows[name]
+            compact.append(
+                "{}:accepted={},reason={}".format(
+                    name, row.get("accepted", "?"), row.get("reason", "?")
+                )
+            )
+        if compact:
+            print("last_candidate_reasons=" + " | ".join(compact))
     if h:
         rms = math.sqrt(statistics.mean(v * v for v in h))
         print(f"height_rms={rms:.6g} height_p95={percentile(h,95):.6g} height_max={max(h):.6g}")
