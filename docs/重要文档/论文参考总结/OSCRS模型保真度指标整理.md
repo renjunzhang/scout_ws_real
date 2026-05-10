@@ -12,21 +12,21 @@
 
 主指标：
 
-```text
-gamma_model_pct =
-  100 * integral [H_model(t) - H_vis(t)] dt
-      / (integral H_model(t) dt + epsilon)
-```
+$$
+\gamma_{\text{model\%}} = 100 \cdot \frac{\int [H_{\text{model}}(t) - H_{\text{vis}}(t)] \, dt}{\int H_{\text{model}}(t) \, dt + \epsilon}
+$$
 
 辅助指标：
 
-```text
-RMSE
-correlation
-e_p95  = model_p95  - visual_p95
-e_peak = model_peak - visual_peak
-e_rms  = model_rms  - visual_rms
-```
+$$
+\begin{aligned}
+\text{RMSE} \\
+\text{correlation} \\
+e_{p95} &= \text{model\_p95} - \text{visual\_p95} \\
+e_{\text{peak}} &= \text{model\_peak} - \text{visual\_peak} \\
+e_{\text{rms}} &= \text{model\_rms} - \text{visual\_rms}
+\end{aligned}
+$$
 
 解释：
 
@@ -44,18 +44,18 @@ gamma_model_pct < 0: 模型整体低估，安全风险较高
 
 主指标：
 
-```text
-A_rank =
-  count{pair: sign(model_diff) == sign(visual_diff)}
-  / count{all pairs}
-```
+$$
+A_{\text{rank}} = \frac{\#\{\text{pair}: \operatorname{sign}(\text{model\_diff}) = \operatorname{sign}(\text{visual\_diff})\}}{\#\{\text{all pairs}\}}
+$$
 
 推荐使用 `p95` 作为主排序指标：
 
-```text
-visual_diff = visual_p95_B - visual_p95_A
-model_diff  = model_p95_B  - model_p95_A
-```
+$$
+\begin{aligned}
+\text{visual\_diff} &= \text{visual\_p95}_B - \text{visual\_p95}_A \\
+\text{model\_diff} &= \text{model\_p95}_B - \text{model\_p95}_A
+\end{aligned}
+$$
 
 解释：
 
@@ -73,20 +73,20 @@ A_rank < 0.50: 不足以指导候选选择
 
 主指标：
 
-```text
-U_p95  = max(0, visual_p95  - model_p95)
-U_peak = max(0, visual_peak - model_peak)
-U_max  = max_t [H_vis(t) - H_model(t)]_+
-r_under = count{t: H_model(t) < H_vis(t)} / count{t}
-```
+$$
+\begin{aligned}
+U_{p95} &= \max(0,\ \text{visual\_p95} - \text{model\_p95}) \\
+U_{\text{peak}} &= \max(0,\ \text{visual\_peak} - \text{model\_peak}) \\
+U_{\max} &= \max_t\, [H_{\text{vis}}(t) - H_{\text{model}}(t)]_+ \\
+r_{\text{under}} &= \frac{\#\{t: H_{\text{model}}(t) < H_{\text{vis}}(t)\}}{\#\{t\}}
+\end{aligned}
+$$
 
 若视觉液面存在超过 `eta_lim` 的片段，计算：
 
-```text
-violation_recall =
-  count{t: H_vis(t) > eta_lim and H_model(t) > eta_lim}
-  / count{t: H_vis(t) > eta_lim}
-```
+$$
+\text{violation\_recall} = \frac{\#\{t: H_{\text{vis}}(t) > \eta_{\lim} \land H_{\text{model}}(t) > \eta_{\lim}\}}{\#\{t: H_{\text{vis}}(t) > \eta_{\lim}\}}
+$$
 
 若当前视觉幅值远低于 `eta_lim`，固定阈值 recall 没有信息量，应做 threshold sweep：
 
@@ -99,24 +99,26 @@ tau = 0.5, 1.0, 1.5, 2.0, 3.0, 4.0 mm
 
 主视觉真值：
 
-```text
-h_final = median(h_left, h_center, h_right)
-h_corr = h_final - h0
-h_smooth_corr = rolling_median(h_corr, window=5)
-H_vis(t) = abs(h_smooth_corr(t))
-```
+$$
+\begin{aligned}
+h_{\text{final}} &= \operatorname{median}(h_{\text{left}}, h_{\text{center}}, h_{\text{right}}) \\
+h_{\text{corr}} &= h_{\text{final}} - h_0 \\
+h_{\text{smooth\_corr}} &= \operatorname{rolling\_median}(h_{\text{corr}},\ \text{window}=5) \\
+H_{\text{vis}}(t) &= |h_{\text{smooth\_corr}}(t)|
+\end{aligned}
+$$
 
 安全峰值辅证：
 
-```text
-H_vis_max(t) = max(h_left - h0_left, h_center - h0_center, h_right - h0_right)
-```
+$$
+H_{\text{vis\_max}}(t) = \max(h_{\text{left}} - h_{0,\text{left}},\ h_{\text{center}} - h_{0,\text{center}},\ h_{\text{right}} - h_{0,\text{right}})
+$$
 
 如果只有统一零点 `h0`，可退化为：
 
-```text
-H_vis_max(t) = max(h_left, h_center, h_right) - h0
-```
+$$
+H_{\text{vis\_max}}(t) = \max(h_{\text{left}}, h_{\text{center}}, h_{\text{right}}) - h_0
+$$
 
 注意：`h_max_lcr = max(h_left, h_center, h_right)` 本身不是零点校正后的晃动幅值。用于 safety peak 前必须转成相对初始液位。
 
@@ -145,9 +147,11 @@ pair_dt_p95_ms
 
 直接用 `sign(diff)` 容易被很小的数值噪声影响。建议加入死区：
 
-```text
-sign_eps = 0.05 mm 或 0.10 mm
+$$
+\varepsilon_{\text{sign}} = 0.05\ \text{mm}\ \text{或}\ 0.10\ \text{mm}
+$$
 
+```text
 if abs(diff) < sign_eps:
     sign = 0
 else:
@@ -256,17 +260,18 @@ docs/Claude/分析数据/phase4_visual_20260509/phase4_runwise_effect_summary_04
 
 固定口径：
 
-```text
-H_vis(t) = abs(h_smooth_corr(t))
-H_model(t) = /slosh/height(t) * 1000  # m -> mm
-```
+$$
+\begin{aligned}
+H_{\text{vis}}(t) &= |h_{\text{smooth\_corr}}(t)| \\
+H_{\text{model}}(t) &= \text{/slosh/height}(t) \times 1000 \quad \text{(m} \to \text{mm)}
+\end{aligned}
+$$
 
 时间窗口：
 
-```text
-t0 = tracking_start
-t1 = tracking_end + 2s
-```
+$$
+t_0 = t_{\text{tracking\_start}}, \quad t_1 = t_{\text{tracking\_end}} + 2\text{s}
+$$
 
 如果没有可靠 `tracking_end`，就使用 `tracking_start` 后全部有效样本。`tracking_start` 从 `/mpc_status == TRACKING` 的第一个时间戳获取；没有该话题时退化为 `bag_start`，但报告必须注明。
 
@@ -323,23 +328,19 @@ under_ratio
 
 计算公式：
 
-```text
-gamma_model_pct =
-  100 * trapz(H_model - H_vis, t)
-      / (trapz(H_model, t) + epsilon)
-
-rmse_mm = sqrt(mean((H_model - H_vis)^2))
-corr = pearson_corr(H_model, H_vis)
-
-e_p95 = model_p95 - visual_p95
-U_p95 = max(0, visual_p95 - model_p95)
-
-e_peak = model_peak - visual_peak
-U_peak = max(0, visual_peak - model_peak)
-
-U_max = max_t [H_vis(t) - H_model(t)]_+
-under_ratio = mean(H_model(t) < H_vis(t))
-```
+$$
+\begin{aligned}
+\gamma_{\text{model\%}} &= 100 \cdot \frac{\operatorname{trapz}(H_{\text{model}} - H_{\text{vis}},\ t)}{\operatorname{trapz}(H_{\text{model}},\ t) + \epsilon} \\[6pt]
+\text{rmse\_mm} &= \sqrt{\overline{(H_{\text{model}} - H_{\text{vis}})^2}} \\
+\text{corr} &= \rho(H_{\text{model}},\ H_{\text{vis}}) \\[6pt]
+e_{p95} &= \text{model\_p95} - \text{visual\_p95} \\
+U_{p95} &= \max(0,\ \text{visual\_p95} - \text{model\_p95}) \\[6pt]
+e_{\text{peak}} &= \text{model\_peak} - \text{visual\_peak} \\
+U_{\text{peak}} &= \max(0,\ \text{visual\_peak} - \text{model\_peak}) \\[6pt]
+U_{\max} &= \max_t\, [H_{\text{vis}}(t) - H_{\text{model}}(t)]_+ \\
+r_{\text{under}} &= \overline{H_{\text{model}}(t) < H_{\text{vis}}(t)}
+\end{aligned}
+$$
 
 建议输出文件名：
 
@@ -371,9 +372,9 @@ OSCRS_MEDIUM_ACTIVE - FIXED_MILD
 
 死区：
 
-```text
-sign_eps = 0.05 mm 或 0.10 mm
-```
+$$
+\varepsilon_{\text{sign}} = 0.05\ \text{mm}\ \text{或}\ 0.10\ \text{mm}
+$$
 
 判定：
 
@@ -388,9 +389,9 @@ sign_match = sign(model_diff) == sign(visual_diff)
 
 `A_rank`：
 
-```text
-A_rank = count(sign_match == yes) / count(non-ambiguous pairs)
-```
+$$
+A_{\text{rank}} = \frac{\#\{\text{sign\_match} = \text{yes}\}}{\#\{\text{non-ambiguous pairs}\}}
+$$
 
 建议输出文件名：
 
@@ -404,8 +405,11 @@ model_selection_fidelity.csv
 
 ```text
 violation_recall at eta_lim
-false_safe_count = count{H_vis > eta_lim and H_model <= eta_lim}
 ```
+
+$$
+\text{false\_safe\_count} = \#\{H_{\text{vis}} > \eta_{\lim} \land H_{\text{model}} \leq \eta_{\lim}\}
+$$
 
 若视觉幅值远低于 `eta_lim`，不要强行解释 `eta_lim recall`，改做 sweep：
 
@@ -416,13 +420,14 @@ tau_mm = 0.5, 1.0, 1.5, 2.0, 3.0, 4.0
 
 每个阈值输出：
 
-```text
-tau_mm
-true_high_count = count{H_vis > tau}
-model_detect_count = count{H_vis > tau and H_model > tau}
-recall = model_detect_count / true_high_count
-false_safe_count = count{H_vis > tau and H_model <= tau}
-```
+$$
+\begin{aligned}
+\text{true\_high\_count} &= \#\{H_{\text{vis}} > \tau\} \\
+\text{model\_detect\_count} &= \#\{H_{\text{vis}} > \tau \land H_{\text{model}} > \tau\} \\
+\text{recall} &= \frac{\text{model\_detect\_count}}{\text{true\_high\_count}} \\
+\text{false\_safe\_count} &= \#\{H_{\text{vis}} > \tau \land H_{\text{model}} \leq \tau\}
+\end{aligned}
+$$
 
 建议输出文件名：
 
