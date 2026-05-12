@@ -2,6 +2,103 @@
 
 本目录存放 `scout_local_planner` 相关的实验辅助脚本，主要用于固定目标/固定路径实验、录包、离线指标提取，以及 IMU 标定验证。
 
+目录整理后的原则：
+
+```text
+scripts/                       # 现场高频入口和 rosrun 入口
+scripts/oscrs/                 # OSCRS 在线选择器核心：G/F/R/S/diagnostics
+scripts/reference_generation/  # 路径/轨迹参考生成库
+scripts/analysis/              # 低频离线分析、历史诊断和论文指标脚本
+```
+
+如果旧文档中写的是 `scripts/<name>.py`，而本 README 标注为 `analysis/<name>.py`，以后以本 README 为准。
+
+## 当前脚本路径总表
+
+### 根目录入口脚本
+
+这些脚本保留在 `scripts/` 根目录，优先作为现场运行、仿真、录包、验收和高频分析入口。
+
+| 路径 | 作用 |
+|---|---|
+| `scripts/anti_slosh_path_post_processor.py` | Online GeoRef / OSCRS path post-processor ROS 节点 |
+| `scripts/launch_sim_nav_stack.sh` | 启动仿真世界、定位、MBF 全局规划器；不启动 local planner，不录 bag |
+| `scripts/run_sim_fixed_path_bag.sh` | 单次仿真 trial + local planner + 路径/目标发布 + rosbag 录制 |
+| `scripts/record_slosh_experiment.sh` | 实物/仿真通用正式录包脚本 |
+| `scripts/record_slosh_debug.sh` | 实物轻量调试录包脚本 |
+| `scripts/send_fixed_goal.py` | 向 `/scout/goal` 重复发布同一个 PoseStamped |
+| `scripts/fixed_global_path_runner.py` | 固定 `/scout/global_path` 的采集与 JSON replay |
+| `scripts/template_fixed_path_generator.py` | 从当前位姿到 goal 生成模板固定路径 |
+| `scripts/validate_georef_oscrs_bag.py` | 单包行为验收：RAW / GeoRef / fixed / OSCRS 是否按预期接管 |
+| `scripts/check_oscrs_takeover.py` | 汇总 OSCRS active/takeover/fallback/fb 分布 |
+| `scripts/check_oscrs_model_consistency.py` | 检查 OSCRS rollout 与 `/slosh/height` 的一致性 |
+| `scripts/extract_slosh_metrics.py` | 主指标提取：height / eta_dot / energy / tracking / solver |
+| `scripts/analyze_oscrs_candidates.py` | 离线复算 OSCRS 候选 feasible / score / fallback |
+| `scripts/analyze_slosh_peak_precursors.py` | 峰值前激励窗口分析 |
+| `scripts/analyze_day3_abc_smoke.py` | Day3 A/B/C smoke 对比 |
+| `scripts/imu_ay_tool.py` | IMU 横向加速度动作、分析、标定 |
+| `scripts/run_imu_stage4_sequence.py` | IMU alpha_z 原地旋转动作 |
+| `scripts/launch_fixed_path_slosh_stack.sh` | 实物固定路径 slosh 链路一键启动 |
+| `scripts/run_day4_profile.sh` | Day4 profile 参数组 wrapper |
+| `scripts/diagnose_georef_budget_gap.py` | GeoRef budget / execution gap 诊断 |
+| `scripts/diagnose_reference_execution_chain.py` | reference 执行链路诊断 |
+| `scripts/diagnose_slosh_guided_georef_score.py` | slosh-guided GeoRef score 诊断 |
+| `scripts/evaluate_anti_slosh_path_candidates.py` | 离线候选路径评价 |
+| `scripts/optimize_anti_slosh_reference.py` | 低激励参考优化历史入口 |
+| `scripts/sweep_anti_slosh_timing_candidates.py` | timing candidate sweep |
+| `scripts/sweep_p3_geometry_candidates.py` | P3 几何 candidate sweep |
+| `scripts/test_candidate_generators_equivalence.py` | GeoRef 候选生成等价性测试 |
+| `scripts/candidate_generators.py` | 旧 import 兼容 shim，转到 `reference_generation/candidate_generators.py` |
+| `scripts/generate_anti_slosh_path_candidates.py` | 旧 CLI/import 兼容 shim，转到 `reference_generation/geometry_candidates.py` |
+
+### OSCRS 核心模块
+
+这些不是直接运行入口，主要被 `anti_slosh_path_post_processor.py` 调用。
+
+| 路径 | 作用 |
+|---|---|
+| `scripts/oscrs/pipeline.py` | G→F→R→S 纯编排器 |
+| `scripts/oscrs/feasibility.py` | F 层：几何 / collision / ay gate |
+| `scripts/oscrs/slosh_rollout.py` | R 层：速度 rollout + 二阶 slosh ODE 指标 |
+| `scripts/oscrs/selector.py` | S 层：hard gate / score / OSCRS selection / fixed candidate |
+| `scripts/oscrs/diagnostics.py` | candidate_report / safety_alarm / metrics 格式化 |
+| `scripts/oscrs/path_utils.py` | 纯几何小工具 |
+| `scripts/oscrs/types.py` | dataclass 接口文档和后续类型迁移锚点 |
+| `scripts/oscrs/generators/georef.py` | 当前 G 实例：GeoRef candidate wrapper |
+
+### 路径/轨迹参考生成库
+
+| 路径 | 作用 |
+|---|---|
+| `scripts/reference_generation/geometry_candidates.py` | GeoRef 平滑、路径采样、曲率/几何指标、离线 candidate 生成 |
+| `scripts/reference_generation/candidate_generators.py` | 在线 G 层候选生成接口，当前实例为 GeoRef smoothing |
+
+### 低频离线分析与历史诊断
+
+| 路径 | 作用 |
+|---|---|
+| `scripts/analysis/compute_modal_params.py` | 根据容器/液位/液体参数重算模态派生量 |
+| `scripts/analysis/ferrari_oracle.py` | Ferrari assigned-path time-optimal oracle 离线工具 |
+| `scripts/analysis/compute_ferrari_indices.py` | Ferrari 风格模型/视觉/优化指标 |
+| `scripts/analysis/extract_visual_height.py` | RealSense 侧视视觉液面高度骨架 |
+| `scripts/analysis/check_time_sync.py` | `/slosh/height` 与图像时间戳同步检查 |
+| `scripts/analysis/summarize_oscrs_step2.py` | OSCRS Step 2 PASS / SATURATED / FAIL 汇总 |
+| `scripts/analysis/offline_pmg_replay.py` | PMG 历史离线 replay |
+| `scripts/analysis/diagnose_p3_failure_modes.py` | P3 failure mode 历史诊断 |
+| `scripts/analysis/diagnose_real_tuning.py` | 实物 bag 调参诊断 |
+| `scripts/analysis/diagnose_speed_profile.py` | 速度剖面限速来源诊断 |
+| `scripts/analysis/analyze_path_geometry_slosh_triggers.py` | 路径几何与 slosh 触发关系分析 |
+| `scripts/analysis/analyze_global_path_duplicates.py` | 全局路径重复点/极短段检查 |
+| `scripts/analysis/analyze_global_path_prefix_window.py` | 全局路径前缀窗口几何检查 |
+| `scripts/analysis/analyze_tracking_infeasible.py` | TRACKING 阶段 infeasible 根因分析 |
+| `scripts/analysis/analyze_sim_speed_issue.py` | 仿真速度偏慢分析 |
+| `scripts/analysis/analyze_settling_day3.py` | Day3 settling 验证 |
+| `scripts/analysis/observe_terminal_recovery.py` | terminal recovery 在线/回放观察 |
+| `scripts/analysis/sim_fixed_goal_tool.py` | 仿真固定 goal capture/show/replay |
+| `scripts/analysis/trajectory_analysis.py` | 实物/仿真执行轨迹几何分析 |
+| `scripts/analysis/mpc_bug_analysis.py` | MPC 历史 bug 分析 |
+| `scripts/analysis/validate_sim_imu.py` | 仿真 IMU 话题在线验收 |
+
 ## 分类索引
 
 当前主线是：
@@ -39,13 +136,13 @@ validate_georef_oscrs_bag.py
 analyze_oscrs_candidates.py
   离线复算候选路径的 OSCRS 指标，输出每个 candidate 的 feasible / score / fallback 依据。
 
-summarize_oscrs_step2.py
+analysis/summarize_oscrs_step2.py
   汇总 OSCRS Step 2 判据，生成 PASS / SATURATED / FAIL 结论。
 
 check_oscrs_model_consistency.py
   检查 OSCRS 预测高度与 bag 中 /slosh/height 的一致性。
 
-compute_modal_params.py
+analysis/compute_modal_params.py
   换容器/液位/液体后，重算 omega_n / height_coeff / Ferrari zeta，
   并同步 config/oscrs_container.yaml。
 ```
@@ -100,21 +197,35 @@ template_fixed_path_generator.py
   适合重复跑 P2/P3 和旧方案消融。
 ```
 
-### C. Ferrari / RA-L 离线参考与视觉指标
+### C. 路径/轨迹参考生成库
 
 ```text
-ferrari_oracle.py
+reference_generation/geometry_candidates.py
+  GeoRef 几何候选生成、曲率/路径指标、离线 candidate JSON 生成。
+
+reference_generation/candidate_generators.py
+  在线 G 层候选生成接口，当前实例为 GeoRef smoothing。
+
+candidate_generators.py
+generate_anti_slosh_path_candidates.py
+  根目录兼容 shim，保留旧 import / rosrun 路径。
+```
+
+### D. Ferrari / RA-L 离线参考与视觉指标
+
+```text
+analysis/ferrari_oracle.py
   Ferrari 2026 RA-L assigned-path time-optimal oracle 的 Scout 改写。
   当前作为离线上界/参考工具，不进入在线控制链。
 
-compute_ferrari_indices.py
+analysis/compute_ferrari_indices.py
   计算 Ferrari 风格指标，可接 /slosh/h_visual topic 或 RGB 离线 CSV。
 
-extract_visual_height.py
+analysis/extract_visual_height.py
   RealSense 侧视 + ArUco + Canny/Hough 的视觉液面高度骨架。
   当前主要作为实物 D5 视觉 GT 管线骨架。
 
-check_time_sync.py
+analysis/check_time_sync.py
   检查 /slosh/height 与图像时间戳配对质量。
 ```
 
@@ -125,7 +236,7 @@ check_time_sync.py
 ../config/visual_height.yaml
 ```
 
-### D. 指标提取与历史分析
+### E. 指标提取与历史分析
 
 ```text
 extract_slosh_metrics.py
@@ -133,25 +244,25 @@ extract_slosh_metrics.py
   solve_success_ratio 等。
 
 analyze_slosh_peak_precursors.py
-analyze_path_geometry_slosh_triggers.py
+analysis/analyze_path_geometry_slosh_triggers.py
 diagnose_reference_execution_chain.py
 diagnose_georef_budget_gap.py
 diagnose_slosh_guided_georef_score.py
   GeoRef/旧方案失效分析脚本。
 
-offline_pmg_replay.py
-diagnose_p3_failure_modes.py
+analysis/offline_pmg_replay.py
+analysis/diagnose_p3_failure_modes.py
   PMG / P3 failure history 分析，当前不是主线控制器。
 ```
 
-### E. IMU / 旧阶段诊断
+### F. IMU / 旧阶段诊断
 
 ```text
 imu_ay_tool.py
-validate_sim_imu.py
+analysis/validate_sim_imu.py
 analyze_day3_abc_smoke.py
-analyze_settling_day3.py
-diagnose_real_tuning.py
+analysis/analyze_settling_day3.py
+analysis/diagnose_real_tuning.py
 ```
 
 这些脚本仍可用于 IMU 标定、settling 状态机和旧风险调度器分析，但不属于当前 GeoRef/OSCRS 主表。
@@ -166,7 +277,7 @@ diagnose_real_tuning.py
 - 手动触发一次固定终点跟踪
 - 做对照实验时保证 goal pose 一致
 
-### `sim_fixed_goal_tool.py`
+### `analysis/sim_fixed_goal_tool.py`
 
 仿真专用固定 goal 工具，支持：
 - `capture`：抓取当前 `/scout/goal` 并保存为 JSON
@@ -271,7 +382,7 @@ GLOBAL_PATH_TOPIC=/scout/global_path_fixed rosrun scout_local_planner launch_fix
 - 录制 Q0/Q5 对照 bag
 - 录制 IMU 标定或终点恢复行为分析 bag
 
-### `compute_modal_params.py`
+### `analysis/compute_modal_params.py`
 
 OSCRS / Ferrari 模型参数一致性工具。换容器、换液位或换液体后，用这个脚本从一手物理量重算模态派生量，并同步 `config/oscrs_container.yaml`。
 
@@ -290,14 +401,14 @@ OSCRS / Ferrari 模型参数一致性工具。换容器、换液位或换液体�
 只检查当前 `oscrs_container.yaml` 是否与物理量一致，不写文件：
 
 ```bash
-python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.py \
+python3 src/scout_apps/control/scout_local_planner/scripts/analysis/compute_modal_params.py \
   --yaml src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml
 ```
 
 临时指定一组新容器 / 液体参数，只打印派生量：
 
 ```bash
-python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.py \
+python3 src/scout_apps/control/scout_local_planner/scripts/analysis/compute_modal_params.py \
   --R 0.025 \
   --h 0.070 \
   --rho 900 \
@@ -307,7 +418,7 @@ python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.
 手工修改 `oscrs_container.yaml` 中的 `slosh.container_radius / liquid_height / liquid_density / liquid_dynamic_viscosity` 后，同步写回派生量：
 
 ```bash
-python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.py \
+python3 src/scout_apps/control/scout_local_planner/scripts/analysis/compute_modal_params.py \
   --yaml src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml \
   --write
 ```
@@ -321,7 +432,7 @@ python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.
 如果要做 Ferrari 物理阻尼 ablation，可显式写回：
 
 ```bash
-python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.py \
+python3 src/scout_apps/control/scout_local_planner/scripts/analysis/compute_modal_params.py \
   --yaml src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml \
   --write \
   --write-zeta-ferrari
@@ -330,7 +441,7 @@ python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.
 如需保留原文件，只导出派生量块：
 
 ```bash
-python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.py \
+python3 src/scout_apps/control/scout_local_planner/scripts/analysis/compute_modal_params.py \
   --R 0.025 \
   --h 0.070 \
   --rho 900 \
@@ -346,12 +457,88 @@ python3 src/scout_apps/control/scout_local_planner/scripts/compute_modal_params.
 
 ### `run_sim_fixed_path_bag.sh`
 
-仿真固定路径单次 trial wrapper。脚本启动一次录制一个 bag，并按顺序完成：
-- 等待仿真/定位稳定
-- 启动 `rosbag record`
-- 用 `fixed_global_path_runner.py --mode replay --publish-once-keepalive` 发布指定固定路径
-- 启动 `slosh_experiment_sim.launch`
-- `Ctrl+C` 时停止 MPC、路径发布和录包
+路径：`scripts/run_sim_fixed_path_bag.sh`
+
+仿真单次 trial + 录包 wrapper。它不负责启动 Gazebo / Cartographer / MBF；这些应先由 `scripts/launch_sim_nav_stack.sh` 启动。该脚本负责在已有仿真导航栈上：
+- 按 `CONDITION` 启动 `slosh_experiment_sim.launch` 和可选 post-processor；
+- 按 `PATH_MODE` 发布固定轨迹、固定 goal 或模板路径；
+- 启动 `rosbag record`；
+- 生成标准化 bag 文件名；
+- `Ctrl+C` 或 `RECORD_DURATION` 到时停止本 trial 的 MPC、路径发布和录包。
+
+和 `launch_sim_nav_stack.sh` 的分工：
+
+```text
+launch_sim_nav_stack.sh:
+  启动仿真环境、定位、MBF 全局规划器。
+  长时间保持运行，一次启动后可跑多包。
+
+run_sim_fixed_path_bag.sh:
+  在已经启动好的仿真环境里跑一次实验 trial。
+  每执行一次生成一个 bag。
+```
+
+三种路径模式：
+
+```text
+PATH_MODE=global_goal
+  发布 /scout/goal，让 MBF 生成 /scout/global_path。
+  用于验证 Online GeoRef / OSCRS 接在真实全局规划器后面的链路。
+
+PATH_MODE=replay
+  读取 PATH_FILE 或 FIXED_PATH_DIR/PATH_ID.json，直接 replay 固定路径。
+  不经过 MBF 重新规划。
+  用于固定 P2/P3 或消融复现实验。
+
+PATH_MODE=template_goal
+  用 template_fixed_path_generator.py 从当前位姿到 goal 生成模板路径。
+  不是 MBF 全局路径。
+```
+
+仿真启动后，跑固定 goal / MBF 全局路径 trial：
+
+```bash
+source /home/a/scout_ws/devel/setup.bash
+
+PATH_MODE=global_goal \
+PATH_ID=open_custom_goal \
+CONDITION=GEOREF_OSCRS_ACTIVE \
+RUN_ID=active01 \
+START_DELAY=10 \
+RECORD_DURATION=0 \
+TEMPLATE_GOAL_X=-3.014343023300171 \
+TEMPLATE_GOAL_Y=2.987114429473877 \
+TEMPLATE_GOAL_QZ=0.9999403278718936 \
+TEMPLATE_GOAL_QW=0.010924316704027428 \
+rosrun scout_local_planner run_sim_fixed_path_bag.sh
+```
+
+仿真启动后，跑固定轨迹 replay trial：
+
+```bash
+source /home/a/scout_ws/devel/setup.bash
+
+PATH_MODE=replay \
+PATH_ID=P2_s_curve \
+CONDITION=GEOREF_OSCRS_ACTIVE \
+RUN_ID=active01 \
+START_DELAY=10 \
+RECORD_DURATION=0 \
+rosrun scout_local_planner run_sim_fixed_path_bag.sh
+```
+
+从 `config/scenarios.yaml` 读取 goal 的快捷写法：
+
+```bash
+source /home/a/scout_ws/devel/setup.bash
+
+SCENARIO=open_user_goal \
+CONDITION=GEOREF_OSCRS_ACTIVE \
+RUN_ID=active01 \
+START_DELAY=10 \
+RECORD_DURATION=0 \
+rosrun scout_local_planner run_sim_fixed_path_bag.sh
+```
 
 常用方式：
 ```bash
@@ -370,6 +557,11 @@ rosrun scout_local_planner run_sim_fixed_path_bag.sh
 - `PATH_PUBLISH_ONCE_KEEPALIVE`: 默认 `true`，只发布一次 latched 路径并保持发布者存活，避免重复触发 `PathHandler` 新路径逻辑
 - `FIXED_PATH_DIR`: 默认 `/data/a/fixed_paths/sim`
 - `BAG_DIR`: 默认 `/data/a/slosh_bags/sim/YYYYMMDD`
+
+注意：
+- 如果目的是验证“真实在线全局规划 + post-processor”，用 `PATH_MODE=global_goal` 或 `SCENARIO=<name>`。
+- 如果目的是最干净地重复同一条路径，用 `PATH_MODE=replay`。
+- 如果传了 `TEMPLATE_GOAL_X/Y/QZ/QW` 但没显式设置 `PATH_MODE`，脚本会自动切到 `PATH_MODE=global_goal`，避免误跑默认 `P2_s_curve` replay。
 
 ### `record_slosh_debug.sh`
 
@@ -420,7 +612,7 @@ rosrun scout_local_planner analyze_slosh_peak_precursors.py \
 
 说明：`PROFILE_* / OUTPUT_GUARD / PMG_*` 属于 2026-04-27 至 2026-04-29 的失败路线，控制器入口已从主线撤回；离线脚本仍可分析这些历史 bag。
 
-### `analyze_settling_day3.py`
+### `analysis/analyze_settling_day3.py`
 
 Day 3 T2 settling 验证专用分析脚本，从 bag 中检查 settling 状态机的进出行为。
 
@@ -454,7 +646,7 @@ rosrun scout_local_planner analyze_day3_abc_smoke.py \
   A=<bag_A> B=<bag_B> C=<bag_C>
 ```
 
-### `analyze_sim_speed_issue.py`
+### `analysis/analyze_sim_speed_issue.py`
 
 仿真 MPC 速度偏慢问题诊断脚本，从 bag 中分析机器人在哪些阶段速度低于预期。
 
@@ -468,7 +660,7 @@ rosrun scout_local_planner analyze_day3_abc_smoke.py \
 - 区分"全程慢"还是"near-goal 段慢"
 - 判断速度低是 risk scheduler 激进还是 terminal recovery 保守
 
-### `analyze_global_path_duplicates.py`
+### `analysis/analyze_global_path_duplicates.py`
 
 定位 `/scout/global_path` 中重复点/极短段的脚本，输出每个可疑位置的索引和坐标。
 
@@ -480,7 +672,7 @@ rosrun scout_local_planner analyze_day3_abc_smoke.py \
 - 确认全局路径发布链是否存在重复 waypoint
 - 为 `PathHandler::sanitizePolyline` 的阈值设置提供依据
 
-### `analyze_tracking_infeasible.py`
+### `analysis/analyze_tracking_infeasible.py`
 
 TRACKING 阶段 OSQP -3 根因分析脚本，将 solver 失败时刻与路径几何异常对齐。
 
@@ -493,7 +685,7 @@ TRACKING 阶段 OSQP -3 根因分析脚本，将 solver 失败时刻与路径几
 - 定位 TRACKING infeasible 的真正根因
 - 区分"geometric failure"和"constraint structure failure"（如 u_prev 冻结）
 
-### `analyze_global_path_prefix_window.py`
+### `analysis/analyze_global_path_prefix_window.py`
 
 分析 `/scout/global_path` 前段窗口几何的专项脚本，面向"路径起步阶段 fitLocalSpline 频繁失败"场景。
 
@@ -503,14 +695,14 @@ TRACKING 阶段 OSQP -3 根因分析脚本，将 solver 失败时刻与路径几
 
 用法：
 ```bash
-python3 analyze_global_path_prefix_window.py <bag> --window-size 89
+python3 src/scout_apps/control/scout_local_planner/scripts/analysis/analyze_global_path_prefix_window.py <bag> --window-size 89
 ```
 
 适用场景：
 - 定位前段局部窗口几何过激的具体点位
 - 判断是单点折返尖刺还是正常大曲率弯道
 
-### `diagnose_speed_profile.py`
+### `analysis/diagnose_speed_profile.py`
 
 速度剖面限速来源诊断脚本，对单条 bag 分析当前速度慢的根因属于哪一候选。
 
@@ -525,14 +717,14 @@ python3 analyze_global_path_prefix_window.py <bag> --window-size 89
 
 用法：
 ```bash
-python3 diagnose_speed_profile.py <bag> --omega-max 2.0 --alpha-max 4.0 --a-lat-max 1.0
+python3 src/scout_apps/control/scout_local_planner/scripts/analysis/diagnose_speed_profile.py <bag> --omega-max 2.0 --alpha-max 4.0 --a-lat-max 1.0
 ```
 
 适用场景：
 - 判断速度慢的主因在规划层还是执行层
 - 验证 P1 v_plan/v_exec 解耦是否真正生效
 
-### `observe_terminal_recovery.py`
+### `analysis/observe_terminal_recovery.py`
 
 终点恢复行为观察脚本，用于在线或回放时判断机器人在终点附近是否进入终点恢复逻辑，并输出阶段性状态。
 
@@ -581,7 +773,7 @@ Stage-4 IMU `alpha_z` 验证动作脚本，向 `/cmd_vel` 发布一组固定的�
 - 采集 IMU 角加速度/角速度变化验证 bag
 - 为 Stage-4 相关分析提供标准化激励
 
-### `validate_sim_imu.py`
+### `analysis/validate_sim_imu.py`
 
 在线验证仿真 IMU 话题质量的脚本（需要 ROS 节点在线，非离线 bag 分析）。
 
@@ -596,21 +788,65 @@ Stage-4 IMU `alpha_z` 验证动作脚本，向 `/cmd_vel` 发布一组固定的�
 
 ### `launch_sim_nav_stack.sh`
 
-仿真导航栈一键启动脚本，顺序拉起 Gazebo、Cartographer 定位、全局规划器。
+路径：`scripts/launch_sim_nav_stack.sh`
+
+仿真导航栈一键启动脚本，顺序拉起 Gazebo、Cartographer 定位、MBF 全局规划器。它只负责“环境与全局规划栈”，不负责单包实验、local planner 参数和 rosbag 录制。
+
+典型完整流程：
+
+```bash
+# 终端 1：启动仿真环境 + 定位 + MBF 全局规划
+source /home/a/scout_ws/devel/setup.bash
+SIM_ENV=open USE_RVIZ=true \
+SPAWN_X=-4.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
+rosrun scout_local_planner launch_sim_nav_stack.sh
+
+# 终端 2：启动一次 trial 并录 bag
+source /home/a/scout_ws/devel/setup.bash
+SCENARIO=open_user_goal CONDITION=GEOREF_OSCRS_ACTIVE RUN_ID=active01 \
+START_DELAY=10 RECORD_DURATION=0 \
+rosrun scout_local_planner run_sim_fixed_path_bag.sh
+```
+
+支持环境：
+
+```text
+SIM_ENV=open
+  world = open_walled.world
+  map   = map_sim_empty.pbstream
+  推荐用于 OSCRS / GeoRef 主线 open-field 对比。
+
+SIM_ENV=maze
+  world = maze_course.world
+  map   = map_carto.pbstream
+  用于迷宫环境可达性/碰撞检查调试，不建议作为当前主线有效性验证场地。
+
+SIM_ENV=custom
+  必须手动提供 WORLD_NAME 和 MAP_FILE。
+```
 
 支持环境变量配置：
 - `USE_RVIZ`：是否启动 RViz（默认 false）
+- `SIM_ENV`：`open / maze / custom`
+- `WORLD_NAME`、`MAP_FILE`：`SIM_ENV=custom` 时必须提供
 - `SPAWN_X/Y/Z`：机器人初始位置
+- `SPAWN_YAW`：机器人初始 yaw
 - `GAZEBO_WAIT_S`：等待 Gazebo 就绪时间
 - `LOCALIZATION_BACKUP_V`：定位初始化倒退速度
+- `OPEN_LOCALIZATION_FORWARD_S/V`：open 场地定位刷新前进动作
+- `OPEN_LOCALIZATION_TURN_S/OMEGA`：open 场地定位刷新左右转动作
 
 用法：
 ```bash
 rosrun scout_local_planner launch_sim_nav_stack.sh
 USE_RVIZ=true rosrun scout_local_planner launch_sim_nav_stack.sh
+SIM_ENV=maze USE_RVIZ=true rosrun scout_local_planner launch_sim_nav_stack.sh
 ```
 
-注意：本脚本只启动到全局规划器，不启动 local planner。local planner 需要单独用 `slosh_experiment_sim.launch` 启动，以便灵活传入实验参数。
+注意：
+- 本脚本只启动到全局规划器，不启动 local planner。
+- local planner 一般不要手动直接启动，而是交给 `run_sim_fixed_path_bag.sh` 按 `CONDITION` 启动，这样 bag 命名、路径发布和参数口径一致。
+- 如果只想手动调试 local planner，也可以另开终端直接启动 `slosh_experiment_sim.launch`。
 
 ### `run_day4_profile.sh`
 

@@ -439,7 +439,7 @@ python3 /home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scr
 Ferrari 指标：
 
 ```bash
-python3 /home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/compute_ferrari_indices.py \
+python3 /home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/analysis/compute_ferrari_indices.py \
   --baseline-bag <RAW_BAG> \
   --optimised-bag <GEOREF_OR_OSCRS_BAG> \
   --baseline-visual-csv <RAW_rgb_heights.csv> \

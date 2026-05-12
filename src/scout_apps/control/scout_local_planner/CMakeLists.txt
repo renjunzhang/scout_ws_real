@@ -65,21 +65,21 @@ target_link_libraries(local_planner_node
 
 catkin_install_python(PROGRAMS
   scripts/send_fixed_goal.py
-  scripts/sim_fixed_goal_tool.py
   scripts/fixed_global_path_runner.py
   scripts/template_fixed_path_generator.py
   scripts/extract_slosh_metrics.py
   scripts/analyze_slosh_peak_precursors.py
-  scripts/offline_pmg_replay.py
-  scripts/diagnose_p3_failure_modes.py
   scripts/imu_ay_tool.py
-  scripts/analyze_sim_speed_issue.py
-  scripts/analyze_tracking_infeasible.py
-  scripts/analyze_global_path_duplicates.py
-  scripts/analyze_global_path_prefix_window.py
-  scripts/analyze_settling_day3.py
   scripts/analyze_day3_abc_smoke.py
   scripts/run_imu_stage4_sequence.py
+  scripts/analysis/analyze_global_path_duplicates.py
+  scripts/analysis/analyze_global_path_prefix_window.py
+  scripts/analysis/analyze_settling_day3.py
+  scripts/analysis/analyze_sim_speed_issue.py
+  scripts/analysis/analyze_tracking_infeasible.py
+  scripts/analysis/diagnose_p3_failure_modes.py
+  scripts/analysis/offline_pmg_replay.py
+  scripts/analysis/sim_fixed_goal_tool.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
