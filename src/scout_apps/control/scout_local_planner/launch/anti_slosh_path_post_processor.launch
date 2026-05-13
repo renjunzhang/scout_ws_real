@@ -19,6 +19,12 @@
   <arg name="costmap_topic" default="/scout/mbf_costmap_nav/global_costmap/costmap"/>
   <arg name="collision_threshold" default="50"/>
   <arg name="unknown_is_obstacle" default="true"/>
+  <arg name="tail_protect_enable" default="false"/>
+  <arg name="tail_gate_enable" default="false"/>
+  <arg name="tail_protect_distance" default="0.6"/>
+  <arg name="tail_protect_mode" default="replace_raw_tail"/>
+  <arg name="tail_deviation_limit" default="0.05"/>
+  <arg name="terminal_tail_heading_limit_deg" default="10.0"/>
   <arg name="prediction_v_max" default="2.0"/>
   <arg name="prediction_ay_max_budget" default="2.0"/>
   <arg name="prediction_a_max" default="1.0"/>
@@ -90,6 +96,12 @@
     <param name="gates/enable_collision_check" value="$(arg enable_collision_check)"/>
     <param name="gates/collision_threshold" value="$(arg collision_threshold)"/>
     <param name="gates/unknown_is_obstacle" value="$(arg unknown_is_obstacle)"/>
+    <param name="tail_protect/enable" value="$(arg tail_protect_enable)"/>
+    <param name="tail_protect/gate_enable" value="$(arg tail_gate_enable)"/>
+    <param name="tail_protect/distance" value="$(arg tail_protect_distance)"/>
+    <param name="tail_protect/mode" value="$(arg tail_protect_mode)"/>
+    <param name="tail_protect/deviation_limit" value="$(arg tail_deviation_limit)"/>
+    <param name="tail_protect/heading_limit_deg" value="$(arg terminal_tail_heading_limit_deg)"/>
 
     <param name="prediction/v_max" value="$(arg prediction_v_max)"/>
     <param name="prediction/ay_max_budget" value="$(arg prediction_ay_max_budget)"/>

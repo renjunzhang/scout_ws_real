@@ -4,13 +4,52 @@
 本模块不持有 ROS publisher，只做纯字符串/数值格式化。
 """
 
+from oscrs.diversity import candidate_diversity
+
+
+def _dominant_reject(rows):
+    """Return (stage, reason) for the most common non-original reject cause."""
+    counts = {}
+    first_reason = {}
+    for row, _ in rows:
+        if row["name"] == "original" or row["accepted"]:
+            continue
+        stage = row.get("reject_stage", "UNKNOWN")
+        reason = row.get("reject_reason", "")
+        key = reason.split("|", 1)[0].split(":", 1)[0] if reason else "unknown"
+        token = (stage, key)
+        counts[token] = counts.get(token, 0) + 1
+        first_reason.setdefault(token, reason.split("|", 1)[0] if reason else "unknown")
+    if not counts:
+        return "NONE", "none"
+    token = max(counts, key=lambda item: counts[item])
+    return token[0], first_reason[token]
+
+
+def _slosh_reject_reason(rows):
+    """Return dominant slosh hard-gate violation among accepted non-original rows."""
+    peak = 0
+    residual = 0
+    for row, _ in rows:
+        if row["name"] == "original" or not row["accepted"]:
+            continue
+        if not row["oscrs_height_pass"]:
+            peak += 1
+        if not row["oscrs_residual_pass"]:
+            residual += 1
+    if peak == 0 and residual == 0:
+        return "none"
+    if peak >= residual:
+        return "peak"
+    return "residual"
+
 
 def compute_fb_codes(rows, oscrs_shadow_enable, oscrs_active_enable, best_row, geometry_row, oscrs_row):
     """计算 fb / fallback / takeover 语义码。
 
     Returns:
         (oscrs_fallback_code, oscrs_fallback, oscrs_takeover)
-        fb: -1 未 active, 0 takeover 成功, 1 only original safe,
+        fb: -1 未 active, 0 OSCRS selected non-original safe candidate, 1 only original safe,
             2 几何可行但 slosh gate 全失败, 3 无可用几何候选
     """
     original_row = next((row for row, _ in rows if row["name"] == "original"), None)
@@ -34,18 +73,49 @@ def compute_fb_codes(rows, oscrs_shadow_enable, oscrs_active_enable, best_row, g
         and oscrs_row is not None
         and oscrs_row["oscrs_feasible"]
         and best_row["name"] == oscrs_row["name"]
-        and best_row["name"] != geometry_row["name"]
+        and best_row["name"] != "original"
     )
     return fb_code, fallback, takeover, original_safe
 
 
+def fallback_reason_from_code(fb_code):
+    if fb_code == -1:
+        return "NOT_ACTIVE"
+    if fb_code == 0:
+        return "OSCRS_TAKEOVER"
+    if fb_code == 1:
+        return "ONLY_ORIGINAL_SLOSH_SAFE"
+    if fb_code == 2:
+        return "SLOSH_GATE_REJECT_ALL"
+    if fb_code == 3:
+        return "FEASIBILITY_REJECT_ALL"
+    return "UNKNOWN"
+
+
+def dominant_reason(rows, fb_code):
+    if fb_code == 2:
+        return "SLOSH_REJECT", _slosh_reject_reason(rows)
+    if fb_code == 3:
+        return _dominant_reject(rows)
+    return "NONE", "none"
+
+
 def format_summary(best_row, geometry_row, oscrs_row, oscrs_active_enable,
-                   fb_code, fallback, original_safe, takeover):
+                   fb_code, fallback, original_safe, takeover,
+                   fallback_reason, dominant_stage, dominant_reason_text,
+                   diversity):
     """格式化 summary 行。格式兼容 validate_georef_oscrs_bag.py 的 SUMMARY_RE。"""
     oscrs_name = oscrs_row["name"] if oscrs_row else "none"
     return (
         "summary:selected={selected},geo={geo},oscrs={oscrs},active={active},"
-        "fallback={fallback},fb={fb},orig_safe={orig_safe},takeover={takeover}"
+        "fallback={fallback},fb={fb},orig_safe={orig_safe},takeover={takeover},"
+        "fallback_reason={fallback_reason},dominant_stage={dominant_stage},"
+        "dominant_reason={dominant_reason},"
+        "div_path={div_path:.3g},div_ay={div_ay:.3g},div_ax={div_ax:.3g},"
+        "div_ax_pulse={div_ax_pulse:.3g},div_sH={div_sH:.3g},"
+        "div_eta_x={div_eta_x:.3g},div_eta_y={div_eta_y:.3g},"
+        "dominant_excitation={dominant_excitation},"
+        "diversity_aligned={diversity_aligned},candidate_collapse={candidate_collapse}"
     ).format(
         selected=best_row["name"],
         geo=geometry_row["name"],
@@ -55,6 +125,10 @@ def format_summary(best_row, geometry_row, oscrs_row, oscrs_active_enable,
         fb=fb_code,
         orig_safe=int(original_safe),
         takeover=takeover,
+        fallback_reason=fallback_reason,
+        dominant_stage=dominant_stage,
+        dominant_reason=dominant_reason_text,
+        **diversity,
     )
 
 
@@ -70,29 +144,43 @@ def format_candidate_row(row):
         col_str = "col=ok"
     return (
         "{name}:accepted={accepted},reason={reason},score={score:.3f},"
+        "stage={stage},"
         "len={length:.3f},drift={drift:.3f},end={end:.3f},"
+        "tail={tail},tail_gate={tail_gate},tail_dev={tail_dev:.3f},tail_yaw={tail_yaw:.1f},"
         "k95={k95:.3f},dk95={dk95:.3f},kr={kr:.3f},dkr={dkr:.3f},"
-        "ayr={ayr:.3f},vmaxp={vmaxp:.3f},gscore={gscore:.3f},sscore={sscore:.3f},"
+        "ayr={ayr:.3f},axp={axp:.3f},axpk={axpk:.3f},aypk={aypk:.3f},"
+        "vmaxp={vmaxp:.3f},gscore={gscore:.3f},sscore={sscore:.3f},"
         "sH={sH:.3g},sHm={sHm:.3g},sHp={sHp:.3g},sHr={sHr:.3g},"
-        "sE={sE:.3g},sEdot={sEdot:.3g},os={os},oh={oh},or={or_},ov={ov:.3g},osc={osc:.3g},{col}"
+        "sE={sE:.3g},sEdot={sEdot:.3g},ex={ex:.3g},ey={ey:.3g},"
+        "os={os},oh={oh},or={or_},ov={ov:.3g},osc={osc:.3g},{col}"
     ).format(
         name=row["name"],
         accepted=int(row["accepted"]),
         reason=row["reject_reason"],
+        stage=row.get("reject_stage", "UNKNOWN"),
         score=row["score"],
         length=row["length_ratio"],
         drift=row["max_drift_m"],
         end=row["endpoint_error_m"],
+        tail=int(row.get("tail_protect_applied", False)),
+        tail_gate=int(row.get("tail_gate_enabled", False)),
+        tail_dev=row.get("tail_deviation_m", 0.0),
+        tail_yaw=row.get("tail_heading_error_deg", 0.0),
         k95=row["kappa_p95"],
         dk95=row["dkappa_p95"],
         kr=row["kappa_ratio"],
         dkr=row["dkappa_ratio"],
         ayr=row["predicted_ay_ratio"],
+        axp=row.get("predicted_ax_p95", 0.0),
+        axpk=row.get("predicted_ax_peak", 0.0),
+        aypk=row.get("predicted_ay_peak", 0.0),
         vmaxp=row["predicted_vmax"],
         gscore=row["geometry_score"],
         sscore=row["slosh_score"],
         sE=row["slosh_energy_rms"],
         sEdot=row["slosh_eta_dot_rms"],
+        ex=row.get("slosh_eta_x_p95", 0.0),
+        ey=row.get("slosh_eta_y_p95", 0.0),
         sH=row["slosh_h_p95"],
         sHm=row["slosh_h_modal_p95"],
         sHp=row["slosh_h_parabola_p95"],
@@ -116,9 +204,14 @@ def format_report(rows, best_row, geometry_row, oscrs_row,
     fb_code, fallback, takeover, original_safe = compute_fb_codes(
         rows, oscrs_shadow_enable, oscrs_active_enable, best_row, geometry_row, oscrs_row,
     )
+    fallback_reason = fallback_reason_from_code(fb_code)
+    dominant_stage, dominant_reason_text = dominant_reason(rows, fb_code)
+    diversity = candidate_diversity(rows)
     parts = [
         format_summary(best_row, geometry_row, oscrs_row, oscrs_active_enable,
-                       fb_code, fallback, original_safe, takeover),
+                       fb_code, fallback, original_safe, takeover,
+                       fallback_reason, dominant_stage, dominant_reason_text,
+                       diversity),
     ]
     for row, _ in rows:
         parts.append(format_candidate_row(row))

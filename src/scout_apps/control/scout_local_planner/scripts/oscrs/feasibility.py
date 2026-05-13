@@ -10,6 +10,23 @@ from reference_generation.geometry_candidates import path_metrics
 from oscrs.path_utils import direction_preserved, endpoint_error, safe_ratio
 
 
+def reject_stage_from_reason(reason):
+    """Map a legacy reject reason string to a coarse diagnostic stage."""
+    if not reason or reason == "accepted":
+        return "ACCEPTED"
+    first = reason.split("|", 1)[0]
+    key = first.split(":", 1)[0]
+    if key == "level":
+        return "GENERATION_SKIPPED"
+    if key in ("collision", "no_costmap", "frame_mismatch"):
+        return "COLLISION_REJECT"
+    if key in ("ay",):
+        return "DYNAMIC_REJECT"
+    if key in ("tail_dev", "tail_heading"):
+        return "TERMINAL_REJECT"
+    return "GEOMETRY_REJECT"
+
+
 def check_collision_on_grid(points, ox, oy, res, width, height, data,
                              threshold, unknown_is_obstacle):
     """对已解包的 costmap grid 数据做 point-cost 碰撞检查。
@@ -40,8 +57,11 @@ def evaluate_geometry_feasibility(candidate, name, base, base_metrics, base_leng
                                    max_endpoint_error, ay_ratio_limit,
                                    predicted_ay_p95, predicted_vmax, base_predicted_ay_p95,
                                    base_predicted_vmax,
-                                   candidate_levels, max_candidate_level,
+                                   generation_skipped, generation_skip_reason,
                                    collision_status, collision_idx, collision_cost,
+                                   tail_gate_enable, tail_deviation_m,
+                                   tail_heading_error_deg, tail_deviation_limit,
+                                   terminal_tail_heading_limit_deg,
                                    w_kappa, w_dkappa, w_length, w_drift,
                                    w_shortening, w_over_smooth):
     """对一条候选执行全部 F gate，返回 gate 结果和 geometry score。
@@ -58,6 +78,8 @@ def evaluate_geometry_feasibility(candidate, name, base, base_metrics, base_leng
     reject_reasons = []
     ay_ratio = safe_ratio(predicted_ay_p95, base_predicted_ay_p95)
 
+    if generation_skipped:
+        reject_reasons.append(generation_skip_reason)
     if len(candidate) < 3:
         reject_reasons.append(f"too_few_points:{len(candidate)}")
     if name != "original" and metrics["min_seg_m"] < min_segment_length:
@@ -70,8 +92,6 @@ def evaluate_geometry_feasibility(candidate, name, base, base_metrics, base_leng
         reject_reasons.append(f"short:{length_ratio:.3f}<{min_length_ratio:.3f}")
     kappa_ratio = safe_ratio(metrics["kappa_p95"], base_metrics["kappa_p95"])
     dkappa_ratio = safe_ratio(metrics["dkappa_p95"], base_metrics["dkappa_p95"])
-    if candidate_levels.get(name, 0) > candidate_levels[max_candidate_level]:
-        reject_reasons.append(f"level:{name}>{max_candidate_level}")
     if ay_ratio > ay_ratio_limit:
         reject_reasons.append(f"ay:{ay_ratio:.3f}>{ay_ratio_limit:.3f}")
     if end_error > max_endpoint_error:
@@ -86,7 +106,15 @@ def evaluate_geometry_feasibility(candidate, name, base, base_metrics, base_leng
     elif collision_status == "frame_mismatch":
         reject_reasons.append("frame_mismatch")
 
+    if tail_gate_enable and tail_deviation_m > tail_deviation_limit:
+        reject_reasons.append(f"tail_dev:{tail_deviation_m:.3f}>{tail_deviation_limit:.3f}")
+    if tail_gate_enable and tail_heading_error_deg > terminal_tail_heading_limit_deg:
+        reject_reasons.append(
+            f"tail_heading:{tail_heading_error_deg:.1f}>{terminal_tail_heading_limit_deg:.1f}"
+        )
+
     accepted = not reject_reasons
+    reject_reason = "accepted" if accepted else "|".join(reject_reasons)
 
     shortening_penalty = max(0.0, min_length_ratio - length_ratio)
     over_smooth_penalty = max(0.0, min_kappa_ratio - kappa_ratio)
@@ -102,7 +130,8 @@ def evaluate_geometry_feasibility(candidate, name, base, base_metrics, base_leng
 
     return {
         "accepted": accepted,
-        "reject_reason": "accepted" if accepted else "|".join(reject_reasons),
+        "reject_stage": reject_stage_from_reason(reject_reason),
+        "reject_reason": reject_reason,
         "geometry_score": geometry_score,
         "length_ratio": length_ratio,
         "kappa_ratio": kappa_ratio,
@@ -114,6 +143,9 @@ def evaluate_geometry_feasibility(candidate, name, base, base_metrics, base_leng
         "base_predicted_vmax": base_predicted_vmax,
         "target_kappa_penalty": target_kappa_penalty,
         "endpoint_error_m": end_error,
+        "tail_gate_enabled": bool(tail_gate_enable),
+        "tail_deviation_m": tail_deviation_m,
+        "tail_heading_error_deg": tail_heading_error_deg,
         "collision_status": collision_status,
         "collision_idx": collision_idx,
         "collision_cost": collision_cost,

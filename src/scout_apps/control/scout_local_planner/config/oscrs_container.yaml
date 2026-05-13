@@ -76,6 +76,7 @@ oscrs:
   # === Layer 2 score (Tier 1 调参点)
   # use_legacy_score=true 退回 RA-L 之前的 score (2*h_max/eta_lim + h_residual/residual_lim + 0.2*geom)
   # batch_normalize=true 时各 metric 在 S_full 内归一到 [0,1]，权重和=score 上界
+  # batch_normalize=false 时仍使用下列权重，但直接对原始物理量加权（不回退 legacy）
   # ===
   score:
     use_legacy_score: false

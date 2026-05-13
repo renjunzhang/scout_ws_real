@@ -93,6 +93,8 @@ def rollout_slosh_metrics(points, *,
             "slosh_h_residual_max": float("inf"),
             "slosh_h_modal_p95": float("inf"),
             "slosh_h_parabola_p95": float("inf"),
+            "slosh_eta_x_p95": float("inf"),
+            "slosh_eta_y_p95": float("inf"),
             "slosh_eta_dot_rms": float("inf"),
             "slosh_energy_rms": float("inf"),
             "slosh_terminal_E": float("inf"),
@@ -117,6 +119,8 @@ def rollout_slosh_metrics(points, *,
     height_modal = []
     height_parabola = []
     height_total = []
+    eta_x_abs = []
+    eta_y_abs = []
     wn2 = omega_n * omega_n
     damping = 2.0 * zeta * omega_n
     radius2_over_4g = (container_radius * container_radius) / (4.0 * 9.81)
@@ -148,6 +152,8 @@ def rollout_slosh_metrics(points, *,
             height_modal.append(modal)
             height_parabola.append(parabola)
             height_total.append(modal + parabola)
+            eta_x_abs.append(abs(eta_x))
+            eta_y_abs.append(abs(eta_y))
         else:
             height_total.append(modal + parabola)
     tracking_count = len(eta_dot_norm)
@@ -159,6 +165,8 @@ def rollout_slosh_metrics(points, *,
         "slosh_h_residual_max": max(residual_height) if residual_height else 0.0,
         "slosh_h_modal_p95": percentile(height_modal, 95.0),
         "slosh_h_parabola_p95": percentile(height_parabola, 95.0),
+        "slosh_eta_x_p95": percentile(eta_x_abs, 95.0),
+        "slosh_eta_y_p95": percentile(eta_y_abs, 95.0),
         "slosh_eta_dot_rms": math.sqrt(sum(v * v for v in eta_dot_norm) / len(eta_dot_norm)) if eta_dot_norm else float("inf"),
         "slosh_energy_rms": math.sqrt(sum(v * v for v in energy) / len(energy)) if energy else float("inf"),
         "slosh_terminal_E": energy[-1] if energy else float("inf"),
@@ -175,6 +183,32 @@ def predicted_lateral_profile(points, predict_v_max, predict_ay_max,
         predict_v_init, offset_x, offset_y,
     )
     return (percentile([abs(v) for v in ay_values], 95.0), max(v_values) if v_values else 0.0)
+
+
+def predicted_excitation_profile(points, predict_v_max, predict_ay_max,
+                                 predict_a_max, predict_v_init, offset_x, offset_y):
+    """Forward speed rollout，返回 ax/ay/v 诊断摘要。"""
+    if len(points) < 2:
+        return {
+            "ax_p95": float("inf"),
+            "ax_peak": float("inf"),
+            "ay_p95": float("inf"),
+            "ay_peak": float("inf"),
+            "vmax": 0.0,
+        }
+    _, _, v_values, ax_values, ay_values = forward_profile(
+        points, predict_v_max, predict_ay_max, predict_a_max,
+        predict_v_init, offset_x, offset_y,
+    )
+    ax_abs = [abs(v) for v in ax_values]
+    ay_abs = [abs(v) for v in ay_values]
+    return {
+        "ax_p95": percentile(ax_abs, 95.0),
+        "ax_peak": max(ax_abs) if ax_abs else 0.0,
+        "ay_p95": percentile(ay_abs, 95.0),
+        "ay_peak": max(ay_abs) if ay_abs else 0.0,
+        "vmax": max(v_values) if v_values else 0.0,
+    }
 
 
 def apply_slosh_scores(rows, w_h, w_energy, w_eta_dot, w_terminal,

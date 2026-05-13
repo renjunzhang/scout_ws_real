@@ -212,13 +212,35 @@ def count_where(reports, key, value):
     return sum(1 for row in reports if row.get(key) == value)
 
 
+def is_takeover_report(row):
+    """Return true when OSCRS actively selected a non-original safe candidate.
+
+    Older bags may contain takeover=0 even when fb=0 and selected is non-original,
+    because takeover previously meant "different from geometry selector".  For
+    behavior validation we care about the active OSCRS path not falling back to
+    original, so infer that from summary fields when needed.
+    """
+    selected = row.get("selected")
+    if row.get("takeover") == "1":
+        return True
+    return (
+        row.get("active") == "1"
+        and row.get("fb") == "0"
+        and selected not in ("", None, "original", "missing")
+    )
+
+
+def takeover_report_count(reports):
+    return sum(1 for row in reports if is_takeover_report(row))
+
+
 def validate(mode, data, args):
     failures = []
     warnings = []
     reports = data["reports"]
     report_count = len(reports)
     active_count = count_where(reports, "active", "1")
-    takeover_count = count_where(reports, "takeover", "1")
+    takeover_count = takeover_report_count(reports)
     fallback_count = count_where(reports, "fallback", "1")
     non_original_count = sum(1 for row in reports if row.get("selected") not in ("", None, "original"))
     fb_missing = sum(1 for row in reports if "fb" not in row)
@@ -295,7 +317,7 @@ def diagnose(mode, data, failures, warnings, args):
     selected = [row.get("selected", "") for row in reports]
     fb_values = [row.get("fb", "") for row in reports]
     active_count = count_where(reports, "active", "1")
-    takeover_count = count_where(reports, "takeover", "1")
+    takeover_count = takeover_report_count(reports)
     non_original_count = sum(1 for item in selected if item and item != "original")
 
     reasons = []
@@ -412,8 +434,8 @@ def diagnose(mode, data, failures, warnings, args):
             ))
         if args.require_takeover and takeover_count <= 0:
             suggestions.append(
-                "需要 takeover 但 takeover=0：OSCRS 与 geometry selector 选了同一路径或回退；"
-                "先确认 --require-non-original 通过，再看 OSCRS score 权重 "
+                "需要 takeover 但 takeover=0：OSCRS 没有发布非 original 安全候选，或该 bag 使用旧 report 语义；"
+                "先确认 --require-non-original 通过，再看 fb/fallback_reason 与 OSCRS score 权重 "
                 f"({PKG_REL_ROOT}/config/oscrs_container.yaml slosh_score.score.*)."
             )
 
@@ -440,7 +462,7 @@ def print_summary(path, mode, data, failures, warnings):
         selected_counts[row.get("selected", "missing")] = selected_counts.get(row.get("selected", "missing"), 0) + 1
         fb_counts[row.get("fb", "missing")] = fb_counts.get(row.get("fb", "missing"), 0) + 1
     active_count = count_where(reports, "active", "1")
-    takeover_count = count_where(reports, "takeover", "1")
+    takeover_count = takeover_report_count(reports)
     fallback_count = count_where(reports, "fallback", "1")
 
     h = data["height"]
@@ -461,7 +483,10 @@ def print_summary(path, mode, data, failures, warnings):
             "last="
             + ",".join(
                 f"{key}={last.get(key, '')}"
-                for key in ("selected", "geo", "oscrs", "active", "fallback", "fb", "takeover")
+                for key in (
+                    "selected", "geo", "oscrs", "active", "fallback", "fb",
+                    "takeover", "fallback_reason", "dominant_stage", "dominant_reason",
+                )
             )
         )
     reject_counts = candidate_reject_reasons(data)

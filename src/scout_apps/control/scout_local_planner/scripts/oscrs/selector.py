@@ -39,23 +39,28 @@ def evaluate_oscrs_hard_gate(accepted, slosh_metrics, oscrs_eta_lim,
 
 def apply_oscrs_score(rows, score_w_h_p95, score_w_energy_rms, score_w_eta_dot_rms,
                       score_w_terminal_E, score_w_geom, score_batch_norm):
-    """RA-L §4.1 Layer 2: batch-normalized OSCRS weighted score。
+    """RA-L §4.1 Layer 2: OSCRS weighted score。
 
     只修改 S_full（非 original 的 feasible 候选）中的 row["oscrs_score"]。
+    score_batch_norm=true 时使用 S_full batch normalization；false 时仍使用
+    同一组权重，但直接对原始物理量加权，不能回退到 legacy score。
     """
     feasible = [
         row for row, _ in rows
         if row["oscrs_feasible"] and row["name"] != "original"
     ]
-    if not feasible or not score_batch_norm:
+    if not feasible:
         return
-    max_h_p95 = max(max(0.0, row["slosh_h_p95"]) for row in feasible)
-    max_energy = max(max(0.0, row["slosh_energy_rms"]) for row in feasible)
-    max_eta_dot = max(max(0.0, row["slosh_eta_dot_rms"]) for row in feasible)
-    max_terminal = max(max(0.0, row["slosh_terminal_E"]) for row in feasible)
-    max_geom = max(max(0.0, row["geometry_score"]) for row in feasible)
+    if score_batch_norm:
+        max_h_p95 = max(max(0.0, row["slosh_h_p95"]) for row in feasible)
+        max_energy = max(max(0.0, row["slosh_energy_rms"]) for row in feasible)
+        max_eta_dot = max(max(0.0, row["slosh_eta_dot_rms"]) for row in feasible)
+        max_terminal = max(max(0.0, row["slosh_terminal_E"]) for row in feasible)
+        max_geom = max(max(0.0, row["geometry_score"]) for row in feasible)
+    else:
+        max_h_p95 = max_energy = max_eta_dot = max_terminal = max_geom = 1.0
     for row in feasible:
-        norm = lambda value, ref: value / max(1e-9, ref)
+        norm = lambda value, ref: value / max(1e-9, ref) if score_batch_norm else value
         row["oscrs_score"] = (
             score_w_h_p95 * norm(row["slosh_h_p95"], max_h_p95)
             + score_w_energy_rms * norm(row["slosh_energy_rms"], max_energy)

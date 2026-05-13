@@ -13,9 +13,11 @@ from oscrs.selector import (
 )
 from oscrs.slosh_rollout import (
     apply_slosh_scores,
+    predicted_excitation_profile,
     predicted_lateral_profile,
     rollout_slosh_metrics,
 )
+from oscrs.generators.tail_protect import tail_deviation, tail_heading_error_deg
 
 _SLOSH_ZERO = {
     "slosh_h_p95": 0.0,
@@ -23,6 +25,8 @@ _SLOSH_ZERO = {
     "slosh_h_residual_max": 0.0,
     "slosh_h_modal_p95": 0.0,
     "slosh_h_parabola_p95": 0.0,
+    "slosh_eta_x_p95": 0.0,
+    "slosh_eta_y_p95": 0.0,
     "slosh_eta_dot_rms": 0.0,
     "slosh_energy_rms": 0.0,
     "slosh_terminal_E": 0.0,
@@ -36,7 +40,7 @@ def _evaluate_one(index, name, candidate, base, base_metrics, base_length,
         base, p.predict_v_max, p.predict_ay_max, p.predict_a_max, p.predict_v_init,
         p.slosh_offset_x, p.slosh_offset_y,
     )
-    ay_p95, predicted_vmax = predicted_lateral_profile(
+    excitation = predicted_excitation_profile(
         candidate, p.predict_v_max, p.predict_ay_max, p.predict_a_max, p.predict_v_init,
         p.slosh_offset_x, p.slosh_offset_y,
     )
@@ -45,9 +49,15 @@ def _evaluate_one(index, name, candidate, base, base_metrics, base_length,
         p.min_segment_length, p.max_drift, p.max_length_ratio,
         p.min_length_ratio, p.min_kappa_ratio, p.target_kappa_ratio,
         p.max_endpoint_error, p.ay_ratio_limit,
-        ay_p95, predicted_vmax, base_ay_p95, base_vmax,
-        p.candidate_levels, p.max_candidate_level,
+        excitation["ay_p95"], excitation["vmax"], base_ay_p95, base_vmax,
+        p.generation_policy.get(name, {}).get("skipped", False),
+        p.generation_policy.get(name, {}).get("reason", "generated"),
         collision_status, collision_idx, collision_cost,
+        p.tail_gate_enable,
+        tail_deviation(candidate, base, p.tail_protect_distance),
+        tail_heading_error_deg(candidate, base),
+        p.tail_deviation_limit,
+        p.terminal_tail_heading_limit_deg,
         p.w_kappa, p.w_dkappa, p.w_length, p.w_drift,
         p.w_shortening, p.w_over_smooth,
     )
@@ -74,7 +84,7 @@ def _evaluate_one(index, name, candidate, base, base_metrics, base_length,
             enable_shadow_or_active=(p.oscrs_shadow_enable or p.oscrs_active_enable),
         )
     else:
-        slosh_metrics = _SLOSH_ZERO
+        slosh_metrics = _SLOSH_ZERO.copy()
     oscrs_gate = evaluate_oscrs_hard_gate(
         accepted, slosh_metrics, p.oscrs_eta_lim, p.oscrs_residual_ratio, score,
     )
@@ -86,10 +96,14 @@ def _evaluate_one(index, name, candidate, base, base_metrics, base_length,
         "slosh_score": score,
         "base_predicted_ay_p95": base_ay_p95,
         "base_predicted_vmax": base_vmax,
+        "predicted_ax_p95": excitation["ax_p95"],
+        "predicted_ax_peak": excitation["ax_peak"],
+        "predicted_ay_peak": excitation["ay_peak"],
         "oscrs_eta_lim": p.oscrs_eta_lim,
         **oscrs_gate,
         **slosh_metrics,
         **f_result,
+        "tail_protect_applied": bool(p.tail_protect_enable and name != "original"),
     }
 
 

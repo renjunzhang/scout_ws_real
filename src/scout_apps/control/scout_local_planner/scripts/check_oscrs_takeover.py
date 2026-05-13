@@ -34,6 +34,17 @@ def parse_summary(text):
     return out
 
 
+def is_takeover_report(row):
+    selected = row.get("selected")
+    if row.get("takeover") == "1":
+        return True
+    return (
+        row.get("active") == "1"
+        and row.get("fb") == "0"
+        and selected not in ("", None, "original", "missing")
+    )
+
+
 def main():
     args = parse_args()
     count = 0
@@ -52,7 +63,7 @@ def main():
             last = row
             if row.get("active") == "1":
                 active += 1
-            if row.get("takeover") == "1":
+            if is_takeover_report(row):
                 takeover += 1
             if row.get("fallback") == "1":
                 fallback += 1

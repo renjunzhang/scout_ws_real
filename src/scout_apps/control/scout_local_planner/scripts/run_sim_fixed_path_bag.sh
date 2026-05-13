@@ -114,6 +114,13 @@
 #   POST_PROCESSOR_OSCRS_ACTIVE_ENABLE
 #     通常不要手工设；CONDITION=GEOREF_OSCRS_ACTIVE 会自动设置。
 #
+#   POST_PROCESSOR_TAIL_PROTECT_ENABLE
+#     默认 false。打开后 GeoRef 非 original 候选会用 raw tail 替换末端，
+#     用于定位 terminal 过冲问题；正式对比前必须单独 smoke。
+#
+#   POST_PROCESSOR_TAIL_GATE_ENABLE
+#     默认 false。打开后 tail_dev/tail_yaw 才参与 reject；否则只做诊断。
+#
 # 输出：
 #   默认 bag:
 #     /data/a/slosh_bags/sim/YYYYMMDD/YYYYMMDD_<PATH_ID>_<CONDITION>_run<RUN_ID>_<HHMMSS>.bag
@@ -144,6 +151,7 @@ SCENARIOS_FILE="${SCENARIOS_FILE:-/home/a/scout_ws/src/scout_apps/control/scout_
 FIXED_PATH_DIR="${FIXED_PATH_DIR:-/data/a/fixed_paths/sim}"
 PATH_FILE="${PATH_FILE:-${FIXED_PATH_DIR}/${PATH_ID}.json}"
 GLOBAL_PATH_TOPIC="${GLOBAL_PATH_TOPIC:-}"
+PATH_SOURCE_OUTPUT_TOPIC="${PATH_SOURCE_OUTPUT_TOPIC:-}"
 PATH_MODE="${PATH_MODE:-replay}"  # replay / template_goal / global_goal
 DEFAULT_GLOBAL_PATH_TOPIC=""
 
@@ -184,6 +192,12 @@ POST_PROCESSOR_COSTMAP_TOPIC="${POST_PROCESSOR_COSTMAP_TOPIC:-/scout/mbf_costmap
 POST_PROCESSOR_MIN_LENGTH_RATIO="${POST_PROCESSOR_MIN_LENGTH_RATIO:-}"
 POST_PROCESSOR_MIN_SEGMENT_LENGTH="${POST_PROCESSOR_MIN_SEGMENT_LENGTH:-}"
 POST_PROCESSOR_AY_RATIO_LIMIT="${POST_PROCESSOR_AY_RATIO_LIMIT:-}"
+POST_PROCESSOR_TAIL_PROTECT_ENABLE="${POST_PROCESSOR_TAIL_PROTECT_ENABLE:-false}"
+POST_PROCESSOR_TAIL_GATE_ENABLE="${POST_PROCESSOR_TAIL_GATE_ENABLE:-false}"
+POST_PROCESSOR_TAIL_PROTECT_DISTANCE="${POST_PROCESSOR_TAIL_PROTECT_DISTANCE:-0.6}"
+POST_PROCESSOR_TAIL_PROTECT_MODE="${POST_PROCESSOR_TAIL_PROTECT_MODE:-replace_raw_tail}"
+POST_PROCESSOR_TAIL_DEVIATION_LIMIT="${POST_PROCESSOR_TAIL_DEVIATION_LIMIT:-0.05}"
+POST_PROCESSOR_TERMINAL_TAIL_HEADING_LIMIT_DEG="${POST_PROCESSOR_TERMINAL_TAIL_HEADING_LIMIT_DEG:-10.0}"
 POST_PROCESSOR_PREDICT_V_MAX="${POST_PROCESSOR_PREDICT_V_MAX:-}"
 POST_PROCESSOR_PREDICT_AY_MAX="${POST_PROCESSOR_PREDICT_AY_MAX:-}"
 POST_PROCESSOR_PREDICT_A_MAX="${POST_PROCESSOR_PREDICT_A_MAX:-}"
@@ -650,6 +664,17 @@ if [[ -z "${GLOBAL_PATH_TOPIC}" ]]; then
     fi
 fi
 
+if [[ -z "${PATH_SOURCE_OUTPUT_TOPIC}" ]]; then
+    if [[ "${POST_PROCESSOR_ENABLE}" == "true" &&
+          ( "${PATH_MODE}" == "replay" || "${PATH_MODE}" == "template_goal" ) ]]; then
+        # Fixed/template path sources must feed the post-processor input.  The
+        # MPC still tracks GLOBAL_PATH_TOPIC, usually /scout/global_path_anti_slosh.
+        PATH_SOURCE_OUTPUT_TOPIC="${POST_PROCESSOR_INPUT_TOPIC}"
+    else
+        PATH_SOURCE_OUTPUT_TOPIC="${GLOBAL_PATH_TOPIC}"
+    fi
+fi
+
 if [[ "${PATH_MODE}" == "template_goal" && -z "${TEMPLATE_NAME}" ]]; then
     case "${PATH_ID}" in
         P0_straight) TEMPLATE_NAME="straight" ;;
@@ -779,6 +804,7 @@ PATH_MODE=${PATH_MODE}
 TEMPLATE_NAME=${TEMPLATE_NAME}
 PATH_FILE=${PATH_FILE}
 GLOBAL_PATH_TOPIC=${GLOBAL_PATH_TOPIC}
+PATH_SOURCE_OUTPUT_TOPIC=${PATH_SOURCE_OUTPUT_TOPIC}
 POST_PROCESSOR_ENABLE=${POST_PROCESSOR_ENABLE}
 POST_PROCESSOR_INPUT_TOPIC=${POST_PROCESSOR_INPUT_TOPIC}
 POST_PROCESSOR_OUTPUT_TOPIC=${POST_PROCESSOR_OUTPUT_TOPIC}
@@ -842,7 +868,7 @@ EOF
 
 publish_config_summary() {
     local summary
-    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; post_processor=${POST_PROCESSOR_ENABLE}; slosh_score=${POST_PROCESSOR_SLOSH_SCORE_ENABLE}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; input_shaping=${INPUT_SHAPING_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}; energy_profile=${ENERGY_PROFILE_ENABLE}; vehicle_v_max=${VEHICLE_V_MAX}"
+    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; path_source_output_topic=${PATH_SOURCE_OUTPUT_TOPIC}; post_processor=${POST_PROCESSOR_ENABLE}; slosh_score=${POST_PROCESSOR_SLOSH_SCORE_ENABLE}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; input_shaping=${INPUT_SHAPING_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}; energy_profile=${ENERGY_PROFILE_ENABLE}; vehicle_v_max=${VEHICLE_V_MAX}"
     rostopic pub -l /experiment/config_summary std_msgs/String "data: '${summary}'" >/dev/null &
     local pid=$!
     pids+=("${pid}")
@@ -1019,7 +1045,7 @@ REPLAY_ARGS=(
     rosrun scout_local_planner fixed_global_path_runner.py
     --mode replay
     --path-file "${PATH_FILE}"
-    --output-topic "${GLOBAL_PATH_TOPIC}"
+    --output-topic "${PATH_SOURCE_OUTPUT_TOPIC}"
     --start-pos-tol "${START_POS_TOL}"
     --start-yaw-tol "${START_YAW_TOL}"
 )
@@ -1039,7 +1065,7 @@ TEMPLATE_ARGS=(
     --template "${TEMPLATE_NAME}"
     --start-heading "${TEMPLATE_START_HEADING}"
     --goal-topic "${TEMPLATE_GOAL_TOPIC}"
-    --output-topic "${GLOBAL_PATH_TOPIC}"
+    --output-topic "${PATH_SOURCE_OUTPUT_TOPIC}"
     --path-file "${PATH_FILE}"
     --publish-count 0
 )
@@ -1083,6 +1109,12 @@ POST_PROCESSOR_ARGS=(
     min_length_ratio:="${POST_PROCESSOR_MIN_LENGTH_RATIO}"
     min_segment_length:="${POST_PROCESSOR_MIN_SEGMENT_LENGTH}"
     ay_ratio_limit:="${POST_PROCESSOR_AY_RATIO_LIMIT}"
+    tail_protect_enable:="${POST_PROCESSOR_TAIL_PROTECT_ENABLE}"
+    tail_gate_enable:="${POST_PROCESSOR_TAIL_GATE_ENABLE}"
+    tail_protect_distance:="${POST_PROCESSOR_TAIL_PROTECT_DISTANCE}"
+    tail_protect_mode:="${POST_PROCESSOR_TAIL_PROTECT_MODE}"
+    tail_deviation_limit:="${POST_PROCESSOR_TAIL_DEVIATION_LIMIT}"
+    terminal_tail_heading_limit_deg:="${POST_PROCESSOR_TERMINAL_TAIL_HEADING_LIMIT_DEG}"
     enable_collision_check:="${POST_PROCESSOR_COLLISION_CHECK}"
     costmap_topic:="${POST_PROCESSOR_COSTMAP_TOPIC}"
     prediction_v_max:="${POST_PROCESSOR_PREDICT_V_MAX}"
@@ -1147,11 +1179,13 @@ echo "  PATH_MODE            = ${PATH_MODE}"
 echo "  TEMPLATE_NAME        = ${TEMPLATE_NAME}"
 echo "  PATH_FILE            = ${PATH_FILE}"
 echo "  GLOBAL_PATH_TOPIC    = ${GLOBAL_PATH_TOPIC}"
+echo "  PATH_SOURCE_OUTPUT   = ${PATH_SOURCE_OUTPUT_TOPIC}"
 echo "  post_processor       = ${POST_PROCESSOR_ENABLE}"
 echo "  post_ds              = ${POST_PROCESSOR_DS}"
 echo "  post_collision_check = ${POST_PROCESSOR_COLLISION_CHECK}"
 echo "  post_max_level       = ${POST_PROCESSOR_MAX_CANDIDATE_LEVEL}"
 echo "  post_fixed_candidate = ${POST_PROCESSOR_FIXED_CANDIDATE_NAME}"
+echo "  post_tail_protect    = ${POST_PROCESSOR_TAIL_PROTECT_ENABLE}, gate=${POST_PROCESSOR_TAIL_GATE_ENABLE}, distance=${POST_PROCESSOR_TAIL_PROTECT_DISTANCE}, mode=${POST_PROCESSOR_TAIL_PROTECT_MODE}"
 echo "  post_oscrs_config    = ${POST_PROCESSOR_OSCRS_CONFIG}"
 echo "  post_slosh_score     = ${POST_PROCESSOR_SLOSH_SCORE_ENABLE}"
 echo "  post_oscrs_shadow    = ${POST_PROCESSOR_OSCRS_SHADOW_ENABLE}"

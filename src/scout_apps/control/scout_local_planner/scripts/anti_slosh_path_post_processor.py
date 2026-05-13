@@ -101,6 +101,14 @@ class AntiSloshPathPostProcessor:
         self.unknown_is_obstacle = bool(rospy.get_param("~gates/unknown_is_obstacle", True))
         self.costmap_topic = str(rospy.get_param("~costmap_topic", "/scout/mbf_costmap_nav/global_costmap/costmap"))
         self.max_candidate_level = str(rospy.get_param("~max_candidate_level", "medium")).lower()
+        self.tail_protect_enable = bool(rospy.get_param("~tail_protect/enable", False))
+        self.tail_gate_enable = bool(rospy.get_param("~tail_protect/gate_enable", False))
+        self.tail_protect_distance = max(0.0, float(rospy.get_param("~tail_protect/distance", 0.6)))
+        self.tail_protect_mode = str(rospy.get_param("~tail_protect/mode", "replace_raw_tail"))
+        self.tail_deviation_limit = max(0.0, float(rospy.get_param("~tail_protect/deviation_limit", 0.05)))
+        self.terminal_tail_heading_limit_deg = max(
+            0.0, float(rospy.get_param("~tail_protect/heading_limit_deg", 10.0))
+        )
         self.predict_v_max = max(0.01, float(rospy.get_param("~prediction/v_max", 2.0)))
         self.predict_ay_max = max(0.01, float(rospy.get_param("~prediction/ay_max_budget", 2.0)))
         self.predict_a_max = max(0.01, float(rospy.get_param("~prediction/a_max", 1.0)))
@@ -165,7 +173,7 @@ class AntiSloshPathPostProcessor:
 
         self.path_pub = rospy.Publisher(self.output_topic, NavPath, queue_size=1, latch=True)
         self.metrics_pub = rospy.Publisher("/anti_slosh_path/metrics", Float32MultiArray, queue_size=1)
-        self.candidate_report_pub = rospy.Publisher("/anti_slosh_path/candidate_report", String, queue_size=1)
+        self.candidate_report_pub = rospy.Publisher("/anti_slosh_path/candidate_report", String, queue_size=1, latch=True)
         self.safety_alarm_pub = rospy.Publisher(self.oscrs_alarm_topic, String, queue_size=1, latch=True)
         self.debug_pubs = {}
         if self.publish_debug:
@@ -280,10 +288,12 @@ class AntiSloshPathPostProcessor:
         base_metrics = path_metrics(base, base)
         base_length = max(1e-6, base_metrics["length_m"])
 
-        candidates, _ = generate_georef_candidates_with_meta(
+        candidates, generation_meta = generate_georef_candidates_with_meta(
             base, self.candidate_specs, self.min_segment_length, sanitize_points,
             self.candidate_levels, self.max_candidate_level,
+            self.tail_protect_enable, self.tail_protect_distance, self.tail_protect_mode,
         )
+        self.generation_policy = generation_meta.get("generation_policy", {})
 
         # Pre-compute collision results (requires ROS costmap)
         collision_results = {}
