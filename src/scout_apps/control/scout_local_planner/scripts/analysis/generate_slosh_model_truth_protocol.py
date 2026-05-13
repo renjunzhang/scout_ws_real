@@ -72,6 +72,14 @@ def record_command(bag_dir, label, duration, topics):
     return base
 
 
+def record_script_command(bag_dir, label):
+    return (
+        "cd $(rospack find scout_local_planner)\n"
+        f"SLOSH_BAG_DIR={q(bag_dir)} \\\n"
+        f"./scripts/record_slosh_experiment.sh 0 {label}"
+    )
+
+
 def run_sim_command(path_id, condition, run_id, duration):
     return (
         "PATH_MODE=replay \\\n"
@@ -113,7 +121,7 @@ def markdown(args):
             f"Action: {action}",
             "",
             "```bash",
-            record_command(bag_dir, f"{args.date}_{label}", args.record_duration, DEFAULT_TOPICS),
+            record_script_command(bag_dir, f"modeltruth_{label}"),
             "```",
             "",
         ])
@@ -150,7 +158,7 @@ def shell(args):
         lines.extend([
             "",
             f"# {label}: {action}",
-            record_command(bag_dir, f"{args.date}_{label}", args.record_duration, DEFAULT_TOPICS),
+            record_script_command(bag_dir, f"modeltruth_{label}"),
         ])
     lines.extend(["", "# Fixed-path strategy comparison commands."])
     for path_id, condition, run_id in PATH_TRIALS:
