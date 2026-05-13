@@ -1,0 +1,856 @@
+# Slosh-Priority MPC 实物有效性验证方案
+
+日期：2026-05-13
+
+## 1. 目的
+
+本方案验证一条独立于 OSCRS / GeoRef 的路线：
+
+```text
+通过重新分配 MPC 代价函数中 tracking、速度跟踪、控制平滑和液体模态响应的优先级，
+观察 MPC 是否能在路径跟踪仍可接受的前提下降低真实 RGB 液面晃动。
+```
+
+这不是 OSCRS 主线验证。OSCRS 主线保持：
+
+```text
+Q_slosh=0
+Q_slosh_eta_dot=0
+MPC 作为 normal tracker
+防晃逻辑位于 reference / candidate selection 层
+```
+
+本方案只回答：
+
+```text
+如果把 MPC 本体重新调成 slosh-priority objective，
+它是否能产生可被 RGB 视觉真值支持的抑晃效果？
+```
+
+## 2. 核心假设
+
+普通 tracking MPC 当前默认更偏向：
+
+```text
+强贴线
+强速度跟踪
+控制平滑适中
+晃动 soft cost 关闭
+```
+
+如果只把 `Q_slosh` 拉大，而不降低 `Q_v`、不提高 `R_da/R_domega`，优化器可能只是改变液体相位或产生控制突变，未必降低真实液面。
+
+因此本方案验证的是：
+
+```text
+slosh-aware objective rebalancing
+```
+
+而不是单独验证：
+
+```text
+Q_slosh 越大越好
+```
+
+## 3. 工程前置检查
+
+当前实物入口：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch
+```
+
+已暴露：
+
+```text
+Q_slosh
+Q_slosh_eta_dot
+mpc_Q_lag
+mpc_Q_contour
+mpc_Q_etheta
+mpc_Q_v
+mpc_R_a
+mpc_R_omega
+mpc_R_da
+mpc_R_domega
+terminal_factor_slosh_eta
+terminal_factor_slosh_eta_dot
+enable_slosh_box_constraint
+energy_profile_enable
+risk_scheduler_enable
+input_shaping_enable
+slosh_speed_governor_enable
+```
+
+这些参数会在加载 `mpc_params.yaml` 后、节点初始化前覆盖对应 ROS 参数，因此裸启动默认行为保持不变，带 arg 启动时可直接执行 A/B/C/D/E 五组。
+
+启动时可覆盖：
+
+```text
+mpc/Q_lag
+mpc/Q_v
+mpc/Q_contour
+mpc/Q_etheta
+mpc/R_a
+mpc/R_omega
+mpc/R_da
+mpc/R_domega
+mpc/terminal_factor_slosh_eta
+mpc/terminal_factor_slosh_eta_dot
+```
+
+检查结果：
+
+```text
+src/scout_apps/control/scout_local_planner/launch/slosh_experiment.launch
+  已支持 A/B/C/D/E 组所需的 Q_slosh / Q_slosh_eta_dot / Q_v / Q_contour / Q_etheta /
+  R_a / R_da / R_domega / terminal_factor_slosh_* / global_path_topic 等参数。
+
+src/scout_apps/control/scout_local_planner/launch/slosh_experiment_sim.launch
+  仿真入口已支持部分覆盖：mpc_Q_v / mpc_R_a / mpc_R_da / terminal_factor_slosh_*；
+  但仍未覆盖 Q_contour / Q_etheta / R_domega。
+```
+
+执行前先确认：
+
+```bash
+rosparam get /scout_local_planner/mpc/Q_lag
+rosparam get /scout_local_planner/mpc/Q_contour
+rosparam get /scout_local_planner/mpc/Q_etheta
+rosparam get /scout_local_planner/mpc/Q_v
+rosparam get /scout_local_planner/mpc/R_a
+rosparam get /scout_local_planner/mpc/R_omega
+rosparam get /scout_local_planner/mpc/R_da
+rosparam get /scout_local_planner/mpc/R_domega
+rosparam get /scout_local_planner/mpc/Q_slosh
+rosparam get /scout_local_planner/mpc/Q_slosh_eta_dot
+rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta
+rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta_dot
+```
+
+不要直接改 `mpc_params.yaml` 默认值做正式实验。默认值应继续服务 normal tracking / OSCRS 主线。
+
+## 4. 固定边界
+
+所有组必须使用同一条路径、同一套视觉识别参数、同一相机姿态、同一液位、同一容器、同一初始静止流程。
+
+本方案不允许同时打开这些机制：
+
+```text
+OSCRS post-processor
+GeoRef post-processor
+PROFILE_ENERGY / energy_profile_enable
+input_shaping
+risk_scheduler
+slosh_speed_governor
+enable_slosh_box_constraint
+```
+
+原因：本实验只验证 MPC cost/objective rebalancing。若混入外层参考生成或输出治理，无法归因。
+
+固定关闭：
+
+```text
+energy_profile_enable=false
+input_shaping_enable=false
+risk_scheduler_enable=false
+slosh_speed_governor_enable=false
+enable_slosh_box_constraint=false
+```
+
+`/slosh/height` 只作为模型内部参考和调试量，不能作为真实液面主指标。正式结论以 RGB 视觉液面为准。
+
+## 5. 实验分组
+
+每组至少 3 包；如果组间差异接近，补到 5 包。
+
+### A. BASE
+
+目的：当前普通 tracking MPC 基线。
+
+```yaml
+Q_lag: 0.5
+Q_contour: 32.0
+Q_etheta: 15.0
+Q_v: 9.0
+R_a: 0.4
+R_omega: 2.0
+R_da: 0.5
+R_domega: 4.0
+Q_slosh: 0.0
+Q_slosh_eta_dot: 0.0
+terminal_factor_slosh_eta: 0.0
+terminal_factor_slosh_eta_dot: 0.0
+```
+
+### B. SOFT_SLOSH_ONLY
+
+目的：只验证“在原 tracking MPC 上加入晃动 soft cost”是否有效。
+
+```yaml
+Q_lag: 0.5
+Q_contour: 32.0
+Q_etheta: 15.0
+Q_v: 9.0
+R_a: 0.4
+R_omega: 2.0
+R_da: 0.5
+R_domega: 4.0
+Q_slosh: 5.0
+Q_slosh_eta_dot: 0.01
+terminal_factor_slosh_eta: 0.0
+terminal_factor_slosh_eta_dot: 0.0
+```
+
+解释边界：
+
+```text
+B 组只能说明单独 slosh soft cost 的效果。
+如果 B 不优于 A，不代表 slosh-priority MPC 失败。
+```
+
+### C. SMOOTH_SPEED_RELAXED
+
+目的：区分“降速/平滑控制本身”与“晃动模态项”的贡献。
+
+```yaml
+Q_lag: 0.5
+Q_contour: 28.0
+Q_etheta: 12.0
+Q_v: 3.0
+R_a: 0.5
+R_omega: 2.0
+R_da: 1.5
+R_domega: 6.0
+Q_slosh: 0.0
+Q_slosh_eta_dot: 0.0
+terminal_factor_slosh_eta: 0.0
+terminal_factor_slosh_eta_dot: 0.0
+```
+
+解释边界：
+
+```text
+如果 C 已显著降低 RGB 液面，说明主要收益可能来自速度松弛和控制平滑。
+此时 D 组必须进一步优于 C，才能说明 slosh 模态项有增量价值。
+```
+
+### D. SLOSH_PRIORITY_MPC
+
+目的：主实验组。验证重新分配 MPC objective 后，晃动项是否能产生额外效果。
+
+```yaml
+Q_lag: 0.5
+Q_contour: 28.0
+Q_etheta: 12.0
+Q_v: 3.0
+R_a: 0.5
+R_omega: 2.0
+R_da: 1.5
+R_domega: 6.0
+Q_slosh: 5.0
+Q_slosh_eta_dot: 0.01
+terminal_factor_slosh_eta: 5.0
+terminal_factor_slosh_eta_dot: 3.0
+```
+
+允许的第二轮小步升级：
+
+```yaml
+Q_slosh_eta_dot: 0.02
+terminal_factor_slosh_eta_dot: 5.0
+```
+
+只有在 D 组残余振荡明显、且 cost contribution 显示 `J_slosh_eta_dot` 不是压倒性主导时，才进入该升级。
+
+### E. SLOSH_DOMINANT
+
+目的：展示更强晃动优先级的 trade-off 上限，不作为默认主方法。
+
+```yaml
+Q_lag: 0.5
+Q_contour: 24.0
+Q_etheta: 10.0
+Q_v: 2.0
+R_a: 0.6
+R_omega: 2.0
+R_da: 2.0
+R_domega: 8.0
+Q_slosh: 10.0
+Q_slosh_eta_dot: 0.03
+terminal_factor_slosh_eta: 8.0
+terminal_factor_slosh_eta_dot: 8.0
+```
+
+解释边界：
+
+```text
+E 组若液面更低但 completion time 明显变长，只能作为 trade-off 曲线，不应作为主结论。
+```
+
+## 6. 路径与动作设计
+
+优先使用固定路径 replay，避免每次 MBF 规划差异污染结果。
+
+路径要求：
+
+```text
+开阔场地
+路径长度 >= 4 m
+包含至少一个 90 度左右转弯或 S 型段
+不贴墙
+BASE 能稳定完成
+不需要人工接管
+```
+
+推荐两类路径：
+
+```text
+P2_REAL_S:
+  主要考察 lateral ay / omega / domega 激励。
+
+P3_REAL_MIXED:
+  包含直线加减速 + 弯道，考察 longitudinal ax 与弯道组合激励。
+```
+
+每包开始前必须：
+
+```text
+小车静止 >= 5 s
+液体可视液面基本静止
+相机画面无遮挡
+红液 ROI 和三标尺可见
+```
+
+如果上一包终点残余明显，等待液面停止后再录下一包。
+
+## 7. 推荐录包流程
+
+### 7.1 启动基础系统
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+```
+
+底盘、雷达、定位、相机按实物固定流程启动。RGB 视觉按：
+
+```text
+docs/重要文档/红色液体视觉验证固定流程.md
+```
+
+建议相机保持 30 Hz；如果 USB/CPU 压力导致丢帧，再降到 20 Hz。MPC 控制频率保持 20 Hz，不需要和相机强行一致。
+
+### 7.2 保存固定路径
+
+先用普通导航生成一次目标路径，然后保存：
+
+```bash
+mkdir -p /home/geist/fixed_paths/real
+
+rosrun scout_local_planner fixed_global_path_runner.py \
+  --mode capture \
+  --input-topic /scout/global_path \
+  --path-file /home/geist/fixed_paths/real/slosh_priority_p2_s.json \
+  --capture-timeout 30
+```
+
+检查：
+
+```bash
+python3 -m json.tool /home/geist/fixed_paths/real/slosh_priority_p2_s.json | head
+```
+
+### 7.3 启动 MPC 实验入口
+
+每组都订阅固定路径：
+
+```text
+global_path_topic:=/scout/global_path_fixed
+```
+
+当前实物入口是：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch
+```
+
+它现在能直接运行 A/B/C/D/E 五组。
+
+### 7.3.1 当前实物 launch 可直接运行的命令
+
+A 组 BASE：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path_fixed \
+  mpc_Q_lag:=0.5 \
+  mpc_Q_contour:=32.0 \
+  mpc_Q_etheta:=15.0 \
+  mpc_Q_v:=9.0 \
+  mpc_R_a:=0.4 \
+  mpc_R_omega:=2.0 \
+  mpc_R_da:=0.5 \
+  mpc_R_domega:=4.0 \
+  Q_slosh:=0.0 \
+  Q_slosh_eta_dot:=0.0 \
+  terminal_factor_slosh_eta:=0.0 \
+  terminal_factor_slosh_eta_dot:=0.0 \
+  enable_slosh_box_constraint:=false \
+  energy_profile_enable:=false \
+  input_shaping_enable:=false \
+  risk_scheduler_enable:=false \
+  slosh_speed_governor_enable:=false \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_lateral_accel:=false \
+  slosh_use_imu_alpha_z:=false
+```
+
+B 组 SOFT_SLOSH_ONLY：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path_fixed \
+  mpc_Q_lag:=0.5 \
+  mpc_Q_contour:=32.0 \
+  mpc_Q_etheta:=15.0 \
+  mpc_Q_v:=9.0 \
+  mpc_R_a:=0.4 \
+  mpc_R_omega:=2.0 \
+  mpc_R_da:=0.5 \
+  mpc_R_domega:=4.0 \
+  Q_slosh:=5.0 \
+  Q_slosh_eta_dot:=0.01 \
+  terminal_factor_slosh_eta:=0.0 \
+  terminal_factor_slosh_eta_dot:=0.0 \
+  enable_slosh_box_constraint:=false \
+  energy_profile_enable:=false \
+  input_shaping_enable:=false \
+  risk_scheduler_enable:=false \
+  slosh_speed_governor_enable:=false \
+  slosh_use_imu_yaw_rate:=true \
+  slosh_use_imu_lateral_accel:=false \
+  slosh_use_imu_alpha_z:=false
+```
+
+C 组 SMOOTH_SPEED_RELAXED：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path_fixed \
+  mpc_Q_lag:=0.5 \
+  mpc_Q_contour:=28.0 \
+  mpc_Q_etheta:=12.0 \
+  mpc_Q_v:=3.0 \
+  mpc_R_a:=0.5 \
+  mpc_R_omega:=2.0 \
+  mpc_R_da:=1.5 \
+  mpc_R_domega:=6.0 \
+  Q_slosh:=0.0 \
+  Q_slosh_eta_dot:=0.0 \
+  terminal_factor_slosh_eta:=0.0 \
+  terminal_factor_slosh_eta_dot:=0.0 \
+  enable_slosh_box_constraint:=false \
+  energy_profile_enable:=false \
+  input_shaping_enable:=false \
+  risk_scheduler_enable:=false \
+  slosh_speed_governor_enable:=false
+```
+
+D 组 SLOSH_PRIORITY_MPC：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path_fixed \
+  mpc_Q_lag:=0.5 \
+  mpc_Q_contour:=28.0 \
+  mpc_Q_etheta:=12.0 \
+  mpc_Q_v:=3.0 \
+  mpc_R_a:=0.5 \
+  mpc_R_omega:=2.0 \
+  mpc_R_da:=1.5 \
+  mpc_R_domega:=6.0 \
+  Q_slosh:=5.0 \
+  Q_slosh_eta_dot:=0.01 \
+  terminal_factor_slosh_eta:=5.0 \
+  terminal_factor_slosh_eta_dot:=3.0 \
+  enable_slosh_box_constraint:=false \
+  energy_profile_enable:=false \
+  input_shaping_enable:=false \
+  risk_scheduler_enable:=false \
+  slosh_speed_governor_enable:=false
+```
+
+E 组 SLOSH_DOMINANT：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path_fixed \
+  mpc_Q_lag:=0.5 \
+  mpc_Q_contour:=24.0 \
+  mpc_Q_etheta:=10.0 \
+  mpc_Q_v:=2.0 \
+  mpc_R_a:=0.6 \
+  mpc_R_omega:=2.0 \
+  mpc_R_da:=2.0 \
+  mpc_R_domega:=8.0 \
+  Q_slosh:=10.0 \
+  Q_slosh_eta_dot:=0.03 \
+  terminal_factor_slosh_eta:=8.0 \
+  terminal_factor_slosh_eta_dot:=8.0 \
+  enable_slosh_box_constraint:=false \
+  energy_profile_enable:=false \
+  input_shaping_enable:=false \
+  risk_scheduler_enable:=false \
+  slosh_speed_governor_enable:=false
+```
+
+如果不使用固定路径 replay，而是订阅普通导航路径，则去掉 `global_path_topic:=/scout/global_path_fixed`，保持默认 `/scout/global_path`。
+
+启动后必须核对实际参数：
+
+```bash
+rosparam get /scout_local_planner/mpc/Q_lag
+rosparam get /scout_local_planner/mpc/Q_contour
+rosparam get /scout_local_planner/mpc/Q_etheta
+rosparam get /scout_local_planner/mpc/Q_v
+rosparam get /scout_local_planner/mpc/R_a
+rosparam get /scout_local_planner/mpc/R_omega
+rosparam get /scout_local_planner/mpc/R_da
+rosparam get /scout_local_planner/mpc/R_domega
+rosparam get /scout_local_planner/mpc/Q_slosh
+rosparam get /scout_local_planner/mpc/Q_slosh_eta_dot
+rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta
+rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta_dot
+```
+
+### 7.3.2 可选：回退到当前默认 BASE
+
+如果只想确认裸启动默认参数，可运行：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  global_path_topic:=/scout/global_path_fixed \
+  Q_slosh:=0.0 \
+  Q_slosh_eta_dot:=0.0 \
+  enable_slosh_box_constraint:=false \
+  energy_profile_enable:=false \
+  input_shaping_enable:=false \
+  risk_scheduler_enable:=false \
+  slosh_speed_governor_enable:=false
+```
+
+该命令依赖 `mpc_params.yaml` 默认：
+
+```text
+  mpc_Q_contour:=32.0 \
+  mpc_Q_etheta:=15.0 \
+  mpc_Q_v:=9.0 \
+  mpc_R_a:=0.4 \
+  mpc_R_da:=0.5 \
+  mpc_R_domega:=4.0 \
+```
+
+### 7.4 replay 固定路径
+
+```bash
+rosrun scout_local_planner fixed_global_path_runner.py \
+  --mode replay \
+  --path-file /home/geist/fixed_paths/real/slosh_priority_p2_s.json \
+  --output-topic /scout/global_path_fixed \
+  --manual-start \
+  --start-pos-tol 0.08 \
+  --start-yaw-tol 0.15 \
+  --publish-once-keepalive
+```
+
+### 7.5 录包命名
+
+建议命名：
+
+```text
+slosh_mpc_A_BASE_p2_run01.bag
+slosh_mpc_B_SOFT_SLOSH_ONLY_p2_run01.bag
+slosh_mpc_C_SMOOTH_SPEED_RELAXED_p2_run01.bag
+slosh_mpc_D_SLOSH_PRIORITY_MPC_p2_run01.bag
+slosh_mpc_E_SLOSH_DOMINANT_p2_run01.bag
+```
+
+## 8. 必录 topic
+
+基础控制：
+
+```text
+/cmd_vel
+/odom
+/tf
+/tf_static
+/scout/global_path_fixed
+/scout/global_path_smooth
+/mpc/status_val
+/mpc/solve_time_ms
+```
+
+MPC / slosh 调试：
+
+```text
+/slosh/state
+/slosh/height
+/slosh/eta_norm
+/slosh/eta_dot_norm
+/slosh/modal_energy
+/slosh/modal_energy_norm
+/slosh/ax_est
+/slosh/ay_est
+/slosh/alpha_est
+/slosh/q_slosh_eta
+```
+
+视觉真值：
+
+```text
+/camera/color/image_raw
+/camera/color/camera_info
+```
+
+如使用压缩图像，必须记录对应 image transport 话题，并在视觉脚本中明确输入源。
+
+## 9. 离线分析指标
+
+### 9.1 tracking
+
+```text
+lateral RMSE
+lateral p95
+heading RMSE
+final position error
+completion time
+manual takeover count
+```
+
+最低接受条件：
+
+```text
+completion_time <= BASE * 1.20
+lateral_p95 <= BASE * 1.30
+无碰撞
+无人工接管
+```
+
+### 9.2 control / excitation
+
+```text
+max |v|
+mean |v|
+max |omega|
+RMS |omega|
+max |a_x|
+RMS |a_x|
+max |a_y|
+RMS |a_y|
+max |delta a_x|
+max |delta omega|
+```
+
+关键指标：
+
+```text
+max |a_y|
+RMS |a_y|
+max |a_x|
+max |delta omega|
+```
+
+### 9.3 RGB external slosh truth
+
+使用红液固定流程输出：
+
+```text
+RGB height peak
+RGB height p95
+RGB height RMS
+high-slosh frame ratio
+near-goal last 3 s RGB peak / p95
+```
+
+注意：
+
+```text
+RGB 是实物液面主指标；
+/slosh/height 是模型内部指标，不能作为主结论。
+```
+
+### 9.4 model-side diagnostics
+
+```text
+/slosh/height peak / p95 / RMS
+eta_dot RMS / p95
+modal_energy RMS / p95
+```
+
+这组只用于解释模型是否和 RGB 趋势一致。
+
+### 9.5 solver
+
+```text
+solve_ms median / p95
+status success ratio
+failure count
+fallback / recovery count
+```
+
+最低接受条件：
+
+```text
+solve_success_ratio >= 0.97
+无连续 solver failure
+```
+
+## 10. Cost Contribution Check
+
+为避免 `Q_slosh_eta_dot` 只是摆设或过度主导，正式实验前应做一次 cost contribution 诊断。
+
+至少离线估计这些项：
+
+```text
+J_contour
+J_lag
+J_etheta
+J_v
+J_control
+J_smooth
+J_slosh_eta
+J_slosh_eta_dot
+```
+
+D 组期望：
+
+```text
+J_slosh_eta + J_slosh_eta_dot 可见
+J_v 相对 A/B 下降
+J_smooth 占比上升
+J_contour 仍保持主要路径约束作用
+```
+
+异常判断：
+
+```text
+J_slosh 长期 < 1%:
+  晃动项可能没有实际影响。
+
+J_slosh 长期 > 40%:
+  晃动项可能过度主导，需检查 tracking 和奇怪绕行/慢行。
+
+J_smooth 明显上升但 D 不优于 C:
+  主要收益来自控制平滑，不应声称 slosh 模态项有增量价值。
+```
+
+## 11. 判定逻辑
+
+### 支持 slosh-priority MPC 的结果
+
+```text
+D 相对 A:
+  RGB peak / p95 下降
+  max |a_y| 或 RMS |a_y| 下降
+  max |a_x| 或 RMS |a_x| 不上升
+  tracking_time <= A * 1.20
+  lateral_p95 <= A * 1.30
+
+D 相对 C:
+  RGB peak / p95 仍有额外下降
+  或 near-goal last 3 s 残余更低
+```
+
+此时可以写：
+
+```text
+slosh-aware objective rebalancing provides additional reduction beyond speed relaxation and control smoothing.
+```
+
+### 只支持平滑/降速的结果
+
+```text
+C 明显优于 A
+D 与 C 持平
+```
+
+结论应写成：
+
+```text
+主要收益来自速度跟踪松弛和控制平滑；
+当前 slosh surrogate 在 MPC cost 中没有体现稳定增量。
+```
+
+### 不支持 MPC cost 路线的结果
+
+```text
+B/D/E 的 RGB 液面不降，或 tracking 明显恶化；
+或 /slosh/height 下降但 RGB 不降。
+```
+
+结论应写成：
+
+```text
+模型内部 slosh cost 可以改变控制行为，
+但未转化为真实 RGB 液面收益。
+```
+
+### E 组解释
+
+```text
+E 有效但时间代价大:
+  只能作为 slosh-priority trade-off 上限。
+
+E 仍无效:
+  不继续盲目加大 Q_slosh。
+  优先回到模型保真度和 reference-first 路线。
+```
+
+## 12. 论文表述边界
+
+可以写：
+
+```text
+We evaluate a slosh-priority MPC objective that relaxes speed tracking and increases control smoothness while penalizing predicted modal displacement and velocity.
+```
+
+谨慎写：
+
+```text
+The slosh-priority tuning reduces excitation and RGB-observed liquid oscillation under the tested fixed-path conditions.
+```
+
+不要写：
+
+```text
+Q_slosh alone guarantees anti-sloshing.
+The internal /slosh/height proves real liquid suppression.
+Acceleration constraints always reduce sloshing.
+```
+
+如果 D 组只在部分路径有效，应写：
+
+```text
+The approach is effective in selected fixed-path maneuvers but remains sensitive to model fidelity and execution mismatch.
+```
+
+## 13. 第一轮最小执行清单
+
+第一轮不要直接跑全矩阵。建议：
+
+```text
+1. 补齐或确认 slosh-priority 实验 launch 参数覆盖。
+2. 固定一条 P2_REAL_S 路径。
+3. 每组先录 1 包 A/C/D smoke。
+4. 若 A/C/D 均安全完成，再补 A/B/C/D 各 3 包。
+5. 只有 D 明显优于 C，才跑 E。
+6. 若 P2 成立，再换 P3_REAL_MIXED。
+```
+
+停止条件：
+
+```text
+连续 2 包出现明显 tracking 不可接受、人工接管或 solver failure，
+停止该参数组，不继续加大 Q_slosh。
+```

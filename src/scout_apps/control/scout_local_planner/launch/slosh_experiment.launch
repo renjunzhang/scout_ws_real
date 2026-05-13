@@ -16,6 +16,16 @@
   <!-- ======== 实验参数 ======== -->
   <arg name="Q_slosh" default="0.0"  doc="晃动抑制权重 (消融变量: 0/5/10/20)"/>
   <arg name="Q_slosh_eta_dot" default="0.0" doc="P1: eta_dot 速度惩罚权重，默认关闭；建议从 0.01~0.1 开始调"/>
+  <arg name="mpc_Q_lag" default="0.5" doc="lag/纵向误差权重覆盖，用于 slosh-priority MPC 消融"/>
+  <arg name="mpc_Q_contour" default="32.0" doc="contour/横向误差权重覆盖，用于 slosh-priority MPC 消融"/>
+  <arg name="mpc_Q_etheta" default="15.0" doc="航向误差权重覆盖，用于 slosh-priority MPC 消融"/>
+  <arg name="mpc_Q_v" default="9.0" doc="速度跟踪权重覆盖，用于 slosh-priority MPC 消融"/>
+  <arg name="mpc_R_a" default="0.4" doc="加速度控制权重覆盖，用于 slosh-priority MPC 消融"/>
+  <arg name="mpc_R_omega" default="2.0" doc="角速度控制权重覆盖，用于 slosh-priority MPC 消融"/>
+  <arg name="mpc_R_da" default="0.5" doc="加速度变化权重覆盖，用于 slosh-priority MPC 消融"/>
+  <arg name="mpc_R_domega" default="4.0" doc="角速度变化权重覆盖，用于 slosh-priority MPC 消融"/>
+  <arg name="terminal_factor_slosh_eta" default="0.0" doc="terminal η 代价放大系数，0=关闭；需 Q_slosh>0"/>
+  <arg name="terminal_factor_slosh_eta_dot" default="0.0" doc="terminal η_dot 代价放大系数，0=关闭；需 Q_slosh_eta_dot>0"/>
   <arg name="enable_slosh_box_constraint" default="false" doc="是否启用第一版液面峰值盒约束代理"/>
   <arg name="verbose" default="false" doc="是否输出调试信息"/>
   <arg name="filter_alpha_v" default="1.0" doc="实验模式: 线速度 EMA 系数，1.0 表示关闭额外低通"/>
@@ -66,6 +76,16 @@
     <param name="verbose" value="$(arg verbose)"/>
     <param name="mpc/Q_slosh" value="$(arg Q_slosh)"/>
     <param name="mpc/Q_slosh_eta_dot" value="$(arg Q_slosh_eta_dot)"/>
+    <param name="mpc/Q_lag" value="$(arg mpc_Q_lag)"/>
+    <param name="mpc/Q_contour" value="$(arg mpc_Q_contour)"/>
+    <param name="mpc/Q_etheta" value="$(arg mpc_Q_etheta)"/>
+    <param name="mpc/Q_v" value="$(arg mpc_Q_v)"/>
+    <param name="mpc/R_a" value="$(arg mpc_R_a)"/>
+    <param name="mpc/R_omega" value="$(arg mpc_R_omega)"/>
+    <param name="mpc/R_da" value="$(arg mpc_R_da)"/>
+    <param name="mpc/R_domega" value="$(arg mpc_R_domega)"/>
+    <param name="mpc/terminal_factor_slosh_eta" value="$(arg terminal_factor_slosh_eta)"/>
+    <param name="mpc/terminal_factor_slosh_eta_dot" value="$(arg terminal_factor_slosh_eta_dot)"/>
     <param name="mpc/enable_slosh_box_constraint" value="$(arg enable_slosh_box_constraint)"/>
     <param name="filter/alpha_v" value="$(arg filter_alpha_v)"/>
     <param name="filter/alpha_omega" value="$(arg filter_alpha_omega)"/>
