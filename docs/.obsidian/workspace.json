@@ -185,6 +185,7 @@
   },
   "active": "061354982c15e95b",
   "lastOpenFiles": [
+    "Claude/修改日志-时间/2026-05-14.md",
     "Claude/分析数据/20260513_model_truth_analysis_q50/HSV_TUNING_NOTE.md",
     "Claude/分析数据/20260513_model_truth_analysis_q50/MODEL_TRUTH_FIDELITY_REPORT.md",
     "Claude/分析数据/20260513_model_truth_analysis_q50/plots/model_vs_rgb_p95_summary.png",
@@ -229,7 +230,6 @@
     "Claude/修改方案-时间-简介/2026-05-01_Anti-Slosh_轨迹几何层重设计方案.md",
     "Claude/遇到的问题与解决方案/2026-05-06_RAL投稿方案改进与执行计划.md",
     "Claude/遇到的问题与解决方案/2026-05-05_open场地低激励几何参考仿真验证方案.md",
-    "Claude/总结/2026-05-05_低激励几何参考生成_仿真验证方案.md",
-    "Claude/修改方案-时间-简介/2026-04-15_Day2_ρk调度器实现.md"
+    "Claude/总结/2026-05-05_低激励几何参考生成_仿真验证方案.md"
   ]
 }
