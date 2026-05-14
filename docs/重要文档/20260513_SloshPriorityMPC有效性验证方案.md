@@ -40,6 +40,24 @@ MPC 作为 normal tracker
 
 如果只把 `Q_slosh` 拉大，而不降低 `Q_v`、不提高 `R_da/R_domega`，优化器可能只是改变液体相位或产生控制突变，未必降低真实液面。
 
+本方案的调参原则是：
+
+```text
+不要靠降低 R_a / R_omega 来凸显 slosh；
+要降低速度跟踪刚性，保留路径跟踪刚性，提高 slosh 状态权重；
+同时用控制变化率代价和硬约束防止 bang-bang 控制。
+```
+
+真正证明 slosh 项有效，必须和同等速度/平滑设置下的 `SMOOTH_SPEED_RELAXED` 对照：
+
+```text
+SMOOTH_SPEED_RELAXED:
+  降 Q_v + 提高 R_da/R_domega，但 Q_slosh=0
+
+SLOSH_PRIORITY_MPC:
+  同样 Q_v/R_da/R_domega，只额外打开 Q_slosh/Q_slosh_eta_dot/terminal slosh
+```
+
 因此本方案验证的是：
 
 ```text
@@ -83,6 +101,21 @@ slosh_speed_governor_enable
 ```
 
 这些参数会在加载 `mpc_params.yaml` 后、节点初始化前覆盖对应 ROS 参数，因此裸启动默认行为保持不变，带 arg 启动时可直接执行 A/B/C/D/E 五组。
+
+当前控制频率配置：
+
+```text
+control_rate = 30 Hz
+mpc.dt = 0.0333333333 s
+mpc.N = 60
+prediction horizon ≈ 2.0 s
+```
+
+注意：
+
+```text
+30 Hz 下单周期约 33 ms。N=60 会增加 QP 规模，实物 smoke 必须检查 /mpc/solve_time_ms。
+```
 
 启动时可覆盖：
 
@@ -128,7 +161,7 @@ rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta
 rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta_dot
 ```
 
-不要直接改 `mpc_params.yaml` 默认值做正式实验。默认值应继续服务 normal tracking / OSCRS 主线。
+除控制频率、`N`、`dt` 这类全局时基设置外，不要为某一组实验直接改 `mpc_params.yaml` 默认代价权重。A/B/C/D/E 的代价权重应通过 `slosh_experiment.launch` 参数覆盖。
 
 ## 4. 固定边界
 
@@ -339,7 +372,25 @@ source /home/geist/scout_ws/devel/setup.bash
 docs/重要文档/红色液体视觉验证固定流程.md
 ```
 
-建议相机保持 30 Hz；如果 USB/CPU 压力导致丢帧，再降到 20 Hz。MPC 控制频率保持 20 Hz，不需要和相机强行一致。
+建议相机保持 30 Hz。当前 MPC 控制频率也按 30 Hz 配置，与 RealSense RGB 时间基准对齐。
+
+如果 USB/CPU 压力导致相机丢帧，可先把相机降到 20 Hz；此时不要为了单包实验临时改 MPC 频率，分析时按时间戳重采样对齐。
+
+当前方案已将 MPC 控制频率调整到 30 Hz，与 RealSense RGB 对齐：
+
+```text
+control_rate=30.0
+mpc.dt=0.0333333333
+mpc.N=60
+```
+
+启动后建议确认：
+
+```bash
+rostopic hz /cmd_vel
+rostopic hz /slosh/height
+rostopic echo /mpc/solve_time_ms
+```
 
 ### 7.2 保存固定路径
 
@@ -522,6 +573,9 @@ rosparam get /scout_local_planner/mpc/Q_slosh
 rosparam get /scout_local_planner/mpc/Q_slosh_eta_dot
 rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta
 rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta_dot
+rosparam get /scout_local_planner/mpc/N
+rosparam get /scout_local_planner/mpc/dt
+rosparam get /scout_local_planner/control_rate
 ```
 
 ### 7.3.2 可选：回退到当前默认 BASE
@@ -631,10 +685,17 @@ manual takeover count
 最低接受条件：
 
 ```text
-completion_time <= BASE * 1.20
+completion_time <= BASE * 1.30
 lateral_p95 <= BASE * 1.30
 无碰撞
 无人工接管
+```
+
+说明：
+
+```text
+本方案允许 slosh-priority MPC 适度变慢；变慢本身不是失败。
+但如果 completion_time 明显超过 BASE * 1.30，主结论应写成 trade-off，而不是稳定优于 baseline。
 ```
 
 ### 9.2 control / excitation
@@ -704,6 +765,7 @@ fallback / recovery count
 ```text
 solve_success_ratio >= 0.97
 无连续 solver failure
+solve_ms p95 明显低于 33 ms 控制周期预算
 ```
 
 ## 10. Cost Contribution Check
@@ -754,7 +816,7 @@ D 相对 A:
   RGB peak / p95 下降
   max |a_y| 或 RMS |a_y| 下降
   max |a_x| 或 RMS |a_x| 不上升
-  tracking_time <= A * 1.20
+  tracking_time <= A * 1.30
   lateral_p95 <= A * 1.30
 
 D 相对 C:
@@ -840,7 +902,7 @@ The approach is effective in selected fixed-path maneuvers but remains sensitive
 第一轮不要直接跑全矩阵。建议：
 
 ```text
-1. 补齐或确认 slosh-priority 实验 launch 参数覆盖。
+1. 确认 slosh_experiment.launch 参数覆盖和 30 Hz 时基生效。
 2. 固定一条 P2_REAL_S 路径。
 3. 每组先录 1 包 A/C/D smoke。
 4. 若 A/C/D 均安全完成，再补 A/B/C/D 各 3 包。
@@ -853,4 +915,6 @@ The approach is effective in selected fixed-path maneuvers but remains sensitive
 ```text
 连续 2 包出现明显 tracking 不可接受、人工接管或 solver failure，
 停止该参数组，不继续加大 Q_slosh。
+
+30 Hz 下若 solve_ms p95 接近或超过 33 ms，先停止正式录包，回查 N=60 的求解负载。
 ```

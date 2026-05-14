@@ -8,6 +8,15 @@
 #   ./record_slosh_experiment.sh 10             # Q_slosh=10
 #   ./record_slosh_experiment.sh 10 trial_3     # Q_slosh=10, 自定义后缀
 #
+# 完整 MPC 启动模板:
+#   roslaunch scout_local_planner slosh_experiment.launch \
+#     global_path_topic:=/scout/global_path_anti_slosh \
+#     Q_slosh:=0 ... (其他参数)
+#
+# 说明：
+#   terminal recovery 默认开启；recovery 分支会持续发布 /slosh/*，
+#   不需要为了录包额外关闭 terminal_recovery_enable。
+#
 # 录制内容：
 #   - 晃动状态：/slosh/state, /slosh/height, /slosh/height_pred_max
 #                /slosh/q_slosh_eta

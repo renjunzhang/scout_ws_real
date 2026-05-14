@@ -28,6 +28,9 @@
   <arg name="filter_alpha_omega" default="1.0" doc="实验模式: 角速度 EMA 系数，1.0 表示关闭额外低通"/>
   <arg name="filter_kappa_boost" default="0.0" doc="实验模式: 关闭曲率自适应 EMA 增益"/>
   <arg name="reached_debug_duration" default="5.0" doc="到达终点后继续输出 slosh debug 的时长（秒）"/>
+  <arg name="terminal_recovery_enable" default="true" doc="终点 terminal recovery；默认开启，recovery 分支仍会持续发布 /slosh/* 调试话题"/>
+  <arg name="terminal_cmd_v_rate_limit" default="0.35" doc="terminal recovery 线速度命令变化率上限 (m/s^2)，降低接管瞬间 ax"/>
+  <arg name="terminal_cmd_omega_rate_limit" default="1.0" doc="terminal recovery 角速度命令变化率上限 (rad/s^2)，降低接管瞬间 alpha"/>
   <arg name="slosh_speed_governor_enable" default="false" doc="是否启用残余晃动感知的速度治理"/>
   <arg name="slosh_speed_governor_k_eta" default="2.5" doc="速度治理液面高度比例缩放系数"/>
   <arg name="slosh_speed_governor_ay_max_base" default="0.0" doc="速度治理横向加速度预算"/>
@@ -92,6 +95,9 @@
     <param name="filter/alpha_omega" value="$(arg filter_alpha_omega)"/>
     <param name="filter/kappa_boost" value="$(arg filter_kappa_boost)"/>
     <param name="experiment/reached_debug_duration" value="$(arg reached_debug_duration)"/>
+    <param name="terminal_recovery/enable" value="$(arg terminal_recovery_enable)"/>
+    <param name="terminal_recovery/cmd_v_rate_limit" value="$(arg terminal_cmd_v_rate_limit)"/>
+    <param name="terminal_recovery/cmd_omega_rate_limit" value="$(arg terminal_cmd_omega_rate_limit)"/>
     <param name="slosh_speed_governor/enable" value="$(arg slosh_speed_governor_enable)"/>
     <param name="slosh_speed_governor/k_eta" value="$(arg slosh_speed_governor_k_eta)"/>
     <param name="slosh_speed_governor/ay_max_base" value="$(arg slosh_speed_governor_ay_max_base)"/>

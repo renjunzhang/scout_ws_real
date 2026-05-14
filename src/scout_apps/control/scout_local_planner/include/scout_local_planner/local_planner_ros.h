@@ -82,6 +82,7 @@ private:
                                     double& v_cmd,
                                     double& omega_cmd,
                                     TerminalMode& mode) const;
+    void limitTerminalRecoveryCmd(double& v_cmd, double& omega_cmd) const;
     int computeSettlingRequiredSteps() const;
     void publishSettlingTime(bool timeout);
     void updateState();
@@ -118,7 +119,7 @@ private:
     MPCParams mpc_params_;
     VehicleParams vehicle_params_;
     PathHandlerParams path_params_;
-    double control_rate_ = 20.0;  // Hz
+    double control_rate_ = 30.0;  // Hz
     std::string base_frame_ = "base_link";
     std::string map_frame_ = "map";
     double infeasible_decel_ = 1.0;       // 不可行时制动减速度 (m/s^2)
@@ -162,6 +163,8 @@ private:
     double terminal_dist_gain_ = 0.8;
     double terminal_v_min_ = 0.05;
     double terminal_v_max_ = 0.18;
+    double terminal_cmd_v_rate_limit_ = 0.35;
+    double terminal_cmd_omega_rate_limit_ = 1.0;
 
     // ISR / ZV input shaping（baseline only, default off）
     bool input_shaping_enable_ = false;

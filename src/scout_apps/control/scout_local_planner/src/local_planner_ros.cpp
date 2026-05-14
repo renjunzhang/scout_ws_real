@@ -236,8 +236,8 @@ void LocalPlannerROS::run() {
 
 void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     // MPC 参数
-    pnh.param("mpc/N", mpc_params_.N, 20);
-    pnh.param("mpc/dt", mpc_params_.dt, 0.05);
+    pnh.param("mpc/N", mpc_params_.N, 60);
+    pnh.param("mpc/dt", mpc_params_.dt, 1.0 / 30.0);
     pnh.param("mpc/cmd_vel_lead_time", mpc_params_.cmd_vel_lead_time, -1.0);
     pnh.param("mpc/Q_el", mpc_params_.Q_el, 1.0);
     pnh.param("mpc/Q_ec", mpc_params_.Q_ec, 10.0);
@@ -352,7 +352,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
               path_params_.smoothed_path_points, 80);
     
     // 其他参数
-    pnh.param("control_rate", control_rate_, 20.0);
+    pnh.param("control_rate", control_rate_, 30.0);
     pnh.param("base_frame", base_frame_, std::string("base_link"));
     pnh.param("map_frame", map_frame_, std::string("map"));
     pnh.param("verbose", verbose_, false);
@@ -409,6 +409,8 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("terminal_recovery/dist_gain", terminal_dist_gain_, 0.8);
     pnh.param("terminal_recovery/v_min", terminal_v_min_, 0.05);
     pnh.param("terminal_recovery/v_max", terminal_v_max_, 0.18);
+    pnh.param("terminal_recovery/cmd_v_rate_limit", terminal_cmd_v_rate_limit_, 0.35);
+    pnh.param("terminal_recovery/cmd_omega_rate_limit", terminal_cmd_omega_rate_limit_, 1.0);
 
     // ISR / ZV input shaping（baseline only）
     pnh.param("input_shaping/enable", input_shaping_enable_, false);
@@ -760,6 +762,8 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     double term_omega = 0.0;
                     TerminalMode term_mode = TerminalMode::NONE;
                     if (computeTerminalRecoveryCmd(goal_info, term_v, term_omega, term_mode)) {
+                        const double prev_cmd_v = filtered_v_;
+                        limitTerminalRecoveryCmd(term_v, term_omega);
                         heading_align_active_ = false;
                         switch (term_mode) {
                             case TerminalMode::ALIGN_TO_POINT:
@@ -779,7 +783,12 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         terminal_goal_info_debug_ = goal_info;
                         terminal_goal_info_valid_ = true;
                         publishCmdVel(term_v, term_omega);
+                        const double dt_cmd = control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
+                        last_control_(ControlIndex::A) =
+                            (filtered_v_ - prev_cmd_v) / std::max(1e-6, dt_cmd);
+                        last_control_(ControlIndex::OMEGA) = filtered_omega_;
                         publishTerminalDebug();
+                        publishSloshDebug(last_solve_time_ms_, last_solve_ok_, false);
 
                         if (verbose_) {
                             ROS_INFO_THROTTLE(
@@ -1392,6 +1401,22 @@ bool LocalPlannerROS::computeTerminalRecoveryCmd(const GoalInfo& goal,
     }
 
     return false;
+}
+
+void LocalPlannerROS::limitTerminalRecoveryCmd(double& v_cmd, double& omega_cmd) const {
+    const double dt = control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
+    const double step_dt = std::max(1e-6, dt);
+
+    auto limit_rate = [step_dt](double target, double current, double rate_limit) {
+        if (!std::isfinite(target) || !std::isfinite(current) || rate_limit <= 1e-6) {
+            return target;
+        }
+        const double max_delta = rate_limit * step_dt;
+        return std::max(current - max_delta, std::min(current + max_delta, target));
+    };
+
+    v_cmd = limit_rate(v_cmd, filtered_v_, terminal_cmd_v_rate_limit_);
+    omega_cmd = limit_rate(omega_cmd, filtered_omega_, terminal_cmd_omega_rate_limit_);
 }
 
 int LocalPlannerROS::computeSettlingRequiredSteps() const {
