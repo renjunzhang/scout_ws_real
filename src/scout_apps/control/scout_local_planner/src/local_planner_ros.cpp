@@ -736,7 +736,14 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 GoalInfo goal_info;
                 const bool has_goal_info = path_handler_.getGoalInfo(goal_info);
 
-                if (!settling_active && terminal_recovery_enable_ && !goal_stop_pending_) {
+                const bool terminal_recovery_allowed =
+                    has_goal_info &&
+                    goal_info.valid &&
+                    (goal_info.position_reached || goal_info.dx < terminal_goal_behind_x_);
+                if (!settling_active &&
+                    terminal_recovery_enable_ &&
+                    !goal_stop_pending_ &&
+                    terminal_recovery_allowed) {
                     if (terminal_recovery_latched_) {
                         const bool should_release =
                             !has_goal_info ||
@@ -892,6 +899,19 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         const double v_cap =
                             terminal_cap + (std::max(0.0, v_des_cmd) - terminal_cap) * smooth;
                         v_des_cmd = std::min(v_des_cmd, v_cap);
+
+                        const double decel =
+                            terminal_cmd_v_rate_limit_ > 1e-6 ? terminal_cmd_v_rate_limit_ :
+                            (path_params_.max_tan_decel > 1e-6 ? path_params_.max_tan_decel :
+                             vehicle_params_.a_max);
+                        if (decel > 1e-6) {
+                            const double remain =
+                                std::max(0.0, goal_dist_slow - path_params_.goal_tolerance);
+                            const double goal_speed = std::max(0.0, path_params_.goal_speed);
+                            const double brake_cap =
+                                std::sqrt(goal_speed * goal_speed + 2.0 * decel * remain);
+                            v_des_cmd = std::min(v_des_cmd, brake_cap);
+                        }
                     }
                 }
                 int reentry_steps_dbg = tracking_reentry_ramp_steps_left_;

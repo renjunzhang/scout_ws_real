@@ -432,6 +432,21 @@ yaw 不满足:
   终点姿态问题只作为单独诊断项处理，不允许继续驱动车辆高速越过终点。
 ```
 
+terminal recovery 当前只在以下情况接管：
+
+```text
+1. position_reached=true，但 yaw 或 terminal settling 仍需处理；
+2. goal 已经落到车后方，说明已经越过目标，需要 recovery 调整。
+```
+
+在位置未到且 goal 仍在前方时，终点接近阶段继续交给 MPC TRACKING。MPC 会在 `terminal_slowdown_distance` 内按剩余距离施加制动速度上限：
+
+```text
+v_des_cmd <= sqrt(goal_speed^2 + 2 * decel * max(0, goal_dist - goal_tolerance))
+```
+
+其中 `decel` 优先使用 `terminal_cmd_v_rate_limit`，用于让参考速度平滑降到 `goal_tolerance` 附近的 0。这样避免 terminal recovery 在容差外提前接管并以固定低速穿过终点。
+
 ### 7.2 保存固定路径
 
 先用普通导航生成一次目标路径，然后保存：
