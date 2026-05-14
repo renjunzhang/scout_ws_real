@@ -418,6 +418,8 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("terminal_slowdown/Q_v", terminal_slowdown_q_v_, 40.0);
     pnh.param("terminal_slowdown/terminal_factor_v",
               terminal_slowdown_terminal_factor_v_, 5.0);
+    pnh.param("terminal_capture_stop/enable", terminal_capture_stop_enable_, true);
+    pnh.param("terminal_capture_stop/distance", terminal_capture_stop_distance_, 0.70);
 
     // ISR / ZV input shaping（baseline only）
     pnh.param("input_shaping/enable", input_shaping_enable_, false);
@@ -738,6 +740,33 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 const bool settling_active = (state_ == PlannerState::SETTLING);
                 GoalInfo goal_info;
                 const bool has_goal_info = path_handler_.getGoalInfo(goal_info);
+                const bool terminal_capture_stop_active =
+                    !settling_active &&
+                    terminal_capture_stop_enable_ &&
+                    has_goal_info &&
+                    goal_info.valid &&
+                    std::isfinite(goal_info.dist) &&
+                    goal_info.dist < terminal_capture_stop_distance_;
+
+                if (terminal_capture_stop_active) {
+                    goal_stop_pending_ = true;
+                    terminal_recovery_latched_ = false;
+                    heading_align_active_ = false;
+                    terminal_mode_debug_ = "CAPTURE_STOP";
+                    publishCmdVel(0.0, 0.0);
+                    publishTerminalDebug();
+                    publishSloshDebug(last_solve_time_ms_, last_solve_ok_, false);
+
+                    const bool speed_low =
+                        std::abs(current_v_) < path_params_.goal_reached_max_speed &&
+                        std::abs(current_omega_) < path_params_.goal_reached_max_omega;
+                    if (speed_low) {
+                        transitionTo(PlannerState::REACHED);
+                        goal_stop_pending_ = false;
+                        resetWarmStart(false, false);
+                    }
+                    return;
+                }
 
                 const bool terminal_recovery_allowed =
                     has_goal_info &&
@@ -1552,7 +1581,13 @@ void LocalPlannerROS::updateState() {
         has_goal_info && goal_info.valid && goal_info.position_reached;
     const double goal_dist = path_handler_.getGoalDistance();
     const double goal_stop_release_dist =
-        std::max(path_params_.goal_capture_distance, path_params_.goal_tolerance + 0.15);
+        std::max({path_params_.goal_capture_distance,
+                  path_params_.goal_tolerance + 0.15,
+                  terminal_capture_stop_enable_ ? terminal_capture_stop_distance_ + 0.10 : 0.0});
+    const bool terminal_capture_stop_reached =
+        terminal_capture_stop_enable_ &&
+        std::isfinite(goal_dist) &&
+        goal_dist < terminal_capture_stop_distance_;
 
     if (state_ == PlannerState::SETTLING) {
         terminal_recovery_latched_ = false;
@@ -1601,7 +1636,7 @@ void LocalPlannerROS::updateState() {
         }
     }
 
-    if (!goal_stop_pending_ && !goal_position_reached) {
+    if (!goal_stop_pending_ && !goal_position_reached && !terminal_capture_stop_reached) {
         return;
     }
 
@@ -1612,6 +1647,8 @@ void LocalPlannerROS::updateState() {
             terminal_recovery_latched_ = false;
             return;
         }
+        goal_stop_pending_ = true;
+    } else if (terminal_capture_stop_reached) {
         goal_stop_pending_ = true;
     }
 

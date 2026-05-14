@@ -99,13 +99,15 @@ terminal_slowdown_distance
 terminal_slowdown_v_max
 terminal_slowdown_Q_v
 terminal_slowdown_terminal_factor_v
+terminal_capture_stop_enable
+terminal_capture_stop_distance
 energy_profile_enable
 risk_scheduler_enable
 input_shaping_enable
 slosh_speed_governor_enable
 ```
 
-这些参数会在加载 `mpc_params.yaml` 后、节点初始化前覆盖对应 ROS 参数，因此裸启动默认行为保持不变，带 arg 启动时可直接执行 A/B/C/D/E 五组。
+这些参数会在加载 `mpc_params.yaml` 后、节点初始化前覆盖对应 ROS 参数。A/B/C/D/E 五组通过 launch arg 覆盖代价权重；终点默认采用 `mpc_planner` 风格的外层 capture stop，不把 near-goal 停车段作为 slosh 主效果窗口。
 
 当前控制频率配置：
 
@@ -165,6 +167,8 @@ rosparam get /scout_local_planner/mpc/Q_slosh
 rosparam get /scout_local_planner/mpc/Q_slosh_eta_dot
 rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta
 rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta_dot
+rosparam get /scout_local_planner/terminal_capture_stop/enable
+rosparam get /scout_local_planner/terminal_capture_stop/distance
 ```
 
 除控制频率、`N`、`dt` 这类全局时基设置外，不要为某一组实验直接改 `mpc_params.yaml` 默认代价权重。A/B/C/D/E 的代价权重应通过 `slosh_experiment.launch` 参数覆盖。
@@ -399,7 +403,35 @@ rostopic echo /mpc/solve_ms
 rostopic echo /mpc/cost_breakdown
 ```
 
-当前实物入口默认启用终点前平滑减速：
+当前实物入口采用三层终点策略，借鉴 `src/mpc_planner` 的外层 goal capture 思路：MPC 负责主路径跟踪，终点附近由外层状态机验收和停车，不要求 MPC 在最后几十厘米继续精确贴点。
+
+第一层：进入 capture stop 半径后直接停车。
+
+```text
+terminal_capture_stop_enable=true
+terminal_capture_stop_distance=0.70
+```
+
+语义：
+
+```text
+goal_dist < terminal_capture_stop_distance:
+  不再依赖 MPC solve / reference sequence 继续贴终点；
+  直接发布 cmd_vel = 0；
+  若 odom 速度降到 goal_reached_max_speed / goal_reached_max_omega 以下，则进入 REACHED。
+```
+
+这对应 `mpc_planner` 的处理方式：
+
+```text
+GoalModule / Contouring 均使用约 1.0m 的宽到达判定；
+ROS navigation 外层 isGoalReached/reset 负责结束任务；
+MPC 不承担最后厘米级停车。
+```
+
+本项目使用 0.70m 而不是 1.0m，是为了减少固定路径实验中“停得过早”的风险。若仍过冲，可改到 0.90 或 1.00；若明显过早，可降到 0.50。
+
+第二层：capture stop 之前仍保留平滑 slowdown 参考。
 
 ```text
 terminal_slowdown_enable=true
@@ -409,41 +441,7 @@ terminal_slowdown_Q_v=40.0
 terminal_slowdown_terminal_factor_v=5.0
 ```
 
-其作用是在 terminal recovery 接管前，随 `goal_dist` 连续降低 `v_des_cmd`，避免 near-goal 仍以较高速度进入 recovery 后再调头。若诊断脚本仍显示：
-
-```text
-REFERENCE_SPEED_TOO_HIGH_NEAR_GOAL
-EXECUTION_SPEED_TOO_HIGH_NEAR_GOAL
-```
-
-优先小步调整：
-
-```text
-terminal_slowdown_distance: 1.20 -> 1.50
-terminal_slowdown_v_max: 0.18 -> 0.15
-```
-
-不要通过增大 `Q_slosh` 解决终点过冲。
-
-终点状态机当前采用 position / yaw 解耦：
-
-```text
-position_reached=true:
-  先进入 goal_stop_pending，将 v_des_cmd 压到 0，等待线速度 / 角速度降到 REACHED 阈值。
-
-yaw 不满足:
-  不再阻止线速度停车。
-  终点姿态问题只作为单独诊断项处理，不允许继续驱动车辆高速越过终点。
-```
-
-terminal recovery 当前只在以下情况接管：
-
-```text
-1. position_reached=true，但 yaw 或 terminal settling 仍需处理；
-2. goal 已经落到车后方，说明已经越过目标，需要 recovery 调整。
-```
-
-在位置未到且 goal 仍在前方时，终点接近阶段继续交给 MPC TRACKING。MPC 会在 `terminal_slowdown_distance` 内按剩余距离施加制动速度包络：
+slowdown 的作用是在进入 capture stop 前降低接近速度。MPC 会在 `terminal_slowdown_distance` 内按剩余距离施加制动速度包络：
 
 ```text
 v_brake = sqrt(goal_speed^2 + 2 * decel * max(0, goal_dist - goal_tolerance))
@@ -464,6 +462,19 @@ terminal_factor_v >= terminal_slowdown_terminal_factor_v
 ```
 
 这样终点停车段的速度参考不再只是软提示，避免 slosh-priority 组因为降低 `Q_v` 而忽略停车参考。该临时权重只作用于 `terminal_slowdown` 内，不参与进入 `terminal_slowdown` 前的 slosh cost 主有效性判断。
+
+第三层：terminal recovery 只处理位置已到后的姿态/残余问题，或已经越过目标后的恢复。
+
+```text
+position_reached=true:
+  yaw 不阻止线速度停车；
+  如需姿态修正，再由 terminal recovery 处理。
+
+goal 已经落到车后方:
+  terminal recovery 可进入 ALIGN_TO_POINT，作为越过终点后的恢复。
+```
+
+不要通过增大 `Q_slosh` 解决终点过冲。终点策略不参与 slosh 主归因，主结论只看进入 `terminal_slowdown` 前的 `TRACKING_PRE_TERMINAL`。
 
 ### 7.2 保存固定路径
 
@@ -649,6 +660,8 @@ rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta_dot
 rosparam get /scout_local_planner/mpc/N
 rosparam get /scout_local_planner/mpc/dt
 rosparam get /scout_local_planner/control_rate
+rosparam get /scout_local_planner/terminal_capture_stop/enable
+rosparam get /scout_local_planner/terminal_capture_stop/distance
 ```
 
 ### 7.3.2 可选：回退到当前默认 BASE
@@ -767,67 +780,50 @@ dx < -0.05 且 terminal/mode = ALIGN_TO_POINT
 
 这表示小车已经越过终点，terminal recovery 正在调头对准 goal。此时应优先检查终点速度剖面、固定路径终点姿态和 terminal recovery 参数，而不是把问题归因到晃动项。
 
-### 7.7 终点强制减速兜底
+### 7.7 终点 capture stop 调参
 
-如果结构性终点制动仍然出现过冲，可以进入“终点安全停车优先”配置。该配置会牺牲 near-goal 加速度平滑性，只用于保证任务完成和避免越过终点；不要把该段 near-goal 降晃写成 slosh cost 的主效果。
+默认终点策略已经不再依赖“最后几厘米 MPC 精确停车”。如果仍出现过冲，优先调 capture stop 半径，而不是继续增大 `Q_slosh` 或堆 terminal slowdown 权重。
 
-第一档强制减速：
-
-```bash
-roslaunch scout_local_planner slosh_experiment.launch \
-  terminal_slowdown_distance:=1.80 \
-  terminal_slowdown_v_max:=0.10 \
-  terminal_slowdown_Q_v:=80.0 \
-  terminal_slowdown_terminal_factor_v:=10.0 \
-  terminal_cmd_v_rate_limit:=0.8 \
-  terminal_cmd_omega_rate_limit:=2.0
-```
-
-第二档强制减速：
+更早捕获：
 
 ```bash
 roslaunch scout_local_planner slosh_experiment.launch \
-  terminal_slowdown_distance:=2.20 \
-  terminal_slowdown_v_max:=0.06 \
-  terminal_slowdown_Q_v:=120.0 \
-  terminal_slowdown_terminal_factor_v:=15.0 \
-  terminal_cmd_v_rate_limit:=1.2 \
-  terminal_cmd_omega_rate_limit:=3.0
+  terminal_capture_stop_enable:=true \
+  terminal_capture_stop_distance:=0.90
 ```
 
-参数含义：
+最保守捕获，接近 `mpc_planner` 的 1m 到达口径：
 
-```text
-terminal_slowdown_distance:
-  更早进入终点制动包络。
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  terminal_capture_stop_enable:=true \
+  terminal_capture_stop_distance:=1.00
+```
 
-terminal_slowdown_v_max:
-  降低终点段速度上界。
+如果停得明显过早：
 
-terminal_slowdown_Q_v / terminal_slowdown_terminal_factor_v:
-  让 MPC 更硬地追终点制动参考。
-
-terminal_cmd_v_rate_limit:
-  提高终点制动可用减速度；会带来更大 ax，但能减少过冲。
-
-terminal_cmd_omega_rate_limit:
-  让终点姿态修正更快；可能增加 near-goal 角加速度。
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  terminal_capture_stop_enable:=true \
+  terminal_capture_stop_distance:=0.50
 ```
 
 实验归因口径：
 
 ```text
+capture stop 用于任务完成和避免过冲。
+NEAR_GOAL / capture stop 段不参与 slosh cost 主归因。
 slosh 主结论只看 TRACKING_PRE_TERMINAL。
-终点强制减速段只用于任务完成和避免过冲，不参与 slosh cost 主归因。
 ```
 
-如果第二档仍然过冲，优先检查：
+如果 `terminal_capture_stop_distance:=1.00` 仍过冲，优先检查：
 
 ```text
-1. 固定路径终点是否在真实目标后方；
-2. /odom 或 map->base_link 是否有延迟/漂移；
+1. 当前运行节点是否确实使用了最新 devel 编译产物；
+2. /cmd_vel 是否真的在 capture stop 后变成 0；
 3. 底盘执行 cmd_vel 是否有明显滞后；
-4. 当前运行节点是否确实使用了最新 devel 编译产物。
+4. /odom 或 map->base_link 是否有延迟/漂移；
+5. 固定路径终点是否在真实目标后方。
 ```
 
 ## 8. 必录 topic
@@ -1136,7 +1132,7 @@ NEAR_GOAL:
   goal_dist <= terminal_slowdown_distance
 ```
 
-`NEAR_GOAL` 只能用于说明终点策略是否平稳，不能作为 slosh cost 主证明。所有 A/B/C/D/E 分组仍必须使用同一套 `terminal_slowdown`、position/yaw 解耦和 terminal recovery 逻辑。
+`NEAR_GOAL` 只能用于说明终点策略是否平稳，不能作为 slosh cost 主证明。所有 A/B/C/D/E 分组仍必须使用同一套 `terminal_capture_stop`、`terminal_slowdown`、position/yaw 解耦和 terminal recovery 逻辑。
 
 ### 支持 slosh-priority MPC 的结果
 
