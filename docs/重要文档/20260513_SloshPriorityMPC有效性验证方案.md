@@ -632,6 +632,70 @@ slosh_mpc_D_SLOSH_PRIORITY_MPC_p2_run01.bag
 slosh_mpc_E_SLOSH_DOMINANT_p2_run01.bag
 ```
 
+### 7.6 终点过冲诊断脚本
+
+如果出现“超过终点后调头”，先不要直接改 `Q_slosh`。该现象通常来自终点逻辑，例如：
+
+```text
+1. 车已经越过 goal，terminal recovery 进入 ALIGN_TO_POINT；
+2. 终点前 reference/v_ref 或 cmd_vel 仍偏高；
+3. 位置已经到达，但终点 yaw 不满足，导致姿态修正；
+4. near-goal solver failure 或代价占比异常。
+```
+
+实时监测：
+
+```bash
+python3 /home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/analysis/diagnose_terminal_overshoot.py
+```
+
+离线分析 bag：
+
+```bash
+python3 /home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/analysis/diagnose_terminal_overshoot.py \
+  --bag /home/geist/slosh_bags/real/xxx.bag
+```
+
+如果是在 `/home/a/scout_ws` 机器上运行，把路径改成：
+
+```bash
+python3 /home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/analysis/diagnose_terminal_overshoot.py \
+  --bag /data/a/slosh_bags/real/xxx.bag
+```
+
+脚本读取：
+
+```text
+/terminal/goal_info
+/terminal/mode
+/terminal/recovery_latched
+/cmd_vel
+/odom
+/reference/v_ref
+/mpc/status_val
+/mpc/cost_breakdown
+```
+
+输出原因标签：
+
+```text
+GOAL_PASSED_THEN_TERMINAL_TURNBACK
+REFERENCE_SPEED_TOO_HIGH_NEAR_GOAL
+EXECUTION_SPEED_TOO_HIGH_NEAR_GOAL
+ENDPOINT_YAW_MISMATCH
+LARGE_TERMINAL_BEARING
+SOLVER_FAILURE_NEAR_GOAL
+TERMINAL_RECOVERY_ACTIVE
+```
+
+关键判断：
+
+```text
+dx < -0.05 且 terminal/mode = ALIGN_TO_POINT
+```
+
+这表示小车已经越过终点，terminal recovery 正在调头对准 goal。此时应优先检查终点速度剖面、固定路径终点姿态和 terminal recovery 参数，而不是把问题归因到晃动项。
+
 ## 8. 必录 topic
 
 基础控制：
