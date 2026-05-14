@@ -97,6 +97,8 @@ enable_slosh_box_constraint
 terminal_slowdown_enable
 terminal_slowdown_distance
 terminal_slowdown_v_max
+terminal_slowdown_Q_v
+terminal_slowdown_terminal_factor_v
 energy_profile_enable
 risk_scheduler_enable
 input_shaping_enable
@@ -403,6 +405,8 @@ rostopic echo /mpc/cost_breakdown
 terminal_slowdown_enable=true
 terminal_slowdown_distance=1.20
 terminal_slowdown_v_max=0.18
+terminal_slowdown_Q_v=40.0
+terminal_slowdown_terminal_factor_v=5.0
 ```
 
 其作用是在 terminal recovery 接管前，随 `goal_dist` 连续降低 `v_des_cmd`，避免 near-goal 仍以较高速度进入 recovery 后再调头。若诊断脚本仍显示：
@@ -439,13 +443,27 @@ terminal recovery 当前只在以下情况接管：
 2. goal 已经落到车后方，说明已经越过目标，需要 recovery 调整。
 ```
 
-在位置未到且 goal 仍在前方时，终点接近阶段继续交给 MPC TRACKING。MPC 会在 `terminal_slowdown_distance` 内按剩余距离施加制动速度上限：
+在位置未到且 goal 仍在前方时，终点接近阶段继续交给 MPC TRACKING。MPC 会在 `terminal_slowdown_distance` 内按剩余距离施加制动速度包络：
 
 ```text
-v_des_cmd <= sqrt(goal_speed^2 + 2 * decel * max(0, goal_dist - goal_tolerance))
+v_brake = sqrt(goal_speed^2 + 2 * decel * max(0, goal_dist - goal_tolerance))
+v_terminal = min(terminal_slowdown_v_max, v_brake)
+v_cap = smoothstep(goal_dist) * v_nominal + (1 - smoothstep(goal_dist)) * v_terminal
+v_des_cmd <= v_cap
 ```
 
-其中 `decel` 优先使用 `terminal_cmd_v_rate_limit`，用于让参考速度平滑降到 `goal_tolerance` 附近的 0。这样避免 terminal recovery 在容差外提前接管并以固定低速穿过终点。
+其中 `decel` 优先使用 `terminal_cmd_v_rate_limit`。`v_brake` 是按“剩余距离内能制动到 `goal_speed`”反推的速度上限；`smoothstep(goal_dist)` 用于从正常巡航速度平滑过渡到该制动包络。
+
+注意：`terminal_slowdown_v_max` 只是终点段速度上界，不再作为 0.18 m/s 平台速度。越接近 `goal_tolerance`，`v_brake` 会继续降到 `goal_speed=0`，避免最后只在几厘米内才刹停。
+
+当该制动速度上限实际低于当前 `v_des_cmd` 时，控制器会临时提高速度跟踪权重：
+
+```text
+Q_v >= terminal_slowdown_Q_v
+terminal_factor_v >= terminal_slowdown_terminal_factor_v
+```
+
+这样终点停车段的速度参考不再只是软提示，避免 slosh-priority 组因为降低 `Q_v` 而忽略停车参考。该临时权重只作用于 `terminal_slowdown` 内，不参与进入 `terminal_slowdown` 前的 slosh cost 主有效性判断。
 
 ### 7.2 保存固定路径
 
@@ -748,6 +766,69 @@ dx < -0.05 且 terminal/mode = ALIGN_TO_POINT
 ```
 
 这表示小车已经越过终点，terminal recovery 正在调头对准 goal。此时应优先检查终点速度剖面、固定路径终点姿态和 terminal recovery 参数，而不是把问题归因到晃动项。
+
+### 7.7 终点强制减速兜底
+
+如果结构性终点制动仍然出现过冲，可以进入“终点安全停车优先”配置。该配置会牺牲 near-goal 加速度平滑性，只用于保证任务完成和避免越过终点；不要把该段 near-goal 降晃写成 slosh cost 的主效果。
+
+第一档强制减速：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  terminal_slowdown_distance:=1.80 \
+  terminal_slowdown_v_max:=0.10 \
+  terminal_slowdown_Q_v:=80.0 \
+  terminal_slowdown_terminal_factor_v:=10.0 \
+  terminal_cmd_v_rate_limit:=0.8 \
+  terminal_cmd_omega_rate_limit:=2.0
+```
+
+第二档强制减速：
+
+```bash
+roslaunch scout_local_planner slosh_experiment.launch \
+  terminal_slowdown_distance:=2.20 \
+  terminal_slowdown_v_max:=0.06 \
+  terminal_slowdown_Q_v:=120.0 \
+  terminal_slowdown_terminal_factor_v:=15.0 \
+  terminal_cmd_v_rate_limit:=1.2 \
+  terminal_cmd_omega_rate_limit:=3.0
+```
+
+参数含义：
+
+```text
+terminal_slowdown_distance:
+  更早进入终点制动包络。
+
+terminal_slowdown_v_max:
+  降低终点段速度上界。
+
+terminal_slowdown_Q_v / terminal_slowdown_terminal_factor_v:
+  让 MPC 更硬地追终点制动参考。
+
+terminal_cmd_v_rate_limit:
+  提高终点制动可用减速度；会带来更大 ax，但能减少过冲。
+
+terminal_cmd_omega_rate_limit:
+  让终点姿态修正更快；可能增加 near-goal 角加速度。
+```
+
+实验归因口径：
+
+```text
+slosh 主结论只看 TRACKING_PRE_TERMINAL。
+终点强制减速段只用于任务完成和避免过冲，不参与 slosh cost 主归因。
+```
+
+如果第二档仍然过冲，优先检查：
+
+```text
+1. 固定路径终点是否在真实目标后方；
+2. /odom 或 map->base_link 是否有延迟/漂移；
+3. 底盘执行 cmd_vel 是否有明显滞后；
+4. 当前运行节点是否确实使用了最新 devel 编译产物。
+```
 
 ## 8. 必录 topic
 

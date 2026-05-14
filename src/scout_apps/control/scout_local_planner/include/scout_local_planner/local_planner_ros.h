@@ -186,6 +186,8 @@ private:
     bool terminal_slowdown_enable_ = true;
     double terminal_slowdown_distance_ = 1.20;
     double terminal_slowdown_v_max_ = 0.18;
+    double terminal_slowdown_q_v_ = 40.0;
+    double terminal_slowdown_terminal_factor_v_ = 5.0;
 
     // ISR / ZV input shaping（baseline only, default off）
     bool input_shaping_enable_ = false;

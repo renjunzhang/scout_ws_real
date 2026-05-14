@@ -415,6 +415,9 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("terminal_slowdown/enable", terminal_slowdown_enable_, true);
     pnh.param("terminal_slowdown/distance", terminal_slowdown_distance_, 1.20);
     pnh.param("terminal_slowdown/v_max", terminal_slowdown_v_max_, 0.18);
+    pnh.param("terminal_slowdown/Q_v", terminal_slowdown_q_v_, 40.0);
+    pnh.param("terminal_slowdown/terminal_factor_v",
+              terminal_slowdown_terminal_factor_v_, 5.0);
 
     // ISR / ZV input shaping（baseline only）
     pnh.param("input_shaping/enable", input_shaping_enable_, false);
@@ -875,8 +878,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         runtime_mpc_params.slosh_eta_bar = settling_eta_bar_ / denom;
                     }
                 }
-                mpc_solver_.setMPCParams(runtime_mpc_params);
-
                 double v_des_cmd_raw = (goal_stop_pending_ || settling_active) ? 0.0 :
                     (risk_scheduler_enable_ && slosh_enabled_) ?
                     risk_output_.v_ref_eff_k : v_nominal;
@@ -894,12 +895,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         const double denom = std::max(1e-6, slow_dist - near_dist);
                         const double ratio = std::max(0.0, std::min(1.0,
                             (goal_dist_slow - near_dist) / denom));
-                        const double smooth = ratio * ratio * (3.0 - 2.0 * ratio);
-                        const double terminal_cap = std::max(0.0, terminal_slowdown_v_max_);
-                        const double v_cap =
-                            terminal_cap + (std::max(0.0, v_des_cmd) - terminal_cap) * smooth;
-                        v_des_cmd = std::min(v_des_cmd, v_cap);
-
                         const double decel =
                             terminal_cmd_v_rate_limit_ > 1e-6 ? terminal_cmd_v_rate_limit_ :
                             (path_params_.max_tan_decel > 1e-6 ? path_params_.max_tan_decel :
@@ -910,10 +905,31 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                             const double goal_speed = std::max(0.0, path_params_.goal_speed);
                             const double brake_cap =
                                 std::sqrt(goal_speed * goal_speed + 2.0 * decel * remain);
-                            v_des_cmd = std::min(v_des_cmd, brake_cap);
+                            const double smooth = ratio * ratio * (3.0 - 2.0 * ratio);
+                            const double terminal_cap =
+                                std::min(std::max(0.0, terminal_slowdown_v_max_), brake_cap);
+                            const double v_cap =
+                                terminal_cap + (std::max(0.0, v_des_cmd) - terminal_cap) * smooth;
+                            const double capped_v_des = std::min(v_des_cmd, v_cap);
+                            if (capped_v_des < v_des_cmd) {
+                                runtime_mpc_params.Q_v =
+                                    std::max(runtime_mpc_params.Q_v, terminal_slowdown_q_v_);
+                                runtime_mpc_params.terminal_factor_v =
+                                    std::max(runtime_mpc_params.terminal_factor_v,
+                                             terminal_slowdown_terminal_factor_v_);
+                                v_des_cmd = capped_v_des;
+                            }
+                        } else {
+                            const double smooth = ratio * ratio * (3.0 - 2.0 * ratio);
+                            const double terminal_cap = std::max(0.0, terminal_slowdown_v_max_);
+                            const double v_cap =
+                                terminal_cap + (std::max(0.0, v_des_cmd) - terminal_cap) * smooth;
+                            v_des_cmd = std::min(v_des_cmd, v_cap);
                         }
                     }
                 }
+                mpc_solver_.setMPCParams(runtime_mpc_params);
+
                 int reentry_steps_dbg = tracking_reentry_ramp_steps_left_;
                 int tracking_fail_streak_dbg = tracking_solve_fail_streak_;
                 int tracking_feas_active_dbg = tracking_feasibility_recovery_active_ ? 1 : 0;

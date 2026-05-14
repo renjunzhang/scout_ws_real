@@ -196,6 +196,8 @@ terminal_slowdown:
   enable: true              # 在 terminal recovery 接管前，提前连续压低 v_des_cmd
   distance: 1.20            # 从该距离开始 smoothstep 降速 (m)
   v_max: 0.18               # 到 terminal recovery 进入距离附近时的速度上限 (m/s)
+  Q_v: 40.0                 # 制动速度上限生效时临时提高速度跟踪权重
+  terminal_factor_v: 5.0    # 制动段临时提高 horizon 末端速度权重
 
 # =============================================================================
 # 终点残余晃动收敛（T2 settling）
