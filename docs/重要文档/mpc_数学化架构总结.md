@@ -8,9 +8,10 @@
 - 当前每个控制周期求解的并不是固定 LTI QP，而是围绕名义轨迹 successive linearization 后得到的**affine time-varying QP**。
 - 当前 near-goal 控制结构是：
   - 远场：tracking MPC
-  - 近终点恢复：外层 `terminal recovery`
-  - 最后收尾：`GOAL_STOP_PENDING` 下由 MPC 负责最后一段减速与纠偏
-  - 只有到达低速门槛后才切到 `REACHED`
+  - 终点前：`terminal_slowdown` 通过参考速度和末端速度权重引导平缓减速
+  - 捕获区：`terminal_capture_stop` 可直接发布零速度，等待车体速度降到 `REACHED` 门槛
+  - 兜底恢复：外层 `terminal recovery` 处理过冲、回退和最终 yaw 对齐
+  - capture/recovery 阶段不再代表纯 MPC cost 行为，晃动有效性主对比应优先截在进入这些阶段之前
 
 ## 目录
 
@@ -35,8 +36,9 @@
 - 7) 监测量与终点行为的工程语义
   - 7.1 `/slosh/height`
   - 7.2 `/slosh/height_pred_max`
-  - 7.3 与视觉 `height_peak_rel_mm` 的关系
-  - 7.4 near-goal 行为
+  - 7.3 `/mpc/slosh_horizon_summary`
+  - 7.4 与视觉 `height_peak_rel_mm` 的关系
+  - 7.5 near-goal 行为
 
 ## 0) 参数入口速查
 
@@ -80,12 +82,15 @@
   - `mpc/terminal_factor_v`: 预测末段速度误差权重放大倍数
   - `mpc/terminal_ramp_steps`: 末段渐进放大权重的步数
 - slosh 软代价：
-  - `mpc/Q_slosh`: 晃动抑制主权重，最终映射到 `Q_slosh_eta`
+  - `mpc/Q_slosh`: 归一化晃动风险权重，最终映射到 `Q_slosh_eta`
+  - `mpc/slosh_height_ref`: 参考晃动高度，用于把模型液面高度归一化，默认 `0.005 m`
+  - `mpc/slosh_eta_dot_ratio`: `eta_dot` 等效位移项相对 `eta` 项的比例
+  - `mpc/Q_slosh_eta_dot`: 旧的手动 `eta_dot` QP 权重；仅当 `slosh_eta_dot_ratio <= 0` 时作为兼容入口使用
 
 其中：
 
 - `Q_slosh = 0` 表示不加入 slosh 软代价
-- `Q_slosh > 0` 表示把 `eta_x / eta_y` 的二次惩罚加入 cost
+- `Q_slosh > 0` 表示把归一化后的 `eta_x / eta_y / eta_dot` 二次惩罚加入 cost
 - `enable_omega_ff = true` 表示额外加入 `(\omega-\omega_ref)^2` 这一项，作用是让 MPC 输出更接近一个预设的参考角速度（通常来自路径曲率）
 
 ### 0.2 约束与 near-goal 相关参数
@@ -133,6 +138,8 @@
 这些通常优先在 `slosh_experiment.launch` 里改：
 
 - `Q_slosh`: 实验时覆盖 `mpc/Q_slosh`，控制 slosh 软代价是否启用及其强度
+- `slosh_height_ref`: 实验时覆盖 `mpc/slosh_height_ref`，决定多大模型液面高度开始被 MPC 明显关注
+- `slosh_eta_dot_ratio`: 实验时覆盖 `mpc/slosh_eta_dot_ratio`，控制残余模态速度项权重
 - `enable_slosh_box_constraint`: 实验时覆盖盒约束开关
 - `slosh_use_imu_yaw_rate`: 是否用 IMU `angular_velocity.z` 替代 odom `omega`
 - `slosh_use_imu_lateral_accel`: 是否用 IMU `linear_acceleration.y` 替代 `v*omega`
@@ -297,13 +304,36 @@ J=\sum_{k=0}^{N}\left(
 - 控制项：\(a,\omega\)；
 - 控制变化率项：\(\Delta a,\Delta\omega\)；
 - 液体软代价项：
-\[
-J_{\text{slosh}}=Q_{\text{slosh},\eta}(\eta_x^2+\eta_y^2),
-\quad
-Q_{\text{slosh},\eta}=Q_{\text{slosh}}\cdot h_{\text{coeff}}^2
-\]
+$$
+J_{\text{slosh}}
+=Q_{\text{slosh},\eta}(\eta_x^2+\eta_y^2)
++Q_{\text{slosh},\dot\eta}(\dot\eta_x^2+\dot\eta_y^2)
+$$
 
-也就是说，软代价直接惩罚的是主模态广义坐标对应的二次型，而不是把“总液面高度”本身直接作为 QP 状态去惩罚。
+其中当前归一化实现为：
+
+$$
+Q_{\text{slosh},\eta}
+=Q_{\text{slosh}}\cdot\frac{h_{\text{coeff}}^2}{h_{\text{ref}}^2}
+$$
+
+$$
+Q_{\text{slosh},\dot\eta}
+=\lambda_{\dot\eta}\cdot
+\frac{Q_{\text{slosh},\eta}}{\omega_n^2}
+$$
+
+这里：
+
+- \(h_{\text{ref}}\) 对应 `mpc/slosh_height_ref`，默认 `0.005 m`
+- \(\lambda_{\dot\eta}\) 对应 `mpc/slosh_eta_dot_ratio`，默认 `0.3`
+- 当 `slosh_eta_dot_ratio <= 0` 时，`mpc/Q_slosh_eta_dot` 作为旧的手动兼容入口使用
+
+也就是说，软代价直接惩罚的是主模态广义坐标及其模态速度对应的二次型，而不是把“总液面高度”本身直接作为 QP 状态去惩罚。
+归一化后的物理含义更接近：
+
+- \((h_{\text{modal}}/h_{\text{ref}})^2\)：模型 modal 液面高度相对参考高度的风险
+- \((\dot\eta/\omega_n)^2\)：把模态速度折算成等效位移后的残余晃动风险
 
 若按“标量惩罚项个数”理解，当前代码更准确的口径是：
 
@@ -318,16 +348,18 @@ Q_{\text{slosh},\eta}=Q_{\text{slosh}}\cdot h_{\text{coeff}}^2
 
 在此之上，还有两类可选增强：
 
-- slosh 软代价：2 项
+- slosh 软代价：默认归一化版本为 4 个状态项
   - \(\eta_x^2\) / \(\eta_y^2\)
+  - \(\dot\eta_x^2\) / \(\dot\eta_y^2\)
 - `omega_ff` 项：1 项
   - \((\omega-\omega_{\text{ref}})^2\)
 
 所以：
 
 - 不开 slosh、不开 `omega_ff` 时，可理解为 **8 项基础惩罚**
-- 开 slosh 时，可理解为 **8 + 2 = 10 项**
-- 再开 `omega_ff` 时，可理解为 **11 项**
+- 只开 eta 型 slosh 时，可理解为 **8 + 2 = 10 项**
+- 使用当前默认归一化 eta + eta_dot slosh 时，可理解为 **8 + 4 = 12 项**
+- 再开 `omega_ff` 时，可理解为 **13 项**
 
 这里还要补一条当前实现细节：
 
@@ -336,7 +368,7 @@ Q_{\text{slosh},\eta}=Q_{\text{slosh}}\cdot h_{\text{coeff}}^2
 
 因此论文或文档里若要写“当前 cost 有多少项”，建议写成：
 
-- **基础 8 项 + 可选 2 项 slosh + 可选 1 项 omega feedforward**
+- **基础 8 项 + 可选 2/4 项 slosh + 可选 1 项 omega feedforward**
 
 比简单写成一个固定整数更准确。
 
@@ -476,8 +508,39 @@ h_{\text{now}} = \eta_{\text{slosh}} + \eta_{\text{parabola}}
 
 - 如果要看“当前这一刻模型估计了多少”，优先看 `/slosh/height`
 - 如果要看“这一拍 MPC 预判未来最危险会到多高”，优先看 `/slosh/height_pred_max`
+- 如果要看“horizon 内 eta/eta_dot 是否真的被预测出来、在哪一步达到峰值”，优先看 `/mpc/slosh_horizon_summary`
 
-### 7.3 与视觉 `height_peak_rel_mm` 的关系
+### 7.3 `/mpc/slosh_horizon_summary`
+
+当前 `/mpc/slosh_horizon_summary` 是 MPC 求解后发布的预测域摘要，用于检查 slosh 项是否真的进入 horizon 并形成可见代价。
+
+消息类型为 `std_msgs/Float32MultiArray`，当前字段顺序是：
+
+| index | 含义 |
+|---:|---|
+| 0 | 初始 eta 范数，单位 m |
+| 1 | horizon 内 eta 范数最大值，单位 m |
+| 2 | 初始 eta_dot 范数，单位 m/s |
+| 3 | horizon 内 eta_dot 范数最大值，单位 m/s |
+| 4 | horizon 内 modal height 最大值，单位 mm |
+| 5 | horizon 内 modal + parabola 总高度最大值，单位 mm |
+| 6 | 总高度最大值出现的 horizon index |
+| 7 | horizon 内 `|v|` p95，单位 m/s |
+| 8 | horizon 内 `|omega|` p95，单位 rad/s |
+| 9 | horizon 内 `|ax|` p95，单位 m/s² |
+| 10 | horizon 内 `|ay|` p95，单位 m/s² |
+| 11 | eta growth ratio，约等于 `eta_norm_max / eta_norm_0` |
+| 12 | horizon 初始总高度，单位 mm |
+
+这个 topic 主要回答三个问题：
+
+1. 当前 horizon 内的 eta/eta_dot 是否不是全零；
+2. slosh 峰值是否发生在未来步，而不是只来自当前状态；
+3. 预测到的高风险是否和 `v/omega/ax/ay` 激励同时出现。
+
+它仍然是模型内部诊断，不是实物液面真值。实物结论仍然必须以 RGB 视觉液面为主。
+
+### 7.4 与视觉 `height_peak_rel_mm` 的关系
 
 当前视觉链输出的 `height_peak_rel_mm` 更准确的语义是：
 
@@ -502,29 +565,36 @@ h_{\text{now}} = \eta_{\text{slosh}} + \eta_{\text{parabola}}
   - `height_peak_rel_mm` vs `/slosh/height`
 - 峰值包络/保守性比较：
   - `height_peak_rel_mm` vs `/slosh/height_pred_max`
+- horizon 行为诊断：
+  - `height_peak_rel_mm` vs `/mpc/slosh_horizon_summary` 中的 `h_total_max_mm` / `eta_growth_ratio`
 
 也就是说：
 
 - `/slosh/height` 更适合作为视觉逐帧误差的主比较对象
 - `/slosh/height_pred_max` 更适合作为“模型预测上界是否保守”的参考对象
+- `/mpc/slosh_horizon_summary` 更适合作为“QP horizon 里是否真的产生了 slosh 预测”的调试对象
 
-### 7.4 near-goal 行为
+### 7.5 near-goal 行为
 
 当前 near-goal 控制结构可以直接表述为：
 
 1. 远场仍由 tracking MPC 生成控制；
-2. 接近终点时，可能先进入外层 terminal recovery；
-3. terminal recovery 当前有 3 个 mode：
+2. 接近终点但尚未进入捕获区时，`terminal_slowdown` 会压低参考速度并提高末端速度权重，用于让 MPC 提前减速；
+3. 进入 `terminal_capture_stop_distance` 后，若 `terminal_capture_stop_enable=true`，外层会直接发布零速度，等待实际速度和角速度低于 `REACHED` 门槛；
+4. 若发生过冲、位置未收敛或需要最终恢复，则可能进入外层 terminal recovery；
+5. terminal recovery 当前有 3 个 mode：
    - `ALIGN_TO_POINT`
    - `APPROACH_POINT`
    - `ALIGN_FINAL_YAW`
-4. 这些 mode 下，控制不是由 MPC 求解器给出，而是外层显式控制律直接发布 `cmd_vel`；
-5. 当目标 pose 已达标后，状态机置 `goal_stop_pending_`；
-6. `goal_stop_pending_` 下，系统仍然走 MPC，只是把 `v_des_cmd` 压到 `0`，由 MPC 负责最后一段减速与纠偏；
-7. 只有当位置/姿态达标且速度、角速度都足够低时，才切到 `REACHED`。
+6. capture stop 和 recovery 下，控制不是由 MPC 求解器给出，而是外层显式控制律直接发布 `cmd_vel`；
+7. 只有当位置达标且速度、角速度都足够低时，才切到 `REACHED`。yaw 可以作为最终对齐目标，但不应阻止线速度先停下来。
 
 因此当前实现的工程语义是：
 
 - 远场：tracking MPC
-- 近终点恢复：外层 terminal recovery
-- 最后收尾：`goal_stop_pending_` 下的 MPC 减速
+- 终点前减速：`terminal_slowdown` 修改参考速度和末端速度权重
+- 捕获区停车：`terminal_capture_stop` 直接发布零速度
+- 兜底恢复：外层 terminal recovery
+
+所以分析“slosh cost 是否改变 MPC 行为”时，要尽量把统计窗口截在 capture stop / terminal recovery 之前。
+否则终点阶段的零速度命令或外层恢复控制会把 MPC cost 的因果关系混进去。

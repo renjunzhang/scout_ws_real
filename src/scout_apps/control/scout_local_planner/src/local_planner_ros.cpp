@@ -45,6 +45,28 @@ double computeTrimmedMean(std::vector<double> samples, double trim_ratio) {
     return sum / static_cast<double>(end - begin);
 }
 
+double percentile(std::vector<double> samples, double p) {
+    if (samples.empty()) {
+        return 0.0;
+    }
+    std::sort(samples.begin(), samples.end());
+    const double alpha = std::max(0.0, std::min(1.0, p));
+    const std::size_t idx = static_cast<std::size_t>(
+        std::round(alpha * static_cast<double>(samples.size() - 1)));
+    return samples[std::min(idx, samples.size() - 1)];
+}
+
+void updateNormalizedSloshWeights(MPCParams& params, double h_coeff, double omega_n) {
+    const double h_ref = std::max(1e-4, params.slosh_height_ref);
+    params.Q_slosh_eta = params.Q_slosh * h_coeff * h_coeff / (h_ref * h_ref);
+
+    if (params.slosh_eta_dot_ratio > 0.0) {
+        params.Q_slosh_eta_dot = omega_n > 1e-6
+            ? params.slosh_eta_dot_ratio * params.Q_slosh_eta / (omega_n * omega_n)
+            : 0.0;
+    }
+}
+
 }  // namespace
 
 LocalPlannerROS::LocalPlannerROS() = default;
@@ -79,11 +101,10 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
         if (diff_model) {
             diff_model->setSloshIntegration(&slosh_integration_);
 
-            // 计算等效 QP 权重: Q_slosh_eta = Q_slosh * height_coeff²
-            // 使得 J_slosh = Q_slosh * η² ≈ Q_slosh_eta * (xn² + yn²)
             double h_coeff = slosh_integration_.getModalParams().height_coeff;
+            const double omega_n = slosh_integration_.getModalParams().omega_n;
             rs_h_coeff_ = h_coeff;
-            mpc_params_.Q_slosh_eta = mpc_params_.Q_slosh * h_coeff * h_coeff;
+            updateNormalizedSloshWeights(mpc_params_, h_coeff, omega_n);
 
             if (mpc_params_.enable_slosh_box_constraint) {
                 if (h_coeff <= 1e-9) {
@@ -121,8 +142,14 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
             // 将更新后的参数同步到求解器（CostFunction 会用到 Q_slosh_eta）
             mpc_solver_.setMPCParams(mpc_params_);
 
-            ROS_INFO("[LocalPlannerROS] Slosh integration enabled (Q_slosh=%.2f, h_coeff=%.4f, Q_slosh_eta=%.4f, Q_slosh_eta_dot=%.4f)",
-                     mpc_params_.Q_slosh, h_coeff, mpc_params_.Q_slosh_eta, mpc_params_.Q_slosh_eta_dot);
+            ROS_INFO("[LocalPlannerROS] Slosh integration enabled (Q_slosh=%.2f, h_ref=%.4f, eta_dot_ratio=%.3f, h_coeff=%.4f, omega_n=%.4f, Q_slosh_eta=%.4f, Q_slosh_eta_dot=%.4f)",
+                     mpc_params_.Q_slosh,
+                     mpc_params_.slosh_height_ref,
+                     mpc_params_.slosh_eta_dot_ratio,
+                     h_coeff,
+                     omega_n,
+                     mpc_params_.Q_slosh_eta,
+                     mpc_params_.Q_slosh_eta_dot);
 
             // 初始化风险调度器（需要 h_coeff）
             if (risk_scheduler_enable_) {
@@ -205,6 +232,8 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     mpc_solve_ms_pub_ = nh_.advertise<std_msgs::Float32>("mpc/solve_ms", 1);
     mpc_status_val_pub_ = nh_.advertise<std_msgs::Int32>("mpc/status_val", 1);
     mpc_cost_breakdown_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("mpc/cost_breakdown", 1);
+    mpc_slosh_horizon_summary_pub_ =
+        nh_.advertise<std_msgs::Float32MultiArray>("mpc/slosh_horizon_summary", 1);
     terminal_mode_pub_ = nh_.advertise<std_msgs::String>("terminal/mode", 1);
     terminal_recovery_latched_pub_ = nh_.advertise<std_msgs::Int32>("terminal/recovery_latched", 1);
     terminal_goal_info_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("terminal/goal_info", 1);
@@ -260,6 +289,8 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/constrain_accel_rate", mpc_params_.constrain_accel_rate, false);
     pnh.param("mpc/terminal_ramp_steps", mpc_params_.terminal_ramp_steps, 1);
     pnh.param("mpc/Q_slosh", mpc_params_.Q_slosh, 0.0);
+    pnh.param("mpc/slosh_height_ref", mpc_params_.slosh_height_ref, 0.005);
+    pnh.param("mpc/slosh_eta_dot_ratio", mpc_params_.slosh_eta_dot_ratio, 0.3);
     pnh.param("mpc/Q_slosh_eta_dot", mpc_params_.Q_slosh_eta_dot, 0.0);
     pnh.param("mpc/terminal_factor_slosh_eta", mpc_params_.terminal_factor_slosh_eta, 0.0);
     pnh.param("mpc/terminal_factor_slosh_eta_dot", mpc_params_.terminal_factor_slosh_eta_dot, 0.0);
@@ -878,7 +909,11 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     );
 
                     // 将调度输出注入 MPC 参数（solve() 前完成）
-                    runtime_mpc_params.Q_slosh_eta = risk_output_.Q_eta_k * rs_h_coeff_ * rs_h_coeff_;
+                    runtime_mpc_params.Q_slosh = risk_output_.Q_eta_k;
+                    updateNormalizedSloshWeights(
+                        runtime_mpc_params,
+                        rs_h_coeff_,
+                        slosh_integration_.getModalParams().omega_n);
                     if (runtime_mpc_params.enable_slosh_box_constraint && rs_h_coeff_ > 1e-9) {
                         const double denom = rs_h_coeff_ * std::sqrt(2.0);
                         runtime_mpc_params.slosh_eta_bar = risk_output_.eta_bar_k / denom;
@@ -898,8 +933,10 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         std::max(1.0, runtime_mpc_params.terminal_factor_v);
                     runtime_mpc_params.Q_slosh =
                         std::max(runtime_mpc_params.Q_slosh, settling_q_eta_);
-                    runtime_mpc_params.Q_slosh_eta =
-                        runtime_mpc_params.Q_slosh * rs_h_coeff_ * rs_h_coeff_;
+                    updateNormalizedSloshWeights(
+                        runtime_mpc_params,
+                        rs_h_coeff_,
+                        slosh_integration_.getModalParams().omega_n);
                     if (slosh_enabled_ &&
                         runtime_mpc_params.enable_slosh_box_constraint &&
                         rs_h_coeff_ > 1e-9) {
@@ -1287,6 +1324,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         tracking_feasibility_recovery_active_ = false;
                     }
                     last_predicted_height_max_ = computePredictedSloshHeightMax(solution);
+                    publishSloshHorizonSummary(solution);
                     last_constraint_active_ =
                         (mpc_params_.slosh_height_max > 0.0 &&
                          last_predicted_height_max_ > mpc_params_.slosh_height_max) ? 1 : 0;
@@ -1922,6 +1960,118 @@ void LocalPlannerROS::publishCostBreakdown(const CostBreakdown& breakdown) {
     msg.data[18] = static_cast<float>(pct(breakdown.J_slosh_eta_dot));
     msg.data[19] = static_cast<float>(pct(breakdown.J_slosh_eta + breakdown.J_slosh_eta_dot));
     mpc_cost_breakdown_pub_.publish(msg);
+}
+
+void LocalPlannerROS::publishSloshHorizonSummary(const MPCSolution& solution) {
+    if (mpc_slosh_horizon_summary_pub_.getNumSubscribers() == 0) {
+        return;
+    }
+
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label =
+        "eta_norm_0_m,eta_norm_max_m,eta_dot_norm_0_mps,eta_dot_norm_max_mps,"
+        "h_modal_max_mm,h_total_max_mm,k_h_total_max,"
+        "v_abs_p95_mps,omega_abs_p95_radps,ax_abs_p95_mps2,ay_abs_p95_mps2,"
+        "eta_growth_ratio,h_total_0_mm";
+    msg.layout.dim[0].size = 13;
+    msg.layout.dim[0].stride = 13;
+    msg.data.assign(13, 0.0f);
+
+    if (!slosh_enabled_ || solution.x_predicted.empty()) {
+        mpc_slosh_horizon_summary_pub_.publish(msg);
+        return;
+    }
+
+    const double h_coeff = slosh_integration_.getModalParams().height_coeff;
+    const double R = slosh_params_.container_radius;
+    const double g = 9.81;
+
+    double eta_norm_0 = 0.0;
+    double eta_norm_max = 0.0;
+    double eta_dot_norm_0 = 0.0;
+    double eta_dot_norm_max = 0.0;
+    double h_modal_max = 0.0;
+    double h_total_max = 0.0;
+    double h_total_0 = 0.0;
+    std::size_t k_h_total_max = 0;
+    std::vector<double> v_abs;
+    std::vector<double> omega_abs;
+    std::vector<double> ax_abs;
+    std::vector<double> ay_abs;
+
+    const std::size_t n_states = solution.x_predicted.size();
+    const std::size_t n_inputs = solution.u_optimal.size();
+    v_abs.reserve(n_states);
+    omega_abs.reserve(n_inputs);
+    ax_abs.reserve(n_inputs);
+    ay_abs.reserve(n_inputs);
+
+    for (std::size_t k = 0; k < n_states; ++k) {
+        const StateVector& xk = solution.x_predicted[k];
+        const double eta_x = xk(StateIndex::ETA_X);
+        const double eta_y = xk(StateIndex::ETA_Y);
+        const double eta_x_dot = xk(StateIndex::ETA_X_DOT);
+        const double eta_y_dot = xk(StateIndex::ETA_Y_DOT);
+        const double eta_norm = std::hypot(eta_x, eta_y);
+        const double eta_dot_norm = std::hypot(eta_x_dot, eta_y_dot);
+        const double h_modal = h_coeff * eta_norm;
+
+        double omega_k = 0.0;
+        if (n_inputs > 0) {
+            omega_k = (k < n_inputs)
+                          ? solution.u_optimal[k](ControlIndex::OMEGA)
+                          : solution.u_optimal.back()(ControlIndex::OMEGA);
+        }
+
+        double h_parabola = 0.0;
+        if (slosh_params_.use_parabola_term) {
+            h_parabola = (R * R * omega_k * omega_k) / (4.0 * g);
+        }
+        const double h_total = h_modal + h_parabola;
+
+        if (k == 0) {
+            eta_norm_0 = eta_norm;
+            eta_dot_norm_0 = eta_dot_norm;
+            h_total_0 = h_total;
+        }
+        eta_norm_max = std::max(eta_norm_max, eta_norm);
+        eta_dot_norm_max = std::max(eta_dot_norm_max, eta_dot_norm);
+        h_modal_max = std::max(h_modal_max, h_modal);
+        if (h_total > h_total_max) {
+            h_total_max = h_total;
+            k_h_total_max = k;
+        }
+        v_abs.push_back(std::abs(xk(StateIndex::V)));
+    }
+
+    for (std::size_t k = 0; k < n_inputs; ++k) {
+        const ControlVector& uk = solution.u_optimal[k];
+        const double a = uk(ControlIndex::A);
+        const double omega = uk(ControlIndex::OMEGA);
+        const double v = solution.x_predicted[std::min(k, n_states - 1)](StateIndex::V);
+        omega_abs.push_back(std::abs(omega));
+        ax_abs.push_back(std::abs(a));
+        ay_abs.push_back(std::abs(v * omega));
+    }
+
+    const double eta_growth_ratio =
+        eta_norm_max / std::max(eta_norm_0, 1e-6);
+
+    msg.data[0] = static_cast<float>(eta_norm_0);
+    msg.data[1] = static_cast<float>(eta_norm_max);
+    msg.data[2] = static_cast<float>(eta_dot_norm_0);
+    msg.data[3] = static_cast<float>(eta_dot_norm_max);
+    msg.data[4] = static_cast<float>(1000.0 * h_modal_max);
+    msg.data[5] = static_cast<float>(1000.0 * h_total_max);
+    msg.data[6] = static_cast<float>(k_h_total_max);
+    msg.data[7] = static_cast<float>(percentile(v_abs, 0.95));
+    msg.data[8] = static_cast<float>(percentile(omega_abs, 0.95));
+    msg.data[9] = static_cast<float>(percentile(ax_abs, 0.95));
+    msg.data[10] = static_cast<float>(percentile(ay_abs, 0.95));
+    msg.data[11] = static_cast<float>(eta_growth_ratio);
+    msg.data[12] = static_cast<float>(1000.0 * h_total_0);
+    mpc_slosh_horizon_summary_pub_.publish(msg);
 }
 
 void LocalPlannerROS::publishCmdVel(double v, double omega) {

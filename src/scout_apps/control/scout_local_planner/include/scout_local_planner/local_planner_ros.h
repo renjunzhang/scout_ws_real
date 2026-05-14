@@ -93,6 +93,7 @@ private:
                                        const MPCParams& params,
                                        const ControlVector& u_prev) const;
     void publishCostBreakdown(const CostBreakdown& breakdown);
+    void publishSloshHorizonSummary(const MPCSolution& solution);
     void publishTerminalDebug();
     void updateSloshEstimate();
     double computePredictedSloshHeightMax(const MPCSolution& solution) const;
@@ -337,6 +338,7 @@ private:
     ros::Publisher mpc_solve_ms_pub_;
     ros::Publisher mpc_status_val_pub_;
     ros::Publisher mpc_cost_breakdown_pub_;
+    ros::Publisher mpc_slosh_horizon_summary_pub_;
     ros::Publisher terminal_mode_pub_;
     ros::Publisher terminal_recovery_latched_pub_;
     ros::Publisher terminal_goal_info_pub_;

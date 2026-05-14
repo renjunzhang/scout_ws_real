@@ -37,9 +37,11 @@ mpc:
   constrain_omega_rate: true
   constrain_accel_rate: true
   
-  # 液体晃动权重（第 2 步启用）
-  Q_slosh: 0.0             # 设为 0 表示不启用晃动抑制
-  Q_slosh_eta_dot: 0.0     # P1: eta_dot 速度惩罚权重，默认关闭（直接 QP 权重，不经 height_coeff 缩放）
+  # 液体晃动权重（归一化模态残余能量）
+  Q_slosh: 0.0             # 归一化晃动风险权重；设为 0 表示不启用晃动抑制
+  slosh_height_ref: 0.005  # 参考晃动高度 (m)，5 mm；Q_slosh 惩罚 (h/h_ref)^2
+  slosh_eta_dot_ratio: 0.3 # eta_dot 等效位移项比例；<=0 时使用手动 Q_slosh_eta_dot
+  Q_slosh_eta_dot: 0.0     # 兼容旧配置：slosh_eta_dot_ratio<=0 时作为直接 QP 权重
   terminal_factor_slosh_eta: 0.0      # P2: terminal η 代价放大系数，0=关闭；需 Q_slosh>0 才生效
   terminal_factor_slosh_eta_dot: 0.0  # P2: terminal η̇ 代价放大系数，0=关闭；需 Q_slosh_eta_dot>0 才生效
   slosh_height_max: 0.05   # 液面高度约束 (m)

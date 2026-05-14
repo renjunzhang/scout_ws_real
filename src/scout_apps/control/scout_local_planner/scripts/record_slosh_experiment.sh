@@ -48,6 +48,7 @@
 #   - IMU 原始输入：/imu/data, /wit/mag
 #   - MPC 性能：/mpc/solve_ms, /mpc/status_val, /mpc_status，/mpc/solve_time_ms
 #   - MPC 代价占比：/mpc/cost_breakdown
+#   - MPC horizon 晃动预测摘要：/mpc/slosh_horizon_summary
 #   - 控制/底盘状态：/cmd_vel, /odom, /scout_status, /rs_status
 #   - 目标/路径：/scout/goal, /scout/current_goal, /scout/global_path, /local_path
 #                /scout/global_path_anti_slosh
@@ -206,6 +207,7 @@ TOPICS=(
     /mpc/solve_time_ms
     /mpc/status_val
     /mpc/cost_breakdown
+    /mpc/slosh_horizon_summary
     /mpc_status
 
     # 控制与状态

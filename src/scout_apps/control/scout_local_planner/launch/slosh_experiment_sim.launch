@@ -14,8 +14,10 @@
 -->
 <launch>
   <!-- ======== 实验参数 ======== -->
-  <arg name="Q_slosh" default="0.0"  doc="晃动抑制权重 (消融变量: 0/5/10/20)"/>
-  <arg name="Q_slosh_eta_dot" default="0.0" doc="P1: eta_dot 速度惩罚权重，默认关闭；建议从 0.01~0.1 开始调"/>
+  <arg name="Q_slosh" default="0.0"  doc="归一化晃动风险权重；第一轮建议扫 2/5/10"/>
+  <arg name="slosh_height_ref" default="0.005" doc="归一化参考晃动高度 (m)，默认 5mm"/>
+  <arg name="slosh_eta_dot_ratio" default="0.3" doc="eta_dot 等效位移项比例；非正数时使用手动 Q_slosh_eta_dot"/>
+  <arg name="Q_slosh_eta_dot" default="0.0" doc="旧手动 eta_dot QP 权重；仅 slosh_eta_dot_ratio 为非正数时生效"/>
   <arg name="mpc_Q_v" default="8.0" doc="速度跟踪权重覆盖，用于 reference execution 消融"/>
   <arg name="mpc_R_a" default="0.4" doc="加速度控制权重覆盖，用于 reference execution 消融"/>
   <arg name="mpc_R_da" default="0.5" doc="加速度变化权重覆盖，用于 reference execution 消融"/>
@@ -83,6 +85,8 @@
     <!-- 实验参数覆盖 (YAML 之后、节点 init 之前) -->
     <param name="verbose" value="$(arg verbose)"/>
     <param name="mpc/Q_slosh" value="$(arg Q_slosh)"/>
+    <param name="mpc/slosh_height_ref" value="$(arg slosh_height_ref)"/>
+    <param name="mpc/slosh_eta_dot_ratio" value="$(arg slosh_eta_dot_ratio)"/>
     <param name="mpc/Q_slosh_eta_dot" value="$(arg Q_slosh_eta_dot)"/>
     <param name="mpc/Q_v" value="$(arg mpc_Q_v)"/>
     <param name="mpc/R_a" value="$(arg mpc_R_a)"/>

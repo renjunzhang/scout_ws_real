@@ -82,7 +82,7 @@ void StateTrackingCost::getQuadraticCost(
     Q_contrib(StateIndex::V, StateIndex::V) = params_.Q_v;
 
     // 晃动软代价: J_slosh = Q_slosh_eta * (eta_x² + eta_y²)
-    // 其中 Q_slosh_eta = Q_slosh * height_coeff² (由 local_planner_ros 计算)
+    // 其中 Q_slosh_eta = Q_slosh * height_coeff² / slosh_height_ref² (由 local_planner_ros 计算)
     if (params_.Q_slosh_eta > 0.0) {
         Q_contrib(StateIndex::ETA_X, StateIndex::ETA_X) = params_.Q_slosh_eta;
         Q_contrib(StateIndex::ETA_Y, StateIndex::ETA_Y) = params_.Q_slosh_eta;

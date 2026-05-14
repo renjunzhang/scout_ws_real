@@ -15,6 +15,8 @@
 
 ```text
 Q_slosh=0
+slosh_height_ref=0.005
+slosh_eta_dot_ratio=0.3
 Q_slosh_eta_dot=0
 MPC 作为 normal tracker
 防晃逻辑位于 reference / candidate selection 层
@@ -55,7 +57,7 @@ SMOOTH_SPEED_RELAXED:
   降 Q_v + 提高 R_da/R_domega，但 Q_slosh=0
 
 SLOSH_PRIORITY_MPC:
-  同样 Q_v/R_da/R_domega，只额外打开 Q_slosh/Q_slosh_eta_dot/terminal slosh
+  同样 Q_v/R_da/R_domega，只额外打开 normalized Q_slosh / slosh_eta_dot_ratio / terminal slosh
 ```
 
 因此本方案验证的是：
@@ -82,6 +84,8 @@ roslaunch scout_local_planner slosh_experiment.launch
 
 ```text
 Q_slosh
+slosh_height_ref
+slosh_eta_dot_ratio
 Q_slosh_eta_dot
 mpc_Q_lag
 mpc_Q_contour
@@ -136,6 +140,8 @@ mpc/R_a
 mpc/R_omega
 mpc/R_da
 mpc/R_domega
+mpc/slosh_height_ref
+mpc/slosh_eta_dot_ratio
 mpc/terminal_factor_slosh_eta
 mpc/terminal_factor_slosh_eta_dot
 ```
@@ -144,7 +150,7 @@ mpc/terminal_factor_slosh_eta_dot
 
 ```text
 src/scout_apps/control/scout_local_planner/launch/slosh_experiment.launch
-  已支持 A/B/C/D/E 组所需的 Q_slosh / Q_slosh_eta_dot / Q_v / Q_contour / Q_etheta /
+  已支持 A/B/C/D/E 组所需的 Q_slosh / slosh_height_ref / slosh_eta_dot_ratio / Q_v / Q_contour / Q_etheta /
   R_a / R_da / R_domega / terminal_factor_slosh_* / global_path_topic 等参数。
 
 src/scout_apps/control/scout_local_planner/launch/slosh_experiment_sim.launch
@@ -164,6 +170,8 @@ rosparam get /scout_local_planner/mpc/R_omega
 rosparam get /scout_local_planner/mpc/R_da
 rosparam get /scout_local_planner/mpc/R_domega
 rosparam get /scout_local_planner/mpc/Q_slosh
+rosparam get /scout_local_planner/mpc/slosh_height_ref
+rosparam get /scout_local_planner/mpc/slosh_eta_dot_ratio
 rosparam get /scout_local_planner/mpc/Q_slosh_eta_dot
 rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta
 rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta_dot
@@ -221,6 +229,8 @@ R_omega: 2.0
 R_da: 0.5
 R_domega: 4.0
 Q_slosh: 0.0
+slosh_height_ref: 0.005
+slosh_eta_dot_ratio: 0.3
 Q_slosh_eta_dot: 0.0
 terminal_factor_slosh_eta: 0.0
 terminal_factor_slosh_eta_dot: 0.0
@@ -240,7 +250,9 @@ R_omega: 2.0
 R_da: 0.5
 R_domega: 4.0
 Q_slosh: 5.0
-Q_slosh_eta_dot: 0.01
+slosh_height_ref: 0.005
+slosh_eta_dot_ratio: 0.3
+Q_slosh_eta_dot: 0.0
 terminal_factor_slosh_eta: 0.0
 terminal_factor_slosh_eta_dot: 0.0
 ```
@@ -266,6 +278,8 @@ R_omega: 2.0
 R_da: 1.5
 R_domega: 6.0
 Q_slosh: 0.0
+slosh_height_ref: 0.005
+slosh_eta_dot_ratio: 0.3
 Q_slosh_eta_dot: 0.0
 terminal_factor_slosh_eta: 0.0
 terminal_factor_slosh_eta_dot: 0.0
@@ -292,7 +306,9 @@ R_omega: 2.0
 R_da: 1.5
 R_domega: 6.0
 Q_slosh: 5.0
-Q_slosh_eta_dot: 0.01
+slosh_height_ref: 0.005
+slosh_eta_dot_ratio: 0.3
+Q_slosh_eta_dot: 0.0
 terminal_factor_slosh_eta: 5.0
 terminal_factor_slosh_eta_dot: 3.0
 ```
@@ -300,11 +316,12 @@ terminal_factor_slosh_eta_dot: 3.0
 允许的第二轮小步升级：
 
 ```yaml
-Q_slosh_eta_dot: 0.02
-terminal_factor_slosh_eta_dot: 5.0
+Q_slosh: 10.0
+slosh_height_ref: 0.005
+slosh_eta_dot_ratio: 0.3
 ```
 
-只有在 D 组残余振荡明显、且 cost contribution 显示 `J_slosh_eta_dot` 不是压倒性主导时，才进入该升级。
+只有在 D 组 `pct_slosh_total` 仍低于 1%，且 horizon summary 显示 eta 已正常预测出来时，才进入该升级。
 
 ### E. SLOSH_DOMINANT
 
@@ -320,7 +337,9 @@ R_omega: 2.0
 R_da: 2.0
 R_domega: 8.0
 Q_slosh: 10.0
-Q_slosh_eta_dot: 0.03
+slosh_height_ref: 0.005
+slosh_eta_dot_ratio: 0.3
+Q_slosh_eta_dot: 0.0
 terminal_factor_slosh_eta: 8.0
 terminal_factor_slosh_eta_dot: 8.0
 ```
@@ -401,6 +420,7 @@ rostopic hz /cmd_vel
 rostopic hz /slosh/height
 rostopic echo /mpc/solve_ms
 rostopic echo /mpc/cost_breakdown
+rostopic echo /mpc/slosh_horizon_summary
 ```
 
 当前实物入口采用三层终点策略，借鉴 `src/mpc_planner` 的外层 goal capture 思路：MPC 负责主路径跟踪，终点附近由外层状态机验收和停车，不要求 MPC 在最后几十厘米继续精确贴点。
@@ -528,6 +548,8 @@ roslaunch scout_local_planner slosh_experiment.launch \
   mpc_R_da:=0.5 \
   mpc_R_domega:=4.0 \
   Q_slosh:=0.0 \
+  slosh_height_ref:=0.005 \
+  slosh_eta_dot_ratio:=0.3 \
   Q_slosh_eta_dot:=0.0 \
   terminal_factor_slosh_eta:=0.0 \
   terminal_factor_slosh_eta_dot:=0.0 \
@@ -555,7 +577,9 @@ roslaunch scout_local_planner slosh_experiment.launch \
   mpc_R_da:=0.5 \
   mpc_R_domega:=4.0 \
   Q_slosh:=5.0 \
-  Q_slosh_eta_dot:=0.01 \
+  slosh_height_ref:=0.005 \
+  slosh_eta_dot_ratio:=0.3 \
+  Q_slosh_eta_dot:=0.0 \
   terminal_factor_slosh_eta:=0.0 \
   terminal_factor_slosh_eta_dot:=0.0 \
   enable_slosh_box_constraint:=false \
@@ -582,6 +606,8 @@ roslaunch scout_local_planner slosh_experiment.launch \
   mpc_R_da:=1.5 \
   mpc_R_domega:=6.0 \
   Q_slosh:=0.0 \
+  slosh_height_ref:=0.005 \
+  slosh_eta_dot_ratio:=0.3 \
   Q_slosh_eta_dot:=0.0 \
   terminal_factor_slosh_eta:=0.0 \
   terminal_factor_slosh_eta_dot:=0.0 \
@@ -606,7 +632,9 @@ roslaunch scout_local_planner slosh_experiment.launch \
   mpc_R_da:=1.5 \
   mpc_R_domega:=6.0 \
   Q_slosh:=5.0 \
-  Q_slosh_eta_dot:=0.01 \
+  slosh_height_ref:=0.005 \
+  slosh_eta_dot_ratio:=0.3 \
+  Q_slosh_eta_dot:=0.0 \
   terminal_factor_slosh_eta:=5.0 \
   terminal_factor_slosh_eta_dot:=3.0 \
   enable_slosh_box_constraint:=false \
@@ -630,7 +658,9 @@ roslaunch scout_local_planner slosh_experiment.launch \
   mpc_R_da:=2.0 \
   mpc_R_domega:=8.0 \
   Q_slosh:=10.0 \
-  Q_slosh_eta_dot:=0.03 \
+  slosh_height_ref:=0.005 \
+  slosh_eta_dot_ratio:=0.3 \
+  Q_slosh_eta_dot:=0.0 \
   terminal_factor_slosh_eta:=8.0 \
   terminal_factor_slosh_eta_dot:=8.0 \
   enable_slosh_box_constraint:=false \
@@ -654,6 +684,8 @@ rosparam get /scout_local_planner/mpc/R_omega
 rosparam get /scout_local_planner/mpc/R_da
 rosparam get /scout_local_planner/mpc/R_domega
 rosparam get /scout_local_planner/mpc/Q_slosh
+rosparam get /scout_local_planner/mpc/slosh_height_ref
+rosparam get /scout_local_planner/mpc/slosh_eta_dot_ratio
 rosparam get /scout_local_planner/mpc/Q_slosh_eta_dot
 rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta
 rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta_dot
@@ -672,6 +704,8 @@ rosparam get /scout_local_planner/terminal_capture_stop/distance
 roslaunch scout_local_planner slosh_experiment.launch \
   global_path_topic:=/scout/global_path_fixed \
   Q_slosh:=0.0 \
+  slosh_height_ref:=0.005 \
+  slosh_eta_dot_ratio:=0.3 \
   Q_slosh_eta_dot:=0.0 \
   enable_slosh_box_constraint:=false \
   energy_profile_enable:=false \
@@ -758,6 +792,7 @@ python3 /home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/anal
 /reference/v_ref
 /mpc/status_val
 /mpc/cost_breakdown
+/mpc/slosh_horizon_summary
 ```
 
 输出原因标签：
@@ -967,7 +1002,7 @@ solve_ms p95 明显低于 33 ms 控制周期预算
 
 ## 10. Cost Contribution Check
 
-为避免 `Q_slosh_eta_dot` 只是摆设或过度主导，正式实验前应做一次 cost contribution 诊断。
+为避免归一化晃动项仍然不可见或过度主导，正式实验前应做一次 cost contribution 诊断。
 
 当前控制器已发布 MPC 内部预测 horizon 上的代价分项：
 
@@ -1070,6 +1105,47 @@ cost_contribution_summary_bar.png
 ```text
 旧 bag 如果没有录到 /mpc/cost_breakdown，不能严格还原 MPC 内部每项 cost 占比。
 这种 bag 只能用速度、加速度、轨迹误差和 RGB 视觉液面做外部行为分析。
+```
+
+### 10.7 Horizon 内 eta 预测诊断
+
+`/mpc/slosh_horizon_summary` 用于判断 MPC horizon 内是否真的预测出了未来晃动，而不是只看当前 `/slosh/state`。
+
+字段顺序：
+
+```text
+0  eta_norm_0_m
+1  eta_norm_max_m
+2  eta_dot_norm_0_mps
+3  eta_dot_norm_max_mps
+4  h_modal_max_mm
+5  h_total_max_mm
+6  k_h_total_max
+7  v_abs_p95_mps
+8  omega_abs_p95_radps
+9  ax_abs_p95_mps2
+10 ay_abs_p95_mps2
+11 eta_growth_ratio
+12 h_total_0_mm
+```
+
+检查命令：
+
+```bash
+rostopic echo /mpc/slosh_horizon_summary
+```
+
+判断：
+
+```text
+eta_growth_ratio < 1.1 且 h_total_max_mm 很小:
+  horizon 没有预测出明显未来晃动，先查 slosh 状态注入、动力学矩阵和参考序列激励。
+
+eta_growth_ratio 明显 > 1，但 pct_slosh_total 仍 < 1%:
+  horizon 内 eta 已经预测出来，主要问题是 slosh cost 尺度太小。
+
+eta_growth_ratio 明显 > 1，pct_slosh_total 到 3%-20%，但 RGB 未下降:
+  晃动模型方向、模型保真度或控制权衡仍有问题，不能用 /slosh/height 自证。
 ```
 
 D 组期望：
