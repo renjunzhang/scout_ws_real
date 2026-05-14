@@ -47,6 +47,7 @@
 #                /liquid_measurement/debug_image
 #   - IMU 原始输入：/imu/data, /wit/mag
 #   - MPC 性能：/mpc/solve_ms, /mpc/status_val, /mpc_status
+#   - MPC 代价占比：/mpc/cost_breakdown
 #   - 控制/底盘状态：/cmd_vel, /odom, /scout_status, /rs_status
 #   - 目标/路径：/scout/goal, /scout/current_goal, /scout/global_path, /local_path
 #                /scout/global_path_anti_slosh
@@ -203,6 +204,7 @@ TOPICS=(
     # MPC 性能
     /mpc/solve_ms
     /mpc/status_val
+    /mpc/cost_breakdown
     /mpc_status
 
     # 控制与状态

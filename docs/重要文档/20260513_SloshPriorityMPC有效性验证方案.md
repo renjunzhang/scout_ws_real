@@ -114,7 +114,8 @@ prediction horizon ≈ 2.0 s
 注意：
 
 ```text
-30 Hz 下单周期约 33 ms。N=60 会增加 QP 规模，实物 smoke 必须检查 /mpc/solve_time_ms。
+30 Hz 下单周期约 33 ms。N=60 会增加 QP 规模，实物 smoke 必须检查 /mpc/solve_ms。
+同时检查 /mpc/cost_breakdown，确认晃动项在优化器内部有可见占比。
 ```
 
 启动时可覆盖：
@@ -389,7 +390,8 @@ mpc.N=60
 ```bash
 rostopic hz /cmd_vel
 rostopic hz /slosh/height
-rostopic echo /mpc/solve_time_ms
+rostopic echo /mpc/solve_ms
+rostopic echo /mpc/cost_breakdown
 ```
 
 ### 7.2 保存固定路径
@@ -642,7 +644,8 @@ slosh_mpc_E_SLOSH_DOMINANT_p2_run01.bag
 /scout/global_path_fixed
 /scout/global_path_smooth
 /mpc/status_val
-/mpc/solve_time_ms
+/mpc/solve_ms
+/mpc/cost_breakdown
 ```
 
 MPC / slosh 调试：
@@ -772,17 +775,53 @@ solve_ms p95 明显低于 33 ms 控制周期预算
 
 为避免 `Q_slosh_eta_dot` 只是摆设或过度主导，正式实验前应做一次 cost contribution 诊断。
 
-至少离线估计这些项：
+当前控制器已发布 MPC 内部预测 horizon 上的代价分项：
 
 ```text
-J_contour
-J_lag
-J_etheta
-J_v
-J_control
-J_smooth
-J_slosh_eta
-J_slosh_eta_dot
+/mpc/cost_breakdown
+```
+
+消息类型：
+
+```text
+std_msgs/Float32MultiArray
+```
+
+字段顺序：
+
+```text
+0  J_total
+1  J_lag
+2  J_contour
+3  J_etheta
+4  J_v
+5  J_omega_ff
+6  J_control
+7  J_smooth
+8  J_slosh_eta
+9  J_slosh_eta_dot
+10 pct_lag
+11 pct_contour
+12 pct_etheta
+13 pct_v
+14 pct_omega_ff
+15 pct_control
+16 pct_smooth
+17 pct_slosh_eta
+18 pct_slosh_eta_dot
+19 pct_slosh_total
+```
+
+检查命令：
+
+```bash
+rostopic echo /mpc/cost_breakdown
+```
+
+录包脚本已包含该 topic：
+
+```text
+src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh
 ```
 
 D 组期望：
@@ -792,6 +831,19 @@ J_slosh_eta + J_slosh_eta_dot 可见
 J_v 相对 A/B 下降
 J_smooth 占比上升
 J_contour 仍保持主要路径约束作用
+```
+
+更具体的第一轮数值判断：
+
+```text
+pct_slosh_total 长期 < 1%:
+  晃动项在优化器里基本不可见，即使 Q_slosh 已打开，也很难期待行为变化。
+
+pct_slosh_total 大约 3%-20%:
+  晃动项有可见影响，适合作为第一轮有效区间。
+
+pct_slosh_total 长期 > 40%:
+  晃动项可能过度主导，需检查 tracking、completion time 和奇怪慢行。
 ```
 
 异常判断：

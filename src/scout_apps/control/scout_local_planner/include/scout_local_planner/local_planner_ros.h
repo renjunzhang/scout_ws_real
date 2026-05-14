@@ -57,6 +57,19 @@ private:
         ALIGN_FINAL_YAW
     };
 
+    struct CostBreakdown {
+        double J_lag = 0.0;
+        double J_contour = 0.0;
+        double J_etheta = 0.0;
+        double J_v = 0.0;
+        double J_omega_ff = 0.0;
+        double J_control = 0.0;
+        double J_smooth = 0.0;
+        double J_slosh_eta = 0.0;
+        double J_slosh_eta_dot = 0.0;
+        double J_total = 0.0;
+    };
+
     // ====== 回调函数 ======
     void globalPathCallback(const nav_msgs::Path::ConstPtr& msg);
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg);
@@ -75,6 +88,11 @@ private:
     void publishSmoothedPath();
     void publishStatus();
     void publishSloshDebug(double solve_time_ms, bool solve_ok, bool publish_solver_debug = true);
+    CostBreakdown computeCostBreakdown(const MPCSolution& solution,
+                                       const std::vector<ReferencePoint>& refs,
+                                       const MPCParams& params,
+                                       const ControlVector& u_prev) const;
+    void publishCostBreakdown(const CostBreakdown& breakdown);
     void publishTerminalDebug();
     void updateSloshEstimate();
     double computePredictedSloshHeightMax(const MPCSolution& solution) const;
@@ -311,6 +329,7 @@ private:
     ros::Publisher slosh_settling_time_pub_;
     ros::Publisher mpc_solve_ms_pub_;
     ros::Publisher mpc_status_val_pub_;
+    ros::Publisher mpc_cost_breakdown_pub_;
     ros::Publisher terminal_mode_pub_;
     ros::Publisher terminal_recovery_latched_pub_;
     ros::Publisher terminal_goal_info_pub_;
