@@ -94,6 +94,9 @@ mpc_R_domega
 terminal_factor_slosh_eta
 terminal_factor_slosh_eta_dot
 enable_slosh_box_constraint
+terminal_slowdown_enable
+terminal_slowdown_distance
+terminal_slowdown_v_max
 energy_profile_enable
 risk_scheduler_enable
 input_shaping_enable
@@ -392,6 +395,41 @@ rostopic hz /cmd_vel
 rostopic hz /slosh/height
 rostopic echo /mpc/solve_ms
 rostopic echo /mpc/cost_breakdown
+```
+
+当前实物入口默认启用终点前平滑减速：
+
+```text
+terminal_slowdown_enable=true
+terminal_slowdown_distance=1.20
+terminal_slowdown_v_max=0.18
+```
+
+其作用是在 terminal recovery 接管前，随 `goal_dist` 连续降低 `v_des_cmd`，避免 near-goal 仍以较高速度进入 recovery 后再调头。若诊断脚本仍显示：
+
+```text
+REFERENCE_SPEED_TOO_HIGH_NEAR_GOAL
+EXECUTION_SPEED_TOO_HIGH_NEAR_GOAL
+```
+
+优先小步调整：
+
+```text
+terminal_slowdown_distance: 1.20 -> 1.50
+terminal_slowdown_v_max: 0.18 -> 0.15
+```
+
+不要通过增大 `Q_slosh` 解决终点过冲。
+
+终点状态机当前采用 position / yaw 解耦：
+
+```text
+position_reached=true:
+  先进入 goal_stop_pending，将 v_des_cmd 压到 0，等待线速度 / 角速度降到 REACHED 阈值。
+
+yaw 不满足:
+  不再阻止线速度停车。
+  终点姿态问题只作为单独诊断项处理，不允许继续驱动车辆高速越过终点。
 ```
 
 ### 7.2 保存固定路径
@@ -888,6 +926,60 @@ rostopic echo /mpc/cost_breakdown
 src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh
 ```
 
+离线提取和画图脚本：
+
+```text
+src/scout_apps/control/scout_local_planner/scripts/analysis/extract_mpc_cost_breakdown.py
+```
+
+实物机常用命令：
+
+```bash
+source /home/geist/scout_ws/devel/setup.bash
+python3 /home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/analysis/extract_mpc_cost_breakdown.py \
+  /home/geist/slosh_bags/real/xxx.bag \
+  --phase TRACKING \
+  --out-dir /home/geist/slosh_bags/real/xxx_cost_breakdown
+```
+
+开发机常用命令：
+
+```bash
+source /home/a/scout_ws/devel/setup.bash
+python3 /home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/analysis/extract_mpc_cost_breakdown.py \
+  /data/a/slosh_bags/real/xxx.bag \
+  --phase TRACKING \
+  --out-dir /data/a/slosh_bags/real/xxx_cost_breakdown
+```
+
+多包合并对比：
+
+```bash
+python3 /home/a/scout_ws/src/scout_apps/control/scout_local_planner/scripts/analysis/extract_mpc_cost_breakdown.py \
+  /data/a/slosh_bags/real/run_A.bag \
+  /data/a/slosh_bags/real/run_C.bag \
+  /data/a/slosh_bags/real/run_D.bag \
+  --phase TRACKING \
+  --out-dir /data/a/slosh_bags/real/cost_breakdown_compare \
+  --prefix A_C_D_cost_contribution
+```
+
+输出文件：
+
+```text
+cost_contribution.csv
+cost_contribution_summary.md
+cost_contribution_timeseries.png
+cost_contribution_summary_bar.png
+```
+
+注意：
+
+```text
+旧 bag 如果没有录到 /mpc/cost_breakdown，不能严格还原 MPC 内部每项 cost 占比。
+这种 bag 只能用速度、加速度、轨迹误差和 RGB 视觉液面做外部行为分析。
+```
+
 D 组期望：
 
 ```text
@@ -925,19 +1017,47 @@ J_smooth 明显上升但 D 不优于 C:
 
 ## 11. 判定逻辑
 
+### 主判定窗口
+
+为避免终点平滑减速、goal stop、terminal recovery 污染“slosh 项是否生效”的判断，主有效性结论只使用进入 `terminal_slowdown` 前的数据：
+
+```text
+TRACKING_PRE_TERMINAL:
+  /mpc_status == TRACKING
+  goal_dist > terminal_slowdown_distance
+```
+
+该窗口用于证明：
+
+```text
+slosh-priority MPC 在正常路径跟踪阶段已经改变了速度/加速度激励和 RGB 液面响应。
+```
+
+终点附近数据单独作为补充窗口：
+
+```text
+NEAR_GOAL:
+  goal_dist <= terminal_slowdown_distance
+```
+
+`NEAR_GOAL` 只能用于说明终点策略是否平稳，不能作为 slosh cost 主证明。所有 A/B/C/D/E 分组仍必须使用同一套 `terminal_slowdown`、position/yaw 解耦和 terminal recovery 逻辑。
+
 ### 支持 slosh-priority MPC 的结果
 
 ```text
-D 相对 A:
+D 相对 A，在 TRACKING_PRE_TERMINAL 内:
   RGB peak / p95 下降
   max |a_y| 或 RMS |a_y| 下降
   max |a_x| 或 RMS |a_x| 不上升
   tracking_time <= A * 1.30
   lateral_p95 <= A * 1.30
 
-D 相对 C:
+D 相对 C，在 TRACKING_PRE_TERMINAL 内:
   RGB peak / p95 仍有额外下降
-  或 near-goal last 3 s 残余更低
+  或 max/RMS ax/ay 进一步下降
+
+NEAR_GOAL:
+  只作为补充结果报告，不参与 slosh cost 主归因。
 ```
 
 此时可以写：

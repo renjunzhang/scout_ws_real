@@ -412,6 +412,9 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("terminal_recovery/v_max", terminal_v_max_, 0.18);
     pnh.param("terminal_recovery/cmd_v_rate_limit", terminal_cmd_v_rate_limit_, 0.35);
     pnh.param("terminal_recovery/cmd_omega_rate_limit", terminal_cmd_omega_rate_limit_, 1.0);
+    pnh.param("terminal_slowdown/enable", terminal_slowdown_enable_, true);
+    pnh.param("terminal_slowdown/distance", terminal_slowdown_distance_, 1.20);
+    pnh.param("terminal_slowdown/v_max", terminal_slowdown_v_max_, 0.18);
 
     // ISR / ZV input shaping（baseline only）
     pnh.param("input_shaping/enable", input_shaping_enable_, false);
@@ -871,6 +874,26 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     (risk_scheduler_enable_ && slosh_enabled_) ?
                     risk_output_.v_ref_eff_k : v_nominal;
                 double v_des_cmd = v_des_cmd_raw;
+                if (state_ == PlannerState::TRACKING &&
+                    !goal_stop_pending_ &&
+                    !settling_active &&
+                    terminal_slowdown_enable_) {
+                    const double goal_dist_slow = path_handler_.getGoalDistance();
+                    const double slow_dist = std::max(terminal_enter_distance_ + 1e-3,
+                                                      terminal_slowdown_distance_);
+                    if (std::isfinite(goal_dist_slow) && goal_dist_slow < slow_dist) {
+                        const double near_dist = std::max(path_params_.goal_tolerance,
+                                                          terminal_enter_distance_);
+                        const double denom = std::max(1e-6, slow_dist - near_dist);
+                        const double ratio = std::max(0.0, std::min(1.0,
+                            (goal_dist_slow - near_dist) / denom));
+                        const double smooth = ratio * ratio * (3.0 - 2.0 * ratio);
+                        const double terminal_cap = std::max(0.0, terminal_slowdown_v_max_);
+                        const double v_cap =
+                            terminal_cap + (std::max(0.0, v_des_cmd) - terminal_cap) * smooth;
+                        v_des_cmd = std::min(v_des_cmd, v_cap);
+                    }
+                }
                 int reentry_steps_dbg = tracking_reentry_ramp_steps_left_;
                 int tracking_fail_streak_dbg = tracking_solve_fail_streak_;
                 int tracking_feas_active_dbg = tracking_feasibility_recovery_active_ ? 1 : 0;
@@ -1487,7 +1510,10 @@ void LocalPlannerROS::updateState() {
         return;
     }
 
-    const bool goal_pose_reached = path_handler_.isGoalReached();
+    GoalInfo goal_info;
+    const bool has_goal_info = path_handler_.getGoalInfo(goal_info);
+    const bool goal_position_reached =
+        has_goal_info && goal_info.valid && goal_info.position_reached;
     const double goal_dist = path_handler_.getGoalDistance();
     const double goal_stop_release_dist =
         std::max(path_params_.goal_capture_distance, path_params_.goal_tolerance + 0.15);
@@ -1497,7 +1523,7 @@ void LocalPlannerROS::updateState() {
         goal_stop_pending_ = false;
 
         const bool should_release =
-            !goal_pose_reached &&
+            !goal_position_reached &&
             (!std::isfinite(goal_dist) || goal_dist > settling_release_distance_);
         if (should_release) {
             transitionTo(PlannerState::TRACKING);
@@ -1539,11 +1565,11 @@ void LocalPlannerROS::updateState() {
         }
     }
 
-    if (!goal_stop_pending_ && !goal_pose_reached) {
+    if (!goal_stop_pending_ && !goal_position_reached) {
         return;
     }
 
-    if (goal_pose_reached) {
+    if (goal_position_reached) {
         if (settling_enable_ && slosh_enabled_) {
             transitionTo(PlannerState::SETTLING);
             goal_stop_pending_ = false;
