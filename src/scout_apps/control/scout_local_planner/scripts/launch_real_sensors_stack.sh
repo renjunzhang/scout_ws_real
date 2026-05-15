@@ -7,8 +7,11 @@ SCRIPT_NAME="launch_real_sensors_stack"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WS_ROOT="${SCOUT_WS:-$(readlink -f "${SCRIPT_DIR}/../../../../..")}"
 LOG_DIR="${LOG_DIR:-/tmp/${SCRIPT_NAME}_$(date +%Y%m%d_%H%M%S)}"
-START_DELAY="${START_DELAY:-4}"
-SETTLE_DELAY="${SETTLE_DELAY:-8}"
+START_DELAY="${START_DELAY:-6}"
+POST_TOPIC_DELAY="${POST_TOPIC_DELAY:-3}"
+SETTLE_DELAY="${SETTLE_DELAY:-12}"
+READY_TIMEOUT="${READY_TIMEOUT:-45}"
+WAIT_FOR_LOCALIZATION_MAP="${WAIT_FOR_LOCALIZATION_MAP:-false}"
 HZ_WINDOW="${HZ_WINDOW:-10}"
 
 pids=()
@@ -92,6 +95,39 @@ start_launch() {
     fi
 }
 
+wait_for_topic() {
+    local topic="$1"
+    local label="${2:-${topic}}"
+    local required="${3:-true}"
+    local safe_name="${topic#/}"
+    safe_name="${safe_name//\//_}"
+    local log_file="${LOG_DIR}/wait_${safe_name}.log"
+
+    echo "[${SCRIPT_NAME}] Waiting for ${label} (${topic}), timeout=${READY_TIMEOUT}s..."
+    if timeout "${READY_TIMEOUT}" rostopic echo -n 1 "${topic}" >"${log_file}" 2>&1; then
+        echo "[${SCRIPT_NAME}] ${label} is publishing."
+        sleep "${POST_TOPIC_DELAY}"
+        return 0
+    fi
+
+    if [[ "${required}" == "true" ]]; then
+        echo "[${SCRIPT_NAME}] ERROR: timed out waiting for ${label} (${topic}). Log: ${log_file}" >&2
+        echo "[${SCRIPT_NAME}] Recent launch logs:" >&2
+        for idx in "${!pids[@]}"; do
+            local name="${names[${idx}]}"
+            local launch_log="${LOG_DIR}/${name}.log"
+            if [[ -f "${launch_log}" ]]; then
+                echo "----- ${name} (${launch_log}) -----" >&2
+                tail -n 30 "${launch_log}" >&2 || true
+            fi
+        done
+        exit 1
+    fi
+
+    echo "[${SCRIPT_NAME}] WARN: timed out waiting for optional ${label} (${topic}); continuing."
+    return 0
+}
+
 check_hz() {
     local topic="$1"
     local safe_name="${topic#/}"
@@ -108,20 +144,29 @@ source_ros
 
 echo "[${SCRIPT_NAME}] Workspace: ${WS_ROOT}"
 echo "[${SCRIPT_NAME}] Logs: ${LOG_DIR}"
+echo "[${SCRIPT_NAME}] START_DELAY=${START_DELAY}s POST_TOPIC_DELAY=${POST_TOPIC_DELAY}s SETTLE_DELAY=${SETTLE_DELAY}s READY_TIMEOUT=${READY_TIMEOUT}s"
 
 setup_can0
 
 start_launch "nanoscan3_front" \
     nanoscan3_bringup nanoscan3_front.launch use_rviz:=false
+wait_for_topic /scan_front "front LiDAR scan"
 
 start_launch "nanoscan3_localization" \
     nanoscan3_localization scout_nanoscan3_cartographer_localization.launch
+if [[ "${WAIT_FOR_LOCALIZATION_MAP}" == "true" ]]; then
+    wait_for_topic /map "Cartographer occupancy grid" false
+else
+    echo "[${SCRIPT_NAME}] Skipping /map wait. Set WAIT_FOR_LOCALIZATION_MAP=true to require localization map readiness."
+fi
 
 start_launch "scout_imu_with_tf" \
     scout_bringup scout_imu_with_tf.launch
+wait_for_topic /imu/data "IMU data"
 
 start_launch "realsense2_camera" \
     realsense2_camera rs_camera.launch
+wait_for_topic /camera/color/image_raw "RealSense color image"
 
 echo
 echo "[${SCRIPT_NAME}] Waiting ${SETTLE_DELAY}s before hz checks..."
