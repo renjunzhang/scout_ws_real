@@ -11,6 +11,8 @@ START_DELAY="${START_DELAY:-6}"
 POST_TOPIC_DELAY="${POST_TOPIC_DELAY:-3}"
 SETTLE_DELAY="${SETTLE_DELAY:-12}"
 READY_TIMEOUT="${READY_TIMEOUT:-45}"
+START_BASE="${START_BASE:-true}"
+WAIT_FOR_ODOM="${WAIT_FOR_ODOM:-true}"
 WAIT_FOR_LOCALIZATION_MAP="${WAIT_FOR_LOCALIZATION_MAP:-false}"
 HZ_WINDOW="${HZ_WINDOW:-10}"
 
@@ -145,8 +147,19 @@ source_ros
 echo "[${SCRIPT_NAME}] Workspace: ${WS_ROOT}"
 echo "[${SCRIPT_NAME}] Logs: ${LOG_DIR}"
 echo "[${SCRIPT_NAME}] START_DELAY=${START_DELAY}s POST_TOPIC_DELAY=${POST_TOPIC_DELAY}s SETTLE_DELAY=${SETTLE_DELAY}s READY_TIMEOUT=${READY_TIMEOUT}s"
+echo "[${SCRIPT_NAME}] START_BASE=${START_BASE} WAIT_FOR_ODOM=${WAIT_FOR_ODOM} WAIT_FOR_LOCALIZATION_MAP=${WAIT_FOR_LOCALIZATION_MAP}"
 
 setup_can0
+
+if [[ "${START_BASE}" == "true" ]]; then
+    start_launch "scout_mini_robot_base" \
+        scout_bringup scout_mini_robot_base.launch
+elif [[ "${WAIT_FOR_ODOM}" == "true" ]]; then
+    echo "[${SCRIPT_NAME}] START_BASE=false; assuming robot base was launched externally."
+fi
+if [[ "${WAIT_FOR_ODOM}" == "true" ]]; then
+    wait_for_topic /odom "Scout base odometry"
+fi
 
 start_launch "nanoscan3_front" \
     nanoscan3_bringup nanoscan3_front.launch use_rviz:=false
