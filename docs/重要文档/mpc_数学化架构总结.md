@@ -8,9 +8,10 @@
 - 当前每个控制周期求解的并不是固定 LTI QP，而是围绕名义轨迹 successive linearization 后得到的**affine time-varying QP**。
 - 当前 near-goal 控制结构是：
   - 远场：tracking MPC
+  - 执行层速度入口：`v_des_rate_limit` 先限制进入 `PathHandler` 的速度上限变化率
   - 终点前：`terminal_slowdown` 通过参考速度和末端速度权重引导平缓减速
-  - 捕获区：`terminal_capture_stop` 可直接发布零速度，等待车体速度降到 `REACHED` 门槛
-  - 兜底恢复：外层 `terminal recovery` 处理过冲、回退和最终 yaw 对齐
+  - 捕获区：`terminal_capture_stop` 进入 `CAPTURE_BRAKE`，按命令变化率限制逐步刹停
+  - 兜底恢复：外层 `terminal recovery` 默认不进主实验，只在终点异常/调头回点时手动开启
   - capture/recovery 阶段不再代表纯 MPC cost 行为，晃动有效性主对比应优先截在进入这些阶段之前
 
 ## 目录
@@ -21,6 +22,7 @@
   - 0.3 slosh 模型相关参数
   - 0.4 IMU / 实验覆盖常用参数
   - 0.5 上游参考路径语义
+  - 0.6 执行层速度参考链路
 - 1) 当前项目 MPC 的优化问题
 - 2) 运动学/动力学模型（项目特化）
   - 2.1 基础 Frenet 跟踪子系统（4 维）
@@ -107,6 +109,9 @@
   - `mpc/constrain_omega_rate`: 是否启用角速度变化率硬约束
   - `mpc/constrain_accel_rate`: 是否启用加速度变化率硬约束
 - near-goal / 路径处理：
+  - `v_des_rate_limit/enable`: 是否限制进入 `PathHandler` 前的执行层速度上限变化率
+  - `v_des_rate_limit/accel_limit`: `v_des` 上升变化率上限
+  - `v_des_rate_limit/decel_limit`: `v_des` 下降变化率上限
   - `path_handler/lookahead_distance`: 前视距离，影响参考点采样与转弯激进程度
   - `path_handler/goal_tolerance`: 判定到达目标的位置容差
   - `path_handler/yaw_tolerance`: 判定到达目标的航向容差
@@ -117,6 +122,9 @@
   - `path_handler/max_tan_accel`: 速度曲线生成时的最大切向加速度
   - `path_handler/max_tan_decel`: 速度曲线生成时的最大切向减速度
   - `path_handler/goal_speed`: 路径终点的目标参考速度
+  - `terminal_slowdown/enable`: 是否在终点捕获前提前压低参考速度
+  - `terminal_capture_stop/enable`: 是否启用终点捕获制动
+  - `terminal_recovery/enable`: 是否启用外层终点恢复；当前实物主实验默认关闭
 
 ### 0.3 slosh 模型相关参数
 
@@ -180,6 +188,45 @@
 - 路径中间参考点的航向，当前主要是样条切线方向 `theta_path`
 - 终点姿态判定时，当前优先使用 goal pose 自身 `orientation`
 - 只有当 goal `orientation` 不可用时，才回退到路径尾部切线方向
+
+### 0.6 执行层速度参考链路
+
+当前进入 MPC horizon 的速度参考不是单一来源，而是一个分层链路：
+
+```text
+vehicle v_nominal
+  -> risk_scheduler / terminal_slowdown / feasibility guard / curvature cap
+  -> v_des_target
+  -> v_des_rate_limit
+  -> v_des_eff
+  -> PathHandler getReferencePoints()
+  -> horizon 内 v_ref
+```
+
+其中：
+
+- `v_des_raw`：名义速度或 risk scheduler 输出的原始速度上限；
+- `v_des_target`：经过 terminal、feasibility、curvature、governor 等上游逻辑裁剪后的目标上限；
+- `v_des_eff`：经过 `v_des_rate_limit` 平滑后的实际执行层速度上限；
+- `v_ref`：`PathHandler` 在 horizon 内按路径弧长、曲率、末端制动距离和 `v_des_eff` 生成的参考速度序列。
+
+所以 `Q_v` 惩罚的并不是 `v_des_raw`，而是 horizon 每一步的：
+
+\[
+(v_k-v_{\text{ref},k})^2
+\]
+
+`v_des_rate_limit` 不是 MPC cost 项，也不是硬约束；它是进入参考生成器之前的外层速度上限平滑器。
+它的作用是减少参考速度一帧突降/突升带来的纵向 \(a_x\) 脉冲，让后续晃动对比更干净。
+
+对应诊断话题：
+
+- `/reference/v_des_raw`
+- `/reference/v_des_target`
+- `/reference/v_des_eff`
+- `/reference/v_des_rate_limited`
+- `/reference/v_ref_horizon`
+- `/reference/s_horizon`
 
 ## 1) 当前项目 MPC 的优化问题
 
@@ -579,22 +626,36 @@ h_{\text{now}} = \eta_{\text{slosh}} + \eta_{\text{parabola}}
 当前 near-goal 控制结构可以直接表述为：
 
 1. 远场仍由 tracking MPC 生成控制；
-2. 接近终点但尚未进入捕获区时，`terminal_slowdown` 会压低参考速度并提高末端速度权重，用于让 MPC 提前减速；
-3. 进入 `terminal_capture_stop_distance` 后，若 `terminal_capture_stop_enable=true`，外层会直接发布零速度，等待实际速度和角速度低于 `REACHED` 门槛；
-4. 若发生过冲、位置未收敛或需要最终恢复，则可能进入外层 terminal recovery；
-5. terminal recovery 当前有 3 个 mode：
+2. 执行层速度上限先经过 `v_des_rate_limit`，避免上游限速一帧突变后直接进入 horizon；
+3. 接近终点但尚未进入捕获区时，`terminal_slowdown` 会压低参考速度并提高末端速度权重，用于让 MPC 提前减速；
+4. 进入 `terminal_capture_stop_distance` 后，若 `terminal_capture_stop_enable=true`，外层进入 `CAPTURE_BRAKE`，目标速度为 0，但通过 `terminal_cmd_v_rate_limit / terminal_cmd_omega_rate_limit` 逐步刹停；
+5. 速度和角速度低于 `REACHED` 门槛后，才切到 `REACHED`；
+6. 若发生过冲、位置未收敛或需要最终恢复，可以手动开启外层 terminal recovery；
+7. terminal recovery 当前有 3 个 mode：
    - `ALIGN_TO_POINT`
    - `APPROACH_POINT`
    - `ALIGN_FINAL_YAW`
-6. capture stop 和 recovery 下，控制不是由 MPC 求解器给出，而是外层显式控制律直接发布 `cmd_vel`；
-7. 只有当位置达标且速度、角速度都足够低时，才切到 `REACHED`。yaw 可以作为最终对齐目标，但不应阻止线速度先停下来。
+8. `CAPTURE_BRAKE` 和 recovery 下，控制不是由 MPC 求解器给出，而是外层显式控制律直接发布 `cmd_vel`。
 
 因此当前实现的工程语义是：
 
 - 远场：tracking MPC
+- 执行层速度平滑：`v_des_rate_limit` 限制进入 `PathHandler` 的速度上限变化率
 - 终点前减速：`terminal_slowdown` 修改参考速度和末端速度权重
-- 捕获区停车：`terminal_capture_stop` 直接发布零速度
-- 兜底恢复：外层 terminal recovery
+- 捕获区停车：`terminal_capture_stop` 进入 `CAPTURE_BRAKE`，按命令变化率限制刹停
+- 兜底恢复：外层 terminal recovery，当前实物主实验默认关闭
 
 所以分析“slosh cost 是否改变 MPC 行为”时，要尽量把统计窗口截在 capture stop / terminal recovery 之前。
-否则终点阶段的零速度命令或外层恢复控制会把 MPC cost 的因果关系混进去。
+否则终点阶段的 `CAPTURE_BRAKE` 或外层恢复控制会把 MPC cost 的因果关系混进去。
+
+当前建议的终点/速度诊断优先看：
+
+- `/terminal/mode`
+- `/reference/v_des_raw`
+- `/reference/v_des_target`
+- `/reference/v_des_eff`
+- `/reference/v_des_rate_limited`
+- `/reference/v_ref_horizon`
+- `/reference/implied_ax`
+- `/cmd_vel`
+- `/scout/odom`

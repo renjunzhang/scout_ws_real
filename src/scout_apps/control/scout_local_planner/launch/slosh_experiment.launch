@@ -34,16 +34,19 @@
   <arg name="filter_alpha_omega" default="1.0" doc="实验模式: 角速度 EMA 系数，1.0 表示关闭额外低通"/>
   <arg name="filter_kappa_boost" default="0.0" doc="实验模式: 关闭曲率自适应 EMA 增益"/>
   <arg name="reached_debug_duration" default="5.0" doc="到达终点后继续输出 slosh debug 的时长（秒）"/>
-  <arg name="terminal_recovery_enable" default="true" doc="终点 terminal recovery；默认开启，recovery 分支仍会持续发布 /slosh/* 调试话题"/>
+  <arg name="terminal_recovery_enable" default="false" doc="终点 terminal recovery；主实验默认关闭，仅作为终点异常/调头兜底手动开启"/>
   <arg name="terminal_cmd_v_rate_limit" default="0.35" doc="terminal recovery 线速度命令变化率上限 (m/s^2)，降低接管瞬间 ax"/>
   <arg name="terminal_cmd_omega_rate_limit" default="1.0" doc="terminal recovery 角速度命令变化率上限 (rad/s^2)，降低接管瞬间 alpha"/>
-  <arg name="terminal_slowdown_enable" default="true" doc="是否在 terminal recovery 接管前提前平滑降低 v_des_cmd"/>
+  <arg name="terminal_slowdown_enable" default="true" doc="是否在终点捕获前提前平滑降低 v_des_cmd；作为 PathHandler 末端速度未验证干净前的保护层"/>
   <arg name="terminal_slowdown_distance" default="1.20" doc="终点前平滑减速起始距离 (m)"/>
   <arg name="terminal_slowdown_v_max" default="0.18" doc="进入 terminal recovery 前的平滑减速目标上限 (m/s)"/>
   <arg name="terminal_slowdown_Q_v" default="40.0" doc="终点制动速度上限生效时临时速度跟踪权重"/>
   <arg name="terminal_slowdown_terminal_factor_v" default="5.0" doc="终点制动速度上限生效时临时 terminal 速度权重放大"/>
-  <arg name="terminal_capture_stop_enable" default="true" doc="mpc_planner 风格外层终点捕获；阈值内直接发布 cmd_vel=0"/>
-  <arg name="terminal_capture_stop_distance" default="0.70" doc="终点捕获停车半径 (m)"/>
+  <arg name="terminal_capture_stop_enable" default="true" doc="mpc_planner 风格外层终点捕获；阈值内进入限速 CAPTURE_BRAKE，不再硬发 cmd_vel=0"/>
+  <arg name="terminal_capture_stop_distance" default="0.70" doc="终点捕获制动半径 (m)"/>
+  <arg name="v_des_rate_limit_enable" default="true" doc="执行层参考速度变化率限制；用于治理纵向 ax 脉冲"/>
+  <arg name="v_des_accel_limit" default="0.60" doc="v_des 上升变化率上限 (m/s^2)"/>
+  <arg name="v_des_decel_limit" default="0.80" doc="v_des 下降变化率上限 (m/s^2)"/>
   <arg name="slosh_speed_governor_enable" default="false" doc="是否启用残余晃动感知的速度治理"/>
   <arg name="slosh_speed_governor_k_eta" default="2.5" doc="速度治理液面高度比例缩放系数"/>
   <arg name="slosh_speed_governor_ay_max_base" default="0.0" doc="速度治理横向加速度预算"/>
@@ -115,6 +118,9 @@
     <param name="terminal_slowdown/terminal_factor_v" value="$(arg terminal_slowdown_terminal_factor_v)"/>
     <param name="terminal_capture_stop/enable" value="$(arg terminal_capture_stop_enable)"/>
     <param name="terminal_capture_stop/distance" value="$(arg terminal_capture_stop_distance)"/>
+    <param name="v_des_rate_limit/enable" value="$(arg v_des_rate_limit_enable)"/>
+    <param name="v_des_rate_limit/accel_limit" value="$(arg v_des_accel_limit)"/>
+    <param name="v_des_rate_limit/decel_limit" value="$(arg v_des_decel_limit)"/>
     <param name="slosh_speed_governor/enable" value="$(arg slosh_speed_governor_enable)"/>
     <param name="slosh_speed_governor/k_eta" value="$(arg slosh_speed_governor_k_eta)"/>
     <param name="slosh_speed_governor/ay_max_base" value="$(arg slosh_speed_governor_ay_max_base)"/>

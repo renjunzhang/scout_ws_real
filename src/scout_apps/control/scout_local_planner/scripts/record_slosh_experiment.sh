@@ -236,6 +236,22 @@ TOPICS=(
     /anti_slosh_path/debug/mid
     /anti_slosh_path/debug/strong
     /mpc/reference_path
+    /reference/v_des_raw
+    /reference/v_des_target
+    /reference/v_des_eff
+    /reference/v_des_rate_limited
+    /reference/v_ref
+    /reference/v_ref_horizon
+    /reference/s_horizon
+    /reference/v_path
+    /reference/kappa
+    /reference/s
+    /reference/implied_ax
+    /reference/implied_ay
+    /reference/implied_jerk
+    /reference/implied_ax_abs_p95
+    /reference/implied_ay_abs_p95
+    /reference/implied_jerk_abs_p95
     /local_path
     /scout/mbf_costmap_nav/GlobalPlanner/plan
     /scout/mbf_costmap_nav/GlobalPlanner/potential

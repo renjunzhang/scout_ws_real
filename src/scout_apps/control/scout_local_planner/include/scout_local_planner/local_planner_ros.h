@@ -159,6 +159,14 @@ private:
     double tracking_curvature_rate_min_speed_ = 0.25;
     double tracking_curvature_rate_gain_ = 1.0;
 
+    // 执行层参考速度变化率限制：治理 v_des 突跳导致的纵向 ax 脉冲
+    bool v_des_rate_limit_enable_ = true;
+    double v_des_accel_limit_ = 0.6;
+    double v_des_decel_limit_ = 0.8;
+    int last_v_des_rate_limited_active_ = 0;
+    double last_v_des_raw_ = 0.0;
+    double last_v_des_target_ = 0.0;
+
     // 原地对齐模式（heading align）
     bool heading_align_enable_ = false;
     double heading_align_enter_ = 0.8;   // 进入阈值 (rad)
@@ -169,7 +177,7 @@ private:
     bool heading_align_active_ = false;
 
     // 终点恢复（terminal recovery）
-    bool terminal_recovery_enable_ = true;
+    bool terminal_recovery_enable_ = false;
     bool terminal_recovery_latched_ = false;
     double terminal_enter_distance_ = 0.35;
     double terminal_release_distance_ = 0.55;
@@ -343,6 +351,12 @@ private:
     ros::Publisher terminal_recovery_latched_pub_;
     ros::Publisher terminal_goal_info_pub_;
     ros::Publisher ref_v_ref_pub_;
+    ros::Publisher ref_v_ref_horizon_pub_;
+    ros::Publisher ref_s_horizon_pub_;
+    ros::Publisher ref_v_des_raw_pub_;
+    ros::Publisher ref_v_des_target_pub_;
+    ros::Publisher ref_v_des_eff_pub_;
+    ros::Publisher ref_v_des_rate_limited_pub_;
     ros::Publisher ref_v_path_pub_;
     ros::Publisher ref_kappa_pub_;
     ros::Publisher ref_s_pub_;

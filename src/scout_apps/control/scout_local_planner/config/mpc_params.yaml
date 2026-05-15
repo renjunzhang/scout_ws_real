@@ -113,6 +113,14 @@ map_frame: "map"           # 地图坐标系
 verbose: false             # 是否输出调试信息
 
 # =============================================================================
+# 执行层速度参考变化率限制（治理纵向 ax 脉冲）
+# =============================================================================
+v_des_rate_limit:
+  enable: true              # slosh 主实验默认开启，避免 v_des_cmd 突跳直接进入 horizon
+  accel_limit: 0.60         # v_des 上升变化率上限 (m/s^2)
+  decel_limit: 0.80         # v_des 下降变化率上限 (m/s^2)；过低会增加终点滑行风险
+
+# =============================================================================
 # 液体晃动模型参数（P0-A: 状态注入）
 # =============================================================================
 slosh:
@@ -176,7 +184,7 @@ heading_align:
 # 终点恢复（near-goal terminal recovery）
 # =============================================================================
 terminal_recovery:
-  enable: true
+  enable: false             # 主实验默认关闭，只作为终点异常/调头兜底手动开启
   enter_distance: 0.70      # 进入近终点恢复区的距离阈值 (m)
   release_distance: 1.00    # 明显离开近终点区后才释放 recovery 锁存 (m)
   goal_behind_x: -0.05      # goal 落到车后时的 x 阈值 (m)
@@ -195,15 +203,15 @@ terminal_recovery:
 # 终点前平滑减速
 # =============================================================================
 terminal_slowdown:
-  enable: true              # 在 terminal recovery 接管前，提前连续压低 v_des_cmd
+  enable: true              # 在终点捕获前提前连续压低 v_des_cmd；PathHandler 末端速度验证干净前保留
   distance: 1.20            # 从该距离开始 smoothstep 降速 (m)
   v_max: 0.18               # 到 terminal recovery 进入距离附近时的速度上限 (m/s)
   Q_v: 40.0                 # 制动速度上限生效时临时提高速度跟踪权重
   terminal_factor_v: 5.0    # 制动段临时提高 horizon 末端速度权重
 
 terminal_capture_stop:
-  enable: true              # mpc_planner 风格外层终点捕获；阈值内直接发布 cmd_vel=0
-  distance: 0.70            # 终点捕获半径 (m)，不参与 slosh 主效果窗口
+  enable: true              # mpc_planner 风格外层终点捕获；阈值内进入限速 CAPTURE_BRAKE
+  distance: 0.70            # 终点捕获制动半径 (m)，不参与 slosh 主效果窗口
 
 # =============================================================================
 # 终点残余晃动收敛（T2 settling）

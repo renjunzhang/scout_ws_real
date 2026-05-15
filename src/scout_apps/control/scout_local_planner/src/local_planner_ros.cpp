@@ -238,6 +238,12 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     terminal_recovery_latched_pub_ = nh_.advertise<std_msgs::Int32>("terminal/recovery_latched", 1);
     terminal_goal_info_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("terminal/goal_info", 1);
     ref_v_ref_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_ref", 1);
+    ref_v_ref_horizon_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("reference/v_ref_horizon", 1);
+    ref_s_horizon_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("reference/s_horizon", 1);
+    ref_v_des_raw_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_des_raw", 1);
+    ref_v_des_target_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_des_target", 1);
+    ref_v_des_eff_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_des_eff", 1);
+    ref_v_des_rate_limited_pub_ = nh_.advertise<std_msgs::Int32>("reference/v_des_rate_limited", 1);
     ref_v_path_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_path", 1);
     ref_kappa_pub_ = nh_.advertise<std_msgs::Float32>("reference/kappa", 1);
     ref_s_pub_ = nh_.advertise<std_msgs::Float32>("reference/s", 1);
@@ -419,6 +425,9 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
               tracking_curvature_rate_min_speed_, 0.25);
     pnh.param("safety/tracking_curvature_rate_gain",
               tracking_curvature_rate_gain_, 1.0);
+    pnh.param("v_des_rate_limit/enable", v_des_rate_limit_enable_, true);
+    pnh.param("v_des_rate_limit/accel_limit", v_des_accel_limit_, 0.6);
+    pnh.param("v_des_rate_limit/decel_limit", v_des_decel_limit_, 0.8);
 
     // 原地对齐模式
     pnh.param("heading_align/enable", heading_align_enable_, false);
@@ -429,7 +438,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("heading_align/start_distance", heading_align_start_dist_, 0.5);
 
     // 终点恢复（near-goal terminal recovery）
-    pnh.param("terminal_recovery/enable", terminal_recovery_enable_, true);
+    pnh.param("terminal_recovery/enable", terminal_recovery_enable_, false);
     pnh.param("terminal_recovery/enter_distance", terminal_enter_distance_, 0.35);
     pnh.param("terminal_recovery/release_distance", terminal_release_distance_, 0.55);
     pnh.param("terminal_recovery/goal_behind_x", terminal_goal_behind_x_, -0.05);
@@ -783,8 +792,17 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     goal_stop_pending_ = true;
                     terminal_recovery_latched_ = false;
                     heading_align_active_ = false;
-                    terminal_mode_debug_ = "CAPTURE_STOP";
-                    publishCmdVel(0.0, 0.0);
+                    terminal_mode_debug_ = "CAPTURE_BRAKE";
+                    double brake_v = 0.0;
+                    double brake_omega = 0.0;
+                    const double prev_cmd_v = filtered_v_;
+                    limitTerminalRecoveryCmd(brake_v, brake_omega);
+                    brake_v = std::max(0.0, brake_v);
+                    publishCmdVel(brake_v, brake_omega);
+                    const double dt_cmd = control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
+                    last_control_(ControlIndex::A) =
+                        (filtered_v_ - prev_cmd_v) / std::max(1e-6, dt_cmd);
+                    last_control_(ControlIndex::OMEGA) = filtered_omega_;
                     publishTerminalDebug();
                     publishSloshDebug(last_solve_time_ms_, last_solve_ok_, false);
 
@@ -1077,20 +1095,9 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     v_des_cmd = std::min(v_des_cmd, v_curve_cap);
                 }
 
-                double v_des_target = v_des_cmd;
+                const double v_des_cmd_capped = v_des_cmd;
+                double v_des_target = v_des_cmd_capped;
                 last_speed_governor_active_ = 0;
-
-                // 1. 获取参考点
-                std::vector<ReferencePoint> ref_points;
-                if (!path_handler_.getReferencePoints(
-                        mpc_params_.N, mpc_params_.dt,
-                        v_des_cmd,  // 执行层速度上限
-                        v_nominal,  // 规划层名义速度，用于 v(s)
-                        ref_points)) {
-                    ROS_WARN_THROTTLE(1.0, "[LocalPlannerROS] Failed to get reference points");
-                    publishCmdVel(0.0, 0.0);
-                    return;
-                }
 
                 // 阶段 4：残余晃动感知的速度治理
                 const double goal_dist = path_handler_.getGoalDistance();
@@ -1107,7 +1114,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 if (!settling_active &&
                     slosh_speed_governor_enable_ &&
                     slosh_enabled_ &&
-                    !ref_points.empty() &&
                     !near_goal_capture) {
                     const double slosh_height = slosh_integration_.getSloshHeight();
                     const double height_risk = std::max(slosh_height, last_predicted_height_max_);
@@ -1148,42 +1154,56 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     }
                 }
 
-                // 对 v_des_eff 做变化率限制，避免每周期参考速度突跳引起求解震荡
+                // 对所有执行层 v_des 做变化率限制，避免速度参考突跳制造纵向 ax 脉冲。
+                // slosh governor 关闭时也生效；governor 只负责进一步给出更低的 target。
                 {
-                    const double prev_v_des = last_v_des_eff_ > 1e-6 ? last_v_des_eff_ : v_des_cmd;
-                    const double accel_limit = path_params_.max_tan_accel > 1e-6
-                        ? path_params_.max_tan_accel
-                        : std::max(1e-6, vehicle_params_.a_max);
-                    const double decel_limit = path_params_.max_tan_decel > 1e-6
-                        ? path_params_.max_tan_decel
-                        : accel_limit;
+                    last_v_des_raw_ = v_des_cmd_raw;
+                    last_v_des_target_ = v_des_target;
+                    last_v_des_rate_limited_active_ = 0;
 
-                    const double v_lo = std::max(slosh_v_des_min_, prev_v_des - decel_limit * mpc_params_.dt);
-                    const double v_hi = prev_v_des + accel_limit * mpc_params_.dt;
-                    const double v_des_eff = std::max(v_lo, std::min(v_hi, v_des_target));
-                    last_v_des_eff_ = std::max(slosh_v_des_min_, std::min(v_des_cmd, v_des_eff));
+                    double v_des_eff = v_des_target;
+                    if (v_des_rate_limit_enable_ && !settling_active) {
+                        const double prev_v_des = last_v_des_eff_ > 1e-6
+                            ? last_v_des_eff_
+                            : std::max(0.0, current_v_);
+                        const double accel_limit =
+                            v_des_accel_limit_ > 1e-6 ? v_des_accel_limit_ :
+                            (path_params_.max_tan_accel > 1e-6 ? path_params_.max_tan_accel :
+                             std::max(1e-6, vehicle_params_.a_max));
+                        const double decel_limit =
+                            v_des_decel_limit_ > 1e-6 ? v_des_decel_limit_ :
+                            (path_params_.max_tan_decel > 1e-6 ? path_params_.max_tan_decel :
+                             accel_limit);
+                        const double rate_dt =
+                            control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
+                        const double v_lo =
+                            std::max(slosh_v_des_min_, prev_v_des - decel_limit * rate_dt);
+                        const double v_hi = prev_v_des + accel_limit * rate_dt;
+                        v_des_eff = std::max(v_lo, std::min(v_hi, v_des_target));
+                        if (std::abs(v_des_eff - v_des_target) > 1e-4) {
+                            last_v_des_rate_limited_active_ = 1;
+                        }
+                    }
 
-                    if (slosh_governor_latched_ && last_v_des_eff_ < v_des_cmd - 1e-3) {
+                    last_v_des_eff_ =
+                        std::max(slosh_v_des_min_, std::min(v_des_cmd_capped, v_des_eff));
+                    v_des_cmd = last_v_des_eff_;
+
+                    if (slosh_governor_latched_ && last_v_des_eff_ < v_des_cmd_capped - 1e-3) {
                         last_speed_governor_active_ = 1;
                     }
                 }
 
-                if (last_speed_governor_active_) {
-                    std::vector<ReferencePoint> ref_points_governed;
-                    if (path_handler_.getReferencePoints(
-                            mpc_params_.N, mpc_params_.dt,
-                            last_v_des_eff_,
-                            v_nominal,
-                            ref_points_governed)) {
-                        ref_points.swap(ref_points_governed);
-                    } else {
-                        last_speed_governor_active_ = 0;
-                        last_v_des_eff_ = v_des_cmd;
-                        slosh_governor_latched_ = false;
-                        slosh_governor_hold_steps_ = 0;
-                    }
-                } else {
-                    last_v_des_eff_ = v_des_cmd;
+                // 1. 获取参考点。v_des_cmd 已经是 rate-limited 执行层速度上限。
+                std::vector<ReferencePoint> ref_points;
+                if (!path_handler_.getReferencePoints(
+                        mpc_params_.N, mpc_params_.dt,
+                        v_des_cmd,
+                        v_nominal,
+                        ref_points)) {
+                    ROS_WARN_THROTTLE(1.0, "[LocalPlannerROS] Failed to get reference points");
+                    publishCmdVel(0.0, 0.0);
+                    return;
                 }
 
                 applyInputShaping(ref_points);
@@ -2328,6 +2348,9 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {
         prev_odom_time_ = ros::Time(0);
     }
     last_v_des_eff_ = 0.0;
+    last_v_des_raw_ = 0.0;
+    last_v_des_target_ = 0.0;
+    last_v_des_rate_limited_active_ = 0;
     last_speed_governor_active_ = 0;
     slosh_governor_latched_ = false;
     slosh_governor_hold_steps_ = 0;
@@ -2518,6 +2541,23 @@ void LocalPlannerROS::publishReferenceExecutionDebug(const std::vector<Reference
 
     const ReferencePoint& ref0 = refs.front();
     publish_float(ref_v_ref_pub_, ref0.v_ref);
+    if (ref_v_ref_horizon_pub_.getNumSubscribers() > 0 ||
+        ref_s_horizon_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32MultiArray v_msg;
+        std_msgs::Float32MultiArray s_msg;
+        v_msg.data.reserve(refs.size());
+        s_msg.data.reserve(refs.size());
+        for (const auto& ref : refs) {
+            v_msg.data.push_back(static_cast<float>(std::max(0.0, ref.v_ref)));
+            s_msg.data.push_back(static_cast<float>(ref.s));
+        }
+        if (ref_v_ref_horizon_pub_.getNumSubscribers() > 0) {
+            ref_v_ref_horizon_pub_.publish(v_msg);
+        }
+        if (ref_s_horizon_pub_.getNumSubscribers() > 0) {
+            ref_s_horizon_pub_.publish(s_msg);
+        }
+    }
     publish_float(ref_v_path_pub_, ref0.v_path);
     publish_float(ref_kappa_pub_, ref0.kappa);
     publish_float(ref_s_pub_, ref0.s);
@@ -2564,6 +2604,27 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok, boo
         std_msgs::Int32 msg;
         msg.data = last_speed_governor_active_;
         slosh_speed_governor_active_pub_.publish(msg);
+    }
+
+    if (ref_v_des_raw_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(last_v_des_raw_);
+        ref_v_des_raw_pub_.publish(msg);
+    }
+    if (ref_v_des_target_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(last_v_des_target_);
+        ref_v_des_target_pub_.publish(msg);
+    }
+    if (ref_v_des_eff_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(last_v_des_eff_);
+        ref_v_des_eff_pub_.publish(msg);
+    }
+    if (ref_v_des_rate_limited_pub_.getNumSubscribers() > 0) {
+        std_msgs::Int32 msg;
+        msg.data = last_v_des_rate_limited_active_;
+        ref_v_des_rate_limited_pub_.publish(msg);
     }
 
     if (slosh_omega_est_used_pub_.getNumSubscribers() > 0) {
