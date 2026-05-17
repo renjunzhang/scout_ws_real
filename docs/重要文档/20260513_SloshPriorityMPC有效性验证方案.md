@@ -72,6 +72,70 @@ slosh-aware objective rebalancing
 Q_slosh 越大越好
 ```
 
+### 2.1 当前 MPC cost 组成
+
+当前 MPC 的 stage cost 可按工程项理解为：
+
+```text
+J = J_tracking + J_control + J_smooth + J_slosh + J_optional
+```
+
+其中基础项为：
+
+```text
+J_tracking:
+  Q_lag      * e_lag^2
+  Q_contour  * e_contour^2
+  Q_etheta   * e_theta^2
+  Q_v        * (v - v_ref)^2
+
+J_control:
+  R_a        * a^2
+  R_omega    * omega^2
+
+J_smooth:
+  R_da       * (a_k - a_{k-1})^2
+  R_domega   * (omega_k - omega_{k-1})^2
+```
+
+当前已实现的晃动项是 normalized modal cost：
+
+```text
+J_slosh:
+  Q_slosh_eta     * (eta_x^2 + eta_y^2)
+  Q_slosh_eta_dot * (eta_dot_x^2 + eta_dot_y^2)
+```
+
+其中：
+
+```text
+Q_slosh_eta     = Q_slosh * h_coeff^2 / slosh_height_ref^2
+Q_slosh_eta_dot = slosh_eta_dot_ratio * Q_slosh_eta / omega_n^2
+```
+
+可选项：
+
+```text
+J_optional:
+  Q_omega_ff * (omega - v_ref * kappa)^2
+  terminal ramp 对 e_contour/e_theta/v/slosh 权重做末端放大
+```
+
+注意：
+
+```text
+v_des_rate_limit 不是 cost 项；
+terminal_slowdown 主要改变进入 PathHandler 的速度上限和 terminal 速度权重；
+CAPTURE_BRAKE 是外层控制逻辑，不是 MPC cost。
+```
+
+所以当前验证的核心还是：
+
+```text
+在相同 v_des_rate_limit / terminal 策略下，
+比较 Q_slosh=0 与 Q_slosh>0 的 normalized modal cost 是否带来额外收益。
+```
+
 ## 3. 工程前置检查
 
 当前实物入口：
@@ -105,13 +169,16 @@ terminal_slowdown_Q_v
 terminal_slowdown_terminal_factor_v
 terminal_capture_stop_enable
 terminal_capture_stop_distance
+v_des_rate_limit_enable
+v_des_accel_limit
+v_des_decel_limit
 energy_profile_enable
 risk_scheduler_enable
 input_shaping_enable
 slosh_speed_governor_enable
 ```
 
-这些参数会在加载 `mpc_params.yaml` 后、节点初始化前覆盖对应 ROS 参数。A/B/C/D/E 五组通过 launch arg 覆盖代价权重；终点默认采用 `mpc_planner` 风格的外层 capture stop，不把 near-goal 停车段作为 slosh 主效果窗口。
+这些参数会在加载 `mpc_params.yaml` 后、节点初始化前覆盖对应 ROS 参数。A/B/C/D/E 五组通过 launch arg 覆盖代价权重；终点默认采用 `mpc_planner` 风格的外层 capture stop，但当前语义是 `CAPTURE_BRAKE` 限速制动，不是直接硬发零速度。不把 near-goal 停车段作为 slosh 主效果窗口。
 
 当前控制频率配置：
 
@@ -177,6 +244,9 @@ rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta
 rosparam get /scout_local_planner/mpc/terminal_factor_slosh_eta_dot
 rosparam get /scout_local_planner/terminal_capture_stop/enable
 rosparam get /scout_local_planner/terminal_capture_stop/distance
+rosparam get /scout_local_planner/v_des_rate_limit/enable
+rosparam get /scout_local_planner/v_des_rate_limit/accel_limit
+rosparam get /scout_local_planner/v_des_rate_limit/decel_limit
 ```
 
 除控制频率、`N`、`dt` 这类全局时基设置外，不要为某一组实验直接改 `mpc_params.yaml` 默认代价权重。A/B/C/D/E 的代价权重应通过 `slosh_experiment.launch` 参数覆盖。
@@ -208,6 +278,16 @@ risk_scheduler_enable=false
 slosh_speed_governor_enable=false
 enable_slosh_box_constraint=false
 ```
+
+固定保持一致：
+
+```text
+terminal_slowdown_enable=true
+terminal_capture_stop_enable=true
+v_des_rate_limit_enable=true
+```
+
+说明：`v_des_rate_limit` 是当前为治理纵向 `ax` 脉冲加入的结构层，不属于 slosh cost，也不是某一实验组的可变因素。A/B/C/D/E 必须使用同一套 `v_des_rate_limit`，否则无法把差异归因到 MPC cost/objective rebalancing。
 
 `/slosh/height` 只作为模型内部参考和调试量，不能作为真实液面主指标。正式结论以 RGB 视觉液面为准。
 
@@ -423,9 +503,115 @@ rostopic echo /mpc/cost_breakdown
 rostopic echo /mpc/slosh_horizon_summary
 ```
 
-当前实物入口采用三层终点策略，借鉴 `src/mpc_planner` 的外层 goal capture 思路：MPC 负责主路径跟踪，终点附近由外层状态机验收和停车，不要求 MPC 在最后几十厘米继续精确贴点。
+正式录包统一使用：
 
-第一层：进入 capture stop 半径后直接停车。
+```bash
+src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh
+```
+
+实物机推荐命令：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+cd /home/geist/scout_ws
+
+SLOSH_BAG_DIR=/home/geist/slosh_bags/real/20260517_slosh_priority \
+SLOSH_RECORD_ALL=true \
+src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh 0 C_run01
+```
+
+参数含义：
+
+```text
+第 1 个参数：Q_slosh，用于写入 bag 文件名，例如 0 / 3 / 7 / 10。
+第 2 个参数：自定义后缀，用于写入 bag 文件名，例如 C_run01 / D_run02 / Q7_run03。
+SLOSH_BAG_DIR：输出目录。
+SLOSH_RECORD_ALL=true：默认全量录制所有当前存在的 ROS topic。
+```
+
+常用命名示例：
+
+```bash
+# C 组：SMOOTH_SPEED_RELAXED，Q_slosh=0
+SLOSH_BAG_DIR=/home/geist/slosh_bags/real/20260517_slosh_priority \
+SLOSH_RECORD_ALL=true \
+src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh 0 C_run01
+
+# D 组：SLOSH_PRIORITY_MPC，按 launch 中实际 Q_slosh 填第 1 个参数
+SLOSH_BAG_DIR=/home/geist/slosh_bags/real/20260517_slosh_priority \
+SLOSH_RECORD_ALL=true \
+src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh 5 D_run01
+
+# Q7 组：D3 基础上 Q_slosh=7
+SLOSH_BAG_DIR=/home/geist/slosh_bags/real/20260517_slosh_priority \
+SLOSH_RECORD_ALL=true \
+src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh 7 Q7_run01
+```
+
+该脚本现在默认按“完整实验包”录制：
+
+```text
+SLOSH_RECORD_ALL=true
+rosbag record -a
+```
+
+也就是把录制开始时 ROS master 上存在的 topic 全部录进 bag，避免因为漏列某个诊断 topic 导致重新录包。除 RGB 原始视频外，至少应覆盖以下主链路：
+
+```text
+slosh observer/model:
+  /slosh/state, /slosh/height, /slosh/height_pred_max,
+  /slosh/eta_norm, /slosh/eta_dot_norm, /slosh/modal_energy*,
+  /slosh/ax_est, /slosh/ay_est, /slosh/alpha_est,
+  /slosh/imu_*, /slosh/settling_time
+
+RGB / visual truth:
+  /camera/color/image_raw, /camera/color/camera_info,
+  /camera/depth/image_rect_raw, /camera/depth/camera_info,
+  /camera/aligned_depth_to_color/*,
+  /slosh/h_visual, /slosh/h_visual_quality,
+  /liquid_measurement/*
+
+MPC / reference / cost:
+  /mpc/cost_breakdown, /mpc/slosh_horizon_summary,
+  /reference/v_des_*, /reference/v_ref*, /reference/s_horizon,
+  /reference/implied_ax, /reference/implied_ay, /reference/implied_jerk
+
+terminal / execution:
+  /terminal/mode, /terminal/goal_info, /terminal/recovery_latched,
+  /cmd_vel, /odom, /scout/cmd_vel, /scout/odom
+
+path / OSCRS:
+  /scout/global_path*, /local_path, /mpc/reference_path,
+  /anti_slosh_path/*
+
+localization / safety:
+  /scan_front, /map*, /tf, /tf_static, /diagnostics, /rosout,
+  cartographer/amcl 常用定位输出。
+```
+
+脚本还会在 bag 同目录保存 sidecar 元数据：
+
+```text
+*_info.txt       当前 git branch/commit/dirty 状态、实验名、话题数
+*_rosparam.yaml 录包开始前的完整 ROS 参数快照
+*_topics.txt    录包开始前 rostopic list
+*_nodes.txt     录包开始前 rosnode list
+```
+
+后续若怀疑参数、节点、topic 是否正确，优先查这些 sidecar 文件，避免因为缺少 launch 参数快照重新录包。
+
+如果实物机磁盘或写入速度压力过大，可以临时切回白名单录制：
+
+```bash
+SLOSH_RECORD_ALL=false src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh 0 C_run01
+```
+
+白名单包含上面列出的核心分析话题，但正式论文实验优先使用默认全量录制。
+
+当前实物入口采用“速度参考平滑 + 终点捕获制动”的终点策略，借鉴 `src/mpc_planner` 的外层 goal capture 思路：MPC 负责主路径跟踪，终点附近由外层状态机验收和停车，不要求 MPC 在最后几十厘米继续精确贴点。
+
+第一层：进入 capture stop 半径后进入 `CAPTURE_BRAKE`。
 
 ```text
 terminal_capture_stop_enable=true
@@ -437,7 +623,8 @@ terminal_capture_stop_distance=0.70
 ```text
 goal_dist < terminal_capture_stop_distance:
   不再依赖 MPC solve / reference sequence 继续贴终点；
-  直接发布 cmd_vel = 0；
+  /terminal/mode = CAPTURE_BRAKE；
+  目标速度为 0，但 cmd_v/cmd_omega 通过 terminal_cmd_v_rate_limit / terminal_cmd_omega_rate_limit 逐步趋近 0；
   若 odom 速度降到 goal_reached_max_speed / goal_reached_max_omega 以下，则进入 REACHED。
 ```
 
@@ -483,18 +670,59 @@ terminal_factor_v >= terminal_slowdown_terminal_factor_v
 
 这样终点停车段的速度参考不再只是软提示，避免 slosh-priority 组因为降低 `Q_v` 而忽略停车参考。该临时权重只作用于 `terminal_slowdown` 内，不参与进入 `terminal_slowdown` 前的 slosh cost 主有效性判断。
 
-第三层：terminal recovery 只处理位置已到后的姿态/残余问题，或已经越过目标后的恢复。
+第三层：执行层 `v_des_rate_limit` 治理纵向 `ax` 脉冲。
 
 ```text
-position_reached=true:
-  yaw 不阻止线速度停车；
-  如需姿态修正，再由 terminal recovery 处理。
-
-goal 已经落到车后方:
-  terminal recovery 可进入 ALIGN_TO_POINT，作为越过终点后的恢复。
+v_des_rate_limit_enable=true
+v_des_accel_limit=0.60
+v_des_decel_limit=0.80
 ```
 
-不要通过增大 `Q_slosh` 解决终点过冲。终点策略不参与 slosh 主归因，主结论只看进入 `terminal_slowdown` 前的 `TRACKING_PRE_TERMINAL`。
+链路：
+
+```text
+v_des_raw
+  -> terminal_slowdown / feasibility / curvature / governor 后得到 v_des_target
+  -> v_des_rate_limit 得到 v_des_eff
+  -> PathHandler 生成 horizon 内 v_ref
+```
+
+这一步不是 cost，也不是硬约束；它是参考生成前的速度上限平滑器。目的在于避免 `v_des_cmd` 一帧突降或突升进入 horizon，减少纵向 `ax` 脉冲对 RGB 液面结论的污染。
+
+下一轮 bag 需要同时看：
+
+```text
+/reference/v_des_raw
+/reference/v_des_target
+/reference/v_des_eff
+/reference/v_des_rate_limited
+/reference/v_ref_horizon
+/reference/implied_ax
+/cmd_vel
+/scout/odom
+```
+
+判断：
+
+```text
+raw -> target 突降：上游限速/terminal/curvature 在压速度；
+target -> eff 被削：v_des_rate_limit 正在平滑突变；
+eff 已平滑但 odom_ax 仍大：问题更可能在 MPC 输出、cmd_vel 或底盘执行侧。
+```
+
+第四层：terminal recovery 只作为手动兜底，不进入主实验默认路径。
+
+```text
+terminal_recovery_enable=false
+```
+
+如果实物出现明显冲过终点后无法停稳、必须调头回点，再显式开启：
+
+```bash
+terminal_recovery_enable:=true
+```
+
+不要通过增大 `Q_slosh` 解决终点过冲或纵向 `ax` 脉冲。终点策略不参与 slosh 主归因，主结论只看进入 `terminal_slowdown` 前的 `TRACKING_PRE_TERMINAL`。
 
 ### 7.2 保存固定路径
 

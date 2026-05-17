@@ -7,6 +7,8 @@
 #   ./record_slosh_experiment.sh                # 默认 Q_slosh=0
 #   ./record_slosh_experiment.sh 10             # Q_slosh=10
 #   ./record_slosh_experiment.sh 10 trial_3     # Q_slosh=10, 自定义后缀
+#   SLOSH_RECORD_ALL=false ./record_slosh_experiment.sh 10 trial_3
+#                                               # 仅录脚本白名单话题
 #
 # 完整 MPC 启动模板:
 #   roslaunch scout_local_planner slosh_experiment.launch \
@@ -14,12 +16,17 @@
 #     Q_slosh:=0 ... (其他参数)
 #
 # 说明：
-#   terminal recovery 默认开启；recovery 分支会持续发布 /slosh/*，
-#   不需要为了录包额外关闭 terminal_recovery_enable。
+#   terminal recovery 当前实物主实验默认关闭；如需调头/回点兜底，可在 launch 中显式开启。
+#   CAPTURE_BRAKE / REACHED 阶段仍会持续发布 /slosh/* 调试话题。
+#   默认 SLOSH_RECORD_ALL=true，使用 rosbag record -a 全量录制所有当前存在的话题。
+#   下方 TOPICS 是白名单 fallback，用于磁盘压力过大时关闭全量录制。
 #
 # 录制内容：
+#   - 录制前自动保存 sidecar 元数据：
+#                *_rosparam.yaml, *_topics.txt, *_nodes.txt, *_info.txt
 #   - 晃动状态：/slosh/state, /slosh/height, /slosh/height_pred_max
 #                /slosh/q_slosh_eta
+#                /slosh/eta_norm, /slosh/eta_dot_norm, /slosh/modal_energy*
 #                /slosh/ax_est, /slosh/ay_est, /slosh/alpha_est
 #                /slosh/omega_est_used, /slosh/imu_omega_z_filtered
 #                /slosh/imu_ay_bias, /slosh/imu_ay_filtered, /slosh/imu_ay_bias_ready
@@ -32,6 +39,8 @@
 #                /camera/color/camera_info
 #                /camera/depth/image_rect_raw
 #                /camera/depth/camera_info
+#                /camera/aligned_depth_to_color/image_raw
+#                /camera/aligned_depth_to_color/camera_info
 #   - 视觉液面测量：
 #                /liquid_measurement/height_left_px
 #                /liquid_measurement/height_right_px
@@ -49,7 +58,10 @@
 #   - MPC 性能：/mpc/solve_ms, /mpc/status_val, /mpc_status，/mpc/solve_time_ms
 #   - MPC 代价占比：/mpc/cost_breakdown
 #   - MPC horizon 晃动预测摘要：/mpc/slosh_horizon_summary
-#   - 控制/底盘状态：/cmd_vel, /odom, /scout_status, /rs_status
+#   - 控制/底盘状态：/cmd_vel, /odom, /scout/cmd_vel, /scout/odom, /scout_status, /rs_status
+#   - 参考速度链路：/reference/v_des_raw, /reference/v_des_target,
+#                /reference/v_des_eff, /reference/v_des_rate_limited,
+#                /reference/v_ref_horizon, /reference/implied_ax
 #   - 目标/路径：/scout/goal, /scout/current_goal, /scout/global_path, /local_path
 #                /scout/global_path_anti_slosh
 #                /anti_slosh_path/metrics, /anti_slosh_path/candidate_report
@@ -89,6 +101,8 @@
 #                /amcl_pose, /particlecloud
 #                /tracked_pose, /submap_list, /trajectory_node_list
 #                /diagnostics, /rosout
+#   - 机器人通用状态：
+#                /joint_states, /battery_state, /tf, /tf_static
 #   - TF：      /tf, /tf_static
 #   - 仿真时钟：/clock（仿真时存在，实物可忽略）
 #
@@ -107,6 +121,9 @@ Q_SLOSH="${1:-0}"
 SUFFIX="${2:-}"
 DATE_STR=$(date +%Y%m%d_%H%M%S)
 SLOSH_BAG_MODE="${SLOSH_BAG_MODE:-real}"
+SLOSH_RECORD_ALL="${SLOSH_RECORD_ALL:-true}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 # 目录
 if [[ -n "${SLOSH_BAG_DIR:-}" ]]; then
@@ -163,6 +180,7 @@ TOPICS=(
     /slosh/speed_cap_active
     /slosh/speed_cap_v_limit
     /slosh/settling_time
+    /slosh/output_guard_active
 
     # 风险调度器
     /risk_scheduler/rho_k
@@ -174,8 +192,23 @@ TOPICS=(
     # RealSense 原始图像
     /camera/color/image_raw
     /camera/color/camera_info
+    /camera/color/metadata
+    /camera/color/image_raw/compressed
+    /camera/color/image_raw/compressed/parameter_descriptions
+    /camera/color/image_raw/compressed/parameter_updates
     /camera/depth/image_rect_raw
     /camera/depth/camera_info
+    /camera/depth/metadata
+    /camera/depth/image_rect_raw/compressed
+    /camera/depth/image_rect_raw/compressed/parameter_descriptions
+    /camera/depth/image_rect_raw/compressed/parameter_updates
+    /camera/aligned_depth_to_color/image_raw
+    /camera/aligned_depth_to_color/camera_info
+    /camera/aligned_depth_to_color/image_raw/compressed
+    /camera/aligned_depth_to_color/image_raw/compressed/parameter_descriptions
+    /camera/aligned_depth_to_color/image_raw/compressed/parameter_updates
+    /camera/extrinsics/depth_to_color
+    /camera/extrinsics/color_to_depth
 
     # 视觉液面测量（节点存在时会自动录到；节点未启动时不影响 rosbag record）
     /liquid_measurement/height_left_px
@@ -201,6 +234,9 @@ TOPICS=(
     # IMU 原始输入
     /imu/data
     /wit/mag
+    /camera/gyro/sample
+    /camera/accel/sample
+    /camera/imu
 
     # MPC 性能
     /mpc/solve_ms
@@ -213,8 +249,12 @@ TOPICS=(
     # 控制与状态
     /cmd_vel
     /odom
+    /scout/cmd_vel
+    /scout/odom
     /scout_status
     /rs_status
+    /joint_states
+    /battery_state
 
     # 避障实现/接口核查
     /scan_front
@@ -290,6 +330,9 @@ TOPICS=(
     /tracked_pose
     /submap_list
     /trajectory_node_list
+    /scan_matched_points2
+    /constraint_list
+    /landmark_poses_list
     # ROS warning / driver diagnostics
     /diagnostics
     /diagnostics_agg
@@ -308,10 +351,44 @@ echo "  液体晃动抑制实验录制"
 echo "============================================"
 echo "  Q_slosh  = ${Q_SLOSH}"
 echo "  mode     = ${SLOSH_BAG_MODE}"
+echo "  record_a = ${SLOSH_RECORD_ALL}"
 echo "  输出文件 = ${BAG_PATH}.bag"
-echo "  话题数   = ${#TOPICS[@]}"
+echo "  白名单数 = ${#TOPICS[@]}"
 echo "============================================"
 echo "  Ctrl+C 停止录制"
 echo "============================================"
 
-rosbag record -O "${BAG_PATH}" "${TOPICS[@]}"
+INFO_PATH="${BAG_PATH}_info.txt"
+PARAM_PATH="${BAG_PATH}_rosparam.yaml"
+TOPIC_PATH="${BAG_PATH}_topics.txt"
+NODE_PATH="${BAG_PATH}_nodes.txt"
+
+{
+    echo "bag=${BAG_PATH}.bag"
+    echo "date=${DATE_STR}"
+    echo "user=${USER}"
+    echo "host=$(hostname)"
+    echo "pwd=$(pwd)"
+    echo "q_slosh=${Q_SLOSH}"
+    echo "suffix=${SUFFIX}"
+    echo "mode=${SLOSH_BAG_MODE}"
+    echo "record_all=${SLOSH_RECORD_ALL}"
+    echo "whitelist_topics=${#TOPICS[@]}"
+    echo "repo_root=${REPO_ROOT}"
+    echo "git_branch=$(git -C "${REPO_ROOT}" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    echo "git_commit=$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || true)"
+    echo "git_dirty=$(git -C "${REPO_ROOT}" status --short 2>/dev/null | wc -l || true)"
+} > "${INFO_PATH}"
+
+rosparam dump "${PARAM_PATH}" || true
+rostopic list | sort > "${TOPIC_PATH}" || true
+rosnode list | sort > "${NODE_PATH}" || true
+
+echo "  元数据   = ${BAG_PATH}_{info.txt,rosparam.yaml,topics.txt,nodes.txt}"
+echo "============================================"
+
+if [[ "${SLOSH_RECORD_ALL}" == "1" || "${SLOSH_RECORD_ALL}" == "true" || "${SLOSH_RECORD_ALL}" == "TRUE" ]]; then
+    rosbag record -a -O "${BAG_PATH}"
+else
+    rosbag record -O "${BAG_PATH}" "${TOPICS[@]}"
+fi
