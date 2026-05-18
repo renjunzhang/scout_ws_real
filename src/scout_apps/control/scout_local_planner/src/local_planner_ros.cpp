@@ -67,6 +67,30 @@ void updateNormalizedSloshWeights(MPCParams& params, double h_coeff, double omeg
     }
 }
 
+// 运动学停车速度包络: v_env(d) = min(v_max_terminal, sqrt(2 a_brake max(0, d - goal_tol)))。
+//
+// 性质:
+//   - d 不在 terminal phase (d >= terminal_slowdown_distance) 或不可用: 返回 +inf (不约束)
+//   - d 接近 goal_tol: 返回 ~0, 自然 enforce 停车
+//   - 单调连续, 不需要 spatial smoothing (temporal rate limit 由 v_des_rate_limit_ 负责)
+//
+// 同一函数同时用于:
+//   pre-MPC v_des cap (告知 MPC 正确 reference)
+//   post-MPC v_cmd hard clamp (兜底, 防 MPC cost balance 输出超包络)
+double computeTerminalVelocityEnvelope(
+    double goal_dist,
+    double terminal_slowdown_distance,
+    double v_max_terminal,
+    double goal_tol,
+    double a_brake) {
+    if (!std::isfinite(goal_dist) || goal_dist >= terminal_slowdown_distance) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const double remain = std::max(0.0, goal_dist - goal_tol);
+    const double v_kinematic = std::sqrt(2.0 * std::max(1e-6, a_brake) * remain);
+    return std::min(std::max(0.0, v_max_terminal), v_kinematic);
+}
+
 }  // namespace
 
 LocalPlannerROS::LocalPlannerROS() = default;
@@ -237,6 +261,13 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     terminal_mode_pub_ = nh_.advertise<std_msgs::String>("terminal/mode", 1);
     terminal_recovery_latched_pub_ = nh_.advertise<std_msgs::Int32>("terminal/recovery_latched", 1);
     terminal_goal_info_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("terminal/goal_info", 1);
+    terminal_v_envelope_pub_ = nh_.advertise<std_msgs::Float32>("terminal/v_envelope", 1);
+    terminal_envelope_active_pub_ = nh_.advertise<std_msgs::Int32>("terminal/envelope_active", 1);
+    terminal_phase_active_pub_ = nh_.advertise<std_msgs::Int32>("terminal/phase_active", 1);
+    terminal_cmd_v_pre_clamp_pub_ =
+        nh_.advertise<std_msgs::Float32>("terminal/cmd_v_pre_clamp", 1);
+    terminal_cmd_v_post_clamp_pub_ =
+        nh_.advertise<std_msgs::Float32>("terminal/cmd_v_post_clamp", 1);
     ref_v_ref_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_ref", 1);
     ref_v_ref_horizon_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("reference/v_ref_horizon", 1);
     ref_s_horizon_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("reference/s_horizon", 1);
@@ -940,63 +971,50 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         runtime_mpc_params.slosh_eta_bar = settling_eta_bar_ / denom;
                     }
                 }
-                if (goal_stop_pending_) {
+                // Terminal velocity envelope: pre-MPC reference cap.
+                // 单一运动学包络函数 (d ∈ [goal_tol, terminal_slowdown_distance) 时 v_env 有限):
+                //   d ≥ terminal_slowdown_distance_ → +inf  (无约束, 不在 terminal phase)
+                //   d → goal_tolerance              → 0     (自然停)
+                // 注意 envelope_active 与 in_terminal_phase 不同:
+                //   envelope_active: d 在 envelope 作用范围内 (kinematic 约束有限)
+                //   in_terminal_phase: terminal-phase protections 应生效的范围。
+                //     必须包含 goal_stop_pending_ 因为车冲过 goal 后 dist 可能再次 > 1.20m,
+                //     此时 envelope 退回 +inf, 但 goal_stop_pending_ 仍 true,
+                //     post-MPC 的 dx ≤ 0 强制 0 兜底必须仍然生效。
+                // v_des temporal 平滑由 v_des_rate_limit_ 负责, envelope 本身不再做 spatial smoothing。
+                const double goal_dist_now = path_handler_.getGoalDistance();
+                const double a_brake =
+                    path_params_.max_tan_decel > 1e-6 ? path_params_.max_tan_decel
+                                                       : vehicle_params_.a_max;
+                const double v_terminal_envelope = terminal_slowdown_enable_
+                    ? computeTerminalVelocityEnvelope(
+                        goal_dist_now,
+                        terminal_slowdown_distance_,
+                        terminal_slowdown_v_max_,
+                        path_params_.goal_tolerance,
+                        a_brake)
+                    : std::numeric_limits<double>::infinity();
+                const bool envelope_active = std::isfinite(v_terminal_envelope);
+                const bool in_terminal_phase = goal_stop_pending_ || envelope_active;
+                last_terminal_v_envelope_ = v_terminal_envelope;
+                last_terminal_envelope_active_ = envelope_active ? 1 : 0;
+                last_terminal_phase_active_ = in_terminal_phase ? 1 : 0;
+
+                if (in_terminal_phase) {
                     runtime_mpc_params.Q_v =
                         std::max(runtime_mpc_params.Q_v, terminal_slowdown_q_v_);
                     runtime_mpc_params.terminal_factor_v =
                         std::max(runtime_mpc_params.terminal_factor_v,
                                  terminal_slowdown_terminal_factor_v_);
                 }
-                double v_des_cmd_raw = (goal_stop_pending_ || settling_active) ? 0.0 :
+
+                const double v_des_cmd_raw = (goal_stop_pending_ || settling_active) ? 0.0 :
                     (risk_scheduler_enable_ && slosh_enabled_) ?
                     risk_output_.v_ref_eff_k : v_nominal;
-                double v_des_cmd = v_des_cmd_raw;
-                if (state_ == PlannerState::TRACKING &&
-                    !goal_stop_pending_ &&
-                    !settling_active &&
-                    terminal_slowdown_enable_) {
-                    const double goal_dist_slow = path_handler_.getGoalDistance();
-                    const double slow_dist = std::max(terminal_enter_distance_ + 1e-3,
-                                                      terminal_slowdown_distance_);
-                    if (std::isfinite(goal_dist_slow) && goal_dist_slow < slow_dist) {
-                        const double near_dist = std::max(path_params_.goal_tolerance,
-                                                          terminal_enter_distance_);
-                        const double denom = std::max(1e-6, slow_dist - near_dist);
-                        const double ratio = std::max(0.0, std::min(1.0,
-                            (goal_dist_slow - near_dist) / denom));
-                        const double decel =
-                            terminal_cmd_v_rate_limit_ > 1e-6 ? terminal_cmd_v_rate_limit_ :
-                            (path_params_.max_tan_decel > 1e-6 ? path_params_.max_tan_decel :
-                             vehicle_params_.a_max);
-                        if (decel > 1e-6) {
-                            const double remain =
-                                std::max(0.0, goal_dist_slow - path_params_.goal_tolerance);
-                            const double goal_speed = std::max(0.0, path_params_.goal_speed);
-                            const double brake_cap =
-                                std::sqrt(goal_speed * goal_speed + 2.0 * decel * remain);
-                            const double smooth = ratio * ratio * (3.0 - 2.0 * ratio);
-                            const double terminal_cap =
-                                std::min(std::max(0.0, terminal_slowdown_v_max_), brake_cap);
-                            const double v_cap =
-                                terminal_cap + (std::max(0.0, v_des_cmd) - terminal_cap) * smooth;
-                            const double capped_v_des = std::min(v_des_cmd, v_cap);
-                            if (capped_v_des < v_des_cmd) {
-                                runtime_mpc_params.Q_v =
-                                    std::max(runtime_mpc_params.Q_v, terminal_slowdown_q_v_);
-                                runtime_mpc_params.terminal_factor_v =
-                                    std::max(runtime_mpc_params.terminal_factor_v,
-                                             terminal_slowdown_terminal_factor_v_);
-                                v_des_cmd = capped_v_des;
-                            }
-                        } else {
-                            const double smooth = ratio * ratio * (3.0 - 2.0 * ratio);
-                            const double terminal_cap = std::max(0.0, terminal_slowdown_v_max_);
-                            const double v_cap =
-                                terminal_cap + (std::max(0.0, v_des_cmd) - terminal_cap) * smooth;
-                            v_des_cmd = std::min(v_des_cmd, v_cap);
-                        }
-                    }
-                }
+                // envelope 在 goal_stop_pending_ + dist 大时退回 +inf, 此时不会进一步约束 v_des;
+                // v_des 已经被 (goal_stop_pending_ || settling_active) → 0 这一支强制为 0。
+                double v_des_cmd = std::min(v_des_cmd_raw, v_terminal_envelope);
+
                 mpc_solver_.setMPCParams(runtime_mpc_params);
 
                 int reentry_steps_dbg = tracking_reentry_ramp_steps_left_;
@@ -1303,7 +1321,24 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
 
                     // 6. 发布控制命令
                     // 注意：cmd_vel 是速度，不是加速度！
-                    publishCmdVel(solution.v_cmd, solution.omega_cmd);
+                    // Terminal phase 用 envelope 兜底: MPC 输出超过运动学停车包络时硬 clamp,
+                    // 越过 goal (dx ≤ 0) 时强制 0。omega 不做 envelope (不是 overshoot 主因)。
+                    double cmd_v_out = solution.v_cmd;
+                    last_terminal_cmd_v_pre_clamp_ = solution.v_cmd;
+                    if (in_terminal_phase) {
+                        cmd_v_out = std::min<double>(cmd_v_out, v_terminal_envelope);
+                        GoalInfo gi;
+                        if (path_handler_.getGoalInfo(gi) && gi.valid &&
+                            std::isfinite(gi.dx) && gi.dx <= 0.0) {
+                            cmd_v_out = 0.0;
+                        }
+                        cmd_v_out = std::max(0.0, cmd_v_out);
+                        // publishCmdVel 内部还有 EMA。terminal hard clamp 要约束实际发布值，
+                        // 因此先同步滤波状态，避免 filtered_v_ 从上一帧高速缓慢衰减并越过包络。
+                        filtered_v_ = std::min(filtered_v_, cmd_v_out);
+                    }
+                    last_terminal_cmd_v_post_clamp_ = cmd_v_out;
+                    publishCmdVel(cmd_v_out, solution.omega_cmd);
                     
                     // 保存控制量
                     last_control_ = solution.u_first;
@@ -1451,6 +1486,8 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         v = 0.0;
                     }
                     double omega = current_omega_ * infeasible_omega_scale_;
+                    last_terminal_cmd_v_pre_clamp_ = std::numeric_limits<double>::quiet_NaN();
+                    last_terminal_cmd_v_post_clamp_ = v;
                     publishCmdVel(v, omega);
                     // 同步更新 last_control_，使下一周期的 alpha 约束基于实际命令值。
                     // 若不更新，u_prev.omega 会冻结在最后一次成功的解，导致
@@ -1709,7 +1746,11 @@ void LocalPlannerROS::updateState() {
     const bool speed_low =
         std::abs(current_v_) < path_params_.goal_reached_max_speed &&
         std::abs(current_omega_) < path_params_.goal_reached_max_omega;
-    if (speed_low) {
+    // REACHED 必须同时满足 speed-low 与 position-in-tolerance:
+    // 仅看速度会让车在越过 goal 1m+ 后只要停住就误判 REACHED;
+    // 加上 goal_position_reached 后, 车若过冲则状态保持 goal_stop_pending_ 直到 MPC 把
+    // 车开回容差圈 (实际不会发生, 但状态机不会假阳性结束)。
+    if (speed_low && goal_position_reached) {
         transitionTo(PlannerState::REACHED);
         goal_stop_pending_ = false;
         terminal_recovery_latched_ = false;
@@ -2294,6 +2335,36 @@ void LocalPlannerROS::publishTerminalDebug() {
         std_msgs::Int32 msg;
         msg.data = terminal_recovery_latched_ ? 1 : 0;
         terminal_recovery_latched_pub_.publish(msg);
+    }
+
+    if (terminal_v_envelope_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(last_terminal_v_envelope_);
+        terminal_v_envelope_pub_.publish(msg);
+    }
+
+    if (terminal_envelope_active_pub_.getNumSubscribers() > 0) {
+        std_msgs::Int32 msg;
+        msg.data = last_terminal_envelope_active_;
+        terminal_envelope_active_pub_.publish(msg);
+    }
+
+    if (terminal_phase_active_pub_.getNumSubscribers() > 0) {
+        std_msgs::Int32 msg;
+        msg.data = last_terminal_phase_active_;
+        terminal_phase_active_pub_.publish(msg);
+    }
+
+    if (terminal_cmd_v_pre_clamp_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(last_terminal_cmd_v_pre_clamp_);
+        terminal_cmd_v_pre_clamp_pub_.publish(msg);
+    }
+
+    if (terminal_cmd_v_post_clamp_pub_.getNumSubscribers() > 0) {
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(last_terminal_cmd_v_post_clamp_);
+        terminal_cmd_v_post_clamp_pub_.publish(msg);
     }
 
     if (terminal_goal_info_pub_.getNumSubscribers() > 0) {

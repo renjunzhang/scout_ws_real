@@ -97,6 +97,11 @@
 #                /terminal/mode
 #                /terminal/recovery_latched
 #                /terminal/goal_info
+#                /terminal/v_envelope
+#                /terminal/envelope_active
+#                /terminal/phase_active
+#                /terminal/cmd_v_pre_clamp
+#                /terminal/cmd_v_post_clamp
 #   - 定位漂移排查：
 #                /amcl_pose, /particlecloud
 #                /tracked_pose, /submap_list, /trajectory_node_list
@@ -321,6 +326,11 @@ TOPICS=(
     /terminal/mode
     /terminal/recovery_latched
     /terminal/goal_info
+    /terminal/v_envelope
+    /terminal/envelope_active
+    /terminal/phase_active
+    /terminal/cmd_v_pre_clamp
+    /terminal/cmd_v_post_clamp
 
     # 定位漂移 / scan-map mismatch 排查
     # AMCL 常用输出

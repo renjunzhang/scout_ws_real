@@ -27,6 +27,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <tf2_ros/buffer.h>
 
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <vector>
@@ -350,6 +351,11 @@ private:
     ros::Publisher terminal_mode_pub_;
     ros::Publisher terminal_recovery_latched_pub_;
     ros::Publisher terminal_goal_info_pub_;
+    ros::Publisher terminal_v_envelope_pub_;
+    ros::Publisher terminal_envelope_active_pub_;
+    ros::Publisher terminal_phase_active_pub_;
+    ros::Publisher terminal_cmd_v_pre_clamp_pub_;
+    ros::Publisher terminal_cmd_v_post_clamp_pub_;
     ros::Publisher ref_v_ref_pub_;
     ros::Publisher ref_v_ref_horizon_pub_;
     ros::Publisher ref_s_horizon_pub_;
@@ -379,6 +385,11 @@ private:
     std::string terminal_mode_debug_ = "NONE";
     GoalInfo terminal_goal_info_debug_;
     bool terminal_goal_info_valid_ = false;
+    double last_terminal_v_envelope_ = std::numeric_limits<double>::infinity();
+    int last_terminal_envelope_active_ = 0;
+    int last_terminal_phase_active_ = 0;
+    double last_terminal_cmd_v_pre_clamp_ = std::numeric_limits<double>::quiet_NaN();
+    double last_terminal_cmd_v_post_clamp_ = std::numeric_limits<double>::quiet_NaN();
     int tracking_solve_fail_streak_ = 0;
     int tracking_solve_success_streak_ = 0;
     int tracking_reentry_ramp_steps_left_ = 0;
