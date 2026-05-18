@@ -91,6 +91,15 @@ double computeTerminalVelocityEnvelope(
     return std::min(std::max(0.0, v_max_terminal), v_kinematic);
 }
 
+double limitRate(double target, double current, double rate_limit, double dt) {
+    if (!std::isfinite(target) || !std::isfinite(current) ||
+        rate_limit <= 1e-6 || dt <= 1e-6) {
+        return target;
+    }
+    const double max_delta = rate_limit * dt;
+    return std::max(current - max_delta, std::min(current + max_delta, target));
+}
+
 }  // namespace
 
 LocalPlannerROS::LocalPlannerROS() = default;
@@ -1328,14 +1337,29 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     if (in_terminal_phase) {
                         cmd_v_out = std::min<double>(cmd_v_out, v_terminal_envelope);
                         GoalInfo gi;
+                        bool goal_behind = false;
                         if (path_handler_.getGoalInfo(gi) && gi.valid &&
                             std::isfinite(gi.dx) && gi.dx <= 0.0) {
+                            goal_behind = true;
                             cmd_v_out = 0.0;
                         }
                         cmd_v_out = std::max(0.0, cmd_v_out);
-                        // publishCmdVel 内部还有 EMA。terminal hard clamp 要约束实际发布值，
-                        // 因此先同步滤波状态，避免 filtered_v_ 从上一帧高速缓慢衰减并越过包络。
-                        filtered_v_ = std::min(filtered_v_, cmd_v_out);
+                        if (!goal_behind) {
+                            const double dt_cmd =
+                                control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
+                            const double terminal_decel =
+                                path_params_.max_tan_decel > 1e-6
+                                    ? path_params_.max_tan_decel
+                                    : std::max(1e-6, vehicle_params_.a_max);
+                            cmd_v_out = limitRate(
+                                cmd_v_out,
+                                std::max(0.0, filtered_v_),
+                                terminal_decel,
+                                dt_cmd);
+                        }
+                        // publishCmdVel 内部还有 EMA。terminal 输出层已经做过速度包络和
+                        // 变化率限制，这里同步滤波状态，避免 EMA 再把上一帧高速带回输出。
+                        filtered_v_ = cmd_v_out;
                     }
                     last_terminal_cmd_v_post_clamp_ = cmd_v_out;
                     publishCmdVel(cmd_v_out, solution.omega_cmd);
