@@ -1148,9 +1148,12 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
 
                     double v_des_eff = v_des_target;
                     if (v_des_rate_limit_enable_ && !settling_active) {
-                        const double prev_v_des = last_v_des_eff_ > 1e-6
-                            ? last_v_des_eff_
-                            : std::max(0.0, current_v_);
+                        const bool terminal_stop_target =
+                            goal_stop_pending_ || v_des_target <= 1e-6;
+                        const double prev_v_des =
+                            (!terminal_stop_target && last_v_des_eff_ <= 1e-6)
+                                ? std::max(0.0, current_v_)
+                                : std::max(0.0, last_v_des_eff_);
                         const double accel_limit =
                             v_des_accel_limit_ > 1e-6 ? v_des_accel_limit_ :
                             (path_params_.max_tan_accel > 1e-6 ? path_params_.max_tan_accel :
@@ -1674,8 +1677,14 @@ void LocalPlannerROS::updateState() {
     if (goal_stop_pending_) {
         // 终点边界附近允许短暂滑出 pose gate，但不要立刻释放 pending stop。
         // 否则会出现“进圈一帧开始刹车 -> 滑出一帧又恢复巡航参考”的 limit cycle。
+        // 一旦车体已经越过 goal（dx 为负），继续保持 pending stop，避免重新恢复巡航参考。
+        const bool goal_behind =
+            has_goal_info &&
+            goal_info.valid &&
+            std::isfinite(goal_info.dx) &&
+            goal_info.dx < terminal_goal_behind_x_;
         const bool should_release =
-            !std::isfinite(goal_dist) || goal_dist > goal_stop_release_dist;
+            !std::isfinite(goal_dist) || (goal_dist > goal_stop_release_dist && !goal_behind);
         if (should_release) {
             goal_stop_pending_ = false;
         }
