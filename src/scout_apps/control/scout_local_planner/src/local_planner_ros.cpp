@@ -741,7 +741,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
         case PlannerState::TRACKING:
         default:
             if (goal_stop_pending_) {
-                terminal_mode_debug_ = "GOAL_STOP_PENDING";
+                terminal_mode_debug_ = "TERMINAL_MPC_STOP";
             } else if (terminal_recovery_latched_) {
                 terminal_mode_debug_ = "TERMINAL_LATCHED";
             } else {
@@ -792,29 +792,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     goal_stop_pending_ = true;
                     terminal_recovery_latched_ = false;
                     heading_align_active_ = false;
-                    terminal_mode_debug_ = "CAPTURE_BRAKE";
-                    double brake_v = 0.0;
-                    double brake_omega = 0.0;
-                    const double prev_cmd_v = filtered_v_;
-                    limitTerminalRecoveryCmd(brake_v, brake_omega);
-                    brake_v = std::max(0.0, brake_v);
-                    publishCmdVel(brake_v, brake_omega);
-                    const double dt_cmd = control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
-                    last_control_(ControlIndex::A) =
-                        (filtered_v_ - prev_cmd_v) / std::max(1e-6, dt_cmd);
-                    last_control_(ControlIndex::OMEGA) = filtered_omega_;
-                    publishTerminalDebug();
-                    publishSloshDebug(last_solve_time_ms_, last_solve_ok_, false);
-
-                    const bool speed_low =
-                        std::abs(current_v_) < path_params_.goal_reached_max_speed &&
-                        std::abs(current_omega_) < path_params_.goal_reached_max_omega;
-                    if (speed_low) {
-                        transitionTo(PlannerState::REACHED);
-                        goal_stop_pending_ = false;
-                        resetWarmStart(false, false);
-                    }
-                    return;
+                    terminal_mode_debug_ = "TERMINAL_MPC_STOP";
                 }
 
                 const bool terminal_recovery_allowed =
@@ -961,6 +939,13 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         const double denom = rs_h_coeff_ * std::sqrt(2.0);
                         runtime_mpc_params.slosh_eta_bar = settling_eta_bar_ / denom;
                     }
+                }
+                if (goal_stop_pending_) {
+                    runtime_mpc_params.Q_v =
+                        std::max(runtime_mpc_params.Q_v, terminal_slowdown_q_v_);
+                    runtime_mpc_params.terminal_factor_v =
+                        std::max(runtime_mpc_params.terminal_factor_v,
+                                 terminal_slowdown_terminal_factor_v_);
                 }
                 double v_des_cmd_raw = (goal_stop_pending_ || settling_active) ? 0.0 :
                     (risk_scheduler_enable_ && slosh_enabled_) ?
@@ -1185,8 +1170,10 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         }
                     }
 
+                    const double v_des_upper =
+                        goal_stop_pending_ ? std::max(0.0, current_v_) : v_des_cmd_capped;
                     last_v_des_eff_ =
-                        std::max(slosh_v_des_min_, std::min(v_des_cmd_capped, v_des_eff));
+                        std::max(slosh_v_des_min_, std::min(v_des_upper, v_des_eff));
                     v_des_cmd = last_v_des_eff_;
 
                     if (slosh_governor_latched_ && last_v_des_eff_ < v_des_cmd_capped - 1e-3) {

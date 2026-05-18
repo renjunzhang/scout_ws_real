@@ -4,7 +4,7 @@
 The script is intentionally focused on slosh experiments:
 
 * when /terminal/mode changes;
-* whether CAPTURE_STOP/CAPTURE_BRAKE or terminal recovery modes appear;
+* whether TERMINAL_MPC_STOP / legacy capture-stop modes or terminal recovery modes appear;
 * cmd_v / odom_v / ax / jerk before and after terminal entry;
 * whether near-goal reference diagnostics are available and low.
 
@@ -252,7 +252,7 @@ def analyze_bag(bag_path, args, out_dir=None):
         mode for _, mode in data["mode"] if str(mode).upper() in RECOVERY_MODES
     )
     capture_triggered = int(any(
-        str(mode).upper() in {"CAPTURE_STOP", "CAPTURE_BRAKE", "GOAL_STOP_PENDING"}
+        str(mode).upper() in {"CAPTURE_STOP", "CAPTURE_BRAKE", "GOAL_STOP_PENDING", "TERMINAL_MPC_STOP"}
         for _, mode in data["mode"]
     ))
     recovery_triggered = int(any(recovery_counts.values()))
@@ -410,7 +410,7 @@ def pulse_verdict(row, args):
 def primary_flags(row, args):
     flags = []
     if row.get("capture_stop_triggered"):
-        flags.append("CAPTURE_STOP")
+        flags.append("TERMINAL_STOP")
     if row.get("recovery_triggered"):
         flags.append("RECOVERY_" + (row.get("recovery_mode_counts") or "UNKNOWN"))
     if row.get("terminal_ref_v_verdict") == "MISSING_REF_TOPICS":
@@ -553,7 +553,7 @@ def write_markdown(path, rows, args):
             "## 下一步",
             "",
             "- 如果大量 bag 是 `MISSING_REF_TOPICS`，下一轮录包必须包含 `/reference/v_ref`、`/reference/implied_ax`、`/reference/implied_jerk` 和 p95 诊断话题。",
-            "- 如果 `CAPTURE_STOP/CAPTURE_BRAKE` 后 `odom_ax_post_max_abs` 或 `cmd_ax_post_max_abs` 仍然高，继续收紧 capture brake 减速度或提前参考减速。",
+            "- 如果 `TERMINAL_MPC_STOP` 后 `odom_ax_post_max_abs` 或 `cmd_ax_post_max_abs` 仍然高，优先检查 MPC terminal 参考速度和执行速度是否连续下降。",
             "- 如果 recovery 模式大量出现，先限制 recovery 只做兜底，否则 slosh cost 的效果会被终点几何接管污染。",
         ]
     )

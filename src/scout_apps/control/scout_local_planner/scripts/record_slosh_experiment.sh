@@ -17,7 +17,7 @@
 #
 # 说明：
 #   terminal recovery 当前实物主实验默认关闭；如需调头/回点兜底，可在 launch 中显式开启。
-#   CAPTURE_BRAKE / REACHED 阶段仍会持续发布 /slosh/* 调试话题。
+#   TERMINAL_MPC_STOP / REACHED 阶段仍会持续发布 /slosh/* 调试话题。
 #   默认 SLOSH_RECORD_ALL=true，使用 rosbag record -a 全量录制所有当前存在的话题。
 #   下方 TOPICS 是白名单 fallback，用于磁盘压力过大时关闭全量录制。
 #

@@ -126,7 +126,7 @@ J_optional:
 ```text
 v_des_rate_limit 不是 cost 项；
 terminal_slowdown 主要改变进入 PathHandler 的速度上限和 terminal 速度权重；
-CAPTURE_BRAKE 是外层控制逻辑，不是 MPC cost。
+TERMINAL_MPC_STOP 是终点监督状态，仍继续由 MPC 做低速收敛。
 ```
 
 所以当前验证的核心还是：
@@ -178,7 +178,7 @@ input_shaping_enable
 slosh_speed_governor_enable
 ```
 
-这些参数会在加载 `mpc_params.yaml` 后、节点初始化前覆盖对应 ROS 参数。A/B/C/D/E 五组通过 launch arg 覆盖代价权重；终点默认采用 `mpc_planner` 风格的外层 capture stop，但当前语义是 `CAPTURE_BRAKE` 限速制动，不是直接硬发零速度。不把 near-goal 停车段作为 slosh 主效果窗口。
+这些参数会在加载 `mpc_params.yaml` 后、节点初始化前覆盖对应 ROS 参数。A/B/C/D/E 五组通过 launch arg 覆盖代价权重；终点默认采用 `mpc_planner` 风格的外层 capture stop，但当前语义是进入 `TERMINAL_MPC_STOP` 后继续由 MPC 平滑收敛，不再由外层直接接管制动。不把 near-goal 停车段作为 slosh 主效果窗口。
 
 当前控制频率配置：
 
@@ -609,9 +609,9 @@ SLOSH_RECORD_ALL=false src/scout_apps/control/scout_local_planner/scripts/record
 
 白名单包含上面列出的核心分析话题，但正式论文实验优先使用默认全量录制。
 
-当前实物入口采用“速度参考平滑 + 终点捕获制动”的终点策略，借鉴 `src/mpc_planner` 的外层 goal capture 思路：MPC 负责主路径跟踪，终点附近由外层状态机验收和停车，不要求 MPC 在最后几十厘米继续精确贴点。
+当前实物入口采用“速度参考平滑 + 终点 MPC stop 监督”的终点策略，借鉴 `src/mpc_planner` 的外层 goal capture 思路：MPC 负责主路径跟踪和终点低速收敛，终点附近由外层状态机验收是否已低速到达，不再由外层直接抢占刹车。
 
-第一层：进入 capture stop 半径后进入 `CAPTURE_BRAKE`。
+第一层：进入 capture stop 半径后进入 `TERMINAL_MPC_STOP`。
 
 ```text
 terminal_capture_stop_enable=true
@@ -622,9 +622,10 @@ terminal_capture_stop_distance=0.70
 
 ```text
 goal_dist < terminal_capture_stop_distance:
-  不再依赖 MPC solve / reference sequence 继续贴终点；
-  /terminal/mode = CAPTURE_BRAKE；
-  目标速度为 0，但 cmd_v/cmd_omega 通过 terminal_cmd_v_rate_limit / terminal_cmd_omega_rate_limit 逐步趋近 0；
+  goal_stop_pending = true；
+  /terminal/mode = TERMINAL_MPC_STOP；
+  继续执行 MPC solve；
+  v_des 目标降为 0，并提高 terminal Q_v / terminal_factor_v；
   若 odom 速度降到 goal_reached_max_speed / goal_reached_max_omega 以下，则进入 REACHED。
 ```
 
@@ -638,7 +639,7 @@ MPC 不承担最后厘米级停车。
 
 本项目使用 0.70m 而不是 1.0m，是为了减少固定路径实验中“停得过早”的风险。若仍过冲，可改到 0.90 或 1.00；若明显过早，可降到 0.50。
 
-第二层：capture stop 之前仍保留平滑 slowdown 参考。
+第二层：进入 terminal MPC stop 之前仍保留平滑 slowdown 参考。
 
 ```text
 terminal_slowdown_enable=true
@@ -648,7 +649,7 @@ terminal_slowdown_Q_v=40.0
 terminal_slowdown_terminal_factor_v=5.0
 ```
 
-slowdown 的作用是在进入 capture stop 前降低接近速度。MPC 会在 `terminal_slowdown_distance` 内按剩余距离施加制动速度包络：
+slowdown 的作用是在进入 terminal MPC stop 前降低接近速度。MPC 会在 `terminal_slowdown_distance` 内按剩余距离施加制动速度包络：
 
 ```text
 v_brake = sqrt(goal_speed^2 + 2 * decel * max(0, goal_dist - goal_tolerance))
@@ -1043,9 +1044,9 @@ dx < -0.05 且 terminal/mode = ALIGN_TO_POINT
 
 这表示小车已经越过终点，terminal recovery 正在调头对准 goal。此时应优先检查终点速度剖面、固定路径终点姿态和 terminal recovery 参数，而不是把问题归因到晃动项。
 
-### 7.7 终点 capture stop 调参
+### 7.7 终点 terminal MPC stop 调参
 
-默认终点策略已经不再依赖“最后几厘米 MPC 精确停车”。如果仍出现过冲，优先调 capture stop 半径，而不是继续增大 `Q_slosh` 或堆 terminal slowdown 权重。
+默认终点策略不再让外层 capture stop 直接发布制动命令。进入 `terminal_capture_stop_distance` 后，系统只进入 `TERMINAL_MPC_STOP`，由 MPC 继续低速收敛。如果仍出现过冲，优先检查 terminal 参考速度和 odom 速度是否连续下降，而不是继续增大 `Q_slosh`。
 
 更早捕获：
 
@@ -1074,8 +1075,8 @@ roslaunch scout_local_planner slosh_experiment.launch \
 实验归因口径：
 
 ```text
-capture stop 用于任务完成和避免过冲。
-NEAR_GOAL / capture stop 段不参与 slosh cost 主归因。
+terminal MPC stop 用于任务完成和低速收敛验收。
+NEAR_GOAL / TERMINAL_MPC_STOP 段不参与 slosh cost 主归因。
 slosh 主结论只看 TRACKING_PRE_TERMINAL。
 ```
 
@@ -1083,10 +1084,11 @@ slosh 主结论只看 TRACKING_PRE_TERMINAL。
 
 ```text
 1. 当前运行节点是否确实使用了最新 devel 编译产物；
-2. /cmd_vel 是否真的在 capture stop 后变成 0；
-3. 底盘执行 cmd_vel 是否有明显滞后；
-4. /odom 或 map->base_link 是否有延迟/漂移；
-5. 固定路径终点是否在真实目标后方。
+2. /reference/v_des_eff 和 /reference/v_ref_horizon 是否在 terminal 前连续下降；
+3. /cmd_vel 和 /odom 是否跟随参考速度连续下降；
+4. 底盘执行 cmd_vel 是否有明显滞后；
+5. /odom 或 map->base_link 是否有延迟/漂移；
+6. 固定路径终点是否在真实目标后方。
 ```
 
 ## 8. 必录 topic
