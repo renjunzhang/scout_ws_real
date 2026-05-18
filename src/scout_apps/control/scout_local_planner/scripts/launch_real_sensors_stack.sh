@@ -15,6 +15,13 @@ START_BASE="${START_BASE:-true}"
 WAIT_FOR_ODOM="${WAIT_FOR_ODOM:-true}"
 WAIT_FOR_LOCALIZATION_MAP="${WAIT_FOR_LOCALIZATION_MAP:-false}"
 HZ_WINDOW="${HZ_WINDOW:-10}"
+REALSENSE_COLOR_WIDTH="${REALSENSE_COLOR_WIDTH:-640}"
+REALSENSE_COLOR_HEIGHT="${REALSENSE_COLOR_HEIGHT:-480}"
+REALSENSE_COLOR_FPS="${REALSENSE_COLOR_FPS:-30}"
+REALSENSE_ENABLE_DEPTH="${REALSENSE_ENABLE_DEPTH:-false}"
+REALSENSE_ENABLE_INFRA="${REALSENSE_ENABLE_INFRA:-false}"
+REALSENSE_ENABLE_INFRA1="${REALSENSE_ENABLE_INFRA1:-false}"
+REALSENSE_ENABLE_INFRA2="${REALSENSE_ENABLE_INFRA2:-false}"
 
 pids=()
 names=()
@@ -141,6 +148,28 @@ check_hz() {
     timeout "${HZ_WINDOW}" rostopic hz "${topic}" 2>&1 | tee "${log_file}" || true
 }
 
+check_camera_info() {
+    local topic="/camera/color/camera_info"
+    local log_file="${LOG_DIR}/camera_color_camera_info.log"
+
+    echo
+    echo "[${SCRIPT_NAME}] Checking RealSense color camera_info (${topic})..."
+    if ! timeout "${READY_TIMEOUT}" rostopic echo -n 1 "${topic}" >"${log_file}" 2>&1; then
+        echo "[${SCRIPT_NAME}] WARN: failed to read ${topic}. Log: ${log_file}"
+        return 0
+    fi
+
+    local width
+    local height
+    width="$(awk '/^width:/ {print $2; exit}' "${log_file}")"
+    height="$(awk '/^height:/ {print $2; exit}' "${log_file}")"
+    echo "[${SCRIPT_NAME}] RealSense color camera_info: width=${width:-unknown} height=${height:-unknown}"
+
+    if [[ "${width:-}" != "${REALSENSE_COLOR_WIDTH}" || "${height:-}" != "${REALSENSE_COLOR_HEIGHT}" ]]; then
+        echo "[${SCRIPT_NAME}] WARN: expected ${REALSENSE_COLOR_WIDTH}x${REALSENSE_COLOR_HEIGHT}, got ${width:-unknown}x${height:-unknown}."
+    fi
+}
+
 mkdir -p "${LOG_DIR}"
 source_ros
 
@@ -148,6 +177,7 @@ echo "[${SCRIPT_NAME}] Workspace: ${WS_ROOT}"
 echo "[${SCRIPT_NAME}] Logs: ${LOG_DIR}"
 echo "[${SCRIPT_NAME}] START_DELAY=${START_DELAY}s POST_TOPIC_DELAY=${POST_TOPIC_DELAY}s SETTLE_DELAY=${SETTLE_DELAY}s READY_TIMEOUT=${READY_TIMEOUT}s"
 echo "[${SCRIPT_NAME}] START_BASE=${START_BASE} WAIT_FOR_ODOM=${WAIT_FOR_ODOM} WAIT_FOR_LOCALIZATION_MAP=${WAIT_FOR_LOCALIZATION_MAP}"
+echo "[${SCRIPT_NAME}] RealSense color=${REALSENSE_COLOR_WIDTH}x${REALSENSE_COLOR_HEIGHT}@${REALSENSE_COLOR_FPS}Hz depth=${REALSENSE_ENABLE_DEPTH} infra=${REALSENSE_ENABLE_INFRA}/${REALSENSE_ENABLE_INFRA1}/${REALSENSE_ENABLE_INFRA2}"
 
 setup_can0
 
@@ -178,8 +208,17 @@ start_launch "scout_imu_with_tf" \
 wait_for_topic /imu/data "IMU data"
 
 start_launch "realsense2_camera" \
-    realsense2_camera rs_camera.launch
+    realsense2_camera rs_camera.launch \
+    enable_color:=true \
+    color_width:="${REALSENSE_COLOR_WIDTH}" \
+    color_height:="${REALSENSE_COLOR_HEIGHT}" \
+    color_fps:="${REALSENSE_COLOR_FPS}" \
+    enable_depth:="${REALSENSE_ENABLE_DEPTH}" \
+    enable_infra:="${REALSENSE_ENABLE_INFRA}" \
+    enable_infra1:="${REALSENSE_ENABLE_INFRA1}" \
+    enable_infra2:="${REALSENSE_ENABLE_INFRA2}"
 wait_for_topic /camera/color/image_raw "RealSense color image"
+check_camera_info
 
 echo
 echo "[${SCRIPT_NAME}] Waiting ${SETTLE_DELAY}s before hz checks..."
