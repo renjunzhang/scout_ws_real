@@ -43,6 +43,8 @@ TOPICS = ["/odom", "/cmd_vel", "/mpc_status", "/terminal/mode", "/slosh/height"]
 COLORS = {
     "C": "#1f77b4",
     "D": "#d62728",
+    "E": "#2ca02c",
+    "F": "#9467bd",
     "Q0": "#1f77b4",
     "Q5": "#d62728",
 }
@@ -61,6 +63,10 @@ def parse_args() -> argparse.Namespace:
 
 
 def condition_from_name(name: str) -> str:
+    if "_F_" in name or "_F_slosh_axjerk" in name:
+        return "F"
+    if "_E_" in name or "_E_axjerk" in name:
+        return "E"
     if "_D_" in name or "_D_run" in name:
         return "D"
     if "_C_" in name or "_C_run" in name:
@@ -74,6 +80,7 @@ def condition_from_name(name: str) -> str:
 def label_from_name(name: str) -> str:
     label = name.replace(".bag", "")
     label = label.replace("slosh_Q0_20260518_", "").replace("slosh_Q5_20260518_", "")
+    label = label.replace("slosh_Q0_20260520_", "").replace("slosh_Q5_20260520_", "")
     label = label.replace("_P2_s_curve", "")
     return label
 

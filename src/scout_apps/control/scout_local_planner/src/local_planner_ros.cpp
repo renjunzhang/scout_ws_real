@@ -175,10 +175,11 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
             // 将更新后的参数同步到求解器（CostFunction 会用到 Q_slosh_eta）
             mpc_solver_.setMPCParams(mpc_params_);
 
-            ROS_INFO("[LocalPlannerROS] Slosh integration enabled (Q_slosh=%.2f, h_ref=%.4f, eta_dot_ratio=%.3f, h_coeff=%.4f, omega_n=%.4f, Q_slosh_eta=%.4f, Q_slosh_eta_dot=%.4f)",
+            ROS_INFO("[LocalPlannerROS] Slosh integration enabled (Q_slosh=%.2f, h_ref=%.4f, eta_dot_ratio=%.3f, preview_factor=%.3f, h_coeff=%.4f, omega_n=%.4f, Q_slosh_eta=%.4f, Q_slosh_eta_dot=%.4f)",
                      mpc_params_.Q_slosh,
                      mpc_params_.slosh_height_ref,
                      mpc_params_.slosh_eta_dot_ratio,
+                     mpc_params_.slosh_preview_factor,
                      h_coeff,
                      omega_n,
                      mpc_params_.Q_slosh_eta,
@@ -337,6 +338,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/Q_slosh", mpc_params_.Q_slosh, 0.0);
     pnh.param("mpc/slosh_height_ref", mpc_params_.slosh_height_ref, 0.005);
     pnh.param("mpc/slosh_eta_dot_ratio", mpc_params_.slosh_eta_dot_ratio, 0.3);
+    pnh.param("mpc/slosh_preview_factor", mpc_params_.slosh_preview_factor, 0.0);
     pnh.param("mpc/Q_slosh_eta_dot", mpc_params_.Q_slosh_eta_dot, 0.0);
     pnh.param("mpc/terminal_factor_slosh_eta", mpc_params_.terminal_factor_slosh_eta, 0.0);
     pnh.param("mpc/terminal_factor_slosh_eta_dot", mpc_params_.terminal_factor_slosh_eta_dot, 0.0);
@@ -1964,13 +1966,17 @@ LocalPlannerROS::CostBreakdown LocalPlannerROS::computeCostBreakdown(
         }
 
         if (params.Q_slosh_eta > 0.0) {
-            out.J_slosh_eta += terminal_factor(k, params.terminal_factor_slosh_eta) *
-                               params.Q_slosh_eta * (eta_x * eta_x + eta_y * eta_y);
+            const double preview_factor = (k > 0) ? std::max(0.0, params.slosh_preview_factor) : 0.0;
+            out.J_slosh_eta +=
+                (terminal_factor(k, params.terminal_factor_slosh_eta) + preview_factor) *
+                params.Q_slosh_eta * (eta_x * eta_x + eta_y * eta_y);
         }
         if (params.Q_slosh_eta_dot > 0.0) {
-            out.J_slosh_eta_dot += terminal_factor(k, params.terminal_factor_slosh_eta_dot) *
-                                   params.Q_slosh_eta_dot *
-                                       (eta_x_dot * eta_x_dot + eta_y_dot * eta_y_dot);
+            const double preview_factor = (k > 0) ? std::max(0.0, params.slosh_preview_factor) : 0.0;
+            out.J_slosh_eta_dot +=
+                (terminal_factor(k, params.terminal_factor_slosh_eta_dot) + preview_factor) *
+                params.Q_slosh_eta_dot *
+                (eta_x_dot * eta_x_dot + eta_y_dot * eta_y_dot);
         }
     }
 

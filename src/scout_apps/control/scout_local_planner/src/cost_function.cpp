@@ -311,6 +311,18 @@ void CostFunction::buildQPCost(
                 }
             }
         }
+
+        if (k > 0 && params_.slosh_preview_factor > 0.0) {
+            const double preview = params_.slosh_preview_factor;
+            if (params_.Q_slosh_eta > 0.0) {
+                Q_total(StateIndex::ETA_X, StateIndex::ETA_X) += preview * params_.Q_slosh_eta;
+                Q_total(StateIndex::ETA_Y, StateIndex::ETA_Y) += preview * params_.Q_slosh_eta;
+            }
+            if (params_.Q_slosh_eta_dot > 0.0) {
+                Q_total(StateIndex::ETA_X_DOT, StateIndex::ETA_X_DOT) += preview * params_.Q_slosh_eta_dot;
+                Q_total(StateIndex::ETA_Y_DOT, StateIndex::ETA_Y_DOT) += preview * params_.Q_slosh_eta_dot;
+            }
+        }
         
         // 填充 H 矩阵（状态部分）
         // OSQP 目标函数为 min 1/2 z'Pz + q'z

@@ -165,6 +165,7 @@ struct MPCParams {
     double Q_slosh = 0.0;   // 归一化晃动风险权重 (设为 0 表示不启用)
     double slosh_height_ref = 0.005;  // 参考晃动高度 (m)，用于归一化 Q_slosh
     double slosh_eta_dot_ratio = 0.3; // eta_dot 等效位移项相对 eta 项的比例；<=0 时使用手动 Q_slosh_eta_dot
+    double slosh_preview_factor = 0.0; // 对 x_1..x_N 额外加权的 one-step preview 系数；0=关闭
     double slosh_height_max = 0.05;  // 液面高度约束 (m)
     bool enable_slosh_box_constraint = false;  // 是否启用一阶盒约束代理
     // 运行时由 local_planner_ros 计算: Q_slosh_eta = Q_slosh * height_coeff² / slosh_height_ref²

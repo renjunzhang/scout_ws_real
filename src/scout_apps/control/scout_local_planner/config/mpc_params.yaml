@@ -41,6 +41,7 @@ mpc:
   Q_slosh: 0.0             # 归一化晃动风险权重；设为 0 表示不启用晃动抑制
   slosh_height_ref: 0.005  # 参考晃动高度 (m)，5 mm；Q_slosh 惩罚 (h/h_ref)^2
   slosh_eta_dot_ratio: 0.3 # eta_dot 等效位移项比例；<=0 时使用手动 Q_slosh_eta_dot
+  slosh_preview_factor: 0.0 # one-step preview 额外权重；0=关闭，1=对 x_1..x_N 额外加一份 slosh 权重
   Q_slosh_eta_dot: 0.0     # 兼容旧配置：slosh_eta_dot_ratio<=0 时作为直接 QP 权重
   terminal_factor_slosh_eta: 0.0      # P2: terminal η 代价放大系数，0=关闭；需 Q_slosh>0 才生效
   terminal_factor_slosh_eta_dot: 0.0  # P2: terminal η̇ 代价放大系数，0=关闭；需 Q_slosh_eta_dot>0 才生效
