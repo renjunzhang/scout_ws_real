@@ -53,4 +53,27 @@
       </imu>
     </plugin>
   </gazebo>
+
+  <!-- Wheel contact parameters (fix A from 2026-05-19_仿真skid-steer接触模型修复方案):
+       official scout_mini.gazebo 把全局摩擦块整段注释掉,scout_mini_wheel.gazebo
+       也只有 <transmission>,导致四个轮子走 Gazebo 默认 mu1=mu2=1 各向同性摩擦,
+       是 stick-slip + 原地自转抖动的头号原因。这里补上 4 个 wheel_link 的接触参数。
+       fdir1 在各 wheel_link 局部坐标系下都是 x 方向(滚动方向),因为 cylinder 沿 z 轴。 -->
+  <!-- v2 (2026-05-19 iteration after first try made 5-20Hz energy +275%):
+       v1 用 kd=100 + mu2=0.3 + maxVel=1.0,造成接触阻尼 ringing。
+       v2 移除 kp/kd/maxVel,回到 ODE 默认刚体接触;mu2 提到 0.5。 -->
+  <xacro:macro name="scout_wheel_contact" params="wheel_prefix">
+    <gazebo reference="${wheel_prefix}_wheel_link">
+      <mu1>1.0</mu1>
+      <mu2>0.5</mu2>
+      <fdir1>1 0 0</fdir1>
+      <minDepth>0.001</minDepth>
+      <maxContacts>64</maxContacts>
+    </gazebo>
+  </xacro:macro>
+
+  <xacro:scout_wheel_contact wheel_prefix="front_left" />
+  <xacro:scout_wheel_contact wheel_prefix="front_right" />
+  <xacro:scout_wheel_contact wheel_prefix="rear_left" />
+  <xacro:scout_wheel_contact wheel_prefix="rear_right" />
 </robot>

@@ -2,6 +2,10 @@
   <arg name="robot_namespace" default="/"/>
   <arg name="urdf_extras" default="/home/a/scout_ws/src/scout_ros/scout_description/urdf/official_scout_mini_imu_extras.urdf.xacro"/>
 
+  <!-- 2026-05-19: bisect of fixes B (right-wheel +0.001 offset) and C
+       (skid_steer torque 1000 to 50) showed both make spin test worse than
+       A v2 alone. Reverted to upstream xacro. A v2 wheel contact params
+       continue to inject via the urdf_extras path above (extras file). -->
   <param name="robot_description" command="$(find xacro)/xacro '/data/a/official_scout_ws/src/scout_description/urdf/mini_abs.xacro'
       robot_namespace:=$(arg robot_namespace)
       urdf_extras:=$(arg urdf_extras)" />
