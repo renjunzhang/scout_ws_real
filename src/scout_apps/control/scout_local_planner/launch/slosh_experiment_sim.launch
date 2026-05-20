@@ -18,9 +18,14 @@
   <arg name="slosh_height_ref" default="0.005" doc="归一化参考晃动高度 (m)，默认 5mm"/>
   <arg name="slosh_eta_dot_ratio" default="0.3" doc="eta_dot 等效位移项比例；非正数时使用手动 Q_slosh_eta_dot"/>
   <arg name="Q_slosh_eta_dot" default="0.0" doc="旧手动 eta_dot QP 权重；仅 slosh_eta_dot_ratio 为非正数时生效"/>
+  <arg name="mpc_Q_lag" default="0.5" doc="lag/纵向误差权重覆盖，用于 slosh-priority MPC 消融"/>
+  <arg name="mpc_Q_contour" default="32.0" doc="contour/横向误差权重覆盖，用于 slosh-priority MPC 消融"/>
+  <arg name="mpc_Q_etheta" default="15.0" doc="航向误差权重覆盖，用于 slosh-priority MPC 消融"/>
   <arg name="mpc_Q_v" default="8.0" doc="速度跟踪权重覆盖，用于 reference execution 消融"/>
   <arg name="mpc_R_a" default="0.4" doc="加速度控制权重覆盖，用于 reference execution 消融"/>
+  <arg name="mpc_R_omega" default="2.0" doc="角速度控制权重覆盖，用于 slosh-priority MPC 消融"/>
   <arg name="mpc_R_da" default="0.5" doc="加速度变化权重覆盖，用于 reference execution 消融"/>
+  <arg name="mpc_R_domega" default="4.0" doc="角速度变化权重覆盖，用于 slosh-priority MPC 消融"/>
   <arg name="mpc_cmd_vel_lead_time" default="0.15" doc="cmd_vel 输出前瞻时间覆盖；仿真默认 0.15"/>
   <arg name="terminal_factor_slosh_eta" default="0.0" doc="P2: terminal η 代价放大系数，0=关闭；首轮建议 5~10；需 Q_slosh>0"/>
   <arg name="terminal_factor_slosh_eta_dot" default="0.0" doc="P2: terminal η̇ 代价放大系数，0=关闭；首轮建议 5~10；需 Q_slosh_eta_dot>0"/>
@@ -33,6 +38,16 @@
   <arg name="terminal_recovery_enable" default="true" doc="终点 terminal recovery；默认开启，recovery 分支仍会持续发布 /slosh/* 调试话题"/>
   <arg name="terminal_cmd_v_rate_limit" default="0.35" doc="terminal recovery 线速度命令变化率上限 (m/s^2)，降低接管瞬间 ax"/>
   <arg name="terminal_cmd_omega_rate_limit" default="1.0" doc="terminal recovery 角速度命令变化率上限 (rad/s^2)，降低接管瞬间 alpha"/>
+  <arg name="terminal_slowdown_enable" default="true" doc="是否在终点捕获前提前平滑降低 v_des_cmd；作为 PathHandler 末端速度未验证干净前的保护层"/>
+  <arg name="terminal_slowdown_distance" default="1.20" doc="终点前平滑减速起始距离 (m)"/>
+  <arg name="terminal_slowdown_v_max" default="0.18" doc="进入 terminal recovery 前的平滑减速目标上限 (m/s)"/>
+  <arg name="terminal_slowdown_Q_v" default="40.0" doc="终点制动速度上限生效时临时速度跟踪权重"/>
+  <arg name="terminal_slowdown_terminal_factor_v" default="5.0" doc="终点制动速度上限生效时临时 terminal 速度权重放大"/>
+  <arg name="terminal_capture_stop_enable" default="true" doc="mpc_planner 风格外层终点捕获；阈值内进入限速 CAPTURE_BRAKE，不再硬发 cmd_vel=0"/>
+  <arg name="terminal_capture_stop_distance" default="0.70" doc="终点捕获制动半径 (m)"/>
+  <arg name="v_des_rate_limit_enable" default="true" doc="执行层参考速度变化率限制；用于治理纵向 ax 脉冲"/>
+  <arg name="v_des_accel_limit" default="0.60" doc="v_des 上升变化率上限 (m/s^2)"/>
+  <arg name="v_des_decel_limit" default="0.80" doc="v_des 下降变化率上限 (m/s^2)"/>
   <arg name="slosh_speed_governor_enable" default="false" doc="是否启用残余晃动感知的速度治理"/>
   <arg name="slosh_speed_governor_k_eta" default="2.5" doc="速度治理液面高度比例缩放系数"/>
   <arg name="slosh_speed_governor_ay_max_base" default="0.0" doc="速度治理横向加速度预算"/>
@@ -55,6 +70,7 @@
   <arg name="slosh_imu_filter_alpha" default="0.3" doc="IMU 数据 EMA 滤波系数"/>
   <arg name="slosh_imu_ay_bias_compensation_enable" default="true" doc="是否对 IMU ay 做静止零偏扣除"/>
   <arg name="slosh_imu_ay_bias_init_duration" default="3.0" doc="估计 IMU ay 零偏所需的连续静止时长"/>
+  <arg name="slosh_imu_ay_scale" default="1.0" doc="IMU ay 离线标定比例系数（由 imu_ay_tool.py calibrate 输出）"/>
   <arg name="risk_scheduler_enable" default="false" doc="是否启用 rho_k 风险自适应调度器"/>
   <arg name="risk_scheduler_gamma" default="5.0" doc="rho_k sigmoid 斜率"/>
   <arg name="risk_scheduler_rho_0" default="0.3" doc="rho_k sigmoid 中点"/>
@@ -88,9 +104,14 @@
     <param name="mpc/slosh_height_ref" value="$(arg slosh_height_ref)"/>
     <param name="mpc/slosh_eta_dot_ratio" value="$(arg slosh_eta_dot_ratio)"/>
     <param name="mpc/Q_slosh_eta_dot" value="$(arg Q_slosh_eta_dot)"/>
+    <param name="mpc/Q_lag" value="$(arg mpc_Q_lag)"/>
+    <param name="mpc/Q_contour" value="$(arg mpc_Q_contour)"/>
+    <param name="mpc/Q_etheta" value="$(arg mpc_Q_etheta)"/>
     <param name="mpc/Q_v" value="$(arg mpc_Q_v)"/>
     <param name="mpc/R_a" value="$(arg mpc_R_a)"/>
+    <param name="mpc/R_omega" value="$(arg mpc_R_omega)"/>
     <param name="mpc/R_da" value="$(arg mpc_R_da)"/>
+    <param name="mpc/R_domega" value="$(arg mpc_R_domega)"/>
     <param name="mpc/cmd_vel_lead_time" value="$(arg mpc_cmd_vel_lead_time)"/>
     <param name="mpc/terminal_factor_slosh_eta" value="$(arg terminal_factor_slosh_eta)"/>
     <param name="mpc/terminal_factor_slosh_eta_dot" value="$(arg terminal_factor_slosh_eta_dot)"/>
@@ -102,6 +123,16 @@
     <param name="terminal_recovery/enable" value="$(arg terminal_recovery_enable)"/>
     <param name="terminal_recovery/cmd_v_rate_limit" value="$(arg terminal_cmd_v_rate_limit)"/>
     <param name="terminal_recovery/cmd_omega_rate_limit" value="$(arg terminal_cmd_omega_rate_limit)"/>
+    <param name="terminal_slowdown/enable" value="$(arg terminal_slowdown_enable)"/>
+    <param name="terminal_slowdown/distance" value="$(arg terminal_slowdown_distance)"/>
+    <param name="terminal_slowdown/v_max" value="$(arg terminal_slowdown_v_max)"/>
+    <param name="terminal_slowdown/Q_v" value="$(arg terminal_slowdown_Q_v)"/>
+    <param name="terminal_slowdown/terminal_factor_v" value="$(arg terminal_slowdown_terminal_factor_v)"/>
+    <param name="terminal_capture_stop/enable" value="$(arg terminal_capture_stop_enable)"/>
+    <param name="terminal_capture_stop/distance" value="$(arg terminal_capture_stop_distance)"/>
+    <param name="v_des_rate_limit/enable" value="$(arg v_des_rate_limit_enable)"/>
+    <param name="v_des_rate_limit/accel_limit" value="$(arg v_des_accel_limit)"/>
+    <param name="v_des_rate_limit/decel_limit" value="$(arg v_des_decel_limit)"/>
     <param name="slosh_speed_governor/enable" value="$(arg slosh_speed_governor_enable)"/>
     <param name="slosh_speed_governor/k_eta" value="$(arg slosh_speed_governor_k_eta)"/>
     <param name="slosh_speed_governor/ay_max_base" value="$(arg slosh_speed_governor_ay_max_base)"/>
@@ -124,6 +155,7 @@
     <param name="slosh_estimator/imu_filter_alpha" value="$(arg slosh_imu_filter_alpha)"/>
     <param name="slosh_estimator/imu_ay_bias_compensation_enable" value="$(arg slosh_imu_ay_bias_compensation_enable)"/>
     <param name="slosh_estimator/imu_ay_bias_init_duration" value="$(arg slosh_imu_ay_bias_init_duration)"/>
+    <param name="slosh_estimator/imu_ay_scale" value="$(arg slosh_imu_ay_scale)"/>
     <param name="risk_scheduler/enable" value="$(arg risk_scheduler_enable)"/>
     <param name="risk_scheduler/gamma" value="$(arg risk_scheduler_gamma)"/>
     <param name="risk_scheduler/rho_0" value="$(arg risk_scheduler_rho_0)"/>
