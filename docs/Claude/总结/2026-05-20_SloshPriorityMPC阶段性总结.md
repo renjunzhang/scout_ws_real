@@ -15,7 +15,8 @@
 1. 当前主线已经从“单纯 slosh cost”转向 Slosh-Priority MPC：
    用液体模态状态项 eta/eta_dot + 激励源头项 ax/jerk 一起抑制晃动。
 
-2. 2026-05-20 固定 P2_s_curve 实物结果中，F 组是当前最稳候选：
+2. 2026-05-20 固定 P2_s_curve 实物结果中，按新论文主窗口
+   paper_main_excl_terminal_1s 评价，F 组是当前最稳候选：
    F = slosh cost + ax/jerk shaping。
 
 3. G 组 one-step preview 提高了 slosh cost 占比，
@@ -23,6 +24,9 @@
 
 4. 真实液面结论以 RGB 视觉为准；
    /slosh/height 只作为模型侧诊断量，不能单独作为论文效果证据。
+
+5. terminal 前 1.0s 必须单独作为 terminal_approach_1s 诊断窗口；
+   不混入论文主效果窗口。
 ```
 
 ## 1. 当前 MPC 结构
@@ -90,10 +94,14 @@ Q_slosh_eta_dot:
 
 ## 2. 终点逻辑现状
 
-当前 terminal 不再作为证明 slosh cost 效果的窗口。它是安全收敛机制，主效果统计只看：
+当前 terminal 不再作为证明 slosh cost 效果的窗口。它是安全收敛机制，论文主效果统计改为：
 
 ```text
-TRACKING start -> 第一次进入 terminal/capture 相关状态之前
+paper_main_excl_terminal_1s:
+  TRACKING start -> 第一次进入 terminal/capture 相关状态前 1.0s
+
+terminal_approach_1s:
+  第一次进入 terminal/capture 相关状态前 1.0s -> 第一次进入 terminal/capture
 ```
 
 当前 terminal 处理：
@@ -122,7 +130,8 @@ TRACKING start -> 第一次进入 terminal/capture 相关状态之前
 ```text
 terminal smoke 已达到进入固定路径 cost 对比的最低门槛；
 但 terminal 内仍可能有 ax/jerk 脉冲。
-因此论文效果统计必须排除 terminal 段。
+因此论文效果统计必须排除 terminal 前 1.0s；
+terminal 前 1.0s 只用于诊断停车是否平顺。
 ```
 
 ## 3. 2026-05-20 固定路径实验
@@ -179,13 +188,19 @@ G:
 统计窗口：
 
 ```text
-TRACKING start 到第一次 terminal/capture 相关状态之前；
-terminal 停车段不进入主效果统计。
+旧窗口：
+  pre_terminal_full = TRACKING start -> first terminal/capture
+
+新论文主窗口：
+  paper_main_excl_terminal_1s = TRACKING start -> first terminal/capture - 1.0s
+
+terminal 诊断窗口：
+  terminal_approach_1s = first terminal/capture - 1.0s -> first terminal/capture
 ```
 
 ## 4. 实验结果
 
-主表：
+旧 pre_terminal_full 主表：
 
 ```text
 condition | n | v_p95 | ax_p95 | ay_p95 | jerk_p95 | /slosh p95 mm | RGB p95 mm | duration
@@ -196,39 +211,76 @@ F         | 3 | 1.117 | 0.281  | 0.277  | 3.263    | 0.865         | 0.576      
 G         | 3 | 1.089 | 0.312  | 0.273  | 3.320    | 0.946         | 0.673      | 18.38
 ```
 
+新论文主窗口 `paper_main_excl_terminal_1s`：
+
+```text
+condition | n | v_p95 | ax_p95 | ay_p95 | jerk_p95 | model p95 | model peak | RGB p95 | RGB peak | duration
+C         | 3 | 1.359 | 0.281  | 0.426  | 2.743    | 1.096     | 1.658      | 0.811   | 1.238    | 12.92
+D         | 3 | 1.136 | 0.256  | 0.313  | 3.061    | 0.973     | 1.452      | 0.690   | 1.460    | 16.19
+E         | 3 | 1.319 | 0.281  | 0.430  | 2.820    | 1.075     | 1.659      | 0.599   | 1.214    | 13.64
+F         | 3 | 1.096 | 0.241  | 0.285  | 3.042    | 0.811     | 1.366      | 0.558   | 1.167    | 16.82
+G         | 3 | 1.070 | 0.264  | 0.280  | 3.092    | 0.890     | 1.379      | 0.685   | 1.519    | 17.38
+```
+
+terminal 诊断窗口 `terminal_approach_1s`：
+
+```text
+condition | n | v_p95 | ax_p95 | ay_p95 | jerk_p95 | model p95 | model peak | RGB p95 | RGB peak
+C         | 3 | 1.395 | 0.955  | 0.497  | 4.548    | 1.222     | 1.639      | 0.366   | 0.392
+D         | 3 | 1.176 | 1.067  | 0.253  | 4.707    | 1.725     | 1.932      | 0.263   | 0.333
+E         | 3 | 1.352 | 1.037  | 0.362  | 5.140    | 1.565     | 1.889      | 0.400   | 0.421
+F         | 3 | 1.136 | 0.993  | 0.248  | 5.242    | 1.741     | 1.972      | 0.491   | 0.543
+G         | 3 | 1.109 | 0.927  | 0.229  | 4.768    | 1.763     | 1.894      | 0.275   | 0.329
+```
+
 相对 C 组：
 
 ```text
 D:
-  RGB p95 降低，速度和 ay 明显下降；
-  说明 slosh-priority 调参方向有效，但不是最优。
+  在新主窗口中，RGB p95、model p95、model peak、ay_p95 均下降；
+  说明单独 modal slosh cost 有效。
+  但 D 的 RGB peak 不稳定，D run02 抬高了均值，因此不能声称单独 slosh cost 稳定降低 RGB peak。
 
 E:
   RGB p95 也降低；
   说明 ax/jerk 激励整形本身对真实液面有贡献。
 
 F:
-  RGB p95 最低；
-  同时 /slosh p95 最低；
+  新主窗口中 RGB p95、RGB peak、model p95、model peak、ay_p95 均下降；
   是当前最稳主线候选。
 
 G:
-  速度和 ay 更低，但 RGB p95 不如 F；
+  速度和 ay 更低，但 RGB p95 / RGB peak 不如 F；
   preview 没有转化成真实液面收益。
 ```
 
-F 相对 C：
+F 相对 C，按新主窗口：
 
 ```text
-v_p95:          1.381 -> 1.117
-ax_p95:         0.318 -> 0.281
-ay_p95:         0.440 -> 0.277
-/slosh p95 mm:  1.121 -> 0.865
-RGB p95 mm:     0.786 -> 0.576
-duration:       13.92s -> 17.82s
+v_p95:          1.359 -> 1.096
+ax_p95:         0.281 -> 0.241
+ay_p95:         0.426 -> 0.285
+model p95 mm:   1.096 -> 0.811
+model peak mm:  1.658 -> 1.366
+RGB p95 mm:     0.811 -> 0.558
+RGB peak mm:    1.238 -> 1.167
+duration:       12.92s -> 16.82s
 ```
 
-G 相对 F：
+D 相对 C，按新主窗口：
+
+```text
+v_p95:          1.359 -> 1.136
+ax_p95:         0.281 -> 0.256
+ay_p95:         0.426 -> 0.313
+model p95 mm:   1.096 -> 0.973
+model peak mm:  1.658 -> 1.452
+RGB p95 mm:     0.811 -> 0.690
+RGB peak mm:    1.238 -> 1.460
+duration:       12.92s -> 16.19s
+```
+
+G 相对 F，按旧 pre_terminal_full：
 
 ```text
 v_p95:          1.117 -> 1.089  (-2.5%)
@@ -247,6 +299,51 @@ RGB peak mm:    1.167 -> 1.519  (+30.2%)
 G 当前不进入主线；
 slosh_preview_factor 继续默认 0.0；
 后续如果继续试 preview，应只作为 ablation，不作为默认配置。
+
+F 当前是论文主窗口最干净的主结果组；
+D 可作为“modal slosh cost 单独有效但 peak 不稳”的消融组；
+E 可作为“激励源头整形本身有效”的消融组。
+```
+
+## 4.1 Peak 回放诊断
+
+新增自动诊断脚本：
+
+```text
+src/scout_apps/control/scout_local_planner/scripts/analysis/analyze_slosh_peak_context.py
+```
+
+20260520 结果：
+
+```text
+pre_terminal peaks: 15
+CURRENT_K0: 7 (46.7%)
+FUTURE_K_GT_0: 8 (53.3%)
+terminal_near within pre_terminal: 11 (73.3%)
+```
+
+关键分组：
+
+```text
+F pre_terminal:
+  peak mean = 1.972 mm
+  CURRENT_K0 = 3/3
+  terminal_near = 3/3
+  time_to_terminal_mean = 0.085 s
+
+F main_excluding_terminal_margin:
+  peak mean = 1.366 mm
+  FUTURE_K_GT_0 = 3/3
+```
+
+判读：
+
+```text
+1. F/G 在旧 pre_terminal_full 里的 model peak 主要来自 terminal 前 0.03-0.13s 的 k=0 当前状态峰值。
+2. 这些 terminal-near peak 不应混入论文主效果窗口。
+3. 去掉 terminal 前 1.0s 后，F 的 model peak 也下降。
+4. 如果后续主窗口内 FUTURE_K_GT_0 peak 仍多，才考虑 slosh height soft constraint + slack。
+5. 如果 peak 主要是 CURRENT_K0，说明峰值来自过去激励累积，应继续向前查 ax/jerk 源头。
 ```
 
 ## 5. Cost Contribution Check
@@ -328,9 +425,10 @@ ell_exc:
 ```text
 1. /slosh/height 是模型内部预测量，只用于解释和诊断。
 2. RGB visual height 是外部真实液面指标。
-3. terminal 段不进入主效果统计，因为 terminal 有独立停车安全逻辑。
+3. terminal 前 1.0s 不进入主效果统计，因为 terminal 有独立停车安全逻辑。
 4. F 组结果支持“modal + excitation shaping”的组合有效。
 5. G 组说明更高 slosh cost 占比不必然带来更低真实液面。
+6. D 组支持 modal slosh cost 单独能降低整体晃动水平，但 RGB peak 不稳定。
 ```
 
 ## 7. 对比实验设计
@@ -393,9 +491,49 @@ QP 解释：
 ```text
 1. 每组至少 3 包。
 2. 所有组使用同一条固定 P2_s_curve 路径。
-3. 统计窗口统一为 TRACKING_PRE_TERMINAL。
+3. 论文主窗口统一为 paper_main_excl_terminal_1s。
 4. static bag 只用于视觉零点/噪声参考，不进入动态组均值。
 5. 若 RGB 和 /slosh/height 冲突，以 RGB 为准。
+6. terminal_approach_1s 单独统计，只用于 terminal 诊断。
+```
+
+## 7.1 数据保留与剔除规则
+
+后续录包不能采用“只保留正向结果、丢弃有效负面结果”的方式。可以做的是：
+
+```text
+1. 探索/调参包：
+   可用于调参数、修流程、定位问题；
+   不进入正式论文统计；
+   需要单独标记为 exploratory / tuning。
+
+2. 正式验证包：
+   一旦按预先写好的方案开始录制，就必须保留所有有效结果；
+   正向和负向都要进统计或作为补充材料解释。
+
+3. 无效包可以剔除，但必须按预先规则：
+   - 相机未录到 /camera/color/image_raw；
+   - camera_info 分辨率错误；
+   - 三标尺/HSV 明显失效；
+   - 定位丢失或起点明显偏离；
+   - 固定路径未正确发布；
+   - MPC 未进入 TRACKING；
+   - bag 缺少关键话题；
+   - safety/recovery/terminal 逻辑提前接管导致主窗口不存在。
+
+4. 剔除必须记录：
+   bag 名称、剔除原因、证据截图或诊断输出。
+```
+
+论文口径：
+
+```text
+可以报告“预注册有效性筛选后的正式包结果”；
+不能把有效的负面包悄悄删掉。
+
+如果某组结果不稳定，应诚实写成：
+  modal-only reduces p95/RMS but peak suppression is not robust;
+  modal + excitation shaping gives the most consistent reduction.
 ```
 
 ## 8. 当前主线建议
@@ -415,6 +553,11 @@ QP 解释：
 4. 若需要更明显对比，优先做：
    C vs E vs F 的重复录制；
    证明 excitation shaping 与 modal term 的互补性。
+
+5. 后续报告默认采用：
+   paper_main_excl_terminal_1s 作为论文主窗口；
+   terminal_approach_1s 作为 terminal 诊断窗口；
+   peak report 作为解释 /slosh/height peak 的自动调试证据。
 ```
 
 尚未解决的问题：
@@ -425,4 +568,3 @@ QP 解释：
 3. /slosh/height 与 RGB 并不总一致，模型保真度仍需继续作为单独问题分析。
 4. F 组降低晃动的代价是完成时间变长，需要在论文中诚实报告 trade-off。
 ```
-
