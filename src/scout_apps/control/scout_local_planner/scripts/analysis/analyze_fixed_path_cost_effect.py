@@ -45,6 +45,7 @@ COLORS = {
     "D": "#d62728",
     "E": "#2ca02c",
     "F": "#9467bd",
+    "G": "#ff7f0e",
     "Q0": "#1f77b4",
     "Q5": "#d62728",
 }
@@ -63,6 +64,8 @@ def parse_args() -> argparse.Namespace:
 
 
 def condition_from_name(name: str) -> str:
+    if "_G_" in name or "_G_slosh_axjerk_preview" in name:
+        return "G"
     if "_F_" in name or "_F_slosh_axjerk" in name:
         return "F"
     if "_E_" in name or "_E_axjerk" in name:
