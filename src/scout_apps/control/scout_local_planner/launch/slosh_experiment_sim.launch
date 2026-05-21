@@ -41,7 +41,7 @@
   <arg name="terminal_cmd_omega_rate_limit" default="1.0" doc="terminal recovery 角速度命令变化率上限 (rad/s^2)，降低接管瞬间 alpha"/>
   <arg name="terminal_slowdown_enable" default="true" doc="是否在终点捕获前提前平滑降低 v_des_cmd；作为 PathHandler 末端速度未验证干净前的保护层"/>
   <arg name="terminal_slowdown_distance" default="1.20" doc="终点前平滑减速起始距离 (m)"/>
-  <arg name="terminal_slowdown_v_max" default="0.18" doc="进入 terminal recovery 前的平滑减速目标上限 (m/s)"/>
+  <arg name="terminal_slowdown_v_max" default="0.18" doc="terminal slowdown 外层包络最高速度；capture 入口低速目标由 terminal_recovery.v_max 配置决定"/>
   <arg name="terminal_slowdown_Q_v" default="40.0" doc="终点制动速度上限生效时临时速度跟踪权重"/>
   <arg name="terminal_slowdown_terminal_factor_v" default="5.0" doc="终点制动速度上限生效时临时 terminal 速度权重放大"/>
   <arg name="terminal_capture_stop_enable" default="true" doc="mpc_planner 风格外层终点捕获；阈值内进入限速 CAPTURE_BRAKE，不再硬发 cmd_vel=0"/>

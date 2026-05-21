@@ -107,11 +107,16 @@ terminal_approach_1s:
 当前 terminal 处理：
 
 ```text
-1. terminal_slowdown_distance 内启用运动学停车包络：
-   v_env(d)=min(v_max, sqrt(2*a_brake*max(0,d-goal_tolerance)))
+1. terminal_slowdown_distance 内启用两段式速度包络：
+   capture 前把速度压到 v_capture；
+   capture 后再从 v_capture 平滑压到 goal_tolerance 处的 0。
+   包络和输出层限速使用有效减速度：
+   min(path_handler/max_tan_decel, v_des_decel_limit)。
 
 2. pre-MPC：
    v_des=min(raw_v_des, v_env)
+   进入 TERMINAL_MPC_STOP 但位置未到时，raw_v_des 不再直接为 0，
+   而是给一个低速 approach 目标 v_capture。
 
 3. post-MPC：
    cmd_v=min(MPC_cmd_v, v_env)
@@ -123,6 +128,24 @@ terminal_approach_1s:
 
 5. REACHED：
    必须 speed_low 和 goal_position_reached 同时成立。
+```
+
+20260520 terminal_approach_1s 专项报告：
+
+```text
+输出目录：
+  /data/a/slosh_bags/real/20260520_fixed_path_cost/red_visual_analysis_20260520/terminal_approach_1s
+
+结论：
+  15/15 包存在参考速度问题：
+    terminal 触发时 v_des_eff≈0.773m/s。
+
+  15/15 包存在限幅问题：
+    odom_ax_max≈1.07-1.37m/s^2；
+    odom_jerk_max≈16-18m/s^3。
+
+  F/G 的 terminal approach model peak 多为 CURRENT_K0；
+  因此 terminal peak 是历史激励累积，不应归因给 slosh cost 主窗口。
 ```
 
 阶段判断：

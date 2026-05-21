@@ -67,11 +67,12 @@ void updateNormalizedSloshWeights(MPCParams& params, double h_coeff, double omeg
     }
 }
 
-// 运动学停车速度包络: v_env(d) = min(v_max_terminal, sqrt(2 a_brake max(0, d - goal_tol)))。
+// 运动学终点速度包络。
 //
 // 性质:
 //   - d 不在 terminal phase (d >= terminal_slowdown_distance) 或不可用: 返回 +inf (不约束)
-//   - d 接近 goal_tol: 返回 ~0, 自然 enforce 停车
+//   - capture 前: 先把速度压到 terminal approach cap, 避免高速撞进 capture
+//   - capture 后: 低速靠近 goal_tol, 到 goal_tol 才自然 enforce 停车
 //   - 单调连续, 不需要 spatial smoothing (temporal rate limit 由 v_des_rate_limit_ 负责)
 //
 // 同一函数同时用于:
@@ -82,13 +83,40 @@ double computeTerminalVelocityEnvelope(
     double terminal_slowdown_distance,
     double v_max_terminal,
     double goal_tol,
-    double a_brake) {
-    if (!std::isfinite(goal_dist) || goal_dist >= terminal_slowdown_distance) {
+    double a_brake,
+    bool capture_stop_enable,
+    double capture_stop_distance,
+    double terminal_approach_v_cap,
+    bool goal_stop_pending) {
+    if (!std::isfinite(goal_dist)) {
         return std::numeric_limits<double>::infinity();
     }
+    const double a = std::max(1e-6, a_brake);
+    const double v_cap = std::max(0.0, v_max_terminal);
+    const double approach_cap = terminal_approach_v_cap > 1e-6
+        ? terminal_approach_v_cap
+        : v_cap;
+
+    if (goal_stop_pending) {
+        const double remain = std::max(0.0, goal_dist - goal_tol);
+        const double v_kinematic = std::sqrt(2.0 * a * remain);
+        return std::min(approach_cap, v_kinematic);
+    }
+
+    if (goal_dist >= terminal_slowdown_distance) {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    if (capture_stop_enable && capture_stop_distance > goal_tol + 1e-3) {
+        const double remain_to_capture = std::max(0.0, goal_dist - capture_stop_distance);
+        const double v_kinematic =
+            std::sqrt(approach_cap * approach_cap + 2.0 * a * remain_to_capture);
+        return std::min(v_cap, v_kinematic);
+    }
+
     const double remain = std::max(0.0, goal_dist - goal_tol);
-    const double v_kinematic = std::sqrt(2.0 * std::max(1e-6, a_brake) * remain);
-    return std::min(std::max(0.0, v_max_terminal), v_kinematic);
+    const double v_kinematic = std::sqrt(2.0 * a * remain);
+    return std::min(v_cap, v_kinematic);
 }
 
 double limitRate(double target, double current, double rate_limit, double dt) {
@@ -983,9 +1011,9 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     }
                 }
                 // Terminal velocity envelope: pre-MPC reference cap.
-                // 单一运动学包络函数 (d ∈ [goal_tol, terminal_slowdown_distance) 时 v_env 有限):
-                //   d ≥ terminal_slowdown_distance_ → +inf  (无约束, 不在 terminal phase)
-                //   d → goal_tolerance              → 0     (自然停)
+                // 单一运动学包络函数:
+                //   capture 前: 在 terminal_capture_stop_distance_ 附近压到 terminal approach cap
+                //   capture 后: 低速靠近 goal_tolerance, 到 goal_tolerance 才压到 0
                 // 注意 envelope_active 与 in_terminal_phase 不同:
                 //   envelope_active: d 在 envelope 作用范围内 (kinematic 约束有限)
                 //   in_terminal_phase: terminal-phase protections 应生效的范围。
@@ -994,16 +1022,26 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 //     post-MPC 的 dx ≤ 0 强制 0 兜底必须仍然生效。
                 // v_des temporal 平滑由 v_des_rate_limit_ 负责, envelope 本身不再做 spatial smoothing。
                 const double goal_dist_now = path_handler_.getGoalDistance();
-                const double a_brake =
+                double a_brake =
                     path_params_.max_tan_decel > 1e-6 ? path_params_.max_tan_decel
                                                        : vehicle_params_.a_max;
+                if (v_des_rate_limit_enable_ && v_des_decel_limit_ > 1e-6) {
+                    a_brake = std::min(a_brake, v_des_decel_limit_);
+                }
+                const double terminal_approach_v_cap =
+                    terminal_v_max_ > 1e-6 ? terminal_v_max_
+                                           : std::max(0.0, terminal_slowdown_v_max_);
                 const double v_terminal_envelope = terminal_slowdown_enable_
                     ? computeTerminalVelocityEnvelope(
                         goal_dist_now,
                         terminal_slowdown_distance_,
                         terminal_slowdown_v_max_,
                         path_params_.goal_tolerance,
-                        a_brake)
+                        a_brake,
+                        terminal_capture_stop_enable_,
+                        terminal_capture_stop_distance_,
+                        terminal_approach_v_cap,
+                        goal_stop_pending_)
                     : std::numeric_limits<double>::infinity();
                 const bool envelope_active = std::isfinite(v_terminal_envelope);
                 const bool in_terminal_phase = goal_stop_pending_ || envelope_active;
@@ -1019,11 +1057,21 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                                  terminal_slowdown_terminal_factor_v_);
                 }
 
-                const double v_des_cmd_raw = (goal_stop_pending_ || settling_active) ? 0.0 :
+                const bool goal_position_reached_now =
+                    has_goal_info && goal_info.valid && goal_info.position_reached;
+                const bool goal_behind_now =
+                    has_goal_info &&
+                    goal_info.valid &&
+                    std::isfinite(goal_info.dx) &&
+                    goal_info.dx <= 0.0;
+                const double v_des_cmd_raw =
+                    settling_active ? 0.0 :
+                    (goal_stop_pending_ && (goal_position_reached_now || goal_behind_now)) ? 0.0 :
+                    goal_stop_pending_ ? terminal_approach_v_cap :
                     (risk_scheduler_enable_ && slosh_enabled_) ?
                     risk_output_.v_ref_eff_k : v_nominal;
-                // envelope 在 goal_stop_pending_ + dist 大时退回 +inf, 此时不会进一步约束 v_des;
-                // v_des 已经被 (goal_stop_pending_ || settling_active) → 0 这一支强制为 0。
+                // goal_stop_pending_ 不再直接把 v_des_raw 砍成 0。
+                // capture 内若位置还没到，MPC 仍低速 approach；真正到 goal_tol 或越过 goal 才停。
                 double v_des_cmd = std::min(v_des_cmd_raw, v_terminal_envelope);
 
                 mpc_solver_.setMPCParams(runtime_mpc_params);
@@ -1349,10 +1397,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         if (!goal_behind) {
                             const double dt_cmd =
                                 control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
-                            const double terminal_decel =
-                                path_params_.max_tan_decel > 1e-6
-                                    ? path_params_.max_tan_decel
-                                    : std::max(1e-6, vehicle_params_.a_max);
+                            const double terminal_decel = std::max(1e-6, a_brake);
                             cmd_v_out = limitRate(
                                 cmd_v_out,
                                 std::max(0.0, filtered_v_),
