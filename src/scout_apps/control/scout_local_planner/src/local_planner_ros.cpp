@@ -128,6 +128,23 @@ double limitRate(double target, double current, double rate_limit, double dt) {
     return std::max(current - max_delta, std::min(current + max_delta, target));
 }
 
+double limitRateAsymmetric(
+    double target,
+    double current,
+    double accel_limit,
+    double decel_limit,
+    double dt) {
+    if (!std::isfinite(target) || !std::isfinite(current) || dt <= 1e-6) {
+        return target;
+    }
+    const double up = std::max(0.0, accel_limit) * dt;
+    const double down = std::max(0.0, decel_limit) * dt;
+    if (target >= current) {
+        return current + std::min(target - current, up);
+    }
+    return current - std::min(current - target, down);
+}
+
 }  // namespace
 
 LocalPlannerROS::LocalPlannerROS() = default;
@@ -306,6 +323,12 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
         nh_.advertise<std_msgs::Float32>("terminal/cmd_v_pre_clamp", 1);
     terminal_cmd_v_post_clamp_pub_ =
         nh_.advertise<std_msgs::Float32>("terminal/cmd_v_post_clamp", 1);
+    profile_cap_active_pub_ = nh_.advertise<std_msgs::Int32>("profile_cap/active", 1);
+    profile_cap_v_profile_pub_ = nh_.advertise<std_msgs::Float32>("profile_cap/v_profile", 1);
+    profile_cap_cmd_v_pre_pub_ = nh_.advertise<std_msgs::Float32>("profile_cap/cmd_v_pre_cap", 1);
+    profile_cap_cmd_v_post_pub_ = nh_.advertise<std_msgs::Float32>("profile_cap/cmd_v_post_cap", 1);
+    profile_cap_implied_ax_pub_ = nh_.advertise<std_msgs::Float32>("profile_cap/implied_ax", 1);
+    profile_cap_implied_jerk_pub_ = nh_.advertise<std_msgs::Float32>("profile_cap/implied_jerk", 1);
     ref_v_ref_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_ref", 1);
     ref_v_ref_horizon_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("reference/v_ref_horizon", 1);
     ref_s_horizon_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("reference/s_horizon", 1);
@@ -437,6 +460,8 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("path_handler/min_ref_speed", path_params_.min_ref_speed, 0.0);
     pnh.param("path_handler/time_parameterize", path_params_.time_parameterize, false);
     pnh.param("path_handler/speed_profile_ds", path_params_.speed_profile_ds, 0.05);
+    pnh.param("path_handler/external_speed_profile_csv",
+              path_params_.external_speed_profile_csv, std::string(""));
     pnh.param("path_handler/max_tan_accel", path_params_.max_tan_accel, 0.0);
     pnh.param("path_handler/max_tan_decel", path_params_.max_tan_decel, 0.0);
     pnh.param("path_handler/goal_speed", path_params_.goal_speed, 0.0);
@@ -498,6 +523,14 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("v_des_rate_limit/enable", v_des_rate_limit_enable_, true);
     pnh.param("v_des_rate_limit/accel_limit", v_des_accel_limit_, 0.6);
     pnh.param("v_des_rate_limit/decel_limit", v_des_decel_limit_, 0.8);
+    pnh.param("external_profile_execution_cap/enable",
+              external_profile_execution_cap_enable_, false);
+    pnh.param("external_profile_execution_cap/accel_limit",
+              external_profile_execution_accel_limit_, 0.0);
+    pnh.param("external_profile_execution_cap/decel_limit",
+              external_profile_execution_decel_limit_, 0.0);
+    pnh.param("external_profile_execution_cap/jerk_limit",
+              external_profile_execution_jerk_limit_, 0.0);
 
     // 原地对齐模式
     pnh.param("heading_align/enable", heading_align_enable_, false);
@@ -1404,7 +1437,81 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                                 terminal_decel,
                                 dt_cmd);
                         }
-                        // publishCmdVel 内部还有 EMA。terminal 输出层已经做过速度包络和
+                    }
+                    last_profile_cap_active_ = 0;
+                    last_profile_cap_v_profile_ = std::numeric_limits<double>::quiet_NaN();
+                    last_profile_cap_cmd_v_pre_ = cmd_v_out;
+                    last_profile_cap_cmd_v_post_ = cmd_v_out;
+                    last_profile_cap_implied_ax_ = std::numeric_limits<double>::quiet_NaN();
+                    last_profile_cap_implied_jerk_ = std::numeric_limits<double>::quiet_NaN();
+                    bool profile_cap_applied = false;
+                    if (external_profile_execution_cap_enable_ &&
+                        path_handler_.hasExternalSpeedProfile()) {
+                        const double s_now = path_handler_.getGlobalProgress();
+                        double profile_v = path_handler_.getSpeedAtS(s_now);
+                        if (std::isfinite(s_now) && profile_v <= 1e-6) {
+                            profile_v = std::max(
+                                profile_v,
+                                path_handler_.getSpeedAtS(
+                                    s_now + std::max(0.02, path_params_.speed_profile_ds)));
+                        }
+                        if (std::isfinite(s_now) && std::isfinite(profile_v)) {
+                            const double dt_cmd =
+                                control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
+                            const double prev_cmd_v = std::max(0.0, filtered_v_);
+                            const double pre_cap = cmd_v_out;
+                            const double target_v =
+                                std::max(0.0, std::min(cmd_v_out, profile_v));
+                            const double accel_limit =
+                                external_profile_execution_accel_limit_ > 1e-6
+                                    ? external_profile_execution_accel_limit_
+                                    : (path_params_.max_tan_accel > 1e-6
+                                           ? path_params_.max_tan_accel
+                                           : std::max(1e-6, vehicle_params_.a_max));
+                            const double decel_limit =
+                                external_profile_execution_decel_limit_ > 1e-6
+                                    ? external_profile_execution_decel_limit_
+                                    : (path_params_.max_tan_decel > 1e-6
+                                           ? path_params_.max_tan_decel
+                                           : accel_limit);
+                            cmd_v_out = limitRateAsymmetric(
+                                target_v, prev_cmd_v, accel_limit, decel_limit, dt_cmd);
+
+                            double implied_ax = (cmd_v_out - prev_cmd_v) / std::max(1e-6, dt_cmd);
+                            double implied_jerk = std::numeric_limits<double>::quiet_NaN();
+                            if (external_profile_execution_jerk_limit_ > 1e-6 &&
+                                profile_cap_has_last_ax_) {
+                                const double ax_limited = limitRate(
+                                    implied_ax,
+                                    profile_cap_last_ax_,
+                                    external_profile_execution_jerk_limit_,
+                                    dt_cmd);
+                                cmd_v_out = std::max(0.0, prev_cmd_v + ax_limited * dt_cmd);
+                                cmd_v_out = std::min(cmd_v_out, profile_v);
+                                implied_ax = (cmd_v_out - prev_cmd_v) / std::max(1e-6, dt_cmd);
+                            }
+                            if (profile_cap_has_last_ax_) {
+                                implied_jerk =
+                                    (implied_ax - profile_cap_last_ax_) / std::max(1e-6, dt_cmd);
+                            }
+                            profile_cap_last_ax_ = implied_ax;
+                            profile_cap_has_last_ax_ = true;
+
+                            last_profile_cap_active_ =
+                                (std::abs(pre_cap - cmd_v_out) > 1e-4 ||
+                                 std::abs(pre_cap - target_v) > 1e-4) ? 1 : 0;
+                            last_profile_cap_v_profile_ = profile_v;
+                            last_profile_cap_cmd_v_pre_ = pre_cap;
+                            last_profile_cap_cmd_v_post_ = cmd_v_out;
+                            last_profile_cap_implied_ax_ = implied_ax;
+                            last_profile_cap_implied_jerk_ = implied_jerk;
+                            profile_cap_applied = true;
+                        }
+                    } else {
+                        profile_cap_has_last_ax_ = false;
+                    }
+                    if (in_terminal_phase || profile_cap_applied) {
+                        // publishCmdVel 内部还有 EMA。terminal/profile 输出层已经做过速度包络和
                         // 变化率限制，这里同步滤波状态，避免 EMA 再把上一帧高速带回输出。
                         filtered_v_ = cmd_v_out;
                     }
@@ -2442,6 +2549,26 @@ void LocalPlannerROS::publishTerminalDebug() {
         terminal_cmd_v_post_clamp_pub_.publish(msg);
     }
 
+    if (profile_cap_active_pub_.getNumSubscribers() > 0) {
+        std_msgs::Int32 msg;
+        msg.data = last_profile_cap_active_;
+        profile_cap_active_pub_.publish(msg);
+    }
+
+    auto publish_profile_float = [](ros::Publisher& pub, double value) {
+        if (pub.getNumSubscribers() <= 0) {
+            return;
+        }
+        std_msgs::Float32 msg;
+        msg.data = static_cast<float>(value);
+        pub.publish(msg);
+    };
+    publish_profile_float(profile_cap_v_profile_pub_, last_profile_cap_v_profile_);
+    publish_profile_float(profile_cap_cmd_v_pre_pub_, last_profile_cap_cmd_v_pre_);
+    publish_profile_float(profile_cap_cmd_v_post_pub_, last_profile_cap_cmd_v_post_);
+    publish_profile_float(profile_cap_implied_ax_pub_, last_profile_cap_implied_ax_);
+    publish_profile_float(profile_cap_implied_jerk_pub_, last_profile_cap_implied_jerk_);
+
     if (terminal_goal_info_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32MultiArray msg;
         msg.data.resize(8, 0.0f);
@@ -2493,6 +2620,9 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {
     last_v_des_raw_ = 0.0;
     last_v_des_target_ = 0.0;
     last_v_des_rate_limited_active_ = 0;
+    profile_cap_has_last_ax_ = false;
+    profile_cap_last_ax_ = 0.0;
+    last_profile_cap_active_ = 0;
     last_speed_governor_active_ = 0;
     slosh_governor_latched_ = false;
     slosh_governor_hold_steps_ = 0;

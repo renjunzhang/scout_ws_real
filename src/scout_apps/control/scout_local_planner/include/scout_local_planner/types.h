@@ -225,6 +225,7 @@ struct PathHandlerParams {
     double min_ref_speed = 0.0;        // 参考速度下限 (m/s)
     bool time_parameterize = false;   // 是否启用时间化速度规划 v(s)
     double speed_profile_ds = 0.05;   // 速度曲线采样间隔 (m)
+    std::string external_speed_profile_csv = ""; // 外部 v_ref(s) CSV；空字符串保持内部速度剖面
     double max_tan_accel = 0.0;       // 最大切向加速度 (m/s^2)，<=0 表示不限制
     double max_tan_decel = 0.0;       // 最大切向减速度 (m/s^2)，<=0 表示不限制
     double goal_speed = 0.0;          // 末端期望速度 (m/s)

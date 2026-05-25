@@ -79,6 +79,8 @@ catkin_install_python(PROGRAMS
   scripts/analysis/analyze_tracking_infeasible.py
   scripts/analysis/diagnose_p3_failure_modes.py
   scripts/analysis/offline_pmg_replay.py
+  scripts/analysis/retime_ruckig_style.py
+  scripts/analysis/retime_toppra_style.py
   scripts/analysis/sim_fixed_goal_tool.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

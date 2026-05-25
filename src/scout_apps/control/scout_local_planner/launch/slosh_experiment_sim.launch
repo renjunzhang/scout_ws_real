@@ -64,6 +64,11 @@
   <arg name="energy_profile_ax_max" default="1.2" doc="PROFILE_ENERGY_GEO 切向加速度预算"/>
   <arg name="energy_profile_decel_max" default="1.2" doc="PROFILE_ENERGY_GEO 切向减速度预算"/>
   <arg name="energy_profile_min_v" default="0.35" doc="PROFILE_ENERGY_GEO 最低参考速度"/>
+  <arg name="external_speed_profile_csv" default="" doc="TOPPRA/Ruckig-style 外部 v_ref(s) CSV；空字符串保持内部速度剖面"/>
+  <arg name="external_profile_execution_cap_enable" default="false" doc="是否在发布 cmd_vel 前执行外部速度剖面 cap；仅用于 TOPPRA/Ruckig baseline"/>
+  <arg name="external_profile_execution_accel_limit" default="0.0" doc="外部 profile 执行层加速度上限；0 表示使用 path/vehicle 默认"/>
+  <arg name="external_profile_execution_decel_limit" default="0.0" doc="外部 profile 执行层减速度上限；0 表示使用 path/vehicle 默认"/>
+  <arg name="external_profile_execution_jerk_limit" default="0.0" doc="外部 profile 执行层 jerk 上限；0 表示不限制 jerk"/>
   <arg name="slosh_use_imu_lateral_accel" default="false" doc="是否使用 IMU 横向加速度替代 v*omega"/>
   <arg name="slosh_use_imu_yaw_rate" default="true" doc="当前默认安全配置：使用 IMU 角速度 z 替代 odom omega"/>
   <arg name="slosh_use_imu_alpha_z" default="false" doc="是否使用 IMU 角速度差分替代 alpha_z"/>
@@ -150,6 +155,11 @@
     <param name="path_handler/energy_profile_ax_max" value="$(arg energy_profile_ax_max)"/>
     <param name="path_handler/energy_profile_decel_max" value="$(arg energy_profile_decel_max)"/>
     <param name="path_handler/energy_profile_min_v" value="$(arg energy_profile_min_v)"/>
+    <param name="path_handler/external_speed_profile_csv" value="$(arg external_speed_profile_csv)"/>
+    <param name="external_profile_execution_cap/enable" value="$(arg external_profile_execution_cap_enable)"/>
+    <param name="external_profile_execution_cap/accel_limit" value="$(arg external_profile_execution_accel_limit)"/>
+    <param name="external_profile_execution_cap/decel_limit" value="$(arg external_profile_execution_decel_limit)"/>
+    <param name="external_profile_execution_cap/jerk_limit" value="$(arg external_profile_execution_jerk_limit)"/>
     <param name="slosh_estimator/use_imu_lateral_accel" value="$(arg slosh_use_imu_lateral_accel)"/>
     <param name="slosh_estimator/use_imu_yaw_rate" value="$(arg slosh_use_imu_yaw_rate)"/>
     <param name="slosh_estimator/use_imu_alpha_z" value="$(arg slosh_use_imu_alpha_z)"/>

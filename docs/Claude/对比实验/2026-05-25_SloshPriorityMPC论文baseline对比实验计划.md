@@ -225,65 +225,11 @@ TEB/DWA: appendix 或 related work
 
 | 论文 baseline | 实验实现建议 | 是否需要新代码 |
 |---|---|---|
-| TOPPRA-style | 固定 P2 路径，生成满足 `v/a` 约束的 `v_ref(s)` CSV，通过 `path_handler/external_speed_profile_csv` 注入 | 已有第一版离线脚本 |
-| Ruckig-style | 对 P2 路径速度序列做 jerk-limited retiming，输出平滑 `v_ref(s)` CSV，通过同一接口注入 | 已有脚本；运行环境需安装 Python `ruckig` |
+| TOPPRA-style | 固定 P2 路径，生成满足 `v/a` 约束的 `v_ref(s)` | 可能需要离线路径速度剖面脚本 |
+| Ruckig-style | 对 P2 路径速度序列做 jerk-limited retiming，输出平滑 `v_ref(s)` | 可能需要离线速度剖面脚本或调用 Ruckig |
 | Smooth MPC | 使用 E 组：`Q_slosh=0`，提高 `R_a/R_da` | 已有 |
 | SloshPriorityMPC | 使用 F 组：`Q_slosh>0` + 提高 `R_a/R_da` | 已有 |
 | TEB | 独立 ROS local planner 跑同起终点 | 需要额外启动/配置，且路径不完全一致 |
-
-### 5.1 外部速度剖面接口
-
-TOPPRA/Ruckig baseline 只替换固定路径的 `v_ref(s)`，不改路径几何、不改 MPC cost、不改 terminal。
-
-CSV 接口：
-
-```text
-s_normalized,s_m,t_s,x,y,yaw,v_ref_m_s,a_ref_m_s2,jerk_ref_m_s3,method
-0.000,0.000,0.000,...,0.000,0.000,0.000,TOPPRA_STYLE
-...
-1.000,...,...,...,0.000,...,...,TOPPRA_STYLE
-```
-
-`PathHandler` 只消费 `s_normalized` 和 `v_ref_m_s` 两列，其余列用于检查速度、加速度和 jerk。
-正式 TOPPRA/Ruckig baseline 需要同时打开 `external_profile_execution_cap_enable`：
-CSV 先约束 MPC 参考速度，execution cap 再约束最终 `cmd_v`，避免“参考限速但实车超 profile”。
-该 cap 不使用液体状态、不改变 MPC cost，只用于保证外部 timing baseline 的执行语义。
-
-TOPPRA-style 第一版生成命令模板：
-
-```bash
-python3 src/scout_apps/control/scout_local_planner/scripts/analysis/retime_toppra_style.py \
-  --path-file /path/to/P2_s_curve_fixed_path.json \
-  --out-csv /path/to/P2_s_curve_toppra_style.csv \
-  --plot /path/to/P2_s_curve_toppra_style.png \
-  --v-max 0.80 \
-  --a-max 0.60 \
-  --decel-max 0.80 \
-  --ds 0.02
-```
-
-MPC 启动时增加：
-
-```bash
-external_speed_profile_csv:=/path/to/P2_s_curve_toppra_style.csv
-```
-
-空字符串时保持内部 `PathHandler` 速度剖面，C/D/E/F 不受影响。
-
-Ruckig-style 命令模板：
-
-```bash
-python3 src/scout_apps/control/scout_local_planner/scripts/analysis/retime_ruckig_style.py \
-  --path-file /path/to/P2_s_curve_fixed_path.json \
-  --out-csv /path/to/P2_s_curve_ruckig_style.csv \
-  --plot /path/to/P2_s_curve_ruckig_style.png \
-  --v-max 0.80 \
-  --a-max 0.60 \
-  --j-max 1.50 \
-  --delta-time 0.02
-```
-
-该脚本使用 Python `ruckig` 包；如果实验环境没有安装，会直接报错，不用近似算法冒充 Ruckig。
 
 ## 6. 推荐论文表格结构
 

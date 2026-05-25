@@ -80,6 +80,8 @@ scripts/analysis/              # 低频离线分析、历史诊断和论文指�
 | `scripts/analysis/compute_modal_params.py` | 根据容器/液位/液体参数重算模态派生量 |
 | `scripts/analysis/ferrari_oracle.py` | Ferrari assigned-path time-optimal oracle 离线工具 |
 | `scripts/analysis/compute_ferrari_indices.py` | Ferrari 风格模型/视觉/优化指标 |
+| `scripts/analysis/retime_toppra_style.py` | 固定路径 TOPPRA-style 限加速度速度重定时，输出 `v_ref(s)` CSV |
+| `scripts/analysis/retime_ruckig_style.py` | 固定路径 Ruckig-style 限 jerk 速度重定时，输出 `v_ref(s)` CSV |
 | `scripts/analysis/extract_visual_height.py` | RealSense 侧视视觉液面高度骨架 |
 | `scripts/analysis/check_time_sync.py` | `/slosh/height` 与图像时间戳同步检查 |
 | `scripts/analysis/summarize_oscrs_step2.py` | OSCRS Step 2 PASS / SATURATED / FAIL 汇总 |
@@ -368,6 +370,13 @@ rosrun scout_local_planner launch_fixed_path_slosh_stack.sh 5
 GLOBAL_PATH_TOPIC=/scout/global_path_fixed rosrun scout_local_planner launch_fixed_path_slosh_stack.sh 5
 ```
 
+如果需要跑 TOPPRA/Ruckig-style 外部速度剖面：
+```bash
+EXTERNAL_SPEED_PROFILE_CSV=/path/to/P2_s_curve_toppra_style.csv \
+GLOBAL_PATH_TOPIC=/scout/global_path_fixed \
+rosrun scout_local_planner launch_fixed_path_slosh_stack.sh 0
+```
+
 ### `record_slosh_experiment.sh`
 
 `rosbag` 录包脚本，用于记录 anti-slosh MPC 实验相关话题。
@@ -493,6 +502,7 @@ PATH_MODE=replay
 PATH_MODE=template_goal
   用 template_fixed_path_generator.py 从当前位姿到 goal 生成模板路径。
   不是 MBF 全局路径。
+  适合“每次只给终点、以当前车位姿为起点”生成 P2_s_curve。
 ```
 
 仿真启动后，跑固定 goal / MBF 全局路径 trial：
@@ -557,6 +567,52 @@ rosrun scout_local_planner run_sim_fixed_path_bag.sh
 - `PATH_PUBLISH_ONCE_KEEPALIVE`: 默认 `true`，只发布一次 latched 路径并保持发布者存活，避免重复触发 `PathHandler` 新路径逻辑
 - `FIXED_PATH_DIR`: 默认 `/data/a/fixed_paths/sim`
 - `BAG_DIR`: 默认 `/data/a/slosh_bags/sim/YYYYMMDD`
+
+外部 baseline 速度剖面：
+- `RETIME_METHOD`: `none / toppra / ruckig`，默认 `none`
+- `EXTERNAL_SPEED_PROFILE_CSV`: 直接指定已有 `v_ref(s)` CSV；非空时优先使用
+- `RETIME_PROFILE_DIR`: 自动生成 CSV/PNG 的目录，默认 `/data/a/fixed_paths/sim/baseline_profiles`
+- `RETIME_V_MAX / RETIME_A_MAX / RETIME_DECEL_MAX`: TOPPRA/Ruckig 共用速度、加速度、减速度约束
+- `RETIME_J_MAX / RETIME_DELTA_TIME`: Ruckig-style jerk 和离散步长
+- `RETIME_DS`: TOPPRA-style 输出路径间隔
+
+从当前位姿到给定终点自动生成 P2_s_curve，并自动生成 TOPPRA-style `v_ref(s)`：
+
+```bash
+source /home/a/scout_ws/devel/setup.bash
+
+PATH_MODE=template_goal \
+PATH_ID=P2_s_curve \
+CONDITION=CUSTOM \
+RUN_ID=toppra_smoke01 \
+RETIME_METHOD=toppra \
+RETIME_V_MAX=0.80 \
+RETIME_A_MAX=0.60 \
+RETIME_DECEL_MAX=0.80 \
+TEMPLATE_GOAL_X=3.5 \
+TEMPLATE_GOAL_Y=0.0 \
+TEMPLATE_GOAL_QZ=0.0 \
+TEMPLATE_GOAL_QW=1.0 \
+RECORD_DURATION=0 \
+rosrun scout_local_planner run_sim_fixed_path_bag.sh
+```
+
+该流程是：
+
+```text
+当前车位姿 + TEMPLATE_GOAL
+  -> template_fixed_path_generator.py 生成本次 P2_s_curve JSON
+  -> retime_toppra_style.py / retime_ruckig_style.py 生成速度剖面 CSV
+  -> slosh_experiment_sim.launch 通过 external_speed_profile_csv 读取 CSV
+```
+
+`PATH_MODE=template_goal` 默认把本次生成的 JSON 保存为
+`/data/a/fixed_paths/sim/<bag_name>.json`，避免误读旧的 `P2_s_curve.json`。
+bag 会同步记录 `/scout/global_path_fixed`、`/reference/v_ref_horizon`、
+`/reference/s_horizon`、`/mpc/cost_breakdown` 和 terminal clamp 诊断话题。
+
+注意：正式对比实验中，同一个 block 内的 TOPPRA/Ruckig/E/F 应 replay 同一条已生成的 JSON；
+不要每个方法各自重新生成路径，否则路径几何不一致。
 
 注意：
 - 如果目的是验证“真实在线全局规划 + post-processor”，用 `PATH_MODE=global_goal` 或 `SCENARIO=<name>`。

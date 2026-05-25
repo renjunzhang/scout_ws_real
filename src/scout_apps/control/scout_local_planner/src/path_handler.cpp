@@ -11,8 +11,11 @@
 #include <tf2/LinearMath/Transform.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <fstream>
 #include <limits>
+#include <sstream>
 
 namespace scout_local_planner {
 
@@ -22,6 +25,29 @@ double normalizeAngle(double angle) {
     while (angle > M_PI) angle -= 2.0 * M_PI;
     while (angle < -M_PI) angle += 2.0 * M_PI;
     return angle;
+}
+
+std::string trimCopy(const std::string& text) {
+    const auto begin = std::find_if_not(text.begin(), text.end(), [](unsigned char c) {
+        return std::isspace(c);
+    });
+    const auto end = std::find_if_not(text.rbegin(), text.rend(), [](unsigned char c) {
+        return std::isspace(c);
+    }).base();
+    if (begin >= end) {
+        return "";
+    }
+    return std::string(begin, end);
+}
+
+std::vector<std::string> splitCsvLine(const std::string& line) {
+    std::vector<std::string> out;
+    std::stringstream ss(line);
+    std::string item;
+    while (std::getline(ss, item, ',')) {
+        out.push_back(trimCopy(item));
+    }
+    return out;
 }
 
 bool hasUsableOrientation(const geometry_msgs::Quaternion& q_msg) {
@@ -381,6 +407,7 @@ void PathHandler::setParams(const PathHandlerParams& params) {
     std::lock_guard<std::mutex> lock(mutex_);
     params_ = params;
     base_frame_ = params.base_frame;
+    loadExternalSpeedProfile(params_.external_speed_profile_csv);
 }
 
 void PathHandler::setTFBuffer(std::shared_ptr<tf2_ros::Buffer> tf_buffer) {
@@ -777,7 +804,16 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
             const double v_exec_cap = std::max(0.0, v_exec);
             const double v_plan_cap = std::max(0.0, v_plan);
             const double speed_s = energy_profile ? s_geom_global : s_progress;
-            double v_ref = speed_profile_valid_ ? getSpeedAtS(speed_s) : v_plan_cap;
+            double profile_v_ref = speed_profile_valid_ ? getSpeedAtS(speed_s) : v_plan_cap;
+            if (external_speed_profile_valid_ && profile_v_ref <= 1e-6 &&
+                speed_s < total_len_global - 1e-3) {
+                const double launch_lookahead_s =
+                    std::max(0.02, params_.speed_profile_ds);
+                profile_v_ref = std::max(
+                    profile_v_ref,
+                    getSpeedAtS(std::min(total_len_global, speed_s + launch_lookahead_s)));
+            }
+            double v_ref = profile_v_ref;
             double v_curve_cap = v_exec_cap;
             const double lat_accel_limit =
                 (energy_profile && params_.energy_profile_lat_accel > 0.0)
@@ -812,6 +848,12 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
                 v_ref = std::max(v_ref, params_.goal_capture_min_speed);
             }
 
+            // 外部 timing baseline 的 CSV 是实验自变量，必须作为硬上界。
+            // 终点捕获等保护逻辑不能把 v_ref 抬高到外部 profile 之上。
+            if (external_speed_profile_valid_) {
+                v_ref = std::min(v_ref, profile_v_ref);
+            }
+
             v_ref = std::min(v_ref, v_curve_cap);
             v_ref = std::min(v_ref, v_plan_cap);
 
@@ -823,6 +865,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
             // 使用当前 s 采样点
             ref.v_ref = v_ref;
             ref.v_path = v_ref;
+            ref.s = speed_s;
 
             // 推进到下一步（仅推进 progress，避免 lookahead 提前衰减速度）
             s_progress = std::min(s_progress + v_ref * dt, total_len_global);
@@ -1387,6 +1430,23 @@ void PathHandler::updateSpeedProfile(double v_des) {
         return;
     }
 
+    if (external_speed_profile_valid_) {
+        speed_profile_s_.reserve(external_speed_profile_s_norm_.size());
+        speed_profile_v_.reserve(external_speed_profile_v_.size());
+        for (size_t i = 0; i < external_speed_profile_s_norm_.size(); ++i) {
+            speed_profile_s_.push_back(external_speed_profile_s_norm_[i] * total_len);
+            speed_profile_v_.push_back(external_speed_profile_v_[i]);
+        }
+        speed_profile_valid_ = !speed_profile_s_.empty() &&
+                               speed_profile_s_.size() == speed_profile_v_.size();
+        if (speed_profile_valid_) {
+            ROS_INFO("[SpeedProfile] mode=EXTERNAL_CSV n=%zu total_len=%.3f file=%s",
+                     speed_profile_v_.size(), total_len,
+                     params_.external_speed_profile_csv.c_str());
+        }
+        return;
+    }
+
     const double ds = std::max(1e-3, params_.speed_profile_ds);
     const int n = static_cast<int>(std::ceil(total_len / ds)) + 1;
     speed_profile_s_.reserve(n);
@@ -1624,6 +1684,124 @@ void PathHandler::updateSpeedProfile(double v_des) {
                  dom_nominal, dom_lat, dom_omega, dom_alpha,
                  accel_limited, decel_limited);
     }
+}
+
+bool PathHandler::loadExternalSpeedProfile(const std::string& csv_path) {
+    external_speed_profile_s_norm_.clear();
+    external_speed_profile_v_.clear();
+    external_speed_profile_valid_ = false;
+
+    if (csv_path.empty()) {
+        return false;
+    }
+
+    std::ifstream fin(csv_path);
+    if (!fin.is_open()) {
+        ROS_ERROR("[PathHandler] Failed to open external speed profile CSV: %s",
+                  csv_path.c_str());
+        return false;
+    }
+
+    std::string line;
+    std::vector<std::string> header;
+    while (std::getline(fin, line)) {
+        line = trimCopy(line);
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        header = splitCsvLine(line);
+        break;
+    }
+    if (header.empty()) {
+        ROS_ERROR("[PathHandler] External speed profile CSV has no header: %s",
+                  csv_path.c_str());
+        return false;
+    }
+
+    int s_col = -1;
+    int v_col = -1;
+    for (size_t i = 0; i < header.size(); ++i) {
+        if (header[i] == "s_normalized") {
+            s_col = static_cast<int>(i);
+        } else if (header[i] == "v_ref_m_s") {
+            v_col = static_cast<int>(i);
+        }
+    }
+    if (s_col < 0 || v_col < 0) {
+        ROS_ERROR("[PathHandler] External speed CSV must contain s_normalized and v_ref_m_s columns: %s",
+                  csv_path.c_str());
+        return false;
+    }
+
+    std::vector<double> s_values;
+    std::vector<double> v_values;
+    int line_no = 1;
+    while (std::getline(fin, line)) {
+        ++line_no;
+        line = trimCopy(line);
+        if (line.empty() || line[0] == '#') {
+            continue;
+        }
+        const std::vector<std::string> cols = splitCsvLine(line);
+        const int needed = std::max(s_col, v_col);
+        if (static_cast<int>(cols.size()) <= needed) {
+            ROS_WARN("[PathHandler] Skip malformed external speed CSV row %d in %s",
+                     line_no, csv_path.c_str());
+            continue;
+        }
+        try {
+            const double s_norm = std::stod(cols[static_cast<size_t>(s_col)]);
+            const double v_ref = std::stod(cols[static_cast<size_t>(v_col)]);
+            if (!std::isfinite(s_norm) || !std::isfinite(v_ref) ||
+                s_norm < -1e-6 || s_norm > 1.0 + 1e-6 || v_ref < -1e-6) {
+                ROS_ERROR("[PathHandler] Invalid external speed CSV row %d: s=%.6f v=%.6f",
+                          line_no, s_norm, v_ref);
+                return false;
+            }
+            const double s_clamped = std::max(0.0, std::min(1.0, s_norm));
+            const double v_clamped = std::max(0.0, v_ref);
+            if (!s_values.empty()) {
+                const double prev_s = s_values.back();
+                if (s_clamped < prev_s - 1e-9) {
+                    ROS_ERROR("[PathHandler] External speed CSV s_normalized must be nondecreasing at row %d",
+                              line_no);
+                    return false;
+                }
+                if (s_clamped <= prev_s + 1e-9) {
+                    s_values.back() = std::max(prev_s, s_clamped);
+                    v_values.back() = v_clamped;
+                    continue;
+                }
+            }
+            s_values.push_back(s_clamped);
+            v_values.push_back(v_clamped);
+        } catch (const std::exception& ex) {
+            ROS_ERROR("[PathHandler] Failed to parse external speed CSV row %d in %s: %s",
+                      line_no, csv_path.c_str(), ex.what());
+            return false;
+        }
+    }
+
+    if (s_values.size() < 2) {
+        ROS_ERROR("[PathHandler] External speed CSV needs at least 2 valid samples: %s",
+                  csv_path.c_str());
+        return false;
+    }
+    if (s_values.front() > 1e-6 || s_values.back() < 1.0 - 1e-6) {
+        ROS_WARN("[PathHandler] External speed CSV should cover s_normalized [0,1]: first=%.6f last=%.6f",
+                 s_values.front(), s_values.back());
+    }
+    if (v_values.front() > 1e-3 || v_values.back() > 1e-3) {
+        ROS_WARN("[PathHandler] External speed CSV endpoint speeds are not zero: v0=%.3f vN=%.3f",
+                 v_values.front(), v_values.back());
+    }
+
+    external_speed_profile_s_norm_ = std::move(s_values);
+    external_speed_profile_v_ = std::move(v_values);
+    external_speed_profile_valid_ = true;
+    ROS_INFO("[PathHandler] Loaded external speed profile CSV: %s (%zu samples)",
+             csv_path.c_str(), external_speed_profile_v_.size());
+    return true;
 }
 
 double PathHandler::getSpeedAtS(double s) const {

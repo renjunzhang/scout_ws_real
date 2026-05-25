@@ -98,6 +98,7 @@ path_handler:
   min_ref_speed: 0.0                  # 参考速度下限 (m/s)
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)
+  external_speed_profile_csv: ""      # 外部 v_ref(s) CSV；空字符串保持内部速度剖面
   max_tan_accel: 2.0                  # 最大切向加速度 (m/s^2) - 提高以加快速度建立
   max_tan_decel: 1.0                  # 最大切向减速度 (m/s^2) - 提高以增强制动收敛
   goal_speed: 0.0                     # 末端期望速度 (m/s)

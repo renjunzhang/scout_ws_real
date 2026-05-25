@@ -283,6 +283,20 @@ ENERGY_PROFILE_DECEL_MAX="${ENERGY_PROFILE_DECEL_MAX:-1.2}"
 ENERGY_PROFILE_MIN_V="${ENERGY_PROFILE_MIN_V:-0.35}"
 VEHICLE_V_MAX="${VEHICLE_V_MAX:-}"
 
+RETIME_METHOD="${RETIME_METHOD:-none}"  # none / toppra / ruckig
+EXTERNAL_SPEED_PROFILE_CSV="${EXTERNAL_SPEED_PROFILE_CSV:-}"
+RETIME_PROFILE_DIR="${RETIME_PROFILE_DIR:-${FIXED_PATH_DIR}/baseline_profiles}"
+RETIME_V_MAX="${RETIME_V_MAX:-0.80}"
+RETIME_A_MAX="${RETIME_A_MAX:-0.60}"
+RETIME_DECEL_MAX="${RETIME_DECEL_MAX:-0.80}"
+RETIME_J_MAX="${RETIME_J_MAX:-1.50}"
+RETIME_DS="${RETIME_DS:-0.02}"
+RETIME_DELTA_TIME="${RETIME_DELTA_TIME:-0.02}"
+EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE="${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE:-false}"
+EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT="${EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT:-${RETIME_A_MAX}}"
+EXTERNAL_PROFILE_EXECUTION_DECEL_LIMIT="${EXTERNAL_PROFILE_EXECUTION_DECEL_LIMIT:-${RETIME_DECEL_MAX}}"
+EXTERNAL_PROFILE_EXECUTION_JERK_LIMIT="${EXTERNAL_PROFILE_EXECUTION_JERK_LIMIT:-0.0}"
+
 if [[ -n "${SCENARIO}" ]]; then
     if [[ ! -f "${SCENARIOS_FILE}" ]]; then
         echo "[run_sim_fixed_path_bag] ERROR: SCENARIOS_FILE not found: ${SCENARIOS_FILE}" >&2
@@ -327,6 +341,10 @@ PY
         BAG_NAME="${BAG_DATE}_${PATH_ID}_${CONDITION}_run${RUN_ID}_${BAG_TIME}"
         BAG_PATH="${BAG_DIR}/${BAG_NAME}"
     fi
+fi
+
+if [[ "${PATH_MODE}" == "template_goal" && -z "${PATH_FILE_WAS_SET}" ]]; then
+    PATH_FILE="${FIXED_PATH_DIR}/${BAG_NAME}.json"
 fi
 
 case "${CONDITION}" in
@@ -693,8 +711,23 @@ if [[ "${PATH_MODE}" == "replay" && ! -f "${PATH_FILE}" ]]; then
     exit 2
 fi
 
+case "${RETIME_METHOD}" in
+    none|toppra|ruckig)
+        ;;
+    *)
+        echo "[run_sim_fixed_path_bag] ERROR: unsupported RETIME_METHOD='${RETIME_METHOD}' (use none, toppra, or ruckig)" >&2
+        exit 2
+        ;;
+esac
+
+if [[ "${RETIME_METHOD}" != "none" && "${PATH_MODE}" == "global_goal" ]]; then
+    echo "[run_sim_fixed_path_bag] ERROR: RETIME_METHOD requires replay/template_goal with a fixed path JSON, not PATH_MODE=global_goal" >&2
+    exit 2
+fi
+
 mkdir -p "${BAG_DIR}"
 mkdir -p "$(dirname "${PATH_FILE}")"
+mkdir -p "${RETIME_PROFILE_DIR}"
 
 if [[ -f /opt/ros/noetic/setup.bash ]]; then
     # shellcheck disable=SC1091
@@ -757,6 +790,69 @@ stop_pid() {
         kill "${pid}" 2>/dev/null || true
         wait "${pid}" 2>/dev/null || true
     fi
+}
+
+wait_for_path_file() {
+    local timeout_s="${1:-20}"
+    local start_s
+    start_s="$(date +%s)"
+    while true; do
+        if [[ -s "${PATH_FILE}" ]]; then
+            return 0
+        fi
+        if (( $(date +%s) - start_s >= timeout_s )); then
+            echo "[run_sim_fixed_path_bag] ERROR: timed out waiting for generated path file: ${PATH_FILE}" >&2
+            return 1
+        fi
+        sleep 0.2
+    done
+}
+
+prepare_external_speed_profile() {
+    if [[ -n "${EXTERNAL_SPEED_PROFILE_CSV}" ]]; then
+        if [[ ! -f "${EXTERNAL_SPEED_PROFILE_CSV}" ]]; then
+            echo "[run_sim_fixed_path_bag] ERROR: EXTERNAL_SPEED_PROFILE_CSV not found: ${EXTERNAL_SPEED_PROFILE_CSV}" >&2
+            exit 2
+        fi
+        return 0
+    fi
+
+    if [[ "${RETIME_METHOD}" == "none" ]]; then
+        return 0
+    fi
+
+    if [[ ! -f "${PATH_FILE}" ]]; then
+        echo "[run_sim_fixed_path_bag] ERROR: cannot retime missing path file: ${PATH_FILE}" >&2
+        exit 2
+    fi
+
+    EXTERNAL_SPEED_PROFILE_CSV="${RETIME_PROFILE_DIR}/${BAG_NAME}_${RETIME_METHOD}_speed_profile.csv"
+    local plot_path="${RETIME_PROFILE_DIR}/${BAG_NAME}_${RETIME_METHOD}_speed_profile.png"
+
+    case "${RETIME_METHOD}" in
+        toppra)
+            echo "[run_sim_fixed_path_bag] Generating TOPPRA-style speed profile: ${EXTERNAL_SPEED_PROFILE_CSV}"
+            rosrun scout_local_planner retime_toppra_style.py \
+                --path-file "${PATH_FILE}" \
+                --out-csv "${EXTERNAL_SPEED_PROFILE_CSV}" \
+                --plot "${plot_path}" \
+                --v-max "${RETIME_V_MAX}" \
+                --a-max "${RETIME_A_MAX}" \
+                --decel-max "${RETIME_DECEL_MAX}" \
+                --ds "${RETIME_DS}"
+            ;;
+        ruckig)
+            echo "[run_sim_fixed_path_bag] Generating Ruckig-style speed profile: ${EXTERNAL_SPEED_PROFILE_CSV}"
+            rosrun scout_local_planner retime_ruckig_style.py \
+                --path-file "${PATH_FILE}" \
+                --out-csv "${EXTERNAL_SPEED_PROFILE_CSV}" \
+                --plot "${plot_path}" \
+                --v-max "${RETIME_V_MAX}" \
+                --a-max "${RETIME_A_MAX}" \
+                --j-max "${RETIME_J_MAX}" \
+                --delta-time "${RETIME_DELTA_TIME}"
+            ;;
+    esac
 }
 
 publish_template_goal() {
@@ -827,6 +923,19 @@ POST_PROCESSOR_OSCRS_ACTIVE_ENABLE=${POST_PROCESSOR_OSCRS_ACTIVE_ENABLE}
 POST_PROCESSOR_MILD_ITERS=${POST_PROCESSOR_MILD_ITERS}
 POST_PROCESSOR_MILD_GAIN=${POST_PROCESSOR_MILD_GAIN}
 POST_PROCESSOR_MILD_MAX_DRIFT=${POST_PROCESSOR_MILD_MAX_DRIFT}
+RETIME_METHOD=${RETIME_METHOD}
+RETIME_PROFILE_DIR=${RETIME_PROFILE_DIR}
+RETIME_V_MAX=${RETIME_V_MAX}
+RETIME_A_MAX=${RETIME_A_MAX}
+RETIME_DECEL_MAX=${RETIME_DECEL_MAX}
+RETIME_J_MAX=${RETIME_J_MAX}
+RETIME_DS=${RETIME_DS}
+RETIME_DELTA_TIME=${RETIME_DELTA_TIME}
+EXTERNAL_SPEED_PROFILE_CSV=${EXTERNAL_SPEED_PROFILE_CSV}
+EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}
+EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT=${EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT}
+EXTERNAL_PROFILE_EXECUTION_DECEL_LIMIT=${EXTERNAL_PROFILE_EXECUTION_DECEL_LIMIT}
+EXTERNAL_PROFILE_EXECUTION_JERK_LIMIT=${EXTERNAL_PROFILE_EXECUTION_JERK_LIMIT}
 TEMPLATE_GOAL_TOPIC=${TEMPLATE_GOAL_TOPIC}
 TEMPLATE_GOAL_FRAME=${TEMPLATE_GOAL_FRAME}
 TEMPLATE_GOAL_X=${TEMPLATE_GOAL_X}
@@ -868,7 +977,7 @@ EOF
 
 publish_config_summary() {
     local summary
-    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; path_source_output_topic=${PATH_SOURCE_OUTPUT_TOPIC}; post_processor=${POST_PROCESSOR_ENABLE}; slosh_score=${POST_PROCESSOR_SLOSH_SCORE_ENABLE}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; input_shaping=${INPUT_SHAPING_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}; energy_profile=${ENERGY_PROFILE_ENABLE}; vehicle_v_max=${VEHICLE_V_MAX}"
+    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; path_source_output_topic=${PATH_SOURCE_OUTPUT_TOPIC}; post_processor=${POST_PROCESSOR_ENABLE}; slosh_score=${POST_PROCESSOR_SLOSH_SCORE_ENABLE}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; input_shaping=${INPUT_SHAPING_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}; energy_profile=${ENERGY_PROFILE_ENABLE}; vehicle_v_max=${VEHICLE_V_MAX}; retime=${RETIME_METHOD}; external_speed_csv=${EXTERNAL_SPEED_PROFILE_CSV}; external_profile_cap=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
     rostopic pub -l /experiment/config_summary std_msgs/String "data: '${summary}'" >/dev/null &
     local pid=$!
     pids+=("${pid}")
@@ -996,15 +1105,26 @@ TOPICS=(
     /local_path
     /mpc/solve_ms
     /mpc/status_val
+    /mpc/cost_breakdown
     /mpc_status
     /terminal/mode
     /terminal/recovery_latched
     /terminal/goal_info
+    /terminal/cmd_v_pre_clamp
+    /terminal/cmd_v_post_clamp
+    /profile_cap/active
+    /profile_cap/v_profile
+    /profile_cap/cmd_v_pre_cap
+    /profile_cap/cmd_v_post_cap
+    /profile_cap/implied_ax
+    /profile_cap/implied_jerk
     /experiment/config_summary
     /reference/v_ref
+    /reference/v_ref_horizon
     /reference/v_path
     /reference/kappa
     /reference/s
+    /reference/s_horizon
     /reference/implied_ax
     /reference/implied_ay
     /reference/implied_jerk
@@ -1094,6 +1214,10 @@ MPC_ARGS=(
     energy_profile_decel_max:="${ENERGY_PROFILE_DECEL_MAX}"
     energy_profile_min_v:="${ENERGY_PROFILE_MIN_V}"
     vehicle_v_max:="${VEHICLE_V_MAX}"
+    external_profile_execution_cap_enable:="${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
+    external_profile_execution_accel_limit:="${EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT}"
+    external_profile_execution_decel_limit:="${EXTERNAL_PROFILE_EXECUTION_DECEL_LIMIT}"
+    external_profile_execution_jerk_limit:="${EXTERNAL_PROFILE_EXECUTION_JERK_LIMIT}"
 )
 
 POST_PROCESSOR_ARGS=(
@@ -1206,6 +1330,9 @@ echo "  risk_scheduler       = ${RISK_SCHEDULER_ENABLE}"
 echo "  input_shaping        = ${INPUT_SHAPING_ENABLE}"
 echo "  energy_profile       = ${ENERGY_PROFILE_ENABLE}"
 echo "  vehicle_v_max        = ${VEHICLE_V_MAX}"
+echo "  retime_method        = ${RETIME_METHOD}"
+echo "  external_speed_csv   = ${EXTERNAL_SPEED_PROFILE_CSV:-<none yet>}"
+echo "  external_profile_cap = ${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
 echo "  approach_start       = ${APPROACH_START_ENABLE}"
 echo "  start_delay          = ${START_DELAY}s"
 echo "  start_gate           = ${START_GATE}"
@@ -1218,6 +1345,11 @@ write_config_summary
 if [[ "${START_DELAY}" != "0" && "${START_DELAY}" != "0.0" ]]; then
     echo "[run_sim_fixed_path_bag] Waiting ${START_DELAY}s for sim/nav stack to settle..."
     sleep "${START_DELAY}"
+fi
+
+if [[ "${PATH_MODE}" == "replay" ]]; then
+    prepare_external_speed_profile
+    write_config_summary
 fi
 
 if [[ "${APPROACH_START_ENABLE}" == "true" ]]; then
@@ -1249,19 +1381,25 @@ fi
 if [[ "${PATH_MODE}" == "template_goal" ]]; then
     start_bg "template path generator" "${TEMPLATE_ARGS[@]}"
     sleep "${TEMPLATE_GENERATOR_WARMUP_S}"
-    start_bg "MPC ${CONDITION}" roslaunch "${MPC_ARGS[@]}"
-    sleep "${MPC_WARMUP_S}"
     echo "[run_sim_fixed_path_bag] Publishing template goal on ${TEMPLATE_GOAL_TOPIC}"
     publish_template_goal
+    if [[ "${RETIME_METHOD}" != "none" || -n "${EXTERNAL_SPEED_PROFILE_CSV}" ]]; then
+        wait_for_path_file 20
+        prepare_external_speed_profile
+        write_config_summary
+        publish_config_summary
+    fi
+    start_bg "MPC ${CONDITION}" roslaunch "${MPC_ARGS[@]}" external_speed_profile_csv:="${EXTERNAL_SPEED_PROFILE_CSV}"
+    sleep "${MPC_WARMUP_S}"
 elif [[ "${PATH_MODE}" == "global_goal" ]]; then
-    start_bg "MPC ${CONDITION}" roslaunch "${MPC_ARGS[@]}"
+    start_bg "MPC ${CONDITION}" roslaunch "${MPC_ARGS[@]}" external_speed_profile_csv:="${EXTERNAL_SPEED_PROFILE_CSV}"
     sleep "${MPC_WARMUP_S}"
     echo "[run_sim_fixed_path_bag] Publishing global goal on ${TEMPLATE_GOAL_TOPIC}"
     publish_template_goal
 else
     start_bg "fixed path replay" "${REPLAY_ARGS[@]}"
     sleep "${PATH_WARMUP_S}"
-    start_bg "MPC ${CONDITION}" roslaunch "${MPC_ARGS[@]}"
+    start_bg "MPC ${CONDITION}" roslaunch "${MPC_ARGS[@]}" external_speed_profile_csv:="${EXTERNAL_SPEED_PROFILE_CSV}"
 fi
 
 echo "[run_sim_fixed_path_bag] Trial is running. Press Ctrl+C after REACHED, or set RECORD_DURATION for auto-stop."

@@ -5,6 +5,11 @@ set -euo pipefail
 
 Q_SLOSH="${1:-0}"
 GLOBAL_PATH_TOPIC="${GLOBAL_PATH_TOPIC:-/scout/global_path_fixed}"
+EXTERNAL_SPEED_PROFILE_CSV="${EXTERNAL_SPEED_PROFILE_CSV:-}"
+EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE="${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE:-false}"
+EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT="${EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT:-0.60}"
+EXTERNAL_PROFILE_EXECUTION_DECEL_LIMIT="${EXTERNAL_PROFILE_EXECUTION_DECEL_LIMIT:-0.80}"
+EXTERNAL_PROFILE_EXECUTION_JERK_LIMIT="${EXTERNAL_PROFILE_EXECUTION_JERK_LIMIT:-0.0}"
 LOCALIZATION_ACCURACY_THRESHOLD="${LOCALIZATION_ACCURACY_THRESHOLD:-70}"
 LOCALIZATION_ACCURACY_TOPIC="${LOCALIZATION_ACCURACY_TOPIC:-}"
 LOCALIZATION_WAIT_TIMEOUT="${LOCALIZATION_WAIT_TIMEOUT:-0}"
@@ -117,6 +122,8 @@ PY
 
 echo "[launch_fixed_path_slosh_stack] Q_slosh=${Q_SLOSH}"
 echo "[launch_fixed_path_slosh_stack] global_path_topic=${GLOBAL_PATH_TOPIC}"
+echo "[launch_fixed_path_slosh_stack] external_speed_profile_csv=${EXTERNAL_SPEED_PROFILE_CSV:-<internal>}"
+echo "[launch_fixed_path_slosh_stack] external_profile_execution_cap=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
 echo "[launch_fixed_path_slosh_stack] localization_accuracy_threshold=${LOCALIZATION_ACCURACY_THRESHOLD}%"
 
 start_launch "nanoscan3 localization" \
@@ -130,6 +137,11 @@ start_launch "MBF global planner" \
 start_launch "slosh local planner" \
     scout_local_planner slosh_experiment.launch \
     global_path_topic:="${GLOBAL_PATH_TOPIC}" \
+    external_speed_profile_csv:="${EXTERNAL_SPEED_PROFILE_CSV}" \
+    external_profile_execution_cap_enable:="${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}" \
+    external_profile_execution_accel_limit:="${EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT}" \
+    external_profile_execution_decel_limit:="${EXTERNAL_PROFILE_EXECUTION_DECEL_LIMIT}" \
+    external_profile_execution_jerk_limit:="${EXTERNAL_PROFILE_EXECUTION_JERK_LIMIT}" \
     Q_slosh:="${Q_SLOSH}" \
     enable_slosh_box_constraint:=false \
     slosh_speed_governor_enable:=false \

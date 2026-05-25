@@ -168,6 +168,20 @@ private:
     double last_v_des_raw_ = 0.0;
     double last_v_des_target_ = 0.0;
 
+    // 外部速度剖面执行层 cap（仅用于 TOPPRA/Ruckig-style baseline，默认关闭）
+    bool external_profile_execution_cap_enable_ = false;
+    double external_profile_execution_accel_limit_ = 0.0;
+    double external_profile_execution_decel_limit_ = 0.0;
+    double external_profile_execution_jerk_limit_ = 0.0;
+    bool profile_cap_has_last_ax_ = false;
+    double profile_cap_last_ax_ = 0.0;
+    int last_profile_cap_active_ = 0;
+    double last_profile_cap_v_profile_ = std::numeric_limits<double>::quiet_NaN();
+    double last_profile_cap_cmd_v_pre_ = std::numeric_limits<double>::quiet_NaN();
+    double last_profile_cap_cmd_v_post_ = std::numeric_limits<double>::quiet_NaN();
+    double last_profile_cap_implied_ax_ = std::numeric_limits<double>::quiet_NaN();
+    double last_profile_cap_implied_jerk_ = std::numeric_limits<double>::quiet_NaN();
+
     // 原地对齐模式（heading align）
     bool heading_align_enable_ = false;
     double heading_align_enter_ = 0.8;   // 进入阈值 (rad)
@@ -356,6 +370,12 @@ private:
     ros::Publisher terminal_phase_active_pub_;
     ros::Publisher terminal_cmd_v_pre_clamp_pub_;
     ros::Publisher terminal_cmd_v_post_clamp_pub_;
+    ros::Publisher profile_cap_active_pub_;
+    ros::Publisher profile_cap_v_profile_pub_;
+    ros::Publisher profile_cap_cmd_v_pre_pub_;
+    ros::Publisher profile_cap_cmd_v_post_pub_;
+    ros::Publisher profile_cap_implied_ax_pub_;
+    ros::Publisher profile_cap_implied_jerk_pub_;
     ros::Publisher ref_v_ref_pub_;
     ros::Publisher ref_v_ref_horizon_pub_;
     ros::Publisher ref_s_horizon_pub_;

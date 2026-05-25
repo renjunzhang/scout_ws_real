@@ -141,6 +141,16 @@ public:
      */
     bool getSmoothedPath(nav_msgs::Path& path_out, int num_samples) const;
 
+    /**
+     * @brief 查询弧长 s 处的参考速度
+     */
+    double getSpeedAtS(double s) const;
+
+    /**
+     * @brief 是否已加载外部速度剖面
+     */
+    bool hasExternalSpeedProfile() const { return external_speed_profile_valid_; }
+
 private:
     /**
      * @brief 将路径从 map 变换到 base_link
@@ -179,17 +189,17 @@ private:
     void updateSpeedProfile(double v_des);
 
     /**
+     * @brief 加载外部归一化速度剖面 CSV
+     */
+    bool loadExternalSpeedProfile(const std::string& csv_path);
+
+    /**
      * @brief 将点投影到路径线段上，返回连续弧长 s
      */
     double projectToPathS(const Eigen::Vector2d& point,
                           int closest_idx,
                           const std::vector<Eigen::Vector2d>& points,
                           const std::vector<double>& path_s) const;
-
-    /**
-     * @brief 查询弧长 s 处的参考速度
-     */
-    double getSpeedAtS(double s) const;
 
     /**
      * @brief 在已持锁前提下计算终点几何信息
@@ -237,6 +247,11 @@ private:
     std::vector<double> speed_profile_v_;
     double speed_profile_v_des_ = 0.0;
     bool speed_profile_valid_ = false;
+
+    // 外部速度剖面（归一化 s → v_ref），用于 TOPPRA/Ruckig-style baseline
+    std::vector<double> external_speed_profile_s_norm_;
+    std::vector<double> external_speed_profile_v_;
+    bool external_speed_profile_valid_ = false;
 
     // 全局弧长（用于平滑推进）
     double s_global_ = 0.0;
