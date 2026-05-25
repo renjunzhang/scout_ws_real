@@ -258,7 +258,7 @@ appendix / related work：
 | TEB | ROS1 engineering baseline，不进正文主表 |
 | DWA | traditional navigation lower bound，不进正文主表 |
 
-## 7. 公平性约束
+## 7. 公平性约束与实验硬规则
 
 所有 fixed-path baseline 必须保持：
 
@@ -280,6 +280,84 @@ engineering baseline, not fixed-path retiming baseline
 
 不要把 TEB/DWA 的结果和 fixed-path 方法混成同一因果解释。
 
+### 7.1 正式实验前必须落地的 5 条硬规则
+
+以下 5 条在 `2026-05-25_SloshPriorityMPC对比实验设计.md` 中已经详细阐述，
+此处固化为 baseline 对比实验的**执行前置门槛**，任何一条不满足不得开始正式录包。
+
+**规则 1：路径进度 s 轴对齐（主轴）**
+
+```text
+主图和主表的横轴必须是归一化路径进度 s ∈ [0, 1]，时间轴只做辅轴。
+TOPPRA / Ruckig 本质是改 timing：同一条路径用不同速度走过。
+如果只在时间轴上比较，"更晚到达拐弯"会被误认成"晃动被抑制"。
+
+实现：odom (x, y) 投影到 fixed path 得 s(t)，
+      视觉液面、模型量重采样到统一 progress grid（101 个点）。
+      AUC_τ 的积分变量也用 ds 而非 dt。
+```
+
+详见对比实验设计 §5.3。
+
+**规则 2：AUC_0.5mm 指标**
+
+```text
+AUC_τ = ∫ max(0, h_vis - τ) ds,  τ = 0.5 mm
+
+比 p95 对间歇超阈值更敏感，比 peak 更稳健。
+积分在路径进度 s 上。
+与 RGB p95 / RMS / peak 并列作为主指标。
+```
+
+详见对比实验设计 §5.1。
+
+**规则 3：±10% completion time 公平性判断**
+
+```text
+若任意两方法的 completion time 差异超过 ±10%：
+  结论不能写"纯 anti-slosh 优势"，
+  必须写"在更保守/更快的控制行为下液面风险的变化"（trade-off 语言）。
+
+若所有方法 completion time 差异 <= 10%：
+  可写"comparable task efficiency with reduced sloshing"。
+```
+
+详见对比实验设计 §7。
+
+**规则 4：每个 block 前后 static bag**
+
+```text
+每个 block（含 4 个 motion bag：TOPPRA/Ruckig/E/F 各 1）
+前后各录一个 10-15 s 的 static bag（液体静置、机器人不动）。
+
+用途：
+  检查视觉证据链的 jitter floor（static jitter 应 < 0.08 mm）
+  检查 bias drift（前后 mean 差应 < 0.05 mm）
+  检查曝光 / 白平衡漂移
+
+若 static bag 异常：该 block 内 motion bag 视觉数据降级为辅助证据。
+run 间等待：每次回到起点后静置 30-60 s，让液体恢复近似同初态。
+```
+
+详见对比实验设计 §10。
+
+**规则 5：Friedman + 配对 Wilcoxon + Holm 校正**
+
+```text
+4 方法 matched block → 主检验流程：
+  1. 对每个主指标（RGB p95, AUC_0.5mm, RGB peak, duration）做 Friedman 检验
+  2. 若 Friedman 显著（p < 0.05）：
+     以 Ours 为参照，做 3 个配对 Wilcoxon signed-rank post hoc
+     用 Holm 校正控制多重比较
+  3. 每个配对报告：Holm-corrected p-value + rank-biserial correlation（效应量）
+
+两方法直接比较（如 E vs F）：直接配对 Wilcoxon。
+progress curve 不逐 bin 做检验，只做描述性展示（median + IQR）。
+真正进统计表的是 p95 / AUC / RMS / peak 这类单 run 标量。
+```
+
+详见对比实验设计 §9。
+
 ## 8. 指标
 
 主指标：
@@ -288,6 +366,7 @@ engineering baseline, not fixed-path retiming baseline
 RGB p95
 RGB peak
 RGB RMS
+AUC_0.5mm = ∫ max(0, h_vis - 0.5mm) ds
 duration
 tracking error
 ```
