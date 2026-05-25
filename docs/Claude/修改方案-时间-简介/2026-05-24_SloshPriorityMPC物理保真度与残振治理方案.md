@@ -1,5 +1,10 @@
 # 2026-05-24 SloshPriorityMPC 物理保真度与残振治理方案
 
+> 2026-05-25 更新：本文件保留为历史方案参考。当前主线已经收敛为
+> C/D/E/F 对比实验设计；P1 `ω²·d / ω̇·d` 偏置耦合补偿和 P2 terminal
+> residual 本轮不做，P3 Ferrari ζ 只做离线对照，不接在线默认。
+> 当前执行文档见 `2026-05-25_SloshPriorityMPC对比实验设计.md`。
+
 > 本方案不动轨迹参考层、不动 launch 接口、不引入新决策变量、不破 QP 形式。
 > 在不增加 online solve time 的前提下，把 Ferrari 2026 论文里"物理保真度"和"残振约束"两条
 > 真正可借鉴的部分搬进当前 MPC，提升 F 组结果的 RGB peak 抑制与模型可信度。
@@ -259,7 +264,7 @@ mpc:
 
 ---
 
-### P3：ζ_n 物理标定（Ferrari 式 3）
+### P3：ζ_n 物理标定/离线消融（Ferrari 式 3）
 
 #### 问题
 
@@ -272,25 +277,26 @@ mpc:
 
 水的 ν, μ 是已知物性，R, h 是容器参数。给定具体 Scout 杯子，ζ_1 应该有定值。
 
-#### 改法
+#### 当前决策
 
-在 `slosh_integration.cpp` 加 `compute_zeta_from_physics(R, h, nu, mu, mode_n)` 静态函数；在 `mpc_params.yaml` 加：
+`compute_modal_params.py` 已能根据容器尺寸计算 Ferrari 物理 ζ。按当前标定：
 
-```yaml
-slosh_estimator:
-  zeta_source: manual   # "manual"（默认，用 yaml zeta 值）/ "physics"（用 Ferrari 公式算）
-  zeta: 0.05             # 仅 zeta_source=manual 生效
-  liquid_kinematic_viscosity: 1.0e-6  # 水 @ 20°C, m²/s（仅 physics 生效）
-  liquid_density: 1000.0              # kg/m³
+```text
+R=0.0185m
+h=0.058m
+zeta_manual=0.05
+zeta_ferrari=0.116962
 ```
 
-启用 physics 模式后，启动时打印一次"computed zeta_1 = X.XXX"日志，便于复核。
+20260522 d200 数据离线重放显示：Ferrari ζ 提升了 p95 排序 `A_rank`
+（0.711538 → 0.8），但 `gamma_model_pct`、`RMSE`、`corr` 和幅值低估都变差。
+所以当前不把 Ferrari ζ 接入在线默认；它保留为离线 ablation / 论文物理参考。
 
 #### 验证
 
-- yaml 容器参数（R, h）对应你实物杯子，启动后打印的 zeta 应在 0.02-0.10 区间（水类常见范围）
-- zeta_source=manual 时行为完全等价旧版
-- physics 模式 + F 组 sim/实物对照，看 model_peak 变化（理论上 ζ 算对了，model_peak 与 RGB peak 一致性应提升）
+- 已输出：`/data/a/slosh_bags/real/20260522_fixed_path_cost_d200/zeta_fidelity_ablation_20260525`
+- 暂不新增在线 `zeta_source`。
+- 若后续新数据同时满足 `gamma/RMSE` 下降、`A_rank/corr` 提升，再考虑接入在线可选参数，默认仍 `manual`。
 
 ---
 
