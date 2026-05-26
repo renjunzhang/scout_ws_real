@@ -38,6 +38,7 @@ include_directories(
 # ============================================================================
 add_library(${PROJECT_NAME}
   src/cubic_spline.cpp
+  src/cost_breakdown.cpp
   src/path_handler.cpp
   src/diff_drive_model.cpp
   src/cost_function.cpp

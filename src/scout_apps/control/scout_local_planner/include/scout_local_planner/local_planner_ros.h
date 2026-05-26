@@ -70,11 +70,6 @@ private:
     void publishSmoothedPath();
     void publishStatus();
     void publishSloshDebug(double solve_time_ms, bool solve_ok, bool publish_solver_debug = true);
-    DiagnosticsCostBreakdown computeCostBreakdown(const MPCSolution& solution,
-                                                  const std::vector<ReferencePoint>& refs,
-                                                  const MPCParams& params,
-                                                  const ControlVector& u_prev) const;
-    void publishCostBreakdown(const DiagnosticsCostBreakdown& breakdown);
     void publishSloshHorizonSummary(const MPCSolution& solution);
     void publishTerminalDebug();
     void updateSloshEstimate();

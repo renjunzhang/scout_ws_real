@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include "scout_local_planner/cost_breakdown.h"
 #include "scout_local_planner/types.h"
 #include "scout_local_planner/slosh_feedback.h"
 #include "scout_local_planner/slosh_integration.h"
@@ -18,19 +19,6 @@
 #include <vector>
 
 namespace scout_local_planner {
-
-struct DiagnosticsCostBreakdown {
-    double J_lag = 0.0;
-    double J_contour = 0.0;
-    double J_etheta = 0.0;
-    double J_v = 0.0;
-    double J_omega_ff = 0.0;
-    double J_control = 0.0;
-    double J_smooth = 0.0;
-    double J_slosh_eta = 0.0;
-    double J_slosh_eta_dot = 0.0;
-    double J_total = 0.0;
-};
 
 struct TerminalDebugData {
     std::string mode = "NONE";
