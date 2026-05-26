@@ -93,22 +93,6 @@ public:
     bool getGoalInfo(GoalInfo& goal_info) const;
 
     /**
-     * @brief 获取前方窗口内的最大曲率绝对值（基于全局样条）
-     * @param lookahead_dist 起始前视距离
-     * @param preview_dist 预览窗口长度
-     * @return 最大 |kappa|，失败时返回 0
-     */
-    double getMaxCurvatureAhead(double lookahead_dist, double preview_dist) const;
-
-    /**
-     * @brief 获取前方窗口内的最大曲率变化率绝对值 |dκ/ds|（基于全局样条）
-     * @param lookahead_dist 起始前视距离
-     * @param preview_dist 预览窗口长度
-     * @return 最大 |dκ/ds|，失败时返回 0
-     */
-    double getMaxCurvatureRateAhead(double lookahead_dist, double preview_dist) const;
-    
-    /**
      * @brief 检查路径是否有效
      */
     bool isPathValid() const;
