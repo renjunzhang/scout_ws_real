@@ -29,7 +29,7 @@
   <arg name="mpc_R_domega" default="4.0" doc="角速度变化权重覆盖，用于 slosh-priority MPC 消融"/>
   <arg name="mpc_cmd_vel_lead_time" default="0.15" doc="cmd_vel 输出前瞻时间覆盖；仿真默认 0.15"/>
   <arg name="terminal_factor_slosh_eta" default="0.0" doc="P2: terminal η 代价放大系数，0=关闭；首轮建议 5~10；需 Q_slosh>0"/>
-  <arg name="terminal_factor_slosh_eta_dot" default="0.0" doc="P2: terminal η̇ 代价放大系数，0=关闭；首轮建议 5~10；需 Q_slosh_eta_dot>0"/>
+  <arg name="terminal_factor_slosh_eta_dot" default="0.0" doc="P2: terminal η̇ 代价放大系数，0=关闭；首轮建议 5~10；需 eta_dot 权重生效"/>
   <arg name="verbose" default="false" doc="是否输出调试信息"/>
   <arg name="filter_alpha_v" default="1.0" doc="实验模式: 线速度 EMA 系数，1.0 表示关闭额外低通"/>
   <arg name="filter_alpha_omega" default="1.0" doc="实验模式: 角速度 EMA 系数，1.0 表示关闭额外低通"/>

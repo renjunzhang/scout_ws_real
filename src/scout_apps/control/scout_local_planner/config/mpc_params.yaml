@@ -44,7 +44,7 @@ mpc:
   slosh_preview_factor: 0.0 # one-step preview 额外权重；0=关闭，1=对 x_1..x_N 额外加一份 slosh 权重
   Q_slosh_eta_dot: 0.0     # 兼容旧配置：slosh_eta_dot_ratio<=0 时作为直接 QP 权重
   terminal_factor_slosh_eta: 0.0      # P2: terminal η 代价放大系数，0=关闭；需 Q_slosh>0 才生效
-  terminal_factor_slosh_eta_dot: 0.0  # P2: terminal η̇ 代价放大系数，0=关闭；需 Q_slosh_eta_dot>0 才生效
+  terminal_factor_slosh_eta_dot: 0.0  # P2: terminal η̇ 代价放大系数，0=关闭；需 eta_dot 权重生效
   slosh_height_max: 0.05   # 诊断用模型高度阈值 (m)，不作为 QP 约束
 
 # =============================================================================
