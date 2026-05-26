@@ -1,744 +1,1112 @@
-# 2026-05-20 scout_local_planner / slosh_models 重构方案（仅审查 + 方案，不动代码）
+# 2026-05-20 scout_local_planner 重构方案（2026-05-26 修订版）
 
-> 本次任务：只产出重构方案。不改任何代码、不改任何外部行为/topic/launch/参数/实验口径。
-> 后续执行需用户明确确认；执行时按分阶段、每步回归。
-
----
-
-## 0. 目标与边界
-
-### 0.1 目标
-- 把 `local_planner_ros.cpp / .h`（132 KB / 2850 行 cpp + 407 行 h）和 `path_handler.cpp`（69 KB / 1730 行）拆成可读、可测、可单独演进的模块。
-- 把 MPC tracking、terminal 处理、slosh state/feedback、diagnostics 发布、analysis 工具按职责分离。
-- 整理 `scripts/` 顶层 23 个 Python 脚本的分目录归类。
-- 全程不改任何外部观测行为。
-
-### 0.2 必须严格保持不变的"外部契约"
-
-| 类别 | 数量 / 范围 | 锁定理由 |
-|---|---|---|
-| ROS publisher topic 名/类型/语义/发布时机 | **60 个**（cmd_vel / local_path / mpc/* / slosh/* / reference/* / terminal_* / /risk_scheduler/*） | analysis 脚本与录包脚本依赖 |
-| ROS subscriber topic | global_path / odom / imu（topic 名 + remap） | 上游路径源、底盘、IMU |
-| ROS param 名 + 默认值 | ~70 个（loadParameters 271 行） | launch args 经 param 桥接，所有默认值锁定 |
-| Launch args | `slosh_experiment.launch` 与 `slosh_experiment_sim.launch` 各 33+ arg | 实验命令一字不改 |
-| MPC 数值行为 | 同输入 → 同 cmd_vel（允许浮点误差 < 1e-6） | 重构不得改变控制律 |
-| 状态机迁移图 | `PlannerState`（IDLE/TRACKING/REACHED/SETTLING…）+ `TerminalMode` | terminal 收敛策略不变 |
-| RGB visual_height 主指标地位 | 真值口径 | `/slosh/height` 仅作为模型调试量 |
-
-### 0.3 严禁的"伪改善"（本次重构禁止做的）
-
-- 不动 `prediction_v_max` / `v_max` / `Q_*` / `R_*` / 任何阈值
-- 不动 `terminal_capture_stop_distance` / `terminal_slowdown_*` 等 gate
-- 不引入新参数让"看起来更好"
-- 不改 record / analysis 实验口径
-- 不在重构里"顺手"修 bug 或加 feature（CLAUDE.md：外科手术式修改）
-
-### 0.4 主线对齐：实物 cost / ax-jerk ablation
-
-**当前主线**：在实物上跑 C / D / E / F 四组消融，验证 MPC cost 结构（Q_slosh / R_a / R_da）
-对早段 ax 与 RGB peak 的影响。详见
-`docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md`。
-
-```text
-C = SMOOTH_SPEED_RELAXED     Q_slosh=0, R_a=默认, R_da=默认
-D = SLOSH_PRIORITY            Q_slosh=5, R_a=默认, R_da=默认
-E = AX_JERK_PRIORITY          Q_slosh=0, R_a=1.0, R_da=2.0
-F = SLOSH_PLUS_AX_JERK        Q_slosh=5, R_a=1.0, R_da=2.0
-```
-
-重构必须服务这条主线，**优先级判据**：
-
-| 优先级 | 判据 | 典型工作 |
-|---|---|---|
-| **A 级（ablation 关键 enabler）** | 该改动直接消除 C/D/E/F 对比中的歧义、提高 cost breakdown 可信度 | cost breakdown 单一来源、slosh cost 抽独立 CostTerm |
-| **B 级（ablation 辅助）** | 该改动让 ablation 数据 slicing / observer 不被控制路径 contaminate | terminal 三段独立化、slosh observer 解耦 |
-| **C 级（一般代码健康）** | 与 ablation 无直接关系，纯代码组织 | controlLoop 完整切分、成员结构化、publisher 聚合、Python 重组 |
-
-**主线节奏意味着**：
-
-- A + B 级（即 Phase 1–4）即使单独做完，ablation 实验已经可以稳跑且数据可信。
-- C 级（Phase 5–11）是长期代码健康投资，可在 RA-L 投稿（2026-08）后再分阶段做。
-- 如果时间紧迫，做完 A + B 级就能切回实物 bag 主线。
-
-### 0.4.1 视觉分析链兼容性硬约束（2026-05-20 新增）
-
-参照 `docs/重要文档/红色液体视觉验证固定流程.md`，本次重构必须保证下列 bag 侧
-"控制端真值"接口完全不变，否则会破坏 RGB 视觉 + Ferrari 保真度对比的整条分析链。
-
-**bag topic 硬约束**：
-
-| topic | 流程文档引用 | 必须保持 |
-|---|---|---|
-| `/mpc/cost_breakdown` | 7.1.1 / 7.1.4 | **21 字段 Float32MultiArray** layout 与每个字段数值（J_slosh_eta / J_slosh_eta_dot / pct_* 等） |
-| `/terminal/mode` | 7.1.1 | TRACKING → first terminal 边界标记，发布时机 |
-| `/terminal/goal_info` | 7.1.1 | 同上 |
-| `/slosh/height` | 7.1 / 8.x | 模型侧高度，做 Ferrari 保真度对比的输入 |
-| `/odom` (转发) | 7.1.4 | linear.x / angular.z 用于 ax/ay/jerk/v_p95 计算 |
-| `/cmd_vel` | 7 | cmd_v_p95 来源 |
-| `/slosh/*` 16 个 topic | 8.x | observer 各内部量 |
-| `/reference/*` 16 个 topic | — | 参考曲线 |
-
-**分析脚本路径硬约束**（流程文档与 record/run 脚本里硬编码）：
-
-```text
-src/scout_apps/control/scout_local_planner/scripts/analysis/analyze_fixed_path_cost_effect.py
-src/scout_apps/control/scout_local_planner/scripts/analysis/extract_mpc_cost_breakdown.py
-```
-
-这两个脚本（以及 `scripts/analysis/` 子目录下的全部 11 个分析脚本）**绝不允许移动或改名**。
-Phase 11 的 Python 重组 **不动 analysis/ 子目录**。
-
-**逐 phase 风险与对策**：
-
-| Phase | 是否触及视觉分析链 | 对策 |
-|---|---|---|
-| 0 | 否（基础设施） | 必须扩展 `diff_two_bags.py` 覆盖：`/mpc/cost_breakdown` 21 字段逐位 \|Δ\| < 1e-6；`/slosh/height` 时间序列；`/terminal/mode`/`/terminal/goal_info` 序列 |
-| **1** | **是** | Phase 0 回归脚本必须用实物 C 组 + D 组 bag 各 replay 一次，前后对比 `/mpc/cost_breakdown` 21 字段 |
-| **2** | **是** | 同上；额外验证 `J_slosh_eta` / `J_slosh_eta_dot` 在 terminal_factor 加权下数值一致 |
-| **3** | **是** | grep 所有 `terminal_mode_pub_.publish` / `terminal_goal_info_pub_.publish` 调用，确保提取后仍按原时序发布；rostopic record 一段，diff 消息序列 |
-| **4** | **是** | observer 抽出后 16 个 `/slosh/*` topic 仍必须从 LocalPlannerROS 经 `feedback_.getOutput()` 走，时序与数值不变；Phase 4 后必须做 rostopic list 全集对比 + 一段实物 bag replay 的 `/slosh/*` 全字段对比 |
-| 5–8 / 10 | 否 | 无 |
-| **9** | **是** | 60 publisher 聚合时必须保留 advertise queue size / latch 设置；`rostopic list` 在前后对比必须 0 diff |
-| **11** | **是** | `scripts/analysis/` 保持原位；顶层 `analyze_*.py` 保留兼容入口；任何被 doc/launch/sh 硬编码引用的脚本绝不移动 |
-
-**phase 通过标准（强化）**：
-
-```text
-任一 phase 通过 = catkin_make OK
-                + smoke test 能停 goal
-                + 同一 sim bag replay diff（cmd_vel + state + 21 字段 breakdown）|Δ| < 1e-6
-                + 涉及视觉链 phase 还需用 实物 C + D bag 各 replay 一次，
-                  /mpc/cost_breakdown 与 /slosh/height 全序列 |Δ| < 1e-6
-                + Phase 3 / 4 / 9 后必须 rostopic list + record diff 验证 topic 完整性
-任一项不通过 → 立即回退该 phase，不进入下一阶段
-```
-
-### 0.5 解耦目标的具体定义
-
-"去耦合"在本次方案里有四个明确含义：
-
-```text
-1. cost 单一来源：solver 用的 cost 与 cost breakdown publish 的 cost
-   是同一段代码计算，不允许两边手抄公式。
-
-2. cost term 隔离：Q_slosh / R_a / R_da 应分别落在独立的 CostTerm 子类，
-   使得 C/D/E/F 改动只改一处参数，不要触发 StateTrackingCost 内部分支。
-
-3. observer / cost 隔离：slosh 状态估计（IMU+odom→η, η̇）
-   与 cost 评估解耦。observer 单独可测、可禁。
-
-4. terminal / tracking 隔离：terminal_capture_stop / recovery / slowdown
-   三段必须有独立入口与可观测的 phase tag，
-   使 analysis 脚本能干净 slicing 出 "TRACKING start → first terminal" 窗口。
-```
+> 目标已变化：旧方案要求“外部行为完全不变、OSCRS 保留”。现在目标是做减法：只保留 SloshPriorityMPC 主线和论文 baseline 对比实验，删除 OSCRS / GeoRef / 旧风险调度 / 旧低激励 profile 等不再服务主线的代码。
 
 ---
 
-## 1. 现状审查结论
+## 0. 当前结论
 
-### 1.1 文件 inventory
+### 0.1 新目标
 
-**`scout_local_planner/include/scout_local_planner/`（11 头文件）**
-
-| 文件 | 大小 | 评估 |
-|---|---|---|
-| `local_planner_ros.h` | 16 KB / 407 行 | **god class header**，~50 成员、60 publisher、4 子状态机 |
-| `types.h` | 12 KB | 共享 struct 集合，OK |
-| `path_handler.h` | 7.5 KB | 接口尚清晰 |
-| `slosh_integration.h` | 7.9 KB | OK |
-| `constraint_manager.h` | 4.9 KB | OK |
-| `cost_function.h` | 5.0 KB | 已有 CostTermBase 组合结构，OK |
-| `mpc_solver.h` | 3.9 KB | OK |
-| `risk_scheduler.h` | 3.4 KB | OK |
-| `cubic_spline.h` | 3.4 KB | 工具，OK |
-| `diff_drive_model.h` | 2.0 KB | OK |
-| `dynamics_model.h` | 1.9 KB | OK |
-
-**`scout_local_planner/src/`（10 cpp）**
-
-| 文件 | 大小 | 状态 |
-|---|---|---|
-| **`local_planner_ros.cpp`** | **132 KB / 2850 行** | **重构核心**：controlLoop 810 行 + loadParameters 271 行 + 30+ 私有方法 |
-| **`path_handler.cpp`** | **69 KB / 1730 行** | **次核心**：getReferencePoints 342 行 + updateGlobalPath 153 行 + 17 个匿名命名空间 helper |
-| `cost_function.cpp` | 15 KB | 结构 OK |
-| `mpc_solver.cpp` | 16 KB | 结构 OK |
-| `constraint_manager.cpp` | 10 KB | OK |
-| `diff_drive_model.cpp` | 7.3 KB | OK |
-| `cubic_spline.cpp` | 5.5 KB | OK |
-| `risk_scheduler.cpp` | 4.8 KB | OK |
-| `slosh_integration.cpp` | 4.4 KB | OK |
-| `local_planner_node.cpp` | 0.6 KB | main 入口 |
-
-**`slosh_models/`**：2 cpp + 2 h，已是干净独立库，本次不动。
-
-**`scripts/`**：23 顶层 + 11 analysis/ + 9 oscrs/(已规整) + 4 reference_generation/(已规整)
-
-### 1.2 god class 内部分布
-
-`LocalPlannerROS` 头里成员变量大致 9 个职责分组（位置已按职责分块，但变量未结构化）：
-
-1. ROS 句柄（nh / subs / pubs / tf）
-2. 核心组件持有（path_handler_, mpc_solver_, slosh_integration_, risk_scheduler_）
-3. 参数（mpc_params_, vehicle_params_, path_params_）
-4. tracking feasibility 与 reentry 状态
-5. v_des rate limit 状态
-6. heading align 状态
-7. terminal_recovery + terminal_slowdown + terminal_capture_stop 状态
-8. input_shaping 状态
-9. settling 状态
-10. slosh feedback（odom 差分、IMU 滤波、bias estimation）
-11. slosh-aware speed governor 状态
-12. risk scheduler 状态
-13. 60 个 debug publisher
-14. cmd_vel EMA 滤波状态
-
-### 1.3 `controlLoop()` 810 行的内部 phase（从分支识别）
-
-按代码流向大致 10 个 phase（**纯方法提取候选**）：
+当前代码只需要支撑：
 
 ```text
-Phase A  入口 reset：重置 terminal_recovery_latched_ / tracking_feasibility_recovery_active_ /
-                     heading_align_active_ 等瞬态 flag
-Phase B  非 TRACKING 状态早 return（IDLE / REACHED 路径，仅 publish 调试与 cmd_vel=0）
-Phase C  terminal_capture_stop 早 return（distance < threshold → publish 0 + 切断 recovery）
-Phase D  terminal_recovery latch + computeTerminalRecoveryCmd + limitTerminalRecoveryCmd
-Phase E  risk_scheduler.update + Q_eta → Q_slosh_eta 换算
-Phase F  settling 状态参数临时覆盖（Q_v / Q_eta / eta_bar）
-Phase G  terminal_slowdown envelope 计算 + 临时 Q_v override
-Phase H  v_des_cmd 选择 + v_des_rate_limit_ 平滑
-Phase I  tracking_feasibility_guard 状态机 + reentry ramp
-Phase J  path_handler.getReferencePoints + mpc_solver.solve + post-process + publishCmdVel
-Phase K  publishSloshDebug / publishCostBreakdown / publishReferenceExecutionDebug / publishStatus / publishTerminalDebug 等
+固定 P2_s_curve 路径
+  -> C / D / E / F 内部 MPC cost 消融
+  -> TOPPRA-style / Ruckig-style 外部 v_ref(s) baseline
+  -> RGB 真值 + /slosh/height 模型辅助分析
+  -> terminal 单独诊断，不进入主效果窗口
 ```
 
-### 1.4 `path_handler.cpp` 顶部的 17 个匿名命名空间 helper
+对应执行文档：
 
 ```text
-normalizeAngle / hasUsableOrientation / resamplePath / bsplineSmooth /
-sanitizePolyline / wrappedAngleDiff / estimateMaxCurvature(2 个签名) /
-estimateMaxCurvatureRate(2 个签名) / estimateNominalSpacing /
-removeSinglePointSpikes / repairPrefixWindowGeometry /
-estimateDiscreteCurvatureSamples / estimateDiscreteCurvatureRateSamples /
-interpolateByArcLength
+docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md
 ```
 
-这些是**纯函数 / 无状态**，是 Phase 1 最低风险的提取目标。
-
-### 1.5 ablation 关键的解耦债（2026-05-20 新增审查）
-
-**债 1：cost breakdown 双份实现，互不引用**
+因此重构成功标准不是“保留所有历史功能”，而是：
 
 ```text
-cost_function.cpp                        local_planner_ros.cpp
-  StateTrackingCost::evaluate()            computeCostBreakdown() [1915-2002]
-  StateTrackingCost::getQuadraticCost()    手抄 J_lag/J_contour/J_etheta/J_v
-  ControlCost::evaluate/getQuadraticCost   手抄 J_control = R_a * a² + R_omega * omega²
-  ControlRateCost::evaluate/getQuadraticCost 手抄 J_smooth = R_da * da² + R_domega * domega²
-                                           手抄 J_slosh_eta + terminal_factor 的修正
+1. C/D/E/F 能实物启动、录包、分析；
+2. TOPPRA/Ruckig-style 能通过 external_speed_profile_csv 注入同一固定路径；
+3. record_slosh_experiment.sh 能录到 RGB、/slosh/*、/mpc/*、/reference/*、/terminal/*、/profile_cap/*；
+4. 分析脚本能完成 RGB / model / cost breakdown / terminal / Ferrari-style 指标；
+5. OSCRS / GeoRef / 旧风险调度等不再出现在主线 launch、README、record 白名单和 C++ 控制路径中。
 ```
 
-- 后者用于发布到 `mpc/cost_breakdown` topic，被所有 analysis 脚本读
-- 前者用于 QP 求解
-- **危险**：C/D/E/F ablation 时只要任一处的公式跟另一处不一致，cost breakdown 的解读就是错的
-- analysis 脚本（如 `analyze_fixed_path_cost_effect.py`）依据 `pct_slosh_total ≈ 20%` 这种判据，
-  如果 breakdown 与实际优化目标不同源，整个判据失效
+### 0.2 必须保留的主线
 
-**债 2：slosh cost 嵌在 `StateTrackingCost` 内**
+#### C++ 核心
 
 ```text
-StateTrackingCost::evaluate()       cost_function.cpp:40-48
-  if (params_.Q_slosh_eta > 0.0) { cost += Q_slosh_eta * (eta_x² + eta_y²); }
-  if (params_.Q_slosh_eta_dot > 0.0) { cost += Q_slosh_eta_dot * (eta_x_dot² + eta_y_dot²); }
-
-StateTrackingCost::getQuadraticCost  cost_function.cpp:84-93
-  if (params_.Q_slosh_eta > 0.0) {
-    Q_contrib(ETA_X, ETA_X) = params_.Q_slosh_eta;
-    Q_contrib(ETA_Y, ETA_Y) = params_.Q_slosh_eta;
-  }
+local_planner_node.cpp
+local_planner_ros.cpp / .h        当前先保留，后续拆
+mpc_solver.cpp / .h
+cost_function.cpp / .h
+constraint_manager.cpp / .h
+diff_drive_model.cpp / .h
+dynamics_model.cpp / .h
+path_handler.cpp / .h
+cubic_spline.cpp / .h
+slosh_integration.cpp / .h
+types.h
 ```
 
-- 没有独立的 `SloshTrackingCost : CostTermBase` 子类
-- C/E 组（Q_slosh=0）走的是同一份代码、同一份 H 矩阵 sparsity pattern，只是数值为零
-- 对 ablation 结论没致命问题（数学上 Q=0 等价于该项不存在），但：
-  - cost breakdown 解读时易混淆"slosh cost 是被 zero 掉还是真的解出来很小"
-  - 未来想做 "slosh-only 软约束" 类实验时无清晰挂载点
-  - 违反 `CostFunction::addCostTerm / removeCostTerm` 的设计意图（这两个接口对 slosh 不起作用）
-
-**债 3：slosh observer 与控制路径强耦合**
+#### slosh_models
 
 ```text
-LocalPlannerROS::updateSloshEstimate()   local_planner_ros.cpp:1833-1875
-  在 controlLoop 内部被调用
-  读 odom 差分 + IMU 滤波 → 写入 slosh_integration_ 内部状态
-  涉及 LocalPlannerROS 的 ~20 个成员变量（IMU bias / EMA / has_imu 等）
+src/scout_apps/control/slosh_models
 ```
 
-- ablation 实验中 observer 的 bias 估计窗口若被 control flow 影响（如 SETTLING 状态延长 reached_debug_duration），
-  η 的初值/收敛会被污染
-- 当前无法单独单测 observer（无法在 ROS-free 环境下喂 IMU 序列得 η）
+该包相对独立，当前不用重构。它仍是 MPC 中 slosh state propagation 的物理模型来源。
 
-**债 4：terminal 三段 (capture_stop / recovery / slowdown) 内联在 controlLoop**
+#### launch / config
 
 ```text
-controlLoop 内：
-  Phase C  terminal_capture_stop 早 return (810 行内大约 95-115 行段)
-  Phase D  terminal_recovery latch + cmd 计算（115-205 段）
-  Phase G  terminal_slowdown envelope（260-300 段）
+launch/slosh_experiment.launch
+launch/slosh_experiment_sim.launch
+config/mpc_params.yaml
+config/mpc_params_sim.yaml
+config/ferrari_oracle.yaml
+config/visual_height.yaml
 ```
 
-- 这三段都会在 ablation 实验中改变 cmd_vel 行为
-- C/D/E/F 实验需要 "TRACKING start → first terminal/capture" 窗口 slicing
-- 现有 publish 的 `terminal_phase_active` / `terminal_envelope_active` 已经能 slicing，但 control flow
-  本身散在 controlLoop 内难以单独打开/关闭
-
-### 1.6 外部依赖映射
+#### 实验脚本
 
 ```text
-local_planner_node.cpp        → LocalPlannerROS::initialize / run
-LocalPlannerROS               → PathHandler, MPCSolver, SloshIntegration, RiskScheduler
-PathHandler                   → CubicSpline + 17 free helpers
-MPCSolver                     → CostFunction, ConstraintManager, DiffDriveModel, DynamicsModel
-SloshIntegration              → slosh_models::LiquidSloshModel (跨包依赖)
-analysis/*.py (11 个脚本)     → 读 bag 的 /slosh/* /mpc/* /terminal_* /reference/* 等 60 topics
-record_slosh_experiment.sh    → rosbag record 同样 60 topics
-launch_sim_nav_stack.sh       → 启动 nav + slosh_experiment_sim.launch
-run_s_curve_smoke_test.sh     → smoke 入口
+scripts/launch_real_sensors_stack.sh
+scripts/launch_sim_nav_stack.sh
+scripts/run_sim_fixed_path_bag.sh
+scripts/record_slosh_experiment.sh
+scripts/send_fixed_goal.py
+scripts/template_fixed_path_generator.py
+scripts/fixed_global_path_runner.py
+scripts/launch_fixed_path_slosh_stack.sh   # 可选入口，不是实物默认入口
+```
+
+#### baseline / retiming 脚本
+
+```text
+scripts/analysis/retime_toppra_style.py
+scripts/analysis/retime_ruckig_style.py
+```
+
+#### 当前分析脚本最小集
+
+```text
+scripts/analysis/analyze_fixed_path_cost_effect.py
+scripts/analysis/analyze_ferrari_indices.py
+scripts/analysis/analyze_slosh_peak_context.py
+scripts/analysis/analyze_terminal_approach_1s.py
+scripts/analysis/analyze_terminal_transition.py
+scripts/analysis/diagnose_terminal_overshoot.py
+scripts/analysis/extract_mpc_cost_breakdown.py
+scripts/analysis/diagnose_speed_profile.py
+scripts/analysis/trajectory_analysis.py
+scripts/analysis/simulate_slosh_ode.py
+scripts/extract_slosh_metrics.py
+```
+
+### 0.3 可以删除或迁出的历史分支
+
+#### 0.3.1 commit 历史分界
+
+不要按 `768003f628e6d2e0825affe2d174f3d2566df7eb..HEAD` 整段回退或整段删除。
+
+该区间可以粗分为三类：
+
+```text
+OSCRS / GeoRef 主体引入与整理：
+  b9f4cce Add slosh-guided GeoRef validation
+  afb8f56 Add OSCRS active GeoRef validation pipeline
+  64d7dab 收束 OSCRS 实物前参数与脚本说明
+  cd7bbbf 拆分 OSCRS 候选生成层并加入 fixed strong 基线
+  a335ef5 修正实物 GeoRef gate 并增加单包行为验收
+  9d4122d 改进 GeoRef 单包验收脚本诊断输出
+  1ff204b / e9ba64a 调参
+  7e67374 重构OSCRS脚本目录与GFRS模块边界
+  a7d30af oscrs: add fidelity and diversity diagnostics
+
+模型保真度 / Ferrari / 视觉分析遗产：
+  3120c9f 测试模型保真度实验
+  3243755 测试模型保真度2
+  ce4ca9b 整理SloshPriorityMPC论文执行方案与Ferrari指标脚本
+  17afb99 完善SloshPriorityMPC论文对比实验设计与baseline选择
+
+当前 MPC 主线：
+  852882f 旧方案再测试
+  700fe60 Smooth terminal recovery for slosh MPC tests
+  65cb0f4 Add MPC cost breakdown monitoring
+  615d32d Add terminal slowdown and cost contribution analysis
+  7b3fb16 治理终点过渡与纵向速度参考脉冲
+  b8fe6a2 / c260db2 / 25dcc8c terminal 治理
+  19e93fd 加入MPC晃动预览代价与G组验证方案
+  e886825 加入固定路径外部速度剖面 baseline
+```
+
+结论：
+
+```text
+可以删除 OSCRS / GeoRef 文件入口；
+不能按提交区间整体回滚；
+模型保真度脚本先不要删，因为论文 still 需要 Ferrari-style 绝对保真度；
+terminal / cost_breakdown / fixed-path / TOPPRA/Ruckig 相关提交属于当前主线，必须保留。
+```
+
+### 0.4 实物验证兼容性硬约束
+
+重构不能让 `docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md` 失效。
+
+当前验证方案里仍有大量显式 launch arg：
+
+```text
+energy_profile_enable:=false
+input_shaping_enable:=false
+risk_scheduler_enable:=false
+slosh_speed_governor_enable:=false
+enable_slosh_box_constraint:=false
+terminal_recovery_enable:=false
+terminal_slowdown_*
+terminal_capture_stop_*
+external_speed_profile_csv
+external_profile_execution_cap_*
+```
+
+因此每删一个 launch arg，都必须同步做三件事：
+
+```text
+1. 更新 slosh_experiment.launch / slosh_experiment_sim.launch；
+2. 更新 20260518 验证方案里的所有启动命令；
+3. 更新 run_sim_fixed_path_bag.sh / scripts/README.md 中对应示例。
+```
+
+否则实物验证会出现两类问题：
+
+```text
+启动命令仍传已删除 arg，roslaunch 直接失败；
+或者旧 arg 已无效但文档还写着它，导致操作者误以为某机制已关闭。
+```
+
+录包话题硬约束：
+
+```text
+必须保留：
+  /camera/color/image_raw
+  /camera/color/camera_info
+  /imu/data
+  /odom
+  /cmd_vel
+  /scout/global_path_fixed
+  /local_path
+  /mpc/status_val
+  /mpc/cost_breakdown
+  /mpc/slosh_horizon_summary
+  /reference/v_ref_horizon
+  /reference/s_horizon
+  /reference/implied_ax
+  /reference/implied_ay
+  /reference/implied_jerk
+  /terminal/*
+  /profile_cap/*
+  /slosh/*
+```
+
+可以删除：
+
+```text
+  /scout/global_path_anti_slosh
+  /anti_slosh_path/*
+  /anti_slosh_path/candidate_report
+  /anti_slosh_path/safety_alarm
+```
+
+脚本路径短期硬约束：
+
+```text
+在实物对比实验完成前，不移动：
+  launch_real_sensors_stack.sh
+  record_slosh_experiment.sh
+  template_fixed_path_generator.py
+  send_fixed_goal.py
+  run_sim_fixed_path_bag.sh
+  scripts/analysis/retime_toppra_style.py
+  scripts/analysis/retime_ruckig_style.py
+  scripts/analysis/analyze_fixed_path_cost_effect.py
+  scripts/analysis/analyze_ferrari_indices.py
+  scripts/analysis/extract_mpc_cost_breakdown.py
+  scripts/analysis/analyze_terminal_approach_1s.py
+```
+
+这些路径已经写进验证方案和日常命令，移动脚本应放在最后，并提供兼容 wrapper。
+
+#### OSCRS / GeoRef 在线路径后处理
+
+这些不服务当前 MPC cost / fixed-path baseline 主线：
+
+```text
+launch/anti_slosh_path_post_processor.launch
+config/oscrs_container.yaml
+scripts/anti_slosh_path_post_processor.py
+scripts/oscrs/**
+scripts/reference_generation/**
+scripts/candidate_generators.py
+scripts/generate_anti_slosh_path_candidates.py
+scripts/evaluate_anti_slosh_path_candidates.py
+scripts/analyze_oscrs_candidates.py
+scripts/check_oscrs_model_consistency.py
+scripts/check_oscrs_takeover.py
+scripts/validate_georef_oscrs_bag.py
+scripts/diagnose_georef_budget_gap.py
+scripts/diagnose_slosh_guided_georef_score.py
+scripts/optimize_anti_slosh_reference.py
+scripts/sweep_anti_slosh_timing_candidates.py
+scripts/sweep_p3_geometry_candidates.py
+scripts/test_candidate_generators_equivalence.py
+```
+
+建议处理方式：
+
+```text
+Phase A 先 git tag / 分支保留旧状态；
+Phase B 用 git rm 删除；
+Phase C 更新 README / record / launch 文档；
+不要保留一堆 legacy wrapper，否则重构目标会失败。
+```
+
+#### C++ 旧实验机制
+
+当前验证方案所有命令都显式关闭这些机制：
+
+```text
+energy_profile_enable=false
+input_shaping_enable=false
+risk_scheduler_enable=false
+slosh_speed_governor_enable=false
+enable_slosh_box_constraint=false
+```
+
+因此它们是主线外分支：
+
+```text
+risk_scheduler.cpp / .h
+RiskScheduler 相关成员、参数、publisher
+input_shaping 相关成员、参数、方法
+slosh_speed_governor 相关成员、参数、分支
+energy_profile_* 速度剖面分支
+slosh box constraint 入口
+heading_align 起点原地对齐分支
+settling / terminal residual 分支
+tracking_curvature_speed_cap 分支
+```
+
+注意：
+
+```text
+terminal_recovery 目前默认关闭，但 terminal envelope 仍借用了 terminal_recovery.v_max 作为 capture 低速目标。
+删除 terminal_recovery 前，必须先把该值显式迁移为 terminal_capture_v 或 terminal_approach_v。
 ```
 
 ---
 
-## 2. 分阶段重构方案（mission-driven 重排）
+## 1. 当前代码问题审查
 
-按 0.4 节的 A/B/C 优先级重排。**A 级（Phase 1–2）+ B 级（Phase 3–4）做完即可完整支撑实物 C/D/E/F ablation**；
-C 级（Phase 5–11）是长期代码健康，可在 RA-L 投稿后再做。
+### 1.1 `local_planner_ros.cpp` 已经不可维护
 
-| Phase | 优先级 | 主题 | 估时 |
-|---|---|---|---|
-| 0 | 基础设施 | diff_two_bags.py 回归脚本 | 2 h |
-| **1** | **A**（ablation 关键） | **cost breakdown 单一来源** | 3 h |
-| **2** | **A**（ablation 关键） | **slosh cost 抽 SloshTrackingCost 子类** | 2 h |
-| **3** | **B**（ablation 辅助） | **terminal 三段从 controlLoop 切独立方法** | 2 h |
-| **4** | **B**（ablation 辅助） | **slosh observer 与 control 解耦** | 4 h |
-| 5 | C | path_handler 顶部 17 free helper → path_utils | 1 h |
-| 6 | C | local_planner_ros 顶部 5 free helper → local_planner_utils | 1 h |
-| 7 | C | controlLoop 完整切分（剩余非-terminal 部分） | 3 h |
-| 8 | C | ~50 成员变量装进嵌套 struct | 4 h |
-| 9 | C | 60 publisher 聚合为 `LocalPlannerPublishers` | 3 h |
-| 10 | C | `path_handler.getReferencePoints` 切分 | 3 h |
-| 11 | C | Python `scripts/` 顶层 23 个按职责分子目录 | 2 h |
-| 12 | 占位 | TerminalManager / FSM 引擎 / PIMPL（本轮不做） | — |
-| **合计** | | | **30 h** |
+当前规模：
 
-**节奏建议**：
-- 单次会话最多 2 phase
-- Phase 2 / 4 / 7 / 9 后必须 review 暂停
-- A+B 级（Phase 1–4，共 11 h）做完后强制暂停，先用回归 bag + 实物 dry-run 验证 ablation 流程没退化，再决定是否继续 C 级
+```text
+local_planner_ros.cpp 约 3031 行
+local_planner_ros.h   约 426 行
+path_handler.cpp      约 1908 行
+```
+
+`LocalPlannerROS` 同时负责：
+
+```text
+ROS subscribe / publish
+参数读取
+状态机
+terminal envelope
+profile execution cap
+slosh observer
+MPC solve
+cost breakdown
+reference diagnostics
+cmd_vel filter
+risk scheduler / input shaping / governor 等旧分支
+```
+
+这不是“拆几个函数”能解决的。先删除主线外分支，再抽类，否则只是把复杂度搬家。
+
+### 1.2 `cost_breakdown` 与 solver 仍是两套公式
+
+当前 solver cost 在：
+
+```text
+src/cost_function.cpp
+```
+
+`/mpc/cost_breakdown` 在：
+
+```text
+LocalPlannerROS::computeCostBreakdown()
+```
+
+两者手写公式重复。对 C/D/E/F 实验而言，这是高风险点：
+
+```text
+如果 solver 真正优化的 J_slosh 与 cost_breakdown 发布的 J_slosh 不一致，
+论文里 pct_slosh / J_slosh 占比就不可信。
+```
+
+这是重构里最该优先处理的“可信度问题”。
+
+### 1.3 OSCRS 还污染脚本层和录包层
+
+`scripts/README.md` 大量篇幅仍在描述 OSCRS / GeoRef。
+
+`record_slosh_experiment.sh` 仍记录：
+
+```text
+/scout/global_path_anti_slosh
+/anti_slosh_path/*
+/anti_slosh_path/candidate_report
+/anti_slosh_path/safety_alarm
+```
+
+这会让当前主线混乱：
+
+```text
+实验明明是 fixed-path MPC cost，
+但脚本说明和 bag 白名单仍像 OSCRS 实验。
+```
+
+应该删除这些入口，而不是继续在命令里反复强调“不启动 OSCRS”。
+
+### 1.4 PathHandler 职责混杂
+
+当前 `PathHandler` 同时做：
+
+```text
+路径接收 / TF 转换 / 重采样 / 曲率估计 / B-spline 平滑
+内部速度剖面 v(s)
+旧 energy_profile
+外部 CSV v_ref(s)
+终点速度处理
+reference horizon 生成
+```
+
+当前主线只需要：
+
+```text
+固定路径 -> 内部 v(s) 或外部 CSV v_ref(s) -> MPC refs
+```
+
+旧 `energy_profile_*` 应删掉；TOPPRA/Ruckig 已经是正式外部 timing baseline，不需要再保留一个内部 PROFILE_ENERGY 历史分支。
+
+### 1.5 `scripts/analysis` 也混有历史研究脚本
+
+很多分析脚本是阶段性产物：
+
+```text
+day3 / phase4 / 0424 red group / OSCRS step2 / PMG replay / P3 failure
+```
+
+它们不影响运行，但会让新实验入口难找。建议保留当前主线最小集，其余移到：
+
+```text
+docs/Claude/legacy_scripts_manifest.md
+```
+
+或直接删除。若担心复查旧数据，先打 tag，不要在主包里继续保留。
 
 ---
 
-### Phase 0（基础设施）：回归比对脚本
+## 2. 重构原则
 
-**改什么**：新增 `scripts/analysis/diff_two_bags.py`，输入两个 bag，对比：
-- `/cmd_vel` 序列（浮点 |Δ| < 1e-6）
-- `/scout_local_planner/state`（或等价状态机 topic）转换序列
-- `/slosh/state` 时间序列
-- `/mpc/cost_breakdown` 各项时间序列
+### 2.1 先删旧分支，再做解耦
 
-输出：PASS/FAIL 与首个出现偏差的 t / topic。
+错误顺序：
 
-**不改什么**：仓库内任何代码 / launch / param。
+```text
+先把 local_planner_ros.cpp 拆成很多类；
+然后每个类里仍然保留 OSCRS、risk_scheduler、input_shaping、speed_governor、energy_profile。
+```
 
-**为什么先做**：后续每个 phase 都靠它做"行为等价"判定。
+正确顺序：
 
-**验证**：用今天的 sim bag `bags/sim_s_curve/20260520_133904_s_curve.bag` 自比，应 PASS。
+```text
+1. 固化当前可运行 baseline；
+2. 删除主线外入口；
+3. 删除主线外 C++ 分支；
+4. 再拆 Terminal / SloshObserver / Cost / Diagnostics。
+```
+
+### 2.2 每次只删一类东西
+
+每个 phase 只做一个主题：
+
+```text
+删 OSCRS Python，不同时改 C++；
+删 risk_scheduler，不同时改 terminal；
+抽 SloshObserver，不同时改 cost；
+```
+
+否则出问题无法定位。
+
+### 2.3 删除前必须有回退点
+
+执行删除前先做：
+
+```bash
+git tag legacy-oscrs-l2p5-before-prune
+```
+
+或者新建分支：
+
+```bash
+git branch legacy/oscrs-l2p5
+```
+
+这样就可以大胆 `git rm`，不需要在主线里保留 “legacy” 垃圾。
+
+### 2.4 主效果窗口不因重构改变
+
+重构后主评价窗口仍是：
+
+```text
+TRACKING start -> first terminal/capture - 1s
+```
+
+terminal 仍只做诊断，不进入 SloshPriorityMPC 主效果统计。
 
 ---
 
-### Phase 1（A 级 / ablation 关键）：cost breakdown 单一来源
+## 3. 推荐新模块结构
 
-**问题**：现 `local_planner_ros.cpp:1915-2002` 的 `computeCostBreakdown` 与 `cost_function.cpp` 的
-公式各写一份，C/D/E/F 一旦哪边漏改，breakdown publish 出来的解读就是错的。
+目标目录：
 
-**改什么**：
+```text
+include/scout_local_planner/
+  local_planner_ros.h          # ROS glue，只保留订阅、发布、控制循环编排
+  mpc_solver.h
+  cost_function.h
+  constraint_manager.h
+  path_handler.h
+  slosh_integration.h
+  slosh_feedback.h             # 新增：odom/imu -> ax/ay/omega/alpha
+  terminal_controller.h        # 新增：terminal envelope / reached gate
+  profile_execution_cap.h      # 新增：external v_ref(s) cmd_v cap
+  diagnostics_publisher.h      # 新增：/slosh /mpc /reference /terminal /profile_cap 发布
+  types.h
+```
+
+最终 `LocalPlannerROS` 应只做：
+
+```text
+1. load params
+2. receive odom / imu / path
+3. update slosh feedback
+4. ask PathHandler for refs
+5. ask MPCSolver solve
+6. pass cmd through terminal/profile cap
+7. publish diagnostics
+```
+
+---
+
+## 4. 分阶段方案
+
+### Phase 0：冻结当前可运行状态
+
+目的：
+
+```text
+防止删完旧分支后不知道哪里坏了。
+```
+
+动作：
+
+```text
+1. 记录当前 commit；
+2. 打 tag 或建 legacy 分支；
+3. 保存当前验证命令；
+4. 用仿真跑 3 个 smoke：
+   - internal profile / C
+   - TOPPRA-style
+   - Ruckig-style
+```
+
+通过标准：
+
+```text
+catkin_make --pkg scout_local_planner 通过；
+三包都能进入 REACHED；
+TOPPRA/Ruckig 的 /profile_cap/v_profile 非 NaN；
+/profile_cap/cmd_v_post_cap 不长期高于 /profile_cap/v_profile。
+```
+
+### Phase 1：删除 OSCRS / GeoRef 文件入口
+
+删除：
+
+```text
+launch/anti_slosh_path_post_processor.launch
+config/oscrs_container.yaml
+scripts/anti_slosh_path_post_processor.py
+scripts/oscrs/**
+scripts/reference_generation/**
+scripts/candidate_generators.py
+scripts/generate_anti_slosh_path_candidates.py
+scripts/evaluate_anti_slosh_path_candidates.py
+scripts/analyze_oscrs_candidates.py
+scripts/check_oscrs_model_consistency.py
+scripts/check_oscrs_takeover.py
+scripts/validate_georef_oscrs_bag.py
+scripts/diagnose_georef_budget_gap.py
+scripts/diagnose_slosh_guided_georef_score.py
+scripts/optimize_anti_slosh_reference.py
+scripts/sweep_anti_slosh_timing_candidates.py
+scripts/sweep_p3_geometry_candidates.py
+scripts/test_candidate_generators_equivalence.py
+```
+
+同步修改：
+
+```text
+scripts/README.md
+record_slosh_experiment.sh
+launch_sim_nav_stack.sh 里的 OSCRS 提示
+```
+
+验证：
+
+```bash
+rg -n "OSCRS|GeoRef|anti_slosh|global_path_anti_slosh|candidate_report" src/scout_apps/control/scout_local_planner
+```
+
+期望：
+
+```text
+只允许历史文档里出现；
+主包代码、launch、record、README 不再出现。
+```
+
+### Phase 2：删除 Python 缓存与无关旧分析脚本
+
+删除：
+
+```text
+scripts/**/__pycache__
+```
+
+删除或迁出 OSCRS 专属分析脚本：
+
+```text
+analyze_day3_abc_smoke.py
+analysis/summarize_oscrs_step2.py
+```
+
+暂时保留模型保真度 / Ferrari / 旧实物数据脚本：
+
+```text
+analysis/phase4_model_fidelity_ablation.py
+analysis/red_group_0424_*.py
+analysis/model_truth_20260513_fidelity.py
+analysis/analyze_zeta_fidelity_ablation.py
+analysis/analyze_ferrari_indices.py
+analysis/compute_ferrari_indices.py
+analysis/ferrari_oracle.py
+```
+
+理由：
+
+```text
+这些脚本不属于运行主线，但论文仍需要 Ferrari-style 绝对保真度和历史模型对比证据。
+第一轮不要删；等论文指标链完全迁到 analyze_ferrari_indices.py 后再决定。
+```
+
+### Phase 3：清理 launch / config 的旧开关
+
+从 `slosh_experiment.launch` / `slosh_experiment_sim.launch` 删除：
+
+```text
+energy_profile_*
+input_shaping_*
+risk_scheduler_enable
+slosh_speed_governor_*
+enable_slosh_box_constraint
+heading_align_*（若确认实物固定路径不需要）
+```
+
+从 `mpc_params.yaml` / `mpc_params_sim.yaml` 删除对应段落。
+
+保留：
+
+```text
+Q_slosh
+slosh_height_ref
+slosh_eta_dot_ratio
+slosh_preview_factor
+Q_slosh_eta_dot
+terminal_factor_slosh_eta
+terminal_factor_slosh_eta_dot
+C/D/E/F 的 Q/R 参数覆盖
+terminal_slowdown
+terminal_capture_stop
+v_des_rate_limit
+external_speed_profile_csv
+external_profile_execution_cap
+slosh_estimator IMU 参数
+```
+
+注意：
+
+```text
+terminal_recovery.v_max 当前被 terminal envelope 当 capture speed 用。
+先新增更明确的参数 terminal_capture_v 或 terminal_approach_v；
+兼容读取旧 terminal_recovery/v_max 一版；
+再删除 terminal_recovery 其它逻辑。
+```
+
+硬要求：
+
+```text
+Phase 3 每删除一个 launch arg，都必须同步更新：
+  docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md
+  scripts/README.md
+  scripts/run_sim_fixed_path_bag.sh
+
+更新后再 grep：
+  rg -n "energy_profile_enable|input_shaping_enable|risk_scheduler_enable|slosh_speed_governor_enable|enable_slosh_box_constraint" \
+    docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md \
+    src/scout_apps/control/scout_local_planner/scripts/README.md \
+    src/scout_apps/control/scout_local_planner/scripts/run_sim_fixed_path_bag.sh
+```
+
+如果还有残留，不能进入实物验证。
+
+### Phase 4：删除 C++ 旧机制
+
+不要一次性删除。拆成 6 个独立子阶段：
+
+```text
+Phase 4A:
+  删除 risk_scheduler.h / .cpp
+  删除 LocalPlannerROS 中 risk_scheduler_* 成员和 /risk_scheduler/* publisher
+
+Phase 4B:
+  删除 input_shaping 相关方法和成员
+
+Phase 4C:
+  删除 slosh_speed_governor 相关方法和成员
+
+Phase 4D:
+  删除 PathHandler energy_profile_* 分支
+
+Phase 4E:
+  删除 slosh box constraint 代理
+
+Phase 4F:
+  评估并删除 heading_align / settling / tracking_curvature_speed_cap
+```
+
+同步：
+
+```text
+CMakeLists.txt 删除 risk_scheduler.cpp
+types.h 删除不再使用的参数字段
+record_slosh_experiment.sh 删除相关 topic
+```
+
+验证：
+
+```bash
+catkin_make --pkg scout_local_planner
+rg -n "risk_scheduler|input_shaping|slosh_speed_governor|energy_profile|enable_slosh_box_constraint" src/scout_apps/control/scout_local_planner
+```
+
+期望：
+
+```text
+主包代码不再出现这些字符串；
+验证文档中可以保留“已删除旧机制”的说明。
+```
+
+每个子阶段都要单独：
+
+```text
+catkin_make --pkg scout_local_planner
+仿真跑 internal profile / C smoke
+必要时跑 TOPPRA 和 Ruckig smoke
+```
+
+如果一次删完，MPC 不动、terminal 不收敛或 `/slosh/height` 中断时，很难定位问题来源。
+
+### Phase 5：cost 单一来源
+
+目的：
+
+```text
+让 solver cost 和 /mpc/cost_breakdown 来自同一套计算逻辑。
+```
+
+动作：
+
+```text
+1. 把 StateTrackingCost 拆成：
+   - TrackingCost
+   - SloshStateCost
+   - OmegaFeedforwardCost（可选，或内部 sub-bucket）
+2. ControlCost 保留 a / omega；
+3. ControlRateCost 保留 da / domega；
+4. 新增 CostBreakdown 计算接口，由 CostFunction 统一输出；
+5. LocalPlannerROS 只负责发布，不再手写公式。
+```
+
+通过标准：
+
+```text
+C/D/E/F 旧 bag replay 后 /mpc/cost_breakdown 数值一致或差异可解释；
+J_slosh_eta / J_slosh_eta_dot / pct_slosh_total 可追溯到 solver 内同一项。
+```
+
+### Phase 6：抽 `SloshFeedback`
+
+新类：
 
 ```cpp
-// 在 CostFunction 上新增一个公开方法：
-struct CostBreakdownPerTerm {
-    std::string name;          // "StateTrackingCost", "ControlCost", "ControlRateCost", ...
-    double total = 0.0;
-    double per_step_max = 0.0;
-    // 可继续按需扩展
-};
-
-std::vector<CostBreakdownPerTerm>
-CostFunction::computeBreakdown(
-    const std::vector<StateVector>& x_traj,
-    const std::vector<ControlVector>& u_traj,
-    const std::vector<ReferencePoint>& refs) const;
-```
-
-实现内部：对每个已注册 CostTerm，逐步调用其现有的 `evaluate(x, u, ref, k)`，按 term name 聚合。
-
-然后把 `local_planner_ros.cpp` 的 `computeCostBreakdown` 改为：
-1. 调用 `cost_function_.computeBreakdown(...)` 拿到 per-term 字典
-2. 把它映射成现有 `CostBreakdown` struct（J_lag / J_contour / J_etheta / J_v / J_control / J_smooth / J_slosh_eta / J_slosh_eta_dot / J_total）
-3. **完全删除**当前重复手抄的公式（line 1915-1997 的核心）
-
-**不改什么**：
-- `mpc/cost_breakdown` topic 的 layout（21 字段 Float32MultiArray）一字不变
-- 每个 J_* 的语义与数值不变
-- terminal_factor_slosh_eta / terminal_factor_slosh_eta_dot 的"末端加权"语义不变（在 SloshTrackingCost 里实现，见 Phase 2）
-
-**风险**：中（同一份代码可能对 omega_ff 项的处理细节差异，需要 phase-0 回归脚本严格对比 `J_*` 序列）。
-
-**ablation 价值**：从此 cost breakdown 与 solver 内目标函数 100% 同源，C/D/E/F 任何差异都可信归因到参数。
-
----
-
-### Phase 2（A 级 / ablation 关键）：抽 `SloshTrackingCost : CostTermBase`
-
-**问题**：slosh 项（Q_slosh_eta, Q_slosh_eta_dot, terminal_factor_*）现在嵌在 `StateTrackingCost` 内
-（cost_function.cpp:40-48, 84-93, 290-310），违反 CostTermBase 设计意图，也使 cost breakdown 难以独立追踪。
-
-**改什么**：
-
-```cpp
-// cost_function.h 新增
-class SloshTrackingCost : public CostTermBase {
-public:
-    SloshTrackingCost(const MPCParams& params);
-    std::string name() const override { return "SloshTrackingCost"; }
-    double evaluate(const StateVector& x, const ControlVector& u,
-                    const ReferencePoint& ref, int k) const override;
-    void getQuadraticCost(int k, int N,
-                          Eigen::MatrixXd& Q_contrib,
-                          Eigen::MatrixXd& R_contrib,
-                          Eigen::VectorXd& q_contrib,
-                          Eigen::VectorXd& r_contrib) const override;
-    void setParams(const MPCParams& params) { params_ = params; }
-private:
-    MPCParams params_;
-    double terminalFactor(int k, int N, double base) const;
-};
-```
-
-实现：从 `StateTrackingCost` 把 slosh 相关分支（含 terminal_factor）原样搬过来。
-
-`CostFunction::initialize(...)`：
-
-```cpp
-addCostTerm(std::make_shared<StateTrackingCost>(params));
-addCostTerm(std::make_shared<ControlCost>(params));
-addCostTerm(std::make_shared<ControlRateCost>(params));
-addCostTerm(std::make_shared<SloshTrackingCost>(params));  // 新增，原 slosh 项从 StateTrackingCost 移走
-```
-
-**不改什么**：
-- `mpc/cost_breakdown` topic 的 J_slosh_eta / J_slosh_eta_dot 字段语义、数值
-- Q_slosh / Q_slosh_eta_dot / terminal_factor_slosh_eta / terminal_factor_slosh_eta_dot 参数名与数值生效逻辑
-- StateTrackingCost 的 e_l / e_c / e_theta / v - v_ref 计算
-
-**风险**：中。需要确认 Q matrix sparsity pattern 在新拆分后与旧 monolithic StateTrackingCost 在数值上等价
-（包括 ETA_X / ETA_Y / ETA_X_DOT / ETA_Y_DOT 四个 diagonal 项的位置）。
-
-**ablation 价值**：
-- C/E 组（Q_slosh=0）走的 cost term 数学上变成"被 disable"，cost breakdown 显示更清晰
-- 未来想做 "slosh 软约束 vs 软代价 vs 硬约束" 等结构对比时，有清晰挂载点
-- 把"slosh 单独是不是 0"作为 C/E 是否 ablation 失败的早判据更直接
-
----
-
-### Phase 3（B 级 / ablation 辅助）：terminal 三段从 controlLoop 切出
-
-**问题**：terminal_capture_stop / terminal_recovery / terminal_slowdown 三段散在 controlLoop 内
-（Phase C / D / G 段），analysis 脚本只能靠 `terminal_phase_active` 等 publish 间接判别。
-
-**改什么**：在 `LocalPlannerROS` 新增三个 private 方法（**只搬，不改逻辑**）：
-
-```cpp
-// 返回 true 表示已处理 + publish，controlLoop 直接 return
-bool runTerminalCaptureStopIfActive(const GoalInfo& goal);
-
-// 返回 true 表示已处理 + publish + return（recovery latch 已生效）
-bool runTerminalRecoveryIfActive(const GoalInfo& goal);
-
-// 计算 terminal_slowdown envelope 并应用 v_max 与 Q_v override
-void applyTerminalSlowdownIfActive(MPCParams& runtime_mpc_params,
-                                    double& v_des_target);
-```
-
-controlLoop 内的对应段落改为函数调用，**逻辑零修改**。
-
-**不改什么**：
-- terminal_phase_active / terminal_envelope_active / terminal_v_envelope / terminal_recovery_latched
-  等 publish 的语义和时机
-- 三段的判定阈值与生效边界
-- terminal_factor_slosh_eta 对 cost 的影响（这个在 Phase 2 已处理）
-
-**风险**：低（纯方法提取）
-
-**ablation 价值**：
-- analysis 脚本 slicing "TRACKING start → first terminal" 窗口的逻辑可以直接从 controlLoop 反推
-- 未来需要把 C/E vs D/F 的 terminal 行为做 A/B 对比时，可一键禁用某段（注释一行函数调用）
-- 为 Phase 12 的 TerminalManager 抽取打基础
-
----
-
-### Phase 4（B 级 / ablation 辅助）：slosh observer 与 control 解耦
-
-**问题**：`updateSloshEstimate()` + IMU 滤波 + bias 估计 + odom 差分散布在 LocalPlannerROS，
-涉及 ~20 个成员变量。ablation 实验里 observer 状态可能被 control 路径污染（SETTLING 拖长 / cmd_vel
-归零导致 odom 差分异常）。
-
-**改什么**：新增 `SloshFeedback` class（仍在 scout_local_planner 包内，不跨包）：
-
-```cpp
-// include/scout_local_planner/slosh_feedback.h
 class SloshFeedback {
 public:
-    struct Config { /* IMU bias compensation 参数 + EMA alpha + topic */ };
-    struct Output {
-        double ax_est, ay_est, alpha_est, omega_est;
-        bool   imu_bias_ready;
-        double imu_ay_bias;
-        // ... 现有 publish 的所有量
-    };
-
-    void configure(const Config& c);
-    void onOdom(double v, double omega, const ros::Time& t);
-    void onImu(double ay_raw, double omega_z, const ros::Time& t);
-    Output getOutput() const;
-    void reset();
+  void configure(...);
+  void onOdom(double v, double omega, ros::Time t);
+  void onImu(...);
+  Output output() const;
+  void reset();
 };
 ```
 
-LocalPlannerROS 持有一个 `SloshFeedback feedback_`；在 odomCallback / imuCallback 内只调
-feedback_.onOdom / onImu。controlLoop 取 `feedback_.getOutput()` 喂给 `slosh_integration_.update(...)`。
+迁出：
 
-**不改什么**：
-- `slosh/ax_est` / `slosh/ay_est` / `slosh/imu_ay_bias` / `slosh/imu_ay_bias_ready` / `slosh/omega_est_used` 等
-  topic 的语义和数值
-- IMU bias 估计的窗口、tolerance、EMA 参数
-- odom 差分 + ay = v*omega 离心估计的公式
+```text
+odom 差分 ax
+ay = v * omega
+IMU yaw rate
+IMU ay bias
+EMA filter
+```
 
-**风险**：中。需要小心把 ~20 个成员的初始化、reset、bias estimator state 一字不漏地搬迁。
+保留 topic 语义：
 
-**ablation 价值**：
-- observer 可以单独跑 GoogleTest（喂一条 IMU 序列得 η 输出），脱离 ROS
-- ablation 实验里 control flow 改变（SETTLING / recovery 进入）不会再影响 observer 状态
-- 后续若要切换 observer 算法（如加 Kalman），有清晰边界
+```text
+/slosh/ax_est
+/slosh/ay_est
+/slosh/alpha_est
+/slosh/omega_est_used
+/slosh/imu_*
+```
 
----
+### Phase 7：抽 `TerminalController`
 
-### Phase 5（C 级）：path_handler 顶部 17 free helper → path_utils
+当前 terminal 需要保留，但要干净：
 
-同原方案，移动 + #include，纯结构。
+```text
+两段式 terminal envelope
+goal_position_reached + speed_low -> REACHED
+GoalInfo.dx <= 0 -> cmd_v 强制 0
+terminal debug topics
+```
 
-### Phase 6（C 级）：local_planner_ros 顶部 5 free helper → local_planner_utils
+删除：
 
-同原方案。
+```text
+旧 terminal recovery ALIGN / APPROACH / FINAL_YAW 分支
+```
 
-### Phase 7（C 级）：controlLoop 完整切分（剩余非 terminal 部分）
+前提：
 
-Phase 3 已经把 terminal 三段切出。Phase 7 处理剩余 phase：
+```text
+先把 capture 低速目标从 terminal_recovery.v_max 迁移到 terminal_capture_v。
+```
+
+硬前置步骤：
+
+```text
+1. 新增参数 terminal_capture_v 或 terminal_approach_v；
+2. terminal envelope 改为使用该新参数；
+3. 保留一版兼容读取 terminal_recovery/v_max；
+4. 跑 d200 terminal smoke；
+5. 通过后再删除 terminal_recovery ALIGN / APPROACH / FINAL_YAW 分支。
+```
+
+不能直接删除 `terminal_recovery`，否则 capture 入口目标速度来源会消失，实物终点收敛风险很高。
+
+新边界：
 
 ```cpp
-void controlLoop_resetTransientFlags();
-bool controlLoop_handleNonTracking();              // IDLE / REACHED 早返
-void controlLoop_updateRiskScheduler(MPCParams& runtime);
-void controlLoop_applySettlingOverrides(MPCParams& runtime);
-double controlLoop_smoothVDes(double v_raw);
-void controlLoop_evaluateTrackingFeasibility(...);
-MPCSolution controlLoop_buildReferencesAndSolve(...);
-void controlLoop_publishAllDebug(...);
+TerminalOutput TerminalController::update(goal, current_v, current_omega, raw_cmd, dt);
 ```
 
-注意：terminal 三段已在 Phase 3 提取，**不要重复**。
+### Phase 8：抽 `ProfileExecutionCap`
 
-### Phase 8（C 级）：成员变量分组结构化
-
-同原方案，把 ~50 个成员装进嵌套 struct。新增 struct：
-- `TerminalRecoveryConfig / Runtime`
-- `TerminalSlowdownConfig / Runtime`
-- `TerminalCaptureStopConfig`
-- `InputShapingState`
-- `SettlingConfig / Runtime`
-- `TrackingFeasibilityConfig / Runtime`
-- ~~`SloshFeedbackConfig / Runtime`~~（已在 Phase 4 由 SloshFeedback 类替代）
-- `CmdFilterState`
-- `VDesRateLimitState`
-
-### Phase 9（C 级）：60 publisher 聚合 `LocalPlannerPublishers`
-
-同原方案。
-
-### Phase 10（C 级）：`path_handler.getReferencePoints` 切分
-
-同原方案。
-
-### Phase 11（C 级 / 独立）：Python `scripts/` 按职责分子目录
-
-同原方案。
-
-### Phase 12（占位，本轮不做）
-
-- `TerminalManager` 类合并 capture_stop / recovery / slowdown 三块业务
-- `FSM` 引擎独立化
-- LocalPlannerROS PIMPL 化
-- GoogleTest 单元测试基础设施
-
----
-
-## 3. 每阶段的回归验证流程
-
-每个 phase commit 前必须做：
+当前 TOPPRA/Ruckig baseline 需要保留：
 
 ```text
-1. 编译
-   cd /home/a/scout_ws
-   catkin_make --pkg scout_local_planner
-   echo "exit code 必须 = 0"
-
-2. Smoke 启动
-   bash src/scout_apps/control/scout_local_planner/scripts/run_s_curve_smoke_test.sh
-   # 确认能停 goal，cmd_vel 不为 NaN
-
-3. 数值回归（关键）
-   3.1 用 phase 前的 commit 跑一次 fixed-path smoke：
-       git stash
-       run_s_curve_smoke_test.sh   → bags/sim_s_curve/<ts>_baseline.bag
-   3.2 应用 phase 改动，再跑一次：
-       run_s_curve_smoke_test.sh   → bags/sim_s_curve/<ts>_after_phase_N.bag
-   3.3 diff /cmd_vel 序列、/slosh/state、PlannerState 转换：
-       python3 scripts/analysis/diff_two_bags.py <baseline> <after_phase_N>
-       # 允许浮点 |Δ| < 1e-6
-   3.4 不通过 → 立即回退 phase，不进入下一阶段
-
-4. Topic 完整性（Phase 5 必做）
-   rostopic list | sort > /tmp/topics_after.txt
-   diff /tmp/topics_before.txt /tmp/topics_after.txt
-   # 必须空 diff
+external_speed_profile_csv
+external_profile_execution_cap_enable
+external_profile_execution_accel_limit
+external_profile_execution_decel_limit
+external_profile_execution_jerk_limit 默认 0
+/profile_cap/*
 ```
 
-**回归脚本待新增**：`scripts/analysis/diff_two_bags.py`（Phase 0 准备工作）。
-该脚本本身不属于本次重构 scope，但是是回归保障的前置依赖，建议作为 Phase 0 单独 commit。
+新类：
 
----
+```cpp
+class ProfileExecutionCap {
+public:
+  Output apply(double cmd_v, double filtered_v, double s_now, const PathHandler& path, double dt);
+};
+```
 
-## 4. 文件级改动清单（按 phase 汇总，mission-driven 重排版）
-
-| Phase | 优先级 | 新增 | 修改 | 删除 |
-|---|---|---|---|---|
-| 0 | 基础设施 | `scripts/analysis/diff_two_bags.py` | — | — |
-| **1** | **A** | — | `include/.../cost_function.h`（加 `CostFunction::computeBreakdown`） `src/cost_function.cpp`（实现） `src/local_planner_ros.cpp`（`computeCostBreakdown` 改为调用 + 删手抄公式 ~80 行） | — |
-| **2** | **A** | — | `include/.../cost_function.h`（加 `SloshTrackingCost` 类） `src/cost_function.cpp`（实现 + 从 StateTrackingCost 移除 slosh 分支 + initialize 注册新 term） | — |
-| **3** | **B** | — | `include/.../local_planner_ros.h`（3 个 terminal 私有方法声明） `src/local_planner_ros.cpp`（controlLoop 内 terminal 三段抽出） | — |
-| **4** | **B** | `include/.../slosh_feedback.h` `src/slosh_feedback.cpp` | `include/.../local_planner_ros.h`（移除 ~20 个 IMU/odom 滤波成员，改持 `SloshFeedback feedback_`） `src/local_planner_ros.cpp`（odomCallback/imuCallback/updateSloshEstimate 改为 feedback_ 委托） `CMakeLists.txt`（加 slosh_feedback.cpp） | — |
-| 5 | C | `include/.../path_utils.h` `src/path_utils.cpp` | `src/path_handler.cpp`（去掉 17 个 free helper 定义，加 include） `CMakeLists.txt` | — |
-| 6 | C | `include/.../local_planner_utils.h` `src/local_planner_utils.cpp` | `src/local_planner_ros.cpp`（去掉 5 个 free helper） `CMakeLists.txt` | — |
-| 7 | C | — | `local_planner_ros.h`（剩余 ~8 个 private 方法声明） `local_planner_ros.cpp`（controlLoop 剩余 phase 切分） | — |
-| 8 | C | — | `local_planner_ros.h`（成员变量装进嵌套 struct，注意 SloshFeedback 已在 Phase 4 处理掉） `local_planner_ros.cpp`（成员引用批量重命名） | — |
-| 9 | C | — | `local_planner_ros.h`（用 LocalPlannerPublishers 替换 60 个 publisher 成员） `local_planner_ros.cpp`（advertise + publish 调用迁移） | — |
-| 10 | C | — | `path_handler.cpp`（getReferencePoints 切分） | — |
-| 11 | C | `scripts/experiment/` `scripts/path/` `scripts/diagnostics/` `scripts/tools/` 子目录（带 `__init__.py` 或 symlink） | 受影响 launch / sh 中的路径引用；新增旧路径 symlink（如有需要） | — |
-
----
-
-## 5. 不在本方案内的事
-
-- `slosh_models` 包暂不动（已是干净独立库）。
-- `cost_function.cpp / mpc_solver.cpp / constraint_manager.cpp` 不动（已是合理大小）。
-- `risk_scheduler / slosh_integration / diff_drive_model / cubic_spline` 不动。
-- 算法层面的任何改动（MPC cost 公式、slosh 估计、terminal 收敛策略）一律不在重构里做。
-- 性能优化（如 publisher 节流、bag 体积压缩）不在本次 scope。
-- 单元测试新增（除 Phase 0 的 diff_two_bags.py 这条回归脚本外）不在本次 scope；GoogleTest 测试框架引入留给 Phase 8。
-
----
-
-## 6. 决策与确认点（mission-driven 修订版）
-
-执行前需用户明确：
-
-1. **是否同意 A + B 级（Phase 1–4，11 h）优先执行**，以最小工作量解锁 C/D/E/F ablation 的可信度？
-   - 若是：先做 0 → 1 → 2 → 3 → 4，强制 review 暂停，根据实物 dry-run 决定是否启动 C 级
-   - 若否：直接跳到 C 级（与 ablation 无关），按风险升序做 Phase 5 起
-
-2. **C 级（Phase 5–11）何时启动？**
-   - A：A+B 级回归通过后立即接力（30 h 一次性做完）
-   - B：RA-L 投稿（2026-08）后再做（推荐）
-   - C：永远不做，A+B 级足够
-
-3. **每 phase 后是否需要 Code review 暂停？**
-   - 默认建议：
-     - **Phase 2 后强制暂停**（slosh cost 抽出，可能影响数值）
-     - **Phase 4 后强制暂停**（observer 解耦完成，A+B 级里程碑）
-     - Phase 7 / 9 后建议暂停
-
-4. **回归基线 bag 用哪个？**
-   - sim 基线：`bags/sim_s_curve/20260520_133904_s_curve.bag`
-   - **实物基线（ablation 关键）**：`/data/a/slosh_bags/real/20260518_fixed_path_cost/` 中
-     C/D 各取 1 包做"重构前后 cost_breakdown / slosh/* 同序列 replay"，
-     允许浮点 |Δ| < 1e-6
-   - 如果允许重启 mpc 节点 replay bag，phase 1/2 后必须用 C 组和 D 组各跑一次回归
-
-5. **重构期间是否暂停其它代码改动？**
-   - 强烈推荐：是（否则 phase 间 diff 被无关改动污染）
-   - 例外允许：仅文档 / 非控制路径的 Python 工具（如 analysis 脚本）改动
-
-6. **Phase 1 的细节：cost breakdown 的 J_omega_ff 来源？**
-   - 现 `computeCostBreakdown` 里有 J_omega_ff 项，但 cost_function.cpp 的 CostTerm 列表里没有显式的 omega_ff term
-   - Phase 1 实施前需要确认：J_omega_ff 是 StateTrackingCost 内嵌的子项，还是已被合并到 J_v
-   - 如果是嵌入子项，Phase 1 的 `computeBreakdown` 接口需要支持 per-term 内部 sub-bucket
-   - 这一点需要在 Phase 1 启动前的 30 min 代码 walk-through 确认
-
----
-
-## 7. 工期估算（mission-driven 修订版）
-
-| Phase | 优先级 | 估时 | 累计 |
-|---|---|---|---|
-| 0 | 基础设施 | 2 h | 2 h |
-| **1** | **A**（ablation 关键） | 3 h | 5 h |
-| **2** | **A** | 2 h | 7 h |
-| **3** | **B**（ablation 辅助） | 2 h | 9 h |
-| **4** | **B** | 4 h | **13 h** ← **A+B 级里程碑** |
-| 5 | C | 1 h | 14 h |
-| 6 | C | 1 h | 15 h |
-| 7 | C | 3 h | 18 h |
-| 8 | C | 4 h | 22 h |
-| 9 | C | 3 h | 25 h |
-| 10 | C | 3 h | 28 h |
-| 11 | C | 2 h | **30 h** |
-| 12 | 占位 | — | — |
-
-**两个里程碑**：
+目的：
 
 ```text
-里程碑 1：13 h 后（Phase 4 完成）
-  cost breakdown 与 solver 同源
-  slosh cost 独立可观测
-  terminal 三段可独立切换
-  observer 可独立单测
-  → C/D/E/F ablation 的数据可信度问题已解决
-  → 切回实物 bag 主线无障碍
-
-里程碑 2：30 h 后（Phase 11 完成）
-  controlLoop 全切分
-  成员变量结构化
-  publisher 聚合
-  Python 脚本归类
-  → 整体代码可维护性显著提升
-  → 适合 RA-L 投稿后或团队协作前做
+把外部 baseline 的执行层 cap 从 LocalPlannerROS 主循环里移走。
 ```
 
-**节奏建议**：单次会话 ≤ 2 phase，每周 ≤ 5 h 投入。A+B 级建议 1–2 周内完成；C 级可在
-2026-08 投稿后做。
+### Phase 9：诊断发布器聚合
+
+新增：
+
+```cpp
+class DiagnosticsPublisher
+```
+
+只做：
+
+```text
+advertise
+publish /slosh/*
+publish /mpc/*
+publish /reference/*
+publish /terminal/*
+publish /profile_cap/*
+```
+
+不做任何控制逻辑。
+
+### Phase 10：PathHandler 简化
+
+保留：
+
+```text
+path ingest
+resample
+curvature
+internal v(s)
+external CSV v_ref(s)
+getReferencePoints
+```
+
+删除：
+
+```text
+energy_profile
+历史 candidate / geometry tuning 入口
+不再使用的 smoothing 分支（若固定路径实验不用）
+```
+
+再拆 helper：
+
+```text
+path_utils.h / .cpp
+speed_profile.h / .cpp
+```
+
+### Phase 11：脚本目录重排
+
+建议最终结构：
+
+```text
+scripts/
+  experiment/
+    launch_real_sensors_stack.sh
+    launch_sim_nav_stack.sh
+    run_sim_fixed_path_bag.sh
+    record_slosh_experiment.sh
+  path/
+    send_fixed_goal.py
+    template_fixed_path_generator.py
+    fixed_global_path_runner.py
+  analysis/
+    保留当前主线分析脚本
+  retiming/
+    retime_toppra_style.py
+    retime_ruckig_style.py
+```
+
+但执行时要谨慎：
+
+```text
+短期可以先不移动脚本，只清理 README；
+因为很多文档和命令已经引用旧路径。
+真正移动脚本应放在最后，并保留一版兼容 wrapper。
+```
 
 ---
 
-## 8. 关联文档
+## 5. 删除后保留的实验命令口径
 
-- `docs/Claude/CLAUDE.md` —— 编码准则（已遵守：思考前提 / 简洁优先 / 外科手术式修改 / 目标驱动）
-- `docs/重要文档/仿真笔记.md` —— 当前仿真状态（影响 Phase 3 的 smoke test 验证）
-- `docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md` —— terminal 收敛策略（必须保持的"外部行为"）
-- `docs/Claude/总体推进方案.md` —— OSCRS RA-L 投稿计划（重构不能影响 paper 节奏）
+重构后，实物主流程仍是：
+
+```text
+1. launch_real_sensors_stack.sh
+2. roslaunch scout_global_planner mbf_global.launch
+3. template_fixed_path_generator.py 生成 /scout/global_path_fixed
+4. roslaunch scout_local_planner slosh_experiment.launch
+5. record_slosh_experiment.sh
+```
+
+C/D/E/F 只改：
+
+```text
+Q_slosh
+R_a
+R_da
+terminal_factor_slosh_eta
+terminal_factor_slosh_eta_dot
+```
+
+TOPPRA/Ruckig 只额外改：
+
+```text
+external_speed_profile_csv
+external_profile_execution_cap_enable=true
+```
+
+---
+
+## 6. 验证矩阵
+
+每个 phase 后至少跑：
+
+```bash
+catkin_make --pkg scout_local_planner
+git diff --check
+```
+
+关键 phase 后跑仿真：
+
+```text
+C internal profile
+TOPPRA-style external profile
+Ruckig-style external profile
+```
+
+必须检查：
+
+```text
+/mpc_status 能 REACHED
+/cmd_vel 非 NaN
+/slosh/height 连续发布
+/mpc/cost_breakdown 发布
+/reference/v_ref_horizon 发布
+/terminal/mode 发布
+/profile_cap/* 在 TOPPRA/Ruckig 中发布
+```
+
+实物前检查：
+
+```text
+record_slosh_experiment.sh 白名单不再含 OSCRS 旧 topic；
+README 不再推荐 OSCRS 命令；
+20260518 验证方案中的命令仍可直接复制运行。
+```
+
+---
+
+## 7. 推荐执行顺序
+
+最现实版本：
+
+```text
+第 1 次提交：
+  Phase 0 + Phase 1
+  只删 OSCRS / GeoRef Python、launch、config、README、record 旧 topic。
+
+第 2 次提交：
+  Phase 2
+  删除 __pycache__ 和 OSCRS 专属 analysis；模型保真度脚本先保留。
+
+第 3 次提交：
+  Phase 3
+  清理 launch/config 旧开关，并同步更新 20260518 验证方案。
+
+第 4 次提交：
+  Phase 4A-4E
+  分批删除 risk_scheduler / input_shaping / governor / energy_profile / box constraint。
+
+第 5 次提交：
+  Phase 5
+  cost 单一来源，保证 cost breakdown 可信。
+
+第 6 次提交：
+  Phase 6 + Phase 7
+  SloshFeedback + terminal_capture_v + TerminalController。
+
+第 7 次提交：
+  Phase 8 + Phase 9
+  ProfileExecutionCap + DiagnosticsPublisher。
+
+第 8 次提交：
+  Phase 10 + Phase 11
+  PathHandler 简化 + 脚本整理。
+```
+
+不要一次性做完。前三次提交会明显减少噪声；后四次才是结构解耦。
+
+---
+
+## 8. 现在不建议做的事
+
+```text
+1. 不要一上来拆 LocalPlannerROS 成 10 个类；
+   先删掉不再服务主线的旧分支。
+
+2. 不要保留 OSCRS legacy wrapper；
+   要回看旧方案就切 legacy tag/branch。
+
+3. 不要在重构里改 Q/R 参数、terminal 距离、slosh 模型参数；
+   这些属于实验设计，不属于代码治理。
+
+4. 不要把 TOPPRA/Ruckig 做成新 controller；
+   它们只是 external v_ref(s) timing baseline。
+
+5. 不要把 RGB 视觉指标和 /slosh/height 混为同级真值；
+   RGB 仍是实物液面主指标。
+```
+
+---
+
+## 9. 需要你确认的点
+
+执行代码重构前需要确认：
+
+```text
+1. 是否允许直接 git rm OSCRS / GeoRef 文件，而不是迁到 legacy 目录？
+2. 是否保留旧 analysis 脚本用于历史数据复查，还是全部删除？
+3. terminal_recovery 是否可以彻底删除？
+   如果可以，先新增 terminal_capture_v 替代 terminal_recovery.v_max。
+4. 是否保留 heading_align？
+   固定路径实验通常不需要；如果实物偶尔起点 yaw 偏差大，可以先保留到 Phase 3 后再决定。
+5. 是否保留 settling？
+   当前计划明确不做 terminal residual；如果不做，应删除。
+```
+
+我的建议：
+
+```text
+先确认 1 和 3。
+只要 OSCRS 可删、terminal_recovery 可替换，就可以开始 Phase 0/1。
+```
