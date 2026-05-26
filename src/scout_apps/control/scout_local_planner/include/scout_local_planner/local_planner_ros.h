@@ -31,7 +31,6 @@
 #include <memory>
 #include <mutex>
 #include <vector>
-#include <deque>
 
 namespace scout_local_planner {
 
@@ -107,9 +106,6 @@ private:
     void publishSettlingTime(bool timeout);
     void updateState();
     void resetWarmStart(bool keep_u_prev, bool reset_slosh = true);
-    void resetInputShaper();
-    void updateInputShaperConfig();
-    void applyInputShaping(std::vector<ReferencePoint>& refs);
     
     // ====== 状态机 ======
     void transitionTo(PlannerState new_state);
@@ -214,18 +210,6 @@ private:
     double terminal_slowdown_terminal_factor_v_ = 5.0;
     bool terminal_capture_stop_enable_ = true;
     double terminal_capture_stop_distance_ = 0.70;
-
-    // ISR / ZV input shaping（baseline only, default off）
-    bool input_shaping_enable_ = false;
-    std::string input_shaping_type_ = "zv";
-    double input_shaping_omega0_override_ = 0.0;
-    double input_shaping_zeta_override_ = 0.0;
-    bool input_shaping_use_model_params_ = true;
-    double input_shaping_A1_ = 1.0;
-    double input_shaping_A2_ = 0.0;
-    int input_shaping_delay_steps_ = 0;
-    std::deque<double> input_shaping_v_history_;
-    double input_shaping_last_dt_ = 0.0;
 
     // 终点残余晃动收敛（T2 settling）
     bool settling_enable_ = false;

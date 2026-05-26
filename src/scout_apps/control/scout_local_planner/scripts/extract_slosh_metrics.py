@@ -42,7 +42,6 @@ KNOWN_CONDITIONS = (
     "FAS_Q10",
     "FAS_Q5",
     "NOM",
-    "ISR",
     "CUSTOM",
 )
 D0_GROUP_METRICS = (

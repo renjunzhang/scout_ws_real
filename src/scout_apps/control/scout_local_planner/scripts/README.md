@@ -103,7 +103,6 @@ PathHandler 通过 `external_speed_profile_csv` 读取该 CSV，并在 reference
 | `analysis/diagnose_terminal_overshoot.py` | 终点过冲原因诊断 |
 | `analysis/extract_mpc_cost_breakdown.py` | 从 bag 提取 MPC cost contribution |
 | `analysis/diagnose_speed_profile.py` | 参考速度、cmd、odom 速度链路诊断 |
-| `analysis/trajectory_analysis.py` | 轨迹、速度、加速度概览 |
 | `analysis/simulate_slosh_ode.py` | 二阶 slosh ODE 输入输出示意和离线仿真 |
 
 ## 保留的历史模型保真度脚本

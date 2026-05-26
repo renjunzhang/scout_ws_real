@@ -12,7 +12,6 @@
 #include <cmath>
 #include <limits>
 #include <algorithm>
-#include <deque>
 
 namespace scout_local_planner {
 
@@ -564,13 +563,6 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("terminal_capture_stop/enable", terminal_capture_stop_enable_, true);
     pnh.param("terminal_capture_stop/distance", terminal_capture_stop_distance_, 0.70);
 
-    // ISR / ZV input shaping（baseline only）
-    pnh.param("input_shaping/enable", input_shaping_enable_, false);
-    pnh.param("input_shaping/type", input_shaping_type_, std::string("zv"));
-    pnh.param("input_shaping/use_model_params", input_shaping_use_model_params_, true);
-    pnh.param("input_shaping/omega0_override", input_shaping_omega0_override_, 0.0);
-    pnh.param("input_shaping/zeta_override", input_shaping_zeta_override_, 0.0);
-
     // 终点残余晃动收敛（T2 settling）
     pnh.param("settling/enable", settling_enable_, false);
     pnh.param("settling/timeout_s", settling_timeout_s_, 3.0);
@@ -649,7 +641,6 @@ void LocalPlannerROS::globalPathCallback(const nav_msgs::Path::ConstPtr& msg) {
     
     if (path_handler_.updateGlobalPath(*msg, vehicle_params_.v_max * 0.8)) {
         has_path_ = true;
-        resetInputShaper();
         // 注：不在此处无条件 resetWarmStart()。
         // 路径是否显著变化由 PathHandler 的 reset_hint_ 标记，
         // controlLoop() 通过 consumeResetHint() 统一决定是否重置。
@@ -794,7 +785,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
     // 路径跳变/重规划提示：重置 warm-start
     if (path_handler_.consumeResetHint()) {
         resetWarmStart(true);
-        resetInputShaper();
         terminal_recovery_latched_ = false;
         tracking_solve_fail_streak_ = 0;
         tracking_solve_success_streak_ = 0;
@@ -1306,7 +1296,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     return;
                 }
 
-                applyInputShaping(ref_points);
                 publishReferenceExecutionDebug(ref_points);
 
                 publishSmoothedPath();
@@ -1940,7 +1929,6 @@ void LocalPlannerROS::updateState() {
 void LocalPlannerROS::transitionTo(PlannerState new_state) {
     if (state_ != new_state) {
         if (new_state == PlannerState::TRACKING && state_ != PlannerState::TRACKING) {
-            resetInputShaper();
             ++episode_id_;
             {
                 // 基础 ramp；若起点曲率超出 reentry_v_cap 对应横向加速度，加倍保守
@@ -2626,116 +2614,6 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {
     last_speed_governor_active_ = 0;
     slosh_governor_latched_ = false;
     slosh_governor_hold_steps_ = 0;
-    resetInputShaper();
-}
-
-void LocalPlannerROS::resetInputShaper() {
-    input_shaping_v_history_.clear();
-    input_shaping_A1_ = 1.0;
-    input_shaping_A2_ = 0.0;
-    input_shaping_delay_steps_ = 0;
-    input_shaping_last_dt_ = 0.0;
-}
-
-void LocalPlannerROS::updateInputShaperConfig() {
-    if (!input_shaping_enable_) {
-        input_shaping_A1_ = 1.0;
-        input_shaping_A2_ = 0.0;
-        input_shaping_delay_steps_ = 0;
-        return;
-    }
-
-    if (input_shaping_type_ != "zv") {
-        ROS_WARN_THROTTLE(2.0, "[LocalPlannerROS] Unsupported input shaper type '%s', disabling shaping",
-                          input_shaping_type_.c_str());
-        input_shaping_A1_ = 1.0;
-        input_shaping_A2_ = 0.0;
-        input_shaping_delay_steps_ = 0;
-        return;
-    }
-
-    double omega0 = 0.0;
-    double zeta = 0.0;
-    if (input_shaping_use_model_params_ && slosh_enabled_) {
-        omega0 = slosh_integration_.getModalParams().omega_n;
-        zeta = slosh_params_.damping_ratio;
-    }
-    if (input_shaping_omega0_override_ > 1e-6) {
-        omega0 = input_shaping_omega0_override_;
-    }
-    if (input_shaping_zeta_override_ > 1e-6) {
-        zeta = input_shaping_zeta_override_;
-    }
-
-    const double dt = std::max(1e-6, mpc_params_.dt);
-    if (omega0 <= 1e-6) {
-        input_shaping_A1_ = 1.0;
-        input_shaping_A2_ = 0.0;
-        input_shaping_delay_steps_ = 0;
-        return;
-    }
-
-    zeta = std::max(0.0, std::min(0.99, zeta));
-    const double wd = omega0 * std::sqrt(std::max(1e-9, 1.0 - zeta * zeta));
-    if (wd <= 1e-6) {
-        input_shaping_A1_ = 1.0;
-        input_shaping_A2_ = 0.0;
-        input_shaping_delay_steps_ = 0;
-        return;
-    }
-
-    const double K = std::exp(-zeta * M_PI / std::sqrt(std::max(1e-9, 1.0 - zeta * zeta)));
-    input_shaping_A1_ = 1.0 / (1.0 + K);
-    input_shaping_A2_ = K / (1.0 + K);
-    input_shaping_delay_steps_ = std::max(0, static_cast<int>(std::round((M_PI / wd) / dt)));
-
-    if (std::abs(input_shaping_last_dt_ - dt) > 1e-9) {
-        input_shaping_v_history_.clear();
-        input_shaping_last_dt_ = dt;
-    }
-}
-
-void LocalPlannerROS::applyInputShaping(std::vector<ReferencePoint>& refs) {
-    if (!input_shaping_enable_ || refs.empty()) {
-        return;
-    }
-
-    updateInputShaperConfig();
-    if (input_shaping_delay_steps_ <= 0 || input_shaping_A2_ <= 1e-9) {
-        return;
-    }
-
-    std::deque<double> hist = input_shaping_v_history_;
-    std::vector<double> raw(refs.size(), 0.0);
-    for (std::size_t i = 0; i < refs.size(); ++i) {
-        raw[i] = std::max(0.0, refs[i].v_ref);
-    }
-
-    for (std::size_t i = 0; i < refs.size(); ++i) {
-        double delayed = raw.front();
-        if (static_cast<int>(i) >= input_shaping_delay_steps_) {
-            delayed = raw[i - input_shaping_delay_steps_];
-        } else {
-            const std::size_t hist_need =
-                static_cast<std::size_t>(input_shaping_delay_steps_ - static_cast<int>(i));
-            if (hist_need <= hist.size()) {
-                delayed = hist[hist.size() - hist_need];
-            } else if (!hist.empty()) {
-                delayed = hist.front();
-            }
-        }
-
-        refs[i].v_ref = std::max(0.0, input_shaping_A1_ * raw[i] + input_shaping_A2_ * delayed);
-    }
-
-    for (double v : raw) {
-        hist.push_back(v);
-    }
-    const std::size_t keep = static_cast<std::size_t>(std::max(1, input_shaping_delay_steps_));
-    while (hist.size() > keep) {
-        hist.pop_front();
-    }
-    input_shaping_v_history_.swap(hist);
 }
 
 void LocalPlannerROS::publishReferenceExecutionDebug(const std::vector<ReferencePoint>& refs) {

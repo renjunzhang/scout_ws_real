@@ -23,7 +23,7 @@
 | `config/mpc_params_sim.yaml` | 仿真默认参数，当前 `R_domega` 已对齐实物 |
 | `launch/slosh_experiment.launch` | 实物实验入口 |
 | `launch/slosh_experiment_sim.launch` | 仿真实验入口 |
-| `scripts/run_sim_fixed_path_bag.sh` | 固定终点/固定路径仿真录包脚本，支持当前主线 launch 可用的 `NOM / FAS_* / PROP_Q5 / ISR / CUSTOM` |
+| `scripts/run_sim_fixed_path_bag.sh` | 固定终点/固定路径仿真录包脚本，支持当前主线 launch 可用的 `NOM / FAS_* / PROP_Q5 / CUSTOM` 与 external speed profile |
 | `scripts/extract_slosh_metrics.py` | 离线指标提取：height、energy、eta_dot、tracking error、odom ay、历史消融 active ratio、lag correlation |
 | `scripts/template_fixed_path_generator.py` | 从当前位姿到终点生成模板路径 |
 | `scripts/fixed_global_path_runner.py` | 固定路径采集/回放 |
@@ -42,7 +42,6 @@
 | `Q_slosh_eta_dot` | 保留，用于惩罚 `eta_dot`；历史实验显示不构成稳定主线 |
 | `terminal_factor_slosh_eta / eta_dot` | 保留，用于 terminal slosh cost；历史实验显示不构成稳定主线 |
 | `risk_scheduler` | 保留为默认关闭/可配置机制 |
-| `input_shaping` | 保留为默认关闭/可配置机制 |
 | `scripts/extract_slosh_metrics.py` | 保留并扩展，用于复盘历史 bag 和后续离线分析 |
 | `scripts/run_sim_fixed_path_bag.sh` | 保留固定终点/固定路径录包流程，但已移除失败控制器入口的启动条件 |
 
@@ -575,8 +574,7 @@ MPC的晃动抑制通过**软代价**实现（Q_η项），而不是刚性约束
 1. **ω_n、ζ的实测值**：代码中从参数服务器读取，当前仿真和实物值未固定在代码里
 2. **容器几何参数**：R（等效摆长）、液位高度等，影响h_coeff计算
 3. **仿真到实物的gap**：当前仿真bag收敛（test7基线），实物验证尚未进行
-4. **ISR ZV Shaper 已实现**（提交 `ea1c07a`），但 ω_d、ζ 的实测辨识值尚未完成，当前使用模型参数或手动覆盖值；`input_shaping_enable=false` 默认关闭，实验时需要在 launch 里开启
-5. **侧视相机标定**：RealSense的液面测量结果与模型估计h的对比，尚未完成
+4. **侧视相机标定**：RealSense的液面测量结果与模型估计h的对比，尚未完成
 
 ---
 

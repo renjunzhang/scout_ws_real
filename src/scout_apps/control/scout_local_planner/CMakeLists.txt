@@ -105,7 +105,6 @@ install(DIRECTORY config launch
 install(PROGRAMS
   scripts/record_slosh_experiment.sh
   scripts/launch_sim_nav_stack.sh
-  scripts/run_day4_profile.sh
   scripts/run_sim_fixed_path_bag.sh
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
