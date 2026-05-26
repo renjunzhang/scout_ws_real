@@ -12,6 +12,7 @@
 #include "scout_local_planner/mpc_solver.h"
 #include "scout_local_planner/slosh_integration.h"
 #include "scout_local_planner/profile_execution_cap.h"
+#include "scout_local_planner/terminal_controller.h"
 
 #include <ros/ros.h>
 #include <nav_msgs/Path.h>
@@ -116,6 +117,7 @@ private:
     PathHandler path_handler_;
     MPCSolver mpc_solver_;
     ProfileExecutionCap profile_execution_cap_;
+    TerminalController terminal_controller_;
     
     // 参数
     MPCParams mpc_params_;
@@ -150,17 +152,6 @@ private:
     double last_profile_cap_cmd_v_post_ = std::numeric_limits<double>::quiet_NaN();
     double last_profile_cap_implied_ax_ = std::numeric_limits<double>::quiet_NaN();
     double last_profile_cap_implied_jerk_ = std::numeric_limits<double>::quiet_NaN();
-
-    // 终点主线：terminal slowdown + capture + MPC stop
-    double terminal_goal_behind_x_ = -0.05;
-    bool terminal_slowdown_enable_ = true;
-    double terminal_slowdown_distance_ = 1.20;
-    double terminal_slowdown_v_max_ = 0.18;
-    double terminal_slowdown_q_v_ = 40.0;
-    double terminal_slowdown_terminal_factor_v_ = 5.0;
-    bool terminal_capture_stop_enable_ = true;
-    double terminal_capture_stop_distance_ = 0.70;
-    double terminal_capture_v_cap_ = 0.18;
 
     // 状态
     PlannerState state_ = PlannerState::IDLE;
@@ -294,7 +285,6 @@ private:
     bool last_solve_ok_ = false;
     double last_predicted_height_max_ = 0.0;
     int last_constraint_active_ = -1;  // -1=unknown, 0=below diagnostic height threshold, 1=above threshold
-    bool goal_stop_pending_ = false;   // 已进入目标容差区，等待低速切换 REACHED；期间仍由 MPC 继续减速和纠偏
     std::string terminal_mode_debug_ = "NONE";
     GoalInfo terminal_goal_info_debug_;
     bool terminal_goal_info_valid_ = false;
