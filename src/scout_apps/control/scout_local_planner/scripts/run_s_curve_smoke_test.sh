@@ -88,7 +88,6 @@ echo "[smoke] launching MPC..."
 roslaunch scout_local_planner slosh_experiment_sim.launch \
     global_path_topic:=/scout/global_path_fixed \
     Q_slosh:="${Q_SLOSH}" \
-    terminal_recovery_enable:=false \
     terminal_slowdown_enable:=true \
     terminal_capture_stop_enable:=true \
     v_des_rate_limit_enable:=true \

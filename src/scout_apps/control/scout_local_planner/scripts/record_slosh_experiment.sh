@@ -178,10 +178,6 @@ TOPICS=(
     /slosh/episode_id
     /slosh/constraint_active
     /slosh/v_des_eff
-    /slosh/speed_cap_active
-    /slosh/speed_cap_v_limit
-    /slosh/settling_time
-    /slosh/output_guard_active
 
     # RealSense 原始图像
     /camera/color/image_raw

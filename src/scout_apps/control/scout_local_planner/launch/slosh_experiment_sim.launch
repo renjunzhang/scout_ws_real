@@ -59,7 +59,7 @@
   <arg name="slosh_imu_ay_bias_compensation_enable" default="true" doc="是否对 IMU ay 做静止零偏扣除"/>
   <arg name="slosh_imu_ay_bias_init_duration" default="3.0" doc="估计 IMU ay 零偏所需的连续静止时长"/>
   <arg name="slosh_imu_ay_scale" default="1.0" doc="IMU ay 离线标定比例系数（由 imu_ay_tool.py calibrate 输出）"/>
-  <arg name="vehicle_v_max" default="3.0" doc="覆盖 vehicle/v_max；anti-slosh path candidate 可用 1.75 使 v_nominal=1.40"/>
+  <arg name="vehicle_v_max" default="3.0" doc="覆盖 vehicle/v_max；固定路径 baseline 可按实验速度需求下调"/>
   <arg name="cmd_vel_topic" default="/cmd_vel" doc="planner 输出的 cmd_vel 话题；阶段 3 可改到调试话题避免与底盘直控冲突"/>
   <arg name="global_path_topic" default="/scout/global_path" doc="local planner 订阅的全局路径话题；固定路径重放实验时可改到 /scout/global_path_fixed"/>
 
