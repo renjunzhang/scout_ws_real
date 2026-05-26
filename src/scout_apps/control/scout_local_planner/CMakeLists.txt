@@ -43,6 +43,7 @@ add_library(${PROJECT_NAME}
   src/cost_function.cpp
   src/constraint_manager.cpp
   src/mpc_solver.cpp
+  src/profile_execution_cap.cpp
   src/local_planner_ros.cpp
   src/slosh_integration.cpp
 )

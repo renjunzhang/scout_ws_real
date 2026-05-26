@@ -11,6 +11,7 @@
 #include "scout_local_planner/path_handler.h"
 #include "scout_local_planner/mpc_solver.h"
 #include "scout_local_planner/slosh_integration.h"
+#include "scout_local_planner/profile_execution_cap.h"
 
 #include <ros/ros.h>
 #include <nav_msgs/Path.h>
@@ -114,6 +115,7 @@ private:
     // 核心组件
     PathHandler path_handler_;
     MPCSolver mpc_solver_;
+    ProfileExecutionCap profile_execution_cap_;
     
     // 参数
     MPCParams mpc_params_;
@@ -141,13 +143,7 @@ private:
     double last_v_des_raw_ = 0.0;
     double last_v_des_target_ = 0.0;
 
-    // 外部速度剖面执行层 cap（仅用于 TOPPRA/Ruckig-style baseline，默认关闭）
-    bool external_profile_execution_cap_enable_ = false;
-    double external_profile_execution_accel_limit_ = 0.0;
-    double external_profile_execution_decel_limit_ = 0.0;
-    double external_profile_execution_jerk_limit_ = 0.0;
-    bool profile_cap_has_last_ax_ = false;
-    double profile_cap_last_ax_ = 0.0;
+    // 外部速度剖面执行层 cap 诊断（仅用于 TOPPRA/Ruckig-style baseline）
     int last_profile_cap_active_ = 0;
     double last_profile_cap_v_profile_ = std::numeric_limits<double>::quiet_NaN();
     double last_profile_cap_cmd_v_pre_ = std::numeric_limits<double>::quiet_NaN();

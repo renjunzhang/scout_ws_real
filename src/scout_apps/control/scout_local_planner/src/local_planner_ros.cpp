@@ -127,23 +127,6 @@ double limitRate(double target, double current, double rate_limit, double dt) {
     return std::max(current - max_delta, std::min(current + max_delta, target));
 }
 
-double limitRateAsymmetric(
-    double target,
-    double current,
-    double accel_limit,
-    double decel_limit,
-    double dt) {
-    if (!std::isfinite(target) || !std::isfinite(current) || dt <= 1e-6) {
-        return target;
-    }
-    const double up = std::max(0.0, accel_limit) * dt;
-    const double down = std::max(0.0, decel_limit) * dt;
-    if (target >= current) {
-        return current + std::min(target - current, up);
-    }
-    return current - std::min(current - target, down);
-}
-
 }  // namespace
 
 LocalPlannerROS::LocalPlannerROS() = default;
@@ -455,14 +438,16 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("v_des_rate_limit/enable", v_des_rate_limit_enable_, true);
     pnh.param("v_des_rate_limit/accel_limit", v_des_accel_limit_, 0.6);
     pnh.param("v_des_rate_limit/decel_limit", v_des_decel_limit_, 0.8);
+    ProfileExecutionCapParams profile_cap_params;
     pnh.param("external_profile_execution_cap/enable",
-              external_profile_execution_cap_enable_, false);
+              profile_cap_params.enable, false);
     pnh.param("external_profile_execution_cap/accel_limit",
-              external_profile_execution_accel_limit_, 0.0);
+              profile_cap_params.accel_limit, 0.0);
     pnh.param("external_profile_execution_cap/decel_limit",
-              external_profile_execution_decel_limit_, 0.0);
+              profile_cap_params.decel_limit, 0.0);
     pnh.param("external_profile_execution_cap/jerk_limit",
-              external_profile_execution_jerk_limit_, 0.0);
+              profile_cap_params.jerk_limit, 0.0);
+    profile_execution_cap_.setParams(profile_cap_params);
 
     pnh.param("terminal_capture_stop/goal_behind_x", terminal_goal_behind_x_, -0.05);
     pnh.param("terminal_slowdown/enable", terminal_slowdown_enable_, true);
@@ -982,73 +967,24 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     last_profile_cap_cmd_v_post_ = cmd_v_out;
                     last_profile_cap_implied_ax_ = std::numeric_limits<double>::quiet_NaN();
                     last_profile_cap_implied_jerk_ = std::numeric_limits<double>::quiet_NaN();
-                    bool profile_cap_applied = false;
-                    if (external_profile_execution_cap_enable_ &&
-                        path_handler_.hasExternalSpeedProfile()) {
-                        const double s_now = path_handler_.getGlobalProgress();
-                        double profile_v = path_handler_.getSpeedAtS(s_now);
-                        if (std::isfinite(s_now) && profile_v <= 1e-6) {
-                            profile_v = std::max(
-                                profile_v,
-                                path_handler_.getSpeedAtS(
-                                    s_now + std::max(0.02, path_params_.speed_profile_ds)));
-                        }
-                        if (std::isfinite(s_now) && std::isfinite(profile_v)) {
-                            const double dt_cmd =
-                                control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
-                            const double prev_cmd_v = std::max(0.0, filtered_v_);
-                            const double pre_cap = cmd_v_out;
-                            const double target_v =
-                                std::max(0.0, std::min(cmd_v_out, profile_v));
-                            const double accel_limit =
-                                external_profile_execution_accel_limit_ > 1e-6
-                                    ? external_profile_execution_accel_limit_
-                                    : (path_params_.max_tan_accel > 1e-6
-                                           ? path_params_.max_tan_accel
-                                           : std::max(1e-6, vehicle_params_.a_max));
-                            const double decel_limit =
-                                external_profile_execution_decel_limit_ > 1e-6
-                                    ? external_profile_execution_decel_limit_
-                                    : (path_params_.max_tan_decel > 1e-6
-                                           ? path_params_.max_tan_decel
-                                           : accel_limit);
-                            cmd_v_out = limitRateAsymmetric(
-                                target_v, prev_cmd_v, accel_limit, decel_limit, dt_cmd);
-
-                            double implied_ax = (cmd_v_out - prev_cmd_v) / std::max(1e-6, dt_cmd);
-                            double implied_jerk = std::numeric_limits<double>::quiet_NaN();
-                            if (external_profile_execution_jerk_limit_ > 1e-6 &&
-                                profile_cap_has_last_ax_) {
-                                const double ax_limited = limitRate(
-                                    implied_ax,
-                                    profile_cap_last_ax_,
-                                    external_profile_execution_jerk_limit_,
-                                    dt_cmd);
-                                cmd_v_out = std::max(0.0, prev_cmd_v + ax_limited * dt_cmd);
-                                cmd_v_out = std::min(cmd_v_out, profile_v);
-                                implied_ax = (cmd_v_out - prev_cmd_v) / std::max(1e-6, dt_cmd);
-                            }
-                            if (profile_cap_has_last_ax_) {
-                                implied_jerk =
-                                    (implied_ax - profile_cap_last_ax_) / std::max(1e-6, dt_cmd);
-                            }
-                            profile_cap_last_ax_ = implied_ax;
-                            profile_cap_has_last_ax_ = true;
-
-                            last_profile_cap_active_ =
-                                (std::abs(pre_cap - cmd_v_out) > 1e-4 ||
-                                 std::abs(pre_cap - target_v) > 1e-4) ? 1 : 0;
-                            last_profile_cap_v_profile_ = profile_v;
-                            last_profile_cap_cmd_v_pre_ = pre_cap;
-                            last_profile_cap_cmd_v_post_ = cmd_v_out;
-                            last_profile_cap_implied_ax_ = implied_ax;
-                            last_profile_cap_implied_jerk_ = implied_jerk;
-                            profile_cap_applied = true;
-                        }
-                    } else {
-                        profile_cap_has_last_ax_ = false;
-                    }
-                    if (in_terminal_phase || profile_cap_applied) {
+                    const double dt_cmd =
+                        control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
+                    const ProfileExecutionCapOutput profile_out =
+                        profile_execution_cap_.apply(
+                            cmd_v_out,
+                            filtered_v_,
+                            dt_cmd,
+                            path_handler_,
+                            path_params_,
+                            vehicle_params_);
+                    cmd_v_out = profile_out.cmd_v;
+                    last_profile_cap_active_ = profile_out.active;
+                    last_profile_cap_v_profile_ = profile_out.v_profile;
+                    last_profile_cap_cmd_v_pre_ = profile_out.cmd_v_pre;
+                    last_profile_cap_cmd_v_post_ = profile_out.cmd_v_post;
+                    last_profile_cap_implied_ax_ = profile_out.implied_ax;
+                    last_profile_cap_implied_jerk_ = profile_out.implied_jerk;
+                    if (in_terminal_phase || profile_out.applied) {
                         // publishCmdVel 内部还有 EMA。terminal/profile 输出层已经做过速度包络和
                         // 变化率限制，这里同步滤波状态，避免 EMA 再把上一帧高速带回输出。
                         filtered_v_ = cmd_v_out;
@@ -1940,8 +1876,7 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {
     last_v_des_raw_ = 0.0;
     last_v_des_target_ = 0.0;
     last_v_des_rate_limited_active_ = 0;
-    profile_cap_has_last_ax_ = false;
-    profile_cap_last_ax_ = 0.0;
+    profile_execution_cap_.reset();
     last_profile_cap_active_ = 0;
 }
 
