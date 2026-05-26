@@ -5,7 +5,6 @@
  * 管理 MPC 的各种约束：
  * - 状态约束（速度限制）
  * - 控制约束（加速度限制）
- * - 液体晃动约束（第 2 步）
  */
 
 #pragma once
@@ -182,20 +181,11 @@ public:
                                    double dt,
                                    const ControlVector& u_prev);
 
-    /**
-     * @brief 设置液体晃动盒约束代理
-     * @param enable 是否启用
-     * @param eta_bar 模态位移盒约束阈值
-     */
-    void setSloshBoxConstraint(bool enable, double eta_bar);
-
 private:
     std::vector<ConstraintPtr> constraints_;
     VehicleParams params_;
     bool enable_omega_rate_ = false;
     bool enable_accel_rate_ = false;
-    bool enable_slosh_box_constraint_ = false;
-    double slosh_eta_bar_ = 0.0;
     double dt_ = 0.0;
     ControlVector u_prev_ = ControlVector::Zero();
 };

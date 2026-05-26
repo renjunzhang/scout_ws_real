@@ -160,11 +160,11 @@ terminal / cost_breakdown / fixed-path / TOPPRA/Ruckig 相关提交属于当前�
 当前验证方案里仍有大量显式 launch arg：
 
 ```text
-energy_profile_enable:=false
-input_shaping_enable:=false
-risk_scheduler_enable:=false
-slosh_speed_governor_enable:=false
-enable_slosh_box_constraint:=false
+旧低激励速度剖面开关（已移除）
+input_shaping_enable:=false（已移除）
+risk_scheduler_enable:=false（已移除）
+slosh_speed_governor_enable:=false（已移除）
+旧 slosh box constraint 入口（已移除）
 terminal_recovery_enable:=false
 terminal_slowdown_*
 terminal_capture_stop_*
@@ -278,11 +278,11 @@ Phase C 更新 README / record / launch 文档；
 当前验证方案所有命令都显式关闭这些机制：
 
 ```text
-energy_profile_enable=false
-input_shaping_enable=false
-risk_scheduler_enable=false
-slosh_speed_governor_enable=false
-enable_slosh_box_constraint=false
+旧低激励速度剖面（已移除）
+input_shaping（已移除）
+risk_scheduler（已移除）
+slosh_speed_governor（已移除）
+旧 slosh box constraint（已移除）
 ```
 
 因此它们是主线外分支：
@@ -635,7 +635,6 @@ energy_profile_*
 input_shaping_*
 risk_scheduler_enable
 slosh_speed_governor_*
-enable_slosh_box_constraint
 heading_align_*（若确认实物固定路径不需要）
 ```
 
@@ -678,7 +677,7 @@ Phase 3 每删除一个 launch arg，都必须同步更新：
   scripts/run_sim_fixed_path_bag.sh
 
 更新后再 grep：
-  rg -n "energy_profile_enable|input_shaping_enable|risk_scheduler_enable|slosh_speed_governor_enable|enable_slosh_box_constraint" \
+  rg -n "energy_profile_enable|input_shaping_enable|risk_scheduler_enable|slosh_speed_governor_enable" \
     docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md \
     src/scout_apps/control/scout_local_planner/scripts/README.md \
     src/scout_apps/control/scout_local_planner/scripts/run_sim_fixed_path_bag.sh
@@ -705,7 +704,7 @@ Phase 4D:
   删除 PathHandler energy_profile_* 分支
 
 Phase 4E:
-  删除 slosh box constraint 代理
+  删除 slosh box constraint 代理（已完成）
 
 Phase 4F:
   评估并删除 heading_align / settling / tracking_curvature_speed_cap
@@ -723,7 +722,7 @@ record_slosh_experiment.sh 删除相关 topic
 
 ```bash
 catkin_make --pkg scout_local_planner
-rg -n "risk_scheduler|input_shaping|slosh_speed_governor|energy_profile|enable_slosh_box_constraint" src/scout_apps/control/scout_local_planner
+rg -n "risk_scheduler|input_shaping|slosh_speed_governor|energy_profile" src/scout_apps/control/scout_local_planner
 ```
 
 期望：

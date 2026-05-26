@@ -182,39 +182,6 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
             const double omega_n = slosh_integration_.getModalParams().omega_n;
             updateNormalizedSloshWeights(mpc_params_, h_coeff, omega_n);
 
-            if (mpc_params_.enable_slosh_box_constraint) {
-                if (h_coeff <= 1e-9) {
-                    ROS_WARN("[LocalPlannerROS] height_coeff too small, disabling slosh box constraint");
-                    mpc_params_.enable_slosh_box_constraint = false;
-                    mpc_params_.slosh_eta_bar = 0.0;
-                } else {
-                    const double omega_budget = std::max(0.0, vehicle_params_.omega_max);
-                    double eta_parabola_budget = 0.0;
-                    if (slosh_params_.use_parabola_term) {
-                        const double R = slosh_params_.container_radius;
-                        eta_parabola_budget = (R * R * omega_budget * omega_budget) / (4.0 * 9.81);
-                    }
-
-                    const double eta_modal_budget =
-                        std::max(0.0, mpc_params_.slosh_height_max - eta_parabola_budget);
-                    const double denom = h_coeff * std::sqrt(2.0);
-                    mpc_params_.slosh_eta_bar = denom > 1e-9 ? eta_modal_budget / denom : 0.0;
-
-                    if (mpc_params_.slosh_eta_bar <= 1e-9) {
-                        ROS_WARN("[LocalPlannerROS] Modal budget too small after parabola reservation, disabling slosh box constraint");
-                        mpc_params_.enable_slosh_box_constraint = false;
-                        mpc_params_.slosh_eta_bar = 0.0;
-                    } else {
-                        ROS_INFO("[LocalPlannerROS] Slosh box constraint enabled: eta_bar=%.5f (height_max=%.4f, parabola_budget=%.4f)",
-                                 mpc_params_.slosh_eta_bar,
-                                 mpc_params_.slosh_height_max,
-                                 eta_parabola_budget);
-                    }
-                }
-            } else {
-                mpc_params_.slosh_eta_bar = 0.0;
-            }
-
             // 将更新后的参数同步到求解器（CostFunction 会用到 Q_slosh_eta）
             mpc_solver_.setMPCParams(mpc_params_);
 
@@ -380,7 +347,6 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("mpc/terminal_factor_slosh_eta", mpc_params_.terminal_factor_slosh_eta, 0.0);
     pnh.param("mpc/terminal_factor_slosh_eta_dot", mpc_params_.terminal_factor_slosh_eta_dot, 0.0);
     pnh.param("mpc/slosh_height_max", mpc_params_.slosh_height_max, 0.05);
-    pnh.param("mpc/enable_slosh_box_constraint", mpc_params_.enable_slosh_box_constraint, false);
 
     // 液体晃动模型参数
     pnh.param("slosh/container_radius", slosh_params_.container_radius, 0.0185);
@@ -554,7 +520,6 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("settling/required_steps", settling_required_steps_override_, 0);
     pnh.param("settling/Q_v", settling_q_v_, 30.0);
     pnh.param("settling/Q_eta", settling_q_eta_, 10.0);
-    pnh.param("settling/eta_bar", settling_eta_bar_, 0.04);
     
     // cmd_vel 低通滤波参数
     pnh.param("filter/alpha_v", cmd_filter_alpha_v_, 0.3);
@@ -934,12 +899,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         runtime_mpc_params,
                         h_coeff,
                         slosh_integration_.getModalParams().omega_n);
-                    if (slosh_enabled_ &&
-                        runtime_mpc_params.enable_slosh_box_constraint &&
-                        h_coeff > 1e-9) {
-                        const double denom = h_coeff * std::sqrt(2.0);
-                        runtime_mpc_params.slosh_eta_bar = settling_eta_bar_ / denom;
-                    }
                 }
                 // Terminal velocity envelope: pre-MPC reference cap.
                 // 单一运动学包络函数:
@@ -1410,7 +1369,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                             "v=%.3f omega=%.3f solve_ms=%.3f "
                             "e=(%.3f, %.3f, %.3f) u_prev=(%.3f, %.3f) ref0=(v=%.3f k=%.3f) "
                             "eta=(%.4f, %.4f) eta_dot=(%.4f, %.4f) "
-                            "Qv=%.2f Qeta=%.2f eta_bar=%.4f "
+                            "Qv=%.2f Qeta=%.2f "
                             "v_des=%.3f v_des_raw=%.3f fallback=%d fail_streak=%d feas_active=%d reentry=%d "
                             "kappa=%.4f dkappa=%.4f",
                             plannerStateToString(state_).c_str(),
@@ -1430,7 +1389,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                             ss(0), ss(2), ss(1), ss(3),
                             runtime_mpc_params.Q_v,
                             runtime_mpc_params.Q_slosh_eta,
-                            runtime_mpc_params.slosh_eta_bar,
                             last_v_des_eff_,
                             v_des_cmd_raw,
                             0,

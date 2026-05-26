@@ -184,7 +184,6 @@ MPC_R_DA="${MPC_R_DA:-}"
 MPC_CMD_VEL_LEAD_TIME="${MPC_CMD_VEL_LEAD_TIME:-}"
 TERMINAL_FACTOR_SLOSH_ETA="${TERMINAL_FACTOR_SLOSH_ETA:-0.0}"
 TERMINAL_FACTOR_SLOSH_ETA_DOT="${TERMINAL_FACTOR_SLOSH_ETA_DOT:-0.0}"
-ENABLE_SLOSH_BOX_CONSTRAINT="${ENABLE_SLOSH_BOX_CONSTRAINT:-false}"
 VEHICLE_V_MAX="${VEHICLE_V_MAX:-}"
 
 RETIME_METHOD="${RETIME_METHOD:-none}"  # none / toppra / ruckig
@@ -557,7 +556,6 @@ MPC_R_DA=${MPC_R_DA}
 MPC_CMD_VEL_LEAD_TIME=${MPC_CMD_VEL_LEAD_TIME}
 TERMINAL_FACTOR_SLOSH_ETA=${TERMINAL_FACTOR_SLOSH_ETA}
 TERMINAL_FACTOR_SLOSH_ETA_DOT=${TERMINAL_FACTOR_SLOSH_ETA_DOT}
-ENABLE_SLOSH_BOX_CONSTRAINT=${ENABLE_SLOSH_BOX_CONSTRAINT}
 VEHICLE_V_MAX=${VEHICLE_V_MAX}
 
 git_status:
@@ -569,7 +567,7 @@ EOF
 
 publish_config_summary() {
     local summary
-    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; path_source_output_topic=${PATH_SOURCE_OUTPUT_TOPIC}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; vehicle_v_max=${VEHICLE_V_MAX}; retime=${RETIME_METHOD}; external_speed_csv=${EXTERNAL_SPEED_PROFILE_CSV}; external_profile_cap=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
+    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; path_source_output_topic=${PATH_SOURCE_OUTPUT_TOPIC}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; vehicle_v_max=${VEHICLE_V_MAX}; retime=${RETIME_METHOD}; external_speed_csv=${EXTERNAL_SPEED_PROFILE_CSV}; external_profile_cap=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
     rostopic pub -l /experiment/config_summary std_msgs/String "data: '${summary}'" >/dev/null &
     local pid=$!
     pids+=("${pid}")
@@ -778,7 +776,6 @@ MPC_ARGS=(
     mpc_cmd_vel_lead_time:="${MPC_CMD_VEL_LEAD_TIME}"
     terminal_factor_slosh_eta:="${TERMINAL_FACTOR_SLOSH_ETA}"
     terminal_factor_slosh_eta_dot:="${TERMINAL_FACTOR_SLOSH_ETA_DOT}"
-    enable_slosh_box_constraint:="${ENABLE_SLOSH_BOX_CONSTRAINT}"
     vehicle_v_max:="${VEHICLE_V_MAX}"
     external_profile_execution_cap_enable:="${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
     external_profile_execution_accel_limit:="${EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT}"
@@ -791,7 +788,6 @@ APPROACH_MPC_ARGS=(
     global_path_topic:="${APPROACH_GLOBAL_PATH_TOPIC}"
     Q_slosh:=0
     Q_slosh_eta_dot:=0.0
-    enable_slosh_box_constraint:=false
 )
 
 echo "============================================================"

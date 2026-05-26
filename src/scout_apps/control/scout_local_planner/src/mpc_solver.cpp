@@ -51,8 +51,6 @@ bool MPCSolver::initialize(const MPCParams& mpc_params,
     
     // 初始化约束管理器
     constraint_manager_.initialize(vehicle_params);
-    constraint_manager_.setSloshBoxConstraint(mpc_params_.enable_slosh_box_constraint,
-                                              mpc_params_.slosh_eta_bar);
     
     // 计算变量维度
     const int nx = StateIndex::TOTAL_DIM;
@@ -93,14 +91,6 @@ void MPCSolver::setPreviousControl(const ControlVector& u_prev) {
 void MPCSolver::setMPCParams(const MPCParams& params) {
     mpc_params_ = params;
     cost_function_.initialize(params);
-    constraint_manager_.setSloshBoxConstraint(mpc_params_.enable_slosh_box_constraint,
-                                              mpc_params_.slosh_eta_bar);
-}
-
-void MPCSolver::setSloshBoxConstraint(bool enable, double eta_bar) {
-    mpc_params_.enable_slosh_box_constraint = enable;
-    mpc_params_.slosh_eta_bar = eta_bar;
-    constraint_manager_.setSloshBoxConstraint(enable, eta_bar);
 }
 
 MPCSolution MPCSolver::solve(

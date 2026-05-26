@@ -166,12 +166,10 @@ struct MPCParams {
     double slosh_height_ref = 0.005;  // 参考晃动高度 (m)，用于归一化 Q_slosh
     double slosh_eta_dot_ratio = 0.3; // eta_dot 等效位移项相对 eta 项的比例；<=0 时使用手动 Q_slosh_eta_dot
     double slosh_preview_factor = 0.0; // 对 x_1..x_N 额外加权的 one-step preview 系数；0=关闭
-    double slosh_height_max = 0.05;  // 液面高度约束 (m)
-    bool enable_slosh_box_constraint = false;  // 是否启用一阶盒约束代理
+    double slosh_height_max = 0.05;  // 诊断用模型高度阈值 (m)，不作为 QP 约束
     // 运行时由 local_planner_ros 计算: Q_slosh_eta = Q_slosh * height_coeff² / slosh_height_ref²
     // cost_function 直接用此值乘 ETA_X² / ETA_Y²
     double Q_slosh_eta = 0.0;
-    double slosh_eta_bar = 0.0;  // 运行时换算得到的模态位移盒约束阈值
     // P1: eta_dot 速度代价（直接 QP 权重，不经 height_coeff 缩放）
     double Q_slosh_eta_dot = 0.0;
     // P2: terminal slosh 能量代价放大系数（在 terminal ramp 步叠加；需对应 base cost > 0 才生效）

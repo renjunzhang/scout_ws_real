@@ -29,7 +29,6 @@
   <arg name="mpc_R_domega" default="4.0" doc="角速度变化权重覆盖，用于 slosh-priority MPC 消融"/>
   <arg name="terminal_factor_slosh_eta" default="0.0" doc="terminal η 代价放大系数，0=关闭；需 Q_slosh>0"/>
   <arg name="terminal_factor_slosh_eta_dot" default="0.0" doc="terminal η_dot 代价放大系数，0=关闭；需 Q_slosh_eta_dot>0"/>
-  <arg name="enable_slosh_box_constraint" default="false" doc="是否启用第一版液面峰值盒约束代理"/>
   <arg name="verbose" default="false" doc="是否输出调试信息"/>
   <arg name="filter_alpha_v" default="1.0" doc="实验模式: 线速度 EMA 系数，1.0 表示关闭额外低通"/>
   <arg name="filter_alpha_omega" default="1.0" doc="实验模式: 角速度 EMA 系数，1.0 表示关闭额外低通"/>
@@ -89,7 +88,6 @@
     <param name="mpc/R_domega" value="$(arg mpc_R_domega)"/>
     <param name="mpc/terminal_factor_slosh_eta" value="$(arg terminal_factor_slosh_eta)"/>
     <param name="mpc/terminal_factor_slosh_eta_dot" value="$(arg terminal_factor_slosh_eta_dot)"/>
-    <param name="mpc/enable_slosh_box_constraint" value="$(arg enable_slosh_box_constraint)"/>
     <param name="filter/alpha_v" value="$(arg filter_alpha_v)"/>
     <param name="filter/alpha_omega" value="$(arg filter_alpha_omega)"/>
     <param name="filter/kappa_boost" value="$(arg filter_kappa_boost)"/>

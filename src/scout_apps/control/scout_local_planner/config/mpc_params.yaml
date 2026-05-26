@@ -45,8 +45,7 @@ mpc:
   Q_slosh_eta_dot: 0.0     # 兼容旧配置：slosh_eta_dot_ratio<=0 时作为直接 QP 权重
   terminal_factor_slosh_eta: 0.0      # P2: terminal η 代价放大系数，0=关闭；需 Q_slosh>0 才生效
   terminal_factor_slosh_eta_dot: 0.0  # P2: terminal η̇ 代价放大系数，0=关闭；需 Q_slosh_eta_dot>0 才生效
-  slosh_height_max: 0.05   # 液面高度约束 (m)
-  enable_slosh_box_constraint: false  # 第一版盒约束代理（ETA_X/ETA_Y），默认关闭
+  slosh_height_max: 0.05   # 诊断用模型高度阈值 (m)，不作为 QP 约束
 
 # =============================================================================
 # 车辆参数（Scout Mini）
@@ -222,7 +221,6 @@ settling:
   required_steps: 0         # <=0 时按 ceil(4π / ω0 / dt) 自动计算
   Q_v: 30.0                 # SETTLING 期间速度收敛权重
   Q_eta: 10.0               # SETTLING 期间晃动惩罚权重
-  eta_bar: 0.04             # SETTLING 期间液面约束上界 (m)
 
 # =============================================================================
 # cmd_vel 低通滤波（EMA）

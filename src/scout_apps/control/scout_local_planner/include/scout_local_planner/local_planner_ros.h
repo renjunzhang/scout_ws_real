@@ -220,7 +220,6 @@ private:
     int settling_required_steps_override_ = 0;
     double settling_q_v_ = 30.0;
     double settling_q_eta_ = 10.0;
-    double settling_eta_bar_ = 0.04;
     int settling_step_count_ = 0;
     ros::Time settling_enter_time_;
     
@@ -356,7 +355,7 @@ private:
     double last_solve_time_ms_ = 0.0;
     bool last_solve_ok_ = false;
     double last_predicted_height_max_ = 0.0;
-    int last_constraint_active_ = -1;  // -1=unknown, 0=inactive, 1=active
+    int last_constraint_active_ = -1;  // -1=unknown, 0=below diagnostic height threshold, 1=above threshold
     bool goal_stop_pending_ = false;   // 已进入目标容差区，等待低速切换 REACHED；期间仍由 MPC 继续减速和纠偏
     std::string terminal_mode_debug_ = "NONE";
     GoalInfo terminal_goal_info_debug_;
