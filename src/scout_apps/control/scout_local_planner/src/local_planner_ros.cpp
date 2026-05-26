@@ -455,13 +455,6 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("path_handler/bspline_samples_per_segment", path_params_.bspline_samples_per_segment, 8);
     pnh.param("path_handler/speed_profile_omega_max", path_params_.speed_profile_omega_max, 0.0);
     pnh.param("path_handler/speed_profile_alpha_max", path_params_.speed_profile_alpha_max, 0.0);
-    pnh.param("path_handler/energy_profile_enable", path_params_.energy_profile_enable, false);
-    pnh.param("path_handler/energy_profile_lat_accel", path_params_.energy_profile_lat_accel, 0.0);
-    pnh.param("path_handler/energy_profile_omega_max", path_params_.energy_profile_omega_max, 0.0);
-    pnh.param("path_handler/energy_profile_alpha_max", path_params_.energy_profile_alpha_max, 0.0);
-    pnh.param("path_handler/energy_profile_ax_max", path_params_.energy_profile_ax_max, 0.0);
-    pnh.param("path_handler/energy_profile_decel_max", path_params_.energy_profile_decel_max, 0.0);
-    pnh.param("path_handler/energy_profile_min_v", path_params_.energy_profile_min_v, 0.0);
     pnh.param("path_handler/publish_smoothed_path",
               path_params_.publish_smoothed_path, false);
     pnh.param("path_handler/smoothed_path_topic",

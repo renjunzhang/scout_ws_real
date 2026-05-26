@@ -23,7 +23,7 @@ def condition_from_name(path):
     name = os.path.basename(path)
     parts = name.replace(".bag", "").split("_")
     for i, part in enumerate(parts):
-        if part in ("NOM", "CUSTOM", "PROFILE", "PROFILE_REF", "PROFILE_REF_V2"):
+        if part in ("NOM", "CUSTOM", "TOPPRA", "RUCKIG"):
             return "_".join(parts[i:-1]) if parts[-1].startswith("run") else "_".join(parts[i:])
     return "UNKNOWN"
 

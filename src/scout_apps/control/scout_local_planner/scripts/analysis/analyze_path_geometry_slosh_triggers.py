@@ -60,7 +60,7 @@ def path_id_from_name(path):
 
 def condition_from_name(path):
     name = os.path.basename(path)
-    match = re.search(r"_(NOM|PROFILE_ENERGY_GEO|PROFILE_ENERGY|OUTPUT_GUARD|PMG|FAS_[^_]+(?:_[^_]+)?|[^_]+)_run", name)
+    match = re.search(r"_(NOM|CUSTOM|TOPPRA|RUCKIG|FAS_[^_]+(?:_[^_]+)?|[^_]+)_run", name)
     return match.group(1) if match else ""
 
 

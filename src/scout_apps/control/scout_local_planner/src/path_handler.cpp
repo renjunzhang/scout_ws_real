@@ -778,9 +778,6 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
         // 沿路径推进（时间化速度）
         if (params_.time_parameterize) {
             // 默认速度参考用 s_progress（不加 lookahead），几何参考用 s_geom。
-            // PROFILE_REF_V2/energy profile 需要速度与几何同弧长采样，否则低曲率段速度
-            // 会和 lookahead 高曲率几何配对，重新生成高 ay reference。
-            const bool energy_profile = params_.energy_profile_enable;
             double s_geom_global = s_progress + params_.lookahead_distance;
             double s_local = s_geom_local;
             if (has_window_s) {
@@ -803,26 +800,21 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
 
             const double v_exec_cap = std::max(0.0, v_exec);
             const double v_plan_cap = std::max(0.0, v_plan);
-            const double speed_s = energy_profile ? s_geom_global : s_progress;
-            double profile_v_ref = speed_profile_valid_ ? getSpeedAtS(speed_s) : v_plan_cap;
+            double profile_v_ref = speed_profile_valid_ ? getSpeedAtS(s_progress) : v_plan_cap;
             if (external_speed_profile_valid_ && profile_v_ref <= 1e-6 &&
-                speed_s < total_len_global - 1e-3) {
+                s_progress < total_len_global - 1e-3) {
                 const double launch_lookahead_s =
                     std::max(0.02, params_.speed_profile_ds);
                 profile_v_ref = std::max(
                     profile_v_ref,
-                    getSpeedAtS(std::min(total_len_global, speed_s + launch_lookahead_s)));
+                    getSpeedAtS(std::min(total_len_global, s_progress + launch_lookahead_s)));
             }
             double v_ref = profile_v_ref;
             double v_curve_cap = v_exec_cap;
-            const double lat_accel_limit =
-                (energy_profile && params_.energy_profile_lat_accel > 0.0)
-                    ? params_.energy_profile_lat_accel
-                    : params_.max_lat_accel;
-            if (lat_accel_limit > 0.0) {
+            if (params_.max_lat_accel > 0.0) {
                 const double kappa_abs = std::abs(ref.kappa);
                 if (kappa_abs > 1e-4) {
-                    v_curve_cap = std::min(v_curve_cap, std::sqrt(lat_accel_limit / kappa_abs));
+                    v_curve_cap = std::min(v_curve_cap, std::sqrt(params_.max_lat_accel / kappa_abs));
                 }
             }
 
@@ -865,7 +857,7 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
             // 使用当前 s 采样点
             ref.v_ref = v_ref;
             ref.v_path = v_ref;
-            ref.s = speed_s;
+            ref.s = s_progress;
 
             // 推进到下一步（仅推进 progress，避免 lookahead 提前衰减速度）
             s_progress = std::min(s_progress + v_ref * dt, total_len_global);
@@ -899,33 +891,6 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
         }
         
         ref_points.push_back(ref);
-    }
-
-    if (params_.time_parameterize && params_.energy_profile_enable && ref_points.size() >= 2) {
-        const double accel_limit = params_.energy_profile_ax_max > 0.0
-            ? params_.energy_profile_ax_max
-            : params_.max_tan_accel;
-        const double decel_base = params_.energy_profile_decel_max > 0.0
-            ? params_.energy_profile_decel_max
-            : params_.max_tan_decel;
-        const double decel_limit = decel_base * 0.8;
-        const double step_dt = std::max(1e-6, dt);
-
-        if (accel_limit > 0.0) {
-            for (size_t i = 1; i < ref_points.size(); ++i) {
-                const double v_lim = ref_points[i - 1].v_ref + accel_limit * step_dt;
-                ref_points[i].v_ref = std::min(ref_points[i].v_ref, v_lim);
-                ref_points[i].v_path = ref_points[i].v_ref;
-            }
-        }
-        if (decel_limit > 0.0) {
-            for (int i = static_cast<int>(ref_points.size()) - 2; i >= 0; --i) {
-                const double v_lim = ref_points[static_cast<size_t>(i + 1)].v_ref + decel_limit * step_dt;
-                ref_points[static_cast<size_t>(i)].v_ref =
-                    std::min(ref_points[static_cast<size_t>(i)].v_ref, v_lim);
-                ref_points[static_cast<size_t>(i)].v_path = ref_points[static_cast<size_t>(i)].v_ref;
-            }
-        }
     }
 
     // 路径在持续使用时保持有效，避免静态路径超时
@@ -1455,32 +1420,12 @@ void PathHandler::updateSpeedProfile(double v_des) {
     std::vector<double> v_omega_cap(static_cast<size_t>(n), v_des);
     std::vector<double> v_alpha_cap(static_cast<size_t>(n), v_des);
     std::vector<double> v_geom_cap(static_cast<size_t>(n), v_des);
-    const bool energy_profile = params_.energy_profile_enable;
-    const double lat_accel_limit =
-        (energy_profile && params_.energy_profile_lat_accel > 0.0)
-            ? params_.energy_profile_lat_accel
-            : params_.max_lat_accel;
-    const double omega_limit =
-        (energy_profile && params_.energy_profile_omega_max > 1e-3)
-            ? params_.energy_profile_omega_max
-            : params_.speed_profile_omega_max;
-    const double alpha_limit =
-        (energy_profile && params_.energy_profile_alpha_max > 1e-6)
-            ? params_.energy_profile_alpha_max
-            : params_.speed_profile_alpha_max;
-    const double accel_limit =
-        (energy_profile && params_.energy_profile_ax_max > 0.0)
-            ? params_.energy_profile_ax_max
-            : params_.max_tan_accel;
-    const double decel_limit =
-        (energy_profile && params_.energy_profile_decel_max > 0.0)
-            ? params_.energy_profile_decel_max
-            : params_.max_tan_decel;
-    const double min_profile_speed =
-        (energy_profile && params_.energy_profile_min_v > 0.0)
-            ? params_.energy_profile_min_v
-            : params_.min_ref_speed;
-    const double alpha_ax_budget = std::max(accel_limit, decel_limit);
+    const double lat_accel_limit = params_.max_lat_accel;
+    const double omega_limit = params_.speed_profile_omega_max;
+    const double alpha_limit = params_.speed_profile_alpha_max;
+    const double accel_limit = params_.max_tan_accel;
+    const double decel_limit = params_.max_tan_decel;
+    const double min_profile_speed = params_.min_ref_speed;
 
     // 第一步：基于 smooth cache 的离散几何采样 kappa / dkappa。
     // 不再用 cubic spline 的二阶导数做速度剖面限速，避免导数放大导致系统性过慢。
@@ -1529,17 +1474,11 @@ void PathHandler::updateSpeedProfile(double v_des) {
             v_omega_cap[static_cast<size_t>(i)] = v_cap;
             v = std::min(v, v_cap);
         }
-        // 角加速度约束：alpha = ax*kappa + v²*dkappa。
-        // Step1 几何消融启用时，先为 ax*kappa 预留最坏加减速预算。
+        // 角加速度约束：alpha = v²*dkappa。
         if (alpha_limit > 1e-6) {
             const double dkappa_abs = std::abs(dkappa_arr[static_cast<size_t>(i)]);
             if (dkappa_abs > 1e-4) {
-                const double alpha_budget = energy_profile
-                    ? alpha_limit - alpha_ax_budget * kappa_abs
-                    : alpha_limit;
-                const double v_cap = alpha_budget > 0.0
-                    ? std::sqrt(alpha_budget / dkappa_abs)
-                    : 0.0;
+                const double v_cap = std::sqrt(alpha_limit / dkappa_abs);
                 v_alpha_cap[static_cast<size_t>(i)] = v_cap;
                 v = std::min(v, v_cap);
             }
@@ -1646,11 +1585,7 @@ void PathHandler::updateSpeedProfile(double v_des) {
                 v_geom_min = std::min(v_geom_min, std::sqrt(lat_accel_limit / kappa_max));
         }
         if (dkappa_max > 1e-4 && alpha_limit > 1e-6) {
-            const double alpha_budget = energy_profile
-                ? alpha_limit - alpha_ax_budget * kappa_max
-                : alpha_limit;
-            v_geom_min = std::min(v_geom_min,
-                                  alpha_budget > 0.0 ? std::sqrt(alpha_budget / dkappa_max) : 0.0);
+            v_geom_min = std::min(v_geom_min, std::sqrt(alpha_limit / dkappa_max));
         }
         for (size_t i = 0; i < speed_profile_v_.size(); ++i) {
             const double v = speed_profile_v_[i];
@@ -1679,7 +1614,7 @@ void PathHandler::updateSpeedProfile(double v_des) {
                  "v_geom_min=%.3f v_profile_min=%.3f v_des=%.3f "
                  "dom(nom/lat/omega/alpha)=%zu/%zu/%zu/%zu "
                  "pass(accel/decel)=%zu/%zu",
-                 energy_profile ? "PROFILE_ENERGY_GEO" : "NOM", nk, ds,
+                 "NOM", nk, ds,
                  kappa_max, dkappa_max, v_geom_min, v_profile_min, v_des,
                  dom_nominal, dom_lat, dom_omega, dom_alpha,
                  accel_limited, decel_limited);

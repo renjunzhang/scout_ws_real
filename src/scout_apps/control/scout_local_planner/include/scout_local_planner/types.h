@@ -234,13 +234,6 @@ struct PathHandlerParams {
     double path_change_threshold = 0.3;  // 路径相似性阈值 (m)，低于此值视为相同路径
     double speed_profile_omega_max = 0.0; // v(s) 规划用 ω_max (rad/s)，<=0 不限制
     double speed_profile_alpha_max = 0.0; // v(s) 规划用 α_max (rad/s²)，<=0 不限制
-    bool energy_profile_enable = false;   // Step1: 几何低激励 profile 消融入口
-    double energy_profile_lat_accel = 0.0; // PROFILE_ENERGY 横向加速度预算
-    double energy_profile_omega_max = 0.0; // PROFILE_ENERGY 角速度预算
-    double energy_profile_alpha_max = 0.0; // PROFILE_ENERGY 角加速度预算
-    double energy_profile_ax_max = 0.0;    // PROFILE_ENERGY 切向加速度预算
-    double energy_profile_decel_max = 0.0; // PROFILE_ENERGY 切向减速度预算
-    double energy_profile_min_v = 0.0;     // PROFILE_ENERGY 最低参考速度
 };
 
 //==============================================================================

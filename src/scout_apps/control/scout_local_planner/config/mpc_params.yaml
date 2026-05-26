@@ -88,13 +88,6 @@ path_handler:
   max_lat_accel: 2.0                  # 最大横向加速度 (m/s^2)
   speed_profile_omega_max: 1.5        # 规划层角速度上限（与 vehicle/omega_max 一致）；显式配置避免自动桥接后难以排查
   speed_profile_alpha_max: 5.0        # 规划层角加速度上限（与 vehicle/alpha_max 一致）；显式配置避免桥接值隐式变化
-  energy_profile_enable: false        # Step1 几何低激励速度剖面消融入口，默认关闭
-  energy_profile_lat_accel: 1.2       # PROFILE_ENERGY_GEO 横向加速度预算
-  energy_profile_omega_max: 1.1       # PROFILE_ENERGY_GEO 角速度预算
-  energy_profile_alpha_max: 3.0       # PROFILE_ENERGY_GEO 角加速度预算，含 ax*kappa
-  energy_profile_ax_max: 1.2          # PROFILE_ENERGY_GEO 切向加速度预算
-  energy_profile_decel_max: 1.2       # PROFILE_ENERGY_GEO 切向减速度预算
-  energy_profile_min_v: 0.35          # PROFILE_ENERGY_GEO 最低参考速度
   min_ref_speed: 0.0                  # 参考速度下限 (m/s)
   time_parameterize: true             # 启用时间化速度规划 v(s)
   speed_profile_ds: 0.05              # 速度曲线采样间隔 (m)

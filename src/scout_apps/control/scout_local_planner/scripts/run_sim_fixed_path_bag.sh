@@ -47,7 +47,7 @@
 #   当前脚本只消费 scenarios.yaml 里的 goal 字段；start/map/notes 只是 checklist。
 #
 # CONDITION 常用值：
-#   CUSTOM / NOM / FAS_* / PROFILE_* / PMG_* 等
+#   CUSTOM / NOM / FAS_* 等
 #     固定路径、内部 MPC cost 消融或历史 smoke 入口。
 #
 #   RETIME_METHOD=toppra / ruckig
@@ -185,13 +185,6 @@ MPC_CMD_VEL_LEAD_TIME="${MPC_CMD_VEL_LEAD_TIME:-}"
 TERMINAL_FACTOR_SLOSH_ETA="${TERMINAL_FACTOR_SLOSH_ETA:-0.0}"
 TERMINAL_FACTOR_SLOSH_ETA_DOT="${TERMINAL_FACTOR_SLOSH_ETA_DOT:-0.0}"
 ENABLE_SLOSH_BOX_CONSTRAINT="${ENABLE_SLOSH_BOX_CONSTRAINT:-false}"
-ENERGY_PROFILE_ENABLE="${ENERGY_PROFILE_ENABLE:-false}"
-ENERGY_PROFILE_LAT_ACCEL="${ENERGY_PROFILE_LAT_ACCEL:-1.2}"
-ENERGY_PROFILE_OMEGA_MAX="${ENERGY_PROFILE_OMEGA_MAX:-1.1}"
-ENERGY_PROFILE_ALPHA_MAX="${ENERGY_PROFILE_ALPHA_MAX:-3.0}"
-ENERGY_PROFILE_AX_MAX="${ENERGY_PROFILE_AX_MAX:-1.2}"
-ENERGY_PROFILE_DECEL_MAX="${ENERGY_PROFILE_DECEL_MAX:-1.2}"
-ENERGY_PROFILE_MIN_V="${ENERGY_PROFILE_MIN_V:-0.35}"
 VEHICLE_V_MAX="${VEHICLE_V_MAX:-}"
 
 RETIME_METHOD="${RETIME_METHOD:-none}"  # none / toppra / ruckig
@@ -263,21 +256,6 @@ case "${CONDITION}" in
         Q_SLOSH="${Q_SLOSH:-0}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
         ;;
-    PROFILE_ENERGY_GEO)
-        Q_SLOSH="${Q_SLOSH:-0}"
-        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        ENERGY_PROFILE_ENABLE=true
-        ;;
-    PROFILE_REF_V2)
-        # V2 constrained reference smoke: use custom/radius geometry plus
-        # PathHandler v(s) caps only. Keep MPC slosh terms disabled.
-        Q_SLOSH="${Q_SLOSH:-0}"
-        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        ENERGY_PROFILE_ENABLE=true
-        ENERGY_PROFILE_OMEGA_MAX=999.0
-        ENERGY_PROFILE_ALPHA_MAX=999.0
-        ENERGY_PROFILE_MIN_V=0.0
-        ;;
     FAS_Q5)
         Q_SLOSH="${Q_SLOSH:-5}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
@@ -304,7 +282,6 @@ case "${CONDITION}" in
     RAW_TUNED)
         Q_SLOSH="${Q_SLOSH:-0}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        ENERGY_PROFILE_ENABLE=false
         MPC_R_A="${MPC_R_A:-1.0}"
         MPC_R_DA="${MPC_R_DA:-2.0}"
         MPC_CMD_VEL_LEAD_TIME="${MPC_CMD_VEL_LEAD_TIME:-0.05}"
@@ -313,7 +290,7 @@ case "${CONDITION}" in
         ;;
     *)
         echo "[run_sim_fixed_path_bag] ERROR: unsupported CONDITION='${CONDITION}'" >&2
-        echo "Use NOM, PROFILE_ENERGY_GEO, PROFILE_REF_V2, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, CUSTOM, or RAW_TUNED." >&2
+        echo "Use NOM, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, CUSTOM, or RAW_TUNED." >&2
         exit 2
         ;;
 esac
@@ -581,13 +558,6 @@ MPC_CMD_VEL_LEAD_TIME=${MPC_CMD_VEL_LEAD_TIME}
 TERMINAL_FACTOR_SLOSH_ETA=${TERMINAL_FACTOR_SLOSH_ETA}
 TERMINAL_FACTOR_SLOSH_ETA_DOT=${TERMINAL_FACTOR_SLOSH_ETA_DOT}
 ENABLE_SLOSH_BOX_CONSTRAINT=${ENABLE_SLOSH_BOX_CONSTRAINT}
-ENERGY_PROFILE_ENABLE=${ENERGY_PROFILE_ENABLE}
-ENERGY_PROFILE_LAT_ACCEL=${ENERGY_PROFILE_LAT_ACCEL}
-ENERGY_PROFILE_OMEGA_MAX=${ENERGY_PROFILE_OMEGA_MAX}
-ENERGY_PROFILE_ALPHA_MAX=${ENERGY_PROFILE_ALPHA_MAX}
-ENERGY_PROFILE_AX_MAX=${ENERGY_PROFILE_AX_MAX}
-ENERGY_PROFILE_DECEL_MAX=${ENERGY_PROFILE_DECEL_MAX}
-ENERGY_PROFILE_MIN_V=${ENERGY_PROFILE_MIN_V}
 VEHICLE_V_MAX=${VEHICLE_V_MAX}
 
 git_status:
@@ -599,7 +569,7 @@ EOF
 
 publish_config_summary() {
     local summary
-    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; path_source_output_topic=${PATH_SOURCE_OUTPUT_TOPIC}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; energy_profile=${ENERGY_PROFILE_ENABLE}; vehicle_v_max=${VEHICLE_V_MAX}; retime=${RETIME_METHOD}; external_speed_csv=${EXTERNAL_SPEED_PROFILE_CSV}; external_profile_cap=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
+    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; path_source_output_topic=${PATH_SOURCE_OUTPUT_TOPIC}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; vehicle_v_max=${VEHICLE_V_MAX}; retime=${RETIME_METHOD}; external_speed_csv=${EXTERNAL_SPEED_PROFILE_CSV}; external_profile_cap=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
     rostopic pub -l /experiment/config_summary std_msgs/String "data: '${summary}'" >/dev/null &
     local pid=$!
     pids+=("${pid}")
@@ -809,13 +779,6 @@ MPC_ARGS=(
     terminal_factor_slosh_eta:="${TERMINAL_FACTOR_SLOSH_ETA}"
     terminal_factor_slosh_eta_dot:="${TERMINAL_FACTOR_SLOSH_ETA_DOT}"
     enable_slosh_box_constraint:="${ENABLE_SLOSH_BOX_CONSTRAINT}"
-    energy_profile_enable:="${ENERGY_PROFILE_ENABLE}"
-    energy_profile_lat_accel:="${ENERGY_PROFILE_LAT_ACCEL}"
-    energy_profile_omega_max:="${ENERGY_PROFILE_OMEGA_MAX}"
-    energy_profile_alpha_max:="${ENERGY_PROFILE_ALPHA_MAX}"
-    energy_profile_ax_max:="${ENERGY_PROFILE_AX_MAX}"
-    energy_profile_decel_max:="${ENERGY_PROFILE_DECEL_MAX}"
-    energy_profile_min_v:="${ENERGY_PROFILE_MIN_V}"
     vehicle_v_max:="${VEHICLE_V_MAX}"
     external_profile_execution_cap_enable:="${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
     external_profile_execution_accel_limit:="${EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT}"
@@ -854,7 +817,6 @@ echo "  mpc_R_da             = ${MPC_R_DA}"
 echo "  cmd_vel_lead_time    = ${MPC_CMD_VEL_LEAD_TIME}"
 echo "  term_factor_eta      = ${TERMINAL_FACTOR_SLOSH_ETA}"
 echo "  term_factor_eta_dot  = ${TERMINAL_FACTOR_SLOSH_ETA_DOT}"
-echo "  energy_profile       = ${ENERGY_PROFILE_ENABLE}"
 echo "  vehicle_v_max        = ${VEHICLE_V_MAX}"
 echo "  retime_method        = ${RETIME_METHOD}"
 echo "  external_speed_csv   = ${EXTERNAL_SPEED_PROFILE_CSV:-<none yet>}"
