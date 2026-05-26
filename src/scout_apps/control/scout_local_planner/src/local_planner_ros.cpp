@@ -17,33 +17,6 @@ namespace scout_local_planner {
 
 namespace {
 
-double computeTrimmedMean(std::vector<double> samples, double trim_ratio) {
-    if (samples.empty()) {
-        return 0.0;
-    }
-
-    std::sort(samples.begin(), samples.end());
-
-    const double clamped_trim = std::max(0.0, std::min(0.49, trim_ratio));
-    std::size_t trim_count = static_cast<std::size_t>(
-        std::floor(static_cast<double>(samples.size()) * clamped_trim));
-    if (trim_count * 2 >= samples.size()) {
-        trim_count = 0;
-    }
-
-    const std::size_t begin = trim_count;
-    const std::size_t end = samples.size() - trim_count;
-    if (begin >= end) {
-        return samples[samples.size() / 2];
-    }
-
-    double sum = 0.0;
-    for (std::size_t i = begin; i < end; ++i) {
-        sum += samples[i];
-    }
-    return sum / static_cast<double>(end - begin);
-}
-
 double percentile(std::vector<double> samples, double p) {
     if (samples.empty()) {
         return 0.0;
@@ -140,23 +113,24 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
                                       &LocalPlannerROS::globalPathCallback, this);
     odom_sub_ = nh_.subscribe("odom", 1, 
                                &LocalPlannerROS::odomCallback, this);
-    if (use_imu_lateral_accel_ || use_imu_yaw_rate_ || use_imu_alpha_z_) {
-        imu_sub_ = nh_.subscribe(imu_topic_, 10,
+    if (slosh_feedback_.imuRequired()) {
+        const SloshFeedbackParams& sfp = slosh_feedback_.params();
+        imu_sub_ = nh_.subscribe(slosh_feedback_.imuTopic(), 10,
                                  &LocalPlannerROS::imuCallback, this);
         ROS_INFO("[LocalPlannerROS] IMU interface enabled: topic=%s, ay=%s, omega_z=%s, alpha_z=%s",
-                 imu_topic_.c_str(),
-                 use_imu_lateral_accel_ ? "on" : "off",
-                 use_imu_yaw_rate_ ? "on" : "off",
-                 use_imu_alpha_z_ ? "on" : "off");
+                 sfp.imu_topic.c_str(),
+                 sfp.use_imu_lateral_accel ? "on" : "off",
+                 sfp.use_imu_yaw_rate ? "on" : "off",
+                 sfp.use_imu_alpha_z ? "on" : "off");
         ROS_INFO("[LocalPlannerROS] IMU ay bias compensation: %s (init=%.2fs, |v|<%.3f, |omega|<%.3f, min_samples=%d)",
-                 imu_ay_bias_compensation_enable_ ? "on" : "off",
-                 imu_ay_bias_init_duration_,
-                 imu_ay_bias_static_v_max_,
-                 imu_ay_bias_static_omega_max_,
-                 imu_ay_bias_min_samples_);
+                 sfp.imu_ay_bias_compensation_enable ? "on" : "off",
+                 sfp.imu_ay_bias_init_duration,
+                 sfp.imu_ay_bias_static_v_max,
+                 sfp.imu_ay_bias_static_omega_max,
+                 sfp.imu_ay_bias_min_samples);
         ROS_INFO("[LocalPlannerROS] IMU ay bias estimator: first_static_only, ema_alpha=%.2f, trim_ratio=%.2f",
-                 imu_ay_bias_estimator_alpha_,
-                 imu_ay_bias_trim_ratio_);
+                 sfp.imu_ay_bias_estimator_alpha,
+                 sfp.imu_ay_bias_trim_ratio);
     }
     
     // 发布者
@@ -290,29 +264,36 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("slosh/use_linear_model", slosh_params_.use_linear_model, true);
     slosh_params_.dt = mpc_params_.dt;  // 与 MPC 时间步长一致
 
-    // 加速度估计 EMA 滤波系数
-    pnh.param("slosh_estimator/accel_filter_alpha", accel_filter_alpha_, 0.3);
-    pnh.param("slosh_estimator/use_imu_lateral_accel", use_imu_lateral_accel_, false);
-    pnh.param("slosh_estimator/use_imu_yaw_rate", use_imu_yaw_rate_, true);
-    pnh.param("slosh_estimator/use_imu_alpha_z", use_imu_alpha_z_, false);
-    pnh.param("slosh_estimator/imu_topic", imu_topic_, std::string("/imu/data"));
-    pnh.param("slosh_estimator/imu_filter_alpha", imu_filter_alpha_, 0.3);
+    SloshFeedbackParams slosh_feedback_params;
+    pnh.param("slosh_estimator/accel_filter_alpha",
+              slosh_feedback_params.accel_filter_alpha, 0.3);
+    pnh.param("slosh_estimator/use_imu_lateral_accel",
+              slosh_feedback_params.use_imu_lateral_accel, false);
+    pnh.param("slosh_estimator/use_imu_yaw_rate",
+              slosh_feedback_params.use_imu_yaw_rate, true);
+    pnh.param("slosh_estimator/use_imu_alpha_z",
+              slosh_feedback_params.use_imu_alpha_z, false);
+    pnh.param("slosh_estimator/imu_topic",
+              slosh_feedback_params.imu_topic, std::string("/imu/data"));
+    pnh.param("slosh_estimator/imu_filter_alpha",
+              slosh_feedback_params.imu_filter_alpha, 0.3);
     pnh.param("slosh_estimator/imu_ay_bias_compensation_enable",
-              imu_ay_bias_compensation_enable_, true);
+              slosh_feedback_params.imu_ay_bias_compensation_enable, true);
     pnh.param("slosh_estimator/imu_ay_bias_init_duration",
-              imu_ay_bias_init_duration_, 3.0);
+              slosh_feedback_params.imu_ay_bias_init_duration, 3.0);
     pnh.param("slosh_estimator/imu_ay_bias_static_v_max",
-              imu_ay_bias_static_v_max_, 0.03);
+              slosh_feedback_params.imu_ay_bias_static_v_max, 0.03);
     pnh.param("slosh_estimator/imu_ay_bias_static_omega_max",
-              imu_ay_bias_static_omega_max_, 0.03);
+              slosh_feedback_params.imu_ay_bias_static_omega_max, 0.03);
     pnh.param("slosh_estimator/imu_ay_bias_min_samples",
-              imu_ay_bias_min_samples_, 100);
+              slosh_feedback_params.imu_ay_bias_min_samples, 100);
     pnh.param("slosh_estimator/imu_ay_bias_estimator_alpha",
-              imu_ay_bias_estimator_alpha_, 0.15);
+              slosh_feedback_params.imu_ay_bias_estimator_alpha, 0.15);
     pnh.param("slosh_estimator/imu_ay_bias_trim_ratio",
-              imu_ay_bias_trim_ratio_, 0.10);
+              slosh_feedback_params.imu_ay_bias_trim_ratio, 0.10);
     pnh.param("slosh_estimator/imu_ay_scale",
-              imu_ay_scale_, 1.0);
+              slosh_feedback_params.imu_ay_scale, 1.0);
+    slosh_feedback_.setParams(slosh_feedback_params);
 
     // 车辆参数
     pnh.param("vehicle/v_max", vehicle_params_.v_max, 1.0);
@@ -458,6 +439,7 @@ void LocalPlannerROS::odomCallback(const nav_msgs::Odometry::ConstPtr& msg) {
     current_omega_ = msg->twist.twist.angular.z;
     current_odom_time_ = msg->header.stamp;
     has_odom_ = true;
+    slosh_feedback_.onOdom(current_v_, current_omega_, current_odom_time_);
     
     // 更新位姿（从 odom 消息中提取）
     current_pose_.header = msg->header;
@@ -471,107 +453,13 @@ void LocalPlannerROS::imuCallback(const sensor_msgs::Imu::ConstPtr& msg) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     const ros::Time stamp = msg->header.stamp.isZero() ? ros::Time::now() : msg->header.stamp;
-
-    const double ay_raw = msg->linear_acceleration.y;
-    const double omega_z_raw = msg->angular_velocity.z;
-    bool ay_bias_just_initialized = false;
-
-    if (imu_ay_bias_compensation_enable_ &&
-        !imu_ay_bias_ready_ &&
-        !imu_ay_bias_window_closed_) {
-        const bool static_for_bias =
-            has_odom_ &&
-            std::abs(current_v_) < imu_ay_bias_static_v_max_ &&
-            std::abs(current_omega_) < imu_ay_bias_static_omega_max_;
-
-        if (static_for_bias) {
-            if (!imu_ay_bias_window_started_) {
-                imu_ay_bias_window_started_ = true;
-                imu_ay_bias_window_start_ = stamp;
-                imu_ay_bias_window_ema_initialized_ = false;
-                imu_ay_bias_window_ema_ = 0.0;
-                imu_ay_bias_samples_.clear();
-            }
-
-            if (!imu_ay_bias_window_ema_initialized_) {
-                imu_ay_bias_window_ema_ = ay_raw;
-                imu_ay_bias_window_ema_initialized_ = true;
-            } else {
-                imu_ay_bias_window_ema_ =
-                    imu_ay_bias_estimator_alpha_ * ay_raw +
-                    (1.0 - imu_ay_bias_estimator_alpha_) * imu_ay_bias_window_ema_;
-            }
-            imu_ay_bias_samples_.push_back(imu_ay_bias_window_ema_);
-        } else if (imu_ay_bias_window_started_) {
-            const double elapsed = (stamp - imu_ay_bias_window_start_).toSec();
-            const int min_samples = std::max(1, imu_ay_bias_min_samples_);
-            const int sample_count = static_cast<int>(imu_ay_bias_samples_.size());
-
-            if (elapsed >= imu_ay_bias_init_duration_ && sample_count >= min_samples) {
-                imu_ay_bias_ = computeTrimmedMean(imu_ay_bias_samples_, imu_ay_bias_trim_ratio_);
-                imu_ay_bias_ready_ = true;
-                ay_bias_just_initialized = true;
-                ROS_INFO("[LocalPlannerROS] IMU ay bias initialized from first static window: bias=%.5f, samples=%d, static_window=%.3fs, estimator=EMA(alpha=%.2f)+trimmed_mean(trim=%.2f)",
-                         imu_ay_bias_,
-                         sample_count,
-                         elapsed,
-                         imu_ay_bias_estimator_alpha_,
-                         imu_ay_bias_trim_ratio_);
-            } else {
-                ROS_WARN("[LocalPlannerROS] IMU ay bias not initialized: first static window too short (elapsed=%.3fs, samples=%d, need>=%.3fs and >=%d). Bias compensation will stay disabled for this run.",
-                         elapsed,
-                         sample_count,
-                         imu_ay_bias_init_duration_,
-                         min_samples);
-            }
-
-            imu_ay_bias_window_closed_ = true;
-            imu_ay_bias_window_started_ = false;
-            imu_ay_bias_window_ema_initialized_ = false;
-            imu_ay_bias_samples_.clear();
-        } else if (has_odom_) {
-            imu_ay_bias_window_closed_ = true;
-            ROS_WARN("[LocalPlannerROS] IMU ay bias not initialized: robot moved before the first static window. Bias compensation will stay disabled for this run.");
-        }
-    }
-
-    const double ay_bias =
-        (imu_ay_bias_compensation_enable_ && imu_ay_bias_ready_) ? imu_ay_bias_ : 0.0;
-    imu_ay_unbiased_ = (ay_raw - ay_bias) * imu_ay_scale_;
-
-    if (!has_imu_) {
-        imu_ay_filtered_ = imu_ay_unbiased_;
-        imu_omega_z_filtered_ = omega_z_raw;
-        imu_alpha_filtered_ = 0.0;
-        prev_imu_omega_z_ = omega_z_raw;
-        prev_imu_time_ = stamp;
-        has_imu_ = true;
-        has_prev_imu_ = true;
-        return;
-    }
-
-    if (ay_bias_just_initialized) {
-        imu_ay_filtered_ = imu_ay_unbiased_;
-    } else {
-        imu_ay_filtered_ =
-            imu_filter_alpha_ * imu_ay_unbiased_ + (1.0 - imu_filter_alpha_) * imu_ay_filtered_;
-    }
-    imu_omega_z_filtered_ =
-        imu_filter_alpha_ * omega_z_raw + (1.0 - imu_filter_alpha_) * imu_omega_z_filtered_;
-
-    if (has_prev_imu_) {
-        const double dt_imu = (stamp - prev_imu_time_).toSec();
-        if (dt_imu > 1e-4 && dt_imu < 1.0) {
-            const double alpha_raw = (omega_z_raw - prev_imu_omega_z_) / dt_imu;
-            imu_alpha_filtered_ =
-                imu_filter_alpha_ * alpha_raw + (1.0 - imu_filter_alpha_) * imu_alpha_filtered_;
-        }
-    }
-
-    prev_imu_omega_z_ = omega_z_raw;
-    prev_imu_time_ = stamp;
-    has_imu_ = true;
-    has_prev_imu_ = true;
+    slosh_feedback_.onImu(
+        msg->linear_acceleration.y,
+        msg->angular_velocity.z,
+        stamp,
+        current_v_,
+        current_omega_,
+        has_odom_);
 }
 
 void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
@@ -1105,42 +993,16 @@ void LocalPlannerROS::updateSloshEstimate() {
         return;
     }
 
-    if (has_prev_odom_ && !prev_odom_time_.isZero() && !current_odom_time_.isZero()) {
-        // 用真实 odom 时间戳差分，避免假定固定控制周期
-        double dt_odom = (current_odom_time_ - prev_odom_time_).toSec();
-        if (dt_odom > 1e-4 && dt_odom < 1.0) {
-            double ax_raw = (current_v_ - prev_v_) / dt_odom;
-            double alpha_raw = (current_omega_ - prev_omega_) / dt_odom;
-            double ay_raw = current_v_ * current_omega_;
-
-            ax_filtered_ = accel_filter_alpha_ * ax_raw + (1.0 - accel_filter_alpha_) * ax_filtered_;
-            ay_filtered_ = accel_filter_alpha_ * ay_raw + (1.0 - accel_filter_alpha_) * ay_filtered_;
-            alpha_filtered_ = accel_filter_alpha_ * alpha_raw + (1.0 - accel_filter_alpha_) * alpha_filtered_;
-        }
-    }
-
-    const bool use_imu_ay = use_imu_lateral_accel_ && has_imu_;
-    const bool use_imu_omega = use_imu_yaw_rate_ && has_imu_;
-    const bool use_imu_alpha = use_imu_alpha_z_ && has_imu_ && has_prev_imu_;
-
-    if ((use_imu_lateral_accel_ || use_imu_yaw_rate_ || use_imu_alpha_z_) && !has_imu_) {
-        ROS_WARN_THROTTLE(2.0, "[LocalPlannerROS] IMU input requested but no IMU message received on %s, fallback to odom-based slosh estimate",
-                          imu_topic_.c_str());
-    }
-
-    ay_est_used_ = use_imu_ay ? imu_ay_filtered_ : ay_filtered_;
-    const double omega_for_slosh = use_imu_omega ? imu_omega_z_filtered_ : current_omega_;
-    omega_est_used_ = omega_for_slosh;
-    alpha_est_used_ = use_imu_alpha ? imu_alpha_filtered_ : alpha_filtered_;
+    slosh_feedback_output_ =
+        slosh_feedback_.update(current_v_, current_omega_, current_odom_time_);
 
     // 当 offset_x/y=0 时，odom fallback 与 DiffDriveModel 的 slosh 输入映射一致；
     // 接入 IMU 后，优先使用实物测得的横向激励/角运动信息。
-    slosh_integration_.update(ax_filtered_, ay_est_used_, omega_for_slosh, alpha_est_used_);
-
-    prev_v_ = current_v_;
-    prev_omega_ = current_omega_;
-    prev_odom_time_ = current_odom_time_;
-    has_prev_odom_ = true;
+    slosh_integration_.update(
+        slosh_feedback_output_.ax,
+        slosh_feedback_output_.ay,
+        slosh_feedback_output_.omega,
+        slosh_feedback_output_.alpha);
 }
 
 double LocalPlannerROS::computePredictedSloshHeightMax(const MPCSolution& solution) const {
@@ -1726,11 +1588,8 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {
             slosh_integration_.reset();
         }
         // 加速度滤波器始终重置，避免旧差分值污染新路径段
-        ax_filtered_ = 0.0;
-        ay_filtered_ = 0.0;
-        alpha_filtered_ = 0.0;
-        has_prev_odom_ = false;
-        prev_odom_time_ = ros::Time(0);
+        slosh_feedback_.resetOdomFilters();
+        slosh_feedback_output_ = slosh_feedback_.output();
     }
     last_v_des_eff_ = 0.0;
     last_v_des_raw_ = 0.0;
@@ -1897,31 +1756,38 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok, boo
 
     if (slosh_omega_est_used_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32 msg;
-        msg.data = static_cast<float>(omega_est_used_);
+        msg.data = static_cast<float>(slosh_feedback_output_.omega);
         slosh_omega_est_used_pub_.publish(msg);
     }
 
     if (slosh_imu_omega_z_filtered_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32 msg;
-        msg.data = static_cast<float>(has_imu_ ? imu_omega_z_filtered_ : 0.0);
+        msg.data = static_cast<float>(
+            slosh_feedback_output_.has_imu ? slosh_feedback_output_.imu_omega_z_filtered : 0.0);
         slosh_imu_omega_z_filtered_pub_.publish(msg);
     }
 
     if (slosh_imu_ay_bias_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32 msg;
-        msg.data = static_cast<float>(imu_ay_bias_compensation_enable_ ? imu_ay_bias_ : 0.0);
+        msg.data = static_cast<float>(
+            slosh_feedback_.params().imu_ay_bias_compensation_enable
+                ? slosh_feedback_output_.imu_ay_bias
+                : 0.0);
         slosh_imu_ay_bias_pub_.publish(msg);
     }
 
     if (slosh_imu_ay_filtered_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32 msg;
-        msg.data = static_cast<float>(has_imu_ ? imu_ay_filtered_ : 0.0);
+        msg.data = static_cast<float>(
+            slosh_feedback_output_.has_imu ? slosh_feedback_output_.imu_ay_filtered : 0.0);
         slosh_imu_ay_filtered_pub_.publish(msg);
     }
 
     if (slosh_imu_ay_bias_ready_pub_.getNumSubscribers() > 0) {
         std_msgs::Int32 msg;
-        msg.data = (imu_ay_bias_compensation_enable_ && imu_ay_bias_ready_) ? 1 : 0;
+        msg.data =
+            (slosh_feedback_.params().imu_ay_bias_compensation_enable &&
+             slosh_feedback_output_.imu_ay_bias_ready) ? 1 : 0;
         slosh_imu_ay_bias_ready_pub_.publish(msg);
     }
 
@@ -1972,12 +1838,12 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok, boo
     }
     if (slosh_excitation_ay_abs_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32 msg;
-        msg.data = static_cast<float>(std::abs(ay_est_used_));
+        msg.data = static_cast<float>(std::abs(slosh_feedback_output_.ay));
         slosh_excitation_ay_abs_pub_.publish(msg);
     }
     if (slosh_excitation_alpha_abs_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32 msg;
-        msg.data = static_cast<float>(std::abs(alpha_est_used_));
+        msg.data = static_cast<float>(std::abs(slosh_feedback_output_.alpha));
         slosh_excitation_alpha_abs_pub_.publish(msg);
     }
 
@@ -2009,17 +1875,17 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok, boo
     // 加速度估计值（论文实验用）
     if (slosh_ax_est_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32 msg;
-        msg.data = static_cast<float>(ax_filtered_);
+        msg.data = static_cast<float>(slosh_feedback_output_.ax);
         slosh_ax_est_pub_.publish(msg);
     }
     if (slosh_ay_est_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32 msg;
-        msg.data = static_cast<float>(ay_est_used_);
+        msg.data = static_cast<float>(slosh_feedback_output_.ay);
         slosh_ay_est_pub_.publish(msg);
     }
     if (slosh_alpha_est_pub_.getNumSubscribers() > 0) {
         std_msgs::Float32 msg;
-        msg.data = static_cast<float>(alpha_est_used_);
+        msg.data = static_cast<float>(slosh_feedback_output_.alpha);
         slosh_alpha_est_pub_.publish(msg);
     }
 }

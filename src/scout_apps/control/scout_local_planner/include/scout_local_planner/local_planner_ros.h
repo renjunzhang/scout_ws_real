@@ -13,6 +13,7 @@
 #include "scout_local_planner/slosh_integration.h"
 #include "scout_local_planner/profile_execution_cap.h"
 #include "scout_local_planner/terminal_controller.h"
+#include "scout_local_planner/slosh_feedback.h"
 
 #include <ros/ros.h>
 #include <nav_msgs/Path.h>
@@ -118,6 +119,7 @@ private:
     MPCSolver mpc_solver_;
     ProfileExecutionCap profile_execution_cap_;
     TerminalController terminal_controller_;
+    SloshFeedback slosh_feedback_;
     
     // 参数
     MPCParams mpc_params_;
@@ -173,50 +175,8 @@ private:
     bool slosh_enabled_ = false;
     SloshParams slosh_params_;
 
-    // 加速度估计（odom 差分 + EMA 低通）
-    double prev_v_ = 0.0;
-    double prev_omega_ = 0.0;
-    ros::Time prev_odom_time_;        // 上一次 odom 时间戳
     ros::Time current_odom_time_;     // 当前 odom 时间戳
-    bool has_prev_odom_ = false;
-    double ax_filtered_ = 0.0;
-    double ay_filtered_ = 0.0;      // odom 横向估计：v * omega（离心加速度近似）
-    double alpha_filtered_ = 0.0;   // odom 角加速度估计
-    double ay_est_used_ = 0.0;      // 实际注入 slosh 模型的横向加速度
-    double alpha_est_used_ = 0.0;   // 实际注入 slosh 模型的角加速度
-    double accel_filter_alpha_ = 0.3;  // EMA 滤波系数
-
-    // IMU 接口预留（阶段 7）
-    bool use_imu_lateral_accel_ = false;
-    bool use_imu_yaw_rate_ = true;
-    bool use_imu_alpha_z_ = false;
-    std::string imu_topic_ = "/imu/data";
-    double imu_filter_alpha_ = 0.3;
-    bool imu_ay_bias_compensation_enable_ = true;
-    double imu_ay_bias_init_duration_ = 3.0;
-    double imu_ay_bias_static_v_max_ = 0.03;
-    double imu_ay_bias_static_omega_max_ = 0.03;
-    int imu_ay_bias_min_samples_ = 100;
-    double imu_ay_bias_estimator_alpha_ = 0.15;
-    double imu_ay_bias_trim_ratio_ = 0.10;
-    double imu_ay_scale_ = 1.0;   // 离线标定比例系数：calibrated = (raw - bias) * scale
-    bool has_imu_ = false;
-    bool has_prev_imu_ = false;
-    ros::Time prev_imu_time_;
-    double imu_ay_filtered_ = 0.0;
-    double imu_ay_bias_ = 0.0;
-    double imu_ay_unbiased_ = 0.0;
-    bool imu_ay_bias_ready_ = false;
-    ros::Time imu_ay_bias_window_start_;
-    bool imu_ay_bias_window_started_ = false;
-    bool imu_ay_bias_window_closed_ = false;
-    bool imu_ay_bias_window_ema_initialized_ = false;
-    double imu_ay_bias_window_ema_ = 0.0;
-    std::vector<double> imu_ay_bias_samples_;
-    double imu_omega_z_filtered_ = 0.0;
-    double imu_alpha_filtered_ = 0.0;
-    double prev_imu_omega_z_ = 0.0;
-    double omega_est_used_ = 0.0;     // 实际注入 slosh 模型的角速度
+    SloshFeedbackOutput slosh_feedback_output_;
 
     double last_v_des_eff_ = 0.0;
 

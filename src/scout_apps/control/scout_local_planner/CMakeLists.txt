@@ -46,6 +46,7 @@ add_library(${PROJECT_NAME}
   src/profile_execution_cap.cpp
   src/terminal_controller.cpp
   src/local_planner_ros.cpp
+  src/slosh_feedback.cpp
   src/slosh_integration.cpp
 )
 
