@@ -14,6 +14,7 @@
 #include "scout_local_planner/profile_execution_cap.h"
 #include "scout_local_planner/terminal_controller.h"
 #include "scout_local_planner/slosh_feedback.h"
+#include "scout_local_planner/diagnostics_publisher.h"
 
 #include <ros/ros.h>
 #include <nav_msgs/Path.h>
@@ -51,19 +52,6 @@ public:
     void run();
 
 private:
-    struct CostBreakdown {
-        double J_lag = 0.0;
-        double J_contour = 0.0;
-        double J_etheta = 0.0;
-        double J_v = 0.0;
-        double J_omega_ff = 0.0;
-        double J_control = 0.0;
-        double J_smooth = 0.0;
-        double J_slosh_eta = 0.0;
-        double J_slosh_eta_dot = 0.0;
-        double J_total = 0.0;
-    };
-
     // ====== 回调函数 ======
     void globalPathCallback(const nav_msgs::Path::ConstPtr& msg);
     void odomCallback(const nav_msgs::Odometry::ConstPtr& msg);
@@ -82,11 +70,11 @@ private:
     void publishSmoothedPath();
     void publishStatus();
     void publishSloshDebug(double solve_time_ms, bool solve_ok, bool publish_solver_debug = true);
-    CostBreakdown computeCostBreakdown(const MPCSolution& solution,
-                                       const std::vector<ReferencePoint>& refs,
-                                       const MPCParams& params,
-                                       const ControlVector& u_prev) const;
-    void publishCostBreakdown(const CostBreakdown& breakdown);
+    DiagnosticsCostBreakdown computeCostBreakdown(const MPCSolution& solution,
+                                                  const std::vector<ReferencePoint>& refs,
+                                                  const MPCParams& params,
+                                                  const ControlVector& u_prev) const;
+    void publishCostBreakdown(const DiagnosticsCostBreakdown& breakdown);
     void publishSloshHorizonSummary(const MPCSolution& solution);
     void publishTerminalDebug();
     void updateSloshEstimate();
@@ -120,6 +108,7 @@ private:
     ProfileExecutionCap profile_execution_cap_;
     TerminalController terminal_controller_;
     SloshFeedback slosh_feedback_;
+    DiagnosticsPublisher diagnostics_publisher_;
     
     // 参数
     MPCParams mpc_params_;
@@ -179,63 +168,6 @@ private:
     SloshFeedbackOutput slosh_feedback_output_;
 
     double last_v_des_eff_ = 0.0;
-
-    // slosh 调试发布
-    ros::Publisher slosh_state_pub_;
-    ros::Publisher slosh_height_pub_;
-    ros::Publisher slosh_ax_est_pub_;
-    ros::Publisher slosh_ay_est_pub_;
-    ros::Publisher slosh_alpha_est_pub_;
-    ros::Publisher slosh_episode_id_pub_;
-    ros::Publisher slosh_height_pred_max_pub_;
-    ros::Publisher slosh_q_slosh_eta_pub_;
-    ros::Publisher slosh_constraint_active_pub_;
-    ros::Publisher slosh_v_des_eff_pub_;
-    ros::Publisher slosh_omega_est_used_pub_;
-    ros::Publisher slosh_imu_omega_z_filtered_pub_;
-    ros::Publisher slosh_imu_ay_bias_pub_;
-    ros::Publisher slosh_imu_ay_filtered_pub_;
-    ros::Publisher slosh_imu_ay_bias_ready_pub_;
-    ros::Publisher slosh_eta_norm_pub_;
-    ros::Publisher slosh_eta_dot_norm_pub_;
-    ros::Publisher slosh_modal_energy_pub_;
-    ros::Publisher slosh_modal_energy_norm_pub_;
-    ros::Publisher slosh_excitation_ay_abs_pub_;
-    ros::Publisher slosh_excitation_alpha_abs_pub_;
-    ros::Publisher mpc_solve_ms_pub_;
-    ros::Publisher mpc_status_val_pub_;
-    ros::Publisher mpc_cost_breakdown_pub_;
-    ros::Publisher mpc_slosh_horizon_summary_pub_;
-    ros::Publisher terminal_mode_pub_;
-    ros::Publisher terminal_recovery_latched_pub_;  // compatibility topic, always publishes 0
-    ros::Publisher terminal_goal_info_pub_;
-    ros::Publisher terminal_v_envelope_pub_;
-    ros::Publisher terminal_envelope_active_pub_;
-    ros::Publisher terminal_phase_active_pub_;
-    ros::Publisher terminal_cmd_v_pre_clamp_pub_;
-    ros::Publisher terminal_cmd_v_post_clamp_pub_;
-    ros::Publisher profile_cap_active_pub_;
-    ros::Publisher profile_cap_v_profile_pub_;
-    ros::Publisher profile_cap_cmd_v_pre_pub_;
-    ros::Publisher profile_cap_cmd_v_post_pub_;
-    ros::Publisher profile_cap_implied_ax_pub_;
-    ros::Publisher profile_cap_implied_jerk_pub_;
-    ros::Publisher ref_v_ref_pub_;
-    ros::Publisher ref_v_ref_horizon_pub_;
-    ros::Publisher ref_s_horizon_pub_;
-    ros::Publisher ref_v_des_raw_pub_;
-    ros::Publisher ref_v_des_target_pub_;
-    ros::Publisher ref_v_des_eff_pub_;
-    ros::Publisher ref_v_des_rate_limited_pub_;
-    ros::Publisher ref_v_path_pub_;
-    ros::Publisher ref_kappa_pub_;
-    ros::Publisher ref_s_pub_;
-    ros::Publisher ref_implied_ax_pub_;
-    ros::Publisher ref_implied_ay_pub_;
-    ros::Publisher ref_implied_jerk_pub_;
-    ros::Publisher ref_implied_ax_abs_p95_pub_;
-    ros::Publisher ref_implied_ay_abs_p95_pub_;
-    ros::Publisher ref_implied_jerk_abs_p95_pub_;
 
     // 实验 episode 标记
     int episode_id_ = 0;

@@ -45,6 +45,7 @@ add_library(${PROJECT_NAME}
   src/mpc_solver.cpp
   src/profile_execution_cap.cpp
   src/terminal_controller.cpp
+  src/diagnostics_publisher.cpp
   src/local_planner_ros.cpp
   src/slosh_feedback.cpp
   src/slosh_integration.cpp

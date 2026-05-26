@@ -17,17 +17,6 @@ namespace scout_local_planner {
 
 namespace {
 
-double percentile(std::vector<double> samples, double p) {
-    if (samples.empty()) {
-        return 0.0;
-    }
-    std::sort(samples.begin(), samples.end());
-    const double alpha = std::max(0.0, std::min(1.0, p));
-    const std::size_t idx = static_cast<std::size_t>(
-        std::round(alpha * static_cast<double>(samples.size() - 1)));
-    return samples[std::min(idx, samples.size() - 1)];
-}
-
 void updateNormalizedSloshWeights(MPCParams& params, double h_coeff, double omega_n) {
     const double h_ref = std::max(1e-4, params.slosh_height_ref);
     params.Q_slosh_eta = params.Q_slosh * h_coeff * h_coeff / (h_ref * h_ref);
@@ -143,65 +132,7 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     }
     status_pub_ = nh_.advertise<std_msgs::String>("mpc_status", 1);
 
-    // slosh 调试发布者
-    slosh_state_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("slosh/state", 1);
-    slosh_height_pub_ = nh_.advertise<std_msgs::Float32>("slosh/height", 1);
-    slosh_ax_est_pub_ = nh_.advertise<std_msgs::Float32>("slosh/ax_est", 1);
-    slosh_ay_est_pub_ = nh_.advertise<std_msgs::Float32>("slosh/ay_est", 1);
-    slosh_alpha_est_pub_ = nh_.advertise<std_msgs::Float32>("slosh/alpha_est", 1);
-    slosh_episode_id_pub_ = nh_.advertise<std_msgs::Int32>("slosh/episode_id", 1);
-    slosh_height_pred_max_pub_ = nh_.advertise<std_msgs::Float32>("slosh/height_pred_max", 1);
-    slosh_q_slosh_eta_pub_ = nh_.advertise<std_msgs::Float32>("slosh/q_slosh_eta", 1);
-    slosh_constraint_active_pub_ = nh_.advertise<std_msgs::Int32>("slosh/constraint_active", 1);
-    slosh_v_des_eff_pub_ = nh_.advertise<std_msgs::Float32>("slosh/v_des_eff", 1);
-    slosh_omega_est_used_pub_ = nh_.advertise<std_msgs::Float32>("slosh/omega_est_used", 1);
-    slosh_imu_omega_z_filtered_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_omega_z_filtered", 1);
-    slosh_imu_ay_bias_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_ay_bias", 1);
-    slosh_imu_ay_filtered_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_ay_filtered", 1);
-    slosh_imu_ay_bias_ready_pub_ = nh_.advertise<std_msgs::Int32>("slosh/imu_ay_bias_ready", 1);
-    slosh_eta_norm_pub_ = nh_.advertise<std_msgs::Float32>("slosh/eta_norm", 1);
-    slosh_eta_dot_norm_pub_ = nh_.advertise<std_msgs::Float32>("slosh/eta_dot_norm", 1);
-    slosh_modal_energy_pub_ = nh_.advertise<std_msgs::Float32>("slosh/modal_energy", 1);
-    slosh_modal_energy_norm_pub_ = nh_.advertise<std_msgs::Float32>("slosh/modal_energy_norm", 1);
-    slosh_excitation_ay_abs_pub_ = nh_.advertise<std_msgs::Float32>("slosh/excitation_ay_abs", 1);
-    slosh_excitation_alpha_abs_pub_ = nh_.advertise<std_msgs::Float32>("slosh/excitation_alpha_abs", 1);
-    mpc_solve_ms_pub_ = nh_.advertise<std_msgs::Float32>("mpc/solve_ms", 1);
-    mpc_status_val_pub_ = nh_.advertise<std_msgs::Int32>("mpc/status_val", 1);
-    mpc_cost_breakdown_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("mpc/cost_breakdown", 1);
-    mpc_slosh_horizon_summary_pub_ =
-        nh_.advertise<std_msgs::Float32MultiArray>("mpc/slosh_horizon_summary", 1);
-    terminal_mode_pub_ = nh_.advertise<std_msgs::String>("terminal/mode", 1);
-    terminal_recovery_latched_pub_ = nh_.advertise<std_msgs::Int32>("terminal/recovery_latched", 1);
-    terminal_goal_info_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("terminal/goal_info", 1);
-    terminal_v_envelope_pub_ = nh_.advertise<std_msgs::Float32>("terminal/v_envelope", 1);
-    terminal_envelope_active_pub_ = nh_.advertise<std_msgs::Int32>("terminal/envelope_active", 1);
-    terminal_phase_active_pub_ = nh_.advertise<std_msgs::Int32>("terminal/phase_active", 1);
-    terminal_cmd_v_pre_clamp_pub_ =
-        nh_.advertise<std_msgs::Float32>("terminal/cmd_v_pre_clamp", 1);
-    terminal_cmd_v_post_clamp_pub_ =
-        nh_.advertise<std_msgs::Float32>("terminal/cmd_v_post_clamp", 1);
-    profile_cap_active_pub_ = nh_.advertise<std_msgs::Int32>("profile_cap/active", 1);
-    profile_cap_v_profile_pub_ = nh_.advertise<std_msgs::Float32>("profile_cap/v_profile", 1);
-    profile_cap_cmd_v_pre_pub_ = nh_.advertise<std_msgs::Float32>("profile_cap/cmd_v_pre_cap", 1);
-    profile_cap_cmd_v_post_pub_ = nh_.advertise<std_msgs::Float32>("profile_cap/cmd_v_post_cap", 1);
-    profile_cap_implied_ax_pub_ = nh_.advertise<std_msgs::Float32>("profile_cap/implied_ax", 1);
-    profile_cap_implied_jerk_pub_ = nh_.advertise<std_msgs::Float32>("profile_cap/implied_jerk", 1);
-    ref_v_ref_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_ref", 1);
-    ref_v_ref_horizon_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("reference/v_ref_horizon", 1);
-    ref_s_horizon_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("reference/s_horizon", 1);
-    ref_v_des_raw_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_des_raw", 1);
-    ref_v_des_target_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_des_target", 1);
-    ref_v_des_eff_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_des_eff", 1);
-    ref_v_des_rate_limited_pub_ = nh_.advertise<std_msgs::Int32>("reference/v_des_rate_limited", 1);
-    ref_v_path_pub_ = nh_.advertise<std_msgs::Float32>("reference/v_path", 1);
-    ref_kappa_pub_ = nh_.advertise<std_msgs::Float32>("reference/kappa", 1);
-    ref_s_pub_ = nh_.advertise<std_msgs::Float32>("reference/s", 1);
-    ref_implied_ax_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_ax", 1);
-    ref_implied_ay_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_ay", 1);
-    ref_implied_jerk_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_jerk", 1);
-    ref_implied_ax_abs_p95_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_ax_abs_p95", 1);
-    ref_implied_ay_abs_p95_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_ay_abs_p95", 1);
-    ref_implied_jerk_abs_p95_pub_ = nh_.advertise<std_msgs::Float32>("reference/implied_jerk_abs_p95", 1);
+    diagnostics_publisher_.advertise(nh_);
     
     // 控制定时器
     control_timer_ = nh_.createTimer(
@@ -726,7 +657,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 MPCSolution solution = mpc_solver_.solve(current_state, ref_points);
                 
                 if (solution.success) {
-                    const CostBreakdown cost_breakdown =
+                    const DiagnosticsCostBreakdown cost_breakdown =
                         computeCostBreakdown(solution, ref_points, runtime_mpc_params, u_prev_for_cost);
 
                     // 6. 发布控制命令
@@ -1044,13 +975,13 @@ double LocalPlannerROS::computePredictedSloshHeightMax(const MPCSolution& soluti
     return height_max;
 }
 
-LocalPlannerROS::CostBreakdown LocalPlannerROS::computeCostBreakdown(
+DiagnosticsCostBreakdown LocalPlannerROS::computeCostBreakdown(
     const MPCSolution& solution,
     const std::vector<ReferencePoint>& refs,
     const MPCParams& params,
     const ControlVector& u_prev) const {
 
-    CostBreakdown out;
+    DiagnosticsCostBreakdown out;
     if (solution.x_predicted.empty()) {
         return out;
     }
@@ -1136,159 +1067,15 @@ LocalPlannerROS::CostBreakdown LocalPlannerROS::computeCostBreakdown(
     return out;
 }
 
-void LocalPlannerROS::publishCostBreakdown(const CostBreakdown& breakdown) {
-    if (mpc_cost_breakdown_pub_.getNumSubscribers() == 0) {
-        return;
-    }
-
-    const double total = breakdown.J_total;
-    auto pct = [total](double value) {
-        return total > 1e-12 ? 100.0 * value / total : 0.0;
-    };
-
-    std_msgs::Float32MultiArray msg;
-    msg.layout.dim.resize(1);
-    msg.layout.dim[0].label =
-        "total,J_lag,J_contour,J_etheta,J_v,J_omega_ff,J_control,J_smooth,"
-        "J_slosh_eta,J_slosh_eta_dot,"
-        "pct_lag,pct_contour,pct_etheta,pct_v,pct_omega_ff,pct_control,"
-        "pct_smooth,pct_slosh_eta,pct_slosh_eta_dot,pct_slosh_total";
-    msg.layout.dim[0].size = 20;
-    msg.layout.dim[0].stride = 20;
-    msg.data.resize(20);
-    msg.data[0] = static_cast<float>(breakdown.J_total);
-    msg.data[1] = static_cast<float>(breakdown.J_lag);
-    msg.data[2] = static_cast<float>(breakdown.J_contour);
-    msg.data[3] = static_cast<float>(breakdown.J_etheta);
-    msg.data[4] = static_cast<float>(breakdown.J_v);
-    msg.data[5] = static_cast<float>(breakdown.J_omega_ff);
-    msg.data[6] = static_cast<float>(breakdown.J_control);
-    msg.data[7] = static_cast<float>(breakdown.J_smooth);
-    msg.data[8] = static_cast<float>(breakdown.J_slosh_eta);
-    msg.data[9] = static_cast<float>(breakdown.J_slosh_eta_dot);
-    msg.data[10] = static_cast<float>(pct(breakdown.J_lag));
-    msg.data[11] = static_cast<float>(pct(breakdown.J_contour));
-    msg.data[12] = static_cast<float>(pct(breakdown.J_etheta));
-    msg.data[13] = static_cast<float>(pct(breakdown.J_v));
-    msg.data[14] = static_cast<float>(pct(breakdown.J_omega_ff));
-    msg.data[15] = static_cast<float>(pct(breakdown.J_control));
-    msg.data[16] = static_cast<float>(pct(breakdown.J_smooth));
-    msg.data[17] = static_cast<float>(pct(breakdown.J_slosh_eta));
-    msg.data[18] = static_cast<float>(pct(breakdown.J_slosh_eta_dot));
-    msg.data[19] = static_cast<float>(pct(breakdown.J_slosh_eta + breakdown.J_slosh_eta_dot));
-    mpc_cost_breakdown_pub_.publish(msg);
+void LocalPlannerROS::publishCostBreakdown(const DiagnosticsCostBreakdown& breakdown) {
+    diagnostics_publisher_.publishCostBreakdown(breakdown);
 }
 
 void LocalPlannerROS::publishSloshHorizonSummary(const MPCSolution& solution) {
-    if (mpc_slosh_horizon_summary_pub_.getNumSubscribers() == 0) {
-        return;
-    }
-
-    std_msgs::Float32MultiArray msg;
-    msg.layout.dim.resize(1);
-    msg.layout.dim[0].label =
-        "eta_norm_0_m,eta_norm_max_m,eta_dot_norm_0_mps,eta_dot_norm_max_mps,"
-        "h_modal_max_mm,h_total_max_mm,k_h_total_max,"
-        "v_abs_p95_mps,omega_abs_p95_radps,ax_abs_p95_mps2,ay_abs_p95_mps2,"
-        "eta_growth_ratio,h_total_0_mm";
-    msg.layout.dim[0].size = 13;
-    msg.layout.dim[0].stride = 13;
-    msg.data.assign(13, 0.0f);
-
-    if (!slosh_enabled_ || solution.x_predicted.empty()) {
-        mpc_slosh_horizon_summary_pub_.publish(msg);
-        return;
-    }
-
-    const double h_coeff = slosh_integration_.getModalParams().height_coeff;
-    const double R = slosh_params_.container_radius;
-    const double g = 9.81;
-
-    double eta_norm_0 = 0.0;
-    double eta_norm_max = 0.0;
-    double eta_dot_norm_0 = 0.0;
-    double eta_dot_norm_max = 0.0;
-    double h_modal_max = 0.0;
-    double h_total_max = 0.0;
-    double h_total_0 = 0.0;
-    std::size_t k_h_total_max = 0;
-    std::vector<double> v_abs;
-    std::vector<double> omega_abs;
-    std::vector<double> ax_abs;
-    std::vector<double> ay_abs;
-
-    const std::size_t n_states = solution.x_predicted.size();
-    const std::size_t n_inputs = solution.u_optimal.size();
-    v_abs.reserve(n_states);
-    omega_abs.reserve(n_inputs);
-    ax_abs.reserve(n_inputs);
-    ay_abs.reserve(n_inputs);
-
-    for (std::size_t k = 0; k < n_states; ++k) {
-        const StateVector& xk = solution.x_predicted[k];
-        const double eta_x = xk(StateIndex::ETA_X);
-        const double eta_y = xk(StateIndex::ETA_Y);
-        const double eta_x_dot = xk(StateIndex::ETA_X_DOT);
-        const double eta_y_dot = xk(StateIndex::ETA_Y_DOT);
-        const double eta_norm = std::hypot(eta_x, eta_y);
-        const double eta_dot_norm = std::hypot(eta_x_dot, eta_y_dot);
-        const double h_modal = h_coeff * eta_norm;
-
-        double omega_k = 0.0;
-        if (n_inputs > 0) {
-            omega_k = (k < n_inputs)
-                          ? solution.u_optimal[k](ControlIndex::OMEGA)
-                          : solution.u_optimal.back()(ControlIndex::OMEGA);
-        }
-
-        double h_parabola = 0.0;
-        if (slosh_params_.use_parabola_term) {
-            h_parabola = (R * R * omega_k * omega_k) / (4.0 * g);
-        }
-        const double h_total = h_modal + h_parabola;
-
-        if (k == 0) {
-            eta_norm_0 = eta_norm;
-            eta_dot_norm_0 = eta_dot_norm;
-            h_total_0 = h_total;
-        }
-        eta_norm_max = std::max(eta_norm_max, eta_norm);
-        eta_dot_norm_max = std::max(eta_dot_norm_max, eta_dot_norm);
-        h_modal_max = std::max(h_modal_max, h_modal);
-        if (h_total > h_total_max) {
-            h_total_max = h_total;
-            k_h_total_max = k;
-        }
-        v_abs.push_back(std::abs(xk(StateIndex::V)));
-    }
-
-    for (std::size_t k = 0; k < n_inputs; ++k) {
-        const ControlVector& uk = solution.u_optimal[k];
-        const double a = uk(ControlIndex::A);
-        const double omega = uk(ControlIndex::OMEGA);
-        const double v = solution.x_predicted[std::min(k, n_states - 1)](StateIndex::V);
-        omega_abs.push_back(std::abs(omega));
-        ax_abs.push_back(std::abs(a));
-        ay_abs.push_back(std::abs(v * omega));
-    }
-
-    const double eta_growth_ratio =
-        eta_norm_max / std::max(eta_norm_0, 1e-6);
-
-    msg.data[0] = static_cast<float>(eta_norm_0);
-    msg.data[1] = static_cast<float>(eta_norm_max);
-    msg.data[2] = static_cast<float>(eta_dot_norm_0);
-    msg.data[3] = static_cast<float>(eta_dot_norm_max);
-    msg.data[4] = static_cast<float>(1000.0 * h_modal_max);
-    msg.data[5] = static_cast<float>(1000.0 * h_total_max);
-    msg.data[6] = static_cast<float>(k_h_total_max);
-    msg.data[7] = static_cast<float>(percentile(v_abs, 0.95));
-    msg.data[8] = static_cast<float>(percentile(omega_abs, 0.95));
-    msg.data[9] = static_cast<float>(percentile(ax_abs, 0.95));
-    msg.data[10] = static_cast<float>(percentile(ay_abs, 0.95));
-    msg.data[11] = static_cast<float>(eta_growth_ratio);
-    msg.data[12] = static_cast<float>(1000.0 * h_total_0);
-    mpc_slosh_horizon_summary_pub_.publish(msg);
+    const double h_coeff =
+        slosh_enabled_ ? slosh_integration_.getModalParams().height_coeff : 0.0;
+    diagnostics_publisher_.publishSloshHorizonSummary(
+        solution, slosh_enabled_, h_coeff, slosh_params_);
 }
 
 void LocalPlannerROS::publishCmdVel(double v, double omega) {
@@ -1485,92 +1272,22 @@ void LocalPlannerROS::publishStatus() {
 }
 
 void LocalPlannerROS::publishTerminalDebug() {
-    if (terminal_mode_pub_.getNumSubscribers() > 0) {
-        std_msgs::String msg;
-        msg.data = terminal_mode_debug_;
-        terminal_mode_pub_.publish(msg);
-    }
-
-    if (terminal_recovery_latched_pub_.getNumSubscribers() > 0) {
-        std_msgs::Int32 msg;
-        msg.data = 0;
-        terminal_recovery_latched_pub_.publish(msg);
-    }
-
-    if (terminal_v_envelope_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(last_terminal_v_envelope_);
-        terminal_v_envelope_pub_.publish(msg);
-    }
-
-    if (terminal_envelope_active_pub_.getNumSubscribers() > 0) {
-        std_msgs::Int32 msg;
-        msg.data = last_terminal_envelope_active_;
-        terminal_envelope_active_pub_.publish(msg);
-    }
-
-    if (terminal_phase_active_pub_.getNumSubscribers() > 0) {
-        std_msgs::Int32 msg;
-        msg.data = last_terminal_phase_active_;
-        terminal_phase_active_pub_.publish(msg);
-    }
-
-    if (terminal_cmd_v_pre_clamp_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(last_terminal_cmd_v_pre_clamp_);
-        terminal_cmd_v_pre_clamp_pub_.publish(msg);
-    }
-
-    if (terminal_cmd_v_post_clamp_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(last_terminal_cmd_v_post_clamp_);
-        terminal_cmd_v_post_clamp_pub_.publish(msg);
-    }
-
-    if (profile_cap_active_pub_.getNumSubscribers() > 0) {
-        std_msgs::Int32 msg;
-        msg.data = last_profile_cap_active_;
-        profile_cap_active_pub_.publish(msg);
-    }
-
-    auto publish_profile_float = [](ros::Publisher& pub, double value) {
-        if (pub.getNumSubscribers() <= 0) {
-            return;
-        }
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(value);
-        pub.publish(msg);
-    };
-    publish_profile_float(profile_cap_v_profile_pub_, last_profile_cap_v_profile_);
-    publish_profile_float(profile_cap_cmd_v_pre_pub_, last_profile_cap_cmd_v_pre_);
-    publish_profile_float(profile_cap_cmd_v_post_pub_, last_profile_cap_cmd_v_post_);
-    publish_profile_float(profile_cap_implied_ax_pub_, last_profile_cap_implied_ax_);
-    publish_profile_float(profile_cap_implied_jerk_pub_, last_profile_cap_implied_jerk_);
-
-    if (terminal_goal_info_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32MultiArray msg;
-        msg.data.resize(8, 0.0f);
-
-        if (!terminal_goal_info_valid_) {
-            const float nan = std::numeric_limits<float>::quiet_NaN();
-            msg.data[0] = nan;
-            msg.data[1] = nan;
-            msg.data[2] = nan;
-            msg.data[3] = nan;
-            msg.data[4] = nan;
-        } else {
-            msg.data[0] = static_cast<float>(terminal_goal_info_debug_.dx);
-            msg.data[1] = static_cast<float>(terminal_goal_info_debug_.dy);
-            msg.data[2] = static_cast<float>(terminal_goal_info_debug_.dist);
-            msg.data[3] = static_cast<float>(terminal_goal_info_debug_.bearing);
-            msg.data[4] = static_cast<float>(terminal_goal_info_debug_.goal_yaw_err);
-            msg.data[5] = terminal_goal_info_debug_.has_goal_yaw ? 1.0f : 0.0f;
-            msg.data[6] = terminal_goal_info_debug_.position_reached ? 1.0f : 0.0f;
-            msg.data[7] = terminal_goal_info_debug_.pose_reached ? 1.0f : 0.0f;
-        }
-
-        terminal_goal_info_pub_.publish(msg);
-    }
+    TerminalDebugData data;
+    data.mode = terminal_mode_debug_;
+    data.goal_info = terminal_goal_info_debug_;
+    data.goal_info_valid = terminal_goal_info_valid_;
+    data.v_envelope = last_terminal_v_envelope_;
+    data.envelope_active = last_terminal_envelope_active_;
+    data.phase_active = last_terminal_phase_active_;
+    data.cmd_v_pre_clamp = last_terminal_cmd_v_pre_clamp_;
+    data.cmd_v_post_clamp = last_terminal_cmd_v_post_clamp_;
+    data.profile_cap_active = last_profile_cap_active_;
+    data.profile_cap_v_profile = last_profile_cap_v_profile_;
+    data.profile_cap_cmd_v_pre = last_profile_cap_cmd_v_pre_;
+    data.profile_cap_cmd_v_post = last_profile_cap_cmd_v_post_;
+    data.profile_cap_implied_ax = last_profile_cap_implied_ax_;
+    data.profile_cap_implied_jerk = last_profile_cap_implied_jerk_;
+    diagnostics_publisher_.publishTerminalDebug(data);
 }
 
 void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {
@@ -1600,294 +1317,32 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {
 }
 
 void LocalPlannerROS::publishReferenceExecutionDebug(const std::vector<ReferencePoint>& refs) {
-    if (refs.empty()) {
-        return;
-    }
-
-    auto publish_float = [](ros::Publisher& pub, double value) {
-        if (pub.getNumSubscribers() <= 0) {
-            return;
-        }
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(value);
-        pub.publish(msg);
-    };
-
-    auto abs_p95 = [](std::vector<double> values) {
-        values.erase(
-            std::remove_if(values.begin(), values.end(),
-                           [](double v) { return !std::isfinite(v); }),
-            values.end());
-        if (values.empty()) {
-            return 0.0;
-        }
-        for (double& value : values) {
-            value = std::abs(value);
-        }
-        std::sort(values.begin(), values.end());
-        const double pos = 0.95 * static_cast<double>(values.size() - 1);
-        const size_t lo = static_cast<size_t>(std::floor(pos));
-        const size_t hi = static_cast<size_t>(std::ceil(pos));
-        if (lo == hi) {
-            return values[lo];
-        }
-        const double r = pos - static_cast<double>(lo);
-        return values[lo] * (1.0 - r) + values[hi] * r;
-    };
-
-    const double dt = std::max(1e-6, mpc_params_.dt);
-    std::vector<double> ax_values;
-    std::vector<double> ay_values;
-    std::vector<double> jerk_values;
-    ax_values.reserve(refs.size());
-    ay_values.reserve(refs.size());
-    jerk_values.reserve(refs.size());
-
-    double first_ax = 0.0;
-    double first_jerk = 0.0;
-    bool has_first_ax = false;
-    double prev_ax = 0.0;
-    bool has_prev_ax = false;
-
-    for (size_t i = 0; i < refs.size(); ++i) {
-        const double v = std::max(0.0, refs[i].v_ref);
-        ay_values.push_back(v * v * refs[i].kappa);
-        if (i + 1 < refs.size()) {
-            const double v_next = std::max(0.0, refs[i + 1].v_ref);
-            const double ax = (v_next - v) / dt;
-            ax_values.push_back(ax);
-            if (!has_first_ax) {
-                first_ax = ax;
-                has_first_ax = true;
-            }
-            if (has_prev_ax) {
-                const double jerk = (ax - prev_ax) / dt;
-                jerk_values.push_back(jerk);
-                if (jerk_values.size() == 1) {
-                    first_jerk = jerk;
-                }
-            }
-            prev_ax = ax;
-            has_prev_ax = true;
-        }
-    }
-
-    const ReferencePoint& ref0 = refs.front();
-    publish_float(ref_v_ref_pub_, ref0.v_ref);
-    if (ref_v_ref_horizon_pub_.getNumSubscribers() > 0 ||
-        ref_s_horizon_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32MultiArray v_msg;
-        std_msgs::Float32MultiArray s_msg;
-        v_msg.data.reserve(refs.size());
-        s_msg.data.reserve(refs.size());
-        for (const auto& ref : refs) {
-            v_msg.data.push_back(static_cast<float>(std::max(0.0, ref.v_ref)));
-            s_msg.data.push_back(static_cast<float>(ref.s));
-        }
-        if (ref_v_ref_horizon_pub_.getNumSubscribers() > 0) {
-            ref_v_ref_horizon_pub_.publish(v_msg);
-        }
-        if (ref_s_horizon_pub_.getNumSubscribers() > 0) {
-            ref_s_horizon_pub_.publish(s_msg);
-        }
-    }
-    publish_float(ref_v_path_pub_, ref0.v_path);
-    publish_float(ref_kappa_pub_, ref0.kappa);
-    publish_float(ref_s_pub_, ref0.s);
-    publish_float(ref_implied_ax_pub_, has_first_ax ? first_ax : 0.0);
-    publish_float(ref_implied_ay_pub_, ay_values.empty() ? 0.0 : ay_values.front());
-    publish_float(ref_implied_jerk_pub_, first_jerk);
-    publish_float(ref_implied_ax_abs_p95_pub_, abs_p95(ax_values));
-    publish_float(ref_implied_ay_abs_p95_pub_, abs_p95(ay_values));
-    publish_float(ref_implied_jerk_abs_p95_pub_, abs_p95(jerk_values));
+    diagnostics_publisher_.publishReferenceExecutionDebug(refs, mpc_params_.dt);
 }
 
 void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok, bool publish_solver_debug) {
-    if (slosh_episode_id_pub_.getNumSubscribers() > 0) {
-        std_msgs::Int32 msg;
-        msg.data = episode_id_;
-        slosh_episode_id_pub_.publish(msg);
-    }
-
-    if (slosh_height_pred_max_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(last_predicted_height_max_);
-        slosh_height_pred_max_pub_.publish(msg);
-    }
-
-    if (slosh_q_slosh_eta_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(slosh_enabled_ ? mpc_params_.Q_slosh_eta : 0.0);
-        slosh_q_slosh_eta_pub_.publish(msg);
-    }
-
-    if (slosh_constraint_active_pub_.getNumSubscribers() > 0) {
-        std_msgs::Int32 msg;
-        msg.data = last_constraint_active_;
-        slosh_constraint_active_pub_.publish(msg);
-    }
-
-    if (slosh_v_des_eff_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(last_v_des_eff_);
-        slosh_v_des_eff_pub_.publish(msg);
-    }
-
-    if (ref_v_des_raw_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(last_v_des_raw_);
-        ref_v_des_raw_pub_.publish(msg);
-    }
-    if (ref_v_des_target_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(last_v_des_target_);
-        ref_v_des_target_pub_.publish(msg);
-    }
-    if (ref_v_des_eff_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(last_v_des_eff_);
-        ref_v_des_eff_pub_.publish(msg);
-    }
-    if (ref_v_des_rate_limited_pub_.getNumSubscribers() > 0) {
-        std_msgs::Int32 msg;
-        msg.data = last_v_des_rate_limited_active_;
-        ref_v_des_rate_limited_pub_.publish(msg);
-    }
-
-    if (slosh_omega_est_used_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(slosh_feedback_output_.omega);
-        slosh_omega_est_used_pub_.publish(msg);
-    }
-
-    if (slosh_imu_omega_z_filtered_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(
-            slosh_feedback_output_.has_imu ? slosh_feedback_output_.imu_omega_z_filtered : 0.0);
-        slosh_imu_omega_z_filtered_pub_.publish(msg);
-    }
-
-    if (slosh_imu_ay_bias_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(
-            slosh_feedback_.params().imu_ay_bias_compensation_enable
-                ? slosh_feedback_output_.imu_ay_bias
-                : 0.0);
-        slosh_imu_ay_bias_pub_.publish(msg);
-    }
-
-    if (slosh_imu_ay_filtered_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(
-            slosh_feedback_output_.has_imu ? slosh_feedback_output_.imu_ay_filtered : 0.0);
-        slosh_imu_ay_filtered_pub_.publish(msg);
-    }
-
-    if (slosh_imu_ay_bias_ready_pub_.getNumSubscribers() > 0) {
-        std_msgs::Int32 msg;
-        msg.data =
-            (slosh_feedback_.params().imu_ay_bias_compensation_enable &&
-             slosh_feedback_output_.imu_ay_bias_ready) ? 1 : 0;
-        slosh_imu_ay_bias_ready_pub_.publish(msg);
-    }
-
-    Eigen::Vector4d slosh_state = Eigen::Vector4d::Zero();
+    SloshDebugData data;
+    data.episode_id = episode_id_;
+    data.predicted_height_max = last_predicted_height_max_;
+    data.q_slosh_eta = slosh_enabled_ ? mpc_params_.Q_slosh_eta : 0.0;
+    data.constraint_active = last_constraint_active_;
+    data.v_des_eff = last_v_des_eff_;
+    data.v_des_raw = last_v_des_raw_;
+    data.v_des_target = last_v_des_target_;
+    data.v_des_rate_limited_active = last_v_des_rate_limited_active_;
+    data.feedback = slosh_feedback_output_;
+    data.imu_ay_bias_compensation_enable =
+        slosh_feedback_.params().imu_ay_bias_compensation_enable;
+    data.slosh_enabled = slosh_enabled_;
     if (slosh_enabled_) {
-        slosh_state = slosh_integration_.getSloshState();
+        data.slosh_state = slosh_integration_.getSloshState();
+        data.omega_n = slosh_integration_.getModalParams().omega_n;
+        data.slosh_height = slosh_integration_.getSloshHeight();
     }
-
-    const double eta_norm =
-        std::hypot(static_cast<double>(slosh_state(0)), static_cast<double>(slosh_state(2)));
-    const double eta_dot_norm =
-        std::hypot(static_cast<double>(slosh_state(1)), static_cast<double>(slosh_state(3)));
-    const double omega0 = slosh_enabled_ ? slosh_integration_.getModalParams().omega_n : 0.0;
-    const double modal_energy =
-        omega0 * omega0 * eta_norm * eta_norm + eta_dot_norm * eta_dot_norm;
-    const double modal_energy_norm = std::sqrt(std::max(0.0, modal_energy));
-
-    // slosh 状态 [η_x, η̇_x, η_y, η̇_y]
-    if (slosh_state_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32MultiArray msg;
-        msg.data.resize(4);
-        msg.data[0] = static_cast<float>(slosh_state(0));
-        msg.data[1] = static_cast<float>(slosh_state(1));
-        msg.data[2] = static_cast<float>(slosh_state(2));
-        msg.data[3] = static_cast<float>(slosh_state(3));
-        slosh_state_pub_.publish(msg);
-    }
-
-    if (slosh_eta_norm_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(eta_norm);
-        slosh_eta_norm_pub_.publish(msg);
-    }
-    if (slosh_eta_dot_norm_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(eta_dot_norm);
-        slosh_eta_dot_norm_pub_.publish(msg);
-    }
-    if (slosh_modal_energy_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(modal_energy);
-        slosh_modal_energy_pub_.publish(msg);
-    }
-    if (slosh_modal_energy_norm_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(modal_energy_norm);
-        slosh_modal_energy_norm_pub_.publish(msg);
-    }
-    if (slosh_excitation_ay_abs_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(std::abs(slosh_feedback_output_.ay));
-        slosh_excitation_ay_abs_pub_.publish(msg);
-    }
-    if (slosh_excitation_alpha_abs_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(std::abs(slosh_feedback_output_.alpha));
-        slosh_excitation_alpha_abs_pub_.publish(msg);
-    }
-
-    // 液面高度标量
-    if (slosh_height_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = slosh_enabled_
-                   ? static_cast<float>(slosh_integration_.getSloshHeight())
-                   : 0.0f;
-        slosh_height_pub_.publish(msg);
-    }
-
-    if (publish_solver_debug) {
-        // 仅在本周期真正执行过 MPC solve 时发布 solver 调试，
-        // 避免 REACHED/IDLE/ERROR 把上一帧结果重复刷到 bag 中。
-        if (mpc_solve_ms_pub_.getNumSubscribers() > 0) {
-            std_msgs::Float32 msg;
-            msg.data = static_cast<float>(solve_time_ms);
-            mpc_solve_ms_pub_.publish(msg);
-        }
-
-        if (mpc_status_val_pub_.getNumSubscribers() > 0) {
-            std_msgs::Int32 msg;
-            msg.data = solve_ok ? 1 : 0;
-            mpc_status_val_pub_.publish(msg);
-        }
-    }
-
-    // 加速度估计值（论文实验用）
-    if (slosh_ax_est_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(slosh_feedback_output_.ax);
-        slosh_ax_est_pub_.publish(msg);
-    }
-    if (slosh_ay_est_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(slosh_feedback_output_.ay);
-        slosh_ay_est_pub_.publish(msg);
-    }
-    if (slosh_alpha_est_pub_.getNumSubscribers() > 0) {
-        std_msgs::Float32 msg;
-        msg.data = static_cast<float>(slosh_feedback_output_.alpha);
-        slosh_alpha_est_pub_.publish(msg);
-    }
+    data.solve_time_ms = solve_time_ms;
+    data.solve_ok = solve_ok;
+    data.publish_solver_debug = publish_solver_debug;
+    diagnostics_publisher_.publishSloshDebug(data);
 }
 
 }  // namespace scout_local_planner
