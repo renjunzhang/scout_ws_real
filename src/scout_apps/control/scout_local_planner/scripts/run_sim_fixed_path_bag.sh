@@ -184,9 +184,7 @@ MPC_R_DA="${MPC_R_DA:-}"
 MPC_CMD_VEL_LEAD_TIME="${MPC_CMD_VEL_LEAD_TIME:-}"
 TERMINAL_FACTOR_SLOSH_ETA="${TERMINAL_FACTOR_SLOSH_ETA:-0.0}"
 TERMINAL_FACTOR_SLOSH_ETA_DOT="${TERMINAL_FACTOR_SLOSH_ETA_DOT:-0.0}"
-RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-}"
 ENABLE_SLOSH_BOX_CONSTRAINT="${ENABLE_SLOSH_BOX_CONSTRAINT:-false}"
-SLOSH_SPEED_GOVERNOR_ENABLE="${SLOSH_SPEED_GOVERNOR_ENABLE:-false}"
 ENERGY_PROFILE_ENABLE="${ENERGY_PROFILE_ENABLE:-false}"
 ENERGY_PROFILE_LAT_ACCEL="${ENERGY_PROFILE_LAT_ACCEL:-1.2}"
 ENERGY_PROFILE_OMEGA_MAX="${ENERGY_PROFILE_OMEGA_MAX:-1.1}"
@@ -264,12 +262,10 @@ case "${CONDITION}" in
     NOM)
         Q_SLOSH="${Q_SLOSH:-0}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         ;;
     PROFILE_ENERGY_GEO)
         Q_SLOSH="${Q_SLOSH:-0}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         ENERGY_PROFILE_ENABLE=true
         ;;
     PROFILE_REF_V2)
@@ -277,7 +273,6 @@ case "${CONDITION}" in
         # PathHandler v(s) caps only. Keep MPC slosh terms disabled.
         Q_SLOSH="${Q_SLOSH:-0}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         ENERGY_PROFILE_ENABLE=true
         ENERGY_PROFILE_OMEGA_MAX=999.0
         ENERGY_PROFILE_ALPHA_MAX=999.0
@@ -286,22 +281,14 @@ case "${CONDITION}" in
     FAS_Q5)
         Q_SLOSH="${Q_SLOSH:-5}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         ;;
     FAS_Q5_DOT)
         Q_SLOSH="${Q_SLOSH:-5}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.05}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         ;;
     FAS_Q10)
         Q_SLOSH="${Q_SLOSH:-10}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
-        ;;
-    PROP_Q5)
-        Q_SLOSH="${Q_SLOSH:-5}"
-        Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-true}"
         ;;
     FAS_Q5_TERM)
         # P2: Q_slosh_eta_dot > 0 是 terminal_factor_slosh_eta_dot 生效的前提
@@ -309,17 +296,14 @@ case "${CONDITION}" in
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.02}"
         TERMINAL_FACTOR_SLOSH_ETA="${TERMINAL_FACTOR_SLOSH_ETA:-10.0}"
         TERMINAL_FACTOR_SLOSH_ETA_DOT="${TERMINAL_FACTOR_SLOSH_ETA_DOT:-10.0}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         ;;
     CUSTOM)
         Q_SLOSH="${Q_SLOSH:-0}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         ;;
     RAW_TUNED)
         Q_SLOSH="${Q_SLOSH:-0}"
         Q_SLOSH_ETA_DOT="${Q_SLOSH_ETA_DOT:-0.0}"
-        RISK_SCHEDULER_ENABLE="${RISK_SCHEDULER_ENABLE:-false}"
         ENERGY_PROFILE_ENABLE=false
         MPC_R_A="${MPC_R_A:-1.0}"
         MPC_R_DA="${MPC_R_DA:-2.0}"
@@ -329,7 +313,7 @@ case "${CONDITION}" in
         ;;
     *)
         echo "[run_sim_fixed_path_bag] ERROR: unsupported CONDITION='${CONDITION}'" >&2
-        echo "Use NOM, PROFILE_ENERGY_GEO, PROFILE_REF_V2, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, PROP_Q5, CUSTOM, or RAW_TUNED." >&2
+        echo "Use NOM, PROFILE_ENERGY_GEO, PROFILE_REF_V2, FAS_Q5, FAS_Q5_DOT, FAS_Q10, FAS_Q5_TERM, CUSTOM, or RAW_TUNED." >&2
         exit 2
         ;;
 esac
@@ -596,9 +580,7 @@ MPC_R_DA=${MPC_R_DA}
 MPC_CMD_VEL_LEAD_TIME=${MPC_CMD_VEL_LEAD_TIME}
 TERMINAL_FACTOR_SLOSH_ETA=${TERMINAL_FACTOR_SLOSH_ETA}
 TERMINAL_FACTOR_SLOSH_ETA_DOT=${TERMINAL_FACTOR_SLOSH_ETA_DOT}
-RISK_SCHEDULER_ENABLE=${RISK_SCHEDULER_ENABLE}
 ENABLE_SLOSH_BOX_CONSTRAINT=${ENABLE_SLOSH_BOX_CONSTRAINT}
-SLOSH_SPEED_GOVERNOR_ENABLE=${SLOSH_SPEED_GOVERNOR_ENABLE}
 ENERGY_PROFILE_ENABLE=${ENERGY_PROFILE_ENABLE}
 ENERGY_PROFILE_LAT_ACCEL=${ENERGY_PROFILE_LAT_ACCEL}
 ENERGY_PROFILE_OMEGA_MAX=${ENERGY_PROFILE_OMEGA_MAX}
@@ -617,7 +599,7 @@ EOF
 
 publish_config_summary() {
     local summary
-    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; path_source_output_topic=${PATH_SOURCE_OUTPUT_TOPIC}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; risk=${RISK_SCHEDULER_ENABLE}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; governor=${SLOSH_SPEED_GOVERNOR_ENABLE}; energy_profile=${ENERGY_PROFILE_ENABLE}; vehicle_v_max=${VEHICLE_V_MAX}; retime=${RETIME_METHOD}; external_speed_csv=${EXTERNAL_SPEED_PROFILE_CSV}; external_profile_cap=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
+    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; path_source_output_topic=${PATH_SOURCE_OUTPUT_TOPIC}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; box=${ENABLE_SLOSH_BOX_CONSTRAINT}; energy_profile=${ENERGY_PROFILE_ENABLE}; vehicle_v_max=${VEHICLE_V_MAX}; retime=${RETIME_METHOD}; external_speed_csv=${EXTERNAL_SPEED_PROFILE_CSV}; external_profile_cap=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
     rostopic pub -l /experiment/config_summary std_msgs/String "data: '${summary}'" >/dev/null &
     local pid=$!
     pids+=("${pid}")
@@ -784,12 +766,6 @@ TOPICS=(
     /slosh/imu_ay_bias_ready
     /slosh/constraint_active
     /slosh/v_des_eff
-    /slosh/speed_governor_active
-    /risk_scheduler/rho_k
-    /risk_scheduler/r_k
-    /risk_scheduler/u_k
-    /risk_scheduler/Q_eta_k
-    /risk_scheduler/fallback_active
 )
 
 REPLAY_ARGS=(
@@ -832,9 +808,7 @@ MPC_ARGS=(
     mpc_cmd_vel_lead_time:="${MPC_CMD_VEL_LEAD_TIME}"
     terminal_factor_slosh_eta:="${TERMINAL_FACTOR_SLOSH_ETA}"
     terminal_factor_slosh_eta_dot:="${TERMINAL_FACTOR_SLOSH_ETA_DOT}"
-    risk_scheduler_enable:="${RISK_SCHEDULER_ENABLE}"
     enable_slosh_box_constraint:="${ENABLE_SLOSH_BOX_CONSTRAINT}"
-    slosh_speed_governor_enable:="${SLOSH_SPEED_GOVERNOR_ENABLE}"
     energy_profile_enable:="${ENERGY_PROFILE_ENABLE}"
     energy_profile_lat_accel:="${ENERGY_PROFILE_LAT_ACCEL}"
     energy_profile_omega_max:="${ENERGY_PROFILE_OMEGA_MAX}"
@@ -854,9 +828,7 @@ APPROACH_MPC_ARGS=(
     global_path_topic:="${APPROACH_GLOBAL_PATH_TOPIC}"
     Q_slosh:=0
     Q_slosh_eta_dot:=0.0
-    risk_scheduler_enable:=false
     enable_slosh_box_constraint:=false
-    slosh_speed_governor_enable:=false
 )
 
 echo "============================================================"
@@ -882,7 +854,6 @@ echo "  mpc_R_da             = ${MPC_R_DA}"
 echo "  cmd_vel_lead_time    = ${MPC_CMD_VEL_LEAD_TIME}"
 echo "  term_factor_eta      = ${TERMINAL_FACTOR_SLOSH_ETA}"
 echo "  term_factor_eta_dot  = ${TERMINAL_FACTOR_SLOSH_ETA_DOT}"
-echo "  risk_scheduler       = ${RISK_SCHEDULER_ENABLE}"
 echo "  energy_profile       = ${ENERGY_PROFILE_ENABLE}"
 echo "  vehicle_v_max        = ${VEHICLE_V_MAX}"
 echo "  retime_method        = ${RETIME_METHOD}"

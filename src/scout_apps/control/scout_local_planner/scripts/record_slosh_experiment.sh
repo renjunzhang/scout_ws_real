@@ -31,9 +31,7 @@
 #                /slosh/omega_est_used, /slosh/imu_omega_z_filtered
 #                /slosh/imu_ay_bias, /slosh/imu_ay_filtered, /slosh/imu_ay_bias_ready
 #                /slosh/episode_id, /slosh/constraint_active
-#                /slosh/v_des_eff, /slosh/speed_governor_active
-#   - 风险调度器：/risk_scheduler/rho_k, /risk_scheduler/r_k, /risk_scheduler/u_k
-#                /risk_scheduler/Q_eta_k, /risk_scheduler/fallback_active
+#                /slosh/v_des_eff
 #   - RealSense 原始输入：
 #                /camera/color/image_raw
 #                /camera/color/camera_info
@@ -180,18 +178,10 @@ TOPICS=(
     /slosh/episode_id
     /slosh/constraint_active
     /slosh/v_des_eff
-    /slosh/speed_governor_active
     /slosh/speed_cap_active
     /slosh/speed_cap_v_limit
     /slosh/settling_time
     /slosh/output_guard_active
-
-    # 风险调度器
-    /risk_scheduler/rho_k
-    /risk_scheduler/r_k
-    /risk_scheduler/u_k
-    /risk_scheduler/Q_eta_k
-    /risk_scheduler/fallback_active
 
     # RealSense 原始图像
     /camera/color/image_raw

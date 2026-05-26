@@ -11,7 +11,6 @@
 #include "scout_local_planner/path_handler.h"
 #include "scout_local_planner/mpc_solver.h"
 #include "scout_local_planner/slosh_integration.h"
-#include "scout_local_planner/risk_scheduler.h"
 
 #include <ros/ros.h>
 #include <nav_msgs/Path.h>
@@ -19,7 +18,6 @@
 #include <sensor_msgs/Imu.h>
 #include <geometry_msgs/Twist.h>
 #include <geometry_msgs/PoseStamped.h>
-#include <std_msgs/Bool.h>
 #include <std_msgs/String.h>
 #include <std_msgs/Float32.h>
 #include <std_msgs/Float32MultiArray.h>
@@ -291,32 +289,7 @@ private:
     double prev_imu_omega_z_ = 0.0;
     double omega_est_used_ = 0.0;     // 实际注入 slosh 模型的角速度
 
-    // slosh-aware 速度治理（阶段 4）
-    bool slosh_speed_governor_enable_ = false;
-    double slosh_k_eta_ = 0.0;
-    double slosh_ay_max_base_ = 0.0;
-    double slosh_v_des_min_ = 0.0;
-    double slosh_eta_deadband_ = 0.3;
-    double slosh_eta_exit_ratio_ = 0.2;
-    double slosh_preview_distance_ = 1.0;
-    int slosh_min_active_steps_ = 10;
-    bool slosh_governor_latched_ = false;
-    int slosh_governor_hold_steps_ = 0;
     double last_v_des_eff_ = 0.0;
-    int last_speed_governor_active_ = 0;
-
-    // ====== ρ_k 风险自适应调度器 ======
-    bool                risk_scheduler_enable_ = false;
-    RiskScheduler       risk_scheduler_;
-    RiskSchedulerOutput risk_output_;
-    double              rs_h_coeff_ = 1.0;   // height_coeff 缓存，用于 Q_eta→Q_slosh_eta 换算
-    double              E_slosh_prev_ = 0.0; // 上一周期模态能量 (η_x² + η_y²)，供 risk_scheduler 使用
-    // 风险调度器调试发布
-    ros::Publisher pub_rho_k_;
-    ros::Publisher pub_r_k_;
-    ros::Publisher pub_u_k_;
-    ros::Publisher pub_Q_eta_k_;
-    ros::Publisher pub_fallback_;
 
     // slosh 调试发布
     ros::Publisher slosh_state_pub_;
@@ -329,7 +302,6 @@ private:
     ros::Publisher slosh_q_slosh_eta_pub_;
     ros::Publisher slosh_constraint_active_pub_;
     ros::Publisher slosh_v_des_eff_pub_;
-    ros::Publisher slosh_speed_governor_active_pub_;
     ros::Publisher slosh_omega_est_used_pub_;
     ros::Publisher slosh_imu_omega_z_filtered_pub_;
     ros::Publisher slosh_imu_ay_bias_pub_;

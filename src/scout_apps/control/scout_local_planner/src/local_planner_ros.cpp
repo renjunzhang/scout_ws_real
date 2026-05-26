@@ -180,7 +180,6 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
 
             double h_coeff = slosh_integration_.getModalParams().height_coeff;
             const double omega_n = slosh_integration_.getModalParams().omega_n;
-            rs_h_coeff_ = h_coeff;
             updateNormalizedSloshWeights(mpc_params_, h_coeff, omega_n);
 
             if (mpc_params_.enable_slosh_box_constraint) {
@@ -229,23 +228,12 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
                      mpc_params_.Q_slosh_eta,
                      mpc_params_.Q_slosh_eta_dot);
 
-            // 初始化风险调度器（需要 h_coeff）
-            if (risk_scheduler_enable_) {
-                pub_rho_k_    = nh_.advertise<std_msgs::Float32>("/risk_scheduler/rho_k", 1);
-                pub_r_k_      = nh_.advertise<std_msgs::Float32>("/risk_scheduler/r_k", 1);
-                pub_u_k_      = nh_.advertise<std_msgs::Float32>("/risk_scheduler/u_k", 1);
-                pub_Q_eta_k_  = nh_.advertise<std_msgs::Float32>("/risk_scheduler/Q_eta_k", 1);
-                pub_fallback_ = nh_.advertise<std_msgs::Bool>("/risk_scheduler/fallback_active", 1);
-                ROS_INFO("[LocalPlannerROS] RiskScheduler enabled (h_coeff=%.4f)", rs_h_coeff_);
-            }
         } else {
             slosh_enabled_ = false;
-            risk_scheduler_enable_ = false;
             ROS_WARN("[LocalPlannerROS] DiffDriveModel cast failed, slosh disabled");
         }
     } else {
         slosh_enabled_ = false;
-        risk_scheduler_enable_ = false;
         ROS_WARN("[LocalPlannerROS] Slosh integration configure failed, running without slosh");
     }
     
@@ -294,7 +282,6 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     slosh_q_slosh_eta_pub_ = nh_.advertise<std_msgs::Float32>("slosh/q_slosh_eta", 1);
     slosh_constraint_active_pub_ = nh_.advertise<std_msgs::Int32>("slosh/constraint_active", 1);
     slosh_v_des_eff_pub_ = nh_.advertise<std_msgs::Float32>("slosh/v_des_eff", 1);
-    slosh_speed_governor_active_pub_ = nh_.advertise<std_msgs::Int32>("slosh/speed_governor_active", 1);
     slosh_omega_est_used_pub_ = nh_.advertise<std_msgs::Float32>("slosh/omega_est_used", 1);
     slosh_imu_omega_z_filtered_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_omega_z_filtered", 1);
     slosh_imu_ay_bias_pub_ = nh_.advertise<std_msgs::Float32>("slosh/imu_ay_bias", 1);
@@ -582,16 +569,6 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("filter/kappa_boost", cmd_filter_kappa_boost_, 0.5);
     pnh.param("experiment/reached_debug_duration", reached_debug_duration_, 5.0);
 
-    // slosh-aware 速度治理
-    pnh.param("slosh_speed_governor/enable", slosh_speed_governor_enable_, false);
-    pnh.param("slosh_speed_governor/k_eta", slosh_k_eta_, 0.0);
-    pnh.param("slosh_speed_governor/ay_max_base", slosh_ay_max_base_, 0.0);
-    pnh.param("slosh_speed_governor/v_des_min", slosh_v_des_min_, 0.0);
-    pnh.param("slosh_speed_governor/eta_deadband", slosh_eta_deadband_, 0.3);
-    pnh.param("slosh_speed_governor/eta_exit_ratio", slosh_eta_exit_ratio_, 0.2);
-    pnh.param("slosh_speed_governor/preview_distance", slosh_preview_distance_, 1.0);
-    pnh.param("slosh_speed_governor/min_active_steps", slosh_min_active_steps_, 10);
-
     // 路径相似性检测阈值
     pnh.param("path_handler/path_change_threshold",
               path_params_.path_change_threshold, 0.3);
@@ -608,32 +585,6 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
         path_params_.speed_profile_alpha_max = vehicle_params_.alpha_max;
     }
 
-    // ρ_k 风险自适应调度器参数
-    pnh.param("risk_scheduler/enable", risk_scheduler_enable_, false);
-    if (risk_scheduler_enable_) {
-        RiskSchedulerParams rs_params;
-        pnh.param("risk_scheduler/gamma",                 rs_params.gamma,                 5.0);
-        pnh.param("risk_scheduler/rho_0",                 rs_params.rho_0,                 0.3);
-        pnh.param("risk_scheduler/rate_limit_per_step",   rs_params.rate_limit_per_step,   0.05);
-        pnh.param("risk_scheduler/Q_eta_min",             rs_params.Q_eta_min,             0.0);
-        pnh.param("risk_scheduler/Q_eta_max",             rs_params.Q_eta_max,             10.0);
-        pnh.param("risk_scheduler/eta_bar_max",           rs_params.eta_bar_max,           0.05);
-        pnh.param("risk_scheduler/delta_eta_bar",         rs_params.delta_eta_bar,         0.02);
-        pnh.param("risk_scheduler/beta",                  rs_params.beta,                  0.3);
-        pnh.param("risk_scheduler/w_h",                   rs_params.w_h,                   0.4);
-        pnh.param("risk_scheduler/w_e",                   rs_params.w_e,                   0.3);
-        pnh.param("risk_scheduler/w_t",                   rs_params.w_t,                   0.3);
-        pnh.param("risk_scheduler/w_r",                   rs_params.w_r,                   0.7);
-        pnh.param("risk_scheduler/w_u",                   rs_params.w_u,                   0.3);
-        pnh.param("risk_scheduler/u_threshold_high",      rs_params.u_threshold_high,      0.8);
-        pnh.param("risk_scheduler/u_high_count_trigger",  rs_params.u_high_count_trigger,  10);
-        pnh.param("risk_scheduler/imu_timeout_s",         rs_params.imu_timeout_s,         0.1);
-        pnh.param("risk_scheduler/a_uncert_max",          rs_params.a_uncert_max,          0.5);
-        pnh.param("risk_scheduler/Q_eta_fix",             rs_params.Q_eta_fix,             5.0);
-        pnh.param("risk_scheduler/eta_bar_fix",           rs_params.eta_bar_fix,           0.04);
-        pnh.param("risk_scheduler/d_goal_thresh",         rs_params.d_goal_thresh,         1.0);
-        risk_scheduler_.init(rs_params);
-    }
 }
 
 void LocalPlannerROS::globalPathCallback(const nav_msgs::Path::ConstPtr& msg) {
@@ -968,46 +919,9 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     }
                 }
 
-                if (goal_stop_pending_) {
-                    // 终点最后一段继续交给 MPC 收敛，但将目标速度压到 0，
-                    // 避免“进容差区后外层直接砍零”带来的冲过头与滑行。
-                    slosh_governor_latched_ = false;
-                    slosh_governor_hold_steps_ = 0;
-                    last_speed_governor_active_ = 0;
-                }
-
-                // ── ρ_k 风险调度器 outer loop ──────────────────────────
                 const double v_nominal = vehicle_params_.v_max * 0.8;
                 MPCParams runtime_mpc_params = mpc_params_;
-                if (!settling_active &&
-                    risk_scheduler_enable_ &&
-                    slosh_enabled_ &&
-                    !goal_stop_pending_) {
-                    const double d_goal_rs = path_handler_.getGoalDistance();
-                    const ros::Time imu_stamp_rs = has_imu_ ? prev_imu_time_ : ros::Time(0);
-
-                    risk_output_ = risk_scheduler_.update(
-                        last_predicted_height_max_,   // 上一周期预测液面高度
-                        E_slosh_prev_,                // 上一周期模态能量
-                        std::isfinite(d_goal_rs) ? d_goal_rs : 1e6,
-                        imu_ay_unbiased_,             // IMU 横向加速度（已去零偏）
-                        current_v_ * current_omega_,  // 运动学离心估计
-                        imu_stamp_rs,
-                        imu_ay_bias_ready_,
-                        v_nominal
-                    );
-
-                    // 将调度输出注入 MPC 参数（solve() 前完成）
-                    runtime_mpc_params.Q_slosh = risk_output_.Q_eta_k;
-                    updateNormalizedSloshWeights(
-                        runtime_mpc_params,
-                        rs_h_coeff_,
-                        slosh_integration_.getModalParams().omega_n);
-                    if (runtime_mpc_params.enable_slosh_box_constraint && rs_h_coeff_ > 1e-9) {
-                        const double denom = rs_h_coeff_ * std::sqrt(2.0);
-                        runtime_mpc_params.slosh_eta_bar = risk_output_.eta_bar_k / denom;
-                    }
-                } else if (settling_active) {
+                if (settling_active) {
                     runtime_mpc_params.Q_el = 0.0;
                     runtime_mpc_params.Q_ec = 0.0;
                     runtime_mpc_params.Q_etheta = 0.0;
@@ -1022,14 +936,15 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         std::max(1.0, runtime_mpc_params.terminal_factor_v);
                     runtime_mpc_params.Q_slosh =
                         std::max(runtime_mpc_params.Q_slosh, settling_q_eta_);
+                    const double h_coeff = slosh_integration_.getModalParams().height_coeff;
                     updateNormalizedSloshWeights(
                         runtime_mpc_params,
-                        rs_h_coeff_,
+                        h_coeff,
                         slosh_integration_.getModalParams().omega_n);
                     if (slosh_enabled_ &&
                         runtime_mpc_params.enable_slosh_box_constraint &&
-                        rs_h_coeff_ > 1e-9) {
-                        const double denom = rs_h_coeff_ * std::sqrt(2.0);
+                        h_coeff > 1e-9) {
+                        const double denom = h_coeff * std::sqrt(2.0);
                         runtime_mpc_params.slosh_eta_bar = settling_eta_bar_ / denom;
                     }
                 }
@@ -1091,8 +1006,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     settling_active ? 0.0 :
                     (goal_stop_pending_ && (goal_position_reached_now || goal_behind_now)) ? 0.0 :
                     goal_stop_pending_ ? terminal_approach_v_cap :
-                    (risk_scheduler_enable_ && slosh_enabled_) ?
-                    risk_output_.v_ref_eff_k : v_nominal;
+                    v_nominal;
                 // goal_stop_pending_ 不再直接把 v_des_raw 砍成 0。
                 // capture 内若位置还没到，MPC 仍低速 approach；真正到 goal_tol 或越过 goal 才停。
                 double v_des_cmd = std::min(v_des_cmd_raw, v_terminal_envelope);
@@ -1182,65 +1096,8 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
 
                 const double v_des_cmd_capped = v_des_cmd;
                 double v_des_target = v_des_cmd_capped;
-                last_speed_governor_active_ = 0;
-
-                // 阶段 4：残余晃动感知的速度治理
-                const double goal_dist = path_handler_.getGoalDistance();
-                const bool near_goal_capture =
-                    std::isfinite(goal_dist) &&
-                    goal_dist > path_params_.goal_tolerance &&
-                    goal_dist < path_params_.goal_capture_distance;
-
-                if (near_goal_capture || !slosh_speed_governor_enable_ || !slosh_enabled_) {
-                    slosh_governor_latched_ = false;
-                    slosh_governor_hold_steps_ = 0;
-                }
-
-                if (!settling_active &&
-                    slosh_speed_governor_enable_ &&
-                    slosh_enabled_ &&
-                    !near_goal_capture) {
-                    const double slosh_height = slosh_integration_.getSloshHeight();
-                    const double height_risk = std::max(slosh_height, last_predicted_height_max_);
-                    const double height_limit = std::max(1e-6, mpc_params_.slosh_height_max);
-                    const double eta_ratio = height_risk / height_limit;
-                    const double eta_deadband = std::max(0.0, std::min(0.99, slosh_eta_deadband_));
-                    const double eta_exit_ratio =
-                        std::max(0.0, std::min(eta_deadband, slosh_eta_exit_ratio_));
-                    const double ay_max_base = slosh_ay_max_base_ > 1e-6
-                        ? slosh_ay_max_base_
-                        : path_params_.max_lat_accel;
-
-                    if (!slosh_governor_latched_) {
-                        if (eta_ratio > eta_deadband) {
-                            slosh_governor_latched_ = true;
-                            slosh_governor_hold_steps_ = std::max(0, slosh_min_active_steps_);
-                        }
-                    } else {
-                        if (slosh_governor_hold_steps_ > 0) {
-                            --slosh_governor_hold_steps_;
-                        }
-                        if (slosh_governor_hold_steps_ <= 0 && eta_ratio < eta_exit_ratio) {
-                            slosh_governor_latched_ = false;
-                        }
-                    }
-
-                    if (ay_max_base > 1e-6 && slosh_governor_latched_) {
-                        const double eta_excess = std::max(0.0, eta_ratio - eta_deadband);
-                        const double scale = 1.0 / (1.0 + std::max(0.0, slosh_k_eta_) * eta_excess);
-                        const double ay_budget_eff = ay_max_base * scale;
-                        const double kappa_preview =
-                            path_handler_.getMaxCurvatureAhead(path_params_.lookahead_distance,
-                                                               slosh_preview_distance_);
-                        if (kappa_preview > 1e-4) {
-                            double v_cap = std::sqrt(std::max(0.0, ay_budget_eff / (kappa_preview + 1e-9)));
-                            v_des_target = std::max(slosh_v_des_min_, std::min(v_des_cmd, v_cap));
-                        }
-                    }
-                }
 
                 // 对所有执行层 v_des 做变化率限制，避免速度参考突跳制造纵向 ax 脉冲。
-                // slosh governor 关闭时也生效；governor 只负责进一步给出更低的 target。
                 {
                     last_v_des_raw_ = v_des_cmd_raw;
                     last_v_des_target_ = v_des_target;
@@ -1265,7 +1122,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         const double rate_dt =
                             control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
                         const double v_lo =
-                            std::max(slosh_v_des_min_, prev_v_des - decel_limit * rate_dt);
+                            std::max(0.0, prev_v_des - decel_limit * rate_dt);
                         const double v_hi = prev_v_des + accel_limit * rate_dt;
                         v_des_eff = std::max(v_lo, std::min(v_hi, v_des_target));
                         if (std::abs(v_des_eff - v_des_target) > 1e-4) {
@@ -1276,12 +1133,8 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     const double v_des_upper =
                         goal_stop_pending_ ? std::max(0.0, current_v_) : v_des_cmd_capped;
                     last_v_des_eff_ =
-                        std::max(slosh_v_des_min_, std::min(v_des_upper, v_des_eff));
+                        std::max(0.0, std::min(v_des_upper, v_des_eff));
                     v_des_cmd = last_v_des_eff_;
-
-                    if (slosh_governor_latched_ && last_v_des_eff_ < v_des_cmd_capped - 1e-3) {
-                        last_speed_governor_active_ = 1;
-                    }
                 }
 
                 // 1. 获取参考点。v_des_cmd 已经是 rate-limited 执行层速度上限。
@@ -1542,30 +1395,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                          last_predicted_height_max_ > mpc_params_.slosh_height_max) ? 1 : 0;
                     publishSloshDebug(solution.solve_time_ms, true);
 
-                    // 保存本周期模态能量，供下周期风险调度器使用
-                    if (risk_scheduler_enable_ && slosh_enabled_) {
-                        const Eigen::Vector4d ss = slosh_integration_.getSloshState();
-                        E_slosh_prev_ = ss(0) * ss(0) + ss(2) * ss(2);
-
-                        // 发布风险调度器调试话题
-                        {
-                            std_msgs::Float32 msg;
-                            msg.data = static_cast<float>(risk_output_.rho_k);
-                            pub_rho_k_.publish(msg);
-                            msg.data = static_cast<float>(risk_output_.r_k);
-                            pub_r_k_.publish(msg);
-                            msg.data = static_cast<float>(risk_output_.u_k);
-                            pub_u_k_.publish(msg);
-                            msg.data = static_cast<float>(risk_output_.Q_eta_k);
-                            pub_Q_eta_k_.publish(msg);
-                        }
-                        {
-                            std_msgs::Bool bmsg;
-                            bmsg.data = risk_output_.fallback_active;
-                            pub_fallback_.publish(bmsg);
-                        }
-                    }
-
                     if (verbose_) {
                         ROS_INFO_THROTTLE(0.5,
                             "[MPC] e_c=%.3f, e_theta=%.3f, v=%.3f, omega=%.3f, solve_time=%.1fms",
@@ -1611,7 +1440,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                             runtime_mpc_params.slosh_eta_bar,
                             last_v_des_eff_,
                             v_des_cmd_raw,
-                            (risk_scheduler_enable_ && slosh_enabled_ && risk_output_.fallback_active) ? 1 : 0,
+                            0,
                             tracking_fail_streak_dbg,
                             tracking_feas_active_dbg,
                             reentry_steps_dbg,
@@ -2611,9 +2440,6 @@ void LocalPlannerROS::resetWarmStart(bool keep_u_prev, bool reset_slosh) {
     profile_cap_has_last_ax_ = false;
     profile_cap_last_ax_ = 0.0;
     last_profile_cap_active_ = 0;
-    last_speed_governor_active_ = 0;
-    slosh_governor_latched_ = false;
-    slosh_governor_hold_steps_ = 0;
 }
 
 void LocalPlannerROS::publishReferenceExecutionDebug(const std::vector<ReferencePoint>& refs) {
@@ -2748,12 +2574,6 @@ void LocalPlannerROS::publishSloshDebug(double solve_time_ms, bool solve_ok, boo
         std_msgs::Float32 msg;
         msg.data = static_cast<float>(last_v_des_eff_);
         slosh_v_des_eff_pub_.publish(msg);
-    }
-
-    if (slosh_speed_governor_active_pub_.getNumSubscribers() > 0) {
-        std_msgs::Int32 msg;
-        msg.data = last_speed_governor_active_;
-        slosh_speed_governor_active_pub_.publish(msg);
     }
 
     if (ref_v_des_raw_pub_.getNumSubscribers() > 0) {

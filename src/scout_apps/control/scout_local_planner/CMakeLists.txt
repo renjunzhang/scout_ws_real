@@ -45,7 +45,6 @@ add_library(${PROJECT_NAME}
   src/mpc_solver.cpp
   src/local_planner_ros.cpp
   src/slosh_integration.cpp
-  src/risk_scheduler.cpp
 )
 
 target_link_libraries(${PROJECT_NAME}
@@ -70,15 +69,10 @@ catkin_install_python(PROGRAMS
   scripts/extract_slosh_metrics.py
   scripts/analyze_slosh_peak_precursors.py
   scripts/imu_ay_tool.py
-  scripts/analyze_day3_abc_smoke.py
   scripts/run_imu_stage4_sequence.py
   scripts/analysis/analyze_global_path_duplicates.py
   scripts/analysis/analyze_global_path_prefix_window.py
-  scripts/analysis/analyze_settling_day3.py
-  scripts/analysis/analyze_sim_speed_issue.py
   scripts/analysis/analyze_tracking_infeasible.py
-  scripts/analysis/diagnose_p3_failure_modes.py
-  scripts/analysis/offline_pmg_replay.py
   scripts/analysis/retime_ruckig_style.py
   scripts/analysis/retime_toppra_style.py
   scripts/analysis/sim_fixed_goal_tool.py

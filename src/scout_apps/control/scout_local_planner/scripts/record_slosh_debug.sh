@@ -52,17 +52,9 @@ TOPICS=(
 
     # 参考速度与终点逻辑
     /slosh/v_des_eff
-    /slosh/speed_governor_active
     /terminal/mode
     /terminal/recovery_latched
     /terminal/goal_info
-
-    # 风险调度器（不开也没关系，rosbag 会忽略不存在的话题）
-    /risk_scheduler/rho_k
-    /risk_scheduler/r_k
-    /risk_scheduler/u_k
-    /risk_scheduler/Q_eta_k
-    /risk_scheduler/fallback_active
 
     # 路径/几何诊断
     /scout/goal

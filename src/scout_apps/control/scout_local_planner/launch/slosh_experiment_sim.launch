@@ -49,14 +49,6 @@
   <arg name="v_des_rate_limit_enable" default="true" doc="执行层参考速度变化率限制；用于治理纵向 ax 脉冲"/>
   <arg name="v_des_accel_limit" default="0.60" doc="v_des 上升变化率上限 (m/s^2)"/>
   <arg name="v_des_decel_limit" default="0.80" doc="v_des 下降变化率上限 (m/s^2)"/>
-  <arg name="slosh_speed_governor_enable" default="false" doc="是否启用残余晃动感知的速度治理"/>
-  <arg name="slosh_speed_governor_k_eta" default="2.5" doc="速度治理液面高度比例缩放系数"/>
-  <arg name="slosh_speed_governor_ay_max_base" default="0.0" doc="速度治理横向加速度预算"/>
-  <arg name="slosh_speed_governor_v_des_min" default="0.0" doc="速度治理后的最低参考速度"/>
-  <arg name="slosh_speed_governor_eta_deadband" default="0.3" doc="速度治理液面比例死区"/>
-  <arg name="slosh_speed_governor_eta_exit_ratio" default="0.2" doc="速度治理退出阈值（滞回）"/>
-  <arg name="slosh_speed_governor_preview_distance" default="1.0" doc="速度治理前方曲率预览长度"/>
-  <arg name="slosh_speed_governor_min_active_steps" default="10" doc="速度治理最少保持周期数"/>
   <arg name="energy_profile_enable" default="false" doc="是否启用 PROFILE_ENERGY Step1 几何低激励速度剖面"/>
   <arg name="energy_profile_lat_accel" default="1.2" doc="PROFILE_ENERGY_GEO 横向加速度预算"/>
   <arg name="energy_profile_omega_max" default="1.1" doc="PROFILE_ENERGY_GEO 角速度预算"/>
@@ -77,13 +69,6 @@
   <arg name="slosh_imu_ay_bias_compensation_enable" default="true" doc="是否对 IMU ay 做静止零偏扣除"/>
   <arg name="slosh_imu_ay_bias_init_duration" default="3.0" doc="估计 IMU ay 零偏所需的连续静止时长"/>
   <arg name="slosh_imu_ay_scale" default="1.0" doc="IMU ay 离线标定比例系数（由 imu_ay_tool.py calibrate 输出）"/>
-  <arg name="risk_scheduler_enable" default="false" doc="是否启用 rho_k 风险自适应调度器"/>
-  <arg name="risk_scheduler_gamma" default="5.0" doc="rho_k sigmoid 斜率"/>
-  <arg name="risk_scheduler_rho_0" default="0.3" doc="rho_k sigmoid 中点"/>
-  <arg name="risk_scheduler_rate_limit_per_step" default="0.05" doc="Q_eta / eta_bar / v_eff 每步变化率限制"/>
-  <arg name="risk_scheduler_beta" default="0.3" doc="高风险时 v_ref 最大折扣比例"/>
-  <arg name="risk_scheduler_Q_eta_min" default="0.0" doc="低风险 Q_eta 下限"/>
-  <arg name="risk_scheduler_Q_eta_max" default="10.0" doc="高风险 Q_eta 上限"/>
   <arg name="settling_eta_tol" default="0.0015" doc="SETTLING |eta| 收敛阈值 (m)"/>
   <arg name="settling_eta_dot_tol" default="0.03" doc="SETTLING |eta_dot| 收敛阈值 (m/s)"/>
   <arg name="settling_timeout_s" default="3.0" doc="SETTLING 最长停留时间 (s)"/>
@@ -135,14 +120,6 @@
     <param name="v_des_rate_limit/enable" value="$(arg v_des_rate_limit_enable)"/>
     <param name="v_des_rate_limit/accel_limit" value="$(arg v_des_accel_limit)"/>
     <param name="v_des_rate_limit/decel_limit" value="$(arg v_des_decel_limit)"/>
-    <param name="slosh_speed_governor/enable" value="$(arg slosh_speed_governor_enable)"/>
-    <param name="slosh_speed_governor/k_eta" value="$(arg slosh_speed_governor_k_eta)"/>
-    <param name="slosh_speed_governor/ay_max_base" value="$(arg slosh_speed_governor_ay_max_base)"/>
-    <param name="slosh_speed_governor/v_des_min" value="$(arg slosh_speed_governor_v_des_min)"/>
-    <param name="slosh_speed_governor/eta_deadband" value="$(arg slosh_speed_governor_eta_deadband)"/>
-    <param name="slosh_speed_governor/eta_exit_ratio" value="$(arg slosh_speed_governor_eta_exit_ratio)"/>
-    <param name="slosh_speed_governor/preview_distance" value="$(arg slosh_speed_governor_preview_distance)"/>
-    <param name="slosh_speed_governor/min_active_steps" value="$(arg slosh_speed_governor_min_active_steps)"/>
     <param name="path_handler/energy_profile_enable" value="$(arg energy_profile_enable)"/>
     <param name="path_handler/energy_profile_lat_accel" value="$(arg energy_profile_lat_accel)"/>
     <param name="path_handler/energy_profile_omega_max" value="$(arg energy_profile_omega_max)"/>
@@ -163,13 +140,6 @@
     <param name="slosh_estimator/imu_ay_bias_compensation_enable" value="$(arg slosh_imu_ay_bias_compensation_enable)"/>
     <param name="slosh_estimator/imu_ay_bias_init_duration" value="$(arg slosh_imu_ay_bias_init_duration)"/>
     <param name="slosh_estimator/imu_ay_scale" value="$(arg slosh_imu_ay_scale)"/>
-    <param name="risk_scheduler/enable" value="$(arg risk_scheduler_enable)"/>
-    <param name="risk_scheduler/gamma" value="$(arg risk_scheduler_gamma)"/>
-    <param name="risk_scheduler/rho_0" value="$(arg risk_scheduler_rho_0)"/>
-    <param name="risk_scheduler/rate_limit_per_step" value="$(arg risk_scheduler_rate_limit_per_step)"/>
-    <param name="risk_scheduler/beta" value="$(arg risk_scheduler_beta)"/>
-    <param name="risk_scheduler/Q_eta_min" value="$(arg risk_scheduler_Q_eta_min)"/>
-    <param name="risk_scheduler/Q_eta_max" value="$(arg risk_scheduler_Q_eta_max)"/>
     <param name="settling/eta_tol" value="$(arg settling_eta_tol)"/>
     <param name="settling/eta_dot_tol" value="$(arg settling_eta_dot_tol)"/>
     <param name="settling/timeout_s" value="$(arg settling_timeout_s)"/>

@@ -17,13 +17,12 @@
 | `src/diff_drive_model.cpp` / `include/scout_local_planner/diff_drive_model.h` | 8 维增广状态的线性化动力学，含 Frenet tracking 与 slosh 激励耦合 |
 | `src/constraint_manager.cpp` / `include/scout_local_planner/constraint_manager.h` | 速度、加速度、角速度、控制变化率、η 盒约束 |
 | `src/path_handler.cpp` / `include/scout_local_planner/path_handler.h` | 全局路径清洗/平滑、参考点生成、速度剖面 |
-| `src/risk_scheduler.cpp` / `include/scout_local_planner/risk_scheduler.h` | 风险调度器，输出 `Q_eta_k / eta_bar_k / v_ref_eff` |
 | `src/slosh_integration.cpp` / `include/scout_local_planner/slosh_integration.h` | 运行时 slosh 状态传播与 `/slosh/height` 估计 |
 | `config/mpc_params.yaml` | 实物默认参数 |
 | `config/mpc_params_sim.yaml` | 仿真默认参数，当前 `R_domega` 已对齐实物 |
 | `launch/slosh_experiment.launch` | 实物实验入口 |
 | `launch/slosh_experiment_sim.launch` | 仿真实验入口 |
-| `scripts/run_sim_fixed_path_bag.sh` | 固定终点/固定路径仿真录包脚本，支持当前主线 launch 可用的 `NOM / FAS_* / PROP_Q5 / CUSTOM` 与 external speed profile |
+| `scripts/run_sim_fixed_path_bag.sh` | 固定终点/固定路径仿真录包脚本，支持当前主线 launch 可用的 `NOM / FAS_* / CUSTOM` 与 external speed profile |
 | `scripts/extract_slosh_metrics.py` | 离线指标提取：height、energy、eta_dot、tracking error、odom ay、历史消融 active ratio、lag correlation |
 | `scripts/template_fixed_path_generator.py` | 从当前位姿到终点生成模板路径 |
 | `scripts/fixed_global_path_runner.py` | 固定路径采集/回放 |
@@ -41,13 +40,12 @@
 | `Q_slosh` | 保留，用于惩罚 `eta_x^2 + eta_y^2`，但历史实验显示单独调大不稳定 |
 | `Q_slosh_eta_dot` | 保留，用于惩罚 `eta_dot`；历史实验显示不构成稳定主线 |
 | `terminal_factor_slosh_eta / eta_dot` | 保留，用于 terminal slosh cost；历史实验显示不构成稳定主线 |
-| `risk_scheduler` | 保留为默认关闭/可配置机制 |
 | `scripts/extract_slosh_metrics.py` | 保留并扩展，用于复盘历史 bag 和后续离线分析 |
 | `scripts/run_sim_fixed_path_bag.sh` | 保留固定终点/固定路径录包流程，但已移除失败控制器入口的启动条件 |
 
 截至 2026-04-29 的实验判断：
 
-- MPC 内部 slosh cost、`GOV_AY`、`PROFILE_*`、`OUTPUT_GUARD`、PMG 均未形成可作为主线的通用方案。
+- MPC 内部 slosh cost、`PROFILE_*`、`OUTPUT_GUARD`、PMG 均未形成可作为主线的通用方案。
 - `OUTPUT_GUARD` 只在 `P2_s_curve` 上出现“无显著减速 + 多指标下降”的局部正例，不能泛化到 `P3_mixed`。
 - PMG 离线曾给出正信号，但仿真闭环暴露 `eta_dot` 明显上升，已不进入实物主线。
 - 当前证据说明：**继续在 MPC 控制器输出层或 QP cost 内堆 anti-slosh 项，成功率低；下一阶段应转向轨迹/速度生成层的可验证方案。**
@@ -435,10 +433,8 @@ v_des_cmd = min(v_des_cmd, tracking_reentry_v_cap_ + α*(v_des_raw - tracking_re
 
 ### 第一层：外层参考整形（实时，每控制周期）
 
-- RiskScheduler 压制 v_ref_eff（减速，幅度最多 beta=30%）
-- RiskScheduler 收紧 η̄（加强约束）
 - TRACKING 曲率预览二次压速（`tracking_curvature_speed_cap`，与第零层使用相同公式但实时 preview）
-- slosh_speed_governor：独立的残余晃动感知限速，基于当前 η/η_bar 比值实时截断 v_des，有死区（`eta_deadband`）和滞回（`eta_exit_ratio`），与 RiskScheduler 同时生效时两套机制各自独立叠加
+- v_des rate limit：对执行层参考速度做加减速限幅，降低纵向 ax 脉冲
 
 ### 第二层：MPC内层
 
@@ -591,21 +587,19 @@ MPC的晃动抑制通过**软代价**实现（Q_η项），而不是刚性约束
 | terminal slosh cost | P2 不稳定，改善难以归因，激励不可比 |
 | preview κ / dκ 前馈限速 | P3B/P3C 失败；实测 odom κ 与 reference κ 差异较大，前馈偏乐观 |
 | 增大 `R_da/R_domega` | P4 失败；tracking 可改善，但实际 `odom_ay_abs_p95 / odom_kappa_abs_p95` 反向恶化 |
-| 反应式 `GOV_AY` 只削 `v_des` | 可降低 `odom_ay_abs_p95`，但可能抬高 `odom_kappa_abs_p95`、延长激励时间，height/energy 不稳定 |
 
 关键观察：
 
 - `/slosh/height` 是模型估计，不是真值测量；实物红色液体视觉和 `/slosh/height` 曾给出不同判断。
 - 当前 MPC 中 slosh 是状态和软代价，但车辆未来激励与液体相位之间没有被稳定约束。
 - 只压某个单点指标（`eta`、`eta_dot`、`ay_p95`、`cmd_dwz`）可能把激励搬到更差的相位或更长持续时间。
-- `GOV_AY threshold=1.0` 说明：`odom_ay_abs_p95` 降低不等于 `h_rms / modal_energy` 降低。
+- `odom_ay_abs_p95` 降低不等于 `h_rms / modal_energy` 降低，仍需 RGB 真值主指标判断。
 
 当前推荐的下一步方向：
 
 1. 先把诊断指标补齐并固定口径：`h_rms / h_p95 / h_peak / modal_energy_norm_rms / eta_dot_rms / odom_ay_abs_p95 / odom_kappa_abs_p95 / track_dist_p95 / task_time / solve_success_ratio`。
-2. 检查 `GOV_AY` 激活时段相对弯道、`height` 峰值、`eta_dot` 峰值是否“削晚了”。
-3. 若继续改控制结构，应从“预测式低激励速度规划”或“v 与 omega 联合限幅”入手，而不是继续只调 `Q_slosh*`、`R_domega` 或单个 `ay_threshold`。
-4. 在没有稳定仿真证据前，不建议把当前 anti-slosh 改动推到实物主实验。
+2. 若继续改控制结构，应从“预测式低激励速度规划”或“v 与 omega 联合限幅”入手，而不是继续只调 `Q_slosh*`、`R_domega` 或单个 `ay_threshold`。
+3. 在没有稳定仿真证据前，不建议把当前 anti-slosh 改动推到实物主实验。
 
 ---
 

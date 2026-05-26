@@ -182,7 +182,7 @@ refresh_localization_motion
 
 echo "[launch_sim_nav_stack] Simulation navigation stack started."
 echo "[launch_sim_nav_stack] Start the local planner separately, for example:"
-echo "  roslaunch scout_local_planner slosh_experiment_sim.launch Q_slosh:=5 risk_scheduler_enable:=true"
+echo "  roslaunch scout_local_planner slosh_experiment_sim.launch Q_slosh:=5"
 echo "[launch_sim_nav_stack] Press Ctrl+C to stop all launched processes."
 
 wait -n "${pids[@]}"

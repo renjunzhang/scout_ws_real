@@ -144,7 +144,6 @@ start_launch "slosh local planner" \
     external_profile_execution_jerk_limit:="${EXTERNAL_PROFILE_EXECUTION_JERK_LIMIT}" \
     Q_slosh:="${Q_SLOSH}" \
     enable_slosh_box_constraint:=false \
-    slosh_speed_governor_enable:=false \
     filter_alpha_v:=1.0 \
     filter_alpha_omega:=1.0 \
     filter_kappa_boost:=0.0 \

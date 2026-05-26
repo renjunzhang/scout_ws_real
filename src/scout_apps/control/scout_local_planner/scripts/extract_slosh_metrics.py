@@ -23,7 +23,6 @@ KNOWN_CONDITIONS = (
     "SMOOTH_CTRL",
     "DKAPPA_CAP",
     "SPEED_CAP",
-    "GOV_AY",
     "AY_COST",
     "ENERGY_WIN",
     "PROFILE_WINDOW",
@@ -38,7 +37,6 @@ KNOWN_CONDITIONS = (
     "PMG",
     "PROFILE_SELECTIVE",
     "PROFILE_SAFE",
-    "PROP_Q5",
     "FAS_Q10",
     "FAS_Q5",
     "NOM",
@@ -55,9 +53,6 @@ D0_GROUP_METRICS = (
     "odom_kappa_abs_p95",
     "track_dist_p95_m",
     "solve_success_ratio",
-    "governor_ay_active_ratio",
-    "gov_ay_first_to_height_peak_s",
-    "gov_ay_first_to_eta_dot_peak_s",
 )
 
 
@@ -296,48 +291,6 @@ def time_of_max_abs(series):
     return ts
 
 
-def first_active_time(series):
-    for ts, value in series:
-        if int(value) == 1:
-            return ts
-    return float("nan")
-
-
-def add_governor_timing_metrics(row, series, start_time):
-    gov_ay_first = first_active_time(series["governor_ay"])
-    height_peak = time_of_max_abs(series["height"])
-    eta_dot_peak = time_of_max_abs(series["eta_dot_norm"])
-    odom_ay_peak = time_of_max_abs(series["odom_ay_abs"])
-
-    row["gov_ay_first_active_s"] = (
-        round(gov_ay_first - start_time, 3) if not math.isnan(gov_ay_first) else float("nan")
-    )
-    row["height_peak_time_s"] = (
-        round(height_peak - start_time, 3) if not math.isnan(height_peak) else float("nan")
-    )
-    row["eta_dot_peak_time_s"] = (
-        round(eta_dot_peak - start_time, 3) if not math.isnan(eta_dot_peak) else float("nan")
-    )
-    row["odom_ay_peak_time_s"] = (
-        round(odom_ay_peak - start_time, 3) if not math.isnan(odom_ay_peak) else float("nan")
-    )
-    row["gov_ay_first_to_height_peak_s"] = (
-        round(height_peak - gov_ay_first, 3)
-        if not math.isnan(gov_ay_first) and not math.isnan(height_peak)
-        else float("nan")
-    )
-    row["gov_ay_first_to_eta_dot_peak_s"] = (
-        round(eta_dot_peak - gov_ay_first, 3)
-        if not math.isnan(gov_ay_first) and not math.isnan(eta_dot_peak)
-        else float("nan")
-    )
-    row["gov_ay_first_to_odom_ay_peak_s"] = (
-        round(odom_ay_peak - gov_ay_first, 3)
-        if not math.isnan(gov_ay_first) and not math.isnan(odom_ay_peak)
-        else float("nan")
-    )
-
-
 def q_from_name(path):
     match = re.search(r"Q([0-9]+(?:\.[0-9]+)?)", os.path.basename(path))
     return match.group(1) if match else ""
@@ -491,8 +444,6 @@ def collect_metrics(
         "/slosh/alpha_est",
         "/mpc/solve_ms",
         "/mpc/status_val",
-        "/slosh/speed_governor_active",
-        "/slosh/speed_governor_ay_active",
         "/slosh/speed_cap_active",
         "/slosh/speed_cap_v_limit",
         "/slosh/output_guard_active",
@@ -572,12 +523,6 @@ def collect_metrics(
                 value = int(msg.data)
                 metrics["status_val"].append(value)
                 status_val_by_status[status_at(segments, ts)].append(value)
-            elif topic == "/slosh/speed_governor_active":
-                metrics["governor"].append(int(msg.data))
-            elif topic == "/slosh/speed_governor_ay_active":
-                value = int(msg.data)
-                metrics["governor_ay"].append(value)
-                series["governor_ay"].append((ts, value))
             elif topic == "/slosh/speed_cap_active":
                 metrics["speed_cap_active"].append(int(msg.data))
             elif topic == "/slosh/speed_cap_v_limit":
@@ -689,10 +634,6 @@ def collect_metrics(
     reached_count = sum(
         1 for index, (_, status) in enumerate(transitions) if index > 0 and status == "REACHED"
     )
-    governor_on = sum(1 for x in metrics["governor"] if x == 1)
-    governor_total = len(metrics["governor"])
-    governor_ay_on = sum(1 for x in metrics["governor_ay"] if x == 1)
-    governor_ay_total = len(metrics["governor_ay"])
     speed_cap_on = sum(1 for x in metrics["speed_cap_active"] if x == 1)
     speed_cap_total = len(metrics["speed_cap_active"])
     output_guard_on = sum(1 for x in metrics["output_guard_active"] if x == 1)
@@ -757,10 +698,6 @@ def collect_metrics(
             sum(1 for x in metrics["status_val"] if x == 1) / len(metrics["status_val"]), 3
         ) if metrics["status_val"] else float("nan"),
         "constraint_active_count": sum(1 for x in metrics["constraint"] if x == 1),
-        "governor_active_count": governor_on,
-        "governor_active_ratio": round(governor_on / governor_total, 3) if governor_total else 0.0,
-        "governor_ay_active_count": governor_ay_on,
-        "governor_ay_active_ratio": round(governor_ay_on / governor_ay_total, 3) if governor_ay_total else 0.0,
         "speed_cap_active_count": speed_cap_on,
         "speed_cap_active_ratio": round(speed_cap_on / speed_cap_total, 3) if speed_cap_total else 0.0,
         "speed_cap_v_limit_mean": round(safe_mean(metrics["speed_cap_v_limit"]), 3),
@@ -819,8 +756,6 @@ def collect_metrics(
         row[f"{key}_success_ratio"] = item["success_ratio"] if item else float("nan")
         row[f"{key}_solve_fail_count"] = item["solve_fail_count"] if item else 0
     add_lag_metrics(row, series, lag_window_s, lag_step_s)
-    add_governor_timing_metrics(row, series, start_time)
-
     episode_rows = []
     for index, (seg_start, seg_end, status) in enumerate(tracking_segments, start=1):
         if status != "TRACKING":
@@ -835,8 +770,6 @@ def collect_metrics(
                 "/slosh/height_pred_max",
                 "/mpc/solve_ms",
                 "/mpc/status_val",
-                "/slosh/speed_governor_active",
-                "/slosh/speed_governor_ay_active",
                 "/slosh/v_des_eff",
                 "/cmd_vel",
             ]):
@@ -851,10 +784,6 @@ def collect_metrics(
                     seg_metrics["solve_ms"].append(float(msg.data))
                 elif topic == "/mpc/status_val":
                     seg_metrics["status_val"].append(int(msg.data))
-                elif topic == "/slosh/speed_governor_active":
-                    seg_metrics["governor"].append(int(msg.data))
-                elif topic == "/slosh/speed_governor_ay_active":
-                    seg_metrics["governor_ay"].append(int(msg.data))
                 elif topic == "/slosh/v_des_eff":
                     seg_metrics["v_des_eff"].append(float(msg.data))
                 elif topic == "/cmd_vel":
@@ -871,10 +800,6 @@ def collect_metrics(
                     prev_cmd_vx = vx
                     prev_cmd_wz = wz
 
-        seg_governor_on = sum(1 for x in seg_metrics["governor"] if x == 1)
-        seg_governor_total = len(seg_metrics["governor"])
-        seg_governor_ay_on = sum(1 for x in seg_metrics["governor_ay"] if x == 1)
-        seg_governor_ay_total = len(seg_metrics["governor_ay"])
         episode_rows.append({
             "bag_name": os.path.basename(bag_path),
             "episode_index": index,
@@ -887,8 +812,6 @@ def collect_metrics(
             "height_pred_max_m": round(safe_max(seg_metrics["pred"]), 6),
             "solve_ms_mean": round(safe_mean(seg_metrics["solve_ms"]), 3),
             "solve_fail_count": sum(1 for x in seg_metrics["status_val"] if x != 1),
-            "governor_active_ratio": round(seg_governor_on / seg_governor_total, 3) if seg_governor_total else 0.0,
-            "governor_ay_active_ratio": round(seg_governor_ay_on / seg_governor_ay_total, 3) if seg_governor_ay_total else 0.0,
             "v_des_eff_mean": round(safe_mean(seg_metrics["v_des_eff"]), 3),
             "cmd_vx_rms": round(rms(seg_metrics["vx"]), 3),
             "cmd_wz_rms": round(rms(seg_metrics["wz"]), 3),
@@ -985,10 +908,7 @@ def print_group_summary(rows, baseline_condition):
             f"{fmt_value(means['modal_energy_norm_rms'], 6)}({fmt_pct(deltas['modal_energy_norm_rms'])}) "
             f"{fmt_value(means['eta_dot_norm_rms_mps'], 6)}({fmt_pct(deltas['eta_dot_norm_rms_mps'])}) "
             f"{fmt_value(means['odom_ay_abs_p95'])}({fmt_pct(deltas['odom_ay_abs_p95'])}) "
-            f"{fmt_value(means['odom_kappa_abs_p95'])}({fmt_pct(deltas['odom_kappa_abs_p95'])}) "
-            f"{fmt_value(means['governor_ay_active_ratio'])} "
-            f"{fmt_value(means['gov_ay_first_to_height_peak_s'])}s "
-            f"{fmt_value(means['gov_ay_first_to_eta_dot_peak_s'])}s"
+            f"{fmt_value(means['odom_kappa_abs_p95'])}({fmt_pct(deltas['odom_kappa_abs_p95'])})"
         )
 
 
@@ -1007,17 +927,13 @@ def print_summary(rows, per_episode_rows, per_episode):
             f"solve_mean={row['solve_ms_mean']}ms "
             f"success={row['solve_success_ratio']} "
             f"fail={row['solve_fail_count']} "
-            f"gov_ratio={row['governor_active_ratio']}"
-            f" gov_ay_ratio={row['governor_ay_active_ratio']}"
-            f" speed_cap_ratio={row['speed_cap_active_ratio']}"
+            f"speed_cap_ratio={row['speed_cap_active_ratio']}"
             f" output_guard_ratio={row['output_guard_active_ratio']}"
             f" cmd_dwz_rms={row['cmd_dwz_rms_radps2']}"
             f" ay_abs={row['excitation_ay_abs_mean']}"
             f" alpha_abs={row['excitation_alpha_abs_mean']}"
             f" ay_height_lag={row['abs_ay_to_height_lag_s']}"
             f" ay_height_corr={row['abs_ay_to_height_corr']}"
-            f" gov_to_h_peak={row['gov_ay_first_to_height_peak_s']}s"
-            f" gov_to_eta_dot_peak={row['gov_ay_first_to_eta_dot_peak_s']}s"
             f" track_p95={row['track_dist_p95_m']}m"
             f" heading_p95={row['track_heading_err_p95_deg']}deg"
             f" odom_ay_p95={row['odom_ay_abs_p95']}"
@@ -1033,8 +949,6 @@ def print_summary(rows, per_episode_rows, per_episode):
                 f"height_p95={row['height_p95_m']}m "
                 f"pred_rms={row['height_pred_rms_m']}m "
                 f"fail={row['solve_fail_count']} "
-                f"gov_ratio={row['governor_active_ratio']} "
-                f"gov_ay_ratio={row['governor_ay_active_ratio']} "
                 f"cmd_dwz_rms={row['cmd_dwz_rms_radps2']}"
             )
 
