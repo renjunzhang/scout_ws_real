@@ -302,8 +302,8 @@ tracking_curvature_speed_cap 分支
 注意：
 
 ```text
-terminal_recovery 目前默认关闭，但 terminal envelope 仍借用了 terminal_recovery.v_max 作为 capture 低速目标。
-删除 terminal_recovery 前，必须先把该值显式迁移为 terminal_capture_v 或 terminal_approach_v。
+terminal envelope 的 capture 低速目标已迁移到 terminal_capture_v。
+删除 terminal_recovery 前，仍需单独验证 recovery 几何分支是否还承担兜底职责。
 ```
 
 ---
@@ -662,10 +662,8 @@ slosh_estimator IMU 参数
 注意：
 
 ```text
-terminal_recovery.v_max 当前被 terminal envelope 当 capture speed 用。
-先新增更明确的参数 terminal_capture_v 或 terminal_approach_v；
-兼容读取旧 terminal_recovery/v_max 一版；
-再删除 terminal_recovery 其它逻辑。
+terminal_capture_v 已替代 terminal_recovery.v_max，成为 terminal envelope 的 capture 低速目标。
+下一步可以在 terminal smoke 通过后，评估是否删除 terminal_recovery 其它逻辑。
 ```
 
 硬要求：
@@ -825,13 +823,13 @@ terminal debug topics
 前提：
 
 ```text
-先把 capture 低速目标从 terminal_recovery.v_max 迁移到 terminal_capture_v。
+capture 低速目标已从 terminal_recovery.v_max 迁移到 terminal_capture_v。
 ```
 
 硬前置步骤：
 
 ```text
-1. 新增参数 terminal_capture_v 或 terminal_approach_v；
+1. 新增参数 terminal_capture_v 或 terminal_approach_v；（已完成）
 2. terminal envelope 改为使用该新参数；
 3. 保留一版兼容读取 terminal_recovery/v_max；
 4. 跑 d200 terminal smoke；
@@ -1096,7 +1094,7 @@ README 不再推荐 OSCRS 命令；
 1. 是否允许直接 git rm OSCRS / GeoRef 文件，而不是迁到 legacy 目录？
 2. 是否保留旧 analysis 脚本用于历史数据复查，还是全部删除？
 3. terminal_recovery 是否可以彻底删除？
-   如果可以，先新增 terminal_capture_v 替代 terminal_recovery.v_max。
+   terminal_capture_v 已替代 terminal_recovery.v_max；下一步只剩 recovery 几何分支是否保留的问题。
 4. 是否保留 heading_align？
    固定路径实验通常不需要；如果实物偶尔起点 yaw 偏差大，可以先保留到 Phase 3 后再决定。
 5. 是否保留 settling？

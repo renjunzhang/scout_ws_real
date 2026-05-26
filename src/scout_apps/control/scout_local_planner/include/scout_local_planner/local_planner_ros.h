@@ -208,6 +208,7 @@ private:
     double terminal_slowdown_terminal_factor_v_ = 5.0;
     bool terminal_capture_stop_enable_ = true;
     double terminal_capture_stop_distance_ = 0.70;
+    double terminal_capture_v_cap_ = 0.18;
 
     // 终点残余晃动收敛（T2 settling）
     bool settling_enable_ = false;

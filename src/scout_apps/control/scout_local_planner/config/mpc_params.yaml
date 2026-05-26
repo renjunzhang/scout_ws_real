@@ -199,13 +199,14 @@ terminal_recovery:
 terminal_slowdown:
   enable: true              # 在终点捕获前提前连续压低 v_des_cmd；PathHandler 末端速度验证干净前保留
   distance: 1.20            # 从该距离开始 smoothstep 降速 (m)
-  v_max: 0.18               # 到 terminal recovery 进入距离附近时的速度上限 (m/s)
+  v_max: 0.18               # terminal slowdown 外层包络最高速度 (m/s)
   Q_v: 40.0                 # 制动速度上限生效时临时提高速度跟踪权重
   terminal_factor_v: 5.0    # 制动段临时提高 horizon 末端速度权重
 
 terminal_capture_stop:
   enable: true              # mpc_planner 风格外层终点捕获；阈值内进入限速 CAPTURE_BRAKE
   distance: 0.70            # 终点捕获制动半径 (m)，不参与 slosh 主效果窗口
+  v_cap: 0.18               # capture 入口和 capture 内的低速目标上限 (m/s)，独立于 terminal_recovery.v_max
 
 # =============================================================================
 # 终点残余晃动收敛（T2 settling）

@@ -508,6 +508,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
               terminal_slowdown_terminal_factor_v_, 5.0);
     pnh.param("terminal_capture_stop/enable", terminal_capture_stop_enable_, true);
     pnh.param("terminal_capture_stop/distance", terminal_capture_stop_distance_, 0.70);
+    pnh.param("terminal_capture_stop/v_cap", terminal_capture_v_cap_, 0.18);
 
     // 终点残余晃动收敛（T2 settling）
     pnh.param("settling/enable", settling_enable_, false);
@@ -919,8 +920,9 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     a_brake = std::min(a_brake, v_des_decel_limit_);
                 }
                 const double terminal_approach_v_cap =
-                    terminal_v_max_ > 1e-6 ? terminal_v_max_
-                                           : std::max(0.0, terminal_slowdown_v_max_);
+                    terminal_capture_v_cap_ > 1e-6
+                        ? terminal_capture_v_cap_
+                        : std::max(0.0, terminal_slowdown_v_max_);
                 const double v_terminal_envelope = terminal_slowdown_enable_
                     ? computeTerminalVelocityEnvelope(
                         goal_dist_now,

@@ -185,6 +185,9 @@ terminal_recovery:
   cmd_v_rate_limit: 0.35    # terminal recovery cmd 线速度变化率上限 (m/s^2)，降低接管瞬间 ax
   cmd_omega_rate_limit: 1.0 # terminal recovery cmd 角速度变化率上限 (rad/s^2)，降低接管瞬间 alpha
 
+terminal_capture_stop:
+  v_cap: 0.18               # capture 入口和 capture 内的低速目标上限 (m/s)，独立于 terminal_recovery.v_max
+
 # =============================================================================
 # 终点残余晃动收敛（T2 settling）
 # =============================================================================
