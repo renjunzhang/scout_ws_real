@@ -15,24 +15,12 @@ import rosbag
 
 STATUS_BUCKETS = ("TRACKING", "SETTLING", "REACHED", "IDLE")
 KNOWN_CONDITIONS = (
-    "FAS_Q5_DKAPPA_CAP",
-    "FAS_Q5_SPEED_CAP",
     "FAS_Q5_TERM",
     "FAS_Q5_DOT",
-    "SMOOTH_DOMEGA",
-    "SMOOTH_CTRL",
-    "DKAPPA_CAP",
-    "SPEED_CAP",
-    "AY_COST",
-    "OUTPUT_GUARD",
-    "PMG_COMBINED",
-    "PMG_LONG",
-    "PMG_LAT",
-    "PMG",
-    "PROFILE_SELECTIVE",
-    "PROFILE_SAFE",
     "FAS_Q10",
     "FAS_Q5",
+    "TOPPRA",
+    "RUCKIG",
     "NOM",
     "CUSTOM",
 )
@@ -292,6 +280,15 @@ def q_from_name(path):
 
 def condition_from_name(path):
     name = os.path.basename(path)
+    match = re.search(
+        r"_(C|D|E(?:_[A-Za-z0-9]+)*|F(?:_[A-Za-z0-9]+)*|G(?:_[A-Za-z0-9]+)*|"
+        r"TOPPRA(?:_[A-Za-z0-9]+)*|RUCKIG(?:_[A-Za-z0-9]+)*|"
+        r"FAS_Q[0-9]+(?:_[A-Za-z0-9]+)*|NOM|CUSTOM)_(?:run|static)",
+        name,
+        re.IGNORECASE,
+    )
+    if match:
+        return match.group(1)
     for condition in KNOWN_CONDITIONS:
         if condition in name:
             return condition
