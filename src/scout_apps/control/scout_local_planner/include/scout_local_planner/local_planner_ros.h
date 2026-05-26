@@ -48,13 +48,6 @@ public:
     void run();
 
 private:
-    enum class TerminalMode {
-        NONE = 0,
-        ALIGN_TO_POINT,
-        APPROACH_POINT,
-        ALIGN_FINAL_YAW
-    };
-
     struct CostBreakdown {
         double J_lag = 0.0;
         double J_contour = 0.0;
@@ -95,13 +88,6 @@ private:
     void publishTerminalDebug();
     void updateSloshEstimate();
     double computePredictedSloshHeightMax(const MPCSolution& solution) const;
-    bool computeTerminalRecoveryCmd(const GoalInfo& goal,
-                                    double& v_cmd,
-                                    double& omega_cmd,
-                                    TerminalMode& mode) const;
-    void limitTerminalRecoveryCmd(double& v_cmd, double& omega_cmd) const;
-    int computeSettlingRequiredSteps() const;
-    void publishSettlingTime(bool timeout);
     void updateState();
     void resetWarmStart(bool keep_u_prev, bool reset_slosh = true);
     
@@ -147,13 +133,6 @@ private:
     double tracking_feas_v_cap_strong_ = 0.3;
     double tracking_reentry_v_cap_ = 0.6;
     int tracking_reentry_ramp_steps_ = 10;
-    bool tracking_curvature_speed_cap_enable_ = true;
-    double tracking_curvature_preview_distance_ = 1.5;
-    double tracking_curvature_rate_preview_distance_ = 1.0;
-    double tracking_curvature_min_speed_ = 0.25;
-    double tracking_curvature_rate_min_speed_ = 0.25;
-    double tracking_curvature_rate_gain_ = 1.0;
-
     // 执行层参考速度变化率限制：治理 v_des 突跳导致的纵向 ax 脉冲
     bool v_des_rate_limit_enable_ = true;
     double v_des_accel_limit_ = 0.6;
@@ -176,31 +155,8 @@ private:
     double last_profile_cap_implied_ax_ = std::numeric_limits<double>::quiet_NaN();
     double last_profile_cap_implied_jerk_ = std::numeric_limits<double>::quiet_NaN();
 
-    // 原地对齐模式（heading align）
-    bool heading_align_enable_ = false;
-    double heading_align_enter_ = 0.8;   // 进入阈值 (rad)
-    double heading_align_exit_ = 0.4;    // 退出阈值 (rad)
-    double heading_align_omega_gain_ = 1.5;
-    double heading_align_max_omega_ = 0.0; // <=0 表示使用 vehicle_params_.omega_max
-    double heading_align_start_dist_ = 0.5; // 只在起点附近生效 (m)
-    bool heading_align_active_ = false;
-
-    // 终点恢复（terminal recovery）
-    bool terminal_recovery_enable_ = false;
-    bool terminal_recovery_latched_ = false;
-    double terminal_enter_distance_ = 0.35;
-    double terminal_release_distance_ = 0.55;
+    // 终点主线：terminal slowdown + capture + MPC stop
     double terminal_goal_behind_x_ = -0.05;
-    double terminal_align_angle_ = 1.0;
-    double terminal_approach_slow_angle_ = 0.45;
-    double terminal_bearing_gain_ = 1.8;
-    double terminal_final_yaw_gain_ = 1.5;
-    double terminal_max_omega_ = 0.0;  // <=0 表示使用 vehicle_params_.omega_max
-    double terminal_dist_gain_ = 0.8;
-    double terminal_v_min_ = 0.05;
-    double terminal_v_max_ = 0.18;
-    double terminal_cmd_v_rate_limit_ = 0.35;
-    double terminal_cmd_omega_rate_limit_ = 1.0;
     bool terminal_slowdown_enable_ = true;
     double terminal_slowdown_distance_ = 1.20;
     double terminal_slowdown_v_max_ = 0.18;
@@ -210,20 +166,6 @@ private:
     double terminal_capture_stop_distance_ = 0.70;
     double terminal_capture_v_cap_ = 0.18;
 
-    // 终点残余晃动收敛（T2 settling）
-    bool settling_enable_ = false;
-    double settling_timeout_s_ = 3.0;
-    double settling_release_distance_ = 0.45;
-    double settling_eta_tol_ = 0.0015;
-    double settling_eta_dot_tol_ = 0.03;
-    double settling_speed_tol_ = 0.05;
-    double settling_omega_tol_ = 0.10;
-    int settling_required_steps_override_ = 0;
-    double settling_q_v_ = 30.0;
-    double settling_q_eta_ = 10.0;
-    int settling_step_count_ = 0;
-    ros::Time settling_enter_time_;
-    
     // 状态
     PlannerState state_ = PlannerState::IDLE;
     geometry_msgs::PoseStamped current_pose_;
@@ -313,13 +255,12 @@ private:
     ros::Publisher slosh_modal_energy_norm_pub_;
     ros::Publisher slosh_excitation_ay_abs_pub_;
     ros::Publisher slosh_excitation_alpha_abs_pub_;
-    ros::Publisher slosh_settling_time_pub_;
     ros::Publisher mpc_solve_ms_pub_;
     ros::Publisher mpc_status_val_pub_;
     ros::Publisher mpc_cost_breakdown_pub_;
     ros::Publisher mpc_slosh_horizon_summary_pub_;
     ros::Publisher terminal_mode_pub_;
-    ros::Publisher terminal_recovery_latched_pub_;
+    ros::Publisher terminal_recovery_latched_pub_;  // compatibility topic, always publishes 0
     ros::Publisher terminal_goal_info_pub_;
     ros::Publisher terminal_v_envelope_pub_;
     ros::Publisher terminal_envelope_active_pub_;

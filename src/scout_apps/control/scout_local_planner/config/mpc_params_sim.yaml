@@ -141,67 +141,19 @@ slosh_estimator:
 # =============================================================================
 # 安全退化策略 + 速度保护（safety）
 #   infeasible_*：求解不可行时的退化行为
-#   tracking_curvature_*：TRACKING 模式曲率/重入限速
+#   tracking_feasibility_*：TRACKING solve fail 后的恢复限速保护
 # =============================================================================
 safety:
   infeasible_decel: 1.0          # 不可行时制动减速度 (m/s^2)
   infeasible_omega_scale: 0.0    # 不可行时角速度缩放
   infeasible_min_speed: 0.0      # 不可行时线速度下限 (m/s)
   tracking_feasibility_guard_enable: true      # TRACKING solve fail 后的恢复限速保护
-  tracking_curvature_speed_cap_enable: false   # 仿真主口径默认关闭；若做 cap 对比需单独显式打开
-  tracking_curvature_preview_distance: 0.8      # 曲率预览长度 (m)；默认1.5，缩短减少提前制动
-  tracking_curvature_rate_preview_distance: 0.6 # dkappa 预览长度 (m)；默认1.0
-  tracking_curvature_min_speed: 0.3             # 曲率限速下限 (m/s)
   tracking_reentry_v_cap: 0.9                   # 重入TRACKING初始速度上限 (m/s)；默认0.6
   tracking_reentry_ramp_steps: 5                # 重入爬坡步数；默认10步
 
-# =============================================================================
-# 原地对齐模式（航向误差过大时原地转向）
-# =============================================================================
-heading_align:
-  enable: false
-  enter_angle: 1.2         # 进入阈值 (rad) ~69° - 提高以避免直道误触发
-  exit_angle: 0.6          # 退出阈值 (rad) ~34°
-  omega_gain: 1.5
-  max_omega: 0.0           # <=0 使用 vehicle.omega_max
-  start_distance: 0.5      # 只在起点附近生效 (m)
-
-# =============================================================================
-# 终点恢复（near-goal terminal recovery）
-# =============================================================================
-terminal_recovery:
-  enable: true
-  enter_distance: 0.90      # 进入近终点恢复区的距离阈值 (m)
-  release_distance: 1.00    # 明显离开近终点区后才释放 recovery 锁存 (m)
-  goal_behind_x: -0.05      # goal 落到车后时的 x 阈值 (m)
-  align_angle: 1.0          # bearing 过大时先原地转向 (rad)
-  approach_slow_angle: 0.45 # bearing 偏大时降低前进速度 (rad)
-  bearing_gain: 1.8         # 朝向 goal 点的角速度增益
-  final_yaw_gain: 1.5       # 最终朝向补偿增益
-  max_omega: 0.8            # 终点恢复阶段角速度上限；<=0 用 vehicle.omega_max
-  dist_gain: 0.8            # 靠近终点的位置误差到速度的比例增益
-  v_min: 0.05               # 终点恢复阶段最小前进速度 (m/s)
-  v_max: 0.18               # 终点恢复阶段最大前进速度 (m/s)
-  cmd_v_rate_limit: 0.35    # terminal recovery cmd 线速度变化率上限 (m/s^2)，降低接管瞬间 ax
-  cmd_omega_rate_limit: 1.0 # terminal recovery cmd 角速度变化率上限 (rad/s^2)，降低接管瞬间 alpha
-
 terminal_capture_stop:
-  v_cap: 0.18               # capture 入口和 capture 内的低速目标上限 (m/s)，独立于 terminal_recovery.v_max
-
-# =============================================================================
-# 终点残余晃动收敛（T2 settling）
-# =============================================================================
-settling:
-  enable: true              # 进入 goal pose 后切换到 SETTLING，而不是直接 REACHED
-  timeout_s: 3.0            # 最长停留时间，超时后强制 REACHED
-  release_distance: 0.45    # 若离开 goal pose 且距离大于此值，则退回 TRACKING
-  eta_tol: 0.0015           # |eta_x|/|eta_y| 收敛阈值 (m)
-  eta_dot_tol: 0.03         # |eta_dot| 收敛阈值 (m/s)
-  speed_tol: 0.05           # 线速度收敛阈值 (m/s)
-  omega_tol: 0.10           # 角速度收敛阈值 (rad/s)
-  required_steps: 0         # <=0 时按 ceil(4π / ω0 / dt) 自动计算
-  Q_v: 30.0                 # SETTLING 期间速度收敛权重
-  Q_eta: 10.0               # SETTLING 期间晃动惩罚权重
+  v_cap: 0.18               # capture 入口和 capture 内的低速目标上限 (m/s)
+  goal_behind_x: -0.05      # goal 落到车后时保持 terminal stop 的 x 阈值 (m)
 
 # =============================================================================
 # cmd_vel 低通滤波（EMA）

@@ -35,9 +35,6 @@
   <arg name="filter_alpha_omega" default="1.0" doc="实验模式: 角速度 EMA 系数，1.0 表示关闭额外低通"/>
   <arg name="filter_kappa_boost" default="0.0" doc="实验模式: 关闭曲率自适应 EMA 增益"/>
   <arg name="reached_debug_duration" default="5.0" doc="到达终点后继续输出 slosh debug 的时长（秒）"/>
-  <arg name="terminal_recovery_enable" default="true" doc="终点 terminal recovery；默认开启，recovery 分支仍会持续发布 /slosh/* 调试话题"/>
-  <arg name="terminal_cmd_v_rate_limit" default="0.35" doc="terminal recovery 线速度命令变化率上限 (m/s^2)，降低接管瞬间 ax"/>
-  <arg name="terminal_cmd_omega_rate_limit" default="1.0" doc="terminal recovery 角速度命令变化率上限 (rad/s^2)，降低接管瞬间 alpha"/>
   <arg name="terminal_slowdown_enable" default="true" doc="是否在终点捕获前提前平滑降低 v_des_cmd；作为 PathHandler 末端速度未验证干净前的保护层"/>
   <arg name="terminal_slowdown_distance" default="1.20" doc="终点前平滑减速起始距离 (m)"/>
   <arg name="terminal_slowdown_v_max" default="0.18" doc="terminal slowdown 外层包络最高速度"/>
@@ -45,7 +42,7 @@
   <arg name="terminal_slowdown_terminal_factor_v" default="5.0" doc="终点制动速度上限生效时临时 terminal 速度权重放大"/>
   <arg name="terminal_capture_stop_enable" default="true" doc="mpc_planner 风格外层终点捕获；阈值内进入限速 CAPTURE_BRAKE，不再硬发 cmd_vel=0"/>
   <arg name="terminal_capture_stop_distance" default="0.70" doc="终点捕获制动半径 (m)"/>
-  <arg name="terminal_capture_v" default="0.18" doc="capture 入口和 capture 内的低速目标上限 (m/s)，独立于 terminal_recovery.v_max"/>
+  <arg name="terminal_capture_v" default="0.18" doc="capture 入口和 capture 内的低速目标上限 (m/s)"/>
   <arg name="v_des_rate_limit_enable" default="true" doc="执行层参考速度变化率限制；用于治理纵向 ax 脉冲"/>
   <arg name="v_des_accel_limit" default="0.60" doc="v_des 上升变化率上限 (m/s^2)"/>
   <arg name="v_des_decel_limit" default="0.80" doc="v_des 下降变化率上限 (m/s^2)"/>
@@ -62,9 +59,6 @@
   <arg name="slosh_imu_ay_bias_compensation_enable" default="true" doc="是否对 IMU ay 做静止零偏扣除"/>
   <arg name="slosh_imu_ay_bias_init_duration" default="3.0" doc="估计 IMU ay 零偏所需的连续静止时长"/>
   <arg name="slosh_imu_ay_scale" default="1.0" doc="IMU ay 离线标定比例系数（由 imu_ay_tool.py calibrate 输出）"/>
-  <arg name="settling_eta_tol" default="0.0015" doc="SETTLING |eta| 收敛阈值 (m)"/>
-  <arg name="settling_eta_dot_tol" default="0.03" doc="SETTLING |eta_dot| 收敛阈值 (m/s)"/>
-  <arg name="settling_timeout_s" default="3.0" doc="SETTLING 最长停留时间 (s)"/>
   <arg name="vehicle_v_max" default="3.0" doc="覆盖 vehicle/v_max；anti-slosh path candidate 可用 1.75 使 v_nominal=1.40"/>
   <arg name="cmd_vel_topic" default="/cmd_vel" doc="planner 输出的 cmd_vel 话题；阶段 3 可改到调试话题避免与底盘直控冲突"/>
   <arg name="global_path_topic" default="/scout/global_path" doc="local planner 订阅的全局路径话题；固定路径重放实验时可改到 /scout/global_path_fixed"/>
@@ -99,9 +93,6 @@
     <param name="filter/alpha_omega" value="$(arg filter_alpha_omega)"/>
     <param name="filter/kappa_boost" value="$(arg filter_kappa_boost)"/>
     <param name="experiment/reached_debug_duration" value="$(arg reached_debug_duration)"/>
-    <param name="terminal_recovery/enable" value="$(arg terminal_recovery_enable)"/>
-    <param name="terminal_recovery/cmd_v_rate_limit" value="$(arg terminal_cmd_v_rate_limit)"/>
-    <param name="terminal_recovery/cmd_omega_rate_limit" value="$(arg terminal_cmd_omega_rate_limit)"/>
     <param name="terminal_slowdown/enable" value="$(arg terminal_slowdown_enable)"/>
     <param name="terminal_slowdown/distance" value="$(arg terminal_slowdown_distance)"/>
     <param name="terminal_slowdown/v_max" value="$(arg terminal_slowdown_v_max)"/>
@@ -126,9 +117,6 @@
     <param name="slosh_estimator/imu_ay_bias_compensation_enable" value="$(arg slosh_imu_ay_bias_compensation_enable)"/>
     <param name="slosh_estimator/imu_ay_bias_init_duration" value="$(arg slosh_imu_ay_bias_init_duration)"/>
     <param name="slosh_estimator/imu_ay_scale" value="$(arg slosh_imu_ay_scale)"/>
-    <param name="settling/eta_tol" value="$(arg settling_eta_tol)"/>
-    <param name="settling/eta_dot_tol" value="$(arg settling_eta_dot_tol)"/>
-    <param name="settling/timeout_s" value="$(arg settling_timeout_s)"/>
     <param name="vehicle/v_max" value="$(arg vehicle_v_max)"/>
 
     <!-- 话题 remap -->

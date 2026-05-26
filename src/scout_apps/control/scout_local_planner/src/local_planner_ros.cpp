@@ -260,7 +260,6 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     slosh_modal_energy_norm_pub_ = nh_.advertise<std_msgs::Float32>("slosh/modal_energy_norm", 1);
     slosh_excitation_ay_abs_pub_ = nh_.advertise<std_msgs::Float32>("slosh/excitation_ay_abs", 1);
     slosh_excitation_alpha_abs_pub_ = nh_.advertise<std_msgs::Float32>("slosh/excitation_alpha_abs", 1);
-    slosh_settling_time_pub_ = nh_.advertise<std_msgs::Float32>("slosh/settling_time", 1, true);
     mpc_solve_ms_pub_ = nh_.advertise<std_msgs::Float32>("mpc/solve_ms", 1);
     mpc_status_val_pub_ = nh_.advertise<std_msgs::Int32>("mpc/status_val", 1);
     mpc_cost_breakdown_pub_ = nh_.advertise<std_msgs::Float32MultiArray>("mpc/cost_breakdown", 1);
@@ -453,18 +452,6 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
               tracking_reentry_v_cap_, 0.6);
     pnh.param("safety/tracking_reentry_ramp_steps",
               tracking_reentry_ramp_steps_, 10);
-    pnh.param("safety/tracking_curvature_speed_cap_enable",
-              tracking_curvature_speed_cap_enable_, false);
-    pnh.param("safety/tracking_curvature_preview_distance",
-              tracking_curvature_preview_distance_, 1.5);
-    pnh.param("safety/tracking_curvature_rate_preview_distance",
-              tracking_curvature_rate_preview_distance_, 1.0);
-    pnh.param("safety/tracking_curvature_min_speed",
-              tracking_curvature_min_speed_, 0.25);
-    pnh.param("safety/tracking_curvature_rate_min_speed",
-              tracking_curvature_rate_min_speed_, 0.25);
-    pnh.param("safety/tracking_curvature_rate_gain",
-              tracking_curvature_rate_gain_, 1.0);
     pnh.param("v_des_rate_limit/enable", v_des_rate_limit_enable_, true);
     pnh.param("v_des_rate_limit/accel_limit", v_des_accel_limit_, 0.6);
     pnh.param("v_des_rate_limit/decel_limit", v_des_decel_limit_, 0.8);
@@ -477,29 +464,7 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("external_profile_execution_cap/jerk_limit",
               external_profile_execution_jerk_limit_, 0.0);
 
-    // 原地对齐模式
-    pnh.param("heading_align/enable", heading_align_enable_, false);
-    pnh.param("heading_align/enter_angle", heading_align_enter_, 0.8);
-    pnh.param("heading_align/exit_angle", heading_align_exit_, 0.4);
-    pnh.param("heading_align/omega_gain", heading_align_omega_gain_, 1.5);
-    pnh.param("heading_align/max_omega", heading_align_max_omega_, 0.0);
-    pnh.param("heading_align/start_distance", heading_align_start_dist_, 0.5);
-
-    // 终点恢复（near-goal terminal recovery）
-    pnh.param("terminal_recovery/enable", terminal_recovery_enable_, false);
-    pnh.param("terminal_recovery/enter_distance", terminal_enter_distance_, 0.35);
-    pnh.param("terminal_recovery/release_distance", terminal_release_distance_, 0.55);
-    pnh.param("terminal_recovery/goal_behind_x", terminal_goal_behind_x_, -0.05);
-    pnh.param("terminal_recovery/align_angle", terminal_align_angle_, 1.0);
-    pnh.param("terminal_recovery/approach_slow_angle", terminal_approach_slow_angle_, 0.45);
-    pnh.param("terminal_recovery/bearing_gain", terminal_bearing_gain_, 1.8);
-    pnh.param("terminal_recovery/final_yaw_gain", terminal_final_yaw_gain_, 1.5);
-    pnh.param("terminal_recovery/max_omega", terminal_max_omega_, 0.0);
-    pnh.param("terminal_recovery/dist_gain", terminal_dist_gain_, 0.8);
-    pnh.param("terminal_recovery/v_min", terminal_v_min_, 0.05);
-    pnh.param("terminal_recovery/v_max", terminal_v_max_, 0.18);
-    pnh.param("terminal_recovery/cmd_v_rate_limit", terminal_cmd_v_rate_limit_, 0.35);
-    pnh.param("terminal_recovery/cmd_omega_rate_limit", terminal_cmd_omega_rate_limit_, 1.0);
+    pnh.param("terminal_capture_stop/goal_behind_x", terminal_goal_behind_x_, -0.05);
     pnh.param("terminal_slowdown/enable", terminal_slowdown_enable_, true);
     pnh.param("terminal_slowdown/distance", terminal_slowdown_distance_, 1.20);
     pnh.param("terminal_slowdown/v_max", terminal_slowdown_v_max_, 0.18);
@@ -510,18 +475,6 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("terminal_capture_stop/distance", terminal_capture_stop_distance_, 0.70);
     pnh.param("terminal_capture_stop/v_cap", terminal_capture_v_cap_, 0.18);
 
-    // 终点残余晃动收敛（T2 settling）
-    pnh.param("settling/enable", settling_enable_, false);
-    pnh.param("settling/timeout_s", settling_timeout_s_, 3.0);
-    pnh.param("settling/release_distance", settling_release_distance_, 0.45);
-    pnh.param("settling/eta_tol", settling_eta_tol_, 0.0015);
-    pnh.param("settling/eta_dot_tol", settling_eta_dot_tol_, 0.03);
-    pnh.param("settling/speed_tol", settling_speed_tol_, 0.05);
-    pnh.param("settling/omega_tol", settling_omega_tol_, 0.10);
-    pnh.param("settling/required_steps", settling_required_steps_override_, 0);
-    pnh.param("settling/Q_v", settling_q_v_, 30.0);
-    pnh.param("settling/Q_eta", settling_q_eta_, 10.0);
-    
     // cmd_vel 低通滤波参数
     pnh.param("filter/alpha_v", cmd_filter_alpha_v_, 0.3);
     pnh.param("filter/alpha_omega", cmd_filter_alpha_omega_, 0.4);
@@ -695,27 +648,11 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
     // 路径跳变/重规划提示：重置 warm-start
     if (path_handler_.consumeResetHint()) {
         resetWarmStart(true);
-        terminal_recovery_latched_ = false;
         tracking_solve_fail_streak_ = 0;
         tracking_solve_success_streak_ = 0;
         tracking_feasibility_recovery_active_ = false;
-        {
-            int ramp = std::max(0, tracking_reentry_ramp_steps_);
-            if (tracking_curvature_speed_cap_enable_ && path_params_.max_lat_accel > 0.0) {
-                const double kappa_start = path_handler_.getMaxCurvatureAhead(
-                    0.0, tracking_curvature_preview_distance_);
-                if (kappa_start > 1e-4 &&
-                    std::sqrt(path_params_.max_lat_accel / kappa_start) <
-                        tracking_reentry_v_cap_) {
-                    ramp *= 2;
-                }
-            }
-            tracking_reentry_ramp_steps_left_ = ramp;
-        }
-    }
-
-    if (state_ != PlannerState::TRACKING) {
-        heading_align_active_ = false;
+        tracking_reentry_ramp_steps_left_ =
+            std::max(0, tracking_reentry_ramp_steps_);
     }
 
     // slosh 估计与调试输出不应只局限于 TRACKING。
@@ -736,7 +673,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
             terminal_mode_debug_ = "ERROR";
             break;
         case PlannerState::SETTLING:
-            terminal_mode_debug_ = "SETTLING";
+            terminal_mode_debug_ = "SETTLING_DISABLED";
             break;
         case PlannerState::REACHED:
             terminal_mode_debug_ = "REACHED";
@@ -745,8 +682,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
         default:
             if (goal_stop_pending_) {
                 terminal_mode_debug_ = "TERMINAL_MPC_STOP";
-            } else if (terminal_recovery_latched_) {
-                terminal_mode_debug_ = "TERMINAL_LATCHED";
             } else {
                 terminal_mode_debug_ = "NONE";
             }
@@ -776,15 +711,12 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
             }
             break;
             
-        case PlannerState::SETTLING:
         case PlannerState::TRACKING:
             // 执行 MPC 控制
             {
-                const bool settling_active = (state_ == PlannerState::SETTLING);
                 GoalInfo goal_info;
                 const bool has_goal_info = path_handler_.getGoalInfo(goal_info);
                 const bool terminal_capture_stop_active =
-                    !settling_active &&
                     terminal_capture_stop_enable_ &&
                     has_goal_info &&
                     goal_info.valid &&
@@ -793,114 +725,11 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
 
                 if (terminal_capture_stop_active) {
                     goal_stop_pending_ = true;
-                    terminal_recovery_latched_ = false;
-                    heading_align_active_ = false;
                     terminal_mode_debug_ = "TERMINAL_MPC_STOP";
-                }
-
-                const bool terminal_recovery_allowed =
-                    has_goal_info &&
-                    goal_info.valid &&
-                    (goal_info.position_reached || goal_info.dx < terminal_goal_behind_x_);
-                if (!settling_active &&
-                    terminal_recovery_enable_ &&
-                    !goal_stop_pending_ &&
-                    terminal_recovery_allowed) {
-                    if (terminal_recovery_latched_) {
-                        const bool should_release =
-                            !has_goal_info ||
-                            !goal_info.valid ||
-                            !std::isfinite(goal_info.dist) ||
-                            goal_info.dist > terminal_release_distance_;
-                        if (should_release) {
-                            terminal_recovery_latched_ = false;
-                        }
-                    } else if (has_goal_info &&
-                               goal_info.valid &&
-                               std::isfinite(goal_info.dist) &&
-                               goal_info.dist < terminal_enter_distance_) {
-                        terminal_recovery_latched_ = true;
-                    }
-                } else {
-                    terminal_recovery_latched_ = false;
-                }
-
-                if (!settling_active &&
-                    terminal_recovery_enable_ &&
-                    terminal_recovery_latched_ &&
-                    has_goal_info &&
-                    goal_info.valid &&
-                    !goal_stop_pending_) {
-                    double term_v = 0.0;
-                    double term_omega = 0.0;
-                    TerminalMode term_mode = TerminalMode::NONE;
-                    if (computeTerminalRecoveryCmd(goal_info, term_v, term_omega, term_mode)) {
-                        const double prev_cmd_v = filtered_v_;
-                        limitTerminalRecoveryCmd(term_v, term_omega);
-                        heading_align_active_ = false;
-                        switch (term_mode) {
-                            case TerminalMode::ALIGN_TO_POINT:
-                                terminal_mode_debug_ = "ALIGN_TO_POINT";
-                                break;
-                            case TerminalMode::APPROACH_POINT:
-                                terminal_mode_debug_ = "APPROACH_POINT";
-                                break;
-                            case TerminalMode::ALIGN_FINAL_YAW:
-                                terminal_mode_debug_ = "ALIGN_FINAL_YAW";
-                                break;
-                            case TerminalMode::NONE:
-                            default:
-                                terminal_mode_debug_ = "NONE";
-                                break;
-                        }
-                        terminal_goal_info_debug_ = goal_info;
-                        terminal_goal_info_valid_ = true;
-                        publishCmdVel(term_v, term_omega);
-                        const double dt_cmd = control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
-                        last_control_(ControlIndex::A) =
-                            (filtered_v_ - prev_cmd_v) / std::max(1e-6, dt_cmd);
-                        last_control_(ControlIndex::OMEGA) = filtered_omega_;
-                        publishTerminalDebug();
-                        publishSloshDebug(last_solve_time_ms_, last_solve_ok_, false);
-
-                        if (verbose_) {
-                            ROS_INFO_THROTTLE(
-                                0.5,
-                                "[TerminalRecovery] mode=%d dist=%.3f bearing=%.3f yaw_err=%.3f cmd=(%.3f, %.3f)",
-                                static_cast<int>(term_mode),
-                                goal_info.dist,
-                                goal_info.bearing,
-                                goal_info.goal_yaw_err,
-                                term_v,
-                                term_omega);
-                        }
-                        return;
-                    }
                 }
 
                 const double v_nominal = vehicle_params_.v_max * 0.8;
                 MPCParams runtime_mpc_params = mpc_params_;
-                if (settling_active) {
-                    runtime_mpc_params.Q_el = 0.0;
-                    runtime_mpc_params.Q_ec = 0.0;
-                    runtime_mpc_params.Q_etheta = 0.0;
-                    runtime_mpc_params.Q_contour = 0.0;
-                    runtime_mpc_params.Q_lag = 0.0;
-                    runtime_mpc_params.enable_omega_ff = false;
-                    runtime_mpc_params.Q_omega_ff = 0.0;
-                    runtime_mpc_params.Q_v = std::max(runtime_mpc_params.Q_v, settling_q_v_);
-                    runtime_mpc_params.terminal_factor_ec = 1.0;
-                    runtime_mpc_params.terminal_factor_etheta = 1.0;
-                    runtime_mpc_params.terminal_factor_v =
-                        std::max(1.0, runtime_mpc_params.terminal_factor_v);
-                    runtime_mpc_params.Q_slosh =
-                        std::max(runtime_mpc_params.Q_slosh, settling_q_eta_);
-                    const double h_coeff = slosh_integration_.getModalParams().height_coeff;
-                    updateNormalizedSloshWeights(
-                        runtime_mpc_params,
-                        h_coeff,
-                        slosh_integration_.getModalParams().omega_n);
-                }
                 // Terminal velocity envelope: pre-MPC reference cap.
                 // 单一运动学包络函数:
                 //   capture 前: 在 terminal_capture_stop_distance_ 附近压到 terminal approach cap
@@ -957,7 +786,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     std::isfinite(goal_info.dx) &&
                     goal_info.dx <= 0.0;
                 const double v_des_cmd_raw =
-                    settling_active ? 0.0 :
                     (goal_stop_pending_ && (goal_position_reached_now || goal_behind_now)) ? 0.0 :
                     goal_stop_pending_ ? terminal_approach_v_cap :
                     v_nominal;
@@ -972,7 +800,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 int tracking_feas_active_dbg = tracking_feasibility_recovery_active_ ? 1 : 0;
                 if (state_ == PlannerState::TRACKING &&
                     !goal_stop_pending_ &&
-                    !settling_active &&
                     tracking_feasibility_guard_enable_) {
                     if (tracking_reentry_ramp_steps_left_ > 0) {
                         const int total_steps = std::max(1, tracking_reentry_ramp_steps_);
@@ -1000,53 +827,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                 }
                 double kappa_preview_dbg = 0.0;
                 double dkappa_preview_dbg = 0.0;
-                if (state_ == PlannerState::TRACKING &&
-                    !goal_stop_pending_ &&
-                    !settling_active &&
-                    tracking_curvature_speed_cap_enable_) {
-                    double v_curve_cap = std::max(0.0, v_des_cmd);
-                    if (path_params_.max_lat_accel > 1e-6) {
-                        kappa_preview_dbg = path_handler_.getMaxCurvatureAhead(
-                            path_params_.lookahead_distance,
-                            tracking_curvature_preview_distance_);
-                        if (kappa_preview_dbg > 1e-4) {
-                            const double v_cap_kappa =
-                                std::sqrt(std::max(0.0, path_params_.max_lat_accel /
-                                                         (kappa_preview_dbg + 1e-9)));
-                            // 规划层 omega 上限：使用 speed_profile_omega_max（与 v(s) 剖面一致）
-                            // 与 QP 硬约束 vehicle_params_.omega_max 解耦，避免双重压速
-                            const double v_cap_omega =
-                                (path_params_.speed_profile_omega_max > 1e-3)
-                                    ? path_params_.speed_profile_omega_max / (kappa_preview_dbg + 1e-9)
-                                    : v_cap_kappa;
-                            // 几何综合限速：取横向加速度 cap 与 omega_max cap 的较小值
-                            const double v_cap_geom = std::min(v_cap_kappa, v_cap_omega);
-                            // 若几何限速低于 min_speed，说明路径确实无法以 min_speed 行驶，降速优先
-                            const double v_floor = std::min(tracking_curvature_min_speed_, v_cap_geom);
-                            v_curve_cap = std::min(v_curve_cap, std::max(v_floor, v_cap_geom));
-                        }
-                    }
-                    if (vehicle_params_.alpha_max > 1e-6) {
-                        dkappa_preview_dbg = path_handler_.getMaxCurvatureRateAhead(
-                            path_params_.lookahead_distance,
-                            tracking_curvature_rate_preview_distance_);
-                        if (dkappa_preview_dbg > 1e-4) {
-                            const double v_cap_dkappa =
-                                std::sqrt(std::max(0.0, tracking_curvature_rate_gain_ *
-                                                         vehicle_params_.alpha_max /
-                                                         (dkappa_preview_dbg + 1e-9)));
-                            // alpha_max 硬约束：v² × dkappa ≤ alpha_max
-                            // 该 cap 可低于 tracking_curvature_rate_min_speed_，
-                            // 因路径几何（高 dkappa 段）确实要求低速
-                            const double v_floor_dkappa =
-                                std::min(tracking_curvature_rate_min_speed_, v_cap_dkappa);
-                            v_curve_cap =
-                                std::min(v_curve_cap,
-                                         std::max(v_floor_dkappa, v_cap_dkappa));
-                        }
-                    }
-                    v_des_cmd = std::min(v_des_cmd, v_curve_cap);
-                }
 
                 const double v_des_cmd_capped = v_des_cmd;
                 double v_des_target = v_des_cmd_capped;
@@ -1058,7 +838,7 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                     last_v_des_rate_limited_active_ = 0;
 
                     double v_des_eff = v_des_target;
-                    if (v_des_rate_limit_enable_ && !settling_active) {
+                    if (v_des_rate_limit_enable_) {
                         const bool terminal_stop_target =
                             goal_stop_pending_ || v_des_target <= 1e-6;
                         const double prev_v_des =
@@ -1138,44 +918,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
                         tracking_reentry_ramp_steps_left_);
                 }
 
-                // 2.1 原地对齐模式：只在起点附近生效
-                bool allow_heading_align = heading_align_enable_;
-                if (allow_heading_align) {
-                    const double start_dist = std::max(0.0, heading_align_start_dist_);
-                    const double s_progress = path_handler_.getGlobalProgress();
-                    if (s_progress > start_dist) {
-                        allow_heading_align = false;
-                        heading_align_active_ = false;
-                    }
-                }
-
-                // 航向误差过大时先原地转向（仅限起点）
-                if (allow_heading_align) {
-                    const double abs_theta = std::abs(frenet.e_theta);
-                    if (!heading_align_active_ && abs_theta > heading_align_enter_) {
-                        heading_align_active_ = true;
-                    } else if (heading_align_active_ && abs_theta < heading_align_exit_) {
-                        heading_align_active_ = false;
-                    }
-                } else {
-                    heading_align_active_ = false;
-                }
-
-                if (heading_align_active_) {
-                    const double max_omega = heading_align_max_omega_ > 1e-6
-                        ? heading_align_max_omega_
-                        : vehicle_params_.omega_max;
-                    // e_theta = theta_robot - theta_path，需取负号使其朝路径方向收敛
-                    double omega = -heading_align_omega_gain_ * frenet.e_theta;
-                    omega = std::max(-max_omega, std::min(max_omega, omega));
-                    publishCmdVel(0.0, omega);
-
-                    if (verbose_) {
-                        ROS_INFO_THROTTLE(0.5, "[Align] e_theta=%.3f, omega=%.3f", frenet.e_theta, omega);
-                    }
-                    return;
-                }
-                
                 // 3. 构建当前状态（避免初始状态越界导致不可行）
                 // 注意：ω 现在是控制量，不在状态中！
                 auto clamp = [](double v, double lo, double hi) {
@@ -1458,133 +1200,6 @@ void LocalPlannerROS::controlLoop(const ros::TimerEvent& event) {
     }
 }
 
-bool LocalPlannerROS::computeTerminalRecoveryCmd(const GoalInfo& goal,
-                                                 double& v_cmd,
-                                                 double& omega_cmd,
-                                                 TerminalMode& mode) const {
-    v_cmd = 0.0;
-    omega_cmd = 0.0;
-    mode = TerminalMode::NONE;
-
-    if (!goal.valid) {
-        return false;
-    }
-
-    auto clamp = [](double x, double lo, double hi) {
-        return std::max(lo, std::min(hi, x));
-    };
-
-    const double omega_max =
-        terminal_max_omega_ > 1e-6 ? terminal_max_omega_ : vehicle_params_.omega_max;
-
-    const bool goal_behind = goal.dx < terminal_goal_behind_x_;
-    const double abs_bearing = std::abs(goal.bearing);
-
-    // 位置已到但姿态还没到：不要退回 normal tracking。
-    // 先把 goal 点几何关系对准，再补 final yaw。
-    if (goal.position_reached && !goal.pose_reached) {
-        const bool need_point_align = goal.dx <= 0.0 || abs_bearing >= 0.30;
-        if (need_point_align) {
-            mode = TerminalMode::ALIGN_TO_POINT;
-            omega_cmd = clamp(terminal_bearing_gain_ * goal.bearing,
-                              -omega_max, omega_max);
-            return true;
-        }
-
-        if (goal.has_goal_yaw &&
-            std::abs(goal.goal_yaw_err) > path_params_.yaw_tolerance) {
-            mode = TerminalMode::ALIGN_FINAL_YAW;
-            omega_cmd = clamp(terminal_final_yaw_gain_ * goal.goal_yaw_err,
-                              -omega_max, omega_max);
-            return true;
-        }
-
-        return false;
-    }
-
-    // goal 在车后，或当前 bearing 太大：先原地对准 goal 点。
-    const bool bearing_large = abs_bearing > terminal_align_angle_;
-    if (goal_behind || bearing_large) {
-        mode = TerminalMode::ALIGN_TO_POINT;
-        omega_cmd = clamp(terminal_bearing_gain_ * goal.bearing,
-                          -omega_max, omega_max);
-        return true;
-    }
-
-    // goal 在前方、距离还未达标：低速靠近。
-    if (goal.dist > path_params_.goal_tolerance) {
-        mode = TerminalMode::APPROACH_POINT;
-
-        double v = clamp(terminal_dist_gain_ * goal.dist,
-                         terminal_v_min_,
-                         terminal_v_max_);
-        if (abs_bearing > terminal_approach_slow_angle_) {
-            v *= 0.4;
-        }
-
-        v_cmd = std::max(0.0, std::min(v, terminal_v_max_));
-        omega_cmd = clamp(terminal_bearing_gain_ * goal.bearing,
-                          -omega_max, omega_max);
-        return true;
-    }
-
-    return false;
-}
-
-void LocalPlannerROS::limitTerminalRecoveryCmd(double& v_cmd, double& omega_cmd) const {
-    const double dt = control_rate_ > 1e-3 ? 1.0 / control_rate_ : mpc_params_.dt;
-    const double step_dt = std::max(1e-6, dt);
-
-    auto limit_rate = [step_dt](double target, double current, double rate_limit) {
-        if (!std::isfinite(target) || !std::isfinite(current) || rate_limit <= 1e-6) {
-            return target;
-        }
-        const double max_delta = rate_limit * step_dt;
-        return std::max(current - max_delta, std::min(current + max_delta, target));
-    };
-
-    v_cmd = limit_rate(v_cmd, filtered_v_, terminal_cmd_v_rate_limit_);
-    omega_cmd = limit_rate(omega_cmd, filtered_omega_, terminal_cmd_omega_rate_limit_);
-}
-
-int LocalPlannerROS::computeSettlingRequiredSteps() const {
-    if (settling_required_steps_override_ > 0) {
-        return settling_required_steps_override_;
-    }
-
-    const double fallback_steps =
-        std::ceil(0.5 / std::max(1e-6, mpc_params_.dt));
-    if (!slosh_enabled_) {
-        return std::max(1, static_cast<int>(fallback_steps));
-    }
-
-    const double omega_n = slosh_integration_.getModalParams().omega_n;
-    if (omega_n <= 1e-6) {
-        return std::max(1, static_cast<int>(fallback_steps));
-    }
-
-    return std::max(
-        1,
-        static_cast<int>(std::ceil((4.0 * M_PI / omega_n) / mpc_params_.dt)));
-}
-
-void LocalPlannerROS::publishSettlingTime(bool timeout) {
-    const double duration_s = settling_enter_time_.isZero()
-        ? settling_step_count_ * mpc_params_.dt
-        : (ros::Time::now() - settling_enter_time_).toSec();
-    if (!std::isfinite(duration_s) || duration_s < 0.0) {
-        return;
-    }
-
-    std_msgs::Float32 msg;
-    msg.data = static_cast<float>(duration_s);
-    slosh_settling_time_pub_.publish(msg);
-
-    ROS_INFO("[LocalPlannerROS] SETTLING finished by %s, settling_time=%.3fs",
-             timeout ? "timeout" : "convergence",
-             duration_s);
-}
-
 void LocalPlannerROS::updateState() {
     // 检查数据是否有效
     if (!has_odom_) {
@@ -1596,16 +1211,15 @@ void LocalPlannerROS::updateState() {
     }
     
     if (!path_handler_.isPathValid()) {
-        if (state_ == PlannerState::TRACKING || state_ == PlannerState::SETTLING) {
+        if (state_ == PlannerState::TRACKING) {
             transitionTo(PlannerState::ERROR);
             ROS_WARN("[LocalPlannerROS] Path invalid or timeout");
         }
         return;
     }
     
-    if (state_ != PlannerState::TRACKING && state_ != PlannerState::SETTLING) {
+    if (state_ != PlannerState::TRACKING) {
         goal_stop_pending_ = false;
-        terminal_recovery_latched_ = false;
         return;
     }
 
@@ -1622,43 +1236,6 @@ void LocalPlannerROS::updateState() {
         terminal_capture_stop_enable_ &&
         std::isfinite(goal_dist) &&
         goal_dist < terminal_capture_stop_distance_;
-
-    if (state_ == PlannerState::SETTLING) {
-        terminal_recovery_latched_ = false;
-        goal_stop_pending_ = false;
-
-        const bool should_release =
-            !goal_position_reached &&
-            (!std::isfinite(goal_dist) || goal_dist > settling_release_distance_);
-        if (should_release) {
-            transitionTo(PlannerState::TRACKING);
-            return;
-        }
-
-        ++settling_step_count_;
-
-        const Eigen::Vector4d ss = slosh_integration_.getSloshState();
-        const bool slosh_small =
-            std::abs(ss(0)) < settling_eta_tol_ &&
-            std::abs(ss(1)) < settling_eta_dot_tol_ &&
-            std::abs(ss(2)) < settling_eta_tol_ &&
-            std::abs(ss(3)) < settling_eta_dot_tol_;
-        const bool speed_low =
-            std::abs(current_v_) < settling_speed_tol_ &&
-            std::abs(current_omega_) < settling_omega_tol_;
-        const bool enough_time = settling_step_count_ >= computeSettlingRequiredSteps();
-        const bool timeout =
-            settling_timeout_s_ > 0.0 &&
-            settling_step_count_ * mpc_params_.dt >= settling_timeout_s_;
-
-        if ((enough_time && slosh_small && speed_low) || timeout) {
-            publishSettlingTime(timeout);
-            transitionTo(PlannerState::REACHED);
-            terminal_recovery_latched_ = false;
-            resetWarmStart(false, false);
-        }
-        return;
-    }
 
     if (goal_stop_pending_) {
         // 终点边界附近允许短暂滑出 pose gate，但不要立刻释放 pending stop。
@@ -1681,12 +1258,6 @@ void LocalPlannerROS::updateState() {
     }
 
     if (goal_position_reached) {
-        if (settling_enable_ && slosh_enabled_) {
-            transitionTo(PlannerState::SETTLING);
-            goal_stop_pending_ = false;
-            terminal_recovery_latched_ = false;
-            return;
-        }
         goal_stop_pending_ = true;
     } else if (terminal_capture_stop_reached) {
         goal_stop_pending_ = true;
@@ -1702,7 +1273,6 @@ void LocalPlannerROS::updateState() {
     if (speed_low && goal_position_reached) {
         transitionTo(PlannerState::REACHED);
         goal_stop_pending_ = false;
-        terminal_recovery_latched_ = false;
         // 到达终点后保留 slosh 内部状态一段时间，便于观测残余晃动衰减。
         resetWarmStart(false, false);
     }
@@ -1712,20 +1282,8 @@ void LocalPlannerROS::transitionTo(PlannerState new_state) {
     if (state_ != new_state) {
         if (new_state == PlannerState::TRACKING && state_ != PlannerState::TRACKING) {
             ++episode_id_;
-            {
-                // 基础 ramp；若起点曲率超出 reentry_v_cap 对应横向加速度，加倍保守
-                int ramp = std::max(0, tracking_reentry_ramp_steps_);
-                if (tracking_curvature_speed_cap_enable_ && path_params_.max_lat_accel > 0.0) {
-                    const double kappa_start = path_handler_.getMaxCurvatureAhead(
-                        0.0, tracking_curvature_preview_distance_);
-                    if (kappa_start > 1e-4 &&
-                        std::sqrt(path_params_.max_lat_accel / kappa_start) <
-                            tracking_reentry_v_cap_) {
-                        ramp *= 2;
-                    }
-                }
-                tracking_reentry_ramp_steps_left_ = ramp;
-            }
+            tracking_reentry_ramp_steps_left_ =
+                std::max(0, tracking_reentry_ramp_steps_);
             tracking_solve_fail_streak_ = 0;
             tracking_solve_success_streak_ = 0;
             tracking_feasibility_recovery_active_ = false;
@@ -1733,14 +1291,6 @@ void LocalPlannerROS::transitionTo(PlannerState new_state) {
             tracking_solve_fail_streak_ = 0;
             tracking_solve_success_streak_ = 0;
             tracking_feasibility_recovery_active_ = false;
-        }
-        if (new_state == PlannerState::SETTLING || state_ == PlannerState::SETTLING) {
-            settling_step_count_ = 0;
-        }
-        if (new_state == PlannerState::SETTLING) {
-            settling_enter_time_ = ros::Time::now();
-        } else if (state_ == PlannerState::SETTLING) {
-            settling_enter_time_ = ros::Time(0);
         }
         if (new_state == PlannerState::REACHED) {
             reached_time_ = ros::Time::now();
@@ -2285,7 +1835,7 @@ void LocalPlannerROS::publishTerminalDebug() {
 
     if (terminal_recovery_latched_pub_.getNumSubscribers() > 0) {
         std_msgs::Int32 msg;
-        msg.data = terminal_recovery_latched_ ? 1 : 0;
+        msg.data = 0;
         terminal_recovery_latched_pub_.publish(msg);
     }
 

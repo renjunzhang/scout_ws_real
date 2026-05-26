@@ -1107,3 +1107,41 @@ README 不再推荐 OSCRS 命令；
 先确认 1 和 3。
 只要 OSCRS 可删、terminal_recovery 可替换，就可以开始 Phase 0/1。
 ```
+
+---
+
+## 2026-05-26 执行状态更新
+
+本轮按 `docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md` 的实物测试主链路继续做减法。
+
+已确认进入删除范围：
+
+```text
+terminal_recovery 几何接管分支
+heading_align 起点原地对齐分支
+settling / terminal residual 分支
+tracking_curvature_speed_cap reactive 限速分支
+```
+
+保留主线：
+
+```text
+TRACKING
+terminal_slowdown
+terminal_capture_stop
+TERMINAL_MPC_STOP
+v_des_rate_limit
+external_speed_profile_csv
+external_profile_execution_cap
+tracking feasibility guard
+infeasible fallback
+```
+
+说明：
+
+```text
+1. terminal_capture_stop/v_cap 已是 terminal 低速目标的唯一来源。
+2. terminal_capture_stop/goal_behind_x 替代旧 terminal_recovery/goal_behind_x。
+3. /terminal/recovery_latched topic 仅保留为历史分析脚本兼容输出，固定发布 0。
+4. 当前不再支持通过 launch 打开 terminal_recovery_enable、heading_align、settling 或 tracking_curvature_speed_cap。
+```
