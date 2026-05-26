@@ -23,7 +23,7 @@ XI_11 = 1.841
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", default=".tmp_red_group_compare_0424")
-    parser.add_argument("--config", default="src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml")
+    parser.add_argument("--config", default="src/scout_apps/control/scout_local_planner/config/mpc_params.yaml")
     parser.add_argument("--out-dir", default="docs/Claude/分析数据/0424_ferrari_fidelity_20260513")
     parser.add_argument("--max-gap-sec", type=float, default=0.15)
     parser.add_argument("--sign-eps-mm", type=float, default=0.05)

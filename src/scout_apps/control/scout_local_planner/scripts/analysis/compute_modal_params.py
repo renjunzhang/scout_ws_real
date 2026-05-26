@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""换容器 / 换液体后，重算晃动模态派生量并同步 oscrs_container.yaml。
+"""换容器 / 换液体后，重算晃动模态派生量。
 
 ==============================================================================
 背景
@@ -20,10 +20,7 @@ Scout 晃动模型（Ferrari 2026 RA-L）只需要 4 个一手物理量：
   ζ (Ferrari)  = 0.92·sqrt( ν/ρ/(g·R³) )
                 · [1 + 0.318/sinh(ξh/R) · (1 + (1−h/R)/cosh(ξh/R))]   ← Ferrari 式(3)
 
-oscrs_container.yaml 中以下字段是这些派生量的"硬写值"，必须保持与 R/h 一致：
-  slosh_score.omega_n      ← 必须 = ω_n
-  slosh_score.height_coeff ← 必须 = height_coeff (observer)
-
+`mpc_params.yaml` 中的 `slosh.*` 字段是一手物理量来源。
 ζ 在 yaml 中的 slosh.damping_ratio 默认是 observer 拟合值（不是 Ferrari 物理值），
 因为容器黏性壁面 / 表面张力等效应不在 Ferrari 半经验公式里。本脚本只把
 Ferrari 物理 ζ 打印出来供参考，**不会自动覆盖 damping_ratio**——除非用户加
@@ -35,7 +32,7 @@ Ferrari 物理 ζ 打印出来供参考，**不会自动覆盖 damping_ratio**�
 1. 显示当前 yaml 里的派生量是否与物理一致（不写文件）：
 
      python3 compute_modal_params.py \
-         --yaml src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml
+         --yaml src/scout_apps/control/scout_local_planner/config/mpc_params.yaml
 
    输出会列出 ω_n / height_coeff 的"yaml 现值 vs 物理值"，差异 > 1e-6 会标 ⚠。
 
@@ -43,20 +40,16 @@ Ferrari 物理 ζ 打印出来供参考，**不会自动覆盖 damping_ratio**�
 
      python3 compute_modal_params.py --R 0.025 --h 0.07 --rho 900 --nu 5.0e-2
 
-3. 改 yaml 里的容器物理量（手工改 R/h/ρ/ν），然后让本脚本同步派生量：
+3. 改 yaml 里的容器物理量（手工改 R/h/ρ/ν），然后打印派生量：
 
      # 先手工编辑 yaml: slosh.container_radius / liquid_height / liquid_density
      #                  / liquid_dynamic_viscosity
      python3 compute_modal_params.py \
-         --yaml src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml \
-         --write
-
-   会就地修改 slosh_score.omega_n 与 slosh_score.height_coeff 两行，
-   注释 / 缩进 / 行尾备注全部保留。
+         --yaml src/scout_apps/control/scout_local_planner/config/mpc_params.yaml
 
 4. 强制把 Ferrari 物理 ζ 也写入 slosh.damping_ratio（一般不建议，仅作 ablation）：
 
-     python3 compute_modal_params.py --yaml ...oscrs_container.yaml \
+     python3 compute_modal_params.py --yaml ...mpc_params.yaml \
          --write --write-zeta-ferrari
 
 5. 把派生量另存为 yaml 块（不动原文件）方便手工 review：
@@ -67,8 +60,8 @@ Ferrari 物理 ζ 打印出来供参考，**不会自动覆盖 damping_ratio**�
 注意
 ==============================================================================
 本脚本只算"由物理量推导"的派生项；下面这些参数它不管，要换容器仍要单独评估：
-  - oscrs.eta_lim_mm        任务级安全门，按容器自由空间 60-80% 选
-  - oscrs.height_coeff_mode / damping_ratio_mode  方案选项，不是物理量
+  - slosh_height_ref / eta_lim 类实验阈值，按容器自由空间和视觉标定选
+  - height_coeff_mode / damping_ratio_mode  方案选项，不是物理量
   - slosh.offset_x / offset_y                     CAD / 机身测量
 """
 
@@ -120,7 +113,7 @@ def compute(R, h, rho, nu, xi=XI_11):
 
 
 def read_yaml_inputs(yaml_path):
-    """从 oscrs_container.yaml 读 R/h/ρ/ν + 当前 yaml 写死的 ω_n / height_coeff / ζ。"""
+    """从 mpc_params.yaml 风格配置读 R/h/ρ/ν + 当前 yaml 写死的 ζ。"""
     with open(yaml_path, "r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle) or {}
     slosh = data.get("slosh", {}) or {}
@@ -223,13 +216,13 @@ def emit_yaml(out_path, derived):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="重算 Scout 晃动模态派生量并同步 oscrs_container.yaml"
+        description="重算 Scout 晃动模态派生量"
     )
     parser.add_argument("--R", type=float, default=None, help="容器内半径 (m)")
     parser.add_argument("--h", type=float, default=None, help="静止液面高度 (m)")
     parser.add_argument("--rho", type=float, default=None, help="液体密度 (kg/m³)")
     parser.add_argument("--nu", type=float, default=None, help="动力黏度 (Pa·s)")
-    parser.add_argument("--yaml", default="", help="oscrs_container.yaml 路径；提供时默认从其读取 R/h/ρ/ν")
+    parser.add_argument("--yaml", default="", help="mpc_params.yaml 路径；提供时默认从其读取 R/h/ρ/ν")
     parser.add_argument("--write", action="store_true",
                         help="把 ω_n / height_coeff 写回 --yaml 指定的文件（in-place，保留注释）")
     parser.add_argument("--write-zeta-ferrari", action="store_true",

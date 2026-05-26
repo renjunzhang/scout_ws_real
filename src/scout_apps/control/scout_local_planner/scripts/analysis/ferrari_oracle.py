@@ -4,9 +4,9 @@
 
 Solves the assigned-path time-optimal problem (§III-A of Ferrari et al.)
 adapted to Scout: heading is tied to the path tangent, so the only decision
-variable is the motion law s(t). The slosh ODE is identical to the online
-OSCRS rollout: linear MSD with mode 1 frequency omega_n and damping zeta,
-plus a centripetal parabola term in container-frame ax/ay.
+variable is the motion law s(t). The slosh ODE follows the same linear MSD
+model as the online MPC slosh observer: mode 1 frequency omega_n and damping
+zeta, plus a centripetal parabola term in container-frame ax/ay.
 
 Status: SKELETON. The CasADi/IPOPT formulation builds and runs on simple
 toy paths but has not been validated against sim/real bags. Convergence on
@@ -38,7 +38,7 @@ def parse_args():
     parser.add_argument("--config",
                         default="src/scout_apps/control/scout_local_planner/config/ferrari_oracle.yaml")
     parser.add_argument("--container",
-                        default="src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml")
+                        default="src/scout_apps/control/scout_local_planner/config/mpc_params.yaml")
     parser.add_argument("--scenario", default="open_user_goal")
     parser.add_argument("--path-topic", default="/scout/global_path",
                         help="Path topic to extract when path_input is a rosbag")

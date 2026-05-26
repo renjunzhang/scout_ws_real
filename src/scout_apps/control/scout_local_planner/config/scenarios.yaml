@@ -1,4 +1,4 @@
-# RA-L 投稿方案 D6：4 个开放场景，用于 OSCRS 验证。
+# 历史开放场景清单。当前 SloshPriorityMPC 主线优先使用固定 P2_s_curve 路径。
 #
 # 状态（2026-05-08）：run_sim_fixed_path_bag.sh 已支持 SCENARIO=<name> 读本文件，
 # 用于开放场景 global-goal 仿真。脚本只消费 goal 并把 PATH_MODE 切到 global_goal；
@@ -50,5 +50,5 @@ scenarios:
     expected_path_length_m: ~6.5
     notes: collision gate 与 slosh gate 同时生效，测试两层硬门是否互不干扰
 
-# RA-L D6 录包矩阵：4 场景 × 3 条件 (RAW / GEOREF_TUNED / GEOREF_OSCRS_ACTIVE)
+# 历史录包矩阵保留为场地记录；不再作为当前主线对比方案。
 # × 5 包 = 60 包仿真 + 60 包实物。硬件时间紧时实物可压到 4×3×3 = 36 包。

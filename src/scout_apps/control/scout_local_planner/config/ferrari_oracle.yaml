@@ -3,7 +3,7 @@
 # 求解 §III-A 的"指定路径时间最优"问题，对 Scout 的简化：
 #   - 航向锁定为路径切线（无 a_x 横向自由度）
 #   - 唯一决策变量是运动律 s(t)
-# 模态晃动模型与阻尼比与在线 OSCRS rollout 完全同口径（见 oscrs_container.yaml）。
+# 模态晃动模型与阻尼比与在线 MPC slosh observer 保持同口径（见 mpc_params.yaml）。
 
 oracle:
   solver: ipopt
@@ -28,7 +28,7 @@ oracle:
                                # Lagrange polynomial collocation 时该字段才生效。
     # B1 修复：把每个 segment 的 slosh ODE 拆成 K 个子步，使 ω_n·dt_sub << 1
     # （半隐式 Euler 稳定边界）。当 ω_n ≈ 31.25 rad/s、dt_max=0.5s 时 K=10
-    # 保证 dt_sub ≤ 0.05s，与在线 OSCRS rollout 同步长。
+    # 保证 dt_sub ≤ 0.05s，与在线 MPC slosh rollout 同步长。
     slosh_substeps: 10
 
   # ============================================================
@@ -43,7 +43,7 @@ oracle:
     omega_max: 1.5             # 差速底盘 yaw rate 上限 (rad/s)
 
   # ============================================================
-  # OSCRS 兼容硬约束（Tier 1：与 oscrs_container.yaml 必须同步）
+  # 晃动高度硬约束（Tier 1：与实验评价阈值必须同步）
   # ============================================================
   constraints:
     eta_lim_mm: 25.0           # η 上限 (mm)；与 oscrs.eta_lim_mm 必须一致

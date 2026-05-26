@@ -12,7 +12,7 @@
 #
 # 完整 MPC 启动模板:
 #   roslaunch scout_local_planner slosh_experiment.launch \
-#     global_path_topic:=/scout/global_path_anti_slosh \
+#     global_path_topic:=/scout/global_path_fixed \
 #     Q_slosh:=0 ... (其他参数)
 #
 # 说明：
@@ -62,9 +62,8 @@
 #   - 参考速度链路：/reference/v_des_raw, /reference/v_des_target,
 #                /reference/v_des_eff, /reference/v_des_rate_limited,
 #                /reference/v_ref_horizon, /reference/implied_ax
-#   - 目标/路径：/scout/goal, /scout/current_goal, /scout/global_path, /local_path
-#                /scout/global_path_anti_slosh
-#                /anti_slosh_path/metrics, /anti_slosh_path/candidate_report
+#   - 目标/路径：/scout/goal, /scout/current_goal, /scout/global_path,
+#                /scout/global_path_fixed, /local_path
 #   - 避障实现/接口核查：
 #                /scan_front
 #                /map, /map_updates
@@ -233,9 +232,6 @@ TOPICS=(
     /slosh/h_visual
     /slosh/h_visual_quality
 
-    # RA-L §4.1 SAFETY_ALARM topic (post-processor 在 hard gate 全失败时一次性发布)
-    /anti_slosh_path/safety_alarm
-
     # IMU 原始输入
     /imu/data
     /wit/mag
@@ -270,16 +266,8 @@ TOPICS=(
     /scout/goal
     /scout/current_goal
     /scout/global_path
-    /scout/global_path_anti_slosh
     /scout/global_path_fixed
     /scout/global_path_smooth
-    /anti_slosh_path/metrics
-    /anti_slosh_path/candidate_report
-    /anti_slosh_path/debug/original
-    /anti_slosh_path/debug/mild
-    /anti_slosh_path/debug/medium
-    /anti_slosh_path/debug/mid
-    /anti_slosh_path/debug/strong
     /mpc/reference_path
     /reference/v_des_raw
     /reference/v_des_target

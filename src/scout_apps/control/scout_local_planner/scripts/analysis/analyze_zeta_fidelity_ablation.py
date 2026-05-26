@@ -35,7 +35,7 @@ def parse_args():
     parser.add_argument("--bag-dir", required=True)
     parser.add_argument("--glob", default="*.bag")
     parser.add_argument("--red-infer-dir", required=True)
-    parser.add_argument("--config", default="src/scout_apps/control/scout_local_planner/config/oscrs_container.yaml")
+    parser.add_argument("--config", default="src/scout_apps/control/scout_local_planner/config/mpc_params.yaml")
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--terminal-exclusion-s", type=float, default=1.0)
     parser.add_argument("--pair-max-gap-s", type=float, default=0.15)
