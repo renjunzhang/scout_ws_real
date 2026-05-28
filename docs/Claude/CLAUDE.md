@@ -80,6 +80,26 @@ $$
 | 指标 | $$\eta_{\lim}$$ |
 ```
 
+## 6. 项目红线
+
+改代码前过一遍，不确定就问。
+
+**不能动的：**
+- `/mpc/cost_breakdown` 21 字段 layout（analysis 脚本 + RGB 流程依赖）
+- `/slosh/*` `/terminal/*` `/reference/*` `/profile_cap/*` topic 名
+- `slosh_experiment*.launch` 的 arg 名（验证方案 20+ 处命令引用）
+- terminal d200 参数（改了要重跑 terminal smoke）
+
+**改完必须过的：**
+- `catkin_make --pkg scout_local_planner`
+- `bash scripts/run_s_curve_smoke_test.sh` 能停 goal
+- 记录到 `docs/Claude/修改日志-时间/<日期>.md`
+
+**关键文档：**
+- 实验方案：`docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md`
+- RGB 流程：`docs/重要文档/红色液体视觉验证固定流程.md`
+- 仿真笔记：`docs/重要文档/仿真笔记.md`
+
 ---
 
 **如果这些准则有效，表现应该是：**diff 中不必要的修改更少，因过度复杂导致的重写更少，澄清问题会发生在实现之前，而不是出错之后。
