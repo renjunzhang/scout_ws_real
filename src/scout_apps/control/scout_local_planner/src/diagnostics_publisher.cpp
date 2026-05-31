@@ -46,6 +46,12 @@ void publishInt(ros::Publisher& pub, int value) {
     pub.publish(msg);
 }
 
+void publishString(ros::Publisher& pub, const std::string& value) {
+    std_msgs::String msg;
+    msg.data = value;
+    pub.publish(msg);
+}
+
 double absP95(std::vector<double> values) {
     values.erase(
         std::remove_if(values.begin(), values.end(),
@@ -129,6 +135,57 @@ void DiagnosticsPublisher::advertise(ros::NodeHandle& nh) {
     ref_implied_ax_abs_p95_pub_ = nh.advertise<std_msgs::Float32>("reference/implied_ax_abs_p95", 1);
     ref_implied_ay_abs_p95_pub_ = nh.advertise<std_msgs::Float32>("reference/implied_ay_abs_p95", 1);
     ref_implied_jerk_abs_p95_pub_ = nh.advertise<std_msgs::Float32>("reference/implied_jerk_abs_p95", 1);
+    diagnostics_experiment_group_pub_ =
+        nh.advertise<std_msgs::String>("diagnostics/experiment_group", 1, true);
+    diagnostics_controller_variant_pub_ =
+        nh.advertise<std_msgs::String>("diagnostics/controller_variant", 1, true);
+    diagnostics_external_profile_mode_pub_ =
+        nh.advertise<std_msgs::String>("diagnostics/external_profile_mode", 1, true);
+    diagnostics_mpc_cost_variant_pub_ =
+        nh.advertise<std_msgs::String>("diagnostics/mpc_cost_variant", 1, true);
+    rpp_speed_reg_active_pub_ =
+        nh.advertise<std_msgs::Int32>("rpp_speed_reg/active", 1);
+    rpp_speed_reg_curvature_pub_ =
+        nh.advertise<std_msgs::Float32>("rpp_speed_reg/curvature", 1);
+    rpp_speed_reg_curvature_active_pub_ =
+        nh.advertise<std_msgs::Int32>("rpp_speed_reg/curvature_active", 1);
+    rpp_speed_reg_approach_active_pub_ =
+        nh.advertise<std_msgs::Int32>("rpp_speed_reg/approach_active", 1);
+    rpp_speed_reg_v_raw_pub_ =
+        nh.advertise<std_msgs::Float32>("rpp_speed_reg/v_raw", 1);
+    rpp_speed_reg_v_curvature_cap_pub_ =
+        nh.advertise<std_msgs::Float32>("rpp_speed_reg/v_curvature_cap", 1);
+    rpp_speed_reg_v_approach_cap_pub_ =
+        nh.advertise<std_msgs::Float32>("rpp_speed_reg/v_approach_cap", 1);
+    rpp_speed_reg_v_out_pub_ =
+        nh.advertise<std_msgs::Float32>("rpp_speed_reg/v_out", 1);
+}
+
+void DiagnosticsPublisher::publishExperimentIdentity(
+        const std::string& experiment_group,
+        const std::string& controller_variant,
+        const std::string& external_profile_mode) {
+    std::string cost_variant = "legacy";
+    if (experiment_group == "C") {
+        cost_variant = "nominal";
+    } else if (experiment_group == "D") {
+        cost_variant = "slosh_only";
+    } else if (experiment_group == "E") {
+        cost_variant = "smooth_only";
+    } else if (experiment_group == "F") {
+        cost_variant = "slosh_smooth";
+    } else if (experiment_group == "RPP_STYLE") {
+        cost_variant = "rpp_speed_reg";
+    } else if (experiment_group == "BIAGIOTTI" ||
+               experiment_group == "RUCKIG" ||
+               experiment_group == "TOPPRA") {
+        cost_variant = "external_profile";
+    }
+
+    publishString(diagnostics_experiment_group_pub_, experiment_group);
+    publishString(diagnostics_controller_variant_pub_, controller_variant);
+    publishString(diagnostics_external_profile_mode_pub_, external_profile_mode);
+    publishString(diagnostics_mpc_cost_variant_pub_, cost_variant);
 }
 
 void DiagnosticsPublisher::publishCostBreakdown(const DiagnosticsCostBreakdown& breakdown) {
@@ -407,6 +464,15 @@ void DiagnosticsPublisher::publishReferenceExecutionDebug(
     publishFloat(ref_implied_ax_abs_p95_pub_, absP95(ax_values));
     publishFloat(ref_implied_ay_abs_p95_pub_, absP95(ay_values));
     publishFloat(ref_implied_jerk_abs_p95_pub_, absP95(jerk_values));
+
+    publishInt(rpp_speed_reg_active_pub_, ref0.rpp_active);
+    publishFloat(rpp_speed_reg_curvature_pub_, ref0.kappa);
+    publishInt(rpp_speed_reg_curvature_active_pub_, ref0.rpp_curvature_active);
+    publishInt(rpp_speed_reg_approach_active_pub_, ref0.rpp_approach_active);
+    publishFloat(rpp_speed_reg_v_raw_pub_, ref0.rpp_v_raw);
+    publishFloat(rpp_speed_reg_v_curvature_cap_pub_, ref0.rpp_v_curvature_cap);
+    publishFloat(rpp_speed_reg_v_approach_cap_pub_, ref0.rpp_v_approach_cap);
+    publishFloat(rpp_speed_reg_v_out_pub_, ref0.rpp_v_out);
 }
 
 void DiagnosticsPublisher::publishSloshDebug(const SloshDebugData& data) {

@@ -14,6 +14,9 @@
 -->
 <launch>
   <!-- ======== 实验参数 ======== -->
+  <arg name="experiment_group" default="LEGACY" doc="正式对比实验组: LEGACY/C/D/E/F/RPP_STYLE/BIAGIOTTI/RUCKIG/TOPPRA；LEGACY 保持旧行为"/>
+  <arg name="controller_variant" default="mpc" doc="兼容调试字段: mpc/rpp_speed_reg；正式实验由 experiment_group 派生"/>
+  <arg name="external_profile_mode" default="none" doc="外部速度剖面模式: none/toppra/ruckig/biagiotti/custom_csv；正式实验由 experiment_group 派生"/>
   <arg name="Q_slosh" default="0.0"  doc="归一化晃动风险权重；第一轮建议扫 2/5/10"/>
   <arg name="slosh_height_ref" default="0.005" doc="归一化参考晃动高度 (m)，默认 5mm"/>
   <arg name="slosh_eta_dot_ratio" default="0.3" doc="eta_dot 等效位移项比例；非正数时使用手动 Q_slosh_eta_dot"/>
@@ -45,11 +48,16 @@
   <arg name="v_des_rate_limit_enable" default="true" doc="执行层参考速度变化率限制；用于治理纵向 ax 脉冲"/>
   <arg name="v_des_accel_limit" default="0.60" doc="v_des 上升变化率上限 (m/s^2)"/>
   <arg name="v_des_decel_limit" default="0.80" doc="v_des 下降变化率上限 (m/s^2)"/>
-  <arg name="external_speed_profile_csv" default="" doc="TOPPRA/Ruckig-style 外部 v_ref(s) CSV；空字符串保持内部速度剖面"/>
-  <arg name="external_profile_execution_cap_enable" default="false" doc="是否在发布 cmd_vel 前执行外部速度剖面 cap；仅用于 TOPPRA/Ruckig baseline"/>
+  <arg name="external_speed_profile_csv" default="" doc="TOPPRA/Ruckig/Biagiotti-style 外部 v_ref(s) CSV；external_profile_mode!=none 时必填"/>
+  <arg name="external_profile_execution_cap_enable" default="false" doc="兼容字段；external_profile_mode!=none 时 C++ 内部会强制启用执行层 cap"/>
   <arg name="external_profile_execution_accel_limit" default="0.0" doc="外部 profile 执行层加速度上限；0 表示使用 path/vehicle 默认"/>
   <arg name="external_profile_execution_decel_limit" default="0.0" doc="外部 profile 执行层减速度上限；0 表示使用 path/vehicle 默认"/>
   <arg name="external_profile_execution_jerk_limit" default="0.0" doc="外部 profile 执行层 jerk 上限；0 表示不限制 jerk"/>
+  <arg name="rpp_regulated_min_radius" default="0.50" doc="RPP-style 曲率限速触发半径 (m)"/>
+  <arg name="rpp_approach_dist" default="0.70" doc="RPP-style 终点 approach 速度缩放距离 (m)"/>
+  <arg name="rpp_min_approach_v" default="0.05" doc="RPP-style approach 最低线速度 (m/s)"/>
+  <arg name="rpp_replace_base_curvature_cap" default="true" doc="RPP-style 是否替代 PathHandler method 曲率限速层"/>
+  <arg name="max_lat_accel_safety" default="2.5" doc="所有方法共用的最终横向加速度安全 cap；0 表示关闭"/>
   <arg name="slosh_use_imu_lateral_accel" default="false" doc="是否使用 IMU 横向加速度替代 v*omega"/>
   <arg name="slosh_use_imu_yaw_rate" default="true" doc="当前默认安全配置：使用 IMU 角速度 z 替代 odom omega"/>
   <arg name="slosh_use_imu_alpha_z" default="false" doc="是否使用 IMU 角速度差分替代 alpha_z"/>
@@ -70,6 +78,9 @@
               command="load"/>
 
     <!-- 实验参数覆盖 (YAML 之后、节点 init 之前) -->
+    <param name="experiment_group" value="$(arg experiment_group)"/>
+    <param name="controller_variant" value="$(arg controller_variant)"/>
+    <param name="external_profile_mode" value="$(arg external_profile_mode)"/>
     <param name="verbose" value="$(arg verbose)"/>
     <param name="mpc/Q_slosh" value="$(arg Q_slosh)"/>
     <param name="mpc/slosh_height_ref" value="$(arg slosh_height_ref)"/>
@@ -106,6 +117,11 @@
     <param name="external_profile_execution_cap/accel_limit" value="$(arg external_profile_execution_accel_limit)"/>
     <param name="external_profile_execution_cap/decel_limit" value="$(arg external_profile_execution_decel_limit)"/>
     <param name="external_profile_execution_cap/jerk_limit" value="$(arg external_profile_execution_jerk_limit)"/>
+    <param name="rpp_speed_reg/regulated_min_radius" value="$(arg rpp_regulated_min_radius)"/>
+    <param name="rpp_speed_reg/approach_dist" value="$(arg rpp_approach_dist)"/>
+    <param name="rpp_speed_reg/min_approach_v" value="$(arg rpp_min_approach_v)"/>
+    <param name="rpp_speed_reg/replace_base_curvature_cap" value="$(arg rpp_replace_base_curvature_cap)"/>
+    <param name="path_handler/max_lat_accel_safety" value="$(arg max_lat_accel_safety)"/>
     <param name="slosh_estimator/use_imu_lateral_accel" value="$(arg slosh_use_imu_lateral_accel)"/>
     <param name="slosh_estimator/use_imu_yaw_rate" value="$(arg slosh_use_imu_yaw_rate)"/>
     <param name="slosh_estimator/use_imu_alpha_z" value="$(arg slosh_use_imu_alpha_z)"/>

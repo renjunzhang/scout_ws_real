@@ -7,9 +7,12 @@
 
 #pragma once
 
+#include "scout_local_planner/rpp_speed_regulator.h"
+
 #include <Eigen/Dense>
 #include <vector>
 #include <string>
+#include <limits>
 
 namespace scout_local_planner {
 
@@ -78,6 +81,15 @@ struct ReferencePoint {
     
     // 参考速度（只用于代价函数，不用于动力学！）
     double v_ref = 0.0;
+
+    // RPP-style 速度调节诊断；默认关闭，不影响普通 MPC / external profile。
+    int rpp_active = 0;
+    int rpp_curvature_active = 0;
+    int rpp_approach_active = 0;
+    double rpp_v_raw = std::numeric_limits<double>::quiet_NaN();
+    double rpp_v_curvature_cap = std::numeric_limits<double>::quiet_NaN();
+    double rpp_v_approach_cap = std::numeric_limits<double>::quiet_NaN();
+    double rpp_v_out = std::numeric_limits<double>::quiet_NaN();
 };
 
 //==============================================================================
@@ -224,6 +236,8 @@ struct PathHandlerParams {
     bool time_parameterize = false;   // 是否启用时间化速度规划 v(s)
     double speed_profile_ds = 0.05;   // 速度曲线采样间隔 (m)
     std::string external_speed_profile_csv = ""; // 外部 v_ref(s) CSV；空字符串保持内部速度剖面
+    RppSpeedRegulatorParams rpp_speed_regulator; // RPP-style reference speed regulator
+    double max_lat_accel_safety = 0.0; // 最终横向加速度安全 cap；0 表示关闭
     double max_tan_accel = 0.0;       // 最大切向加速度 (m/s^2)，<=0 表示不限制
     double max_tan_decel = 0.0;       // 最大切向减速度 (m/s^2)，<=0 表示不限制
     double goal_speed = 0.0;          // 末端期望速度 (m/s)

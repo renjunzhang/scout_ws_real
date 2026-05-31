@@ -1,6 +1,6 @@
 # scout_local_planner/scripts
 
-更新时间：2026-05-26
+更新时间：2026-05-30
 
 本目录当前服务 **SloshPriorityMPC 固定路径实物/仿真对比实验**。
 
@@ -14,11 +14,13 @@
   -> RGB / model / cost / terminal 分析
 ```
 
-完整 SOP：
+当前正式对比实验 SOP：
 
 ```text
-docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md
+docs/重要文档/20260527_SloshPriorityMPC正式对比实验验证方案.md
 ```
+
+`20260518_MPC终点收敛与固定路径验证方案.md` 只作为 terminal / fixed-path 基础流程的历史参考。
 
 ## 实物脚本
 
@@ -50,7 +52,7 @@ src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh 5 
 |---|---|
 | `template_fixed_path_generator.py` | 根据当前位姿和目标点生成模板路径，如 `s_curve`、`straight`、`mixed` |
 | `fixed_global_path_runner.py` | 固定路径 JSON capture/replay，发布 `/scout/global_path_fixed` |
-| `run_sim_fixed_path_bag.sh` | 仿真固定路径 trial + 自动录包；支持 internal / TOPPRA / Ruckig smoke |
+| `run_sim_fixed_path_bag.sh` | 仿真固定路径 trial + 自动录包；支持 internal / TOPPRA / Ruckig / Biagiotti smoke |
 | `launch_sim_nav_stack.sh` | 仿真导航栈启动入口 |
 | `launch_fixed_path_slosh_stack.sh` | 可选历史一键入口；当前实物 SOP 默认使用分终端手动流程 |
 
@@ -115,12 +117,38 @@ RUN_ID=ruckig01 \
 rosrun scout_local_planner run_sim_fixed_path_bag.sh
 ```
 
-## Retiming baseline
+Biagiotti-style smoke：
+
+```bash
+PATH_MODE=template_goal \
+PATH_ID=P2_s_curve \
+TEMPLATE_NAME=s_curve \
+CONDITION=CUSTOM \
+RETIME_METHOD=biagiotti \
+BIAGIOTTI_OMEGA_N=5.0 \
+BIAGIOTTI_DAMPING_RATIO=0.05 \
+RUN_ID=biagiotti01 \
+rosrun scout_local_planner run_sim_fixed_path_bag.sh
+```
+
+## External profile baseline
 
 | 脚本 | 当前用途 |
 |---|---|
 | `analysis/retime_toppra_style.py` | 生成 acceleration-limited `v_ref(s)` CSV |
 | `analysis/retime_ruckig_style.py` | 生成 jerk-limited `v_ref(s)` CSV；需要 Python `ruckig` 包 |
+| `analysis/shape_biagiotti.py` | 生成 Biagiotti/input-shaping-style slosh-aware `v_ref(s)` CSV |
+| `analysis/path_profile_utils.py` | TOPPRA/Ruckig/Biagiotti 共用的固定路径读取、插值、CSV、plot 工具 |
+
+定位：
+
+```text
+TOPPRA-style   = open-loop acceleration-limited retiming baseline
+Ruckig-style   = open-loop jerk-limited retiming baseline
+Biagiotti-style = open-loop slosh-aware reference-shaping baseline
+```
+
+这三类都只改变固定路径上的 `v_ref(s)`，不改变路径几何，不直接改 MPC cost。
 
 CSV 接口：
 
@@ -152,7 +180,7 @@ ROS Noetic 常见 Python 是 3.8；
 python3 -m pip install --user --only-binary=:all: 'ruckig==0.9.2'
 ```
 
-如果安装失败，不要用手写近似曲线冒充 Ruckig-style baseline；可以先跳过 Ruckig，只跑 TOPPRA-style / E / F。
+如果安装失败，不要用手写近似曲线冒充 Ruckig-style baseline；可以先跳过 Ruckig，只跑 C / D / E / F / RPP-style / Biagiotti / TOPPRA-style。
 
 ## 主线分析脚本
 

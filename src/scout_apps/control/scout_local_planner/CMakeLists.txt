@@ -39,6 +39,7 @@ include_directories(
 add_library(${PROJECT_NAME}
   src/cubic_spline.cpp
   src/cost_breakdown.cpp
+  src/rpp_speed_regulator.cpp
   src/path_handler.cpp
   src/diff_drive_model.cpp
   src/cost_function.cpp
@@ -78,6 +79,8 @@ catkin_install_python(PROGRAMS
   scripts/analysis/analyze_global_path_duplicates.py
   scripts/analysis/analyze_global_path_prefix_window.py
   scripts/analysis/analyze_tracking_infeasible.py
+  scripts/analysis/path_profile_utils.py
+  scripts/analysis/shape_biagiotti.py
   scripts/analysis/retime_ruckig_style.py
   scripts/analysis/retime_toppra_style.py
   scripts/analysis/sim_fixed_goal_tool.py

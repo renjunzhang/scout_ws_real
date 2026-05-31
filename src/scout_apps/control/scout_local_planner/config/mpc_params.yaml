@@ -84,7 +84,8 @@ path_handler:
   window_forward: 48                   # 样条窗口向前额外点数
   s_jump_threshold: 0.8               # 弧长跳变阈值 (m) - 增大以容忍定位抖动
   resample_spacing: 0.05              # 路径重采样间隔 (m)
-  max_lat_accel: 2.0                  # 最大横向加速度 (m/s^2)
+  max_lat_accel: 2.0                  # method 层曲率限速 a_lat_comfort (m/s^2)；RPP-style 会替换它
+  max_lat_accel_safety: 2.5           # safety 层横向加速度硬上限 (m/s^2)，0=关闭；所有 baseline 共用，RPP 不得绕过；应 >= max_lat_accel
   speed_profile_omega_max: 1.5        # 规划层角速度上限（与 vehicle/omega_max 一致）；显式配置避免自动桥接后难以排查
   speed_profile_alpha_max: 5.0        # 规划层角加速度上限（与 vehicle/alpha_max 一致）；显式配置避免桥接值隐式变化
   min_ref_speed: 0.0                  # 参考速度下限 (m/s)
@@ -97,6 +98,16 @@ path_handler:
   use_bspline_smoothing: false        # 关闭局部 B-spline 平滑（提高贴合度）
   bspline_samples_per_segment: 12      # 每段采样点数
   path_change_threshold: 0.3           # 路径相似性阈值 (m)，低于此值视为重复路径，跳过重置
+
+# =============================================================================
+# RPP-style 参考速度调节器（仅 experiment_group=RPP_STYLE / controller_variant=rpp_speed_reg 生效）
+# 非晃液感知 baseline，移植自 Nav2 RPP regulation_functions.hpp（只取曲率/approach 调速，非完整 controller）
+# =============================================================================
+rpp_speed_reg:
+  regulated_min_radius: 0.50          # 曲率半径阈值 (m)，r<阈值时 v 线性 taper
+  approach_dist: 0.70                 # 终点 approach 调速触发的剩余路径距离 (m)
+  min_approach_v: 0.05                # approach 段最低参考速度 (m/s)
+  replace_base_curvature_cap: true    # true=RPP 替换 PathHandler 的 method 层曲率 cap (max_lat_accel)；safety cap 仍生效
 
 # =============================================================================
 # 节点参数

@@ -13,6 +13,7 @@
 
 #include "scout_local_planner/types.h"
 #include "scout_local_planner/cubic_spline.h"
+#include "scout_local_planner/rpp_speed_regulator.h"
 
 #include <nav_msgs/Path.h>
 #include <geometry_msgs/PoseStamped.h>
@@ -219,6 +220,7 @@ private:
     
     // 局部样条
     CubicSpline2D local_spline_;
+    RppSpeedRegulator rpp_speed_regulator_;
     double current_s_ = 0.0;  // 当前在样条上的弧长位置
     int closest_idx_ = 0;     // 最近点索引
 

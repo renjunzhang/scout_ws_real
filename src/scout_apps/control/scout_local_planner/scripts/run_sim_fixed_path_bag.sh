@@ -50,9 +50,9 @@
 #   CUSTOM / NOM / FAS_* 等
 #     固定路径、内部 MPC cost 消融或历史 smoke 入口。
 #
-#   RETIME_METHOD=toppra / ruckig
+#   RETIME_METHOD=toppra / ruckig / biagiotti
 #     在 PATH_MODE=template_goal/replay 下为固定路径生成 external_speed_profile_csv，
-#     用于 TOPPRA-style / Ruckig-style baseline 仿真 smoke。
+#     用于 TOPPRA-style / Ruckig-style / Biagiotti-style baseline 仿真 smoke。
 #
 # 常用命令：固定 goal，MBF 全局规划，普通 MPC
 #   source /home/a/scout_ws/devel/setup.bash
@@ -186,7 +186,10 @@ TERMINAL_FACTOR_SLOSH_ETA="${TERMINAL_FACTOR_SLOSH_ETA:-0.0}"
 TERMINAL_FACTOR_SLOSH_ETA_DOT="${TERMINAL_FACTOR_SLOSH_ETA_DOT:-0.0}"
 VEHICLE_V_MAX="${VEHICLE_V_MAX:-}"
 
-RETIME_METHOD="${RETIME_METHOD:-none}"  # none / toppra / ruckig
+EXPERIMENT_GROUP="${EXPERIMENT_GROUP:-LEGACY}"
+CONTROLLER_VARIANT="${CONTROLLER_VARIANT:-mpc}"
+EXTERNAL_PROFILE_MODE="${EXTERNAL_PROFILE_MODE:-}"
+RETIME_METHOD="${RETIME_METHOD:-none}"  # none / toppra / ruckig / biagiotti
 EXTERNAL_SPEED_PROFILE_CSV="${EXTERNAL_SPEED_PROFILE_CSV:-}"
 RETIME_PROFILE_DIR="${RETIME_PROFILE_DIR:-${FIXED_PATH_DIR}/baseline_profiles}"
 RETIME_V_MAX="${RETIME_V_MAX:-0.80}"
@@ -195,6 +198,8 @@ RETIME_DECEL_MAX="${RETIME_DECEL_MAX:-0.80}"
 RETIME_J_MAX="${RETIME_J_MAX:-1.50}"
 RETIME_DS="${RETIME_DS:-0.02}"
 RETIME_DELTA_TIME="${RETIME_DELTA_TIME:-0.02}"
+BIAGIOTTI_OMEGA_N="${BIAGIOTTI_OMEGA_N:-5.0}"
+BIAGIOTTI_DAMPING_RATIO="${BIAGIOTTI_DAMPING_RATIO:-0.05}"
 EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE="${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE:-false}"
 EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT="${EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT:-${RETIME_A_MAX}}"
 EXTERNAL_PROFILE_EXECUTION_DECEL_LIMIT="${EXTERNAL_PROFILE_EXECUTION_DECEL_LIMIT:-${RETIME_DECEL_MAX}}"
@@ -336,13 +341,23 @@ if [[ "${PATH_MODE}" == "replay" && ! -f "${PATH_FILE}" ]]; then
 fi
 
 case "${RETIME_METHOD}" in
-    none|toppra|ruckig)
+    none|toppra|ruckig|biagiotti)
         ;;
     *)
-        echo "[run_sim_fixed_path_bag] ERROR: unsupported RETIME_METHOD='${RETIME_METHOD}' (use none, toppra, or ruckig)" >&2
+        echo "[run_sim_fixed_path_bag] ERROR: unsupported RETIME_METHOD='${RETIME_METHOD}' (use none, toppra, ruckig, or biagiotti)" >&2
         exit 2
         ;;
 esac
+
+if [[ -z "${EXTERNAL_PROFILE_MODE}" ]]; then
+    if [[ "${RETIME_METHOD}" != "none" ]]; then
+        EXTERNAL_PROFILE_MODE="${RETIME_METHOD}"
+    elif [[ -n "${EXTERNAL_SPEED_PROFILE_CSV}" ]]; then
+        EXTERNAL_PROFILE_MODE="custom_csv"
+    else
+        EXTERNAL_PROFILE_MODE="none"
+    fi
+fi
 
 if [[ "${RETIME_METHOD}" != "none" && "${PATH_MODE}" == "global_goal" ]]; then
     echo "[run_sim_fixed_path_bag] ERROR: RETIME_METHOD requires replay/template_goal with a fixed path JSON, not PATH_MODE=global_goal" >&2
@@ -476,6 +491,20 @@ prepare_external_speed_profile() {
                 --j-max "${RETIME_J_MAX}" \
                 --delta-time "${RETIME_DELTA_TIME}"
             ;;
+        biagiotti)
+            echo "[run_sim_fixed_path_bag] Generating Biagiotti-style shaped speed profile: ${EXTERNAL_SPEED_PROFILE_CSV}"
+            rosrun scout_local_planner shape_biagiotti.py \
+                --path-file "${PATH_FILE}" \
+                --out-csv "${EXTERNAL_SPEED_PROFILE_CSV}" \
+                --plot "${plot_path}" \
+                --omega-n "${BIAGIOTTI_OMEGA_N}" \
+                --damping-ratio "${BIAGIOTTI_DAMPING_RATIO}" \
+                --v-max "${RETIME_V_MAX}" \
+                --a-max "${RETIME_A_MAX}" \
+                --decel-max "${RETIME_DECEL_MAX}" \
+                --ds "${RETIME_DS}" \
+                --delta-time "${RETIME_DELTA_TIME}"
+            ;;
     esac
 }
 
@@ -526,6 +555,9 @@ PATH_FILE=${PATH_FILE}
 GLOBAL_PATH_TOPIC=${GLOBAL_PATH_TOPIC}
 PATH_SOURCE_OUTPUT_TOPIC=${PATH_SOURCE_OUTPUT_TOPIC}
 RETIME_METHOD=${RETIME_METHOD}
+EXPERIMENT_GROUP=${EXPERIMENT_GROUP}
+CONTROLLER_VARIANT=${CONTROLLER_VARIANT}
+EXTERNAL_PROFILE_MODE=${EXTERNAL_PROFILE_MODE}
 RETIME_PROFILE_DIR=${RETIME_PROFILE_DIR}
 RETIME_V_MAX=${RETIME_V_MAX}
 RETIME_A_MAX=${RETIME_A_MAX}
@@ -533,6 +565,8 @@ RETIME_DECEL_MAX=${RETIME_DECEL_MAX}
 RETIME_J_MAX=${RETIME_J_MAX}
 RETIME_DS=${RETIME_DS}
 RETIME_DELTA_TIME=${RETIME_DELTA_TIME}
+BIAGIOTTI_OMEGA_N=${BIAGIOTTI_OMEGA_N}
+BIAGIOTTI_DAMPING_RATIO=${BIAGIOTTI_DAMPING_RATIO}
 EXTERNAL_SPEED_PROFILE_CSV=${EXTERNAL_SPEED_PROFILE_CSV}
 EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}
 EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT=${EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT}
@@ -567,7 +601,7 @@ EOF
 
 publish_config_summary() {
     local summary
-    summary="bag=${BAG_NAME}; condition=${CONDITION}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; path_source_output_topic=${PATH_SOURCE_OUTPUT_TOPIC}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; vehicle_v_max=${VEHICLE_V_MAX}; retime=${RETIME_METHOD}; external_speed_csv=${EXTERNAL_SPEED_PROFILE_CSV}; external_profile_cap=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
+    summary="bag=${BAG_NAME}; condition=${CONDITION}; group=${EXPERIMENT_GROUP}; controller_variant=${CONTROLLER_VARIANT}; external_profile_mode=${EXTERNAL_PROFILE_MODE}; path=${PATH_ID}; run=${RUN_ID}; path_mode=${PATH_MODE}; global_path_topic=${GLOBAL_PATH_TOPIC}; path_source_output_topic=${PATH_SOURCE_OUTPUT_TOPIC}; Q_slosh=${Q_SLOSH}; Q_eta_dot=${Q_SLOSH_ETA_DOT}; Q_v=${MPC_Q_V}; R_a=${MPC_R_A}; R_da=${MPC_R_DA}; lead=${MPC_CMD_VEL_LEAD_TIME}; terminal_eta=${TERMINAL_FACTOR_SLOSH_ETA}; terminal_eta_dot=${TERMINAL_FACTOR_SLOSH_ETA_DOT}; vehicle_v_max=${VEHICLE_V_MAX}; retime=${RETIME_METHOD}; external_speed_csv=${EXTERNAL_SPEED_PROFILE_CSV}; external_profile_cap=${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}"
     rostopic pub -l /experiment/config_summary std_msgs/String "data: '${summary}'" >/dev/null &
     local pid=$!
     pids+=("${pid}")
@@ -712,6 +746,14 @@ TOPICS=(
     /reference/implied_ax_abs_p95
     /reference/implied_ay_abs_p95
     /reference/implied_jerk_abs_p95
+    /rpp_speed_reg/active
+    /rpp_speed_reg/curvature
+    /rpp_speed_reg/curvature_active
+    /rpp_speed_reg/approach_active
+    /rpp_speed_reg/v_raw
+    /rpp_speed_reg/v_curvature_cap
+    /rpp_speed_reg/v_approach_cap
+    /rpp_speed_reg/v_out
     /slosh/state
     /slosh/eta_norm
     /slosh/eta_dot_norm
@@ -767,6 +809,9 @@ TEMPLATE_ARGS=(
 
 MPC_ARGS=(
     scout_local_planner slosh_experiment_sim.launch
+    experiment_group:="${EXPERIMENT_GROUP}"
+    controller_variant:="${CONTROLLER_VARIANT}"
+    external_profile_mode:="${EXTERNAL_PROFILE_MODE}"
     global_path_topic:="${GLOBAL_PATH_TOPIC}"
     Q_slosh:="${Q_SLOSH}"
     Q_slosh_eta_dot:="${Q_SLOSH_ETA_DOT}"
@@ -796,6 +841,9 @@ echo "============================================================"
 echo "  PATH_ID              = ${PATH_ID}"
 echo "  SCENARIO             = ${SCENARIO}"
 echo "  CONDITION            = ${CONDITION}"
+echo "  EXPERIMENT_GROUP     = ${EXPERIMENT_GROUP}"
+echo "  CONTROLLER_VARIANT   = ${CONTROLLER_VARIANT}"
+echo "  EXTERNAL_PROFILE_MODE= ${EXTERNAL_PROFILE_MODE}"
 echo "  RUN_ID               = ${RUN_ID}"
 echo "  PATH_MODE            = ${PATH_MODE}"
 echo "  TEMPLATE_NAME        = ${TEMPLATE_NAME}"

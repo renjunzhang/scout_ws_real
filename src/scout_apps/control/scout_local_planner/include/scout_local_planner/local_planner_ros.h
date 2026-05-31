@@ -61,7 +61,8 @@ private:
     void controlLoop(const ros::TimerEvent& event);
     
     // ====== 辅助函数 ======
-    void loadParameters(ros::NodeHandle& pnh);
+    bool loadParameters(ros::NodeHandle& pnh);
+    bool configureExperimentVariant(ProfileExecutionCapParams& profile_cap_params);
     void publishCmdVel(double v, double omega);
     void publishLocalPath(const std::vector<StateVector>& predicted_states,
                           const std::vector<ReferencePoint>& refs);
@@ -131,7 +132,12 @@ private:
     double last_v_des_raw_ = 0.0;
     double last_v_des_target_ = 0.0;
 
-    // 外部速度剖面执行层 cap 诊断（仅用于 TOPPRA/Ruckig-style baseline）
+    // 对比实验身份：LEGACY 保持旧启动行为；正式实验用 C/D/E/F/RPP_STYLE/BIAGIOTTI/RUCKIG/TOPPRA。
+    std::string experiment_group_ = "LEGACY";
+    std::string controller_variant_ = "mpc";
+    std::string external_profile_mode_ = "none";
+
+    // 外部速度剖面执行层 cap 诊断（用于 TOPPRA/Ruckig/Biagiotti-style baseline）
     int last_profile_cap_active_ = 0;
     double last_profile_cap_v_profile_ = std::numeric_limits<double>::quiet_NaN();
     double last_profile_cap_cmd_v_pre_ = std::numeric_limits<double>::quiet_NaN();

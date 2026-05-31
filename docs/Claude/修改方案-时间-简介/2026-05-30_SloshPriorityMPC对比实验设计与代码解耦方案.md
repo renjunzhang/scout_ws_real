@@ -164,7 +164,7 @@ TOPPRA/Ruckig 是"更不聪明"的台阶,放阶梯里廉价补足"开环单调�
 |---|---|---|
 | C / D / E / F | 同一 MPC + Q_slosh/R_a/R_da 切换 | 已有 |
 | RPP-style | 框架内 RppSpeedRegulator 模块 (§6) | 本方案新增 |
-| TOPPRA / Ruckig / Biagiotti | 离线生成 v_ref(s) CSV + external_profile_mode 注入 (§4.2) | TOPPRA/Ruckig 脚本已有; Biagiotti 待写 |
+| TOPPRA / Ruckig / Biagiotti | 离线生成 v_ref(s) CSV + external_profile_mode 注入 (§4.2) | TOPPRA/Ruckig/Biagiotti 脚本已有 |
 | TEB | 独立 nav_core plugin, P2P 跑 | 仓内已有, 零移植 |
 
 **结论**: 本方案 §4-§13 的代码改动覆盖 C/D/E/F/RPP-style/TOPPRA/Ruckig/Biagiotti 的全部需求,
@@ -285,21 +285,21 @@ experiment_group:
 注: BIAGIOTTI/RUCKIG/TOPPRA 是范式轴, Layer2 都是 C 的 ordinary MPC 跟踪器
 (controller_variant=mpc + Q_slosh=0 + C_default R), 仅 Layer1 整形剖面不同。
 
-**派生方式**: launch 只接受 `experiment_group:=<X>`, 内部 `LocalPlannerROS::loadParameters` 调
-`deriveParamsFromGroup(group)` 填充 `controller_variant_` + `external_profile_mode_` +
-默认的 `R_a / R_da`; Q_slosh 仍可被 yaml/launch 覆盖, 但**必须满足上表约束**, 否则 FATAL。
+**派生方式**: launch 正式入口必须显式设置 `experiment_group:=<X>`；内部
+`LocalPlannerROS::loadParameters` 根据 group 派生 `controller_variant_` +
+`external_profile_mode_`。`Q_slosh / R_a / R_da` 等数值参数仍由 yaml/launch 显式给出，
+但 `Q_slosh` 必须满足上表约束，否则 FATAL。
 
 **执行顺序(关键, 不可乱)**:
 
 ```text
-1. deriveParamsFromGroup(group): 只派生 categorical (controller_variant + external_profile_mode)
-   和"组默认" R_a/R_da; 此步不碰用户显式数值。
-2. 加载/覆盖数值参数: yaml/launch 显式给的 Q_slosh / R_a / R_da 覆盖组默认
-   (F-best 的工作点数值在此步生效, deriveParamsFromGroup 不得反向覆盖它)。
+1. 读取 yaml/launch 数值参数: `Q_slosh / R_a / R_da` 等工作点数值在此步生效。
+2. 根据 group 派生 categorical (controller_variant + external_profile_mode)。
+   不自动改写 `R_a / R_da`，避免覆盖 F-best sweep 或外部 baseline 的显式调参值。
 3. validate: 最后统一校验 (epsilon 判 Q_slosh)。
 ```
 
-即 deriveParamsFromGroup 只定"类别 + 兜底默认", 数值最终以用户显式值为准。
+即 group 只定"实验类别 + 互斥边界"；数值最终以 20260527 方案中的启动命令为准。
 
 **默认值与 LEGACY 语义(必须分清, 不要把三者混为一谈)**:
 
@@ -400,7 +400,7 @@ external_profile_mode:
   none        group ∈ {C, D, E, F, RPP_STYLE}
   ruckig      group == RUCKIG       (retime_ruckig_style.py 输出)
   toppra      group == TOPPRA       (retime_toppra_style.py 输出)
-  biagiotti   group == BIAGIOTTI    (shape_biagiotti.py 输出, 待写)
+  biagiotti   group == BIAGIOTTI    (shape_biagiotti.py 输出)
   custom_csv  legacy / 调试通道, 无对应 experiment_group
 ```
 
@@ -429,7 +429,7 @@ mode ∈ {ruckig, toppra, biagiotti, custom_csv}:
   csv 来源约定:
     ruckig    ← retime_ruckig_style.py
     toppra    ← retime_toppra_style.py
-    biagiotti ← shape_biagiotti.py (待写, 见 §9.2)
+    biagiotti ← shape_biagiotti.py (见 §9.2)
     custom_csv← 任意 v_ref(s) CSV (调试 / 历史兼容)
 ```
 
@@ -466,15 +466,21 @@ custom_csv:
 | TOPPRA | `mpc` | `toppra` | == 0 | accel-limited retiming (supplementary 阶梯) |
 | LEGACY | (任意) | (任意) | (任意) | 老 launch 路径, 不参与正式实验统计 |
 
-禁止组合 (validate FATAL):
+正式 group 的派生字段处理:
 
 ```text
-# group 与派生字段不匹配 (举例, 实现按"派生值 != 实际值"统一判)
+experiment_group != LEGACY 时:
+  controller_variant / external_profile_mode 以 group 派生值为准;
+  如果 launch 里误传了不同值, 启动期 ROS_WARN 并覆盖为派生值;
+  不把这类误传直接 FATAL, 避免实物命令里残留兼容字段导致整场启动失败。
+
+# group 与派生字段不匹配 (举例)
 experiment_group=C + controller_variant=rpp_speed_reg
 experiment_group=RPP_STYLE + external_profile_mode != none
 experiment_group=BIAGIOTTI + external_profile_mode != biagiotti
 experiment_group=TOPPRA + external_profile_mode != toppra
 experiment_group=RUCKIG + external_profile_mode != ruckig
+→ 上述由 group 派生覆盖并 ROS_WARN, 最终运行值必须回到派生表。
 
 # Q_slosh 与 group 约束冲突 (用 epsilon, 勿严格浮点相等)
 #   slosh-aware 判据: Q_slosh > 1e-9; non-slosh 判据: Q_slosh <= 1e-9
@@ -490,19 +496,20 @@ controller_variant=rpp_speed_reg + external_profile_mode != none
 
 ### 5.1 校验责任与执行点
 
-互斥规则在 `LocalPlannerROS::loadParameters` 末尾**统一校验**, 违反即 `ROS_FATAL` 启动失败,
-不依赖 launch 文件检查(launch 层无法做参数组合判断)。
+互斥规则在 `LocalPlannerROS::loadParameters` 末尾**统一派生与校验**:
+正式 group 先覆盖 categorical 字段, 再校验 Q_slosh/CSV/内部互斥。违反硬约束即 `ROS_FATAL`
+启动失败, 不依赖 launch 文件检查(launch 层无法做参数组合判断)。
 
-校验函数签名(实现层文档, 仅供方案引用, 本方案不写代码):
+校验函数签名:
 
 ```text
-bool LocalPlannerROS::validateExperimentVariant() const;
+bool LocalPlannerROS::configureExperimentVariant(ProfileExecutionCapParams& profile_cap_params);
 
 实现要点 (按以下顺序):
   Step 1: 若 experiment_group_ != LEGACY:
-            调 deriveParamsFromGroup(experiment_group_) -> (cv_derived, epm_derived)
-            校验 controller_variant_ == cv_derived; 不等 → FATAL
-            校验 external_profile_mode_ == epm_derived; 不等 → FATAL
+            调 deriveParamsFromGroup(experiment_group_) -> (cv_derived, epm_derived, Q_slosh 约束)
+            controller_variant_ 不等于 cv_derived → ROS_WARN 后覆盖
+            external_profile_mode_ 不等于 epm_derived → ROS_WARN 后覆盖
             校验 Q_slosh 满足 group 约束 (epsilon 判: <= 1e-9 或 > 1e-9); 不满足 → FATAL
   Step 2: 派生字段内部互斥校验 (LEGACY 路径也走):
             controller_variant=rpp_speed_reg + Q_slosh > 0 → FATAL
@@ -514,7 +521,7 @@ bool LocalPlannerROS::validateExperimentVariant() const;
             epm != none + external_speed_profile_csv_ 为空 → FATAL
   任一 FATAL → ROS_FATAL("[validate] <rule> violated, expected=X got=Y") 并返回 false
 
-initialize() 末尾必须调用; false 则启动失败, 不进 run()
+loadParameters() 内必须调用; false 则 initialize() 失败, 不进 run()
 
 校验时机:
   - loadParameters 全部读完之后(含 deriveParamsFromGroup 调用), advertise/subscribe 之前
@@ -554,7 +561,7 @@ mode ∈ {ruckig, toppra, biagiotti, custom_csv}:
   path_params_.external_speed_profile_csv = <param 中的 csv 路径>;
 ```
 
-这一步在 `LocalPlannerROS::loadParameters` 内 `validateExperimentVariant()` 之后、
+这一步在 `LocalPlannerROS::loadParameters` 内 `configureExperimentVariant()` 之后、
 `setParams` 之前完成, 是 Phase B 的关键解耦动作。
 
 向后兼容: 老 launch 文件可能仍直接传 `external_speed_profile_csv` 参数而**不传**
@@ -866,7 +873,7 @@ safety cap (硬横向加速度上限, a_lat_safety):
 2. ExperimentConfig (新)
    include/scout_local_planner/experiment_config.h
    src/experiment_config.cpp
-   - deriveParamsFromGroup / validateExperimentVariant 从 local_planner_ros 搬到这里。
+   - group 派生 / 互斥校验从 local_planner_ros 搬到这里。
    - 纯查表 + 校验逻辑, 不依赖 ROS node 句柄 (传入已读出的参数结构体, 返回派生结果 / 错误)。
    - local_planner_ros 只负责: 读 ROS param → 调 ExperimentConfig::derive/validate → 用结果。
    - 收益: god class 减负; 派生/互斥规则可脱离 ROS 单测 (输入组合 → 期望派生/FATAL)。
@@ -1076,7 +1083,7 @@ include/scout_local_planner/local_planner_ros.h      ★ experiment_group_ 字�
 include/scout_local_planner/path_handler.h           ★ §7 step 2 加 replace_base_curvature_cap 开关
                                                        + step 4 调 RppSpeedRegulator
 include/scout_local_planner/diagnostics_publisher.h
-src/local_planner_ros.cpp                            ★ deriveParamsFromGroup + validateExperimentVariant
+src/local_planner_ros.cpp                            ★ configureExperimentVariant
                                                        + §5.2 CSV 透传
 src/path_handler.cpp                                 ★ §7 step 2 跳过 / step 4 接入 RppSpeedRegulator
 src/diagnostics_publisher.cpp                        ★ §8 /rpp_speed_reg/* 6 个 topic
@@ -1241,9 +1248,9 @@ RETIME_METHOD=ruckig 跑一次 sim smoke    # 验证 Ruckig 仍能跑(import 链
 
 ```text
 1. launch 加 experiment_group (default LEGACY) arg, 内部派生 controller_variant +
-   external_profile_mode (§4.0 派生表)。老 launch 仍可直接传后两者, 走 LEGACY 路径并 WARN。
+   external_profile_mode (§4.0 派生表)。老 launch 仍可直接传后两者, 走 LEGACY 路径。
 2. yaml / loadParameters 实现 deriveParamsFromGroup() + §5.2 CSV 透传清空逻辑
-3. 实现 LocalPlannerROS::validateExperimentVariant (§5.1 三步校验)
+3. 实现 LocalPlannerROS::configureExperimentVariant (§5.1 三步派生与校验)
 4. 保持默认 (group=LEGACY + mpc + none) 行为与当前回归一致 (按下方 4 层验收门,
    不要求 bag 级 byte-equal)
 5. RppSpeedRegulator 模块还没实现, validate 阶段直接拒绝 experiment_group=RPP_STYLE
@@ -1266,7 +1273,8 @@ RETIME_METHOD=ruckig 跑一次 sim smoke    # 验证 Ruckig 仍能跑(import 链
 ```text
 1. 单元层 (强): Phase B 只测参数派生 + 互斥校验 + CSV 清空/透传
    - deriveParamsFromGroup 对每个 group 派生出正确的 (controller_variant, external_profile_mode)
-   - validate 对每条禁止组合都 FATAL (epsilon 判 Q_slosh), 对每条合法组合放行
+   - group 误传 categorical 字段时 WARN 覆盖
+   - Q_slosh/CSV/内部互斥硬约束违反时 FATAL, 合法组合放行
    - mode=none 时 path_params_.external_speed_profile_csv 被清空; mode!=none 时被透传
    RppSpeedRegulator::regulate 纯函数单测属 Phase C (此阶段模块未实现), 不在 Phase B 验收门。
 
@@ -1313,7 +1321,7 @@ scripts/analysis/diff_two_bags.py
    step 2 加 replace_base_curvature_cap 开关 (§7 + §6.1, default true)
 3. 只在 controller_variant=rpp_speed_reg (即 experiment_group=RPP_STYLE) 时启用
 4. 新增 /rpp_speed_reg/* 诊断 topic (§8)
-5. validateExperimentVariant 放开 RPP_STYLE / rpp_speed_reg
+5. `configureExperimentVariant()` 放开 RPP_STYLE / rpp_speed_reg
 ```
 
 验证(包含 hard assertions, smoke 不通过即 Phase C fail):
@@ -1396,7 +1404,7 @@ supplementary smoke:
    把 getReferencePoints 内 step1..6 + RPP/safety/external 改写成有序 cap stage 列表;
    getReferencePoints 退化为"准备几何上下文 → pipeline.apply → 写 ref_points"。
 2. 抽 ExperimentConfig (§6.4 产物2):
-   deriveParamsFromGroup / validateExperimentVariant 从 local_planner_ros 搬出, 脱 ROS 单测。
+   group 派生 / 互斥校验从 local_planner_ros 搬出, 脱 ROS 单测。
 3. safety cap 升为 pipeline 终端 stage (结构性保证恒在最后), 不再是 step4b 内联。
 4. 不新增任何 baseline、不改任何 topic/字段/launch arg、不改 d200 参数。
 ```
@@ -1406,7 +1414,7 @@ supplementary smoke:
 ```text
 1. 单元层 (强):
    - SpeedReferencePipeline: 每个 stage 纯函数单测 (含 safety 终端恒执行);
-   - ExperimentConfig: 8 个 group + LEGACY 的派生/互斥脱 ROS 单测 (输入组合 → 期望派生/FATAL)。
+   - ExperimentConfig: 8 个 group + LEGACY 的派生/互斥脱 ROS 单测 (输入组合 → 期望派生/WARN/FATAL)。
 2. 回归层 (强): 重构前后, 同一批 Phase F 配置 (C/E/F/RPP-style/Biagiotti/Ruckig/TOPPRA)
    各重放 1 次, 按 §10 Phase B 的"4 层验收门"对比重构前 bag:
    - 行为层 verdict 一致;
@@ -1486,10 +1494,10 @@ external_profile_mode∈{ruckig,toppra,biagiotti,custom_csv} 时, csv 必须非�
    即 yaml 原样 Q_slosh=0 的非晃液感知 MPC (今天默认本就不是 SloshPriorityMPC, 见 §4.0);
    LEGACY ≠ C ≠ F: C 是显式 ordinary MPC baseline, F 是显式 SloshPriorityMPC (ours),
    三者语义/bag 前缀/analysis 分组都分开 (§4.0 默认值与 LEGACY 语义);
-2. 正式实验只靠 launch 设 experiment_group=C/D/E/F/RPP_STYLE/BIAGIOTTI/RUCKIG/TOPPRA 切换;
-   Q_slosh/R_a/R_da 仍是 yaml/launch 可调数值, 但被 group 约束 (违反即 FATAL);
-3. 任意非法组合 (group 与派生字段不匹配 / Q_slosh 违反约束) 均在 validateExperimentVariant
-   阶段 ROS_FATAL 启动失败, 不进 controlLoop;
+2. 正式实验必须在 launch 命令中显式设置 experiment_group=C/D/E/F/RPP_STYLE/BIAGIOTTI/RUCKIG/TOPPRA;
+   Q_slosh/R_a/R_da 仍按 20260527 SOP 显式传入, 其中 Q_slosh 被 group 约束 (违反即 FATAL);
+3. 正式 group 与派生字段不匹配时 WARN 并覆盖; Q_slosh/CSV/内部互斥硬约束违反时
+   configureExperimentVariant 阶段 ROS_FATAL 启动失败, 不进 controlLoop;
 4. experiment_group=RPP_STYLE 在 P2 S 弯 sim smoke 必须通过 Phase C 的 4 条 hard assertion
    (RPP active + 弯心 curvature_active + approach 段线性下降 + 与 C 组速度差异 >= 0.05 m/s);
 5. TOPPRA/Ruckig/Biagiotti 经各自 external_profile_mode 注入, 共用 C 的同一跟踪器 (范式轴公平);

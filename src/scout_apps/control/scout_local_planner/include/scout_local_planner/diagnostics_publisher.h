@@ -70,6 +70,9 @@ public:
     void publishReferenceExecutionDebug(const std::vector<ReferencePoint>& refs,
                                         double dt);
     void publishSloshDebug(const SloshDebugData& data);
+    void publishExperimentIdentity(const std::string& experiment_group,
+                                   const std::string& controller_variant,
+                                   const std::string& external_profile_mode);
 
 private:
     ros::Publisher slosh_state_pub_;
@@ -127,6 +130,18 @@ private:
     ros::Publisher ref_implied_ax_abs_p95_pub_;
     ros::Publisher ref_implied_ay_abs_p95_pub_;
     ros::Publisher ref_implied_jerk_abs_p95_pub_;
+    ros::Publisher diagnostics_experiment_group_pub_;
+    ros::Publisher diagnostics_controller_variant_pub_;
+    ros::Publisher diagnostics_external_profile_mode_pub_;
+    ros::Publisher diagnostics_mpc_cost_variant_pub_;
+    ros::Publisher rpp_speed_reg_active_pub_;
+    ros::Publisher rpp_speed_reg_curvature_pub_;
+    ros::Publisher rpp_speed_reg_curvature_active_pub_;
+    ros::Publisher rpp_speed_reg_approach_active_pub_;
+    ros::Publisher rpp_speed_reg_v_raw_pub_;
+    ros::Publisher rpp_speed_reg_v_curvature_cap_pub_;
+    ros::Publisher rpp_speed_reg_v_approach_cap_pub_;
+    ros::Publisher rpp_speed_reg_v_out_pub_;
 };
 
 }  // namespace scout_local_planner

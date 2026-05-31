@@ -127,6 +127,18 @@ SLOSH_RECORD_ALL="${SLOSH_RECORD_ALL:-true}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null || pwd)"
 
+read_rosparam_or_default() {
+    local name="$1"
+    local default="$2"
+    rosparam get "${name}" 2>/dev/null || echo "${default}"
+}
+
+EXPERIMENT_GROUP="${EXPERIMENT_GROUP:-$(read_rosparam_or_default /scout_local_planner/experiment_group LEGACY)}"
+CONTROLLER_VARIANT="${CONTROLLER_VARIANT:-$(read_rosparam_or_default /scout_local_planner/controller_variant mpc)}"
+EXTERNAL_PROFILE_MODE="${EXTERNAL_PROFILE_MODE:-$(read_rosparam_or_default /scout_local_planner/external_profile_mode none)}"
+MPC_R_A_META="${MPC_R_A_META:-$(read_rosparam_or_default /scout_local_planner/mpc/R_a unknown)}"
+MPC_R_DA_META="${MPC_R_DA_META:-$(read_rosparam_or_default /scout_local_planner/mpc/R_da unknown)}"
+
 # 目录
 if [[ -n "${SLOSH_BAG_DIR:-}" ]]; then
     BAG_DIR="${SLOSH_BAG_DIR}"
@@ -145,8 +157,13 @@ else
 fi
 mkdir -p "${BAG_DIR}"
 
-# 文件名
-if [[ -n "${SUFFIX}" ]]; then
+# 文件名。LEGACY 保持旧命名；正式 group 使用统一前缀，便于 analysis 分组。
+if [[ "${EXPERIMENT_GROUP}" != "LEGACY" ]]; then
+    BAG_NAME="slosh_${EXPERIMENT_GROUP}_qs${Q_SLOSH}_ra${MPC_R_A_META}_rda${MPC_R_DA_META}_${DATE_STR}"
+    if [[ -n "${SUFFIX}" ]]; then
+        BAG_NAME="${BAG_NAME}_${SUFFIX}"
+    fi
+elif [[ -n "${SUFFIX}" ]]; then
     BAG_NAME="slosh_Q${Q_SLOSH}_${DATE_STR}_${SUFFIX}"
 else
     BAG_NAME="slosh_Q${Q_SLOSH}_${DATE_STR}"
@@ -232,6 +249,10 @@ TOPICS=(
     /mpc/cost_breakdown
     /mpc/slosh_horizon_summary
     /mpc_status
+    /diagnostics/experiment_group
+    /diagnostics/controller_variant
+    /diagnostics/external_profile_mode
+    /diagnostics/mpc_cost_variant
 
     # 控制与状态
     /cmd_vel
@@ -271,6 +292,14 @@ TOPICS=(
     /reference/implied_ax_abs_p95
     /reference/implied_ay_abs_p95
     /reference/implied_jerk_abs_p95
+    /rpp_speed_reg/active
+    /rpp_speed_reg/curvature
+    /rpp_speed_reg/curvature_active
+    /rpp_speed_reg/approach_active
+    /rpp_speed_reg/v_raw
+    /rpp_speed_reg/v_curvature_cap
+    /rpp_speed_reg/v_approach_cap
+    /rpp_speed_reg/v_out
     /local_path
     /scout/mbf_costmap_nav/GlobalPlanner/plan
     /scout/mbf_costmap_nav/GlobalPlanner/potential
@@ -334,6 +363,9 @@ echo "============================================"
 echo "  液体晃动抑制实验录制"
 echo "============================================"
 echo "  Q_slosh  = ${Q_SLOSH}"
+echo "  group    = ${EXPERIMENT_GROUP}"
+echo "  variant  = ${CONTROLLER_VARIANT}"
+echo "  profile  = ${EXTERNAL_PROFILE_MODE}"
 echo "  mode     = ${SLOSH_BAG_MODE}"
 echo "  record_a = ${SLOSH_RECORD_ALL}"
 echo "  输出文件 = ${BAG_PATH}.bag"
@@ -354,6 +386,11 @@ NODE_PATH="${BAG_PATH}_nodes.txt"
     echo "host=$(hostname)"
     echo "pwd=$(pwd)"
     echo "q_slosh=${Q_SLOSH}"
+    echo "experiment_group=${EXPERIMENT_GROUP}"
+    echo "controller_variant=${CONTROLLER_VARIANT}"
+    echo "external_profile_mode=${EXTERNAL_PROFILE_MODE}"
+    echo "mpc_R_a=${MPC_R_A_META}"
+    echo "mpc_R_da=${MPC_R_DA_META}"
     echo "suffix=${SUFFIX}"
     echo "mode=${SLOSH_BAG_MODE}"
     echo "record_all=${SLOSH_RECORD_ALL}"

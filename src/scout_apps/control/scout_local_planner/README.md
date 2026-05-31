@@ -1,6 +1,6 @@
 # scout_local_planner
 
-更新时间：2026-05-26
+更新时间：2026-05-30
 
 本包当前维护一条主线：**SloshPriorityMPC 固定路径对比实验**。
 
@@ -9,18 +9,20 @@
 ```text
 固定 P2_s_curve 路径
   -> PathHandler 生成 reference horizon
-  -> 可选 external_speed_profile_csv 注入 TOPPRA/Ruckig-style v_ref(s)
+  -> 可选 external_speed_profile_csv 注入 TOPPRA/Ruckig/Biagiotti-style v_ref(s)
   -> 8 维增广 MPC tracking
   -> terminal envelope / profile execution cap / cmd_vel
   -> rosbag
   -> RGB 真值 + /slosh/height 模型辅助 + cost breakdown + terminal 诊断
 ```
 
-完整实物 SOP 以此文档为准：
+当前正式对比实验 SOP 以此文档为准：
 
 ```text
-docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md
+docs/重要文档/20260527_SloshPriorityMPC正式对比实验验证方案.md
 ```
+
+`20260518_MPC终点收敛与固定路径验证方案.md` 只作为 terminal / fixed-path 基础流程的历史参考。
 
 ## 当前实验对象
 
@@ -32,8 +34,10 @@ docs/重要文档/20260518_MPC终点收敛与固定路径验证方案.md
 | D | slosh modal cost only | 固定 | 内部 `v_ref(s)` |
 | E | non-slosh smooth MPC | 固定 | 内部 `v_ref(s)` |
 | F | SloshPriorityMPC | 固定 | 内部 `v_ref(s)` |
+| RPP-style | RPP 启发的非晃液 `v_ref` 速度调节 baseline | 固定 | 内部 `v_ref(s)` + regulator |
 | TOPPRA-style | 限加速度 retiming baseline | 固定 | 外部 CSV |
 | Ruckig-style | 限 jerk retiming baseline | 固定 | 外部 CSV |
+| Biagiotti-style | 开环 slosh-aware reference shaping baseline | 固定 | 外部 CSV |
 
 主效果窗口固定为：
 
@@ -57,7 +61,7 @@ terminal approach 只做工程诊断，不进入 slosh cost 主效果统计。
 | `src/slosh_integration.cpp` / `include/.../slosh_integration.h` | 运行时 slosh 二阶模型状态传播和 `/slosh/height` |
 | `src/slosh_feedback.cpp` / `include/.../slosh_feedback.h` | odom/IMU 到 `ax/ay/omega/alpha` 的反馈估计 |
 | `src/terminal_controller.cpp` / `include/.../terminal_controller.h` | terminal slowdown、capture、REACHED 判定、post-MPC 速度 clamp |
-| `src/profile_execution_cap.cpp` / `include/.../profile_execution_cap.h` | TOPPRA/Ruckig 外部速度剖面的执行层 hard cap |
+| `src/profile_execution_cap.cpp` / `include/.../profile_execution_cap.h` | TOPPRA/Ruckig/Biagiotti 外部速度剖面的执行层 hard cap |
 | `src/diagnostics_publisher.cpp` / `include/.../diagnostics_publisher.h` | `/slosh/*`、`/mpc/*`、`/reference/*`、`/terminal/*`、`/profile_cap/*` 发布 |
 
 ## MPC 状态和代价
@@ -94,7 +98,7 @@ tracking error
 fixed path -> curvature / acceleration constraints -> v_ref(s)
 ```
 
-外部 baseline 使用：
+外部 profile baseline 使用：
 
 ```text
 external_speed_profile_csv
@@ -183,7 +187,7 @@ src/scout_apps/control/scout_local_planner/scripts/record_slosh_experiment.sh <Q
 在线 path post-processor
 历史路径后处理策略验证
 risk scheduler
-input shaping / ISR
+历史 runtime input shaping / ISR
 speed governor
 旧内置低激励 profile
 terminal recovery 几何接管分支
@@ -197,6 +201,7 @@ heading_align / settling / tracking_curvature_speed_cap 旧分支
 - RGB 视觉液面是实物主指标。
 - `/slosh/height` 是模型辅助指标，不能自证真实防晃。
 - C/D/E/F 不改变路径几何，也不改变外部速度剖面。
-- TOPPRA/Ruckig-style 只改变同一固定路径上的 `v_ref(s)`。
+- TOPPRA/Ruckig/Biagiotti-style 只改变同一固定路径上的 `v_ref(s)`。
+- RPP-style 不完整复现 Nav2 RPP controller，只作为同 MPC 后端下的速度调节 baseline。
 - terminal 段只诊断停车平顺性，不进入主效果统计。
 - completion time 差异超过 10% 时，按 trade-off 解释。

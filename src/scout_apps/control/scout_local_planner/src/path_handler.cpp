@@ -811,7 +811,10 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
             }
             double v_ref = profile_v_ref;
             double v_curve_cap = v_exec_cap;
-            if (params_.max_lat_accel > 0.0) {
+            const bool rpp_replaces_curve_cap =
+                params_.rpp_speed_regulator.enable &&
+                params_.rpp_speed_regulator.replace_base_curvature_cap;
+            if (params_.max_lat_accel > 0.0 && !rpp_replaces_curve_cap) {
                 const double kappa_abs = std::abs(ref.kappa);
                 if (kappa_abs > 1e-4) {
                     v_curve_cap = std::min(v_curve_cap, std::sqrt(params_.max_lat_accel / kappa_abs));
@@ -849,6 +852,29 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
             v_ref = std::min(v_ref, v_curve_cap);
             v_ref = std::min(v_ref, v_plan_cap);
 
+            if (params_.rpp_speed_regulator.enable) {
+                const double rpp_v_raw = v_ref;
+                const double remain_s = std::max(0.0, total_len_global - s_progress);
+                const RppSpeedRegulatorOutput rpp_out =
+                    rpp_speed_regulator_.regulate(
+                        v_ref, ref.kappa, remain_s, params_.rpp_speed_regulator);
+                v_ref = rpp_out.v_out;
+                ref.rpp_active = 1;
+                ref.rpp_curvature_active = rpp_out.curvature_active ? 1 : 0;
+                ref.rpp_approach_active = rpp_out.approach_active ? 1 : 0;
+                ref.rpp_v_raw = rpp_v_raw;
+                ref.rpp_v_curvature_cap = rpp_out.v_curvature_cap;
+                ref.rpp_v_approach_cap = rpp_out.v_approach_cap;
+                ref.rpp_v_out = rpp_out.v_out;
+            }
+
+            if (params_.max_lat_accel_safety > 0.0) {
+                const double kappa_abs = std::abs(ref.kappa);
+                if (kappa_abs > 1e-4) {
+                    v_ref = std::min(v_ref, std::sqrt(params_.max_lat_accel_safety / kappa_abs));
+                }
+            }
+
             // 外部传入的 v_des 必须是硬上界。否则 goal_stop_pending_ 时即便上层将
             // v_des_cmd 压到 0，time-parameterized speed profile 仍可能把 v_ref 抬回正值，
             // 导致终点区继续前冲。
@@ -876,10 +902,34 @@ bool PathHandler::getReferencePoints(int N, double dt, double v_exec, double v_p
             ref.kappa = local_spline_.evaluateKappa(s_local);
 
             double v_ref = std::min(std::max(0.0, v_plan), std::max(0.0, v_exec));
-            if (params_.max_lat_accel > 0.0) {
+            const bool rpp_replaces_curve_cap =
+                params_.rpp_speed_regulator.enable &&
+                params_.rpp_speed_regulator.replace_base_curvature_cap;
+            if (params_.max_lat_accel > 0.0 && !rpp_replaces_curve_cap) {
                 double kappa_abs = std::abs(ref.kappa);
                 if (kappa_abs > 1e-4) {
                     v_ref = std::min(v_ref, std::sqrt(params_.max_lat_accel / kappa_abs));
+                }
+            }
+            if (params_.rpp_speed_regulator.enable) {
+                const double rpp_v_raw = v_ref;
+                const double remain_s = std::max(0.0, total_len - s_local);
+                const RppSpeedRegulatorOutput rpp_out =
+                    rpp_speed_regulator_.regulate(
+                        v_ref, ref.kappa, remain_s, params_.rpp_speed_regulator);
+                v_ref = rpp_out.v_out;
+                ref.rpp_active = 1;
+                ref.rpp_curvature_active = rpp_out.curvature_active ? 1 : 0;
+                ref.rpp_approach_active = rpp_out.approach_active ? 1 : 0;
+                ref.rpp_v_raw = rpp_v_raw;
+                ref.rpp_v_curvature_cap = rpp_out.v_curvature_cap;
+                ref.rpp_v_approach_cap = rpp_out.v_approach_cap;
+                ref.rpp_v_out = rpp_out.v_out;
+            }
+            if (params_.max_lat_accel_safety > 0.0) {
+                double kappa_abs = std::abs(ref.kappa);
+                if (kappa_abs > 1e-4) {
+                    v_ref = std::min(v_ref, std::sqrt(params_.max_lat_accel_safety / kappa_abs));
                 }
             }
             if (params_.min_ref_speed > 0.0) {

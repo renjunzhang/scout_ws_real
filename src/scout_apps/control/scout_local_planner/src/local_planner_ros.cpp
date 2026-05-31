@@ -12,6 +12,7 @@
 #include <cmath>
 #include <limits>
 #include <algorithm>
+#include <cctype>
 
 namespace scout_local_planner {
 
@@ -37,6 +38,27 @@ double limitRate(double target, double current, double rate_limit, double dt) {
     return std::max(current - max_delta, std::min(current + max_delta, target));
 }
 
+std::string upperString(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+    return value;
+}
+
+std::string lowerString(std::string value) {
+    std::transform(value.begin(), value.end(), value.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return value;
+}
+
+bool isExternalProfileMode(const std::string& mode) {
+    return mode == "ruckig" || mode == "toppra" ||
+           mode == "biagiotti" || mode == "custom_csv";
+}
+
+const char* boolText(bool value) {
+    return value ? "true" : "false";
+}
+
 }  // namespace
 
 LocalPlannerROS::LocalPlannerROS() = default;
@@ -46,7 +68,9 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     nh_ = nh;
     
     // 加载参数
-    loadParameters(pnh);
+    if (!loadParameters(pnh)) {
+        return false;
+    }
     
     // 初始化 TF
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>();
@@ -133,6 +157,8 @@ bool LocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     status_pub_ = nh_.advertise<std_msgs::String>("mpc_status", 1);
 
     diagnostics_publisher_.advertise(nh_);
+    diagnostics_publisher_.publishExperimentIdentity(
+        experiment_group_, controller_variant_, external_profile_mode_);
     
     // 控制定时器
     control_timer_ = nh_.createTimer(
@@ -150,7 +176,14 @@ void LocalPlannerROS::run() {
     ros::spin();
 }
 
-void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
+bool LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
+    pnh.param("experiment_group", experiment_group_, std::string("LEGACY"));
+    pnh.param("controller_variant", controller_variant_, std::string("mpc"));
+    pnh.param("external_profile_mode", external_profile_mode_, std::string("none"));
+    experiment_group_ = upperString(experiment_group_);
+    controller_variant_ = lowerString(controller_variant_);
+    external_profile_mode_ = lowerString(external_profile_mode_);
+
     // MPC 参数
     pnh.param("mpc/N", mpc_params_.N, 60);
     pnh.param("mpc/dt", mpc_params_.dt, 1.0 / 30.0);
@@ -256,6 +289,16 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
     pnh.param("path_handler/speed_profile_ds", path_params_.speed_profile_ds, 0.05);
     pnh.param("path_handler/external_speed_profile_csv",
               path_params_.external_speed_profile_csv, std::string(""));
+    pnh.param("path_handler/max_lat_accel_safety",
+              path_params_.max_lat_accel_safety, 0.0);
+    pnh.param("rpp_speed_reg/regulated_min_radius",
+              path_params_.rpp_speed_regulator.regulated_min_radius, 0.5);
+    pnh.param("rpp_speed_reg/approach_dist",
+              path_params_.rpp_speed_regulator.approach_dist, 0.7);
+    pnh.param("rpp_speed_reg/min_approach_v",
+              path_params_.rpp_speed_regulator.min_approach_v, 0.05);
+    pnh.param("rpp_speed_reg/replace_base_curvature_cap",
+              path_params_.rpp_speed_regulator.replace_base_curvature_cap, true);
     pnh.param("path_handler/max_tan_accel", path_params_.max_tan_accel, 0.0);
     pnh.param("path_handler/max_tan_decel", path_params_.max_tan_decel, 0.0);
     pnh.param("path_handler/goal_speed", path_params_.goal_speed, 0.0);
@@ -307,6 +350,16 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
               profile_cap_params.decel_limit, 0.0);
     pnh.param("external_profile_execution_cap/jerk_limit",
               profile_cap_params.jerk_limit, 0.0);
+    if (!configureExperimentVariant(profile_cap_params)) {
+        return false;
+    }
+    pnh.setParam("experiment_group", experiment_group_);
+    pnh.setParam("controller_variant", controller_variant_);
+    pnh.setParam("external_profile_mode", external_profile_mode_);
+    pnh.setParam("path_handler/external_speed_profile_csv",
+                 path_params_.external_speed_profile_csv);
+    pnh.setParam("external_profile_execution_cap/enable",
+                 profile_cap_params.enable);
     profile_execution_cap_.setParams(profile_cap_params);
 
     TerminalControllerParams terminal_params;
@@ -344,6 +397,133 @@ void LocalPlannerROS::loadParameters(ros::NodeHandle& pnh) {
         path_params_.speed_profile_alpha_max = vehicle_params_.alpha_max;
     }
 
+    return true;
+}
+
+bool LocalPlannerROS::configureExperimentVariant(ProfileExecutionCapParams& profile_cap_params) {
+    struct DerivedVariant {
+        std::string controller_variant;
+        std::string external_profile_mode;
+        int q_slosh_sign = 0;  // -1: must be zero, +1: must be positive, 0: no group constraint
+    };
+
+    auto derive = [](const std::string& group, DerivedVariant& out) -> bool {
+        if (group == "C") {
+            out = {"mpc", "none", -1};
+        } else if (group == "D") {
+            out = {"mpc", "none", +1};
+        } else if (group == "E") {
+            out = {"mpc", "none", -1};
+        } else if (group == "F") {
+            out = {"mpc", "none", +1};
+        } else if (group == "RPP_STYLE") {
+            out = {"rpp_speed_reg", "none", -1};
+        } else if (group == "BIAGIOTTI") {
+            out = {"mpc", "biagiotti", -1};
+        } else if (group == "RUCKIG") {
+            out = {"mpc", "ruckig", -1};
+        } else if (group == "TOPPRA") {
+            out = {"mpc", "toppra", -1};
+        } else if (group == "LEGACY") {
+            out = {"", "", 0};
+        } else {
+            return false;
+        }
+        return true;
+    };
+
+    DerivedVariant expected;
+    if (!derive(experiment_group_, expected)) {
+        ROS_FATAL("[validate] unsupported experiment_group='%s'", experiment_group_.c_str());
+        return false;
+    }
+
+    if (experiment_group_ != "LEGACY") {
+        if (controller_variant_ != expected.controller_variant) {
+            ROS_WARN("[validate] experiment_group=%s overrides controller_variant '%s' -> '%s'",
+                     experiment_group_.c_str(), controller_variant_.c_str(),
+                     expected.controller_variant.c_str());
+            controller_variant_ = expected.controller_variant;
+        }
+        if (external_profile_mode_ != expected.external_profile_mode) {
+            ROS_WARN("[validate] experiment_group=%s overrides external_profile_mode '%s' -> '%s'",
+                     experiment_group_.c_str(), external_profile_mode_.c_str(),
+                     expected.external_profile_mode.c_str());
+            external_profile_mode_ = expected.external_profile_mode;
+        }
+    }
+
+    const double eps = 1e-9;
+    const bool slosh_positive = mpc_params_.Q_slosh > eps;
+    if (experiment_group_ != "LEGACY" && expected.q_slosh_sign < 0 && slosh_positive) {
+        ROS_FATAL("[validate] experiment_group=%s requires Q_slosh == 0, got %.6g",
+                  experiment_group_.c_str(), mpc_params_.Q_slosh);
+        return false;
+    }
+    if (experiment_group_ != "LEGACY" && expected.q_slosh_sign > 0 && !slosh_positive) {
+        ROS_FATAL("[validate] experiment_group=%s requires Q_slosh > 0, got %.6g",
+                  experiment_group_.c_str(), mpc_params_.Q_slosh);
+        return false;
+    }
+
+    if (controller_variant_ != "mpc" && controller_variant_ != "rpp_speed_reg") {
+        ROS_FATAL("[validate] unsupported controller_variant='%s'", controller_variant_.c_str());
+        return false;
+    }
+    if (external_profile_mode_ != "none" && !isExternalProfileMode(external_profile_mode_)) {
+        ROS_FATAL("[validate] unsupported external_profile_mode='%s'", external_profile_mode_.c_str());
+        return false;
+    }
+
+    if (controller_variant_ == "rpp_speed_reg" && slosh_positive) {
+        ROS_FATAL("[validate] rpp_speed_reg requires Q_slosh == 0, got %.6g",
+                  mpc_params_.Q_slosh);
+        return false;
+    }
+    if (controller_variant_ == "rpp_speed_reg" && external_profile_mode_ != "none") {
+        ROS_FATAL("[validate] rpp_speed_reg requires external_profile_mode == none, got '%s'",
+                  external_profile_mode_.c_str());
+        return false;
+    }
+    if (controller_variant_ == "mpc" && isExternalProfileMode(external_profile_mode_) &&
+        slosh_positive) {
+        ROS_FATAL("[validate] external_profile_mode='%s' requires Q_slosh == 0, got %.6g",
+                  external_profile_mode_.c_str(), mpc_params_.Q_slosh);
+        return false;
+    }
+
+    if (external_profile_mode_ == "none") {
+        if (!path_params_.external_speed_profile_csv.empty()) {
+            if (experiment_group_ != "LEGACY") {
+                ROS_FATAL("[validate] external_profile_mode=none requires empty external_speed_profile_csv for formal experiment_group=%s",
+                          experiment_group_.c_str());
+                return false;
+            }
+            ROS_WARN("[compat] external_speed_profile_csv is set but external_profile_mode=none; ignoring CSV. Use external_profile_mode=custom_csv to enable it.");
+            path_params_.external_speed_profile_csv.clear();
+        }
+        profile_cap_params.enable = false;
+    } else {
+        if (path_params_.external_speed_profile_csv.empty()) {
+            ROS_FATAL("[validate] external_profile_mode='%s' requires non-empty external_speed_profile_csv",
+                      external_profile_mode_.c_str());
+            return false;
+        }
+        profile_cap_params.enable = true;
+    }
+
+    path_params_.rpp_speed_regulator.enable = (controller_variant_ == "rpp_speed_reg");
+
+    ROS_INFO("[LocalPlannerROS] Experiment variant: group=%s controller_variant=%s external_profile_mode=%s Q_slosh=%.6g profile_cap_enable=%s csv=%s",
+             experiment_group_.c_str(),
+             controller_variant_.c_str(),
+             external_profile_mode_.c_str(),
+             mpc_params_.Q_slosh,
+             boolText(profile_cap_params.enable),
+             path_params_.external_speed_profile_csv.empty()
+                 ? "<none>"
+                 : path_params_.external_speed_profile_csv.c_str());
+    return true;
 }
 
 void LocalPlannerROS::globalPathCallback(const nav_msgs::Path::ConstPtr& msg) {
