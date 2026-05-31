@@ -165,7 +165,7 @@ rosrun scout_local_planner template_fixed_path_generator.py \
 
 ### 1.4 终端 D：发送固定 goal
 
-下面坐标是占位。实物当天必须替换成你实际选定的 P2 终点。
+2026-05-31 实物 pilot smoke 使用以下固定 P2 终点。后续同一天所有组必须使用同一个 goal，除非重新生成整套路径和外部 profile：
 
 ```bash
 source /opt/ros/noetic/setup.bash
@@ -174,11 +174,18 @@ cd /home/geist/scout_ws
 
 rosrun scout_local_planner send_fixed_goal.py \
   --goal-topic /scout/goal \
-  --x <GOAL_X> \
-  --y <GOAL_Y> \
-  --yaw <GOAL_YAW> \
+  --x 7.164488315582275 \
+  --y 9.307367324829102 \
+  --yaw 1.0808 \
   --repeat-count 1 \
   --repeat-rate 1
+```
+
+如果换场地或换地面标记，需要同步更新这里的 goal，并重新生成：
+
+```text
+/home/geist/fixed_paths/real/<DATE>/P2_s_curve_d200.json
+/home/geist/fixed_paths/real/<DATE>/baseline_profiles/*.csv
 ```
 
 确认 JSON 已生成：
@@ -742,13 +749,31 @@ MPC 订阅的不是 /scout/global_path_fixed；
 
 ### 7.3 第三层：实物 pilot smoke
 
-每组先 1 包：
+每组先 1 包，按正式流程启动，但 **不进入论文正式统计**。2026-05-31 pilot 建议顺序：
 
 ```text
-C / E / RPP_STYLE / BIAGIOTTI / F
-D
-TOPPRA / RUCKIG
+C -> E -> RPP_STYLE -> BIAGIOTTI -> F -> D
 ```
+
+建议 bag 后缀：
+
+```text
+P2_s_curve_C_pilot_run01
+P2_s_curve_E_pilot_run01
+P2_s_curve_RPP_STYLE_pilot_run01
+P2_s_curve_BIAGIOTTI_pilot_run01
+P2_s_curve_F_pilot_run01
+P2_s_curve_D_pilot_run01
+```
+
+可选补充：
+
+```text
+P2_s_curve_TOPPRA_pilot_run01
+P2_s_curve_RUCKIG_pilot_run01
+```
+
+`BIAGIOTTI / TOPPRA / RUCKIG` 必须先用本次最终 JSON 生成对应 CSV，再启动 MPC。
 
 smoke 只验证：
 
