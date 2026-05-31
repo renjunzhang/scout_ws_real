@@ -46,7 +46,7 @@ oracle:
   # 晃动高度硬约束（Tier 1：与实验评价阈值必须同步）
   # ============================================================
   constraints:
-    eta_lim_mm: 25.0           # η 上限 (mm)；与 oscrs.eta_lim_mm 必须一致
+    eta_lim_mm: 25.0           # η 上限 (mm)；与实验评价阈值保持一致
     residual_ratio: 0.20       # 残振 gate = ratio × eta_lim_mm；Ferrari 文献 0.2
     settle_duration: 2.0       # 路径末尾零输入残振响应时长 (s)
     use_parabola_term: true    # 是否在 η_total 中加入离心抛物面项

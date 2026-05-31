@@ -1,10 +1,10 @@
 # scout_local_planner
 
-更新时间：2026-05-30
+更新时间：2026-05-31
 
-本包当前维护一条主线：**SloshPriorityMPC 固定路径对比实验**。
+本包当前维护一条主线：**SloshPriorityMPC 控制器层固定路径对比实验**。
 
-当前目标不是维护历史路径后处理方案，而是支撑下面这条可复现实物实验链：
+当前目标不是维护历史路径后处理 / OSCRS 规划层方案，而是支撑下面这条可复现实物实验链：
 
 ```text
 固定 P2_s_curve 路径
@@ -24,20 +24,109 @@ docs/重要文档/20260527_SloshPriorityMPC正式对比实验验证方案.md
 
 `20260518_MPC终点收敛与固定路径验证方案.md` 只作为 terminal / fixed-path 基础流程的历史参考。
 
-## 当前实验对象
+## 包内方法谱系
 
-正文主线只比较固定路径上的控制策略，不比较几何路径规划器。
+### 1. 主线：SloshPriorityMPC
 
-| 方法 | 含义 | 路径几何 | 速度参考 |
-|---|---|---|---|
-| C | 普通 tracking MPC | 固定 | 内部 `v_ref(s)` |
-| D | slosh modal cost only | 固定 | 内部 `v_ref(s)` |
-| E | non-slosh smooth MPC | 固定 | 内部 `v_ref(s)` |
-| F | SloshPriorityMPC | 固定 | 内部 `v_ref(s)` |
-| RPP-style | RPP 启发的非晃液 `v_ref` 速度调节 baseline | 固定 | 内部 `v_ref(s)` + regulator |
-| TOPPRA-style | 限加速度 retiming baseline | 固定 | 外部 CSV |
-| Ruckig-style | 限 jerk retiming baseline | 固定 | 外部 CSV |
-| Biagiotti-style | 开环 slosh-aware reference shaping baseline | 固定 | 外部 CSV |
+`SloshPriorityMPC` 是本文当前主方法。它是**控制器层方法**，不生成路径、不选择路径、不做规划层 candidate selection。
+
+```text
+输入: fixed/global path reference
+核心: 8 维增广 MPC state + slosh prediction model + slosh-priority cost
+输出: /cmd_vel
+评价: RGB max(left, center, right) 为实物液面主指标
+```
+
+论文和实验里对应工程组：
+
+```text
+F = SloshPriorityMPC / ours
+```
+
+如果论文为了叙事把最终方法写成 `D` 或其他符号，代码和 rosbag 里仍以 `experiment_group:=F` 为准。
+
+### 2. 内部 MPC 消融分支
+
+这些分支都使用同一个 MPC solver、同一个 PathHandler、同一个 terminal 逻辑、同一个 fixed path。差别只在 cost 权重和控制平滑权重。
+
+| group | 名称 | 含义 | 路径几何 | `v_ref(s)` | `Q_slosh` |
+|---|---|---|---|---|---|
+| C | ordinary MPC / nominal MPC | 普通 tracking MPC，不惩罚液体模态状态 | 固定 | 内部生成 | 0 |
+| D | slosh-only MPC | 只加入 modal slosh state cost，不额外强化 smooth shaping | 固定 | 内部生成 | >0 |
+| E | smooth-only MPC | 不用 slosh cost，只强化控制平滑 / 激励整形 | 固定 | 内部生成 | 0 |
+| F | SloshPriorityMPC | modal slosh cost + smooth shaping，当前主方法 | 固定 | 内部生成 | >0 |
+
+这四组是最干净的 controller-layer 因果消融：
+
+```text
+D vs C: modal slosh cost 是否有用
+E vs C: 非晃液平滑控制是否有用
+F vs D: smooth shaping 是否补强 slosh-only
+F vs E: slosh-aware 是否超过 smooth-only
+```
+
+### 3. 包内速度调节分支
+
+| group | 名称 | 含义 | 路径几何 | `v_ref(s)` |
+|---|---|---|---|---|
+| RPP_STYLE | RPP-style regulated-speed baseline | Macenski RPP 启发的曲率 / approach 速度调节，不是完整 Nav2 RPP controller | 固定 | 内部 `v_ref(s)` + regulator |
+
+这个分支仍在 `scout_local_planner` 内，目的是复用同一 MPC 后端和同一录包链路，降低 baseline 混杂。论文中应写成：
+
+```text
+RPP-inspired regulated-speed baseline
+```
+
+不要写成完整复现 Nav2 RPP controller。
+
+### 4. 外部 profile / 开环整形分支
+
+这些分支不改路径几何，但会通过 CSV 改变同一条路径上的 `v_ref(s)`。它们用于比较“开环 retiming / shaping”与闭环 SloshPriorityMPC。
+
+| group | 名称 | 含义 | 路径几何 | `v_ref(s)` |
+|---|---|---|---|---|
+| TOPPRA | TOPPRA-style | 限速度 / 加速度的 fixed-path retiming baseline | 固定 | 外部 CSV |
+| RUCKIG | Ruckig-style | 限速度 / 加速度 / jerk 的 fixed-path retiming baseline | 固定 | 外部 CSV |
+| BIAGIOTTI | Biagiotti-style | slosh-aware open-loop shaping baseline，按液体模态频率整形参考速度 | 固定 | 外部 CSV |
+| custom_csv | custom external profile | 调试入口，不属于正式实验组 | 固定 | 外部 CSV |
+
+外部 CSV 统一走：
+
+```text
+external_speed_profile_csv
+external_profile_mode
+ProfileExecutionCap
+```
+
+其中 TOPPRA / Ruckig 是 generic smooth-motion baseline；Biagiotti 是 open-loop slosh-aware shaping baseline。
+
+### 5. `experiment_group` 切换关系
+
+正式实验只应显式传 `experiment_group`，由代码派生 `controller_variant` 和 `external_profile_mode`。
+
+| group | controller_variant | external_profile_mode | 是否改路径 | 是否改 `v_ref(s)` | 定位 |
+|---|---|---|---:|---:|---|
+| LEGACY | 手动参数 | 手动参数 | 否 | 视参数而定 | 兼容旧调试入口 |
+| C | `mpc` | `none` | 否 | 否 | ordinary MPC |
+| D | `mpc` | `none` | 否 | 否 | slosh-only |
+| E | `mpc` | `none` | 否 | 否 | smooth-only |
+| F | `mpc` | `none` | 否 | 否 | SloshPriorityMPC |
+| RPP_STYLE | `rpp_speed_reg` | `none` | 否 | 内部调节 | RPP-style speed regulator |
+| TOPPRA | `mpc` | `toppra` | 否 | 是 | open-loop retiming |
+| RUCKIG | `mpc` | `ruckig` | 否 | 是 | open-loop jerk-limited retiming |
+| BIAGIOTTI | `mpc` | `biagiotti` | 否 | 是 | open-loop slosh-aware shaping |
+
+### 6. 不在本包内实现的对比方向
+
+这些方向可以作为论文 related work / appendix / 下一阶段，但不属于当前 `scout_local_planner` 主线：
+
+| 方法 | 当前定位 |
+|---|---|
+| Kanayama controller | 计划作为独立 `tracking_baselines` 包实现，不塞进 MPC 包 |
+| CLF-QP tracking controller | 计划作为独立 `tracking_baselines` 包实现，不塞进 MPC 包 |
+| TEB / DWA | related work 或 appendix P2P 工程泛化，不进 fixed-path 主因果表 |
+| TOPPRA / Ruckig 完整库复现 | 当前只做 `*-style` CSV profile，不声称完整复现 |
+| OSCRS / GeoRef / homotopy candidate selection | 规划层下一篇方向，不属于当前控制器层实验 |
 
 主效果窗口固定为：
 

@@ -223,12 +223,11 @@ python3 -m pip install --user --only-binary=:all: 'ruckig==0.9.2'
 /slosh/*
 ```
 
-## 历史目录
+## 历史分析脚本
 
-当前脚本目录里可能仍有历史目录或历史分析脚本，例如：
+当前脚本目录里仍有部分历史分析脚本，例如：
 
 ```text
-oscrs/
 reference_generation/
 analysis/red_group_0424_*.py
 analysis/model_truth_20260513_fidelity.py
