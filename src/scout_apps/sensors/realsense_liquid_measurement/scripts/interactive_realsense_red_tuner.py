@@ -10,7 +10,7 @@ Keys:
   s  save current parameters, preview image, and report
   r  restore auto exposure / auto white balance
   a  apply current trackbar values immediately
-  q  quit
+  q  quit; Esc is intentionally ignored in the main tuner window
 """
 
 import argparse
@@ -127,7 +127,7 @@ def wait_for_first_frame(img_buf: ImageBuffer, timeout: float = 10.0) -> Optiona
 
 def select_roi_from_frame(frame: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
     print("[INFO] Select temporary ROI around the red liquid, then press Enter/Space.")
-    print("[INFO] Press c or Esc in the ROI window to cancel and use full image.")
+    print("[INFO] Press c in the ROI window to cancel and use full image; avoid Esc on unstable RealSense setups.")
     selected = cv2.selectROI("select_red_liquid_roi", frame, showCrosshair=True, fromCenter=False)
     cv2.destroyWindow("select_red_liquid_roi")
     x, y, w, h = (int(v) for v in selected)
@@ -354,7 +354,8 @@ def main() -> None:
     print(f"[INFO] image_topic={args.image_topic}")
     print(f"[INFO] dynparam_ns={args.dynparam_ns}")
     print(f"[INFO] roi={roi if roi is not None else 'full image'}")
-    print("[KEYS] s=save  r=restore auto  a=apply  q=quit")
+    print("[KEYS] s=save  r=restore auto  a=apply  q=quit  Esc=ignored")
+    print("[INFO] Use q to quit cleanly. Do not use Esc if the RealSense node is unstable.")
     print("[INFO] RealSense color aperture is fixed; tune exposure/gain/white_balance.")
 
     last_applied: Optional[Tuple[int, int, int]] = None
@@ -376,8 +377,10 @@ def main() -> None:
             put_lines(blank, ("Waiting for image topic...", args.image_topic))
             cv2.imshow(WIN, blank)
             key = cv2.waitKey(30) & 0xFF
-            if key in (ord("q"), 27):
+            if key == ord("q"):
                 break
+            if key == 27:
+                print("[WARN] Esc ignored. Press q to quit cleanly.")
             continue
 
         crop = clip_roi(frame, roi)
@@ -412,8 +415,10 @@ def main() -> None:
         cv2.imshow(MASK_WIN, p4)
 
         key = cv2.waitKey(20) & 0xFF
-        if key in (ord("q"), 27):
+        if key == ord("q"):
             break
+        if key == 27:
+            print("[WARN] Esc ignored. Press q to quit cleanly.")
         if key == ord("a"):
             apply_camera(client, params)
             last_applied = setting
