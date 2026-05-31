@@ -108,9 +108,54 @@ depth=false
 infra=false
 ```
 
-### 1.2 终端 B：可选视觉调参
+### 1.2 终端 B：固定 RealSense RGB 参数
 
-只在光照/相机位置变化后做。调好曝光、增益、白平衡后，再做三标尺和 HSV 标注。
+推荐正式实验使用“冻结当前 RGB 参数”的方式，不依赖交互调参窗口。先启动 `launch_real_sensors_stack.sh`，让自动曝光/自动白平衡稳定几秒，确认 `/camera/color/image_raw` 有数据后执行：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+cd /home/geist/scout_ws
+
+OUT_DIR=/home/geist/slosh_bags/real/<DATE>_visual_tuning/realsense_rgb_fixed_params \
+src/scout_apps/control/scout_local_planner/scripts/set_realsense_rgb_manual_params.sh
+```
+
+脚本默认 `MODE=freeze_current`，会：
+
+```text
+1. 读取当前 exposure / gain / white_balance；
+2. 关闭 enable_auto_exposure / enable_auto_white_balance；
+3. 把刚刚读取到的当前值写回相机；
+4. 保存当天固定参数 YAML 和可复用 apply 脚本。
+```
+
+如果不想冻结当前值，而是明确使用手动指定值：
+
+```bash
+MODE=manual EXPOSURE=6500 GAIN=24 WHITE_BALANCE=4200 \
+OUT_DIR=/home/geist/slosh_bags/real/<DATE>_visual_tuning/realsense_rgb_fixed_params \
+src/scout_apps/control/scout_local_planner/scripts/set_realsense_rgb_manual_params.sh
+```
+
+脚本会检查 `/camera/color/image_raw` 频率。正式录包前至少确认：
+
+```bash
+rosrun dynamic_reconfigure dynparam get /camera/rgb_camera enable_auto_exposure
+rosrun dynamic_reconfigure dynparam get /camera/rgb_camera exposure
+rosrun dynamic_reconfigure dynparam get /camera/rgb_camera gain
+rosrun dynamic_reconfigure dynparam get /camera/rgb_camera enable_auto_white_balance
+rosrun dynamic_reconfigure dynparam get /camera/rgb_camera white_balance
+rostopic hz /camera/color/image_raw
+```
+
+当天所有 pilot / 正式组必须使用同一份固定参数。不要在组间重新打开自动曝光或改白平衡。
+
+### 1.2.1 可选：交互视觉调参
+
+只在光照/相机位置变化明显后做。调好曝光、增益、白平衡后，可以把保存报告中的参数写回 `set_realsense_rgb_manual_params.sh` 的环境变量命令。
+
+注意：实物机上退出 OpenCV 调参窗口可能导致 RealSense 图像话题异常。若必须使用交互窗口，建议只按 `s` 保存参数，不在实验前频繁退出窗口。
 
 ```bash
 source /opt/ros/noetic/setup.bash
@@ -136,7 +181,7 @@ python3 src/scout_apps/sensors/realsense_liquid_measurement/scripts/interactive_
 
 ```text
 <DATE> 必须替换成真实目录名，例如 20260531。
-调参窗口按 q 正常退出；不要强杀相机节点。
+交互窗口只用于找参数；正式录包前优先使用 set_realsense_rgb_manual_params.sh 固定参数。
 ```
 
 ### 1.3 终端 C：生成本次 P2 固定模板路径
