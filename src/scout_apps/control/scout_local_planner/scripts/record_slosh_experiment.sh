@@ -60,6 +60,7 @@
 #   - 参考速度链路：/reference/v_des_raw, /reference/v_des_target,
 #                /reference/v_des_eff, /reference/v_des_rate_limited,
 #                /reference/v_ref_horizon, /reference/implied_ax
+#   - 外部 profile 执行 cap：/profile_cap/*
 #   - 目标/路径：/scout/goal, /scout/current_goal, /scout/global_path,
 #                /scout/global_path_fixed, /local_path
 #   - 避障实现/接口核查：
@@ -292,6 +293,12 @@ TOPICS=(
     /reference/implied_ax_abs_p95
     /reference/implied_ay_abs_p95
     /reference/implied_jerk_abs_p95
+    /profile_cap/active
+    /profile_cap/v_profile
+    /profile_cap/cmd_v_pre_cap
+    /profile_cap/cmd_v_post_cap
+    /profile_cap/implied_ax
+    /profile_cap/implied_jerk
     /rpp_speed_reg/active
     /rpp_speed_reg/curvature
     /rpp_speed_reg/curvature_active
