@@ -31,16 +31,23 @@ fi
 echo "[set_realsense_rgb_manual_params] Waiting for ${IMAGE_TOPIC}..."
 timeout "${READY_TIMEOUT}" rostopic echo -n 1 "${IMAGE_TOPIC}" >/dev/null
 
-get_param() {
-    rosrun dynamic_reconfigure dynparam get "${DYNPARAM_NS}" "$1" | tail -n 1
+get_config() {
+    rosrun dynamic_reconfigure dynparam get "${DYNPARAM_NS}"
+}
+
+get_param_from_config() {
+    local config="$1"
+    local name="$2"
+    awk -F': ' -v key="${name}" '$1 == key {print $2; found=1; exit} END {if (!found) exit 1}' <<< "${config}"
 }
 
 if [[ "${MODE}" == "freeze_current" ]]; then
     echo "[set_realsense_rgb_manual_params] MODE=freeze_current; waiting ${AUTO_SETTLE_S}s before reading current params..."
     sleep "${AUTO_SETTLE_S}"
-    EXPOSURE="$(get_param exposure)"
-    GAIN="$(get_param gain)"
-    WHITE_BALANCE="$(get_param white_balance)"
+    current_config="$(get_config)"
+    EXPOSURE="$(get_param_from_config "${current_config}" exposure)"
+    GAIN="$(get_param_from_config "${current_config}" gain)"
+    WHITE_BALANCE="$(get_param_from_config "${current_config}" white_balance)"
 elif [[ "${MODE}" == "manual" ]]; then
     EXPOSURE="${EXPOSURE:-7000}"
     GAIN="${GAIN:-32}"
@@ -99,11 +106,11 @@ echo "  ${apply_path}"
 
 echo
 echo "[set_realsense_rgb_manual_params] Current RGB params:"
-rosrun dynamic_reconfigure dynparam get "${DYNPARAM_NS}" enable_auto_exposure
-rosrun dynamic_reconfigure dynparam get "${DYNPARAM_NS}" exposure
-rosrun dynamic_reconfigure dynparam get "${DYNPARAM_NS}" gain
-rosrun dynamic_reconfigure dynparam get "${DYNPARAM_NS}" enable_auto_white_balance
-rosrun dynamic_reconfigure dynparam get "${DYNPARAM_NS}" white_balance
+current_config="$(get_config)"
+for key in enable_auto_exposure exposure gain enable_auto_white_balance white_balance; do
+    value="$(get_param_from_config "${current_config}" "${key}" || echo unknown)"
+    echo "${key}: ${value}"
+done
 
 echo
 echo "[set_realsense_rgb_manual_params] Check image rate:"
