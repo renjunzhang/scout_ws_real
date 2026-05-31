@@ -72,6 +72,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--apply-period", type=float, default=0.25)
     p.add_argument("--no-live-apply", action="store_true",
                    help="Only apply camera parameters when pressing `a`.")
+    p.add_argument("--no-guide-lines", action="store_true",
+                   help="Disable display-only center and target liquid-level guide lines.")
+    p.add_argument("--liquid-target-frac", type=float, default=0.425,
+                   help="Display-only target static liquid level as a fraction of ROI height from the top.")
     return p.parse_args()
 
 
@@ -211,6 +215,31 @@ def put_lines(img: np.ndarray, lines: Tuple[str, ...], origin: Tuple[int, int] =
         y += 25
 
 
+def draw_guides(
+    img: np.ndarray,
+    roi: Optional[Tuple[int, int, int, int]],
+    target_frac: float,
+) -> None:
+    h_img, w_img = img.shape[:2]
+    cx = w_img // 2
+    cy = h_img // 2
+    cv2.line(img, (cx, 0), (cx, h_img - 1), (255, 255, 0), 1, cv2.LINE_AA)
+    cv2.line(img, (0, cy), (w_img - 1, cy), (255, 255, 0), 1, cv2.LINE_AA)
+
+    frac = max(0.05, min(0.95, float(target_frac)))
+    if roi is None:
+        x1, x2 = 0, w_img - 1
+        y_target = int(round(frac * h_img))
+    else:
+        x, y, w, h = roi
+        x1 = max(0, min(w_img - 1, x))
+        x2 = max(x1, min(w_img - 1, x + w))
+        y_target = int(round(y + frac * h))
+    y_target = max(0, min(h_img - 1, y_target))
+    cv2.line(img, (x1, y_target), (x2, y_target), (0, 255, 0), 2, cv2.LINE_AA)
+    put_lines(img, (f"target static liquid {frac:.3f}H",), origin=(max(8, x1 + 8), max(24, y_target - 8)))
+
+
 def read_trackbar(args: argparse.Namespace) -> Dict[str, int]:
     exposure = args.exp_min + cv2.getTrackbarPos("exposure", WIN)
     gain = args.gain_min + cv2.getTrackbarPos("gain", WIN)
@@ -271,6 +300,8 @@ def save_current(
             "sat_min": int(params["sat_min"]),
             "val_min": int(params["val_min"]),
             "morph_kernel": int(params["morph_kernel"]),
+            "guide_lines": True,
+            "liquid_target_frac": float(params.get("liquid_target_frac", 0.425)),
         },
         "metrics": {k: float(v) for k, v in metrics.items()},
     }
@@ -281,6 +312,7 @@ def save_current(
     if roi is not None:
         x, y, w, h = roi
         cv2.rectangle(preview, (x, y), (x + w, y + h), (0, 255, 255), 2)
+    draw_guides(preview, roi, float(params.get("liquid_target_frac", 0.425)))
     put_lines(preview, (
         f"exp={params['exposure']} gain={params['gain']} wb={params['white_balance']}",
         f"HSV h1=[{params['hue1_low']},{params['hue1_high']}] h2=[{params['hue2_low']},{params['hue2_high']}]",
@@ -356,6 +388,7 @@ def main() -> None:
     print(f"[INFO] roi={roi if roi is not None else 'full image'}")
     print("[KEYS] s=save  r=restore auto  a=apply  q=quit  Esc=ignored")
     print("[INFO] Use q to quit cleanly. Do not use Esc if the RealSense node is unstable.")
+    print("[INFO] Guide lines are display-only: cyan=image center, green=target static liquid level.")
     print("[INFO] RealSense color aperture is fixed; tune exposure/gain/white_balance.")
 
     last_applied: Optional[Tuple[int, int, int]] = None
@@ -365,6 +398,7 @@ def main() -> None:
     while not rospy.is_shutdown():
         frame = img_buf.latest
         params = read_trackbar(args)
+        params["liquid_target_frac"] = float(args.liquid_target_frac)
         now = time.time()
         setting = (params["exposure"], params["gain"], params["white_balance"])
         if not args.no_live_apply and (setting != last_applied) and (now - last_apply_time >= args.apply_period):
@@ -391,12 +425,16 @@ def main() -> None:
         if roi is not None:
             x, y, w, h = roi
             cv2.rectangle(full, (x, y), (x + w, y + h), (0, 255, 255), 2)
+        if not args.no_guide_lines:
+            draw_guides(full, roi, args.liquid_target_frac)
 
         overlay = crop.copy()
         red_overlay = np.zeros_like(overlay)
         red_overlay[:, :, 2] = mask
         overlay = cv2.addWeighted(overlay, 0.72, red_overlay, 0.28, 0.0)
         draw_top_boundary(overlay, mask)
+        if not args.no_guide_lines:
+            draw_guides(overlay, None, args.liquid_target_frac)
 
         mask_bgr = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
         h, w = args.panel_height, args.panel_width
