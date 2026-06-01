@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1120" viewBox="0 0 1800 1120">
+  <defs>
+    <style>
+      .title { font: 700 34px Arial, sans-serif; fill: #111827; }
+      .subtitle { font: 400 20px Arial, sans-serif; fill: #374151; }
+      .laneTitle { font: 700 26px Arial, sans-serif; fill: #111827; }
+      .boxTitle { font: 700 20px Arial, sans-serif; fill: #111827; }
+      .text { font: 400 17px Arial, sans-serif; fill: #1f2937; }
+      .small { font: 400 15px Arial, sans-serif; fill: #374151; }
+      .mono { font: 400 15px "DejaVu Sans Mono", Consolas, monospace; fill: #111827; }
+      .muted { fill: #6b7280; }
+      .baseline { fill: #f8fafc; stroke: #64748b; stroke-width: 2; }
+      .ours { fill: #fff7ed; stroke: #ea580c; stroke-width: 2.5; }
+      .shared { fill: #eef2ff; stroke: #4f46e5; stroke-width: 2; }
+      .add { fill: #fef3c7; stroke: #d97706; stroke-width: 2.5; }
+      .output { fill: #ecfdf5; stroke: #059669; stroke-width: 2; }
+      .warn { fill: #fef2f2; stroke: #dc2626; stroke-width: 2; }
+      .arrow { stroke: #374151; stroke-width: 2.2; fill: none; marker-end: url(#arrowHead); }
+      .arrowAdd { stroke: #d97706; stroke-width: 2.5; fill: none; marker-end: url(#arrowHeadOrange); }
+      .dash { stroke-dasharray: 8 8; }
+      .note { fill: #ffffff; stroke: #d1d5db; stroke-width: 1.5; }
+    </style>
+    <marker id="arrowHead" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#374151"/>
+    </marker>
+    <marker id="arrowHeadOrange" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#d97706"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1800" height="1120" fill="#ffffff"/>
+
+  <text x="900" y="54" text-anchor="middle" class="title">Integrated MPC Baseline vs Slosh-Aware Integrated MPC</text>
+  <text x="900" y="86" text-anchor="middle" class="subtitle">Same local MPC backbone; our method augments state, dynamics, objective and diagnostics with liquid modal response.</text>
+
+  <rect x="70" y="125" width="790" height="840" rx="18" class="baseline"/>
+  <rect x="940" y="125" width="790" height="840" rx="18" class="ours"/>
+
+  <text x="465" y="170" text-anchor="middle" class="laneTitle">Baseline: mpc_planner-style Integrated Local MPC</text>
+  <text x="1335" y="170" text-anchor="middle" class="laneTitle">Ours: spmpc_local_planner Slosh-Aware Integrated MPC</text>
+
+  <!-- Baseline column -->
+  <rect x="125" y="205" width="680" height="96" rx="10" class="shared"/>
+  <text x="465" y="235" text-anchor="middle" class="boxTitle">Shared Inputs</text>
+  <text x="155" y="266" class="text">Global/reference path or goal, local corridor/map, robot odom/state, bounds</text>
+  <text x="155" y="288" class="small muted">No liquid state, no RGB, no slosh feedback</text>
+
+  <rect x="125" y="350" width="680" height="126" rx="10" class="baseline"/>
+  <text x="465" y="381" text-anchor="middle" class="boxTitle">Reference / Corridor Preparation</text>
+  <text x="155" y="414" class="text">Spline reference path, road/corridor bounds, optional obstacle constraints</text>
+  <text x="155" y="441" class="mono">RealTimeData: reference_path, goal, costmap, dynamic_obstacles</text>
+
+  <rect x="125" y="525" width="680" height="210" rx="10" class="baseline"/>
+  <text x="465" y="556" text-anchor="middle" class="boxTitle">Integrated MPC Optimization</text>
+  <text x="155" y="590" class="text">State:</text>
+  <text x="240" y="590" class="mono">x_base = [x, y, psi, v, s]</text>
+  <text x="155" y="622" class="text">Input:</text>
+  <text x="240" y="622" class="mono">u = [a, w]</text>
+  <text x="155" y="654" class="text">Dynamics:</text>
+  <text x="240" y="654" class="mono">x_{k+1} = f_robot(x_k, u_k)</text>
+  <text x="155" y="686" class="text">Cost:</text>
+  <text x="240" y="686" class="mono">J_base = J_contour + J_lag + J_v + J_u + J_terminal</text>
+  <text x="155" y="718" class="text">Constraints:</text>
+  <text x="270" y="718" class="mono">bounds + corridor/obstacle constraints</text>
+
+  <rect x="125" y="790" width="680" height="96" rx="10" class="output"/>
+  <text x="465" y="821" text-anchor="middle" class="boxTitle">Output</text>
+  <text x="155" y="852" class="text">Local trajectory + first command</text>
+  <text x="155" y="875" class="mono">cmd_v = solution v at k=1, cmd_w = solution w at k=0</text>
+
+  <!-- Ours column -->
+  <rect x="995" y="205" width="680" height="96" rx="10" class="shared"/>
+  <text x="1335" y="235" text-anchor="middle" class="boxTitle">Shared Inputs</text>
+  <text x="1025" y="266" class="text">Same global/reference path or goal, same corridor/map, same robot state</text>
+  <text x="1025" y="288" class="small muted">Fair comparison keeps path/corridor/bounds fixed</text>
+
+  <rect x="995" y="320" width="680" height="86" rx="10" class="add"/>
+  <text x="1335" y="351" text-anchor="middle" class="boxTitle">Additional Liquid State Input</text>
+  <text x="1025" y="382" class="mono">x_slosh,0 = [eta_x, dot_eta_x, eta_y, dot_eta_y]</text>
+
+  <rect x="995" y="450" width="680" height="126" rx="10" class="ours"/>
+  <text x="1335" y="481" text-anchor="middle" class="boxTitle">Reference / Corridor Preparation</text>
+  <text x="1025" y="514" class="text">Same baseline preparation: spline path, corridor, obstacle parameters</text>
+  <text x="1025" y="541" class="small muted">The global path is not changed by the slosh module</text>
+
+  <rect x="995" y="625" width="680" height="250" rx="10" class="ours"/>
+  <text x="1335" y="656" text-anchor="middle" class="boxTitle">Slosh-Aware Integrated MPC Optimization</text>
+  <text x="1025" y="690" class="text">State:</text>
+  <text x="1110" y="690" class="mono">x_ours = [x, y, psi, v, s, eta_x, dot_eta_x, eta_y, dot_eta_y]</text>
+  <text x="1025" y="722" class="text">Input:</text>
+  <text x="1110" y="722" class="mono">u = [a, w]</text>
+  <text x="1025" y="754" class="text">Dynamics:</text>
+  <text x="1135" y="754" class="mono">x_robot,k+1 = f_robot(x_robot,k, u_k)</text>
+  <text x="1135" y="781" class="mono">x_slosh,k+1 = f_slosh(x_slosh,k, ax_k, ay_k)</text>
+  <text x="1025" y="813" class="text">Cost:</text>
+  <text x="1110" y="813" class="mono">J_ours = J_base + J_slosh + optional J_terminal_slosh</text>
+  <text x="1025" y="845" class="text">Constraint:</text>
+  <text x="1135" y="845" class="mono">baseline constraints + optional h_k &lt;= h_lim</text>
+
+  <rect x="995" y="910" width="680" height="96" rx="10" class="output"/>
+  <text x="1335" y="941" text-anchor="middle" class="boxTitle">Output</text>
+  <text x="1025" y="972" class="text">Slosh-aware local trajectory + first command</text>
+  <text x="1025" y="995" class="mono">/spmpc/local_trajectory, /cmd_vel, /spmpc/slosh_horizon_summary</text>
+
+  <!-- Arrows baseline -->
+  <path d="M465 301 L465 348" class="arrow"/>
+  <path d="M465 476 L465 523" class="arrow"/>
+  <path d="M465 735 L465 788" class="arrow"/>
+
+  <!-- Arrows ours -->
+  <path d="M1335 301 L1335 318" class="arrow"/>
+  <path d="M1335 406 L1335 448" class="arrowAdd"/>
+  <path d="M1335 576 L1335 623" class="arrow"/>
+  <path d="M1335 875 L1335 908" class="arrow"/>
+
+  <!-- Cross comparison band -->
+  <rect x="380" y="1000" width="1040" height="76" rx="12" class="note"/>
+  <text x="900" y="1030" text-anchor="middle" class="boxTitle">Fair Comparison Rule</text>
+  <text x="900" y="1058" text-anchor="middle" class="text">Keep global path, corridor, bounds, horizon, terminal policy and robot dynamics aligned. Difference = liquid modal state + slosh dynamics + slosh objective/constraint.</text>
+
+  <!-- Difference callouts -->
+  <rect x="705" y="205" width="270" height="86" rx="10" class="warn"/>
+  <text x="840" y="237" text-anchor="middle" class="boxTitle">Baseline lacks</text>
+  <text x="735" y="267" class="small">liquid memory, slosh rollout,</text>
+  <text x="735" y="287" class="small">slosh-risk optimization</text>
+
+  <path d="M975 248 L995 248" class="arrowAdd"/>
+
+  <rect x="705" y="620" width="270" height="132" rx="10" class="add"/>
+  <text x="840" y="653" text-anchor="middle" class="boxTitle">Ours adds</text>
+  <text x="735" y="684" class="small">1. slosh observer state</text>
+  <text x="735" y="707" class="small">2. second-order modal dynamics</text>
+  <text x="735" y="730" class="small">3. J_slosh / h_lim</text>
+
+  <path d="M975 686 L995 686" class="arrowAdd"/>
+</svg>
