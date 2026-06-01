@@ -60,6 +60,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+first_status() {
+  timeout 3s rostopic echo -n 1 /spmpc/status 2>/dev/null | awk -F'"' '/data:/ {print $2; exit}'
+}
+
+first_cmd_v() {
+  timeout 3s rostopic echo -n 1 /cmd_vel 2>/dev/null | awk '/x:/ {print $2; exit}'
+}
+
+is_near_zero() {
+  awk -v x="${1:-999}" 'BEGIN { if (x < 0) x = -x; exit !(x < 0.001) }'
+}
+
 RECORD_TOPICS=(
   /spmpc/status
   /spmpc/cost_breakdown
@@ -120,6 +132,16 @@ roslaunch spmpc_local_planner spmpc_fixed_path.launch \
   >"${OUT_DIR}/${VARIANT}_planner.log" 2>&1 &
 planner_pid=$!
 sleep 3   # 等 planner 起、拿到第一帧 odom/path
+
+status="$(first_status || true)"
+cmd_v="$(first_cmd_v || true)"
+echo "[preflight] status=${status:-NA}, cmd_v=${cmd_v:-NA}"
+if [[ "${status}" == "GOAL_REACHED" ]] && is_near_zero "${cmd_v:-0}"; then
+  echo "[ERR] planner 启动后立即 GOAL_REACHED 且 cmd_v≈0。" >&2
+  echo "      这通常表示仿真没有从固定 spawn 起点重启, 或当前机器人已经在目标附近。" >&2
+  echo "      请关闭仿真, 重新执行 launch_sim_nav_stack.sh, 等 30s 后再跑本脚本。" >&2
+  exit 2
+fi
 
 echo "[rec] 录包 ${RECORD_SEC}s ..."
 rosbag record -O "$bag" "${RECORD_TOPICS[@]}" \

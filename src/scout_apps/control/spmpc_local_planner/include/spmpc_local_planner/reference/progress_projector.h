@@ -14,6 +14,7 @@ struct ProgressProjection {
 class ProgressProjector {
 public:
     ProgressProjection project(const ReferencePath& reference, double x, double y) const;
+    ProgressProjection project(const ReferencePath& reference, double x, double y, double min_s) const;
 };
 
 }  // namespace spmpc_local_planner

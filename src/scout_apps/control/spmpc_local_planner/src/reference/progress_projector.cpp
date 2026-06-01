@@ -21,11 +21,20 @@ double segmentLength(const TrajectoryPoint& a, const TrajectoryPoint& b) {
 }  // namespace
 
 ProgressProjection ProgressProjector::project(const ReferencePath& reference, double x, double y) const {
+    return project(reference, x, y, 0.0);
+}
+
+ProgressProjection ProgressProjector::project(
+    const ReferencePath& reference,
+    double x,
+    double y,
+    double min_s) const {
     ProgressProjection best;
     const auto& pts = reference.points();
     if (pts.empty()) {
         return best;
     }
+    const double lower_s = std::max(0.0, std::min(min_s, reference.length()));
     if (pts.size() == 1) {
         best.valid = true;
         best.point = pts.front();
@@ -38,6 +47,9 @@ ProgressProjection ProgressProjector::project(const ReferencePath& reference, do
     for (size_t i = 0; i + 1 < pts.size(); ++i) {
         const auto& a = pts[i];
         const auto& b = pts[i + 1];
+        if (b.s + 1e-9 < lower_s) {
+            continue;
+        }
         const double vx = b.x - a.x;
         const double vy = b.y - a.y;
         const double seg_len2 = vx * vx + vy * vy;
@@ -45,7 +57,9 @@ ProgressProjection ProgressProjector::project(const ReferencePath& reference, do
             continue;
         }
 
-        const double t = clamp01(((x - a.x) * vx + (y - a.y) * vy) / seg_len2);
+        const double seg_s = std::max(1e-9, b.s - a.s);
+        const double min_t = clamp01((lower_s - a.s) / seg_s);
+        const double t = std::max(min_t, clamp01(((x - a.x) * vx + (y - a.y) * vy) / seg_len2));
         const double px = a.x + t * vx;
         const double py = a.y + t * vy;
         const double d2 = sqr(x - px) + sqr(y - py);

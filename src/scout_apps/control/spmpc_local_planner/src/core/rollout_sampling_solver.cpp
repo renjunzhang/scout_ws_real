@@ -70,7 +70,7 @@ bool RolloutSamplingSolver::solve(
     }
 
     ProgressProjector projector;
-    const auto proj = projector.project(reference, input.robot.x, input.robot.y);
+    const auto proj = projector.project(reference, input.robot.x, input.robot.y, input.min_progress_s);
     if (!proj.valid) {
         output.status = "PROJECTION_FAILED";
         return false;
@@ -83,6 +83,7 @@ bool RolloutSamplingSolver::solve(
         output.cmd_v = 0.0;
         output.cmd_omega = 0.0;
         output.progress_s = reference.length() > 1e-6 ? proj.s / reference.length() : 0.0;
+        output.progress_abs_s = proj.s;
         return true;
     }
 
@@ -154,7 +155,7 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
     p.y = input.robot.y;
     p.yaw = input.robot.yaw;
     p.v = input.robot.v;
-    p.s = projector.project(reference, input.robot.x, input.robot.y).s;
+    p.s = projector.project(reference, input.robot.x, input.robot.y, input.min_progress_s).s;
     output.trajectory.reserve(input.horizon_steps + 1);
     output.trajectory.push_back(p);
 
@@ -238,6 +239,7 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
     output.cmd_v = first_v;
     output.cmd_omega = first_omega;
     output.progress_s = reference.length() > 1e-6 ? output.trajectory.front().s / reference.length() : 0.0;
+    output.progress_abs_s = output.trajectory.front().s;
     output.success = true;
     output.status = variant_.name + "_OK";
     return output;

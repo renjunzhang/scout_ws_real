@@ -60,6 +60,7 @@ struct SolverInput {
     SloshState slosh;
     double dt = 0.1;
     int horizon_steps = 30;
+    double min_progress_s = 0.0;
 };
 
 struct SolverOutput {
@@ -68,6 +69,7 @@ struct SolverOutput {
     double cmd_v = 0.0;
     double cmd_omega = 0.0;
     double progress_s = 0.0;
+    double progress_abs_s = 0.0;
     double solver_time_ms = 0.0;
     std::vector<TrajectoryPoint> trajectory;
     SloshHorizonSummary slosh_summary;
