@@ -1,0 +1,3 @@
+robot:
+  v_max: 0.8
+  omega_max: 1.2

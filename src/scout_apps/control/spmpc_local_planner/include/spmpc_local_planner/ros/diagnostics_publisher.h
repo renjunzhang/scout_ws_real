@@ -1,0 +1,32 @@
+#pragma once
+
+#include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/core/variant_config.h"
+#include <nav_msgs/Path.h>
+#include <ros/ros.h>
+#include <std_msgs/Float32.h>
+#include <std_msgs/Float32MultiArray.h>
+#include <std_msgs/String.h>
+
+namespace spmpc_local_planner {
+
+class DiagnosticsPublisher {
+public:
+    void initialize(ros::NodeHandle& nh);
+    void publishVariant(const VariantConfig& variant, const std::string& experiment_mode);
+    void publishOutput(const SolverOutput& output, const std::string& frame_id);
+    void publishStatus(const std::string& status);
+
+private:
+    nav_msgs::Path makePathMsg(const SolverOutput& output, const std::string& frame_id) const;
+
+    ros::Publisher status_pub_;
+    ros::Publisher variant_pub_;
+    ros::Publisher experiment_mode_pub_;
+    ros::Publisher trajectory_pub_;
+    ros::Publisher progress_pub_;
+    ros::Publisher solver_time_pub_;
+    ros::Publisher cost_breakdown_pub_;
+};
+
+}  // namespace spmpc_local_planner

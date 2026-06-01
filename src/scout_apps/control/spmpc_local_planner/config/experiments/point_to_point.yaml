@@ -1,0 +1,5 @@
+experiment:
+  mode: point_to_point
+  reference_source: global_path
+  corridor_width: 0.50
+  obstacle_enable: false

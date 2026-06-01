@@ -1,0 +1,44 @@
+variants:
+  B0:
+    slosh_enable: false
+    smooth_priority_enable: false
+    slosh_constraint_enable: false
+    w_contour: 1.0
+    w_lag: 0.2
+    w_progress: 0.2
+    w_control: 0.1
+    w_smooth: 0.1
+    w_slosh: 0.0
+
+  B_slosh:
+    slosh_enable: true
+    smooth_priority_enable: false
+    slosh_constraint_enable: false
+    w_contour: 1.0
+    w_lag: 0.2
+    w_progress: 0.2
+    w_control: 0.1
+    w_smooth: 0.1
+    w_slosh: 1.0
+
+  B_smooth:
+    slosh_enable: false
+    smooth_priority_enable: true
+    slosh_constraint_enable: false
+    w_contour: 1.0
+    w_lag: 0.2
+    w_progress: 0.2
+    w_control: 0.3
+    w_smooth: 1.0
+    w_slosh: 0.0
+
+  B_ours:
+    slosh_enable: true
+    smooth_priority_enable: true
+    slosh_constraint_enable: false
+    w_contour: 1.0
+    w_lag: 0.2
+    w_progress: 0.2
+    w_control: 0.3
+    w_smooth: 1.0
+    w_slosh: 1.0

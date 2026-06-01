@@ -1,0 +1,8 @@
+slosh:
+  container_radius: 0.0185
+  liquid_height: 0.058
+  liquid_density: 1000.0
+  damping_ratio: 0.05
+  mode_index: 1
+  slosh_height_ref: 0.005
+  slosh_eta_dot_ratio: 0.3

@@ -116,7 +116,7 @@ SPMPC (本方法):      负责在该路径附近, 生成 slosh-aware 的局部�
 #### 分阶段与"不做"
 
 ```text
-Phase 1-2:  无障碍 cost; obstacle_cost_terms 文件预留但 enable=false (见 §4.2.1)。
+Phase 1-2:  无障碍 cost; cost_terms 内 obstacle/corridor 项预留但 enable=false (见 §4.2.1)。
 Phase 3:    才点亮 corridor / costmap obstacle penalty (静态, 软约束)。
 明确不做:    动态障碍预测 / homotopy / topology 候选 (见 §8.3)。
 ```
@@ -567,121 +567,68 @@ $$
 
 ## 4. 推荐文件结构
 
+采用**中等粒度**:按 §4.2.1 的"三圈/职责"分目录(保证解耦),但每类 cost/constraint
+先各收一个文件(满足简洁原则,避免一上来背几十个空文件的债)。粒度原则见本节末。
+
 ```text
 src/scout_apps/control/
-├── scout_local_planner/
-│   └── 当前控制层主线: C/D/E/F + fixed-path 实物实验
+├── scout_local_planner/      # Route A: 当前控制层主线，保留，不动
+├── slosh_models/             # 共享物理模型库 (Route A/B 共用，复用不 fork)
 │
-├── spmpc_local_planner/
-│   ├── CMakeLists.txt
-│   ├── package.xml
-│   ├── include/spmpc_local_planner/
-│   │   ├── spmpc_local_planner_ros.h
-│   │   ├── spmpc_problem.h
-│   │   ├── spmpc_state.h
-│   │   ├── reference_corridor.h
-│   │   ├── trajectory_rollout.h
-│   │   ├── slosh_cost_terms.h
-│   │   ├── obstacle_cost_terms.h
-│   │   ├── terminal_policy.h
-│   │   └── diagnostics_publisher.h
-│   ├── src/
-│   │   ├── spmpc_local_planner_ros.cpp
-│   │   ├── spmpc_problem.cpp
-│   │   ├── reference_corridor.cpp
-│   │   ├── trajectory_rollout.cpp
-│   │   ├── slosh_cost_terms.cpp
-│   │   ├── obstacle_cost_terms.cpp
-│   │   ├── terminal_policy.cpp
-│   │   └── diagnostics_publisher.cpp
-│   ├── config/
-│   │   ├── spmpc_default.yaml
-│   │   └── spmpc_baseline.yaml
-│   ├── launch/
-│   │   ├── spmpc_experiment.launch
-│   │   └── spmpc_sim.launch
-│   ├── scripts/
-│   │   ├── run_spmpc_smoke.sh
-│   │   └── validate_spmpc_bag.py
-│   └── README.md
-│
-└── slosh_models/
-    └── 共享物理模型库，后续可逐步抽成真正公共库
+└── spmpc_local_planner/      # Route B: 规控一体新主线
+    ├── CMakeLists.txt
+    ├── package.xml
+    ├── include/spmpc_local_planner/
+    │   ├── ros/
+    │   │   ├── spmpc_local_planner_ros.h    # ROS 适配：订阅/发布/参数/定时器 (唯一可 include ros)
+    │   │   └── diagnostics_publisher.h      # /spmpc/* 诊断发布
+    │   ├── core/
+    │   │   ├── spmpc_problem.h              # 唯一编排者：组 cost+约束+调 solver→出 trajectory
+    │   │   ├── spmpc_solver.h               # solver 接口 (第一版只接 OSQP 一个实现)
+    │   │   ├── spmpc_state.h                # 9 维增广状态 struct + index
+    │   │   ├── trajectory.h                 # local trajectory 数据结构
+    │   │   └── variant_config.h             # B0/B-slosh/B-smooth/B-ours 派生 (集中一处)
+    │   ├── reference/
+    │   │   ├── reference_path.h             # global/fixed path 缓存 (复用 PathHandler 几何)
+    │   │   ├── progress_projector.h         # 最近点 / s 投影 / contour-lag 误差
+    │   │   └── corridor_builder.h           # fixed corridor / costmap corridor (Phase 3)
+    │   ├── dynamics/
+    │   │   ├── robot_dynamics.h             # [x,y,psi,v,s] 离散化 + 线性化 A/B
+    │   │   └── slosh_dynamics.h             # [eta,eta_dot] 模态 ODE (复用 slosh_models)
+    │   ├── cost_terms.h                     # 所有 cost 项 (二次型, 各带 enable 开关)
+    │   ├── constraints.h                    # bounds / corridor (obstacle/slosh 预留, 默认关)
+    │   └── terminal_policy.h                # 终点判断与低 jerk 停车
+    ├── src/                                 # 与 include 对应的实现文件
+    ├── config/                              # 按"换什么改哪个文件"拆 (详见 §4.4)
+    │   ├── planner/                         # 平台无关: common / variants / solver
+    │   ├── platforms/                       # 换底盘只改这里: scout_mini / dingo / ...
+    │   ├── containers/                      # 换容器只改这里: tube_default / cup_default
+    │   └── experiments/                     # fixed_path / point_to_point
+    ├── launch/
+    │   ├── spmpc_experiment.launch
+    │   ├── spmpc_fixed_path.launch
+    │   └── spmpc_point_to_point.launch
+    ├── scripts/
+    │   ├── run_spmpc_fixed_path_smoke.sh
+    │   ├── run_spmpc_p2p_smoke.sh
+    │   ├── record_spmpc_experiment.sh
+    │   ├── validate_spmpc_bag.py
+    │   └── analyze_spmpc_cost_breakdown.py
+    └── README.md
 ```
 
-第一阶段不要把所有东西抽象成插件。先让 `spmpc_local_planner` 最小闭环跑通，再考虑模块化扩展。
-
-### 4.1 实验驱动的最终代码结构
-
-上面的结构是最小草图。真正开工时建议按“实验组可切换、模块可诊断、主线不污染”的原则组织：
+粒度原则(对齐 CLAUDE.md「简洁优先」+「先简单, 需要时再抽象」):
 
 ```text
-spmpc_local_planner/
-├── include/spmpc_local_planner/
-│   ├── ros/
-│   │   ├── spmpc_local_planner_ros.h       # ROS 适配层，只负责订阅/发布/参数读取
-│   │   └── diagnostics_publisher.h         # /spmpc/* 诊断发布
-│   │
-│   ├── core/
-│   │   ├── spmpc_problem.h                 # 一次 MPC 问题的输入/输出/权重集合
-│   │   ├── spmpc_solver.h                  # solver 接口，第一版可只接一个实现
-│   │   ├── spmpc_state.h                   # robot + optional slosh state
-│   │   ├── trajectory.h                    # local trajectory 数据结构
-│   │   └── variant_config.h                # B0/B-slosh/B-smooth/B-ours 派生配置
-│   │
-│   ├── reference/
-│   │   ├── reference_path.h                # global/fixed path 缓存
-│   │   ├── progress_projector.h            # 最近点、s 投影、contour/lag 误差
-│   │   └── corridor_builder.h              # fixed corridor / costmap corridor
-│   │
-│   ├── dynamics/
-│   │   ├── robot_dynamics.h                # [x,y,psi,v,s] rollout
-│   │   └── slosh_dynamics.h                # [eta,dot_eta] rollout
-│   │
-│   ├── costs/
-│   │   ├── cost_terms.h                    # cost term 统一接口
-│   │   ├── contour_cost.h
-│   │   ├── lag_cost.h
-│   │   ├── progress_cost.h
-│   │   ├── control_cost.h
-│   │   ├── smooth_cost.h
-│   │   ├── terminal_cost.h
-│   │   ├── corridor_cost.h
-│   │   ├── obstacle_cost.h
-│   │   └── slosh_cost.h
-│   │
-│   ├── constraints/
-│   │   ├── bounds_constraint.h
-│   │   ├── corridor_constraint.h
-│   │   ├── obstacle_constraint.h
-│   │   └── slosh_constraint.h              # 第一阶段只预留，默认关闭
-│   │
-│   └── terminal/
-│       └── terminal_policy.h               # 终点判断与低 jerk 停车策略
-│
-├── src/
-│   └── 与 include 对应的实现文件
-│
-├── config/
-│   ├── spmpc_common.yaml                   # 机器人、horizon、topic、诊断通用配置
-│   ├── variants.yaml                       # B0/B-slosh/B-smooth/B-ours 权重
-│   ├── fixed_path_experiment.yaml          # 固定路径实验参数
-│   ├── point_to_point_experiment.yaml      # 点到点实验参数
-│   └── slosh_model.yaml                    # 容器、液体、阻尼、频率参数
-│
-├── launch/
-│   ├── spmpc_experiment.launch
-│   ├── spmpc_fixed_path.launch
-│   └── spmpc_point_to_point.launch
-│
-├── scripts/
-│   ├── run_spmpc_fixed_path_smoke.sh
-│   ├── run_spmpc_p2p_smoke.sh
-│   ├── record_spmpc_experiment.sh
-│   ├── validate_spmpc_bag.py
-│   └── analyze_spmpc_cost_breakdown.py
-│
-└── README.md
+1. 目录按职责圈分 (ros/core/reference/dynamics + 顶层 cost/constraint/terminal),
+   保证 §4.2.1 三圈依赖方向 → 这是解耦的本质, 与文件数无关。
+2. cost_terms.h 一个文件收所有 cost (contour/lag/progress/control/smooth/terminal/
+   corridor/obstacle/slosh)。它们 Phase 1 都是几行二次型, 各带 enable 开关即可,
+   不为几行代码各造一个 .h/.cpp/CMake 条目。
+3. constraints.h 同理一个文件 (bounds + corridor; obstacle/slosh constraint 预留 stub, 默认关)。
+4. 拆分时机: 某个 cost/constraint 真长到几百行 (如 slosh / obstacle 成熟后),
+   再单独拆出文件。先简单, 需要时再抽象, 不预先过度拆分。
+5. Phase 1 实际要建的文件是其中最小子集 (见 §6 Phase 1); 其余 Phase 2/3 才填。
 ```
 
 ### 4.2 模块边界
@@ -719,13 +666,17 @@ diagnostics 不参与控制决策。
           │ 依赖
           ▼
 中圈  纯算法（禁止 #include <ros/ros.h>，可脱 ROS 单测）
-        spmpc_problem.{h,cpp}      唯一编排者：组 cost+约束+调 OSQP→出 trajectory
-        spmpc_state.h              9 维状态 struct + index
-        reference_corridor.{h,cpp} 路径投影 / contour-lag / corridor 生成
-        trajectory_rollout.{h,cpp} 动力学积分 + 线性化 A_k/B_k
-        slosh_cost_terms.{h,cpp}   slosh ODE + J_slosh
-        obstacle_cost_terms.{h,cpp} corridor / 障碍约束（Phase 3 才点亮）
-        terminal_policy.{h,cpp}    终点 cost / 收敛
+        core/spmpc_problem      唯一编排者：组 cost+约束+调 solver→出 trajectory
+        core/spmpc_solver       OSQP 封装
+        core/spmpc_state        9 维状态 struct + index
+        core/variant_config     B0/B-slosh/B-smooth/B-ours 派生 (集中一处)
+        reference/progress_projector  路径投影 / contour-lag 误差
+        reference/corridor_builder    corridor 生成（Phase 3 才点亮）
+        dynamics/robot_dynamics 底盘离散化 + 线性化 A_k/B_k
+        dynamics/slosh_dynamics slosh 模态 ODE rollout
+        cost_terms              所有 cost 项 (二次型, 各带 enable; 含 slosh/obstacle)
+        constraints             bounds / corridor (obstacle/slosh 预留, 默认关)
+        terminal_policy         终点 cost / 收敛
           │ 依赖
           ▼
 内圈  复用既有（只读，不反向耦合）
@@ -737,16 +688,17 @@ diagnostics 不参与控制决策。
 
 ```text
 规则 1  中圈零 ROS 依赖
-  spmpc_problem / reference_corridor / trajectory_rollout / slosh_cost_terms /
-  obstacle_cost_terms / terminal_policy 内不得出现 #include <ros/ros.h>。
-  输入用纯 struct，输出用纯 struct。→ 能脱 ROS 单测，也是论文可复现的底气。
+  core/ reference/ dynamics/ cost_terms / constraints / terminal_policy
+  内不得出现 #include <ros/ros.h>。输入用纯 struct，输出用纯 struct。
+  → 能脱 ROS 单测，也是论文可复现的底气。
 
 规则 2  spmpc_problem 是唯一编排者
-  ROS 层只调它一个 solve(input)->output。各 cost_terms 互不引用，
+  ROS 层只调它一个 solve(input)->output。cost_terms 内各 cost 项互不引用，
   只被 spmpc_problem 按 variant 开关组装进 QP。
 
-规则 3  每个 cost term 是"可独立开关的纯函数对象"
-  slosh_cost_terms / obstacle_cost_terms / terminal_policy 各自 addTo(QP, weights, enable)。
+规则 3  每个 cost 项是"可独立开关的纯函数对象"
+  cost_terms 内每个 cost (contour/lag/progress/control/smooth/terminal/
+  corridor/obstacle/slosh) 各自 addTo(QP, weights, enable)。
   enable=false 就完全不进 QP（不是进了再乘 0）。→ 直接支撑 §4.3 的 B0/B-slosh/
   B-smooth/B-ours 消融：换组只改 enable，不改代码。
 
@@ -759,10 +711,11 @@ diagnostics 不参与控制决策。
 落地顺序（结构一次建全，功能分阶段点亮，对齐 §6 Phase）：
 
 ```text
-Phase 1  ros + spmpc_problem + reference_corridor + trajectory_rollout + terminal_policy
-         slosh_cost_terms / obstacle_cost_terms 文件建好但 enable=false 空实现
-Phase 2  点亮 slosh_cost_terms（复用 slosh_models）
-Phase 3  点亮 obstacle_cost_terms（corridor）
+Phase 1  ros + core(problem/solver/state/variant_config) + reference/progress_projector
+         + dynamics/robot_dynamics + cost_terms(contour/lag/progress/control/smooth) + terminal_policy
+         cost_terms 内 slosh/corridor/obstacle 与 dynamics/slosh_dynamics 先空实现/enable=false
+Phase 2  点亮 cost_terms 的 slosh 项 + dynamics/slosh_dynamics（复用 slosh_models）
+Phase 3  点亮 cost_terms 的 corridor/obstacle 项 + reference/corridor_builder
 ```
 
 #### 4.2.2 命名空间口径（两条线互斥启动，单发布者）
@@ -801,7 +754,8 @@ Phase 3  点亮 obstacle_cost_terms（corridor）
 ```text
 1. scripts/launch_real_sensors_stack.sh   传感器/底盘/定位/IMU/RealSense（共用，不动）
 2. spmpc_experiment.launch                只起 spmpc planner 节点（ns=spmpc）
-   - load spmpc_common.yaml + variants.yaml + 实验 yaml
+   - load planner/common.yaml + planner/variants.yaml + platforms/<平台>.yaml
+     + containers/<容器>.yaml + experiments/<实验>.yaml
    - arg: planner_variant / experiment_mode / reference_source / cmd_vel_topic
    - <node ns="spmpc"> + 绝对 topic remap
 ```
@@ -864,38 +818,162 @@ src/mpc_planner:
   mpc_planner optional
 ```
 
+#### 4.3.1 内部 variant 与外部 planner 包的边界
+
+`B0 / B-slosh / B-smooth / B-ours` 不拆成 4 个包，也不复制 4 套代码。它们是同一个 `spmpc_local_planner` 内部的 `planner_variant`：
+
+```text
+spmpc_local_planner/
+  planner_variant=B0
+  planner_variant=B_slosh
+  planner_variant=B_smooth
+  planner_variant=B_ours
+```
+
+原因：
+
+```text
+1. 四组共享同一 reference/corridor/terminal/solver/diagnostics；
+2. 四组只改变 state/cost/weight enable；
+3. 这样内部消融才公平，bugfix 也不会改四份代码。
+```
+
+外部 baseline 才是同级 planner 包：
+
+```text
+src/scout_apps/control/
+  spmpc_local_planner/       本文规控一体 SPMPC
+  teb_local_planner/         外部 baseline
+  mpc_local_planner/         外部 baseline，后续引入
+  dwa_local_planner/         ROS navigation classic lower bound，supplementary
+  scout_local_planner/       当前控制层 tracking MPC 主线，保留
+```
+
+论文和代码口径：
+
+```text
+内部消融:
+  同一个 planner 包、同一个 solver/dataflow，只切 planner_variant。
+
+外部对比:
+  不同 planner 包，在同一 map / start / goal / bounds / global path source 下对比。
+```
+
+#### 4.3.2 对外实验接口统一口径
+
+不同 planner 内部实现不一样，但实验层输入输出要尽量统一：
+
+```text
+共同输入:
+  /odom
+  /tf
+  /map 或 costmap
+  /scout/global_path 或 /scout/global_path_fixed
+  /move_base_simple/goal 或 /scout/goal
+
+共同输出:
+  /cmd_vel
+  local plan / local trajectory 诊断
+  planner status
+```
+
+`spmpc_local_planner` 第一阶段先作为普通 ROS node：
+
+```text
+输入:
+  /odom
+  /scout/global_path_fixed 或 /scout/global_path
+
+输出:
+  /cmd_vel
+  /spmpc/local_trajectory
+  /spmpc/status
+  /spmpc/cost_breakdown
+```
+
+后续如果要和 `TEB`、`mpc_local_planner` 做严格 `move_base/nav_core` 工程对比，应增加适配层，而不是改 core：
+
+```text
+spmpc core solver
+  -> fixed-path ROS node adapter
+  -> nav_core/BaseLocalPlanner adapter
+```
+
+第一版不强行做 `nav_core` 插件。原因是 Phase 1/2 的关键是把 integrated MPC + slosh objective 跑通；`nav_core` 适配是点到点工程泛化阶段的接口工作。
+
 ### 4.4 参数文件设计
 
 不要把所有参数堆进 launch。launch 只暴露实验必要入口，其余写 YAML。
+参数目录按"换什么改哪个文件"拆开，配合 §4.8 三层契约——换底盘只改 `platforms/`，换容器只改 `containers/`：
 
-#### `spmpc_common.yaml`
+```text
+config/
+  planner/
+    common.yaml          # horizon / dt / 控制频率 / 诊断 (与平台无关)
+    variants.yaml        # B0/B-slosh/B-smooth/B-ours 实验组开关
+    solver.yaml          # OSQP / SQP 迭代参数 (与平台无关)
+  platforms/
+    scout_mini.yaml      # 第一套实验平台
+    dingo.yaml           # 换同类差速底盘只加这种文件
+    diff_drive_generic.yaml
+  containers/
+    tube_default.yaml    # 试管 (当前实验容器)
+    cup_default.yaml     # 换容器只加这种文件
+  experiments/
+    fixed_path.yaml
+    point_to_point.yaml
+```
+
+#### `planner/common.yaml`（平台无关）
 
 ```yaml
 spmpc:
   control_frequency: 20.0
   horizon_steps: 30
   dt: 0.1
-
   topics:
     odom: /odom
     global_path: /scout/global_path
     fixed_path: /scout/global_path_fixed
     cmd_vel: /cmd_vel
-
-  robot:
-    v_min: 0.0
-    v_max: 0.8
-    a_min: -0.8
-    a_max: 0.6
-    omega_max: 1.2
-
   diagnostics:
     namespace: /spmpc
     publish_local_trajectory: true
     publish_cost_breakdown: true
 ```
 
-#### `variants.yaml`
+注：`topics` 列默认值；换平台时由 `platforms/<name>.yaml` 覆盖（topic 名也是平台相关项）。
+
+#### `platforms/scout_mini.yaml`（换底盘只改这里，对应 §4.8 PlatformParams）
+
+```yaml
+platform:
+  name: scout_mini
+  kinematics: differential
+  wheel_base: 0.498
+  track_width: 0.470
+  v_min: 0.0
+  v_max: 0.8
+  a_min: -0.8
+  a_max: 0.6
+  omega_max: 1.2
+  jerk_max: 1.0
+  base_frame: base_link
+```
+
+#### `containers/tube_default.yaml`（换容器只改这里，对应 §4.8 SloshParams）
+
+```yaml
+container:
+  radius: 0.025
+  liquid_height: 0.07
+  omega_n: 4.2
+  zeta: 0.05
+  offset_x: 0.0
+  offset_y: 0.0
+```
+
+#### `planner/variants.yaml`
 
 ```yaml
 variants:
@@ -903,42 +981,45 @@ variants:
     slosh_enable: false
     smooth_priority_enable: false
     slosh_constraint_enable: false
-
   B_slosh:
     slosh_enable: true
     smooth_priority_enable: false
     slosh_constraint_enable: false
-
   B_smooth:
     slosh_enable: false
     smooth_priority_enable: true
     slosh_constraint_enable: false
-
   B_ours:
     slosh_enable: true
     smooth_priority_enable: true
     slosh_constraint_enable: false
 ```
 
-#### `fixed_path_experiment.yaml`
+#### `experiments/fixed_path.yaml`
 
 ```yaml
 experiment:
   mode: fixed_path
   reference_source: global_path_fixed
   corridor_width: 0.30
+  corridor_enable: true
+  obstacle_enable: false        # 障碍 cost 仅 Phase 3 后启用
   terminal_exclude_sec: 1.0
 ```
 
-#### `point_to_point_experiment.yaml`
+#### `experiments/point_to_point.yaml`
 
 ```yaml
 experiment:
   mode: point_to_point
   reference_source: global_path
   corridor_width: 0.50
-  obstacle_enable: true
+  corridor_enable: true
+  obstacle_enable: false        # 第一版默认关；Phase 3 加入静态 corridor/obstacle 后才置 true
 ```
+
+> `obstacle_enable` 第一版一律 false（见 §3.1.1 / §6 分阶段）。避障由全局规划器负责，
+> SPMPC 第一/二版只做 corridor 软约束，不做障碍 cost；Phase 3 才允许置 true。
 
 ### 4.5 launch 参数设计
 
@@ -954,8 +1035,14 @@ experiment_mode:
 reference_source:
   global_path_fixed | global_path | goal
 
-config_profile:
-  fixed_path_experiment | point_to_point_experiment
+experiment_profile:
+  experiments/fixed_path | experiments/point_to_point
+
+platform_profile:
+  platforms/scout_mini | platforms/dingo | ...
+
+container_profile:
+  containers/tube_default | containers/cup_default | ...
 ```
 
 不建议暴露一堆互斥 bool：
@@ -1049,6 +1136,171 @@ pct_slosh_total
 2. mpc_planner 的 topology / guidance 多候选系统；
 3. scout_local_planner 中控制层 tracking error 状态结构；
 4. scout_local_planner 的 /mpc/* topic 名。
+```
+
+### 4.8 core / adapter / YAML 三层平台无关设计
+
+#### 设计目标
+
+`spmpc_local_planner` 不绑定 Scout mini，Scout mini 只是第一套实验平台。目标：
+
+```text
+同类差速底盘迁移时，只修改 YAML 参数；
+不修改 core 算法；
+不修改 ROS adapter 代码。
+```
+
+#### 边界（必须收紧，避免"平台无关"被理解成无所不能）
+
+```text
+只承诺同运动学类型平台可移植。
+第一阶段只支持 differential / unicycle 类底盘。
+Scout → Dingo / Jackal 这类可靠参数迁移（只改 YAML）。
+差速 → Ackermann / 全向：不承诺只改 YAML，需新增 RobotDynamicsModel（改 core）。
+```
+
+#### 三层隔离
+
+```text
+core:    纯算法层；不依赖 ROS；不知道机器人型号；
+         只接收 PlannerInput / PlatformParams / SloshParams，输出 PlannerOutput。
+adapter: 平台接入层；负责 ROS topic / tf / odom / cmd_vel / nav_core；
+         把 YAML 读成参数 struct，调用同一个 SpmpcPlannerCore。
+YAML:    平台参数层；描述机器人限制、容器参数、topic 名、frame 名。
+```
+
+#### core 红线
+
+core 中禁止出现：
+
+```text
+#include <ros/ros.h>
+写死 Scout mini 参数
+写死 topic 名 / frame 名
+写死容器半径 / 液高 / omega_n / zeta
+写死 v_max / a_max / omega_max
+```
+
+所有物理量必须来自 `PlatformParams` / `SloshParams` / `PlannerConfig` / `VariantConfig`。
+
+#### 平台参数示例
+
+```yaml
+platform:
+  name: scout_mini
+  kinematics: differential
+  wheel_base: 0.498
+  track_width: 0.470
+  v_max: 0.8
+  omega_max: 1.2
+  a_max: 0.6
+  jerk_max: 1.0
+  base_frame: base_link
+
+topics:
+  odom: /odom
+  cmd_vel: /cmd_vel
+  global_path: /scout/global_path_fixed
+
+container:
+  radius: 0.025
+  liquid_height: 0.07
+  omega_n: 4.2
+  zeta: 0.05
+  offset_x: 0.0
+  offset_y: 0.0
+```
+
+#### adapter 双入口（共用同一 core）
+
+```text
+SpmpcRosNode         第一阶段独立 node，快速验证
+SpmpcNavCorePlugin   后续 move_base/nav_core 插件，与 TEB/DWA 同框架公平对比
+```
+
+二者都只做适配，都调用 `SpmpcPlannerCore::solve(input, output)`；不要把算法写进 node 或 plugin。
+
+#### 最终决策
+
+```text
+采用三层平台无关设计。
+第一阶段只支持差速 / unicycle 类平台。
+同类平台迁移目标：只改 YAML。
+跨运动学类型迁移：允许新增 RobotDynamicsModel，不承诺只调参。
+```
+
+不算过度设计，因为它直接服务两个目标：(1) 论文方法不是 Scout 专用；(2) 后续换同类底盘不推倒重写。
+
+### 4.9 实验包 spmpc_experiments（外部 baseline 不进自研包）
+
+外部对比算法**不放进 `spmpc_local_planner`**。它们各自保持独立包，只在一个实验调度包里统一管理 launch / 参数 / 录包 / 分析。
+
+#### 包拓扑
+
+```text
+src/
+├── scout_apps/control/
+│   ├── scout_local_planner/      # Route A 控制层主线
+│   └── spmpc_local_planner/      # Route B 自研：B0/B-slosh/B-smooth/B-ours（同一 core 切 variant）
+│
+├── teb_local_planner/            # 外部 baseline：TEB（不改源码）
+├── mpc_local_planner/            # 外部 baseline：普通 NMPC local planner（不改源码）
+├── dwa_local_planner/            # ROS 自带 / 系统安装（不改源码）
+├── mpc_planner/                  # 可选外部 baseline（尽量不改）
+│
+└── spmpc_experiments/            # 只放实验配置 / launch / 脚本，不放算法
+```
+
+#### spmpc_experiments 内部
+
+```text
+spmpc_experiments/
+├── launch/
+│   ├── fixed_path/        run_B0 / run_B_slosh / run_B_smooth / run_B_ours
+│   └── point_to_point/    run_B0 / run_B_ours / run_teb / run_dwa /
+│                          run_mpc_local_planner / run_mpc_planner_optional
+├── config/
+│   ├── common/            map / robot_limits / start_goal / costmap_common
+│   ├── baselines/         teb / dwa / mpc_local_planner / mpc_planner
+│   └── spmpc/             B0 / B_slosh / B_smooth / B_ours
+├── scripts/
+│   ├── run_fixed_path_batch.py
+│   ├── run_point_to_point_batch.py
+│   ├── record_experiment.sh
+│   └── analyze_results.py
+└── README.md
+```
+
+#### 职责划分
+
+| 方法 | 放在哪里 | 是否改源码 |
+|---|---|---|
+| B0 / B-slosh / B-smooth / B-ours | `spmpc_local_planner` | 是，同一份 core 切 variant |
+| TEB | `teb_local_planner` | 不改 |
+| DWA | `dwa_local_planner` | 不改 |
+| mpc_local_planner | `mpc_local_planner` | 不改 |
+| mpc_planner | `mpc_planner` | 尽量不改，可选 |
+
+```text
+算法包 = 各自独立；
+实验包 = 统一调度（launch / 参数 / 录包 / 分析）；
+数据分析 = 同一套脚本。
+```
+
+运行方式统一为：
+
+```bash
+roslaunch spmpc_experiments run_B_ours.launch
+roslaunch spmpc_experiments run_teb.launch
+roslaunch spmpc_experiments run_mpc_local_planner.launch
+```
+
+核心原则：
+
+```text
+B 系列在 spmpc_local_planner 内部切 variant；
+TEB / DWA / mpc_local_planner 保持外部独立包，不入侵自研包；
+spmpc_experiments 统一启动、参数、录包、分析。
 ```
 
 ## 5. 与 src/mpc_planner 的关系
