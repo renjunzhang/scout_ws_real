@@ -2,6 +2,8 @@
 
 #include "spmpc_local_planner/core/spmpc_solver.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
+#include <utility>
+#include <vector>
 
 namespace spmpc_local_planner {
 
@@ -15,8 +17,7 @@ private:
     SolverOutput rolloutCandidate(
         const SolverInput& input,
         const ReferencePath& reference,
-        double cmd_v,
-        double cmd_omega) const;
+        const std::vector<std::pair<double, double>>& controls) const;
 
     SolverParams params_;
     VariantConfig variant_;

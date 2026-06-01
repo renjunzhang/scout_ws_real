@@ -11,6 +11,7 @@ struct SolverParams {
     double v_max = 0.8;
     double omega_max = 1.2;
     double a_max = 0.6;
+    double corridor_width = 0.30;
     double lookahead_distance = 0.6;
     double goal_tolerance = 0.15;
     SloshModelParams slosh;

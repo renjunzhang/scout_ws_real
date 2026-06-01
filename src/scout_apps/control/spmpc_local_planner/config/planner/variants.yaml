@@ -19,7 +19,7 @@ variants:
     w_progress: 0.2
     w_control: 0.1
     w_smooth: 0.1
-    w_slosh: 1.0
+    w_slosh: 5.0   # bug A 修复后 slosh 与 contour 同量级; 调到 5 让 slosh 能改变候选选择 (后续可 sweep)
 
   B_smooth:
     slosh_enable: false
@@ -41,4 +41,4 @@ variants:
     w_progress: 0.2
     w_control: 0.3
     w_smooth: 1.0
-    w_slosh: 1.0
+    w_slosh: 5.0   # 与 B_slosh 一致, 叠加强 smooth

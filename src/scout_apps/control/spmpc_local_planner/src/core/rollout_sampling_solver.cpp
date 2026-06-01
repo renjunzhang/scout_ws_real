@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <utility>
 #include <vector>
 
 namespace spmpc_local_planner {
@@ -21,6 +22,31 @@ double normalizeAngle(double a) {
         a += 2.0 * M_PI;
     }
     return a;
+}
+
+std::vector<std::pair<double, double>> makePiecewiseControls(
+    int horizon_steps,
+    double base_v,
+    double base_omega,
+    double v_start_scale,
+    double v_end_scale,
+    double omega_start_scale,
+    double omega_end_scale,
+    double v_max,
+    double omega_max) {
+    const int n = std::max(1, horizon_steps);
+    std::vector<std::pair<double, double>> controls;
+    controls.reserve(n);
+
+    for (int k = 0; k < n; ++k) {
+        const double r = n > 1 ? static_cast<double>(k) / static_cast<double>(n - 1) : 0.0;
+        const double v_scale = v_start_scale + r * (v_end_scale - v_start_scale);
+        const double omega_scale = omega_start_scale + r * (omega_end_scale - omega_start_scale);
+        const double v = clampValue(base_v * v_scale / 0.5, 0.0, v_max);
+        const double omega = clampValue(base_omega * omega_scale, -omega_max, omega_max);
+        controls.emplace_back(v, omega);
+    }
+    return controls;
 }
 
 }  // namespace
@@ -68,21 +94,35 @@ bool RolloutSamplingSolver::solve(
     const double base_v = clampValue(0.5 * params_.v_max, 0.0, params_.v_max);
     const double base_omega = clampValue(2.0 * heading_error, -params_.omega_max, params_.omega_max);
 
-    const std::vector<double> v_scales = {0.35, 0.5, 0.7, 0.9};
-    const std::vector<double> omega_scales = {0.7, 1.0, 1.3};
+    const std::vector<double> v_start_scales = {0.35, 0.5, 0.7, 0.9};
+    const std::vector<double> v_end_scales = {0.35, 0.5, 0.7, 0.9};
+    const std::vector<double> omega_start_scales = {0.7, 1.0, 1.3};
+    const std::vector<double> omega_end_scales = {0.7, 1.0, 1.3};
     double best_score = std::numeric_limits<double>::infinity();
     bool have_candidate = false;
 
-    for (double v_scale : v_scales) {
-        for (double omega_scale : omega_scales) {
-            const double cmd_v = clampValue(base_v * v_scale / 0.5, 0.0, params_.v_max);
-            const double cmd_omega = clampValue(base_omega * omega_scale, -params_.omega_max, params_.omega_max);
-            auto candidate = rolloutCandidate(input, reference, cmd_v, cmd_omega);
-            const double score = candidate.cost.total();
-            if (!have_candidate || score < best_score) {
-                best_score = score;
-                output = candidate;
-                have_candidate = true;
+    for (double v_start : v_start_scales) {
+        for (double v_end : v_end_scales) {
+            for (double omega_start : omega_start_scales) {
+                for (double omega_end : omega_end_scales) {
+                    const auto controls = makePiecewiseControls(
+                        input.horizon_steps,
+                        base_v,
+                        base_omega,
+                        v_start,
+                        v_end,
+                        omega_start,
+                        omega_end,
+                        params_.v_max,
+                        params_.omega_max);
+                    auto candidate = rolloutCandidate(input, reference, controls);
+                    const double score = candidate.cost.total();
+                    if (!have_candidate || score < best_score) {
+                        best_score = score;
+                        output = candidate;
+                        have_candidate = true;
+                    }
+                }
             }
         }
     }
@@ -100,9 +140,13 @@ bool RolloutSamplingSolver::solve(
 SolverOutput RolloutSamplingSolver::rolloutCandidate(
     const SolverInput& input,
     const ReferencePath& reference,
-    double cmd_v,
-    double cmd_omega) const {
+    const std::vector<std::pair<double, double>>& controls) const {
     SolverOutput output;
+    if (controls.empty()) {
+        output.status = "EMPTY_CONTROL_SEQUENCE";
+        return output;
+    }
+
     ProgressProjector projector;
 
     TrajectoryPoint p;
@@ -120,6 +164,9 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
 
     double prev_v = input.robot.v;
     for (int k = 0; k < input.horizon_steps; ++k) {
+        const auto& control = controls[std::min(static_cast<size_t>(k), controls.size() - 1)];
+        const double cmd_v = control.first;
+        const double cmd_omega = control.second;
         const double ax = (cmd_v - prev_v) / std::max(1e-3, input.dt);
         const double ay = cmd_v * cmd_omega;
         slosh = slosh_dynamics_.step(slosh, ax, ay, cmd_omega);
@@ -146,12 +193,15 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
 
         const auto proj = projector.project(reference, p.x, p.y);
         if (proj.valid) {
-            const double e_contour_ref = 0.15;
+            const double e_contour_ref = std::max(1e-3, 0.5 * params_.corridor_width);
             output.cost.J_contour += variant_.w_contour * (proj.distance / e_contour_ref) * (proj.distance / e_contour_ref);
         }
 
         const double a_ref = std::max(0.1, params_.a_max);
         output.cost.J_smooth += variant_.w_smooth * (ax / a_ref) * (ax / a_ref);
+        const double v_norm = cmd_v / std::max(1e-3, params_.v_max);
+        const double omega_norm = cmd_omega / std::max(1e-3, params_.omega_max);
+        output.cost.J_control += variant_.w_control * (v_norm * v_norm + omega_norm * omega_norm);
 
         if (variant_.slosh_enable && slosh_dynamics_.configured()) {
             const double h_ref = std::max(1e-4, params_.slosh.slosh_height_ref);
@@ -173,12 +223,20 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
         output.slosh_summary.h_p95_pred = sorted[idx];
     }
 
-    const double v_norm = cmd_v / std::max(1e-3, params_.v_max);
-    const double omega_norm = cmd_omega / std::max(1e-3, params_.omega_max);
-    output.cost.J_control = variant_.w_control * (v_norm * v_norm + omega_norm * omega_norm);
+    // Stage costs are averaged so weights remain comparable when horizon length changes.
+    const int n_steps = std::max(1, input.horizon_steps);
+    const double inv_n = 1.0 / static_cast<double>(n_steps);
+    output.cost.J_contour *= inv_n;
+    output.cost.J_control *= inv_n;
+    output.cost.J_smooth *= inv_n;
+    output.cost.J_slosh_eta *= inv_n;
+    output.cost.J_slosh_eta_dot *= inv_n;
+
+    const double first_v = controls.empty() ? 0.0 : controls.front().first;
+    const double first_omega = controls.empty() ? 0.0 : controls.front().second;
     output.cost.J_progress = -variant_.w_progress * std::max(0.0, output.trajectory.back().s - output.trajectory.front().s);
-    output.cmd_v = cmd_v;
-    output.cmd_omega = cmd_omega;
+    output.cmd_v = first_v;
+    output.cmd_omega = first_omega;
     output.progress_s = reference.length() > 1e-6 ? output.trajectory.front().s / reference.length() : 0.0;
     output.success = true;
     output.status = variant_.name + "_OK";
