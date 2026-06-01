@@ -12,6 +12,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_ros
   tf2_geometry_msgs
+  slosh_models
 )
 
 find_package(Eigen3 REQUIRED)
@@ -19,7 +20,7 @@ find_package(Eigen3 REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs
+  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs slosh_models
   DEPENDS EIGEN3
 )
 
@@ -34,6 +35,7 @@ add_library(${PROJECT_NAME}
   src/core/spmpc_problem.cpp
   src/reference/reference_path.cpp
   src/reference/progress_projector.cpp
+  src/dynamics/slosh_dynamics.cpp
   src/core/rollout_sampling_solver.cpp
   src/ros/diagnostics_publisher.cpp
   src/ros/spmpc_local_planner_ros.cpp

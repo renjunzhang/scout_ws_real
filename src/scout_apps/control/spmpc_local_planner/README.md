@@ -5,16 +5,18 @@
 
 ## 当前阶段
 
-当前只落地 Phase 1 最小骨架：
+当前落地到 Phase 2 最小闭环：
 
 ```text
 /odom + /scout/global_path_fixed
   -> ReferencePath / progress projection
   -> RolloutSamplingSolver 占位 solver
+  -> SloshDynamics horizon rollout
   -> /spmpc/local_trajectory + /cmd_vel + /spmpc/* diagnostics
 ```
 
-这不是完整 SQP/OSQP 规控一体 MPC，只用于验证包结构、ROS 数据流和诊断接口。
+这不是完整 SQP/OSQP 规控一体 MPC；当前只用于验证包结构、ROS 数据流、
+slosh 状态传播和 slosh-aware 候选评分接口。
 
 ## 配置结构
 
@@ -31,9 +33,9 @@ config/experiments/point_to_point.yaml
 
 ```text
 B0        普通 integrated MPC 占位组
-B_slosh   预留 slosh cost 组
-B_smooth  预留 smooth-priority 组
-B_ours    预留 slosh + smooth 主方法组
+B_slosh   B0 + slosh horizon cost
+B_smooth  B0 + smooth-priority cost
+B_ours    B0 + slosh horizon cost + smooth-priority cost
 ```
 
 ## 启动
@@ -65,8 +67,19 @@ roslaunch spmpc_local_planner spmpc_point_to_point.launch planner_variant:=B0
 /spmpc/experiment_mode
 /spmpc/local_trajectory
 /spmpc/debug/progress_s
+/spmpc/debug/slosh_state
+/spmpc/slosh_horizon_summary
 /spmpc/solver_time_ms
 /spmpc/cost_breakdown
 ```
 
 不要复用 `/mpc/cost_breakdown`，避免污染 `scout_local_planner` 既有分析链路。
+
+## 录包
+
+```bash
+OUT_DIR=/tmp/spmpc_bags NAME=spmpc_phase2_smoke \
+  src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_experiment.sh
+```
+
+脚本会记录 `/spmpc/debug/slosh_state` 和 `/spmpc/slosh_horizon_summary`。

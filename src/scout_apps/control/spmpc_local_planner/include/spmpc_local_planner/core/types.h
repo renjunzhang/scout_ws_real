@@ -27,6 +27,34 @@ struct TrajectoryPoint {
     double s = 0.0;
 };
 
+struct SloshHorizonSummary {
+    double h_peak_pred = 0.0;
+    double h_p95_pred = 0.0;
+    double eta_x_peak = 0.0;
+    double eta_y_peak = 0.0;
+    double eta_dot_norm_peak = 0.0;
+    int peak_k = 0;
+};
+
+struct CostBreakdown {
+    double J_contour = 0.0;
+    double J_lag = 0.0;
+    double J_progress = 0.0;
+    double J_v = 0.0;
+    double J_control = 0.0;
+    double J_smooth = 0.0;
+    double J_terminal = 0.0;
+    double J_corridor = 0.0;
+    double J_obstacle = 0.0;
+    double J_slosh_eta = 0.0;
+    double J_slosh_eta_dot = 0.0;
+
+    double total() const {
+        return J_contour + J_lag + J_progress + J_v + J_control + J_smooth +
+               J_terminal + J_corridor + J_obstacle + J_slosh_eta + J_slosh_eta_dot;
+    }
+};
+
 struct SolverInput {
     RobotState robot;
     SloshState slosh;
@@ -42,6 +70,8 @@ struct SolverOutput {
     double progress_s = 0.0;
     double solver_time_ms = 0.0;
     std::vector<TrajectoryPoint> trajectory;
+    SloshHorizonSummary slosh_summary;
+    CostBreakdown cost;
 };
 
 }  // namespace spmpc_local_planner

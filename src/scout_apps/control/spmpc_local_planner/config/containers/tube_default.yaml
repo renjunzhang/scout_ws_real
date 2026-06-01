@@ -6,3 +6,5 @@ slosh:
   mode_index: 1
   slosh_height_ref: 0.005
   slosh_eta_dot_ratio: 0.3
+  use_linear_model: true
+  use_parabola_term: true

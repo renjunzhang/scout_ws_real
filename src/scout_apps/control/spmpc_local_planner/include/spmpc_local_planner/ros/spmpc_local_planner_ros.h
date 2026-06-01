@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/core/spmpc_problem.h"
+#include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Odometry.h>
@@ -23,8 +24,10 @@ private:
     void controlTimerCallback(const ros::TimerEvent&);
     RobotState robotStateFromOdom(const nav_msgs::Odometry& odom) const;
     bool robotStateFromLatest(RobotState& state);
+    void updateSloshObserverFromOdom(const nav_msgs::Odometry& odom);
     ReferencePath referencePathFromMsg(const nav_msgs::Path& path) const;
     void loadVariantOverrides(const std::string& variant_name);
+    SloshModelParams loadSloshParams() const;
 
     ros::NodeHandle nh_;
     ros::NodeHandle pnh_;
@@ -38,9 +41,13 @@ private:
     SpmpcProblem problem_;
     DiagnosticsPublisher diagnostics_;
     VariantConfig variant_;
+    SloshDynamics slosh_observer_;
+    SloshState current_slosh_;
 
     nav_msgs::Odometry last_odom_;
+    nav_msgs::Odometry prev_odom_;
     bool have_odom_ = false;
+    bool have_prev_odom_ = false;
 
     std::string odom_topic_ = "/odom";
     std::string path_topic_ = "/scout/global_path_fixed";

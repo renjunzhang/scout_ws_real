@@ -15,6 +15,7 @@ public:
     void initialize(ros::NodeHandle& nh);
     void publishVariant(const VariantConfig& variant, const std::string& experiment_mode);
     void publishOutput(const SolverOutput& output, const std::string& frame_id);
+    void publishSloshState(const SloshState& state);
     void publishStatus(const std::string& status);
 
 private:
@@ -27,6 +28,8 @@ private:
     ros::Publisher progress_pub_;
     ros::Publisher solver_time_pub_;
     ros::Publisher cost_breakdown_pub_;
+    ros::Publisher slosh_state_pub_;
+    ros::Publisher slosh_horizon_summary_pub_;
 };
 
 }  // namespace spmpc_local_planner

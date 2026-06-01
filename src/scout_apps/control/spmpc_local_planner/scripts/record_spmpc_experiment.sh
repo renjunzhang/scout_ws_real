@@ -11,6 +11,8 @@ rosbag record -O "${OUT_DIR}/${NAME}.bag" \
   /spmpc/experiment_mode \
   /spmpc/local_trajectory \
   /spmpc/debug/progress_s \
+  /spmpc/debug/slosh_state \
+  /spmpc/slosh_horizon_summary \
   /spmpc/solver_time_ms \
   /spmpc/cost_breakdown \
   /cmd_vel \

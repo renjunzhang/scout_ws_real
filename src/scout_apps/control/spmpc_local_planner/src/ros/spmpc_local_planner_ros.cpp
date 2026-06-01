@@ -29,12 +29,18 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     SolverParams solver_params;
     pnh_.param("robot/v_max", solver_params.v_max, solver_params.v_max);
     pnh_.param("robot/omega_max", solver_params.omega_max, solver_params.omega_max);
+    pnh_.param("robot/a_max", solver_params.a_max, solver_params.a_max);
     pnh_.param("reference/lookahead_distance", solver_params.lookahead_distance, solver_params.lookahead_distance);
     pnh_.param("terminal/goal_tolerance", solver_params.goal_tolerance, solver_params.goal_tolerance);
+    solver_params.slosh = loadSloshParams();
+    solver_params.slosh.dt = dt_;
 
     variant_ = makeVariantConfig(variant_name);
     loadVariantOverrides(variant_.name);
     problem_.configure(solver_params, variant_);
+    if (!slosh_observer_.configure(solver_params.slosh)) {
+        ROS_WARN("[spmpc_local_planner] slosh observer configure failed; slosh diagnostics stay zero");
+    }
 
     odom_sub_ = nh_.subscribe(odom_topic_, 1, &SpmpcLocalPlannerROS::odomCallback, this);
     path_sub_ = nh_.subscribe(path_topic_, 1, &SpmpcLocalPlannerROS::pathCallback, this);
@@ -58,6 +64,7 @@ void SpmpcLocalPlannerROS::spin() {
 }
 
 void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
+    updateSloshObserverFromOdom(*msg);
     last_odom_ = *msg;
     have_odom_ = true;
 }
@@ -84,12 +91,14 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent&) {
         diagnostics_.publishStatus("WAITING_FOR_TF_POSE");
         return;
     }
+    input.slosh = current_slosh_;
     input.dt = dt_;
     input.horizon_steps = horizon_steps_;
 
     SolverOutput output;
     problem_.solve(input, output);
     diagnostics_.publishStatus(output.status);
+    diagnostics_.publishSloshState(input.slosh);
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
 
     if (publish_cmd_vel_) {
@@ -140,6 +149,28 @@ bool SpmpcLocalPlannerROS::robotStateFromLatest(RobotState& state) {
     }
 }
 
+void SpmpcLocalPlannerROS::updateSloshObserverFromOdom(const nav_msgs::Odometry& odom) {
+    if (!slosh_observer_.configured()) {
+        return;
+    }
+    if (!have_prev_odom_) {
+        prev_odom_ = odom;
+        have_prev_odom_ = true;
+        return;
+    }
+
+    const double dt_msg = (odom.header.stamp - prev_odom_.header.stamp).toSec();
+    const double dt_safe = dt_msg > 1e-4 ? dt_msg : dt_;
+    const double v = odom.twist.twist.linear.x;
+    const double prev_v = prev_odom_.twist.twist.linear.x;
+    const double omega = odom.twist.twist.angular.z;
+    const double ax = (v - prev_v) / std::max(1e-3, dt_safe);
+    const double ay = v * omega;
+
+    current_slosh_ = slosh_observer_.step(current_slosh_, ax, ay, omega);
+    prev_odom_ = odom;
+}
+
 ReferencePath SpmpcLocalPlannerROS::referencePathFromMsg(const nav_msgs::Path& path) const {
     std::vector<TrajectoryPoint> points;
     points.reserve(path.poses.size());
@@ -167,6 +198,20 @@ void SpmpcLocalPlannerROS::loadVariantOverrides(const std::string& variant_name)
     pnh_.param(prefix + "w_control", variant_.w_control, variant_.w_control);
     pnh_.param(prefix + "w_smooth", variant_.w_smooth, variant_.w_smooth);
     pnh_.param(prefix + "w_slosh", variant_.w_slosh, variant_.w_slosh);
+}
+
+SloshModelParams SpmpcLocalPlannerROS::loadSloshParams() const {
+    SloshModelParams params;
+    pnh_.param("slosh/container_radius", params.container_radius, params.container_radius);
+    pnh_.param("slosh/liquid_height", params.liquid_height, params.liquid_height);
+    pnh_.param("slosh/liquid_density", params.liquid_density, params.liquid_density);
+    pnh_.param("slosh/damping_ratio", params.damping_ratio, params.damping_ratio);
+    pnh_.param("slosh/mode_index", params.mode_index, params.mode_index);
+    pnh_.param("slosh/slosh_height_ref", params.slosh_height_ref, params.slosh_height_ref);
+    pnh_.param("slosh/slosh_eta_dot_ratio", params.slosh_eta_dot_ratio, params.slosh_eta_dot_ratio);
+    pnh_.param("slosh/use_linear_model", params.use_linear_model, params.use_linear_model);
+    pnh_.param("slosh/use_parabola_term", params.use_parabola_term, params.use_parabola_term);
+    return params;
 }
 
 }  // namespace spmpc_local_planner

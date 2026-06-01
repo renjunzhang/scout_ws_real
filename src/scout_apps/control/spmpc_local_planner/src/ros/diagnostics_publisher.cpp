@@ -12,6 +12,8 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     progress_pub_ = nh.advertise<std_msgs::Float32>("debug/progress_s", 1);
     solver_time_pub_ = nh.advertise<std_msgs::Float32>("solver_time_ms", 1);
     cost_breakdown_pub_ = nh.advertise<std_msgs::Float32MultiArray>("cost_breakdown", 1);
+    slosh_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_state", 1);
+    slosh_horizon_summary_pub_ = nh.advertise<std_msgs::Float32MultiArray>("slosh_horizon_summary", 1);
 }
 
 void DiagnosticsPublisher::publishVariant(
@@ -43,7 +45,60 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     cost.layout.dim[0].size = 22;
     cost.layout.dim[0].stride = 22;
     cost.data.assign(22, 0.0f);
+    const double total = output.cost.total();
+    const double denom = std::abs(total) > 1e-9 ? std::abs(total) : 1.0;
+    cost.data[0] = static_cast<float>(total);
+    cost.data[1] = static_cast<float>(output.cost.J_contour);
+    cost.data[2] = static_cast<float>(output.cost.J_lag);
+    cost.data[3] = static_cast<float>(output.cost.J_progress);
+    cost.data[4] = static_cast<float>(output.cost.J_v);
+    cost.data[5] = static_cast<float>(output.cost.J_control);
+    cost.data[6] = static_cast<float>(output.cost.J_smooth);
+    cost.data[7] = static_cast<float>(output.cost.J_terminal);
+    cost.data[8] = static_cast<float>(output.cost.J_corridor);
+    cost.data[9] = static_cast<float>(output.cost.J_obstacle);
+    cost.data[10] = static_cast<float>(output.cost.J_slosh_eta);
+    cost.data[11] = static_cast<float>(output.cost.J_slosh_eta_dot);
+    cost.data[12] = static_cast<float>(100.0 * output.cost.J_contour / denom);
+    cost.data[13] = static_cast<float>(100.0 * output.cost.J_lag / denom);
+    cost.data[14] = static_cast<float>(100.0 * output.cost.J_progress / denom);
+    cost.data[15] = static_cast<float>(100.0 * output.cost.J_v / denom);
+    cost.data[16] = static_cast<float>(100.0 * output.cost.J_control / denom);
+    cost.data[17] = static_cast<float>(100.0 * output.cost.J_smooth / denom);
+    cost.data[18] = static_cast<float>(100.0 * output.cost.J_terminal / denom);
+    cost.data[19] = static_cast<float>(100.0 * output.cost.J_corridor / denom);
+    cost.data[20] = static_cast<float>(100.0 * output.cost.J_obstacle / denom);
+    cost.data[21] = static_cast<float>(100.0 * (output.cost.J_slosh_eta + output.cost.J_slosh_eta_dot) / denom);
     cost_breakdown_pub_.publish(cost);
+
+    std_msgs::Float32MultiArray summary;
+    summary.layout.dim.resize(1);
+    summary.layout.dim[0].label =
+        "h_peak_pred,h_p95_pred,eta_x_peak,eta_y_peak,eta_dot_norm_peak,peak_k";
+    summary.layout.dim[0].size = 6;
+    summary.layout.dim[0].stride = 6;
+    summary.data.resize(6, 0.0f);
+    summary.data[0] = static_cast<float>(output.slosh_summary.h_peak_pred);
+    summary.data[1] = static_cast<float>(output.slosh_summary.h_p95_pred);
+    summary.data[2] = static_cast<float>(output.slosh_summary.eta_x_peak);
+    summary.data[3] = static_cast<float>(output.slosh_summary.eta_y_peak);
+    summary.data[4] = static_cast<float>(output.slosh_summary.eta_dot_norm_peak);
+    summary.data[5] = static_cast<float>(output.slosh_summary.peak_k);
+    slosh_horizon_summary_pub_.publish(summary);
+}
+
+void DiagnosticsPublisher::publishSloshState(const SloshState& state) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label = "eta_x,eta_x_dot,eta_y,eta_y_dot";
+    msg.layout.dim[0].size = 4;
+    msg.layout.dim[0].stride = 4;
+    msg.data.resize(4, 0.0f);
+    msg.data[0] = static_cast<float>(state.eta_x);
+    msg.data[1] = static_cast<float>(state.eta_x_dot);
+    msg.data[2] = static_cast<float>(state.eta_y);
+    msg.data[3] = static_cast<float>(state.eta_y_dot);
+    slosh_state_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishStatus(const std::string& status) {

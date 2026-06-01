@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/core/variant_config.h"
+#include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/reference/reference_path.h"
 
 namespace spmpc_local_planner {
@@ -9,8 +10,10 @@ namespace spmpc_local_planner {
 struct SolverParams {
     double v_max = 0.8;
     double omega_max = 1.2;
+    double a_max = 0.6;
     double lookahead_distance = 0.6;
     double goal_tolerance = 0.15;
+    SloshModelParams slosh;
 };
 
 class SpmpcSolver {
