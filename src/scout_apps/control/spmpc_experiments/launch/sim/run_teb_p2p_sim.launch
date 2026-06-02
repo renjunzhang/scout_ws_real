@@ -1,0 +1,16 @@
+<launch>
+  <arg name="global_path_topic" default="/scout/global_path_fixed"/>
+  <arg name="goal_topic" default="/scout/goal"/>
+  <arg name="cmd_vel_topic" default="/cmd_vel"/>
+
+  <include file="$(find baseline_local_planner_runner)/launch/nav_core_runner.launch">
+    <arg name="plugin_type" value="teb_local_planner/TebLocalPlannerROS"/>
+    <arg name="plugin_name" value="TebLocalPlannerROS"/>
+    <arg name="global_path_topic" value="$(arg global_path_topic)"/>
+    <arg name="goal_topic" value="$(arg goal_topic)"/>
+    <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
+    <arg name="status_topic" value="/baseline/teb/status"/>
+    <arg name="global_plan_topic" value="/baseline/teb/global_plan"/>
+    <arg name="planner_config" value="$(find scout_global_planner)/config/teb_local_planner.yaml"/>
+  </include>
+</launch>

@@ -23,7 +23,13 @@ rosbag record -O "${OUT_DIR}/${NAME}.bag" \
   /scout/global_path \
   /scout/global_path_fixed \
   /map \
+  /camera/color/image_raw \
+  /camera/color/camera_info \
   /slosh/height \
+  /slosh/height_pred_max \
   /slosh/eta_x \
   /slosh/eta_y \
-  /tf
+  /slosh/eta_x_dot \
+  /slosh/eta_y_dot \
+  /tf \
+  /tf_static

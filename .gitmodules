@@ -1,0 +1,12 @@
+[submodule "src/mpc_planner"]
+	path = src/mpc_planner
+	url = https://github.com/tud-amr/mpc_planner.git
+[submodule "src/scout_apps/control/control_box_rst"]
+	path = src/scout_apps/control/control_box_rst
+	url = https://github.com/rst-tu-dortmund/control_box_rst.git
+[submodule "src/scout_apps/control/mpc_local_planner"]
+	path = src/scout_apps/control/mpc_local_planner
+	url = https://github.com/rst-tu-dortmund/mpc_local_planner.git
+[submodule "src/scout_apps/control/navigation"]
+	path = src/scout_apps/control/navigation
+	url = https://github.com/ros-planning/navigation.git

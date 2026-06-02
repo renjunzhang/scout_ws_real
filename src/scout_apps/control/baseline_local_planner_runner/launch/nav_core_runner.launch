@@ -1,0 +1,28 @@
+<launch>
+  <arg name="plugin_type" default="teb_local_planner/TebLocalPlannerROS"/>
+  <arg name="plugin_name" default="TebLocalPlannerROS"/>
+  <arg name="global_path_topic" default="/scout/global_path_fixed"/>
+  <arg name="goal_topic" default="/scout/goal"/>
+  <arg name="cmd_vel_topic" default="/cmd_vel"/>
+  <arg name="status_topic" default="/baseline/status"/>
+  <arg name="global_plan_topic" default="/baseline/global_plan"/>
+  <arg name="controller_frequency" default="10.0"/>
+  <arg name="planner_config" default=""/>
+  <arg name="costmap_config" default="$(find baseline_local_planner_runner)/config/local_costmap_sim.yaml"/>
+
+  <node pkg="baseline_local_planner_runner"
+        type="baseline_local_planner_runner_node"
+        name="baseline_local_planner_runner"
+        output="screen">
+    <param name="plugin_type" value="$(arg plugin_type)"/>
+    <param name="plugin_name" value="$(arg plugin_name)"/>
+    <param name="global_path_topic" value="$(arg global_path_topic)"/>
+    <param name="goal_topic" value="$(arg goal_topic)"/>
+    <param name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
+    <param name="status_topic" value="$(arg status_topic)"/>
+    <param name="global_plan_topic" value="$(arg global_plan_topic)"/>
+    <param name="controller_frequency" value="$(arg controller_frequency)"/>
+    <rosparam file="$(arg costmap_config)" command="load"/>
+    <rosparam if="$(eval planner_config != '')" file="$(arg planner_config)" command="load"/>
+  </node>
+</launch>

@@ -1673,6 +1673,19 @@ Phase 4 每个 bag 必须记录：
 
 这里保留 `/slosh/*` 是为了和当前 observer、RGB 流程、历史实验对齐；但 `spmpc_local_planner` 自己的控制诊断必须走 `/spmpc/*`。
 
+Phase 4 固定路径实物入口：
+
+```bash
+VARIANT=B_slosh_anti \
+OUT_DIR=/home/geist/slosh_bags/real/20260602_spmpc_phase4 \
+GOAL_X=7.164488315582275 \
+GOAL_Y=9.307367324829102 \
+GOAL_YAW=1.0808 \
+bash src/scout_apps/control/spmpc_local_planner/scripts/phase4_fixed_path_run.sh
+```
+
+该脚本只负责 fixed-path 对比实验执行，不替代传感器/定位启动脚本。实物启动仍先使用现有传感器栈；脚本随后生成 `/scout/global_path_fixed`、发送 `/scout/goal`、启动 `spmpc_fixed_path.launch` 并录制 Phase 4 所需话题。每个 run 会额外写 `<RUN_ID>_meta.yaml`，记录 variant、目标点、路径参数、git hash 和录包时长。
+
 ### Phase 4.1 公平性口径
 
 Route B 是规控一体实验，不再锁死 `v_ref`。因此公平性不能沿用控制器实验的“same v_ref”口径，必须改为：

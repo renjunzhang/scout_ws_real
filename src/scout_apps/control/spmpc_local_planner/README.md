@@ -141,3 +141,51 @@ VARIANT=B_slosh_anti OUT_DIR=/data/a/spmpc_primitive_smoke \
 python3 src/scout_apps/control/spmpc_local_planner/scripts/analyze_b0_bslosh_compare.py \
   /data/a/spmpc_primitive_smoke B_slosh_linear B_slosh_anti
 ```
+
+## Phase 4 Fixed-Path 实物录包
+
+Phase4 使用独立脚本，不复用 Phase3 smoke。脚本假设实物传感器、定位、
+底盘和相机已经启动，只负责：
+
+```text
+生成 /scout/global_path_fixed
+发送 /scout/goal
+启动 spmpc_fixed_path.launch
+录制 /spmpc/*、/slosh/*、/camera/color/image_raw、/odom、/cmd_vel、/tf
+写入 run metadata
+```
+
+示例：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+cd /home/geist/scout_ws
+
+VARIANT=B_slosh_anti \
+OUT_DIR=/home/geist/slosh_bags/real/20260602_spmpc_phase4 \
+GOAL_X=7.164488315582275 \
+GOAL_Y=9.307367324829102 \
+GOAL_YAW=1.0808 \
+bash src/scout_apps/control/spmpc_local_planner/scripts/phase4_fixed_path_run.sh
+```
+
+每个 run 会生成：
+
+```text
+<RUN_ID>.bag
+<RUN_ID>_meta.yaml
+<RUN_ID>_planner.log
+<RUN_ID>_path_generator.log
+<RUN_ID>_send_goal.log
+<RUN_ID>_rosbag.log
+```
+
+正式实验前建议先小样本 smoke：
+
+```text
+B0
+B_slosh_linear
+B_slosh_anti
+B_ours_anti
+```

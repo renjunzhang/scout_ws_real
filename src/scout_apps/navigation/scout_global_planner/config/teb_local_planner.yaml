@@ -1,7 +1,7 @@
 # TEB local planner config (Scout Mini diff-drive / skid-steer)
 TebLocalPlannerROS:
   # Frames & topics
-  odom_topic: odom
+  odom_topic: /odom
   map_frame: map
   transform_tolerance: 1.0
 

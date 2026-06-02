@@ -1,0 +1,111 @@
+# spmpc_experiments
+
+`spmpc_experiments` 只放实验调度，不放算法实现。
+
+```text
+spmpc_local_planner           自研 SPMPC / B0 / B_slosh / B_smooth / B_ours
+baseline_local_planner_runner 独立加载 nav_core plugin, 让外部 baseline 脱离 move_base
+teb_local_planner             外部 baseline, ROS1 nav_core plugin
+dwa_local_planner             外部 supplementary baseline, 已从 ROS navigation 本地源码化
+mpc_local_planner             外部 MPC baseline, 已放入 src/scout_apps/control, 需补齐 corbo/control_box_rst 依赖后实跑
+
+spmpc_experiments    统一 launch / config / recording / smoke scripts
+```
+
+## 当前可用仿真入口
+
+先启动仿真和定位：
+
+```bash
+source devel/setup.bash
+SIM_ENV=open USE_RVIZ=true \
+  SPAWN_X=-4.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
+  rosrun scout_local_planner launch_sim_nav_stack.sh
+```
+
+然后在另一个终端运行 baseline smoke：
+
+```bash
+source devel/setup.bash
+cd /home/a/scout_ws
+
+BASELINE=spmpc VARIANT=B_ours_anti OUT_DIR=/data/a/spmpc_baseline_smoke \
+  bash src/scout_apps/control/spmpc_experiments/scripts/run_p2p_baseline_smoke.sh
+```
+
+```bash
+BASELINE=teb OUT_DIR=/data/a/spmpc_baseline_smoke \
+  bash src/scout_apps/control/spmpc_experiments/scripts/run_p2p_baseline_smoke.sh
+```
+
+```bash
+BASELINE=dwa OUT_DIR=/data/a/spmpc_baseline_smoke \
+  bash src/scout_apps/control/spmpc_experiments/scripts/run_p2p_baseline_smoke.sh
+```
+
+```bash
+BASELINE=mpc OUT_DIR=/data/a/spmpc_baseline_smoke \
+  bash src/scout_apps/control/spmpc_experiments/scripts/run_p2p_baseline_smoke.sh
+```
+
+## 重要边界
+
+- `TEB/DWA/mpc_local_planner` 本体仍是 `nav_core` 插件。
+- `baseline_local_planner_runner` 把这些插件包装成独立 ROS node，直接订阅 path/goal 并发布 `/cmd_vel`。
+- `SPMPC` 当前也是独立 ROS node。这样点到点 smoke 不再依赖 `move_base`。
+- 当前 runner 的 goal-only 模式会生成一条直线路径；正式 fixed-path 对比时应输入同一条 `/scout/global_path_fixed`。
+
+## mpc_local_planner 状态
+
+`mpc_local_planner` 已 clone 到：
+
+```text
+src/scout_apps/control/mpc_local_planner
+```
+
+但该包依赖 `control_box_rst/corbo`。`control_box_rst` 已 clone 到：
+
+```text
+src/scout_apps/control/control_box_rst
+```
+
+它是 plain CMake 包，不能用普通全量 `catkin_make` 和 catkin 包混编。
+当前已经通过 isolated 路线编译并安装到：
+
+```text
+install_isolated_mpc
+```
+
+构建命令：
+
+```bash
+source /opt/ros/noetic/setup.bash
+catkin_make_isolated --install --force-cmake \
+  --only-pkg-with-deps mpc_local_planner \
+  --install-space install_isolated_mpc \
+  --devel devel_isolated_mpc \
+  --build build_isolated_mpc
+```
+
+运行 `BASELINE=mpc` 前需要 source isolated install 空间和主工作区：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/a/scout_ws/install_isolated_mpc/setup.bash
+source /home/a/scout_ws/devel/setup.bash
+```
+
+当前 `control_box_rst` 和 `mpc_local_planner` 根目录不再放 `CATKIN_IGNORE`。
+因此普通全量 `catkin_make` 不再作为推荐构建入口；主工作区日常编译请使用白名单，
+`mpc_local_planner` 单独使用上述 isolated 路线。
+
+## DWA 状态
+
+`dwa_local_planner` 已从 `ros-planning/navigation` clone 到：
+
+```text
+src/scout_apps/control/navigation/dwa_local_planner
+```
+
+navigation 仓库中除 `dwa_local_planner` 外的其它包均放置 `CATKIN_IGNORE`，
+避免覆盖当前系统 Noetic navigation 依赖。
