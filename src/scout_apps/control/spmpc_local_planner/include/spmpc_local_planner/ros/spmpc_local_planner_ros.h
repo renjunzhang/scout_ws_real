@@ -63,9 +63,9 @@ private:
     bool use_tf_pose_ = true;
     bool obstacle_enable_ = false;
     double tf_timeout_sec_ = 0.05;
-    double control_frequency_ = 20.0;
-    double dt_ = 0.1;
-    int horizon_steps_ = 30;
+    double control_frequency_ = 30.0;
+    double dt_ = 1.0 / 30.0;
+    int horizon_steps_ = 60;
 };
 
 }  // namespace spmpc_local_planner

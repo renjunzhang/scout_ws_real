@@ -11,7 +11,7 @@ struct SloshModelParams {
     double liquid_density = 1000.0;
     double damping_ratio = 0.05;
     int mode_index = 1;
-    double dt = 0.1;
+    double dt = 1.0 / 30.0;
     double slosh_height_ref = 0.005;
     double slosh_eta_dot_ratio = 0.3;
     bool use_linear_model = true;

@@ -84,8 +84,8 @@ struct SolverInput {
     RobotState robot;
     SloshState slosh;
     const CostmapGrid* costmap = nullptr;
-    double dt = 0.1;
-    int horizon_steps = 30;
+    double dt = 1.0 / 30.0;
+    int horizon_steps = 60;
     double min_progress_s = 0.0;
 };
 
