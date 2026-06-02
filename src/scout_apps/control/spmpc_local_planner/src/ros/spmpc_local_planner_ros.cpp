@@ -17,6 +17,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("experiment_mode", experiment_mode_, experiment_mode_);
     pnh_.param("topics/odom", odom_topic_, odom_topic_);
     pnh_.param("topics/reference_path", path_topic_, path_topic_);
+    pnh_.param("topics/costmap", costmap_topic_, costmap_topic_);
     pnh_.param("topics/cmd_vel", cmd_topic_, cmd_topic_);
     pnh_.param("frames/robot_base", robot_base_frame_, robot_base_frame_);
     pnh_.param("frames/use_tf_pose", use_tf_pose_, use_tf_pose_);
@@ -31,6 +32,20 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("robot/omega_max", solver_params.omega_max, solver_params.omega_max);
     pnh_.param("robot/a_max", solver_params.a_max, solver_params.a_max);
     pnh_.param("experiment/corridor_width", solver_params.corridor_width, solver_params.corridor_width);
+    pnh_.param("experiment/corridor_enable", solver_params.corridor_enable, solver_params.corridor_enable);
+    pnh_.param("experiment/corridor_hard_bound_enable",
+               solver_params.corridor_hard_bound_enable,
+               solver_params.corridor_hard_bound_enable);
+    pnh_.param("experiment/corridor_weight", solver_params.corridor_weight, solver_params.corridor_weight);
+    pnh_.param("experiment/obstacle_enable", solver_params.obstacle_enable, solver_params.obstacle_enable);
+    pnh_.param("experiment/obstacle_weight", solver_params.obstacle_weight, solver_params.obstacle_weight);
+    pnh_.param("experiment/obstacle_influence_radius",
+               solver_params.obstacle_influence_radius,
+               solver_params.obstacle_influence_radius);
+    pnh_.param("experiment/homotopy_enable", solver_params.homotopy_enable, solver_params.homotopy_enable);
+    pnh_.param("experiment/homotopy_lateral_offset",
+               solver_params.homotopy_lateral_offset,
+               solver_params.homotopy_lateral_offset);
     pnh_.param("reference/lookahead_distance", solver_params.lookahead_distance, solver_params.lookahead_distance);
     pnh_.param("terminal/goal_tolerance", solver_params.goal_tolerance, solver_params.goal_tolerance);
     solver_params.slosh = loadSloshParams();
@@ -42,9 +57,13 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     if (!slosh_observer_.configure(solver_params.slosh)) {
         ROS_WARN("[spmpc_local_planner] slosh observer configure failed; slosh diagnostics stay zero");
     }
+    obstacle_enable_ = solver_params.obstacle_enable;
 
     odom_sub_ = nh_.subscribe(odom_topic_, 1, &SpmpcLocalPlannerROS::odomCallback, this);
     path_sub_ = nh_.subscribe(path_topic_, 1, &SpmpcLocalPlannerROS::pathCallback, this);
+    if (obstacle_enable_) {
+        costmap_sub_ = nh_.subscribe(costmap_topic_, 1, &SpmpcLocalPlannerROS::costmapCallback, this);
+    }
     cmd_pub_ = nh_.advertise<geometry_msgs::Twist>(cmd_topic_, 1);
 
     ros::NodeHandle spmpc_nh(nh_, "spmpc");
@@ -55,8 +74,8 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     const double period = 1.0 / std::max(1.0, control_frequency_);
     control_timer_ = nh_.createTimer(ros::Duration(period), &SpmpcLocalPlannerROS::controlTimerCallback, this);
 
-    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s cmd_topic=%s",
-             variant_.name.c_str(), experiment_mode_.c_str(), path_topic_.c_str(), cmd_topic_.c_str());
+    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s",
+             variant_.name.c_str(), experiment_mode_.c_str(), path_topic_.c_str(), costmap_topic_.c_str(), cmd_topic_.c_str());
     return true;
 }
 
@@ -73,6 +92,10 @@ void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
 void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
     const auto reference = referencePathFromMsg(*msg);
     problem_.setReferencePath(reference);
+}
+
+void SpmpcLocalPlannerROS::costmapCallback(const nav_msgs::OccupancyGridConstPtr& msg) {
+    problem_.setCostmap(costmapFromMsg(*msg));
 }
 
 void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent&) {
@@ -141,8 +164,17 @@ bool SpmpcLocalPlannerROS::robotStateFromLatest(RobotState& state) {
         state.yaw = tf2::getYaw(tf.transform.rotation);
         return true;
     } catch (const tf2::TransformException& ex) {
+        if (reference_frame != last_odom_.header.frame_id) {
+            ROS_WARN_THROTTLE(1.0,
+                              "[spmpc_local_planner] TF pose unavailable %s <- %s: %s; odom frame is %s, refuse mixed-frame fallback",
+                              reference_frame.c_str(),
+                              robot_base_frame_.c_str(),
+                              ex.what(),
+                              last_odom_.header.frame_id.c_str());
+            return false;
+        }
         ROS_WARN_THROTTLE(1.0,
-                          "[spmpc_local_planner] TF pose unavailable %s <- %s: %s; using odom pose fallback",
+                          "[spmpc_local_planner] TF pose unavailable %s <- %s: %s; odom frame matches reference, using odom fallback",
                           reference_frame.c_str(),
                           robot_base_frame_.c_str(),
                           ex.what());
@@ -188,11 +220,24 @@ ReferencePath SpmpcLocalPlannerROS::referencePathFromMsg(const nav_msgs::Path& p
     return reference;
 }
 
+CostmapGrid SpmpcLocalPlannerROS::costmapFromMsg(const nav_msgs::OccupancyGrid& map) const {
+    CostmapGrid costmap;
+    costmap.setGrid(
+        map.info.width,
+        map.info.height,
+        map.info.resolution,
+        map.info.origin.position.x,
+        map.info.origin.position.y,
+        map.data);
+    return costmap;
+}
+
 void SpmpcLocalPlannerROS::loadVariantOverrides(const std::string& variant_name) {
     const std::string prefix = "variants/" + variant_name + "/";
     pnh_.param(prefix + "slosh_enable", variant_.slosh_enable, variant_.slosh_enable);
     pnh_.param(prefix + "smooth_priority_enable", variant_.smooth_priority_enable, variant_.smooth_priority_enable);
     pnh_.param(prefix + "slosh_constraint_enable", variant_.slosh_constraint_enable, variant_.slosh_constraint_enable);
+    pnh_.param(prefix + "primitive_mode", variant_.primitive_mode, variant_.primitive_mode);
     pnh_.param(prefix + "w_contour", variant_.w_contour, variant_.w_contour);
     pnh_.param(prefix + "w_lag", variant_.w_lag, variant_.w_lag);
     pnh_.param(prefix + "w_progress", variant_.w_progress, variant_.w_progress);

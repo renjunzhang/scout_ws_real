@@ -12,6 +12,14 @@ struct SolverParams {
     double omega_max = 1.2;
     double a_max = 0.6;
     double corridor_width = 0.30;
+    bool corridor_enable = true;
+    bool corridor_hard_bound_enable = false;
+    double corridor_weight = 1.0;
+    bool obstacle_enable = false;
+    double obstacle_weight = 1.0;
+    double obstacle_influence_radius = 0.25;
+    bool homotopy_enable = false;
+    double homotopy_lateral_offset = 0.0;
     double lookahead_distance = 0.6;
     double goal_tolerance = 0.15;
     SloshModelParams slosh;

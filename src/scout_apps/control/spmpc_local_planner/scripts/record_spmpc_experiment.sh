@@ -13,12 +13,16 @@ rosbag record -O "${OUT_DIR}/${NAME}.bag" \
   /spmpc/debug/progress_s \
   /spmpc/debug/slosh_state \
   /spmpc/slosh_horizon_summary \
+  /spmpc/corridor \
+  /spmpc/guidance \
+  /spmpc/primitive \
   /spmpc/solver_time_ms \
   /spmpc/cost_breakdown \
   /cmd_vel \
   /odom \
   /scout/global_path \
   /scout/global_path_fixed \
+  /map \
   /slosh/height \
   /slosh/eta_x \
   /slosh/eta_y \

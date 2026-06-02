@@ -1,5 +1,6 @@
 #pragma once
 
+#include "spmpc_local_planner/core/costmap_grid.h"
 #include <string>
 #include <vector>
 
@@ -36,6 +37,30 @@ struct SloshHorizonSummary {
     int peak_k = 0;
 };
 
+struct GuidanceSummary {
+    int guidance_id = 0;
+    double lateral_bias = 0.0;
+};
+
+struct CorridorSummary {
+    double width = 0.0;
+    double half_width = 0.0;
+    double max_contour_error = 0.0;
+    double max_violation = 0.0;
+    int violation_count = 0;
+    bool hard_bound_violated = false;
+};
+
+struct PrimitiveSummary {
+    int primitive_id = 0;
+    double v_start_scale = 0.0;
+    double v_mid_scale = 0.0;
+    double v_end_scale = 0.0;
+    double omega_start_scale = 0.0;
+    double omega_mid_scale = 0.0;
+    double omega_end_scale = 0.0;
+};
+
 struct CostBreakdown {
     double J_contour = 0.0;
     double J_lag = 0.0;
@@ -58,6 +83,7 @@ struct CostBreakdown {
 struct SolverInput {
     RobotState robot;
     SloshState slosh;
+    const CostmapGrid* costmap = nullptr;
     double dt = 0.1;
     int horizon_steps = 30;
     double min_progress_s = 0.0;
@@ -73,6 +99,9 @@ struct SolverOutput {
     double solver_time_ms = 0.0;
     std::vector<TrajectoryPoint> trajectory;
     SloshHorizonSummary slosh_summary;
+    GuidanceSummary guidance_summary;
+    CorridorSummary corridor_summary;
+    PrimitiveSummary primitive_summary;
     CostBreakdown cost;
 };
 

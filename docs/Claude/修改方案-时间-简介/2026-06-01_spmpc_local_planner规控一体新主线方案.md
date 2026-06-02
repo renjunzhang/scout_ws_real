@@ -118,7 +118,8 @@ SPMPC (本方法):      负责在该路径附近, 生成 slosh-aware 的局部�
 ```text
 Phase 1-2:  无障碍 cost; cost_terms 内 obstacle/corridor 项预留但 enable=false (见 §4.2.1)。
 Phase 3:    才点亮 corridor / costmap obstacle penalty (静态, 软约束)。
-明确不做:    动态障碍预测 / homotopy / topology 候选 (见 §8.3)。
+明确不做:    动态障碍预测 / 完整 homotopy/topology 系统 (见 §8.3);
+            轻量 guidance 候选 (corridor 内横向偏置) 已在 Phase 3 实现, 见 §6。
 ```
 
 #### 对比实验场景的公平性（关键）
@@ -1003,7 +1004,13 @@ experiment:
   reference_source: global_path_fixed
   corridor_width: 0.30
   corridor_enable: true
-  obstacle_enable: false        # 障碍 cost 仅 Phase 3 后启用
+  corridor_hard_bound_enable: false
+  corridor_weight: 1.0
+  obstacle_enable: false        # 固定路径主因果实验不启用 obstacle/homotopy
+  obstacle_weight: 1.0
+  obstacle_influence_radius: 0.25
+  homotopy_enable: false
+  homotopy_lateral_offset: 0.0
   terminal_exclude_sec: 1.0
 ```
 
@@ -1015,11 +1022,17 @@ experiment:
   reference_source: global_path
   corridor_width: 0.50
   corridor_enable: true
-  obstacle_enable: false        # 第一版默认关；Phase 3 加入静态 corridor/obstacle 后才置 true
+  corridor_hard_bound_enable: false
+  corridor_weight: 1.0
+  obstacle_enable: true         # Phase 3 点到点工程泛化启用静态 /map obstacle cost
+  obstacle_weight: 1.0
+  obstacle_influence_radius: 0.25
+  homotopy_enable: true         # 轻量 center/left/right guidance 候选
+  homotopy_lateral_offset: 0.12
 ```
 
-> `obstacle_enable` 第一版一律 false（见 §3.1.1 / §6 分阶段）。避障由全局规划器负责，
-> SPMPC 第一/二版只做 corridor 软约束，不做障碍 cost；Phase 3 才允许置 true。
+> 固定路径主因果实验仍保持 `obstacle_enable=false`、`homotopy_enable=false`，避免把绕行能力混进 slosh cost 的贡献。
+> 点到点工程泛化实验才允许 `obstacle_enable=true` 和轻量 guidance 候选。
 
 ### 4.5 launch 参数设计
 
@@ -1068,6 +1081,7 @@ cost_xxx_enable
 /spmpc/slosh_horizon_summary
 /spmpc/reference_path
 /spmpc/corridor
+/spmpc/guidance
 /spmpc/solver_time_ms
 /spmpc/debug/robot_state
 /spmpc/debug/slosh_state
@@ -1563,13 +1577,16 @@ peak_k
 
 ### Phase 3: 加入 corridor / obstacle 约束
 
-第一版不做复杂 homotopy，只做局部 corridor：
+第一版不接 `mpc_planner` 的 Acados/FORCES 动态拓扑搜索，只做轻量 Phase 3：
 
 ```text
 global path 周围 corridor；
-costmap obstacle penalty；
+静态 OccupancyGrid costmap obstacle penalty；
+center/left/right 三路 lateral guidance 候选；
 必要时 hard bound。
 ```
+
+这里的 `homotopy` 口径要写清楚：当前 SPMPC 只实现轻量 guidance candidate，用 corridor 内的横向偏置表示不同局部绕行倾向；不实现动态障碍预测、H-signature 分类、多 solver 并行 topology 管理。
 
 成功标准：
 
@@ -1861,11 +1878,14 @@ Goal / global path / map
 第一阶段不做：
 
 ```text
-1. OSCRS / GeoRef / homotopy candidate selection；
-2. 完整 T-MPC++ 复刻；
-3. 动态障碍预测；
-4. 多容器优化；
-5. 复杂全局重规划。
+1. OSCRS / GeoRef；
+2. 完整 homotopy / topology 系统 (动态障碍预测、H-signature 分类、多 solver 并行管理)；
+   注: 轻量 guidance candidate (corridor 内 center/left/right 横向偏置) 已在 Phase 3 实现,
+       它不等于完整 homotopy, 口径见 §6 Phase 3；
+3. 完整 T-MPC++ 复刻；
+4. 动态障碍预测；
+5. 多容器优化；
+6. 复杂全局重规划。
 ```
 
 这些可以作为下一篇或 L3 方向。

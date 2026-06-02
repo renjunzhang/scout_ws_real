@@ -73,6 +73,10 @@ ProgressProjection ProgressProjector::project(
             best.point.s = a.s + t * segmentLength(a, b);
             best.s = best.point.s;
             best.distance = std::sqrt(d2);
+            const double inv_len = 1.0 / std::sqrt(seg_len2);
+            const double nx = -vy * inv_len;
+            const double ny = vx * inv_len;
+            best.signed_distance = (x - px) * nx + (y - py) * ny;
         }
     }
 

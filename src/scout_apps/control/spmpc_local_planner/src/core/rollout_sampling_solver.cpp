@@ -10,6 +10,16 @@
 namespace spmpc_local_planner {
 namespace {
 
+struct PrimitiveDesc {
+    int id = 0;
+    double v_start_scale = 0.5;
+    double v_mid_scale = 0.5;
+    double v_end_scale = 0.5;
+    double omega_start_scale = 1.0;
+    double omega_mid_scale = 1.0;
+    double omega_end_scale = 1.0;
+};
+
 double clampValue(double value, double lo, double hi) {
     return std::max(lo, std::min(hi, value));
 }
@@ -28,10 +38,7 @@ std::vector<std::pair<double, double>> makePiecewiseControls(
     int horizon_steps,
     double base_v,
     double base_omega,
-    double v_start_scale,
-    double v_end_scale,
-    double omega_start_scale,
-    double omega_end_scale,
+    const PrimitiveDesc& primitive,
     double v_max,
     double omega_max) {
     const int n = std::max(1, horizon_steps);
@@ -40,13 +47,96 @@ std::vector<std::pair<double, double>> makePiecewiseControls(
 
     for (int k = 0; k < n; ++k) {
         const double r = n > 1 ? static_cast<double>(k) / static_cast<double>(n - 1) : 0.0;
-        const double v_scale = v_start_scale + r * (v_end_scale - v_start_scale);
-        const double omega_scale = omega_start_scale + r * (omega_end_scale - omega_start_scale);
+        double v_scale = primitive.v_mid_scale;
+        double omega_scale = primitive.omega_mid_scale;
+        if (r <= 0.5) {
+            const double local_r = r / 0.5;
+            v_scale = primitive.v_start_scale + local_r * (primitive.v_mid_scale - primitive.v_start_scale);
+            omega_scale = primitive.omega_start_scale + local_r * (primitive.omega_mid_scale - primitive.omega_start_scale);
+        } else {
+            const double local_r = (r - 0.5) / 0.5;
+            v_scale = primitive.v_mid_scale + local_r * (primitive.v_end_scale - primitive.v_mid_scale);
+            omega_scale = primitive.omega_mid_scale + local_r * (primitive.omega_end_scale - primitive.omega_mid_scale);
+        }
         const double v = clampValue(base_v * v_scale / 0.5, 0.0, v_max);
         const double omega = clampValue(base_omega * omega_scale, -omega_max, omega_max);
         controls.emplace_back(v, omega);
     }
     return controls;
+}
+
+PrimitiveSummary toSummary(const PrimitiveDesc& primitive) {
+    PrimitiveSummary summary;
+    summary.primitive_id = primitive.id;
+    summary.v_start_scale = primitive.v_start_scale;
+    summary.v_mid_scale = primitive.v_mid_scale;
+    summary.v_end_scale = primitive.v_end_scale;
+    summary.omega_start_scale = primitive.omega_start_scale;
+    summary.omega_mid_scale = primitive.omega_mid_scale;
+    summary.omega_end_scale = primitive.omega_end_scale;
+    return summary;
+}
+
+std::vector<PrimitiveDesc> makePrimitiveDescs(const VariantConfig& variant) {
+    const std::vector<double> v_start_scales = {0.35, 0.5, 0.7, 0.9};
+    const std::vector<double> v_end_scales = {0.35, 0.5, 0.7, 0.9};
+    const std::vector<double> omega_start_scales = {0.7, 1.0, 1.3};
+    const std::vector<double> omega_end_scales = {0.7, 1.0, 1.3};
+
+    std::vector<PrimitiveDesc> primitives;
+    primitives.reserve(v_start_scales.size() * v_end_scales.size() *
+                       omega_start_scales.size() * omega_end_scales.size() + 8);
+
+    int linear_id = 1;
+    for (double v_start : v_start_scales) {
+        for (double v_end : v_end_scales) {
+            for (double omega_start : omega_start_scales) {
+                for (double omega_end : omega_end_scales) {
+                    PrimitiveDesc p;
+                    p.id = linear_id++;
+                    p.v_start_scale = v_start;
+                    p.v_mid_scale = 0.5 * (v_start + v_end);
+                    p.v_end_scale = v_end;
+                    p.omega_start_scale = omega_start;
+                    p.omega_mid_scale = 0.5 * (omega_start + omega_end);
+                    p.omega_end_scale = omega_end;
+                    primitives.push_back(p);
+                }
+            }
+        }
+    }
+
+    if (variant.primitive_mode != "anti_slosh" && variant.primitive_mode != "all") {
+        return primitives;
+    }
+
+    // These templates add the timing shapes that linear start/end candidates cannot express:
+    // brake before the turn, valley through the middle, and smooth recovery after the high-risk segment.
+    primitives.push_back({1000, 0.9, 0.35, 0.9, 0.8, 1.0, 0.8});   // mid-valley
+    primitives.push_back({1001, 0.7, 0.35, 0.7, 0.7, 1.0, 0.7});   // mild mid-valley
+    primitives.push_back({1010, 0.5, 0.35, 0.7, 0.7, 1.0, 1.0});   // pre-turn brake
+    primitives.push_back({1011, 0.7, 0.35, 0.9, 0.7, 1.0, 0.9});   // brake then recover
+    primitives.push_back({1020, 0.35, 0.5, 0.7, 0.7, 0.8, 0.8});   // jerk-limited recovery
+    primitives.push_back({1021, 0.35, 0.5, 0.9, 0.7, 0.8, 0.8});   // stronger recovery
+    primitives.push_back({1030, 0.7, 0.5, 0.7, 0.6, 0.8, 0.6});    // soft turn valley
+    primitives.push_back({1031, 0.9, 0.5, 0.7, 0.6, 0.8, 0.6});    // soft turn decel
+
+    return primitives;
+}
+
+std::vector<std::pair<int, double>> makeGuidanceBiases(const SolverParams& params) {
+    std::vector<std::pair<int, double>> biases;
+    biases.emplace_back(0, 0.0);
+    if (!params.homotopy_enable || params.homotopy_lateral_offset <= 1e-6) {
+        return biases;
+    }
+    const double max_bias = std::max(0.0, 0.45 * params.corridor_width);
+    const double bias = clampValue(params.homotopy_lateral_offset, 0.0, max_bias);
+    if (bias > 1e-6) {
+        biases.emplace_back(1, bias);
+        biases.emplace_back(-1, -bias);
+    }
+    return biases;
 }
 
 }  // namespace
@@ -89,41 +179,45 @@ bool RolloutSamplingSolver::solve(
 
     const double target_s = std::min(reference.length(), proj.s + params_.lookahead_distance);
     const auto target = reference.sample(target_s);
-    const double target_heading = std::atan2(target.y - input.robot.y, target.x - input.robot.x);
-    const double heading_error = normalizeAngle(target_heading - input.robot.yaw);
-
     const double base_v = clampValue(0.5 * params_.v_max, 0.0, params_.v_max);
-    const double base_omega = clampValue(2.0 * heading_error, -params_.omega_max, params_.omega_max);
 
-    const std::vector<double> v_start_scales = {0.35, 0.5, 0.7, 0.9};
-    const std::vector<double> v_end_scales = {0.35, 0.5, 0.7, 0.9};
-    const std::vector<double> omega_start_scales = {0.7, 1.0, 1.3};
-    const std::vector<double> omega_end_scales = {0.7, 1.0, 1.3};
+    const auto guidance_biases = makeGuidanceBiases(params_);
+    const auto primitives = makePrimitiveDescs(variant_);
     double best_score = std::numeric_limits<double>::infinity();
     bool have_candidate = false;
 
-    for (double v_start : v_start_scales) {
-        for (double v_end : v_end_scales) {
-            for (double omega_start : omega_start_scales) {
-                for (double omega_end : omega_end_scales) {
-                    const auto controls = makePiecewiseControls(
-                        input.horizon_steps,
-                        base_v,
-                        base_omega,
-                        v_start,
-                        v_end,
-                        omega_start,
-                        omega_end,
-                        params_.v_max,
-                        params_.omega_max);
-                    auto candidate = rolloutCandidate(input, reference, controls);
-                    const double score = candidate.cost.total();
-                    if (!have_candidate || score < best_score) {
-                        best_score = score;
-                        output = candidate;
-                        have_candidate = true;
-                    }
-                }
+    for (const auto& guidance : guidance_biases) {
+        const double nx = -std::sin(target.yaw);
+        const double ny = std::cos(target.yaw);
+        const double target_x = target.x + nx * guidance.second;
+        const double target_y = target.y + ny * guidance.second;
+        const double target_heading = std::atan2(target_y - input.robot.y, target_x - input.robot.x);
+        const double heading_error = normalizeAngle(target_heading - input.robot.yaw);
+        const double base_omega = clampValue(2.0 * heading_error, -params_.omega_max, params_.omega_max);
+
+        for (const auto& primitive : primitives) {
+            const auto controls = makePiecewiseControls(
+                input.horizon_steps,
+                base_v,
+                base_omega,
+                primitive,
+                params_.v_max,
+                params_.omega_max);
+            auto candidate = rolloutCandidate(
+                input,
+                reference,
+                controls,
+                toSummary(primitive),
+                guidance.first,
+                guidance.second);
+            if (!candidate.success) {
+                continue;
+            }
+            const double score = candidate.cost.total();
+            if (!have_candidate || score < best_score) {
+                best_score = score;
+                output = candidate;
+                have_candidate = true;
             }
         }
     }
@@ -141,7 +235,10 @@ bool RolloutSamplingSolver::solve(
 SolverOutput RolloutSamplingSolver::rolloutCandidate(
     const SolverInput& input,
     const ReferencePath& reference,
-    const std::vector<std::pair<double, double>>& controls) const {
+    const std::vector<std::pair<double, double>>& controls,
+    const PrimitiveSummary& primitive_summary,
+    int guidance_id,
+    double lateral_bias) const {
     SolverOutput output;
     if (controls.empty()) {
         output.status = "EMPTY_CONTROL_SEQUENCE";
@@ -158,6 +255,11 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
     p.s = projector.project(reference, input.robot.x, input.robot.y, input.min_progress_s).s;
     output.trajectory.reserve(input.horizon_steps + 1);
     output.trajectory.push_back(p);
+    output.primitive_summary = primitive_summary;
+    output.guidance_summary.guidance_id = guidance_id;
+    output.guidance_summary.lateral_bias = lateral_bias;
+    output.corridor_summary.width = std::max(0.0, params_.corridor_width);
+    output.corridor_summary.half_width = 0.5 * output.corridor_summary.width;
 
     SloshState slosh = input.slosh;
     std::vector<double> heights;
@@ -192,10 +294,29 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
         p.s = std::min(reference.length(), p.s + std::max(0.0, cmd_v) * input.dt);
         output.trajectory.push_back(p);
 
-        const auto proj = projector.project(reference, p.x, p.y);
+        const auto proj = projector.project(reference, p.x, p.y, input.min_progress_s);
         if (proj.valid) {
             const double e_contour_ref = std::max(1e-3, 0.5 * params_.corridor_width);
-            output.cost.J_contour += variant_.w_contour * (proj.distance / e_contour_ref) * (proj.distance / e_contour_ref);
+            const double biased_error = proj.signed_distance - lateral_bias;
+            const double e_contour_norm = biased_error / e_contour_ref;
+            output.cost.J_contour += variant_.w_contour * e_contour_norm * e_contour_norm;
+
+            output.corridor_summary.max_contour_error =
+                std::max(output.corridor_summary.max_contour_error, proj.distance);
+            if (params_.corridor_enable) {
+                const double half_width = std::max(1e-3, output.corridor_summary.half_width);
+                const double violation = std::max(0.0, proj.distance - half_width);
+                if (violation > 0.0) {
+                    ++output.corridor_summary.violation_count;
+                    output.corridor_summary.max_violation =
+                        std::max(output.corridor_summary.max_violation, violation);
+                    const double v_norm = violation / half_width;
+                    output.cost.J_corridor += params_.corridor_weight * v_norm * v_norm;
+                    if (params_.corridor_hard_bound_enable) {
+                        output.corridor_summary.hard_bound_violated = true;
+                    }
+                }
+            }
         }
 
         const double a_ref = std::max(0.1, params_.a_max);
@@ -203,6 +324,12 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
         const double v_norm = cmd_v / std::max(1e-3, params_.v_max);
         const double omega_norm = cmd_omega / std::max(1e-3, params_.omega_max);
         output.cost.J_control += variant_.w_control * (v_norm * v_norm + omega_norm * omega_norm);
+
+        if (params_.obstacle_enable && input.costmap != nullptr && !input.costmap->empty()) {
+            const int cost = input.costmap->maxCostInRadius(p.x, p.y, params_.obstacle_influence_radius);
+            const double cost_norm = static_cast<double>(std::max(0, cost)) / 100.0;
+            output.cost.J_obstacle += params_.obstacle_weight * cost_norm * cost_norm;
+        }
 
         if (variant_.slosh_enable && slosh_dynamics_.configured()) {
             const double h_ref = std::max(1e-4, params_.slosh.slosh_height_ref);
@@ -230,8 +357,16 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
     output.cost.J_contour *= inv_n;
     output.cost.J_control *= inv_n;
     output.cost.J_smooth *= inv_n;
+    output.cost.J_corridor *= inv_n;
+    output.cost.J_obstacle *= inv_n;
     output.cost.J_slosh_eta *= inv_n;
     output.cost.J_slosh_eta_dot *= inv_n;
+
+    if (output.corridor_summary.hard_bound_violated) {
+        output.success = false;
+        output.status = "CORRIDOR_REJECT";
+        return output;
+    }
 
     const double first_v = controls.empty() ? 0.0 : controls.front().first;
     const double first_omega = controls.empty() ? 0.0 : controls.front().second;

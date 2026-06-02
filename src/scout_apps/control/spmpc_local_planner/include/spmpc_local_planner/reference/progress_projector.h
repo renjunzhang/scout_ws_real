@@ -8,6 +8,7 @@ struct ProgressProjection {
     bool valid = false;
     double s = 0.0;
     double distance = 0.0;
+    double signed_distance = 0.0;
     TrajectoryPoint point;
 };
 

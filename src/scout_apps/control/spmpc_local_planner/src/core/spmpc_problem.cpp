@@ -42,6 +42,11 @@ void SpmpcProblem::setReferencePath(const ReferencePath& reference) {
     }
 }
 
+void SpmpcProblem::setCostmap(const CostmapGrid& costmap) {
+    costmap_ = costmap;
+    have_costmap_ = !costmap_.empty();
+}
+
 bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     if (reference_.empty()) {
         output = SolverOutput{};
@@ -50,6 +55,7 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     }
     SolverInput guarded_input = input;
     guarded_input.min_progress_s = last_progress_s_;
+    guarded_input.costmap = have_costmap_ ? &costmap_ : nullptr;
     const bool ok = solver_->solve(guarded_input, reference_, output);
     if (ok && output.success) {
         last_progress_s_ = std::max(last_progress_s_, output.progress_abs_s);

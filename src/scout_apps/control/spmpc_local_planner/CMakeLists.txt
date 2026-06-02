@@ -32,6 +32,7 @@ include_directories(
 
 add_library(${PROJECT_NAME}
   src/core/variant_config.cpp
+  src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
   src/reference/reference_path.cpp
   src/reference/progress_projector.cpp

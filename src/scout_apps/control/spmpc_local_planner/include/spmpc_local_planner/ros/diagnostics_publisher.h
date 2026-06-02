@@ -28,6 +28,9 @@ private:
     ros::Publisher progress_pub_;
     ros::Publisher solver_time_pub_;
     ros::Publisher cost_breakdown_pub_;
+    ros::Publisher corridor_pub_;
+    ros::Publisher guidance_pub_;
+    ros::Publisher primitive_pub_;
     ros::Publisher slosh_state_pub_;
     ros::Publisher slosh_horizon_summary_pub_;
 };

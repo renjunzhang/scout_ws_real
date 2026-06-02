@@ -17,7 +17,10 @@ private:
     SolverOutput rolloutCandidate(
         const SolverInput& input,
         const ReferencePath& reference,
-        const std::vector<std::pair<double, double>>& controls) const;
+        const std::vector<std::pair<double, double>>& controls,
+        const PrimitiveSummary& primitive_summary,
+        int guidance_id,
+        double lateral_bias) const;
 
     SolverParams params_;
     VariantConfig variant_;

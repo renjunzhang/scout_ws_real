@@ -2,4 +2,11 @@ experiment:
   mode: point_to_point
   reference_source: global_path
   corridor_width: 0.50
-  obstacle_enable: false
+  corridor_enable: true
+  corridor_hard_bound_enable: false
+  corridor_weight: 1.0
+  obstacle_enable: true
+  obstacle_weight: 1.0
+  obstacle_influence_radius: 0.25
+  homotopy_enable: true
+  homotopy_lateral_offset: 0.12

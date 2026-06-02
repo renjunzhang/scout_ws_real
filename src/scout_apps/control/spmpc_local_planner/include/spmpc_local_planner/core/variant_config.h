@@ -9,6 +9,7 @@ struct VariantConfig {
     bool slosh_enable = false;
     bool smooth_priority_enable = false;
     bool slosh_constraint_enable = false;
+    std::string primitive_mode = "linear";
 
     double w_contour = 1.0;
     double w_lag = 0.2;

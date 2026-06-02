@@ -12,6 +12,9 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     progress_pub_ = nh.advertise<std_msgs::Float32>("debug/progress_s", 1);
     solver_time_pub_ = nh.advertise<std_msgs::Float32>("solver_time_ms", 1);
     cost_breakdown_pub_ = nh.advertise<std_msgs::Float32MultiArray>("cost_breakdown", 1);
+    corridor_pub_ = nh.advertise<std_msgs::Float32MultiArray>("corridor", 1);
+    guidance_pub_ = nh.advertise<std_msgs::Float32MultiArray>("guidance", 1);
+    primitive_pub_ = nh.advertise<std_msgs::Float32MultiArray>("primitive", 1);
     slosh_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_state", 1);
     slosh_horizon_summary_pub_ = nh.advertise<std_msgs::Float32MultiArray>("slosh_horizon_summary", 1);
 }
@@ -70,6 +73,47 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     cost.data[20] = static_cast<float>(100.0 * output.cost.J_obstacle / denom);
     cost.data[21] = static_cast<float>(100.0 * (output.cost.J_slosh_eta + output.cost.J_slosh_eta_dot) / denom);
     cost_breakdown_pub_.publish(cost);
+
+    std_msgs::Float32MultiArray corridor;
+    corridor.layout.dim.resize(1);
+    corridor.layout.dim[0].label =
+        "width,half_width,max_contour_error,max_violation,violation_count,hard_bound_violated";
+    corridor.layout.dim[0].size = 6;
+    corridor.layout.dim[0].stride = 6;
+    corridor.data.resize(6, 0.0f);
+    corridor.data[0] = static_cast<float>(output.corridor_summary.width);
+    corridor.data[1] = static_cast<float>(output.corridor_summary.half_width);
+    corridor.data[2] = static_cast<float>(output.corridor_summary.max_contour_error);
+    corridor.data[3] = static_cast<float>(output.corridor_summary.max_violation);
+    corridor.data[4] = static_cast<float>(output.corridor_summary.violation_count);
+    corridor.data[5] = output.corridor_summary.hard_bound_violated ? 1.0f : 0.0f;
+    corridor_pub_.publish(corridor);
+
+    std_msgs::Float32MultiArray guidance;
+    guidance.layout.dim.resize(1);
+    guidance.layout.dim[0].label = "guidance_id,lateral_bias";
+    guidance.layout.dim[0].size = 2;
+    guidance.layout.dim[0].stride = 2;
+    guidance.data.resize(2, 0.0f);
+    guidance.data[0] = static_cast<float>(output.guidance_summary.guidance_id);
+    guidance.data[1] = static_cast<float>(output.guidance_summary.lateral_bias);
+    guidance_pub_.publish(guidance);
+
+    std_msgs::Float32MultiArray primitive;
+    primitive.layout.dim.resize(1);
+    primitive.layout.dim[0].label =
+        "primitive_id,v_start_scale,v_mid_scale,v_end_scale,omega_start_scale,omega_mid_scale,omega_end_scale";
+    primitive.layout.dim[0].size = 7;
+    primitive.layout.dim[0].stride = 7;
+    primitive.data.resize(7, 0.0f);
+    primitive.data[0] = static_cast<float>(output.primitive_summary.primitive_id);
+    primitive.data[1] = static_cast<float>(output.primitive_summary.v_start_scale);
+    primitive.data[2] = static_cast<float>(output.primitive_summary.v_mid_scale);
+    primitive.data[3] = static_cast<float>(output.primitive_summary.v_end_scale);
+    primitive.data[4] = static_cast<float>(output.primitive_summary.omega_start_scale);
+    primitive.data[5] = static_cast<float>(output.primitive_summary.omega_mid_scale);
+    primitive.data[6] = static_cast<float>(output.primitive_summary.omega_end_scale);
+    primitive_pub_.publish(primitive);
 
     std_msgs::Float32MultiArray summary;
     summary.layout.dim.resize(1);

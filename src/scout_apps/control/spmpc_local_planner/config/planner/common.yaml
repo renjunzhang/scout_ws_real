@@ -6,6 +6,7 @@ publish_cmd_vel: true
 topics:
   odom: /odom
   reference_path: /scout/global_path_fixed
+  costmap: /map
   cmd_vel: /cmd_vel
 
 frames:

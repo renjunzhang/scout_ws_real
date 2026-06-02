@@ -2,6 +2,7 @@
   <arg name="planner_variant" default="B0" doc="B0|B_slosh|B_smooth|B_ours"/>
   <arg name="experiment_mode" default="fixed_path" doc="fixed_path|point_to_point"/>
   <arg name="reference_path_topic" default="/scout/global_path_fixed"/>
+  <arg name="costmap_topic" default="/map"/>
   <arg name="cmd_vel_topic" default="/cmd_vel"/>
   <arg name="publish_cmd_vel" default="true"/>
   <arg name="platform_config" default="scout_mini"/>
@@ -17,6 +18,7 @@
     <param name="planner_variant" value="$(arg planner_variant)"/>
     <param name="experiment_mode" value="$(arg experiment_mode)"/>
     <param name="topics/reference_path" value="$(arg reference_path_topic)"/>
+    <param name="topics/costmap" value="$(arg costmap_topic)"/>
     <param name="topics/cmd_vel" value="$(arg cmd_vel_topic)"/>
     <param name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>
   </node>

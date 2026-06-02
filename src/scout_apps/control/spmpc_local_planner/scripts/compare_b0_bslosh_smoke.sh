@@ -76,11 +76,15 @@ RECORD_TOPICS=(
   /spmpc/status
   /spmpc/cost_breakdown
   /spmpc/slosh_horizon_summary
+  /spmpc/corridor
+  /spmpc/guidance
+  /spmpc/primitive
   /spmpc/debug/slosh_state
   /spmpc/debug/progress_s
   /spmpc/solver_time_ms
   /cmd_vel
   /odom
+  /map
 )
 
 mkdir -p "$OUT_DIR"
