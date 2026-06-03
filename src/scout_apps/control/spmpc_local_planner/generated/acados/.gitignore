@@ -1,0 +1,4 @@
+# acados codegen 产物（由 scripts/acados/generate_spmpc_acados.py 生成，不手改、默认不提交）。
+# 生成命令、依赖版本与输出路径记录在修改日志；如需提交生成物，单独调整本策略。
+*
+!.gitignore

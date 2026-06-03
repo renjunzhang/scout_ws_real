@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/ros/spmpc_local_planner_ros.h"
+#include "spmpc_local_planner/solvers/solver_factory.h"
 #include <algorithm>
 #include <geometry_msgs/TransformStamped.h>
 #include <tf2/utils.h>
@@ -48,6 +49,12 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                solver_params.homotopy_lateral_offset);
     pnh_.param("reference/lookahead_distance", solver_params.lookahead_distance, solver_params.lookahead_distance);
     pnh_.param("terminal/goal_tolerance", solver_params.goal_tolerance, solver_params.goal_tolerance);
+    pnh_.param("solver_backend", solver_params.solver_backend, solver_params.solver_backend);
+    if (!isKnownSolverBackend(solver_params.solver_backend)) {
+        ROS_WARN("[spmpc_local_planner] unknown solver_backend '%s'; falling back to primitive",
+                 solver_params.solver_backend.c_str());
+        solver_params.solver_backend = kSolverBackendPrimitive;
+    }
     solver_params.slosh = loadSloshParams();
     solver_params.slosh.dt = dt_;
 
@@ -69,6 +76,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     ros::NodeHandle spmpc_nh(nh_, "spmpc");
     diagnostics_.initialize(spmpc_nh);
     diagnostics_.publishVariant(variant_, experiment_mode_);
+    diagnostics_.publishSolverBackend(solver_params.solver_backend);
     diagnostics_.publishStatus("INITIALIZED");
 
     const double period = 1.0 / std::max(1.0, control_frequency_);
@@ -123,6 +131,11 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent&) {
     problem_.solve(input, output);
     diagnostics_.publishStatus(output.status);
     diagnostics_.publishSloshState(input.slosh);
+    // 当前标量模型液面高度 = c_h·‖η‖ (+向心项), 由唯一物理核 SloshDynamics 计算; 单位米(模型 proxy)。
+    if (slosh_observer_.configured()) {
+        const double omega_meas = last_odom_.twist.twist.angular.z;
+        diagnostics_.publishSloshHeight(slosh_observer_.height(input.slosh, omega_meas));
+    }
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
 
     if (publish_cmd_vel_) {

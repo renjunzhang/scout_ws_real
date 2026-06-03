@@ -10,5 +10,13 @@ catkin_install_python(PROGRAMS
   scripts/annotate_liquid_roi.py
   scripts/extract_liquid_height_from_bag.py
   scripts/debug_liquid_vs_mpc_frame_by_frame.py
+  scripts/red_liquid_infer_from_bag.py
+  scripts/online_liquid_height_node.py
+  scripts/liquid_experiment_monitor.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(DIRECTORY launch
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+  OPTIONAL
 )

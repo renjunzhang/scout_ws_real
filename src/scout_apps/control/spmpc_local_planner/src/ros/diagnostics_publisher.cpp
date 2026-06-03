@@ -8,6 +8,7 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     status_pub_ = nh.advertise<std_msgs::String>("status", 1, true);
     variant_pub_ = nh.advertise<std_msgs::String>("controller_variant", 1, true);
     experiment_mode_pub_ = nh.advertise<std_msgs::String>("experiment_mode", 1, true);
+    solver_backend_pub_ = nh.advertise<std_msgs::String>("solver_backend", 1, true);
     trajectory_pub_ = nh.advertise<nav_msgs::Path>("local_trajectory", 1, true);
     progress_pub_ = nh.advertise<std_msgs::Float32>("debug/progress_s", 1);
     solver_time_pub_ = nh.advertise<std_msgs::Float32>("solver_time_ms", 1);
@@ -16,6 +17,7 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     guidance_pub_ = nh.advertise<std_msgs::Float32MultiArray>("guidance", 1);
     primitive_pub_ = nh.advertise<std_msgs::Float32MultiArray>("primitive", 1);
     slosh_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_state", 1);
+    slosh_height_pub_ = nh.advertise<std_msgs::Float32>("slosh_height", 1);
     slosh_horizon_summary_pub_ = nh.advertise<std_msgs::Float32MultiArray>("slosh_horizon_summary", 1);
 }
 
@@ -28,6 +30,12 @@ void DiagnosticsPublisher::publishVariant(
 
     msg.data = experiment_mode;
     experiment_mode_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishSolverBackend(const std::string& solver_backend) {
+    std_msgs::String msg;
+    msg.data = solver_backend;
+    solver_backend_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::string& frame_id) {
@@ -49,7 +57,13 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     cost.layout.dim[0].stride = 22;
     cost.data.assign(22, 0.0f);
     const double total = output.cost.total();
-    const double denom = std::abs(total) > 1e-9 ? std::abs(total) : 1.0;
+    // 占比分母用各项绝对值之和, 而非 |total|: 后者含负的 J_progress 奖励, total 近零时百分比会爆炸。
+    const auto& c = output.cost;
+    const double abs_sum =
+        std::abs(c.J_contour) + std::abs(c.J_lag) + std::abs(c.J_progress) + std::abs(c.J_v) +
+        std::abs(c.J_control) + std::abs(c.J_smooth) + std::abs(c.J_terminal) + std::abs(c.J_corridor) +
+        std::abs(c.J_obstacle) + std::abs(c.J_slosh_eta) + std::abs(c.J_slosh_eta_dot);
+    const double denom = abs_sum > 1e-9 ? abs_sum : 1.0;
     cost.data[0] = static_cast<float>(total);
     cost.data[1] = static_cast<float>(output.cost.J_contour);
     cost.data[2] = static_cast<float>(output.cost.J_lag);
@@ -118,12 +132,13 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     std_msgs::Float32MultiArray summary;
     summary.layout.dim.resize(1);
     summary.layout.dim[0].label =
-        "h_peak_pred,h_p95_pred,eta_x_peak,eta_y_peak,eta_dot_norm_peak,peak_k";
+        "h_peak_pred_mm,h_p95_pred_mm,eta_x_peak,eta_y_peak,eta_dot_norm_peak,peak_k";
     summary.layout.dim[0].size = 6;
     summary.layout.dim[0].stride = 6;
     summary.data.resize(6, 0.0f);
-    summary.data[0] = static_cast<float>(output.slosh_summary.h_peak_pred);
-    summary.data[1] = static_cast<float>(output.slosh_summary.h_p95_pred);
+    // 高度字段(0,1)统一发布为 mm(内部为米); eta/eta_dot 峰值仍是模态量, 不转换。
+    summary.data[0] = static_cast<float>(1000.0 * output.slosh_summary.h_peak_pred);
+    summary.data[1] = static_cast<float>(1000.0 * output.slosh_summary.h_p95_pred);
     summary.data[2] = static_cast<float>(output.slosh_summary.eta_x_peak);
     summary.data[3] = static_cast<float>(output.slosh_summary.eta_y_peak);
     summary.data[4] = static_cast<float>(output.slosh_summary.eta_dot_norm_peak);
@@ -143,6 +158,13 @@ void DiagnosticsPublisher::publishSloshState(const SloshState& state) {
     msg.data[2] = static_cast<float>(state.eta_y);
     msg.data[3] = static_cast<float>(state.eta_y_dot);
     slosh_state_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishSloshHeight(double height_m) {
+    // 内部物理为米(SI); 发布边界统一转 mm, 与 RGB /liquid/height 同单位。
+    std_msgs::Float32 msg;
+    msg.data = static_cast<float>(1000.0 * height_m);
+    slosh_height_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishStatus(const std::string& status) {

@@ -5,6 +5,8 @@
   <arg name="costmap_topic" default="/map"/>
   <arg name="cmd_vel_topic" default="/cmd_vel"/>
   <arg name="publish_cmd_vel" default="true"/>
+  <arg name="solver_backend" default="primitive" doc="primitive|continuous_mpcc_acados"/>
+  <arg name="w_slosh" default="-1.0" doc="覆盖当前 variant 的 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
   <arg name="platform_config" default="scout_mini"/>
   <arg name="container_config" default="tube_default"/>
   <arg name="experiment_config" default="fixed_path"/>
@@ -21,5 +23,9 @@
     <param name="topics/costmap" value="$(arg costmap_topic)"/>
     <param name="topics/cmd_vel" value="$(arg cmd_vel_topic)"/>
     <param name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>
+    <param name="solver_backend" value="$(arg solver_backend)"/>
+    <!-- sweep 时覆盖该 variant 的 w_slosh(在 variants.yaml 加载之后, 故生效); w_slosh<0 跳过 -->
+    <param name="variants/$(arg planner_variant)/w_slosh" value="$(arg w_slosh)"
+           if="$(eval float(arg('w_slosh')) >= 0.0)"/>
   </node>
 </launch>

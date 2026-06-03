@@ -4,6 +4,7 @@
 #include "spmpc_local_planner/core/variant_config.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/reference/reference_path.h"
+#include <string>
 
 namespace spmpc_local_planner {
 
@@ -22,6 +23,7 @@ struct SolverParams {
     double homotopy_lateral_offset = 0.0;
     double lookahead_distance = 0.6;
     double goal_tolerance = 0.15;
+    std::string solver_backend = "primitive";  // primitive | continuous_mpcc_acados
     SloshModelParams slosh;
 };
 

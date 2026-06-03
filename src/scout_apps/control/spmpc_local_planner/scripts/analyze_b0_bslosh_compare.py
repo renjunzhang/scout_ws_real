@@ -29,6 +29,7 @@ def load(bag_path, include_reached=False):
     d = {
         "cmd_v": [], "cmd_omega": [],
         "h_peak": [], "h_p95": [], "eta_dot_peak": [],
+        "obs_eta_norm": [], "obs_eta_dot_norm": [],
         "progress": [], "status": [], "solver_ms": [],
         "J_total": [], "J_contour": [], "J_progress": [], "J_control": [],
         "J_smooth": [], "J_corridor": [], "J_obstacle": [],
@@ -90,6 +91,14 @@ def load(bag_path, include_reached=False):
                     d["h_peak"].append(msg.data[0])
                     d["h_p95"].append(msg.data[1])
                     d["eta_dot_peak"].append(msg.data[4])
+            elif topic == "/spmpc/debug/slosh_state" and len(msg.data) >= 4:
+                # observer(从 odom 估计的实际执行晃动), 与控制器内部模型无关 ->
+                # 跨后端/跨模型公平对比 B0 vs B_slosh 的唯一同尺度晃动量。
+                if active_sample():
+                    eta_norm = (msg.data[0] ** 2 + msg.data[2] ** 2) ** 0.5
+                    eta_dot_norm = (msg.data[1] ** 2 + msg.data[3] ** 2) ** 0.5
+                    d["obs_eta_norm"].append(eta_norm)
+                    d["obs_eta_dot_norm"].append(eta_dot_norm)
             elif topic == "/spmpc/debug/progress_s":
                 if active_sample():
                     d["progress"].append(msg.data)
@@ -121,6 +130,22 @@ def fmt(s):
     if s is None:
         return "   (无数据)"
     return f"n={s['n']:4d} mean={s['mean']:+.4f} max={s['max']:+.4f} min={s['min']:+.4f}"
+
+
+def cost_share_line(d):
+    """各项代价占比 = |mean(J_i)| / Σ|mean(J_j)|, 有界且可解释(避免 |total| 含负 progress 致爆炸)。"""
+    pairs = [
+        ("contour", "J_contour"), ("progress", "J_progress"), ("control", "J_control"),
+        ("smooth", "J_smooth"), ("corridor", "J_corridor"), ("obstacle", "J_obstacle"),
+        ("slosh_eta", "J_slosh_eta"), ("slosh_etad", "J_slosh_eta_dot"),
+    ]
+    mags = {}
+    for label, key in pairs:
+        xs = [x for x in d.get(key, []) if x is not None]
+        mags[label] = abs(st.mean(xs)) if xs else 0.0
+    tot = sum(mags.values()) or 1.0
+    items = sorted(mags.items(), key=lambda kv: -kv[1])
+    return ", ".join(f"{k} {100.0 * v / tot:.0f}%" for k, v in items if v > 1e-9)
 
 
 def top_counts(xs, limit=6):
@@ -174,9 +199,11 @@ def main():
         print(f"---- {v} ----  末态 status={last_status}")
         print(f"  cmd_v          {fmt(summ(d['cmd_v']))}")
         print(f"  cmd_omega      {fmt(summ(d['cmd_omega']))}")
-        print(f"  h_peak_pred    {fmt(summ(d['h_peak']))}")
+        print(f"  h_peak_pred_mm {fmt(summ(d['h_peak']))}  # 控制器内部预测(mm); B0(5维)无slosh状态恒为0, 不可跨模型比")
         print(f"  h_p95_pred     {fmt(summ(d['h_p95']))}")
         print(f"  eta_dot_peak   {fmt(summ(d['eta_dot_peak']))}")
+        print(f"  obs_eta_norm   {fmt(summ(d['obs_eta_norm']))}  # observer(实际执行晃动), 跨后端公平对比量")
+        print(f"  obs_eta_dot    {fmt(summ(d['obs_eta_dot_norm']))}")
         print(f"  J_total        {fmt(summ(d['J_total']))}")
         print(f"  J_progress     {fmt(summ(d['J_progress']))}")
         print(f"  J_contour      {fmt(summ(d['J_contour']))}")
@@ -186,6 +213,7 @@ def main():
         print(f"  J_obstacle     {fmt(summ(d['J_obstacle']))}")
         print(f"  J_slosh_eta    {fmt(summ(d['J_slosh_eta']))}")
         print(f"  J_slosh_eta_d  {fmt(summ(d['J_slosh_eta_dot']))}")
+        print(f"  cost占比        {cost_share_line(d)}")
         print(f"  corridor_err   {fmt(summ(d['corridor_error']))}")
         print(f"  corridor_viol  {fmt(summ(d['corridor_violation']))}")
         print(f"  corridor_nviol {fmt(summ(d['corridor_viol_count']))}")
@@ -196,7 +224,7 @@ def main():
         print(f"  anti_primitive {anti_primitive_summary(d['primitive_id'])}")
         print(f"  v_scales       start {fmt(summ(d['v_start_scale']))} | mid {fmt(summ(d['v_mid_scale']))} | end {fmt(summ(d['v_end_scale']))}")
         print(f"  omega_scales   start {fmt(summ(d['omega_start_scale']))} | mid {fmt(summ(d['omega_mid_scale']))} | end {fmt(summ(d['omega_end_scale']))}")
-        print(f"  slosh_pct(%)   {fmt(summ(d['slosh_total_pct']))}  # 仅辅助; J_progress为负时可能>100%")
+        print(f"  slosh_pct(%)   {fmt(summ(d['slosh_total_pct']))}  # 话题 pct(已改为各项绝对值占比, 有界)")
         print(f"  solver_ms      {fmt(summ(d['solver_ms']))}")
         mf = monotonic_frac(d["progress"])
         print(f"  progress 单调比 {'(无数据)' if mf is None else f'{mf:.3f}'}")
@@ -212,26 +240,36 @@ def main():
             xs = [x for x in xs if x is not None]
             return st.mean(xs) if xs else 0.0
 
+        def peak_or0(xs):
+            xs = [x for x in xs if x is not None]
+            return max(xs) if xs else 0.0
+
         dv = abs(mean_or0(da["cmd_v"]) - mean_or0(db["cmd_v"]))
         dw = abs(mean_or0(da["cmd_omega"]) - mean_or0(db["cmd_omega"]))
-        dh = abs(mean_or0(da["h_peak"]) - mean_or0(db["h_peak"]))
-        print(f"  |Δ mean cmd_v|      = {dv:.5f} m/s")
-        print(f"  |Δ mean cmd_omega|  = {dw:.5f} rad/s")
-        print(f"  |Δ mean h_peak_pred|= {dh:.6f}")
+        # 主晃动判定用 observer(实际执行晃动), 而非预测 h_peak(B0 恒为0不可比)。
+        oa_mean, ob_mean = mean_or0(da["obs_eta_norm"]), mean_or0(db["obs_eta_norm"])
+        oa_peak, ob_peak = peak_or0(da["obs_eta_norm"]), peak_or0(db["obs_eta_norm"])
+        print(f"  |Δ mean cmd_v|        = {dv:.5f} m/s")
+        print(f"  |Δ mean cmd_omega|    = {dw:.5f} rad/s")
+        print(f"  obs_eta_norm mean     {a}={oa_mean:.5f}  {b}={ob_mean:.5f}")
+        print(f"  obs_eta_norm peak     {a}={oa_peak:.5f}  {b}={ob_peak:.5f}")
 
+        have_obs = bool(da["obs_eta_norm"]) and bool(db["obs_eta_norm"])
         # 阈值: cmd_v 差 < 5mm/s 且 cmd_omega 差 < 0.01 rad/s 视为"几乎一样"
         if dv < 0.005 and dw < 0.01:
             print()
             print(f"  >>> 结论: {a} 与 {b} 控制输出几乎一致。")
-            print("      当前 cost/primitive 没有明显改变行为 —— 优先检查 primitive/控制序列覆盖是否不足。")
-            print("      下一步可比较 B_slosh_linear vs B_slosh_anti; 若仍无差异, 再考虑 SQP/OSQP。")
+            print("      cost 没有明显改变行为 —— 检查 w_slosh / 候选覆盖 / 后端是否生效。")
+        elif not have_obs:
+            print()
+            print(f"  >>> 结论: {a} 与 {b} 行为有差异, 但缺 observer(/spmpc/debug/slosh_state) 数据,")
+            print("      无法判定降晃。请确认录包含该话题且 slosh observer 已配置。")
         else:
             print()
             print(f"  >>> 结论: {a} 与 {b} 产生了可观察差异。")
-            print(f"      检查 {b} 的 h_peak_pred 是否低于 {a}。")
-            if dh > 1e-6:
-                better = "更低 (符合预期)" if mean_or0(db["h_peak"]) < mean_or0(da["h_peak"]) else "更高 (反常, 需查)"
-                print(f"      {b} 预测峰值晃动相对 {a}: {better}")
+            better_mean = "更低 (降晃, 符合预期)" if ob_mean < oa_mean else "更高 (反常, 需查 w_slosh 是否过大致行为畸变)"
+            better_peak = "更低" if ob_peak < oa_peak else "更高"
+            print(f"      observer 实际晃动 {b} 相对 {a}: mean {better_mean}; peak {better_peak}")
 
 
 if __name__ == "__main__":

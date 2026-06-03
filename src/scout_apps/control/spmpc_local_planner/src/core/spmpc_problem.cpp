@@ -1,5 +1,5 @@
 #include "spmpc_local_planner/core/spmpc_problem.h"
-#include "spmpc_local_planner/core/rollout_sampling_solver.h"
+#include "spmpc_local_planner/solvers/solver_factory.h"
 #include <cmath>
 
 namespace spmpc_local_planner {
@@ -27,10 +27,10 @@ bool sameReferencePath(const ReferencePath& a, const ReferencePath& b) {
 
 }  // namespace
 
-SpmpcProblem::SpmpcProblem()
-    : solver_(new RolloutSamplingSolver()) {}
+SpmpcProblem::SpmpcProblem() = default;
 
 void SpmpcProblem::configure(const SolverParams& solver_params, const VariantConfig& variant) {
+    solver_ = makeSolver(solver_params.solver_backend);
     solver_->configure(solver_params, variant);
 }
 
@@ -51,6 +51,11 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     if (reference_.empty()) {
         output = SolverOutput{};
         output.status = "NO_REFERENCE_PATH";
+        return false;
+    }
+    if (!solver_) {
+        output = SolverOutput{};
+        output.status = "NO_SOLVER";
         return false;
     }
     SolverInput guarded_input = input;

@@ -14,8 +14,10 @@ class DiagnosticsPublisher {
 public:
     void initialize(ros::NodeHandle& nh);
     void publishVariant(const VariantConfig& variant, const std::string& experiment_mode);
+    void publishSolverBackend(const std::string& solver_backend);
     void publishOutput(const SolverOutput& output, const std::string& frame_id);
     void publishSloshState(const SloshState& state);
+    void publishSloshHeight(double height_m);
     void publishStatus(const std::string& status);
 
 private:
@@ -24,6 +26,7 @@ private:
     ros::Publisher status_pub_;
     ros::Publisher variant_pub_;
     ros::Publisher experiment_mode_pub_;
+    ros::Publisher solver_backend_pub_;
     ros::Publisher trajectory_pub_;
     ros::Publisher progress_pub_;
     ros::Publisher solver_time_pub_;
@@ -32,6 +35,7 @@ private:
     ros::Publisher guidance_pub_;
     ros::Publisher primitive_pub_;
     ros::Publisher slosh_state_pub_;
+    ros::Publisher slosh_height_pub_;
     ros::Publisher slosh_horizon_summary_pub_;
 };
 

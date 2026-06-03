@@ -1,0 +1,15 @@
+<launch>
+  <!-- 实物实验现场监控前端(纯订阅, 隔离): 一屏看 RGB overlay + 液面曲线 + SPMPC 状态。
+       前提: online_liquid_height 已发 /liquid/*(overlay 需 publish_debug:=true); spmpc 节点在跑。
+       不开相机、不发控制话题; 关窗只退本前端。 -->
+  <arg name="image_topic" default="/liquid/debug_image"/>
+  <arg name="history_sec" default="20.0"/>
+  <arg name="solver_warn_ms" default="33.0"/>
+
+  <node pkg="realsense_liquid_measurement" type="liquid_experiment_monitor.py"
+        name="liquid_experiment_monitor" output="screen">
+    <param name="image_topic" value="$(arg image_topic)"/>
+    <param name="history_sec" value="$(arg history_sec)"/>
+    <param name="solver_warn_ms" value="$(arg solver_warn_ms)"/>
+  </node>
+</launch>

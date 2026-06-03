@@ -3,6 +3,9 @@ dt: 0.0333333333
 horizon_steps: 60
 publish_cmd_vel: true
 
+# solver 后端: primitive | continuous_mpcc_acados
+solver_backend: primitive
+
 topics:
   odom: /odom
   reference_path: /scout/global_path_fixed

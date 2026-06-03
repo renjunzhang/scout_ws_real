@@ -294,3 +294,76 @@ heading_align / settling / tracking_curvature_speed_cap 旧分支
 - RPP-style 不完整复现 Nav2 RPP controller，只作为同 MPC 后端下的速度调节 baseline。
 - terminal 段只诊断停车平顺性，不进入主效果统计。
 - completion time 差异超过 10% 时，按 trade-off 解释。
+
+---
+
+## 调参与排障
+
+> 自 control/说明.md 迁入(2026-06-03)。实物以 `config/mpc_params.yaml` 为准。
+
+### 先确认链路，再调参数
+
+- `/scout/global_path` 有持续输出，且 `header.frame_id=map`
+- TF `map -> odom -> base_link` 连通且稳定
+- `/odom` 的 `linear.x` 和 `angular.z` 数值正常、方向正确
+- `control_rate` 与 `mpc/dt` 一致（默认 20 Hz 与 0.05 s）
+- `/cmd_vel` 没有被其他节点抢占
+
+### 主要参数分组
+
+#### 状态与参考
+
+| 参数 | 作用 | 说明 |
+|------|------|------|
+| `Q_contour` / `Q_ec` | 横向贴路径强度 | 默认 `use_contour_lag=true`，优先看 `Q_contour` |
+| `Q_lag` / `Q_el` | 纵向误差强度 | 影响沿路径推进误差 |
+| `Q_etheta` | 航向误差权重 | 过大易转向过激 |
+| `Q_v` | 速度跟踪权重 | 影响跟随 `v_ref` 的积极程度 |
+| `enable_omega_ff` / `Q_omega_ff` | 曲率前馈 | `omega_ref = v_ref * kappa` 提前给转向趋势 |
+
+#### 控制平滑与约束
+
+| 参数 | 作用 | 说明 |
+|------|------|------|
+| `R_omega` | 角速度惩罚 | 增大后转向更保守 |
+| `R_domega` | 角速度变化率惩罚 | 最关键的平滑参数 |
+| `R_a` / `R_da` | 加速度 / 其变化率惩罚 | 增大后加减速更柔和 |
+| `vehicle/omega_max` / `alpha_max` | 角速度上限 / 变化率硬约束 | 响应能力上界 |
+| `vehicle/v_max` / `a_max` / `j_max` | 纵向响应能力 | 过大可能打滑或冲击更强 |
+
+#### 路径与速度曲线
+
+| 参数 | 作用 | 说明 |
+|------|------|------|
+| `path_handler/lookahead_distance` | 前视距离 | 越大越平滑，越小越贴路径 |
+| `path_handler/max_lat_accel` | 曲率限速 | 限制弯道速度 |
+| `path_handler/max_tan_accel` / `max_tan_decel` | 切向加/减速上限 | 影响提速与急弯/终点减速 |
+| `path_handler/goal_capture_distance` / `goal_capture_min_speed` | 终点捕获区 / 最低参考速度 | 避免末端过早停死 |
+
+### 推荐调参顺序
+
+1. 先做基础跟踪基线（`test_mpc.launch`，或 `slosh_experiment.launch` 但 `Q_slosh:=0`、关盒约束与 governor）。
+2. 先调约束和路径层（`vehicle/*`、`path_handler/*`），再调权重（`Q_*`、`R_*`）。
+3. 每次只改 1~2 个参数，单次幅度 10%~30%；不要同时改 `lookahead_distance`、`Q_contour`、`R_domega`。
+4. 基础跟踪稳了再开 anti-slosh：先 `Q_slosh:=5` → 再 `enable_slosh_box_constraint:=true` → 最后 `slosh_speed_governor_enable:=true`。
+
+### 观察话题
+
+```bash
+rostopic echo /mpc_status        # 状态机
+rostopic echo /mpc/status_val    # 求解成功标志(1/0)
+rostopic echo /mpc/solve_ms      # 求解耗时
+rostopic echo /cmd_vel
+# anti-slosh 实验再看:
+rostopic echo /slosh/height /slosh/height_pred_max /slosh/speed_governor_active /slosh/constraint_active
+```
+
+### 常见现象与优先调整
+
+| 现象 | 优先看 | 方向 |
+|------|--------|------|
+| `cmd_vel.angular.z` 锯齿、不顺滑 | `R_domega` → `R_omega` → `lookahead_distance` → `alpha_max`/`omega_max` | 先增 `R_domega`，再增 `R_omega`，必要时增前视或降响应上限 |
+| 直道蛇行、摆头 | `R_omega`、`R_domega`、`lookahead_distance`、`Q_contour`、`Q_etheta` | 先压过激转向，再降路径贴合激进度 |
+| 弯道跟不上 / 切弯 / 贴墙 | `Q_contour`、`Q_etheta`、`lookahead_distance`、`max_lat_accel`、`omega_max` | 先提横向/航向跟踪，再看前视/响应能力 |
+| 终点附近提前停 | `goal_capture_distance`、`goal_capture_min_speed`、`goal_tolerance`、`yaw_tolerance` | 先调终点捕获区，再放宽到点判据 |
+| `status_val` 频繁 0 | `vehicle/*`、`path_handler/max_*`、anti-slosh 附加机制 | 先降激进度，必要时先关 anti-slosh |

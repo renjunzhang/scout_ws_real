@@ -156,6 +156,11 @@ B0 continuous       = 5 维状态 [px, py, theta, v, s]
 B_slosh / B_ours    = 9 维状态 [px, py, theta, v, s, eta_x, eta_x_dot, eta_y, eta_y_dot]
 ```
 
+实现说明（2026-06-03）：B0 严格保持 5 维。代价用 per-node EXTERNAL，只能表达
+stage-0 的 `|u - u_prev|`（跨周期连续性）与各步控制幅值；horizon 内 k>0 的逐步
+`Δu` 平滑若要直接表达需把控制并入状态（B0 将变 8 维，与本口径冲突），故暂不做，
+Phase C 视实测连续性再定。
+
 ### 4.2 控制输入
 
 推荐第一版：
@@ -268,6 +273,11 @@ eta_ref       = slosh_height_ref
 eta_dot_ref   = omega_n * slosh_height_ref
 ```
 
+实现说明（2026-06-03）：`e_l_ref` 代码默认取 `max(0.1, v_max*dt)`，偏离字面的
+`v_ref*dt`（后者过小会放大 lag 权重）；该值是运行时参数，wrapper 可覆盖。
+slosh 归一化用 `eta/eta_ref`；为与 primitive 的 `h/h_ref` 一致（c_h·‖η‖=h），
+wrapper 设 `eta_ref = slosh_height_ref / c_h`，保证两后端尺度可比（§11.6）。
+
 原则：
 
 ```text
@@ -317,13 +327,38 @@ stage k>0:
   Δu_k = u_k - u_{k-1}
 ```
 
-这样 `J_smooth` 既能约束 horizon 内的控制连续性，也能约束跨控制周期的第一帧跳变。
+这是最终完整连续 OCP 的目标形式：`J_smooth` 既能约束 horizon 内的控制连续性，也能约束跨控制周期的第一帧跳变。
 
 注意：
 
 ```text
 如果不传 u_prev，连续求解器可能每周期重新规划出不同第一步，
 即使 horizon 内 smooth，实际 /cmd_vel 仍可能跳。
+```
+
+实现说明（2026-06-03）：第一版 acados 后端只实现“跨周期第一帧连续性”：
+
+```text
+stage 0:
+  J_smooth = ||u_0 - u_prev||^2
+
+stage k>0:
+  不显式惩罚 u_k - u_{k-1}
+```
+
+原因是当前 per-node EXTERNAL cost 只能看到本 stage 的 `x_k,u_k,p_k`，不能直接引用上一 stage 的 `u_{k-1}`。因此当前 `/spmpc/cost_breakdown` 中的 `J_smooth` 也必须只统计 stage 0 相对上一周期 `u_prev` 的跳变，不能把尚未进入 OCP 的 horizon 内差分伪装成真实代价。
+
+后续若要实现完整 horizon 内 `Δu_k`，需要二选一：
+
+```text
+1. 状态增广: 把上一控制量 u_prev_state=[a,omega,v_s] 放进状态并随动力学传播；
+2. 换 cost 结构: 使用能表达相邻 stage 控制差分的 OCP 建模方式。
+```
+
+在此之前，论文中只能把第一版 continuous 的 smooth 项描述为：
+
+```text
+cross-cycle first-step smoothing + control effort regularization
 ```
 
 ### 4.6 连续 reference 的前置条件

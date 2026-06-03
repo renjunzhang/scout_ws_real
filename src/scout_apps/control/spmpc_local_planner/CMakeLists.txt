@@ -17,6 +17,24 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(Eigen3 REQUIRED)
 
+# ---- acados 可选检测（连续 MPCC 后端）----
+# 同时满足：环境变量 ACADOS_SOURCE_DIR 指向已安装的 C 库 + 已 codegen 的 spmpc_b0 求解器，
+# 才启用 continuous_mpcc_acados 真实现；否则 wrapper 编译为 stub，整包仍可构建（§10 红线 #8）。
+if(NOT ACADOS_SOURCE_DIR)
+  set(ACADOS_SOURCE_DIR "$ENV{ACADOS_SOURCE_DIR}")
+endif()
+set(SPMPC_GEN_B0_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0)
+set(SPMPC_GEN_SLOSH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh)
+set(SPMPC_WITH_ACADOS FALSE)
+if(ACADOS_SOURCE_DIR AND EXISTS "${ACADOS_SOURCE_DIR}/lib/libacados.so"
+   AND EXISTS "${SPMPC_GEN_B0_DIR}/libacados_ocp_solver_spmpc_b0.so"
+   AND EXISTS "${SPMPC_GEN_SLOSH_DIR}/libacados_ocp_solver_spmpc_slosh.so")
+  set(SPMPC_WITH_ACADOS TRUE)
+  message(STATUS "[spmpc] acados found at ${ACADOS_SOURCE_DIR}; building continuous_mpcc_acados backend (b0 + slosh)")
+else()
+  message(STATUS "[spmpc] acados not found (ACADOS_SOURCE_DIR / generated spmpc_b0+slosh missing); continuous backend = stub")
+endif()
+
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
@@ -36,8 +54,11 @@ add_library(${PROJECT_NAME}
   src/core/spmpc_problem.cpp
   src/reference/reference_path.cpp
   src/reference/progress_projector.cpp
+  src/reference/reference_spline.cpp
   src/dynamics/slosh_dynamics.cpp
   src/core/rollout_sampling_solver.cpp
+  src/solvers/solver_factory.cpp
+  src/solvers/continuous_mpcc_solver_acados.cpp
   src/ros/diagnostics_publisher.cpp
   src/ros/spmpc_local_planner_ros.cpp
 )
@@ -46,6 +67,25 @@ target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
 )
+
+if(SPMPC_WITH_ACADOS)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE SPMPC_WITH_ACADOS)
+  target_include_directories(${PROJECT_NAME} PRIVATE
+    ${ACADOS_SOURCE_DIR}/include
+    ${ACADOS_SOURCE_DIR}/include/acados
+    ${ACADOS_SOURCE_DIR}/include/blasfeo/include
+    ${ACADOS_SOURCE_DIR}/include/hpipm/include
+    ${SPMPC_GEN_B0_DIR}
+    ${SPMPC_GEN_SLOSH_DIR}
+  )
+  target_link_libraries(${PROJECT_NAME}
+    ${SPMPC_GEN_B0_DIR}/libacados_ocp_solver_spmpc_b0.so
+    ${SPMPC_GEN_SLOSH_DIR}/libacados_ocp_solver_spmpc_slosh.so
+    ${ACADOS_SOURCE_DIR}/lib/libacados.so
+    ${ACADOS_SOURCE_DIR}/lib/libhpipm.so
+    ${ACADOS_SOURCE_DIR}/lib/libblasfeo.so
+  )
+endif()
 
 add_executable(spmpc_local_planner_node src/spmpc_local_planner_node.cpp)
 target_link_libraries(spmpc_local_planner_node
