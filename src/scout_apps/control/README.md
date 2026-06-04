@@ -84,7 +84,7 @@ roslaunch spmpc_local_planner spmpc_fixed_path.launch \
 - 连续 MPCC 升级与模块化方案：`docs/Claude/修改方案-时间-简介/2026-06-03_SPMPC连续MPCC优化升级与模块化方案.md`
 - 规控一体新主线方案：`docs/Claude/修改方案-时间-简介/2026-06-01_spmpc_local_planner规控一体新主线方案.md`
 - Methods(论文叙事)：`docs/重要文档/Methods/20260602_SPMPC规控一体Methods论文叙事版.md`
-- 实物对比实验 SOP：`docs/重要文档/20260603_SPMPC连续MPCC实物对比实验SOP.md`
+- 实物对比实验 SOP：`docs/实物实验注意事项/对比试验/20260603_SPMPC连续MPCC实物对比实验SOP.md`
 - acados 安装(实物端,focal 坑)：`docs/实物实验注意事项/代码移植/20260602_实物端代码拉取与子模块注意事项.md` §3.1
 
 **Route A(scout_local_planner)**

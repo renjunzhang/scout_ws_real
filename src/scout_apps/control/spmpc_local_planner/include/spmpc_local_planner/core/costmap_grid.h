@@ -13,6 +13,7 @@ public:
         double resolution,
         double origin_x,
         double origin_y,
+        double origin_yaw,
         const std::vector<int8_t>& data);
 
     bool empty() const { return data_.empty() || width_ == 0 || height_ == 0 || resolution_ <= 0.0; }
@@ -28,6 +29,7 @@ private:
     double resolution_ = 0.0;
     double origin_x_ = 0.0;
     double origin_y_ = 0.0;
+    double origin_yaw_ = 0.0;
     std::vector<int8_t> data_;
 };
 

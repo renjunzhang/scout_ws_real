@@ -6,7 +6,9 @@
 #include "spmpc_local_planner/reference/reference_spline.h"
 
 #include "acados_solver_spmpc_b0.h"
+#ifdef SPMPC_WITH_ACADOS_SLOSH
 #include "acados_solver_spmpc_slosh.h"
+#endif
 #include "acados_c/ocp_nlp_interface.h"
 
 #include <Eigen/Dense>
@@ -35,7 +37,9 @@ enum Param {
 
 // 参数布局契约：与 scripts/acados/spmpc_acados_model.py（→生成器 NP 宏）绑死，漂移即编译失败。
 static_assert(E_L_REF + 1 == SPMPC_B0_NP, "B0 参数布局与生成的 spmpc_b0 求解器不一致");
+#ifdef SPMPC_WITH_ACADOS_SLOSH
 static_assert(W_SLOSH_ETA_DOT + 1 == SPMPC_SLOSH_NP, "slosh 参数布局与生成的 spmpc_slosh 求解器不一致");
+#endif
 
 // 统一封装两个生成求解器（b0 5维 / slosh 9维），把前缀相关调用收敛到一处。
 struct GenSolver {
@@ -53,12 +57,16 @@ struct GenSolver {
             }
             capsule = c; nx = SPMPC_B0_NX; nu = SPMPC_B0_NU; np = SPMPC_B0_NP; n_horizon = SPMPC_B0_N;
         } else {
+#ifdef SPMPC_WITH_ACADOS_SLOSH
             auto* c = spmpc_slosh_acados_create_capsule();
             if (c == nullptr || spmpc_slosh_acados_create(c) != 0) {
                 if (c) spmpc_slosh_acados_free_capsule(c);
                 return false;
             }
             capsule = c; nx = SPMPC_SLOSH_NX; nu = SPMPC_SLOSH_NU; np = SPMPC_SLOSH_NP; n_horizon = SPMPC_SLOSH_N;
+#else
+            return false;
+#endif
         }
         return true;
     }
@@ -68,40 +76,77 @@ struct GenSolver {
             spmpc_b0_acados_free(static_cast<spmpc_b0_solver_capsule*>(capsule));
             spmpc_b0_acados_free_capsule(static_cast<spmpc_b0_solver_capsule*>(capsule));
         } else {
+#ifdef SPMPC_WITH_ACADOS_SLOSH
             spmpc_slosh_acados_free(static_cast<spmpc_slosh_solver_capsule*>(capsule));
             spmpc_slosh_acados_free_capsule(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+#endif
         }
         capsule = nullptr;
     }
     void update_params(int stage, double* p) {
-        if (kind == B0) spmpc_b0_acados_update_params(static_cast<spmpc_b0_solver_capsule*>(capsule), stage, p, np);
-        else spmpc_slosh_acados_update_params(static_cast<spmpc_slosh_solver_capsule*>(capsule), stage, p, np);
+        if (kind == B0) {
+            spmpc_b0_acados_update_params(static_cast<spmpc_b0_solver_capsule*>(capsule), stage, p, np);
+        } else {
+#ifdef SPMPC_WITH_ACADOS_SLOSH
+            spmpc_slosh_acados_update_params(static_cast<spmpc_slosh_solver_capsule*>(capsule), stage, p, np);
+#endif
+        }
     }
     int solve() {
-        return kind == B0 ? spmpc_b0_acados_solve(static_cast<spmpc_b0_solver_capsule*>(capsule))
-                          : spmpc_slosh_acados_solve(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_acados_solve(static_cast<spmpc_b0_solver_capsule*>(capsule));
+        }
+#ifdef SPMPC_WITH_ACADOS_SLOSH
+        return spmpc_slosh_acados_solve(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+#else
+        return -1;
+#endif
     }
     ocp_nlp_config* config() {
-        return kind == B0 ? spmpc_b0_acados_get_nlp_config(static_cast<spmpc_b0_solver_capsule*>(capsule))
-                          : spmpc_slosh_acados_get_nlp_config(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+        if (kind == B0) return spmpc_b0_acados_get_nlp_config(static_cast<spmpc_b0_solver_capsule*>(capsule));
+#ifdef SPMPC_WITH_ACADOS_SLOSH
+        return spmpc_slosh_acados_get_nlp_config(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+#else
+        return nullptr;
+#endif
     }
     ocp_nlp_dims* dims() {
-        return kind == B0 ? spmpc_b0_acados_get_nlp_dims(static_cast<spmpc_b0_solver_capsule*>(capsule))
-                          : spmpc_slosh_acados_get_nlp_dims(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+        if (kind == B0) return spmpc_b0_acados_get_nlp_dims(static_cast<spmpc_b0_solver_capsule*>(capsule));
+#ifdef SPMPC_WITH_ACADOS_SLOSH
+        return spmpc_slosh_acados_get_nlp_dims(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+#else
+        return nullptr;
+#endif
     }
     ocp_nlp_in* in() {
-        return kind == B0 ? spmpc_b0_acados_get_nlp_in(static_cast<spmpc_b0_solver_capsule*>(capsule))
-                          : spmpc_slosh_acados_get_nlp_in(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+        if (kind == B0) return spmpc_b0_acados_get_nlp_in(static_cast<spmpc_b0_solver_capsule*>(capsule));
+#ifdef SPMPC_WITH_ACADOS_SLOSH
+        return spmpc_slosh_acados_get_nlp_in(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+#else
+        return nullptr;
+#endif
     }
     ocp_nlp_out* out() {
-        return kind == B0 ? spmpc_b0_acados_get_nlp_out(static_cast<spmpc_b0_solver_capsule*>(capsule))
-                          : spmpc_slosh_acados_get_nlp_out(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+        if (kind == B0) return spmpc_b0_acados_get_nlp_out(static_cast<spmpc_b0_solver_capsule*>(capsule));
+#ifdef SPMPC_WITH_ACADOS_SLOSH
+        return spmpc_slosh_acados_get_nlp_out(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+#else
+        return nullptr;
+#endif
     }
     ocp_nlp_solver* solver() {
-        return kind == B0 ? spmpc_b0_acados_get_nlp_solver(static_cast<spmpc_b0_solver_capsule*>(capsule))
-                          : spmpc_slosh_acados_get_nlp_solver(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+        if (kind == B0) return spmpc_b0_acados_get_nlp_solver(static_cast<spmpc_b0_solver_capsule*>(capsule));
+#ifdef SPMPC_WITH_ACADOS_SLOSH
+        return spmpc_slosh_acados_get_nlp_solver(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+#else
+        return nullptr;
+#endif
     }
 };
+
+double clampValue(double value, double lo, double hi) {
+    return std::max(lo, std::min(hi, value));
+}
 
 double polyEval(const Eigen::Vector4d& c, double s) {
     return c(0) + c(1) * s + c(2) * s * s + c(3) * s * s * s;
@@ -280,6 +325,13 @@ bool ContinuousMpccSolverAcados::solve(
     double time_tot = 0.0;
     ocp_nlp_get(gen->solver(), "time_tot", &time_tot);
     output.solver_time_ms = time_tot * 1000.0;
+    if (status != 0) {
+        output.success = false;
+        output.status = "ACADOS_SOLVE_FAILED_" + std::to_string(status);
+        output.cmd_v = 0.0;
+        output.cmd_omega = 0.0;
+        return false;
+    }
 
     // 读轨迹 + 诊断量（contour/lag/slosh/控制），按 §11.5 对齐 primitive。
     const double inv_n = 1.0 / static_cast<double>(std::max(1, n));
@@ -351,15 +403,8 @@ bool ContinuousMpccSolverAcados::solve(
         output.slosh_summary.h_p95_pred = sorted[idx];
     }
 
-    if (status != 0) {
-        output.success = false;
-        output.status = "ACADOS_SOLVE_FAILED_" + std::to_string(status);
-        output.cmd_v = 0.0;
-        output.cmd_omega = 0.0;
-        return false;
-    }
-
-    output.cmd_v = output.trajectory.size() > 1 ? output.trajectory[1].v : input.robot.v;
+    // u = [a, omega, v_s]; v_s 是虚拟路径进度速度，不直接作为 /cmd_vel.linear.x。
+    output.cmd_v = clampValue(input.robot.v + u0[0] * input.dt, 0.0, params_.v_max);
     output.cmd_omega = u0[1];
     u_prev_[0] = u0[0];
     u_prev_[1] = u0[1];

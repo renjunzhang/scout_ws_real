@@ -36,6 +36,8 @@ PATH_MIN_AMPLITUDE="${PATH_MIN_AMPLITUDE:-0.25}"
 PATH_MAX_AMPLITUDE="${PATH_MAX_AMPLITUDE:-1.20}"
 START_HEADING="${START_HEADING:-current}"
 RECORD_CAMERA="${RECORD_CAMERA:-true}"
+RECORD_MOCAP="${RECORD_MOCAP:-false}"       # Nokov 动捕只作为监控/真值记录，不是 planner 输入
+MOCAP_TRACKER="${MOCAP_TRACKER:-Scout}"
 RUN_ID="${RUN_ID:-$(date +%Y%m%d_%H%M%S)_${VARIANT}}"
 
 generator_pid=""
@@ -195,6 +197,14 @@ path:
   max_amplitude: ${PATH_MAX_AMPLITUDE}
   start_heading: ${START_HEADING}
 record_camera: ${RECORD_CAMERA}
+record_mocap: ${RECORD_MOCAP}
+mocap_tracker: ${MOCAP_TRACKER}
+mocap_raw_pose_topic: /vrpn_client_node/${MOCAP_TRACKER}/pose
+mocap_monitor_topics:
+  pose: /mocap/scout_pose
+  odom: /mocap/scout_odom
+  path: /mocap/scout_path
+  status: /mocap/status
 EOF
 
 record_topics=(
@@ -228,6 +238,15 @@ record_topics=(
 
 if [[ "${RECORD_CAMERA}" == "true" ]]; then
   record_topics+=(/camera/color/image_raw /camera/color/camera_info)
+fi
+if [[ "${RECORD_MOCAP}" == "true" || "${RECORD_MOCAP}" == "1" ]]; then
+  record_topics+=(
+    "/vrpn_client_node/${MOCAP_TRACKER}/pose"
+    /mocap/scout_pose
+    /mocap/scout_odom
+    /mocap/scout_path
+    /mocap/status
+  )
 fi
 
 bag="${OUT_DIR}/${RUN_ID}.bag"

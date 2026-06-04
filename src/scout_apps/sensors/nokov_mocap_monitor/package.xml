@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>nokov_mocap_monitor</name>
+  <version>0.0.1</version>
+  <description>Nokov/XINGYING VRPN motion-capture monitor for ground-truth recording only.</description>
+
+  <maintainer email="geist@example.com">geist</maintainer>
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <exec_depend>python3</exec_depend>
+  <exec_depend>rospy</exec_depend>
+  <exec_depend>roslaunch</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>vrpn_client_ros</exec_depend>
+</package>

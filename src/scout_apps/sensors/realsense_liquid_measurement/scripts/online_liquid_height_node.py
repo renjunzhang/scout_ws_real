@@ -7,17 +7,21 @@
 每天一次标定(ROI + 三标尺 + HSV)写入 calibration.yaml 后:
   订阅 RGB 图像 -> 每帧 detect_red_liquid -> 发布 max-LCR / 三列 / 中位数液面高度(mm)。
 
-发布:
+发布(话题名均可通过私有参数覆盖, 默认如下):
   /liquid/height          std_msgs/Float32          max(left,center,right) mm (主监控量, 无检测=NaN)
   /liquid/height_lcr      std_msgs/Float32MultiArray [left, center, right] mm (NaN=该列无检测)
   /liquid/height_median   std_msgs/Float32          三列中位数 mm (质量交叉检查)
   /liquid/debug_image     sensor_msgs/Image         可选 overlay(~publish_debug:=true)
 
 参数(私有):
-  ~calibration   (必填) 三标尺标定 yaml(与离线同一份)
-  ~image_topic   默认 /camera/color/image_raw
-  ~process_every 默认 1 (每 N 帧处理一次, 降 CPU)
-  ~publish_debug 默认 false
+  ~calibration            (必填) 三标尺标定 yaml(与离线同一份)
+  ~image_topic            默认 /camera/color/image_raw
+  ~height_topic           默认 /liquid/height
+  ~height_lcr_topic       默认 /liquid/height_lcr
+  ~height_median_topic    默认 /liquid/height_median
+  ~debug_image_topic      默认 /liquid/debug_image
+  ~process_every          默认 1 (每 N 帧处理一次, 降 CPU)
+  ~publish_debug          默认 false
   HSV/检测阈值   优先 calibration 的 hsv: 段, ~<key> 参数可覆盖, 否则用与离线一致的默认值。
 
 监控: rqt_plot /liquid/height   或   rostopic echo /liquid/height
@@ -70,6 +74,10 @@ class OnlineLiquidHeight:
     def __init__(self):
         calib_path = rospy.get_param("~calibration")
         self.image_topic = rospy.get_param("~image_topic", "/camera/color/image_raw")
+        self.height_topic = rospy.get_param("~height_topic", "/liquid/height")
+        self.lcr_topic = rospy.get_param("~height_lcr_topic", "/liquid/height_lcr")
+        self.median_topic = rospy.get_param("~height_median_topic", "/liquid/height_median")
+        self.debug_topic = rospy.get_param("~debug_image_topic", "/liquid/debug_image")
         self.every = max(1, int(rospy.get_param("~process_every", 1)))
         self.publish_debug = bool(rospy.get_param("~publish_debug", False))
 
@@ -82,16 +90,18 @@ class OnlineLiquidHeight:
 
         self.bridge = CvBridge()
         self.frame_i = 0
-        self.height_pub = rospy.Publisher("/liquid/height", Float32, queue_size=5)
-        self.lcr_pub = rospy.Publisher("/liquid/height_lcr", Float32MultiArray, queue_size=5)
-        self.median_pub = rospy.Publisher("/liquid/height_median", Float32, queue_size=5)
-        self.debug_pub = (rospy.Publisher("/liquid/debug_image", Image, queue_size=2)
+        self.height_pub = rospy.Publisher(self.height_topic, Float32, queue_size=5)
+        self.lcr_pub = rospy.Publisher(self.lcr_topic, Float32MultiArray, queue_size=5)
+        self.median_pub = rospy.Publisher(self.median_topic, Float32, queue_size=5)
+        self.debug_pub = (rospy.Publisher(self.debug_topic, Image, queue_size=2)
                           if self.publish_debug else None)
         self.sub = rospy.Subscriber(self.image_topic, Image, self.on_image,
                                     queue_size=1, buff_size=2 ** 24)
 
-        rospy.loginfo("[online_liquid_height] calib=%s image=%s every=%d debug=%s",
-                      calib_path, self.image_topic, self.every, self.publish_debug)
+        rospy.loginfo("[online_liquid_height] calib=%s image=%s every=%d debug=%s outputs=(%s,%s,%s,%s)",
+                      calib_path, self.image_topic, self.every, self.publish_debug,
+                      self.height_topic, self.lcr_topic, self.median_topic,
+                      self.debug_topic if self.publish_debug else "debug-disabled")
         rospy.loginfo("[online_liquid_height] ROI=(%d,%d,%d,%d) tube=[%d,%d] rulers=%s "
                       "HSV=h1[%d,%d] h2[%d,%d] s>=%d v>=%d",
                       self.geom["roi_x"], self.geom["roi_y"], self.geom["roi_w"], self.geom["roi_h"],

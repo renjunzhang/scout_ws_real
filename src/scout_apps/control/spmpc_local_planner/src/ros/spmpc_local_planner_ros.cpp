@@ -1,6 +1,7 @@
 #include "spmpc_local_planner/ros/spmpc_local_planner_ros.h"
 #include "spmpc_local_planner/solvers/solver_factory.h"
 #include <algorithm>
+#include <cmath>
 #include <geometry_msgs/TransformStamped.h>
 #include <tf2/utils.h>
 
@@ -59,6 +60,9 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     solver_params.slosh.dt = dt_;
 
     variant_ = makeVariantConfig(variant_name);
+    if (variant_name != "B0" && variant_.name == "B0") {
+        ROS_WARN("[spmpc_local_planner] unknown planner_variant '%s'; falling back to B0", variant_name.c_str());
+    }
     loadVariantOverrides(variant_.name);
     problem_.configure(solver_params, variant_);
     if (!slosh_observer_.configure(solver_params.slosh)) {
@@ -91,6 +95,14 @@ void SpmpcLocalPlannerROS::spin() {
     ros::spin();
 }
 
+void SpmpcLocalPlannerROS::publishZeroCommand() {
+    if (!publish_cmd_vel_) {
+        return;
+    }
+    geometry_msgs::Twist cmd;
+    cmd_pub_.publish(cmd);
+}
+
 void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
     updateSloshObserverFromOdom(*msg);
     last_odom_ = *msg;
@@ -111,16 +123,19 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent&) {
 
     if (!have_odom_) {
         diagnostics_.publishStatus("WAITING_FOR_ODOM");
+        publishZeroCommand();
         return;
     }
     if (!problem_.hasReferencePath()) {
         diagnostics_.publishStatus("WAITING_FOR_REFERENCE_PATH");
+        publishZeroCommand();
         return;
     }
 
     SolverInput input;
     if (!robotStateFromLatest(input.robot)) {
         diagnostics_.publishStatus("WAITING_FOR_TF_POSE");
+        publishZeroCommand();
         return;
     }
     input.slosh = current_slosh_;
@@ -213,6 +228,13 @@ void SpmpcLocalPlannerROS::updateSloshObserverFromOdom(const nav_msgs::Odometry&
     const double ax = (v - prev_v) / std::max(1e-3, dt_safe);
     const double ay = v * omega;
 
+    if (std::abs(dt_safe - slosh_observer_.params().dt) > 1e-4) {
+        auto params = slosh_observer_.params();
+        params.dt = dt_safe;
+        if (!slosh_observer_.configure(params)) {
+            ROS_WARN_THROTTLE(1.0, "[spmpc_local_planner] slosh observer reconfigure failed");
+        }
+    }
     current_slosh_ = slosh_observer_.step(current_slosh_, ax, ay, omega);
     prev_odom_ = odom;
 }
@@ -241,6 +263,7 @@ CostmapGrid SpmpcLocalPlannerROS::costmapFromMsg(const nav_msgs::OccupancyGrid& 
         map.info.resolution,
         map.info.origin.position.x,
         map.info.origin.position.y,
+        tf2::getYaw(map.info.origin.orientation),
         map.data);
     return costmap;
 }

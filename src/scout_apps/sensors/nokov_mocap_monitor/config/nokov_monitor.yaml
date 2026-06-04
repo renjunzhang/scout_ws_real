@@ -1,0 +1,26 @@
+# Nokov/XINGYING motion-capture monitor defaults.
+# This package is for monitoring and rosbag ground truth only. Do not remap these
+# outputs to /odom, /cmd_vel, or planner topics.
+
+server: "10.1.1.198"
+tracker: "Scout"
+input_pose_topic: "/vrpn_client_node/Scout/pose"
+
+pose_topic: "/mocap/scout_pose"
+odom_topic: "/mocap/scout_odom"
+path_topic: "/mocap/scout_path"
+status_topic: "/mocap/status"
+
+publish_pose: true
+publish_odom: true
+publish_path: true
+publish_tf: false
+
+# Monitoring-only frames. Keep these separate from map/odom/base_link.
+output_frame_id: "mocap_world"
+mocap_world_frame: "mocap_world"
+mocap_body_frame: "mocap_scout"
+
+path_max_length: 5000
+stale_timeout_sec: 1.0
+status_publish_hz: 1.0

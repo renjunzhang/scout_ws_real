@@ -1,6 +1,7 @@
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/solvers/solver_factory.h"
 #include <cmath>
+#include <cstddef>
 
 namespace spmpc_local_planner {
 namespace {
@@ -13,16 +14,26 @@ double pointDist2(const TrajectoryPoint& a, const TrajectoryPoint& b) {
     return sqr(a.x - b.x) + sqr(a.y - b.y);
 }
 
+double angleDiff(double a, double b) {
+    return std::atan2(std::sin(a - b), std::cos(a - b));
+}
+
 bool sameReferencePath(const ReferencePath& a, const ReferencePath& b) {
     if (a.empty() || b.empty()) {
         return false;
     }
     const auto& ap = a.points();
     const auto& bp = b.points();
-    return a.frameId() == b.frameId() &&
-           std::abs(a.length() - b.length()) < 1e-3 &&
-           pointDist2(ap.front(), bp.front()) < 1e-4 &&
-           pointDist2(ap.back(), bp.back()) < 1e-4;
+    if (a.frameId() != b.frameId() || ap.size() != bp.size() ||
+        std::abs(a.length() - b.length()) >= 1e-3) {
+        return false;
+    }
+    for (size_t i = 0; i < ap.size(); ++i) {
+        if (pointDist2(ap[i], bp[i]) >= 1e-4 || std::abs(angleDiff(ap[i].yaw, bp[i].yaw)) >= 1e-3) {
+            return false;
+        }
+    }
+    return true;
 }
 
 }  // namespace

@@ -3,13 +3,21 @@
        前提: 当天已标定(ROI+三标尺+HSV)写入 calibration; 传感器栈已起(/camera/color/image_raw)。 -->
   <arg name="calibration" doc="三标尺标定 yaml(与离线同一份, 当天标一次)"/>
   <arg name="image_topic" default="/camera/color/image_raw"/>
+  <arg name="height_topic" default="/liquid/height"/>
+  <arg name="height_lcr_topic" default="/liquid/height_lcr"/>
+  <arg name="height_median_topic" default="/liquid/height_median"/>
+  <arg name="debug_image_topic" default="/liquid/debug_image"/>
   <arg name="process_every" default="1" doc="每 N 帧处理一次(降 CPU)"/>
-  <arg name="publish_debug" default="false" doc="是否发布 /liquid/debug_image overlay"/>
+  <arg name="publish_debug" default="false" doc="是否发布 debug_image_topic overlay"/>
 
   <node pkg="realsense_liquid_measurement" type="online_liquid_height_node.py"
         name="online_liquid_height" output="screen">
     <param name="calibration" value="$(arg calibration)"/>
     <param name="image_topic" value="$(arg image_topic)"/>
+    <param name="height_topic" value="$(arg height_topic)"/>
+    <param name="height_lcr_topic" value="$(arg height_lcr_topic)"/>
+    <param name="height_median_topic" value="$(arg height_median_topic)"/>
+    <param name="debug_image_topic" value="$(arg debug_image_topic)"/>
     <param name="process_every" value="$(arg process_every)"/>
     <param name="publish_debug" value="$(arg publish_debug)"/>
   </node>

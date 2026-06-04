@@ -18,6 +18,8 @@
 #     --bag <bag> --calibration <cal.json> --topic /camera/color/image_raw --out-dir <dir>
 #
 # 真值: RGB max(left,center,right) 液面高度(离线); /spmpc/* 仅模型辅助。
+# 在线 /liquid/* 由 realsense_liquid_measurement 单独启动，本脚本默认不依赖、不录制；
+# 如需把在线 proxy 同步进 bag，显式设置 RECORD_ONLINE_LIQUID=true。
 
 set -euo pipefail
 
@@ -35,6 +37,10 @@ PATH_TEMPLATE="${PATH_TEMPLATE:-s_curve}"
 PATH_FILE="${PATH_FILE:-/home/geist/fixed_paths/real/${DATE}/P2_${PATH_TEMPLATE}.json}"
 SOLVER_BACKEND="${SOLVER_BACKEND:-continuous_mpcc_acados}"
 W_SLOSH="${W_SLOSH:--1.0}"
+# 控制器本身不依赖 RGB/在线液面节点；下面两个开关只影响本实验脚本的 preflight/录包。
+REQUIRE_RGB_TRUTH="${REQUIRE_RGB_TRUTH:-true}"          # true: 要求 /camera/color/image_raw，用于离线 RGB 真值
+RECORD_RGB_CAMERA="${RECORD_RGB_CAMERA:-${REQUIRE_RGB_TRUTH}}"  # true: 录 RGB 原始图像/相机内参
+RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-false}"   # true: 额外录 /liquid/* 在线调试 proxy
 ACADOS_SOURCE_DIR="${ACADOS_SOURCE_DIR:-$HOME/acados}"
 PKG_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
@@ -51,32 +57,54 @@ echo_num() { timeout 3s rostopic echo -n 1 "$1" 2>/dev/null | awk '/data:/ {prin
 first_cmd_v() { timeout 3s rostopic echo -n 1 /cmd_vel 2>/dev/null | awk '/x:/ {print $2; exit}'; }
 
 # 实物录包: 相机(RGB真值离线用) + 控制/里程 + spmpc 诊断 + 参考路径 + tf。
+# 在线 /liquid/* 是 realsense_liquid_measurement 的调试 proxy，不是 spmpc_local_planner 输入；默认不录，需显式 RECORD_ONLINE_LIQUID=true。
 RECORD_TOPICS=(
-  /camera/color/image_raw /camera/color/camera_info
   /cmd_vel /odom /tf /tf_static /imu/data
   "${REF_TOPIC}"
   /spmpc/status /spmpc/solver_backend /spmpc/cost_breakdown /spmpc/slosh_horizon_summary
   /spmpc/debug/slosh_state /spmpc/slosh_height /spmpc/debug/progress_s /spmpc/solver_time_ms /spmpc/local_trajectory
-  /liquid/height /liquid/height_lcr
 )
+if [[ "${RECORD_RGB_CAMERA}" == "true" ]]; then
+  RECORD_TOPICS+=(/camera/color/image_raw /camera/color/camera_info)
+fi
+if [[ "${RECORD_ONLINE_LIQUID}" == "true" ]]; then
+  RECORD_TOPICS+=(/liquid/height /liquid/height_lcr /liquid/height_median)
+fi
 
 echo "================ 实物 continuous: ${VARIANT} (w_slosh=${W_SLOSH}) -> ${BAG_DIR}/${BAG_NAME}.bag ================"
 
 # ---- acados 环境 preflight ----
 if [[ "${SOLVER_BACKEND}" == "continuous_mpcc_acados" ]]; then
-  export LD_LIBRARY_PATH="${ACADOS_SOURCE_DIR}/lib:${LD_LIBRARY_PATH:-}"
+  ACADOS_LIB_DIR=""
+  if [[ -f "${ACADOS_SOURCE_DIR}/lib/libacados.so" ]]; then
+    ACADOS_LIB_DIR="${ACADOS_SOURCE_DIR}/lib"
+  elif [[ -f "${ACADOS_SOURCE_DIR}/lib64/libacados.so" ]]; then
+    ACADOS_LIB_DIR="${ACADOS_SOURCE_DIR}/lib64"
+  fi
+  [[ -n "${ACADOS_LIB_DIR}" ]] && export LD_LIBRARY_PATH="${ACADOS_LIB_DIR}:${LD_LIBRARY_PATH:-}"
   miss=0
-  [[ -f "${ACADOS_SOURCE_DIR}/lib/libacados.so" ]] || { echo "[ERR] 缺 ${ACADOS_SOURCE_DIR}/lib/libacados.so(实物机先按 SOP §1 装 acados)" >&2; miss=1; }
+  [[ -n "${ACADOS_LIB_DIR}" ]] || { echo "[ERR] 缺 ${ACADOS_SOURCE_DIR}/lib或lib64/libacados.so(实物机先按 SOP §1 装 acados)" >&2; miss=1; }
   [[ -f "${PKG_DIR}/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so" ]] || { echo "[ERR] 缺 spmpc_b0 求解器, 跑 generate_spmpc_acados.py --model b0" >&2; miss=1; }
-  [[ -f "${PKG_DIR}/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so" ]] || { echo "[ERR] 缺 spmpc_slosh 求解器, 跑 generate_spmpc_acados.py --model slosh" >&2; miss=1; }
+  case "${VARIANT}" in
+    *slosh*|*ours*)
+      [[ -f "${PKG_DIR}/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so" ]] || { echo "[ERR] ${VARIANT} 需要 spmpc_slosh 求解器, 跑 generate_spmpc_acados.py --model slosh" >&2; miss=1; }
+      ;;
+  esac
   [[ "$miss" == "1" ]] && exit 3
 fi
 
 # ---- 传感器 preflight ----
 if ! rostopic list >/dev/null 2>&1; then echo "[ERR] 未检测到 roscore, 先起传感器栈(终端A)。" >&2; exit 1; fi
 if ! timeout 5s rostopic echo -n 1 /odom >/dev/null 2>&1; then echo "[ERR] 无 /odom, 检查底盘/定位(终端A)。" >&2; exit 1; fi
-if ! timeout 5s rostopic echo -n 1 /camera/color/image_raw >/dev/null 2>&1; then echo "[ERR] 无 /camera/color/image_raw, RGB 真值依赖它(终端A)。" >&2; exit 1; fi
-echo "[preflight] acados + /odom + RGB OK"
+if [[ "${REQUIRE_RGB_TRUTH}" == "true" ]]; then
+  if ! timeout 5s rostopic echo -n 1 /camera/color/image_raw >/dev/null 2>&1; then
+    echo "[ERR] 无 /camera/color/image_raw；控制器可不依赖 RGB，但本实验脚本要求录 RGB 离线真值。若只做控制 smoke，可设 REQUIRE_RGB_TRUTH=false。" >&2
+    exit 1
+  fi
+  echo "[preflight] acados + /odom + RGB truth OK"
+else
+  echo "[preflight] acados + /odom OK (REQUIRE_RGB_TRUTH=false, 不检查 RGB 真值话题)"
+fi
 
 mkdir -p "$BAG_DIR" "$(dirname "$PATH_FILE")"
 bag="${BAG_DIR}/${BAG_NAME}.bag"

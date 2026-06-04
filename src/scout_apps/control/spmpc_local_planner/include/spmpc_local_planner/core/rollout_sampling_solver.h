@@ -17,6 +17,7 @@ private:
     SolverOutput rolloutCandidate(
         const SolverInput& input,
         const ReferencePath& reference,
+        double start_s,
         const std::vector<std::pair<double, double>>& controls,
         const PrimitiveSummary& primitive_summary,
         int guidance_id,

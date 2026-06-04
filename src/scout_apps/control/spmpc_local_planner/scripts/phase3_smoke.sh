@@ -28,6 +28,8 @@ GOAL_Y="${GOAL_Y:-2.6}"
 GOAL_YAW="${GOAL_YAW:-1.0}"
 PATH_TEMPLATE="${PATH_TEMPLATE:-s_curve}"
 PATH_FILE="${PATH_FILE:-/tmp/spmpc_phase3_smoke/P2_s_curve_spmpc_phase3.json}"
+SOLVER_BACKEND="${SOLVER_BACKEND:-primitive}"
+W_SLOSH="${W_SLOSH:--1.0}"
 
 generator_pid=""
 planner_pid=""
@@ -67,9 +69,17 @@ wait_planner_ready() {
     case "${status:-}" in
       ""|INITIALIZED|WAITING_FOR_ODOM|WAITING_FOR_REFERENCE_PATH|WAITING_FOR_TF_POSE)
         ;;
-      *)
+      *_OK|GOAL_REACHED|CORRIDOR_REJECT)
         echo "$status"
         return 0
+        ;;
+      ACADOS_SOLVE_FAILED*|ACADOS_NOT_CREATED|ACADOS_NOT_IMPLEMENTED|NO_REFERENCE_PATH|PROJECTION_FAILED|NO_SOLVER|NO_CANDIDATE)
+        echo "$status"
+        return 2
+        ;;
+      *)
+        echo "$status"
+        return 2
         ;;
     esac
     if (( $(date +%s) - start >= timeout_sec )); then
@@ -106,6 +116,7 @@ RECORD_TOPICS=(
   /spmpc/status
   /spmpc/controller_variant
   /spmpc/experiment_mode
+  /spmpc/solver_backend
   /spmpc/local_trajectory
   /spmpc/cost_breakdown
   /spmpc/slosh_horizon_summary
@@ -154,7 +165,8 @@ case "$PHASE3_MODE" in
     sleep 2
     ;;
 
-  point_to_point)
+  point_to_point|p2p)
+    PHASE3_MODE="point_to_point"
     REF_TOPIC="${REF_TOPIC:-/scout/global_path}"
     LAUNCH_FILE="spmpc_point_to_point.launch"
     BAG_NAME="${NAME:-${VARIANT}_point_to_point}"
@@ -182,10 +194,12 @@ rosrun scout_local_planner send_fixed_goal.py \
 echo "[path] 等待 ${REF_TOPIC} ..."
 wait_topic_header "${REF_TOPIC}" 15
 
-echo "[planner] 启动 ${LAUNCH_FILE}"
+echo "[planner] 启动 ${LAUNCH_FILE}: solver_backend=${SOLVER_BACKEND}, w_slosh=${W_SLOSH}"
 roslaunch spmpc_local_planner "${LAUNCH_FILE}" \
   planner_variant:="${VARIANT}" \
   reference_path_topic:="${REF_TOPIC}" \
+  solver_backend:="${SOLVER_BACKEND}" \
+  w_slosh:="${W_SLOSH}" \
   >"${OUT_DIR}/${BAG_NAME}_planner.log" 2>&1 &
 planner_pid=$!
 sleep 3

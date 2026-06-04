@@ -1,0 +1,66 @@
+<launch>
+  <!-- Nokov/XINGYING VRPN monitor. Monitoring/ground-truth only: no /odom, no /cmd_vel, no control TF. -->
+  <arg name="server" default="10.1.1.198"/>
+  <arg name="vrpn_port" default="3883"/>
+  <arg name="tracker" default="Scout"/>
+  <arg name="start_vrpn" default="true"/>
+  <arg name="start_monitor_bridge" default="true"/>
+
+  <arg name="raw_pose_topic" default="/vrpn_client_node/$(arg tracker)/pose"/>
+  <arg name="mocap_pose_topic" default="/mocap/scout_pose"/>
+  <arg name="mocap_odom_topic" default="/mocap/scout_odom"/>
+  <arg name="mocap_path_topic" default="/mocap/scout_path"/>
+  <arg name="mocap_status_topic" default="/mocap/status"/>
+
+  <arg name="publish_pose" default="true"/>
+  <arg name="publish_odom" default="true"/>
+  <arg name="publish_path" default="true"/>
+  <arg name="publish_tf" default="false"/>
+
+  <arg name="output_frame_id" default="mocap_world"/>
+  <arg name="mocap_world_frame" default="mocap_world"/>
+  <arg name="mocap_body_frame" default="mocap_scout"/>
+  <arg name="path_max_length" default="5000"/>
+  <arg name="stale_timeout_sec" default="1.0"/>
+  <arg name="status_publish_hz" default="1.0"/>
+
+  <arg name="use_rviz" default="false"/>
+  <arg name="rviz_config" default="$(find nokov_mocap_monitor)/rviz/nokov_monitor.rviz"/>
+
+  <!-- PDF-compatible VRPN entry: roslaunch vrpn_client_ros sample.launch server:=10.1.1.198 port:=3883 -->
+  <include if="$(arg start_vrpn)" file="$(find vrpn_client_ros)/launch/sample.launch">
+    <arg name="server" value="$(arg server)"/>
+    <arg name="port" value="$(arg vrpn_port)"/>
+  </include>
+
+  <node if="$(arg start_monitor_bridge)"
+        pkg="nokov_mocap_monitor"
+        type="mocap_pose_monitor.py"
+        name="mocap_pose_monitor"
+        output="screen">
+    <rosparam file="$(find nokov_mocap_monitor)/config/nokov_monitor.yaml" command="load"/>
+    <param name="tracker" value="$(arg tracker)"/>
+    <param name="input_pose_topic" value="$(arg raw_pose_topic)"/>
+    <param name="pose_topic" value="$(arg mocap_pose_topic)"/>
+    <param name="odom_topic" value="$(arg mocap_odom_topic)"/>
+    <param name="path_topic" value="$(arg mocap_path_topic)"/>
+    <param name="status_topic" value="$(arg mocap_status_topic)"/>
+    <param name="publish_pose" value="$(arg publish_pose)"/>
+    <param name="publish_odom" value="$(arg publish_odom)"/>
+    <param name="publish_path" value="$(arg publish_path)"/>
+    <param name="publish_tf" value="$(arg publish_tf)"/>
+    <param name="output_frame_id" value="$(arg output_frame_id)"/>
+    <param name="mocap_world_frame" value="$(arg mocap_world_frame)"/>
+    <param name="mocap_body_frame" value="$(arg mocap_body_frame)"/>
+    <param name="path_max_length" value="$(arg path_max_length)"/>
+    <param name="stale_timeout_sec" value="$(arg stale_timeout_sec)"/>
+    <param name="status_publish_hz" value="$(arg status_publish_hz)"/>
+  </node>
+
+  <node if="$(arg use_rviz)"
+        pkg="rviz"
+        type="rviz"
+        name="nokov_monitor_rviz"
+        args="-d $(arg rviz_config)"
+        output="screen"/>
+</launch>

@@ -26,13 +26,26 @@ endif()
 set(SPMPC_GEN_B0_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0)
 set(SPMPC_GEN_SLOSH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh)
 set(SPMPC_WITH_ACADOS FALSE)
-if(ACADOS_SOURCE_DIR AND EXISTS "${ACADOS_SOURCE_DIR}/lib/libacados.so"
-   AND EXISTS "${SPMPC_GEN_B0_DIR}/libacados_ocp_solver_spmpc_b0.so"
-   AND EXISTS "${SPMPC_GEN_SLOSH_DIR}/libacados_ocp_solver_spmpc_slosh.so")
+set(SPMPC_WITH_ACADOS_SLOSH FALSE)
+set(ACADOS_LIB_DIR "")
+if(ACADOS_SOURCE_DIR)
+  foreach(_acados_lib_dir "${ACADOS_SOURCE_DIR}/lib" "${ACADOS_SOURCE_DIR}/lib64")
+    if(EXISTS "${_acados_lib_dir}/libacados.so")
+      set(ACADOS_LIB_DIR "${_acados_lib_dir}")
+      break()
+    endif()
+  endforeach()
+endif()
+if(ACADOS_LIB_DIR AND EXISTS "${SPMPC_GEN_B0_DIR}/libacados_ocp_solver_spmpc_b0.so")
   set(SPMPC_WITH_ACADOS TRUE)
-  message(STATUS "[spmpc] acados found at ${ACADOS_SOURCE_DIR}; building continuous_mpcc_acados backend (b0 + slosh)")
+  if(EXISTS "${SPMPC_GEN_SLOSH_DIR}/libacados_ocp_solver_spmpc_slosh.so")
+    set(SPMPC_WITH_ACADOS_SLOSH TRUE)
+    message(STATUS "[spmpc] acados found at ${ACADOS_SOURCE_DIR}; building continuous_mpcc_acados backend (b0 + slosh)")
+  else()
+    message(STATUS "[spmpc] acados found at ${ACADOS_SOURCE_DIR}; building continuous_mpcc_acados backend (b0 only, slosh solver missing)")
+  endif()
 else()
-  message(STATUS "[spmpc] acados not found (ACADOS_SOURCE_DIR / generated spmpc_b0+slosh missing); continuous backend = stub")
+  message(STATUS "[spmpc] acados not found (ACADOS_SOURCE_DIR / generated spmpc_b0 missing); continuous backend = stub")
 endif()
 
 catkin_package(
@@ -76,15 +89,20 @@ if(SPMPC_WITH_ACADOS)
     ${ACADOS_SOURCE_DIR}/include/blasfeo/include
     ${ACADOS_SOURCE_DIR}/include/hpipm/include
     ${SPMPC_GEN_B0_DIR}
-    ${SPMPC_GEN_SLOSH_DIR}
   )
   target_link_libraries(${PROJECT_NAME}
     ${SPMPC_GEN_B0_DIR}/libacados_ocp_solver_spmpc_b0.so
-    ${SPMPC_GEN_SLOSH_DIR}/libacados_ocp_solver_spmpc_slosh.so
-    ${ACADOS_SOURCE_DIR}/lib/libacados.so
-    ${ACADOS_SOURCE_DIR}/lib/libhpipm.so
-    ${ACADOS_SOURCE_DIR}/lib/libblasfeo.so
+    ${ACADOS_LIB_DIR}/libacados.so
+    ${ACADOS_LIB_DIR}/libhpipm.so
+    ${ACADOS_LIB_DIR}/libblasfeo.so
   )
+  if(SPMPC_WITH_ACADOS_SLOSH)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE SPMPC_WITH_ACADOS_SLOSH)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${SPMPC_GEN_SLOSH_DIR})
+    target_link_libraries(${PROJECT_NAME}
+      ${SPMPC_GEN_SLOSH_DIR}/libacados_ocp_solver_spmpc_slosh.so
+    )
+  endif()
 endif()
 
 add_executable(spmpc_local_planner_node src/spmpc_local_planner_node.cpp)

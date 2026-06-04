@@ -24,6 +24,7 @@ private:
     void pathCallback(const nav_msgs::PathConstPtr& msg);
     void costmapCallback(const nav_msgs::OccupancyGridConstPtr& msg);
     void controlTimerCallback(const ros::TimerEvent&);
+    void publishZeroCommand();
     RobotState robotStateFromOdom(const nav_msgs::Odometry& odom) const;
     bool robotStateFromLatest(RobotState& state);
     void updateSloshObserverFromOdom(const nav_msgs::Odometry& odom);

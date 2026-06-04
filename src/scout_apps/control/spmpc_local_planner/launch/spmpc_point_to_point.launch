@@ -2,11 +2,15 @@
   <arg name="planner_variant" default="B0"/>
   <arg name="reference_path_topic" default="/scout/global_path"/>
   <arg name="costmap_topic" default="/map"/>
+  <arg name="solver_backend" default="primitive" doc="primitive|continuous_mpcc_acados"/>
+  <arg name="w_slosh" default="-1.0" doc="覆盖 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
   <include file="$(find spmpc_local_planner)/launch/spmpc_experiment.launch">
     <arg name="planner_variant" value="$(arg planner_variant)"/>
     <arg name="experiment_mode" value="point_to_point"/>
     <arg name="experiment_config" value="point_to_point"/>
     <arg name="reference_path_topic" value="$(arg reference_path_topic)"/>
     <arg name="costmap_topic" value="$(arg costmap_topic)"/>
+    <arg name="solver_backend" value="$(arg solver_backend)"/>
+    <arg name="w_slosh" value="$(arg w_slosh)"/>
   </include>
 </launch>

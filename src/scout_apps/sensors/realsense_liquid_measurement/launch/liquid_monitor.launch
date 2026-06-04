@@ -1,15 +1,41 @@
 <launch>
-  <!-- 实物实验现场监控前端(纯订阅, 隔离): 一屏看 RGB overlay + 液面曲线 + SPMPC 状态。
-       前提: online_liquid_height 已发 /liquid/*(overlay 需 publish_debug:=true); spmpc 节点在跑。
-       不开相机、不发控制话题; 关窗只退本前端。 -->
+  <!-- Field monitor dashboard (subscribe-only, isolated): dark UI with RGB overlay, trend, KPIs, and topic health.
+       Prerequisite: online_liquid_height publishes /liquid/*; overlay requires publish_debug:=true.
+       This node does not open the camera or publish control topics; closing it only exits this dashboard. -->
   <arg name="image_topic" default="/liquid/debug_image"/>
+  <arg name="liquid_height_topic" default="/liquid/height"/>
+  <arg name="liquid_lcr_topic" default="/liquid/height_lcr"/>
+  <arg name="model_height_topic" default="/spmpc/slosh_height"/>
+  <arg name="solver_time_topic" default="/spmpc/solver_time_ms"/>
+  <arg name="slosh_summary_topic" default="/spmpc/slosh_horizon_summary"/>
+  <arg name="status_topic" default="/spmpc/status"/>
+  <arg name="backend_topic" default="/spmpc/solver_backend"/>
+  <arg name="cmd_topic" default="/cmd_vel"/>
+  <arg name="odom_topic" default="/odom"/>
   <arg name="history_sec" default="20.0"/>
+  <arg name="max_session_sec" default="300.0"/>
   <arg name="solver_warn_ms" default="33.0"/>
+  <arg name="stale_sec" default="1.0"/>
+  <arg name="refresh_hz" default="5.0"/>
+  <arg name="export_dir" default="~/liquid_monitor_exports"/>
 
   <node pkg="realsense_liquid_measurement" type="liquid_experiment_monitor.py"
         name="liquid_experiment_monitor" output="screen">
     <param name="image_topic" value="$(arg image_topic)"/>
+    <param name="liquid_height_topic" value="$(arg liquid_height_topic)"/>
+    <param name="liquid_lcr_topic" value="$(arg liquid_lcr_topic)"/>
+    <param name="model_height_topic" value="$(arg model_height_topic)"/>
+    <param name="solver_time_topic" value="$(arg solver_time_topic)"/>
+    <param name="slosh_summary_topic" value="$(arg slosh_summary_topic)"/>
+    <param name="status_topic" value="$(arg status_topic)"/>
+    <param name="backend_topic" value="$(arg backend_topic)"/>
+    <param name="cmd_topic" value="$(arg cmd_topic)"/>
+    <param name="odom_topic" value="$(arg odom_topic)"/>
     <param name="history_sec" value="$(arg history_sec)"/>
+    <param name="max_session_sec" value="$(arg max_session_sec)"/>
     <param name="solver_warn_ms" value="$(arg solver_warn_ms)"/>
+    <param name="stale_sec" value="$(arg stale_sec)"/>
+    <param name="refresh_hz" value="$(arg refresh_hz)"/>
+    <param name="export_dir" value="$(arg export_dir)"/>
   </node>
 </launch>

@@ -15,6 +15,14 @@ double lerp(double a, double b, double t) {
     return a + (b - a) * t;
 }
 
+double normalizeAngle(double a) {
+    return std::atan2(std::sin(a), std::cos(a));
+}
+
+double lerpAngle(double a, double b, double t) {
+    return normalizeAngle(a + normalizeAngle(b - a) * t);
+}
+
 }  // namespace
 
 void ReferencePath::setPoints(const std::vector<TrajectoryPoint>& points, const std::string& frame_id) {
@@ -28,6 +36,7 @@ void ReferencePath::setPoints(const std::vector<TrajectoryPoint>& points, const 
             const auto& prev = points_.back();
             total_length_ += std::sqrt(dist2(prev.x, prev.y, p.x, p.y));
         }
+        p.yaw = normalizeAngle(p.yaw);
         p.s = total_length_;
         points_.push_back(p);
     }
@@ -54,7 +63,7 @@ TrajectoryPoint ReferencePath::sample(double s) const {
     TrajectoryPoint out;
     out.x = lerp(a.x, b.x, t);
     out.y = lerp(a.y, b.y, t);
-    out.yaw = lerp(a.yaw, b.yaw, t);
+    out.yaw = lerpAngle(a.yaw, b.yaw, t);
     out.v = lerp(a.v, b.v, t);
     out.s = s;
     return out;

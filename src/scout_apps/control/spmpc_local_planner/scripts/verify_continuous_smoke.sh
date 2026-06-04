@@ -61,7 +61,7 @@ RECORD_TOPICS=(
   /spmpc/status /spmpc/solver_backend /spmpc/cost_breakdown /spmpc/slosh_horizon_summary
   /spmpc/corridor /spmpc/guidance /spmpc/primitive
   /spmpc/debug/slosh_state /spmpc/slosh_height /spmpc/debug/progress_s /spmpc/solver_time_ms
-  /cmd_vel /odom /map
+  /cmd_vel /odom "${REF_TOPIC}" /map /tf /tf_static
 )
 
 # ---- acados 环境 preflight ----
@@ -119,6 +119,10 @@ status="$(echo_str /spmpc/status || true)"
 cmd_v="$(first_cmd_v || true)"
 solver_ms="$(echo_num /spmpc/solver_time_ms || true)"
 echo "[preflight] backend=${backend:-NA} status=${status:-NA} cmd_v=${cmd_v:-NA} solver_ms=${solver_ms:-NA}"
+if [[ "${backend:-}" != "${SOLVER_BACKEND}" ]]; then
+  echo "[FATAL] 期望 /spmpc/solver_backend=${SOLVER_BACKEND}, 实际=${backend:-NA}。看 ${OUT_DIR}/${BAG_NAME}_planner.log" >&2
+  exit 4
+fi
 
 case "${status:-}" in
   ACADOS_NOT_IMPLEMENTED)

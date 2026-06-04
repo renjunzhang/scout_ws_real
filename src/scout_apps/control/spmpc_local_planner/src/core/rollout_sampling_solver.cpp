@@ -206,6 +206,7 @@ bool RolloutSamplingSolver::solve(
             auto candidate = rolloutCandidate(
                 input,
                 reference,
+                proj.s,
                 controls,
                 toSummary(primitive),
                 guidance.first,
@@ -235,6 +236,7 @@ bool RolloutSamplingSolver::solve(
 SolverOutput RolloutSamplingSolver::rolloutCandidate(
     const SolverInput& input,
     const ReferencePath& reference,
+    double start_s,
     const std::vector<std::pair<double, double>>& controls,
     const PrimitiveSummary& primitive_summary,
     int guidance_id,
@@ -252,7 +254,7 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
     p.y = input.robot.y;
     p.yaw = input.robot.yaw;
     p.v = input.robot.v;
-    p.s = projector.project(reference, input.robot.x, input.robot.y, input.min_progress_s).s;
+    p.s = start_s;
     output.trajectory.reserve(input.horizon_steps + 1);
     output.trajectory.push_back(p);
     output.primitive_summary = primitive_summary;
