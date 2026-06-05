@@ -1,6 +1,8 @@
 #pragma once
 
 #include "spmpc_local_planner/core/costmap_grid.h"
+#include "spmpc_local_planner/core/terminal_controller.h"
+#include "spmpc_local_planner/warm_start/warm_start_diagnostics.h"
 #include <string>
 #include <vector>
 
@@ -11,6 +13,7 @@ struct RobotState {
     double y = 0.0;
     double yaw = 0.0;
     double v = 0.0;
+    double omega = 0.0;
 };
 
 struct SloshState {
@@ -99,6 +102,8 @@ struct SolverOutput {
     double solver_time_ms = 0.0;
     std::vector<TrajectoryPoint> trajectory;
     SloshHorizonSummary slosh_summary;
+    WarmStartDiagnostics warm_start_diagnostics;
+    TerminalDiagnostics terminal_diagnostics;
     GuidanceSummary guidance_summary;
     CorridorSummary corridor_summary;
     PrimitiveSummary primitive_summary;

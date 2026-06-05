@@ -2,10 +2,16 @@
   <arg name="planner_variant" default="B0"/>
   <arg name="reference_path_topic" default="/scout/global_path"/>
   <arg name="costmap_topic" default="/map"/>
+  <arg name="solver_backend" default="continuous_mpcc_acados"/>
+  <arg name="w_slosh" default="-1.0"/>
+  <arg name="reference_target_frame" default="odom"/>
 
   <include file="$(find spmpc_local_planner)/launch/spmpc_point_to_point.launch">
     <arg name="planner_variant" value="$(arg planner_variant)"/>
     <arg name="reference_path_topic" value="$(arg reference_path_topic)"/>
     <arg name="costmap_topic" value="$(arg costmap_topic)"/>
+    <arg name="solver_backend" value="$(arg solver_backend)"/>
+    <arg name="w_slosh" value="$(arg w_slosh)"/>
+    <arg name="reference_target_frame" value="$(arg reference_target_frame)"/>
   </include>
 </launch>

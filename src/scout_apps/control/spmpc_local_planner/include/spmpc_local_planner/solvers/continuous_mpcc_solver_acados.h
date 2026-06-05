@@ -2,6 +2,9 @@
 
 #include "spmpc_local_planner/core/spmpc_solver.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
+#include "spmpc_local_planner/warm_start/warm_start_generator.h"
+#include "spmpc_local_planner/warm_start/warm_start_output.h"
+#include <memory>
 
 namespace spmpc_local_planner {
 
@@ -29,6 +32,9 @@ private:
     bool use_slosh_model_ = false;        // 由 variant.slosh_enable 决定接 b0(5维) 还是 slosh(9维)
 
     void* capsule_ = nullptr;             // 不透明 acados capsule（仅 SPMPC_WITH_ACADOS 下有效）
+    std::unique_ptr<WarmStartGenerator> warm_start_generator_;
+    mutable WarmStartOutput previous_warm_start_solution_;
+    mutable bool have_previous_solution_ = false;
     mutable double u_prev_[3] = {0.0, 0.0, 0.0};  // 上周期下发控制 [a, omega, v_s]
     mutable bool have_u_prev_ = false;
 };

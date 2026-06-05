@@ -19,6 +19,10 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     slosh_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_state", 1);
     slosh_height_pub_ = nh.advertise<std_msgs::Float32>("slosh_height", 1);
     slosh_horizon_summary_pub_ = nh.advertise<std_msgs::Float32MultiArray>("slosh_horizon_summary", 1);
+    warm_start_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/warm_start", 1);
+    warm_start_status_pub_ = nh.advertise<std_msgs::String>("debug/warm_start_status", 1);
+    terminal_pub_ = nh.advertise<std_msgs::Float32MultiArray>("terminal/debug", 1);
+    terminal_mode_pub_ = nh.advertise<std_msgs::String>("terminal/mode", 1);
 }
 
 void DiagnosticsPublisher::publishVariant(
@@ -48,6 +52,61 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     std_msgs::Float32 solver_ms;
     solver_ms.data = static_cast<float>(output.solver_time_ms);
     solver_time_pub_.publish(solver_ms);
+
+    const auto& ws = output.warm_start_diagnostics;
+    std_msgs::Float32MultiArray warm_start;
+    warm_start.layout.dim.resize(1);
+    warm_start.layout.dim[0].label =
+        "valid,used_flatness,used_previous_solution,used_fallback,used_slosh_rollout,bound_violation_count,max_v,max_omega,max_a,max_lateral_acc,max_slosh_height_pred,reference_fit_error";
+    warm_start.layout.dim[0].size = 12;
+    warm_start.layout.dim[0].stride = 12;
+    warm_start.data.resize(12, 0.0f);
+    warm_start.data[0] = ws.warm_start_valid ? 1.0f : 0.0f;
+    warm_start.data[1] = ws.used_flatness ? 1.0f : 0.0f;
+    warm_start.data[2] = ws.used_previous_solution ? 1.0f : 0.0f;
+    warm_start.data[3] = ws.used_fallback ? 1.0f : 0.0f;
+    warm_start.data[4] = ws.used_slosh_rollout ? 1.0f : 0.0f;
+    warm_start.data[5] = static_cast<float>(ws.bound_violation_count);
+    warm_start.data[6] = static_cast<float>(ws.max_v);
+    warm_start.data[7] = static_cast<float>(ws.max_omega);
+    warm_start.data[8] = static_cast<float>(ws.max_a);
+    warm_start.data[9] = static_cast<float>(ws.max_lateral_acc);
+    warm_start.data[10] = static_cast<float>(1000.0 * ws.max_slosh_height_pred);
+    warm_start.data[11] = static_cast<float>(ws.reference_fit_error);
+    warm_start_pub_.publish(warm_start);
+
+    std_msgs::String warm_start_status;
+    warm_start_status.data = ws.failure_reason.empty() ? "OK" : ws.failure_reason;
+    warm_start_status_pub_.publish(warm_start_status);
+
+    const auto& td = output.terminal_diagnostics;
+    std_msgs::Float32MultiArray terminal;
+    terminal.layout.dim.resize(1);
+    terminal.layout.dim[0].label =
+        "enabled,terminal_phase,pre_terminal_phase,envelope_active,stop_pending,position_reached,speed_gate_reached,omega_gate_reached,reached,distance_to_goal,remaining_s,dx_robot,v_envelope,cmd_v_pre_clamp,cmd_v_post_clamp";
+    terminal.layout.dim[0].size = 15;
+    terminal.layout.dim[0].stride = 15;
+    terminal.data.resize(15, 0.0f);
+    terminal.data[0] = td.enabled ? 1.0f : 0.0f;
+    terminal.data[1] = td.terminal_phase ? 1.0f : 0.0f;
+    terminal.data[2] = td.pre_terminal_phase ? 1.0f : 0.0f;
+    terminal.data[3] = td.envelope_active ? 1.0f : 0.0f;
+    terminal.data[4] = td.stop_pending ? 1.0f : 0.0f;
+    terminal.data[5] = td.position_reached ? 1.0f : 0.0f;
+    terminal.data[6] = td.speed_gate_reached ? 1.0f : 0.0f;
+    terminal.data[7] = td.omega_gate_reached ? 1.0f : 0.0f;
+    terminal.data[8] = td.reached ? 1.0f : 0.0f;
+    terminal.data[9] = static_cast<float>(td.distance_to_goal);
+    terminal.data[10] = static_cast<float>(td.remaining_s);
+    terminal.data[11] = static_cast<float>(td.dx_robot);
+    terminal.data[12] = static_cast<float>(td.v_envelope);
+    terminal.data[13] = static_cast<float>(td.cmd_v_pre_clamp);
+    terminal.data[14] = static_cast<float>(td.cmd_v_post_clamp);
+    terminal_pub_.publish(terminal);
+
+    std_msgs::String terminal_mode;
+    terminal_mode.data = td.mode;
+    terminal_mode_pub_.publish(terminal_mode);
 
     std_msgs::Float32MultiArray cost;
     cost.layout.dim.resize(1);

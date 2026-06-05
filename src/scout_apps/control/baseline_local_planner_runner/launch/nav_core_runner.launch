@@ -7,6 +7,13 @@
   <arg name="status_topic" default="/baseline/status"/>
   <arg name="global_plan_topic" default="/baseline/global_plan"/>
   <arg name="controller_frequency" default="10.0"/>
+  <arg name="force_straight_plan_on_goal" default="false"/>
+  <arg name="use_wrapper_goal_check" default="true"/>
+  <arg name="latch_goal_reached" default="false"/>
+  <arg name="max_cmd_vel_x" default="0.8"/>
+  <arg name="max_cmd_vel_theta" default="1.2"/>
+  <arg name="base_frame" default="base_footprint"/>
+  <arg name="plan_target_frame" default=""/>
   <arg name="planner_config" default=""/>
   <arg name="costmap_config" default="$(find baseline_local_planner_runner)/config/local_costmap_sim.yaml"/>
 
@@ -22,6 +29,13 @@
     <param name="status_topic" value="$(arg status_topic)"/>
     <param name="global_plan_topic" value="$(arg global_plan_topic)"/>
     <param name="controller_frequency" value="$(arg controller_frequency)"/>
+    <param name="force_straight_plan_on_goal" value="$(arg force_straight_plan_on_goal)"/>
+    <param name="use_wrapper_goal_check" value="$(arg use_wrapper_goal_check)"/>
+    <param name="latch_goal_reached" value="$(arg latch_goal_reached)"/>
+    <param name="max_cmd_vel_x" value="$(arg max_cmd_vel_x)"/>
+    <param name="max_cmd_vel_theta" value="$(arg max_cmd_vel_theta)"/>
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="plan_target_frame" value="$(arg plan_target_frame)"/>
     <rosparam file="$(arg costmap_config)" command="load"/>
     <rosparam if="$(eval planner_config != '')" file="$(arg planner_config)" command="load"/>
   </node>

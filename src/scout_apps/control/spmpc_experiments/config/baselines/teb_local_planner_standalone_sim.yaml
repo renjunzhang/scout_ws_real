@@ -1,0 +1,68 @@
+# Standalone TEB baseline config for SPMPC P2P smoke tests.
+# Keep this simulation-only copy conservative for liquid-transport comparisons.
+TebLocalPlannerROS:
+  # Frames & topics
+  odom_topic: /odom
+  map_frame: odom
+  transform_tolerance: 1.0
+
+  # Trajectory
+  teb_autosize: true
+  dt_ref: 0.25
+  dt_hysteresis: 0.05
+  max_samples: 500
+  global_plan_overwrite_orientation: true
+  allow_init_with_backwards_motion: false
+  max_global_plan_lookahead_dist: 4.0
+  global_plan_prune_distance: 0.5
+  exact_arc_length: false
+  feasibility_check_no_poses: 5
+
+  # Robot (diff drive), conservative for real-liquid transfer.
+  max_vel_x: 0.8
+  max_vel_x_backwards: 0.15
+  max_vel_theta: 1.2
+  acc_lim_x: 0.6
+  acc_lim_theta: 1.2
+  min_turning_radius: 0.0
+  wheelbase: 0.0
+  cmd_angle_instead_rotvel: false
+
+  # Footprint
+  footprint_model:
+    type: "polygon"
+    vertices: [[0.31, 0.2925], [0.31, -0.2925], [-0.31, -0.2925], [-0.31, 0.2925]]
+
+  # Goal tolerance
+  xy_goal_tolerance: 0.25
+  yaw_goal_tolerance: 0.35
+  free_goal_vel: false
+
+  # Obstacles
+  min_obstacle_dist: 0.25
+  inflation_dist: 0.45
+  include_costmap_obstacles: true
+  costmap_obstacles_behind_robot_dist: 1.0
+  obstacle_poses_affected: 25
+
+  # Optimization
+  no_inner_iterations: 5
+  no_outer_iterations: 4
+  optimization_activate: true
+  optimization_verbose: false
+  penalty_epsilon: 0.1
+  weight_max_vel_x: 5.0
+  weight_max_vel_theta: 5.0
+  weight_acc_lim_x: 5.0
+  weight_acc_lim_theta: 5.0
+  weight_kinematics_nh: 1000.0
+  weight_kinematics_forward_drive: 30.0
+  weight_kinematics_turning_radius: 1.0
+  weight_optimaltime: 0.4
+  weight_obstacle: 80.0
+
+  # Homotopy class planning
+  enable_homotopy_class_planning: false
+  enable_multithreading: true
+  max_number_classes: 2
+  roadmap_graph_no_samples: 15

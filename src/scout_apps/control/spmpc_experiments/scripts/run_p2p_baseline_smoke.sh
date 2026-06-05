@@ -11,7 +11,8 @@
 #     rosrun scout_local_planner launch_sim_nav_stack.sh
 #
 # 用法:
-#   BASELINE=spmpc VARIANT=B_ours_anti OUT_DIR=/data/a/spmpc_baseline_smoke \
+#   BASELINE=spmpc VARIANT=B_ours SPMPC_SOLVER_BACKEND=continuous_mpcc_acados \
+#     OUT_DIR=/data/a/spmpc_baseline_smoke \
 #     bash src/scout_apps/control/spmpc_experiments/scripts/run_p2p_baseline_smoke.sh
 #
 #   BASELINE=teb OUT_DIR=/data/a/spmpc_baseline_smoke \
@@ -24,6 +25,8 @@ set -euo pipefail
 
 BASELINE="${BASELINE:-spmpc}"  # spmpc | teb | dwa | mpc
 VARIANT="${VARIANT:-B0}"
+SPMPC_SOLVER_BACKEND="${SPMPC_SOLVER_BACKEND:-continuous_mpcc_acados}"
+SPMPC_W_SLOSH="${SPMPC_W_SLOSH:--1.0}"
 OUT_DIR="${OUT_DIR:-/data/${USER}/spmpc_baseline_smoke}"
 RECORD_SEC="${RECORD_SEC:-30}"
 GOAL_TOPIC="${GOAL_TOPIC:-/scout/goal}"
@@ -87,7 +90,7 @@ case "$BASELINE" in
   spmpc)
     launch_pkg="spmpc_experiments"
     launch_file="run_spmpc_p2p_sim.launch"
-    launch_args=(planner_variant:="${VARIANT}")
+    launch_args=(planner_variant:="${VARIANT}" solver_backend:="${SPMPC_SOLVER_BACKEND}" w_slosh:="${SPMPC_W_SLOSH}")
     ;;
   teb)
     launch_pkg="spmpc_experiments"
@@ -136,6 +139,8 @@ cat >"$meta" <<EOF
 run_id: ${RUN_ID}
 baseline: ${BASELINE}
 variant: ${VARIANT}
+spmpc_solver_backend: ${SPMPC_SOLVER_BACKEND}
+spmpc_w_slosh: ${SPMPC_W_SLOSH}
 git_hash: ${git_hash}
 record_sec: ${RECORD_SEC}
 goal:
@@ -152,6 +157,7 @@ record_topics=(
   /scan_front
   /scout/goal
   /scout/global_path
+  /scout/global_path_fixed
   /scout/move_base/global_costmap/costmap
   /scout/move_base/local_costmap/costmap
   /scout/move_base/GlobalPlanner/plan

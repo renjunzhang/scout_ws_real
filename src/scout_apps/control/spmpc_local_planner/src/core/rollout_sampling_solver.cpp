@@ -166,17 +166,6 @@ bool RolloutSamplingSolver::solve(
         return false;
     }
 
-    const double remaining = std::max(0.0, reference.length() - proj.s);
-    if (remaining < params_.goal_tolerance) {
-        output.success = true;
-        output.status = "GOAL_REACHED";
-        output.cmd_v = 0.0;
-        output.cmd_omega = 0.0;
-        output.progress_s = reference.length() > 1e-6 ? proj.s / reference.length() : 0.0;
-        output.progress_abs_s = proj.s;
-        return true;
-    }
-
     const double target_s = std::min(reference.length(), proj.s + params_.lookahead_distance);
     const auto target = reference.sample(target_s);
     const double base_v = clampValue(0.5 * params_.v_max, 0.0, params_.v_max);

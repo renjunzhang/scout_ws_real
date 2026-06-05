@@ -19,6 +19,40 @@ frames:
 
 reference:
   lookahead_distance: 0.6
+  preprocess_enable: false
+  resample_spacing: 0.08
+  smoothing_window: 3
+  min_segment_length: 0.001
 
 terminal:
+  enable: true
   goal_tolerance: 0.15
+  goal_reached_max_speed: 0.03
+  goal_reached_max_omega: 0.05
+  slowdown:
+    enable: true
+    distance: 1.20
+    v_max: 0.18
+  capture_stop:
+    enable: true
+    distance: 0.70
+    v_cap: 0.18
+    goal_behind_x: -0.05
+  command_clamp:
+    enable: true
+    rate_limit_enable: true
+
+platform:
+  kinematics: differential
+
+acados:
+  warm_start:
+    enable: false
+    type: diff_drive_flatness
+    use_previous_solution: true
+    use_slosh_rollout: true
+    curvature_speed_limit_enable: true
+    max_reference_fit_error: 0.10
+    fallback_to_previous_solution: true
+    fallback_to_primitive: true
+  warm_start_flatness_enable: false

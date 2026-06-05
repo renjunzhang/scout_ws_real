@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
+#include "spmpc_local_planner/reference/reference_path_preprocessor.h"
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/OccupancyGrid.h>
@@ -46,6 +47,8 @@ private:
     SpmpcProblem problem_;
     DiagnosticsPublisher diagnostics_;
     VariantConfig variant_;
+    ReferencePathPreprocessor reference_preprocessor_;
+    ReferencePathPreprocessParams reference_preprocess_params_;
     SloshDynamics slosh_observer_;
     SloshState current_slosh_;
 
@@ -59,6 +62,7 @@ private:
     std::string costmap_topic_ = "/map";
     std::string cmd_topic_ = "/cmd_vel";
     std::string robot_base_frame_ = "base_link";
+    std::string reference_target_frame_;
     std::string experiment_mode_ = "fixed_path";
     bool publish_cmd_vel_ = true;
     bool use_tf_pose_ = true;

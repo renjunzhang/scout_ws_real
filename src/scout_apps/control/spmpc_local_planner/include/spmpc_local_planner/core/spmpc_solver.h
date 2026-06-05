@@ -4,6 +4,7 @@
 #include "spmpc_local_planner/core/variant_config.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/reference/reference_path.h"
+#include "spmpc_local_planner/warm_start/warm_start_input.h"
 #include <string>
 
 namespace spmpc_local_planner {
@@ -22,7 +23,11 @@ struct SolverParams {
     bool homotopy_enable = false;
     double homotopy_lateral_offset = 0.0;
     double lookahead_distance = 0.6;
-    double goal_tolerance = 0.15;
+    double goal_tolerance = 0.15;  // deprecated mirror: use terminal.goal_tolerance
+    TerminalControllerParams terminal;
+    WarmStartConfig warm_start;
+    PlatformParams platform;
+    bool warm_start_flatness_enable = false;  // deprecated: use acados/warm_start/enable
     std::string solver_backend = "primitive";  // primitive | continuous_mpcc_acados
     SloshModelParams slosh;
 };

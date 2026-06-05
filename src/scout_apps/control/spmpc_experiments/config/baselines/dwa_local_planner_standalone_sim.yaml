@@ -30,7 +30,7 @@ DWAPlannerROS:
   yaw_goal_tolerance: 0.20
   latch_xy_goal_tolerance: true
 
-  prune_plan: true
+  prune_plan: false
   publish_traj_pc: true
   publish_cost_grid_pc: false
   global_frame_id: odom

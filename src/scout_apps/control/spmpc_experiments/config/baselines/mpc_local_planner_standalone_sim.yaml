@@ -75,7 +75,7 @@ MpcLocalPlannerROS:
     publish_ocp_results: true
 
   solver:
-    type: "ipopt"
+    type: "lsq_lm"
     ipopt:
       iterations: 100
       max_cpu_time: -1.0

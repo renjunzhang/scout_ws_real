@@ -1,5 +1,5 @@
 <launch>
-  <arg name="global_path_topic" default="/scout/global_path_fixed"/>
+  <arg name="global_path_topic" default="/scout/global_path"/>
   <arg name="goal_topic" default="/scout/goal"/>
   <arg name="cmd_vel_topic" default="/cmd_vel"/>
 
@@ -11,6 +11,7 @@
     <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
     <arg name="status_topic" value="/baseline/teb/status"/>
     <arg name="global_plan_topic" value="/baseline/teb/global_plan"/>
-    <arg name="planner_config" value="$(find scout_global_planner)/config/teb_local_planner.yaml"/>
+    <arg name="plan_target_frame" value="odom"/>
+    <arg name="planner_config" value="$(find spmpc_experiments)/config/baselines/teb_local_planner_standalone_sim.yaml"/>
   </include>
 </launch>

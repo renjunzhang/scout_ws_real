@@ -4,6 +4,7 @@
 
 #include "spmpc_local_planner/reference/progress_projector.h"
 #include "spmpc_local_planner/reference/reference_spline.h"
+#include "spmpc_local_planner/warm_start/warm_start_factory.h"
 
 #include "acados_solver_spmpc_b0.h"
 #ifdef SPMPC_WITH_ACADOS_SLOSH
@@ -171,6 +172,243 @@ void fitReferencePolynomials(const ReferenceSpline& spline, double s0, double s_
     cy = A.colPivHouseholderQr().solve(by);
 }
 
+WarmStartState makeWarmStartState(const double* x, bool slosh) {
+    WarmStartState state;
+    state.px = x[0]; state.py = x[1]; state.theta = x[2]; state.v = x[3]; state.s = x[4];
+    if (slosh) {
+        state.eta_x = x[5]; state.eta_x_dot = x[6]; state.eta_y = x[7]; state.eta_y_dot = x[8];
+    }
+    return state;
+}
+
+WarmStartControl makeWarmStartControl(const double* u) {
+    WarmStartControl control;
+    control.a = u[0]; control.omega = u[1]; control.v_s = u[2];
+    return control;
+}
+
+void fillAcadosState(const WarmStartState& state, bool slosh, double* x) {
+    x[0] = state.px; x[1] = state.py; x[2] = state.theta; x[3] = state.v; x[4] = state.s;
+    x[5] = slosh ? state.eta_x : 0.0;
+    x[6] = slosh ? state.eta_x_dot : 0.0;
+    x[7] = slosh ? state.eta_y : 0.0;
+    x[8] = slosh ? state.eta_y_dot : 0.0;
+}
+
+void fillAcadosControl(const WarmStartControl& control, double* u) {
+    u[0] = control.a;
+    u[1] = control.omega;
+    u[2] = control.v_s;
+}
+
+void setAcadosWarmStart(GenSolver& gen, const WarmStartOutput& warm_start, bool slosh) {
+    if (!warm_start.valid || warm_start.states.size() < static_cast<size_t>(gen.n_horizon + 1) ||
+        warm_start.controls.size() < static_cast<size_t>(gen.n_horizon)) {
+        return;
+    }
+    ocp_nlp_config* cfg = gen.config();
+    ocp_nlp_dims* dims = gen.dims();
+    ocp_nlp_in* nlp_in = gen.in();
+    ocp_nlp_out* nlp_out = gen.out();
+    double x_guess[9];
+    double u_guess[3];
+    for (int k = 0; k <= gen.n_horizon; ++k) {
+        fillAcadosState(warm_start.states[k], slosh, x_guess);
+        ocp_nlp_out_set(cfg, dims, nlp_out, nlp_in, k, "x", x_guess);
+        if (k < gen.n_horizon) {
+            fillAcadosControl(warm_start.controls[k], u_guess);
+            ocp_nlp_out_set(cfg, dims, nlp_out, nlp_in, k, "u", u_guess);
+        }
+    }
+}
+
+WarmStartInput makeWarmStartInput(const SolverInput& input,
+                                  const ReferencePath& reference,
+                                  const ReferenceSpline& spline,
+                                  double s0,
+                                  double len,
+                                  int n,
+                                  const SolverParams& params,
+                                  const SloshDynamics& slosh_dyn,
+                                  bool have_u_prev,
+                                  const double* u_prev) {
+    WarmStartInput warm_input;
+    warm_input.robot = input.robot;
+    warm_input.slosh = input.slosh;
+    warm_input.reference = &reference;
+    warm_input.spline = &spline;
+    warm_input.horizon_steps = n;
+    warm_input.dt = input.dt;
+    warm_input.s0 = s0;
+    warm_input.reference_length = len;
+    warm_input.platform = params.platform;
+    warm_input.slosh_params = params.slosh;
+    warm_input.slosh_dynamics = &slosh_dyn;
+    warm_input.bounds.v_max = params.v_max;
+    warm_input.bounds.omega_max = params.omega_max;
+    warm_input.bounds.a_max = params.a_max;
+    warm_input.bounds.v_s_max = params.v_max;
+    warm_input.config = params.warm_start;
+    warm_input.have_previous_control = have_u_prev;
+    if (have_u_prev && u_prev != nullptr) {
+        warm_input.previous_a = u_prev[0];
+        warm_input.previous_omega = u_prev[1];
+        warm_input.previous_v_s = u_prev[2];
+    }
+    return warm_input;
+}
+
+bool isWarmStartFinite(const WarmStartOutput& warm_start) {
+    for (const auto& state : warm_start.states) {
+        if (!std::isfinite(state.px) || !std::isfinite(state.py) || !std::isfinite(state.theta) ||
+            !std::isfinite(state.v) || !std::isfinite(state.s) || !std::isfinite(state.eta_x) ||
+            !std::isfinite(state.eta_x_dot) || !std::isfinite(state.eta_y) || !std::isfinite(state.eta_y_dot)) {
+            return false;
+        }
+    }
+    for (const auto& control : warm_start.controls) {
+        if (!std::isfinite(control.a) || !std::isfinite(control.omega) || !std::isfinite(control.v_s)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void stampWarmStartMetrics(WarmStartOutput& warm_start,
+                           const SolverParams& params,
+                           const SloshDynamics& slosh_dyn,
+                           bool slosh) {
+    for (const auto& state : warm_start.states) {
+        warm_start.diagnostics.max_v = std::max(warm_start.diagnostics.max_v, std::abs(state.v));
+        if (slosh && slosh_dyn.configured()) {
+            SloshState ss;
+            ss.eta_x = state.eta_x; ss.eta_x_dot = state.eta_x_dot;
+            ss.eta_y = state.eta_y; ss.eta_y_dot = state.eta_y_dot;
+            warm_start.diagnostics.max_slosh_height_pred = std::max(
+                warm_start.diagnostics.max_slosh_height_pred, slosh_dyn.height(ss));
+        }
+        if (state.v < -1e-9 || state.v > params.v_max + 1e-9) {
+            ++warm_start.diagnostics.bound_violation_count;
+        }
+    }
+    for (const auto& control : warm_start.controls) {
+        warm_start.diagnostics.max_a = std::max(warm_start.diagnostics.max_a, std::abs(control.a));
+        warm_start.diagnostics.max_omega = std::max(warm_start.diagnostics.max_omega, std::abs(control.omega));
+        warm_start.diagnostics.max_lateral_acc = std::max(
+            warm_start.diagnostics.max_lateral_acc, std::abs(control.v_s * control.omega));
+        if (std::abs(control.a) > params.a_max + 1e-9 ||
+            std::abs(control.omega) > params.omega_max + 1e-9 ||
+            control.v_s < -1e-9 || control.v_s > params.v_max + 1e-9) {
+            ++warm_start.diagnostics.bound_violation_count;
+        }
+    }
+}
+
+WarmStartOutput makeShiftedPreviousWarmStart(const WarmStartOutput& previous,
+                                             const SolverInput& input,
+                                             double s0,
+                                             int n,
+                                             bool slosh,
+                                             const SolverParams& params,
+                                             const SloshDynamics& slosh_dyn) {
+    WarmStartOutput out;
+    out.diagnostics.used_previous_solution = true;
+    if (!previous.valid || previous.states.size() < static_cast<size_t>(n + 1) ||
+        previous.controls.size() < static_cast<size_t>(n)) {
+        out.fallback_reason = "NO_PREVIOUS_WARM_START";
+        out.diagnostics.failure_reason = out.fallback_reason;
+        return out;
+    }
+    if (previous.states.size() > 1 && std::abs(previous.states[1].s - s0) > std::max(0.5, 5.0 * params.v_max * input.dt)) {
+        out.fallback_reason = "PREVIOUS_WARM_START_PROGRESS_JUMP";
+        out.diagnostics.failure_reason = out.fallback_reason;
+        return out;
+    }
+
+    out.states.resize(n + 1);
+    out.controls.resize(n);
+    for (int k = 0; k <= n; ++k) {
+        out.states[k] = previous.states[std::min(k + 1, n)];
+        out.states[k].v = clampValue(out.states[k].v, 0.0, params.v_max);
+    }
+    for (int k = 0; k < n; ++k) {
+        out.controls[k] = previous.controls[std::min(k + 1, n - 1)];
+        out.controls[k].a = clampValue(out.controls[k].a, -params.a_max, params.a_max);
+        out.controls[k].omega = clampValue(out.controls[k].omega, -params.omega_max, params.omega_max);
+        out.controls[k].v_s = clampValue(out.controls[k].v_s, 0.0, params.v_max);
+    }
+
+    out.states[0].px = input.robot.x;
+    out.states[0].py = input.robot.y;
+    out.states[0].theta = input.robot.yaw;
+    out.states[0].v = clampValue(input.robot.v, 0.0, params.v_max);
+    out.states[0].s = s0;
+    if (slosh) {
+        out.states[0].eta_x = input.slosh.eta_x;
+        out.states[0].eta_x_dot = input.slosh.eta_x_dot;
+        out.states[0].eta_y = input.slosh.eta_y;
+        out.states[0].eta_y_dot = input.slosh.eta_y_dot;
+    }
+
+    out.valid = isWarmStartFinite(out);
+    out.diagnostics.warm_start_valid = out.valid;
+    if (!out.valid) {
+        out.fallback_reason = "PREVIOUS_WARM_START_NONFINITE";
+        out.diagnostics.failure_reason = out.fallback_reason;
+    }
+    stampWarmStartMetrics(out, params, slosh_dyn, slosh);
+    return out;
+}
+
+WarmStartOutput makeConservativeWarmStart(const WarmStartInput& warm_input,
+                                          const SolverParams& params,
+                                          const SloshDynamics& slosh_dyn,
+                                          bool slosh) {
+    WarmStartOutput out;
+    out.diagnostics.used_fallback = true;
+    if (warm_input.spline == nullptr || warm_input.spline->empty() || warm_input.horizon_steps <= 0) {
+        out.fallback_reason = "CONSERVATIVE_FALLBACK_NO_REFERENCE";
+        out.diagnostics.failure_reason = out.fallback_reason;
+        return out;
+    }
+    const int n = warm_input.horizon_steps;
+    out.states.resize(n + 1);
+    out.controls.resize(n);
+    const double v_seed = clampValue(0.25 * params.v_max, 0.0, params.v_max);
+    SloshState slosh_state = warm_input.slosh;
+    for (int k = 0; k <= n; ++k) {
+        const double s = clampValue(warm_input.s0 + v_seed * warm_input.dt * k, warm_input.s0, warm_input.reference_length);
+        const ReferenceSample ref = warm_input.spline->sample(s);
+        out.states[k].px = (k == 0) ? warm_input.robot.x : ref.x;
+        out.states[k].py = (k == 0) ? warm_input.robot.y : ref.y;
+        out.states[k].theta = (k == 0) ? warm_input.robot.yaw : ref.psi;
+        out.states[k].v = (k == 0) ? clampValue(warm_input.robot.v, 0.0, params.v_max) : v_seed;
+        out.states[k].s = (k == 0) ? warm_input.s0 : s;
+        if (slosh) {
+            out.states[k].eta_x = slosh_state.eta_x;
+            out.states[k].eta_x_dot = slosh_state.eta_x_dot;
+            out.states[k].eta_y = slosh_state.eta_y;
+            out.states[k].eta_y_dot = slosh_state.eta_y_dot;
+        }
+        if (k < n) {
+            out.controls[k].a = clampValue((v_seed - out.states[k].v) / std::max(1e-3, warm_input.dt), -params.a_max, params.a_max);
+            out.controls[k].omega = clampValue(ref.kappa * out.states[k].v, -params.omega_max, params.omega_max);
+            out.controls[k].v_s = clampValue(out.states[k].v, 0.0, params.v_max);
+            if (slosh && slosh_dyn.configured()) {
+                slosh_state = slosh_dyn.step(slosh_state, out.controls[k].a, out.states[k].v * out.controls[k].omega, out.controls[k].omega);
+            }
+        }
+    }
+    out.valid = isWarmStartFinite(out);
+    out.diagnostics.warm_start_valid = out.valid;
+    if (!out.valid) {
+        out.fallback_reason = "CONSERVATIVE_FALLBACK_NONFINITE";
+        out.diagnostics.failure_reason = out.fallback_reason;
+    }
+    stampWarmStartMetrics(out, params, slosh_dyn, slosh);
+    return out;
+}
+
 }  // namespace
 
 ContinuousMpccSolverAcados::ContinuousMpccSolverAcados() = default;
@@ -188,8 +426,14 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
     params_ = params;
     variant_ = variant;
     use_slosh_model_ = variant.slosh_enable;
+    if (params_.warm_start_flatness_enable) {
+        params_.warm_start.enable = true;
+    }
     have_u_prev_ = false;
+    have_previous_solution_ = false;
+    previous_warm_start_solution_ = WarmStartOutput{};
     slosh_dyn_.configure(params.slosh);
+    warm_start_generator_ = makeWarmStartGenerator(params_.warm_start, params_.platform);
 
     if (capsule_ != nullptr) {
         auto* old = static_cast<GenSolver*>(capsule_);
@@ -234,12 +478,6 @@ bool ContinuousMpccSolverAcados::solve(
     const double s0 = proj.s;
     output.progress_s = len > 1e-6 ? s0 / len : 0.0;
     output.progress_abs_s = s0;
-
-    if (std::max(0.0, len - s0) < params_.goal_tolerance) {
-        output.success = true;
-        output.status = "GOAL_REACHED";
-        return true;
-    }
 
     // 用求解器固化的 N（codegen 时确定），而非 input.horizon_steps，避免二者不一致导致越界。
     const int n = gen->n_horizon;
@@ -319,6 +557,36 @@ bool ContinuousMpccSolverAcados::solve(
     ocp_nlp_out* nlp_out = gen->out();
     ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, 0, "lbx", x0);
     ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, 0, "ubx", x0);
+    WarmStartOutput warm_start;
+    bool warm_start_applied = false;
+    const bool warm_start_requested = params_.warm_start.enable || params_.warm_start_flatness_enable;
+    const WarmStartInput warm_input = makeWarmStartInput(
+        input, reference, spline, s0, len, n, params_, slosh_dyn_, have_u_prev_, u_prev_);
+    if (warm_start_requested && warm_start_generator_) {
+        WarmStartDiagnostics diagnostics;
+        warm_start_generator_->generate(warm_input, warm_start, diagnostics);
+        warm_start.diagnostics = diagnostics;
+        if (warm_start.valid) {
+            setAcadosWarmStart(*gen, warm_start, slosh);
+            warm_start_applied = true;
+        }
+    }
+    if (warm_start_requested && !warm_start_applied && params_.warm_start.fallback_to_previous_solution && have_previous_solution_) {
+        warm_start = makeShiftedPreviousWarmStart(
+            previous_warm_start_solution_, input, s0, n, slosh, params_, slosh_dyn_);
+        if (warm_start.valid) {
+            setAcadosWarmStart(*gen, warm_start, slosh);
+            warm_start_applied = true;
+        }
+    }
+    if (warm_start_requested && !warm_start_applied && params_.warm_start.fallback_to_primitive) {
+        warm_start = makeConservativeWarmStart(warm_input, params_, slosh_dyn_, slosh);
+        if (warm_start.valid) {
+            setAcadosWarmStart(*gen, warm_start, slosh);
+            warm_start_applied = true;
+        }
+    }
+    output.warm_start_diagnostics = warm_start.diagnostics;
 
     const int status = gen->solve();
 
@@ -336,6 +604,8 @@ bool ContinuousMpccSolverAcados::solve(
     // 读轨迹 + 诊断量（contour/lag/slosh/控制），按 §11.5 对齐 primitive。
     const double inv_n = 1.0 / static_cast<double>(std::max(1, n));
     output.trajectory.reserve(n + 1);
+    std::vector<WarmStartState> solved_states;
+    solved_states.reserve(n + 1);
     std::vector<double> heights;
     heights.reserve(n + 1);
     double xk[9];
@@ -344,6 +614,7 @@ bool ContinuousMpccSolverAcados::solve(
         TrajectoryPoint pt;
         pt.x = xk[0]; pt.y = xk[1]; pt.yaw = xk[2]; pt.v = xk[3]; pt.s = xk[4];
         output.trajectory.push_back(pt);
+        solved_states.push_back(makeWarmStartState(xk, slosh));
 
         const double xref = polyEval(cx, pt.s);
         const double yref = polyEval(cy, pt.s);
@@ -375,9 +646,12 @@ bool ContinuousMpccSolverAcados::solve(
     const double a_ref = std::max(0.1, params_.a_max);
     const double omega_ref = std::max(1e-3, params_.omega_max);
     const double vs_ref = std::max(0.1, params_.v_max);
+    std::vector<WarmStartControl> solved_controls;
+    solved_controls.reserve(n);
     double uk[3], u0[3] = {0, 0, 0};
     for (int k = 0; k < n; ++k) {
         ocp_nlp_out_get(cfg, dims, nlp_out, k, "u", uk);
+        solved_controls.push_back(makeWarmStartControl(uk));
         if (k == 0) { u0[0] = uk[0]; u0[1] = uk[1]; u0[2] = uk[2]; }
         const double vn = uk[0] / a_ref;
         const double wn = uk[1] / omega_ref;
@@ -405,11 +679,16 @@ bool ContinuousMpccSolverAcados::solve(
 
     // u = [a, omega, v_s]; v_s 是虚拟路径进度速度，不直接作为 /cmd_vel.linear.x。
     output.cmd_v = clampValue(input.robot.v + u0[0] * input.dt, 0.0, params_.v_max);
-    output.cmd_omega = u0[1];
+    output.cmd_omega = clampValue(u0[1], -params_.omega_max, params_.omega_max);
     u_prev_[0] = u0[0];
-    u_prev_[1] = u0[1];
+    u_prev_[1] = output.cmd_omega;
     u_prev_[2] = u0[2];
     have_u_prev_ = true;
+    previous_warm_start_solution_.states = solved_states;
+    previous_warm_start_solution_.controls = solved_controls;
+    previous_warm_start_solution_.valid = !solved_states.empty() && solved_controls.size() == static_cast<size_t>(n);
+    previous_warm_start_solution_.diagnostics = output.warm_start_diagnostics;
+    have_previous_solution_ = previous_warm_start_solution_.valid;
 
     output.success = true;
     output.status = variant_.name + "_ACADOS_OK";

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <geometry_msgs/TransformStamped.h>
 #include <tf2/utils.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 namespace spmpc_local_planner {
 
@@ -22,12 +23,17 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("topics/costmap", costmap_topic_, costmap_topic_);
     pnh_.param("topics/cmd_vel", cmd_topic_, cmd_topic_);
     pnh_.param("frames/robot_base", robot_base_frame_, robot_base_frame_);
+    pnh_.param("frames/reference_target", reference_target_frame_, reference_target_frame_);
     pnh_.param("frames/use_tf_pose", use_tf_pose_, use_tf_pose_);
     pnh_.param("frames/tf_timeout_sec", tf_timeout_sec_, tf_timeout_sec_);
     pnh_.param("publish_cmd_vel", publish_cmd_vel_, publish_cmd_vel_);
     pnh_.param("control_frequency", control_frequency_, control_frequency_);
     pnh_.param("dt", dt_, dt_);
     pnh_.param("horizon_steps", horizon_steps_, horizon_steps_);
+    pnh_.param("reference/preprocess_enable", reference_preprocess_params_.enable, reference_preprocess_params_.enable);
+    pnh_.param("reference/resample_spacing", reference_preprocess_params_.resample_spacing, reference_preprocess_params_.resample_spacing);
+    pnh_.param("reference/smoothing_window", reference_preprocess_params_.smoothing_window, reference_preprocess_params_.smoothing_window);
+    pnh_.param("reference/min_segment_length", reference_preprocess_params_.min_segment_length, reference_preprocess_params_.min_segment_length);
 
     SolverParams solver_params;
     pnh_.param("robot/v_max", solver_params.v_max, solver_params.v_max);
@@ -50,6 +56,43 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                solver_params.homotopy_lateral_offset);
     pnh_.param("reference/lookahead_distance", solver_params.lookahead_distance, solver_params.lookahead_distance);
     pnh_.param("terminal/goal_tolerance", solver_params.goal_tolerance, solver_params.goal_tolerance);
+    solver_params.terminal.goal_tolerance = solver_params.goal_tolerance;
+    pnh_.param("terminal/enable", solver_params.terminal.enable, solver_params.terminal.enable);
+    pnh_.param("terminal/goal_tolerance", solver_params.terminal.goal_tolerance, solver_params.terminal.goal_tolerance);
+    pnh_.param("terminal/goal_reached_max_speed", solver_params.terminal.goal_reached_max_speed, solver_params.terminal.goal_reached_max_speed);
+    pnh_.param("terminal/goal_reached_max_omega", solver_params.terminal.goal_reached_max_omega, solver_params.terminal.goal_reached_max_omega);
+    pnh_.param("terminal/slowdown/enable", solver_params.terminal.slowdown_enable, solver_params.terminal.slowdown_enable);
+    pnh_.param("terminal/slowdown/distance", solver_params.terminal.slowdown_distance, solver_params.terminal.slowdown_distance);
+    pnh_.param("terminal/slowdown/v_max", solver_params.terminal.slowdown_v_max, solver_params.terminal.slowdown_v_max);
+    pnh_.param("terminal/capture_stop/enable", solver_params.terminal.capture_stop_enable, solver_params.terminal.capture_stop_enable);
+    pnh_.param("terminal/capture_stop/distance", solver_params.terminal.capture_stop_distance, solver_params.terminal.capture_stop_distance);
+    pnh_.param("terminal/capture_stop/v_cap", solver_params.terminal.capture_v_cap, solver_params.terminal.capture_v_cap);
+    pnh_.param("terminal/capture_stop/goal_behind_x", solver_params.terminal.goal_behind_x, solver_params.terminal.goal_behind_x);
+    pnh_.param("terminal/command_clamp/enable", solver_params.terminal.command_clamp_enable, solver_params.terminal.command_clamp_enable);
+    pnh_.param("terminal/command_clamp/rate_limit_enable", solver_params.terminal.rate_limit_enable, solver_params.terminal.rate_limit_enable);
+    solver_params.goal_tolerance = solver_params.terminal.goal_tolerance;
+    pnh_.param("platform/kinematics", solver_params.platform.kinematics, solver_params.platform.kinematics);
+    pnh_.param("acados/warm_start_flatness_enable", solver_params.warm_start_flatness_enable, solver_params.warm_start_flatness_enable);
+    pnh_.param("acados/warm_start/type", solver_params.warm_start.type, solver_params.warm_start.type);
+    pnh_.param("acados/warm_start/use_previous_solution", solver_params.warm_start.use_previous_solution, solver_params.warm_start.use_previous_solution);
+    pnh_.param("acados/warm_start/use_slosh_rollout", solver_params.warm_start.use_slosh_rollout, solver_params.warm_start.use_slosh_rollout);
+    pnh_.param("acados/warm_start/curvature_speed_limit_enable",
+               solver_params.warm_start.curvature_speed_limit_enable,
+               solver_params.warm_start.curvature_speed_limit_enable);
+    pnh_.param("acados/warm_start/max_reference_fit_error",
+               solver_params.warm_start.max_reference_fit_error,
+               solver_params.warm_start.max_reference_fit_error);
+    pnh_.param("acados/warm_start/fallback_to_previous_solution",
+               solver_params.warm_start.fallback_to_previous_solution,
+               solver_params.warm_start.fallback_to_previous_solution);
+    pnh_.param("acados/warm_start/fallback_to_primitive",
+               solver_params.warm_start.fallback_to_primitive,
+               solver_params.warm_start.fallback_to_primitive);
+    if (pnh_.hasParam("acados/warm_start/enable")) {
+        pnh_.param("acados/warm_start/enable", solver_params.warm_start.enable, solver_params.warm_start.enable);
+    } else {
+        solver_params.warm_start.enable = solver_params.warm_start_flatness_enable;
+    }
     pnh_.param("solver_backend", solver_params.solver_backend, solver_params.solver_backend);
     if (!isKnownSolverBackend(solver_params.solver_backend)) {
         ROS_WARN("[spmpc_local_planner] unknown solver_backend '%s'; falling back to primitive",
@@ -110,6 +153,35 @@ void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
 }
 
 void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
+    if (!reference_target_frame_.empty() && msg->header.frame_id != reference_target_frame_) {
+        nav_msgs::Path transformed_path;
+        transformed_path.header = msg->header;
+        transformed_path.header.frame_id = reference_target_frame_;
+        transformed_path.header.stamp = ros::Time(0);
+        transformed_path.poses.reserve(msg->poses.size());
+        try {
+            for (const auto& pose : msg->poses) {
+                geometry_msgs::PoseStamped stamped = pose;
+                if (stamped.header.frame_id.empty()) {
+                    stamped.header.frame_id = msg->header.frame_id;
+                }
+                stamped.header.stamp = ros::Time(0);
+                auto transformed = tf_buffer_.transform(stamped, reference_target_frame_, ros::Duration(std::max(0.0, tf_timeout_sec_)));
+                transformed.header.stamp = ros::Time(0);
+                transformed_path.poses.push_back(transformed);
+            }
+        } catch (const tf2::TransformException& ex) {
+            ROS_WARN_THROTTLE(1.0,
+                              "[spmpc_local_planner] transform reference path %s -> %s failed: %s",
+                              msg->header.frame_id.c_str(),
+                              reference_target_frame_.c_str(),
+                              ex.what());
+            return;
+        }
+        problem_.setReferencePath(referencePathFromMsg(transformed_path));
+        return;
+    }
+
     const auto reference = referencePathFromMsg(*msg);
     problem_.setReferencePath(reference);
 }
@@ -167,6 +239,7 @@ RobotState SpmpcLocalPlannerROS::robotStateFromOdom(const nav_msgs::Odometry& od
     state.y = odom.pose.pose.position.y;
     state.yaw = tf2::getYaw(odom.pose.pose.orientation);
     state.v = odom.twist.twist.linear.x;
+    state.omega = odom.twist.twist.angular.z;
     return state;
 }
 
@@ -250,8 +323,9 @@ ReferencePath SpmpcLocalPlannerROS::referencePathFromMsg(const nav_msgs::Path& p
         points.push_back(p);
     }
 
+    const auto processed = reference_preprocessor_.preprocess(points, reference_preprocess_params_);
     ReferencePath reference;
-    reference.setPoints(points, path.header.frame_id);
+    reference.setPoints(processed, path.header.frame_id);
     return reference;
 }
 

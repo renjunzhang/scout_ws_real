@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -53,10 +54,16 @@ public:
     private_nh_.param("global_plan_topic", global_plan_topic_, std::string("/baseline/global_plan"));
     private_nh_.param("controller_frequency", controller_frequency_, 10.0);
     private_nh_.param("goal_replan_on_receive", goal_replan_on_receive_, true);
+    private_nh_.param("force_straight_plan_on_goal", force_straight_plan_on_goal_, false);
+    private_nh_.param("use_wrapper_goal_check", use_wrapper_goal_check_, true);
+    private_nh_.param("latch_goal_reached", latch_goal_reached_, false);
     private_nh_.param("straight_plan_spacing", straight_plan_spacing_, 0.05);
     private_nh_.param("xy_goal_tolerance", xy_goal_tolerance_, 0.20);
     private_nh_.param("yaw_goal_tolerance", yaw_goal_tolerance_, 0.20);
+    private_nh_.param("max_cmd_vel_x", max_cmd_vel_x_, 0.8);
+    private_nh_.param("max_cmd_vel_theta", max_cmd_vel_theta_, 1.2);
     private_nh_.param("base_frame", base_frame_, std::string("base_link"));
+    private_nh_.param("plan_target_frame", plan_target_frame_, std::string(""));
 
     cmd_pub_ = nh_.advertise<geometry_msgs::Twist>(cmd_vel_topic_, 1);
     status_pub_ = nh_.advertise<std_msgs::String>(status_topic_, 1, true);
@@ -93,6 +100,40 @@ private:
       return;
     current_plan_ = msg->poses;
     plan_frame_ = msg->header.frame_id.empty() ? msg->poses.front().header.frame_id : msg->header.frame_id;
+    for (auto& pose : current_plan_)
+    {
+      if (pose.header.frame_id.empty())
+        pose.header.frame_id = plan_frame_;
+      pose.header.stamp = ros::Time(0);
+    }
+    if (!plan_target_frame_.empty() && plan_frame_ != plan_target_frame_)
+    {
+      std::vector<geometry_msgs::PoseStamped> transformed_plan;
+      transformed_plan.reserve(current_plan_.size());
+      try
+      {
+        for (const auto& pose : current_plan_)
+        {
+          geometry_msgs::PoseStamped transformed = tf_buffer_.transform(pose, plan_target_frame_, ros::Duration(0.2));
+          transformed.header.stamp = ros::Time(0);
+          transformed_plan.push_back(transformed);
+        }
+      }
+      catch (const tf2::TransformException& ex)
+      {
+        ROS_WARN_THROTTLE(2.0, "[baseline_runner] transform plan %s -> %s failed: %s",
+                          plan_frame_.c_str(), plan_target_frame_.c_str(), ex.what());
+        return;
+      }
+      current_plan_.swap(transformed_plan);
+      plan_frame_ = plan_target_frame_;
+    }
+    if (!have_goal_)
+    {
+      goal_ = current_plan_.back();
+      have_goal_ = true;
+    }
+    goal_reached_latched_ = false;
     plan_dirty_ = true;
     publishStatus("PATH_RECEIVED");
   }
@@ -100,8 +141,26 @@ private:
   void goalCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
   {
     goal_ = *msg;
+    if (!plan_target_frame_.empty() && goal_.header.frame_id != plan_target_frame_)
+    {
+      if (goal_.header.frame_id.empty())
+        goal_.header.frame_id = "map";
+      goal_.header.stamp = ros::Time(0);
+      try
+      {
+        goal_ = tf_buffer_.transform(goal_, plan_target_frame_, ros::Duration(0.2));
+        goal_.header.stamp = ros::Time(0);
+      }
+      catch (const tf2::TransformException& ex)
+      {
+        ROS_WARN_THROTTLE(2.0, "[baseline_runner] transform goal %s -> %s failed: %s",
+                          msg->header.frame_id.c_str(), plan_target_frame_.c_str(), ex.what());
+        return;
+      }
+    }
     have_goal_ = true;
-    if (goal_replan_on_receive_ && current_plan_.empty())
+    goal_reached_latched_ = false;
+    if (force_straight_plan_on_goal_ || (goal_replan_on_receive_ && current_plan_.empty()))
       buildStraightPlanToGoal(goal_);
     publishStatus("GOAL_RECEIVED");
   }
@@ -149,7 +208,7 @@ private:
       const double r = static_cast<double>(i) / static_cast<double>(steps);
       geometry_msgs::PoseStamped pose;
       pose.header.frame_id = frame;
-      pose.header.stamp = ros::Time::now();
+      pose.header.stamp = ros::Time(0);
       pose.pose.position.x = sx + r * dx;
       pose.pose.position.y = sy + r * dy;
       pose.pose.orientation = yawToQuat(i == steps ? goal_yaw : heading);
@@ -200,8 +259,10 @@ private:
       return;
     }
 
-    if (planner_->isGoalReached() || goalCloseEnough())
+    if (use_wrapper_goal_check_ && ((latch_goal_reached_ && goal_reached_latched_) || goalCloseEnough()))
     {
+      if (latch_goal_reached_)
+        goal_reached_latched_ = true;
       publishZero();
       publishStatus("GOAL_REACHED");
       return;
@@ -210,6 +271,7 @@ private:
     geometry_msgs::Twist cmd;
     if (planner_->computeVelocityCommands(cmd))
     {
+      clampCommand(cmd);
       cmd_pub_.publish(cmd);
       publishStatus("TRACKING");
     }
@@ -218,6 +280,17 @@ private:
       publishZero();
       publishStatus("NO_VALID_CMD");
     }
+  }
+
+  void clampCommand(geometry_msgs::Twist& cmd) const
+  {
+    if (max_cmd_vel_x_ > 0.0)
+    {
+      cmd.linear.x = std::max(-max_cmd_vel_x_, std::min(max_cmd_vel_x_, cmd.linear.x));
+      cmd.linear.y = std::max(-max_cmd_vel_x_, std::min(max_cmd_vel_x_, cmd.linear.y));
+    }
+    if (max_cmd_vel_theta_ > 0.0)
+      cmd.angular.z = std::max(-max_cmd_vel_theta_, std::min(max_cmd_vel_theta_, cmd.angular.z));
   }
 
   void publishZero()
@@ -239,7 +312,7 @@ private:
   void publishGlobalPlan()
   {
     nav_msgs::Path path;
-    path.header.stamp = ros::Time::now();
+    path.header.stamp = ros::Time(0);
     path.header.frame_id = plan_frame_.empty() ? current_plan_.front().header.frame_id : plan_frame_;
     path.poses = current_plan_;
     global_plan_pub_.publish(path);
@@ -272,11 +345,18 @@ private:
   std::string status_topic_;
   std::string global_plan_topic_;
   std::string base_frame_;
+  std::string plan_target_frame_;
   double controller_frequency_ = 10.0;
   double straight_plan_spacing_ = 0.05;
   double xy_goal_tolerance_ = 0.20;
   double yaw_goal_tolerance_ = 0.20;
+  double max_cmd_vel_x_ = 0.8;
+  double max_cmd_vel_theta_ = 1.2;
   bool goal_replan_on_receive_ = true;
+  bool force_straight_plan_on_goal_ = false;
+  bool use_wrapper_goal_check_ = true;
+  bool latch_goal_reached_ = false;
+  bool goal_reached_latched_ = false;
   bool plan_dirty_ = false;
   bool have_goal_ = false;
 };
@@ -292,6 +372,7 @@ int main(int argc, char** argv)
   catch (const std::exception& ex)
   {
     ROS_FATAL_STREAM("[baseline_runner] failed: " << ex.what());
+    std::cerr << "[baseline_runner] failed: " << ex.what() << std::endl;
     return 1;
   }
   return 0;

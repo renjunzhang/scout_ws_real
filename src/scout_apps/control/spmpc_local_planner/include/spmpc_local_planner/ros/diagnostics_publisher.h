@@ -37,6 +37,10 @@ private:
     ros::Publisher slosh_state_pub_;
     ros::Publisher slosh_height_pub_;
     ros::Publisher slosh_horizon_summary_pub_;
+    ros::Publisher warm_start_pub_;
+    ros::Publisher warm_start_status_pub_;
+    ros::Publisher terminal_pub_;
+    ros::Publisher terminal_mode_pub_;
 };
 
 }  // namespace spmpc_local_planner

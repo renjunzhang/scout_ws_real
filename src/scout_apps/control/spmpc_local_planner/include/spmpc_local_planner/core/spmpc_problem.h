@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/core/spmpc_solver.h"
+#include "spmpc_local_planner/core/terminal_controller.h"
 #include <memory>
 
 namespace spmpc_local_planner {
@@ -21,6 +22,8 @@ private:
     ReferencePath reference_;
     CostmapGrid costmap_;
     bool have_costmap_ = false;
+    SolverParams solver_params_;
+    TerminalController terminal_controller_;
     std::unique_ptr<SpmpcSolver> solver_;
     double last_progress_s_ = 0.0;
 };

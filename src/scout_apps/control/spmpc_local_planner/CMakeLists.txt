@@ -65,10 +65,15 @@ add_library(${PROJECT_NAME}
   src/core/variant_config.cpp
   src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
+  src/core/terminal_controller.cpp
   src/reference/reference_path.cpp
+  src/reference/reference_path_preprocessor.cpp
   src/reference/progress_projector.cpp
   src/reference/reference_spline.cpp
   src/dynamics/slosh_dynamics.cpp
+  src/warm_start/diff_drive_flatness_warm_start.cpp
+  src/warm_start/mecanum_warm_start.cpp
+  src/warm_start/warm_start_factory.cpp
   src/core/rollout_sampling_solver.cpp
   src/solvers/solver_factory.cpp
   src/solvers/continuous_mpcc_solver_acados.cpp
@@ -110,6 +115,23 @@ target_link_libraries(spmpc_local_planner_node
   ${PROJECT_NAME}
   ${catkin_LIBRARIES}
 )
+
+if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_diff_drive_flatness_warm_start test/test_diff_drive_flatness_warm_start.cpp)
+  if(TARGET test_diff_drive_flatness_warm_start)
+    target_link_libraries(test_diff_drive_flatness_warm_start
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_terminal_controller test/test_terminal_controller.cpp)
+  if(TARGET test_terminal_controller)
+    target_link_libraries(test_terminal_controller
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+endif()
 
 install(TARGETS ${PROJECT_NAME} spmpc_local_planner_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}

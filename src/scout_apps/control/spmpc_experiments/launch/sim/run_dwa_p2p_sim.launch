@@ -1,5 +1,5 @@
 <launch>
-  <arg name="global_path_topic" default="/scout/global_path_fixed"/>
+  <arg name="global_path_topic" default="/scout/global_path"/>
   <arg name="goal_topic" default="/scout/goal"/>
   <arg name="cmd_vel_topic" default="/cmd_vel"/>
 
@@ -11,6 +11,9 @@
     <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
     <arg name="status_topic" value="/baseline/dwa/status"/>
     <arg name="global_plan_topic" value="/baseline/dwa/global_plan"/>
+    <arg name="plan_target_frame" value="odom"/>
+    <arg name="force_straight_plan_on_goal" value="true"/>
+    <arg name="use_wrapper_goal_check" value="false"/>
     <arg name="planner_config" value="$(find spmpc_experiments)/config/baselines/dwa_local_planner_standalone_sim.yaml"/>
   </include>
 </launch>
