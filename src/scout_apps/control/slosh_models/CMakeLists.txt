@@ -8,6 +8,8 @@ find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
   geometry_msgs
+  nav_msgs
+  std_srvs
   eigen_conversions
 )
 
@@ -17,7 +19,7 @@ find_package(OsqpEigen QUIET)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp std_msgs geometry_msgs eigen_conversions
+  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs std_srvs eigen_conversions
   DEPENDS EIGEN3
 )
 
@@ -43,6 +45,16 @@ if(OsqpEigen_FOUND)
   target_compile_definitions(${PROJECT_NAME} PRIVATE HAS_OSQP_EIGEN)
 endif()
 
+add_executable(slosh_monitor_node
+  src/slosh_monitor_node.cpp
+)
+
+target_link_libraries(slosh_monitor_node
+  ${PROJECT_NAME}
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+
 # 安装
 install(TARGETS ${PROJECT_NAME}
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
@@ -54,6 +66,14 @@ install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
 )
 
+install(TARGETS slosh_monitor_node
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
 install(DIRECTORY config/
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config
+)
+
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
 )
