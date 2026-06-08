@@ -23,7 +23,21 @@
 
 主线只比较同一 continuous backend 下的变体。若使用 `continuous_mpcc_acados`，主表固定 alpha-state 后端；若使用 `continuous_mpcc_direct_omega_legacy` 作为 RouteB 候选，主表也必须整组固定该后端和同一 `alpha_max`。`primitive` 后端和外部 planner 只作为附录或工程 baseline，不能混入 SPMPC 内部主表，否则会同时改变“求解器形式”和“是否 slosh-aware”。
 
-### 0.2 主实验组
+### 0.2 论文主文实验块
+
+主文建议收敛为五个实验块，避免把诊断性 RouteB、权重扫和工程 smoke 混进主线叙事：
+
+| 主文实验块 | 包含内容 | 一句话目的 |
+|---|---|---|
+| Experiment 1: Internal Ablation | `B0 / B_smooth / B_slosh / B_ours` | 在同一 SPMPC backend、同一 `alpha_max`、同一路径和同一约束下，证明 slosh-aware 与 smooth 各自对完成率、跟踪和液面晃动的贡献。 |
+| Experiment 2: External Baselines | `B_ours` vs TEB vs DWA | 在 common-limit 或明确标注的 tuned-limit 条件下，比较最终 SPMPC 与传统局部规划器的 success / duration / tracking / slosh Pareto 表现。 |
+| Experiment 3: Metric Analysis | full-window vs post-start + Pareto | 同一批 bag 同时报告全程液面风险、去掉起步瞬态后的行进阶段抑晃，以及速度/完成率/跟踪/晃动之间的 trade-off。 |
+| Experiment 4: Real-Robot Validation | 实物 fixed-path；最低 `B0/B_ours`，时间够再加 TEB/DWA | 在真实 Scout、真实液体和同一 RGB 标定下验证仿真趋势能否迁移到实物平台。 |
+| Experiment 5: Slosh Proxy Validation | 模型 slosh 输出 vs RGB max-LCR | 验证 `/spmpc/slosh_height` 或 `/slosh/height` 作为在线模型 proxy 与离线 RGB 真值之间的相关性、滞后和误差边界。 |
+
+RouteB alpha-state vs direct-omega、`alpha_max` 扫描、`w_slosh` 扫描、路径迁移和起点扰动更适合放在诊断/附录，除非后续决定把其中某项升为论文主实验。
+
+### 0.3 SPMPC 内部主实验组
 
 alpha-state 主线（`continuous_mpcc_acados`）如下：
 
@@ -72,7 +86,7 @@ bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_paper_matri
 
 正式数据仍建议一个方法/一组方法 fresh 启动仿真；runner 只负责统一目录、meta 和指标提取。
 
-### 0.3 真值和辅助量边界
+### 0.4 真值和辅助量边界
 
 ```text
 主真值：离线 RGB max-LCR 液面高度(mm)
