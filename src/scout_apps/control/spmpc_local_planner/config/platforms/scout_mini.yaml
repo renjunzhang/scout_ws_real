@@ -2,3 +2,9 @@ robot:
   v_max: 0.8
   omega_max: 1.2
   a_max: 0.6
+
+platform:
+  shared_constraints:
+    linear_accel_limit_enable: true
+    linear_accel_max: 0.6
+    linear_accel_max_dt: 0.2

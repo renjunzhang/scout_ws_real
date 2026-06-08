@@ -3,6 +3,8 @@
 #include <limits>
 #include <string>
 
+#include "spmpc_local_planner/core/terminal_diagnostics.h"
+
 namespace spmpc_local_planner {
 
 struct TerminalControllerParams {
@@ -44,25 +46,6 @@ struct TerminalClampOutput {
     double cmd_v_post = 0.0;
     double cmd_omega_pre = 0.0;
     double cmd_omega_post = 0.0;
-};
-
-struct TerminalDiagnostics {
-    bool enabled = false;
-    bool terminal_phase = false;
-    bool pre_terminal_phase = true;
-    bool envelope_active = false;
-    bool stop_pending = false;
-    bool position_reached = false;
-    bool speed_gate_reached = false;
-    bool omega_gate_reached = false;
-    bool reached = false;
-    double distance_to_goal = std::numeric_limits<double>::infinity();
-    double remaining_s = std::numeric_limits<double>::infinity();
-    double dx_robot = std::numeric_limits<double>::quiet_NaN();
-    double v_envelope = std::numeric_limits<double>::infinity();
-    double cmd_v_pre_clamp = std::numeric_limits<double>::quiet_NaN();
-    double cmd_v_post_clamp = std::numeric_limits<double>::quiet_NaN();
-    std::string mode = "NONE";
 };
 
 class TerminalController {

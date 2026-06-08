@@ -1,7 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/core/costmap_grid.h"
-#include "spmpc_local_planner/core/terminal_controller.h"
+#include "spmpc_local_planner/core/terminal_diagnostics.h"
 #include "spmpc_local_planner/warm_start/warm_start_diagnostics.h"
 #include <string>
 #include <vector>

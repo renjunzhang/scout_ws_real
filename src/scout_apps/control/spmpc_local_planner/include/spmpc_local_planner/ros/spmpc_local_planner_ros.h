@@ -26,6 +26,8 @@ private:
     void costmapCallback(const nav_msgs::OccupancyGridConstPtr& msg);
     void controlTimerCallback(const ros::TimerEvent&);
     void publishZeroCommand();
+    void publishCommand(const geometry_msgs::Twist& desired);
+    geometry_msgs::Twist applySharedCommandLimits(const geometry_msgs::Twist& desired, const ros::Time& stamp);
     RobotState robotStateFromOdom(const nav_msgs::Odometry& odom) const;
     bool robotStateFromLatest(RobotState& state);
     void updateSloshObserverFromOdom(const nav_msgs::Odometry& odom);
@@ -67,6 +69,12 @@ private:
     bool publish_cmd_vel_ = true;
     bool use_tf_pose_ = true;
     bool obstacle_enable_ = false;
+    bool shared_cmd_linear_accel_limit_enable_ = true;
+    double shared_cmd_linear_accel_max_ = 0.6;
+    double shared_cmd_linear_accel_max_dt_ = 0.2;
+    geometry_msgs::Twist last_published_cmd_;
+    ros::Time last_cmd_stamp_;
+    bool have_last_published_cmd_ = false;
     double tf_timeout_sec_ = 0.05;
     double control_frequency_ = 30.0;
     double dt_ = 1.0 / 30.0;

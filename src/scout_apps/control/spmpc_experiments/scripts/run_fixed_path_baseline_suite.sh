@@ -28,6 +28,10 @@ PRE_PATH_WAIT_SEC="${PRE_PATH_WAIT_SEC:-0}"
 SLOSH_MONITOR_ENABLE="${SLOSH_MONITOR_ENABLE:-false}"
 SLOSH_MONITOR_ODOM_TOPIC="${SLOSH_MONITOR_ODOM_TOPIC:-/odom}"
 SLOSH_MONITOR_CMD_VEL_TOPIC="${SLOSH_MONITOR_CMD_VEL_TOPIC:-${CMD_VEL_TOPIC}}"
+EXPERIMENT_GROUP="${EXPERIMENT_GROUP:-fixed_path_external_baseline}"
+EVIDENCE_CHAIN_VERSION="${EVIDENCE_CHAIN_VERSION:-20260605}"
+INCLUDE_MPC_LOCAL_PLANNER="${INCLUDE_MPC_LOCAL_PLANNER:-false}"
+SLOSH_RESET_BEFORE_RUN="${SLOSH_RESET_BEFORE_RUN:-true}"
 
 planner_pid=""
 path_pid=""
@@ -86,6 +90,17 @@ wait_status_or_cmd() {
   done
 }
 
+reset_slosh_monitor() {
+  if [[ "${SLOSH_MONITOR_ENABLE}" != "true" || "${SLOSH_RESET_BEFORE_RUN}" != "true" ]]; then
+    return 0
+  fi
+  if timeout 2s rosservice call /slosh/reset >/dev/null 2>&1; then
+    echo "[slosh_monitor] reset /slosh/reset"
+  else
+    echo "[WARN] /slosh/reset 不可用，跳过本次 slosh monitor reset" >&2
+  fi
+}
+
 launch_for_baseline() {
   case "$1" in
     teb)
@@ -112,6 +127,14 @@ status_topic_for_baseline() {
   esac
 }
 
+config_for_baseline() {
+  case "$1" in
+    teb) echo "config/baselines/teb_local_planner_standalone_sim.yaml" ;;
+    dwa) echo "config/baselines/dwa_local_planner_standalone_sim.yaml" ;;
+    mpc|mpc_local_planner) echo "config/baselines/mpc_local_planner_standalone_sim.yaml" ;;
+  esac
+}
+
 if [[ -z "${PATH_FILE}" ]]; then
   echo "[ERR] PATH_FILE 不能为空；请指定固定路径 JSON，例如 /data/a/fixed_paths/sim/P2_s_curve.json" >&2
   exit 2
@@ -126,7 +149,10 @@ if ! rostopic list >/dev/null 2>&1; then
 fi
 
 if [[ "${BASELINE}" == "all" ]]; then
-  BASELINES="teb dwa mpc_local_planner"
+  BASELINES="teb dwa"
+  if [[ "${INCLUDE_MPC_LOCAL_PLANNER}" == "true" ]]; then
+    BASELINES="${BASELINES} mpc_local_planner"
+  fi
 else
   BASELINES="${BASELINE}"
 fi
@@ -135,6 +161,7 @@ mkdir -p "${OUT_ROOT}"
 
 echo "================ fixed-path baseline suite ================"
 echo "BASELINES=${BASELINES}"
+echo "EXPERIMENT_GROUP=${EXPERIMENT_GROUP}"
 echo "PATH_ID=${PATH_ID}"
 echo "PATH_FILE=${PATH_FILE}"
 echo "OUT_ROOT=${OUT_ROOT}"
@@ -177,6 +204,7 @@ for run_idx in $(seq 1 "${RUNS}"); do
   for baseline in ${BASELINES}; do
     launch_file="$(launch_for_baseline "${baseline}")"
     status_topic="$(status_topic_for_baseline "${baseline}")"
+    baseline_config="$(config_for_baseline "${baseline}")"
     method="${baseline}"
     if [[ "${method}" == "mpc" ]]; then
       method="mpc_local_planner"
@@ -191,9 +219,12 @@ for run_idx in $(seq 1 "${RUNS}"); do
     cat >"${meta}" <<EOF
 run_id: ${run_id}
 method: ${method}
+experiment_group: ${EXPERIMENT_GROUP}
+evidence_chain_version: ${EVIDENCE_CHAIN_VERSION}
 path_id: ${PATH_ID}
 path_file: ${PATH_FILE}
 path_topic: ${PATH_TOPIC}
+baseline_config: ${baseline_config}
 plan_target_frame: odom
 force_straight_plan_on_goal: false
 use_wrapper_goal_check: true
@@ -204,6 +235,9 @@ slosh_monitor_enable: ${SLOSH_MONITOR_ENABLE}
 slosh_monitor_odom_topic: ${SLOSH_MONITOR_ODOM_TOPIC}
 slosh_monitor_cmd_vel_topic: ${SLOSH_MONITOR_CMD_VEL_TOPIC}
 slosh_height_unit: m
+slosh_eval_only: true
+slosh_feedback_forbidden: true
+external_baseline_uses_slosh: false
 EOF
 
     if [[ "${PRE_PATH_WAIT_SEC}" != "0" ]]; then
@@ -219,6 +253,7 @@ EOF
         >"${run_dir}/${run_id}_slosh_monitor.log" 2>&1 &
       slosh_monitor_pid=$!
       sleep 1
+      reset_slosh_monitor
     fi
 
     echo "[rec] ${bag}"

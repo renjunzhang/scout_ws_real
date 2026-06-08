@@ -513,7 +513,7 @@ bool ContinuousMpccSolverAcados::solve(
     p[W_CONTOUR] = variant_.w_contour;
     p[W_LAG] = variant_.w_lag;
     p[W_PROGRESS] = variant_.w_progress;
-    p[W_A] = variant_.w_control;
+    p[W_A] = variant_.w_control + variant_.w_accel;
     p[W_OMEGA] = variant_.w_control;
     p[W_VS] = 0.0;
     p[E_C_REF] = e_c_ref;
@@ -655,7 +655,8 @@ bool ContinuousMpccSolverAcados::solve(
         if (k == 0) { u0[0] = uk[0]; u0[1] = uk[1]; u0[2] = uk[2]; }
         const double vn = uk[0] / a_ref;
         const double wn = uk[1] / omega_ref;
-        output.cost.J_control += variant_.w_control * (vn * vn + wn * wn) * inv_n;
+        output.cost.J_control += ((variant_.w_control + variant_.w_accel) * vn * vn +
+                                  variant_.w_control * wn * wn) * inv_n;
 
         // 与当前 acados external cost 保持一致：w_du_* 只在 stage 0 置非零，
         // 表示跨控制周期第一帧连续性；horizon 内 Δu_k 尚未进入 OCP 代价。

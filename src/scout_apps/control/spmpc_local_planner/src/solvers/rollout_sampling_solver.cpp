@@ -1,4 +1,4 @@
-#include "spmpc_local_planner/core/rollout_sampling_solver.h"
+#include "spmpc_local_planner/solvers/rollout_sampling_solver.h"
 #include "spmpc_local_planner/reference/progress_projector.h"
 #include <algorithm>
 #include <chrono>

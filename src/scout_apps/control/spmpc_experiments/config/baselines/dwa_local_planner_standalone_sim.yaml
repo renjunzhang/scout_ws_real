@@ -1,17 +1,17 @@
 # Standalone DWA baseline config for SPMPC simulation comparisons.
-# Conservative ordinary tuning only: no slosh dynamics or slosh-aware cost.
+# Common-limit ordinary tuning only: no slosh dynamics or slosh-aware cost.
 DWAPlannerROS:
-  max_vel_x: 0.7
+  max_vel_x: 0.8
   min_vel_x: 0.0
   max_vel_y: 0.0
   min_vel_y: 0.0
-  max_vel_theta: 1.0
+  max_vel_theta: 1.2
   min_vel_theta: 0.1
   min_in_place_vel_theta: 0.2
 
-  acc_lim_x: 0.5
+  acc_lim_x: 0.6
   acc_lim_y: 0.0
-  acc_lim_theta: 1.0
+  acc_lim_theta: 1.2
 
   sim_time: 2.0
   sim_granularity: 0.05

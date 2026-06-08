@@ -7,6 +7,9 @@
   <arg name="reference_target_frame" default="" doc="可选: 将收到的 reference path 转到该 frame 后再求解"/>
   <arg name="solver_backend" default="primitive" doc="primitive|continuous_mpcc_acados"/>
   <arg name="w_slosh" default="-1.0" doc="覆盖 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
+  <arg name="shared_linear_accel_limit_enable" default="true"/>
+  <arg name="shared_linear_accel_max" default="-1.0"/>
+  <arg name="shared_linear_accel_max_dt" default="-1.0"/>
   <include file="$(find spmpc_local_planner)/launch/spmpc_experiment.launch">
     <arg name="planner_variant" value="$(arg planner_variant)"/>
     <arg name="experiment_mode" value="fixed_path"/>
@@ -18,5 +21,8 @@
     <arg name="reference_target_frame" value="$(arg reference_target_frame)"/>
     <arg name="solver_backend" value="$(arg solver_backend)"/>
     <arg name="w_slosh" value="$(arg w_slosh)"/>
+    <arg name="shared_linear_accel_limit_enable" value="$(arg shared_linear_accel_limit_enable)"/>
+    <arg name="shared_linear_accel_max" value="$(arg shared_linear_accel_max)"/>
+    <arg name="shared_linear_accel_max_dt" value="$(arg shared_linear_accel_max_dt)"/>
   </include>
 </launch>

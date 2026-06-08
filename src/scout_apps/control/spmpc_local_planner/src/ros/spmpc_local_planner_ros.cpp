@@ -39,6 +39,18 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("robot/v_max", solver_params.v_max, solver_params.v_max);
     pnh_.param("robot/omega_max", solver_params.omega_max, solver_params.omega_max);
     pnh_.param("robot/a_max", solver_params.a_max, solver_params.a_max);
+    shared_cmd_linear_accel_max_ = solver_params.a_max;
+    pnh_.param("platform/shared_constraints/linear_accel_limit_enable",
+               shared_cmd_linear_accel_limit_enable_,
+               shared_cmd_linear_accel_limit_enable_);
+    pnh_.param("platform/shared_constraints/linear_accel_max",
+               shared_cmd_linear_accel_max_,
+               shared_cmd_linear_accel_max_);
+    pnh_.param("platform/shared_constraints/linear_accel_max_dt",
+               shared_cmd_linear_accel_max_dt_,
+               shared_cmd_linear_accel_max_dt_);
+    shared_cmd_linear_accel_max_ = std::max(0.0, shared_cmd_linear_accel_max_);
+    shared_cmd_linear_accel_max_dt_ = std::max(1e-3, shared_cmd_linear_accel_max_dt_);
     pnh_.param("experiment/corridor_width", solver_params.corridor_width, solver_params.corridor_width);
     pnh_.param("experiment/corridor_enable", solver_params.corridor_enable, solver_params.corridor_enable);
     pnh_.param("experiment/corridor_hard_bound_enable",
@@ -55,8 +67,6 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                solver_params.homotopy_lateral_offset,
                solver_params.homotopy_lateral_offset);
     pnh_.param("reference/lookahead_distance", solver_params.lookahead_distance, solver_params.lookahead_distance);
-    pnh_.param("terminal/goal_tolerance", solver_params.goal_tolerance, solver_params.goal_tolerance);
-    solver_params.terminal.goal_tolerance = solver_params.goal_tolerance;
     pnh_.param("terminal/enable", solver_params.terminal.enable, solver_params.terminal.enable);
     pnh_.param("terminal/goal_tolerance", solver_params.terminal.goal_tolerance, solver_params.terminal.goal_tolerance);
     pnh_.param("terminal/goal_reached_max_speed", solver_params.terminal.goal_reached_max_speed, solver_params.terminal.goal_reached_max_speed);
@@ -70,7 +80,6 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("terminal/capture_stop/goal_behind_x", solver_params.terminal.goal_behind_x, solver_params.terminal.goal_behind_x);
     pnh_.param("terminal/command_clamp/enable", solver_params.terminal.command_clamp_enable, solver_params.terminal.command_clamp_enable);
     pnh_.param("terminal/command_clamp/rate_limit_enable", solver_params.terminal.rate_limit_enable, solver_params.terminal.rate_limit_enable);
-    solver_params.goal_tolerance = solver_params.terminal.goal_tolerance;
     pnh_.param("platform/kinematics", solver_params.platform.kinematics, solver_params.platform.kinematics);
     pnh_.param("acados/warm_start_flatness_enable", solver_params.warm_start_flatness_enable, solver_params.warm_start_flatness_enable);
     pnh_.param("acados/warm_start/type", solver_params.warm_start.type, solver_params.warm_start.type);
@@ -107,6 +116,11 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         ROS_WARN("[spmpc_local_planner] unknown planner_variant '%s'; falling back to B0", variant_name.c_str());
     }
     loadVariantOverrides(variant_.name);
+    if (!pnh_.hasParam("variants/" + variant_.name + "/w_contour")) {
+        ROS_WARN("[spmpc_local_planner] 未找到 variants/%s/* 参数：config/planner/variants.yaml "
+                 "可能未加载，变体权重回退到内置 B0 默认值。正式实验请用 launch 加载 variants.yaml",
+                 variant_.name.c_str());
+    }
     problem_.configure(solver_params, variant_);
     if (!slosh_observer_.configure(solver_params.slosh)) {
         ROS_WARN("[spmpc_local_planner] slosh observer configure failed; slosh diagnostics stay zero");
@@ -139,10 +153,47 @@ void SpmpcLocalPlannerROS::spin() {
 }
 
 void SpmpcLocalPlannerROS::publishZeroCommand() {
+    geometry_msgs::Twist cmd;
+    publishCommand(cmd);
+}
+
+geometry_msgs::Twist SpmpcLocalPlannerROS::applySharedCommandLimits(
+    const geometry_msgs::Twist& desired,
+    const ros::Time& stamp) {
+    geometry_msgs::Twist limited = desired;
+    if (!shared_cmd_linear_accel_limit_enable_ || shared_cmd_linear_accel_max_ <= 0.0) {
+        last_published_cmd_ = desired;
+        last_cmd_stamp_ = stamp;
+        have_last_published_cmd_ = true;
+        return desired;
+    }
+
+    const double nominal_dt = 1.0 / std::max(1.0, control_frequency_);
+    double dt = nominal_dt;
+    if (have_last_published_cmd_ && !last_cmd_stamp_.isZero() && !stamp.isZero()) {
+        dt = (stamp - last_cmd_stamp_).toSec();
+    }
+    if (!std::isfinite(dt) || dt <= 1e-6) {
+        dt = nominal_dt;
+    }
+    dt = std::min(dt, shared_cmd_linear_accel_max_dt_);
+
+    const double max_step = shared_cmd_linear_accel_max_ * dt;
+    const double dv = desired.linear.x - last_published_cmd_.linear.x;
+    limited.linear.x = last_published_cmd_.linear.x + std::max(-max_step, std::min(max_step, dv));
+
+    last_published_cmd_ = limited;
+    last_cmd_stamp_ = stamp;
+    have_last_published_cmd_ = true;
+    return limited;
+}
+
+void SpmpcLocalPlannerROS::publishCommand(const geometry_msgs::Twist& desired) {
     if (!publish_cmd_vel_) {
         return;
     }
-    geometry_msgs::Twist cmd;
+    const auto stamp = ros::Time::now();
+    const auto cmd = applySharedCommandLimits(desired, stamp);
     cmd_pub_.publish(cmd);
 }
 
@@ -225,12 +276,10 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent&) {
     }
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
 
-    if (publish_cmd_vel_) {
-        geometry_msgs::Twist cmd;
-        cmd.linear.x = output.success ? output.cmd_v : 0.0;
-        cmd.angular.z = output.success ? output.cmd_omega : 0.0;
-        cmd_pub_.publish(cmd);
-    }
+    geometry_msgs::Twist cmd;
+    cmd.linear.x = output.success ? output.cmd_v : 0.0;
+    cmd.angular.z = output.success ? output.cmd_omega : 0.0;
+    publishCommand(cmd);
 }
 
 RobotState SpmpcLocalPlannerROS::robotStateFromOdom(const nav_msgs::Odometry& odom) const {
@@ -352,6 +401,7 @@ void SpmpcLocalPlannerROS::loadVariantOverrides(const std::string& variant_name)
     pnh_.param(prefix + "w_lag", variant_.w_lag, variant_.w_lag);
     pnh_.param(prefix + "w_progress", variant_.w_progress, variant_.w_progress);
     pnh_.param(prefix + "w_control", variant_.w_control, variant_.w_control);
+    pnh_.param(prefix + "w_accel", variant_.w_accel, variant_.w_accel);
     pnh_.param(prefix + "w_smooth", variant_.w_smooth, variant_.w_smooth);
     pnh_.param(prefix + "w_slosh", variant_.w_slosh, variant_.w_slosh);
 }

@@ -18,12 +18,12 @@ TebLocalPlannerROS:
   exact_arc_length: false
   feasibility_check_no_poses: 5
 
-  # Robot (diff drive), conservative for real-liquid transfer.
-  max_vel_x: 0.7
+  # Robot (diff drive), aligned with SPMPC common-limit smoke.
+  max_vel_x: 0.8
   max_vel_x_backwards: 0.15
-  max_vel_theta: 1.0
-  acc_lim_x: 0.5
-  acc_lim_theta: 1.0
+  max_vel_theta: 1.2
+  acc_lim_x: 0.6
+  acc_lim_theta: 1.2
   min_turning_radius: 0.0
   wheelbase: 0.0
   cmd_angle_instead_rotvel: false

@@ -17,6 +17,9 @@ set -euo pipefail
 VARIANTS="${VARIANTS:-B0 B_smooth B_slosh B_ours}"
 SPMPC_SOLVER_BACKEND="${SPMPC_SOLVER_BACKEND:-continuous_mpcc_acados}"
 SPMPC_W_SLOSH="${SPMPC_W_SLOSH:--1.0}"
+SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE="${SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE:-true}"
+SPMPC_SHARED_LINEAR_ACCEL_MAX="${SPMPC_SHARED_LINEAR_ACCEL_MAX:--1.0}"
+SPMPC_SHARED_LINEAR_ACCEL_MAX_DT="${SPMPC_SHARED_LINEAR_ACCEL_MAX_DT:--1.0}"
 OUT_ROOT="${OUT_ROOT:-/data/${USER}/spmpc_paper_compare/fixed_path_smoke}"
 PATH_FILE="${PATH_FILE:-}"
 PATH_ID="${PATH_ID:-fixed_path}"
@@ -32,6 +35,9 @@ PRE_PATH_WAIT_SEC="${PRE_PATH_WAIT_SEC:-0}"
 SLOSH_MONITOR_ENABLE="${SLOSH_MONITOR_ENABLE:-false}"
 SLOSH_MONITOR_ODOM_TOPIC="${SLOSH_MONITOR_ODOM_TOPIC:-/odom}"
 SLOSH_MONITOR_CMD_VEL_TOPIC="${SLOSH_MONITOR_CMD_VEL_TOPIC:-${CMD_VEL_TOPIC}}"
+EXPERIMENT_GROUP="${EXPERIMENT_GROUP:-fixed_path_internal_ablation}"
+EVIDENCE_CHAIN_VERSION="${EVIDENCE_CHAIN_VERSION:-20260605}"
+SLOSH_RESET_BEFORE_RUN="${SLOSH_RESET_BEFORE_RUN:-true}"
 
 planner_pid=""
 path_pid=""
@@ -90,6 +96,17 @@ wait_status_or_cmd() {
   done
 }
 
+reset_slosh_monitor() {
+  if [[ "${SLOSH_MONITOR_ENABLE}" != "true" || "${SLOSH_RESET_BEFORE_RUN}" != "true" ]]; then
+    return 0
+  fi
+  if timeout 2s rosservice call /slosh/reset >/dev/null 2>&1; then
+    echo "[slosh_monitor] reset /slosh/reset"
+  else
+    echo "[WARN] /slosh/reset 不可用，跳过本次 slosh monitor reset" >&2
+  fi
+}
+
 if [[ -z "${PATH_FILE}" ]]; then
   echo "[ERR] PATH_FILE 不能为空；请指定固定路径 JSON，例如 /data/a/fixed_paths/sim/P2_s_curve.json" >&2
   exit 2
@@ -110,6 +127,7 @@ echo "PATH_ID=${PATH_ID}"
 echo "PATH_FILE=${PATH_FILE}"
 echo "VARIANTS=${VARIANTS}"
 echo "OUT_ROOT=${OUT_ROOT}"
+echo "EXPERIMENT_GROUP=${EXPERIMENT_GROUP}"
 echo "[preflight] 等待 /odom ${COSTMAP_TOPIC} ..."
 wait_topic_once /odom 10
 wait_topic_once "${COSTMAP_TOPIC}" 10
@@ -158,6 +176,8 @@ for run_idx in $(seq 1 "${RUNS}"); do
 run_id: ${run_id}
 method: spmpc
 variant: ${variant}
+experiment_group: ${EXPERIMENT_GROUP}
+evidence_chain_version: ${EVIDENCE_CHAIN_VERSION}
 solver_backend: ${SPMPC_SOLVER_BACKEND}
 w_slosh_override: ${SPMPC_W_SLOSH}
 path_id: ${PATH_ID}
@@ -169,7 +189,13 @@ run_index: ${run_idx}
 slosh_monitor_enable: ${SLOSH_MONITOR_ENABLE}
 slosh_monitor_odom_topic: ${SLOSH_MONITOR_ODOM_TOPIC}
 slosh_monitor_cmd_vel_topic: ${SLOSH_MONITOR_CMD_VEL_TOPIC}
+shared_linear_accel_limit_enable: ${SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE}
+shared_linear_accel_max: ${SPMPC_SHARED_LINEAR_ACCEL_MAX}
+shared_linear_accel_max_dt: ${SPMPC_SHARED_LINEAR_ACCEL_MAX_DT}
 slosh_height_unit: m
+slosh_eval_only: true
+slosh_feedback_forbidden: true
+external_baseline_uses_slosh: false
 EOF
 
     if [[ "${PRE_PATH_WAIT_SEC}" != "0" ]]; then
@@ -185,6 +211,7 @@ EOF
         >"${run_dir}/${run_id}_slosh_monitor.log" 2>&1 &
       slosh_monitor_pid=$!
       sleep 1
+      reset_slosh_monitor
     fi
 
     echo "[rec] ${bag}"
@@ -203,7 +230,7 @@ EOF
     path_pid=$!
     sleep 1
 
-    launch_args=(planner_variant:="${variant}" solver_backend:="${SPMPC_SOLVER_BACKEND}" reference_path_topic:="${PATH_TOPIC}" costmap_topic:="${COSTMAP_TOPIC}" cmd_vel_topic:="${CMD_VEL_TOPIC}" w_slosh:="${SPMPC_W_SLOSH}")
+    launch_args=(planner_variant:="${variant}" solver_backend:="${SPMPC_SOLVER_BACKEND}" reference_path_topic:="${PATH_TOPIC}" costmap_topic:="${COSTMAP_TOPIC}" cmd_vel_topic:="${CMD_VEL_TOPIC}" w_slosh:="${SPMPC_W_SLOSH}" shared_linear_accel_limit_enable:="${SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE}" shared_linear_accel_max:="${SPMPC_SHARED_LINEAR_ACCEL_MAX}" shared_linear_accel_max_dt:="${SPMPC_SHARED_LINEAR_ACCEL_MAX_DT}")
     if [[ -n "${REFERENCE_TARGET_FRAME}" ]]; then
       launch_args+=(reference_target_frame:="${REFERENCE_TARGET_FRAME}")
     fi

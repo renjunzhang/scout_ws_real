@@ -44,9 +44,6 @@ SpmpcProblem::SpmpcProblem() = default;
 
 void SpmpcProblem::configure(const SolverParams& solver_params, const VariantConfig& variant) {
     solver_params_ = solver_params;
-    if (solver_params_.goal_tolerance > 0.0) {
-        solver_params_.terminal.goal_tolerance = solver_params_.goal_tolerance;
-    }
     terminal_controller_.setParams(solver_params_.terminal);
     solver_ = makeSolver(solver_params_.solver_backend);
     solver_->configure(solver_params_, variant);

@@ -5,6 +5,7 @@
 > 仿真只用于集成联调，**抑晃效果只在实物上以离线 RGB 真值评定**。
 > 运行脚本：`src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh`
 > 工控机迁移与 acados 安装：`docs/实物实验注意事项/代码移植/20260602_实物端代码拉取与子模块注意事项.md`
+> 论文实验设计、证据链和正式方法矩阵以 `docs/实物实验注意事项/对比试验/20260605_SPMPC论文对比实验设计建议.md` 为准；本文只作为连续 MPCC 仿真/实物操作 SOP。
 
 ---
 
@@ -35,6 +36,22 @@ B_ours  vs B0        最终方法总体收益
 ```
 
 可选附录组：`B_slosh_linear`、`B_slosh_anti`、`B_ours_anti`、`primitive` 后端、`scout_local_planner`/`mpc_planner` 外部 baseline。
+
+仿真侧论文主矩阵可先用统一 runner 做 smoke / 半正式统计：
+
+```bash
+OUT_ROOT=/data/a/spmpc_paper_compare/fixed_path_matrix_$(date +%Y%m%d_%H%M%S) \
+PATH_FILE=/data/a/fixed_paths/sim/P2_s_curve.json \
+PATH_ID=P2_s_curve \
+SLOSH_MONITOR_ENABLE=true \
+RUNS=1 \
+RECORD_SEC=60 \
+PRE_PATH_WAIT_SEC=30 \
+SPMPC_SOLVER_BACKEND=continuous_mpcc_acados \
+bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_paper_matrix.sh
+```
+
+正式数据仍建议一个方法/一组方法 fresh 启动仿真；runner 只负责统一目录、meta 和指标提取。
 
 ### 0.3 真值和辅助量边界
 

@@ -100,13 +100,17 @@ def infer_method(bag_path, meta):
     if method:
         return method
     name = bag_path.name.lower()
-    for key in ("b_ours", "b_slosh", "b_smooth", "b0"):
+    for key in ("b_ours", "b_slosh", "b_smooth", "b_accel", "b_inst_excitation", "b0"):
         if key in name:
             return f"spmpc_{key}"
     for key in ("teb", "dwa", "mpc_local_planner", "mpc"):
         if key in name:
             return "mpc_local_planner" if key == "mpc" else key
     return "unknown"
+
+
+def path_topic_from_meta(meta):
+    return meta.get("path_topic", "/scout/global_path_fixed")
 
 
 def path_points(path_msg):
@@ -246,6 +250,7 @@ def read_bag_series(bag_path, path_topic, terminal_threshold):
     return data
 
 
+
 def derive_terminal_phase(data, terminal_threshold):
     pts = data["path"]
     if len(pts) < 1:
@@ -336,6 +341,12 @@ def summarize_bag_phase(bag_path, data, meta, method, phase):
         "bag": str(bag_path),
         "method": method,
         "variant": meta.get("variant", ""),
+        "experiment_group": meta.get("experiment_group", ""),
+        "evidence_chain_version": meta.get("evidence_chain_version", ""),
+        "solver_backend": meta.get("solver_backend", meta.get("spmpc_solver_backend", "")),
+        "slosh_monitor_enable": meta.get("slosh_monitor_enable", ""),
+        "slosh_eval_only": meta.get("slosh_eval_only", ""),
+        "baseline_config": meta.get("baseline_config", ""),
         "path_id": meta.get("path_id", ""),
         "run_id": meta.get("run_id", bag_path.stem),
         "phase": phase,
@@ -350,7 +361,11 @@ def summarize_bag_phase(bag_path, data, meta, method, phase):
         "eta_dot_norm_peak": max_abs([v for _, v in eta_dot]),
         "eta_dot_norm_rms": rms([v for _, v in eta_dot]),
         "cmd_dvx_rms_mps2": rms([v for _, v in cmd_v_acc]),
+        "cmd_dvx_abs_p95_mps2": percentile([abs(v) for _, v in cmd_v_acc], 95),
+        "cmd_dvx_abs_max_mps2": max_abs([v for _, v in cmd_v_acc]),
         "cmd_dwz_rms_radps2": rms([v for _, v in cmd_w_acc]),
+        "cmd_dwz_abs_p95_radps2": percentile([abs(v) for _, v in cmd_w_acc], 95),
+        "cmd_dwz_abs_max_radps2": max_abs([v for _, v in cmd_w_acc]),
         "odom_ax_abs_p95_mps2": percentile([abs(v) for _, v in odom_ax], 95),
         "odom_ay_abs_p95_mps2": percentile([abs(v) for v in odom_ay_values], 95),
         "solver_time_mean_ms": safe_mean([v for _, v in solve]),
@@ -359,6 +374,10 @@ def summarize_bag_phase(bag_path, data, meta, method, phase):
         "final_speed_mps": final_speed,
         "final_omega_radps": final_omega,
         "stable_stop_bool": stable_stop,
+        "has_odom": int("/odom" in data["topics"]),
+        "has_cmd_vel": int("/cmd_vel" in data["topics"]),
+        "has_path": int(path_topic_from_meta(meta) in data["topics"] or bool(data["path"])),
+        "has_slosh_state": int("/spmpc/debug/slosh_state" in data["topics"] or "/slosh/state" in data["topics"]),
         "has_spmpc_terminal_debug": int("/spmpc/terminal/debug" in data["topics"]),
         "has_slosh_height": int(bool(data["slosh_height_mm"])),
     }
@@ -406,7 +425,11 @@ def group_summary(rows):
         "eta_dot_norm_peak",
         "eta_dot_norm_rms",
         "cmd_dvx_rms_mps2",
+        "cmd_dvx_abs_p95_mps2",
+        "cmd_dvx_abs_max_mps2",
         "cmd_dwz_rms_radps2",
+        "cmd_dwz_abs_p95_radps2",
+        "cmd_dwz_abs_max_radps2",
         "odom_ax_abs_p95_mps2",
         "odom_ay_abs_p95_mps2",
         "solver_time_mean_ms",

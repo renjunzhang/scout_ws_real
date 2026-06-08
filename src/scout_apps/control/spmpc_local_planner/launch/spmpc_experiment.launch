@@ -1,5 +1,5 @@
 <launch>
-  <arg name="planner_variant" default="B0" doc="B0|B_slosh|B_slosh_linear|B_slosh_anti|B_smooth|B_ours|B_ours_anti"/>
+  <arg name="planner_variant" default="B0" doc="B0|B_accel|B_slosh|B_slosh_linear|B_slosh_anti|B_smooth|B_ours|B_ours_anti"/>
   <arg name="experiment_mode" default="fixed_path" doc="fixed_path|point_to_point"/>
   <arg name="reference_path_topic" default="/scout/global_path_fixed"/>
   <arg name="costmap_topic" default="/map"/>
@@ -8,6 +8,9 @@
   <arg name="reference_target_frame" default="" doc="可选: 将收到的 reference path 转到该 frame 后再求解"/>
   <arg name="solver_backend" default="primitive" doc="primitive|continuous_mpcc_acados"/>
   <arg name="w_slosh" default="-1.0" doc="覆盖当前 variant 的 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
+  <arg name="shared_linear_accel_limit_enable" default="true"/>
+  <arg name="shared_linear_accel_max" default="-1.0" doc="覆盖 platform/shared_constraints/linear_accel_max; 负值时用 platform yaml"/>
+  <arg name="shared_linear_accel_max_dt" default="-1.0" doc="覆盖 platform/shared_constraints/linear_accel_max_dt; 负值时用 platform yaml"/>
   <arg name="platform_config" default="scout_mini"/>
   <arg name="container_config" default="tube_default"/>
   <arg name="experiment_config" default="fixed_path"/>
@@ -26,6 +29,11 @@
     <param name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>
     <param name="frames/reference_target" value="$(arg reference_target_frame)"/>
     <param name="solver_backend" value="$(arg solver_backend)"/>
+    <param name="platform/shared_constraints/linear_accel_limit_enable" value="$(arg shared_linear_accel_limit_enable)"/>
+    <param name="platform/shared_constraints/linear_accel_max" value="$(arg shared_linear_accel_max)"
+           if="$(eval float(arg('shared_linear_accel_max')) >= 0.0)"/>
+    <param name="platform/shared_constraints/linear_accel_max_dt" value="$(arg shared_linear_accel_max_dt)"
+           if="$(eval float(arg('shared_linear_accel_max_dt')) >= 0.0)"/>
     <!-- sweep 时覆盖该 variant 的 w_slosh(在 variants.yaml 加载之后, 故生效); w_slosh<0 跳过 -->
     <param name="variants/$(arg planner_variant)/w_slosh" value="$(arg w_slosh)"
            if="$(eval float(arg('w_slosh')) >= 0.0)"/>

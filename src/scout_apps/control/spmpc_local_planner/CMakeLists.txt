@@ -74,7 +74,7 @@ add_library(${PROJECT_NAME}
   src/warm_start/diff_drive_flatness_warm_start.cpp
   src/warm_start/mecanum_warm_start.cpp
   src/warm_start/warm_start_factory.cpp
-  src/core/rollout_sampling_solver.cpp
+  src/solvers/rollout_sampling_solver.cpp
   src/solvers/solver_factory.cpp
   src/solvers/continuous_mpcc_solver_acados.cpp
   src/ros/diagnostics_publisher.cpp

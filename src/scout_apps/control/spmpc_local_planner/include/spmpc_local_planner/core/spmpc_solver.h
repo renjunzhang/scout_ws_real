@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/core/terminal_controller.h"  // SolverParams.terminal 需要完整 TerminalControllerParams
 #include "spmpc_local_planner/core/variant_config.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/reference/reference_path.h"
@@ -23,7 +24,6 @@ struct SolverParams {
     bool homotopy_enable = false;
     double homotopy_lateral_offset = 0.0;
     double lookahead_distance = 0.6;
-    double goal_tolerance = 0.15;  // deprecated mirror: use terminal.goal_tolerance
     TerminalControllerParams terminal;
     WarmStartConfig warm_start;
     PlatformParams platform;
