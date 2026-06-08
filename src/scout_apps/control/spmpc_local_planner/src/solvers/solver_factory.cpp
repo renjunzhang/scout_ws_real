@@ -4,6 +4,8 @@
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
 #include "spmpc_local_planner/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.h"
 
+#include <stdexcept>
+
 namespace spmpc_local_planner {
 
 bool isKnownSolverBackend(const std::string& backend) {
@@ -19,8 +21,11 @@ std::unique_ptr<SpmpcSolver> makeSolver(const std::string& backend) {
     if (backend == kSolverBackendContinuousMpccDirectOmegaLegacy) {
         return std::unique_ptr<SpmpcSolver>(new ContinuousMpccDirectOmegaLegacySolverAcados());
     }
-    // primitive 及未识别名称：回退到当前运动基元择优 solver。
-    return std::unique_ptr<SpmpcSolver>(new RolloutSamplingSolver());
+    if (backend == kSolverBackendPrimitive) {
+        // primitive 是显式 fallback/debug rollout sampler；调用方必须先完成 backend policy 校验。
+        return std::unique_ptr<SpmpcSolver>(new RolloutSamplingSolver());
+    }
+    throw std::invalid_argument("unknown SPMPC solver backend: " + backend);
 }
 
 }  // namespace spmpc_local_planner

@@ -50,11 +50,12 @@ experiment:
   mode: point_to_point
   reference_source: global_path
   corridor_width: 0.50
-  corridor_enable: true
+  # 当前默认主线是 continuous_mpcc_acados；corridor/obstacle/homotopy OCP 模块未接入前保持关闭，避免静默误用。
+  corridor_enable: false
   corridor_hard_bound_enable: false
   corridor_weight: 1.0
-  obstacle_enable: true
+  obstacle_enable: false
   obstacle_weight: 1.0
   obstacle_influence_radius: 0.25
-  homotopy_enable: true
+  homotopy_enable: false
   homotopy_lateral_offset: 0.12

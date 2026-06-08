@@ -3,8 +3,11 @@ dt: 0.0333333333
 horizon_steps: 60
 publish_cmd_vel: true
 
-# solver 后端: primitive | continuous_mpcc_acados | continuous_mpcc_direct_omega_legacy
-solver_backend: primitive
+# solver 后端:
+#   continuous_mpcc_acados: SPMPC 主线 continuous MPCC
+#   continuous_mpcc_direct_omega_legacy: RouteB diagnostic/legacy continuous MPCC
+#   primitive: fallback/debug rollout sampling + cost ranking, not MPCC/mainline
+solver_backend: continuous_mpcc_acados
 
 topics:
   odom: /odom

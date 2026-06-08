@@ -16,7 +16,7 @@ struct SolverParams {
     double a_max = 0.6;
     double alpha_max = 1.2;  // 转向角加速度上限 |d(omega)/dt| (rad/s^2)，与 TEB/DWA acc_lim_theta 对齐
     double corridor_width = 0.30;
-    bool corridor_enable = true;
+    bool corridor_enable = false;
     bool corridor_hard_bound_enable = false;
     double corridor_weight = 1.0;
     bool obstacle_enable = false;
@@ -29,7 +29,8 @@ struct SolverParams {
     WarmStartConfig warm_start;
     PlatformParams platform;
     bool warm_start_flatness_enable = false;  // deprecated: use acados/warm_start/enable
-    std::string solver_backend = "primitive";  // primitive | continuous_mpcc_acados | continuous_mpcc_direct_omega_legacy
+    // continuous_mpcc_acados: SPMPC mainline MPCC; direct_omega: RouteB diagnostic; primitive: debug rollout fallback only.
+    std::string solver_backend = "continuous_mpcc_acados";
     SloshModelParams slosh;
 };
 

@@ -2,11 +2,111 @@
 #include "spmpc_local_planner/solvers/solver_factory.h"
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <geometry_msgs/TransformStamped.h>
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 namespace spmpc_local_planner {
+
+namespace {
+
+const char* boolText(bool value) {
+    return value ? "true" : "false";
+}
+
+const char* solverBackendRole(const std::string& backend) {
+    if (backend == kSolverBackendContinuousMpccAcados) {
+        return "SPMPC mainline continuous MPCC";
+    }
+    if (backend == kSolverBackendContinuousMpccDirectOmegaLegacy) {
+        return "RouteB diagnostic/legacy continuous MPCC, not mainline";
+    }
+    if (backend == kSolverBackendPrimitive) {
+        return "fallback/debug rollout sampling + cost ranking, not MPCC/mainline";
+    }
+    return "unknown";
+}
+
+void appendPolicyError(std::string& reason, const std::string& message) {
+    if (!reason.empty()) {
+        reason += "; ";
+    }
+    reason += message;
+}
+
+bool validateBackendPolicy(const SolverParams& params,
+                           const VariantConfig& variant,
+                           std::string& reason) {
+    reason.clear();
+
+    if (params.solver_backend == kSolverBackendContinuousMpccAcados) {
+        if (variant.slosh_constraint_enable) {
+            appendPolicyError(reason,
+                              "continuous_mpcc_acados does not support slosh_constraint_enable yet");
+        }
+        if (params.corridor_enable) {
+            appendPolicyError(reason,
+                              "continuous_mpcc_acados does not support corridor_enable until J_corridor is implemented in the OCP");
+        }
+        if (params.obstacle_enable) {
+            appendPolicyError(reason,
+                              "continuous_mpcc_acados does not support obstacle_enable until obstacle OCP terms are implemented");
+        }
+        if (params.homotopy_enable) {
+            appendPolicyError(reason,
+                              "continuous_mpcc_acados does not support homotopy_enable until multi-candidate/homotopy SPMPC is implemented");
+        }
+        if (params.corridor_hard_bound_enable) {
+            appendPolicyError(reason,
+                              "continuous_mpcc_acados does not support corridor_hard_bound_enable yet");
+        }
+    } else if (params.solver_backend == kSolverBackendContinuousMpccDirectOmegaLegacy) {
+        if (variant.slosh_enable || variant.slosh_constraint_enable) {
+            appendPolicyError(reason,
+                              "slosh-enabled variants must use continuous_mpcc_acados mainline, not RouteB legacy backend");
+        }
+        if (params.corridor_enable) {
+            appendPolicyError(reason,
+                              "RouteB legacy backend does not support corridor_enable until J_corridor is implemented in the OCP");
+        }
+        if (params.obstacle_enable) {
+            appendPolicyError(reason,
+                              "RouteB legacy backend does not support obstacle_enable under the SPMPC mainline policy");
+        }
+        if (params.homotopy_enable) {
+            appendPolicyError(reason,
+                              "RouteB legacy backend does not support homotopy_enable under the SPMPC mainline policy");
+        }
+        if (params.corridor_hard_bound_enable) {
+            appendPolicyError(reason,
+                              "RouteB legacy backend does not support corridor_hard_bound_enable");
+        }
+    } else if (params.solver_backend == kSolverBackendPrimitive) {
+        if (variant.slosh_enable || variant.slosh_constraint_enable) {
+            appendPolicyError(reason,
+                              "primitive is fallback/debug rollout sampling only and cannot run slosh-enabled SPMPC variants");
+        }
+        if (params.obstacle_enable) {
+            appendPolicyError(reason,
+                              "primitive cannot run obstacle_enable=true under the SPMPC mainline policy");
+        }
+        if (params.homotopy_enable) {
+            appendPolicyError(reason,
+                              "primitive cannot run homotopy_enable=true under the SPMPC mainline policy");
+        }
+        if (params.corridor_hard_bound_enable) {
+            appendPolicyError(reason,
+                              "primitive cannot run corridor_hard_bound_enable=true under the SPMPC mainline policy");
+        }
+    } else {
+        appendPolicyError(reason, "unknown solver backend");
+    }
+
+    return reason.empty();
+}
+
+}  // namespace
 
 SpmpcLocalPlannerROS::SpmpcLocalPlannerROS()
     : tf_listener_(tf_buffer_) {}
@@ -105,9 +205,12 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     }
     pnh_.param("solver_backend", solver_params.solver_backend, solver_params.solver_backend);
     if (!isKnownSolverBackend(solver_params.solver_backend)) {
-        ROS_WARN("[spmpc_local_planner] unknown solver_backend '%s'; falling back to primitive",
-                 solver_params.solver_backend.c_str());
-        solver_params.solver_backend = kSolverBackendPrimitive;
+        ROS_FATAL("[spmpc_local_planner] unknown solver_backend '%s'. Valid backends: %s, %s, %s",
+                  solver_params.solver_backend.c_str(),
+                  kSolverBackendContinuousMpccAcados,
+                  kSolverBackendContinuousMpccDirectOmegaLegacy,
+                  kSolverBackendPrimitive);
+        return false;
     }
     solver_params.slosh = loadSloshParams();
     solver_params.slosh.dt = dt_;
@@ -122,6 +225,29 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                  "可能未加载，变体权重回退到内置 B0 默认值。正式实验请用 launch 加载 variants.yaml",
                  variant_.name.c_str());
     }
+
+    std::string policy_error;
+    if (!validateBackendPolicy(solver_params, variant_, policy_error)) {
+        ROS_FATAL("[spmpc_local_planner] backend policy rejected backend=%s role=%s variant=%s: %s",
+                  solver_params.solver_backend.c_str(),
+                  solverBackendRole(solver_params.solver_backend),
+                  variant_.name.c_str(),
+                  policy_error.c_str());
+        return false;
+    }
+
+    ROS_INFO("[spmpc_local_planner] backend=%s role=%s variant=%s mode=%s features: slosh=%s slosh_constraint=%s obstacle=%s homotopy=%s corridor=%s corridor_hard_bound=%s",
+             solver_params.solver_backend.c_str(),
+             solverBackendRole(solver_params.solver_backend),
+             variant_.name.c_str(),
+             experiment_mode_.c_str(),
+             boolText(variant_.slosh_enable),
+             boolText(variant_.slosh_constraint_enable),
+             boolText(solver_params.obstacle_enable),
+             boolText(solver_params.homotopy_enable),
+             boolText(solver_params.corridor_enable),
+             boolText(solver_params.corridor_hard_bound_enable));
+
     problem_.configure(solver_params, variant_);
     if (!slosh_observer_.configure(solver_params.slosh)) {
         ROS_WARN("[spmpc_local_planner] slosh observer configure failed; slosh diagnostics stay zero");

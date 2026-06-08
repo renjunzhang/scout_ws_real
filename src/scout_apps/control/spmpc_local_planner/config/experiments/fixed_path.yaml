@@ -2,7 +2,8 @@ experiment:
   mode: fixed_path
   reference_source: global_path_fixed
   corridor_width: 0.30
-  corridor_enable: true
+  # continuous_mpcc_acados 当前未接入 J_corridor；默认关闭，避免软走廊开关静默空操作。
+  corridor_enable: false
   corridor_hard_bound_enable: false
   corridor_weight: 1.0
   obstacle_enable: false

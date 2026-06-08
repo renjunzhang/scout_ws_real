@@ -14,7 +14,7 @@ constexpr const char* kSolverBackendContinuousMpccDirectOmegaLegacy = "continuou
 // 判断后端名是否被工厂识别（供 ROS 层校验并告警，core/solvers 自身不依赖 ROS）。
 bool isKnownSolverBackend(const std::string& backend);
 
-// 按后端名创建 solver；未识别的名称回退到 primitive。
+// 按后端名创建 solver；调用方应先校验后端名，未识别名称会抛出异常而不是回退到 primitive。
 std::unique_ptr<SpmpcSolver> makeSolver(const std::string& backend);
 
 }  // namespace spmpc_local_planner
