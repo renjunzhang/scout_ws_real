@@ -195,47 +195,84 @@ B_smooth: success=3/3, stable=3/3, peak mean≈30.83 mm, p95 mean≈10.72 mm
 
 该比较不是同一批次同时包含 `B_smooth` 的 formal ranking，只作为决策参考。
 
-## 8. 当前结论
+## 8. 补充复核：去掉前 2s 的 post-start peak
+
+对 P2_s_curve 的路径形状复查后发现：
+
+```text
+s=0.0–2.8 m  |kappa|≈0.8   急转/S 弯集中在最前面
+s=2.8–9.2 m  |kappa|≈0.1   后面基本是长直线到终点
+```
+
+因此这条路径的“转弯段”与“从静止起步猛冲”高度重叠。仅按曲率框出 S 弯段不能有效隔离过弯抑晃，反而会把起步 lurch 一起算进去。更有效的诊断口径是：保留 full-window 指标，同时新增 `exclude-first-2s` / `post-start` 指标。
+
+按去掉前 2s 的 peak 复核，本轮 narrow sweep 的方向为：
+
+```text
+B_slosh w=2.0 / 2.2 / 2.4: 18.7 / 20.4 / 19.1 mm
+B_ours  w=2.0 / 2.2 / 2.4: 21.2 / 19.7 / 14.7 mm
+B_smooth 参考:                 约 22–23 mm
+```
+
+这个补充结果修正了 full-window peak 的解释：
+
+```text
+1. 起步 lurch 是真实污染，而且幅度很大；尤其 B_ours 在 N=1 复核中可从 35.8 mm 降到 12.2 mm。
+2. 去掉前 2s 后，slosh-aware 相对 B_smooth 的方向是对的，说明真效果一直存在，只是被起步峰值盖住。
+3. N=3 中 slosh-aware 仍低于 B_smooth 参考，但差距比 N=1 小，结果更糊，不能直接作为 formal ranking。
+4. 外部 TEB/DWA 的低晃动不是窗口假象；去掉前 2s 后它们仍然更低，后续只能用速度/完成率/跟踪/slosh 的 Pareto 口径解释。
+```
+
+注意：`exclude-first-2s` 不是“纯 S 弯段”指标。它只是去掉起步瞬态后的行进阶段指标。若要干净隔离过弯抑晃，需要统一起步速度 ramp，或者换一条“先直线引导段、再中段 S 弯”的 fixed path。
+
+## 9. 当前结论
 
 本轮可以得出的结论：
 
 ```text
 1. 2.0–2.4 区间确实比 2.75 更接近可用区，但仍不是可以直接 N=5 的最终区间。
 2. B_slosh w=2.4 是本轮唯一 3/3 success/stable 的 slosh-aware 组合。
-3. B_slosh w=2.0/2.2 有更强降峰值潜力，但仍出现停滞，因此需要先解决稳定性，不能直接作为正式候选。
-4. B_ours 在 2.0/2.2/2.4 均为 2/3，本轮没有确认出稳定窄区间。
-5. 当前核心矛盾变成：B_slosh 的 raw slosh cost 能降低峰值但容易停滞；B_ours 更平滑/折中但本轮未显著拉开 B_smooth。
+3. full-window peak 受到起步 lurch 明显污染；在 P2_s_curve 上不能仅凭全程 peak 判断 B_ours 或 slosh-aware 无效。
+4. 去掉前 2s 后，B_slosh/B_ours 相对 B_smooth 参考值呈现更低 peak，说明 slosh-aware 的行进阶段抑晃方向成立。
+5. N=3 post-start 差距比 N=1 小，且 B_slosh 2.0/2.2、B_ours 2.0/2.2/2.4 仍有完成率问题，因此还不是 formal ranking。
+6. 当前核心矛盾应更新为：slosh-aware 已能降低起步后晃动，但仍需同时解决起步 lurch、稳定完成率和外部 baseline 慢/保守带来的 Pareto 对比问题。
 ```
 
 当前不能得出的结论：
 
 ```text
 1. B_slosh w=2.2 是最终最优。
-2. B_ours w=2.2 已经足够稳定且显著优于 B_smooth。
+2. B_ours w=2.2 已经足够稳定且显著优于 B_smooth 的 formal 结论。
 3. 可以直接把 B_slosh/B_ours 全部扩大到 N=5。
 4. 2.4 是最终权重；它只是本轮唯一 3/3 完成的候选。
+5. exclude-first-2s 可以替代 full-window；完整运输风险仍必须报告起步峰值。
+6. P2_s_curve 的曲率窗口等于纯过弯窗口；这条路径的急转贴近起点，该口径会和起步段混在一起。
 ```
 
-## 9. 下一步建议
+## 10. 下一步建议
 
-不建议立刻跑 full N=5。更稳的下一步是先做一个决策门槛：
+不建议立刻跑 full N=5。更稳的下一步是先做指标修正和同批复核：
 
 ```text
-方案 A：如果优先找“能完成”的候选
-  - 只复现 B_slosh w=2.4，并加回 B_smooth 同批对照。
-  - 目标是确认 B_slosh w=2.4 是否 3/3 或 5/5 稳定，以及是否至少在 p95 上不差。
+方案 A：先修指标口径
+  - 在 metrics 中同时报告 full-window 与 exclude-first-2s/post-start slosh peak/p95/RMS。
+  - full-window 用于完整运输风险；post-start 用于排除起步 lurch 后观察行进阶段抑晃。
+  - 不把 P2_s_curve 的曲率窗口称为“纯 S 弯段”。
 
-方案 B：如果优先找“明显降晃”的候选
-  - 重点查 B_slosh w=2.0/2.2 为什么 1/3 停滞。
-  - 不先扩大 N=5，而是检查失败 run 的 progress / cmd_v / cost breakdown / ACADOS_MINSTEP。
-  - 若能通过较小策略改动避免停滞，再复现 2.0/2.2。
+方案 B：做干净同批 N≥3 internal 复核
+  - 同批 fresh-sim 包含 B0 / B_smooth / B_slosh@2.2 / B_ours@2.2。
+  - 可选加 B_slosh@2.4 / B_ours@2.4，用于比较完成率更稳的候选。
+  - 同时报告 success/stable、duration、tracking、full-window slosh 与 post-start slosh。
 
-方案 C：如果论文主线必须保留 B_ours
-  - 先不要继续只调 w_slosh。
-  - 检查 B_ours 中 smooth/control 权重是否过强，是否压住 slosh cost 对控制的影响。
-  - 下一轮应该是小改 B_ours 内部权重比例，而不是继续把 w_slosh 从 2.0 扫到 2.4。
+方案 C：如果继续保留 P2_s_curve
+  - 需要承认它的急转紧贴起点，不能干净隔离“起步”和“过弯”。
+  - 若要干净隔离过弯抑晃，应考虑统一起步速度 ramp，或增加一条“先直线引导段、再中段 S 弯”的 fixed path。
+
+方案 D：外部 baseline 仍走 Pareto 解释
+  - TEB/DWA 去掉前 2s 后 absolute slosh 仍低，窗口修正不能解决这道坎。
+  - 后续应同时比较 success / duration / tracking / slosh，而不是只比较 peak。
 ```
 
 一句话：
 
-> 本轮把问题从“slosh cost 是否生效”推进到了“raw B_slosh 能降峰值但不够稳，B_ours 稳定/降峰值优势仍不够明确”；当前最像可完成候选的是 `B_slosh w=2.4`，但它还没有明显打赢 `B_smooth`，所以仍不应直接做全量 N=5。
+> 本轮把问题从“slosh cost 是否生效”进一步推进到“full-window peak 被起步 lurch 污染，post-start 后 slosh-aware 效果能拉开，但仍需同批 N≥3 和 Pareto 口径复核”；因此仍不应直接做全量 N=5。

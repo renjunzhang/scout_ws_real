@@ -25,8 +25,12 @@ if(NOT ACADOS_SOURCE_DIR)
 endif()
 set(SPMPC_GEN_B0_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0)
 set(SPMPC_GEN_SLOSH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh)
+set(SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0_direct_omega_legacy)
+set(SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh_direct_omega)
 set(SPMPC_WITH_ACADOS FALSE)
 set(SPMPC_WITH_ACADOS_SLOSH FALSE)
+set(SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY FALSE)
+set(SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA FALSE)
 set(ACADOS_LIB_DIR "")
 if(ACADOS_SOURCE_DIR)
   foreach(_acados_lib_dir "${ACADOS_SOURCE_DIR}/lib" "${ACADOS_SOURCE_DIR}/lib64")
@@ -46,6 +50,15 @@ if(ACADOS_LIB_DIR AND EXISTS "${SPMPC_GEN_B0_DIR}/libacados_ocp_solver_spmpc_b0.
   endif()
 else()
   message(STATUS "[spmpc] acados not found (ACADOS_SOURCE_DIR / generated spmpc_b0 missing); continuous backend = stub")
+endif()
+if(ACADOS_LIB_DIR AND EXISTS "${SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR}/libacados_ocp_solver_spmpc_b0_direct_omega_legacy.so")
+  set(SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY TRUE)
+  if(EXISTS "${SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR}/libacados_ocp_solver_spmpc_slosh_direct_omega.so")
+    set(SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA TRUE)
+    message(STATUS "[spmpc] building continuous_mpcc_direct_omega backend (b0 + slosh)")
+  else()
+    message(STATUS "[spmpc] building continuous_mpcc_direct_omega backend (b0 only, slosh solver missing)")
+  endif()
 endif()
 
 catkin_package(
@@ -77,6 +90,7 @@ add_library(${PROJECT_NAME}
   src/solvers/rollout_sampling_solver.cpp
   src/solvers/solver_factory.cpp
   src/solvers/continuous_mpcc_solver_acados.cpp
+  src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
   src/ros/diagnostics_publisher.cpp
   src/ros/spmpc_local_planner_ros.cpp
 )
@@ -106,6 +120,30 @@ if(SPMPC_WITH_ACADOS)
     target_include_directories(${PROJECT_NAME} PRIVATE ${SPMPC_GEN_SLOSH_DIR})
     target_link_libraries(${PROJECT_NAME}
       ${SPMPC_GEN_SLOSH_DIR}/libacados_ocp_solver_spmpc_slosh.so
+    )
+  endif()
+endif()
+
+if(SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY)
+  target_compile_definitions(${PROJECT_NAME} PRIVATE SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY)
+  target_include_directories(${PROJECT_NAME} PRIVATE
+    ${ACADOS_SOURCE_DIR}/include
+    ${ACADOS_SOURCE_DIR}/include/acados
+    ${ACADOS_SOURCE_DIR}/include/blasfeo/include
+    ${ACADOS_SOURCE_DIR}/include/hpipm/include
+    ${SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR}
+  )
+  target_link_libraries(${PROJECT_NAME}
+    ${SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR}/libacados_ocp_solver_spmpc_b0_direct_omega_legacy.so
+    ${ACADOS_LIB_DIR}/libacados.so
+    ${ACADOS_LIB_DIR}/libhpipm.so
+    ${ACADOS_LIB_DIR}/libblasfeo.so
+  )
+  if(SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR})
+    target_link_libraries(${PROJECT_NAME}
+      ${SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR}/libacados_ocp_solver_spmpc_slosh_direct_omega.so
     )
   endif()
 endif()

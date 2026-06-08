@@ -12,6 +12,7 @@ struct WarmStartState {
     double theta = 0.0;
     double v = 0.0;
     double s = 0.0;
+    double omega = 0.0;   // 2026-06-08: omega 进入状态
     double eta_x = 0.0;
     double eta_x_dot = 0.0;
     double eta_y = 0.0;
@@ -20,7 +21,8 @@ struct WarmStartState {
 
 struct WarmStartControl {
     double a = 0.0;
-    double omega = 0.0;
+    double omega = 0.0;   // 兼容旧热启动生成器(角速度)；OCP 注入用 alpha
+    double alpha = 0.0;   // 2026-06-08: 转向角加速度 = d(omega)/dt，OCP 控制
     double v_s = 0.0;
 };
 

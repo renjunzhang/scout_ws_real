@@ -39,6 +39,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("robot/v_max", solver_params.v_max, solver_params.v_max);
     pnh_.param("robot/omega_max", solver_params.omega_max, solver_params.omega_max);
     pnh_.param("robot/a_max", solver_params.a_max, solver_params.a_max);
+    pnh_.param("robot/alpha_max", solver_params.alpha_max, solver_params.alpha_max);
     shared_cmd_linear_accel_max_ = solver_params.a_max;
     pnh_.param("platform/shared_constraints/linear_accel_limit_enable",
                shared_cmd_linear_accel_limit_enable_,
@@ -400,6 +401,9 @@ void SpmpcLocalPlannerROS::loadVariantOverrides(const std::string& variant_name)
     pnh_.param(prefix + "w_contour", variant_.w_contour, variant_.w_contour);
     pnh_.param(prefix + "w_lag", variant_.w_lag, variant_.w_lag);
     pnh_.param(prefix + "w_progress", variant_.w_progress, variant_.w_progress);
+    pnh_.param(prefix + "w_v", variant_.w_v, variant_.w_v);
+    pnh_.param(prefix + "w_vs", variant_.w_vs, variant_.w_vs);
+    pnh_.param(prefix + "v_ref", variant_.v_ref, variant_.v_ref);
     pnh_.param(prefix + "w_control", variant_.w_control, variant_.w_control);
     pnh_.param(prefix + "w_accel", variant_.w_accel, variant_.w_accel);
     pnh_.param(prefix + "w_smooth", variant_.w_smooth, variant_.w_smooth);

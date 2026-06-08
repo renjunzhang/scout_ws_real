@@ -43,22 +43,70 @@ SIM_ENV=open USE_RVIZ=true \
 
 ## 常用 fixed-path 调用
 
-### SPMPC 单 case
+### SPMPC 单 case：replay 固定 JSON
 
-前提：已 fresh 启动仿真并等待定位恢复。
+前提：已 fresh 启动仿真并等待定位恢复。`run_fixed_path_spmpc_suite.sh` 使用 `VARIANTS` / `OUT_ROOT`，run id 由脚本生成；不要用 `PLANNER_VARIANT` / `OUT_DIR` / `RUN_ID` 调这个 suite。
 
 ```bash
 source /home/a/scout_ws/devel/setup.bash
 cd /home/a/scout_ws
 
-PLANNER_VARIANT=B_slosh \
+VARIANTS=B_slosh \
 SPMPC_W_SLOSH=2.4 \
 SPMPC_SOLVER_BACKEND=continuous_mpcc_acados \
+PATH_SOURCE_MODE=replay \
 PATH_ID=P2_s_curve \
 PATH_FILE=/data/a/fixed_paths/sim/P2_s_curve.json \
-OUT_DIR=/data/a/spmpc_paper_compare/example_fixed_path \
-RUN_ID=P2_s_curve_spmpc_B_slosh_w2p4_run01 \
+OUT_ROOT=/data/a/spmpc_paper_compare/example_fixed_path \
 RECORD_SEC=60 \
+bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_spmpc_suite.sh
+```
+
+### SPMPC 单 case：当前位置起点 + 固定终点
+
+该模式先用 `template_fixed_path_generator.py` 从当前 `base_link` 位姿到固定 goal 生成 JSON，再用 `fixed_global_path_runner.py` replay 该 JSON 给 planner；适合排除“固定 JSON 起点和当前定位不一致”的影响。
+
+```bash
+source /home/a/scout_ws/devel/setup.bash
+cd /home/a/scout_ws
+
+VARIANTS=B0 \
+SPMPC_SOLVER_BACKEND=continuous_mpcc_acados \
+PATH_SOURCE_MODE=stable_goal \
+PATH_ID=P2_s_curve_current_start \
+GOAL_X=-3.6119120121002197 \
+GOAL_Y=3.955589771270752 \
+GOAL_YAW=2.584969730815858 \
+PATH_TEMPLATE=s_curve \
+START_HEADING=current \
+FEASIBILITY_ANALYZE=true \
+OUT_ROOT=/data/a/spmpc_omega_alpha_b0_p2_current_start_fixed \
+RECORD_SEC=60 \
+bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_spmpc_suite.sh
+```
+
+### SPMPC 诊断：continuous direct-omega legacy B0
+
+`continuous_mpcc_direct_omega_legacy` 只用于 B0 诊断，恢复 continuous OCP 中 `u[1]=omega` 直接下发角速度的旧式口径；不要把它作为 slosh formal 或 common-limit 论文结果。
+
+```bash
+source /home/a/scout_ws/devel/setup.bash
+cd /home/a/scout_ws
+
+VARIANTS=B0 \
+SPMPC_SOLVER_BACKEND=continuous_mpcc_direct_omega_legacy \
+PATH_SOURCE_MODE=stable_goal \
+PATH_ID=P2_s_curve_current_start_direct_omega_legacy \
+GOAL_X=-3.6119120121002197 \
+GOAL_Y=3.955589771270752 \
+GOAL_YAW=2.584969730815858 \
+PATH_TEMPLATE=s_curve \
+START_HEADING=current \
+FEASIBILITY_ANALYZE=true \
+OUT_ROOT=/data/a/spmpc_b0_p2_continuous_direct_omega_legacy_diag \
+RECORD_SEC=60 \
+RUN_TIMEOUT_SEC=60 \
+SLOSH_MONITOR_ENABLE=false \
 bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_spmpc_suite.sh
 ```
 
@@ -138,16 +186,24 @@ BASELINE=mpc OUT_DIR=/data/a/spmpc_baseline_smoke \
 ### fixed-path suite
 
 ```text
-PATH_ID / PATH_FILE       fixed path 标识与 JSON 路径
-OUT_DIR / RUN_ID          输出目录与 run 名称
+PATH_ID / PATH_FILE       fixed path 标识与 JSON 路径（replay 模式需要 PATH_FILE）
+PATH_SOURCE_MODE          replay（默认，回放既有 JSON）| stable_goal（当前位置起点 + 固定终点生成后回放）
+OUT_ROOT                  输出根目录；run id 由 suite 自动生成
 RECORD_SEC                录包时长，当前诊断通常用 60s
-PLANNER_VARIANT           SPMPC variant，例如 B0 / B_smooth / B_slosh / B_ours / B_accel
+RUN_TIMEOUT_SEC           planner 启动后的 hard stop 秒数，默认 60；设为 0 可关闭
+VARIANTS                  SPMPC variant 列表，例如 B0 / B_smooth / B_slosh / B_ours / B_accel
 SPMPC_W_SLOSH             覆盖 variants/<variant>/w_slosh；负值表示使用 variants.yaml 默认值
-SPMPC_SOLVER_BACKEND      默认 continuous_mpcc_acados
+SPMPC_SOLVER_BACKEND      默认 continuous_mpcc_acados；可诊断用 continuous_mpcc_direct_omega_legacy（B0-only）
 SLOSH_MONITOR_ENABLE      是否启动/记录 slosh monitor
 SLOSH_RESET_BEFORE_RUN    run 前是否调用 /slosh/reset
 EXPERIMENT_GROUP          证据链实验组
 EVIDENCE_CHAIN_VERSION    证据链版本标签
+
+stable_goal 额外变量：
+GOAL_X / GOAL_Y / GOAL_YAW    固定终点（map frame）
+PATH_TEMPLATE                 模板路径，当前常用 s_curve
+START_HEADING                 current 表示路径初始切向使用当前车头朝向
+FEASIBILITY_ANALYZE           是否对生成 JSON 进行曲率/omega_req 可行性检查
 ```
 
 ### P2P smoke

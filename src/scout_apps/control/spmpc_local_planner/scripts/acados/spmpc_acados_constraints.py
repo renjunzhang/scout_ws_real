@@ -10,21 +10,40 @@ obstacle / costmap / hard corridor 不在 B0 引入。
 import numpy as np
 
 
-def set_constraints(ocp, cfg):
+def set_constraints_direct_omega_legacy(ocp, cfg):
+    """诊断 legacy B0：u[1]=omega 直接受限，状态只约束 v。"""
     a_max = cfg["a_max"]
     omega_max = cfg["omega_max"]
     vs_max = cfg["vs_max"]
     v_max = cfg["v_max"]
 
-    # 控制 bounds: u = [a, omega, v_s]
     ocp.constraints.idxbu = np.array([0, 1, 2])
     ocp.constraints.lbu = np.array([-a_max, -omega_max, 0.0])
     ocp.constraints.ubu = np.array([a_max, omega_max, vs_max])
 
-    # 状态 bound: v 是 x[3]
     ocp.constraints.idxbx = np.array([3])
     ocp.constraints.lbx = np.array([0.0])
     ocp.constraints.ubx = np.array([v_max])
+    ocp.constraints.x0 = np.zeros(cfg["nx"])
+
+
+
+def set_constraints(ocp, cfg):
+    a_max = cfg["a_max"]
+    omega_max = cfg["omega_max"]
+    vs_max = cfg["vs_max"]
+    v_max = cfg["v_max"]
+    alpha_max = cfg["alpha_max"]
+
+    # 控制 bounds: u = [a, alpha, v_s]；alpha=d(omega)/dt 硬约束在 ±alpha_max。
+    ocp.constraints.idxbu = np.array([0, 1, 2])
+    ocp.constraints.lbu = np.array([-a_max, -alpha_max, 0.0])
+    ocp.constraints.ubu = np.array([a_max, alpha_max, vs_max])
+
+    # 状态 bound: v 是 x[3] ∈ [0, v_max]；omega 是 x[5] ∈ [-omega_max, omega_max]。
+    ocp.constraints.idxbx = np.array([3, 5])
+    ocp.constraints.lbx = np.array([0.0, -omega_max])
+    ocp.constraints.ubx = np.array([v_max, omega_max])
 
     # 初始状态由 wrapper 每周期通过 set("x0", ...) 设定；
     # 这里给出占位 x0，维度需匹配 nx。

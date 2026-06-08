@@ -3,7 +3,7 @@ dt: 0.0333333333
 horizon_steps: 60
 publish_cmd_vel: true
 
-# solver 后端: primitive | continuous_mpcc_acados
+# solver 后端: primitive | continuous_mpcc_acados | continuous_mpcc_direct_omega_legacy
 solver_backend: primitive
 
 topics:
@@ -26,7 +26,7 @@ reference:
 
 terminal:
   enable: true
-  goal_tolerance: 0.15
+  goal_tolerance: 0.20   # 与 TEB/DWA 统一成功判定距离(原 0.15)
   goal_reached_max_speed: 0.03
   goal_reached_max_omega: 0.05
   slowdown:
@@ -47,12 +47,12 @@ platform:
 
 acados:
   warm_start:
-    enable: false
+    enable: true                          # 2026-06-08: 开热启动, 让弯处卡死的 OCP 从"在动"的猜测重启
     type: diff_drive_flatness
     use_previous_solution: true
     use_slosh_rollout: true
     curvature_speed_limit_enable: true
     max_reference_fit_error: 0.10
-    fallback_to_previous_solution: true
-    fallback_to_primitive: true
+    fallback_to_previous_solution: false  # 关键: 卡死时"上周期解"=停滞轨迹, 拿它当热启动等于又喂回卡死, 必须关
+    fallback_to_primitive: true           # 回退到保守"在动"猜测(v_seed + omega=kappa*v)
   warm_start_flatness_enable: false

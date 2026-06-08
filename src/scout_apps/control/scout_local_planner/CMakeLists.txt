@@ -79,6 +79,7 @@ catkin_install_python(PROGRAMS
   scripts/analysis/analyze_global_path_duplicates.py
   scripts/analysis/analyze_global_path_prefix_window.py
   scripts/analysis/analyze_tracking_infeasible.py
+  scripts/analysis/analyze_fixed_path_feasibility.py
   scripts/analysis/path_profile_utils.py
   scripts/analysis/shape_biagiotti.py
   scripts/analysis/retime_ruckig_style.py

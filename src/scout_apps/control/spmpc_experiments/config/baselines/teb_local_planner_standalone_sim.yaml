@@ -34,7 +34,7 @@ TebLocalPlannerROS:
     vertices: [[0.31, 0.2925], [0.31, -0.2925], [-0.31, -0.2925], [-0.31, 0.2925]]
 
   # Goal tolerance
-  xy_goal_tolerance: 0.25
+  xy_goal_tolerance: 0.20   # 与 SPMPC / DWA 统一成功判定距离(原 0.25)
   yaw_goal_tolerance: 0.35
   free_goal_vel: false
 

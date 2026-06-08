@@ -2,7 +2,7 @@
   <arg name="planner_variant" default="B0"/>
   <arg name="reference_path_topic" default="/scout/global_path"/>
   <arg name="costmap_topic" default="/map"/>
-  <arg name="solver_backend" default="primitive" doc="primitive|continuous_mpcc_acados"/>
+  <arg name="solver_backend" default="primitive" doc="primitive|continuous_mpcc_acados|continuous_mpcc_direct_omega_legacy"/>
   <arg name="w_slosh" default="-1.0" doc="覆盖 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
   <arg name="reference_target_frame" default="odom" doc="P2P 中将 global path 固化到该局部 frame; 空值则保持原 frame"/>
   <include file="$(find spmpc_local_planner)/launch/spmpc_experiment.launch">

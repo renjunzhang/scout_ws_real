@@ -20,12 +20,34 @@ SPMPC_W_SLOSH="${SPMPC_W_SLOSH:--1.0}"
 SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE="${SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE:-true}"
 SPMPC_SHARED_LINEAR_ACCEL_MAX="${SPMPC_SHARED_LINEAR_ACCEL_MAX:--1.0}"
 SPMPC_SHARED_LINEAR_ACCEL_MAX_DT="${SPMPC_SHARED_LINEAR_ACCEL_MAX_DT:--1.0}"
+SPMPC_ALPHA_MAX="${SPMPC_ALPHA_MAX:--1.0}"
 OUT_ROOT="${OUT_ROOT:-/data/${USER}/spmpc_paper_compare/fixed_path_smoke}"
 PATH_FILE="${PATH_FILE:-}"
 PATH_ID="${PATH_ID:-fixed_path}"
+PATH_SOURCE_MODE="${PATH_SOURCE_MODE:-replay}"  # replay | stable_goal
 RUNS="${RUNS:-1}"
 RECORD_SEC="${RECORD_SEC:-35}"
+RUN_TIMEOUT_SEC="${RUN_TIMEOUT_SEC:-60}"
 PATH_TOPIC="${PATH_TOPIC:-/scout/global_path_fixed}"
+PATH_TEMPLATE="${PATH_TEMPLATE:-s_curve}"
+START_HEADING="${START_HEADING:-current}"
+GOAL_TOPIC="${GOAL_TOPIC:-/scout/current_start_fixed_goal}"
+GOAL_FRAME="${GOAL_FRAME:-map}"
+GOAL_X="${GOAL_X:-}"
+GOAL_Y="${GOAL_Y:-}"
+GOAL_YAW="${GOAL_YAW:-0.0}"
+PATH_SPACING="${PATH_SPACING:-0.05}"
+PATH_AMPLITUDE_RATIO="${PATH_AMPLITUDE_RATIO:-0.18}"
+PATH_MIN_AMPLITUDE="${PATH_MIN_AMPLITUDE:-0.25}"
+PATH_MAX_AMPLITUDE="${PATH_MAX_AMPLITUDE:-1.20}"
+PATH_SIDE="${PATH_SIDE:-left}"
+PATH_GENERATION_TIMEOUT_SEC="${PATH_GENERATION_TIMEOUT_SEC:-20}"
+PATH_GENERATOR_SETTLE_SEC="${PATH_GENERATOR_SETTLE_SEC:-1}"
+PATH_GENERATOR_PUBLISH_COUNT="${PATH_GENERATOR_PUBLISH_COUNT:-1}"
+FEASIBILITY_ANALYZE="${FEASIBILITY_ANALYZE:-false}"
+FEASIBILITY_V_REF="${FEASIBILITY_V_REF:-0.25}"
+FEASIBILITY_OMEGA_MAX="${FEASIBILITY_OMEGA_MAX:-1.2}"
+FEASIBILITY_FAIL_ON_OMEGA_LIMIT="${FEASIBILITY_FAIL_ON_OMEGA_LIMIT:-false}"
 COSTMAP_TOPIC="${COSTMAP_TOPIC:-/map}"
 CMD_VEL_TOPIC="${CMD_VEL_TOPIC:-/cmd_vel}"
 REFERENCE_TARGET_FRAME="${REFERENCE_TARGET_FRAME:-}"
@@ -43,6 +65,7 @@ planner_pid=""
 path_pid=""
 rec_pid=""
 slosh_monitor_pid=""
+generator_pid=""
 
 cleanup_run() {
   if [[ -n "${rec_pid}" ]]; then
@@ -65,6 +88,11 @@ cleanup_run() {
     wait "${slosh_monitor_pid}" 2>/dev/null || true
     slosh_monitor_pid=""
   fi
+  if [[ -n "${generator_pid}" ]]; then
+    kill -INT "${generator_pid}" 2>/dev/null || true
+    wait "${generator_pid}" 2>/dev/null || true
+    generator_pid=""
+  fi
 }
 trap cleanup_run EXIT
 
@@ -81,12 +109,13 @@ wait_status_or_cmd() {
   local status_topic="$1"
   local timeout_sec="$2"
   local start
+  local probe_timeout_sec=3
   start="$(date +%s)"
   while true; do
-    if timeout 1s rostopic echo -n 1 "${status_topic}" >/dev/null 2>&1; then
+    if timeout "${probe_timeout_sec}s" rostopic echo -n 1 "${status_topic}" >/dev/null 2>&1; then
       return 0
     fi
-    if timeout 1s rostopic echo -n 1 "${CMD_VEL_TOPIC}" >/dev/null 2>&1; then
+    if timeout "${probe_timeout_sec}s" rostopic echo -n 1 "${CMD_VEL_TOPIC}" >/dev/null 2>&1; then
       return 0
     fi
     if (( $(date +%s) - start >= timeout_sec )); then
@@ -94,6 +123,89 @@ wait_status_or_cmd() {
     fi
     sleep 0.5
   done
+}
+
+wait_file_nonempty() {
+  local file="$1"
+  local timeout_sec="$2"
+  local start
+  start="$(date +%s)"
+  while true; do
+    if [[ -s "${file}" ]]; then
+      return 0
+    fi
+    if (( $(date +%s) - start >= timeout_sec )); then
+      echo "[ERR] ${timeout_sec}s 内没有生成 fixed path JSON: ${file}" >&2
+      return 1
+    fi
+    sleep 0.2
+  done
+}
+
+generate_stable_goal_path() {
+  local run_path_file="$1"
+  local run_dir="$2"
+  local run_id="$3"
+  mkdir -p "$(dirname "${run_path_file}")"
+  echo "[stable_path] 当前位姿起点 -> 固定终点，生成 ${run_path_file}"
+  rosrun scout_local_planner template_fixed_path_generator.py \
+    --template "${PATH_TEMPLATE}" \
+    --goal-topic "${GOAL_TOPIC}" \
+    --output-topic "${PATH_TOPIC}" \
+    --path-file "${run_path_file}" \
+    --start-heading "${START_HEADING}" \
+    --spacing "${PATH_SPACING}" \
+    --amplitude-ratio "${PATH_AMPLITUDE_RATIO}" \
+    --min-amplitude "${PATH_MIN_AMPLITUDE}" \
+    --max-amplitude "${PATH_MAX_AMPLITUDE}" \
+    --side "${PATH_SIDE}" \
+    --publish-count "${PATH_GENERATOR_PUBLISH_COUNT}" \
+    --wait-subscriber-timeout 0 \
+    >"${run_dir}/${run_id}_path_generator.log" 2>&1 &
+  generator_pid=$!
+  sleep "${PATH_GENERATOR_SETTLE_SEC}"
+
+  rosrun scout_local_planner send_fixed_goal.py \
+    --goal-topic "${GOAL_TOPIC}" \
+    --frame "${GOAL_FRAME}" \
+    --x "${GOAL_X}" \
+    --y "${GOAL_Y}" \
+    --yaw "${GOAL_YAW}" \
+    --repeat-count 1 \
+    --repeat-rate 1 \
+    --wait-subscriber-timeout 2 \
+    >"${run_dir}/${run_id}_send_goal.log" 2>&1
+
+  wait_file_nonempty "${run_path_file}" "${PATH_GENERATION_TIMEOUT_SEC}"
+  if [[ -n "${generator_pid}" ]]; then
+    kill -INT "${generator_pid}" 2>/dev/null || true
+    wait "${generator_pid}" 2>/dev/null || true
+    generator_pid=""
+  fi
+}
+
+run_feasibility_analysis() {
+  local run_path_file="$1"
+  local run_dir="$2"
+  local run_id="$3"
+  if [[ "${FEASIBILITY_ANALYZE}" != "true" ]]; then
+    return 0
+  fi
+  local analyzer
+  analyzer="$(rospack find scout_local_planner)/scripts/analysis/analyze_fixed_path_feasibility.py"
+  local args=(
+    --path-file "${run_path_file}"
+    --v-ref "${FEASIBILITY_V_REF}"
+    --omega-max "${FEASIBILITY_OMEGA_MAX}"
+    --alpha-max "${SPMPC_ALPHA_MAX}"
+    --json-out "${run_dir}/${run_id}_feasibility.json"
+    --csv-out "${run_dir}/${run_id}_feasibility.csv"
+  )
+  if [[ "${FEASIBILITY_FAIL_ON_OMEGA_LIMIT}" == "true" ]]; then
+    args+=(--fail-on-omega-limit)
+  fi
+  echo "[feasibility] analyze_fixed_path_feasibility.py ${args[*]}"
+  python3 "${analyzer}" "${args[@]}" >"${run_dir}/${run_id}_feasibility.log" 2>&1
 }
 
 reset_slosh_monitor() {
@@ -107,14 +219,28 @@ reset_slosh_monitor() {
   fi
 }
 
-if [[ -z "${PATH_FILE}" ]]; then
-  echo "[ERR] PATH_FILE 不能为空；请指定固定路径 JSON，例如 /data/a/fixed_paths/sim/P2_s_curve.json" >&2
-  exit 2
-fi
-if [[ ! -f "${PATH_FILE}" ]]; then
-  echo "[ERR] PATH_FILE 不存在: ${PATH_FILE}" >&2
-  exit 2
-fi
+case "${PATH_SOURCE_MODE}" in
+  replay)
+    if [[ -z "${PATH_FILE}" ]]; then
+      echo "[ERR] replay 模式下 PATH_FILE 不能为空；请指定固定路径 JSON，例如 /data/a/fixed_paths/sim/P2_s_curve.json" >&2
+      exit 2
+    fi
+    if [[ ! -f "${PATH_FILE}" ]]; then
+      echo "[ERR] PATH_FILE 不存在: ${PATH_FILE}" >&2
+      exit 2
+    fi
+    ;;
+  stable_goal)
+    if [[ -z "${GOAL_X}" || -z "${GOAL_Y}" ]]; then
+      echo "[ERR] stable_goal 模式下 GOAL_X/GOAL_Y 不能为空" >&2
+      exit 2
+    fi
+    ;;
+  *)
+    echo "[ERR] PATH_SOURCE_MODE 只能是 replay 或 stable_goal，当前=${PATH_SOURCE_MODE}" >&2
+    exit 2
+    ;;
+esac
 if ! rostopic list >/dev/null 2>&1; then
   echo "[ERR] roscore/仿真栈未检测到。请先启动仿真。" >&2
   exit 1
@@ -124,10 +250,13 @@ mkdir -p "${OUT_ROOT}"
 
 echo "================ SPMPC fixed-path suite ================"
 echo "PATH_ID=${PATH_ID}"
+echo "PATH_SOURCE_MODE=${PATH_SOURCE_MODE}"
 echo "PATH_FILE=${PATH_FILE}"
 echo "VARIANTS=${VARIANTS}"
 echo "OUT_ROOT=${OUT_ROOT}"
 echo "EXPERIMENT_GROUP=${EXPERIMENT_GROUP}"
+echo "SPMPC_ALPHA_MAX=${SPMPC_ALPHA_MAX}"
+echo "RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC}"
 echo "[preflight] 等待 /odom ${COSTMAP_TOPIC} ..."
 wait_topic_once /odom 10
 wait_topic_once "${COSTMAP_TOPIC}" 10
@@ -172,6 +301,25 @@ for run_idx in $(seq 1 "${RUNS}"); do
     meta="${run_dir}/${run_id}_meta.yaml"
 
     echo "---------------- ${run_id} ----------------"
+    run_path_file="${PATH_FILE}"
+    path_original_file="${PATH_FILE}"
+    stable_goal_enabled="false"
+    if [[ "${PATH_SOURCE_MODE}" == "stable_goal" ]]; then
+      run_path_file="${run_dir}/${run_id}_generated_path.json"
+      path_original_file=""
+      stable_goal_enabled="true"
+    fi
+
+    if [[ "${PRE_PATH_WAIT_SEC}" != "0" ]]; then
+      echo "[settle] 等待定位/仿真稳定 ${PRE_PATH_WAIT_SEC}s 后再生成/发布 fixed path"
+      sleep "${PRE_PATH_WAIT_SEC}"
+    fi
+
+    if [[ "${PATH_SOURCE_MODE}" == "stable_goal" ]]; then
+      generate_stable_goal_path "${run_path_file}" "${run_dir}" "${run_id}"
+    fi
+    run_feasibility_analysis "${run_path_file}" "${run_dir}" "${run_id}"
+
     cat >"${meta}" <<EOF
 run_id: ${run_id}
 method: spmpc
@@ -181,27 +329,42 @@ evidence_chain_version: ${EVIDENCE_CHAIN_VERSION}
 solver_backend: ${SPMPC_SOLVER_BACKEND}
 w_slosh_override: ${SPMPC_W_SLOSH}
 path_id: ${PATH_ID}
-path_file: ${PATH_FILE}
+path_source_mode: ${PATH_SOURCE_MODE}
+path_file: ${run_path_file}
+path_original_file: ${path_original_file}
 path_topic: ${PATH_TOPIC}
 git_hash: ${git_hash}
 record_sec: ${RECORD_SEC}
+run_timeout_sec: ${RUN_TIMEOUT_SEC}
 run_index: ${run_idx}
+stable_goal_enabled: ${stable_goal_enabled}
+template_name: ${PATH_TEMPLATE}
+template_start_heading: ${START_HEADING}
+template_goal_topic: ${GOAL_TOPIC}
+template_goal_frame: ${GOAL_FRAME}
+template_goal_x: ${GOAL_X}
+template_goal_y: ${GOAL_Y}
+template_goal_yaw: ${GOAL_YAW}
+path_spacing: ${PATH_SPACING}
+path_amplitude_ratio: ${PATH_AMPLITUDE_RATIO}
+path_min_amplitude: ${PATH_MIN_AMPLITUDE}
+path_max_amplitude: ${PATH_MAX_AMPLITUDE}
+path_side: ${PATH_SIDE}
+feasibility_analyze: ${FEASIBILITY_ANALYZE}
+feasibility_v_ref: ${FEASIBILITY_V_REF}
+feasibility_omega_max: ${FEASIBILITY_OMEGA_MAX}
 slosh_monitor_enable: ${SLOSH_MONITOR_ENABLE}
 slosh_monitor_odom_topic: ${SLOSH_MONITOR_ODOM_TOPIC}
 slosh_monitor_cmd_vel_topic: ${SLOSH_MONITOR_CMD_VEL_TOPIC}
 shared_linear_accel_limit_enable: ${SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE}
 shared_linear_accel_max: ${SPMPC_SHARED_LINEAR_ACCEL_MAX}
 shared_linear_accel_max_dt: ${SPMPC_SHARED_LINEAR_ACCEL_MAX_DT}
+alpha_max_override: ${SPMPC_ALPHA_MAX}
 slosh_height_unit: m
 slosh_eval_only: true
 slosh_feedback_forbidden: true
 external_baseline_uses_slosh: false
 EOF
-
-    if [[ "${PRE_PATH_WAIT_SEC}" != "0" ]]; then
-      echo "[settle] 等待定位/仿真稳定 ${PRE_PATH_WAIT_SEC}s 后再开始录包和发布 fixed path"
-      sleep "${PRE_PATH_WAIT_SEC}"
-    fi
 
     if [[ "${SLOSH_MONITOR_ENABLE}" == "true" ]]; then
       echo "[slosh_monitor] roslaunch slosh_models slosh_monitor.launch odom_topic:=${SLOSH_MONITOR_ODOM_TOPIC} cmd_vel_topic:=${SLOSH_MONITOR_CMD_VEL_TOPIC}"
@@ -220,7 +383,7 @@ EOF
     rec_pid=$!
     sleep 1
 
-    path_args=(--mode replay --path-file "${PATH_FILE}" --output-topic "${PATH_TOPIC}" --publish-once-keepalive)
+    path_args=(--mode replay --path-file "${run_path_file}" --output-topic "${PATH_TOPIC}" --publish-once-keepalive)
     if [[ "${SKIP_START_WAIT}" == "true" ]]; then
       path_args+=(--skip-start-wait)
     fi
@@ -230,7 +393,7 @@ EOF
     path_pid=$!
     sleep 1
 
-    launch_args=(planner_variant:="${variant}" solver_backend:="${SPMPC_SOLVER_BACKEND}" reference_path_topic:="${PATH_TOPIC}" costmap_topic:="${COSTMAP_TOPIC}" cmd_vel_topic:="${CMD_VEL_TOPIC}" w_slosh:="${SPMPC_W_SLOSH}" shared_linear_accel_limit_enable:="${SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE}" shared_linear_accel_max:="${SPMPC_SHARED_LINEAR_ACCEL_MAX}" shared_linear_accel_max_dt:="${SPMPC_SHARED_LINEAR_ACCEL_MAX_DT}")
+    launch_args=(planner_variant:="${variant}" solver_backend:="${SPMPC_SOLVER_BACKEND}" reference_path_topic:="${PATH_TOPIC}" costmap_topic:="${COSTMAP_TOPIC}" cmd_vel_topic:="${CMD_VEL_TOPIC}" w_slosh:="${SPMPC_W_SLOSH}" shared_linear_accel_limit_enable:="${SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE}" shared_linear_accel_max:="${SPMPC_SHARED_LINEAR_ACCEL_MAX}" shared_linear_accel_max_dt:="${SPMPC_SHARED_LINEAR_ACCEL_MAX_DT}" alpha_max:="${SPMPC_ALPHA_MAX}")
     if [[ -n "${REFERENCE_TARGET_FRAME}" ]]; then
       launch_args+=(reference_target_frame:="${REFERENCE_TARGET_FRAME}")
     fi
@@ -238,12 +401,23 @@ EOF
     roslaunch spmpc_local_planner spmpc_fixed_path.launch "${launch_args[@]}" \
       >"${run_dir}/${run_id}_planner.log" 2>&1 &
     planner_pid=$!
+    run_start_epoch="$(date +%s)"
 
     if ! wait_status_or_cmd /spmpc/status "${WAIT_READY_SEC}"; then
       echo "[WARN] ${WAIT_READY_SEC}s 内未观察到 /spmpc/status 或 ${CMD_VEL_TOPIC}; 仍继续录包" >&2
     fi
 
-    sleep "${RECORD_SEC}"
+    if [[ "${RUN_TIMEOUT_SEC}" == "0" ]]; then
+      sleep "${RECORD_SEC}"
+    else
+      elapsed_sec=$(( $(date +%s) - run_start_epoch ))
+      remaining_sec=$(( RUN_TIMEOUT_SEC - elapsed_sec ))
+      if (( remaining_sec <= 0 )); then
+        echo "[timeout] planner 启动后已超过 ${RUN_TIMEOUT_SEC}s，停止本 run"
+      elif ! timeout "${remaining_sec}s" sleep "${RECORD_SEC}"; then
+        echo "[timeout] planner 启动后达到 ${RUN_TIMEOUT_SEC}s，停止本 run"
+      fi
+    fi
     cleanup_run
     sleep 1
     echo "[done] ${run_id}"

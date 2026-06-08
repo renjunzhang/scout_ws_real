@@ -26,18 +26,19 @@ enum Param {
     RX0 = 0, RX1, RX2, RX3,
     RY0, RY1, RY2, RY3,
     W_CONTOUR, W_LAG, W_PROGRESS,
-    W_A, W_OMEGA, W_VS,
-    W_DU_A, W_DU_OMEGA, W_DU_VS,
-    A_PREV, OMEGA_PREV, VS_PREV,
+    W_A, W_OMEGA, W_V, W_VS, W_ALPHA,
+    W_DU_A, W_DU_VS,
+    A_PREV, VS_PREV,
     E_C_REF, E_L_REF,
-    // 以下仅 slosh 模型（接在 B0 的 22 个之后）
+    V_REF,
+    // 以下仅 slosh 模型（接在 B0 的 23 个之后）
     TWO_ZETA_OMEGA_N, OMEGA_N_SQ, KAPPA_X, KAPPA_Y,
     ETA_REF, ETA_DOT_REF, W_SLOSH_ETA, W_SLOSH_ETA_DOT,
     PARAM_MAX,
 };
 
 // 参数布局契约：与 scripts/acados/spmpc_acados_model.py（→生成器 NP 宏）绑死，漂移即编译失败。
-static_assert(E_L_REF + 1 == SPMPC_B0_NP, "B0 参数布局与生成的 spmpc_b0 求解器不一致");
+static_assert(V_REF + 1 == SPMPC_B0_NP, "B0 参数布局与生成的 spmpc_b0 求解器不一致");
 #ifdef SPMPC_WITH_ACADOS_SLOSH
 static_assert(W_SLOSH_ETA_DOT + 1 == SPMPC_SLOSH_NP, "slosh 参数布局与生成的 spmpc_slosh 求解器不一致");
 #endif
@@ -175,29 +176,31 @@ void fitReferencePolynomials(const ReferenceSpline& spline, double s0, double s_
 WarmStartState makeWarmStartState(const double* x, bool slosh) {
     WarmStartState state;
     state.px = x[0]; state.py = x[1]; state.theta = x[2]; state.v = x[3]; state.s = x[4];
+    state.omega = x[5];
     if (slosh) {
-        state.eta_x = x[5]; state.eta_x_dot = x[6]; state.eta_y = x[7]; state.eta_y_dot = x[8];
+        state.eta_x = x[6]; state.eta_x_dot = x[7]; state.eta_y = x[8]; state.eta_y_dot = x[9];
     }
     return state;
 }
 
 WarmStartControl makeWarmStartControl(const double* u) {
     WarmStartControl control;
-    control.a = u[0]; control.omega = u[1]; control.v_s = u[2];
+    control.a = u[0]; control.alpha = u[1]; control.v_s = u[2];
     return control;
 }
 
 void fillAcadosState(const WarmStartState& state, bool slosh, double* x) {
     x[0] = state.px; x[1] = state.py; x[2] = state.theta; x[3] = state.v; x[4] = state.s;
-    x[5] = slosh ? state.eta_x : 0.0;
-    x[6] = slosh ? state.eta_x_dot : 0.0;
-    x[7] = slosh ? state.eta_y : 0.0;
-    x[8] = slosh ? state.eta_y_dot : 0.0;
+    x[5] = state.omega;
+    x[6] = slosh ? state.eta_x : 0.0;
+    x[7] = slosh ? state.eta_x_dot : 0.0;
+    x[8] = slosh ? state.eta_y : 0.0;
+    x[9] = slosh ? state.eta_y_dot : 0.0;
 }
 
 void fillAcadosControl(const WarmStartControl& control, double* u) {
     u[0] = control.a;
-    u[1] = control.omega;
+    u[1] = control.alpha;
     u[2] = control.v_s;
 }
 
@@ -210,7 +213,7 @@ void setAcadosWarmStart(GenSolver& gen, const WarmStartOutput& warm_start, bool 
     ocp_nlp_dims* dims = gen.dims();
     ocp_nlp_in* nlp_in = gen.in();
     ocp_nlp_out* nlp_out = gen.out();
-    double x_guess[9];
+    double x_guess[10];
     double u_guess[3];
     for (int k = 0; k <= gen.n_horizon; ++k) {
         fillAcadosState(warm_start.states[k], slosh, x_guess);
@@ -261,13 +264,14 @@ WarmStartInput makeWarmStartInput(const SolverInput& input,
 bool isWarmStartFinite(const WarmStartOutput& warm_start) {
     for (const auto& state : warm_start.states) {
         if (!std::isfinite(state.px) || !std::isfinite(state.py) || !std::isfinite(state.theta) ||
-            !std::isfinite(state.v) || !std::isfinite(state.s) || !std::isfinite(state.eta_x) ||
-            !std::isfinite(state.eta_x_dot) || !std::isfinite(state.eta_y) || !std::isfinite(state.eta_y_dot)) {
+            !std::isfinite(state.v) || !std::isfinite(state.s) || !std::isfinite(state.omega) ||
+            !std::isfinite(state.eta_x) || !std::isfinite(state.eta_x_dot) ||
+            !std::isfinite(state.eta_y) || !std::isfinite(state.eta_y_dot)) {
             return false;
         }
     }
     for (const auto& control : warm_start.controls) {
-        if (!std::isfinite(control.a) || !std::isfinite(control.omega) || !std::isfinite(control.v_s)) {
+        if (!std::isfinite(control.a) || !std::isfinite(control.alpha) || !std::isfinite(control.v_s)) {
             return false;
         }
     }
@@ -280,6 +284,9 @@ void stampWarmStartMetrics(WarmStartOutput& warm_start,
                            bool slosh) {
     for (const auto& state : warm_start.states) {
         warm_start.diagnostics.max_v = std::max(warm_start.diagnostics.max_v, std::abs(state.v));
+        warm_start.diagnostics.max_omega = std::max(warm_start.diagnostics.max_omega, std::abs(state.omega));
+        warm_start.diagnostics.max_lateral_acc = std::max(
+            warm_start.diagnostics.max_lateral_acc, std::abs(state.v * state.omega));
         if (slosh && slosh_dyn.configured()) {
             SloshState ss;
             ss.eta_x = state.eta_x; ss.eta_x_dot = state.eta_x_dot;
@@ -287,17 +294,15 @@ void stampWarmStartMetrics(WarmStartOutput& warm_start,
             warm_start.diagnostics.max_slosh_height_pred = std::max(
                 warm_start.diagnostics.max_slosh_height_pred, slosh_dyn.height(ss));
         }
-        if (state.v < -1e-9 || state.v > params.v_max + 1e-9) {
+        if (state.v < -1e-9 || state.v > params.v_max + 1e-9 ||
+            std::abs(state.omega) > params.omega_max + 1e-9) {
             ++warm_start.diagnostics.bound_violation_count;
         }
     }
     for (const auto& control : warm_start.controls) {
         warm_start.diagnostics.max_a = std::max(warm_start.diagnostics.max_a, std::abs(control.a));
-        warm_start.diagnostics.max_omega = std::max(warm_start.diagnostics.max_omega, std::abs(control.omega));
-        warm_start.diagnostics.max_lateral_acc = std::max(
-            warm_start.diagnostics.max_lateral_acc, std::abs(control.v_s * control.omega));
         if (std::abs(control.a) > params.a_max + 1e-9 ||
-            std::abs(control.omega) > params.omega_max + 1e-9 ||
+            std::abs(control.alpha) > params.alpha_max + 1e-9 ||
             control.v_s < -1e-9 || control.v_s > params.v_max + 1e-9) {
             ++warm_start.diagnostics.bound_violation_count;
         }
@@ -334,7 +339,7 @@ WarmStartOutput makeShiftedPreviousWarmStart(const WarmStartOutput& previous,
     for (int k = 0; k < n; ++k) {
         out.controls[k] = previous.controls[std::min(k + 1, n - 1)];
         out.controls[k].a = clampValue(out.controls[k].a, -params.a_max, params.a_max);
-        out.controls[k].omega = clampValue(out.controls[k].omega, -params.omega_max, params.omega_max);
+        out.controls[k].alpha = clampValue(out.controls[k].alpha, -params.alpha_max, params.alpha_max);
         out.controls[k].v_s = clampValue(out.controls[k].v_s, 0.0, params.v_max);
     }
 
@@ -343,6 +348,7 @@ WarmStartOutput makeShiftedPreviousWarmStart(const WarmStartOutput& previous,
     out.states[0].theta = input.robot.yaw;
     out.states[0].v = clampValue(input.robot.v, 0.0, params.v_max);
     out.states[0].s = s0;
+    out.states[0].omega = input.robot.omega;
     if (slosh) {
         out.states[0].eta_x = input.slosh.eta_x;
         out.states[0].eta_x_dot = input.slosh.eta_x_dot;
@@ -384,6 +390,8 @@ WarmStartOutput makeConservativeWarmStart(const WarmStartInput& warm_input,
         out.states[k].theta = (k == 0) ? warm_input.robot.yaw : ref.psi;
         out.states[k].v = (k == 0) ? clampValue(warm_input.robot.v, 0.0, params.v_max) : v_seed;
         out.states[k].s = (k == 0) ? warm_input.s0 : s;
+        out.states[k].omega = (k == 0) ? warm_input.robot.omega
+                                       : clampValue(ref.kappa * out.states[k].v, -params.omega_max, params.omega_max);
         if (slosh) {
             out.states[k].eta_x = slosh_state.eta_x;
             out.states[k].eta_x_dot = slosh_state.eta_x_dot;
@@ -392,10 +400,10 @@ WarmStartOutput makeConservativeWarmStart(const WarmStartInput& warm_input,
         }
         if (k < n) {
             out.controls[k].a = clampValue((v_seed - out.states[k].v) / std::max(1e-3, warm_input.dt), -params.a_max, params.a_max);
-            out.controls[k].omega = clampValue(ref.kappa * out.states[k].v, -params.omega_max, params.omega_max);
+            out.controls[k].alpha = 0.0;  // 保守初值：alpha 由优化器细化
             out.controls[k].v_s = clampValue(out.states[k].v, 0.0, params.v_max);
             if (slosh && slosh_dyn.configured()) {
-                slosh_state = slosh_dyn.step(slosh_state, out.controls[k].a, out.states[k].v * out.controls[k].omega, out.controls[k].omega);
+                slosh_state = slosh_dyn.step(slosh_state, out.controls[k].a, out.states[k].v * out.states[k].omega, out.states[k].omega);
             }
         }
     }
@@ -491,6 +499,7 @@ bool ContinuousMpccSolverAcados::solve(
 
     const double e_c_ref = std::max(1e-3, 0.5 * params_.corridor_width);
     const double e_l_ref = std::max(0.1, params_.v_max * input.dt);
+    const double v_ref = clampValue(variant_.v_ref, 0.0, params_.v_max);
 
     // slosh 物理：取自同一套 slosh_dynamics 核（§4.3），κ=1（与 slosh_models 的单位输入增益一致）。
     double c_h = 1.0, eta_ref = 1.0, eta_dot_ref = 1.0;
@@ -514,10 +523,13 @@ bool ContinuousMpccSolverAcados::solve(
     p[W_LAG] = variant_.w_lag;
     p[W_PROGRESS] = variant_.w_progress;
     p[W_A] = variant_.w_control + variant_.w_accel;
-    p[W_OMEGA] = variant_.w_control;
-    p[W_VS] = 0.0;
+    p[W_OMEGA] = variant_.w_control;          // omega 现在是状态(转向幅值)
+    p[W_V] = variant_.w_v;                    // 物理速度 tracking 权重：防止 cmd_v 塌到 0
+    p[W_VS] = variant_.w_vs;                  // v_s tracking 权重：防止弯处 creep
+    p[W_ALPHA] = variant_.w_smooth;           // 转向角加速度权重(抗 chatter，所有 stage)
     p[E_C_REF] = e_c_ref;
     p[E_L_REF] = e_l_ref;
+    p[V_REF] = v_ref;
     if (slosh) {
         p[TWO_ZETA_OMEGA_N] = two_zeta_omega_n;
         p[OMEGA_N_SQ] = omega_n_sq;
@@ -530,26 +542,26 @@ bool ContinuousMpccSolverAcados::solve(
     }
 
     for (int stage = 0; stage <= n; ++stage) {
+        // omega 已是状态(初值=实测 omega)，跨周期连续性由状态保证；仅 a/v_s 做第一帧连续性。
         if (stage == 0 && have_u_prev_) {
             p[W_DU_A] = variant_.w_smooth;
-            p[W_DU_OMEGA] = variant_.w_smooth;
             p[W_DU_VS] = variant_.w_smooth;
             p[A_PREV] = u_prev_[0];
-            p[OMEGA_PREV] = u_prev_[1];
             p[VS_PREV] = u_prev_[2];
         } else {
-            p[W_DU_A] = 0.0; p[W_DU_OMEGA] = 0.0; p[W_DU_VS] = 0.0;
-            p[A_PREV] = 0.0; p[OMEGA_PREV] = 0.0; p[VS_PREV] = 0.0;
+            p[W_DU_A] = 0.0; p[W_DU_VS] = 0.0;
+            p[A_PREV] = 0.0; p[VS_PREV] = 0.0;
         }
         gen->update_params(stage, p);
     }
 
-    double x0[9] = {input.robot.x, input.robot.y, input.robot.yaw, input.robot.v, s0, 0, 0, 0, 0};
+    double x0[10] = {input.robot.x, input.robot.y, input.robot.yaw, input.robot.v, s0,
+                     input.robot.omega, 0, 0, 0, 0};
     if (slosh) {
-        x0[5] = input.slosh.eta_x;
-        x0[6] = input.slosh.eta_x_dot;
-        x0[7] = input.slosh.eta_y;
-        x0[8] = input.slosh.eta_y_dot;
+        x0[6] = input.slosh.eta_x;
+        x0[7] = input.slosh.eta_x_dot;
+        x0[8] = input.slosh.eta_y;
+        x0[9] = input.slosh.eta_y_dot;
     }
     ocp_nlp_config* cfg = gen->config();
     ocp_nlp_dims* dims = gen->dims();
@@ -608,7 +620,7 @@ bool ContinuousMpccSolverAcados::solve(
     solved_states.reserve(n + 1);
     std::vector<double> heights;
     heights.reserve(n + 1);
-    double xk[9];
+    double xk[10];
     for (int k = 0; k <= n; ++k) {
         ocp_nlp_out_get(cfg, dims, nlp_out, k, "x", xk);
         TrajectoryPoint pt;
@@ -625,7 +637,7 @@ bool ContinuousMpccSolverAcados::solve(
         output.cost.J_lag += variant_.w_lag * (e_l / e_l_ref) * (e_l / e_l_ref) * inv_n;
 
         if (slosh) {
-            const double ex = xk[5], exd = xk[6], ey = xk[7], eyd = xk[8];
+            const double ex = xk[6], exd = xk[7], ey = xk[8], eyd = xk[9];
             const double eta_norm = std::hypot(ex, ey);
             const double eta_dot_norm = std::hypot(exd, eyd);
             const double h = c_h * eta_norm;
@@ -645,6 +657,7 @@ bool ContinuousMpccSolverAcados::solve(
 
     const double a_ref = std::max(0.1, params_.a_max);
     const double omega_ref = std::max(1e-3, params_.omega_max);
+    const double alpha_ref = std::max(1e-3, params_.alpha_max);
     const double vs_ref = std::max(0.1, params_.v_max);
     std::vector<WarmStartControl> solved_controls;
     solved_controls.reserve(n);
@@ -653,22 +666,24 @@ bool ContinuousMpccSolverAcados::solve(
         ocp_nlp_out_get(cfg, dims, nlp_out, k, "u", uk);
         solved_controls.push_back(makeWarmStartControl(uk));
         if (k == 0) { u0[0] = uk[0]; u0[1] = uk[1]; u0[2] = uk[2]; }
-        const double vn = uk[0] / a_ref;
-        const double wn = uk[1] / omega_ref;
-        output.cost.J_control += ((variant_.w_control + variant_.w_accel) * vn * vn +
-                                  variant_.w_control * wn * wn) * inv_n;
+        const double an = uk[0] / a_ref;                          // a (控制)
+        const double aln = uk[1] / alpha_ref;                     // alpha = omega-rate (控制)
+        const double wn = solved_states[k].omega / omega_ref;     // omega 现在是状态
+        output.cost.J_control += ((variant_.w_control + variant_.w_accel) * an * an +
+                                  variant_.w_control * wn * wn +
+                                  variant_.w_smooth * aln * aln) * inv_n;
+        output.cost.J_progress += -variant_.w_progress * (uk[2] / vs_ref) * inv_n;
+        const double vn = (solved_states[k].v - v_ref) / vs_ref;
+        const double vsn = (uk[2] - v_ref) / vs_ref;
+        output.cost.J_v += (variant_.w_v * vn * vn + variant_.w_vs * vsn * vsn) * inv_n;
 
-        // 与当前 acados external cost 保持一致：w_du_* 只在 stage 0 置非零，
-        // 表示跨控制周期第一帧连续性；horizon 内 Δu_k 尚未进入 OCP 代价。
+        // a/v_s 跨周期第一帧连续性（stage 0）；omega 连续性由状态保证，Δomega 平滑由 w_alpha(全 stage)负责。
         if (k == 0 && have_u_prev_) {
             const double da = (uk[0] - u_prev_[0]) / a_ref;
-            const double dw = (uk[1] - u_prev_[1]) / omega_ref;
             const double dvs = (uk[2] - u_prev_[2]) / vs_ref;
-            output.cost.J_smooth += variant_.w_smooth * (da * da + dw * dw + dvs * dvs) * inv_n;
+            output.cost.J_smooth += variant_.w_smooth * (da * da + dvs * dvs) * inv_n;
         }
     }
-    output.cost.J_progress = -variant_.w_progress *
-        std::max(0.0, output.trajectory.back().s - output.trajectory.front().s);
 
     if (!heights.empty()) {
         std::vector<double> sorted = heights;
@@ -678,11 +693,12 @@ bool ContinuousMpccSolverAcados::solve(
         output.slosh_summary.h_p95_pred = sorted[idx];
     }
 
-    // u = [a, omega, v_s]; v_s 是虚拟路径进度速度，不直接作为 /cmd_vel.linear.x。
+    // u = [a, alpha, v_s]; v_s 是虚拟路径进度速度，不直接作为 /cmd_vel.linear.x。
+    // omega 是状态：下发角速度 = 实测 omega + alpha_0*dt（与 cmd_v 同口径单步积分）。
     output.cmd_v = clampValue(input.robot.v + u0[0] * input.dt, 0.0, params_.v_max);
-    output.cmd_omega = clampValue(u0[1], -params_.omega_max, params_.omega_max);
+    output.cmd_omega = clampValue(input.robot.omega + u0[1] * input.dt, -params_.omega_max, params_.omega_max);
     u_prev_[0] = u0[0];
-    u_prev_[1] = output.cmd_omega;
+    u_prev_[1] = u0[1];
     u_prev_[2] = u0[2];
     have_u_prev_ = true;
     previous_warm_start_solution_.states = solved_states;

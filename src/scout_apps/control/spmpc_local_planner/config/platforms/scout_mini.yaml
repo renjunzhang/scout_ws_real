@@ -2,6 +2,7 @@ robot:
   v_max: 0.8
   omega_max: 1.2
   a_max: 0.6
+  alpha_max: 1.2   # 转向角加速度上限 |d(omega)/dt| (rad/s^2)，与 TEB/DWA acc_lim_theta 对齐
 
 platform:
   shared_constraints:

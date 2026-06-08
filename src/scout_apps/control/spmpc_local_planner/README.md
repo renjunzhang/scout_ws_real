@@ -6,16 +6,29 @@
 slosh-aware continuous MPCC + acados SQP-RTI
 ```
 
-它在同一个滚动时域优化问题中同时处理：
+它每个控制周期在同一个滚动时域优化问题中同时处理：
 
 ```text
-底盘运动预测
-参考路径进度推进
+局部轨迹几何
+参考路径进度 s / v_s
+底盘速度与角速度动态
 contour / lag 路径误差
 控制约束与平滑
 液体模态状态预测
 液面晃动代价
 ROS 闭环执行与诊断发布
+```
+
+因此本文档中的 SPMPC 仍按“规划控制一体”口径理解：它不是“先给一条局部路径、再单独跟踪”，而是在 horizon 内同时优化局部运动、路径进度和第一帧控制命令。
+
+当前 continuous MPCC 有两条需要区分的结构：
+
+```text
+continuous_mpcc_acados
+  当前主线 alpha-state MPCC：omega 是状态，alpha=d(omega)/dt 是控制。
+
+continuous_mpcc_direct_omega_legacy
+  RouteB / direct-omega 诊断后端：omega 是控制，alpha_max 用作输出 cmd_omega rate clamp。
 ```
 
 早期 `primitive` / `rollout` 后端仍保留为工程 fallback、smoke test 或附录 baseline，但不再是当前论文和实物主实验的核心叙事。
@@ -46,13 +59,14 @@ SpmpcProblem
         ▼
 SpmpcSolver interface
         │
-        ├─ continuous_mpcc_acados   当前主线：连续 MPCC + acados SQP-RTI
-        └─ primitive                保留后端：rollout / primitive argmin fallback
+        ├─ continuous_mpcc_acados                 当前主线：alpha-state continuous MPCC + acados
+        ├─ continuous_mpcc_direct_omega_legacy    RouteB 诊断：direct-omega continuous MPCC
+        └─ primitive                              保留后端：rollout / primitive argmin fallback
         │
         ▼
 SolverOutput
         │
-        ├─ 首步控制 a, omega, v_s
+        ├─ 第一帧 cmd_v / cmd_omega
         ├─ 预测轨迹
         ├─ slosh horizon summary
         ├─ solver status / backend / solve time
@@ -70,7 +84,7 @@ include/spmpc_local_planner/
 ├── core/          通用数据结构、Solver 抽象、SpmpcProblem、costmap、primitive fallback
 ├── reference/     ReferencePath、路径投影、spline / MPCC 参考路径工具
 ├── dynamics/      SloshDynamics，对接 slosh_models 的液体模态动力学
-├── solvers/       SolverFactory 与 continuous MPCC acados backend
+├── solvers/       SolverFactory 与 continuous MPCC acados backends
 ├── ros/           ROS node wrapper、diagnostics publisher
 ├── costs/         预留：后续独立代价模块
 ├── constraints/   预留：后续独立约束模块
@@ -91,7 +105,7 @@ config/
 
 launch/            ROS 启动入口
 scripts/           实物实验脚本、smoke、录包、分析与 acados codegen
-scripts/acados/    生成 spmpc_b0 / spmpc_slosh acados solver
+scripts/acados/    生成 alpha-state 与 direct-omega acados solver
 generated/acados/  acados generated solver artifacts
 ```
 
@@ -108,47 +122,64 @@ generated/acados                       负责 generated solver
 
 ---
 
-## 3. 方法主线：continuous MPCC
+## 3. 方法主线：alpha-state continuous MPCC
 
 ### 3.1 状态与控制
 
-基础连续 MPCC 使用 5D 状态：
+当前主线 `continuous_mpcc_acados` 将 `omega` 提升为 OCP 状态，将角加速度 `alpha` 作为控制输入。
+
+B0 / non-slosh 模型为 6D：
 
 ```text
-x_b0 = [px, py, theta, v, s]
+x_b0 = [px, py, theta, v, s, omega]
+u    = [a, alpha, v_s]
 ```
 
-slosh-aware 变体使用 9D 状态：
+slosh-aware 模型为 10D：
 
 ```text
-x_slosh = [px, py, theta, v, s, eta_x, eta_x_dot, eta_y, eta_y_dot]
-```
-
-控制输入为：
-
-```text
-u = [a, omega, v_s]
+x_slosh = [px, py, theta, v, s, omega, eta_x, eta_x_dot, eta_y, eta_y_dot]
+u       = [a, alpha, v_s]
 ```
 
 含义：
 
 ```text
 a       底盘切向加速度
-omega   底盘角速度
+alpha   底盘角加速度，即 omega_dot
 v_s     虚拟路径进度速度，用于推进 MPCC 路径参数 s
+omega   底盘角速度状态
 ```
 
-### 3.2 路径误差
+对应输出边界为：
+
+```text
+cmd_vel.linear.x  = clamp(v_current + a_0 * dt, 0, v_max)
+cmd_vel.angular.z = clamp(omega_current + alpha_0 * dt, -omega_max, omega_max)
+```
+
+### 3.2 路径误差与进度
 
 MPCC 不跟踪固定时间索引轨迹，而是在参考路径上优化路径进度 `s`，并通过：
 
 ```text
-contour error   法向轮廓误差
-lag error       切向滞后误差
-progress reward 路径进度奖励
+contour error       法向轮廓误差
+lag error           切向滞后误差
+progress reward     路径进度奖励
+v / v_s tracking    物理速度和虚拟进度速度 anti-creep
 ```
 
 共同决定局部运动。
+
+当前 anti-creep 相关参数来自 variant 配置：
+
+```text
+w_v     物理速度 v 对 v_ref 的 tracking penalty
+w_vs    虚拟进度速度 v_s 对 v_ref 的 tracking penalty
+v_ref   参考速度，当前统一初值 0.25 m/s
+```
+
+`/spmpc/cost_breakdown` 的字段布局保持不变；当前 `J_v` 口径表示物理速度 `v` 与虚拟进度速度 `v_s` tracking penalty 的合计。
 
 ### 3.3 液体模态
 
@@ -166,19 +197,66 @@ h_model = c_h * sqrt(eta_x^2 + eta_y^2)
 
 该量用于控制器内部优化和 `/spmpc/*` 诊断，是模型 proxy；论文和实物报告中的真实液面指标以离线 RGB max-LCR 为准。
 
+在 alpha-state 主线里，slosh 动力学使用预测状态中的 `omega`；在 RouteB direct-omega 里，slosh 动力学使用控制输入中的 `omega`。
+
 ---
 
-## 4. Solver 后端
+## 4. RouteB / direct-omega 诊断结构
 
-### 4.1 continuous_mpcc_acados：当前主线
+`continuous_mpcc_direct_omega_legacy` 是为定位 alpha-state stall / anti-chatter 问题保留的诊断后端。它仍是 continuous MPCC，因为局部轨迹、路径进度和第一帧控制仍在同一个 OCP 中优化；区别是角速度处理方式不同。
 
-`continuous_mpcc_acados` 是当前实物主线后端。它通过 acados generated solver 求解连续 MPCC OCP。
+B0 direct-omega 模型为 5D：
+
+```text
+x_b0_direct = [px, py, theta, v, s]
+u           = [a, omega, v_s]
+```
+
+slosh direct-omega 生成入口为 9D：
+
+```text
+x_slosh_direct = [px, py, theta, v, s, eta_x, eta_x_dot, eta_y, eta_y_dot]
+u              = [a, omega, v_s]
+```
+
+输出边界为：
+
+```text
+cmd_omega_raw = clamp(omega_0, -omega_max, omega_max)
+cmd_omega     = clamp(cmd_omega_raw, prev_cmd_omega ± alpha_max * dt)
+cmd_v         = clamp(v_current + a_0 * dt, 0, v_max)
+```
+
+注意事项：
+
+```text
+1. RouteB 中 alpha_max 不是 OCP 内部控制约束，而是输出 cmd_omega rate limit。
+2. B0 direct-omega 已用于 RouteB 诊断；slosh direct-omega 有 codegen / link 入口，但 formal 使用仍需单独验证。
+3. RouteB 与 alpha-state 改变了 OCP 状态/控制结构，不能混进同一主表作为普通 slosh 消融。
+```
+
+当前 P2 RouteB B0 诊断结论：
+
+```text
+alpha_max = 20 / 4 / 3.5 均能到达终点。
+alpha_max = 3.0 虽能到达，但 solve fail 多、路径明显变长。
+alpha_max = 8.0 更快，但出现左摇右晃。
+当前 B0 候选工作点倾向 3.5~4.0 rad/s^2，其中 3.5 表现最好。
+```
+
+---
+
+## 5. Solver 后端
+
+### 5.1 continuous_mpcc_acados：当前主线
+
+`continuous_mpcc_acados` 是当前主线后端。它通过 acados generated solver 求解 alpha-state continuous MPCC OCP。
 
 生成模型：
 
 ```text
-spmpc_b0      5D baseline continuous MPCC
-spmpc_slosh   9D slosh-aware continuous MPCC
+spmpc_b0      6D alpha-state baseline continuous MPCC
+spmpc_slosh   10D alpha-state slosh-aware continuous MPCC
 ```
 
 编译宏：
@@ -196,7 +274,30 @@ ACADOS_NOT_CREATED
 ACADOS_SOLVE_FAILED_*
 ```
 
-### 4.2 primitive：保留 fallback / baseline
+### 5.2 continuous_mpcc_direct_omega_legacy：RouteB 诊断后端
+
+生成模型：
+
+```text
+spmpc_b0_direct_omega_legacy  5D direct-omega B0
+spmpc_slosh_direct_omega      9D direct-omega slosh，formal 使用需验证
+```
+
+编译宏：
+
+```text
+SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY
+SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
+```
+
+典型状态：
+
+```text
+B0_ACADOS_DIRECT_OMEGA_LEGACY_OK
+ACADOS_DIRECT_OMEGA_SOLVE_FAILED_*
+```
+
+### 5.3 primitive：保留 fallback / baseline
 
 `primitive` 后端基于候选控制序列 rollout 和 argmin 评分。它仍可用于：
 
@@ -211,16 +312,16 @@ primitive / anti-primitive 附录消融
 
 ---
 
-## 5. 主实验变体
+## 6. 主实验变体
 
-当前主实验在同一个 `continuous_mpcc_acados` 后端下比较：
+当前 alpha-state 主实验应在同一个 `continuous_mpcc_acados` 后端下比较：
 
 | variant | backend | generated model | 状态维度 | slosh 状态/代价 | smooth | 用途 |
 |---|---|---|---:|---|---|---|
-| `B0` | `continuous_mpcc_acados` | `spmpc_b0` | 5D | 否 | 否 | 基础 continuous MPCC baseline |
-| `B_smooth` | `continuous_mpcc_acados` | `spmpc_b0` | 5D | 否 | 是 | 只看控制平滑是否降晃 |
-| `B_slosh` | `continuous_mpcc_acados` | `spmpc_slosh` | 9D | 是 | 否 | 只看 slosh-aware 模型/代价是否有效 |
-| `B_ours` | `continuous_mpcc_acados` | `spmpc_slosh` | 9D | 是 | 是 | 完整方法 |
+| `B0` | `continuous_mpcc_acados` | `spmpc_b0` | 6D | 否 | 否 | 基础 alpha-state continuous MPCC baseline |
+| `B_smooth` | `continuous_mpcc_acados` | `spmpc_b0` | 6D | 否 | 是 | 只看控制平滑是否降晃 |
+| `B_slosh` | `continuous_mpcc_acados` | `spmpc_slosh` | 10D | 是 | 否 | 只看 slosh-aware 模型/代价是否有效 |
+| `B_ours` | `continuous_mpcc_acados` | `spmpc_slosh` | 10D | 是 | 是 | 完整方法 |
 
 核心对照关系：
 
@@ -234,18 +335,27 @@ B_ours  vs B0        最终方法总体收益
 可选附录组：
 
 ```text
+B_accel
 B_slosh_linear
 B_slosh_anti
 B_ours_anti
 primitive backend
+RouteB direct-omega backend
 external planner baselines
 ```
 
-这些不混入主表，避免同时改变“求解器形式”和“是否 slosh-aware”。
+实验公平性注意：
+
+```text
+1. SPMPC 内部主表必须固定同一个 solver backend、同一个 alpha_max、同一组 warm-start / terminal / reference 设置。
+2. alpha-state vs RouteB 是 backend / OCP 结构消融，不是普通 slosh-aware 消融。
+3. 若 RouteB 成为正式候选，所有 SPMPC variants 必须使用同一个 RouteB backend 与同一个 alpha_max。
+4. TEB/DWA common-limit 对比需要同步普通动力学限制；若 RouteB 用 alpha_max=3.5，而 TEB/DWA acc_lim_theta 仍为 1.2，不能称为完全 common-limit。
+```
 
 ---
 
-## 6. 与 RGB 液面测量的边界
+## 7. 与 RGB 液面测量的边界
 
 `spmpc_local_planner` 不依赖在线 RGB 识别包，也不打开相机。
 
@@ -262,7 +372,7 @@ realsense_liquid_measurement
 重要区分：
 
 ```text
-/spmpc/slosh_height      模型预测液面 proxy，不是真值
+/spmpc/slosh_height      模型预测液面 proxy，发布边界单位为 mm
 /liquid/*                在线 RGB 调试 proxy，不进入控制回路
 离线 RGB max-LCR          论文/报告主评价真值
 ```
@@ -277,14 +387,14 @@ RECORD_ONLINE_LIQUID=true
 
 ---
 
-## 7. 配置文件
+## 8. 配置文件
 
 ```text
-config/planner/common.yaml       通用 MPCC / solver / cost 参数
-config/planner/variants.yaml     B0 / B_smooth / B_slosh / B_ours 等变体
-config/platforms/scout_mini.yaml Scout Mini 速度、加速度、角速度限制
-config/containers/tube_default.yaml 容器和液体模态参数
-config/experiments/fixed_path.yaml  固定路径实验模板
+config/planner/common.yaml             通用 MPCC / solver / warm-start / terminal 参数
+config/planner/variants.yaml           B0 / B_smooth / B_slosh / B_ours 等变体
+config/platforms/scout_mini.yaml       Scout Mini 速度、加速度、角速度、角加速度限制
+config/containers/tube_default.yaml    容器和液体模态参数
+config/experiments/fixed_path.yaml     固定路径实验模板
 config/experiments/point_to_point.yaml 点到点 smoke / 工程测试模板
 ```
 
@@ -297,32 +407,67 @@ config/experiments/point_to_point.yaml 点到点 smoke / 工程测试模板
 实验入口参数放 experiments/
 ```
 
----
+当前关键默认值：
 
-## 8. 构建与 generated solver
+```text
+robot/v_max      = 0.8
+robot/omega_max  = 1.2
+robot/a_max      = 0.6
+robot/alpha_max  = 1.2
 
-### 8.1 生成 acados solver
+acados/warm_start/enable                        = true
+acados/warm_start/fallback_to_previous_solution = false
+acados/warm_start/fallback_to_primitive         = true
 
-实物主线需要生成两个 solver：
-
-```bash
-source /opt/ros/noetic/setup.bash
-source ~/acados_venv/bin/activate
-cd /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/acados
-
-python generate_spmpc_acados.py --model b0
-python generate_spmpc_acados.py --model slosh
-
-deactivate
+terminal/goal_tolerance = 0.20
 ```
 
-### 8.2 编译 planner
+`launch` 中的 `alpha_max:=-1.0` 是哨兵值，表示使用 platform yaml 默认值；非负值才会覆盖 `robot/alpha_max`。
+
+---
+
+## 9. 构建与 generated solver
+
+### 9.1 生成 acados solver
+
+alpha-state 主线需要生成两个 solver：
 
 ```bash
-cd /home/geist/scout_ws
 source /opt/ros/noetic/setup.bash
-source ~/.bashrc        # ACADOS_SOURCE_DIR / LD_LIBRARY_PATH
-catkin_make --pkg spmpc_local_planner --force-cmake
+source /home/a/acados_venv/bin/activate
+export ACADOS_SOURCE_DIR=/home/a/acados
+export LD_LIBRARY_PATH=/home/a/acados/lib:${LD_LIBRARY_PATH:-}
+cd /home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/acados
+
+python3 generate_spmpc_acados.py --model b0
+python3 generate_spmpc_acados.py --model slosh
+```
+
+RouteB / direct-omega 诊断需要额外生成：
+
+```bash
+python3 generate_spmpc_acados.py --model b0_direct_omega_legacy
+python3 generate_spmpc_acados.py --model slosh_direct_omega
+```
+
+可先做装配检查：
+
+```bash
+python3 generate_spmpc_acados.py --check --model b0
+python3 generate_spmpc_acados.py --check --model slosh
+python3 generate_spmpc_acados.py --check --model b0_direct_omega_legacy
+python3 generate_spmpc_acados.py --check --model slosh_direct_omega
+```
+
+### 9.2 编译 planner
+
+```bash
+cd /home/a/scout_ws
+source /opt/ros/noetic/setup.bash
+source /home/a/acados_venv/bin/activate
+export ACADOS_SOURCE_DIR=/home/a/acados
+export LD_LIBRARY_PATH=/home/a/acados/lib:${LD_LIBRARY_PATH:-}
+catkin_make --force-cmake -DCATKIN_WHITELIST_PACKAGES="spmpc_local_planner" --pkg spmpc_local_planner
 source devel/setup.bash
 ```
 
@@ -330,9 +475,9 @@ source devel/setup.bash
 
 ---
 
-## 9. 启动入口
+## 10. 启动入口
 
-### 9.1 固定路径 continuous MPCC
+### 10.1 固定路径 alpha-state continuous MPCC
 
 ```bash
 roslaunch spmpc_local_planner spmpc_fixed_path.launch \
@@ -340,7 +485,16 @@ roslaunch spmpc_local_planner spmpc_fixed_path.launch \
   solver_backend:=continuous_mpcc_acados
 ```
 
-### 9.2 点到点工程测试
+### 10.2 固定路径 RouteB / direct-omega 诊断
+
+```bash
+roslaunch spmpc_local_planner spmpc_fixed_path.launch \
+  planner_variant:=B0 \
+  solver_backend:=continuous_mpcc_direct_omega_legacy \
+  alpha_max:=3.5
+```
+
+### 10.3 点到点工程测试
 
 ```bash
 roslaunch spmpc_local_planner spmpc_point_to_point.launch \
@@ -348,7 +502,7 @@ roslaunch spmpc_local_planner spmpc_point_to_point.launch \
   solver_backend:=continuous_mpcc_acados
 ```
 
-### 9.3 实物固定路径主脚本
+### 10.4 实物固定路径主脚本
 
 正式实物对比实验推荐使用封装脚本：
 
@@ -356,6 +510,7 @@ roslaunch spmpc_local_planner spmpc_point_to_point.launch \
 DATE=<DATE> \
 GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> \
 VARIANT=B_ours \
+SOLVER_BACKEND=continuous_mpcc_acados \
 bash src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh
 ```
 
@@ -365,9 +520,11 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh
 docs/实物实验注意事项/对比试验/20260603_SPMPC连续MPCC实物对比实验SOP.md
 ```
 
+当前注意：`run_continuous_real.sh` 已支持 `SOLVER_BACKEND`，但尚未把 `alpha_max` 运行时覆盖透传到 `spmpc_fixed_path.launch`。如果 RouteB 实物实验需要使用仿真诊断得到的 `alpha_max=3.5`，正式跑前需先补脚本透传，或手动 roslaunch 传 `alpha_max:=3.5`。
+
 ---
 
-## 10. 诊断话题
+## 11. 诊断话题
 
 主要诊断输出：
 
@@ -379,7 +536,7 @@ docs/实物实验注意事项/对比试验/20260603_SPMPC连续MPCC实物对比�
 /spmpc/local_trajectory           预测局部轨迹
 /spmpc/debug/progress_s           当前路径进度
 /spmpc/debug/slosh_state          模态状态 proxy
-/spmpc/slosh_height               模型预测液面高度 proxy
+/spmpc/slosh_height               模型预测液面高度 proxy，发布单位 mm
 /spmpc/slosh_horizon_summary      预测时域晃动摘要
 /spmpc/solver_time_ms             求解耗时
 /spmpc/cost_breakdown             代价分解
@@ -392,7 +549,7 @@ docs/实物实验注意事项/对比试验/20260603_SPMPC连续MPCC实物对比�
 
 ---
 
-## 11. 录包口径
+## 12. 录包口径
 
 实物主实验建议使用 `run_continuous_real.sh`，默认记录控制、状态、路径、诊断和 RGB 原始图像：
 
@@ -419,9 +576,16 @@ OUT_DIR=/tmp/spmpc_bags NAME=spmpc_debug \
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_experiment.sh
 ```
 
+fixed-path 仿真对比、fresh-sim 规则和 metrics 提取见：
+
+```text
+src/scout_apps/control/spmpc_experiments/scripts/README.md
+docs/实物实验注意事项/实物实验前的仿真/
+```
+
 ---
 
-## 12. 维护说明
+## 13. 维护说明
 
 当前包的长期结构目标是：
 
@@ -430,6 +594,7 @@ OUT_DIR=/tmp/spmpc_bags NAME=spmpc_debug \
 ROS adapter 只做 I/O 和消息转换
 continuous MPCC 是主线 backend
 primitive 后端只做 fallback / baseline
+RouteB direct-omega 作为诊断/结构消融，不默认混入主表
 RGB 在线分析保持在 sensors/realsense_liquid_measurement
 ```
 
@@ -439,5 +604,6 @@ RGB 在线分析保持在 sensors/realsense_liquid_measurement
 1. CMake target 拆分为 spmpc_core / spmpc_ros
 2. SolverParams 按 robot/reference/slosh/acados/primitive 分组
 3. 将 rollout solver 内部的 cost / constraints / terminal 逻辑迁入对应目录
-4. 保持 acados generated code 只影响 solvers/continuous_mpcc_solver_acados.cpp 与 scripts/acados
+4. 保持 acados generated code 只影响 solvers/*_acados.cpp 与 scripts/acados
+5. 若 RouteB 进入 formal 主线，先补齐 slosh direct-omega 验证与 run_continuous_real.sh 的 alpha_max 透传
 ```

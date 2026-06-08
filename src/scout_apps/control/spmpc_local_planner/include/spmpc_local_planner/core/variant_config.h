@@ -14,6 +14,9 @@ struct VariantConfig {
     double w_contour = 1.0;
     double w_lag = 0.2;
     double w_progress = 0.2;
+    double w_v = 1.0;
+    double w_vs = 0.3;
+    double v_ref = 0.25;
     double w_control = 0.1;
     // Supplemental non-slosh acceleration regularization baseline. Kept separate
     // from w_control so B_accel can penalize a without changing omega weight.

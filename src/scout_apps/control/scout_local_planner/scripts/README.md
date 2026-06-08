@@ -139,6 +139,7 @@ rosrun scout_local_planner run_sim_fixed_path_bag.sh
 | `analysis/retime_ruckig_style.py` | 生成 jerk-limited `v_ref(s)` CSV；需要 Python `ruckig` 包 |
 | `analysis/shape_biagiotti.py` | 生成 Biagiotti/input-shaping-style slosh-aware `v_ref(s)` CSV |
 | `analysis/path_profile_utils.py` | TOPPRA/Ruckig/Biagiotti 共用的固定路径读取、插值、CSV、plot 工具 |
+| `analysis/analyze_fixed_path_feasibility.py` | 固定路径几何可行性检查：曲率、最小转弯半径、`omega_req=v_ref*kappa`、前段曲率窗口 |
 
 定位：
 
@@ -149,6 +150,16 @@ Biagiotti-style = open-loop slosh-aware reference-shaping baseline
 ```
 
 这三类都只改变固定路径上的 `v_ref(s)`，不改变路径几何，不直接改 MPC cost。
+
+固定路径可行性检查示例：
+
+```bash
+rosrun scout_local_planner analyze_fixed_path_feasibility.py \
+  --path-file /data/a/fixed_paths/sim/P2_s_curve.json \
+  --v-ref 0.25 \
+  --omega-max 1.2 \
+  --json-out /tmp/P2_s_curve_feasibility.json
+```
 
 CSV 接口：
 
