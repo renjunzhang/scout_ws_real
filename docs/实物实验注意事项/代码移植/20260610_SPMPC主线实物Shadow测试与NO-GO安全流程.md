@@ -368,3 +368,146 @@ B0、B_slosh 安全但 B_ours 不安全 -> 问题可能在 smooth priority 和 s
 当前测试是现场 smoke / operator override，不等于正式实物放行。
 正式放行还需要后续仿真 Gate 和实物 bag 复核共同通过。
 ```
+
+## 9. 2026-06-10 实测记录
+
+环境：Ubuntu 20.04 (focal) / ROS Noetic / acados v0.5.4 / `experiment/georef-mpc-hybrid` / 实物机工控机（`scout_ws_real`）。
+
+### 9.1 环境 source 顺序（本次实测统一使用）
+
+```bash
+source /opt/ros/noetic/setup.bash
+source ~/.bashrc                            # ACADOS_SOURCE_DIR, LD_LIBRARY_PATH
+source /home/geist/scout_ws/devel/setup.bash
+cd /home/geist/scout_ws
+```
+
+### 9.2 B0 — 通过 ✅
+
+**启动命令：**
+
+```bash
+roslaunch spmpc_local_planner spmpc_fixed_path.launch \
+  planner_variant:=B0 \
+  solver_backend:=continuous_mpcc_acados \
+  alpha_max:=8.0 \
+  reference_path_topic:=/scout/global_path_fixed \
+  costmap_topic:=/map \
+  cmd_vel_topic:=/cmd_vel \
+  publish_cmd_vel:=true
+```
+
+**录包：**
+
+```bash
+VARIANT=B0 \
+SOLVER_BACKEND=continuous_mpcc_acados \
+RECORD_SEC=0 \
+OUT_DIR=/home/geist/slosh_bags/real/20260610_spmpc_mainline_ground \
+NAME=spmpc_B0_acados_ground_smoke \
+bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+```
+
+**bag 分析：**
+
+```text
+bag:  /home/geist/slosh_bags/real/20260610_spmpc_mainline_ground/spmpc_B0_acados_ground_smoke.bag
+duration: 64.2s  messages: 47,745  size: 186 MB
+
+solver_backend:     continuous_mpcc_acados
+controller_variant: B0
+status:             B0_ACADOS_OK → GOAL_REACHED
+terminal:           TRACKING → TERMINAL_SLOWDOWN → TERMINAL_CAPTURE_STOP → REACHED
+start_lock:         DISABLED
+progress_s:         0.0000 → 0.9916
+cmd_vel 非零帧:     1043
+
+是否明显转圈:       no
+是否明显离轨:       no
+是否触发 TRACKING_UNSAFE_PROJECTION: no
+是否触发 TRACKING_SPIN_FAIL/TERMINAL_SPIN_FAIL: no
+progress_s 是否增长: yes (0 → 0.9916)
+是否人工急停:       no
+```
+
+### 9.3 B_slosh — 通过 ✅
+
+**启动命令：**
+
+```bash
+roslaunch spmpc_local_planner spmpc_fixed_path.launch \
+  planner_variant:=B_slosh \
+  solver_backend:=continuous_mpcc_acados \
+  alpha_max:=8.0 \
+  reference_path_topic:=/scout/global_path_fixed \
+  costmap_topic:=/map \
+  cmd_vel_topic:=/cmd_vel \
+  publish_cmd_vel:=true
+```
+
+**录包：**
+
+```bash
+VARIANT=B_slosh \
+SOLVER_BACKEND=continuous_mpcc_acados \
+RECORD_SEC=0 \
+OUT_DIR=/home/geist/slosh_bags/real/20260610_spmpc_mainline_ground \
+NAME=spmpc_B_slosh_acados_ground_smoke \
+bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+```
+
+**bag 分析：**
+
+```text
+bag:  /home/geist/slosh_bags/real/20260610_spmpc_mainline_ground/spmpc_B_slosh_acados_ground_smoke.bag
+duration: 66.3s  messages: 54,156
+
+solver_backend:     continuous_mpcc_acados
+controller_variant: B_slosh
+status:             B_slosh_ACADOS_OK → GOAL_REACHED
+terminal:           TRACKING → TERMINAL_SLOWDOWN → TERMINAL_CAPTURE_STOP → REACHED
+start_lock:         (见 bag)
+progress_s:         0.0001 → 0.9932
+cmd_vel 非零帧:     1232
+
+是否明显转圈:       no
+是否明显离轨:       no
+是否触发 TRACKING_UNSAFE_PROJECTION: no
+是否触发 TRACKING_SPIN_FAIL/TERMINAL_SPIN_FAIL: no
+progress_s 是否增长: yes (0 → 0.9932)
+是否人工急停:       no
+```
+
+### 9.4 判断
+
+```text
+B0 安全     ✅
+B_slosh 安全 ✅
+→ 可继续 B_ours（slosh state + slosh cost + smooth priority）。
+```
+
+**bag 分析 Python 一键脚本：**
+
+```bash
+python3 << 'EOF'
+import rosbag, sys
+bag = rosbag.Bag(sys.argv[1])
+statuses, terminals = set(), set()
+p_first, p_last = None, None
+cmd = 0
+for topic, msg, t in bag.read_messages():
+    if topic == '/spmpc/status': statuses.add(msg.data)
+    elif topic == '/spmpc/terminal/mode': terminals.add(msg.data)
+    elif topic == '/spmpc/debug/progress_s':
+        if p_first is None: p_first = msg.data
+        p_last = msg.data
+    elif topic == '/cmd_vel':
+        if msg.linear.x or msg.angular.z: cmd += 1
+print(f'duration: {bag.get_end_time()-bag.get_start_time():.1f}s')
+print(f'status: {sorted(statuses)}')
+print(f'terminal: {sorted(terminals)}')
+print(f'progress: {p_first:.4f} -> {p_last:.4f}')
+print(f'cmd_vel: {cmd} non-zero')
+bag.close()
+EOF
+```

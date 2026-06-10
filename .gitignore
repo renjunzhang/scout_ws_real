@@ -5,6 +5,9 @@ install/
 install_isolated/
 devel_isolated/
 build_isolated/
+build_isolated_mpc/
+devel_isolated_mpc/
+install_isolated_mpc/
 log/
 logs/
 CMakeFiles/
@@ -16,6 +19,7 @@ Makefile
 # Catkin tooling state
 .catkin_tools/
 .catkin_workspace
+CATKIN_IGNORE
 
 # Generated/packaging artifacts
 *.egg-info/
