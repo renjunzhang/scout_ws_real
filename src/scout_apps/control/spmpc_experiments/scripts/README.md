@@ -31,15 +31,37 @@ SIM_ENV=open USE_RVIZ=true \
 
 | 脚本 | 类型 | 主要用途 | fresh-sim 注意事项 |
 |---|---|---|---|
-| `run_fixed_path_spmpc_suite.sh` | fixed-path run suite | 运行 SPMPC fixed-path case，支持 `planner_variant`、`w_slosh`、solver backend、shared command acceleration limit、slosh monitor meta/reset。 | 只负责单次/一组 planner run；正式实验建议外层每个 case 重启仿真。 |
-| `run_fixed_path_baseline_suite.sh` | fixed-path baseline suite | 运行 TEB/DWA/可选 `mpc_local_planner` fixed-path baseline，并写入 `slosh_eval_only`、`slosh_feedback_forbidden` 等公平性 meta。 | baseline 可以记录 slosh 作为评价信号，但不得作为控制输入；正式实验同样需要每 case fresh sim。 |
-| `run_fixed_path_paper_matrix.sh` | paper matrix 编排 | 编排 fixed-path internal ablation、external anchor、TEB/DWA 和可选 `B_accel`。用于统一目录和 meta。 | 不启动/关闭 Gazebo；更适合 smoke 或手动 fresh-sim 单 case 调用，不适合直接连续跑 formal 数据。 |
+| `run_fixed_path_spmpc_suite.sh` | fixed-path run suite | 运行 SPMPC fixed-path case，支持 `planner_variant`、`w_slosh`、可选 `v_ref` 诊断覆盖、solver backend、shared command acceleration limit、slosh monitor meta/reset。 | 只负责单次/一组 planner run；正式实验建议外层每个 case 重启仿真。 |
+| `run_fixed_path_baseline_suite.sh` | fixed-path baseline suite | 运行 TEB/DWA/可选 `mpc_local_planner` fixed-path baseline，并写入 speed tier、共同限幅目标、`slosh_eval_only`、`slosh_feedback_forbidden` 等公平性 meta。 | baseline 可以记录 slosh 作为评价信号，但不得作为控制输入；正式实验同样需要每 case fresh sim。 |
+| `run_fixed_path_paper_matrix.sh` | paper matrix 编排 | 编排 fixed-path internal ablation、external anchor、TEB/DWA 和可选 `B_accel`；默认提取窗口化 metrics。用于统一目录和 meta。 | 不启动/关闭 Gazebo；更适合 smoke 或手动 fresh-sim 单 case 调用，不适合直接连续跑 formal 数据。 |
 | `run_fixed_path_critical_sweep.sh` | fixed-path critical scenario 编排 | 对一个或多个 fixed path 调用 paper matrix，默认包含 `P2_s_curve`。 | 继承 paper matrix 限制；路径/方法批量编排不等于 fresh-sim formal runner。 |
-| `extract_fixed_path_paper_metrics.py` | 指标提取 | 从 fixed-path rosbag/meta 提取论文指标：success/stable、tracking、slosh height、cmd acceleration、omega-rate、solver time、topic presence、evidence-chain meta 等。 | 离线分析脚本；不影响仿真环境。 |
+| `extract_fixed_path_paper_metrics.py` | 指标提取 | 从 fixed-path rosbag/meta 提取论文指标：success/stable、tracking、slosh height、cmd/odom speed、cmd acceleration、omega-rate、solver time、topic presence、evidence-chain meta 等。 | 离线分析脚本；不影响仿真环境。 |
 | `run_p2p_baseline_smoke.sh` | P2P smoke | 用同一目标点和同一录包口径快速验证 `spmpc`、`teb`、`dwa`、`mpc`/`mpc_local_planner`。 | 前提是已经手动启动仿真与定位；主要用于 smoke，不作为 fixed-path 主线证据。 |
 | `run_p2p_paper_supplement.sh` | P2P supplement 编排 | 运行点到点补充实验，默认比较 `B0/B_ours` 与 TEB/DWA，可选 `mpc_local_planner`。 | 不负责 fresh-sim；P2P 是论文补充，不替代 fixed-path critical scenario。 |
 | `run_robustness_transfer_sweep.sh` | robustness/transfer 编排 | 统一鲁棒性/迁移实验目录和 meta，支持 nominal、yaw perturbation、`w_slosh_low/high` 等标签。 | yaw perturbation 需要用户先用对应 spawn yaw fresh 启动仿真；脚本只打印提示，不会自动改变仿真起点。 |
 | `validate_slosh_monitor_against_visual.py` | slosh model validation | 将 `/slosh/height` 或 `/spmpc/slosh_height` 与视觉液面高度 CSV 对齐，计算 lag/correlation/error 并导出验证 CSV。 | 离线验证脚本；用于“模型/监控信号是否可信”的证据链前置环节。 |
+
+## fixed-path 主矩阵与速度层级
+
+paper-facing 主矩阵默认口径：
+
+```text
+internal ablation: B0 B_slosh B_ours
+external anchors : B0 B_ours
+external baselines: teb dwa
+optional supplement: B_smooth / B_accel / mpc_local_planner
+```
+
+`mpc_local_planner` 只有在 `INCLUDE_MPC_LOCAL_PLANNER=true` 时纳入；其 standalone config 已按共同限幅对齐到 `max_vel_x=0.8`、`max_vel_theta=1.2`、`acc_lim_x=0.6`、`dec_lim_x=0.6`、`acc_lim_theta=1.2`。
+
+速度层级分开记录：
+
+```text
+SPEED_TIER=fair_common      论文公平主表；共同硬限幅 0.8 / 1.2 / 0.6 / 1.2
+SPEED_TIER=fast_diagnostic  提速诊断；不能直接混入 fair_common 主表
+```
+
+实物 B0/B_slosh bag 显示 runtime 硬上限已是 `v_max=0.8`，但 tracking 段实际均速约 `0.32–0.35m/s`。因此提速优先诊断 `v_ref` / 速度 profile / terminal window，而不是盲目上调 `v_max`。
 
 ## 常用 fixed-path 调用
 
@@ -61,6 +83,23 @@ OUT_ROOT=/data/a/spmpc_paper_compare/example_fixed_path \
 RECORD_SEC=60 \
 bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_spmpc_suite.sh
 ```
+
+高速诊断只用显式 opt-in，不改默认 `variants.yaml`：
+
+```bash
+SPEED_TIER=fast_diagnostic \
+SPMPC_V_REF=0.60 \
+VARIANTS=B_slosh \
+SPMPC_SOLVER_BACKEND=continuous_mpcc_acados \
+PATH_SOURCE_MODE=replay \
+PATH_ID=P2_s_curve \
+PATH_FILE=/data/a/fixed_paths/sim/P2_s_curve.json \
+OUT_ROOT=/data/a/spmpc_paper_compare/fast_diag_vref060 \
+RECORD_SEC=60 \
+bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_spmpc_suite.sh
+```
+
+该结果只能标成 `fast_diagnostic`；必须用 `extract_fixed_path_paper_metrics.py --phase windows` 的 `tracking/core` 速度字段确认行为，再决定是否进入 fresh-sim Gate。
 
 ### SPMPC 单 case：当前位置起点 + 固定终点
 
@@ -119,8 +158,7 @@ cd /home/a/scout_ws
 BASELINE=teb \
 PATH_ID=P2_s_curve \
 PATH_FILE=/data/a/fixed_paths/sim/P2_s_curve.json \
-OUT_DIR=/data/a/spmpc_paper_compare/example_fixed_path \
-RUN_ID=P2_s_curve_teb_run01 \
+OUT_ROOT=/data/a/spmpc_paper_compare/example_fixed_path \
 RECORD_SEC=60 \
 bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_baseline_suite.sh
 ```
@@ -193,7 +231,14 @@ RECORD_SEC                录包时长，当前诊断通常用 60s
 RUN_TIMEOUT_SEC           planner 启动后的 hard stop 秒数，默认 60；设为 0 可关闭
 VARIANTS                  SPMPC variant 列表，例如 B0 / B_smooth / B_slosh / B_ours / B_accel
 SPMPC_W_SLOSH             覆盖 variants/<variant>/w_slosh；负值表示使用 variants.yaml 默认值
+SPMPC_V_REF               诊断用覆盖 variants/<variant>/v_ref；负值表示使用 variants.yaml 默认值
 SPMPC_SOLVER_BACKEND      默认 continuous_mpcc_acados；可诊断用 continuous_mpcc_direct_omega_legacy（B0-only）
+SPEED_TIER                fair_common（默认）| fast_diagnostic；写入 meta 和 metrics
+LIMIT_PROFILE             默认 common_v0p8_w1p2_a0p6_alpha1p2
+TARGET_V_MAX_MPS          共同线速度目标上限，默认 0.8
+TARGET_OMEGA_MAX_RADPS    共同角速度目标上限，默认 1.2
+TARGET_ACC_LIM_X_MPS2     共同线加速度目标上限，默认 0.6
+TARGET_ACC_LIM_THETA_RADPS2 共同角加速度目标上限，默认 1.2
 SLOSH_MONITOR_ENABLE      是否启动/记录 slosh monitor
 SLOSH_RESET_BEFORE_RUN    run 前是否调用 /slosh/reset
 EXPERIMENT_GROUP          证据链实验组
@@ -228,11 +273,16 @@ RUN_ID      可手动指定 run 名称
 <OUT_DIR>/<RUN_ID>_rosbag.log
 ```
 
-fixed-path 指标提取后常见输出：
+fixed-path 指标提取后常见输出（matrix 默认 `METRICS_PHASE=windows`）：
 
 ```text
 fixed_path_metrics.csv
-fixed_path_metrics_pre_terminal.csv
+fixed_path_metrics_start.csv
+fixed_path_metrics_tracking.csv
+fixed_path_metrics_terminal.csv
+fixed_path_metrics_reached.csv
+fixed_path_metrics_motion.csv
+fixed_path_metrics_core.csv
 fixed_path_metrics_group_summary.csv
 ```
 
@@ -249,5 +299,6 @@ narrow_sweep_behavior_group_summary.md
 
 - `variants.yaml` 里的 `B_slosh/B_ours` 默认 `w_slosh` 可能不等于最近 fresh-sim 窄扫使用的候选权重。正式实验不要无意中用 `SPMPC_W_SLOSH=-1.0` 继承默认值；应显式写明本轮权重。
 - `B_accel` 是 non-slosh acceleration regularization baseline，用来区分“slosh-aware”与“只是加速度更小”。
-- TEB/DWA common-limit 配置只对齐普通运动学限制；slosh 始终是 evaluation-only。
+- TEB/DWA/mpc_local_planner standalone common-limit 配置只对齐普通运动学限制；slosh 始终是 evaluation-only。
+- `SPEED_TIER=fast_diagnostic` 和 `SPMPC_V_REF>=0` 是提速诊断入口，不等于 formal fair-common 结论。
 - fixed-path critical scenario 是当前论文主线；P2P、robustness、transfer 是补充证据。

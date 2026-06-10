@@ -7,9 +7,9 @@ MpcLocalPlannerROS:
       max_vel_x: 0.8
       max_vel_x_backwards: 0.0
       max_vel_theta: 1.2
-      acc_lim_x: 0.8
-      dec_lim_x: 0.8
-      acc_lim_theta: 2.0
+      acc_lim_x: 0.6
+      dec_lim_x: 0.6
+      acc_lim_theta: 1.2
 
   footprint_model:
     type: "polygon"

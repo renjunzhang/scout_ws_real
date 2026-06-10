@@ -30,6 +30,12 @@ SLOSH_MONITOR_ODOM_TOPIC="${SLOSH_MONITOR_ODOM_TOPIC:-/odom}"
 SLOSH_MONITOR_CMD_VEL_TOPIC="${SLOSH_MONITOR_CMD_VEL_TOPIC:-${CMD_VEL_TOPIC}}"
 EXPERIMENT_GROUP="${EXPERIMENT_GROUP:-fixed_path_external_baseline}"
 EVIDENCE_CHAIN_VERSION="${EVIDENCE_CHAIN_VERSION:-20260605}"
+SPEED_TIER="${SPEED_TIER:-fair_common}"
+LIMIT_PROFILE="${LIMIT_PROFILE:-common_v0p8_w1p2_a0p6_alpha1p2}"
+TARGET_V_MAX_MPS="${TARGET_V_MAX_MPS:-0.8}"
+TARGET_OMEGA_MAX_RADPS="${TARGET_OMEGA_MAX_RADPS:-1.2}"
+TARGET_ACC_LIM_X_MPS2="${TARGET_ACC_LIM_X_MPS2:-0.6}"
+TARGET_ACC_LIM_THETA_RADPS2="${TARGET_ACC_LIM_THETA_RADPS2:-1.2}"
 INCLUDE_MPC_LOCAL_PLANNER="${INCLUDE_MPC_LOCAL_PLANNER:-false}"
 SLOSH_RESET_BEFORE_RUN="${SLOSH_RESET_BEFORE_RUN:-true}"
 
@@ -162,6 +168,8 @@ mkdir -p "${OUT_ROOT}"
 echo "================ fixed-path baseline suite ================"
 echo "BASELINES=${BASELINES}"
 echo "EXPERIMENT_GROUP=${EXPERIMENT_GROUP}"
+echo "SPEED_TIER=${SPEED_TIER}"
+echo "LIMIT_PROFILE=${LIMIT_PROFILE}"
 echo "PATH_ID=${PATH_ID}"
 echo "PATH_FILE=${PATH_FILE}"
 echo "OUT_ROOT=${OUT_ROOT}"
@@ -225,6 +233,12 @@ path_id: ${PATH_ID}
 path_file: ${PATH_FILE}
 path_topic: ${PATH_TOPIC}
 baseline_config: ${baseline_config}
+speed_tier: ${SPEED_TIER}
+limit_profile: ${LIMIT_PROFILE}
+target_v_max_mps: ${TARGET_V_MAX_MPS}
+target_omega_max_radps: ${TARGET_OMEGA_MAX_RADPS}
+target_acc_lim_x_mps2: ${TARGET_ACC_LIM_X_MPS2}
+target_acc_lim_theta_radps2: ${TARGET_ACC_LIM_THETA_RADPS2}
 plan_target_frame: odom
 force_straight_plan_on_goal: false
 use_wrapper_goal_check: true

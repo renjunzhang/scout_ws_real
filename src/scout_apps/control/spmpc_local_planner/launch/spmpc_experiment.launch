@@ -8,6 +8,7 @@
   <arg name="reference_target_frame" default="" doc="可选: 将收到的 reference path 转到该 frame 后再求解"/>
   <arg name="solver_backend" default="continuous_mpcc_acados" doc="continuous_mpcc_acados(mainline)|continuous_mpcc_direct_omega_legacy(RouteB diagnostic)|primitive(debug fallback)"/>
   <arg name="w_slosh" default="-1.0" doc="覆盖当前 variant 的 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
+  <arg name="v_ref" default="-1.0" doc="诊断/消融用: 覆盖当前 variant 的 v_ref; 负值时用 variants.yaml 原值"/>
   <arg name="shared_linear_accel_limit_enable" default="true"/>
   <arg name="shared_linear_accel_max" default="-1.0" doc="覆盖 platform/shared_constraints/linear_accel_max; 负值时用 platform yaml"/>
   <arg name="shared_linear_accel_max_dt" default="-1.0" doc="覆盖 platform/shared_constraints/linear_accel_max_dt; 负值时用 platform yaml"/>
@@ -40,5 +41,8 @@
     <!-- sweep 时覆盖该 variant 的 w_slosh(在 variants.yaml 加载之后, 故生效); w_slosh<0 跳过 -->
     <param name="variants/$(arg planner_variant)/w_slosh" value="$(arg w_slosh)"
            if="$(eval float(arg('w_slosh')) >= 0.0)"/>
+    <!-- speed diagnostic 时覆盖该 variant 的 v_ref; v_ref<0 跳过，保持默认行为 -->
+    <param name="variants/$(arg planner_variant)/v_ref" value="$(arg v_ref)"
+           if="$(eval float(arg('v_ref')) >= 0.0)"/>
   </node>
 </launch>

@@ -82,6 +82,7 @@ private:
 
     TerminalControllerParams params_;
     bool stop_pending_ = false;
+    bool reached_latched_ = false;
     TerminalDiagnostics diagnostics_;
 };
 

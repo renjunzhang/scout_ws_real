@@ -22,6 +22,7 @@ void TerminalController::setParams(const TerminalControllerParams& params) {
 
 void TerminalController::reset() {
     stop_pending_ = false;
+    reached_latched_ = false;
     diagnostics_ = TerminalDiagnostics{};
     diagnostics_.enabled = params_.enable;
 }
@@ -51,6 +52,25 @@ TerminalPlan TerminalController::updateAndPlan(
         return plan;
     }
 
+    if (reached_latched_) {
+        stop_pending_ = true;
+        plan.stop_pending = true;
+        plan.envelope_active = true;
+        plan.terminal_phase = true;
+        plan.pre_terminal_phase = false;
+        plan.v_envelope = 0.0;
+        plan.mode = "REACHED";
+
+        diagnostics_.terminal_phase = plan.terminal_phase;
+        diagnostics_.pre_terminal_phase = plan.pre_terminal_phase;
+        diagnostics_.envelope_active = plan.envelope_active;
+        diagnostics_.stop_pending = plan.stop_pending;
+        diagnostics_.v_envelope = plan.v_envelope;
+        diagnostics_.reached = true;
+        diagnostics_.mode = plan.mode;
+        return plan;
+    }
+
     const double release_distance = params_.capture_stop_distance + params_.goal_release_distance_margin;
     if (stop_pending_ && goal.distance_to_goal > release_distance && !(finite(goal.dx_robot) && goal.dx_robot < params_.goal_behind_x)) {
         stop_pending_ = false;
@@ -71,6 +91,7 @@ TerminalPlan TerminalController::updateAndPlan(
     plan.pre_terminal_phase = !terminal_phase;
     plan.v_envelope = envelope;
     if (goal.position_reached && diagnostics_.speed_gate_reached && diagnostics_.omega_gate_reached) {
+        reached_latched_ = true;
         plan.mode = "REACHED";
         diagnostics_.reached = true;
     } else if (stop_pending_) {

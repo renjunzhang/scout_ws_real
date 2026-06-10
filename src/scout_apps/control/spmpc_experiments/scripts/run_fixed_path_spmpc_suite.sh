@@ -17,10 +17,17 @@ set -euo pipefail
 VARIANTS="${VARIANTS:-B0 B_smooth B_slosh B_ours}"
 SPMPC_SOLVER_BACKEND="${SPMPC_SOLVER_BACKEND:-continuous_mpcc_acados}"
 SPMPC_W_SLOSH="${SPMPC_W_SLOSH:--1.0}"
+SPMPC_V_REF="${SPMPC_V_REF:--1.0}"
 SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE="${SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE:-true}"
 SPMPC_SHARED_LINEAR_ACCEL_MAX="${SPMPC_SHARED_LINEAR_ACCEL_MAX:--1.0}"
 SPMPC_SHARED_LINEAR_ACCEL_MAX_DT="${SPMPC_SHARED_LINEAR_ACCEL_MAX_DT:--1.0}"
 SPMPC_ALPHA_MAX="${SPMPC_ALPHA_MAX:--1.0}"
+SPEED_TIER="${SPEED_TIER:-fair_common}"
+LIMIT_PROFILE="${LIMIT_PROFILE:-common_v0p8_w1p2_a0p6_alpha1p2}"
+TARGET_V_MAX_MPS="${TARGET_V_MAX_MPS:-0.8}"
+TARGET_OMEGA_MAX_RADPS="${TARGET_OMEGA_MAX_RADPS:-1.2}"
+TARGET_ACC_LIM_X_MPS2="${TARGET_ACC_LIM_X_MPS2:-0.6}"
+TARGET_ACC_LIM_THETA_RADPS2="${TARGET_ACC_LIM_THETA_RADPS2:-1.2}"
 OUT_ROOT="${OUT_ROOT:-/data/${USER}/spmpc_paper_compare/fixed_path_smoke}"
 PATH_FILE="${PATH_FILE:-}"
 PATH_ID="${PATH_ID:-fixed_path}"
@@ -256,6 +263,9 @@ echo "VARIANTS=${VARIANTS}"
 echo "OUT_ROOT=${OUT_ROOT}"
 echo "EXPERIMENT_GROUP=${EXPERIMENT_GROUP}"
 echo "SPMPC_ALPHA_MAX=${SPMPC_ALPHA_MAX}"
+echo "SPMPC_V_REF=${SPMPC_V_REF}"
+echo "SPEED_TIER=${SPEED_TIER}"
+echo "LIMIT_PROFILE=${LIMIT_PROFILE}"
 echo "RUN_TIMEOUT_SEC=${RUN_TIMEOUT_SEC}"
 echo "[preflight] 等待 /odom ${COSTMAP_TOPIC} ..."
 wait_topic_once /odom 10
@@ -328,6 +338,13 @@ experiment_group: ${EXPERIMENT_GROUP}
 evidence_chain_version: ${EVIDENCE_CHAIN_VERSION}
 solver_backend: ${SPMPC_SOLVER_BACKEND}
 w_slosh_override: ${SPMPC_W_SLOSH}
+v_ref_override: ${SPMPC_V_REF}
+speed_tier: ${SPEED_TIER}
+limit_profile: ${LIMIT_PROFILE}
+target_v_max_mps: ${TARGET_V_MAX_MPS}
+target_omega_max_radps: ${TARGET_OMEGA_MAX_RADPS}
+target_acc_lim_x_mps2: ${TARGET_ACC_LIM_X_MPS2}
+target_acc_lim_theta_radps2: ${TARGET_ACC_LIM_THETA_RADPS2}
 path_id: ${PATH_ID}
 path_source_mode: ${PATH_SOURCE_MODE}
 path_file: ${run_path_file}
@@ -393,7 +410,7 @@ EOF
     path_pid=$!
     sleep 1
 
-    launch_args=(planner_variant:="${variant}" solver_backend:="${SPMPC_SOLVER_BACKEND}" reference_path_topic:="${PATH_TOPIC}" costmap_topic:="${COSTMAP_TOPIC}" cmd_vel_topic:="${CMD_VEL_TOPIC}" w_slosh:="${SPMPC_W_SLOSH}" shared_linear_accel_limit_enable:="${SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE}" shared_linear_accel_max:="${SPMPC_SHARED_LINEAR_ACCEL_MAX}" shared_linear_accel_max_dt:="${SPMPC_SHARED_LINEAR_ACCEL_MAX_DT}" alpha_max:="${SPMPC_ALPHA_MAX}")
+    launch_args=(planner_variant:="${variant}" solver_backend:="${SPMPC_SOLVER_BACKEND}" reference_path_topic:="${PATH_TOPIC}" costmap_topic:="${COSTMAP_TOPIC}" cmd_vel_topic:="${CMD_VEL_TOPIC}" w_slosh:="${SPMPC_W_SLOSH}" v_ref:="${SPMPC_V_REF}" shared_linear_accel_limit_enable:="${SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE}" shared_linear_accel_max:="${SPMPC_SHARED_LINEAR_ACCEL_MAX}" shared_linear_accel_max_dt:="${SPMPC_SHARED_LINEAR_ACCEL_MAX_DT}" alpha_max:="${SPMPC_ALPHA_MAX}")
     if [[ -n "${REFERENCE_TARGET_FRAME}" ]]; then
       launch_args+=(reference_target_frame:="${REFERENCE_TARGET_FRAME}")
     fi

@@ -80,6 +80,54 @@ TEST(TerminalController, ReachedRequiresLowSpeedAndLowOmega) {
     EXPECT_TRUE(controller.reached());
 }
 
+TEST(TerminalController, ReachedStaysLatchedAfterVelocityNoise) {
+    TerminalController controller;
+    controller.setParams(makeParams());
+    EXPECT_EQ(controller.updateAndPlan(makeGoal(0.05), 0.0, 0.0, 0.6).mode, "REACHED");
+    EXPECT_TRUE(controller.reached());
+
+    const auto noisy = controller.updateAndPlan(makeGoal(0.05), 0.10, 0.20, 0.6);
+    EXPECT_EQ(noisy.mode, "REACHED");
+    EXPECT_TRUE(noisy.terminal_phase);
+    EXPECT_TRUE(controller.reached());
+}
+
+TEST(TerminalController, ResetClearsReachedLatch) {
+    TerminalController controller;
+    controller.setParams(makeParams());
+    EXPECT_EQ(controller.updateAndPlan(makeGoal(0.05), 0.0, 0.0, 0.6).mode, "REACHED");
+    EXPECT_TRUE(controller.reached());
+
+    controller.reset();
+    const auto plan = controller.updateAndPlan(makeGoal(0.05), 0.20, 0.0, 0.6);
+    EXPECT_NE(plan.mode, "REACHED");
+    EXPECT_FALSE(controller.reached());
+}
+
+TEST(TerminalController, CaptureStopDoesNotLatchReached) {
+    TerminalController controller;
+    controller.setParams(makeParams());
+    const auto capture = controller.updateAndPlan(makeGoal(0.50), 0.0, 0.0, 0.6);
+    EXPECT_EQ(capture.mode, "TERMINAL_CAPTURE_STOP");
+    EXPECT_FALSE(controller.reached());
+
+    const auto still_capture = controller.updateAndPlan(makeGoal(0.50), 0.10, 0.20, 0.6);
+    EXPECT_EQ(still_capture.mode, "TERMINAL_CAPTURE_STOP");
+    EXPECT_FALSE(controller.reached());
+}
+
+TEST(TerminalController, NearGoalWithHighSpeedDoesNotLatchReached) {
+    TerminalController controller;
+    controller.setParams(makeParams());
+    const auto fast = controller.updateAndPlan(makeGoal(0.05), 0.20, 0.0, 0.6);
+    EXPECT_NE(fast.mode, "REACHED");
+    EXPECT_FALSE(controller.reached());
+
+    const auto outside_goal = controller.updateAndPlan(makeGoal(0.16), 0.0, 0.0, 0.6);
+    EXPECT_NE(outside_goal.mode, "REACHED");
+    EXPECT_FALSE(controller.reached());
+}
+
 TEST(TerminalController, ReachedUsesEuclideanDistanceNotRemainingS) {
     TerminalController controller;
     controller.setParams(makeParams());
