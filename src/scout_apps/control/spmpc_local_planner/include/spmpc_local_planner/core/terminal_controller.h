@@ -22,6 +22,10 @@ struct TerminalControllerParams {
     double goal_reached_max_omega = 0.05;
     bool command_clamp_enable = true;
     bool rate_limit_enable = true;
+    bool omega_clamp_enable = true;
+    double omega_clamp_max = 0.25;
+    double omega_near_goal_max = 0.10;
+    double omega_near_goal_distance = 0.35;
 };
 
 struct TerminalGoalInfo {

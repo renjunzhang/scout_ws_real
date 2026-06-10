@@ -11,6 +11,8 @@
 #include <ros/ros.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <cstddef>
+#include <string>
 
 namespace spmpc_local_planner {
 
@@ -28,9 +30,17 @@ private:
     void publishZeroCommand();
     void publishCommand(const geometry_msgs::Twist& desired);
     geometry_msgs::Twist applySharedCommandLimits(const geometry_msgs::Twist& desired, const ros::Time& stamp);
+    bool updateTerminalSpinFailGate(const SolverInput& input, const SolverOutput& output, double period_sec);
+    void resetTerminalSpinFailGate();
+    bool updateTrackingSafetyGate(const SolverInput& input,
+                                  const SolverOutput& output,
+                                  double period_sec,
+                                  std::string& failure_status);
+    void resetTrackingSafetyGate();
     RobotState robotStateFromOdom(const nav_msgs::Odometry& odom) const;
     bool robotStateFromLatest(RobotState& state);
     void updateSloshObserverFromOdom(const nav_msgs::Odometry& odom);
+    bool updateReferenceSignature(const nav_msgs::Path& path);
     ReferencePath referencePathFromMsg(const nav_msgs::Path& path) const;
     CostmapGrid costmapFromMsg(const nav_msgs::OccupancyGrid& map) const;
     void loadVariantOverrides(const std::string& variant_name);
@@ -58,6 +68,13 @@ private:
     nav_msgs::Odometry prev_odom_;
     bool have_odom_ = false;
     bool have_prev_odom_ = false;
+    bool have_reference_signature_ = false;
+    std::string reference_signature_frame_;
+    std::size_t reference_signature_size_ = 0;
+    double reference_signature_start_x_ = 0.0;
+    double reference_signature_start_y_ = 0.0;
+    double reference_signature_end_x_ = 0.0;
+    double reference_signature_end_y_ = 0.0;
 
     std::string odom_topic_ = "/odom";
     std::string path_topic_ = "/scout/global_path_fixed";
@@ -72,6 +89,22 @@ private:
     bool shared_cmd_linear_accel_limit_enable_ = true;
     double shared_cmd_linear_accel_max_ = 0.6;
     double shared_cmd_linear_accel_max_dt_ = 0.2;
+    bool terminal_spin_fail_enable_ = true;
+    double terminal_spin_fail_omega_threshold_ = 0.20;
+    double terminal_spin_fail_max_duration_sec_ = 2.0;
+    double terminal_spin_fail_duration_sec_ = 0.0;
+    bool terminal_spin_fail_latched_ = false;
+    bool tracking_safety_enable_ = true;
+    bool tracking_safety_projection_enable_ = true;
+    double tracking_safety_max_projection_distance_m_ = 0.50;
+    double tracking_safety_max_projection_duration_sec_ = 0.20;
+    double tracking_safety_projection_duration_sec_ = 0.0;
+    bool tracking_safety_projection_latched_ = false;
+    bool tracking_safety_spin_enable_ = true;
+    double tracking_safety_spin_omega_threshold_ = 0.50;
+    double tracking_safety_spin_max_duration_sec_ = 2.0;
+    double tracking_safety_spin_duration_sec_ = 0.0;
+    bool tracking_safety_spin_latched_ = false;
     geometry_msgs::Twist last_published_cmd_;
     ros::Time last_cmd_stamp_;
     bool have_last_published_cmd_ = false;

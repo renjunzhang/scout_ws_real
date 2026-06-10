@@ -44,6 +44,38 @@ terminal:
   command_clamp:
     enable: true
     rate_limit_enable: true
+    omega_enable: true
+    omega_max: 0.25
+    omega_near_goal_max: 0.10
+    omega_near_goal_distance: 0.35
+  spin_fail:
+    enable: true
+    omega_threshold: 0.20
+    max_duration_sec: 2.0
+
+tracking_safety:
+  enable: true
+  projection:
+    enable: true
+    max_distance_m: 0.50
+    max_duration_sec: 0.20
+  spin_fail:
+    enable: true
+    omega_threshold: 0.50
+    max_duration_sec: 2.0
+
+# Detector-only near-start lock observability. Disabled by default; it does not override /cmd_vel.
+start_lock_recovery:
+  enable: false
+  detect_only: true
+  start_window_s: 0.20
+  min_stall_duration_sec: 1.50
+  progress_epsilon_s: 0.005
+  cmd_v_small_threshold: 0.03
+  warm_start_v_s_min: 0.10
+  u0_v_s_max: 0.02
+  require_monotonic_clip: true
+  max_projection_distance_m: 0.50
 
 platform:
   kinematics: differential

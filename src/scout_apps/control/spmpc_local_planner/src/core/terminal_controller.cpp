@@ -129,6 +129,14 @@ TerminalClampOutput TerminalController::clampCommand(
     }
     out.cmd_v_post = target_v;
 
+    if (params_.omega_clamp_enable) {
+        double omega_limit = std::max(0.0, params_.omega_clamp_max);
+        if (goal.distance_to_goal <= params_.omega_near_goal_distance) {
+            omega_limit = std::min(omega_limit, std::max(0.0, params_.omega_near_goal_max));
+        }
+        out.cmd_omega_post = clampValue(out.cmd_omega_post, -omega_limit, omega_limit);
+    }
+
     diagnostics_.cmd_v_pre_clamp = out.cmd_v_pre;
     diagnostics_.cmd_v_post_clamp = out.cmd_v_post;
     return out;

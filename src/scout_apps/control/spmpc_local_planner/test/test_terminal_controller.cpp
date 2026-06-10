@@ -20,14 +20,18 @@ TerminalControllerParams makeParams() {
     params.goal_reached_max_omega = 0.05;
     params.command_clamp_enable = true;
     params.rate_limit_enable = true;
+    params.omega_clamp_enable = true;
+    params.omega_clamp_max = 0.25;
+    params.omega_near_goal_max = 0.10;
+    params.omega_near_goal_distance = 0.35;
     return params;
 }
 
-TerminalGoalInfo makeGoal(double distance, double dx_robot = 1.0) {
+TerminalGoalInfo makeGoal(double distance, double dx_robot = 1.0, double remaining_s = -1.0) {
     TerminalGoalInfo goal;
     goal.valid = true;
     goal.distance_to_goal = distance;
-    goal.remaining_s = distance;
+    goal.remaining_s = remaining_s >= 0.0 ? remaining_s : distance;
     goal.dx_robot = dx_robot;
     goal.position_reached = distance < 0.15;
     return goal;
@@ -74,6 +78,37 @@ TEST(TerminalController, ReachedRequiresLowSpeedAndLowOmega) {
     controller.reset();
     EXPECT_EQ(controller.updateAndPlan(makeGoal(0.05), 0.0, 0.0, 0.6).mode, "REACHED");
     EXPECT_TRUE(controller.reached());
+}
+
+TEST(TerminalController, ReachedUsesEuclideanDistanceNotRemainingS) {
+    TerminalController controller;
+    controller.setParams(makeParams());
+    const auto goal = makeGoal(0.20, 1.0, 0.01);
+    const auto plan = controller.updateAndPlan(goal, 0.0, 0.0, 0.6);
+    EXPECT_NE(plan.mode, "REACHED");
+    EXPECT_FALSE(controller.reached());
+    EXPECT_DOUBLE_EQ(controller.diagnostics().remaining_s, 0.01);
+    EXPECT_DOUBLE_EQ(controller.diagnostics().distance_to_goal, 0.20);
+}
+
+TEST(TerminalController, OmegaClampLimitsTerminalSpin) {
+    TerminalController controller;
+    controller.setParams(makeParams());
+    const auto goal = makeGoal(0.50);
+    const auto plan = controller.updateAndPlan(goal, 0.2, 0.0, 0.6);
+    ASSERT_TRUE(plan.terminal_phase);
+    const auto clamp = controller.clampCommand(0.2, 1.2, 0.2, 0.1, goal, plan, 0.6);
+    EXPECT_NEAR(clamp.cmd_omega_post, 0.25, 1e-9);
+}
+
+TEST(TerminalController, NearGoalOmegaClampIsStricter) {
+    TerminalController controller;
+    controller.setParams(makeParams());
+    const auto goal = makeGoal(0.20);
+    const auto plan = controller.updateAndPlan(goal, 0.2, 0.0, 0.6);
+    ASSERT_TRUE(plan.terminal_phase);
+    const auto clamp = controller.clampCommand(0.2, -1.2, 0.2, 0.1, goal, plan, 0.6);
+    EXPECT_NEAR(clamp.cmd_omega_post, -0.10, 1e-9);
 }
 
 TEST(TerminalController, GoalBehindForcesZeroDuringPendingStop) {

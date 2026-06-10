@@ -150,6 +150,64 @@ double clampValue(double value, double lo, double hi) {
     return std::max(lo, std::min(hi, value));
 }
 
+double wrapAngle(double angle) {
+    return std::atan2(std::sin(angle), std::cos(angle));
+}
+
+SolverBoundSummary makeRuntimeBounds(const SolverParams& params) {
+    SolverBoundSummary bounds;
+    bounds.a_min = -std::max(0.0, params.a_max);
+    bounds.a_max = std::max(0.0, params.a_max);
+    bounds.alpha_min = -std::max(0.0, params.alpha_max);
+    bounds.alpha_max = std::max(0.0, params.alpha_max);
+    bounds.v_s_min = 0.0;
+    bounds.v_s_max = std::max(0.0, params.v_max);
+    bounds.v_min = 0.0;
+    bounds.v_max = std::max(0.0, params.v_max);
+    bounds.omega_min = -std::max(0.0, params.omega_max);
+    bounds.omega_max = std::max(0.0, params.omega_max);
+    return bounds;
+}
+
+SolverBoundSummary makeGeneratedBounds() {
+    SolverBoundSummary bounds;
+    bounds.a_min = -0.6;
+    bounds.a_max = 0.6;
+    bounds.alpha_min = -1.2;
+    bounds.alpha_max = 1.2;
+    bounds.v_s_min = 0.0;
+    bounds.v_s_max = 0.8;
+    bounds.v_min = 0.0;
+    bounds.v_max = 0.8;
+    bounds.omega_min = -1.2;
+    bounds.omega_max = 1.2;
+    return bounds;
+}
+
+void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds, double* x0) {
+    ocp_nlp_config* cfg = gen.config();
+    ocp_nlp_dims* dims = gen.dims();
+    ocp_nlp_in* nlp_in = gen.in();
+    ocp_nlp_out* nlp_out = gen.out();
+
+    ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, 0, "lbx", x0);
+    ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, 0, "ubx", x0);
+
+    double lbu[3] = {bounds.a_min, bounds.alpha_min, bounds.v_s_min};
+    double ubu[3] = {bounds.a_max, bounds.alpha_max, bounds.v_s_max};
+    for (int stage = 0; stage < gen.n_horizon; ++stage) {
+        ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "lbu", lbu);
+        ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "ubu", ubu);
+    }
+
+    double lbx[2] = {bounds.v_min, bounds.omega_min};
+    double ubx[2] = {bounds.v_max, bounds.omega_max};
+    for (int stage = 1; stage <= gen.n_horizon; ++stage) {
+        ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "lbx", lbx);
+        ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "ubx", ubx);
+    }
+}
+
 double polyEval(const Eigen::Vector4d& c, double s) {
     return c(0) + c(1) * s + c(2) * s * s + c(3) * s * s * s;
 }
@@ -250,12 +308,14 @@ WarmStartInput makeWarmStartInput(const SolverInput& input,
     warm_input.bounds.v_max = params.v_max;
     warm_input.bounds.omega_max = params.omega_max;
     warm_input.bounds.a_max = params.a_max;
+    warm_input.bounds.omega_rate_max = params.alpha_max;
     warm_input.bounds.v_s_max = params.v_max;
     warm_input.config = params.warm_start;
     warm_input.have_previous_control = have_u_prev;
     if (have_u_prev && u_prev != nullptr) {
         warm_input.previous_a = u_prev[0];
-        warm_input.previous_omega = u_prev[1];
+        // Legacy field; alpha-state u_prev[1] is alpha, while the flatness generator does not consume previous_omega.
+        warm_input.previous_omega = input.robot.omega;
         warm_input.previous_v_s = u_prev[2];
     }
     return warm_input;
@@ -381,7 +441,7 @@ WarmStartOutput makeConservativeWarmStart(const WarmStartInput& warm_input,
     out.states.resize(n + 1);
     out.controls.resize(n);
     const double v_seed = clampValue(0.25 * params.v_max, 0.0, params.v_max);
-    SloshState slosh_state = warm_input.slosh;
+    const double dt = std::max(1e-3, warm_input.dt);
     for (int k = 0; k <= n; ++k) {
         const double s = clampValue(warm_input.s0 + v_seed * warm_input.dt * k, warm_input.s0, warm_input.reference_length);
         const ReferenceSample ref = warm_input.spline->sample(s);
@@ -392,17 +452,23 @@ WarmStartOutput makeConservativeWarmStart(const WarmStartInput& warm_input,
         out.states[k].s = (k == 0) ? warm_input.s0 : s;
         out.states[k].omega = (k == 0) ? warm_input.robot.omega
                                        : clampValue(ref.kappa * out.states[k].v, -params.omega_max, params.omega_max);
-        if (slosh) {
+        if (k < n) {
+            out.controls[k].a = clampValue((v_seed - out.states[k].v) / dt, -params.a_max, params.a_max);
+            out.controls[k].alpha = 0.0;  // 保守初值：alpha 由优化器细化
+        }
+    }
+    for (int k = 0; k < n; ++k) {
+        const double ds = out.states[k + 1].s - out.states[k].s;
+        out.controls[k].v_s = clampValue(ds / dt, 0.0, params.v_max);
+    }
+    if (slosh) {
+        SloshState slosh_state = warm_input.slosh;
+        for (int k = 0; k <= n; ++k) {
             out.states[k].eta_x = slosh_state.eta_x;
             out.states[k].eta_x_dot = slosh_state.eta_x_dot;
             out.states[k].eta_y = slosh_state.eta_y;
             out.states[k].eta_y_dot = slosh_state.eta_y_dot;
-        }
-        if (k < n) {
-            out.controls[k].a = clampValue((v_seed - out.states[k].v) / std::max(1e-3, warm_input.dt), -params.a_max, params.a_max);
-            out.controls[k].alpha = 0.0;  // 保守初值：alpha 由优化器细化
-            out.controls[k].v_s = clampValue(out.states[k].v, 0.0, params.v_max);
-            if (slosh && slosh_dyn.configured()) {
+            if (k < n && slosh_dyn.configured()) {
                 slosh_state = slosh_dyn.step(slosh_state, out.controls[k].a, out.states[k].v * out.states[k].omega, out.states[k].omega);
             }
         }
@@ -476,7 +542,28 @@ bool ContinuousMpccSolverAcados::solve(
     const bool slosh = use_slosh_model_;
 
     ProgressProjector projector;
+    const auto raw_proj = projector.project(reference, input.robot.x, input.robot.y);
     const auto proj = projector.project(reference, input.robot.x, input.robot.y, input.min_progress_s);
+    output.projector_debug.min_progress_s = input.min_progress_s;
+    if (raw_proj.valid) {
+        output.projector_debug.raw_valid = true;
+        output.projector_debug.raw_s = raw_proj.s;
+        output.projector_debug.raw_distance = raw_proj.distance;
+        output.projector_debug.raw_signed_distance = raw_proj.signed_distance;
+        output.projector_debug.raw_x = raw_proj.point.x;
+        output.projector_debug.raw_y = raw_proj.point.y;
+        output.projector_debug.raw_yaw = raw_proj.point.yaw;
+    }
+    if (proj.valid) {
+        output.projector_debug.guarded_valid = true;
+        output.projector_debug.guarded_s = proj.s;
+        output.projector_debug.guarded_distance = proj.distance;
+        output.projector_debug.guarded_signed_distance = proj.signed_distance;
+        output.projector_debug.guarded_x = proj.point.x;
+        output.projector_debug.guarded_y = proj.point.y;
+        output.projector_debug.guarded_yaw = proj.point.yaw;
+        output.projector_debug.monotonic_clip_applied = raw_proj.valid && proj.s > raw_proj.s + 1e-9;
+    }
     if (!proj.valid) {
         output.status = "PROJECTION_FAILED";
         return false;
@@ -496,6 +583,24 @@ bool ContinuousMpccSolverAcados::solve(
     const double s_end = std::min(len, s0 + params_.v_max * Tf);
     Eigen::Vector4d cx, cy;
     fitReferencePolynomials(spline, s0, s_end, cx, cy);
+
+    const ReferenceSample ref0 = spline.sample(s0);
+    const double ref0_x = polyEval(cx, s0);
+    const double ref0_y = polyEval(cy, s0);
+    const double ref0_yaw = std::atan2(polyDeriv(cy, s0), polyDeriv(cx, s0));
+    const double dx0 = input.robot.x - ref0_x;
+    const double dy0 = input.robot.y - ref0_y;
+    output.stage0_reference_debug.s0 = s0;
+    output.stage0_reference_debug.ref_x = ref0_x;
+    output.stage0_reference_debug.ref_y = ref0_y;
+    output.stage0_reference_debug.ref_yaw = ref0_yaw;
+    output.stage0_reference_debug.ref_kappa = ref0.kappa;
+    output.stage0_reference_debug.robot_x = input.robot.x;
+    output.stage0_reference_debug.robot_y = input.robot.y;
+    output.stage0_reference_debug.robot_yaw = input.robot.yaw;
+    output.stage0_reference_debug.yaw_error = wrapAngle(input.robot.yaw - ref0_yaw);
+    output.stage0_reference_debug.contour_error = std::sin(ref0_yaw) * dx0 - std::cos(ref0_yaw) * dy0;
+    output.stage0_reference_debug.lag_error = -std::cos(ref0_yaw) * dx0 - std::sin(ref0_yaw) * dy0;
 
     const double e_c_ref = std::max(1e-3, 0.5 * params_.corridor_width);
     const double e_l_ref = std::max(0.1, params_.v_max * input.dt);
@@ -563,12 +668,20 @@ bool ContinuousMpccSolverAcados::solve(
         x0[8] = input.slosh.eta_y;
         x0[9] = input.slosh.eta_y_dot;
     }
+    output.runtime_bounds = makeRuntimeBounds(params_);
+    output.generated_bounds = makeGeneratedBounds();
+    output.first_shot_debug.progress_s = output.progress_s;
+    output.first_shot_debug.progress_abs_s = output.progress_abs_s;
+    output.first_shot_debug.x0_v = input.robot.v;
+    output.first_shot_debug.x0_omega = input.robot.omega;
+    output.first_shot_debug.x0_s = s0;
+
+    applyRuntimeBounds(*gen, output.runtime_bounds, x0);
+
     ocp_nlp_config* cfg = gen->config();
     ocp_nlp_dims* dims = gen->dims();
     ocp_nlp_in* nlp_in = gen->in();
     ocp_nlp_out* nlp_out = gen->out();
-    ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, 0, "lbx", x0);
-    ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, 0, "ubx", x0);
     WarmStartOutput warm_start;
     bool warm_start_applied = false;
     const bool warm_start_requested = params_.warm_start.enable || params_.warm_start_flatness_enable;
@@ -599,12 +712,24 @@ bool ContinuousMpccSolverAcados::solve(
         }
     }
     output.warm_start_diagnostics = warm_start.diagnostics;
+    for (int k = 0; k < 3; ++k) {
+        if (warm_start.valid && k < static_cast<int>(warm_start.states.size()) &&
+            k < static_cast<int>(warm_start.controls.size())) {
+            auto& head = output.warm_start_head_debug.points[k];
+            head.valid = true;
+            head.state_s = warm_start.states[k].s;
+            head.state_omega = warm_start.states[k].omega;
+            head.control_alpha = warm_start.controls[k].alpha;
+            head.control_v_s = warm_start.controls[k].v_s;
+        }
+    }
 
     const int status = gen->solve();
 
     double time_tot = 0.0;
     ocp_nlp_get(gen->solver(), "time_tot", &time_tot);
     output.solver_time_ms = time_tot * 1000.0;
+    output.first_shot_debug.status_code = static_cast<double>(status);
     if (status != 0) {
         output.success = false;
         output.status = "ACADOS_SOLVE_FAILED_" + std::to_string(status);
@@ -655,6 +780,32 @@ bool ContinuousMpccSolverAcados::solve(
         }
     }
 
+    for (int k = 0; k < 3 && k < static_cast<int>(solved_states.size()); ++k) {
+        const auto& state = solved_states[k];
+        auto& head = output.local_traj_head_debug.points[k];
+        head.valid = true;
+        head.x = state.px;
+        head.y = state.py;
+        head.yaw = state.theta;
+        head.v = state.v;
+        head.omega = state.omega;
+        head.s = state.s;
+        const auto head_proj = projector.project(reference, state.px, state.py);
+        if (head_proj.valid) {
+            head.proj_s = head_proj.s;
+            head.proj_distance = head_proj.distance;
+            head.proj_signed_distance = head_proj.signed_distance;
+        }
+        const double xref = polyEval(cx, state.s);
+        const double yref = polyEval(cy, state.s);
+        const double phi = std::atan2(polyDeriv(cy, state.s), polyDeriv(cx, state.s));
+        const double dx = state.px - xref;
+        const double dy = state.py - yref;
+        head.contour_error = std::sin(phi) * dx - std::cos(phi) * dy;
+        head.lag_error = -std::cos(phi) * dx - std::sin(phi) * dy;
+        head.yaw_error = wrapAngle(state.theta - phi);
+    }
+
     const double a_ref = std::max(0.1, params_.a_max);
     const double omega_ref = std::max(1e-3, params_.omega_max);
     const double alpha_ref = std::max(1e-3, params_.alpha_max);
@@ -695,8 +846,35 @@ bool ContinuousMpccSolverAcados::solve(
 
     // u = [a, alpha, v_s]; v_s 是虚拟路径进度速度，不直接作为 /cmd_vel.linear.x。
     // omega 是状态：下发角速度 = 实测 omega + alpha_0*dt（与 cmd_v 同口径单步积分）。
-    output.cmd_v = clampValue(input.robot.v + u0[0] * input.dt, 0.0, params_.v_max);
-    output.cmd_omega = clampValue(input.robot.omega + u0[1] * input.dt, -params_.omega_max, params_.omega_max);
+    const double cmd_v_pre = input.robot.v + u0[0] * input.dt;
+    const double cmd_omega_pre = input.robot.omega + u0[1] * input.dt;
+    output.cmd_v = clampValue(cmd_v_pre, 0.0, params_.v_max);
+    output.cmd_omega = clampValue(cmd_omega_pre, -params_.omega_max, params_.omega_max);
+
+    output.first_shot_debug.success = true;
+    output.first_shot_debug.u0_a = u0[0];
+    output.first_shot_debug.u0_alpha = u0[1];
+    output.first_shot_debug.u0_v_s = u0[2];
+    output.first_shot_debug.cmd_v_pre_clamp = cmd_v_pre;
+    output.first_shot_debug.cmd_v_post_clamp = output.cmd_v;
+    output.first_shot_debug.cmd_omega_pre_clamp = cmd_omega_pre;
+    output.first_shot_debug.cmd_omega_post_clamp = output.cmd_omega;
+    if (solved_states.size() > 1) {
+        output.first_shot_debug.x1_v = solved_states[1].v;
+        output.first_shot_debug.x1_omega = solved_states[1].omega;
+        output.first_shot_debug.x1_s = solved_states[1].s;
+    }
+    if (solved_states.size() > 2) {
+        output.first_shot_debug.x2_v = solved_states[2].v;
+        output.first_shot_debug.x2_omega = solved_states[2].omega;
+        output.first_shot_debug.x2_s = solved_states[2].s;
+    }
+    if (solved_states.size() > 3) {
+        output.first_shot_debug.x3_v = solved_states[3].v;
+        output.first_shot_debug.x3_omega = solved_states[3].omega;
+        output.first_shot_debug.x3_s = solved_states[3].s;
+    }
+
     u_prev_[0] = u0[0];
     u_prev_[1] = u0[1];
     u_prev_[2] = u0[2];

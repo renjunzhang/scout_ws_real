@@ -78,6 +78,7 @@ add_library(${PROJECT_NAME}
   src/core/variant_config.cpp
   src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
+  src/core/start_lock_recovery.cpp
   src/core/terminal_controller.cpp
   src/reference/reference_path.cpp
   src/reference/reference_path_preprocessor.cpp
@@ -165,6 +166,13 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_terminal_controller test/test_terminal_controller.cpp)
   if(TARGET test_terminal_controller)
     target_link_libraries(test_terminal_controller
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_start_lock_recovery test/test_start_lock_recovery.cpp)
+  if(TARGET test_start_lock_recovery)
+    target_link_libraries(test_start_lock_recovery
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
     )

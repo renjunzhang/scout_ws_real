@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/core/spmpc_solver.h"
+#include "spmpc_local_planner/core/start_lock_recovery.h"
 #include "spmpc_local_planner/core/terminal_controller.h"
 #include <memory>
 
@@ -19,11 +20,14 @@ public:
     bool solve(const SolverInput& input, SolverOutput& output);
 
 private:
+    void updateStartLockRecovery(const SolverInput& input, bool valid_output, SolverOutput& output);
+
     ReferencePath reference_;
     CostmapGrid costmap_;
     bool have_costmap_ = false;
     SolverParams solver_params_;
     TerminalController terminal_controller_;
+    StartLockRecovery start_lock_recovery_;
     std::unique_ptr<SpmpcSolver> solver_;
     double last_progress_s_ = 0.0;
 };

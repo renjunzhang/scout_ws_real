@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/core/start_lock_recovery.h"  // SolverParams.start_lock_recovery 需要完整参数
 #include "spmpc_local_planner/core/terminal_controller.h"  // SolverParams.terminal 需要完整 TerminalControllerParams
 #include "spmpc_local_planner/core/variant_config.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
@@ -26,6 +27,7 @@ struct SolverParams {
     double homotopy_lateral_offset = 0.0;
     double lookahead_distance = 0.6;
     TerminalControllerParams terminal;
+    StartLockRecoveryParams start_lock_recovery;
     WarmStartConfig warm_start;
     PlatformParams platform;
     bool warm_start_flatness_enable = false;  // deprecated: use acados/warm_start/enable

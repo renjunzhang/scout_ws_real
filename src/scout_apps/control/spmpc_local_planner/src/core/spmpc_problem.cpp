@@ -45,6 +45,7 @@ SpmpcProblem::SpmpcProblem() = default;
 void SpmpcProblem::configure(const SolverParams& solver_params, const VariantConfig& variant) {
     solver_params_ = solver_params;
     terminal_controller_.setParams(solver_params_.terminal);
+    start_lock_recovery_.setParams(solver_params_.start_lock_recovery);
     solver_ = makeSolver(solver_params_.solver_backend);
     solver_->configure(solver_params_, variant);
 }
@@ -55,6 +56,7 @@ void SpmpcProblem::setReferencePath(const ReferencePath& reference) {
     if (!same_path) {
         last_progress_s_ = 0.0;
         terminal_controller_.reset();
+        start_lock_recovery_.reset();
     }
 }
 
@@ -63,15 +65,46 @@ void SpmpcProblem::setCostmap(const CostmapGrid& costmap) {
     have_costmap_ = !costmap_.empty();
 }
 
+void SpmpcProblem::updateStartLockRecovery(const SolverInput& input, bool valid_output, SolverOutput& output) {
+    StartLockRecoveryObservation obs;
+    obs.valid = valid_output;
+    obs.terminal_reached = output.terminal_diagnostics.reached || output.status == "GOAL_REACHED";
+    obs.status = output.status;
+    obs.progress_abs_s = output.progress_abs_s;
+    obs.cmd_v = output.cmd_v;
+    obs.robot_v = input.robot.v;
+
+    const auto& projector = output.projector_debug;
+    obs.raw_projection_valid = projector.raw_valid;
+    obs.guarded_projection_valid = projector.guarded_valid;
+    obs.projector_raw_s = projector.raw_s;
+    obs.projector_guarded_s = projector.guarded_s;
+    obs.projector_raw_distance = projector.raw_distance;
+    obs.projector_guarded_distance = projector.guarded_distance;
+    obs.monotonic_clip_applied = projector.monotonic_clip_applied;
+
+    const auto& warm_start_head = output.warm_start_head_debug.points[0];
+    obs.warm_start_v_s_valid = warm_start_head.valid;
+    obs.warm_start_v_s0 = warm_start_head.control_v_s;
+
+    obs.first_shot_valid = output.first_shot_debug.success;
+    obs.first_shot_u0_v_s = output.first_shot_debug.u0_v_s;
+
+    start_lock_recovery_.update(obs, input.dt);
+    output.start_lock_recovery = start_lock_recovery_.diagnostics();
+}
+
 bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     if (reference_.empty()) {
         output = SolverOutput{};
         output.status = "NO_REFERENCE_PATH";
+        updateStartLockRecovery(input, false, output);
         return false;
     }
     if (!solver_) {
         output = SolverOutput{};
         output.status = "NO_SOLVER";
+        updateStartLockRecovery(input, false, output);
         return false;
     }
 
@@ -80,6 +113,7 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     if (!proj.valid) {
         output = SolverOutput{};
         output.status = "PROJECTION_FAILED";
+        updateStartLockRecovery(input, false, output);
         return false;
     }
 
@@ -88,12 +122,13 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     const auto goal = reference_.sample(len);
     const double dx = goal.x - input.robot.x;
     const double dy = goal.y - input.robot.y;
+    const double distance_to_goal = std::hypot(dx, dy);
     TerminalGoalInfo goal_info;
     goal_info.valid = true;
     goal_info.remaining_s = remaining_s;
-    goal_info.distance_to_goal = remaining_s;
+    goal_info.distance_to_goal = distance_to_goal;
     goal_info.dx_robot = std::cos(input.robot.yaw) * dx + std::sin(input.robot.yaw) * dy;
-    goal_info.position_reached = remaining_s < terminal_controller_.params().goal_tolerance;
+    goal_info.position_reached = distance_to_goal < terminal_controller_.params().goal_tolerance;
 
     const TerminalPlan terminal_plan = terminal_controller_.updateAndPlan(
         goal_info, input.robot.v, input.robot.omega, std::max(1e-6, solver_params_.a_max));
@@ -104,6 +139,7 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         output.progress_s = len > 1e-6 ? proj.s / len : 0.0;
         output.progress_abs_s = proj.s;
         output.terminal_diagnostics = terminal_controller_.diagnostics();
+        updateStartLockRecovery(input, true, output);
         return true;
     }
     if (terminal_controller_.reached()) {
@@ -116,6 +152,7 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         output.cmd_omega = 0.0;
         output.terminal_diagnostics = terminal_controller_.diagnostics();
         last_progress_s_ = std::max(last_progress_s_, output.progress_abs_s);
+        updateStartLockRecovery(input, true, output);
         return true;
     }
 
@@ -137,6 +174,7 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         last_progress_s_ = std::max(last_progress_s_, output.progress_abs_s);
     }
     output.terminal_diagnostics = terminal_controller_.diagnostics();
+    updateStartLockRecovery(input, ok && output.success, output);
     return ok;
 }
 

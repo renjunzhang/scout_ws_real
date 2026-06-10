@@ -39,8 +39,18 @@ private:
     ros::Publisher slosh_horizon_summary_pub_;
     ros::Publisher warm_start_pub_;
     ros::Publisher warm_start_status_pub_;
+    ros::Publisher runtime_bounds_pub_;
+    ros::Publisher generated_bounds_pub_;
+    ros::Publisher first_shot_pub_;
+    ros::Publisher projector_pub_;
+    ros::Publisher stage0_reference_pub_;
+    ros::Publisher local_traj_head_pub_;
+    ros::Publisher warm_start_head_pub_;
     ros::Publisher terminal_pub_;
     ros::Publisher terminal_mode_pub_;
+    ros::Publisher start_lock_active_pub_;
+    ros::Publisher start_lock_mode_pub_;
+    ros::Publisher start_lock_debug_pub_;
 };
 
 }  // namespace spmpc_local_planner

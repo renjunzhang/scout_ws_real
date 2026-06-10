@@ -1,6 +1,7 @@
 #include "spmpc_local_planner/warm_start/diff_drive_flatness_warm_start.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace spmpc_local_planner {
 namespace {
@@ -15,11 +16,12 @@ bool finite(double value) {
 
 bool finiteState(const WarmStartState& state) {
     return finite(state.px) && finite(state.py) && finite(state.theta) && finite(state.v) && finite(state.s) &&
-           finite(state.eta_x) && finite(state.eta_x_dot) && finite(state.eta_y) && finite(state.eta_y_dot);
+           finite(state.omega) && finite(state.eta_x) && finite(state.eta_x_dot) && finite(state.eta_y) &&
+           finite(state.eta_y_dot);
 }
 
 bool finiteControl(const WarmStartControl& control) {
-    return finite(control.a) && finite(control.omega) && finite(control.v_s);
+    return finite(control.a) && finite(control.omega) && finite(control.alpha) && finite(control.v_s);
 }
 
 double nominalSpeed(double remaining, double horizon_left, const WarmStartInput& input) {
@@ -126,17 +128,32 @@ bool DiffDriveFlatnessWarmStart::generate(
     output.states[0].theta = input.robot.yaw;
     output.states[0].v = clampCounted(input.robot.v, 0.0, input.bounds.v_max, diagnostics.bound_violation_count);
     output.states[0].s = clampValue(input.s0, 0.0, input.reference_length);
+    output.states[0].omega = clampCounted(input.robot.omega, -input.bounds.omega_max, input.bounds.omega_max,
+                                         diagnostics.bound_violation_count);
     speeds[0] = output.states[0].v;
     copySlosh(input.slosh, output.states[0]);
 
+    const double alpha_abs_bound = input.bounds.omega_rate_max > 1e-9
+        ? input.bounds.omega_rate_max
+        : std::numeric_limits<double>::infinity();
     for (int k = 0; k < n; ++k) {
-        const ReferenceSample ref = input.spline->sample(output.states[k].s);
+        const ReferenceSample next_ref = input.spline->sample(output.states[k + 1].s);
+        const double omega_target = clampCounted(next_ref.kappa * output.states[k + 1].v,
+                                                -input.bounds.omega_max,
+                                                input.bounds.omega_max,
+                                                diagnostics.bound_violation_count);
         WarmStartControl control;
         control.a = (speeds[k + 1] - output.states[k].v) / input.dt;
-        control.omega = ref.kappa * output.states[k].v;
-        control.v_s = output.states[k].v;
+        control.alpha = (omega_target - output.states[k].omega) / input.dt;
+        const double ds = output.states[k + 1].s - output.states[k].s;
+        control.v_s = ds / input.dt;
         control.a = clampCounted(control.a, -input.bounds.a_max, input.bounds.a_max, diagnostics.bound_violation_count);
-        control.omega = clampCounted(control.omega, -input.bounds.omega_max, input.bounds.omega_max, diagnostics.bound_violation_count);
+        control.alpha = clampCounted(control.alpha, -alpha_abs_bound, alpha_abs_bound, diagnostics.bound_violation_count);
+        output.states[k + 1].omega = clampCounted(output.states[k].omega + control.alpha * input.dt,
+                                                 -input.bounds.omega_max,
+                                                 input.bounds.omega_max,
+                                                 diagnostics.bound_violation_count);
+        control.omega = output.states[k].omega;  // legacy/debug mirror; alpha-state OCP consumes control.alpha.
         const double v_s_hi = input.bounds.v_s_max > 1e-9 ? input.bounds.v_s_max : input.bounds.v_max;
         control.v_s = clampCounted(control.v_s, 0.0, v_s_hi, diagnostics.bound_violation_count);
         output.controls[k] = control;
@@ -150,8 +167,9 @@ bool DiffDriveFlatnessWarmStart::generate(
         SloshState slosh = input.slosh;
         for (int k = 0; k < n; ++k) {
             const double ax = output.controls[k].a;
-            const double ay = output.states[k].v * output.controls[k].omega;
-            slosh = input.slosh_dynamics->step(slosh, ax, ay, output.controls[k].omega);
+            const double omega = output.states[k].omega;
+            const double ay = output.states[k].v * omega;
+            slosh = input.slosh_dynamics->step(slosh, ax, ay, omega);
             copySlosh(slosh, output.states[k + 1]);
         }
     } else {
@@ -167,6 +185,7 @@ bool DiffDriveFlatnessWarmStart::generate(
             ++nonfinite_count;
         }
         diagnostics.max_v = std::max(diagnostics.max_v, std::abs(state.v));
+        diagnostics.max_omega = std::max(diagnostics.max_omega, std::abs(state.omega));
         diagnostics.max_slosh_height_pred = std::max(
             diagnostics.max_slosh_height_pred,
             can_rollout_slosh ? input.slosh_dynamics->height(sloshFromState(state)) : 0.0);
@@ -181,10 +200,9 @@ bool DiffDriveFlatnessWarmStart::generate(
             ++nonfinite_count;
         }
         diagnostics.max_a = std::max(diagnostics.max_a, std::abs(control.a));
-        diagnostics.max_omega = std::max(diagnostics.max_omega, std::abs(control.omega));
         diagnostics.max_lateral_acc = std::max(
             diagnostics.max_lateral_acc,
-            std::abs(output.states[k].v * control.omega));
+            std::abs(output.states[k].v * output.states[k].omega));
     }
 
     if (nonfinite_count > 0) {

@@ -21,8 +21,18 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     slosh_horizon_summary_pub_ = nh.advertise<std_msgs::Float32MultiArray>("slosh_horizon_summary", 1);
     warm_start_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/warm_start", 1);
     warm_start_status_pub_ = nh.advertise<std_msgs::String>("debug/warm_start_status", 1);
+    runtime_bounds_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/runtime_bounds", 1);
+    generated_bounds_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/generated_bounds", 1);
+    first_shot_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/first_shot_summary", 1);
+    projector_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/projector", 1);
+    stage0_reference_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/stage0_reference", 1);
+    local_traj_head_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/local_traj_head", 1);
+    warm_start_head_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/warm_start_head", 1);
     terminal_pub_ = nh.advertise<std_msgs::Float32MultiArray>("terminal/debug", 1);
     terminal_mode_pub_ = nh.advertise<std_msgs::String>("terminal/mode", 1);
+    start_lock_active_pub_ = nh.advertise<std_msgs::Float32>("start_lock/active", 1);
+    start_lock_mode_pub_ = nh.advertise<std_msgs::String>("start_lock/mode", 1);
+    start_lock_debug_pub_ = nh.advertise<std_msgs::Float32MultiArray>("start_lock/debug", 1);
 }
 
 void DiagnosticsPublisher::publishVariant(
@@ -79,6 +89,152 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     warm_start_status.data = ws.failure_reason.empty() ? "OK" : ws.failure_reason;
     warm_start_status_pub_.publish(warm_start_status);
 
+    const auto publish_bounds = [](const SolverBoundSummary& bounds, ros::Publisher& pub) {
+        std_msgs::Float32MultiArray msg;
+        msg.layout.dim.resize(1);
+        msg.layout.dim[0].label = "a_min,a_max,alpha_min,alpha_max,vs_min,vs_max,v_min,v_max,omega_min,omega_max";
+        msg.layout.dim[0].size = 10;
+        msg.layout.dim[0].stride = 10;
+        msg.data.resize(10, 0.0f);
+        msg.data[0] = static_cast<float>(bounds.a_min);
+        msg.data[1] = static_cast<float>(bounds.a_max);
+        msg.data[2] = static_cast<float>(bounds.alpha_min);
+        msg.data[3] = static_cast<float>(bounds.alpha_max);
+        msg.data[4] = static_cast<float>(bounds.v_s_min);
+        msg.data[5] = static_cast<float>(bounds.v_s_max);
+        msg.data[6] = static_cast<float>(bounds.v_min);
+        msg.data[7] = static_cast<float>(bounds.v_max);
+        msg.data[8] = static_cast<float>(bounds.omega_min);
+        msg.data[9] = static_cast<float>(bounds.omega_max);
+        pub.publish(msg);
+    };
+    publish_bounds(output.runtime_bounds, runtime_bounds_pub_);
+    publish_bounds(output.generated_bounds, generated_bounds_pub_);
+
+    const auto& fs = output.first_shot_debug;
+    std_msgs::Float32MultiArray first_shot;
+    first_shot.layout.dim.resize(1);
+    first_shot.layout.dim[0].label =
+        "success,status_code,progress_s,progress_abs_s,x0_v,x0_omega,x0_s,u0_a,u0_alpha,u0_vs,cmd_v_pre,cmd_v_post,cmd_omega_pre,cmd_omega_post,x1_v,x1_omega,x1_s,x2_v,x2_omega,x2_s,x3_v,x3_omega,x3_s";
+    first_shot.layout.dim[0].size = 23;
+    first_shot.layout.dim[0].stride = 23;
+    first_shot.data.resize(23, 0.0f);
+    first_shot.data[0] = fs.success ? 1.0f : 0.0f;
+    first_shot.data[1] = static_cast<float>(fs.status_code);
+    first_shot.data[2] = static_cast<float>(fs.progress_s);
+    first_shot.data[3] = static_cast<float>(fs.progress_abs_s);
+    first_shot.data[4] = static_cast<float>(fs.x0_v);
+    first_shot.data[5] = static_cast<float>(fs.x0_omega);
+    first_shot.data[6] = static_cast<float>(fs.x0_s);
+    first_shot.data[7] = static_cast<float>(fs.u0_a);
+    first_shot.data[8] = static_cast<float>(fs.u0_alpha);
+    first_shot.data[9] = static_cast<float>(fs.u0_v_s);
+    first_shot.data[10] = static_cast<float>(fs.cmd_v_pre_clamp);
+    first_shot.data[11] = static_cast<float>(fs.cmd_v_post_clamp);
+    first_shot.data[12] = static_cast<float>(fs.cmd_omega_pre_clamp);
+    first_shot.data[13] = static_cast<float>(fs.cmd_omega_post_clamp);
+    first_shot.data[14] = static_cast<float>(fs.x1_v);
+    first_shot.data[15] = static_cast<float>(fs.x1_omega);
+    first_shot.data[16] = static_cast<float>(fs.x1_s);
+    first_shot.data[17] = static_cast<float>(fs.x2_v);
+    first_shot.data[18] = static_cast<float>(fs.x2_omega);
+    first_shot.data[19] = static_cast<float>(fs.x2_s);
+    first_shot.data[20] = static_cast<float>(fs.x3_v);
+    first_shot.data[21] = static_cast<float>(fs.x3_omega);
+    first_shot.data[22] = static_cast<float>(fs.x3_s);
+    first_shot_pub_.publish(first_shot);
+
+    const auto& pr = output.projector_debug;
+    std_msgs::Float32MultiArray projector;
+    projector.layout.dim.resize(1);
+    projector.layout.dim[0].label =
+        "raw_valid,raw_s,raw_distance,raw_signed_distance,raw_x,raw_y,raw_yaw,guarded_valid,guarded_s,guarded_distance,guarded_signed_distance,guarded_x,guarded_y,guarded_yaw,min_progress_s,monotonic_clip_applied";
+    projector.layout.dim[0].size = 16;
+    projector.layout.dim[0].stride = 16;
+    projector.data.resize(16, 0.0f);
+    projector.data[0] = pr.raw_valid ? 1.0f : 0.0f;
+    projector.data[1] = static_cast<float>(pr.raw_s);
+    projector.data[2] = static_cast<float>(pr.raw_distance);
+    projector.data[3] = static_cast<float>(pr.raw_signed_distance);
+    projector.data[4] = static_cast<float>(pr.raw_x);
+    projector.data[5] = static_cast<float>(pr.raw_y);
+    projector.data[6] = static_cast<float>(pr.raw_yaw);
+    projector.data[7] = pr.guarded_valid ? 1.0f : 0.0f;
+    projector.data[8] = static_cast<float>(pr.guarded_s);
+    projector.data[9] = static_cast<float>(pr.guarded_distance);
+    projector.data[10] = static_cast<float>(pr.guarded_signed_distance);
+    projector.data[11] = static_cast<float>(pr.guarded_x);
+    projector.data[12] = static_cast<float>(pr.guarded_y);
+    projector.data[13] = static_cast<float>(pr.guarded_yaw);
+    projector.data[14] = static_cast<float>(pr.min_progress_s);
+    projector.data[15] = pr.monotonic_clip_applied ? 1.0f : 0.0f;
+    projector_pub_.publish(projector);
+
+    const auto& s0ref = output.stage0_reference_debug;
+    std_msgs::Float32MultiArray stage0_reference;
+    stage0_reference.layout.dim.resize(1);
+    stage0_reference.layout.dim[0].label =
+        "s0,ref_x,ref_y,ref_yaw,ref_kappa,robot_x,robot_y,robot_yaw,yaw_error,contour_error,lag_error";
+    stage0_reference.layout.dim[0].size = 11;
+    stage0_reference.layout.dim[0].stride = 11;
+    stage0_reference.data.resize(11, 0.0f);
+    stage0_reference.data[0] = static_cast<float>(s0ref.s0);
+    stage0_reference.data[1] = static_cast<float>(s0ref.ref_x);
+    stage0_reference.data[2] = static_cast<float>(s0ref.ref_y);
+    stage0_reference.data[3] = static_cast<float>(s0ref.ref_yaw);
+    stage0_reference.data[4] = static_cast<float>(s0ref.ref_kappa);
+    stage0_reference.data[5] = static_cast<float>(s0ref.robot_x);
+    stage0_reference.data[6] = static_cast<float>(s0ref.robot_y);
+    stage0_reference.data[7] = static_cast<float>(s0ref.robot_yaw);
+    stage0_reference.data[8] = static_cast<float>(s0ref.yaw_error);
+    stage0_reference.data[9] = static_cast<float>(s0ref.contour_error);
+    stage0_reference.data[10] = static_cast<float>(s0ref.lag_error);
+    stage0_reference_pub_.publish(stage0_reference);
+
+    std_msgs::Float32MultiArray local_traj_head;
+    local_traj_head.layout.dim.resize(1);
+    local_traj_head.layout.dim[0].label =
+        "valid0,x0,y0,yaw0,v0,omega0,s0,proj_s0,proj_distance0,proj_signed_distance0,contour0,lag0,yaw_error0,valid1,x1,y1,yaw1,v1,omega1,s1,proj_s1,proj_distance1,proj_signed_distance1,contour1,lag1,yaw_error1,valid2,x2,y2,yaw2,v2,omega2,s2,proj_s2,proj_distance2,proj_signed_distance2,contour2,lag2,yaw_error2";
+    local_traj_head.layout.dim[0].size = 39;
+    local_traj_head.layout.dim[0].stride = 39;
+    local_traj_head.data.resize(39, 0.0f);
+    for (int i = 0; i < 3; ++i) {
+        const auto& pt = output.local_traj_head_debug.points[i];
+        const int o = 13 * i;
+        local_traj_head.data[o + 0] = pt.valid ? 1.0f : 0.0f;
+        local_traj_head.data[o + 1] = static_cast<float>(pt.x);
+        local_traj_head.data[o + 2] = static_cast<float>(pt.y);
+        local_traj_head.data[o + 3] = static_cast<float>(pt.yaw);
+        local_traj_head.data[o + 4] = static_cast<float>(pt.v);
+        local_traj_head.data[o + 5] = static_cast<float>(pt.omega);
+        local_traj_head.data[o + 6] = static_cast<float>(pt.s);
+        local_traj_head.data[o + 7] = static_cast<float>(pt.proj_s);
+        local_traj_head.data[o + 8] = static_cast<float>(pt.proj_distance);
+        local_traj_head.data[o + 9] = static_cast<float>(pt.proj_signed_distance);
+        local_traj_head.data[o + 10] = static_cast<float>(pt.contour_error);
+        local_traj_head.data[o + 11] = static_cast<float>(pt.lag_error);
+        local_traj_head.data[o + 12] = static_cast<float>(pt.yaw_error);
+    }
+    local_traj_head_pub_.publish(local_traj_head);
+
+    std_msgs::Float32MultiArray warm_start_head;
+    warm_start_head.layout.dim.resize(1);
+    warm_start_head.layout.dim[0].label =
+        "valid0,state_s0,state_omega0,control_alpha0,control_vs0,valid1,state_s1,state_omega1,control_alpha1,control_vs1,valid2,state_s2,state_omega2,control_alpha2,control_vs2";
+    warm_start_head.layout.dim[0].size = 15;
+    warm_start_head.layout.dim[0].stride = 15;
+    warm_start_head.data.resize(15, 0.0f);
+    for (int i = 0; i < 3; ++i) {
+        const auto& pt = output.warm_start_head_debug.points[i];
+        const int o = 5 * i;
+        warm_start_head.data[o + 0] = pt.valid ? 1.0f : 0.0f;
+        warm_start_head.data[o + 1] = static_cast<float>(pt.state_s);
+        warm_start_head.data[o + 2] = static_cast<float>(pt.state_omega);
+        warm_start_head.data[o + 3] = static_cast<float>(pt.control_alpha);
+        warm_start_head.data[o + 4] = static_cast<float>(pt.control_v_s);
+    }
+    warm_start_head_pub_.publish(warm_start_head);
+
     const auto& td = output.terminal_diagnostics;
     std_msgs::Float32MultiArray terminal;
     terminal.layout.dim.resize(1);
@@ -107,6 +263,46 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     std_msgs::String terminal_mode;
     terminal_mode.data = td.mode;
     terminal_mode_pub_.publish(terminal_mode);
+
+    const auto& sl = output.start_lock_recovery;
+    std_msgs::Float32 start_lock_active;
+    start_lock_active.data = sl.active ? 1.0f : 0.0f;
+    start_lock_active_pub_.publish(start_lock_active);
+
+    std_msgs::String start_lock_mode;
+    start_lock_mode.data = sl.mode;
+    start_lock_mode_pub_.publish(start_lock_mode);
+
+    std_msgs::Float32MultiArray start_lock;
+    start_lock.layout.dim.resize(1);
+    start_lock.layout.dim[0].label =
+        "enabled,detect_only,active,near_start,stall_progress,cmd_suppressed,warmstart_requests_motion,solver_rejects_progress,monotonic_clip_active,projection_distance_unsafe,stall_time_sec,active_count,progress_abs_s,progress_delta_s,projector_raw_s,projector_guarded_s,guard_minus_raw_s,projector_distance,cmd_v,robot_v,warm_start_v_s0,first_shot_u0_vs";
+    start_lock.layout.dim[0].size = 22;
+    start_lock.layout.dim[0].stride = 22;
+    start_lock.data.resize(22, 0.0f);
+    start_lock.data[0] = sl.enabled ? 1.0f : 0.0f;
+    start_lock.data[1] = sl.detect_only ? 1.0f : 0.0f;
+    start_lock.data[2] = sl.active ? 1.0f : 0.0f;
+    start_lock.data[3] = sl.near_start ? 1.0f : 0.0f;
+    start_lock.data[4] = sl.stall_progress ? 1.0f : 0.0f;
+    start_lock.data[5] = sl.cmd_suppressed ? 1.0f : 0.0f;
+    start_lock.data[6] = sl.warmstart_requests_motion ? 1.0f : 0.0f;
+    start_lock.data[7] = sl.solver_rejects_progress ? 1.0f : 0.0f;
+    start_lock.data[8] = sl.monotonic_clip_active ? 1.0f : 0.0f;
+    start_lock.data[9] = sl.projection_distance_unsafe ? 1.0f : 0.0f;
+    start_lock.data[10] = static_cast<float>(sl.stall_time_sec);
+    start_lock.data[11] = static_cast<float>(sl.active_count);
+    start_lock.data[12] = static_cast<float>(sl.progress_abs_s);
+    start_lock.data[13] = static_cast<float>(sl.progress_delta_s);
+    start_lock.data[14] = static_cast<float>(sl.projector_raw_s);
+    start_lock.data[15] = static_cast<float>(sl.projector_guarded_s);
+    start_lock.data[16] = static_cast<float>(sl.guard_minus_raw_s);
+    start_lock.data[17] = static_cast<float>(sl.projector_distance);
+    start_lock.data[18] = static_cast<float>(sl.cmd_v);
+    start_lock.data[19] = static_cast<float>(sl.robot_v);
+    start_lock.data[20] = static_cast<float>(sl.warm_start_v_s0);
+    start_lock.data[21] = static_cast<float>(sl.first_shot_u0_v_s);
+    start_lock_debug_pub_.publish(start_lock);
 
     std_msgs::Float32MultiArray cost;
     cost.layout.dim.resize(1);

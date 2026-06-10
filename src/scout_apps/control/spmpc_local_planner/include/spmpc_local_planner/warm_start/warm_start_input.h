@@ -27,7 +27,7 @@ struct WarmStartBounds {
     double v_max = 0.8;
     double omega_max = 1.2;
     double a_max = 0.6;
-    double omega_rate_max = 0.0;
+    double omega_rate_max = 0.0;  // alpha-state warm-start bound for d(omega)/dt
     double v_s_max = 0.8;
 };
 
@@ -47,7 +47,7 @@ struct WarmStartInput {
     WarmStartConfig config;
     bool have_previous_control = false;
     double previous_a = 0.0;
-    double previous_omega = 0.0;
+    double previous_omega = 0.0;  // legacy/direct-omega-era field; current alpha-state flatness path does not consume it
     double previous_v_s = 0.0;
 };
 

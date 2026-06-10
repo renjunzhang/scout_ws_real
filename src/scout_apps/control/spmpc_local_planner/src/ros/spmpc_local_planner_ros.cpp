@@ -181,6 +181,36 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("terminal/capture_stop/goal_behind_x", solver_params.terminal.goal_behind_x, solver_params.terminal.goal_behind_x);
     pnh_.param("terminal/command_clamp/enable", solver_params.terminal.command_clamp_enable, solver_params.terminal.command_clamp_enable);
     pnh_.param("terminal/command_clamp/rate_limit_enable", solver_params.terminal.rate_limit_enable, solver_params.terminal.rate_limit_enable);
+    pnh_.param("terminal/command_clamp/omega_enable", solver_params.terminal.omega_clamp_enable, solver_params.terminal.omega_clamp_enable);
+    pnh_.param("terminal/command_clamp/omega_max", solver_params.terminal.omega_clamp_max, solver_params.terminal.omega_clamp_max);
+    pnh_.param("terminal/command_clamp/omega_near_goal_max", solver_params.terminal.omega_near_goal_max, solver_params.terminal.omega_near_goal_max);
+    pnh_.param("terminal/command_clamp/omega_near_goal_distance", solver_params.terminal.omega_near_goal_distance, solver_params.terminal.omega_near_goal_distance);
+    pnh_.param("terminal/spin_fail/enable", terminal_spin_fail_enable_, terminal_spin_fail_enable_);
+    pnh_.param("terminal/spin_fail/omega_threshold", terminal_spin_fail_omega_threshold_, terminal_spin_fail_omega_threshold_);
+    pnh_.param("terminal/spin_fail/max_duration_sec", terminal_spin_fail_max_duration_sec_, terminal_spin_fail_max_duration_sec_);
+    terminal_spin_fail_omega_threshold_ = std::max(0.0, terminal_spin_fail_omega_threshold_);
+    terminal_spin_fail_max_duration_sec_ = std::max(0.0, terminal_spin_fail_max_duration_sec_);
+    pnh_.param("tracking_safety/enable", tracking_safety_enable_, tracking_safety_enable_);
+    pnh_.param("tracking_safety/projection/enable", tracking_safety_projection_enable_, tracking_safety_projection_enable_);
+    pnh_.param("tracking_safety/projection/max_distance_m", tracking_safety_max_projection_distance_m_, tracking_safety_max_projection_distance_m_);
+    pnh_.param("tracking_safety/projection/max_duration_sec", tracking_safety_max_projection_duration_sec_, tracking_safety_max_projection_duration_sec_);
+    pnh_.param("tracking_safety/spin_fail/enable", tracking_safety_spin_enable_, tracking_safety_spin_enable_);
+    pnh_.param("tracking_safety/spin_fail/omega_threshold", tracking_safety_spin_omega_threshold_, tracking_safety_spin_omega_threshold_);
+    pnh_.param("tracking_safety/spin_fail/max_duration_sec", tracking_safety_spin_max_duration_sec_, tracking_safety_spin_max_duration_sec_);
+    tracking_safety_max_projection_distance_m_ = std::max(0.0, tracking_safety_max_projection_distance_m_);
+    tracking_safety_max_projection_duration_sec_ = std::max(0.0, tracking_safety_max_projection_duration_sec_);
+    tracking_safety_spin_omega_threshold_ = std::max(0.0, tracking_safety_spin_omega_threshold_);
+    tracking_safety_spin_max_duration_sec_ = std::max(0.0, tracking_safety_spin_max_duration_sec_);
+    pnh_.param("start_lock_recovery/enable", solver_params.start_lock_recovery.enable, solver_params.start_lock_recovery.enable);
+    pnh_.param("start_lock_recovery/detect_only", solver_params.start_lock_recovery.detect_only, solver_params.start_lock_recovery.detect_only);
+    pnh_.param("start_lock_recovery/start_window_s", solver_params.start_lock_recovery.start_window_s, solver_params.start_lock_recovery.start_window_s);
+    pnh_.param("start_lock_recovery/min_stall_duration_sec", solver_params.start_lock_recovery.min_stall_duration_sec, solver_params.start_lock_recovery.min_stall_duration_sec);
+    pnh_.param("start_lock_recovery/progress_epsilon_s", solver_params.start_lock_recovery.progress_epsilon_s, solver_params.start_lock_recovery.progress_epsilon_s);
+    pnh_.param("start_lock_recovery/cmd_v_small_threshold", solver_params.start_lock_recovery.cmd_v_small_threshold, solver_params.start_lock_recovery.cmd_v_small_threshold);
+    pnh_.param("start_lock_recovery/warm_start_v_s_min", solver_params.start_lock_recovery.warm_start_v_s_min, solver_params.start_lock_recovery.warm_start_v_s_min);
+    pnh_.param("start_lock_recovery/u0_v_s_max", solver_params.start_lock_recovery.u0_v_s_max, solver_params.start_lock_recovery.u0_v_s_max);
+    pnh_.param("start_lock_recovery/require_monotonic_clip", solver_params.start_lock_recovery.require_monotonic_clip, solver_params.start_lock_recovery.require_monotonic_clip);
+    pnh_.param("start_lock_recovery/max_projection_distance_m", solver_params.start_lock_recovery.max_projection_distance_m, solver_params.start_lock_recovery.max_projection_distance_m);
     pnh_.param("platform/kinematics", solver_params.platform.kinematics, solver_params.platform.kinematics);
     pnh_.param("acados/warm_start_flatness_enable", solver_params.warm_start_flatness_enable, solver_params.warm_start_flatness_enable);
     pnh_.param("acados/warm_start/type", solver_params.warm_start.type, solver_params.warm_start.type);
@@ -280,8 +310,14 @@ void SpmpcLocalPlannerROS::spin() {
 }
 
 void SpmpcLocalPlannerROS::publishZeroCommand() {
+    if (!publish_cmd_vel_) {
+        return;
+    }
     geometry_msgs::Twist cmd;
-    publishCommand(cmd);
+    cmd_pub_.publish(cmd);
+    last_published_cmd_ = cmd;
+    last_cmd_stamp_ = ros::Time::now();
+    have_last_published_cmd_ = true;
 }
 
 geometry_msgs::Twist SpmpcLocalPlannerROS::applySharedCommandLimits(
@@ -324,6 +360,115 @@ void SpmpcLocalPlannerROS::publishCommand(const geometry_msgs::Twist& desired) {
     cmd_pub_.publish(cmd);
 }
 
+void SpmpcLocalPlannerROS::resetTerminalSpinFailGate() {
+    terminal_spin_fail_duration_sec_ = 0.0;
+    terminal_spin_fail_latched_ = false;
+}
+
+void SpmpcLocalPlannerROS::resetTrackingSafetyGate() {
+    tracking_safety_projection_duration_sec_ = 0.0;
+    tracking_safety_projection_latched_ = false;
+    tracking_safety_spin_duration_sec_ = 0.0;
+    tracking_safety_spin_latched_ = false;
+}
+
+bool SpmpcLocalPlannerROS::updateTerminalSpinFailGate(const SolverInput& input, const SolverOutput& output, double period_sec) {
+    if (!terminal_spin_fail_enable_) {
+        resetTerminalSpinFailGate();
+        return false;
+    }
+    const auto& terminal = output.terminal_diagnostics;
+    if (!output.success || !terminal.terminal_phase || terminal.reached) {
+        resetTerminalSpinFailGate();
+        return false;
+    }
+
+    const bool spinning = std::abs(input.robot.omega) > terminal_spin_fail_omega_threshold_ ||
+                          std::abs(output.cmd_omega) > terminal_spin_fail_omega_threshold_;
+    if (!spinning) {
+        resetTerminalSpinFailGate();
+        return false;
+    }
+
+    if (!std::isfinite(period_sec) || period_sec <= 1e-6) {
+        period_sec = dt_;
+    }
+    terminal_spin_fail_duration_sec_ += std::max(0.0, period_sec);
+    if (terminal_spin_fail_latched_ || terminal_spin_fail_duration_sec_ >= terminal_spin_fail_max_duration_sec_) {
+        terminal_spin_fail_latched_ = true;
+        return true;
+    }
+    return false;
+}
+
+bool SpmpcLocalPlannerROS::updateTrackingSafetyGate(const SolverInput& input,
+                                                    const SolverOutput& output,
+                                                    double period_sec,
+                                                    std::string& failure_status) {
+    failure_status.clear();
+    if (!tracking_safety_enable_) {
+        resetTrackingSafetyGate();
+        return false;
+    }
+    if (!std::isfinite(period_sec) || period_sec <= 1e-6) {
+        period_sec = dt_;
+    }
+    period_sec = std::max(0.0, period_sec);
+
+    const auto& terminal = output.terminal_diagnostics;
+    if (terminal.reached || output.status == "GOAL_REACHED") {
+        resetTrackingSafetyGate();
+        return false;
+    }
+    if (tracking_safety_projection_latched_) {
+        failure_status = "TRACKING_UNSAFE_PROJECTION";
+        return true;
+    }
+    if (tracking_safety_spin_latched_) {
+        failure_status = "TRACKING_SPIN_FAIL";
+        return true;
+    }
+    if (!output.success) {
+        return false;
+    }
+
+    const auto& projector = output.projector_debug;
+    const double projection_distance = projector.guarded_valid ? projector.guarded_distance : projector.raw_distance;
+    const bool projection_valid = projector.guarded_valid || projector.raw_valid;
+    const bool projection_unsafe = tracking_safety_projection_enable_ && projection_valid &&
+                                   tracking_safety_max_projection_distance_m_ > 0.0 &&
+                                   projection_distance > tracking_safety_max_projection_distance_m_;
+    if (projection_unsafe) {
+        tracking_safety_projection_duration_sec_ += period_sec;
+    } else {
+        tracking_safety_projection_duration_sec_ = 0.0;
+    }
+
+    const bool tracking_phase = !terminal.terminal_phase;
+    const bool spinning = tracking_safety_spin_enable_ && tracking_phase &&
+                          (std::abs(input.robot.omega) > tracking_safety_spin_omega_threshold_ ||
+                           std::abs(output.cmd_omega) > tracking_safety_spin_omega_threshold_);
+    if (spinning) {
+        tracking_safety_spin_duration_sec_ += period_sec;
+    } else {
+        tracking_safety_spin_duration_sec_ = 0.0;
+    }
+
+    if (tracking_safety_projection_enable_ && tracking_safety_max_projection_duration_sec_ > 0.0 &&
+        tracking_safety_projection_duration_sec_ >= tracking_safety_max_projection_duration_sec_) {
+        tracking_safety_projection_latched_ = true;
+        failure_status = "TRACKING_UNSAFE_PROJECTION";
+        return true;
+    }
+    if (tracking_safety_spin_enable_ && tracking_safety_spin_max_duration_sec_ > 0.0 &&
+        tracking_safety_spin_duration_sec_ >= tracking_safety_spin_max_duration_sec_) {
+        tracking_safety_spin_latched_ = true;
+        failure_status = "TRACKING_SPIN_FAIL";
+        return true;
+    }
+    return false;
+}
+
 void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
     updateSloshObserverFromOdom(*msg);
     last_odom_ = *msg;
@@ -356,11 +501,19 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
                               ex.what());
             return;
         }
+        if (updateReferenceSignature(transformed_path)) {
+            resetTerminalSpinFailGate();
+            resetTrackingSafetyGate();
+        }
         problem_.setReferencePath(referencePathFromMsg(transformed_path));
         return;
     }
 
     const auto reference = referencePathFromMsg(*msg);
+    if (updateReferenceSignature(*msg)) {
+        resetTerminalSpinFailGate();
+        resetTrackingSafetyGate();
+    }
     problem_.setReferencePath(reference);
 }
 
@@ -368,15 +521,19 @@ void SpmpcLocalPlannerROS::costmapCallback(const nav_msgs::OccupancyGridConstPtr
     problem_.setCostmap(costmapFromMsg(*msg));
 }
 
-void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent&) {
+void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     diagnostics_.publishVariant(variant_, experiment_mode_);
 
     if (!have_odom_) {
+        resetTerminalSpinFailGate();
+        resetTrackingSafetyGate();
         diagnostics_.publishStatus("WAITING_FOR_ODOM");
         publishZeroCommand();
         return;
     }
     if (!problem_.hasReferencePath()) {
+        resetTerminalSpinFailGate();
+        resetTrackingSafetyGate();
         diagnostics_.publishStatus("WAITING_FOR_REFERENCE_PATH");
         publishZeroCommand();
         return;
@@ -384,6 +541,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent&) {
 
     SolverInput input;
     if (!robotStateFromLatest(input.robot)) {
+        resetTerminalSpinFailGate();
+        resetTrackingSafetyGate();
         diagnostics_.publishStatus("WAITING_FOR_TF_POSE");
         publishZeroCommand();
         return;
@@ -394,6 +553,23 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent&) {
 
     SolverOutput output;
     problem_.solve(input, output);
+    double spin_gate_dt = dt_;
+    if (!event.last_real.isZero() && !event.current_real.isZero()) {
+        spin_gate_dt = (event.current_real - event.last_real).toSec();
+    }
+    if (updateTerminalSpinFailGate(input, output, spin_gate_dt)) {
+        output.success = false;
+        output.status = "TERMINAL_SPIN_FAIL";
+        output.cmd_v = 0.0;
+        output.cmd_omega = 0.0;
+    }
+    std::string tracking_safety_status;
+    if (updateTrackingSafetyGate(input, output, spin_gate_dt, tracking_safety_status)) {
+        output.success = false;
+        output.status = tracking_safety_status;
+        output.cmd_v = 0.0;
+        output.cmd_omega = 0.0;
+    }
     diagnostics_.publishStatus(output.status);
     diagnostics_.publishSloshState(input.slosh);
     // 当前标量模型液面高度 = c_h·‖η‖ (+向心项), 由唯一物理核 SloshDynamics 计算; 单位米(模型 proxy)。
@@ -403,9 +579,14 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent&) {
     }
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
 
+    if (!output.success) {
+        publishZeroCommand();
+        return;
+    }
+
     geometry_msgs::Twist cmd;
-    cmd.linear.x = output.success ? output.cmd_v : 0.0;
-    cmd.angular.z = output.success ? output.cmd_omega : 0.0;
+    cmd.linear.x = output.cmd_v;
+    cmd.angular.z = output.cmd_omega;
     publishCommand(cmd);
 }
 
@@ -486,6 +667,37 @@ void SpmpcLocalPlannerROS::updateSloshObserverFromOdom(const nav_msgs::Odometry&
     }
     current_slosh_ = slosh_observer_.step(current_slosh_, ax, ay, omega);
     prev_odom_ = odom;
+}
+
+bool SpmpcLocalPlannerROS::updateReferenceSignature(const nav_msgs::Path& path) {
+    if (path.poses.empty()) {
+        const bool changed = have_reference_signature_;
+        have_reference_signature_ = false;
+        reference_signature_frame_.clear();
+        reference_signature_size_ = 0;
+        return changed;
+    }
+
+    const auto& first = path.poses.front().pose.position;
+    const auto& last = path.poses.back().pose.position;
+    const auto size = path.poses.size();
+    const auto frame = path.header.frame_id;
+    const bool changed = !have_reference_signature_ || reference_signature_frame_ != frame ||
+                         reference_signature_size_ != size ||
+                         std::hypot(reference_signature_start_x_ - first.x,
+                                    reference_signature_start_y_ - first.y) > 1e-3 ||
+                         std::hypot(reference_signature_end_x_ - last.x,
+                                    reference_signature_end_y_ - last.y) > 1e-3;
+    if (changed) {
+        have_reference_signature_ = true;
+        reference_signature_frame_ = frame;
+        reference_signature_size_ = size;
+        reference_signature_start_x_ = first.x;
+        reference_signature_start_y_ = first.y;
+        reference_signature_end_x_ = last.x;
+        reference_signature_end_y_ = last.y;
+    }
+    return changed;
 }
 
 ReferencePath SpmpcLocalPlannerROS::referencePathFromMsg(const nav_msgs::Path& path) const {

@@ -83,6 +83,136 @@ struct CostBreakdown {
     }
 };
 
+struct SolverBoundSummary {
+    double a_min = 0.0;
+    double a_max = 0.0;
+    double alpha_min = 0.0;
+    double alpha_max = 0.0;
+    double v_s_min = 0.0;
+    double v_s_max = 0.0;
+    double v_min = 0.0;
+    double v_max = 0.0;
+    double omega_min = 0.0;
+    double omega_max = 0.0;
+};
+
+struct FirstShotDebugSummary {
+    bool success = false;
+    double status_code = 0.0;
+    double progress_s = 0.0;
+    double progress_abs_s = 0.0;
+    double x0_v = 0.0;
+    double x0_omega = 0.0;
+    double x0_s = 0.0;
+    double u0_a = 0.0;
+    double u0_alpha = 0.0;
+    double u0_v_s = 0.0;
+    double cmd_v_pre_clamp = 0.0;
+    double cmd_v_post_clamp = 0.0;
+    double cmd_omega_pre_clamp = 0.0;
+    double cmd_omega_post_clamp = 0.0;
+    double x1_v = 0.0;
+    double x1_omega = 0.0;
+    double x1_s = 0.0;
+    double x2_v = 0.0;
+    double x2_omega = 0.0;
+    double x2_s = 0.0;
+    double x3_v = 0.0;
+    double x3_omega = 0.0;
+    double x3_s = 0.0;
+};
+
+struct ProjectorDebugSummary {
+    bool raw_valid = false;
+    double raw_s = 0.0;
+    double raw_distance = 0.0;
+    double raw_signed_distance = 0.0;
+    double raw_x = 0.0;
+    double raw_y = 0.0;
+    double raw_yaw = 0.0;
+    bool guarded_valid = false;
+    double guarded_s = 0.0;
+    double guarded_distance = 0.0;
+    double guarded_signed_distance = 0.0;
+    double guarded_x = 0.0;
+    double guarded_y = 0.0;
+    double guarded_yaw = 0.0;
+    double min_progress_s = 0.0;
+    bool monotonic_clip_applied = false;
+};
+
+struct Stage0ReferenceDebugSummary {
+    double s0 = 0.0;
+    double ref_x = 0.0;
+    double ref_y = 0.0;
+    double ref_yaw = 0.0;
+    double ref_kappa = 0.0;
+    double robot_x = 0.0;
+    double robot_y = 0.0;
+    double robot_yaw = 0.0;
+    double yaw_error = 0.0;
+    double contour_error = 0.0;
+    double lag_error = 0.0;
+};
+
+struct LocalTrajectoryHeadPointDebug {
+    bool valid = false;
+    double x = 0.0;
+    double y = 0.0;
+    double yaw = 0.0;
+    double v = 0.0;
+    double omega = 0.0;
+    double s = 0.0;
+    double proj_s = 0.0;
+    double proj_distance = 0.0;
+    double proj_signed_distance = 0.0;
+    double contour_error = 0.0;
+    double lag_error = 0.0;
+    double yaw_error = 0.0;
+};
+
+struct LocalTrajectoryHeadDebugSummary {
+    LocalTrajectoryHeadPointDebug points[3];
+};
+
+struct WarmStartHeadPointDebug {
+    bool valid = false;
+    double state_s = 0.0;
+    double state_omega = 0.0;
+    double control_alpha = 0.0;
+    double control_v_s = 0.0;
+};
+
+struct WarmStartHeadDebugSummary {
+    WarmStartHeadPointDebug points[3];
+};
+
+struct StartLockRecoveryDiagnostics {
+    bool enabled = false;
+    bool detect_only = true;
+    bool active = false;
+    bool near_start = false;
+    bool stall_progress = false;
+    bool cmd_suppressed = false;
+    bool warmstart_requests_motion = false;
+    bool solver_rejects_progress = false;
+    bool monotonic_clip_active = false;
+    bool projection_distance_unsafe = false;
+    double stall_time_sec = 0.0;
+    double active_count = 0.0;
+    double progress_abs_s = 0.0;
+    double progress_delta_s = 0.0;
+    double projector_raw_s = 0.0;
+    double projector_guarded_s = 0.0;
+    double guard_minus_raw_s = 0.0;
+    double projector_distance = 0.0;
+    double cmd_v = 0.0;
+    double robot_v = 0.0;
+    double warm_start_v_s0 = 0.0;
+    double first_shot_u0_v_s = 0.0;
+    std::string mode = "DISABLED";
+};
+
 struct SolverInput {
     RobotState robot;
     SloshState slosh;
@@ -107,6 +237,14 @@ struct SolverOutput {
     GuidanceSummary guidance_summary;
     CorridorSummary corridor_summary;
     PrimitiveSummary primitive_summary;
+    SolverBoundSummary runtime_bounds;
+    SolverBoundSummary generated_bounds;
+    FirstShotDebugSummary first_shot_debug;
+    ProjectorDebugSummary projector_debug;
+    Stage0ReferenceDebugSummary stage0_reference_debug;
+    LocalTrajectoryHeadDebugSummary local_traj_head_debug;
+    WarmStartHeadDebugSummary warm_start_head_debug;
+    StartLockRecoveryDiagnostics start_lock_recovery;
     CostBreakdown cost;
 };
 

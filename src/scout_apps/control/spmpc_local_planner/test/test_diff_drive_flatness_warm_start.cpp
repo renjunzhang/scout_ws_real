@@ -1,5 +1,6 @@
 #include "spmpc_local_planner/warm_start/diff_drive_flatness_warm_start.h"
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cmath>
 
 namespace spmpc_local_planner {
@@ -50,6 +51,7 @@ WarmStartInput makeInput(const ReferencePath& path, const ReferenceSpline& splin
     input.bounds.v_max = 0.5;
     input.bounds.omega_max = 0.4;
     input.bounds.a_max = 0.6;
+    input.bounds.omega_rate_max = 1.0;
     input.bounds.v_s_max = 0.5;
     input.config.enable = true;
     input.config.max_reference_fit_error = 0.10;
@@ -74,8 +76,12 @@ TEST(DiffDriveFlatnessWarmStart, StraightReferenceHasZeroOmegaAndValidSizes) {
     EXPECT_DOUBLE_EQ(output.states.front().px, input.robot.x);
     EXPECT_DOUBLE_EQ(output.states.front().py, input.robot.y);
     EXPECT_DOUBLE_EQ(output.states.front().s, input.s0);
+    for (const auto& state : output.states) {
+        EXPECT_LE(std::abs(state.omega), 1e-6);
+    }
     for (const auto& control : output.controls) {
         EXPECT_LE(std::abs(control.omega), 1e-6);
+        EXPECT_LE(std::abs(control.alpha), 1e-6);
         EXPECT_LE(std::abs(control.a), input.bounds.a_max + 1e-9);
     }
 }
@@ -91,8 +97,63 @@ TEST(DiffDriveFlatnessWarmStart, CurvatureSpeedLimitKeepsOmegaWithinBound) {
     WarmStartOutput output;
     WarmStartDiagnostics diagnostics;
     EXPECT_TRUE(generator.generate(input, output, diagnostics));
-    for (const auto& control : output.controls) {
-        EXPECT_LE(std::abs(control.omega), input.bounds.omega_max + 1e-9);
+    bool has_nonzero_omega = false;
+    for (const auto& state : output.states) {
+        EXPECT_LE(std::abs(state.omega), input.bounds.omega_max + 1e-9);
+        has_nonzero_omega = has_nonzero_omega || std::abs(state.omega) > 1e-3;
+    }
+    EXPECT_TRUE(has_nonzero_omega);
+}
+
+TEST(DiffDriveFlatnessWarmStart, AlphaTrajectoryIsRateBoundedAndConsistent) {
+    const ReferencePath path = makeArcReference();
+    ReferenceSpline spline;
+    spline.build(path);
+    WarmStartInput input = makeInput(path, spline);
+    input.bounds.omega_max = 2.0;
+    input.bounds.omega_rate_max = 0.2;
+
+    DiffDriveFlatnessWarmStart generator;
+    WarmStartOutput output;
+    WarmStartDiagnostics diagnostics;
+    EXPECT_TRUE(generator.generate(input, output, diagnostics));
+
+    bool has_nonzero_alpha = false;
+    for (int k = 0; k < input.horizon_steps; ++k) {
+        const auto& state = output.states[static_cast<size_t>(k)];
+        const auto& next_state = output.states[static_cast<size_t>(k + 1)];
+        const auto& control = output.controls[static_cast<size_t>(k)];
+        EXPECT_LE(std::abs(control.alpha), input.bounds.omega_rate_max + 1e-9);
+        EXPECT_NEAR(next_state.omega, state.omega + control.alpha * input.dt, 1e-9);
+        has_nonzero_alpha = has_nonzero_alpha || std::abs(control.alpha) > 1e-6;
+    }
+    EXPECT_TRUE(has_nonzero_alpha);
+}
+
+TEST(DiffDriveFlatnessWarmStart, PreservesInitialOmegaAndClampsPathSpeed) {
+    const ReferencePath path = makeLineReference();
+    ReferenceSpline spline;
+    spline.build(path);
+    WarmStartInput input = makeInput(path, spline);
+    input.robot.omega = 0.25;
+    input.bounds.v_s_max = 0.12;
+
+    DiffDriveFlatnessWarmStart generator;
+    WarmStartOutput output;
+    WarmStartDiagnostics diagnostics;
+    EXPECT_TRUE(generator.generate(input, output, diagnostics));
+    ASSERT_EQ(output.states.size(), static_cast<size_t>(input.horizon_steps + 1));
+    ASSERT_EQ(output.controls.size(), static_cast<size_t>(input.horizon_steps));
+    EXPECT_NEAR(output.states.front().omega, input.robot.omega, 1e-12);
+    for (int k = 0; k < input.horizon_steps; ++k) {
+        const auto& state = output.states[static_cast<size_t>(k)];
+        const auto& next_state = output.states[static_cast<size_t>(k + 1)];
+        const auto& control = output.controls[static_cast<size_t>(k)];
+        const double raw_v_s = (next_state.s - state.s) / input.dt;
+        const double expected_v_s = std::min(std::max(raw_v_s, 0.0), input.bounds.v_s_max);
+        EXPECT_NEAR(control.v_s, expected_v_s, 1e-9);
+        EXPECT_LE(control.v_s, input.bounds.v_s_max + 1e-9);
+        EXPECT_GE(control.v_s, -1e-9);
     }
 }
 
