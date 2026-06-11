@@ -1,0 +1,39 @@
+# DWA real-robot config for SPMPC baseline comparison.
+# Common-limit ordinary tuning only: no slosh dynamics or slosh-aware cost.
+DWAPlannerROS:
+  max_vel_x: 0.8
+  min_vel_x: 0.0
+  max_vel_y: 0.0
+  min_vel_y: 0.0
+  max_vel_theta: 1.2
+  min_vel_theta: 0.1
+  min_in_place_vel_theta: 0.2
+
+  acc_lim_x: 0.8
+  acc_lim_y: 0.0
+  acc_lim_theta: 2.0
+
+  sim_time: 2.0
+  sim_granularity: 0.05
+  angular_sim_granularity: 0.05
+  vx_samples: 12
+  vy_samples: 1
+  vtheta_samples: 24
+
+  path_distance_bias: 32.0
+  goal_distance_bias: 24.0
+  occdist_scale: 0.02
+  forward_point_distance: 0.325
+  stop_time_buffer: 0.2
+  scaling_speed: 0.25
+  max_scaling_factor: 0.2
+
+  xy_goal_tolerance: 0.25
+  yaw_goal_tolerance: 0.25
+  latch_xy_goal_tolerance: true
+
+  prune_plan: true
+  publish_traj_pc: true
+  publish_cost_grid_pc: false
+  global_frame_id: map
+  transform_tolerance: 2.0
