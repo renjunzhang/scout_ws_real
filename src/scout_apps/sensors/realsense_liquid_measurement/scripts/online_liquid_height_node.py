@@ -29,6 +29,7 @@
 
 import os
 import sys
+from collections import deque
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -37,6 +38,7 @@ import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float32, Float32MultiArray
+from std_srvs.srv import Empty, EmptyResponse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from red_liquid_infer_from_bag import (  # noqa: E402
@@ -90,6 +92,15 @@ class OnlineLiquidHeight:
 
         self.bridge = CvBridge()
         self.frame_i = 0
+        self.height_bias_mm = float(rospy.get_param("~height_bias_mm",
+            calib.get("height_bias_mm", 0.0) if isinstance(calib, dict) else 0.0))
+
+        # running zero estimation from first frames
+        self._zero_window = deque(maxlen=30)
+        self._zero_samples = 0
+        self._zero_value = 0.0
+        self._zero_locked = False
+
         self.height_pub = rospy.Publisher(self.height_topic, Float32, queue_size=5)
         self.lcr_pub = rospy.Publisher(self.lcr_topic, Float32MultiArray, queue_size=5)
         self.median_pub = rospy.Publisher(self.median_topic, Float32, queue_size=5)
@@ -97,18 +108,19 @@ class OnlineLiquidHeight:
                           if self.publish_debug else None)
         self.sub = rospy.Subscriber(self.image_topic, Image, self.on_image,
                                     queue_size=1, buff_size=2 ** 24)
+        self.reset_srv = rospy.Service("~reset_zero", Empty, self.on_reset)
 
         rospy.loginfo("[online_liquid_height] calib=%s image=%s every=%d debug=%s outputs=(%s,%s,%s,%s)",
                       calib_path, self.image_topic, self.every, self.publish_debug,
                       self.height_topic, self.lcr_topic, self.median_topic,
                       self.debug_topic if self.publish_debug else "debug-disabled")
         rospy.loginfo("[online_liquid_height] ROI=(%d,%d,%d,%d) tube=[%d,%d] rulers=%s "
-                      "HSV=h1[%d,%d] h2[%d,%d] s>=%d v>=%d",
+                      "HSV=h1[%d,%d] h2[%d,%d] s>=%d v>=%d bias=%.1fmm",
                       self.geom["roi_x"], self.geom["roi_y"], self.geom["roi_w"], self.geom["roi_h"],
                       self.geom["tube_left"], self.geom["tube_right"],
                       "3-ruler" if self.rulers else "legacy",
                       self.args.hue1_low, self.args.hue1_high, self.args.hue2_low, self.args.hue2_high,
-                      self.args.sat_min, self.args.val_min)
+                      self.args.sat_min, self.args.val_min, self.height_bias_mm)
 
     def on_image(self, msg):
         self.frame_i += 1
@@ -129,10 +141,22 @@ class OnlineLiquidHeight:
         max_lcr = float(max(valid)) if valid else float("nan")
         median = h_mm_final(h_mms)
 
-        self.height_pub.publish(Float32(data=max_lcr))
-        self.median_pub.publish(Float32(data=float(median) if median is not None else float("nan")))
+        # running zero estimation
+        if not self._zero_locked and self._zero_samples < 30 and not (max_lcr != max_lcr):
+            self._zero_window.append(max_lcr)
+            self._zero_samples += 1
+            if self._zero_samples == 30:
+                self._zero_value = float(np.median(list(self._zero_window)))
+                self._zero_locked = True
+                rospy.loginfo("[online_liquid_height] zero locked: h0=%.2f mm (median of first 30 frames)", self._zero_value)
+
+        h0 = self._zero_value if self._zero_locked else 0.0
+        max_lcr_corrected = max_lcr - h0 - self.height_bias_mm
+
+        self.height_pub.publish(Float32(data=max_lcr_corrected))
+        self.median_pub.publish(Float32(data=float(median - h0 - self.height_bias_mm) if median is not None else float("nan")))
         lcr = Float32MultiArray()
-        lcr.data = [float(h) if h is not None else float("nan") for h in h_mms]
+        lcr.data = [float(h - h0 - self.height_bias_mm) if h is not None else float("nan") for h in h_mms]
         self.lcr_pub.publish(lcr)
 
         if self.debug_pub is not None:
@@ -143,8 +167,16 @@ class OnlineLiquidHeight:
                 rospy.logwarn_throttle(5.0, "[online_liquid_height] debug 渲染失败: %s", exc)
 
         cols = ",".join("NA" if h is None else "%.1f" % h for h in h_mms)
-        rospy.loginfo_throttle(1.0, "[online_liquid_height] max-LCR=%.2f mm  L/C/R=[%s] mm",
-                               max_lcr, cols)
+        rospy.loginfo_throttle(1.0, "[online_liquid_height] max-LCR=%.2f mm  L/C/R=[%s] mm  h0=%.1f bias=%.1f",
+                               max_lcr_corrected, cols, h0, self.height_bias_mm)
+
+    def on_reset(self, req):
+        self._zero_window.clear()
+        self._zero_samples = 0
+        self._zero_value = 0.0
+        self._zero_locked = False
+        rospy.loginfo("[online_liquid_height] zero reset — re-estimating h0 from next 30 frames")
+        return EmptyResponse()
 
 
 def main():

@@ -9,6 +9,7 @@
   <arg name="debug_image_topic" default="/liquid/debug_image"/>
   <arg name="process_every" default="1" doc="每 N 帧处理一次(降 CPU)"/>
   <arg name="publish_debug" default="false" doc="是否发布 debug_image_topic overlay"/>
+  <arg name="height_bias_mm" default="0.0" doc="手动偏置(mm): 静止时显示非零则设相反值"/>
 
   <node pkg="realsense_liquid_measurement" type="online_liquid_height_node.py"
         name="online_liquid_height" output="screen">
@@ -20,5 +21,6 @@
     <param name="debug_image_topic" value="$(arg debug_image_topic)"/>
     <param name="process_every" value="$(arg process_every)"/>
     <param name="publish_debug" value="$(arg publish_debug)"/>
+    <param name="height_bias_mm" value="$(arg height_bias_mm)"/>
   </node>
 </launch>

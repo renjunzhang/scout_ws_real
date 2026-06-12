@@ -141,8 +141,9 @@ class Monitor:
                 now = time.time()
                 self.session.append((now, self.liquid_max, self.liquid_lcr[0], self.liquid_lcr[1],
                                      self.liquid_lcr[2], self.model_h, self.cmd_v, self.odom_v, self.solver_ms))
-                while self.session and now - self.session[0][0] > self.max_session_sec:
-                    self.session.popleft()
+                if self.max_session_sec > 0:
+                    while self.session and now - self.session[0][0] > self.max_session_sec:
+                        self.session.popleft()
 
     def _summary_cb(self, msg):
         if len(msg.data) >= 2:
