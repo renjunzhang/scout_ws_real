@@ -6,10 +6,12 @@ Role:
   - Never publish control/perception topics, never open the camera, never record bags.
   - Independent from control packages; closing this dashboard does not affect the planner.
   - Topic names are configurable through ROS private parameters.
-  - Online /liquid/* and model /spmpc/* are proxies; paper metrics use offline bag inference.
+  - Online /liquid/* is an RGB monitoring proxy; paper metrics use offline bag inference.
+  - Optional model/SPMPC overlays can be enabled by parameters, but are disabled by
+    the RGB-only combined launch.
 
 Layout:
-  [RGB overlay]            [liquid height trend: max-LCR / L/C/R / model]
+  [RGB overlay]            [liquid height trend: max-LCR / L/C/R]
   [key metrics]            [topic health]
   [START] [STOP] [ZERO] [EXPORT]
 
@@ -55,6 +57,7 @@ class Monitor:
         self.liquid_height_topic = rospy.get_param("~liquid_height_topic", "/liquid/height")
         self.liquid_lcr_topic = rospy.get_param("~liquid_lcr_topic", "/liquid/height_lcr")
         self.model_height_topic = rospy.get_param("~model_height_topic", "/spmpc/slosh_height")
+        self.show_model = bool(rospy.get_param("~show_model", True)) and bool(self.model_height_topic)
         self.solver_time_topic = rospy.get_param("~solver_time_topic", "/spmpc/solver_time_ms")
         self.slosh_summary_topic = rospy.get_param("~slosh_summary_topic", "/spmpc/slosh_horizon_summary")
         self.status_topic = rospy.get_param("~status_topic", "/spmpc/status")
@@ -96,16 +99,18 @@ class Monitor:
         rospy.Subscriber(self.image_topic, Image, self._img_cb, queue_size=1, buff_size=2 ** 24)
         rospy.Subscriber(self.liquid_height_topic, Float32, self._height_cb, queue_size=10)
         rospy.Subscriber(self.liquid_lcr_topic, Float32MultiArray, self._lcr_cb, queue_size=10)
-        rospy.Subscriber(self.model_height_topic, Float32, self._mk("model_h", "model_h"), queue_size=10)
+        if self.show_model:
+            rospy.Subscriber(self.model_height_topic, Float32, self._mk("model_h", "model_h"), queue_size=10)
         rospy.Subscriber(self.solver_time_topic, Float32, self._mk("solver_ms", "solver_ms"), queue_size=10)
         rospy.Subscriber(self.slosh_summary_topic, Float32MultiArray, self._summary_cb, queue_size=5)
         rospy.Subscriber(self.status_topic, String, self._str_cb("status"), queue_size=5)
         rospy.Subscriber(self.backend_topic, String, self._str_cb("backend"), queue_size=5)
         rospy.Subscriber(self.cmd_topic, Twist, self._cmd_cb, queue_size=5)
         rospy.Subscriber(self.odom_topic, Odometry, self._odom_cb, queue_size=5)
-        rospy.loginfo("[monitor] subscribed liquid=(%s,%s) spmpc=(%s,%s,%s,%s,%s) cmd=%s odom=%s",
+        rospy.loginfo("[monitor] subscribed liquid=(%s,%s) model=%s spmpc=(%s,%s,%s,%s) cmd=%s odom=%s",
                       self.liquid_height_topic, self.liquid_lcr_topic,
-                      self.model_height_topic, self.solver_time_topic, self.slosh_summary_topic,
+                      self.model_height_topic if self.show_model else "disabled",
+                      self.solver_time_topic, self.slosh_summary_topic,
                       self.status_topic, self.backend_topic, self.cmd_topic, self.odom_topic)
 
     def _mk(self, key, attr):
@@ -212,7 +217,8 @@ class Monitor:
         ax.plot(ts, [s[2] - h0m for s in samples], color=C_L, lw=0.9, label="L")
         ax.plot(ts, [s[3] - h0m for s in samples], color=C_C, lw=0.9, label="C")
         ax.plot(ts, [s[4] - h0m for s in samples], color=C_R, lw=0.9, label="R")
-        ax.plot(ts, [s[5] - h0mod for s in samples], color=C_MODEL, lw=1.3, ls="--", label="model h")
+        if self.show_model:
+            ax.plot(ts, [s[5] - h0mod for s in samples], color=C_MODEL, lw=1.3, ls="--", label="model h")
         ax.axhline(0, color=MUTE, lw=0.6, ls=":")
         ax.set_xlabel("t (s)"); ax.set_ylabel("liquid height (mm)" + ("  [zeroed]" if (h0m or h0mod) else ""))
         ax.set_title("liquid_session_%s" % stamp); ax.grid(True, alpha=0.3); ax.legend(loc="upper left", fontsize=8, ncol=2)
@@ -335,6 +341,7 @@ def main():
             model_h, h_peak = m.model_h, m.h_peak_pred
             status, backend, solver_ms = m.status, m.backend, m.solver_ms
             cmd_v, odom_v, ax_est = m.cmd_v, m.odom_v, m.ax_est
+            show_model = m.show_model
             n_sess = len(m.session); last_export = m.last_export
             now = time.time()
             win = [s for s in m.session if now - s[0] <= m.history_sec]
@@ -380,7 +387,8 @@ def main():
             ax_curve.plot(ts, [s[2] - h0m for s in win], color=C_L, lw=1.0, alpha=0.85, label="L")
             ax_curve.plot(ts, [s[3] - h0m for s in win], color=C_C, lw=1.0, alpha=0.85, label="C")
             ax_curve.plot(ts, [s[4] - h0m for s in win], color=C_R, lw=1.0, alpha=0.85, label="R")
-            ax_curve.plot(ts, [s[5] - h0mod for s in win], color=C_MODEL, lw=1.6, ls="--", label="model")
+            if show_model:
+                ax_curve.plot(ts, [s[5] - h0mod for s in win], color=C_MODEL, lw=1.6, ls="--", label="model")
             ax_curve.axhline(0, color=MUTE, lw=0.8, ls=":")
             ax_curve.set_xlim(-m.history_sec, 0.0)
             ax_curve.set_xlabel("t (s, now=0)", fontsize=8)
@@ -404,7 +412,10 @@ def main():
         _metric_cell(ax_kpi, 0.22, 0.47, 0.12, 0.28, "LEFT", _fmt(lcr[0] - h0m, " mm", 0), C_L)
         _metric_cell(ax_kpi, 0.36, 0.47, 0.12, 0.28, "CENTER", _fmt(lcr[1] - h0m, " mm", 0), C_C)
         _metric_cell(ax_kpi, 0.50, 0.47, 0.12, 0.28, "RIGHT", _fmt(lcr[2] - h0m, " mm", 0), C_R)
-        _metric_cell(ax_kpi, 0.64, 0.47, 0.16, 0.28, "MODEL", model_value, C_MODEL)
+        if show_model:
+            _metric_cell(ax_kpi, 0.64, 0.47, 0.16, 0.28, "MODEL", model_value, C_MODEL)
+        else:
+            _metric_cell(ax_kpi, 0.64, 0.47, 0.16, 0.28, "RGB ONLY", "ON", C_MAX)
         _metric_cell(ax_kpi, 0.82, 0.47, 0.15, 0.28, "SOLVER", _fmt(solver_ms, " ms", 1), solver_color)
         _metric_cell(ax_kpi, 0.02, 0.08, 0.18, 0.24, "CMD V", _fmt(cmd_v, " m/s", 2), OK if cmd_fresh else WARN)
         _metric_cell(ax_kpi, 0.22, 0.08, 0.18, 0.24, "ODOM V", _fmt(odom_v, " m/s", 2), OK if odom_fresh else WARN)

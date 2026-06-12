@@ -1,12 +1,18 @@
 <launch>
-  <!-- 在线液面监控一站启动: RGB检测 + 独立slosh模型 + 监控前端。
-       前提: 传感器栈已起(/camera/color/image_raw, /odom)，标定 YAML 当天已做。
-       不依赖 SPMPC: TEB/DWA/SPMPC 全部通用。
+  <!-- 在线液面监控一站启动: RGB检测 + 监控前端。
+       前提: 传感器栈已起(/camera/color/image_raw)，标定 YAML 当天已做。
+       不启动独立 slosh model；右侧波形图只显示 RGB max-LCR/L/C/R 高度。
        关闭: Ctrl-C 停止全部，不影响相机、传感器栈和 planner。 -->
   <arg name="calibration" doc="三标尺标定 yaml(与离线同一份, 当天标一次)"/>
   <arg name="image_topic" default="/camera/color/image_raw"/>
   <arg name="process_every" default="1" doc="每 N 帧处理一次(降 CPU)"/>
-  <arg name="height_bias_mm" default="0.0" doc="手动偏置(mm): 若静止时显示-3mm则设3.0, 也可写入 calibration YAML 的 height_bias_mm 字段"/>
+  <arg name="height_bias_mm" default="0.0" doc="手动偏置(mm): 与当前静止显示值同号；显示+3mm设3.0，显示-3mm设-3.0"/>
+  <arg name="hue1_low" default="0"/>
+  <arg name="hue1_high" default="11"/>
+  <arg name="hue2_low" default="173"/>
+  <arg name="hue2_high" default="179"/>
+  <arg name="sat_min" default="80"/>
+  <arg name="val_min" default="162"/>
 
   <!-- ===== 检测节点: 读取相机, 逐帧 detect_red_liquid, 发布 /liquid/* ===== -->
   <include file="$(find realsense_liquid_measurement)/launch/online_liquid_height.launch">
@@ -15,19 +21,23 @@
     <arg name="process_every" value="$(arg process_every)"/>
     <arg name="publish_debug" value="true"/>
     <arg name="height_bias_mm" value="$(arg height_bias_mm)"/>
+    <arg name="hue1_low" value="$(arg hue1_low)"/>
+    <arg name="hue1_high" value="$(arg hue1_high)"/>
+    <arg name="hue2_low" value="$(arg hue2_low)"/>
+    <arg name="hue2_high" value="$(arg hue2_high)"/>
+    <arg name="sat_min" value="$(arg sat_min)"/>
+    <arg name="val_min" value="$(arg val_min)"/>
   </include>
 
-  <!-- ===== 独立 slosh 模型: 只读 /odom + /cmd_vel, 不依赖 SPMPC, 发布 /slosh/height ===== -->
-  <include file="$(find slosh_models)/launch/slosh_monitor.launch"/>
-
   <!-- ===== 监控前端: 纯订阅, matplotlib dark dashboard, 常开 ===== -->
-  <!-- model 曲线指向独立 /slosh/height (SPMPC/TEB/DWA 通用) -->
+  <!-- 不订阅/绘制 slosh model；右侧曲线仅显示 RGB max-LCR 与 L/C/R。 -->
   <node pkg="realsense_liquid_measurement" type="liquid_experiment_monitor.py"
         name="liquid_experiment_monitor" output="screen" required="false">
     <param name="image_topic" value="/liquid/debug_image"/>
     <param name="liquid_height_topic" value="/liquid/height"/>
     <param name="liquid_lcr_topic" value="/liquid/height_lcr"/>
-    <param name="model_height_topic" value="/slosh/height"/>
+    <param name="show_model" value="false"/>
+    <param name="model_height_topic" value=""/>
     <param name="solver_time_topic" value="/spmpc/solver_time_ms"/>
     <param name="slosh_summary_topic" value="/spmpc/slosh_horizon_summary"/>
     <param name="status_topic" value="/spmpc/status"/>

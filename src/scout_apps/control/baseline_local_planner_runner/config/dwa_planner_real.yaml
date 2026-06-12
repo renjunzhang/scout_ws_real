@@ -9,9 +9,11 @@ DWAPlannerROS:
   min_vel_theta: 0.1
   min_in_place_vel_theta: 0.2
 
-  acc_lim_x: 0.8
+  # Fair common-limit profile: align with SPMPC/sim gate (a_max=0.6, alpha_max=1.2).
+  # Robustness-tuning changes for real DWA diagnosis must be recorded separately.
+  acc_lim_x: 0.6
   acc_lim_y: 0.0
-  acc_lim_theta: 2.0
+  acc_lim_theta: 1.2
 
   sim_time: 2.0
   sim_granularity: 0.05
