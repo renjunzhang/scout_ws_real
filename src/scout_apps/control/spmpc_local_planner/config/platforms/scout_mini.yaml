@@ -9,3 +9,7 @@ platform:
     linear_accel_limit_enable: true
     linear_accel_max: 0.6
     linear_accel_max_dt: 0.2
+    angular_limit_enable: false
+    angular_rate_max: 1.2
+    angular_accel_max: 1.2
+    angular_accel_max_dt: 0.2

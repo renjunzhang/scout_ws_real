@@ -211,6 +211,25 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_ba
 
 说明：`RECORD_CAMERA=true` 会录 `/camera/color/image_raw` 与 `/camera/color/camera_info`，用于离线 RGB 液面分析；`RECORD_SCAN=true` 会录 `/scan_front`，用于现场障碍/安全证据；`RECORD_DEPTH`、`RECORD_ONLINE_LIQUID`、`RECORD_MOCAP` 默认关闭，需要时再显式打开，避免 bag 过大。
 
+如果当天已经有三标尺标定 YAML，且希望这个 run 录完后直接导出液面变化 CSV，可以显式打开后处理：
+
+```bash
+VARIANT=B0 \
+RUN_LABEL=P0_straight \
+RECORD_SEC=0 \
+RECORD_CAMERA=true \
+RECORD_SCAN=true \
+RECORD_ONLINE_LIQUID=true \
+LIQUID_EXPORT_AFTER_RECORD=true \
+LIQUID_EXPORT_SOURCE=rgb \
+LIQUID_CALIBRATION=/home/geist/slosh_bags/real/${DATE}_calib/red_3ruler.yaml \
+OUT_DIR=${OUT_DIR} \
+NAME=spmpc_full_P0_straight_B0_rgb \
+bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
+```
+
+手动 Ctrl-C 停 rosbag 后，脚本会继续调用 `export_liquid_variation_from_bags.py`，在 `${OUT_DIR}/spmpc_full_P0_straight_B0_rgb_liquid_variation/` 下生成 `liquid_variation_timeseries.csv`、`liquid_variation_summary.csv` 和曲线图。
+
 ### 4.4 终端 E：先做 Shadow，不驱动车
 
 ```bash

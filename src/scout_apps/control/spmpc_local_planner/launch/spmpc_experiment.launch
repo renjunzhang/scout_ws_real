@@ -9,9 +9,16 @@
   <arg name="solver_backend" default="continuous_mpcc_acados" doc="continuous_mpcc_acados(mainline)|continuous_mpcc_direct_omega_legacy(RouteB diagnostic)|primitive(debug fallback)"/>
   <arg name="w_slosh" default="-1.0" doc="覆盖当前 variant 的 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
   <arg name="v_ref" default="-1.0" doc="诊断/消融用: 覆盖当前 variant 的 v_ref; 负值时用 variants.yaml 原值"/>
+  <arg name="w_alpha" default="-1.0" doc="覆盖当前 variant 的 w_alpha; 负值时由 w_smooth fallback"/>
+  <arg name="w_du_a" default="-1.0" doc="覆盖当前 variant 的 w_du_a; 负值时由 w_smooth fallback"/>
+  <arg name="w_du_vs" default="-1.0" doc="覆盖当前 variant 的 w_du_vs; 负值时由 w_smooth fallback"/>
   <arg name="shared_linear_accel_limit_enable" default="true"/>
   <arg name="shared_linear_accel_max" default="-1.0" doc="覆盖 platform/shared_constraints/linear_accel_max; 负值时用 platform yaml"/>
   <arg name="shared_linear_accel_max_dt" default="-1.0" doc="覆盖 platform/shared_constraints/linear_accel_max_dt; 负值时用 platform yaml"/>
+  <arg name="shared_angular_limit_enable" default="false"/>
+  <arg name="shared_angular_rate_max" default="-1.0" doc="覆盖 platform/shared_constraints/angular_rate_max; 负值时用 platform yaml/robot omega_max"/>
+  <arg name="shared_angular_accel_max" default="-1.0" doc="覆盖 platform/shared_constraints/angular_accel_max; 负值时用 platform yaml/robot alpha_max"/>
+  <arg name="shared_angular_accel_max_dt" default="-1.0" doc="覆盖 platform/shared_constraints/angular_accel_max_dt; 负值时用 platform yaml"/>
   <arg name="alpha_max" default="-1.0" doc="诊断/消融用: 覆盖 robot/alpha_max; 负值时用 platform yaml"/>
   <arg name="platform_config" default="scout_mini"/>
   <arg name="container_config" default="tube_default"/>
@@ -36,6 +43,13 @@
            if="$(eval float(arg('shared_linear_accel_max')) >= 0.0)"/>
     <param name="platform/shared_constraints/linear_accel_max_dt" value="$(arg shared_linear_accel_max_dt)"
            if="$(eval float(arg('shared_linear_accel_max_dt')) >= 0.0)"/>
+    <param name="platform/shared_constraints/angular_limit_enable" value="$(arg shared_angular_limit_enable)"/>
+    <param name="platform/shared_constraints/angular_rate_max" value="$(arg shared_angular_rate_max)"
+           if="$(eval float(arg('shared_angular_rate_max')) >= 0.0)"/>
+    <param name="platform/shared_constraints/angular_accel_max" value="$(arg shared_angular_accel_max)"
+           if="$(eval float(arg('shared_angular_accel_max')) >= 0.0)"/>
+    <param name="platform/shared_constraints/angular_accel_max_dt" value="$(arg shared_angular_accel_max_dt)"
+           if="$(eval float(arg('shared_angular_accel_max_dt')) >= 0.0)"/>
     <param name="robot/alpha_max" value="$(arg alpha_max)"
            if="$(eval float(arg('alpha_max')) >= 0.0)"/>
     <!-- sweep 时覆盖该 variant 的 w_slosh(在 variants.yaml 加载之后, 故生效); w_slosh<0 跳过 -->
@@ -44,5 +58,12 @@
     <!-- speed diagnostic 时覆盖该 variant 的 v_ref; v_ref<0 跳过，保持默认行为 -->
     <param name="variants/$(arg planner_variant)/v_ref" value="$(arg v_ref)"
            if="$(eval float(arg('v_ref')) >= 0.0)"/>
+    <!-- smooth split sweep overrides; <0 时由 C++ 侧回退到 w_smooth -->
+    <param name="variants/$(arg planner_variant)/w_alpha" value="$(arg w_alpha)"
+           if="$(eval float(arg('w_alpha')) >= 0.0)"/>
+    <param name="variants/$(arg planner_variant)/w_du_a" value="$(arg w_du_a)"
+           if="$(eval float(arg('w_du_a')) >= 0.0)"/>
+    <param name="variants/$(arg planner_variant)/w_du_vs" value="$(arg w_du_vs)"
+           if="$(eval float(arg('w_du_vs')) >= 0.0)"/>
   </node>
 </launch>

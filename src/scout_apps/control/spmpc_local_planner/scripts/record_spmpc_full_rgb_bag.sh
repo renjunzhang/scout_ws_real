@@ -24,6 +24,24 @@ RECORD_STANDALONE_SLOSH="${RECORD_STANDALONE_SLOSH:-true}"
 RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-false}"
 RECORD_MOCAP="${RECORD_MOCAP:-false}"
 RECORD_ROSOUT="${RECORD_ROSOUT:-true}"
+
+# Optional post-record liquid export. Disabled by default: recording remains
+# subscribe-only and never launches perception/control unless explicitly asked.
+LIQUID_EXPORT_AFTER_RECORD="${LIQUID_EXPORT_AFTER_RECORD:-false}"
+LIQUID_EXPORT_SOURCE="${LIQUID_EXPORT_SOURCE:-rgb}"
+LIQUID_CALIBRATION="${LIQUID_CALIBRATION:-}"
+LIQUID_EXPORT_OUT_DIR="${LIQUID_EXPORT_OUT_DIR:-${OUT_DIR}/${NAME}_liquid_variation}"
+LIQUID_IMAGE_TOPIC="${LIQUID_IMAGE_TOPIC:-/camera/color/image_raw}"
+LIQUID_ZERO_CORRECTION_FRAMES="${LIQUID_ZERO_CORRECTION_FRAMES:-30}"
+LIQUID_SMOOTH_FRAMES="${LIQUID_SMOOTH_FRAMES:-5}"
+LIQUID_DEBUG_EVERY="${LIQUID_DEBUG_EVERY:-30}"
+LIQUID_HUE1_LOW="${LIQUID_HUE1_LOW:-0}"
+LIQUID_HUE1_HIGH="${LIQUID_HUE1_HIGH:-11}"
+LIQUID_HUE2_LOW="${LIQUID_HUE2_LOW:-173}"
+LIQUID_HUE2_HIGH="${LIQUID_HUE2_HIGH:-179}"
+LIQUID_SAT_MIN="${LIQUID_SAT_MIN:-80}"
+LIQUID_VAL_MIN="${LIQUID_VAL_MIN:-162}"
+
 MOCAP_TRACKER="${MOCAP_TRACKER:-Scout}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -326,6 +344,13 @@ printf '%s\n' "${record_topics[@]}" > "${SELECTED_TOPIC_PATH}"
   echo "record_online_liquid=${RECORD_ONLINE_LIQUID}"
   echo "record_mocap=${RECORD_MOCAP}"
   echo "record_rosout=${RECORD_ROSOUT}"
+  echo "liquid_export_after_record=${LIQUID_EXPORT_AFTER_RECORD}"
+  echo "liquid_export_source=${LIQUID_EXPORT_SOURCE}"
+  echo "liquid_calibration=${LIQUID_CALIBRATION}"
+  echo "liquid_export_out_dir=${LIQUID_EXPORT_OUT_DIR}"
+  echo "liquid_image_topic=${LIQUID_IMAGE_TOPIC}"
+  echo "liquid_zero_correction_frames=${LIQUID_ZERO_CORRECTION_FRAMES}"
+  echo "liquid_smooth_frames=${LIQUID_SMOOTH_FRAMES}"
   echo "mocap_tracker=${MOCAP_TRACKER}"
   echo "topic_count=${#record_topics[@]}"
   echo "repo_root=${REPO_ROOT}"
@@ -353,6 +378,7 @@ cat <<EOF
   scan_front   = ${RECORD_SCAN}
   depth        = ${RECORD_DEPTH}
   liquid proxy = ${RECORD_ONLINE_LIQUID}
+  liquid export= ${LIQUID_EXPORT_AFTER_RECORD} (${LIQUID_EXPORT_SOURCE})
   mocap        = ${RECORD_MOCAP}
   metadata     = ${OUT_DIR}/${NAME}_{info.txt,rosparam.yaml,topics.txt,nodes.txt,cmd_vel_info.txt,selected_topics.txt}
 ============================================
@@ -367,17 +393,46 @@ else
   record_cmd=(rosbag record -O "${BAG_PATH}" "${record_topics[@]}")
 fi
 
+set +e
 if [[ "${RECORD_SEC}" == "0" ]]; then
   "${record_cmd[@]}"
+  code=$?
 else
-  set +e
   timeout --signal=INT --kill-after=5s "${RECORD_SEC}s" "${record_cmd[@]}"
   code=$?
-  set -e
-  if [[ ${code} -ne 0 && ${code} -ne 124 && ${code} -ne 130 ]]; then
-    echo "[record_spmpc_full_rgb_bag] ERROR: rosbag record failed with exit code ${code}" >&2
-    exit "${code}"
-  fi
+fi
+set -e
+if [[ ${code} -ne 0 && ${code} -ne 124 && ${code} -ne 130 ]]; then
+  echo "[record_spmpc_full_rgb_bag] ERROR: rosbag record failed with exit code ${code}" >&2
+  exit "${code}"
 fi
 
 echo "[record_spmpc_full_rgb_bag] OK: bag saved: ${BAG_PATH}"
+
+if truthy "${LIQUID_EXPORT_AFTER_RECORD}"; then
+  LIQUID_EXPORT_SCRIPT="${LIQUID_EXPORT_SCRIPT:-${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/scripts/export_liquid_variation_from_bags.py}"
+  if [[ ! -x "${LIQUID_EXPORT_SCRIPT}" ]]; then
+    echo "[record_spmpc_full_rgb_bag] ERROR: liquid export script not executable: ${LIQUID_EXPORT_SCRIPT}" >&2
+    exit 20
+  fi
+  if [[ "${LIQUID_EXPORT_SOURCE}" != "online" && -z "${LIQUID_CALIBRATION}" ]]; then
+    echo "[record_spmpc_full_rgb_bag] ERROR: LIQUID_CALIBRATION is required when LIQUID_EXPORT_SOURCE=${LIQUID_EXPORT_SOURCE}" >&2
+    exit 21
+  fi
+  echo "[record_spmpc_full_rgb_bag] running liquid export -> ${LIQUID_EXPORT_OUT_DIR}"
+  python3 "${LIQUID_EXPORT_SCRIPT}" "${BAG_PATH}" \
+    --source "${LIQUID_EXPORT_SOURCE}" \
+    --calibration "${LIQUID_CALIBRATION}" \
+    --topic "${LIQUID_IMAGE_TOPIC}" \
+    --out-dir "${LIQUID_EXPORT_OUT_DIR}" \
+    --zero-correction-frames "${LIQUID_ZERO_CORRECTION_FRAMES}" \
+    --smooth-frames "${LIQUID_SMOOTH_FRAMES}" \
+    --debug-every "${LIQUID_DEBUG_EVERY}" \
+    --hue1-low "${LIQUID_HUE1_LOW}" \
+    --hue1-high "${LIQUID_HUE1_HIGH}" \
+    --hue2-low "${LIQUID_HUE2_LOW}" \
+    --hue2-high "${LIQUID_HUE2_HIGH}" \
+    --sat-min "${LIQUID_SAT_MIN}" \
+    --val-min "${LIQUID_VAL_MIN}"
+  echo "[record_spmpc_full_rgb_bag] OK: liquid export saved under ${LIQUID_EXPORT_OUT_DIR}"
+fi

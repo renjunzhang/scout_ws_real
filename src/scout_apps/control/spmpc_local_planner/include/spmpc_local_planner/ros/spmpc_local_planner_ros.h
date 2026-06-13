@@ -29,7 +29,13 @@ private:
     void controlTimerCallback(const ros::TimerEvent&);
     void publishZeroCommand();
     void publishCommand(const geometry_msgs::Twist& desired);
-    geometry_msgs::Twist applySharedCommandLimits(const geometry_msgs::Twist& desired, const ros::Time& stamp);
+    geometry_msgs::Twist applySharedCommandLimits(const geometry_msgs::Twist& desired,
+                                                  const ros::Time& stamp,
+                                                  geometry_msgs::Twist& previous,
+                                                  double& dt,
+                                                  bool& linear_limited,
+                                                  bool& angular_rate_limited,
+                                                  bool& angular_accel_limited);
     bool updateTerminalSpinFailGate(const SolverInput& input, const SolverOutput& output, double period_sec);
     void resetTerminalSpinFailGate();
     bool updateTrackingSafetyGate(const SolverInput& input,
@@ -89,6 +95,10 @@ private:
     bool shared_cmd_linear_accel_limit_enable_ = true;
     double shared_cmd_linear_accel_max_ = 0.6;
     double shared_cmd_linear_accel_max_dt_ = 0.2;
+    bool shared_cmd_angular_limit_enable_ = false;
+    double shared_cmd_angular_rate_max_ = 1.2;
+    double shared_cmd_angular_accel_max_ = 1.2;
+    double shared_cmd_angular_accel_max_dt_ = 0.2;
     bool terminal_spin_fail_enable_ = true;
     double terminal_spin_fail_omega_threshold_ = 0.20;
     double terminal_spin_fail_max_duration_sec_ = 2.0;

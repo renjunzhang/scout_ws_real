@@ -28,6 +28,8 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     stage0_reference_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/stage0_reference", 1);
     local_traj_head_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/local_traj_head", 1);
     warm_start_head_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/warm_start_head", 1);
+    cmd_output_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/cmd_vel_output", 1);
+    cmd_output_status_pub_ = nh.advertise<std_msgs::String>("debug/cmd_vel_output_status", 1);
     terminal_pub_ = nh.advertise<std_msgs::Float32MultiArray>("terminal/debug", 1);
     terminal_mode_pub_ = nh.advertise<std_msgs::String>("terminal/mode", 1);
     start_lock_active_pub_ = nh.advertise<std_msgs::Float32>("start_lock/active", 1);
@@ -50,6 +52,41 @@ void DiagnosticsPublisher::publishSolverBackend(const std::string& solver_backen
     std_msgs::String msg;
     msg.data = solver_backend;
     solver_backend_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishCommandOutput(const geometry_msgs::Twist& desired,
+                                                const geometry_msgs::Twist& limited,
+                                                const geometry_msgs::Twist& previous,
+                                                double dt,
+                                                bool linear_limited,
+                                                bool angular_rate_limited,
+                                                bool angular_accel_limited) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label =
+        "desired_v,desired_omega,limited_v,limited_omega,prev_v,prev_omega,dt,linear_limited,angular_rate_limited,angular_accel_limited";
+    msg.layout.dim[0].size = 10;
+    msg.layout.dim[0].stride = 10;
+    msg.data.resize(10, 0.0f);
+    msg.data[0] = static_cast<float>(desired.linear.x);
+    msg.data[1] = static_cast<float>(desired.angular.z);
+    msg.data[2] = static_cast<float>(limited.linear.x);
+    msg.data[3] = static_cast<float>(limited.angular.z);
+    msg.data[4] = static_cast<float>(previous.linear.x);
+    msg.data[5] = static_cast<float>(previous.angular.z);
+    msg.data[6] = static_cast<float>(dt);
+    msg.data[7] = linear_limited ? 1.0f : 0.0f;
+    msg.data[8] = angular_rate_limited ? 1.0f : 0.0f;
+    msg.data[9] = angular_accel_limited ? 1.0f : 0.0f;
+    cmd_output_pub_.publish(msg);
+
+    std_msgs::String status;
+    if (linear_limited || angular_rate_limited || angular_accel_limited) {
+        status.data = "LIMITED";
+    } else {
+        status.data = "PASS";
+    }
+    cmd_output_status_pub_.publish(status);
 }
 
 void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::string& frame_id) {

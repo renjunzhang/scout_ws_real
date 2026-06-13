@@ -98,6 +98,9 @@ def load_config():
         "v_ref": float(b0.get("v_ref", 0.25)),
         "w_control": float(b0["w_control"]),
         "w_smooth": float(b0["w_smooth"]),
+        "w_alpha": float(b0.get("w_alpha", b0["w_smooth"])),
+        "w_du_a": float(b0.get("w_du_a", b0["w_smooth"])),
+        "w_du_vs": float(b0.get("w_du_vs", b0["w_smooth"])),
         # slosh codegen 默认值（运行时由 C++ 包装层从同一套 slosh_dynamics 覆盖，§4.3）。
         "w_slosh": float(b_slosh.get("w_slosh", 5.0)),
     }
@@ -125,10 +128,10 @@ def default_parameter_values(cfg, with_slosh, direct_omega_legacy=False):
     if direct_omega_legacy:
         p[idx["w_du_omega"]] = cfg["w_smooth"]
     else:
-        p[idx["w_alpha"]] = cfg["w_smooth"]   # 转向角加速度权重(抗 chatter，所有 stage 生效)
+        p[idx["w_alpha"]] = cfg["w_alpha"]   # 转向角加速度权重(抗 chatter，所有 stage 生效)
     p[idx["v_ref"]] = cfg["v_ref"]
-    p[idx["w_du_a"]] = cfg["w_smooth"]
-    p[idx["w_du_vs"]] = cfg["w_smooth"]
+    p[idx["w_du_a"]] = cfg["w_du_a"]
+    p[idx["w_du_vs"]] = cfg["w_du_vs"]
     p[idx["e_c_ref"]] = cfg["e_c_ref"]
     p[idx["e_l_ref"]] = cfg["e_l_ref"]
     if with_slosh:

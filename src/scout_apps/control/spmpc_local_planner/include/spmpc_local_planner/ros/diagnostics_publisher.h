@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/core/variant_config.h"
+#include <geometry_msgs/Twist.h>
 #include <nav_msgs/Path.h>
 #include <ros/ros.h>
 #include <std_msgs/Float32.h>
@@ -16,6 +17,13 @@ public:
     void publishVariant(const VariantConfig& variant, const std::string& experiment_mode);
     void publishSolverBackend(const std::string& solver_backend);
     void publishOutput(const SolverOutput& output, const std::string& frame_id);
+    void publishCommandOutput(const geometry_msgs::Twist& desired,
+                              const geometry_msgs::Twist& limited,
+                              const geometry_msgs::Twist& previous,
+                              double dt,
+                              bool linear_limited,
+                              bool angular_rate_limited,
+                              bool angular_accel_limited);
     void publishSloshState(const SloshState& state);
     void publishSloshHeight(double height_m);
     void publishStatus(const std::string& status);
@@ -46,6 +54,8 @@ private:
     ros::Publisher stage0_reference_pub_;
     ros::Publisher local_traj_head_pub_;
     ros::Publisher warm_start_head_pub_;
+    ros::Publisher cmd_output_pub_;
+    ros::Publisher cmd_output_status_pub_;
     ros::Publisher terminal_pub_;
     ros::Publisher terminal_mode_pub_;
     ros::Publisher start_lock_active_pub_;

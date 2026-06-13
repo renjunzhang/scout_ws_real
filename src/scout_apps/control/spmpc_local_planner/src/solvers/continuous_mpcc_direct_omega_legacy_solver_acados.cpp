@@ -294,9 +294,9 @@ bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
 
     for (int stage = 0; stage <= n; ++stage) {
         if (stage == 0 && have_u_prev_) {
-            p[W_DU_A] = variant_.w_smooth;
+            p[W_DU_A] = variant_.w_du_a;
             p[W_DU_OMEGA] = variant_.w_smooth;
-            p[W_DU_VS] = variant_.w_smooth;
+            p[W_DU_VS] = variant_.w_du_vs;
             p[A_PREV] = u_prev_[0];
             p[OMEGA_PREV] = u_prev_[1];
             p[VS_PREV] = u_prev_[2];
@@ -391,7 +391,9 @@ bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
             const double da = (uk[0] - u_prev_[0]) / a_ref;
             const double domega = (uk[1] - u_prev_[1]) / omega_ref;
             const double dvs = (uk[2] - u_prev_[2]) / vs_ref;
-            output.cost.J_smooth += variant_.w_smooth * (da * da + domega * domega + dvs * dvs) * inv_n;
+            output.cost.J_smooth += (variant_.w_du_a * da * da +
+                                     variant_.w_smooth * domega * domega +
+                                     variant_.w_du_vs * dvs * dvs) * inv_n;
         }
     }
 

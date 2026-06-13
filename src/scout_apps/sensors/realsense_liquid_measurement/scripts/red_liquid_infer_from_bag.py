@@ -417,6 +417,14 @@ def h_mm_final(h_mms: List[Optional[float]]) -> Optional[float]:
     return float(np.median(valid))
 
 
+def h_mm_max_lcr(h_mms: List[Optional[float]]) -> Optional[float]:
+    """Max-LCR liquid height, matching the online /liquid/height primary signal."""
+    valid = [h for h in h_mms if h is not None]
+    if not valid:
+        return None
+    return float(max(valid))
+
+
 # ── Debug rendering ───────────────────────────────────────────────────────────
 
 def render_debug(
@@ -554,15 +562,18 @@ def render_debug_clear(
 
 def save_csv(
     out_path: Path,
-    frame_indices:  List[int],
-    stamps:         List[float],
-    y_tops_all:     List[List[Optional[float]]],
-    h_mms_all:      List[List[Optional[float]]],
-    confs_all:      List[List[float]],
-    clipped_all:    List[List[bool]],
-    h_corr_all:     List[Optional[float]],
-    h_smooth_final: List[Optional[float]],
-    h_smooth_corr:  List[Optional[float]],
+    frame_indices:       List[int],
+    stamps:              List[float],
+    y_tops_all:          List[List[Optional[float]]],
+    h_mms_all:           List[List[Optional[float]]],
+    confs_all:           List[List[float]],
+    clipped_all:         List[List[bool]],
+    h_corr_all:          List[Optional[float]],
+    h_smooth_final:      List[Optional[float]],
+    h_smooth_corr:       List[Optional[float]],
+    h_max_corr_all:      List[Optional[float]],
+    h_max_smooth_final:  List[Optional[float]],
+    h_max_smooth_corr:   List[Optional[float]],
     has_rulers: bool,
 ) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -574,17 +585,22 @@ def save_csv(
                 "y_top_left",    "h_mm_left",   "clipped_left",
                 "y_top_center",  "h_mm_center", "clipped_center",
                 "y_top_right",   "h_mm_right",  "clipped_right",
-                "h_mm_final",    "conf_mean",   "any_clipped",
-                "h_mm_corr",     # zero-corrected; empty if correction disabled
+                "h_mm_final",    "h_mm_max_lcr", "conf_mean",   "any_clipped",
+                "h_mm_corr",     # zero-corrected median; empty if correction disabled
                 "h_mm_smooth",   # rolling-median of h_mm_final (=h_mm_final if smooth=1)
                 "h_mm_smooth_corr",  # rolling-median of h_mm_corr
+                "h_mm_max_lcr_corr",        # zero-corrected max-LCR, matches online /liquid/height semantics
+                "h_mm_max_lcr_smooth",      # rolling-median of h_mm_max_lcr
+                "h_mm_max_lcr_smooth_corr", # rolling-median of h_mm_max_lcr_corr
             ])
-            for fi, st, ytops, hms, cnfs, clips, h_corr, h_sf, h_sc in zip(
+            for fi, st, ytops, hms, cnfs, clips, h_corr, h_sf, h_sc, h_max_corr, h_max_sf, h_max_sc in zip(
                     frame_indices, stamps, y_tops_all, h_mms_all,
-                    confs_all, clipped_all, h_corr_all, h_smooth_final, h_smooth_corr):
+                    confs_all, clipped_all, h_corr_all, h_smooth_final, h_smooth_corr,
+                    h_max_corr_all, h_max_smooth_final, h_max_smooth_corr):
                 def _f(v: Optional[float]) -> str:
                     return f"{v:.3f}" if v is not None else ""
                 h_fin = h_mm_final(hms)
+                h_max = h_mm_max_lcr(hms)
                 valid_cnfs = [c for c in cnfs if c > 0]
                 mean_conf  = float(np.mean(valid_cnfs)) if valid_cnfs else 0.0
                 writer.writerow([
@@ -592,14 +608,16 @@ def save_csv(
                     _f(ytops[0]), _f(hms[0]), int(clips[0]),
                     _f(ytops[1]), _f(hms[1]), int(clips[1]),
                     _f(ytops[2]), _f(hms[2]), int(clips[2]),
-                    _f(h_fin), f"{mean_conf:.4f}", int(any(clips)),
+                    _f(h_fin), _f(h_max), f"{mean_conf:.4f}", int(any(clips)),
                     _f(h_corr), _f(h_sf), _f(h_sc),
+                    _f(h_max_corr), _f(h_max_sf), _f(h_max_sc),
                 ])
         else:
             writer.writerow(["frame_index", "stamp_sec", "y_top_roi", "confidence"])
-            for fi, st, ytops, _, cnfs, __, ___, ____, _____ in zip(
+            for fi, st, ytops, _, cnfs, __, ___, ____, _____, ______, _______, ________ in zip(
                     frame_indices, stamps, y_tops_all, h_mms_all,
-                    confs_all, clipped_all, h_corr_all, h_smooth_final, h_smooth_corr):
+                    confs_all, clipped_all, h_corr_all, h_smooth_final, h_smooth_corr,
+                    h_max_corr_all, h_max_smooth_final, h_max_smooth_corr):
                 yt = ytops[0]
                 writer.writerow([
                     fi, f"{st:.9f}",
@@ -616,6 +634,7 @@ def save_plot(
     y_tops_all: List[List[Optional[float]]],
     h_corr_all: List[Optional[float]],
     h_smooth_corr: List[Optional[float]],
+    h_max_smooth_corr: List[Optional[float]],
     has_rulers: bool,
 ) -> None:
     if not _HAS_MPL:
@@ -638,15 +657,25 @@ def save_plot(
             ax.plot(xs_max, ys_max, linewidth=1.8, color="#FF8C00",
                     alpha=0.9, label="max(L,C,R)")
 
-        # Smoothed zero-corrected curve
+        # Smoothed zero-corrected curves. max-LCR is the primary real-experiment
+        # signal and matches /liquid/height; median remains as a quality cross-check.
+        xs_max_sc, ys_max_sc = [], []
+        for st, hsc in zip(stamps, h_max_smooth_corr):
+            if hsc is not None:
+                xs_max_sc.append(st - t0)
+                ys_max_sc.append(hsc)
+        if xs_max_sc:
+            ax.plot(xs_max_sc, ys_max_sc, linewidth=2.3, color="#00AEEF",
+                    label="max-LCR corr+smooth")
+
         xs_sc, ys_sc = [], []
         for st, hsc in zip(stamps, h_smooth_corr):
             if hsc is not None:
                 xs_sc.append(st - t0)
                 ys_sc.append(hsc)
         if xs_sc:
-            ax.plot(xs_sc, ys_sc, linewidth=2.2, color="#00AEEF",
-                    label="corr+smooth")
+            ax.plot(xs_sc, ys_sc, linewidth=1.2, color="#7C3AED", alpha=0.85,
+                    label="median corr+smooth")
 
         ax.set_ylabel("Liquid height h_mm")
         ax.legend(loc="upper right", fontsize=8)
@@ -802,20 +831,35 @@ def main() -> int:
 
     # ---- Zero-point correction (Step 2) ------------------------------------
     h_corr_all: List[Optional[float]] = [None] * len(h_mms_all)
+    h_max_corr_all: List[Optional[float]] = [None] * len(h_mms_all)
+    h_finals_all = [h_mm_final(hms) for hms in h_mms_all]
+    h_max_all = [h_mm_max_lcr(hms) for hms in h_mms_all]
     if args.zero_correction_frames > 0 and has_rulers:
-        h_finals_all = [h_mm_final(hms) for hms in h_mms_all]
         zero_pool = [h for h in h_finals_all[:args.zero_correction_frames] if h is not None]
+        zero_pool_max = [h for h in h_max_all[:args.zero_correction_frames] if h is not None]
         if zero_pool:
             h0 = float(np.median(zero_pool))
             h_corr_all = [
                 (h - h0) if h is not None else None
                 for h in h_finals_all
             ]
-            print(f"[INFO] zero correction: h0={h0:.3f}mm "
+            print(f"[INFO] zero correction median: h0={h0:.3f}mm "
                   f"(median of first {len(zero_pool)} valid frames)")
         else:
             print("[WARN] zero correction: no valid h_mm_final in first "
                   f"{args.zero_correction_frames} frames; correction skipped.",
+                  file=sys.stderr)
+        if zero_pool_max:
+            h0_max = float(np.median(zero_pool_max))
+            h_max_corr_all = [
+                (h - h0_max) if h is not None else None
+                for h in h_max_all
+            ]
+            print(f"[INFO] zero correction max-LCR: h0={h0_max:.3f}mm "
+                  f"(median of first {len(zero_pool_max)} valid frames)")
+        else:
+            print("[WARN] zero correction: no valid h_mm_max_lcr in first "
+                  f"{args.zero_correction_frames} frames; max-LCR correction skipped.",
                   file=sys.stderr)
 
     # ---- Temporal smoothing (Step 3) ----------------------------------------
@@ -830,27 +874,36 @@ def main() -> int:
         return out
 
     if args.smooth_frames > 1 and has_rulers:
-        h_finals_raw = [h_mm_final(hms) for hms in h_mms_all]
-        h_smooth_final = _rolling_median(h_finals_raw, args.smooth_frames)
+        h_smooth_final = _rolling_median(h_finals_all, args.smooth_frames)
         h_smooth_corr  = _rolling_median(h_corr_all,   args.smooth_frames)
+        h_max_smooth_final = _rolling_median(h_max_all, args.smooth_frames)
+        h_max_smooth_corr  = _rolling_median(h_max_corr_all, args.smooth_frames)
         print(f"[INFO] temporal smoothing: window={args.smooth_frames} frames")
     else:
-        h_smooth_final = [h_mm_final(hms) for hms in h_mms_all]
+        h_smooth_final = list(h_finals_all)
         h_smooth_corr  = list(h_corr_all)
+        h_max_smooth_final = list(h_max_all)
+        h_max_smooth_corr  = list(h_max_corr_all)
 
     csv_path  = out_dir / f"{bag_path.stem}_red_top.csv"
     plot_path = out_dir / f"{bag_path.stem}_red_top_curve.png"
     save_csv(csv_path, frame_indices, stamps, y_tops_all, h_mms_all,
-             confs_all, clipped_all, h_corr_all, h_smooth_final, h_smooth_corr, has_rulers)
-    save_plot(plot_path, stamps, h_mms_all, y_tops_all, h_corr_all, h_smooth_corr, has_rulers)
+             confs_all, clipped_all, h_corr_all, h_smooth_final, h_smooth_corr,
+             h_max_corr_all, h_max_smooth_final, h_max_smooth_corr, has_rulers)
+    save_plot(plot_path, stamps, h_mms_all, y_tops_all, h_corr_all, h_smooth_corr,
+              h_max_smooth_corr, has_rulers)
 
     valid_ratio = (valid_cnt / processed) if processed > 0 else 0.0
     print(f"[OK] processed {processed} frames, {valid_cnt} valid ({100.0 * valid_ratio:.1f}%)")
     if has_rulers:
         all_finals = [h_mm_final(hms) for hms in h_mms_all]
+        all_max_lcr = [h_mm_max_lcr(hms) for hms in h_mms_all]
         valid_finals = [v for v in all_finals if v is not None]
+        valid_max_lcr = [v for v in all_max_lcr if v is not None]
         if valid_finals:
             print(f"[OK] h_mm_final range: {min(valid_finals):.2f}mm ~ {max(valid_finals):.2f}mm")
+        if valid_max_lcr:
+            print(f"[OK] h_mm_max_lcr range: {min(valid_max_lcr):.2f}mm ~ {max(valid_max_lcr):.2f}mm")
     else:
         valid_ys = [yt[0] for yt in y_tops_all if yt[0] is not None]
         if valid_ys:

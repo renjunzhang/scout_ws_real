@@ -141,6 +141,8 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("robot/a_max", solver_params.a_max, solver_params.a_max);
     pnh_.param("robot/alpha_max", solver_params.alpha_max, solver_params.alpha_max);
     shared_cmd_linear_accel_max_ = solver_params.a_max;
+    shared_cmd_angular_rate_max_ = solver_params.omega_max;
+    shared_cmd_angular_accel_max_ = solver_params.alpha_max;
     pnh_.param("platform/shared_constraints/linear_accel_limit_enable",
                shared_cmd_linear_accel_limit_enable_,
                shared_cmd_linear_accel_limit_enable_);
@@ -150,8 +152,29 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("platform/shared_constraints/linear_accel_max_dt",
                shared_cmd_linear_accel_max_dt_,
                shared_cmd_linear_accel_max_dt_);
+    pnh_.param("platform/shared_constraints/angular_limit_enable",
+               shared_cmd_angular_limit_enable_,
+               shared_cmd_angular_limit_enable_);
+    pnh_.param("platform/shared_constraints/angular_rate_max",
+               shared_cmd_angular_rate_max_,
+               shared_cmd_angular_rate_max_);
+    pnh_.param("platform/shared_constraints/angular_accel_max",
+               shared_cmd_angular_accel_max_,
+               shared_cmd_angular_accel_max_);
+    pnh_.param("platform/shared_constraints/angular_accel_max_dt",
+               shared_cmd_angular_accel_max_dt_,
+               shared_cmd_angular_accel_max_dt_);
     shared_cmd_linear_accel_max_ = std::max(0.0, shared_cmd_linear_accel_max_);
     shared_cmd_linear_accel_max_dt_ = std::max(1e-3, shared_cmd_linear_accel_max_dt_);
+    if (shared_cmd_angular_rate_max_ <= 0.0) {
+        shared_cmd_angular_rate_max_ = solver_params.omega_max;
+    }
+    if (shared_cmd_angular_accel_max_ <= 0.0) {
+        shared_cmd_angular_accel_max_ = solver_params.alpha_max;
+    }
+    shared_cmd_angular_rate_max_ = std::max(0.0, shared_cmd_angular_rate_max_);
+    shared_cmd_angular_accel_max_ = std::max(0.0, shared_cmd_angular_accel_max_);
+    shared_cmd_angular_accel_max_dt_ = std::max(1e-3, shared_cmd_angular_accel_max_dt_);
     pnh_.param("experiment/corridor_width", solver_params.corridor_width, solver_params.corridor_width);
     pnh_.param("experiment/corridor_enable", solver_params.corridor_enable, solver_params.corridor_enable);
     pnh_.param("experiment/corridor_hard_bound_enable",
@@ -322,28 +345,51 @@ void SpmpcLocalPlannerROS::publishZeroCommand() {
 
 geometry_msgs::Twist SpmpcLocalPlannerROS::applySharedCommandLimits(
     const geometry_msgs::Twist& desired,
-    const ros::Time& stamp) {
+    const ros::Time& stamp,
+    geometry_msgs::Twist& previous,
+    double& dt,
+    bool& linear_limited,
+    bool& angular_rate_limited,
+    bool& angular_accel_limited) {
     geometry_msgs::Twist limited = desired;
-    if (!shared_cmd_linear_accel_limit_enable_ || shared_cmd_linear_accel_max_ <= 0.0) {
-        last_published_cmd_ = desired;
-        last_cmd_stamp_ = stamp;
-        have_last_published_cmd_ = true;
-        return desired;
-    }
+    previous = last_published_cmd_;
+    linear_limited = false;
+    angular_rate_limited = false;
+    angular_accel_limited = false;
 
     const double nominal_dt = 1.0 / std::max(1.0, control_frequency_);
-    double dt = nominal_dt;
+    dt = nominal_dt;
     if (have_last_published_cmd_ && !last_cmd_stamp_.isZero() && !stamp.isZero()) {
         dt = (stamp - last_cmd_stamp_).toSec();
     }
     if (!std::isfinite(dt) || dt <= 1e-6) {
         dt = nominal_dt;
     }
-    dt = std::min(dt, shared_cmd_linear_accel_max_dt_);
+    const double linear_dt = std::min(dt, shared_cmd_linear_accel_max_dt_);
+    const double angular_dt = std::min(dt, shared_cmd_angular_accel_max_dt_);
 
-    const double max_step = shared_cmd_linear_accel_max_ * dt;
-    const double dv = desired.linear.x - last_published_cmd_.linear.x;
-    limited.linear.x = last_published_cmd_.linear.x + std::max(-max_step, std::min(max_step, dv));
+    if (shared_cmd_linear_accel_limit_enable_ && shared_cmd_linear_accel_max_ > 0.0) {
+        const double max_step = shared_cmd_linear_accel_max_ * linear_dt;
+        const double dv = desired.linear.x - previous.linear.x;
+        limited.linear.x = previous.linear.x + std::max(-max_step, std::min(max_step, dv));
+        linear_limited = std::abs(limited.linear.x - desired.linear.x) > 1e-6;
+    }
+
+    if (shared_cmd_angular_limit_enable_) {
+        if (shared_cmd_angular_rate_max_ > 0.0) {
+            const double before_rate = limited.angular.z;
+            limited.angular.z = std::max(-shared_cmd_angular_rate_max_,
+                                         std::min(shared_cmd_angular_rate_max_, limited.angular.z));
+            angular_rate_limited = std::abs(limited.angular.z - before_rate) > 1e-6;
+        }
+        if (shared_cmd_angular_accel_max_ > 0.0) {
+            const double max_step = shared_cmd_angular_accel_max_ * angular_dt;
+            const double dw = limited.angular.z - previous.angular.z;
+            const double before_accel = limited.angular.z;
+            limited.angular.z = previous.angular.z + std::max(-max_step, std::min(max_step, dw));
+            angular_accel_limited = std::abs(limited.angular.z - before_accel) > 1e-6;
+        }
+    }
 
     last_published_cmd_ = limited;
     last_cmd_stamp_ = stamp;
@@ -356,7 +402,15 @@ void SpmpcLocalPlannerROS::publishCommand(const geometry_msgs::Twist& desired) {
         return;
     }
     const auto stamp = ros::Time::now();
-    const auto cmd = applySharedCommandLimits(desired, stamp);
+    geometry_msgs::Twist previous;
+    double dt = 0.0;
+    bool linear_limited = false;
+    bool angular_rate_limited = false;
+    bool angular_accel_limited = false;
+    const auto cmd = applySharedCommandLimits(
+        desired, stamp, previous, dt, linear_limited, angular_rate_limited, angular_accel_limited);
+    diagnostics_.publishCommandOutput(
+        desired, cmd, previous, dt, linear_limited, angular_rate_limited, angular_accel_limited);
     cmd_pub_.publish(cmd);
 }
 
@@ -745,7 +799,20 @@ void SpmpcLocalPlannerROS::loadVariantOverrides(const std::string& variant_name)
     pnh_.param(prefix + "w_control", variant_.w_control, variant_.w_control);
     pnh_.param(prefix + "w_accel", variant_.w_accel, variant_.w_accel);
     pnh_.param(prefix + "w_smooth", variant_.w_smooth, variant_.w_smooth);
+    pnh_.param(prefix + "w_alpha", variant_.w_alpha, variant_.w_alpha);
+    pnh_.param(prefix + "w_du_a", variant_.w_du_a, variant_.w_du_a);
+    pnh_.param(prefix + "w_du_vs", variant_.w_du_vs, variant_.w_du_vs);
     pnh_.param(prefix + "w_slosh", variant_.w_slosh, variant_.w_slosh);
+
+    if (variant_.w_alpha < 0.0) {
+        variant_.w_alpha = variant_.w_smooth;
+    }
+    if (variant_.w_du_a < 0.0) {
+        variant_.w_du_a = variant_.w_smooth;
+    }
+    if (variant_.w_du_vs < 0.0) {
+        variant_.w_du_vs = variant_.w_smooth;
+    }
 }
 
 SloshModelParams SpmpcLocalPlannerROS::loadSloshParams() const {

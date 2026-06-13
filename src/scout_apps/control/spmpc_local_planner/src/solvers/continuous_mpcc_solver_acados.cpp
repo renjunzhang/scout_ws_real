@@ -631,7 +631,7 @@ bool ContinuousMpccSolverAcados::solve(
     p[W_OMEGA] = variant_.w_control;          // omega 现在是状态(转向幅值)
     p[W_V] = variant_.w_v;                    // 物理速度 tracking 权重：防止 cmd_v 塌到 0
     p[W_VS] = variant_.w_vs;                  // v_s tracking 权重：防止弯处 creep
-    p[W_ALPHA] = variant_.w_smooth;           // 转向角加速度权重(抗 chatter，所有 stage)
+    p[W_ALPHA] = variant_.w_alpha;            // 转向角加速度权重(抗 chatter，所有 stage)
     p[E_C_REF] = e_c_ref;
     p[E_L_REF] = e_l_ref;
     p[V_REF] = v_ref;
@@ -649,8 +649,8 @@ bool ContinuousMpccSolverAcados::solve(
     for (int stage = 0; stage <= n; ++stage) {
         // omega 已是状态(初值=实测 omega)，跨周期连续性由状态保证；仅 a/v_s 做第一帧连续性。
         if (stage == 0 && have_u_prev_) {
-            p[W_DU_A] = variant_.w_smooth;
-            p[W_DU_VS] = variant_.w_smooth;
+            p[W_DU_A] = variant_.w_du_a;
+            p[W_DU_VS] = variant_.w_du_vs;
             p[A_PREV] = u_prev_[0];
             p[VS_PREV] = u_prev_[2];
         } else {
@@ -822,7 +822,7 @@ bool ContinuousMpccSolverAcados::solve(
         const double wn = solved_states[k].omega / omega_ref;     // omega 现在是状态
         output.cost.J_control += ((variant_.w_control + variant_.w_accel) * an * an +
                                   variant_.w_control * wn * wn +
-                                  variant_.w_smooth * aln * aln) * inv_n;
+                                  variant_.w_alpha * aln * aln) * inv_n;
         output.cost.J_progress += -variant_.w_progress * (uk[2] / vs_ref) * inv_n;
         const double vn = (solved_states[k].v - v_ref) / vs_ref;
         const double vsn = (uk[2] - v_ref) / vs_ref;
@@ -832,7 +832,7 @@ bool ContinuousMpccSolverAcados::solve(
         if (k == 0 && have_u_prev_) {
             const double da = (uk[0] - u_prev_[0]) / a_ref;
             const double dvs = (uk[2] - u_prev_[2]) / vs_ref;
-            output.cost.J_smooth += variant_.w_smooth * (da * da + dvs * dvs) * inv_n;
+            output.cost.J_smooth += (variant_.w_du_a * da * da + variant_.w_du_vs * dvs * dvs) * inv_n;
         }
     }
 
