@@ -131,6 +131,8 @@ record_topics=(
   /spmpc/debug/stage0_reference
   /spmpc/debug/local_traj_head
   /spmpc/debug/warm_start_head
+  /spmpc/debug/cmd_vel_output
+  /spmpc/debug/cmd_vel_output_status
 
   # SPMPC safety modes.
   /spmpc/start_lock/active
