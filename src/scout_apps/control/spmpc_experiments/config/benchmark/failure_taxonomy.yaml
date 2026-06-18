@@ -1,0 +1,58 @@
+schema_version: 1
+notes:
+  - "Failure codes separate dependency, planner, task, fairness, monitor, and analysis failures."
+  - "Codes are for metadata/reporting first; they do not change planner runtime behavior."
+
+status_codes:
+  success:
+    - GOAL_REACHED
+
+  task_failure:
+    - TIMEOUT_NO_GOAL
+    - COLLISION_OR_EMERGENCY_STOP
+    - TRACKING_DIVERGED
+
+  planner_failure:
+    - PLANNER_NO_CMD
+    - PLANNER_INVALID_CMD
+    - PLANNER_STATUS_ERROR
+    - SOLVER_FAILED
+
+  system_failure:
+    - TF_ERROR
+    - ODOM_TIMEOUT
+    - LOCALIZATION_LOST
+    - ROS_MASTER_LOST
+    - BAG_RECORD_FAILED
+
+  precheck_or_dependency:
+    - DEPENDENCY_SKIPPED
+    - PRECHECK_FAILED
+    - MPC_PLANNER_NOT_READY
+    - LT_DWA_NOT_INSTALLED
+
+  fairness_failure:
+    - FAIRNESS_VIOLATION
+    - COMMAND_GATE_TOO_ACTIVE
+    - PARAMETER_NOT_FROZEN
+    - NON_STRICT_FRESH_SIM
+    - MONITOR_USED_FOR_CONTROL
+
+  monitor_failure:
+    - SLOSH_MONITOR_MISSING
+    - SLOSH_MONITOR_NO_CHANGE_DETECTED
+    - SLOSH_MONITOR_BAD_DT
+
+  analysis_failure:
+    - ANALYSIS_FAILED
+    - REQUIRED_TOPIC_MISSING
+
+main_table_blocking_codes:
+  - DEPENDENCY_SKIPPED
+  - PRECHECK_FAILED
+  - FAIRNESS_VIOLATION
+  - COMMAND_GATE_TOO_ACTIVE
+  - PARAMETER_NOT_FROZEN
+  - NON_STRICT_FRESH_SIM
+  - MONITOR_USED_FOR_CONTROL
+  - REQUIRED_TOPIC_MISSING

@@ -1,0 +1,79 @@
+schema_version: 1
+source_sop: docs/实物实验注意事项/仿真环境/20260611_隔离Scout仿真环境使用SOP.md
+notes:
+  - "This file records shared experiment assumptions; it must not mutate sim, map, TF, URDF, or launch defaults."
+  - "Formal fixed-path comparison still requires external strict fresh-sim orchestration evidence."
+
+common_environment:
+  simulation:
+    default_root: /data/a/scout_sim_replacement
+    legacy_workspace_sim_role: readonly_reference_only
+    default_ros_master_uri: http://localhost:11328
+    default_gazebo_master_uri: http://localhost:11362
+    allow_current_running_sim_for_formal_gate1: false
+    current_running_sim_allowed_role: current_sim_diagnostics_only
+    forbidden_cleanup_patterns:
+      - killall
+      - pkill
+    cleanup_policy: stop_only_tracked_child_pids
+
+  robot:
+    platform: scout_mini
+    footprint_source: shared_yaml
+    footprint_note: "Use identical footprint/inflation assumptions for nav_core baselines when applicable."
+
+  frames:
+    map_frame: map
+    odom_frame: odom
+    base_frame: base_footprint
+    base_link_frame: base_link
+
+  topics:
+    odom: /odom
+    tf: /tf
+    tf_static: /tf_static
+    fixed_path: /scout/global_path_fixed
+    goal: /scout/current_start_fixed_goal
+    costmap_or_map: /map
+    cmd_vel_executed: /cmd_vel
+    benchmark_cmd_vel_raw: /benchmark/cmd_vel_raw
+
+  costmap:
+    resolution_m: 0.05
+    inflation_radius_m: 0.30
+    obstacle_range_m: null
+    raytrace_range_m: null
+
+  goal:
+    xy_tolerance_m: 0.20
+    yaw_tolerance_rad: 0.30
+    max_case_time_s: 60.0
+
+  timing:
+    controller_frequency_hz: 30.0
+    record_before_start_s: 1.0
+    record_after_goal_s: 3.0
+    fresh_sim_settle_s: 30.0
+    fresh_sim_cooldown_s: 30.0
+
+  path:
+    topic: /scout/global_path_fixed
+    path_source_modes:
+      - replay
+      - stable_goal
+    start_pose_policy: fresh_or_checked
+    goal_policy: fixed_per_scenario
+    default_templates:
+      - straight
+      - s_curve
+      - mixed
+
+strict_fresh_sim_requirements:
+  one_case_per_fresh_sim: true
+  settle_before_case_s: 30.0
+  shutdown_after_case: true
+  cooldown_after_shutdown_s: 30.0
+  orchestrator_scripts_are_not_freshness_proof:
+    - src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_paper_matrix.sh
+    - src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_critical_sweep.sh
+    - src/scout_apps/control/spmpc_experiments/scripts/run_robustness_transfer_sweep.sh

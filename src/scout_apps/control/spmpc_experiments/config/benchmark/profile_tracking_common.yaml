@@ -1,0 +1,45 @@
+schema_version: 1
+notes:
+  - "Hamaguchi-style and Lim-style profile baselines may differ only in profile generation."
+  - "The CSV schema, common tracker, command gate, and metrics extractor must be shared."
+
+profile_tracker:
+  implementation: scout_local_planner_external_profile
+  external_profile_mode: custom_csv
+  path_topic: /scout/global_path_fixed
+  output_cmd_topic: /benchmark/cmd_vel_raw
+  constraints:
+    v_max_mps: 0.8
+    omega_max_radps: 1.2
+    a_max_mps2: 0.6
+    alpha_max_radps2: 1.2
+  tracking:
+    lookahead_distance_m: fixed
+    goal_tolerance_m: common
+    yaw_tolerance_rad: common
+  execution_cap:
+    enabled: true
+    accel_limit_mps2: 0.6
+    decel_limit_mps2: 0.6
+    jerk_limit_mps3: null
+  fairness:
+    profile_generator_may_differ: true
+    profile_csv_schema_may_differ: false
+    profile_tracker_may_differ: false
+    command_gate_may_differ: false
+    metrics_analyzer_may_differ: false
+    monitor_feedback_during_test_allowed: false
+
+profile_csv_schema:
+  source_helper: src/scout_apps/control/scout_local_planner/scripts/analysis/path_profile_utils.py
+  required_columns:
+    - s_normalized
+    - s_m
+    - t_s
+    - x
+    - y
+    - yaw
+    - v_ref_m_s
+    - a_ref_m_s2
+    - jerk_ref_m_s3
+    - method

@@ -1,0 +1,52 @@
+schema_version: 1
+notes:
+  - "Tuning records are required so baseline defaults are not unfairly compared against heavily tuned SPMPC parameters."
+  - "Test-set observations must not trigger manual parameter changes for main-table results."
+
+tuning:
+  split:
+    train_scenarios:
+      - straight_x5_train
+      - s_curve_x5_train
+    validation_scenarios:
+      - s_curve_x5_val
+    test_scenarios:
+      - s_curve_x5_test
+      - threshold_s_curve_test
+
+  trials:
+    max_performance_tuning_trials_per_planner: 20
+    integration_debug_trials: recorded_but_not_counted
+    fixed_random_seed: 42
+    require_trial_log: true
+
+  selection_metric:
+    primary: success_rate
+    secondary: external_or_rgb_slosh_p95_mm
+    tertiary: first_goal_time_s
+    quaternary: abs_domegadt_p95
+
+  forbidden:
+    - tune_on_test_set
+    - manual_parameter_change_after_test_bag_seen
+    - compare_default_baseline_against_heavily_tuned_ours_without_disclosure
+    - use_monitor_feedback_to_modify_runtime_profile_during_test
+
+  freeze:
+    require_parameter_freeze_before_test: true
+    require_config_hash: true
+    require_git_sha: true
+    require_common_limits_hash: true
+    require_scenario_hash: true
+
+  metadata_required_per_case:
+    phase: test
+    parameters_frozen: true
+    tuning_trials_used: required_integer
+    tuned_on_scenarios: required_list
+    config_hashes:
+      planner_config: required
+      adapter_config: required_if_adapter_used
+      common_limits: required
+      scenario: required
+      profile_csv: required_if_profile_baseline

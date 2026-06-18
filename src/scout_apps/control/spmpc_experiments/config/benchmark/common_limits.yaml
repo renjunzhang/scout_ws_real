@@ -1,0 +1,77 @@
+schema_version: 1
+source_of_truth: spmpc_local_planner/config/platforms/scout_mini.yaml
+notes:
+  - "Common limits are paper-facing fairness targets, not automatic runtime overrides."
+  - "Each planner adapter must explicitly map these targets into its own config before a strict main-table run."
+
+limits:
+  profile: common_v0p8_w1p2_a0p6_alpha1p2
+  v_max_mps: 0.8
+  omega_max_radps: 1.2
+  a_max_mps2: 0.6
+  alpha_max_radps2: 1.2
+  allow_reverse: false
+  jerk_max_mps3: null
+
+planner_param_mapping:
+  spmpc:
+    internal_limits:
+      v_max_mps: robot/v_max
+      omega_max_radps: robot/omega_max
+      a_max_mps2: robot/a_max
+      alpha_max_radps2: robot/alpha_max
+    execution_limits:
+      linear_accel_limit_enable: platform/shared_constraints/linear_accel_limit_enable
+      linear_accel_max_mps2: platform/shared_constraints/linear_accel_max
+      angular_rate_max_radps: platform/shared_constraints/angular_rate_max
+      angular_accel_max_radps2: platform/shared_constraints/angular_accel_max
+    goal_tolerance: terminal/goal_tolerance
+
+  scout_local_planner_profile_tracker:
+    internal_limits:
+      v_max_mps: vehicle/v_max
+      omega_max_radps: vehicle/omega_max
+      a_max_mps2: vehicle/a_max
+      alpha_max_radps2: vehicle/alpha_max
+    execution_limits:
+      accel_limit_mps2: profile_execution_cap/accel_limit
+      decel_limit_mps2: profile_execution_cap/decel_limit
+    goal_tolerance: path_handler/goal_tolerance
+    yaw_tolerance: path_handler/yaw_tolerance
+
+  teb:
+    internal_limits:
+      v_max_mps: TebLocalPlannerROS/max_vel_x
+      omega_max_radps: TebLocalPlannerROS/max_vel_theta
+      a_max_mps2: TebLocalPlannerROS/acc_lim_x
+      alpha_max_radps2: TebLocalPlannerROS/acc_lim_theta
+    goal_tolerance: TebLocalPlannerROS/xy_goal_tolerance
+    yaw_tolerance: TebLocalPlannerROS/yaw_goal_tolerance
+
+  dwa:
+    internal_limits:
+      v_max_mps: DWAPlannerROS/max_vel_x
+      omega_max_radps: DWAPlannerROS/max_vel_theta
+      a_max_mps2: DWAPlannerROS/acc_lim_x
+      alpha_max_radps2: DWAPlannerROS/acc_lim_theta
+    goal_tolerance: DWAPlannerROS/xy_goal_tolerance
+    yaw_tolerance: DWAPlannerROS/yaw_goal_tolerance
+
+  mpc_local_planner:
+    internal_limits:
+      v_max_mps: robot/unicycle/max_vel_x
+      omega_max_radps: robot/unicycle/max_vel_theta
+      a_max_mps2: robot/unicycle/acc_lim_x
+      alpha_max_radps2: robot/unicycle/acc_lim_theta
+    goal_tolerance: controller/xy_goal_tolerance
+    yaw_tolerance: controller/yaw_goal_tolerance
+
+command_gate_policy:
+  purpose: safety_and_fairness_audit_only
+  clamp_ratio_warning: 0.01
+  clamp_ratio_main_table_exclusion: 0.05
+  raw_limit_violation_warning: true
+  record_raw_and_executed_cmd: true
+  notes:
+    - "Command gate must not become an implicit controller."
+    - "If clamp_ratio exceeds exclusion threshold, the run is appendix-only or failed for main table."

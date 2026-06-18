@@ -81,6 +81,9 @@ catkin_install_python(PROGRAMS
   scripts/analysis/analyze_tracking_infeasible.py
   scripts/analysis/analyze_fixed_path_feasibility.py
   scripts/analysis/path_profile_utils.py
+  scripts/analysis/advanced_profile_common.py
+  scripts/analysis/generate_hamaguchi_profile.py
+  scripts/analysis/generate_lim_style_profile.py
   scripts/analysis/shape_biagiotti.py
   scripts/analysis/retime_ruckig_style.py
   scripts/analysis/retime_toppra_style.py

@@ -1,0 +1,278 @@
+schema_version: 1
+source_design: docs/实物实验注意事项/对比论文的寻找/20260618_对比试验代码模块化设计_v2_现有资产复用与公平性补充.md
+notes:
+  - "This file declares method capabilities for fair reporting; it is not loaded by runtime planners."
+  - "Monitor-only topics must never be used as online planner/control inputs."
+
+planners:
+  spmpc_b0:
+    category: ours_integrated_local_planner_ablation
+    information_access_category: spmpc
+    implementation: spmpc_local_planner
+    interface_type: independent_ros_node
+    online: true
+    present_in_workspace: true
+    ready_to_run: true
+    cmd_vel_output: true
+    fixed_path_input: true
+    global_path_input: true
+    costmap_input: optional
+    liquid_model_access: none
+    online_liquid_feedback: false
+    uses_extra_sensors:
+      rgb_liquid: false
+      imu: false
+      dynamic_obstacles: false
+    supports_constraints:
+      v_max: true
+      omega_max: true
+      a_max: true
+      alpha_max: true
+      jerk_max: false
+    evaluation_role: ours_ablation_baseline
+    main_table_eligible_if_preflight_passes: true
+
+  spmpc_smooth_only:
+    category: ours_integrated_local_planner_ablation
+    information_access_category: spmpc
+    implementation: spmpc_local_planner
+    interface_type: independent_ros_node
+    online: true
+    present_in_workspace: true
+    ready_to_run: true
+    cmd_vel_output: true
+    fixed_path_input: true
+    global_path_input: true
+    costmap_input: optional
+    liquid_model_access: none
+    online_liquid_feedback: false
+    uses_extra_sensors:
+      rgb_liquid: false
+      imu: false
+      dynamic_obstacles: false
+    supports_constraints:
+      v_max: true
+      omega_max: true
+      a_max: true
+      alpha_max: true
+      jerk_max: false
+    evaluation_role: ours_smooth_ablation
+    main_table_eligible_if_preflight_passes: true
+
+  spmpc_full:
+    category: ours_integrated_local_planner
+    information_access_category: spmpc
+    implementation: spmpc_local_planner
+    interface_type: independent_ros_node
+    online: true
+    present_in_workspace: true
+    ready_to_run: true
+    cmd_vel_output: true
+    fixed_path_input: true
+    global_path_input: true
+    costmap_input: optional
+    liquid_model_access: internal_slosh_ode
+    online_liquid_feedback: false
+    uses_extra_sensors:
+      rgb_liquid: false
+      imu: false
+      dynamic_obstacles: false
+    supports_constraints:
+      v_max: true
+      omega_max: true
+      a_max: true
+      alpha_max: true
+      jerk_max: false
+    evaluation_role: main_ours
+    main_table_eligible_if_preflight_passes: true
+
+  teb:
+    category: legacy_local_planner
+    information_access_category: classical_or_modern_local_planner
+    implementation: teb_local_planner
+    interface_type: nav_core_plugin_via_baseline_runner
+    online: true
+    present_in_workspace: true
+    ready_to_run: true
+    cmd_vel_output: true
+    fixed_path_input: via_runner_setPlan
+    global_path_input: via_runner_setPlan
+    costmap_input: true
+    liquid_model_access: none
+    online_liquid_feedback: false
+    uses_extra_sensors:
+      rgb_liquid: false
+      imu: false
+      dynamic_obstacles: false
+    supports_constraints:
+      v_max: true
+      omega_max: true
+      a_max: true
+      alpha_max: true
+      jerk_max: false
+    evaluation_role: legacy_reference
+    main_table_eligible_if_preflight_passes: true
+
+  dwa:
+    category: legacy_local_planner
+    information_access_category: classical_or_modern_local_planner
+    implementation: navigation/dwa_local_planner
+    interface_type: nav_core_plugin_via_baseline_runner
+    online: true
+    present_in_workspace: true
+    ready_to_run: true
+    cmd_vel_output: true
+    fixed_path_input: via_runner_setPlan
+    global_path_input: via_runner_setPlan
+    costmap_input: true
+    liquid_model_access: none
+    online_liquid_feedback: false
+    uses_extra_sensors:
+      rgb_liquid: false
+      imu: false
+      dynamic_obstacles: false
+    supports_constraints:
+      v_max: true
+      omega_max: true
+      a_max: true
+      alpha_max: true
+      jerk_max: false
+    evaluation_role: legacy_reference
+    main_table_eligible_if_preflight_passes: true
+
+  mpc_local_planner:
+    category: ordinary_mpc_local_planner
+    information_access_category: ordinary_mpc_local_planner
+    implementation: mpc_local_planner
+    interface_type: nav_core_plugin_via_baseline_runner
+    online: true
+    present_in_workspace: true
+    ready_to_run: conditional
+    cmd_vel_output: true
+    fixed_path_input: via_runner_setPlan
+    global_path_input: via_runner_setPlan
+    costmap_input: true
+    liquid_model_access: none
+    online_liquid_feedback: false
+    uses_extra_sensors:
+      rgb_liquid: false
+      imu: false
+      dynamic_obstacles: false
+    supports_constraints:
+      v_max: true
+      omega_max: true
+      a_max: true
+      alpha_max: true
+      jerk_max: false
+    evaluation_role: fallback_mpc_baseline
+    main_table_eligible_if_preflight_passes: supplementary
+
+  lt_dwa:
+    category: modern_local_planner
+    information_access_category: classical_or_modern_local_planner
+    implementation: external_future
+    interface_type: pending_adapter
+    online: true
+    present_in_workspace: false
+    ready_to_run: false
+    dependency_failure_code: LT_DWA_NOT_INSTALLED
+    cmd_vel_output: true
+    fixed_path_input: pending_adapter
+    global_path_input: pending_adapter
+    costmap_input: true
+    liquid_model_access: none
+    online_liquid_feedback: false
+    uses_extra_sensors:
+      rgb_liquid: false
+      imu: false
+      dynamic_obstacles: false
+    supports_constraints:
+      v_max: true
+      omega_max: true
+      a_max: true
+      alpha_max: unknown
+      jerk_max: unknown
+    evaluation_role: target_modern_baseline
+    main_table_eligible_if_preflight_passes: false
+
+  mpc_planner:
+    category: advanced_mpc_planner
+    information_access_category: ordinary_mpc_local_planner
+    implementation: src/mpc_planner
+    interface_type: custom_or_ros_navigation_adapter
+    online: true
+    present_in_workspace: true
+    ready_to_run: false
+    dependency_failure_code: MPC_PLANNER_NOT_READY
+    cmd_vel_output: true
+    fixed_path_input: pending_adapter
+    global_path_input: pending_adapter
+    costmap_input: true
+    liquid_model_access: none
+    online_liquid_feedback: false
+    uses_extra_sensors:
+      rgb_liquid: false
+      imu: false
+      dynamic_obstacles: false
+    supports_constraints:
+      v_max: true
+      omega_max: true
+      a_max: true
+      alpha_max: true
+      jerk_max: unknown
+    evaluation_role: advanced_baseline_if_preflight_passes
+    main_table_eligible_if_preflight_passes: false
+
+  hamaguchi_profile:
+    category: slosh_specific_motion_generation
+    information_access_category: slosh_specific_profile_baseline
+    implementation: generated_external_profile
+    interface_type: profile_csv_plus_common_tracker
+    online: false
+    present_in_workspace: true
+    ready_to_run: true
+    cmd_vel_output: via_common_profile_tracker
+    fixed_path_input: offline_fixed_path
+    global_path_input: offline_fixed_path
+    costmap_input: no_online_costmap
+    liquid_model_access: offline_model_parameters
+    online_liquid_feedback: false
+    uses_extra_sensors:
+      rgb_liquid: false
+      imu: false
+      dynamic_obstacles: false
+    supports_constraints:
+      v_max: true
+      omega_max: true
+      a_max: true
+      alpha_max: true
+      jerk_max: optional
+    evaluation_role: supplementary_slosh_baseline
+    main_table_eligible_if_preflight_passes: separate_supplementary_table
+
+  lim_profile:
+    category: slosh_specific_offline_optimization
+    information_access_category: slosh_specific_profile_baseline
+    implementation: generated_external_profile
+    interface_type: profile_csv_plus_common_tracker
+    online: false
+    present_in_workspace: true
+    ready_to_run: true
+    cmd_vel_output: via_common_profile_tracker
+    fixed_path_input: offline_fixed_path
+    global_path_input: offline_fixed_path
+    costmap_input: no_online_costmap
+    liquid_model_access: offline_model_parameters
+    online_liquid_feedback: false
+    uses_extra_sensors:
+      rgb_liquid: false
+      imu: false
+      dynamic_obstacles: false
+    supports_constraints:
+      v_max: true
+      omega_max: true
+      a_max: true
+      alpha_max: true
+      jerk_max: optional
+    evaluation_role: supplementary_slosh_baseline
+    main_table_eligible_if_preflight_passes: separate_supplementary_table

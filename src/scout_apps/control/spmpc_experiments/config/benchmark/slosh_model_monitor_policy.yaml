@@ -1,0 +1,51 @@
+schema_version: 1
+notes:
+  - "This policy describes benchmark monitor-only usage; it does not change the current slosh_models runtime defaults."
+  - "Existing /slosh/* topics may be supported during transition, but benchmark-facing policy namespace is /benchmark/slosh_monitor."
+
+slosh_monitor:
+  enabled_by_default_for_sim_strict: true
+  enabled_by_default_for_real: recommended_secondary
+  mode: monitor_only
+  implementation_package: slosh_models
+  implementation_launch: src/scout_apps/control/slosh_models/launch/slosh_monitor.launch
+  output_namespace: /benchmark/slosh_monitor
+  transitional_legacy_namespace: /slosh
+  inputs:
+    odom: /odom
+    cmd_vel_debug: /cmd_vel
+    cmd_vel_debug_usage: debug_only
+  outputs:
+    height: /benchmark/slosh_monitor/height
+    state: /benchmark/slosh_monitor/state
+    event: /benchmark/slosh_monitor/event
+    debug: /benchmark/slosh_monitor/debug
+  consumed_by_planner: false
+  consumed_by_command_gate: false
+  consumed_by_profile_generator_during_test: false
+  consumed_by_spmpc_ocp: false
+  consumed_by_cmd_vel_chain: false
+  allowed_consumers:
+    - rosbag
+    - metrics_extractor
+    - rviz_or_plot
+    - offline_report
+  forbidden_consumers:
+    - planner
+    - spmpc_ocp
+    - profile_generator_during_test
+    - command_gate
+    - cmd_vel_chain
+  required_recorded_topics_for_sim_strict:
+    - /benchmark/slosh_monitor/height
+    - /benchmark/slosh_monitor/state
+    - /benchmark/slosh_monitor/event
+    - /benchmark/slosh_monitor/debug
+  transition_compatible_recorded_topics:
+    - /slosh/height
+    - /slosh/state
+    - /slosh/debug
+  missing_topic_policy:
+    sim_strict: REQUIRED_TOPIC_MISSING
+    sim_smoke: warning_monitor_missing
+    real: warning_rgb_primary

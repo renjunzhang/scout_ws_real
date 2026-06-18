@@ -1,0 +1,54 @@
+schema_version: 1
+notes:
+  - "Main-table eligibility is a reporting gate, not a runtime controller."
+  - "If a condition fails, keep the evidence but label it smoke/appendix/diagnostic instead of formal main-table data."
+
+main_table_inclusion:
+  required:
+    strict_fresh: true
+    same_test_set: true
+    parameters_frozen_before_test: true
+    no_manual_intervention: true
+    metrics_recomputed_by_same_script: true
+    common_limits_loaded: true
+    dependency_status: OK
+    slosh_monitor_enabled_for_sim: true
+    slosh_monitor_not_used_for_control: true
+
+  thresholds:
+    success_rate_min: 0.8
+    command_gate_clamp_ratio_max: 0.05
+    command_gate_clamp_ratio_warning: 0.01
+    required_topic_missing: false
+
+  exclusions:
+    - DEPENDENCY_SKIPPED
+    - PRECHECK_FAILED
+    - FAIRNESS_VIOLATION
+    - PARAMETER_NOT_FROZEN
+    - NON_STRICT_FRESH_SIM
+    - COMMAND_GATE_TOO_ACTIVE
+    - MONITOR_USED_FOR_CONTROL
+    - REQUIRED_TOPIC_MISSING
+
+  allowed_in_appendix:
+    - current_sim_diagnostics
+    - dependency_skipped_report
+    - non_strict_smoke
+    - fast_diagnostic
+
+  table_groups:
+    online_local_planner:
+      - dwa
+      - teb
+      - lt_dwa
+      - mpc_local_planner
+      - mpc_planner
+      - spmpc_b0
+      - spmpc_smooth_only
+      - spmpc_full
+    slosh_specific_motion_generation:
+      - hamaguchi_profile
+      - lim_profile
+      - spmpc_smooth_only
+      - spmpc_full

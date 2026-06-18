@@ -1,0 +1,38 @@
+schema_version: 1
+scenario_id: canonical_fixed_path_p2
+source_records:
+  - /data/a/Obsidian/vaults/StudyVault/30-Projects/MPC/规控一体的实验记录/仿真实验/20260614_SPMPC仿真结果总表.md
+  - /data/a/Obsidian/vaults/StudyVault/30-Projects/MPC/规控一体的实验记录/仿真实验/20260612_SPMPC_B0_Bslosh_Bours_explicit_map_strict_N3/20260612_SPMPC_B0_Bslosh_Bours_explicit-map_strict-fresh_N3.md
+role: first_strict_fresh_profile_baseline_endpoint
+notes:
+  - "This file declares the canonical fixed-path endpoint/template used for fair profile-baseline smoke and strict-fresh runs."
+  - "It is not loaded by runtime planners and does not modify launch defaults or control behavior."
+
+goal:
+  frame_id: map
+  x: 5.0
+  y: 0.0
+  yaw: 0.0
+
+path_template:
+  name: s_curve
+  start_heading: current
+  amplitude_ratio: 0.18
+  min_amplitude: 0.25
+  max_amplitude: 1.20
+  side: left
+  smooth_iterations: 3
+  spacing_m: 0.05
+
+common_limits:
+  profile: common_v0p8_w1p2_a0p6_alpha1p2
+  v_max_mps: 0.8
+  omega_max_radps: 1.2
+  a_max_mps2: 0.6
+  alpha_max_radps2: 1.2
+  allow_reverse: false
+
+strict_fresh_scope:
+  first_pass_runs: 1
+  formal_runner_root: /data/a/scout_sim_replacement
+  current_sim_role: current_sim_diagnostics_only

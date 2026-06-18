@@ -1,0 +1,37 @@
+schema_version: 1
+notes:
+  - "External slosh observer is a monitor-only model proxy for evaluation and reporting."
+  - "It must not provide closed-loop feedback to planners, profile generators, command gates, SPMPC OCP inputs, or /cmd_vel."
+
+external_slosh_observer:
+  source_model: slosh_models
+  mode: monitor_only
+  inputs:
+    odom: /odom
+    cmd_vel_executed: /cmd_vel
+    cmd_vel_raw: /benchmark/cmd_vel_raw
+  outputs:
+    height_topic: /benchmark/slosh_monitor/height
+    state_topic: /benchmark/slosh_monitor/state
+    event_topic: /benchmark/slosh_monitor/event
+    debug_topic: /benchmark/slosh_monitor/debug
+  control_usage:
+    allowed: false
+    forbidden_consumers:
+      - planner
+      - spmpc_ocp
+      - profile_generator_during_test
+      - command_gate
+      - cmd_vel_chain
+  use_for_main_metrics:
+    sim: true
+    real: secondary
+  rgb_priority_real: true
+  metric_names:
+    simulation_prefix: slosh_monitor_model
+    real_rgb_prefix: rgb_liquid
+    spmpc_internal_prefix: spmpc_internal_slosh
+  notes:
+    - "Monitor output is for observation, bagging, and offline metrics only."
+    - "External observer is still a model proxy, not ground truth."
+    - "Do not mix SPMPC internal slosh_height with monitor slosh height in the same metric column."

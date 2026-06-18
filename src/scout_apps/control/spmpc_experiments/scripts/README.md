@@ -33,6 +33,9 @@ SIM_ENV=open USE_RVIZ=true \
 |---|---|---|---|
 | `run_fixed_path_spmpc_suite.sh` | fixed-path run suite | 运行 SPMPC fixed-path case，支持 `planner_variant`、`w_slosh`、可选 `v_ref` 诊断覆盖、solver backend、shared command acceleration limit、slosh monitor meta/reset。 | 只负责单次/一组 planner run；正式实验建议外层每个 case 重启仿真。 |
 | `run_fixed_path_baseline_suite.sh` | fixed-path baseline suite | 运行 TEB/DWA/可选 `mpc_local_planner` fixed-path baseline，并写入 speed tier、共同限幅目标、`slosh_eval_only`、`slosh_feedback_forbidden` 等公平性 meta。 | baseline 可以记录 slosh 作为评价信号，但不得作为控制输入；正式实验同样需要每 case fresh sim。 |
+| `run_fixed_path_profile_baseline_suite.sh` | fixed-path profile baseline suite | 运行 Hamaguchi/Lim 离线 profile generator，生成标准 CSV 后交给 `scout_local_planner` common tracker；写入 `current_sim_only`、`profile_generated_before_case`、`monitor_feedback_used_for_profile=false` 等 meta。 | 不启动/关闭 Gazebo，本脚本不能单独作为 strict fresh 证据；正式运行必须由 `/data/a/scout_sim_replacement` 外层 strict wrapper 启停 fresh sim。 |
+| `bench_check_profile_endpoint.py` | endpoint checker | 静态检查 profile baseline 的 endpoint/template/common limits 是否与旧仿真 canonical P2 设置一致。 | 不启动 ROS/Gazebo，不写 runtime 状态；失败时停止进入 strict fresh 正式流程。 |
+| `bench_write_freshness_evidence.py` | freshness evidence converter | 将 `/data/a/scout_sim_replacement` strict fresh manifest/batch meta 转成 `bench_check_freshness.py` 接受的新 evidence schema。 | 只转换证据文件；不推断 already-running sim 为 strict fresh。 |
 | `run_fixed_path_paper_matrix.sh` | paper matrix 编排 | 编排 fixed-path internal ablation、external anchor、TEB/DWA 和可选 `B_accel`；默认提取窗口化 metrics。用于统一目录和 meta。 | 不启动/关闭 Gazebo；更适合 smoke 或手动 fresh-sim 单 case 调用，不适合直接连续跑 formal 数据。 |
 | `run_fixed_path_critical_sweep.sh` | fixed-path critical scenario 编排 | 对一个或多个 fixed path 调用 paper matrix，默认包含 `P2_s_curve`。 | 继承 paper matrix 限制；路径/方法批量编排不等于 fresh-sim formal runner。 |
 | `extract_fixed_path_paper_metrics.py` | 指标提取 | 从 fixed-path rosbag/meta 提取论文指标：success/stable、tracking、slosh height、cmd/odom speed、cmd acceleration、omega-rate、solver time、topic presence、evidence-chain meta 等。 | 离线分析脚本；不影响仿真环境。 |
@@ -174,6 +177,33 @@ teb dwa
 ```bash
 INCLUDE_MPC_LOCAL_PLANNER=true
 ```
+
+### Profile baseline 单 case：Hamaguchi/Lim + common tracker
+
+该入口只做 current-sim/smoke 编排：先用 canonical endpoint/template 生成 fixed path，再离线生成 profile CSV，最后用 `scout_local_planner` 的 `external_profile_mode=custom_csv` common tracker 跑同一路径。它不会启动/关闭 Gazebo，也不会宣称 strict fresh。
+
+canonical P2 设置固定为：`GOAL_X=5.0`、`GOAL_Y=0.0`、`GOAL_YAW=0.0`、`PATH_TEMPLATE=s_curve`、`PATH_START_HEADING=current`、`PATH_AMPLITUDE_RATIO=0.18`、`PATH_MAX_AMPLITUDE=1.20`、`PATH_SMOOTH_ITERATIONS=3`，共同限幅为 `0.8/1.2/0.6/1.2`。
+
+```bash
+source /home/a/scout_ws/devel/setup.bash
+cd /home/a/scout_ws
+
+PROFILE_BASELINE=hamaguchi_profile \
+PATH_SOURCE_MODE=stable_goal \
+PATH_ID=P2_s_curve_current_start \
+OUT_ROOT=/data/a/spmpc_paper_compare/profile_baseline_smoke \
+RECORD_SEC=60 \
+bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_profile_baseline_suite.sh
+
+PROFILE_BASELINE=lim_profile \
+PATH_SOURCE_MODE=stable_goal \
+PATH_ID=P2_s_curve_current_start \
+OUT_ROOT=/data/a/spmpc_paper_compare/profile_baseline_smoke \
+RECORD_SEC=60 \
+bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_profile_baseline_suite.sh
+```
+
+正式 strict fresh 结果必须由 `/data/a/scout_sim_replacement` 外层 wrapper 每 case 单独启停仿真并生成 freshness evidence 后，才能进入正式统计流程。
 
 ## P2P smoke 示例
 

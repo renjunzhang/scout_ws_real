@@ -1,0 +1,41 @@
+schema_version: 1
+profile_baseline:
+  id: lim_profile
+  label: Lim-style offline slosh-aware retimed profile
+  category: slosh_specific_offline_optimization
+  implementation: generated_external_profile
+  generator_script: src/scout_apps/control/scout_local_planner/scripts/analysis/generate_lim_style_profile.py
+  method_name: LIM_STYLE
+  approximation_note: >-
+    Uses fixed-path offline slosh-risk retiming with a linear second-order liquid
+    model and local speed-ceiling updates. It is a lightweight, dependency-free
+    offline optimization baseline, not an online slosh-feedback controller.
+  online: false
+  interface_type: profile_csv_plus_common_tracker
+  output_schema: profile_tracking_common
+  method_table_role: supplementary_slosh_profile_table
+  main_table_eligible_if_preflight_passes: separate_supplementary_table
+  common_limits:
+    v_max_mps: 0.8
+    omega_max_radps: 1.2
+    a_max_mps2: 0.6
+    alpha_max_radps2: 1.2
+    allow_reverse: false
+  offline_liquid_model_parameters:
+    omega_n_rad_s: required_cli_argument
+    damping_ratio: default_0p05
+    slosh_limit_mm: default_5p0
+  information_boundary:
+    allowed_inputs:
+      - offline_fixed_path
+      - offline_liquid_model_parameters
+      - common_limits
+      - train_or_validation_scenarios_only
+    monitor_feedback_during_test_allowed: false
+    runtime_profile_regeneration_allowed: false
+    ros_topic_subscription_allowed: false
+    online_liquid_feedback: false
+  shared_runtime_chain:
+    tracker: scout_local_planner_external_profile
+    command_gate: common_profile_tracking_policy
+    metrics: shared_fixed_path_metrics

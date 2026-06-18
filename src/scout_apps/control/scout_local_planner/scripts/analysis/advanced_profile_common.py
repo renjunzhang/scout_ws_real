@@ -1,0 +1,288 @@
+#!/usr/bin/env python3
+"""Shared helpers for offline advanced fixed-path profile generators.
+
+These helpers are intentionally ROS-free and dependency-free. They only operate on
+fixed-path samples and scalar speed profiles; they do not subscribe to runtime
+monitor topics or publish velocity commands.
+"""
+
+import math
+
+
+PROFILE_COLUMNS = [
+    "s_normalized",
+    "s_m",
+    "t_s",
+    "x",
+    "y",
+    "yaw",
+    "v_ref_m_s",
+    "a_ref_m_s2",
+    "jerk_ref_m_s3",
+    "method",
+]
+
+
+def build_s_grid(total_len, num_samples, ds):
+    if total_len <= 0.0:
+        raise RuntimeError("total path length must be positive")
+    if ds and ds > 0.0:
+        n = max(2, int(math.ceil(total_len / ds)) + 1)
+    else:
+        n = max(2, int(num_samples))
+    return [total_len * i / (n - 1) for i in range(n)]
+
+
+def retime_accel_limited(
+    s_grid,
+    v_max,
+    a_max,
+    decel_max,
+    start_speed,
+    goal_speed,
+    speed_limits=None,
+):
+    """Forward/backward path retiming under scalar speed ceilings."""
+    if v_max < 0.0 or a_max < 0.0 or decel_max < 0.0:
+        raise RuntimeError("v_max/a_max/decel_max must be non-negative")
+    n = len(s_grid)
+    if speed_limits is not None and len(speed_limits) != n:
+        raise RuntimeError("speed_limits length must match s_grid")
+
+    v = []
+    for i in range(n):
+        local_limit = float(v_max)
+        if speed_limits is not None:
+            local_limit = min(local_limit, max(0.0, float(speed_limits[i])))
+        v.append(local_limit)
+
+    v[0] = min(v[0], max(0.0, start_speed))
+    v[-1] = min(v[-1], max(0.0, goal_speed))
+
+    if a_max > 0.0:
+        for i in range(1, n):
+            ds = max(0.0, s_grid[i] - s_grid[i - 1])
+            v_lim = math.sqrt(max(0.0, v[i - 1] * v[i - 1] + 2.0 * a_max * ds))
+            v[i] = min(v[i], v_lim)
+
+    if decel_max > 0.0:
+        for i in range(n - 2, -1, -1):
+            ds = max(0.0, s_grid[i + 1] - s_grid[i])
+            v_lim = math.sqrt(max(0.0, v[i + 1] * v[i + 1] + 2.0 * decel_max * ds))
+            v[i] = min(v[i], v_lim)
+    return v
+
+
+def compute_time_accel_jerk(s_grid, v):
+    n = len(s_grid)
+    t = [0.0] * n
+    a = [0.0] * n
+    j = [0.0] * n
+    dt_seg = [0.0] * n
+    for i in range(1, n):
+        ds = max(0.0, s_grid[i] - s_grid[i - 1])
+        v_sum = v[i] + v[i - 1]
+        dt = 2.0 * ds / v_sum if v_sum > 1e-9 else 0.0
+        dt_seg[i] = dt
+        t[i] = t[i - 1] + dt
+        a[i] = (v[i] - v[i - 1]) / dt if dt > 1e-9 else 0.0
+    for i in range(1, n):
+        j[i] = (a[i] - a[i - 1]) / dt_seg[i] if dt_seg[i] > 1e-9 else 0.0
+    return t, a, j
+
+
+def wrap_to_pi(angle):
+    while angle > math.pi:
+        angle -= 2.0 * math.pi
+    while angle < -math.pi:
+        angle += 2.0 * math.pi
+    return angle
+
+
+def unwrap_angles(angles):
+    if not angles:
+        return []
+    out = [float(angles[0])]
+    for angle in angles[1:]:
+        out.append(out[-1] + wrap_to_pi(float(angle) - out[-1]))
+    return out
+
+
+def compute_curvature(s_grid, pose_grid):
+    """Estimate signed curvature kappa(s) from path yaw samples."""
+    n = len(s_grid)
+    if n != len(pose_grid):
+        raise RuntimeError("pose_grid length must match s_grid")
+    yaw = unwrap_angles([p[2] for p in pose_grid])
+    kappa = [0.0] * n
+    if n < 3:
+        return kappa
+    for i in range(n):
+        if i == 0:
+            ds = s_grid[1] - s_grid[0]
+            dyaw = yaw[1] - yaw[0]
+        elif i == n - 1:
+            ds = s_grid[-1] - s_grid[-2]
+            dyaw = yaw[-1] - yaw[-2]
+        else:
+            ds = s_grid[i + 1] - s_grid[i - 1]
+            dyaw = yaw[i + 1] - yaw[i - 1]
+        kappa[i] = dyaw / ds if abs(ds) > 1e-9 else 0.0
+    return kappa
+
+
+def smooth_series(values, passes=2):
+    out = [float(v) for v in values]
+    if len(out) < 3:
+        return out
+    for _ in range(max(0, int(passes))):
+        prev = out[:]
+        for i in range(1, len(out) - 1):
+            out[i] = 0.25 * prev[i - 1] + 0.5 * prev[i] + 0.25 * prev[i + 1]
+    return out
+
+
+def interp_series(x_src, y_src, x):
+    if not x_src:
+        return 0.0
+    if x <= x_src[0]:
+        return y_src[0]
+    if x >= x_src[-1]:
+        return y_src[-1]
+    lo = 0
+    hi = len(x_src) - 1
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if x_src[mid] <= x:
+            lo = mid
+        else:
+            hi = mid
+    dx = x_src[hi] - x_src[lo]
+    ratio = 0.0 if dx <= 1e-12 else (x - x_src[lo]) / dx
+    return y_src[lo] + ratio * (y_src[hi] - y_src[lo])
+
+
+def hamaguchi_two_impulse_shaper(omega_n, damping_ratio):
+    if omega_n <= 0.0:
+        raise RuntimeError("omega_n must be positive")
+    if damping_ratio < 0.0 or damping_ratio >= 1.0:
+        raise RuntimeError("damping_ratio must be in [0, 1)")
+    denom = math.sqrt(max(1e-12, 1.0 - damping_ratio * damping_ratio))
+    delta_t = math.pi / (omega_n * denom)
+    k = math.exp(-damping_ratio * math.pi / denom)
+    amp0 = 1.0 / (1.0 + k)
+    amp1 = k / (1.0 + k)
+    return delta_t, k, [(0.0, amp0), (delta_t, amp1)]
+
+
+def shape_time_law_with_impulses(t_base, a_base, total_len, start_speed, dt, impulses):
+    if dt <= 0.0:
+        raise RuntimeError("dt must be positive")
+    if total_len <= 0.0:
+        raise RuntimeError("total_len must be positive")
+    if not t_base:
+        raise RuntimeError("empty base time law")
+    t_end = t_base[-1] + max(delay for delay, _amp in impulses)
+    n = max(2, int(math.ceil(t_end / dt)) + 1)
+    t = [min(t_end, i * dt) for i in range(n)]
+    t[-1] = t_end
+
+    a_shaped = []
+    for ti in t:
+        acc = 0.0
+        for delay, amp in impulses:
+            src_t = ti - delay
+            if 0.0 <= src_t <= t_base[-1]:
+                acc += amp * interp_series(t_base, a_base, src_t)
+        a_shaped.append(acc)
+
+    v = [max(0.0, start_speed)]
+    s = [0.0]
+    for i in range(1, len(t)):
+        seg_dt = max(0.0, t[i] - t[i - 1])
+        vi = max(0.0, v[-1] + 0.5 * (a_shaped[i - 1] + a_shaped[i]) * seg_dt)
+        si = s[-1] + 0.5 * (v[-1] + vi) * seg_dt
+        v.append(vi)
+        s.append(si)
+
+    if s[-1] <= 1e-9:
+        raise RuntimeError("shaped time law produced zero path progress")
+    scale = total_len / s[-1]
+    s_scaled = [max(0.0, min(total_len, si * scale)) for si in s]
+    return t, s_scaled, v, a_shaped, scale
+
+
+def slosh_step_rk4(eta, eta_dot, accel, omega_n, damping_ratio, dt):
+    def deriv(state_eta, state_dot):
+        return (
+            state_dot,
+            -2.0 * damping_ratio * omega_n * state_dot - omega_n * omega_n * state_eta - accel,
+        )
+
+    k1_eta, k1_dot = deriv(eta, eta_dot)
+    k2_eta, k2_dot = deriv(eta + 0.5 * dt * k1_eta, eta_dot + 0.5 * dt * k1_dot)
+    k3_eta, k3_dot = deriv(eta + 0.5 * dt * k2_eta, eta_dot + 0.5 * dt * k2_dot)
+    k4_eta, k4_dot = deriv(eta + dt * k3_eta, eta_dot + dt * k3_dot)
+    eta_next = eta + (dt / 6.0) * (k1_eta + 2.0 * k2_eta + 2.0 * k3_eta + k4_eta)
+    dot_next = eta_dot + (dt / 6.0) * (k1_dot + 2.0 * k2_dot + 2.0 * k3_dot + k4_dot)
+    return eta_next, dot_next
+
+
+def simulate_slosh_profile(t, ax, ay, omega_n, damping_ratio, h_coeff=1.0):
+    """Roll out two decoupled slosh channels on a nonuniform sample grid."""
+    if len(t) != len(ax) or len(t) != len(ay):
+        raise RuntimeError("t/ax/ay length mismatch")
+    if omega_n <= 0.0:
+        raise RuntimeError("omega_n must be positive")
+    if damping_ratio < 0.0:
+        raise RuntimeError("damping_ratio must be non-negative")
+    sx = (0.0, 0.0)
+    sy = (0.0, 0.0)
+    eta_x = [sx[0]]
+    eta_y = [sy[0]]
+    eta_norm = [0.0]
+    h_model = [0.0]
+    for i in range(1, len(t)):
+        dt = max(0.0, t[i] - t[i - 1])
+        # Bound the internal integration step for stability when the profile has
+        # sparse samples. This remains deterministic and dependency-free.
+        steps = max(1, int(math.ceil(dt / 0.01)))
+        sub_dt = dt / steps if steps > 0 else 0.0
+        ax_i = ax[i - 1]
+        ay_i = ay[i - 1]
+        for _ in range(steps):
+            sx = slosh_step_rk4(sx[0], sx[1], ax_i, omega_n, damping_ratio, sub_dt)
+            sy = slosh_step_rk4(sy[0], sy[1], ay_i, omega_n, damping_ratio, sub_dt)
+        norm = math.hypot(sx[0], sy[0])
+        eta_x.append(sx[0])
+        eta_y.append(sy[0])
+        eta_norm.append(norm)
+        h_model.append(h_coeff * norm)
+    return {
+        "eta_x": eta_x,
+        "eta_y": eta_y,
+        "eta_norm": eta_norm,
+        "h_model": h_model,
+    }
+
+
+def rows_from_profile(s_grid, pose_grid, t, v, a, j, method_name):
+    total_len = s_grid[-1]
+    rows = []
+    for i, s in enumerate(s_grid):
+        x, y, yaw = pose_grid[i]
+        rows.append(
+            {
+                "s_normalized": s / total_len if total_len > 1e-9 else 0.0,
+                "s_m": s,
+                "t_s": t[i],
+                "x": x,
+                "y": y,
+                "yaw": yaw,
+                "v_ref_m_s": v[i],
+                "a_ref_m_s2": a[i],
+                "jerk_ref_m_s3": j[i],
+                "method": method_name,
+            }
+        )
+    return rows

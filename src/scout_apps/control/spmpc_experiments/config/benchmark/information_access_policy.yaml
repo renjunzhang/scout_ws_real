@@ -1,0 +1,131 @@
+schema_version: 1
+notes:
+  - "Information-access fairness is checked before a run is allowed into the main table."
+  - "Monitor-only data is observation/metrics data, never planner/control input."
+
+information_access_policy:
+  categories:
+    classical_or_modern_local_planner:
+      allowed_inputs:
+        - odom
+        - tf
+        - map_or_costmap
+        - scan
+        - fixed_or_global_path
+        - goal
+      forbidden_inputs:
+        - /liquid/height
+        - /slosh/height
+        - /slosh/state
+        - /benchmark/slosh_monitor/height
+        - /benchmark/slosh_monitor/state
+        - rgb_liquid_height
+        - spmpc_internal_slosh_state
+        - spmpc_internal_slosh_height
+      examples:
+        - dwa
+        - teb
+        - lt_dwa
+
+    ordinary_mpc_local_planner:
+      allowed_inputs:
+        - odom
+        - tf
+        - map_or_costmap
+        - fixed_or_global_path
+        - goal
+      forbidden_inputs:
+        - online_liquid_feedback
+        - /slosh/height
+        - /slosh/state
+        - /benchmark/slosh_monitor/height
+        - /benchmark/slosh_monitor/state
+        - spmpc_internal_slosh_state
+      examples:
+        - mpc_local_planner
+        - mpc_planner
+
+    slosh_specific_profile_baseline:
+      allowed_inputs:
+        - offline_fixed_path
+        - offline_liquid_model_parameters
+        - common_limits
+        - train_or_validation_scenarios_only
+      forbidden_inputs:
+        - online_rgb_liquid_feedback
+        - monitor_feedback_during_test_case
+        - /slosh/height
+        - /slosh/state
+        - /benchmark/slosh_monitor/height
+        - /benchmark/slosh_monitor/state
+        - runtime_profile_regeneration_from_monitor
+        - test_set_manual_retuning
+      examples:
+        - hamaguchi_profile
+        - lim_profile
+
+    spmpc:
+      allowed_inputs:
+        - odom
+        - odom_derived_slosh_state
+        - internal_slosh_model
+        - fixed_or_global_path
+        - optional_map_or_costmap
+      forbidden_inputs:
+        - online_rgb_liquid_feedback_for_main_table
+        - external_monitor_height_as_planner_input
+        - external_monitor_state_as_planner_input
+        - external_monitor_height_as_ocp_input
+        - external_monitor_state_as_ocp_input
+        - /slosh/height
+        - /slosh/state
+        - /benchmark/slosh_monitor/height
+        - /benchmark/slosh_monitor/state
+        - /slosh/height_as_control_input
+        - /slosh/state_as_control_input
+        - /benchmark/slosh_monitor/height_as_control_input
+        - /benchmark/slosh_monitor/state_as_control_input
+      examples:
+        - spmpc_full
+        - spmpc_b0
+        - spmpc_smooth_only
+
+    slosh_monitor:
+      allowed_inputs:
+        - odom
+        - cmd_vel_for_debug_or_replay
+      allowed_outputs:
+        - /benchmark/slosh_monitor/height
+        - /benchmark/slosh_monitor/state
+        - /benchmark/slosh_monitor/event
+        - /benchmark/slosh_monitor/debug
+        - /slosh/height
+        - /slosh/state
+        - /slosh/debug
+      allowed_consumers:
+        - rosbag
+        - metrics_extractor
+        - rviz_or_plot
+        - offline_report
+      forbidden_consumers:
+        - planner
+        - spmpc_ocp
+        - profile_generator_during_test
+        - command_gate
+        - cmd_vel_chain
+
+  cross_method_metric_priority:
+    simulation:
+      - simulator_ground_truth_if_available
+      - slosh_monitor_model_proxy
+      - spmpc_internal_slosh_diagnostics_only
+    real_robot:
+      - rgb_liquid_height
+      - slosh_monitor_model_proxy_secondary
+      - spmpc_internal_slosh_diagnostics_only
+
+  hard_stop_conditions:
+    - MONITOR_USED_FOR_CONTROL
+    - PARAMETER_NOT_FROZEN
+    - NON_STRICT_FRESH_SIM
+    - COMMAND_GATE_TOO_ACTIVE
