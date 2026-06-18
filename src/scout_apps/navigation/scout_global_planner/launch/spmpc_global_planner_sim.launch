@@ -1,0 +1,44 @@
+<launch>
+  <!-- Current/simple global planner entry for SPMPC point-to-point simulation.
+       This intentionally avoids the legacy MBF/costmap_nav path publisher used by
+       mbf_global_sim.launch and publishes the live path expected by SPMPC on
+       /scout/global_path. -->
+  <arg name="ns" default="/scout" />
+  <arg name="use_sim_time" default="true" />
+
+  <arg name="map_topic" default="/map" />
+  <arg name="global_path_topic" default="global_path" />
+  <arg name="planner_frequency" default="2.0" />
+  <arg name="allow_unknown" default="false" />
+  <arg name="occ_threshold" default="65" />
+  <arg name="inflation_radius" default="0.5" />
+  <arg name="base_frame" default="base_link" />
+  <arg name="map_frame" default="map" />
+  <arg name="remap_goal" default="true" />
+  <arg name="shortcut_smoothing" default="true" />
+  <arg name="smooth_path" default="true" />
+  <arg name="smooth_weight_data" default="0.2" />
+  <arg name="smooth_weight_smooth" default="0.4" />
+  <arg name="smooth_tolerance" default="1e-4" />
+  <arg name="smooth_max_iterations" default="200" />
+
+  <include file="$(find scout_global_planner)/launch/simple_global_planner_sim.launch">
+    <arg name="ns" value="$(arg ns)" />
+    <arg name="use_sim_time" value="$(arg use_sim_time)" />
+    <arg name="map_topic" value="$(arg map_topic)" />
+    <arg name="global_path_topic" value="$(arg global_path_topic)" />
+    <arg name="planner_frequency" value="$(arg planner_frequency)" />
+    <arg name="allow_unknown" value="$(arg allow_unknown)" />
+    <arg name="occ_threshold" value="$(arg occ_threshold)" />
+    <arg name="inflation_radius" value="$(arg inflation_radius)" />
+    <arg name="base_frame" value="$(arg base_frame)" />
+    <arg name="map_frame" value="$(arg map_frame)" />
+    <arg name="remap_goal" value="$(arg remap_goal)" />
+    <arg name="shortcut_smoothing" value="$(arg shortcut_smoothing)" />
+    <arg name="smooth_path" value="$(arg smooth_path)" />
+    <arg name="smooth_weight_data" value="$(arg smooth_weight_data)" />
+    <arg name="smooth_weight_smooth" value="$(arg smooth_weight_smooth)" />
+    <arg name="smooth_tolerance" value="$(arg smooth_tolerance)" />
+    <arg name="smooth_max_iterations" value="$(arg smooth_max_iterations)" />
+  </include>
+</launch>

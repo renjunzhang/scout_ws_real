@@ -1,0 +1,49 @@
+<launch>
+  <!-- SPMPC point-to-point simulation with the current simple_global_planner.
+       This launch does not start Gazebo/localization; start the isolated sim
+       environment first, then run this launch on the same ROS master. -->
+  <arg name="planner_variant" default="B0" />
+  <arg name="solver_backend" default="continuous_mpcc_acados" />
+  <arg name="w_slosh" default="-1.0" />
+  <arg name="w_alpha" default="-1.0" />
+  <arg name="w_du_a" default="-1.0" />
+  <arg name="w_du_vs" default="-1.0" />
+
+  <arg name="reference_path_topic" default="/scout/global_path" />
+  <arg name="costmap_topic" default="/map" />
+  <arg name="reference_target_frame" default="map" />
+
+  <arg name="global_ns" default="/scout" />
+  <arg name="global_path_topic" default="global_path" />
+  <arg name="global_map_topic" default="/map" />
+  <arg name="global_planner_frequency" default="2.0" />
+  <arg name="global_allow_unknown" default="false" />
+  <arg name="global_occ_threshold" default="65" />
+  <arg name="global_inflation_radius" default="0.5" />
+  <arg name="global_base_frame" default="base_link" />
+  <arg name="global_map_frame" default="map" />
+
+  <include file="$(find scout_global_planner)/launch/spmpc_global_planner_sim.launch">
+    <arg name="ns" value="$(arg global_ns)" />
+    <arg name="map_topic" value="$(arg global_map_topic)" />
+    <arg name="global_path_topic" value="$(arg global_path_topic)" />
+    <arg name="planner_frequency" value="$(arg global_planner_frequency)" />
+    <arg name="allow_unknown" value="$(arg global_allow_unknown)" />
+    <arg name="occ_threshold" value="$(arg global_occ_threshold)" />
+    <arg name="inflation_radius" value="$(arg global_inflation_radius)" />
+    <arg name="base_frame" value="$(arg global_base_frame)" />
+    <arg name="map_frame" value="$(arg global_map_frame)" />
+  </include>
+
+  <include file="$(find spmpc_local_planner)/launch/spmpc_point_to_point.launch">
+    <arg name="planner_variant" value="$(arg planner_variant)" />
+    <arg name="reference_path_topic" value="$(arg reference_path_topic)" />
+    <arg name="costmap_topic" value="$(arg costmap_topic)" />
+    <arg name="solver_backend" value="$(arg solver_backend)" />
+    <arg name="w_slosh" value="$(arg w_slosh)" />
+    <arg name="w_alpha" value="$(arg w_alpha)" />
+    <arg name="w_du_a" value="$(arg w_du_a)" />
+    <arg name="w_du_vs" value="$(arg w_du_vs)" />
+    <arg name="reference_target_frame" value="$(arg reference_target_frame)" />
+  </include>
+</launch>

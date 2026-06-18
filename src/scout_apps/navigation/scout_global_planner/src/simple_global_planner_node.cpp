@@ -320,7 +320,7 @@ private:
         resampled.push_back(path.front());
 
         for (size_t i = 1; i < path.size(); ++i) {
-            const Point2D& prev = resampled.back();
+            const Point2D prev = resampled.back();
             const Point2D& curr = path[i];
             const double dx = curr.x - prev.x;
             const double dy = curr.y - prev.y;
