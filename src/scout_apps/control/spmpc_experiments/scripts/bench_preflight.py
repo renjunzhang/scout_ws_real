@@ -40,13 +40,14 @@ REQUIRED_CONTROL_PACKAGES = {
     "spmpc_experiments": "src/scout_apps/control/spmpc_experiments",
     "baseline_local_planner_runner": "src/scout_apps/control/baseline_local_planner_runner",
     "scout_local_planner": "src/scout_apps/control/scout_local_planner",
+    "scout_profile_baselines": "src/scout_apps/control/scout_profile_baselines",
     "slosh_models": "src/scout_apps/control/slosh_models",
 }
 
 REQUIRED_REUSE_ASSETS = {
     "fixed_path_runner": "src/scout_apps/control/scout_local_planner/scripts/fixed_global_path_runner.py",
     "template_fixed_path_generator": "src/scout_apps/control/scout_local_planner/scripts/template_fixed_path_generator.py",
-    "profile_csv_utils": "src/scout_apps/control/scout_local_planner/scripts/analysis/path_profile_utils.py",
+    "profile_csv_utils": "src/scout_apps/control/scout_profile_baselines/scripts/path_profile_utils.py",
     "fixed_path_feasibility_analyzer": "src/scout_apps/control/scout_local_planner/scripts/analysis/analyze_fixed_path_feasibility.py",
     "fixed_path_metrics_extractor": "src/scout_apps/control/spmpc_experiments/scripts/extract_fixed_path_paper_metrics.py",
     "spmpc_suite": "src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_spmpc_suite.sh",
@@ -112,12 +113,12 @@ EXPECTED_PROFILE_COLUMNS = [
 PROFILE_BASELINES = {
     "hamaguchi_profile": {
         "config": "hamaguchi_profile.yaml",
-        "generator": "src/scout_apps/control/scout_local_planner/scripts/analysis/generate_hamaguchi_profile.py",
+        "generator": "src/scout_apps/control/scout_profile_baselines/scripts/generate_hamaguchi_profile.py",
         "method_name": "HAMAGUCHI_STYLE",
     },
     "lim_profile": {
         "config": "lim_profile.yaml",
-        "generator": "src/scout_apps/control/scout_local_planner/scripts/analysis/generate_lim_style_profile.py",
+        "generator": "src/scout_apps/control/scout_profile_baselines/scripts/generate_lim_style_profile.py",
         "method_name": "LIM_STYLE",
     },
 }
@@ -564,8 +565,15 @@ class Preflight:
             self.info("MPC_PLANNER_PRESENT", f"src/mpc_planner exists at {mpc_planner}; still requires its own smoke gate")
         else:
             self.warn("MPC_PLANNER_ABSENT", "src/mpc_planner not found; advanced MPC baseline is dependency-skipped")
-        # LT-DWA is intentionally future/pending in the capability matrix.
-        self.info("LT_DWA_PENDING", "LT-DWA adapter/package is not required for Phase 0 preflight")
+        lt_dwa_vendor = self.repo_root / "third_party/LT_DWA"
+        if lt_dwa_vendor.is_dir():
+            self.info(
+                "LT_DWA_VENDORED_SOURCE_ONLY",
+                f"LT-DWA source is vendored at {lt_dwa_vendor}; adapter/smoke gate remains pending",
+                lt_dwa_vendor,
+            )
+        else:
+            self.warn("LT_DWA_NOT_INSTALLED", "third_party/LT_DWA not found; advanced LT-DWA baseline is dependency-skipped")
 
     def expect_path(
         self,

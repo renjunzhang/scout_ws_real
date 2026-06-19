@@ -37,6 +37,21 @@ MPC_PLANNER_EXPECTED_DEPS = {
     "roadmap": "src/roadmap",
     "costmap_converter": "src/costmap_converter",
 }
+LT_DWA_VENDOR_ROOT = "third_party/LT_DWA"
+LT_DWA_VENDOR_REQUIRED_FILES = {
+    "readme": "ReadMe.md",
+    "local_planner_package": "local_planner/package.xml",
+    "navigation_package": "navigation/package.xml",
+    "obstacle_msgs_package": "obstacle_msgs/package.xml",
+    "local_map_generation_package": "local_map_generation/package.xml",
+    "static_map_package": "static_map/package.xml",
+    "crowd_simulator_package": "crowd_simulator/package.xml",
+    "demo_node": "local_planner/src/local_planner_node.cpp",
+}
+LT_DWA_VENDOR_CONFLICTING_PACKAGE_NAMES = {
+    "local_planner",
+    "navigation",
+}
 LT_DWA_PACKAGE_NAME_HINTS = {
     "lt_dwa",
     "lt_dwa_planner",
@@ -86,23 +101,63 @@ class ReadinessCheck:
         return self.report
 
     def check_lt_dwa(self) -> None:
+        vendor_root = self.repo_root / LT_DWA_VENDOR_ROOT
+        if vendor_root.is_dir():
+            self.pass_check("lt_dwa_vendor_root", "LT-DWA source is vendored outside catkin src", vendor_root)
+            missing_vendor_files = []
+            for name, rel in LT_DWA_VENDOR_REQUIRED_FILES.items():
+                path = vendor_root / rel
+                if path.is_file():
+                    self.pass_check(f"lt_dwa_vendor:{name}", f"Found LT-DWA vendor file {rel}", path)
+                else:
+                    missing_vendor_files.append({"name": name, "path": str(path)})
+            if missing_vendor_files:
+                self.report["missing"].extend(missing_vendor_files)
+                self.error(
+                    "LT_DWA_VENDOR_INCOMPLETE",
+                    "LT-DWA vendor tree is present but missing expected upstream files; refresh third_party/LT_DWA.",
+                    vendor_root,
+                )
+
+            package_names = self.read_package_names(vendor_root)
+            conflicts = sorted(LT_DWA_VENDOR_CONFLICTING_PACKAGE_NAMES & set(package_names))
+            if conflicts:
+                self.warn(
+                    "LT_DWA_PACKAGE_NAME_CONFLICT",
+                    "Vendored LT-DWA contains catkin package names that conflict with this workspace "
+                    f"({conflicts}); keep it under third_party/LT_DWA and do not symlink it into src.",
+                    vendor_root,
+                )
+            self.info(
+                "LT_DWA_VENDORED_SOURCE_ONLY",
+                "LT-DWA upstream source is available for git pull, but it is intentionally not catkin-built in the main workspace.",
+                vendor_root,
+            )
+            self.error(
+                "LT_DWA_ADAPTER_NOT_READY",
+                "LT-DWA is vendored source-only; no benchmark adapter/current-sim smoke gate has been implemented yet.",
+                vendor_root,
+            )
+            return
+
         packages = self.find_packages_by_name(LT_DWA_PACKAGE_NAME_HINTS)
         if not packages:
             self.report["missing"].append(
                 {
-                    "name": "lt_dwa_package",
+                    "name": "lt_dwa_vendor_source",
+                    "path": str(vendor_root),
                     "expected_package_names": sorted(LT_DWA_PACKAGE_NAME_HINTS),
                 }
             )
             self.error(
                 "LT_DWA_NOT_INSTALLED",
-                "No LT-DWA package/plugin was found in this workspace; keep this baseline dependency-skipped.",
+                "No LT-DWA vendored source or package/plugin was found; keep this baseline dependency-skipped.",
             )
             return
         for name, path in packages.items():
             self.pass_check(f"package:{name}", f"Found candidate LT-DWA package {name}", path)
-        self.warn(
-            "LT_DWA_ADAPTER_NOT_VERIFIED",
+        self.error(
+            "LT_DWA_ADAPTER_NOT_READY",
             "Candidate package exists, but no benchmark adapter/smoke gate has been verified yet.",
         )
 
@@ -171,6 +226,19 @@ class ReadinessCheck:
                 "Static readiness files are present, but a separate isolated smoke gate is still required before suite integration.",
                 root,
             )
+
+    def read_package_names(self, root: Path) -> List[str]:
+        names: List[str] = []
+        for package_xml in root.rglob("package.xml"):
+            try:
+                text = package_xml.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            start = text.find("<name>")
+            end = text.find("</name>", start + len("<name>")) if start >= 0 else -1
+            if start >= 0 and end > start:
+                names.append(text[start + len("<name>") : end].strip())
+        return names
 
     def find_packages_by_name(self, names: set[str]) -> Dict[str, Path]:
         src_root = self.repo_root / "src"

@@ -24,6 +24,7 @@ main_table_inclusion:
   exclusions:
     - DEPENDENCY_SKIPPED
     - PRECHECK_FAILED
+    - LT_DWA_ADAPTER_NOT_READY
     - FAIRNESS_VIOLATION
     - PARAMETER_NOT_FROZEN
     - NON_STRICT_FRESH_SIM

@@ -133,12 +133,16 @@ rosrun scout_local_planner run_sim_fixed_path_bag.sh
 
 ## External profile baseline
 
+Hamaguchi/Lim 对比方法的真实 generator 已迁到 `src/scout_apps/control/scout_profile_baselines/`，本包只保留 `analysis/generate_hamaguchi_profile.py` 和 `analysis/generate_lim_style_profile.py` 两个兼容 wrapper；正式入口请用 `rosrun scout_profile_baselines ...`。本目录继续保留老固定路径 profile 工具和 common tracker 相关脚本。
+
 | 脚本 | 当前用途 |
 |---|---|
 | `analysis/retime_toppra_style.py` | 生成 acceleration-limited `v_ref(s)` CSV |
 | `analysis/retime_ruckig_style.py` | 生成 jerk-limited `v_ref(s)` CSV；需要 Python `ruckig` 包 |
 | `analysis/shape_biagiotti.py` | 生成 Biagiotti/input-shaping-style slosh-aware `v_ref(s)` CSV |
 | `analysis/path_profile_utils.py` | TOPPRA/Ruckig/Biagiotti 共用的固定路径读取、插值、CSV、plot 工具 |
+| `analysis/generate_hamaguchi_profile.py` | 兼容 wrapper，转发到 `scout_profile_baselines/scripts/generate_hamaguchi_profile.py` |
+| `analysis/generate_lim_style_profile.py` | 兼容 wrapper，转发到 `scout_profile_baselines/scripts/generate_lim_style_profile.py` |
 | `analysis/analyze_fixed_path_feasibility.py` | 固定路径几何可行性检查：曲率、最小转弯半径、`omega_req=v_ref*kappa`、前段曲率窗口 |
 
 定位：

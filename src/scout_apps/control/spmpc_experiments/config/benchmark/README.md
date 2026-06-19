@@ -30,7 +30,7 @@ The high-level monitor-only information boundary is also recorded in `informatio
 
 ## Profile baseline policy
 
-Hamaguchi/Lim-style baselines are offline profile generators. Their configs live in `../profile_baselines/`, and their generator scripts live with the existing fixed-path profile tools under `scout_local_planner/scripts/analysis/`.
+Hamaguchi/Lim-style baselines are offline profile generators. Their configs live in `../profile_baselines/`, and their generator implementations live in the isolated `src/scout_apps/control/scout_profile_baselines/` package. `scout_local_planner` remains the common external-profile tracker and keeps only legacy wrapper entrypoints.
 
 - They may read only a fixed path, frozen common limits, and offline liquid-model parameters.
 - They must output the shared profile CSV schema declared in `profile_tracking_common.yaml`.
@@ -46,7 +46,7 @@ Older `/data/a/scout_sim_replacement` strict fresh manifests use reachability co
 
 ## Advanced baseline readiness policy
 
-`lt_dwa` and `mpc_planner` are readiness-gated advanced candidates. If LT-DWA is not installed, it is reported as `LT_DWA_NOT_INSTALLED`. If `src/mpc_planner` lacks generated solver artifacts or required dependencies, it is reported as `MPC_PLANNER_NOT_READY`. These dependency/readiness outcomes are not algorithm failures and must not be promoted into runnable suites without a separate smoke gate.
+`lt_dwa` and `mpc_planner` are readiness-gated advanced candidates. LT-DWA source is vendored at `third_party/LT_DWA/` for real-machine `git pull`, but it is source-only because upstream package names (`local_planner`, `navigation`) conflict with this workspace; readiness remains `LT_DWA_ADAPTER_NOT_READY`. If `src/mpc_planner` lacks generated solver artifacts or required dependencies, it is reported as `MPC_PLANNER_NOT_READY`. These dependency/readiness outcomes are not algorithm failures and must not be promoted into runnable suites without a separate smoke gate.
 
 ## Dependency policy
 

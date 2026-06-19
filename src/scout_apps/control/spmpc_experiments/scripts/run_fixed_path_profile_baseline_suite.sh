@@ -435,8 +435,8 @@ for run_idx in $(seq 1 "${RUNS}"); do
     check_endpoint "${run_path_file}" "${run_dir}" "${run_id}"
 
     build_profile_args "${baseline}" "${run_path_file}" "${profile_csv}" "${profile_plot}" "${profile_debug_prefix}"
-    echo "[profile] rosrun scout_local_planner ${generator_name} ${PROFILE_ARGS[*]}"
-    rosrun scout_local_planner "${generator_name}" "${PROFILE_ARGS[@]}" \
+    echo "[profile] rosrun scout_profile_baselines ${generator_name} ${PROFILE_ARGS[*]}"
+    rosrun scout_profile_baselines "${generator_name}" "${PROFILE_ARGS[@]}" \
       >"${run_dir}/${run_id}_profile_generator.log" 2>&1
     wait_file_nonempty "${profile_csv}" 5
 
@@ -453,6 +453,7 @@ freshness_claim: current_sim_only
 strict_requested: false
 one_case_per_fresh_sim: false
 profile_generated_before_case: true
+profile_generator_package: scout_profile_baselines
 profile_generator_script: ${generator_name}
 profile_csv: ${profile_csv}
 profile_omega_n: ${PROFILE_OMEGA_N}

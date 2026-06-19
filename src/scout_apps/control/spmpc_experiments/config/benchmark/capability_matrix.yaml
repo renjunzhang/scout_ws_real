@@ -170,12 +170,12 @@ planners:
   lt_dwa:
     category: modern_local_planner
     information_access_category: classical_or_modern_local_planner
-    implementation: external_future
-    interface_type: pending_adapter
+    implementation: third_party/LT_DWA
+    interface_type: source_only_pending_adapter
     online: true
-    present_in_workspace: false
+    present_in_workspace: source_only
     ready_to_run: false
-    dependency_failure_code: LT_DWA_NOT_INSTALLED
+    dependency_failure_code: LT_DWA_ADAPTER_NOT_READY
     cmd_vel_output: true
     fixed_path_input: pending_adapter
     global_path_input: pending_adapter
@@ -226,7 +226,7 @@ planners:
   hamaguchi_profile:
     category: slosh_specific_motion_generation
     information_access_category: slosh_specific_profile_baseline
-    implementation: generated_external_profile
+    implementation: scout_profile_baselines_generated_external_profile
     interface_type: profile_csv_plus_common_tracker
     online: false
     present_in_workspace: true
@@ -253,7 +253,7 @@ planners:
   lim_profile:
     category: slosh_specific_offline_optimization
     information_access_category: slosh_specific_profile_baseline
-    implementation: generated_external_profile
+    implementation: scout_profile_baselines_generated_external_profile
     interface_type: profile_csv_plus_common_tracker
     online: false
     present_in_workspace: true

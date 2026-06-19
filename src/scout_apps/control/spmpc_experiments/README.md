@@ -12,6 +12,23 @@ mpc_local_planner             外部 MPC baseline, 已放入 src/scout_apps/cont
 spmpc_experiments    统一 launch / config / recording / smoke scripts
 ```
 
+## 对比算法文件分类入口
+
+对比算法与 benchmark 文件先看：[`README_compare_algorithms.md`](README_compare_algorithms.md)。当前按四层分类，方便横向比较：
+
+```text
+config/benchmark/          公平性规则、common limits、freshness、capability matrix、主表准入
+config/baselines/          TEB / DWA / mpc_local_planner runtime configs
+config/profile_baselines/  Hamaguchi / Lim supplementary profile baseline configs
+scripts/                   suites、preflight、freshness evidence、endpoint check、metrics
+../scout_profile_baselines/ Hamaguchi / Lim offline profile generators 与独立 helper
+../scout_local_planner/     common external-profile tracker 与旧 rosrun wrapper
+../../../../third_party/LT_DWA/
+                           LT-DWA upstream source-only vendor，adapter pending
+```
+
+关键边界：`spmpc_experiments` 只做实验调度和 benchmark gate，不放 planner/OCP 算法实现；Hamaguchi/Lim 的 generator 实现在 `scout_profile_baselines`，runtime common tracker 仍在 `scout_local_planner`，它们是 supplementary profile baseline，不是 online local-planner 同层主表方法。
+
 ## 当前可用仿真入口
 
 先启动仿真和定位：

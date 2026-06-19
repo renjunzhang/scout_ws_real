@@ -27,6 +27,23 @@ SIM_ENV=open USE_RVIZ=true \
 
 > 注意：`run_fixed_path_paper_matrix.sh`、`run_fixed_path_critical_sweep.sh`、`run_p2p_paper_supplement.sh`、`run_robustness_transfer_sweep.sh` 是编排入口，不负责启动/关闭 Gazebo。正式数据不要把它们当成“自动 fresh-sim runner”；需要由外层流程保证一个 case 一个 fresh sim。
 
+## 按对比算法找入口
+
+更完整的文件分类见 `../README_compare_algorithms.md`。常用入口如下：
+
+| 类别 | 方法 | 配置 | 运行入口 | 核心实现 | 表格角色 |
+|---|---|---|---|---|---|
+| online SPMPC | `B0` / `B_slosh` / `B_smooth` / `B_ours` | SPMPC variant/config；benchmark policy 在 `config/benchmark/` | `run_fixed_path_spmpc_suite.sh` | `src/scout_apps/control/spmpc_local_planner/` | 主表 / 内部消融 |
+| legacy local planner | TEB | `config/baselines/teb_local_planner_standalone_sim.yaml` | `run_fixed_path_baseline_suite.sh` | `teb_local_planner` + `baseline_local_planner_runner` | 同层 online baseline |
+| legacy local planner | DWA | `config/baselines/dwa_local_planner_standalone_sim.yaml` | `run_fixed_path_baseline_suite.sh` | `navigation/dwa_local_planner` + `baseline_local_planner_runner` | 同层 online baseline |
+| fallback MPC | `mpc_local_planner` | `config/baselines/mpc_local_planner_standalone_sim.yaml` | `run_fixed_path_baseline_suite.sh`，需 opt-in | `src/scout_apps/control/mpc_local_planner/` | fallback / supplement |
+| profile baseline | Hamaguchi | `config/profile_baselines/hamaguchi_profile.yaml` | `run_fixed_path_profile_baseline_suite.sh` | `scout_profile_baselines/scripts/generate_hamaguchi_profile.py` | supplementary profile baseline |
+| profile baseline | Lim | `config/profile_baselines/lim_profile.yaml` | `run_fixed_path_profile_baseline_suite.sh` | `scout_profile_baselines/scripts/generate_lim_style_profile.py` | supplementary profile baseline |
+| advanced candidate | LT-DWA | `config/benchmark/capability_matrix.yaml` | readiness check only | `third_party/LT_DWA/` source-only，adapter pending | candidate，未通过前不进表 |
+| advanced candidate | `src/mpc_planner` | `config/benchmark/capability_matrix.yaml` | readiness check only | `src/mpc_planner/` | candidate，未通过前不进表 |
+
+Hamaguchi/Lim 的 runtime chain 固定为：`offline profile generator -> profile_csv -> common tracker -> cmd_vel -> metrics`。slosh monitor 只允许进入 rosbag/metrics/report，不得被 generator、command gate、OCP 或 `/cmd_vel` 链路消费。
+
 ## 脚本索引
 
 | 脚本 | 类型 | 主要用途 | fresh-sim 注意事项 |

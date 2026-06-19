@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>scout_profile_baselines</name>
+  <version>0.1.0</version>
+  <description>
+    Offline supplementary fixed-path profile baseline generators for Scout
+    comparison experiments. This package owns Hamaguchi-style and Lim-style
+    profile generation only; runtime tracking remains in scout_local_planner.
+  </description>
+
+  <maintainer email="user@todo.todo">user</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <export>
+  </export>
+</package>

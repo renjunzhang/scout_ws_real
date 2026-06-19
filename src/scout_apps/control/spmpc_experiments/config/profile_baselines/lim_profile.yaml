@@ -3,8 +3,8 @@ profile_baseline:
   id: lim_profile
   label: Lim-style offline slosh-aware retimed profile
   category: slosh_specific_offline_optimization
-  implementation: generated_external_profile
-  generator_script: src/scout_apps/control/scout_local_planner/scripts/analysis/generate_lim_style_profile.py
+  implementation: scout_profile_baselines_generated_external_profile
+  generator_script: src/scout_apps/control/scout_profile_baselines/scripts/generate_lim_style_profile.py
   method_name: LIM_STYLE
   approximation_note: >-
     Uses fixed-path offline slosh-risk retiming with a linear second-order liquid
