@@ -58,6 +58,21 @@ LT_DWA_PACKAGE_NAME_HINTS = {
     "lt_dwa_local_planner",
     "ltdwa",
     "ltdwa_planner",
+    "lt_dwa_adapter",
+}
+LT_DWA_ADAPTER_ROOT = "src/scout_apps/control/lt_dwa_adapter"
+LT_DWA_ADAPTER_REQUIRED_FILES = {
+    "package_xml": "package.xml",
+    "cmakelists": "CMakeLists.txt",
+    "node_source": "src/lt_dwa_adapter_node.cpp",
+    "ros_wrapper_source": "src/lt_dwa_adapter_ros.cpp",
+    "planner_source": "src/lt_dwa_planner.cpp",
+    "launch": "launch/lt_dwa_adapter.launch",
+    "config": "config/lt_dwa_adapter_sim.yaml",
+}
+LT_DWA_BENCHMARK_REQUIRED_FILES = {
+    "wrapper_launch": "src/scout_apps/control/spmpc_experiments/launch/sim/run_lt_dwa_fixed_path_sim.launch",
+    "baseline_config": "src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_adapter_standalone_sim.yaml",
 }
 
 
@@ -129,36 +144,56 @@ class ReadinessCheck:
                     vendor_root,
                 )
             self.info(
-                "LT_DWA_VENDORED_SOURCE_ONLY",
-                "LT-DWA upstream source is available for git pull, but it is intentionally not catkin-built in the main workspace.",
+                "LT_DWA_REFERENCE_SOURCE_ONLY",
+                "LT-DWA upstream source is retained under third_party as a reference and is not catkin-built in the main workspace.",
                 vendor_root,
             )
+        else:
+            self.warn("LT_DWA_VENDOR_ABSENT", "third_party/LT_DWA is absent; adapter can still be checked, but paper-reference source is missing", vendor_root)
+
+        adapter_root = self.repo_root / LT_DWA_ADAPTER_ROOT
+        if not adapter_root.is_dir():
+            self.report["missing"].append({"name": "lt_dwa_adapter_root", "path": str(adapter_root)})
             self.error(
                 "LT_DWA_ADAPTER_NOT_READY",
-                "LT-DWA is vendored source-only; no benchmark adapter/current-sim smoke gate has been implemented yet.",
-                vendor_root,
+                "Scout-owned lt_dwa_adapter package is missing; keep LT-DWA dependency-skipped.",
+                adapter_root,
+            )
+            return
+        self.pass_check("lt_dwa_adapter_root", "Scout-owned LT-DWA adapter package is present", adapter_root)
+
+        missing_adapter_files = []
+        for name, rel in LT_DWA_ADAPTER_REQUIRED_FILES.items():
+            path = adapter_root / rel
+            if path.is_file():
+                self.pass_check(f"lt_dwa_adapter:{name}", f"Found LT-DWA adapter file {rel}", path)
+            else:
+                missing_adapter_files.append({"name": name, "path": str(path)})
+        for name, rel in LT_DWA_BENCHMARK_REQUIRED_FILES.items():
+            path = self.repo_root / rel
+            if path.is_file():
+                self.pass_check(f"lt_dwa_benchmark:{name}", f"Found LT-DWA benchmark file {rel}", path)
+            else:
+                missing_adapter_files.append({"name": name, "path": str(path)})
+
+        if missing_adapter_files:
+            self.report["missing"].extend(missing_adapter_files)
+            self.error(
+                "LT_DWA_ADAPTER_NOT_READY",
+                "LT-DWA adapter package is present but required node/config/launch benchmark files are missing.",
+                adapter_root,
             )
             return
 
-        packages = self.find_packages_by_name(LT_DWA_PACKAGE_NAME_HINTS)
-        if not packages:
-            self.report["missing"].append(
-                {
-                    "name": "lt_dwa_vendor_source",
-                    "path": str(vendor_root),
-                    "expected_package_names": sorted(LT_DWA_PACKAGE_NAME_HINTS),
-                }
-            )
-            self.error(
-                "LT_DWA_NOT_INSTALLED",
-                "No LT-DWA vendored source or package/plugin was found; keep this baseline dependency-skipped.",
-            )
+        packages = self.find_packages_by_name({"lt_dwa_adapter"})
+        if "lt_dwa_adapter" not in packages:
+            self.error("LT_DWA_ADAPTER_NOT_READY", "lt_dwa_adapter/package.xml does not declare package name lt_dwa_adapter", adapter_root)
             return
-        for name, path in packages.items():
-            self.pass_check(f"package:{name}", f"Found candidate LT-DWA package {name}", path)
-        self.error(
-            "LT_DWA_ADAPTER_NOT_READY",
-            "Candidate package exists, but no benchmark adapter/smoke gate has been verified yet.",
+        self.pass_check("lt_dwa_adapter_package_name", "lt_dwa_adapter package name is unique and explicit", packages["lt_dwa_adapter"])
+        self.warn(
+            "LT_DWA_SMOKE_GATE_REQUIRED",
+            "Static LT-DWA adapter assets are present; require isolated shadow/closed-loop smoke before formal main-table use.",
+            adapter_root,
         )
 
     def check_mpc_planner(self) -> None:

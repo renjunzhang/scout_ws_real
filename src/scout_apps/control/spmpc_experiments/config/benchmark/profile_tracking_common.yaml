@@ -31,7 +31,7 @@ profile_tracker:
     monitor_feedback_during_test_allowed: false
 
 profile_csv_schema:
-  source_helper: src/scout_apps/control/scout_profile_baselines/scripts/path_profile_utils.py
+  source_helper: src/scout_apps/control/scout_profile_baselines/scripts/common/path_profile_utils.py
   required_columns:
     - s_normalized
     - s_m

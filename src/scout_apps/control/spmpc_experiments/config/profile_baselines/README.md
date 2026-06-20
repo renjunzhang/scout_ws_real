@@ -4,21 +4,23 @@
 
 当前方法：
 
-| 方法 | 配置文件 | generator 实现 | 运行入口 | 表格角色 |
-|---|---|---|---|---|
-| Hamaguchi-style profile | `hamaguchi_profile.yaml` | `src/scout_apps/control/scout_profile_baselines/scripts/generate_hamaguchi_profile.py` | `src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_profile_baseline_suite.sh` | supplementary profile baseline |
-| Lim-style profile | `lim_profile.yaml` | `src/scout_apps/control/scout_profile_baselines/scripts/generate_lim_style_profile.py` | `src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_profile_baseline_suite.sh` | supplementary profile baseline |
+| 方法 | 配置文件 | stable generator 入口 | 真实实现 | 运行入口 | 表格角色 |
+|---|---|---|---|---|---|
+| Hamaguchi-style profile | `hamaguchi_profile.yaml` | `src/scout_apps/control/scout_profile_baselines/scripts/generate_hamaguchi_profile.py` | `src/scout_apps/control/scout_profile_baselines/scripts/hamaguchi/generate_profile.py` | `src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_profile_baseline_suite.sh` | supplementary profile baseline |
+| Lim-style profile | `lim_profile.yaml` | `src/scout_apps/control/scout_profile_baselines/scripts/generate_lim_style_profile.py` | `src/scout_apps/control/scout_profile_baselines/scripts/lim/generate_profile.py` | `src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_profile_baseline_suite.sh` | supplementary profile baseline |
 
 ## 物理隔离
 
-Hamaguchi/Lim 的真实实现已经从老控制器 analysis 目录拆出，集中在：
+Hamaguchi/Lim 的真实实现已经从老控制器 analysis 目录拆出，并在 `scout_profile_baselines` 内按方法分目录：
 
 ```text
 src/scout_apps/control/scout_profile_baselines/
-  scripts/generate_hamaguchi_profile.py
-  scripts/generate_lim_style_profile.py
-  scripts/advanced_profile_common.py
-  scripts/path_profile_utils.py
+  scripts/generate_hamaguchi_profile.py   # stable wrapper
+  scripts/generate_lim_style_profile.py   # stable wrapper
+  scripts/hamaguchi/generate_profile.py   # Hamaguchi-style implementation
+  scripts/lim/generate_profile.py         # Lim-style implementation
+  scripts/common/advanced_profile_common.py
+  scripts/common/path_profile_utils.py
 ```
 
 职责分工：

@@ -1,0 +1,52 @@
+# Scout-owned LT-DWA-style adapter defaults for simulation benchmarks.
+# Safe by default: shadow-only, no /cmd_vel publication unless the launch/suite
+# explicitly sets publish_cmd_vel:=true and cmd_vel_topic:=/cmd_vel.
+
+publish_cmd_vel: false
+publish_shadow_cmd: true
+require_map: true
+
+odom_topic: /odom
+map_topic: /map
+global_path_topic: /scout/global_path_fixed
+goal_topic: /scout/goal
+cmd_vel_topic: /lt_dwa/shadow_cmd_vel
+shadow_cmd_topic: /baseline/lt_dwa/shadow_cmd_vel
+status_topic: /baseline/lt_dwa/status
+global_plan_topic: /baseline/lt_dwa/global_plan
+local_plan_topic: /baseline/lt_dwa/local_plan
+
+base_frame: base_link
+plan_target_frame: odom
+controller_frequency: 10.0
+tf_timeout_sec: 0.2
+
+# Common fair-comparison command limits.
+v_max_mps: 0.8
+omega_max_radps: 1.2
+a_max_mps2: 0.6
+alpha_max_radps2: 1.2
+allow_reverse: false
+xy_goal_tolerance: 0.20
+yaw_goal_tolerance: 0.30
+
+# Dynamic-window layered rollout parameters.
+dt: 0.15
+horizon_steps: 12
+v_samples: 7
+omega_samples: 9
+top_k_per_layer: 80
+robot_radius_m: 0.35
+clearance_radius_m: 0.80
+lethal_occupancy: 65
+treat_unknown_as_occupied: false
+
+weights:
+  obstacle: 2.0
+  path_lateral: 4.0
+  heading: 2.0
+  progress: 3.0
+  terminal: 4.0
+  smooth_v: 0.0
+  smooth_omega: 0.08
+  speed: 1.0

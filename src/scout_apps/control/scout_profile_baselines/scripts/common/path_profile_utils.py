@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Shared helpers for fixed-path speed-profile generators.
+"""Shared helpers for Hamaguchi/Lim fixed-path speed-profile generators.
 
-Used by retime_toppra_style.py / retime_ruckig_style.py / shape_biagiotti.py.
-All of them keep the fixed path geometry unchanged and only compute a scalar
-path-speed profile, then write the same CSV schema consumed by
+Both profile baselines keep the fixed path geometry unchanged and only compute a
+scalar path-speed profile, then write the same CSV schema consumed by
 `path_handler/external_speed_profile_csv`.
 """
 

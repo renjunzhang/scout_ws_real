@@ -14,6 +14,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 VARIANTS="${VARIANTS:-B0 B_smooth B_slosh B_ours}"
 SPMPC_SOLVER_BACKEND="${SPMPC_SOLVER_BACKEND:-continuous_mpcc_acados}"
 SPMPC_W_SLOSH="${SPMPC_W_SLOSH:--1.0}"
@@ -64,6 +66,8 @@ PRE_PATH_WAIT_SEC="${PRE_PATH_WAIT_SEC:-0}"
 SLOSH_MONITOR_ENABLE="${SLOSH_MONITOR_ENABLE:-false}"
 SLOSH_MONITOR_ODOM_TOPIC="${SLOSH_MONITOR_ODOM_TOPIC:-/odom}"
 SLOSH_MONITOR_CMD_VEL_TOPIC="${SLOSH_MONITOR_CMD_VEL_TOPIC:-${CMD_VEL_TOPIC}}"
+SLOSH_MONITOR_OUTPUT_NAMESPACE="${SLOSH_MONITOR_OUTPUT_NAMESPACE:-/benchmark/slosh_monitor}"
+SKIP_PHASE0_PREFLIGHT="${SKIP_PHASE0_PREFLIGHT:-false}"
 EXPERIMENT_GROUP="${EXPERIMENT_GROUP:-fixed_path_internal_ablation}"
 EVIDENCE_CHAIN_VERSION="${EVIDENCE_CHAIN_VERSION:-20260605}"
 SLOSH_RESET_BEFORE_RUN="${SLOSH_RESET_BEFORE_RUN:-true}"
@@ -219,11 +223,28 @@ reset_slosh_monitor() {
   if [[ "${SLOSH_MONITOR_ENABLE}" != "true" || "${SLOSH_RESET_BEFORE_RUN}" != "true" ]]; then
     return 0
   fi
-  if timeout 2s rosservice call /slosh/reset >/dev/null 2>&1; then
-    echo "[slosh_monitor] reset /slosh/reset"
+  local service="${SLOSH_MONITOR_OUTPUT_NAMESPACE%/}/reset"
+  if timeout 2s rosservice call "${service}" >/dev/null 2>&1; then
+    echo "[slosh_monitor] reset ${service}"
   else
-    echo "[WARN] /slosh/reset 不可用，跳过本次 slosh monitor reset" >&2
+    echo "[WARN] ${service} 不可用，跳过本次 slosh monitor reset" >&2
   fi
+}
+
+preflight_id_for_variant() {
+  case "$1" in
+    B0) echo "spmpc_b0" ;;
+    B_smooth) echo "spmpc_smooth_only" ;;
+    B_slosh|B_ours) echo "spmpc_full" ;;
+    *) echo "[ERR] unknown SPMPC variant for preflight: $1" >&2; return 2 ;;
+  esac
+}
+
+run_phase0_preflight() {
+  if [[ "${SKIP_PHASE0_PREFLIGHT}" == "true" ]]; then
+    echo "[phase0][WARN] SKIP_PHASE0_PREFLIGHT=true; current run is diagnostics only"
+  fi
+  bash "${SCRIPT_DIR}/bench_run_phase0_preflight.sh" "$@"
 }
 
 case "${PATH_SOURCE_MODE}" in
@@ -248,6 +269,12 @@ case "${PATH_SOURCE_MODE}" in
     exit 2
     ;;
 esac
+PREFLIGHT_VARIANTS=""
+for variant in ${VARIANTS}; do
+  PREFLIGHT_VARIANTS="${PREFLIGHT_VARIANTS} $(preflight_id_for_variant "${variant}")"
+done
+run_phase0_preflight ${PREFLIGHT_VARIANTS}
+
 if ! rostopic list >/dev/null 2>&1; then
   echo "[ERR] roscore/仿真栈未检测到。请先启动仿真。" >&2
   exit 1
@@ -295,6 +322,10 @@ record_topics=(
   /spmpc/debug/warm_start_status
   /spmpc/terminal/debug
   /spmpc/terminal/mode
+  /benchmark/slosh_monitor/height
+  /benchmark/slosh_monitor/state
+  /benchmark/slosh_monitor/event
+  /benchmark/slosh_monitor/debug
   /slosh/height
   /slosh/state
   /slosh/debug
@@ -354,6 +385,7 @@ git_hash: ${git_hash}
 record_sec: ${RECORD_SEC}
 run_timeout_sec: ${RUN_TIMEOUT_SEC}
 run_index: ${run_idx}
+skip_phase0_preflight: ${SKIP_PHASE0_PREFLIGHT}
 stable_goal_enabled: ${stable_goal_enabled}
 template_name: ${PATH_TEMPLATE}
 template_start_heading: ${START_HEADING}
@@ -373,6 +405,7 @@ feasibility_omega_max: ${FEASIBILITY_OMEGA_MAX}
 slosh_monitor_enable: ${SLOSH_MONITOR_ENABLE}
 slosh_monitor_odom_topic: ${SLOSH_MONITOR_ODOM_TOPIC}
 slosh_monitor_cmd_vel_topic: ${SLOSH_MONITOR_CMD_VEL_TOPIC}
+slosh_monitor_output_namespace: ${SLOSH_MONITOR_OUTPUT_NAMESPACE}
 shared_linear_accel_limit_enable: ${SPMPC_SHARED_LINEAR_ACCEL_LIMIT_ENABLE}
 shared_linear_accel_max: ${SPMPC_SHARED_LINEAR_ACCEL_MAX}
 shared_linear_accel_max_dt: ${SPMPC_SHARED_LINEAR_ACCEL_MAX_DT}
@@ -384,10 +417,11 @@ external_baseline_uses_slosh: false
 EOF
 
     if [[ "${SLOSH_MONITOR_ENABLE}" == "true" ]]; then
-      echo "[slosh_monitor] roslaunch slosh_models slosh_monitor.launch odom_topic:=${SLOSH_MONITOR_ODOM_TOPIC} cmd_vel_topic:=${SLOSH_MONITOR_CMD_VEL_TOPIC}"
+      echo "[slosh_monitor] roslaunch slosh_models slosh_monitor.launch odom_topic:=${SLOSH_MONITOR_ODOM_TOPIC} cmd_vel_topic:=${SLOSH_MONITOR_CMD_VEL_TOPIC} output_namespace:=${SLOSH_MONITOR_OUTPUT_NAMESPACE}"
       roslaunch slosh_models slosh_monitor.launch \
         odom_topic:="${SLOSH_MONITOR_ODOM_TOPIC}" \
         cmd_vel_topic:="${SLOSH_MONITOR_CMD_VEL_TOPIC}" \
+        output_namespace:="${SLOSH_MONITOR_OUTPUT_NAMESPACE}" \
         >"${run_dir}/${run_id}_slosh_monitor.log" 2>&1 &
       slosh_monitor_pid=$!
       sleep 1

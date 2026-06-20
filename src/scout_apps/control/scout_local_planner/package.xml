@@ -4,7 +4,7 @@
   <version>1.0.0</version>
   <description>
     Scout 机器人 MPC 局部路径规划器
-    
+
     特性：
     - Frenet MPC 路径跟踪
     - 加速度控制输入
@@ -29,17 +29,20 @@
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
-  
+
   <!-- 液体晃动模型库 -->
   <depend>slosh_models</depend>
-  
+
   <!-- 系统依赖 -->
   <build_depend>eigen</build_depend>
   <build_export_depend>eigen</build_export_depend>
   <exec_depend>eigen</exec_depend>
-  
+
   <!-- OSQP 求解器 (ROS vendor package) -->
   <depend>osqp_vendor</depend>
+
+  <!-- 旧 Hamaguchi/Lim rosrun 入口是兼容 wrapper，运行时转发到独立 profile baseline 包 -->
+  <exec_depend>scout_profile_baselines</exec_depend>
 
   <export>
   </export>

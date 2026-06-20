@@ -1,0 +1,25 @@
+<launch>
+  <arg name="config" default="$(find lt_dwa_adapter)/config/lt_dwa_adapter_sim.yaml" />
+  <arg name="publish_cmd_vel" default="false" />
+  <arg name="cmd_vel_topic" default="/lt_dwa/shadow_cmd_vel" />
+  <arg name="shadow_cmd_topic" default="/baseline/lt_dwa/shadow_cmd_vel" />
+  <arg name="odom_topic" default="/odom" />
+  <arg name="map_topic" default="/map" />
+  <arg name="global_path_topic" default="/scout/global_path_fixed" />
+  <arg name="goal_topic" default="/scout/goal" />
+  <arg name="base_frame" default="base_link" />
+  <arg name="plan_target_frame" default="map" />
+
+  <node pkg="lt_dwa_adapter" type="lt_dwa_adapter_node" name="lt_dwa_adapter_node" output="screen">
+    <rosparam command="load" file="$(arg config)" />
+    <param name="publish_cmd_vel" value="$(arg publish_cmd_vel)" />
+    <param name="cmd_vel_topic" value="$(arg cmd_vel_topic)" />
+    <param name="shadow_cmd_topic" value="$(arg shadow_cmd_topic)" />
+    <param name="odom_topic" value="$(arg odom_topic)" />
+    <param name="map_topic" value="$(arg map_topic)" />
+    <param name="global_path_topic" value="$(arg global_path_topic)" />
+    <param name="goal_topic" value="$(arg goal_topic)" />
+    <param name="base_frame" value="$(arg base_frame)" />
+    <param name="plan_target_frame" value="$(arg plan_target_frame)" />
+  </node>
+</launch>

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fixed-path simulation suite for external nav_core baselines (TEB / DWA / mpc_local_planner).
+# Fixed-path simulation suite for external baselines (TEB / DWA / mpc_local_planner / LT-DWA adapter).
 #
 # 前提：先启动仿真与定位，例如：
 #   source devel/setup.bash
@@ -13,7 +13,9 @@
 
 set -euo pipefail
 
-BASELINE="${BASELINE:-teb}"  # teb | dwa | mpc | mpc_local_planner | all
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+BASELINE="${BASELINE:-teb}"  # teb | dwa | mpc | mpc_local_planner | lt_dwa | all
 OUT_ROOT="${OUT_ROOT:-/data/${USER}/spmpc_paper_compare/fixed_path_smoke}"
 PATH_FILE="${PATH_FILE:-}"
 PATH_ID="${PATH_ID:-fixed_path}"
@@ -28,6 +30,8 @@ PRE_PATH_WAIT_SEC="${PRE_PATH_WAIT_SEC:-0}"
 SLOSH_MONITOR_ENABLE="${SLOSH_MONITOR_ENABLE:-false}"
 SLOSH_MONITOR_ODOM_TOPIC="${SLOSH_MONITOR_ODOM_TOPIC:-/odom}"
 SLOSH_MONITOR_CMD_VEL_TOPIC="${SLOSH_MONITOR_CMD_VEL_TOPIC:-${CMD_VEL_TOPIC}}"
+SLOSH_MONITOR_OUTPUT_NAMESPACE="${SLOSH_MONITOR_OUTPUT_NAMESPACE:-/benchmark/slosh_monitor}"
+SKIP_PHASE0_PREFLIGHT="${SKIP_PHASE0_PREFLIGHT:-false}"
 EXPERIMENT_GROUP="${EXPERIMENT_GROUP:-fixed_path_external_baseline}"
 EVIDENCE_CHAIN_VERSION="${EVIDENCE_CHAIN_VERSION:-20260605}"
 SPEED_TIER="${SPEED_TIER:-fair_common}"
@@ -37,6 +41,8 @@ TARGET_OMEGA_MAX_RADPS="${TARGET_OMEGA_MAX_RADPS:-1.2}"
 TARGET_ACC_LIM_X_MPS2="${TARGET_ACC_LIM_X_MPS2:-0.6}"
 TARGET_ACC_LIM_THETA_RADPS2="${TARGET_ACC_LIM_THETA_RADPS2:-1.2}"
 INCLUDE_MPC_LOCAL_PLANNER="${INCLUDE_MPC_LOCAL_PLANNER:-false}"
+INCLUDE_LT_DWA="${INCLUDE_LT_DWA:-false}"
+LT_DWA_PUBLISH_CMD_VEL="${LT_DWA_PUBLISH_CMD_VEL:-true}"
 SLOSH_RESET_BEFORE_RUN="${SLOSH_RESET_BEFORE_RUN:-true}"
 
 planner_pid=""
@@ -100,10 +106,11 @@ reset_slosh_monitor() {
   if [[ "${SLOSH_MONITOR_ENABLE}" != "true" || "${SLOSH_RESET_BEFORE_RUN}" != "true" ]]; then
     return 0
   fi
-  if timeout 2s rosservice call /slosh/reset >/dev/null 2>&1; then
-    echo "[slosh_monitor] reset /slosh/reset"
+  local service="${SLOSH_MONITOR_OUTPUT_NAMESPACE%/}/reset"
+  if timeout 2s rosservice call "${service}" >/dev/null 2>&1; then
+    echo "[slosh_monitor] reset ${service}"
   else
-    echo "[WARN] /slosh/reset 不可用，跳过本次 slosh monitor reset" >&2
+    echo "[WARN] ${service} 不可用，跳过本次 slosh monitor reset" >&2
   fi
 }
 
@@ -118,6 +125,9 @@ launch_for_baseline() {
     mpc|mpc_local_planner)
       echo "run_mpc_local_planner_fixed_path_sim.launch"
       ;;
+    lt_dwa)
+      echo "run_lt_dwa_fixed_path_sim.launch"
+      ;;
     *)
       echo "[ERR] unknown baseline: $1" >&2
       return 2
@@ -130,6 +140,7 @@ status_topic_for_baseline() {
     teb) echo "/baseline/teb/status" ;;
     dwa) echo "/baseline/dwa/status" ;;
     mpc|mpc_local_planner) echo "/baseline/mpc_local_planner/status" ;;
+    lt_dwa) echo "/baseline/lt_dwa/status" ;;
   esac
 }
 
@@ -138,7 +149,28 @@ config_for_baseline() {
     teb) echo "config/baselines/teb_local_planner_standalone_sim.yaml" ;;
     dwa) echo "config/baselines/dwa_local_planner_standalone_sim.yaml" ;;
     mpc|mpc_local_planner) echo "config/baselines/mpc_local_planner_standalone_sim.yaml" ;;
+    lt_dwa) echo "config/baselines/lt_dwa_adapter_standalone_sim.yaml" ;;
   esac
+}
+
+preflight_id_for_baseline() {
+  case "$1" in
+    mpc) echo "mpc_local_planner" ;;
+    *) echo "$1" ;;
+  esac
+}
+
+plan_target_frame_for_baseline() {
+  case "$1" in
+    *) echo "odom" ;;
+  esac
+}
+
+run_phase0_preflight() {
+  if [[ "${SKIP_PHASE0_PREFLIGHT}" == "true" ]]; then
+    echo "[phase0][WARN] SKIP_PHASE0_PREFLIGHT=true; current run is diagnostics only"
+  fi
+  bash "${SCRIPT_DIR}/bench_run_phase0_preflight.sh" "$@"
 }
 
 if [[ -z "${PATH_FILE}" ]]; then
@@ -149,18 +181,26 @@ if [[ ! -f "${PATH_FILE}" ]]; then
   echo "[ERR] PATH_FILE 不存在: ${PATH_FILE}" >&2
   exit 2
 fi
-if ! rostopic list >/dev/null 2>&1; then
-  echo "[ERR] roscore/仿真栈未检测到。请先启动仿真。" >&2
-  exit 1
-fi
-
 if [[ "${BASELINE}" == "all" ]]; then
   BASELINES="teb dwa"
   if [[ "${INCLUDE_MPC_LOCAL_PLANNER}" == "true" ]]; then
     BASELINES="${BASELINES} mpc_local_planner"
   fi
+  if [[ "${INCLUDE_LT_DWA}" == "true" ]]; then
+    BASELINES="${BASELINES} lt_dwa"
+  fi
 else
   BASELINES="${BASELINE}"
+fi
+PREFLIGHT_BASELINES=""
+for baseline in ${BASELINES}; do
+  PREFLIGHT_BASELINES="${PREFLIGHT_BASELINES} $(preflight_id_for_baseline "${baseline}")"
+done
+run_phase0_preflight ${PREFLIGHT_BASELINES}
+
+if ! rostopic list >/dev/null 2>&1; then
+  echo "[ERR] roscore/仿真栈未检测到。请先启动仿真。" >&2
+  exit 1
 fi
 
 mkdir -p "${OUT_ROOT}"
@@ -194,6 +234,10 @@ record_topics=(
   /baseline/dwa/global_plan
   /baseline/mpc_local_planner/status
   /baseline/mpc_local_planner/global_plan
+  /baseline/lt_dwa/status
+  /baseline/lt_dwa/global_plan
+  /baseline/lt_dwa/local_plan
+  /baseline/lt_dwa/shadow_cmd_vel
   /scout/goal
   /scout/global_path
   /scout/move_base/GlobalPlanner/plan
@@ -201,6 +245,10 @@ record_topics=(
   /scout/move_base/DWAPlannerROS/local_plan
   /scout/move_base/TebLocalPlannerROS/global_plan
   /scout/move_base/TebLocalPlannerROS/local_plan
+  /benchmark/slosh_monitor/height
+  /benchmark/slosh_monitor/state
+  /benchmark/slosh_monitor/event
+  /benchmark/slosh_monitor/debug
   /slosh/height
   /slosh/state
   /slosh/debug
@@ -213,6 +261,7 @@ for run_idx in $(seq 1 "${RUNS}"); do
     launch_file="$(launch_for_baseline "${baseline}")"
     status_topic="$(status_topic_for_baseline "${baseline}")"
     baseline_config="$(config_for_baseline "${baseline}")"
+    plan_target_frame="$(plan_target_frame_for_baseline "${baseline}")"
     method="${baseline}"
     if [[ "${method}" == "mpc" ]]; then
       method="mpc_local_planner"
@@ -239,15 +288,17 @@ target_v_max_mps: ${TARGET_V_MAX_MPS}
 target_omega_max_radps: ${TARGET_OMEGA_MAX_RADPS}
 target_acc_lim_x_mps2: ${TARGET_ACC_LIM_X_MPS2}
 target_acc_lim_theta_radps2: ${TARGET_ACC_LIM_THETA_RADPS2}
-plan_target_frame: odom
+plan_target_frame: ${plan_target_frame}
 force_straight_plan_on_goal: false
 use_wrapper_goal_check: true
 git_hash: ${git_hash}
 record_sec: ${RECORD_SEC}
 run_index: ${run_idx}
+skip_phase0_preflight: ${SKIP_PHASE0_PREFLIGHT}
 slosh_monitor_enable: ${SLOSH_MONITOR_ENABLE}
 slosh_monitor_odom_topic: ${SLOSH_MONITOR_ODOM_TOPIC}
 slosh_monitor_cmd_vel_topic: ${SLOSH_MONITOR_CMD_VEL_TOPIC}
+slosh_monitor_output_namespace: ${SLOSH_MONITOR_OUTPUT_NAMESPACE}
 slosh_height_unit: m
 slosh_eval_only: true
 slosh_feedback_forbidden: true
@@ -260,10 +311,11 @@ EOF
     fi
 
     if [[ "${SLOSH_MONITOR_ENABLE}" == "true" ]]; then
-      echo "[slosh_monitor] roslaunch slosh_models slosh_monitor.launch odom_topic:=${SLOSH_MONITOR_ODOM_TOPIC} cmd_vel_topic:=${SLOSH_MONITOR_CMD_VEL_TOPIC}"
+      echo "[slosh_monitor] roslaunch slosh_models slosh_monitor.launch odom_topic:=${SLOSH_MONITOR_ODOM_TOPIC} cmd_vel_topic:=${SLOSH_MONITOR_CMD_VEL_TOPIC} output_namespace:=${SLOSH_MONITOR_OUTPUT_NAMESPACE}"
       roslaunch slosh_models slosh_monitor.launch \
         odom_topic:="${SLOSH_MONITOR_ODOM_TOPIC}" \
         cmd_vel_topic:="${SLOSH_MONITOR_CMD_VEL_TOPIC}" \
+        output_namespace:="${SLOSH_MONITOR_OUTPUT_NAMESPACE}" \
         >"${run_dir}/${run_id}_slosh_monitor.log" 2>&1 &
       slosh_monitor_pid=$!
       sleep 1
@@ -286,9 +338,18 @@ EOF
     path_pid=$!
     sleep 1
 
-    echo "[planner] roslaunch spmpc_experiments ${launch_file} global_path_topic:=${PATH_TOPIC} cmd_vel_topic:=${CMD_VEL_TOPIC}"
-    roslaunch spmpc_experiments "${launch_file}" global_path_topic:="${PATH_TOPIC}" cmd_vel_topic:="${CMD_VEL_TOPIC}" \
-      >"${run_dir}/${run_id}_planner.log" 2>&1 &
+    if [[ "${baseline}" == "lt_dwa" ]]; then
+      echo "[planner] roslaunch spmpc_experiments ${launch_file} global_path_topic:=${PATH_TOPIC} cmd_vel_topic:=${CMD_VEL_TOPIC} publish_cmd_vel:=${LT_DWA_PUBLISH_CMD_VEL}"
+      roslaunch spmpc_experiments "${launch_file}" \
+        global_path_topic:="${PATH_TOPIC}" \
+        cmd_vel_topic:="${CMD_VEL_TOPIC}" \
+        publish_cmd_vel:="${LT_DWA_PUBLISH_CMD_VEL}" \
+        >"${run_dir}/${run_id}_planner.log" 2>&1 &
+    else
+      echo "[planner] roslaunch spmpc_experiments ${launch_file} global_path_topic:=${PATH_TOPIC} cmd_vel_topic:=${CMD_VEL_TOPIC}"
+      roslaunch spmpc_experiments "${launch_file}" global_path_topic:="${PATH_TOPIC}" cmd_vel_topic:="${CMD_VEL_TOPIC}" \
+        >"${run_dir}/${run_id}_planner.log" 2>&1 &
+    fi
     planner_pid=$!
 
     if ! wait_status_or_cmd "${status_topic}" "${WAIT_READY_SEC}"; then

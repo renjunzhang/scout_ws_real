@@ -10,7 +10,10 @@
 
 - source-only vendor：是
 - 主 catkin workspace 自动编译：否
-- benchmark adapter：待实现
+- benchmark adapter：待实现，计划另建 `src/scout_apps/control/lt_dwa_adapter/`，不直接把 vendor tree 放入 `src/`
 - strict-fresh runnable baseline：否
 
-更多说明见 `LT_DWA/SCOUT_VENDOR_NOTES.md`。
+更多说明见：
+
+- `LT_DWA/SCOUT_VENDOR_NOTES.md`
+- `LT_DWA/SCOUT_ADAPTER_PLAN.md`

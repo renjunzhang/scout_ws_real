@@ -29,7 +29,7 @@ DWAPlannerROS:
   max_scaling_factor: 0.2
 
   xy_goal_tolerance: 0.20
-  yaw_goal_tolerance: 0.20
+  yaw_goal_tolerance: 0.30
   latch_xy_goal_tolerance: true
 
   prune_plan: false

@@ -5,6 +5,7 @@ profile_baseline:
   category: slosh_specific_motion_generation
   implementation: scout_profile_baselines_generated_external_profile
   generator_script: src/scout_apps/control/scout_profile_baselines/scripts/generate_hamaguchi_profile.py
+  implementation_script: src/scout_apps/control/scout_profile_baselines/scripts/hamaguchi/generate_profile.py
   method_name: HAMAGUCHI_STYLE
   paper_reference: docs/重要文档/论文参考总结/Hamaguchi和Taniguchi - 2002 - TRANSFER CONTROL AND CURVED PATH DESIGN FOR CYLINDRICAL LIQUID CONTAINER圆柱形液体容器的传输控制与弯曲路径设计.pdf
   approximation_note: >-

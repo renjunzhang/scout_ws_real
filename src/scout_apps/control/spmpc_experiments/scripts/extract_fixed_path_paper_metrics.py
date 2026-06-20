@@ -31,6 +31,7 @@ STATUS_TOPICS = (
     "/baseline/teb/status",
     "/baseline/dwa/status",
     "/baseline/mpc_local_planner/status",
+    "/baseline/lt_dwa/status",
     "/mpc_status",
 )
 

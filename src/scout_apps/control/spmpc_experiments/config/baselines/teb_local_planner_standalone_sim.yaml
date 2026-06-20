@@ -20,7 +20,7 @@ TebLocalPlannerROS:
 
   # Robot (diff drive), aligned with SPMPC common-limit smoke.
   max_vel_x: 0.8
-  max_vel_x_backwards: 0.15
+  max_vel_x_backwards: 0.0
   max_vel_theta: 1.2
   acc_lim_x: 0.6
   acc_lim_theta: 1.2
@@ -35,7 +35,7 @@ TebLocalPlannerROS:
 
   # Goal tolerance
   xy_goal_tolerance: 0.20   # 与 SPMPC / DWA 统一成功判定距离(原 0.25)
-  yaw_goal_tolerance: 0.35
+  yaw_goal_tolerance: 0.30
   free_goal_vel: false
 
   # Obstacles

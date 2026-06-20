@@ -22,6 +22,8 @@ except ImportError as exc:  # pragma: no cover - exercised only on missing dep
         "PyYAML missing; install python3-yaml or pip3 install pyyaml"
     ) from exc
 
+from bench_validate_comparison_contracts import ComparisonContractValidator
+
 
 REQUIRED_BENCHMARK_FILES = {
     "capability_matrix.yaml": "planners",
@@ -42,17 +44,21 @@ REQUIRED_CONTROL_PACKAGES = {
     "scout_local_planner": "src/scout_apps/control/scout_local_planner",
     "scout_profile_baselines": "src/scout_apps/control/scout_profile_baselines",
     "slosh_models": "src/scout_apps/control/slosh_models",
+    "lt_dwa_adapter": "src/scout_apps/control/lt_dwa_adapter",
 }
 
 REQUIRED_REUSE_ASSETS = {
     "fixed_path_runner": "src/scout_apps/control/scout_local_planner/scripts/fixed_global_path_runner.py",
     "template_fixed_path_generator": "src/scout_apps/control/scout_local_planner/scripts/template_fixed_path_generator.py",
-    "profile_csv_utils": "src/scout_apps/control/scout_profile_baselines/scripts/path_profile_utils.py",
+    "profile_csv_utils": "src/scout_apps/control/scout_profile_baselines/scripts/common/path_profile_utils.py",
     "fixed_path_feasibility_analyzer": "src/scout_apps/control/scout_local_planner/scripts/analysis/analyze_fixed_path_feasibility.py",
     "fixed_path_metrics_extractor": "src/scout_apps/control/spmpc_experiments/scripts/extract_fixed_path_paper_metrics.py",
     "spmpc_suite": "src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_spmpc_suite.sh",
     "baseline_suite": "src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_baseline_suite.sh",
     "baseline_runner_launch": "src/scout_apps/control/baseline_local_planner_runner/launch/nav_core_runner.launch",
+    "lt_dwa_adapter_launch": "src/scout_apps/control/lt_dwa_adapter/launch/lt_dwa_adapter.launch",
+    "lt_dwa_benchmark_launch": "src/scout_apps/control/spmpc_experiments/launch/sim/run_lt_dwa_fixed_path_sim.launch",
+    "lt_dwa_benchmark_config": "src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_adapter_standalone_sim.yaml",
     "slosh_monitor_launch": "src/scout_apps/control/slosh_models/launch/slosh_monitor.launch",
 }
 
@@ -182,6 +188,7 @@ class Preflight:
             self.check_tuning_policy()
             self.check_selected_planner()
             self.check_selected_profile_baseline()
+            self.check_comparison_contracts()
         self.check_reuse_assets()
         self.check_optional_future_assets()
 
@@ -553,6 +560,22 @@ class Preflight:
             )
         self.pass_check("selected_profile_baseline", f"{self.args.planner} profile config and generator boundary are declared", config_path)
 
+    def check_comparison_contracts(self) -> None:
+        validator = ComparisonContractValidator(self.repo_root)
+        contract_report = validator.check()
+        self.report["comparison_contract_summary"] = {
+            "status": contract_report.get("status"),
+            "checks": len(contract_report.get("checks") or []),
+            "warnings": len(contract_report.get("warnings") or []),
+            "errors": len(contract_report.get("errors") or []),
+        }
+        for item in contract_report.get("warnings") or []:
+            self.warn(str(item.get("code", "CONTRACT_WARNING")), str(item.get("message", item)))
+        for item in contract_report.get("errors") or []:
+            self.error(str(item.get("code", "CONTRACT_ERROR")), str(item.get("message", item)))
+        if contract_report.get("ok"):
+            self.pass_check("comparison_contracts", "Comparison method/profile/monitor/LT-DWA contracts are coherent")
+
     def check_reuse_assets(self) -> None:
         for name, rel in REQUIRED_CONTROL_PACKAGES.items():
             self.expect_path("package:" + name, self.repo_root / rel, must_be_dir=True)
@@ -566,14 +589,23 @@ class Preflight:
         else:
             self.warn("MPC_PLANNER_ABSENT", "src/mpc_planner not found; advanced MPC baseline is dependency-skipped")
         lt_dwa_vendor = self.repo_root / "third_party/LT_DWA"
+        lt_dwa_adapter = self.repo_root / "src/scout_apps/control/lt_dwa_adapter"
         if lt_dwa_vendor.is_dir():
             self.info(
-                "LT_DWA_VENDORED_SOURCE_ONLY",
-                f"LT-DWA source is vendored at {lt_dwa_vendor}; adapter/smoke gate remains pending",
+                "LT_DWA_REFERENCE_SOURCE_PRESENT",
+                f"LT-DWA upstream source is vendored at {lt_dwa_vendor} as source-only reference",
                 lt_dwa_vendor,
             )
         else:
-            self.warn("LT_DWA_NOT_INSTALLED", "third_party/LT_DWA not found; advanced LT-DWA baseline is dependency-skipped")
+            self.warn("LT_DWA_VENDOR_ABSENT", "third_party/LT_DWA not found; restore source reference before paper reporting")
+        if lt_dwa_adapter.is_dir():
+            self.info(
+                "LT_DWA_ADAPTER_PRESENT",
+                f"Scout-owned LT-DWA adapter exists at {lt_dwa_adapter}; isolated smoke gate is still required for formal use",
+                lt_dwa_adapter,
+            )
+        else:
+            self.warn("LT_DWA_ADAPTER_NOT_READY", "Scout-owned lt_dwa_adapter package not found; LT-DWA baseline is dependency-skipped")
 
     def expect_path(
         self,

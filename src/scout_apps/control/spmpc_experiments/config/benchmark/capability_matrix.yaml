@@ -170,15 +170,19 @@ planners:
   lt_dwa:
     category: modern_local_planner
     information_access_category: classical_or_modern_local_planner
-    implementation: third_party/LT_DWA
-    interface_type: source_only_pending_adapter
+    implementation: src/scout_apps/control/lt_dwa_adapter
+    reference_source: third_party/LT_DWA
+    interface_type: scout_owned_ros_adapter
     online: true
-    present_in_workspace: source_only
-    ready_to_run: false
-    dependency_failure_code: LT_DWA_ADAPTER_NOT_READY
+    present_in_workspace: adapter_present
+    ready_to_run: conditional
+    dependency_failure_code: LT_DWA_SMOKE_GATE_REQUIRED
+    adapter_package: src/scout_apps/control/lt_dwa_adapter
+    adapter_plan: third_party/LT_DWA/SCOUT_ADAPTER_PLAN.md
+    smoke_gate_required_before_runnable: true
     cmd_vel_output: true
-    fixed_path_input: pending_adapter
-    global_path_input: pending_adapter
+    fixed_path_input: /scout/global_path_fixed
+    global_path_input: /scout/global_path_fixed
     costmap_input: true
     liquid_model_access: none
     online_liquid_feedback: false
@@ -190,8 +194,8 @@ planners:
       v_max: true
       omega_max: true
       a_max: true
-      alpha_max: unknown
-      jerk_max: unknown
+      alpha_max: true
+      jerk_max: false
     evaluation_role: target_modern_baseline
     main_table_eligible_if_preflight_passes: false
 
@@ -251,7 +255,7 @@ planners:
     main_table_eligible_if_preflight_passes: separate_supplementary_table
 
   lim_profile:
-    category: slosh_specific_offline_optimization
+    category: slosh_specific_offline_retiming
     information_access_category: slosh_specific_profile_baseline
     implementation: scout_profile_baselines_generated_external_profile
     interface_type: profile_csv_plus_common_tracker

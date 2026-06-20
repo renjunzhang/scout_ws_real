@@ -28,6 +28,8 @@ COSTMAP_TOPIC="${COSTMAP_TOPIC:-/map}"
 WAIT_READY_SEC="${WAIT_READY_SEC:-30}"
 PRE_PATH_WAIT_SEC="${PRE_PATH_WAIT_SEC:-0}"
 SKIP_START_WAIT="${SKIP_START_WAIT:-true}"
+SKIP_PHASE0_PREFLIGHT="${SKIP_PHASE0_PREFLIGHT:-false}"
+ALLOW_NONCANONICAL_SCENARIO="${ALLOW_NONCANONICAL_SCENARIO:-false}"
 
 GOAL_TOPIC="${GOAL_TOPIC:-/scout/current_start_fixed_goal}"
 GOAL_FRAME="${GOAL_FRAME:-map}"
@@ -86,7 +88,7 @@ EXTERNAL_PROFILE_EXECUTION_JERK_LIMIT="${EXTERNAL_PROFILE_EXECUTION_JERK_LIMIT:-
 SLOSH_MONITOR_ENABLE="${SLOSH_MONITOR_ENABLE:-false}"
 SLOSH_MONITOR_ODOM_TOPIC="${SLOSH_MONITOR_ODOM_TOPIC:-/odom}"
 SLOSH_MONITOR_CMD_VEL_TOPIC="${SLOSH_MONITOR_CMD_VEL_TOPIC:-${CMD_VEL_TOPIC}}"
-SLOSH_MONITOR_OUTPUT_NAMESPACE="${SLOSH_MONITOR_OUTPUT_NAMESPACE:-/slosh}"
+SLOSH_MONITOR_OUTPUT_NAMESPACE="${SLOSH_MONITOR_OUTPUT_NAMESPACE:-/benchmark/slosh_monitor}"
 SLOSH_RESET_BEFORE_RUN="${SLOSH_RESET_BEFORE_RUN:-true}"
 EVIDENCE_CHAIN_VERSION="${EVIDENCE_CHAIN_VERSION:-20260619_profile_baseline_v1}"
 
@@ -196,6 +198,45 @@ profile_generator_name() {
     lim_profile) echo "generate_lim_style_profile.py" ;;
     *) echo "[ERR] unknown PROFILE_BASELINE: $1" >&2; return 2 ;;
   esac
+}
+
+run_phase0_preflight() {
+  if [[ "${SKIP_PHASE0_PREFLIGHT}" == "true" ]]; then
+    echo "[phase0][WARN] SKIP_PHASE0_PREFLIGHT=true; current run is diagnostics only"
+  fi
+  bash "${SCRIPT_DIR}/bench_run_phase0_preflight.sh" "$@"
+}
+
+check_canonical_scenario() {
+  local run_dir="$1"
+  local run_id="$2"
+  local args=(
+    --path-id "${PATH_ID}"
+    --path-source-mode "${PATH_SOURCE_MODE}"
+    --goal-frame "${GOAL_FRAME}"
+    --goal-x "${GOAL_X}"
+    --goal-y "${GOAL_Y}"
+    --goal-yaw "${GOAL_YAW}"
+    --path-template "${PATH_TEMPLATE}"
+    --path-start-heading "${PATH_START_HEADING}"
+    --path-spacing "${PATH_SPACING}"
+    --path-amplitude-ratio "${PATH_AMPLITUDE_RATIO}"
+    --path-min-amplitude "${PATH_MIN_AMPLITUDE}"
+    --path-max-amplitude "${PATH_MAX_AMPLITUDE}"
+    --path-side "${PATH_SIDE}"
+    --path-smooth-iterations "${PATH_SMOOTH_ITERATIONS}"
+    --limit-profile "${LIMIT_PROFILE}"
+    --v-max "${TARGET_V_MAX_MPS}"
+    --omega-max "${TARGET_OMEGA_MAX_RADPS}"
+    --a-max "${TARGET_ACC_LIM_X_MPS2}"
+    --alpha-max "${TARGET_ACC_LIM_THETA_RADPS2}"
+    --format yaml
+  )
+  if [[ "${ALLOW_NONCANONICAL_SCENARIO}" == "true" ]]; then
+    args+=(--allow-noncanonical)
+  fi
+  python3 "${SCRIPT_DIR}/bench_validate_canonical_scenario.py" "${args[@]}" \
+    >"${run_dir}/${run_id}_canonical_scenario_check.yaml"
 }
 
 build_profile_args() {
@@ -328,11 +369,6 @@ case "${PATH_SOURCE_MODE}" in
     ;;
 esac
 
-if ! rostopic list >/dev/null 2>&1; then
-  echo "[ERR] roscore/仿真栈未检测到。本脚本只做 current-sim suite；strict fresh 由 /data wrapper 负责。" >&2
-  exit 1
-fi
-
 if [[ "${PROFILE_BASELINE}" == "all" ]]; then
   PROFILE_BASELINES="hamaguchi_profile lim_profile"
 else
@@ -344,6 +380,12 @@ for baseline in ${PROFILE_BASELINES}; do
     *) echo "[ERR] unsupported PROFILE_BASELINE=${baseline}" >&2; exit 2 ;;
   esac
 done
+run_phase0_preflight ${PROFILE_BASELINES}
+
+if ! rostopic list >/dev/null 2>&1; then
+  echo "[ERR] roscore/仿真栈未检测到。本脚本只做 current-sim suite；strict fresh 由 /data wrapper 负责。" >&2
+  exit 1
+fi
 
 mkdir -p "${OUT_ROOT}"
 
@@ -391,6 +433,10 @@ record_topics=(
   /reference/implied_ay
   /reference/implied_jerk
   /experiment/config_summary
+  /benchmark/slosh_monitor/height
+  /benchmark/slosh_monitor/state
+  /benchmark/slosh_monitor/event
+  /benchmark/slosh_monitor/debug
   /slosh/height
   /slosh/state
   /slosh/debug
@@ -421,6 +467,7 @@ for run_idx in $(seq 1 "${RUNS}"); do
     profile_debug_prefix="${run_dir}/${run_id}_${method}_debug"
 
     echo "---------------- ${run_id} ----------------"
+    check_canonical_scenario "${run_dir}" "${run_id}"
 
     if [[ "${PRE_PATH_WAIT_SEC}" != "0" ]]; then
       echo "[settle] 等待定位/仿真稳定 ${PRE_PATH_WAIT_SEC}s 后再生成/发布 fixed path"
@@ -452,6 +499,8 @@ evidence_chain_version: ${EVIDENCE_CHAIN_VERSION}
 freshness_claim: current_sim_only
 strict_requested: false
 one_case_per_fresh_sim: false
+skip_phase0_preflight: ${SKIP_PHASE0_PREFLIGHT}
+allow_noncanonical_scenario: ${ALLOW_NONCANONICAL_SCENARIO}
 profile_generated_before_case: true
 profile_generator_package: scout_profile_baselines
 profile_generator_script: ${generator_name}

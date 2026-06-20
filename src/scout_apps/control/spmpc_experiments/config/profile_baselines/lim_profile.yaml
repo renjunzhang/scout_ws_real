@@ -2,14 +2,15 @@ schema_version: 1
 profile_baseline:
   id: lim_profile
   label: Lim-style offline slosh-aware retimed profile
-  category: slosh_specific_offline_optimization
+  category: slosh_specific_offline_retiming
   implementation: scout_profile_baselines_generated_external_profile
   generator_script: src/scout_apps/control/scout_profile_baselines/scripts/generate_lim_style_profile.py
+  implementation_script: src/scout_apps/control/scout_profile_baselines/scripts/lim/generate_profile.py
   method_name: LIM_STYLE
   approximation_note: >-
     Uses fixed-path offline slosh-risk retiming with a linear second-order liquid
     model and local speed-ceiling updates. It is a lightweight, dependency-free
-    offline optimization baseline, not an online slosh-feedback controller.
+    heuristic retiming baseline, not an online slosh-feedback controller.
   online: false
   interface_type: profile_csv_plus_common_tracker
   output_schema: profile_tracking_common
