@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iomanip>
 #include <iostream>
 #include <sstream>
 
+#include <geometry_msgs/TransformStamped.h>
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
@@ -45,6 +47,7 @@ LtDwaAdapterROS::LtDwaAdapterROS()
   private_nh_.param("cmd_vel_topic", cmd_vel_topic_, std::string("/lt_dwa/shadow_cmd_vel"));
   private_nh_.param("shadow_cmd_topic", shadow_cmd_topic_, std::string("/baseline/lt_dwa/shadow_cmd_vel"));
   private_nh_.param("status_topic", status_topic_, std::string("/baseline/lt_dwa/status"));
+  private_nh_.param("diagnostics_topic", diagnostics_topic_, std::string("/baseline/lt_dwa/diagnostics"));
   private_nh_.param("global_plan_topic", global_plan_topic_, std::string("/baseline/lt_dwa/global_plan"));
   private_nh_.param("local_plan_topic", local_plan_topic_, std::string("/baseline/lt_dwa/local_plan"));
   private_nh_.param("base_frame", base_frame_, std::string("base_footprint"));
@@ -57,6 +60,7 @@ LtDwaAdapterROS::LtDwaAdapterROS()
   private_nh_.param("tf_timeout_sec", tf_timeout_sec_, 0.2);
   private_nh_.param("publish_cmd_vel", publish_cmd_vel_, false);
   private_nh_.param("publish_shadow_cmd", publish_shadow_cmd_, true);
+  private_nh_.param("publish_diagnostics", publish_diagnostics_, false);
   private_nh_.param("require_map", require_map_, true);
 
   if (!std::isfinite(planning_frequency_) || planning_frequency_ <= 0.0)
@@ -82,6 +86,13 @@ LtDwaAdapterROS::LtDwaAdapterROS()
   private_nh_.param("treat_unknown_as_occupied", planner_config_.treat_unknown_as_occupied, false);
   private_nh_.param("xy_goal_tolerance", planner_config_.goal_xy_tolerance_m, 0.20);
   private_nh_.param("yaw_goal_tolerance", planner_config_.goal_yaw_tolerance_rad, 0.30);
+  private_nh_.param("max_tracking_deviation_m", planner_config_.max_tracking_deviation_m, 1.50);
+  private_nh_.param("lookahead_distance_m", planner_config_.lookahead_distance_m, 0.55);
+  private_nh_.param("progress_rollback_tolerance_m", planner_config_.progress_rollback_tolerance_m, 0.35);
+  private_nh_.param("max_progress_advance_per_step_m", planner_config_.max_progress_advance_per_step_m, 0.35);
+  private_nh_.param("cross_track_heading_gain", planner_config_.cross_track_heading_gain, 1.40);
+  private_nh_.param("tracking_slowdown_lateral_m", planner_config_.tracking_slowdown_lateral_m, 0.35);
+  private_nh_.param("tracking_slowdown_heading_rad", planner_config_.tracking_slowdown_heading_rad, 0.65);
   private_nh_.param("weights/obstacle", planner_config_.weights.obstacle, 2.0);
   private_nh_.param("weights/path_lateral", planner_config_.weights.path_lateral, 4.0);
   private_nh_.param("weights/heading", planner_config_.weights.heading, 2.0);
@@ -101,6 +112,7 @@ LtDwaAdapterROS::LtDwaAdapterROS()
   cmd_pub_ = nh_.advertise<geometry_msgs::Twist>(cmd_vel_topic_, 1);
   shadow_cmd_pub_ = nh_.advertise<geometry_msgs::Twist>(shadow_cmd_topic_, 1);
   status_pub_ = nh_.advertise<std_msgs::String>(status_topic_, 1, true);
+  diagnostics_pub_ = nh_.advertise<std_msgs::String>(diagnostics_topic_, 1, false);
   global_plan_pub_ = nh_.advertise<nav_msgs::Path>(global_plan_topic_, 1, true);
   local_plan_pub_ = nh_.advertise<nav_msgs::Path>(local_plan_topic_, 1, true);
 
@@ -116,9 +128,17 @@ LtDwaAdapterROS::LtDwaAdapterROS()
   ROS_INFO_STREAM("[lt_dwa_adapter] initialized shadow=" << (publish_cmd_vel_ ? "false" : "true")
                   << " publish_cmd_vel=" << publish_cmd_vel_ << " cmd_vel_topic=" << cmd_vel_topic_
                   << " path_topic=" << global_path_topic_ << " map_topic=" << map_topic_
+                  << " diagnostics=" << publish_diagnostics_ << " diagnostics_topic=" << diagnostics_topic_
                   << " planning_frequency=" << planning_frequency_
                   << " command_publish_frequency=" << command_publish_frequency_
-                  << " command_stale_timeout_sec=" << command_stale_timeout_sec_);
+                  << " command_stale_timeout_sec=" << command_stale_timeout_sec_
+                  << " max_tracking_deviation_m=" << planner_config_.max_tracking_deviation_m
+                  << " lookahead_distance_m=" << planner_config_.lookahead_distance_m
+                  << " progress_rollback_tolerance_m=" << planner_config_.progress_rollback_tolerance_m
+                  << " max_progress_advance_per_step_m=" << planner_config_.max_progress_advance_per_step_m
+                  << " cross_track_heading_gain=" << planner_config_.cross_track_heading_gain
+                  << " tracking_slowdown_lateral_m=" << planner_config_.tracking_slowdown_lateral_m
+                  << " tracking_slowdown_heading_rad=" << planner_config_.tracking_slowdown_heading_rad);
 }
 
 void LtDwaAdapterROS::spin()
@@ -177,6 +197,8 @@ void LtDwaAdapterROS::pathCallback(const nav_msgs::Path::ConstPtr& msg)
   goal_ = transformed.poses.back();
   have_goal_ = true;
   have_path_ = true;
+  last_progress_s_ = 0.0;
+  have_last_progress_ = false;
   publishGlobalPlan();
   publishStatus("PATH_RECEIVED");
 }
@@ -265,9 +287,49 @@ bool LtDwaAdapterROS::transformPose(const geometry_msgs::PoseStamped& input,
   }
 }
 
+bool LtDwaAdapterROS::getPlanToMapTransform(const std::string& plan_frame,
+                                            const std::string& map_frame,
+                                            PlanningTransform2D& transform) const
+{
+  transform = identityTransform(plan_frame, map_frame);
+  if (map_frame.empty() || plan_frame.empty() || plan_frame == map_frame)
+    return true;
+
+  try
+  {
+    const geometry_msgs::TransformStamped tf = tf_buffer_.lookupTransform(map_frame, plan_frame, ros::Time(0),
+                                                                          ros::Duration(tf_timeout_sec_));
+    transform.valid = true;
+    transform.source_frame = plan_frame;
+    transform.target_frame = map_frame;
+    transform.x = tf.transform.translation.x;
+    transform.y = tf.transform.translation.y;
+    transform.yaw = tf2::getYaw(tf.transform.rotation);
+    return true;
+  }
+  catch (const tf2::TransformException& ex)
+  {
+    ROS_WARN_THROTTLE(2.0, "[lt_dwa_adapter] plan/map transform %s -> %s failed: %s",
+                      plan_frame.c_str(), map_frame.c_str(), ex.what());
+    transform.valid = false;
+    transform.source_frame = plan_frame;
+    transform.target_frame = map_frame;
+    return false;
+  }
+}
+
+std::string LtDwaAdapterROS::currentPlanFrame() const
+{
+  if (!current_path_msg_.header.frame_id.empty())
+    return current_path_msg_.header.frame_id;
+  if (!plan_target_frame_.empty())
+    return plan_target_frame_;
+  return "map";
+}
+
 bool LtDwaAdapterROS::getRobotState(RobotState& state) const
 {
-  const std::string target_frame = current_path_msg_.header.frame_id.empty() ? std::string("map") : current_path_msg_.header.frame_id;
+  const std::string target_frame = currentPlanFrame();
   geometry_msgs::PoseStamped base_pose;
   base_pose.header.frame_id = base_frame_;
   base_pose.header.stamp = ros::Time(0);
@@ -287,11 +349,6 @@ bool LtDwaAdapterROS::getRobotState(RobotState& state) const
   state.yaw = tf2::getYaw(robot_pose.pose.orientation);
   state.v = latest_odom_.twist.twist.linear.x;
   state.omega = latest_odom_.twist.twist.angular.z;
-  if (have_last_command_)
-  {
-    state.v = last_command_.v;
-    state.omega = last_command_.omega;
-  }
   return true;
 }
 
@@ -391,9 +448,47 @@ void LtDwaAdapterROS::planningTimerCallback(const ros::TimerEvent&)
   }
 
   const nav_msgs::OccupancyGrid* map = have_map_ ? &latest_map_ : nullptr;
-  const PlanResult result = planner_.plan(state, current_path_, map);
+  const std::string plan_frame = currentPlanFrame();
+  const std::string map_frame = map && !latest_map_.header.frame_id.empty() ? latest_map_.header.frame_id : std::string();
+  PlanningTransform2D plan_to_map = identityTransform(plan_frame, map_frame);
+  bool plan_map_transform_ok = true;
+  if (map)
+  {
+    plan_map_transform_ok = getPlanToMapTransform(plan_frame, map_frame, plan_to_map);
+    if (!plan_map_transform_ok && require_map_)
+    {
+      cacheZeroCommand(now);
+      publishLocalPlan(TrajectoryCandidate{});
+      publishStatus("MAP_TF_ERROR");
+      return;
+    }
+  }
+
+  OccupancyQueryConfig occupancy_config;
+  occupancy_config.robot_radius_m = planner_config_.robot_radius_m;
+  occupancy_config.clearance_radius_m = planner_config_.clearance_radius_m;
+  occupancy_config.lethal_occupancy = planner_config_.lethal_occupancy;
+  occupancy_config.treat_unknown_as_occupied = planner_config_.treat_unknown_as_occupied;
+  OccupancyAdapter occupancy_adapter(map && plan_map_transform_ok ? map : nullptr, plan_to_map, occupancy_config);
+
+  const double min_progress_s = have_last_progress_ ?
+                                  std::max(0.0, last_progress_s_ - planner_config_.progress_rollback_tolerance_m) :
+                                  0.0;
+  const double max_progress_s = have_last_progress_ ?
+                                  last_progress_s_ + planner_config_.max_progress_advance_per_step_m :
+                                  planner_config_.lookahead_distance_m;
+  PlanResult result = planner_.plan(state, current_path_, occupancy_adapter.hasGrid() ? &occupancy_adapter : nullptr,
+                                    min_progress_s, max_progress_s);
+  result.diagnostics.plan_map_transform_ok = plan_map_transform_ok;
+  if (result.diagnostics.has_initial_match && (result.status == "TRACKING" || result.status == "GOAL_REACHED"))
+  {
+    last_progress_s_ = have_last_progress_ ? std::max(last_progress_s_, result.diagnostics.initial_progress_s) :
+                                             result.diagnostics.initial_progress_s;
+    have_last_progress_ = true;
+  }
   const ros::Time result_stamp = ros::Time::now();
   publishLocalPlan(result.best);
+  publishDiagnostics(state, result);
   if (result.valid && result.status == "TRACKING")
   {
     cacheCommand(result.command, result_stamp, true);
@@ -460,6 +555,124 @@ void LtDwaAdapterROS::publishStatus(const std::string& status)
   std_msgs::String msg;
   msg.data = status;
   status_pub_.publish(msg);
+}
+
+void LtDwaAdapterROS::publishDiagnostics(const RobotState& state, const PlanResult& result)
+{
+  if (!publish_diagnostics_)
+    return;
+
+  const std::string plan_frame = currentPlanFrame();
+  const std::string map_frame = have_map_ && !latest_map_.header.frame_id.empty() ? latest_map_.header.frame_id : std::string("");
+  const auto& diagnostics = result.diagnostics;
+  const auto& collision = diagnostics.initial_collision_details;
+
+  const auto transform_diagnostic_pose = [this](const geometry_msgs::PoseStamped& input,
+                                                const std::string& target_frame,
+                                                geometry_msgs::PoseStamped& output) -> bool {
+    if (target_frame.empty())
+    {
+      output = input;
+      return true;
+    }
+    geometry_msgs::PoseStamped stamped = input;
+    if (stamped.header.frame_id.empty())
+      stamped.header.frame_id = "map";
+    stamped.header.stamp = ros::Time(0);
+    if (stamped.header.frame_id == target_frame)
+    {
+      output = stamped;
+      return true;
+    }
+    try
+    {
+      output = tf_buffer_.transform(stamped, target_frame, ros::Duration(0.0));
+      output.header.stamp = ros::Time(0);
+      return true;
+    }
+    catch (const tf2::TransformException&)
+    {
+      return false;
+    }
+  };
+
+  std::ostringstream ss;
+  ss << std::fixed << std::setprecision(3);
+  ss << "status=" << result.status;
+  ss << " plan_frame=" << plan_frame;
+  ss << " map_frame=" << (map_frame.empty() ? std::string("<none>") : map_frame);
+  ss << " plan_map_transform_ok=" << (diagnostics.plan_map_transform_ok ? 1 : 0);
+  ss << " path_size=" << current_path_.size();
+  ss << " tracker_progress_s=" << (have_last_progress_ ? last_progress_s_ : 0.0);
+  ss << " state_plan_x=" << state.x << " state_plan_y=" << state.y << " state_plan_yaw=" << state.yaw;
+  ss << " state_v=" << state.v << " state_w=" << state.omega;
+
+  const auto& raw_position = latest_odom_.pose.pose.position;
+  ss << " raw_odom_frame=" << (latest_odom_.header.frame_id.empty() ? std::string("<empty>") : latest_odom_.header.frame_id);
+  ss << " raw_odom_child=" << (latest_odom_.child_frame_id.empty() ? std::string("<empty>") : latest_odom_.child_frame_id);
+  ss << " raw_odom_x=" << raw_position.x << " raw_odom_y=" << raw_position.y;
+  ss << " raw_odom_yaw=" << tf2::getYaw(latest_odom_.pose.pose.orientation);
+
+  geometry_msgs::PoseStamped state_plan_pose;
+  state_plan_pose.header.frame_id = plan_frame;
+  state_plan_pose.header.stamp = ros::Time(0);
+  state_plan_pose.pose.position.x = state.x;
+  state_plan_pose.pose.position.y = state.y;
+  state_plan_pose.pose.orientation = yawToQuat(state.yaw);
+
+  if (!map_frame.empty())
+  {
+    geometry_msgs::PoseStamped state_map_pose;
+    if (transform_diagnostic_pose(state_plan_pose, map_frame, state_map_pose))
+    {
+      ss << " state_map_x=" << state_map_pose.pose.position.x;
+      ss << " state_map_y=" << state_map_pose.pose.position.y;
+      ss << " state_map_yaw=" << tf2::getYaw(state_map_pose.pose.orientation);
+    }
+
+    geometry_msgs::PoseStamped map_origin;
+    map_origin.header.frame_id = map_frame;
+    map_origin.header.stamp = ros::Time(0);
+    map_origin.pose.orientation.w = 1.0;
+    geometry_msgs::PoseStamped map_origin_plan;
+    if (transform_diagnostic_pose(map_origin, plan_frame, map_origin_plan))
+    {
+      ss << " map_origin_in_plan_x=" << map_origin_plan.pose.position.x;
+      ss << " map_origin_in_plan_y=" << map_origin_plan.pose.position.y;
+      ss << " map_origin_in_plan_yaw=" << tf2::getYaw(map_origin_plan.pose.orientation);
+    }
+  }
+
+  if (diagnostics.has_initial_match)
+  {
+    ss << " match_idx=" << diagnostics.initial_match_index;
+    ss << " match_progress_s=" << diagnostics.initial_progress_s;
+    ss << " match_dist=" << diagnostics.initial_match_distance;
+    ss << " signed_lateral_err=" << diagnostics.initial_signed_lateral_error;
+    ss << " match_heading_err=" << diagnostics.initial_match_heading_error;
+  }
+  ss << " target_idx=" << diagnostics.lookahead_target_index;
+  ss << " target_progress_s=" << diagnostics.lookahead_target_progress_s;
+  ss << " target_x=" << diagnostics.lookahead_target_x;
+  ss << " target_y=" << diagnostics.lookahead_target_y;
+  ss << " tracking_diverged=" << (diagnostics.tracking_diverged ? 1 : 0);
+  ss << " max_tracking_deviation_m=" << diagnostics.max_tracking_deviation_m;
+  ss << " initial_collision=" << (diagnostics.initial_collision ? 1 : 0);
+  ss << " collision_samples=" << collision.checked_samples;
+  ss << " collision_unknown=" << collision.unknown_samples;
+  ss << " collision_out_of_map=" << collision.out_of_map_samples;
+  ss << " collision_lethal=" << collision.lethal_samples;
+  ss << " collision_center_occ=" << collision.center_occupancy;
+  ss << " collision_max_occ=" << collision.max_occupancy;
+  if (collision.has_first_lethal_sample)
+  {
+    ss << " first_lethal_x=" << collision.first_lethal_x;
+    ss << " first_lethal_y=" << collision.first_lethal_y;
+  }
+
+  std_msgs::String msg;
+  msg.data = ss.str();
+  diagnostics_pub_.publish(msg);
 }
 
 void LtDwaAdapterROS::publishGlobalPlan()

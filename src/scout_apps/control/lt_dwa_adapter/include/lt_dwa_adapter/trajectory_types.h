@@ -64,6 +64,13 @@ struct PlannerConfig
   bool treat_unknown_as_occupied = false;
   double goal_xy_tolerance_m = 0.20;
   double goal_yaw_tolerance_rad = 0.30;
+  double max_tracking_deviation_m = 1.50;
+  double lookahead_distance_m = 0.55;
+  double progress_rollback_tolerance_m = 0.35;
+  double max_progress_advance_per_step_m = 0.35;
+  double cross_track_heading_gain = 1.40;
+  double tracking_slowdown_lateral_m = 0.35;
+  double tracking_slowdown_heading_rad = 0.65;
 };
 
 struct ScoreBreakdown
@@ -75,6 +82,38 @@ struct ScoreBreakdown
   double terminal = 0.0;
   double smooth = 0.0;
   double speed = 0.0;
+};
+
+struct CollisionDiagnostics
+{
+  int checked_samples = 0;
+  int unknown_samples = 0;
+  int out_of_map_samples = 0;
+  int lethal_samples = 0;
+  int center_occupancy = -1;
+  int max_occupancy = -1;
+  bool has_first_lethal_sample = false;
+  double first_lethal_x = 0.0;
+  double first_lethal_y = 0.0;
+};
+
+struct PlanDiagnostics
+{
+  bool has_initial_match = false;
+  double initial_match_index = 0.0;
+  double initial_match_distance = 0.0;
+  double initial_signed_lateral_error = 0.0;
+  double initial_match_heading_error = 0.0;
+  double initial_progress_s = 0.0;
+  int lookahead_target_index = -1;
+  double lookahead_target_x = 0.0;
+  double lookahead_target_y = 0.0;
+  double lookahead_target_progress_s = 0.0;
+  bool tracking_diverged = false;
+  double max_tracking_deviation_m = 0.0;
+  bool plan_map_transform_ok = true;
+  bool initial_collision = false;
+  CollisionDiagnostics initial_collision_details;
 };
 
 struct TrajectoryPoint
@@ -92,6 +131,7 @@ struct TrajectoryCandidate
   ScoreBreakdown score;
   double total_cost = std::numeric_limits<double>::infinity();
   double progress_index = 0.0;
+  double progress_s = 0.0;
   bool valid = false;
 };
 
@@ -101,6 +141,7 @@ struct PlanResult
   std::string status = "NO_VALID_CMD";
   Command command;
   TrajectoryCandidate best;
+  PlanDiagnostics diagnostics;
   int expanded_nodes = 0;
   int valid_candidates = 0;
 };

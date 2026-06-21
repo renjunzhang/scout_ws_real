@@ -45,6 +45,7 @@ REQUIRED_CONTROL_PACKAGES = {
     "scout_profile_baselines": "src/scout_apps/control/scout_profile_baselines",
     "slosh_models": "src/scout_apps/control/slosh_models",
     "lt_dwa_adapter": "src/scout_apps/control/lt_dwa_adapter",
+    "lt_dwa_v2_adapter": "src/scout_apps/control/lt_dwa_v2_adapter",
 }
 
 REQUIRED_REUSE_ASSETS = {
@@ -59,6 +60,9 @@ REQUIRED_REUSE_ASSETS = {
     "lt_dwa_adapter_launch": "src/scout_apps/control/lt_dwa_adapter/launch/lt_dwa_adapter.launch",
     "lt_dwa_benchmark_launch": "src/scout_apps/control/spmpc_experiments/launch/sim/run_lt_dwa_fixed_path_sim.launch",
     "lt_dwa_benchmark_config": "src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_adapter_standalone_sim.yaml",
+    "lt_dwa_v2_adapter_launch": "src/scout_apps/control/lt_dwa_v2_adapter/launch/lt_dwa_v2_adapter.launch",
+    "lt_dwa_v2_benchmark_launch": "src/scout_apps/control/spmpc_experiments/launch/sim/run_lt_dwa_v2_fixed_path_sim.launch",
+    "lt_dwa_v2_benchmark_config": "src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_v2_adapter_standalone_sim.yaml",
     "slosh_monitor_launch": "src/scout_apps/control/slosh_models/launch/slosh_monitor.launch",
 }
 
@@ -590,6 +594,7 @@ class Preflight:
             self.warn("MPC_PLANNER_ABSENT", "src/mpc_planner not found; advanced MPC baseline is dependency-skipped")
         lt_dwa_vendor = self.repo_root / "third_party/LT_DWA"
         lt_dwa_adapter = self.repo_root / "src/scout_apps/control/lt_dwa_adapter"
+        lt_dwa_v2_adapter = self.repo_root / "src/scout_apps/control/lt_dwa_v2_adapter"
         if lt_dwa_vendor.is_dir():
             self.info(
                 "LT_DWA_REFERENCE_SOURCE_PRESENT",
@@ -606,6 +611,14 @@ class Preflight:
             )
         else:
             self.warn("LT_DWA_ADAPTER_NOT_READY", "Scout-owned lt_dwa_adapter package not found; LT-DWA baseline is dependency-skipped")
+        if lt_dwa_v2_adapter.is_dir():
+            self.info(
+                "LT_DWA_V2_ADAPTER_PRESENT",
+                f"Scout-owned LT-DWA-v2 adapter exists at {lt_dwa_v2_adapter}; strict smoke gate is still required before formal use",
+                lt_dwa_v2_adapter,
+            )
+        else:
+            self.warn("LT_DWA_V2_SMOKE_GATE_REQUIRED", "Scout-owned lt_dwa_v2_adapter package not found; LT-DWA-v2 baseline is dependency-skipped")
 
     def expect_path(
         self,

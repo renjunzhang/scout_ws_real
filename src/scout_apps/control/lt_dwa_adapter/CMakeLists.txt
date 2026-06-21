@@ -23,6 +23,9 @@ include_directories(
 )
 
 add_library(lt_dwa_adapter_core
+  src/path_reference.cpp
+  src/planning_frames.cpp
+  src/occupancy_adapter.cpp
   src/trajectory_rollout.cpp
   src/scoring.cpp
   src/lt_dwa_planner.cpp

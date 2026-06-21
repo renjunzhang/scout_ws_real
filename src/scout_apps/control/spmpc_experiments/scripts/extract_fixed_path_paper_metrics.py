@@ -22,6 +22,7 @@ BAD_STATUS_KEYS = (
     "WAITING",
     "ACADOS_NOT",
     "SET_PLAN_FAILED",
+    "TRACKING_DIVERGED",
     "PLUGIN_ERROR",
 )
 
@@ -32,6 +33,7 @@ STATUS_TOPICS = (
     "/baseline/dwa/status",
     "/baseline/mpc_local_planner/status",
     "/baseline/lt_dwa/status",
+    "/baseline/lt_dwa_v2/status",
     "/mpc_status",
 )
 
@@ -49,6 +51,7 @@ SAFETY_ABORT_STATUS_KEYS = (
     "SPIN_FAIL",
     "TRACKING_SPIN_FAIL",
     "TERMINAL_SPIN_FAIL",
+    "TRACKING_DIVERGED",
 )
 
 SOLVER_FAIL_STATUS_KEYS = (
@@ -188,7 +191,7 @@ def infer_method(bag_path, meta):
     for key in ("b_ours", "b_slosh", "b_smooth", "b_accel", "b_inst_excitation", "b0"):
         if key in name:
             return f"spmpc_{key}"
-    for key in ("teb", "dwa", "mpc_local_planner", "mpc"):
+    for key in ("lt_dwa_v2", "lt_dwa", "teb", "dwa", "mpc_local_planner", "mpc"):
         if key in name:
             return "mpc_local_planner" if key == "mpc" else key
     return "unknown"

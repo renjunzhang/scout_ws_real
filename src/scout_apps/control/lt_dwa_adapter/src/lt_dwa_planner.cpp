@@ -23,35 +23,37 @@ double normalizeAngle(double angle)
 }
 }  // namespace
 
-Command LtDwaPlanner::pathTrackingSeed(const RobotState& state, const std::vector<Pose2D>& path) const
+Command LtDwaPlanner::pathTrackingSeed(const RobotState& state,
+                                       const PathReference& path,
+                                       double previous_progress_s) const
 {
   Command seed;
   if (path.empty())
     return seed;
 
-  const PathMatch match = matchPath(state, path);
-  const double lookahead_m = 0.55;
-  size_t target_index = static_cast<size_t>(std::max(0.0, match.index));
-  double accumulated = 0.0;
-  for (size_t i = target_index; i + 1 < path.size(); ++i)
-  {
-    const double ds = std::hypot(path[i + 1].x - path[i].x, path[i + 1].y - path[i].y);
-    accumulated += ds;
-    target_index = i + 1;
-    if (accumulated >= lookahead_m)
-      break;
-  }
+  const double min_progress_s = std::max(0.0, previous_progress_s - config_.progress_rollback_tolerance_m);
+  const double max_progress_s = previous_progress_s + config_.max_progress_advance_per_step_m;
+  const PathProjection match = path.project(state, min_progress_s, max_progress_s);
+  if (!match.valid)
+    return seed;
 
-  const Pose2D& target = path[target_index];
-  const Pose2D& goal = path.back();
+  const Pose2D target = path.sampleByProgress(match.progress_s + config_.lookahead_distance_m);
+  const Pose2D goal = path.sampleByProgress(path.totalLength());
   const double terminal_dist = std::hypot(goal.x - state.x, goal.y - state.y);
   const double target_heading = std::atan2(target.y - state.y, target.x - state.x);
-  const double heading_error = normalizeAngle(target_heading - state.yaw);
-  const double yaw_gain = terminal_dist < 0.45 ? 1.2 : 1.6;
+  const double pure_pursuit_error = normalizeAngle(target_heading - state.yaw);
+  const double lateral_correction = std::atan2(-config_.cross_track_heading_gain * match.signed_lateral_error,
+                                               std::max(0.20, config_.lookahead_distance_m));
+  const double corrected_path_heading = normalizeAngle(match.pose.yaw + lateral_correction);
+  const double cross_track_error = normalizeAngle(corrected_path_heading - state.yaw);
+  const double heading_error = normalizeAngle(0.45 * pure_pursuit_error + 0.55 * cross_track_error);
+  const double tracking_heading_error = std::max(std::abs(pure_pursuit_error), std::abs(cross_track_error));
+  const double yaw_gain = match.distance > config_.tracking_slowdown_lateral_m ? 2.2 : (terminal_dist < 0.45 ? 1.2 : 1.7);
   const double desired_omega = clamp(yaw_gain * heading_error, -config_.limits.omega_max_radps, config_.limits.omega_max_radps);
-  const double speed_scale = clamp(std::cos(std::min(M_PI / 2.0, std::abs(heading_error))), 0.20, 1.0);
+  const double heading_speed_scale = clamp(std::cos(std::min(M_PI / 2.0, tracking_heading_error)), 0.08, 1.0);
+  const double lateral_speed_scale = clamp(1.0 - match.distance / std::max(0.10, config_.max_tracking_deviation_m), 0.10, 1.0);
   const double approach_scale = clamp(terminal_dist / 0.75, 0.15, 1.0);
-  const double desired_v = config_.limits.v_max_mps * speed_scale * approach_scale;
+  const double desired_v = config_.limits.v_max_mps * heading_speed_scale * lateral_speed_scale * approach_scale;
 
   const double v_step = config_.limits.a_max_mps2 * config_.dt;
   const double w_step = config_.limits.alpha_max_radps2 * config_.dt;
@@ -65,31 +67,70 @@ Command LtDwaPlanner::pathTrackingSeed(const RobotState& state, const std::vecto
 }
 
 PlanResult LtDwaPlanner::plan(const RobotState& current,
-                              const std::vector<Pose2D>& path,
-                              const nav_msgs::OccupancyGrid* occupancy) const
+                              const std::vector<Pose2D>& path_points,
+                              const OccupancyAdapter* occupancy,
+                              double min_progress_s,
+                              double max_progress_s) const
 {
   PlanResult result;
-  if (path.empty())
+  PathReference path;
+  if (!path.setPath(path_points))
   {
     result.status = "WAITING_FOR_PATH";
     return result;
   }
+  result.diagnostics.plan_map_transform_ok = !occupancy || occupancy->transformOk();
+
+  if (max_progress_s < 0.0)
+    max_progress_s = path.totalLength();
+  max_progress_s = clamp(max_progress_s, min_progress_s, path.totalLength());
+  const PathProjection initial_match = path.project(current, min_progress_s, max_progress_s);
+  result.diagnostics.has_initial_match = initial_match.valid;
+  if (initial_match.valid)
+  {
+    result.diagnostics.initial_match_index = initial_match.index;
+    result.diagnostics.initial_match_distance = initial_match.distance;
+    result.diagnostics.initial_signed_lateral_error = initial_match.signed_lateral_error;
+    result.diagnostics.initial_match_heading_error = initial_match.heading_error;
+    result.diagnostics.initial_progress_s = initial_match.progress_s;
+    const double target_progress_s = std::min(path.totalLength(), initial_match.progress_s + config_.lookahead_distance_m);
+    const Pose2D target = path.sampleByProgress(target_progress_s);
+    result.diagnostics.lookahead_target_index = static_cast<int>(std::round(initial_match.index));
+    result.diagnostics.lookahead_target_x = target.x;
+    result.diagnostics.lookahead_target_y = target.y;
+    result.diagnostics.lookahead_target_progress_s = target_progress_s;
+  }
+  result.diagnostics.max_tracking_deviation_m = config_.max_tracking_deviation_m;
+
   if (isGoalReached(current, path))
   {
     result.valid = true;
     result.status = "GOAL_REACHED";
     return result;
   }
-  if (collisionAt(current, occupancy))
+
+  CollisionDiagnostics initial_collision_details;
+  const bool initial_collision = collisionAt(current, occupancy, &initial_collision_details);
+  result.diagnostics.initial_collision = initial_collision;
+  result.diagnostics.initial_collision_details = initial_collision_details;
+  if (initial_collision)
   {
     result.status = "ROBOT_IN_COLLISION";
+    return result;
+  }
+  if (config_.max_tracking_deviation_m > 0.0 && initial_match.valid &&
+      initial_match.distance > config_.max_tracking_deviation_m)
+  {
+    result.diagnostics.tracking_diverged = true;
+    result.status = "TRACKING_DIVERGED";
     return result;
   }
 
   TrajectoryCandidate root;
   root.valid = true;
   root.total_cost = 0.0;
-  root.progress_index = matchPath(current, path).index;
+  root.progress_index = initial_match.index;
+  root.progress_s = initial_match.progress_s;
   std::vector<TrajectoryCandidate> frontier;
   frontier.push_back(root);
 
@@ -103,7 +144,7 @@ PlanResult LtDwaPlanner::plan(const RobotState& current,
       const RobotState base_state = candidate.points.empty() ? current : candidate.points.back().state;
       const Command previous_command = candidate.points.empty() ? initial_command : candidate.points.back().command;
       auto commands = sampleCommands(base_state);
-      commands.push_back(pathTrackingSeed(base_state, path));
+      commands.push_back(pathTrackingSeed(base_state, path, candidate.progress_s));
       for (const auto& command : commands)
       {
         ++result.expanded_nodes;
@@ -112,7 +153,13 @@ PlanResult LtDwaPlanner::plan(const RobotState& current,
           continue;
 
         ScoreBreakdown inc_score;
-        const double inc_cost = scorePoint(next_state, command, previous_command, candidate.progress_index, path, occupancy, inc_score);
+        const double inc_cost = scorePoint(next_state, command, previous_command, candidate.progress_s, path, occupancy, inc_score);
+        const double min_progress_s = std::max(0.0, candidate.progress_s - config_.progress_rollback_tolerance_m);
+        const double max_progress_s = candidate.progress_s + config_.max_progress_advance_per_step_m;
+        const PathProjection next_match = path.project(next_state, min_progress_s, max_progress_s);
+        if (!next_match.valid)
+          continue;
+
         TrajectoryCandidate child = candidate;
         TrajectoryPoint point;
         point.state = next_state;
@@ -124,7 +171,8 @@ PlanResult LtDwaPlanner::plan(const RobotState& current,
           child.first_command = command;
         child.total_cost += inc_cost;
         accumulateScore(child.score, inc_score);
-        child.progress_index = matchPath(next_state, path).index;
+        child.progress_index = next_match.index;
+        child.progress_s = next_match.progress_s;
         child.valid = true;
         next_frontier.push_back(child);
       }
@@ -136,7 +184,7 @@ PlanResult LtDwaPlanner::plan(const RobotState& current,
     std::sort(next_frontier.begin(), next_frontier.end(), [](const TrajectoryCandidate& a, const TrajectoryCandidate& b) {
       if (std::abs(a.total_cost - b.total_cost) > 1e-9)
         return a.total_cost < b.total_cost;
-      return a.progress_index > b.progress_index;
+      return a.progress_s > b.progress_s;
     });
     if (static_cast<int>(next_frontier.size()) > config_.top_k_per_layer)
       next_frontier.resize(static_cast<size_t>(config_.top_k_per_layer));
@@ -153,7 +201,7 @@ PlanResult LtDwaPlanner::plan(const RobotState& current,
   const auto best_it = std::min_element(frontier.begin(), frontier.end(), [](const TrajectoryCandidate& a, const TrajectoryCandidate& b) {
     if (std::abs(a.total_cost - b.total_cost) > 1e-9)
       return a.total_cost < b.total_cost;
-    return a.progress_index > b.progress_index;
+    return a.progress_s > b.progress_s;
   });
   result.best = *best_it;
   result.command = result.best.first_command;

@@ -25,6 +25,12 @@ void LtDwaPlanner::configure(const PlannerConfig& config)
   config_.limits.omega_max_radps = std::max(0.0, config_.limits.omega_max_radps);
   config_.limits.a_max_mps2 = std::max(0.0, config_.limits.a_max_mps2);
   config_.limits.alpha_max_radps2 = std::max(0.0, config_.limits.alpha_max_radps2);
+  config_.lookahead_distance_m = std::max(0.05, config_.lookahead_distance_m);
+  config_.progress_rollback_tolerance_m = std::max(0.0, config_.progress_rollback_tolerance_m);
+  config_.max_progress_advance_per_step_m = std::max(0.05, config_.max_progress_advance_per_step_m);
+  config_.cross_track_heading_gain = std::max(0.0, config_.cross_track_heading_gain);
+  config_.tracking_slowdown_lateral_m = std::max(0.05, config_.tracking_slowdown_lateral_m);
+  config_.tracking_slowdown_heading_rad = std::max(0.05, config_.tracking_slowdown_heading_rad);
 }
 
 std::vector<double> LtDwaPlanner::sampleLinearVelocities(double current_v) const

@@ -74,6 +74,20 @@ LT_DWA_BENCHMARK_REQUIRED_FILES = {
     "wrapper_launch": "src/scout_apps/control/spmpc_experiments/launch/sim/run_lt_dwa_fixed_path_sim.launch",
     "baseline_config": "src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_adapter_standalone_sim.yaml",
 }
+LT_DWA_V2_ADAPTER_ROOT = "src/scout_apps/control/lt_dwa_v2_adapter"
+LT_DWA_V2_ADAPTER_REQUIRED_FILES = {
+    "package_xml": "package.xml",
+    "cmakelists": "CMakeLists.txt",
+    "node_source": "src/lt_dwa_v2_adapter_node.cpp",
+    "ros_wrapper_source": "src/ros/lt_dwa_v2_adapter_ros.cpp",
+    "planner_source": "src/search/lt_dwa_v2_planner.cpp",
+    "launch": "launch/lt_dwa_v2_adapter.launch",
+    "config": "config/lt_dwa_v2_adapter_sim.yaml",
+}
+LT_DWA_V2_BENCHMARK_REQUIRED_FILES = {
+    "wrapper_launch": "src/scout_apps/control/spmpc_experiments/launch/sim/run_lt_dwa_v2_fixed_path_sim.launch",
+    "baseline_config": "src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_v2_adapter_standalone_sim.yaml",
+}
 
 
 class ReadinessCheck:
@@ -105,6 +119,8 @@ class ReadinessCheck:
     def check(self) -> Dict[str, Any]:
         if self.args.planner == "lt_dwa":
             self.check_lt_dwa()
+        elif self.args.planner == "lt_dwa_v2":
+            self.check_lt_dwa_v2()
         elif self.args.planner == "mpc_planner":
             self.check_mpc_planner()
         else:
@@ -193,6 +209,62 @@ class ReadinessCheck:
         self.warn(
             "LT_DWA_SMOKE_GATE_REQUIRED",
             "Static LT-DWA adapter assets are present; require isolated shadow/closed-loop smoke before formal main-table use.",
+            adapter_root,
+        )
+
+    def check_lt_dwa_v2(self) -> None:
+        vendor_root = self.repo_root / LT_DWA_VENDOR_ROOT
+        if vendor_root.is_dir():
+            self.info(
+                "LT_DWA_REFERENCE_SOURCE_ONLY",
+                "LT-DWA upstream source is retained under third_party as an algorithm reference for v2 and is not catkin-built.",
+                vendor_root,
+            )
+        else:
+            self.warn("LT_DWA_VENDOR_ABSENT", "third_party/LT_DWA is absent; v2 can still be checked as Scout-owned code, but paper-reference source is missing", vendor_root)
+
+        adapter_root = self.repo_root / LT_DWA_V2_ADAPTER_ROOT
+        if not adapter_root.is_dir():
+            self.report["missing"].append({"name": "lt_dwa_v2_adapter_root", "path": str(adapter_root)})
+            self.error(
+                "LT_DWA_V2_SMOKE_GATE_REQUIRED",
+                "Scout-owned lt_dwa_v2_adapter package is missing; keep LT-DWA-v2 dependency-skipped.",
+                adapter_root,
+            )
+            return
+        self.pass_check("lt_dwa_v2_adapter_root", "Scout-owned LT-DWA-v2 adapter package is present", adapter_root)
+
+        missing_adapter_files = []
+        for name, rel in LT_DWA_V2_ADAPTER_REQUIRED_FILES.items():
+            path = adapter_root / rel
+            if path.is_file():
+                self.pass_check(f"lt_dwa_v2_adapter:{name}", f"Found LT-DWA-v2 adapter file {rel}", path)
+            else:
+                missing_adapter_files.append({"name": name, "path": str(path)})
+        for name, rel in LT_DWA_V2_BENCHMARK_REQUIRED_FILES.items():
+            path = self.repo_root / rel
+            if path.is_file():
+                self.pass_check(f"lt_dwa_v2_benchmark:{name}", f"Found LT-DWA-v2 benchmark file {rel}", path)
+            else:
+                missing_adapter_files.append({"name": name, "path": str(path)})
+
+        if missing_adapter_files:
+            self.report["missing"].extend(missing_adapter_files)
+            self.error(
+                "LT_DWA_V2_SMOKE_GATE_REQUIRED",
+                "LT-DWA-v2 adapter package is present but required node/config/launch benchmark files are missing.",
+                adapter_root,
+            )
+            return
+
+        packages = self.find_packages_by_name({"lt_dwa_v2_adapter"})
+        if "lt_dwa_v2_adapter" not in packages:
+            self.error("LT_DWA_V2_SMOKE_GATE_REQUIRED", "lt_dwa_v2_adapter/package.xml does not declare package name lt_dwa_v2_adapter", adapter_root)
+            return
+        self.pass_check("lt_dwa_v2_adapter_package_name", "lt_dwa_v2_adapter package name is unique and explicit", packages["lt_dwa_v2_adapter"])
+        self.warn(
+            "LT_DWA_V2_SMOKE_GATE_REQUIRED",
+            "Static LT-DWA-v2 benchmark assets are present; require strict fresh-sim smoke before formal main-table use.",
             adapter_root,
         )
 
@@ -330,7 +402,7 @@ def emit_report(report: Dict[str, Any], fmt: str) -> None:
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Dry-run readiness check for advanced benchmark baselines.")
-    parser.add_argument("--planner", choices=("lt_dwa", "mpc_planner"), required=True)
+    parser.add_argument("--planner", choices=("lt_dwa", "lt_dwa_v2", "mpc_planner"), required=True)
     parser.add_argument("--repo-root", type=Path, default=None)
     parser.add_argument("--format", choices=("json", "yaml"), default="json")
     return parser

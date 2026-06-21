@@ -34,6 +34,7 @@ status_codes:
     - LT_DWA_VENDOR_INCOMPLETE
     - LT_DWA_ADAPTER_NOT_READY
     - LT_DWA_SMOKE_GATE_REQUIRED
+    - LT_DWA_V2_SMOKE_GATE_REQUIRED
 
   fairness_failure:
     - FAIRNESS_VIOLATION
@@ -54,28 +55,43 @@ status_codes:
 method_current_failure_classification:
   lt_dwa:
     as_of: 2026-06-21
-    current_code: CLOSED_LOOP_COLLISION_OR_GOAL_FAILURE
-    previous_code: COMMAND_GATE_TOO_ACTIVE
+    current_code: TRACKING_DIVERGED
+    previous_code: CLOSED_LOOP_COLLISION_OR_GOAL_FAILURE
     evidence:
-      run_root: /data/a/scout_sim_replacement/results/proxy_baseline_mainline_lt_dwa_rate_decouple_20260621_stampfix_closed_loop
+      run_root: /data/a/scout_sim_replacement/results/proxy_baseline_mainline_lt_dwa_tracking_diverged_gate_hold_20260621_152828_closed_loop
+      bag: /data/a/scout_sim_replacement/bags/proxy_baseline_mainline_lt_dwa_tracking_diverged_gate_hold_20260621_152828_closed_loop/lt_dwa_closed_loop.bag
       cmd_topic: /benchmark/cmd_vel_raw
-      cmd_topic_rate_hz: 25.0
-      cmd_topic_max_gap_sec: 0.041
-      cmd_vel_drive_rate_hz: 30.0
-      cmd_vel_drive_max_linear_x_mps: 0.6
+      cmd_topic_rate_hz: 25.3
+      cmd_vel_drive_rate_hz: 30.3
+      cmd_vel_drive_max_linear_x_mps: 0.7716666666666667
       no_valid_cmd_max_duration_sec: 0.0
       no_go_flags:
-        - GOAL_NOT_REACHED
-      observed_status: ROBOT_IN_COLLISION
+        - TRACKING_DIVERGED
+      observed_status: TRACKING_DIVERGED
     notes:
       - "Command-cadence / guard-timeout failure is resolved: /benchmark/cmd_vel_raw has no >0.3s gaps and /cmd_vel_drive is no longer pinned at 0.18 m/s."
-      - "LT-DWA remains NO-GO because the closed-loop smoke still diverges into collision/goal failure. Diagnose collision, tracking, and local target separately from command gate."
+      - "LT-DWA remains NO-GO because closed-loop tracking diverges from the fixed path; the safety gate now stops before collision instead of allowing the adapter to continue into ROBOT_IN_COLLISION."
+      - "The previous closed-loop collision run remains evidence that tracking/local-target recovery and frame-consistent occupancy queries still need separate follow-up patches."
+
+  lt_dwa_v2:
+    as_of: 2026-06-22
+    current_code: LT_DWA_V2_SMOKE_GATE_REQUIRED
+    evidence:
+      package: src/scout_apps/control/lt_dwa_v2_adapter
+      benchmark_launch: src/scout_apps/control/spmpc_experiments/launch/sim/run_lt_dwa_v2_fixed_path_sim.launch
+      benchmark_config: src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_v2_adapter_standalone_sim.yaml
+      cmd_topic: /benchmark/cmd_vel_raw
+      shadow_cmd_topic: /baseline/lt_dwa_v2/shadow_cmd_vel
+    notes:
+      - "LT-DWA-v2 is a Scout-owned DWA engineering framework plus LT-DWA long-horizon sampling/scoring idea, not a mutation of ROS DWA or third_party/LT_DWA."
+      - "Benchmark suite integration exists, but strict fresh-sim smoke has not yet passed; keep v2 out of the formal main table until the smoke gate records goal/collision/freshness evidence."
 
 main_table_blocking_codes:
   - DEPENDENCY_SKIPPED
   - PRECHECK_FAILED
   - LT_DWA_ADAPTER_NOT_READY
   - LT_DWA_SMOKE_GATE_REQUIRED
+  - LT_DWA_V2_SMOKE_GATE_REQUIRED
   - FAIRNESS_VIOLATION
   - COMMAND_GATE_TOO_ACTIVE
   - PARAMETER_NOT_FROZEN

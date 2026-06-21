@@ -4,6 +4,7 @@
 
 publish_cmd_vel: false
 publish_shadow_cmd: true
+publish_diagnostics: false
 require_map: true
 
 odom_topic: /odom
@@ -13,6 +14,7 @@ goal_topic: /scout/goal
 cmd_vel_topic: /lt_dwa/shadow_cmd_vel
 shadow_cmd_topic: /baseline/lt_dwa/shadow_cmd_vel
 status_topic: /baseline/lt_dwa/status
+diagnostics_topic: /baseline/lt_dwa/diagnostics
 global_plan_topic: /baseline/lt_dwa/global_plan
 local_plan_topic: /baseline/lt_dwa/local_plan
 
@@ -32,6 +34,17 @@ alpha_max_radps2: 1.2
 allow_reverse: false
 xy_goal_tolerance: 0.20
 yaw_goal_tolerance: 0.30
+# Safety NO-GO: stop instead of continuing after closed-loop tracking diverges.
+max_tracking_deviation_m: 1.50
+# DWA-style path reference: continuous arc-length lookahead and bounded progress rollback.
+lookahead_distance_m: 0.55
+progress_rollback_tolerance_m: 0.35
+max_progress_advance_per_step_m: 0.35
+# Stability terms for S-curve tracking: signed cross-track correction and slowdown
+# when lateral/heading errors grow. These only affect LT-DWA candidate scoring.
+cross_track_heading_gain: 1.40
+tracking_slowdown_lateral_m: 0.35
+tracking_slowdown_heading_rad: 0.65
 
 # Dynamic-window layered rollout parameters.
 dt: 0.15

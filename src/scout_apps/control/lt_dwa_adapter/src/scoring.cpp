@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 namespace lt_dwa_adapter
 {
@@ -16,171 +15,110 @@ double normalizeAngle(double angle)
     angle += 2.0 * M_PI;
   return angle;
 }
-
-bool worldToMap(const nav_msgs::OccupancyGrid& grid, double wx, double wy, int& mx, int& my)
-{
-  const double origin_x = grid.info.origin.position.x;
-  const double origin_y = grid.info.origin.position.y;
-  const double res = grid.info.resolution;
-  if (res <= 0.0)
-    return false;
-  mx = static_cast<int>(std::floor((wx - origin_x) / res));
-  my = static_cast<int>(std::floor((wy - origin_y) / res));
-  return mx >= 0 && my >= 0 && mx < static_cast<int>(grid.info.width) && my < static_cast<int>(grid.info.height);
-}
-
-int occupancyAt(const nav_msgs::OccupancyGrid& grid, int mx, int my)
-{
-  if (mx < 0 || my < 0 || mx >= static_cast<int>(grid.info.width) || my >= static_cast<int>(grid.info.height))
-    return -1;
-  const auto idx = static_cast<size_t>(my) * static_cast<size_t>(grid.info.width) + static_cast<size_t>(mx);
-  if (idx >= grid.data.size())
-    return -1;
-  return static_cast<int>(grid.data[idx]);
-}
 }  // namespace
 
-LtDwaPlanner::PathMatch LtDwaPlanner::matchPath(const RobotState& state, const std::vector<Pose2D>& path) const
-{
-  PathMatch best;
-  best.distance = std::numeric_limits<double>::infinity();
-  if (path.empty())
-    return best;
-
-  for (size_t i = 0; i < path.size(); ++i)
-  {
-    const double dx = state.x - path[i].x;
-    const double dy = state.y - path[i].y;
-    const double dist = std::hypot(dx, dy);
-    if (dist < best.distance)
-    {
-      best.distance = dist;
-      best.index = static_cast<double>(i);
-      best.pose = path[i];
-    }
-  }
-  best.heading_error = std::abs(normalizeAngle(state.yaw - best.pose.yaw));
-  return best;
-}
-
-bool LtDwaPlanner::isGoalReached(const RobotState& state, const std::vector<Pose2D>& path) const
+bool LtDwaPlanner::isGoalReached(const RobotState& state, const PathReference& path) const
 {
   if (path.empty())
     return false;
-  const Pose2D& goal = path.back();
+  const Pose2D goal = path.sampleByProgress(path.totalLength());
   const double dist = std::hypot(goal.x - state.x, goal.y - state.y);
   const double yaw_err = std::abs(normalizeAngle(goal.yaw - state.yaw));
   return dist <= config_.goal_xy_tolerance_m && yaw_err <= config_.goal_yaw_tolerance_rad;
 }
 
-bool LtDwaPlanner::collisionAt(const RobotState& state, const nav_msgs::OccupancyGrid* occupancy) const
+bool LtDwaPlanner::collisionAt(const RobotState& state,
+                               const OccupancyAdapter* occupancy,
+                               CollisionDiagnostics* diagnostics) const
 {
-  if (!occupancy || occupancy->data.empty())
-    return false;
-
-  const double step = std::max(static_cast<double>(occupancy->info.resolution), config_.robot_radius_m / 2.0);
-  const int rings = std::max(1, static_cast<int>(std::ceil(config_.robot_radius_m / std::max(0.01, step))));
-  for (int r = 0; r <= rings; ++r)
+  if (!occupancy)
   {
-    const double radius = (static_cast<double>(r) / static_cast<double>(rings)) * config_.robot_radius_m;
-    const int samples = (r == 0) ? 1 : 12;
-    for (int i = 0; i < samples; ++i)
-    {
-      const double angle = (samples == 1) ? 0.0 : (2.0 * M_PI * static_cast<double>(i) / static_cast<double>(samples));
-      const double wx = state.x + radius * std::cos(angle);
-      const double wy = state.y + radius * std::sin(angle);
-      int mx = 0;
-      int my = 0;
-      if (!worldToMap(*occupancy, wx, wy, mx, my))
-        return config_.treat_unknown_as_occupied;
-      const int occ = occupancyAt(*occupancy, mx, my);
-      if (occ < 0)
-      {
-        if (config_.treat_unknown_as_occupied)
-          return true;
-      }
-      else if (occ >= config_.lethal_occupancy)
-      {
-        return true;
-      }
-    }
+    if (diagnostics)
+      *diagnostics = CollisionDiagnostics{};
+    return false;
   }
-  return false;
+  return occupancy->collisionAt(state, diagnostics);
 }
 
-double LtDwaPlanner::obstacleCost(const RobotState& state, const nav_msgs::OccupancyGrid* occupancy) const
+double LtDwaPlanner::obstacleCost(const RobotState& state, const OccupancyAdapter* occupancy) const
 {
-  if (!occupancy || occupancy->data.empty() || occupancy->info.resolution <= 0.0)
+  if (!occupancy)
     return 0.0;
-
-  int cx = 0;
-  int cy = 0;
-  if (!worldToMap(*occupancy, state.x, state.y, cx, cy))
-    return config_.treat_unknown_as_occupied ? 1.0 : 0.2;
-
-  const int cells = std::max(1, static_cast<int>(std::ceil(config_.clearance_radius_m / occupancy->info.resolution)));
-  double min_dist = std::numeric_limits<double>::infinity();
-  double occ_peak = 0.0;
-  for (int dy = -cells; dy <= cells; ++dy)
-  {
-    for (int dx = -cells; dx <= cells; ++dx)
-    {
-      const int mx = cx + dx;
-      const int my = cy + dy;
-      const int occ = occupancyAt(*occupancy, mx, my);
-      const double dist = std::hypot(static_cast<double>(dx), static_cast<double>(dy)) * occupancy->info.resolution;
-      if (dist > config_.clearance_radius_m)
-        continue;
-      if (occ < 0)
-      {
-        if (config_.treat_unknown_as_occupied)
-          min_dist = std::min(min_dist, dist);
-        continue;
-      }
-      occ_peak = std::max(occ_peak, static_cast<double>(occ) / 100.0);
-      if (occ >= config_.lethal_occupancy)
-        min_dist = std::min(min_dist, dist);
-    }
-  }
-
-  if (!std::isfinite(min_dist))
-    return occ_peak;
-  const double clearance = std::max(0.0, min_dist - config_.robot_radius_m);
-  const double clearance_cost = 1.0 / (1.0 + clearance);
-  return std::max(occ_peak, clearance_cost);
+  return occupancy->obstacleCost(state);
 }
 
 double LtDwaPlanner::scorePoint(const RobotState& state,
                                 const Command& command,
                                 const Command& previous_command,
-                                double previous_progress_index,
-                                const std::vector<Pose2D>& path,
-                                const nav_msgs::OccupancyGrid* occupancy,
+                                double previous_progress_s,
+                                const PathReference& path,
+                                const OccupancyAdapter* occupancy,
                                 ScoreBreakdown& score) const
 {
-  const PathMatch match = matchPath(state, path);
-  const Pose2D& goal = path.back();
+  const double min_progress_s = std::max(0.0, previous_progress_s - config_.progress_rollback_tolerance_m);
+  const double max_progress_s = previous_progress_s + config_.max_progress_advance_per_step_m;
+  const PathProjection match = path.project(state, min_progress_s, max_progress_s);
+  const Pose2D goal = path.sampleByProgress(path.totalLength());
   const double terminal_dist = std::hypot(goal.x - state.x, goal.y - state.y);
-  const double path_scale = std::max(1.0, static_cast<double>(path.size() - 1));
-  const double progress_delta = match.index - previous_progress_index;
+  const double path_scale = std::max(1.0, path.totalLength());
+  const double matched_progress_s = match.valid ? match.progress_s : previous_progress_s;
+  const double remaining_progress_s = std::max(0.0, path.totalLength() - matched_progress_s);
+  const double progress_delta_s = match.valid ? match.progress_s - previous_progress_s : 0.0;
   const double v_fraction = config_.limits.v_max_mps > 1e-9 ? command.v / config_.limits.v_max_mps : 0.0;
+  const double forward_v_fraction = std::max(0.0, v_fraction);
   const double goal_slowdown = std::max(0.0, std::min(1.0, terminal_dist / 0.80));
+  const double lateral_error = match.valid ? match.distance : config_.max_tracking_deviation_m;
+  const double deviation_scale = std::max(0.20, config_.max_tracking_deviation_m);
+  const double lateral_ratio = lateral_error / deviation_scale;
+  const double path_heading_error = match.valid ? match.heading_error : M_PI;
+  const Pose2D target = path.sampleByProgress((match.valid ? match.progress_s : previous_progress_s) +
+                                              config_.lookahead_distance_m);
+  const double target_heading = std::atan2(target.y - state.y, target.x - state.x);
+  const double target_heading_error = std::abs(normalizeAngle(target_heading - state.yaw));
+  const double tracking_heading_error = std::max(path_heading_error, target_heading_error);
+  const double omega_fraction = config_.limits.omega_max_radps > 1e-9 ?
+                                  std::abs(command.omega) / config_.limits.omega_max_radps :
+                                  0.0;
 
   score.obstacle = config_.weights.obstacle * obstacleCost(state, occupancy);
-  score.path_lateral = config_.weights.path_lateral * match.distance;
-  score.heading = config_.weights.heading * match.heading_error;
-  score.progress = -config_.weights.progress * std::max(0.0, progress_delta) / path_scale;
-  if (progress_delta < -0.25)
-    score.progress += config_.weights.progress * std::abs(progress_delta) / path_scale;
-  score.terminal = config_.weights.terminal * terminal_dist;
+  score.path_lateral = config_.weights.path_lateral * lateral_error * (1.0 + 3.0 * lateral_ratio * lateral_ratio);
+  if (lateral_error > config_.tracking_slowdown_lateral_m)
+  {
+    const double lateral_excess = lateral_error - config_.tracking_slowdown_lateral_m;
+    score.path_lateral += config_.weights.path_lateral * lateral_excess * lateral_excess /
+                          std::max(0.05, config_.tracking_slowdown_lateral_m);
+  }
+  score.heading = config_.weights.heading * path_heading_error * (1.0 + path_heading_error / M_PI) +
+                  0.75 * config_.weights.heading * target_heading_error;
+  const double progress_gate = std::max(0.0, std::min(1.0, 1.0 - lateral_ratio)) *
+                               std::max(0.0, std::cos(std::min(M_PI / 2.0, target_heading_error)));
+  score.progress = -config_.weights.progress * std::max(0.0, progress_delta_s) * progress_gate / path_scale;
+  if (progress_delta_s < -0.05)
+    score.progress += config_.weights.progress * std::abs(progress_delta_s) / path_scale;
+  if (lateral_error > 0.80 * deviation_scale)
+    score.progress += config_.weights.progress * (lateral_error - 0.80 * deviation_scale) / deviation_scale;
+  const double terminal_xy_gate = std::max(0.0, std::min(1.0, 1.0 - remaining_progress_s / 1.0));
+  score.terminal = config_.weights.terminal * remaining_progress_s / path_scale +
+                   terminal_xy_gate * config_.weights.terminal * terminal_dist;
   score.smooth = config_.weights.smooth_v * std::abs(command.v - previous_command.v) +
                  config_.weights.smooth_omega * std::abs(command.omega - previous_command.omega) +
                  0.25 * config_.weights.smooth_omega * std::abs(command.omega);
-  score.speed = -config_.weights.speed * std::max(0.0, v_fraction) * goal_slowdown;
-  if (terminal_dist > config_.goal_xy_tolerance_m && command.v < 0.03)
-    score.speed += 0.5 * config_.weights.speed;
+  score.speed = -config_.weights.speed * forward_v_fraction * goal_slowdown * progress_gate;
+  const double lateral_slowdown_excess = std::max(0.0, lateral_error - config_.tracking_slowdown_lateral_m) /
+                                         std::max(0.05, config_.tracking_slowdown_lateral_m);
+  const double heading_slowdown_excess = std::max(0.0, tracking_heading_error - config_.tracking_slowdown_heading_rad);
+  score.speed += config_.weights.speed * forward_v_fraction *
+                 (2.0 * lateral_slowdown_excess + 1.5 * heading_slowdown_excess);
+  if (lateral_error < config_.tracking_slowdown_lateral_m &&
+      tracking_heading_error < config_.tracking_slowdown_heading_rad)
+  {
+    const double heading_alignment = 1.0 - tracking_heading_error / config_.tracking_slowdown_heading_rad;
+    score.smooth += 0.50 * config_.weights.heading * omega_fraction * std::max(0.0, heading_alignment);
+    if (remaining_progress_s > config_.goal_xy_tolerance_m && command.v < 0.03)
+      score.speed += 2.0 * config_.weights.speed * (1.0 + remaining_progress_s / path_scale);
+  }
   if (terminal_dist < 0.80)
-    score.speed += 4.0 * config_.weights.speed * (1.0 - goal_slowdown) * std::max(0.0, v_fraction);
+    score.speed += 4.0 * config_.weights.speed * (1.0 - goal_slowdown) * forward_v_fraction;
   return weightedTotal(score);
 }
 

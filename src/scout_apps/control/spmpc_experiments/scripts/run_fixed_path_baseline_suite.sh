@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fixed-path simulation suite for external baselines (TEB / DWA / mpc_local_planner / LT-DWA adapter).
+# Fixed-path simulation suite for external baselines (TEB / DWA / mpc_local_planner / LT-DWA adapters).
 #
 # 前提：先启动仿真与定位，例如：
 #   source devel/setup.bash
@@ -15,7 +15,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-BASELINE="${BASELINE:-teb}"  # teb | dwa | mpc | mpc_local_planner | lt_dwa | all
+BASELINE="${BASELINE:-teb}"  # teb | dwa | mpc | mpc_local_planner | lt_dwa | lt_dwa_v2 | all
 OUT_ROOT="${OUT_ROOT:-/data/${USER}/spmpc_paper_compare/fixed_path_smoke}"
 PATH_FILE="${PATH_FILE:-}"
 PATH_ID="${PATH_ID:-fixed_path}"
@@ -42,11 +42,17 @@ TARGET_ACC_LIM_X_MPS2="${TARGET_ACC_LIM_X_MPS2:-0.6}"
 TARGET_ACC_LIM_THETA_RADPS2="${TARGET_ACC_LIM_THETA_RADPS2:-1.2}"
 INCLUDE_MPC_LOCAL_PLANNER="${INCLUDE_MPC_LOCAL_PLANNER:-false}"
 INCLUDE_LT_DWA="${INCLUDE_LT_DWA:-false}"
+INCLUDE_LT_DWA_V2="${INCLUDE_LT_DWA_V2:-false}"
 LT_DWA_PUBLISH_CMD_VEL="${LT_DWA_PUBLISH_CMD_VEL:-true}"
 LT_DWA_CMD_VEL_TOPIC="${LT_DWA_CMD_VEL_TOPIC:-/benchmark/cmd_vel_raw}"
 LT_DWA_PLANNING_FREQUENCY="${LT_DWA_PLANNING_FREQUENCY:-10.0}"
 LT_DWA_COMMAND_PUBLISH_FREQUENCY="${LT_DWA_COMMAND_PUBLISH_FREQUENCY:-25.0}"
 LT_DWA_COMMAND_STALE_TIMEOUT_SEC="${LT_DWA_COMMAND_STALE_TIMEOUT_SEC:-2.0}"
+LT_DWA_V2_PUBLISH_CMD_VEL="${LT_DWA_V2_PUBLISH_CMD_VEL:-true}"
+LT_DWA_V2_CMD_VEL_TOPIC="${LT_DWA_V2_CMD_VEL_TOPIC:-/benchmark/cmd_vel_raw}"
+LT_DWA_V2_PLANNING_FREQUENCY="${LT_DWA_V2_PLANNING_FREQUENCY:-10.0}"
+LT_DWA_V2_COMMAND_PUBLISH_FREQUENCY="${LT_DWA_V2_COMMAND_PUBLISH_FREQUENCY:-25.0}"
+LT_DWA_V2_COMMAND_STALE_TIMEOUT_SEC="${LT_DWA_V2_COMMAND_STALE_TIMEOUT_SEC:-2.0}"
 SLOSH_RESET_BEFORE_RUN="${SLOSH_RESET_BEFORE_RUN:-true}"
 
 planner_pid=""
@@ -133,6 +139,9 @@ launch_for_baseline() {
     lt_dwa)
       echo "run_lt_dwa_fixed_path_sim.launch"
       ;;
+    lt_dwa_v2)
+      echo "run_lt_dwa_v2_fixed_path_sim.launch"
+      ;;
     *)
       echo "[ERR] unknown baseline: $1" >&2
       return 2
@@ -146,6 +155,7 @@ status_topic_for_baseline() {
     dwa) echo "/baseline/dwa/status" ;;
     mpc|mpc_local_planner) echo "/baseline/mpc_local_planner/status" ;;
     lt_dwa) echo "/baseline/lt_dwa/status" ;;
+    lt_dwa_v2) echo "/baseline/lt_dwa_v2/status" ;;
   esac
 }
 
@@ -155,6 +165,7 @@ config_for_baseline() {
     dwa) echo "config/baselines/dwa_local_planner_standalone_sim.yaml" ;;
     mpc|mpc_local_planner) echo "config/baselines/mpc_local_planner_standalone_sim.yaml" ;;
     lt_dwa) echo "config/baselines/lt_dwa_adapter_standalone_sim.yaml" ;;
+    lt_dwa_v2) echo "config/baselines/lt_dwa_v2_adapter_standalone_sim.yaml" ;;
   esac
 }
 
@@ -193,6 +204,9 @@ if [[ "${BASELINE}" == "all" ]]; then
   fi
   if [[ "${INCLUDE_LT_DWA}" == "true" ]]; then
     BASELINES="${BASELINES} lt_dwa"
+  fi
+  if [[ "${INCLUDE_LT_DWA_V2}" == "true" ]]; then
+    BASELINES="${BASELINES} lt_dwa_v2"
   fi
 else
   BASELINES="${BASELINE}"
@@ -244,6 +258,11 @@ record_topics=(
   /baseline/lt_dwa/global_plan
   /baseline/lt_dwa/local_plan
   /baseline/lt_dwa/shadow_cmd_vel
+  /baseline/lt_dwa_v2/status
+  /baseline/lt_dwa_v2/global_plan
+  /baseline/lt_dwa_v2/local_plan
+  /baseline/lt_dwa_v2/shadow_cmd_vel
+  /baseline/lt_dwa_v2/diagnostics
   /scout/goal
   /scout/global_path
   /scout/move_base/GlobalPlanner/plan
@@ -271,6 +290,8 @@ for run_idx in $(seq 1 "${RUNS}"); do
     run_cmd_vel_topic="${CMD_VEL_TOPIC}"
     if [[ "${baseline}" == "lt_dwa" ]]; then
       run_cmd_vel_topic="${LT_DWA_CMD_VEL_TOPIC}"
+    elif [[ "${baseline}" == "lt_dwa_v2" ]]; then
+      run_cmd_vel_topic="${LT_DWA_V2_CMD_VEL_TOPIC}"
     fi
     method="${baseline}"
     if [[ "${method}" == "mpc" ]]; then
@@ -303,6 +324,9 @@ plan_target_frame: ${plan_target_frame}
 lt_dwa_planning_frequency: ${LT_DWA_PLANNING_FREQUENCY}
 lt_dwa_command_publish_frequency: ${LT_DWA_COMMAND_PUBLISH_FREQUENCY}
 lt_dwa_command_stale_timeout_sec: ${LT_DWA_COMMAND_STALE_TIMEOUT_SEC}
+lt_dwa_v2_planning_frequency: ${LT_DWA_V2_PLANNING_FREQUENCY}
+lt_dwa_v2_command_publish_frequency: ${LT_DWA_V2_COMMAND_PUBLISH_FREQUENCY}
+lt_dwa_v2_command_stale_timeout_sec: ${LT_DWA_V2_COMMAND_STALE_TIMEOUT_SEC}
 force_straight_plan_on_goal: false
 use_wrapper_goal_check: true
 git_hash: ${git_hash}
@@ -361,6 +385,16 @@ EOF
         planning_frequency:="${LT_DWA_PLANNING_FREQUENCY}" \
         command_publish_frequency:="${LT_DWA_COMMAND_PUBLISH_FREQUENCY}" \
         command_stale_timeout_sec:="${LT_DWA_COMMAND_STALE_TIMEOUT_SEC}" \
+        >"${run_dir}/${run_id}_planner.log" 2>&1 &
+    elif [[ "${baseline}" == "lt_dwa_v2" ]]; then
+      echo "[planner] roslaunch spmpc_experiments ${launch_file} global_path_topic:=${PATH_TOPIC} cmd_vel_topic:=${run_cmd_vel_topic} publish_cmd_vel:=${LT_DWA_V2_PUBLISH_CMD_VEL} planning_frequency:=${LT_DWA_V2_PLANNING_FREQUENCY} command_publish_frequency:=${LT_DWA_V2_COMMAND_PUBLISH_FREQUENCY}"
+      roslaunch spmpc_experiments "${launch_file}" \
+        global_path_topic:="${PATH_TOPIC}" \
+        cmd_vel_topic:="${run_cmd_vel_topic}" \
+        publish_cmd_vel:="${LT_DWA_V2_PUBLISH_CMD_VEL}" \
+        planning_frequency:="${LT_DWA_V2_PLANNING_FREQUENCY}" \
+        command_publish_frequency:="${LT_DWA_V2_COMMAND_PUBLISH_FREQUENCY}" \
+        command_stale_timeout_sec:="${LT_DWA_V2_COMMAND_STALE_TIMEOUT_SEC}" \
         >"${run_dir}/${run_id}_planner.log" 2>&1 &
     else
       echo "[planner] roslaunch spmpc_experiments ${launch_file} global_path_topic:=${PATH_TOPIC} cmd_vel_topic:=${CMD_VEL_TOPIC}"

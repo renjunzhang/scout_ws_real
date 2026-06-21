@@ -77,11 +77,14 @@ BASELINE_CONFIGS = {
     "dwa": "src/scout_apps/control/spmpc_experiments/config/baselines/dwa_local_planner_standalone_sim.yaml",
     "mpc_local_planner": "src/scout_apps/control/spmpc_experiments/config/baselines/mpc_local_planner_standalone_sim.yaml",
     "lt_dwa": "src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_adapter_standalone_sim.yaml",
+    "lt_dwa_v2": "src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_v2_adapter_standalone_sim.yaml",
 }
 
 LT_DWA_VENDOR_ROOT = "third_party/LT_DWA"
 LT_DWA_ADAPTER_ROOT = "src/scout_apps/control/lt_dwa_adapter"
 LT_DWA_ADAPTER_CODE = "LT_DWA_SMOKE_GATE_REQUIRED"
+LT_DWA_V2_ADAPTER_ROOT = "src/scout_apps/control/lt_dwa_v2_adapter"
+LT_DWA_V2_ADAPTER_CODE = "LT_DWA_V2_SMOKE_GATE_REQUIRED"
 
 
 class ComparisonContractValidator:
@@ -121,6 +124,7 @@ class ComparisonContractValidator:
         if capability:
             self.check_profile_baseline_metadata(capability)
             self.check_lt_dwa_policy(capability, failure_taxonomy, main_table)
+            self.check_lt_dwa_v2_policy(capability, failure_taxonomy, main_table)
         if profile_tracking:
             self.check_profile_csv_contract(profile_tracking)
         if common_limits and common_environment:
@@ -354,6 +358,83 @@ class ComparisonContractValidator:
         if not any(item.get("code") == "LT_DWA_FAILURE_TAXONOMY_MISSING" for item in self.report["errors"]):
             self.pass_check("lt_dwa_failure_codes", "LT-DWA smoke-gate-required code is declared and blocking")
 
+    def check_lt_dwa_v2_policy(self, capability: Dict[str, Any], failure_taxonomy: Dict[str, Any], main_table: Dict[str, Any]) -> None:
+        planners = capability.get("planners", {})
+        lt_v2 = planners.get("lt_dwa_v2", {}) if isinstance(planners, dict) else {}
+        if not isinstance(lt_v2, dict):
+            self.error("LT_DWA_V2_CAPABILITY_MISSING", "lt_dwa_v2 missing from capability_matrix.yaml")
+            return
+        self.expect_equal(lt_v2.get("implementation"), LT_DWA_V2_ADAPTER_ROOT, "LT_DWA_V2_IMPLEMENTATION_PATH_MISMATCH", "lt_dwa_v2 implementation")
+        self.expect_equal(lt_v2.get("reference_source"), LT_DWA_VENDOR_ROOT, "LT_DWA_V2_REFERENCE_SOURCE_MISMATCH", "lt_dwa_v2 reference_source")
+        self.expect_equal(lt_v2.get("interface_type"), "scout_owned_ros_adapter", "LT_DWA_V2_INTERFACE_MISMATCH", "lt_dwa_v2 interface_type")
+        self.expect_equal(lt_v2.get("present_in_workspace"), "adapter_present", "LT_DWA_V2_PRESENT_STATUS_MISMATCH", "lt_dwa_v2 present_in_workspace")
+        self.expect_equal(lt_v2.get("ready_to_run"), "conditional", "LT_DWA_V2_READY_STATUS_MISMATCH", "lt_dwa_v2 ready_to_run")
+        self.expect_equal(lt_v2.get("dependency_failure_code"), LT_DWA_V2_ADAPTER_CODE, "LT_DWA_V2_FAILURE_CODE_MISMATCH", "lt_dwa_v2 dependency_failure_code")
+        self.expect_equal(lt_v2.get("smoke_gate_required_before_runnable"), True, "LT_DWA_V2_SMOKE_GATE_FLAG_MISMATCH", "lt_dwa_v2 smoke gate flag")
+        self.expect_equal(lt_v2.get("liquid_model_access"), "none", "LT_DWA_V2_LIQUID_ACCESS_MISMATCH", "lt_dwa_v2 liquid_model_access")
+        self.expect_equal(lt_v2.get("online_liquid_feedback"), False, "LT_DWA_V2_ONLINE_LIQUID_FEEDBACK", "lt_dwa_v2 online_liquid_feedback")
+        self.expect_equal(lt_v2.get("main_table_eligible_if_preflight_passes"), False, "LT_DWA_V2_TABLE_ELIGIBILITY_MISMATCH", "lt_dwa_v2 table eligibility")
+
+        adapter = self.repo_root / LT_DWA_V2_ADAPTER_ROOT
+        required_adapter_files = [
+            "package.xml",
+            "CMakeLists.txt",
+            "launch/lt_dwa_v2_adapter.launch",
+            "config/lt_dwa_v2_adapter_sim.yaml",
+            "src/lt_dwa_v2_adapter_node.cpp",
+            "src/ros/lt_dwa_v2_adapter_ros.cpp",
+            "src/search/lt_dwa_v2_planner.cpp",
+        ]
+        for rel in required_adapter_files:
+            path = adapter / rel
+            if path.is_file():
+                self.pass_check(f"lt_dwa_v2_adapter_file:{rel}", f"LT-DWA-v2 adapter file exists: {rel}", path)
+            else:
+                self.error("LT_DWA_V2_ADAPTER_FILE_MISSING", f"LT-DWA-v2 adapter file missing: {path}", path)
+
+        benchmark_launch = self.repo_root / "src/scout_apps/control/spmpc_experiments/launch/sim/run_lt_dwa_v2_fixed_path_sim.launch"
+        benchmark_config = self.repo_root / BASELINE_CONFIGS["lt_dwa_v2"]
+        if benchmark_launch.is_file():
+            self.pass_check("lt_dwa_v2_benchmark_launch", "LT-DWA-v2 benchmark wrapper launch exists", benchmark_launch)
+        else:
+            self.error("LT_DWA_V2_BENCHMARK_LAUNCH_MISSING", f"LT-DWA-v2 benchmark wrapper launch missing: {benchmark_launch}", benchmark_launch)
+        lt_config = self.load_yaml(benchmark_config, "baselines/lt_dwa_v2_adapter_standalone_sim.yaml")
+        if lt_config:
+            runtime = lt_config.get("runtime", {})
+            topics = lt_config.get("topics", {})
+            limits = lt_config.get("limits", {})
+            self.expect_equal(runtime.get("publish_cmd_vel"), False, "LT_DWA_V2_DEFAULT_CMD_VEL_UNSAFE", "lt_dwa_v2 runtime.publish_cmd_vel", benchmark_config)
+            if topics.get("cmd_vel_topic") == "/cmd_vel":
+                self.error("LT_DWA_V2_DEFAULT_CMD_VEL_UNSAFE", "lt_dwa_v2 default cmd_vel_topic must not be /cmd_vel", benchmark_config)
+            self.expect_equal(limits.get("allow_reverse"), False, "LT_DWA_V2_REVERSE_NOT_ALLOWED", "lt_dwa_v2 limits.allow_reverse", benchmark_config)
+            for token in ("/benchmark/slosh_monitor", "/slosh/"):
+                for rel in (
+                    "launch/lt_dwa_v2_adapter.launch",
+                    "config/lt_dwa_v2_adapter_sim.yaml",
+                    "src/ros/lt_dwa_v2_adapter_ros.cpp",
+                    "src/search/lt_dwa_v2_planner.cpp",
+                ):
+                    path = adapter / rel
+                    if path.is_file() and token in path.read_text(encoding="utf-8", errors="replace"):
+                        self.error("LT_DWA_V2_MONITOR_INPUT_LEAKAGE", f"LT-DWA-v2 adapter runtime file {rel} contains forbidden monitor token {token}", path)
+            self.pass_check("lt_dwa_v2_default_shadow_only", "LT-DWA-v2 benchmark config defaults to shadow-only and has no monitor input tokens", benchmark_config)
+
+        flattened_codes = set()
+        status_codes = failure_taxonomy.get("status_codes", {}) if isinstance(failure_taxonomy, dict) else {}
+        if isinstance(status_codes, dict):
+            for values in status_codes.values():
+                if isinstance(values, list):
+                    flattened_codes.update(str(item) for item in values)
+        before_errors = len(self.report["errors"])
+        if LT_DWA_V2_ADAPTER_CODE not in flattened_codes:
+            self.error("LT_DWA_V2_FAILURE_TAXONOMY_MISSING", f"failure_taxonomy missing {LT_DWA_V2_ADAPTER_CODE}")
+        if LT_DWA_V2_ADAPTER_CODE not in set(failure_taxonomy.get("main_table_blocking_codes") or []):
+            self.error("LT_DWA_V2_BLOCKING_CODE_MISSING", f"main_table_blocking_codes missing {LT_DWA_V2_ADAPTER_CODE}")
+        inclusions = main_table.get("main_table_inclusion", {}) if isinstance(main_table, dict) else {}
+        if LT_DWA_V2_ADAPTER_CODE not in set(inclusions.get("exclusions") or []):
+            self.error("LT_DWA_V2_MAIN_TABLE_EXCLUSION_MISSING", f"main_table_inclusion exclusions missing {LT_DWA_V2_ADAPTER_CODE}")
+        if len(self.report["errors"]) == before_errors:
+            self.pass_check("lt_dwa_v2_failure_codes", "LT-DWA-v2 smoke-gate-required code is declared and blocking")
 
     def check_runtime_baseline_fairness(self, common_limits: Dict[str, Any], common_environment: Dict[str, Any]) -> None:
         limits = common_limits.get("limits", {})
@@ -410,6 +491,17 @@ class ComparisonContractValidator:
                     "yaw_goal_tolerance": "yaw_goal_tolerance",
                 }
                 reverse_value = 0.0 if root.get("allow_reverse") is False else 1.0
+            elif planner == "lt_dwa_v2":
+                root = cfg
+                mapping = {
+                    "v_max": "limits/v_max_mps",
+                    "omega_max": "limits/omega_max_radps",
+                    "a_max": "limits/a_max_mps2",
+                    "alpha_max": "limits/alpha_max_radps2",
+                    "xy_goal_tolerance": "goal/xy_tolerance_m",
+                    "yaw_goal_tolerance": "goal/yaw_tolerance_rad",
+                }
+                reverse_value = 0.0 if self.nested_get(root, "limits/allow_reverse") is False else 1.0
             else:
                 root = cfg.get("MpcLocalPlannerROS", {})
                 mapping = {
