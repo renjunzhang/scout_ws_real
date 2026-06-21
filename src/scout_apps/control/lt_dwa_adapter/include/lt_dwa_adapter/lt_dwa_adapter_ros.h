@@ -5,11 +5,13 @@
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
+#include <ros/callback_queue.h>
 #include <ros/ros.h>
 #include <std_msgs/String.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -29,13 +31,19 @@ private:
   void mapCallback(const nav_msgs::OccupancyGrid::ConstPtr& msg);
   void pathCallback(const nav_msgs::Path::ConstPtr& msg);
   void goalCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
-  void controlTimerCallback(const ros::TimerEvent& event);
+  void planningTimerCallback(const ros::TimerEvent& event);
+  void commandPublishTimerCallback(const ros::TimerEvent& event);
 
   bool transformPath(const nav_msgs::Path& input, nav_msgs::Path& output);
   bool transformPose(const geometry_msgs::PoseStamped& input, const std::string& target_frame,
                      geometry_msgs::PoseStamped& output) const;
   bool getRobotState(RobotState& state) const;
   bool goalCloseEnough(const RobotState& state) const;
+  Command clampCommand(const Command& command) const;
+  bool cachedCommandFresh(const ros::Time& now) const;
+  Command commandForPublish(const ros::Time& now) const;
+  void cacheCommand(const Command& command, const ros::Time& stamp, bool tracking_command);
+  void cacheZeroCommand(const ros::Time& stamp);
   void publishCommand(const Command& command);
   void publishZeroCommand();
   void publishShadowCommand(const Command& command);
@@ -45,6 +53,9 @@ private:
 
   ros::NodeHandle nh_;
   ros::NodeHandle private_nh_;
+  ros::NodeHandle command_nh_;
+  ros::CallbackQueue command_callback_queue_;
+  mutable std::mutex command_mutex_;
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
 
@@ -57,7 +68,8 @@ private:
   ros::Publisher status_pub_;
   ros::Publisher global_plan_pub_;
   ros::Publisher local_plan_pub_;
-  ros::Timer control_timer_;
+  ros::Timer planning_timer_;
+  ros::Timer command_publish_timer_;
 
   LtDwaPlanner planner_;
   PlannerConfig planner_config_;
@@ -69,6 +81,10 @@ private:
   std::vector<Pose2D> current_path_;
   Command last_command_;
   bool have_last_command_ = false;
+  Command cached_command_;
+  ros::Time cached_command_stamp_;
+  bool have_cached_command_ = false;
+  bool cached_command_tracking_ = false;
   std::string last_status_;
 
   std::string odom_topic_;
@@ -83,7 +99,9 @@ private:
   std::string base_frame_;
   std::string plan_target_frame_;
 
-  double controller_frequency_ = 10.0;
+  double planning_frequency_ = 10.0;
+  double command_publish_frequency_ = 25.0;
+  double command_stale_timeout_sec_ = 2.0;
   double tf_timeout_sec_ = 0.2;
   bool publish_cmd_vel_ = false;
   bool publish_shadow_cmd_ = true;

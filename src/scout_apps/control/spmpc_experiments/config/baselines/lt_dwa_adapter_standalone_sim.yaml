@@ -18,7 +18,10 @@ local_plan_topic: /baseline/lt_dwa/local_plan
 
 base_frame: base_link
 plan_target_frame: odom
-controller_frequency: 10.0
+controller_frequency: 10.0  # Backward-compatible alias for planning_frequency.
+planning_frequency: 10.0
+command_publish_frequency: 25.0
+command_stale_timeout_sec: 2.0
 tf_timeout_sec: 0.2
 
 v_max_mps: 0.8

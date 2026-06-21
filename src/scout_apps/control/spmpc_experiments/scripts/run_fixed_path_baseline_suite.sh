@@ -43,6 +43,10 @@ TARGET_ACC_LIM_THETA_RADPS2="${TARGET_ACC_LIM_THETA_RADPS2:-1.2}"
 INCLUDE_MPC_LOCAL_PLANNER="${INCLUDE_MPC_LOCAL_PLANNER:-false}"
 INCLUDE_LT_DWA="${INCLUDE_LT_DWA:-false}"
 LT_DWA_PUBLISH_CMD_VEL="${LT_DWA_PUBLISH_CMD_VEL:-true}"
+LT_DWA_CMD_VEL_TOPIC="${LT_DWA_CMD_VEL_TOPIC:-/benchmark/cmd_vel_raw}"
+LT_DWA_PLANNING_FREQUENCY="${LT_DWA_PLANNING_FREQUENCY:-10.0}"
+LT_DWA_COMMAND_PUBLISH_FREQUENCY="${LT_DWA_COMMAND_PUBLISH_FREQUENCY:-25.0}"
+LT_DWA_COMMAND_STALE_TIMEOUT_SEC="${LT_DWA_COMMAND_STALE_TIMEOUT_SEC:-2.0}"
 SLOSH_RESET_BEFORE_RUN="${SLOSH_RESET_BEFORE_RUN:-true}"
 
 planner_pid=""
@@ -86,13 +90,14 @@ wait_topic_once() {
 wait_status_or_cmd() {
   local status_topic="$1"
   local timeout_sec="$2"
+  local cmd_topic="$3"
   local start
   start="$(date +%s)"
   while true; do
     if timeout 1s rostopic echo -n 1 "${status_topic}" >/dev/null 2>&1; then
       return 0
     fi
-    if timeout 1s rostopic echo -n 1 "${CMD_VEL_TOPIC}" >/dev/null 2>&1; then
+    if timeout 1s rostopic echo -n 1 "${cmd_topic}" >/dev/null 2>&1; then
       return 0
     fi
     if (( $(date +%s) - start >= timeout_sec )); then
@@ -222,6 +227,7 @@ git_hash="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 record_topics=(
   /clock
   "${CMD_VEL_TOPIC}"
+  /benchmark/cmd_vel_raw
   /odom
   "${COSTMAP_TOPIC}"
   /scan_front
@@ -262,6 +268,10 @@ for run_idx in $(seq 1 "${RUNS}"); do
     status_topic="$(status_topic_for_baseline "${baseline}")"
     baseline_config="$(config_for_baseline "${baseline}")"
     plan_target_frame="$(plan_target_frame_for_baseline "${baseline}")"
+    run_cmd_vel_topic="${CMD_VEL_TOPIC}"
+    if [[ "${baseline}" == "lt_dwa" ]]; then
+      run_cmd_vel_topic="${LT_DWA_CMD_VEL_TOPIC}"
+    fi
     method="${baseline}"
     if [[ "${method}" == "mpc" ]]; then
       method="mpc_local_planner"
@@ -281,6 +291,7 @@ evidence_chain_version: ${EVIDENCE_CHAIN_VERSION}
 path_id: ${PATH_ID}
 path_file: ${PATH_FILE}
 path_topic: ${PATH_TOPIC}
+cmd_vel_topic: ${run_cmd_vel_topic}
 baseline_config: ${baseline_config}
 speed_tier: ${SPEED_TIER}
 limit_profile: ${LIMIT_PROFILE}
@@ -289,6 +300,9 @@ target_omega_max_radps: ${TARGET_OMEGA_MAX_RADPS}
 target_acc_lim_x_mps2: ${TARGET_ACC_LIM_X_MPS2}
 target_acc_lim_theta_radps2: ${TARGET_ACC_LIM_THETA_RADPS2}
 plan_target_frame: ${plan_target_frame}
+lt_dwa_planning_frequency: ${LT_DWA_PLANNING_FREQUENCY}
+lt_dwa_command_publish_frequency: ${LT_DWA_COMMAND_PUBLISH_FREQUENCY}
+lt_dwa_command_stale_timeout_sec: ${LT_DWA_COMMAND_STALE_TIMEOUT_SEC}
 force_straight_plan_on_goal: false
 use_wrapper_goal_check: true
 git_hash: ${git_hash}
@@ -339,11 +353,14 @@ EOF
     sleep 1
 
     if [[ "${baseline}" == "lt_dwa" ]]; then
-      echo "[planner] roslaunch spmpc_experiments ${launch_file} global_path_topic:=${PATH_TOPIC} cmd_vel_topic:=${CMD_VEL_TOPIC} publish_cmd_vel:=${LT_DWA_PUBLISH_CMD_VEL}"
+      echo "[planner] roslaunch spmpc_experiments ${launch_file} global_path_topic:=${PATH_TOPIC} cmd_vel_topic:=${run_cmd_vel_topic} publish_cmd_vel:=${LT_DWA_PUBLISH_CMD_VEL} planning_frequency:=${LT_DWA_PLANNING_FREQUENCY} command_publish_frequency:=${LT_DWA_COMMAND_PUBLISH_FREQUENCY}"
       roslaunch spmpc_experiments "${launch_file}" \
         global_path_topic:="${PATH_TOPIC}" \
-        cmd_vel_topic:="${CMD_VEL_TOPIC}" \
+        cmd_vel_topic:="${run_cmd_vel_topic}" \
         publish_cmd_vel:="${LT_DWA_PUBLISH_CMD_VEL}" \
+        planning_frequency:="${LT_DWA_PLANNING_FREQUENCY}" \
+        command_publish_frequency:="${LT_DWA_COMMAND_PUBLISH_FREQUENCY}" \
+        command_stale_timeout_sec:="${LT_DWA_COMMAND_STALE_TIMEOUT_SEC}" \
         >"${run_dir}/${run_id}_planner.log" 2>&1 &
     else
       echo "[planner] roslaunch spmpc_experiments ${launch_file} global_path_topic:=${PATH_TOPIC} cmd_vel_topic:=${CMD_VEL_TOPIC}"
@@ -352,8 +369,8 @@ EOF
     fi
     planner_pid=$!
 
-    if ! wait_status_or_cmd "${status_topic}" "${WAIT_READY_SEC}"; then
-      echo "[WARN] ${WAIT_READY_SEC}s 内未观察到 ${status_topic} 或 ${CMD_VEL_TOPIC}; 仍继续录包" >&2
+    if ! wait_status_or_cmd "${status_topic}" "${WAIT_READY_SEC}" "${run_cmd_vel_topic}"; then
+      echo "[WARN] ${WAIT_READY_SEC}s 内未观察到 ${status_topic} 或 ${run_cmd_vel_topic}; 仍继续录包" >&2
     fi
 
     sleep "${RECORD_SEC}"

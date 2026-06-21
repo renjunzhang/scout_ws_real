@@ -1,12 +1,15 @@
 <launch>
   <arg name="global_path_topic" default="/scout/global_path_fixed"/>
   <arg name="goal_topic" default="/scout/goal"/>
-  <arg name="cmd_vel_topic" default="/lt_dwa/shadow_cmd_vel"/>
+  <arg name="cmd_vel_topic" default="/benchmark/cmd_vel_raw"/>
   <arg name="publish_cmd_vel" default="false"/>
   <arg name="odom_topic" default="/odom"/>
   <arg name="map_topic" default="/map"/>
   <arg name="base_frame" default="base_link"/>
   <arg name="plan_target_frame" default="odom"/>
+  <arg name="planning_frequency" default="10.0"/>
+  <arg name="command_publish_frequency" default="25.0"/>
+  <arg name="command_stale_timeout_sec" default="2.0"/>
 
   <include file="$(find lt_dwa_adapter)/launch/lt_dwa_adapter.launch">
     <arg name="config" value="$(find spmpc_experiments)/config/baselines/lt_dwa_adapter_standalone_sim.yaml"/>
@@ -18,5 +21,8 @@
     <arg name="map_topic" value="$(arg map_topic)"/>
     <arg name="base_frame" value="$(arg base_frame)"/>
     <arg name="plan_target_frame" value="$(arg plan_target_frame)"/>
+    <arg name="planning_frequency" value="$(arg planning_frequency)"/>
+    <arg name="command_publish_frequency" value="$(arg command_publish_frequency)"/>
+    <arg name="command_stale_timeout_sec" value="$(arg command_stale_timeout_sec)"/>
   </include>
 </launch>

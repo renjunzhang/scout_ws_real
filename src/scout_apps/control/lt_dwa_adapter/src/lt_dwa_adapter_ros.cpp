@@ -43,17 +43,28 @@ LtDwaAdapterROS::LtDwaAdapterROS()
   private_nh_.param("global_path_topic", global_path_topic_, std::string("/scout/global_path_fixed"));
   private_nh_.param("goal_topic", goal_topic_, std::string("/scout/goal"));
   private_nh_.param("cmd_vel_topic", cmd_vel_topic_, std::string("/lt_dwa/shadow_cmd_vel"));
-  private_nh_.param("shadow_cmd_topic", shadow_cmd_topic_, std::string("/baseline/lt_dwa/shadow_cmd"));
+  private_nh_.param("shadow_cmd_topic", shadow_cmd_topic_, std::string("/baseline/lt_dwa/shadow_cmd_vel"));
   private_nh_.param("status_topic", status_topic_, std::string("/baseline/lt_dwa/status"));
   private_nh_.param("global_plan_topic", global_plan_topic_, std::string("/baseline/lt_dwa/global_plan"));
   private_nh_.param("local_plan_topic", local_plan_topic_, std::string("/baseline/lt_dwa/local_plan"));
   private_nh_.param("base_frame", base_frame_, std::string("base_footprint"));
   private_nh_.param("plan_target_frame", plan_target_frame_, std::string(""));
-  private_nh_.param("controller_frequency", controller_frequency_, 10.0);
+  double controller_frequency = 10.0;
+  private_nh_.param("controller_frequency", controller_frequency, 10.0);
+  private_nh_.param("planning_frequency", planning_frequency_, controller_frequency);
+  private_nh_.param("command_publish_frequency", command_publish_frequency_, 25.0);
+  private_nh_.param("command_stale_timeout_sec", command_stale_timeout_sec_, 2.0);
   private_nh_.param("tf_timeout_sec", tf_timeout_sec_, 0.2);
   private_nh_.param("publish_cmd_vel", publish_cmd_vel_, false);
   private_nh_.param("publish_shadow_cmd", publish_shadow_cmd_, true);
   private_nh_.param("require_map", require_map_, true);
+
+  if (!std::isfinite(planning_frequency_) || planning_frequency_ <= 0.0)
+    planning_frequency_ = 10.0;
+  if (!std::isfinite(command_publish_frequency_) || command_publish_frequency_ <= 0.0)
+    command_publish_frequency_ = 25.0;
+  if (!std::isfinite(command_stale_timeout_sec_) || command_stale_timeout_sec_ <= 0.0)
+    command_stale_timeout_sec_ = 2.0;
 
   private_nh_.param("v_max_mps", planner_config_.limits.v_max_mps, 0.8);
   private_nh_.param("omega_max_radps", planner_config_.limits.omega_max_radps, 1.2);
@@ -93,18 +104,29 @@ LtDwaAdapterROS::LtDwaAdapterROS()
   global_plan_pub_ = nh_.advertise<nav_msgs::Path>(global_plan_topic_, 1, true);
   local_plan_pub_ = nh_.advertise<nav_msgs::Path>(local_plan_topic_, 1, true);
 
-  const double period = 1.0 / std::max(1.0, controller_frequency_);
-  control_timer_ = nh_.createTimer(ros::Duration(period), &LtDwaAdapterROS::controlTimerCallback, this);
+  command_nh_.setCallbackQueue(&command_callback_queue_);
+  const double planning_period = 1.0 / std::max(1.0, planning_frequency_);
+  const double command_publish_period = 1.0 / std::max(1.0, command_publish_frequency_);
+  planning_timer_ = nh_.createTimer(ros::Duration(planning_period), &LtDwaAdapterROS::planningTimerCallback, this);
+  command_publish_timer_ = command_nh_.createTimer(ros::Duration(command_publish_period),
+                                                   &LtDwaAdapterROS::commandPublishTimerCallback, this);
 
+  cacheZeroCommand(ros::Time::now());
   publishStatus("INITIALIZED");
   ROS_INFO_STREAM("[lt_dwa_adapter] initialized shadow=" << (publish_cmd_vel_ ? "false" : "true")
                   << " publish_cmd_vel=" << publish_cmd_vel_ << " cmd_vel_topic=" << cmd_vel_topic_
-                  << " path_topic=" << global_path_topic_ << " map_topic=" << map_topic_);
+                  << " path_topic=" << global_path_topic_ << " map_topic=" << map_topic_
+                  << " planning_frequency=" << planning_frequency_
+                  << " command_publish_frequency=" << command_publish_frequency_
+                  << " command_stale_timeout_sec=" << command_stale_timeout_sec_);
 }
 
 void LtDwaAdapterROS::spin()
 {
+  ros::AsyncSpinner command_spinner(1, &command_callback_queue_);
+  command_spinner.start();
   ros::spin();
+  command_spinner.stop();
 }
 
 void LtDwaAdapterROS::odomCallback(const nav_msgs::Odometry::ConstPtr& msg)
@@ -284,26 +306,71 @@ bool LtDwaAdapterROS::goalCloseEnough(const RobotState& state) const
   return dist <= planner_config_.goal_xy_tolerance_m && yaw_err <= planner_config_.goal_yaw_tolerance_rad;
 }
 
-void LtDwaAdapterROS::controlTimerCallback(const ros::TimerEvent&)
+Command LtDwaAdapterROS::clampCommand(const Command& command) const
 {
+  Command clamped;
+  const double min_v = planner_config_.limits.allow_reverse ? -planner_config_.limits.v_max_mps : 0.0;
+  clamped.v = clamp(command.v, min_v, planner_config_.limits.v_max_mps);
+  clamped.omega = clamp(command.omega, -planner_config_.limits.omega_max_radps, planner_config_.limits.omega_max_radps);
+  return clamped;
+}
+
+bool LtDwaAdapterROS::cachedCommandFresh(const ros::Time& now) const
+{
+  std::lock_guard<std::mutex> lock(command_mutex_);
+  if (!have_cached_command_ || cached_command_stamp_.isZero())
+    return false;
+  return (now - cached_command_stamp_).toSec() <= command_stale_timeout_sec_;
+}
+
+Command LtDwaAdapterROS::commandForPublish(const ros::Time& now) const
+{
+  std::lock_guard<std::mutex> lock(command_mutex_);
+  if (!have_cached_command_ || !cached_command_tracking_ || cached_command_stamp_.isZero())
+    return Command{};
+  if ((now - cached_command_stamp_).toSec() > command_stale_timeout_sec_)
+    return Command{};
+  return cached_command_;
+}
+
+void LtDwaAdapterROS::cacheCommand(const Command& command, const ros::Time& stamp, bool tracking_command)
+{
+  const Command clamped = clampCommand(command);
+  {
+    std::lock_guard<std::mutex> lock(command_mutex_);
+    cached_command_ = clamped;
+    cached_command_stamp_ = stamp;
+    cached_command_tracking_ = tracking_command;
+    have_cached_command_ = true;
+  }
+
+  last_command_ = clamped;
+  have_last_command_ = true;
+}
+
+void LtDwaAdapterROS::cacheZeroCommand(const ros::Time& stamp)
+{
+  cacheCommand(Command{}, stamp, false);
+}
+
+void LtDwaAdapterROS::planningTimerCallback(const ros::TimerEvent&)
+{
+  const ros::Time now = ros::Time::now();
   if (!have_odom_)
   {
-    publishZeroCommand();
-    publishShadowCommand(Command{});
+    cacheZeroCommand(now);
     publishStatus("WAITING_FOR_ODOM");
     return;
   }
   if (!have_path_ || current_path_.empty())
   {
-    publishZeroCommand();
-    publishShadowCommand(Command{});
+    cacheZeroCommand(now);
     publishStatus("WAITING_FOR_PATH");
     return;
   }
   if (require_map_ && !have_map_)
   {
-    publishZeroCommand();
-    publishShadowCommand(Command{});
+    cacheZeroCommand(now);
     publishStatus("WAITING_FOR_MAP");
     return;
   }
@@ -311,15 +378,13 @@ void LtDwaAdapterROS::controlTimerCallback(const ros::TimerEvent&)
   RobotState state;
   if (!getRobotState(state))
   {
-    publishZeroCommand();
-    publishShadowCommand(Command{});
+    cacheZeroCommand(now);
     publishStatus("TF_ERROR");
     return;
   }
   if (goalCloseEnough(state))
   {
-    publishZeroCommand();
-    publishShadowCommand(Command{});
+    cacheZeroCommand(now);
     publishLocalPlan(TrajectoryCandidate{});
     publishStatus("GOAL_REACHED");
     return;
@@ -327,17 +392,17 @@ void LtDwaAdapterROS::controlTimerCallback(const ros::TimerEvent&)
 
   const nav_msgs::OccupancyGrid* map = have_map_ ? &latest_map_ : nullptr;
   const PlanResult result = planner_.plan(state, current_path_, map);
+  const ros::Time result_stamp = ros::Time::now();
   publishLocalPlan(result.best);
   if (result.valid && result.status == "TRACKING")
   {
-    publishShadowCommand(result.command);
-    publishCommand(result.command);
+    cacheCommand(result.command, result_stamp, true);
   }
   else
   {
-    publishShadowCommand(Command{});
-    publishZeroCommand();
+    cacheZeroCommand(result_stamp);
   }
+
   std::string status = formatStatus(result);
   if (have_goal_)
   {
@@ -351,17 +416,21 @@ void LtDwaAdapterROS::controlTimerCallback(const ros::TimerEvent&)
   publishStatus(status);
 }
 
+void LtDwaAdapterROS::commandPublishTimerCallback(const ros::TimerEvent&)
+{
+  const Command command = commandForPublish(ros::Time::now());
+  publishShadowCommand(command);
+  publishCommand(command);
+}
+
 void LtDwaAdapterROS::publishCommand(const Command& command)
 {
   if (!publish_cmd_vel_)
     return;
+  const Command clamped = clampCommand(command);
   geometry_msgs::Twist msg;
-  const double min_v = planner_config_.limits.allow_reverse ? -planner_config_.limits.v_max_mps : 0.0;
-  msg.linear.x = clamp(command.v, min_v, planner_config_.limits.v_max_mps);
-  msg.angular.z = clamp(command.omega, -planner_config_.limits.omega_max_radps, planner_config_.limits.omega_max_radps);
-  last_command_.v = msg.linear.x;
-  last_command_.omega = msg.angular.z;
-  have_last_command_ = true;
+  msg.linear.x = clamped.v;
+  msg.angular.z = clamped.omega;
   cmd_pub_.publish(msg);
 }
 
@@ -376,13 +445,10 @@ void LtDwaAdapterROS::publishShadowCommand(const Command& command)
 {
   if (!publish_shadow_cmd_)
     return;
+  const Command clamped = clampCommand(command);
   geometry_msgs::Twist msg;
-  const double min_v = planner_config_.limits.allow_reverse ? -planner_config_.limits.v_max_mps : 0.0;
-  msg.linear.x = clamp(command.v, min_v, planner_config_.limits.v_max_mps);
-  msg.angular.z = clamp(command.omega, -planner_config_.limits.omega_max_radps, planner_config_.limits.omega_max_radps);
-  last_command_.v = msg.linear.x;
-  last_command_.omega = msg.angular.z;
-  have_last_command_ = true;
+  msg.linear.x = clamped.v;
+  msg.angular.z = clamped.omega;
   shadow_cmd_pub_.publish(msg);
 }
 

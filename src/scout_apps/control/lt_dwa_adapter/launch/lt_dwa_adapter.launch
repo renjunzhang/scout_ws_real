@@ -9,6 +9,9 @@
   <arg name="goal_topic" default="/scout/goal" />
   <arg name="base_frame" default="base_link" />
   <arg name="plan_target_frame" default="map" />
+  <arg name="planning_frequency" default="10.0" />
+  <arg name="command_publish_frequency" default="25.0" />
+  <arg name="command_stale_timeout_sec" default="2.0" />
 
   <node pkg="lt_dwa_adapter" type="lt_dwa_adapter_node" name="lt_dwa_adapter_node" output="screen">
     <rosparam command="load" file="$(arg config)" />
@@ -21,5 +24,8 @@
     <param name="goal_topic" value="$(arg goal_topic)" />
     <param name="base_frame" value="$(arg base_frame)" />
     <param name="plan_target_frame" value="$(arg plan_target_frame)" />
+    <param name="planning_frequency" value="$(arg planning_frequency)" />
+    <param name="command_publish_frequency" value="$(arg command_publish_frequency)" />
+    <param name="command_stale_timeout_sec" value="$(arg command_stale_timeout_sec)" />
   </node>
 </launch>
