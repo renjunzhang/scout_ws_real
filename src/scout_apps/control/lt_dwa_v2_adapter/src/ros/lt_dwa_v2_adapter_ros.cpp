@@ -396,9 +396,12 @@ void LtDwaV2AdapterROS::planningTimerCallback(const ros::TimerEvent&)
   const double min_progress_s = have_last_progress_ ?
                                     std::max(0.0, last_progress_s_ - config_.tracking.progress_rollback_tolerance_m) :
                                     0.0;
+  // First acquisition may start on a fixed global path whose stored beginning is
+  // not colocated with the robot. Search the whole path once, but keep the
+  // normal max_tracking_deviation_m gate inside the planner before arming.
   const double max_progress_s = have_last_progress_ ?
                                     last_progress_s_ + config_.tracking.max_progress_advance_per_step_m :
-                                    config_.tracking.lookahead_distance_m;
+                                    -1.0;
   PlanResult result = planner_.plan(state, current_path_, occupancy_adapter.hasGrid() ? &occupancy_adapter : nullptr,
                                     min_progress_s, max_progress_s);
   result.diagnostics.plan_map_transform_ok = plan_map_transform_ok;

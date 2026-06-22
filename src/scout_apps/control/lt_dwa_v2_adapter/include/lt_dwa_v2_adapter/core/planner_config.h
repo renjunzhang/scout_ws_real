@@ -58,9 +58,9 @@ struct GoalConfig
 struct TrackingConfig
 {
   double max_tracking_deviation_m = 1.50;
-  double lookahead_distance_m = 0.55;
+  double lookahead_distance_m = 0.35;
   double progress_rollback_tolerance_m = 0.35;
-  double max_progress_advance_per_step_m = 0.35;
+  double max_progress_advance_per_step_m = 0.20;
   double cross_track_heading_gain = 1.40;
   double tracking_slowdown_lateral_m = 0.35;
   double tracking_slowdown_heading_rad = 0.65;

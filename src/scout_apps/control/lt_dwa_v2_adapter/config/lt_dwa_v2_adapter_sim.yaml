@@ -39,9 +39,9 @@ goal:
 
 tracking:
   max_tracking_deviation_m: 1.50
-  lookahead_distance_m: 0.55
+  lookahead_distance_m: 0.35
   progress_rollback_tolerance_m: 0.35
-  max_progress_advance_per_step_m: 0.35
+  max_progress_advance_per_step_m: 0.20
   cross_track_heading_gain: 1.40
   tracking_slowdown_lateral_m: 0.35
   tracking_slowdown_heading_rad: 0.65

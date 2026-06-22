@@ -5,6 +5,14 @@
 
 namespace lt_dwa_v2_adapter
 {
+namespace
+{
+double rankingCost(const TrajectoryCandidate& candidate)
+{
+  return candidate.total_cost - candidate.progress_s;
+}
+}  // namespace
+
 FrontierPruner::FrontierPruner(const SearchConfig& config)
 {
   configure(config);
@@ -37,6 +45,10 @@ const TrajectoryCandidate* FrontierPruner::best(const std::vector<TrajectoryCand
 
 bool FrontierPruner::better(const TrajectoryCandidate& a, const TrajectoryCandidate& b) const
 {
+  const double a_rank = rankingCost(a);
+  const double b_rank = rankingCost(b);
+  if (std::abs(a_rank - b_rank) > 1e-9)
+    return a_rank < b_rank;
   if (std::abs(a.total_cost - b.total_cost) > 1e-9)
     return a.total_cost < b.total_cost;
   if (std::abs(a.progress_s - b.progress_s) > 1e-9)

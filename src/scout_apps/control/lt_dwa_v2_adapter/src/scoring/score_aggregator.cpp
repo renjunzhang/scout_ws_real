@@ -60,8 +60,7 @@ ScoreContext ScoreAggregator::makeContext(const RobotState& state,
   context.previous_command = previous_command;
   context.previous_progress_s = previous_progress_s;
 
-  const double min_progress_s =
-      std::max(0.0, previous_progress_s - config_.tracking.progress_rollback_tolerance_m);
+  const double min_progress_s = std::max(0.0, previous_progress_s);
   const double max_progress_s = previous_progress_s + config_.tracking.max_progress_advance_per_step_m;
   context.match = path.project(state, min_progress_s, max_progress_s);
   context.goal = path.sampleByProgress(path.totalLength());
@@ -86,10 +85,13 @@ ScoreContext ScoreAggregator::makeContext(const RobotState& state,
                                          config_.tracking.lookahead_distance_m);
   const double target_heading = std::atan2(context.target.y - state.y, context.target.x - state.x);
   context.target_heading_error = std::abs(normalizeAngle(target_heading - state.yaw));
-  context.tracking_heading_error = std::max(context.path_heading_error, context.target_heading_error);
-  context.progress_gate = clamp01(1.0 - context.lateral_ratio) *
-                          std::max(0.0, std::cos(std::min(M_PI / 2.0, context.target_heading_error)));
   context.terminal_xy_gate = clamp01(1.0 - context.remaining_progress_s / 1.0);
+  context.tracking_heading_error = context.terminal_xy_gate > 0.5 ? context.target_heading_error :
+                                                                  std::max(context.path_heading_error,
+                                                                           context.target_heading_error);
+  const double lateral_progress_gate = clamp01(1.0 - 0.70 * context.lateral_ratio);
+  const double heading_progress_gate = clamp01(std::cos(std::min(M_PI / 2.0, context.target_heading_error)));
+  context.progress_gate = std::max(0.25, lateral_progress_gate) * std::max(0.20, heading_progress_gate);
   return context;
 }
 

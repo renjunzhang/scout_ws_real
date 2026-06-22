@@ -68,7 +68,7 @@ Command LtDwaV2Planner::pathTrackingSeed(const RobotState& state,
   if (path.empty())
     return seed;
 
-  const double min_progress_s = std::max(0.0, previous_progress_s - config_.tracking.progress_rollback_tolerance_m);
+  const double min_progress_s = std::max(0.0, previous_progress_s);
   const double max_progress_s = previous_progress_s + config_.tracking.max_progress_advance_per_step_m;
   const PathProjection match = path.project(state, min_progress_s, max_progress_s);
   if (!match.valid)
@@ -83,7 +83,9 @@ Command LtDwaV2Planner::pathTrackingSeed(const RobotState& state,
                                                std::max(0.20, config_.tracking.lookahead_distance_m));
   const double corrected_path_heading = normalizeAngle(match.pose.yaw + lateral_correction);
   const double cross_track_error = normalizeAngle(corrected_path_heading - state.yaw);
-  const double heading_error = normalizeAngle(0.45 * pure_pursuit_error + 0.55 * cross_track_error);
+  const double terminal_blend = terminal_dist < 1.0 ? 0.75 : 0.20;
+  const double heading_error = normalizeAngle(terminal_blend * pure_pursuit_error +
+                                             (1.0 - terminal_blend) * cross_track_error);
   const double tracking_heading_error = std::max(std::abs(pure_pursuit_error), std::abs(cross_track_error));
   const double yaw_gain = match.distance > config_.tracking.tracking_slowdown_lateral_m ?
                               2.2 :
@@ -94,7 +96,9 @@ Command LtDwaV2Planner::pathTrackingSeed(const RobotState& state,
   const double lateral_speed_scale =
       clamp(1.0 - match.distance / std::max(0.10, config_.tracking.max_tracking_deviation_m), 0.10, 1.0);
   const double approach_scale = clamp(terminal_dist / 0.75, 0.15, 1.0);
-  const double desired_v = config_.limits.v_max_mps * heading_speed_scale * lateral_speed_scale * approach_scale;
+  double desired_v = config_.limits.v_max_mps * heading_speed_scale * lateral_speed_scale * approach_scale;
+  if (terminal_dist > config_.goal.xy_tolerance_m && tracking_heading_error < 1.20)
+    desired_v = std::max(desired_v, 0.12 * config_.limits.v_max_mps);
 
   const DynamicWindow window = sampler_.windowFor(state);
   seed.v = clamp(desired_v, window.min_v, window.max_v);

@@ -10,6 +10,7 @@ import argparse
 import bisect
 import csv
 import math
+import re
 from pathlib import Path
 from statistics import mean
 
@@ -35,6 +36,10 @@ STATUS_TOPICS = (
     "/baseline/lt_dwa/status",
     "/baseline/lt_dwa_v2/status",
     "/mpc_status",
+)
+
+DIAGNOSTIC_TOPICS = (
+    "/baseline/lt_dwa_v2/diagnostics",
 )
 
 WAITING_STATUS_KEYS = (
@@ -203,6 +208,22 @@ def path_topic_from_meta(meta, default="/scout/global_path_fixed"):
 
 
 
+def cmd_topic_from_meta(meta, default="/cmd_vel"):
+    return meta.get("cmd_vel_topic", default)
+
+
+
+def parse_key_value_float(text, key):
+    match = re.search(r"(?:^|\s)" + re.escape(key) + r"=([-+0-9.eE]+)", text)
+    if not match:
+        return nan()
+    try:
+        return float(match.group(1))
+    except ValueError:
+        return nan()
+
+
+
 def path_points(path_msg):
     pts = []
     for pose in path_msg.poses:
@@ -285,11 +306,13 @@ def latest_string_sample(samples, t):
 
 
 
-def read_bag_series(bag_path, path_topic, terminal_threshold, reached_threshold):
+def read_bag_series(bag_path, path_topic, cmd_topic, terminal_threshold, reached_threshold):
     data = {
         "path": [],
         "odom": [],
         "cmd": [],
+        "cmd_topic": cmd_topic,
+        "cmd_topics": set(),
         "slosh_height_mm": [],
         "eta_dot_norm": [],
         "solve_time_ms": [],
@@ -303,10 +326,14 @@ def read_bag_series(bag_path, path_topic, terminal_threshold, reached_threshold)
         "start_time": nan(),
         "eval": {},
     }
+    cmd_topics = ["/cmd_vel"]
+    if cmd_topic and cmd_topic not in cmd_topics:
+        cmd_topics.append(cmd_topic)
+
     candidate_topics = [
         path_topic,
         "/odom",
-        "/cmd_vel",
+        *cmd_topics,
         "/spmpc/slosh_height",
         "/slosh/height",
         "/spmpc/debug/slosh_state",
@@ -317,6 +344,7 @@ def read_bag_series(bag_path, path_topic, terminal_threshold, reached_threshold)
         "/spmpc/terminal/debug",
         "/spmpc/terminal/mode",
         *STATUS_TOPICS,
+        *DIAGNOSTIC_TOPICS,
     ]
     with rosbag.Bag(str(bag_path), "r") as bag:
         data["start_time"] = bag.get_start_time()
@@ -341,8 +369,9 @@ def read_bag_series(bag_path, path_topic, terminal_threshold, reached_threshold)
                         "omega": float(twist.angular.z),
                     }
                 )
-            elif topic == "/cmd_vel":
+            elif topic in cmd_topics:
                 data["cmd"].append({"t": t, "v": float(msg.linear.x), "omega": float(msg.angular.z)})
+                data["cmd_topics"].add(topic)
             elif topic == "/spmpc/slosh_height":
                 value = float(getattr(msg, "data", nan()))
                 data["slosh_height_mm"].append((t, value))
@@ -374,8 +403,33 @@ def read_bag_series(bag_path, path_topic, terminal_threshold, reached_threshold)
                         }
                     )
             elif topic in STATUS_TOPICS:
-                data["status"].append((t, str(getattr(msg, "data", ""))))
+                status_text = str(getattr(msg, "data", ""))
+                data["status"].append((t, status_text))
                 data["status_topics"].add(topic)
+                status_goal_dist = parse_key_value_float(status_text, "goal_dist")
+                if math.isfinite(status_goal_dist):
+                    data["terminal_debug"].append(
+                        terminal_debug_sample(
+                            t,
+                            terminal_phase=status_goal_dist <= terminal_threshold,
+                            pre_terminal_phase=status_goal_dist > terminal_threshold,
+                            reached=status_window(status_text) == "reached" and status_goal_dist <= reached_threshold,
+                            distance_to_goal=status_goal_dist,
+                            source="status_goal_dist",
+                        )
+                    )
+            elif topic in DIAGNOSTIC_TOPICS:
+                diagnostic_text = str(getattr(msg, "data", ""))
+                match_dist = parse_key_value_float(diagnostic_text, "match_dist")
+                match_heading_err = parse_key_value_float(diagnostic_text, "match_heading_err")
+                if math.isfinite(match_dist) or math.isfinite(match_heading_err):
+                    data["stage0_reference"].append(
+                        {
+                            "t": t,
+                            "yaw_error": abs(match_heading_err) if math.isfinite(match_heading_err) else nan(),
+                            "contour_error": abs(match_dist) if math.isfinite(match_dist) else nan(),
+                        }
+                    )
             elif topic == "/spmpc/terminal/mode":
                 data["terminal_mode"].append((t, str(getattr(msg, "data", ""))))
             elif topic == "/spmpc/terminal/debug":
@@ -736,15 +790,17 @@ def summarize_bag_phase(bag_path, data, meta, method, phase):
         "motion_start_sec": rel_time(data, eval_info.get("motion_start_sec", nan())),
         "window_source": eval_info.get("window_source", ""),
         "status_topic_used": eval_info.get("status_topic_used", ""),
+        "cmd_topic_used": data.get("cmd_topic", "/cmd_vel"),
         "has_legacy_mpc_status": eval_info.get("has_legacy_mpc_status", 0),
         "has_eval_window": eval_info.get("has_eval_window", 0),
         "reached_tail_duration_s": window_duration(data, "reached"),
         "has_odom": int("/odom" in data["topics"]),
-        "has_cmd_vel": int("/cmd_vel" in data["topics"]),
+        "has_cmd_vel": int(data.get("cmd_topic", "/cmd_vel") in data["topics"] or bool(data.get("cmd_topics"))),
         "has_path": int(path_topic_from_meta(meta) in data["topics"] or bool(data["path"])),
         "has_slosh_state": int("/spmpc/debug/slosh_state" in data["topics"] or "/slosh/state" in data["topics"]),
         "has_spmpc_projector": int("/spmpc/debug/projector" in data["topics"]),
         "has_spmpc_stage0_reference": int("/spmpc/debug/stage0_reference" in data["topics"]),
+        "has_lt_dwa_v2_diagnostics": int(any(topic in data["topics"] for topic in DIAGNOSTIC_TOPICS)),
         "has_spmpc_terminal_debug": int("/spmpc/terminal/debug" in data["topics"]),
         "has_slosh_height": int(bool(data["slosh_height_mm"])),
     }
@@ -894,8 +950,9 @@ def main():
         meta = read_meta_for_bag(bag_path)
         method = infer_method(bag_path, meta)
         path_topic = path_topic_from_meta(meta, args.path_topic)
+        cmd_topic = cmd_topic_from_meta(meta)
         print(f"[bag] {bag_path} method={method}")
-        data = read_bag_series(bag_path, path_topic, args.terminal_distance, args.reached_distance)
+        data = read_bag_series(bag_path, path_topic, cmd_topic, args.terminal_distance, args.reached_distance)
         annotate_eval_windows(data, args.motion_threshold, args.motion_consecutive)
         for phase in phases:
             all_rows.append(summarize_bag_phase(bag_path, data, meta, method, phase))
