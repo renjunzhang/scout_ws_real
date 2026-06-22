@@ -251,7 +251,13 @@ bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
 
     const double e_c_ref = std::max(1e-3, 0.5 * params_.corridor_width);
     const double e_l_ref = std::max(0.1, params_.v_max * input.dt);
-    const double v_ref = clampValue(variant_.v_ref, 0.0, params_.v_max);
+    const double requested_v_ref = input.has_v_ref_current ? input.v_ref_current : variant_.v_ref;
+    const double v_ref = clampValue(requested_v_ref, 0.0, params_.v_max);
+    output.v_ref_debug.configured = variant_.v_ref;
+    output.v_ref_debug.requested = requested_v_ref;
+    output.v_ref_debug.effective = v_ref;
+    output.v_ref_debug.runtime_override = input.has_v_ref_current;
+    output.v_ref_debug.status = input.v_ref_status;
 
     // slosh 物理：与 primitive / 主线同一套 slosh_dynamics 核（§4.3），κ=1。
     double c_h = 1.0, eta_ref = 1.0, eta_dot_ref = 1.0;

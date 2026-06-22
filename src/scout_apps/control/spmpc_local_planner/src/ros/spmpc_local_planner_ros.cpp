@@ -1,8 +1,13 @@
 #include "spmpc_local_planner/ros/spmpc_local_planner_ros.h"
 #include "spmpc_local_planner/solvers/solver_factory.h"
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
 #include <string>
+#include <vector>
 #include <geometry_msgs/TransformStamped.h>
 #include <tf2/utils.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
@@ -33,6 +38,49 @@ void appendPolicyError(std::string& reason, const std::string& message) {
         reason += "; ";
     }
     reason += message;
+}
+
+std::string trimCopy(const std::string& value) {
+    std::size_t begin = 0;
+    while (begin < value.size() && std::isspace(static_cast<unsigned char>(value[begin]))) {
+        ++begin;
+    }
+    std::size_t end = value.size();
+    while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+        --end;
+    }
+    return value.substr(begin, end - begin);
+}
+
+std::vector<std::string> splitCsvSimple(const std::string& line) {
+    std::vector<std::string> cells;
+    std::stringstream ss(line);
+    std::string cell;
+    while (std::getline(ss, cell, ',')) {
+        cells.push_back(trimCopy(cell));
+    }
+    return cells;
+}
+
+bool parseDoubleStrict(const std::string& text, double& value) {
+    const std::string trimmed = trimCopy(text);
+    if (trimmed.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    value = std::strtod(trimmed.c_str(), &end);
+    return end != trimmed.c_str() && *end == '\0' && std::isfinite(value);
+}
+
+int findColumn(const std::vector<std::string>& header, const std::vector<std::string>& names) {
+    for (std::size_t i = 0; i < header.size(); ++i) {
+        for (const auto& name : names) {
+            if (header[i] == name) {
+                return static_cast<int>(i);
+            }
+        }
+    }
+    return -1;
 }
 
 bool validateBackendPolicy(const SolverParams& params,
@@ -332,6 +380,183 @@ void SpmpcLocalPlannerROS::spin() {
     ros::spin();
 }
 
+void SpmpcLocalPlannerROS::resetMapVRefProgress() {
+    map_vref_last_progress_abs_s_ = 0.0;
+    have_map_vref_progress_ = false;
+}
+
+bool SpmpcLocalPlannerROS::loadMapVRefProfile(const std::string& path) {
+    std::ifstream in(path);
+    if (!in.is_open()) {
+        ROS_WARN("[spmpc_local_planner] map_vref profile open failed: %s", path.c_str());
+        return false;
+    }
+
+    std::vector<MapVRefProfileSample> samples;
+    bool header_parsed = false;
+    bool have_header = false;
+    int s_col = 0;
+    int v_col = 1;
+    std::string line;
+    int line_no = 0;
+    while (std::getline(in, line)) {
+        ++line_no;
+        const std::string trimmed = trimCopy(line);
+        if (trimmed.empty() || trimmed[0] == '#') {
+            continue;
+        }
+        const auto cells = splitCsvSimple(trimmed);
+        if (cells.empty()) {
+            continue;
+        }
+
+        if (!header_parsed) {
+            double first = 0.0;
+            double second = 0.0;
+            if (cells.size() >= 2 && parseDoubleStrict(cells[0], first) && parseDoubleStrict(cells[1], second)) {
+                header_parsed = true;
+            } else {
+                have_header = true;
+                header_parsed = true;
+                s_col = findColumn(cells, {"s_m", "s", "progress_s_m"});
+                v_col = findColumn(cells, {"v_ref_map_mps", "v_ref_current_mps", "v_ref_mps", "v_safe_mps"});
+                if (s_col < 0 || v_col < 0) {
+                    ROS_WARN("[spmpc_local_planner] map_vref profile header must include s_m and v_ref_map_mps: %s", path.c_str());
+                    return false;
+                }
+                continue;
+            }
+        }
+
+        if (have_header && (static_cast<int>(cells.size()) <= std::max(s_col, v_col))) {
+            ROS_WARN("[spmpc_local_planner] map_vref profile skip short row %d in %s", line_no, path.c_str());
+            continue;
+        }
+        const int s_index = have_header ? s_col : 0;
+        const int v_index = have_header ? v_col : 1;
+        double s_m = 0.0;
+        double v_ref_mps = 0.0;
+        if (static_cast<int>(cells.size()) <= std::max(s_index, v_index) ||
+            !parseDoubleStrict(cells[s_index], s_m) ||
+            !parseDoubleStrict(cells[v_index], v_ref_mps)) {
+            ROS_WARN("[spmpc_local_planner] map_vref profile skip invalid row %d in %s", line_no, path.c_str());
+            continue;
+        }
+        if (s_m < 0.0 || v_ref_mps < 0.0) {
+            ROS_WARN("[spmpc_local_planner] map_vref profile skip negative row %d in %s", line_no, path.c_str());
+            continue;
+        }
+        samples.push_back({s_m, v_ref_mps});
+    }
+
+    if (samples.empty()) {
+        ROS_WARN("[spmpc_local_planner] map_vref profile has no valid samples: %s", path.c_str());
+        return false;
+    }
+    std::sort(samples.begin(), samples.end(), [](const auto& a, const auto& b) {
+        return a.s_m < b.s_m;
+    });
+    std::vector<MapVRefProfileSample> deduped;
+    deduped.reserve(samples.size());
+    for (const auto& sample : samples) {
+        if (!deduped.empty() && std::abs(sample.s_m - deduped.back().s_m) < 1e-9) {
+            deduped.back() = sample;
+        } else {
+            deduped.push_back(sample);
+        }
+    }
+
+    map_vref_profile_ = deduped;
+    map_vref_profile_path_ = path;
+    map_vref_profile_loaded_ = true;
+    ROS_INFO("[spmpc_local_planner] loaded map_vref profile %s with %zu samples", path.c_str(), map_vref_profile_.size());
+    return true;
+}
+
+bool SpmpcLocalPlannerROS::ensureMapVRefProfileLoaded(const std::string& path) {
+    if (path.empty()) {
+        map_vref_profile_loaded_ = false;
+        map_vref_profile_path_.clear();
+        map_vref_profile_.clear();
+        return false;
+    }
+    if (map_vref_profile_loaded_ && path == map_vref_profile_path_) {
+        return true;
+    }
+    map_vref_profile_loaded_ = false;
+    map_vref_profile_.clear();
+    map_vref_profile_path_.clear();
+    return loadMapVRefProfile(path);
+}
+
+bool SpmpcLocalPlannerROS::lookupMapVRef(double s_m, double& v_ref_mps) const {
+    if (map_vref_profile_.empty() || !std::isfinite(s_m)) {
+        return false;
+    }
+    if (s_m <= map_vref_profile_.front().s_m) {
+        v_ref_mps = map_vref_profile_.front().v_ref_mps;
+        return true;
+    }
+    if (s_m >= map_vref_profile_.back().s_m) {
+        v_ref_mps = map_vref_profile_.back().v_ref_mps;
+        return true;
+    }
+    const auto upper = std::lower_bound(
+        map_vref_profile_.begin(), map_vref_profile_.end(), s_m,
+        [](const MapVRefProfileSample& sample, double value) { return sample.s_m < value; });
+    if (upper == map_vref_profile_.begin() || upper == map_vref_profile_.end()) {
+        return false;
+    }
+    const auto lower = upper - 1;
+    const double ds = upper->s_m - lower->s_m;
+    if (ds <= 1e-9) {
+        v_ref_mps = upper->v_ref_mps;
+        return true;
+    }
+    const double ratio = (s_m - lower->s_m) / ds;
+    v_ref_mps = lower->v_ref_mps + ratio * (upper->v_ref_mps - lower->v_ref_mps);
+    return std::isfinite(v_ref_mps);
+}
+
+void SpmpcLocalPlannerROS::applyRuntimeVRef(SolverInput& input) {
+    bool runtime_v_ref_enable = false;
+    double runtime_v_ref = -1.0;
+    pnh_.param("map_vref/runtime_v_ref_enable", runtime_v_ref_enable, runtime_v_ref_enable);
+    pnh_.param("map_vref/runtime_v_ref", runtime_v_ref, runtime_v_ref);
+    if (runtime_v_ref_enable && std::isfinite(runtime_v_ref) && runtime_v_ref >= 0.0) {
+        input.has_v_ref_current = true;
+        input.v_ref_current = runtime_v_ref;
+        input.v_ref_status = "RUNTIME_OVERRIDE";
+        return;
+    }
+
+    bool profile_enable = false;
+    std::string profile_path;
+    double profile_lookahead_s = 0.0;
+    pnh_.param("map_vref/profile_enable", profile_enable, profile_enable);
+    pnh_.param("map_vref/profile_path", profile_path, profile_path);
+    pnh_.param("map_vref/profile_lookahead_s", profile_lookahead_s, profile_lookahead_s);
+    if (!profile_enable) {
+        input.v_ref_status = "VARIANT_FALLBACK";
+        return;
+    }
+    if (!ensureMapVRefProfileLoaded(profile_path)) {
+        input.v_ref_status = profile_path.empty() ? "PROFILE_NOT_CONFIGURED" : "PROFILE_LOAD_FAILED";
+        return;
+    }
+
+    const double current_s = have_map_vref_progress_ ? map_vref_last_progress_abs_s_ : 0.0;
+    const double lookup_s = current_s + std::max(0.0, profile_lookahead_s);
+    double profile_v_ref = 0.0;
+    if (!lookupMapVRef(lookup_s, profile_v_ref)) {
+        input.v_ref_status = "PROFILE_LOOKUP_FAILED";
+        return;
+    }
+    input.has_v_ref_current = true;
+    input.v_ref_current = profile_v_ref;
+    input.v_ref_status = "PROFILE_LOOKUP";
+}
+
 void SpmpcLocalPlannerROS::publishZeroCommand() {
     if (!publish_cmd_vel_) {
         return;
@@ -558,6 +783,7 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
         if (updateReferenceSignature(transformed_path)) {
             resetTerminalSpinFailGate();
             resetTrackingSafetyGate();
+            resetMapVRefProgress();
         }
         problem_.setReferencePath(referencePathFromMsg(transformed_path));
         return;
@@ -567,6 +793,7 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
     if (updateReferenceSignature(*msg)) {
         resetTerminalSpinFailGate();
         resetTrackingSafetyGate();
+        resetMapVRefProgress();
     }
     problem_.setReferencePath(reference);
 }
@@ -605,8 +832,14 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     input.dt = dt_;
     input.horizon_steps = horizon_steps_;
 
+    applyRuntimeVRef(input);
+
     SolverOutput output;
     problem_.solve(input, output);
+    if (std::isfinite(output.progress_abs_s)) {
+        map_vref_last_progress_abs_s_ = output.progress_abs_s;
+        have_map_vref_progress_ = true;
+    }
     double spin_gate_dt = dt_;
     if (!event.last_real.isZero() && !event.current_real.isZero()) {
         spin_gate_dt = (event.current_real - event.last_real).toSec();

@@ -11,6 +11,8 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     solver_backend_pub_ = nh.advertise<std_msgs::String>("solver_backend", 1, true);
     trajectory_pub_ = nh.advertise<nav_msgs::Path>("local_trajectory", 1, true);
     progress_pub_ = nh.advertise<std_msgs::Float32>("debug/progress_s", 1);
+    v_ref_current_pub_ = nh.advertise<std_msgs::Float32>("debug/v_ref_current", 1);
+    map_vref_status_pub_ = nh.advertise<std_msgs::String>("debug/map_vref_status", 1);
     solver_time_pub_ = nh.advertise<std_msgs::Float32>("solver_time_ms", 1);
     cost_breakdown_pub_ = nh.advertise<std_msgs::Float32MultiArray>("cost_breakdown", 1);
     corridor_pub_ = nh.advertise<std_msgs::Float32MultiArray>("corridor", 1);
@@ -95,6 +97,16 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     std_msgs::Float32 progress;
     progress.data = static_cast<float>(output.progress_s);
     progress_pub_.publish(progress);
+
+    std_msgs::Float32 v_ref_current;
+    v_ref_current.data = static_cast<float>(output.v_ref_debug.effective);
+    v_ref_current_pub_.publish(v_ref_current);
+
+    std_msgs::String map_vref_status;
+    map_vref_status.data = output.v_ref_debug.status.empty()
+                               ? (output.v_ref_debug.runtime_override ? "RUNTIME_OVERRIDE" : "VARIANT_FALLBACK")
+                               : output.v_ref_debug.status;
+    map_vref_status_pub_.publish(map_vref_status);
 
     std_msgs::Float32 solver_ms;
     solver_ms.data = static_cast<float>(output.solver_time_ms);

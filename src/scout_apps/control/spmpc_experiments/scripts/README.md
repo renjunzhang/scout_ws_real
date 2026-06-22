@@ -59,6 +59,7 @@ Hamaguchi/Lim 的 runtime chain 固定为：`offline profile generator -> profil
 | `run_fixed_path_paper_matrix.sh` | paper matrix 编排 | 编排 fixed-path internal ablation、external anchor、TEB/DWA 和可选 `B_accel`；默认提取窗口化 metrics。用于统一目录和 meta。 | 不启动/关闭 Gazebo；更适合 smoke 或手动 fresh-sim 单 case 调用，不适合直接连续跑 formal 数据。 |
 | `run_fixed_path_critical_sweep.sh` | fixed-path critical scenario 编排 | 对一个或多个 fixed path 调用 paper matrix，默认包含 `P2_s_curve`。 | 继承 paper matrix 限制；路径/方法批量编排不等于 fresh-sim formal runner。 |
 | `extract_fixed_path_paper_metrics.py` | 指标提取 | 从 fixed-path rosbag/meta 提取论文指标：success/stable、tracking、slosh height、cmd/odom speed、cmd acceleration、omega-rate、solver time、topic presence、evidence-chain meta 等。 | 离线分析脚本；不影响仿真环境。 |
+| `extract_map_vref_event_metrics.py` | Map-vref smoke 指标 | 从轻量 recorder CSV 与 Map-vref profile CSV 提取 PRE/EVENT/POST crossing、plateau speed 与 half-step response delay。 | 离线分析脚本；只证明 Map-vref 软件链路，不作为 RGB/slosh formal evidence。 |
 | `run_p2p_baseline_smoke.sh` | P2P smoke | 用同一目标点和同一录包口径快速验证 `spmpc`、`teb`、`dwa`、`mpc`/`mpc_local_planner`。 | 前提是已经手动启动仿真与定位；主要用于 smoke，不作为 fixed-path 主线证据。 |
 | `run_p2p_paper_supplement.sh` | P2P supplement 编排 | 运行点到点补充实验，默认比较 `B0/B_ours` 与 TEB/DWA，可选 `mpc_local_planner`。 | 不负责 fresh-sim；P2P 是论文补充，不替代 fixed-path critical scenario。 |
 | `run_robustness_transfer_sweep.sh` | robustness/transfer 编排 | 统一鲁棒性/迁移实验目录和 meta，支持 nominal、yaw perturbation、`w_slosh_low/high` 等标签。 | yaw perturbation 需要用户先用对应 spawn yaw fresh 启动仿真；脚本只打印提示，不会自动改变仿真起点。 |

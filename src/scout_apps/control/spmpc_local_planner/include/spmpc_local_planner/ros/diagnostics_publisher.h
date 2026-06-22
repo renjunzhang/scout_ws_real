@@ -37,6 +37,8 @@ private:
     ros::Publisher solver_backend_pub_;
     ros::Publisher trajectory_pub_;
     ros::Publisher progress_pub_;
+    ros::Publisher v_ref_current_pub_;
+    ros::Publisher map_vref_status_pub_;
     ros::Publisher solver_time_pub_;
     ros::Publisher cost_breakdown_pub_;
     ros::Publisher corridor_pub_;

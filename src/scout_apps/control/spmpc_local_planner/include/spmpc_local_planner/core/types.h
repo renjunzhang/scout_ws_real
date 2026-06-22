@@ -220,6 +220,17 @@ struct SolverInput {
     double dt = 1.0 / 30.0;
     int horizon_steps = 60;
     double min_progress_s = 0.0;
+    bool has_v_ref_current = false;
+    double v_ref_current = 0.0;
+    std::string v_ref_status = "VARIANT_FALLBACK";
+};
+
+struct VRefDebugSummary {
+    double configured = 0.0;
+    double requested = 0.0;
+    double effective = 0.0;
+    bool runtime_override = false;
+    std::string status = "VARIANT_FALLBACK";
 };
 
 struct SolverOutput {
@@ -242,6 +253,7 @@ struct SolverOutput {
     FirstShotDebugSummary first_shot_debug;
     ProjectorDebugSummary projector_debug;
     Stage0ReferenceDebugSummary stage0_reference_debug;
+    VRefDebugSummary v_ref_debug;
     LocalTrajectoryHeadDebugSummary local_traj_head_debug;
     WarmStartHeadDebugSummary warm_start_head_debug;
     StartLockRecoveryDiagnostics start_lock_recovery;

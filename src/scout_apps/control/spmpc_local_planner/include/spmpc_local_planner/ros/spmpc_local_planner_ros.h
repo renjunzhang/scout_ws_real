@@ -13,8 +13,14 @@
 #include <tf2_ros/transform_listener.h>
 #include <cstddef>
 #include <string>
+#include <vector>
 
 namespace spmpc_local_planner {
+
+struct MapVRefProfileSample {
+    double s_m = 0.0;
+    double v_ref_mps = 0.0;
+};
 
 class SpmpcLocalPlannerROS {
 public:
@@ -49,6 +55,11 @@ private:
     bool updateReferenceSignature(const nav_msgs::Path& path);
     ReferencePath referencePathFromMsg(const nav_msgs::Path& path) const;
     CostmapGrid costmapFromMsg(const nav_msgs::OccupancyGrid& map) const;
+    bool loadMapVRefProfile(const std::string& path);
+    bool ensureMapVRefProfileLoaded(const std::string& path);
+    bool lookupMapVRef(double s_m, double& v_ref_mps) const;
+    void applyRuntimeVRef(SolverInput& input);
+    void resetMapVRefProgress();
     void loadVariantOverrides(const std::string& variant_name);
     SloshModelParams loadSloshParams() const;
 
@@ -75,6 +86,11 @@ private:
     bool have_odom_ = false;
     bool have_prev_odom_ = false;
     bool have_reference_signature_ = false;
+    std::string map_vref_profile_path_;
+    std::vector<MapVRefProfileSample> map_vref_profile_;
+    bool map_vref_profile_loaded_ = false;
+    double map_vref_last_progress_abs_s_ = 0.0;
+    bool have_map_vref_progress_ = false;
     std::string reference_signature_frame_;
     std::size_t reference_signature_size_ = 0;
     double reference_signature_start_x_ = 0.0;
