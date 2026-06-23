@@ -1,0 +1,81 @@
+<launch>
+  <!-- Safe wrapper-side overlay for the isolated Scout SOP. It does not launch or modify the simulator. -->
+  <arg name="planning_frame" default="map"/>
+  <arg name="input_odom_topic" default="/odom"/>
+  <arg name="map_frame_odom_topic" default="/baseline/official_lt_dwa/odom_map"/>
+  <arg name="map_topic" default="/map"/>
+  <arg name="path_topic" default="/scout/global_path_fixed"/>
+  <arg name="goal_topic" default="/scout/goal"/>
+  <arg name="shadow_cmd_topic" default="/baseline/official_lt_dwa/shadow_cmd_vel"/>
+  <arg name="status_topic" default="/baseline/official_lt_dwa/status"/>
+  <arg name="diagnostics_topic" default="/baseline/official_lt_dwa/diagnostics"/>
+  <arg name="global_plan_topic" default="/baseline/official_lt_dwa/global_plan"/>
+  <arg name="local_plan_topic" default="/baseline/official_lt_dwa/local_plan"/>
+  <arg name="worker_result_topic" default="/baseline/official_lt_dwa/worker_result"/>
+  <arg name="expected_map_file" default="/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream"/>
+  <arg name="scout_ws_root" default="$(optenv SCOUT_WS_ROOT /home/geist/scout_ws)"/>
+  <arg name="worker_executable" default="$(arg scout_ws_root)/devel/lib/lt_dwa_official_wrapper/lt_dwa_worker"/>
+  <arg name="runtime_request_dir" default="/tmp"/>
+
+  <arg name="target_frame" default="map"/>
+  <arg name="base_frame" default="base_link"/>
+  <arg name="lookup_timeout_sec" default="0.05"/>
+
+  <arg name="start_local_map_service" default="true"/>
+  <arg name="enable_worker_core" default="true"/>
+  <arg name="planner_rate_hz" default="5.0"/>
+  <arg name="command_publish_rate_hz" default="30.0"/>
+  <arg name="command_stale_timeout_sec" default="0.6"/>
+  <arg name="input_stale_timeout_sec" default="0.5"/>
+  <arg name="worker_timeout_sec" default="1.0"/>
+
+  <arg name="enable_actuated_output" default="false"/>
+  <arg name="publish_cmd_vel" default="false"/>
+  <arg name="publish_benchmark_raw" default="false"/>
+  <arg name="cmd_vel_topic" default="/cmd_vel"/>
+  <arg name="benchmark_raw_topic" default="/benchmark/cmd_vel_raw"/>
+
+  <arg name="worker_tf_topic" default="/baseline/official_lt_dwa/worker_tf_sandbox"/>
+  <arg name="worker_tf_static_topic" default="/baseline/official_lt_dwa/worker_tf_static_sandbox"/>
+
+  <include if="$(arg start_local_map_service)" file="$(find local_map_generation)/launch/start.launch"/>
+
+  <node pkg="lt_dwa_official_wrapper" type="lt_dwa_map_frame_odom_adapter" name="lt_dwa_sop_map_frame_odom_adapter" output="screen">
+    <param name="input_odom_topic" value="$(arg input_odom_topic)"/>
+    <param name="output_odom_topic" value="$(arg map_frame_odom_topic)"/>
+    <param name="target_frame" value="$(arg target_frame)"/>
+    <param name="base_frame" value="$(arg base_frame)"/>
+    <param name="lookup_timeout_sec" value="$(arg lookup_timeout_sec)"/>
+    <param name="use_latest_tf" value="true"/>
+  </node>
+
+  <node pkg="lt_dwa_official_wrapper" type="lt_dwa_scout_bridge" name="lt_dwa_sop_scout_bridge" output="screen">
+    <param name="planning_frame" value="$(arg planning_frame)"/>
+    <param name="odom_topic" value="$(arg map_frame_odom_topic)"/>
+    <param name="map_topic" value="$(arg map_topic)"/>
+    <param name="path_topic" value="$(arg path_topic)"/>
+    <param name="goal_topic" value="$(arg goal_topic)"/>
+    <param name="shadow_cmd_topic" value="$(arg shadow_cmd_topic)"/>
+    <param name="status_topic" value="$(arg status_topic)"/>
+    <param name="diagnostics_topic" value="$(arg diagnostics_topic)"/>
+    <param name="global_plan_topic" value="$(arg global_plan_topic)"/>
+    <param name="local_plan_topic" value="$(arg local_plan_topic)"/>
+    <param name="worker_result_topic" value="$(arg worker_result_topic)"/>
+    <param name="expected_map_file" value="$(arg expected_map_file)"/>
+    <param name="worker_executable" value="$(arg worker_executable)"/>
+    <param name="runtime_request_dir" value="$(arg runtime_request_dir)"/>
+    <param name="enable_worker_core" value="$(arg enable_worker_core)"/>
+    <param name="planner_rate_hz" value="$(arg planner_rate_hz)"/>
+    <param name="command_publish_rate_hz" value="$(arg command_publish_rate_hz)"/>
+    <param name="command_stale_timeout_sec" value="$(arg command_stale_timeout_sec)"/>
+    <param name="input_stale_timeout_sec" value="$(arg input_stale_timeout_sec)"/>
+    <param name="worker_timeout_sec" value="$(arg worker_timeout_sec)"/>
+    <param name="enable_actuated_output" value="$(arg enable_actuated_output)"/>
+    <param name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>
+    <param name="publish_benchmark_raw" value="$(arg publish_benchmark_raw)"/>
+    <param name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
+    <param name="benchmark_raw_topic" value="$(arg benchmark_raw_topic)"/>
+    <param name="worker_tf_topic" value="$(arg worker_tf_topic)"/>
+    <param name="worker_tf_static_topic" value="$(arg worker_tf_static_topic)"/>
+  </node>
+</launch>

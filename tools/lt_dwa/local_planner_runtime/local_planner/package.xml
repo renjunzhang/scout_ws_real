@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>local_planner</name>
+  <version>0.0.0</version>
+  <description>Runtime-only local_planner package path for isolated LT-DWA worker core calls.</description>
+  <maintainer email="noreply@example.com">Scout LT-DWA Wrapper</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>catkin</buildtool_depend>
+</package>

@@ -1,0 +1,16 @@
+# Frozen offline worker request fixture for Phase 3F.
+# Safety: this file is self-contained and must not start or touch Scout simulation.
+LT_DWA_WORKER_REQUEST_V1
+now 50.1
+planning_frame odom
+stamp 50
+robot_pose odom 50 0 0 0
+robot_twist 0 0
+target_pose odom 50 1 0 0
+path_count 3
+path odom 50 0 0 0
+path odom 50 0.5 0 0
+path odom 50 1 0 0
+map odom 50 5 5 0.1 -0.2 -0.2 0
+map_data 25 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+obstacle_count 0
