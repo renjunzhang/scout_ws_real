@@ -39,7 +39,7 @@ SIM_ENV=open USE_RVIZ=true \
 | fallback MPC | `mpc_local_planner` | `config/baselines/mpc_local_planner_standalone_sim.yaml` | `run_fixed_path_baseline_suite.sh`，需 opt-in | `src/scout_apps/control/mpc_local_planner/` | fallback / supplement |
 | profile baseline | Hamaguchi | `config/profile_baselines/hamaguchi_profile.yaml` | `run_fixed_path_profile_baseline_suite.sh` | wrapper `scout_profile_baselines/scripts/generate_hamaguchi_profile.py` -> impl `scripts/hamaguchi/generate_profile.py` | supplementary profile baseline |
 | profile baseline | Lim | `config/profile_baselines/lim_profile.yaml` | `run_fixed_path_profile_baseline_suite.sh` | wrapper `scout_profile_baselines/scripts/generate_lim_style_profile.py` -> impl `scripts/lim/generate_profile.py` | supplementary profile baseline |
-| advanced candidate | LT-DWA | `config/benchmark/capability_matrix.yaml` | readiness check only | `third_party/LT_DWA/` source-only，adapter pending | candidate，未通过前不进表 |
+| advanced candidate | LT-DWA | `config/baselines/lt_dwa_official_wrapper_standalone_sim.yaml` + `config/benchmark/capability_matrix.yaml` | `run_fixed_path_baseline_suite.sh` + readiness gate | `src/scout_apps/control/lt_dwa_official_wrapper/` + `third_party/LT_DWA/` source-only vendor | official wrapper；未通过 strict gate 前不进表 |
 | advanced candidate | `src/mpc_planner` | `config/benchmark/capability_matrix.yaml` | readiness check only | `src/mpc_planner/` | candidate，未通过前不进表 |
 
 Hamaguchi/Lim 的 runtime chain 固定为：`offline profile generator -> profile_csv -> common tracker -> cmd_vel -> metrics`。slosh monitor 只允许进入 rosbag/metrics/report，不得被 generator、command gate、OCP 或 `/cmd_vel` 链路消费。
@@ -73,7 +73,7 @@ paper-facing 主矩阵默认口径：
 internal ablation: B0 B_slosh B_ours
 external anchors : B0 B_ours
 external baselines: teb dwa
-optional supplement: B_smooth / B_accel / mpc_local_planner
+optional supplement: B_smooth / B_accel / mpc_local_planner / lt_dwa official wrapper
 ```
 
 `mpc_local_planner` 只有在 `INCLUDE_MPC_LOCAL_PLANNER=true` 时纳入；其 standalone config 已按共同限幅对齐到 `max_vel_x=0.8`、`max_vel_theta=1.2`、`acc_lim_x=0.6`、`dec_lim_x=0.6`、`acc_lim_theta=1.2`。
@@ -197,6 +197,14 @@ teb dwa
 
 ```bash
 INCLUDE_MPC_LOCAL_PLANNER=true
+```
+
+如需把 official LT-DWA wrapper 纳入，需要先构建 `obstacle_msgs;local_map_generation;lt_dwa_official_wrapper`，并确保 runtime overlay 在前：
+
+```bash
+export SCOUT_WS_ROOT=/home/a/scout_ws
+export ROS_PACKAGE_PATH=$SCOUT_WS_ROOT/tools/lt_dwa/local_planner_runtime:$ROS_PACKAGE_PATH
+INCLUDE_LT_DWA=true
 ```
 
 ### Profile baseline 单 case：Hamaguchi/Lim + common tracker

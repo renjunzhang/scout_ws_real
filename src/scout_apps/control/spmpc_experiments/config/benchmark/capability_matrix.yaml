@@ -170,14 +170,16 @@ planners:
   lt_dwa:
     category: modern_local_planner
     information_access_category: classical_or_modern_local_planner
-    implementation: src/scout_apps/control/lt_dwa_adapter
+    implementation: src/scout_apps/control/lt_dwa_official_wrapper
     reference_source: third_party/LT_DWA
-    interface_type: scout_owned_ros_adapter
+    runtime_local_planner_overlay: tools/lt_dwa/local_planner_runtime
+    vendor_deps_package: src/scout_apps/control/lt_dwa_official_vendor_deps
+    interface_type: official_core_process_wrapper
     online: true
-    present_in_workspace: adapter_present
+    present_in_workspace: official_wrapper_present
     ready_to_run: conditional
-    dependency_failure_code: LT_DWA_SMOKE_GATE_REQUIRED
-    adapter_package: src/scout_apps/control/lt_dwa_adapter
+    dependency_failure_code: LT_DWA_WRAPPER_SMOKE_GATE_REQUIRED
+    adapter_package: src/scout_apps/control/lt_dwa_official_wrapper
     adapter_plan: third_party/LT_DWA/SCOUT_ADAPTER_PLAN.md
     smoke_gate_required_before_runnable: true
     cmd_vel_output: true
@@ -196,40 +198,7 @@ planners:
       a_max: true
       alpha_max: true
       jerk_max: false
-    evaluation_role: target_modern_baseline
-    main_table_eligible_if_preflight_passes: false
-
-  lt_dwa_v2:
-    category: modern_local_planner
-    information_access_category: classical_or_modern_local_planner
-    implementation: src/scout_apps/control/lt_dwa_v2_adapter
-    reference_source: third_party/LT_DWA
-    engineering_reference: navigation/dwa_local_planner
-    interface_type: scout_owned_ros_adapter
-    online: true
-    present_in_workspace: adapter_present
-    ready_to_run: conditional
-    dependency_failure_code: LT_DWA_V2_SMOKE_GATE_REQUIRED
-    adapter_package: src/scout_apps/control/lt_dwa_v2_adapter
-    adapter_plan: docs/实物实验注意事项/对比论文的寻找/20260618_对比试验代码模块化设计_v2_现有资产复用与公平性补充.md
-    smoke_gate_required_before_runnable: true
-    cmd_vel_output: true
-    fixed_path_input: /scout/global_path_fixed
-    global_path_input: /scout/global_path_fixed
-    costmap_input: true
-    liquid_model_access: none
-    online_liquid_feedback: false
-    uses_extra_sensors:
-      rgb_liquid: false
-      imu: false
-      dynamic_obstacles: false
-    supports_constraints:
-      v_max: true
-      omega_max: true
-      a_max: true
-      alpha_max: true
-      jerk_max: false
-    evaluation_role: target_modern_baseline_shadow_smoke
+    evaluation_role: target_modern_baseline_official_wrapper
     main_table_eligible_if_preflight_passes: false
 
   mpc_planner:

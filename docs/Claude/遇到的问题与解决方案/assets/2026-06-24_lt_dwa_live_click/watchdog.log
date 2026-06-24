@@ -1,0 +1,2 @@
+WATCHDOG_READY waiting_for=/scout/goal timeout_s=600 run_timeout_s=60 reach_tol_m=0.30
+WATCHDOG_EXIT reason=goal_timeout_no_action

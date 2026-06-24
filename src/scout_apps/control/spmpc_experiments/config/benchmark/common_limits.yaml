@@ -66,14 +66,14 @@ planner_param_mapping:
     goal_tolerance: controller/xy_goal_tolerance
     yaw_tolerance: controller/yaw_goal_tolerance
 
-  lt_dwa_v2:
+  lt_dwa:
     internal_limits:
-      v_max_mps: limits/v_max_mps
-      omega_max_radps: limits/omega_max_radps
-      a_max_mps2: limits/a_max_mps2
-      alpha_max_radps2: limits/alpha_max_radps2
-    goal_tolerance: goal/xy_tolerance_m
-    yaw_tolerance: goal/yaw_tolerance_rad
+      v_max_mps: v_max_mps
+      omega_max_radps: omega_max_radps
+      a_max_mps2: a_max_mps2
+      alpha_max_radps2: alpha_max_radps2
+    goal_tolerance: xy_goal_tolerance
+    yaw_tolerance: yaw_goal_tolerance
 
 command_gate_policy:
   purpose: safety_and_fairness_audit_only

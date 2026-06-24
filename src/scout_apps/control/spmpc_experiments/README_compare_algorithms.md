@@ -2,7 +2,7 @@
 
 本文件是 SPMPC 对比实验的“先看这里”入口，用来回答：每个对比算法的配置、实现、运行入口、指标和表格角色分别放在哪里。
 
-> 当前采取低风险组织方式：Hamaguchi/Lim 已从老控制器目录拆到独立 `scout_profile_baselines` 包；旧 `rosrun scout_local_planner generate_*.py` 入口仅作为兼容 wrapper 保留。LT-DWA 上游仍作为 source-only vendored code 放在 `third_party/LT_DWA`，Scout 自有可运行 adapter 单独放在 `src/scout_apps/control/lt_dwa_adapter/`，不把上游包放入 catkin 主构建。
+> 当前采取低风险组织方式：Hamaguchi/Lim 已从老控制器目录拆到独立 `scout_profile_baselines` 包；旧 `rosrun scout_local_planner generate_*.py` 入口仅作为兼容 wrapper 保留。`lt_dwa` baseline 已切到官方 LT-DWA ROS Noetic core wrapper：wrapper 在 `src/scout_apps/control/lt_dwa_official_wrapper/`，官方 source-only vendor 仍放在 `third_party/LT_DWA`，不把上游包放入 catkin 主构建。
 
 ## 1. 总体分层
 
@@ -22,11 +22,14 @@ scout_local_planner/
   launch/slosh_experiment_sim.launch
                               common tracker used by profile baselines
 
-lt_dwa_adapter/
-                              Scout-owned LT-DWA-style adapter, default shadow-only
+lt_dwa_official_wrapper/
+                              official LT-DWA ROS Noetic core wrapper, default shadow-only
 
 third_party/LT_DWA/
-                              upstream LT-DWA source-only reference, never symlinked into src
+                              upstream LT-DWA source-only vendor, required by wrapper and never symlinked into src
+
+tools/lt_dwa/local_planner_runtime/
+                              runtime local_planner overlay for official planning.config/data resolution
 ```
 
 运行数据和 strict fresh 外层生命周期在隔离仿真根目录：
@@ -54,7 +57,7 @@ Obsidian 只作为报告/镜像层，不作为 canonical raw source：
 | fallback MPC         | `mpc_local_planner`                            | `config/baselines/mpc_local_planner_standalone_sim.yaml`                                 | `src/scout_apps/control/mpc_local_planner/`                                        | `scripts/run_fixed_path_baseline_suite.sh`，需显式 opt-in                                                  | `scripts/extract_fixed_path_paper_metrics.py`                 | fallback / supplement；按 readiness 决定 | 禁止作为控制输入；仅 rosbag/metrics/report         |
 | profile baseline     | Hamaguchi-style                                  | `config/profile_baselines/hamaguchi_profile.yaml`                                        | wrapper: `scout_profile_baselines/scripts/generate_hamaguchi_profile.py`；impl: `scripts/hamaguchi/generate_profile.py` | `scripts/run_fixed_path_profile_baseline_suite.sh` + common tracker                                        | `profile_baseline_metrics_aggregate.csv`、combined comparison | supplementary profile baseline           | generator/tracker 不消费 monitor；monitor 只做评价 |
 | profile baseline     | Lim-style                                        | `config/profile_baselines/lim_profile.yaml`                                              | wrapper: `scout_profile_baselines/scripts/generate_lim_style_profile.py`；impl: `scripts/lim/generate_profile.py` | `scripts/run_fixed_path_profile_baseline_suite.sh` + common tracker                                        | `profile_baseline_metrics_aggregate.csv`、combined comparison | supplementary profile baseline           | generator/tracker 不消费 monitor；monitor 只做评价 |
-| modern baseline candidate | LT-DWA                                      | `config/baselines/lt_dwa_adapter_standalone_sim.yaml` + `config/benchmark/capability_matrix.yaml` | adapter: `src/scout_apps/control/lt_dwa_adapter/`；reference: `third_party/LT_DWA/` source-only vendor | `launch/sim/run_lt_dwa_fixed_path_sim.launch`；`scripts/run_fixed_path_baseline_suite.sh`；isolated smoke wrapper | `/baseline/lt_dwa/status`、local/global plan、metrics extractor | adapter 已可运行；formal 主表仍按 gate/证据审批 | 不消费 monitor；仅 rosbag/metrics/report |
+| modern baseline candidate | LT-DWA                                      | `config/baselines/lt_dwa_official_wrapper_standalone_sim.yaml` + `config/benchmark/capability_matrix.yaml` | wrapper: `src/scout_apps/control/lt_dwa_official_wrapper/`；reference: `third_party/LT_DWA/` source-only vendor；runtime: `tools/lt_dwa/local_planner_runtime/` | `launch/sim/run_lt_dwa_fixed_path_sim.launch`；`scripts/run_fixed_path_baseline_suite.sh`；isolated smoke wrapper | `/baseline/lt_dwa/status`、diagnostics、worker_result、local/global plan、metrics extractor | official wrapper 已可运行；formal 主表仍按 gate/证据审批 | 不消费 monitor；仅 rosbag/metrics/report |
 | advanced candidate   | `src/mpc_planner`                              | `config/benchmark/capability_matrix.yaml`                                                | `src/mpc_planner/`，solver/deps readiness-gated                                    | `scripts/bench_check_advanced_baseline_readiness.py`                                                       | readiness report                                                | candidate；未通过前不进表                | 不适用                                             |
 
 ## 3. Hamaguchi/Lim profile baseline 的链路
@@ -119,7 +122,7 @@ OUT_ROOT=/data/a/spmpc_paper_compare/example_baseline \
 bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_baseline_suite.sh
 ```
 
-`mpc_local_planner` 需要显式 opt-in；未确认依赖与 readiness 前不要放入主表。`lt_dwa` 使用 Scout-owned adapter，默认 shadow-only；isolated closed-loop smoke 已验证通路，但 formal 主表仍需按 capability/main-table gate 和 freshness evidence 明确审批。
+`mpc_local_planner` 需要显式 opt-in；未确认依赖与 readiness 前不要放入主表。`lt_dwa` 使用官方 LT-DWA wrapper，默认 shadow-only；只有 suite 显式传入 `enable_actuated_output=true` + `publish_cmd_vel=true` 才输出 benchmark command。formal 主表仍需按 capability/main-table gate 和 freshness evidence 明确审批。
 
 ### Hamaguchi/Lim profile baseline
 
@@ -183,11 +186,13 @@ scout_local_planner/scripts/analysis/generate_lim_style_profile.py
 
 `scout_local_planner/scripts/analysis/path_profile_utils.py` 继续保留给 TOPPRA/Ruckig/Biagiotti 旧 profile 工具使用；profile-baseline 正式 schema source 以 `scout_profile_baselines/scripts/common/path_profile_utils.py` 为准。
 
-LT-DWA 当前分成两层：
+LT-DWA 当前分成三层：
 
 ```text
-src/scout_apps/control/lt_dwa_adapter/   # Scout-owned runnable adapter
-third_party/LT_DWA/                      # upstream source-only reference
+src/scout_apps/control/lt_dwa_official_wrapper/      # Scout-facing official core wrapper
+src/scout_apps/control/lt_dwa_official_vendor_deps/  # obstacle_msgs/local_map_generation vendor deps
+tools/lt_dwa/local_planner_runtime/                  # runtime local_planner overlay
+third_party/LT_DWA/                                  # upstream source-only vendor
 ```
 
-不要把 `third_party/LT_DWA` symlink 到 `src/`，因为上游包含 `local_planner`、`navigation` 等与本 workspace 冲突的 catkin package 名称。可运行对比只通过 `lt_dwa_adapter` 进入；adapter 默认 `publish_cmd_vel=false`，仿真闭环必须由隔离 suite 显式开启。适配边界见 `third_party/LT_DWA/SCOUT_ADAPTER_PLAN.md`。
+不要把 `third_party/LT_DWA` symlink 到 `src/`，因为上游包含 `local_planner`、`navigation` 等与本 workspace 冲突的 catkin package 名称。可运行对比只通过 `lt_dwa_official_wrapper` 进入；wrapper 默认 `enable_actuated_output=false`、`publish_cmd_vel=false`，仿真闭环必须由隔离 suite 显式开启。适配边界见 `third_party/LT_DWA/SCOUT_ADAPTER_PLAN.md`。

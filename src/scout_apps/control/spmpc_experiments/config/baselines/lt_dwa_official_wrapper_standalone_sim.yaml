@@ -1,0 +1,49 @@
+# Standalone official LT-DWA wrapper config for SPMPC simulation comparisons.
+# Runtime parameters are supplied through run_lt_dwa_fixed_path_sim.launch.
+# This file freezes benchmark-facing topics, gates, and common limits.
+
+implementation: src/scout_apps/control/lt_dwa_official_wrapper
+reference_source: third_party/LT_DWA
+runtime_local_planner_overlay: tools/lt_dwa/local_planner_runtime
+
+publish_cmd_vel: false
+publish_shadow_cmd: true
+publish_benchmark_raw: false
+publish_diagnostics: true
+require_map: true
+
+odom_topic: /odom
+map_topic: /map
+global_path_topic: /scout/global_path_fixed
+goal_topic: /scout/goal
+cmd_vel_topic: /benchmark/cmd_vel_raw
+shadow_cmd_topic: /baseline/lt_dwa/shadow_cmd_vel
+status_topic: /baseline/lt_dwa/status
+diagnostics_topic: /baseline/lt_dwa/diagnostics
+global_plan_topic: /baseline/lt_dwa/global_plan
+local_plan_topic: /baseline/lt_dwa/local_plan
+worker_result_topic: /baseline/lt_dwa/worker_result
+
+base_frame: base_link
+plan_target_frame: map
+planning_frequency: 5.0
+command_publish_frequency: 30.0
+command_stale_timeout_sec: 0.6
+worker_timeout_sec: 1.0
+
+v_max_mps: 0.8
+omega_max_radps: 1.2
+a_max_mps2: 0.6
+alpha_max_radps2: 1.2
+allow_reverse: false
+xy_goal_tolerance: 0.20
+yaw_goal_tolerance: 0.30
+
+runtime_env:
+  SCOUT_WS_ROOT: /home/a/scout_ws
+  ROS_PACKAGE_PATH_prefix: tools/lt_dwa/local_planner_runtime
+
+notes:
+  - "Baseline id lt_dwa now uses official LT-DWA ROS Noetic core through lt_dwa_official_wrapper."
+  - "The wrapper remains inert unless enable_actuated_output=true and publish_cmd_vel=true are passed by the suite."
+  - "third_party/LT_DWA is source-only official vendor code and must not be moved into catkin src."

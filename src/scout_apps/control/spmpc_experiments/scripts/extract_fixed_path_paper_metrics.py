@@ -34,12 +34,11 @@ STATUS_TOPICS = (
     "/baseline/dwa/status",
     "/baseline/mpc_local_planner/status",
     "/baseline/lt_dwa/status",
-    "/baseline/lt_dwa_v2/status",
     "/mpc_status",
 )
 
 DIAGNOSTIC_TOPICS = (
-    "/baseline/lt_dwa_v2/diagnostics",
+    "/baseline/lt_dwa/diagnostics",
 )
 
 WAITING_STATUS_KEYS = (
@@ -196,7 +195,7 @@ def infer_method(bag_path, meta):
     for key in ("b_ours", "b_slosh", "b_smooth", "b_accel", "b_inst_excitation", "b0"):
         if key in name:
             return f"spmpc_{key}"
-    for key in ("lt_dwa_v2", "lt_dwa", "teb", "dwa", "mpc_local_planner", "mpc"):
+    for key in ("lt_dwa", "teb", "dwa", "mpc_local_planner", "mpc"):
         if key in name:
             return "mpc_local_planner" if key == "mpc" else key
     return "unknown"
@@ -800,7 +799,7 @@ def summarize_bag_phase(bag_path, data, meta, method, phase):
         "has_slosh_state": int("/spmpc/debug/slosh_state" in data["topics"] or "/slosh/state" in data["topics"]),
         "has_spmpc_projector": int("/spmpc/debug/projector" in data["topics"]),
         "has_spmpc_stage0_reference": int("/spmpc/debug/stage0_reference" in data["topics"]),
-        "has_lt_dwa_v2_diagnostics": int(any(topic in data["topics"] for topic in DIAGNOSTIC_TOPICS)),
+        "has_lt_dwa_diagnostics": int(any(topic in data["topics"] for topic in DIAGNOSTIC_TOPICS)),
         "has_spmpc_terminal_debug": int("/spmpc/terminal/debug" in data["topics"]),
         "has_slosh_height": int(bool(data["slosh_height_mm"])),
     }

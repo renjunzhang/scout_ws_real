@@ -18,13 +18,14 @@ spmpc_experiments    统一 launch / config / recording / smoke scripts
 
 ```text
 config/benchmark/          公平性规则、common limits、freshness、capability matrix、主表准入
-config/baselines/          TEB / DWA / mpc_local_planner runtime configs
+config/baselines/          TEB / DWA / mpc_local_planner / official LT-DWA wrapper runtime configs
 config/profile_baselines/  Hamaguchi / Lim supplementary profile baseline configs
 scripts/                   suites、preflight、freshness evidence、endpoint check、metrics
 ../scout_profile_baselines/ Hamaguchi / Lim offline profile generators 与独立 helper
 ../scout_local_planner/     common external-profile tracker 与旧 rosrun wrapper
+../lt_dwa_official_wrapper/ official LT-DWA ROS Noetic core wrapper
 ../../../../third_party/LT_DWA/
-                           LT-DWA upstream source-only vendor，adapter pending
+                           LT-DWA upstream source-only vendor，保留给 official wrapper 编译使用
 ```
 
 关键边界：`spmpc_experiments` 只做实验调度和 benchmark gate，不放 planner/OCP 算法实现；Hamaguchi/Lim 的 generator 实现在 `scout_profile_baselines`，runtime common tracker 仍在 `scout_local_planner`，它们是 supplementary profile baseline，不是 online local-planner 同层主表方法。
@@ -115,6 +116,29 @@ source /home/a/scout_ws/devel/setup.bash
 当前 `control_box_rst` 和 `mpc_local_planner` 根目录不再放 `CATKIN_IGNORE`。
 因此普通全量 `catkin_make` 不再作为推荐构建入口；主工作区日常编译请使用白名单，
 `mpc_local_planner` 单独使用上述 isolated 路线。
+
+## LT-DWA 状态
+
+当前 `lt_dwa` baseline id 已切到官方 LT-DWA ROS Noetic core wrapper：
+
+```text
+src/scout_apps/control/lt_dwa_official_wrapper/
+```
+
+官方 source-only vendor 保留在：
+
+```text
+third_party/LT_DWA/
+```
+
+运行 official core 前需要确保 runtime `local_planner` overlay 在 `ROS_PACKAGE_PATH` 前面：
+
+```bash
+export SCOUT_WS_ROOT=/home/a/scout_ws
+export ROS_PACKAGE_PATH=$SCOUT_WS_ROOT/tools/lt_dwa/local_planner_runtime:$ROS_PACKAGE_PATH
+```
+
+旧 `lt_dwa_adapter` / `lt_dwa_v2_adapter` 不再作为 active benchmark 路径使用；`third_party/LT_DWA` 不能删除，也不能 symlink 到 catkin `src/`。
 
 ## DWA 状态
 

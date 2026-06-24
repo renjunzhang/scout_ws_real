@@ -46,7 +46,7 @@ Older `/data/a/scout_sim_replacement` strict fresh manifests use reachability co
 
 ## Advanced baseline readiness policy
 
-`lt_dwa` and `mpc_planner` are readiness-gated advanced candidates. LT-DWA source is vendored at `third_party/LT_DWA/` for real-machine `git pull`, but it is source-only because upstream package names (`local_planner`, `navigation`) conflict with this workspace; readiness remains `LT_DWA_ADAPTER_NOT_READY`. If `src/mpc_planner` lacks generated solver artifacts or required dependencies, it is reported as `MPC_PLANNER_NOT_READY`. These dependency/readiness outcomes are not algorithm failures and must not be promoted into runnable suites without a separate smoke gate.
+`lt_dwa` and `mpc_planner` are readiness-gated advanced candidates. `lt_dwa` now means the official LT-DWA ROS Noetic core through `src/scout_apps/control/lt_dwa_official_wrapper`, with official source vendored at `third_party/LT_DWA/` and runtime `local_planner` overlay under `tools/lt_dwa/local_planner_runtime/`. The vendor tree remains source-only because upstream package names (`local_planner`, `navigation`) conflict with this workspace; readiness remains blocked by `LT_DWA_WRAPPER_SMOKE_GATE_REQUIRED` until a strict fresh-sim smoke gate passes. If `src/mpc_planner` lacks generated solver artifacts or required dependencies, it is reported as `MPC_PLANNER_NOT_READY`. These dependency/readiness outcomes are not algorithm failures and must not be promoted into runnable suites without a separate smoke gate.
 
 ## Dependency policy
 

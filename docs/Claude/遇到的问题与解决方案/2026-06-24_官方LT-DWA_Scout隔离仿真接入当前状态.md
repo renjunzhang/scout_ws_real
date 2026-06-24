@@ -99,11 +99,16 @@ Scout ROS topics
 
 ## 3. 当前接入架构
 
-当前实现放在隔离 wrapper workspace：
+当前 active 实现已经迁入主仓库：
 
 ```text
-/data/a/lt_dwa_wrapper_ws/src/lt_dwa_official_wrapper
+/home/a/scout_ws/src/scout_apps/control/lt_dwa_official_wrapper
+/home/a/scout_ws/src/scout_apps/control/lt_dwa_official_vendor_deps/{obstacle_msgs,local_map_generation}
+/home/a/scout_ws/tools/lt_dwa/local_planner_runtime
+/home/a/scout_ws/third_party/LT_DWA
 ```
+
+`third_party/LT_DWA` 是 official source-only vendor，不能删除，也不能 symlink 到 catkin `src/`。
 
 核心链路：
 
@@ -210,7 +215,34 @@ scout_sop_cmd_vel_benchmark.launch
 
 这样 bridge 可以严格使用 `planning_frame=map`，不再依赖 `/tmp` 临时脚本。
 
-### 4.5 official Robot TF 副作用隔离
+### 4.5 `spmpc_experiments` baseline 切换
+
+2026-06-24 按“只保留 LT-DWA 官方 ROS Noetic 接入”的方向梳理：
+
+```text
+lt_dwa baseline id
+  -> src/scout_apps/control/lt_dwa_official_wrapper
+  -> /baseline/lt_dwa/* experiment namespace
+```
+
+旧路径已从 active benchmark 中退休：
+
+```text
+src/scout_apps/control/lt_dwa_adapter/
+src/scout_apps/control/lt_dwa_v2_adapter/
+spmpc_experiments/launch/sim/run_lt_dwa_v2_fixed_path_sim.launch
+spmpc_experiments/config/baselines/lt_dwa_v2_adapter_standalone_sim.yaml
+```
+
+需要保留：
+
+```text
+third_party/LT_DWA
+```
+
+原因是 official wrapper 的 worker 编译/调用依赖其中的官方 `SeedPolicy::forward(...)`、`seed_policy.cpp` 和 `eb_mpc_trajectory_optimizer.cpp` 等源码。
+
+### 4.6 official Robot TF 副作用隔离
 
 官方 `Robot` 构造函数会启动 detached TF broadcaster，原本可能向全局 `/tf` 发布：
 
@@ -364,6 +396,91 @@ target_pose 主要用于 goal reached 判断；
 
 因此在终点附近，如果车偏离 reference path 或姿态不合适，可能继续绕终点附近修正，而不是稳定吸到 endpoint。
 
+### 问题 D：S 全局层可发布，但 LT-DWA 实际轨迹不能稳定跟随
+
+2026-06-24 又做了一次 visible Scout SOP + S-curve 固定全局层 + 官方 LT-DWA `/cmd_vel` 仿真观察。启动方式不是点到点 `simple_global_planner`，而是固定 S 曲线：
+
+```text
+/scout/global_path_fixed = S-curve fixed global path
+path_start≈(0.015, 0.015)
+path_end≈(5.000, 0.000)
+path_points=118
+path_y_min=-0.668 m
+path_y_max=0.686 m
+```
+
+停止仿真前已发 zero `/cmd_vel`，随后停止本次启动的 LT-DWA bridge、S-curve path publisher、Gazebo/RViz 脚本；未修改 `/data/a/scout_sim_replacement`、SOP 或官方 upstream。
+
+实际轨迹从本次 LT-DWA worker request 中的 `robot_pose map ...` 恢复，和全局 S 路径对比图已移出 `/tmp`，保存到：
+
+```text
+docs/Claude/遇到的问题与解决方案/assets/2026-06-24_lt_dwa_scurve/scurve_global_vs_actual_route.png
+```
+
+同目录还保存了：
+
+```text
+scurve_actual_vs_global_metrics.json
+scurve_actual_vs_global_points.csv
+final_snapshot.json
+zero_stop.log
+```
+
+本次对比指标：
+
+```text
+trajectory_points=716
+path_points=118
+final_to_path_end=0.285 m
+min_to_path_end=0.028 m
+mean_nearest_path_error=0.405 m
+max_nearest_path_error=1.243 m
+actual_y_min=-1.331 m
+actual_y_max=0.855 m
+```
+
+现象判断：
+
+```text
+1. 车能从起点沿 S 前半段大致跟随，并一度非常接近终点（min_to_path_end=0.028 m）。
+2. 中后段明显偏离 S 全局路径，最大横向/最近路径误差约 1.24 m。
+3. 终点附近出现绕圈/冲过现象，最后停在距离 path end 约 0.285 m 的位置。
+```
+
+因此当前问题不是“没有 S 全局层”，而是：
+
+```text
+S 全局层发布正常；官方 LT-DWA wrapper 能驱动车运动；但当前官方 core + one-shot worker + endpoint 策略不能稳定完成 S 曲线跟踪和终点收敛。
+```
+
+这比之前的 60s endpoint gate 又多暴露了一个问题：即使最终距离偶尔能接近终点，整段路径的 tracking quality 仍不够，不能只看 endpoint distance。
+
+### 问题 E：清理后点到点通路仍可用
+
+`spmpc_experiments` 切到 official wrapper 并删除旧 adapter 后，又做了一次 visible Scout SOP + RViz-click 等价 goal 的点到点 smoke：
+
+```text
+/scout/goal frame_id=map x=5.0 y=0.0 yaw=0.0
+/simple_global_planner -> /scout/global_path
+lt_dwa official wrapper -> /cmd_vel
+```
+
+结果：
+
+```text
+GOAL_RECEIVED x=5.000 y=0.000
+PROGRESS t=0.0 x=7.032 y=-0.074 dist=2.033 best=2.033
+RESULT reason=reached_goal_tolerance elapsed=4.6 final_dist=0.202 best_dist=0.202
+```
+
+判定：
+
+```text
+点到点 smoke PASS：4.6s 进入 0.30 m tolerance。
+```
+
+注意：这只证明清理后 `spmpc_experiments -> official LT-DWA wrapper` 点到点通路还能用，不改变前述 S-curve tracking quality 不稳定的结论，也不等价于 formal strict-fresh S-curve 主表通过。
+
 ---
 
 ## 7. 安全边界状态
@@ -372,9 +489,9 @@ target_pose 主要用于 goal reached 判断；
 
 ```text
 未修改 /data/a/scout_sim_replacement world/map/URDF/model/SOP
-未修改 /home/a/scout_ws/src
 未修改 /data/a/lt_dwa_official_repro_ws/src/LT_DWA
 官方 upstream 保持只读
+主仓库仅修改 wrapper / spmpc_experiments / 文档；未触碰隔离仿真环境
 ```
 
 `/cmd_vel` 只在用户明确授权后的 bounded benchmark 中发布，结束后确认：
@@ -437,5 +554,5 @@ Official LT-DWA core was integrated into the Scout isolated ROS Noetic simulatio
 
 ```text
 当前是“官方 LT-DWA core 的 ROS Noetic wrapper 接入”，不是“官方 demo node 原样接入”。
-它已经完成仿真通路接入，但尚未通过 60s 到达终点 benchmark。
+它已经完成仿真通路接入；清理旧 adapter 后点到点 smoke 可到达，但 S-curve tracking quality / formal strict gate 仍未通过。
 ```

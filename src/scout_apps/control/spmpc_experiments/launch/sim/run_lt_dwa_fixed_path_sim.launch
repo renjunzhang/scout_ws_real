@@ -3,26 +3,41 @@
   <arg name="goal_topic" default="/scout/goal"/>
   <arg name="cmd_vel_topic" default="/benchmark/cmd_vel_raw"/>
   <arg name="publish_cmd_vel" default="false"/>
+  <arg name="enable_actuated_output" default="false"/>
+  <arg name="publish_benchmark_raw" default="false"/>
   <arg name="odom_topic" default="/odom"/>
   <arg name="map_topic" default="/map"/>
   <arg name="base_frame" default="base_link"/>
-  <arg name="plan_target_frame" default="odom"/>
-  <arg name="planning_frequency" default="10.0"/>
-  <arg name="command_publish_frequency" default="25.0"/>
-  <arg name="command_stale_timeout_sec" default="2.0"/>
+  <arg name="plan_target_frame" default="map"/>
+  <arg name="planning_frequency" default="5.0"/>
+  <arg name="command_publish_frequency" default="30.0"/>
+  <arg name="command_stale_timeout_sec" default="0.6"/>
+  <arg name="worker_timeout_sec" default="1.0"/>
+  <arg name="scout_ws_root" default="$(optenv SCOUT_WS_ROOT /home/a/scout_ws)"/>
+  <arg name="runtime_request_dir" default="/tmp"/>
 
-  <include file="$(find lt_dwa_adapter)/launch/lt_dwa_adapter.launch">
-    <arg name="config" value="$(find spmpc_experiments)/config/baselines/lt_dwa_adapter_standalone_sim.yaml"/>
-    <arg name="global_path_topic" value="$(arg global_path_topic)"/>
-    <arg name="goal_topic" value="$(arg goal_topic)"/>
-    <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
-    <arg name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>
-    <arg name="odom_topic" value="$(arg odom_topic)"/>
+  <include file="$(find lt_dwa_official_wrapper)/launch/scout_sop_cmd_vel_benchmark.launch">
+    <arg name="input_odom_topic" value="$(arg odom_topic)"/>
     <arg name="map_topic" value="$(arg map_topic)"/>
-    <arg name="base_frame" value="$(arg base_frame)"/>
-    <arg name="plan_target_frame" value="$(arg plan_target_frame)"/>
-    <arg name="planning_frequency" value="$(arg planning_frequency)"/>
-    <arg name="command_publish_frequency" value="$(arg command_publish_frequency)"/>
+    <arg name="map_frame_odom_topic" value="/baseline/lt_dwa/odom_map"/>
+    <arg name="path_topic" value="$(arg global_path_topic)"/>
+    <arg name="goal_topic" value="$(arg goal_topic)"/>
+    <arg name="shadow_cmd_topic" value="/baseline/lt_dwa/shadow_cmd_vel"/>
+    <arg name="status_topic" value="/baseline/lt_dwa/status"/>
+    <arg name="diagnostics_topic" value="/baseline/lt_dwa/diagnostics"/>
+    <arg name="global_plan_topic" value="/baseline/lt_dwa/global_plan"/>
+    <arg name="local_plan_topic" value="/baseline/lt_dwa/local_plan"/>
+    <arg name="worker_result_topic" value="/baseline/lt_dwa/worker_result"/>
+    <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
+    <arg name="benchmark_raw_topic" value="/benchmark/cmd_vel_raw"/>
+    <arg name="enable_actuated_output" value="$(arg enable_actuated_output)"/>
+    <arg name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>
+    <arg name="publish_benchmark_raw" value="$(arg publish_benchmark_raw)"/>
+    <arg name="planner_rate_hz" value="$(arg planning_frequency)"/>
+    <arg name="command_publish_rate_hz" value="$(arg command_publish_frequency)"/>
     <arg name="command_stale_timeout_sec" value="$(arg command_stale_timeout_sec)"/>
+    <arg name="worker_timeout_sec" value="$(arg worker_timeout_sec)"/>
+    <arg name="scout_ws_root" value="$(arg scout_ws_root)"/>
+    <arg name="runtime_request_dir" value="$(arg runtime_request_dir)"/>
   </include>
 </launch>

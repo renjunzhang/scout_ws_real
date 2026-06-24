@@ -44,8 +44,8 @@ REQUIRED_CONTROL_PACKAGES = {
     "scout_local_planner": "src/scout_apps/control/scout_local_planner",
     "scout_profile_baselines": "src/scout_apps/control/scout_profile_baselines",
     "slosh_models": "src/scout_apps/control/slosh_models",
-    "lt_dwa_adapter": "src/scout_apps/control/lt_dwa_adapter",
-    "lt_dwa_v2_adapter": "src/scout_apps/control/lt_dwa_v2_adapter",
+    "lt_dwa_official_wrapper": "src/scout_apps/control/lt_dwa_official_wrapper",
+    "lt_dwa_official_vendor_deps": "src/scout_apps/control/lt_dwa_official_vendor_deps",
 }
 
 REQUIRED_REUSE_ASSETS = {
@@ -57,12 +57,12 @@ REQUIRED_REUSE_ASSETS = {
     "spmpc_suite": "src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_spmpc_suite.sh",
     "baseline_suite": "src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_baseline_suite.sh",
     "baseline_runner_launch": "src/scout_apps/control/baseline_local_planner_runner/launch/nav_core_runner.launch",
-    "lt_dwa_adapter_launch": "src/scout_apps/control/lt_dwa_adapter/launch/lt_dwa_adapter.launch",
+    "lt_dwa_official_wrapper_launch": "src/scout_apps/control/lt_dwa_official_wrapper/launch/scout_sop_cmd_vel_benchmark.launch",
+    "lt_dwa_official_shadow_launch": "src/scout_apps/control/lt_dwa_official_wrapper/launch/scout_sop_shadow_integration.launch",
     "lt_dwa_benchmark_launch": "src/scout_apps/control/spmpc_experiments/launch/sim/run_lt_dwa_fixed_path_sim.launch",
-    "lt_dwa_benchmark_config": "src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_adapter_standalone_sim.yaml",
-    "lt_dwa_v2_adapter_launch": "src/scout_apps/control/lt_dwa_v2_adapter/launch/lt_dwa_v2_adapter.launch",
-    "lt_dwa_v2_benchmark_launch": "src/scout_apps/control/spmpc_experiments/launch/sim/run_lt_dwa_v2_fixed_path_sim.launch",
-    "lt_dwa_v2_benchmark_config": "src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_v2_adapter_standalone_sim.yaml",
+    "lt_dwa_benchmark_config": "src/scout_apps/control/spmpc_experiments/config/baselines/lt_dwa_official_wrapper_standalone_sim.yaml",
+    "lt_dwa_runtime_overlay": "tools/lt_dwa/local_planner_runtime/local_planner/package.xml",
+    "lt_dwa_vendor_source": "third_party/LT_DWA/local_planner/src/seed_policy.cpp",
     "slosh_monitor_launch": "src/scout_apps/control/slosh_models/launch/slosh_monitor.launch",
 }
 
@@ -94,11 +94,13 @@ REQUIRED_FAILURE_CODES = {
     "PARAMETER_NOT_FROZEN",
     "SLOSH_MONITOR_MISSING",
     "REQUIRED_TOPIC_MISSING",
+    "LT_DWA_WRAPPER_SMOKE_GATE_REQUIRED",
 }
 
 REQUIRED_MAIN_TABLE_EXCLUSIONS = {
     "DEPENDENCY_SKIPPED",
     "PRECHECK_FAILED",
+    "LT_DWA_WRAPPER_SMOKE_GATE_REQUIRED",
     "FAIRNESS_VIOLATION",
     "PARAMETER_NOT_FROZEN",
     "NON_STRICT_FRESH_SIM",
@@ -593,32 +595,32 @@ class Preflight:
         else:
             self.warn("MPC_PLANNER_ABSENT", "src/mpc_planner not found; advanced MPC baseline is dependency-skipped")
         lt_dwa_vendor = self.repo_root / "third_party/LT_DWA"
-        lt_dwa_adapter = self.repo_root / "src/scout_apps/control/lt_dwa_adapter"
-        lt_dwa_v2_adapter = self.repo_root / "src/scout_apps/control/lt_dwa_v2_adapter"
+        lt_dwa_wrapper = self.repo_root / "src/scout_apps/control/lt_dwa_official_wrapper"
+        lt_dwa_runtime = self.repo_root / "tools/lt_dwa/local_planner_runtime"
         if lt_dwa_vendor.is_dir():
             self.info(
                 "LT_DWA_REFERENCE_SOURCE_PRESENT",
-                f"LT-DWA upstream source is vendored at {lt_dwa_vendor} as source-only reference",
+                f"Official LT-DWA upstream source is vendored at {lt_dwa_vendor} as source-only reference",
                 lt_dwa_vendor,
             )
         else:
             self.warn("LT_DWA_VENDOR_ABSENT", "third_party/LT_DWA not found; restore source reference before paper reporting")
-        if lt_dwa_adapter.is_dir():
+        if lt_dwa_wrapper.is_dir():
             self.info(
-                "LT_DWA_ADAPTER_PRESENT",
-                f"Scout-owned LT-DWA adapter exists at {lt_dwa_adapter}; isolated smoke gate is still required for formal use",
-                lt_dwa_adapter,
+                "LT_DWA_OFFICIAL_WRAPPER_PRESENT",
+                f"Official LT-DWA wrapper exists at {lt_dwa_wrapper}; strict smoke gate is still required for formal use",
+                lt_dwa_wrapper,
             )
         else:
-            self.warn("LT_DWA_ADAPTER_NOT_READY", "Scout-owned lt_dwa_adapter package not found; LT-DWA baseline is dependency-skipped")
-        if lt_dwa_v2_adapter.is_dir():
+            self.warn("LT_DWA_WRAPPER_SMOKE_GATE_REQUIRED", "lt_dwa_official_wrapper package not found; LT-DWA baseline is dependency-skipped")
+        if lt_dwa_runtime.is_dir():
             self.info(
-                "LT_DWA_V2_ADAPTER_PRESENT",
-                f"Scout-owned LT-DWA-v2 adapter exists at {lt_dwa_v2_adapter}; strict smoke gate is still required before formal use",
-                lt_dwa_v2_adapter,
+                "LT_DWA_RUNTIME_OVERLAY_PRESENT",
+                f"Official LT-DWA runtime local_planner overlay exists at {lt_dwa_runtime}",
+                lt_dwa_runtime,
             )
         else:
-            self.warn("LT_DWA_V2_SMOKE_GATE_REQUIRED", "Scout-owned lt_dwa_v2_adapter package not found; LT-DWA-v2 baseline is dependency-skipped")
+            self.warn("LT_DWA_RUNTIME_OVERLAY_MISSING", "tools/lt_dwa/local_planner_runtime not found; official LT-DWA worker cannot resolve planning.config")
 
     def expect_path(
         self,

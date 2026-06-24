@@ -26,7 +26,6 @@ information_access_policy:
         - dwa
         - teb
         - lt_dwa
-        - lt_dwa_v2
 
     ordinary_mpc_local_planner:
       allowed_inputs:

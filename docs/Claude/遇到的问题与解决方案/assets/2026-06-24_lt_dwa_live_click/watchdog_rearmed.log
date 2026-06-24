@@ -1,0 +1,8 @@
+WATCHDOG_REARMED waiting_for=/scout/goal timeout_s=900 run_timeout_s=60 reach_tol_m=0.30
+GOAL_RECEIVED x=5.000 y=0.000
+PROGRESS t=0.0 x=7.032 y=-0.074 dist=2.033 best=2.033
+RESULT reason=reached_goal_tolerance elapsed=4.6 final_dist=0.202 best_dist=0.202
+killing /lt_dwa_sop_scout_bridge
+killed
+STOPPED_NODE /lt_dwa_sop_scout_bridge
+ZERO_STOP_PUBLISHED
