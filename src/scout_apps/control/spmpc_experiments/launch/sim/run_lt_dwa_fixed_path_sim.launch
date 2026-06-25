@@ -13,6 +13,17 @@
   <arg name="command_publish_frequency" default="30.0"/>
   <arg name="command_stale_timeout_sec" default="0.6"/>
   <arg name="worker_timeout_sec" default="1.0"/>
+  <arg name="max_v" default="0.8"/>
+  <arg name="min_v" default="0.0"/>
+  <arg name="max_w" default="1.2"/>
+  <arg name="max_acc" default="0.6"/>
+  <arg name="max_angular_acc" default="1.2"/>
+  <arg name="robot_radius" default="0.3"/>
+  <arg name="time_step" default="0.2"/>
+  <arg name="path_resample_spacing" default="0.10"/>
+  <arg name="enable_path_tracking_guard" default="true"/>
+  <arg name="path_tracking_lookahead_m" default="0.75"/>
+  <arg name="path_tracking_min_v" default="0.18"/>
   <arg name="scout_ws_root" default="$(optenv SCOUT_WS_ROOT /home/a/scout_ws)"/>
   <arg name="runtime_request_dir" default="/tmp"/>
 
@@ -37,6 +48,17 @@
     <arg name="command_publish_rate_hz" value="$(arg command_publish_frequency)"/>
     <arg name="command_stale_timeout_sec" value="$(arg command_stale_timeout_sec)"/>
     <arg name="worker_timeout_sec" value="$(arg worker_timeout_sec)"/>
+    <arg name="max_v" value="$(arg max_v)"/>
+    <arg name="min_v" value="$(arg min_v)"/>
+    <arg name="max_w" value="$(arg max_w)"/>
+    <arg name="max_acc" value="$(arg max_acc)"/>
+    <arg name="max_angular_acc" value="$(arg max_angular_acc)"/>
+    <arg name="robot_radius" value="$(arg robot_radius)"/>
+    <arg name="time_step" value="$(arg time_step)"/>
+    <arg name="path_resample_spacing" value="$(arg path_resample_spacing)"/>
+    <arg name="enable_path_tracking_guard" value="$(arg enable_path_tracking_guard)"/>
+    <arg name="path_tracking_lookahead_m" value="$(arg path_tracking_lookahead_m)"/>
+    <arg name="path_tracking_min_v" value="$(arg path_tracking_min_v)"/>
     <arg name="scout_ws_root" value="$(arg scout_ws_root)"/>
     <arg name="runtime_request_dir" value="$(arg runtime_request_dir)"/>
   </include>

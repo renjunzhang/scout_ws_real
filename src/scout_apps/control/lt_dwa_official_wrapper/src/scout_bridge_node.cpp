@@ -129,6 +129,26 @@ class ScoutBridgeNode {
     LoadStringParam(private_nh_, "worker_tf_topic", &config_.worker_tf_topic);
     LoadStringParam(private_nh_, "worker_tf_static_topic", &config_.worker_tf_static_topic);
     LoadStringParam(private_nh_, "planning_frame", &config_.planner_config.planning_frame);
+    private_nh_.param("max_v", config_.planner_config.max_v, config_.planner_config.max_v);
+    private_nh_.param("min_v", config_.planner_config.min_v, config_.planner_config.min_v);
+    private_nh_.param("max_w", config_.planner_config.max_w, config_.planner_config.max_w);
+    private_nh_.param("max_acc", config_.planner_config.max_acc, config_.planner_config.max_acc);
+    private_nh_.param("max_angular_acc",
+                      config_.planner_config.max_angular_acc,
+                      config_.planner_config.max_angular_acc);
+    private_nh_.param("robot_radius",
+                      config_.planner_config.robot_radius,
+                      config_.planner_config.robot_radius);
+    private_nh_.param("scan_radius",
+                      config_.planner_config.scan_radius,
+                      config_.planner_config.scan_radius);
+    private_nh_.param("time_step", config_.planner_config.time_step, config_.planner_config.time_step);
+    private_nh_.param("goal_xy_tolerance",
+                      config_.planner_config.goal_xy_tolerance,
+                      config_.planner_config.goal_xy_tolerance);
+    private_nh_.param("goal_yaw_tolerance",
+                      config_.planner_config.goal_yaw_tolerance,
+                      config_.planner_config.goal_yaw_tolerance);
 
     double legacy_bridge_rate = config_.bridge_rate_hz;
     if (private_nh_.getParam("bridge_rate_hz", legacy_bridge_rate)) {
@@ -155,6 +175,15 @@ class ScoutBridgeNode {
     private_nh_.param("path_resample_spacing",
                       config_.planner_config.path_resample_spacing,
                       config_.planner_config.path_resample_spacing);
+    private_nh_.param("enable_path_tracking_guard",
+                      config_.planner_config.enable_path_tracking_guard,
+                      config_.planner_config.enable_path_tracking_guard);
+    private_nh_.param("path_tracking_lookahead_m",
+                      config_.planner_config.path_tracking_lookahead_m,
+                      config_.planner_config.path_tracking_lookahead_m);
+    private_nh_.param("path_tracking_min_v",
+                      config_.planner_config.path_tracking_min_v,
+                      config_.planner_config.path_tracking_min_v);
 
     config_.planner_rate_hz = PositiveOrDefault(config_.planner_rate_hz, 5.0);
     config_.command_publish_rate_hz = PositiveOrDefault(config_.command_publish_rate_hz, 30.0);
@@ -285,7 +314,7 @@ class ScoutBridgeNode {
                         -1.0);
       return;
     }
-    out << SerializeWorkerRequest(build.input, now);
+    out << SerializeWorkerRequest(build.input, config_.planner_config, now);
     out.close();
 
     std::vector<std::string> worker_args{"--mode", config_.worker_mode, "--request", request_path};

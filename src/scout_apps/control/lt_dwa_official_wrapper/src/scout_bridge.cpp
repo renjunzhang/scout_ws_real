@@ -215,6 +215,17 @@ std::string FormatScoutBridgeDiagnostics(const ScoutBridgeConfig& config,
       << " enable_actuated_output=" << config.enable_actuated_output
       << " publish_cmd_vel=" << config.publish_cmd_vel
       << " publish_benchmark_raw=" << config.publish_benchmark_raw
+      << " max_v=" << config.planner_config.max_v
+      << " min_v=" << config.planner_config.min_v
+      << " max_w=" << config.planner_config.max_w
+      << " max_acc=" << config.planner_config.max_acc
+      << " max_angular_acc=" << config.planner_config.max_angular_acc
+      << " robot_radius=" << config.planner_config.robot_radius
+      << " time_step=" << config.planner_config.time_step
+      << " path_resample_spacing=" << config.planner_config.path_resample_spacing
+      << " enable_path_tracking_guard=" << config.planner_config.enable_path_tracking_guard
+      << " path_tracking_lookahead_m=" << config.planner_config.path_tracking_lookahead_m
+      << " path_tracking_min_v=" << config.planner_config.path_tracking_min_v
       << " effective_cmd_vel=" << ShouldPublishCmdVel(config)
       << " effective_benchmark_raw=" << ShouldPublishBenchmarkRaw(config)
       << " cmd_vel_topic=" << config.cmd_vel_topic

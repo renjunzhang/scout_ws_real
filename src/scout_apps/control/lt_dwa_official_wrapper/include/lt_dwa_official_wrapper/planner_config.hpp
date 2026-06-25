@@ -21,6 +21,10 @@ struct PlannerConfig {
   double goal_xy_tolerance{0.3};
   double goal_yaw_tolerance{0.5};
 
+  bool enable_path_tracking_guard{true};
+  double path_tracking_lookahead_m{0.75};
+  double path_tracking_min_v{0.18};
+
   unsigned int deterministic_seed{0};
   bool enable_worker_isolation{false};
   bool publish_debug_topics{false};

@@ -31,6 +31,45 @@ void AppendPose(std::ostringstream& oss, const std::string& key, const Pose2d& p
       << pose.x << ' ' << pose.y << ' ' << pose.yaw << '\n';
 }
 
+void AppendPlannerConfig(std::ostringstream& oss, const PlannerConfig& config) {
+  oss << "planner_config " << config.planning_frame << ' '
+      << config.max_v << ' ' << config.min_v << ' ' << config.max_w << ' '
+      << config.max_acc << ' ' << config.max_angular_acc << ' '
+      << config.robot_radius << ' ' << config.scan_radius << ' '
+      << config.time_step << ' ' << config.path_resample_spacing << ' '
+      << config.input_stale_timeout_sec << ' ' << config.goal_xy_tolerance << ' '
+      << config.goal_yaw_tolerance << ' ' << config.deterministic_seed << ' '
+      << static_cast<int>(config.enable_worker_isolation) << ' '
+      << static_cast<int>(config.publish_debug_topics) << ' '
+      << static_cast<int>(config.enable_path_tracking_guard) << ' '
+      << config.path_tracking_lookahead_m << ' '
+      << config.path_tracking_min_v << '\n';
+}
+
+bool ReadPlannerConfig(std::istringstream& iss, PlannerConfig* config) {
+  int enable_worker_isolation = 0;
+  int publish_debug_topics = 0;
+  if (!(iss >> config->planning_frame >> config->max_v >> config->min_v >> config->max_w >>
+        config->max_acc >> config->max_angular_acc >> config->robot_radius >>
+        config->scan_radius >> config->time_step >> config->path_resample_spacing >>
+        config->input_stale_timeout_sec >> config->goal_xy_tolerance >>
+        config->goal_yaw_tolerance >> config->deterministic_seed >>
+        enable_worker_isolation >> publish_debug_topics)) {
+    return false;
+  }
+  config->enable_worker_isolation = enable_worker_isolation != 0;
+  config->publish_debug_topics = publish_debug_topics != 0;
+
+  int enable_path_tracking_guard = config->enable_path_tracking_guard ? 1 : 0;
+  if (iss >> enable_path_tracking_guard) {
+    config->enable_path_tracking_guard = enable_path_tracking_guard != 0;
+    if (!(iss >> config->path_tracking_lookahead_m >> config->path_tracking_min_v)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool ReadNextMeaningfulLine(std::istream& input, std::string* line) {
   while (std::getline(input, *line)) {
     if (line->empty()) {
@@ -54,12 +93,23 @@ WorkerRequestParseResult Fail(const std::string& reason) {
 }  // namespace
 
 std::string SerializeWorkerRequest(const PlannerInput& input, const ros::Time& now) {
+  PlannerConfig config;
+  if (!input.planning_frame.empty()) {
+    config.planning_frame = input.planning_frame;
+  }
+  return SerializeWorkerRequest(input, config, now);
+}
+
+std::string SerializeWorkerRequest(const PlannerInput& input,
+                                   const PlannerConfig& config,
+                                   const ros::Time& now) {
   std::ostringstream oss;
   oss << std::setprecision(17);
   oss << kMagic << '\n';
   oss << "now " << now.toSec() << '\n';
   oss << "planning_frame " << input.planning_frame << '\n';
   oss << "stamp " << input.stamp.toSec() << '\n';
+  AppendPlannerConfig(oss, config);
   AppendPose(oss, "robot_pose", input.robot_pose);
   oss << "robot_twist " << input.robot_twist.v << ' ' << input.robot_twist.w << '\n';
   AppendPose(oss, "target_pose", input.target_pose);
@@ -143,6 +193,11 @@ WorkerRequestParseResult ParseWorkerRequestText(const std::string& text) {
       }
       result.input.stamp = TimeFromDouble(seconds);
       saw_stamp = true;
+    } else if (key == "planner_config") {
+      if (!ReadPlannerConfig(iss, &result.config)) {
+        return Fail("invalid planner_config line");
+      }
+      result.has_config = true;
     } else if (key == "robot_pose") {
       result.input.robot_pose = ReadPose(iss);
       if (!iss) {
@@ -239,6 +294,9 @@ WorkerRequestParseResult ParseWorkerRequestText(const std::string& text) {
   }
   if (result.input.dynamic_obstacles.size() != expected_obstacle_count) {
     return Fail("obstacle_count does not match obstacle entries");
+  }
+  if (!result.has_config && !result.input.planning_frame.empty()) {
+    result.config.planning_frame = result.input.planning_frame;
   }
 
   result.ok = true;

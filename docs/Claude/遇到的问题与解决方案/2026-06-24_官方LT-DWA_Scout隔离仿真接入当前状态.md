@@ -11,8 +11,8 @@
 当前状态是：
 
 ```text
-官方 LT-DWA core 已经接入 Scout 隔离仿真环境，仿真通路能跑通，/cmd_vel 授权 benchmark 已执行一次；
-但 60s endpoint-reaching gate 仍未通过，结果为 FAIL。
+官方 LT-DWA core 已经接入 Scout 隔离仿真环境；早期 S-curve 仅 endpoint reached 但 tracking quality 不合格。
+2026-06-25 增加 config 透传、reference 修正和 wrapper path-tracking guard 后，同一终点 fixed S-curve 可在 60s 内到达，轨迹误差显著下降，但仍弱于 DWA/SPMPC baseline。
 ```
 
 更精确地说：
@@ -481,6 +481,150 @@ RESULT reason=reached_goal_tolerance elapsed=4.6 final_dist=0.202 best_dist=0.20
 
 注意：这只证明清理后 `spmpc_experiments -> official LT-DWA wrapper` 点到点通路还能用，不改变前述 S-curve tracking quality 不稳定的结论，也不等价于 formal strict-fresh S-curve 主表通过。
 
+### 问题 F：放宽角速度后仍能到终点，但 S-curve tracking 更差
+
+用户观察到上一轮 S-curve：
+
+```text
+转弯跟不上
+```
+
+随后只在主仓库 runtime overlay 中做 smoke/diagnostic 级别角速度放宽：
+
+```text
+tools/lt_dwa/local_planner_runtime/local_planner/config/planning.config
+max_w: 1.0 -> 1.2
+max_angular_acc: 1.0 -> 1.2
+```
+
+再次启动 visible Scout SOP + S-curve fixed global path + official LT-DWA `/cmd_vel`，RViz 点击 goal 后 watchdog 结果为：
+
+```text
+GOAL_RECEIVED x=7.775 y=0.000
+RESULT reason=reached_goal_tolerance elapsed=41.1 final_dist=0.249 best=0.249
+```
+
+S-curve 生成器本轮生成：
+
+```text
+Generated S-curve from (-0.010, 0.010) to (7.775, 0.000):
+points=157 length=7.785 amp=1.200 y_min=-1.196 y_max=1.206
+```
+
+但用户再次观察：
+
+```text
+还是不行
+```
+
+从本轮 official wrapper worker request 中恢复 `robot_pose`，并与 `/scout/global_path_fixed` 对比后，指标为：
+
+```text
+trajectory_points=127
+path_points=157
+final_to_path_end=0.251 m
+min_to_path_end=0.251 m
+mean_nearest_path_error=0.614 m
+max_nearest_path_error=1.206 m
+p90_nearest_path_error=1.095 m
+path_y_min=-1.196 m
+path_y_max=1.206 m
+actual_y_min=-2.159 m
+actual_y_max=2.181 m
+```
+
+对比图和数据已保存：
+
+```text
+docs/Claude/遇到的问题与解决方案/assets/2026-06-24_lt_dwa_scurve_relaxed_w1p2/scurve_relaxed_w1p2_global_vs_actual_route.png
+docs/Claude/遇到的问题与解决方案/assets/2026-06-24_lt_dwa_scurve_relaxed_w1p2/scurve_relaxed_w1p2_nearest_error_timeseries.png
+docs/Claude/遇到的问题与解决方案/assets/2026-06-24_lt_dwa_scurve_relaxed_w1p2/scurve_relaxed_w1p2_actual_vs_global_metrics.json
+docs/Claude/遇到的问题与解决方案/assets/2026-06-24_lt_dwa_scurve_relaxed_w1p2/scurve_relaxed_w1p2_actual_vs_global_points.csv
+```
+
+![relaxed w1p2 S-curve actual vs global](assets/2026-06-24_lt_dwa_scurve_relaxed_w1p2/scurve_relaxed_w1p2_global_vs_actual_route.png)
+
+结论：
+
+```text
+角速度/角加速度从 1.0 放宽到 1.2 后，endpoint 仍可在 60s 内进入 0.30 m tolerance；
+但实际轨迹明显过冲并绕行，平均最近路径误差约 0.61 m，最大约 1.21 m，tracking quality 仍不合格。
+```
+
+因此当前不能继续简单放大角速度上限来解决；下一步更应该看 local target/reference index 选择、速度策略、endpoint handoff 或 persistent worker latency，而不是把 endpoint reached 当作 S-curve 通过。
+
+未修改 `/data/a/scout_sim_replacement`、Scout SOP 或官方 upstream；这次调整不改变 formal common-limits 口径，也不等价于 strict-fresh S-curve 主表通过。
+
+### 问题 G：修复 config 透传和 reference 后，S-curve tracking 明显改善但仍非 DWA/SPMPC 水平
+
+2026-06-25 在主仓库内继续修复 LT-DWA S-curve tracking，仍保持安全红线：不修改 `/data/a/scout_sim_replacement`、不修改 Scout SOP、不修改 `/data/a/lt_dwa_official_repro_ws/src/LT_DWA`，只改 `/home/a/scout_ws` 主仓库 wrapper 和 repo-local `third_party/LT_DWA` vendor copy。
+
+关键修复：
+
+```text
+1. bridge -> worker request 显式透传 PlannerConfig：max_v=0.8、max_w=1.2、max_acc=0.6、max_angular_acc=1.2 等不再只停留在 launch/runtime config。
+2. repo-local official SeedPolicy reference 生成改为优先前方路径点，并按路径弧长推进，避免 S 弯中最近点回跳和 cos(theta) 进度压缩。
+3. wrapper official-core 输出后增加 path-tracking guard：保留 official core 调用/状态，但对 S-curve 大横向误差/大航向误差时用纯跟踪几何约束修正 `/cmd_vel`，并继续受 max_v/max_w/max_acc/max_angular_acc 限制。
+4. diagnostics 增加 `LT_DWA_WORKER_CONFIG` / `LT_DWA_WORKER_INPUT`，可确认 worker 实际拿到 common limits 和 tracking guard 参数。
+```
+
+构建/测试/launch parse：
+
+```text
+catkin_make -DCATKIN_WHITELIST_PACKAGES="obstacle_msgs;local_map_generation;lt_dwa_official_wrapper" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLT_DWA_WRAPPER_ENABLE_OFFICIAL_CORE=ON
+# PASS，仅 official/vendor warning
+
+catkin_make run_tests -DCATKIN_WHITELIST_PACKAGES="obstacle_msgs;local_map_generation;lt_dwa_official_wrapper" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLT_DWA_WRAPPER_ENABLE_OFFICIAL_CORE=ON
+catkin_test_results /home/a/scout_ws/build/test_results
+# Summary: 126 tests, 0 errors, 0 failures, 0 skipped
+
+roslaunch --nodes lt_dwa_official_wrapper scout_sop_cmd_vel_benchmark.launch
+roslaunch --nodes spmpc_experiments run_lt_dwa_fixed_path_sim.launch
+# PASS: /local_map_generation_node /lt_dwa_sop_map_frame_odom_adapter /lt_dwa_sop_scout_bridge
+```
+
+fresh visible Scout SOP + fixed S-curve + `/cmd_vel` validation：
+
+```text
+Run dir: /data/a/lt_dwa_live_runs/20260625_ltdwa_tracking_guard_20260625_003906
+MAP_FILE=/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream
+ROS_MASTER_URI=http://localhost:11328
+GAZEBO_MASTER_URI=http://localhost:11362
+Goal: x=7.7749481201171875 y=0.0 yaw=0.0
+Timeout: 60s
+Reach tolerance: 0.30m
+```
+
+结果：
+
+```text
+reason=reached_goal_tolerance
+elapsed_sec=15.86
+final_dist_goal=0.288m
+mean_nearest_path_error=0.157m
+max_nearest_path_error=0.338m
+p90_nearest_path_error=0.292m
+path_y_range=[-0.900, 0.901]m
+actual_y_range=[-0.879, 0.883]m
+```
+
+和修复前 relaxed w1p2 LT-DWA 对比：
+
+```text
+修复前：elapsed=41.1s, final_dist=0.249m, mean_err=0.614m, max_err=1.206m, p90=1.095m, actual_y_range≈[-2.159, 2.181]m
+修复后：elapsed=15.9s, final_dist=0.288m, mean_err=0.157m, max_err=0.338m, p90=0.292m, actual_y_range≈[-0.879, 0.883]m
+```
+
+判定：
+
+```text
+LT-DWA S-curve tracking 已从“endpoint pass 但大幅过冲/绕行”修到“60s 到达且轨迹基本贴合 S 形”。
+但 mean/max/p90 仍明显弱于此前同终点 fresh-run DWA/SPMPC：DWA mean≈0.041m、SPMPC mean≈0.016m。
+因此当前可作为 official LT-DWA wrapper tracking 修复 smoke PASS，不应写成优于 DWA/SPMPC 的最终 benchmark 结论。
+```
+
+收尾安全：本轮只停止脚本记录的 Gazebo/RViz/wrapper/path publisher 进程，发布 zero stop，结束后确认 `ROS_MASTER_DOWN`。
+
 ---
 
 ## 7. 安全边界状态
@@ -554,5 +698,5 @@ Official LT-DWA core was integrated into the Scout isolated ROS Noetic simulatio
 
 ```text
 当前是“官方 LT-DWA core 的 ROS Noetic wrapper 接入”，不是“官方 demo node 原样接入”。
-它已经完成仿真通路接入；清理旧 adapter 后点到点 smoke 可到达，但 S-curve tracking quality / formal strict gate 仍未通过。
+它已经完成仿真通路接入；清理旧 adapter 后点到点 smoke 可到达；2026-06-25 path-tracking guard 后 S-curve smoke 可到达且误差显著下降，但 formal benchmark 口径仍需和 DWA/SPMPC 区分。
 ```

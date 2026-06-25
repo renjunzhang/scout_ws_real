@@ -1,0 +1,47 @@
+{
+  "run_dir": "/data/a/lt_dwa_live_runs/20260624_scurve_relaxed_w1p2_20260624_223207",
+  "request_count": 127,
+  "trajectory_points": 127,
+  "path_points": 157,
+  "latest_request": "lt_dwa_scout_bridge_request_317171000000.txt",
+  "target_pose_xyyaw": [
+    7.7749481201171875,
+    8.940696716308594e-08,
+    0.7673428520385966
+  ],
+  "path_start": {
+    "x": -0.00979985843911936,
+    "y": 0.010357833280663451
+  },
+  "path_end": {
+    "x": 7.7749481201171875,
+    "y": 8.940696686917097e-08
+  },
+  "actual_start": {
+    "x": -0.010034832671486582,
+    "y": 0.010597732492134308
+  },
+  "actual_end": {
+    "x": 7.706982832330896,
+    "y": -0.24204167263659948
+  },
+  "final_to_path_end": 0.2514030527201845,
+  "min_to_path_end": 0.2514030527201845,
+  "mean_nearest_path_error": 0.6136650976405874,
+  "max_nearest_path_error": 1.206459296350325,
+  "p50_nearest_path_error": 0.6162396349298376,
+  "p90_nearest_path_error": 1.095237939553808,
+  "actual_y_min": -2.1594957467324507,
+  "actual_y_max": 2.181347140724343,
+  "path_y_min": -1.1959502023318196,
+  "path_y_max": 1.2063081250194498,
+  "max_nearest_error_at": {
+    "actual_index": 21,
+    "nearest_path_index": 52,
+    "error_m": 1.206459296350325,
+    "actual_x": 3.139713576679139,
+    "actual_y": 2.1170164468219133,
+    "path_x": 2.586497166203676,
+    "path_y": 1.0448711036287597
+  }
+}

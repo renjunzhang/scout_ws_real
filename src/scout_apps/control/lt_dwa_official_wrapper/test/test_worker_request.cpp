@@ -55,9 +55,19 @@ PlannerInput MakeInput() {
 
 }  // namespace
 
-TEST(WorkerRequestTest, RoundTripsPlannerInput) {
+TEST(WorkerRequestTest, RoundTripsPlannerInputAndPlannerConfig) {
   const auto input = MakeInput();
-  const std::string serialized = SerializeWorkerRequest(input, ros::Time(30.1));
+  PlannerConfig config;
+  config.planning_frame = "odom";
+  config.max_v = 0.8;
+  config.max_w = 1.2;
+  config.max_acc = 0.6;
+  config.max_angular_acc = 1.2;
+  config.path_resample_spacing = 0.08;
+  config.enable_path_tracking_guard = true;
+  config.path_tracking_lookahead_m = 0.72;
+  config.path_tracking_min_v = 0.16;
+  const std::string serialized = SerializeWorkerRequest(input, config, ros::Time(30.1));
 
   const auto parsed = ParseWorkerRequestText(serialized);
 
@@ -71,6 +81,15 @@ TEST(WorkerRequestTest, RoundTripsPlannerInput) {
   EXPECT_EQ(parsed.input.occupancy_grid.data.size(), 6u);
   EXPECT_EQ(parsed.input.occupancy_grid.data[1], 100);
   EXPECT_EQ(parsed.input.occupancy_grid.data[2], -1);
+  EXPECT_TRUE(parsed.has_config);
+  EXPECT_DOUBLE_EQ(parsed.config.max_v, 0.8);
+  EXPECT_DOUBLE_EQ(parsed.config.max_w, 1.2);
+  EXPECT_DOUBLE_EQ(parsed.config.max_acc, 0.6);
+  EXPECT_DOUBLE_EQ(parsed.config.max_angular_acc, 1.2);
+  EXPECT_DOUBLE_EQ(parsed.config.path_resample_spacing, 0.08);
+  EXPECT_TRUE(parsed.config.enable_path_tracking_guard);
+  EXPECT_DOUBLE_EQ(parsed.config.path_tracking_lookahead_m, 0.72);
+  EXPECT_DOUBLE_EQ(parsed.config.path_tracking_min_v, 0.16);
   ASSERT_EQ(parsed.input.dynamic_obstacles.size(), 1u);
   EXPECT_EQ(parsed.input.dynamic_obstacles[0].id, 3);
   EXPECT_NEAR(parsed.input.dynamic_obstacles[0].radius, 0.2, 1.0e-9);

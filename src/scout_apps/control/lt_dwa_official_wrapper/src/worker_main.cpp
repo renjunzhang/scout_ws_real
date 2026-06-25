@@ -1,6 +1,8 @@
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <thread>
 
@@ -52,6 +54,52 @@ int Emit(lt_dwa_official_wrapper::WrapperStatus status,
   return exit_code;
 }
 
+lt_dwa_official_wrapper::PlannerConfig ConfigFromRequest(
+    const lt_dwa_official_wrapper::WorkerRequestParseResult& request) {
+  lt_dwa_official_wrapper::PlannerConfig config = request.has_config
+      ? request.config
+      : lt_dwa_official_wrapper::PlannerConfig();
+  if (!request.input.planning_frame.empty()) {
+    config.planning_frame = request.input.planning_frame;
+  }
+  return config;
+}
+
+void EmitRuntimeDiagnostics(const lt_dwa_official_wrapper::PlannerInput& input,
+                            const lt_dwa_official_wrapper::PlannerConfig& config) {
+  std::size_t nearest_index = 0;
+  double nearest_error = std::numeric_limits<double>::quiet_NaN();
+  for (std::size_t i = 0; i < input.reference_path.size(); ++i) {
+    const double dx = input.reference_path[i].x - input.robot_pose.x;
+    const double dy = input.reference_path[i].y - input.robot_pose.y;
+    const double distance = std::hypot(dx, dy);
+    if (!std::isfinite(nearest_error) || distance < nearest_error) {
+      nearest_error = distance;
+      nearest_index = i;
+    }
+  }
+  const double goal_dist = std::hypot(input.target_pose.x - input.robot_pose.x,
+                                     input.target_pose.y - input.robot_pose.y);
+  std::cout << "LT_DWA_WORKER_CONFIG planning_frame=" << config.planning_frame
+            << " max_v=" << config.max_v
+            << " min_v=" << config.min_v
+            << " max_w=" << config.max_w
+            << " max_acc=" << config.max_acc
+            << " max_angular_acc=" << config.max_angular_acc
+            << " robot_radius=" << config.robot_radius
+            << " time_step=" << config.time_step
+            << " path_resample_spacing=" << config.path_resample_spacing
+            << " enable_path_tracking_guard=" << (config.enable_path_tracking_guard ? 1 : 0)
+            << " path_tracking_lookahead_m=" << config.path_tracking_lookahead_m
+            << " path_tracking_min_v=" << config.path_tracking_min_v << "\n";
+  std::cout << "LT_DWA_WORKER_INPUT path_points=" << input.reference_path.size()
+            << " nearest_path_index=" << nearest_index
+            << " nearest_path_error=" << nearest_error
+            << " goal_dist=" << goal_dist
+            << " robot_v=" << input.robot_twist.v
+            << " robot_w=" << input.robot_twist.w << "\n";
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -79,7 +127,7 @@ int main(int argc, char** argv) {
                   "request_parse_failed_" + request.reason, 2);
     }
 
-    lt_dwa_official_wrapper::PlannerConfig config;
+    lt_dwa_official_wrapper::PlannerConfig config = ConfigFromRequest(request);
     lt_dwa_official_wrapper::PlannerFacade facade(config);
     const auto output = facade.PlanOnce(request.input, request.now);
     return Emit(output.status, output.diagnostics.reject_reason);
@@ -98,10 +146,8 @@ int main(int argc, char** argv) {
                   "request_parse_failed_" + request.reason, 0.0, 0.0, -1, 2);
     }
 
-    lt_dwa_official_wrapper::PlannerConfig config;
-    if (!request.input.planning_frame.empty()) {
-      config.planning_frame = request.input.planning_frame;
-    }
+    lt_dwa_official_wrapper::PlannerConfig config = ConfigFromRequest(request);
+    EmitRuntimeDiagnostics(request.input, config);
     lt_dwa_official_wrapper::FrameValidator validator;
     const auto validation = validator.ValidateInput(request.input, config, request.now);
     if (!validation.ok()) {

@@ -728,19 +728,36 @@ std::vector<State> SeedPolicy::generateReferenceStates(const std::vector<PathPos
             break;
         }
     }
-    // 计算当前状态在全局路径上的对应点
+    // 计算当前状态在全局路径上的对应点。优先选择车体前方路径点，避免转弯超调后
+    // 被车体后方的点拉回导致索引回退；若路径全在后方，则回退为全局最近点。
     double min_distance = std::numeric_limits<double>::max();
     int current_position_index = navigation_path.size() - 1;
+    bool has_forward_candidate = false;
+    const double min_forward_x = -0.5 * this->robot_radius_;
     for (int i = 0; i < navigation_path.size(); i++) {
+        if (navigation_path[i].x_ < min_forward_x) {
+            continue;
+        }
         double distance = sqrt(navigation_path[i].x_ * navigation_path[i].x_ + navigation_path[i].y_ * navigation_path[i].y_);
-        if (Tools::isSmall(distance, min_distance)) {
+        if (!has_forward_candidate || Tools::isSmall(distance, min_distance)) {
             min_distance = distance;
             current_position_index = i;
+            has_forward_candidate = true;
         }
     }
-    // 计算参考状态序列
+    if (!has_forward_candidate) {
+        for (int i = 0; i < navigation_path.size(); i++) {
+            double distance = sqrt(navigation_path[i].x_ * navigation_path[i].x_ + navigation_path[i].y_ * navigation_path[i].y_);
+            if (Tools::isSmall(distance, min_distance)) {
+                min_distance = distance;
+                current_position_index = i;
+            }
+        }
+    }
+    // 计算参考状态序列：沿路径弧长推进，不再用局部切向 cos(theta) 压缩进度，
+    // 避免 S 弯大航向差时参考点卡住或跳段。
      for (int frame_index = 0; frame_index < PREDICT_TIME_LEN; frame_index++) {
-        double distance = std::max(target_speeds[current_position_index] * cos(navigation_path[current_position_index].theta_), 0.0) * static_cast<double>(frame_index) * this->time_step_;
+        double distance = target_speeds[current_position_index] * static_cast<double>(frame_index) * this->time_step_;
         int future_index = navigation_path.size() - 1;
         for (int index = current_position_index; index < navigation_path.size(); index++) {
             if (Tools::isLarge(navigation_path[index].dist_ - navigation_path[current_position_index].dist_, distance)) {

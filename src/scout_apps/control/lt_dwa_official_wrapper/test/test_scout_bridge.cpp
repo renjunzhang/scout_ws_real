@@ -190,6 +190,11 @@ TEST(ScoutBridgeTest, FormatsDiagnosticsWithSafetyFlagsAndRates) {
   EXPECT_NE(text.find("planner_rate_hz=5"), std::string::npos);
   EXPECT_NE(text.find("command_publish_rate_hz=30"), std::string::npos);
   EXPECT_NE(text.find("enable_actuated_output=false"), std::string::npos);
+  EXPECT_NE(text.find("max_v=1"), std::string::npos);
+  EXPECT_NE(text.find("max_w=1"), std::string::npos);
+  EXPECT_NE(text.find("path_resample_spacing=0.1"), std::string::npos);
+  EXPECT_NE(text.find("enable_path_tracking_guard=true"), std::string::npos);
+  EXPECT_NE(text.find("path_tracking_lookahead_m=0.75"), std::string::npos);
   EXPECT_NE(text.find("effective_cmd_vel=false"), std::string::npos);
   EXPECT_NE(text.find("effective_benchmark_raw=false"), std::string::npos);
   EXPECT_NE(text.find("worker_tf_topic=/baseline/official_lt_dwa/worker_tf_sandbox"), std::string::npos);
