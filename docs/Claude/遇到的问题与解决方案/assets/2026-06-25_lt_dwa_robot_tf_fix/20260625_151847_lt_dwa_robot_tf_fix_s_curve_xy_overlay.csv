@@ -1,0 +1,2 @@
+bag,path_points,actual_points,actual_source,frame,tracking_rms_m,tracking_max_m,final_error_m
+/data/a/lt_dwa_tracking_runs/20260625_151847_lt_dwa_robot_tf_fix_s_curve/20260625_151847_lt_dwa_robot_tf_fix_s_curve.bag,179,4860,tf,map,0.0603590222797208,0.14543753545929064,0.21800531608397014

@@ -37,7 +37,7 @@
 class SeedPolicy: public Policy {
  public:
     // 构造函数
-    SeedPolicy(double max_v, double min_v, double max_w, double max_acc, double max_angular_acc, double robot_radius, double time_step, const ros::ServiceClient &local_map_service): Policy(max_v, min_v, max_w, max_acc, max_angular_acc, robot_radius, time_step) {
+    SeedPolicy(double max_v, double min_v, double max_w, double max_acc, double max_angular_acc, double robot_radius, double time_step, const ros::ServiceClient &local_map_service): Policy(max_v, min_v, max_w, max_acc, max_angular_acc, robot_radius, time_step), debug_nh_("~") {
         this->local_map_service_ = local_map_service;
         // 定义轨迹优化器
         this->eb_mpc_trajectory_optimizer_ = EbMpcOptimization::TrajectoryOptimizer(max_v, min_v, max_w, max_acc, max_angular_acc);
@@ -49,13 +49,12 @@ class SeedPolicy: public Policy {
         }
         boost::property_tree::ini_parser::read_ini(file_path, this->pt_);
         // [debug]進行可視化
-        ros::NodeHandle nh("~");
-        this->seed_tree_vis_pub_ = nh.advertise<visualization_msgs::MarkerArray>("/local_planner/seed_tree_vis", 10);
-        this->best_seed_sequence_vis_pub_ = nh.advertise<visualization_msgs::MarkerArray>("/local_planner/best_seed_sequence_vis", 10);
-        this->debug_map_pub_ = nh.advertise<nav_msgs::OccupancyGrid>("/local_planner/debug_map", 10);
-        this->debug_cost_pub_ = nh.advertise<nav_msgs::OccupancyGrid>("/local_planner/debug_cost", 10);
-        this->debug_nav_pub_= nh.advertise<visualization_msgs::MarkerArray>("/local_planner/debug_nav", 10);
-        this->debug_optimize_pub_ = nh.advertise<visualization_msgs::MarkerArray>("/local_planner/debug_optimize", 10);
+        this->seed_tree_vis_pub_ = debug_nh_.advertise<visualization_msgs::MarkerArray>("/local_planner/seed_tree_vis", 10);
+        this->best_seed_sequence_vis_pub_ = debug_nh_.advertise<visualization_msgs::MarkerArray>("/local_planner/best_seed_sequence_vis", 10);
+        this->debug_map_pub_ = debug_nh_.advertise<nav_msgs::OccupancyGrid>("/local_planner/debug_map", 10);
+        this->debug_cost_pub_ = debug_nh_.advertise<nav_msgs::OccupancyGrid>("/local_planner/debug_cost", 10);
+        this->debug_nav_pub_= debug_nh_.advertise<visualization_msgs::MarkerArray>("/local_planner/debug_nav", 10);
+        this->debug_optimize_pub_ = debug_nh_.advertise<visualization_msgs::MarkerArray>("/local_planner/debug_optimize", 10);
     };
 
     // 析构函数
@@ -66,6 +65,7 @@ class SeedPolicy: public Policy {
  
  private:
     ros::ServiceClient local_map_service_;
+    ros::NodeHandle debug_nh_;
     boost::property_tree::ptree pt_;
     std::mt19937 rand_gen_ = std::mt19937(0);
     EbMpcOptimization::TrajectoryOptimizer eb_mpc_trajectory_optimizer_;

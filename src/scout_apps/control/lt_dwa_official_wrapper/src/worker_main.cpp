@@ -54,6 +54,28 @@ int Emit(lt_dwa_official_wrapper::WrapperStatus status,
   return exit_code;
 }
 
+int Emit(lt_dwa_official_wrapper::WrapperStatus status,
+         const std::string& reason,
+         double raw_command_v,
+         double raw_command_w,
+         double final_command_v,
+         double final_command_w,
+         bool guard_applied,
+         const std::string& guard_reason,
+         int core_return,
+         int exit_code = 0) {
+  std::cout << lt_dwa_official_wrapper::FormatWorkerResponse(status,
+                                                            reason,
+                                                            raw_command_v,
+                                                            raw_command_w,
+                                                            final_command_v,
+                                                            final_command_w,
+                                                            guard_applied,
+                                                            guard_reason,
+                                                            core_return);
+  return exit_code;
+}
+
 lt_dwa_official_wrapper::PlannerConfig ConfigFromRequest(
     const lt_dwa_official_wrapper::WorkerRequestParseResult& request) {
   lt_dwa_official_wrapper::PlannerConfig config = request.has_config
@@ -163,7 +185,15 @@ int main(int argc, char** argv) {
     }
     const auto result = lt_dwa_official_wrapper::RunOfficialCoreOnce(
         request.input, config, OFFICIAL_LT_DWA_ROOT);
-    return Emit(result.status, result.reason, result.command.v, result.command.w, result.core_return);
+    return Emit(result.status,
+                result.reason,
+                result.raw_command.v,
+                result.raw_command.w,
+                result.final_command.v,
+                result.final_command.w,
+                result.guard_applied,
+                result.guard_reason,
+                result.core_return);
 #else
     return Emit(lt_dwa_official_wrapper::WrapperStatus::kCommandRejected,
                 "official_core_build_disabled", 0.0, 0.0, -1);

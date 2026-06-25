@@ -56,13 +56,21 @@ ScoutBridgeInputCache MakeValidCache() {
 
 ScoutBridgeCommandState MakeCommandState(const ros::Time& stamp) {
   ScoutBridgeCommandState state;
-  state.has_command = true;
+  state.has_raw_command = true;
+  state.raw_command_v = 0.1;
+  state.raw_command_w = -0.05;
+  state.has_final_command = true;
   state.stamp = stamp;
-  state.command_v = 0.3;
-  state.command_w = -0.2;
+  state.final_command_v = 0.3;
+  state.final_command_w = -0.2;
+  state.guard_applied = true;
+  state.guard_reason = "path_tracking_guard";
+  state.has_core_return = true;
+  state.core_return = 0;
   state.status = WrapperStatus::kOk;
-  state.reason = "official_core_ok";
-  state.worker_latency_ms = 12.0;
+  state.reason = "official_core_ok_path_tracking_guard";
+  state.execution_mode = "in_process";
+  state.planner_latency_ms = 12.0;
   return state;
 }
 
@@ -78,7 +86,9 @@ TEST(ScoutBridgeTest, DefaultsAreShadowOnlyRealtimeBridge) {
   EXPECT_DOUBLE_EQ(config.command_stale_timeout_sec, 0.25);
   EXPECT_EQ(config.worker_tf_topic, "/baseline/official_lt_dwa/worker_tf_sandbox");
   EXPECT_EQ(config.worker_tf_static_topic, "/baseline/official_lt_dwa/worker_tf_static_sandbox");
+  EXPECT_EQ(config.planner_execution_mode, "in_process");
   EXPECT_EQ(config.shadow_cmd_topic, "/baseline/official_lt_dwa/shadow_cmd_vel");
+  EXPECT_EQ(config.raw_cmd_topic, "/baseline/official_lt_dwa/raw_cmd_vel");
   EXPECT_EQ(config.path_topic, "/scout/global_path_fixed");
 }
 
@@ -178,14 +188,13 @@ TEST(ScoutBridgeTest, NonOkCommandDecisionReturnsZero) {
 }
 
 TEST(ScoutBridgeTest, FormatsDiagnosticsWithSafetyFlagsAndRates) {
+  const auto state = MakeCommandState(ros::Time(10.0));
+  const auto decision = DecideCommandPublication(DefaultScoutBridgeConfig(), state, ros::Time(10.1));
   const auto text = FormatScoutBridgeDiagnostics(DefaultScoutBridgeConfig(),
-                                                WrapperStatus::kCommandRejected,
-                                                "worker_disabled",
-                                                0.0,
-                                                0.0,
-                                                -1.0,
-                                                false,
-                                                -1.0);
+                                                state,
+                                                decision,
+                                                WrapperStatus::kOk,
+                                                "official_core_ok_path_tracking_guard");
 
   EXPECT_NE(text.find("planner_rate_hz=5"), std::string::npos);
   EXPECT_NE(text.find("command_publish_rate_hz=30"), std::string::npos);
@@ -198,6 +207,12 @@ TEST(ScoutBridgeTest, FormatsDiagnosticsWithSafetyFlagsAndRates) {
   EXPECT_NE(text.find("effective_cmd_vel=false"), std::string::npos);
   EXPECT_NE(text.find("effective_benchmark_raw=false"), std::string::npos);
   EXPECT_NE(text.find("worker_tf_topic=/baseline/official_lt_dwa/worker_tf_sandbox"), std::string::npos);
+  EXPECT_NE(text.find("raw_cmd_topic=/baseline/official_lt_dwa/raw_cmd_vel"), std::string::npos);
+  EXPECT_NE(text.find("execution_mode=in_process"), std::string::npos);
+  EXPECT_NE(text.find("guard_applied=true"), std::string::npos);
+  EXPECT_NE(text.find("raw_command_v=0.1"), std::string::npos);
+  EXPECT_NE(text.find("final_command_v=0.3"), std::string::npos);
+  EXPECT_NE(text.find("published_command_v=0.3"), std::string::npos);
   EXPECT_NE(text.find("expected_map_file="), std::string::npos);
 }
 

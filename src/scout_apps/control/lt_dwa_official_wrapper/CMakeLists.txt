@@ -116,8 +116,15 @@ add_executable(lt_dwa_scout_bridge
   src/scout_bridge_node.cpp
 )
 add_dependencies(lt_dwa_scout_bridge ${catkin_EXPORTED_TARGETS})
+if(LT_DWA_WRAPPER_ENABLE_OFFICIAL_CORE)
+  add_dependencies(lt_dwa_scout_bridge ${PROJECT_NAME}_official_core)
+  target_compile_definitions(lt_dwa_scout_bridge PRIVATE
+    LT_DWA_WRAPPER_ENABLE_OFFICIAL_CORE
+    OFFICIAL_LT_DWA_ROOT="${OFFICIAL_LT_DWA_ROOT}")
+endif()
 target_link_libraries(lt_dwa_scout_bridge
   ${PROJECT_NAME}
+  ${LT_DWA_WORKER_OPTIONAL_LIBRARIES}
   ${catkin_LIBRARIES}
   ${OpenCV_LIBRARIES}
 )

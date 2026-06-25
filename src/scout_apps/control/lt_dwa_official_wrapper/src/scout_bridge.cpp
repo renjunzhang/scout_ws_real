@@ -170,7 +170,7 @@ ScoutBridgeCommandDecision DecideCommandPublication(const ScoutBridgeConfig& con
   decision.publish_cmd_vel = ShouldPublishCmdVel(config);
   decision.publish_benchmark_raw = ShouldPublishBenchmarkRaw(config);
 
-  if (!state.has_command) {
+  if (!state.has_final_command) {
     decision.reason = state.reason.empty() ? "missing_command" : state.reason;
     return decision;
   }
@@ -189,25 +189,25 @@ ScoutBridgeCommandDecision DecideCommandPublication(const ScoutBridgeConfig& con
   }
 
   decision.fresh = true;
-  decision.command_v = state.command_v;
-  decision.command_w = state.command_w;
+  decision.command_v = state.final_command_v;
+  decision.command_w = state.final_command_w;
   decision.reason = "command_fresh";
   return decision;
 }
 
 std::string FormatScoutBridgeDiagnostics(const ScoutBridgeConfig& config,
+                                         const ScoutBridgeCommandState& state,
+                                         const ScoutBridgeCommandDecision& decision,
                                          WrapperStatus status,
-                                         const std::string& reason,
-                                         double command_v,
-                                         double command_w,
-                                         double command_age_sec,
-                                         bool command_fresh,
-                                         double worker_latency_ms) {
+                                         const std::string& reason) {
   std::ostringstream oss;
   oss << std::boolalpha
       << "status=" << ToString(status)
       << " reason=" << reason
+      << " execution_mode=" << state.execution_mode
+      << " planner_execution_mode=" << config.planner_execution_mode
       << " shadow_cmd_topic=" << config.shadow_cmd_topic
+      << " raw_cmd_topic=" << config.raw_cmd_topic
       << " expected_map_file=" << config.expected_map_file
       << " planner_rate_hz=" << config.planner_rate_hz
       << " command_publish_rate_hz=" << config.command_publish_rate_hz
@@ -232,11 +232,21 @@ std::string FormatScoutBridgeDiagnostics(const ScoutBridgeConfig& config,
       << " benchmark_raw_topic=" << config.benchmark_raw_topic
       << " worker_tf_topic=" << config.worker_tf_topic
       << " worker_tf_static_topic=" << config.worker_tf_static_topic
-      << " command_fresh=" << command_fresh
-      << " command_age_sec=" << command_age_sec
-      << " worker_latency_ms=" << worker_latency_ms
-      << " command_v=" << command_v
-      << " command_w=" << command_w;
+      << " command_fresh=" << decision.fresh
+      << " command_age_sec=" << decision.command_age_sec
+      << " planner_latency_ms=" << state.planner_latency_ms
+      << " has_core_return=" << state.has_core_return
+      << " core_return=" << state.core_return
+      << " guard_applied=" << state.guard_applied
+      << " guard_reason=" << state.guard_reason
+      << " has_raw_command=" << state.has_raw_command
+      << " raw_command_v=" << state.raw_command_v
+      << " raw_command_w=" << state.raw_command_w
+      << " has_final_command=" << state.has_final_command
+      << " final_command_v=" << state.final_command_v
+      << " final_command_w=" << state.final_command_w
+      << " published_command_v=" << decision.command_v
+      << " published_command_w=" << decision.command_w;
   return oss.str();
 }
 

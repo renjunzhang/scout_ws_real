@@ -19,6 +19,14 @@ struct WorkerRunResult {
   bool has_command{false};
   double command_v{0.0};
   double command_w{0.0};
+  bool has_raw_command{false};
+  double raw_command_v{0.0};
+  double raw_command_w{0.0};
+  bool has_final_command{false};
+  double final_command_v{0.0};
+  double final_command_w{0.0};
+  bool guard_applied{false};
+  std::string guard_reason;
   bool has_core_return{false};
   int core_return{0};
 };

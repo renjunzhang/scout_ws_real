@@ -94,6 +94,39 @@ TEST(WorkerProtocolTest, ParsesStructuredResponseWithCommandFields) {
   EXPECT_TRUE(response.has_command);
   EXPECT_DOUBLE_EQ(response.command_v, 0.2);
   EXPECT_DOUBLE_EQ(response.command_w, -0.1);
+  EXPECT_TRUE(response.has_final_command);
+  EXPECT_DOUBLE_EQ(response.final_command_v, 0.2);
+  EXPECT_DOUBLE_EQ(response.final_command_w, -0.1);
+  EXPECT_TRUE(response.has_core_return);
+  EXPECT_EQ(response.core_return, 0);
+}
+
+TEST(WorkerProtocolTest, ParsesStructuredResponseWithRawAndFinalCommandFields) {
+  const std::string text = FormatWorkerResponse(WrapperStatus::kOk,
+                                                "official_core_ok_path_tracking_guard",
+                                                0.1,
+                                                -0.05,
+                                                0.2,
+                                                -0.1,
+                                                true,
+                                                "path_tracking_guard",
+                                                0);
+
+  const auto response = ParseWorkerResponse(text);
+
+  EXPECT_TRUE(response.valid);
+  EXPECT_EQ(response.status, WrapperStatus::kOk);
+  EXPECT_TRUE(response.has_raw_command);
+  EXPECT_DOUBLE_EQ(response.raw_command_v, 0.1);
+  EXPECT_DOUBLE_EQ(response.raw_command_w, -0.05);
+  EXPECT_TRUE(response.has_final_command);
+  EXPECT_DOUBLE_EQ(response.final_command_v, 0.2);
+  EXPECT_DOUBLE_EQ(response.final_command_w, -0.1);
+  EXPECT_TRUE(response.has_command);
+  EXPECT_DOUBLE_EQ(response.command_v, 0.2);
+  EXPECT_DOUBLE_EQ(response.command_w, -0.1);
+  EXPECT_TRUE(response.guard_applied);
+  EXPECT_EQ(response.guard_reason, "path_tracking_guard");
   EXPECT_TRUE(response.has_core_return);
   EXPECT_EQ(response.core_return, 0);
 }

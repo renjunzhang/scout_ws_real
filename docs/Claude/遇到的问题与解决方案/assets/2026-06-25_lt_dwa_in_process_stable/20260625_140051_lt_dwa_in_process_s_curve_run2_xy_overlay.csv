@@ -1,0 +1,2 @@
+bag,path_points,actual_points,actual_source,frame,tracking_rms_m,tracking_max_m,final_error_m
+/data/a/lt_dwa_tracking_runs/20260625_140051_lt_dwa_in_process_s_curve_run2/20260625_140051_lt_dwa_in_process_s_curve_run2.bag,141,3479,tf,map,0.08554870288929375,0.18729490699841006,0.23404728488819232

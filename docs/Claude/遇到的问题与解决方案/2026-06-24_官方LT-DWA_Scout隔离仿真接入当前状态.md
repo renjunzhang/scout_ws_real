@@ -12,7 +12,8 @@
 
 ```text
 官方 LT-DWA core 已经接入 Scout 隔离仿真环境；早期 S-curve 仅 endpoint reached 但 tracking quality 不合格。
-2026-06-25 增加 config 透传、reference 修正和 wrapper path-tracking guard 后，同一终点 fixed S-curve 可在 60s 内到达，轨迹误差显著下降，但仍弱于 DWA/SPMPC baseline。
+2026-06-25 增加 config 透传、reference 修正和 wrapper path-tracking guard 后，同一终点 fixed S-curve 可在 60s 内到达，轨迹误差显著下降。
+2026-06-25 进一步切到 `in_process`、分离 raw official 与 guarded/final 输出，并修复 `SeedPolicy` debug publisher lifetime 与 official `Robot` detached TF broadcaster 崩溃后，fresh visible Scout SOP 多轮 S-curve 均 60s 内到达；同 20260621 旧 adapter NO-GO 终点口径的 official wrapper N=3 复测为 3/3 到点，overlay RMS 均值约 0.095 m，LT-DWA 已可作为稳定对比 baseline；但 `/slosh/height` 与 cmd 角加速度偏高，不应写成优于 DWA/SPMPC。
 ```
 
 更精确地说：
@@ -127,12 +128,11 @@ lt_dwa_map_frame_odom_adapter
         │
         ▼
 lt_dwa_scout_bridge
-        │  builds PlannerInput, writes request file
+        │  builds PlannerInput
+        ├── in_process: directly calls official SeedPolicy::forward(...)
+        └── worker_once fallback: request file + lt_dwa_worker --mode official-core-once
         ▼
-lt_dwa_worker --mode official-core-once
-        │  calls official SeedPolicy::forward(...)
-        ▼
-structured worker result
+raw official command + guarded/final command
         │
         ▼
 30Hz command publisher
@@ -625,6 +625,208 @@ LT-DWA S-curve tracking 已从“endpoint pass 但大幅过冲/绕行”修到�
 
 收尾安全：本轮只停止脚本记录的 Gazebo/RViz/wrapper/path publisher 进程，发布 zero stop，结束后确认 `ROS_MASTER_DOWN`。
 
+### 问题 H：in-process 首次 live 崩溃，修复 publisher lifetime 后连续 fresh-run 通过
+
+用户要求先把 one-shot worker 改为 persistent/in-process，并彻底分离 raw official 输出与 tracking guard 输出。实现后首次 visible live run 出现小车不动，原因不是 S 全局层未发布，而是 `lt_dwa_sop_scout_bridge` 在 in-process official core 调用中崩溃：
+
+```text
+terminate called after throwing an instance of 'ros::Exception'
+  what():  Call to isLatched() on an invalid Publisher
+```
+
+定位结果：repo-local `third_party/LT_DWA/local_planner/include/policy/seed_policy.hpp` 中 `SeedPolicy` 构造函数用临时 `ros::NodeHandle nh("~")` advertise debug publishers；构造函数返回后 NodeHandle 析构，后续 `seed_policy.cpp` 中未被 `VISUALIZATION` 完全保护的 publish 会命中 invalid Publisher。
+
+修复：只修改 `/home/a/scout_ws/third_party/LT_DWA` vendor copy，不修改 `/data/a/lt_dwa_official_repro_ws/src/LT_DWA` upstream。给 `SeedPolicy` 增加持久 `ros::NodeHandle debug_nh_` 成员，并从该成员 advertise debug publishers。
+
+同时补齐可重复 evidence 链：
+
+```text
+1. `spmpc_experiments/scripts/run_fixed_path_baseline_suite.sh`
+   - LT-DWA baseline 可透传 `planner_execution_mode`、`raw_cmd_topic`、`runtime_request_dir`。
+   - 记录 `/baseline/lt_dwa/raw_cmd_vel`。
+   - 默认 runtime request dir 放到 `OUT_ROOT/lt_dwa_runtime_requests`，不再默认依赖 `/tmp` 作为证据目录。
+2. 新增 `spmpc_experiments/scripts/plot_fixed_path_xy_overlay.py`
+   - 从 rosbag 读取 `/scout/global_path_fixed` 与 `/tf`/`/odom`。
+   - 输出 reference path vs actual trajectory PNG 和 CSV 指标。
+```
+
+构建/测试：
+
+```text
+catkin_make -DCATKIN_WHITELIST_PACKAGES="obstacle_msgs;local_map_generation;lt_dwa_official_wrapper" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLT_DWA_WRAPPER_ENABLE_OFFICIAL_CORE=ON
+# PASS
+
+catkin_make run_tests -DCATKIN_WHITELIST_PACKAGES="obstacle_msgs;local_map_generation;lt_dwa_official_wrapper" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLT_DWA_WRAPPER_ENABLE_OFFICIAL_CORE=ON
+catkin_test_results /home/a/scout_ws/build/test_results
+# Summary: 128 tests, 0 errors, 0 failures, 0 skipped
+
+catkin_make -DCATKIN_WHITELIST_PACKAGES="scout_msgs;scout_local_planner"
+# PASS
+```
+
+fresh visible Scout SOP + in-process LT-DWA + S-curve 两轮验证均为每轮重新启动仿真环境，均使用：
+
+```text
+MAP_FILE=/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream
+ROS_MASTER_URI=http://localhost:11328
+GAZEBO_MASTER_URI=http://localhost:11362
+planner_execution_mode:=in_process
+/cmd_vel enabled only for this bounded simulation test
+Timeout: 60s 未到达 = FAIL
+Goal: map x=6.0 y=0.0
+```
+
+结果：
+
+```text
+Run 1: /data/a/lt_dwa_tracking_runs/20260625_135825_lt_dwa_in_process_s_curve_run1
+outcome=goal_reached_within_60s
+path_points=141 actual_points=3440 actual_source=tf frame=map
+tracking_rms_m=0.08484 tracking_max_m=0.19218 final_error_m=0.24660
+
+Run 2: /data/a/lt_dwa_tracking_runs/20260625_140051_lt_dwa_in_process_s_curve_run2
+outcome=goal_reached_within_60s
+path_points=141 actual_points=3479 actual_source=tf frame=map
+tracking_rms_m=0.08555 tracking_max_m=0.18729 final_error_m=0.23405
+```
+
+对比图已保存到仓库文档 assets：
+
+```text
+docs/Claude/遇到的问题与解决方案/assets/2026-06-25_lt_dwa_in_process_stable/20260625_135825_lt_dwa_in_process_s_curve_run1_xy_overlay.png
+docs/Claude/遇到的问题与解决方案/assets/2026-06-25_lt_dwa_in_process_stable/20260625_140051_lt_dwa_in_process_s_curve_run2_xy_overlay.png
+```
+
+![run1 in-process S-curve actual vs global](assets/2026-06-25_lt_dwa_in_process_stable/20260625_135825_lt_dwa_in_process_s_curve_run1_xy_overlay.png)
+
+![run2 in-process S-curve actual vs global](assets/2026-06-25_lt_dwa_in_process_stable/20260625_140051_lt_dwa_in_process_s_curve_run2_xy_overlay.png)
+
+判定：
+
+```text
+in_process invalid Publisher 崩溃已修复。
+LT-DWA S-curve tracking 在这两轮 fresh visible Scout SOP 中均 60s 内到达，RMS 约 0.085 m，max error < 0.20 m。
+当前可以作为稳定对比方法继续纳入 baseline；但仍需和 DWA/SPMPC 分开表述，不应声称优于 DWA/SPMPC。
+```
+
+安全收尾：每轮仿真均 fresh 启动；每轮结束只停止本轮启动的 roslaunch/path/rosbag/Gazebo/RViz 进程，未使用 broad `killall`/`pkill`，未修改 `/data/a/scout_sim_replacement`、Scout SOP 或官方 upstream。
+
+### 问题 I：手动 RViz 点击仍卡住，最终定位到 official Robot detached TF broadcaster
+
+用户再次手动点击 RViz goal 时，小车又停住。按安全流程先发布 zero `/cmd_vel`，只停止本轮启动的 LT-DWA/path/relay/rosbag/Gazebo/RViz 任务，并确认：
+
+```text
+ROS_MASTER_DOWN
+```
+
+本轮记录目录：
+
+```text
+/data/a/lt_dwa_tracking_runs/20260625_150957_lt_dwa_manual_click_s_curve_restart
+```
+
+日志显示不是路径未生成，而是 bridge 再次崩溃：
+
+```text
+Received goal in frame map: x=7.954 y=0.024
+Generated template path s_curve with 179 poses in frame map
+terminate called after throwing an instance of 'ros::Exception'
+  what():  Call to isLatched() on an invalid Publisher
+[lt_dwa_sop_scout_bridge-3] process has died
+```
+
+残留根因：`third_party/LT_DWA/local_planner/include/util/robot.hpp` 中 official `Robot` 构造函数每次创建对象都会启动 detached TF broadcaster thread；in-process wrapper 每个规划 tick 都构造/销毁 `Robot`，线程可能在对象析构后继续访问内部 `tf::TransformBroadcaster`，触发 invalid Publisher。同时该 official demo broadcaster 会向全局 `/tf` 发布 `odom -> base_footprint`，造成 `TF_REPEATED_DATA` 并污染 Scout 仿真 TF。
+
+修复：
+
+```text
+1. Robot broadcaster thread 不再 detach；析构时 stop + join。
+2. stop_ 改为 atomic_bool，避免线程 stop 标志数据竞争。
+3. Robot 增加 `enable_tf_broadcast` 参数，默认 true 保持 official demo 行为。
+4. wrapper 的 `RunOfficialCoreOnce(...)` 构造 Robot 时传 `false`，in-process 路径不再发布 official demo TF。
+```
+
+验证：
+
+```text
+catkin_make -DCATKIN_WHITELIST_PACKAGES="obstacle_msgs;local_map_generation;lt_dwa_official_wrapper" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLT_DWA_WRAPPER_ENABLE_OFFICIAL_CORE=ON
+# PASS
+
+catkin_make run_tests -DCATKIN_WHITELIST_PACKAGES="obstacle_msgs;local_map_generation;lt_dwa_official_wrapper" -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLT_DWA_WRAPPER_ENABLE_OFFICIAL_CORE=ON
+catkin_test_results /home/a/scout_ws/build/test_results
+# Summary: 128 tests, 0 errors, 0 failures, 0 skipped
+```
+
+fresh visible Scout SOP 复现失败同类 goal：
+
+```text
+Run dir: /data/a/lt_dwa_tracking_runs/20260625_151847_lt_dwa_robot_tf_fix_s_curve
+Goal: map x=7.954 y=0.024
+planner_execution_mode:=in_process
+Timeout: 60s 未到达 = FAIL
+outcome=goal_reached_within_60s
+path_points=179 actual_points=4860 actual_source=tf frame=map
+tracking_rms_m=0.06036 tracking_max_m=0.14544 final_error_m=0.21801
+```
+
+本轮 planner log 未再出现 `Call to isLatched()`、`process has died` 或 `TF_REPEATED_DATA`。对比图已保存：
+
+```text
+docs/Claude/遇到的问题与解决方案/assets/2026-06-25_lt_dwa_robot_tf_fix/20260625_151847_lt_dwa_robot_tf_fix_s_curve_xy_overlay.png
+```
+
+![robot tf fix S-curve actual vs global](assets/2026-06-25_lt_dwa_robot_tf_fix/20260625_151847_lt_dwa_robot_tf_fix_s_curve_xy_overlay.png)
+
+判定：
+
+```text
+手动点击后卡住的核心原因已解决：in-process official Robot 不再启动 detached TF publisher 线程，也不再污染 Scout /tf。
+同类远端 S-curve goal fresh-run 已 60s 内到达，且轨迹误差低于前两轮 smoke。
+```
+
+安全收尾：验证结束后发布 zero `/cmd_vel`，只停止本轮启动的任务，确认 `ROS_MASTER_DOWN`；未修改 `/data/a/scout_sim_replacement`、Scout SOP 或 `/data/a/lt_dwa_official_repro_ws/src/LT_DWA`。
+
+### 6.4 同 20260621 终点口径 official wrapper N=3 对比复测
+
+为回应“让 LT-DWA 成为稳定对比方法”的要求，按 20260621 online baseline 同终点口径复测 official wrapper：
+
+```text
+artifact_root=/data/a/lt_dwa_tracking_runs/20260625_161723_lt_dwa_official_goal5_s_curve_n3
+manifest=/data/a/lt_dwa_tracking_runs/20260625_161723_lt_dwa_official_goal5_s_curve_n3/manifest.csv
+overlay_metrics=/data/a/lt_dwa_tracking_runs/20260625_161723_lt_dwa_official_goal5_s_curve_n3/lt_dwa_official_goal5_overlay_metrics.csv
+core_metrics=/data/a/lt_dwa_tracking_runs/20260625_161723_lt_dwa_official_goal5_s_curve_n3/lt_dwa_official_goal5_metrics_core.csv
+```
+
+口径：visible isolated Scout sim 每轮重新启动；pre/post `ROS=false, Gazebo=false`；`goal=(5.0,0.0,0.0)`；`s_curve/current`；common-limit `v=0.8, omega=1.2, a=0.6, alpha=1.2`；`planner_execution_mode=in_process`；60s 未到点即 FAIL。
+
+结果：
+
+```text
+N/pass: 3/3
+first-goal mean: 5.292 s
+overlay tracking RMS/max/final mean: 0.095 / 0.202 / 0.224 m
+/slosh/height core peak/p95 mean: 3.050 / 2.119 mm
+cmd abs(dω/dt) p95/max mean: 4.118 / 7.178 rad/s²
+diagnostics guard_applied rate: about 0.59
+planner latency: mean about 61 ms, p95 about 117 ms
+```
+
+判定：
+
+```text
+旧 `LT-DWA adapter` 在同类 goal=5 S-curve 口径下是 0/3 GOAL_NOT_REACHED；official wrapper in-process 当前为 3/3 到点。
+这说明 official LT-DWA wrapper 已通过“稳定 baseline 可用性”gate。
+但 slosh proxy 与角加速度仍高，不能写成优于 DWA/SPMPC 或主表最优。
+```
+
+本批结果已记录到：
+
+```text
+/data/a/Obsidian/vaults/StudyVault/30-Projects/MPC/规控一体的实验记录/仿真实验/20260614_SPMPC仿真结果总表.md
+```
+
+安全收尾：每轮仿真均 fresh 启动；结束后发布 zero `/cmd_vel`，只停止本轮启动的任务，最终确认 `ROS_11328_DOWN` 与 `GAZEBO_11362_DOWN`；未修改 `/data/a/scout_sim_replacement` 源码/配置、Scout SOP 或 `/data/a/lt_dwa_official_repro_ws/src/LT_DWA`。
+
 ---
 
 ## 7. 安全边界状态
@@ -650,13 +852,14 @@ LT-DWA S-curve tracking 已从“endpoint pass 但大幅过冲/绕行”修到�
 
 优先级从高到低：
 
-### 8.1 做 persistent worker，降低 latency
+### 8.1 保持 in-process 主路径，并保留 worker_once fallback
 
 目标：
 
 ```text
-避免每 5Hz tick 都 fork/exec official worker；
-把 worker latency 从 300-400 ms 级降到更接近 official time_step=0.2s 的控制节奏。
+in_process 已修复 invalid Publisher 崩溃，应作为默认主路径继续验证；
+worker_once 只作为 legacy/fallback/test 工具保留，不再作为性能对比主路径。
+后续重点看 raw official command vs guarded/final command 的差异，而不是回到每 tick fork/exec。
 ```
 
 ### 8.2 加终点附近收敛策略

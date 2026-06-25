@@ -219,7 +219,8 @@ OfficialCoreResult RunOfficialCoreOnce(const PlannerInput& input,
                 config.max_acc,
                 config.max_angular_acc,
                 ToOfficialPose(input.robot_pose),
-                ToOfficialAction(input.robot_twist));
+                ToOfficialAction(input.robot_twist),
+                false);
 
     SeedPolicy policy(config.max_v,
                       config.min_v,
@@ -240,27 +241,37 @@ OfficialCoreResult RunOfficialCoreOnce(const PlannerInput& input,
 
     OfficialCoreResult result;
     result.core_return = core_return;
-    result.command.v = planned_action.v_;
-    result.command.w = planned_action.w_;
+    result.raw_command.v = planned_action.v_;
+    result.raw_command.w = planned_action.w_;
+    result.final_command = result.raw_command;
+    result.guard_reason = "pass_through_official_core";
 
     if (core_return < 0) {
       result.status = WrapperStatus::kCorePlanningFailed;
       result.reason = "official_core_returned_failure";
-      result.command.v = 0.0;
-      result.command.w = 0.0;
+      result.raw_command.v = 0.0;
+      result.raw_command.w = 0.0;
+      result.final_command.v = 0.0;
+      result.final_command.w = 0.0;
+      result.guard_reason = "core_planning_failed";
       return result;
     }
 
     if (IsGoalReached(input, config)) {
       result.status = WrapperStatus::kGoalReached;
       result.reason = "official_core_goal_reached";
-      result.command.v = 0.0;
-      result.command.w = 0.0;
+      result.raw_command.v = 0.0;
+      result.raw_command.w = 0.0;
+      result.final_command.v = 0.0;
+      result.final_command.w = 0.0;
+      result.guard_reason = "goal_reached";
       return result;
     }
 
     if (config.enable_path_tracking_guard && input.reference_path.size() >= 2) {
-      result.command = PathTrackingGuardCommand(input, config);
+      result.final_command = PathTrackingGuardCommand(input, config);
+      result.guard_applied = true;
+      result.guard_reason = "path_tracking_guard";
       result.reason = "official_core_ok_path_tracking_guard";
     } else {
       result.reason = "official_core_ok";

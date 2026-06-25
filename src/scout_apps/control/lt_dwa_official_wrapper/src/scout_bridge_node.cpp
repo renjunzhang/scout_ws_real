@@ -10,9 +10,19 @@
 #include <ros/ros.h>
 #include <std_msgs/String.h>
 
+#include "lt_dwa_official_wrapper/frame_validator.hpp"
 #include "lt_dwa_official_wrapper/scout_bridge.hpp"
+#include "lt_dwa_official_wrapper/worker_protocol.hpp"
 #include "lt_dwa_official_wrapper/worker_request.hpp"
 #include "lt_dwa_official_wrapper/worker_supervisor.hpp"
+
+#ifdef LT_DWA_WRAPPER_ENABLE_OFFICIAL_CORE
+#include "lt_dwa_official_wrapper/official_core_runner.hpp"
+#endif
+
+#ifndef OFFICIAL_LT_DWA_ROOT
+#define OFFICIAL_LT_DWA_ROOT ""
+#endif
 
 namespace lt_dwa_official_wrapper {
 namespace {
@@ -48,6 +58,11 @@ geometry_msgs::Twist MakeTwist(double v, double w) {
   return msg;
 }
 
+double ElapsedMs(const std::chrono::steady_clock::time_point& start) {
+  const auto elapsed = std::chrono::steady_clock::now() - start;
+  return std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(elapsed).count();
+}
+
 double PositiveOrDefault(double value, double fallback) {
   return value > 0.0 ? value : fallback;
 }
@@ -66,6 +81,7 @@ class ScoutBridgeNode {
     goal_sub_ = nh_.subscribe(config_.goal_topic, 1, &ScoutBridgeNode::GoalCallback, this);
 
     shadow_cmd_pub_ = nh_.advertise<geometry_msgs::Twist>(config_.shadow_cmd_topic, 1);
+    raw_cmd_pub_ = nh_.advertise<geometry_msgs::Twist>(config_.raw_cmd_topic, 1);
     status_pub_ = nh_.advertise<std_msgs::String>(config_.status_topic, 1, true);
     diagnostics_pub_ = nh_.advertise<std_msgs::String>(config_.diagnostics_topic, 1, true);
     global_plan_pub_ = nh_.advertise<nav_msgs::Path>(config_.global_plan_topic, 1, true);
@@ -85,13 +101,10 @@ class ScoutBridgeNode {
       ROS_WARN_STREAM("official LT-DWA bridge actuated output gate is enabled; stale/invalid commands will publish zero");
     }
 
-    StoreCommandState(false,
-                      WrapperStatus::kWaitingForInput,
-                      "bridge_started_shadow_only",
-                      0.0,
-                      0.0,
-                      ros::Time(),
-                      -1.0);
+    StoreCommandState(MakeEmptyCommandState(WrapperStatus::kWaitingForInput,
+                                             "bridge_started_shadow_only",
+                                             ros::Time(),
+                                             "disabled"));
 
     const double planner_rate = PositiveOrDefault(config_.planner_rate_hz, 5.0);
     const double command_rate = PositiveOrDefault(config_.command_publish_rate_hz, 30.0);
@@ -115,6 +128,7 @@ class ScoutBridgeNode {
     LoadStringParam(private_nh_, "path_topic", &config_.path_topic);
     LoadStringParam(private_nh_, "goal_topic", &config_.goal_topic);
     LoadStringParam(private_nh_, "shadow_cmd_topic", &config_.shadow_cmd_topic);
+    LoadStringParam(private_nh_, "raw_cmd_topic", &config_.raw_cmd_topic);
     LoadStringParam(private_nh_, "status_topic", &config_.status_topic);
     LoadStringParam(private_nh_, "diagnostics_topic", &config_.diagnostics_topic);
     LoadStringParam(private_nh_, "global_plan_topic", &config_.global_plan_topic);
@@ -123,6 +137,7 @@ class ScoutBridgeNode {
     LoadStringParam(private_nh_, "cmd_vel_topic", &config_.cmd_vel_topic);
     LoadStringParam(private_nh_, "benchmark_raw_topic", &config_.benchmark_raw_topic);
     LoadStringParam(private_nh_, "expected_map_file", &config_.expected_map_file);
+    LoadStringParam(private_nh_, "planner_execution_mode", &config_.planner_execution_mode);
     LoadStringParam(private_nh_, "worker_executable", &config_.worker_executable);
     LoadStringParam(private_nh_, "runtime_request_dir", &config_.runtime_request_dir);
     LoadStringParam(private_nh_, "worker_mode", &config_.worker_mode);
@@ -243,78 +258,82 @@ class ScoutBridgeNode {
     return latest_command_;
   }
 
-  void StoreCommandState(bool has_command,
-                         WrapperStatus status,
-                         const std::string& reason,
-                         double command_v,
-                         double command_w,
-                         const ros::Time& stamp,
-                         double worker_latency_ms) {
+  void StoreCommandState(const ScoutBridgeCommandState& state) {
     std::lock_guard<std::mutex> lock(mutex_);
-    latest_command_.has_command = has_command;
-    latest_command_.status = status;
-    latest_command_.reason = reason;
-    latest_command_.command_v = has_command ? command_v : 0.0;
-    latest_command_.command_w = has_command ? command_w : 0.0;
-    latest_command_.stamp = stamp;
-    latest_command_.worker_latency_ms = worker_latency_ms;
+    latest_command_ = state;
   }
 
-  void PlannerTimerCallback(const ros::TimerEvent&) {
-    if (!TrySetPlannerInFlight()) {
-      ROS_WARN_THROTTLE(1.0, "official LT-DWA bridge planner worker still in flight; skipping tick");
-      return;
+  ScoutBridgeCommandState MakeEmptyCommandState(WrapperStatus status,
+                                                const std::string& reason,
+                                                const ros::Time& stamp,
+                                                const std::string& execution_mode,
+                                                double planner_latency_ms = -1.0) const {
+    ScoutBridgeCommandState state;
+    state.status = status;
+    state.reason = reason;
+    state.stamp = stamp;
+    state.execution_mode = execution_mode;
+    state.planner_latency_ms = planner_latency_ms;
+    return state;
+  }
+
+  ScoutBridgeCommandState RunPlannerInProcess(const PlannerInput& input, const ros::Time& now) {
+    const auto start = std::chrono::steady_clock::now();
+    FrameValidator validator;
+    const auto validation = validator.ValidateInput(input, config_.planner_config, now);
+    if (!validation.ok()) {
+      return MakeEmptyCommandState(validation.status,
+                                   validation.reason,
+                                   now,
+                                   "in_process",
+                                   ElapsedMs(start));
     }
 
-    struct InFlightGuard {
-      ScoutBridgeNode* node;
-      ~InFlightGuard() { node->SetPlannerInFlight(false); }
-    } guard{this};
+#ifdef LT_DWA_WRAPPER_ENABLE_OFFICIAL_CORE
+    const auto result = RunOfficialCoreOnce(input, config_.planner_config, OFFICIAL_LT_DWA_ROOT);
+    ScoutBridgeCommandState state;
+    state.status = result.status;
+    state.reason = result.reason;
+    state.stamp = ros::Time::now();
+    state.has_raw_command = result.core_return >= 0;
+    state.raw_command_v = state.has_raw_command ? result.raw_command.v : 0.0;
+    state.raw_command_w = state.has_raw_command ? result.raw_command.w : 0.0;
+    state.has_final_command = result.core_return >= 0;
+    state.final_command_v = state.has_final_command ? result.final_command.v : 0.0;
+    state.final_command_w = state.has_final_command ? result.final_command.w : 0.0;
+    state.guard_applied = result.guard_applied;
+    state.guard_reason = result.guard_reason;
+    state.has_core_return = result.core_return >= 0;
+    state.core_return = result.core_return;
+    state.execution_mode = "in_process";
+    state.planner_latency_ms = ElapsedMs(start);
+    return state;
+#else
+    return MakeEmptyCommandState(WrapperStatus::kCommandRejected,
+                                 "official_core_build_disabled",
+                                 now,
+                                 "in_process",
+                                 ElapsedMs(start));
+#endif
+  }
 
-    const ros::Time now = ros::Time::now();
-    const auto build = BuildPlannerInputForScoutBridge(config_, CacheSnapshot(), now);
-    if (!build.ok()) {
-      StoreCommandState(false, build.status, build.reason, 0.0, 0.0, now, -1.0);
-      return;
-    }
-
-    PublishLocalPlanSkeleton(build.input);
-
-    if (!config_.enable_worker_core) {
-      StoreCommandState(false,
-                        WrapperStatus::kCommandRejected,
-                        "worker_core_disabled_shadow_only",
-                        0.0,
-                        0.0,
-                        now,
-                        -1.0);
-      return;
-    }
-
+  ScoutBridgeCommandState RunPlannerViaWorkerOnce(const PlannerInput& input, const ros::Time& now) {
     if (!EnsureDirectory(config_.runtime_request_dir)) {
-      StoreCommandState(false,
-                        WrapperStatus::kWaitingForInput,
-                        "runtime_request_dir_unavailable",
-                        0.0,
-                        0.0,
-                        now,
-                        -1.0);
-      return;
+      return MakeEmptyCommandState(WrapperStatus::kWaitingForInput,
+                                   "runtime_request_dir_unavailable",
+                                   now,
+                                   "worker_once");
     }
 
     const std::string request_path = MakeRequestPath(config_.runtime_request_dir, now);
     std::ofstream out(request_path);
     if (!out.good()) {
-      StoreCommandState(false,
-                        WrapperStatus::kWaitingForInput,
-                        "request_file_open_failed",
-                        0.0,
-                        0.0,
-                        now,
-                        -1.0);
-      return;
+      return MakeEmptyCommandState(WrapperStatus::kWaitingForInput,
+                                   "request_file_open_failed",
+                                   now,
+                                   "worker_once");
     }
-    out << SerializeWorkerRequest(build.input, config_.planner_config, now);
+    out << SerializeWorkerRequest(input, config_.planner_config, now);
     out.close();
 
     std::vector<std::string> worker_args{"--mode", config_.worker_mode, "--request", request_path};
@@ -330,28 +349,86 @@ class ScoutBridgeNode {
         config_.worker_executable,
         worker_args,
         config_.worker_timeout_sec);
-    const auto elapsed = std::chrono::steady_clock::now() - start;
-    const double worker_latency_ms =
-        std::chrono::duration_cast<std::chrono::duration<double, std::milli>>(elapsed).count();
 
-    double command_v = 0.0;
-    double command_w = 0.0;
-    const bool has_command = result.valid_response && result.status == WrapperStatus::kOk && result.has_command;
-    if (has_command) {
-      command_v = result.command_v;
-      command_w = result.command_w;
-    }
-
-    StoreCommandState(has_command,
-                      result.status,
-                      result.reason,
-                      command_v,
-                      command_w,
-                      ros::Time::now(),
-                      worker_latency_ms);
+    ScoutBridgeCommandState state;
+    state.status = result.status;
+    state.reason = result.reason;
+    state.stamp = ros::Time::now();
+    state.has_raw_command = result.valid_response && result.has_raw_command;
+    state.raw_command_v = state.has_raw_command ? result.raw_command_v : 0.0;
+    state.raw_command_w = state.has_raw_command ? result.raw_command_w : 0.0;
+    state.has_final_command = result.valid_response && result.status == WrapperStatus::kOk && result.has_final_command;
+    state.final_command_v = state.has_final_command ? result.final_command_v : 0.0;
+    state.final_command_w = state.has_final_command ? result.final_command_w : 0.0;
+    state.guard_applied = result.guard_applied;
+    state.guard_reason = result.guard_reason;
+    state.has_core_return = result.has_core_return;
+    state.core_return = result.core_return;
+    state.execution_mode = "worker_once";
+    state.planner_latency_ms = ElapsedMs(start);
     if (!result.output.empty()) {
       worker_result_pub_.publish(MakeStringMsg(result.output));
     }
+    return state;
+  }
+
+  std::string FormatInProcessResult(const ScoutBridgeCommandState& state) const {
+    if (state.has_raw_command || state.has_final_command || state.has_core_return) {
+      return FormatWorkerResponse(state.status,
+                                  state.reason,
+                                  state.raw_command_v,
+                                  state.raw_command_w,
+                                  state.final_command_v,
+                                  state.final_command_w,
+                                  state.guard_applied,
+                                  state.guard_reason,
+                                  state.has_core_return ? state.core_return : -1);
+    }
+    return FormatWorkerResponse(state.status, state.reason);
+  }
+
+  void PlannerTimerCallback(const ros::TimerEvent&) {
+    if (!TrySetPlannerInFlight()) {
+      ROS_WARN_THROTTLE(1.0, "official LT-DWA bridge planner still in flight; skipping tick");
+      return;
+    }
+
+    struct InFlightGuard {
+      ScoutBridgeNode* node;
+      ~InFlightGuard() { node->SetPlannerInFlight(false); }
+    } guard{this};
+
+    const ros::Time now = ros::Time::now();
+    const auto build = BuildPlannerInputForScoutBridge(config_, CacheSnapshot(), now);
+    if (!build.ok()) {
+      StoreCommandState(MakeEmptyCommandState(build.status, build.reason, now, "disabled"));
+      return;
+    }
+
+    PublishLocalPlanSkeleton(build.input);
+
+    ScoutBridgeCommandState state;
+    if (!config_.enable_worker_core || config_.planner_execution_mode == "disabled") {
+      state = MakeEmptyCommandState(WrapperStatus::kCommandRejected,
+                                    "planner_execution_disabled",
+                                    now,
+                                    "disabled");
+    } else if (config_.planner_execution_mode == "worker_once") {
+      state = RunPlannerViaWorkerOnce(build.input, now);
+    } else if (config_.planner_execution_mode == "in_process") {
+      state = RunPlannerInProcess(build.input, now);
+      worker_result_pub_.publish(MakeStringMsg(FormatInProcessResult(state)));
+    } else {
+      state = MakeEmptyCommandState(WrapperStatus::kCommandRejected,
+                                    "unknown_planner_execution_mode_" + config_.planner_execution_mode,
+                                    now,
+                                    config_.planner_execution_mode);
+    }
+
+    if (state.status == WrapperStatus::kOk && state.has_raw_command) {
+      raw_cmd_pub_.publish(MakeTwist(state.raw_command_v, state.raw_command_w));
+    }
+    StoreCommandState(state);
   }
 
   void CommandTimerCallback(const ros::TimerEvent&) {
@@ -403,21 +480,14 @@ class ScoutBridgeNode {
                      const ScoutBridgeCommandDecision& decision) {
     WrapperStatus status = state.status;
     std::string reason = state.reason;
-    if (state.has_command && !decision.fresh && state.status == WrapperStatus::kOk) {
+    if (state.has_final_command && !decision.fresh && state.status == WrapperStatus::kOk) {
       status = WrapperStatus::kStaleInput;
       reason = decision.reason;
     }
 
     status_pub_.publish(MakeStringMsg(ToString(status)));
     diagnostics_pub_.publish(MakeStringMsg(
-        FormatScoutBridgeDiagnostics(config_,
-                                     status,
-                                     reason,
-                                     decision.command_v,
-                                     decision.command_w,
-                                     decision.command_age_sec,
-                                     decision.fresh,
-                                     state.worker_latency_ms)));
+        FormatScoutBridgeDiagnostics(config_, state, decision, status, reason)));
   }
 
   void PublishFinalZeroIfNeeded() {
@@ -450,6 +520,7 @@ class ScoutBridgeNode {
   ros::Subscriber path_sub_;
   ros::Subscriber goal_sub_;
   ros::Publisher shadow_cmd_pub_;
+  ros::Publisher raw_cmd_pub_;
   ros::Publisher status_pub_;
   ros::Publisher diagnostics_pub_;
   ros::Publisher global_plan_pub_;

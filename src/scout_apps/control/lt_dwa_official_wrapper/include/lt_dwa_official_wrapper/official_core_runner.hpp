@@ -11,7 +11,10 @@ namespace lt_dwa_official_wrapper {
 struct OfficialCoreResult {
   WrapperStatus status{WrapperStatus::kCoreProcessExited};
   std::string reason;
-  Twist2d command;
+  Twist2d raw_command;
+  Twist2d final_command;
+  bool guard_applied{false};
+  std::string guard_reason;
   int core_return{-1};
 };
 

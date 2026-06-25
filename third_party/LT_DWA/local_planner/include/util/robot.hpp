@@ -7,6 +7,7 @@
 
 #include <thread>
 #include <mutex>
+#include <atomic>
 #include <ros/ros.h>
 #include <tf/tf.h>
 #include <tf/transform_broadcaster.h>
@@ -16,7 +17,7 @@
 class Robot {
  public:
     // 构造函数
-    Robot(double max_v, double min_v, double max_w, double max_acc, double max_angular_acc, Pose pose={0.0, 0.0, 0.0}, Action action={0.0, 0.0}) {
+    Robot(double max_v, double min_v, double max_w, double max_acc, double max_angular_acc, Pose pose={0.0, 0.0, 0.0}, Action action={0.0, 0.0}, bool enable_tf_broadcast=true) {
         // 初始化属性
         this->max_v_ = max_v;
         this->min_v_ = min_v;
@@ -26,13 +27,17 @@ class Robot {
         // 初始化机器人
         this->init(pose, action);
         // 创建线程
-        this->broadcast_thread_ptr_ = std::make_shared<std::thread>(&Robot::tfBroadCast, this);
-        this->broadcast_thread_ptr_->detach();
+        if (enable_tf_broadcast) {
+            this->broadcast_thread_ptr_ = std::make_shared<std::thread>(&Robot::tfBroadCast, this);
+        }
     };
 
     // 析构函数
     ~Robot() {
-        this->stop_ = true;
+        this->stop_.store(true);
+        if (this->broadcast_thread_ptr_ && this->broadcast_thread_ptr_->joinable()) {
+            this->broadcast_thread_ptr_->join();
+        }
     };
 
     // 初始化
@@ -86,12 +91,12 @@ class Robot {
     Action action_;  // 状态
     tf::TransformBroadcaster br_;  // 位置播放
     std::shared_ptr<std::thread> broadcast_thread_ptr_;  // 线程
-    bool stop_ = false;  // 程序停止
+    std::atomic_bool stop_{false};  // 程序停止
     std::mutex lock_;  // 锁
 
     void tfBroadCast() {
         ros::Rate loop_rate(100);
-        while (!this->stop_) {
+        while (!this->stop_.load()) {
             tf::Transform transform;
             this->lock_.lock();
             transform.setOrigin(tf::Vector3(this->pose_.x_, this->pose_.y_, 0.0));

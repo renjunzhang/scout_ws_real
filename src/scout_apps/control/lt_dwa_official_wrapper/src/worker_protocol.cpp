@@ -60,6 +60,10 @@ std::string EscapeReason(std::string reason) {
   return reason;
 }
 
+bool ParseBool(const std::string& value) {
+  return value == "1" || value == "true" || value == "True" || value == "TRUE";
+}
+
 }  // namespace
 
 std::string FormatWorkerResponse(WrapperStatus status, const std::string& reason) {
@@ -83,6 +87,28 @@ std::string FormatWorkerResponse(WrapperStatus status,
   return oss.str();
 }
 
+std::string FormatWorkerResponse(WrapperStatus status,
+                                 const std::string& reason,
+                                 double raw_command_v,
+                                 double raw_command_w,
+                                 double final_command_v,
+                                 double final_command_w,
+                                 bool guard_applied,
+                                 const std::string& guard_reason,
+                                 int core_return) {
+  std::ostringstream oss;
+  oss << "LT_DWA_WORKER_RESULT status=" << ToString(status)
+      << " reason=" << EscapeReason(reason)
+      << " raw_command_v=" << raw_command_v
+      << " raw_command_w=" << raw_command_w
+      << " final_command_v=" << final_command_v
+      << " final_command_w=" << final_command_w
+      << " guard_applied=" << (guard_applied ? 1 : 0)
+      << " guard_reason=" << EscapeReason(guard_reason)
+      << " core_return=" << core_return << "\n";
+  return oss.str();
+}
+
 WorkerResponse ParseWorkerResponse(const std::string& text) {
   WorkerResponse response;
   std::istringstream lines(text);
@@ -99,6 +125,10 @@ WorkerResponse ParseWorkerResponse(const std::string& text) {
     std::string reason_value;
     bool saw_command_v = false;
     bool saw_command_w = false;
+    bool saw_raw_command_v = false;
+    bool saw_raw_command_w = false;
+    bool saw_final_command_v = false;
+    bool saw_final_command_w = false;
     bool saw_core_return = false;
     while (tokens >> token) {
       const auto sep = token.find('=');
@@ -123,6 +153,34 @@ WorkerResponse ParseWorkerResponse(const std::string& text) {
           saw_command_w = true;
         } catch (...) {
         }
+      } else if (key == "raw_command_v") {
+        try {
+          response.raw_command_v = std::stod(value);
+          saw_raw_command_v = true;
+        } catch (...) {
+        }
+      } else if (key == "raw_command_w") {
+        try {
+          response.raw_command_w = std::stod(value);
+          saw_raw_command_w = true;
+        } catch (...) {
+        }
+      } else if (key == "final_command_v") {
+        try {
+          response.final_command_v = std::stod(value);
+          saw_final_command_v = true;
+        } catch (...) {
+        }
+      } else if (key == "final_command_w") {
+        try {
+          response.final_command_w = std::stod(value);
+          saw_final_command_w = true;
+        } catch (...) {
+        }
+      } else if (key == "guard_applied") {
+        response.guard_applied = ParseBool(value);
+      } else if (key == "guard_reason") {
+        response.guard_reason = value;
       } else if (key == "core_return") {
         try {
           response.core_return = std::stoi(value);
@@ -137,6 +195,17 @@ WorkerResponse ParseWorkerResponse(const std::string& text) {
       response.status = StatusFromString(status_value);
       response.reason = reason_value;
       response.has_command = saw_command_v && saw_command_w;
+      response.has_raw_command = saw_raw_command_v && saw_raw_command_w;
+      response.has_final_command = saw_final_command_v && saw_final_command_w;
+      if (response.has_final_command) {
+        response.command_v = response.final_command_v;
+        response.command_w = response.final_command_w;
+        response.has_command = true;
+      } else if (response.has_command) {
+        response.final_command_v = response.command_v;
+        response.final_command_w = response.command_w;
+        response.has_final_command = true;
+      }
       response.has_core_return = saw_core_return;
       return response;
     }

@@ -21,6 +21,7 @@ struct ScoutBridgeConfig {
   std::string goal_topic{"/scout/goal"};
 
   std::string shadow_cmd_topic{"/baseline/official_lt_dwa/shadow_cmd_vel"};
+  std::string raw_cmd_topic{"/baseline/official_lt_dwa/raw_cmd_vel"};
   std::string status_topic{"/baseline/official_lt_dwa/status"};
   std::string diagnostics_topic{"/baseline/official_lt_dwa/diagnostics"};
   std::string global_plan_topic{"/baseline/official_lt_dwa/global_plan"};
@@ -30,6 +31,7 @@ struct ScoutBridgeConfig {
   std::string benchmark_raw_topic{"/benchmark/cmd_vel_raw"};
 
   std::string expected_map_file{"/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream"};
+  std::string planner_execution_mode{"in_process"};
   std::string worker_executable{"/home/geist/scout_ws/devel/lib/lt_dwa_official_wrapper/lt_dwa_worker"};
   std::string runtime_request_dir{"/tmp"};
   std::string worker_mode{"official-core-once"};
@@ -70,13 +72,21 @@ struct ScoutBridgeBuildResult {
 };
 
 struct ScoutBridgeCommandState {
-  bool has_command{false};
+  bool has_raw_command{false};
+  double raw_command_v{0.0};
+  double raw_command_w{0.0};
+  bool has_final_command{false};
   ros::Time stamp;
-  double command_v{0.0};
-  double command_w{0.0};
+  double final_command_v{0.0};
+  double final_command_w{0.0};
+  bool guard_applied{false};
+  std::string guard_reason;
+  bool has_core_return{false};
+  int core_return{0};
   WrapperStatus status{WrapperStatus::kWaitingForInput};
   std::string reason{"no_command"};
-  double worker_latency_ms{-1.0};
+  std::string execution_mode{"disabled"};
+  double planner_latency_ms{-1.0};
 };
 
 struct ScoutBridgeCommandDecision {
@@ -99,12 +109,9 @@ ScoutBridgeCommandDecision DecideCommandPublication(const ScoutBridgeConfig& con
                                                     const ScoutBridgeCommandState& state,
                                                     const ros::Time& now);
 std::string FormatScoutBridgeDiagnostics(const ScoutBridgeConfig& config,
+                                         const ScoutBridgeCommandState& state,
+                                         const ScoutBridgeCommandDecision& decision,
                                          WrapperStatus status,
-                                         const std::string& reason,
-                                         double command_v,
-                                         double command_w,
-                                         double command_age_sec = -1.0,
-                                         bool command_fresh = false,
-                                         double worker_latency_ms = -1.0);
+                                         const std::string& reason);
 
 }  // namespace lt_dwa_official_wrapper

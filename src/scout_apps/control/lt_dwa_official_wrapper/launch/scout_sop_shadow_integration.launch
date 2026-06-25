@@ -7,6 +7,7 @@
   <arg name="path_topic" default="/scout/global_path_fixed"/>
   <arg name="goal_topic" default="/scout/goal"/>
   <arg name="shadow_cmd_topic" default="/baseline/official_lt_dwa/shadow_cmd_vel"/>
+  <arg name="raw_cmd_topic" default="/baseline/official_lt_dwa/raw_cmd_vel"/>
   <arg name="status_topic" default="/baseline/official_lt_dwa/status"/>
   <arg name="diagnostics_topic" default="/baseline/official_lt_dwa/diagnostics"/>
   <arg name="global_plan_topic" default="/baseline/official_lt_dwa/global_plan"/>
@@ -23,6 +24,7 @@
 
   <arg name="start_local_map_service" default="true"/>
   <arg name="enable_worker_core" default="true"/>
+  <arg name="planner_execution_mode" default="in_process"/>
   <arg name="planner_rate_hz" default="5.0"/>
   <arg name="command_publish_rate_hz" default="30.0"/>
   <arg name="command_stale_timeout_sec" default="0.6"/>
@@ -78,6 +80,7 @@
     <param name="path_topic" value="$(arg path_topic)"/>
     <param name="goal_topic" value="$(arg goal_topic)"/>
     <param name="shadow_cmd_topic" value="$(arg shadow_cmd_topic)"/>
+    <param name="raw_cmd_topic" value="$(arg raw_cmd_topic)"/>
     <param name="status_topic" value="$(arg status_topic)"/>
     <param name="diagnostics_topic" value="$(arg diagnostics_topic)"/>
     <param name="global_plan_topic" value="$(arg global_plan_topic)"/>
@@ -87,6 +90,7 @@
     <param name="worker_executable" value="$(arg worker_executable)"/>
     <param name="runtime_request_dir" value="$(arg runtime_request_dir)"/>
     <param name="enable_worker_core" value="$(arg enable_worker_core)"/>
+    <param name="planner_execution_mode" value="$(arg planner_execution_mode)"/>
     <param name="planner_rate_hz" value="$(arg planner_rate_hz)"/>
     <param name="command_publish_rate_hz" value="$(arg command_publish_rate_hz)"/>
     <param name="command_stale_timeout_sec" value="$(arg command_stale_timeout_sec)"/>

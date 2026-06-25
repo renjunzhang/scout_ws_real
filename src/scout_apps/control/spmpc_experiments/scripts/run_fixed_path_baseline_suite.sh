@@ -50,6 +50,9 @@ LT_DWA_PLANNING_FREQUENCY="${LT_DWA_PLANNING_FREQUENCY:-5.0}"
 LT_DWA_COMMAND_PUBLISH_FREQUENCY="${LT_DWA_COMMAND_PUBLISH_FREQUENCY:-30.0}"
 LT_DWA_COMMAND_STALE_TIMEOUT_SEC="${LT_DWA_COMMAND_STALE_TIMEOUT_SEC:-0.6}"
 LT_DWA_WORKER_TIMEOUT_SEC="${LT_DWA_WORKER_TIMEOUT_SEC:-1.0}"
+LT_DWA_PLANNER_EXECUTION_MODE="${LT_DWA_PLANNER_EXECUTION_MODE:-in_process}"
+LT_DWA_RAW_CMD_TOPIC="${LT_DWA_RAW_CMD_TOPIC:-/baseline/lt_dwa/raw_cmd_vel}"
+LT_DWA_RUNTIME_REQUEST_DIR="${LT_DWA_RUNTIME_REQUEST_DIR:-${OUT_ROOT}/lt_dwa_runtime_requests}"
 SLOSH_RESET_BEFORE_RUN="${SLOSH_RESET_BEFORE_RUN:-true}"
 
 planner_pid=""
@@ -247,6 +250,7 @@ record_topics=(
   /baseline/lt_dwa/diagnostics
   /baseline/lt_dwa/global_plan
   /baseline/lt_dwa/local_plan
+  /baseline/lt_dwa/raw_cmd_vel
   /baseline/lt_dwa/shadow_cmd_vel
   /baseline/lt_dwa/worker_result
   /scout/goal
@@ -313,6 +317,9 @@ lt_dwa_planning_frequency: ${LT_DWA_PLANNING_FREQUENCY}
 lt_dwa_command_publish_frequency: ${LT_DWA_COMMAND_PUBLISH_FREQUENCY}
 lt_dwa_command_stale_timeout_sec: ${LT_DWA_COMMAND_STALE_TIMEOUT_SEC}
 lt_dwa_worker_timeout_sec: ${LT_DWA_WORKER_TIMEOUT_SEC}
+lt_dwa_planner_execution_mode: ${LT_DWA_PLANNER_EXECUTION_MODE}
+lt_dwa_raw_cmd_topic: ${LT_DWA_RAW_CMD_TOPIC}
+lt_dwa_runtime_request_dir: ${LT_DWA_RUNTIME_REQUEST_DIR}
 force_straight_plan_on_goal: false
 use_wrapper_goal_check: true
 git_hash: ${git_hash}
@@ -363,7 +370,7 @@ EOF
     sleep 1
 
     if [[ "${baseline}" == "lt_dwa" ]]; then
-      echo "[planner] roslaunch spmpc_experiments ${launch_file} global_path_topic:=${PATH_TOPIC} cmd_vel_topic:=${run_cmd_vel_topic} enable_actuated_output:=${LT_DWA_ENABLE_ACTUATED_OUTPUT} publish_cmd_vel:=${LT_DWA_PUBLISH_CMD_VEL} planning_frequency:=${LT_DWA_PLANNING_FREQUENCY} command_publish_frequency:=${LT_DWA_COMMAND_PUBLISH_FREQUENCY}"
+      echo "[planner] roslaunch spmpc_experiments ${launch_file} global_path_topic:=${PATH_TOPIC} cmd_vel_topic:=${run_cmd_vel_topic} enable_actuated_output:=${LT_DWA_ENABLE_ACTUATED_OUTPUT} publish_cmd_vel:=${LT_DWA_PUBLISH_CMD_VEL} planning_frequency:=${LT_DWA_PLANNING_FREQUENCY} command_publish_frequency:=${LT_DWA_COMMAND_PUBLISH_FREQUENCY} planner_execution_mode:=${LT_DWA_PLANNER_EXECUTION_MODE} runtime_request_dir:=${LT_DWA_RUNTIME_REQUEST_DIR}"
       roslaunch spmpc_experiments "${launch_file}" \
         global_path_topic:="${PATH_TOPIC}" \
         cmd_vel_topic:="${run_cmd_vel_topic}" \
@@ -374,6 +381,9 @@ EOF
         command_publish_frequency:="${LT_DWA_COMMAND_PUBLISH_FREQUENCY}" \
         command_stale_timeout_sec:="${LT_DWA_COMMAND_STALE_TIMEOUT_SEC}" \
         worker_timeout_sec:="${LT_DWA_WORKER_TIMEOUT_SEC}" \
+        planner_execution_mode:="${LT_DWA_PLANNER_EXECUTION_MODE}" \
+        raw_cmd_topic:="${LT_DWA_RAW_CMD_TOPIC}" \
+        runtime_request_dir:="${LT_DWA_RUNTIME_REQUEST_DIR}" \
         >"${run_dir}/${run_id}_planner.log" 2>&1 &
     else
       echo "[planner] roslaunch spmpc_experiments ${launch_file} global_path_topic:=${PATH_TOPIC} cmd_vel_topic:=${CMD_VEL_TOPIC}"

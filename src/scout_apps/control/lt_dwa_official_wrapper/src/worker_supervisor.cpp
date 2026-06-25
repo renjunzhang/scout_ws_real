@@ -142,6 +142,14 @@ WorkerRunResult WorkerSupervisor::Run(const std::string& executable,
   result.has_command = response.has_command;
   result.command_v = response.command_v;
   result.command_w = response.command_w;
+  result.has_raw_command = response.has_raw_command;
+  result.raw_command_v = response.raw_command_v;
+  result.raw_command_w = response.raw_command_w;
+  result.has_final_command = response.has_final_command;
+  result.final_command_v = response.final_command_v;
+  result.final_command_w = response.final_command_w;
+  result.guard_applied = response.guard_applied;
+  result.guard_reason = response.guard_reason;
   result.has_core_return = response.has_core_return;
   result.core_return = response.core_return;
 
