@@ -7,7 +7,9 @@
   <arg name="plan_target_frame" default="odom"/>
   <arg name="max_cmd_vel_x" default="0.8"/>
   <arg name="max_cmd_vel_theta" default="1.2"/>
-  <arg name="planner_config" default="$(find spmpc_experiments)/config/baselines/mpc_local_planner_standalone_sim.yaml"/>
+  <arg name="xy_goal_tolerance" default="0.20"/>
+  <arg name="yaw_goal_tolerance" default="0.30"/>
+  <arg name="planner_config" default="$(find spmpc_experiments)/config/baselines/mpc_local_planner_fixed_path_tuned_sim.yaml"/>
   <arg name="costmap_config" default="$(find baseline_local_planner_runner)/config/local_costmap_sim.yaml"/>
 
   <include file="$(find baseline_local_planner_runner)/launch/nav_core_runner.launch">
@@ -23,6 +25,8 @@
     <arg name="plan_target_frame" value="$(arg plan_target_frame)"/>
     <arg name="max_cmd_vel_x" value="$(arg max_cmd_vel_x)"/>
     <arg name="max_cmd_vel_theta" value="$(arg max_cmd_vel_theta)"/>
+    <arg name="xy_goal_tolerance" value="$(arg xy_goal_tolerance)"/>
+    <arg name="yaw_goal_tolerance" value="$(arg yaw_goal_tolerance)"/>
     <arg name="force_straight_plan_on_goal" value="false"/>
     <arg name="use_wrapper_goal_check" value="true"/>
     <arg name="latch_goal_reached" value="true"/>

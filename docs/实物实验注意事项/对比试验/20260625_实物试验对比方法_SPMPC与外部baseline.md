@@ -129,6 +129,64 @@ B. tuned/native output：外部方法使用各自冻结后的原生输出；报�
 6. 所有候选方法 N=1 安全且数据完整后，才做 N=3 或 N=5 正式交错顺序。
 ```
 
+#### 2026-06-25 `mpc_local_planner` 隔离仿真 smoke 记录
+
+在迁移到实物前，`mpc_local_planner` 已按隔离仿真 SOP 做过一次 current-sim diagnostic smoke。该结果只证明“接入链路能跑、能到终点”，**不能直接作为 formal fixed-path 对比结果**。
+
+运行条件：
+
+```text
+仿真入口: /data/a/scout_sim_replacement
+MAP_FILE: /data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream
+baseline attach: /data/a/scout_sim_replacement/scripts/launch_proxy_baseline_localized_attach.sh
+BASELINE: mpc_local_planner
+PATH_TEMPLATE: s_curve
+PATH_START_HEADING: current
+GOAL: x=5.0, y=0.0, yaw=0.0
+cmd_vel_topic: /cmd_vel
+runner: baseline_local_planner_runner -> mpc_local_planner/MpcLocalPlannerROS
+```
+
+观测结果：
+
+```text
+/map、/scan_front、/odom、TF map->base_link 正常。
+/baseline/mpc_local_planner/status = TRACKING。
+/baseline/mpc_local_planner/global_plan 正常发布。
+/cmd_vel publisher = /baseline_local_planner_runner。
+终点附近 map pose ≈ (5.00, 0.095)，final error ≈ 0.095 m。
+```
+
+运行轨迹与全局参考层对比：
+
+![mpc_local_planner executed trajectory vs global reference](assets/20260625_mpc_local_planner_executed_vs_reference.png)
+
+本次图中黑色虚线是 `/scout/global_path_fixed`，紫色实线是 Cartographer `/trajectory_node_list` 中对应本轮的实际运行轨迹。近邻参考误差约为：
+
+| 指标 | 值 |
+|---|---:|
+| mean tracking error | `0.140 m` |
+| RMS tracking error | `0.203 m` |
+| max tracking error | `0.543 m` |
+| final error | `0.095 m` |
+
+解释：
+
+```text
+mpc_local_planner 当前配置能到终点，但更像 navigation-style endpoint reaching。
+它接收的 global_plan 与 /scout/global_path_fixed 基本一致，问题不是参考路径没有送进去；
+实际闭环会明显切弯，尚未达到 strict fixed-path tracking baseline 要求。
+```
+
+因此进入实物前的口径是：
+
+```text
+mpc_local_planner: 已通过隔离仿真 diagnostic smoke 的“能跑/能到”门槛；
+尚未通过 formal fixed-path tracking 门槛。
+若用于实物外部 baseline，必须标注 navigation-style baseline，
+或先进一步调参/冻结 strict tracking 配置后再纳入正式表。
+```
+
 LT-DWA 进入实物 closed-loop 的前置门槛：
 
 ```text

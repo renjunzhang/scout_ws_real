@@ -8,7 +8,9 @@ experiment:
   corridor_weight: 1.0
   obstacle_enable: false
   obstacle_weight: 1.0
-  obstacle_influence_radius: 0.25
+  # If obstacle cost is enabled in future, use a radius that covers the
+  # conservative Scout Mini circumscribed footprint from platforms/scout_mini.yaml.
+  obstacle_influence_radius: 0.45
   homotopy_enable: false
   homotopy_lateral_offset: 0.0
   terminal_exclude_sec: 1.0

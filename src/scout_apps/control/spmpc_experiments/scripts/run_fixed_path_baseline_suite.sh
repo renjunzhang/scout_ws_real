@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Fixed-path simulation suite for external baselines (TEB / DWA / mpc_local_planner / official LT-DWA wrapper).
 #
-# 前提：先启动仿真与定位，例如：
-#   source devel/setup.bash
-#   SIM_ENV=open USE_RVIZ=true SPAWN_X=-4.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
-#     rosrun scout_local_planner launch_sim_nav_stack.sh
+# 前提：先按隔离仿真 SOP 启动 /data/a/scout_sim_replacement 的仿真与定位，例如：
+#   MAP_FILE=/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream \
+#   USE_RVIZ=true \
+#   /data/a/scout_sim_replacement/scripts/launch_proxy_sim_localization_env.sh
+#
+# 不要把旧 launch_sim_nav_stack.sh 作为正式/半正式对比入口。
 #
 # 用法：
 #   BASELINE=teb OUT_ROOT=/data/a/spmpc_paper_compare/fixed_path_smoke \

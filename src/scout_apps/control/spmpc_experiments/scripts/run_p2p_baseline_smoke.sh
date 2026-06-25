@@ -5,10 +5,12 @@
 #   先启动仿真与定位。TEB/DWA/mpc_local_planner 通过 baseline_local_planner_runner
 #   独立加载 nav_core plugin，不再依赖 move_base。
 #
-# 推荐仿真启动:
-#   source devel/setup.bash
-#   SIM_ENV=open USE_RVIZ=true SPAWN_X=-4.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
-#     rosrun scout_local_planner launch_sim_nav_stack.sh
+# 推荐仿真启动：按隔离仿真 SOP 显式指定地图启动 /data/a/scout_sim_replacement：
+#   MAP_FILE=/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream \
+#   USE_RVIZ=true \
+#   /data/a/scout_sim_replacement/scripts/launch_proxy_sim_localization_env.sh
+#
+# 不要把旧 launch_sim_nav_stack.sh 作为常规 smoke 入口。
 #
 # 用法:
 #   BASELINE=spmpc VARIANT=B_ours SPMPC_SOLVER_BACKEND=continuous_mpcc_acados \

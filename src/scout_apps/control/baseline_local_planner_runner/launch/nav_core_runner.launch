@@ -10,6 +10,8 @@
   <arg name="force_straight_plan_on_goal" default="false"/>
   <arg name="use_wrapper_goal_check" default="true"/>
   <arg name="latch_goal_reached" default="false"/>
+  <arg name="xy_goal_tolerance" default="0.20"/>
+  <arg name="yaw_goal_tolerance" default="0.20"/>
   <arg name="max_cmd_vel_x" default="0.8"/>
   <arg name="max_cmd_vel_theta" default="1.2"/>
   <arg name="base_frame" default="base_footprint"/>
@@ -32,6 +34,8 @@
     <param name="force_straight_plan_on_goal" value="$(arg force_straight_plan_on_goal)"/>
     <param name="use_wrapper_goal_check" value="$(arg use_wrapper_goal_check)"/>
     <param name="latch_goal_reached" value="$(arg latch_goal_reached)"/>
+    <param name="xy_goal_tolerance" value="$(arg xy_goal_tolerance)"/>
+    <param name="yaw_goal_tolerance" value="$(arg yaw_goal_tolerance)"/>
     <param name="max_cmd_vel_x" value="$(arg max_cmd_vel_x)"/>
     <param name="max_cmd_vel_theta" value="$(arg max_cmd_vel_theta)"/>
     <param name="base_frame" value="$(arg base_frame)"/>

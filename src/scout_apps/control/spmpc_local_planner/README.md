@@ -120,6 +120,57 @@ generated/acados                       负责 generated solver
 
 当前 CMake 仍以一个主要 planner library 组织 core、solver 和 ROS 代码；目录层面已经分层，但 target 级别未来可进一步拆为 `spmpc_core` 与 `spmpc_ros`。
 
+### 2.1 Scout Mini 实物尺寸 / footprint 口径
+
+2026-06-25 已按 `docs/实物实验注意事项/代码移植/实物说明书.md` 复核 Scout Mini 实物尺寸。说明书关键参数：
+
+```text
+长×宽×高: 612 × 580 × 245 mm
+轴距:     451 mm
+前/后轮距: 490 mm
+最高速度: 1.5 m/s
+最小转弯半径: 0 m
+```
+
+SPMPC 平台配置文件为：
+
+```text
+config/platforms/scout_mini.yaml
+```
+
+当前写入的 package-local 尺寸源如下：
+
+```yaml
+robot:
+  v_max: 0.8
+  omega_max: 1.2
+  a_max: 0.6
+  alpha_max: 1.2
+  geometry:
+    length: 0.612
+    width: 0.580
+    height: 0.245
+    wheelbase: 0.451
+    track_width: 0.490
+    footprint:
+      type: polygon
+      vertices: [[0.31, 0.2925], [0.31, -0.2925], [-0.31, -0.2925], [-0.31, 0.2925]]
+    circumscribed_radius: 0.426
+    inscribed_radius: 0.2925
+```
+
+解释：
+
+- `v_max=0.8 m/s` 小于说明书最高速度 `1.5 m/s`，是 formal comparison 的保守速度上限。
+- `platform/kinematics=differential` 与四轮差速转向、最小转弯半径 `0 m` 一致。
+- footprint 使用 `0.620 m × 0.585 m` 保守矩形，覆盖说明书 `0.612 m × 0.580 m`，并与 TEB / MPC local planner baseline 里的 footprint 一致。
+- 当前主线 `continuous_mpcc_acados` 直接使用速度/角速度/加速度约束；footprint 目前作为实物尺寸和后续 collision/costmap 口径的 source-of-truth，不代表 OCP 内已经加入完整车体多边形碰撞约束。
+- `config/experiments/fixed_path.yaml` 与 `config/experiments/point_to_point.yaml` 中 `obstacle_enable` 仍默认关闭；如果后续打开 obstacle cost，`obstacle_influence_radius` 已改为 `0.45 m`，覆盖上述 conservative circumscribed footprint。
+
+因此，当前固定路径无障碍仿真矩阵在运动能力层面符合实物且偏保守；若进入带障碍物/狭窄通道/实物安全验证，必须继续确认 costmap inflation、footprint collision 与现场安全边界，不得只依赖质点 MPCC。
+
+尺寸参数写入后的 no-regression 验证：2026-06-25 使用 strict fresh-sim S 曲线 N=3 复跑 `spmpc/B_ours`，显式地图 `/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream`，结果 `3/3 GOAL_REACHED`，strict freshness invalid `0`。结果目录：`/data/a/scout_sim_replacement/results/strict_fresh_fair_n3_20260625_234232_spmpc_after_size_params_n3`；tracking RMS mean `0.024 m`，tracking max mean `0.042 m`，final error mean `0.182 m`。这说明新增的 `robot/geometry` 和未启用 obstacle radius 调整没有破坏当前 fixed-path 主线行为。
+
 ---
 
 ## 3. 方法主线：alpha-state continuous MPCC

@@ -7,25 +7,25 @@
 正式或半正式 fixed-path 对比必须遵守 fresh-sim 规则：
 
 ```text
-1. 每个 case 单独启动仿真。
-2. 启动后等待 30s，让定位恢复。
-3. 只跑一个 planner / variant / weight case。
-4. 每个 case 约 60s 内仍未有效完成则按失败处理，不继续无限等待。
-5. 跑完关闭 planner、rosbag、path publisher、slosh monitor 和仿真。
-6. 再等待 30s，确认仿真完全关闭后才启动下一次 fresh sim。
-7. 不修改仿真环境；只调整 planner / 算法 / 配置。
+1. 每个 case 单独按隔离仿真 SOP 启动 /data/a/scout_sim_replacement。
+2. 启动时必须显式传入已确认地图 MAP_FILE。
+3. 启动后等待定位、/map、/scan_front、TF 和 RViz 对齐。
+4. 只跑一个 planner / variant / weight case。
+5. 每个 case 约 60s 内仍未有效完成则按失败处理，不继续无限等待。
+6. 跑完关闭 planner、rosbag、path publisher、slosh monitor 和该 case 自己启动的仿真进程。
+7. 再等待 30s，确认仿真完全关闭后才启动下一次 fresh sim。
+8. 不修改仿真环境；只调整 planner / 算法 / 项目侧配置。
 ```
 
-推荐仿真启动命令示例：
+推荐仿真启动命令示例（不要再使用旧 `launch_sim_nav_stack.sh` 作为常规入口）：
 
 ```bash
-source /home/a/scout_ws/devel/setup.bash
-SIM_ENV=open USE_RVIZ=true \
-  SPAWN_X=3.30 SPAWN_Y=0.15 SPAWN_Z=0.1 SPAWN_YAW=-3.08 \
-  rosrun scout_local_planner launch_sim_nav_stack.sh
+MAP_FILE=/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream \
+USE_RVIZ=true \
+/data/a/scout_sim_replacement/scripts/launch_proxy_sim_localization_env.sh
 ```
 
-> 注意：`run_fixed_path_paper_matrix.sh`、`run_fixed_path_critical_sweep.sh`、`run_p2p_paper_supplement.sh`、`run_robustness_transfer_sweep.sh` 是编排入口，不负责启动/关闭 Gazebo。正式数据不要把它们当成“自动 fresh-sim runner”；需要由外层流程保证一个 case 一个 fresh sim。
+> 注意：`run_fixed_path_paper_matrix.sh`、`run_fixed_path_critical_sweep.sh`、`run_p2p_paper_supplement.sh`、`run_robustness_transfer_sweep.sh` 是编排入口，不负责启动/关闭 Gazebo。正式数据不要把它们当成“自动 fresh-sim runner”；需要由 `/data/a/scout_sim_replacement` 外层流程保证一个 case 一个 fresh sim，并保留正确 `MAP_FILE` 证据。
 
 ## 按对比算法找入口
 
@@ -236,13 +236,12 @@ bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_profile_bas
 
 ## P2P smoke 示例
 
-前提：先启动仿真与定位。
+前提：先按隔离仿真 SOP 启动 `/data/a/scout_sim_replacement` 的仿真与定位，并显式指定已确认地图。
 
 ```bash
-source /home/a/scout_ws/devel/setup.bash
-SIM_ENV=open USE_RVIZ=true \
-  SPAWN_X=-4.0 SPAWN_Y=0.0 SPAWN_Z=0.1 SPAWN_YAW=0.0 \
-  rosrun scout_local_planner launch_sim_nav_stack.sh
+MAP_FILE=/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream \
+USE_RVIZ=true \
+/data/a/scout_sim_replacement/scripts/launch_proxy_sim_localization_env.sh
 ```
 
 另开终端运行：

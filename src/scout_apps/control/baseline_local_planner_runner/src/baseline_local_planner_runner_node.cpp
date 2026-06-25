@@ -259,7 +259,13 @@ private:
       return;
     }
 
-    if (use_wrapper_goal_check_ && ((latch_goal_reached_ && goal_reached_latched_) || goalCloseEnough()))
+    bool goal_reached = latch_goal_reached_ && goal_reached_latched_;
+    if (!goal_reached && use_wrapper_goal_check_)
+      goal_reached = goalCloseEnough();
+    if (!goal_reached && planner_)
+      goal_reached = planner_->isGoalReached();
+
+    if (goal_reached)
     {
       if (latch_goal_reached_)
         goal_reached_latched_ = true;

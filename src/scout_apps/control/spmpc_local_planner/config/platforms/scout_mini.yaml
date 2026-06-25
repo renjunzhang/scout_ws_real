@@ -1,8 +1,29 @@
 robot:
+  # Motion limits used by SPMPC formal comparison. They are intentionally
+  # conservative against the Scout Mini manual maximum speed (1.5 m/s).
   v_max: 0.8
   omega_max: 1.2
   a_max: 0.6
   alpha_max: 1.2   # 转向角加速度上限 |d(omega)/dt| (rad/s^2)，与 TEB/DWA acc_lim_theta 对齐
+
+  # Scout Mini physical dimensions from docs/实物实验注意事项/代码移植/实物说明书.md.
+  # These parameters are the package-local source of truth for real-robot size
+  # alignment. Current continuous MPCC uses the motion limits above directly;
+  # footprint/collision-aware experiments and baseline configs should reuse the
+  # footprint below instead of inventing another robot envelope.
+  geometry:
+    length: 0.612       # m, manual: 612 mm
+    width: 0.580        # m, manual: 580 mm
+    height: 0.245       # m, manual: 245 mm
+    wheelbase: 0.451    # m, manual: 451 mm
+    track_width: 0.490  # m, manual front/rear track: 490 mm
+    footprint:
+      type: polygon
+      # Slightly conservative rectangle: 0.620 m x 0.585 m, matching the
+      # existing TEB/MPC baseline footprint and covering the manual body size.
+      vertices: [[0.31, 0.2925], [0.31, -0.2925], [-0.31, -0.2925], [-0.31, 0.2925]]
+    circumscribed_radius: 0.426  # m, sqrt(0.31^2 + 0.2925^2)
+    inscribed_radius: 0.2925     # m, half conservative footprint width
 
 platform:
   shared_constraints:
