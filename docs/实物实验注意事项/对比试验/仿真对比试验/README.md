@@ -293,6 +293,159 @@ has_raw_command=true
 has_final_command=true
 ```
 
+## 3.5 下一轮内部消融：N=9 full + Top5 展示矩阵（2026-06-26 计划）
+
+> 给后续 agent 的执行入口：本节用于跑 SPMPC 内部消融，不替换第 3.1 节已有 N=3 大矩阵。
+> 目标是同时保留完整 N=9 统计可信度，并额外筛出 5 个代表性改善案例用于展示方法有效性。
+
+### 3.5.1 变量轴与矩阵
+
+硬约束已经接入，内部消融不要把 `B_ours_hard` 直接混成唯一最终方法；否则会分不清收益来自 slosh soft cost、smooth-priority，还是 hard cap。推荐拆成两层：
+
+| 层级 | Variant | slosh soft | smooth priority | hard constraint | 主要问题 |
+|---|---|---:|---:|---:|---|
+| primary soft ablation | `spmpc_B0` | 否 | 否 | 否 | 无 slosh/无 smooth 的基线 |
+| primary soft ablation | `spmpc_B_smooth` | 否 | 是 | 否 | 只看 smooth-priority |
+| primary soft ablation | `spmpc_B_slosh` | 是 | 否 | 否 | 只看 slosh soft cost |
+| primary soft ablation | `spmpc_B_ours` | 是 | 是 | 否 | soft slosh + smooth-priority 的主方法 |
+| hard-cap increment | `spmpc_B_slosh_hard` | 是 | 否 | 是 | hard cap 对 slosh-only 的增量 |
+| hard-cap increment | `spmpc_B_ours_hard` | 是 | 是 | 是 | hard cap 对最终方法的增量 |
+
+正式 full N=9 至少跑这 6 个 variant，每个 variant 都保留 9 个 strict fresh cases。不要只保留好看的 5 个作为正式统计。
+
+### 3.5.2 固定路径参数
+
+与 `20260626_fixed_path_s_curve_matrix_n3/01_固定路径S曲线矩阵N3汇总.md` 保持一致：
+
+```bash
+GOAL_X=5.0
+GOAL_Y=0.0
+GOAL_YAW=0.0
+PATH_TEMPLATE=s_curve
+PATH_START_HEADING=current
+PATH_AMPLITUDE_RATIO=0.18
+PATH_MIN_AMPLITUDE=0.25
+PATH_MAX_AMPLITUDE=1.20
+PATH_SIDE=left
+PATH_SMOOTH_ITERATIONS=3
+RECORD_SEC=60
+MAP_FILE=/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream
+```
+
+### 3.5.3 推荐运行方式：按 variant 分批，避免长命令挂死
+
+不要一次把 6 个 variant 全塞进一个长矩阵命令。推荐一个 variant 一批，便于超时、失败重跑和审计：
+
+```bash
+cd /home/a/scout_ws
+export ACADOS_SOURCE_DIR=/home/a/acados
+export LD_LIBRARY_PATH=/home/a/acados/lib:${LD_LIBRARY_PATH:-}
+
+BATCH_STAMP=$(date +%Y%m%d_%H%M%S)_internal_ablation_n9_spmpc_B_ours \
+N=9 \
+MATRIX="spmpc_B_ours" \
+MODE=closed_loop \
+RECORD_SEC=60 \
+STRICT_PRE_CONTROL_SETTLE_SEC=30 \
+STRICT_POST_SHUTDOWN_SEC=30 \
+MAP_FILE=/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream \
+GOAL_X=5.0 \
+GOAL_Y=0.0 \
+GOAL_YAW=0.0 \
+PATH_TEMPLATE=s_curve \
+PATH_START_HEADING=current \
+PATH_AMPLITUDE_RATIO=0.18 \
+PATH_MIN_AMPLITUDE=0.25 \
+PATH_MAX_AMPLITUDE=1.20 \
+PATH_SIDE=left \
+PATH_SMOOTH_ITERATIONS=3 \
+/data/a/scout_sim_replacement/scripts/run_strict_fresh_fair_comparison_n3.sh
+```
+
+把 `BATCH_STAMP` 和 `MATRIX` 依次替换为：
+
+```text
+spmpc_B0
+spmpc_B_smooth
+spmpc_B_slosh
+spmpc_B_ours
+spmpc_B_slosh_hard
+spmpc_B_ours_hard
+```
+
+说明：脚本名仍叫 `n3`，但由环境变量 `N=9` 控制实际次数。每个 run 仍必须是 fresh sim；如果 manifest 里任何 case 的 pre/post ROS/Gazebo reachability 不是 false，不能当 strict fresh 正式数据。
+
+### 3.5.4 Top5 筛选规则：先全量统计，再展示代表性改善
+
+全量 N=9 aggregate 必须完整保留。Top5 只用于展示，不替代 full table。
+
+建议固定两个 Top5 榜：
+
+1. **Top5 soft improvement**：比较 `spmpc_B_slosh -> spmpc_B_ours`。
+   - 目的：突出 smooth-priority 加到 slosh-aware MPC 后的收益。
+   - 候选：paired run 中两者都 `valid_strict_case=true`、都 `goal_reached=true`。
+   - 保护条件：`tracking_rms_B_ours <= tracking_rms_B_slosh * 1.10`，或绝对恶化不超过 `+0.01 m`。
+   - 排序：优先按 `slosh_p95` 降幅从大到小；并列时看 `slosh_peak` 降幅，再看 tracking RMS。
+
+2. **Top5 hard-cap increment**：比较 `spmpc_B_ours -> spmpc_B_ours_hard`。
+   - 目的：展示 hard constraint 在不显著损害 tracking 时对液面风险指标的增量。
+   - 候选与保护条件同上。
+   - 排序：优先按 `slosh_p95` 降幅；如果研究重点改成安全峰值，可在报告中明确改用 `slosh_peak` 降幅。
+
+报告措辞必须写清楚：
+
+```text
+完整 N=9 strict-fresh 统计见 full table；Top5 是按预设规则从 valid/success paired cases 中筛出的代表性改善案例，用于展示，不替代全量统计。
+```
+
+### 3.5.5 输出建议
+
+建议写入新的 Obsidian 子报告，不覆盖已有 N=3：
+
+```text
+/data/a/Obsidian/vaults/StudyVault/30-Projects/MPC/规控一体的实验记录/仿真实验/20260626_fixed_path_s_curve_matrix_n3/04_SPMPC内部消融_N9全量与Top5.md
+```
+
+机器表格建议：
+
+```text
+tables/spmpc_internal_ablation_n9_per_case.csv
+tables/spmpc_internal_ablation_n9_aggregate.csv
+tables/spmpc_internal_ablation_n9_pairs_soft.csv
+tables/spmpc_internal_ablation_n9_top5_soft.csv
+tables/spmpc_internal_ablation_n9_pairs_hard.csv
+tables/spmpc_internal_ablation_n9_top5_hard.csv
+```
+
+图像建议：
+
+```text
+figures/spmpc_internal_ablation_n9_full_*.png
+figures/spmpc_internal_ablation_n9_top5_soft_*.png
+figures/spmpc_internal_ablation_n9_top5_hard_*.png
+```
+
+### 3.5.6 硬约束注意事项
+
+- 当前 hard cap 默认 `slosh_height_max=0.008 m`。
+- 2026-06-26 的普通 S 曲线 fresh-sim 中，外部 slosh 大约是 1 mm 量级，明显低于 8 mm cap；因此 hard constraint 可能不 active。正常 S 曲线里不要强行宣称 hard cap 大幅改善，只能说它在正常跟踪下未破坏性能，且作为 safety-constrained 版本保留。
+- 如果要证明 hard constraint 真正 active，应单独设计 stress/sensitivity 场景，例如更激进路径、更高速度或更紧 `slosh_height_max`。这类 stress 结果必须单独标注，不能混入 common-limit formal baseline。
+- runner 当前 rosbag topic 列表未必包含 `/spmpc/debug/slosh_hard_constraint`。不要擅自修改 `/data/a/scout_sim_replacement` 脚本；如果必须记录 hard-margin topic，先向用户确认。
+
+### 3.5.7 子代理 / 后台任务超时要求
+
+用户明确要求“别挂太多 subagent，记得给 subagent 加超时”。后续 agent 必须遵守：
+
+- 默认不要让 subagent 直接控制仿真；仿真运行由主 agent 顺序执行，最多只把结果聚合/审计交给子代理。
+- 同时运行的 subagent 不超过 2 个；禁止一次 fan-out 很多仿真代理。
+- 如果使用 subagent：
+  - 代码/结果扫描代理：超时 5 分钟；
+  - 单批结果聚合/画图代理：超时 10 分钟；
+  - 单 variant N=9 仿真运行如果确实交给后台/子代理：必须在提示词里写明硬超时 45 分钟，并要求超时后停止该批、报告未完成 case，不得静默继续。
+- 如果使用 shell 后台命令，外层要有明确超时；例如普通终端可用 `timeout --preserve-status 45m ...` 包住单 variant N=9 命令。若当前工具本身有更短硬限制，则按 variant/run 拆得更小，不要靠无限等待。
+- N=9 全矩阵 6 个 variant 预期可能持续数小时；要按 variant 分批记录 batch stamp 和 manifest。任一批超时/失败后先汇报，不要继续把残缺数据写成 full N=9。
+- 后处理脚本必须检查 `strict_fresh_manifest.csv`：`exit_status=0`、`valid_strict_case=true`、pre/post ROS/Gazebo 均 false。检查失败则标记 invalid，不得为了 Top5 筛选把 invalid case 混入候选。
+
 ## 4. 固定路径跟踪：current-sim diagnostic 命令
 
 > 只用于人工观察/调试，不是 formal fresh-sim 证据。
