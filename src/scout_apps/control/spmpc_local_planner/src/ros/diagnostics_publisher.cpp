@@ -21,6 +21,7 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     slosh_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_state", 1);
     slosh_height_pub_ = nh.advertise<std_msgs::Float32>("slosh_height", 1);
     slosh_horizon_summary_pub_ = nh.advertise<std_msgs::Float32MultiArray>("slosh_horizon_summary", 1);
+    slosh_hard_constraint_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_hard_constraint", 1);
     warm_start_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/warm_start", 1);
     warm_start_status_pub_ = nh.advertise<std_msgs::String>("debug/warm_start_status", 1);
     runtime_bounds_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/runtime_bounds", 1);
@@ -448,6 +449,19 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     summary.data[4] = static_cast<float>(output.slosh_summary.eta_dot_norm_peak);
     summary.data[5] = static_cast<float>(output.slosh_summary.peak_k);
     slosh_horizon_summary_pub_.publish(summary);
+
+    std_msgs::Float32MultiArray hard;
+    hard.layout.dim.resize(1);
+    hard.layout.dim[0].label = "enabled,h_limit_mm,h_peak_pred_mm,margin_mm,peak_k";
+    hard.layout.dim[0].size = 5;
+    hard.layout.dim[0].stride = 5;
+    hard.data.resize(5, 0.0f);
+    hard.data[0] = output.slosh_summary.hard_constraint_enable ? 1.0f : 0.0f;
+    hard.data[1] = static_cast<float>(1000.0 * output.slosh_summary.h_limit);
+    hard.data[2] = static_cast<float>(1000.0 * output.slosh_summary.h_peak_pred);
+    hard.data[3] = static_cast<float>(1000.0 * output.slosh_summary.h_limit_margin);
+    hard.data[4] = static_cast<float>(output.slosh_summary.peak_k);
+    slosh_hard_constraint_pub_.publish(hard);
 }
 
 void DiagnosticsPublisher::publishSloshState(const SloshState& state) {

@@ -38,6 +38,9 @@ struct SloshHorizonSummary {
     double eta_y_peak = 0.0;
     double eta_dot_norm_peak = 0.0;
     int peak_k = 0;
+    bool hard_constraint_enable = false;
+    double h_limit = 0.0;
+    double h_limit_margin = 0.0;
 };
 
 struct GuidanceSummary {

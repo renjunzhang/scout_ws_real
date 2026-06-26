@@ -13,6 +13,7 @@ struct SloshModelParams {
     int mode_index = 1;
     double dt = 1.0 / 30.0;
     double slosh_height_ref = 0.005;
+    double slosh_height_max = 0.008;
     double slosh_eta_dot_ratio = 0.3;
     bool use_linear_model = true;
     bool use_parabola_term = true;

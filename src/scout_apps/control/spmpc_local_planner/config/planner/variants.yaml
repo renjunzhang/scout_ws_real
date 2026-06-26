@@ -31,6 +31,22 @@ variants:
     w_smooth: 0.1
     w_slosh: 5.0   # bug A 修复后 slosh 与 contour 同量级; 调到 5 让 slosh 能改变候选选择 (后续可 sweep)
 
+  B_slosh_hard:
+    slosh_enable: true
+    smooth_priority_enable: false
+    slosh_constraint_enable: true
+    primitive_mode: linear
+    w_contour: 1.0
+    w_lag: 0.2
+    w_progress: 0.2
+    w_v: 1.0
+    w_vs: 0.3
+    v_ref: 0.25
+    w_control: 0.1
+    w_accel: 0.0
+    w_smooth: 0.1
+    w_slosh: 5.0
+
   B_slosh_linear:
     slosh_enable: true
     smooth_priority_enable: false
@@ -110,6 +126,22 @@ variants:
     w_accel: 0.0
     w_smooth: 1.0
     w_slosh: 5.0   # 与 B_slosh 一致, 叠加强 smooth
+
+  B_ours_hard:
+    slosh_enable: true
+    smooth_priority_enable: true
+    slosh_constraint_enable: true
+    primitive_mode: linear
+    w_contour: 1.0
+    w_lag: 0.2
+    w_progress: 0.2
+    w_v: 1.0
+    w_vs: 0.3
+    v_ref: 0.25
+    w_control: 0.3
+    w_accel: 0.0
+    w_smooth: 1.0
+    w_slosh: 5.0
 
   B_ours_anti:
     slosh_enable: true

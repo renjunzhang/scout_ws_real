@@ -76,14 +76,17 @@ SLOSH_EXTRA_NAMES = [
     "w_slosh_eta",       # 模态位移权重
     "w_slosh_eta_dot",   # 模态速度权重
 ]
-PARAM_NAMES_SLOSH = PARAM_NAMES + SLOSH_EXTRA_NAMES
+SLOSH_HARD_EXTRA_NAMES = [
+    "eta_max_sq",        # 硬约束阈值: eta_x^2 + eta_y^2 <= eta_max_sq（mainline slosh only）
+]
+PARAM_NAMES_SLOSH = PARAM_NAMES + SLOSH_EXTRA_NAMES + SLOSH_HARD_EXTRA_NAMES
 NP_SLOSH = len(PARAM_NAMES_SLOSH)
 PIDX_SLOSH = {name: i for i, name in enumerate(PARAM_NAMES_SLOSH)}
 
 NX_SLOSH = 10  # [px, py, theta, v, s, omega, eta_x, eta_x_dot, eta_y, eta_y_dot]
 
-# direct-omega + slosh（路 B 生产主线）：legacy direct-omega 参数 + slosh 物理/权重，
-# 后缀与 PARAM_NAMES_SLOSH 完全一致，故 cost 的 _slosh_cost 可按 eta_base 复用。
+# direct-omega + slosh（路 B 诊断）：legacy direct-omega 参数 + slosh 物理/软代价权重。
+# 不追加 mainline hard-constraint 参数，避免诊断后端共享不支持的硬约束布局。
 PARAM_NAMES_SLOSH_DIRECT_OMEGA = PARAM_NAMES_DIRECT_OMEGA_LEGACY + SLOSH_EXTRA_NAMES
 NP_SLOSH_DIRECT_OMEGA = len(PARAM_NAMES_SLOSH_DIRECT_OMEGA)
 PIDX_SLOSH_DIRECT_OMEGA = {name: i for i, name in enumerate(PARAM_NAMES_SLOSH_DIRECT_OMEGA)}

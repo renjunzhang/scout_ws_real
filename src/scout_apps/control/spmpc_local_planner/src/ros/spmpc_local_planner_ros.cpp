@@ -89,9 +89,9 @@ bool validateBackendPolicy(const SolverParams& params,
     reason.clear();
 
     if (params.solver_backend == kSolverBackendContinuousMpccAcados) {
-        if (variant.slosh_constraint_enable) {
+        if (variant.slosh_constraint_enable && !variant.slosh_enable) {
             appendPolicyError(reason,
-                              "continuous_mpcc_acados does not support slosh_constraint_enable yet");
+                              "slosh_constraint_enable requires slosh_enable on continuous_mpcc_acados");
         }
         if (params.corridor_enable) {
             appendPolicyError(reason,
@@ -1056,6 +1056,13 @@ SloshModelParams SpmpcLocalPlannerROS::loadSloshParams() const {
     pnh_.param("slosh/damping_ratio", params.damping_ratio, params.damping_ratio);
     pnh_.param("slosh/mode_index", params.mode_index, params.mode_index);
     pnh_.param("slosh/slosh_height_ref", params.slosh_height_ref, params.slosh_height_ref);
+    pnh_.param("slosh/slosh_height_max", params.slosh_height_max, params.slosh_height_max);
+    if (!std::isfinite(params.slosh_height_max) || params.slosh_height_max <= 0.0) {
+        ROS_WARN("[spmpc_local_planner] invalid slosh/slosh_height_max=%.6f, fallback to slosh_height_ref=%.6f",
+                 params.slosh_height_max,
+                 params.slosh_height_ref);
+        params.slosh_height_max = std::max(1e-6, params.slosh_height_ref);
+    }
     pnh_.param("slosh/slosh_eta_dot_ratio", params.slosh_eta_dot_ratio, params.slosh_eta_dot_ratio);
     pnh_.param("slosh/use_linear_model", params.use_linear_model, params.use_linear_model);
     pnh_.param("slosh/use_parabola_term", params.use_parabola_term, params.use_parabola_term);

@@ -36,7 +36,11 @@ from spmpc_acados_model import (  # noqa: E402
     PIDX_SLOSH_DIRECT_OMEGA,
 )
 from spmpc_acados_cost import stage_cost_expr, terminal_cost_expr  # noqa: E402
-from spmpc_acados_constraints import set_constraints, set_constraints_direct_omega_legacy  # noqa: E402
+from spmpc_acados_constraints import (  # noqa: E402
+    set_constraints,
+    set_constraints_direct_omega_legacy,
+    set_constraints_slosh,
+)
 
 MODELS = {
     "b0": {"export": export_spmpc_b0_symbols, "with_slosh": False},
@@ -147,6 +151,8 @@ def default_parameter_values(cfg, with_slosh, direct_omega_legacy=False):
         p[idx["eta_dot_ref"]] = omega_n * eta_ref
         p[idx["w_slosh_eta"]] = cfg["w_slosh"]
         p[idx["w_slosh_eta_dot"]] = cfg["w_slosh"]
+        if "eta_max_sq" in idx:
+            p[idx["eta_max_sq"]] = 1e12
     return p
 
 
@@ -209,6 +215,8 @@ def generate(cfg, output_root, model_key):
     ocp.parameter_values = default_parameter_values(cfg, with_slosh, direct_omega_legacy)
     if direct_omega_legacy:
         set_constraints_direct_omega_legacy(ocp, cfg)
+    elif with_slosh:
+        set_constraints_slosh(ocp, cfg, PIDX_SLOSH)
     else:
         set_constraints(ocp, cfg)
 

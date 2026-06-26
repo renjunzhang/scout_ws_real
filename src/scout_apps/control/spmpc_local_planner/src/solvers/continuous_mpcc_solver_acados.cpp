@@ -34,16 +34,20 @@ enum Param {
     // 以下仅 slosh 模型（接在 B0 的 23 个之后）
     TWO_ZETA_OMEGA_N, OMEGA_N_SQ, KAPPA_X, KAPPA_Y,
     ETA_REF, ETA_DOT_REF, W_SLOSH_ETA, W_SLOSH_ETA_DOT,
+    ETA_MAX_SQ,
     PARAM_MAX,
 };
 
 // 参数布局契约：与 scripts/acados/spmpc_acados_model.py（→生成器 NP 宏）绑死，漂移即编译失败。
 static_assert(V_REF + 1 == SPMPC_B0_NP, "B0 参数布局与生成的 spmpc_b0 求解器不一致");
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-static_assert(W_SLOSH_ETA_DOT + 1 == SPMPC_SLOSH_NP, "slosh 参数布局与生成的 spmpc_slosh 求解器不一致");
+static_assert(ETA_MAX_SQ + 1 == SPMPC_SLOSH_NP, "slosh 参数布局与生成的 spmpc_slosh 求解器不一致");
+static_assert(SPMPC_SLOSH_NH > 0, "spmpc_slosh 求解器缺少 slosh hard constraint，请重新生成 acados artifacts");
 #endif
 
-// 统一封装两个生成求解器（b0 5维 / slosh 9维），把前缀相关调用收敛到一处。
+constexpr double kDisabledEtaMaxSq = 1e12;
+
+// 统一封装两个生成求解器（b0 6维 / slosh 10维），把前缀相关调用收敛到一处。
 struct GenSolver {
     enum Kind { B0, SLOSH } kind = B0;
     void* capsule = nullptr;
@@ -614,6 +618,8 @@ bool ContinuousMpccSolverAcados::solve(
 
     // slosh 物理：取自同一套 slosh_dynamics 核（§4.3），κ=1（与 slosh_models 的单位输入增益一致）。
     double c_h = 1.0, eta_ref = 1.0, eta_dot_ref = 1.0;
+    double eta_max_sq = kDisabledEtaMaxSq;
+    double h_limit = 0.0;
     double two_zeta_omega_n = 0.0, omega_n_sq = 0.0;
     if (slosh && slosh_dyn_.configured()) {
         const double omega_n = slosh_dyn_.omegaN();
@@ -624,7 +630,16 @@ bool ContinuousMpccSolverAcados::solve(
         omega_n_sq = omega_n * omega_n;
         eta_ref = std::max(1e-6, h_ref / c_h);      // 使 ||eta||/eta_ref == (c_h||eta||)/h_ref，与 primitive 一致
         eta_dot_ref = std::max(1e-6, omega_n * h_ref);
+        if (variant_.slosh_constraint_enable) {
+            h_limit = std::max(1e-6, params_.slosh.slosh_height_max);
+            const double eta_max = std::max(1e-6, h_limit / c_h);
+            eta_max_sq = eta_max * eta_max;
+        }
     }
+    output.slosh_summary.hard_constraint_enable = (slosh && variant_.slosh_constraint_enable &&
+                                                   eta_max_sq < kDisabledEtaMaxSq);
+    output.slosh_summary.h_limit = h_limit;
+    output.slosh_summary.h_limit_margin = h_limit;
 
     double p[PARAM_MAX];
     for (int i = 0; i < PARAM_MAX; ++i) p[i] = 0.0;
@@ -650,6 +665,7 @@ bool ContinuousMpccSolverAcados::solve(
         p[ETA_DOT_REF] = eta_dot_ref;
         p[W_SLOSH_ETA] = variant_.w_slosh;
         p[W_SLOSH_ETA_DOT] = variant_.w_slosh * params_.slosh.slosh_eta_dot_ratio;
+        p[ETA_MAX_SQ] = eta_max_sq;
     }
 
     for (int stage = 0; stage <= n; ++stage) {
@@ -848,6 +864,9 @@ bool ContinuousMpccSolverAcados::solve(
         const size_t idx = std::min(sorted.size() - 1,
             static_cast<size_t>(std::floor(0.95 * (sorted.size() - 1))));
         output.slosh_summary.h_p95_pred = sorted[idx];
+    }
+    if (output.slosh_summary.hard_constraint_enable) {
+        output.slosh_summary.h_limit_margin = output.slosh_summary.h_limit - output.slosh_summary.h_peak_pred;
     }
 
     // u = [a, alpha, v_s]; v_s 是虚拟路径进度速度，不直接作为 /cmd_vel.linear.x。

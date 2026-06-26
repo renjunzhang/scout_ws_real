@@ -13,8 +13,9 @@ VariantConfig makeVariantConfig(const std::string& variant_name) {
     if (variant_name == "B_accel" || variant_name == "B_inst_excitation") {
         cfg.name = "B_accel";  // 兼容旧别名 B_inst_excitation -> B_accel
     } else if (variant_name == "B0" || variant_name == "B_slosh" ||
-               variant_name == "B_slosh_linear" || variant_name == "B_slosh_anti" ||
-               variant_name == "B_smooth" || variant_name == "B_ours" ||
+               variant_name == "B_slosh_hard" || variant_name == "B_slosh_linear" ||
+               variant_name == "B_slosh_anti" || variant_name == "B_smooth" ||
+               variant_name == "B_ours" || variant_name == "B_ours_hard" ||
                variant_name == "B_ours_anti") {
         cfg.name = variant_name;
     } else {
