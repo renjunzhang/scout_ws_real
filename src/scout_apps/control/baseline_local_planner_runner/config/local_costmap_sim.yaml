@@ -3,6 +3,8 @@ controller_frequency: 10.0
 local_costmap:
   global_frame: odom
   robot_base_frame: base_footprint
+  # Conservative Scout Mini footprint aligned with spmpc_local_planner/config/platforms/scout_mini.yaml.
+  footprint: [[0.31, 0.2925], [0.31, -0.2925], [-0.31, -0.2925], [-0.31, 0.2925]]
   transform_tolerance: 1.0
   update_frequency: 5.0
   publish_frequency: 2.0

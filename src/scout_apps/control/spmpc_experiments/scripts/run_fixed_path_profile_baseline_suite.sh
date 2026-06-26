@@ -523,6 +523,12 @@ target_v_max_mps: ${TARGET_V_MAX_MPS}
 target_omega_max_radps: ${TARGET_OMEGA_MAX_RADPS}
 target_acc_lim_x_mps2: ${TARGET_ACC_LIM_X_MPS2}
 target_acc_lim_theta_radps2: ${TARGET_ACC_LIM_THETA_RADPS2}
+runtime_vehicle_v_max_mps: ${VEHICLE_V_MAX}
+runtime_vehicle_omega_max_radps: ${TARGET_OMEGA_MAX_RADPS}
+runtime_vehicle_a_max_mps2: ${TARGET_ACC_LIM_X_MPS2}
+runtime_vehicle_alpha_max_radps2: ${TARGET_ACC_LIM_THETA_RADPS2}
+runtime_path_speed_profile_omega_max_radps: ${TARGET_OMEGA_MAX_RADPS}
+runtime_path_speed_profile_alpha_max_radps2: ${TARGET_ACC_LIM_THETA_RADPS2}
 path_id: ${PATH_ID}
 path_source_mode: ${PATH_SOURCE_MODE}
 path_file: ${run_path_file}
@@ -598,6 +604,15 @@ EOF_META
       mpc_R_da:="${MPC_R_DA}" \
       mpc_cmd_vel_lead_time:="${MPC_CMD_VEL_LEAD_TIME}" \
       vehicle_v_max:="${VEHICLE_V_MAX}" \
+      vehicle_omega_max:="${TARGET_OMEGA_MAX_RADPS}" \
+      vehicle_a_max:="${TARGET_ACC_LIM_X_MPS2}" \
+      vehicle_alpha_max:="${TARGET_ACC_LIM_THETA_RADPS2}" \
+      path_speed_profile_omega_max:="${TARGET_OMEGA_MAX_RADPS}" \
+      path_speed_profile_alpha_max:="${TARGET_ACC_LIM_THETA_RADPS2}" \
+      path_max_tan_accel:="${TARGET_ACC_LIM_X_MPS2}" \
+      path_max_tan_decel:="${PROFILE_DECEL_MAX}" \
+      v_des_accel_limit:="${TARGET_ACC_LIM_X_MPS2}" \
+      v_des_decel_limit:="${PROFILE_DECEL_MAX}" \
       external_speed_profile_csv:="${profile_csv}" \
       external_profile_execution_cap_enable:="${EXTERNAL_PROFILE_EXECUTION_CAP_ENABLE}" \
       external_profile_execution_accel_limit:="${EXTERNAL_PROFILE_EXECUTION_ACCEL_LIMIT}" \

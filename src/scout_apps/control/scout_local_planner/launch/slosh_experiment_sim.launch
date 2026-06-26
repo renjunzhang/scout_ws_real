@@ -68,6 +68,13 @@
   <arg name="slosh_imu_ay_bias_init_duration" default="3.0" doc="估计 IMU ay 零偏所需的连续静止时长"/>
   <arg name="slosh_imu_ay_scale" default="1.0" doc="IMU ay 离线标定比例系数（由 imu_ay_tool.py calibrate 输出）"/>
   <arg name="vehicle_v_max" default="3.0" doc="覆盖 vehicle/v_max；固定路径 baseline 可按实验速度需求下调"/>
+  <arg name="vehicle_omega_max" default="1.5" doc="覆盖 vehicle/omega_max；formal profile baseline 应传 common limit 1.2"/>
+  <arg name="vehicle_a_max" default="2.0" doc="覆盖 vehicle/a_max；formal profile baseline 应传 common limit 0.6"/>
+  <arg name="vehicle_alpha_max" default="5.0" doc="覆盖 vehicle/alpha_max；formal profile baseline 应传 common limit 1.2"/>
+  <arg name="path_speed_profile_omega_max" default="1.5" doc="覆盖 path_handler/speed_profile_omega_max；formal profile baseline 应传 common limit 1.2"/>
+  <arg name="path_speed_profile_alpha_max" default="5.0" doc="覆盖 path_handler/speed_profile_alpha_max；formal profile baseline 应传 common limit 1.2"/>
+  <arg name="path_max_tan_accel" default="2.0" doc="覆盖 path_handler/max_tan_accel；formal profile baseline 应传 common limit 0.6"/>
+  <arg name="path_max_tan_decel" default="2.0" doc="覆盖 path_handler/max_tan_decel；formal profile baseline 应传 common limit 0.6"/>
   <arg name="cmd_vel_topic" default="/cmd_vel" doc="planner 输出的 cmd_vel 话题；阶段 3 可改到调试话题避免与底盘直控冲突"/>
   <arg name="global_path_topic" default="/scout/global_path" doc="local planner 订阅的全局路径话题；固定路径重放实验时可改到 /scout/global_path_fixed"/>
 
@@ -134,6 +141,13 @@
     <param name="slosh_estimator/imu_ay_bias_init_duration" value="$(arg slosh_imu_ay_bias_init_duration)"/>
     <param name="slosh_estimator/imu_ay_scale" value="$(arg slosh_imu_ay_scale)"/>
     <param name="vehicle/v_max" value="$(arg vehicle_v_max)"/>
+    <param name="vehicle/omega_max" value="$(arg vehicle_omega_max)"/>
+    <param name="vehicle/a_max" value="$(arg vehicle_a_max)"/>
+    <param name="vehicle/alpha_max" value="$(arg vehicle_alpha_max)"/>
+    <param name="path_handler/speed_profile_omega_max" value="$(arg path_speed_profile_omega_max)"/>
+    <param name="path_handler/speed_profile_alpha_max" value="$(arg path_speed_profile_alpha_max)"/>
+    <param name="path_handler/max_tan_accel" value="$(arg path_max_tan_accel)"/>
+    <param name="path_handler/max_tan_decel" value="$(arg path_max_tan_decel)"/>
 
     <!-- 话题 remap -->
     <remap from="global_path" to="$(arg global_path_topic)"/>
