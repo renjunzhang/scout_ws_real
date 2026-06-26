@@ -98,7 +98,8 @@ OfficialCoreResult PreflightOfficialRuntime(const std::string& official_source_r
 bool IsGoalReached(const PlannerInput& input, const PlannerConfig& config) {
   const double dx = input.target_pose.x - input.robot_pose.x;
   const double dy = input.target_pose.y - input.robot_pose.y;
-  return std::hypot(dx, dy) <= config.robot_radius;
+  const double tolerance = config.goal_xy_tolerance > 0.0 ? config.goal_xy_tolerance : config.robot_radius;
+  return std::hypot(dx, dy) <= tolerance;
 }
 
 constexpr double kPi = 3.14159265358979323846;

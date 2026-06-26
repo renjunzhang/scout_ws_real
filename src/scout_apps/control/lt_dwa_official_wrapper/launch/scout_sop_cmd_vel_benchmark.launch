@@ -14,7 +14,9 @@
   <arg name="max_w" default="1.2"/>
   <arg name="max_acc" default="0.6"/>
   <arg name="max_angular_acc" default="1.2"/>
-  <arg name="robot_radius" default="0.3"/>
+  <arg name="robot_radius" default="0.426"/>
+  <arg name="goal_xy_tolerance" default="0.20"/>
+  <arg name="goal_yaw_tolerance" default="0.30"/>
   <arg name="time_step" default="0.2"/>
   <arg name="path_resample_spacing" default="0.10"/>
   <arg name="enable_path_tracking_guard" default="true"/>
@@ -54,6 +56,8 @@
     <arg name="max_acc" value="$(arg max_acc)"/>
     <arg name="max_angular_acc" value="$(arg max_angular_acc)"/>
     <arg name="robot_radius" value="$(arg robot_radius)"/>
+    <arg name="goal_xy_tolerance" value="$(arg goal_xy_tolerance)"/>
+    <arg name="goal_yaw_tolerance" value="$(arg goal_yaw_tolerance)"/>
     <arg name="time_step" value="$(arg time_step)"/>
     <arg name="path_resample_spacing" value="$(arg path_resample_spacing)"/>
     <arg name="enable_path_tracking_guard" value="$(arg enable_path_tracking_guard)"/>
