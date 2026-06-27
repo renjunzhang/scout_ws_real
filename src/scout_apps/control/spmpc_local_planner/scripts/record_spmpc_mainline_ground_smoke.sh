@@ -60,6 +60,8 @@ record_topics=(
   /spmpc/slosh_horizon_summary
   /spmpc/debug/slosh_state
   /spmpc/debug/progress_s
+  /spmpc/debug/v_ref_current
+  /spmpc/debug/map_vref_status
   /spmpc/debug/runtime_bounds
   /spmpc/debug/generated_bounds
   /spmpc/debug/first_shot_summary

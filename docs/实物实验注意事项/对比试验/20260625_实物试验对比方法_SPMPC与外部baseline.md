@@ -27,6 +27,45 @@ LT-DWA official wrapper 是外部传统局部规划 baseline。
 
 因此，若 LT-DWA 能完成路径但液面高度或角速度变化更大，这正是有效对比结果，而不是要求 LT-DWA 也做液面闭环。
 
+### 0.1 与 Map-vref / 地形经验地图的阶段关系
+
+`Map-vref` 是另一条实物证据链，不能和普通 SPMPC / external baseline 对比混成同一个阶段：
+
+```text
+R0：实物探索采集 / 数据链路验证
+  - 使用 B_ours 或保守 B_ours_hard_1mm
+  - map_vref/profile_enable=false
+  - map_vref/runtime_v_ref_enable=false
+  - 只采集 RGB/IMU/odom/cmd/path/progress，不验证 Map-vref 效果
+
+R1：离线构图、校验、冻结 profile
+  - 输出 frozen profile CSV、profile_hash、path_hash、map_id、path_id、payload_id、freeze note
+
+R2：frozen profile blind test
+  - B_ours
+  - B_ours_uniform_slow
+  - B_ours_map_vref（只读 frozen profile，禁止用 test RGB 在线调参）
+```
+
+R0 数据不能同时作为构图集和盲测集；正式液面真值仍以 `RGB bag/video -> offline max-LCR` 为准。
+
+### 0.2 当前仿真前置状态（2026-06-27）
+
+隔离仿真 fixed-path S 曲线外部对比已经完成 `N=9` formal fresh-sim：
+
+```text
+spmpc_B_ours_hard_1mm / dwa / teb / mpc_local_planner_tuned / lt_dwa_official
+45/45 strict valid，45/45 到点，未触发 60s FAIL 或 freshness violation。
+```
+
+当前 SPMPC hard-cap 推荐值为：
+
+```text
+slosh_height_max = 0.001 m  # 1.0 mm
+```
+
+`0.85 mm` 可作为更激进补充，但 acados transient failure 更多；实物阶段若使用 hard-cap 方法，metadata 必须记录 cap 值，且不要把原始内部消融的 `8 mm` 口径与当前推荐 `1 mm` 口径混用。
+
 ---
 
 ## 1. 方法矩阵
@@ -38,7 +77,10 @@ LT-DWA official wrapper 是外部传统局部规划 baseline。
 | `B0` | SPMPC internal baseline | 否 | 否 | 基础 tracking 锚点；证明连续 MPCC 本身能完成任务 |
 | `B_smooth` | SPMPC internal ablation | 否 | 是 | 回答“只靠平滑控制能否降晃”；当前实物中不稳定时只作诊断 |
 | `B_slosh` | SPMPC internal ablation | 是 | 否/弱 | 回答 slosh-aware 模型/代价本体是否有效 |
-| `B_ours` | SPMPC final | 是 | 是 | 最终方法；只有 tracking 安全后才比较降晃收益 |
+| `B_ours` | SPMPC final soft | 是 | 是 | R0 首批推荐主控；Map-vref 关闭时作为无地图 baseline |
+| `B_slosh_hard` | SPMPC hard-cap increment | 是 + hard cap | 否/弱 | hard cap 对 slosh-only 的增量；需记录 cap 值 |
+| `B_ours_hard_1mm` | SPMPC final hard-cap | 是 + `slosh_height_max=0.001 m` | 是 | 当前仿真推荐 hard-cap 行；实物采用前先 N=1 smoke |
+| `B_ours_map_vref` | SPMPC + frozen profile | 是；profile 只调 `v_ref` | 是 | 只用于 R2 blind test；R0 不启用，不用 test RGB 在线调参 |
 
 ### 1.2 外部 baseline
 
@@ -178,13 +220,15 @@ mpc_local_planner 当前配置能到终点，但更像 navigation-style endpoint
 实际闭环会明显切弯，尚未达到 strict fixed-path tracking baseline 要求。
 ```
 
-因此进入实物前的口径是：
+因此进入实物前的口径更新为：
 
 ```text
-mpc_local_planner: 已通过隔离仿真 diagnostic smoke 的“能跑/能到”门槛；
-尚未通过 formal fixed-path tracking 门槛。
-若用于实物外部 baseline，必须标注 navigation-style baseline，
-或先进一步调参/冻结 strict tracking 配置后再纳入正式表。
+mpc_local_planner 原始配置：曾通过隔离仿真 diagnostic smoke 的“能跑/能到”门槛，
+但 fixed-path tracking 不足，只能作为历史诊断记录。
+
+mpc_local_planner_tuned：已在 2026-06-27 外部 baseline fixed-path N=9 formal fresh-sim 中
+9/9 strict valid、9/9 到点；若迁移到实物，必须显式使用 tuned fixed-path 配置，
+并仍需先做 N=1 smoke，确认现场 tracking、安全和 RGB/odom/cmd/path 数据完整后再进正式表。
 ```
 
 LT-DWA 进入实物 closed-loop 的前置门槛：
@@ -220,6 +264,40 @@ Round 3: B_ours -> B0 -> LT-DWA
 ```text
 停 planner -> 发 /cmd_vel zero -> 停 bag -> 回到同一起点 -> 等液体静稳 60~90s -> 确认 /cmd_vel 无旧 publisher -> 下一轮
 ```
+
+### 3.3 R0 / Map-vref 实物采集入口（半手动安全流程）
+
+R0 不是 full automation，建议保持多终端半手动流程：先录包，再启动 planner；现场安全人员随时可停。当前 repo 中可用入口如下：
+
+| 环节 | 当前入口 | 状态 / 注意 |
+|---|---|---|
+| 传感器/定位栈 | `src/scout_apps/control/scout_local_planner/scripts/launch_real_sensors_stack.sh` | 启动 base、LiDAR、Cartographer localization、IMU、RealSense；只停止自己追踪 PID |
+| 在线 RGB 观察 | `roslaunch realsense_liquid_measurement online_liquid_monitor_combined.launch ...` | 源码位于 `src/scout_apps/sensors/realsense_liquid_measurement`；`/liquid/height` 只作现场观察 |
+| fixed path 生成 | `rosrun scout_local_planner template_fixed_path_generator.py ...` | 生成 current-pose 起点固定路径；必须 RViz 人工确认不穿墙/不贴墙 |
+| goal 发送 | `rosrun scout_local_planner send_fixed_goal.py ...` | 只发送目标；不替代人工安全确认 |
+| 全量 RGB recorder | `src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh` | R0 推荐 recorder；只录包，不发控制；白名单需包含 Map-vref debug topics |
+| 短安全 smoke recorder | `src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh` | 只用于短 smoke；不能替代 RGB R0 数据 |
+| SPMPC fixed path | `roslaunch spmpc_local_planner spmpc_fixed_path.launch ...` | R0-A 首批关闭 Map-vref：`profile_enable=false`、`runtime_v_ref_enable=false` |
+| offline RGB | `red_liquid_infer_from_bag.py` / `export_liquid_variation_from_bags.py` | 正式液面真值来自离线 max-LCR，不来自在线 `/liquid/height` |
+
+R0-A 首批推荐：
+
+```bash
+rosparam set /spmpc_local_planner/map_vref/runtime_v_ref_enable false
+rosparam set /spmpc_local_planner/map_vref/profile_enable false
+
+roslaunch spmpc_local_planner spmpc_fixed_path.launch \
+  planner_variant:=B_ours \
+  solver_backend:=continuous_mpcc_acados \
+  reference_path_topic:=/scout/global_path_fixed \
+  cmd_vel_topic:=/cmd_vel \
+  costmap_topic:=/map \
+  reference_target_frame:=map \
+  v_ref:=0.25 \
+  alpha_max:=1.2
+```
+
+每个 R0 trial 的 metadata 至少记录 `map_vref_profile_enable`、`map_vref_runtime_override_enable`、`planner_variant`、`v_ref`、`path_id/path_file`、`payload_id`、`camera calibration` 和 bag 路径。
 
 ---
 
@@ -277,6 +355,7 @@ done
 ```text
 /tf /tf_static
 /odom /map /scan_front
+/imu/data /container_imu
 /camera/color/image_raw /camera/color/camera_info
 /scout/goal /scout/global_path_fixed
 /cmd_vel
@@ -291,6 +370,8 @@ SPMPC 额外 topic：
 /spmpc/debug/runtime_bounds
 /spmpc/debug/generated_bounds
 /spmpc/debug/progress_s
+/spmpc/debug/v_ref_current
+/spmpc/debug/map_vref_status
 /spmpc/debug/projector
 /spmpc/debug/stage0_reference
 /spmpc/debug/local_traj_head
@@ -303,6 +384,14 @@ SPMPC 额外 topic：
 /spmpc/terminal/debug
 /spmpc/slosh_height
 /spmpc/slosh_horizon_summary
+```
+
+Map-vref 状态判读：
+
+```text
+R0 / 普通 B_ours：/spmpc/debug/map_vref_status = VARIANT_FALLBACK
+R2 B_ours_map_vref：/spmpc/debug/map_vref_status = PROFILE_LOOKUP
+runtime smoke：/spmpc/debug/map_vref_status = RUNTIME_OVERRIDE
 ```
 
 LT-DWA 额外 topic：
@@ -488,6 +577,9 @@ Table R3: external real-robot baseline comparison
 
 Table R4: safety/command smoothness diagnostics
   cmd |dω/dt|, limiter ratio, guard_applied rate, failure modes
+
+Table R5: Map-vref frozen-profile blind test（仅 R2）
+  B_ours / B_ours_uniform_slow / B_ours_map_vref；报告 profile_hash、path_hash、map_vref_status、v_ref_current/cmd/odom 响应
 ```
 
 其中 LT-DWA 行的标准描述：
