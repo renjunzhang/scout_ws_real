@@ -77,6 +77,21 @@ start_lock_recovery:
   require_monotonic_clip: true
   max_projection_distance_m: 0.50
 
+# P0/P1 delay-phase observability. Disabled by default: monitor/shadow never changes /cmd_vel
+# or the SolverInput used by acados; it only publishes debug topics when enabled.
+delay_phase:
+  mode: off              # off | monitor | shadow
+  publish_diagnostics: true
+  history_window_sec: 2.0
+  cmd_timeout_sec: 0.5
+  odom_timeout_sec: 0.5
+  linear_delay_sec: 0.15
+  angular_delay_sec: 0.22
+  max_prediction_sec: 0.40
+  max_integration_step_sec: 0.02
+  min_integration_step_sec: 0.001
+  require_complete_history: false
+
 platform:
   kinematics: differential
 

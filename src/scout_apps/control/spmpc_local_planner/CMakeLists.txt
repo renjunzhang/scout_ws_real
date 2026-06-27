@@ -92,6 +92,8 @@ add_library(${PROJECT_NAME}
   src/solvers/solver_factory.cpp
   src/solvers/continuous_mpcc_solver_acados.cpp
   src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
+  src/ros/command_history_buffer.cpp
+  src/ros/execution_state_predictor.cpp
   src/ros/diagnostics_publisher.cpp
   src/ros/spmpc_local_planner_ros.cpp
 )
@@ -173,6 +175,20 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_start_lock_recovery test/test_start_lock_recovery.cpp)
   if(TARGET test_start_lock_recovery)
     target_link_libraries(test_start_lock_recovery
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_command_history_buffer test/test_command_history_buffer.cpp)
+  if(TARGET test_command_history_buffer)
+    target_link_libraries(test_command_history_buffer
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_execution_state_predictor test/test_execution_state_predictor.cpp)
+  if(TARGET test_execution_state_predictor)
+    target_link_libraries(test_execution_state_predictor
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
     )

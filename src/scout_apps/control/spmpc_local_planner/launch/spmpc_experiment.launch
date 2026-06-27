@@ -20,6 +20,9 @@
   <arg name="shared_angular_accel_max" default="-1.0" doc="覆盖 platform/shared_constraints/angular_accel_max; 负值时用 platform yaml/robot alpha_max"/>
   <arg name="shared_angular_accel_max_dt" default="-1.0" doc="覆盖 platform/shared_constraints/angular_accel_max_dt; 负值时用 platform yaml"/>
   <arg name="alpha_max" default="-1.0" doc="诊断/消融用: 覆盖 robot/alpha_max; 负值时用 platform yaml"/>
+  <arg name="delay_phase_mode" default="off" doc="off|monitor|shadow; shadow 只发诊断, 不改变 SolverInput 或 /cmd_vel"/>
+  <arg name="delay_phase_linear_delay_sec" default="-1.0" doc="覆盖 delay_phase/linear_delay_sec; 负值时用 common.yaml"/>
+  <arg name="delay_phase_angular_delay_sec" default="-1.0" doc="覆盖 delay_phase/angular_delay_sec; 负值时用 common.yaml"/>
   <arg name="platform_config" default="scout_mini"/>
   <arg name="container_config" default="tube_default"/>
   <arg name="experiment_config" default="fixed_path"/>
@@ -52,6 +55,11 @@
            if="$(eval float(arg('shared_angular_accel_max_dt')) >= 0.0)"/>
     <param name="robot/alpha_max" value="$(arg alpha_max)"
            if="$(eval float(arg('alpha_max')) >= 0.0)"/>
+    <param name="delay_phase/mode" value="$(arg delay_phase_mode)"/>
+    <param name="delay_phase/linear_delay_sec" value="$(arg delay_phase_linear_delay_sec)"
+           if="$(eval float(arg('delay_phase_linear_delay_sec')) >= 0.0)"/>
+    <param name="delay_phase/angular_delay_sec" value="$(arg delay_phase_angular_delay_sec)"
+           if="$(eval float(arg('delay_phase_angular_delay_sec')) >= 0.0)"/>
     <!-- sweep 时覆盖该 variant 的 w_slosh(在 variants.yaml 加载之后, 故生效); w_slosh<0 跳过 -->
     <param name="variants/$(arg planner_variant)/w_slosh" value="$(arg w_slosh)"
            if="$(eval float(arg('w_slosh')) >= 0.0)"/>

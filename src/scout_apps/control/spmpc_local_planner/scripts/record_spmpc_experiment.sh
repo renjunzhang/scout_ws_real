@@ -22,6 +22,11 @@ record_topics=(
   /spmpc/primitive
   /spmpc/solver_time_ms
   /spmpc/cost_breakdown
+  /spmpc/debug/delay_phase
+  /spmpc/debug/odom_timing
+  /spmpc/debug/execution_state
+  /spmpc/debug/execution_alignment_status
+  /spmpc/debug/delay_compensation
   /cmd_vel
   /odom
   /scout/global_path

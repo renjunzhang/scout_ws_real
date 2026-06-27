@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/core/variant_config.h"
+#include "spmpc_local_planner/ros/delay_phase_types.h"
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Path.h>
 #include <ros/ros.h>
@@ -26,6 +27,11 @@ public:
                               bool angular_accel_limited);
     void publishSloshState(const SloshState& state);
     void publishSloshHeight(double height_m);
+    void publishDelayPhase(const DelayPhaseDebugSummary& summary);
+    void publishOdomTiming(const OdomTimingDebug& timing);
+    void publishExecutionState(const ExecutionStatePrediction& prediction);
+    void publishExecutionAlignmentStatus(const std::string& status);
+    void publishDelayCompensation(const DelayPhaseDebugSummary& summary);
     void publishStatus(const std::string& status);
 
 private:
@@ -59,6 +65,11 @@ private:
     ros::Publisher warm_start_head_pub_;
     ros::Publisher cmd_output_pub_;
     ros::Publisher cmd_output_status_pub_;
+    ros::Publisher delay_phase_pub_;
+    ros::Publisher odom_timing_pub_;
+    ros::Publisher execution_state_pub_;
+    ros::Publisher execution_alignment_status_pub_;
+    ros::Publisher delay_compensation_pub_;
     ros::Publisher terminal_pub_;
     ros::Publisher terminal_mode_pub_;
     ros::Publisher start_lock_active_pub_;

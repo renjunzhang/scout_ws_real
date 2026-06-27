@@ -3,7 +3,9 @@
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/reference/reference_path_preprocessor.h"
+#include "spmpc_local_planner/ros/command_history_buffer.h"
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
+#include "spmpc_local_planner/ros/execution_state_predictor.h"
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
@@ -35,6 +37,14 @@ private:
     void controlTimerCallback(const ros::TimerEvent&);
     void publishZeroCommand();
     void publishCommand(const geometry_msgs::Twist& desired);
+    void recordPublishedCommand(const geometry_msgs::Twist& cmd, const ros::Time& stamp, const CommandPublishMeta& meta);
+    bool delayPhaseActive() const;
+    bool delayPhaseShadowEnabled() const;
+    void publishDelayPhaseDiagnostics(const ros::Time& now,
+                                      DelayPhaseStatusCode status_code,
+                                      const ExecutionStatePrediction* prediction,
+                                      double solver_time_ms);
+    void publishDelayPhaseEarlyStatus(DelayPhaseStatusCode status_code);
     geometry_msgs::Twist applySharedCommandLimits(const geometry_msgs::Twist& desired,
                                                   const ros::Time& stamp,
                                                   geometry_msgs::Twist& previous,
@@ -80,6 +90,11 @@ private:
     ReferencePathPreprocessParams reference_preprocess_params_;
     SloshDynamics slosh_observer_;
     SloshState current_slosh_;
+    CommandHistoryBuffer command_history_;
+    ExecutionStatePredictor execution_predictor_;
+    DelayPhaseParams delay_phase_params_;
+    OdomTimingDebug last_odom_timing_;
+    ros::Time last_odom_receive_stamp_;
 
     nav_msgs::Odometry last_odom_;
     nav_msgs::Odometry prev_odom_;

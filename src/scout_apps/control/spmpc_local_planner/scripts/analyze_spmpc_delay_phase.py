@@ -28,6 +28,10 @@ CMD_TOPIC = "/cmd_vel"
 SPMPC_CMD_OUTPUT_TOPIC = "/spmpc/debug/cmd_vel_output"
 SOLVER_TIME_TOPIC = "/spmpc/solver_time_ms"
 STATUS_TOPIC = "/spmpc/status"
+DELAY_PHASE_TOPIC = "/spmpc/debug/delay_phase"
+EXECUTION_STATE_TOPIC = "/spmpc/debug/execution_state"
+EXECUTION_ALIGNMENT_STATUS_TOPIC = "/spmpc/debug/execution_alignment_status"
+DELAY_COMPENSATION_TOPIC = "/spmpc/debug/delay_compensation"
 ODOM_TOPICS = ["/odom", "/scout/odom"]
 
 
@@ -207,7 +211,16 @@ def find_bags(paths):
 
 
 def read_bag(path, preferred_odom_topic, include_after_goal, cmd_source):
-    topics = [CMD_TOPIC, SPMPC_CMD_OUTPUT_TOPIC, SOLVER_TIME_TOPIC, STATUS_TOPIC]
+    topics = [
+        CMD_TOPIC,
+        SPMPC_CMD_OUTPUT_TOPIC,
+        SOLVER_TIME_TOPIC,
+        STATUS_TOPIC,
+        DELAY_PHASE_TOPIC,
+        EXECUTION_STATE_TOPIC,
+        EXECUTION_ALIGNMENT_STATUS_TOPIC,
+        DELAY_COMPENSATION_TOPIC,
+    ]
     topics.extend(ODOM_TOPICS)
 
     cmd_vel = []
@@ -217,6 +230,12 @@ def read_bag(path, preferred_odom_topic, include_after_goal, cmd_source):
     limiter_linear = []
     limiter_angular_rate = []
     limiter_angular_accel = []
+    delay_phase_linear_ms = []
+    delay_phase_angular_ms = []
+    shadow_valid = []
+    shadow_history_complete = []
+    shadow_missing_history_ms = []
+    alignment_status_counts = {}
     status_counts = {}
     first_goal_reached = None
 
@@ -233,6 +252,22 @@ def read_bag(path, preferred_odom_topic, include_after_goal, cmd_source):
                 limiter_linear.append(1.0 if data[7] > 0.5 else 0.0)
                 limiter_angular_rate.append(1.0 if data[8] > 0.5 else 0.0)
                 limiter_angular_accel.append(1.0 if data[9] > 0.5 else 0.0)
+            elif topic == DELAY_PHASE_TOPIC and len(getattr(msg, "data", [])) >= 11:
+                data = list(msg.data)
+                delay_phase_linear_ms.append(float(data[5]))
+                delay_phase_angular_ms.append(float(data[6]))
+            elif topic == EXECUTION_STATE_TOPIC and len(getattr(msg, "data", [])) >= 19:
+                data = list(msg.data)
+                shadow_valid.append(1.0 if data[0] > 0.5 else 0.0)
+                shadow_missing_history_ms.append(float(data[17]))
+                shadow_history_complete.append(1.0 if data[18] > 0.5 else 0.0)
+            elif topic == DELAY_COMPENSATION_TOPIC and len(getattr(msg, "data", [])) >= 4:
+                data = list(msg.data)
+                delay_phase_linear_ms.append(float(data[2]))
+                delay_phase_angular_ms.append(float(data[3]))
+            elif topic == EXECUTION_ALIGNMENT_STATUS_TOPIC:
+                value = str(msg.data)
+                alignment_status_counts[value] = alignment_status_counts.get(value, 0) + 1
             elif topic in odom_by_topic:
                 v = float(msg.twist.twist.linear.x)
                 omega = float(msg.twist.twist.angular.z)
@@ -287,6 +322,12 @@ def read_bag(path, preferred_odom_topic, include_after_goal, cmd_source):
         "limiter_linear": limiter_linear,
         "limiter_angular_rate": limiter_angular_rate,
         "limiter_angular_accel": limiter_angular_accel,
+        "delay_phase_linear_ms": delay_phase_linear_ms,
+        "delay_phase_angular_ms": delay_phase_angular_ms,
+        "shadow_valid": shadow_valid,
+        "shadow_history_complete": shadow_history_complete,
+        "shadow_missing_history_ms": shadow_missing_history_ms,
+        "alignment_status_counts": alignment_status_counts,
         "status_counts": status_counts,
     }
 
@@ -303,6 +344,9 @@ def analyze_bag(path, args):
     top_status = "-"
     if data["status_counts"]:
         top_status = max(data["status_counts"].items(), key=lambda kv: kv[1])[0]
+    top_alignment_status = "-"
+    if data["alignment_status_counts"]:
+        top_alignment_status = max(data["alignment_status_counts"].items(), key=lambda kv: kv[1])[0]
 
     return {
         "bag": str(path),
@@ -324,6 +368,12 @@ def analyze_bag(path, args):
         "linear_limited_frac": mean(data["limiter_linear"]),
         "angular_rate_limited_frac": mean(data["limiter_angular_rate"]),
         "angular_accel_limited_frac": mean(data["limiter_angular_accel"]),
+        "delay_phase_linear_ms": median(data["delay_phase_linear_ms"]),
+        "delay_phase_angular_ms": median(data["delay_phase_angular_ms"]),
+        "shadow_valid_frac": mean(data["shadow_valid"]),
+        "shadow_history_complete_frac": mean(data["shadow_history_complete"]),
+        "shadow_missing_history_p95_ms": percentile(data["shadow_missing_history_ms"], 0.95),
+        "top_alignment_status": top_alignment_status,
         "v_delay_s": v_delay["delay_s"],
         "v_corr": v_delay["corr"],
         "v_delay_samples": v_delay["samples"],
@@ -340,7 +390,7 @@ def print_summary(rows):
         return
     header = (
         "bag", "dur", "status", "v_delay", "v_corr", "v_conf",
-        "w_delay", "w_corr", "w_conf", "solve_p95", "cmd_p95")
+        "w_delay", "w_corr", "w_conf", "solve_p95", "cmd_p95", "shadow", "align")
     print("\n" + "  ".join(f"{h:>10}" for h in header))
     print("-" * 128)
     for row in rows:
@@ -357,6 +407,8 @@ def print_summary(rows):
             f"{row['omega_confidence'][:10]:>10}",
             f"{fmt(row['solver_p95_ms'], 1):>10}",
             f"{fmt(row['cmd_period_p95_ms'], 1):>10}",
+            f"{fmt(row['shadow_valid_frac'], 2):>10}",
+            f"{row['top_alignment_status'][:10]:>10}",
         ]
         print("  ".join(cells))
     print("\n说明: v_delay / w_delay 为正表示 odom 相对 cmd 滞后；confidence 低时只作人工复核线索。")

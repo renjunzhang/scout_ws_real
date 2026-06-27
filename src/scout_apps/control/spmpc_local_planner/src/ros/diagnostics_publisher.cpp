@@ -33,6 +33,11 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     warm_start_head_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/warm_start_head", 1);
     cmd_output_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/cmd_vel_output", 1);
     cmd_output_status_pub_ = nh.advertise<std_msgs::String>("debug/cmd_vel_output_status", 1);
+    delay_phase_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/delay_phase", 1);
+    odom_timing_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/odom_timing", 1);
+    execution_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/execution_state", 1);
+    execution_alignment_status_pub_ = nh.advertise<std_msgs::String>("debug/execution_alignment_status", 1);
+    delay_compensation_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/delay_compensation", 1);
     terminal_pub_ = nh.advertise<std_msgs::Float32MultiArray>("terminal/debug", 1);
     terminal_mode_pub_ = nh.advertise<std_msgs::String>("terminal/mode", 1);
     start_lock_active_pub_ = nh.advertise<std_msgs::Float32>("start_lock/active", 1);
@@ -90,6 +95,97 @@ void DiagnosticsPublisher::publishCommandOutput(const geometry_msgs::Twist& desi
         status.data = "PASS";
     }
     cmd_output_status_pub_.publish(status);
+}
+
+void DiagnosticsPublisher::publishDelayPhase(const DelayPhaseDebugSummary& summary) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label =
+        "mode_code,cmd_age_ms,cmd_period_ms,odom_age_ms,solver_time_ms,linear_delay_ms,angular_delay_ms,history_span_ms,history_complete,shadow_valid,status_code";
+    msg.layout.dim[0].size = 11;
+    msg.layout.dim[0].stride = 11;
+    msg.data.resize(11, 0.0f);
+    msg.data[0] = static_cast<float>(static_cast<int>(summary.mode));
+    msg.data[1] = static_cast<float>(summary.cmd_age_ms);
+    msg.data[2] = static_cast<float>(summary.cmd_period_ms);
+    msg.data[3] = static_cast<float>(summary.odom_age_ms);
+    msg.data[4] = static_cast<float>(summary.solver_time_ms);
+    msg.data[5] = static_cast<float>(summary.linear_delay_ms);
+    msg.data[6] = static_cast<float>(summary.angular_delay_ms);
+    msg.data[7] = static_cast<float>(summary.history_span_ms);
+    msg.data[8] = summary.history_complete ? 1.0f : 0.0f;
+    msg.data[9] = summary.shadow_valid ? 1.0f : 0.0f;
+    msg.data[10] = static_cast<float>(static_cast<int>(summary.status_code));
+    delay_phase_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishOdomTiming(const OdomTimingDebug& timing) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label = "recv_age_ms,stamp_dt_ms,ax,ay,omega,have_prev_odom,dt_clamped";
+    msg.layout.dim[0].size = 7;
+    msg.layout.dim[0].stride = 7;
+    msg.data.resize(7, 0.0f);
+    msg.data[0] = static_cast<float>(timing.recv_age_ms);
+    msg.data[1] = static_cast<float>(timing.stamp_dt_ms);
+    msg.data[2] = static_cast<float>(timing.ax);
+    msg.data[3] = static_cast<float>(timing.ay);
+    msg.data[4] = static_cast<float>(timing.omega);
+    msg.data[5] = timing.have_prev_odom ? 1.0f : 0.0f;
+    msg.data[6] = timing.dt_clamped ? 1.0f : 0.0f;
+    odom_timing_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishExecutionState(const ExecutionStatePrediction& prediction) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label =
+        "valid,raw_x,raw_y,raw_yaw,raw_v,raw_omega,pred_x,pred_y,pred_yaw,pred_v,pred_omega,pred_eta_x,pred_eta_x_dot,pred_eta_y,pred_eta_y_dot,integrated_ms,covered_history_ms,missing_history_ms,history_complete";
+    msg.layout.dim[0].size = 19;
+    msg.layout.dim[0].stride = 19;
+    msg.data.resize(19, 0.0f);
+    msg.data[0] = prediction.valid ? 1.0f : 0.0f;
+    msg.data[1] = static_cast<float>(prediction.raw_robot.x);
+    msg.data[2] = static_cast<float>(prediction.raw_robot.y);
+    msg.data[3] = static_cast<float>(prediction.raw_robot.yaw);
+    msg.data[4] = static_cast<float>(prediction.raw_robot.v);
+    msg.data[5] = static_cast<float>(prediction.raw_robot.omega);
+    msg.data[6] = static_cast<float>(prediction.predicted_robot.x);
+    msg.data[7] = static_cast<float>(prediction.predicted_robot.y);
+    msg.data[8] = static_cast<float>(prediction.predicted_robot.yaw);
+    msg.data[9] = static_cast<float>(prediction.predicted_robot.v);
+    msg.data[10] = static_cast<float>(prediction.predicted_robot.omega);
+    msg.data[11] = static_cast<float>(prediction.predicted_slosh.eta_x);
+    msg.data[12] = static_cast<float>(prediction.predicted_slosh.eta_x_dot);
+    msg.data[13] = static_cast<float>(prediction.predicted_slosh.eta_y);
+    msg.data[14] = static_cast<float>(prediction.predicted_slosh.eta_y_dot);
+    msg.data[15] = static_cast<float>(1000.0 * prediction.integrated_duration_sec);
+    msg.data[16] = static_cast<float>(1000.0 * prediction.covered_history_sec);
+    msg.data[17] = static_cast<float>(1000.0 * prediction.missing_history_sec);
+    msg.data[18] = prediction.history_complete ? 1.0f : 0.0f;
+    execution_state_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishExecutionAlignmentStatus(const std::string& status) {
+    std_msgs::String msg;
+    msg.data = status;
+    execution_alignment_status_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishDelayCompensation(const DelayPhaseDebugSummary& summary) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label = "mode_code,closed_loop_enabled,linear_delay_ms,angular_delay_ms,shadow_valid,status_code";
+    msg.layout.dim[0].size = 6;
+    msg.layout.dim[0].stride = 6;
+    msg.data.resize(6, 0.0f);
+    msg.data[0] = static_cast<float>(static_cast<int>(summary.mode));
+    msg.data[1] = 0.0f;
+    msg.data[2] = static_cast<float>(summary.linear_delay_ms);
+    msg.data[3] = static_cast<float>(summary.angular_delay_ms);
+    msg.data[4] = summary.shadow_valid ? 1.0f : 0.0f;
+    msg.data[5] = static_cast<float>(static_cast<int>(summary.status_code));
+    delay_compensation_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::string& frame_id) {

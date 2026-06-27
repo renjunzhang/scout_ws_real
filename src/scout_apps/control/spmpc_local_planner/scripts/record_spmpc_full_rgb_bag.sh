@@ -135,6 +135,11 @@ record_topics=(
   /spmpc/debug/warm_start_head
   /spmpc/debug/cmd_vel_output
   /spmpc/debug/cmd_vel_output_status
+  /spmpc/debug/delay_phase
+  /spmpc/debug/odom_timing
+  /spmpc/debug/execution_state
+  /spmpc/debug/execution_alignment_status
+  /spmpc/debug/delay_compensation
 
   # SPMPC safety modes.
   /spmpc/start_lock/active

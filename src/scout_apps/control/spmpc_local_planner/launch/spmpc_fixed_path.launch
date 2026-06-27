@@ -19,6 +19,9 @@
   <arg name="shared_angular_accel_max" default="-1.0"/>
   <arg name="shared_angular_accel_max_dt" default="-1.0"/>
   <arg name="alpha_max" default="-1.0" doc="诊断/消融用: 覆盖 robot/alpha_max; 负值时用 platform yaml"/>
+  <arg name="delay_phase_mode" default="off" doc="off|monitor|shadow; shadow 只发诊断"/>
+  <arg name="delay_phase_linear_delay_sec" default="-1.0"/>
+  <arg name="delay_phase_angular_delay_sec" default="-1.0"/>
   <include file="$(find spmpc_local_planner)/launch/spmpc_experiment.launch">
     <arg name="planner_variant" value="$(arg planner_variant)"/>
     <arg name="experiment_mode" value="fixed_path"/>
@@ -42,5 +45,8 @@
     <arg name="shared_angular_accel_max" value="$(arg shared_angular_accel_max)"/>
     <arg name="shared_angular_accel_max_dt" value="$(arg shared_angular_accel_max_dt)"/>
     <arg name="alpha_max" value="$(arg alpha_max)"/>
+    <arg name="delay_phase_mode" value="$(arg delay_phase_mode)"/>
+    <arg name="delay_phase_linear_delay_sec" value="$(arg delay_phase_linear_delay_sec)"/>
+    <arg name="delay_phase_angular_delay_sec" value="$(arg delay_phase_angular_delay_sec)"/>
   </include>
 </launch>
