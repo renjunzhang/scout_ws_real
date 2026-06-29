@@ -1,0 +1,115 @@
+% !TEX program = xelatex
+\documentclass[12pt,a4paper]{ctexart}
+
+% =========================
+% 基础宏包
+% =========================
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{bm}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{siunitx}
+\usepackage{xcolor}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage[nameinlink]{cleveref}
+
+% =========================
+% 页面设置
+% =========================
+\geometry{
+  left=2.5cm,
+  right=2.5cm,
+  top=2.5cm,
+  bottom=2.5cm
+}
+
+\linespread{1.15}
+
+% =========================
+% 图片路径
+% =========================
+\graphicspath{{figures/}}
+
+% =========================
+% 超链接设置
+% =========================
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+% =========================
+% 常用数学符号
+% =========================
+\newcommand{\SPMPC}{SPMPC}
+\newcommand{\MPCC}{MPCC}
+\newcommand{\MPC}{MPC}
+
+\newcommand{\vx}{\bm{x}}
+\newcommand{\vu}{\bm{u}}
+\newcommand{\vp}{\bm{p}}
+\newcommand{\vr}{\bm{r}}
+
+\newcommand{\xr}{\bm{x}_{r}}
+\newcommand{\xl}{\bm{x}_{l}}
+\newcommand{\xaug}{\bm{x}}
+
+\newcommand{\ec}{e_{\mathrm{c}}}
+\newcommand{\el}{e_{\mathrm{l}}}
+\newcommand{\hslosh}{h_{\mathrm{slosh}}}
+
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\R}{\mathbb{R}}
+
+% =========================
+% 中文图表名称
+% =========================
+\renewcommand{\figurename}{图}
+\renewcommand{\tablename}{表}
+
+% =========================
+% 标题信息
+% =========================
+\title{面向移动底盘开口液体运输的在线防晃局部轨迹规划方法}
+\author{作者姓名}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+% =========================
+% 摘要
+% =========================
+\begin{abstract}
+化学实验室和服务机器人场景中的开口液体运输要求移动机器人在完成路径跟踪的同时抑制由加减速和转向运动诱发的液体晃动。已有液体防晃研究覆盖了机械臂、专用转运机构和载液车辆等平台，也包括输入整形、速度剖面、离线轨迹优化和防晃跟踪控制等方法；然而，移动底盘液体运输仍缺少一种在局部规划阶段实时传播液体动态状态并生成低晃动运动的在线方法。普通移动机器人局部规划器虽然能够在线生成平滑可行轨迹，但通常不包含所运输液体的动态记忆。为此，本文提出一种晃动感知模型预测轮廓控制方法（\SPMPC），将低阶液体模态状态嵌入移动底盘的在线 \MPCC{} 局部轨迹规划问题中，在滚动时域内联合优化路径进度、底盘控制和预测液体响应。本文计划通过方法消融、普通局部规划器对比和外部视觉液面评价验证：显式液体状态预测相对于单纯平滑运动具有独立价值，并能够在保持路径跟踪和实时性的同时降低液体晃动。
+
+\vspace{0.5em}
+\noindent\textbf{关键词：}
+移动机器人；开口液体运输；液体晃动；防晃轨迹规划；模型预测轮廓控制；局部规划
+\end{abstract}
+
+% =========================
+% 正文
+% =========================
+\input{sections/01_intro}
+\input{sections/02_related_work}
+\input{sections/03_method}
+\input{sections/04_experiments}
+\input{sections/05_conclusion}
+
+% =========================
+% 参考文献
+% =========================
+% 当前是论文框架阶段，尚未插入正式 \cite{}。
+% 加入真实引用后再启用下面两行：
+% \bibliographystyle{IEEEtran}
+% \bibliography{references}
+
+\end{document}

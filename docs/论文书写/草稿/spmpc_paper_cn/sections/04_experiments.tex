@@ -1,0 +1,88 @@
+\section{实验设计}
+
+实验章节的原则是：不把论文写成 planner 排行榜，而是让每个实验服务一个明确 claim。本文实验应回答：在移动底盘开口液体运输中，显式液体状态预测是否比单纯平滑运动和普通在线局部规划更能降低真实液体晃动，同时保持可达性、路径跟踪和实时性。
+
+\subsection{实验场景与公平性协议}
+
+实验场景建议固定为化学实验室或类实验室环境中的安全参考路径。机器人在给定全局参考路径上执行局部轨迹规划，不把动态避障、homotopy 或 corridor 选择作为第一版主线。所有方法应尽量使用公平的速度、加速度和角速度限制，并报告成功率、到达时间、路径跟踪误差、真实液面晃动指标和求解时间。
+
+需要明确区分两类指标：
+
+\begin{itemize}
+  \item \textbf{内部诊断指标：} 例如 \texttt{/spmpc/slosh\_height} 或由低阶模型计算的预测晃动 proxy；
+  \item \textbf{真实评价指标：} 例如 RGB max-LCR、液面线/弯月面变化或外部传感器测得的液面晃动。
+\end{itemize}
+
+主结果中不能只使用内部模型 proxy 证明防晃效果。
+
+\subsection{实验一：slosh-aware 与 smooth-only 消融}
+
+该实验比较 B\_ours、B\_smooth、B\_slosh 和 B0。核心问题是：轨迹平滑是否等价于防晃？
+
+预期论证结构为：
+
+\begin{equation}
+  \text{smooth motion} \neq \text{slosh-aware motion}.
+\end{equation}
+
+若 B\_ours 相比 B\_smooth 在相近任务成功率和路径跟踪性能下显著降低 RGB max-LCR 或残余晃动，则支持 claim：显式液体状态预测具有独立价值，而不是仅仅通过降低速度或增加平滑惩罚取得效果。
+
+\subsection{实验二：普通 local planner baseline 对比}
+
+该实验将 \SPMPC{} 与非液体感知移动机器人局部规划器对比，例如 DWA、TEB、RPP、LT-DWA 或其他可部署 baseline。此实验不是为了证明 SPMPC 在所有导航指标上全面优于普通 planner，而是为了回答审稿人质疑：如果 ordinary local planner 调得足够平滑，是否已经足够？
+
+因此，该实验应重点报告：
+
+\begin{itemize}
+  \item 是否到达目标；
+  \item 到达时间和路径跟踪误差是否仍可接受；
+  \item 真实液面晃动是否降低；
+  \item SPMPC 是否只是通过显著变慢换取防晃；
+  \item 普通 planner 的平滑轨迹是否仍可能激发液体残余振荡。
+\end{itemize}
+
+\subsection{实验三：真实液面评价}
+
+该实验使用 RGB 或其他外部观测方法评价液面晃动。推荐指标包括 maximum liquid contour ratio、液面峰峰值、到达后残余振荡和 settling time。应在正文中明确说明：内部预测的晃动 proxy 用于控制器诊断，真实实验结论以外部观测指标为主。
+
+若视觉评价暂时存在噪声或标定限制，也应主动说明其边界，并避免把模型预测量写成真实液面高度。
+
+\subsection{实验四：实时性与部署诊断}
+
+由于本文主张的是在线局部轨迹规划，必须报告求解时间、控制频率和失败率。推荐报告：
+
+\begin{itemize}
+  \item 平均求解时间和最大求解时间；
+  \item SQP-RTI 收敛/失败情况；
+  \item 控制频率是否满足机器人执行；
+  \item 在不同路径曲率或速度限制下的稳定性。
+\end{itemize}
+
+这部分结果服务 claim：SPMPC 不是离线 trajectory optimization，而是可部署的在线滚动局部规划器。
+
+\subsection{结果组织方式}
+
+结果章节建议按 claim 组织，而不是按算法列表组织。
+
+\begin{table}[t]
+  \centering
+  \caption{实验与 claim 的对应关系}
+  \label{tab:experiment_claims}
+  \begin{tabular}{p{0.28\linewidth} p{0.55\linewidth}}
+    \toprule
+    实验 & 支持的 claim \\
+    \midrule
+    B\_ours vs B\_smooth & smooth-only 不等于 slosh-aware \\
+    B\_ours vs B\_slosh/B0 & 液体状态预测和平滑项的贡献分离 \\
+    B\_ours vs DWA/TEB/LT-DWA & ordinary local planner 缺少液体动态记忆 \\
+    RGB max-LCR / 外部观测 & 真实评价不能只依赖 model proxy \\
+    solver time / control frequency & 方法属于 online local planning，而非离线轨迹优化 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+每个结果段落建议采用以下模板：
+
+\begin{equation}
+  \text{Claim} \rightarrow \text{Evidence} \rightarrow \text{Interpretation} \rightarrow \text{Limitation}.
+\end{equation}

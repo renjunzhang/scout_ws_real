@@ -1,0 +1,126 @@
+\section{方法}
+
+本节给出 \SPMPC{} 的论文级方法框架。写作时应注意：公式不是目的，公式要服务于“在线局部轨迹规划阶段如何考虑液体动态记忆”这一故事。
+
+\subsection{问题定义与系统概览}
+
+给定一条安全参考路径，移动底盘需要在每个控制周期生成下一段局部运动，使机器人沿参考路径前进，同时抑制容器内液体晃动。本文不在第一版中处理完整全局避障、homotopy/corridor 选择或随机机会约束，而是聚焦于给定安全路径上的在线防晃局部轨迹规划。
+
+规划器输入包括参考路径、当前机器人状态、上一时刻控制量和当前预测液体状态；规划器输出为底盘速度或加速度相关控制命令。整体闭环结构为：
+
+\begin{equation}
+  \text{reference path} \rightarrow \SPMPC{} \rightarrow \text{chassis command} \rightarrow \text{robot and liquid response}.
+\end{equation}
+
+\subsection{参考路径与路径进度}
+
+\MPCC{} 使用路径进度变量 $s$ 表示机器人沿参考路径的位置。参考路径可表示为
+\begin{equation}
+  \vr(s) = \begin{bmatrix} x_r(s) & y_r(s) \end{bmatrix}^{\top},
+\end{equation}
+其中 $s$ 的演化由虚拟路径速度 $v_s$ 控制：
+\begin{equation}
+  \dot{s} = v_s.
+\end{equation}
+
+机器人当前位置 $(p_x,p_y)$ 与参考路径之间的误差可分解为轮廓误差 $\ec$ 和滞后误差 $\el$。轮廓误差刻画偏离路径的横向误差，滞后误差刻画沿路径方向的进度误差。该表述使规划器可以在 tracking、progress 和控制平滑之间权衡。
+
+\subsection{Alpha-state 移动底盘动力学}
+
+为直接约束转向激励，本文采用 alpha-state 形式。非晃动增强的底盘状态和控制定义为
+\begin{equation}
+  \xr = \begin{bmatrix} p_x & p_y & \theta & v & s & \omega \end{bmatrix}^{\top},
+  \qquad
+  \vu = \begin{bmatrix} a & \alpha & v_s \end{bmatrix}^{\top},
+\end{equation}
+其中 $v$ 是线速度，$\omega$ 是角速度，$a$ 是线加速度，$\alpha=\dot{\omega}$ 是角加速度，$v_s$ 是虚拟路径速度。
+
+底盘动力学为
+\begin{align}
+  \dot{p}_x &= v\cos\theta, \\
+  \dot{p}_y &= v\sin\theta, \\
+  \dot{\theta} &= \omega, \\
+  \dot{v} &= a, \\
+  \dot{s} &= v_s, \\
+  \dot{\omega} &= \alpha.
+\end{align}
+
+该形式的故事作用是：本文不是只限制角速度 $\omega$，而是把 $\omega$ 放入状态、把角加速度 $\alpha$ 放入控制，从而让优化问题能够直接约束转向激励变化。
+
+\subsection{低阶液体模态动力学}
+
+液体晃动被建模为由容器运动激励的低阶模态响应。以单模态线性模型为例，某一方向的模态坐标 $\eta_i$ 满足
+\begin{equation}
+  \ddot{\eta}_i + 2\zeta_i\omega_i\dot{\eta}_i + \omega_i^2\eta_i = -\kappa_i a_i,
+\end{equation}
+其中 $\eta_i$ 是模态广义坐标，$\dot{\eta}_i$ 是模态速度，$a_i$ 是容器在对应方向上的加速度激励。
+
+在移动底盘近似中，纵向激励和横向激励可写为
+\begin{equation}
+  a_x = a, \qquad a_y = v\omega.
+\end{equation}
+
+因此，晃动增强状态定义为
+\begin{equation}
+  \xaug = \begin{bmatrix}
+  p_x & p_y & \theta & v & s & \omega &
+  \eta_x & \dot{\eta}_x & \eta_y & \dot{\eta}_y
+  \end{bmatrix}^{\top}.
+\end{equation}
+
+这里必须强调：$\eta$ 是规划器传播的低阶模态状态，液面高度或视觉晃动幅值是由状态和真实观测得到的输出/评价指标，而不是本文直接测得的完整自由液面状态。
+
+\subsection{晃动感知 MPCC 目标函数}
+
+\SPMPC{} 的阶段代价由路径跟踪、路径进度、控制努力、控制平滑和晃动抑制几部分组成：
+\begin{equation}
+  J = J_{\text{track}} + J_{\text{progress}} + J_{\text{control}} + J_{\text{smooth}} + J_{\text{slosh}}.
+\end{equation}
+
+其中路径跟踪项惩罚轮廓误差和滞后误差；进度项鼓励机器人沿路径前进；控制项限制过大的线加速度、角速度或角加速度；平滑项惩罚控制变化；晃动项惩罚预测的液体模态响应：
+\begin{equation}
+  J_{\text{slosh}} = w_{\eta}\left(\eta_x^2 + \eta_y^2\right)
+  + w_{\dot{\eta}}\left(\dot{\eta}_x^2 + \dot{\eta}_y^2\right).
+\end{equation}
+
+写作时应突出该项的作用：它不是让轨迹“更光滑”的替代项，而是让优化器看到液体状态和未来响应，从而生成更少激发液体动态的局部运动。
+
+\subsection{约束与命令生成}
+
+优化问题包含底盘运动约束和控制输入约束，例如
+\begin{align}
+  0 \leq v \leq v_{\max}, \qquad
+  |\omega| \leq \omega_{\max}, \\
+  |a| \leq a_{\max}, \qquad
+  |\alpha| \leq \alpha_{\max}, \qquad
+  0 \leq v_s \leq v_{s,\max}.
+\end{align}
+
+可选地，也可以加入预测晃动状态的软/硬约束，例如
+\begin{equation}
+  \eta_x^2 + \eta_y^2 \leq \eta_{\max}^2.
+\end{equation}
+
+第一版论文应谨慎使用 hard slosh constraint 的表述；若实验主线主要依靠晃动代价项，则应把硬约束作为可选实现或附录讨论。
+
+\subsection{滚动时域求解与方法变体}
+
+每个控制周期，\SPMPC{} 根据当前机器人状态和预测液体状态求解有限时域最优控制问题，并将第一步控制应用到底盘。本文实现基于 acados SQP-RTI，以满足在线局部规划实时性要求。
+
+为验证故事中的关键 claim，实验中可构造以下方法变体：
+
+\begin{table}[t]
+  \centering
+  \caption{SPMPC 方法变体及其故事作用}
+  \label{tab:method_variants}
+  \begin{tabular}{p{0.16\linewidth} p{0.25\linewidth} p{0.45\linewidth}}
+    \toprule
+    变体 & 配置 & 故事作用 \\
+    \midrule
+    B0 & 无晃动项、无强化平滑 & 基础 MPCC local planner \\
+    B\_slosh & 有晃动项、无强化平滑 & 分离液体状态预测的贡献 \\
+    B\_smooth & 无晃动项、有强化平滑 & 检验 smooth-only 是否足够 \\
+    B\_ours & 有晃动项、有部署所需平滑 & 主方法，验证 slosh-aware + smooth 的组合效果 \\
+    \bottomrule
+  \end{tabular}
+\end{table}

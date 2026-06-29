@@ -67,3 +67,14 @@ docs/实物实验注意事项/对比试验/assets
 docs/实物实验注意事项/PPT/spmpc_20260613_build/
 docs/实物实验注意事项/PPT/figures/20260616_slosh_model/
 docs/实物实验注意事项/分析记录/
+
+# Generated LaTeX build artifacts for paper drafts
+docs/论文书写/草稿/spmpc_paper_cn/main.aux
+docs/论文书写/草稿/spmpc_paper_cn/main.bbl
+docs/论文书写/草稿/spmpc_paper_cn/main.blg
+docs/论文书写/草稿/spmpc_paper_cn/main.fdb_latexmk
+docs/论文书写/草稿/spmpc_paper_cn/main.fls
+docs/论文书写/草稿/spmpc_paper_cn/main.log
+docs/论文书写/草稿/spmpc_paper_cn/main.out
+docs/论文书写/草稿/spmpc_paper_cn/main.pdf
+docs/论文书写/草稿/spmpc_paper_cn/main.xdv
