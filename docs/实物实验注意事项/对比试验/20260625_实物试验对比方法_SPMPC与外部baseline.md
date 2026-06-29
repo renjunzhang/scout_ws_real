@@ -273,8 +273,8 @@ R0 不是 full automation，建议保持多终端半手动流程：先录包，�
 |---|---|---|
 | 传感器/定位栈 | `src/scout_apps/control/scout_local_planner/scripts/launch_real_sensors_stack.sh` | 启动 base、LiDAR、Cartographer localization、IMU、RealSense；只停止自己追踪 PID |
 | 在线 RGB 观察 | `roslaunch realsense_liquid_measurement online_liquid_monitor_combined.launch ...` | 源码位于 `src/scout_apps/sensors/realsense_liquid_measurement`；`/liquid/height` 只作现场观察 |
-| fixed path 生成 | `rosrun scout_local_planner template_fixed_path_generator.py ...` | 生成 current-pose 起点固定路径；必须 RViz 人工确认不穿墙/不贴墙 |
-| goal 发送 | `rosrun scout_local_planner send_fixed_goal.py ...` | 只发送目标；不替代人工安全确认 |
+| fixed path 生成 | `rosrun scout_local_planner publish_straight_fixed_path.py ...` / `template_fixed_path_generator.py ...` | R0 直线采集优先用 straight helper；曲线/点击终点模板再用 template generator。必须 RViz 人工确认不穿墙/不贴墙 |
+| goal 发送 | `publish_straight_fixed_path.py --publish-goal` / `send_fixed_goal.py ...` | 直线路径 helper 可同步发布 terminal goal；只发送目标，不替代人工安全确认 |
 | 全量 RGB recorder | `src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh` | R0 推荐 recorder；只录包，不发控制；白名单需包含 Map-vref debug topics |
 | 短安全 smoke recorder | `src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh` | 只用于短 smoke；不能替代 RGB R0 数据 |
 | SPMPC fixed path | `roslaunch spmpc_local_planner spmpc_fixed_path.launch ...` | R0-A 首批关闭 Map-vref：`profile_enable=false`、`runtime_v_ref_enable=false` |
@@ -296,6 +296,82 @@ roslaunch spmpc_local_planner spmpc_fixed_path.launch \
   v_ref:=0.25 \
   alpha_max:=1.2
 ```
+
+#### R0 直线固定全局层（推荐首条采集路径）
+
+R0 RGB 高度采集的全局层采用**固定直线参考路径**，不使用在线 global planner，也不启用 Map-vref。直线 helper 会从当前 `map -> base_link` TF 读取起点和朝向，沿当前车头方向生成 `/scout/global_path_fixed`，并可同步发布 terminal `/scout/goal`。
+
+首次生成路径时，把机器人用遥控器低速摆到地面起点标记，朝向对准开阔直线方向，然后执行：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+cd /home/geist/scout_ws
+
+DATE=$(date +%Y%m%d)
+PATH_DIR=/home/geist/fixed_paths/real/${DATE}_mapvref_R0
+PATH_FILE=${PATH_DIR}/R0_A_open_space_straight_4m.json
+mkdir -p "${PATH_DIR}"
+
+rosrun scout_local_planner publish_straight_fixed_path.py \
+  --mode generate \
+  --frame map \
+  --base-frame base_link \
+  --length 4.0 \
+  --spacing 0.05 \
+  --path-id R0_A_open_space_straight_4m \
+  --path-file "${PATH_FILE}" \
+  --output-topic /scout/global_path_fixed \
+  --publish-goal \
+  --goal-topic /scout/goal \
+  --publish-count 0
+```
+
+`--publish-count 0` 表示该终端持续发布；正式 run 时保持这个 path publisher 终端打开。RViz 中必须确认：
+
+```text
+/scout/global_path_fixed 在 map frame 下是一条开阔直线；
+路径不穿墙、不贴墙、不压线、不经过人员/障碍；
+起点就是当前地面标记，终点有足够刹停空间。
+```
+
+后续重复同一条路径时，不重新生成，直接 replay 保存的 JSON：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+cd /home/geist/scout_ws
+
+PATH_FILE=/home/geist/fixed_paths/real/<DATE>_mapvref_R0/R0_A_open_space_straight_4m.json
+
+rosrun scout_local_planner publish_straight_fixed_path.py \
+  --mode replay \
+  --frame map \
+  --path-file "${PATH_FILE}" \
+  --output-topic /scout/global_path_fixed \
+  --publish-goal \
+  --goal-topic /scout/goal \
+  --publish-count 0
+```
+
+随后启动 recorder，再启动 B_ours / B_ours_hard 跟踪该固定全局层：
+
+```bash
+rosparam set /spmpc_local_planner/map_vref/runtime_v_ref_enable false
+rosparam set /spmpc_local_planner/map_vref/profile_enable false
+
+roslaunch spmpc_local_planner spmpc_fixed_path.launch \
+  planner_variant:=B_ours \
+  solver_backend:=continuous_mpcc_acados \
+  reference_path_topic:=/scout/global_path_fixed \
+  cmd_vel_topic:=/cmd_vel \
+  costmap_topic:=/map \
+  reference_target_frame:=map \
+  v_ref:=0.20 \
+  alpha_max:=1.2
+```
+
+若现场风险高，先把 `cmd_vel_topic` 改成 `/spmpc_shadow_cmd_vel` 做 shadow；closed-loop 前确认 `/cmd_vel` 无旧 publisher、RGB zero locked、recorder 已开始、急停人员就位。遥控器只用于摆车、回起点和接管，不作为正式 R0 采集控制源。
 
 每个 R0 trial 的 metadata 至少记录 `map_vref_profile_enable`、`map_vref_runtime_override_enable`、`planner_variant`、`v_ref`、`path_id/path_file`、`payload_id`、`camera calibration` 和 bag 路径。
 
