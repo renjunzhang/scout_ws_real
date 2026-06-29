@@ -350,6 +350,72 @@ done
 
 ## 5. 录包 topic 口径
 
+### 5.0 recorder 策略：正式 run 用 full RGB whitelist，轻量 bag 只做 quick check
+
+为了更方便、也更有说服力地对比出液面抑制效果，正式实物对比不建议只录轻量 bag。推荐采用：
+
+```text
+N=1 smoke / shadow 接入检查：轻量 recorder，可快速判断是否安全、是否到点、topic 是否正常。
+正式 N=3 / N=5 对比：full RGB whitelist recorder，每个 run 保留 RGB、/liquid/*、/slosh/height、cmd/odom/path/status。
+第一次接入新的外部 baseline：可额外用 RECORD_ALL_EXISTING_TOPICS=true 录一包短诊断，确认没有漏 topic；正式跑前回到 whitelist 或明确记录全量录制口径。
+```
+
+推荐分工：
+
+| recorder | 脚本 | 用途 | 是否作为正式主证据 |
+|---|---|---|---:|
+| 轻量 quick bag | `record_spmpc_mainline_ground_smoke.sh` | N=1 smoke、每跑完一个 run 立即看 success/tracking/cmd/`/slosh/height` | 否，只作现场筛查 |
+| full RGB whitelist bag | `record_spmpc_full_rgb_bag.sh` + `RECORD_ALL_EXISTING_TOPICS=false` | 正式 N=3/N=5 主 recorder；保留 RGB 图像、在线液面、统一 slosh proxy 和控制/定位证据 | 是 |
+| 临时全 topic bag | `record_spmpc_full_rgb_bag.sh` + `RECORD_ALL_EXISTING_TOPICS=true` | 新 baseline 首次接入、怀疑 topic 漏录、短时诊断兜底 | 仅短诊断；若进正式表需标注 |
+
+正式 run 推荐命令模板：
+
+```bash
+VARIANT=<METHOD> \
+RUN_LABEL=<METHOD>_R<ROUND> \
+RECORD_SEC=70 \
+OUT_DIR=/home/geist/slosh_bags/real/${DATE}_real_baseline_compare \
+NAME=<METHOD>_R<ROUND>_full_rgb \
+RECORD_CAMERA=true \
+RECORD_SCAN=true \
+RECORD_DEPTH=false \
+RECORD_STANDALONE_SLOSH=true \
+RECORD_ONLINE_LIQUID=true \
+RECORD_ALL_EXISTING_TOPICS=false \
+bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
+```
+
+录完每个 run 后，立即跑轻量指标提取，先判断这个 run 是否有效：
+
+```bash
+python src/scout_apps/control/spmpc_experiments/scripts/extract_fixed_path_paper_metrics.py \
+  /home/geist/slosh_bags/real/${DATE}_real_baseline_compare/<METHOD>_R<ROUND>_full_rgb.bag \
+  --csv /home/geist/slosh_bags/real/${DATE}_real_baseline_compare/<METHOD>_R<ROUND>_metrics.csv \
+  --phase windows
+```
+
+正式液面主表在一批 run 结束后，从 full RGB bag 离线导出 RGB/max-LCR 液面结果；在线 `/liquid/*` 只作现场 quick check：
+
+```bash
+python src/scout_apps/sensors/realsense_liquid_measurement/scripts/export_liquid_variation_from_bags.py \
+  /home/geist/slosh_bags/real/${DATE}_real_baseline_compare \
+  --recursive \
+  --source rgb \
+  --calibration /home/geist/liquid_calibration/<calibration>.yaml \
+  --out-dir /home/geist/slosh_bags/real/${DATE}_real_baseline_compare/liquid_variation_export \
+  --allow-fail
+```
+
+对比结论采用三层口径：
+
+```text
+1. RGB offline max-LCR：正式液面主指标，报告 peak / p95 / RMS / AUC / settling。
+2. /slosh/height：所有算法统一的外部 slosh model proxy，用于快速对比和解释趋势。
+3. /spmpc/slosh_height：只用于 SPMPC 内部模型解释，不作为外部 baseline 的真实液面指标。
+```
+
+因此，正式实物对比的推荐原则是：**全量 RGB 白名单录制用于主证据，轻量 recorder 只负责 smoke 和现场 quick check**。
+
 每个 run 单独一个 bag。通用 topic：
 
 ```text
