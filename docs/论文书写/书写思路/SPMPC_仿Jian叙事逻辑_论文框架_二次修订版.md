@@ -1,7 +1,9 @@
+从
+
 # SPMPC 论文叙事逻辑框架：仿 Jian et al. 全文章节对齐版（二次修订版）
 
-修订日期：2026-06-30  
-用途：用于 SPMPC 论文的 Abstract、Introduction、Related Work、Method、Experiments、Discussion 和 Conclusion 的整体组织。  
+修订日期：2026-06-30
+用途：用于 SPMPC 论文的 Abstract、Introduction、Related Work、Method、Experiments、Discussion 和 Conclusion 的整体组织。
 核心目标：让论文的每个章节都服务同一条故事线，而不是只在 Introduction 里讲故事。
 
 ---
@@ -22,7 +24,8 @@
 3. 增加 **段落级写作模板**，尤其是 Introduction、Related Work、Method 和 Experiments 的开头句、收束句；
 4. 增加 **Claim–Gap–Evidence 对齐框架**，保证每个 claim 都有文献支撑和实验支撑；
 5. 增加 **图表叙事功能表**，让 Fig. 1、Fig. 2、Fig. 3、Table I、Table II、Table III 都服务故事，而不是只展示结果；
-6. 增加 **章节之间的桥接句**，避免文章变成“相关工作一章、方法一章、实验一章”互相割裂。
+6. 增加 **章节之间的桥接句**，避免文章变成“相关工作一章、方法一章、实验一章”互相割裂；
+7. 新增 **Prabakaran 2026 / Okatsuka 2011 后的 novelty 修正**：承认 slosh-aware predictive/MPC tracking control 已存在，把本文贡献收敛为普通轮式移动底盘 online MPCC local planning。
 
 一句话：
 
@@ -49,28 +52,28 @@ Jian et al. 这篇 D-CBF-MPC 论文的核心叙事不是：
 
 它的文章结构大致是：
 
-| 章节 | Jian et al. 的写法 | 叙事功能 |
-|---|---|---|
-| Abstract | 任务 → 点云/MBE/KF/D-CBF-MPC → 实验 | 先把完整链路告诉读者 |
-| Introduction | 动态环境导航重要 → 三个难点 → 本文方案 | 把问题拆成可解决的模块 |
-| Related Work | Local Perception + Local Planning | 按方法链路综述，而不是按年份堆文献 |
-| Framework | Sensor → SLAM → local perception → prediction → local planning → controller | 用系统图让方法链路可视化 |
-| Method | D-CBF + MPC + MBE/KF prediction | 每个模块回答 Introduction 里的一个难点 |
-| Experiments | Real-world scenario + simulation baseline | 用真实场景证明可运行，用仿真消融证明模块有效 |
-| Conclusion | 回到 dynamic obstacle avoidance 主线 | 收束到最初的问题定义 |
+| 章节         | Jian et al. 的写法                                                               | 叙事功能                                     |
+| ------------ | -------------------------------------------------------------------------------- | -------------------------------------------- |
+| Abstract     | 任务 → 点云/MBE/KF/D-CBF-MPC → 实验                                            | 先把完整链路告诉读者                         |
+| Introduction | 动态环境导航重要 → 三个难点 → 本文方案                                         | 把问题拆成可解决的模块                       |
+| Related Work | Local Perception + Local Planning                                                | 按方法链路综述，而不是按年份堆文献           |
+| Framework    | Sensor → SLAM → local perception → prediction → local planning → controller | 用系统图让方法链路可视化                     |
+| Method       | D-CBF + MPC + MBE/KF prediction                                                  | 每个模块回答 Introduction 里的一个难点       |
+| Experiments  | Real-world scenario + simulation baseline                                        | 用真实场景证明可运行，用仿真消融证明模块有效 |
+| Conclusion   | 回到 dynamic obstacle avoidance 主线                                             | 收束到最初的问题定义                         |
 
 SPMPC 应仿照成：
 
-| 章节 | SPMPC 应该怎么写 | 叙事功能 |
-|---|---|---|
-| Abstract | 任务 → 两条研究线断层 → slosh-aware MPCC → 消融和实测 | 快速交代本文填什么 gap |
-| Introduction | 移动液体运输重要 → 三个难点 → 本文方案 | 把“晃液不是平滑问题”讲清楚 |
-| Related Work | Slosh model → robotic anti-slosh → mobile-base transport → ordinary local planner | 让每类文献服务 gap |
-| Framework / Method Overview | odom/path → slosh-state propagation → MPCC OCP → `/cmd_vel` → external evaluation | 用系统链路说明方法不是孤立 cost |
-| Method | slosh model + MPCC formulation + receding-horizon command | 每个模块回应一个难点 |
-| Experiments | B0/B_smooth/B_slosh/B_ours + external planners | 用消融证明 smooth-only 不等于 slosh-aware |
-| Discussion | 模型 proxy、无硬防溢出保证、未来真实液面反馈 | 控制表达边界，增强可信度 |
-| Conclusion | 回到 liquid sloshing as dynamic state | 收束到一句话故事 |
+| 章节                        | SPMPC 应该怎么写                                                                       | 叙事功能                                  |
+| --------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Abstract                    | 任务 → 两条研究线断层 → slosh-aware MPCC → 消融和实测                               | 快速交代本文填什么 gap                    |
+| Introduction                | 移动液体运输重要 → 三个难点 → 本文方案                                               | 把“晃液不是平滑问题”讲清楚              |
+| Related Work                | Slosh model → robotic anti-slosh → mobile-base transport → ordinary local planner   | 让每类文献服务 gap                        |
+| Framework / Method Overview | odom/path → slosh-state propagation → MPCC OCP →`/cmd_vel` → external evaluation | 用系统链路说明方法不是孤立 cost           |
+| Method                      | slosh model + MPCC formulation + receding-horizon command                              | 每个模块回应一个难点                      |
+| Experiments                 | B0/B_smooth/B_slosh/B_ours + external planners                                         | 用消融证明 smooth-only 不等于 slosh-aware |
+| Discussion                  | 模型 proxy、无硬防溢出保证、未来真实液面反馈                                           | 控制表达边界，增强可信度                  |
+| Conclusion                  | 回到 liquid sloshing as dynamic state                                                  | 收束到一句话故事                          |
 
 ---
 
@@ -88,7 +91,7 @@ SPMPC 应仿照成：
 
 ```text
 Introduction：为什么液体晃动不是平滑问题？
-Related Work：为什么已有工作还没有把这个状态放进在线 local planner？
+Related Work：为什么已有工作即使有 slosh-aware MPC/tracking/control，也还没有把这个状态放进普通 WMR 的在线 MPCC local planner？
 Method：我们如何把这个状态放进 MPCC？
 Experiments：为什么只平滑不够？为什么 slosh state prediction 有用？
 Discussion：这个结论在什么边界内成立？
@@ -113,10 +116,19 @@ SPMPC 的故事不要讲成：
 
 两条线是：
 
-| 研究线 | 已有能力 | 缺口 |
-|---|---|---|
-| **Anti-sloshing motion generation** | 有液体模型、input shaping、路径设计、速度剖面、离线轨迹优化、防晃控制 | 通常不是导航栈里的在线 local planner |
-| **Mobile robot local planning** | 能在线生成可行、平滑、可执行 `/cmd_vel` | 通常没有液体模态状态，无法传播晃液动态记忆 |
+| 研究线                                    | 已有能力                                                              | 缺口                                       |
+| ----------------------------------------- | --------------------------------------------------------------------- | ------------------------------------------ |
+| **Anti-sloshing motion generation** | 有液体模型、input shaping、路径设计、速度剖面、离线轨迹优化、防晃控制 | 通常不是导航栈里的在线 local planner       |
+| **Mobile robot local planning**     | 能在线生成可行、平滑、可执行`/cmd_vel`                              | 通常没有液体模态状态，无法传播晃液动态记忆 |
+
+
+重要修正：已有研究已经将晃液动力学引入液体容器转运系统和特殊机器人平台的 predictive control / MPC tracking controller 中。这些工作说明晃液状态进入反馈控制是有效的；因此本文不能宣称“首次将晃液状态放进 MPC”。更稳妥的 novelty 是：这些方法主要面向给定轨迹跟踪、转运控制或特殊平台控制，而 SPMPC 面向普通轮式移动机器人的在线局部轨迹规划，并在 MPCC 中优化路径进度、路径误差、底盘控制、控制平滑性和预测晃液状态。
+
+English guardrail:
+
+```text
+Existing studies have already integrated sloshing dynamics into predictive or MPC-based tracking controllers for liquid-container transfer systems and special robotic platforms. These works confirm that sloshing states can be useful in feedback control. However, they mainly address prescribed trajectory tracking or transfer-control problems, whereas SPMPC focuses on online local trajectory planning with path-progress optimization for a standard wheeled mobile robot.
+```
 
 SPMPC 的定位是：
 
@@ -207,18 +219,18 @@ Smooth and Safe Mobile Robot Liquid Transportation
 
 这张表是本次修订最重要的内容。后续写论文时，每一章都应该对照这张表检查。
 
-| 章节 | 这一章回答的问题 | 仿 Jian 的写法 | SPMPC 的写法 | 章末应该留下什么印象 |
-|---|---|---|---|---|
-| Abstract | 本文到底解决什么问题？ | 任务 + 方法链路 + 实验 | open-liquid transport + anti-slosh/local-planner gap + slosh-aware MPCC + ablation | 读者马上知道本文填的是 online slosh-aware local planning gap |
-| Introduction | 为什么这个问题不是普通规划问题？ | 动态环境三难点 | 晃液有动态记忆；ordinary planner 不传播液体状态；anti-slosh 方法多不是 online local planner | 液体晃动必须作为动态状态进入 local planner |
-| Related Work | 前人做了什么，缺在哪里？ | Local Perception / Local Planning | Slosh model / robotic anti-slosh / mobile-base transport / ordinary local planner | 两条线没有接起来 |
-| Method Overview | 方法整体链路是什么？ | Fig. 2 系统框架 | odom + path → slosh-state propagation → MPCC → `/cmd_vel` | SPMPC 是一个闭环 local planner，不是离线轨迹生成器 |
-| Slosh Model | 未来动态信息从哪里来？ | MBE + KF 预测未来障碍物 | low-order modal model 传播未来晃液状态 | 液体状态在时域内被显式传播 |
-| MPCC Formulation | 动态信息如何进入优化？ | D-CBF 进入 MPC 约束 | slosh dynamics + slosh cost 进入 MPCC OCP | OCP 同时优化 path tracking、progress、smoothness、slosh response |
-| Implementation | 如何在线运行？ | local planning 10 Hz、只执行控制命令 | receding-horizon solve、执行第一帧 `/cmd_vel` | 方法能接入移动机器人控制回路 |
-| Experiments | 每个模块是否真的有用？ | MPC / MPC-CBF / MPC-KF / curvefit / Ours | B0 / B_smooth / B_slosh / B_ours + external planners | smooth-only 不等于 slosh-aware，完整方法最稳 |
-| Discussion | 结论边界是什么？ | 总结有效性和实时性 | 不声称 spill-free；模型 proxy 与真实测量区分；未来加入反馈和约束 | 方法可信但不过度宣称 |
-| Conclusion | 本文贡献是什么？ | 回到 dynamic obstacle avoidance | 回到 liquid sloshing as predicted dynamic state | 读者记住一句话故事 |
+| 章节             | 这一章回答的问题                 | 仿 Jian 的写法                           | SPMPC 的写法                                                                                | 章末应该留下什么印象                                             |
+| ---------------- | -------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Abstract         | 本文到底解决什么问题？           | 任务 + 方法链路 + 实验                   | open-liquid transport + anti-slosh/local-planner gap + slosh-aware MPCC + ablation          | 读者马上知道本文填的是 online slosh-aware local planning gap     |
+| Introduction     | 为什么这个问题不是普通规划问题？ | 动态环境三难点                           | 晃液有动态记忆；ordinary planner 不传播液体状态；anti-slosh 方法多不是 online local planner | 液体晃动必须作为动态状态进入 local planner                       |
+| Related Work     | 前人做了什么，缺在哪里？         | Local Perception / Local Planning        | Slosh model / robotic anti-slosh / mobile-base transport / ordinary local planner           | 两条线没有接起来                                                 |
+| Method Overview  | 方法整体链路是什么？             | Fig. 2 系统框架                          | odom + path → slosh-state propagation → MPCC →`/cmd_vel`                               | SPMPC 是一个闭环 local planner，不是离线轨迹生成器               |
+| Slosh Model      | 未来动态信息从哪里来？           | MBE + KF 预测未来障碍物                  | low-order modal model 传播未来晃液状态                                                      | 液体状态在时域内被显式传播                                       |
+| MPCC Formulation | 动态信息如何进入优化？           | D-CBF 进入 MPC 约束                      | slosh dynamics + slosh cost 进入 MPCC OCP                                                   | OCP 同时优化 path tracking、progress、smoothness、slosh response |
+| Implementation   | 如何在线运行？                   | local planning 10 Hz、只执行控制命令     | receding-horizon solve、执行第一帧`/cmd_vel`                                              | 方法能接入移动机器人控制回路                                     |
+| Experiments      | 每个模块是否真的有用？           | MPC / MPC-CBF / MPC-KF / curvefit / Ours | B0 / B_smooth / B_slosh / B_ours + external planners                                        | smooth-only 不等于 slosh-aware，完整方法最稳                     |
+| Discussion       | 结论边界是什么？                 | 总结有效性和实时性                       | 不声称 spill-free；模型 proxy 与真实测量区分；未来加入反馈和约束                            | 方法可信但不过度宣称                                             |
+| Conclusion       | 本文贡献是什么？                 | 回到 dynamic obstacle avoidance          | 回到 liquid sloshing as predicted dynamic state                                             | 读者记住一句话故事                                               |
 
 ---
 
@@ -241,7 +253,7 @@ SPMPC 对应为：
 
 ```text
 移动机器人运输开口液体需要平滑且晃液感知的运动
-→ anti-slosh 方法和 ordinary local planner 各有缺口
+→ 已有 slosh-aware control 与 ordinary local planner 在 planning layer 上仍有缺口
 → 提出 SPMPC
 → 将低阶晃液模态模型嵌入 receding-horizon MPCC
 → 用内部消融和外部 planner 对比验证
@@ -251,12 +263,12 @@ SPMPC 对应为：
 ### 6.2 英文 Abstract 草稿
 
 ```text
-Mobile robots carrying open liquid containers must generate motions that are not only feasible and smooth, but also aware of liquid sloshing. Existing anti-sloshing methods reduce liquid motion through input shaping, path design, transfer control, or offline trajectory optimization, while conventional mobile robot local planners ignore the dynamic memory of liquid states. This paper presents SPMPC, a slosh-aware Model Predictive Contouring Control local planner for mobile-base liquid transportation. A low-order sloshing modal model is embedded into a receding-horizon optimal control problem, where path tracking, path progress, executable velocity commands, control smoothness, and predicted sloshing states are jointly optimized. A model-based slosh-state propagation module provides the initial liquid state at each control cycle, and the first optimized control input is applied as the mobile-base command. Simulation and real-world experiments compare the proposed method with basic MPCC, smooth-only MPCC, slosh-only MPCC, and non-slosh-aware local planners. The results show that explicitly predicting sloshing states reduces liquid motion beyond what can be achieved by trajectory smoothness alone, while maintaining path tracking and real-time performance.
+Mobile robots carrying open liquid containers must generate motions that are not only feasible and smooth, but also aware of liquid sloshing. Existing anti-sloshing methods reduce liquid motion through input shaping, path design, transfer control, offline trajectory optimization, or predictive/MPC tracking control, while conventional mobile robot local planners ignore the dynamic memory of liquid states. This paper presents SPMPC, a slosh-aware Model Predictive Contouring Control local planner for mobile-base liquid transportation. A low-order sloshing modal model is embedded into a receding-horizon optimal control problem, where path tracking, path progress, executable velocity commands, control smoothness, and predicted sloshing states are jointly optimized. A model-based slosh-state propagation module provides the initial liquid state at each control cycle, and the first optimized control input is applied as the mobile-base command. Simulation and real-world experiments compare the proposed method with basic MPCC, smooth-only MPCC, slosh-only MPCC, and non-slosh-aware local planners. The results show that explicitly predicting sloshing states reduces liquid motion beyond what can be achieved by trajectory smoothness alone, while maintaining path tracking and real-time performance.
 ```
 
 ### 6.3 中文 Abstract 草稿
 
-> 移动机器人在运输开口液体容器时，需要生成不仅可行、平滑，而且能够感知液体晃动的运动。已有防晃方法通过输入整形、路径设计、转运控制或离线轨迹优化降低液体晃动，而普通移动机器人局部规划器通常忽略液体状态的动态记忆。本文提出 SPMPC，一种面向移动底盘液体运输任务的晃液感知 MPCC 局部规划器。该方法将低阶晃液模态模型嵌入滚动时域最优控制问题，在同一框架中联合优化路径跟踪、路径进度、可执行速度命令、控制平滑性和预测晃液状态。基于模型的晃液状态传播模块在每个控制周期提供液体初始状态，优化得到的第一帧控制量被发送到底盘执行。仿真与真实实验将本文方法与基础 MPCC、smooth-only MPCC、slosh-only MPCC 以及非液体感知 local planner 进行比较。结果表明显式预测晃液状态能够在轨迹平滑之外进一步降低液体晃动，同时保持路径跟踪和实时性能。
+> 移动机器人在运输开口液体容器时，需要生成不仅可行、平滑，而且能够感知液体晃动的运动。已有防晃方法通过输入整形、路径设计、转运控制、离线轨迹优化或 predictive/MPC 跟踪控制降低液体晃动，而普通移动机器人局部规划器通常忽略液体状态的动态记忆。本文提出 SPMPC，一种面向移动底盘液体运输任务的晃液感知 MPCC 局部规划器。该方法将低阶晃液模态模型嵌入滚动时域最优控制问题，在同一框架中联合优化路径跟踪、路径进度、可执行速度命令、控制平滑性和预测晃液状态。基于模型的晃液状态传播模块在每个控制周期提供液体初始状态，优化得到的第一帧控制量被发送到底盘执行。仿真与真实实验将本文方法与基础 MPCC、smooth-only MPCC、slosh-only MPCC 以及非液体感知 local planner 进行比较。结果表明显式预测晃液状态能够在轨迹平滑之外进一步降低液体晃动，同时保持路径跟踪和实时性能。
 
 注意：如果当前没有真实液面反馈闭环，不建议在 Abstract 里使用 **observer**，更稳妥的是 **model-based slosh-state propagation**。
 
@@ -316,11 +328,11 @@ The difficulties of slosh-aware mobile liquid transportation are mainly threefol
 
 这三点后续必须一一对应：
 
-| Introduction 难点 | Related Work 回答 | Method 回答 | Experiments 回答 |
-|---|---|---|---|
-| 液体有动态记忆 | D1 低阶模型 / A01-A03 | low-order slosh state propagation | B_slosh vs B0 |
-| ordinary planner 不传播液体状态 | E 类普通 planner | slosh states in MPCC horizon | B_ours vs external planners |
-| anti-slosh 方法多不是 online local planner | A1-A4、B/C 类 | receding-horizon MPCC local planner | real-time solver time + `/cmd_vel` execution |
+| Introduction 难点                          | Related Work 回答     | Method 回答                         | Experiments 回答                              |
+| ------------------------------------------ | --------------------- | ----------------------------------- | --------------------------------------------- |
+| 液体有动态记忆                             | D1 低阶模型 / A01-A03 | low-order slosh state propagation   | B_slosh vs B0                                 |
+| ordinary planner 不传播液体状态            | E 类普通 planner      | slosh states in MPCC horizon        | B_ours vs external planners                   |
+| anti-slosh 方法多不是 online local planner | A1-A4、B/C 类         | receding-horizon MPCC local planner | real-time solver time +`/cmd_vel` execution |
 
 ---
 
@@ -410,16 +422,16 @@ D. Online Local Planning without Liquid States
 
 推荐文献作用：
 
-| 论文 ID | 用途 |
-|---|---|
-| A01 Sloshing Dynamics Estimation for Liquid-filled Containers under 2-Dimensional Excitation | 低阶模态 / 等效动力学，最接近 SPMPC 的 slosh state 建模依据 |
-| A02 A Simple Model-Based Method for Sloshing Estimation in Liquid Transfer in Automatic Machines | model-based sloshing estimation，支撑状态预测思想 |
-| A03 Modeling of liquid sloshing with application in robotics and automation | robotics and automation 中的 slosh modeling 背景 |
-| A04 Simulation of liquid sloshing in 2D containers using the VOF method | 高保真仿真背景，用来说明 CFD 不适合在线 planner |
-| A05 Nonlinear finite element analysis of liquid sloshing in complex vehicle motion scenarios | 复杂运动下高保真分析，作为大尺度 / 高保真背景 |
-| A07 Preshaping Command Inputs to Reduce System Vibration | input shaping / command preshaping 基础 |
-| A08 Slosh Measuring Sensor System for Liquid-Carrying Robots | 液体运输机器人真实 slosh 测量 |
-| A09 / A10 / A11 | 机器视觉、弯月面、电容式液位检测，评价方法背景 |
+| 论文 ID                                                                                          | 用途                                                        |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------- |
+| A01 Sloshing Dynamics Estimation for Liquid-filled Containers under 2-Dimensional Excitation     | 低阶模态 / 等效动力学，最接近 SPMPC 的 slosh state 建模依据 |
+| A02 A Simple Model-Based Method for Sloshing Estimation in Liquid Transfer in Automatic Machines | model-based sloshing estimation，支撑状态预测思想           |
+| A03 Modeling of liquid sloshing with application in robotics and automation                      | robotics and automation 中的 slosh modeling 背景            |
+| A04 Simulation of liquid sloshing in 2D containers using the VOF method                          | 高保真仿真背景，用来说明 CFD 不适合在线 planner             |
+| A05 Nonlinear finite element analysis of liquid sloshing in complex vehicle motion scenarios     | 复杂运动下高保真分析，作为大尺度 / 高保真背景               |
+| A07 Preshaping Command Inputs to Reduce System Vibration                                         | input shaping / command preshaping 基础                     |
+| A08 Slosh Measuring Sensor System for Liquid-Carrying Robots                                     | 液体运输机器人真实 slosh 测量                               |
+| A09 / A10 / A11                                                                                  | 机器视觉、弯月面、电容式液位检测，评价方法背景              |
 
 段落模板：
 
@@ -443,15 +455,15 @@ Low-order sloshing models have been widely used to represent the dominant liquid
 
 推荐文献作用：
 
-| 论文 ID | 用途 |
-|---|---|
-| C01 Time-Optimal Anti-Sloshing Trajectory Planning for Multiple Liquid-Filled Containers Subject to SCARA Motion | SCARA 多容器 time-optimal 防晃 |
-| C02 A Solution to Slosh-free Robot Trajectory Optimization | slosh-free robot trajectory optimization |
-| C03 Manipulating liquids with robots: A sloshing-free solution | 机器人操作液体经典防晃 |
-| C04 Trajectory planning for meal assist robot considering spilling avoidance | 防洒 / meal assist 应用 |
-| C05 Sloshing Suppression Control by using Physical Boundary Element Model and Predictive Control | BEM + predictive control |
-| C06 Anti-sloshing control: Flatness-based trajectory planning and tracking control with ESO | flatness + observer + tracking |
-| C07 Robust output feedback strategy for liquid handling using reconfigurable robots | reconfigurable robot / robust feedback |
+| 论文 ID                                                                                                          | 用途                                     |
+| ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| C01 Time-Optimal Anti-Sloshing Trajectory Planning for Multiple Liquid-Filled Containers Subject to SCARA Motion | SCARA 多容器 time-optimal 防晃           |
+| C02 A Solution to Slosh-free Robot Trajectory Optimization                                                       | slosh-free robot trajectory optimization |
+| C03 Manipulating liquids with robots: A sloshing-free solution                                                   | 机器人操作液体经典防晃                   |
+| C04 Trajectory planning for meal assist robot considering spilling avoidance                                     | 防洒 / meal assist 应用                  |
+| C05 Sloshing Suppression Control by using Physical Boundary Element Model and Predictive Control                 | BEM + predictive control                 |
+| C06 Anti-sloshing control: Flatness-based trajectory planning and tracking control with ESO                      | flatness + observer + tracking           |
+| C07 Robust output feedback strategy for liquid handling using reconfigurable robots                              | reconfigurable robot / robust feedback   |
 
 段落模板：
 
@@ -718,15 +730,15 @@ J = J_contour + J_lag + J_progress + J_velocity + J_control + J_smooth + J_slosh
 
 各项作用：
 
-| cost | 作用 | 对应故事 |
-|---|---|---|
-| `J_contour` | 减少法向路径误差 | 不偏离参考路径 |
-| `J_lag` | 减少切向滞后 | 不落后路径 |
-| `J_progress` | 鼓励前进 | 保持效率 |
-| `J_velocity` | 跟踪参考速度 | 可控速度 |
-| `J_control` | 限制控制幅值 | 可执行 |
-| `J_smooth` | 平滑控制变化 | ordinary smooth planner 能做到的部分 |
-| `J_slosh` | 惩罚预测晃液状态 | 本文核心新增部分 |
+| cost           | 作用             | 对应故事                             |
+| -------------- | ---------------- | ------------------------------------ |
+| `J_contour`  | 减少法向路径误差 | 不偏离参考路径                       |
+| `J_lag`      | 减少切向滞后     | 不落后路径                           |
+| `J_progress` | 鼓励前进         | 保持效率                             |
+| `J_velocity` | 跟踪参考速度     | 可控速度                             |
+| `J_control`  | 限制控制幅值     | 可执行                               |
+| `J_smooth`   | 平滑控制变化     | ordinary smooth planner 能做到的部分 |
+| `J_slosh`    | 惩罚预测晃液状态 | 本文核心新增部分                     |
 
 段落模板：
 
@@ -798,21 +810,21 @@ Q5: 普通 online local planner 是否因为缺少液体状态而表现不足？
 
 > SPMPC 内部每个模块是否有用？
 
-| Method | Slosh model/cost | Smooth shaping | Role |
-|---|---:|---:|---|
-| **B0** | No | Weak | ordinary alpha-state MPCC |
-| **B_smooth** | No | Strong | smooth-only ablation |
-| **B_slosh** | Yes | Weak | slosh-only ablation |
-| **B_ours** | Yes | Strong | full SPMPC |
+| Method             | Slosh model/cost | Smooth shaping | Role                      |
+| ------------------ | ---------------: | -------------: | ------------------------- |
+| **B0**       |               No |           Weak | ordinary alpha-state MPCC |
+| **B_smooth** |               No |         Strong | smooth-only ablation      |
+| **B_slosh**  |              Yes |           Weak | slosh-only ablation       |
+| **B_ours**   |              Yes |         Strong | full SPMPC                |
 
 关键比较：
 
-| Comparison | 证明什么 |
-|---|---|
-| `B_ours vs B_smooth` | slosh-aware 不是普通平滑 |
-| `B_ours vs B_slosh` | smooth shaping 对最终效果必要 |
-| `B_smooth vs B0` | 平滑本身有收益 |
-| `B_slosh vs B0` | 液体模型和液体代价本身有贡献 |
+| Comparison             | 证明什么                      |
+| ---------------------- | ----------------------------- |
+| `B_ours vs B_smooth` | slosh-aware 不是普通平滑      |
+| `B_ours vs B_slosh`  | smooth shaping 对最终效果必要 |
+| `B_smooth vs B0`     | 平滑本身有收益                |
+| `B_slosh vs B0`      | 液体模型和液体代价本身有贡献  |
 
 英文说明：
 
@@ -832,19 +844,19 @@ To evaluate the role of each component, we first conduct same-framework ablation
 
 > 普通导航栈方法是否足够？
 
-| Method | Type | Slosh-aware? | Role |
-|---|---|---:|---|
-| RPP / Pure Pursuit | path tracking | No | lightweight tracking baseline |
-| DWA / LT-DWA | velocity-space local planner | No | classic kinodynamic baseline |
-| TEB / MPC local planner | optimization-based local planner | No | stronger local-planner baseline |
-| B_ours | slosh-aware MPCC | Yes | proposed method |
+| Method                  | Type                             | Slosh-aware? | Role                            |
+| ----------------------- | -------------------------------- | -----------: | ------------------------------- |
+| RPP / Pure Pursuit      | path tracking                    |           No | lightweight tracking baseline   |
+| DWA / LT-DWA            | velocity-space local planner     |           No | classic kinodynamic baseline    |
+| TEB / MPC local planner | optimization-based local planner |           No | stronger local-planner baseline |
+| B_ours                  | slosh-aware MPCC                 |          Yes | proposed method                 |
 
 不要将这组和内部消融混成一张总排名表。二者回答的问题不同：
 
-| 实验组 | 回答问题 |
-|---|---|
-| 内部消融 | SPMPC 的 slosh prediction 和 smooth shaping 是否有贡献 |
-| 外部 planner 对比 | 普通 non-slosh-aware local planner 是否足够 |
+| 实验组            | 回答问题                                               |
+| ----------------- | ------------------------------------------------------ |
+| 内部消融          | SPMPC 的 slosh prediction 和 smooth shaping 是否有贡献 |
+| 外部 planner 对比 | 普通 non-slosh-aware local planner 是否足够            |
 
 ---
 
@@ -852,17 +864,17 @@ To evaluate the role of each component, we first conduct same-framework ablation
 
 主指标：
 
-| 指标 | 含义 | 对应故事 |
-|---|---|---|
-| `Max-LCR / Max slosh height` | 最大液面晃动 | 是否防晃 |
-| `RMS-LCR / mean liquid motion` | 平均晃动强度 | 是否整体更稳 |
-| `Residual oscillation` | 到达后残余晃动 | 是否降低动态记忆残留 |
-| `Travel time` | 完成时间 | 不是靠无限慢降低晃动 |
-| `Mean / max contour error` | 路径跟踪 | 没有牺牲路径跟踪 |
-| `Speed variance` | 速度平稳性 | 是否控制平滑 |
-| `Acceleration / angular acceleration RMS` | 控制平滑 | 对应 smoothness |
-| `Solver time` | 实时性 | 是否能在线运行 |
-| `Success rate / timeout` | 完成任务能力 | 外部 baseline 比较 |
+| 指标                                        | 含义           | 对应故事             |
+| ------------------------------------------- | -------------- | -------------------- |
+| `Max-LCR / Max slosh height`              | 最大液面晃动   | 是否防晃             |
+| `RMS-LCR / mean liquid motion`            | 平均晃动强度   | 是否整体更稳         |
+| `Residual oscillation`                    | 到达后残余晃动 | 是否降低动态记忆残留 |
+| `Travel time`                             | 完成时间       | 不是靠无限慢降低晃动 |
+| `Mean / max contour error`                | 路径跟踪       | 没有牺牲路径跟踪     |
+| `Speed variance`                          | 速度平稳性     | 是否控制平滑         |
+| `Acceleration / angular acceleration RMS` | 控制平滑       | 对应 smoothness      |
+| `Solver time`                             | 实时性         | 是否能在线运行       |
+| `Success rate / timeout`                  | 完成任务能力   | 外部 baseline 比较   |
 
 注意：
 
@@ -944,14 +956,14 @@ This paper presented SPMPC, a slosh-aware MPCC local planner for mobile robot li
 
 这个矩阵用于防止论文 claim 没有支撑。
 
-| Claim | Related Work 支撑 | Method 支撑 | Experiment 支撑 | 可能审稿问题 |
-|---|---|---|---|---|
-| 液体晃动具有动态记忆，不能只看瞬时加速度 | A01、A02、A03 | `eta, eta_dot` state propagation | B_slosh vs B0；residual oscillation | 低阶模型是否足够准确？ |
-| smooth-only 不等于 slosh-aware | A07、D13、B03 | `J_smooth` 与 `J_slosh` 分离 | B_ours vs B_smooth | smooth 权重调大是否就够？ |
-| anti-slosh 和 local planner 两条线没有接起来 | A1-A4、B/C 类、E 类 | SPMPC = slosh-aware MPCC local planner | real-time `/cmd_vel` + external planner 对比 | B01/B11 是否已经解决？ |
-| SPMPC 能在线生成可执行底盘命令 | E 类 local planner 背景 | receding-horizon OCP，first input as `/cmd_vel` | solver time、success rate | 实时性是否足够？ |
-| SPMPC 降低晃液而不只是变慢 | A/B/D 文献 | 同时有 progress / tracking / slosh cost | LCR + travel time + contour error | 是否靠降低速度取胜？ |
-| 模型 proxy 与真实液面评价应区分 | A08-A11 | `/spmpc/slosh_height` 仅诊断 | RGB max-LCR / external measurement | 是否用自己的模型评估自己？ |
+| Claim                                        | Related Work 支撑       | Method 支撑                                      | Experiment 支撑                               | 可能审稿问题               |
+| -------------------------------------------- | ----------------------- | ------------------------------------------------ | --------------------------------------------- | -------------------------- |
+| 液体晃动具有动态记忆，不能只看瞬时加速度     | A01、A02、A03           | `eta, eta_dot` state propagation               | B_slosh vs B0；residual oscillation           | 低阶模型是否足够准确？     |
+| smooth-only 不等于 slosh-aware               | A07、D13、B03           | `J_smooth` 与 `J_slosh` 分离                 | B_ours vs B_smooth                            | smooth 权重调大是否就够？  |
+| anti-slosh 和 local planner 两条线没有接起来 | A1-A4、B/C 类、E 类     | SPMPC = slosh-aware MPCC local planner           | real-time`/cmd_vel` + external planner 对比 | B01/B11 是否已经解决？     |
+| SPMPC 能在线生成可执行底盘命令               | E 类 local planner 背景 | receding-horizon OCP，first input as`/cmd_vel` | solver time、success rate                     | 实时性是否足够？           |
+| SPMPC 降低晃液而不只是变慢                   | A/B/D 文献              | 同时有 progress / tracking / slosh cost          | LCR + travel time + contour error             | 是否靠降低速度取胜？       |
+| 模型 proxy 与真实液面评价应区分              | A08-A11                 | `/spmpc/slosh_height` 仅诊断                   | RGB max-LCR / external measurement            | 是否用自己的模型评估自己？ |
 
 ---
 
@@ -1035,26 +1047,26 @@ SPMPC 可画成：
 
 ### Table I：Related Work 对比表
 
-| Category | Representative works | Online local planner | Liquid state in planner | Standard mobile base | Main limitation relative to SPMPC |
-|---|---|---:|---:|---:|---|
-| Slosh modeling / input shaping | A01, A02, A03, A07 | No | Partial | Platform-independent | Modeling or command shaping, not local planning |
-| Manipulator anti-slosh | C01-C07 | Usually no | Yes | No | Different platform/control inputs |
-| Mobile-base path / velocity design | B02-B04, B10 | Limited | Partial | Yes | Predefined path/profile |
-| Slosh-constrained trajectory optimization | B01, B11 | Limited / task-dependent | Yes | Yes/related | Not navigation-stack local planner |
-| Active reducer / special platform | B05-B08 | Task-dependent | Yes | No/partial | Extra mechanism or different actuation |
-| Ordinary local planner | D01-D13 | Yes | No | Yes | No liquid dynamic memory |
-| **SPMPC** | Ours | **Yes** | **Yes** | **Yes** | — |
+| Category                                  | Representative works |     Online local planner | Liquid state in planner | Standard mobile base | Main limitation relative to SPMPC               |
+| ----------------------------------------- | -------------------- | -----------------------: | ----------------------: | -------------------: | ----------------------------------------------- |
+| Slosh modeling / input shaping            | A01, A02, A03, A07   |                       No |                 Partial | Platform-independent | Modeling or command shaping, not local planning |
+| Manipulator anti-slosh                    | C01-C07              |               Usually no |                     Yes |                   No | Different platform/control inputs               |
+| Mobile-base path / velocity design        | B02-B04, B10         |                  Limited |                 Partial |                  Yes | Predefined path/profile                         |
+| Slosh-constrained trajectory optimization | B01, B11             | Limited / task-dependent |                     Yes |          Yes/related | Not navigation-stack local planner              |
+| Active reducer / special platform         | B05-B08              |           Task-dependent |                     Yes |           No/partial | Extra mechanism or different actuation          |
+| Ordinary local planner                    | D01-D13              |                      Yes |                      No |                  Yes | No liquid dynamic memory                        |
+| **SPMPC**                           | Ours                 |            **Yes** |           **Yes** |        **Yes** | —                                              |
 
 ---
 
 ### Table II：内部消融实验表
 
-| Method | Slosh model/cost | Smooth shaping | Max-LCR ↓ | RMS-LCR ↓ | Tracking error ↓ | Travel time ↓ | Solver time ↓ |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| B0 | No | Weak |  |  |  |  |  |
-| B_smooth | No | Strong |  |  |  |  |  |
-| B_slosh | Yes | Weak |  |  |  |  |  |
-| B_ours | Yes | Strong |  |  |  |  |  |
+| Method   | Slosh model/cost | Smooth shaping | Max-LCR ↓ | RMS-LCR ↓ | Tracking error ↓ | Travel time ↓ | Solver time ↓ |
+| -------- | ---------------: | -------------: | ---------: | ---------: | ----------------: | -------------: | -------------: |
+| B0       |               No |           Weak |            |            |                   |                |                |
+| B_smooth |               No |         Strong |            |            |                   |                |                |
+| B_slosh  |              Yes |           Weak |            |            |                   |                |                |
+| B_ours   |              Yes |         Strong |            |            |                   |                |                |
 
 叙事功能：
 
@@ -1064,12 +1076,12 @@ SPMPC 可画成：
 
 ### Table III：外部 local planner 对比表
 
-| Method | Type | Slosh-aware? | Max-LCR ↓ | Travel time ↓ | Tracking error ↓ | Success rate ↑ |
-|---|---|---:|---:|---:|---:|---:|
-| RPP / Pure Pursuit | path tracking | No |  |  |  |  |
-| DWA / LT-DWA | velocity-space local planner | No |  |  |  |  |
-| TEB / MPC local planner | optimization-based local planner | No |  |  |  |  |
-| B_ours | slosh-aware MPCC | Yes |  |  |  |  |
+| Method                  | Type                             | Slosh-aware? | Max-LCR ↓ | Travel time ↓ | Tracking error ↓ | Success rate ↑ |
+| ----------------------- | -------------------------------- | -----------: | ---------: | -------------: | ----------------: | --------------: |
+| RPP / Pure Pursuit      | path tracking                    |           No |            |                |                   |                 |
+| DWA / LT-DWA            | velocity-space local planner     |           No |            |                |                   |                 |
+| TEB / MPC local planner | optimization-based local planner |           No |            |                |                   |                 |
+| B_ours                  | slosh-aware MPCC                 |          Yes |            |                |                   |                 |
 
 叙事功能：
 
@@ -1137,27 +1149,27 @@ Despite these limitations, the results support the central claim that sloshing s
 
 ### 16.1 推荐使用
 
-| 推荐表述 | 原因 |
-|---|---|
-| reduced sloshing | 稳妥，不承诺绝对安全 |
-| slosh-aware | 准确表达方法特点 |
-| liquid-friendly local planning | 适合 Introduction / Discussion |
-| predicted sloshing states | 和方法一致 |
-| model-predicted slosh-height proxy | 区分模型输出和真实测量 |
-| external liquid-motion measurement | 强调实验评价独立性 |
-| online receding-horizon local planning | 准确定位方法层级 |
+| 推荐表述                               | 原因                           |
+| -------------------------------------- | ------------------------------ |
+| reduced sloshing                       | 稳妥，不承诺绝对安全           |
+| slosh-aware                            | 准确表达方法特点               |
+| liquid-friendly local planning         | 适合 Introduction / Discussion |
+| predicted sloshing states              | 和方法一致                     |
+| model-predicted slosh-height proxy     | 区分模型输出和真实测量         |
+| external liquid-motion measurement     | 强调实验评价独立性             |
+| online receding-horizon local planning | 准确定位方法层级               |
 
 ### 16.2 谨慎使用或避免
 
-| 表述 | 问题 |
-|---|---|
-| spill-free guarantee | 除非有硬约束和严格实验，否则不要说 |
-| safety-critical liquid transport | 容易被要求形式化安全证明 |
-| true slosh observer | 若无液面测量反馈，不要说 |
-| complete obstacle-aware MPCC | 第一版未完成，不应宣称 |
-| global optimality | 非凸 OCP 不应宣称 |
-| closed-loop stability guarantee | 若无证明，不应宣称 |
-| `/spmpc/slosh_height` as ground truth | 模型 proxy 不能当真实液面 |
+| 表述                                    | 问题                               |
+| --------------------------------------- | ---------------------------------- |
+| spill-free guarantee                    | 除非有硬约束和严格实验，否则不要说 |
+| safety-critical liquid transport        | 容易被要求形式化安全证明           |
+| true slosh observer                     | 若无液面测量反馈，不要说           |
+| complete obstacle-aware MPCC            | 第一版未完成，不应宣称             |
+| global optimality                       | 非凸 OCP 不应宣称                  |
+| closed-loop stability guarantee         | 若无证明，不应宣称                 |
+| `/spmpc/slosh_height` as ground truth | 模型 proxy 不能当真实液面          |
 
 ---
 
@@ -1177,24 +1189,12 @@ Despite these limitations, the results support the central claim that sloshing s
 
 建议按这个顺序推进：
 
-1. **整理 A 类移动底盘液体运输近邻文献矩阵**  
-   重点区分 A1 固定路径、A2 速度剖面、A3 离线优化、A4 tracking/control、A5 online local planning gap。
-
-2. **整理 D 类低阶模型与测量评价文献**  
-   重点支撑 slosh modal model 和 RGB / LCR 外部评价。
-
-3. **整理 E 类普通 local planner baseline**  
-   明确哪些方法进入外部对比，哪些只作为 related work。
-
-4. **建立 Claim–Gap–Evidence 矩阵**  
-   每个 claim 必须对应文献支撑和实验支撑。
-
-5. **写 Introduction 初稿**  
-   建议直接按本文件第 7 节五段式写，不要从 Method 开始写。
-
-6. **画 Fig. 2 系统框架图和 Fig. 3 horizon 示意图**  
-   先把故事图画出来，再填公式，避免 Method 写散。
-
-7. **把实验表格先搭出来**  
+1. **整理 A 类移动底盘液体运输近邻文献矩阵**重点区分 A1 固定路径、A2 速度剖面、A3 离线优化、A4 tracking/control、A5 online local planning gap。
+2. **整理 D 类低阶模型与测量评价文献**重点支撑 slosh modal model 和 RGB / LCR 外部评价。
+3. **整理 E 类普通 local planner baseline**明确哪些方法进入外部对比，哪些只作为 related work。
+4. **建立 Claim–Gap–Evidence 矩阵**每个 claim 必须对应文献支撑和实验支撑。
+5. **写 Introduction 初稿**建议直接按本文件第 7 节五段式写，不要从 Method 开始写。
+6. **画 Fig. 2 系统框架图和 Fig. 3 horizon 示意图**先把故事图画出来，再填公式，避免 Method 写散。
+7. **把实验表格先搭出来**
    Table II 和 Table III 的空表先放进论文，这样后续跑实验时知道每个实验要回答什么问题。
 

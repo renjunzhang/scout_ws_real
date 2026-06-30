@@ -4,6 +4,41 @@
 
 > 当前采取低风险组织方式：Hamaguchi/Lim 已从老控制器目录拆到独立 `scout_profile_baselines` 包；旧 `rosrun scout_local_planner generate_*.py` 入口仅作为兼容 wrapper 保留。`lt_dwa` baseline 已切到官方 LT-DWA ROS Noetic core wrapper：wrapper 在 `src/scout_apps/control/lt_dwa_official_wrapper/`，官方 source-only vendor 仍放在 `third_party/LT_DWA`，不把上游包放入 catkin 主构建。
 
+## 0. 当前收敛口径（2026-06-29）
+
+当前阶段**先不做 Map-vref**，目标是把普通 fixed-path 实物对比链路收敛：算法入口、参数口径、录包、quick metrics、RGB 离线液面主指标和失败统计先固定下来。
+
+当前外部对比方法只按下面 6 个统计，不把 Map-vref 或其它高级候选混入本轮主表：
+
+```text
+TEB
+DWA
+LT-DWA official wrapper
+Ham / Hamaguchi profile
+Lim profile
+mpc_local_planner
+```
+
+SPMPC 侧用于对照的当前主线方法为：
+
+```text
+B0
+B_slosh
+B_ours
+B_ours_hard_1mm    # 使用时必须记录 slosh_height_max=0.001 m
+```
+
+本轮不纳入：
+
+```text
+B_ours_map_vref / frozen Map-vref profile / runtime Map-vref override
+src/mpc_planner advanced candidate
+TOPPRA / Ruckig / Biagiotti 等历史 profile 工具
+任何订阅 /liquid/* 或 /slosh/* 做控制反馈的外部 baseline
+```
+
+统一评价口径：外部 baseline 不使用液面信息，液面只做后评价；正式实物 run 使用 full RGB whitelist bag，主液面指标来自 RGB offline max-LCR，`/slosh/height` 作为所有算法统一的外部 slosh proxy，`/spmpc/slosh_height` 只解释 SPMPC 内部模型。
+
 ## 1. 总体分层
 
 ```text
@@ -54,10 +89,10 @@ Obsidian 只作为报告/镜像层，不作为 canonical raw source：
 | online SPMPC         | `B0` / `B_slosh` / `B_smooth` / `B_ours` | SPMPC variant/config；benchmark common policy 在 `config/benchmark/`                     | `src/scout_apps/control/spmpc_local_planner/`                                      | `scripts/run_fixed_path_spmpc_suite.sh`；外层 strict wrapper 在 `/data/a/scout_sim_replacement/scripts/` | `scripts/extract_fixed_path_paper_metrics.py`                 | 主表 / 内部消融                          | 禁止作为控制输入；仅 rosbag/metrics/report         |
 | legacy local planner | TEB                                              | `config/baselines/teb_local_planner_standalone_sim.yaml`                                 | `teb_local_planner` nav_core plugin + `baseline_local_planner_runner`            | `scripts/run_fixed_path_baseline_suite.sh`                                                                 | `scripts/extract_fixed_path_paper_metrics.py`                 | 同层 online baseline                     | 禁止作为控制输入；仅 rosbag/metrics/report         |
 | legacy local planner | DWA                                              | `config/baselines/dwa_local_planner_standalone_sim.yaml`、`dwa_local_planner_sim.yaml` | `navigation/dwa_local_planner` nav_core plugin + `baseline_local_planner_runner` | `scripts/run_fixed_path_baseline_suite.sh`                                                                 | `scripts/extract_fixed_path_paper_metrics.py`                 | 同层 online baseline                     | 禁止作为控制输入；仅 rosbag/metrics/report         |
-| fallback MPC         | `mpc_local_planner`                            | `config/baselines/mpc_local_planner_standalone_sim.yaml`                                 | `src/scout_apps/control/mpc_local_planner/`                                        | `scripts/run_fixed_path_baseline_suite.sh`，需显式 opt-in                                                  | `scripts/extract_fixed_path_paper_metrics.py`                 | fallback / supplement；按 readiness 决定 | 禁止作为控制输入；仅 rosbag/metrics/report         |
+| external MPC baseline | `mpc_local_planner`                          | `config/baselines/mpc_local_planner_standalone_sim.yaml` / tuned fixed-path config       | `src/scout_apps/control/mpc_local_planner/` + `baseline_local_planner_runner`       | `scripts/run_fixed_path_baseline_suite.sh`；实物端需 isolated build，正式前先 N=1 smoke                     | `scripts/extract_fixed_path_paper_metrics.py`                 | 当前外部对比主表项之一                  | 禁止作为控制输入；仅 rosbag/metrics/report         |
 | profile baseline     | Hamaguchi-style                                  | `config/profile_baselines/hamaguchi_profile.yaml`                                        | wrapper: `scout_profile_baselines/scripts/generate_hamaguchi_profile.py`；impl: `scripts/hamaguchi/generate_profile.py` | `scripts/run_fixed_path_profile_baseline_suite.sh` + common tracker                                        | `profile_baseline_metrics_aggregate.csv`、combined comparison | supplementary profile baseline           | generator/tracker 不消费 monitor；monitor 只做评价 |
 | profile baseline     | Lim-style                                        | `config/profile_baselines/lim_profile.yaml`                                              | wrapper: `scout_profile_baselines/scripts/generate_lim_style_profile.py`；impl: `scripts/lim/generate_profile.py` | `scripts/run_fixed_path_profile_baseline_suite.sh` + common tracker                                        | `profile_baseline_metrics_aggregate.csv`、combined comparison | supplementary profile baseline           | generator/tracker 不消费 monitor；monitor 只做评价 |
-| modern baseline candidate | LT-DWA                                      | `config/baselines/lt_dwa_official_wrapper_standalone_sim.yaml` + `config/benchmark/capability_matrix.yaml` | wrapper: `src/scout_apps/control/lt_dwa_official_wrapper/`；reference: `third_party/LT_DWA/` source-only vendor；runtime: `tools/lt_dwa/local_planner_runtime/` | `launch/sim/run_lt_dwa_fixed_path_sim.launch`；`scripts/run_fixed_path_baseline_suite.sh`；isolated smoke wrapper | `/baseline/lt_dwa/status`、diagnostics、worker_result、local/global plan、metrics extractor | official wrapper 已可运行；formal 主表仍按 gate/证据审批 | 不消费 monitor；仅 rosbag/metrics/report |
+| external baseline    | LT-DWA                                      | `config/baselines/lt_dwa_official_wrapper_standalone_sim.yaml` + `config/benchmark/capability_matrix.yaml` | wrapper: `src/scout_apps/control/lt_dwa_official_wrapper/`；reference: `third_party/LT_DWA/` source-only vendor；runtime: `tools/lt_dwa/local_planner_runtime/` | `launch/sim/run_lt_dwa_fixed_path_sim.launch`；`scripts/run_fixed_path_baseline_suite.sh`；实物先 shadow 再 bounded `/cmd_vel` | `/baseline/lt_dwa/status`、diagnostics、worker_result、local/global plan、metrics extractor | 当前外部对比主表项之一                  | 不消费 monitor；仅 rosbag/metrics/report |
 | advanced candidate   | `src/mpc_planner`                              | `config/benchmark/capability_matrix.yaml`                                                | `src/mpc_planner/`，solver/deps readiness-gated                                    | `scripts/bench_check_advanced_baseline_readiness.py`                                                       | readiness report                                                | candidate；未通过前不进表                | 不适用                                             |
 
 ## 3. Hamaguchi/Lim profile baseline 的链路
@@ -122,7 +157,7 @@ OUT_ROOT=/data/a/spmpc_paper_compare/example_baseline \
 bash src/scout_apps/control/spmpc_experiments/scripts/run_fixed_path_baseline_suite.sh
 ```
 
-`mpc_local_planner` 需要显式 opt-in；未确认依赖与 readiness 前不要放入主表。`lt_dwa` 使用官方 LT-DWA wrapper，默认 shadow-only；只有 suite 显式传入 `enable_actuated_output=true` + `publish_cmd_vel=true` 才输出 benchmark command。formal 主表仍需按 capability/main-table gate 和 freshness evidence 明确审批。
+`mpc_local_planner` 是当前外部对比项之一；实物端需要按 isolated build/source 路线处理，并在正式表前先做 N=1 smoke。`lt_dwa` 使用官方 LT-DWA wrapper，默认 shadow-only；只有 suite 或实物 launch 显式传入 `enable_actuated_output=true` + `publish_cmd_vel=true` 才输出 benchmark command。formal 主表仍需保留 fixed-path、60s timeout、freshness/录包证据和失败统计。
 
 ### Hamaguchi/Lim profile baseline
 

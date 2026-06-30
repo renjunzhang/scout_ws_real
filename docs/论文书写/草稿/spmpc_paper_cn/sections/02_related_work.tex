@@ -1,57 +1,66 @@
 \section{相关工作}
 
-本节不按单篇论文罗列文献，而按论文故事所需的功能分组：先说明跨平台基础方法，再说明不同平台上的防晃研究，最后聚焦移动底盘液体运输和普通移动机器人局部规划器的差异。该结构服务于一个核心定位：\SPMPC{} 位于移动底盘液体运输中的在线滚动防晃局部规划方向。
+本节按论文论证链组织相关工作，而不是按时间简单罗列。本文需要回答的问题是：已有研究已经为移动底盘开口液体运输提供了哪些基础，为什么这些基础仍未直接形成标准轮式移动底盘上的在线晃液感知局部规划器。
 
-\subsection{跨平台基础：液体模型、输入整形与测量评价}
+\subsection{晃液建模、估计与测量}
 
-液体防晃规划首先需要可用于控制和优化的液体模型。高保真 CFD、VOF、FEM 或 SPH 方法能够描述复杂自由液面、冲击和非线性现象，但其计算代价通常不适合直接嵌入实时局部规划器。因此，许多面向控制和规划的研究采用低阶模型，例如等效摆模型、质量-弹簧-阻尼模型或模态状态空间模型。这类模型的共同作用是用有限维状态表示液体对历史运动激励的动态记忆。
+防晃规划首先依赖可用于控制和优化的液体动态表示。高保真 VOF、FEM、SPH、CFD 或数字孪生模型能够描述复杂自由液面、液固耦合、冲击和强非线性现象\cite{A03_Schrgenhumer2019,A04_Elahi2015,A05_Nicolsen2017,A06_Moya2020}，但其计算代价和状态维度通常不适合直接嵌入实时移动机器人局部规划器。相比之下，等效摆、质量--弹簧--阻尼和低阶模态模型用少量状态描述主导晃液动态，更适合作为在线优化内核。
 
-输入整形、命令预整形、速度剖面设计和 jerk 限制等方法是另一类重要基础。它们说明通过改变输入频率成分、速度变化和加速度形状可以减少残余振动或液面晃动。然而，这类方法通常依赖已知频率、固定路径或预先设计的 profile，并不必然传播当前液体状态。因此，它们适合作为 smooth/profile 类 baseline 的理论基础，但不能直接等价于在线 slosh-aware 局部规划。
+Guagliumi 等提出的模型驱动晃液估计方法表明，给定容器运动输入后，可以用简单低阶模型预测液面峰值\cite{A02_Guagliumi2021}。Di Leva 的二维激励晃液估计进一步强调，水平平面内的容器加速度可作为液体模态状态的外部激励，并由模态坐标映射到最大液面高度\cite{A01_Leva2021}。这些工作不直接求解移动机器人局部规划问题，但为本文采用低阶晃液状态作为预测状态提供了方法基础。
 
-此外，真实液面评价是防晃论文可信度的重要组成部分。若仅使用规划器内部的模型输出作为评价指标，容易产生“用自己的模型评价自己”的问题。因此，本文将区分内部预测的 model proxy 与外部真实液面评价，并优先采用 RGB 液面观测、max-LCR 或其他视觉/传感指标衡量真实晃动。
+真实液面测量是另一个相关方向。外部传感、视觉液位检测和液面重建研究说明，液体运动可以通过 ToF、RGB、机器视觉或其它传感方式进行评价\cite{A08_Weaver2024,A09_Bobovnik2021,A10_Shao2026,A11_Ren2024}。本文因此区分两类量：规划器内部传播的 model-predicted slosh proxy 用于优化和诊断，而实验结论应尽量依赖外部液面观测指标。该边界避免把内部模型量直接宣称为真实液面高度。
 
-\subsection{机械臂、SCARA 与操作机器人中的液体防晃}
+\subsection{输入整形、防晃轨迹生成与预测控制}
 
-机械臂和 SCARA 等操作机器人中的液体防晃研究通常关注末端轨迹规划、容器姿态补偿、平坦性规划、预测控制或鲁棒输出反馈控制。此类方法表明，在机器人运动规划和控制中显式考虑液体响应是有价值的，也说明防晃不应只依赖末端轨迹的几何平滑性。
+输入整形和命令预整形是防振与防晃控制的重要基础。Singer 和 Seering 的 command preshaping 工作表明，通过调整输入命令的频率成分可以降低残余振动\cite{A07_Singer1990}。在液体运输场景中，这一思想通常表现为对路径曲率、速度剖面、加速度模式或 jerk profile 的设计。此类方法能够显著减少激励，但多数依赖固定路径、已知频率或预先设计的 profile；它们未必在每个控制周期传播当前液体相位，也不一定具有移动机器人 local planner 的在线接口。
 
-但是，机械臂类平台与移动底盘平台存在关键差异。机械臂通常能够控制末端姿态，甚至利用冗余自由度改变容器倾角，以主动抵消液面激励；而差速或 skid-steer 移动底盘主要通过线速度、角速度、加速度和角加速度影响容器运动。二者的控制输入、任务形式和动力学约束不同。因此，机械臂/SCARA 防晃文献在本文中属于 broader related work，而不是 Scout Mini 移动底盘的同层实验 baseline。
+机器人操作和专用液体转运系统中的防晃研究进一步说明，显式液体模型对运动生成和控制是有价值的。SCARA、多自由度机械臂、meal-assist robot 和液体容器转运系统相关工作研究了 slosh-free trajectory optimization、容器姿态补偿、flatness-based planning、tracking control 和鲁棒反馈等方法\cite{C01_Ferrari2026,C02_Muchacho2022,C03_Moriello2018,C04_Kuriyama2008,C06_Viet2024}。这些方法的控制变量通常是关节轨迹、末端执行器位姿、容器姿态或专用转运机构输入，而不是标准轮式移动底盘每个周期输出的线速度和角速度命令。因此，它们是 liquid-aware motion generation 的重要证据，但不是本文的同层实验 baseline。
 
-\subsection{液罐车、车辆与船舶等载液平台}
+需要特别指出的是，slosh-aware predictive control 或 MPC 并不是本文首次提出的方向。Okatsuka 等早期研究已经将晃液动力学引入液体容器转运系统的模型预测控制\cite{A12_Okatsuka2011}；随后又有基于边界元物理模型和广义预测控制的液面稳定方法\cite{C05_Okatsuka2012}。这些工作证明预测控制框架适合处理晃液动态，但它们主要面向专用转运机构或给定运动后的控制问题，而不是标准移动底盘的在线局部路径进度优化。本文的 novelty 因此不在于“第一次把晃液状态放进 MPC”，而在于把低阶晃液状态嵌入标准轮式移动底盘的 online \MPCC{} local-planning layer。
 
-液罐车、车辆和船舶等大尺度载液平台中的晃动研究关注制动、转弯、侧倾稳定性、结构载荷和车辆-液体耦合动力学。相关研究说明，移动载体中的液体晃动会显著影响运动安全和系统稳定性，也常采用 preview control、悬架控制、有限元分析或流固耦合模型分析晃动影响。
+\subsection{移动底盘液体运输与防晃路径设计}
 
-这类工作为本文提供了移动载液系统的安全背景，但其问题尺度和控制目标通常不同于服务机器人或实验室移动底盘。液罐车/船舶更强调大尺度载荷、结构响应或车辆稳定性，而本文关注的是给定安全路径上的在线局部轨迹规划。因此，该类文献可作为 broader background，不作为本文同层方法对比的主线。
+移动底盘液体运输是本文最直接的近邻方向。Hamaguchi 和合作者形成了一条清晰的早期研究谱系：从圆柱容器曲线路径转运控制和曲率/加速度设计\cite{B04_Hamaguchi2002}，到轮式移动机器人上的速度控制与路径设计\cite{B03_Hamaguchi2004}，再到路径设计和 PD trace control\cite{B02_Hamaguchi2005}。这些工作已经把圆柱容器晃液建模为球摆型系统，并通过 input shaping 选择曲率半径、加速度模式或速度 profile。它们与本文共享“移动平台运输液体”的任务背景，但其核心是预先设计路径或速度剖面，然后执行或跟踪该路径；规划器并不在每个控制周期根据当前液体状态和参考路径求解滚动时域局部 OCP。
 
-\subsection{移动底盘液体运输与防晃轨迹规划}
+后续 Hamaguchi 相关研究还发展出主动抑振机构路线，例如在移动台车或全向移动机器人上加入主动振动抑制器、并联机构、气动执行器和 notch-filtered motion shaping\cite{B05_Hamaguchi2019,B06_Hamaguchi2018}。这类方法说明，硬件级补偿可以显著改善搬运稳定性；但它们依赖额外机构或特殊平台，不能直接作为标准轮式移动底盘上的软件式 local planner baseline。对于本文而言，它们的作用是说明移动平台液体运输防晃已有长期研究，而 SPMPC 的定位是“不增加主动抑振硬件，在底盘局部规划层引入液体状态”。
 
-与本文最接近的是移动底盘或服务机器人液体运输中的防晃路径与轨迹规划研究。已有方法大致可以分为四类。
+近期工作进一步把液体模型纳入移动机器人或移动容器的优化与控制。Lim 等将液面近似为球摆，并求解移动机器人的二维离线轨迹优化问题以降低摆角\cite{B01_Lim2024}。Nguyen Viet 等将非线性等效质量--弹簧--阻尼模型、time-optimal motion planning、LESO--TSMC tracking 和 CBF 输出约束结合起来\cite{B11_Viet2025}。Prabakaran 等在 reconfigurable staircase service robot 上提出 Kalman-filter MPC / output-feedback tracking-control 方法来降低清洁液晃动\cite{B12_Prabakaran2026}。这些工作非常接近本文主题，因为它们显式考虑液体动态并使用优化或预测控制。然而，它们分别属于离线全轨迹优化、reference planning plus tracking/control、或 special-platform MPC tracking/control，而不是普通轮式移动底盘导航栈中的 online \MPCC{} local planner。
 
 \begin{table}[t]
   \centering
+  \small
   \caption{移动底盘液体运输近邻工作的层级划分}
-  \label{tab:mobile_liquid_related_work}
-  \begin{tabular}{p{0.18\linewidth} p{0.34\linewidth} p{0.36\linewidth}}
+  \label{tab:mobile_base_related_work_framework}
+  \begin{tabular}{p{0.24\linewidth} p{0.30\linewidth} p{0.34\linewidth}}
     \toprule
-    类别 & 典型问题 & 与本文关系 \\
+    文献类型 & 代表工作 & 相对 \SPMPC{} 的主要差异 \\
     \midrule
-    固定路径/曲线路径设计 & 预先设计路径几何、转弯半径和曲率以减少晃动 & 说明路径几何会影响晃动，但多为预设计路径 \\
-    速度剖面/input shaping & 在给定路径上设计速度、加速度或命令输入 & 支撑 smooth/profile baseline，但通常不是在线状态感知规划 \\
-    离线防晃轨迹优化 & 将液体模型或约束放入整段轨迹优化 & 显式考虑液体，强近邻，但常偏离线或预规划 \\
-    防晃跟踪控制/特殊机构 & 给定轨迹后进行 tracking 或利用主动抑振机构 & 说明防晃控制有效，但层级或硬件条件不同 \\
+    曲线路径 / velocity profile / input shaping & Hamaguchi 系列\cite{B04_Hamaguchi2002,B03_Hamaguchi2004,B02_Hamaguchi2005} & 多为 fixed path/profile design，不是 horizon 内滚动局部规划 \\
+    主动抑振机构 / 特殊硬件 & Cart 或 omni robot + active vibration reducer\cite{B05_Hamaguchi2019,B06_Hamaguchi2018} & 依赖额外机构或特殊平台，不是标准 WMR 软件规划层 \\
+    离线液体约束轨迹优化 & Lim et al.\cite{B01_Lim2024} & 显式液体模型，但一次性优化整段轨迹，不是 online local planner \\
+    time-optimal planning + tracking & Nguyen Viet et al.\cite{B11_Viet2025} & reference planning 与鲁棒跟踪为主，不处理导航栈局部规划接口 \\
+    special-platform MPC tracking/control & Prabakaran et al.\cite{B12_Prabakaran2026} & 证明 slosh-aware MPC tracking 已存在，但不是 standard WMR online \MPCC{} \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-这些方法为移动底盘液体运输提供了重要基础，但它们通常不是导航栈中的在线局部轨迹规划问题。本文希望强调的 gap 是：移动底盘在运行过程中需要不断更新下一段局部运动，并且此时液体当前相位和历史激励会影响未来的晃动响应。若规划器不传播液体状态，则无法在局部决策中利用这些动态信息。
+\begin{figure}[t]
+  \centering
+  \figplaceholder{文献定位图：\\低阶晃液模型 / fixed profile / offline optimization / tracking control / ordinary local planner / \\online slosh-aware local planning。}
+  \caption{相关工作定位图占位。后续应突出 \SPMPC{} 位于移动底盘液体运输中的 online slosh-aware local planning 层级，而不是 fixed profile、offline trajectory optimization 或 ordinary local planner。}
+  \label{fig:literature_position_placeholder}
+\end{figure}
 
-\subsection{不含液体动态的移动机器人局部规划器}
+由此可见，移动底盘液体运输并非缺少研究；真正缺少的是一种把液体动态记忆放入标准移动底盘 online local-planning loop 的方法。SPMPC 正是在这一层级上定义问题：在给定参考路径附近，用滚动时域优化同时选择路径进度、底盘控制和预测液体响应。
 
-普通移动机器人局部规划器和轨迹优化方法，如 DWA、TEB、pure pursuit、MPPI、通用轨迹优化、jerk-limited trajectory generation 和 time-optimal path parameterization，已经能够处理路径跟踪、运动可行性、平滑性甚至避障或风险约束。它们是本文实验中必须考虑的外部 baseline，因为它们代表了“如果不显式考虑液体，普通在线 planner 能做到什么”。
+\subsection{普通移动机器人局部规划与轨迹优化}
 
-然而，这些方法的目标函数和状态变量通常不包含被运输液体的模态状态。即使它们生成的轨迹速度和加速度较平滑，也无法表示液体的当前相位、残余振荡和对未来输入的动态响应。因此，它们不是液体防晃方向本身，而是用于验证本文 claim 的 negative control：ordinary online planning is not necessarily slosh-aware planning。
+另一条相关研究线是普通移动机器人局部规划。路径跟踪器、DWA 类局部规划器、MPC/MPPI、trajectory optimization、risk-aware motion planning 和 jerk-limited trajectory generation 已经能够在线生成可行、平滑且可执行的运动命令\cite{D01_Macenski2023,D02_Jian2023,D03_Zhang2025,D06_Williams2017,D07_Trevisan2025,D13_Berscheid2021}。这些方法构成本文实验对比的重要来源，因为它们与 SPMPC 具有相似的部署层级：都面向移动机器人 local planning，并最终输出底盘可执行命令。
 
-\subsection{SPMPC 的位置}
+然而，普通 local planner 的状态和代价通常围绕机器人位姿、速度、路径误差、障碍距离、碰撞风险、控制平滑性或时间效率构建。即使某些方法具有 MPC 或 trajectory optimization 形式，只要状态中没有液体模态位移和速度，优化器就无法区分“同样平滑但与当前液体相位关系不同”的控制序列。因此，普通 local planner 代表的是 \emph{online but not liquid-aware} 的研究线。它们适合作为外部 baseline，但不能替代显式晃液状态预测。
 
-综上，现有防晃研究证明了液体模型、输入整形、轨迹优化和防晃控制的价值；机械臂和载液车辆平台说明液体晃动会影响机器人和移动载体任务；移动底盘液体运输近邻方法则覆盖了固定路径、速度剖面、离线优化和跟踪控制等方向。但是，面向移动底盘开口液体运输的在线滚动防晃局部规划仍是一个需要明确表述的 gap。
+\subsection{小结：SPMPC 的定位}
 
-本文的 \SPMPC{} 位于该 gap：它不是普通 local planner 加一个平滑代价，也不是给定轨迹后的控制器，而是在移动底盘局部轨迹规划阶段显式传播低阶液体模态状态，并在滚动时域内联合优化路径进度、底盘控制和预测液体响应。
+综上，现有文献已经分别提供了四类基础：低阶晃液建模和测量评价、输入整形与防晃运动生成、移动底盘液体运输的路径/profile/跟踪/机构补偿方法，以及普通移动机器人在线局部规划器。这些基础共同说明：液体防晃有充分研究基础，slosh-aware predictive/MPC control 也已经存在；本文不能、也不应将贡献写成“首次使用 MPC 抑制晃液”。
+
+本文的定位是连接两条原本分离的研究线：anti-slosh methods are liquid-aware but often not online local planners, whereas ordinary local planners are online and executable but not liquid-aware. \SPMPC{} 通过在 \MPCC{} 局部规划器中嵌入低阶晃液模态状态，使标准轮式移动底盘能够在路径跟踪、路径进度、底盘控制、控制平滑性和预测液体响应之间进行在线滚动权衡。
