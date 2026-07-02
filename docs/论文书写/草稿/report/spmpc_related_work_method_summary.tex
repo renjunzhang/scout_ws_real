@@ -1,0 +1,324 @@
+% !TEX program = xelatex
+\documentclass[12pt,a4paper]{ctexart}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{geometry}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+\linespread{1.15}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue
+}
+
+\newcommand{\SPMPC}{SPMPC}
+\newcommand{\MPCC}{MPCC}
+\newcommand{\MPC}{MPC}
+\newcommand{\xr}{\bm{x}_{r}}
+\newcommand{\xl}{\bm{x}_{l}}
+\newcommand{\xaug}{\bm{x}}
+\newcommand{\vu}{\bm{u}}
+\newcommand{\ec}{e_{\mathrm{c}}}
+\newcommand{\el}{e_{\mathrm{l}}}
+
+\title{\SPMPC{} 相关工作与方法讨论总结}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{本文档用途与写作依据}
+
+本文档用于和老师讨论当前 \SPMPC{} 论文的相关工作组织方式与方法表达方式。本文档按照《SPMPC 终稿写作指南》的核心结构整理：先明确论文主线与创新边界，再按“普通移动机器人局部规划器、移动底盘液体运输近邻、跨平台防晃背景”的顺序组织相关工作，最后用方法部分说明 \SPMPC{} 如何把低阶晃液状态嵌入在线 \MPCC{} 局部规划问题。
+
+需要特别说明的是，终稿写作指南决定“论文应该怎么讲”，但不作为文献事实、实验结果或实现细节的来源。本文档中的文献判断应继续以原论文、Obsidian 文献笔记和 \texttt{references.bib} 为准；方法判断应以当前 LaTeX 方法草稿和代码实现为准；实验结论必须等待真实实验数据支持。
+
+当前论文主线可以概括为：
+\begin{quote}
+\SPMPC{} 不是“又一个液体防晃方法”，而是面向移动底盘开口液体运输，把低阶晃液状态前移到标准轮式移动底盘的在线 \MPCC{} 局部规划层，在滚动时域中联合优化路径跟踪、路径进度、底盘控制平滑性与预测液体响应。
+\end{quote}
+
+因此，本文不应把创新点写成“首次将晃液状态放入 \MPC{}”。已有工作已经研究了晃液感知预测控制、\MPC{} 跟踪控制和防晃轨迹优化。本文更准确的创新边界是：已有防晃方法通常显式考虑液体晃动，但多属于固定路径、速度剖面、离线轨迹优化、给定轨迹后的跟踪控制或特殊平台控制；普通移动机器人局部规划器在线、可执行，但通常不传播液体动态状态。\SPMPC{} 关注二者交叉处：标准轮式移动底盘上的在线晃液感知 \MPCC{} 局部规划。
+
+\section{相关工作总结}
+
+\subsection{建议组织原则：按“平台 + 问题层级”分类}
+
+当前相关工作不宜只按“是否研究液体晃动”分类，也不宜只按普通移动机器人局部规划分类。更合适的组织方式是同时考虑两个维度：
+\begin{enumerate}
+  \item \textbf{平台是否接近本文任务：} 标准轮式移动底盘、特殊移动平台、机械臂、液罐车、船舶或专用转运机构；
+  \item \textbf{问题层级是否接近本文方法：} 在线局部规划、离线轨迹优化、速度剖面设计、输入整形、跟踪控制、晃液建模或液面测量。
+\end{enumerate}
+
+基于这个原则，相关工作建议组织成三条主线：
+\begin{enumerate}
+  \item 普通移动机器人在线局部规划器、\MPC{} 与 \MPCC{}：它们与本文处于相近部署层级，能够在线输出底盘可执行命令，但通常不显式传播液体状态；
+  \item 移动底盘液体运输与防晃近邻：它们与本文共享“移动平台运输液体”的物理问题，但多数不是标准轮式移动底盘导航栈中的在线局部规划器；
+  \item 跨平台防晃建模、轨迹生成与预测控制：它们为本文提供方法基础和创新边界，但通常不作为 Scout/WMR 同层实验基线。
+\end{enumerate}
+
+\subsection{普通移动机器人在线局部规划器与轨迹优化}
+
+普通移动机器人局部规划器已经能够在线生成可执行的速度命令，并处理路径跟踪、避障、风险、平滑性或时间效率等问题。例如 RPP、LT-DWA、MPPI、轨迹优化和 jerk 受限轨迹生成等工作已经形成了较成熟的局部规划或运动生成研究线\cite{D01_Macenski2023,D02_Jian2023,D03_Zhang2025,D06_Williams2017,D13_Berscheid2021}。
+
+这类方法与 \SPMPC{} 的共同点是：它们都部署在移动机器人在线局部规划或底盘控制接口附近，最终输出底盘可执行命令。因此，它们适合作为实验基线，用来回答“普通局部规划器是否已经足够”的问题。
+
+但它们的主要不足是：规划状态通常只包含机器人位姿、速度、路径误差、障碍距离、控制变化或风险项，而不包含液体模态位移和速度。即使控制序列足够平滑，如果优化器不知道当前液体相位，就无法区分两条“同样平滑但对液体响应不同”的运动。因此，普通移动机器人局部规划器可以概括为：
+\begin{quote}
+在线、可执行，但通常不具备液体状态预测能力。
+\end{quote}
+
+\subsection{移动底盘液体运输与防晃近邻}
+
+移动底盘液体运输是与本文最接近的物理问题。Hamaguchi 及其合作者较早研究了轮式移动机器人或移动台车运输圆柱容器液体时的路径设计、速度剖面、输入整形与轨迹跟踪控制\cite{B04_Hamaguchi2002,B03_Hamaguchi2004,B02_Hamaguchi2005}。这些工作已经说明移动平台运输液体时必须考虑容器运动对液体晃动的激励。
+
+近期工作进一步把液体模型纳入移动机器人或移动容器的优化与控制。Lim 等将液面近似为球摆，并进行二维离线轨迹优化以降低液体晃动\cite{B01_Lim2024}。Nguyen Viet 等结合非线性等效质量--弹簧--阻尼模型、时间最优规划、跟踪控制与 CBF 输出约束\cite{B11_Viet2025}。Prabakaran 等在可重构楼梯服务机器人上提出晃液感知轨迹控制与 \MPC{} 跟踪控制思路\cite{B12_Prabakaran2026}。
+
+这些工作非常重要，因为它们证明了“移动平台 + 液体防晃”不是空白方向，也证明了显式液体模型和优化/预测控制在该任务中有价值。但它们与 \SPMPC{} 的主要差异在于：多数工作属于固定路径或速度剖面设计、离线整段轨迹优化、先规划参考轨迹再进行跟踪控制，或特殊平台上的 \MPC{} 跟踪控制。它们通常不直接提供标准轮式移动底盘导航栈中的在线 \MPCC{} 局部规划器。
+
+\begin{table}[h]
+  \centering
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \caption{移动底盘液体运输近邻工作与 \SPMPC{} 的层级差异}
+  \begin{tabular}{p{0.26\linewidth}p{0.30\linewidth}p{0.35\linewidth}}
+    \toprule
+    类型 & 代表工作 & 与 \SPMPC{} 的主要差异 \\
+    \midrule
+    固定路径、速度剖面与输入整形 & Hamaguchi 系列\cite{B04_Hamaguchi2002,B03_Hamaguchi2004,B02_Hamaguchi2005} & 多为预先设计路径或速度剖面，不是在每个控制周期求解局部 \MPCC{} \\
+    离线液体约束轨迹优化 & Lim 等\cite{B01_Lim2024} & 显式使用液体模型，但一次性优化整段轨迹，不是在线局部规划器 \\
+    时间最优规划与跟踪控制 & Nguyen Viet 等\cite{B11_Viet2025} & 以参考轨迹规划和鲁棒跟踪为主，不直接对应标准导航栈局部规划接口 \\
+    特殊平台 \MPC{} 跟踪控制 & Prabakaran 等\cite{B12_Prabakaran2026} & 证明晃液感知 \MPC{} 或跟踪控制已有研究，但平台和任务接口不同于标准 WMR 在线 \MPCC{} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{跨平台防晃建模、轨迹生成与预测控制}
+
+液体晃动不仅出现在移动底盘，也广泛存在于机械臂、SCARA、液体容器转运系统、液罐车、船舶和其他专用机构中。这类研究提供了重要的方法基础：低阶等效模型可用于在线预测，高保真 VOF、CFD、FEM 或 SPH 模型可用于理解复杂液面现象，输入整形可减少激励，预测控制或 \MPC{} 可把液体状态纳入控制优化。
+
+例如，低阶晃液估计研究说明可以用等效摆、质量--弹簧--阻尼或模态状态描述主导晃液响应\cite{A02_Guagliumi2021,A01_Leva2021}；输入整形研究说明命令预整形可降低残余振动\cite{A07_Singer1990}；Okatsuka 等关于液体容器转运系统的研究已经将晃液动力学纳入预测控制或 \MPC{} 框架\cite{A12_Okatsuka2011,C05_Okatsuka2012}；机械臂和机器人操作中的防晃轨迹优化、容器姿态补偿和跟踪控制也说明显式液体模型对运动生成有价值\cite{C02_Muchacho2022,C03_Moriello2018,C06_Viet2024}。
+
+这类文献的作用是两方面的。第一，它们为本文使用低阶晃液状态提供理论和方法背景。第二，它们提醒本文必须避免过度宣称：\SPMPC{} 不是第一个晃液感知 \MPC{}，也不是第一个防晃轨迹优化方法。它们通常不作为同层实验基线，因为它们的平台、控制输入、自由度和部署接口不同于标准轮式移动底盘局部规划器。
+
+\subsection{相关工作的最终定位}
+
+相关工作的收束句可以写成：
+\begin{quote}
+已有研究分别建立了低阶晃液建模、防晃预测控制、移动底盘液体运输以及移动机器人在线局部规划的基础。本文关注的是这些方向的交叉处：面向标准轮式移动底盘的在线滚动时域 \MPCC{} 局部规划器。该规划器显式传播液体模态状态，并在同一预测时域内联合优化路径进度、路径跟踪、底盘控制、控制平滑性和预测晃液响应。
+\end{quote}
+
+\section{方法总结}
+
+\subsection{方法目标与边界}
+
+\SPMPC{} 的目标是在给定安全参考路径附近，为携带开口液体容器的标准轮式移动底盘生成在线、可执行且晃液感知的局部运动命令。它不是高保真自由液面仿真器，也不是真实液面高度估计器；它是在移动机器人局部规划层引入足够低维的液体动态记忆。
+
+方法边界可总结为：
+\begin{quote}
+在每个控制周期，\SPMPC{} 接收当前底盘状态、路径进度、上一帧控制量和模型传播得到的晃液状态，求解一个包含机器人动力学、路径进度和低阶晃液动力学的有限时域 \MPCC{} 问题，并只执行第一帧底盘速度命令。
+\end{quote}
+
+输出仍是标准底盘接口，例如：
+\begin{equation}
+  \texttt{/cmd\_vel} = (v_{\mathrm{cmd}},\omega_{\mathrm{cmd}}).
+\end{equation}
+
+\subsection{机器人与路径进度状态}
+
+为同时表达路径跟踪、底盘可执行性和沿路径推进，\SPMPC{} 使用 alpha-state \MPCC{} 表述。机器人与路径进度状态为
+\begin{equation}
+  \xr =
+  \begin{bmatrix}
+    p_x & p_y & \theta & v & s & \omega
+  \end{bmatrix}^{\top},
+\end{equation}
+其中 $(p_x,p_y)$ 是底盘位置，$\theta$ 是航向角，$v$ 是线速度，$\omega$ 是角速度，$s$ 是路径进度。控制输入为
+\begin{equation}
+  \vu =
+  \begin{bmatrix}
+    a & \alpha & v_s
+  \end{bmatrix}^{\top},
+\end{equation}
+其中 $a$ 是线加速度，$\alpha=\dot{\omega}$ 是角加速度，$v_s=\dot{s}$ 是虚拟路径进度速度。连续时间机器人模型为
+\begin{equation}
+\begin{aligned}
+  \dot{p}_x &= v\cos\theta, &
+  \dot{p}_y &= v\sin\theta, &
+  \dot{\theta} &= \omega, \\
+  \dot{v} &= a, &
+  \dot{s} &= v_s, &
+  \dot{\omega} &= \alpha .
+\end{aligned}
+\end{equation}
+
+这里 $s$ 和 $v_s$ 表明本文不是单纯跟踪控制器，而是具有路径进度优化的局部规划器。$\omega$ 作为状态、$\alpha$ 作为控制，也便于约束转向变化，并表达转弯带来的横向晃液激励。
+
+\subsection{低阶晃液状态与增强模型}
+
+每个方向的低阶晃液状态定义为
+\begin{equation}
+  x_{s,i}=\begin{bmatrix}\eta_i & \dot{\eta}_i\end{bmatrix}^{\top},
+  \qquad i\in\{x,y\},
+\end{equation}
+其中 $\eta_i$ 表示主导晃液模态位移，$\dot{\eta}_i$ 表示模态速度。二阶模态动力学为
+\begin{equation}
+  \ddot{\eta}_i + 2\zeta_i\omega_i\dot{\eta}_i + \omega_i^2\eta_i = -\kappa_i a_i,
+\end{equation}
+其中 $\omega_i$、$\zeta_i$、$\kappa_i$ 分别是等效固有频率、阻尼比和输入增益，$a_i$ 是容器水平激励。
+
+对于轮式底盘，当前方法采用以下控制友好的激励近似：
+\begin{equation}
+  a_x = a, \qquad a_y \approx v\omega .
+\end{equation}
+这表示纵向晃动主要由线加速度激发，横向晃动主要由转弯时的向心加速度近似激发。
+
+组合机器人状态和液体状态后，增强状态为
+\begin{equation}
+  \xaug =
+  \begin{bmatrix}
+    p_x & p_y & \theta & v & s & \omega &
+    \eta_x & \dot{\eta}_x & \eta_y & \dot{\eta}_y
+  \end{bmatrix}^{\top}.
+\end{equation}
+
+这一增强状态是 \SPMPC{} 的核心：普通局部规划器只知道机器人状态和路径误差，而 \SPMPC{} 还知道当前液体“晃到什么相位”，从而能在预测时域内选择更合适的未来运动。
+
+\subsection{轮廓误差、路径进度与最优控制问题}
+
+给定参考路径 $\bm{r}(s)$，定义切向 $\bm{t}(s)$、法向 $\bm{n}(s)$ 和位置误差 $\bm{e}(s)$。轮廓误差与滞后误差为
+\begin{equation}
+  \ec = \bm{n}(s)^{\top}\bm{e}(s),
+  \qquad
+  \el = \bm{t}(s)^{\top}\bm{e}(s).
+\end{equation}
+
+离散化增强动力学后，每个控制周期求解有限时域最优控制问题：
+\begin{equation}
+\begin{aligned}
+  \min_{\{\xaug_k,\vu_k\}_{k=0}^{N-1}} \quad
+  & \sum_{k=0}^{N-1}
+  \Big(
+    q_c e_{\mathrm{c},k}^{2}
+    + q_l e_{\mathrm{l},k}^{2}
+    - q_p v_{s,k}
+    + \|\vu_k\|_{R}^{2} \\
+  & \qquad\qquad
+    + \|\vu_k-\vu_{k-1}\|_{S}^{2}
+    + \|\bm{x}_{l,k}\|_{Q_s}^{2}
+  \Big)
+  + q_{c,N}e_{\mathrm{c},N}^{2}
+  + q_{l,N}e_{\mathrm{l},N}^{2}
+  + \|\bm{x}_{l,N}\|_{Q_{s,N}}^{2} \\
+  \mathrm{s.t.}\quad
+  & \xaug_0=\hat{\xaug}(t), \\
+  & \xaug_{k+1}=f_d(\xaug_k,\vu_k),\qquad k=0,\ldots,N-1, \\
+  & \xaug_k\in\mathcal{X},\qquad \vu_k\in\mathcal{U} .
+\end{aligned}
+\end{equation}
+
+目标函数各项的作用如下：
+\begin{table}[h]
+  \centering
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \caption{\SPMPC{} 目标函数各项的作用}
+  \begin{tabular}{p{0.24\linewidth}p{0.34\linewidth}p{0.32\linewidth}}
+    \toprule
+    代价项 & 优化作用 & 论文叙事作用 \\
+    \midrule
+    $q_c\ec^2$, $q_l\el^2$ & 控制路径横向误差和进度误差 & 保持局部规划器的路径跟踪能力 \\
+    $-q_p v_s$ & 奖励沿路径前进 & 避免靠停下来防晃 \\
+    $\|\vu\|_R^2$ & 限制控制幅值 & 保持底盘命令可执行 \\
+    $\|\vu_k-\vu_{k-1}\|_S^2$ & 平滑控制变化 & 覆盖普通平滑规划器的能力 \\
+    $\|\xl\|_{Q_s}^2$ & 惩罚预测晃液状态 & 本文新增的晃液感知规划项 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{为什么不是仅仅平滑轨迹}
+
+普通平滑规划器可以惩罚速度变化、加速度、jerk 或控制差分，这对减少晃液有帮助，但不充分。液体具有动态记忆：两段控制序列可能同样平滑、加速度幅值也相近，但由于它们与当前液体相位耦合不同，未来液体响应可能完全不同。
+
+因此，本文的关键论点是：
+\begin{quote}
+平滑性是防晃运动的必要条件，但不是充分条件。规划器不仅要知道未来底盘激励，还要知道当前液体相位；这正是显式传播晃液状态的作用。
+\end{quote}
+
+这也是后续消融实验需要比较 \texttt{B\_smooth} 和 \texttt{B\_ours} 的原因。
+
+\subsection{约束、命令生成与消融设计}
+
+典型约束包括底盘速度、角速度、线加速度、角加速度和路径进度速度约束：
+\begin{align}
+  0 \leq v_k \leq v_{\max}, \qquad
+  |\omega_k| \leq \omega_{\max}, \\
+  |a_k| \leq a_{\max}, \qquad
+  |\alpha_k| \leq \alpha_{\max}, \qquad
+  0 \leq v_{s,k} \leq v_{s,\max} .
+\end{align}
+
+也可以加入模型预测的晃液软约束，例如
+\begin{equation}
+  \eta_{x,k}^{2}+\eta_{y,k}^{2} \leq \eta_{\max}^{2}+\epsilon_k,
+  \qquad \epsilon_k\geq 0.
+\end{equation}
+但需要强调：这只是模型预测的晃液边界，不是形式化无溢出保证。
+
+每个周期求解后，只执行第一帧优化结果，例如
+\begin{equation}
+  v_{\mathrm{cmd}} = v_0+a_0^{\star}\Delta t,
+  \qquad
+  \omega_{\mathrm{cmd}}=\omega_0+\alpha_0^{\star}\Delta t.
+\end{equation}
+随后进入下一周期重新初始化和求解。
+
+后续实验可使用四类内部变体验证贡献来源：
+\begin{table}[h]
+  \centering
+  \small
+  \setlength{\tabcolsep}{4pt}
+  \caption{\SPMPC{} 内部消融变体}
+  \begin{tabular}{p{0.18\linewidth}p{0.22\linewidth}p{0.22\linewidth}p{0.28\linewidth}}
+    \toprule
+    变体 & 晃液模型/代价 & 平滑约束 & 回答的问题 \\
+    \midrule
+    \texttt{B0} & 无 & 弱 & 基础 \MPCC{} 能否完成路径跟踪 \\
+    \texttt{B\_smooth} & 无 & 强 & 只增强平滑性是否足够防晃 \\
+    \texttt{B\_slosh} & 有 & 弱 & 显式晃液状态预测是否有独立贡献 \\
+    \texttt{B\_ours} & 有 & 强 & 完整方法是否兼顾跟踪、平滑和防晃 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{建议和老师讨论的问题}
+
+\begin{enumerate}
+  \item 相关工作是否应采用“平台 + 问题层级”的组织方式：普通移动机器人局部规划器、移动底盘液体运输近邻、跨平台防晃背景？
+  \item DWA、TEB、\texttt{mpc\_local\_planner}、移动机器人 \MPCC{} 主干文献和局部规划器评价基准是否需要补成主文必引文献？
+  \item 移动底盘液体运输近邻中，哪些适合作为实验基线，哪些更适合作为概念对比或相关工作表格？
+  \item 是否认可本文的克制创新表述：不是首次提出晃液感知 \MPC{}，而是面向标准轮式移动底盘的在线 \MPCC{} 局部规划层晃液状态增强？
+  \item 方法中使用低阶二阶模态模型是否足以支撑第一版论文？是否需要更强调“模型预测晃液状态不是真实液面观测”？
+  \item 实验上是否应该优先验证 \texttt{B\_ours} 与 \texttt{B\_smooth} 的差异，以回答“是不是只是更平滑”的质疑？
+\end{enumerate}
+
+\section{一句话版本}
+
+如果需要用一句话向老师概括当前论文：
+\begin{quote}
+普通移动机器人局部规划器能在线输出可执行命令，但通常不传播液体动态状态；已有防晃方法显式考虑晃液，但多数处于离线轨迹、速度剖面、给定轨迹跟踪或特殊平台层。\SPMPC{} 面向标准轮式移动底盘，在在线 \MPCC{} 局部规划层中嵌入低阶晃液状态，在滚动时域内联合优化路径跟踪、路径进度、底盘控制平滑性和预测液体响应，并输出普通 \texttt{/cmd\_vel} 命令。
+\end{quote}
+
+\bibliographystyle{IEEEtran}
+\bibliography{../spmpc_paper_cn/references}
+
+\end{document}
