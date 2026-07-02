@@ -37,6 +37,11 @@ PATH_TEMPLATE="${PATH_TEMPLATE:-s_curve}"
 PATH_FILE="${PATH_FILE:-/home/geist/fixed_paths/real/${DATE}/P2_${PATH_TEMPLATE}.json}"
 SOLVER_BACKEND="${SOLVER_BACKEND:-continuous_mpcc_acados}"
 W_SLOSH="${W_SLOSH:--1.0}"
+V_REF="${V_REF:--1.0}"
+SLOSH_HEIGHT_MAX="${SLOSH_HEIGHT_MAX:--1.0}"
+DELAY_PHASE_MODE="${DELAY_PHASE_MODE:-off}"
+DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC:--1.0}"
+DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC:--1.0}"
 # 控制器本身不依赖 RGB/在线液面节点；下面两个开关只影响本实验脚本的 preflight/录包。
 REQUIRE_RGB_TRUTH="${REQUIRE_RGB_TRUTH:-true}"          # true: 要求 /camera/color/image_raw，用于离线 RGB 真值
 RECORD_RGB_CAMERA="${RECORD_RGB_CAMERA:-${REQUIRE_RGB_TRUTH}}"  # true: 录 RGB 原始图像/相机内参
@@ -61,8 +66,14 @@ first_cmd_v() { timeout 3s rostopic echo -n 1 /cmd_vel 2>/dev/null | awk '/x:/ {
 RECORD_TOPICS=(
   /cmd_vel /odom /tf /tf_static /imu/data
   "${REF_TOPIC}"
-  /spmpc/status /spmpc/solver_backend /spmpc/cost_breakdown /spmpc/slosh_horizon_summary
-  /spmpc/debug/slosh_state /spmpc/slosh_height /spmpc/debug/progress_s /spmpc/solver_time_ms /spmpc/local_trajectory
+  /spmpc/status /spmpc/controller_variant /spmpc/experiment_mode /spmpc/solver_backend
+  /spmpc/debug/effective_config /spmpc/cost_breakdown /spmpc/debug/slosh_cost_monitor
+  /spmpc/slosh_horizon_summary /spmpc/debug/slosh_hard_constraint /spmpc/debug/slosh_hard_constraint_effective
+  /spmpc/debug/slosh_state /spmpc/slosh_height /spmpc/debug/progress_s /spmpc/debug/v_ref_current
+  /spmpc/solver_time_ms /spmpc/local_trajectory
+  /spmpc/debug/delay_phase /spmpc/debug/odom_timing /spmpc/debug/execution_state
+  /spmpc/debug/execution_alignment_status /spmpc/debug/delay_compensation /spmpc/debug/cmd_odom_alignment
+  /spmpc/debug/cmd_vel_output /spmpc/debug/cmd_vel_output_status
 )
 if [[ "${RECORD_RGB_CAMERA}" == "true" ]]; then
   RECORD_TOPICS+=(/camera/color/image_raw /camera/color/camera_info)
@@ -71,7 +82,7 @@ if [[ "${RECORD_ONLINE_LIQUID}" == "true" ]]; then
   RECORD_TOPICS+=(/liquid/height /liquid/height_lcr /liquid/height_median)
 fi
 
-echo "================ 实物 continuous: ${VARIANT} (w_slosh=${W_SLOSH}) -> ${BAG_DIR}/${BAG_NAME}.bag ================"
+echo "================ 实物 continuous: ${VARIANT} (w_slosh=${W_SLOSH}, v_ref=${V_REF}, slosh_height_max=${SLOSH_HEIGHT_MAX}, delay_phase=${DELAY_PHASE_MODE}) -> ${BAG_DIR}/${BAG_NAME}.bag ================"
 
 # ---- acados 环境 preflight ----
 if [[ "${SOLVER_BACKEND}" == "continuous_mpcc_acados" ]]; then
@@ -108,6 +119,24 @@ fi
 
 mkdir -p "$BAG_DIR" "$(dirname "$PATH_FILE")"
 bag="${BAG_DIR}/${BAG_NAME}.bag"
+meta="${BAG_DIR}/${BAG_NAME}_run_meta.env"
+{
+  echo "variant=${VARIANT}"
+  echo "solver_backend=${SOLVER_BACKEND}"
+  echo "w_slosh=${W_SLOSH}"
+  echo "v_ref=${V_REF}"
+  echo "slosh_height_max=${SLOSH_HEIGHT_MAX}"
+  echo "delay_phase_mode=${DELAY_PHASE_MODE}"
+  echo "delay_phase_linear_delay_sec=${DELAY_PHASE_LINEAR_DELAY_SEC}"
+  echo "delay_phase_angular_delay_sec=${DELAY_PHASE_ANGULAR_DELAY_SEC}"
+  echo "record_sec=${RECORD_SEC}"
+  echo "reference_topic=${REF_TOPIC}"
+  echo "path_template=${PATH_TEMPLATE}"
+  echo "path_file=${PATH_FILE}"
+  printf 'record_topics='
+  printf '%s ' "${RECORD_TOPICS[@]}"
+  printf '\n'
+} >"${meta}"
 
 echo "[path] 生成模板路径(从当前车位姿到同一 goal): template=${PATH_TEMPLATE} -> ${REF_TOPIC}"
 rosrun scout_local_planner template_fixed_path_generator.py \
@@ -130,10 +159,13 @@ if ! timeout 10s rostopic echo -n 1 "${REF_TOPIC}/header" >/dev/null; then
 fi
 echo "[json] $(ls -lh "${PATH_FILE}" 2>/dev/null | awk '{print $5, $9}')"
 
-echo "[launch] planner_variant=${VARIANT} solver_backend=${SOLVER_BACKEND} w_slosh=${W_SLOSH}"
+echo "[launch] planner_variant=${VARIANT} solver_backend=${SOLVER_BACKEND} w_slosh=${W_SLOSH} v_ref=${V_REF} slosh_height_max=${SLOSH_HEIGHT_MAX} delay_phase=${DELAY_PHASE_MODE}"
 roslaunch spmpc_local_planner spmpc_fixed_path.launch \
   planner_variant:="${VARIANT}" reference_path_topic:="${REF_TOPIC}" \
-  solver_backend:="${SOLVER_BACKEND}" w_slosh:="${W_SLOSH}" \
+  solver_backend:="${SOLVER_BACKEND}" w_slosh:="${W_SLOSH}" v_ref:="${V_REF}" \
+  slosh_height_max:="${SLOSH_HEIGHT_MAX}" delay_phase_mode:="${DELAY_PHASE_MODE}" \
+  delay_phase_linear_delay_sec:="${DELAY_PHASE_LINEAR_DELAY_SEC}" \
+  delay_phase_angular_delay_sec:="${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
   >"${BAG_DIR}/${BAG_NAME}_planner.log" 2>&1 &
 planner_pid=$!
 sleep 4
@@ -166,6 +198,7 @@ echo
 echo "================ ${VARIANT} 完成 ================"
 echo "  末态 status = ${status_end:-NA}"
 echo "  bag         = ${bag}"
+echo "  meta        = ${meta}"
 echo
 echo ">>> 离线算 RGB 真值(max-LCR 液面高度):"
 echo "    python3 src/scout_apps/sensors/realsense_liquid_measurement/scripts/red_liquid_infer_from_bag.py \\"

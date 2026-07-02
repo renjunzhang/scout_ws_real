@@ -86,6 +86,80 @@ struct CostBreakdown {
     }
 };
 
+struct SloshHardConstraintDebug {
+    bool enabled = false;
+    double h_limit = 0.0;
+    double height_coeff = 0.0;
+    double eta_max = 0.0;
+    double eta_max_sq = 0.0;
+    double h_peak_pred = 0.0;
+    double h_limit_margin = 0.0;
+    int peak_k = 0;
+    bool modal_only = true;
+    bool observer_uses_parabola = false;
+};
+
+struct SloshCostMonitor {
+    double J_slosh_eta = 0.0;
+    double J_slosh_eta_dot = 0.0;
+    double J_slosh_total = 0.0;
+    double abs_cost_sum = 0.0;
+    double pct_slosh_total_abs_sum = 0.0;
+    double pct_eta_in_slosh = 0.0;
+    double pct_eta_dot_in_slosh = 0.0;
+    double eta_ref = 0.0;
+    double eta_dot_ref = 0.0;
+    double omega_n = 0.0;
+    double height_coeff = 0.0;
+    double slosh_eta_dot_ratio = 0.0;
+    double eta_norm_peak = 0.0;
+    double eta_dot_norm_peak = 0.0;
+};
+
+struct EffectiveConfigDebug {
+    double solver_backend_code = 0.0;
+    double control_frequency = 0.0;
+    double dt = 0.0;
+    double horizon_steps = 0.0;
+    double slosh_enable = 0.0;
+    double slosh_constraint_enable = 0.0;
+    double smooth_priority_enable = 0.0;
+    double primitive_mode_code = 0.0;
+    double v_ref = 0.0;
+    double w_slosh = 0.0;
+    double w_control = 0.0;
+    double w_smooth = 0.0;
+    double w_accel = 0.0;
+    double w_alpha = 0.0;
+    double w_du_a = 0.0;
+    double w_du_vs = 0.0;
+    double v_max = 0.0;
+    double omega_max = 0.0;
+    double a_max = 0.0;
+    double alpha_max = 0.0;
+    double shared_linear_accel_limit_enable = 0.0;
+    double shared_linear_accel_max = 0.0;
+    double shared_linear_accel_max_dt = 0.0;
+    double shared_angular_limit_enable = 0.0;
+    double shared_angular_rate_max = 0.0;
+    double shared_angular_accel_max = 0.0;
+    double shared_angular_accel_max_dt = 0.0;
+    double container_radius = 0.0;
+    double liquid_height = 0.0;
+    double damping_ratio = 0.0;
+    double slosh_height_ref = 0.0;
+    double slosh_height_max = 0.0;
+    double slosh_eta_dot_ratio = 0.0;
+    double use_parabola_term = 0.0;
+    double delay_phase_mode_code = 0.0;
+    double delay_linear_sec = 0.0;
+    double delay_angular_sec = 0.0;
+    double delay_cmd_timeout_sec = 0.0;
+    double delay_odom_timeout_sec = 0.0;
+    double delay_history_window_sec = 0.0;
+    double delay_require_complete_history = 0.0;
+};
+
 struct SolverBoundSummary {
     double a_min = 0.0;
     double a_max = 0.0;
@@ -260,6 +334,8 @@ struct SolverOutput {
     LocalTrajectoryHeadDebugSummary local_traj_head_debug;
     WarmStartHeadDebugSummary warm_start_head_debug;
     StartLockRecoveryDiagnostics start_lock_recovery;
+    SloshHardConstraintDebug slosh_hard_constraint;
+    SloshCostMonitor slosh_cost_monitor;
     CostBreakdown cost;
 };
 

@@ -618,11 +618,13 @@ bool ContinuousMpccSolverAcados::solve(
 
     // slosh 物理：取自同一套 slosh_dynamics 核（§4.3），κ=1（与 slosh_models 的单位输入增益一致）。
     double c_h = 1.0, eta_ref = 1.0, eta_dot_ref = 1.0;
+    double eta_max = 0.0;
     double eta_max_sq = kDisabledEtaMaxSq;
     double h_limit = 0.0;
+    double omega_n = 0.0;
     double two_zeta_omega_n = 0.0, omega_n_sq = 0.0;
     if (slosh && slosh_dyn_.configured()) {
-        const double omega_n = slosh_dyn_.omegaN();
+        omega_n = slosh_dyn_.omegaN();
         const double zeta = params_.slosh.damping_ratio;
         const double h_ref = std::max(1e-4, params_.slosh.slosh_height_ref);
         c_h = std::max(1e-6, slosh_dyn_.heightCoeff());
@@ -632,7 +634,7 @@ bool ContinuousMpccSolverAcados::solve(
         eta_dot_ref = std::max(1e-6, omega_n * h_ref);
         if (variant_.slosh_constraint_enable) {
             h_limit = std::max(1e-6, params_.slosh.slosh_height_max);
-            const double eta_max = std::max(1e-6, h_limit / c_h);
+            eta_max = std::max(1e-6, h_limit / c_h);
             eta_max_sq = eta_max * eta_max;
         }
     }
@@ -640,6 +642,19 @@ bool ContinuousMpccSolverAcados::solve(
                                                    eta_max_sq < kDisabledEtaMaxSq);
     output.slosh_summary.h_limit = h_limit;
     output.slosh_summary.h_limit_margin = h_limit;
+    output.slosh_hard_constraint.enabled = output.slosh_summary.hard_constraint_enable;
+    output.slosh_hard_constraint.h_limit = h_limit;
+    output.slosh_hard_constraint.height_coeff = c_h;
+    output.slosh_hard_constraint.eta_max = output.slosh_summary.hard_constraint_enable ? eta_max : 0.0;
+    output.slosh_hard_constraint.eta_max_sq = output.slosh_summary.hard_constraint_enable ? eta_max_sq : 0.0;
+    output.slosh_hard_constraint.h_limit_margin = h_limit;
+    output.slosh_hard_constraint.modal_only = true;
+    output.slosh_hard_constraint.observer_uses_parabola = params_.slosh.use_parabola_term;
+    output.slosh_cost_monitor.eta_ref = eta_ref;
+    output.slosh_cost_monitor.eta_dot_ref = eta_dot_ref;
+    output.slosh_cost_monitor.omega_n = omega_n;
+    output.slosh_cost_monitor.height_coeff = c_h;
+    output.slosh_cost_monitor.slosh_eta_dot_ratio = params_.slosh.slosh_eta_dot_ratio;
 
     double p[PARAM_MAX];
     for (int i = 0; i < PARAM_MAX; ++i) p[i] = 0.0;
@@ -796,6 +811,8 @@ bool ContinuousMpccSolverAcados::solve(
             output.slosh_summary.eta_x_peak = std::max(output.slosh_summary.eta_x_peak, std::abs(ex));
             output.slosh_summary.eta_y_peak = std::max(output.slosh_summary.eta_y_peak, std::abs(ey));
             output.slosh_summary.eta_dot_norm_peak = std::max(output.slosh_summary.eta_dot_norm_peak, eta_dot_norm);
+            output.slosh_cost_monitor.eta_norm_peak = std::max(output.slosh_cost_monitor.eta_norm_peak, eta_norm);
+            output.slosh_cost_monitor.eta_dot_norm_peak = std::max(output.slosh_cost_monitor.eta_dot_norm_peak, eta_dot_norm);
             output.cost.J_slosh_eta += variant_.w_slosh * (eta_norm / eta_ref) * (eta_norm / eta_ref) * inv_n;
             output.cost.J_slosh_eta_dot += variant_.w_slosh * params_.slosh.slosh_eta_dot_ratio *
                 (eta_dot_norm / eta_dot_ref) * (eta_dot_norm / eta_dot_ref) * inv_n;
@@ -868,6 +885,23 @@ bool ContinuousMpccSolverAcados::solve(
     if (output.slosh_summary.hard_constraint_enable) {
         output.slosh_summary.h_limit_margin = output.slosh_summary.h_limit - output.slosh_summary.h_peak_pred;
     }
+    output.slosh_hard_constraint.h_peak_pred = output.slosh_summary.h_peak_pred;
+    output.slosh_hard_constraint.h_limit_margin = output.slosh_summary.h_limit_margin;
+    output.slosh_hard_constraint.peak_k = output.slosh_summary.peak_k;
+
+    const double abs_sum =
+        std::abs(output.cost.J_contour) + std::abs(output.cost.J_lag) + std::abs(output.cost.J_progress) +
+        std::abs(output.cost.J_v) + std::abs(output.cost.J_control) + std::abs(output.cost.J_smooth) +
+        std::abs(output.cost.J_terminal) + std::abs(output.cost.J_corridor) + std::abs(output.cost.J_obstacle) +
+        std::abs(output.cost.J_slosh_eta) + std::abs(output.cost.J_slosh_eta_dot);
+    const double slosh_abs = std::abs(output.cost.J_slosh_eta) + std::abs(output.cost.J_slosh_eta_dot);
+    output.slosh_cost_monitor.J_slosh_eta = output.cost.J_slosh_eta;
+    output.slosh_cost_monitor.J_slosh_eta_dot = output.cost.J_slosh_eta_dot;
+    output.slosh_cost_monitor.J_slosh_total = output.cost.J_slosh_eta + output.cost.J_slosh_eta_dot;
+    output.slosh_cost_monitor.abs_cost_sum = abs_sum;
+    output.slosh_cost_monitor.pct_slosh_total_abs_sum = abs_sum > 1e-9 ? 100.0 * slosh_abs / abs_sum : 0.0;
+    output.slosh_cost_monitor.pct_eta_in_slosh = slosh_abs > 1e-9 ? 100.0 * std::abs(output.cost.J_slosh_eta) / slosh_abs : 0.0;
+    output.slosh_cost_monitor.pct_eta_dot_in_slosh = slosh_abs > 1e-9 ? 100.0 * std::abs(output.cost.J_slosh_eta_dot) / slosh_abs : 0.0;
 
     // u = [a, alpha, v_s]; v_s 是虚拟路径进度速度，不直接作为 /cmd_vel.linear.x。
     // omega 是状态：下发角速度 = 实测 omega + alpha_0*dt（与 cmd_v 同口径单步积分）。

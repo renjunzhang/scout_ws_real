@@ -8,6 +8,7 @@
   <arg name="solver_backend" default="continuous_mpcc_acados" doc="continuous_mpcc_acados(mainline)|continuous_mpcc_direct_omega_legacy(RouteB diagnostic)|primitive(debug fallback)"/>
   <arg name="w_slosh" default="-1.0" doc="覆盖 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
   <arg name="v_ref" default="-1.0" doc="诊断/消融用: 覆盖 v_ref; 负值时用 variants.yaml 原值"/>
+  <arg name="slosh_height_max" default="-1.0" doc="覆盖 slosh/slosh_height_max(m); 负值时用 container yaml"/>
   <arg name="w_alpha" default="-1.0"/>
   <arg name="w_du_a" default="-1.0"/>
   <arg name="w_du_vs" default="-1.0"/>
@@ -34,6 +35,7 @@
     <arg name="solver_backend" value="$(arg solver_backend)"/>
     <arg name="w_slosh" value="$(arg w_slosh)"/>
     <arg name="v_ref" value="$(arg v_ref)"/>
+    <arg name="slosh_height_max" value="$(arg slosh_height_max)"/>
     <arg name="w_alpha" value="$(arg w_alpha)"/>
     <arg name="w_du_a" value="$(arg w_du_a)"/>
     <arg name="w_du_vs" value="$(arg w_du_vs)"/>

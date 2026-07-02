@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
+#include <cmath>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
@@ -9,6 +10,7 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     variant_pub_ = nh.advertise<std_msgs::String>("controller_variant", 1, true);
     experiment_mode_pub_ = nh.advertise<std_msgs::String>("experiment_mode", 1, true);
     solver_backend_pub_ = nh.advertise<std_msgs::String>("solver_backend", 1, true);
+    effective_config_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/effective_config", 1, true);
     trajectory_pub_ = nh.advertise<nav_msgs::Path>("local_trajectory", 1, true);
     progress_pub_ = nh.advertise<std_msgs::Float32>("debug/progress_s", 1);
     v_ref_current_pub_ = nh.advertise<std_msgs::Float32>("debug/v_ref_current", 1);
@@ -22,6 +24,8 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     slosh_height_pub_ = nh.advertise<std_msgs::Float32>("slosh_height", 1);
     slosh_horizon_summary_pub_ = nh.advertise<std_msgs::Float32MultiArray>("slosh_horizon_summary", 1);
     slosh_hard_constraint_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_hard_constraint", 1);
+    slosh_hard_constraint_effective_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_hard_constraint_effective", 1);
+    slosh_cost_monitor_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_cost_monitor", 1);
     warm_start_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/warm_start", 1);
     warm_start_status_pub_ = nh.advertise<std_msgs::String>("debug/warm_start_status", 1);
     runtime_bounds_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/runtime_bounds", 1);
@@ -38,6 +42,7 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     execution_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/execution_state", 1);
     execution_alignment_status_pub_ = nh.advertise<std_msgs::String>("debug/execution_alignment_status", 1);
     delay_compensation_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/delay_compensation", 1);
+    cmd_odom_alignment_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/cmd_odom_alignment", 1);
     terminal_pub_ = nh.advertise<std_msgs::Float32MultiArray>("terminal/debug", 1);
     terminal_mode_pub_ = nh.advertise<std_msgs::String>("terminal/mode", 1);
     start_lock_active_pub_ = nh.advertise<std_msgs::Float32>("start_lock/active", 1);
@@ -60,6 +65,58 @@ void DiagnosticsPublisher::publishSolverBackend(const std::string& solver_backen
     std_msgs::String msg;
     msg.data = solver_backend;
     solver_backend_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& config) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label =
+        "solver_backend_code,control_frequency,dt,horizon_steps,slosh_enable,slosh_constraint_enable,smooth_priority_enable,primitive_mode_code,v_ref,w_slosh,w_control,w_smooth,w_accel,w_alpha,w_du_a,w_du_vs,v_max,omega_max,a_max,alpha_max,shared_linear_accel_limit_enable,shared_linear_accel_max,shared_linear_accel_max_dt,shared_angular_limit_enable,shared_angular_rate_max,shared_angular_accel_max,shared_angular_accel_max_dt,container_radius,liquid_height,damping_ratio,slosh_height_ref,slosh_height_max,slosh_eta_dot_ratio,use_parabola_term,delay_phase_mode_code,delay_linear_sec,delay_angular_sec,delay_cmd_timeout_sec,delay_odom_timeout_sec,delay_history_window_sec,delay_require_complete_history";
+    msg.layout.dim[0].size = 41;
+    msg.layout.dim[0].stride = 41;
+    msg.data.resize(41, 0.0f);
+    msg.data[0] = static_cast<float>(config.solver_backend_code);
+    msg.data[1] = static_cast<float>(config.control_frequency);
+    msg.data[2] = static_cast<float>(config.dt);
+    msg.data[3] = static_cast<float>(config.horizon_steps);
+    msg.data[4] = static_cast<float>(config.slosh_enable);
+    msg.data[5] = static_cast<float>(config.slosh_constraint_enable);
+    msg.data[6] = static_cast<float>(config.smooth_priority_enable);
+    msg.data[7] = static_cast<float>(config.primitive_mode_code);
+    msg.data[8] = static_cast<float>(config.v_ref);
+    msg.data[9] = static_cast<float>(config.w_slosh);
+    msg.data[10] = static_cast<float>(config.w_control);
+    msg.data[11] = static_cast<float>(config.w_smooth);
+    msg.data[12] = static_cast<float>(config.w_accel);
+    msg.data[13] = static_cast<float>(config.w_alpha);
+    msg.data[14] = static_cast<float>(config.w_du_a);
+    msg.data[15] = static_cast<float>(config.w_du_vs);
+    msg.data[16] = static_cast<float>(config.v_max);
+    msg.data[17] = static_cast<float>(config.omega_max);
+    msg.data[18] = static_cast<float>(config.a_max);
+    msg.data[19] = static_cast<float>(config.alpha_max);
+    msg.data[20] = static_cast<float>(config.shared_linear_accel_limit_enable);
+    msg.data[21] = static_cast<float>(config.shared_linear_accel_max);
+    msg.data[22] = static_cast<float>(config.shared_linear_accel_max_dt);
+    msg.data[23] = static_cast<float>(config.shared_angular_limit_enable);
+    msg.data[24] = static_cast<float>(config.shared_angular_rate_max);
+    msg.data[25] = static_cast<float>(config.shared_angular_accel_max);
+    msg.data[26] = static_cast<float>(config.shared_angular_accel_max_dt);
+    msg.data[27] = static_cast<float>(config.container_radius);
+    msg.data[28] = static_cast<float>(config.liquid_height);
+    msg.data[29] = static_cast<float>(config.damping_ratio);
+    msg.data[30] = static_cast<float>(config.slosh_height_ref);
+    msg.data[31] = static_cast<float>(config.slosh_height_max);
+    msg.data[32] = static_cast<float>(config.slosh_eta_dot_ratio);
+    msg.data[33] = static_cast<float>(config.use_parabola_term);
+    msg.data[34] = static_cast<float>(config.delay_phase_mode_code);
+    msg.data[35] = static_cast<float>(config.delay_linear_sec);
+    msg.data[36] = static_cast<float>(config.delay_angular_sec);
+    msg.data[37] = static_cast<float>(config.delay_cmd_timeout_sec);
+    msg.data[38] = static_cast<float>(config.delay_odom_timeout_sec);
+    msg.data[39] = static_cast<float>(config.delay_history_window_sec);
+    msg.data[40] = static_cast<float>(config.delay_require_complete_history);
+    effective_config_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishCommandOutput(const geometry_msgs::Twist& desired,
@@ -186,6 +243,39 @@ void DiagnosticsPublisher::publishDelayCompensation(const DelayPhaseDebugSummary
     msg.data[4] = summary.shadow_valid ? 1.0f : 0.0f;
     msg.data[5] = static_cast<float>(static_cast<int>(summary.status_code));
     delay_compensation_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishCmdOdomAlignment(const CmdOdomAlignmentDebug& alignment) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label =
+        "mode_code,cmd_age_ms,cmd_period_ms,odom_age_ms,odom_period_ms,linear_delay_ms,angular_delay_ms,history_span_ms,covered_history_ms,missing_history_ms,history_complete,shadow_valid,fixed_closed_loop_configured,fixed_closed_loop_applied,status_code,dx_pred_raw,dy_pred_raw,dyaw_pred_raw,dv_pred_raw,domega_pred_raw,deta_norm_pred_raw,deta_dot_norm_pred_raw";
+    msg.layout.dim[0].size = 22;
+    msg.layout.dim[0].stride = 22;
+    msg.data.resize(22, 0.0f);
+    msg.data[0] = static_cast<float>(static_cast<int>(alignment.mode));
+    msg.data[1] = static_cast<float>(alignment.cmd_age_ms);
+    msg.data[2] = static_cast<float>(alignment.cmd_period_ms);
+    msg.data[3] = static_cast<float>(alignment.odom_age_ms);
+    msg.data[4] = static_cast<float>(alignment.odom_period_ms);
+    msg.data[5] = static_cast<float>(alignment.linear_delay_ms);
+    msg.data[6] = static_cast<float>(alignment.angular_delay_ms);
+    msg.data[7] = static_cast<float>(alignment.history_span_ms);
+    msg.data[8] = static_cast<float>(alignment.covered_history_ms);
+    msg.data[9] = static_cast<float>(alignment.missing_history_ms);
+    msg.data[10] = alignment.history_complete ? 1.0f : 0.0f;
+    msg.data[11] = alignment.shadow_valid ? 1.0f : 0.0f;
+    msg.data[12] = alignment.fixed_closed_loop_configured ? 1.0f : 0.0f;
+    msg.data[13] = alignment.fixed_closed_loop_applied ? 1.0f : 0.0f;
+    msg.data[14] = static_cast<float>(static_cast<int>(alignment.status_code));
+    msg.data[15] = static_cast<float>(alignment.dx_pred_raw);
+    msg.data[16] = static_cast<float>(alignment.dy_pred_raw);
+    msg.data[17] = static_cast<float>(alignment.dyaw_pred_raw);
+    msg.data[18] = static_cast<float>(alignment.dv_pred_raw);
+    msg.data[19] = static_cast<float>(alignment.domega_pred_raw);
+    msg.data[20] = static_cast<float>(alignment.deta_norm_pred_raw);
+    msg.data[21] = static_cast<float>(alignment.deta_dot_norm_pred_raw);
+    cmd_odom_alignment_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::string& frame_id) {
@@ -489,6 +579,30 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     cost.data[21] = static_cast<float>(100.0 * (output.cost.J_slosh_eta + output.cost.J_slosh_eta_dot) / denom);
     cost_breakdown_pub_.publish(cost);
 
+    const auto& sm = output.slosh_cost_monitor;
+    std_msgs::Float32MultiArray slosh_cost;
+    slosh_cost.layout.dim.resize(1);
+    slosh_cost.layout.dim[0].label =
+        "J_slosh_eta,J_slosh_eta_dot,J_slosh_total,abs_cost_sum,pct_slosh_total_abs_sum,pct_eta_in_slosh,pct_eta_dot_in_slosh,eta_ref,eta_dot_ref,omega_n,height_coeff,slosh_eta_dot_ratio,eta_norm_peak,eta_dot_norm_peak";
+    slosh_cost.layout.dim[0].size = 14;
+    slosh_cost.layout.dim[0].stride = 14;
+    slosh_cost.data.resize(14, 0.0f);
+    slosh_cost.data[0] = static_cast<float>(sm.J_slosh_eta);
+    slosh_cost.data[1] = static_cast<float>(sm.J_slosh_eta_dot);
+    slosh_cost.data[2] = static_cast<float>(sm.J_slosh_total);
+    slosh_cost.data[3] = static_cast<float>(sm.abs_cost_sum);
+    slosh_cost.data[4] = static_cast<float>(sm.pct_slosh_total_abs_sum);
+    slosh_cost.data[5] = static_cast<float>(sm.pct_eta_in_slosh);
+    slosh_cost.data[6] = static_cast<float>(sm.pct_eta_dot_in_slosh);
+    slosh_cost.data[7] = static_cast<float>(sm.eta_ref);
+    slosh_cost.data[8] = static_cast<float>(sm.eta_dot_ref);
+    slosh_cost.data[9] = static_cast<float>(sm.omega_n);
+    slosh_cost.data[10] = static_cast<float>(sm.height_coeff);
+    slosh_cost.data[11] = static_cast<float>(sm.slosh_eta_dot_ratio);
+    slosh_cost.data[12] = static_cast<float>(sm.eta_norm_peak);
+    slosh_cost.data[13] = static_cast<float>(sm.eta_dot_norm_peak);
+    slosh_cost_monitor_pub_.publish(slosh_cost);
+
     std_msgs::Float32MultiArray corridor;
     corridor.layout.dim.resize(1);
     corridor.layout.dim[0].label =
@@ -558,6 +672,26 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     hard.data[3] = static_cast<float>(1000.0 * output.slosh_summary.h_limit_margin);
     hard.data[4] = static_cast<float>(output.slosh_summary.peak_k);
     slosh_hard_constraint_pub_.publish(hard);
+
+    const auto& hc = output.slosh_hard_constraint;
+    std_msgs::Float32MultiArray hard_effective;
+    hard_effective.layout.dim.resize(1);
+    hard_effective.layout.dim[0].label =
+        "enabled,h_limit_mm,height_coeff,eta_max,eta_max_sq,h_peak_pred_mm,margin_mm,peak_k,modal_only,observer_uses_parabola";
+    hard_effective.layout.dim[0].size = 10;
+    hard_effective.layout.dim[0].stride = 10;
+    hard_effective.data.resize(10, 0.0f);
+    hard_effective.data[0] = hc.enabled ? 1.0f : 0.0f;
+    hard_effective.data[1] = static_cast<float>(1000.0 * hc.h_limit);
+    hard_effective.data[2] = static_cast<float>(hc.height_coeff);
+    hard_effective.data[3] = static_cast<float>(hc.eta_max);
+    hard_effective.data[4] = static_cast<float>(hc.eta_max_sq);
+    hard_effective.data[5] = static_cast<float>(1000.0 * hc.h_peak_pred);
+    hard_effective.data[6] = static_cast<float>(1000.0 * hc.h_limit_margin);
+    hard_effective.data[7] = static_cast<float>(hc.peak_k);
+    hard_effective.data[8] = hc.modal_only ? 1.0f : 0.0f;
+    hard_effective.data[9] = hc.observer_uses_parabola ? 1.0f : 0.0f;
+    slosh_hard_constraint_effective_pub_.publish(hard_effective);
 }
 
 void DiagnosticsPublisher::publishSloshState(const SloshState& state) {

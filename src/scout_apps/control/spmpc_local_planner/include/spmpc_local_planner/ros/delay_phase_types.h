@@ -92,6 +92,31 @@ struct DelayPhaseDebugSummary {
     DelayPhaseStatusCode status_code = DelayPhaseStatusCode::Off;
 };
 
+struct CmdOdomAlignmentDebug {
+    DelayPhaseMode mode = DelayPhaseMode::Off;
+    double cmd_age_ms = 0.0;
+    double cmd_period_ms = 0.0;
+    double odom_age_ms = 0.0;
+    double odom_period_ms = 0.0;
+    double linear_delay_ms = 0.0;
+    double angular_delay_ms = 0.0;
+    double history_span_ms = 0.0;
+    double covered_history_ms = 0.0;
+    double missing_history_ms = 0.0;
+    bool history_complete = false;
+    bool shadow_valid = false;
+    bool fixed_closed_loop_configured = false;
+    bool fixed_closed_loop_applied = false;
+    DelayPhaseStatusCode status_code = DelayPhaseStatusCode::Off;
+    double dx_pred_raw = 0.0;
+    double dy_pred_raw = 0.0;
+    double dyaw_pred_raw = 0.0;
+    double dv_pred_raw = 0.0;
+    double domega_pred_raw = 0.0;
+    double deta_norm_pred_raw = 0.0;
+    double deta_dot_norm_pred_raw = 0.0;
+};
+
 inline std::string delayPhaseModeName(DelayPhaseMode mode) {
     switch (mode) {
     case DelayPhaseMode::Monitor:

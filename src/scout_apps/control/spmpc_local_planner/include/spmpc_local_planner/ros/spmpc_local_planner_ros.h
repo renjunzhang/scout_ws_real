@@ -95,6 +95,7 @@ private:
     CommandHistoryBuffer command_history_;
     ExecutionStatePredictor execution_predictor_;
     DelayPhaseParams delay_phase_params_;
+    EffectiveConfigDebug effective_config_;
     OdomTimingDebug last_odom_timing_;
     ros::Time last_odom_receive_stamp_;
 

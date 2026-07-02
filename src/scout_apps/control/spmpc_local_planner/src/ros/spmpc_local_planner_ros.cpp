@@ -33,6 +33,33 @@ const char* solverBackendRole(const std::string& backend) {
     return "unknown";
 }
 
+int solverBackendCode(const std::string& backend) {
+    if (backend == kSolverBackendContinuousMpccAcados) {
+        return 1;
+    }
+    if (backend == kSolverBackendContinuousMpccDirectOmegaLegacy) {
+        return 2;
+    }
+    if (backend == kSolverBackendPrimitive) {
+        return 3;
+    }
+    return 0;
+}
+
+int primitiveModeCode(const std::string& primitive_mode) {
+    if (primitive_mode == "linear") {
+        return 1;
+    }
+    if (primitive_mode == "anti_slosh") {
+        return 2;
+    }
+    return 0;
+}
+
+double wrapAngle(double angle) {
+    return std::atan2(std::sin(angle), std::cos(angle));
+}
+
 void appendPolicyError(std::string& reason, const std::string& message) {
     if (!reason.empty()) {
         reason += "; ";
@@ -374,6 +401,48 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
              boolText(solver_params.corridor_enable),
              boolText(solver_params.corridor_hard_bound_enable));
 
+    effective_config_.solver_backend_code = solverBackendCode(solver_params.solver_backend);
+    effective_config_.control_frequency = control_frequency_;
+    effective_config_.dt = dt_;
+    effective_config_.horizon_steps = static_cast<double>(horizon_steps_);
+    effective_config_.slosh_enable = variant_.slosh_enable ? 1.0 : 0.0;
+    effective_config_.slosh_constraint_enable = variant_.slosh_constraint_enable ? 1.0 : 0.0;
+    effective_config_.smooth_priority_enable = variant_.smooth_priority_enable ? 1.0 : 0.0;
+    effective_config_.primitive_mode_code = primitiveModeCode(variant_.primitive_mode);
+    effective_config_.v_ref = variant_.v_ref;
+    effective_config_.w_slosh = variant_.w_slosh;
+    effective_config_.w_control = variant_.w_control;
+    effective_config_.w_smooth = variant_.w_smooth;
+    effective_config_.w_accel = variant_.w_accel;
+    effective_config_.w_alpha = variant_.w_alpha;
+    effective_config_.w_du_a = variant_.w_du_a;
+    effective_config_.w_du_vs = variant_.w_du_vs;
+    effective_config_.v_max = solver_params.v_max;
+    effective_config_.omega_max = solver_params.omega_max;
+    effective_config_.a_max = solver_params.a_max;
+    effective_config_.alpha_max = solver_params.alpha_max;
+    effective_config_.shared_linear_accel_limit_enable = shared_cmd_linear_accel_limit_enable_ ? 1.0 : 0.0;
+    effective_config_.shared_linear_accel_max = shared_cmd_linear_accel_max_;
+    effective_config_.shared_linear_accel_max_dt = shared_cmd_linear_accel_max_dt_;
+    effective_config_.shared_angular_limit_enable = shared_cmd_angular_limit_enable_ ? 1.0 : 0.0;
+    effective_config_.shared_angular_rate_max = shared_cmd_angular_rate_max_;
+    effective_config_.shared_angular_accel_max = shared_cmd_angular_accel_max_;
+    effective_config_.shared_angular_accel_max_dt = shared_cmd_angular_accel_max_dt_;
+    effective_config_.container_radius = solver_params.slosh.container_radius;
+    effective_config_.liquid_height = solver_params.slosh.liquid_height;
+    effective_config_.damping_ratio = solver_params.slosh.damping_ratio;
+    effective_config_.slosh_height_ref = solver_params.slosh.slosh_height_ref;
+    effective_config_.slosh_height_max = solver_params.slosh.slosh_height_max;
+    effective_config_.slosh_eta_dot_ratio = solver_params.slosh.slosh_eta_dot_ratio;
+    effective_config_.use_parabola_term = solver_params.slosh.use_parabola_term ? 1.0 : 0.0;
+    effective_config_.delay_phase_mode_code = static_cast<double>(static_cast<int>(delay_phase_params_.mode));
+    effective_config_.delay_linear_sec = delay_phase_params_.linear_delay_sec;
+    effective_config_.delay_angular_sec = delay_phase_params_.angular_delay_sec;
+    effective_config_.delay_cmd_timeout_sec = delay_phase_params_.cmd_timeout_sec;
+    effective_config_.delay_odom_timeout_sec = delay_phase_params_.odom_timeout_sec;
+    effective_config_.delay_history_window_sec = delay_phase_params_.history_window_sec;
+    effective_config_.delay_require_complete_history = delay_phase_params_.require_complete_history ? 1.0 : 0.0;
+
     problem_.configure(solver_params, variant_);
     if (!slosh_observer_.configure(solver_params.slosh)) {
         ROS_WARN("[spmpc_local_planner] slosh observer configure failed; slosh diagnostics stay zero");
@@ -394,6 +463,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     diagnostics_.initialize(spmpc_nh);
     diagnostics_.publishVariant(variant_, experiment_mode_);
     diagnostics_.publishSolverBackend(solver_params.solver_backend);
+    diagnostics_.publishEffectiveConfig(effective_config_);
     diagnostics_.publishStatus("INITIALIZED");
 
     const double period = 1.0 / std::max(1.0, control_frequency_);
@@ -662,9 +732,38 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     summary.closed_loop_enabled = closed_loop_enabled;
     summary.status_code = effective_status;
 
+    CmdOdomAlignmentDebug alignment;
+    alignment.mode = delay_phase_params_.mode;
+    alignment.cmd_age_ms = summary.cmd_age_ms;
+    alignment.cmd_period_ms = summary.cmd_period_ms;
+    alignment.odom_age_ms = summary.odom_age_ms;
+    alignment.odom_period_ms = last_odom_timing_.stamp_dt_ms;
+    alignment.linear_delay_ms = summary.linear_delay_ms;
+    alignment.angular_delay_ms = summary.angular_delay_ms;
+    alignment.history_span_ms = summary.history_span_ms;
+    alignment.covered_history_ms = prediction ? 1000.0 * prediction->covered_history_sec : 0.0;
+    alignment.missing_history_ms = prediction ? 1000.0 * prediction->missing_history_sec : 0.0;
+    alignment.history_complete = summary.history_complete;
+    alignment.shadow_valid = summary.shadow_valid;
+    alignment.fixed_closed_loop_configured = delayPhaseClosedLoopEnabled();
+    alignment.fixed_closed_loop_applied = closed_loop_enabled;
+    alignment.status_code = effective_status;
+    if (prediction) {
+        alignment.dx_pred_raw = prediction->predicted_robot.x - prediction->raw_robot.x;
+        alignment.dy_pred_raw = prediction->predicted_robot.y - prediction->raw_robot.y;
+        alignment.dyaw_pred_raw = wrapAngle(prediction->predicted_robot.yaw - prediction->raw_robot.yaw);
+        alignment.dv_pred_raw = prediction->predicted_robot.v - prediction->raw_robot.v;
+        alignment.domega_pred_raw = prediction->predicted_robot.omega - prediction->raw_robot.omega;
+        alignment.deta_norm_pred_raw = std::hypot(prediction->predicted_slosh.eta_x - prediction->raw_slosh.eta_x,
+                                                  prediction->predicted_slosh.eta_y - prediction->raw_slosh.eta_y);
+        alignment.deta_dot_norm_pred_raw = std::hypot(prediction->predicted_slosh.eta_x_dot - prediction->raw_slosh.eta_x_dot,
+                                                      prediction->predicted_slosh.eta_y_dot - prediction->raw_slosh.eta_y_dot);
+    }
+
     diagnostics_.publishDelayPhase(summary);
     diagnostics_.publishOdomTiming(last_odom_timing_);
     diagnostics_.publishDelayCompensation(summary);
+    diagnostics_.publishCmdOdomAlignment(alignment);
     diagnostics_.publishExecutionAlignmentStatus(
         prediction && !prediction->status.empty() && effective_status == prediction->status_code
             ? prediction->status
@@ -930,6 +1029,7 @@ void SpmpcLocalPlannerROS::costmapCallback(const nav_msgs::OccupancyGridConstPtr
 
 void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     diagnostics_.publishVariant(variant_, experiment_mode_);
+    diagnostics_.publishEffectiveConfig(effective_config_);
 
     if (!have_odom_) {
         resetTerminalSpinFailGate();
