@@ -180,7 +180,7 @@ void DiagnosticsPublisher::publishDelayCompensation(const DelayPhaseDebugSummary
     msg.layout.dim[0].stride = 6;
     msg.data.resize(6, 0.0f);
     msg.data[0] = static_cast<float>(static_cast<int>(summary.mode));
-    msg.data[1] = 0.0f;
+    msg.data[1] = summary.closed_loop_enabled ? 1.0f : 0.0f;
     msg.data[2] = static_cast<float>(summary.linear_delay_ms);
     msg.data[3] = static_cast<float>(summary.angular_delay_ms);
     msg.data[4] = summary.shadow_valid ? 1.0f : 0.0f;

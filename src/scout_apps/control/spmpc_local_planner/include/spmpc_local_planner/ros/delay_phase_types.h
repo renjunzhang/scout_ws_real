@@ -11,6 +11,7 @@ enum class DelayPhaseMode {
     Off = 0,
     Monitor = 1,
     Shadow = 2,
+    FixedClosedLoop = 3,
 };
 
 enum class DelayPhaseStatusCode {
@@ -25,6 +26,7 @@ enum class DelayPhaseStatusCode {
     CmdStale = 8,
     OdomStale = 9,
     InvalidParams = 10,
+    FixedClosedLoopOk = 11,
 };
 
 struct DelayPhaseParams {
@@ -86,6 +88,7 @@ struct DelayPhaseDebugSummary {
     double history_span_ms = 0.0;
     bool history_complete = false;
     bool shadow_valid = false;
+    bool closed_loop_enabled = false;
     DelayPhaseStatusCode status_code = DelayPhaseStatusCode::Off;
 };
 
@@ -95,6 +98,8 @@ inline std::string delayPhaseModeName(DelayPhaseMode mode) {
         return "monitor";
     case DelayPhaseMode::Shadow:
         return "shadow";
+    case DelayPhaseMode::FixedClosedLoop:
+        return "fixed_closed_loop";
     case DelayPhaseMode::Off:
     default:
         return "off";
@@ -107,6 +112,8 @@ inline std::string delayPhaseStatusName(DelayPhaseStatusCode status) {
         return "MONITOR_OK";
     case DelayPhaseStatusCode::ShadowOk:
         return "SHADOW_OK";
+    case DelayPhaseStatusCode::FixedClosedLoopOk:
+        return "FIXED_CLOSED_LOOP_OK";
     case DelayPhaseStatusCode::NoOdom:
         return "NO_ODOM";
     case DelayPhaseStatusCode::NoReference:
@@ -139,6 +146,10 @@ inline DelayPhaseMode parseDelayPhaseMode(const std::string& mode_text) {
     }
     if (value == "shadow" || value == "p1_shadow" || value == "p1-shadow") {
         return DelayPhaseMode::Shadow;
+    }
+    if (value == "fixed_closed_loop" || value == "fixed-closed-loop" ||
+        value == "p1_fixed_closed_loop" || value == "p1-fixed-closed-loop") {
+        return DelayPhaseMode::FixedClosedLoop;
     }
     return DelayPhaseMode::Off;
 }

@@ -589,8 +589,13 @@ bool SpmpcLocalPlannerROS::delayPhaseActive() const {
     return delay_phase_params_.publish_diagnostics && delay_phase_params_.mode != DelayPhaseMode::Off;
 }
 
-bool SpmpcLocalPlannerROS::delayPhaseShadowEnabled() const {
-    return delayPhaseActive() && delay_phase_params_.mode == DelayPhaseMode::Shadow;
+bool SpmpcLocalPlannerROS::delayPhasePredictionEnabled() const {
+    return delay_phase_params_.mode == DelayPhaseMode::Shadow ||
+           delay_phase_params_.mode == DelayPhaseMode::FixedClosedLoop;
+}
+
+bool SpmpcLocalPlannerROS::delayPhaseClosedLoopEnabled() const {
+    return delay_phase_params_.mode == DelayPhaseMode::FixedClosedLoop;
 }
 
 void SpmpcLocalPlannerROS::recordPublishedCommand(
@@ -607,7 +612,8 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     const ros::Time& now,
     DelayPhaseStatusCode status_code,
     const ExecutionStatePrediction* prediction,
-    double solver_time_ms) {
+    double solver_time_ms,
+    bool closed_loop_enabled) {
     if (!delayPhaseActive()) {
         return;
     }
@@ -617,23 +623,29 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     const double cmd_age_sec = have_history ? (now - command_history_.latestStamp()).toSec() : -1.0;
     const bool have_odom_receive = !last_odom_receive_stamp_.isZero();
     const double odom_age_sec = have_odom_receive ? (now - last_odom_receive_stamp_).toSec() : -1.0;
+    const auto status_requires_freshness = [](DelayPhaseStatusCode status) {
+        return status == DelayPhaseStatusCode::MonitorOk ||
+               status == DelayPhaseStatusCode::ShadowOk ||
+               status == DelayPhaseStatusCode::FixedClosedLoopOk ||
+               status == DelayPhaseStatusCode::PartialHistory;
+    };
 
     if ((effective_status == DelayPhaseStatusCode::MonitorOk ||
-         effective_status == DelayPhaseStatusCode::ShadowOk) &&
+         effective_status == DelayPhaseStatusCode::ShadowOk ||
+         effective_status == DelayPhaseStatusCode::FixedClosedLoopOk) &&
         !have_history) {
         effective_status = DelayPhaseStatusCode::NoCmdHistory;
+        closed_loop_enabled = false;
     }
-    if ((effective_status == DelayPhaseStatusCode::MonitorOk ||
-         effective_status == DelayPhaseStatusCode::ShadowOk ||
-         effective_status == DelayPhaseStatusCode::PartialHistory) &&
+    if (status_requires_freshness(effective_status) &&
         delay_phase_params_.cmd_timeout_sec > 0.0 && cmd_age_sec > delay_phase_params_.cmd_timeout_sec) {
         effective_status = DelayPhaseStatusCode::CmdStale;
+        closed_loop_enabled = false;
     }
-    if ((effective_status == DelayPhaseStatusCode::MonitorOk ||
-         effective_status == DelayPhaseStatusCode::ShadowOk ||
-         effective_status == DelayPhaseStatusCode::PartialHistory) &&
+    if (status_requires_freshness(effective_status) &&
         delay_phase_params_.odom_timeout_sec > 0.0 && odom_age_sec > delay_phase_params_.odom_timeout_sec) {
         effective_status = DelayPhaseStatusCode::OdomStale;
+        closed_loop_enabled = false;
     }
 
     DelayPhaseDebugSummary summary;
@@ -647,6 +659,7 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     summary.history_span_ms = 1000.0 * command_history_.spanSec();
     summary.history_complete = prediction ? prediction->history_complete : have_history;
     summary.shadow_valid = prediction ? prediction->valid : false;
+    summary.closed_loop_enabled = closed_loop_enabled;
     summary.status_code = effective_status;
 
     diagnostics_.publishDelayPhase(summary);
@@ -656,7 +669,7 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
         prediction && !prediction->status.empty() && effective_status == prediction->status_code
             ? prediction->status
             : delayPhaseStatusName(effective_status));
-    if (prediction && delayPhaseShadowEnabled()) {
+    if (prediction && delayPhasePredictionEnabled()) {
         diagnostics_.publishExecutionState(*prediction);
     }
 }
@@ -954,15 +967,34 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     DelayPhaseStatusCode delay_phase_status = DelayPhaseStatusCode::MonitorOk;
     ExecutionStatePrediction shadow_prediction;
     ExecutionStatePrediction* shadow_prediction_ptr = nullptr;
-    if (delayPhaseShadowEnabled()) {
+    if (delayPhasePredictionEnabled()) {
         shadow_prediction = execution_predictor_.predict(
             input.robot, input.slosh, command_history_, delay_phase_now, delay_phase_params_);
         delay_phase_status = shadow_prediction.status_code;
         shadow_prediction_ptr = &shadow_prediction;
     }
 
+    SolverInput solve_input = input;
+    bool delay_compensation_applied = false;
+    if (delayPhaseClosedLoopEnabled() && shadow_prediction_ptr) {
+        const bool have_odom_receive = !last_odom_receive_stamp_.isZero();
+        const double odom_age_sec = have_odom_receive ? (delay_phase_now - last_odom_receive_stamp_).toSec() : -1.0;
+        const bool odom_fresh = have_odom_receive &&
+                                (!std::isfinite(delay_phase_params_.odom_timeout_sec) ||
+                                 delay_phase_params_.odom_timeout_sec <= 0.0 ||
+                                 odom_age_sec <= delay_phase_params_.odom_timeout_sec);
+        if (shadow_prediction.valid && shadow_prediction.history_complete &&
+            shadow_prediction.status_code == DelayPhaseStatusCode::FixedClosedLoopOk && odom_fresh) {
+            solve_input.robot = shadow_prediction.predicted_robot;
+            solve_input.slosh = shadow_prediction.predicted_slosh;
+            delay_compensation_applied = true;
+        } else if (!odom_fresh) {
+            delay_phase_status = DelayPhaseStatusCode::OdomStale;
+        }
+    }
+
     SolverOutput output;
-    problem_.solve(input, output);
+    problem_.solve(solve_input, output);
     if (std::isfinite(output.progress_abs_s)) {
         map_vref_last_progress_abs_s_ = output.progress_abs_s;
         have_map_vref_progress_ = true;
@@ -991,7 +1023,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         const double omega_meas = last_odom_.twist.twist.angular.z;
         diagnostics_.publishSloshHeight(slosh_observer_.height(input.slosh, omega_meas));
     }
-    publishDelayPhaseDiagnostics(delay_phase_now, delay_phase_status, shadow_prediction_ptr, output.solver_time_ms);
+    publishDelayPhaseDiagnostics(
+        delay_phase_now, delay_phase_status, shadow_prediction_ptr, output.solver_time_ms, delay_compensation_applied);
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
 
     if (!output.success) {

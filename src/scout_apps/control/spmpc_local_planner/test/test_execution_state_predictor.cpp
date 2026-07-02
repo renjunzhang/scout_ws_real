@@ -42,6 +42,12 @@ ExecutionStatePredictor makePredictor() {
 
 }  // namespace
 
+TEST(DelayPhaseTypes, ParsesFixedClosedLoopAliases) {
+    EXPECT_EQ(parseDelayPhaseMode("fixed_closed_loop"), DelayPhaseMode::FixedClosedLoop);
+    EXPECT_EQ(parseDelayPhaseMode("fixed-closed-loop"), DelayPhaseMode::FixedClosedLoop);
+    EXPECT_EQ(parseDelayPhaseMode("p1_fixed_closed_loop"), DelayPhaseMode::FixedClosedLoop);
+}
+
 TEST(ExecutionStatePredictor, ConstantStraightCommandPredictsForwardState) {
     CommandHistoryBuffer history;
     history.configure(2.0);
@@ -71,6 +77,23 @@ TEST(ExecutionStatePredictor, ConstantAngularCommandPredictsYaw) {
     ASSERT_TRUE(prediction.valid);
     EXPECT_NEAR(prediction.predicted_robot.yaw, 0.20, 1e-6);
     EXPECT_NEAR(prediction.predicted_robot.omega, 1.0, 1e-9);
+}
+
+TEST(ExecutionStatePredictor, CompleteHistoryInFixedClosedLoopReportsClosedLoopOk) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    history.push(sample(9.80, 1.0, 0.0));
+
+    RobotState robot;
+    SloshState slosh;
+    auto p = params(0.20);
+    p.mode = DelayPhaseMode::FixedClosedLoop;
+    const auto prediction = makePredictor().predict(robot, slosh, history, stamp(10.0), p);
+
+    ASSERT_TRUE(prediction.valid);
+    EXPECT_TRUE(prediction.history_complete);
+    EXPECT_EQ(prediction.status_code, DelayPhaseStatusCode::FixedClosedLoopOk);
+    EXPECT_NEAR(prediction.predicted_robot.x, 0.20, 1e-6);
 }
 
 TEST(ExecutionStatePredictor, PartialHistoryIsReportedButAllowedByDefault) {

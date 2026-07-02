@@ -19,7 +19,7 @@
   <arg name="shared_angular_accel_max" default="-1.0"/>
   <arg name="shared_angular_accel_max_dt" default="-1.0"/>
   <arg name="alpha_max" default="-1.0" doc="诊断/消融用: 覆盖 robot/alpha_max; 负值时用 platform yaml"/>
-  <arg name="delay_phase_mode" default="off" doc="off|monitor|shadow; shadow 只发诊断"/>
+  <arg name="delay_phase_mode" default="off" doc="off|monitor|shadow|fixed_closed_loop; shadow 只发诊断, fixed_closed_loop 改 SolverInput"/>
   <arg name="delay_phase_linear_delay_sec" default="-1.0"/>
   <arg name="delay_phase_angular_delay_sec" default="-1.0"/>
   <include file="$(find spmpc_local_planner)/launch/spmpc_experiment.launch">

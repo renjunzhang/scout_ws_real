@@ -39,11 +39,13 @@ private:
     void publishCommand(const geometry_msgs::Twist& desired);
     void recordPublishedCommand(const geometry_msgs::Twist& cmd, const ros::Time& stamp, const CommandPublishMeta& meta);
     bool delayPhaseActive() const;
-    bool delayPhaseShadowEnabled() const;
+    bool delayPhasePredictionEnabled() const;
+    bool delayPhaseClosedLoopEnabled() const;
     void publishDelayPhaseDiagnostics(const ros::Time& now,
                                       DelayPhaseStatusCode status_code,
                                       const ExecutionStatePrediction* prediction,
-                                      double solver_time_ms);
+                                      double solver_time_ms,
+                                      bool closed_loop_enabled = false);
     void publishDelayPhaseEarlyStatus(DelayPhaseStatusCode status_code);
     geometry_msgs::Twist applySharedCommandLimits(const geometry_msgs::Twist& desired,
                                                   const ros::Time& stamp,

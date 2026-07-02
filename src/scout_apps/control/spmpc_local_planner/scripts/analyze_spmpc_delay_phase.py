@@ -232,6 +232,7 @@ def read_bag(path, preferred_odom_topic, include_after_goal, cmd_source):
     limiter_angular_accel = []
     delay_phase_linear_ms = []
     delay_phase_angular_ms = []
+    closed_loop_enabled = []
     shadow_valid = []
     shadow_history_complete = []
     shadow_missing_history_ms = []
@@ -263,6 +264,7 @@ def read_bag(path, preferred_odom_topic, include_after_goal, cmd_source):
                 shadow_history_complete.append(1.0 if data[18] > 0.5 else 0.0)
             elif topic == DELAY_COMPENSATION_TOPIC and len(getattr(msg, "data", [])) >= 4:
                 data = list(msg.data)
+                closed_loop_enabled.append(1.0 if len(data) >= 2 and data[1] > 0.5 else 0.0)
                 delay_phase_linear_ms.append(float(data[2]))
                 delay_phase_angular_ms.append(float(data[3]))
             elif topic == EXECUTION_ALIGNMENT_STATUS_TOPIC:
@@ -324,6 +326,7 @@ def read_bag(path, preferred_odom_topic, include_after_goal, cmd_source):
         "limiter_angular_accel": limiter_angular_accel,
         "delay_phase_linear_ms": delay_phase_linear_ms,
         "delay_phase_angular_ms": delay_phase_angular_ms,
+        "closed_loop_enabled": closed_loop_enabled,
         "shadow_valid": shadow_valid,
         "shadow_history_complete": shadow_history_complete,
         "shadow_missing_history_ms": shadow_missing_history_ms,
@@ -370,6 +373,9 @@ def analyze_bag(path, args):
         "angular_accel_limited_frac": mean(data["limiter_angular_accel"]),
         "delay_phase_linear_ms": median(data["delay_phase_linear_ms"]),
         "delay_phase_angular_ms": median(data["delay_phase_angular_ms"]),
+        "closed_loop_enabled_frac": mean(data["closed_loop_enabled"]),
+        "closed_loop_enabled_count": sum(data["closed_loop_enabled"]),
+        "closed_loop_enabled_samples": len(data["closed_loop_enabled"]),
         "shadow_valid_frac": mean(data["shadow_valid"]),
         "shadow_history_complete_frac": mean(data["shadow_history_complete"]),
         "shadow_missing_history_p95_ms": percentile(data["shadow_missing_history_ms"], 0.95),
@@ -390,7 +396,7 @@ def print_summary(rows):
         return
     header = (
         "bag", "dur", "status", "v_delay", "v_corr", "v_conf",
-        "w_delay", "w_corr", "w_conf", "solve_p95", "cmd_p95", "shadow", "align")
+        "w_delay", "w_corr", "w_conf", "solve_p95", "cmd_p95", "shadow", "closed", "align")
     print("\n" + "  ".join(f"{h:>10}" for h in header))
     print("-" * 128)
     for row in rows:
@@ -408,6 +414,7 @@ def print_summary(rows):
             f"{fmt(row['solver_p95_ms'], 1):>10}",
             f"{fmt(row['cmd_period_p95_ms'], 1):>10}",
             f"{fmt(row['shadow_valid_frac'], 2):>10}",
+            f"{fmt(row['closed_loop_enabled_frac'], 2):>10}",
             f"{row['top_alignment_status'][:10]:>10}",
         ]
         print("  ".join(cells))

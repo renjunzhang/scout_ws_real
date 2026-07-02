@@ -77,10 +77,11 @@ start_lock_recovery:
   require_monotonic_clip: true
   max_projection_distance_m: 0.50
 
-# P0/P1 delay-phase observability. Disabled by default: monitor/shadow never changes /cmd_vel
-# or the SolverInput used by acados; it only publishes debug topics when enabled.
+# P0/P1 delay-phase handling. Disabled by default.
+# monitor/shadow only publish diagnostics. fixed_closed_loop uses guarded predicted
+# execution state as SolverInput and falls back to raw state when guards fail.
 delay_phase:
-  mode: off              # off | monitor | shadow
+  mode: off              # off | monitor | shadow | fixed_closed_loop
   publish_diagnostics: true
   history_window_sec: 2.0
   cmd_timeout_sec: 0.5
