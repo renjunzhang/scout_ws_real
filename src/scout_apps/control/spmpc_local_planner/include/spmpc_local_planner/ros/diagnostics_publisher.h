@@ -19,6 +19,10 @@ public:
     void publishSolverBackend(const std::string& solver_backend);
     void publishEffectiveConfig(const EffectiveConfigDebug& config);
     void publishOutput(const SolverOutput& output, const std::string& frame_id);
+    void publishRawState(const RobotState& robot, const SloshState& slosh, double height_coeff);
+    void publishPredictedState(const ExecutionStatePrediction& prediction, double height_coeff);
+    void publishSolverInputState(const SolverInput& input, bool delay_compensation_applied, double height_coeff);
+    void publishCommandIntervention(const CommandInterventionDebug& intervention);
     void publishCommandOutput(const geometry_msgs::Twist& desired,
                               const geometry_msgs::Twist& limited,
                               const geometry_msgs::Twist& previous,
@@ -68,6 +72,10 @@ private:
     ros::Publisher stage0_reference_pub_;
     ros::Publisher local_traj_head_pub_;
     ros::Publisher warm_start_head_pub_;
+    ros::Publisher raw_state_pub_;
+    ros::Publisher predicted_state_pub_;
+    ros::Publisher solver_input_state_pub_;
+    ros::Publisher command_intervention_pub_;
     ros::Publisher cmd_output_pub_;
     ros::Publisher cmd_output_status_pub_;
     ros::Publisher delay_phase_pub_;

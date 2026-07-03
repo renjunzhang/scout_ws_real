@@ -204,6 +204,7 @@ record_topics=(
   /spmpc/debug/slosh_model_consistency
   /spmpc/debug/solver_input_state
   /spmpc/debug/raw_state
+  /spmpc/debug/predicted_state
   /spmpc/debug/delay_phase
   /spmpc/debug/odom_timing
   /spmpc/debug/execution_state

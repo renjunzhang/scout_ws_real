@@ -35,8 +35,9 @@ private:
     void pathCallback(const nav_msgs::PathConstPtr& msg);
     void costmapCallback(const nav_msgs::OccupancyGridConstPtr& msg);
     void controlTimerCallback(const ros::TimerEvent&);
-    void publishZeroCommand();
-    void publishCommand(const geometry_msgs::Twist& desired);
+    void publishZeroCommand(const CommandInterventionDebug& intervention = CommandInterventionDebug());
+    void publishCommand(const geometry_msgs::Twist& desired,
+                        const CommandInterventionDebug& intervention = CommandInterventionDebug());
     void recordPublishedCommand(const geometry_msgs::Twist& cmd, const ros::Time& stamp, const CommandPublishMeta& meta);
     bool delayPhaseActive() const;
     bool delayPhasePredictionEnabled() const;

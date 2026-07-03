@@ -796,7 +796,12 @@ void SpmpcLocalPlannerROS::publishDelayPhaseEarlyStatus(DelayPhaseStatusCode sta
     publishDelayPhaseDiagnostics(ros::Time::now(), status_code, nullptr, 0.0);
 }
 
-void SpmpcLocalPlannerROS::publishZeroCommand() {
+void SpmpcLocalPlannerROS::publishZeroCommand(const CommandInterventionDebug& intervention) {
+    CommandInterventionDebug debug = intervention;
+    debug.publish_cmd_vel = publish_cmd_vel_;
+    debug.published_cmd_v = 0.0;
+    debug.published_cmd_omega = 0.0;
+    diagnostics_.publishCommandIntervention(debug);
     if (!publish_cmd_vel_) {
         return;
     }
@@ -859,8 +864,12 @@ geometry_msgs::Twist SpmpcLocalPlannerROS::applySharedCommandLimits(
     return limited;
 }
 
-void SpmpcLocalPlannerROS::publishCommand(const geometry_msgs::Twist& desired) {
+void SpmpcLocalPlannerROS::publishCommand(const geometry_msgs::Twist& desired,
+                                           const CommandInterventionDebug& intervention) {
     if (!publish_cmd_vel_) {
+        CommandInterventionDebug debug = intervention;
+        debug.publish_cmd_vel = false;
+        diagnostics_.publishCommandIntervention(debug);
         return;
     }
     const auto stamp = ros::Time::now();
@@ -879,6 +888,14 @@ void SpmpcLocalPlannerROS::publishCommand(const geometry_msgs::Twist& desired) {
     recordPublishedCommand(cmd, stamp, meta);
     diagnostics_.publishCommandOutput(
         desired, cmd, previous, dt, linear_limited, angular_rate_limited, angular_accel_limited);
+    CommandInterventionDebug debug = intervention;
+    debug.published_cmd_v = cmd.linear.x;
+    debug.published_cmd_omega = cmd.angular.z;
+    debug.linear_limited = linear_limited;
+    debug.angular_rate_limited = angular_rate_limited;
+    debug.angular_accel_limited = angular_accel_limited;
+    debug.publish_cmd_vel = true;
+    diagnostics_.publishCommandIntervention(debug);
     cmd_pub_.publish(cmd);
 }
 
@@ -1055,7 +1072,9 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         resetTrackingSafetyGate();
         diagnostics_.publishStatus("WAITING_FOR_ODOM");
         publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoOdom);
-        publishZeroCommand();
+        CommandInterventionDebug intervention;
+        intervention.zero_due_to_waiting_for_odom = true;
+        publishZeroCommand(intervention);
         return;
     }
     if (!problem_.hasReferencePath()) {
@@ -1063,7 +1082,9 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         resetTrackingSafetyGate();
         diagnostics_.publishStatus("WAITING_FOR_REFERENCE_PATH");
         publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoReference);
-        publishZeroCommand();
+        CommandInterventionDebug intervention;
+        intervention.zero_due_to_waiting_for_reference = true;
+        publishZeroCommand(intervention);
         return;
     }
 
@@ -1073,12 +1094,16 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         resetTrackingSafetyGate();
         diagnostics_.publishStatus("WAITING_FOR_TF_POSE");
         publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoTfPose);
-        publishZeroCommand();
+        CommandInterventionDebug intervention;
+        intervention.zero_due_to_waiting_for_tf = true;
+        publishZeroCommand(intervention);
         return;
     }
     input.slosh = current_slosh_;
     input.dt = dt_;
     input.horizon_steps = horizon_steps_;
+    const double slosh_height_coeff = slosh_observer_.configured() ? slosh_observer_.heightCoeff() : 0.0;
+    diagnostics_.publishRawState(input.robot, input.slosh, slosh_height_coeff);
 
     applyRuntimeVRef(input);
     // effective_config_.v_ref 是本周期 solver 将看到的速度参考：runtime/profile override 优先，
@@ -1099,7 +1124,14 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             input.robot, input.slosh, command_history_, delay_phase_now, delay_phase_params_);
         delay_phase_status = shadow_prediction.status_code;
         shadow_prediction_ptr = &shadow_prediction;
+    } else {
+        shadow_prediction.raw_robot = input.robot;
+        shadow_prediction.raw_slosh = input.slosh;
+        shadow_prediction.predicted_robot = input.robot;
+        shadow_prediction.predicted_slosh = input.slosh;
+        shadow_prediction.status_code = DelayPhaseStatusCode::Off;
     }
+    diagnostics_.publishPredictedState(shadow_prediction, slosh_height_coeff);
 
     SolverInput solve_input = input;
     bool delay_compensation_applied = false;
@@ -1120,6 +1152,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         }
     }
 
+    diagnostics_.publishSolverInputState(solve_input, delay_compensation_applied, slosh_height_coeff);
+
     SolverOutput output;
     problem_.solve(solve_input, output);
     if (std::isfinite(output.progress_abs_s)) {
@@ -1130,19 +1164,31 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     if (!event.last_real.isZero() && !event.current_real.isZero()) {
         spin_gate_dt = (event.current_real - event.last_real).toSec();
     }
-    if (updateTerminalSpinFailGate(input, output, spin_gate_dt)) {
+    CommandInterventionDebug intervention;
+    intervention.solver_cmd_v = output.cmd_v;
+    intervention.solver_cmd_omega = output.cmd_omega;
+    const bool solver_success = output.success;
+    const bool terminal_spin_blocked = updateTerminalSpinFailGate(input, output, spin_gate_dt);
+    if (terminal_spin_blocked) {
         output.success = false;
         output.status = "TERMINAL_SPIN_FAIL";
         output.cmd_v = 0.0;
         output.cmd_omega = 0.0;
     }
     std::string tracking_safety_status;
-    if (updateTrackingSafetyGate(input, output, spin_gate_dt, tracking_safety_status)) {
+    const bool tracking_safety_blocked = updateTrackingSafetyGate(input, output, spin_gate_dt, tracking_safety_status);
+    if (tracking_safety_blocked) {
         output.success = false;
         output.status = tracking_safety_status;
         output.cmd_v = 0.0;
         output.cmd_omega = 0.0;
     }
+    intervention.post_gate_cmd_v = output.cmd_v;
+    intervention.post_gate_cmd_omega = output.cmd_omega;
+    intervention.output_success = output.success;
+    intervention.zero_due_to_solver_failure = !solver_success;
+    intervention.zero_due_to_terminal_spin_fail = terminal_spin_blocked;
+    intervention.zero_due_to_tracking_safety = tracking_safety_blocked;
     diagnostics_.publishStatus(output.status);
     // 诊断用 solve_input.slosh：fixed_closed_loop 补偿生效时 solve_input.slosh 是
     // shadow_prediction.predicted_slosh；input.slosh 仍是原始测量值。
@@ -1158,14 +1204,14 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
 
     if (!output.success) {
-        publishZeroCommand();
+        publishZeroCommand(intervention);
         return;
     }
 
     geometry_msgs::Twist cmd;
     cmd.linear.x = output.cmd_v;
     cmd.angular.z = output.cmd_omega;
-    publishCommand(cmd);
+    publishCommand(cmd, intervention);
 }
 
 RobotState SpmpcLocalPlannerROS::robotStateFromOdom(const nav_msgs::Odometry& odom) const {

@@ -3,6 +3,81 @@
 本目录放 SPMPC 自研 planner 的 smoke、录包和离线诊断脚本。
 这些脚本服务于 `spmpc_local_planner` 本身，不用于启动外部 TEB/DWA/MPC baseline。
 
+## record_spmpc_full_rgb_bag.sh
+
+实物 SPMPC 黑匣子录包脚本。它只负责录制 topic 和保存 metadata，**不发送 `/cmd_vel`、不发送目标点、不启动/停止 planner**。
+
+主要用途：正式实物 run 前先启动 recorder，把事后分析可能需要的证据一次录全，包括：
+
+- `/cmd_vel`、`/odom`、`/tf`、`/map`、固定路径/goal；
+- `/spmpc/status`、`/spmpc/solver_backend`、`/spmpc/controller_variant`；
+- `/spmpc/debug/effective_config`、`/spmpc/cost_breakdown`、`/spmpc/slosh_horizon_summary`；
+- `/spmpc/debug/raw_state`、`/spmpc/debug/predicted_state`、`/spmpc/debug/solver_input_state`、`/spmpc/debug/command_intervention`；
+- 相机、scan、standalone `/slosh/*`、在线 `/liquid/*` 等可选话题。
+
+典型用法：
+
+```bash
+RUN_LABEL=Bours_delay_080_050_run01 \
+VARIANT=B_ours \
+RECORD_SEC=60 \
+RECORD_RGB=false \
+OUT_DIR=/home/geist/slosh_bags/real/20260703_fixed_path_compare/B_ours \
+bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
+```
+
+输出包括 `.bag`、`*_info.txt`、`*_rosparam.yaml`、`*_recorded_topics.txt`、`*_selected_topics_not_recorded.txt`、`*_topic_info/` 等 sidecar。
+
+## run_spmpc_real_fixed_path_trial.sh
+
+实物 SPMPC fixed-path 单次试验一键脚本。前提是实物传感器/定位/底盘栈已经启动；脚本负责把下面流程合并成一次命令：
+
+```text
+启动 fixed-path generator -> 发送固定终点 -> 启动黑匣子录包 -> 启动 SPMPC variant -> 60s 或 Ctrl-C 后清理
+```
+
+默认目标点固定为 2026-07-02 实物 bag 中恢复出的终点：`GOAL_X=-5.424`、`GOAL_Y=-4.736`、`GOAL_YAW=0.0`。`RECORD_SEC` 默认 60，且大于 60 或非法时会强制回到 60。
+
+典型用法：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+cd /home/geist/scout_ws
+
+ALG=B_ours \
+RUN_LABEL=Bours_delay_080_050_run01 \
+CMD_TOPIC=/cmd_vel \
+DELAY_PHASE_MODE=fixed_closed_loop \
+DELAY_PHASE_LINEAR_DELAY_SEC=0.08 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.05 \
+RECORD_RGB=false \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+```
+
+该脚本只覆盖 SPMPC 内部消融，不用于外部 baseline。
+
+## summarize_spmpc_real_trial.py
+
+实物 SPMPC bag 离线 summary 脚本。支持传入单个 `.bag` 或 run 目录，读取 rosbag 与 recorder / one-click sidecar，输出：
+
+```text
+${bag_stem}_summary.json
+${bag_stem}_summary.md
+```
+
+它按 `Float32MultiArray.layout.dim[0].label` 动态解析字段，避免依赖硬编码索引。旧 bag 缺少新 debug topic 时不会失败，而是在 summary 中列出 red flags。
+
+典型用法：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+
+python3 src/scout_apps/control/spmpc_local_planner/scripts/summarize_spmpc_real_trial.py \
+  /home/geist/slosh_bags/real/20260703_fixed_path_compare/B_ours/Bours_delay_080_050_run01.bag
+```
+
 ## compare_b0_bslosh_smoke.sh
 
 Phase 2/3 内部消融 smoke 脚本。用于在仿真中跑一个 SPMPC variant，

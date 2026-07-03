@@ -50,6 +50,26 @@ struct CommandPublishMeta {
     bool angular_accel_limited = false;
 };
 
+struct CommandInterventionDebug {
+    double solver_cmd_v = 0.0;
+    double solver_cmd_omega = 0.0;
+    double post_gate_cmd_v = 0.0;
+    double post_gate_cmd_omega = 0.0;
+    double published_cmd_v = 0.0;
+    double published_cmd_omega = 0.0;
+    bool output_success = false;
+    bool zero_due_to_solver_failure = false;
+    bool zero_due_to_waiting_for_odom = false;
+    bool zero_due_to_waiting_for_reference = false;
+    bool zero_due_to_waiting_for_tf = false;
+    bool zero_due_to_terminal_spin_fail = false;
+    bool zero_due_to_tracking_safety = false;
+    bool linear_limited = false;
+    bool angular_rate_limited = false;
+    bool angular_accel_limited = false;
+    bool publish_cmd_vel = false;
+};
+
 struct OdomTimingDebug {
     double recv_age_ms = 0.0;
     double stamp_dt_ms = 0.0;

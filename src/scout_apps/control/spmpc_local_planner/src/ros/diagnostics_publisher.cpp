@@ -1,9 +1,18 @@
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
+#include <algorithm>
 #include <cmath>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 namespace spmpc_local_planner {
+
+namespace {
+
+double modalHeightMm(const SloshState& state, double height_coeff) {
+    return 1000.0 * std::max(0.0, height_coeff) * std::hypot(state.eta_x, state.eta_y);
+}
+
+}  // namespace
 
 void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     status_pub_ = nh.advertise<std_msgs::String>("status", 1, true);
@@ -35,6 +44,10 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     stage0_reference_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/stage0_reference", 1);
     local_traj_head_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/local_traj_head", 1);
     warm_start_head_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/warm_start_head", 1);
+    raw_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/raw_state", 1);
+    predicted_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/predicted_state", 1);
+    solver_input_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/solver_input_state", 1);
+    command_intervention_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/command_intervention", 1);
     cmd_output_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/cmd_vel_output", 1);
     cmd_output_status_pub_ = nh.advertise<std_msgs::String>("debug/cmd_vel_output_status", 1);
     delay_phase_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/delay_phase", 1);
@@ -117,6 +130,106 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     msg.data[39] = static_cast<float>(config.delay_history_window_sec);
     msg.data[40] = static_cast<float>(config.delay_require_complete_history);
     effective_config_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishRawState(const RobotState& robot, const SloshState& slosh, double height_coeff) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label = "x,y,yaw,v,omega,eta_x,eta_x_dot,eta_y,eta_y_dot,h_modal_mm";
+    msg.layout.dim[0].size = 10;
+    msg.layout.dim[0].stride = 10;
+    msg.data.resize(10, 0.0f);
+    msg.data[0] = static_cast<float>(robot.x);
+    msg.data[1] = static_cast<float>(robot.y);
+    msg.data[2] = static_cast<float>(robot.yaw);
+    msg.data[3] = static_cast<float>(robot.v);
+    msg.data[4] = static_cast<float>(robot.omega);
+    msg.data[5] = static_cast<float>(slosh.eta_x);
+    msg.data[6] = static_cast<float>(slosh.eta_x_dot);
+    msg.data[7] = static_cast<float>(slosh.eta_y);
+    msg.data[8] = static_cast<float>(slosh.eta_y_dot);
+    msg.data[9] = static_cast<float>(modalHeightMm(slosh, height_coeff));
+    raw_state_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishPredictedState(const ExecutionStatePrediction& prediction, double height_coeff) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label =
+        "valid,x,y,yaw,v,omega,eta_x,eta_x_dot,eta_y,eta_y_dot,h_modal_mm,integrated_ms,covered_history_ms,missing_history_ms,history_complete,status_code";
+    msg.layout.dim[0].size = 16;
+    msg.layout.dim[0].stride = 16;
+    msg.data.resize(16, 0.0f);
+    msg.data[0] = prediction.valid ? 1.0f : 0.0f;
+    msg.data[1] = static_cast<float>(prediction.predicted_robot.x);
+    msg.data[2] = static_cast<float>(prediction.predicted_robot.y);
+    msg.data[3] = static_cast<float>(prediction.predicted_robot.yaw);
+    msg.data[4] = static_cast<float>(prediction.predicted_robot.v);
+    msg.data[5] = static_cast<float>(prediction.predicted_robot.omega);
+    msg.data[6] = static_cast<float>(prediction.predicted_slosh.eta_x);
+    msg.data[7] = static_cast<float>(prediction.predicted_slosh.eta_x_dot);
+    msg.data[8] = static_cast<float>(prediction.predicted_slosh.eta_y);
+    msg.data[9] = static_cast<float>(prediction.predicted_slosh.eta_y_dot);
+    msg.data[10] = static_cast<float>(modalHeightMm(prediction.predicted_slosh, height_coeff));
+    msg.data[11] = static_cast<float>(1000.0 * prediction.integrated_duration_sec);
+    msg.data[12] = static_cast<float>(1000.0 * prediction.covered_history_sec);
+    msg.data[13] = static_cast<float>(1000.0 * prediction.missing_history_sec);
+    msg.data[14] = prediction.history_complete ? 1.0f : 0.0f;
+    msg.data[15] = static_cast<float>(static_cast<int>(prediction.status_code));
+    predicted_state_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishSolverInputState(const SolverInput& input,
+                                                   bool delay_compensation_applied,
+                                                   double height_coeff) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label =
+        "source_code,delay_compensation_applied,x,y,yaw,v,omega,eta_x,eta_x_dot,eta_y,eta_y_dot,h_modal_mm";
+    msg.layout.dim[0].size = 12;
+    msg.layout.dim[0].stride = 12;
+    msg.data.resize(12, 0.0f);
+    msg.data[0] = delay_compensation_applied ? 1.0f : 0.0f;
+    msg.data[1] = delay_compensation_applied ? 1.0f : 0.0f;
+    msg.data[2] = static_cast<float>(input.robot.x);
+    msg.data[3] = static_cast<float>(input.robot.y);
+    msg.data[4] = static_cast<float>(input.robot.yaw);
+    msg.data[5] = static_cast<float>(input.robot.v);
+    msg.data[6] = static_cast<float>(input.robot.omega);
+    msg.data[7] = static_cast<float>(input.slosh.eta_x);
+    msg.data[8] = static_cast<float>(input.slosh.eta_x_dot);
+    msg.data[9] = static_cast<float>(input.slosh.eta_y);
+    msg.data[10] = static_cast<float>(input.slosh.eta_y_dot);
+    msg.data[11] = static_cast<float>(modalHeightMm(input.slosh, height_coeff));
+    solver_input_state_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishCommandIntervention(const CommandInterventionDebug& intervention) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label =
+        "solver_cmd_v,solver_cmd_omega,post_gate_cmd_v,post_gate_cmd_omega,published_cmd_v,published_cmd_omega,output_success,zero_due_to_solver_failure,zero_due_to_waiting_for_odom,zero_due_to_waiting_for_reference,zero_due_to_waiting_for_tf,zero_due_to_terminal_spin_fail,zero_due_to_tracking_safety,linear_limited,angular_rate_limited,angular_accel_limited,publish_cmd_vel";
+    msg.layout.dim[0].size = 17;
+    msg.layout.dim[0].stride = 17;
+    msg.data.resize(17, 0.0f);
+    msg.data[0] = static_cast<float>(intervention.solver_cmd_v);
+    msg.data[1] = static_cast<float>(intervention.solver_cmd_omega);
+    msg.data[2] = static_cast<float>(intervention.post_gate_cmd_v);
+    msg.data[3] = static_cast<float>(intervention.post_gate_cmd_omega);
+    msg.data[4] = static_cast<float>(intervention.published_cmd_v);
+    msg.data[5] = static_cast<float>(intervention.published_cmd_omega);
+    msg.data[6] = intervention.output_success ? 1.0f : 0.0f;
+    msg.data[7] = intervention.zero_due_to_solver_failure ? 1.0f : 0.0f;
+    msg.data[8] = intervention.zero_due_to_waiting_for_odom ? 1.0f : 0.0f;
+    msg.data[9] = intervention.zero_due_to_waiting_for_reference ? 1.0f : 0.0f;
+    msg.data[10] = intervention.zero_due_to_waiting_for_tf ? 1.0f : 0.0f;
+    msg.data[11] = intervention.zero_due_to_terminal_spin_fail ? 1.0f : 0.0f;
+    msg.data[12] = intervention.zero_due_to_tracking_safety ? 1.0f : 0.0f;
+    msg.data[13] = intervention.linear_limited ? 1.0f : 0.0f;
+    msg.data[14] = intervention.angular_rate_limited ? 1.0f : 0.0f;
+    msg.data[15] = intervention.angular_accel_limited ? 1.0f : 0.0f;
+    msg.data[16] = intervention.publish_cmd_vel ? 1.0f : 0.0f;
+    command_intervention_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishCommandOutput(const geometry_msgs::Twist& desired,
