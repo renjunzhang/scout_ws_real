@@ -1,217 +1,296 @@
-# Agent B：D 组 local planner 文献补强与缺口检查
+# SPMPC 普通移动机器人局部规划器文献缺口检查
 
-日期：2026-07-01  
-角色：Agent B — D 组 ordinary mobile-robot local planner / MPC / MPCC 谱系检查  
-输入优先级：遵循 `SPMPC论文写作路线_文献优先.md`：docx 决定写作组织，Obsidian/原论文决定文献事实，LaTeX 草稿决定当前正文状态。
+日期：2026-07-02  
+角色：Agent B  
+范围：站在论文作者视角，判断“普通移动机器人局部规划器 / MPC / MPCC”相关文献是否足以支撑 SPMPC 相关工作第一小节；本文件只做文献缺口判断和写作建议，不直接修改 `02_related_work.tex`。
 
----
+## 1. 结论先行
 
-## 1. 结论摘要
+- 如果**只引用当前 `02_related_work.tex` 第 58 行已经使用的 D 组文献**（`D01_Macenski2023`、`D02_Jian2023`、`D03_Zhang2025`、`D06_Williams2017`、`D07_Trevisan2025`、`D13_Berscheid2021`），相关工作第一小节的论证**还不够扎实**。这些文献能说明普通局部规划器、MPPI、轨迹优化和平滑轨迹生成已经成熟，但还缺少 DWA 原始论文、TEB、普通 MPC 局部规划器、MPCC 主干、移动机器人 MPCC 和局部规划器评价基准这些关键支点。
+- 如果采用**当前 `references.bib` 中已经补入的 D15--D21 条目**，文献基础已经基本够用。也就是说，问题不再是“完全缺文献”，而是后续改正文时必须把这些文献真正用到 Related Work 第一小节中，而不是继续只引用旧的 D01/D02/D03/D06/D07/D13。
+- 主文必须引用或至少应进入 Related Work 第一小节的文献类型是：DWA 原始论文、TEB、普通 MPC / `mpc_local_planner` 谱系、移动机器人 MPCC，以及 LT-DWA。如果 Method 中明确使用 MPCC 叙事，还应补一个 MPCC 路径进度或轮廓误差主干文献。
+- RPP、MPPI、Ruckig、UTO、TOPPRA、DWPP 属于可选文献。它们能增强“普通方法已经能做路径跟踪、速度约束、风险、平滑性和时间效率”的背景，但不是证明 SPMPC 文献缺口的最小必需集合。
+- 地形规划、DRL、多机器人轨迹优化、一般数据驱动预测控制和“流体启发”的运动规划不建议在主文第一小节展开。它们容易拉散主线，且不能直接支撑“标准 WMR 在线局部规划器通常不传播液体状态”这句话。
+- 建议写作顺序是：**先确认并固定 `references.bib` 中 DWA、TEB、MPC 局部规划器、MPCC、MRPB 的 citation key，再重写 `02_related_work.tex` 第一小节**。否则正文中容易出现 D02 与 D14 混引，或 Obsidian 编号与 `references.bib` key 不一致的问题。
+- 这些文献最终服务于论文中的核心论断是：**普通移动机器人局部规划器能够在线生成可执行底盘命令，并可优化安全性、效率、平滑性、路径进度或避障性能；但它们的预测状态通常围绕机器人和环境，不传播被运输液体的模态状态。因此，SPMPC 的贡献不是发明普通局部规划或首次把晃液放入 MPC，而是在标准 WMR 在线 MPCC 局部规划层中加入低阶晃液状态传播。**
 
-当前 D 组文献已经覆盖了若干现代 local planner / MPC / MPPI / trajectory-generation 方向，例如 RPP、LT-DWA、MPPI、UTO、TOPPRA、Ruckig 等；这些足以支撑“普通 local planner 能在线、平滑、可执行，但默认不传播液体动态状态”的主论点。
+## 2. 当前已有 D 组文献能支撑什么
 
-但如果终稿 Related Work 第一段要承担 docx 要求的“先建立 SPMPC 所在方法层级”这一任务，当前谱系还缺少几类 canonical anchor：
+| 文献 key | 方法或论文 | 属于哪类局部规划 / 运动生成方法 | 是否已在 references.bib | 是否适合主文引用 | 在 SPMPC 论文中的作用 |
+|---|---|---|---|---|---|
+| `D01_Macenski2023` | Regulated Pure Pursuit for Robot Path Tracking | RPP / 普通路径跟踪器 | 是 | 可选 | 支撑“普通路径跟踪器可以在线输出底盘速度命令，并根据曲率、碰撞启发和安全规则调节速度”。它适合作轻量路径跟踪背景，但不能单独支撑 MPC / MPCC 局部规划层。 |
+| `D02_Jian2023` | Long-Term Dynamic Window Approach for Kinodynamic Local Planning in Static and Crowd Environments | LT-DWA / 长时域 DWA 类局部规划器 | 是 | 建议主文引用；若实验使用 LT-DWA 则必引 | 支撑“DWA 家族已经有现代长时域和图优化扩展，能够在线生成更安全、更可跟踪的局部运动”。它说明普通局部规划器可以很强，但仍不传播液体模态状态。注意：`D02_Jian2023` 是 LT-DWA，不是 D-CBF-MPC。 |
+| `D03_Zhang2025` | Universal Trajectory Optimization Framework for Differential Drive Robot Class | 差速机器人轨迹优化 / UTO | 是 | 可选 | 支撑“普通差速机器人轨迹优化可以直接优化线速度、角速度及其积分形式，生成可行、平滑、高质量运动”。它可作为普通轨迹优化背景，但不是 SPMPC 缺口的最关键文献。 |
+| `D04_Li2025` | Real-Time Multilevel Terrain-Aware Path Planning for Ground Mobile Robots in Large-Scale Rough Terrains | 地形感知路径规划 | 是 | 不建议主文第一小节展开 | 支撑移动机器人规划可扩展到地形和稳定性，但第一版 SPMPC 不纳入 terrain prior。主文展开它会偏离“液体状态预测”主线。 |
+| `D05_SnchezIbez2021` | Path Planning for Autonomous Mobile Robots: A Review | 移动机器人路径规划综述 | 是 | 可选背景，不建议重点展开 | 可作为术语或综述背景，但不能替代 DWA、TEB、MPC、MPCC 这些具体同层方法。 |
+| `D06_Williams2017` | Model Predictive Path Integral Control: From Theory to Parallel Computation | MPPI / 采样式 MPC | 是 | 可选到建议主文引用 | 支撑“MPC/MPPI 类方法可以在线处理非线性系统和复杂代价”。它有助于说明普通预测控制并不天然等于液体感知，只有显式加入液体状态后才会成为 slosh-aware。 |
+| `D07_Trevisan2025` | Dynamic Risk-Aware MPPI for Mobile Robots in Crowds | 风险感知 MPPI | 是 | 可选 | 支撑“普通局部规划器甚至可以优化人群风险和不确定性”。但其风险对象是外部人群/障碍，而不是容器内液体动态记忆。 |
+| `D08_Li2021` | Efficient Trajectory Planning for Multiple Non-Holonomic Mobile Robots via Prioritized Trajectory Optimization | 多非完整机器人轨迹优化 | 是 | 不建议主文第一小节展开 | 说明优化式运动生成可用于多机器人协调，但任务层级不是单个 WMR 携带开口液体的在线局部规划。 |
+| `D09_Yan2024` | Distributed Data-driven Predictive Control via Dissipative Behavior Synthesis | 数据驱动预测控制理论 | 是 | 不建议主文展开 | 是控制理论背景，不是移动机器人局部规划器基线。 |
+| `D10_Butyrev2019` | Deep Reinforcement Learning for Motion Planning of Mobile Robots | DRL 运动规划 | 是 | 不建议主文展开 | 可作为学习式运动规划背景，但若论文不做学习式基线，主文展开会分散论证。 |
+| `D11_Malliaropoulos2024` | Actor-Critic RL for Reactive 3D Optimal Motion Planning Based on Fluid Dynamics | “流体启发”的三维反应式规划 | 是 | 不建议主文展开 | 这里的“流体”是规划场类比，不是被运输液体晃动。主文展开容易造成术语混淆。 |
+| `D12_Pham2017` | TOPPRA / time-optimal path parameterization | 固定路径速度剖面 | 是 | 可选 | 支撑“给定路径上可以做时间最优速度剖面”。它适合补充 smooth-only 或 speed-profile 对照，但不是在线局部规划层的主支点。 |
+| `D13_Berscheid2021` | Jerk-limited Real-time Trajectory Generation with Arbitrary Target States | jerk-limited 在线轨迹生成 | 是 | 可选 | 支撑“普通运动生成可以实时满足速度、加速度和 jerk 约束，从而获得平滑命令”。它有助于说明“平滑不等于防晃”，但不传播液体模态状态。 |
+| `D14_Jian2023` | Dynamic Control Barrier Function-based MPC to Safety-Critical Obstacle-Avoidance of Mobile Robot | D-CBF-MPC / 安全关键避障叙事参考 | 是 | 不建议放入普通局部规划器第一小节的主线 | 这是 D-CBF-MPC 叙事参考，不是 LT-DWA。可用于安全约束或叙事方式参考，但不能替代 DWA、TEB 或普通 MPC 局部规划器文献。 |
+| `D15_Fox1997` | The Dynamic Window Approach to Collision Avoidance | DWA 原始论文 / 速度空间局部规划器 | 是 | 必引 | 支撑“经典局部规划器可以在线选择满足动力学和避障约束的底盘速度命令”。它是证明 ordinary local planner 在线可执行的基础文献之一。 |
+| `D16_Rosmann2017` | Integrated Online Trajectory Planning and Optimization in Distinctive Topologies | TEB / 拓扑感知在线轨迹优化 | 是 | 必引 | 支撑“优化式局部规划器可在线处理非完整约束、速度/加速度限制、障碍距离和不同拓扑候选”。它是 TEB 基线和普通优化式局部规划器的关键文献。 |
+| `D17_Rosmann2021` | Online Motion Planning based on Nonlinear MPC with Non-Euclidean Rotation Groups | 普通 NMPC 局部规划器 / `mpc_local_planner` 谱系 | 是 | 建议必引 | 支撑“普通 MPC 局部规划器可以在线处理非线性模型、约束和位姿误差”。ROS Index 与仓库页面均将 `mpc_local_planner` 指向该论文；它直接服务于“SPMPC 不是普通 MPC 加平滑项，而是在局部 MPC/MPCC 中加入液体状态”。 |
+| `D18_Lam2013` | Model Predictive Contouring Control for Biaxial Systems | MPCC / 轮廓误差控制基础 | 是 | 可选；Method 中可引 | 支撑“轮廓误差、滞后误差和路径进度优化是 MPCC 中已有概念”。当前缺少对应 Obsidian 单篇笔记，正式使用前建议再核验原文。 |
+| `D19_Liniger2015` | Optimization-Based Autonomous Racing of 1:43 Scale RC Cars | 移动系统 MPCC / 路径进度优化 | 是 | 建议主文或 Method 引用 | 支撑“MPCC 可在移动系统中实时联合优化路径进度、跟踪误差和约束”。它能支撑 SPMPC 的 MPCC 主干，但不涉及液体运输。 |
+| `D20_Brito2019` | Model Predictive Contouring Control for Collision Avoidance in Unstructured Dynamic Environments | 移动机器人 MPCC / 动态环境避障 | 是 | 必引 | 支撑“MPCC 已可作为移动机器人在线局部规划和避障主干”。它是保护 novelty 的关键文献：SPMPC 的贡献不是首次把 MPCC 用于移动机器人，而是在该层加入液体模态状态。 |
+| `D21_Wen2021` | MRPB 1.0 | 局部规划器评价基准 | 是 | 主文可选，实验章节建议引用 | 支撑“普通局部规划器评价通常关注安全性、效率和平滑性，而不评价开口液体的内部响应”。它适合解释为什么 SPMPC 需要额外的 slosh 指标。 |
+| 待定 / Obsidian `D20` | DWPP: Dynamic Window Pure Pursuit | DWA + Pure Pursuit / 速度与加速度约束路径跟踪 | 否 | 暂不建议主文引用 | 可补充说明普通路径跟踪器正在更显式地考虑速度和加速度约束，但当前 `references.bib` 无条目，信息应标注待核验。 |
 
-1. **classic DWA**：需要用 Fox--Burgard--Thrun 1997 作为 DWA 家族源头，而不是只引用 LT-DWA。
-2. **TEB**：需要 canonical TEB / distinctive-topology trajectory optimization 论文支撑 ROS TEB baseline。
-3. **mpc_local_planner / ordinary NMPC local planner**：需要单独引用 ROS `mpc_local_planner` 对应的 NMPC local-planning paper，而不能只泛称 MPC。
-4. **MPCC backbone**：需要引用 contouring-error / progress-optimization 的 canonical MPCC 文献，解释 SPMPC 的 `s, v_s` 和 contouring/lag/progress 思路不是凭空出现。
-5. **mobile-robot MPCC**：需要引用普通移动机器人/动态环境中的 MPCC local planning，避免把 novelty 误写成“首次把 MPCC 用于 mobile robot local planning”。
-6. **local-planner benchmark**：需要 MRPB 作为 baseline 选择与评价维度的 benchmark 参考。
+## 3. 可能缺失的经典局部规划文献
 
-已在 `docs/论文书写/草稿/spmpc_paper_cn/references.bib` 中补入 D15--D21 作为这些 anchor 的 BibTeX 条目。
+### 3.1 DWA
 
----
+- **是否已有**：当前 `references.bib` 已有 `D15_Fox1997`；Obsidian D 组也有 DWA 原始论文笔记，但 Obsidian 编号是 D14。
+- **是否建议补**：如果从旧正文引用集合看，必须补；如果按当前 `references.bib`，则应保留并在正文中实际引用。
+- **推荐补哪篇**：Fox、Burgard、Thrun 的 *The Dynamic Window Approach to Collision Avoidance*。
+- **它在本文中的作用**：作为 DWA 家族源头，支撑“普通局部规划器能够在线生成满足动力学和避障约束的可执行速度命令”。
+- **它支撑的论文表述**：DWA 类方法在速度空间内选择可执行且安全的底盘速度，是移动机器人在线局部规划的经典路线；但其评价目标围绕机器人运动和障碍安全，不包含被运输液体的模态位移和速度。
 
-## 2. 已补入 references.bib 的 canonical entries
+### 3.2 TEB
 
-| 新 key | 文献 | 论文角色 | 在 SPMPC 中的用法 |
-|---|---|---|---|
-| `D15_Fox1997` | Fox, Burgard, Thrun, *The Dynamic Window Approach to Collision Avoidance*, 1997 | classic DWA source | 支撑 DWA 是 velocity-space online local planner 家族的经典源头；与 LT-DWA 一起组成 DWA 线。 |
-| `D16_Rosmann2017` | Rösmann, Hoffmann, Bertram, *Integrated Online Trajectory Planning and Optimization in Distinctive Topologies*, 2017 | TEB canonical paper | 支撑 TEB 作为 optimization-based online local planner baseline；强调其优化机器人轨迹拓扑/动态约束，但无液体模态状态。 |
-| `D17_Rosmann2021` | Rösmann, Makarow, Bertram, *Online Motion Planning based on Nonlinear Model Predictive Control with Non-Euclidean Rotation Groups*, 2021 | `mpc_local_planner` / ordinary NMPC local-planner anchor | 支撑 ordinary NMPC local planner baseline；说明 MPC-style local planning 已成熟，但默认状态/代价仍是机器人中心的。 |
-| `D18_Lam2013` | Lam, Manzie, Good, *Model Predictive Contouring Control for Biaxial Systems*, 2013 | MPCC contouring-control foundation | 支撑 contouring/lag error 与路径进度优化的 MPCC 基础概念。 |
-| `D19_Liniger2015` | Liniger, Domahidi, Morari, *Optimization-Based Autonomous Racing of 1:43 Scale RC Cars*, 2015 | nonlinear MPCC / autonomous-racing backbone | 支撑路径进度、轮式/车辆动力学、receding-horizon contouring control 的成熟性。 |
-| `D20_Brito2019` | Brito, Floor, Ferranti, Alonso-Mora, *Model Predictive Contouring Control for Collision Avoidance in Unstructured Dynamic Environments*, 2019 | mobile-robot MPCC / dynamic-environment anchor | 防止过度宣称；可写成“MPCC 已用于 mobile-robot collision avoidance/local planning，但未传播 transported-liquid modal state”。 |
-| `D21_Wen2021` | Wen et al., *MRPB 1.0: A Unified Benchmark for the Evaluation of Mobile Robot Local Planning Approaches*, 2021 | local-planner benchmark | 支撑 baseline 选择、评价指标与 local planner benchmark 背景。 |
+- **是否已有**：当前 `references.bib` 已有 `D16_Rosmann2017`；Obsidian D 组中对应 TEB 笔记编号为 D19。
+- **是否建议补**：必须补入主文引用。TEB 是 ROS 局部规划基线中最常被审稿人预期看到的优化式方法之一。
+- **推荐补哪篇**：Rösmann、Hoffmann、Bertram 的 *Integrated Online Trajectory Planning and Optimization in Distinctive Topologies*。
+- **它在本文中的作用**：支撑“普通优化式局部规划器已经能在线处理非完整约束、速度/加速度限制、障碍距离和拓扑不同的候选轨迹”。
+- **它支撑的论文表述**：TEB 等优化式局部规划器可以在线生成满足运动学和避障约束的局部轨迹，但其预测变量仍是机器人轨迹和时间间隔，不包含开口容器内液体的动态状态。
 
----
+### 3.3 mpc_local_planner
 
-## 3. 当前 D 组覆盖与缺口
+- **是否已有**：当前 `references.bib` 已有 `D17_Rosmann2021`，Obsidian 中也有对应 NMPC 局部规划笔记。
+- **是否建议补**：建议补入主文，尤其当实验或叙事中提到 `mpc_local_planner` 或 ordinary MPC 局部规划器时。
+- **推荐补哪篇**：Rösmann、Makarow、Bertram 的 *Online Motion Planning based on Nonlinear Model Predictive Control with Non-Euclidean Rotation Groups*。
+- **它在本文中的作用**：支撑“普通 MPC 局部规划器已经能够在线处理非线性机器人模型、约束和位姿误差”。这样才能把 SPMPC 的差异写清楚：SPMPC 不是“普通 MPC 加平滑项”，而是把液体模态状态也放进预测模型。
+- **它支撑的论文表述**：普通 MPC 局部规划器能够在滚动时域内优化底盘运动，但若状态中没有液体模态位移和速度，它仍不能显式处理被运输液体的动态记忆。
+- **核验结果**：当前 Obsidian 将该论文作为 `mpc_local_planner` 谱系参考；ROS Index 与仓库页面也将 `mpc_local_planner` 指向该论文。正式引用建议以 ECC 论文为主，ROS 页面只作为本地追踪信息，不作为主文引用。
 
-### 3.1 已覆盖且可保留
+### 3.4 MPCC / 轮廓误差局部规划主干
 
-当前 Obsidian D 组已有内容仍有价值：
+- **是否已有**：当前 `references.bib` 已有 `D18_Lam2013` 和 `D19_Liniger2015`。Obsidian 中已整理 Liniger，Lam 目前未见单独精读笔记。
+- **是否建议补**：建议至少引用一个 MPCC 主干文献。若 Method 中解释 contouring error、lag error、路径进度和 `s, v_s`，则更应引用。
+- **推荐补哪篇**：优先用 `D19_Liniger2015` 支撑移动系统上的路径进度优化；若要强调一般 MPCC 轮廓误差定义，可补 `D18_Lam2013`，但正式使用前建议核验原文。
+- **它在本文中的作用**：支撑“SPMPC 是局部规划层的 MPCC，而不是单纯给定轨迹跟踪控制器”。MPCC 主干说明路径进度本身可以进入优化，而不是只跟踪预先给定的时间参数轨迹。
+- **它支撑的论文表述**：MPCC 已经提供了将路径跟踪误差、路径进度和约束放入同一滚动优化问题的主干；SPMPC 在该主干上加入低阶晃液状态传播和液体响应代价。
 
-- `D01_Macenski2023`：RPP，可作为 lightweight tracking / supplementary baseline。
-- `D02_Jian2023`：LT-DWA，可作为 modern DWA-family external baseline。
-- `D03_Zhang2025`：UTO，可作为差速机器人 trajectory optimization 相关工作。
-- `D06_Williams2017`、`D07_Trevisan2025`：MPPI / risk-aware MPPI，可作为 sampling-based MPC local-planning family。
-- `D12_Pham2017`、`D13_Berscheid2021`：TOPPRA / Ruckig，可用于 fixed-path speed-profile 或 smooth-only supplementary baseline。
-- `D14_Jian2023`：D-CBF-MPC，适合作 narrative reference / dynamic-obstacle MPC guardrail，不应和 D02 LT-DWA 混淆。
+### 3.5 移动机器人 MPCC
 
-### 3.2 主要缺口
+- **是否已有**：当前 `references.bib` 已有 `D20_Brito2019`；Obsidian 中对应移动机器人 MPCC 笔记编号为 D18。
+- **是否建议补**：必须补。它是保护 novelty 的关键文献。
+- **推荐补哪篇**：Brito、Floor、Ferranti、Alonso-Mora 的 *Model Predictive Contouring Control for Collision Avoidance in Unstructured Dynamic Environments*。
+- **它在本文中的作用**：说明移动机器人语境下的 MPCC 局部规划已经存在，并且可以在线处理路径跟踪、路径进度和避障。因此 SPMPC 不能把“MPCC 用于移动机器人局部规划”写成贡献。
+- **它支撑的论文表述**：已有移动机器人 MPCC 可以在线优化路径跟踪、路径进度和障碍约束，但其预测状态仍主要围绕机器人和障碍物；SPMPC 的差异在于加入被运输液体的低阶模态状态。
 
-| 缺口 | 为什么重要 | 修复状态 |
-|---|---|---|
-| 只有 LT-DWA、没有 classic DWA | 审稿人通常会把 DWA 识别为 classic local planner family；只 cite LT-DWA 会显得谱系不完整。 | 已补 `D15_Fox1997`。 |
-| 没有 TEB canonical entry | TEB 是 ROS local-planner baseline 常见对照；若实验中出现 TEB，Related Work 和 references 必须有正式来源。 | 已补 `D16_Rosmann2017`。 |
-| 没有 `mpc_local_planner` 对应普通 NMPC local-planner entry | 论文主线强调 SPMPC 是 slosh-aware MPCC/local MPC；必须有 ordinary MPC local planner 参照物。 | 已补 `D17_Rosmann2021`。 |
-| 没有 MPCC foundation | Method 中的 path progress / contouring 需要引用 backbone；否则 SPMPC 的 MPCC 层级缺少事实支点。 | 已补 `D18_Lam2013`、`D19_Liniger2015`。 |
-| 没有 mobile-robot MPCC guardrail | 需要避免写成“首次把 MPCC 用到 mobile robot”；novelty 应是 slosh-state augmentation in online local-planning layer。 | 已补 `D20_Brito2019`。 |
-| 没有 benchmark reference | 实验章节需要解释为什么选 DWA/TEB/MPC 等 baseline、指标如何设计。 | 已补 `D21_Wen2021`。 |
+### 3.6 局部规划器评价基准
 
----
+- **是否已有**：当前 `references.bib` 已有 `D21_Wen2021`；Obsidian 中对应 MRPB 笔记编号为 D17。
+- **是否建议补**：建议补，但不一定必须放在 Related Work 第一小节。若篇幅紧张，可放到实验设计或评价指标小节。
+- **推荐补哪篇**：Wen 等的 *MRPB 1.0: A Unified Benchmark for the Evaluation of Mobile Robot Local Planning Approaches*。
+- **它在本文中的作用**：支撑“普通局部规划器评价通常围绕安全性、效率和平滑性展开”，从而引出 SPMPC 还需要评价预测液体响应或外部液面指标。
+- **它支撑的论文表述**：标准局部规划器基准可以评价导航层面的安全、效率和平滑，但这些指标不能替代开口液体运输中的液体响应评价。
 
-## 4. 推荐写入 Related Work 第一段的逻辑
+## 4. 建议补入或保留在 references.bib 的条目
 
-建议终稿第一段不再只列“DWA / TEB / MPC / MPPI”，而是按方法层级展开：
+说明：以下条目在当前 `references.bib` 中已经存在。这里的“必补”是从论文写作判断出发：如果后续换成干净 bib 或重排 key，这些条目不应丢失。
 
-1. **Velocity-space local planning**：classic DWA → LT-DWA。
-2. **Graph / optimization-based local planning**：TEB。
-3. **Ordinary MPC / NMPC local planning**：`mpc_local_planner` / NMPC motion planning。
-4. **MPPI / sampling-based MPC**：MPPI family。
-5. **MPCC / path-progress optimization**：Lam / Liniger / Brito 等 MPCC backbone。
-6. **Benchmark / evaluation**：MRPB。
+### 4.1 主文建议必补
 
-可用的正文骨架如下：
+#### DWA 原始论文
 
-```tex
-Classic velocity-space local planners such as DWA \cite{D15_Fox1997} and its long-horizon variants \cite{D02_Jian2023},
-optimization-based planners such as TEB \cite{D16_Rosmann2017},
-ordinary NMPC local planners \cite{D17_Rosmann2021},
-and sampling-based MPC/MPPI methods \cite{D06_Williams2017,D07_Trevisan2025}
-can generate online, feasible, and smooth mobile-robot commands.
-MPCC formulations further introduce contouring/lag errors and path-progress optimization \cite{D18_Lam2013,D19_Liniger2015},
-and have also been used for mobile-robot collision avoidance in dynamic environments \cite{D20_Brito2019}.
-Benchmarks such as MRPB summarize common evaluation practice for mobile-robot local planning \cite{D21_Wen2021}.
-However, these ordinary local planners usually optimize robot states, path geometry, collision risk, progress, and control smoothness, rather than propagating transported-liquid modal states inside the receding horizon.
+- 推荐引用：`D15_Fox1997`
+- 为什么必须补：没有 DWA 原始论文，DWA 家族只引用 LT-DWA 会显得谱系不完整。
+- 支撑论断：普通移动机器人局部规划器可以在线输出满足动力学和避障约束的可执行速度命令，但不传播液体状态。
+- BibTeX 候选：
+
+```bibtex
+@article{D15_Fox1997,
+  title = {{The Dynamic Window Approach to Collision Avoidance}},
+  author = {Dieter Fox and Wolfram Burgard and Sebastian Thrun},
+  year = {1997},
+  journal = {IEEE Robotics \& Automation Magazine},
+  volume = {4},
+  number = {1},
+  pages = {23--33},
+  doi = {10.1109/100.580977},
+  keywords = {SPMPC,D15,classic-DWA,local-planner,baseline}
+}
 ```
 
-中文对应逻辑：
+#### TEB
 
-> DWA、TEB、ordinary NMPC local planner、MPPI 和 MPCC 已经能在线生成可执行、平滑、避障或路径进度优化的移动机器人运动；但它们的预测状态通常围绕机器人位姿、速度、障碍风险、路径误差和控制平滑性构建，并不包含液体模态位移/速度。因此，它们是 SPMPC 的同层 ordinary local-planner baseline，而不是 slosh-aware planner。
+- 推荐引用：`D16_Rosmann2017`
+- 为什么必须补：TEB 是普通优化式局部规划器的代表，也是 ROS 语境下常见基线。
+- 支撑论断：普通优化式局部规划器可在线优化可行轨迹和避障约束，但其预测变量仍是机器人轨迹而非液体模态状态。
+- BibTeX 候选：
 
----
-
-## 5. 推荐 baseline 分层
-
-### 5.1 主文 direct external baselines
-
-| Baseline | 建议引用 | 角色 |
-|---|---|---|
-| DWA | `D15_Fox1997`；若实验用 LT-DWA，再加 `D02_Jian2023` | classic / modern velocity-space local planner。 |
-| TEB | `D16_Rosmann2017` | optimization-based ROS local planner。 |
-| `mpc_local_planner` / ordinary NMPC | `D17_Rosmann2021` | 最接近“普通 MPC local planner”的同层对照。 |
-| LT-DWA | `D02_Jian2023` | 已在 Obsidian D 组中，适合作 modern DWA-family baseline。 |
-
-### 5.2 主文或 appendix 的 method-foundation references
-
-| Reference | 建议引用 | 角色 |
-|---|---|---|
-| MPCC contouring foundation | `D18_Lam2013` | 解释 contouring/lag error 与 progress variable。 |
-| Autonomous-racing MPCC | `D19_Liniger2015` | 支撑 nonlinear receding-horizon MPCC / path-progress optimization。 |
-| Mobile-robot MPCC collision avoidance | `D20_Brito2019` | novelty guardrail：MPCC local planning 已存在，SPMPC 的新增点是 liquid modal state。 |
-
-### 5.3 Supplementary / optional references
-
-| Reference | 当前状态 | 用法 |
-|---|---|---|
-| RPP | 已有 `D01_Macenski2023` | 如果实验加入轻量 tracking baseline，可引用。 |
-| MPPI | 已有 `D06_Williams2017` / `D07_Trevisan2025` | 可作为 ordinary MPC/MPPI family，而不一定必须实作 baseline。 |
-| TOPPRA / Ruckig | 已有 `D12_Pham2017` / `D13_Berscheid2021` | 用于 smooth-only 或 speed-profile supplementary baseline，证明 smooth-only 不等于 slosh-aware。 |
-| UTO | 已有 `D03_Zhang2025` | 可作为差速机器人 trajectory optimization 相关工作。 |
-| MRPB | 新增 `D21_Wen2021` | 实验指标和 benchmark 背景。 |
-
----
-
-## 6. 对当前 LaTeX 草稿的具体建议
-
-当前 `sections/02_related_work.tex` 中普通 local planner 小节已经表达了正确主线：ordinary local planners are online but not liquid-aware。但引用还偏向现有 D01--D13，缺少 classic/canonical anchors。
-
-建议后续修改时至少更新该句：
-
-```tex
-路径跟踪器、DWA 类局部规划器、MPC/MPPI、trajectory optimization、risk-aware motion planning 和 jerk-limited trajectory generation 已经能够在线生成可行、平滑且可执行的运动命令\cite{D01_Macenski2023,D02_Jian2023,D03_Zhang2025,D06_Williams2017,D07_Trevisan2025,D13_Berscheid2021}。
+```bibtex
+@article{D16_Rosmann2017,
+  title = {{Integrated Online Trajectory Planning and Optimization in Distinctive Topologies}},
+  author = {Christoph R{\"o}smann and Frank Hoffmann and Torsten Bertram},
+  year = {2017},
+  journal = {Robotics and Autonomous Systems},
+  volume = {88},
+  pages = {142--153},
+  doi = {10.1016/j.robot.2016.11.007},
+  keywords = {SPMPC,D16,TEB,local-planner,baseline}
+}
 ```
 
-改为类似：
+#### ordinary MPC / `mpc_local_planner` 谱系
 
-```tex
-Classic velocity-space local planners such as DWA\cite{D15_Fox1997} and modern long-horizon variants\cite{D02_Jian2023}, optimization-based planners such as TEB\cite{D16_Rosmann2017}, ordinary NMPC local planners\cite{D17_Rosmann2021}, MPPI-style predictive control\cite{D06_Williams2017,D07_Trevisan2025}, and jerk-limited online trajectory generation\cite{D13_Berscheid2021} can generate feasible, smooth, and executable robot commands online.
+- 推荐引用：`D17_Rosmann2021`
+- 为什么必须补：SPMPC 的方法层级是 MPC/MPCC 局部规划，如果没有普通 MPC 局部规划器作为对照，审稿人会觉得缺少同层参照。
+- 支撑论断：普通 MPC 局部规划器可以在线处理非线性约束，但不显式加入液体状态时不能处理液体动态记忆。
+- BibTeX 候选：
+
+```bibtex
+@inproceedings{D17_Rosmann2021,
+  title = {{Online Motion Planning based on Nonlinear Model Predictive Control with Non-Euclidean Rotation Groups}},
+  author = {Christoph R{\"o}smann and Artemi Makarow and Torsten Bertram},
+  year = {2021},
+  booktitle = {2021 European Control Conference (ECC)},
+  pages = {1583--1590},
+  doi = {10.23919/ECC54610.2021.9654872},
+  eprint = {2006.03534},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.RO},
+  keywords = {SPMPC,D17,mpc-local-planner,NMPC,ROS},
+  ros_index_url = {https://index.ros.org/r/mpc_local_planner/}
+}
 ```
 
-如果保留中文稿，可写成：
+- 待核验：是否在正文中直接称其为 `mpc_local_planner` 官方论文，建议再核对 ROS 文档。
 
-```tex
-经典 DWA 及其长时域变体\cite{D15_Fox1997,D02_Jian2023}、TEB 等优化式局部规划器\cite{D16_Rosmann2017}、普通 NMPC local planner\cite{D17_Rosmann2021}、MPPI 类预测控制方法\cite{D06_Williams2017,D07_Trevisan2025}以及 jerk-limited 在线轨迹生成\cite{D13_Berscheid2021}，已经能够在线生成可行、平滑且可执行的移动机器人运动命令。
+#### 移动机器人 MPCC
+
+- 推荐引用：`D20_Brito2019`
+- 为什么必须补：它能避免 SPMPC novelty 被写歪。移动机器人 MPCC 局部规划已存在，SPMPC 的新意是加入液体状态。
+- 支撑论断：MPCC 已可用于移动机器人在线局部规划和动态避障，但普通 MPCC 不传播被运输液体模态状态。
+- BibTeX 候选：
+
+```bibtex
+@article{D20_Brito2019,
+  title = {{Model Predictive Contouring Control for Collision Avoidance in Unstructured Dynamic Environments}},
+  author = {Bruno Brito and Boaz Floor and Laura Ferranti and Javier Alonso-Mora},
+  year = {2019},
+  journal = {IEEE Robotics and Automation Letters},
+  volume = {4},
+  number = {4},
+  pages = {4459--4466},
+  doi = {10.1109/LRA.2019.2929976},
+  keywords = {SPMPC,D20,MPCC,mobile-robot,collision-avoidance}
+}
 ```
 
-随后补一句 MPCC backbone：
+#### LT-DWA
 
-```tex
-MPCC further introduces contouring/lag errors and path-progress optimization as a receding-horizon path-following formulation\cite{D18_Lam2013,D19_Liniger2015}, and has been applied to mobile-robot collision avoidance in dynamic environments\cite{D20_Brito2019}.
+- 推荐引用：`D02_Jian2023`
+- 为什么必须补：若实验或正文对比 LT-DWA，它必须作为现代 DWA-family 局部规划器引用。
+- 支撑论断：DWA 家族不仅有经典版本，也有面向长时域和复杂环境的现代变体；但它仍不处理被运输液体状态。
+- BibTeX 状态：当前 `references.bib` 已有，信息已核验到 DOI、期刊卷期和页码。
+- 特别注意：不要误用 `D14_Jian2023`。`D14_Jian2023` 是 D-CBF-MPC 叙事参考。
+
+### 4.2 主文建议可选或放在 Method / 实验背景
+
+#### MPCC 路径进度主干
+
+- 推荐引用：`D19_Liniger2015`
+- 为什么可选但很有价值：它能支撑“路径进度优化是 MPCC 主干中的成熟做法”，适合放在 Related Work 或 Method 中。
+- 支撑论断：SPMPC 的 `s, v_s` 和路径进度优化来自 MPCC 层级，不是简单轨迹跟踪。
+- BibTeX 候选：
+
+```bibtex
+@article{D19_Liniger2015,
+  title = {{Optimization-Based Autonomous Racing of 1:43 Scale RC Cars}},
+  author = {Alexander Liniger and Alexander Domahidi and Manfred Morari},
+  year = {2015},
+  journal = {Optimal Control Applications and Methods},
+  volume = {36},
+  number = {5},
+  pages = {628--647},
+  doi = {10.1002/oca.2123},
+  keywords = {SPMPC,D19,MPCC,path-progress,autonomous-racing}
+}
 ```
 
-再接当前 gap 句：
+#### 一般 MPCC 轮廓误差基础
 
-```tex
-However, these planners typically reason over robot pose, velocity, path geometry, collision risk, control smoothness, and path progress, rather than propagating transported-liquid modal displacement and velocity states inside the planning horizon.
+- 推荐引用：`D18_Lam2013`
+- 为什么可选：如果正文只用 Brito 和 Liniger，MPCC 主线已经够用；如果要更规范解释 contouring/lag error，可引用 Lam。
+- 待核验：当前 `references.bib` 有条目，但 Obsidian 中未见单篇笔记，正式主文引用前建议再读原文。
+
+#### MRPB 局部规划器评价基准
+
+- 推荐引用：`D21_Wen2021`
+- 为什么可选但建议保留：它能支撑 baseline 和评价指标设计，尤其是“普通局部规划器指标不覆盖液体响应”。
+- 更适合位置：Related Work 第一小节短提，或实验章节评价指标背景。
+- BibTeX 候选：
+
+```bibtex
+@inproceedings{D21_Wen2021,
+  title = {{MRPB 1.0: A Unified Benchmark for the Evaluation of Mobile Robot Local Planning Approaches}},
+  author = {Jian Wen and Xuebo Zhang and Qingchen Bi and Zhangchao Pan and Yanghe Feng and Jing Yuan and Yongchun Fang},
+  year = {2021},
+  booktitle = {2021 IEEE International Conference on Robotics and Automation (ICRA)},
+  pages = {8238--8244},
+  doi = {10.1109/ICRA48506.2021.9561901},
+  keywords = {SPMPC,D21,benchmark,local-planner,MRPB}
+}
 ```
 
----
+### 4.3 可放附录、实验背景或暂不引用
 
-## 7. Obsidian D 组建议回填项
+- `D01_Macenski2023`：RPP。适合作轻量路径跟踪基线或背景；不是第一小节最关键支点。
+- `D03_Zhang2025`：UTO。可说明差速机器人普通轨迹优化成熟；不必重点展开。
+- `D06_Williams2017`：MPPI。可用于扩展普通 MPC/MPC-like 方法谱系；若篇幅有限可短提。
+- `D13_Berscheid2021`：Ruckig。适合说明 smooth-only 或 jerk-limited 运动生成；不必作为主文核心。
+- `D12_Pham2017`：TOPPRA。若设计固定路径速度剖面对照，可在实验背景或附录使用。
+- DWPP：当前仅在 Obsidian 中有 note，`references.bib` 未见条目；除非加入 DWPP 或 Nav2 controller 对比，否则暂不引用，信息标注待核验。
 
-为了让 Obsidian 文献事实库与 `references.bib` 同步，建议后续在
+## 5. 相关工作第一小节建议写法
 
-```text
-/data/a/Obsidian/vaults/StudyVault/30-Projects/MPC/参考论文整理/D_普通移动机器人_local_planner_MPC_轨迹优化/
-```
+普通移动机器人在线局部规划器已经形成了较成熟的方法谱系。经典 DWA 在速度空间中选择满足动力学和避障约束的可执行底盘命令，后续 LT-DWA 等方法进一步扩展规划时域并改善复杂环境中的局部运动生成。TEB 等优化式局部规划器能够在线优化带时间信息的轨迹，并同时考虑非完整约束、速度和加速度限制、障碍距离以及不同拓扑候选。RPP、Ruckig 等路径跟踪或在线轨迹生成方法则从曲率调速、速度约束、加速度约束和 jerk-limited 平滑性等角度提高底盘命令的可执行性。与此同时，MPC、MPPI 和 NMPC 局部规划器已经能够在滚动时域内处理非线性模型、控制约束和复杂代价；MPCC 进一步将路径进度、轮廓误差和滞后误差纳入统一优化框架，并已用于移动机器人动态环境避障。
 
-增加或回填以下 note：
+这些工作说明，将 SPMPC 放在标准 WMR 的在线局部规划层是合理的：同层方法本来就需要在每个控制周期生成可执行的底盘速度或短时轨迹，并在路径跟踪、安全性、效率和平滑性之间折中。然而，普通局部规划器的预测状态和代价通常围绕机器人位姿、速度、路径几何、障碍距离、碰撞风险、控制平滑性或路径进度构建。即使某些方法采用 MPC、MPPI、NMPC 或 MPCC 形式，只要没有把被运输液体的模态位移和模态速度作为预测状态传播，规划器就无法显式处理液体的动态记忆，也无法区分“底盘运动同样平滑、但与当前晃液相位相互作用不同”的控制序列。因此，普通局部规划器适合作为 SPMPC 的同层基线和方法背景，但它们原本并不是为开口液体运输中的液体状态预测而设计的。
 
-1. `D15 The Dynamic Window Approach to Collision Avoidance.md`
-2. `D16 Integrated Online Trajectory Planning and Optimization in Distinctive Topologies.md`
-3. `D17 Online Motion Planning based on Nonlinear Model Predictive Control with Non-Euclidean Rotation Groups.md`
-4. `D18 Model Predictive Contouring Control for Biaxial Systems.md`
-5. `D19 Optimization-Based Autonomous Racing of 1-43 Scale RC Cars.md`
-6. `D20 Model Predictive Contouring Control for Collision Avoidance in Unstructured Dynamic Environments.md`
-7. `D21 MRPB 1.0 A Unified Benchmark for the Evaluation of Mobile Robot Local Planning Approaches.md`
+SPMPC 的贡献不在于首次提出 DWA、TEB、MPC、MPPI 或 MPCC，也不在于首次将晃液状态放入 MPC。本文关注的是两条研究线之间的交叉缺口：普通移动机器人局部规划器在线、可执行，但通常不具备液体状态预测能力；已有防晃方法显式考虑液体动态，但多数不位于标准 WMR 导航栈的在线局部规划层。SPMPC 因此在标准 WMR 的在线 MPCC 局部规划层中嵌入低阶晃液状态，使规划器在滚动时域内联合优化路径跟踪、路径进度、底盘控制平滑性和预测液体响应，并输出普通 `/cmd_vel` 命令。
 
-建议每个 note 都按同一矩阵字段标注：
+## 6. 推荐引用优先级
 
-- Planner type；
-- Online/offline；
-- State/control/objective；
-- Liquid model?；
-- Slosh state in controller?；
-- Online local planner?；
-- Path progress optimization?；
-- Standard WMR baseline?；
-- Role in paper。
+### 6.1 主文第一小节建议必引
 
----
+- **DWA**：建议引用 `D15_Fox1997`；若正文还讨论 LT-DWA，则同时引用 `D02_Jian2023`。作用是建立“速度空间在线局部规划器可输出可执行命令”的经典支点。
+- **TEB**：建议引用 `D16_Rosmann2017`。作用是建立“优化式在线局部规划器可处理轨迹、时间、约束和障碍”的支点。
+- **MPC local planner / `mpc_local_planner`**：建议引用 `D17_Rosmann2021`。ROS Index 与仓库页面均指向该论文，作用是建立“普通 MPC 局部规划器已存在，但不天然包含液体状态”。
+- **移动机器人 MPCC**：建议引用 `D20_Brito2019`。作用是建立“MPCC 已可作为移动机器人局部规划主干，SPMPC 的新意是加入液体模态状态”。
+- **LT-DWA**：建议引用 `D02_Jian2023`，尤其当实验或正文把 LT-DWA 作为基线时。必须明确它不是 `D14_Jian2023`。
 
-## 8. 不应过度宣称的边界
+### 6.2 主文第一小节可选引用
 
-补强 D 组后，Related Work 可以更稳地承认以下事实：
+- **RPP**：`D01_Macenski2023`。适合补充“轻量路径跟踪器也能在线输出底盘命令”。
+- **MPPI**：`D06_Williams2017`。适合补充“预测控制类方法可在线处理复杂代价”。若篇幅紧张可不展开。
+- **MPCC 路径进度主干**：`D19_Liniger2015`。适合与 `D20_Brito2019` 搭配，说明路径进度优化和 MPCC 主干成熟。
+- **一般 MPCC 轮廓误差基础**：`D18_Lam2013`。适合 Method 或附录解释 contouring/lag error；正式引用前建议核验原文。
+- **Ruckig / jerk-limited 生成**：`D13_Berscheid2021`。适合说明 smooth-only 运动生成很成熟，但不等于液体状态预测。
+- **MRPB**：`D21_Wen2021`。若第一小节需要一句评价框架背景可引用；否则更适合实验章节。
 
-- DWA/TEB/MPC/MPPI/MPCC 已经是成熟 online local planning 或 path-following family；
-- MPCC 与 path-progress optimization 不是 SPMPC 首创；
-- mobile-robot MPCC / collision avoidance 已经存在；
-- SPMPC 的 novelty 不在普通 MPCC backbone，而在 **standard WMR online MPCC local-planning layer + low-order transported-liquid modal state propagation + slosh-aware cost/constraints/cmd_vel output**。
+### 6.3 不建议主文第一小节展开
 
-推荐保护句：
+- `D04_Li2025`：地形感知规划，偏离第一版 SPMPC 范围。
+- `D05_SnchezIbez2021`：综述背景，可不用在第一小节展开。
+- `D07_Trevisan2025`：风险感知 MPPI，可选背景但不是核心支点。
+- `D08_Li2021`：多机器人轨迹优化，任务层级不同。
+- `D09_Yan2024`：一般数据驱动预测控制，不是移动机器人局部规划器基线。
+- `D10_Butyrev2019`：DRL 运动规划，除非有实验基线，否则不展开。
+- `D11_Malliaropoulos2024`：“流体启发”规划，不是被运输液体晃动，容易混淆。
+- `D14_Jian2023`：D-CBF-MPC 叙事参考，不应与 `D02_Jian2023` 混用；不建议放在普通局部规划器第一小节作为主要证据。
 
-> 本文不声称首次提出 DWA/TEB/MPC/MPCC 局部规划，也不声称首次将预测控制用于晃液抑制。本文关注的是两条谱系之间的交叉缺口：ordinary mobile-robot local planners are online and executable but generally not liquid-aware, while anti-slosh methods are liquid-aware but often not standard online local planners. SPMPC fills this gap by augmenting an MPCC-style local planner with low-order slosh-state prediction for mobile-base open-liquid transport.
+### 6.4 对基线集合的建议
 
----
-
-## 9. 后续最小改动清单
-
-1. 已完成：在 `references.bib` 中加入 `D15_Fox1997`--`D21_Wen2021`。
-2. 建议下一步：更新 `sections/02_related_work.tex` 的普通 local planner 小节 citations。
-3. 建议下一步：把 Agent A 的 Related Work rewrite plan 中第一段改成 local planner / MPC / MPCC 先行结构。
-4. 建议下一步：回填 Obsidian D 组 note 与 D matrix，避免之后 agent 只看到 D01--D14 而遗漏 canonical anchors。
-5. 建议下一步：在实验计划中用 `D21_Wen2021` 支撑 local-planner benchmark/metrics 背景，但不要把尚未完成的结果写成结论。
+- 若主文实验或仿真基线空间有限，普通局部规划器基线建议至少覆盖：**DWA / LT-DWA、TEB、MPC local planner**。这三类分别代表速度空间方法、优化式局部规划和普通 MPC 局部规划。
+- RPP 可以作为轻量路径跟踪补充基线；MPPI 可作为预测控制/采样控制补充基线；Ruckig 或 TOPPRA 更适合作 smooth-only 或速度剖面补充，而不是第一层主基线。
+- MPCC 文献主要用于支撑 SPMPC 的方法层级和 novelty 边界；若没有可复现实装，Brito 或 Liniger 不一定要作为实验基线，但应该作为 Related Work / Method 引用。
+- MRPB 更像评价框架参考，而不是单个基线。它适合支撑“普通局部规划器评价 safety、efficiency、smoothness；SPMPC 还需要 liquid-response 评价”的写作逻辑。

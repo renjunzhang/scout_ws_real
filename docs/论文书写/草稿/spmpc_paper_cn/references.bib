@@ -1,12 +1,21 @@
 % SPMPC paper bibliography
-% Source list: /data/a/Obsidian/vaults/StudyVault/30-Projects/MPC/参考论文整理/00_SPMPC参考论文总览.md, plus A12 Okatsuka, B12 Prabakaran, and D14 Jian et al. narrative reference.
-% Audited/curated on 2026-06-30 against Zotero metadata, paper notes, and targeted DOI/web checks.
-% Citation keys keep the Obsidian ID prefix (A01, B01, ...).
-% Custom fields such as keywords, zotero_key, and zotero_attachment_key are for local tracking and are ignored by IEEEtran.bst.
+% Source list: /data/a/Obsidian/vaults/StudyVault/30-Projects/MPC/参考论文整理/00_SPMPC参考论文总览.md
+% Audited/curated on 2026-07-03 against Zotero metadata, Obsidian paper notes, and targeted DOI/web checks.
+% 2026-07-03 changes:
+%   - Added C08_Zauner2024 (time-optimal transport of cups, manipulator) and C09_Arrizabalaga2024 (geometric slosh-free tracking, ICRA 2024)
+%   - Added D22_Ohnishi2026 (DWPP, arXiv:2601.15006)
+%   - D14_Jian2023 retained as CBF-MPC narrative reference (Zhuozhu Jian, ≠ D02 LT-DWA Zhiqiang Jian)
+%   - D15_Fox1997=DWA, D16_Rosmann2017=TEB, D17_Rosmann2021=mpc_local_planner,
+%     D18_Lam2013=MPCC biaxial, D19_Liniger2015=MPCC racing, D20_Brito2019=MPCC collision,
+%     D21_Wen2021=MRPB benchmark, D22_Ohnishi2026=DWPP
+%   - Obsidian D-group notes (D14-D22) renamed and H1 headings updated to match bib keys
+%   - Metadata cleanup after subagent authenticity audit: A01, B02, B07, B11, B12,
+%     C02, C06, C08, C09, D01, and D13 normalized without changing citation keys.
+% Custom fields (keywords, zotero_key, zotero_attachment_key) are for local tracking; ignored by IEEEtran.bst.
 
 @inproceedings{A01_Leva2021,
   title = {{Sloshing Dynamics Estimation for Liquid-filled Containers under 2-Dimensional Excitation}},
-  author = {Roberto Di Leva},
+  author = {Roberto Di Leva and Marco Carricato and Hubert Gattringer and Andreas M{"u}ller},
   year = {2021},
   booktitle = {Proceedings of the 10th ECCOMAS Thematic Conference on MULTIBODY DYNAMICS},
   pages = {80--89},
@@ -182,7 +191,7 @@
   title = {{Path design and trace control of a wheeled mobile robot to damp liquid sloshing in a cylindrical container}},
   author = {M. Hamaguchi and Yu. Yoshida and T. Kihara and T. Taniguchi},
   year = {2005},
-  booktitle = {IEEE International Conference Mechatronics and Automation, 2005},
+  booktitle = {2005 IEEE International Conference on Mechatronics and Automation},
   volume = {4},
   pages = {1959--1964},
   doi = {10.1109/ICMA.2005.1626862},
@@ -248,7 +257,7 @@
 
 @inproceedings{B07_Nguyen2024,
   title = {{Control Strategy for Liquid Transfer Using a Four-wheel Mecanum Mobile Robot Platform}},
-  author = {Viet Khanh Nguyen and Hue Luu Thi and Duc Thanh Cao and Tung Lam Nguyen and Duc Minh Do and Thanh Ha Vo},
+  author = {Nguyen Viet, Khanh and Luu Thi, Hue and Cao Duc, Thanh and Lam Nguyen, Tung and Do Duc, Minh and Vo, Thanh Ha},
   year = {2024},
   booktitle = {2024 9th International Conference on Applying New Technology in Green Buildings (ATiGB)},
   pages = {316--322},
@@ -302,7 +311,7 @@
 
 @article{B11_Viet2025,
   title = {{Time-Optimal Motion Planning and Anti-Sloshing Control for a Container Under Disturbances}},
-  author = {Khanh Nguyen Viet and Hue Luu Thi and Thanh Cao Duc and Huy Nguyen Danh and Minh Nhat Vu and Tung Lam Nguyen},
+  author = {Nguyen Viet, Khanh and Luu Thi, Hue and Cao Duc, Thanh and Nguyen Danh, Huy and Vu, Minh Nhat and Lam Nguyen, Tung},
   year = {2025},
   journal = {IEEE Access},
   volume = {13},
@@ -323,9 +332,8 @@
   volume = {16132},
   pages = {268--282},
   doi = {10.1007/978-981-95-2382-5_19},
-  publisher = {Springer Nature},
+  publisher = {Springer Nature Singapore},
   address = {Singapore},
-  isbn = {978-981-95-2382-5},
   keywords = {SPMPC,B12,slosh-aware-MPC,tracking-control,special-platform},
   zotero_key = {XUD8WP4C},
   zotero_attachment_key = {BJT773WJ},
@@ -346,14 +354,15 @@
   zotero_attachment_key = {GENJ8QMV}
 }
 
-@misc{C02_Muchacho2022,
+@inproceedings{C02_Muchacho2022,
   title = {{A Solution to Slosh-free Robot Trajectory Optimization}},
   author = {Rafael I. Cabral Muchacho and Riddhiman Laha and Luis F. C. Figueredo and Sami Haddadin},
   year = {2022},
-  howpublished = {arXiv preprint},
+  booktitle = {2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+  pages = {223--230},
+  doi = {10.1109/IROS47612.2022.9981173},
   eprint = {2210.12614},
   archivePrefix = {arXiv},
-  doi = {10.48550/arXiv.2210.12614},
   url = {http://arxiv.org/abs/2210.12614},
   keywords = {SPMPC,C02},
   zotero_key = {722ENDER},
@@ -399,7 +408,7 @@
 
 @article{C06_Viet2024,
   title = {{Anti-sloshing control: Flatness-based trajectory planning and tracking control with an integrated extended state observer}},
-  author = {Khanh Nguyen Viet and Minh Do Duc and Thanh Cao Duc and Tung Lam Nguyen},
+  author = {Nguyen Viet, Khanh and Do Duc, Minh and Cao Duc, Thanh and Lam Nguyen, Tung},
   year = {2024},
   journal = {IET Cyber-Systems and Robotics},
   volume = {6},
@@ -424,15 +433,17 @@
   zotero_attachment_key = {K9IHM599}
 }
 
-@misc{D01_Macenski2023,
+@article{D01_Macenski2023,
   title = {{Regulated Pure Pursuit for Robot Path Tracking}},
-  author = {Steve Macenski and Shrijit Singh and Francisco Martin and Jonatan Gines},
+  author = {Steve Macenski and Shrijit Singh and Francisco Mart{\'{i}}n and Jonatan Gin{\'{e}}s},
   year = {2023},
-  howpublished = {arXiv preprint},
+  journal = {Autonomous Robots},
+  volume = {47},
+  number = {6},
+  pages = {685--694},
+  doi = {10.1007/s10514-023-10097-6},
   eprint = {2305.20026},
   archivePrefix = {arXiv},
-  doi = {10.48550/arXiv.2305.20026},
-  url = {http://arxiv.org/abs/2305.20026},
   keywords = {SPMPC,D01},
   zotero_key = {VJ6RNEBP},
   zotero_attachment_key = {P7YU2HFX}
@@ -588,15 +599,14 @@
   zotero_attachment_key = {K2E2PN8X}
 }
 
-@misc{D13_Berscheid2021,
+@inproceedings{D13_Berscheid2021,
   title = {{Jerk-limited Real-time Trajectory Generation with Arbitrary Target States}},
-  author = {Lars Berscheid and Torsten Kröger},
+  author = {Lars Berscheid and Torsten Kroeger},
   year = {2021},
-  howpublished = {arXiv preprint},
+  booktitle = {Robotics: Science and Systems XVII},
+  doi = {10.15607/RSS.2021.XVII.015},
   eprint = {2105.04830},
   archivePrefix = {arXiv},
-  doi = {10.48550/arXiv.2105.04830},
-  url = {http://arxiv.org/abs/2105.04830},
   keywords = {SPMPC,D13},
   zotero_key = {3X2E788D},
   zotero_attachment_key = {F9IZHHMR}
@@ -615,6 +625,8 @@
   arxiv = {2209.08539}
 }
 
+% Canonical ordinary local-planner / MPC / MPCC anchors for the SPMPC related-work argument.
+% These keys intentionally follow the current references.bib sequence; Obsidian note IDs differ for some entries.
 @article{D15_Fox1997,
   title = {{The Dynamic Window Approach to Collision Avoidance}},
   author = {Dieter Fox and Wolfram Burgard and Sebastian Thrun},
@@ -643,11 +655,13 @@
   author = {Christoph R{\"o}smann and Artemi Makarow and Torsten Bertram},
   year = {2021},
   booktitle = {2021 European Control Conference (ECC)},
+  pages = {1583--1590},
   doi = {10.23919/ECC54610.2021.9654872},
   eprint = {2006.03534},
   archivePrefix = {arXiv},
   primaryClass = {cs.RO},
-  keywords = {SPMPC,D17,mpc-local-planner,NMPC,ROS}
+  keywords = {SPMPC,D17,mpc-local-planner,NMPC,ROS},
+  ros_index_url = {https://index.ros.org/r/mpc_local_planner/}
 }
 
 @article{D18_Lam2013,
@@ -684,6 +698,42 @@
   pages = {4459--4466},
   doi = {10.1109/LRA.2019.2929976},
   keywords = {SPMPC,D20,MPCC,mobile-robot,collision-avoidance}
+}
+
+@misc{D22_Ohnishi2026,
+  title = {{DWPP: Dynamic Window Pure Pursuit Considering Velocity and Acceleration Constraints}},
+  author = {Fumiya Ohnishi and Masaki Takahashi},
+  year = {2026},
+  eprint = {2601.15006},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.RO},
+  doi = {10.48550/arXiv.2601.15006},
+  keywords = {SPMPC,D22,local-planner,dynamic-window,pure-pursuit,nav2}
+}
+
+@incollection{C08_Zauner2024,
+  title = {{Time-Optimal Transport of Loosely Placed Liquid Filled Cups along Prescribed Paths}},
+  author = {Klaus Zauner and Hubert Gattringer and Andreas M{"u}ller},
+  year = {2024},
+  booktitle = {Advances in Service and Industrial Robotics},
+  series = {Mechanisms and Machine Science},
+  volume = {157},
+  pages = {411--419},
+  publisher = {Springer},
+  doi = {10.1007/978-3-031-59257-7_41},
+  keywords = {SPMPC,C08,manipulator-slosh,time-optimal,prescribed-path},
+  zotero_key = {BAT5MYDF}
+}
+
+@inproceedings{C09_Arrizabalaga2024,
+  title = {{Geometric Slosh-Free Tracking for Robotic Manipulators}},
+  author = {Jon Arrizabalaga and Lukas Pries and Riddhiman Laha and Runkang Li and Sami Haddadin and Markus Ryll},
+  year = {2024},
+  booktitle = {2024 IEEE International Conference on Robotics and Automation (ICRA)},
+  pages = {1226--1232},
+  doi = {10.1109/ICRA57147.2024.10610813},
+  keywords = {SPMPC,C09,manipulator-slosh,slosh-free-tracking,differential-flatness},
+  zotero_key = {3UIYPG4A}
 }
 
 @inproceedings{D21_Wen2021,
