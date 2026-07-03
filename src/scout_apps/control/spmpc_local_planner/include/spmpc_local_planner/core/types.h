@@ -96,7 +96,7 @@ struct SloshHardConstraintDebug {
     double h_limit_margin = 0.0;
     int peak_k = 0;
     bool modal_only = true;
-    bool observer_uses_parabola = false;
+    bool solver_uses_parabola = false;
 };
 
 struct SloshCostMonitor {

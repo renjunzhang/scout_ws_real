@@ -16,7 +16,9 @@ struct SloshModelParams {
     double slosh_height_max = 0.008;
     double slosh_eta_dot_ratio = 0.3;
     bool use_linear_model = true;
-    bool use_parabola_term = true;
+    // Default to modal-only height. The yaw-induced parabola correction is kept as
+    // an opt-in visualization proxy but is not part of the solver hard constraint.
+    bool use_parabola_term = false;
 };
 
 class SloshDynamics {

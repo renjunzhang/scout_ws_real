@@ -631,7 +631,9 @@ bool ContinuousMpccSolverAcados::solve(
         two_zeta_omega_n = 2.0 * zeta * omega_n;
         omega_n_sq = omega_n * omega_n;
         eta_ref = std::max(1e-6, h_ref / c_h);      // 使 ||eta||/eta_ref == (c_h||eta||)/h_ref，与 primitive 一致
-        eta_dot_ref = std::max(1e-6, omega_n * h_ref);
+        // eta_dot_ref 与 eta_ref 同口径：omega_n × eta_ref = omega_n × h_ref / c_h
+        // 原曾误写为 omega_n × h_ref（比设计值大 c_h 倍），导致 eta_dot 惩罚被人为压小
+        eta_dot_ref = std::max(1e-6, omega_n * eta_ref);
         if (variant_.slosh_constraint_enable) {
             h_limit = std::max(1e-6, params_.slosh.slosh_height_max);
             eta_max = std::max(1e-6, h_limit / c_h);
@@ -648,8 +650,11 @@ bool ContinuousMpccSolverAcados::solve(
     output.slosh_hard_constraint.eta_max = output.slosh_summary.hard_constraint_enable ? eta_max : 0.0;
     output.slosh_hard_constraint.eta_max_sq = output.slosh_summary.hard_constraint_enable ? eta_max_sq : 0.0;
     output.slosh_hard_constraint.h_limit_margin = h_limit;
+    // Solver 硬约束/代价诊断统一采用 modal-only 高度 c_h·||eta||。
+    // slosh/use_parabola_term 只属于 observer/可视化 total-height proxy；在当前 R=18.5mm、常用角速度下
+    // r^2*omega^2/(4g) 为 0.01mm 量级，故不进入 solver 诊断，避免把转弯准静态项误当作模态晃动。
     output.slosh_hard_constraint.modal_only = true;
-    output.slosh_hard_constraint.observer_uses_parabola = params_.slosh.use_parabola_term;
+    output.slosh_hard_constraint.solver_uses_parabola = false;
     output.slosh_cost_monitor.eta_ref = eta_ref;
     output.slosh_cost_monitor.eta_dot_ref = eta_dot_ref;
     output.slosh_cost_monitor.omega_n = omega_n;
@@ -802,6 +807,8 @@ bool ContinuousMpccSolverAcados::solve(
             const double ex = xk[6], exd = xk[7], ey = xk[8], eyd = xk[9];
             const double eta_norm = std::hypot(ex, ey);
             const double eta_dot_norm = std::hypot(exd, eyd);
+            // Solver 预测高度保持 modal-only: h_modal = c_h·||eta||。
+            // yaw-induced parabola 项刻意不进入 solver hard-constraint/cost 诊断（见上方 solver_uses_parabola=false）。
             const double h = c_h * eta_norm;
             heights.push_back(h);
             if (h > output.slosh_summary.h_peak_pred) {

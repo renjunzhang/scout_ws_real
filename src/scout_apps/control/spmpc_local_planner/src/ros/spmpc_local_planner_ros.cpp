@@ -208,6 +208,11 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     std::string delay_phase_mode = delayPhaseModeName(delay_phase_params_.mode);
     pnh_.param("delay_phase/mode", delay_phase_mode, delay_phase_mode);
     delay_phase_params_.mode = parseDelayPhaseMode(delay_phase_mode);
+    if (!isKnownDelayPhaseMode(delay_phase_mode)) {
+        ROS_WARN("[spmpc_local_planner] 未知 delay_phase/mode=\"%s\"，已静默退化为 Off。"
+                 "合法值：off / monitor / shadow / fixed_closed_loop（及其别名）。",
+                 delay_phase_mode.c_str());
+    }
     pnh_.param("delay_phase/publish_diagnostics", delay_phase_params_.publish_diagnostics, delay_phase_params_.publish_diagnostics);
     pnh_.param("delay_phase/history_window_sec", delay_phase_params_.history_window_sec, delay_phase_params_.history_window_sec);
     pnh_.param("delay_phase/cmd_timeout_sec", delay_phase_params_.cmd_timeout_sec, delay_phase_params_.cmd_timeout_sec);
@@ -689,8 +694,20 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     }
 
     DelayPhaseStatusCode effective_status = status_code;
-    const bool have_history = !command_history_.empty();
-    const double cmd_age_sec = have_history ? (now - command_history_.latestStamp()).toSec() : -1.0;
+    const bool has_any_history = !command_history_.empty();
+    const double history_span_sec = command_history_.spanSec();
+    // has_any_history 只表示是否收到过命令；history_complete 另按补偿窗口判断。
+    // 补偿窗口与 ExecutionStatePredictor 一致：max(linear_delay, angular_delay) 且受 max_prediction_sec 限制，
+    // 不再误用 history_window_sec（它是 buffer 保留窗口，通常远大于实际补偿窗口）。
+    double required_history_sec = std::max(0.0, std::max(delay_phase_params_.linear_delay_sec,
+                                                        delay_phase_params_.angular_delay_sec));
+    required_history_sec = std::min(required_history_sec, std::max(0.0, delay_phase_params_.max_prediction_sec));
+    const bool fallback_history_complete =
+        has_any_history && (required_history_sec <= 1e-6 || history_span_sec + 1e-6 >= required_history_sec);
+    const double fallback_covered_history_sec = has_any_history ? std::min(history_span_sec, required_history_sec) : 0.0;
+    const double fallback_missing_history_sec =
+        has_any_history ? std::max(0.0, required_history_sec - history_span_sec) : required_history_sec;
+    const double cmd_age_sec = has_any_history ? (now - command_history_.latestStamp()).toSec() : -1.0;
     const bool have_odom_receive = !last_odom_receive_stamp_.isZero();
     const double odom_age_sec = have_odom_receive ? (now - last_odom_receive_stamp_).toSec() : -1.0;
     const auto status_requires_freshness = [](DelayPhaseStatusCode status) {
@@ -703,7 +720,7 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     if ((effective_status == DelayPhaseStatusCode::MonitorOk ||
          effective_status == DelayPhaseStatusCode::ShadowOk ||
          effective_status == DelayPhaseStatusCode::FixedClosedLoopOk) &&
-        !have_history) {
+        !has_any_history) {
         effective_status = DelayPhaseStatusCode::NoCmdHistory;
         closed_loop_enabled = false;
     }
@@ -726,8 +743,8 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     summary.solver_time_ms = solver_time_ms;
     summary.linear_delay_ms = 1000.0 * delay_phase_params_.linear_delay_sec;
     summary.angular_delay_ms = 1000.0 * delay_phase_params_.angular_delay_sec;
-    summary.history_span_ms = 1000.0 * command_history_.spanSec();
-    summary.history_complete = prediction ? prediction->history_complete : have_history;
+    summary.history_span_ms = 1000.0 * history_span_sec;
+    summary.history_complete = prediction ? prediction->history_complete : fallback_history_complete;
     summary.shadow_valid = prediction ? prediction->valid : false;
     summary.closed_loop_enabled = closed_loop_enabled;
     summary.status_code = effective_status;
@@ -741,8 +758,10 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     alignment.linear_delay_ms = summary.linear_delay_ms;
     alignment.angular_delay_ms = summary.angular_delay_ms;
     alignment.history_span_ms = summary.history_span_ms;
-    alignment.covered_history_ms = prediction ? 1000.0 * prediction->covered_history_sec : 0.0;
-    alignment.missing_history_ms = prediction ? 1000.0 * prediction->missing_history_sec : 0.0;
+    alignment.covered_history_ms = prediction ? 1000.0 * prediction->covered_history_sec
+                                              : 1000.0 * fallback_covered_history_sec;
+    alignment.missing_history_ms = prediction ? 1000.0 * prediction->missing_history_sec
+                                              : 1000.0 * fallback_missing_history_sec;
     alignment.history_complete = summary.history_complete;
     alignment.shadow_valid = summary.shadow_valid;
     alignment.fixed_closed_loop_configured = delayPhaseClosedLoopEnabled();
@@ -1028,8 +1047,8 @@ void SpmpcLocalPlannerROS::costmapCallback(const nav_msgs::OccupancyGridConstPtr
 }
 
 void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
-    diagnostics_.publishVariant(variant_, experiment_mode_);
-    diagnostics_.publishEffectiveConfig(effective_config_);
+    // publishVariant 内容（variant code、experiment_mode）在运行期不变，已在初始化时发布一次（latched）。
+    // publishEffectiveConfig 等 applyRuntimeVRef() 计算完本周期 v_ref 后再发，避免动态 v_ref 滞后一拍。
 
     if (!have_odom_) {
         resetTerminalSpinFailGate();
@@ -1062,6 +1081,14 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     input.horizon_steps = horizon_steps_;
 
     applyRuntimeVRef(input);
+    // effective_config_.v_ref 是本周期 solver 将看到的速度参考：runtime/profile override 优先，
+    // 并按 solver v_max 做同口径 clamp。必须在发布前更新，避免 /spmpc/debug/effective_config 滞后一拍。
+    const double requested_config_v_ref = input.has_v_ref_current ? input.v_ref_current : variant_.v_ref;
+    if (std::isfinite(requested_config_v_ref)) {
+        const double v_max = std::max(0.0, effective_config_.v_max);
+        effective_config_.v_ref = std::max(0.0, std::min(v_max, requested_config_v_ref));
+    }
+    diagnostics_.publishEffectiveConfig(effective_config_);
 
     const ros::Time delay_phase_now = ros::Time::now();
     DelayPhaseStatusCode delay_phase_status = DelayPhaseStatusCode::MonitorOk;
@@ -1117,11 +1144,14 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         output.cmd_omega = 0.0;
     }
     diagnostics_.publishStatus(output.status);
-    diagnostics_.publishSloshState(input.slosh);
+    // 诊断用 solve_input.slosh：fixed_closed_loop 补偿生效时 solve_input.slosh 是
+    // shadow_prediction.predicted_slosh；input.slosh 仍是原始测量值。
+    // 统一用 solve_input 确保 bag 记录的状态与 solver 实际输入一致。
+    diagnostics_.publishSloshState(solve_input.slosh);
     // 当前标量模型液面高度 = c_h·‖η‖ (+向心项), 由唯一物理核 SloshDynamics 计算; 单位米(模型 proxy)。
     if (slosh_observer_.configured()) {
         const double omega_meas = last_odom_.twist.twist.angular.z;
-        diagnostics_.publishSloshHeight(slosh_observer_.height(input.slosh, omega_meas));
+        diagnostics_.publishSloshHeight(slosh_observer_.height(solve_input.slosh, omega_meas));
     }
     publishDelayPhaseDiagnostics(
         delay_phase_now, delay_phase_status, shadow_prediction_ptr, output.solver_time_ms, delay_compensation_applied);
@@ -1337,6 +1367,20 @@ SloshModelParams SpmpcLocalPlannerROS::loadSloshParams() const {
     pnh_.param("slosh/mode_index", params.mode_index, params.mode_index);
     pnh_.param("slosh/slosh_height_ref", params.slosh_height_ref, params.slosh_height_ref);
     pnh_.param("slosh/slosh_height_max", params.slosh_height_max, params.slosh_height_max);
+    // 防呆：历史上部分 launch/yaml 误写在 container/slosh_height_max 命名空间。
+    // 若 container/slosh_height_max 存在且合法，用它覆盖并打 WARN 提示迁移。
+    {
+        double container_height_max = -1.0;
+        pnh_.param("container/slosh_height_max", container_height_max, container_height_max);
+        if (std::isfinite(container_height_max) && container_height_max > 0.0) {
+            ROS_WARN_ONCE(
+                "[spmpc_local_planner] 检测到 container/slosh_height_max=%.4f m，"
+                "正确命名空间为 slosh/slosh_height_max。"
+                "本次自动采用 container 值 (%.4f m)，请将配置迁移到 slosh/ 命名空间。",
+                container_height_max, container_height_max);
+            params.slosh_height_max = container_height_max;
+        }
+    }
     if (!std::isfinite(params.slosh_height_max) || params.slosh_height_max <= 0.0) {
         ROS_WARN("[spmpc_local_planner] invalid slosh/slosh_height_max=%.6f, fallback to slosh_height_ref=%.6f",
                  params.slosh_height_max,

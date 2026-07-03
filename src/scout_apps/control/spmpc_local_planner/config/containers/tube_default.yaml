@@ -8,4 +8,7 @@ slosh:
   slosh_height_max: 0.001
   slosh_eta_dot_ratio: 0.3
   use_linear_model: true
-  use_parabola_term: true
+  # 2026-07-03: 当前 SPMPC 实验统一采用 modal-only 液面高度 c_h*||eta||。
+  # yaw-induced parabola 修正 r^2*omega^2/(4g) 在本管径/角速度下为 0.01mm 量级，
+  # 为避免 observer/RGB proxy 与 solver modal 口径混用，默认关闭。
+  use_parabola_term: false

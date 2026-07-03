@@ -179,4 +179,17 @@ inline DelayPhaseMode parseDelayPhaseMode(const std::string& mode_text) {
     return DelayPhaseMode::Off;
 }
 
+/// 判断 mode_text 是否是已知合法字符串（忽略大小写）。
+/// 用于在 ROS 节点加载参数时检测拼写错误（例如 "fixed_closedloop" 静默退化为 Off）。
+inline bool isKnownDelayPhaseMode(const std::string& mode_text) {
+    std::string value = mode_text;
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return value == "off" || value == "monitor" || value == "p0" || value == "diagnostics" ||
+           value == "shadow" || value == "p1_shadow" || value == "p1-shadow" ||
+           value == "fixed_closed_loop" || value == "fixed-closed-loop" ||
+           value == "p1_fixed_closed_loop" || value == "p1-fixed-closed-loop";
+}
+
 }  // namespace spmpc_local_planner

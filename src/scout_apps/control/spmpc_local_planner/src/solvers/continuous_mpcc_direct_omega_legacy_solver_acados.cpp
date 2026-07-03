@@ -270,7 +270,9 @@ bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
         two_zeta_omega_n = 2.0 * zeta * omega_n;
         omega_n_sq = omega_n * omega_n;
         eta_ref = std::max(1e-6, h_ref / c_h);
-        eta_dot_ref = std::max(1e-6, omega_n * h_ref);
+        // eta_dot_ref 与 eta_ref 同口径：omega_n × eta_ref = omega_n × h_ref / c_h
+        // 原曾误写为 omega_n × h_ref（比设计值大 c_h 倍），导致 eta_dot 惩罚被人为压小
+        eta_dot_ref = std::max(1e-6, omega_n * eta_ref);
     }
 
     double p[PARAM_LEGACY_MAX];

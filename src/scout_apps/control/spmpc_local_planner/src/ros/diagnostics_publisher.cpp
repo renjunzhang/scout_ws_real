@@ -647,7 +647,7 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     std_msgs::Float32MultiArray summary;
     summary.layout.dim.resize(1);
     summary.layout.dim[0].label =
-        "h_peak_pred_mm,h_p95_pred_mm,eta_x_peak,eta_y_peak,eta_dot_norm_peak,peak_k";
+        "h_modal_peak_pred_mm,h_modal_p95_pred_mm,eta_x_peak,eta_y_peak,eta_dot_norm_peak,peak_k";
     summary.layout.dim[0].size = 6;
     summary.layout.dim[0].stride = 6;
     summary.data.resize(6, 0.0f);
@@ -662,7 +662,7 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
 
     std_msgs::Float32MultiArray hard;
     hard.layout.dim.resize(1);
-    hard.layout.dim[0].label = "enabled,h_limit_mm,h_peak_pred_mm,margin_mm,peak_k";
+    hard.layout.dim[0].label = "enabled,h_modal_limit_mm,h_modal_peak_pred_mm,modal_margin_mm,peak_k";
     hard.layout.dim[0].size = 5;
     hard.layout.dim[0].stride = 5;
     hard.data.resize(5, 0.0f);
@@ -677,7 +677,7 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     std_msgs::Float32MultiArray hard_effective;
     hard_effective.layout.dim.resize(1);
     hard_effective.layout.dim[0].label =
-        "enabled,h_limit_mm,height_coeff,eta_max,eta_max_sq,h_peak_pred_mm,margin_mm,peak_k,modal_only,observer_uses_parabola";
+        "enabled,h_modal_limit_mm,height_coeff,eta_max,eta_max_sq,h_modal_peak_pred_mm,modal_margin_mm,peak_k,modal_only,solver_uses_parabola";
     hard_effective.layout.dim[0].size = 10;
     hard_effective.layout.dim[0].stride = 10;
     hard_effective.data.resize(10, 0.0f);
@@ -690,7 +690,7 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     hard_effective.data[6] = static_cast<float>(1000.0 * hc.h_limit_margin);
     hard_effective.data[7] = static_cast<float>(hc.peak_k);
     hard_effective.data[8] = hc.modal_only ? 1.0f : 0.0f;
-    hard_effective.data[9] = hc.observer_uses_parabola ? 1.0f : 0.0f;
+    hard_effective.data[9] = hc.solver_uses_parabola ? 1.0f : 0.0f;
     slosh_hard_constraint_effective_pub_.publish(hard_effective);
 }
 

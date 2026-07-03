@@ -324,7 +324,11 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
 
         if (variant_.slosh_enable && slosh_dynamics_.configured()) {
             const double h_ref = std::max(1e-4, params_.slosh.slosh_height_ref);
-            const double eta_dot_ref = std::max(1e-4, slosh_dynamics_.omegaN() * h_ref);
+            // eta_ref = h_ref / c_h，与 acados solver 同口径
+            const double c_h = std::max(1e-6, slosh_dynamics_.heightCoeff());
+            const double eta_ref = std::max(1e-6, h_ref / c_h);
+            // eta_dot_ref 与 eta_ref 同口径：omega_n × eta_ref = omega_n × h_ref / c_h
+            const double eta_dot_ref = std::max(1e-4, slosh_dynamics_.omegaN() * eta_ref);
             const double eta_dot_norm = slosh_dynamics_.etaDotNorm(slosh);
             output.cost.J_slosh_eta += variant_.w_slosh * (h / h_ref) * (h / h_ref);
             output.cost.J_slosh_eta_dot +=
