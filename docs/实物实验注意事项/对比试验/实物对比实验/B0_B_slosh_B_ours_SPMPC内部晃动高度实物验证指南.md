@@ -24,6 +24,14 @@
 既然模型预测是真值，为什么优化器没有把这个真值压下来？
 ```
 
+本轮实验原则：
+
+```text
+每个 bag 都录完整诊断；每个 run 只改一个实验变量。
+```
+
+也就是说，同一包里可以同时录 cost、delay、command、slosh observer、solver status 这些被动诊断量；但不要同一包里又改 delay、又改权重、又开 IMU、又开 hard，否则事后仍然分不清因果。
+
 ---
 
 ## 2. 本实验能证明什么 / 不能证明什么
@@ -251,7 +259,7 @@ rostopic info /cmd_vel
 当前推荐使用一键脚本执行后续流程：
 
 ```text
-生成 fixed S-curve path -> 发送固定终点 -> 启动黑匣子 recorder -> 启动 SPMPC variant -> 60s 或 Ctrl-C 后清理
+启动 fixed-path generator -> 启动黑匣子 recorder -> 发送固定终点 -> 等待 /scout/global_path_fixed -> 启动 SPMPC variant -> 60s 或 Ctrl-C 后清理
 ```
 
 脚本：
@@ -292,7 +300,14 @@ GOAL_YAW=0.0
 
 ---
 
-## 7. N=1 当前 smoke 命令
+## 7. 当前推荐：delay 归因最小测试矩阵
+
+当前还不是正式统计阶段，先不要一开始就按 `B0 -> B_slosh -> B_ours -> N=3` 盲跑；本轮优先回答：
+
+```text
+在同一版新代码、同一路径/容器/液位/v_ref/shared limits 下，只改变 delay，
+B_slosh 的内部模型晃动是否从异常恢复？
+```
 
 每个 run 之间：
 
@@ -300,49 +315,130 @@ GOAL_YAW=0.0
 脚本自动停 planner/recorder/generator -> 确认 /cmd_vel 为 0 -> 遥控回起点标记 -> 液体静稳 60~90s -> 开下一次 run
 ```
 
-### 7.1 B0
+推荐每个 bag 保留一点静止基线：
+
+```text
+0–5 s：静止，等待 topic 全部发布；
+5–60 s：执行 fixed S-curve；
+60–65 s：若已到点，继续观察残余 slosh / terminal 行为。
+```
+
+当前一键脚本默认 recorder 先启动、再发送 goal、再启动 planner；运动开始可在后处理中用 `/cmd_vel` 第一次非零时刻或 `/spmpc/status` 状态变化自动识别。
+
+如果本轮需要保留 RGB 原始证据，把 `RECORD_RGB=false` 改为 `RECORD_RGB=true`；但当前结论仍限定为 internal model evidence。
+
+### 7.0 Run 0：静态配置检查（约 10s）
+
+目的：正式动起来前确认新 topic、effective config、run meta 和 delay 参数真的落地。若希望不驱动车体，可把命令发布到 shadow topic：
 
 ```bash
-ALG=B0 \
-RUN_LABEL=B0_delay_080_050_run01 \
-CMD_TOPIC=/cmd_vel \
+ALG=B_slosh \
+RUN_LABEL=static_config_check_10s \
+CMD_TOPIC=/spmpc_shadow_cmd_vel \
+RECORD_SEC=10 \
 RECORD_RGB=false \
 bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
 ```
 
-### 7.2 B_slosh
+必须检查：
+
+```text
+/spmpc/debug/effective_config
+/spmpc/debug/raw_state
+/spmpc/debug/predicted_state
+/spmpc/debug/solver_input_state
+/spmpc/debug/slosh_cost_monitor
+/spmpc/debug/command_intervention
+/spmpc/debug/cmd_odom_alignment
+```
+
+若 topic 缺失、effective config 与 run meta 不一致、`fixed_closed_loop` 未生效，先停下修配置再跑正式 run。静态检查阶段的 history completeness 可能受启动瞬间 command history 影响，正式判断仍以后续运动 run 的 summary 为准。
+
+### 7.1 Run 1：B_slosh 新 delay
 
 ```bash
 ALG=B_slosh \
 RUN_LABEL=Bslosh_delay_080_050_run01 \
 CMD_TOPIC=/cmd_vel \
+DELAY_PHASE_MODE=fixed_closed_loop \
+DELAY_PHASE_LINEAR_DELAY_SEC=0.08 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.05 \
 RECORD_RGB=false \
 bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
 ```
 
-### 7.3 B_ours
+目的：看 slosh-aware soft cost 在当前推荐 delay 下是否恢复模型层优势。
+
+### 7.2 Run 2：B_slosh 旧 delay，同一版新代码复现
+
+```bash
+ALG=B_slosh \
+RUN_LABEL=Bslosh_delay_150_220_run01 \
+CMD_TOPIC=/cmd_vel \
+DELAY_PHASE_MODE=fixed_closed_loop \
+DELAY_PHASE_LINEAR_DELAY_SEC=0.15 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
+RECORD_RGB=false \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+```
+
+目的：只改 delay，观察旧 delay 是否重新导致 B_slosh 变差。旧 bag 只能作为背景证据，不能作为唯一 old-delay 对照，因为代码版本、诊断链路和参数落地方式已经变化。
+
+### 7.3 Run 3：B0 新 delay baseline
+
+```bash
+ALG=B0 \
+RUN_LABEL=B0_delay_080_050_run01 \
+CMD_TOPIC=/cmd_vel \
+DELAY_PHASE_MODE=fixed_closed_loop \
+DELAY_PHASE_LINEAR_DELAY_SEC=0.08 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.05 \
+RECORD_RGB=false \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+```
+
+注意：`B0` 不启用 slosh prediction，不要把 horizon peak 与 `B_slosh` 直接等价比较；比较 `B0` 时主要看 `/spmpc/slosh_height`、tracking、cmd smoothness、completion time 和 command intervention。
+
+### 7.4 Run 4：B_ours 新 delay
 
 ```bash
 ALG=B_ours \
 RUN_LABEL=Bours_delay_080_050_run01 \
 CMD_TOPIC=/cmd_vel \
+DELAY_PHASE_MODE=fixed_closed_loop \
+DELAY_PHASE_LINEAR_DELAY_SEC=0.08 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.05 \
 RECORD_RGB=false \
 bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
 ```
 
-如果本轮需要保留 RGB 原始证据，把 `RECORD_RGB=false` 改为：
+目的：若 `B_slosh` 已经恢复规律，再看完整策略是否兼顾 slosh、smooth 和 tracking。
 
-```text
-RECORD_RGB=true
+### 7.5 可选：B_slosh delay off / shadow
+
+时间允许时补一个：
+
+```bash
+ALG=B_slosh \
+RUN_LABEL=Bslosh_delay_off_run01 \
+CMD_TOPIC=/cmd_vel \
+DELAY_PHASE_MODE=off \
+RECORD_RGB=false \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
 ```
 
-但当前结论仍限定为 internal model evidence。
+判读：
+
+```text
+delay_off > old_delay 但 < new_delay：新 delay 有帮助；
+delay_off 最好：当前 compensation 模型可能仍有问题，不只是 delay 数值问题。
+```
 
 ---
 
 ## 8. 正式 N=3 交错顺序
 
-N=1 smoke 通过后再进入 N=3。不要连续跑完一个方法再跑另一个方法，推荐交错：
+只有当上面的 delay 归因矩阵说明新 delay 下链路干净、`B_slosh` 规律可信后，再进入正式 N=3。不要连续跑完一个方法再跑另一个方法，推荐交错：
 
 ```text
 Round 1: B0 -> B_slosh -> B_ours
@@ -359,7 +455,7 @@ Bours_delay_080_050_r1
 ...
 ```
 
-如果 N=1 中出现下面任一情况，先停止，不进入 N=3：
+如果 delay 归因矩阵或 N=1 中出现下面任一情况，先停止，不进入 N=3：
 
 ```text
 明显离轨；
@@ -369,6 +465,8 @@ Bours_delay_080_050_r1
 新 debug topic 缺失；
 summary red flags 指向 solver input 相位错误或命令链路大量改写。
 ```
+
+本轮不建议跑 hard：hard 约束会混入可行性/求解失败问题，不适合作为 delay 诊断主线。
 
 ---
 
@@ -511,13 +609,36 @@ sidecar_effective_config_mismatch
 /spmpc/debug/cmd_odom_alignment
 ```
 
-期望：
+注意：`predicted_state - raw_state` 有差异不一定是错，因为 fixed closed-loop compensation 本来就是把 raw state 往前推。更可靠的判断是：
+
+```text
+predicted_state(t) 是否接近 raw_state(t + delay)
+```
+
+因此本轮先用 summary 的 raw→predicted shift 做快速筛查，离线细查时应对齐未来 raw state：
+
+```text
+predicted_vs_future_raw_yaw_error
+predicted_vs_future_raw_omega_error
+predicted_vs_future_raw_eta_error
+predicted_vs_future_raw_eta_dot_error
+```
+
+判读：
+
+```text
+predicted 比 future raw 还推得更远：过补偿；
+predicted 落后 future raw：补偿不足；
+predicted 接近 future raw：补偿合理。
+```
+
+快速期望：
 
 ```text
 fixed_closed_loop_applied_frac 高；
 history_complete_frac 高；
-solver_input_state - raw_state 的 yaw / omega / eta 偏移合理；
-不要出现明显过补偿。
+solver_input_state 与 raw/future raw 的 yaw / omega / eta 偏移合理；
+不要出现明显过补偿或欠补偿。
 ```
 
 #### B. optimizer 是否真的在压 slosh
@@ -559,6 +680,31 @@ angular_rate_limited_frac 不高；
 angular_accel_limited_frac 不高；
 published_zero_frac 不高；
 zero_due_to_solver_failure / terminal_spin_fail / tracking_safety 基本为 0。
+```
+
+如果 `command_limited_often`、`published_zero_often` 或 `solver_fail_or_gate_fail` 出现，该 run 只能用于 debugging，不能直接作为 clean delay attribution 或 clean method comparison。
+
+### 10.3 建议自动判读阈值
+
+第一版阈值只用于筛查，不作为最终物理结论：
+
+```text
+fixed_closed_loop_applied_frac < 0.95 -> red
+history_complete_frac < 0.95 -> red
+command_limiter_frac > 0.20 -> yellow
+published_zero_frac > 0.05 -> red
+solver_fail_count > 0 for soft variants -> red
+
+|delta_yaw| > 0.10 rad -> yellow
+|delta_yaw| > 0.20 rad -> red
+|delta_omega| > 0.15 rad/s -> yellow
+|delta_omega| > 0.30 rad/s -> red
+delta_height_proxy > 0.5 mm -> yellow
+delta_height_proxy > 1.0 mm -> red
+|delta_eta| / eta_ref > 0.25 -> yellow
+|delta_eta| / eta_ref > 0.50 -> red
+|delta_eta_dot| / eta_dot_ref > 0.25 -> yellow
+|delta_eta_dot| / eta_dot_ref > 0.50 -> red
 ```
 
 ---

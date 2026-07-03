@@ -351,12 +351,20 @@ def summarize_command_intervention(samples):
         if finite(sample.get("published_cmd_omega")) and finite(sample.get("post_gate_cmd_omega")):
             mismatch_w.append(abs(sample["published_cmd_omega"] - sample["post_gate_cmd_omega"]))
     zero_samples = [1.0 if abs(s.get("published_cmd_v", 0.0)) <= 1e-6 and abs(s.get("published_cmd_omega", 0.0)) <= 1e-6 else 0.0 for s in samples]
+    linear_limited_frac = fraction_true(series_field(samples, "linear_limited"))
+    angular_rate_limited_frac = fraction_true(series_field(samples, "angular_rate_limited"))
+    angular_accel_limited_frac = fraction_true(series_field(samples, "angular_accel_limited"))
+    limiter_candidates = [
+        v for v in (linear_limited_frac, angular_rate_limited_frac, angular_accel_limited_frac)
+        if finite(v)
+    ]
     return {
         "samples": len(samples),
         "published_zero_frac": fraction_true(zero_samples),
-        "linear_limited_frac": fraction_true(series_field(samples, "linear_limited")),
-        "angular_rate_limited_frac": fraction_true(series_field(samples, "angular_rate_limited")),
-        "angular_accel_limited_frac": fraction_true(series_field(samples, "angular_accel_limited")),
+        "linear_limited_frac": linear_limited_frac,
+        "angular_rate_limited_frac": angular_rate_limited_frac,
+        "angular_accel_limited_frac": angular_accel_limited_frac,
+        "command_limiter_frac": max(limiter_candidates) if limiter_candidates else float("nan"),
         "published_minus_post_gate_v_abs": numeric_summary(mismatch_v),
         "published_minus_post_gate_omega_abs": numeric_summary(mismatch_w),
         "zero_reason_counts": {field: int(sum(1 for s in samples if abs(s.get(field, 0.0)) > 0.5)) for field in ZERO_REASON_FIELDS},
@@ -398,14 +406,14 @@ def build_red_flags(summary):
     intent_mode = str(summary.get("intent", {}).get("delay_phase_mode") or "").lower()
     effective_mode = summary["metrics"].get("effective_config_last", {}).get("delay_phase_mode_code")
     fixed_closed_loop_expected = "fixed_closed_loop" in intent_mode or effective_mode == 3.0
-    if fixed_closed_loop_expected and finite(delay.get("delay_compensation_applied_frac")) and delay["delay_compensation_applied_frac"] < 0.8:
+    if fixed_closed_loop_expected and finite(delay.get("delay_compensation_applied_frac")) and delay["delay_compensation_applied_frac"] < 0.95:
         flags.append({"code": "fixed_closed_loop_not_applied", "detail": f"applied_frac={fmt(delay['delay_compensation_applied_frac'])}"})
-    if fixed_closed_loop_expected and finite(delay.get("history_complete_frac")) and delay["history_complete_frac"] < 0.8:
+    if fixed_closed_loop_expected and finite(delay.get("history_complete_frac")) and delay["history_complete_frac"] < 0.95:
         flags.append({"code": "delay_history_incomplete", "detail": f"history_complete_frac={fmt(delay['history_complete_frac'])}"})
     state_delta = delay.get("solver_minus_raw", {})
     yaw_p95 = state_delta.get("abs_yaw_rad", {}).get("p95")
     omega_p95 = state_delta.get("abs_omega", {}).get("p95")
-    if (finite(yaw_p95) and yaw_p95 > 0.15) or (finite(omega_p95) and omega_p95 > 0.25):
+    if (finite(yaw_p95) and yaw_p95 > 0.20) or (finite(omega_p95) and omega_p95 > 0.30):
         flags.append({"code": "solver_input_phase_shift_large", "detail": f"yaw_p95={fmt(yaw_p95)} rad, omega_p95={fmt(omega_p95)}"})
 
     opt = summary["metrics"].get("optimizer_pressure", {})
@@ -419,19 +427,18 @@ def build_red_flags(summary):
         flags.append({"code": "horizon_peak_not_reduced_or_missing", "detail": "missing /spmpc/slosh_horizon_summary"})
 
     cmd = summary["metrics"].get("command_intervention", {})
-    limited = max(
-        cmd.get("linear_limited_frac", float("nan")) if finite(cmd.get("linear_limited_frac")) else 0.0,
-        cmd.get("angular_rate_limited_frac", float("nan")) if finite(cmd.get("angular_rate_limited_frac")) else 0.0,
-        cmd.get("angular_accel_limited_frac", float("nan")) if finite(cmd.get("angular_accel_limited_frac")) else 0.0,
-    )
-    if limited > 0.2:
+    limited = cmd.get("command_limiter_frac")
+    if finite(limited) and limited > 0.2:
         flags.append({"code": "command_limited_often", "detail": f"max limiter frac={fmt(limited)}"})
-    if finite(cmd.get("published_zero_frac")) and cmd["published_zero_frac"] > 0.2:
+    if finite(cmd.get("published_zero_frac")) and cmd["published_zero_frac"] > 0.05:
         flags.append({"code": "published_zero_often", "detail": f"zero_frac={fmt(cmd['published_zero_frac'])}"})
     reason_counts = cmd.get("zero_reason_counts", {})
     bad_reasons = {k: v for k, v in reason_counts.items() if v > 0 and k not in {"zero_due_to_waiting_for_odom", "zero_due_to_waiting_for_reference"}}
-    if bad_reasons:
-        flags.append({"code": "solver_fail_or_gate_fail", "detail": str(bad_reasons)})
+    status_counts_map = summary.get("observed", {}).get("status_counts", {})
+    solver_fail_count = sum(v for k, v in status_counts_map.items() if "FAIL" in str(k).upper() or "FAILED" in str(k).upper())
+    if bad_reasons or solver_fail_count > 0:
+        detail = {"zero_reasons": bad_reasons, "status_fail_count": int(solver_fail_count)}
+        flags.append({"code": "solver_fail_or_gate_fail", "detail": str(detail)})
 
     mismatch = summary["metrics"].get("intent_effective", {}).get("mismatches", [])
     if mismatch:
@@ -456,12 +463,17 @@ def summarize_bag(bag_path):
     cost_breakdown = multi.get("/spmpc/cost_breakdown", [])
     horizon = multi.get("/spmpc/slosh_horizon_summary", [])
     effective = multi.get("/spmpc/debug/effective_config", [])
+    j_slosh_eta = series_field(slosh_cost, "J_slosh_eta") or series_field(cost_breakdown, "J_slosh_eta")
+    j_slosh_eta_dot = series_field(slosh_cost, "J_slosh_eta_dot") or series_field(cost_breakdown, "J_slosh_eta_dot")
     j_slosh_total = series_field(slosh_cost, "J_slosh_total")
     if not j_slosh_total:
         j_slosh_total = [s.get("J_slosh_eta", 0.0) + s.get("J_slosh_eta_dot", 0.0)
                          for s in cost_breakdown
                          if finite(s.get("J_slosh_eta")) and finite(s.get("J_slosh_eta_dot"))]
     pct_slosh = series_field(slosh_cost, "pct_slosh_total_abs_sum") or series_field(cost_breakdown, "pct_slosh_total")
+    pct_progress = series_field(cost_breakdown, "pct_progress")
+    pct_smooth = series_field(cost_breakdown, "pct_smooth")
+    pct_control = series_field(cost_breakdown, "pct_control")
     eta_dot_share = series_field(slosh_cost, "pct_eta_dot_in_slosh")
     if not eta_dot_share:
         eta_dot_share = [100.0 * abs(s.get("J_slosh_eta_dot", 0.0)) /
@@ -516,9 +528,14 @@ def summarize_bag(bag_path):
                 "cmd_odom_alignment_status_counts": status_counts(data["strings"].get("/spmpc/debug/execution_alignment_status", [])),
             },
             "optimizer_pressure": {
+                "J_slosh_eta": numeric_summary(j_slosh_eta),
+                "J_slosh_eta_dot": numeric_summary(j_slosh_eta_dot),
                 "J_slosh_total": numeric_summary(j_slosh_total),
                 "pct_slosh_total_abs_sum": numeric_summary(pct_slosh),
                 "pct_eta_dot_in_slosh": numeric_summary(eta_dot_share),
+                "pct_progress": numeric_summary(pct_progress),
+                "pct_smooth": numeric_summary(pct_smooth),
+                "pct_control": numeric_summary(pct_control),
                 "eta_norm_peak": numeric_summary(series_field(slosh_cost, "eta_norm_peak")),
                 "eta_dot_norm_peak": numeric_summary(series_field(slosh_cost, "eta_dot_norm_peak")),
                 "h_modal_peak_pred_mm": numeric_summary(series_field_any(horizon, ["h_modal_peak_pred_mm", "h_peak_pred_mm", "h_peak_pred", "h_peak"])),
@@ -573,15 +590,21 @@ def render_markdown(summary):
     lines.append(f"- solver-input minus raw omega p95: {fmt(state_delta.get('abs_omega', {}).get('p95'))}")
     lines.append(f"- solver-input minus raw eta_norm p95: {fmt(state_delta.get('eta_norm', {}).get('p95'))}")
     lines.append("")
+    slosh_height = metrics.get("slosh_height_mm", {})
     lines.append("## Optimizer pressure")
+    lines.append(f"- internal slosh p95/max: {fmt(slosh_height.get('p95'))} / {fmt(slosh_height.get('max'))} mm")
+    lines.append(f"- J_slosh_eta median: {fmt(opt.get('J_slosh_eta', {}).get('p50'))}")
+    lines.append(f"- J_slosh_eta_dot median: {fmt(opt.get('J_slosh_eta_dot', {}).get('p50'))}")
     lines.append(f"- J_slosh_total mean: {fmt(opt.get('J_slosh_total', {}).get('mean'))}")
-    lines.append(f"- slosh cost pct median: {fmt(opt.get('pct_slosh_total_abs_sum', {}).get('p50'))}%")
+    lines.append(f"- slosh cost pct median/p95: {fmt(opt.get('pct_slosh_total_abs_sum', {}).get('p50'))}% / {fmt(opt.get('pct_slosh_total_abs_sum', {}).get('p95'))}%")
     lines.append(f"- eta_dot share in slosh median: {fmt(opt.get('pct_eta_dot_in_slosh', {}).get('p50'))}%")
+    lines.append(f"- progress/smooth/control pct median: {fmt(opt.get('pct_progress', {}).get('p50'))}% / {fmt(opt.get('pct_smooth', {}).get('p50'))}% / {fmt(opt.get('pct_control', {}).get('p50'))}%")
     lines.append(f"- horizon h_peak p95: {fmt(opt.get('h_modal_peak_pred_mm', {}).get('p95'))} mm")
     lines.append(f"- horizon h_p95 p95: {fmt(opt.get('h_modal_p95_pred_mm', {}).get('p95'))} mm")
     lines.append("")
     lines.append("## Command intervention")
     lines.append(f"- published_zero_frac: {fmt(cmd.get('published_zero_frac'))}")
+    lines.append(f"- command_limiter_frac: {fmt(cmd.get('command_limiter_frac'))}")
     lines.append(f"- linear_limited_frac: {fmt(cmd.get('linear_limited_frac'))}")
     lines.append(f"- angular_rate_limited_frac: {fmt(cmd.get('angular_rate_limited_frac'))}")
     lines.append(f"- angular_accel_limited_frac: {fmt(cmd.get('angular_accel_limited_frac'))}")

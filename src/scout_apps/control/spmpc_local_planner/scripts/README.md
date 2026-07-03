@@ -33,7 +33,7 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_ba
 实物 SPMPC fixed-path 单次试验一键脚本。前提是实物传感器/定位/底盘栈已经启动；脚本负责把下面流程合并成一次命令：
 
 ```text
-启动 fixed-path generator -> 发送固定终点 -> 启动黑匣子录包 -> 启动 SPMPC variant -> 60s 或 Ctrl-C 后清理
+启动 fixed-path generator -> 启动黑匣子录包 -> 发送固定终点 -> 等待 fixed path -> 启动 SPMPC variant -> 60s 或 Ctrl-C 后清理
 ```
 
 默认目标点固定为 2026-07-02 实物 bag 中恢复出的终点：`GOAL_X=-5.424`、`GOAL_Y=-4.736`、`GOAL_YAW=0.0`。`RECORD_SEC` 默认 60，且大于 60 或非法时会强制回到 60。
