@@ -8,26 +8,25 @@
 % =========================
 % 字体与中文支持
 % =========================
+% Overleaf 兼容：使用 TeX Live 自带字体文件，不依赖本机 /usr/share/fonts 路径。
+% Overleaf 中请将编译器设置为 XeLaTeX。
 \usepackage{fontspec}
-\setmainfont[
-  Path=/usr/share/fonts/opentype/urw-base35/,
-  UprightFont=NimbusRoman-Regular.otf,
-  BoldFont=NimbusRoman-Bold.otf,
-  ItalicFont=NimbusRoman-Italic.otf,
-  BoldItalicFont=NimbusRoman-BoldItalic.otf
-]{Nimbus Roman}
-\setsansfont[
-  Path=/usr/share/fonts/opentype/urw-base35/,
-  UprightFont=NimbusSans-Regular.otf,
-  BoldFont=NimbusSans-Bold.otf,
-  ItalicFont=NimbusSans-Italic.otf,
-  BoldItalicFont=NimbusSans-BoldItalic.otf
-]{Nimbus Sans}
-\setmonofont{DejaVu Sans Mono}
-\usepackage{xeCJK}
-\setCJKmainfont[AutoFakeSlant=0.2]{Noto Serif CJK SC}
-\setCJKsansfont[AutoFakeSlant=0.2]{Noto Sans CJK SC}
-\setCJKmonofont{Noto Sans Mono CJK SC}
+\setmainfont{texgyretermes}[
+  Extension=.otf,
+  UprightFont=*-regular,
+  BoldFont=*-bold,
+  ItalicFont=*-italic,
+  BoldItalicFont=*-bolditalic
+]
+\setsansfont{texgyreheros}[
+  Extension=.otf,
+  UprightFont=*-regular,
+  BoldFont=*-bold,
+  ItalicFont=*-italic,
+  BoldItalicFont=*-bolditalic
+]
+\setmonofont{lmmono10-regular.otf}
+\usepackage[UTF8,fontset=fandol,scheme=plain]{ctex}
 
 % =========================
 % 基础宏包
