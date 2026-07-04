@@ -122,6 +122,14 @@
     \eta_x & \dot{\eta}_x & \eta_y & \dot{\eta}_y
   \end{bmatrix}^{\top}.
 \end{equation}
+
+为了在实验中区分“规划器内部预测量”和“真实液面观测”，本文将由低阶晃液状态导出的模型代理量记为
+\begin{equation}
+  H_{\mathrm{model}}(t)=\mathcal{H}(\xl(t);\phi),
+  \label{eq:model_proxy_height}
+\end{equation}
+其中 $\phi$ 表示容器几何、液位和模型参数。实现中若发布 \texttt{/spmpc/slosh\_height}，它也只表示这类内部模型预测或诊断代理量。已有跨平台防晃轨迹规划研究使用一阶模态位移构造液面高度代理量，并将其与视频提取的实验液面进行对照\cite{C01_Ferrari2026}；本文借鉴这种“模型代理量必须接受外部观测校验”的评价口径，但不把 $H_{\mathrm{model}}$ 直接等同于真实自由液面高度。
+
 增强状态为
 \begin{equation}
 \begin{aligned}
@@ -236,7 +244,7 @@ OCP 中的状态和控制可行域主要包含底盘运动约束、控制输入�
   \qquad \epsilon_k\geq 0,
   \label{eq:slosh_soft_bound}
 \end{equation}
-并在目标函数中惩罚松弛变量 $\epsilon_k$。该扩展不作为本文主实验的核心组成；\eqref{eq:slosh_soft_bound} 也只是模型预测晃液边界，在没有真实液面反馈和形式化安全证明的情况下不构成严格防溢出保证。
+并在目标函数中惩罚松弛变量 $\epsilon_k$。该扩展不作为本文主实验的核心组成；\eqref{eq:slosh_soft_bound} 也只是模型预测晃液边界，在没有真实液面反馈和形式化安全证明的情况下不能支撑形式化无溢出结论。
 
 \subsection{滚动时域执行与消融变体}
 
