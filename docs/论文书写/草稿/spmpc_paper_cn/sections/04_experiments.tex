@@ -76,28 +76,34 @@
   \resizebox{\linewidth}{!}{%
   \begin{tikzpicture}[
     font=\scriptsize,
-    panel/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=white, minimum width=4.1cm, minimum height=2.0cm, align=center},
-    arr/.style={-{Latex[length=1.6mm]}, draw=spmpcgray, line width=0.4pt}
+    panel/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=white, minimum width=4.15cm, minimum height=2.05cm, align=center},
+    frame/.style={draw=spmpcgray, line width=0.35pt},
+    title/.style={font=\scriptsize\bfseries, text=spmpcblue, align=center},
+    note/.style={font=\tiny, text=spmpcgray, align=center},
+    legend/.style={draw=spmpcgray, rounded corners=1.2pt, line width=0.35pt, fill=spmpclight, minimum width=1.05cm, minimum height=0.28cm, align=center, font=\tiny}
   ]
-    \node[panel] (a) at (0,2.25) {轨迹与路径误差\\结果图占位};
-    \node[panel] (b) at (4.65,2.25) {速度 / 加速度 / 控制平滑性\\结果图占位};
-    \node[panel] (c) at (0,0) {真实液面响应\\RGB LCR / 外部液面观测\\结果图占位};
-    \node[panel] (d) at (4.65,0) {求解时间与任务完成统计\\结果图占位};
+    \node[panel] (a) at (0,2.35) {};
+    \node[panel] (b) at (4.75,2.35) {};
+    \node[panel] (c) at (0,0) {};
+    \node[panel] (d) at (4.75,0) {};
+
+    \node[title] at (a.north) [yshift=-0.30cm] {A 轨迹与路径误差};
+    \node[title] at (b.north) [yshift=-0.30cm] {B 控制剖面};
+    \node[title] at (c.north) [yshift=-0.30cm] {C 外部液面响应};
+    \node[title] at (d.north) [yshift=-0.30cm] {D 求解与任务统计};
 
     \foreach \p in {a,b,c,d}{
-      \draw[arr] ($ (\p.south west) + (0.35,0.35) $) -- ($ (\p.south west) + (0.35,1.55) $);
-      \draw[arr] ($ (\p.south west) + (0.35,0.35) $) -- ($ (\p.south west) + (3.55,0.35) $);
+      \draw[frame] ($ (\p.south west) + (0.52,0.42) $) rectangle ($ (\p.north east) + (-0.38,-0.70) $);
+      \node[note] at ($ (\p.center) + (0,-0.18) $) {结果数据待填入};
     }
-    \draw[spmpcblue, line width=0.7pt] (-1.35,2.35) -- (-0.55,2.75) -- (0.25,2.55) -- (1.05,2.9);
-    \draw[spmpcorange, line width=0.7pt] (-1.35,2.55) -- (-0.55,2.40) -- (0.25,2.85) -- (1.05,2.65);
-    \draw[spmpcblue, line width=0.7pt] (3.30,2.35) -- (4.10,2.65) -- (4.90,2.45) -- (5.70,2.75);
-    \draw[spmpcorange, line width=0.7pt] (3.30,2.62) -- (4.10,2.48) -- (4.90,2.70) -- (5.70,2.52);
-    \draw[spmpcblue, line width=0.7pt] (-1.35,0.15) -- (-0.55,0.70) -- (0.25,0.30) -- (1.05,0.55);
-    \draw[spmpcorange, line width=0.7pt] (-1.35,0.45) -- (-0.55,0.25) -- (0.25,0.60) -- (1.05,0.35);
-    \draw[spmpcblue, line width=0.7pt] (3.30,0.20) -- (3.30,0.85) -- (3.75,0.85) -- (3.75,0.20);
-    \draw[spmpcorange, line width=0.7pt] (4.20,0.20) -- (4.20,0.55) -- (4.65,0.55) -- (4.65,0.20);
+
+    \node[legend] at (-1.35,-1.45) {\texttt{B0}};
+    \node[legend] at (-0.25,-1.45) {\texttt{B\_smooth}};
+    \node[legend] at (1.15,-1.45) {\texttt{B\_slosh}};
+    \node[legend] at (2.45,-1.45) {\texttt{B\_ours}};
+    \node[note, anchor=west] at (3.25,-1.45) {占位版式：不含曲线、数值或趋势结论};
   \end{tikzpicture}}
-  \caption{内部消融实验结果分析图占位。该图用于放置 \texttt{B0}、\texttt{B\_smooth}、\texttt{B\_slosh} 和 \texttt{B\_ours} 的轨迹、控制、真实液面响应和求解时间结果；最终版本必须由真实实验数据替换。}
+  \caption{内部消融实验结果分析图占位。该图用于放置 \texttt{B0}、\texttt{B\_smooth}、\texttt{B\_slosh} 和 \texttt{B\_ours} 的轨迹、控制、真实液面响应和求解时间结果；当前仅保留版式框，不包含实验曲线、数值或趋势结论，最终版本必须由真实实验数据替换。}
   \label{fig:ablation_result_placeholder}
 \end{figure}
 
