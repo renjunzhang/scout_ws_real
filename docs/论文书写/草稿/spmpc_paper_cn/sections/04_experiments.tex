@@ -1,23 +1,49 @@
 \section{实验}
 
-本节围绕 \SPMPC{} 的核心主张组织实验：显式晃液状态预测是否能在单纯平滑控制之外进一步降低液体晃动，并且不以不可接受的路径跟踪、到达时间或实时性代价为条件。尚未完成的实验结果在本文稿中以结果占位标注；这些占位只能用真实仿真、实物或外部液面观测数据替换，不能用内部代理量代替真实液面结论。
+本节围绕 \SPMPC{} 的核心主张组织实验：显式晃液状态预测是否能在单纯平滑控制之外进一步降低液体晃动，并且不以不可接受的路径跟踪、到达时间或实时性代价为条件。实验评价同时覆盖内部消融、普通在线局部规划器对比、移动底盘防晃近邻对比、实时性分析和实物验证。尚未完成的实验结果在本文稿中以结果占位标注；这些占位只能由真实仿真、实物或外部液面观测数据替换，不能用内部代理量替代真实液面结论。
 
 \subsection{实验设置与评价指标}
 
-实验范围与问题定义保持一致：标准轮式移动底盘携带开口液体容器沿给定安全参考路径运动。仿真用于比较不同规划器在相同参考路径、底盘约束和任务终止条件下的行为；实物实验用于评价真实液面响应，并检查内部模型代理量是否具有解释价值。
+实验范围与问题定义保持一致：标准轮式移动底盘携带开口液体容器沿给定安全参考路径运动。仿真比较不同规划器在相同参考路径、底盘约束和任务终止条件下的行为；实物实验评价真实液面响应，并检查内部模型代理量是否具有解释价值。
 
-正式比较应固定以下条件：相同起点、终点、参考路径、容器配置、任务终止条件和失败判据；尽量对齐最大线速度、角速度、线加速度和角加速度；外部基线方法不使用液面状态作为控制输入；真实液面指标来自 RGB 或其它外部观测；所有试次记录轨迹、速度、控制输入、求解时间、内部晃液代理量和外部液面观测。
+正式比较固定起点、终点、参考路径、容器配置、任务终止条件和失败判据，并尽量对齐最大线速度、角速度、线加速度和角加速度。外部基线方法不使用液面状态作为控制输入。所有试次记录轨迹、速度、控制输入、求解时间、内部晃液代理量和外部液面观测。
 
 这里需要特别区分两类量：\texttt{/spmpc/slosh\_height} 只能作为模型内部预测或诊断代理量；真实液体结论必须依赖 RGB 最大 LCR、液面高度测量或其它外部观测指标。
 
 \begin{figure}[t]
   \centering
-  \figplaceholder{Fig. 3：实验平台与评价流程占位\\底盘、开口容器、参考路径、RGB/外部液面观测、日志记录}
-  \caption{实验平台与外部液面评价流程。该图用于展示仿真/实物平台、容器、参考路径、外部液面观测和日志记录流程；当前结果图等待真实实验材料替换。}
-  \label{fig:experiment_setup_placeholder}
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[
+    font=\small,
+    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=2.8cm, minimum height=0.88cm, align=center},
+    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=3.0cm, minimum height=1.05cm, align=center, font=\small\bfseries},
+    metric/.style={draw=spmpcgray, rounded corners=2pt, line width=0.4pt, fill=white, minimum width=2.35cm, minimum height=0.62cm, align=center, font=\scriptsize},
+    arr/.style={-{Latex[length=2mm]}, line width=0.5pt, draw=spmpcblue}
+  ]
+    \node[core] (robot) at (0,0) {移动底盘 + 开口容器\\参考路径任务};
+    \node[block] (planner) at (3.8,0.9) {规划器日志\\轨迹 / 命令 / 求解时间};
+    \node[block] (proxy) at (3.8,-0.9) {内部模型代理量\\\texttt{/spmpc/slosh\_height}};
+    \node[block] (camera) at (3.8,2.35) {外部液面观测\\RGB / 液位传感};
+    \node[core] (eval) at (7.5,0.55) {评价指标计算};
+    \node[metric] (m1) at (10.7,1.85) {真实液面运动};
+    \node[metric] (m2) at (10.7,0.85) {任务完成};
+    \node[metric] (m3) at (10.7,-0.15) {路径跟踪};
+    \node[metric] (m4) at (10.7,-1.15) {控制平滑与实时性};
+
+    \draw[arr] (robot.east) -- (planner.west);
+    \draw[arr] (robot.east) -- (proxy.west);
+    \draw[arr] (robot.north east) |- (camera.west);
+    \draw[arr] (planner.east) -- (eval.west);
+    \draw[arr] (proxy.east) -- (eval.west);
+    \draw[arr] (camera.east) -| (eval.north);
+    \foreach \m in {m1,m2,m3,m4}
+      \draw[arr] (eval.east) -- (\m.west);
+  \end{tikzpicture}}
+  \caption{实验平台与外部液面评价流程。轨迹、速度命令、求解时间和内部晃液代理量用于解释规划器行为；真实液面结论由外部视觉或液位观测支持。}
+  \label{fig:experiment_setup}
 \end{figure}
 
-评价指标覆盖液体运动、任务完成、路径跟踪、控制平滑性和在线计算五个方面，如 \cref{tab:metrics_plan} 所示。填入结果时应同时报告均值、方差或置信区间，并保留失败试次；如果样本数有限，则应明确写成初步证据，而不是强结论。
+评价指标覆盖液体运动、任务完成、路径跟踪、控制平滑性和在线计算五个方面，如 \cref{tab:metrics_plan} 所示。报告结果时同时给出均值、方差或置信区间，并保留失败试次；若样本数有限，则将结论限定为初步证据。
 
 \begin{table}[t]
   \centering
@@ -43,13 +69,36 @@
 
 内部消融用于回答“\SPMPC{} 的每个模块是否必要”。所有变体共享同一带路径进度状态的 \MPCC{} 框架、同一参考路径和同一底盘约束，只改变晃液模型/代价和平滑权重。变体定义已在 \cref{tab:method_variants} 中给出，包括 \texttt{B0}、\texttt{B\_smooth}、\texttt{B\_slosh} 和 \texttt{B\_ours}。
 
-结果解释应围绕四组比较展开：\texttt{B\_smooth} 与 \texttt{B0} 用于量化平滑性收益；\texttt{B\_slosh} 与 \texttt{B0} 用于量化液体状态预测收益；\texttt{B\_ours} 与 \texttt{B\_smooth} 用于回答仅平滑控制是否足够；\texttt{B\_ours} 与 \texttt{B\_slosh} 用于说明平滑控制仍然是可执行局部规划的一部分。
+消融按两个因素组织：是否显式传播并惩罚晃液状态，以及是否增强控制平滑项。\texttt{B\_smooth} 与 \texttt{B0} 用于量化平滑性收益；\texttt{B\_slosh} 与 \texttt{B0} 用于量化液体状态预测收益；\texttt{B\_ours} 与 \texttt{B\_smooth} 用于回答仅平滑控制是否足够；\texttt{B\_ours} 与 \texttt{B\_slosh} 用于说明平滑控制仍然是可执行局部规划的一部分。
 
 \begin{figure}[t]
   \centering
-  \figplaceholder{Fig. 4：内部消融结果占位\\B0 / B\_smooth / B\_slosh / B\_ours 的轨迹、速度、液面响应和求解时间}
-  \caption{内部消融实验结果占位。该图应由真实数据曲线和统计表替换，用于比较仅平滑控制、显式晃液状态预测和完整方法之间的差异。}
-  \label{fig:ablation_example_placeholder}
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[
+    font=\scriptsize,
+    panel/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=white, minimum width=4.1cm, minimum height=2.0cm, align=center},
+    arr/.style={-{Latex[length=1.6mm]}, draw=spmpcgray, line width=0.4pt}
+  ]
+    \node[panel] (a) at (0,2.25) {轨迹与路径误差\\结果图占位};
+    \node[panel] (b) at (4.65,2.25) {速度 / 加速度 / 控制平滑性\\结果图占位};
+    \node[panel] (c) at (0,0) {真实液面响应\\RGB LCR / 外部液面观测\\结果图占位};
+    \node[panel] (d) at (4.65,0) {求解时间与任务完成统计\\结果图占位};
+
+    \foreach \p in {a,b,c,d}{
+      \draw[arr] ($ (\p.south west) + (0.35,0.35) $) -- ($ (\p.south west) + (0.35,1.55) $);
+      \draw[arr] ($ (\p.south west) + (0.35,0.35) $) -- ($ (\p.south west) + (3.55,0.35) $);
+    }
+    \draw[spmpcblue, line width=0.7pt] (-1.35,2.35) -- (-0.55,2.75) -- (0.25,2.55) -- (1.05,2.9);
+    \draw[spmpcorange, line width=0.7pt] (-1.35,2.55) -- (-0.55,2.40) -- (0.25,2.85) -- (1.05,2.65);
+    \draw[spmpcblue, line width=0.7pt] (3.30,2.35) -- (4.10,2.65) -- (4.90,2.45) -- (5.70,2.75);
+    \draw[spmpcorange, line width=0.7pt] (3.30,2.62) -- (4.10,2.48) -- (4.90,2.70) -- (5.70,2.52);
+    \draw[spmpcblue, line width=0.7pt] (-1.35,0.15) -- (-0.55,0.70) -- (0.25,0.30) -- (1.05,0.55);
+    \draw[spmpcorange, line width=0.7pt] (-1.35,0.45) -- (-0.55,0.25) -- (0.25,0.60) -- (1.05,0.35);
+    \draw[spmpcblue, line width=0.7pt] (3.30,0.20) -- (3.30,0.85) -- (3.75,0.85) -- (3.75,0.20);
+    \draw[spmpcorange, line width=0.7pt] (4.20,0.20) -- (4.20,0.55) -- (4.65,0.55) -- (4.65,0.20);
+  \end{tikzpicture}}
+  \caption{内部消融实验结果分析图占位。该图用于放置 \texttt{B0}、\texttt{B\_smooth}、\texttt{B\_slosh} 和 \texttt{B\_ours} 的轨迹、控制、真实液面响应和求解时间结果；最终版本必须由真实实验数据替换。}
+  \label{fig:ablation_result_placeholder}
 \end{figure}
 
 \paragraph{结果占位：} 当前尚未填入内部消融数据。结果完成后，本段应报告各变体的任务完成率、到达时间、路径误差、控制平滑性、真实液面指标、内部晃液代理量和求解时间，并解释 \texttt{B\_ours} 相对于 \texttt{B\_smooth} 的差异是否来自晃液状态预测而非单纯减速。
@@ -58,18 +107,22 @@
 
 普通在线局部规划器对比用于回答“非液体感知局部规划器调好以后是否已经足够”。外部基线可以包括 DWA、TEB、\texttt{mpc\_local\_planner} 或 LT-DWA 系列规划器。它们与本文处于相近部署层级，能够在线生成底盘命令，但通常不传播液体动态记忆。
 
-正式进入主表的方法应满足四个条件：接口可运行、底盘约束可对齐、任务定义一致、日志可复现。比较结果不应被解释为一般导航排行榜，而应服务于本文缺口：当任务包含开口液体时，普通局部规划器的平滑性和在线性是否足以替代液体状态预测。
+进入主表的方法应满足四个条件：接口可运行、底盘约束可对齐、任务定义一致、日志可复现。比较指标包括成功率、到达时间、路径误差、真实液面指标和求解时间，用于检验普通局部规划器的平滑性和在线性是否足以替代液体状态预测。
 
 \paragraph{结果占位：} 当前尚未填入普通局部规划器对比数据。结果完成后，本段应给出各基线与 \SPMPC{} 的成功率、到达时间、路径误差、真实液面指标和求解时间，并保留失败或超时试次。
 
 \subsection{移动底盘防晃近邻对比}
 
-移动底盘防晃近邻方法用于解释本文与已有液体运输工作的层级差异。可比较对象包括 Hamaguchi 式路径/速度剖面、输入整形策略、Lim 式离线液体约束轨迹或其它能在同一任务中复现实验接口的防晃方法。它们的作用不是作为同层局部规划器排行榜，而是说明：具有液体模型的防晃方法若位于离线规划、速度剖面或跟踪控制层，与在线局部规划层的 \SPMPC{} 仍存在接口和决策层级差异。
+移动底盘防晃近邻方法用于解释本文与已有液体运输工作的层级差异。可比较对象包括 Hamaguchi 式路径/速度剖面、输入整形策略、Lim 式离线液体约束轨迹或其它能在同一任务中复现实验接口的防晃方法。它们的作用是说明具有液体模型的防晃方法在离线规划、速度剖面或跟踪控制层与在线局部规划层之间的接口差异。
+
+近邻对比优先选择可在同一任务接口复现的方法；难以公平复现的工作用于相关工作层级分析。对可复现方法，实验记录任务完成、真实液面响应、路径误差和执行时间，并说明其与 \SPMPC{} 在决策层级和在线接口上的差异。
 
 \paragraph{结果占位：} 当前尚未填入移动底盘防晃近邻对比数据。若无法公平复现某类方法，应在本段明确说明其作为相关工作参照而非主实验基线，并避免把不可复现实验写成已完成结果。
 
 \subsection{实时性、鲁棒性与实物验证}
 
-实时性分析应报告 OCP 求解时间、控制频率、求解失败次数和极端试次。鲁棒性分析可覆盖不同路径类型、不同初始晃液状态、不同液位或不同权重设置。实物验证应记录最终发送到底盘的命令、外部液面观测、内部模型代理量和关键执行链路诊断，以区分方法效果与底盘执行、传感延迟或命令门控造成的影响。
+实时性分析报告 OCP 求解时间、控制频率、求解失败次数和极端试次。鲁棒性分析覆盖不同路径类型、不同初始晃液状态、不同液位或不同权重设置。实物验证记录最终发送到底盘的命令、外部液面观测、内部模型代理量和关键执行链路诊断，以区分方法效果与底盘执行、传感延迟或命令门控造成的影响。
+
+在实物实验中，\texttt{/spmpc/slosh\_height} 仍只作为模型内部代理量；真实液体晃动降低的结论应由外部液面观测支持。求解时间和控制频率用于验证滚动时域优化是否满足在线局部规划的实时要求。
 
 \paragraph{结果占位：} 当前尚未填入实时性、鲁棒性和实物实验数据。结果完成后，本段应说明 \SPMPC{} 是否能够在目标控制频率下稳定求解，并用真实液面观测支持“降低晃动”而不是仅报告内部 \texttt{/spmpc/slosh\_height} 的降低。

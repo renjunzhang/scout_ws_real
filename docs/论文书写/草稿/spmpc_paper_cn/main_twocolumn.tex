@@ -40,6 +40,8 @@
 \usepackage{array}
 \usepackage{siunitx}
 \usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,matrix,shapes.geometric}
 \usepackage{hyperref}
 \usepackage[nameinlink]{cleveref}
 
@@ -81,15 +83,10 @@
 \newcommand{\dd}{\mathrm{d}}
 \newcommand{\R}{\mathbb{R}}
 
-% RAL/IEEE 双栏预览占位图：保持栏宽内显示。
-\newcommand{\figplaceholder}[2][0.92\linewidth]{%
-  \fbox{%
-    \begin{minipage}[c][0.15\textheight][c]{#1}
-      \centering\color{gray}#2\\[0.4em]
-      \small 图形占位
-    \end{minipage}%
-  }%
-}
+\definecolor{spmpcblue}{RGB}{36,99,180}
+\definecolor{spmpclight}{RGB}{235,243,255}
+\definecolor{spmpcorange}{RGB}{220,120,40}
+\definecolor{spmpcgray}{RGB}{90,90,90}
 
 % =========================
 % 标题信息

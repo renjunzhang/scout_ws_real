@@ -13,6 +13,8 @@
 \usepackage{array}
 \usepackage{siunitx}
 \usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,matrix,shapes.geometric}
 \usepackage{geometry}
 \usepackage{hyperref}
 \usepackage[nameinlink]{cleveref}
@@ -67,15 +69,10 @@
 \newcommand{\dd}{\mathrm{d}}
 \newcommand{\R}{\mathbb{R}}
 
-% 图像占位：有正式图片后，用 \includegraphics 替换占位框即可。
-\newcommand{\figplaceholder}[2][0.86\linewidth]{%
-  \fbox{%
-    \begin{minipage}[c][0.22\textheight][c]{#1}
-      \centering\color{gray}#2\\[0.5em]
-      \small 图形占位
-    \end{minipage}%
-  }%
-}
+\definecolor{spmpcblue}{RGB}{36,99,180}
+\definecolor{spmpclight}{RGB}{235,243,255}
+\definecolor{spmpcorange}{RGB}{220,120,40}
+\definecolor{spmpcgray}{RGB}{90,90,90}
 
 % =========================
 % 中文图表名称
