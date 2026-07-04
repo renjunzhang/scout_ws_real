@@ -1,127 +1,33 @@
-\section{实验设计与验证计划}
+\section{实验}
 
-本节目前只给出实验框架和写作口径，不填写尚未获得的实验结果。实验章节的作用不是形成规划器排行榜，而是围绕本文核心主张组织证据：\textbf{显式晃液状态预测是否能在单纯平滑控制之外进一步降低液体晃动，并且不以不可接受的路径跟踪、到达时间或实时性代价为条件。} 后续完成仿真或实物实验后，应在本节相应位置填入数据、图表和失败案例，而不是改变主线问题。
+本节围绕 \SPMPC{} 的核心主张组织实验：显式晃液状态预测是否能在单纯平滑控制之外进一步降低液体晃动，并且不以不可接受的路径跟踪、到达时间或实时性代价为条件。尚未完成的实验结果在本文稿中以结果占位标注；这些占位只能用真实仿真、实物或外部液面观测数据替换，不能用内部代理量代替真实液面结论。
 
-\subsection{实验问题与证据链}
+\subsection{实验设置与评价指标}
 
-根据引言和方法部分的论证，实验需要回答四类问题。\cref{tab:experiment_claim_map} 给出每类问题对应的证据形式。表中“待填”表示后续实验完成后补充具体数据、图号或表号。
+实验范围与问题定义保持一致：标准轮式移动底盘携带开口液体容器沿给定安全参考路径运动。仿真用于比较不同规划器在相同参考路径、底盘约束和任务终止条件下的行为；实物实验用于评价真实液面响应，并检查内部模型代理量是否具有解释价值。
 
-\begin{table}[t]
-  \centering
-  \footnotesize
-  \setlength{\tabcolsep}{3pt}
-  \caption{实验问题、核心主张与所需证据}
-  \label{tab:experiment_claim_map}
-  \begin{tabular}{p{0.28\linewidth} p{0.32\linewidth} p{0.28\linewidth}}
-    \toprule
-    实验问题 & 支持的核心主张 & 需要的证据 \\
-    \midrule
-    仅平滑控制是否足够防晃 & 液体晃动不是单纯轨迹平滑问题 & \texttt{B\_ours} 与 \texttt{B\_smooth} 对比，待填 \\
-    晃液状态预测是否有独立贡献 & 低阶晃液状态提供动态记忆 & \texttt{B\_slosh} 与 \texttt{B0} 对比，待填 \\
-    完整方法是否保持局部规划能力 & \SPMPC{} 同时优化路径进度、底盘控制和液体响应 & 跟踪误差、到达时间、成功率，待填 \\
-    普通在线规划器是否缺少液体状态 & 普通局部规划器在线可执行但不传播液体状态 & 外部基线方法对比，待填 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-所有结果段落后续建议使用统一结构：
-\begin{equation}
-  \text{主张} \rightarrow \text{证据} \rightarrow
-  \text{解释} \rightarrow \text{边界}.
-\end{equation}
-也就是说，每个图表都必须说明它支持哪个主张、排除了哪个替代解释，以及仍然有哪些边界。
-
-\subsection{实验场景与公平协议}
-
-第一版实验范围应与本文问题定义一致：给定安全参考路径上的移动底盘开口液体运输。实验场景可以分为仿真验证和实物验证两层。仿真用于快速检查不同规划器在同一参考路径和约束下的行为；实物实验用于评价真实液面响应，并验证内部模型代理量是否具有解释价值。
-
-公平协议应在所有正式对比前固定：
-
-\begin{enumerate}
-  \item \textbf{统一任务：} 相同起点、终点、参考路径、容器配置和任务终止条件；
-  \item \textbf{统一底盘限制：} 尽量对齐最大线速度、角速度、线加速度和角加速度；
-  \item \textbf{统一初始化：} 正式仿真比较应使用全新启动的仿真环境；若只是当前仿真诊断，应明确不计入正式结果；
-  \item \textbf{统一评价：} 外部基线方法不使用液面状态作为控制输入；真实液面指标来自 RGB 或其它外部观测；
-  \item \textbf{统一失败判据：} 记录超时、未到达、碰撞、明显偏离参考路径、求解失败等情况；
-  \item \textbf{统一记录：} 保存轨迹、速度、控制输入、求解时间、内部晃液代理量和外部液面观测。
-\end{enumerate}
+正式比较应固定以下条件：相同起点、终点、参考路径、容器配置、任务终止条件和失败判据；尽量对齐最大线速度、角速度、线加速度和角加速度；外部基线方法不使用液面状态作为控制输入；真实液面指标来自 RGB 或其它外部观测；所有试次记录轨迹、速度、控制输入、求解时间、内部晃液代理量和外部液面观测。
 
 这里需要特别区分两类量：\texttt{/spmpc/slosh\_height} 只能作为模型内部预测或诊断代理量；真实液体结论必须依赖 RGB 最大 LCR、液面高度测量或其它外部观测指标。
 
 \begin{figure}[t]
   \centering
-  \figplaceholder{实验平台 / 评价流程图：\\Scout 或仿真底盘、容器、参考路径、RGB 相机、\\日志与液面指标计算流程。}
-  \caption{实验平台与外部液面评价流程占位。后续应插入仿真/实物场景、相机视角、液面感兴趣区域和日志记录流程。}
+  \figplaceholder{Fig. 3：实验平台与评价流程占位\\底盘、开口容器、参考路径、RGB/外部液面观测、日志记录}
+  \caption{实验平台与外部液面评价流程。该图用于展示仿真/实物平台、容器、参考路径、外部液面观测和日志记录流程；当前结果图等待真实实验材料替换。}
   \label{fig:experiment_setup_placeholder}
 \end{figure}
 
-\subsection{内部消融实验}
-
-内部消融用于回答“\SPMPC{} 的每个模块是否必要”。所有变体应共享同一带路径进度状态的 \MPCC{} 框架、同一参考路径和同一底盘约束，只改变晃液模型/代价和平滑权重。计划比较的变体见 \cref{tab:ablation_plan}。
+评价指标覆盖液体运动、任务完成、路径跟踪、控制平滑性和在线计算五个方面，如 \cref{tab:metrics_plan} 所示。填入结果时应同时报告均值、方差或置信区间，并保留失败试次；如果样本数有限，则应明确写成初步证据，而不是强结论。
 
 \begin{table}[t]
   \centering
   \footnotesize
   \setlength{\tabcolsep}{3pt}
-  \caption{内部消融实验计划}
-  \label{tab:ablation_plan}
-  \begin{tabular}{p{0.18\linewidth} p{0.20\linewidth} p{0.18\linewidth} p{0.32\linewidth}}
-    \toprule
-    变体 & 晃液模型/代价 & 平滑约束 & 主要回答的问题 \\
-    \midrule
-    \texttt{B0} & 无 & 弱 & 基础 \MPCC{} 的路径跟踪和液体响应基线 \\
-    \texttt{B\_smooth} & 无 & 强 & 只增强平滑性是否足够防晃 \\
-    \texttt{B\_slosh} & 有 & 弱 & 显式晃液状态预测是否有独立贡献 \\
-    \texttt{B\_ours} & 有 & 强 & 完整方法是否兼顾防晃、跟踪和实时性 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-后续结果解释应重点围绕四组比较展开：\texttt{B\_smooth} 与 \texttt{B0} 用于量化平滑性收益；\texttt{B\_slosh} 与 \texttt{B0} 用于量化液体状态预测收益；\texttt{B\_ours} 与 \texttt{B\_smooth} 用于回答仅平滑控制是否足够；\texttt{B\_ours} 与 \texttt{B\_slosh} 用于说明平滑控制仍然是可执行局部规划的一部分。
-
-\begin{figure}[t]
-  \centering
-  \figplaceholder{消融结果示例图：\\同一路径下 \texttt{B\_smooth} 与 \texttt{B\_ours} 的速度、\\预测/真实液面响应和路径跟踪曲线。}
-  \caption{仅平滑与晃液感知消融对比图占位。后续应插入代表性试次曲线，用于展示相近平滑度或相近到达时间下的液面响应差异。}
-  \label{fig:ablation_example_placeholder}
-\end{figure}
-
-\subsection{外部局部规划器对比}
-
-外部对比用于回答“普通在线局部规划器调好以后是否已经足够”。这一组基线方法不是为了证明 \SPMPC{} 在所有导航指标上排名第一，而是为了提供缺口证据：普通规划器可以在线生成可执行和平滑运动，但通常不传播液体动态记忆。
-
-候选基线方法分为两类。第一类是同层移动机器人局部规划器，例如 DWA、TEB、\texttt{mpc\_local\_planner} 或 LT-DWA 系列规划器；它们是外部主对比对象。第二类是防晃速度剖面或离线参考轨迹，例如 Hamaguchi 式速度/路径剖面或 Lim 式晃液约束轨迹；它们用于解释相关工作差异，不一定作为同层在线基线进入主表。最终进入主表的方法必须满足接口可运行、约束可对齐、任务定义一致和日志可复现四个条件。
-
-\begin{table}[t]
-  \centering
-  \footnotesize
-  \setlength{\tabcolsep}{3pt}
-  \caption{外部对比方法的角色}
-  \label{tab:external_baselines}
-  \begin{tabular}{p{0.25\linewidth} p{0.30\linewidth} p{0.31\linewidth}}
-    \toprule
-    方法类型 & 示例 & 在论文中的作用 \\
-    \midrule
-    普通在线局部规划器 & DWA / TEB / 非晃液感知 \MPC{} / LT-DWA & 同层基线：在线可执行但不传播液体状态 \\
-    防晃速度剖面或离线轨迹 & Hamaguchi 式 / Lim 式参考轨迹 & 相关工作参照：具有晃液感知能力但不在同一局部规划层 \\
-    \SPMPC{} 内部变体 & \texttt{B0}, \texttt{B\_smooth}, \texttt{B\_slosh}, \texttt{B\_ours} & 模块消融：分离平滑项与晃液状态贡献 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-\subsection{评价指标}
-
-评价指标应覆盖液体运动、任务完成、路径跟踪、控制平滑性和在线计算五个方面，如 \cref{tab:metrics_plan} 所示。填结果时应同时报告均值、方差或置信区间，并保留失败试次；如果样本数有限，则应明确写成初步证据，而不是强结论。
-
-\begin{table}[t]
-  \centering
-  \footnotesize
-  \setlength{\tabcolsep}{3pt}
-  \caption{评价指标与叙事作用}
+  \caption{评价指标与评价目的}
   \label{tab:metrics_plan}
   \begin{tabular}{p{0.28\linewidth} p{0.34\linewidth} p{0.26\linewidth}}
     \toprule
-    指标类别 & 具体指标 & 叙事作用 \\
+    指标类别 & 具体指标 & 评价目的 \\
     \midrule
     真实液面运动 & RGB 最大 LCR、RMS-LCR、残余振荡 & 验证是否真的降低晃动 \\
     模型诊断 & 预测晃液状态、\texttt{/spmpc/slosh\_height} & 解释模型预测，不能替代真实评价 \\
@@ -133,17 +39,37 @@
   \end{tabular}
 \end{table}
 
-\subsection{结果小节占位结构}
+\subsection{内部消融实验}
 
-实验完成后，本节可以按下面结构展开。当前版本只保留占位，避免在没有数据前写结果性判断。
+内部消融用于回答“\SPMPC{} 的每个模块是否必要”。所有变体共享同一带路径进度状态的 \MPCC{} 框架、同一参考路径和同一底盘约束，只改变晃液模型/代价和平滑权重。变体定义已在 \cref{tab:method_variants} 中给出，包括 \texttt{B0}、\texttt{B\_smooth}、\texttt{B\_slosh} 和 \texttt{B\_ours}。
 
-\begin{enumerate}
-  \item \textbf{实验设置与公平性检查：} 说明路径、容器、底盘限制、初始化、日志和评价方法是否一致；
-  \item \textbf{内部消融：} 填入 \texttt{B0}/\texttt{B\_smooth}/\texttt{B\_slosh}/\texttt{B\_ours} 的主要表格和典型曲线；
-  \item \textbf{外部规划器对比：} 填入普通局部规划器基线的对比表和代表性失败/成功案例；
-  \item \textbf{真实液面观测：} 填入 RGB 或外部液面测量结果，并与内部代理量分开解释；
-  \item \textbf{实时性分析：} 填入求解时间、控制频率和求解失败统计；
-  \item \textbf{局限性：} 说明模型误差、权重敏感性、路径类型、液体参数和传感噪声等边界。
-\end{enumerate}
+结果解释应围绕四组比较展开：\texttt{B\_smooth} 与 \texttt{B0} 用于量化平滑性收益；\texttt{B\_slosh} 与 \texttt{B0} 用于量化液体状态预测收益；\texttt{B\_ours} 与 \texttt{B\_smooth} 用于回答仅平滑控制是否足够；\texttt{B\_ours} 与 \texttt{B\_slosh} 用于说明平滑控制仍然是可执行局部规划的一部分。
 
-最终写作时，若某个实验没有完成，应明确标注为未完成或移到后续工作，不能用内部代理量替代真实液面结论，也不能把计划对比写成已观测结果。
+\begin{figure}[t]
+  \centering
+  \figplaceholder{Fig. 4：内部消融结果占位\\B0 / B\_smooth / B\_slosh / B\_ours 的轨迹、速度、液面响应和求解时间}
+  \caption{内部消融实验结果占位。该图应由真实数据曲线和统计表替换，用于比较仅平滑控制、显式晃液状态预测和完整方法之间的差异。}
+  \label{fig:ablation_example_placeholder}
+\end{figure}
+
+\paragraph{结果占位：} 当前尚未填入内部消融数据。结果完成后，本段应报告各变体的任务完成率、到达时间、路径误差、控制平滑性、真实液面指标、内部晃液代理量和求解时间，并解释 \texttt{B\_ours} 相对于 \texttt{B\_smooth} 的差异是否来自晃液状态预测而非单纯减速。
+
+\subsection{普通在线局部规划器对比}
+
+普通在线局部规划器对比用于回答“非液体感知局部规划器调好以后是否已经足够”。外部基线可以包括 DWA、TEB、\texttt{mpc\_local\_planner} 或 LT-DWA 系列规划器。它们与本文处于相近部署层级，能够在线生成底盘命令，但通常不传播液体动态记忆。
+
+正式进入主表的方法应满足四个条件：接口可运行、底盘约束可对齐、任务定义一致、日志可复现。比较结果不应被解释为一般导航排行榜，而应服务于本文缺口：当任务包含开口液体时，普通局部规划器的平滑性和在线性是否足以替代液体状态预测。
+
+\paragraph{结果占位：} 当前尚未填入普通局部规划器对比数据。结果完成后，本段应给出各基线与 \SPMPC{} 的成功率、到达时间、路径误差、真实液面指标和求解时间，并保留失败或超时试次。
+
+\subsection{移动底盘防晃近邻对比}
+
+移动底盘防晃近邻方法用于解释本文与已有液体运输工作的层级差异。可比较对象包括 Hamaguchi 式路径/速度剖面、输入整形策略、Lim 式离线液体约束轨迹或其它能在同一任务中复现实验接口的防晃方法。它们的作用不是作为同层局部规划器排行榜，而是说明：具有液体模型的防晃方法若位于离线规划、速度剖面或跟踪控制层，与在线局部规划层的 \SPMPC{} 仍存在接口和决策层级差异。
+
+\paragraph{结果占位：} 当前尚未填入移动底盘防晃近邻对比数据。若无法公平复现某类方法，应在本段明确说明其作为相关工作参照而非主实验基线，并避免把不可复现实验写成已完成结果。
+
+\subsection{实时性、鲁棒性与实物验证}
+
+实时性分析应报告 OCP 求解时间、控制频率、求解失败次数和极端试次。鲁棒性分析可覆盖不同路径类型、不同初始晃液状态、不同液位或不同权重设置。实物验证应记录最终发送到底盘的命令、外部液面观测、内部模型代理量和关键执行链路诊断，以区分方法效果与底盘执行、传感延迟或命令门控造成的影响。
+
+\paragraph{结果占位：} 当前尚未填入实时性、鲁棒性和实物实验数据。结果完成后，本段应说明 \SPMPC{} 是否能够在目标控制频率下稳定求解，并用真实液面观测支持“降低晃动”而不是仅报告内部 \texttt{/spmpc/slosh\_height} 的降低。
