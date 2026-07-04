@@ -18,11 +18,11 @@
 典型用法：
 
 ```bash
-RUN_LABEL=Bours_delay_080_050_run01 \
-VARIANT=B_ours \
+RUN_LABEL=Bslosh_delay_off_run01 \
+VARIANT=B_slosh \
 RECORD_SEC=60 \
 RECORD_RGB=false \
-OUT_DIR=/home/geist/slosh_bags/real/20260703_fixed_path_compare/B_ours \
+OUT_DIR=/home/geist/slosh_bags/real/20260704_fixed_path_compare/B_slosh \
 bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
 ```
 
@@ -36,7 +36,7 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_ba
 启动 fixed-path generator -> 启动黑匣子录包 -> 发送固定终点 -> 等待 fixed path -> 启动 SPMPC variant -> 60s 或 Ctrl-C 后清理
 ```
 
-默认目标点固定为 2026-07-02 实物 bag 中恢复出的终点：`GOAL_X=-5.424`、`GOAL_Y=-4.736`、`GOAL_YAW=0.0`。`RECORD_SEC` 默认 60，且大于 60 或非法时会强制回到 60。
+默认目标点固定为 2026-07-02 实物 bag 中恢复出的终点：`GOAL_X=-5.424`、`GOAL_Y=-4.736`、`GOAL_YAW=0.0`。`RECORD_SEC` 默认 60，且大于 60 或非法时会强制回到 60。当前脚本默认 delay 口径为 `DELAY_PHASE_MODE=off`；若要验证 `fixed_closed_loop 0.08 / 0.05`，必须在命令里显式指定。
 
 典型用法：
 
@@ -45,12 +45,12 @@ source /opt/ros/noetic/setup.bash
 source /home/geist/scout_ws/devel/setup.bash
 cd /home/geist/scout_ws
 
-ALG=B_ours \
-RUN_LABEL=Bours_delay_080_050_run01 \
+ALG=B_slosh \
+RUN_LABEL=Bslosh_delay_off_run01 \
 CMD_TOPIC=/cmd_vel \
-DELAY_PHASE_MODE=fixed_closed_loop \
-DELAY_PHASE_LINEAR_DELAY_SEC=0.08 \
-DELAY_PHASE_ANGULAR_DELAY_SEC=0.05 \
+DELAY_PHASE_MODE=off \
+DELAY_PHASE_LINEAR_DELAY_SEC=-1.0 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=-1.0 \
 RECORD_RGB=false \
 bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
 ```
@@ -75,7 +75,7 @@ source /opt/ros/noetic/setup.bash
 source /home/geist/scout_ws/devel/setup.bash
 
 python3 src/scout_apps/control/spmpc_local_planner/scripts/summarize_spmpc_real_trial.py \
-  /home/geist/slosh_bags/real/20260703_fixed_path_compare/B_ours/Bours_delay_080_050_run01.bag
+  /home/geist/slosh_bags/real/20260704_fixed_path_compare/B_slosh/Bslosh_delay_off_run01.bag
 ```
 
 ## compare_b0_bslosh_smoke.sh
