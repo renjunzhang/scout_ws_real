@@ -1,5 +1,6 @@
 % !TEX program = xelatex
-\documentclass[12pt,a4paper]{ctexart}
+% 双栏预览入口：用于估算正式论文篇幅，不作为主写作稿。
+\documentclass[10pt,a4paper,twocolumn]{ctexart}
 
 % =========================
 % 基础宏包
@@ -18,16 +19,18 @@
 \usepackage[nameinlink]{cleveref}
 
 % =========================
-% 页面设置
+% 页面设置：近似会议论文双栏预览
 % =========================
 \geometry{
-  left=2.5cm,
-  right=2.5cm,
-  top=2.5cm,
-  bottom=2.5cm
+  left=1.7cm,
+  right=1.7cm,
+  top=1.9cm,
+  bottom=2.0cm
 }
 
-\linespread{1.15}
+\linespread{1.03}
+\setlength{\columnsep}{0.65cm}
+\setlength{\parskip}{0pt}
 
 % =========================
 % 图片路径
@@ -67,11 +70,11 @@
 \newcommand{\dd}{\mathrm{d}}
 \newcommand{\R}{\mathbb{R}}
 
-% 图像占位：后续有正式图片后，用 \includegraphics 替换占位框即可。
-\newcommand{\figplaceholder}[2][0.86\linewidth]{%
+% 双栏预览占位图：比单栏版本更紧凑。
+\newcommand{\figplaceholder}[2][0.92\linewidth]{%
   \fbox{%
-    \begin{minipage}[c][0.22\textheight][c]{#1}
-      \centering\color{gray}#2\\[0.5em]
+    \begin{minipage}[c][0.15\textheight][c]{#1}
+      \centering\color{gray}#2\\[0.4em]
       \small 后续插图占位
     \end{minipage}%
   }%
