@@ -32,7 +32,7 @@
 
 也就是说，同一包里可以同时录 cost、delay、command、slosh observer、solver status 这些被动诊断量；但不要同一包里又改 delay、又改权重、又开 IMU、又开 hard，否则事后仍然分不清因果。
 
-本轮主动变量优先固定为 `delay_phase_mode`：先跑 `off`，再跑 `fixed_closed_loop 0.08 / 0.05`，不要反过来。
+本轮主动变量不再设为 delay 归因；`B0` gate 已确认最干净口径是 `fixed_closed_loop 0.15 / 0.22`。后续主动变量只保留方法名：`B0`、`B_slosh`、`B_ours`。
 
 ---
 
@@ -133,11 +133,11 @@ slosh_constraint_enable: false
 
 ```text
 1. hard constraint 当前是 modal-only 口径，不等于 RGB 真值 hard cap；
-2. delay compensation 尚需先稳定；
+2. 本轮 fixed 0.15 / 0.22 baseline 已经稳定，hard 反而会引入新的可行性变量；
 3. 本轮先判断 soft cost / ours 策略在模型层面是否恢复仿真规律。
 ```
 
-hard-cap 相关实验等 delay 和 soft-cost 规律跑通后再单独设计。
+hard-cap 相关实验等 fixed-baseline 三方法 soft-cost 规律跑通后再单独设计。
 
 ---
 
@@ -194,7 +194,15 @@ rosparam set /spmpc_local_planner/map_vref/profile_enable false
 /spmpc/debug/map_vref_status = VARIANT_FALLBACK
 ```
 
-当前标准低速 smoke / formal debug 统一使用：
+2026-07-05 已完成 `B0_fixed_path基础跟踪调试指南.md` 中的 B0 gate，结论是：
+
+```text
+1. B0 + fixed_closed_loop 0.15 / 0.22：GOAL_REACHED，projection p95 ≈ 0.0276 m，最干净。
+2. B0 + delay off + 当前保守角向限制：TRACKING_UNSAFE_PROJECTION，失败。
+3. B0 + delay off + 放开角向限制：可以 GOAL_REACHED，但 projection p95 ≈ 0.089 m，不如 fixed_closed_loop 干净。
+```
+
+因此本文件的正式对比口径改为：
 
 ```text
 v_ref=0.20 m/s
@@ -202,44 +210,21 @@ shared_linear_accel_max=0.6 m/s^2
 shared_angular_rate_max=1.2 rad/s
 shared_angular_accel_max=1.2 rad/s^2
 alpha_max=1.2 rad/s^2
-timeout=60 s
-```
-
-当前不要把 `fixed_closed_loop 0.08 / 0.05` 当作默认必开项；delay compensation 本身是本轮待验证变量。现场口径分四类：
-
-当前默认调试口径：
-
-```text
-delay_phase_mode=off
-delay_phase_linear_delay_sec=-1.0
-delay_phase_angular_delay_sec=-1.0
-```
-
-当前待验证 delay 口径：
-
-```text
-delay_phase_mode=fixed_closed_loop
-delay_phase_linear_delay_sec=0.08
-delay_phase_angular_delay_sec=0.05
-```
-
-推荐诊断口径（若需要只看预测、不替换 solver input）：
-
-```text
-delay_phase_mode=shadow
-delay_phase_linear_delay_sec=0.08
-delay_phase_angular_delay_sec=0.05
-```
-
-旧问题复现口径：
-
-```text
 delay_phase_mode=fixed_closed_loop
 delay_phase_linear_delay_sec=0.15
 delay_phase_angular_delay_sec=0.22
+timeout=60 s
 ```
 
-执行顺序必须是：先 `off`，再 `fixed_closed_loop 0.08 / 0.05`，不要反过来。旧 `0.15 / 0.22` 只作为问题复现实验或 old-delay 对照，不作为当前正式候选；尤其 `angular_delay_sec=0.22` 目前怀疑过补偿。
+也就是说，接下来 `B0 / B_slosh / B_ours` 必须在同一个 `fixed_closed_loop 0.15 / 0.22` baseline 下对比。不要再用旧文档中的 `delay off` 或 `fixed_closed_loop 0.08 / 0.05` 作为主线。
+
+备用口径仅用于额外诊断：
+
+```text
+delay off + ALPHA_MAX=8.0 + SHARED_ANGULAR_ACCEL_MAX=3.0
+```
+
+该备用口径证明 delay off 不是绝对不可用，但 tracking 误差更大，不作为当前内部晃动高度正式对比首选。
 
 ---
 
@@ -275,6 +260,35 @@ rostopic info /cmd_vel
 
 注意：任一时刻只允许一个 planner 有效发布 `/cmd_vel`。
 
+### 6.1.1 正式 N=3 的 RGB 前置检查
+
+N=1 smoke 可以不录 RGB；但正式 N=3 是论文/报告候选数据，不能浪费每一次正式矩阵机会，**必须同步录 RGB**。
+
+正式 N=3 开始前先确认：
+
+```bash
+rostopic echo -n 1 /camera/color/image_raw
+rostopic echo -n 1 /camera/color/camera_info
+rostopic hz /camera/color/image_raw
+```
+
+现场检查：
+
+```text
+1. RealSense 已经启动，画面能看到容器和液面有效区域；
+2. 曝光、增益、白平衡固定，不要自动变化；
+3. 灯光、相机姿态、容器安装在 N=3 全程保持不变；
+4. 确认磁盘空间足够，RGB 会显著增大 bag；
+5. 每个 run 前液体静稳 60~90s，开跑后不要移动相机/光源/容器；
+6. 如果 RGB topic 异常，该 run 仍保留为 internal model 样本，但不能作为 RGB physical evidence。
+```
+
+正式 N=3 命令统一使用：
+
+```text
+RECORD_RGB=true
+```
+
 ### 6.2 一键执行固定路径 + 录包 + SPMPC
 
 当前推荐使用一键脚本执行后续流程：
@@ -289,7 +303,7 @@ rostopic info /cmd_vel
 src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
 ```
 
-最小命令模板：
+最小命令模板（以 `B_slosh` N=1 smoke 为例）：
 
 ```bash
 source /opt/ros/noetic/setup.bash
@@ -297,22 +311,37 @@ source /home/geist/scout_ws/devel/setup.bash
 cd /home/geist/scout_ws
 
 ALG=B_slosh \
-RUN_LABEL=Bslosh_delay_off_run01 \
+RUN_LABEL=Bslosh_fixed_150_220_smoke01 \
 CMD_TOPIC=/cmd_vel \
-DELAY_PHASE_MODE=off \
-DELAY_PHASE_LINEAR_DELAY_SEC=-1.0 \
-DELAY_PHASE_ANGULAR_DELAY_SEC=-1.0 \
+V_REF=0.20 \
+ALPHA_MAX=1.2 \
+SHARED_LINEAR_ACCEL_LIMIT_ENABLE=true \
+SHARED_LINEAR_ACCEL_MAX=0.6 \
+SHARED_ANGULAR_LIMIT_ENABLE=true \
+SHARED_ANGULAR_RATE_MAX=1.2 \
+SHARED_ANGULAR_ACCEL_MAX=1.2 \
+DELAY_PHASE_MODE=fixed_closed_loop \
+DELAY_PHASE_LINEAR_DELAY_SEC=0.15 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
+RECORD_TOPIC_INFO=false \
+RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=false \
 bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
 ```
 
-脚本默认值已经跟随当前默认调试口径（delay off）。正式执行仍建议每个 run 显式写出 `DELAY_PHASE_MODE`，避免现场误用：
+脚本默认值仍可能是 delay off；正式执行必须每个 run 显式写出完整控制口径，避免现场误用：
 
 ```text
 V_REF=0.20
-DELAY_PHASE_MODE=off
-DELAY_PHASE_LINEAR_DELAY_SEC=-1.0
-DELAY_PHASE_ANGULAR_DELAY_SEC=-1.0
+ALPHA_MAX=1.2
+SHARED_LINEAR_ACCEL_MAX=0.6
+SHARED_ANGULAR_RATE_MAX=1.2
+SHARED_ANGULAR_ACCEL_MAX=1.2
+DELAY_PHASE_MODE=fixed_closed_loop
+DELAY_PHASE_LINEAR_DELAY_SEC=0.15
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.22
+RECORD_TOPIC_INFO=false
+RECORDER_STARTUP_SEC=8
 RECORD_SEC=60
 MAX_RECORD_SEC=60
 GOAL_X=-5.424
@@ -324,35 +353,14 @@ GOAL_YAW=0.0
 
 ---
 
-## 7. 当前推荐：delay 归因最小测试矩阵
+## 7. 当前推荐：fixed 0.15 / 0.22 下的 N=1 smoke
 
-当前还不是正式统计阶段，先不要一开始就按 `B0 -> B_slosh -> B_ours -> N=3` 盲跑。本轮主动变量只设为 delay 口径；cost、command、solver input、slosh observer 等诊断全录，但不在同一个 run 里再改权重、IMU、hard 或 RGB 真值流程。
-
-本轮优先回答：
+B0 gate 已经完成，当前不再做 delay 归因矩阵。接下来先做同一口径下的三方法 N=1 smoke：
 
 ```text
-在同一版新代码、同一路径/容器/液位/v_ref/shared limits 下，只改变 delay_phase_mode，
-B_slosh 的内部模型晃动是否从 fixed delay 异常中恢复？
-```
-
-最重要三包：
-
-```text
-1. B_slosh_delay_off
-2. B_slosh_delay_080_050
-3. B0_delay_off
-```
-
-推荐完整顺序：
-
-```text
-Run 0: static_config_check 或 shadow_check
-Run 1: B_slosh_delay_off
-Run 2: B_slosh_delay_080_050
-Run 3: B0_delay_off
-Run 4: B0_delay_080_050          可选
-Run 5: B_ours_delay_off          根据前面结果决定
-Run 6: B_slosh_delay_150_220     旧问题复现，可选
+Run 1: B0_fixed_150_220_smoke01
+Run 2: Bslosh_fixed_150_220_smoke01
+Run 3: Bours_fixed_150_220_smoke01
 ```
 
 每个 run 之间：
@@ -369,154 +377,110 @@ Run 6: B_slosh_delay_150_220     旧问题复现，可选
 60–65 s：若已到点，继续观察残余 slosh / terminal 行为。
 ```
 
-当前一键脚本默认 recorder 先启动、再发送 goal、再启动 planner；运动开始可在后处理中用 `/cmd_vel` 第一次非零时刻或 `/spmpc/status` 状态变化自动识别。
+当前一键脚本默认 recorder 先启动、再发送 goal、再等待 `/scout/global_path_fixed`、最后启动 planner；运动开始可在后处理中用 `/cmd_vel` 第一次非零时刻或 `/spmpc/status` 状态变化自动识别。
 
 如果本轮需要保留 RGB 原始证据，把 `RECORD_RGB=false` 改为 `RECORD_RGB=true`；但当前结论仍限定为 internal model evidence。
 
-### 7.0 Run 0：静态配置检查或 shadow 检查（约 10s）
-
-目的：正式动起来前确认新 topic、effective config、run meta 和 delay 参数真的落地。若希望不驱动车体，可把命令发布到 shadow topic；若希望检查 `predicted_state` 但不替换 `solver_input_state`，使用 `DELAY_PHASE_MODE=shadow`：
+### 7.1 Run 1：B0 fixed 0.15 / 0.22 smoke
 
 ```bash
-ALG=B_slosh \
-RUN_LABEL=shadow_check_080_050_10s \
-CMD_TOPIC=/spmpc_shadow_cmd_vel \
-DELAY_PHASE_MODE=shadow \
-DELAY_PHASE_LINEAR_DELAY_SEC=0.08 \
-DELAY_PHASE_ANGULAR_DELAY_SEC=0.05 \
-RECORD_SEC=10 \
-RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
-```
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+cd /home/geist/scout_ws
 
-如果只想检查默认 off 口径，把上面三行 delay 参数改成：
-
-```text
-DELAY_PHASE_MODE=off
-DELAY_PHASE_LINEAR_DELAY_SEC=-1.0
-DELAY_PHASE_ANGULAR_DELAY_SEC=-1.0
-```
-
-必须检查：
-
-```text
-/spmpc/debug/effective_config
-/spmpc/debug/raw_state
-/spmpc/debug/predicted_state
-/spmpc/debug/solver_input_state
-/spmpc/debug/slosh_cost_monitor
-/spmpc/debug/command_intervention
-/spmpc/debug/cmd_odom_alignment
-```
-
-若 topic 缺失、effective config 与 run meta 不一致、delay mode 与 run label 不一致，先停下修配置再跑正式 run。静态检查阶段的 history completeness 可能受启动瞬间 command history 影响，正式判断仍以后续运动 run 的 summary 为准。
-
-### 7.1 Run 1：B_slosh delay off
-
-```bash
-ALG=B_slosh \
-RUN_LABEL=Bslosh_delay_off_run01 \
-CMD_TOPIC=/cmd_vel \
-DELAY_PHASE_MODE=off \
-DELAY_PHASE_LINEAR_DELAY_SEC=-1.0 \
-DELAY_PHASE_ANGULAR_DELAY_SEC=-1.0 \
-RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
-```
-
-目的：先建立当前最稳 baseline。此时不做主动 delay compensation，`solver_input_state` 应基本等于 `raw_state`。
-
-### 7.2 Run 2：B_slosh fixed 0.08 / 0.05
-
-```bash
-ALG=B_slosh \
-RUN_LABEL=Bslosh_delay_080_050_run01 \
-CMD_TOPIC=/cmd_vel \
-DELAY_PHASE_MODE=fixed_closed_loop \
-DELAY_PHASE_LINEAR_DELAY_SEC=0.08 \
-DELAY_PHASE_ANGULAR_DELAY_SEC=0.05 \
-RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
-```
-
-目的：只相对 Run 1 改 delay，验证 `fixed_closed_loop 0.08 / 0.05` 到底是帮助恢复，还是把 solver input 推到错误相位。
-
-### 7.3 Run 3：B0 delay off baseline
-
-```bash
 ALG=B0 \
-RUN_LABEL=B0_delay_off_run01 \
+RUN_LABEL=B0_fixed_150_220_smoke01 \
 CMD_TOPIC=/cmd_vel \
-DELAY_PHASE_MODE=off \
-DELAY_PHASE_LINEAR_DELAY_SEC=-1.0 \
-DELAY_PHASE_ANGULAR_DELAY_SEC=-1.0 \
-RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
-```
-
-注意：`B0` 不启用 slosh prediction，不要把 horizon peak 与 `B_slosh` 直接等价比较；比较 `B0` 时主要看 `/spmpc/slosh_height`、tracking、cmd smoothness、completion time 和 command intervention。
-
-### 7.4 Run 4：B0 fixed 0.08 / 0.05（可选）
-
-```bash
-ALG=B0 \
-RUN_LABEL=B0_delay_080_050_run01 \
-CMD_TOPIC=/cmd_vel \
-DELAY_PHASE_MODE=fixed_closed_loop \
-DELAY_PHASE_LINEAR_DELAY_SEC=0.08 \
-DELAY_PHASE_ANGULAR_DELAY_SEC=0.05 \
-RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
-```
-
-目的：如果需要分辨 fixed delay 对 B0 运动轨迹本身的影响，再补这一包；不是前三包必需项。
-
-### 7.5 Run 5：B_ours delay off（根据前面结果决定）
-
-```bash
-ALG=B_ours \
-RUN_LABEL=Bours_delay_off_run01 \
-CMD_TOPIC=/cmd_vel \
-DELAY_PHASE_MODE=off \
-DELAY_PHASE_LINEAR_DELAY_SEC=-1.0 \
-DELAY_PHASE_ANGULAR_DELAY_SEC=-1.0 \
-RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
-```
-
-目的：若 `B_slosh_delay_off` 已经恢复规律，再看完整策略是否兼顾 slosh、smooth 和 tracking。若前三包已经说明 fixed delay 是主问题，可以先不跑 `B_ours`，避免当天时间被分散。
-
-### 7.6 Run 6：B_slosh 旧 delay 0.15 / 0.22（可选复现）
-
-```bash
-ALG=B_slosh \
-RUN_LABEL=Bslosh_delay_150_220_run01 \
-CMD_TOPIC=/cmd_vel \
+V_REF=0.20 \
+ALPHA_MAX=1.2 \
+SHARED_LINEAR_ACCEL_LIMIT_ENABLE=true \
+SHARED_LINEAR_ACCEL_MAX=0.6 \
+SHARED_ANGULAR_LIMIT_ENABLE=true \
+SHARED_ANGULAR_RATE_MAX=1.2 \
+SHARED_ANGULAR_ACCEL_MAX=1.2 \
 DELAY_PHASE_MODE=fixed_closed_loop \
 DELAY_PHASE_LINEAR_DELAY_SEC=0.15 \
 DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
+RECORD_TOPIC_INFO=false \
+RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=false \
 bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
 ```
 
-目的：只作旧问题复现。同一版新代码重跑可以证明 old delay 是否稳定诱发问题；旧 bag 只能作为背景证据，不能作为唯一 old-delay 对照。
+目的：给当天三方法对比建立同日 B0 参考。这个 run 应接近 `B0_fixed_150_220_baseline_run01` 的 tracking 水平。
 
-### 7.7 判读逻辑
+### 7.2 Run 2：B_slosh fixed 0.15 / 0.22 smoke
 
-```text
-B_slosh_delay_off 正常、B_slosh_delay_080_050 变差：优先判定 fixed closed-loop 相位补偿有问题；默认继续用 off。
-B_slosh_delay_off 正常、B_slosh_delay_080_050 相当或更好：0.08/0.05 可作为候选，但还不能跳过 N=3 验证。
-B_slosh_delay_off 本身也差：问题不只是 fixed delay，转查 optimizer pressure / command intervention / 模型一致性。
-B0_delay_off 明显优于 B_slosh_delay_off：转查 slosh cost 权重、horizon 预测、速度/平滑代价竞争。
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+cd /home/geist/scout_ws
+
+ALG=B_slosh \
+RUN_LABEL=Bslosh_fixed_150_220_smoke01 \
+CMD_TOPIC=/cmd_vel \
+V_REF=0.20 \
+ALPHA_MAX=1.2 \
+SHARED_LINEAR_ACCEL_LIMIT_ENABLE=true \
+SHARED_LINEAR_ACCEL_MAX=0.6 \
+SHARED_ANGULAR_LIMIT_ENABLE=true \
+SHARED_ANGULAR_RATE_MAX=1.2 \
+SHARED_ANGULAR_ACCEL_MAX=1.2 \
+DELAY_PHASE_MODE=fixed_closed_loop \
+DELAY_PHASE_LINEAR_DELAY_SEC=0.15 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
+RECORD_TOPIC_INFO=false \
+RECORDER_STARTUP_SEC=8 \
+RECORD_RGB=false \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
 ```
 
-本轮不跑 hard constraint；hard 会混入可行性和求解失败变量，不适合作为 delay 归因主线。
+目的：只相对 B0 改 variant，验证 slosh-aware soft cost 在同一 tracking baseline 下是否降低内部晃动模型指标。
+
+### 7.3 Run 3：B_ours fixed 0.15 / 0.22 smoke
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+cd /home/geist/scout_ws
+
+ALG=B_ours \
+RUN_LABEL=Bours_fixed_150_220_smoke01 \
+CMD_TOPIC=/cmd_vel \
+V_REF=0.20 \
+ALPHA_MAX=1.2 \
+SHARED_LINEAR_ACCEL_LIMIT_ENABLE=true \
+SHARED_LINEAR_ACCEL_MAX=0.6 \
+SHARED_ANGULAR_LIMIT_ENABLE=true \
+SHARED_ANGULAR_RATE_MAX=1.2 \
+SHARED_ANGULAR_ACCEL_MAX=1.2 \
+DELAY_PHASE_MODE=fixed_closed_loop \
+DELAY_PHASE_LINEAR_DELAY_SEC=0.15 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
+RECORD_TOPIC_INFO=false \
+RECORDER_STARTUP_SEC=8 \
+RECORD_RGB=false \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+```
+
+目的：在 B_slosh 基础上验证 ours 的 smooth priority 是否还能保持 tracking，并观察内部晃动、cmd smoothness 和 completion time。
+
+### 7.4 N=1 smoke 判读逻辑
+
+```text
+三包都 GOAL_REACHED，且 B_slosh / B_ours 没有明显 tracking 恶化：进入正式 N=3。
+B_slosh 失败或明显离轨：先不要跑 B_ours；查 slosh cost 权重、solver input、command intervention。
+B_slosh 成功但 B_ours 失败：优先怀疑 smooth_priority 与 S 曲线 tracking 冲突，参考 20260613 B_smooth 经验。
+B0 当天 smoke 明显差于 B0_fixed_150_220_baseline_run01：先停止，排查现场起点/定位/底盘状态，不进入方法对比。
+```
+
+本轮不跑 hard constraint；hard 会混入可行性和求解失败变量，不适合作为当前三方法主线。
 
 ---
 
 ## 8. 正式 N=3 交错顺序
 
-只有当上面的 delay 归因矩阵说明某一 delay 口径下链路干净、`B_slosh` 规律可信后，再进入正式 N=3。若前三包没有证明 `fixed_closed_loop 0.08 / 0.05` 更好，则正式 N=3 默认使用 `delay off`。不要连续跑完一个方法再跑另一个方法，推荐交错：
+只有当第 7 节 N=1 smoke 说明三方法在 `fixed_closed_loop 0.15 / 0.22` 口径下都能干净跟踪后，再进入正式 N=3。不要连续跑完一个方法再跑另一个方法，推荐交错：
 
 ```text
 Round 1: B0 -> B_slosh -> B_ours
@@ -524,18 +488,97 @@ Round 2: B_ours -> B_slosh -> B0
 Round 3: B_slosh -> B0 -> B_ours
 ```
 
-命名建议（delay off 默认口径）：
+命名建议：
 
 ```text
-B0_delay_off_r1
-Bslosh_delay_off_r1
-Bours_delay_off_r1
-...
+B0_fixed_150_220_r1
+Bslosh_fixed_150_220_r1
+Bours_fixed_150_220_r1
+Bours_fixed_150_220_r2
+Bslosh_fixed_150_220_r2
+B0_fixed_150_220_r2
+Bslosh_fixed_150_220_r3
+B0_fixed_150_220_r3
+Bours_fixed_150_220_r3
 ```
 
-如果后续证明确实要用 `fixed_closed_loop 0.08 / 0.05`，命名中必须显式写 `delay_080_050`，不能省略。
+正式 N=3 每条命令仍必须显式写完整控制口径，不依赖脚本默认值，并且必须设置 `RECORD_RGB=true`。每轮开跑前先确认当前 shell：
 
-如果 delay 归因矩阵或 N=1 中出现下面任一情况，先停止，不进入 N=3：
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+cd /home/geist/scout_ws
+```
+
+下面是三种方法的模板；每轮只改 `RUN_LABEL`。
+
+B0：
+
+```bash
+ALG=B0 \
+RUN_LABEL=B0_fixed_150_220_r1 \
+CMD_TOPIC=/cmd_vel \
+V_REF=0.20 \
+ALPHA_MAX=1.2 \
+SHARED_LINEAR_ACCEL_LIMIT_ENABLE=true \
+SHARED_LINEAR_ACCEL_MAX=0.6 \
+SHARED_ANGULAR_LIMIT_ENABLE=true \
+SHARED_ANGULAR_RATE_MAX=1.2 \
+SHARED_ANGULAR_ACCEL_MAX=1.2 \
+DELAY_PHASE_MODE=fixed_closed_loop \
+DELAY_PHASE_LINEAR_DELAY_SEC=0.15 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
+RECORD_TOPIC_INFO=false \
+RECORDER_STARTUP_SEC=8 \
+RECORD_RGB=true \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+```
+
+B_slosh：
+
+```bash
+ALG=B_slosh \
+RUN_LABEL=Bslosh_fixed_150_220_r1 \
+CMD_TOPIC=/cmd_vel \
+V_REF=0.20 \
+ALPHA_MAX=1.2 \
+SHARED_LINEAR_ACCEL_LIMIT_ENABLE=true \
+SHARED_LINEAR_ACCEL_MAX=0.6 \
+SHARED_ANGULAR_LIMIT_ENABLE=true \
+SHARED_ANGULAR_RATE_MAX=1.2 \
+SHARED_ANGULAR_ACCEL_MAX=1.2 \
+DELAY_PHASE_MODE=fixed_closed_loop \
+DELAY_PHASE_LINEAR_DELAY_SEC=0.15 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
+RECORD_TOPIC_INFO=false \
+RECORDER_STARTUP_SEC=8 \
+RECORD_RGB=true \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+```
+
+B_ours：
+
+```bash
+ALG=B_ours \
+RUN_LABEL=Bours_fixed_150_220_r1 \
+CMD_TOPIC=/cmd_vel \
+V_REF=0.20 \
+ALPHA_MAX=1.2 \
+SHARED_LINEAR_ACCEL_LIMIT_ENABLE=true \
+SHARED_LINEAR_ACCEL_MAX=0.6 \
+SHARED_ANGULAR_LIMIT_ENABLE=true \
+SHARED_ANGULAR_RATE_MAX=1.2 \
+SHARED_ANGULAR_ACCEL_MAX=1.2 \
+DELAY_PHASE_MODE=fixed_closed_loop \
+DELAY_PHASE_LINEAR_DELAY_SEC=0.15 \
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
+RECORD_TOPIC_INFO=false \
+RECORDER_STARTUP_SEC=8 \
+RECORD_RGB=true \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+```
+
+如果 N=1 smoke 或 N=3 中出现下面任一情况，先停止，不把该 run 当 clean 方法比较样本：
 
 ```text
 明显离轨；
@@ -546,7 +589,132 @@ Bours_delay_off_r1
 summary red flags 指向 solver input 相位错误或命令链路大量改写。
 ```
 
-本轮不建议跑 hard：hard 约束会混入可行性/求解失败问题，不适合作为 delay 诊断主线。
+本轮不建议跑 hard：hard 约束会混入可行性/求解失败问题，不适合作为当前三方法主线。
+
+### 8.1 2026-07-05 正式 N=3 现场记录与内部 slosh 初步分析
+
+> 日期：2026-07-05
+>
+> 范围：这里只记录 SPMPC internal model evidence，即 `/spmpc/slosh_height`、`raw_state / predicted_state / solver_input_state` 和 `slosh_horizon_summary`。本节**不做 RGB 定量分析**；RGB 已录制，后续单独作为 physical liquid evidence 分析。
+
+正式 N=3 使用同一控制口径，只改变 `ALG`：
+
+```text
+V_REF=0.20
+ALPHA_MAX=1.2
+SHARED_LINEAR_ACCEL_LIMIT_ENABLE=true
+SHARED_LINEAR_ACCEL_MAX=0.6
+SHARED_ANGULAR_LIMIT_ENABLE=true
+SHARED_ANGULAR_RATE_MAX=1.2
+SHARED_ANGULAR_ACCEL_MAX=1.2
+DELAY_PHASE_MODE=fixed_closed_loop
+DELAY_PHASE_LINEAR_DELAY_SEC=0.15
+DELAY_PHASE_ANGULAR_DELAY_SEC=0.22
+RECORD_TOPIC_INFO=false
+RECORDER_STARTUP_SEC=8
+RECORD_RGB=true
+RECORD_SEC=60
+MAX_RECORD_SEC=60
+hard constraint: disabled
+```
+
+正式交错顺序与实际 bag：
+
+```text
+Round 1:
+  B0      -> /home/geist/slosh_bags/real/20260705_fixed_path_compare/B0/B0_fixed_150_220_r1.bag
+  B_slosh -> /home/geist/slosh_bags/real/20260705_fixed_path_compare/B_slosh/Bslosh_fixed_150_220_r1.bag
+  B_ours  -> /home/geist/slosh_bags/real/20260705_fixed_path_compare/B_ours/Bours_fixed_150_220_r1.bag
+
+Round 2:
+  B_ours  -> /home/geist/slosh_bags/real/20260705_fixed_path_compare/B_ours/Bours_fixed_150_220_r2.bag
+  B_slosh -> /home/geist/slosh_bags/real/20260705_fixed_path_compare/B_slosh/Bslosh_fixed_150_220_r2.bag
+  B0      -> /home/geist/slosh_bags/real/20260705_fixed_path_compare/B0/B0_fixed_150_220_r2.bag
+
+Round 3:
+  B_slosh -> /home/geist/slosh_bags/real/20260705_fixed_path_compare/B_slosh/Bslosh_fixed_150_220_r3.bag
+  B0      -> /home/geist/slosh_bags/real/20260705_fixed_path_compare/B0/B0_fixed_150_220_r3.bag
+  B_ours  -> /home/geist/slosh_bags/real/20260705_fixed_path_compare/B_ours/Bours_fixed_150_220_r3.bag
+```
+
+后处理统计窗口：
+
+```text
+first ACADOS_OK -> first GOAL_REACHED，
+再按 /spmpc/debug/stage0_reference 的 s0 取 path progress 10%~90%。
+本节的 max 只统计 path progress 10%~90% 内的 max_10_90。
+```
+
+现场初步结果：9 个正式 bag 全部 `GOAL_REACHED`，且 `delay_compensation_applied_frac = 1.000`。说明本轮 fixed closed-loop delay compensation 在正式 N=3 中实际生效。
+
+逐 run 内部 slosh 指标如下，单位为 mm：
+
+| run | goal time | `/spmpc/slosh_height` p95 | max_10_90 | RMS | projection p95 |
+|---|---:|---:|---:|---:|---:|
+| `B0_fixed_150_220_r1` | 33.39s | 1.093 | 2.118 | 0.554 | 0.030m |
+| `B0_fixed_150_220_r2` | 34.09s | 1.081 | 1.873 | 0.532 | 0.029m |
+| `B0_fixed_150_220_r3` | 33.78s | 1.035 | 1.835 | 0.513 | 0.030m |
+| `Bslosh_fixed_150_220_r1` | 36.60s | 0.507 | 0.883 | 0.262 | 0.036m |
+| `Bslosh_fixed_150_220_r2` | 37.06s | 0.612 | 1.247 | 0.298 | 0.034m |
+| `Bslosh_fixed_150_220_r3` | 36.90s | 0.731 | 1.297 | 0.341 | 0.033m |
+| `Bours_fixed_150_220_r1` | 38.41s | 0.904 | 1.597 | 0.440 | 0.033m |
+| `Bours_fixed_150_220_r2` | 38.18s | 0.786 | 1.847 | 0.410 | 0.037m |
+| `Bours_fixed_150_220_r3` | 37.63s | 0.907 | 1.431 | 0.403 | 0.036m |
+
+N=3 聚合结果：
+
+| method | goal time mean±std | slosh p95 mean±std | max_10_90 mean±std | RMS mean±std | projection p95 mean±std |
+|---|---:|---:|---:|---:|---:|
+| `B0` | 33.753 ± 0.355s | 1.070 ± 0.030mm | 1.942 ± 0.153mm | 0.533 ± 0.021mm | 0.030 ± 0.001m |
+| `B_slosh` | 36.851 ± 0.231s | 0.616 ± 0.112mm | 1.142 ± 0.226mm | 0.300 ± 0.040mm | 0.034 ± 0.001m |
+| `B_ours` | 38.073 ± 0.403s | 0.865 ± 0.069mm | 1.625 ± 0.209mm | 0.417 ± 0.020mm | 0.035 ± 0.002m |
+
+相对 `B0` 的变化：
+
+```text
+B_slosh:
+  /spmpc/slosh_height p95 下降约 42.4%
+  max_10_90 下降约 41.2%
+  RMS 下降约 43.6%
+
+B_ours:
+  /spmpc/slosh_height p95 下降约 19.1%
+  max_10_90 下降约 16.3%
+  RMS 下降约 21.7%
+```
+
+内部 slosh 传播链路快速统计，单位为 mm：
+
+| method | raw_state h p95 | predicted_state h p95 | solver_input_state h p95 | horizon peak p95 |
+|---|---:|---:|---:|---:|
+| `B0` | 1.308 ± 0.064 | 1.070 ± 0.030 | 1.070 ± 0.030 | 0.000 ± 0.000 |
+| `B_slosh` | 1.530 ± 0.053 | 0.616 ± 0.112 | 0.616 ± 0.112 | 0.715 ± 0.085 |
+| `B_ours` | 1.445 ± 0.093 | 0.865 ± 0.069 | 0.865 ± 0.069 | 0.999 ± 0.027 |
+
+判读备注：
+
+```text
+1. solver_input_state 与 predicted_state 的 h_modal_mm 统计一致，说明 fixed closed-loop 补偿后的预测状态进入了 solver。
+2. /spmpc/slosh_height 在本批 bag 中与 solver_input_state 的 h_modal_mm 统计一致，可作为本节 internal model 主指标。
+3. raw_state(t) 与 predicted_state(t) 不能直接按同一时间戳解释优劣；fixed closed-loop 的意义本来就是用 cmd history 把 raw state 往前推，严格检查应比较 predicted_state(t) 与 future raw_state(t + delay)。
+4. B0 的 horizon peak p95 为 0，不代表 B0 没有晃动，而是 B0 不启用 slosh horizon cost / prediction输出作为优化项；B0 的主比较仍看统一 observer `/spmpc/slosh_height`。
+5. B_slosh / B_ours 的 horizon peak 非零，说明 slosh-aware 预测链路和代价链路在正式 N=3 中确实被激活。
+```
+
+2026-07-05 正式 N=3 的内部模型结论：
+
+```text
+在 fixed_closed_loop 0.15 / 0.22、v_ref=0.20、相同 shared constraints、hard disabled 的统一口径下，
+9 个正式 bag 均成功到点，tracking p95 均约 3~3.5 cm。
+
+SPMPC internal slosh 指标稳定呈现：
+B_slosh < B_ours < B0。
+
+B_slosh 是本轮最强内部晃动抑制版本；
+B_ours 也明显低于 B0，但降幅小于 B_slosh，说明本轮 ours 更偏向平滑/保守控制，而不是最大化压低 internal slosh。
+```
+
+现场注意事项：`B_slosh` 从 r1 到 r3 的 p95 / RMS 有轻微升高趋势，但三次都明显低于 `B0`。这可能与液体初始静稳程度、回起点误差、现场温度/底盘状态或残余晃动有关；当前不改变主结论，后续 RGB 分析时再检查是否也有同方向趋势。
 
 ---
 
@@ -663,7 +831,7 @@ bag/meta dir = ...
 
 ### 10.1 必须先看 red flags
 
-如果 summary 出现下面 red flags，先不要把该 run 当正式有效样本。注意：`fixed_closed_loop_not_applied` 只适用于 fixed run；`delay off` run 预期就是不应用补偿。
+如果 summary 出现下面 red flags，先不要把该 run 当正式有效样本。本文件主线都是 `fixed_closed_loop 0.15 / 0.22`，因此 `fixed_closed_loop_not_applied` 必须视为关键问题；`delay off` 只作为额外诊断时才预期不应用补偿。
 
 ```text
 critical_topic_missing
@@ -762,7 +930,7 @@ published_zero_frac 不高；
 zero_due_to_solver_failure / terminal_spin_fail / tracking_safety 基本为 0。
 ```
 
-如果 `command_limited_often`、`published_zero_often` 或 `solver_fail_or_gate_fail` 出现，该 run 只能用于 debugging，不能直接作为 clean delay attribution 或 clean method comparison。
+如果 `command_limited_often`、`published_zero_often` 或 `solver_fail_or_gate_fail` 出现，该 run 只能用于 debugging，不能直接作为 clean method comparison。
 
 ### 10.3 建议自动判读阈值
 
@@ -857,7 +1025,7 @@ RGB/相机异常只影响 RGB 物理真值，不必然使内部模型实验无�
 | 指标                                | 来源                                            |
 | ----------------------------------- | ----------------------------------------------- |
 | `first_goal_time_sec`             | `/spmpc/status`                               |
-| `tracking_rms_m / p95 / max`      | `/odom` vs `/scout/global_path_fixed`       |
+| `tracking_rms_m / p95 / max`      | 优先用 `/spmpc/debug/stage0_reference` / `/spmpc/debug/projector`；不要直接拿 `/odom.pose` 减 map 路径 |
 | `cmd_v_mean / p95 / max`          | `/cmd_vel` 或 `/spmpc/debug/cmd_vel_output` |
 | `cmd_omega_p95 / max`             | `/cmd_vel` 或 `/spmpc/debug/cmd_vel_output` |
 | `solver_time_p95 / max`           | `/spmpc/solver_time_ms`                       |
@@ -967,9 +1135,9 @@ map_vref_runtime_v_ref_enable: false
 map_vref_profile_enable: false
 map_vref_status:
 
-delay_phase_mode: off / shadow / fixed_closed_loop
-linear_delay_sec: -1.0 / 0.08 / 0.15
-angular_delay_sec: -1.0 / 0.05 / 0.22
+delay_phase_mode: fixed_closed_loop
+linear_delay_sec: 0.15
+angular_delay_sec: 0.22
 delay_compensation_applied_frac:
 history_complete_frac:
 solver_input_phase_shift_large: yes/no
