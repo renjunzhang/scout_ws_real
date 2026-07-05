@@ -1,14 +1,12 @@
 \section{实验与验证}
 
-本节围绕 \SPMPC{} 的核心主张组织实验与验证：显式晃液状态预测是否能在单纯平滑控制之外提供可解释的防晃作用，并且不以不可接受的路径跟踪、到达时间或实时性代价为条件。实验评价覆盖内部消融、普通在线局部规划器对比、移动底盘防晃近邻对比、模型—外部液面一致性分析、实时性分析和实物验证。尚未完成的实验结果在本文稿中仅以待填结果占位标注；这些占位只能由真实仿真、实物或外部液面观测数据替换，不能用内部代理量替代真实液面结论。
+本节围绕 \SPMPC{} 的核心主张组织实验与验证：显式晃液状态预测是否能在单纯平滑控制之外提供可解释的防晃作用，并且不以不可接受的路径跟踪、任务完成时间或实时性代价为条件。实验采用仿真--实物双层证据链：仿真实验用于系统比较内部消融和外部基线，实物实验用于检查真实液面响应及模型代理量的解释能力，在线求解统计用于验证该方法仍满足移动底盘局部规划器的部署要求。
 
-\subsection{实验设置与公平性协议}
+\subsection{实验设置与评价指标}
 
-实验范围与问题定义保持一致：标准轮式移动底盘携带开口液体容器沿给定安全参考路径运动。仿真比较不同规划器在相同参考路径、底盘约束和任务终止条件下的行为；实物实验评价外部观测到的液面运动，并检查内部模型代理量是否具有解释价值。
+实验范围与问题定义保持一致：标准轮式移动底盘携带开口液体容器沿给定安全参考路径运动。仿真比较不同规划器在相同参考路径、底盘约束和任务终止条件下的行为；实物实验记录外部液面观测，并检查内部模型代理量是否具有解释价值。
 
-正式比较固定起点、终点、参考路径、容器配置、任务终止条件和失败判据，并尽量对齐最大线速度、角速度、线加速度和角加速度。外部基线方法不使用液面状态作为控制输入。所有试次记录轨迹、速度、控制输入、求解时间、内部模型代理量和外部液面观测。
-
-这里需要特别区分两类量：\texttt{/spmpc/slosh\_height} 只能作为模型内部预测或诊断代理量；真实液面结论必须依赖 RGB 最大 LCR、液面高度测量或其它外部观测指标。
+为保证比较公平，正式实验固定起点、终点、参考路径、容器配置、任务终止条件和失败判据，并尽量对齐最大线速度、角速度、线加速度和角加速度。外部基线方法不使用液面状态作为控制输入。所有试次记录轨迹、速度、控制输入、求解时间、内部模型代理量和外部液面观测。这里需要特别区分两类量：\texttt{/spmpc/slosh\_height}、$H_{\mathrm{model}}^{\mathrm{modal}}$ 和 $H_{\mathrm{model}}^{\mathrm{full}}$ 只能作为模型内部预测或诊断代理量；真实液面结论必须依赖 RGB 最大 LCR、液面高度测量或其它外部观测指标。
 
 \begin{figure}[t]
   \centering
@@ -26,7 +24,7 @@
     \node[block] (camera) at (3.8,2.35) {外部液面观测\\RGB / 液位传感};
     \node[core] (eval) at (7.5,0.55) {评价指标计算};
     \node[metric] (m1) at (10.7,1.85) {真实液面运动};
-    \node[metric] (m2) at (10.7,0.85) {模型—外部一致性};
+    \node[metric] (m2) at (10.7,0.85) {模型--外部一致性};
     \node[metric] (m3) at (10.7,-0.15) {路径与任务};
     \node[metric] (m4) at (10.7,-1.15) {控制与实时性};
 
@@ -43,7 +41,7 @@
   \label{fig:experiment_setup}
 \end{figure}
 
-评价指标覆盖真实液面运动、模型诊断、模型—外部液面一致性、任务完成、路径跟踪、控制平滑性和在线计算，如 \cref{tab:metrics_plan} 所示。报告结果时同时给出均值、方差或置信区间，并保留失败试次；若样本数有限，则将结论限定为初步证据。
+评价指标覆盖真实液面运动、模型诊断、模型--外部液面一致性、任务完成、路径跟踪、控制平滑性和在线计算，如 \cref{tab:metrics_plan} 所示。报告结果时同时给出均值、方差或置信区间，并保留失败试次；若样本数有限，则将结论限定为初步证据。
 
 \begin{table}[t]
   \centering
@@ -56,8 +54,8 @@
     指标类别 & 具体指标 & 评价目的 \\
     \midrule
     真实液面运动 & RGB 最大 LCR、RMS-LCR、残余振荡 & 验证外部观测是否支持防晃主张 \\
-    模型诊断 & 预测晃液状态、$H_{\mathrm{model}}$、\texttt{/spmpc/slosh\_height} & 解释模型预测，不能替代真实评价 \\
-    模型—外部一致性 & $\gamma_{\mathrm{bias}}$、$\gamma_{\mathrm{abs}}$、RMSE、$\rho$、$\tau^\star$、峰值/分位低估量 & 判断内部代理量能否解释外部观测 \\
+    模型诊断 & 预测晃液状态、$H_{\mathrm{model}}^{\mathrm{modal}}$、$H_{\mathrm{model}}^{\mathrm{full}}$、\texttt{/spmpc/slosh\_height} & 解释模型预测，不能替代真实评价 \\
+    模型--外部一致性 & $\gamma_{\mathrm{bias}}$、$\gamma_{\mathrm{abs}}$、RMSE、$\rho$、$\tau^\star$、峰值/分位低估量 & 判断内部代理量能否解释外部观测 \\
     任务完成 & 成功率、超时、到达时间 & 排除“只是变慢/停下”的解释 \\
     路径跟踪 & 轮廓误差、路径偏差 & 验证仍是合格局部规划器 \\
     控制平滑性 & 速度、加速度、角加速度均方根 & 区分平滑性与晃液状态预测的作用 \\
@@ -66,126 +64,85 @@
   \end{tabular}
 \end{table}
 
-\subsection{模型—外部液面一致性评价}
-
-内部晃液代理量能否支持真实液面结论，不能由模型自身闭环判断，而需要与外部观测进行对照。借鉴 Ferrari 等在离线 SCARA 多容器防晃规划中将低阶模型液面高度与视频提取实验液面进行比较的验证口径\cite{C01_Ferrari2026}，本文将内部模型代理量记为 $H_{\mathrm{model}}(t)$，将 RGB 或液位传感得到的外部液面指标记为 $H_{\mathrm{vis}}(t)$。该对照只用于评价模型解释力，不把外部平台的离线优化结果迁移为本文的实验结论。
-
-评价时间窗应覆盖运动结束后的残余振荡。Ferrari 等使用 $1.25t_{\mathrm{end}}$ 的积分窗口以纳入 residual oscillation\cite{C01_Ferrari2026}；对于移动底盘任务，本文采用
-\begin{equation}
-  [t_0,t_1]=[t_{\mathrm{cmd}},\ t_{\mathrm{goal}}+T_{\mathrm{settling}}],
-  \label{eq:fidelity_window}
-\end{equation}
-其中 $t_{\mathrm{cmd}}$ 为有效底盘命令开始时刻，$t_{\mathrm{goal}}$ 为到达判据满足时刻，$T_{\mathrm{settling}}$ 用于记录终端后的残余液面运动。
-
-为避免把整体保守性、幅值误差和时间延迟混为一谈，本文分别定义带符号偏差、绝对偏差和延迟对齐指标。带符号偏差为
+为避免仅依赖内部模型指标评价方法效果，本文比较模型代理量与外部液面观测 $H_{\mathrm{vis}}(t)$。在模型--外部一致性分析中，记实际参与评价的模型代理量为 $H_{\mathrm{model}}^{\mathrm{eval}}(t)$；它可以取 $H_{\mathrm{model}}^{\mathrm{modal}}(t)$ 或 $H_{\mathrm{model}}^{\mathrm{full}}(t)$，但报告时必须明确说明采用哪一种口径。借鉴 Ferrari 等在跨平台防晃轨迹规划中将低阶模型液面高度与视频提取实验液面进行对照的验证口径\cite{C01_Ferrari2026}，本文采用带符号偏差评价模型整体偏保守或低估：
 \begin{equation}
   \gamma_{\mathrm{bias}} =
   100\cdot
-  \frac{\int_{t_0}^{t_1}\left(H_{\mathrm{model}}(t)-H_{\mathrm{vis}}(t)\right)\dd t}
-  {\int_{t_0}^{t_1}H_{\mathrm{model}}(t)\dd t+\epsilon},
+  \frac{\int_{t_0}^{t_1}\left(H_{\mathrm{model}}^{\mathrm{eval}}(t)-H_{\mathrm{vis}}(t)\right)\dd t}
+  {\int_{t_0}^{t_1}H_{\mathrm{model}}^{\mathrm{eval}}(t)\dd t+\epsilon},
   \label{eq:gamma_bias}
 \end{equation}
-其中 $\epsilon$ 是防止分母退化的小常数。$\gamma_{\mathrm{bias}}>0$ 表示模型整体偏保守，$\gamma_{\mathrm{bias}}<0$ 表示模型整体低估外部液面指标。绝对偏差为
+其中 $[t_0,t_1]$ 覆盖有效底盘命令开始到到达后的残余振荡记录窗口，$\epsilon$ 是防止分母退化的小常数。$\gamma_{\mathrm{bias}}>0$ 表示模型整体偏保守，$\gamma_{\mathrm{bias}}<0$ 表示模型整体低估外部液面指标。绝对偏差定义为
 \begin{equation}
   \gamma_{\mathrm{abs}} =
   100\cdot
-  \frac{\int_{t_0}^{t_1}\left|H_{\mathrm{model}}(t)-H_{\mathrm{vis}}(t)\right|\dd t}
+  \frac{\int_{t_0}^{t_1}\left|H_{\mathrm{model}}^{\mathrm{eval}}(t)-H_{\mathrm{vis}}(t)\right|\dd t}
   {\int_{t_0}^{t_1}H_{\mathrm{vis}}(t)\dd t+\epsilon}.
   \label{eq:gamma_abs}
 \end{equation}
+辅助指标包括 RMSE、相关系数 $\rho$、相位偏移 $\tau^\star$、峰值误差、高分位误差和最大局部低估量。模型--外部一致性只用于诊断解释，不替代真实液面结论，也不构成形式化防溢出保证。若 $H_{\mathrm{model}}^{\mathrm{eval}}$ 与 $H_{\mathrm{vis}}$ 存在显著相位差或局部峰值低估，相应结果应解释为模型诊断发现，而不是直接作为安全门限依据。
 
-均方根误差和相关性分别定义为
-\begin{equation}
-  \mathrm{RMSE}=\sqrt{\frac{1}{t_1-t_0}\int_{t_0}^{t_1}\left(H_{\mathrm{model}}(t)-H_{\mathrm{vis}}(t)\right)^2\dd t},
-  \label{eq:fidelity_rmse}
-\end{equation}
-\begin{equation}
-  \rho=\operatorname{corr}\left(H_{\mathrm{model}}(t),H_{\mathrm{vis}}(t)\right).
-  \label{eq:fidelity_corr}
-\end{equation}
-若需要区分幅值错误与执行链路延迟，可进一步计算
-\begin{equation}
-  \tau^\star=
-  \arg\max_{\tau\in[-\tau_{\max},\tau_{\max}]}
-  \operatorname{corr}\left(H_{\mathrm{model}}(t),H_{\mathrm{vis}}(t+\tau)\right).
-  \label{eq:fidelity_delay}
-\end{equation}
+\subsection{仿真实验：内部消融与外部基线对比}
 
-峰值、高分位和最大局部低估量用于检查平均偏差掩盖局部风险的情况：
-\begin{equation}
-\begin{aligned}
-  e_{\mathrm{peak}} &= H_{\mathrm{model},\mathrm{peak}}-H_{\mathrm{vis},\mathrm{peak}}, \\
-  e_{p95} &= H_{\mathrm{model},p95}-H_{\mathrm{vis},p95}, \\
-  e_{\mathrm{under},\mathrm{peak}} &= \max_t\left[H_{\mathrm{vis}}(t)-H_{\mathrm{model}}(t)\right]_+ .
-\end{aligned}
-\label{eq:fidelity_peak_metrics}
-\end{equation}
-因此，任何基于 $H_{\mathrm{model}}$ 的运行时门控都不能只依赖积分平均指标；若未来将其用于更强安全判断，还必须同时验证峰值、高分位、最大低估量、相关性和时间延迟。上述指标是工程诊断和实验解释工具，不构成形式化防溢出证明。
+仿真实验用于在可控条件下系统比较不同规划策略。该部分首先通过内部消融分离控制平滑性与晃液状态预测的作用，再与普通在线局部规划器以及可公平复现的移动底盘防晃近邻方法比较。仿真结论应由相同任务接口、相同底盘约束和相同失败判据下的统计结果支持，而不是由单次示例轨迹或内部代理量单独支撑。
 
-\subsection{内部消融实验}
-
-内部消融用于回答“\SPMPC{} 的每个模块是否必要”。所有变体共享同一带路径进度状态的 \MPCC{} 框架、同一参考路径和同一底盘约束，只改变晃液模型/代价和平滑权重。变体定义已在 \cref{tab:method_variants} 中给出，包括 \texttt{B0}、\texttt{B\_smooth}、\texttt{B\_slosh} 和 \texttt{B\_ours}。
-
-消融按两个因素组织：是否显式传播并惩罚晃液状态，以及是否增强控制平滑项。\texttt{B\_smooth} 与 \texttt{B0} 用于量化平滑性收益；\texttt{B\_slosh} 与 \texttt{B0} 用于量化液体状态预测收益；\texttt{B\_ours} 与 \texttt{B\_smooth} 用于回答仅平滑控制是否足够；\texttt{B\_ours} 与 \texttt{B\_slosh} 用于说明平滑控制仍然是可执行局部规划的一部分。
+内部消融用于回答“\SPMPC{} 是否只是更强的平滑控制”。所有变体共享同一带路径进度状态的 \MPCC{} 框架、同一参考路径和同一底盘约束，只改变晃液模型/代价和平滑权重。变体定义已在 \cref{tab:method_variants} 中给出，包括 \texttt{B0}、\texttt{B\_smooth}、\texttt{B\_slosh} 和 \texttt{B\_ours}。
 
 \begin{figure}[t]
   \centering
   \resizebox{\linewidth}{!}{%
   \begin{tikzpicture}[
-    font=\scriptsize,
-    panel/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=white, minimum width=4.15cm, minimum height=2.05cm, align=center},
-    frame/.style={draw=spmpcgray, line width=0.35pt},
-    title/.style={font=\scriptsize\bfseries, text=spmpcblue, align=center},
-    note/.style={font=\tiny, text=spmpcgray, align=center},
-    legend/.style={draw=spmpcgray, rounded corners=1.2pt, line width=0.35pt, fill=spmpclight, minimum width=1.05cm, minimum height=0.28cm, align=center, font=\tiny}
+    font=\small,
+    cell/.style={draw=spmpcgray, rounded corners=2pt, line width=0.55pt, fill=white, minimum width=2.9cm, minimum height=1.05cm, align=center},
+    ours/.style={draw=spmpcblue, rounded corners=2pt, line width=0.8pt, fill=spmpclight, minimum width=2.9cm, minimum height=1.05cm, align=center, font=\small\bfseries},
+    head/.style={font=\small\bfseries, text=spmpcblue, align=center},
+    row/.style={font=\small\bfseries, text=spmpcgray, align=center},
+    note/.style={font=\scriptsize, text=spmpcgray, align=center},
+    arr/.style={-{Latex[length=2mm]}, line width=0.5pt, draw=spmpcblue}
   ]
-    \node[panel] (a) at (0,2.35) {};
-    \node[panel] (b) at (4.75,2.35) {};
-    \node[panel] (c) at (0,0) {};
-    \node[panel] (d) at (4.75,0) {};
+    \node[head] at (2.0,2.35) {无晃液状态};
+    \node[head] at (5.6,2.35) {有晃液状态};
+    \node[row] at (-0.25,1.25) {弱平滑};
+    \node[row] at (-0.25,-0.25) {强平滑};
 
-    \node[title] at (a.north) [yshift=-0.30cm] {A 轨迹与路径误差};
-    \node[title] at (b.north) [yshift=-0.30cm] {B 控制剖面};
-    \node[title] at (c.north) [yshift=-0.30cm] {C 外部液面响应};
-    \node[title] at (d.north) [yshift=-0.30cm] {D 求解与任务统计};
+    \node[cell] (b0) at (2.0,1.25) {\texttt{B0}\\基础 \MPCC{}};
+    \node[cell] (bs) at (5.6,1.25) {\texttt{B\_slosh}\\加入晃液状态};
+    \node[cell] (bm) at (2.0,-0.25) {\texttt{B\_smooth}\\增强控制平滑};
+    \node[ours] (bo) at (5.6,-0.25) {\texttt{B\_ours}\\完整方法};
 
-    \foreach \p in {a,b,c,d}{
-      \draw[frame] ($ (\p.south west) + (0.52,0.42) $) rectangle ($ (\p.north east) + (-0.38,-0.70) $);
-      \node[note] at ($ (\p.center) + (0,-0.18) $) {结果数据待填入};
-    }
+    \draw[arr] (b0) -- node[above, note] {晃液预测收益} (bs);
+    \draw[arr] (b0) -- node[left, note] {平滑性收益} (bm);
+    \draw[arr] (bm) -- node[below, note] {是否超越仅平滑控制} (bo);
+    \draw[arr] (bs) -- node[right, note] {平滑项是否仍有助于执行} (bo);
 
-    \node[legend] at (-1.35,-1.45) {\texttt{B0}};
-    \node[legend] at (-0.25,-1.45) {\texttt{B\_smooth}};
-    \node[legend] at (1.15,-1.45) {\texttt{B\_slosh}};
-    \node[legend] at (2.45,-1.45) {\texttt{B\_ours}};
-    \node[note, anchor=west] at (3.25,-1.45) {占位版式：不含曲线、数值或趋势结论};
+    \node[note] at (3.8,-1.45) {消融设计图：不包含实验曲线、数值或趋势结论};
   \end{tikzpicture}}
-  \caption{内部消融实验结果分析图占位。该图用于放置 \texttt{B0}、\texttt{B\_smooth}、\texttt{B\_slosh} 和 \texttt{B\_ours} 的轨迹、控制、真实液面响应和求解时间结果；当前仅保留版式框，不包含实验曲线、数值或趋势结论，最终版本必须由真实实验数据替换。}
-  \label{fig:ablation_result_placeholder}
+  \caption{内部消融变体与验证关系。四个变体构成“是否传播晃液状态”和“是否增强控制平滑性”的二维拆解，用于区分仅平滑控制与显式晃液状态预测的作用。}
+  \label{fig:ablation_design}
 \end{figure}
 
-\paragraph{待填结果：} 本段预留内部消融数据，应报告各变体的任务完成率、到达时间、路径误差、控制平滑性、外部液面指标、内部模型代理量、模型—外部一致性指标和求解时间。只有当外部液面指标支持相同趋势时，才能将 \texttt{B\_ours} 相对于 \texttt{B\_smooth} 的差异解释为真实液面响应改善；若只有内部代理量下降，则只能说明规划器在自身模型下减小了预测晃液响应。
+消融比较按四个问题组织。\texttt{B\_smooth} 与 \texttt{B0} 用于量化只增强平滑性带来的变化；\texttt{B\_slosh} 与 \texttt{B0} 用于量化显式晃液状态预测是否具有独立作用；\texttt{B\_ours} 与 \texttt{B\_smooth} 用于检验完整方法是否超越 smooth-only；\texttt{B\_ours} 与 \texttt{B\_slosh} 用于说明平滑控制仍然是生成可执行局部命令的一部分。只有当外部液面指标支持相同趋势时，才能将 \texttt{B\_ours} 相对于 \texttt{B\_smooth} 的差异解释为真实液面响应改善；若只有内部代理量下降，则只能说明规划器在自身模型下减小了预测晃液响应。
 
-\subsection{普通在线局部规划器对比}
+普通在线局部规划器对比用于检验“不传播液体状态的在线局部规划是否已经足够”。外部基线可以包括 DWA、TEB、\texttt{mpc\_local\_planner} 或 LT-DWA 系列规划器。它们与本文处于相近部署层级，能够在线生成底盘命令，但通常不传播液体动态记忆。进入主表的方法应满足接口可运行、底盘约束可对齐、任务定义一致和日志可复现等条件；比较指标包括成功率、到达时间、路径误差、外部液面指标和求解时间。
 
-普通在线局部规划器对比用于回答“非液体感知局部规划器调好以后是否已经足够”。外部基线可以包括 DWA、TEB、\texttt{mpc\_local\_planner} 或 LT-DWA 系列规划器。它们与本文处于相近部署层级，能够在线生成底盘命令，但通常不传播液体动态记忆。
+移动底盘防晃近邻方法用于解释本文与已有液体运输工作的层级差异。可比较对象包括 Hamaguchi 式路径/速度剖面、输入整形策略、Lim 式离线液体约束轨迹或其它能在同一任务中复现实验接口的防晃方法。若某类方法能在相同任务接口下公平复现，则进入定量比较；若无法公平复现，则只作为相关工作中的层级参照，不进入主结果表。该处理避免把不同平台、不同控制输入或不同决策层级的方法强行写成同层 baseline。
 
-进入主表的方法应满足四个条件：接口可运行、底盘约束可对齐、任务定义一致、日志可复现。比较指标包括成功率、到达时间、路径误差、外部液面指标和求解时间，用于检验普通局部规划器的平滑性和在线性是否足以替代液体状态预测。
+\paragraph{结果组织：} 内部消融结果表汇总外部液面响应、任务完成、路径跟踪、控制平滑性、模型--外部一致性和求解时间；代表性时间序列展示相近任务完成代价下仅平滑控制与晃液状态预测的差异。外部基线结果表分别报告普通局部规划器和可复现防晃近邻方法的比较结果；不可公平复现的方法仅作为层级参照，不进入定量排名。
 
-\paragraph{待填结果：} 本段预留普通局部规划器对比数据，应给出各基线与 \SPMPC{} 的成功率、到达时间、路径误差、外部液面指标、模型—外部一致性指标和求解时间，并保留失败或超时试次。该对比不是导航排行榜，而是检验“不传播液体动态记忆的在线局部规划”是否足以完成开口液体运输任务。
+\subsection{实物实验：真实液面响应与模型一致性}
 
-\subsection{移动底盘防晃近邻对比}
+实物实验用于检查仿真趋势是否能由真实外部液面观测支持，并验证内部模型代理量是否具有解释能力。实物平台记录最终发送到底盘的命令、外部液面观测、内部模型代理量和关键执行链路诊断，以区分方法效果与底盘执行、传感延迟或命令门控造成的影响。在实物实验中，\texttt{/spmpc/slosh\_height} 仍只作为模型内部代理量；真实液面响应结论应由 RGB、液位传感或其它外部液面观测支持。
 
-移动底盘防晃近邻方法用于解释本文与已有液体运输工作的层级差异。可比较对象包括 Hamaguchi 式路径/速度剖面、输入整形策略、Lim 式离线液体约束轨迹或其它能在同一任务中复现实验接口的防晃方法。它们的作用是说明具有液体模型的防晃方法在离线规划、速度剖面或跟踪控制层与在线局部规划层之间的接口差异。
+实物比较优先覆盖能够直接回应主张的代表性设置，例如 \texttt{B\_smooth} 与 \texttt{B\_ours} 的对比，或在条件允许时加入 \texttt{B0}、\texttt{B\_slosh} 和普通局部规划器。报告时应同时呈现任务完成、路径跟踪、控制输入和外部液面响应，避免把降低速度或终端停顿误写为防晃效果。
 
-近邻对比优先选择可在同一任务接口复现的方法；难以公平复现的工作用于相关工作层级分析。对可复现方法，实验记录任务完成、外部液面响应、路径误差和执行时间，并说明其与 \SPMPC{} 在决策层级和在线接口上的差异。
+模型--外部液面一致性分析在本节报告，指标定义见前文实验设置。该分析比较 $H_{\mathrm{model}}^{\mathrm{eval}}$ 与 $H_{\mathrm{vis}}$ 的幅值偏差、整体低估或保守性、相关性、相位偏移以及峰值/高分位误差，用于判断内部代理量能否解释外部液面变化。若模型代理量与外部观测存在明显幅值误差、局部低估或相位延迟，则相应结论应限制为模型诊断，而不能替代真实液面评价。
 
-\paragraph{待填结果：} 本段预留移动底盘防晃近邻对比数据。若某类近邻方法无法在相同任务接口下公平复现，应明确说明其作为相关工作参照而非主实验基线；只有实际复现的数据才进入定量比较，不能把不可复现实验写成已完成结果。
+\paragraph{结果组织：} 实物结果图展示代表性外部液面曲线、底盘命令和模型代理量；统计表汇总真实液面响应、任务完成、路径跟踪和模型--外部一致性指标。真实液面结论只由外部观测支持，内部代理量仅用于解释规划器预测与外部响应之间的关系。
 
-\subsection{实时性、鲁棒性与实物验证}
+\subsection{在线求解性能与执行诊断}
 
-实时性分析报告 OCP 求解时间、控制频率、求解失败次数和极端试次。鲁棒性分析覆盖不同路径类型、不同初始晃液状态、不同液位或不同权重设置。实物验证记录最终发送到底盘的命令、外部液面观测、内部模型代理量和关键执行链路诊断，以区分方法效果与底盘执行、传感延迟或命令门控造成的影响。
+在线求解性能单独报告，用于验证 \SPMPC{} 仍是可部署的滚动时域局部规划器，而不是离线防晃轨迹优化。统计内容包括 OCP 求解时间、控制频率、求解失败次数、超时次数以及极端试次。求解时间应至少报告中位数和高分位耗时，并与目标控制周期比较。
 
-在实物实验中，\texttt{/spmpc/slosh\_height} 仍只作为模型内部代理量；真实液面响应结论应由外部液面观测支持。求解时间和控制频率用于验证滚动时域优化是否满足在线局部规划的实时要求，模型—外部一致性指标用于判断内部代理量是否具有解释价值。
+执行诊断用于解释实物系统中的偏差来源，包括求解器输出、最终 \texttt{/cmd\_vel}、命令限幅、终端减速、传感延迟和底盘执行响应等。上述诊断量服务于实验可解释性，不构成 \SPMPC{} 的核心方法贡献；若执行链路显著改变优化器输出，则相应实物结论应明确限定在该执行条件下。
 
-\paragraph{待填结果：} 本段预留实时性、鲁棒性和实物实验数据，应说明 \SPMPC{} 是否能够在目标控制频率下稳定求解，并用外部液面观测和模型—外部一致性指标支持或限制“降低晃动”的表述；在数据填入前，不报告具体降低幅度。
+\paragraph{结果组织：} 在线求解统计表报告求解时间分布、控制频率和失败次数；执行诊断图或表用于说明优化器输出与最终底盘命令之间是否存在明显差异。该部分的作用是支撑在线局部规划部署可行性，而不是给出独立的防晃性能结论。

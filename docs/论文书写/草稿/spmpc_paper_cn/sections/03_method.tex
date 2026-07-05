@@ -123,12 +123,20 @@
   \end{bmatrix}^{\top}.
 \end{equation}
 
-为了在实验中区分“规划器内部预测量”和“真实液面观测”，本文将由低阶晃液状态导出的模型代理量记为
+为了在实验中区分“规划器内部预测量”和“真实液面观测”，本文将由低阶晃液状态导出的模型代理量记为 $H_{\mathrm{model}}$。实现中可以报告两类口径：其一为仅由模态位移给出的动态晃液代理量
 \begin{equation}
-  H_{\mathrm{model}}(t)=\mathcal{H}(\xl(t);\phi),
-  \label{eq:model_proxy_height}
+  H_{\mathrm{model}}^{\mathrm{modal}}(t)
+  = c_h\sqrt{\eta_x^2(t)+\eta_y^2(t)},
+  \label{eq:h_model_modal}
 \end{equation}
-其中 $\phi$ 表示容器几何、液位和模型参数。实现中若发布 \texttt{/spmpc/slosh\_height}，它也只表示这类内部模型预测或诊断代理量。已有跨平台防晃轨迹规划研究使用一阶模态位移构造液面高度代理量，并将其与视频提取的实验液面进行对照\cite{C01_Ferrari2026}；本文借鉴这种“模型代理量必须接受外部观测校验”的评价口径，但不把 $H_{\mathrm{model}}$ 直接等同于真实自由液面高度。
+其中 $c_h$ 为由容器几何、液位和模态参数决定的高度映射系数；其二为与实现中可能发布的 \texttt{/spmpc/slosh\_height} 对应的完整诊断量
+\begin{equation}
+  H_{\mathrm{model}}^{\mathrm{full}}(t)
+  = H_{\mathrm{model}}^{\mathrm{modal}}(t)
+  + \mathbb{I}_{\mathrm{para}}\frac{R^2\omega^2(t)}{4g},
+  \label{eq:h_model_full}
+\end{equation}
+其中第二项为可选的转弯抛物面代理项，$R$ 为容器半径，$\omega$ 为底盘角速度，$\mathbb{I}_{\mathrm{para}}$ 表示该项是否启用。需要强调的是，$H_{\mathrm{model}}^{\mathrm{modal}}$、$H_{\mathrm{model}}^{\mathrm{full}}$ 和 \texttt{/spmpc/slosh\_height} 均属于模型内部预测或诊断代理量，不是独立的真实液面观测。已有跨平台防晃轨迹规划研究使用一阶模态位移构造液面高度代理量，并将其与视频提取的实验液面进行对照\cite{C01_Ferrari2026}；本文借鉴这种“模型代理量必须接受外部观测校验”的评价口径，但不把 $H_{\mathrm{model}}$ 直接等同于真实自由液面高度。后续实验中若使用 RGB 或液位传感得到外部液面指标，应明确说明其与上述哪一种模型代理量进行比较。
 
 增强状态为
 \begin{equation}
