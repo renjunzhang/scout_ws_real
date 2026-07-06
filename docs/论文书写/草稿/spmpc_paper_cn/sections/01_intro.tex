@@ -14,29 +14,29 @@
   \centering
   \resizebox{\linewidth}{!}{%
   \begin{tikzpicture}[
-    font=\small,
-    panel/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=3.7cm, minimum height=2.15cm, align=center},
-    title/.style={font=\bfseries\small, text=spmpcblue},
+    font=\footnotesize,
+    panel/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=2.55cm, minimum height=1.82cm, align=center},
+    title/.style={font=\bfseries\scriptsize, text=spmpcblue, align=center},
     note/.style={font=\scriptsize, text=spmpcgray, align=center},
-    arr/.style={-{Latex[length=2mm]}, line width=0.5pt, draw=spmpcblue}
+    arr/.style={-{Latex[length=1.7mm]}, line width=0.5pt, draw=spmpcblue}
   ]
     \node[panel] (p1) at (0,0) {};
-    \node[title] at (p1.north) [yshift=-0.28cm] {普通局部规划};
-    \node[note] at (p1.center) [yshift=0.18cm] {路径 + 底盘状态\\在线生成速度命令};
-    \node[note] at (p1.south) [yshift=0.35cm] {不传播液体状态};
+    \node[title] at (p1.north) [yshift=-0.42cm] {Local\\planning};
+    \node[note] at (p1.center) [yshift=-0.05cm] {Path + base\\vel. cmd};
+    \node[note] at (p1.south) [yshift=0.30cm] {No liquid state};
 
-    \node[panel] (p2) at (4.35,0) {};
-    \node[title] at (p2.north) [yshift=-0.28cm] {已有防晃方法};
-    \node[note] at (p2.center) [yshift=0.20cm] {液体模型 + 输入整形\\速度剖面 / 跟踪控制};
-    \node[note] at (p2.south) [yshift=0.35cm] {多位于其它决策层};
+    \node[panel] (p2) at (3.05,0) {};
+    \node[title] at (p2.north) [yshift=-0.42cm] {Anti-slosh\\methods};
+    \node[note] at (p2.center) [yshift=-0.05cm] {Liquid model\\shaping / tracking};
+    \node[note] at (p2.south) [yshift=0.30cm] {Other layers};
 
-    \node[panel, fill=white] (p3) at (8.70,0) {};
-    \node[title] at (p3.north) [yshift=-0.28cm] {\SPMPC{} 在线局部规划};
-    \node[note] at (p3.center) [yshift=0.24cm] {底盘状态 + 路径进度\\低阶晃液状态};
-    \node[note] at (p3.south) [yshift=0.35cm] {滚动时域 \MPCC{} 输出 /cmd\_vel};
+    \node[panel, fill=white] (p3) at (6.10,0) {};
+    \node[title] at (p3.north) [yshift=-0.42cm] {\SPMPC{}\\planner};
+    \node[note] at (p3.center) [yshift=-0.05cm] {Base + progress\\slosh state};
+    \node[note] at (p3.south) [yshift=0.30cm] {\MPCC{} horizon\\/cmd\_vel};
 
-    \draw[arr] (p1.east) -- node[above, font=\scriptsize, text=spmpcgray] {缺少动态记忆} (p2.west);
-    \draw[arr] (p2.east) -- node[above, font=\scriptsize, text=spmpcgray] {回到局部规划层} (p3.west);
+    \draw[arr] (p1.east) -- (p2.west);
+    \draw[arr] (p2.east) -- (p3.west);
   \end{tikzpicture}}
   \caption{\SPMPC{} 的任务与方法定位。普通局部规划器具备在线部署接口但通常不传播液体状态；已有防晃方法显式考虑液体模型但多位于其它决策层；本文将低阶晃液状态嵌入标准移动底盘在线 \MPCC{} 局部规划问题。}
   \label{fig:system_overview}

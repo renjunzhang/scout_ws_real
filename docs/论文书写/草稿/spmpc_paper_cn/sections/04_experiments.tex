@@ -12,21 +12,21 @@
   \centering
   \resizebox{\linewidth}{!}{%
   \begin{tikzpicture}[
-    font=\small,
-    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=2.8cm, minimum height=0.88cm, align=center},
-    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=3.0cm, minimum height=1.05cm, align=center, font=\small\bfseries},
-    metric/.style={draw=spmpcgray, rounded corners=2pt, line width=0.4pt, fill=white, minimum width=2.35cm, minimum height=0.62cm, align=center, font=\scriptsize},
-    arr/.style={-{Latex[length=2mm]}, line width=0.5pt, draw=spmpcblue}
+    font=\footnotesize,
+    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=1.55cm, minimum height=0.58cm, align=center},
+    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=1.60cm, minimum height=0.72cm, align=center, font=\footnotesize\bfseries},
+    metric/.style={draw=spmpcgray, rounded corners=2pt, line width=0.4pt, fill=white, minimum width=1.15cm, minimum height=0.44cm, align=center, font=\scriptsize},
+    arr/.style={-{Latex[length=1.6mm]}, line width=0.5pt, draw=spmpcblue}
   ]
-    \node[core] (robot) at (0,0) {移动底盘 + 开口容器\\参考路径任务};
-    \node[block] (planner) at (3.8,0.9) {规划器日志\\轨迹 / 命令 / 求解时间};
-    \node[block] (proxy) at (3.8,-0.9) {内部模型代理量\\\texttt{/spmpc/slosh\_height}};
-    \node[block] (camera) at (3.8,2.35) {外部液面观测\\RGB / 液位传感};
-    \node[core] (eval) at (7.5,0.55) {评价指标计算};
-    \node[metric] (m1) at (10.7,1.85) {真实液面运动};
-    \node[metric] (m2) at (10.7,0.85) {模型--外部一致性};
-    \node[metric] (m3) at (10.7,-0.15) {路径与任务};
-    \node[metric] (m4) at (10.7,-1.15) {控制与实时性};
+    \node[core] (robot) at (0,0) {Base +\\container};
+    \node[block] (planner) at (2.35,0.75) {Planner logs\\traj. / cmd};
+    \node[block] (proxy) at (2.35,-0.75) {Model proxy\\slosh};
+    \node[block] (camera) at (2.35,1.80) {Surface obs.\\RGB / level};
+    \node[core] (eval) at (4.65,0.35) {Metrics};
+    \node[metric] (m1) at (6.75,1.45) {liquid};
+    \node[metric] (m2) at (6.75,0.65) {proxy};
+    \node[metric] (m3) at (6.75,-0.15) {task};
+    \node[metric] (m4) at (6.75,-0.95) {runtime};
 
     \draw[arr] (robot.east) -- (planner.west);
     \draw[arr] (robot.east) -- (proxy.west);
@@ -92,30 +92,27 @@
   \centering
   \resizebox{\linewidth}{!}{%
   \begin{tikzpicture}[
-    font=\small,
-    cell/.style={draw=spmpcgray, rounded corners=2pt, line width=0.55pt, fill=white, minimum width=2.9cm, minimum height=1.05cm, align=center},
-    ours/.style={draw=spmpcblue, rounded corners=2pt, line width=0.8pt, fill=spmpclight, minimum width=2.9cm, minimum height=1.05cm, align=center, font=\small\bfseries},
-    head/.style={font=\small\bfseries, text=spmpcblue, align=center},
-    row/.style={font=\small\bfseries, text=spmpcgray, align=center},
-    note/.style={font=\scriptsize, text=spmpcgray, align=center},
-    arr/.style={-{Latex[length=2mm]}, line width=0.5pt, draw=spmpcblue}
+    font=\footnotesize,
+    cell/.style={draw=spmpcgray, rounded corners=2pt, line width=0.55pt, fill=white, minimum width=2.15cm, minimum height=0.82cm, align=center},
+    ours/.style={draw=spmpcblue, rounded corners=2pt, line width=0.8pt, fill=spmpclight, minimum width=2.15cm, minimum height=0.82cm, align=center, font=\footnotesize\bfseries},
+    head/.style={font=\footnotesize\bfseries, text=spmpcblue, align=center},
+    row/.style={font=\scriptsize\bfseries, text=spmpcgray, align=right},
+    arr/.style={-{Latex[length=1.7mm]}, line width=0.5pt, draw=spmpcblue, shorten >=1pt, shorten <=1pt}
   ]
-    \node[head] at (2.0,2.35) {无晃液状态};
-    \node[head] at (5.6,2.35) {有晃液状态};
-    \node[row] at (-0.25,1.25) {弱平滑};
-    \node[row] at (-0.25,-0.25) {强平滑};
+    \node[head] at (1.45,1.65) {No slosh state};
+    \node[head] at (4.35,1.65) {Slosh state};
+    \node[row, anchor=east] at (-0.05,0.70) {Weak\\smooth.};
+    \node[row, anchor=east] at (-0.05,-0.45) {Strong\\smooth.};
 
-    \node[cell] (b0) at (2.0,1.25) {\texttt{B0}\\基础 \MPCC{}};
-    \node[cell] (bs) at (5.6,1.25) {\texttt{B\_slosh}\\加入晃液状态};
-    \node[cell] (bm) at (2.0,-0.25) {\texttt{B\_smooth}\\增强控制平滑};
-    \node[ours] (bo) at (5.6,-0.25) {\texttt{B\_ours}\\完整方法};
+    \node[cell] (b0) at (1.45,0.70) {\texttt{B0}\\Baseline};
+    \node[cell] (bs) at (4.35,0.70) {\texttt{B\_slosh}\\Slosh-aware};
+    \node[cell] (bm) at (1.45,-0.45) {\texttt{B\_smooth}\\High smoothing};
+    \node[ours] (bo) at (4.35,-0.45) {\texttt{B\_ours}\\Full method};
 
-    \draw[arr] (b0) -- node[above, note] {晃液预测收益} (bs);
-    \draw[arr] (b0) -- node[left, note] {平滑性收益} (bm);
-    \draw[arr] (bm) -- node[below, note] {是否超越仅平滑控制} (bo);
-    \draw[arr] (bs) -- node[right, note] {平滑项是否仍有助于执行} (bo);
-
-    \node[note] at (3.8,-1.45) {消融设计图：不包含实验曲线、数值或趋势结论};
+    \draw[arr] (b0) -- (bs);
+    \draw[arr] (b0) -- (bm);
+    \draw[arr] (bm) -- (bo);
+    \draw[arr] (bs) -- (bo);
   \end{tikzpicture}}
   \caption{内部消融变体与验证关系。四个变体构成“是否传播晃液状态”和“是否增强控制平滑性”的二维拆解，用于区分仅平滑控制与显式晃液状态预测的作用。}
   \label{fig:ablation_design}
@@ -133,11 +130,51 @@
 
 实物实验用于检查仿真趋势是否能由真实外部液面观测支持，并验证内部模型代理量是否具有解释能力。实物平台记录最终发送到底盘的命令、外部液面观测、内部模型代理量和关键执行链路诊断，以区分方法效果与底盘执行、传感延迟或命令门控造成的影响。在实物实验中，\texttt{/spmpc/slosh\_height} 仍只作为模型内部代理量；真实液面响应结论应由 RGB、液位传感或其它外部液面观测支持。
 
-实物比较优先覆盖能够直接回应主张的代表性设置，例如 \texttt{B\_smooth} 与 \texttt{B\_ours} 的对比，或在条件允许时加入 \texttt{B0}、\texttt{B\_slosh} 和普通局部规划器。报告时应同时呈现任务完成、路径跟踪、控制输入和外部液面响应，避免把降低速度或终端停顿误写为防晃效果。
+本文已完成一组固定路径实物初步对比。该组实验采用相同起终点、参考路径和底盘约束，三种方法 \texttt{B0}、\texttt{B\_slosh} 和 \texttt{B\_ours} 各重复 3 次；9 个 rosbag 均达到终点，且有效配置均满足 $v_{\mathrm{ref}}=0.20\,\mathrm{m/s}$、线/角速度与加速度约束对齐、固定闭环延迟补偿启用、模型硬约束关闭、跟踪安全停顿未触发。\cref{tab:real_fixed_path_20260705} 报告路径进度 10\%--90\% 主窗口的统计结果。
 
-模型--外部液面一致性分析在本节报告，指标定义见前文实验设置。该分析比较 $H_{\mathrm{model}}^{\mathrm{eval}}$ 与 $H_{\mathrm{vis}}$ 的幅值偏差、整体低估或保守性、相关性、相位偏移以及峰值/高分位误差，用于判断内部代理量能否解释外部液面变化。若模型代理量与外部观测存在明显幅值误差、局部低估或相位延迟，则相应结论应限制为模型诊断，而不能替代真实液面评价。
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \caption{2026-07-05 固定路径实物对比结果，路径进度 10\%--90\% 主窗口}
+  \label{tab:real_fixed_path_20260705}
+  \resizebox{\linewidth}{!}{%
+  \begin{tabular}{lcccc}
+    \toprule
+    方法 & 模型 p95/RMS [mm] & RGB p95/RMS [mm] & $|\omega|$ p95/max [rad/s] & 到达时间 [s] \\
+    \midrule
+    \texttt{B0} & $1.100\pm0.034$ / $0.547\pm0.016$ & $1.009\pm0.214$ / $0.541\pm0.081$ & $0.234\pm0.015$ / $0.348\pm0.007$ & $33.753\pm0.355$ \\
+    \texttt{B\_slosh} & $0.632\pm0.101$ / $0.307\pm0.035$ & $0.901\pm0.015$ / $0.537\pm0.008$ & $0.242\pm0.033$ / $0.341\pm0.004$ & $36.851\pm0.231$ \\
+    \texttt{B\_ours} & $0.892\pm0.076$ / $0.432\pm0.018$ & $0.709\pm0.098$ / $0.384\pm0.032$ & $0.207\pm0.007$ / $0.269\pm0.002$ & $38.073\pm0.403$ \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
 
-\paragraph{结果组织：} 实物结果图展示代表性外部液面曲线、底盘命令和模型代理量；统计表汇总真实液面响应、任务完成、路径跟踪和模型--外部一致性指标。真实液面结论只由外部观测支持，内部代理量仅用于解释规划器预测与外部响应之间的关系。
+从内部模型代理量看，\texttt{B\_slosh} 的 \texttt{/spmpc/slosh\_height} p95 和 RMS 相对 \texttt{B0} 分别下降 42.5\% 和 43.9\%，是本组实验中模型侧抑晃最强的变体；\texttt{B\_ours} 的模型 p95 和 RMS 也分别下降 18.9\% 和 21.0\%。从 RGB 外部液面包络看，\texttt{B\_ours} 的 $H_{\mathrm{vis}}$ p95、峰值和 RMS 相对 \texttt{B0} 分别下降 29.8\%、33.3\% 和 29.0\%，且 $|\omega|$ 的 p95 与峰值最低。该结果说明完整方法在本组固定路径实物试验中不仅降低了内部预测晃液响应，也降低了外部观测到的液面包络；但其到达时间较 \texttt{B0} 增加，因而不能把结论写成所有指标均占优。
+
+模型--外部液面一致性分析在本节报告，指标定义见前文实验设置。该分析比较 $H_{\mathrm{model}}^{\mathrm{eval}}$ 与 $H_{\mathrm{vis}}$ 的幅值偏差、整体低估或保守性、相关性、相位偏移以及峰值/高分位误差，用于判断内部代理量能否解释外部液面变化。若模型代理量与外部观测存在明显幅值误差、局部低估或相位延迟，则相应结论应限制为模型诊断，而不能替代真实液面评价。\cref{tab:real_fidelity_20260705} 给出同一主窗口内 \texttt{/spmpc/slosh\_height} 与 RGB 包络的 Ferrari-style 绝对保真度诊断。
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \caption{2026-07-05 实物主窗口模型--外部液面一致性诊断}
+  \label{tab:real_fidelity_20260705}
+  \resizebox{\linewidth}{!}{%
+  \begin{tabular}{lcccccc}
+    \toprule
+    方法 & $\Delta t_{p95}$ [ms] & $\gamma_{\mathrm{bias}}$ [\%] & RMSE [mm] & $\rho$ & RGB/model p95 [mm] & $U_{\max}$ [mm] \\
+    \midrule
+    \texttt{B0} & $15.260\pm0.244$ & $4.860\pm13.704$ & $0.431\pm0.057$ & $0.190\pm0.068$ & $1.009$ / $1.048$ & $2.061\pm0.570$ \\
+    \texttt{B\_slosh} & $16.393\pm1.225$ & $-75.581\pm13.858$ & $0.383\pm0.036$ & $0.260\pm0.109$ & $0.901$ / $0.575$ & $1.908\pm0.440$ \\
+    \texttt{B\_ours} & $17.302\pm0.158$ & $8.809\pm11.772$ & $0.316\pm0.030$ & $0.137\pm0.158$ & $0.709$ / $0.832$ & $1.232\pm0.445$ \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+时间配对质量较好，三组 $\Delta t_{p95}$ 均为 15--17 ms；但逐帧相关性较弱，$\rho$ 仅为 0.137--0.260，因此不能声称模型信号具有逐帧相位保真。\texttt{B\_slosh} 的 $\gamma_{\mathrm{bias}}$ 为 $-75.581\%$，说明该变体存在明显系统低估；\texttt{B\_ours} 的 RMSE 最低、p95 低估量接近 0，且最大局部低估量低于其它两组。综合来看，\texttt{/spmpc/slosh\_height} 可作为控制侧辅助指标，用于支持 slosh-aware 变体相对 \texttt{B0} 的趋势判断；但它不能独立作为真实液面真值、所有候选排序依据或硬安全门控。
+
+\paragraph{后续补充：} 当前实物结果仍是固定路径、小样本 $N=3$ 的初步证据。后续应继续补充更多路径、液位、容器配置和外部基线试验，并用真实数据脚本绘制代表性外部液面曲线、底盘命令和模型代理量；真实液面结论只由外部观测支持，内部代理量仅用于解释规划器预测与外部响应之间的关系。
 
 \subsection{在线求解性能与执行诊断}
 

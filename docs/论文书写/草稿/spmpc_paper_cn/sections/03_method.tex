@@ -21,40 +21,33 @@
   \centering
   \resizebox{\linewidth}{!}{%
   \begin{tikzpicture}[
-    font=\small,
-    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=2.6cm, minimum height=0.82cm, align=center},
-    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=3.05cm, minimum height=1.15cm, align=center, font=\small\bfseries},
-    cost/.style={draw=spmpcgray, rounded corners=2pt, line width=0.4pt, fill=white, minimum width=1.75cm, minimum height=0.58cm, align=center, font=\scriptsize},
-    arr/.style={-{Latex[length=2mm]}, line width=0.5pt, draw=spmpcblue}
+    font=\footnotesize,
+    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=1.45cm, minimum height=0.62cm, align=center},
+    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=1.85cm, minimum height=0.82cm, align=center, font=\footnotesize\bfseries},
+    cost/.style={draw=spmpcgray, rounded corners=2pt, line width=0.4pt, fill=white, minimum width=1.05cm, minimum height=0.45cm, align=center, font=\scriptsize},
+    arr/.style={-{Latex[length=1.6mm]}, line width=0.5pt, draw=spmpcblue}
   ]
-    \node[block] (odom) at (0,1.55) {里程计\\底盘状态};
-    \node[block] (path) at (0,0.45) {参考路径\\路径进度};
-    \node[block] (prev) at (0,-0.65) {上一帧\\控制量};
-    \node[block] (slosh) at (0,-1.75) {低阶晃液\\模态状态};
+    \node[block] (odom) at (0,1.35) {Odom.\\base};
+    \node[block] (path) at (0,0.45) {Path\\progress};
+    \node[block] (prev) at (0,-0.45) {Prev.\\control};
+    \node[block] (slosh) at (0,-1.35) {Slosh\\state};
 
-    \node[core] (dyn) at (3.7,0.35) {增强动力学\\$\xaug_{k+1}=f_d(\xaug_k,\vu_k)$};
-    \node[cost] (robot) at (3.7,-1.05) {底盘模型};
-    \node[cost] (liq) at (3.7,-1.85) {晃液模型};
+    \node[core] (dyn) at (2.35,0.15) {Aug. model\\base + slosh};
+    \node[core] (ocp) at (4.70,0.15) {\MPCC{}\\OCP};
+    \node[block, fill=white] (cmd) at (7.00,0.15) {First cmd.\\$/cmd\_vel$};
 
-    \node[core] (ocp) at (7.45,0.35) {滚动时域\\\MPCC{} OCP};
-    \node[cost] (c1) at (6.25,-1.05) {路径误差};
-    \node[cost] (c2) at (8.65,-1.05) {路径进度};
-    \node[cost] (c3) at (6.25,-1.85) {控制平滑};
-    \node[cost] (c4) at (8.65,-1.85) {预测晃液};
-
-    \node[block, fill=white] (cmd) at (11.0,0.35) {第一帧控制\\$/cmd\_vel$};
+    \node[cost] (c1) at (3.85,-0.85) {track};
+    \node[cost] (c2) at (5.55,-0.85) {progress};
+    \node[cost] (c3) at (3.85,-1.45) {smooth};
+    \node[cost] (c4) at (5.55,-1.45) {slosh};
 
     \foreach \s in {odom,path,prev,slosh}
       \draw[arr] (\s.east) -- (dyn.west);
     \draw[arr] (dyn.east) -- (ocp.west);
-    \draw[arr] (robot.east) -- (ocp.west);
-    \draw[arr] (liq.east) -- (ocp.west);
-    \draw[arr] (c1.north) -- (ocp.south);
-    \draw[arr] (c2.north) -- (ocp.south);
-    \draw[arr] (c3.north) -- (ocp.south);
-    \draw[arr] (c4.north) -- (ocp.south);
     \draw[arr] (ocp.east) -- (cmd.west);
-    \draw[arr, rounded corners=8pt] (cmd.south) |- (5.6,-2.75) -| node[pos=0.25, below, font=\scriptsize, text=spmpcgray] {下一控制周期重新优化} (dyn.south);
+    \foreach \c in {c1,c2,c3,c4}
+      \draw[arr] (\c.north) -- (ocp.south);
+    \draw[arr, rounded corners=6pt] (cmd.south) |- (4.70,-2.05) -| node[pos=0.22, below, font=\scriptsize, text=spmpcgray] {replan} (dyn.south);
   \end{tikzpicture}}
   \caption{\SPMPC{} 增强状态与 OCP 结构。规划器将底盘状态、路径进度和低阶晃液状态放入同一预测模型，在滚动时域内联合考虑路径跟踪、路径推进、控制平滑和预测晃液响应，并只执行第一帧底盘命令。}
   \label{fig:method_structure}
