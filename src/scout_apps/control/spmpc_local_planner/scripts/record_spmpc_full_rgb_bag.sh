@@ -163,6 +163,19 @@ record_topics=(
   /local_path
   /mpc/reference_path
 
+  # External baseline status / plans / command diagnostics.
+  /baseline/official_lt_dwa/status
+  /baseline/official_lt_dwa/diagnostics
+  /baseline/official_lt_dwa/worker_result
+  /baseline/official_lt_dwa/global_plan
+  /baseline/official_lt_dwa/local_plan
+  /baseline/official_lt_dwa/raw_cmd_vel
+  /baseline/official_lt_dwa/shadow_cmd_vel
+  /baseline/teb/status
+  /baseline/teb/global_plan
+  /baseline/mpc_local_planner/status
+  /baseline/mpc_local_planner/global_plan
+
   # SPMPC mainline status / solver / trajectory.
   /spmpc/status
   /spmpc/solver_backend

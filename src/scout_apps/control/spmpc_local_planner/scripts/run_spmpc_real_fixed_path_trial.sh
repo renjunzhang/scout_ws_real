@@ -48,6 +48,119 @@ child_running() {
   [[ -n "${pid}" ]] && jobs -pr | grep -qx "${pid}"
 }
 
+wait_for_operator() {
+  local message="$1"
+  if [[ -t 0 ]]; then
+    echo ""
+    echo "[matrix] ${message}"
+    echo "[matrix] Press Enter to continue, or Ctrl+C to stop."
+    read -r _
+  else
+    echo "[matrix] ${message}"
+    echo "[matrix] stdin is not a terminal; continuing without interactive wait."
+  fi
+}
+
+run_matrix_preset() {
+  local preset="$1"
+  local script_path
+  script_path="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+
+  local label_tag="${MATRIX_LABEL_TAG:-0706}"
+  local matrix_date="${DATE:-$(date +%Y%m%d)}"
+  local include_gate="${MATRIX_INCLUDE_GATE:-true}"
+  local wait_between="${MATRIX_WAIT_BETWEEN_RUNS:-true}"
+  local continue_on_fail="${MATRIX_CONTINUE_ON_FAIL:-false}"
+  local runs=()
+
+  case "${preset}" in
+    0706_bsmooth_bours|0706_smooth_bridge)
+      if truthy "${include_gate}"; then
+        runs+=("B0|B0_fixed_150_220_${label_tag}_gate01|false")
+      fi
+      runs+=("B_smooth|Bsmooth_fixed_150_220_${label_tag}_r1|true")
+      runs+=("B_ours|Bours_fixed_150_220_${label_tag}_r1|true")
+      runs+=("B_ours|Bours_fixed_150_220_${label_tag}_r2|true")
+      runs+=("B_smooth|Bsmooth_fixed_150_220_${label_tag}_r2|true")
+      runs+=("B_smooth|Bsmooth_fixed_150_220_${label_tag}_r3|true")
+      runs+=("B_ours|Bours_fixed_150_220_${label_tag}_r3|true")
+      ;;
+    *)
+      fail "Unknown MATRIX_PRESET='${preset}'. Supported: 0706_bsmooth_bours"
+      ;;
+  esac
+
+  echo "================ SPMPC real fixed-path matrix ================"
+  echo "  preset       = ${preset}"
+  echo "  date         = ${matrix_date}"
+  echo "  label_tag    = ${label_tag}"
+  echo "  include_gate = ${include_gate}"
+  echo "  runs         = ${#runs[@]}"
+  echo "  control      = fixed_closed_loop 0.15 / 0.22, v_ref=0.20"
+  echo "=============================================================="
+
+  local index=0
+  local item variant label record_rgb rc
+  for item in "${runs[@]}"; do
+    index=$((index + 1))
+    IFS='|' read -r variant label record_rgb <<< "${item}"
+    echo ""
+    echo "[matrix] next ${index}/${#runs[@]}: ${label} (${variant}, RECORD_RGB=${record_rgb})"
+    if truthy "${wait_between}"; then
+      wait_for_operator "Return the robot to the start mark, align heading, let liquid settle 60-90s, and confirm RGB/TF/odom are healthy."
+    fi
+
+    set +e
+    env \
+      MATRIX_PRESET= \
+      DATE="${matrix_date}" \
+      STAMP= \
+      ALG="${variant}" \
+      VARIANT="${variant}" \
+      RUN_LABEL="${label}" \
+      NAME="${label}" \
+      RUN_OUT_DIR= \
+      PATH_FILE= \
+      CMD_TOPIC="${CMD_TOPIC:-/cmd_vel}" \
+      V_REF="${V_REF:-0.20}" \
+      ALPHA_MAX="${ALPHA_MAX:-1.2}" \
+      SHARED_LINEAR_ACCEL_LIMIT_ENABLE="${SHARED_LINEAR_ACCEL_LIMIT_ENABLE:-true}" \
+      SHARED_LINEAR_ACCEL_MAX="${SHARED_LINEAR_ACCEL_MAX:-0.6}" \
+      SHARED_ANGULAR_LIMIT_ENABLE="${SHARED_ANGULAR_LIMIT_ENABLE:-true}" \
+      SHARED_ANGULAR_RATE_MAX="${SHARED_ANGULAR_RATE_MAX:-1.2}" \
+      SHARED_ANGULAR_ACCEL_MAX="${SHARED_ANGULAR_ACCEL_MAX:-1.2}" \
+      DELAY_PHASE_MODE="${DELAY_PHASE_MODE:-fixed_closed_loop}" \
+      DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC:-0.15}" \
+      DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC:-0.22}" \
+      RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO:-false}" \
+      RECORDER_STARTUP_SEC="${RECORDER_STARTUP_SEC:-8}" \
+      RECORD_RGB="${record_rgb}" \
+      RECORD_SEC="${RECORD_SEC:-60}" \
+      MAX_RECORD_SEC="${MAX_RECORD_SEC:-60}" \
+      bash "${script_path}"
+    rc=$?
+    set -e
+
+    if (( rc != 0 )); then
+      echo "[matrix] run failed: ${label} rc=${rc}" >&2
+      if ! truthy "${continue_on_fail}"; then
+        echo "[matrix] stop remaining runs. Set MATRIX_CONTINUE_ON_FAIL=true to continue after failures." >&2
+        return "${rc}"
+      fi
+    fi
+  done
+
+  echo "================ matrix finished ================"
+  echo "  preset = ${preset}"
+  echo "  date   = ${matrix_date}"
+  echo "================================================="
+}
+
+if [[ -n "${MATRIX_PRESET:-}" ]]; then
+  run_matrix_preset "${MATRIX_PRESET}"
+  exit $?
+fi
+
 DATE="${DATE:-$(date +%Y%m%d)}"
 STAMP="${STAMP:-$(date +%H%M%S)}"
 VARIANT="${VARIANT:-${ALG:-B_ours}}"
