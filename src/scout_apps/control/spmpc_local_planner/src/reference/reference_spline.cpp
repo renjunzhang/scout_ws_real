@@ -35,7 +35,7 @@ ReferenceSample ReferenceSpline::sample(double s) const {
     out.y = p.y;
     out.s = sc;
 
-    // psi / kappa：弧长有限差分估计（骨架版本）。
+    // psi / kappa：弧长有限差分估计。
     const double h = std::min(0.1, std::max(1e-3, 0.25 * len));
     const double s_lo = std::max(0.0, sc - h);
     const double s_hi = std::min(len, sc + h);

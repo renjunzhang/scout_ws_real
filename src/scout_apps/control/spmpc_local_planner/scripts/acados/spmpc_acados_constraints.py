@@ -1,9 +1,10 @@
-"""SPMPC 连续 MPCC —— B0 约束（控制与状态 bounds）。
+"""SPMPC 连续 MPCC —— acados 约束（控制、状态和 slosh hard cap）。
 
 只设置 acados ocp.constraints 的边界数组（numpy），不 import acados_template。
-B0 第一版只做简单 bound（方案 §7 Phase C）：
-  控制: a∈[-a_max,a_max], omega∈[-omega_max,omega_max], v_s∈[0,vs_max]
-  状态: v∈[0,v_max]
+B0 alpha-state 主线只做简单 bound：
+  控制: a∈[-a_max,a_max], alpha∈[-alpha_max,alpha_max], v_s∈[0,vs_max]
+  状态: v∈[0,v_max], omega∈[-omega_max,omega_max]
+direct-omega 诊断模型使用单独的 direct-omega bounds；slosh hard variant 追加模态高度上限。
 obstacle / costmap / hard corridor 不在 B0 引入。
 """
 

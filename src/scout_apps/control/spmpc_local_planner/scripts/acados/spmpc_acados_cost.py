@@ -1,6 +1,7 @@
-"""SPMPC 连续 MPCC —— B0 外部代价（EXTERNAL cost，纯 CasADi）。
+"""SPMPC 连续 MPCC —— acados 外部代价（EXTERNAL cost，纯 CasADi）。
 
-只产出 CasADi 代价表达式，不依赖 acados。表达式按 §4.4 口径：
+只产出 CasADi 代价表达式，不依赖 acados。覆盖 alpha-state 主线和
+RouteB direct-omega 诊断模型。表达式按 §4.4 口径：
   - 误差类项无量纲化（除以参考尺度）；
   - 所有逐步累加项除以 N，保证不同 horizon / 与 primitive 后端权重可迁移；
   - 速度/路径进度单独处理（v_s 负向奖励 + v/v_s 对 v_ref 的跟踪，避免弯处 creep）。
@@ -115,7 +116,7 @@ def _slosh_cost(x, p, pidx_slosh=PIDX_SLOSH, eta_base=6):
 
 
 def stage_cost_expr_direct_omega_legacy(sym, cfg):
-    """direct-omega B0/slosh 的 stage EXTERNAL 代价（路 B 生产主线 + 诊断共用）。
+    """direct-omega B0/slosh 的 stage EXTERNAL 代价（RouteB 诊断/legacy）。
 
     omega 是直接控制；with_slosh 时液体模态在 x[5..8]，参数用 PIDX_SLOSH_DIRECT_OMEGA。
     转向 chatter 不在此硬约束，由 wrapper 出口 omega-rate 限幅压制。

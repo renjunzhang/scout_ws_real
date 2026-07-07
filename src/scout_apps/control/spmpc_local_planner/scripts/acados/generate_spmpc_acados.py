@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
-"""SPMPC 连续 MPCC —— B0 acados 求解器生成入口（orchestrator）。
+"""SPMPC 连续 MPCC —— acados 求解器生成入口（orchestrator）。
 
 职责（方案 §5.1 / §11.4）：
   - 唯一的 IO 边界：从包内 config/*.yaml 读取维度、bounds、默认权重；
   - 组装 AcadosModel / AcadosOcp，设置 EXTERNAL cost、约束、SQP-RTI 求解器选项；
-  - codegen 输出到 generated/acados/spmpc_b0/（生成物不手改）。
+  - codegen 输出到 generated/acados/<model_name>/（生成物不手改）。
 
 依赖：本文件需要 acados_template；model/cost/constraints 只需 CasADi/numpy。
 用法：
-  python3 generate_spmpc_acados.py            # 生成 acados B0 求解器
-  python3 generate_spmpc_acados.py --check    # 不依赖 acados，只校验 CasADi 模型/代价能装配
+  python3 generate_spmpc_acados.py                         # 默认生成 alpha-state B0
+  python3 generate_spmpc_acados.py --model slosh            # 生成 alpha-state slosh
+  python3 generate_spmpc_acados.py --model b0_direct_omega_legacy
+  python3 generate_spmpc_acados.py --model slosh_direct_omega
+  python3 generate_spmpc_acados.py --check                  # 只校验 CasADi 模型/代价装配
 """
 
 import argparse
@@ -242,7 +245,8 @@ def generate(cfg, output_root, model_key):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", choices=list(MODELS.keys()), default="b0",
-                        help="生成哪个模型：b0（6维alpha-state）| slosh（10维alpha-state）| b0_direct_omega_legacy（5维诊断）")
+                        help="生成哪个模型：b0（6维alpha-state）| slosh（10维alpha-state）| "
+                             "b0_direct_omega_legacy（5维诊断）| slosh_direct_omega（9维诊断）")
     parser.add_argument("--check", action="store_true",
                         help="不依赖 acados，仅校验 CasADi 模型/代价装配")
     parser.add_argument("--output-dir", default=os.path.join(PKG_DIR, "generated", "acados"),

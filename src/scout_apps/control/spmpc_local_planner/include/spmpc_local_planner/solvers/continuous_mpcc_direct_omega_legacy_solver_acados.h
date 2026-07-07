@@ -6,7 +6,7 @@
 
 namespace spmpc_local_planner {
 
-// 路 B 生产后端：direct-omega 连续 MPCC（omega 作为直接控制 u[1]，单次 SQP-RTI 求解稳定）。
+// RouteB 诊断/legacy 后端：direct-omega 连续 MPCC（omega 作为直接控制 u[1]）。
 //   B0:    x = [px, py, theta, v, s]                                  (5D)
 //   slosh: x = [px, py, theta, v, s, eta_x, eta_x_dot, eta_y, eta_y_dot] (9D), a_y = v*omega
 // omega 不在 OCP 内硬约束角加速度；转向 chatter 由 wrapper 出口 omega-rate 限幅

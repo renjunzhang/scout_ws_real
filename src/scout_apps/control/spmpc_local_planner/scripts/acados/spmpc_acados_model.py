@@ -1,9 +1,9 @@
-"""SPMPC 连续 MPCC —— B0 模型符号定义（纯 CasADi，不依赖 acados）。
+"""SPMPC 连续 MPCC —— 模型符号定义（纯 CasADi，不依赖 acados）。
 
 设计约束（见方案 §5.1 / §11.1 / §11.4）：
   - 本模块只产出 CasADi 符号与显式 ODE，不 import acados_template；
   - AcadosModel 的组装、求解器选项、codegen 全部在 generate_spmpc_acados.py 完成；
-  - 参数向量布局是 python 建模 与 C++ 包装层（Phase C）的契约，改这里必须同步 wrapper。
+  - 参数向量布局是 Python 建模与 C++ 包装层的契约，改这里必须同步 wrapper。
 
 B0（无 slosh）—— 2026-06-08 起 omega 进入状态、alpha=omegȧ 成为控制：
   状态 x = [px, py, theta, v, s, omega]          （6 维）
@@ -243,7 +243,7 @@ def export_spmpc_slosh_direct_omega_symbols(name="spmpc_slosh_direct_omega"):
     """路 B：direct-omega + slosh（9 维）。omega 作为直接控制（u[1]），液体模态在 x[5..8]。
 
     模态连续动力学（§4.3）：η̈_i + 2ζω_n η̇_i + ω_n^2 η_i = -κ_i a_i, a_x=a, a_y=v·ω（ω 是控制）。
-    本模型解算稳定（单次 RTI 即可跑完）；转向 chatter 由 wrapper 出口 omega-rate 限幅压制。
+    该模型提供 codegen / link 入口；formal 使用仍需单独验证。转向 chatter 由 wrapper 出口 omega-rate 限幅压制。
     """
     px = ca.SX.sym("px")
     py = ca.SX.sym("py")
