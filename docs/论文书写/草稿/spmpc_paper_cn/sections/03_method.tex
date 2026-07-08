@@ -15,7 +15,7 @@
   \item 将第一帧优化结果转换为底盘可执行的速度命令，并进入下一控制周期。
 \end{enumerate}
 
-因此，\SPMPC{} 的输出仍是普通移动底盘可执行的局部速度命令，例如线速度/角速度形式的 \texttt{/cmd\_vel}。方法内部的晃液状态用于预测和优化，不等同于真实液面传感器观测；真实液面运动应在实验中由外部视觉或传感指标评价。
+因此，\SPMPC{} 的输出仍是普通移动底盘可执行的局部速度命令，即线速度和角速度形式的底盘控制输入。方法内部的晃液状态用于预测和优化，不等同于真实液面传感器观测；真实液面运动应在实验中由外部视觉或传感指标评价。
 
 \begin{figure}[t]
   \centering
@@ -34,7 +34,7 @@
 
     \node[core] (dyn) at (2.35,0.15) {Aug. model\\base + slosh};
     \node[core] (ocp) at (4.70,0.15) {\MPCC{}\\OCP};
-    \node[block, fill=white] (cmd) at (7.00,0.15) {First cmd.\\$/cmd\_vel$};
+    \node[block, fill=white] (cmd) at (7.00,0.15) {First\\base cmd};
 
     \node[cost] (c1) at (3.85,-0.85) {track};
     \node[cost] (c2) at (5.55,-0.85) {progress};
@@ -116,20 +116,20 @@
   \end{bmatrix}^{\top}.
 \end{equation}
 
-为了在实验中区分“规划器内部预测量”和“真实液面观测”，本文将由低阶晃液状态导出的模型代理量记为 $H_{\mathrm{model}}$。实现中可以报告两类口径：其一为仅由模态位移给出的动态晃液代理量
+为了在实验中区分“规划器内部预测量”和“真实液面观测”，本文将由低阶晃液状态导出的模型代理量记为 $H_{\mathrm{model}}$。本文使用两类模型代理量描述预测液面响应：其一为仅由模态位移给出的动态晃液代理量
 \begin{equation}
   H_{\mathrm{model}}^{\mathrm{modal}}(t)
   = c_h\sqrt{\eta_x^2(t)+\eta_y^2(t)},
   \label{eq:h_model_modal}
 \end{equation}
-其中 $c_h$ 为由容器几何、液位和模态参数决定的高度映射系数；其二为与实现中可能发布的 \texttt{/spmpc/slosh\_height} 对应的完整诊断量
+其中 $c_h$ 为由容器几何、液位和模态参数决定的高度映射系数；其二为包含转弯抛物面近似的完整模型代理量
 \begin{equation}
   H_{\mathrm{model}}^{\mathrm{full}}(t)
   = H_{\mathrm{model}}^{\mathrm{modal}}(t)
   + \mathbb{I}_{\mathrm{para}}\frac{R^2\omega^2(t)}{4g},
   \label{eq:h_model_full}
 \end{equation}
-其中第二项为可选的转弯抛物面代理项，$R$ 为容器半径，$\omega$ 为底盘角速度，$\mathbb{I}_{\mathrm{para}}$ 表示该项是否启用。需要强调的是，$H_{\mathrm{model}}^{\mathrm{modal}}$、$H_{\mathrm{model}}^{\mathrm{full}}$ 和 \texttt{/spmpc/slosh\_height} 均属于模型内部预测或诊断代理量，不是独立的真实液面观测。已有跨平台防晃轨迹规划研究使用一阶模态位移构造液面高度代理量，并将其与视频提取的实验液面进行对照\cite{C01_Ferrari2026}；本文借鉴这种“模型代理量必须接受外部观测校验”的评价口径，但不把 $H_{\mathrm{model}}$ 直接等同于真实自由液面高度。后续实验中若使用 RGB 或液位传感得到外部液面指标，应明确说明其与上述哪一种模型代理量进行比较。
+其中第二项为可选的转弯抛物面代理项，$R$ 为容器半径，$\omega$ 为底盘角速度，$\mathbb{I}_{\mathrm{para}}$ 表示该项是否启用。在本文实现日志中，$H_{\mathrm{model}}^{\mathrm{full}}$ 对应记录字段 \texttt{/spmpc/slosh\_height}；除该实现映射外，本文均以 $H_{\mathrm{model}}$ 或具体上标口径称呼该量。需要强调的是，$H_{\mathrm{model}}^{\mathrm{modal}}$ 和 $H_{\mathrm{model}}^{\mathrm{full}}$ 均属于模型内部预测或诊断代理量，不是独立的真实液面观测。已有跨平台防晃轨迹规划研究使用一阶模态位移构造液面高度代理量，并将其与视频提取的实验液面进行对照\cite{C01_Ferrari2026}；本文借鉴这种“模型代理量必须接受外部观测校验”的评价口径，但不把 $H_{\mathrm{model}}$ 直接等同于真实自由液面高度。后续实验中若使用 RGB 或液位传感得到外部液面指标，应明确说明其与上述哪一种模型代理量进行比较。
 
 增强状态为
 \begin{equation}
@@ -256,7 +256,7 @@ OCP 中的状态和控制可行域主要包含底盘运动约束、控制输入�
   \omega_{\mathrm{cmd}} = \omega_0 + \alpha_0^{\star}\Delta t,
   \label{eq:cmd_generation}
 \end{equation}
-并经过底盘接口限幅后发布为 \texttt{/cmd\_vel}。随后，系统在下一周期用新的里程计和更新后的模型晃液状态重新初始化并再次求解。该滚动时域执行方式使 \SPMPC{} 保持普通局部规划器的在线闭环接口。
+并经过底盘接口限幅后发布为底盘速度命令。随后，系统在下一周期用新的里程计和更新后的模型晃液状态重新初始化并再次求解。该滚动时域执行方式使 \SPMPC{} 保持普通局部规划器的在线闭环接口。
 
 本文方法天然支持模块拆解式消融。为验证“平滑运动不一定等于晃液感知运动”，实验使用同一 \MPCC{} 框架下的四类变体，如 \cref{tab:method_variants} 所示。
 
