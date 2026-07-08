@@ -1,5 +1,6 @@
 #pragma once
 
+#include "spmpc_local_planner/core/slosh_risk_governor.h"
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/core/variant_config.h"
 #include "spmpc_local_planner/ros/delay_phase_types.h"
@@ -32,6 +33,7 @@ public:
                               bool angular_accel_limited);
     void publishSloshState(const SloshState& state);
     void publishSloshHeight(double height_m);
+    void publishSloshGovernor(const SloshRiskGovernorOutput& output);
     void publishDelayPhase(const DelayPhaseDebugSummary& summary);
     void publishOdomTiming(const OdomTimingDebug& timing);
     void publishExecutionState(const ExecutionStatePrediction& prediction);
@@ -63,6 +65,8 @@ private:
     ros::Publisher slosh_hard_constraint_pub_;
     ros::Publisher slosh_hard_constraint_effective_pub_;
     ros::Publisher slosh_cost_monitor_pub_;
+    ros::Publisher slosh_governor_pub_;
+    ros::Publisher slosh_governor_status_pub_;
     ros::Publisher warm_start_pub_;
     ros::Publisher warm_start_status_pub_;
     ros::Publisher runtime_bounds_pub_;

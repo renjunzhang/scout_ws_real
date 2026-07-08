@@ -77,6 +77,24 @@ start_lock_recovery:
   require_monotonic_clip: true
   max_projection_distance_m: 0.50
 
+# Soft online reference governor. Disabled by default; when enabled it only caps
+# SolverInput.v_ref_current before MPCC solve and never gates /cmd_vel directly.
+slosh_risk_governor:
+  enable: false
+  require_slosh_variant: true
+  horizon_steps: 30
+  height_limit_m: 0.006
+  risk_threshold: 1.0
+  release_threshold: 0.75
+  beta_min: 0.45
+  beta_grid_count: 12
+  min_v_ref: 0.05
+  accel_limit: 0.4
+  omega_decay_tau: 0.5
+  beta_rate_up_per_sec: 0.5
+  beta_rate_down_per_sec: 2.0
+  include_parabola_height: true
+
 # P0/P1 delay-phase handling. Disabled by default.
 # monitor/shadow only publish diagnostics. fixed_closed_loop uses guarded predicted
 # execution state as SolverInput and falls back to raw state when guards fail.

@@ -35,6 +35,8 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     slosh_hard_constraint_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_hard_constraint", 1);
     slosh_hard_constraint_effective_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_hard_constraint_effective", 1);
     slosh_cost_monitor_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_cost_monitor", 1);
+    slosh_governor_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_governor", 1);
+    slosh_governor_status_pub_ = nh.advertise<std_msgs::String>("debug/slosh_governor_status", 1);
     warm_start_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/warm_start", 1);
     warm_start_status_pub_ = nh.advertise<std_msgs::String>("debug/warm_start_status", 1);
     runtime_bounds_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/runtime_bounds", 1);
@@ -265,6 +267,32 @@ void DiagnosticsPublisher::publishCommandOutput(const geometry_msgs::Twist& desi
         status.data = "PASS";
     }
     cmd_output_status_pub_.publish(status);
+}
+
+void DiagnosticsPublisher::publishSloshGovernor(const SloshRiskGovernorOutput& output) {
+    std_msgs::Float32MultiArray msg;
+    msg.layout.dim.resize(1);
+    msg.layout.dim[0].label =
+        "enabled,active,nominal_v_ref,governed_v_ref,beta_raw,beta_filtered,risk_now,risk_peak,h_now_mm,h_peak_mm,selected_candidate_index";
+    msg.layout.dim[0].size = 11;
+    msg.layout.dim[0].stride = 11;
+    msg.data.resize(11, 0.0f);
+    msg.data[0] = output.enabled ? 1.0f : 0.0f;
+    msg.data[1] = output.active ? 1.0f : 0.0f;
+    msg.data[2] = static_cast<float>(output.nominal_v_ref);
+    msg.data[3] = static_cast<float>(output.governed_v_ref);
+    msg.data[4] = static_cast<float>(output.beta_raw);
+    msg.data[5] = static_cast<float>(output.beta_filtered);
+    msg.data[6] = static_cast<float>(output.risk_now);
+    msg.data[7] = static_cast<float>(output.risk_peak);
+    msg.data[8] = static_cast<float>(1000.0 * output.h_now_m);
+    msg.data[9] = static_cast<float>(1000.0 * output.h_peak_m);
+    msg.data[10] = static_cast<float>(output.selected_candidate_index);
+    slosh_governor_pub_.publish(msg);
+
+    std_msgs::String status;
+    status.data = output.status;
+    slosh_governor_status_pub_.publish(status);
 }
 
 void DiagnosticsPublisher::publishDelayPhase(const DelayPhaseDebugSummary& summary) {

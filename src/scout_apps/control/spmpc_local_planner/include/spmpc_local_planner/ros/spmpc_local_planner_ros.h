@@ -1,5 +1,6 @@
 #pragma once
 
+#include "spmpc_local_planner/core/slosh_risk_governor.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/reference/reference_path_preprocessor.h"
@@ -72,9 +73,11 @@ private:
     bool ensureMapVRefProfileLoaded(const std::string& path);
     bool lookupMapVRef(double s_m, double& v_ref_mps) const;
     void applyRuntimeVRef(SolverInput& input);
+    void applySloshRiskGovernor(SolverInput& input);
     void resetMapVRefProgress();
     void loadVariantOverrides(const std::string& variant_name);
     SloshModelParams loadSloshParams() const;
+    SloshRiskGovernorParams loadSloshRiskGovernorParams() const;
 
     ros::NodeHandle nh_;
     ros::NodeHandle pnh_;
@@ -93,6 +96,9 @@ private:
     ReferencePathPreprocessParams reference_preprocess_params_;
     SloshDynamics slosh_observer_;
     SloshState current_slosh_;
+    SloshRiskGovernor slosh_risk_governor_;
+    SloshRiskGovernorParams slosh_risk_governor_params_;
+    SloshRiskGovernorOutput last_slosh_governor_output_;
     CommandHistoryBuffer command_history_;
     ExecutionStatePredictor execution_predictor_;
     DelayPhaseParams delay_phase_params_;

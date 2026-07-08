@@ -56,6 +56,13 @@ int primitiveModeCode(const std::string& primitive_mode) {
     return 0;
 }
 
+std::string appendVRefStatus(const std::string& current, const std::string& suffix) {
+    if (current.empty()) {
+        return suffix;
+    }
+    return current + "+" + suffix;
+}
+
 double wrapAngle(double angle) {
     return std::atan2(std::sin(angle), std::cos(angle));
 }
@@ -372,6 +379,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     }
     solver_params.slosh = loadSloshParams();
     solver_params.slosh.dt = dt_;
+    slosh_risk_governor_params_ = loadSloshRiskGovernorParams();
 
     variant_ = makeVariantConfig(variant_name);
     if (variant_name != "B0" && variant_.name == "B0") {
@@ -454,6 +462,10 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     }
     if (!execution_predictor_.configure(solver_params.slosh)) {
         ROS_WARN("[spmpc_local_planner] delay_phase shadow slosh predictor configure failed; shadow slosh stays pass-through");
+    }
+    if (!slosh_risk_governor_.configure(solver_params.slosh, slosh_risk_governor_params_) &&
+        slosh_risk_governor_params_.enable) {
+        ROS_WARN("[spmpc_local_planner] slosh risk governor configure failed; governor will pass through v_ref");
     }
     obstacle_enable_ = solver_params.obstacle_enable;
 
@@ -658,6 +670,32 @@ void SpmpcLocalPlannerROS::applyRuntimeVRef(SolverInput& input) {
     input.has_v_ref_current = true;
     input.v_ref_current = profile_v_ref;
     input.v_ref_status = "PROFILE_LOOKUP";
+}
+
+void SpmpcLocalPlannerROS::applySloshRiskGovernor(SolverInput& input) {
+    const double nominal_v_ref = input.has_v_ref_current ? input.v_ref_current : variant_.v_ref;
+    SloshRiskGovernorInput governor_input;
+    governor_input.slosh = input.slosh;
+    governor_input.robot_v = input.robot.v;
+    governor_input.robot_omega = input.robot.omega;
+    governor_input.nominal_v_ref = nominal_v_ref;
+    governor_input.dt = input.dt;
+    governor_input.slosh_variant_enabled = variant_.slosh_enable;
+
+    last_slosh_governor_output_ = slosh_risk_governor_.update(governor_input);
+    diagnostics_.publishSloshGovernor(last_slosh_governor_output_);
+
+    if (!last_slosh_governor_output_.enabled ||
+        last_slosh_governor_output_.status == "DISABLED" ||
+        last_slosh_governor_output_.status == "NOT_SLOSH_VARIANT" ||
+        last_slosh_governor_output_.status == "INVALID_CONFIG" ||
+        !std::isfinite(last_slosh_governor_output_.governed_v_ref)) {
+        return;
+    }
+
+    input.has_v_ref_current = true;
+    input.v_ref_current = last_slosh_governor_output_.governed_v_ref;
+    input.v_ref_status = appendVRefStatus(input.v_ref_status, "SLOSH_GOVERNOR");
 }
 
 bool SpmpcLocalPlannerROS::delayPhaseActive() const {
@@ -1045,6 +1083,7 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
             resetTerminalSpinFailGate();
             resetTrackingSafetyGate();
             resetMapVRefProgress();
+            slosh_risk_governor_.reset();
         }
         problem_.setReferencePath(referencePathFromMsg(transformed_path));
         return;
@@ -1055,6 +1094,7 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
         resetTerminalSpinFailGate();
         resetTrackingSafetyGate();
         resetMapVRefProgress();
+        slosh_risk_governor_.reset();
     }
     problem_.setReferencePath(reference);
 }
@@ -1106,6 +1146,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     diagnostics_.publishRawState(input.robot, input.slosh, slosh_height_coeff);
 
     applyRuntimeVRef(input);
+    applySloshRiskGovernor(input);
     // effective_config_.v_ref 是本周期 solver 将看到的速度参考：runtime/profile override 优先，
     // 并按 solver v_max 做同口径 clamp。必须在发布前更新，避免 /spmpc/debug/effective_config 滞后一拍。
     const double requested_config_v_ref = input.has_v_ref_current ? input.v_ref_current : variant_.v_ref;
@@ -1436,6 +1477,27 @@ SloshModelParams SpmpcLocalPlannerROS::loadSloshParams() const {
     pnh_.param("slosh/slosh_eta_dot_ratio", params.slosh_eta_dot_ratio, params.slosh_eta_dot_ratio);
     pnh_.param("slosh/use_linear_model", params.use_linear_model, params.use_linear_model);
     pnh_.param("slosh/use_parabola_term", params.use_parabola_term, params.use_parabola_term);
+    return params;
+}
+
+SloshRiskGovernorParams SpmpcLocalPlannerROS::loadSloshRiskGovernorParams() const {
+    SloshRiskGovernorParams params;
+    pnh_.param("slosh_risk_governor/enable", params.enable, params.enable);
+    pnh_.param("slosh_risk_governor/require_slosh_variant", params.require_slosh_variant, params.require_slosh_variant);
+    pnh_.param("slosh_risk_governor/horizon_steps", params.horizon_steps, params.horizon_steps);
+    pnh_.param("slosh_risk_governor/height_limit_m", params.height_limit_m, params.height_limit_m);
+    pnh_.param("slosh_risk_governor/risk_threshold", params.risk_threshold, params.risk_threshold);
+    pnh_.param("slosh_risk_governor/release_threshold", params.release_threshold, params.release_threshold);
+    pnh_.param("slosh_risk_governor/beta_min", params.beta_min, params.beta_min);
+    pnh_.param("slosh_risk_governor/beta_grid_count", params.beta_grid_count, params.beta_grid_count);
+    pnh_.param("slosh_risk_governor/min_v_ref", params.min_v_ref, params.min_v_ref);
+    pnh_.param("slosh_risk_governor/accel_limit", params.accel_limit, params.accel_limit);
+    pnh_.param("slosh_risk_governor/omega_decay_tau", params.omega_decay_tau, params.omega_decay_tau);
+    pnh_.param("slosh_risk_governor/beta_rate_up_per_sec", params.beta_rate_up_per_sec, params.beta_rate_up_per_sec);
+    pnh_.param("slosh_risk_governor/beta_rate_down_per_sec", params.beta_rate_down_per_sec, params.beta_rate_down_per_sec);
+    pnh_.param("slosh_risk_governor/include_parabola_height",
+               params.include_parabola_height,
+               params.include_parabola_height);
     return params;
 }
 

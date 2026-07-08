@@ -78,6 +78,7 @@ add_library(${PROJECT_NAME}
   src/core/variant_config.cpp
   src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
+  src/core/slosh_risk_governor.cpp
   src/core/start_lock_recovery.cpp
   src/core/terminal_controller.cpp
   src/reference/reference_path.cpp
@@ -189,6 +190,13 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_execution_state_predictor test/test_execution_state_predictor.cpp)
   if(TARGET test_execution_state_predictor)
     target_link_libraries(test_execution_state_predictor
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_slosh_risk_governor test/test_slosh_risk_governor.cpp)
+  if(TARGET test_slosh_risk_governor)
+    target_link_libraries(test_slosh_risk_governor
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
     )
