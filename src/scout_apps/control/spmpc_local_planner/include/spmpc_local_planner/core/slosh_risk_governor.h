@@ -34,18 +34,30 @@ struct SloshRiskGovernorInput {
 struct SloshRiskGovernorOutput {
     bool enabled = false;
     bool active = false;
+    bool feasible_found = false;
+    bool saturated = false;
+    bool predicted_risk_admissible = false;
     double nominal_v_ref = 0.0;
     double governed_v_ref = 0.0;
     double beta_raw = 1.0;
     double beta_filtered = 1.0;
     double risk_now = 0.0;
     double risk_peak = 0.0;
+    double risk_margin = 0.0;
     double h_now_m = 0.0;
     double h_peak_m = 0.0;
+    double computation_time_ms = 0.0;
     int selected_candidate_index = 0;
     std::string status = "DISABLED";
 };
 
+// Finite-horizon predictive reference adaptation:
+//   beta_star = max beta in B
+//               s.t. max_k H_k(beta) / H_lim <= risk_threshold.
+// B is the discrete grid from 1.0 down to beta_min. The raw candidate is the
+// largest grid point satisfying the predicted risk condition. The final
+// rate-limited beta is rolled out again, so predicted_risk_admissible and
+// risk_margin describe the reference actually sent to MPCC.
 class SloshRiskGovernor {
 public:
     bool configure(const SloshModelParams& slosh_params, const SloshRiskGovernorParams& params);

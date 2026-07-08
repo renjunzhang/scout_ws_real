@@ -273,10 +273,10 @@ void DiagnosticsPublisher::publishSloshGovernor(const SloshRiskGovernorOutput& o
     std_msgs::Float32MultiArray msg;
     msg.layout.dim.resize(1);
     msg.layout.dim[0].label =
-        "enabled,active,nominal_v_ref,governed_v_ref,beta_raw,beta_filtered,risk_now,risk_peak,h_now_mm,h_peak_mm,selected_candidate_index";
-    msg.layout.dim[0].size = 11;
-    msg.layout.dim[0].stride = 11;
-    msg.data.resize(11, 0.0f);
+        "enabled,active,nominal_v_ref,governed_v_ref,beta_raw,beta_filtered,risk_now,risk_peak,h_now_mm,h_peak_mm,selected_candidate_index,feasible_found,saturated,predicted_risk_admissible,risk_margin,computation_time_ms";
+    msg.layout.dim[0].size = 16;
+    msg.layout.dim[0].stride = 16;
+    msg.data.resize(16, 0.0f);
     msg.data[0] = output.enabled ? 1.0f : 0.0f;
     msg.data[1] = output.active ? 1.0f : 0.0f;
     msg.data[2] = static_cast<float>(output.nominal_v_ref);
@@ -288,6 +288,11 @@ void DiagnosticsPublisher::publishSloshGovernor(const SloshRiskGovernorOutput& o
     msg.data[8] = static_cast<float>(1000.0 * output.h_now_m);
     msg.data[9] = static_cast<float>(1000.0 * output.h_peak_m);
     msg.data[10] = static_cast<float>(output.selected_candidate_index);
+    msg.data[11] = output.feasible_found ? 1.0f : 0.0f;
+    msg.data[12] = output.saturated ? 1.0f : 0.0f;
+    msg.data[13] = output.predicted_risk_admissible ? 1.0f : 0.0f;
+    msg.data[14] = static_cast<float>(output.risk_margin);
+    msg.data[15] = static_cast<float>(output.computation_time_ms);
     slosh_governor_pub_.publish(msg);
 
     std_msgs::String status;

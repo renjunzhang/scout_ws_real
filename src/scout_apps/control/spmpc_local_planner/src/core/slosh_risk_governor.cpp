@@ -1,9 +1,12 @@
 #include "spmpc_local_planner/core/slosh_risk_governor.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 
 namespace spmpc_local_planner {
 namespace {
+
+using Clock = std::chrono::steady_clock;
 
 double clampValue(double value, double lo, double hi) {
     return std::max(lo, std::min(hi, value));
@@ -11,6 +14,14 @@ double clampValue(double value, double lo, double hi) {
 
 bool finitePositive(double value) {
     return std::isfinite(value) && value > 0.0;
+}
+
+bool riskAdmissible(double risk, double threshold) {
+    return std::isfinite(risk) && risk <= threshold + 1e-12;
+}
+
+double elapsedMs(const Clock::time_point& start) {
+    return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
 }
 
 }  // namespace
@@ -56,7 +67,9 @@ SloshRiskGovernorOutput SloshRiskGovernor::passThrough(
         out.h_peak_m = out.h_now_m;
         out.risk_now = out.h_now_m / params_.height_limit_m;
         out.risk_peak = out.risk_now;
+        out.predicted_risk_admissible = riskAdmissible(out.risk_peak, params_.risk_threshold);
     }
+    out.risk_margin = params_.risk_threshold - out.risk_peak;
     out.selected_candidate_index = 0;
     out.status = status;
     return out;
@@ -104,11 +117,17 @@ SloshRiskGovernor::RolloutResult SloshRiskGovernor::rollout(
 }
 
 SloshRiskGovernorOutput SloshRiskGovernor::update(const SloshRiskGovernorInput& input) {
+    const Clock::time_point start = Clock::now();
+    auto finish = [&](SloshRiskGovernorOutput out) {
+        out.computation_time_ms = elapsedMs(start);
+        return out;
+    };
+
     if (!params_.enable) {
-        return passThrough(input, "DISABLED");
+        return finish(passThrough(input, "DISABLED"));
     }
     if (params_.require_slosh_variant && !input.slosh_variant_enabled) {
-        return passThrough(input, "NOT_SLOSH_VARIANT");
+        return finish(passThrough(input, "NOT_SLOSH_VARIANT"));
     }
     if (finitePositive(input.dt) && configured_ &&
         std::abs(slosh_dyn_.params().dt - input.dt) > 1e-6) {
@@ -117,7 +136,7 @@ SloshRiskGovernorOutput SloshRiskGovernor::update(const SloshRiskGovernorInput& 
     }
     if (!configured_ || !slosh_dyn_.configured() || !finitePositive(params_.height_limit_m) ||
         !finitePositive(input.nominal_v_ref) || !finitePositive(input.dt)) {
-        return passThrough(input, "INVALID_CONFIG");
+        return finish(passThrough(input, "INVALID_CONFIG"));
     }
 
     SloshRiskGovernorOutput out;
@@ -129,20 +148,15 @@ SloshRiskGovernorOutput SloshRiskGovernor::update(const SloshRiskGovernorInput& 
     const int grid = std::max(1, params_.beta_grid_count);
     double selected_beta = params_.beta_min;
     int selected_index = grid - 1;
-    RolloutResult selected_rollout;
     bool found_feasible = false;
 
     for (int i = 0; i < grid; ++i) {
         const double ratio = grid == 1 ? 0.0 : static_cast<double>(i) / static_cast<double>(grid - 1);
         const double beta = 1.0 - ratio * (1.0 - params_.beta_min);
         const RolloutResult candidate = rollout(input, beta);
-        if (i == 0 || (!found_feasible && i == grid - 1)) {
-            selected_rollout = candidate;
-        }
-        if (candidate.risk_peak <= params_.risk_threshold) {
+        if (riskAdmissible(candidate.risk_peak, params_.risk_threshold)) {
             selected_beta = beta;
             selected_index = i;
-            selected_rollout = candidate;
             found_feasible = true;
             break;
         }
@@ -150,12 +164,11 @@ SloshRiskGovernorOutput SloshRiskGovernor::update(const SloshRiskGovernorInput& 
     if (!found_feasible) {
         selected_beta = params_.beta_min;
         selected_index = grid - 1;
-        selected_rollout = rollout(input, selected_beta);
     }
 
     out.beta_raw = selected_beta;
-    out.risk_peak = selected_rollout.risk_peak;
-    out.h_peak_m = selected_rollout.h_peak_m;
+    out.feasible_found = found_feasible;
+    out.saturated = !found_feasible;
     out.selected_candidate_index = selected_index;
 
     const double previous_beta = have_beta_filtered_ ? beta_filtered_ : 1.0;
@@ -173,16 +186,24 @@ SloshRiskGovernorOutput SloshRiskGovernor::update(const SloshRiskGovernorInput& 
 
     const double min_v_ref = std::min(std::max(0.0, params_.min_v_ref), input.nominal_v_ref);
     out.governed_v_ref = clampValue(filtered_beta * input.nominal_v_ref, min_v_ref, input.nominal_v_ref);
+
+    const RolloutResult filtered_rollout = rollout(input, filtered_beta);
+    out.risk_peak = filtered_rollout.risk_peak;
+    out.h_peak_m = filtered_rollout.h_peak_m;
+    out.risk_margin = params_.risk_threshold - out.risk_peak;
+    out.predicted_risk_admissible = riskAdmissible(out.risk_peak, params_.risk_threshold);
     out.active = filtered_beta < 0.999 || out.risk_peak > params_.release_threshold;
 
-    if (!found_feasible && selected_index == grid - 1) {
-        out.status = "SATURATED_BETA_MIN";
+    if (out.saturated) {
+        out.status = "SATURATED";
+    } else if (!out.predicted_risk_admissible) {
+        out.status = "TRANSIENT_RATE_LIMITED";
     } else if (out.active) {
         out.status = "ACTIVE";
     } else {
         out.status = "PASS_THROUGH";
     }
-    return out;
+    return finish(out);
 }
 
 }  // namespace spmpc_local_planner
