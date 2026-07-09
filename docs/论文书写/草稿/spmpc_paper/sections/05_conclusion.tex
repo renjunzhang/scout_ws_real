@@ -1,0 +1,19 @@
+\section{Conclusion and Limitations}
+
+This paper studied online local planning for mobile-base open-liquid transport and proposed \SPMPC{}, a slosh-aware planning method that embeds low-order slosh modal states into an \MPCC{} formulation.
+The central premise is that liquid sloshing is not only a trajectory-smoothing issue, but a state-prediction problem with dynamic memory.
+If a planner penalizes only velocity, acceleration, or command variation, it may fail to represent the effect of the current liquid phase on future response.
+\SPMPC{} forms an augmented state from base motion, path progress, and low-order slosh variables, jointly optimizes contouring error, lag error, path progress, control magnitude, control smoothness, and predicted slosh response, and executes the first optimized base command in receding horizon.
+The paper also formulates a soft Slosh-risk Reference Governor as a pre-\MPCC{} finite-horizon reference-adaptation module that contracts the speed reference without directly rewriting the final base command.
+
+Representative fixed-path physical trials provide initial evidence for the main claim.
+For \Bzero{}, \Bsmooth{}, and \Bslosh{}, three trials per method reached the goal.
+Over the 10--90\% path-progress window, \Bslosh{} reduced the model-proxy p95 and RMS by 36.4\% and 37.4\% relative to the smooth-only baseline, and reduced RGB $H_{\mathrm{vis}}$ p95 and RMS by 29.2\% and 15.9\%.
+These p95/RMS trends indicate that the slosh-aware variant can provide liquid-response improvement beyond smooth-only control in the representative trials.
+The evidence is deliberately interpreted conservatively: RGB RMS decreases less than the model proxy, \Bslosh{} takes longer to reach the goal, and its path-projection and angular-velocity metrics are not uniformly best.
+Internal model proxies are therefore treated as control-side diagnostic quantities rather than ground-truth liquid height, complete candidate-ranking criteria, or hard safety signals.
+
+The conclusions hold under the assumptions of a precomputed geometrically feasible reference path, low-order slosh modeling, and external liquid-response evaluation.
+\SPMPC{} is positioned as a method for moving liquid dynamic memory into the online \MPCC{} local-planning layer of a standard mobile base, not as a high-fidelity free-surface reconstruction method or a formal spill-free controller.
+The Slosh-risk Reference Governor is likewise a soft reference-adaptation mechanism, not a hard safety interlock or a spill-prevention proof.
+Future extensions include broader validation across paths, fill levels, container geometries, ordinary local-planner baselines, mobile-base anti-slosh references, and governor ablations, as well as measured container acceleration, real liquid-surface feedback, and uncertainty-aware constraints for more complex navigation scenarios.

@@ -1,0 +1,55 @@
+\section{Representative Physical Evidence}
+
+The representative physical result in \cref{tab:method_physical_ablation} focuses on the fixed-path internal ablation.
+The comparison includes \Bzero{}, \Bsmooth{}, and \Bslosh{}.
+Each method is repeated three times, all trials reach the goal, and statistics are computed over the 10--90\% path-progress window.
+The configurations use the same nominal speed reference, matched base limits, fixed closed-loop delay compensation, no hard model constraint, and no tracking-protection stop.
+
+\begin{table*}[t]
+  \centering
+  \caption{Representative fixed-path physical internal-ablation results and relative reductions over the 10--90\% path-progress window.}
+  \label{tab:method_physical_ablation}
+  \label{tab:method_physical_reduction}
+  \footnotesize
+  \renewcommand{\arraystretch}{1.08}
+  \textit{A. Physical ablation statistics.}\par\vspace{2pt}
+  \setlength{\tabcolsep}{4pt}
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{lccccc}
+    \toprule
+    Method & Model proxy p95/max/RMS [mm] & RGB p95/max/RMS [mm] & Projection error p95 [cm] & $|\omega|$ p95 [rad/s] & Arrival time [s] \\
+    \midrule
+    \Bzero{} & $1.100\pm0.034$ / $2.102\pm0.222$ / $0.547\pm0.016$ & $1.009\pm0.214$ / $2.398\pm0.482$ / $0.541\pm0.081$ & $2.947\pm0.087$ & $0.234\pm0.015$ & $33.753\pm0.355$ \\
+    \Bsmooth{} & $0.994\pm0.165$ / $2.227\pm0.240$ / $0.491\pm0.066$ & $1.272\pm0.283$ / $2.267\pm0.309$ / $0.639\pm0.060$ & $3.646\pm1.188$ & $0.202\pm0.022$ & $35.169\pm0.537$ \\
+    \Bslosh{} & $0.632\pm0.101$ / $1.255\pm0.039$ / $0.307\pm0.035$ & $0.901\pm0.015$ / $2.162\pm0.405$ / $0.537\pm0.008$ & $3.442\pm0.128$ & $0.242\pm0.033$ & $36.851\pm0.231$ \\
+    \bottomrule
+  \end{tabular}}
+  \vspace{4pt}
+
+  \scriptsize
+  \textit{B. Relative reduction of the slosh-aware variant with respect to the smooth-only baseline.}\par\vspace{2pt}
+  \setlength{\tabcolsep}{3pt}
+  \resizebox{0.62\textwidth}{!}{%
+  \begin{tabular}{lcccc}
+    \toprule
+    Comparison & \multicolumn{2}{c}{Model proxy} & \multicolumn{2}{c}{RGB $H_{\mathrm{vis}}$} \\
+    \cmidrule(lr){2-3}\cmidrule(lr){4-5}
+    & p95 & RMS & p95 & RMS \\
+    \midrule
+    \Bslosh{} vs. \Bsmooth{} & $36.4\%$ & $37.4\%$ & $29.2\%$ & $15.9\%$ \\
+    \bottomrule
+  \end{tabular}}
+\end{table*}
+
+The smooth-only variant reduces $|\omega|$ p95 relative to \Bzero{}, but the RGB liquid envelope does not decrease accordingly.
+In contrast, \Bslosh{} has lower model-proxy and RGB p95/RMS metrics than \Bsmooth{}, despite not having the lowest angular-velocity statistic.
+Relative to \Bsmooth{}, \Bslosh{} reduces model-proxy p95 and RMS by 36.4\% and 37.4\%, and reduces RGB $H_{\mathrm{vis}}$ p95 and RMS by 29.2\% and 15.9\%.
+
+This evidence supports a narrow but important conclusion: explicit slosh-state prediction can improve representative liquid-response metrics beyond smooth-only local planning.
+It does not show dominance over every task metric.
+\Bslosh{} has a longer arrival time, and its projection-error and angular-velocity statistics are not uniformly best.
+Accordingly, the result should be presented as liquid-response improvement with a task-time tradeoff, not as overall superiority across all metrics.
+
+The data also clarify how the full paper should frame the method contribution.
+The strongest defensible claim is the state-augmented local-planning formulation itself.
+The reference governor and terminal stopping are useful extensions, but they should be evaluated as incremental modules unless additional experiments establish them as equally central contributions.

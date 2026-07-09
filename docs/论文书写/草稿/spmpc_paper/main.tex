@@ -1,0 +1,94 @@
+% !TEX program = pdflatex
+% IEEE conference paper based on /home/zrj/Downloads/spmpc_paper.zip.
+\documentclass[conference]{IEEEtran}
+
+\IEEEoverridecommandlockouts
+
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{newtxmath}
+\usepackage{bm}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,matrix,shapes.geometric}
+\usepackage{url}
+\usepackage{cite}
+\usepackage[nameinlink,capitalize]{cleveref}
+
+\graphicspath{{figures/}}
+
+\newcommand{\SPMPC}{SPMPC}
+\newcommand{\MPCC}{MPCC}
+\newcommand{\MPC}{MPC}
+\newcommand{\MpcLocalPlanner}{MPC local planner}
+
+\newcommand{\Bzero}{\ensuremath{\mathrm{B}_{0}}}
+\newcommand{\Bsmooth}{\ensuremath{\mathrm{B}_{\mathrm{smooth}}}}
+\newcommand{\Bslosh}{\ensuremath{\mathrm{B}_{\mathrm{slosh}}}}
+\newcommand{\Bours}{\ensuremath{\mathrm{B}_{\mathrm{ours}}}}
+\newcommand{\Boursgov}{\ensuremath{\mathrm{B}_{\mathrm{ours,gov}}}}
+\newcommand{\Boursnostop}{\ensuremath{\mathrm{B}_{\mathrm{ours,no\,stop}}}}
+\newcommand{\Boursstop}{\ensuremath{\mathrm{B}_{\mathrm{ours,stop}}}}
+
+\newcommand{\vx}{\bm{x}}
+\newcommand{\vu}{\bm{u}}
+\newcommand{\vp}{\bm{p}}
+\newcommand{\vr}{\bm{r}}
+\newcommand{\xr}{\bm{x}_{r}}
+\newcommand{\xl}{\bm{x}_{\ell}}
+\newcommand{\xaug}{\bm{x}}
+\newcommand{\ec}{e_{\mathrm{c}}}
+\newcommand{\el}{e_{\mathrm{l}}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\R}{\mathbb{R}}
+
+\definecolor{spmpcblue}{RGB}{36,99,180}
+\definecolor{spmpclight}{RGB}{235,243,255}
+\definecolor{spmpcorange}{RGB}{220,120,40}
+\definecolor{spmpcgray}{RGB}{90,90,90}
+
+\title{\LARGE \bf
+\SPMPC: Slosh-Aware Model Predictive Contouring Control for Open-Liquid Transport on Mobile Bases
+}
+
+\author{
+\IEEEauthorblockN{Renjun Zhang}
+\IEEEauthorblockA{
+\textit{University of Science and Technology of China}\\
+Hefei, China\\
+zhangrenjun@mail.ustc.edu.cn}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Mobile bases carrying open liquid containers can excite free-surface oscillations during acceleration, braking, and turning, which can reduce transport reliability and increase spill risk.
+Unlike rigid payloads, liquid motion has dynamic memory: its future response depends not only on instantaneous base acceleration, but also on the current modal displacement, modal velocity, and residual oscillation phase.
+This paper studies online local planning for open-liquid transport along a given geometrically feasible reference path.
+We propose \SPMPC{}, a slosh-aware model predictive contouring control method that augments the mobile-base and path-progress states with a low-order slosh modal state.
+The resulting receding-horizon planner jointly optimizes contouring error, lag error, path progress, executable base commands, control smoothness, and predicted slosh response.
+We also formulate a soft Slosh-risk Reference Governor, which contracts the speed reference before the \MPCC{} solve without directly overriding the final base command.
+The evaluation separates internal model proxy quantities from external liquid-surface observations, and uses ablations and physical trials to examine whether explicit slosh-state prediction explains liquid-response improvements beyond smooth-only motion generation.
+\end{abstract}
+
+\begin{IEEEkeywords}
+mobile robots, open-liquid transport, liquid sloshing, model predictive contouring control, local planning
+\end{IEEEkeywords}
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_method}
+\input{sections/04_experiments}
+\input{sections/05_conclusion}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}
