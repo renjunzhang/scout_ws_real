@@ -1,6 +1,6 @@
 \section{问题定义与 \SPMPC{} 方法}
 
-本节给出 \SPMPC{} 的方法表述。本文将开口液体运输中的防晃需求放在标准轮式移动底盘的在线局部规划层处理：在给定安全参考路径附近，规划器以滚动时域方式求解包含机器人状态、路径进度和低阶晃液状态的 \MPCC{} 问题，并输出底盘可执行的速度命令。与离线防晃轨迹生成、固定路径速度剖面或给定轨迹后的跟踪控制不同，\SPMPC{} 在每个控制周期根据当前增强状态重新规划；与仅惩罚控制变化的平滑规划器不同，\SPMPC{} 在预测模型中显式传播液体动态记忆。本文方法不追求高保真自由液面仿真，而是在实时可解的局部规划层使用控制友好的低阶晃液模型。在此基础上，本文还引入一个有限时域预测参考适配模块，用于在 \MPCC{} 求解前软性收缩速度参考 $v_{\mathrm{ref}}$，而不是在求解后拦截或改写 \texttt{/cmd\_vel}。
+本节给出 \SPMPC{} 的方法表述。本文将开口液体运输中的防晃需求放在标准轮式移动底盘的在线局部规划层处理：在给定安全参考路径附近，规划器以滚动时域方式求解包含机器人状态、路径进度和低阶晃液状态的 \MPCC{} 问题，并输出底盘可执行的速度命令。与离线防晃轨迹生成、固定路径速度剖面或给定轨迹后的跟踪控制不同，\SPMPC{} 在每个控制周期根据当前增强状态重新规划；与仅惩罚控制变化的平滑规划器不同，\SPMPC{} 在预测模型中显式传播液体动态记忆。本文方法不追求高保真自由液面仿真，而是在实时可解的局部规划层使用控制友好的低阶晃液模型。
 
 \subsection{问题设置与总体框架}
 
@@ -10,10 +10,8 @@
   \item 根据里程计获得当前底盘位姿、线速度和角速度；
   \item 将当前位置投影到参考路径，得到路径进度初值和局部参考段；
   \item 以当前或上一周期传播得到的低阶晃液状态作为液体初始状态；
-  \item 由实验配置、速度地图或运行时覆盖量得到名义速度参考 $v_{\mathrm{ref}}^{\mathrm{nom}}$；
-  \item 若启用 Slosh-risk Reference Governor，则基于短时域晃液预测生成受管制参考 $v_{\mathrm{ref}}^{g}$，并将其传入 \MPCC{}；
   \item 在预测时域内同时传播底盘运动、路径进度和液体模态状态；
-  \item 求解包含路径跟踪、路径进度、速度参考、控制平滑性和预测晃液响应的 \MPCC{} 问题；
+  \item 求解包含路径跟踪、路径进度、控制平滑性和预测晃液响应的 \MPCC{} 问题；
   \item 将第一帧优化结果转换为底盘可执行的速度命令，并进入下一控制周期。
 \end{enumerate}
 
@@ -197,9 +195,7 @@
 \begin{aligned}
   \ell_k ={}& q_c e_{\mathrm{c},k}^{2}
     + q_l e_{\mathrm{l},k}^{2}
-    - q_p v_{s,k} \\
-  & + q_v (v_k-v_{\mathrm{ref},k})^2
-    + q_{v_s} (v_{s,k}-v_{\mathrm{ref},k})^2
+    - q_p v_{s,k}
     + \|\vu_k\|_{R}^{2} \\
   & + \|\vu_k-\vu_{k-1}\|_{S}^{2}
     + \|\bm{x}_{l,k}\|_{Q_s}^{2}, \\
@@ -209,7 +205,7 @@
 \end{aligned}
 \label{eq:spmpc_cost_terms}
 \end{equation}
-其中 $q_c$ 和 $q_l$ 分别惩罚轮廓误差与滞后误差，$q_p$ 奖励路径进度，$q_v$ 和 $q_{v_s}$ 使物理速度与虚拟路径进度速度跟随速度参考，$R$ 惩罚控制幅值，$S$ 惩罚控制变化，$Q_s$ 惩罚预测晃液状态。当参考适配模块关闭时，$v_{\mathrm{ref},k}=v_{\mathrm{ref}}^{\mathrm{nom}}$；当该模块开启时，$v_{\mathrm{ref},k}=v_{\mathrm{ref}}^{g}$。
+其中 $q_c$ 和 $q_l$ 分别惩罚轮廓误差与滞后误差，$q_p$ 奖励路径进度，$R$ 惩罚控制幅值，$S$ 惩罚控制变化，$Q_s$ 惩罚预测晃液状态。
 
 式 \eqref{eq:spmpc_cost_terms} 的关键新增部分是 $\|\bm{x}_{l,k}\|_{Q_s}^{2}$ 以及与其一致的晃液动力学约束。若只增加控制平滑惩罚，规划器只能倾向于选择较平滑的控制序列；而加入晃液状态后，规划器可以区分两条同样平滑但对当前残余晃动相位影响不同的局部运动。
 
@@ -225,7 +221,6 @@
     \midrule
     $q_c\ec^2$, $q_l\el^2$ & 约束底盘贴近参考路径 & 保持局部规划器的路径跟踪能力 \\
     $-q_p v_s$ & 鼓励沿参考路径前进 & 防止简单通过停下或过慢运动降低晃动 \\
-    $q_v(v-v_{\mathrm{ref}})^2$, $q_{v_s}(v_s-v_{\mathrm{ref}})^2$ & 跟随速度参考 & 为名义参考和预测参考适配提供统一作用点 \\
     $\|\vu\|_R^2$ & 限制控制幅值 & 保持底盘命令可执行 \\
     $\|\Delta\vu\|_S^2$ & 平滑控制变化 & 约束速度和角速度命令的变化幅度 \\
     $\|\xl\|_{Q_s}^2$ & 惩罚预测晃液状态 & 使预测晃液状态参与局部运动选择 \\
@@ -251,79 +246,6 @@ OCP 中的状态和控制可行域主要包含底盘运动约束、控制输入�
   \label{eq:slosh_soft_bound}
 \end{equation}
 并在目标函数中惩罚松弛变量 $\epsilon_k$。该扩展不作为本文主实验的核心组成；\eqref{eq:slosh_soft_bound} 也只是模型预测晃液边界，在没有真实液面反馈和形式化安全证明的情况下不能支撑形式化无溢出结论。
-
-\subsection{Slosh-risk Reference Governor}
-
-上一节的 \MPCC{} 通过增强状态和晃液代价在 OCP 内部选择局部运动。为了在短时域预测到较高晃液风险时进一步调节任务速度，本文引入一个 soft Slosh-risk Reference Governor。该模块位于 \MPCC{} 求解之前，其唯一作用是将名义速度参考 $v_{\mathrm{ref}}^{\mathrm{nom}}$ 收缩为受管制速度参考 $v_{\mathrm{ref}}^{g}$，并将 $v_{\mathrm{ref}}^{g}$ 作为 \eqref{eq:spmpc_cost_terms} 中的速度参考传入 OCP。它不直接修改求解后发布的 \texttt{/cmd\_vel}，不构成紧急制动或硬安全锁，不使用 RGB 液面观测，也不改变 \MPCC{} 的状态维度。
-
-给定当前晃液状态 $\xl(t)$、当前底盘速度 $v(t)$、角速度 $\omega(t)$ 和名义速度参考 $v_{\mathrm{ref}}^{\mathrm{nom}}$，governor 在离散候选集合
-\begin{equation}
-  \begin{aligned}
-    \beta_i
-    &=1-\frac{i}{M-1}(1-\beta_{\min}),
-    \quad i=0,\ldots,M-1,\\
-    \mathcal{B}
-    &=\{\beta_i\}_{i=0}^{M-1}\subseteq [\beta_{\min},1]
-  \end{aligned}
-  \label{eq:governor_beta_grid}
-\end{equation}
-上搜索速度缩放因子。每个候选 $\beta$ 对应目标速度
-\begin{equation}
-  v_{\beta}=\beta v_{\mathrm{ref}}^{\mathrm{nom}},
-\end{equation}
-并在 governor 内部使用简化预测模型做 $N_g$ 步 rollout。实现中，预测速度 $v_k^{g}$ 以给定加速度上限向 $v_{\beta}$ 收敛，角速度可按时间常数衰减近似，晃液状态则沿用 \eqref{eq:slosh_modal_dynamics}--\eqref{eq:slosh_excitation} 的低阶模型传播。令 $H_k(\beta)$ 表示该候选下第 $k$ 步的模型预测晃液高度代理量，$H_{\lim}$ 为风险归一化高度阈值，则候选风险定义为
-\begin{equation}
-  R(\beta)
-  =
-  \max_{0\leq k\leq N_g}
-  \frac{H_k(\beta)}{H_{\lim}} .
-  \label{eq:governor_candidate_risk}
-\end{equation}
-给定风险阈值 $\rho$，原始缩放因子选择为
-\begin{equation}
-  \beta_{\mathrm{raw}}
-  =
-  \max\{\beta\in\mathcal{B}\mid R(\beta)\leq \rho\}.
-  \label{eq:governor_beta_star}
-\end{equation}
-若集合为空，则取 $\beta_{\mathrm{raw}}=\beta_{\min}$，并将该状态标记为 saturated。该 saturated 状态表示所有离散候选在当前模型预测下均超过风险阈值，系统只能采用最小候选参考继续软性降速；它不是形式化安全停止条件。
-
-为了避免速度参考在相邻控制周期之间突变，governor 对 $\beta_{\mathrm{raw}}$ 施加非对称变化率限制。记上一周期滤波后的缩放因子为 $\beta_f^{-}$，升速和降速变化率上限分别为 $\dot{\beta}_{\uparrow}$ 与 $\dot{\beta}_{\downarrow}$，则
-\begin{equation}
-  \begin{aligned}
-    \underline{\beta}
-    &=\max\{\beta_{\min},\beta_f^{-}-\dot{\beta}_{\downarrow}\Delta t\},\\
-    \overline{\beta}
-    &=\min\{1,\beta_f^{-}+\dot{\beta}_{\uparrow}\Delta t\},\\
-    \beta_f
-    &=\operatorname{clip}
-      \left(\beta_{\mathrm{raw}},\underline{\beta},\overline{\beta}\right).
-  \end{aligned}
-  \label{eq:governor_beta_filter}
-\end{equation}
-最终发送给 \MPCC{} 的受管制参考为
-\begin{equation}
-  \tilde{v}_{\mathrm{ref}}^{g}
-  =
-  \beta_f v_{\mathrm{ref}}^{\mathrm{nom}},
-  \qquad
-  v_{\mathrm{ref}}^{g}
-  =
-  \min\left\{
-    v_{\mathrm{ref}}^{\mathrm{nom}},
-    \max\{v_{\min},\tilde{v}_{\mathrm{ref}}^{g}\}
-  \right\}.
-  \label{eq:governor_vref}
-\end{equation}
-当不使用最小巡航速度下限时，\eqref{eq:governor_vref} 退化为 $v_{\mathrm{ref}}^{g}=\beta_f v_{\mathrm{ref}}^{\mathrm{nom}}$。由于 $v_{\mathrm{ref}}^{g}$ 只进入 \MPCC{} 的参考速度项，最终底盘命令仍由 \MPCC{} 求解、底盘约束和执行接口共同决定。
-
-\noindent\textbf{命题 1（参考不放大与离散候选最优性）。}
-假设 $v_{\mathrm{ref}}^{\mathrm{nom}}\geq 0$，$\mathcal{B}\subseteq[\beta_{\min},1]$，且 \eqref{eq:governor_beta_filter} 给出的 $\beta_f\in[\beta_{\min},1]$。则 governor 生成的速度参考满足 $v_{\mathrm{ref}}^{g}\leq v_{\mathrm{ref}}^{\mathrm{nom}}$。若可行集合 $\{\beta\in\mathcal{B}\mid R(\beta)\leq\rho\}$ 非空，则 $\beta_{\mathrm{raw}}$ 是离散候选集合中满足预测风险阈值的最大缩放因子。
-
-\noindent\textit{证明草稿。}
-由 \eqref{eq:governor_beta_filter} 可知 $\beta_f\leq 1$，因此 $\tilde{v}_{\mathrm{ref}}^{g}=\beta_f v_{\mathrm{ref}}^{\mathrm{nom}}\leq v_{\mathrm{ref}}^{\mathrm{nom}}$。式 \eqref{eq:governor_vref} 又显式对 $v_{\mathrm{ref}}^{g}$ 施加 $\min\{v_{\mathrm{ref}}^{\mathrm{nom}},\cdot\}$，故 $v_{\mathrm{ref}}^{g}\leq v_{\mathrm{ref}}^{\mathrm{nom}}$。另一方面，\eqref{eq:governor_beta_star} 按定义在所有满足 $R(\beta)\leq\rho$ 的离散候选中取最大元素，因此当可行集合非空时，$\beta_{\mathrm{raw}}$ 即为该离散网格上的最大预测可行缩放因子。
-
-需要强调的是，上述性质不等价于无溢出或安全不变性保证。若变化率限制使 $\beta_f>\beta_{\mathrm{raw}}$，则对 $\beta_f$ 的再次 rollout 可能超过风险阈值，此时应报告为 transient rate-limited，而不能声称满足安全约束。若没有候选满足阈值，governor 进入 saturated 状态并取 $\beta_{\min}$；这仍是软参考适配，而不是硬停止或形式化安全控制器。
 
 \subsection{滚动时域执行与消融变体}
 
