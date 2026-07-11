@@ -1,0 +1,76 @@
+# Versioned real-robot TEB candidate for the obstacle-free fixed S-curve.
+#
+# This is the formalization starting point recovered from the 2026-07-06
+# loose_fast tuning direction. It is not a frozen paper parameter set until an
+# actuated N=1 smoke satisfies the gates in the 2026-07-10 formalization guide.
+TebLocalPlannerROS:
+  # Frames and timing.
+  odom_topic: /odom
+  map_frame: map
+  transform_tolerance: 1.0
+  teb_autosize: true
+  dt_ref: 0.30
+  dt_hysteresis: 0.08
+  max_samples: 500
+
+  # Fixed-path handling. Keep the 0706 loose_fast geometry fixed during the
+  # first speed-only smoke so that one parameter family changes at a time.
+  global_plan_overwrite_orientation: true
+  allow_init_with_backwards_motion: false
+  max_global_plan_lookahead_dist: 4.0
+  global_plan_prune_distance: 0.60
+  global_plan_viapoint_sep: 0.70
+  exact_arc_length: false
+  feasibility_check_no_poses: 5
+
+  # Candidate speed and common platform acceleration limits. The launch wrapper
+  # overrides these four fields from MAX_V/MAX_W/MAX_ACC/MAX_ANGULAR_ACC for TEB
+  # so the plugin and the post-planner clamp cannot silently use different limits.
+  max_vel_x: 0.30
+  max_vel_x_backwards: 0.03
+  max_vel_theta: 1.20
+  acc_lim_x: 0.60
+  acc_lim_theta: 1.20
+  min_turning_radius: 0.0
+  wheelbase: 0.0
+  cmd_angle_instead_rotvel: false
+
+  footprint_model:
+    type: "polygon"
+    vertices: [[0.31, 0.2925], [0.31, -0.2925], [-0.31, -0.2925], [-0.31, 0.2925]]
+
+  xy_goal_tolerance: 0.20
+  yaw_goal_tolerance: 0.30
+  free_goal_vel: false
+
+  # Obstacle-free main-table protocol. A collision-aware experiment must use a
+  # separate config and must also enable collision handling for SPMPC.
+  min_obstacle_dist: 0.0
+  inflation_dist: 0.0
+  include_costmap_obstacles: false
+  costmap_obstacles_behind_robot_dist: 0.0
+  obstacle_poses_affected: 0
+
+  # Balanced/loose_fast continuation: reduce over-tight via-point following,
+  # enforce the shared acceleration bounds, and give time optimality enough
+  # weight to avoid the very slow 0706 behavior.
+  no_inner_iterations: 4
+  no_outer_iterations: 3
+  optimization_activate: true
+  optimization_verbose: false
+  penalty_epsilon: 0.08
+  weight_max_vel_x: 5.0
+  weight_max_vel_theta: 5.0
+  weight_acc_lim_x: 10.0
+  weight_acc_lim_theta: 50.0
+  weight_kinematics_nh: 1000.0
+  weight_kinematics_forward_drive: 40.0
+  weight_kinematics_turning_radius: 1.0
+  weight_optimaltime: 0.60
+  weight_obstacle: 0.0
+  weight_viapoint: 2.0
+
+  enable_homotopy_class_planning: false
+  enable_multithreading: true
+  max_number_classes: 1
+  roadmap_graph_no_samples: 15

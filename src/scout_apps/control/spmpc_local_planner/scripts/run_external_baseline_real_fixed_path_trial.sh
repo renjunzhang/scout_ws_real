@@ -159,7 +159,11 @@ PLAN_TARGET_FRAME="${PLAN_TARGET_FRAME:-map}"
 CONTROLLER_FREQUENCY="${CONTROLLER_FREQUENCY:-10.0}"
 PLANNER_RATE_HZ="${PLANNER_RATE_HZ:-5.0}"
 COMMAND_PUBLISH_RATE_HZ="${COMMAND_PUBLISH_RATE_HZ:-30.0}"
-MAX_V="${MAX_V:-0.50}"
+case "${METHOD}" in
+  teb) DEFAULT_MAX_V="0.30" ;;
+  *) DEFAULT_MAX_V="0.50" ;;
+esac
+MAX_V="${MAX_V:-${DEFAULT_MAX_V}}"
 MAX_W="${MAX_W:-1.2}"
 MAX_ACC="${MAX_ACC:-0.6}"
 MAX_ANGULAR_ACC="${MAX_ANGULAR_ACC:-1.2}"
@@ -172,7 +176,9 @@ RECORD_SCAN="${RECORD_SCAN:-true}"
 RECORD_DEPTH="${RECORD_DEPTH:-false}"
 RECORD_STANDALONE_SLOSH="${RECORD_STANDALONE_SLOSH:-true}"
 RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-false}"
-RECORD_ALL_EXISTING_TOPICS="${RECORD_ALL_EXISTING_TOPICS:-true}"
+# Deterministic whitelist for formal runs. Set true only for short diagnostics
+# when disk space is known to be sufficient.
+RECORD_ALL_EXISTING_TOPICS="${RECORD_ALL_EXISTING_TOPICS:-false}"
 RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO:-true}"
 PATH_GENERATOR_STARTUP_SEC="${PATH_GENERATOR_STARTUP_SEC:-2}"
 RECORDER_STARTUP_SEC="${RECORDER_STARTUP_SEC:-2}"
@@ -287,14 +293,17 @@ case "${METHOD}" in
     fi
     [[ -n "${BASELINE_RUNNER_DIR}" ]] || fail "rospack cannot find baseline_local_planner_runner"
     [[ -n "${SPMPC_EXP_DIR}" ]] || fail "rospack cannot find spmpc_experiments"
-    COSTMAP_CONFIG="${COSTMAP_CONFIG:-${BASELINE_RUNNER_DIR}/config/local_costmap_real.yaml}"
-    [[ -r "${COSTMAP_CONFIG}" ]] || fail "Costmap config is not readable: ${COSTMAP_CONFIG}"
     if [[ "${METHOD}" == "teb" ]]; then
       PLUGIN_TYPE="teb_local_planner/TebLocalPlannerROS"
       PLUGIN_NAME="TebLocalPlannerROS"
       STATUS_TOPIC="${STATUS_TOPIC:-/baseline/teb/status}"
       GLOBAL_PLAN_TOPIC="${GLOBAL_PLAN_TOPIC:-/baseline/teb/global_plan}"
-      PLANNER_CONFIG="${PLANNER_CONFIG:-${SPMPC_EXP_DIR}/config/baselines/teb_local_planner_standalone_sim.yaml}"
+      RAW_CMD_TOPIC="${RAW_CMD_TOPIC:-/baseline/teb/raw_cmd_vel}"
+      COMMAND_INTERVENTION_TOPIC="${COMMAND_INTERVENTION_TOPIC:-/baseline/teb/command_intervention}"
+      TRACKING_DIAGNOSTICS_TOPIC="${TRACKING_DIAGNOSTICS_TOPIC:-/baseline/teb/tracking_error}"
+      COSTMAP_CONFIG="${COSTMAP_CONFIG:-${BASELINE_RUNNER_DIR}/config/local_costmap_real_no_obstacles.yaml}"
+      PLANNER_CONFIG="${PLANNER_CONFIG:-${SPMPC_EXP_DIR}/config/baselines/teb_local_planner_fixed_path_real_noobs.yaml}"
+      OVERRIDE_TEB_LIMITS="${OVERRIDE_TEB_LIMITS:-true}"
     else
       MPC_OVERLAY_SETUP="${MPC_OVERLAY_SETUP:-/home/geist/scout_ws/install_isolated_mpc/setup.bash}"
       [[ -r "${MPC_OVERLAY_SETUP}" ]] || fail "mpc_local_planner overlay setup is missing: ${MPC_OVERLAY_SETUP}; source/build isolated MPC overlay before this baseline"
@@ -305,8 +314,14 @@ case "${METHOD}" in
       PLUGIN_NAME="MpcLocalPlannerROS"
       STATUS_TOPIC="${STATUS_TOPIC:-/baseline/mpc_local_planner/status}"
       GLOBAL_PLAN_TOPIC="${GLOBAL_PLAN_TOPIC:-/baseline/mpc_local_planner/global_plan}"
+      RAW_CMD_TOPIC="${RAW_CMD_TOPIC:-/baseline/mpc_local_planner/raw_cmd_vel}"
+      COMMAND_INTERVENTION_TOPIC="${COMMAND_INTERVENTION_TOPIC:-/baseline/mpc_local_planner/command_intervention}"
+      TRACKING_DIAGNOSTICS_TOPIC="${TRACKING_DIAGNOSTICS_TOPIC:-/baseline/mpc_local_planner/tracking_error}"
+      COSTMAP_CONFIG="${COSTMAP_CONFIG:-${BASELINE_RUNNER_DIR}/config/local_costmap_real.yaml}"
       PLANNER_CONFIG="${PLANNER_CONFIG:-${SPMPC_EXP_DIR}/config/baselines/mpc_local_planner_fixed_path_tuned_sim.yaml}"
+      OVERRIDE_TEB_LIMITS="false"
     fi
+    [[ -r "${COSTMAP_CONFIG}" ]] || fail "Costmap config is not readable: ${COSTMAP_CONFIG}"
     [[ -r "${PLANNER_CONFIG}" ]] || fail "Planner config is not readable: ${PLANNER_CONFIG}"
     planner_cmd=(
       roslaunch baseline_local_planner_runner nav_core_runner.launch
@@ -322,6 +337,14 @@ case "${METHOD}" in
       "plan_target_frame:=${PLAN_TARGET_FRAME}"
       "max_cmd_vel_x:=${MAX_V}"
       "max_cmd_vel_theta:=${MAX_W}"
+      "raw_cmd_vel_topic:=${RAW_CMD_TOPIC}"
+      "command_intervention_topic:=${COMMAND_INTERVENTION_TOPIC}"
+      "tracking_diagnostics_topic:=${TRACKING_DIAGNOSTICS_TOPIC}"
+      "override_teb_limits:=${OVERRIDE_TEB_LIMITS}"
+      "teb_max_vel_x:=${MAX_V}"
+      "teb_max_vel_theta:=${MAX_W}"
+      "teb_acc_lim_x:=${MAX_ACC}"
+      "teb_acc_lim_theta:=${MAX_ANGULAR_ACC}"
       "xy_goal_tolerance:=${XY_GOAL_TOL}"
       "yaw_goal_tolerance:=${YAW_GOAL_TOL}"
       "costmap_config:=${COSTMAP_CONFIG}"
@@ -402,6 +425,11 @@ trap on_interrupt INT TERM
   echo "cmd_topic=${CMD_TOPIC}"
   echo "status_topic=${STATUS_TOPIC}"
   echo "global_plan_topic=${GLOBAL_PLAN_TOPIC}"
+  echo "raw_cmd_topic=${RAW_CMD_TOPIC:-}"
+  echo "command_intervention_topic=${COMMAND_INTERVENTION_TOPIC:-}"
+  echo "tracking_diagnostics_topic=${TRACKING_DIAGNOSTICS_TOPIC:-}"
+  echo "planner_config=${PLANNER_CONFIG:-}"
+  echo "costmap_config=${COSTMAP_CONFIG:-}"
   echo "max_v=${MAX_V}"
   echo "max_w=${MAX_W}"
   echo "max_acc=${MAX_ACC}"
@@ -421,6 +449,8 @@ cat <<EOF
   run_label    = ${RUN_LABEL}
   cmd_topic    = ${CMD_TOPIC}
   status_topic = ${STATUS_TOPIC}
+  planner_cfg  = ${PLANNER_CONFIG:-NA}
+  costmap_cfg  = ${COSTMAP_CONFIG:-NA}
   recorder     = ${RECORD_SEC}s max (Ctrl+C stops earlier)
   out_dir      = ${RUN_OUT_DIR}
   path_file    = ${PATH_FILE}

@@ -14,6 +14,14 @@
   <arg name="yaw_goal_tolerance" default="0.20"/>
   <arg name="max_cmd_vel_x" default="0.8"/>
   <arg name="max_cmd_vel_theta" default="1.2"/>
+  <arg name="raw_cmd_vel_topic" default="/baseline/raw_cmd_vel"/>
+  <arg name="command_intervention_topic" default="/baseline/command_intervention"/>
+  <arg name="tracking_diagnostics_topic" default="/baseline/tracking_error"/>
+  <arg name="override_teb_limits" default="false"/>
+  <arg name="teb_max_vel_x" default="0.8"/>
+  <arg name="teb_max_vel_theta" default="1.2"/>
+  <arg name="teb_acc_lim_x" default="0.6"/>
+  <arg name="teb_acc_lim_theta" default="1.2"/>
   <arg name="base_frame" default="base_footprint"/>
   <arg name="plan_target_frame" default=""/>
   <arg name="planner_config" default=""/>
@@ -38,9 +46,22 @@
     <param name="yaw_goal_tolerance" value="$(arg yaw_goal_tolerance)"/>
     <param name="max_cmd_vel_x" value="$(arg max_cmd_vel_x)"/>
     <param name="max_cmd_vel_theta" value="$(arg max_cmd_vel_theta)"/>
+    <param name="raw_cmd_vel_topic" value="$(arg raw_cmd_vel_topic)"/>
+    <param name="command_intervention_topic" value="$(arg command_intervention_topic)"/>
+    <param name="tracking_diagnostics_topic" value="$(arg tracking_diagnostics_topic)"/>
     <param name="base_frame" value="$(arg base_frame)"/>
     <param name="plan_target_frame" value="$(arg plan_target_frame)"/>
     <rosparam file="$(arg costmap_config)" command="load"/>
     <rosparam if="$(eval planner_config != '')" file="$(arg planner_config)" command="load"/>
+    <!-- For TEB real trials, make the planner-internal limits identical to the
+         runner limits after loading YAML. Other plugins leave this disabled. -->
+    <param name="$(arg plugin_name)/max_vel_x" value="$(arg teb_max_vel_x)"
+           if="$(arg override_teb_limits)"/>
+    <param name="$(arg plugin_name)/max_vel_theta" value="$(arg teb_max_vel_theta)"
+           if="$(arg override_teb_limits)"/>
+    <param name="$(arg plugin_name)/acc_lim_x" value="$(arg teb_acc_lim_x)"
+           if="$(arg override_teb_limits)"/>
+    <param name="$(arg plugin_name)/acc_lim_theta" value="$(arg teb_acc_lim_theta)"
+           if="$(arg override_teb_limits)"/>
   </node>
 </launch>

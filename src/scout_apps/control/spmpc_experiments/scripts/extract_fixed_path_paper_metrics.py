@@ -41,6 +41,16 @@ DIAGNOSTIC_TOPICS = (
     "/baseline/lt_dwa/diagnostics",
 )
 
+TRACKING_DIAGNOSTIC_TOPICS = (
+    "/baseline/teb/tracking_error",
+    "/baseline/mpc_local_planner/tracking_error",
+)
+
+COMMAND_INTERVENTION_TOPICS = (
+    "/baseline/teb/command_intervention",
+    "/baseline/mpc_local_planner/command_intervention",
+)
+
 WAITING_STATUS_KEYS = (
     "WAITING",
     "NO_ODOM",
@@ -170,13 +180,34 @@ def wrap_angle(angle):
 
 
 def read_meta_for_bag(bag_path):
-    candidates = list(bag_path.parent.glob("*_meta.yaml"))
+    candidates = []
+    stem = bag_path.stem
+    exact_names = (
+        f"{stem}_external_baseline_meta.env",
+        f"{stem}_one_click_meta.env",
+        f"{stem}_run_meta.env",
+        f"{stem}_info.txt",
+        f"{stem}_meta.yaml",
+    )
+    candidates.extend(path for path in (bag_path.parent / name for name in exact_names) if path.exists())
+    if not candidates:
+        for pattern in (
+            "*_external_baseline_meta.env",
+            "*_one_click_meta.env",
+            "*_run_meta.env",
+            "*_info.txt",
+            "*_meta.yaml",
+        ):
+            candidates.extend(sorted(bag_path.parent.glob(pattern)))
     meta = {}
     for path in candidates:
         for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-            if ":" not in line:
+            if "=" in line:
+                key, value = line.split("=", 1)
+            elif ":" in line:
+                key, value = line.split(":", 1)
+            else:
                 continue
-            key, value = line.split(":", 1)
             meta[key.strip()] = value.strip().strip('"').strip("'")
         if meta:
             return meta
@@ -203,12 +234,12 @@ def infer_method(bag_path, meta):
 
 
 def path_topic_from_meta(meta, default="/scout/global_path_fixed"):
-    return meta.get("path_topic", default)
+    return meta.get("path_topic", meta.get("ref_topic", meta.get("reference_topic", default)))
 
 
 
 def cmd_topic_from_meta(meta, default="/cmd_vel"):
-    return meta.get("cmd_vel_topic", default)
+    return meta.get("cmd_vel_topic", meta.get("cmd_topic", default))
 
 
 
@@ -321,6 +352,7 @@ def read_bag_series(bag_path, path_topic, cmd_topic, terminal_threshold, reached
         "status_topics": set(),
         "terminal_debug": [],
         "terminal_mode": [],
+        "command_intervention": [],
         "topics": set(),
         "start_time": nan(),
         "eval": {},
@@ -344,6 +376,8 @@ def read_bag_series(bag_path, path_topic, cmd_topic, terminal_threshold, reached
         "/spmpc/terminal/mode",
         *STATUS_TOPICS,
         *DIAGNOSTIC_TOPICS,
+        *TRACKING_DIAGNOSTIC_TOPICS,
+        *COMMAND_INTERVENTION_TOPICS,
     ]
     with rosbag.Bag(str(bag_path), "r") as bag:
         data["start_time"] = bag.get_start_time()
@@ -429,6 +463,39 @@ def read_bag_series(bag_path, path_topic, cmd_topic, terminal_threshold, reached
                             "contour_error": abs(match_dist) if math.isfinite(match_dist) else nan(),
                         }
                     )
+            elif topic in TRACKING_DIAGNOSTIC_TOPICS:
+                arr = list(getattr(msg, "data", []))
+                if len(arr) >= 7:
+                    data["stage0_reference"].append(
+                        {
+                            "t": t,
+                            "yaw_error": abs(float(arr[1])),
+                            "contour_error": abs(float(arr[0])),
+                        }
+                    )
+                    goal_dist = float(arr[5])
+                    data["terminal_debug"].append(
+                        terminal_debug_sample(
+                            t,
+                            terminal_phase=goal_dist <= terminal_threshold,
+                            pre_terminal_phase=goal_dist > terminal_threshold,
+                            # The runner status owns the full XY+yaw reached
+                            # decision. Distance alone only defines terminal phase.
+                            reached=False,
+                            distance_to_goal=goal_dist,
+                            source="baseline_tracking_diagnostics",
+                        )
+                    )
+            elif topic in COMMAND_INTERVENTION_TOPICS:
+                arr = list(getattr(msg, "data", []))
+                if len(arr) >= 8:
+                    data["command_intervention"].append(
+                        {
+                            "t": t,
+                            "linear_limited": float(arr[6]),
+                            "angular_limited": float(arr[7]),
+                        }
+                    )
             elif topic == "/spmpc/terminal/mode":
                 data["terminal_mode"].append((t, str(getattr(msg, "data", ""))))
             elif topic == "/spmpc/terminal/debug":
@@ -492,6 +559,7 @@ def first_sample_time(data):
         times.extend(row[0] for row in data[key])
     times.extend(row["t"] for row in data["stage0_reference"])
     times.extend(row["t"] for row in data["terminal_debug"])
+    times.extend(row["t"] for row in data["command_intervention"])
     return min(times) if times else nan()
 
 
@@ -671,6 +739,7 @@ def summarize_bag_phase(bag_path, data, meta, method, phase):
     slosh = tuple_phase_filter(data["slosh_height_mm"], phase, data)
     eta_dot = tuple_phase_filter(data["eta_dot_norm"], phase, data)
     solve = tuple_phase_filter(data["solve_time_ms"], phase, data)
+    command_intervention = phase_filter(data["command_intervention"], phase, data)
 
     stage0 = phase_filter(data["stage0_reference"], phase, data)
     projector = tuple_phase_filter(data["projector_distance"], phase, data)
@@ -780,6 +849,12 @@ def summarize_bag_phase(bag_path, data, meta, method, phase):
         "odom_ay_abs_p95_mps2": percentile([abs(v) for v in odom_ay_values], 95),
         "solver_time_mean_ms": safe_mean([v for _, v in solve]),
         "solver_time_p95_ms": percentile([v for _, v in solve], 95),
+        "command_linear_limited_frac": safe_mean(
+            [row["linear_limited"] for row in command_intervention]
+        ),
+        "command_angular_limited_frac": safe_mean(
+            [row["angular_limited"] for row in command_intervention]
+        ),
         "final_stop_distance_m": final_dist,
         "final_speed_mps": final_speed,
         "final_omega_radps": final_omega,
@@ -800,6 +875,12 @@ def summarize_bag_phase(bag_path, data, meta, method, phase):
         "has_spmpc_projector": int("/spmpc/debug/projector" in data["topics"]),
         "has_spmpc_stage0_reference": int("/spmpc/debug/stage0_reference" in data["topics"]),
         "has_lt_dwa_diagnostics": int(any(topic in data["topics"] for topic in DIAGNOSTIC_TOPICS)),
+        "has_baseline_tracking_diagnostics": int(
+            any(topic in data["topics"] for topic in TRACKING_DIAGNOSTIC_TOPICS)
+        ),
+        "has_baseline_command_intervention": int(
+            any(topic in data["topics"] for topic in COMMAND_INTERVENTION_TOPICS)
+        ),
         "has_spmpc_terminal_debug": int("/spmpc/terminal/debug" in data["topics"]),
         "has_slosh_height": int(bool(data["slosh_height_mm"])),
     }
@@ -868,6 +949,8 @@ def group_summary(rows):
         "odom_ay_abs_p95_mps2",
         "solver_time_mean_ms",
         "solver_time_p95_ms",
+        "command_linear_limited_frac",
+        "command_angular_limited_frac",
         "final_stop_distance_m",
         "final_speed_mps",
         "final_omega_radps",

@@ -1,6 +1,14 @@
 # 20260706 TEB 实物 fixed-path 参数调试记录
 
 > 目的：记录 2026-07-06 晚上 TEB 外部 baseline 的 fixed-path 实物接入和参数调试过程，方便 2026-07-07 继续调参。本文只记录参数配置与现场判断，不做 bag 深度分析。
+>
+> **2026-07-10 状态说明：本文保留为历史调参日志，不再作为当前执行 SOP。** 文中的 `/tmp/*.yaml` 已不是可复现配置，`loose_fast` 也尚未经过量化 gate。当前 real/no-obstacle 固化配置、公共限制、录包口径和 formal N=3 流程统一见：
+>
+> ```text
+> docs/实物实验注意事项/对比试验/实物对比实验/0710_TEB实物fixed_path正式化方案.md
+> ```
+>
+> 当前 fixed-path SPMPC 主线同样关闭 obstacle/corridor，因此本文第 9 节“不把 no-obstacle TEB 作为最终公平 baseline”只代表 0706 当晚的保守判断；在当前无障碍主表中，应使用明确标注的 `TEB-noobs-fixed`。原文其余现场事实不回写，以免修改历史记录。
 
 ## 1. 总体结论
 

@@ -21,7 +21,18 @@ baseline 的独立执行器。它不实现控制算法，只负责把插件式 l
 /cmd_vel
 /baseline/<name>/status
 /baseline/<name>/global_plan
+/baseline/<name>/raw_cmd_vel
+/baseline/<name>/command_intervention
+/baseline/<name>/tracking_error
 ```
+
+`raw_cmd_vel` 是插件原始输出；`command_intervention` 同时记录原始命令、
+runner 限幅后的命令以及线速度/角速度是否被截断。正式对比应检查限幅比例，
+避免把长期后级 clamp 的结果误认为 planner 自身输出。
+
+`tracking_error` 使用 TF 将机器人位姿取到 global-plan frame，并发布路径距离、
+航向误差、路径进度、终点距离等字段，避免直接用不同 frame 的 `/odom` 与
+`/scout/global_path_fixed` 相减。
 
 如果只收到 goal、没有 path，runner 会按当前位姿到目标点生成一条直线路径。
 正式 fixed-path 对比应显式发布同一条 `/scout/global_path_fixed`。

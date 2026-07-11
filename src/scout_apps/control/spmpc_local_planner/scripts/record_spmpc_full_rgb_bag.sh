@@ -173,8 +173,14 @@ record_topics=(
   /baseline/official_lt_dwa/shadow_cmd_vel
   /baseline/teb/status
   /baseline/teb/global_plan
+  /baseline/teb/raw_cmd_vel
+  /baseline/teb/command_intervention
+  /baseline/teb/tracking_error
   /baseline/mpc_local_planner/status
   /baseline/mpc_local_planner/global_plan
+  /baseline/mpc_local_planner/raw_cmd_vel
+  /baseline/mpc_local_planner/command_intervention
+  /baseline/mpc_local_planner/tracking_error
 
   # SPMPC mainline status / solver / trajectory.
   /spmpc/status
