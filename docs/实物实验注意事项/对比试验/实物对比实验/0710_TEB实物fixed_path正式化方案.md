@@ -386,9 +386,242 @@ TEB 连续 NO_VALID_CMD。
 
 ---
 
-## 12. TEB 完成后的 LT-DWA rescue
+## 12. TEB 完成后的 mpc_local_planner 实物接入
 
-### 12.1 顺序和实验定位
+### 12.1 当前状态和方法定位
+
+`mpc_local_planner` 是标准 `nav_core::BaseLocalPlanner` 插件，runner 直接执行
+`MpcLocalPlannerROS::computeVelocityCommands()` 的输出，不需要像 LT-DWA 那样用自定义 path-tracking guard 长期覆盖命令。因此，如果实物 smoke 能通过，它是比 LT-DWA 更干净的第二外部 baseline 候选。
+
+当前状态必须区分：
+
+```text
+isolated MPC overlay / plugin：已构建、可解析；
+固定 S-curve 仿真：已验证；
+实物 shadow：尚未正式验证；
+实物 actuated N=1：尚未验证；
+实物 formal N=3：未开始。
+```
+
+0706 输出目录中已有的 `sim_MPC_*` bag 虽然放在 `slosh_bags/real` 下，但包含
+`/clock` 和 `/gazebo/*`，属于仿真证据，不能当成实物 smoke。
+
+### 12.2 20260711 strict fresh-sim N=1 复测
+
+按仿真统一指南，用当前代码、isolated overlay 和 tuned config 重新运行：
+
+```text
+matrix: mpc_local_planner
+strict fresh-sim: true
+N=1
+goal: (5.0, 0.0, 0.0)
+path: s_curve / start_heading=current
+limits: v=0.8, omega=1.2, a=0.6, alpha=1.2
+delay phase: off
+planner config: mpc_local_planner_fixed_path_tuned_sim.yaml
+```
+
+结果：
+
+```text
+valid_strict_case=true；
+GOAL_REACHED；
+duration=6.537s；
+tracking RMS≈0.100m；
+tracking p95≈0.198m；
+tracking max≈0.206m；
+最终 path progress≈0.968，无明显回退；
+cmd_v mean/p95/max≈0.773/0.800/0.800m/s；
+|cmd_w| p95/max≈1.163/1.200rad/s；
+/slosh/height p95/peak≈1.708/1.804mm。
+```
+
+结果路径：
+
+```text
+/data/a/scout_sim_replacement/results/strict_fresh_fair_n3_20260711_193812_codex_mpc_local_planner_n1
+/data/a/scout_sim_replacement/bags/strict_fresh_fair_n3_20260711_193812_codex_mpc_local_planner_n1
+```
+
+判定：当前 MPC plugin、固定路径和闭环接口正常，但 tuned-sim 参数会同时触及线速度和角速度上限，不能未经降速和实物配置固化就直接上车。
+
+### 12.3 实物前必须固化 real/no-obstacle 配置
+
+不能把现有 simulation 配置直接改名后使用。开始实物 shadow 前新增版本化文件：
+
+```text
+src/scout_apps/control/spmpc_experiments/config/baselines/mpc_local_planner_fixed_path_real_noobs.yaml
+```
+
+第一版从 tuned-sim 复制结构，但至少修改：
+
+```text
+MpcLocalPlannerROS/robot/unicycle/max_vel_x=0.30
+MpcLocalPlannerROS/robot/unicycle/max_vel_x_backwards=0.0
+MpcLocalPlannerROS/robot/unicycle/max_vel_theta=1.20
+MpcLocalPlannerROS/robot/unicycle/acc_lim_x=0.60
+MpcLocalPlannerROS/robot/unicycle/dec_lim_x=0.60
+MpcLocalPlannerROS/robot/unicycle/acc_lim_theta=1.20
+MpcLocalPlannerROS/collision_avoidance/include_costmap_obstacles=false
+MpcLocalPlannerROS/collision_avoidance/enable_dynamic_obstacles=false
+```
+
+costmap 使用与 `TEB-noobs-fixed` 相同的：
+
+```text
+src/scout_apps/control/baseline_local_planner_runner/config/local_costmap_real_no_obstacles.yaml
+```
+
+原因：当前 fixed-path SPMPC 和 TEB 正文主表均关闭 obstacle/corridor。若 MPC 单独开启 scan obstacle/inflation，就不能与该主表混合解释。
+
+MPC 内部限制必须和 runner 参数相同。不能让内部 `max_vel_x=0.8`，再依靠 runner 长期截到 `0.30`。`/baseline/mpc_local_planner/command_intervention` 应作为隐藏限幅检查，建议 formal 候选的 linear/angular limited fraction `<1%`。
+
+### 12.4 Overlay 与 preflight
+
+实物机器先确认 isolated overlay：
+
+```bash
+ls /home/geist/scout_ws/install_isolated_mpc/setup.bash
+
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+source /home/geist/scout_ws/install_isolated_mpc/setup.bash
+cd /home/geist/scout_ws
+
+rospack find mpc_local_planner
+rospack plugins --attrib=plugin nav_core | grep mpc_local_planner
+```
+
+如果报：
+
+```text
+Could not find library corresponding to plugin mpc_local_planner/MpcLocalPlannerROS
+```
+
+说明 isolated overlay 没有正确 source；不能继续实车。还要检查：
+
+```bash
+rostopic echo -n 1 /odom
+rostopic echo -n 1 /map
+rostopic echo -n 1 /scan_front
+rosrun tf tf_echo map base_link
+rostopic info /cmd_vel
+```
+
+### 12.5 Shadow
+
+以下命令只有在 real/no-obstacle YAML 已创建并通过 launch parse 后才能执行：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+source /home/geist/scout_ws/install_isolated_mpc/setup.bash
+cd /home/geist/scout_ws
+
+METHOD=mpc_local_planner \
+STAGE=shadow \
+RUN_LABEL=MPC_local_planner_real_noobs_v1_shadow01 \
+PLANNER_CONFIG=/home/geist/scout_ws/src/scout_apps/control/spmpc_experiments/config/baselines/mpc_local_planner_fixed_path_real_noobs.yaml \
+COSTMAP_CONFIG=/home/geist/scout_ws/src/scout_apps/control/baseline_local_planner_runner/config/local_costmap_real_no_obstacles.yaml \
+MAX_V=0.30 MAX_W=1.20 MAX_ACC=0.60 MAX_ANGULAR_ACC=1.20 \
+RECORD_ALL_EXISTING_TOPICS=false \
+RECORD_RGB=false RECORD_TOPIC_INFO=true \
+RECORD_SEC=30 MAX_RECORD_SEC=30 \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+```
+
+shadow 通过条件：
+
+```text
+/baseline/mpc_local_planner/status 进入 TRACKING；
+/baseline/mpc_local_planner/global_plan 是同一 fixed S-curve；
+/baseline/mpc_local_planner/raw_cmd_vel 连续且数值有限；
+/baseline/mpc_local_planner/tracking_error 连续发布；
+/spmpc_shadow_cmd_vel 有合理命令；
+无 SET_PLAN_FAILED / NO_VALID_CMD 持续出现；
+/cmd_vel 不由 shadow MPC 发布。
+```
+
+### 12.6 20s actuated 短程 smoke
+
+shadow 通过后，第一轮只跑 `20s`，手在急停上：
+
+```bash
+METHOD=mpc_local_planner \
+STAGE=actuated \
+RUN_LABEL=MPC_local_planner_real_noobs_v1_short01 \
+PLANNER_CONFIG=/home/geist/scout_ws/src/scout_apps/control/spmpc_experiments/config/baselines/mpc_local_planner_fixed_path_real_noobs.yaml \
+COSTMAP_CONFIG=/home/geist/scout_ws/src/scout_apps/control/baseline_local_planner_runner/config/local_costmap_real_no_obstacles.yaml \
+MAX_V=0.30 MAX_W=1.20 MAX_ACC=0.60 MAX_ANGULAR_ACC=1.20 \
+RECORD_ALL_EXISTING_TOPICS=false \
+RECORD_RGB=true RECORD_TOPIC_INFO=true \
+RECORDER_STARTUP_SEC=8 \
+RECORD_SEC=20 MAX_RECORD_SEC=25 \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+```
+
+短程 gate：
+
+```text
+机器人持续沿 fixed path 正向推进；
+tracking p95 < 0.30m；
+无明显左右摆头、原地高速旋转或切弯失控；
+20s 内 path progress 至少增加 0.15；
+raw command 不长期贴 MAX_V/MAX_W；
+runner limiter fraction 建议 <1%；
+无持续 NO_VALID_CMD；
+人工未接管。
+```
+
+### 12.7 单变量调参和 60s gate
+
+第一轮只改速度轴。若 `MAX_V=0.30` 稳定但过慢：
+
+```text
+v1: MAX_V=0.30
+v2: MAX_V=0.35
+v3: MAX_V=0.40（仅在前两档稳定且现场安全时）
+```
+
+每次同时更新 real YAML 内部 `max_vel_x` 和 runner `MAX_V`。如果角速度频繁饱和或摆头，优先一次只改一个：
+
+```text
+quadratic_form control_weights angular 项：0.04 -> 0.08
+或
+max_global_plan_lookahead_dist：1.0 -> 1.5
+```
+
+如果 tracking 太松，一次只提高 position/state tracking 权重；不能同时提高 tracking 权重、降低 lookahead、提高速度和降低角速度上限。
+
+短程通过后才跑 60s N=1。进入 formal 的最低门槛：
+
+```text
+GOAL_REACHED；
+goal time <=57s；
+tracking p95 <=0.30m；
+无人工接管 / 定位跳变 / 持续 NO_VALID_CMD；
+无长期线速度或角速度后级 clamp；
+RGB、odom、TF、fixed path、raw/final cmd 和 tracking diagnostics 完整。
+```
+
+最多尝试 2~3 个单变量 candidate。仍不能同时满足到点、tracking、平顺性和 limiter gate 时停止 MPC 实物调参，不让第二外部 baseline 吞掉 governor 消融时间。
+
+### 12.8 参数冻结和 formal
+
+N=1 通过后，将最终 real YAML 另存为 frozen/final 文件，记录 git commit，之后不得继续调参。若 MPC 进入补充 formal，仍需与同日 governor-off `B_ours` bridge 交错运行，并明确：
+
+```text
+mpc_local_planner 不使用 slosh feedback；
+液面仅作为外部评价；
+必须同时报告 goal time、actual cmd_v、tracking 和 RGB；
+不能因为其速度快或慢只比较液面 peak。
+```
+
+---
+
+## 13. TEB 完成后的 LT-DWA rescue
+
+### 13.1 顺序和实验定位
 
 LT-DWA 不打断当前 TEB 主线。执行顺序固定为：
 
@@ -397,7 +630,8 @@ TEB shadow / N=1 gate
   -> TEB 参数冻结
   -> TEB 与同日 B_ours governor-off 交错 formal N=3
   -> TEB 数据确认完整
-  -> 再单独处理 LT-DWA
+  -> 优先决定是否补 mpc_local_planner
+  -> 最后再单独处理 LT-DWA
 ```
 
 LT-DWA 是可选补充 baseline，不得反过来阻塞 TEB、governor 消融或主方法实物实验。0706 原始参数不能直接重跑 formal：当时 official core 持续返回 OK，但 wrapper 的 `path_tracking_guard` 全程接管后仍出现 map-frame tracking p95 约 `1.23m`、进度最大约 `39%` 而最终退回约 `13%`、角速度达到 `1.2rad/s` 上限。
@@ -410,7 +644,7 @@ LT-DWA official core + wrapper path-tracking guard
 
 不能把 guarded/final command 当成未经修改的官方 LT-DWA 原始输出。后续表格必须同时保留 raw command、final command 和 guard applied fraction。
 
-### 12.2 实物 rescue 前先补齐启动和记录接口
+### 13.2 实物 rescue 前先补齐启动和记录接口
 
 当前 one-click 脚本只透传公共速度/加速度限制。开始 LT-DWA rescue 前，先让
 `run_external_baseline_real_fixed_path_trial.sh` 显式支持并写入 metadata：
@@ -440,7 +674,7 @@ PATH_TRACKING_MIN_V
 tracking 必须使用 `/baseline/official_lt_dwa/odom_map` 与
 `/scout/global_path_fixed`，不能直接用不同 frame 的 `/odom`。指标脚本还应同时识别 real topic 前缀 `/baseline/official_lt_dwa/*` 和 sim topic 前缀 `/baseline/lt_dwa/*`。
 
-### 12.3 第一阶段：只做低速参数 rescue
+### 13.3 第一阶段：只做低速参数 rescue
 
 第一候选 R0 的目的只是验证“能否稳定沿路径推进”，不追求速度：
 
@@ -509,7 +743,7 @@ path progress 持续增加，20s 内至少增加 0.10；
 R0 太慢但稳定时，一次只把 `MAX_V` 调到 `0.22`。R0 仍外切时，一次只把
 `MAX_V` 降到 `0.15` 或把 lookahead 增到 `1.50m`。不允许同时修改速度、lookahead、最低速度和角速度上限。
 
-### 12.4 第二阶段：formal 前必须修改 wrapper guard
+### 13.4 第二阶段：formal 前必须修改 wrapper guard
 
 参数能完成短程 smoke，不代表当前 guard 已具备实物鲁棒性。进入 60s smoke 或 formal 前，wrapper 至少要补：
 
@@ -533,7 +767,7 @@ tracking distance > 0.80m：发布 zero，状态 LOST_TRACK，等待人工检查
 
 阈值需先在 shadow 和短程实物中验证，不能未经验证直接冻结为论文参数。
 
-### 12.5 60s smoke、formal 和停止线
+### 13.5 60s smoke、formal 和停止线
 
 只有“R0/R1/R2 短程通过 + guard 代码 gate 通过”后，才允许 LT-DWA 60s smoke。最低门槛：
 
@@ -553,8 +787,8 @@ Timebox：最多尝试 2~3 个单变量参数候选和 1 个明确的 guard 修�
 
 ---
 
-## 13. 当前一句话原则
+## 14. 当前一句话原则
 
 ```text
-先用版本化 real/no-obstacle 配置把 TEB 做到稳定、量化、冻结，再与同日 governor-off B_ours 交错跑 N=3；TEB 数据完成后才处理 LT-DWA，并坚持“短程参数 rescue -> guard 实物鲁棒性修改 -> 60s smoke -> formal”的顺序。
+先用版本化 real/no-obstacle 配置把 TEB 做到稳定、量化、冻结，再与同日 governor-off B_ours 交错跑 N=3；TEB 数据完成后优先尝试标准插件 mpc_local_planner，最后才处理 LT-DWA，并坚持 shadow、短程 smoke、60s gate、参数冻结后再 formal。
 ```
