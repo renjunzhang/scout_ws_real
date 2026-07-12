@@ -27,6 +27,7 @@ RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-false}"
 RECORD_MOCAP="${RECORD_MOCAP:-false}"
 RECORD_ROSOUT="${RECORD_ROSOUT:-true}"
 RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO:-true}"
+ROSBAG_BUFFER_SIZE_MB="${ROSBAG_BUFFER_SIZE_MB:-4096}"
 
 # Optional post-record liquid export. Disabled by default: recording remains
 # subscribe-only and never launches perception/control unless explicitly asked.
@@ -455,6 +456,7 @@ write_topic_info_snapshot
   echo "record_scan=${RECORD_SCAN}"
   echo "record_standalone_slosh=${RECORD_STANDALONE_SLOSH}"
   echo "record_online_liquid=${RECORD_ONLINE_LIQUID}"
+  echo "rosbag_buffer_size_mb=${ROSBAG_BUFFER_SIZE_MB}"
   echo "record_mocap=${RECORD_MOCAP}"
   echo "record_rosout=${RECORD_ROSOUT}"
   echo "record_topic_info=${RECORD_TOPIC_INFO}"
@@ -505,6 +507,7 @@ cat <<EOF
   depth        = ${RECORD_DEPTH}
   liquid proxy = ${RECORD_ONLINE_LIQUID}
   liquid export= ${LIQUID_EXPORT_AFTER_RECORD} (${LIQUID_EXPORT_SOURCE})
+  rosbag buffer= ${ROSBAG_BUFFER_SIZE_MB} MB
   mocap        = ${RECORD_MOCAP}
   metadata     = ${OUT_DIR}/${NAME}_{info.txt,rosparam.yaml,topics.txt,nodes.txt,selected_topics.txt,*topics*.txt,bag_info.txt}
 ============================================
@@ -514,9 +517,9 @@ cat <<EOF
 EOF
 
 if truthy "${RECORD_ALL_EXISTING_TOPICS}"; then
-  record_cmd=(rosbag record -a -O "${BAG_PATH}")
+  record_cmd=(rosbag record --buffsize="${ROSBAG_BUFFER_SIZE_MB}" -a -O "${BAG_PATH}")
 else
-  record_cmd=(rosbag record -O "${BAG_PATH}" "${record_topics[@]}")
+  record_cmd=(rosbag record --buffsize="${ROSBAG_BUFFER_SIZE_MB}" -O "${BAG_PATH}" "${record_topics[@]}")
 fi
 
 set +e

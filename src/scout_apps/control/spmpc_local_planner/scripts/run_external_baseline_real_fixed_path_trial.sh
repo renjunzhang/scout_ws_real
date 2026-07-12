@@ -342,6 +342,7 @@ case "${METHOD}" in
       "tracking_diagnostics_topic:=${TRACKING_DIAGNOSTICS_TOPIC}"
       "override_teb_limits:=${OVERRIDE_TEB_LIMITS}"
       "teb_max_vel_x:=${MAX_V}"
+      "teb_max_vel_trans:=${MAX_V}"
       "teb_max_vel_theta:=${MAX_W}"
       "teb_acc_lim_x:=${MAX_ACC}"
       "teb_acc_lim_theta:=${MAX_ANGULAR_ACC}"

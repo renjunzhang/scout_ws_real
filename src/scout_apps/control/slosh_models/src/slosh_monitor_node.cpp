@@ -59,11 +59,11 @@ private:
     pnh_.param("offset_y", model_params_.r_y, 0.0);
     pnh_.param("gravity", model_params_.g, 9.81);
     pnh_.param("use_linear_model", model_params_.use_linear_model, true);
-    pnh_.param("use_parabola_term", model_params_.use_parabola_term, true);
+    pnh_.param("use_parabola_term", model_params_.use_parabola_term, false);
 
     pnh_.param("accel_filter_alpha", accel_filter_alpha_, 0.3);
     pnh_.param("min_dt", min_dt_, 0.001);
-    pnh_.param("max_dt", max_dt_, 0.5);
+    pnh_.param("max_dt", max_dt_, 0.1);
     accel_filter_alpha_ = std::max(0.0, std::min(1.0, accel_filter_alpha_));
   }
 
@@ -80,6 +80,10 @@ private:
     last_v_ = 0.0;
     last_omega_ = 0.0;
     last_height_m_ = 0.0;
+    last_cmd_v_ = 0.0;
+    last_cmd_omega_ = 0.0;
+    update_count_ = 0;
+    episode_start_stamp_ = ros::Time::now();
   }
 
   bool resetCb(std_srvs::Empty::Request&, std_srvs::Empty::Response&) {
@@ -127,6 +131,14 @@ private:
       prev_omega_ = omega;
       publish(stamp);
       return;
+    }
+
+    const double dt_tolerance = std::max(0.002, 0.1 * model_params_.dt);
+    if (std::fabs(dt - model_params_.dt) > dt_tolerance) {
+      ROS_WARN_THROTTLE(1.0,
+                        "[slosh_monitor] odom dt=%.4f differs from fixed model_dt=%.4f",
+                        dt,
+                        model_params_.dt);
     }
 
     const double ax_raw = (v - prev_v_) / dt;
@@ -180,11 +192,11 @@ private:
     std_msgs::Float32MultiArray debug_msg;
     debug_msg.layout.dim.resize(1);
     debug_msg.layout.dim[0].label =
-        "stamp_sec,dt,v_odom,omega_odom,ax_est,ay_est,alpha_est,height_m,height_mm,cmd_v,cmd_omega,update_count,reset_count";
+        "stamp_rel_sec,dt,v_odom,omega_odom,ax_est,ay_est,alpha_est,height_m,height_mm,cmd_v,cmd_omega,update_count,reset_count";
     debug_msg.layout.dim[0].size = 13;
     debug_msg.layout.dim[0].stride = 13;
     debug_msg.data = {
-        static_cast<float>(stamp.toSec()),
+        static_cast<float>(std::max(0.0, (stamp - episode_start_stamp_).toSec())),
         static_cast<float>(last_dt_),
         static_cast<float>(last_v_),
         static_cast<float>(last_omega_),
@@ -222,6 +234,7 @@ private:
 
   bool have_prev_odom_ = false;
   ros::Time prev_stamp_;
+  ros::Time episode_start_stamp_;
   double prev_v_ = 0.0;
   double prev_omega_ = 0.0;
   double ax_filt_ = 0.0;

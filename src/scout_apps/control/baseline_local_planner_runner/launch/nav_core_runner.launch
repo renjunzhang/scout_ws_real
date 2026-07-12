@@ -19,6 +19,7 @@
   <arg name="tracking_diagnostics_topic" default="/baseline/tracking_error"/>
   <arg name="override_teb_limits" default="false"/>
   <arg name="teb_max_vel_x" default="0.8"/>
+  <arg name="teb_max_vel_trans" default="0.8"/>
   <arg name="teb_max_vel_theta" default="1.2"/>
   <arg name="teb_acc_lim_x" default="0.6"/>
   <arg name="teb_acc_lim_theta" default="1.2"/>
@@ -56,6 +57,8 @@
     <!-- For TEB real trials, make the planner-internal limits identical to the
          runner limits after loading YAML. Other plugins leave this disabled. -->
     <param name="$(arg plugin_name)/max_vel_x" value="$(arg teb_max_vel_x)"
+           if="$(arg override_teb_limits)"/>
+    <param name="$(arg plugin_name)/max_vel_trans" value="$(arg teb_max_vel_trans)"
            if="$(arg override_teb_limits)"/>
     <param name="$(arg plugin_name)/max_vel_theta" value="$(arg teb_max_vel_theta)"
            if="$(arg override_teb_limits)"/>

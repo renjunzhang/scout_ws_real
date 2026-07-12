@@ -13,12 +13,12 @@
   <arg name="offset_y" default="0.0"/>
   <arg name="gravity" default="9.81"/>
   <arg name="use_linear_model" default="true"/>
-  <arg name="use_parabola_term" default="true"/>
+  <arg name="use_parabola_term" default="false"/>
   <arg name="model_dt" default="0.02"/>
 
   <arg name="accel_filter_alpha" default="0.3"/>
   <arg name="min_dt" default="0.001"/>
-  <arg name="max_dt" default="0.5"/>
+  <arg name="max_dt" default="0.1"/>
 
   <node pkg="slosh_models" type="slosh_monitor_node" name="slosh_monitor" ns="$(arg output_namespace)" output="screen">
     <param name="odom_topic" value="$(arg odom_topic)"/>
