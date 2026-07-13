@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # One-click external-baseline fixed-path real trial wrapper.
 # Assumes the real sensor/base/localization stack is already running.
-# This script starts the fixed-path generator, starts the black-box bag recorder,
-# sends the goal, waits for the fixed path, then launches one external baseline
-# in shadow or actuated mode. The recorder bounds run duration; Ctrl+C stops earlier.
+# This script starts the standalone slosh evaluator, starts the fixed-path
+# generator and black-box bag recorder, sends the goal, waits for the fixed
+# path, then launches one external baseline in shadow or actuated mode. The
+# recorder bounds run duration; Ctrl+C stops earlier.
 
 set -euo pipefail
 
@@ -77,6 +78,72 @@ check_cmd_vel_clear_for_actuated() {
     printf '%s\n' "${info}" >&2
     exit 2
   fi
+}
+
+ros_node_exists() {
+  local node_name="$1"
+  timeout 5s rosnode list 2>/dev/null | grep -Fxq "${node_name}"
+}
+
+wait_topic_once() {
+  local topic="$1"
+  local timeout_sec="$2"
+  timeout "${timeout_sec}s" rostopic echo -n 1 "${topic}" >/dev/null 2>&1
+}
+
+reset_slosh_monitor() {
+  if ! timeout "${SLOSH_MONITOR_RESET_TIMEOUT_SEC}s" \
+      rosservice call "${SLOSH_MONITOR_RESET_SERVICE}" >/dev/null 2>&1; then
+    show_log_tail "${slosh_monitor_log}" "standalone slosh monitor"
+    fail "Failed to reset standalone slosh monitor via ${SLOSH_MONITOR_RESET_SERVICE}"
+  fi
+  if ! wait_topic_once "${SLOSH_MONITOR_HEIGHT_TOPIC}" "${SLOSH_MONITOR_RESET_TIMEOUT_SEC}"; then
+    show_log_tail "${slosh_monitor_log}" "standalone slosh monitor"
+    fail "No ${SLOSH_MONITOR_HEIGHT_TOPIC} sample received after reset"
+  fi
+  echo "[slosh_monitor] reset ${SLOSH_MONITOR_RESET_SERVICE}"
+}
+
+prepare_slosh_monitor() {
+  if ! truthy "${START_STANDALONE_SLOSH}" && ! truthy "${RECORD_STANDALONE_SLOSH}"; then
+    echo "[slosh_monitor] disabled: START_STANDALONE_SLOSH=false and RECORD_STANDALONE_SLOSH=false"
+    return 0
+  fi
+
+  if truthy "${START_STANDALONE_SLOSH}"; then
+    if ros_node_exists "${SLOSH_MONITOR_NODE}"; then
+      fail "${SLOSH_MONITOR_NODE} already exists; stop the old monitor or set START_STANDALONE_SLOSH=false to reuse it explicitly"
+    fi
+
+    echo "[slosh_monitor] starting ${SLOSH_MONITOR_NODE} from ${SLOSH_MONITOR_ODOM_TOPIC}"
+    roslaunch slosh_models slosh_monitor.launch \
+      "odom_topic:=${SLOSH_MONITOR_ODOM_TOPIC}" \
+      "cmd_vel_topic:=${SLOSH_MONITOR_CMD_VEL_TOPIC}" \
+      "output_namespace:=${SLOSH_MONITOR_OUTPUT_NAMESPACE}" \
+      "container_radius:=${SLOSH_MONITOR_CONTAINER_RADIUS}" \
+      "liquid_height:=${SLOSH_MONITOR_LIQUID_HEIGHT}" \
+      "damping_ratio:=${SLOSH_MONITOR_DAMPING_RATIO}" \
+      "use_parabola_term:=${SLOSH_MONITOR_USE_PARABOLA_TERM}" \
+      "model_dt:=${SLOSH_MONITOR_MODEL_DT}" \
+      "accel_filter_alpha:=${SLOSH_MONITOR_ACCEL_FILTER_ALPHA}" \
+      "min_dt:=${SLOSH_MONITOR_MIN_DT}" \
+      "max_dt:=${SLOSH_MONITOR_MAX_DT}" \
+      > "${slosh_monitor_log}" 2>&1 &
+    slosh_monitor_pid=$!
+  else
+    echo "[slosh_monitor] START_STANDALONE_SLOSH=false; requiring an externally managed monitor"
+  fi
+
+  if ! wait_topic_once "${SLOSH_MONITOR_HEIGHT_TOPIC}" "${SLOSH_MONITOR_STARTUP_TIMEOUT_SEC}"; then
+    show_log_tail "${slosh_monitor_log}" "standalone slosh monitor"
+    fail "Timed out waiting for ${SLOSH_MONITOR_HEIGHT_TOPIC}; check ${SLOSH_MONITOR_ODOM_TOPIC} and slosh_models build/source"
+  fi
+  if [[ -n "${slosh_monitor_pid}" ]] && ! child_running "${slosh_monitor_pid}"; then
+    show_log_tail "${slosh_monitor_log}" "standalone slosh monitor"
+    fail "Standalone slosh monitor exited during startup"
+  fi
+
+  reset_slosh_monitor
 }
 
 DATE="${DATE:-$(date +%Y%m%d)}"
@@ -176,6 +243,27 @@ RECORD_SCAN="${RECORD_SCAN:-true}"
 RECORD_DEPTH="${RECORD_DEPTH:-false}"
 RECORD_STANDALONE_SLOSH="${RECORD_STANDALONE_SLOSH:-true}"
 RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-false}"
+START_STANDALONE_SLOSH="${START_STANDALONE_SLOSH:-true}"
+SLOSH_MONITOR_ODOM_TOPIC="${SLOSH_MONITOR_ODOM_TOPIC:-${ODOM_TOPIC}}"
+SLOSH_MONITOR_CMD_VEL_TOPIC="${SLOSH_MONITOR_CMD_VEL_TOPIC:-/cmd_vel}"
+SLOSH_MONITOR_OUTPUT_NAMESPACE="${SLOSH_MONITOR_OUTPUT_NAMESPACE:-/slosh}"
+SLOSH_MONITOR_CONTAINER_RADIUS="${SLOSH_MONITOR_CONTAINER_RADIUS:-0.0185}"
+SLOSH_MONITOR_LIQUID_HEIGHT="${SLOSH_MONITOR_LIQUID_HEIGHT:-0.058}"
+SLOSH_MONITOR_DAMPING_RATIO="${SLOSH_MONITOR_DAMPING_RATIO:-0.05}"
+SLOSH_MONITOR_MODEL_DT="${SLOSH_MONITOR_MODEL_DT:-0.02}"
+SLOSH_MONITOR_ACCEL_FILTER_ALPHA="${SLOSH_MONITOR_ACCEL_FILTER_ALPHA:-0.3}"
+SLOSH_MONITOR_MIN_DT="${SLOSH_MONITOR_MIN_DT:-0.001}"
+SLOSH_MONITOR_MAX_DT="${SLOSH_MONITOR_MAX_DT:-0.1}"
+SLOSH_MONITOR_USE_PARABOLA_TERM="${SLOSH_MONITOR_USE_PARABOLA_TERM:-false}"
+SLOSH_MONITOR_STARTUP_TIMEOUT_SEC="${SLOSH_MONITOR_STARTUP_TIMEOUT_SEC:-10}"
+SLOSH_MONITOR_RESET_TIMEOUT_SEC="${SLOSH_MONITOR_RESET_TIMEOUT_SEC:-5}"
+SLOSH_MONITOR_NAMESPACE_ROOT="${SLOSH_MONITOR_OUTPUT_NAMESPACE%/}"
+if [[ -n "${SLOSH_MONITOR_NAMESPACE_ROOT}" && "${SLOSH_MONITOR_NAMESPACE_ROOT}" != /* ]]; then
+  SLOSH_MONITOR_NAMESPACE_ROOT="/${SLOSH_MONITOR_NAMESPACE_ROOT}"
+fi
+SLOSH_MONITOR_NODE="${SLOSH_MONITOR_NAMESPACE_ROOT}/slosh_monitor"
+SLOSH_MONITOR_RESET_SERVICE="${SLOSH_MONITOR_NAMESPACE_ROOT}/reset"
+SLOSH_MONITOR_HEIGHT_TOPIC="${SLOSH_MONITOR_NAMESPACE_ROOT}/height"
 # Deterministic whitelist for formal runs. Set true only for short diagnostics
 # when disk space is known to be sufficient.
 RECORD_ALL_EXISTING_TOPICS="${RECORD_ALL_EXISTING_TOPICS:-false}"
@@ -191,6 +279,8 @@ require_cmd rostopic
 require_cmd rosrun
 require_cmd roslaunch
 require_cmd rospack
+require_cmd rosnode
+require_cmd rosservice
 [[ -f "${RECORDER_SCRIPT}" ]] || fail "Recorder script not found: ${RECORDER_SCRIPT}"
 [[ -r "${RECORDER_SCRIPT}" ]] || fail "Recorder script is not readable: ${RECORDER_SCRIPT}"
 
@@ -213,6 +303,15 @@ for kv in \
   "CONTROLLER_FREQUENCY=${CONTROLLER_FREQUENCY}" \
   "PLANNER_RATE_HZ=${PLANNER_RATE_HZ}" \
   "COMMAND_PUBLISH_RATE_HZ=${COMMAND_PUBLISH_RATE_HZ}" \
+  "SLOSH_MONITOR_CONTAINER_RADIUS=${SLOSH_MONITOR_CONTAINER_RADIUS}" \
+  "SLOSH_MONITOR_LIQUID_HEIGHT=${SLOSH_MONITOR_LIQUID_HEIGHT}" \
+  "SLOSH_MONITOR_DAMPING_RATIO=${SLOSH_MONITOR_DAMPING_RATIO}" \
+  "SLOSH_MONITOR_MODEL_DT=${SLOSH_MONITOR_MODEL_DT}" \
+  "SLOSH_MONITOR_ACCEL_FILTER_ALPHA=${SLOSH_MONITOR_ACCEL_FILTER_ALPHA}" \
+  "SLOSH_MONITOR_MIN_DT=${SLOSH_MONITOR_MIN_DT}" \
+  "SLOSH_MONITOR_MAX_DT=${SLOSH_MONITOR_MAX_DT}" \
+  "SLOSH_MONITOR_STARTUP_TIMEOUT_SEC=${SLOSH_MONITOR_STARTUP_TIMEOUT_SEC}" \
+  "SLOSH_MONITOR_RESET_TIMEOUT_SEC=${SLOSH_MONITOR_RESET_TIMEOUT_SEC}" \
   "PATH_GENERATOR_STARTUP_SEC=${PATH_GENERATOR_STARTUP_SEC}" \
   "RECORDER_STARTUP_SEC=${RECORDER_STARTUP_SEC}" \
   "PLANNER_STARTUP_SEC=${PLANNER_STARTUP_SEC}"; do
@@ -363,11 +462,13 @@ path_generator_log="${RUN_OUT_DIR}/${NAME}_path_generator.log"
 send_goal_log="${RUN_OUT_DIR}/${NAME}_send_goal.log"
 recorder_log="${RUN_OUT_DIR}/${NAME}_recorder.log"
 planner_log="${RUN_OUT_DIR}/${NAME}_planner.log"
+slosh_monitor_log="${RUN_OUT_DIR}/${NAME}_slosh_monitor.log"
 run_meta="${RUN_OUT_DIR}/${NAME}_external_baseline_meta.env"
 
 path_generator_pid=""
 recorder_pid=""
 planner_pid=""
+slosh_monitor_pid=""
 cleaned_up=false
 
 kill_child() {
@@ -395,6 +496,7 @@ cleanup() {
   publish_zero_cmd
   kill_child "${recorder_pid}" "recorder"
   kill_child "${path_generator_pid}" "path generator"
+  kill_child "${slosh_monitor_pid}" "standalone slosh monitor"
 }
 
 on_interrupt() {
@@ -438,6 +540,27 @@ trap on_interrupt INT TERM
   echo "xy_goal_tol=${XY_GOAL_TOL}"
   echo "yaw_goal_tol=${YAW_GOAL_TOL}"
   echo "record_rgb=${RECORD_RGB}"
+  echo "record_standalone_slosh=${RECORD_STANDALONE_SLOSH}"
+  echo "start_standalone_slosh=${START_STANDALONE_SLOSH}"
+  echo "slosh_monitor_odom_topic=${SLOSH_MONITOR_ODOM_TOPIC}"
+  echo "slosh_monitor_cmd_vel_topic=${SLOSH_MONITOR_CMD_VEL_TOPIC}"
+  echo "slosh_monitor_output_namespace=${SLOSH_MONITOR_OUTPUT_NAMESPACE}"
+  echo "slosh_monitor_node=${SLOSH_MONITOR_NODE}"
+  echo "slosh_monitor_height_topic=${SLOSH_MONITOR_HEIGHT_TOPIC}"
+  echo "slosh_monitor_reset_service=${SLOSH_MONITOR_RESET_SERVICE}"
+  echo "slosh_monitor_log=${slosh_monitor_log}"
+  echo "slosh_monitor_container_radius=${SLOSH_MONITOR_CONTAINER_RADIUS}"
+  echo "slosh_monitor_liquid_height=${SLOSH_MONITOR_LIQUID_HEIGHT}"
+  echo "slosh_monitor_damping_ratio=${SLOSH_MONITOR_DAMPING_RATIO}"
+  echo "slosh_monitor_model_dt=${SLOSH_MONITOR_MODEL_DT}"
+  echo "slosh_monitor_accel_filter_alpha=${SLOSH_MONITOR_ACCEL_FILTER_ALPHA}"
+  echo "slosh_monitor_min_dt=${SLOSH_MONITOR_MIN_DT}"
+  echo "slosh_monitor_max_dt=${SLOSH_MONITOR_MAX_DT}"
+  echo "slosh_monitor_use_parabola_term=${SLOSH_MONITOR_USE_PARABOLA_TERM}"
+  echo "slosh_monitor_startup_timeout_sec=${SLOSH_MONITOR_STARTUP_TIMEOUT_SEC}"
+  echo "slosh_monitor_reset_timeout_sec=${SLOSH_MONITOR_RESET_TIMEOUT_SEC}"
+  echo "slosh_eval_only=true"
+  echo "external_baseline_uses_slosh=false"
   echo "record_online_liquid=${RECORD_ONLINE_LIQUID}"
   echo "record_all_existing_topics=${RECORD_ALL_EXISTING_TOPICS}"
   echo "planner_command=${planner_command_string}"
@@ -452,6 +575,7 @@ cat <<EOF
   status_topic = ${STATUS_TOPIC}
   planner_cfg  = ${PLANNER_CONFIG:-NA}
   costmap_cfg  = ${COSTMAP_CONFIG:-NA}
+  slosh monitor= start:${START_STANDALONE_SLOSH} record:${RECORD_STANDALONE_SLOSH} topic:${SLOSH_MONITOR_HEIGHT_TOPIC}
   recorder     = ${RECORD_SEC}s max (Ctrl+C stops earlier)
   out_dir      = ${RUN_OUT_DIR}
   path_file    = ${PATH_FILE}
@@ -466,6 +590,8 @@ if [[ "${STAGE}" == "actuated" ]]; then
 [SAFETY] robot is at the start mark, liquid settled 60-90s, and the area is clear.
 EOF
 fi
+
+prepare_slosh_monitor
 
 echo "[path] starting generator -> ${REF_TOPIC}"
 rosrun scout_local_planner template_fixed_path_generator.py \
@@ -565,12 +691,20 @@ if ! child_running "${planner_pid}"; then
   fail "Planner exited during startup (code=${planner_code})"
 fi
 
-echo "[run] recording until Ctrl+C, ${RECORD_SEC}s recorder timeout, or planner exit"
+echo "[run] recording until Ctrl+C, ${RECORD_SEC}s recorder timeout, planner exit, or slosh monitor exit"
+wait_pids=("${recorder_pid}" "${planner_pid}")
+if [[ -n "${slosh_monitor_pid}" ]]; then
+  wait_pids+=("${slosh_monitor_pid}")
+fi
 set +e
-wait -n "${recorder_pid}" "${planner_pid}"
+wait -n "${wait_pids[@]}"
 first_exit_code=$?
 set -e
-if child_running "${recorder_pid}"; then
+if [[ -n "${slosh_monitor_pid}" ]] && ! child_running "${slosh_monitor_pid}" && child_running "${recorder_pid}"; then
+  show_log_tail "${slosh_monitor_log}" "standalone slosh monitor"
+  echo "[ERR] standalone slosh monitor exited before recorder timeout (code=${first_exit_code}); invalidating run" >&2
+  recorder_code=1
+elif child_running "${recorder_pid}"; then
   show_log_tail "${planner_log}" "planner"
   echo "[ERR] planner exited before recorder timeout (code=${first_exit_code}); stopping recorder/generator" >&2
   recorder_code=1
@@ -589,6 +723,7 @@ echo "  bag/meta dir = ${RUN_OUT_DIR}"
 echo "  run meta     = ${run_meta}"
 echo "  recorder log = ${recorder_log}"
 echo "  planner log  = ${planner_log}"
+echo "  slosh log    = ${slosh_monitor_log}"
 echo "  path log     = ${path_generator_log}"
 echo "================================================"
 exit "${recorder_code}"

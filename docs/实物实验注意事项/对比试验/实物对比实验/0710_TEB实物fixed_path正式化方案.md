@@ -2,6 +2,10 @@
 
 > 目的：在不等待 Slosh-risk Governor 实物消融的前提下，先把一个普通外部 local planner baseline 做到可复现、可量化、可进入 formal N=3。本文以 `TEB-noobs-fixed` 为当前首选，并把 0706 的 loose_fast 调参方向固化为受控的候选起点。
 >
+> 2026-07-13 更新：补充 0712 TEB/B_ours 实物结果的公平性解释、tracking-matched
+> T0/T1 流程，以及 standalone slosh monitor 的自动启动、reset、运行期存活检查和
+> NO-GO 口径。
+>
 > 0706 原始现场记录仍保留在：
 >
 > ```text
@@ -121,8 +125,11 @@ CONTROLLER_FREQUENCY=10.0
 其中：
 
 ```text
-MAX_V / MAX_W:
-  同时覆盖 TEB 内部 max_vel_x/max_vel_theta 和 runner 最终 clamp；
+MAX_V:
+  同时覆盖 TEB 内部 max_vel_x/max_vel_trans 和 runner 最终 clamp；
+
+MAX_W:
+  同时覆盖 TEB 内部 max_vel_theta 和 runner 最终 clamp；
 
 MAX_ACC / MAX_ANGULAR_ACC:
   覆盖 TEB 内部 acc_lim_x/acc_lim_theta；
@@ -141,6 +148,35 @@ MAX_ACC / MAX_ANGULAR_ACC:
 
 如果需要“严格相同线速度硬上限”的额外表，应先增加两方法共用的输出速度 cap，再同日重跑 `B_ours` bridge；不要把该问题留到结果出来后再调整。
 
+0712 实物数据进一步说明，`tracking p95 <=0.30m` 只能作为“车辆安全完成任务”的宽松
+gate，不能自动代表两种方法具有相近的路径跟踪质量：
+
+```text
+TEB tracking p95:           约 0.154m
+B_ours governor-off p95:    约 0.0384m
+TEB / B_ours:               约 4.0x
+
+TEB |cmd_omega| p95:        约 0.159rad/s
+B_ours |cmd_omega| p95:     约 0.212rad/s
+
+TEB cmd_v p95:              0.300m/s
+B_ours cmd_v p95:           约 0.428m/s
+```
+
+因此当前 TEB 较低的 model slosh peak 很可能同时来自：
+
+```text
+1. via-point 跟踪较弱、弯道允许切弯，实际路径曲率更小；
+2. 转向角速度 p95 更低，横向激励 |v*omega| 更小；
+3. 线速度基本固定在 0.30m/s，没有 B_ours 的速度上冲；
+4. TEB 优化目标并不要求像 B_ours 一样同时紧跟 fixed path。
+```
+
+当前配置没有一个直接名为“允许 tracking error”的控制参数。`XY_GOAL_TOL` 只作用于
+终点，不决定全程跟踪。更相关的是 `weight_viapoint=2.0` 偏弱、
+`global_plan_viapoint_sep=0.70m` 较稀，以及较长的 lookahead。正式结论必须同时报告
+tracking、实际命令、到点时间和 slosh，不能只按 peak 排序。
+
 ---
 
 ## 6. TEB 候选 v1
@@ -157,12 +193,74 @@ MAX_ACC / MAX_ANGULAR_ACC:
 | `weight_viapoint` | `2.0` |
 | `weight_optimaltime` | `0.60` |
 | `weight_acc_lim_theta` | `50.0` |
+| `penalty_epsilon` | `0.02` |
 | `max_vel_x` | 由 `MAX_V` 覆盖，首轮 `0.30` |
+| `max_vel_trans` | 由 `MAX_V` 覆盖，首轮 `0.30` |
 | `max_vel_theta` | 由 `MAX_W` 覆盖，首轮 `1.20` |
 | `acc_lim_x` | `0.60` |
 | `acc_lim_theta` | `1.20` |
 
 注意：`weight_acc_lim_theta` 主要提高对角加速度约束违反的惩罚，不等于独立的角速度平滑/jerk 代价。减少摆头首先检查 via-point 密度、路径剪枝、lookahead 和原始命令，不要只靠降低角速度硬上限把问题遮住。
+
+### 6.1 0712 结果定位和 tracking-matched 候选
+
+0712 v1 的三次 TEB 均成功到点且无人工接管，但 tracking p95 约 `0.154m`，明显松于
+同日 B_ours governor-off 的 `0.0384m`。因此这组三次运行可以证明：
+
+```text
+TEB 能在当前 fixed-path 实物链路稳定到点；
+在宽松 tracking gate 下，它的模型高度较低。
+```
+
+但不能证明：
+
+```text
+TEB 在相同 fixed-path 跟踪质量下仍具有同样的低 slosh peak。
+```
+
+下一候选按单变量方式定义为：
+
+```text
+T0:
+  penalty_epsilon=0.02
+  weight_viapoint=2.0
+  MAX_V=0.30
+
+T1:
+  penalty_epsilon=0.02
+  weight_viapoint=3.0
+  MAX_V=0.30
+```
+
+对应 T1 文件：
+
+```text
+src/scout_apps/control/spmpc_experiments/config/baselines/
+teb_local_planner_fixed_path_real_noobs_track_t1.yaml
+```
+
+注意：Git diff 中基础配置曾把 `penalty_epsilon: 0.08 -> 0.02`。它会将速度软惩罚开始
+作用的位置从约 `0.22m/s` 移到约 `0.28m/s`，不是无关修改。运行 T1 前必须检查
+0712 bag 配套的 `*_rosparam.yaml`：
+
+```text
+若 0712 实际已经是 0.02：可将对应 v1 作为 T0；
+若 0712 实际是 0.08：先补跑 T0，再运行 T1；
+不得把 epsilon 不同的 run 宣称为只改变 weight_viapoint 的单变量对照。
+```
+
+T1 选择标准不以 slosh peak 为依据，先看任务质量：
+
+```text
+GOAL_REACHED；
+tracking p95 <=0.08m；
+无持续摆头、NO_VALID_CMD 或人工接管；
+runner limiter fraction <1%；
+MAX_V 仍保持 0.30m/s。
+```
+
+收紧 tracking 后，TEB 的角速度、到点时间和 slosh peak 可能上升，这是公平性校正的
+预期结果，不应因为 peak 变差就回退到切弯更多的参数。
 
 ---
 
@@ -183,7 +281,58 @@ rostopic echo -n 1 /tf
 
 actuated 前 `/cmd_vel` 不得存在旧 planner publisher。
 
-### 7.2 Shadow
+### 7.2 Standalone slosh monitor
+
+一键脚本现在明确区分两个开关：
+
+```text
+START_STANDALONE_SLOSH=true（默认）：
+  启动 slosh_models/slosh_monitor.launch；
+  等待 /slosh/height；
+  在路径、录包和 planner 启动前调用 /slosh/reset；
+  保存独立 monitor log，并在退出时清理进程。
+
+RECORD_STANDALONE_SLOSH=true：
+  只让 record_spmpc_full_rgb_bag.sh 把 /slosh/* 加入录包 topic；
+  它控制“是否录制”，不代替 START_STANDALONE_SLOSH 的生命周期管理。
+```
+
+正式命令显式写出：
+
+```bash
+START_STANDALONE_SLOSH=true \
+RECORD_STANDALONE_SLOSH=true \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+```
+
+默认 monitor 固定使用：
+
+```text
+odom_topic=/odom；
+cmd_vel_topic=/cmd_vel（仅 debug，模型由 odom 驱动）；
+output_namespace=/slosh；
+R=0.0185m；h=0.058m；zeta=0.05；
+use_parabola_term=false；
+model_dt=0.02；
+accel_filter_alpha=0.3；min_dt=0.001；max_dt=0.1。
+```
+
+脚本的强制 gate：
+
+```text
+检测到旧 /slosh/slosh_monitor 时拒绝启动，避免重复 publisher；
+启动后规定时间内收不到 /slosh/height，停止实验；
+/slosh/reset 调用失败，停止实验；
+脚本拥有的 monitor 在录包结束前退出，本次 run 判失败；
+monitor 参数、topic 和 eval-only 口径写入 external_baseline_meta.env；
+外部 baseline 不订阅 /slosh/*，monitor 只用于统一外部评价。
+```
+
+如确需复用人工启动的 monitor，可显式设置 `START_STANDALONE_SLOSH=false`；此时脚本仍会
+要求 `/slosh/height` 和 `/slosh/reset` 可用，但不会负责外部进程的退出清理。正式 formal
+优先使用默认的自动管理模式。
+
+### 7.3 Shadow
 
 ```bash
 DATE=20260710 \
@@ -196,6 +345,8 @@ MAX_ACC=0.60 \
 MAX_ANGULAR_ACC=1.20 \
 RECORD_ALL_EXISTING_TOPICS=false \
 RECORD_RGB=false \
+START_STANDALONE_SLOSH=true \
+RECORD_STANDALONE_SLOSH=true \
 RECORD_TOPIC_INFO=true \
 RECORD_SEC=30 \
 MAX_RECORD_SEC=30 \
@@ -209,11 +360,12 @@ Shadow 通过条件：
 /baseline/teb/global_plan 是同一 fixed S-curve；
 /baseline/teb/raw_cmd_vel 连续发布；
 /baseline/teb/tracking_error 的 frame 口径有效；
+/slosh/height 在 planner 启动前已经存在且连续发布；
 无 SET_PLAN_FAILED / NO_VALID_CMD 长时间持续；
 /cmd_vel 没有被 shadow planner 发布。
 ```
 
-### 7.3 Actuated N=1 smoke
+### 7.4 Actuated N=1 smoke
 
 ```bash
 DATE=20260710 \
@@ -226,6 +378,8 @@ MAX_ACC=0.60 \
 MAX_ANGULAR_ACC=1.20 \
 RECORD_ALL_EXISTING_TOPICS=false \
 RECORD_RGB=true \
+START_STANDALONE_SLOSH=true \
+RECORD_STANDALONE_SLOSH=true \
 RECORD_TOPIC_INFO=true \
 RECORDER_STARTUP_SEC=8 \
 RECORD_SEC=60 \
@@ -239,7 +393,7 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_re
 
 ## 8. N=1 量化 gate
 
-现有 `B_ours` 参考完成时间约 `38.1s`。TEB 进入 formal 的最低门槛：
+现有 `B_ours` 参考完成时间约 `38.1s`。TEB N=1 首先通过安全/完整性门槛：
 
 ```text
 GOAL_REACHED；
@@ -249,8 +403,22 @@ tracking p95 <= 0.30m；
 无持续左右摆头、急停或长时间 NO_VALID_CMD；
 linear/angular limited fraction 不长期非零，建议 < 1%；
 RGB 覆盖运动开始 -> first GOAL_REACHED，并保留 post-goal 残余段；
-odom / tf / fixed path / cmd / baseline diagnostics 完整。
+odom / tf / fixed path / cmd / baseline diagnostics 完整；
+/slosh/height、/slosh/state、/slosh/debug 从运动前开始连续记录；
+rosbag 在 path progress 10%~90% 核心段无 buffer exceeded。
 ```
+
+但进入“tracking-matched 正式比较”的门槛进一步收紧为：
+
+```text
+tracking p95 <=0.08m；
+同时报告与 B_ours 当日 tracking p95 的差值；
+参数选择先依据 tracking、成功和稳定性，不依据 slosh peak；
+若只能满足 0.08m~0.30m，则保留为 tracking 不匹配的描述性 external baseline。
+```
+
+`0.08m` 不是声称两种控制器已经完全同构，而是避免继续用约 `0.154m` 的明显切弯结果
+支撑“同路径质量下 peak 更低”的强结论。正式表仍必须把连续 tracking 指标并列报告。
 
 提取控制、tracking 和 limiter 指标：
 
@@ -262,6 +430,10 @@ python3 src/scout_apps/control/spmpc_experiments/scripts/extract_fixed_path_pape
 ```
 
 RGB 仍使用统一离线 max-LCR 流程，不使用在线 `/liquid/*` 作为控制或主真值。
+
+录包脚本虽然已把 rosbag buffer 默认提高到 `4096MB`，但大 buffer 只能吸收瞬时拥塞。
+正式补跑前先使用相同 RGB/topic 集合原地录制 60 秒，确认 recorder log 无
+`buffer exceeded`。出现核心段 drop 的 run 不能通过增加 buffer 后“修复”，只能重跑。
 
 ---
 
@@ -278,6 +450,15 @@ v3: MAX_V=0.40（仅在现场安全和前两档稳定时）
 ```
 
 每档先 N=1，不能直接把更快参数带入 formal。
+
+每次速度扫描在 planner 启动后都必须确认：
+
+```text
+/baseline_local_planner_runner/TebLocalPlannerROS/max_vel_x=MAX_V；
+/baseline_local_planner_runner/TebLocalPlannerROS/max_vel_trans=MAX_V；
+/baseline_local_planner_runner/max_cmd_vel_x=MAX_V；
+实际 cmd_v p95 确实突破上一档，而不是被隐藏上限继续截住。
+```
 
 ### 9.2 左右摆头
 
@@ -303,15 +484,37 @@ global_plan_prune_distance: 0.60 -> 0.80
 
 ### 9.3 切弯/偏路径过大
 
-一次只向相反方向恢复一个参数：
+0712 已确认 v1 tracking p95 约 `0.154m`，因此下一步优先执行预注册 T0/T1，不先做速度
+扫描，也不根据 slosh peak 选择参数：
 
 ```text
-weight_viapoint: 2.0 -> 3.0
-或
-global_plan_viapoint_sep: 0.70 -> 0.60
+T0: penalty_epsilon=0.02, weight_viapoint=2.0, MAX_V=0.30
+T1: penalty_epsilon=0.02, weight_viapoint=3.0, MAX_V=0.30
 ```
 
-tracking p95 超过 `0.30m` 的 run 不能进入正式主表。
+运行时显式指定版本化配置，不能临时修改同一个 YAML：
+
+```text
+T0 PLANNER_CONFIG:
+src/scout_apps/control/spmpc_experiments/config/baselines/
+teb_local_planner_fixed_path_real_noobs.yaml
+
+T1 PLANNER_CONFIG:
+src/scout_apps/control/spmpc_experiments/config/baselines/
+teb_local_planner_fixed_path_real_noobs_track_t1.yaml
+```
+
+若 T1 仍不能把 tracking p95 压到 `0.08m`，下一次只向相反方向恢复一个参数：
+
+```text
+weight_viapoint: 3.0 -> 4.0（T2，仅在 T1 稳定但 tracking 仍偏松时）
+或
+固定 weight_viapoint 后，仅改 global_plan_viapoint_sep: 0.70 -> 0.60
+```
+
+不能在同一个 candidate 中同时提高 via-point 权重、缩短 via-point 间距、提高速度和降低
+lookahead。tracking p95 超过 `0.30m` 的 run 不能进入安全主表；超过 `0.08m` 的 run
+不能宣称已经完成 tracking-matched 比较。
 
 ### 9.4 Timebox
 
@@ -327,8 +530,10 @@ N=1 通过后：
 1. 将最终 YAML 另存为带 final/frozen 名称的版本化文件；
 2. 记录 git commit；
 3. 固定 path、goal、limits、goal tolerance、controller frequency；
-4. formal 过程中不得继续调参数；
-5. 调参 bag 全部保留，但不进入主统计。
+4. 固定 standalone monitor 的 R/h/zeta/model_dt/filter/parabola 口径；
+5. 每个 run 在运动前 reset monitor，并确认 /slosh/height 已发布；
+6. formal 过程中不得继续调参数；
+7. 调参 bag 全部保留，但不进入主统计。
 ```
 
 同日必须运行 governor-off `B_ours` bridge。推荐交错顺序：
@@ -361,6 +566,7 @@ actual cmd_v mean/p95；
 actual |cmd_omega| p95/max；
 tracking RMS/p95；
 runner limiter fraction；
+standalone model height peak/p95/RMS；
 RGB H_vis peak/p95/RMS。
 ```
 
@@ -379,8 +585,14 @@ RGB 丢失或 ROI 不可用；
 容器液位、相机姿态或光照条件改变；
 调参过程中临时修改 YAML；
 runner clamp 长时间介入；
-TEB 连续 NO_VALID_CMD。
+TEB 连续 NO_VALID_CMD；
+用于 model-height formal 时 monitor 未启动、未 reset 或参数口径不一致；
+path progress 10%~90% 核心段出现 rosbag buffer exceeded / odom 丢样。
 ```
+
+若控制、tracking 和 RGB 完整，但 standalone monitor topic 缺失，该 run 可以保留为
+轨迹/RGB 描述性证据；不得把离线补算结果伪装成实录 `/slosh/height`。如果论文的 model
+height 表要求 clean online monitor N=3，则必须补跑。
 
 外部 baseline 不要求 `delay_compensation_applied_frac`，因为它没有 SPMPC delay-phase 模块；其有效性由 baseline status、map-frame tracking diagnostics、cmd 完整性和现场安全记录判定。
 
@@ -790,5 +1002,5 @@ Timebox：最多尝试 2~3 个单变量参数候选和 1 个明确的 guard 修�
 ## 14. 当前一句话原则
 
 ```text
-先用版本化 real/no-obstacle 配置把 TEB 做到稳定、量化、冻结，再与同日 governor-off B_ours 交错跑 N=3；TEB 数据完成后优先尝试标准插件 mpc_local_planner，最后才处理 LT-DWA，并坚持 shadow、短程 smoke、60s gate、参数冻结后再 formal。
+先用 T0/T1 把 TEB 的 tracking 质量收紧并量化，确认 standalone monitor 已启动、reset 且录包无核心段丢样后再冻结；随后与同日 governor-off B_ours 交错跑 N=3。TEB 数据完成后优先尝试标准插件 mpc_local_planner，最后才处理 LT-DWA。
 ```
