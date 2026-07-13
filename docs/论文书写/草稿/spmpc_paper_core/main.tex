@@ -1,0 +1,73 @@
+% !TEX program = pdflatex
+% Method-and-experiment core draft in the standard IEEE Transactions journal format.
+\documentclass[journal]{IEEEtran}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{bm}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{placeins}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc}
+\usepackage{cite}
+\usepackage[nameinlink,capitalize]{cleveref}
+
+\newcommand{\SPMPC}{SPMPC}
+\newcommand{\MPCC}{MPCC}
+\newcommand{\xr}{\bm{x}_{r}}
+\newcommand{\xl}{\bm{x}_{\ell}}
+\newcommand{\xaug}{\bm{x}}
+\newcommand{\vu}{\bm{u}}
+\newcommand{\vr}{\bm{r}}
+\newcommand{\ec}{e_{\mathrm{c}}}
+\newcommand{\el}{e_{\mathrm{l}}}
+\newcommand{\Bzero}{\ensuremath{\mathrm{B}_{0}}}
+\newcommand{\Bsmooth}{\ensuremath{\mathrm{B}_{\mathrm{smooth}}}}
+\newcommand{\Bslosh}{\ensuremath{\mathrm{B}_{\mathrm{slosh}}}}
+\newcommand{\Bours}{\ensuremath{\mathrm{B}_{\mathrm{ours}}}}
+\newcommand{\Bsmatch}{\ensuremath{\mathrm{B}_{\mathrm{smooth,match}}}}
+\newcommand{\Boursnogov}{\ensuremath{\mathrm{B}_{\mathrm{ours,noRG}}}}
+\newcommand{\Boursgov}{\ensuremath{\mathrm{B}_{\mathrm{ours,RG}}}}
+\newcommand{\Pending}{\textcolor{spmpcgray}{\textit{pending}}}
+\newcommand{\PendingResult}[1]{%
+  \par\smallskip\noindent
+  \textcolor{spmpcgray}{\textit{Pending result: #1}}%
+  \par\smallskip}
+
+\definecolor{spmpcblue}{RGB}{36,99,180}
+\definecolor{spmpclight}{RGB}{235,243,255}
+\definecolor{spmpcgray}{RGB}{90,90,90}
+
+\title{\SPMPC: Slosh-Aware Model Predictive Contouring Control for Open-Liquid Transport on Mobile Bases}
+
+\author{Renjun Zhang%
+\thanks{Renjun Zhang is with the University of Science and Technology of China,
+Hefei, China (e-mail: zhangrenjun@mail.ustc.edu.cn).}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This paper formulates an online slosh-aware path-progress planning method for a wheeled mobile base transporting an open liquid container along a geometrically feasible reference path.
+The method augments the base and path-progress states with low-order liquid modal dynamics, allowing liquid dynamic memory to evolve inside a model predictive contouring control horizon.
+The resulting optimal control problem jointly selects executable base motion and virtual path progress while penalizing predicted phase-dependent liquid response.
+An optional predictive speed-reference shaping layer contracts the nominal speed reference using a short liquid-state rollout without overriding the optimized base command.
+The resulting formulation provides a modular basis for separating liquid-state prediction inside the optimal control problem from optional speed-reference adaptation.
+The evaluation uses matched internal baselines to distinguish liquid-state prediction from motion smoothing, and treats external liquid-surface observations separately from the model proxy.
+\end{abstract}
+
+\begin{IEEEkeywords}
+mobile robots, open-liquid transport, liquid sloshing, model predictive contouring control, receding-horizon planning
+\end{IEEEkeywords}
+
+\input{sections/01_method}
+\input{sections/02_experiments}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

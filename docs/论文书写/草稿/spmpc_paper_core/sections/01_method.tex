@@ -1,0 +1,321 @@
+\section{\SPMPC{} Method}
+
+\subsection{Problem Scope and Receding-Horizon Information Flow}
+
+\IEEEPARstart{T}{he} task is to transport an open liquid container on a standard wheeled mobile base along a given geometrically feasible reference path. Let $t_j$ denote the current control instant. The planner receives the measured base state, the current path-progress estimate, the previously applied control, and a liquid modal state propagated by a low-order model. It solves one finite-horizon optimal control problem and executes only the first action.
+
+The current formulation addresses path-progress motion generation near a prescribed path. It does not include occupancy-grid constraints, dynamic-obstacle prediction, or collision corridors. The method should therefore be interpreted as an online slosh-aware motion-planning layer rather than a complete dynamic-environment navigation system.
+
+The central modeling decision is to place liquid dynamic memory inside the prediction state. Liquid motion is not evaluated only after the base command has been selected. As illustrated in \cref{fig:core_architecture}, robot motion, path progress, and liquid state evolve within the same horizon.
+
+\begin{figure}[t]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[
+    font=\footnotesize,
+    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=1.50cm, minimum height=0.62cm, align=center},
+    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=1.95cm, minimum height=0.82cm, align=center, font=\footnotesize\bfseries},
+    small/.style={draw=spmpcgray, rounded corners=2pt, line width=0.4pt, fill=white, minimum width=1.10cm, minimum height=0.45cm, align=center, font=\scriptsize},
+    arr/.style={-{Latex[length=1.6mm]}, line width=0.5pt, draw=spmpcblue}
+  ]
+    \node[block] (base) at (0,1.35) {Base\\state};
+    \node[block] (path) at (0,0.45) {Path\\progress};
+    \node[block] (prev) at (0,-0.45) {Previous\\control};
+    \node[block] (liquid) at (0,-1.35) {Liquid\\state};
+
+    \node[core] (model) at (2.45,0.15) {Augmented\\prediction model};
+    \node[core] (ocp) at (4.90,0.15) {\SPMPC{}\\OCP};
+    \node[block, fill=white] (cmd) at (7.25,0.15) {First\\base command};
+
+    \node[small] (track) at (4.05,-0.95) {tracking};
+    \node[small] (progress) at (5.75,-0.95) {progress};
+    \node[small] (smooth) at (4.05,-1.55) {smoothness};
+    \node[small] (slosh) at (5.75,-1.55) {slosh};
+
+    \foreach \s in {base,path,prev,liquid}
+      \draw[arr] (\s.east) -- (model.west);
+    \draw[arr] (model.east) -- (ocp.west);
+    \draw[arr] (ocp.east) -- (cmd.west);
+    \foreach \c in {track,progress,smooth,slosh}
+      \draw[arr] (\c.north) -- (ocp.south);
+    \draw[arr, rounded corners=6pt] (cmd.south) |- (4.90,-2.10) -| node[pos=0.22, below, font=\scriptsize, text=spmpcgray] {receding-horizon update} (model.south);
+  \end{tikzpicture}}
+  \caption{Core information flow of \SPMPC{}. Base motion, path progress, and the propagated liquid state share one prediction model. The first constrained action is applied before the OCP is initialized again.}
+  \label{fig:core_architecture}
+\end{figure}
+
+\subsection{Base and Path-Progress Dynamics}
+
+The robot and progress state is
+\begin{equation}
+  \xr =
+  \begin{bmatrix}
+    p_x & p_y & \theta & v & s & \omega
+  \end{bmatrix}^{\top},
+  \label{eq:robot_state}
+\end{equation}
+where $(p_x,p_y)$ is the base position, $\theta$ is the heading, $v$ and $\omega$ are the linear and angular velocities, and $s$ is the reference-path progress. The control input is
+\begin{equation}
+  \vu =
+  \begin{bmatrix}
+    a & \alpha & v_s
+  \end{bmatrix}^{\top},
+  \label{eq:control_input}
+\end{equation}
+with linear acceleration $a$, angular acceleration $\alpha$, and virtual path-progress speed $v_s$. The continuous-time dynamics are
+\begin{equation}
+\begin{aligned}
+  \dot{p}_x &= v\cos\theta, &
+  \dot{p}_y &= v\sin\theta, &
+  \dot{\theta} &= \omega,\\
+  \dot{v} &= a, &
+  \dot{s} &= v_s, &
+  \dot{\omega} &= \alpha .
+\end{aligned}
+\label{eq:robot_dynamics}
+\end{equation}
+
+This acceleration-level representation makes angular-acceleration limits and rotational control variation explicit. Related mobile-robot MPC formulations also include internal motion states and acceleration-level controls \cite{D23_Arrizabalaga2021}. In \SPMPC{}, this state choice supports execution constraints; it is not treated as an independent methodological contribution.
+
+\subsection{Low-Order Liquid Dynamics and Augmented State}
+
+Dominant planar slosh motion can be represented using a small number of modal coordinates driven by horizontal container acceleration \cite{A01_Leva2021,A02_Guagliumi2021}. For each container-frame direction $i\in\{x,y\}$, define
+\begin{equation}
+  \bm{x}_{s,i}=
+  \begin{bmatrix}
+    \eta_i & \dot{\eta}_i
+  \end{bmatrix}^{\top},
+\end{equation}
+where $\eta_i$ is the dominant modal displacement. A second-order model gives
+\begin{equation}
+  \ddot{\eta}_i
+  +2\zeta_i\omega_{n,i}\dot{\eta}_i
+  +\omega_{n,i}^2\eta_i
+  =-\kappa_i a_i,
+  \label{eq:liquid_mode}
+\end{equation}
+with natural frequency $\omega_{n,i}$, damping ratio $\zeta_i$, and input gain $\kappa_i$. The subscript $n$ distinguishes the modal natural frequency from the base angular velocity $\omega$.
+
+For a rigidly mounted container, the base motion provides the approximate excitation
+\begin{equation}
+  a_x=a,\qquad a_y\approx v\omega .
+  \label{eq:liquid_excitation}
+\end{equation}
+The first term is the forward tangential acceleration. The second approximates lateral centripetal excitation during turning. This compact excitation model is selected for online planning and does not replace a high-fidelity free-surface model.
+
+The liquid and augmented states are
+\begin{equation}
+\begin{aligned}
+  \xl &=
+  \begin{bmatrix}
+    \eta_x & \dot{\eta}_x & \eta_y & \dot{\eta}_y
+  \end{bmatrix}^{\top},\\
+  \xaug &=
+  \begin{bmatrix}
+    \xr^{\top} & \xl^{\top}
+  \end{bmatrix}^{\top}.
+\end{aligned}
+\label{eq:augmented_state}
+\end{equation}
+After discretization with sampling interval $\Delta t$, the joint model is written as
+\begin{equation}
+  \xaug_{k+1}=f_d(\xaug_k,\vu_k).
+  \label{eq:joint_discrete_dynamics}
+\end{equation}
+At control instant $t_j$, the OCP is initialized by
+\begin{equation}
+  \xaug_0=
+  \hat{\xaug}(t_j)
+  =
+  \begin{bmatrix}
+    \hat{\xr}^{\top}(t_j) &
+    \hat{\xl}^{\top}(t_j)
+  \end{bmatrix}^{\top}.
+  \label{eq:initial_augmented_state}
+\end{equation}
+The base component is measured or estimated from robot sensing. The liquid component is propagated by \cref{eq:liquid_mode,eq:liquid_excitation}; it is not a direct observation of the free surface.
+
+For optimization diagnostics and reference shaping, the propagated state can be mapped to a nonnegative model proxy
+\begin{equation}
+  H_{\mathrm{model}}
+  =
+  c_h\sqrt{\eta_x^2+\eta_y^2}
+  +\mathbb{I}_{\mathrm{para}}
+  \frac{R_c^2\omega^2}{4g},
+  \label{eq:model_proxy}
+\end{equation}
+where $c_h$ maps modal displacement to a height scale, $R_c$ is the container radius, and $\mathbb{I}_{\mathrm{para}}$ enables an optional quasi-static turning term. This proxy describes the model response. It is not identified with measured liquid height.
+
+\paragraph{Prediction consequence}
+Once $\xl$ is propagated and penalized inside the horizon, the optimizer can distinguish candidate motions with similar geometric errors but different interactions with the current liquid phase. A slosh-agnostic planner cannot represent this distinction explicitly.
+
+\subsection{Path-Progress Geometry}
+
+Let the reference path be
+\begin{equation}
+  \vr(s)=
+  \begin{bmatrix}
+    r_x(s) & r_y(s)
+  \end{bmatrix}^{\top},
+\end{equation}
+with tangent angle $\psi(s)$. Following the standard \MPCC{} construction \cite{D19_Liniger2015,D20_Brito2019}, define
+\begin{equation}
+\begin{aligned}
+  \bm{t}(s)&=
+  \begin{bmatrix}
+    \cos\psi(s) & \sin\psi(s)
+  \end{bmatrix}^{\top},\\
+  \bm{n}(s)&=
+  \begin{bmatrix}
+    -\sin\psi(s) & \cos\psi(s)
+  \end{bmatrix}^{\top}.
+\end{aligned}
+\end{equation}
+For the displacement $\bm{e}(s)=[p_x,p_y]^{\top}-\vr(s)$, the contouring and lag errors are
+\begin{equation}
+  \ec=\bm{n}^{\top}(s)\bm{e}(s),\qquad
+  \el=\bm{t}^{\top}(s)\bm{e}(s).
+  \label{eq:contour_lag_errors}
+\end{equation}
+The contouring error measures lateral path deviation. The lag error couples the physical position to the virtual progress state.
+
+\subsection{Slosh-Aware \MPCC{} Optimal Control Problem}
+
+For horizon length $N$, the core \SPMPC{} problem is
+\begin{equation}
+\begin{aligned}
+  \min_{\xaug_{0:N},\vu_{0:N-1}}\quad
+  &\sum_{k=0}^{N-1}\ell_k+\ell_N\\
+  \mathrm{s.t.}\quad
+  &\xaug_0=\hat{\xaug}(t_j),\\
+  &\xaug_{k+1}=f_d(\xaug_k,\vu_k),\\
+  &\xaug_k\in\mathcal{X},\quad
+   \vu_k\in\mathcal{U},\\
+  &k=0,\ldots,N-1.
+\end{aligned}
+\label{eq:core_ocp}
+\end{equation}
+The stage and terminal costs are
+\begin{equation}
+\begin{aligned}
+  \ell_k={}&
+    q_c e_{\mathrm{c},k}^{2}
+    +q_l e_{\mathrm{l},k}^{2}
+    -q_p v_{s,k}\\
+  &+q_v(v_k-v_{\mathrm{ref},k})^2
+    +q_{v_s}(v_{s,k}-v_{\mathrm{ref},k})^2\\
+  &+\|\vu_k\|_{R}^{2}
+    +\|\vu_k-\vu_{k-1}\|_{S}^{2}
+    +\|\bm{x}_{\ell,k}\|_{Q_s}^{2},\\
+  \ell_N={}&
+    q_{c,N}e_{\mathrm{c},N}^{2}
+    +q_{l,N}e_{\mathrm{l},N}^{2}
+    +\|\bm{x}_{\ell,N}\|_{Q_{s,N}}^{2}.
+\end{aligned}
+\label{eq:core_cost}
+\end{equation}
+Here $\|\bm{z}\|_Q^2=\bm{z}^{\top}Q\bm{z}$. For $k=0$, the slew term uses $\vu_{-1}=\vu_{\mathrm{prev}}(t_j)$, the control applied before the current solve. The first two terms maintain path accuracy. The reward $-q_pv_s$ prevents slosh reduction by indefinite stopping, while the speed-reference terms regulate task pace. Matrices $R$ and $S$ penalize control effort and variation. The final term makes the propagated liquid state affect motion selection.
+
+Representative base and input bounds are
+\begin{equation}
+\begin{gathered}
+  0\leq v_k\leq v_{\max},\qquad
+  |\omega_k|\leq\omega_{\max},\\
+  |a_k|\leq a_{\max},\qquad
+  |\alpha_k|\leq\alpha_{\max},\\
+  0\leq v_{s,k}\leq v_{s,\max}.
+\end{gathered}
+\label{eq:base_bounds}
+\end{equation}
+The core anti-slosh mechanism is the combination of \cref{eq:joint_discrete_dynamics} and the liquid-state penalty in \cref{eq:core_cost}. A slosh penalty without liquid propagation would not carry phase-dependent memory.
+
+If a model-level envelope is required, an optional soft boundary can be added:
+\begin{equation}
+  \eta_{x,k}^{2}+\eta_{y,k}^{2}
+  \leq\eta_{\max}^{2}+\epsilon_k,\qquad
+  \epsilon_k\geq0.
+  \label{eq:optional_soft_boundary}
+\end{equation}
+The corresponding stage cost becomes
+\begin{equation}
+  \ell_k^{\mathrm{soft}}
+  =\ell_k+q_{\epsilon}\epsilon_k^2,
+  \qquad q_{\epsilon}>0.
+  \label{eq:optional_slack_cost}
+\end{equation}
+This model constraint does not by itself establish a spill-free guarantee.
+
+\subsection{Optional Predictive Speed-Reference Shaping}
+
+The core OCP can use the nominal reference directly, $v_{\mathrm{ref},k}=v_{\mathrm{ref}}^{\mathrm{nom}}$. An optional reference-shaping layer evaluates whether this reference should be contracted before the next \MPCC{} solve. It does not change the augmented state or override the optimized command.
+
+Let
+\begin{equation}
+  \mathcal{B}
+  =
+  \{\beta_0,\ldots,\beta_{M-1}\}
+  \subseteq[\beta_{\min},1]
+\end{equation}
+be a finite scaling set. Candidate $\beta$ defines $v_{\beta}=\beta v_{\mathrm{ref}}^{\mathrm{nom}}$. A simplified $N_g$-step rollout produces $H_k(\beta)$, and its normalized risk is
+\begin{equation}
+  R(\beta)
+  =
+  \max_{0\leq k\leq N_g}
+  \frac{H_k(\beta)}{H_{\lim}}.
+  \label{eq:shaping_risk}
+\end{equation}
+For threshold $\rho$, define
+\begin{equation}
+\begin{aligned}
+  \mathcal{B}_{\mathrm{feas}}
+  &=
+  \{\beta\in\mathcal{B}\mid R(\beta)\leq\rho\},\\
+  \beta_{\mathrm{raw}}
+  &=
+  \begin{cases}
+    \max\mathcal{B}_{\mathrm{feas}},
+      &\mathcal{B}_{\mathrm{feas}}\neq\emptyset,\\
+    \beta_{\min},
+      &\mathcal{B}_{\mathrm{feas}}=\emptyset.
+  \end{cases}
+\end{aligned}
+\label{eq:shaping_selection}
+\end{equation}
+
+An asymmetric rate limiter produces the applied scaling:
+\begin{equation}
+\begin{aligned}
+  \underline{\beta}
+  &=
+  \max\{\beta_{\min},
+  \beta_f^{-}-\dot{\beta}_{\downarrow}\Delta t\},\\
+  \overline{\beta}
+  &=
+  \min\{1,
+  \beta_f^{-}+\dot{\beta}_{\uparrow}\Delta t\},\\
+  \beta_f
+  &=
+  \operatorname{clip}
+  (\beta_{\mathrm{raw}},
+   \underline{\beta},
+   \overline{\beta}),\\
+  v_{\mathrm{ref}}^{g}
+  &=\beta_f v_{\mathrm{ref}}^{\mathrm{nom}}.
+\end{aligned}
+\label{eq:shaping_filter}
+\end{equation}
+The construction does not amplify a nonnegative nominal reference. When $\mathcal{B}_{\mathrm{feas}}$ is nonempty, $\beta_{\mathrm{raw}}$ is the largest discrete candidate that meets the model-risk threshold. The rate limiter can nevertheless produce $\beta_f>\beta_{\mathrm{raw}}$ during one update, while an empty candidate set only triggers fallback toward $\beta_{\min}$. These properties do not imply recursive feasibility, closed-loop stability, or spill prevention.
+
+\subsection{Online Solution and First-Action Execution}
+
+The current implementation solves \cref{eq:core_ocp} using an acados-generated SQP-RTI solver with explicit RK integration and warm starts from the previous solution. The first optimized acceleration is converted to the base command
+\begin{equation}
+  v_{\mathrm{cmd}}
+  =v_0+a_0^{\star}\Delta t,\qquad
+  \omega_{\mathrm{cmd}}
+  =\omega_0+\alpha_0^{\star}\Delta t.
+  \label{eq:first_action}
+\end{equation}
+After common base limits are applied, the command is executed and the horizon is shifted. New base measurements and the propagated liquid state then initialize the next OCP.
+
+With $v_{\mathrm{ref},k}=v_{\mathrm{ref}}^{\mathrm{nom}}$, \cref{eq:core_ocp,eq:core_cost} define the core \SPMPC{} planner. Enabling \cref{eq:shaping_risk,eq:shaping_selection,eq:shaping_filter} changes only the speed reference supplied to that planner. The distinction keeps the liquid-state-augmented OCP separate from the optional reference-shaping extension.

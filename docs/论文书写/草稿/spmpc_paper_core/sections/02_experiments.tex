@@ -1,0 +1,332 @@
+\section{Experimental Evaluation}
+
+The evaluation asks whether liquid-state propagation changes the physical liquid response beyond what can be obtained through stronger motion smoothing alone. A useful result must also preserve task completion and acceptable path tracking. Slower motion is reported as a tradeoff, not counted automatically as anti-slosh improvement.
+
+The study is organized around matched internal baselines. This choice isolates the mechanism introduced by \SPMPC{} because the compared controllers share the robot model, path-progress formulation, constraints, horizon, and numerical solver. It follows the evidence pattern used in constrained anti-slosh trajectory planning, where optimized motions are tested against matched nonoptimized profiles under the same transport task \cite{C01_Ferrari2026}. The present fixed-path experiments do not attempt to rank complete navigation systems whose main distinction is obstacle avoidance.
+
+\subsection{Experimental Questions and Protocol}
+
+Four questions structure the evaluation. The factorial study tests the independent and interacting effects of liquid prediction and control smoothing. A completion-time-matched comparison then examines whether any liquid-response difference can be explained by slower travel. Model sensitivity and solver timing address deployment assumptions. The final study concerns the optional speed-reference shaping layer.
+
+All controller variants use the same start and goal, geometrically feasible path, base-motion bounds, prediction horizon, solver backend, state initialization rule, and termination criterion. Predictive reference shaping remains disabled during the core factorial study. Only the factors named in \cref{tab:factorial_variants} may differ.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Two-factor internal comparison used for the core evaluation.}
+  \label{tab:factorial_variants}
+  \begin{tabular}{@{}lccp{0.39\linewidth}@{}}
+    \toprule
+    Variant & Liquid state & Smoothing & Experimental role \\
+    \midrule
+    \Bzero   & Off & Weak   & Ordinary \MPCC{} \\
+    \Bsmooth & Off & Strong & Smooth-only control \\
+    \Bslosh  & On  & Weak   & Liquid-aware control \\
+    \Bours   & On  & Strong & Complete \SPMPC{} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The physical protocol separates three temporal windows. Statistics over 10\% to 90\% path progress describe the main motion interval. Full-trial records determine success and arrival time. A fixed interval after arrival captures residual oscillation. Startup, steady transport, and settling therefore do not share one aggregate value.
+
+The calibrated RGB envelope is denoted by $H_{\mathrm{vis}}$. Its p95 and RMS values form the primary liquid-response evidence. The propagated quantity $H_{\mathrm{model}}$ is retained as a model diagnostic. Similar units or group-level trends do not make it a measurement of the free surface.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Metric hierarchy used throughout the evaluation.}
+  \label{tab:evaluation_metrics}
+  \begin{tabular}{@{}p{0.30\linewidth}p{0.62\linewidth}@{}}
+    \toprule
+    Evidence layer & Reported quantities \\
+    \midrule
+    External liquid & $H_{\mathrm{vis}}$ p95, RMS, and post-arrival residual \\
+    Model response & $H_{\mathrm{model}}$ p95, RMS, peak, and signed bias \\
+    Task execution & Success, arrival time, path-error p95, and final error \\
+    Control behavior & $|\omega|$ p95, acceleration RMS, and command variation \\
+    Computation & Solve-time median, p95, maximum, miss rate, and failures \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Every trial that satisfies the predefined validity criteria enters the final statistics. Sensor failure, missing path input, solver inactivity, and corrupted recording are admissible exclusion reasons. Performance itself is not. Representative time series will be selected by proximity to the group median rather than by the most favorable run.
+
+Per-trial metrics will be reported with their sample count, mean, standard deviation, and a 95\% bootstrap confidence interval. For a response $Y$, the two-factor analysis uses
+\begin{equation}
+  Y_r
+  =\mu+\tau_{\ell}L_r+\tau_s S_r
+  +\tau_{\ell s}L_rS_r+\varepsilon_r,
+  \label{eq:factorial_response}
+\end{equation}
+where $L_r\in\{0,1\}$ indicates liquid-state propagation and $S_r\in\{0,1\}$ indicates strong smoothing. The interaction term is important. A diagonal comparison alone cannot identify it.
+The model will be fitted separately for each path. A pooled analysis will include path as a blocking factor.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Physical setup parameters. Entries marked pending must be frozen before the complete experiment matrix is collected.}
+  \label{tab:physical_setup}
+  \begin{tabular}{@{}p{0.36\linewidth}p{0.56\linewidth}@{}}
+    \toprule
+    Item & Setting \\
+    \midrule
+    Mobile base and command interface & Scout Mini skid-steer base commanded by linear and angular velocity \\
+    Container geometry and fill depth & Cylindrical tube, $R_c=18.5\,\mathrm{mm}$ and $h=58\,\mathrm{mm}$ \\
+    Transported liquid & \Pending \\
+    External RGB observation and scale & RealSense RGB with run-specific three-ruler calibration \\
+    Control period and prediction horizon & $30\,\mathrm{Hz}$, $\Delta t=0.0333\,\mathrm{s}$, and $N=60$ \\
+    Nominal speed reference & $0.20\,\mathrm{m/s}$ for the current fixed-path trials \\
+    Core path and high-risk path & Fixed-path geometry recorded; high-risk path \Pending \\
+    Repetitions & Current preliminary groups: three; final target: at least five per cell and path \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\subsection{Factorial Ablation of Liquid Prediction and Smoothing}
+
+The four cells in \cref{tab:factorial_variants} support clean one-factor contrasts. Comparing \Bzero{} with \Bsmooth{} measures stronger smoothing without liquid dynamics. The pair \Bzero{} and \Bslosh{} isolates liquid prediction under weak smoothing. Under strong smoothing, the corresponding liquid-state effect is obtained from \Bsmooth{} and \Bours{}. The final contrast, \Bslosh{} against \Bours{}, measures additional smoothing while the liquid model remains active.
+
+The available fixed-path summary contains three successful trials for each variant and uses the 10\% to 90\% progress window. The \Bzero{}, \Bslosh{}, and \Bours{} groups were collected together under one controlled protocol. The formal \Bsmooth{} group uses the same controller configuration and task definition, but it was recorded in a separate acquisition block. The resulting four-row table is therefore descriptive and does not replace a four-cell matrix collected within one block.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{2.2pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Available fixed-path liquid-response statistics. Each row contains three trials and reports mean $\pm$ standard deviation.}
+  \label{tab:preliminary_liquid_results}
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Variant & Model p95 & Model RMS & RGB p95 & RGB RMS \\
+            & [mm] & [mm] & [mm] & [mm] \\
+    \midrule
+    \Bzero
+      & $1.100\pm0.034$
+      & $0.547\pm0.016$
+      & $1.009\pm0.214$
+      & $0.541\pm0.081$ \\
+    \Bsmooth
+      & $0.994\pm0.165$
+      & $0.491\pm0.066$
+      & $1.272\pm0.283$
+      & $0.639\pm0.060$ \\
+    \Bslosh
+      & $0.632\pm0.101$
+      & $0.307\pm0.035$
+      & $0.901\pm0.015$
+      & $0.537\pm0.008$ \\
+    \Bours
+      & $0.892\pm0.076$
+      & $0.432\pm0.018$
+      & $0.709\pm0.098$
+      & $0.384\pm0.032$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{2.6pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Task and control statistics for the same fixed-path trials.}
+  \label{tab:preliminary_task_results}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Variant & Path p95 [cm] & $|\omega|$ p95 [rad/s] & Time [s] \\
+    \midrule
+    \Bzero
+      & $2.947\pm0.087$
+      & $0.234\pm0.015$
+      & $33.753\pm0.355$ \\
+    \Bsmooth
+      & $3.646\pm1.188$
+      & $0.202\pm0.022$
+      & $35.169\pm0.537$ \\
+    \Bslosh
+      & $3.442\pm0.128$
+      & $0.242\pm0.033$
+      & $36.851\pm0.231$ \\
+    \Bours
+      & $3.527\pm0.204$
+      & $0.207\pm0.007$
+      & $38.073\pm0.403$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Relative to \Bzero{}, \Bours{} reduces RGB p95 and RMS by 29.8\% and 29.0\%, respectively. Its model response is also lower. The improvement comes with approximately $4.3\,\mathrm{s}$ of additional travel time and a larger path-error p95. \Bslosh{} reduces RGB p95 by 10.7\%, while its RGB RMS remains nearly unchanged.
+
+The descriptive comparison with \Bsmooth{} is also favorable to \Bours{}. Model p95 and RMS are 10.3\% and 12.0\% lower, while RGB p95 and RMS are 44.3\% and 39.9\% lower. These percentages cross acquisition blocks. They cannot be interpreted as the clean strong-smoothing main effect required by the factorial design.
+
+Taken together, the available trials show that the liquid objective changes the optimized motion and can coincide with lower RGB response. Acquisition-block effects, initial liquid conditions, and visual calibration remain possible confounders. Broad superiority is not claimed.
+
+\PendingResult{Collect \Bzero{}, \Bsmooth{}, \Bslosh{}, and \Bours{} within one acquisition block on both the fixed path and the high-risk path. Use the complete data to estimate the main effects and interaction in \cref{eq:factorial_response}.}
+
+\subsection{Completion-Time-Matched Smooth-Only Comparison}
+
+The factorial matrix uses one nominal reference for every cell, which preserves configuration equality but does not force equal arrival times. A separate comparison controls this confound. The smooth-only variant \Bsmatch{} retains the \Bsmooth{} model, weights, and constraints; only its nominal speed reference is selected before data collection so that its median completion time matches that of \Bours{} within a fixed tolerance $\delta_T$.
+
+The tuning target uses arrival time only. RGB outcomes are not inspected while setting the reference. Once the target is frozen, both variants run with identical paths, initial conditions, validity rules, and repetition counts. The matching condition is
+\begin{equation}
+  \frac{|\widetilde{T}_{\mathrm{smooth,match}}
+  -\widetilde{T}_{\mathrm{ours}}|}
+  {\widetilde{T}_{\mathrm{ours}}}
+  \leq\delta_T,
+  \label{eq:time_matching}
+\end{equation}
+where $\widetilde{T}$ denotes the group median. This comparison asks whether the liquid-aware speed profile matters when total task duration is approximately fixed.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Completion-time-matched smooth-only comparison.}
+  \label{tab:time_matched_results}
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Variant & Time [s] & RGB p95 & RGB RMS & Path p95 \\
+    \midrule
+    \Bsmatch & \Pending & \Pending & \Pending & \Pending \\
+    \Bours   & \Pending & \Pending & \Pending & \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\PendingResult{Freeze $\delta_T$, determine the time-matched nominal speed without using liquid outcomes, and collect the paired physical comparison.}
+
+\subsection{Model Consistency and Sensitivity}
+
+The low-order model influences the optimizer but is not corrected by direct free-surface feedback. Its usefulness must therefore be tested beyond nominal parameters. Synchronized model and RGB curves will first be evaluated over a window that includes post-arrival settling. Two normalized indices separate signed bias from absolute disagreement:
+\begin{equation}
+\begin{aligned}
+  \gamma_{\mathrm{bias}}
+  &=100\,
+  \frac{\int_{0}^{T_e}
+  \left(H_{\mathrm{model}}-H_{\mathrm{vis}}\right)\,\mathrm{d}t}
+  {\int_{0}^{T_e}H_{\mathrm{model}}\,\mathrm{d}t},\\
+  \gamma_{\mathrm{abs}}
+  &=100\,
+  \frac{\int_{0}^{T_e}
+  \left|H_{\mathrm{model}}-H_{\mathrm{vis}}\right|\,\mathrm{d}t}
+  {\int_{0}^{T_e}H_{\mathrm{model}}\,\mathrm{d}t}.
+\end{aligned}
+\label{eq:model_consistency_indices}
+\end{equation}
+The signed quantity reveals systematic underestimation or overestimation. The absolute index measures total mismatch. This extends the model-to-experiment integral comparison used in anti-slosh trajectory validation \cite{C01_Ferrari2026} while preserving the distinction between a model state and an external observation.
+
+Signed-bias statistics are available for the same fixed-path groups. \cref{tab:available_model_consistency} reports the 10\% to 90\% window used in the physical comparison. Negative values indicate that the model underestimates the RGB envelope on average.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{2.8pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Available model-to-RGB consistency statistics. Each row contains three trials.}
+  \label{tab:available_model_consistency}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Variant & $\gamma_{\mathrm{bias}}$ [\%] & RMSE [mm] & Corr. \\
+    \midrule
+    \Bzero   & $4.9\pm13.7$   & $0.431\pm0.057$ & $0.190\pm0.068$ \\
+    \Bsmooth & $-41.1\pm5.7$  & $0.442\pm0.035$ & $0.177\pm0.074$ \\
+    \Bslosh  & $-75.6\pm13.9$ & $0.383\pm0.036$ & $0.260\pm0.109$ \\
+    \Bours   & $8.8\pm11.8$   & $0.316\pm0.030$ & $0.137\pm0.158$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Framewise correlation remains weak. \Bslosh{} shows the largest systematic underestimation, even when its internal model response is the lowest. These results support using $H_{\mathrm{model}}$ as a control-side diagnostic. They do not support a standalone liquid-height measurement or a hard safety gate.
+
+The planned sensitivity study perturbs one modeling assumption at a time in simulation. Natural frequency, damping ratio, and input gain are varied around their nominal values. Nonzero initial liquid states test residual dynamic memory. Execution delay is included because phase error can arise even when the continuous model parameters are accurate.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Planned model-sensitivity matrix.}
+  \label{tab:sensitivity_plan}
+  \begin{tabular}{@{}p{0.28\linewidth}p{0.29\linewidth}p{0.34\linewidth}@{}}
+    \toprule
+    Perturbation & Levels & Pending outputs \\
+    \midrule
+    Natural frequency & $0.8$, $0.9$, $1.0$, $1.1$, $1.2$ times nominal & Liquid response, time, success \\
+    Damping ratio & $0.6$, $0.8$, $1.0$, $1.2$, $1.4$ times nominal & Residual response and bias \\
+    Input gain & $0.8$, $0.9$, $1.0$, $1.1$, $1.2$ times nominal & Amplitude sensitivity \\
+    Initial liquid state & Zero and nonzero modal states & Dynamic-memory sensitivity \\
+    Execution delay & Nominal and perturbed delays & Phase and tracking degradation \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\PendingResult{Compute $\gamma_{\mathrm{abs}}$ for the existing trials and complete the parameter-sensitivity matrix. Report degradation curves rather than a binary robustness claim.}
+
+\subsection{Online Computational Performance}
+
+Online deployment is assessed from the solve-time distribution recorded on the physical system. For $N_c$ control cycles, the deadline-miss rate is defined below.
+\begin{equation}
+  r_{\mathrm{miss}}
+  =\frac{1}{N_c}
+  \sum_{j=1}^{N_c}
+  \mathbb{I}\!\left(T_{\mathrm{solve},j}>\Delta t\right),
+  \label{eq:deadline_miss_rate}
+\end{equation}
+where $N_c$ is the number of control cycles. Solver failure, fallback behavior, and achieved update frequency are reported separately. A low mean cannot conceal occasional missed deadlines.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{2.5pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Online computational statistics on the deployed platform.}
+  \label{tab:runtime_results}
+  \begin{tabular}{@{}lccccc@{}}
+    \toprule
+    Variant & Median [ms] & p95 [ms] & Max. [ms] & Miss rate & Failures \\
+    \midrule
+    \Bzero   & \Pending & \Pending & \Pending & \Pending & \Pending \\
+    \Bsmooth & \Pending & \Pending & \Pending & \Pending & \Pending \\
+    \Bslosh  & \Pending & \Pending & \Pending & \Pending & \Pending \\
+    \Bours   & \Pending & \Pending & \Pending & \Pending & \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\PendingResult{Extract per-cycle solver timing, deadline misses, solver status, fallback actions, and achieved control frequency from every valid physical trial.}
+
+\subsection{Predictive Speed-Reference Shaping}
+
+The optional shaping layer is evaluated after the core \Bours{} configuration has been frozen. The comparison uses \Boursnogov{} and \Boursgov{} with identical \MPCC{} weights, nominal references, paths, constraints, and initial states. One low-risk path checks unnecessary intervention. A high-risk path must contain sustained curvature changes or a speed level that activates the predicted-risk mechanism.
+
+External liquid response remains the primary outcome. Arrival time quantifies the price of reference contraction. The records of $\beta_{\mathrm{raw}}$, $\beta_f$, saturation, and activation rate verify that the module actually participated in the decision process.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{2.6pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Predictive speed-reference shaping comparison.}
+  \label{tab:reference_shaping_results}
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Variant & RGB p95 & RGB RMS & Time & Activation rate \\
+    \midrule
+    \Boursnogov & \Pending & \Pending & \Pending & Not applicable \\
+    \Boursgov   & \Pending & \Pending & \Pending & \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The module will be interpreted as beneficial only if the high-risk experiment improves external liquid response without an unacceptable task-time penalty, while the low-risk experiment shows limited unnecessary contraction. A reduction in the model proxy alone is insufficient.
+
+\PendingResult{Collect matched low-risk and high-risk noRG/RG trials, then decide whether predictive reference shaping remains in the main paper or moves to supplementary material.}
+
+\FloatBarrier
