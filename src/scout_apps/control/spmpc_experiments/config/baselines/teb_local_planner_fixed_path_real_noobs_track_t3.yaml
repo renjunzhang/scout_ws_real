@@ -1,0 +1,63 @@
+# Real-robot TEB tracking candidate T3 for the obstacle-free fixed S-curve.
+# The only change from track_t2 is global_plan_viapoint_sep: 0.70 -> 0.60.
+# Keep MAX_V=0.30 while evaluating this candidate.
+TebLocalPlannerROS:
+  odom_topic: /odom
+  map_frame: map
+  transform_tolerance: 1.0
+  teb_autosize: true
+  dt_ref: 0.30
+  dt_hysteresis: 0.08
+  max_samples: 500
+
+  global_plan_overwrite_orientation: true
+  allow_init_with_backwards_motion: false
+  max_global_plan_lookahead_dist: 4.0
+  global_plan_prune_distance: 0.60
+  global_plan_viapoint_sep: 0.60
+  exact_arc_length: false
+  feasibility_check_no_poses: 5
+
+  max_vel_x: 0.30
+  max_vel_x_backwards: 0.03
+  max_vel_theta: 1.20
+  acc_lim_x: 0.60
+  acc_lim_theta: 1.20
+  min_turning_radius: 0.0
+  wheelbase: 0.0
+  cmd_angle_instead_rotvel: false
+
+  footprint_model:
+    type: "polygon"
+    vertices: [[0.31, 0.2925], [0.31, -0.2925], [-0.31, -0.2925], [-0.31, 0.2925]]
+
+  xy_goal_tolerance: 0.20
+  yaw_goal_tolerance: 0.30
+  free_goal_vel: false
+
+  min_obstacle_dist: 0.0
+  inflation_dist: 0.0
+  include_costmap_obstacles: false
+  costmap_obstacles_behind_robot_dist: 0.0
+  obstacle_poses_affected: 0
+
+  no_inner_iterations: 4
+  no_outer_iterations: 3
+  optimization_activate: true
+  optimization_verbose: false
+  penalty_epsilon: 0.02
+  weight_max_vel_x: 5.0
+  weight_max_vel_theta: 5.0
+  weight_acc_lim_x: 10.0
+  weight_acc_lim_theta: 50.0
+  weight_kinematics_nh: 1000.0
+  weight_kinematics_forward_drive: 40.0
+  weight_kinematics_turning_radius: 1.0
+  weight_optimaltime: 0.60
+  weight_obstacle: 0.0
+  weight_viapoint: 4.0
+
+  enable_homotopy_class_planning: false
+  enable_multithreading: true
+  max_number_classes: 1
+  roadmap_graph_no_samples: 15

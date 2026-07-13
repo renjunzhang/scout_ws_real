@@ -113,7 +113,9 @@ wait_for_topic() {
     local log_file="${LOG_DIR}/wait_${safe_name}.log"
 
     echo "[${SCRIPT_NAME}] Waiting for ${label} (${topic}), timeout=${READY_TIMEOUT}s..."
-    if timeout "${READY_TIMEOUT}" rostopic echo -n 1 "${topic}" >"${log_file}" 2>&1; then
+    # Readiness only needs one delivered message. Avoid expanding large arrays
+    # such as 1920x1080 RGB data, which can outlive the timeout while formatting.
+    if timeout "${READY_TIMEOUT}" rostopic echo --noarr -n 1 "${topic}" >"${log_file}" 2>&1; then
         echo "[${SCRIPT_NAME}] ${label} is publishing."
         sleep "${POST_TOPIC_DELAY}"
         return 0
