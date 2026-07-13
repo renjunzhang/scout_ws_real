@@ -1,5 +1,7 @@
 # spmpc_local_planner
 
+> 论文 Methods、公式、贡献点与写作边界参考：[`README_METHOD.md`](README_METHOD.md)。
+
 `spmpc_local_planner` 是 Scout 液体运输实验中的 **SPMPC 规控一体局部规划器**。当前主线不是早期 Phase3 的 primitive smoke，也不是单纯的路径跟踪控制器，而是：
 
 ```text
