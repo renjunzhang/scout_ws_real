@@ -1,18 +1,15 @@
 % !TEX program = pdflatex
-% IEEE conference paper based on /home/zrj/Downloads/spmpc_paper.zip.
-\documentclass[conference]{IEEEtran}
+% Standard IEEE Transactions journal format.
+\documentclass[journal]{IEEEtran}
 
-\IEEEoverridecommandlockouts
-
-\usepackage[T1]{fontenc}
 \usepackage{amsmath,amssymb,amsfonts}
-\usepackage{newtxmath}
 \usepackage{bm}
 \usepackage{mathtools}
 \usepackage{graphicx}
 \usepackage{booktabs}
 \usepackage{array}
 \usepackage{multirow}
+\usepackage{placeins}
 \usepackage{xcolor}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,calc,fit,matrix,shapes.geometric}
@@ -52,17 +49,11 @@
 \definecolor{spmpcorange}{RGB}{220,120,40}
 \definecolor{spmpcgray}{RGB}{90,90,90}
 
-\title{\LARGE \bf
-\SPMPC: Slosh-Aware Model Predictive Contouring Control for Open-Liquid Transport on Mobile Bases
-}
+\title{\SPMPC: Slosh-Aware Model Predictive Contouring Control for Open-Liquid Transport on Mobile Bases}
 
-\author{
-\IEEEauthorblockN{Renjun Zhang}
-\IEEEauthorblockA{
-\textit{University of Science and Technology of China}\\
-Hefei, China\\
-zhangrenjun@mail.ustc.edu.cn}
-}
+\author{Renjun Zhang%
+\thanks{Renjun Zhang is with the University of Science and Technology of China,
+Hefei, China (e-mail: zhangrenjun@mail.ustc.edu.cn).}}
 
 \begin{document}
 

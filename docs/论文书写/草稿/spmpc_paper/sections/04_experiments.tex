@@ -1,220 +1,124 @@
-\section{Experiments and Validation}
+\section{Experimental Design and Results}
 
-The experiments evaluate the main claim of \SPMPC{}: explicit slosh-state prediction can provide interpretable liquid-response improvement beyond smooth-only control, without unacceptable path-tracking, task-time, or online-computation cost.
-The evaluation uses a two-layer evidence chain.
-Controlled comparisons are used to separate internal ablation factors and local-planner baselines, while physical trials examine external liquid response and the interpretability of internal model proxies.
-Online computation and execution diagnostics are treated separately to verify that the method remains a deployable receding-horizon local planner.
+The experiments address one central question: does explicit propagation of liquid dynamics improve the externally observed liquid response beyond stronger motion smoothing alone? Task completion, path error, and control behavior are evaluated at the same time, preventing persistent deceleration from being reported as anti-slosh performance. Because the current formulation follows a prescribed path, the experimental claims are restricted to that setting.
 
-\subsection{Experimental Setting and Metrics}
+\subsection{Experimental Setup and Evaluation Protocol}
 
-The experimental scope matches the problem formulation: a standard wheeled mobile base transports an open liquid container along a precomputed geometrically feasible reference path.
-Planner comparisons use the same start and goal conditions, reference path, base constraints, task termination condition, and failure criteria.
-External baseline planners do not receive liquid-surface state as a control input.
-Each trial logs trajectory, velocity commands, control inputs, solve time, internal model proxies, and external liquid observations.
-Throughout the evaluation, $H_{\mathrm{model}}^{\mathrm{modal}}$ and $H_{\mathrm{model}}^{\mathrm{full}}$ are interpreted only as internal prediction or diagnostic proxies.
-Claims about real liquid motion are based on RGB envelope measurements, liquid-level measurements, or other external observations.
+All internal variants share the start and goal, reference path, base-motion bounds, prediction horizon, solver backend, and termination criteria. Predictive speed-reference shaping is disabled in the core factorial ablation, leaving liquid prediction and smoothing strength as the two design factors. External planners use the same task definition, with linear velocity, angular velocity, and acceleration limits matched as closely as their interfaces permit.
 
-\begin{figure}[t]
-  \centering
-  \resizebox{\linewidth}{!}{%
-  \begin{tikzpicture}[
-    font=\footnotesize,
-    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=1.55cm, minimum height=0.58cm, align=center},
-    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=1.60cm, minimum height=0.72cm, align=center, font=\footnotesize\bfseries},
-    metric/.style={draw=spmpcgray, rounded corners=2pt, line width=0.4pt, fill=white, minimum width=1.15cm, minimum height=0.44cm, align=center, font=\scriptsize},
-    arr/.style={-{Latex[length=1.6mm]}, line width=0.5pt, draw=spmpcblue}
-  ]
-    \node[core] (robot) at (0,0) {Base +\\container};
-    \node[block] (planner) at (2.35,0.75) {Planner logs\\traj. / cmd};
-    \node[block] (proxy) at (2.35,-0.75) {Model proxy\\slosh};
-    \node[block] (camera) at (2.35,1.80) {Surface obs.\\RGB / level};
-    \node[core] (eval) at (4.65,0.35) {Metrics};
-    \node[metric] (m1) at (6.75,1.45) {liquid};
-    \node[metric] (m2) at (6.75,0.65) {proxy};
-    \node[metric] (m3) at (6.75,-0.15) {task};
-    \node[metric] (m4) at (6.75,-0.95) {runtime};
+Three temporal windows serve different purposes. The main window, from 10\% to 90\% path progress, excludes the dominant influence of startup and terminal detection on steady-motion statistics. The full trial determines task success and arrival time. A fixed post-arrival window is reserved for residual oscillation. The current physical table reports the main-window results, with repeated trials summarized as mean $\pm$ standard deviation.
 
-    \draw[arr] (robot.east) -- (planner.west);
-    \draw[arr] (robot.east) -- (proxy.west);
-    \draw[arr] (robot.north east) |- (camera.west);
-    \draw[arr] (planner.east) -- (eval.west);
-    \draw[arr] (proxy.east) -- (eval.west);
-    \draw[arr] (camera.east) -| (eval.north);
-    \foreach \m in {m1,m2,m3,m4}
-      \draw[arr] (eval.east) -- (\m.west);
-  \end{tikzpicture}}
-  \caption{Experimental measurement pipeline. Trajectories, base commands, solve time, and internal slosh proxies explain planner behavior; real liquid-response claims are supported by external vision or liquid-level observations.}
-  \label{fig:experiment_setup}
-\end{figure}
-
-\Cref{tab:metrics_plan} summarizes the metrics.
-For liquid-response comparisons, high-percentile and RMS metrics are emphasized because single-frame maxima can be affected by isolated visual envelope spikes.
-For limited sample sizes, the statistical claim is restricted to representative evidence rather than broad population-level significance.
+Real liquid response is evaluated using the calibrated RGB envelope $H_{\mathrm{vis}}$, for which p95 and RMS are the primary metrics. The internal quantity $H_{\mathrm{model}}$ follows the convention in \cref{eq:h_model} and is used only to explain the response predicted by the planner. Matching units do not make the two quantities equivalent.
 
 \begin{table}[t]
   \centering
   \scriptsize
-  \setlength{\tabcolsep}{3pt}
-  \caption{Evaluation metrics and their roles.}
+  \setlength{\tabcolsep}{2.5pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Evaluation metrics and their evidential roles.}
   \label{tab:metrics_plan}
-  \begin{tabular}{p{0.27\linewidth} p{0.35\linewidth} p{0.26\linewidth}}
+  \begin{tabular}{p{0.23\linewidth} p{0.37\linewidth} p{0.28\linewidth}}
     \toprule
-    Category & Metrics & Purpose \\
+    Category & Primary metrics & Role \\
     \midrule
-    External liquid motion & RGB max-LCR, RMS-LCR, residual oscillation & Test whether external observations support liquid-response improvement \\
-    Model diagnostics & Predicted slosh state, $H_{\mathrm{model}}^{\mathrm{modal}}$, $H_{\mathrm{model}}^{\mathrm{full}}$ & Interpret model prediction without replacing external measurements \\
-    Model-external consistency & $\gamma_{\mathrm{bias}}$, $\gamma_{\mathrm{abs}}$, RMSE, $\rho$, $\tau^\star$, peak/high-percentile underestimation & Check whether internal proxies explain external observations \\
-    Task completion & Success rate, timeout, arrival time & Exclude the explanation that the planner simply stops or slows excessively \\
-    Path tracking & Contouring error, path deviation & Verify that the local-planning task remains satisfied \\
-    Control smoothness & RMS velocity, acceleration, and angular acceleration & Separate smoothness from slosh-state prediction \\
-    Online computation & Solve time, control frequency, solver failures & Verify real-time receding-horizon execution \\
+    External liquid response & p95, RMS, and residual oscillation of $H_{\mathrm{vis}}$ & Support claims about real liquid motion \\
+    Model diagnostics & p95, RMS, and peak of $H_{\mathrm{model}}$ & Explain internal prediction \\
+    Task and tracking & Success rate, arrival time, and projection error & Quantify the cost of slosh reduction \\
+    Control behavior & Angular-velocity p95, linear-acceleration RMS, and angular-acceleration RMS & Check whether gains arise only from smoothing or slowing \\
+    Online computation & Median, p95, and maximum solve time, plus deadline-miss rate & Test execution within the control period \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-To avoid evaluating the method using only internal model quantities, we compare model proxies with an external liquid observation $H_{\mathrm{vis}}(t)$.
-Let $H_{\mathrm{model}}^{\mathrm{eval}}(t)$ denote the model proxy used for comparison; it may be either $H_{\mathrm{model}}^{\mathrm{modal}}(t)$ or $H_{\mathrm{model}}^{\mathrm{full}}(t)$, and the selected convention is reported with the results.
-Following the practice of comparing low-order model height with video-extracted liquid motion in anti-slosh trajectory planning \cite{C01_Ferrari2026}, we define the signed bias
-\begin{equation}
-  \gamma_{\mathrm{bias}} =
-  100\cdot
-  \frac{\int_{t_0}^{t_1}\left(H_{\mathrm{model}}^{\mathrm{eval}}(t)-H_{\mathrm{vis}}(t)\right)\dd t}
-  {\int_{t_0}^{t_1}H_{\mathrm{model}}^{\mathrm{eval}}(t)\dd t+\epsilon}.
-  \label{eq:gamma_bias}
-\end{equation}
-The interval $[t_0,t_1]$ spans the valid command window and the post-arrival residual-oscillation window, and $\epsilon$ prevents denominator degeneracy.
-A positive $\gamma_{\mathrm{bias}}$ indicates that the model is conservative on average, while a negative value indicates average underestimation of the external metric.
-The absolute deviation is
-\begin{equation}
-  \gamma_{\mathrm{abs}} =
-  100\cdot
-  \frac{\int_{t_0}^{t_1}\left|H_{\mathrm{model}}^{\mathrm{eval}}(t)-H_{\mathrm{vis}}(t)\right|\dd t}
-  {\int_{t_0}^{t_1}H_{\mathrm{vis}}(t)\dd t+\epsilon}.
-  \label{eq:gamma_abs}
-\end{equation}
-Additional diagnostics include RMSE, correlation coefficient $\rho$, phase shift $\tau^\star$, peak error, high-percentile error, and maximum local underestimation.
-Model-external consistency is used for interpretation; it is not a substitute for external liquid evidence and does not constitute a formal spill-prevention guarantee.
+Model and external liquid quantities are interpreted in separate evidence layers. Agreement in group-level trends can indicate that the low-order prediction is consistent with the external response. Frame-level phase fidelity, reconstruction of true free-surface height, and the validity of a safety threshold require stronger calibration and sensing evidence.
 
-\subsection{Internal Ablation and Baseline Structure}
+\subsection{Factorial Ablation of Slosh Prediction and Motion Smoothing}
 
-The internal ablation tests whether \SPMPC{} is merely a stronger smoothness controller.
-All variants share the same path-progress \MPCC{} structure, reference path, and base constraints; they differ only in the slosh model/cost and smoothing weights.
-The four variants \Bzero{}, \Bsmooth{}, \Bslosh{}, and \Bours{} are defined in \cref{tab:method_variants}.
+The four variants in \cref{tab:method_variants} form a two-factor matrix. \Bzero{} versus \Bsmooth{} measures smoothing without a liquid model, while \Bzero{} versus \Bslosh{} evaluates the liquid mechanism under weak smoothing. A complete matrix also requires \Bsmooth{} versus \Bours{} to determine whether liquid prediction remains beneficial under strong smoothing. The remaining one-factor comparison, \Bslosh{} versus \Bours{}, characterizes the effect of increased smoothing when the liquid model is active.
 
-\begin{figure}[t]
-  \centering
-  \resizebox{\linewidth}{!}{%
-  \begin{tikzpicture}[
-    font=\footnotesize,
-    cell/.style={draw=spmpcgray, rounded corners=2pt, line width=0.55pt, fill=white, minimum width=2.15cm, minimum height=0.82cm, align=center},
-    ours/.style={draw=spmpcblue, rounded corners=2pt, line width=0.8pt, fill=spmpclight, minimum width=2.15cm, minimum height=0.82cm, align=center, font=\footnotesize\bfseries},
-    head/.style={font=\footnotesize\bfseries, text=spmpcblue, align=center},
-    row/.style={font=\scriptsize\bfseries, text=spmpcgray, align=right},
-    arr/.style={-{Latex[length=1.7mm]}, line width=0.5pt, draw=spmpcblue, shorten >=1pt, shorten <=1pt}
-  ]
-    \node[head] at (1.45,1.65) {No slosh state};
-    \node[head] at (4.35,1.65) {Slosh state};
-    \node[row, anchor=east] at (-0.05,0.70) {Weak\\smooth.};
-    \node[row, anchor=east] at (-0.05,-0.45) {Strong\\smooth.};
+\Bsmooth{} versus \Bslosh{} is a diagonal contrast. It has practical narrative value because it tests whether slosh-aware planning with weak smoothing can outperform a strong smooth-only baseline. However, liquid prediction and smoothing strength change together, so the contrast cannot be interpreted as the pure main effect of liquid prediction.
 
-    \node[cell] (b0) at (1.45,0.70) {\Bzero{}\\Baseline};
-    \node[cell] (bs) at (4.35,0.70) {\Bslosh{}\\Slosh-aware};
-    \node[cell] (bm) at (1.45,-0.45) {\Bsmooth{}\\High smoothing};
-    \node[ours] (bo) at (4.35,-0.45) {\Bours{}\\SPMPC};
+The current physical statistics cover \Bzero{}, \Bsmooth{}, and \Bslosh{}. Without \Bours{}, the matrix cannot estimate the liquid-prediction effect under strong smoothing or identify an interaction between the two factors. The available data therefore provide trend-level evidence rather than a complete causal ablation.
 
-    \draw[arr] (b0) -- (bs);
-    \draw[arr] (b0) -- (bm);
-    \draw[arr] (bm) -- (bo);
-    \draw[arr] (bs) -- (bo);
-  \end{tikzpicture}}
-  \caption{Internal ablation structure. The variants form a two-factor decomposition of whether the planner propagates a slosh state and whether stronger control smoothing is applied.}
-  \label{fig:ablation_design}
-\end{figure}
+\subsection{Model Sensitivity and Online Computation}
 
-The comparisons answer distinct questions.
-\Bsmooth{} vs.\ \Bzero{} quantifies the effect of stronger smoothness alone.
-\Bslosh{} vs.\ \Bzero{} evaluates the independent role of explicit slosh-state prediction.
-\Bours{} vs.\ \Bsmooth{} tests whether the state-augmented planner exceeds smooth-only planning.
-\Bours{} vs.\ \Bslosh{} characterizes the role of additional smoothing in executable local-command generation.
-Only trends supported by external liquid observations are interpreted as real liquid-response improvement; reductions in internal proxies alone are interpreted as model-side reductions in predicted slosh response.
+The suitability of a low-order model as an online decision kernel cannot be assessed from nominal-model proxies alone. A sensitivity study should perturb natural frequency, damping ratio, and input gain while also changing the initial liquid state. Natural frequency can be scanned at $\pm10\%$ and $\pm20\%$ around its nominal value, with a wider relative range for damping. Nonzero initial modes represent residual oscillation that has not decayed before the next turn. Relevant outputs include an external or high-fidelity liquid metric, task completion, and degradation of $H_{\mathrm{model}}$ relative to the evaluation signal.
 
-Ordinary local-planner baselines test whether online local planning without liquid-state propagation already covers the task.
-Candidate baselines include DWA, TEB, \MpcLocalPlanner{}, and LT-DWA.
-They operate at a similar deployment layer and generate executable base commands, but generally do not propagate liquid dynamic memory.
-Quantitative comparison requires runnable interfaces, matched base constraints, identical task definitions, and reproducible logs.
-Mobile-base anti-slosh reference methods, such as Hamaguchi-style path/speed profiles, input shaping, and offline liquid-constrained trajectory optimization, are included quantitatively only when they can be reproduced under comparable platform and interface conditions; otherwise, they serve as decision-layer references rather than ranked baselines.
+Online computation is characterized by a distribution rather than a single mean. Median and p95 solve times should be accompanied by maximum latency, deadline-miss rate, solver failures, and the achieved control frequency. The use of acados SQP-RTI establishes the implementation route. It does not replace timing measurements on the deployed system.
 
-The Slosh-risk Reference Governor is evaluated as an incremental module by comparing \Bours{} and \Boursgov{} under the same \SPMPC{} parameters, nominal speed reference, and base constraints.
-In addition to liquid, task, and tracking metrics, the governor-specific diagnostics are $\beta_{\mathrm{raw}}$, $\beta_f$, saturated rate, transient rate-limited rate, and arrival-time change.
+Until those statistics are complete, no broader claim is made about parameter robustness or real-time performance beyond the observed physical operation.
 
-\subsection{Physical Experiments: External Liquid Response and Model Consistency}
+\subsection{Comparison with Ordinary Online Motion Planners}
 
-Physical experiments examine whether the trends observed from planning and model proxies are supported by external liquid-surface observations.
-The platform records the final base command, external liquid observation, internal model proxy, and execution-chain diagnostics, allowing the analysis to separate planner behavior from base execution, sensing latency, and command limiting.
-In the physical analysis, $H_{\mathrm{model}}$ remains an internal proxy; real liquid-response conclusions are based on RGB or liquid-level observations.
+The internal \Bzero{} variant is the primary ordinary \MPCC{} baseline for identifying the effect of liquid prediction because it shares the path-progress state, constraints, horizon, and numerical framework with \SPMPC{}. The main external comparison should retain one reproducible ordinary MPC or MPCC local planner and LT-DWA as a stronger long-horizon kinodynamic baseline \cite{D02_Jian2023}. DWA and TEB can provide supplementary classical references \cite{D15_Fox1997,D16_Rosmann2017}.
 
-\Cref{tab:real_fixed_path_ablation} reports a representative fixed-path internal-ablation result.
-The comparison includes a basic baseline, a smooth-only baseline, and a slosh-aware variant.
-Each method is repeated three times.
-All trials reach the goal, and the valid configurations use $v_{\mathrm{ref}}=0.20\,\mathrm{m/s}$, matched linear/angular velocity and acceleration limits, enabled fixed closed-loop delay compensation, disabled hard model constraint, and no tracking-protection stop.
-Statistics are computed over the 10--90\% path-progress window.
+The comparison follows standard local-planner measures of task efficiency, tracking, smoothness, and computation \cite{D21_Wen2021}, while adding the same external liquid observation for every method. External planners do not receive liquid state as feedback. Only \SPMPC{} propagates the low-order liquid dynamics.
 
-\begin{table}[t]
+In an obstacle-free fixed-path experiment, this comparison reflects online command generation, tracking, and liquid-transport behavior. It does not exercise the main local-obstacle capabilities of DWA, TEB, or LT-DWA and therefore cannot support a ranking of complete navigation performance. No quantitative ordering is stated before matched results are available.
+
+\subsection{Physical Liquid-Response Validation}
+
+The physical validation uses a fixed reference path and the same nominal speed, $v_{\mathrm{ref}}=0.20\,\mathrm{m/s}$. Each of the three variants contains three representative trials. Linear velocity, angular velocity, and acceleration bounds are aligned, and every trial reaches the goal. Both the model proxy and the RGB envelope are evaluated from 10\% to 90\% path progress.
+
+\begin{table}[!htbp]
   \centering
   \scriptsize
-  \setlength{\tabcolsep}{3pt}
-  \renewcommand{\arraystretch}{1.05}
-  \caption{Representative fixed-path physical internal-ablation results over the 10--90\% path-progress window.}
+  \setlength{\tabcolsep}{2.3pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Representative fixed-path physical results. Values are mean $\pm$ standard deviation over the main path-progress window.}
   \label{tab:real_fixed_path_ablation}
-  \label{tab:real_reduction_selected}
-  \resizebox{\columnwidth}{!}{%
+  \begin{tabular}{lcccc}
+    \toprule
+    Method & Model p95 [mm] & Model RMS [mm] & RGB p95 [mm] & RGB RMS [mm] \\
+    \midrule
+    \Bzero
+      & $1.100\pm0.034$
+      & $0.547\pm0.016$
+      & $1.009\pm0.214$
+      & $0.541\pm0.081$ \\
+    \Bsmooth
+      & $0.994\pm0.165$
+      & $0.491\pm0.066$
+      & $1.272\pm0.283$
+      & $0.639\pm0.060$ \\
+    \Bslosh
+      & $0.632\pm0.101$
+      & $0.307\pm0.035$
+      & $0.901\pm0.015$
+      & $0.537\pm0.008$ \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{0.45em}
+
   \begin{tabular}{lccc}
     \toprule
-    Metric & \Bzero{} & \Bsmooth{} & \Bslosh{} \\
+    Method & Projection p95 [cm] & $|\omega|$ p95 [rad/s] & Arrival time [s] \\
     \midrule
-    \multicolumn{4}{l}{\textit{A. Physical ablation statistics}}\\
-    Model p95 [mm] & $1.100\pm0.034$ & $0.994\pm0.165$ & $0.632\pm0.101$ \\
-    Model max [mm] & $2.102\pm0.222$ & $2.227\pm0.240$ & $1.255\pm0.039$ \\
-    Model RMS [mm] & $0.547\pm0.016$ & $0.491\pm0.066$ & $0.307\pm0.035$ \\
-    RGB p95 [mm] & $1.009\pm0.214$ & $1.272\pm0.283$ & $0.901\pm0.015$ \\
-    RGB max [mm] & $2.398\pm0.482$ & $2.267\pm0.309$ & $2.162\pm0.405$ \\
-    RGB RMS [mm] & $0.541\pm0.081$ & $0.639\pm0.060$ & $0.537\pm0.008$ \\
-    Projection p95 [cm] & $2.947\pm0.087$ & $3.646\pm1.188$ & $3.442\pm0.128$ \\
-    $|\omega|$ p95 [rad/s] & $0.234\pm0.015$ & $0.202\pm0.022$ & $0.242\pm0.033$ \\
-    Arrival time [s] & $33.753\pm0.355$ & $35.169\pm0.537$ & $36.851\pm0.231$ \\
-    \midrule
-    \multicolumn{4}{l}{\textit{B. Relative reduction of \Bslosh{} with respect to \Bsmooth{}}}\\
-    Model p95 & -- & -- & $36.4\%$ \\
-    Model RMS & -- & -- & $37.4\%$ \\
-    RGB p95 & -- & -- & $29.2\%$ \\
-    RGB RMS & -- & -- & $15.9\%$ \\
+    \Bzero
+      & $2.947\pm0.087$
+      & $0.234\pm0.015$
+      & $33.753\pm0.355$ \\
+    \Bsmooth
+      & $3.646\pm1.188$
+      & $0.202\pm0.022$
+      & $35.169\pm0.537$ \\
+    \Bslosh
+      & $3.442\pm0.128$
+      & $0.242\pm0.033$
+      & $36.851\pm0.231$ \\
     \bottomrule
-  \end{tabular}}
+  \end{tabular}
 \end{table}
 
-The comparison between \Bsmooth{} and \Bzero{} shows that stronger smoothing can reduce $|\omega|$ p95 and some model-proxy statistics, but the RGB liquid envelope does not decrease accordingly.
-\Bslosh{} does not have the lowest $|\omega|$ p95, yet both the model-proxy and RGB p95/RMS metrics are lower than those of \Bsmooth{}.
-This indicates that the observed liquid-response improvement in these representative trials cannot be explained by smaller angular velocity alone.
-Panel B of \cref{tab:real_fixed_path_ablation} reports the corresponding relative reductions.
+Stronger smoothing does not produce a consistent external liquid benefit in these trials. Relative to \Bzero{}, \Bsmooth{} reduces $|\omega|$ p95 from $0.234$ to $0.202\,\mathrm{rad/s}$, and its model proxy decreases slightly. The RGB p95 and RMS instead increase to $1.272$ and $0.639\,\mathrm{mm}$. A lower high-percentile angular velocity alone is therefore insufficient to establish improved liquid response.
 
-Relative to the smooth-only baseline, \Bslosh{} reduces the model-proxy p95 and RMS by 36.4\% and 37.4\%, and reduces the RGB $H_{\mathrm{vis}}$ p95 and RMS by 29.2\% and 15.9\%.
-Peak statistics are retained in \cref{tab:real_fixed_path_ablation}, but the isolated sensitivity of max values to visual envelope spikes makes p95/RMS the primary evidence in this comparison.
-Relative to \Bzero{}, \Bslosh{} reduces the model proxy and RGB p95, while the RGB RMS is nearly unchanged; therefore \Bzero{} is used as a reference baseline rather than the main reduction denominator.
-Overall, these representative fixed-path physical trials show consistent p95/RMS liquid-response improvement of the slosh-aware variant over the smooth-only baseline.
-At the same time, \Bslosh{} has a longer arrival time, and its projection-error and angular-velocity statistics are not uniformly best.
-The conclusion is therefore limited to liquid-response improvement rather than dominance across all task metrics.
+In the diagonal comparison between \Bslosh{} and \Bsmooth{}, model p95 and RMS decrease by $36.4\%$ and $37.4\%$, respectively. RGB p95 decreases by $29.2\%$, while RGB RMS decreases by $15.9\%$. The angular-velocity p95 of \Bslosh{} is slightly higher, so the external-liquid difference cannot be attributed solely to lower angular velocity. This is the clearest positive trend in the current evidence.
 
-The model-external comparison is used only as an interpretive diagnostic.
-In this result, the internal model proxy $H_{\mathrm{model}}$ and the external RGB liquid envelope decrease consistently when comparing \Bslosh{} against \Bsmooth{}, supporting a trend-level explanation based on explicit slosh prediction.
-The proxy still cannot replace external liquid observations, frame-level phase fidelity, ground-truth free-surface height, or hard safety monitoring.
+There is a cost. The mean arrival time of \Bslosh{} is $36.851\,\mathrm{s}$, longer than for the other variants, and its projection-error and angular-velocity statistics are not uniformly best. Relative to \Bzero{}, it lowers RGB p95 while leaving RGB RMS nearly unchanged. The current result thus supports a liquid-response trend on the representative fixed path, not dominance across all task metrics.
 
-\subsection{Online Computation and Execution Diagnostics}
+The internal proxy and RGB metrics move in the same group-level direction when \Bslosh{} is compared with \Bsmooth{}. This consistency helps explain why the low-order model changes the selected motion. It does not establish frame-level fidelity between the two time series, and $H_{\mathrm{model}}$ cannot replace external liquid observation.
 
-Online solve performance is reported separately from liquid-response metrics to verify that \SPMPC{} remains a deployable receding-horizon local planner rather than an offline anti-slosh trajectory optimizer.
-Relevant quantities include OCP solve-time distribution, control frequency, solver failures, timeouts, and extreme cases.
-Median and high-percentile solve times are compared with the control period.
+These results come from a small representative sample and do not form a complete four-cell physical matrix. Matched \Bours{} statistics, model sensitivity, solve-time distributions, and ordinary-planner results are still absent. Consequently, the current evidence does not support claims of statistical significance, parameter robustness, or broad planner superiority.
 
-Execution diagnostics explain discrepancies in the physical system.
-They include optimizer output, final base velocity command, command saturation, terminal deceleration, sensing delay, and base response.
-These diagnostics support experimental interpretation but are not independent anti-slosh contributions.
-When the execution chain substantially modifies the optimizer output, the corresponding physical conclusions are interpreted under that execution condition.
+\FloatBarrier

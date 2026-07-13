@@ -1,186 +1,124 @@
-\section{实验与验证}
+\section{实验设计与结果}
 
-本节围绕 \SPMPC{} 的主要实验问题组织验证：显式晃液状态预测是否能在单纯平滑控制之外提供可解释的液面响应改善，并且不以不可接受的路径跟踪、任务完成时间或在线计算代价为条件。实验采用仿真--实物双层证据链：仿真实验用于系统比较内部消融和外部基线，实物实验用于检查真实液面响应及模型代理量的解释能力，在线求解统计用于验证该方法仍满足移动底盘局部规划器的部署要求。
+实验围绕一个核心判断展开：显式传播液体动态状态，能否在单纯增强运动平滑性之外改善外部液面响应。评价同时考虑任务完成、路径误差和控制行为，避免把持续降速误写为防晃性能。由于当前方法沿给定路径运行，实验结论也限定在这一任务范围内。
 
-\subsection{实验设置与评价指标}
+\subsection{实验设置与评价协议}
 
-实验范围与问题定义保持一致：标准轮式移动底盘携带开口液体容器沿预先给定的几何可行参考路径运动。仿真比较不同规划器在相同参考路径、底盘约束和任务终止条件下的行为；实物实验记录外部液面观测，并检查内部模型代理量是否具有解释价值。
+所有内部消融共享起点、终点、参考路径、底盘运动边界、预测时域、求解器后端和终止判据。核心二维消融关闭预测速度参考整形，使液体预测与平滑配置成为仅有的两个设计因子。外部方法比较时采用相同任务定义，并尽可能对齐线速度、角速度及其加速度边界。
 
-为保证比较公平，正式实验固定起点、终点、参考路径、容器配置、任务终止条件和失败判据，并尽量对齐最大线速度、角速度、线加速度和角加速度。外部基线方法不使用液面状态作为控制输入。所有试次记录轨迹、速度、控制输入、求解时间、内部模型代理量和外部液面观测。这里需要特别区分模型代理量与外部观测量：$H_{\mathrm{model}}^{\mathrm{modal}}$ 和 $H_{\mathrm{model}}^{\mathrm{full}}$ 只能作为模型内部预测或诊断代理量；真实液面结论必须依赖 RGB 最大 LCR、液面高度测量或其它外部观测指标。
+实物评价使用三个时间口径。路径进度 10\% 至 90\% 的主窗口用于排除起步和终端判定对稳定运动统计的支配；全程窗口记录到达时间与任务成功；到达后的固定窗口用于分析残余振荡。当前表格报告主窗口结果。重复试次以均值加减标准差表示。
 
-\begin{figure}[t]
-  \centering
-  \resizebox{\linewidth}{!}{%
-  \begin{tikzpicture}[
-    font=\footnotesize,
-    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=1.55cm, minimum height=0.58cm, align=center},
-    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=1.60cm, minimum height=0.72cm, align=center, font=\footnotesize\bfseries},
-    metric/.style={draw=spmpcgray, rounded corners=2pt, line width=0.4pt, fill=white, minimum width=1.15cm, minimum height=0.44cm, align=center, font=\scriptsize},
-    arr/.style={-{Latex[length=1.6mm]}, line width=0.5pt, draw=spmpcblue}
-  ]
-    \node[core] (robot) at (0,0) {Base +\\container};
-    \node[block] (planner) at (2.35,0.75) {Planner logs\\traj. / cmd};
-    \node[block] (proxy) at (2.35,-0.75) {Model proxy\\slosh};
-    \node[block] (camera) at (2.35,1.80) {Surface obs.\\RGB / level};
-    \node[core] (eval) at (4.65,0.35) {Metrics};
-    \node[metric] (m1) at (6.75,1.45) {liquid};
-    \node[metric] (m2) at (6.75,0.65) {proxy};
-    \node[metric] (m3) at (6.75,-0.15) {task};
-    \node[metric] (m4) at (6.75,-0.95) {runtime};
-
-    \draw[arr] (robot.east) -- (planner.west);
-    \draw[arr] (robot.east) -- (proxy.west);
-    \draw[arr] (robot.north east) |- (camera.west);
-    \draw[arr] (planner.east) -- (eval.west);
-    \draw[arr] (proxy.east) -- (eval.west);
-    \draw[arr] (camera.east) -| (eval.north);
-    \foreach \m in {m1,m2,m3,m4}
-      \draw[arr] (eval.east) -- (\m.west);
-  \end{tikzpicture}}
-  \caption{实验平台与外部液面评价流程。轨迹、速度命令、求解时间和内部晃液代理量用于解释规划器行为；真实液面结论由外部视觉或液位观测支持。}
-  \label{fig:experiment_setup}
-\end{figure}
-
-评价指标覆盖真实液面运动、模型诊断、模型--外部液面一致性、任务完成、路径跟踪、控制平滑性和在线计算，如 \cref{tab:metrics_plan} 所示。报告结果时同时给出均值、方差或置信区间，并保留失败试次；若样本数有限，则将结论限定为初步证据。
+真实液面响应由标定后的 RGB 液面包络 $H_{\mathrm{vis}}$ 评价，主指标为 p95 和 RMS。内部代理量 $H_{\mathrm{model}}$ 采用 \cref{eq:h_model} 的统一口径，只用于解释规划器所预测的液体响应。两者量纲可以一致，含义并不相同。
 
 \begin{table}[t]
   \centering
   \footnotesize
   \setlength{\tabcolsep}{3pt}
-  \caption{评价指标与评价目的}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{实验指标及其证据作用}
   \label{tab:metrics_plan}
-  \begin{tabular}{p{0.27\linewidth} p{0.35\linewidth} p{0.26\linewidth}}
+  \begin{tabular}{p{0.24\linewidth} p{0.35\linewidth} p{0.29\linewidth}}
     \toprule
-    指标类别 & 具体指标 & 评价目的 \\
+    类别 & 主要指标 & 用途 \\
     \midrule
-    真实液面运动 & RGB 最大 LCR、RMS-LCR、残余振荡 & 验证外部观测是否支持液面响应改善结论 \\
-    模型诊断 & 预测晃液状态、$H_{\mathrm{model}}^{\mathrm{modal}}$、$H_{\mathrm{model}}^{\mathrm{full}}$ & 解释模型预测，不能替代真实评价 \\
-    模型--外部一致性 & $\gamma_{\mathrm{bias}}$、$\gamma_{\mathrm{abs}}$、RMSE、$\rho$、$\tau^\star$、峰值/分位低估量 & 判断内部代理量能否解释外部观测 \\
-    任务完成 & 成功率、超时、到达时间 & 排除“只是变慢/停下”的解释 \\
-    路径跟踪 & 轮廓误差、路径偏差 & 检查路径跟踪是否仍满足任务需求 \\
-    控制平滑性 & 速度、加速度、角加速度均方根 & 区分平滑性与晃液状态预测的作用 \\
-    在线计算 & 求解时间、控制频率、失败次数 & 验证滚动时域求解可实时运行 \\
+    外部液面 & $H_{\mathrm{vis}}$ 的 p95、RMS、残余振荡 & 支撑真实液面响应结论 \\
+    模型诊断 & $H_{\mathrm{model}}$ 的 p95、RMS、峰值 & 解释优化器内部预测 \\
+    任务与跟踪 & 成功率、到达时间、投影误差 & 量化防晃代价 \\
+    控制行为 & 角速度 p95、线加速度 RMS、角加速度 RMS & 检查是否仅由平滑或降速造成 \\
+    在线计算 & 求解时间中位数、p95、最大值、超时率 & 检验控制周期内的在线运行能力 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-为避免仅依赖内部模型指标评价方法效果，本文比较模型代理量与外部液面观测 $H_{\mathrm{vis}}(t)$。在模型--外部一致性分析中，记实际参与评价的模型代理量为 $H_{\mathrm{model}}^{\mathrm{eval}}(t)$；它可以取 $H_{\mathrm{model}}^{\mathrm{modal}}(t)$ 或 $H_{\mathrm{model}}^{\mathrm{full}}(t)$，但报告时必须明确说明采用哪一种口径。借鉴 Ferrari 等在跨平台防晃轨迹规划中将低阶模型液面高度与视频提取实验液面进行对照的验证口径\cite{C01_Ferrari2026}，本文采用带符号偏差评价模型整体偏保守或低估：
-\begin{equation}
-  \gamma_{\mathrm{bias}} =
-  100\cdot
-  \frac{\int_{t_0}^{t_1}\left(H_{\mathrm{model}}^{\mathrm{eval}}(t)-H_{\mathrm{vis}}(t)\right)\dd t}
-  {\int_{t_0}^{t_1}H_{\mathrm{model}}^{\mathrm{eval}}(t)\dd t+\epsilon},
-  \label{eq:gamma_bias}
-\end{equation}
-其中 $[t_0,t_1]$ 覆盖有效底盘命令开始到到达后的残余振荡记录窗口，$\epsilon$ 是防止分母退化的小常数。$\gamma_{\mathrm{bias}}>0$ 表示模型整体偏保守，$\gamma_{\mathrm{bias}}<0$ 表示模型整体低估外部液面指标。绝对偏差定义为
-\begin{equation}
-  \gamma_{\mathrm{abs}} =
-  100\cdot
-  \frac{\int_{t_0}^{t_1}\left|H_{\mathrm{model}}^{\mathrm{eval}}(t)-H_{\mathrm{vis}}(t)\right|\dd t}
-  {\int_{t_0}^{t_1}H_{\mathrm{vis}}(t)\dd t+\epsilon}.
-  \label{eq:gamma_abs}
-\end{equation}
-辅助指标包括 RMSE、相关系数 $\rho$、相位偏移 $\tau^\star$、峰值误差、高分位误差和最大局部低估量。模型--外部一致性只用于诊断解释，不替代真实液面结论，也不构成形式化防溢出保证。若 $H_{\mathrm{model}}^{\mathrm{eval}}$ 与 $H_{\mathrm{vis}}$ 存在明显相位差或局部峰值低估，相应结果应解释为模型诊断发现，而不是直接作为安全门限依据。
+模型与外部液面之间只做分层解释。若两类指标在组间呈现同向变化，可以说明低阶模型与外部响应具有趋势一致性；逐帧相位保真、真实高度重建和安全阈值有效性需要更强的标定与感知证据，不能由组均值代替。
 
-\subsection{仿真实验：内部消融与外部基线对比}
+\subsection{晃液预测与运动平滑性的二维消融}
 
-仿真实验用于在可控条件下系统比较不同规划策略。该部分首先通过内部消融分离控制平滑性与晃液状态预测的作用，再与普通在线局部规划器以及可公平复现的移动底盘防晃近邻方法比较。仿真结论应由相同任务接口、相同底盘约束和相同失败判据下的统计结果支持，而不是由单次示例轨迹或内部代理量单独支撑。
+\cref{tab:method_variants} 给出的四个变体构成二因素矩阵。$\mathrm{B}_{0}$ 与 $\mathrm{B}_{\mathrm{smooth}}$ 评价不含液体模型时的平滑作用，$\mathrm{B}_{0}$ 与 $\mathrm{B}_{\mathrm{slosh}}$ 评价弱平滑条件下液体预测的增量。完整矩阵还需要比较 $\mathrm{B}_{\mathrm{smooth}}$ 与 $\mathrm{B}_{\mathrm{ours}}$，从而判断强平滑条件下液体机制是否仍然有效。最后一组一因素比较由 $\mathrm{B}_{\mathrm{slosh}}$ 与 $\mathrm{B}_{\mathrm{ours}}$ 给出，用于分析液体模型启用后增强平滑的影响。
 
-内部消融用于回答“\SPMPC{} 是否只是更强的平滑控制”。所有变体共享同一带路径进度状态的 \MPCC{} 框架、同一参考路径和同一底盘约束，只改变晃液模型/代价和平滑权重。变体定义已在 \cref{tab:method_variants} 中给出，包括 \texttt{B0}、\texttt{B\_smooth}、\texttt{B\_slosh} 和 \texttt{B\_ours}。
+$\mathrm{B}_{\mathrm{smooth}}$ 与 $\mathrm{B}_{\mathrm{slosh}}$ 是对角线对比。它具有实际叙事价值，因为它检验晃液感知的弱平滑方法能否超过强平滑基线；但液体机制和平滑强度同时发生变化，因此这组差异不能被解释为液体预测的纯主效应。
 
-\begin{figure}[t]
-  \centering
-  \resizebox{\linewidth}{!}{%
-  \begin{tikzpicture}[
-    font=\footnotesize,
-    cell/.style={draw=spmpcgray, rounded corners=2pt, line width=0.55pt, fill=white, minimum width=2.15cm, minimum height=0.82cm, align=center},
-    ours/.style={draw=spmpcblue, rounded corners=2pt, line width=0.8pt, fill=spmpclight, minimum width=2.15cm, minimum height=0.82cm, align=center, font=\footnotesize\bfseries},
-    head/.style={font=\footnotesize\bfseries, text=spmpcblue, align=center},
-    row/.style={font=\scriptsize\bfseries, text=spmpcgray, align=right},
-    arr/.style={-{Latex[length=1.7mm]}, line width=0.5pt, draw=spmpcblue, shorten >=1pt, shorten <=1pt}
-  ]
-    \node[head] at (1.45,1.65) {No slosh state};
-    \node[head] at (4.35,1.65) {Slosh state};
-    \node[row, anchor=east] at (-0.05,0.70) {Weak\\smooth.};
-    \node[row, anchor=east] at (-0.05,-0.45) {Strong\\smooth.};
+当前实物统计覆盖 $\mathrm{B}_{0}$、$\mathrm{B}_{\mathrm{smooth}}$ 和 $\mathrm{B}_{\mathrm{slosh}}$。缺少 $\mathrm{B}_{\mathrm{ours}}$ 后，二维矩阵无法估计强平滑条件下的液体预测作用，也不能判断两个因素是否存在交互。现有数据因此用于提供趋势证据，不承担完整因果消融的结论。
 
-    \node[cell] (b0) at (1.45,0.70) {\texttt{B0}\\Baseline};
-    \node[cell] (bs) at (4.35,0.70) {\texttt{B\_slosh}\\Slosh-aware};
-    \node[cell] (bm) at (1.45,-0.45) {\texttt{B\_smooth}\\High smoothing};
-    \node[ours] (bo) at (4.35,-0.45) {\texttt{B\_ours}\\SPMPC};
+\subsection{模型敏感性与在线计算}
 
-    \draw[arr] (b0) -- (bs);
-    \draw[arr] (b0) -- (bm);
-    \draw[arr] (bm) -- (bo);
-    \draw[arr] (bs) -- (bo);
-  \end{tikzpicture}}
-  \caption{内部消融变体与验证关系。四个变体构成“是否传播晃液状态”和“是否增强控制平滑性”的二维拆解，用于区分仅平滑控制与显式晃液状态预测的作用。}
-  \label{fig:ablation_design}
-\end{figure}
+低阶模型能否作为在线决策内核，不能只依据名义参数下的模型代理量判断。敏感性评价需要分别扰动固有频率、阻尼比与输入增益，并改变液体初始状态。固有频率可按名义值的 $\pm10\%$ 和 $\pm20\%$ 扫描，阻尼比采用更宽的相对偏差；非零初始模态用于模拟转弯前尚未衰减的残余晃动。输出应包括外部或高保真液面指标、任务完成情况，以及 $H_{\mathrm{model}}$ 相对评价量的退化幅度。
 
-消融比较按四个问题组织。\texttt{B\_smooth} 与 \texttt{B0} 用于量化只增强平滑性带来的变化；\texttt{B\_slosh} 与 \texttt{B0} 用于量化显式晃液状态预测是否具有独立作用；\texttt{B\_ours} 与 \texttt{B\_smooth} 用于检验状态增强规划器是否超越 smooth-only；\texttt{B\_ours} 与 \texttt{B\_slosh} 用于说明平滑控制仍然是生成可执行局部命令的一部分。只有当外部液面指标支持相同趋势时，才能将 \texttt{B\_ours} 相对于 \texttt{B\_smooth} 的差异解释为真实液面响应改善；若只有内部代理量下降，则只能说明规划器在自身模型下减小了预测晃液响应。
+在线计算采用求解时间分布而不是单一平均值。除中位数和 p95 外，还需报告最大耗时、控制周期超时率、求解失败次数与实际控制频率。acados SQP-RTI 的使用说明了实现路径，不能代替本系统上的时间统计。
 
-普通在线局部规划器对比用于检验“不传播液体状态的在线局部规划是否已经能够覆盖该任务需求”。外部基线可以包括 DWA、TEB、\texttt{mpc\_local\_planner} 或 LT-DWA 系列规划器。它们与本文处于相近部署层级，能够在线生成底盘命令，但通常不传播液体动态记忆。进入主表的方法应满足接口可运行、底盘约束可对齐、任务定义一致和日志可复现等条件；比较指标包括成功率、到达时间、路径误差、外部液面指标和求解时间。
+在上述统计补齐之前，本文不对模型参数鲁棒性或实时性作超出当前实物运行事实的推广。
 
-移动底盘防晃近邻方法用于解释本文与已有液体运输工作的层级差异。可比较对象包括 Hamaguchi 式路径/速度剖面、输入整形策略、Lim 式离线液体约束轨迹或其它能在同一任务中复现实验接口的防晃方法。若某类方法能在相同任务接口下公平复现，则进入定量比较；若无法公平复现，则只作为相关工作中的层级参照，不进入主结果表。该处理避免把不同平台、不同控制输入或不同决策层级的方法强行写成同层 baseline。
+\subsection{普通在线运动规划器对比}
 
-\paragraph{结果组织：} 内部消融结果表汇总外部液面响应、任务完成、路径跟踪、控制平滑性、模型--外部一致性和求解时间；代表性时间序列展示相近任务完成代价下仅平滑控制与晃液状态预测的差异。若完成 Slosh-risk Reference Governor 消融，则只在相同 \texttt{B\_ours} 参数、相同名义 $v_{\mathrm{ref}}$ 和相同底盘约束下比较 \texttt{B\_ours} 与 \texttt{B\_ours\_gov}，并单独报告 $\beta_{\mathrm{raw}}$、$\beta_f$、saturated rate、transient rate-limited rate 与外部液面指标；未完成数据不进入结果表。外部基线结果表分别报告普通局部规划器和可复现防晃近邻方法的比较结果；不可公平复现的方法仅作为层级参照，不进入定量排名。
+内部 $\mathrm{B}_{0}$ 是识别液体预测作用的首要普通 \MPCC{} 基线，因为它与 \SPMPC{} 共享状态约束、路径进度、预测时域和数值求解框架。外部主基线宜保留一个可稳定复现的普通 MPC 或 MPCC 局部规划器，再加入 LT-DWA 作为具有长时域动力学搜索能力的对照\cite{D02_Jian2023}。DWA 与 TEB 可用于补充经典局部规划参考\cite{D15_Fox1997,D16_Rosmann2017}。
 
-\subsection{实物实验：真实液面响应与模型一致性}
+比较指标遵循局部规划器常用的任务效率、路径误差、控制平滑性和计算开销口径\cite{D21_Wen2021}，并额外加入相同的外部液面观测。各方法不使用液体状态作为反馈，只有 \SPMPC{} 传播低阶液体状态。
 
-实物实验用于检查仿真趋势是否能由真实外部液面观测支持，并验证内部模型代理量是否具有解释能力。实物平台记录最终发送到底盘的命令、外部液面观测、内部模型代理量和关键执行链路诊断，以区分方法效果与底盘执行、传感延迟或命令门控造成的影响。在实物实验中，$H_{\mathrm{model}}$ 仍只作为模型内部代理量；真实液面响应结论应由 RGB、液位传感或其它外部液面观测支持。
+若实验仍采用无障碍固定路径，外部比较反映的是在线命令生成、跟踪和液体运输表现。DWA、TEB 与 LT-DWA 的局部避障能力没有被充分调用，结果不能外推为完整导航性能排名。在同口径结果完成前，本节不对外部方法作定量排序。
 
-本文选取固定路径实物代表性内部消融结果，比较基础方法、仅增强平滑性的 smooth-only baseline，以及显式晃液模型参与优化的 slosh-aware 变体。三组方法各重复 3 次；所有试次均达到终点，且有效配置均满足 $v_{\mathrm{ref}}=0.20\,\mathrm{m/s}$、线/角速度与加速度约束对齐、固定闭环延迟补偿启用、模型硬约束关闭、跟踪停顿保护未触发。\cref{tab:real_fixed_path_ablation} 报告路径进度 10\%--90\% 主窗口的统计结果。
+\subsection{实物液面响应验证}
 
-\begin{table*}[t]
-  \centering
-  \footnotesize
-  \setlength{\tabcolsep}{4pt}
-  \renewcommand{\arraystretch}{1.08}
-  \caption{固定路径实物代表性内部消融结果，路径进度 10\%--90\% 主窗口}
-  \label{tab:real_fixed_path_ablation}
-  \resizebox{\textwidth}{!}{%
-  \begin{tabular}{lccccc}
-    \toprule
-    方法 & 模型代理量 p95/max/RMS [mm] & RGB p95/max/RMS [mm] & 投影误差 p95 [cm] & $|\omega|$ p95 [rad/s] & 到达时间 [s] \\
-    \midrule
-    \texttt{B0} & $1.100\pm0.034$ / $2.102\pm0.222$ / $0.547\pm0.016$ & $1.009\pm0.214$ / $2.398\pm0.482$ / $0.541\pm0.081$ & $2.947\pm0.087$ & $0.234\pm0.015$ & $33.753\pm0.355$ \\
-    \texttt{B\_smooth} & $0.994\pm0.165$ / $2.227\pm0.240$ / $0.491\pm0.066$ & $1.272\pm0.283$ / $2.267\pm0.309$ / $0.639\pm0.060$ & $3.646\pm1.188$ & $0.202\pm0.022$ & $35.169\pm0.537$ \\
-    \texttt{B\_slosh} & $0.632\pm0.101$ / $1.255\pm0.039$ / $0.307\pm0.035$ & $0.901\pm0.015$ / $2.162\pm0.405$ / $0.537\pm0.008$ & $3.442\pm0.128$ & $0.242\pm0.033$ & $36.851\pm0.231$ \\
-    \bottomrule
-  \end{tabular}}
-\end{table*}
+实物验证采用固定参考路径与相同的名义速度 $v_{\mathrm{ref}}=0.20\,\mathrm{m/s}$。三组变体各包含 3 次代表性试次，线速度、角速度和加速度约束保持一致；全部试次均到达终点。表中模型代理量与 RGB 液面包络均在路径进度 10\% 至 90\% 的主窗口计算。
 
-从 \texttt{B\_smooth} 与 \texttt{B0} 的对比看，仅增强控制平滑性可以降低 $|\omega|$ p95 和部分模型代理量指标，但 RGB 外部液面包络并未随之降低。\texttt{B\_slosh} 的 $|\omega|$ p95 并不是最低，但表中模型代理量和 RGB 外部液面包络的 p95/RMS 指标均低于 \texttt{B\_smooth}，说明这组代表性试次中的液面响应改善不能由更小角速度单独解释。代表性相对降幅见 \cref{tab:real_reduction_selected}。
-
-\begin{table}[t]
+\begin{table}[!htbp]
   \centering
   \scriptsize
-  \setlength{\tabcolsep}{3pt}
-  \caption{slosh-aware 变体相对 smooth-only baseline 的代表性相对降幅，正值表示指标降低}
-  \label{tab:real_reduction_selected}
-  \resizebox{\linewidth}{!}{%
+  \setlength{\tabcolsep}{2.5pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{固定路径代表性实物结果，数值为均值加减标准差，主窗口为路径进度 10\% 至 90\%}
+  \label{tab:real_fixed_path_ablation}
   \begin{tabular}{lcccc}
     \toprule
-    对比 & \multicolumn{2}{c}{模型代理量} & \multicolumn{2}{c}{RGB $H_{\mathrm{vis}}$} \\
-    \cmidrule(lr){2-3}\cmidrule(lr){4-5}
-    & p95 & RMS & p95 & RMS \\
+    方法 & 模型 p95 [mm] & 模型 RMS [mm] & RGB p95 [mm] & RGB RMS [mm] \\
     \midrule
-    \texttt{B\_slosh} vs. \texttt{B\_smooth} & $36.4\%$ & $37.4\%$ & $29.2\%$ & $15.9\%$ \\
+    $\mathrm{B}_{0}$
+      & $1.100\pm0.034$
+      & $0.547\pm0.016$
+      & $1.009\pm0.214$
+      & $0.541\pm0.081$ \\
+    $\mathrm{B}_{\mathrm{smooth}}$
+      & $0.994\pm0.165$
+      & $0.491\pm0.066$
+      & $1.272\pm0.283$
+      & $0.639\pm0.060$ \\
+    $\mathrm{B}_{\mathrm{slosh}}$
+      & $0.632\pm0.101$
+      & $0.307\pm0.035$
+      & $0.901\pm0.015$
+      & $0.537\pm0.008$ \\
     \bottomrule
-  \end{tabular}}
+  \end{tabular}
+
+  \vspace{0.45em}
+
+  \begin{tabular}{lccc}
+    \toprule
+    方法 & 投影误差 p95 [cm] & $|\omega|$ p95 [rad/s] & 到达时间 [s] \\
+    \midrule
+    $\mathrm{B}_{0}$
+      & $2.947\pm0.087$
+      & $0.234\pm0.015$
+      & $33.753\pm0.355$ \\
+    $\mathrm{B}_{\mathrm{smooth}}$
+      & $3.646\pm1.188$
+      & $0.202\pm0.022$
+      & $35.169\pm0.537$ \\
+    $\mathrm{B}_{\mathrm{slosh}}$
+      & $3.442\pm0.128$
+      & $0.242\pm0.033$
+      & $36.851\pm0.231$ \\
+    \bottomrule
+  \end{tabular}
 \end{table}
 
-相对 smooth-only baseline，\texttt{B\_slosh} 的模型代理量 p95 和 RMS 分别下降 36.4\% 和 37.4\%，RGB $H_{\mathrm{vis}}$ p95 和 RMS 分别下降 29.2\% 和 15.9\%。峰值统计保留在 \cref{tab:real_fixed_path_ablation} 中，但由于单次视觉包络尖峰对 max 指标影响较大，本文不把峰值降幅作为该组实物消融的主要证据。相对基础方法 \texttt{B0}，\texttt{B\_slosh} 的模型代理量与 RGB p95 均降低，但 RGB RMS 基本持平，因此 \texttt{B0} 仅作为参考基线，不作为该表的主降幅比较。综合来看，在这组代表性固定路径实物试次中，slosh-aware 变体相对 smooth-only baseline 在 p95 和 RMS 指标上呈现一致的液面响应改善；同时，\texttt{B\_slosh} 的到达时间更长，投影误差和角速度指标并非全部最优，因此结论应限定为液面响应改善，而不是所有任务指标均占优。
+仅增强平滑性并未在这组试次中带来一致的外部液面收益。与 $\mathrm{B}_{0}$ 相比，$\mathrm{B}_{\mathrm{smooth}}$ 的 $|\omega|$ p95 从 $0.234$ 降至 $0.202\,\mathrm{rad/s}$，模型代理量也略有下降；RGB p95 和 RMS 则分别升至 $1.272$ 和 $0.639\,\mathrm{mm}$。更低的角速度高分位本身不足以说明真实液面响应改善。
 
-模型--外部液面一致性只作为解释性诊断使用。该组结果中，内部模型代理量 $H_{\mathrm{model}}$ 与外部 RGB 液面包络在 \texttt{B\_slosh} 相对 \texttt{B\_smooth} 的比较中呈现一致下降趋势，因此可以支持显式晃液模型带来的趋势性解释；但内部代理量仍不能替代真实液面观测，也不能作为逐帧相位保真、真实液面真值或硬安全门控的证据。
+在 $\mathrm{B}_{\mathrm{slosh}}$ 与 $\mathrm{B}_{\mathrm{smooth}}$ 的对角线比较中，模型 p95 和 RMS 分别降低 $36.4\%$ 与 $37.4\%$，RGB p95 和 RMS 分别降低 $29.2\%$ 与 $15.9\%$。$\mathrm{B}_{\mathrm{slosh}}$ 的 $|\omega|$ p95 反而略高，因此这组外部液面差异不能由较小角速度单独解释。这是当前结果中最直接的正向趋势。
 
-\paragraph{后续补充：} 当前实物结果仍是固定路径、小样本 $N=3$ 的初步证据。后续应继续补充更多路径、液位、容器配置和外部基线试验，并用真实数据脚本绘制代表性外部液面曲线、底盘命令和模型代理量；真实液面结论只由外部观测支持，内部代理量仅用于解释规划器预测与外部响应之间的关系。
+代价同样存在。$\mathrm{B}_{\mathrm{slosh}}$ 的平均到达时间为 $36.851\,\mathrm{s}$，长于另外两组；其投影误差与角速度指标也不是最优。相对 $\mathrm{B}_{0}$，该变体降低了 RGB p95，但 RGB RMS 基本持平。故当前数据支持的是代表性固定路径条件下的液面响应趋势，不是所有任务指标上的全面占优。
 
-\subsection{在线求解性能与执行诊断}
+内部代理量与 RGB 指标在 $\mathrm{B}_{\mathrm{slosh}}$ 相对 $\mathrm{B}_{\mathrm{smooth}}$ 的组间变化方向一致。这种一致性有助于解释低阶模型为何会改变规划结果，却不能证明两条时间序列具有逐帧保真度。模型代理量也不能替代外部液面观测。
 
-在线求解性能单独报告，用于验证 \SPMPC{} 仍是可部署的滚动时域局部规划器，而不是离线防晃轨迹优化。统计内容包括 OCP 求解时间、控制频率、求解失败次数、超时次数以及极端试次。求解时间应至少报告中位数和高分位耗时，并与目标控制周期比较。
+当前结果来自小样本代表性试次，尚未形成完整的四单元实物矩阵。没有 $\mathrm{B}_{\mathrm{ours}}$ 的同口径统计，也没有模型敏感性、求解时间分布和普通规划器结果，因而不作统计显著性、参数鲁棒性或广泛规划优越性的主张。
 
-执行诊断用于解释实物系统中的偏差来源，包括求解器输出、最终底盘速度命令、命令限幅、终端减速、传感延迟和底盘执行响应等。上述诊断量服务于实验可解释性，不构成 \SPMPC{} 的核心方法贡献；若执行链路显著改变优化器输出，则相应实物结论应明确限定在该执行条件下。
-
-\paragraph{结果组织：} 在线求解统计表报告求解时间分布、控制频率和失败次数；执行诊断图或表用于说明优化器输出与最终底盘命令之间是否存在明显差异。该部分的作用是支撑在线局部规划部署可行性，而不是给出独立的防晃性能结论。
+\FloatBarrier

@@ -1,23 +1,22 @@
-# SPMPC IEEE Conference Paper Draft
+# SPMPC IEEE Transactions Journal Draft
 
-This directory contains the English IEEE conference-style draft of the SPMPC paper.
+This directory contains the English IEEE Transactions-style journal draft of the SPMPC paper.
 
 ## Template Source
 
-This draft currently uses the IEEE conference template package supplied by:
+The draft uses the local `IEEEtran.cls` supplied with the original template package:
 
 ```text
 /home/zrj/Downloads/spmpc_paper.zip
 ```
 
-The active template class is `IEEEtran.cls`, and the paper entry point uses:
+The local class is the standard IEEEtran v1.8b release and matches the TeX Live system copy. The paper entry point uses the journal option:
 
 ```latex
-\documentclass[conference]{IEEEtran}
-\IEEEoverridecommandlockouts
+\documentclass[journal]{IEEEtran}
 ```
 
-The previous ACC/PaperPlaza `ieeeconf.cls` template has been removed from this directory for now.
+Conference-specific author blocks and manual title-font overrides are not used. The previous ACC/PaperPlaza `ieeeconf.cls` template remains outside this directory.
 
 ## Build
 
@@ -39,9 +38,9 @@ pdflatex main.tex
 
 ## Draft Policy
 
-The current English version is a conference-paper scaffold, not a finished translation. The core narrative is:
+The current English version is a journal-paper draft, not a finished submission. The core narrative is:
 
 1. sloshing is a dynamic-memory state prediction problem, not only a smoothing problem;
 2. SPMPC embeds a low-order slosh state in an online MPCC local planner for a standard mobile base;
-3. the Slosh-risk Reference Governor is a soft pre-MPCC reference adaptation module, not a hard safety layer;
+3. predictive slosh-risk speed-reference shaping is a soft pre-MPCC adaptation module, not a hard safety layer;
 4. model proxy quantities must be separated from external liquid-surface observations.
