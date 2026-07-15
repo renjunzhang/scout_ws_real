@@ -1,6 +1,6 @@
-# SPMPC IEEE Transactions Journal Draft
+# S-MPCC IEEE Transactions Journal Draft
 
-This directory contains the English IEEE Transactions-style journal draft of the SPMPC paper.
+This directory contains the complete English IEEE Transactions-style journal draft of the S-MPCC paper. Its method and experiment sections are aligned with `../spmpc_paper_core`.
 
 ## Template Source
 
@@ -41,6 +41,9 @@ pdflatex main.tex
 The current English version is a journal-paper draft, not a finished submission. The core narrative is:
 
 1. sloshing is a dynamic-memory state prediction problem, not only a smoothing problem;
-2. SPMPC embeds a low-order slosh state in an online MPCC local planner for a standard mobile base;
-3. predictive slosh-risk speed-reference shaping is a soft pre-MPCC adaptation module, not a hard safety layer;
-4. model proxy quantities must be separated from external liquid-surface observations.
+2. S-MPCC embeds a container-parameterized low-order slosh state in an online MPCC local planner for a standard mobile base;
+3. the core comparison uses Baseline MPCC, Smooth-only MPCC, and S-MPCC, with the reference governor and modal hard cap disabled;
+4. model quantities must be separated from the calibrated vision-based experimental reference measurement;
+5. the selected 40-, 64-, or 88-trial evidence package determines which path and container claims may remain in the paper.
+
+Full solver settings, controller weights, the experimental metadata freeze checklist, development-only records, the tiered experiment matrix, sensitivity plans, and runtime details are stored in `supplementary/supplementary_material.tex`. The file is not included by `main.tex` and must be packaged separately if used for submission.

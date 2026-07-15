@@ -35,9 +35,10 @@ support them.
 
 The main text uses only the modal prediction \(H_{\mathrm{modal}}\) and the RGB
 observation \(H_{\mathrm{vis}}\). Parabolic diagnostic augmentation is disabled
-for the formal protocol. Full weights, solver settings, development-only
-records, sensitivity plans, and detailed runtime tables are stored in
-supplementary/supplementary_material.tex and are not included by main.tex.
+for the formal protocol. Full weights, solver settings, the experimental
+metadata freeze checklist, development-only records, sensitivity plans, and
+detailed runtime tables are stored in supplementary/supplementary_material.tex
+and are not included by main.tex.
 
 The physical design is frozen as one of three evidence packages before formal
 outcomes are inspected. At \(n=8\), the minimum mechanism package contains 40

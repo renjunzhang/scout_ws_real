@@ -45,38 +45,19 @@ A fixed RGB camera provides a calibrated visual free-surface envelope, denoted b
 
 \subsection{Apparatus, Paths, and RGB Measurement}
 
-\begin{table*}[t]
-  \centering
-  \scriptsize
-  \setlength{\tabcolsep}{4pt}
-  \renewcommand{\arraystretch}{1.08}
-  \caption{Experimental apparatus, path, container, and deployment metadata to be frozen before formal acquisition.}
-  \label{tab:experimental_setup}
-  \begin{tabular}{@{}p{0.20\linewidth}p{0.37\linewidth}p{0.35\linewidth}@{}}
-    \toprule
-    Item & Nominal setting & Formal record \\
-    \midrule
-    Mobile base & Scout Mini; velocity command interface & Payload and center-of-mass configuration \Pending \\
-    Low-risk path & Fixed prescribed path & Geometry and length \Pending \\
-    High-risk path & Sustained curvature changes & Geometry and length \Pending \\
-    Container $C_1$ & $R_c=18.5\,\mathrm{mm}$, $h=58\,\mathrm{mm}$ & Height, freeboard, volume, mass, $\omega_1$, $c_h$ \Pending \\
-    Container $C_2$ & Different radius and/or fill depth & All geometry; $\omega_1$ shift at least 15--20\% \Pending \\
-    Camera & RealSense RGB & Model, resolution, frame rate, pose, and ROI \Pending \\
-    RGB processing & Calibrated liquid-envelope extraction & Algorithm, filtering, missing-frame rule, and calibration error \Pending \\
-    Synchronization & RGB, odometry, command, and solver logs & Timestamp alignment procedure \Pending \\
-    Trial definition & 10\%--90\% motion window plus post-arrival interval & Rest threshold, success, arrival, and residual-window definitions \Pending \\
-    OCP limits & $v_{\max}=0.8$, $\omega_{\max}=1.2$, $a_{\max}=0.6$, $\alpha_{\max}=1.2$ & SI units as defined in \cref{eq:ocp_bounds} \\
-    Executed command limits & Shared across methods & $v_{\mathrm{cmd,max}}$, $\omega_{\mathrm{cmd,max}}$, rate limiting \Pending \\
-    Deployment layer & Shared across methods & Terminal logic, gate state, solver failure, and fallback \Pending \\
-    Software revision & Version-controlled implementation & Archived formal-acquisition revision \Pending \\
-    \bottomrule
-  \end{tabular}
-\end{table*}
+Physical trials use a Scout Mini mobile base and cylindrical liquid containers
+mounted at the base rotation center. The nominal container $C_1$ has inner
+radius $R_c=18.5\,\mathrm{mm}$ and liquid depth $h=58\,\mathrm{mm}$; $C_2$
+changes the container geometry and/or fill depth for the transfer study. A
+low-risk prescribed path and a high-risk path with sustained curvature changes
+are used according to the selected evidence package. Complete apparatus, path,
+container, calibration, executed-command, deployment-layer, and software
+metadata are reported in the supplementary material.
 
-Formal acquisition begins only after every setup entry in
-\cref{tab:experimental_setup}, the complete controller-weight table, the
-configured damping ratio $\zeta$, and all shared execution-layer settings have been
-frozen and archived. Formal RGB outcomes are not inspected during this freeze.
+All controller weights, the configured damping ratio $\zeta$, executed-command
+limits, shared deployment behavior, camera settings, and synchronization rules
+are frozen and archived before formal acquisition. Formal RGB outcomes are not
+inspected while these settings are selected.
 
 The camera is rigidly mounted relative to the container. Its model, resolution, frame rate, pose, and region of interest are recorded. Pixel-to-millimeter calibration is performed before the formal blocks using a fixed procedure, and its resolution or repeated-calibration error is reported. The liquid-surface extraction algorithm, filtering, and missing-frame handling are specified before outcomes are inspected. The same procedure is applied to every method without using controller labels to select trials, frames, or processing parameters. RGB, odometry, executed commands, modal states, and solver records are aligned to a common timeline. The formal protocol requires each trial to begin only after the base is stationary and $H_{\mathrm{vis}}$ remains below a calibration-derived rest threshold for at least $2\,\mathrm{s}$. The threshold is determined from stationary calibration data before controller trials and is not retuned by method. Each trial includes the pre-specified $T_{\mathrm{post}}=5\,\mathrm{s}$ post-arrival observation interval. These durations are acquisition-protocol choices and do not describe internal controller timing.
 

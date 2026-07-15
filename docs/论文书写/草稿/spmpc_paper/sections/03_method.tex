@@ -1,427 +1,270 @@
-\section{Problem Formulation and \SPMPC{} Method}
+\section{\SMPCC{} Method}
+\label{sec:method}
 
-This section presents the \SPMPC{} formulation.
-The anti-slosh requirement for open-liquid transport is handled at the online local-planning layer of a standard mobile base.
-Given a precomputed geometrically feasible reference path, the planner solves a receding-horizon \MPCC{} problem whose state includes the robot state, path progress, and a low-order slosh state, and outputs executable base velocity commands.
-Unlike offline anti-slosh trajectory generation, fixed-path speed profiling, or tracking control after a trajectory has been prescribed, \SPMPC{} replans from the current augmented state at every control cycle.
-Unlike smoothness-only planners, it explicitly propagates liquid dynamic memory in the prediction model.
-The method does not attempt high-fidelity free-surface simulation; it uses a control-oriented low-order slosh model suitable for online optimization.
-On top of the basic planner, we also formulate a finite-horizon reference-adaptation module that contracts the speed reference before the \MPCC{} solve rather than intercepting or rewriting the final base command.
+\subsection{Problem Definition and Architecture}
 
-\subsection{Problem Setting and Overall Architecture}
+\SMPCC{} is an online receding-horizon local motion planner and controller that optimizes robot motion and virtual path progress while propagating liquid dynamics along a prescribed geometrically feasible reference path. At control instant $t_j$, it receives the measured base state, the accepted path progress, the previous control, and an internally propagated liquid modal state. It predicts the coupled response over a finite horizon and applies the first optimized action.
 
-We consider a standard wheeled mobile base carrying an open liquid container along a precomputed geometrically feasible reference path.
-At each control cycle, the local planner uses the current base state, path-progress estimate, previous control input, and propagated slosh state to solve a finite-horizon \MPCC{} problem.
-Only the first base command is executed.
-The key modeling choice is that the liquid modal state is not an after-the-fact diagnostic variable; it is part of the optimization state propagated with the robot state.
-The online procedure is:
-\begin{enumerate}
-  \item obtain the current base pose, linear velocity, and angular velocity from odometry;
-  \item project the current position onto the reference path and initialize the path-progress state and local reference segment;
-  \item initialize the liquid state using the current or previously propagated low-order slosh state;
-  \item determine the nominal speed reference $v_{\mathrm{ref}}^{\mathrm{nom}}$ from the experiment configuration, speed map, or runtime override;
-  \item if the Slosh-risk Reference Governor is enabled, generate a governed speed reference $v_{\mathrm{ref}}^{g}$ by short-horizon slosh prediction and pass it to the \MPCC{} problem;
-  \item propagate base motion, path progress, and liquid modal states over the prediction horizon;
-  \item solve an \MPCC{} problem that includes path tracking, path progress, speed-reference tracking, control smoothness, and predicted slosh response;
-  \item convert the first optimized step to an executable base command and repeat at the next control cycle.
-\end{enumerate}
+The method assumes that a geometrically feasible reference path has already been supplied. Occupancy-grid reasoning, dynamic-obstacle prediction, collision-corridor construction, and global route selection are outside the present OCP. The reference governor and modal hard cap are optional liquid-aware extensions and are disabled in the core RQ1--RQ4 comparisons. Any delay predictor, terminal controller, command gate, or command-rate limiter used in physical deployment is frozen before formal acquisition, applied identically to all three methods, and reported separately from the core \SMPCC{} formulation.
 
-The output of \SPMPC{} remains a standard local velocity command for a mobile base, i.e., linear and angular velocity commands.
-The internal slosh state is used for prediction and optimization and is not equivalent to an external liquid-surface measurement.
-Real liquid motion is evaluated experimentally using external vision or liquid-level observations.
+The defining mechanism is liquid dynamic memory. Two candidate motions with similar path error and control regularity can produce different future liquid responses when the current modal displacement, velocity, or phase differs. \SMPCC{} represents this dependence by augmenting the \MPCC{} prediction state with propagated liquid dynamics. \Cref{fig:core_architecture} summarizes the resulting control loop.
 
 \begin{figure}[t]
   \centering
   \resizebox{\linewidth}{!}{%
   \begin{tikzpicture}[
     font=\footnotesize,
-    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=1.45cm, minimum height=0.62cm, align=center},
-    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=1.85cm, minimum height=0.82cm, align=center, font=\footnotesize\bfseries},
-    cost/.style={draw=spmpcgray, rounded corners=2pt, line width=0.4pt, fill=white, minimum width=1.05cm, minimum height=0.45cm, align=center, font=\scriptsize},
+    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=1.65cm, minimum height=0.64cm, align=center},
+    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=2.15cm, minimum height=0.82cm, align=center, font=\footnotesize\bfseries},
     arr/.style={-{Latex[length=1.6mm]}, line width=0.5pt, draw=spmpcblue}
   ]
-    \node[block] (odom) at (0,1.35) {Odom.\\base};
-    \node[block] (path) at (0,0.45) {Path\\progress};
-    \node[block] (prev) at (0,-0.45) {Prev.\\control};
-    \node[block] (slosh) at (0,-1.35) {Slosh\\state};
+    \node[block] (odom) at (0,1.05) {Odometry};
+    \node[block] (path) at (0,-0.05) {Geometrically feasible\\reference path};
+    \node[block] (prev) at (0,-1.15) {Previous\\control};
+    \node[core] (prep) at (2.55,0.45) {Guarded projection,\\local path model, and\\liquid-state propagation};
+    \node[core] (ocp) at (5.55,0.05) {Slosh-augmented\\alpha-state \MPCC{} OCP};
+    \node[block, fill=white] (cmd) at (8.15,0.05) {First optimized\\base command};
 
-    \node[core] (dyn) at (2.35,0.15) {Aug. model\\base + slosh};
-    \node[core] (ocp) at (4.70,0.15) {\MPCC{}\\OCP};
-    \node[block, fill=white] (cmd) at (7.00,0.15) {First\\base cmd};
-
-    \node[cost] (c1) at (3.85,-0.85) {track};
-    \node[cost] (c2) at (5.55,-0.85) {progress};
-    \node[cost] (c3) at (3.85,-1.45) {smooth};
-    \node[cost] (c4) at (5.55,-1.45) {slosh};
-
-    \foreach \s in {odom,path,prev,slosh}
-      \draw[arr] (\s.east) -- (dyn.west);
-    \draw[arr] (dyn.east) -- (ocp.west);
+    \draw[arr] (odom.east) -- (prep.west);
+    \draw[arr] (path.east) -- (prep.west);
+    \draw[arr] (prep.east) -- (ocp.west);
+    \draw[arr] (prev.east) -| (ocp.south west);
     \draw[arr] (ocp.east) -- (cmd.west);
-    \foreach \c in {c1,c2,c3,c4}
-      \draw[arr] (\c.north) -- (ocp.south);
-    \draw[arr, rounded corners=6pt] (cmd.south) |- (4.70,-2.05) -| node[pos=0.22, below, font=\scriptsize, text=spmpcgray] {replan} (dyn.south);
+    \draw[arr, rounded corners=6pt] (cmd.south) |- (5.55,-1.85) -| node[pos=0.25, below, font=\scriptsize, text=spmpcgray] {receding-horizon update} (prep.south east);
   \end{tikzpicture}}
-  \caption{\SPMPC{} augmented-state and OCP structure. The planner puts the base state, path progress, and low-order slosh state in the same prediction model, jointly considers path tracking, path advancement, control smoothness, and predicted slosh response, and executes only the first base command.}
-  \label{fig:method_structure}
+  \caption{Core \SMPCC{} architecture. The method includes path projection, liquid-state propagation, the augmented OCP, SQP-RTI solution, and first-action output.}
+  \label{fig:core_architecture}
 \end{figure}
 
-\subsection{Augmented State and Low-Order Slosh Dynamics}
+The control-cycle index is $j$, and $k\mid j$ denotes prediction node $k$ formed at cycle $j$. Measured and propagated online quantities carry index $j$; OCP variables carry index $k\mid j$.
 
-To jointly represent path tracking and forward progress, we use an alpha-state \MPCC{} formulation with a path-progress variable.
-The robot and progress state is
+\subsection{Path Progress and Contouring Geometry}
+
+Let the reference path be $\vr(s)=[r_x(s),r_y(s)]^\top$, parameterized by arc length $s\in[0,L]$. To prevent backward jumps on self-near or noisy path segments, the measured position $\bm p_j$ is projected subject to the last accepted progress $s_{\min,j}$:
 \begin{equation}
-  \xr =
-  \begin{bmatrix}
-    p_x & p_y & \theta & v & s & \omega
-  \end{bmatrix}^{\top},
+  s_{0,j}
+  =\underset{s\in[s_{\min,j},L]}{\arg\min}\,
+  \|\bm p_j-\vr(s)\|_2^2,
+  \qquad s_{0,j}\geq s_{\min,j}.
+  \label{eq:guarded_projection}
 \end{equation}
-where $(p_x,p_y)$ is the base position, $\theta$ is the heading, $v$ is the linear velocity, $\omega$ is the angular velocity, and $s$ is the progress along the reference path.
-The control input is
-\begin{equation}
-  \vu =
-  \begin{bmatrix}
-    a & \alpha & v_s
-  \end{bmatrix}^{\top},
-\end{equation}
-where $a$ is the linear acceleration, $\alpha=\dot{\omega}$ is the angular acceleration, and $v_s=\dot{s}$ is the virtual path-progress speed.
-The continuous-time robot model is
+The accepted lower bound advances monotonically and is reset when a new path is received.
+
+At each cycle, the path is sampled over
+\[
+  [s_{0,j},\,\min\{L,s_{0,j}+v_{\max}T_f\}]
+\]
+and fitted locally by cubic polynomials. Their derivatives define the reference heading and curvature,
+\[
+  \phi(s)=\operatorname{atan2}(r_y'(s),r_x'(s)),\qquad
+  \kappa(s)=
+  \frac{r_x'r_y''-r_y'r_x''}
+  {(r_x'^2+r_y'^2+\varepsilon_\kappa)^{3/2}},
+\]
+with $\varepsilon_\kappa=10^{-6}$.
+
+For $\Delta p_x=p_x-r_x(s)$ and $\Delta p_y=p_y-r_y(s)$, the signed contour and lag errors are
 \begin{equation}
 \begin{aligned}
-  \dot{p}_x &= v\cos\theta, &
-  \dot{p}_y &= v\sin\theta, &
-  \dot{\theta} &= \omega, \\
-  \dot{v} &= a, &
-  \dot{s} &= v_s, &
-  \dot{\omega} &= \alpha .
+  e_{\mathrm c}(s)&=\sin\phi(s)\,\Delta p_x-\cos\phi(s)\,\Delta p_y,\\
+  e_{\mathrm l}(s)&=-\cos\phi(s)\,\Delta p_x-\sin\phi(s)\,\Delta p_y.
 \end{aligned}
-\label{eq:robot_alpha_dynamics}
+\label{eq:contour_lag_errors}
 \end{equation}
-This state choice places base executability and path progress inside the same OCP: the planner cannot reduce sloshing simply by stopping, nor can it pursue progress while ignoring base constraints and liquid response.
+The virtual progress state is optimized within the horizon rather than prescribed by time, as in standard \MPCC{} formulations \cite{D19_Liniger2015,D20_Brito2019}.
 
-Slosh-estimation studies under planar excitation show that dominant liquid response can be represented by a small number of modal coordinates and velocities excited by container acceleration \cite{A01_Leva2021}.
-Model-based slosh estimation further shows that mass-spring-damper-type low-order models can provide control-oriented prediction quantities without high-fidelity free-surface computation \cite{A02_Guagliumi2021}.
-Following this principle, we use a second-order modal model at the local-planning layer.
-For each direction,
-\begin{equation}
-  x_{s,i}=
-  \begin{bmatrix}
-    \eta_i & \dot{\eta}_i
-  \end{bmatrix}^{\top}, \qquad i\in\{x,y\},
-\end{equation}
-where $\eta_i$ and $\dot{\eta}_i$ are the displacement and velocity of the dominant slosh mode.
-The dynamics are
-\begin{equation}
-  \ddot{\eta}_i
-  +2\zeta_i\omega_i\dot{\eta}_i
-  +\omega_i^2\eta_i
-  =-\kappa_i a_i,
-  \label{eq:slosh_modal_dynamics}
-\end{equation}
-where $\omega_i$, $\zeta_i$, and $\kappa_i$ are the equivalent natural frequency, damping ratio, and input gain, respectively, and $a_i$ is the horizontal excitation in the corresponding direction.
+\subsection{Robot--Liquid Augmented Dynamics}
 
-For planar motion of the wheeled base, the container excitation is approximated from the base motion:
-\begin{equation}
-  a_x = a, \qquad a_y \approx v\omega .
-  \label{eq:slosh_excitation}
-\end{equation}
-Here $a_x$ denotes tangential excitation in the base-forward direction, and $a_y$ approximates lateral centripetal excitation during turning.
-If inertial measurements or liquid-surface feedback are introduced in an extended implementation, this excitation channel can be replaced by measured or filtered container acceleration.
-In this paper, it is used as a model-driven slosh-state propagation channel and is not treated as a real liquid-surface observer.
+\subsubsection{Alpha-state base model}
 
-The two-direction liquid state is
+The base and path-progress state and the control are
+\[
+  \bm x_r=[p_x,p_y,\theta,v,s,\omega]^\top,\qquad
+  \bm u=[a,\alpha,v_s]^\top,
+\]
+where $a=\dot v$, $\alpha=\dot\omega$, and $v_s=\dot s$. Their continuous dynamics are
 \begin{equation}
-  \xl =
-  \begin{bmatrix}
-    \eta_x & \dot{\eta}_x & \eta_y & \dot{\eta}_y
-  \end{bmatrix}^{\top}.
+\begin{aligned}
+  \dot p_x&=v\cos\theta, & \dot p_y&=v\sin\theta, &
+  \dot\theta&=\omega,\\
+  \dot v&=a, & \dot s&=v_s, & \dot\omega&=\alpha.
+\end{aligned}
+\label{eq:robot_dynamics}
 \end{equation}
-To distinguish internal planner quantities from measured liquid motion, we denote slosh-height quantities derived from the low-order state as $H_{\mathrm{model}}$.
-We use two model proxies.
-The first is a modal proxy based only on modal displacement:
+Placing $\omega$ in the state enforces rotational continuity through the dynamics and permits a direct angular-acceleration bound. This acceleration-level representation is an implementation choice rather than a separate novelty claim \cite{D23_Arrizabalaga2021}.
+
+\subsubsection{Container-parameterized first sloshing mode}
+
+The liquid model represents the first lateral sloshing mode along two orthogonal container directions. For a cylindrical container with inner radius $R_c$, liquid depth $h$, density $\rho$, and gravitational acceleration $g$, the adopted equivalent-model parameters are \cite{A01_Leva2021,A02_Guagliumi2021}
 \begin{equation}
-  H_{\mathrm{model}}^{\mathrm{modal}}(t)
-  = c_h\sqrt{\eta_x^2(t)+\eta_y^2(t)},
-  \label{eq:h_model_modal}
+\begin{aligned}
+  J_1'(\xi_{11})&=0,\qquad \xi_{11}=1.8412,\\
+  m_F&=\rho\pi R_c^2h,\\
+  \omega_1&=
+  \sqrt{g\frac{\xi_{11}}{R_c}
+  \tanh\!\left(\frac{\xi_{11}h}{R_c}\right)},\\
+  m_1&=m_F
+  \frac{2R_c\tanh(\xi_{11}h/R_c)}
+  {\xi_{11}h(\xi_{11}^2-1)},\\
+  c_h&=\frac{4hm_1}{m_FR_c}.
+\end{aligned}
+\label{eq:modal_parameters}
 \end{equation}
-where $c_h$ maps modal displacement to an approximate height scale determined by container geometry, fill level, and modal parameters.
-The second includes an optional quasi-static parabolic term during turning:
+The damping ratio $\zeta$ is read from the frozen liquid-model configuration and reported numerically with its configuration source. No experimental identification is claimed unless such a procedure is actually performed and archived. The same frozen value is used for all methods and both containers in the geometry-only transfer study. A container change updates the remaining physical parameters through \cref{eq:modal_parameters} and does not trigger controller-weight retuning.
+
+The modal state is
+\[
+  \bm x_\ell=
+  [\eta_x,\dot\eta_x,\eta_y,\dot\eta_y]^\top.
+\]
+Here $\eta_x$ and $\eta_y$ are generalized modal displacements, not physical free-surface elevations. The body-fixed axis $x_b$ points forward and $y_b$ points laterally. With the container mounted at the base rotation center, the signed excitation approximation is $a_x=a$ and $a_y=v\omega$. Each orthogonal direction follows
 \begin{equation}
-  H_{\mathrm{model}}^{\mathrm{full}}(t)
-  = H_{\mathrm{model}}^{\mathrm{modal}}(t)
-  + \mathbb{I}_{\mathrm{para}}\frac{R^2\omega^2(t)}{4g},
-  \label{eq:h_model_full}
+  \ddot\eta_i+2\zeta\omega_1\dot\eta_i+\omega_1^2\eta_i=-a_i,
+  \qquad i\in\{x,y\}.
+  \label{eq:liquid_dynamics}
 \end{equation}
-where $R$ is the container radius, $\omega$ is the base angular velocity, and $\mathbb{I}_{\mathrm{para}}$ indicates whether the parabolic term is enabled.
-Both $H_{\mathrm{model}}^{\mathrm{modal}}$ and $H_{\mathrm{model}}^{\mathrm{full}}$ are internal prediction or diagnostic proxies, not independent measurements of the real liquid surface.
-This follows the evaluation discipline used in cross-platform anti-slosh trajectory planning, where low-order model height proxies are compared with video-extracted liquid motion \cite{C01_Ferrari2026}.
+The term $v\omega$ retains the sign of the lateral acceleration. The present model does not cover an offset container; such a configuration would require the $\alpha r$ and $\omega^2r$ contributions in both the OCP and online propagation.
 
 The augmented state is
+\[
+  \bm x=[\bm x_r^\top,\bm x_\ell^\top]^\top\in\mathbb R^{10}.
+\]
+The joint dynamics used inside the OCP are integrated by explicit Runge--Kutta (ERK).
+
+\subsubsection{Online liquid-state propagation}
+
+At the beginning of a formal physical trial, the modal state is initialized to zero only after the base is stationary and the calibrated visual response has satisfied the pre-specified rest criterion. It is then propagated throughout the trial without reset. RQ4 is the sole exception: its controlled planning study replaces the zero initialization with the phase states specified in \cref{eq:phase_initial_states}. Consecutive odometry samples provide
+\[
+  \hat a_{x,j}=\frac{v_j-v_{j-1}}{\Delta t_{\mathrm{odom}}},
+  \qquad
+  \hat a_{y,j}=v_j\omega_j.
+\]
+For the continuous liquid matrices $(A_\ell,B_\ell)$, a zero-order hold over the odometry interval gives
 \begin{equation}
 \begin{aligned}
-  \xaug = [&p_x,\ p_y,\ \theta,\ v,\ s,\ \omega, \\
-           &\eta_x,\ \dot{\eta}_x,\ \eta_y,\ \dot{\eta}_y]^{\top}.
+  A_d&=e^{A_\ell\Delta t_{\mathrm{odom}}},\qquad
+  B_d=\int_0^{\Delta t_{\mathrm{odom}}}
+  e^{A_\ell\tau}B_\ell\,\mathrm d\tau,\\
+  \hat{\bm x}_{\ell,j+1}
+  &=A_d\hat{\bm x}_{\ell,j}
+  +B_d[\hat a_{x,j},\hat a_{y,j}]^\top.
 \end{aligned}
-\label{eq:augmented_state}
+\label{eq:liquid_state_propagation}
 \end{equation}
-The augmented state is important not only because it supplies a slosh penalty to the objective, but because it makes liquid dynamic memory explicit in the prediction model.
-If the state contained only base pose, velocity, and path progress, the future liquid response would still depend on unmodeled excitation history and the current liquid phase.
-With $\eta_i$ and $\dot{\eta}_i$ included, the discrete prediction model becomes
-\begin{equation}
-  \xaug_{k+1}=f_d(\xaug_k,\vu_k),
-\end{equation}
-so the next augmented state is determined by the current augmented state and control input.
-The slosh modal state is therefore part of the OCP state space, allowing the planner to predict how the current liquid phase will evolve under candidate future controls.
+RGB observations are not used to correct this state. The OCP initial condition is
+\[
+  \bm x_{0\mid j}
+  =[\hat{\bm x}_{r,j}^\top,\hat{\bm x}_{\ell,j}^\top]^\top.
+\]
 
-\subsection{Slosh-Aware MPCC Problem}
-
-Let the reference path be
+The modal response used by the optimizer and logger is
 \begin{equation}
-  \vr(s)=
-  \begin{bmatrix}
-    r_x(s) & r_y(s)
-  \end{bmatrix}^{\top},
+  H_{\mathrm{modal}}
+  =c_h\sqrt{\eta_x^2+\eta_y^2}.
+  \label{eq:modal_height}
 \end{equation}
-with tangent angle $\psi(s)$.
-The unit tangent and normal vectors are
+The calibrated vision-based reference measurement used in the experiments is denoted by $H_{\mathrm{vis}}$. It is not fed back to the controller. The formal configuration sets the parabolic correction off, so the logged model quantity is modal-only.
+
+\subsection{Slosh-Aware \MPCC{} OCP}
+
+At cycle $j$, \SMPCC{} solves
 \begin{equation}
 \begin{aligned}
-  \bm{t}(s) &= [\cos\psi(s),\ \sin\psi(s)]^{\top}, \\
-  \bm{n}(s) &= [-\sin\psi(s),\ \cos\psi(s)]^{\top}.
-\end{aligned}
-\end{equation}
-The position error relative to the path point is
-\begin{equation}
-  \bm{e}(s)=
-  \begin{bmatrix}
-    p_x & p_y
-  \end{bmatrix}^{\top}-\vr(s).
-\end{equation}
-The contouring and lag errors are
-\begin{equation}
-  \ec = \bm{n}(s)^{\top}\bm{e}(s), \qquad
-  \el = \bm{t}(s)^{\top}\bm{e}(s).
-  \label{eq:contour_lag_error}
-\end{equation}
-The contouring error $\ec$ measures the lateral deviation from the reference path, and the lag error $\el$ measures the progress-direction deviation.
-By optimizing $\ec$, $\el$, and $v_s$ jointly, \MPCC{} trades off path tracking and forward progress.
-
-After discretizing \eqref{eq:robot_alpha_dynamics}--\eqref{eq:slosh_excitation}, let $N$ be the horizon length and $\Delta t$ be the time step.
-At each control cycle, \SPMPC{} solves
-\begin{equation}
-\begin{aligned}
-  \min_{\xaug_{0:N},\vu_{0:N-1}} \quad
-  & \sum_{k=0}^{N-1}\ell_k + \ell_N \\
+  \min_{\bm x_{0:N\mid j},\bm u_{0:N-1\mid j}}\quad
+  &\sum_{k=0}^{N-1}\ell_{k\mid j}+\ell_{N\mid j}\\
   \mathrm{s.t.}\quad
-  & \xaug_0=\hat{\xaug}(t), \\
-  & \xaug_{k+1}=f_d(\xaug_k,\vu_k), \\
-  & \xaug_k\in\mathcal{X},\quad \vu_k\in\mathcal{U}, \\
-  & k=0,\ldots,N-1 .
+  &\bm x_{0\mid j}=\hat{\bm x}_j,\\
+  &\bm x_{k+1\mid j}=f_d(\bm x_{k\mid j},\bm u_{k\mid j}),\\
+  &\bm x_{k\mid j}\in\mathcal X,\qquad
+  \bm u_{k\mid j}\in\mathcal U.
 \end{aligned}
-\label{eq:spmpc_ocp}
+\label{eq:core_ocp}
 \end{equation}
-Here $f_d$ is the discretized augmented dynamics and $\hat{\xaug}(t)$ is the current augmented-state estimate.
-The stage and terminal costs are
+The core setting uses $N=60$, $\Delta t=1/30\,\mathrm{s}$, and $T_f=2.0\,\mathrm{s}$. The discretized joint dynamics $f_d$ use ERK.
+
+The stage cost is
+\begin{equation}
+  \ell_{k\mid j}=\frac{1}{N}\left(
+  J_{\mathrm{track}}+J_{\mathrm{path}}+J_{\mathrm{ctrl}}
+  +J_{\Delta}+J_{\mathrm{slosh}}\right)_{k\mid j}.
+  \label{eq:stage_cost}
+\end{equation}
+The path reference uses the curvature-aware speed
+\[
+  v_{\mathrm{ref}}(s)=
+  \max\!\left\{0.3v_{\mathrm{cruise}},
+  \frac{v_{\mathrm{cruise}}}
+  {\sqrt{1+(v_{\mathrm{cruise}}|\kappa(s)|/\omega_{\max})^2}}
+  \right\}.
+\]
+The non-liquid terms are
+\[
+\begin{aligned}
+J_{\mathrm{track}}={}&
+w_c(e_{\mathrm c}/e_{c,\mathrm{ref}})^2
++w_l(e_{\mathrm l}/e_{l,\mathrm{ref}})^2,\\
+J_{\mathrm{path}}={}&
+-w_pv_s/v_{s,\max}
++w_v[(v-v_{\mathrm{ref}})/v_{\max}]^2\\
+&+w_{v_s}[(v_s-v_{\mathrm{ref}})/v_{s,\max}]^2
++J_{\mathrm{ac}},\\
+J_{\mathrm{ctrl}}={}&
+w_a(a/a_{\max})^2+w_\omega(\omega/\omega_{\max})^2
++w_\alpha(\alpha/\alpha_{\max})^2.
+\end{aligned}
+\]
+The one-sided anti-creep term $J_{\mathrm{ac}}$ penalizes deficits below $v_{\mathrm{ref}}$ for both $v$ and $v_s$. Cross-cycle continuity $J_\Delta$ acts at $k=0$ on $a$ and $v_s$ relative to the previous accepted control. Full numerical weights and normalizers are reported in the supplementary material.
+
+For $\bm\eta=[\eta_x,\eta_y]^\top$ and
+$\dot{\bm\eta}=[\dot\eta_x,\dot\eta_y]^\top$, the modal normalizers are
+\[
+  \eta_{\mathrm{ref}}=\frac{H_{\mathrm{ref}}}{c_h},
+  \qquad
+  \dot\eta_{\mathrm{ref}}
+  =\omega_1\eta_{\mathrm{ref}}
+  =\frac{\omega_1H_{\mathrm{ref}}}{c_h}.
+\]
+The slosh term is
+\begin{equation}
+  J_{\mathrm{slosh},k\mid j}
+  =w_\eta\frac{\|\bm\eta_{k\mid j}\|_2^2}{\eta_{\mathrm{ref}}^2}
+  +w_{\dot\eta}
+  \frac{\|\dot{\bm\eta}_{k\mid j}\|_2^2}
+  {\dot\eta_{\mathrm{ref}}^2}.
+  \label{eq:slosh_cost}
+\end{equation}
+No additional factor of $c_h$ is applied inside this cost. The physical modal normalizers are supplied at every shooting stage. The terminal cost retains the tracking and slosh terms but omits progress reward and control regularization.
+
+The OCP bounds are
+\begin{equation}
+\begin{gathered}
+  0\leq v_{k\mid j}\leq v_{\max},\qquad
+  |\omega_{k\mid j}|\leq\omega_{\max},\\
+  |a_{k\mid j}|\leq a_{\max},\qquad
+  |\alpha_{k\mid j}|\leq\alpha_{\max},\\
+  0\leq v_{s,k\mid j}\leq v_{s,\max}.
+\end{gathered}
+\label{eq:ocp_bounds}
+\end{equation}
+The nominal OCP limits are $v_{\max}=0.8\,\mathrm{m/s}$, $\omega_{\max}=1.2\,\mathrm{rad/s}$, $a_{\max}=0.6\,\mathrm{m/s^2}$, and $\alpha_{\max}=1.2\,\mathrm{rad/s^2}$.
+
+\subsection{Online Solution and Executed Command}
+
+The OCP is solved with an acados-generated SQP-RTI scheme, one real-time iteration per control cycle, partial-condensing HPIPM, and four-stage ERK integration. Only the first optimized control is used:
 \begin{equation}
 \begin{aligned}
-  \ell_k ={}& q_c e_{\mathrm{c},k}^{2}
-    + q_l e_{\mathrm{l},k}^{2}
-    - q_p v_{s,k}
-    + q_v (v_k-v_{\mathrm{ref},k})^2 \\
-  & + q_{v_s}(v_{s,k}-v_{\mathrm{ref},k})^2
-    + \|\vu_k\|_{R}^{2} \\
-  & + \|\vu_k-\vu_{k-1}\|_{S}^{2}
-    + \|\bm{x}_{\ell,k}\|_{Q_s}^{2}, \\
-  \ell_N ={}& q_{c,N}e_{\mathrm{c},N}^{2}
-    + q_{l,N}e_{\mathrm{l},N}^{2}
-    + \|\bm{x}_{\ell,N}\|_{Q_{s,N}}^{2} .
+  v_{\mathrm{cmd},j}^{\mathrm{OCP}}
+  &=\operatorname{clip}(v_j+a_{0\mid j}^\star\Delta t,0,v_{\max}),\\
+  \omega_{\mathrm{cmd},j}^{\mathrm{OCP}}
+  &=\operatorname{clip}(\omega_j+\alpha_{0\mid j}^\star\Delta t,
+  -\omega_{\max},\omega_{\max}).
 \end{aligned}
-\label{eq:spmpc_cost_terms}
+\label{eq:first_action}
 \end{equation}
-The weights $q_c$ and $q_l$ penalize contouring and lag errors, $q_p$ rewards path progress, $q_v$ and $q_{v_s}$ make physical speed and virtual progress speed track the speed reference, $R$ penalizes control magnitude, $S$ penalizes control variation, and $Q_s$ penalizes predicted slosh state.
-When the reference governor is disabled, $v_{\mathrm{ref},k}=v_{\mathrm{ref}}^{\mathrm{nom}}$.
-When it is enabled, $v_{\mathrm{ref},k}=v_{\mathrm{ref}}^{g}$.
 
-The key additional term in \eqref{eq:spmpc_cost_terms} is $\|\bm{x}_{\ell,k}\|_{Q_s}^{2}$, together with the corresponding slosh dynamics.
-A planner that only increases control-smoothness penalties can prefer smooth command sequences, but it cannot distinguish two similarly smooth sequences that interact differently with the current residual slosh phase.
-The augmented slosh state provides that distinction.
+The OCP limits in \cref{eq:ocp_bounds} are distinct from downstream execution limits. The formal experiment metadata reports the deployed command bounds, terminal slowdown and capture logic, acceleration or rate limiting, solver-failure response, and fallback action. These shared settings are frozen before formal acquisition, and control metrics are computed from the executed command rather than the pre-intervention OCP output. The archived software revision used for formal acquisition is recorded with the reproducibility metadata.
 
-\begin{table}[t]
-  \centering
-  \scriptsize
-  \setlength{\tabcolsep}{3pt}
-  \caption{Roles of the \SPMPC{} objective terms.}
-  \label{tab:cost_story}
-  \begin{tabular}{p{0.25\linewidth} p{0.31\linewidth} p{0.32\linewidth}}
-    \toprule
-    Term & Optimization role & Functional interpretation \\
-    \midrule
-    $q_c\ec^2$, $q_l\el^2$ & Keep the base close to the reference path & Preserve local-planner path-tracking capability \\
-    $-q_p v_s$ & Encourage progress along the path & Avoid reducing slosh simply by stopping \\
-    $q_v(v-v_{\mathrm{ref}})^2$, $q_{v_s}(v_s-v_{\mathrm{ref}})^2$ & Track speed reference & Provide a common action point for nominal and governed references \\
-    $\|\vu\|_R^2$ & Limit command magnitude & Maintain executable base commands \\
-    $\|\Delta\vu\|_S^2$ & Smooth control variation & Limit changes in linear and angular commands \\
-    $\|\xl\|_{Q_s}^2$ & Penalize predicted slosh state & Make predicted liquid response affect local motion selection \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-The feasible sets mainly include base-motion constraints, control-input constraints, and path-progress constraints, for example
-\begin{align}
-  0 \leq v_k \leq v_{\max}, \qquad
-  |\omega_k| \leq \omega_{\max}, \\
-  |a_k| \leq a_{\max}, \qquad
-  |\alpha_k| \leq \alpha_{\max}, \qquad
-  0 \leq v_{s,k} \leq v_{s,\max} .
-  \label{eq:spmpc_bounds}
-\end{align}
-These constraints ensure that the optimized trajectory can be converted to executable base commands.
-
-The basic \SPMPC{} planner uses the slosh-state cost as the online anti-slosh mechanism.
-If a model-predicted liquid boundary must be represented, the same augmented-state framework can include a soft boundary constraint such as
-\begin{equation}
-  \eta_{x,k}^{2}+\eta_{y,k}^{2} \leq \eta_{\max}^{2} + \epsilon_k,
-  \qquad \epsilon_k\geq 0,
-  \label{eq:slosh_soft_bound}
-\end{equation}
-with a slack penalty in the objective.
-This extension is not treated as the core component of the physical experiments.
-Moreover, \eqref{eq:slosh_soft_bound} is a model-predicted boundary; without real liquid-surface feedback and a formal safety proof, it is not a spill-free guarantee.
-
-\subsection{Slosh-risk Reference Governor}
-
-The \MPCC{} formulation above selects local motion inside the OCP through the augmented state and slosh cost.
-To further regulate task speed when short-horizon prediction indicates elevated slosh risk, we introduce a soft Slosh-risk Reference Governor.
-The module is placed before the \MPCC{} solve.
-Its only role is to contract the nominal speed reference $v_{\mathrm{ref}}^{\mathrm{nom}}$ into a governed reference $v_{\mathrm{ref}}^{g}$, which then enters \eqref{eq:spmpc_cost_terms}.
-It does not directly modify the solved base command, does not act as an emergency brake or hard safety interlock, does not use RGB liquid observations, and does not change the \MPCC{} state dimension.
-
-Given the current slosh state $\xl(t)$, base speed $v(t)$, angular speed $\omega(t)$, and nominal speed reference $v_{\mathrm{ref}}^{\mathrm{nom}}$, the governor searches over a finite set of scaling factors
-\begin{equation}
-  \mathcal{B}
-  =\{\beta_0,\ldots,\beta_{M-1}\}
-  \subseteq[\beta_{\min},1].
-  \label{eq:governor_beta_grid}
-\end{equation}
-Each candidate $\beta$ defines
-\begin{equation}
-  v_{\beta}=\beta v_{\mathrm{ref}}^{\mathrm{nom}},
-\end{equation}
-and is evaluated by an internal $N_g$-step rollout.
-In the implementation, the predicted speed $v_k^g$ approaches $v_{\beta}$ under a prescribed acceleration limit, the angular velocity can be approximated by time-constant decay, and the slosh state is propagated using the low-order model in \eqref{eq:slosh_modal_dynamics}--\eqref{eq:slosh_excitation}.
-Let $H_k(\beta)\geq 0$ be the model-predicted slosh height or envelope proxy at step $k$ for candidate $\beta$, using either $H_{\mathrm{model}}^{\mathrm{modal}}$ or $H_{\mathrm{model}}^{\mathrm{full}}$ according to the evaluation convention.
-With a normalization height $H_{\lim}>0$, the candidate risk is
-\begin{equation}
-  R(\beta)
-  =
-  \max_{0\leq k\leq N_g}
-  \frac{H_k(\beta)}{H_{\lim}} .
-  \label{eq:governor_candidate_risk}
-\end{equation}
-For a risk threshold $\rho$, the feasible candidate set is
-\begin{equation}
-  \mathcal{B}_{\mathrm{feas}}
-  =
-  \{\beta\in\mathcal{B}\mid R(\beta)\leq \rho\}.
-  \label{eq:governor_beta_feas}
-\end{equation}
-The raw scaling factor is selected as
-\begin{equation}
-  \beta_{\mathrm{raw}}
-  =
-  \begin{cases}
-    \max \mathcal{B}_{\mathrm{feas}}, & \mathcal{B}_{\mathrm{feas}}\neq \emptyset,\\
-    \beta_{\min}, & \mathcal{B}_{\mathrm{feas}}= \emptyset.
-  \end{cases}
-  \label{eq:governor_beta_star}
-\end{equation}
-If $\mathcal{B}_{\mathrm{feas}}$ is empty, the state is marked as saturated.
-This status indicates that every discrete candidate exceeds the model-predicted risk threshold, so the system uses the smallest candidate reference for soft deceleration.
-It is not a formal safety stop condition.
-
-To avoid abrupt speed-reference changes, the governor applies an asymmetric rate limit to $\beta_{\mathrm{raw}}$.
-Let $\beta_f^{-}$ be the filtered scaling factor from the previous cycle, and let $\dot{\beta}_{\uparrow}$ and $\dot{\beta}_{\downarrow}$ be the increase and decrease rate limits.
-Then
-\begin{equation}
-  \begin{aligned}
-    \underline{\beta}
-    &=\max\{\beta_{\min},\beta_f^{-}-\dot{\beta}_{\downarrow}\Delta t\},\\
-    \overline{\beta}
-    &=\min\{1,\beta_f^{-}+\dot{\beta}_{\uparrow}\Delta t\},\\
-    \beta_f
-    &=\operatorname{clip}
-      \left(\beta_{\mathrm{raw}},\underline{\beta},\overline{\beta}\right).
-  \end{aligned}
-  \label{eq:governor_beta_filter}
-\end{equation}
-The governed reference sent to the \MPCC{} problem is
-\begin{equation}
-  \tilde{v}_{\mathrm{ref}}^{g}
-  =
-  \beta_f v_{\mathrm{ref}}^{\mathrm{nom}},
-  \qquad
-  v_{\mathrm{ref}}^{g}
-  =
-  \min\left\{
-    v_{\mathrm{ref}}^{\mathrm{nom}},
-    \max\{v_{\min},\tilde{v}_{\mathrm{ref}}^{g}\}
-  \right\}.
-  \label{eq:governor_vref}
-\end{equation}
-When no minimum cruising speed is used, \eqref{eq:governor_vref} reduces to $v_{\mathrm{ref}}^{g}=\beta_f v_{\mathrm{ref}}^{\mathrm{nom}}$.
-Because $v_{\mathrm{ref}}^{g}$ only enters the speed-reference terms of the \MPCC{} problem, the final base command is still determined by the \MPCC{} solution, base constraints, and execution interface.
-
-\noindent\textbf{Proposition 1 (reference non-amplification and discrete candidate optimality).}
-Assume $v_{\mathrm{ref}}^{\mathrm{nom}}\geq 0$, $H_{\lim}>0$, $\mathcal{B}\subseteq[\beta_{\min},1]$, and the filtered scaling factor in \eqref{eq:governor_beta_filter} satisfies $\beta_f\in[\beta_{\min},1]$.
-Then the governor satisfies $v_{\mathrm{ref}}^{g}\leq v_{\mathrm{ref}}^{\mathrm{nom}}$.
-If $\mathcal{B}_{\mathrm{feas}}$ is nonempty, then $\beta_{\mathrm{raw}}$ is the largest scaling factor in the discrete candidate set that satisfies the model-predicted risk threshold.
-
-\noindent\emph{Proof.}
-From \eqref{eq:governor_beta_filter}, $\beta_f\leq 1$, and therefore $\tilde{v}_{\mathrm{ref}}^{g}=\beta_f v_{\mathrm{ref}}^{\mathrm{nom}}\leq v_{\mathrm{ref}}^{\mathrm{nom}}$.
-Equation \eqref{eq:governor_vref} then explicitly applies $\min\{v_{\mathrm{ref}}^{\mathrm{nom}},\cdot\}$, giving $v_{\mathrm{ref}}^{g}\leq v_{\mathrm{ref}}^{\mathrm{nom}}$.
-Furthermore, \eqref{eq:governor_beta_feas}--\eqref{eq:governor_beta_star} selects the maximum element among all discrete candidates satisfying $R(\beta)\leq\rho$.
-Thus, when the feasible set is nonempty, $\beta_{\mathrm{raw}}$ is the maximum feasible scaling factor on the candidate grid.
-
-The above property is not a spill-free or safety-invariance guarantee.
-If the rate limiter yields $\beta_f>\beta_{\mathrm{raw}}$, then a rollout at $\beta_f$ may still exceed the risk threshold; this condition is reported as a transient rate-limited state rather than a satisfied safety constraint.
-If no candidate satisfies the threshold, the governor enters the saturated state and takes $\beta_{\min}$, which remains a soft reference-adaptation action rather than a hard stop or formal safety controller.
-
-\subsection{Receding-Horizon Execution and Ablation Variants}
-
-After solving \eqref{eq:spmpc_ocp}, the planner executes only the first optimized step.
-The command sent to the base can be obtained from the first predicted state or from the current velocity plus the optimized control increment, for example
-\begin{equation}
-  v_{\mathrm{cmd}} = v_0 + a_0^{\star}\Delta t,
-  \qquad
-  \omega_{\mathrm{cmd}} = \omega_0 + \alpha_0^{\star}\Delta t.
-  \label{eq:cmd_generation}
-\end{equation}
-The command is then passed through the base-interface limits and published as the base velocity command.
-At the next cycle, the system reinitializes with updated odometry and the updated model slosh state and solves again.
-This receding-horizon execution preserves the interface of an ordinary mobile-robot local planner.
-
-The method supports modular ablations.
-To test whether smooth motion alone explains anti-slosh behavior, the experiments use four variants within the same \MPCC{} framework, as shown in \cref{tab:method_variants}.
-
-\begin{table}[t]
-  \centering
-  \scriptsize
-  \setlength{\tabcolsep}{3pt}
-  \caption{\SPMPC{} internal ablation variants.}
-  \label{tab:method_variants}
-  \begin{tabular}{p{0.18\linewidth} p{0.22\linewidth} p{0.20\linewidth} p{0.28\linewidth}}
-    \toprule
-    Variant & Slosh model/cost & Smoothing & Experimental question \\
-    \midrule
-    \Bzero{} & absent & weak & Can the base \MPCC{} complete path tracking? \\
-    \Bsmooth{} & absent & strong & Is stronger control smoothing sufficient? \\
-    \Bslosh{} & present & weak & Does explicit slosh-state prediction have independent value? \\
-    \Bours{} & present & strong & How does the state-augmented planner trade tracking, smoothness, and slosh response? \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-The comparison between \Bsmooth{} and \Bslosh{} separates control smoothness from liquid-state prediction.
-\Bours{} denotes the basic \SPMPC{} planner.
-When the reference-adaptation module is evaluated, it is enabled on top of the same \Bours{} parameters and nominal speed reference and is denoted \Boursgov{}.
-This isolates the incremental effect of soft speed-reference adaptation relative to the basic slosh-state-augmented \MPCC{}.
+The reference governor and modal hard cap are optional liquid-aware extensions.
+The delay predictor, terminal controller, command gate, and command-rate limiter
+belong to the shared deployment layer. None is part of the core \SMPCC{}
+formulation defined in this section.

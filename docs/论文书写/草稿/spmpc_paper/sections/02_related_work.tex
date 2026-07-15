@@ -18,12 +18,12 @@ Regulated pure pursuit, dynamic-window variants, LT-DWA, MPPI, differential-driv
 
 These methods are close to the system interface considered here because they serve runtime local decision making and ultimately produce executable base commands.
 Local-planner benchmarks also typically evaluate safety, efficiency, smoothness, path tracking, and computation time \cite{D21_Wen2021}.
-Therefore, ordinary local planners are natural same-layer baselines for testing whether online planning without explicit liquid-state propagation is already sufficient for open-liquid transport.
+They therefore provide decision-layer context for \SMPCC{}, although the current fixed-path study does not rank global or obstacle-oriented planners.
 
 However, these planners usually propagate robot pose, velocity, path error, obstacle distance, control variation, or risk variables; they do not include the modal displacement and velocity of the liquid inside the transported container.
 For liquid transport, reducing command variation or improving geometric smoothness is not equivalent to suppressing sloshing.
 Two command sequences may have similar velocity, acceleration, and jerk profiles but different future liquid responses because they couple differently with the current liquid phase.
-Ordinary local planners are therefore useful same-layer comparisons, but they do not directly represent liquid dynamic memory.
+Ordinary local planners clarify the same-layer novelty boundary, but they do not directly represent liquid dynamic memory.
 
 \subsection{Mobile-Base Liquid Transport and Anti-Slosh Methods}
 
@@ -43,7 +43,7 @@ The Hamaguchi line of work is closer to path design, velocity-profile design, in
 Active suppression mechanisms rely on additional hardware or special platforms.
 The approach of Lim et al.\ is closer to whole-trajectory offline optimization.
 Nguyen Viet et al.\ use a planning-plus-tracking structure, and Prabakaran et al.\ focus on a special service-robot platform and trajectory tracking.
-In contrast, \SPMPC{} inserts a low-order slosh state directly into an online \MPCC{} local-planning problem for a standard wheeled mobile base and resolves a short-horizon optimization problem at every control cycle.
+In contrast, \SMPCC{} inserts a low-order slosh state directly into an online \MPCC{} local-planning problem for a standard wheeled mobile base and resolves a short-horizon optimization problem at every control cycle.
 
 \begin{table}[t]
   \centering
@@ -66,7 +66,7 @@ In contrast, \SPMPC{} inserts a low-order slosh state directly into an online \M
 
 Thus, the mobile-base liquid-transport problem is not unexplored.
 The gap addressed here is the insertion of liquid dynamic memory into the online local-planning loop of a standard mobile base.
-\SPMPC{} defines this problem layer by selecting path progress, base control, and predicted liquid response in the same receding-horizon optimization problem.
+\SMPCC{} defines this problem layer by selecting path progress, base control, and predicted liquid response in the same receding-horizon optimization problem.
 
 \subsection{Cross-Platform Slosh Modeling, Trajectory Generation, and Predictive Control}
 
@@ -84,7 +84,7 @@ External sensing, machine vision, and liquid-level detection studies further sho
 This motivates the distinction used throughout the paper between internal model proxies and measured liquid-surface indicators.
 Cross-platform anti-slosh studies are therefore treated primarily as modeling and evaluation references unless their platform, input interface, and decision layer can be reproduced under the same experimental conditions.
 
-\subsection{Positioning of \SPMPC{}}
+\subsection{Positioning of \SMPCC{}}
 
 In summary, prior work has established foundations in mobile-robot local planning, mobile-base liquid transport, low-order slosh modeling, and anti-slosh predictive control.
 Ordinary local planners operate at a similar deployment layer but usually lack liquid-state prediction.
@@ -92,5 +92,4 @@ Mobile-base anti-slosh methods share the physical task but often operate through
 Cross-platform anti-slosh methods provide modeling and control foundations but do not generally constitute same-layer experimental baselines.
 
 This paper is positioned at their intersection: online slosh-aware \MPCC{} local planning for a standard wheeled mobile base.
-Rather than claiming the first slosh-aware \MPC{} method, the paper integrates low-order slosh modal states, path progress, base-control constraints, control smoothness, and predicted liquid response into one receding-horizon local-planning problem.
-The Slosh-risk Reference Governor is likewise confined to this local-planning interface: it scales the speed reference before the \MPCC{} solve and is not a post-\MPCC{} command override, a control-barrier-function safety layer, an RGB-based liquid-surface feedback controller, or a separate OCP with different state dimension.
+Rather than claiming the first slosh-aware \MPC{} method, \SMPCC{} integrates low-order slosh modal states, path progress, base-control constraints, control smoothness, and predicted liquid response into one receding-horizon local-planning problem. Its empirical claims remain limited to matched internal \MPCC{} variants, completion-time control, and geometry-based container transfer.
