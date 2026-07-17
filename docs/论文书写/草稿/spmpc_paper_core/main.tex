@@ -45,10 +45,12 @@ Hefei, China (e-mail: zhangrenjun@mail.ustc.edu.cn).}}
 \maketitle
 
 \begin{abstract}
-This paper formulates an online receding-horizon local motion planner and controller for transporting an open liquid container along a prescribed geometrically feasible reference path.
-The method jointly optimizes robot motion, virtual path progress, and a container-parameterized first-mode liquid model within a model predictive contouring control horizon.
-Propagated modal displacement and velocity provide liquid dynamic memory, allowing the planned motion to depend on the current oscillation phase.
-The evaluation uses matched slosh-agnostic and smooth-only MPCC variants, a completion-time-matched comparison, and geometry-based transfer across containers without controller-weight retuning.
+Transporting an open liquid on a mobile base requires more than suppressing command variation: the response to a candidate motion also depends on the liquid displacement, velocity, and oscillation phase already present when that motion is planned.
+This paper presents an online receding-horizon local motion planner and controller for a prescribed geometrically feasible path.
+The proposed \SMPCC{} formulation jointly predicts robot motion, virtual path progress, and a container-parameterized first lateral sloshing mode represented in two orthogonal directions.
+An odometry-driven propagation step carries the modal state between control cycles, so the current liquid dynamic memory can alter the next optimized motion segment.
+The frozen evaluation protocol uses matched slosh-agnostic and smooth-only MPCC variants, an independently tuned completion-time-matched comparison, geometry-based transfer without controller-weight retuning, controlled liquid-phase studies, counterfactual replay of the propagated runtime state, and command-chain and runtime audits.
+The scope is online motion generation along a supplied path; global route planning, obstacle reasoning, and a formal spill-free guarantee are not claimed.
 \end{abstract}
 
 \begin{IEEEkeywords}

@@ -1,14 +1,15 @@
 \section{Experimental Evaluation}
 \label{sec:experiments}
 
-The evaluation follows one evidence sequence: whether \SMPCC{} reduces the
-physical free-surface response, how its executed motion and excitation differ
-from matched slosh-agnostic controllers, whether the improvement remains after
-completion-time matching, whether it transfers across container geometries,
-and whether liquid state changes a plan that can be solved online. Claims are
-restricted to the prescribed-path setting and to comparisons with the matched
-Baseline and Smooth-only \MPCC{} variants. No superiority over existing global,
-obstacle-oriented, or liquid-transport planners is claimed.
+The evaluation is designed to test one bounded claim: whether propagated liquid
+dynamics change receding-horizon motion decisions and improve the measured
+free-surface response along a prescribed path. The evidence proceeds from the
+physical outcome to the executed motion that produced it, then examines the
+completion-time alternative, transfer across container geometries, the effect
+of liquid state on the optimizer, and real-time execution. Claims remain
+restricted to matched internal \MPCC{} variants in the prescribed-path setting;
+the study does not rank \SMPCC{} against global, obstacle-oriented, or other
+liquid-transport planners.
 
 \subsection{Evaluation Questions and Evidence Structure}
 
@@ -22,19 +23,24 @@ Four research questions organize the evidence:
   \item \textbf{RQ3---Container transfer:} Does geometry-based model
   reparameterization preserve the benefit without controller-weight retuning?
   \item \textbf{RQ4---State-dependent online planning:} Do liquid modal state
-  and phase change the predicted motion plan, and can that plan be solved
-  within the online deadline?
+  and phase change the predicted motion plan and optimized first action in both
+  controlled states and formal runtime replay, and can the resulting OCP be
+  solved within the online deadline?
 \end{itemize}
 
-The mechanism analysis connects path geometry and the current robot--liquid
-state to optimized motion, executed motion, realized base excitation, and two
-parallel liquid-response quantities:
+The mechanism analysis preserves the distinction between optimization and
+execution. Let $\bm c=[v,\omega]^\top$ denote a velocity command. The evidence
+chain is
 \[
 \begin{aligned}
 (\kappa(s),\hat{\bm{x}}_{r,j},\hat{\bm{x}}_{\ell,j})
 &\rightarrow \bm{u}^{\star}_{0:N-1\mid j},\\
 \bm{u}^{\star}_{0:N-1\mid j}
-&\rightarrow \bm{u}_{\mathrm{exec}}
+&\rightarrow \bm c_{\mathrm{solver},j}
+\rightarrow \bm c_{\mathrm{post},j}
+\rightarrow \bm c_{\mathrm{pub},j},\\
+\bm c_{\mathrm{pub}}
+&\rightarrow \text{executed motion}
 \rightarrow (a_{x,\mathrm{exec}},a_{y,\mathrm{exec}}),\\[-1mm]
 (a_{x,\mathrm{exec}},a_{y,\mathrm{exec}})
 &\Rightarrow
@@ -44,10 +50,14 @@ H_{\mathrm{vis}}, & \text{physical reference response}.
 \end{cases}
 \end{aligned}
 \]
-The diagram is an analysis structure rather than a claim that
-$H_{\mathrm{modal}}$ causes $H_{\mathrm{vis}}$. The former is an internal
-prediction or propagated model response; the latter is the calibrated
-vision-based experimental reference.
+Here the raw solver, post-gate, and final published commands are separate log
+layers. Only the published command and measured motion are connected directly
+to the realized excitation. The final branch is an analysis structure rather
+than a claim that $H_{\mathrm{modal}}$ causes $H_{\mathrm{vis}}$: the former is
+an internal prediction or propagated model response, whereas the latter is the
+calibrated vision-based experimental reference. A replay that stops before the
+shared execution layer is interpreted only as an optimized first-action
+difference.
 
 \subsection{Experimental Setup and Compared Methods}
 
@@ -58,7 +68,10 @@ mounted at the base rotation center. The body-fixed $x_b$ axis points forward
 and $y_b$ points laterally. The nominal container $C_1$ has inner radius
 $R_c=18.5\,\mathrm{mm}$ and liquid depth $h=58\,\mathrm{mm}$. Container $C_2$
 changes the radius and/or fill depth so that the first-mode natural frequency
-changes by approximately 15--20\% or more. A low-risk prescribed path and a
+changes by approximately 15--20\% or more. Before $C_2$ is frozen, its modal
+frequency is checked against the camera frame rate and the validated visual
+measurement bandwidth; parameter separation is not created by moving the
+response outside the observation regime. A low-risk prescribed path and a
 high-risk path with sustained curvature changes are used.
 
 The experimental-setup figure will combine the mobile base and fixed camera,
@@ -76,32 +89,35 @@ container \(C_2\), camera pose, and coordinate annotations have been frozen.}
 The three controller variants are defined in \cref{tab:core_variants}. All
 robot models, paths, constraints, horizons, solver settings, and shared
 deployment behavior are identical unless the table explicitly states
-otherwise.
+otherwise. Each method is archived as a read-only configuration snapshot.
 
-\begin{table}[t]
+\begin{table*}[t]
   \centering
   \scriptsize
-  \setlength{\tabcolsep}{2.6pt}
+  \setlength{\tabcolsep}{5.0pt}
   \renewcommand{\arraystretch}{1.08}
   \caption{Methods used in the main comparison.}
   \label{tab:core_variants}
-  \begin{tabular}{@{}p{0.25\linewidth}cccc@{}}
+  \begin{tabular}{@{}llllll@{}}
     \toprule
-    Method & Liquid state & Slosh cost & Smoothing & Role \\
+    Method & Frozen code mapping & Liquid state & Slosh cost & Smoothing & Role \\
     \midrule
-    Baseline \MPCC{} & Off & Off & Nominal & Base \\
-    Smooth-only \MPCC{} & Off & Off & Enhanced & Generic smoothing \\
-    \SMPCC{} & On & On & Nominal & Proposed \\
+    Baseline \MPCC{} & \texttt{B0} & Off & Off & Nominal & Base \MPCC{} control \\
+    Smooth-only \MPCC{} & \texttt{B\_smooth} & Off & Off & Enhanced & Generic smoothing control \\
+    \SMPCC{} & \texttt{B\_slosh} & On & On & Nominal & Proposed method \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
-Baseline--\SMPCC{} isolates the addition of propagated liquid state and the
-slosh cost. Baseline--Smooth-only isolates enhanced generic smoothing.
-Smooth-only--\SMPCC{} is the practical comparison between a slosh-agnostic
-smoothing strategy and liquid-state-aware predictive planning. The reference
-governor and modal hard cap are disabled, and any downstream terminal, gate,
-rate-limit, or fallback behavior is shared by all methods.
+Baseline--\SMPCC{} evaluates the combined mechanism introduced by the
+propagated liquid state and slosh cost. Baseline--Smooth-only quantifies the
+effect of enhanced generic smoothing. Smooth-only--\SMPCC{} is the primary
+practical comparison because it tests explicit liquid dynamic memory against a
+slosh-agnostic strategy that has already been given stronger smoothing. The
+reference governor and modal hard cap are disabled, and downstream terminal,
+gate, rate-limit, and fallback behavior is shared by all methods. A legacy
+``\SMPCC{} plus enhanced smoothing'' configuration is development-only and is
+not a fourth core method.
 
 \subsubsection{Experimental matrix}
 
@@ -116,10 +132,20 @@ The formal design uses $n=8$ randomized blocks and 88 physical trials:
 The high-risk $C_1$ trials in the super-blocks serve both RQ1 and RQ3; they are
 not collected twice. Method order is randomized within every block, and
 container order is randomized or counterbalanced within each super-block.
-RQ4 and the parameter-switch planning comparison in RQ3 are controlled
-computational studies and require no additional physical trials. An optional
-$C_2$ mismatch group using frozen $C_1$ liquid parameters adds eight physical
-trials and is reserved for supporting analysis.
+RQ4 comprises controlled longitudinal and lateral phase studies, actual/zero
+runtime-state replay, and runtime analysis. The phase and replay studies, as
+well as the RQ3 parameter-switch and computational mismatch comparisons, add no
+physical trials. An optional $C_2$ mismatch group using frozen $C_1$ liquid
+parameters adds eight physical trials, increasing the design to 96 trials. It
+is the only planned extension that can test whether reparameterization is
+physically necessary rather than merely whether the optimizer is parameter
+sensitive.
+
+If acquisition stops early, the evidence and manuscript claims are reduced
+together. The 40-trial core package contains the high-risk $C_1$ three-method
+comparison and the time-matched comparison; adding the low-risk path gives 64
+trials, and adding the $C_2$ super-block component gives the complete 88-trial
+design.
 
 All controller weights, the configured damping ratio $\zeta$,
 executed-command limits, shared deployment behavior, camera settings, and
@@ -130,18 +156,31 @@ Formal RGB outcomes are not inspected while these settings are selected.
 
 \subsubsection{Recorded signals and physical reference}
 
-Each trial records the following synchronized layers:
+Each trial records synchronized signals at the level at which they enter the
+evidence chain:
 \begin{itemize}
   \item the prescribed path, projected progress $s$, and curvature $\kappa(s)$;
-  \item odometry $(x,y,\theta,v,\omega)$ and the path-tracking error;
-  \item the OCP first action, predicted $v_{k\mid j}$, $\omega_{k\mid j}$,
-  $v_{s,k\mid j}$, and the final executed velocity command;
+  \item odometry $(x,y,\theta,v,\omega)$, path-tracking error, task state, and
+  the common arrival decision;
+  \item the actual pre-solve robot and liquid states, $s_{\min,j}$, effective
+  speed reference, previous control, and solver/warm-start snapshot required
+  for deterministic replay;
+  \item the optimized first action and the predicted $v_{k\mid j}$,
+  $\omega_{k\mid j}$, $v_{s,k\mid j}$, and liquid rollout;
+  \item the raw solver command, post-gate command, final published command,
+  limiter flags, fallback state, and previous published command;
   \item propagated modal state
   $(\eta_x,\dot\eta_x,\eta_y,\dot\eta_y)$ and $H_{\mathrm{modal}}$;
   \item calibrated visual free-surface response $H_{\mathrm{vis}}$;
-  \item solve time, solver status, deadline miss, intervention state, and
-  fallback action.
+  \item solve time, solver status, deadline miss, intervention state, fallback
+  action, and achieved control interval.
 \end{itemize}
+
+The online log retains the first action and available predictions. The frozen
+RQ4 replay tool additionally exports the complete horizon of
+$v$, $\omega$, $v_s$, $\eta_x$, $\dot\eta_x$, $\eta_y$, $\dot\eta_y$, $a$,
+and $\alpha$; an XY path or a short horizon summary is not sufficient for the
+state-dependence analysis.
 
 Prediction and execution are not conflated. Inside the OCP,
 $a_{x,k\mid j}=a_{k\mid j}$ and
@@ -156,7 +195,29 @@ processing rule
 \]
 The differentiation and filtering procedure is frozen before formal outcomes
 are inspected. Physical motion and excitation metrics use odometry and
-executed commands; predicted quantities are used only for mechanism analysis.
+published commands; predicted quantities are used only for mechanism analysis.
+
+Command intervention is defined before formal acquisition. For frozen
+tolerances $\epsilon_v$ and $\epsilon_\omega$, the trial-level intervention
+ratio is
+\begin{equation}
+\begin{aligned}
+  r_{\mathrm{int}}
+  =\frac{1}{N_c}\sum_{j=1}^{N_c}
+  \mathbb I\!\big(&
+  |v_{\mathrm{pub},j}-v_{\mathrm{solver},j}|>\epsilon_v\\[-1mm]
+  &\lor
+  |\omega_{\mathrm{pub},j}-\omega_{\mathrm{solver},j}|>\epsilon_\omega
+  \big).
+\end{aligned}
+  \label{eq:intervention_ratio}
+\end{equation}
+An admission threshold $r_{\mathrm{int,max}}$ is frozen from independent
+deployment tests for the nonterminal main-motion interval. Exceeding this
+threshold in a formal trial is reported rather than excluded. If the shared
+execution layer frequently overrides the optimizer, physical differences are
+attributed to the final executed trajectory, not directly to the raw OCP
+command.
 
 Only two liquid-response quantities are used. $H_{\mathrm{modal}}$ is the
 internal modal response and OCP penalty, whereas $H_{\mathrm{vis}}$ is the
@@ -182,28 +243,43 @@ $T_{\mathrm{post}}=5\,\mathrm{s}$ post-arrival observation interval.
 
 \subsubsection{Primary, secondary, and diagnostic outcomes}
 
-Motion is aligned by normalized path progress
-$\sigma=s/L$. The primary outcome is the trial-level 95th percentile
-\[
-  H_{\mathrm{vis,p95}}^{\mathrm{motion}}
+The first effective motion time $t_{\mathrm{move}}$ is determined by a frozen
+velocity or command threshold and minimum duration. Together with the common
+arrival rule, it defines the full motion window
+\begin{equation}
+  \mathcal W_{\mathrm{full}}
+  =[t_{\mathrm{move}},t_{\mathrm{arrival}}].
+  \label{eq:full_motion_window}
+\end{equation}
+The primary physical outcome is the trial-level 95th percentile
+\begin{equation}
+  H_{\mathrm{vis,p95}}^{\mathrm{full}}
   =Q_{0.95}\!\left(
-  H_{\mathrm{vis}}(t)\,:\,0.1\leq\sigma(t)\leq0.9
+  H_{\mathrm{vis}}(t):t\in\mathcal W_{\mathrm{full}}
   \right).
-\]
-The 10\%--90\% window is fixed before formal acquisition. The full
-0\%--100\% motion-window p95 and motion-window RGB RMS are pre-specified
-sensitivity outcomes.
+  \label{eq:primary_rgb_outcome}
+\end{equation}
+This window includes start-up and terminal braking, two physically relevant
+excitation phases, but excludes pre-start waiting and post-arrival observation.
+Motion-dependent process curves are aligned by normalized path progress
+$\sigma=s/L$. The 10\%--90\% path-progress p95 is a pre-specified sensitivity
+outcome that isolates the path interior from start and terminal handling; it
+does not replace the full-window primary outcome.
 
-Key secondary outcomes are post-arrival $H_{\mathrm{vis}}$ RMS over
+Secondary outcomes are full-window $H_{\mathrm{vis}}$ RMS, 10\%--90\%
+$H_{\mathrm{vis}}$ p95, post-arrival $H_{\mathrm{vis}}$ RMS over
 $0\leq\tau=t-t_{\mathrm{arrival}}\leq T_{\mathrm{post}}$, completion time,
-path-error p95, and success rate. Mechanism diagnostics comprise
-$H_{\mathrm{modal}}$ p95, $a_{x,\mathrm{exec}}$ RMS,
-$|a_{y,\mathrm{exec}}|$ p95, realized angular-acceleration or command-rate
-metrics, and the control variations directly associated with the enhanced
-smoothing weights. Real-time outcomes are solve-time median, p95, and maximum,
-deadline-miss rate, solver failure, fallback use, and achieved control
-frequency. Mechanism and model diagnostics cannot replace the
-$H_{\mathrm{vis}}$ outcome.
+contour-error p95, and success rate. The path is also partitioned into five
+pre-registered mechanism segments, $Z_1$--$Z_5$, spanning start-up, entry into
+curvature, curvature reversal, re-acceleration, and terminal braking.
+
+Mechanism diagnostics comprise $H_{\mathrm{modal}}$ p95,
+$a_{x,\mathrm{exec}}$ RMS, $|a_{y,\mathrm{exec}}|$ p95, realized angular
+acceleration or command-rate variation, $r_{\mathrm{int}}$, and raw-to-published
+command differences. Real-time outcomes are solve-time median, p95, and
+maximum, deadline-miss rate, solver failure, fallback use, and achieved control
+frequency. None of these internal or process diagnostics substitutes for the
+physical $H_{\mathrm{vis}}$ outcome.
 
 One complete trial is the statistical sample. Video frames and points on an
 aligned process curve are not treated as independent observations. Process
@@ -214,8 +290,15 @@ than pointwise inferential confidence intervals.
 
 \subsubsection{Randomization, paired analysis, and failure handling}
 
-The primary analysis uses within-block differences. For method $m$, reference
-method $m'$, block $b$, and path $p$,
+The comparison hierarchy is fixed before formal acquisition. For RQ1, the
+primary contrast is \SMPCC{} minus Smooth-only \MPCC{}; \SMPCC{} minus
+Baseline \MPCC{} is the key secondary contrast, and Smooth-only minus Baseline
+is a mechanism diagnostic. For RQ2, the primary contrast is \SMPCC{} minus
+Smooth-match \MPCC{}. This hierarchy is not revised in response to the observed
+significance pattern.
+
+The analysis uses within-block differences. For method $m$, reference method
+$m'$, block $b$, and path $p$,
 \begin{equation}
   \Delta_{b,p}^{m-m'}
   =Y_{m,b,p}-Y_{m',b,p}.
@@ -229,12 +312,15 @@ The primary estimand is the mean paired difference
 A negative value favors \SMPCC{} for liquid-response and error outcomes when
 $m=\mathrm{S\text{-}MPCC}$. The paper reports raw trial points, block-paired
 lines, $\bar\Delta_p^{m-m'}$, mean within-block relative change, and a 95\%
-confidence interval obtained by resampling whole blocks. The median paired
-difference is a robustness summary. Reaching $n=8$ does not by itself establish
-statistical confirmation; interpretation uses the paired observations, effect
-magnitude, uncertainty interval, and failure pattern. Mixed-effects models are
-supporting analyses, with the block intercept nested by path when collections
-use different blocks.
+interval obtained by resampling whole blocks. The paired median is a robustness
+summary. The RQ1 primary contrast additionally receives exact paired
+sign-flip/randomization inference and leave-one-block-out analysis. If p-values
+are reported for multiple secondary comparisons, their interpretation follows
+a frozen hierarchy or Holm adjustment. Reaching $n=8$ does not by itself
+establish statistical confirmation; interpretation combines paired
+observations, effect magnitude, uncertainty, and the failure pattern.
+Mixed-effects models are supporting analyses rather than replacements for the
+paired raw data and small-sample robustness checks.
 
 Exclusions are restricted to acquisition failures unrelated to a compared
 method, such as a recording system that never started, an irrecoverably
@@ -253,10 +339,11 @@ used to select trials or representative time series.
 \subsubsection{Physical liquid response}
 
 RQ1 compares the three methods on both prescribed paths with $C_1$. The primary
-contrasts are \SMPCC{} minus Baseline and \SMPCC{} minus Smooth-only.
-Smooth-only minus Baseline quantifies the effect of enhanced generic smoothing.
-\Cref{tab:rq1_results} reports trial-level descriptive summaries; paired
-effects and uncertainty are shown with raw block-paired observations.
+contrast is \SMPCC{} minus Smooth-only. \SMPCC{} minus Baseline is the key
+secondary contrast, while Smooth-only minus Baseline quantifies the effect of
+enhanced generic smoothing. \Cref{tab:rq1_results} reports trial-level
+descriptive summaries; interpretation is based on the pre-specified paired
+effects and their uncertainty rather than on method-wise summaries alone.
 
 \begin{table*}[t]
   \centering
@@ -269,7 +356,7 @@ effects and uncertainty are shown with raw block-paired observations.
   \label{tab:rq1_results}
   \begin{tabular}{@{}llccccc@{}}
     \toprule
-    Path & Method & RGB p95 [mm] & Post-RMS [mm] &
+    Path & Method & Full RGB p95 [mm] & Post-RMS [mm] &
     Time [s] & Path p95 [cm] & Success \\
     \midrule
     Low-risk & Baseline \MPCC{} & \Pending & \Pending & \Pending & \Pending & \Pending \\
@@ -291,17 +378,20 @@ $H_{\mathrm{modal}}$, and $H_{\mathrm{vis}}$. Median and interquartile curves
 are shown for all three methods. The corresponding low-risk process curves are
 reported in the supplementary material. This figure tests whether measured
 liquid reduction is accompanied by mechanism-consistent redistribution of
-motion and excitation near demanding curvature segments.
+motion and excitation near demanding curvature segments. It is not interpreted
+as evidence that the controller is better merely because its global mean speed
+is lower.
 
 \subsubsection{Mechanism and task tradeoffs}
 
 The discussion jointly examines whether Smooth-only produces the intended
-reduction in realized control variation, whether \SMPCC{} is globally slower,
-whether it reallocates excitation locally rather than uniformly reducing
-speed, and whether liquid improvement is accompanied by path-tracking or
-success penalties. Detailed $H_{\mathrm{modal}}$, excitation, smoothing, and
-solve-time diagnostics are reported in the supplementary material so that
-they do not compete with the primary physical result.
+reduction in realized control variation, whether \SMPCC{} reallocates
+excitation locally rather than uniformly reducing speed, and whether any liquid
+improvement is accompanied by path-tracking or success penalties. The command
+audit is used to determine whether raw optimizer differences survive the shared
+execution layer. Detailed $H_{\mathrm{modal}}$, excitation, smoothing,
+intervention, and solve-time diagnostics are reported in the supplementary
+material so that they do not compete with the primary physical result.
 
 \PendingResult{Collect the 24 low-risk \(C_1\) trials and the high-risk
 \(C_1\) component of the 48-trial container super-blocks; generate the
@@ -323,7 +413,8 @@ reference is frozen when
 Formal paired blocks are collected only after $\delta_T$ and the Smooth-match
 reference have been fixed.
 
-The RQ2 figure combines the paired completion-time--RGB-p95 observations with
+The pre-specified RQ2 contrast is \SMPCC{} minus Smooth-match. The RQ2 figure
+combines paired completion-time--full-window-RGB-p95 observations with
 progress-aligned executed $v$, realized $a_y$, $H_{\mathrm{modal}}$, and
 $H_{\mathrm{vis}}$. The intended comparison does not require identical
 instantaneous speed. It tests whether two controllers with similar total
@@ -331,7 +422,9 @@ completion time distribute speed and excitation differently along the path.
 Formal outcomes are not reused to iteratively retune Smooth-match.
 
 \PendingResult{Use an independent pilot to freeze Smooth-match, then collect
-eight high-risk \(C_1\) paired blocks, totaling 16 formal trials.}
+eight high-risk \(C_1\) paired blocks, totaling 16 formal trials; generate the
+paired completion-time--RGB plot and the progress-aligned motion, excitation,
+modal-response, and visual-response panels.}
 
 \subsection{RQ3: Transfer Across Containers}
 
@@ -358,98 +451,180 @@ container before interpreting the method-by-container interaction.
 
 \subsubsection{Physical and process results}
 
-\begin{table}[!t]
+\begin{table*}[!t]
   \centering
   \scriptsize
-  \setlength{\tabcolsep}{2.5pt}
+  \setlength{\tabcolsep}{4.5pt}
   \renewcommand{\arraystretch}{1.08}
   \caption{Formal RQ3 results on the high-risk path. The \(C_1\) and \(C_2\)
   observations are collected within the same randomized super-blocks.}
   \label{tab:rq3_results}
-  \begin{tabular}{@{}clccc@{}}
+  \begin{tabular}{@{}clccccc@{}}
     \toprule
-    Container & Method &
-    \shortstack{RGB p95 [mm]\\Normalized p95} &
-    \shortstack{Time [s]\\Path p95 [cm]} &
-    Success \\
+    Container & Method & Full RGB p95 [mm] & Normalized RGB p95 &
+    Modal p95 [mm] & Time [s] & Path p95 [cm] \\
     \midrule
     $C_1$ & Baseline \MPCC{} &
-      \shortstack{\Pending\\\Pending} &
-      \shortstack{\Pending\\\Pending} & \Pending \\
+      \Pending & \Pending & \Pending & \Pending & \Pending \\
     $C_1$ & Smooth-only \MPCC{} &
-      \shortstack{\Pending\\\Pending} &
-      \shortstack{\Pending\\\Pending} & \Pending \\
+      \Pending & \Pending & \Pending & \Pending & \Pending \\
     $C_1$ & \SMPCC{} &
-      \shortstack{\Pending\\\Pending} &
-      \shortstack{\Pending\\\Pending} & \Pending \\
+      \Pending & \Pending & \Pending & \Pending & \Pending \\
     \addlinespace[1pt]
     $C_2$ & Baseline \MPCC{} &
-      \shortstack{\Pending\\\Pending} &
-      \shortstack{\Pending\\\Pending} & \Pending \\
+      \Pending & \Pending & \Pending & \Pending & \Pending \\
     $C_2$ & Smooth-only \MPCC{} &
-      \shortstack{\Pending\\\Pending} &
-      \shortstack{\Pending\\\Pending} & \Pending \\
+      \Pending & \Pending & \Pending & \Pending & \Pending \\
     $C_2$ & \SMPCC{} &
-      \shortstack{\Pending\\\Pending} &
-      \shortstack{\Pending\\\Pending} & \Pending \\
+      \Pending & \Pending & \Pending & \Pending & \Pending \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
 The RQ3 figure combines a method-by-container interaction plot with
 \SMPCC{} process curves for executed $v$, realized $a_y$,
 $H_{\mathrm{modal}}$, and $H_{\mathrm{vis}}$ under $C_1$ and $C_2$. A
 controlled computational comparison holds robot state, path location, and
 normalized modal amplitude and phase fixed while switching only the frozen
-container-parameter set. This separates parameter-dependent planning behavior
-from hardware and acquisition differences. Physical transfer results establish
-performance under reparameterization; they are not alone interpreted as a
-causal isolation of the parameter change.
+container-parameter set. A complementary mismatch replay can apply the correct
+$C_2$ parameters and the incorrect frozen $C_1$ parameters to the same $C_2$
+log state. These computational comparisons isolate parameter sensitivity of
+the optimizer, not the physical necessity of parameter updating. The
+super-block trials evaluate physical performance after reparameterization, but
+they do not alone isolate what would have happened under incorrect parameters.
 
 \PendingResult{Freeze \(C_2\) and \(\lambda_H\), then collect eight
 high-risk super-blocks containing both containers and all three methods,
 totaling 48 trials. Run the controlled \(C_1/C_2\) parameter-switch planning
-comparison without additional physical trials.}
+comparison and computational mismatch replay without additional physical
+trials; generate the method--container interaction plot and the two-container
+process comparison. Add the optional eight physical mismatch trials only if a
+physical necessity claim is required.}
 
-\subsection{RQ4: State-Dependent Planning and Real-Time Feasibility}
+\subsection{RQ4: State-Dependent Planning, Propagated-State Effect, and Real-Time Feasibility}
+\label{sec:rq4}
 
 \subsubsection{Liquid-phase-dependent replanning}
 
-RQ4 first holds the measured robot state and reference path fixed and
-initializes the OCP with four modal states of equal energy and different phase.
-The pre-specified mechanism-study amplitude is
-$A=0.5\eta_{\mathrm{ref}}$:
+The controlled phase study tests the OCP independently of physical-trial
+variability. Two mechanism checkpoints are frozen before the formal outcomes
+are inspected: a longitudinal checkpoint before start-up or re-acceleration,
+and a lateral checkpoint before curve entry or curvature reversal. At each
+checkpoint, the robot state, local path, container parameters, and modal energy
+are fixed. Only the phase of one modal direction is changed.
+
+With the pre-specified amplitude $A=0.5\eta_{\mathrm{ref}}$, the longitudinal
+initial states are
 \begin{equation}
 \begin{aligned}
   &[A,0,0,0]^\top,\qquad
   [0,\omega_1A,0,0]^\top,\\
   &[-A,0,0,0]^\top,\qquad
-  [0,-\omega_1A,0,0]^\top.
+  [0,-\omega_1A,0,0]^\top,
 \end{aligned}
-  \label{eq:phase_initial_states}
+\label{eq:phase_initial_states}
 \end{equation}
-For each initialization, the predicted $v_{k\mid j}$,
-$\omega_{k\mid j}$, $v_{s,k\mid j}$,
-$H_{\mathrm{modal},k\mid j}$, first control, and optional predicted path are
-recorded. The comparison tests whether the same robot state and path yield
-different future plans when liquid phase changes.
+and the lateral states are
+\begin{equation}
+\begin{aligned}
+  &[0,0,A,0]^\top,\qquad
+  [0,0,0,\omega_1A]^\top,\\
+  &[0,0,-A,0]^\top,\qquad
+  [0,0,0,-\omega_1A]^\top.
+\end{aligned}
+\label{eq:lateral_phase_initial_states}
+\end{equation}
+For every initialization, the study records the complete predicted
+$v_{k\mid j}$, $\omega_{k\mid j}$, $v_{s,k\mid j}$, modal-state, and
+$H_{\mathrm{modal},k\mid j}$ horizons, together with
+$a_{0\mid j}^{\star}$, $\alpha_{0\mid j}^{\star}$, and
+$v_{s,0\mid j}^{\star}$. The comparison directly tests whether identical
+robot and path states produce different future plans when liquid phase changes.
+The allocation of longitudinal and lateral results between the main text and
+supplementary material is frozen before the result values are inspected.
+
+\subsubsection{Counterfactual replay of the propagated runtime state}
+
+The constructed phase states establish whether the OCP is sensitive in
+principle. A separate actual/zero replay tests whether the internally propagated
+state recorded during formal high-risk trials changed the optimizer in normal
+operation. This state is generated from odometry; it is not treated as a direct
+measurement of the physical free surface.
+
+For control cycle $j$, let $\mathcal S_j$ contain the pre-solve solver and
+warm-start snapshot, previous solution, previous accepted control, previous
+published command, guarded progress, effective speed reference, container
+parameters, and any shared deployment context. The two branches are
+\begin{equation}
+\begin{aligned}
+\mathcal P_{\mathrm{actual},j}
+&=\mathcal P(\hat{\bm x}_{r,j},\hat{\bm x}_{\ell,j},
+\mathrm{path}_j,\mathcal S_j),\\
+\mathcal P_{\mathrm{zero},j}
+&=\mathcal P(\hat{\bm x}_{r,j},\bm 0,
+\mathrm{path}_j,\mathcal S_j).
+\end{aligned}
+\label{eq:actual_zero_replay}
+\end{equation}
+Both branches are cloned from the same immutable pre-solve snapshot; they are
+not solved sequentially on one mutable solver instance. Before a cycle enters
+the counterfactual comparison, the actual branch must reproduce the online
+solver status, first control, and raw solver command within frozen numerical
+tolerances. Nonreproduced cycles are reported as replay failures and are not
+silently included in the action-difference distribution.
+
+The primary replay quantities are
+\begin{equation}
+\begin{aligned}
+\Delta a_{0,j}
+&=a_{0,j}^{\star}(\hat{\bm x}_{\ell,j})
+-a_{0,j}^{\star}(\bm 0),\\
+\Delta\alpha_{0,j}
+&=\alpha_{0,j}^{\star}(\hat{\bm x}_{\ell,j})
+-\alpha_{0,j}^{\star}(\bm 0),\\
+\Delta v_{s,0,j}
+&=v_{s,0,j}^{\star}(\hat{\bm x}_{\ell,j})
+-v_{s,0,j}^{\star}(\bm 0).
+\end{aligned}
+\label{eq:replay_first_action_difference}
+\end{equation}
+Complete-horizon differences in $v$, $\omega$, $v_s$, modal state, and
+$H_{\mathrm{modal}}$ provide supporting mechanism detail. Control cycles are
+not treated as independent samples. Each trial first yields the median and p95
+of $|\Delta a_0|$, $|\Delta\alpha_0|$, and $|\Delta v_{s,0}|$, together with
+the fraction exceeding frozen numerical tolerances; inference and display then
+use trial-level summaries. The reproduction rate and replay-failure rate are
+reported with these distributions.
+
+Unless both branches are also passed through identical snapshots of the
+terminal, gate, and rate-limiter logic, the quantities in
+\cref{eq:replay_first_action_difference} are called optimized first-action
+differences, not counterfactual executed commands. This replay tests whether
+the propagated internal state affected optimization; it does not establish
+that the propagated state equals the true liquid state or that the
+counterfactual branch would improve the physical response.
 
 \subsubsection{Real-time performance}
 
 Online computation is evaluated over every formal physical trial. The reported
 statistics are solve-time median, p95, and maximum, together with
-\[
+\begin{equation}
   r_{\mathrm{miss}}
   =\frac{1}{N_c}\sum_{j=1}^{N_c}
   \mathbb I(T_{\mathrm{solve},j}>\Delta t).
-\]
+  \label{eq:deadline_miss_ratio}
+\end{equation}
 Solver failure, fallback action, and achieved control frequency are reported
-separately. The RQ4 figure combines the phase-dependent predicted plans and
-first actions with a solve-time empirical cumulative distribution function.
+separately. The RQ4 figure combines phase-dependent predicted plans,
+trial-level actual/zero optimized first-action differences, and the solve-time
+empirical cumulative distribution. Use of SQP-RTI or acados alone is not taken
+as evidence of real-time feasibility.
 
-\PendingResult{Run the four-phase controlled planning study and extract the
-runtime distribution, deadline misses, solver failures, fallback use, and
-achieved frequency from all 88 formal physical trials.}
+\PendingResult{Freeze the two checkpoints and replay tolerances; run the
+longitudinal and lateral four-phase studies; replay valid high-risk formal logs
+from cloned pre-solve snapshots; and extract runtime, deadline, failure,
+fallback, intervention, and achieved-frequency statistics from all completed
+formal physical trials.}
 
 \subsection{Supporting Model Consistency and Sensitivity}
 
@@ -473,9 +648,24 @@ accuracy of the present camera, calibration, or extraction pipeline.
 
 Sensitivity to $\omega_1$, $\zeta$, $c_h$, initial modal state, and execution
 delay is evaluated in simulation or log replay and reported in the
-supplementary material. The optional physical mismatch group applies the
-frozen $C_1$ parameter set to $C_2$ for eight high-risk \SMPCC{} trials. It is
-reported only as supporting evidence for the necessity of geometry-based
-reparameterization and is not included in the 88-trial main analysis.
+supplementary material. The supplementary analysis also contains the complete
+actual/zero and optional phase-flip replay distributions, actual-branch
+reproduction diagnostics, command intervention distributions, and the
+correct-versus-incorrect $C_2$ computational mismatch. These analyses refine
+the mechanism and model limitations but do not create an additional research
+question.
+
+The optional physical mismatch group applies the frozen $C_1$ parameter set to
+$C_2$ for eight high-risk \SMPCC{} trials and is not included in the 88-trial
+main analysis. A claim that geometry-based updating is physically necessary is
+considered only if this controlled physical extension changes
+$H_{\mathrm{vis}}$ under the pre-specified comparison. A difference between
+correct and incorrect parameters in simulation or replay establishes only
+optimizer sensitivity.
+
+\PendingResult{Compute the modal--vision consistency summaries, run the frozen
+parameter, initial-state, delay, and phase-flip sensitivity analyses, report the
+complete replay reproduction and failure distributions, and add the optional
+physical mismatch result only if that extension is collected.}
 
 \FloatBarrier
