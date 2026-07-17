@@ -98,38 +98,62 @@ The defining mechanism is liquid dynamic memory. Two candidate motions with simi
   \label{fig:core_architecture}
 \end{figure*}
 
-The control-cycle index is $j$, and $k\mid j$ denotes prediction node $k$ formed at cycle $j$. Measured and propagated online quantities carry index $j$; OCP variables carry index $k\mid j$.
+Let \(j=0,1,\ldots\) index control cycles and let
+\(\mathcal K=\{0,\ldots,N-1\}\) and
+\(\mathcal K_N=\{0,\ldots,N\}\). The prediction grid formed at cycle \(j\) is
+\[
+  t_{k\mid j}=t_j+k\Delta t,\qquad k\in\mathcal K_N.
+\]
+Online estimates carry a hat and the cycle index \(j\), whereas decision
+variables carry the conditional index \(k\mid j\).
 
 \subsection{Path Progress and Contouring Geometry}
 
-Let the reference path be $\vr(s)=[r_x(s),r_y(s)]^\top$, parameterized by arc length $s\in[0,L]$. To prevent backward jumps on self-near or noisy path segments, the measured position $\bm p_j$ is projected subject to the last accepted progress $s_{\min,j}$:
+Let
+\(\vr:[0,L]\rightarrow\mathbb R^2\),
+\(\vr(s)=[r_x(s),r_y(s)]^\top\), denote a twice-differentiable reference path
+parameterized by arc length. At cycle \(j\), the measured planar position is
+\(\hat{\bm p}_j=[\hat p_{x,j},\hat p_{y,j}]^\top\). To prevent backward jumps
+on self-near or noisy path segments, its guarded projection is
 \begin{equation}
-  s_{0,j}
-  =\underset{s\in[s_{\min,j},L]}{\arg\min}\,
-  \|\bm p_j-\vr(s)\|_2^2,
-  \qquad s_{0,j}\geq s_{\min,j}.
+  \hat s_j
+  =\operatorname*{arg\,min}_{s\in[s_{\min,j},L]}
+  \|\hat{\bm p}_j-\vr(s)\|_2^2.
   \label{eq:guarded_projection}
 \end{equation}
-The accepted lower bound advances monotonically and is reset when a new path is received.
+The accepted lower bound \(s_{\min,j}\) is nondecreasing within a path episode
+and is reset when a new path is received.
 
 At each cycle, the path is sampled over
 \[
-  [s_{0,j},\,\min\{L,s_{0,j}+v_{\max}T_f\}]
+  \mathcal I_j
+  =[\hat s_j,\min\{L,\hat s_j+v_{\max}T_f\}],
+  \qquad T_f=N\Delta t,
 \]
-and fitted locally by cubic polynomials. Their derivatives define the reference heading and curvature,
-\[
-  \phi(s)=\operatorname{atan2}(r_y'(s),r_x'(s)),\qquad
-  \kappa(s)=
-  \frac{r_x'r_y''-r_y'r_x''}
-  {(r_x'^2+r_y'^2+\varepsilon_\kappa)^{3/2}},
-\]
-with $\varepsilon_\kappa=10^{-6}$.
-
-For $\Delta p_x=p_x-r_x(s)$ and $\Delta p_y=p_y-r_y(s)$, the signed contour and lag errors are
+and fitted locally by cubic polynomials in \(s\). The reference heading and
+regularized curvature are
 \begin{equation}
 \begin{aligned}
-  e_{\mathrm c}(s)&=\sin\phi(s)\,\Delta p_x-\cos\phi(s)\,\Delta p_y,\\
-  e_{\mathrm l}(s)&=-\cos\phi(s)\,\Delta p_x-\sin\phi(s)\,\Delta p_y.
+  \phi(s)
+  &=\operatorname{atan2}\!\left(r_y'(s),r_x'(s)\right),\\
+  \kappa(s)
+  &=\frac{r_x'(s)r_y''(s)-r_y'(s)r_x''(s)}
+  {\left(r_x'(s)^2+r_y'(s)^2+\varepsilon_\kappa\right)^{3/2}},
+\end{aligned}
+\label{eq:path_heading_curvature}
+\end{equation}
+where \(\varepsilon_\kappa=10^{-6}\) is the fixed numerical safeguard used by
+the implementation.
+
+For a generic robot state and progress \(s\), define
+\(\Delta p_x=p_x-r_x(s)\) and \(\Delta p_y=p_y-r_y(s)\). The signed contour
+and lag errors used by the implementation are
+\begin{equation}
+\begin{aligned}
+  e_{\mathrm c}(\bm x_r)
+  &=\sin\phi(s)\,\Delta p_x-\cos\phi(s)\,\Delta p_y,\\
+  e_{\mathrm l}(\bm x_r)
+  &=-\cos\phi(s)\,\Delta p_x-\sin\phi(s)\,\Delta p_y.
 \end{aligned}
 \label{eq:contour_lag_errors}
 \end{equation}
@@ -137,30 +161,45 @@ The virtual progress state is optimized within the horizon rather than prescribe
 
 \subsection{Robot--Liquid Augmented Dynamics}
 
-\subsubsection{Alpha-state base model}
+\subsubsection{Acceleration-level base and progress model}
 
-The base and path-progress state and the control are
-\[
-  \bm x_r=[p_x,p_y,\theta,v,s,\omega]^\top,\qquad
-  \bm u=[a,\alpha,v_s]^\top,
-\]
-where $a=\dot v$, $\alpha=\dot\omega$, and $v_s=\dot s$. Their continuous dynamics are
+The base and virtual-progress state and the control input are
 \begin{equation}
-\begin{aligned}
-  \dot p_x&=v\cos\theta, & \dot p_y&=v\sin\theta, &
-  \dot\theta&=\omega,\\
-  \dot v&=a, & \dot s&=v_s, & \dot\omega&=\alpha.
-\end{aligned}
+  \bm x_r
+  =[p_x,p_y,\theta,v,s,\omega]^\top\in\mathbb R^6,
+  \qquad
+  \bm u=[a,\alpha,v_s]^\top\in\mathbb R^3,
+  \label{eq:robot_state_control}
+\end{equation}
+where \(a=\dot v\), \(\alpha=\dot\omega\), and \(v_s=\dot s\). The continuous
+base dynamics are
+\begin{equation}
+  \dot{\bm x}_r
+  =f_r(\bm x_r,\bm u)
+  =
+  \begin{bmatrix}
+    v\cos\theta&
+    v\sin\theta&
+    \omega&
+    a&
+    v_s&
+    \alpha
+  \end{bmatrix}^{\!\top}.
 \label{eq:robot_dynamics}
 \end{equation}
 Placing $\omega$ in the state enforces rotational continuity through the dynamics and permits a direct angular-acceleration bound. This acceleration-level representation is an implementation choice rather than a separate novelty claim \cite{D23_Arrizabalaga2021}.
 
 \subsubsection{Container-parameterized first sloshing mode}
 
-The liquid model represents the first lateral sloshing mode along two orthogonal container directions. For a cylindrical container with inner radius $R_c$, liquid depth $h$, density $\rho$, and gravitational acceleration $g$, the adopted equivalent-model parameters are \cite{A01_Leva2021,A02_Guagliumi2021}
+The liquid model represents the first lateral sloshing mode along two
+orthogonal container directions. For a cylindrical container with inner radius
+\(R_c\), liquid depth \(h\), density \(\rho\), and gravitational acceleration
+\(g\), let \(J_1\) be the first-order Bessel function of the first kind and let
+\(\xi_{11}\) be the first positive root of \(J_1'\). The adopted
+equivalent-model parameters are \cite{A01_Leva2021,A02_Guagliumi2021}
 \begin{equation}
 \begin{aligned}
-  J_1'(\xi_{11})&=0,\qquad \xi_{11}=1.8412,\\
+  J_1'(\xi_{11})&=0,\qquad \xi_{11}\simeq1.8412,\\
   m_F&=\rho\pi R_c^2h,\\
   \omega_1&=
   \sqrt{g\frac{\xi_{11}}{R_c}
@@ -174,52 +213,137 @@ The liquid model represents the first lateral sloshing mode along two orthogonal
 \end{equation}
 The damping ratio $\zeta$ is read from the frozen liquid-model configuration and reported numerically with its configuration source. No experimental identification is claimed unless such a procedure is actually performed and archived. The same frozen value is used for all methods and both containers in the geometry-only transfer study. A container change updates the remaining physical parameters through \cref{eq:modal_parameters} and does not trigger controller-weight retuning.
 
-The modal state is
-\[
-  \bm x_\ell=
-  [\eta_x,\dot\eta_x,\eta_y,\dot\eta_y]^\top.
-\]
-Here $\eta_x$ and $\eta_y$ are generalized modal displacements, not physical free-surface elevations. The body-fixed axis $x_b$ points forward and $y_b$ points laterally. With the container mounted at the base rotation center, the signed excitation approximation is $a_x=a$ and $a_y=v\omega$. Each orthogonal direction follows
+The modal state and the body-frame excitation vector are
 \begin{equation}
-  \ddot\eta_i+2\zeta\omega_1\dot\eta_i+\omega_1^2\eta_i=-a_i,
-  \qquad i\in\{x,y\}.
+  \bm x_\ell
+  =[\eta_x,\dot\eta_x,\eta_y,\dot\eta_y]^\top\in\mathbb R^4,
+  \qquad
+  \bm a_b(\bm x_r,\bm u)
+  =
+  \begin{bmatrix}a\\v\omega\end{bmatrix}.
+  \label{eq:liquid_state_excitation}
+\end{equation}
+Here \(\eta_x\) and \(\eta_y\) are generalized modal displacements, not
+physical free-surface elevations. The body-fixed axis \(x_b\) points forward
+and \(y_b\) points laterally. With the container mounted at the base rotation
+center, the modal dynamics are
+\begin{equation}
+  \dot{\bm x}_\ell
+  =A_\ell\bm x_\ell+B_\ell\bm a_b,
+  \label{eq:liquid_state_space}
+\end{equation}
+where
+\begin{equation}
+\begin{aligned}
+  A_\ell
+  &=
+    \begin{bmatrix}
+      0&1&0&0\\
+      -\omega_1^2&-2\zeta\omega_1&0&0\\
+      0&0&0&1\\
+      0&0&-\omega_1^2&-2\zeta\omega_1
+    \end{bmatrix},\\
+  B_\ell
+  &=
+    \begin{bmatrix}
+      0&0\\
+      -1&0\\
+      0&0\\
+      0&-1
+    \end{bmatrix}.
+\end{aligned}
   \label{eq:liquid_dynamics}
 \end{equation}
-The term $v\omega$ retains the sign of the lateral acceleration. The present model does not cover an offset container; such a configuration would require the $\alpha r$ and $\omega^2r$ contributions in both the OCP and online propagation.
+Equivalently,
+\(\ddot\eta_i+2\zeta\omega_1\dot\eta_i+\omega_1^2\eta_i=-a_i\) for
+\(i\in\{x,y\}\). The term \(v\omega\) retains the sign of the lateral
+acceleration. The present model does not cover an offset container; such a
+configuration would require the \(\alpha r\) and \(\omega^2r\) contributions
+in both the OCP and online propagation.
 
 The augmented state is
-\[
-  \bm x=[\bm x_r^\top,\bm x_\ell^\top]^\top\in\mathbb R^{10}.
-\]
-The joint dynamics used inside the OCP are integrated by explicit Runge--Kutta (ERK).
+\begin{equation}
+\begin{aligned}
+  \bm x
+  &=[\bm x_r^\top,\bm x_\ell^\top]^\top\in\mathbb R^{10},\\
+  \dot{\bm x}
+  &=f_c(\bm x,\bm u;\bm\vartheta_c)\\
+  &=
+  \begin{bmatrix}
+    f_r(\bm x_r,\bm u)\\
+    A_\ell\bm x_\ell+B_\ell\bm a_b(\bm x_r,\bm u)
+  \end{bmatrix}.
+\end{aligned}
+  \label{eq:augmented_dynamics}
+\end{equation}
+where \(\bm\vartheta_c=(\omega_1,\zeta,c_h)\) denotes the
+container-dependent model quantities used by the core OCP. The joint dynamics
+are discretized by the four-stage ERK integrator used by acados.
 
 \subsubsection{Online liquid-state propagation}
 
-For physical operation, the modal state is initialized to zero only after the base is stationary and the calibrated visual response satisfies the pre-specified rest criterion. It is then propagated throughout the trial without being reset at successive control cycles. Controlled mechanism studies can instead inject frozen nonzero initial states, as specified in \cref{sec:rq4}. Consecutive odometry samples provide
-\[
-  \hat a_{x,j}=\frac{v_j-v_{j-1}}{\Delta t_{\mathrm{odom}}},
-  \qquad
-  \hat a_{y,j}=v_j\omega_j.
-\]
-For the continuous liquid matrices $(A_\ell,B_\ell)$, a zero-order hold over the odometry interval gives
+For physical operation, the modal state is initialized to zero only after the
+base is stationary and the calibrated visual response satisfies the
+pre-specified rest criterion. It is then propagated throughout the trial
+without being reset at successive control cycles. Controlled mechanism studies
+can instead inject frozen nonzero initial states, as specified in
+\cref{sec:rq4}.
+
+Let \(q\) index odometry samples, with
+\(\Delta t_q^{\mathrm o}=t_q^{\mathrm o}-t_{q-1}^{\mathrm o}\). Consecutive
+samples provide the signed excitation estimate
+\begin{equation}
+  \hat{\bm a}_{b,q}
+  =
+  \begin{bmatrix}
+    \hat a_{x,q}\\
+    \hat a_{y,q}
+  \end{bmatrix}
+  =
+  \begin{bmatrix}
+    (v_q^{\mathrm o}-v_{q-1}^{\mathrm o})/\Delta t_q^{\mathrm o}\\
+    v_q^{\mathrm o}\omega_q^{\mathrm o}
+  \end{bmatrix}.
+  \label{eq:odom_excitation}
+\end{equation}
+For the continuous matrices in \cref{eq:liquid_dynamics}, zero-order hold over
+the same odometry interval gives
 \begin{equation}
 \begin{aligned}
-  A_d&=e^{A_\ell\Delta t_{\mathrm{odom}}},\qquad
-  B_d=\int_0^{\Delta t_{\mathrm{odom}}}
+  A_{d,q}&=e^{A_\ell\Delta t_q^{\mathrm o}},\\
+  B_{d,q}&=\int_0^{\Delta t_q^{\mathrm o}}
   e^{A_\ell\tau}B_\ell\,\mathrm d\tau,\\
-  \hat{\bm x}_{\ell,j+1}
-  &=A_d\hat{\bm x}_{\ell,j}
-  +B_d[\hat a_{x,j},\hat a_{y,j}]^\top.
+  \hat{\bm x}_{\ell,q}
+  &=A_{d,q}\hat{\bm x}_{\ell,q-1}
+  +B_{d,q}\hat{\bm a}_{b,q}.
 \end{aligned}
 \label{eq:liquid_state_propagation}
 \end{equation}
-RGB observations are not used to correct this state. The OCP initial condition is
-\[
-  \bm x_{0\mid j}
-  =[\hat{\bm x}_{r,j}^\top,\hat{\bm x}_{\ell,j}^\top]^\top.
-\]
+Define the latest odometry index available at control cycle \(j\) as
+\begin{equation}
+  q_j=\max\{q:t_q^{\mathrm o}\leq t_j\},
+  \qquad
+  \hat{\bm x}_{\ell,j}:=\hat{\bm x}_{\ell,q_j}.
+  \label{eq:odom_control_alignment}
+\end{equation}
+RGB observations are not used to correct this state. With
+\begin{equation}
+  \hat{\bm x}_{r,j}
+  =[
+  \hat p_{x,j},\hat p_{y,j},\hat\theta_j,
+  \hat v_j,\hat s_j,\hat\omega_j
+  ]^\top,
+  \label{eq:online_robot_state}
+\end{equation}
+the augmented OCP estimate is
+\begin{equation}
+  \hat{\bm x}_j
+  =
+  [\hat{\bm x}_{r,j}^\top,\hat{\bm x}_{\ell,j}^\top]^\top.
+  \label{eq:ocp_initial_estimate}
+\end{equation}
 
-The modal response used by the optimizer and logger is
+The nonnegative modal envelope used by the optimizer and logger is
 \begin{equation}
   H_{\mathrm{modal}}
   =c_h\sqrt{\eta_x^2+\eta_y^2}.
@@ -229,73 +353,163 @@ The calibrated vision-based reference measurement used in the experiments is den
 
 \subsection{Slosh-Aware \MPCC{} OCP}
 
-At cycle $j$, \SMPCC{} solves
+Let \(F_{\Delta t}\) denote one four-stage ERK step applied to
+\cref{eq:augmented_dynamics}. At cycle \(j\), \SMPCC{} solves
 \begin{equation}
 \begin{aligned}
-  \min_{\bm x_{0:N\mid j},\bm u_{0:N-1\mid j}}\quad
-  &\sum_{k=0}^{N-1}\ell_{k\mid j}+\ell_{N\mid j}\\
-  \mathrm{s.t.}\quad
+  \underset{\substack{\bm x_{0:N\mid j}\\
+                      \bm u_{0:N-1\mid j}}}{\operatorname{minimize}}
+  \quad&
+  \frac{1}{N}\sum_{k\in\mathcal K}
+  \bar\ell_{k\mid j}
+  +V_{f,N\mid j}\\
+  \mathrm{subject\ to}\quad
   &\bm x_{0\mid j}=\hat{\bm x}_j,\\
-  &\bm x_{k+1\mid j}=f_d(\bm x_{k\mid j},\bm u_{k\mid j}),\\
-  &\bm x_{k\mid j}\in\mathcal X,\qquad
-  \bm u_{k\mid j}\in\mathcal U.
+  &\bm x_{k+1\mid j}
+  =F_{\Delta t}(\bm x_{k\mid j},\bm u_{k\mid j};
+  \bm\vartheta_c),
+  &&k\in\mathcal K,\\
+  &\bm x_{k\mid j}\in\mathcal X,
+  &&k\in\mathcal K_N,\\
+  &\bm u_{k\mid j}\in\mathcal U,
+  &&k\in\mathcal K.
 \end{aligned}
 \label{eq:core_ocp}
 \end{equation}
-The core setting uses $N=60$, $\Delta t=1/30\,\mathrm{s}$, and $T_f=2.0\,\mathrm{s}$. The discretized joint dynamics $f_d$ use ERK.
+The core setting uses \(N=60\), \(\Delta t=1/30\,\mathrm{s}\), and
+\(T_f=N\Delta t=2.0\,\mathrm{s}\).
 
-The stage cost is
+The unscaled stage expression is decomposed as
 \begin{equation}
-  \ell_{k\mid j}=\frac{1}{N}\left(
-  J_{\mathrm{track}}+J_{\mathrm{path}}+J_{\mathrm{ctrl}}
-  +J_{\Delta}+J_{\mathrm{slosh}}\right)_{k\mid j}.
+  \bar\ell_{k\mid j}
+  =J_{\mathrm{track},k\mid j}
+  +J_{\mathrm{path},k\mid j}
+  +J_{\mathrm{ctrl},k\mid j}
+  +J_{\Delta,k\mid j}
+  +J_{\mathrm{slosh},k\mid j}.
   \label{eq:stage_cost}
 \end{equation}
-The path reference uses the curvature-aware speed
-\[
-  v_{\mathrm{ref}}(s)=
-  \max\!\left\{0.3v_{\mathrm{cruise}},
-  \frac{v_{\mathrm{cruise}}}
-  {\sqrt{1+(v_{\mathrm{cruise}}|\kappa(s)|/\omega_{\max})^2}}
-  \right\}.
-\]
-The non-liquid terms are
-\[
+All terms are dimensionless. Define the unconstrained curvature-based speed
+and the lower-bounded reference speed as
+\begin{equation}
 \begin{aligned}
-J_{\mathrm{track}}={}&
-w_c(e_{\mathrm c}/e_{c,\mathrm{ref}})^2
-+w_l(e_{\mathrm l}/e_{l,\mathrm{ref}})^2,\\
-J_{\mathrm{path}}={}&
--w_pv_s/v_{s,\max}
-+w_v[(v-v_{\mathrm{ref}})/v_{\max}]^2\\
-&+w_{v_s}[(v_s-v_{\mathrm{ref}})/v_{s,\max}]^2
-+J_{\mathrm{ac}},\\
-J_{\mathrm{ctrl}}={}&
-w_a(a/a_{\max})^2+w_\omega(\omega/\omega_{\max})^2
-+w_\alpha(\alpha/\alpha_{\max})^2.
+  v_{\kappa,k\mid j}
+  &:=\frac{v_{\mathrm{cruise}}}
+  {\sqrt{1+
+  (v_{\mathrm{cruise}}\kappa(s_{k\mid j})/\omega_{\max})^2}},\\
+  v_{\mathrm{ref},k\mid j}
+  &:=v_{\mathrm{ref}}(s_{k\mid j})
+  =\max\!\left\{0.3v_{\mathrm{cruise}},v_{\kappa,k\mid j}\right\}.
 \end{aligned}
-\]
-The one-sided anti-creep term $J_{\mathrm{ac}}$ penalizes deficits below $v_{\mathrm{ref}}$ for both $v$ and $v_s$. Cross-cycle continuity $J_\Delta$ acts at $k=0$ on $a$ and $v_s$ relative to the previous accepted control. Full numerical weights and normalizers are reported in the supplementary material.
+  \label{eq:curvature_speed_reference}
+\end{equation}
+The tracking, progress/speed, and control terms are
+\begin{equation}
+\begin{aligned}
+J_{\mathrm{track},k\mid j}
+={}&
+w_c\!\left(
+\frac{e_{\mathrm c}(\bm x_{r,k\mid j})}{e_{c,\mathrm{ref}}}
+\right)^2
++w_l\!\left(
+\frac{e_{\mathrm l}(\bm x_{r,k\mid j})}{e_{l,\mathrm{ref}}}
+\right)^2,\\
+J_{\mathrm{path},k\mid j}
+={}&
+-w_p\frac{v_{s,k\mid j}}{v_{s,\max}}
++w_v\!\left(
+\frac{v_{k\mid j}-v_{\mathrm{ref},k\mid j}}{v_{\max}}
+\right)^2\\
+&+w_{v_s}\!\left(
+\frac{v_{s,k\mid j}-v_{\mathrm{ref},k\mid j}}{v_{s,\max}}
+\right)^2
++J_{\mathrm{ac},k\mid j},\\
+J_{\mathrm{ctrl},k\mid j}
+={}&
+w_a\!\left(\frac{a_{k\mid j}}{a_{\max}}\right)^2
++w_\omega\!\left(\frac{\omega_{k\mid j}}{\omega_{\max}}\right)^2
++w_\alpha\!\left(\frac{\alpha_{k\mid j}}{\alpha_{\max}}\right)^2.
+\end{aligned}
+\label{eq:nonliquid_costs}
+\end{equation}
 
-For $\bm\eta=[\eta_x,\eta_y]^\top$ and
-$\dot{\bm\eta}=[\dot\eta_x,\dot\eta_y]^\top$, the modal normalizers are
-\[
+For \([z]_+=\max\{z,0\}\), the implemented one-sided anti-creep term is
+\begin{equation}
+\begin{aligned}
+J_{\mathrm{ac},k\mid j}
+=\gamma_{\mathrm{ac}}w_v
+\bigg[
+&\left(
+\frac{[v_{\mathrm{ref},k\mid j}-v_{k\mid j}]_+}{v_{\max}}
+\right)^2\\
+&+
+\left(
+\frac{[v_{\mathrm{ref},k\mid j}-v_{s,k\mid j}]_+}{v_{s,\max}}
+\right)^2
+\bigg].
+\end{aligned}
+\label{eq:anti_creep_cost}
+\end{equation}
+Let \(a_{j-1}^{\mathrm{acc}}\) and \(v_{s,j-1}^{\mathrm{acc}}\) be the
+previous cycle's accepted OCP controls, and define
+\begin{equation}
+\begin{aligned}
+  \Delta a_{k\mid j}
+  &:=\frac{a_{k\mid j}-a_{j-1}^{\mathrm{acc}}}{a_{\max}},\\
+  \Delta v_{s,k\mid j}
+  &:=\frac{v_{s,k\mid j}-v_{s,j-1}^{\mathrm{acc}}}{v_{s,\max}}.
+\end{aligned}
+  \label{eq:cross_cycle_differences}
+\end{equation}
+With \(\delta_{k0}\) denoting the Kronecker delta, cross-cycle first-action
+continuity is
+\begin{equation}
+  J_{\Delta,k\mid j}
+  =\delta_{k0}\left(
+  w_{\Delta a}\Delta a_{k\mid j}^2
+  +w_{\Delta v_s}\Delta v_{s,k\mid j}^2
+  \right).
+  \label{eq:cross_cycle_cost}
+\end{equation}
+This term is disabled when no accepted previous control exists.
+
+For
+\(\bm\eta=[\eta_x,\eta_y]^\top\) and
+\(\dot{\bm\eta}=[\dot\eta_x,\dot\eta_y]^\top\), let
+\(H_{\mathrm{ref}}>0\) be the frozen modal-height normalization, not a hard
+constraint. The modal normalizers are
+\begin{equation}
   \eta_{\mathrm{ref}}=\frac{H_{\mathrm{ref}}}{c_h},
   \qquad
   \dot\eta_{\mathrm{ref}}
   =\omega_1\eta_{\mathrm{ref}}
   =\frac{\omega_1H_{\mathrm{ref}}}{c_h}.
-\]
+  \label{eq:modal_normalizers}
+\end{equation}
 The slosh term is
 \begin{equation}
   J_{\mathrm{slosh},k\mid j}
-  =w_\eta\frac{\|\bm\eta_{k\mid j}\|_2^2}{\eta_{\mathrm{ref}}^2}
+  =w_\eta
+  \frac{\|\bm\eta_{k\mid j}\|_2^2}{\eta_{\mathrm{ref}}^2}
   +w_{\dot\eta}
   \frac{\|\dot{\bm\eta}_{k\mid j}\|_2^2}
-  {\dot\eta_{\mathrm{ref}}^2}.
+  {\dot\eta_{\mathrm{ref}}^2},
+  \qquad
+  w_{\dot\eta}=\rho_{\dot\eta}w_\eta.
   \label{eq:slosh_cost}
 \end{equation}
-No additional factor of $c_h$ is applied inside this cost. The physical modal normalizers are supplied at every shooting stage. The terminal cost retains the tracking and slosh terms but omits progress reward and control regularization.
+Here \(\rho_{\dot\eta}\) is the frozen modal-velocity weight ratio used by the
+implementation. No additional factor of \(c_h\) is applied inside the cost.
+The terminal cost is defined separately as
+\begin{equation}
+  V_{f,N\mid j}
+  =J_{\mathrm{track},N\mid j}
+  +J_{\mathrm{slosh},N\mid j},
+  \label{eq:terminal_cost}
+\end{equation}
+and therefore contains neither progress reward nor control regularization.
+Full numerical weights and normalizers are reported in the supplementary
+material.
 
 The three experimental controllers are instantiated from this common OCP
 template. Baseline \MPCC{} omits the propagated liquid state and sets
@@ -307,33 +521,46 @@ model, path representation, constraints, numerical solver, and shared execution
 layer remain identical across the three variants; \cref{tab:core_variants}
 summarizes the frozen mapping used in the experiments.
 
-The OCP bounds are
+Following the coordinate order in \cref{eq:robot_state_control}, the
+implemented box-constraint sets are
 \begin{equation}
-\begin{gathered}
-  0\leq v_{k\mid j}\leq v_{\max},\qquad
-  |\omega_{k\mid j}|\leq\omega_{\max},\\
-  |a_{k\mid j}|\leq a_{\max},\qquad
-  |\alpha_{k\mid j}|\leq\alpha_{\max},\\
-  0\leq v_{s,k\mid j}\leq v_{s,\max}.
-\end{gathered}
+\begin{aligned}
+  \mathcal X
+  &:=\mathbb R^3\times[0,v_{\max}]\times\mathbb R
+  \times[-\omega_{\max},\omega_{\max}]\times\mathbb R^4,\\
+  \mathcal U
+  &:=[-a_{\max},a_{\max}]
+  \times[-\alpha_{\max},\alpha_{\max}]
+  \times[0,v_{s,\max}].
+\end{aligned}
 \label{eq:ocp_bounds}
 \end{equation}
-The nominal OCP limits are $v_{\max}=0.8\,\mathrm{m/s}$, $\omega_{\max}=1.2\,\mathrm{rad/s}$, $a_{\max}=0.6\,\mathrm{m/s^2}$, and $\alpha_{\max}=1.2\,\mathrm{rad/s^2}$.
+The current implementation uses \(v_{s,\max}=v_{\max}\). The nominal limits
+are \(v_{\max}=0.8\,\mathrm{m/s}\),
+\(\omega_{\max}=1.2\,\mathrm{rad/s}\),
+\(a_{\max}=0.6\,\mathrm{m/s^2}\), and
+\(\alpha_{\max}=1.2\,\mathrm{rad/s^2}\). The core comparison imposes no modal
+hard constraint.
 
 \subsection{Online Solution and Executed Command}
 
 At the $30\,\mathrm{Hz}$ control rate, the $N=60$, $T_f=2.0\,\mathrm{s}$ OCP
 is solved with an acados-generated SQP-RTI scheme, one real-time iteration per
 cycle, partial-condensing HPIPM, four-stage ERK integration, and warm starting
-from the preceding cycle. The first optimized control defines the raw solver
-command
+from the preceding cycle. Let
+\(\Pi_{[\underline z,\bar z]}(z)=\min\{\bar z,\max\{\underline z,z\}\}\)
+denote scalar interval projection. The first optimized control
+\(\bm u_{0\mid j}^\star
+=[a_{0\mid j}^\star,\alpha_{0\mid j}^\star,v_{s,0\mid j}^\star]^\top\)
+defines the raw solver command
 \begin{equation}
 \begin{aligned}
   v_{\mathrm{solver},j}
-  &=\operatorname{clip}(v_j+a_{0\mid j}^\star\Delta t,0,v_{\max}),\\
+  &=\Pi_{[0,v_{\max}]}
+  \left(\hat v_j+a_{0\mid j}^\star\Delta t\right),\\
   \omega_{\mathrm{solver},j}
-  &=\operatorname{clip}(\omega_j+\alpha_{0\mid j}^\star\Delta t,
-  -\omega_{\max},\omega_{\max}).
+  &=\Pi_{[-\omega_{\max},\omega_{\max}]}
+  \left(\hat\omega_j+\alpha_{0\mid j}^\star\Delta t\right).
 \end{aligned}
 \label{eq:first_action}
 \end{equation}
@@ -345,14 +572,29 @@ mapping and fallback command are recorded with the formal configuration. A
 failed solver cycle remains a method failure in the experimental analysis and
 is not removed or replaced.
 
-This raw command is not assumed to be identical to the command received by the base. Let $\bm c_{\mathrm{solver},j}=[v_{\mathrm{solver},j},\omega_{\mathrm{solver},j}]^\top$, let $\mathcal G_j$ denote the frozen terminal and safety-gate logic, and let $\mathcal L_j$ denote the frozen rate and rate-of-change limiting logic. The physical command chain is recorded as
+This raw command is not assumed to be identical to the command received by the
+base. Let
+\(\bm c_{\mathrm{solver},j}
+=[v_{\mathrm{solver},j},\omega_{\mathrm{solver},j}]^\top\), let
+\(\mathcal G_j\) denote the frozen terminal and safety-gate logic, and let
+\(\mathcal L_j\) denote the frozen rate and rate-of-change limiting logic. The
+physical command chain is recorded as
 \begin{equation}
   \bm c_{\mathrm{post},j}=\mathcal G_j(\bm c_{\mathrm{solver},j}),
   \qquad
   \bm c_{\mathrm{pub},j}=\mathcal L_j(\bm c_{\mathrm{post},j}),
   \label{eq:command_chain}
 \end{equation}
-where $\bm c_{\mathrm{pub},j}$ is the final published velocity command. The OCP limits in \cref{eq:ocp_bounds}, raw solver-command limits, gate output, and published-command limits are therefore reported as separate quantities. Formal experiment metadata also records terminal capture logic, solver-failure handling, fallback actions, and every intervention flag. Motion and control metrics are computed from odometry and the published command, whereas the raw solver output is used only to analyze the optimizer. The command-difference tolerances and intervention ratio $r_{\mathrm{int}}$ are defined in \cref{eq:intervention_ratio}. The archived software revision used for formal acquisition is included in the reproducibility metadata.
+where \(\bm c_{\mathrm{pub},j}\) is the final published velocity command. The
+OCP limits in \cref{eq:ocp_bounds}, raw solver-command limits, gate output, and
+published-command limits are therefore reported as separate quantities. Formal
+experiment metadata also records terminal capture logic, solver-failure
+handling, fallback actions, and every intervention flag. Motion and control
+metrics are computed from odometry and the published command, whereas the raw
+solver output is used only to analyze the optimizer. The command-difference
+tolerances and intervention ratio \(r_{\mathrm{int}}\) are defined in
+\cref{eq:intervention_ratio}. The archived software revision used for formal
+acquisition is included in the reproducibility metadata.
 
 The reference governor and modal hard cap are optional liquid-aware extensions.
 The delay predictor, terminal controller, command gate, and command-rate limiter

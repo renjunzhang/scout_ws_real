@@ -135,11 +135,15 @@ container order is randomized or counterbalanced within each super-block.
 RQ4 comprises controlled longitudinal and lateral phase studies, actual/zero
 runtime-state replay, and runtime analysis. The phase and replay studies, as
 well as the RQ3 parameter-switch and computational mismatch comparisons, add no
-physical trials. An optional $C_2$ mismatch group using frozen $C_1$ liquid
-parameters adds eight physical trials, increasing the design to 96 trials. It
-is the only planned extension that can test whether reparameterization is
-physically necessary rather than merely whether the optimizer is parameter
-sensitive.
+physical trials. A separate long-horizon audit uses eight $C_1$ trials on an
+extended path containing five consecutive repetitions of the frozen high-risk
+curvature sequence. These runs retain the propagated liquid state throughout
+the complete sequence and are excluded from the 88-trial main comparison. An
+optional $C_2$ mismatch group using frozen $C_1$ liquid parameters adds another
+eight physical trials. Collecting either extension gives 96 trials, and
+collecting both gives 104. Neither extension changes the RQ1--RQ4 comparison
+hierarchy. Only the physical mismatch group can test whether reparameterization
+is necessary rather than merely whether the optimizer is parameter sensitive.
 
 If acquisition stops early, the evidence and manuscript claims are reduced
 together. The 40-trial core package contains the high-risk $C_1$ three-method
@@ -274,12 +278,14 @@ pre-registered mechanism segments, $Z_1$--$Z_5$, spanning start-up, entry into
 curvature, curvature reversal, re-acceleration, and terminal braking.
 
 Mechanism diagnostics comprise $H_{\mathrm{modal}}$ p95,
-$a_{x,\mathrm{exec}}$ RMS, $|a_{y,\mathrm{exec}}|$ p95, realized angular
-acceleration or command-rate variation, $r_{\mathrm{int}}$, and raw-to-published
-command differences. Real-time outcomes are solve-time median, p95, and
-maximum, deadline-miss rate, solver failure, fallback use, and achieved control
-frequency. None of these internal or process diagnostics substitutes for the
-physical $H_{\mathrm{vis}}$ outcome.
+$a_{x,\mathrm{exec}}$ RMS, $|a_{y,\mathrm{exec}}|$ p95, optimized
+$\alpha_{0\mid j}^{\star}$ RMS and p95, layer-specific command total-variation
+rate, thresholded direction-reversal rate, high-frequency command energy,
+$r_{\mathrm{int}}$, and raw-to-published command differences. Real-time
+outcomes are solve-time median, p95, and maximum, deadline-miss rate, solver
+failure, fallback use, and achieved control frequency. None of these internal
+or process diagnostics substitutes for the physical $H_{\mathrm{vis}}$
+outcome.
 
 One complete trial is the statistical sample. Video frames and points on an
 aligned process curve are not treated as independent observations. Process
@@ -625,6 +631,111 @@ longitudinal and lateral four-phase studies; replay valid high-risk formal logs
 from cloned pre-solve snapshots; and extract runtime, deadline, failure,
 fallback, intervention, and achieved-frequency statistics from all completed
 formal physical trials.}
+
+\subsection{Long-Horizon Propagation and Command-Regularity Audit}
+\label{sec:long_horizon_command_audit}
+
+This supporting audit tests two failure modes that are not separate research
+questions: progressive disagreement in the uncorrected modal propagation and
+command chatter that may be hidden by the shared execution layer. The audit
+does not constitute a proof of closed-loop stability. It restricts its claim to
+the tested duration, path family, container, and command limits.
+
+\subsubsection{Long-horizon propagation audit}
+
+Eight independent $C_1$ runs use a frozen extended path formed by five
+consecutive repetitions of the high-risk curvature sequence. Each run begins
+from the same pre-specified physical rest criterion. The modal state is
+initialized once before motion and is not reset between repetitions. Controller
+weights, path geometry, camera processing, command limits, and deployment logic
+remain identical to the main \SMPCC{} trials. A complete extended run is the
+statistical sample; its five repetitions are paired within-run observations and
+are not treated as independent trials.
+
+Let $r\in\{1,\ldots,R_{\mathrm{long}}\}$ index repetitions, with
+$R_{\mathrm{long}}=5$, and let $\mathcal W_r$ be the matched motion window of
+repetition $r$. Let $\epsilon_H>0$ be a frozen small-denominator safeguard.
+The normalized modal--vision disagreement is
+\begin{equation}
+  d_{H,r}
+  =100\,
+  \frac{
+  \int_{\mathcal W_r}
+  |H_{\mathrm{modal}}(t)-H_{\mathrm{vis}}(t)|\,\mathrm dt}
+  {\max\!\left\{
+  \int_{\mathcal W_r}H_{\mathrm{vis}}(t)\,\mathrm dt,
+  \epsilon_H
+  \right\}}.
+  \label{eq:long_horizon_disagreement}
+\end{equation}
+The primary drift contrasts are the within-run last-minus-first differences
+\begin{equation}
+\begin{aligned}
+  \Delta d_H
+  &=d_{H,R_{\mathrm{long}}}-d_{H,1},\\
+  \Delta H_{\mathrm{vis,p95}}
+  &=H_{\mathrm{vis,p95},R_{\mathrm{long}}}
+  -H_{\mathrm{vis,p95},1}.
+\end{aligned}
+  \label{eq:long_horizon_drift_contrasts}
+\end{equation}
+The same paired comparison is reported for contour-error p95, completion time
+per repetition, command-regularity metrics, solve time, solver failure, and
+fallback use. All repetition-wise curves are also shown to expose nonmonotonic
+failure patterns that a first--last contrast could miss.
+
+The tolerances $\delta_{d_H}$, $\delta_{H}$, and $\delta_e$ for model
+disagreement, physical liquid response, and tracking degradation are frozen
+from camera calibration and independent deployment tests before the extended
+runs are inspected. ``No systematic degradation over the tested duration'' is
+reported only when the one-sided 95\% intervals for the paired last--first
+effects remain below their corresponding tolerances and the complete failure
+record shows no late-run concentration. Failure to reject a zero trend alone is
+not interpreted as evidence of no drift. Because $H_{\mathrm{vis}}$ is a
+nonnegative envelope, this audit evaluates amplitude disagreement and physical
+performance; it does not establish signed modal-phase accuracy.
+
+\subsubsection{Command-regularity audit}
+
+Command regularity is evaluated from the existing formal trials and the
+long-horizon runs without adding another controller variant. For command layer
+$g\in\{\mathrm{solver},\mathrm{post},\mathrm{pub}\}$, define the angular
+total-variation rate and finite-difference command acceleration over an
+analyzed window of duration $T_e$ containing $N_c$ control cycles as
+\begin{equation}
+\begin{aligned}
+  \operatorname{TVR}_{\omega}^{(g)}
+  &=\frac{1}{T_e}
+  \sum_{j=1}^{N_c-1}
+  |\omega_{j+1}^{(g)}-\omega_j^{(g)}|,\\
+  \alpha_{\mathrm{cmd},j}^{(g)}
+  &=\frac{\omega_j^{(g)}-\omega_{j-1}^{(g)}}{\Delta t_j}.
+\end{aligned}
+  \label{eq:command_regularity_metrics}
+\end{equation}
+The paper reports $\operatorname{TVR}_{\omega}^{(g)}$, RMS and p95 of
+$\alpha_{\mathrm{cmd}}^{(g)}$, optimized $\alpha_{0\mid j}^{\star}$ RMS and
+p95, the analogous linear-command quantities, and the rate of thresholded
+direction reversals. It also reports the fraction of command-spectrum energy
+above a frozen cutoff $f_{\mathrm{hf}}$. The cutoff, reversal threshold, and
+spectral preprocessing are fixed from the measured base bandwidth and
+independent deployment data, not from formal method outcomes.
+
+Baseline, Smooth-only, and \SMPCC{} are compared through the same randomized
+blocks used by RQ1. The intended conclusion is noninferiority of \SMPCC{}
+command regularity to Smooth-only within frozen tolerances
+$\delta_{\mathrm{TVR}}$, $\delta_{\alpha}$, and $\delta_{E}$. This audit does
+not require \SMPCC{} to be the smoothest method. A low published-command
+variation is insufficient when the raw solver output has high variation or
+when $r_{\mathrm{int}}$ indicates frequent rate limiting; such a result is
+attributed to the execution layer rather than to the optimizer.
+
+\PendingResult{Collect eight five-repetition $C_1$ long-horizon runs without
+inter-repetition modal reset; freeze drift and command-regularity tolerances
+from independent calibration/deployment records; report repetition-wise and
+last--first propagation outcomes; and compute layer-specific variation,
+acceleration, reversal, spectral-energy, and intervention statistics for all
+formal methods.}
 
 \subsection{Supporting Model Consistency and Sensitivity}
 
