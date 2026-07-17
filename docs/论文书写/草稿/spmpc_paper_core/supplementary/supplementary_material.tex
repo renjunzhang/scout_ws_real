@@ -1,0 +1,320 @@
+% Supplementary-material fragment. This file is intentionally not included by
+% main.tex so that spmpc_paper_core remains a two-section main-text draft.
+
+\section{Solver and Controller Configuration}
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{Numerical solver configuration.}
+  \begin{tabular}{@{}p{0.31\columnwidth}p{0.63\columnwidth}@{}}
+    \toprule
+    Item & Setting \\
+    \midrule
+    Control frequency & $30\,\mathrm{Hz}$ \\
+    Horizon & $N=60$, $T_f=2.0\,\mathrm{s}$ \\
+    NLP method & SQP-RTI, one iteration per cycle \\
+    QP solver & Partial-condensing HPIPM \\
+    Integration & ERK, four stages, one step per interval \\
+    Hessian & Exact \\
+    Regularization & PROJECT; Levenberg--Marquardt $10^{-3}$ \\
+    Warm start & Enabled \\
+    Solver fallback & Previous solution off; primitive fallback on \\
+    Raw solver-command clamp & $0\leq v_{\mathrm{solver}}\leq0.8\,\mathrm{m/s}$; $|\omega_{\mathrm{solver}}|\leq1.2\,\mathrm{rad/s}$ \\
+    Post-gate command bounds & Shared across methods; numerical limits \Pending \\
+    Published-command bounds & Shared across methods; linear, angular-rate, and rate-of-change limits \Pending \\
+    Terminal goal tolerance & $0.20\,\mathrm{m}$ \\
+    Core liquid-aware extensions & Reference governor off; modal hard cap off \\
+    Shared downstream intervention & Terminal, gate, delay, rate, fallback, and zero-command settings \Pending \\
+    Intervention tolerances & $\epsilon_v$, $\epsilon_\omega$, and $r_{\mathrm{int,max}}$ \Pending \\
+    Damping ratio & $\zeta$ \Pending; copied from the frozen liquid-model configuration \\
+    Trial liquid-state initialization & Zero after the formal rest criterion \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+All entries marked \Pending{} must be replaced from the archived formal
+configuration before the first randomized block is acquired. Values are not
+selected or revised using formal RGB outcomes.
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \caption{Controller weights and normalizers to be copied from the frozen formal configuration.}
+  \begin{tabular}{@{}lccccl@{}}
+    \toprule
+    Weight & Baseline & Smooth-only & \SMPCC{} & Normalizer & Role \\
+    \midrule
+    $w_c$ & \Pending & \Pending & \Pending & $e_{c,\mathrm{ref}}$ & Contour tracking \\
+    $w_l$ & \Pending & \Pending & \Pending & $e_{l,\mathrm{ref}}$ & Lag tracking \\
+    $w_p$ & \Pending & \Pending & \Pending & $v_{s,\max}$ & Progress reward \\
+    $w_v$ & \Pending & \Pending & \Pending & $v_{\max}$ & Base-speed tracking \\
+    $w_{v_s}$ & \Pending & \Pending & \Pending & $v_{s,\max}$ & Progress-speed tracking \\
+    $w_a$ & \Pending & \Pending & \Pending & $a_{\max}$ & Longitudinal control \\
+    $w_\omega$ & \Pending & \Pending & \Pending & $\omega_{\max}$ & Angular-rate regularization \\
+    $w_\alpha$ & \Pending & \Pending & \Pending & $\alpha_{\max}$ & Angular acceleration \\
+    $w_{\Delta a}$ & \Pending & \Pending & \Pending & $a_{\max}$ & Cross-cycle continuity \\
+    $w_{\Delta v_s}$ & \Pending & \Pending & \Pending & $v_{s,\max}$ & Progress continuity \\
+    $\gamma_{\mathrm{ac}}$ & $8$ & $8$ & $8$ & -- & One-sided anti-creep scale \\
+    $w_\eta$ & $0$ & $0$ & \Pending & $\eta_{\mathrm{ref}}$ & Modal displacement \\
+    $w_{\dot\eta}$ & $0$ & $0$ & \Pending & $\dot\eta_{\mathrm{ref}}$ & Modal velocity \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\section{Experimental Metadata Freeze Checklist}
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{4pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Experimental apparatus, path, container, and deployment metadata to be frozen before formal acquisition.}
+  \label{tab:supp_experimental_setup}
+  \begin{tabular}{@{}p{0.20\linewidth}p{0.37\linewidth}p{0.35\linewidth}@{}}
+    \toprule
+    Item & Nominal setting & Formal record \\
+    \midrule
+    Mobile base & Scout Mini; velocity command interface & Payload and center-of-mass configuration \Pending \\
+    Low-risk path & Fixed prescribed path & Geometry and length \Pending \\
+    High-risk path & Sustained curvature changes & Geometry and length \Pending \\
+    Container $C_1$ & $R_c=18.5\,\mathrm{mm}$, $h=58\,\mathrm{mm}$ & Height, freeboard, volume, mass, $\omega_1$, $c_h$ \Pending \\
+    Container $C_2$ & Different radius and/or fill depth & All geometry; $\omega_1$ shift at least 15--20\% \Pending \\
+    Camera & RealSense RGB & Model, resolution, frame rate, pose, and ROI \Pending \\
+    Camera--mode sampling & Checked before $C_2$ freeze & $f_{\mathrm{cam}}/f_{1,c}$ and visual-bandwidth admission record \Pending \\
+    RGB processing & Calibrated liquid-envelope extraction & Algorithm, filtering, missing-frame rule, and calibration error \Pending \\
+    Synchronization & RGB, odometry, command, and solver logs & Timestamp alignment procedure \Pending \\
+    Trial definition & Full motion window plus 10\%--90\% sensitivity and post-arrival intervals & Motion onset, rest, success, arrival, $Z_1$--$Z_5$, and residual-window rules \Pending \\
+    OCP limits & $v_{\max}=0.8$, $\omega_{\max}=1.2$, $a_{\max}=0.6$, $\alpha_{\max}=1.2$ & SI units as defined in the main paper \\
+    Command-chain limits & Shared across methods & Raw solver, post-gate, and published limits; rate limiting \Pending \\
+    Deployment layer & Shared across methods & Terminal logic, gate state, solver failure, fallback, and zero-command behavior \Pending \\
+    Intervention audit & Frozen before formal trials & $\epsilon_v$, $\epsilon_\omega$, $r_{\mathrm{int,max}}$, and smoke-test record \Pending \\
+    Software revision & Version-controlled implementation & Archived formal-acquisition revision \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\section{Recorded Signal and Derived Metric Checklist}
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{4pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Synchronized records required for the formal evidence chain.}
+  \label{tab:supp_recorded_signals}
+  \begin{tabular}{@{}p{0.16\linewidth}p{0.42\linewidth}p{0.34\linewidth}@{}}
+    \toprule
+    Layer & Required record & Main derived quantity or use \\
+    \midrule
+    Path & Reference geometry, arc length, $\kappa(s)$, projected $s$ & $\sigma=s/L$, path-error alignment, curvature context \\
+    Robot & Timestamped $(x,y,\theta,v,\omega)$ odometry & Executed trajectory, completion time, path-error p95 \\
+    OCP input & Robot/liquid state, $s_{\min}$, effective reference, previous controls, pre-solve solver/warm-start state & Actual-branch reproduction and cloned replay \\
+    OCP plan & First action; complete replay horizon for $v$, $\omega$, $v_s$, $a$, $\alpha$, and modal state & RQ3 parameter switch and RQ4 phase/replay analyses \\
+    Execution & Raw solver, post-gate, and published commands with limiter/fallback flags & Realized command variation, $r_{\mathrm{int}}$, and attribution audit \\
+    Excitation & Filtered $\dot v_{\mathrm{odom}}$ and $v_{\mathrm{odom}}\omega_{\mathrm{odom}}$ & $a_{x,\mathrm{exec}}$ RMS and $|a_{y,\mathrm{exec}}|$ p95 \\
+    Liquid model & $(\eta_x,\dot\eta_x,\eta_y,\dot\eta_y)$ and $H_{\mathrm{modal}}$ & Internal mechanism and model-consistency diagnostics \\
+    Vision & Raw RGB timestamps, extracted $H_{\mathrm{vis}}$, calibration and missing-frame flags & Primary RGB p95 and residual RMS \\
+    Runtime & Solve time, status, deadline flag, fallback and intervention state & ECDF, p95, deadline-miss and failure rates \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\section{Formal Experiment Matrix}
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \caption{Formal 88-trial physical acquisition matrix for $n=8$ randomized blocks.}
+  \label{tab:supp_formal_matrix}
+  \begin{tabular}{@{}p{0.17\linewidth}p{0.14\linewidth}p{0.27\linewidth}cp{0.17\linewidth}@{}}
+    \toprule
+    Evidence block & Condition & Methods & Trials & Main use \\
+    \midrule
+    Low-risk blocks & $C_1$, low-risk path & Baseline, Smooth-only, \SMPCC{} & $3n=24$ & RQ1 path consistency \\
+    Container super-blocks & $C_1/C_2$, high-risk path & Baseline, Smooth-only, \SMPCC{} & $6n=48$ & RQ1 high-risk result and RQ3 transfer \\
+    Time-matched blocks & $C_1$, high-risk path & Smooth-match, \SMPCC{} & $2n=16$ & RQ2 time confound \\
+    \midrule
+    Main total & -- & -- & $11n=88$ & RQ1--RQ4 and runtime \\
+    Optional mismatch & $C_2$, high-risk path with frozen $C_1$ parameters & \SMPCC{} & $+n=+8$ & Supporting reparameterization evidence \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+The high-risk $C_1$ observations in the container super-blocks are shared by
+RQ1 and RQ3 and are not acquired twice. The four-phase RQ4 comparison and the
+actual/zero replay, together with the controlled $C_1/C_2$ parameter-switch and
+computational mismatch comparisons, are computational studies and add no
+physical trials. Runtime statistics use all completed formal physical trials.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{Staged evidence packages and corresponding claim limits.}
+  \begin{tabular}{@{}lcl@{}}
+    \toprule
+    Package & Trials & Supported scope \\
+    \midrule
+    Core mechanism & 40 & High-risk RQ1, RQ2, RQ4, runtime \\
+    Two-path & 64 & Core package plus path consistency \\
+    Complete main & 88 & Full RQ1--RQ4 and container transfer \\
+    Physical mismatch & 96 & Adds parameter-necessity test \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+If acquisition ends before a package is complete, the corresponding path or
+container claim is removed from the abstract, contribution statement, results,
+and conclusion rather than inferred from a smaller unplanned subset.
+
+\section{Command-Chain and Replay Audit}
+
+For every formal control cycle, the archive contains
+$(v_{\mathrm{solver}},\omega_{\mathrm{solver}})$,
+$(v_{\mathrm{post}},\omega_{\mathrm{post}})$, and
+$(v_{\mathrm{pub}},\omega_{\mathrm{pub}})$ with terminal, gate, limiter,
+fallback, and zero-command flags. The frozen values of $\epsilon_v$,
+$\epsilon_\omega$, and $r_{\mathrm{int,max}}$ are reported with the deployment
+smoke-test record. Main-text mechanism claims are qualified whenever the formal
+$r_{\mathrm{int}}$ distribution shows that downstream logic frequently masks
+raw optimizer differences.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{Command-chain intervention statistics.}
+  \begin{tabular}{@{}lcccc@{}}
+    \toprule
+    Method & $r_{\mathrm{int}}$ median & p95 & $|\Delta v|$ p95 & $|\Delta\omega|$ p95 \\
+    \midrule
+    Baseline & \Pending & \Pending & \Pending & \Pending \\
+    Smooth-only & \Pending & \Pending & \Pending & \Pending \\
+    \SMPCC{} & \Pending & \Pending & \Pending & \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The primary replay clones actual and zero branches from the same immutable
+pre-solve snapshot. Before counterfactual differences are computed, the actual
+branch must reproduce the online solver status, first control, and raw solver
+command. The following values are frozen before formal outcomes are inspected:
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{RQ4 replay reproducibility settings.}
+  \begin{tabular}{@{}p{0.30\columnwidth}p{0.64\columnwidth}@{}}
+    \toprule
+    Item & Frozen value or record \\
+    \midrule
+    Snapshot contents & Solver, warm start, previous solution, controls, progress, reference, deployment context \\
+    Status reproduction rule & \Pending \\
+    First-control tolerance & $\epsilon_a$, $\epsilon_\alpha$, $\epsilon_{v_s}$ \Pending \\
+    Raw-command tolerance & $\epsilon_{v,\mathrm{replay}}$, $\epsilon_{\omega,\mathrm{replay}}$ \Pending \\
+    Sampling rule & All valid high-risk cycles or frozen $Z_1$--$Z_5$ subset \Pending \\
+    Horizon export & $v$, $\omega$, $v_s$, $a$, $\alpha$, modal state, $H_{\mathrm{modal}}$ \\
+    Failure handling & Exclude from difference distribution; report replay-failure rate \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Each physical trial yields the median and p95 of
+$|\Delta a_0|$, $|\Delta\alpha_0|$, and $|\Delta v_{s,0}|$, plus the fraction
+of cycles above the frozen numerical tolerance. Complete actual/zero and
+optional phase-flip distributions, reproduction rates, and section-wise
+$Z_1$--$Z_5$ summaries are retained here. Unless both branches are propagated
+through the identical shared execution-layer snapshot, these quantities remain
+optimized first-action differences.
+
+\section{Development-Only Records}
+
+The archived trials predate the frozen block protocol and are not used for
+formal inference. Modal-only quantities must be recomputed from
+$(\eta_x,\eta_y)$ before reporting.
+The legacy statement $v_{\mathrm{ref}}=0.20\,\mathrm{m/s}$ is treated as a
+compatibility item rather than proof of mismatch: the archived configuration
+must be checked to determine whether it denotes a fixed reference or the
+$v_{\mathrm{cruise}}$ input to the curvature-aware profile. Regardless of the
+outcome of this check, the archived trials do not contribute to the formal
+randomized-block sample size.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{Development-only RGB statistics, mean $\pm$ standard deviation over three trials.}
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    Method & RGB p95 [mm] & RGB RMS [mm] \\
+    \midrule
+    Baseline & $1.009\pm0.214$ & $0.541\pm0.081$ \\
+    Smooth-only & $1.272\pm0.283$ & $0.639\pm0.060$ \\
+    \SMPCC{} & $0.901\pm0.015$ & $0.537\pm0.008$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{Development-only task statistics for the same trials.}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Method & Path p95 [cm] & $|\omega|$ p95 [rad/s] & Time [s] \\
+    \midrule
+    Baseline & $2.947\pm0.087$ & $0.234\pm0.015$ & $33.753\pm0.355$ \\
+    Smooth-only & $3.646\pm1.188$ & $0.202\pm0.022$ & $35.169\pm0.537$ \\
+    \SMPCC{} & $3.442\pm0.128$ & $0.242\pm0.033$ & $36.851\pm0.231$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The archived \SMPCC{} plus enhanced-smoothing record is excluded from the
+core comparison. Its RGB and task outcomes may be retained after the modal-only
+logs are reprocessed.
+
+\section{Sensitivity and Runtime Details}
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{Supporting simulation sensitivity study.}
+  \begin{tabular}{@{}p{0.16\columnwidth}p{0.30\columnwidth}p{0.20\columnwidth}>{\centering\arraybackslash}p{0.10\columnwidth}@{}}
+    \toprule
+    Perturbation & Levels & Outputs & Status \\
+    \midrule
+    $\omega_1$ & $0.8$--$1.2$ nominal & Response, time, success & \Pending \\
+    $\zeta$ & $0.6$--$1.4$ nominal & Residual and bias & \Pending \\
+    $c_h$ & $0.8$--$1.2$ nominal & Height-scale sensitivity & \Pending \\
+    Initial modal state & Zero and nonzero & Dynamic memory & \Pending \\
+    Modal phase & Longitudinal/lateral four-phase and optional phase flip & Plan and first-action dependence & \Pending \\
+    Execution delay & Nominal and perturbed & Phase and tracking & \Pending \\
+    $C_2$ parameter set & Correct $C_2$ and incorrect frozen $C_1$ & Computational parameter sensitivity & \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \caption{Complete runtime statistics.}
+  \begin{tabular}{@{}lccccccc@{}}
+    \toprule
+    Method & Median & p95 & Maximum & Miss rate & Failures & Fallbacks & Frequency \\
+    \midrule
+    Baseline & \Pending & \Pending & \Pending & \Pending & \Pending & \Pending & \Pending \\
+    Smooth-only & \Pending & \Pending & \Pending & \Pending & \Pending & \Pending & \Pending \\
+    \SMPCC{} & \Pending & \Pending & \Pending & \Pending & \Pending & \Pending & \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\section{Optional Container-Mismatch Analysis}
+
+The optional group runs \SMPCC{} on $C_2$ while retaining the $C_1$ values of
+$\omega_1$, $c_h$, $\eta_{\mathrm{ref}}$, and
+$\dot\eta_{\mathrm{ref}}$. It is a model-mismatch analysis and not a fourth
+core method. Only a pre-specified physical comparison of this group with the
+correctly parameterized $C_2$ trials can support a claim about the physical
+necessity of geometry-based updating. A computational correct/incorrect replay
+supports only parameter sensitivity of the optimizer. Physical mismatch result:
+\Pending.

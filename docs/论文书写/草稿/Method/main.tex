@@ -1,0 +1,78 @@
+% !TEX program = pdflatex
+\documentclass[conference]{IEEEtran}
+
+\IEEEoverridecommandlockouts
+
+\usepackage[T1]{fontenc}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{newtxmath}
+\usepackage{bm}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{url}
+\usepackage{cite}
+\usepackage[nameinlink,capitalize]{cleveref}
+
+\newcommand{\SPMPC}{SPMPC}
+\newcommand{\MPCC}{MPCC}
+\newcommand{\MPC}{MPC}
+\newcommand{\MpcLocalPlanner}{MPC local planner}
+
+\newcommand{\Bzero}{\ensuremath{\mathrm{B}_{0}}}
+\newcommand{\Bsmooth}{\ensuremath{\mathrm{B}_{\mathrm{smooth}}}}
+\newcommand{\Bslosh}{\ensuremath{\mathrm{B}_{\mathrm{slosh}}}}
+\newcommand{\Bours}{\ensuremath{\mathrm{B}_{\mathrm{ours}}}}
+\newcommand{\Boursgov}{\ensuremath{\mathrm{B}_{\mathrm{ours,gov}}}}
+\newcommand{\Boursnostop}{\ensuremath{\mathrm{B}_{\mathrm{ours,no\,stop}}}}
+\newcommand{\Boursstop}{\ensuremath{\mathrm{B}_{\mathrm{ours,stop}}}}
+
+\newcommand{\vx}{\bm{x}}
+\newcommand{\vu}{\bm{u}}
+\newcommand{\vr}{\bm{r}}
+\newcommand{\xr}{\bm{x}_{r}}
+\newcommand{\xl}{\bm{x}_{\ell}}
+\newcommand{\xaug}{\bm{x}}
+\newcommand{\ec}{e_{\mathrm{c}}}
+\newcommand{\el}{e_{\mathrm{l}}}
+\newcommand{\dd}{\mathrm{d}}
+
+\title{\LARGE \bf
+Slosh-Aware Model Predictive Contouring Control for Open-Liquid Transport: Core Formulation and Comparative Evidence
+}
+
+\author{
+\IEEEauthorblockN{Renjun Zhang}
+\IEEEauthorblockA{
+\textit{University of Science and Technology of China}\\
+Hefei, China\\
+zhangrenjun@mail.ustc.edu.cn}
+}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Open-liquid transport on mobile bases requires local motion generation that accounts for the dynamic memory of the liquid free surface.
+This manuscript develops the technical core of \SPMPC{}, a slosh-aware model predictive contouring control method that embeds a low-order liquid modal state into an online \MPCC{} local planner.
+The formulation jointly predicts base motion, path progress, and liquid response, and it can be paired with a soft finite-horizon reference governor that contracts the speed reference before the \MPCC{} solve.
+The evaluation structure isolates explicit slosh-state prediction from smooth-only motion generation and separates internal model proxies from external liquid observations.
+\end{abstract}
+
+\begin{IEEEkeywords}
+model predictive contouring control, liquid sloshing, mobile robots, local planning, ablation study
+\end{IEEEkeywords}
+
+\input{sections/00_core_claim}
+\input{sections/01_spmpc_formulation}
+\input{sections/02_evaluation_matrix}
+\input{sections/03_representative_evidence}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

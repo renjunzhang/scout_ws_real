@@ -1,0 +1,19 @@
+\section{Core Claim and Scope}
+
+The central claim of \SPMPC{} is that open-liquid local planning should be treated as a predictive state problem, not only as a smooth-command generation problem.
+For a mobile base carrying an open container, the future free-surface response depends on the current liquid displacement, liquid velocity, and residual oscillation phase.
+Two command sequences with comparable velocity, acceleration, and smoothness statistics can therefore induce different liquid responses if they interact differently with the current liquid state.
+
+\SPMPC{} addresses this issue at the online local-planning layer.
+Given a geometrically feasible reference path, the planner repeatedly solves a finite-horizon \MPCC{} problem from the current robot, path-progress, and liquid modal state, then executes the first base command.
+The method preserves the interface of an ordinary mobile-base local planner while making liquid dynamic memory part of the prediction model.
+
+The technical body consists of three linked elements.
+First, the robot state and path-progress state are augmented with a low-order slosh modal state.
+Second, the \MPCC{} objective jointly penalizes path error, insufficient progress, speed-reference mismatch, control effort, control variation, and predicted slosh response.
+Third, an optional Slosh-risk Reference Governor contracts the speed reference through short-horizon slosh prediction before the \MPCC{} solve.
+
+The scope is intentionally bounded.
+The method is not a high-fidelity free-surface simulator, a hard spill-prevention controller, or a closed-loop liquid-surface feedback controller.
+Model-derived slosh quantities are used as prediction and diagnostic proxies.
+Claims about real liquid motion must be supported by external observations such as RGB liquid-surface measurements or liquid-level sensing.

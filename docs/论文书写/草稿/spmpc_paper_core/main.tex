@@ -1,0 +1,66 @@
+% !TEX program = pdflatex
+% Method-and-experiment core draft in the standard IEEE Transactions journal format.
+\documentclass[journal]{IEEEtran}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{bm}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{placeins}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc}
+\usepackage{cite}
+\usepackage[nameinlink,capitalize]{cleveref}
+
+\newcommand{\SMPCC}{S-MPCC}
+\newcommand{\MPCC}{MPCC}
+\newcommand{\xr}{\bm{x}_{r}}
+\newcommand{\xl}{\bm{x}_{\ell}}
+\newcommand{\xaug}{\bm{x}}
+\newcommand{\vu}{\bm{u}}
+\newcommand{\vr}{\bm{r}}
+\newcommand{\ec}{e_{\mathrm{c}}}
+\newcommand{\el}{e_{\mathrm{l}}}
+\newcommand{\Pending}{\textcolor{spmpcgray}{\textit{pending}}}
+\newcommand{\PendingResult}[1]{%
+  \par\smallskip\noindent
+  \textcolor{spmpcgray}{\textit{Pending result: #1}}%
+  \par\smallskip}
+
+\definecolor{spmpcblue}{RGB}{36,99,180}
+\definecolor{spmpclight}{RGB}{235,243,255}
+\definecolor{spmpcgray}{RGB}{90,90,90}
+
+\title{\SMPCC: Slosh-Aware Model Predictive Contouring Control for Open-Liquid Transport on Mobile Bases}
+
+\author{Renjun Zhang%
+\thanks{Renjun Zhang is with the University of Science and Technology of China,
+Hefei, China (e-mail: zhangrenjun@mail.ustc.edu.cn).}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Transporting an open liquid on a mobile base requires more than suppressing command variation: the response to a candidate motion also depends on the liquid displacement, velocity, and oscillation phase already present when that motion is planned.
+This paper presents an online receding-horizon local motion planner and controller for a prescribed geometrically feasible path.
+The proposed \SMPCC{} formulation jointly predicts robot motion, virtual path progress, and a container-parameterized first lateral sloshing mode represented in two orthogonal directions.
+An odometry-driven propagation step carries the modal state between control cycles, so the current liquid dynamic memory can alter the next optimized motion segment.
+The frozen evaluation protocol uses matched slosh-agnostic and smooth-only MPCC variants, an independently tuned completion-time-matched comparison, geometry-based transfer without controller-weight retuning, controlled liquid-phase studies, counterfactual replay of the propagated runtime state, and command-chain and runtime audits.
+The scope is online motion generation along a supplied path; global route planning, obstacle reasoning, and a formal spill-free guarantee are not claimed.
+\end{abstract}
+
+\begin{IEEEkeywords}
+mobile robots, open-liquid transport, liquid sloshing, model predictive contouring control, receding-horizon planning
+\end{IEEEkeywords}
+
+\input{sections/01_method}
+\input{sections/02_experiments}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

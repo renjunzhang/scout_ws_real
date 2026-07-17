@@ -1,0 +1,270 @@
+\section{\SMPCC{} Method}
+\label{sec:method}
+
+\subsection{Problem Definition and Architecture}
+
+\SMPCC{} is an online receding-horizon local motion planner and controller that optimizes robot motion and virtual path progress while propagating liquid dynamics along a prescribed geometrically feasible reference path. At control instant $t_j$, it receives the measured base state, the accepted path progress, the previous control, and an internally propagated liquid modal state. It predicts the coupled response over a finite horizon and applies the first optimized action.
+
+The method assumes that a geometrically feasible reference path has already been supplied. Occupancy-grid reasoning, dynamic-obstacle prediction, collision-corridor construction, and global route selection are outside the present OCP. The reference governor and modal hard cap are optional liquid-aware extensions and are disabled in the core RQ1--RQ4 comparisons. Any delay predictor, terminal controller, command gate, or command-rate limiter used in physical deployment is frozen before formal acquisition, applied identically to all three methods, and reported separately from the core \SMPCC{} formulation.
+
+The defining mechanism is liquid dynamic memory. Two candidate motions with similar path error and control regularity can produce different future liquid responses when the current modal displacement, velocity, or phase differs. \SMPCC{} represents this dependence by augmenting the \MPCC{} prediction state with propagated liquid dynamics. \Cref{fig:core_architecture} summarizes the resulting control loop.
+
+\begin{figure}[t]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[
+    font=\footnotesize,
+    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=1.65cm, minimum height=0.64cm, align=center},
+    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=2.15cm, minimum height=0.82cm, align=center, font=\footnotesize\bfseries},
+    arr/.style={-{Latex[length=1.6mm]}, line width=0.5pt, draw=spmpcblue}
+  ]
+    \node[block] (odom) at (0,1.05) {Odometry};
+    \node[block] (path) at (0,-0.05) {Geometrically feasible\\reference path};
+    \node[block] (prev) at (0,-1.15) {Previous\\control};
+    \node[core] (prep) at (2.55,0.45) {Guarded projection,\\local path model, and\\liquid-state propagation};
+    \node[core] (ocp) at (5.55,0.05) {Slosh-augmented\\alpha-state \MPCC{} OCP};
+    \node[block, fill=white] (cmd) at (8.15,0.05) {First optimized\\base command};
+
+    \draw[arr] (odom.east) -- (prep.west);
+    \draw[arr] (path.east) -- (prep.west);
+    \draw[arr] (prep.east) -- (ocp.west);
+    \draw[arr] (prev.east) -| (ocp.south west);
+    \draw[arr] (ocp.east) -- (cmd.west);
+    \draw[arr, rounded corners=6pt] (cmd.south) |- (5.55,-1.85) -| node[pos=0.25, below, font=\scriptsize, text=spmpcgray] {receding-horizon update} (prep.south east);
+  \end{tikzpicture}}
+  \caption{Core \SMPCC{} architecture. The method includes path projection, liquid-state propagation, the augmented OCP, SQP-RTI solution, and first-action output.}
+  \label{fig:core_architecture}
+\end{figure}
+
+The control-cycle index is $j$, and $k\mid j$ denotes prediction node $k$ formed at cycle $j$. Measured and propagated online quantities carry index $j$; OCP variables carry index $k\mid j$.
+
+\subsection{Path Progress and Contouring Geometry}
+
+Let the reference path be $\vr(s)=[r_x(s),r_y(s)]^\top$, parameterized by arc length $s\in[0,L]$. To prevent backward jumps on self-near or noisy path segments, the measured position $\bm p_j$ is projected subject to the last accepted progress $s_{\min,j}$:
+\begin{equation}
+  s_{0,j}
+  =\underset{s\in[s_{\min,j},L]}{\arg\min}\,
+  \|\bm p_j-\vr(s)\|_2^2,
+  \qquad s_{0,j}\geq s_{\min,j}.
+  \label{eq:guarded_projection}
+\end{equation}
+The accepted lower bound advances monotonically and is reset when a new path is received.
+
+At each cycle, the path is sampled over
+\[
+  [s_{0,j},\,\min\{L,s_{0,j}+v_{\max}T_f\}]
+\]
+and fitted locally by cubic polynomials. Their derivatives define the reference heading and curvature,
+\[
+  \phi(s)=\operatorname{atan2}(r_y'(s),r_x'(s)),\qquad
+  \kappa(s)=
+  \frac{r_x'r_y''-r_y'r_x''}
+  {(r_x'^2+r_y'^2+\varepsilon_\kappa)^{3/2}},
+\]
+with $\varepsilon_\kappa=10^{-6}$.
+
+For $\Delta p_x=p_x-r_x(s)$ and $\Delta p_y=p_y-r_y(s)$, the signed contour and lag errors are
+\begin{equation}
+\begin{aligned}
+  e_{\mathrm c}(s)&=\sin\phi(s)\,\Delta p_x-\cos\phi(s)\,\Delta p_y,\\
+  e_{\mathrm l}(s)&=-\cos\phi(s)\,\Delta p_x-\sin\phi(s)\,\Delta p_y.
+\end{aligned}
+\label{eq:contour_lag_errors}
+\end{equation}
+The virtual progress state is optimized within the horizon rather than prescribed by time, as in standard \MPCC{} formulations \cite{D19_Liniger2015,D20_Brito2019}.
+
+\subsection{Robot--Liquid Augmented Dynamics}
+
+\subsubsection{Alpha-state base model}
+
+The base and path-progress state and the control are
+\[
+  \bm x_r=[p_x,p_y,\theta,v,s,\omega]^\top,\qquad
+  \bm u=[a,\alpha,v_s]^\top,
+\]
+where $a=\dot v$, $\alpha=\dot\omega$, and $v_s=\dot s$. Their continuous dynamics are
+\begin{equation}
+\begin{aligned}
+  \dot p_x&=v\cos\theta, & \dot p_y&=v\sin\theta, &
+  \dot\theta&=\omega,\\
+  \dot v&=a, & \dot s&=v_s, & \dot\omega&=\alpha.
+\end{aligned}
+\label{eq:robot_dynamics}
+\end{equation}
+Placing $\omega$ in the state enforces rotational continuity through the dynamics and permits a direct angular-acceleration bound. This acceleration-level representation is an implementation choice rather than a separate novelty claim \cite{D23_Arrizabalaga2021}.
+
+\subsubsection{Container-parameterized first sloshing mode}
+
+The liquid model represents the first lateral sloshing mode along two orthogonal container directions. For a cylindrical container with inner radius $R_c$, liquid depth $h$, density $\rho$, and gravitational acceleration $g$, the adopted equivalent-model parameters are \cite{A01_Leva2021,A02_Guagliumi2021}
+\begin{equation}
+\begin{aligned}
+  J_1'(\xi_{11})&=0,\qquad \xi_{11}=1.8412,\\
+  m_F&=\rho\pi R_c^2h,\\
+  \omega_1&=
+  \sqrt{g\frac{\xi_{11}}{R_c}
+  \tanh\!\left(\frac{\xi_{11}h}{R_c}\right)},\\
+  m_1&=m_F
+  \frac{2R_c\tanh(\xi_{11}h/R_c)}
+  {\xi_{11}h(\xi_{11}^2-1)},\\
+  c_h&=\frac{4hm_1}{m_FR_c}.
+\end{aligned}
+\label{eq:modal_parameters}
+\end{equation}
+The damping ratio $\zeta$ is read from the frozen liquid-model configuration and reported numerically with its configuration source. No experimental identification is claimed unless such a procedure is actually performed and archived. The same frozen value is used for all methods and both containers in the geometry-only transfer study. A container change updates the remaining physical parameters through \cref{eq:modal_parameters} and does not trigger controller-weight retuning.
+
+The modal state is
+\[
+  \bm x_\ell=
+  [\eta_x,\dot\eta_x,\eta_y,\dot\eta_y]^\top.
+\]
+Here $\eta_x$ and $\eta_y$ are generalized modal displacements, not physical free-surface elevations. The body-fixed axis $x_b$ points forward and $y_b$ points laterally. With the container mounted at the base rotation center, the signed excitation approximation is $a_x=a$ and $a_y=v\omega$. Each orthogonal direction follows
+\begin{equation}
+  \ddot\eta_i+2\zeta\omega_1\dot\eta_i+\omega_1^2\eta_i=-a_i,
+  \qquad i\in\{x,y\}.
+  \label{eq:liquid_dynamics}
+\end{equation}
+The term $v\omega$ retains the sign of the lateral acceleration. The present model does not cover an offset container; such a configuration would require the $\alpha r$ and $\omega^2r$ contributions in both the OCP and online propagation.
+
+The augmented state is
+\[
+  \bm x=[\bm x_r^\top,\bm x_\ell^\top]^\top\in\mathbb R^{10}.
+\]
+The joint dynamics used inside the OCP are integrated by explicit Runge--Kutta (ERK).
+
+\subsubsection{Online liquid-state propagation}
+
+At the beginning of a formal physical trial, the modal state is initialized to zero only after the base is stationary and the calibrated visual response has satisfied the pre-specified rest criterion. It is then propagated throughout the trial without reset. RQ4 is the sole exception: its controlled planning study replaces the zero initialization with the phase states specified in \cref{eq:phase_initial_states}. Consecutive odometry samples provide
+\[
+  \hat a_{x,j}=\frac{v_j-v_{j-1}}{\Delta t_{\mathrm{odom}}},
+  \qquad
+  \hat a_{y,j}=v_j\omega_j.
+\]
+For the continuous liquid matrices $(A_\ell,B_\ell)$, a zero-order hold over the odometry interval gives
+\begin{equation}
+\begin{aligned}
+  A_d&=e^{A_\ell\Delta t_{\mathrm{odom}}},\qquad
+  B_d=\int_0^{\Delta t_{\mathrm{odom}}}
+  e^{A_\ell\tau}B_\ell\,\mathrm d\tau,\\
+  \hat{\bm x}_{\ell,j+1}
+  &=A_d\hat{\bm x}_{\ell,j}
+  +B_d[\hat a_{x,j},\hat a_{y,j}]^\top.
+\end{aligned}
+\label{eq:liquid_state_propagation}
+\end{equation}
+RGB observations are not used to correct this state. The OCP initial condition is
+\[
+  \bm x_{0\mid j}
+  =[\hat{\bm x}_{r,j}^\top,\hat{\bm x}_{\ell,j}^\top]^\top.
+\]
+
+The modal response used by the optimizer and logger is
+\begin{equation}
+  H_{\mathrm{modal}}
+  =c_h\sqrt{\eta_x^2+\eta_y^2}.
+  \label{eq:modal_height}
+\end{equation}
+The calibrated vision-based reference measurement used in the experiments is denoted by $H_{\mathrm{vis}}$. It is not fed back to the controller. The formal configuration sets the parabolic correction off, so the logged model quantity is modal-only.
+
+\subsection{Slosh-Aware \MPCC{} OCP}
+
+At cycle $j$, \SMPCC{} solves
+\begin{equation}
+\begin{aligned}
+  \min_{\bm x_{0:N\mid j},\bm u_{0:N-1\mid j}}\quad
+  &\sum_{k=0}^{N-1}\ell_{k\mid j}+\ell_{N\mid j}\\
+  \mathrm{s.t.}\quad
+  &\bm x_{0\mid j}=\hat{\bm x}_j,\\
+  &\bm x_{k+1\mid j}=f_d(\bm x_{k\mid j},\bm u_{k\mid j}),\\
+  &\bm x_{k\mid j}\in\mathcal X,\qquad
+  \bm u_{k\mid j}\in\mathcal U.
+\end{aligned}
+\label{eq:core_ocp}
+\end{equation}
+The core setting uses $N=60$, $\Delta t=1/30\,\mathrm{s}$, and $T_f=2.0\,\mathrm{s}$. The discretized joint dynamics $f_d$ use ERK.
+
+The stage cost is
+\begin{equation}
+  \ell_{k\mid j}=\frac{1}{N}\left(
+  J_{\mathrm{track}}+J_{\mathrm{path}}+J_{\mathrm{ctrl}}
+  +J_{\Delta}+J_{\mathrm{slosh}}\right)_{k\mid j}.
+  \label{eq:stage_cost}
+\end{equation}
+The path reference uses the curvature-aware speed
+\[
+  v_{\mathrm{ref}}(s)=
+  \max\!\left\{0.3v_{\mathrm{cruise}},
+  \frac{v_{\mathrm{cruise}}}
+  {\sqrt{1+(v_{\mathrm{cruise}}|\kappa(s)|/\omega_{\max})^2}}
+  \right\}.
+\]
+The non-liquid terms are
+\[
+\begin{aligned}
+J_{\mathrm{track}}={}&
+w_c(e_{\mathrm c}/e_{c,\mathrm{ref}})^2
++w_l(e_{\mathrm l}/e_{l,\mathrm{ref}})^2,\\
+J_{\mathrm{path}}={}&
+-w_pv_s/v_{s,\max}
++w_v[(v-v_{\mathrm{ref}})/v_{\max}]^2\\
+&+w_{v_s}[(v_s-v_{\mathrm{ref}})/v_{s,\max}]^2
++J_{\mathrm{ac}},\\
+J_{\mathrm{ctrl}}={}&
+w_a(a/a_{\max})^2+w_\omega(\omega/\omega_{\max})^2
++w_\alpha(\alpha/\alpha_{\max})^2.
+\end{aligned}
+\]
+The one-sided anti-creep term $J_{\mathrm{ac}}$ penalizes deficits below $v_{\mathrm{ref}}$ for both $v$ and $v_s$. Cross-cycle continuity $J_\Delta$ acts at $k=0$ on $a$ and $v_s$ relative to the previous accepted control. Full numerical weights and normalizers are reported in the supplementary material.
+
+For $\bm\eta=[\eta_x,\eta_y]^\top$ and
+$\dot{\bm\eta}=[\dot\eta_x,\dot\eta_y]^\top$, the modal normalizers are
+\[
+  \eta_{\mathrm{ref}}=\frac{H_{\mathrm{ref}}}{c_h},
+  \qquad
+  \dot\eta_{\mathrm{ref}}
+  =\omega_1\eta_{\mathrm{ref}}
+  =\frac{\omega_1H_{\mathrm{ref}}}{c_h}.
+\]
+The slosh term is
+\begin{equation}
+  J_{\mathrm{slosh},k\mid j}
+  =w_\eta\frac{\|\bm\eta_{k\mid j}\|_2^2}{\eta_{\mathrm{ref}}^2}
+  +w_{\dot\eta}
+  \frac{\|\dot{\bm\eta}_{k\mid j}\|_2^2}
+  {\dot\eta_{\mathrm{ref}}^2}.
+  \label{eq:slosh_cost}
+\end{equation}
+No additional factor of $c_h$ is applied inside this cost. The physical modal normalizers are supplied at every shooting stage. The terminal cost retains the tracking and slosh terms but omits progress reward and control regularization.
+
+The OCP bounds are
+\begin{equation}
+\begin{gathered}
+  0\leq v_{k\mid j}\leq v_{\max},\qquad
+  |\omega_{k\mid j}|\leq\omega_{\max},\\
+  |a_{k\mid j}|\leq a_{\max},\qquad
+  |\alpha_{k\mid j}|\leq\alpha_{\max},\\
+  0\leq v_{s,k\mid j}\leq v_{s,\max}.
+\end{gathered}
+\label{eq:ocp_bounds}
+\end{equation}
+The nominal OCP limits are $v_{\max}=0.8\,\mathrm{m/s}$, $\omega_{\max}=1.2\,\mathrm{rad/s}$, $a_{\max}=0.6\,\mathrm{m/s^2}$, and $\alpha_{\max}=1.2\,\mathrm{rad/s^2}$.
+
+\subsection{Online Solution and Executed Command}
+
+The OCP is solved with an acados-generated SQP-RTI scheme, one real-time iteration per control cycle, partial-condensing HPIPM, and four-stage ERK integration. Only the first optimized control is used:
+\begin{equation}
+\begin{aligned}
+  v_{\mathrm{cmd},j}^{\mathrm{OCP}}
+  &=\operatorname{clip}(v_j+a_{0\mid j}^\star\Delta t,0,v_{\max}),\\
+  \omega_{\mathrm{cmd},j}^{\mathrm{OCP}}
+  &=\operatorname{clip}(\omega_j+\alpha_{0\mid j}^\star\Delta t,
+  -\omega_{\max},\omega_{\max}).
+\end{aligned}
+\label{eq:first_action}
+\end{equation}
+
+The OCP limits in \cref{eq:ocp_bounds} are distinct from downstream execution limits. The formal experiment metadata reports the deployed command bounds, terminal slowdown and capture logic, acceleration or rate limiting, solver-failure response, and fallback action. These shared settings are frozen before formal acquisition, and control metrics are computed from the executed command rather than the pre-intervention OCP output. The archived software revision used for formal acquisition is recorded with the reproducibility metadata.
+
+The reference governor and modal hard cap are optional liquid-aware extensions.
+The delay predictor, terminal controller, command gate, and command-rate limiter
+belong to the shared deployment layer. None is part of the core \SMPCC{}
+formulation defined in this section.

@@ -1,46 +1,66 @@
 \section{问题定义与 \SPMPC{} 方法}
 
-本节给出 \SPMPC{} 的方法表述。本文将开口液体运输中的防晃需求放在标准轮式移动底盘的在线局部规划层处理：在给定安全参考路径附近，规划器以滚动时域方式求解包含机器人状态、路径进度和低阶晃液状态的 \MPCC{} 问题，并输出底盘可执行的速度命令。与离线防晃轨迹生成、固定路径速度剖面或给定轨迹后的跟踪控制不同，\SPMPC{} 在每个控制周期根据当前增强状态重新规划；与仅惩罚控制变化的平滑规划器不同，\SPMPC{} 在预测模型中显式传播液体动态记忆。本文方法不追求高保真自由液面仿真，而是在实时可解的局部规划层使用控制友好的低阶晃液模型。
+\subsection{问题范围与滚动时域框架}
 
-\subsection{问题设置与总体框架}
+本文考虑标准轮式移动底盘携带开口液体容器沿一条预先给定且几何可行的参考路径运动。上游模块提供参考路径，规划器在每个控制周期接收当前底盘状态、路径进度、上一控制输入以及由低阶模型传播得到的液体模态状态。有限时域优化同时决定底盘运动和路径推进速度，系统只执行求解序列中的第一帧动作，随后依据更新后的状态重新求解。
 
-本文考虑一个标准轮式移动底盘携带开口液体容器沿给定安全参考路径运动的任务。局部规划器在每个控制周期接收当前机器人状态、参考路径、上一帧控制量以及由模型传播得到的晃液状态初值，求解一个有限时域最优控制问题，并只执行第一帧控制。整体在线流程如下：
+当前方法处理的是给定路径附近的在线路径进度运动生成。主 OCP 尚未包含动态障碍预测、占据栅格或车体碰撞走廊，因此本文不将其表述为完整的动态障碍导航系统。
 
-\begin{enumerate}
-  \item 根据里程计获得当前底盘位姿、线速度和角速度；
-  \item 将当前位置投影到参考路径，得到路径进度初值和局部参考段；
-  \item 以当前或上一周期传播得到的低阶晃液状态作为液体初始状态；
-  \item 在预测时域内同时传播底盘运动、路径进度和液体模态状态；
-  \item 求解包含路径跟踪、路径进度、控制平滑性和预测晃液响应的 \MPCC{} 问题；
-  \item 将第一帧优化结果转换为底盘可执行的速度命令，并进入下一控制周期。
-\end{enumerate}
-
-因此，\SPMPC{} 的输出仍是普通移动底盘可执行的局部速度命令，例如线速度/角速度形式的 \texttt{/cmd\_vel}。方法内部的晃液状态用于预测和优化，不等同于真实液面传感器观测；真实液面运动应在实验中由外部视觉或传感指标评价。
+\SPMPC{} 的关键在于液体状态进入预测层。它不是求解后的诊断量。对于几何误差相近的候选运动，规划器可以根据当前液体相位及其未来演化作出不同选择。整体结构见 \cref{fig:method_structure}。
 
 \begin{figure}[t]
   \centering
-  \figplaceholder{方法结构图：\\机器人状态 + 路径进度 + 晃液状态\\进入增强动力学与 \MPCC{} OCP，输出第一帧底盘命令。}
-  \caption{\SPMPC{} 增强状态与 OCP 结构图占位。后续应展示机器人状态、路径进度、低阶晃液状态、目标函数各项和滚动时域命令生成之间的关系。}
-  \label{fig:method_structure_placeholder}
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[
+    font=\footnotesize,
+    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=1.45cm, minimum height=0.62cm, align=center},
+    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=1.85cm, minimum height=0.82cm, align=center, font=\footnotesize\bfseries},
+    cost/.style={draw=spmpcgray, rounded corners=2pt, line width=0.4pt, fill=white, minimum width=1.05cm, minimum height=0.45cm, align=center, font=\scriptsize},
+    arr/.style={-{Latex[length=1.6mm]}, line width=0.5pt, draw=spmpcblue}
+  ]
+    \node[block] (odom) at (0,1.35) {底盘\\状态};
+    \node[block] (path) at (0,0.45) {路径\\进度};
+    \node[block] (prev) at (0,-0.45) {上一帧\\控制};
+    \node[block] (slosh) at (0,-1.35) {液体\\状态};
+
+    \node[core] (dyn) at (2.35,0.15) {增强模型\\底盘与液体};
+    \node[core] (ocp) at (4.70,0.15) {\SPMPC{}\\OCP};
+    \node[block, fill=white] (cmd) at (7.00,0.15) {首帧\\速度命令};
+
+    \node[cost] (c1) at (3.85,-0.85) {路径跟踪};
+    \node[cost] (c2) at (5.55,-0.85) {路径推进};
+    \node[cost] (c3) at (3.85,-1.45) {控制平滑};
+    \node[cost] (c4) at (5.55,-1.45) {预测晃液};
+
+    \foreach \s in {odom,path,prev,slosh}
+      \draw[arr] (\s.east) -- (dyn.west);
+    \draw[arr] (dyn.east) -- (ocp.west);
+    \draw[arr] (ocp.east) -- (cmd.west);
+    \foreach \c in {c1,c2,c3,c4}
+      \draw[arr] (\c.north) -- (ocp.south);
+    \draw[arr, rounded corners=6pt] (cmd.south) |- (4.70,-2.05) -| node[pos=0.22, below, font=\scriptsize, text=spmpcgray] {滚动更新} (dyn.south);
+  \end{tikzpicture}}
+  \caption{\SPMPC{} 的增强预测与滚动执行结构。底盘状态、路径进度和低阶液体状态在同一时域内传播，第一帧优化结果经约束处理后发送到底盘。}
+  \label{fig:method_structure}
 \end{figure}
 
-\subsection{增强状态与低阶晃液动力学模型}
+\subsection{机器人与液体增强预测模型}
 
-为在局部规划中同时表达路径跟踪和沿路径前进，本文采用带路径进度变量的 alpha-state \MPCC{} 表述。机器人与路径进度状态定义为
+为同时表达底盘执行约束和沿路径推进，机器人状态取为
 \begin{equation}
   \xr =
   \begin{bmatrix}
     p_x & p_y & \theta & v & s & \omega
   \end{bmatrix}^{\top},
 \end{equation}
-其中 $(p_x,p_y)$ 为底盘位置，$\theta$ 为航向角，$v$ 为线速度，$\omega$ 为角速度，$s$ 为沿参考路径的进度变量。控制输入定义为
+其中 $(p_x,p_y)$、$\theta$、$v$ 和 $\omega$ 分别表示底盘位置、航向角、线速度与角速度，$s$ 为参考路径进度。控制输入定义为
 \begin{equation}
   \vu =
   \begin{bmatrix}
     a & \alpha & v_s
   \end{bmatrix}^{\top},
 \end{equation}
-其中 $a$ 为线加速度，$\alpha=\dot{\omega}$ 为角加速度，$v_s=\dot{s}$ 为虚拟路径进度速度。连续时间机器人模型写为
+其中 $a$ 为线加速度，$\alpha$ 为角加速度，$v_s$ 是虚拟路径进度速度。相应连续时间模型为
 \begin{equation}
 \begin{aligned}
   \dot{p}_x &= v\cos\theta, &
@@ -53,16 +73,16 @@
 \label{eq:robot_alpha_dynamics}
 \end{equation}
 
-该状态选择的作用是把底盘可执行性和路径进度放入同一个 OCP：规划器既不能为了防晃完全停止，也不能只追求路径进度而忽略底盘约束和液体响应。
+将 $\omega$ 置于状态并以 $\alpha$ 作为控制量，可以直接施加角加速度约束，也便于惩罚角运动变化。该 alpha-state 配置属于执行层建模选择。本文的方法区别来自机器人状态与液体动态记忆的联合传播，而不是这一状态形式本身。
 
-二维平面激励下的晃液估计研究表明，容器内主导晃液响应可以用少量模态坐标及其速度描述，并由容器水平加速度激励\cite{A01_Leva2021}；模型驱动晃液估计研究进一步说明，质量--弹簧--阻尼型低阶模型可以在避免高保真自由液面计算的同时提供控制友好的预测量\cite{A02_Guagliumi2021}。基于这一思路，本文在局部规划层采用二阶模态模型。单个方向的晃液状态定义为
+低阶模态模型在较小状态维数下保留了液体响应的主要动态特征，适合嵌入在线优化\cite{A01_Leva2021,A02_Guagliumi2021}。对于容器坐标系中的方向 $i\in\{x,y\}$，定义
 \begin{equation}
   x_{s,i}=
   \begin{bmatrix}
     \eta_i & \dot{\eta}_i
-  \end{bmatrix}^{\top}, \qquad i\in\{x,y\},
+  \end{bmatrix}^{\top},
 \end{equation}
-其中 $\eta_i$ 和 $\dot{\eta}_i$ 分别表示该方向主导晃液模态的位移和速度。其动力学写为
+其中 $\eta_i$ 为主导模态位移。其动力学写为
 \begin{equation}
   \ddot{\eta}_i
   +2\zeta_i\omega_i\dot{\eta}_i
@@ -70,167 +90,204 @@
   =-\kappa_i a_i,
   \label{eq:slosh_modal_dynamics}
 \end{equation}
-其中 $\omega_i$、$\zeta_i$ 和 $\kappa_i$ 分别表示等效固有频率、阻尼比和输入增益，$a_i$ 为容器在对应方向上的水平激励。
+式中 $\omega_i$、$\zeta_i$ 和 $\kappa_i$ 分别为等效固有频率、阻尼比和输入增益。
 
-对于轮式底盘在水平面内的局部运动，本文使用底盘运动量近似容器激励：
+容器与底盘刚性连接时，前向切向激励由线加速度给出，转弯引起的横向激励采用向心加速度近似：
 \begin{equation}
-  a_x = a, \qquad a_y \approx v\omega .
+  a_x=a,\qquad a_y\approx v\omega .
   \label{eq:slosh_excitation}
 \end{equation}
-其中 $a_x$ 表示沿底盘前向的切向激励，$a_y$ 表示由转弯产生的横向向心激励近似。若后续实现中引入 IMU 或外部液面反馈，该通道可替换为测量或滤波后的容器加速度；但本文第一版将其作为模型驱动的晃液状态传播，而不称为真实液面观测器。
+该近似面向局部规划计算，并不替代高保真自由液面模型。其参数适用范围需要通过模型敏感性和外部液面观测检验。
 
-将两个方向组合后，液体状态为
-\begin{equation}
-  \xl =
-  \begin{bmatrix}
-    \eta_x & \dot{\eta}_x & \eta_y & \dot{\eta}_y
-  \end{bmatrix}^{\top}.
-\end{equation}
-增强状态为
+组合两个方向后，液体状态与增强状态分别为
 \begin{equation}
 \begin{aligned}
-  \xaug = [&p_x,\ p_y,\ \theta,\ v,\ s,\ \omega, \\
-           &\eta_x,\ \dot{\eta}_x,\ \eta_y,\ \dot{\eta}_y]^{\top}.
+  \xl &=
+  \begin{bmatrix}
+    \eta_x & \dot{\eta}_x & \eta_y & \dot{\eta}_y
+  \end{bmatrix}^{\top},\\
+  \xaug &=
+  \begin{bmatrix}
+    \xr^{\top} & \xl^{\top}
+  \end{bmatrix}^{\top}.
 \end{aligned}
 \label{eq:augmented_state}
 \end{equation}
-
-该增强状态的作用不仅是为目标函数提供晃液惩罚项，更重要的是使预测模型在低阶近似下包含液体动态记忆。若状态只包含底盘位姿、速度和路径进度，则未来液体响应仍依赖未显式表示的历史激励和当前液体相位；加入 $\eta_i$ 和 $\dot{\eta}_i$ 后，离散预测模型可以写成
+离散化后的联合预测模型记为
 \begin{equation}
-  \xaug_{k+1}=f_d(\xaug_k,\vu_k),
+  \xaug_{k+1}=f_d(\xaug_k,\vu_k).
+  \label{eq:augmented_discrete}
 \end{equation}
-即下一步增强状态由当前增强状态和当前控制决定。由此，晃液模态状态成为 OCP 状态空间的一部分，规划器能够预测当前液体相位在未来控制下如何演化，而不是仅通过控制平滑项间接处理晃动。
 
-\subsection{晃液感知 MPCC 问题构造}
-
-设参考路径由平面曲线
+为解释优化器内部的预测响应，本文使用模型代理量
 \begin{equation}
-  \vr(s)=
-  \begin{bmatrix}
-    r_x(s) & r_y(s)
-  \end{bmatrix}^{\top}
+  H_{\mathrm{model}}
+  =
+  c_h\sqrt{\eta_x^2+\eta_y^2}
+  +\mathbb{I}_{\mathrm{para}}\frac{R_c^2\omega^2}{4g},
+  \label{eq:h_model}
 \end{equation}
-给出，其切向角为 $\psi(s)$。定义单位切向和法向向量为
+其中 $c_h$ 为模态到高度量纲的映射系数，$R_c$ 为容器半径，$\mathbb{I}_{\mathrm{para}}$ 控制是否加入转弯准静态项。$H_{\mathrm{model}}$ 仅用于优化解释和模型诊断。真实液面响应由独立视觉或液位观测给出。
+
+\paragraph{预测含义}
+当目标函数或约束依赖传播后的 $\xl$ 时，联合 OCP 能够区分几何跟踪误差相近、但会引起不同相位相关液体响应的候选运动。不含液体状态的规划器无法在预测层显式表达这一差异。
+
+\subsection{晃液感知 \MPCC{} 构造}
+
+设参考路径为 $\vr(s)=[r_x(s),r_y(s)]^{\top}$，其切向角为 $\psi(s)$。单位切向量与法向量定义为
 \begin{equation}
 \begin{aligned}
-  \bm{t}(s) &= [\cos\psi(s),\ \sin\psi(s)]^{\top}, \\
+  \bm{t}(s) &= [\cos\psi(s),\ \sin\psi(s)]^{\top},\\
   \bm{n}(s) &= [-\sin\psi(s),\ \cos\psi(s)]^{\top}.
 \end{aligned}
 \end{equation}
-底盘当前位置与参考点的差为
+令 $\bm{e}(s)=[p_x,p_y]^{\top}-\vr(s)$，轮廓误差和滞后误差为
 \begin{equation}
-  \bm{e}(s)=
-  \begin{bmatrix}
-    p_x & p_y
-  \end{bmatrix}^{\top}-\vr(s).
-\end{equation}
-则轮廓误差和滞后误差分别定义为
-\begin{equation}
-  \ec = \bm{n}(s)^{\top}\bm{e}(s), \qquad
-  \el = \bm{t}(s)^{\top}\bm{e}(s).
+  \ec=\bm{n}(s)^{\top}\bm{e}(s),\qquad
+  \el=\bm{t}(s)^{\top}\bm{e}(s).
   \label{eq:contour_lag_error}
 \end{equation}
-其中 $\ec$ 描述相对参考路径的横向偏差，$\el$ 描述沿路径方向的进度偏差。通过同时优化 $\ec$、$\el$ 和 $v_s$，\MPCC{} 可以在路径跟踪和前进速度之间进行权衡。
+前者度量横向偏差，后者描述当前位置与路径参数之间的纵向不一致。
 
-将 \eqref{eq:robot_alpha_dynamics}--\eqref{eq:slosh_excitation} 离散化后，记预测时域长度为 $N$，离散时间步长为 $\Delta t$。每个控制周期求解如下 OCP：
+给定预测步数 $N$ 和采样间隔 $\Delta t$，每个控制周期求解
 \begin{equation}
 \begin{aligned}
-  \min_{\xaug_{0:N},\vu_{0:N-1}} \quad
-  & \sum_{k=0}^{N-1}\ell_k + \ell_N \\
+  \min_{\xaug_{0:N},\vu_{0:N-1}}\quad
+  &\sum_{k=0}^{N-1}\ell_k+\ell_N\\
   \mathrm{s.t.}\quad
-  & \xaug_0=\hat{\xaug}(t), \\
-  & \xaug_{k+1}=f_d(\xaug_k,\vu_k), \\
-  & \xaug_k\in\mathcal{X},\quad \vu_k\in\mathcal{U}, \\
-  & k=0,\ldots,N-1 .
+  &\xaug_0=\hat{\xaug}(t),\\
+  &\xaug_{k+1}=f_d(\xaug_k,\vu_k),\\
+  &\xaug_k\in\mathcal{X},\quad \vu_k\in\mathcal{U},\\
+  &k=0,\ldots,N-1 .
 \end{aligned}
 \label{eq:spmpc_ocp}
 \end{equation}
-其中 $f_d$ 为离散化后的增强动力学，$\hat{\xaug}(t)$ 为当前周期的增强状态初值。阶段代价和终端代价定义为
+阶段代价与终端代价取为
 \begin{equation}
 \begin{aligned}
-  \ell_k ={}& q_c e_{\mathrm{c},k}^{2}
-    + q_l e_{\mathrm{l},k}^{2}
-    - q_p v_{s,k}
-    + \|\vu_k\|_{R}^{2} \\
-  & + \|\vu_k-\vu_{k-1}\|_{S}^{2}
-    + \|\bm{x}_{l,k}\|_{Q_s}^{2}, \\
-  \ell_N ={}& q_{c,N}e_{\mathrm{c},N}^{2}
-    + q_{l,N}e_{\mathrm{l},N}^{2}
-    + \|\bm{x}_{l,N}\|_{Q_{s,N}}^{2} .
+  \ell_k={}&
+    q_c e_{\mathrm{c},k}^{2}
+    +q_l e_{\mathrm{l},k}^{2}
+    -q_p v_{s,k}
+    +q_v(v_k-v_{\mathrm{ref},k})^2\\
+  &+q_{v_s}(v_{s,k}-v_{\mathrm{ref},k})^2
+    +\|\vu_k\|_{R}^{2}\\
+  &+\|\vu_k-\vu_{k-1}\|_{S}^{2}
+    +\|\bm{x}_{l,k}\|_{Q_s}^{2},\\
+  \ell_N={}&
+    q_{c,N}e_{\mathrm{c},N}^{2}
+    +q_{l,N}e_{\mathrm{l},N}^{2}
+    +\|\bm{x}_{l,N}\|_{Q_{s,N}}^{2}.
 \end{aligned}
 \label{eq:spmpc_cost_terms}
 \end{equation}
-其中 $q_c$ 和 $q_l$ 分别惩罚轮廓误差与滞后误差，$q_p$ 奖励路径进度，$R$ 惩罚控制幅值，$S$ 惩罚控制变化，$Q_s$ 惩罚预测晃液状态。
 
-式 \eqref{eq:spmpc_cost_terms} 的关键新增部分是 $\|\bm{x}_{l,k}\|_{Q_s}^{2}$ 以及与其一致的晃液动力学约束。若只增加控制平滑惩罚，规划器只能倾向于选择较平滑的控制序列；而加入晃液状态后，规划器可以区分两条同样平滑但对当前残余晃动相位影响不同的局部运动。
+轮廓项和滞后项维持路径跟踪，$-q_pv_s$ 鼓励任务推进，速度参考项调节运行节奏。控制幅值与控制变化代价用于满足底盘执行需求。液体状态代价只有与 \cref{eq:slosh_modal_dynamics} 和 \cref{eq:augmented_discrete} 的传播同时存在时，才具有前瞻的相位相关含义。
 
-\begin{table}[t]
-  \centering
-  \small
-  \setlength{\tabcolsep}{4pt}
-  \caption{\SPMPC{} 目标函数各项的作用}
-  \label{tab:cost_story}
-  \begin{tabular}{p{0.24\linewidth} p{0.32\linewidth} p{0.32\linewidth}}
-    \toprule
-    代价项 & 优化作用 & 叙事作用 \\
-    \midrule
-    $q_c\ec^2$, $q_l\el^2$ & 约束底盘贴近参考路径 & 保持局部规划器的路径跟踪能力 \\
-    $-q_p v_s$ & 鼓励沿参考路径前进 & 防止简单通过停下来降低晃动 \\
-    $\|\vu\|_R^2$ & 限制控制幅值 & 保持底盘命令可执行 \\
-    $\|\Delta\vu\|_S^2$ & 平滑控制变化 & 覆盖普通平滑规划器的能力 \\
-    $\|\xl\|_{Q_s}^2$ & 惩罚预测晃液状态 & 本文新增的晃液感知规划项 \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+路径推进项不可省略。否则优化器可能通过长期低速甚至停止来减小预测晃液。因此，实验必须同时报告液面响应、到达时间和路径误差。
 
-OCP 中的状态和控制可行域主要包含底盘运动约束、控制输入约束和路径进度约束，例如
-\begin{align}
-  0 \leq v_k \leq v_{\max}, \qquad
-  |\omega_k| \leq \omega_{\max}, \\
-  |a_k| \leq a_{\max}, \qquad
-  |\alpha_k| \leq \alpha_{\max}, \qquad
-  0 \leq v_{s,k} \leq v_{s,\max} .
-  \label{eq:spmpc_bounds}
-\end{align}
-这些约束使优化结果能够转换为底盘可执行命令。
-
-若需要表达模型预测的液面风险，也可以加入晃液状态软约束，例如
+可行域包含底盘状态与控制边界，例如
 \begin{equation}
-  \eta_{x,k}^{2}+\eta_{y,k}^{2} \leq \eta_{\max}^{2} + \epsilon_k,
-  \qquad \epsilon_k\geq 0,
+\begin{gathered}
+  0\leq v_k\leq v_{\max},\qquad
+  |\omega_k|\leq\omega_{\max},\\
+  |a_k|\leq a_{\max},\qquad
+  |\alpha_k|\leq\alpha_{\max},\qquad
+  0\leq v_{s,k}\leq v_{s,\max}.
+\end{gathered}
+\label{eq:spmpc_bounds}
+\end{equation}
+
+液体状态软边界可以作为同一框架的扩展：
+\begin{equation}
+  \eta_{x,k}^{2}+\eta_{y,k}^{2}
+  \leq \eta_{\max}^{2}+\epsilon_k,\qquad \epsilon_k\geq0.
   \label{eq:slosh_soft_bound}
 \end{equation}
-并在目标函数中惩罚松弛变量 $\epsilon_k$。需要强调的是，\eqref{eq:slosh_soft_bound} 只是模型预测晃液边界；在没有真实液面反馈和形式化安全证明的情况下，它不构成严格防溢出保证。
+松弛量进入代价后可避免轻微模型误差直接造成不可行。该边界未作为当前核心实物消融的共同因素，也不构成无溢出保证。
 
-\subsection{滚动时域执行与消融变体}
+\subsection{预测晃液风险的速度参考整形}
 
-每个控制周期求解 \eqref{eq:spmpc_ocp} 后，规划器只执行第一帧优化结果。实际发送的速度命令可以由第一步预测状态或当前速度加控制增量得到，例如
+基础 \SPMPC{} 已在 OCP 内传播液体状态。对于预测风险较高的区段，还可以在求解前对名义速度参考进行软性整形。该模块只改变进入 \cref{eq:spmpc_cost_terms} 的 $v_{\mathrm{ref}}$，不覆盖求解后的底盘命令。
+
+给定离散缩放集合 $\mathcal{B}\subseteq[\beta_{\min},1]$，候选 $\beta$ 对应 $v_{\beta}=\beta v_{\mathrm{ref}}^{\mathrm{nom}}$。从当前液体状态出发进行 $N_g$ 步简化预测，记第 $k$ 步的晃液代理量为 $H_k(\beta)$。候选风险定义为
 \begin{equation}
-  v_{\mathrm{cmd}} = v_0 + a_0^{\star}\Delta t,
-  \qquad
-  \omega_{\mathrm{cmd}} = \omega_0 + \alpha_0^{\star}\Delta t,
+\begin{aligned}
+  \mathcal{B}&=\{\beta_0,\ldots,\beta_{M-1}\},\\
+  R(\beta)&=
+  \max_{0\leq k\leq N_g}
+  \frac{H_k(\beta)}{H_{\lim}} .
+\end{aligned}
+\label{eq:shaper_risk}
+\end{equation}
+其中 $H_{\lim}$ 是模型风险归一化阈值。可接受候选集合及原始缩放因子为
+\begin{equation}
+\begin{aligned}
+  \mathcal{B}_{\mathrm{feas}}
+  &=\{\beta\in\mathcal{B}\mid R(\beta)\leq\rho\},\\
+  \beta_{\mathrm{raw}}
+  &=
+  \begin{cases}
+    \max\mathcal{B}_{\mathrm{feas}},
+      &\mathcal{B}_{\mathrm{feas}}\neq\emptyset,\\
+    \beta_{\min},
+      &\mathcal{B}_{\mathrm{feas}}=\emptyset .
+  \end{cases}
+\end{aligned}
+\label{eq:shaper_selection}
+\end{equation}
+
+为抑制参考速度跳变，对 $\beta_{\mathrm{raw}}$ 施加非对称变化率限制。若上一周期缩放为 $\beta_f^{-}$，则
+\begin{equation}
+\begin{aligned}
+  \underline{\beta}
+  &=\max\{\beta_{\min},
+    \beta_f^{-}-\dot{\beta}_{\downarrow}\Delta t\},\\
+  \overline{\beta}
+  &=\min\{1,
+    \beta_f^{-}+\dot{\beta}_{\uparrow}\Delta t\},\\
+  \beta_f
+  &=\operatorname{clip}
+    (\beta_{\mathrm{raw}},\underline{\beta},\overline{\beta}),\\
+  v_{\mathrm{ref}}^{g}
+  &=\beta_f v_{\mathrm{ref}}^{\mathrm{nom}}.
+\end{aligned}
+\label{eq:shaper_filter}
+\end{equation}
+
+这一构造具有两个有限性质。其一，$v_{\mathrm{ref}}^{g}$ 不超过非负的名义参考。其二，当 $\mathcal{B}_{\mathrm{feas}}$ 非空时，$\beta_{\mathrm{raw}}$ 是离散集合中满足模型风险阈值的最大候选。变化率限制可能使本周期实际采用的 $\beta_f$ 高于 $\beta_{\mathrm{raw}}$；候选集合为空时，模块也只能退回 $\beta_{\min}$。因此，该模块属于预测参考整形，不提供递归可行性、稳定性或无溢出安全保证。
+
+\subsection{在线执行与消融定义}
+
+当前实现采用 acados 生成的 SQP-RTI 求解器，并通过显式 RK 积分传播增强状态。求解器使用上一周期解和参考路径信息构造热启动。求解完成后只执行首帧控制：
+\begin{equation}
+  v_{\mathrm{cmd}}=v_0+a_0^{\star}\Delta t,\qquad
+  \omega_{\mathrm{cmd}}=\omega_0+\alpha_0^{\star}\Delta t.
   \label{eq:cmd_generation}
 \end{equation}
-并经过底盘接口限幅后发布为 \texttt{/cmd\_vel}。随后，系统在下一周期用新的里程计和更新后的模型晃液状态重新初始化并再次求解。该滚动时域执行方式使 \SPMPC{} 保持普通局部规划器的在线闭环接口。
+命令经过统一底盘边界处理后发布。新的底盘状态与传播后的液体状态在下一周期重新初始化 OCP。
 
-本文方法天然支持模块拆解式消融。为验证“平滑运动不一定等于晃液感知运动”，后续实验使用同一 \MPCC{} 框架下的四类变体，如 \cref{tab:method_variants} 所示。
+核心消融采用两个实验因子，即液体状态与代价是否启用，以及控制平滑配置为弱或强。所有变体共享参考路径、底盘约束、预测时域、求解器、终止条件和初始状态口径。预测速度参考整形在该矩阵中关闭。
 
 \begin{table}[t]
   \centering
-  \small
-  \setlength{\tabcolsep}{4pt}
-  \caption{\SPMPC{} 内部消融变体}
+  \footnotesize
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{\SPMPC{} 的二维内部消融定义}
   \label{tab:method_variants}
-  \begin{tabular}{p{0.18\linewidth} p{0.22\linewidth} p{0.22\linewidth} p{0.26\linewidth}}
+  \begin{tabular}{p{0.17\linewidth} p{0.23\linewidth} p{0.18\linewidth} p{0.30\linewidth}}
     \toprule
-    变体 & 晃液模型/代价 & 平滑约束 & 实验问题 \\
+    变体 & 液体状态与代价 & 平滑配置 & 评价作用 \\
     \midrule
-    \texttt{B0} & 无 & 弱 & 基础 \MPCC{} 能否完成路径跟踪 \\
-    \texttt{B\_smooth} & 无 & 强 & 只增强控制平滑性是否足够防晃 \\
-    \texttt{B\_slosh} & 有 & 弱 & 显式晃液状态预测是否有独立价值 \\
-    \texttt{B\_ours} & 有 & 强 & 完整方法在跟踪、平滑和防晃之间的折中 \\
+    $\mathrm{B}_{0}$ & 关闭 & 弱 & 基础角加速度状态 \MPCC{} \\
+    $\mathrm{B}_{\mathrm{smooth}}$ & 关闭 & 强 & 仅增强运动平滑性 \\
+    $\mathrm{B}_{\mathrm{slosh}}$ & 启用 & 弱 & 弱平滑条件下引入液体预测 \\
+    $\mathrm{B}_{\mathrm{ours}}$ & 启用 & 强 & 完整基础 \SPMPC{}，不含参考整形 \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-其中，\texttt{B\_smooth} 与 \texttt{B\_slosh} 的对比用于分离“控制平滑性”和“液体状态预测”的作用；\texttt{B\_ours} 则对应本文主方法。外部普通局部规划器对比用于验证：即使一个规划器能够在线生成可执行且平滑的运动，只要它不传播液体动态记忆，就仍可能在开口液体运输中产生较大的残余晃动。
+$\mathrm{B}_{0}$ 与 $\mathrm{B}_{\mathrm{smooth}}$ 只改变平滑配置，$\mathrm{B}_{0}$ 与 $\mathrm{B}_{\mathrm{slosh}}$ 只改变液体机制。强平滑条件下，液体预测的增量作用由 $\mathrm{B}_{\mathrm{smooth}}$ 与 $\mathrm{B}_{\mathrm{ours}}$ 给出；含液体模型时，平滑配置的影响由 $\mathrm{B}_{\mathrm{slosh}}$ 与 $\mathrm{B}_{\mathrm{ours}}$ 判断。
+
+$\mathrm{B}_{\mathrm{smooth}}$ 与 $\mathrm{B}_{\mathrm{slosh}}$ 位于二维矩阵的对角线，两项因素同时变化。该比较能够检验弱平滑的晃液感知规划是否仍优于强平滑基线，但不能单独估计液体预测的纯主效应。若评价预测参考整形，应在同一 $\mathrm{B}_{\mathrm{ours}}$ 参数下另行比较关闭与启用两种设置。
