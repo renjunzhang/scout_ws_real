@@ -3,38 +3,100 @@
 
 \subsection{Problem Definition and Architecture}
 
-\SMPCC{} is an online receding-horizon local motion planner and controller that optimizes robot motion and virtual path progress while propagating liquid dynamics along a prescribed geometrically feasible reference path. At control instant $t_j$, it receives the measured base state, the accepted path progress, the previous control, and an internally propagated liquid modal state. It predicts the coupled response over a finite horizon and applies the first optimized action.
+\SMPCC{} is an online receding-horizon local motion planner and controller that jointly optimizes robot motion and virtual path progress while predicting liquid dynamics along a prescribed geometrically feasible path. At control instant $t_j$, the optimizer is initialized with the measured base state, guarded path progress, previous accepted control, and an internally propagated liquid modal state. It predicts the coupled robot--liquid response over a finite horizon and returns the first optimized action.
 
-The method assumes that a geometrically feasible reference path has already been supplied. Occupancy-grid reasoning, dynamic-obstacle prediction, collision-corridor construction, and global route selection are outside the present OCP. The reference governor and modal hard cap are optional liquid-aware extensions and are disabled in the core RQ1--RQ4 comparisons. Any delay predictor, terminal controller, command gate, or command-rate limiter used in physical deployment is frozen before formal acquisition, applied identically to all three methods, and reported separately from the core \SMPCC{} formulation.
+The method assumes that the reference path has already been checked for geometric feasibility. Occupancy-grid reasoning, dynamic-obstacle prediction, collision-corridor construction, and global route selection are outside the present OCP. The core method comprises online state construction, the augmented OCP, and its raw first-action output. A delay predictor, terminal controller, command gate, command-rate limiter, and fallback policy belong to a shared deployment layer. When enabled in physical trials, these components are frozen before formal acquisition, applied identically to all compared methods, and audited separately from the core formulation. The reference governor and modal hard cap are optional liquid-aware extensions and are disabled in the core RQ1--RQ4 comparisons.
 
 The defining mechanism is liquid dynamic memory. Two candidate motions with similar path error and control regularity can produce different future liquid responses when the current modal displacement, velocity, or phase differs. \SMPCC{} represents this dependence by augmenting the \MPCC{} prediction state with propagated liquid dynamics. \Cref{fig:core_architecture} summarizes the resulting control loop.
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
-  \resizebox{\linewidth}{!}{%
   \begin{tikzpicture}[
-    font=\footnotesize,
-    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=1.65cm, minimum height=0.64cm, align=center},
-    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=2.15cm, minimum height=0.82cm, align=center, font=\footnotesize\bfseries},
-    arr/.style={-{Latex[length=1.6mm]}, line width=0.5pt, draw=spmpcblue}
+    node distance=12mm,
+    external/.style={
+      draw=spmpcgray, rounded corners=2pt, line width=0.6pt,
+      fill=spmpclight, text width=3.0cm, minimum height=1.55cm,
+      align=center, font=\small
+    },
+    core/.style={
+      draw=spmpcblue, rounded corners=2pt, line width=0.9pt,
+      fill=white, text width=3.35cm, minimum height=1.55cm,
+      align=center, font=\small
+    },
+    action/.style={
+      draw=spmpcblue, rounded corners=2pt, line width=0.9pt,
+      fill=white, text width=2.75cm, minimum height=1.55cm,
+      align=center, font=\small
+    },
+    lower/.style={
+      draw=spmpcgray, rounded corners=2pt, line width=0.6pt,
+      fill=spmpclight, text width=3.15cm, minimum height=1.30cm,
+      align=center, font=\small
+    },
+    arr/.style={
+      -{Latex[length=2.0mm]}, line width=0.7pt, draw=spmpcblue
+    },
+    feedback/.style={
+      -{Latex[length=2.0mm]}, line width=0.6pt, draw=spmpcgray
+    }
   ]
-    \node[block] (odom) at (0,1.05) {Odometry};
-    \node[block] (path) at (0,-0.05) {Geometrically feasible\\reference path};
-    \node[block] (prev) at (0,-1.15) {Previous\\control};
-    \node[core] (prep) at (2.55,0.45) {Guarded projection,\\local path model, and\\liquid-state propagation};
-    \node[core] (ocp) at (5.55,0.05) {Slosh-augmented\\alpha-state \MPCC{} OCP};
-    \node[block, fill=white] (cmd) at (8.15,0.05) {First optimized\\base command};
+    \node[external] (input) {
+      \textbf{Online inputs}\\[1mm]
+      \footnotesize prescribed feasible path\\
+      odometry stream\\
+      previous accepted control
+    };
+    \node[core, right=of input] (prep) {
+      \textbf{State and path construction}\\[1mm]
+      \footnotesize guarded path projection\\
+      local path and curvature model\\
+      odometry-driven liquid propagation
+    };
+    \node[core, right=of prep] (ocp) {
+      \textbf{Slosh-aware MPCC}\\[1mm]
+      \footnotesize augmented robot--liquid prediction\\
+      tracking, progress, and slosh costs\\
+      SQP-RTI solution
+    };
+    \node[action, right=of ocp] (action) {
+      \textbf{First action and raw command}\\[1mm]
+      \footnotesize $a_{0\mid j}^{\star}$,
+      $\alpha_{0\mid j}^{\star}$,
+      $v_{s,0\mid j}^{\star}$\\
+      $\bm c_{\mathrm{solver},j}$
+    };
+    \node[lower, below=11mm of action] (deploy) {
+      \textbf{Shared execution layer}\\[1mm]
+      \footnotesize command limits and rate handling\\
+      gate and fallback
+    };
+    \node[lower, left=18mm of deploy] (plant) {
+      \textbf{Mobile base and open liquid}\\[1mm]
+      \footnotesize executed motion\\
+      physical liquid response
+    };
+    \node[lower, left=18mm of plant] (feedbacknode) {
+      \textbf{Feedback update}\\[1mm]
+      \footnotesize new odometry\\
+      accepted previous control
+    };
 
-    \draw[arr] (odom.east) -- (prep.west);
-    \draw[arr] (path.east) -- (prep.west);
+    \draw[arr] (input.east) -- (prep.west);
     \draw[arr] (prep.east) -- (ocp.west);
-    \draw[arr] (prev.east) -| (ocp.south west);
-    \draw[arr] (ocp.east) -- (cmd.west);
-    \draw[arr, rounded corners=6pt] (cmd.south) |- (5.55,-1.85) -| node[pos=0.25, below, font=\scriptsize, text=spmpcgray] {receding-horizon update} (prep.south east);
-  \end{tikzpicture}}
-  \caption{Core \SMPCC{} architecture. The method includes path projection, liquid-state propagation, the augmented OCP, SQP-RTI solution, and first-action output.}
+    \draw[arr] (ocp.east) -- (action.west);
+    \draw[arr] (action.south) -- (deploy.north);
+    \draw[feedback] (deploy.west) -- (plant.east);
+    \draw[feedback] (plant.west) -- (feedbacknode.east);
+    \draw[feedback] (feedbacknode.west) -- ++(-18mm,0)
+      -| ([xshift=-8mm]input.west) -- (input.west);
+  \end{tikzpicture}
+  \caption{Closed-loop \SMPCC{} architecture. State construction, the
+  slosh-aware OCP, and first-action output form the core method. The optimized
+  action passes through the shared execution layer before driving the mobile
+  base and liquid. The lower row separates execution, the physical plant, and
+  the odometry/control-memory update that closes the receding-horizon loop.}
   \label{fig:core_architecture}
-\end{figure}
+\end{figure*}
 
 The control-cycle index is $j$, and $k\mid j$ denotes prediction node $k$ formed at cycle $j$. Measured and propagated online quantities carry index $j$; OCP variables carry index $k\mid j$.
 
@@ -133,7 +195,7 @@ The joint dynamics used inside the OCP are integrated by explicit Runge--Kutta (
 
 \subsubsection{Online liquid-state propagation}
 
-At the beginning of a formal physical trial, the modal state is initialized to zero only after the base is stationary and the calibrated visual response has satisfied the pre-specified rest criterion. It is then propagated throughout the trial without reset. RQ4 is the sole exception: its controlled planning study replaces the zero initialization with the phase states specified in \cref{eq:phase_initial_states}. Consecutive odometry samples provide
+For physical operation, the modal state is initialized to zero only after the base is stationary and the calibrated visual response satisfies the pre-specified rest criterion. It is then propagated throughout the trial without being reset at successive control cycles. Controlled mechanism studies can instead inject frozen nonzero initial states, as specified in \cref{sec:rq4}. Consecutive odometry samples provide
 \[
   \hat a_{x,j}=\frac{v_j-v_{j-1}}{\Delta t_{\mathrm{odom}}},
   \qquad
@@ -235,6 +297,16 @@ The slosh term is
 \end{equation}
 No additional factor of $c_h$ is applied inside this cost. The physical modal normalizers are supplied at every shooting stage. The terminal cost retains the tracking and slosh terms but omits progress reward and control regularization.
 
+The three experimental controllers are instantiated from this common OCP
+template. Baseline \MPCC{} omits the propagated liquid state and sets
+$w_\eta=w_{\dot\eta}=0$. Smooth-only \MPCC{} uses the same liquid-off
+formulation and changes only the pre-frozen generic smoothing weights.
+\SMPCC{} retains the nominal non-liquid weights, propagates $\bm x_\ell$, and
+uses positive modal displacement and velocity weights. The horizon, robot
+model, path representation, constraints, numerical solver, and shared execution
+layer remain identical across the three variants; \cref{tab:core_variants}
+summarizes the frozen mapping used in the experiments.
+
 The OCP bounds are
 \begin{equation}
 \begin{gathered}
@@ -250,19 +322,37 @@ The nominal OCP limits are $v_{\max}=0.8\,\mathrm{m/s}$, $\omega_{\max}=1.2\,\ma
 
 \subsection{Online Solution and Executed Command}
 
-The OCP is solved with an acados-generated SQP-RTI scheme, one real-time iteration per control cycle, partial-condensing HPIPM, and four-stage ERK integration. Only the first optimized control is used:
+At the $30\,\mathrm{Hz}$ control rate, the $N=60$, $T_f=2.0\,\mathrm{s}$ OCP
+is solved with an acados-generated SQP-RTI scheme, one real-time iteration per
+cycle, partial-condensing HPIPM, four-stage ERK integration, and warm starting
+from the preceding cycle. The first optimized control defines the raw solver
+command
 \begin{equation}
 \begin{aligned}
-  v_{\mathrm{cmd},j}^{\mathrm{OCP}}
+  v_{\mathrm{solver},j}
   &=\operatorname{clip}(v_j+a_{0\mid j}^\star\Delta t,0,v_{\max}),\\
-  \omega_{\mathrm{cmd},j}^{\mathrm{OCP}}
+  \omega_{\mathrm{solver},j}
   &=\operatorname{clip}(\omega_j+\alpha_{0\mid j}^\star\Delta t,
   -\omega_{\max},\omega_{\max}).
 \end{aligned}
 \label{eq:first_action}
 \end{equation}
 
-The OCP limits in \cref{eq:ocp_bounds} are distinct from downstream execution limits. The formal experiment metadata reports the deployed command bounds, terminal slowdown and capture logic, acceleration or rate limiting, solver-failure response, and fallback action. These shared settings are frozen before formal acquisition, and control metrics are computed from the executed command rather than the pre-intervention OCP output. The archived software revision used for formal acquisition is recorded with the reproducibility metadata.
+Solver status is checked before the raw command enters the deployment layer.
+The frozen configuration disables previous-solution command fallback and uses
+the shared primitive fallback on a non-success status; the exact status-to-action
+mapping and fallback command are recorded with the formal configuration. A
+failed solver cycle remains a method failure in the experimental analysis and
+is not removed or replaced.
+
+This raw command is not assumed to be identical to the command received by the base. Let $\bm c_{\mathrm{solver},j}=[v_{\mathrm{solver},j},\omega_{\mathrm{solver},j}]^\top$, let $\mathcal G_j$ denote the frozen terminal and safety-gate logic, and let $\mathcal L_j$ denote the frozen rate and rate-of-change limiting logic. The physical command chain is recorded as
+\begin{equation}
+  \bm c_{\mathrm{post},j}=\mathcal G_j(\bm c_{\mathrm{solver},j}),
+  \qquad
+  \bm c_{\mathrm{pub},j}=\mathcal L_j(\bm c_{\mathrm{post},j}),
+  \label{eq:command_chain}
+\end{equation}
+where $\bm c_{\mathrm{pub},j}$ is the final published velocity command. The OCP limits in \cref{eq:ocp_bounds}, raw solver-command limits, gate output, and published-command limits are therefore reported as separate quantities. Formal experiment metadata also records terminal capture logic, solver-failure handling, fallback actions, and every intervention flag. Motion and control metrics are computed from odometry and the published command, whereas the raw solver output is used only to analyze the optimizer. The command-difference tolerances and intervention ratio $r_{\mathrm{int}}$ are defined in \cref{eq:intervention_ratio}. The archived software revision used for formal acquisition is included in the reproducibility metadata.
 
 The reference governor and modal hard cap are optional liquid-aware extensions.
 The delay predictor, terminal controller, command gate, and command-rate limiter
