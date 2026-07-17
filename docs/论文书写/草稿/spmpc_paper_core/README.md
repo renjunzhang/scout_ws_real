@@ -36,21 +36,22 @@ support them.
 The main text uses only the modal prediction \(H_{\mathrm{modal}}\) and the RGB
 observation \(H_{\mathrm{vis}}\). Parabolic diagnostic augmentation is disabled
 for the formal protocol. Full weights, solver settings, the experimental
-metadata freeze checklist, development-only records, sensitivity plans, and
-detailed runtime tables are stored in supplementary/supplementary_material.tex
-and are not included by main.tex.
+metadata freeze checklist, the synchronized-signal checklist, development-only
+records, sensitivity plans, and detailed runtime tables are stored in
+supplementary/supplementary_material.tex and are not included by main.tex.
 
-The physical design is frozen as one of three evidence packages before formal
-outcomes are inspected. At \(n=8\), the minimum mechanism package contains 40
-trials, the two-path package contains 64 trials, and the full RQ1--RQ4 package
-contains 88 trials. Only the full package supports the container-transfer
-claim; the package cannot be expanded after inspecting formal outcomes.
+The formal physical design uses \(n=8\) randomized blocks and 88 trials:
+24 low-risk \(C_1\) trials, 48 high-risk \(C_1/C_2\) super-block trials, and
+16 high-risk completion-time-matched trials. The optional \(C_2\) mismatch
+group adds eight trials but remains supporting evidence. Controlled
+container-parameter and liquid-phase planning comparisons are computational
+studies and add no physical trials.
 
 The main comparison strategy uses matched internal MPCC variants. No broad
 ranking against obstacle-oriented local planners is claimed for the current
 fixed-path setting.
 
-Before formal acquisition, the numerical controller weights, identified
+Before formal acquisition, the numerical controller weights, configured
 damping ratio, liquid-state initialization rule, executed-command limits, and
 shared deployment settings must be frozen in the supplementary configuration.
 The primary estimand and analysis windows are already fixed in the experiment

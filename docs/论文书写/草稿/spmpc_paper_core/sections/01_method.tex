@@ -9,32 +9,93 @@ The method assumes that a geometrically feasible reference path has already been
 
 The defining mechanism is liquid dynamic memory. Two candidate motions with similar path error and control regularity can produce different future liquid responses when the current modal displacement, velocity, or phase differs. \SMPCC{} represents this dependence by augmenting the \MPCC{} prediction state with propagated liquid dynamics. \Cref{fig:core_architecture} summarizes the resulting control loop.
 
-\begin{figure}[t]
+\begin{figure*}[t]
   \centering
-  \resizebox{\linewidth}{!}{%
   \begin{tikzpicture}[
-    font=\footnotesize,
-    block/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=1.65cm, minimum height=0.64cm, align=center},
-    core/.style={draw=spmpcblue, rounded corners=2pt, line width=0.7pt, fill=white, minimum width=2.15cm, minimum height=0.82cm, align=center, font=\footnotesize\bfseries},
-    arr/.style={-{Latex[length=1.6mm]}, line width=0.5pt, draw=spmpcblue}
+    node distance=12mm,
+    external/.style={
+      draw=spmpcgray, rounded corners=2pt, line width=0.6pt,
+      fill=spmpclight, text width=3.0cm, minimum height=1.55cm,
+      align=center, font=\small
+    },
+    core/.style={
+      draw=spmpcblue, rounded corners=2pt, line width=0.9pt,
+      fill=white, text width=3.35cm, minimum height=1.55cm,
+      align=center, font=\small
+    },
+    action/.style={
+      draw=spmpcblue, rounded corners=2pt, line width=0.9pt,
+      fill=white, text width=2.75cm, minimum height=1.55cm,
+      align=center, font=\small
+    },
+    lower/.style={
+      draw=spmpcgray, rounded corners=2pt, line width=0.6pt,
+      fill=spmpclight, text width=3.15cm, minimum height=1.30cm,
+      align=center, font=\small
+    },
+    arr/.style={
+      -{Latex[length=2.0mm]}, line width=0.7pt, draw=spmpcblue
+    },
+    feedback/.style={
+      -{Latex[length=2.0mm]}, line width=0.6pt, draw=spmpcgray
+    }
   ]
-    \node[block] (odom) at (0,1.05) {Odometry};
-    \node[block] (path) at (0,-0.05) {Geometrically feasible\\reference path};
-    \node[block] (prev) at (0,-1.15) {Previous\\control};
-    \node[core] (prep) at (2.55,0.45) {Guarded projection,\\local path model, and\\liquid-state propagation};
-    \node[core] (ocp) at (5.55,0.05) {Slosh-augmented\\alpha-state \MPCC{} OCP};
-    \node[block, fill=white] (cmd) at (8.15,0.05) {First optimized\\base command};
+    \node[external] (input) {
+      \textbf{Online inputs}\\[1mm]
+      \footnotesize prescribed safe path\\
+      odometry stream\\
+      previous accepted control
+    };
+    \node[core, right=of input] (prep) {
+      \textbf{State and path construction}\\[1mm]
+      \footnotesize guarded path projection\\
+      local path and curvature model\\
+      odometry-driven liquid propagation
+    };
+    \node[core, right=of prep] (ocp) {
+      \textbf{Slosh-aware MPCC}\\[1mm]
+      \footnotesize augmented robot--liquid prediction\\
+      tracking, progress, and slosh costs\\
+      SQP-RTI solution
+    };
+    \node[action, right=of ocp] (action) {
+      \textbf{First optimized action}\\[1mm]
+      \footnotesize $a_{0\mid j}^{\star}$,
+      $\alpha_{0\mid j}^{\star}$,
+      $v_{s,0\mid j}^{\star}$
+    };
+    \node[lower, below=11mm of action] (deploy) {
+      \textbf{Shared execution layer}\\[1mm]
+      \footnotesize command limits and rate handling\\
+      gate and fallback
+    };
+    \node[lower, left=18mm of deploy] (plant) {
+      \textbf{Mobile base and open liquid}\\[1mm]
+      \footnotesize executed motion\\
+      physical liquid response
+    };
+    \node[lower, left=18mm of plant] (feedbacknode) {
+      \textbf{Feedback update}\\[1mm]
+      \footnotesize new odometry\\
+      accepted previous control
+    };
 
-    \draw[arr] (odom.east) -- (prep.west);
-    \draw[arr] (path.east) -- (prep.west);
+    \draw[arr] (input.east) -- (prep.west);
     \draw[arr] (prep.east) -- (ocp.west);
-    \draw[arr] (prev.east) -| (ocp.south west);
-    \draw[arr] (ocp.east) -- (cmd.west);
-    \draw[arr, rounded corners=6pt] (cmd.south) |- (5.55,-1.85) -| node[pos=0.25, below, font=\scriptsize, text=spmpcgray] {receding-horizon update} (prep.south east);
-  \end{tikzpicture}}
-  \caption{Core \SMPCC{} architecture. The method includes path projection, liquid-state propagation, the augmented OCP, SQP-RTI solution, and first-action output.}
+    \draw[arr] (ocp.east) -- (action.west);
+    \draw[arr] (action.south) -- (deploy.north);
+    \draw[feedback] (deploy.west) -- (plant.east);
+    \draw[feedback] (plant.west) -- (feedbacknode.east);
+    \draw[feedback] (feedbacknode.west) -- ++(-18mm,0)
+      -| ([xshift=-8mm]input.west) -- (input.west);
+  \end{tikzpicture}
+  \caption{Closed-loop \SMPCC{} architecture. State construction, the
+  slosh-aware OCP, and first-action output form the core method. The optimized
+  action passes through the shared execution layer before driving the mobile
+  base and liquid. The lower row separates execution, the physical plant, and
+  the odometry/control-memory update that closes the receding-horizon loop.}
   \label{fig:core_architecture}
-\end{figure}
+\end{figure*}
 
 The control-cycle index is $j$, and $k\mid j$ denotes prediction node $k$ formed at cycle $j$. Measured and propagated online quantities carry index $j$; OCP variables carry index $k\mid j$.
 
