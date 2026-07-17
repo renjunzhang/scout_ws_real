@@ -1,6 +1,32 @@
 % !TEX program = xelatex
-% 双栏预览入口：用于估算正式论文篇幅，不作为主写作稿。
-\documentclass[10pt,a4paper,twocolumn]{ctexart}
+% RAL/IEEE 风格双栏预览入口：用于估算正式论文篇幅，不作为主写作稿。
+% 注意：当前仍为中文草稿；最终投稿需使用 RAL 官方模板与英文正文重新排版。
+\documentclass[letterpaper,10pt,journal,twoside]{IEEEtran}
+
+\IEEEoverridecommandlockouts
+
+% =========================
+% 字体与中文支持
+% =========================
+% Overleaf 兼容：使用 TeX Live 自带字体文件，不依赖本机 /usr/share/fonts 路径。
+% Overleaf 中请将编译器设置为 XeLaTeX。
+\usepackage{fontspec}
+\setmainfont{texgyretermes}[
+  Extension=.otf,
+  UprightFont=*-regular,
+  BoldFont=*-bold,
+  ItalicFont=*-italic,
+  BoldItalicFont=*-bolditalic
+]
+\setsansfont{texgyreheros}[
+  Extension=.otf,
+  UprightFont=*-regular,
+  BoldFont=*-bold,
+  ItalicFont=*-italic,
+  BoldItalicFont=*-bolditalic
+]
+\setmonofont{lmmono10-regular.otf}
+\usepackage[UTF8,fontset=fandol,scheme=plain]{ctex}
 
 % =========================
 % 基础宏包
@@ -12,25 +38,19 @@
 \usepackage{booktabs}
 \usepackage{multirow}
 \usepackage{array}
+\usepackage{placeins}
 \usepackage{siunitx}
 \usepackage{xcolor}
-\usepackage{geometry}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,matrix,shapes.geometric}
 \usepackage{hyperref}
 \usepackage[nameinlink]{cleveref}
-
-% =========================
-% 页面设置：近似会议论文双栏预览
-% =========================
-\geometry{
-  left=1.7cm,
-  right=1.7cm,
-  top=1.9cm,
-  bottom=2.0cm
-}
-
-\linespread{1.03}
-\setlength{\columnsep}{0.65cm}
-\setlength{\parskip}{0pt}
+\crefname{figure}{图}{图}
+\Crefname{figure}{图}{图}
+\crefname{table}{表}{表}
+\Crefname{table}{表}{表}
+\crefname{equation}{式}{式}
+\Crefname{equation}{式}{式}
 
 % =========================
 % 图片路径
@@ -70,28 +90,17 @@
 \newcommand{\dd}{\mathrm{d}}
 \newcommand{\R}{\mathbb{R}}
 
-% 双栏预览占位图：比单栏版本更紧凑。
-\newcommand{\figplaceholder}[2][0.92\linewidth]{%
-  \fbox{%
-    \begin{minipage}[c][0.15\textheight][c]{#1}
-      \centering\color{gray}#2\\[0.4em]
-      \small 后续插图占位
-    \end{minipage}%
-  }%
-}
-
-% =========================
-% 中文图表名称
-% =========================
-\renewcommand{\figurename}{图}
-\renewcommand{\tablename}{表}
+\definecolor{spmpcblue}{RGB}{36,99,180}
+\definecolor{spmpclight}{RGB}{235,243,255}
+\definecolor{spmpcorange}{RGB}{220,120,40}
+\definecolor{spmpcgray}{RGB}{90,90,90}
 
 % =========================
 % 标题信息
 % =========================
 \title{\SPMPC{}：面向移动底盘开口液体运输的晃液感知模型预测轮廓控制方法}
-\author{作者姓名}
-\date{\today}
+\author{张仁军}
+\date{}
 
 \begin{document}
 
@@ -101,12 +110,12 @@
 % 摘要
 % =========================
 \begin{abstract}
-移动底盘在运输开口液体容器时，其加速、制动和转弯运动会激发液体晃动，从而影响运输稳定性并增加溢出风险。与普通固体负载不同，液体晃动具有动态记忆，其未来响应不仅取决于瞬时底盘加速度，也取决于当前液体模态位移和模态速度。现有移动机器人局部规划器能够在线生成可执行且平滑的底盘命令，但通常不传播液体动态状态；已有防晃方法虽然显式考虑液体模型，但多位于离线轨迹优化、给定路径速度剖面、输入整形、给定轨迹跟踪控制或特殊平台控制层。为连接这两类研究，本文提出 \SPMPC{}，一种面向移动底盘开口液体运输的晃液感知 \MPCC{} 在线局部规划器。该方法将低阶晃液模态状态并入移动底盘增强状态模型，在滚动时域内联合优化路径轮廓误差、滞后误差、路径进度、控制平滑性和预测晃液响应，并将第一帧优化结果转换为底盘速度命令执行。通过普通局部规划器对比、移动底盘防晃近邻对比和内部消融实验，本文验证显式晃液状态预测相对于仅平滑控制在降低液体晃动方面的作用，并分析其路径跟踪、运行效率和实时求解性能。
-
-\vspace{0.5em}
-\noindent\textbf{关键词：}
-移动机器人；开口液体运输；液体晃动；晃液感知局部规划；模型预测轮廓控制；滚动时域规划
+移动底盘在运输开口液体容器时，其加速、制动和转弯运动会激发液体晃动，从而影响运输稳定性并增加溢出风险。与普通固体负载不同，液体晃动具有动态记忆，其未来响应不仅取决于瞬时底盘加速度，也取决于当前液体模态位移和模态速度。现有移动机器人局部规划器能够在线生成可执行且平滑的底盘命令，但通常不传播液体动态状态；已有防晃方法虽然显式考虑液体模型，但多位于离线轨迹优化、给定路径速度剖面、输入整形、给定轨迹跟踪控制或特殊平台控制层。为连接这两类研究，本文提出 \SPMPC{}，一种面向移动底盘开口液体运输的晃液感知 \MPCC{} 在线局部规划器。该方法将低阶晃液模态状态并入移动底盘增强状态模型，在滚动时域内联合优化路径轮廓误差、滞后误差、路径进度、控制平滑性和预测晃液响应，并引入有限时域 Slosh-risk Reference Governor，在 \MPCC{} 求解前软性收缩速度参考而不直接改写底盘速度命令。本文设计内部消融、普通局部规划器对比、移动底盘防晃近邻对比和模型—外部液面一致性分析，用于评估显式晃液状态预测相对于仅平滑控制的作用，并为预测参考适配保留同参数消融口径；其中真实液面结论需由外部视觉或液位观测支持。
 \end{abstract}
+
+\begin{IEEEkeywords}
+移动机器人；开口液体运输；液体晃动；晃液感知局部规划；模型预测轮廓控制；滚动时域规划
+\end{IEEEkeywords}
 
 % =========================
 % 正文框架
@@ -115,7 +124,6 @@
 \input{sections/02_related_work}
 \input{sections/03_method}
 \input{sections/04_experiments}
-\input{sections/05_discussion}
 \input{sections/05_conclusion}
 
 % =========================

@@ -1,0 +1,195 @@
+% Supplementary-material fragment. This file is intentionally not included by
+% main.tex so that spmpc_paper_core remains a two-section main-text draft.
+
+\section{Solver and Controller Configuration}
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{Numerical solver configuration.}
+  \begin{tabular}{@{}ll@{}}
+    \toprule
+    Item & Setting \\
+    \midrule
+    Control frequency & $30\,\mathrm{Hz}$ \\
+    Horizon & $N=60$, $T_f=2.0\,\mathrm{s}$ \\
+    NLP method & SQP-RTI, one iteration per cycle \\
+    QP solver & Partial-condensing HPIPM \\
+    Integration & ERK, four stages, one step per interval \\
+    Hessian & Exact \\
+    Regularization & PROJECT; Levenberg--Marquardt $10^{-3}$ \\
+    Warm start & Enabled \\
+    Solver fallback & Previous solution off; primitive fallback on \\
+    Pre-deployment command clamp & $0\leq v_{\mathrm{cmd}}\leq0.8\,\mathrm{m/s}$; $|\omega_{\mathrm{cmd}}|\leq1.2\,\mathrm{rad/s}$ \\
+    Terminal goal tolerance & $0.20\,\mathrm{m}$ \\
+    Core liquid-aware extensions & Reference governor off; modal hard cap off \\
+    Shared downstream intervention & Terminal, gate, delay, and rate settings \Pending \\
+    Damping ratio & $\zeta$ \Pending; copied from the frozen liquid-model configuration \\
+    Trial liquid-state initialization & Zero after the formal rest criterion \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+All entries marked \Pending{} must be replaced from the archived formal
+configuration before the first randomized block is acquired. Values are not
+selected or revised using formal RGB outcomes.
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \caption{Controller weights and normalizers to be copied from the frozen formal configuration.}
+  \begin{tabular}{@{}lccccl@{}}
+    \toprule
+    Weight & Baseline & Smooth-only & \SMPCC{} & Normalizer & Role \\
+    \midrule
+    $w_c$ & \Pending & \Pending & \Pending & $e_{c,\mathrm{ref}}$ & Contour tracking \\
+    $w_l$ & \Pending & \Pending & \Pending & $e_{l,\mathrm{ref}}$ & Lag tracking \\
+    $w_p$ & \Pending & \Pending & \Pending & $v_{s,\max}$ & Progress reward \\
+    $w_v$ & \Pending & \Pending & \Pending & $v_{\max}$ & Base-speed tracking \\
+    $w_{v_s}$ & \Pending & \Pending & \Pending & $v_{s,\max}$ & Progress-speed tracking \\
+    $w_a$ & \Pending & \Pending & \Pending & $a_{\max}$ & Longitudinal control \\
+    $w_\omega$ & \Pending & \Pending & \Pending & $\omega_{\max}$ & Angular-rate regularization \\
+    $w_\alpha$ & \Pending & \Pending & \Pending & $\alpha_{\max}$ & Angular acceleration \\
+    $w_{\Delta a}$ & \Pending & \Pending & \Pending & $a_{\max}$ & Cross-cycle continuity \\
+    $w_{\Delta v_s}$ & \Pending & \Pending & \Pending & $v_{s,\max}$ & Progress continuity \\
+    $\gamma_{\mathrm{ac}}$ & $8$ & $8$ & $8$ & -- & One-sided anti-creep scale \\
+    $w_\eta$ & $0$ & $0$ & \Pending & $\eta_{\mathrm{ref}}$ & Modal displacement \\
+    $w_{\dot\eta}$ & $0$ & $0$ & \Pending & $\dot\eta_{\mathrm{ref}}$ & Modal velocity \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\section{Experimental Metadata Freeze Checklist}
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{4pt}
+  \renewcommand{\arraystretch}{1.08}
+  \caption{Experimental apparatus, path, container, and deployment metadata to be frozen before formal acquisition.}
+  \label{tab:supp_experimental_setup}
+  \begin{tabular}{@{}p{0.20\linewidth}p{0.37\linewidth}p{0.35\linewidth}@{}}
+    \toprule
+    Item & Nominal setting & Formal record \\
+    \midrule
+    Mobile base & Scout Mini; velocity command interface & Payload and center-of-mass configuration \Pending \\
+    Low-risk path & Fixed prescribed path & Geometry and length \Pending \\
+    High-risk path & Sustained curvature changes & Geometry and length \Pending \\
+    Container $C_1$ & $R_c=18.5\,\mathrm{mm}$, $h=58\,\mathrm{mm}$ & Height, freeboard, volume, mass, $\omega_1$, $c_h$ \Pending \\
+    Container $C_2$ & Different radius and/or fill depth & All geometry; $\omega_1$ shift at least 15--20\% \Pending \\
+    Camera & RealSense RGB & Model, resolution, frame rate, pose, and ROI \Pending \\
+    RGB processing & Calibrated liquid-envelope extraction & Algorithm, filtering, missing-frame rule, and calibration error \Pending \\
+    Synchronization & RGB, odometry, command, and solver logs & Timestamp alignment procedure \Pending \\
+    Trial definition & 10\%--90\% motion window plus post-arrival interval & Rest threshold, success, arrival, and residual-window definitions \Pending \\
+    OCP limits & $v_{\max}=0.8$, $\omega_{\max}=1.2$, $a_{\max}=0.6$, $\alpha_{\max}=1.2$ & SI units as defined in the main paper \\
+    Executed command limits & Shared across methods & $v_{\mathrm{cmd,max}}$, $\omega_{\mathrm{cmd,max}}$, rate limiting \Pending \\
+    Deployment layer & Shared across methods & Terminal logic, gate state, solver failure, and fallback \Pending \\
+    Software revision & Version-controlled implementation & Archived formal-acquisition revision \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\section{Formal Experiment Matrix}
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \caption{Pre-specified physical evidence packages for $n$ randomized blocks.}
+  \begin{tabular}{@{}p{0.15\linewidth}p{0.32\linewidth}ccp{0.25\linewidth}@{}}
+    \toprule
+    Package & Composition & Trials & $n=8$ & Supported claim scope \\
+    \midrule
+    Minimum mechanism & High-risk $C_1$: three methods; Smooth-match--\SMPCC{} & $5n$ & 40 & High-risk RQ1, RQ2, RQ4, and runtime \\
+    Two-path & Minimum package plus low-risk $C_1$: three methods & $8n$ & 64 & Adds consistency across the two prescribed paths \\
+    Full main & Two-path package plus high-risk $C_2$: three methods, with $C_1/C_2$ super-blocks & $11n$ & 88 & Full RQ1--RQ4 including container transfer \\
+    Optional mismatch & $C_2$ with the frozen $C_1$ liquid parameters & $+n$ & $+8$ & Necessity of geometry-based reparameterization \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\section{Development-Only Records}
+
+The archived trials predate the frozen block protocol and are not used for
+formal inference. Modal-only quantities must be recomputed from
+$(\eta_x,\eta_y)$ before reporting.
+The legacy statement $v_{\mathrm{ref}}=0.20\,\mathrm{m/s}$ is treated as a
+compatibility item rather than proof of mismatch: the archived configuration
+must be checked to determine whether it denotes a fixed reference or the
+$v_{\mathrm{cruise}}$ input to the curvature-aware profile. Regardless of the
+outcome of this check, the archived trials do not contribute to the formal
+randomized-block sample size.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{Development-only RGB statistics, mean $\pm$ standard deviation over three trials.}
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    Method & RGB p95 [mm] & RGB RMS [mm] \\
+    \midrule
+    Baseline & $1.009\pm0.214$ & $0.541\pm0.081$ \\
+    Smooth-only & $1.272\pm0.283$ & $0.639\pm0.060$ \\
+    \SMPCC{} & $0.901\pm0.015$ & $0.537\pm0.008$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{Development-only task statistics for the same trials.}
+  \begin{tabular}{@{}lccc@{}}
+    \toprule
+    Method & Path p95 [cm] & $|\omega|$ p95 [rad/s] & Time [s] \\
+    \midrule
+    Baseline & $2.947\pm0.087$ & $0.234\pm0.015$ & $33.753\pm0.355$ \\
+    Smooth-only & $3.646\pm1.188$ & $0.202\pm0.022$ & $35.169\pm0.537$ \\
+    \SMPCC{} & $3.442\pm0.128$ & $0.242\pm0.033$ & $36.851\pm0.231$ \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The archived \SMPCC{} plus enhanced-smoothing record is excluded from the
+core comparison. Its RGB and task outcomes may be retained after the modal-only
+logs are reprocessed.
+
+\section{Sensitivity and Runtime Details}
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{Supporting simulation sensitivity study.}
+  \begin{tabular}{@{}lll@{}}
+    \toprule
+    Perturbation & Levels & Outputs \\
+    \midrule
+    $\omega_1$ & $0.8$--$1.2$ nominal & Response, time, success \\
+    $\zeta$ & $0.6$--$1.4$ nominal & Residual and bias \\
+    $c_h$ & $0.8$--$1.2$ nominal & Height-scale sensitivity \\
+    Initial modal state & Zero and nonzero & Dynamic memory \\
+    Execution delay & Nominal and perturbed & Phase and tracking \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \caption{Complete runtime statistics.}
+  \begin{tabular}{@{}lccccc@{}}
+    \toprule
+    Method & Median & p95 & Maximum & Miss rate & Failures \\
+    \midrule
+    Baseline & \Pending & \Pending & \Pending & \Pending & \Pending \\
+    Smooth-only & \Pending & \Pending & \Pending & \Pending & \Pending \\
+    \SMPCC{} & \Pending & \Pending & \Pending & \Pending & \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Optional Container-Mismatch Analysis}
+
+The optional group runs \SMPCC{} on $C_2$ while retaining the $C_1$ values of
+$\omega_1$, $c_h$, $\eta_{\mathrm{ref}}$, and
+$\dot\eta_{\mathrm{ref}}$. It is a model-mismatch analysis and not a fourth
+core method.

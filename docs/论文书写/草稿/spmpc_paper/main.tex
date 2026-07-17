@@ -1,0 +1,76 @@
+% !TEX program = pdflatex
+% Standard IEEE Transactions journal format.
+\documentclass[journal]{IEEEtran}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{bm}
+\usepackage{mathtools}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{placeins}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit,matrix,shapes.geometric}
+\usepackage{url}
+\usepackage{cite}
+\usepackage[nameinlink,capitalize]{cleveref}
+
+\graphicspath{{figures/}}
+
+\newcommand{\SMPCC}{S-MPCC}
+\newcommand{\MPCC}{MPCC}
+\newcommand{\MPC}{MPC}
+\newcommand{\MpcLocalPlanner}{MPC local planner}
+
+\newcommand{\vx}{\bm{x}}
+\newcommand{\vu}{\bm{u}}
+\newcommand{\vp}{\bm{p}}
+\newcommand{\vr}{\bm{r}}
+\newcommand{\xr}{\bm{x}_{r}}
+\newcommand{\xl}{\bm{x}_{\ell}}
+\newcommand{\xaug}{\bm{x}}
+\newcommand{\ec}{e_{\mathrm{c}}}
+\newcommand{\el}{e_{\mathrm{l}}}
+\newcommand{\dd}{\mathrm{d}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\Pending}{\textcolor{spmpcgray}{\textit{pending}}}
+\newcommand{\PendingResult}[1]{%
+  \par\smallskip\noindent
+  \textcolor{spmpcgray}{\textit{Pending result: #1}}%
+  \par\smallskip}
+
+\definecolor{spmpcblue}{RGB}{36,99,180}
+\definecolor{spmpclight}{RGB}{235,243,255}
+\definecolor{spmpcorange}{RGB}{220,120,40}
+\definecolor{spmpcgray}{RGB}{90,90,90}
+
+\title{\SMPCC: Slosh-Aware Model Predictive Contouring Control for Open-Liquid Transport on Mobile Bases}
+
+\author{Renjun Zhang%
+\thanks{Renjun Zhang is with the University of Science and Technology of China,
+Hefei, China (e-mail: zhangrenjun@mail.ustc.edu.cn).}}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Mobile bases carrying open liquid containers can excite free-surface oscillations during acceleration, braking, and turning. Liquid motion has dynamic memory: its future response depends on the current modal displacement, modal velocity, and oscillation phase as well as future base excitation. This paper formulates \SMPCC{}, an online receding-horizon local motion planner and controller for transport along a prescribed geometrically feasible reference path. The method augments robot motion and virtual path progress with a container-parameterized first-mode liquid model whose state is propagated from odometry. A slosh-aware \MPCC{} problem then selects state-dependent motion while retaining executable base constraints and first-action receding-horizon output. The evaluation uses matched slosh-agnostic and smooth-only \MPCC{} variants, an independently tuned completion-time-matched comparison, and geometry-based transfer across containers without controller-weight retuning. Physical liquid-response claims rely on a calibrated vision-based reference measurement rather than the internal modal prediction.
+\end{abstract}
+
+\begin{IEEEkeywords}
+mobile robots, open-liquid transport, liquid sloshing, model predictive contouring control, receding-horizon planning
+\end{IEEEkeywords}
+
+\input{sections/01_introduction}
+\input{sections/02_related_work}
+\input{sections/03_method}
+\input{sections/04_experiments}
+\input{sections/05_conclusion}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

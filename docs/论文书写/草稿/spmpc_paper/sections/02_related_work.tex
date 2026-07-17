@@ -1,0 +1,95 @@
+\section{Related Work}
+
+This section organizes related work by both platform proximity and decision-layer proximity.
+The paper does not address liquid sloshing in isolation, nor does it address generic mobile-robot local planning in isolation.
+Instead, it focuses on their intersection at the online local-planning layer of a standard wheeled mobile base, where the planner must output executable commands at runtime while propagating the dynamic state of the transported liquid over the prediction horizon.
+
+Three groups of prior work are most relevant.
+The first group consists of ordinary mobile-robot local planners and trajectory optimization methods, which operate at a similar deployment layer but generally do not propagate liquid states.
+The second group includes mobile-base liquid transport and closely related anti-slosh studies, which share the physical task but often operate through fixed paths, velocity profiles, offline trajectory optimization, tracking control, or special platform mechanisms.
+The third group covers cross-platform slosh modeling, anti-slosh trajectory generation, and predictive control, which provide modeling and control foundations while clarifying the novelty boundary of this work.
+
+\subsection{Online Local Planning and Trajectory Optimization for Mobile Robots}
+
+Mobile-robot local planners address short-horizon motion generation at runtime and must output executable base commands under kinematic, dynamic, and environmental constraints.
+Classical DWA, TEB, and \MpcLocalPlanner{} represent important families of velocity-space search, time-parameterized trajectory optimization, and receding-horizon nonlinear optimal control \cite{D15_Fox1997,D16_Rosmann2017,D17_Rosmann2021}.
+\MPCC{} has also become a useful backbone for progress-maximizing path following and local planning \cite{D19_Liniger2015,D20_Brito2019}.
+Regulated pure pursuit, dynamic-window variants, LT-DWA, MPPI, differential-drive trajectory optimization, and jerk-limited trajectory generation further extend local planning in terms of tracking, velocity and acceleration limits, dynamic feasibility, risk handling, and smoothness \cite{D01_Macenski2023,D22_Ohnishi2026,D02_Jian2023,D06_Williams2017,D07_Trevisan2025,D03_Zhang2025,D13_Berscheid2021}.
+
+These methods are close to the system interface considered here because they serve runtime local decision making and ultimately produce executable base commands.
+Local-planner benchmarks also typically evaluate safety, efficiency, smoothness, path tracking, and computation time \cite{D21_Wen2021}.
+They therefore provide decision-layer context for \SMPCC{}, although the current fixed-path study does not rank global or obstacle-oriented planners.
+
+However, these planners usually propagate robot pose, velocity, path error, obstacle distance, control variation, or risk variables; they do not include the modal displacement and velocity of the liquid inside the transported container.
+For liquid transport, reducing command variation or improving geometric smoothness is not equivalent to suppressing sloshing.
+Two command sequences may have similar velocity, acceleration, and jerk profiles but different future liquid responses because they couple differently with the current liquid phase.
+Ordinary local planners clarify the same-layer novelty boundary, but they do not directly represent liquid dynamic memory.
+
+\subsection{Mobile-Base Liquid Transport and Anti-Slosh Methods}
+
+Mobile-base liquid transport is the closest physical task to this paper.
+Hamaguchi and collaborators studied path design, velocity profiles, input shaping, and tracking control for wheeled mobile robots or carts transporting cylindrical liquid containers \cite{B04_Hamaguchi2002,B03_Hamaguchi2004,B02_Hamaguchi2005}.
+These studies demonstrated that mobile-platform motion excites liquid sloshing and that motion planning and control benefit from explicit consideration of the liquid response.
+Subsequent work also introduced active vibration reducers, parallel-link mechanisms, and omnidirectional mobile platforms \cite{B05_Hamaguchi2019,B06_Hamaguchi2018,B07_Nguyen2024,B08_Yuan2020}, showing that anti-slosh transport can be achieved through specialized hardware or platform designs as well as software planning.
+
+Recent work has further incorporated liquid models into mobile-robot or mobile-container optimization and control.
+Lim et al.\ approximate liquid sloshing by spherical-pendulum dynamics and solve a two-dimensional trajectory optimization problem to reduce sloshing \cite{B01_Lim2024}.
+Nguyen Viet et al.\ combine a nonlinear equivalent mass-spring-damper model, time-optimal planning, tracking control, and output constraints for container transport under disturbances \cite{B11_Viet2025}.
+Prabakaran et al.\ study slosh-aware trajectory control and \MPC{} tracking control on a reconfigurable stair-climbing service robot \cite{B12_Prabakaran2026}.
+
+These studies establish the value of explicit liquid modeling and optimized motion generation.
+Their main difference from this work is the decision layer.
+The Hamaguchi line of work is closer to path design, velocity-profile design, input shaping, and tracking along a prescribed route.
+Active suppression mechanisms rely on additional hardware or special platforms.
+The approach of Lim et al.\ is closer to whole-trajectory offline optimization.
+Nguyen Viet et al.\ use a planning-plus-tracking structure, and Prabakaran et al.\ focus on a special service-robot platform and trajectory tracking.
+In contrast, \SMPCC{} inserts a low-order slosh state directly into an online \MPCC{} local-planning problem for a standard wheeled mobile base and resolves a short-horizon optimization problem at every control cycle.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \caption{Decision-layer comparison with mobile-base liquid-transport studies.}
+  \label{tab:mobile_base_related_work_framework}
+  \begin{tabular}{p{0.23\linewidth} p{0.29\linewidth} p{0.36\linewidth}}
+    \toprule
+    Type & Representative work & Main difference from this paper \\
+    \midrule
+    Fixed path, velocity profile, and input shaping & Hamaguchi series \cite{B04_Hamaguchi2002,B03_Hamaguchi2004,B02_Hamaguchi2005} & Suppresses sloshing mainly through predesigned paths or speed profiles rather than a path-progress \MPCC{} solved at every control cycle. \\
+    Active suppression hardware & Mobile carts or omnidirectional platforms with active reducers \cite{B05_Hamaguchi2019,B06_Hamaguchi2018} & Relies on additional mechanisms or special platforms rather than a software local planner for a standard wheeled base. \\
+    Offline liquid-constrained trajectory optimization & Lim et al. \cite{B01_Lim2024} & Uses explicit liquid dynamics but is closer to whole-trajectory optimization than runtime local planning. \\
+    Time-optimal planning and tracking control & Nguyen Viet et al. \cite{B11_Viet2025} & Uses reference planning and robust tracking rather than directly producing local-planner base commands. \\
+    Slosh-aware tracking on special platforms & Prabakaran et al. \cite{B12_Prabakaran2026} & Demonstrates slosh-aware \MPC{} or tracking control, but with different platform, task interface, and control layer. \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Thus, the mobile-base liquid-transport problem is not unexplored.
+The gap addressed here is the insertion of liquid dynamic memory into the online local-planning loop of a standard mobile base.
+\SMPCC{} defines this problem layer by selecting path progress, base control, and predicted liquid response in the same receding-horizon optimization problem.
+
+\subsection{Cross-Platform Slosh Modeling, Trajectory Generation, and Predictive Control}
+
+Liquid sloshing also appears in manipulators, SCARA systems, liquid-transfer machines, tank vehicles, ships, and specialized mechanisms.
+High-fidelity VOF, FEM, CFD, and digital-twin models can describe complex free-surface behavior, fluid-structure coupling, and nonlinear effects \cite{A03_Schrgenhumer2019,A04_Elahi2015,A05_Nicolsen2017,A06_Moya2020}.
+However, their state dimension and computational cost are generally unsuitable for direct embedding in a real-time mobile-robot local planner.
+Equivalent-pendulum, mass-spring-damper, and low-order modal models instead provide a compact state representation of dominant slosh dynamics, making them more appropriate as prediction models for online optimization \cite{A02_Guagliumi2021,A01_Leva2021}.
+
+Input shaping, predictive control, and anti-slosh trajectory generation have shown that explicit liquid models can improve motion generation and control \cite{A07_Singer1990,A12_Okatsuka2011,C05_Okatsuka2012,C01_Ferrari2026,C02_Muchacho2022,C03_Moriello2018,C04_Kuriyama2008,C06_Viet2024}.
+Ferrari et al.\ propose offline time-optimal anti-slosh trajectory planning for multi-container transport on a 4D SCARA system and compare a low-order model height with video-extracted experimental liquid motion \cite{C01_Ferrari2026}.
+That work provides a useful model-to-experiment validation perspective, but differs in platform, grasping configuration, optimization layer, and online interface.
+Accordingly, this paper does not claim novelty as the first use of a slosh state in \MPC{}; it emphasizes the integration of a low-order slosh state into the online local-planning layer of a standard mobile base.
+
+External sensing, machine vision, and liquid-level detection studies further show that real liquid motion can be evaluated using independent observations \cite{A08_Weaver2024,A09_Bobovnik2021,A10_Shao2026,A11_Ren2024}.
+This motivates the distinction used throughout the paper between internal model proxies and measured liquid-surface indicators.
+Cross-platform anti-slosh studies are therefore treated primarily as modeling and evaluation references unless their platform, input interface, and decision layer can be reproduced under the same experimental conditions.
+
+\subsection{Positioning of \SMPCC{}}
+
+In summary, prior work has established foundations in mobile-robot local planning, mobile-base liquid transport, low-order slosh modeling, and anti-slosh predictive control.
+Ordinary local planners operate at a similar deployment layer but usually lack liquid-state prediction.
+Mobile-base anti-slosh methods share the physical task but often operate through fixed paths, speed profiles, offline optimization, tracking control, or special platforms.
+Cross-platform anti-slosh methods provide modeling and control foundations but do not generally constitute same-layer experimental baselines.
+
+This paper is positioned at their intersection: online slosh-aware \MPCC{} local planning for a standard wheeled mobile base.
+Rather than claiming the first slosh-aware \MPC{} method, \SMPCC{} integrates low-order slosh modal states, path progress, base-control constraints, control smoothness, and predicted liquid response into one receding-horizon local-planning problem. Its empirical claims remain limited to matched internal \MPCC{} variants, completion-time control, and geometry-based container transfer.

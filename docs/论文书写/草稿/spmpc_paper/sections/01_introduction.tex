@@ -1,0 +1,53 @@
+\section{Introduction}
+
+\IEEEPARstart{M}{obile} robots are increasingly deployed in laboratory, service, and industrial transport tasks. A representative challenge is carrying an open or partially open liquid container. Base acceleration, braking, and turning excite free-surface oscillations that can increase settling time, reduce transport reliability, and raise spill risk. Motion for this task must therefore be geometrically feasible and executable while accounting for the dynamic response of the transported liquid.
+
+This paper considers the following problem: given a geometrically feasible reference path, how can a standard wheeled mobile base generate online local motion that predicts and reduces the liquid response excited by its own movement? The central premise is that liquid sloshing is not merely a trajectory-smoothing problem but a state-prediction problem with dynamic memory. Motion sequences with similar velocity, acceleration, or smoothness can induce different future responses because the outcome also depends on the current modal displacement, modal velocity, and residual oscillation phase.
+
+Prior work has reduced liquid sloshing through low-order modeling, input shaping, velocity-profile design, trajectory optimization, and tracking control \cite{A02_Guagliumi2021,A01_Leva2021,A07_Singer1990,A12_Okatsuka2011,C05_Okatsuka2012}. In parallel, mobile-robot local planners generate online commands under motion, tracking, and navigation constraints \cite{D15_Fox1997,D16_Rosmann2017,D17_Rosmann2021,D19_Liniger2015,D20_Brito2019}. These lines of work generally operate at different decision layers. Anti-slosh methods often design a path, speed profile, or complete trajectory before execution, or apply tracking control after a reference has been prescribed. General local planners operate online but typically do not propagate the dynamic state of the transported liquid.
+
+We address this intersection with \SMPCC{}, a slosh-aware model predictive contouring control method. \SMPCC{} uses \MPCC{} as an online local motion-planning backbone and augments the robot and virtual path-progress states with a low-order liquid modal state. The liquid state is propagated from odometry-driven excitation and evolves inside the same prediction horizon as robot motion. Consequently, two candidate motions with similar geometric tracking and smoothness can receive different costs when they interact differently with the current liquid phase.
+
+\begin{figure}[t]
+  \centering
+  \resizebox{\linewidth}{!}{%
+  \begin{tikzpicture}[
+    font=\footnotesize,
+    panel/.style={draw=spmpcgray, rounded corners=2pt, line width=0.5pt, fill=spmpclight, minimum width=2.55cm, minimum height=1.82cm, align=center},
+    title/.style={font=\bfseries\scriptsize, text=spmpcblue, align=center},
+    note/.style={font=\scriptsize, text=spmpcgray, align=center},
+    arr/.style={-{Latex[length=1.7mm]}, line width=0.5pt, draw=spmpcblue}
+  ]
+    \node[panel] (p1) at (0,0) {};
+    \node[title] at (p1.north) [yshift=-0.42cm] {Online local\\planning};
+    \node[note] at (p1.center) [yshift=-0.05cm] {Path progress\\base commands};
+    \node[note] at (p1.south) [yshift=0.30cm] {No liquid state};
+
+    \node[panel] (p2) at (3.05,0) {};
+    \node[title] at (p2.north) [yshift=-0.42cm] {Anti-slosh\\motion design};
+    \node[note] at (p2.center) [yshift=-0.05cm] {Liquid model\\profiles / trajectories};
+    \node[note] at (p2.south) [yshift=0.30cm] {Often offline};
+
+    \node[panel, fill=white] (p3) at (6.10,0) {};
+    \node[title] at (p3.north) [yshift=-0.42cm] {\SMPCC{}\\planner};
+    \node[note] at (p3.center) [yshift=-0.05cm] {Robot + progress\\liquid memory};
+    \node[note] at (p3.south) [yshift=0.30cm] {One \MPCC{} horizon\\first action};
+
+    \draw[arr] (p1.east) -- (p2.west);
+    \draw[arr] (p2.east) -- (p3.west);
+  \end{tikzpicture}}
+  \caption{Positioning of \SMPCC{}. Online local planning provides executable receding-horizon commands, whereas anti-slosh motion design provides liquid-aware modeling principles. \SMPCC{} combines these roles by propagating liquid dynamic memory inside a path-progress \MPCC{} problem.}
+  \label{fig:system_overview}
+\end{figure}
+
+The contributions are summarized as follows.
+\begin{enumerate}
+  \item \textbf{Online liquid-dynamic-memory \MPCC{} formulation.}
+  We formulate open-liquid transport along a prescribed path as an online local motion-planning problem and augment an acceleration-level path-progress \MPCC{} model with the first lateral liquid mode in two orthogonal directions.
+  \item \textbf{Container-parameterized prediction and online propagation.}
+  We define a reproducible mapping from cylindrical-container geometry to the modal prediction parameters and propagate the liquid state between control cycles using odometry-driven excitation, allowing the current modal phase to affect future motion selection.
+  \item \textbf{Matched experimental evidence structure.}
+  We define slosh-agnostic Baseline and Smooth-only \MPCC{} variants, an independent completion-time-matched comparison, geometry-based container transfer without controller-weight retuning, and a controlled liquid-phase planning study. Physical liquid-response conclusions use a calibrated vision-based reference measurement rather than the internal model quantity.
+\end{enumerate}
+
+The scope is online slosh-aware local motion planning along a precomputed geometrically feasible reference path. The present OCP does not include global route selection, occupancy-grid collision constraints, or dynamic-obstacle prediction. The method is not presented as a high-fidelity free-surface simulator, a controller driven by measured liquid-surface feedback, or a formal spill-free guarantee. Claims are restricted to comparisons with matched slosh-agnostic and smooth-only \MPCC{} variants; external global, obstacle-oriented, and liquid-transport planners are not ranked in the current study.

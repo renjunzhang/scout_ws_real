@@ -1,0 +1,172 @@
+\section{\SPMPC{} Formulation}
+
+\subsection{Augmented Prediction Model}
+
+The mobile-base and path-progress state is
+\begin{equation}
+  \xr =
+  \begin{bmatrix}
+    p_x & p_y & \theta & v & s & \omega
+  \end{bmatrix}^{\top},
+\end{equation}
+where $(p_x,p_y)$ is the base position, $\theta$ is the heading, $v$ is the linear velocity, $\omega$ is the angular velocity, and $s$ is the path-progress variable.
+The control input is
+\begin{equation}
+  \vu =
+  \begin{bmatrix}
+    a & \alpha & v_s
+  \end{bmatrix}^{\top},
+\end{equation}
+where $a$ is linear acceleration, $\alpha=\dot{\omega}$ is angular acceleration, and $v_s=\dot{s}$ is virtual path-progress speed.
+The base and progress dynamics are
+\begin{equation}
+\begin{aligned}
+  \dot{p}_x &= v\cos\theta, &
+  \dot{p}_y &= v\sin\theta, &
+  \dot{\theta} &= \omega,\\
+  \dot{v} &= a, &
+  \dot{s} &= v_s, &
+  \dot{\omega} &= \alpha .
+\end{aligned}
+\label{eq:method_base_progress}
+\end{equation}
+
+The liquid response is represented by a control-oriented second-order modal model.
+For each horizontal direction $i\in\{x,y\}$,
+\begin{equation}
+  \ddot{\eta}_i
+  +2\zeta_i\omega_i\dot{\eta}_i
+  +\omega_i^2\eta_i
+  =-\kappa_i a_i,
+  \label{eq:method_slosh_dynamics}
+\end{equation}
+where $\eta_i$ and $\dot{\eta}_i$ are the modal displacement and velocity, and $\omega_i$, $\zeta_i$, and $\kappa_i$ are the equivalent natural frequency, damping ratio, and input gain.
+For planar mobile-base motion, the excitation channel is approximated by
+\begin{equation}
+  a_x=a,\qquad a_y\approx v\omega .
+  \label{eq:method_excitation}
+\end{equation}
+This approximation is used for online prediction rather than as a direct liquid-surface observer.
+It follows the same control-oriented modeling principle used in low-order slosh estimation and anti-slosh planning studies \cite{A01_Leva2021,A02_Guagliumi2021}.
+
+The liquid state is
+\begin{equation}
+  \xl =
+  \begin{bmatrix}
+    \eta_x & \dot{\eta}_x & \eta_y & \dot{\eta}_y
+  \end{bmatrix}^{\top},
+\end{equation}
+and the augmented state is
+\begin{equation}
+\begin{aligned}
+  \xaug =
+  [&p_x,\ p_y,\ \theta,\ v,\ s,\ \omega,\\
+   &\eta_x,\ \dot{\eta}_x,\ \eta_y,\ \dot{\eta}_y]^\top .
+\end{aligned}
+\label{eq:method_augmented_state}
+\end{equation}
+After discretization, the horizon model is written compactly as
+\begin{equation}
+  \xaug_{k+1}=f_d(\xaug_k,\vu_k).
+  \label{eq:method_discrete_model}
+\end{equation}
+This state choice is the key distinction from smoothness-only local planning: the current residual liquid phase is propagated into future candidate controls.
+
+\subsection{Model Proxy and Objective}
+
+The internal model proxy for liquid response is denoted by $H_{\mathrm{model}}$.
+A modal proxy is
+\begin{equation}
+  H_{\mathrm{model}}^{\mathrm{modal}}(t)
+  =
+  c_h\sqrt{\eta_x^2(t)+\eta_y^2(t)},
+  \label{eq:method_h_modal}
+\end{equation}
+where $c_h$ maps modal displacement to an approximate height scale.
+When the quasi-static turning contribution is enabled, the proxy becomes
+\begin{equation}
+  H_{\mathrm{model}}^{\mathrm{full}}(t)
+  =
+  H_{\mathrm{model}}^{\mathrm{modal}}(t)
+  +\mathbb{I}_{\mathrm{para}}\frac{R^2\omega^2(t)}{4g},
+  \label{eq:method_h_full}
+\end{equation}
+where $R$ is the container radius and $\mathbb{I}_{\mathrm{para}}$ indicates whether the parabolic term is included.
+These quantities remain model proxies and are not treated as ground-truth free-surface measurements \cite{C01_Ferrari2026}.
+
+Let the reference path be $\vr(s)=[r_x(s),r_y(s)]^\top$ with tangent angle $\psi(s)$.
+The tangent and normal vectors are
+\begin{equation}
+\begin{aligned}
+  \bm{t}(s) &= [\cos\psi(s),\ \sin\psi(s)]^\top,\\
+  \bm{n}(s) &= [-\sin\psi(s),\ \cos\psi(s)]^\top .
+\end{aligned}
+\end{equation}
+With $\bm{e}(s)=[p_x,\ p_y]^\top-\vr(s)$, the contouring and lag errors are
+\begin{equation}
+  \ec=\bm{n}(s)^\top\bm{e}(s),\qquad
+  \el=\bm{t}(s)^\top\bm{e}(s).
+  \label{eq:method_contour_lag}
+\end{equation}
+
+At each control cycle, \SPMPC{} solves
+\begin{equation}
+\begin{aligned}
+  \min_{\xaug_{0:N},\vu_{0:N-1}} \quad
+  & \sum_{k=0}^{N-1}\ell_k+\ell_N\\
+  \mathrm{s.t.}\quad
+  & \xaug_0=\hat{\xaug}(t),\\
+  & \xaug_{k+1}=f_d(\xaug_k,\vu_k),\\
+  & \xaug_k\in\mathcal{X},\quad \vu_k\in\mathcal{U}.
+\end{aligned}
+\label{eq:method_ocp}
+\end{equation}
+The stage cost is
+\begin{equation}
+\begin{aligned}
+  \ell_k={}&
+    q_c e_{\mathrm{c},k}^{2}
+    +q_l e_{\mathrm{l},k}^{2}
+    -q_p v_{s,k}
+    +q_v(v_k-v_{\mathrm{ref},k})^{2}\\
+  &+q_{v_s}(v_{s,k}-v_{\mathrm{ref},k})^{2}\\
+  &+\|\vu_k\|_R^2
+    +\|\vu_k-\vu_{k-1}\|_S^2\\
+  &+\|\bm{x}_{\ell,k}\|_{Q_s}^{2}.
+\end{aligned}
+\label{eq:method_stage_cost}
+\end{equation}
+The terminal cost retains terminal path-error and slosh-state penalties.
+The feasible sets encode base and control limits on $v$, $\omega$, $a$, $\alpha$, and $v_s$.
+Only the first optimized base command is executed, and the problem is solved again at the next control cycle.
+
+\subsection{Soft Reference Governor}
+
+The Slosh-risk Reference Governor is a soft module placed before the \MPCC{} solve.
+It evaluates candidate speed-reference scaling factors
+\begin{equation}
+  \mathcal{B}=\{\beta_0,\ldots,\beta_{M-1}\}\subseteq[\beta_{\min},1],
+\end{equation}
+where each candidate defines $v_\beta=\beta v_{\mathrm{ref}}^{\mathrm{nom}}$.
+A short internal rollout gives a risk score
+\begin{equation}
+  R(\beta)=
+  \max_{0\leq k\leq N_g}
+  \frac{H_k(\beta)}{H_{\lim}}.
+\end{equation}
+The feasible candidate set is
+\begin{equation}
+  \mathcal{B}_{\mathrm{feas}}
+  =
+  \{\beta\in\mathcal{B}\mid R(\beta)\leq \rho\}.
+\end{equation}
+The raw scale is the largest feasible candidate when such a candidate exists, and $\beta_{\min}$ otherwise.
+After rate limiting, the filtered value $\beta_f$ defines
+\begin{equation}
+  v_{\mathrm{ref}}^g
+  =
+  \min\{v_{\mathrm{ref}}^{\mathrm{nom}},
+  \max(v_{\min},\beta_f v_{\mathrm{ref}}^{\mathrm{nom}})\}.
+\end{equation}
+The governed reference enters \eqref{eq:method_stage_cost}.
+It does not directly replace the optimized base command, and its role is reference adaptation rather than hard safety enforcement.

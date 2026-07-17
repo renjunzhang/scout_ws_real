@@ -1,0 +1,69 @@
+\section{Comparative Evaluation Matrix}
+
+The evaluation is designed around one falsifiable question: whether explicit slosh-state prediction improves liquid response beyond what can be obtained by stronger command smoothing alone.
+The matrix therefore separates liquid evidence, model-side diagnostics, task completion, path tracking, command behavior, and runtime feasibility.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \caption{Metric groups for interpreting the experiments.}
+  \label{tab:method_metric_groups}
+  \begin{tabular}{p{0.28\linewidth} p{0.62\linewidth}}
+    \toprule
+    Group & Representative metrics \\
+    \midrule
+    External liquid response & RGB p95/max/RMS, residual oscillation after arrival \\
+    Model diagnostics & $H_{\mathrm{model}}$ p95/max/RMS, model-to-vision trend consistency \\
+    Task completion & success rate, timeout, arrival time \\
+    Path tracking & projection error p95, maximum path deviation \\
+    Command behavior & $|\omega|$ p95, acceleration RMS, command variation \\
+    Runtime & solve-time median/p95, control frequency, solver failures \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The core internal ablation uses a two-factor design, shown in \cref{tab:method_internal_ablation}.
+All variants share the same reference path, base constraints, path-progress \MPCC{} structure, and task definition.
+Only the slosh model/cost and smoothing level are changed.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
+  \caption{Internal ablation matrix for separating slosh prediction from smoothing.}
+  \label{tab:method_internal_ablation}
+  \begin{tabular}{p{0.17\linewidth} p{0.20\linewidth} p{0.18\linewidth} p{0.35\linewidth}}
+    \toprule
+    Variant & Slosh state/cost & Smoothing & Interpretation \\
+    \midrule
+    \Bzero{} & absent & weak & Base \MPCC{} reference \\
+    \Bsmooth{} & absent & strong & Smooth-only explanation \\
+    \Bslosh{} & present & weak & Independent slosh-state effect \\
+    \Bours{} & present & strong & Combined \SPMPC{} planner \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The comparison between \Bsmooth{} and \Bzero{} estimates the effect of stronger smoothing alone.
+The comparison between \Bslosh{} and \Bzero{} estimates the independent value of explicit liquid-state propagation.
+The most important comparison is \Bslosh{} or \Bours{} against \Bsmooth{}, because it tests whether the slosh-aware formulation improves upon the strongest smooth-only explanation.
+Finally, \Bours{} against \Bslosh{} measures the effect of combining slosh prediction with stronger smoothing.
+
+Same-layer local-planner baselines test whether ordinary online planning already covers the task.
+DWA, TEB, \MpcLocalPlanner{}, and LT-DWA are natural candidates because they output executable base commands under runtime constraints.
+They should be compared with matched start and goal conditions, reference path, velocity and acceleration limits, arrival criteria, failure criteria, and logging pipeline.
+Mobile-base anti-slosh references such as fixed-path velocity profiles, input shaping, and offline liquid-constrained trajectory optimization define a second comparison axis.
+They are ranked quantitatively only when their assumptions and command interfaces can be reproduced under comparable platform conditions.
+
+The optional governor and terminal-stopping mechanisms are evaluated incrementally rather than folded into the main method claim.
+The governor comparison is
+\begin{equation}
+  \Bours{} \quad \text{vs.} \quad \Boursgov{},
+\end{equation}
+with matched nominal speed reference, base constraints, path, and \SPMPC{} weights.
+The terminal-stopping comparison is
+\begin{equation}
+  \Boursnostop{} \quad \text{vs.} \quad \Boursstop{},
+\end{equation}
+where the primary metrics are post-arrival RGB RMS/p95, residual oscillation decay time, terminal acceleration, terminal angular-command variation, and settling time.
