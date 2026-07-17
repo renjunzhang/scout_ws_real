@@ -13,6 +13,7 @@
 - `/spmpc/status`、`/spmpc/solver_backend`、`/spmpc/controller_variant`；
 - `/spmpc/debug/effective_config`、`/spmpc/cost_breakdown`、`/spmpc/slosh_horizon_summary`；
 - `/spmpc/debug/raw_state`、`/spmpc/debug/predicted_state`、`/spmpc/debug/solver_input_state`、`/spmpc/debug/command_intervention`；
+- `/spmpc/debug/predicted_horizon`、`/spmpc/debug/pre_solve_snapshot`，用于完整预测时域和 actual/zero replay；
 - 相机、scan、standalone `/slosh/*`、在线 `/liquid/*` 等可选话题。
 
 典型用法：
@@ -27,6 +28,33 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_ba
 ```
 
 输出包括 `.bag`、`*_info.txt`、`*_rosparam.yaml`、`*_recorded_topics.txt`、`*_selected_topics_not_recorded.txt`、`*_topic_info/` 等 sidecar。
+
+### replay 话题 smoke 检查
+
+启动 `continuous_mpcc_acados` 并进入正常求解后，正式录制前至少检查一次：
+
+```bash
+rostopic echo -n 1 /spmpc/debug/predicted_horizon
+rostopic echo -n 1 /spmpc/debug/pre_solve_snapshot
+```
+
+必须满足：
+
+- 两条消息的 `valid` 均为 `true`，`backend` 为 `continuous_mpcc_acados`；
+- `horizon_steps: 60`；预测时域有 61 个状态样本和 60 个控制样本；
+- pre-solve 快照的 `state_width: 10`、`control_width: 3`；
+- B0 为 `parameter_width: 23`、`stage_parameters` 共 1403 个数；含 slosh 的 variant 为 `parameter_width: 32`、共 1952 个数；
+- `initial_guess_states` 对应 `61 x 10`，`initial_guess_controls` 对应 `60 x 3`；
+- 第二个及后续有效求解周期通常应有 `have_previous_solution: true`；
+- `primal_guess_only: true` 是当前预期值，表示未录对偶变量和内部 SQP memory。
+
+短录一包后再确认两个话题实际进入 bag：
+
+```bash
+rosbag info /path/to/run.bag | rg '/spmpc/debug/(predicted_horizon|pre_solve_snapshot)'
+```
+
+若现场机没有 `rg`，可把最后一段替换为 `grep -E`。上述检查只证明录制接口和显式输入完整；actual replay 还必须在冻结容差内复现在线 solver status、第一控制量和 raw command，才能用于正式反事实分析。
 
 ## run_spmpc_real_fixed_path_trial.sh
 

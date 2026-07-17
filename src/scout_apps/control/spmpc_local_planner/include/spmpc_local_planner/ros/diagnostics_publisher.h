@@ -4,6 +4,8 @@
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/core/variant_config.h"
 #include "spmpc_local_planner/ros/delay_phase_types.h"
+#include "spmpc_local_planner/PreSolveSnapshot.h"
+#include "spmpc_local_planner/PredictedHorizon.h"
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Path.h>
 #include <ros/ros.h>
@@ -44,6 +46,10 @@ public:
 
 private:
     nav_msgs::Path makePathMsg(const SolverOutput& output, const std::string& frame_id) const;
+    PredictedHorizon makePredictedHorizonMsg(
+        const SolverOutput& output, const std::string& frame_id) const;
+    PreSolveSnapshot makePreSolveSnapshotMsg(
+        const SolverOutput& output, const std::string& frame_id) const;
 
     ros::Publisher status_pub_;
     ros::Publisher variant_pub_;
@@ -51,6 +57,8 @@ private:
     ros::Publisher solver_backend_pub_;
     ros::Publisher effective_config_pub_;
     ros::Publisher trajectory_pub_;
+    ros::Publisher predicted_horizon_pub_;
+    ros::Publisher pre_solve_snapshot_pub_;
     ros::Publisher progress_pub_;
     ros::Publisher v_ref_current_pub_;
     ros::Publisher map_vref_status_pub_;

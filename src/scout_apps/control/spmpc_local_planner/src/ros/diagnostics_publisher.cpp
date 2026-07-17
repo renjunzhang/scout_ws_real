@@ -12,6 +12,25 @@ double modalHeightMm(const SloshState& state, double height_coeff) {
     return 1000.0 * std::max(0.0, height_coeff) * std::hypot(state.eta_x, state.eta_y);
 }
 
+void appendStateRow(const HorizonStateDebug& state, std::vector<double>& flat) {
+    flat.push_back(state.x);
+    flat.push_back(state.y);
+    flat.push_back(state.yaw);
+    flat.push_back(state.v);
+    flat.push_back(state.s);
+    flat.push_back(state.omega);
+    flat.push_back(state.eta_x);
+    flat.push_back(state.eta_x_dot);
+    flat.push_back(state.eta_y);
+    flat.push_back(state.eta_y_dot);
+}
+
+void appendControlRow(const HorizonControlDebug& control, std::vector<double>& flat) {
+    flat.push_back(control.a);
+    flat.push_back(control.alpha_or_omega);
+    flat.push_back(control.v_s);
+}
+
 }  // namespace
 
 void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
@@ -21,6 +40,8 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     solver_backend_pub_ = nh.advertise<std_msgs::String>("solver_backend", 1, true);
     effective_config_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/effective_config", 1, true);
     trajectory_pub_ = nh.advertise<nav_msgs::Path>("local_trajectory", 1, true);
+    predicted_horizon_pub_ = nh.advertise<PredictedHorizon>("debug/predicted_horizon", 1);
+    pre_solve_snapshot_pub_ = nh.advertise<PreSolveSnapshot>("debug/pre_solve_snapshot", 1);
     progress_pub_ = nh.advertise<std_msgs::Float32>("debug/progress_s", 1);
     v_ref_current_pub_ = nh.advertise<std_msgs::Float32>("debug/v_ref_current", 1);
     map_vref_status_pub_ = nh.advertise<std_msgs::String>("debug/map_vref_status", 1);
@@ -426,6 +447,8 @@ void DiagnosticsPublisher::publishCmdOdomAlignment(const CmdOdomAlignmentDebug& 
 
 void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::string& frame_id) {
     trajectory_pub_.publish(makePathMsg(output, frame_id));
+    predicted_horizon_pub_.publish(makePredictedHorizonMsg(output, frame_id));
+    pre_solve_snapshot_pub_.publish(makePreSolveSnapshotMsg(output, frame_id));
 
     std_msgs::Float32 progress;
     progress.data = static_cast<float>(output.progress_s);
@@ -887,6 +910,144 @@ nav_msgs::Path DiagnosticsPublisher::makePathMsg(
         path.poses.push_back(pose);
     }
     return path;
+}
+
+PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
+    const SolverOutput& output,
+    const std::string& frame_id) const {
+    PredictedHorizon msg;
+    msg.header.stamp = ros::Time::now();
+    msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
+    msg.schema_version = 1;
+    const auto& horizon = output.predicted_horizon;
+    msg.valid = horizon.valid;
+    msg.backend = horizon.backend;
+    msg.variant = horizon.variant;
+    msg.solver_status = horizon.solver_status == "NOT_RUN" ? output.status : horizon.solver_status;
+    msg.slosh_enabled = horizon.slosh_enabled;
+    msg.control_semantics = horizon.control_semantics;
+    msg.dt = horizon.dt;
+    msg.horizon_steps = static_cast<uint32_t>(horizon.controls.size());
+
+    const size_t state_count = horizon.states.size();
+    msg.t.reserve(state_count);
+    msg.x.reserve(state_count);
+    msg.y.reserve(state_count);
+    msg.yaw.reserve(state_count);
+    msg.v.reserve(state_count);
+    msg.omega.reserve(state_count);
+    msg.s.reserve(state_count);
+    msg.eta_x.reserve(state_count);
+    msg.eta_x_dot.reserve(state_count);
+    msg.eta_y.reserve(state_count);
+    msg.eta_y_dot.reserve(state_count);
+    msg.h_modal.reserve(state_count);
+    for (size_t k = 0; k < state_count; ++k) {
+        const auto& state = horizon.states[k];
+        msg.t.push_back(static_cast<double>(k) * horizon.dt);
+        msg.x.push_back(state.x);
+        msg.y.push_back(state.y);
+        msg.yaw.push_back(state.yaw);
+        msg.v.push_back(state.v);
+        msg.omega.push_back(state.omega);
+        msg.s.push_back(state.s);
+        msg.eta_x.push_back(state.eta_x);
+        msg.eta_x_dot.push_back(state.eta_x_dot);
+        msg.eta_y.push_back(state.eta_y);
+        msg.eta_y_dot.push_back(state.eta_y_dot);
+        msg.h_modal.push_back(state.h_modal);
+    }
+    msg.a.reserve(horizon.controls.size());
+    msg.alpha_or_omega.reserve(horizon.controls.size());
+    msg.v_s.reserve(horizon.controls.size());
+    for (const auto& control : horizon.controls) {
+        msg.a.push_back(control.a);
+        msg.alpha_or_omega.push_back(control.alpha_or_omega);
+        msg.v_s.push_back(control.v_s);
+    }
+    return msg;
+}
+
+PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
+    const SolverOutput& output,
+    const std::string& frame_id) const {
+    PreSolveSnapshot msg;
+    msg.header.stamp = ros::Time::now();
+    msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
+    msg.schema_version = 1;
+    const auto& snapshot = output.pre_solve_snapshot;
+    msg.valid = snapshot.valid;
+    msg.backend = snapshot.backend;
+    msg.variant = snapshot.variant;
+    msg.solver_status = snapshot.solver_status == "NOT_RUN" ? output.status : snapshot.solver_status;
+    msg.slosh_enabled = snapshot.slosh_enabled;
+    msg.primal_guess_only = snapshot.primal_guess_only;
+    msg.control_semantics = snapshot.control_semantics;
+    msg.dt = snapshot.dt;
+    msg.horizon_steps = static_cast<uint32_t>(std::max(0, snapshot.horizon_steps));
+    msg.state_width = static_cast<uint32_t>(std::max(0, snapshot.state_width));
+    msg.control_width = static_cast<uint32_t>(std::max(0, snapshot.control_width));
+    msg.parameter_width = static_cast<uint32_t>(std::max(0, snapshot.parameter_width));
+    msg.robot_x = snapshot.robot.x;
+    msg.robot_y = snapshot.robot.y;
+    msg.robot_yaw = snapshot.robot.yaw;
+    msg.robot_v = snapshot.robot.v;
+    msg.robot_omega = snapshot.robot.omega;
+    msg.eta_x = snapshot.slosh.eta_x;
+    msg.eta_x_dot = snapshot.slosh.eta_x_dot;
+    msg.eta_y = snapshot.slosh.eta_y;
+    msg.eta_y_dot = snapshot.slosh.eta_y_dot;
+    msg.min_progress_s = snapshot.min_progress_s;
+    msg.reference_length = snapshot.reference_length;
+    msg.s0 = snapshot.s0;
+    msg.s_end = snapshot.s_end;
+    for (int i = 0; i < 4; ++i) {
+        msg.reference_x_coeffs[static_cast<size_t>(i)] = snapshot.reference_x_coeffs[i];
+        msg.reference_y_coeffs[static_cast<size_t>(i)] = snapshot.reference_y_coeffs[i];
+    }
+    msg.has_v_ref_current = snapshot.has_v_ref_current;
+    msg.configured_v_ref = snapshot.configured_v_ref;
+    msg.requested_v_ref = snapshot.requested_v_ref;
+    msg.effective_v_ref = snapshot.effective_v_ref;
+    msg.v_ref_status = snapshot.v_ref_status;
+    msg.have_previous_control = snapshot.have_previous_control;
+    msg.previous_a = snapshot.previous_a;
+    msg.previous_alpha_or_omega = snapshot.previous_alpha_or_omega;
+    msg.previous_v_s = snapshot.previous_v_s;
+    msg.have_previous_solution = snapshot.have_previous_solution;
+    msg.warm_start_requested = snapshot.warm_start_requested;
+    msg.warm_start_applied = snapshot.warm_start_applied;
+    msg.warm_start_source = snapshot.warm_start_source;
+    msg.a_min = snapshot.runtime_bounds.a_min;
+    msg.a_max = snapshot.runtime_bounds.a_max;
+    msg.alpha_or_omega_min = snapshot.runtime_bounds.alpha_min;
+    msg.alpha_or_omega_max = snapshot.runtime_bounds.alpha_max;
+    msg.v_s_min = snapshot.runtime_bounds.v_s_min;
+    msg.v_s_max = snapshot.runtime_bounds.v_s_max;
+    msg.v_min = snapshot.runtime_bounds.v_min;
+    msg.v_max = snapshot.runtime_bounds.v_max;
+    msg.omega_min = snapshot.runtime_bounds.omega_min;
+    msg.omega_max = snapshot.runtime_bounds.omega_max;
+    msg.parameter_names = snapshot.parameter_names;
+    msg.stage_parameters = snapshot.stage_parameters;
+
+    msg.initial_guess_states.reserve(snapshot.initial_guess_states.size() * 10);
+    msg.initial_guess_controls.reserve(snapshot.initial_guess_controls.size() * 3);
+    msg.previous_solution_states.reserve(snapshot.previous_solution_states.size() * 10);
+    msg.previous_solution_controls.reserve(snapshot.previous_solution_controls.size() * 3);
+    for (const auto& state : snapshot.initial_guess_states) {
+        appendStateRow(state, msg.initial_guess_states);
+    }
+    for (const auto& control : snapshot.initial_guess_controls) {
+        appendControlRow(control, msg.initial_guess_controls);
+    }
+    for (const auto& state : snapshot.previous_solution_states) {
+        appendStateRow(state, msg.previous_solution_states);
+    }
+    for (const auto& control : snapshot.previous_solution_controls) {
+        appendControlRow(control, msg.previous_solution_controls);
+    }
+    return msg;
 }
 
 }  // namespace spmpc_local_planner

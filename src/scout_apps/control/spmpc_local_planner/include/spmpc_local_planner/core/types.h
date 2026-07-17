@@ -173,6 +173,82 @@ struct SolverBoundSummary {
     double omega_max = 0.0;
 };
 
+struct HorizonStateDebug {
+    double x = 0.0;
+    double y = 0.0;
+    double yaw = 0.0;
+    double v = 0.0;
+    double s = 0.0;
+    double omega = 0.0;
+    double eta_x = 0.0;
+    double eta_x_dot = 0.0;
+    double eta_y = 0.0;
+    double eta_y_dot = 0.0;
+    double h_modal = 0.0;
+};
+
+struct HorizonControlDebug {
+    double a = 0.0;
+    double alpha_or_omega = 0.0;
+    double v_s = 0.0;
+};
+
+struct PredictedHorizonDebug {
+    bool valid = false;
+    std::string backend;
+    std::string variant;
+    std::string solver_status = "NOT_RUN";
+    bool slosh_enabled = false;
+    std::string control_semantics = "alpha";
+    double dt = 0.0;
+    std::vector<HorizonStateDebug> states;
+    std::vector<HorizonControlDebug> controls;
+};
+
+struct PreSolveSnapshotDebug {
+    bool valid = false;
+    std::string backend;
+    std::string variant;
+    std::string solver_status = "NOT_RUN";
+    bool slosh_enabled = false;
+    // Current implementation captures the full primal x/u guess but not acados dual variables.
+    bool primal_guess_only = true;
+    std::string control_semantics = "alpha";
+    double dt = 0.0;
+    int horizon_steps = 0;
+    int state_width = 10;
+    int control_width = 3;
+    int parameter_width = 0;
+    RobotState robot;
+    SloshState slosh;
+    double min_progress_s = 0.0;
+    double reference_length = 0.0;
+    double s0 = 0.0;
+    double s_end = 0.0;
+    double reference_x_coeffs[4] = {0.0, 0.0, 0.0, 0.0};
+    double reference_y_coeffs[4] = {0.0, 0.0, 0.0, 0.0};
+    bool has_v_ref_current = false;
+    double configured_v_ref = 0.0;
+    double requested_v_ref = 0.0;
+    double effective_v_ref = 0.0;
+    std::string v_ref_status = "VARIANT_FALLBACK";
+    bool have_previous_control = false;
+    double previous_a = 0.0;
+    double previous_alpha_or_omega = 0.0;
+    double previous_v_s = 0.0;
+    bool have_previous_solution = false;
+    bool warm_start_requested = false;
+    bool warm_start_applied = false;
+    std::string warm_start_source = "CAPSULE_REUSE";
+    SolverBoundSummary runtime_bounds;
+    std::vector<std::string> parameter_names;
+    std::vector<double> stage_parameters;
+    std::vector<HorizonStateDebug> initial_guess_states;
+    std::vector<HorizonControlDebug> initial_guess_controls;
+    std::vector<HorizonStateDebug> previous_solution_states;
+    std::vector<HorizonControlDebug> previous_solution_controls;
+};
+
 struct FirstShotDebugSummary {
     bool success = false;
     double status_code = 0.0;
@@ -319,6 +395,8 @@ struct SolverOutput {
     double progress_abs_s = 0.0;
     double solver_time_ms = 0.0;
     std::vector<TrajectoryPoint> trajectory;
+    PredictedHorizonDebug predicted_horizon;
+    PreSolveSnapshotDebug pre_solve_snapshot;
     SloshHorizonSummary slosh_summary;
     WarmStartDiagnostics warm_start_diagnostics;
     TerminalDiagnostics terminal_diagnostics;

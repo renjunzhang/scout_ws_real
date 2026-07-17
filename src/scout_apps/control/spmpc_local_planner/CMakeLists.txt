@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   geometry_msgs
   nav_msgs
+  message_generation
   tf2
   tf2_ros
   tf2_geometry_msgs
@@ -16,6 +17,17 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(Eigen3 REQUIRED)
+
+add_message_files(
+  FILES
+  PredictedHorizon.msg
+  PreSolveSnapshot.msg
+)
+
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+)
 
 # ---- acados 可选检测（连续 MPCC 后端）----
 # 同时满足：环境变量 ACADOS_SOURCE_DIR 指向已安装的 C 库 + 已 codegen 的 spmpc_b0 求解器，
@@ -64,7 +76,7 @@ endif()
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs tf2 tf2_ros tf2_geometry_msgs slosh_models
+  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs message_runtime tf2 tf2_ros tf2_geometry_msgs slosh_models
   DEPENDS EIGEN3
 )
 
@@ -97,6 +109,11 @@ add_library(${PROJECT_NAME}
   src/ros/execution_state_predictor.cpp
   src/ros/diagnostics_publisher.cpp
   src/ros/spmpc_local_planner_ros.cpp
+)
+
+add_dependencies(${PROJECT_NAME}
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
 )
 
 target_link_libraries(${PROJECT_NAME}
@@ -153,6 +170,10 @@ if(SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY)
 endif()
 
 add_executable(spmpc_local_planner_node src/spmpc_local_planner_node.cpp)
+add_dependencies(spmpc_local_planner_node
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+)
 target_link_libraries(spmpc_local_planner_node
   ${PROJECT_NAME}
   ${catkin_LIBRARIES}
@@ -200,6 +221,19 @@ if(CATKIN_ENABLE_TESTING)
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
     )
+  endif()
+  if(SPMPC_WITH_ACADOS)
+    catkin_add_gtest(test_replay_diagnostics test/test_replay_diagnostics.cpp)
+    if(TARGET test_replay_diagnostics)
+      add_dependencies(test_replay_diagnostics
+        ${${PROJECT_NAME}_EXPORTED_TARGETS}
+        ${catkin_EXPORTED_TARGETS}
+      )
+      target_link_libraries(test_replay_diagnostics
+        ${PROJECT_NAME}
+        ${catkin_LIBRARIES}
+      )
+    endif()
   endif()
 endif()
 

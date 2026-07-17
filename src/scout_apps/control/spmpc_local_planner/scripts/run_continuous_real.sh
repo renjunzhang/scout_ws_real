@@ -71,6 +71,7 @@ RECORD_TOPICS=(
   /spmpc/slosh_horizon_summary /spmpc/debug/slosh_hard_constraint /spmpc/debug/slosh_hard_constraint_effective
   /spmpc/debug/slosh_state /spmpc/slosh_height /spmpc/debug/progress_s /spmpc/debug/v_ref_current
   /spmpc/solver_time_ms /spmpc/local_trajectory
+  /spmpc/debug/predicted_horizon /spmpc/debug/pre_solve_snapshot
   /spmpc/debug/delay_phase /spmpc/debug/odom_timing /spmpc/debug/execution_state
   /spmpc/debug/execution_alignment_status /spmpc/debug/delay_compensation /spmpc/debug/cmd_odom_alignment
   /spmpc/debug/cmd_vel_output /spmpc/debug/cmd_vel_output_status

@@ -194,6 +194,8 @@ record_topics=(
   /spmpc/debug/effective_config
   /spmpc/cost_breakdown
   /spmpc/local_trajectory
+  /spmpc/debug/predicted_horizon
+  /spmpc/debug/pre_solve_snapshot
   /spmpc/corridor
   /spmpc/guidance
   /spmpc/primitive

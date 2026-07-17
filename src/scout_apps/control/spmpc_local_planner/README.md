@@ -589,6 +589,8 @@ docs/实物实验注意事项/对比试验/20260603_SPMPC连续MPCC实物对比�
 /spmpc/local_trajectory           预测局部轨迹
 /spmpc/debug/progress_s           当前路径进度
 /spmpc/debug/slosh_state          模态状态 proxy
+/spmpc/debug/predicted_horizon    完整 N+1 状态、N 控制预测时域
+/spmpc/debug/pre_solve_snapshot   solve() 前 OCP 参数、边界和 warm-start 原始变量快照
 /spmpc/slosh_height               模型预测液面高度 proxy，发布单位 mm
 /spmpc/slosh_horizon_summary      预测时域晃动摘要
 /spmpc/solver_time_ms             求解耗时
@@ -597,6 +599,13 @@ docs/实物实验注意事项/对比试验/20260603_SPMPC连续MPCC实物对比�
 /spmpc/guidance                   guidance 诊断，主要用于 fallback / legacy
 /spmpc/primitive                  primitive 诊断，主要用于 fallback / legacy
 ```
+
+其中两个 replay 诊断使用自定义消息：
+
+- `PredictedHorizon`：记录 `t,x,y,yaw,v,omega,s`、四个液体模态状态、`h_modal`，以及每阶段的 `a,alpha_or_omega,v_s`。默认连续 MPCC 时域为 60，因此应有 61 个状态和 60 个控制。
+- `PreSolveSnapshot`：记录本周期真实 solver 输入、参考曲线三次多项式系数、有效 `v_ref`、上一控制/上一解、运行时边界、全部阶段参数，以及紧邻 `solve()` 前写入 acados 的完整原始变量初值。B0 的阶段参数应为 `61 x 23`，含液体模型的 variant 应为 `61 x 32`。
+
+这两个消息当前只由论文主线后端 `continuous_mpcc_acados` 完整填充；其他后端会发布 `valid=false`。`PreSolveSnapshot.primal_guess_only=true` 表示尚未记录对偶变量和 acados 内部 SQP memory。因此它提供了 actual/zero replay 所需的完整显式原始变量上下文，但不能单凭消息存在就宣称逐位精确复现。正式采集前必须验证离线 actual 分支能够在冻结容差内复现在线 solver status、第一控制量和 raw command；若失败，再补录对偶变量或内部求解器状态。
 
 不要复用 `/mpc/cost_breakdown`，避免污染 `scout_local_planner` 既有分析链路。
 
@@ -615,6 +624,8 @@ docs/实物实验注意事项/对比试验/20260603_SPMPC连续MPCC实物对比�
 /camera/color/image_raw
 /camera/color/camera_info
 ```
+
+`run_continuous_real.sh` 和 `record_spmpc_full_rgb_bag.sh` 均已显式包含 `/spmpc/debug/predicted_horizon` 与 `/spmpc/debug/pre_solve_snapshot`。正式 run 前按 `scripts/README.md` 的 replay 话题 smoke 检查确认消息有效且数组尺寸正确。
 
 其中 RGB 原始图像用于离线推断真实液面高度。在线 `/liquid/*` 仅是调试 proxy，默认不录；需要时显式设置：
 

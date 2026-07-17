@@ -251,6 +251,96 @@ WarmStartControl makeWarmStartControl(const double* u) {
     return control;
 }
 
+HorizonStateDebug makeHorizonState(const WarmStartState& state, double h_modal = 0.0) {
+    HorizonStateDebug out;
+    out.x = state.px;
+    out.y = state.py;
+    out.yaw = state.theta;
+    out.v = state.v;
+    out.s = state.s;
+    out.omega = state.omega;
+    out.eta_x = state.eta_x;
+    out.eta_x_dot = state.eta_x_dot;
+    out.eta_y = state.eta_y;
+    out.eta_y_dot = state.eta_y_dot;
+    out.h_modal = h_modal;
+    return out;
+}
+
+HorizonControlDebug makeHorizonControl(const WarmStartControl& control) {
+    HorizonControlDebug out;
+    out.a = control.a;
+    out.alpha_or_omega = control.alpha;
+    out.v_s = control.v_s;
+    return out;
+}
+
+void copyWarmStartForSnapshot(const WarmStartOutput& warm_start,
+                              double height_coeff,
+                              std::vector<HorizonStateDebug>& states,
+                              std::vector<HorizonControlDebug>& controls) {
+    states.clear();
+    controls.clear();
+    states.reserve(warm_start.states.size());
+    controls.reserve(warm_start.controls.size());
+    for (const auto& state : warm_start.states) {
+        const double h_modal = height_coeff * std::hypot(state.eta_x, state.eta_y);
+        states.push_back(makeHorizonState(state, h_modal));
+    }
+    for (const auto& control : warm_start.controls) {
+        controls.push_back(makeHorizonControl(control));
+    }
+}
+
+void capturePrimalGuess(GenSolver& gen,
+                        bool slosh,
+                        double height_coeff,
+                        std::vector<HorizonStateDebug>& states,
+                        std::vector<HorizonControlDebug>& controls) {
+    states.clear();
+    controls.clear();
+    states.reserve(static_cast<size_t>(gen.n_horizon + 1));
+    controls.reserve(static_cast<size_t>(gen.n_horizon));
+    ocp_nlp_config* cfg = gen.config();
+    ocp_nlp_dims* dims = gen.dims();
+    ocp_nlp_out* nlp_out = gen.out();
+    double x[10] = {0.0};
+    double u[3] = {0.0};
+    for (int k = 0; k <= gen.n_horizon; ++k) {
+        std::fill(x, x + 10, 0.0);
+        ocp_nlp_out_get(cfg, dims, nlp_out, k, "x", x);
+        const WarmStartState state = makeWarmStartState(x, slosh);
+        const double h_modal = height_coeff * std::hypot(state.eta_x, state.eta_y);
+        states.push_back(makeHorizonState(state, h_modal));
+        if (k < gen.n_horizon) {
+            ocp_nlp_out_get(cfg, dims, nlp_out, k, "u", u);
+            controls.push_back(makeHorizonControl(makeWarmStartControl(u)));
+        }
+    }
+}
+
+std::vector<std::string> parameterNames(int width) {
+    static const char* const names[] = {
+        "rx0", "rx1", "rx2", "rx3",
+        "ry0", "ry1", "ry2", "ry3",
+        "w_contour", "w_lag", "w_progress",
+        "w_a", "w_omega", "w_v", "w_vs", "w_alpha",
+        "w_du_a", "w_du_vs", "a_prev", "vs_prev",
+        "e_c_ref", "e_l_ref", "v_ref",
+        "two_zeta_omega_n", "omega_n_sq", "kappa_x", "kappa_y",
+        "eta_ref", "eta_dot_ref", "w_slosh_eta", "w_slosh_eta_dot",
+        "eta_max_sq",
+    };
+    const int count = static_cast<int>(sizeof(names) / sizeof(names[0]));
+    const int n = std::max(0, std::min(width, count));
+    std::vector<std::string> out;
+    out.reserve(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) {
+        out.emplace_back(names[i]);
+    }
+    return out;
+}
+
 void fillAcadosState(const WarmStartState& state, bool slosh, double* x) {
     x[0] = state.px; x[1] = state.py; x[2] = state.theta; x[3] = state.v; x[4] = state.s;
     x[5] = state.omega;
@@ -616,6 +706,42 @@ bool ContinuousMpccSolverAcados::solve(
     output.v_ref_debug.runtime_override = input.has_v_ref_current;
     output.v_ref_debug.status = input.v_ref_status;
 
+    auto& snapshot = output.pre_solve_snapshot;
+    snapshot.valid = true;
+    snapshot.backend = "continuous_mpcc_acados";
+    snapshot.variant = variant_.name;
+    snapshot.slosh_enabled = slosh;
+    snapshot.primal_guess_only = true;
+    snapshot.control_semantics = "alpha";
+    snapshot.dt = input.dt;
+    snapshot.horizon_steps = n;
+    snapshot.state_width = 10;
+    snapshot.control_width = 3;
+    snapshot.parameter_width = gen->np;
+    snapshot.robot = input.robot;
+    snapshot.slosh = input.slosh;
+    snapshot.min_progress_s = input.min_progress_s;
+    snapshot.reference_length = len;
+    snapshot.s0 = s0;
+    snapshot.s_end = s_end;
+    for (int i = 0; i < 4; ++i) {
+        snapshot.reference_x_coeffs[i] = cx(i);
+        snapshot.reference_y_coeffs[i] = cy(i);
+    }
+    snapshot.has_v_ref_current = input.has_v_ref_current;
+    snapshot.configured_v_ref = variant_.v_ref;
+    snapshot.requested_v_ref = requested_v_ref;
+    snapshot.effective_v_ref = v_ref;
+    snapshot.v_ref_status = input.v_ref_status;
+    snapshot.have_previous_control = have_u_prev_;
+    if (have_u_prev_) {
+        snapshot.previous_a = u_prev_[0];
+        snapshot.previous_alpha_or_omega = u_prev_[1];
+        snapshot.previous_v_s = u_prev_[2];
+    }
+    snapshot.have_previous_solution = have_previous_solution_;
+    snapshot.parameter_names = parameterNames(gen->np);
+
     // slosh 物理：取自同一套 slosh_dynamics 核（§4.3），κ=1（与 slosh_models 的单位输入增益一致）。
     double c_h = 1.0, eta_ref = 1.0, eta_dot_ref = 1.0;
     double eta_max = 0.0;
@@ -699,6 +825,8 @@ bool ContinuousMpccSolverAcados::solve(
             p[W_DU_A] = 0.0; p[W_DU_VS] = 0.0;
             p[A_PREV] = 0.0; p[VS_PREV] = 0.0;
         }
+        snapshot.stage_parameters.insert(
+            snapshot.stage_parameters.end(), p, p + gen->np);
         gen->update_params(stage, p);
     }
 
@@ -711,6 +839,7 @@ bool ContinuousMpccSolverAcados::solve(
         x0[9] = input.slosh.eta_y_dot;
     }
     output.runtime_bounds = makeRuntimeBounds(params_);
+    snapshot.runtime_bounds = output.runtime_bounds;
     output.generated_bounds = makeGeneratedBounds();
     output.first_shot_debug.progress_s = output.progress_s;
     output.first_shot_debug.progress_abs_s = output.progress_abs_s;
@@ -727,6 +856,14 @@ bool ContinuousMpccSolverAcados::solve(
     WarmStartOutput warm_start;
     bool warm_start_applied = false;
     const bool warm_start_requested = params_.warm_start.enable || params_.warm_start_flatness_enable;
+    snapshot.warm_start_requested = warm_start_requested;
+    snapshot.warm_start_source = "CAPSULE_REUSE";
+    if (have_previous_solution_) {
+        copyWarmStartForSnapshot(
+            previous_warm_start_solution_, c_h,
+            snapshot.previous_solution_states,
+            snapshot.previous_solution_controls);
+    }
     const WarmStartInput warm_input = makeWarmStartInput(
         input, reference, spline, s0, len, n, params_, slosh_dyn_, have_u_prev_, u_prev_);
     if (warm_start_requested && warm_start_generator_) {
@@ -736,6 +873,8 @@ bool ContinuousMpccSolverAcados::solve(
         if (warm_start.valid) {
             setAcadosWarmStart(*gen, warm_start, slosh);
             warm_start_applied = true;
+            snapshot.warm_start_source = warm_start.diagnostics.used_flatness ?
+                "FLATNESS_GENERATOR" : "WARM_START_GENERATOR";
         }
     }
     if (warm_start_requested && !warm_start_applied && params_.warm_start.fallback_to_previous_solution && have_previous_solution_) {
@@ -744,6 +883,7 @@ bool ContinuousMpccSolverAcados::solve(
         if (warm_start.valid) {
             setAcadosWarmStart(*gen, warm_start, slosh);
             warm_start_applied = true;
+            snapshot.warm_start_source = "SHIFTED_PREVIOUS_SOLUTION";
         }
     }
     if (warm_start_requested && !warm_start_applied && params_.warm_start.fallback_to_primitive) {
@@ -751,8 +891,10 @@ bool ContinuousMpccSolverAcados::solve(
         if (warm_start.valid) {
             setAcadosWarmStart(*gen, warm_start, slosh);
             warm_start_applied = true;
+            snapshot.warm_start_source = "CONSERVATIVE_FALLBACK";
         }
     }
+    snapshot.warm_start_applied = warm_start_applied;
     output.warm_start_diagnostics = warm_start.diagnostics;
     for (int k = 0; k < 3; ++k) {
         if (warm_start.valid && k < static_cast<int>(warm_start.states.size()) &&
@@ -766,6 +908,14 @@ bool ContinuousMpccSolverAcados::solve(
         }
     }
 
+    // Capture the exact primal x/u guess present in the capsule immediately before solve().
+    // Dual variables and internal SQP memory are intentionally not claimed by schema v1;
+    // actual replay must still pass the frozen numerical reproduction gate.
+    capturePrimalGuess(
+        *gen, slosh, c_h,
+        snapshot.initial_guess_states,
+        snapshot.initial_guess_controls);
+
     const int status = gen->solve();
 
     double time_tot = 0.0;
@@ -773,6 +923,7 @@ bool ContinuousMpccSolverAcados::solve(
     output.solver_time_ms = time_tot * 1000.0;
     output.first_shot_debug.status_code = static_cast<double>(status);
     if (status != 0) {
+        snapshot.solver_status = "ACADOS_SOLVE_FAILED_" + std::to_string(status);
         output.success = false;
         output.status = "ACADOS_SOLVE_FAILED_" + std::to_string(status);
         output.cmd_v = 0.0;
@@ -783,6 +934,13 @@ bool ContinuousMpccSolverAcados::solve(
     // 读轨迹 + 诊断量（contour/lag/slosh/控制），按 §11.5 对齐 primitive。
     const double inv_n = 1.0 / static_cast<double>(std::max(1, n));
     output.trajectory.reserve(n + 1);
+    output.predicted_horizon.backend = "continuous_mpcc_acados";
+    output.predicted_horizon.variant = variant_.name;
+    output.predicted_horizon.slosh_enabled = slosh;
+    output.predicted_horizon.control_semantics = "alpha";
+    output.predicted_horizon.dt = input.dt;
+    output.predicted_horizon.states.reserve(static_cast<size_t>(n + 1));
+    output.predicted_horizon.controls.reserve(static_cast<size_t>(n));
     std::vector<WarmStartState> solved_states;
     solved_states.reserve(n + 1);
     std::vector<double> heights;
@@ -793,7 +951,10 @@ bool ContinuousMpccSolverAcados::solve(
         TrajectoryPoint pt;
         pt.x = xk[0]; pt.y = xk[1]; pt.yaw = xk[2]; pt.v = xk[3]; pt.s = xk[4];
         output.trajectory.push_back(pt);
-        solved_states.push_back(makeWarmStartState(xk, slosh));
+        const WarmStartState solved_state = makeWarmStartState(xk, slosh);
+        solved_states.push_back(solved_state);
+        const double solved_h_modal = slosh ? c_h * std::hypot(solved_state.eta_x, solved_state.eta_y) : 0.0;
+        output.predicted_horizon.states.push_back(makeHorizonState(solved_state, solved_h_modal));
 
         const double xref = polyEval(cx, pt.s);
         const double yref = polyEval(cy, pt.s);
@@ -862,6 +1023,8 @@ bool ContinuousMpccSolverAcados::solve(
     for (int k = 0; k < n; ++k) {
         ocp_nlp_out_get(cfg, dims, nlp_out, k, "u", uk);
         solved_controls.push_back(makeWarmStartControl(uk));
+        output.predicted_horizon.controls.push_back(
+            makeHorizonControl(solved_controls.back()));
         if (k == 0) { u0[0] = uk[0]; u0[1] = uk[1]; u0[2] = uk[2]; }
         const double an = uk[0] / a_ref;                          // a (控制)
         const double aln = uk[1] / alpha_ref;                     // alpha = omega-rate (控制)
@@ -953,6 +1116,9 @@ bool ContinuousMpccSolverAcados::solve(
 
     output.success = true;
     output.status = variant_.name + "_ACADOS_OK";
+    output.predicted_horizon.valid = true;
+    output.predicted_horizon.solver_status = output.status;
+    snapshot.solver_status = output.status;
     return true;
 }
 
