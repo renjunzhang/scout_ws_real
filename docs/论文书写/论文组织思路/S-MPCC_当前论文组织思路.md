@@ -4,6 +4,8 @@
 >
 > 实验章节的唯一上位协议是 `docs/论文书写/实验章节设计/S-MPCC_experimental_design.md`，正式次数和执行速查以 `docs/论文书写/实验章节设计/SPMPC实验矩阵设计.md` 为准。本文件只保留论文级实验摘要和证据映射；若实验细节不一致，以实验总章、矩阵速查表和正式 freeze artifacts 为准。
 >
+> **条件性实验说明：** `Long-horizon propagation and command-regularity audit` 是可选的支持性扩展，不属于 88 次主实验矩阵，也不是 RQ1–RQ4 或三项核心贡献成立的必要条件。只有扩展路径、安全运行、连续状态传播和分层命令日志全部通过预验收后才执行。若最终未执行、未完成或数据链不足以构成可解释证据，投稿稿应整体删除该模块、相关公式、扩展次数和长时无退化/命令防抖主张，不保留 pending 占位。
+>
 > 旧文档中出现的 `B_ours`、四格因子实验、Reference Governor 核心消融、modal hard cap、终端独有贡献和外部 planner 排名，不再属于当前论文主线。
 
 ## 1. 论文的核心定位
@@ -55,6 +57,8 @@ S-MPCC 是一个沿预先给定几何可行路径运行的在线滚动时域局�
 \text{是否实时且被实际执行}.
 \]
 
+长时传播与命令规律性审计只能在这条核心证据链完成后作为支持性扩展，不能成为摘要、贡献列表或主结论的前置条件。
+
 ### 1.4 当前允许的主要主张
 
 正式实验完成后，论文可以谨慎主张：
@@ -86,15 +90,15 @@ S-MPCC 是一个沿预先给定几何可行路径运行的在线滚动时域局�
 
 完整论文采用五个正文部分，实验结果和解释按研究问题合并，不另设一个内容重复的通用 Discussion：
 
-| 位置 | 章节 | 本章核心作用 |
-| --- | --- | --- |
-| 前置部分 | Title、Abstract、Keywords | 用最短篇幅交代问题、方法、证据和结论 |
-| I | Introduction | 建立问题、缺口、方法定位、贡献和适用边界 |
-| II | Related Work | 从物理任务和决策层两条轴线定位 S-MPCC |
-| III | S-MPCC Method | 给出可复现的机器人—液体增广预测和在线 OCP |
-| IV | Experimental Evaluation | 按 RQ1–RQ4 建立完整实验因果与可行性证据链 |
-| V | Conclusion and Limitations | 汇总得到支持的结论，并明确不能外推的范围 |
-| 补充材料 | Supplementary Material | 保存完整配置、正式矩阵、开发数据和详细诊断 |
+| 位置     | 章节                       | 本章核心作用                               |
+| -------- | -------------------------- | ------------------------------------------ |
+| 前置部分 | Title、Abstract、Keywords  | 用最短篇幅交代问题、方法、证据和结论       |
+| I        | Introduction               | 建立问题、缺口、方法定位、贡献和适用边界   |
+| II       | Related Work               | 从物理任务和决策层两条轴线定位 S-MPCC      |
+| III      | S-MPCC Method              | 给出可复现的机器人—液体增广预测和在线 OCP |
+| IV       | Experimental Evaluation    | 按 RQ1–RQ4 建立完整实验因果与可行性证据链 |
+| V        | Conclusion and Limitations | 汇总得到支持的结论，并明确不能外推的范围   |
+| 补充材料 | Supplementary Material     | 保存完整配置、正式矩阵、开发数据和详细诊断 |
 
 章节之间的逻辑关系为：
 
@@ -487,7 +491,7 @@ Related Work 的最后一句应自然引出方法：既然缺口位于在线 pat
 
 ### 7.1 本章回答的问题
 
-本章按四个研究问题组织，而不是分别按 RGB、轨迹、速度、模型和求解器拆章。每个 RQ 内同时使用物理液面、运动、激励、任务表现和计算指标回答一个明确问题。
+本章按“四个核心 RQ + 一个支持性证据部分”组织，而不是分别按 RGB、轨迹、速度、模型和求解器拆章。每个 RQ 内同时使用物理液面、运动、激励、任务表现和计算指标回答一个明确问题。第五部分不是 RQ5，其中的长时传播与命令规律性审计仅为条件性模块。
 
 ### 7.2 4.1 Evaluation Questions and Evidence Structure
 
@@ -497,6 +501,8 @@ Related Work 的最后一句应自然引出方法：既然缺口位于在线 pat
 - **RQ2 — Completion-time confound：** 完成时间匹配后，S-MPCC 的收益是否仍然存在？
 - **RQ3 — Container transfer：** 只根据容器几何重算模型参数而不重新调权时，收益能否跨容器保持？
 - **RQ4 — State-dependent online planning and propagated-state effect：** 构造相位和正式运行中的传播状态是否改变未来规划与 optimized first action，并且求解是否满足实时期限？
+
+实验证据在章内保持五部分结构：RQ1、RQ2、RQ3、RQ4，以及 `Supporting Robustness, Model Consistency, and Sensitivity`。后者只用于说明方法的实用边界和模型局限，不改变四个 RQ 的主次关系。
 
 随后给出证据链：
 
@@ -543,11 +549,11 @@ Related Work 的最后一句应自然引出方法：既然缺口位于在线 pat
 
 正文在这里放三方法定义表：
 
-| Method | Frozen code mapping | Liquid state | Slosh cost | Smoothing | Role |
-| --- | --- | ---: | ---: | ---: | --- |
-| Baseline MPCC | `B0` | Off | Off | Nominal | 基础 MPCC 对照 |
-| Smooth-only MPCC | `B_smooth` | Off | Off | Enhanced | 通用增强平滑对照 |
-| S-MPCC | `B_slosh` | On | On | Nominal | 本文方法 |
+| Method           | Frozen code mapping | Liquid state | Slosh cost | Smoothing | Role             |
+| ---------------- | ------------------- | -----------: | ---------: | --------: | ---------------- |
+| Baseline MPCC    | `B0`              |          Off |        Off |   Nominal | 基础 MPCC 对照   |
+| Smooth-only MPCC | `B_smooth`        |          Off |        Off |  Enhanced | 通用增强平滑对照 |
+| S-MPCC           | `B_slosh`         |           On |         On |   Nominal | 本文方法         |
 
 解释三种比较：
 
@@ -561,25 +567,31 @@ Related Work 的最后一句应自然引出方法：既然缺口位于在线 pat
 
 完整方案采用 \(n=8\) 个随机区组、共 88 次正式实物实验：
 
-| 证据块 | 条件 | 方法 | 次数 | 用途 |
-| --- | --- | --- | ---: | --- |
-| 低风险区组 | \(C_1\)，低风险路径 | 三种核心方法 | 24 | RQ1 双路径一致性 |
-| 容器 super-block | \(C_1/C_2\)，高风险路径 | 三种核心方法 | 48 | RQ1 高风险结果与 RQ3 |
-| 等时间区组 | \(C_1\)，高风险路径 | Smooth-match、S-MPCC | 16 | RQ2 |
-| 合计 | — | — | 88 | RQ1–RQ4 与实时性 |
+| 证据块           | 条件                    | 方法                 | 次数 | 用途                 |
+| ---------------- | ----------------------- | -------------------- | ---: | -------------------- |
+| 低风险区组       | \(C_1\)，低风险路径     | 三种核心方法         |   24 | RQ1 双路径一致性     |
+| 容器 super-block | \(C_1/C_2\)，高风险路径 | 三种核心方法         |   48 | RQ1 高风险结果与 RQ3 |
+| 等时间区组       | \(C_1\)，高风险路径     | Smooth-match、S-MPCC |   16 | RQ2                  |
+| 合计             | —                      | —                   |   88 | RQ1–RQ4 与实时性    |
 
-可选物理参数失配组：在 \(C_2\) 上错误使用 \(C_1\) 参数运行 S-MPCC，每个 super-block 增加一次，共增加 8 次，使总数变为 96。只有该组的外部 \(H_{\mathrm{vis}}\) 支持时，才能讨论几何参数更新对物理迁移效果的必要性。
+可选物理参数失配组：在 \(C_2\) 上错误使用 \(C_1\) 参数运行 S-MPCC，每个 super-block 增加一次，共增加 8 次。若只完成该扩展，总数为 96。只有该组的外部 \(H_{\mathrm{vis}}\) 支持时，才能讨论几何参数更新对物理迁移效果的必要性。
+
+条件性长时审计组：仅在预验收通过后，用 \(C_1\) 和冻结的扩展路径执行 8 次 S-MPCC 长时运行，每次包含 5 个连续高风险曲率序列，序列之间不重置液体状态。该组不计入 88 次主矩阵；若只完成该扩展，总数也为 96；两个 8 次扩展都完成时才为 104。
+
+> **本章的硬边界：** 88 次是唯一主实验矩阵。长时传播与命令规律性审计不保证执行，也不保证得到“无退化”结果。若未执行、未完成或数据无效，最终稿中不计相应的 96/104 次，不保留该小节及相关主张。若完成了合格采集但结果不利，则应如实报告，不得因为结果不符合预期而删除。
 
 RQ4 纵向/横向四相位规划、实际传播状态 actual/zero replay，以及 RQ3 参数切换和计算 mismatch replay 均属于计算实验，不增加 88 次主方案的实物次数。
 
 若实验资源不足，可按证据包缩减，但必须同步缩小论文主张：
 
-| 证据包 | 正式实物组成（\(n=8\)） | 次数 | 可以保留的结论 |
-| --- | --- | ---: | --- |
-| 核心机制包 | \(C_1\) 高风险三方法 + 等时间两方法 | 40 | RQ1 高风险、RQ2、RQ4、实时性 |
-| 双路径包 | 核心机制包 + \(C_1\) 低风险三方法 | 64 | 增加两条路径的一致性 |
-| 完整主方案 | 双路径包 + \(C_2\) 高风险三方法 | 88 | 完整 RQ1–RQ4 和跨容器 RQ3 |
-| 参数必要性扩展 | 完整主方案 + \(C_2\) 错误参数 S-MPCC | 96 | 可检验参数更新对物理迁移是否必要 |
+| 证据包                 | 正式实物组成（\(n=8\)）               | 次数 | 可以保留的结论                         |
+| ---------------------- | ------------------------------------- | ---: | -------------------------------------- |
+| 核心机制包             | \(C_1\) 高风险三方法 + 等时间两方法   |   40 | RQ1 高风险、RQ2、RQ4、实时性           |
+| 双路径包               | 核心机制包 +\(C_1\) 低风险三方法      |   64 | 增加两条路径的一致性                   |
+| 完整主方案             | 双路径包 +\(C_2\) 高风险三方法        |   88 | 完整 RQ1–RQ4 和跨容器 RQ3             |
+| 参数必要性扩展         | 完整主方案 +\(C_2\) 错误参数 S-MPCC   |   96 | 可检验参数更新对物理迁移是否必要       |
+| 长时审计扩展（条件性） | 完整主方案 + 8 次五序列连续运行       |   96 | 可检验测试时长内的传播与命令规律性边界 |
+| 两项可选扩展全部完成   | 完整主方案 + 物理 mismatch + 长时审计 |  104 | 可分别检验两类支持性问题，不新增 RQ    |
 
 如果最终只完成 40 或 64 次，摘要、贡献、RQ 列表、结果表和结论中必须删除或降级尚未获得对应数据的跨路径或跨容器主张。
 
@@ -863,9 +875,23 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 
 这一节必须用实际运行日志证明 online feasibility，不能仅凭采用 SQP-RTI 或 acados 就声称实时。
 
-### 7.9 4.8 Supporting Model Consistency and Sensitivity
+### 7.9 4.8 Supporting Robustness, Model Consistency, and Sensitivity
 
-这不是第五个 RQ，也不能替代 RGB 主结果。本节只做支持性诊断：
+这是实验章的第五个证据部分，但不是第五个 RQ，也不能替代 RGB 主结果。本节分为一个条件性审计模块和一个常规支持性诊断模块。
+
+#### 4.8.1 Conditional long-horizon propagation and command-regularity audit
+
+该模块只在以下条件全部满足时执行：扩展路径安全且可重复；液体状态能在 5 个连续序列之间保持传播而不被重置；raw solver、post-gate 和 published command 日志完整；视觉链、同步和失败记录可用；退化和命令规律性容差在查看正式结果前由独立标定/部署记录冻结。
+
+长时传播部分采用 8 次独立 \(C_1\) 运行，每次连续执行 5 个高风险曲率序列，中间不重置模态状态。主要检查序列级 modal–vision disagreement、\(H_{\mathrm{vis}}\)、轨迹误差、求解失败和首末序列差异。命令规律性部分检查 raw/post/published 三层命令的 total-variation rate、命令角加速度、方向反转率、高频能量和执行层干预。主矩阵中的最小执行层审计（raw/post/published 命令和 \(r_{\mathrm{int}}\)）仍然必须保留；只有这一组扩展的长时和非劣性分析是可选的。
+
+本审计不构成闭环稳定性、递归可行性或长期无误差累积的证明。即使结果支持，也只能写“在测试时长、路径族、容器和命令限制下未观察到超过冻结容差的系统性退化”。
+
+> **保留/删除规则：** 只有当该审计完成合格采集且数据可解释时，才在最终论文中保留本小节及支持性图表。若预验收失败、未执行、未完成或关键日志/视觉数据无效，应从正文、补充材料、实验总数和结论中同步删除该模块，不得以 pending 占位投稿。已合格完成但呈现负面结果时则应如实报告。
+
+#### 4.8.2 Model consistency and sensitivity
+
+该模块做常规支持性诊断：
 
 - \(H_{\mathrm{modal}}\) 与 \(H_{\mathrm{vis}}\) 的代表性对齐时序；
 - vision-normalized signed bias；
@@ -895,6 +921,8 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 4. RQ3 容器 interaction 与过程曲线；
 5. RQ4 纵横向四相位规划、actual/zero optimized first-action difference 与 runtime ECDF。
 
+长时传播/命令规律性审计不进入上述五组核心图。只有完成合格采集且结果可解释时，才可在正文增加一组支持性图或一张紧凑表；否则不占用正文篇幅。
+
 表格应出现在首次讨论相应 RQ 的附近，不能把 RQ3 表统一堆到实验章末尾。
 
 ### 7.11 本章不应写入
@@ -908,6 +936,8 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 - 把同一可变 solver 上顺序执行的 actual/zero 求解当成公平反事实；
 - 把计算 mismatch 写成参数更新对真实物理迁移的必要性证据；
 - 把 optimized first-action difference 写成机器人已经执行的反事实命令；
+- 把长时审计包装成 RQ5、稳定性证明或三项贡献的必需证据；
+- 在未执行或数据无效时保留长时审计的 pending 小节、96/104 次计数或无退化/防抖主张；
 - 在没有统一复现协议的情况下加入外部 planner 排名。
 
 ## 8. 第五章：Conclusion and Limitations
@@ -932,6 +962,7 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 - 相位相关规划、实际传播状态 replay 和实时求解结果。
 
 只写最重要的效应量和区间，不重复整张结果表。
+长时传播与命令规律性审计不进入这四条核心结论；只有完成合格采集且结果可解释时，才在其后增加一句限定条件的支持性结论。
 
 #### 第三段：局限性
 
@@ -972,7 +1003,7 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 2. Baseline、Smooth-only、S-MPCC 的全部权重和 normalizer；
 3. 实验装置、路径、容器、相机、同步和软件提交的 freeze checklist；
 4. required signals 与 derived metrics checklist；
-5. 40/64/88 次证据包和可选 96 次参数必要性扩展矩阵；
+5. 40/64/88 次主证据包，以及两个独立的可选 +8 扩展（参数必要性、长时审计）；只在对应扩展实际完成时列出 96/104 次总数；
 6. 旧三次 development-only 数据；
 7. 旧 “S-MPCC + enhanced smoothing” 的补充记录；
 8. 完整 sensitivity 和 runtime 表；
@@ -980,6 +1011,7 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 10. \(C_2\) 正确/错误参数的计算 mismatch 与可选物理 mismatch；
 11. raw/post-gate/published command 和执行层干预统计；
 12. 正文放不下的低风险过程曲线和机制诊断。
+13. 仅当条件性长时审计完成时，收录扩展路径、预验收、序列级传播结果和分层命令规律性全分布。
 
 当前 `spmpc_paper_core/main.tex` 不会自动编译 `supplementary/supplementary_material.tex`。投稿阶段可根据期刊要求把它作为独立补充 PDF，或由完整论文入口显式 `\input`/`\include`；在未显式引用前，它不会出现在 core PDF 中。
 
@@ -993,38 +1025,40 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 
 ## 10. 章节—证据映射
 
-| 核心判断 | 主要出现位置 | 必要证据 |
-| --- | --- | --- |
-| 液体具有动态记忆，普通平滑不能显式表示相位 | Introduction、Related Work、RQ4 | 文献定位、纵横向四相位规划与 actual/zero replay |
-| S-MPCC 把液体状态放入在线 MPCC | Method | 增广状态、传播方程、slosh cost、optimized first action |
-| 物理液面得到改善 | RQ1 | 正式 block-paired \(H_{\mathrm{vis}}\) 结果 |
-| 改善不只是通用平滑 | RQ1 | Baseline、Smooth-only、S-MPCC 三方法比较 |
-| 改善不只是更慢 | RQ2 | 独立 pilot 冻结后的等完成时间比较 |
-| 容器参数化可实现有限迁移 | RQ3 | \(C_1/C_2\) super-block、参数切换规划与计算 mismatch |
-| 正式传播状态实际改变优化动作 | RQ4 | 同一 pre-solve 快照下 actual/zero optimized first-action difference |
-| 方法是真正的状态相关在线规划 | RQ4 | 纵横向不同液体相位的完整预测计划与 optimized first action |
-| 方法可以实时运行 | RQ4 | solve-time ECDF、p95、miss 和 failure |
-| OCP 差异是否真正到达执行层 | Measurements、RQ1、RQ4 | raw/post-gate/published command 与 \(r_{\mathrm{int}}\) |
-| 内部模型具有何种一致性和局限 | Supporting Analysis | modal–vision 对齐和敏感性，不替代 RGB |
+| 核心判断                                             | 主要出现位置                    | 必要证据                                                                           |
+| ---------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------- |
+| 液体具有动态记忆，普通平滑不能显式表示相位           | Introduction、Related Work、RQ4 | 文献定位、纵横向四相位规划与 actual/zero replay                                    |
+| S-MPCC 把液体状态放入在线 MPCC                       | Method                          | 增广状态、传播方程、slosh cost、optimized first action                             |
+| 物理液面得到改善                                     | RQ1                             | 正式 block-paired\(H_{\mathrm{vis}}\) 结果                                         |
+| 改善不只是通用平滑                                   | RQ1                             | Baseline、Smooth-only、S-MPCC 三方法比较                                           |
+| 改善不只是更慢                                       | RQ2                             | 独立 pilot 冻结后的等完成时间比较                                                  |
+| 容器参数化可实现有限迁移                             | RQ3                             | \(C_1/C_2\) super-block、参数切换规划与计算 mismatch                               |
+| 正式传播状态实际改变优化动作                         | RQ4                             | 同一 pre-solve 快照下 actual/zero optimized first-action difference                |
+| 方法是真正的状态相关在线规划                         | RQ4                             | 纵横向不同液体相位的完整预测计划与 optimized first action                          |
+| 方法可以实时运行                                     | RQ4                             | solve-time ECDF、p95、miss 和 failure                                              |
+| OCP 差异是否真正到达执行层                           | Measurements、RQ1、RQ4          | raw/post-gate/published command 与\(r_{\mathrm{int}}\)                             |
+| 测试时长内是否存在明显的传播退化或命令抖动（条件性） | Supporting Analysis             | 只在长时审计完成后使用序列级 modal–vision、首末差异、TVR/高频能量和执行层干预证据 |
+| 内部模型具有何种一致性和局限                         | Supporting Analysis             | modal–vision 对齐和敏感性，不替代 RGB                                             |
 
 ## 11. 统一术语和符号
 
 后续所有章节应统一：
 
-| 项目 | 统一写法 | 不再使用或谨慎使用 |
-| --- | --- | --- |
-| 论文方法名 | S-MPCC | SPMPC 作为论文名 |
-| 内部 OCP | slosh-aware MPCC formulation | 泛称完整自主 planner |
-| 物理参考液面 | calibrated vision-based experimental reference, \(H_{\mathrm{vis}}\) | absolute ground truth |
-| 内部模型响应 | \(H_{\mathrm{modal}}\) | \(H_{\mathrm{diag}}\)、物理真值 |
-| 液体模态 | first lateral mode represented in two orthogonal directions | two-mode model |
-| 核心方法组 | S-MPCC | \(B_{\mathrm{ours}}\) |
-| 增强平滑组 | Smooth-only MPCC | ours-smooth |
-| 等时间组 | Smooth-match MPCC | 与核心三方法混为第四组 |
-| 代码映射 | Baseline=`B0`、Smooth-only=`B_smooth`、S-MPCC=`B_slosh` | 用 `B_ours` 代表论文方法 |
-| RQ4 反事实量 | optimized first-action difference | 未经过执行层却称 counterfactual executed command |
-| freeboard fraction | \(\lambda_H\) | \(\rho_f\) |
-| 路径范围 | prescribed geometrically feasible path | obstacle-free guarantee / safe under all conditions |
+| 项目               | 统一写法                                                            | 不再使用或谨慎使用                                  |
+| ------------------ | ------------------------------------------------------------------- | --------------------------------------------------- |
+| 论文方法名         | S-MPCC                                                              | SPMPC 作为论文名                                    |
+| 内部 OCP           | slosh-aware MPCC formulation                                        | 泛称完整自主 planner                                |
+| 物理参考液面       | calibrated vision-based experimental reference,\(H_{\mathrm{vis}}\) | absolute ground truth                               |
+| 内部模型响应       | \(H_{\mathrm{modal}}\)                                              | \(H_{\mathrm{diag}}\)、物理真值                     |
+| 液体模态           | first lateral mode represented in two orthogonal directions         | two-mode model                                      |
+| 核心方法组         | S-MPCC                                                              | \(B_{\mathrm{ours}}\)                               |
+| 增强平滑组         | Smooth-only MPCC                                                    | ours-smooth                                         |
+| 等时间组           | Smooth-match MPCC                                                   | 与核心三方法混为第四组                              |
+| 代码映射           | Baseline=`B0`、Smooth-only=`B_smooth`、S-MPCC=`B_slosh`       | 用`B_ours` 代表论文方法                           |
+| RQ4 反事实量       | optimized first-action difference                                   | 未经过执行层却称 counterfactual executed command    |
+| 长时审计           | conditional supporting audit                                        | RQ5、stability proof、必做主实验                    |
+| freeboard fraction | \(\lambda_H\)                                                       | \(\rho_f\)                                          |
+| 路径范围           | prescribed geometrically feasible path                              | obstacle-free guarantee / safe under all conditions |
 
 ## 12. 推荐写作与执行顺序
 
@@ -1033,12 +1067,13 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 1. **冻结 Method：** 核心定义、符号、公式、执行层边界和方法名全部一致。
 2. **冻结实验协议：** 三方法映射、权重、\(\zeta\)、全运动窗口 primary、10%–90% 敏感性窗口、统计主比较、执行限制、RGB 处理和失败规则。
 3. **完成实验工具准备：** 冻结两条路径、\(C_2\)、相机标定和随机区组表；验证 raw/post-gate/published command 记录；验收 replay 快照克隆、actual 复现和完整 horizon 导出。
-4. **采集正式数据：** 按矩阵速查表优先完成 40 次核心机制包，再扩展到 64/88 次；只有需要参数物理必要性主张时扩展到 96 次。
+4. **采集正式数据：** 按矩阵速查表优先完成 40 次核心机制包，再扩展到 64/88 次。88 次主矩阵完成后，只有需要参数物理必要性主张时才增加 8 次物理 mismatch。
 5. **完成计算实验：** 执行纵横向四相位、actual/zero replay、容器参数切换和计算 mismatch。
-6. **填写 RQ1–RQ4：** 先生成原始配对点、过程曲线、效应量、区间、sign-flip 和 leave-one-block-out，再写结果解释。
-7. **反向修改 Introduction 与 Related Work：** 让贡献和主张与实际证据完全一致。
-8. **最后写 Abstract 与 Conclusion：** 只使用正式结果中的最关键数字。
-9. **同步完整论文：** `spmpc_paper_core` 确定后，再将方法和实验同步到 `spmpc_paper`。
+6. **条件性决定长时审计：** 在不影响 RQ1–RQ4 的前提下进行预验收；通过则可增加 8 次长时运行，不通过则标记 no-go 并从最终稿删除整个模块。单独完成任一 +8 扩展为 96 次，两者都完成才为 104 次。
+7. **填写 RQ1–RQ4：** 先生成原始配对点、过程曲线、效应量、区间、sign-flip 和 leave-one-block-out，再写结果解释。
+8. **反向修改 Introduction 与 Related Work：** 让贡献和主张与实际证据完全一致。
+9. **最后写 Abstract 与 Conclusion：** 只使用正式结果中的最关键数字；只有条件性审计完成且可解释时才提及其结果。
+10. **同步完整论文：** `spmpc_paper_core` 确定后，再将方法和实验同步到 `spmpc_paper`。
 
 ## 13. 正式采集前的论文冻结检查
 
@@ -1064,6 +1099,8 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 - [ ] replay 工具能从同一 pre-solve 快照克隆 actual/zero 分支并导出完整 horizon；
 - [ ] actual replay 能在冻结容差内复现在线第一控制量和 raw solver command；
 - [ ] 计算 mismatch 不会被写成物理必要性证据；
+- [ ] 若计划执行长时审计，扩展路径安全、五序列连续传播、分层命令日志和独立容差冻结已通过预验收；否则该扩展标记为 no-go；
+- [ ] 长时审计的删除开关已明确：未执行/未完成/数据无效时，同步删除小节、公式、图表、96/104 计数和相关主张；
 - [ ] 正式软件 revision、文档、配置和分析脚本已归档；
 - [ ] 旧三次结果明确标记为 pilot，不计入正式 \(n\)。
 
@@ -1072,3 +1109,5 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 整篇论文最终应让读者得到以下清晰认识：
 
 > S-MPCC 的价值不在于单纯让机器人运动更平滑，也不在于提出新的高保真液体模型。它把一个可实时传播的低阶液体动态状态放入移动底盘的 path-progress MPCC 决策层，使当前液体位移、速度和相位能够改变下一段在线运动计划。论文通过三种匹配内部方法、独立等完成时间比较、跨容器无权重重调迁移、纵横向四相位规划、正式传播状态 actual/zero replay、执行层干预诊断和实时求解统计，逐层验证这一有限但明确的主张；真实物理效果始终由独立的 \(H_{\mathrm{vis}}\) 结果承担。
+
+上述最终叙事不依赖长时传播与命令规律性审计。该模块若完成，只在第五个支持性证据部分中限定其适用时长和条件；若不做，论文仍以 88 次主矩阵和 RQ1–RQ4 收敛。

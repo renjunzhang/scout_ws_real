@@ -57,18 +57,23 @@ Hefei, China (e-mail: zhangrenjun@mail.ustc.edu.cn).}}
 \maketitle
 
 \begin{abstract}
-Mobile bases carrying open liquid containers can excite free-surface oscillations during acceleration, braking, and turning. Liquid motion has dynamic memory: its future response depends on the current modal displacement, modal velocity, and oscillation phase as well as future base excitation. This paper formulates \SMPCC{}, an online receding-horizon local motion planner and controller for transport along a prescribed geometrically feasible reference path. The method augments robot motion and virtual path progress with a container-parameterized first-mode liquid model whose state is propagated from odometry. A slosh-aware \MPCC{} problem then selects state-dependent motion while retaining executable base constraints and first-action receding-horizon output. The evaluation uses matched slosh-agnostic and smooth-only \MPCC{} variants, an independently tuned completion-time-matched comparison, and geometry-based transfer across containers without controller-weight retuning. Physical liquid-response claims rely on a calibrated vision-based reference measurement rather than the internal modal prediction.
+Transporting an open liquid on a mobile base requires more than suppressing command variation: the response to a candidate motion also depends on the liquid displacement, velocity, and oscillation phase already present when that motion is planned.
+This paper presents an online receding-horizon local motion planner and controller for a prescribed geometrically feasible path.
+The proposed \SMPCC{} formulation jointly predicts robot motion, virtual path progress, and a container-parameterized first lateral sloshing mode represented in two orthogonal directions.
+An odometry-driven propagation step carries the modal state between control cycles, so the current liquid dynamic memory can alter the next optimized motion segment.
+The frozen evaluation protocol uses matched slosh-agnostic and smooth-only MPCC variants, an independently tuned completion-time-matched comparison, geometry-based transfer without controller-weight retuning, controlled liquid-phase studies, counterfactual replay of the propagated runtime state, and command-chain and runtime audits.
+The scope is online motion generation along a supplied path; global route planning, obstacle reasoning, and a formal spill-free guarantee are not claimed.
 \end{abstract}
 
 \begin{IEEEkeywords}
 mobile robots, open-liquid transport, liquid sloshing, model predictive contouring control, receding-horizon planning
 \end{IEEEkeywords}
 
-\input{sections/01_introduction}
-\input{sections/02_related_work}
+% \input{sections/01_introduction}
+% \input{sections/02_related_work}
 \input{sections/03_method}
 \input{sections/04_experiments}
-\input{sections/05_conclusion}
+% \input{sections/05_conclusion}
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
