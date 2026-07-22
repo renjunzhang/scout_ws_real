@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # One-click SPMPC fixed-path real trial wrapper.
 # Assumes the real sensor/base/localization stack is already running.
-# This script starts the fixed-path generator, starts the black-box bag recorder,
-# sends the goal, waits for the fixed path, then launches the selected SPMPC
-# variant. The recorder always has a bounded duration; Ctrl+C stops the run earlier.
+# The path source can either generate a path from the current pose or replay a
+# frozen JSON path with a configurable start-pose gate. The script also starts
+# the black-box recorder and selected SPMPC variant. The recorder always has a
+# bounded duration; Ctrl+C stops the run earlier.
 
 set -euo pipefail
 
@@ -121,6 +122,10 @@ run_matrix_preset() {
       NAME="${label}" \
       RUN_OUT_DIR= \
       PATH_FILE= \
+      PILOT_MODE=false \
+      PILOT_METHOD= \
+      PILOT_RECORD_RGB=false \
+      PATH_SOURCE_MODE=generate \
       CMD_TOPIC="${CMD_TOPIC:-/cmd_vel}" \
       V_REF="${V_REF:-0.20}" \
       ALPHA_MAX="${ALPHA_MAX:-1.2}" \
@@ -163,10 +168,59 @@ fi
 
 DATE="${DATE:-$(date +%Y%m%d)}"
 STAMP="${STAMP:-$(date +%H%M%S)}"
-VARIANT="${VARIANT:-${ALG:-B_ours}}"
-ALG="${ALG:-${VARIANT}}"
-RUN_LABEL="${RUN_LABEL:-real_fixed_${VARIANT}_${STAMP}}"
+PILOT_MODE="${PILOT_MODE:-false}"
+PILOT_METHOD="${PILOT_METHOD:-}"
+PILOT_RECORD_RGB="${PILOT_RECORD_RGB:-false}"
+ALLOW_PILOT_PATH_OVERWRITE="${ALLOW_PILOT_PATH_OVERWRITE:-false}"
+
+if [[ -z "${PATH_SOURCE_MODE:-}" ]]; then
+  if truthy "${PILOT_MODE}"; then
+    PATH_SOURCE_MODE=replay
+  else
+    PATH_SOURCE_MODE=generate
+  fi
+fi
+
+if [[ -n "${PILOT_METHOD}" ]]; then
+  case "${PILOT_METHOD}" in
+    B0)
+      VARIANT=B0
+      W_SLOSH=0.0
+      ;;
+    Bsmooth|B_smooth)
+      VARIANT=B_smooth
+      W_SLOSH=0.0
+      ;;
+    W*)
+      pilot_weight="${PILOT_METHOD#W}"
+      require_number "PILOT_METHOD weight" "${pilot_weight}"
+      [[ "${pilot_weight}" != -* ]] || fail "PILOT_METHOD weight must be non-negative, got '${pilot_weight}'"
+      VARIANT=B_slosh
+      W_SLOSH="${pilot_weight}"
+      ;;
+    *)
+      fail "Unknown PILOT_METHOD='${PILOT_METHOD}'. Use B0, Bsmooth, or W<number> such as W1/W2/W5/W10."
+      ;;
+  esac
+  ALG="${VARIANT}"
+else
+  VARIANT="${VARIANT:-${ALG:-B_ours}}"
+  ALG="${ALG:-${VARIANT}}"
+fi
+
+if [[ -z "${RUN_LABEL:-}" ]]; then
+  if truthy "${PILOT_MODE}"; then
+    RUN_LABEL="pilot_${PILOT_METHOD:-${VARIANT}}_${STAMP}"
+  else
+    RUN_LABEL="real_fixed_${VARIANT}_${STAMP}"
+  fi
+fi
 NAME="${NAME:-${RUN_LABEL}}"
+if truthy "${PILOT_MODE}"; then
+  RUN_CLASS=pilot
+else
+  RUN_CLASS=trial
+fi
 
 MAX_RECORD_SEC="${MAX_RECORD_SEC:-60}"
 RECORD_SEC="${RECORD_SEC:-60}"
@@ -189,10 +243,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel 2>/dev/null || { cd "${SCRIPT_DIR}/../../../../.." && pwd; })"
 RECORDER_SCRIPT="${RECORDER_SCRIPT:-${SCRIPT_DIR}/record_spmpc_full_rgb_bag.sh}"
 
-BAG_ROOT="${BAG_ROOT:-${HOME}/slosh_bags/real/${DATE}_fixed_path_compare}"
-RUN_OUT_DIR="${RUN_OUT_DIR:-${BAG_ROOT}/${VARIANT}}"
-PATH_ROOT="${PATH_ROOT:-${HOME}/fixed_paths/real/${DATE}_fixed_path_compare}"
-PATH_FILE="${PATH_FILE:-${PATH_ROOT}/fixed_s_curve_compare.json}"
+if truthy "${PILOT_MODE}"; then
+  BAG_ROOT="${BAG_ROOT:-${HOME}/slosh_bags/real/${DATE}_spmpc_parameter_pilot}"
+  RUN_OUT_DIR="${RUN_OUT_DIR:-${BAG_ROOT}/${PILOT_METHOD:-${VARIANT}}}"
+else
+  BAG_ROOT="${BAG_ROOT:-${HOME}/slosh_bags/real/${DATE}_fixed_path_compare}"
+  RUN_OUT_DIR="${RUN_OUT_DIR:-${BAG_ROOT}/${VARIANT}}"
+fi
+if truthy "${PILOT_MODE}"; then
+  PATH_ROOT="${PATH_ROOT:-${HOME}/fixed_paths/real/${DATE}_spmpc_parameter_pilot}"
+  PATH_FILE="${PATH_FILE:-${PATH_ROOT}/H0_weight_pilot.json}"
+else
+  PATH_ROOT="${PATH_ROOT:-${HOME}/fixed_paths/real/${DATE}_fixed_path_compare}"
+  if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
+    PATH_FILE="${PATH_FILE:-}"
+  else
+    PATH_FILE="${PATH_FILE:-${PATH_ROOT}/fixed_s_curve_compare.json}"
+  fi
+fi
 REF_TOPIC="${REF_TOPIC:-/scout/global_path_fixed}"
 GOAL_TOPIC="${GOAL_TOPIC:-/scout/goal}"
 GOAL_FRAME="${GOAL_FRAME:-map}"
@@ -212,6 +280,18 @@ PATH_SIDE="${PATH_SIDE:-left}"
 PATH_SMOOTH_ITERATIONS="${PATH_SMOOTH_ITERATIONS:-3}"
 GOAL_REPEAT_COUNT="${GOAL_REPEAT_COUNT:-5}"
 GOAL_REPEAT_RATE="${GOAL_REPEAT_RATE:-5}"
+BASE_FRAME="${BASE_FRAME:-base_link}"
+if truthy "${PILOT_MODE}"; then
+  START_POS_TOL="${START_POS_TOL:-0.08}"
+  START_YAW_TOL="${START_YAW_TOL:-0.15}"
+else
+  START_POS_TOL="${START_POS_TOL:-0.05}"
+  START_YAW_TOL="${START_YAW_TOL:-0.10}"
+fi
+START_HOLD_SEC="${START_HOLD_SEC:-0.5}"
+START_GATE_TIMEOUT_SEC="${START_GATE_TIMEOUT_SEC:-120}"
+PATH_PUBLISH_RATE="${PATH_PUBLISH_RATE:-2.0}"
+GENERATED_PATH_WAIT_SEC="${GENERATED_PATH_WAIT_SEC:-10}"
 
 CMD_TOPIC="${CMD_TOPIC:-/cmd_vel}"
 COSTMAP_TOPIC="${COSTMAP_TOPIC:-/map}"
@@ -220,9 +300,15 @@ SOLVER_BACKEND="${SOLVER_BACKEND:-continuous_mpcc_acados}"
 V_REF="${V_REF:-0.20}"
 W_SLOSH="${W_SLOSH:--1.0}"
 SLOSH_HEIGHT_MAX="${SLOSH_HEIGHT_MAX:--1.0}"
-DELAY_PHASE_MODE="${DELAY_PHASE_MODE:-off}"
-DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC:--1.0}"
-DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC:--1.0}"
+if truthy "${PILOT_MODE}"; then
+  DELAY_PHASE_MODE="${DELAY_PHASE_MODE:-fixed_closed_loop}"
+  DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC:-0.15}"
+  DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC:-0.22}"
+else
+  DELAY_PHASE_MODE="${DELAY_PHASE_MODE:-off}"
+  DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC:--1.0}"
+  DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC:--1.0}"
+fi
 ALPHA_MAX="${ALPHA_MAX:-1.2}"
 SHARED_LINEAR_ACCEL_LIMIT_ENABLE="${SHARED_LINEAR_ACCEL_LIMIT_ENABLE:-true}"
 SHARED_LINEAR_ACCEL_MAX="${SHARED_LINEAR_ACCEL_MAX:-0.6}"
@@ -230,15 +316,32 @@ SHARED_ANGULAR_LIMIT_ENABLE="${SHARED_ANGULAR_LIMIT_ENABLE:-true}"
 SHARED_ANGULAR_RATE_MAX="${SHARED_ANGULAR_RATE_MAX:-1.2}"
 SHARED_ANGULAR_ACCEL_MAX="${SHARED_ANGULAR_ACCEL_MAX:-1.2}"
 
-RECORD_RGB="${RECORD_RGB:-false}"
+if truthy "${PILOT_MODE}"; then
+  # Pilot runs are model-side parameter screening by default. RGB can only be
+  # re-enabled through the explicit pilot override to avoid stale shell exports.
+  RECORD_RGB="${PILOT_RECORD_RGB}"
+  RECORD_CAMERA="${PILOT_RECORD_RGB}"
+  RECORD_CAMERA_COMPRESSED=false
+  RECORD_DEPTH=false
+  RECORD_ONLINE_LIQUID=false
+else
+  RECORD_RGB="${RECORD_RGB:-false}"
+  RECORD_CAMERA="${RECORD_CAMERA:-${RECORD_RGB}}"
+  RECORD_CAMERA_COMPRESSED="${RECORD_CAMERA_COMPRESSED:-false}"
+  RECORD_DEPTH="${RECORD_DEPTH:-false}"
+  RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-false}"
+fi
 RECORD_SCAN="${RECORD_SCAN:-true}"
-RECORD_DEPTH="${RECORD_DEPTH:-false}"
 RECORD_STANDALONE_SLOSH="${RECORD_STANDALONE_SLOSH:-true}"
-RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-false}"
 RECORD_ALL_EXISTING_TOPICS="${RECORD_ALL_EXISTING_TOPICS:-false}"
-RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO:-true}"
 PATH_GENERATOR_STARTUP_SEC="${PATH_GENERATOR_STARTUP_SEC:-2}"
-RECORDER_STARTUP_SEC="${RECORDER_STARTUP_SEC:-2}"
+if truthy "${PILOT_MODE}"; then
+  RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO:-false}"
+  RECORDER_STARTUP_SEC="${RECORDER_STARTUP_SEC:-8}"
+else
+  RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO:-true}"
+  RECORDER_STARTUP_SEC="${RECORDER_STARTUP_SEC:-2}"
+fi
 PLANNER_STARTUP_SEC="${PLANNER_STARTUP_SEC:-2}"
 SEND_ZERO_ON_EXIT="${SEND_ZERO_ON_EXIT:-true}"
 OPERATOR_NOTE="${OPERATOR_NOTE:-one_click_spmpc_real_fixed_path_trial}"
@@ -249,6 +352,17 @@ require_cmd rosrun
 require_cmd roslaunch
 [[ -f "${RECORDER_SCRIPT}" ]] || fail "Recorder script not found: ${RECORDER_SCRIPT}"
 [[ -r "${RECORDER_SCRIPT}" ]] || fail "Recorder script is not readable: ${RECORDER_SCRIPT}"
+case "${PATH_SOURCE_MODE}" in
+  generate|replay) ;;
+  *) fail "PATH_SOURCE_MODE must be generate|replay, got '${PATH_SOURCE_MODE}'" ;;
+esac
+if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
+  [[ -n "${PATH_FILE}" ]] || fail "PATH_FILE is required when PATH_SOURCE_MODE=replay"
+  [[ -s "${PATH_FILE}" ]] || fail "Frozen replay path is missing or empty: ${PATH_FILE}"
+fi
+if truthy "${PILOT_MODE}" && [[ "${PATH_SOURCE_MODE}" == "generate" && -e "${PATH_FILE}" ]] && ! truthy "${ALLOW_PILOT_PATH_OVERWRITE}"; then
+  fail "Pilot path already exists and will not be overwritten: ${PATH_FILE}. Use replay, choose a new PATH_FILE, or explicitly set ALLOW_PILOT_PATH_OVERWRITE=true."
+fi
 case "${DELAY_PHASE_MODE}" in
   off|monitor|shadow|fixed_closed_loop) ;;
   *) fail "DELAY_PHASE_MODE must be off|monitor|shadow|fixed_closed_loop, got '${DELAY_PHASE_MODE}'" ;;
@@ -262,6 +376,12 @@ for kv in \
   "PATH_MIN_AMPLITUDE=${PATH_MIN_AMPLITUDE}" \
   "PATH_MAX_AMPLITUDE=${PATH_MAX_AMPLITUDE}" \
   "GOAL_REPEAT_RATE=${GOAL_REPEAT_RATE}" \
+  "START_POS_TOL=${START_POS_TOL}" \
+  "START_YAW_TOL=${START_YAW_TOL}" \
+  "START_HOLD_SEC=${START_HOLD_SEC}" \
+  "START_GATE_TIMEOUT_SEC=${START_GATE_TIMEOUT_SEC}" \
+  "PATH_PUBLISH_RATE=${PATH_PUBLISH_RATE}" \
+  "GENERATED_PATH_WAIT_SEC=${GENERATED_PATH_WAIT_SEC}" \
   "V_REF=${V_REF}" \
   "W_SLOSH=${W_SLOSH}" \
   "SLOSH_HEIGHT_MAX=${SLOSH_HEIGHT_MAX}" \
@@ -287,7 +407,10 @@ if ! timeout 5s rostopic list >/dev/null 2>&1; then
   fail "ROS master is not reachable; source the workspace and start the real stack/roscore first"
 fi
 
-mkdir -p "${RUN_OUT_DIR}" "$(dirname "${PATH_FILE}")"
+mkdir -p "${RUN_OUT_DIR}"
+if [[ "${PATH_SOURCE_MODE}" == "generate" ]]; then
+  mkdir -p "$(dirname "${PATH_FILE}")"
+fi
 
 path_generator_log="${RUN_OUT_DIR}/${NAME}_path_generator.log"
 send_goal_log="${RUN_OUT_DIR}/${NAME}_send_goal.log"
@@ -323,7 +446,7 @@ cleanup() {
   kill_child "${planner_pid}" "planner"
   publish_zero_cmd
   kill_child "${recorder_pid}" "recorder"
-  kill_child "${path_generator_pid}" "path generator"
+  kill_child "${path_generator_pid}" "path source"
 }
 
 on_interrupt() {
@@ -357,18 +480,61 @@ planner_cmd=(
 )
 planner_command_string="$(printf '%q ' "${planner_cmd[@]}")"
 
+if [[ "${PATH_SOURCE_MODE}" == "generate" ]]; then
+  path_cmd=(
+    rosrun scout_local_planner template_fixed_path_generator.py
+    --template "${PATH_TEMPLATE}"
+    --goal-topic "${GOAL_TOPIC}"
+    --output-topic "${REF_TOPIC}"
+    --path-file "${PATH_FILE}"
+    --start-heading current
+    --spacing "${PATH_SPACING}"
+    --amplitude-ratio "${PATH_AMPLITUDE_RATIO}"
+    --min-amplitude "${PATH_MIN_AMPLITUDE}"
+    --max-amplitude "${PATH_MAX_AMPLITUDE}"
+    --side "${PATH_SIDE}"
+    --smooth-iterations "${PATH_SMOOTH_ITERATIONS}"
+    --publish-count 0
+  )
+else
+  path_cmd=(
+    rosrun scout_local_planner fixed_global_path_runner.py
+    --mode replay
+    --path-file "${PATH_FILE}"
+    --output-topic "${REF_TOPIC}"
+    --base-frame "${BASE_FRAME}"
+    --start-pos-tol "${START_POS_TOL}"
+    --start-yaw-tol "${START_YAW_TOL}"
+    --start-hold-sec "${START_HOLD_SEC}"
+    --publish-rate "${PATH_PUBLISH_RATE}"
+    --publish-count 0
+  )
+fi
+path_command_string="$(printf '%q ' "${path_cmd[@]}")"
+
 run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
 {
   echo "date=${DATE}"
   echo "stamp=${STAMP}"
   echo "variant=${VARIANT}"
+  echo "run_class=${RUN_CLASS}"
+  echo "pilot_mode=${PILOT_MODE}"
+  echo "pilot_method=${PILOT_METHOD}"
+  echo "allow_pilot_path_overwrite=${ALLOW_PILOT_PATH_OVERWRITE}"
   echo "run_label=${RUN_LABEL}"
   echo "name=${NAME}"
   echo "record_sec=${RECORD_SEC}"
   echo "max_record_sec=${MAX_RECORD_SEC}"
   echo "run_out_dir=${RUN_OUT_DIR}"
   echo "path_file=${PATH_FILE}"
+  echo "path_source_mode=${PATH_SOURCE_MODE}"
+  echo "path_command=${path_command_string}"
   echo "ref_topic=${REF_TOPIC}"
+  echo "base_frame=${BASE_FRAME}"
+  echo "start_pos_tol=${START_POS_TOL}"
+  echo "start_yaw_tol=${START_YAW_TOL}"
+  echo "start_hold_sec=${START_HOLD_SEC}"
+  echo "start_gate_timeout_sec=${START_GATE_TIMEOUT_SEC}"
   echo "goal_topic=${GOAL_TOPIC}"
   echo "goal_frame=${GOAL_FRAME}"
   echo "goal_x=${GOAL_X}"
@@ -383,35 +549,33 @@ run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
   echo "delay_phase_linear_delay_sec=${DELAY_PHASE_LINEAR_DELAY_SEC}"
   echo "delay_phase_angular_delay_sec=${DELAY_PHASE_ANGULAR_DELAY_SEC}"
   echo "record_rgb=${RECORD_RGB}"
+  echo "record_camera=${RECORD_CAMERA}"
+  echo "record_camera_compressed=${RECORD_CAMERA_COMPRESSED}"
+  echo "record_depth=${RECORD_DEPTH}"
   echo "record_online_liquid=${RECORD_ONLINE_LIQUID}"
   echo "planner_command=${planner_command_string}"
 } > "${run_meta}"
 
 echo "================ SPMPC real fixed-path trial ================"
 echo "  variant       = ${VARIANT}"
+echo "  pilot         = ${PILOT_MODE} (${PILOT_METHOD:-direct parameters})"
 echo "  run_label     = ${RUN_LABEL}"
 echo "  cmd_topic     = ${CMD_TOPIC}"
 echo "  recorder      = ${RECORD_SEC}s max (Ctrl+C stops earlier)"
 echo "  out_dir       = ${RUN_OUT_DIR}"
+echo "  record_rgb    = ${RECORD_RGB}"
+echo "  path_source   = ${PATH_SOURCE_MODE}"
 echo "  path_file     = ${PATH_FILE}"
-echo "  goal          = (${GOAL_X}, ${GOAL_Y}, ${GOAL_YAW}) in ${GOAL_FRAME}"
+if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
+  echo "  start_gate    = ${START_POS_TOL} m / ${START_YAW_TOL} rad, hold ${START_HOLD_SEC}s"
+else
+  echo "  goal          = (${GOAL_X}, ${GOAL_Y}, ${GOAL_YAW}) in ${GOAL_FRAME}"
+fi
+echo "  v_ref/w_slosh = ${V_REF} / ${W_SLOSH}"
 echo "============================================================="
 
-echo "[path] starting generator -> ${REF_TOPIC}"
-rosrun scout_local_planner template_fixed_path_generator.py \
-  --template "${PATH_TEMPLATE}" \
-  --goal-topic "${GOAL_TOPIC}" \
-  --output-topic "${REF_TOPIC}" \
-  --path-file "${PATH_FILE}" \
-  --start-heading current \
-  --spacing "${PATH_SPACING}" \
-  --amplitude-ratio "${PATH_AMPLITUDE_RATIO}" \
-  --min-amplitude "${PATH_MIN_AMPLITUDE}" \
-  --max-amplitude "${PATH_MAX_AMPLITUDE}" \
-  --side "${PATH_SIDE}" \
-  --smooth-iterations "${PATH_SMOOTH_ITERATIONS}" \
-  --publish-count 0 \
-  > "${path_generator_log}" 2>&1 &
+echo "[path] starting ${PATH_SOURCE_MODE} source -> ${REF_TOPIC}"
+"${path_cmd[@]}" > "${path_generator_log}" 2>&1 &
 path_generator_pid=$!
 sleep "${PATH_GENERATOR_STARTUP_SEC}"
 if ! child_running "${path_generator_pid}"; then
@@ -419,8 +583,20 @@ if ! child_running "${path_generator_pid}"; then
   wait "${path_generator_pid}"
   path_code=$?
   set -e
-  show_log_tail "${path_generator_log}" "path generator"
-  fail "Path generator exited before receiving the fixed goal (code=${path_code})"
+  show_log_tail "${path_generator_log}" "path source"
+  fail "Path source exited during startup (mode=${PATH_SOURCE_MODE}, code=${path_code})"
+fi
+
+if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
+  echo "[path] waiting up to ${START_GATE_TIMEOUT_SEC}s for the relaxed start gate and ${REF_TOPIC}"
+  if ! timeout "${START_GATE_TIMEOUT_SEC}s" rostopic echo -n 1 "${REF_TOPIC}" >/dev/null; then
+    show_log_tail "${path_generator_log}" "fixed-path replay"
+    fail "Timed out waiting for replay start gate/path on ${REF_TOPIC}"
+  fi
+  if ! child_running "${path_generator_pid}"; then
+    show_log_tail "${path_generator_log}" "fixed-path replay"
+    fail "Fixed-path replay stopped after publishing the path"
+  fi
 fi
 
 echo "[record] starting black-box recorder before goal/planner"
@@ -429,11 +605,16 @@ echo "[record] starting black-box recorder before goal/planner"
   DATE="${DATE}" \
   STAMP="${STAMP}" \
   VARIANT="${VARIANT}" \
+  RUN_CLASS="${RUN_CLASS}" \
+  PILOT_MODE="${PILOT_MODE}" \
+  PILOT_METHOD="${PILOT_METHOD}" \
   RUN_LABEL="${RUN_LABEL}" \
   RECORD_SEC="${RECORD_SEC}" \
   OUT_DIR="${RUN_OUT_DIR}" \
   NAME="${NAME}" \
   RECORD_RGB="${RECORD_RGB}" \
+  RECORD_CAMERA="${RECORD_CAMERA}" \
+  RECORD_CAMERA_COMPRESSED="${RECORD_CAMERA_COMPRESSED}" \
   RECORD_SCAN="${RECORD_SCAN}" \
   RECORD_DEPTH="${RECORD_DEPTH}" \
   RECORD_STANDALONE_SLOSH="${RECORD_STANDALONE_SLOSH}" \
@@ -450,6 +631,11 @@ echo "[record] starting black-box recorder before goal/planner"
   GOAL_X="${GOAL_X}" \
   GOAL_Y="${GOAL_Y}" \
   GOAL_YAW="${GOAL_YAW}" \
+  PATH_SOURCE_MODE="${PATH_SOURCE_MODE}" \
+  PATH_FILE="${PATH_FILE}" \
+  START_POS_TOL="${START_POS_TOL}" \
+  START_YAW_TOL="${START_YAW_TOL}" \
+  START_HOLD_SEC="${START_HOLD_SEC}" \
   LAUNCH_COMMAND="${planner_command_string}" \
   OPERATOR_NOTE="${OPERATOR_NOTE}" \
   bash "${RECORDER_SCRIPT}"
@@ -465,28 +651,32 @@ if ! child_running "${recorder_pid}"; then
   fail "Recorder exited during startup (code=${recorder_code})"
 fi
 
-echo "[goal] sending fixed goal"
-if ! rosrun scout_local_planner send_fixed_goal.py \
-  --goal-topic "${GOAL_TOPIC}" \
-  --frame "${GOAL_FRAME}" \
-  --x "${GOAL_X}" \
-  --y "${GOAL_Y}" \
-  --yaw "${GOAL_YAW}" \
-  --repeat-count "${GOAL_REPEAT_COUNT}" \
-  --repeat-rate "${GOAL_REPEAT_RATE}" \
-  > "${send_goal_log}" 2>&1; then
-  show_log_tail "${send_goal_log}" "send fixed goal"
-  fail "Failed to send fixed goal"
-fi
+if [[ "${PATH_SOURCE_MODE}" == "generate" ]]; then
+  echo "[goal] sending fixed goal"
+  if ! rosrun scout_local_planner send_fixed_goal.py \
+    --goal-topic "${GOAL_TOPIC}" \
+    --frame "${GOAL_FRAME}" \
+    --x "${GOAL_X}" \
+    --y "${GOAL_Y}" \
+    --yaw "${GOAL_YAW}" \
+    --repeat-count "${GOAL_REPEAT_COUNT}" \
+    --repeat-rate "${GOAL_REPEAT_RATE}" \
+    > "${send_goal_log}" 2>&1; then
+    show_log_tail "${send_goal_log}" "send fixed goal"
+    fail "Failed to send fixed goal"
+  fi
 
-echo "[path] waiting for ${REF_TOPIC}"
-if ! timeout 10s rostopic echo -n 1 "${REF_TOPIC}" >/dev/null; then
-  show_log_tail "${path_generator_log}" "path generator"
-  fail "Timed out waiting for fixed path on ${REF_TOPIC}"
-fi
-if ! child_running "${path_generator_pid}"; then
-  show_log_tail "${path_generator_log}" "path generator"
-  fail "Path generator stopped after goal; fixed path may not remain available"
+  echo "[path] waiting for ${REF_TOPIC}"
+  if ! timeout "${GENERATED_PATH_WAIT_SEC}s" rostopic echo -n 1 "${REF_TOPIC}" >/dev/null; then
+    show_log_tail "${path_generator_log}" "path generator"
+    fail "Timed out waiting for generated fixed path on ${REF_TOPIC}"
+  fi
+  if ! child_running "${path_generator_pid}"; then
+    show_log_tail "${path_generator_log}" "path generator"
+    fail "Path generator stopped after goal; fixed path may not remain available"
+  fi
+else
+  echo "[goal] replay mode uses the frozen path directly; fixed-goal generation is skipped"
 fi
 
 echo "[launch] starting planner"
@@ -509,14 +699,14 @@ first_exit_code=$?
 set -e
 if child_running "${recorder_pid}"; then
   show_log_tail "${planner_log}" "planner"
-  echo "[ERR] planner exited before recorder timeout (code=${first_exit_code}); stopping recorder/generator" >&2
+  echo "[ERR] planner exited before recorder timeout (code=${first_exit_code}); stopping recorder/path source" >&2
   recorder_code=1
 else
   recorder_code=${first_exit_code}
   if (( recorder_code != 0 )); then
     show_log_tail "${recorder_log}" "recorder"
   fi
-  echo "[run] recorder exited with code ${recorder_code}; stopping planner/generator"
+  echo "[run] recorder exited with code ${recorder_code}; stopping planner/path source"
 fi
 cleanup
 trap - EXIT INT TERM
