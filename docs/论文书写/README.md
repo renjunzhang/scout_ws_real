@@ -2,6 +2,54 @@
 
 本文档记录本仓库中论文/报告类 LaTeX 文档的本地编译用法。当前机器已经安装完整 TeX Live 2026，主要文件放在 `/data/a`，避免占用系统根目录。
 
+## 论文相关 AI Skills
+
+截至 2026-07-18，当前为论文研究、写作和实验图表制作安装了以下 Skills。Codex GPT Pro 与 Claude GPT Pro 使用相互隔离的配置目录，Skill 不跨环境自动共享。
+
+### Academic Research Suite
+
+- 使用环境：`codex-gpt-pro`
+- 当前版本：`0.1.17`
+- 安装位置：`/home/zrj/.local/share/codex-gpt-pro/codex-home/skills/academic-research-suite`
+- 主要用途：深度研究、文献综述、研究问题收敛、论文提纲与写作、引用检查、论文修改、模拟审稿、实验规划、统计解释，以及从研究到成稿的完整工作流。
+- 常用入口：自然语言描述任务，或使用 `ars-plan`、`ars-outline`、`ars-lit-review`、`ars-citation-check`、`ars-reviewer`、`ars-full` 等别名。若客户端拦截斜杠命令，优先使用不带 `/` 的普通别名。
+- 适用阶段：从选题、调研、实验设计到写作、返修和审稿的全过程。
+
+### scipilot-figure-skill
+
+- 使用环境：`codex-gpt-pro`
+- 上游仓库：<https://github.com/Haojae/scipilot-figure-skill>
+- 安装位置：`/home/zrj/.local/share/codex-gpt-pro/codex-home/skills/scipilot-figure-skill`
+- 专用 Python 环境：`/home/zrj/.local/share/codex-gpt-pro/codex-home/venvs/scipilot-figure-skill`
+- 主要用途：先剖析 CSV、Excel 或 DataFrame，再根据论文论点推荐合适的图型，生成出版级数据图，并检查缺字、裁切、标签重叠、灰度辨识度和期刊尺寸规范。
+- 支持内容：折线图、散点图、箱线图/小提琴图、柱状图、热力图、分布图、误差棒、相关性图和多面板组合；支持 PDF、SVG、PNG 和 Plotly 静态导出。
+- 适用场景：不知道数据该用什么图、需要 Nature/Science/IEEE/Elsevier/PNAS 或中文论文风格、需要色盲友好配色和投稿前视觉自检。
+- 调用示例：`用 scipilot-figure-skill 分析 figures/results.csv，并生成 Nature 双栏论文图。`
+- 运行约定：Skill 内部脚本统一通过 `scripts/run_python.sh` 执行，不要直接使用系统 `/usr/bin/python3`。该入口会隔离 ROS 的 `PYTHONPATH`，并配置 Kaleido 使用的专用 Chrome。
+- 不适用内容：方法示意图、机制图、流程图、系统架构图和模型结构图。
+
+### paper-figure
+
+- 使用环境：`claude-gpt-pro`
+- 上游仓库：<https://github.com/wanshuiyin/Auto-claude-code-research-in-sleep/tree/main/skills/paper-figure>
+- 安装时上游提交：`86ea69caa6da4baab01e17a4212ecf75fe87661a`
+- 安装位置：`/home/zrj/.local/share/claude-gpt-pro/claude-config/skills/paper-figure`
+- 主要用途：根据 `PAPER_PLAN.md`、实验 JSON/CSV 和已有图表，批量生成论文实验图、消融图、多面板图和 LaTeX 对比表格，并为每张图保留独立生成脚本。
+- 适用场景：论文已经有明确的 Figure Plan 和实验结果，需要在 Claude Code 中批量生产风格统一的图表和表格。
+- 调用方式：`/paper-figure <figure-plan-or-data-path>`，例如 `/paper-figure docs/论文书写/草稿/spmpc_paper_cn`。
+- 不适用内容：方法框架图、架构图、定性样本图、照片和截图，这些内容仍需人工准备。
+
+### 选择建议
+
+| 当前任务 | 优先使用 |
+|----------|----------|
+| 选题、文献综述、论文提纲、写作、引用检查、返修或模拟审稿 | `academic-research-suite` |
+| 拿到一份数据但不确定该画什么，或需要严格的期刊规范与视觉自检 | `scipilot-figure-skill` |
+| 已有 Figure Plan 和实验数据，需要批量生成实验图及 LaTeX 表格 | `paper-figure` |
+| 方法框架图、系统架构图、流程图或机制示意图 | TikZ、draw.io、Figma 等人工维护 |
+
+两个画图 Skill 都主要面向数据驱动图表。`scipilot-figure-skill` 更偏向“分析数据、选择正确图型、按期刊规范检查”；`paper-figure` 更偏向“读取既定 Figure Plan，批量生成实验图和 LaTeX 表格”。
+
 ## 环境位置
 
 TeX Live 安装位置：
