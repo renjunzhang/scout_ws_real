@@ -4,9 +4,11 @@
 >
 > 唯一上位依据：[S-MPCC_experimental_design.md](./S-MPCC_experimental_design.md)
 >
-> 当前版本日期：2026-07-17
+> K6 详细口径：[K6_Ferrari模型视觉一致性冻结协议.md](./K6_Ferrari模型视觉一致性冻结协议.md)
 >
-> 当前状态：与实验设计冻结版 v1.0 同步
+> 当前版本日期：2026-07-25
+>
+> 当前状态：与实验设计冻结版 v1.1、K6-FID-v1.0 同步
 >
 > 文件名保留旧的SPMPC写法仅为兼容现有链接；论文方法名和本文内容统一使用S-MPCC。
 >
@@ -119,7 +121,7 @@ E2中的高风险\(C_1\)数据同时用于RQ1和RQ3，不重复采集。
 | K3 | 实际传播状态反事实replay | 同一pre-solve solver快照及全部非液体输入 | actual state、zero state、可选phase flip | optimized first-action difference | 检验正式传播状态是否实际影响优化 |
 | K4 | 容器参数切换 | 机器人状态、路径、归一化模态状态 | \(C_1/C_2\)参数集 | 预测运动、模态响应、optimized first action | 解释参数如何改变规划 |
 | K5 | 计算mismatch replay | \(C_2\)日志和相同solver上下文 | 正确\(C_2\)参数、错误\(C_1\)参数 | 计划差异 | 只证明规划对参数敏感 |
-| K6 | 模型一致性与敏感性 | 正式日志和冻结分析流程 | \(\omega_1,\zeta,c_h\)、延迟、初态等 | 偏差、趋势与敏感性 | 支持模型适用范围诊断 |
+| K6 | [模型—视觉一致性与敏感性](./K6_Ferrari模型视觉一致性冻结协议.md) | 32 次正式 S-MPCC 日志和冻结分析流程 | \(\omega_1,\zeta,c_h\)、延迟、初态等 | Ferrari-form signed bias、absolute disagreement、局部低估与敏感性 | 支持模型适用范围诊断 |
 
 K1/K2至少冻结两个机制检查点：
 
@@ -133,6 +135,15 @@ K3必须满足：
 - replay工具导出完整\(v,\omega,v_s,\eta,\dot\eta,a,\alpha\) horizon；
 - 统计单位为trial，不把控制周期当作独立样本；
 - 未经过共享执行层回放时，只称optimized first-action difference，不称counterfactual executed command。
+
+K6 必须满足：
+
+- 主要总体固定为 E1–E3 中 32 次正式 S-MPCC 尝试，不将关闭液体状态的方法伪造为在线模型样本；
+- 主要窗口固定为 \([t_{\mathrm{move}},t_{\mathrm{arrival}}+5\,\mathrm{s}]\)，统计单位为 trial；
+- Ferrari-form signed bias 使用 \(H_{\mathrm{modal}}\) 积分作分母，absolute disagreement 单独报告；
+- 主要模型 topic 固定为 `/spmpc/slosh_height`，视觉量固定为 `h_mm_max_lcr_smooth_corr`；
+- 不用 per-trial 最佳时滞重算主指标，不做幅值拟合，不根据正式结果重调参数；
+- 第 12 节 no-go 检查未全部通过时，K6 及正式采集均保持 NO-GO。
 
 ---
 
@@ -310,6 +321,8 @@ H_{\mathrm{vis}}(t):t\in\mathcal W_{\mathrm{full}}
 - [ ] K1/K2相位方向、幅值和检查点已冻结；
 - [ ] K3 actual/zero replay能够从相同pre-solve快照分叉；
 - [ ] actual replay能够复现在线结果并导出完整horizon；
+- [ ] K6-FID-v1.0 的公式、32 次总体、5 s 窗口、同步规则和敏感性水平已绑定唯一 freeze manifest；
+- [ ] K6 唯一分析脚本已在独立 smoke 数据上通过，且不使用最佳时滞、topic 回退或正式结果调参；
 - [ ] 正式代码、配置、文档、随机表和分析脚本已纳入版本管理。
 
 ---
