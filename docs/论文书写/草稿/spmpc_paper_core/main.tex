@@ -10,8 +10,6 @@
 \usepackage{array}
 \usepackage{placeins}
 \usepackage{xcolor}
-\usepackage{tikz}
-\usetikzlibrary{arrows.meta,positioning,calc}
 \usepackage{cite}
 \usepackage[nameinlink,capitalize]{cleveref}
 
@@ -25,16 +23,10 @@
 \newcommand{\ec}{e_{\mathrm{c}}}
 \newcommand{\el}{e_{\mathrm{l}}}
 \newcommand{\Pending}{\textcolor{spmpcgray}{\textit{pending}}}
-\newcommand{\PendingResult}[1]{%
-  \par\smallskip\noindent
-  \textcolor{spmpcgray}{\textit{Pending result: #1}}%
-  \par\smallskip}
 
-\definecolor{spmpcblue}{RGB}{36,99,180}
-\definecolor{spmpclight}{RGB}{235,243,255}
 \definecolor{spmpcgray}{RGB}{90,90,90}
 
-\title{\SMPCC: Slosh-Aware Model Predictive Contouring Control for Open-Liquid Transport on Mobile Bases}
+\title{\SMPCC: Slosh-Aware Online Trajectory Generation for Prescribed-Path Liquid Transport}
 
 \author{Renjun Zhang%
 \thanks{Renjun Zhang is with the University of Science and Technology of China,
@@ -46,15 +38,16 @@ Hefei, China (e-mail: zhangrenjun@mail.ustc.edu.cn).}}
 
 \begin{abstract}
 Transporting an open liquid on a mobile base requires more than suppressing command variation: the response to a candidate motion also depends on the liquid displacement, velocity, and oscillation phase already present when that motion is planned.
-This paper presents an online receding-horizon local motion planner and controller for a prescribed geometrically feasible path.
-The proposed \SMPCC{} formulation jointly predicts robot motion, virtual path progress, and a container-parameterized first lateral sloshing mode represented in two orthogonal directions.
-An odometry-driven propagation step carries the modal state between control cycles, so the current liquid dynamic memory can alter the next optimized motion segment.
-The frozen evaluation protocol uses matched slosh-agnostic and smooth-only MPCC variants, an independently tuned completion-time-matched comparison, geometry-based transfer without controller-weight retuning, controlled liquid-phase studies, counterfactual replay of the propagated runtime state, and command-chain and runtime audits.
-The scope is online motion generation along a supplied path; global route planning, obstacle reasoning, and a formal spill-free guarantee are not claimed.
+This paper presents \SMPCC{}, a receding-horizon trajectory generator and controller for prescribed geometrically feasible paths.
+It augments an acceleration-level \MPCC{} with finite-horizon virtual path progress and a container-parameterized first lateral sloshing mode represented in two orthogonal directions.
+An odometry-driven model propagates an internal modal state between control cycles, and this model state conditions the next virtual-progress and chassis action; it is not a measurement of the true signed liquid phase.
+The evaluation is designed to contrast \SMPCC{} with slosh-agnostic, smooth-only, completion-time-matched, and model-informed fixed-profile conditions using calibrated vision, odometry-derived executed timing, constructed internal modal-phase studies, online-input/zero-state replay, and execution-chain and runtime audits.
+Formal outcome claims and numerical results are intentionally withheld until the preregistered release, measurement, comparator, and analysis gates have passed.
+The scope is online trajectory generation along a supplied path; global route planning, obstacle reasoning, and a formal spill-free guarantee are not claimed.
 \end{abstract}
 
 \begin{IEEEkeywords}
-mobile robots, open-liquid transport, liquid sloshing, model predictive contouring control, receding-horizon planning
+mobile robots, open-liquid transport, liquid sloshing, model predictive contouring control, prescribed-path trajectory generation, online virtual path-progress optimization
 \end{IEEEkeywords}
 
 \input{sections/01_method}

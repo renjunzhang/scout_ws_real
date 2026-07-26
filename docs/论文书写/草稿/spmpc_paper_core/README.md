@@ -1,83 +1,113 @@
-# S-MPCC Method-Core Draft
+# S-MPCC Method-and-Experiment Core
 
-This directory contains a standalone IEEE Transactions-style draft of the
-S-MPCC method and experimental evidence chain. It stabilizes the prescribed-path
-scope, container-parameterized augmented prediction model, optimal control
-problem, matched internal comparisons, cross-container transfer protocol,
-propagated-state replay, and receding-horizon execution interface.
+This directory contains the standalone IEEE journal-style core for the S-MPCC
+method and experimental evidence chain. Its theme is prescribed-path trajectory
+generation: a finite-horizon virtual path-progress MPCC uses an odometry-driven,
+model-propagated internal liquid state to adapt chassis motion along supplied
+geometry.
 
 The paper-level organization is defined by
-`../../论文组织思路/S-MPCC_当前论文组织思路.md`. The authoritative experimental
-protocol is `../../实验章节设计/S-MPCC_experimental_design.md`, with the
-acquisition matrix summarized in `../../实验章节设计/SPMPC实验矩阵设计.md`.
+`../../论文组织思路/S-MPCC_当前论文组织思路.md`. The five-condition matrix in this
+core is currently a redesign proposal, not an executable acquisition protocol.
+The existing field protocol remains authoritative until the experimental design,
+matrix, analysis rules, random tables, and freeze template are synchronously
+superseded. Formal acquisition is therefore `NO-GO`; only a manifest template,
+not an immutable `freeze_manifest.yaml/FREEZE_ID`, currently exists.
 
-The entry point uses the local IEEEtran v1.8b class in journal mode:
+## Scope
 
-```latex
-\documentclass[journal]{IEEEtran}
-```
+The core deliberately contains only:
+
+- `main.tex`: title, abstract, keywords, and document entry point;
+- `sections/01_method.tex`: the reproducible S-MPCC formulation;
+- `sections/02_experiments.tex`: the proposed RQ1--RQ4 evidence structure; and
+- `supplementary/supplementary_material.tex`: freeze/configuration templates and
+  supporting analyses.
+
+Introduction, Related Work, and Conclusion are added in the full-paper tree only
+after the method release and evidence scope are known. The core does not claim
+global route planning, obstacle reasoning, true signed liquid-phase observation,
+or a formal spill-free guarantee.
 
 ## Build
+
+The normal local build is:
 
 ```bash
 cd docs/论文书写/草稿/spmpc_paper_core
 latexmk -pdf main.tex
 ```
 
-## Draft Status
+For a clean verification build that does not place generated files beside the
+source:
 
-The method equations are accompanied by a complete experiment chapter. Existing
-fixed-path physical statistics are marked as development-only evidence.
-Experiments that have not been completed use explicit `pending` placeholders.
-Protocol language is used throughout: the draft does not present a planned
-comparison, figure, or replay analysis as an observed result.
-Every unexecuted evidence output in RQ1--RQ4 and the supporting analyses is
-covered by a `Pending result` block, pending result-table cells, or a pending
-supplementary status entry. Protocol definitions, estimands, and acquisition
-rules remain ordinary prose because they are frozen design choices rather than
-experimental findings.
+```bash
+out="$(mktemp -d /tmp/spmpc-paper-build.XXXXXX)"
+latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir="$out" main.tex
+rg -n 'Warning|undefined|Overfull|Underfull|Error' "$out/main.log" "$out/main.blg"
+```
 
-The core draft contains two paper sections: the S-MPCC method and the experimental
-evaluation. The modal cap, predictive speed-reference governor, delay-state
-predictor, and deployment safety gates are intentionally excluded. They can be
-reintroduced later as supplementary material if the corresponding experiments
-support them.
+The supplementary fragment is intentionally not included by `main.tex`; it must
+be wrapped or included separately when the venue permits supplementary material.
 
-The main text uses only the modal prediction \(H_{\mathrm{modal}}\) and the RGB
-observation \(H_{\mathrm{vis}}\). Parabolic diagnostic augmentation is disabled
-for the formal protocol. Full weights, solver settings, the experimental
-metadata freeze checklist, the synchronized-signal checklist, development-only
-records, sensitivity plans, and detailed runtime tables are stored in
-supplementary/supplementary_material.tex and are not included by main.tex.
+## Current Experimental Design
 
-The primary physical outcome is the trial-level RGB p95 over the full motion
-window from first effective motion to the common arrival event. The 10%--90%
-path-progress result is a pre-specified sensitivity analysis. Raw solver,
-post-gate, and published commands are logged separately so that optimizer
-differences are not conflated with downstream execution.
+The proposed matrix uses a provisional minimum of eight randomized blocks:
 
-The formal physical design uses \(n=8\) randomized blocks and 88 trials:
-24 low-risk \(C_1\) trials, 48 high-risk \(C_1/C_2\) super-block trials, and
-16 high-risk completion-time-matched trials. The optional \(C_2\) mismatch
-group increases the design to 96 trials and is required before a physical
-necessity claim about container reparameterization can be considered.
-Controlled container-parameter comparisons, longitudinal and lateral
-liquid-phase studies, and actual/zero propagated-state replay are computational
-studies and add no physical trials. The staged evidence packages contain 40,
-64, or 88 trials, with claims reduced if acquisition stops before the full
-design.
+| Stage | Configuration | Conditions | Added | Cumulative |
+| --- | --- | --- | ---: | ---: |
+| I | C1 + H1 | Baseline, Smooth-only, Smooth-match, Fixed-profile, S-MPCC | 40 | 40 |
+| II-A | C1 + L1 | Smooth-only, Fixed-profile, S-MPCC | 24 | 64 |
+| II-B, conditional | C2 + H1 | Smooth-only, Fixed-profile, S-MPCC | 24 | 88 |
 
-The main comparison strategy uses matched internal MPCC variants. No broad
-ranking against obstacle-oriented local planners is claimed for the current
-fixed-path setting.
+The value `n=8` is not yet a statistical guarantee. It must be frozen from the
+minimum meaningful RGB effect, paired development variability, target
+precision/power, and method/vision failure allowance. Stage II-B is a
+preregistered conditional extension; 64 trials already form the preferred
+two-path trajectory-generation evidence package.
 
-Before formal acquisition, the numerical controller weights, configured
-damping ratio, liquid-state initialization rule, executed-command limits,
-intervention tolerances, replay reproduction tolerances, and shared deployment
-settings must be frozen in the supplementary configuration. The RQ1 primary
-contrast is S-MPCC minus Smooth-only MPCC; the RQ2 primary contrast is S-MPCC
-minus Smooth-match MPCC. Whole-block bootstrap intervals, exact paired
-sign-flip inference, and leave-one-block-out sensitivity are pre-specified.
-A liquid-aware neighboring-method baseline may be considered only after the
-core evidence has been completed; it is not part of the current acquisition
-matrix.
+The five high-risk conditions test four competing explanations:
+
+1. base MPCC behavior;
+2. generic smoothing;
+3. uniform slowdown at matched completion time;
+4. physics-aware fixed timing; and
+5. model-state-conditioned online progress and chassis motion.
+
+Fixed-profile is a transparent prior-art-inspired end-to-end comparator, not a
+faithful Hamaguchi or Lim reproduction and not a single-factor memory ablation.
+
+## Formal-Acquisition Gates
+
+Before any formal block, the project must complete and archive:
+
+- claim and comparator definition;
+- current-versus-rotation-consistent release selection;
+- limited weight-candidate screening;
+- an independent RGB efficacy pilot for one final candidate, with an exact
+  preregistered development block count and no early stopping;
+- the odometry-based `s_proj` trajectory extractor and immutable phase/replay
+  toolchain;
+- Smooth-match and Fixed-profile fairness/tuning records;
+- measurement, failure, estimand, sample-size, and randomization rules; and
+- one immutable software/configuration release and `FREEZE_ID`.
+
+The confirmatory order is S-MPCC versus Smooth-only, followed, only after that
+gate passes, by S-MPCC versus Fixed-profile. Exact inference follows the actual
+five-condition randomization support; paired sign-flip is only a sensitivity
+analysis. Continuous effects are explicitly success-conditional and are reported
+with `n_pair/n`, success margins, and a failure-penalized sensitivity.
+
+## Evidence Boundaries
+
+Actual trajectory timing is reconstructed from odometry-derived path projection
+`s_proj`; the OCP variable `s_ocp` is never used as executed ground truth.
+`H_vis` is the calibrated experimental reference and `H_modal` is an internal
+model response. Online-input/zero-state replay tests whether the propagated
+internal state changes optimization; it does not validate the true liquid phase
+or a counterfactual physical outcome.
+
+The K6-style modal--vision population is 8/16/24 S-MPCC planned units after
+Stage I/II-A/II-B. Long-horizon propagation, physical parameter mismatch, and
+broad planner rankings are optional exploratory studies with no reserved formal
+count and no role in the 40/64/88 packages.

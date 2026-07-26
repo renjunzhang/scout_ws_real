@@ -3,11 +3,11 @@
 
 \subsection{Problem Definition and Architecture}
 
-\SMPCC{} is an online receding-horizon local motion planner and controller that jointly optimizes robot motion and virtual path progress while predicting liquid dynamics along a prescribed geometrically feasible path. At control instant $t_j$, the optimizer is initialized with the measured base state, guarded path progress, previous accepted control, and an internally propagated liquid modal state. It predicts the coupled robot--liquid response over a finite horizon and returns the first optimized action.
+\SMPCC{} is a receding-horizon trajectory generator and controller for a prescribed geometrically feasible path. It jointly optimizes finite-horizon virtual path progress and chassis motion while predicting an odometry-driven, model-propagated internal liquid modal state. At control instant $t_j$, the optimizer is initialized with the measured base state, guarded odometry-to-path projection, previous accepted control, and the propagated internal modal state. It predicts the coupled robot--liquid response over a finite horizon and returns the first optimized action. The optimized progress is not treated as executed timing ground truth; actual progress--time quantities are reconstructed independently from odometry.
 
 The method assumes that the reference path has already been checked for geometric feasibility. Occupancy-grid reasoning, dynamic-obstacle prediction, collision-corridor construction, and global route selection are outside the present OCP. The core method comprises online state construction, the augmented OCP, and its raw first-action output. A delay predictor, terminal controller, command gate, command-rate limiter, and fallback policy belong to a shared deployment layer. When enabled in physical trials, these components are frozen before formal acquisition, applied identically to all compared methods, and audited separately from the core formulation. The reference governor and modal hard cap are optional liquid-aware extensions and are disabled in the core RQ1--RQ4 comparisons.
 
-The defining mechanism is liquid dynamic memory. Two candidate motions with similar path error and control regularity can produce different future liquid responses when the current modal displacement, velocity, or phase differs. \SMPCC{} represents this dependence by augmenting the \MPCC{} prediction state with propagated liquid dynamics. \Cref{fig:core_architecture} summarizes the resulting control loop.
+The defining mechanism is model-propagated liquid dynamic memory. Two candidate motions with similar path error and control regularity can produce different predicted liquid responses when the internal modal displacement, velocity, or phase differs. \SMPCC{} represents this dependence by augmenting the \MPCC{} prediction state with propagated liquid dynamics. It does not observe the true signed liquid phase. \Cref{fig:core_architecture} summarizes the resulting control loop.
 
 \begin{figure*}[t]
   \centering
@@ -16,7 +16,11 @@ The defining mechanism is liquid dynamic memory. Two candidate motions with simi
   slosh-aware OCP, and first-action output form the core method. The optimized
   action passes through the shared execution layer before driving the mobile
   base and liquid. The lower row separates execution, the physical plant, and
-  the odometry/control-memory update that closes the receding-horizon loop.}
+  the odometry/control-memory update that closes the receding-horizon loop. In
+  the diagram, path construction uses the odometry projection
+  $\hat s_{\mathrm{proj},j}$ and the model-propagated internal modal state,
+  whereas prediction uses the finite-horizon virtual progress
+  $s_{\mathrm{ocp},k\mid j}$.}
   \label{fig:core_architecture}
 \end{figure*}
 
@@ -38,7 +42,7 @@ parameterized by arc length. At cycle \(j\), the measured planar position is
 \(\hat{\bm p}_j=[\hat p_{x,j},\hat p_{y,j}]^\top\). To prevent backward jumps
 on self-near or noisy path segments, its guarded projection is
 \begin{equation}
-  \hat s_j
+  \hat s_{\mathrm{proj},j}
   =\operatorname*{arg\,min}_{s\in[s_{\min,j},L]}
   \|\hat{\bm p}_j-\vr(s)\|_2^2.
   \label{eq:guarded_projection}
@@ -49,7 +53,7 @@ and is reset when a new path is received.
 At each cycle, the path is sampled over
 \[
   \mathcal I_j
-  =[\hat s_j,\min\{L,\hat s_j+v_{\max}T_f\}],
+  =[\hat s_{\mathrm{proj},j},\min\{L,\hat s_{\mathrm{proj},j}+v_{\max}T_f\}],
   \qquad T_f=N\Delta t,
 \]
 and fitted locally by cubic polynomials in \(s\). The reference heading and
@@ -67,19 +71,22 @@ regularized curvature are
 where \(\varepsilon_\kappa=10^{-6}\) is the fixed numerical safeguard used by
 the implementation.
 
-For a generic robot state and progress \(s\), define
-\(\Delta p_x=p_x-r_x(s)\) and \(\Delta p_y=p_y-r_y(s)\). The signed contour
+For a generic OCP robot state and virtual progress \(s_{\mathrm{ocp}}\), define
+\(\Delta p_x=p_x-r_x(s_{\mathrm{ocp}})\) and
+\(\Delta p_y=p_y-r_y(s_{\mathrm{ocp}})\). The signed contour
 and lag errors used by the implementation are
 \begin{equation}
 \begin{aligned}
   e_{\mathrm c}(\bm x_r)
-  &=\sin\phi(s)\,\Delta p_x-\cos\phi(s)\,\Delta p_y,\\
+  &=\sin\phi(s_{\mathrm{ocp}})\,\Delta p_x
+  -\cos\phi(s_{\mathrm{ocp}})\,\Delta p_y,\\
   e_{\mathrm l}(\bm x_r)
-  &=-\cos\phi(s)\,\Delta p_x-\sin\phi(s)\,\Delta p_y.
+  &=-\cos\phi(s_{\mathrm{ocp}})\,\Delta p_x
+  -\sin\phi(s_{\mathrm{ocp}})\,\Delta p_y.
 \end{aligned}
 \label{eq:contour_lag_errors}
 \end{equation}
-The virtual progress state is optimized within the horizon rather than prescribed by time, as in standard \MPCC{} formulations \cite{D19_Liniger2015,D20_Brito2019}.
+The virtual progress state is optimized within the horizon rather than prescribed by time, as in standard \MPCC{} formulations \cite{D19_Liniger2015,D20_Brito2019}. It is a finite-horizon optimization state, not an executed timing measurement. The experimental analysis therefore uses a separately frozen odometry-to-path projection to construct $s_{\mathrm{proj}}$, $\sigma=s_{\mathrm{proj}}/L$, and actual $t(\sigma)$.
 
 \subsection{Robot--Liquid Augmented Dynamics}
 
@@ -88,12 +95,13 @@ The virtual progress state is optimized within the horizon rather than prescribe
 The base and virtual-progress state and the control input are
 \begin{equation}
   \bm x_r
-  =[p_x,p_y,\theta,v,s,\omega]^\top\in\mathbb R^6,
+  =[p_x,p_y,\theta,v,s_{\mathrm{ocp}},\omega]^\top\in\mathbb R^6,
   \qquad
   \bm u=[a,\alpha,v_s]^\top\in\mathbb R^3,
   \label{eq:robot_state_control}
 \end{equation}
-where \(a=\dot v\), \(\alpha=\dot\omega\), and \(v_s=\dot s\). The continuous
+where \(a=\dot v\), \(\alpha=\dot\omega\), and
+\(v_s=\dot s_{\mathrm{ocp}}\). The continuous
 base dynamics are
 \begin{equation}
   \dot{\bm x}_r
@@ -133,7 +141,7 @@ equivalent-model parameters are \cite{A01_Leva2021,A02_Guagliumi2021}
 \end{aligned}
 \label{eq:modal_parameters}
 \end{equation}
-The damping ratio $\zeta$ is read from the frozen liquid-model configuration and reported numerically with its configuration source. No experimental identification is claimed unless such a procedure is actually performed and archived. The same frozen value is used for all methods and both containers in the geometry-only transfer study. A container change updates the remaining physical parameters through \cref{eq:modal_parameters} and does not trigger controller-weight retuning.
+The damping ratio $\zeta$ is read from the frozen liquid-model configuration and reported numerically with its configuration source. No experimental identification is claimed unless such a procedure is actually performed and archived. The same frozen value is used for all methods and reported containers. If the preregistered $C_2$ stage is executed, only the declared physical model parameters are updated through \cref{eq:modal_parameters}; controller weights are not retuned, and any transfer claim remains limited to the reported configurations.
 
 The modal state and the body-frame excitation vector are
 \begin{equation}
@@ -183,6 +191,17 @@ acceleration. The present model does not cover an offset container; such a
 configuration would require the \(\alpha r\) and \(\omega^2r\) contributions
 in both the OCP and online propagation.
 
+The equations below state the current independent-body-axis candidate release,
+which neglects yaw-induced transport between the two modal coordinates. Formal
+acquisition remains blocked until the preregistered rotation-relevance gate has
+compared this candidate with the rotation-consistent alternative using frozen
+high-curvature and curvature-reversal cases. If that gate selects the
+rotation-consistent release,
+\cref{eq:liquid_state_space,eq:liquid_dynamics,eq:augmented_dynamics} and the
+online propagation are replaced consistently
+before a new immutable method release is created; data from the two releases
+are never pooled.
+
 The augmented state is
 \begin{equation}
 \begin{aligned}
@@ -202,14 +221,15 @@ where \(\bm\vartheta_c=(\omega_1,\zeta,c_h)\) denotes the
 container-dependent model quantities used by the core OCP. The joint dynamics
 are discretized by the four-stage ERK integrator used by acados.
 
-\subsubsection{Online liquid-state propagation}
+\subsubsection{Online Propagation of the Internal Liquid-Model State}
 
-For physical operation, the modal state is initialized to zero only after the
-base is stationary and the calibrated visual response satisfies the
-pre-specified rest criterion. It is then propagated throughout the trial
-without being reset at successive control cycles. Controlled mechanism studies
-can instead inject frozen nonzero initial states, as specified in
-\cref{sec:rq4}.
+For physical operation, the internal modal state is initialized to zero only
+after the method-independent rest-admission rule is satisfied. That rule uses a
+ring-down-validated minimum settling time and, where available, a frozen
+method-independent monitor or offline visual-start quality check. It is then
+propagated throughout the trial without being reset at successive control
+cycles. Controlled mechanism studies can instead inject frozen nonzero internal
+states, as specified in \cref{sec:model_state_mechanism}.
 
 Let \(q\) index odometry samples, with
 \(\Delta t_q^{\mathrm o}=t_q^{\mathrm o}-t_{q-1}^{\mathrm o}\). Consecutive
@@ -248,12 +268,14 @@ Define the latest odometry index available at control cycle \(j\) as
   \hat{\bm x}_{\ell,j}:=\hat{\bm x}_{\ell,q_j}.
   \label{eq:odom_control_alignment}
 \end{equation}
-RGB observations are not used to correct this state. With
+RGB observations are not used to correct this state. Accordingly,
+$\hat{\bm x}_{\ell,j}$ is a model-propagated internal state, not an observed
+liquid state or a validated signed-phase estimate. With
 \begin{equation}
   \hat{\bm x}_{r,j}
   =[
   \hat p_{x,j},\hat p_{y,j},\hat\theta_j,
-  \hat v_j,\hat s_j,\hat\omega_j
+  \hat v_j,\hat s_{\mathrm{proj},j},\hat\omega_j
   ]^\top,
   \label{eq:online_robot_state}
 \end{equation}
@@ -264,6 +286,9 @@ the augmented OCP estimate is
   [\hat{\bm x}_{r,j}^\top,\hat{\bm x}_{\ell,j}^\top]^\top.
   \label{eq:ocp_initial_estimate}
 \end{equation}
+Thus the horizon is initialized with
+$s_{\mathrm{ocp},0\mid j}=\hat s_{\mathrm{proj},j}$, after which
+$s_{\mathrm{ocp},k\mid j}$ evolves as an independent virtual progress state.
 
 The nonnegative modal envelope used by the optimizer and logger is
 \begin{equation}
@@ -318,9 +343,9 @@ and the lower-bounded reference speed as
   v_{\kappa,k\mid j}
   &:=\frac{v_{\mathrm{cruise}}}
   {\sqrt{1+
-  (v_{\mathrm{cruise}}\kappa(s_{k\mid j})/\omega_{\max})^2}},\\
+  (v_{\mathrm{cruise}}\kappa(s_{\mathrm{ocp},k\mid j})/\omega_{\max})^2}},\\
   v_{\mathrm{ref},k\mid j}
-  &:=v_{\mathrm{ref}}(s_{k\mid j})
+  &:=v_{\mathrm{ref}}(s_{\mathrm{ocp},k\mid j})
   =\max\!\left\{0.3v_{\mathrm{cruise}},v_{\kappa,k\mid j}\right\}.
 \end{aligned}
   \label{eq:curvature_speed_reference}
@@ -430,18 +455,21 @@ The terminal cost is defined separately as
   \label{eq:terminal_cost}
 \end{equation}
 and therefore contains neither progress reward nor control regularization.
-Full numerical weights and normalizers are reported in the supplementary
-material.
+Full numerical weights and normalizers are reported in the archived repository
+or another supplementary form permitted by the venue.
 
-The three experimental controllers are instantiated from this common OCP
-template. Baseline \MPCC{} omits the propagated liquid state and sets
+Three internal \MPCC{} variants are instantiated from this common OCP template.
+Baseline \MPCC{} omits the model-propagated internal liquid modal state and sets
 $w_\eta=w_{\dot\eta}=0$. Smooth-only \MPCC{} uses the same liquid-off
 formulation and changes only the pre-frozen generic smoothing weights.
 \SMPCC{} retains the nominal non-liquid weights, propagates $\bm x_\ell$, and
 uses positive modal displacement and velocity weights. The horizon, robot
 model, path representation, constraints, numerical solver, and shared execution
-layer remain identical across the three variants; \cref{tab:core_variants}
-summarizes the frozen mapping used in the experiments.
+layer remain identical across these three internal variants. The evaluation has
+two additional conditions: Smooth-match is a frozen completion-time-matched
+configuration of Smooth-only, whereas Model-informed fixed-profile is a
+separate timing-generation and tracking system rather than an OCP switch or a
+factorial ablation. \Cref{tab:core_variants} summarizes all five conditions.
 
 Following the coordinate order in \cref{eq:robot_state_control}, the
 implemented box-constraint sets are
