@@ -345,11 +345,21 @@ fi
 PLANNER_STARTUP_SEC="${PLANNER_STARTUP_SEC:-2}"
 SEND_ZERO_ON_EXIT="${SEND_ZERO_ON_EXIT:-true}"
 OPERATOR_NOTE="${OPERATOR_NOTE:-one_click_spmpc_real_fixed_path_trial}"
+PILOT_CONDITION="${PILOT_CONDITION:-}"
+BLOCK_SEGMENT_ID="${BLOCK_SEGMENT_ID:-}"
+SPLIT_BLOCK="${SPLIT_BLOCK:-false}"
+ORDER_POSITION="${ORDER_POSITION:-}"
+ACQUISITION_RETRY="${ACQUISITION_RETRY:-false}"
+RETRY_REASON_FILE="${RETRY_REASON_FILE:-}"
+PATH_EXPECTED_SHA256="${PATH_EXPECTED_SHA256:-}"
+PATH_ACTUAL_SHA256=""
+REQUIRE_PATH_HASH="${REQUIRE_PATH_HASH:-false}"
 
 require_cmd timeout
 require_cmd rostopic
 require_cmd rosrun
 require_cmd roslaunch
+require_cmd sha256sum
 [[ -f "${RECORDER_SCRIPT}" ]] || fail "Recorder script not found: ${RECORDER_SCRIPT}"
 [[ -r "${RECORDER_SCRIPT}" ]] || fail "Recorder script is not readable: ${RECORDER_SCRIPT}"
 case "${PATH_SOURCE_MODE}" in
@@ -359,6 +369,10 @@ esac
 if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
   [[ -n "${PATH_FILE}" ]] || fail "PATH_FILE is required when PATH_SOURCE_MODE=replay"
   [[ -s "${PATH_FILE}" ]] || fail "Frozen replay path is missing or empty: ${PATH_FILE}"
+  if truthy "${REQUIRE_PATH_HASH}" || [[ -n "${PATH_EXPECTED_SHA256}" ]]; then
+    [[ "${PATH_EXPECTED_SHA256}" =~ ^[0-9a-fA-F]{64}$ ]] || \
+      fail "PATH_EXPECTED_SHA256 must be the frozen 64-hex digest when path hash checking is enabled"
+  fi
 fi
 if truthy "${PILOT_MODE}" && [[ "${PATH_SOURCE_MODE}" == "generate" && -e "${PATH_FILE}" ]] && ! truthy "${ALLOW_PILOT_PATH_OVERWRITE}"; then
   fail "Pilot path already exists and will not be overwritten: ${PATH_FILE}. Use replay, choose a new PATH_FILE, or explicitly set ALLOW_PILOT_PATH_OVERWRITE=true."
@@ -408,8 +422,26 @@ if ! timeout 5s rostopic list >/dev/null 2>&1; then
 fi
 
 mkdir -p "${RUN_OUT_DIR}"
+[[ ! -e "${RUN_OUT_DIR}/${NAME}.bag" && ! -e "${RUN_OUT_DIR}/${NAME}.bag.active" ]] || \
+  fail "Run output already exists for NAME=${NAME}; use the protocol-authorized next repeat label"
 if [[ "${PATH_SOURCE_MODE}" == "generate" ]]; then
   mkdir -p "$(dirname "${PATH_FILE}")"
+else
+  PATH_ACTUAL_SHA256="$(sha256sum "${PATH_FILE}" | awk '{print $1}')"
+  path_hash_pass=false
+  if [[ -n "${PATH_EXPECTED_SHA256}" ]]; then
+    [[ "${PATH_ACTUAL_SHA256,,}" == "${PATH_EXPECTED_SHA256,,}" ]] || \
+      fail "Frozen path SHA-256 mismatch: expected=${PATH_EXPECTED_SHA256}, actual=${PATH_ACTUAL_SHA256}"
+    path_hash_pass=true
+  elif truthy "${REQUIRE_PATH_HASH}"; then
+    fail "REQUIRE_PATH_HASH=true but PATH_EXPECTED_SHA256 is empty"
+  fi
+  {
+    echo "pass=${path_hash_pass}"
+    echo "path_file=${PATH_FILE}"
+    echo "path_expected_sha256=${PATH_EXPECTED_SHA256,,}"
+    echo "path_actual_sha256=${PATH_ACTUAL_SHA256,,}"
+  } > "${RUN_OUT_DIR}/${NAME}_path_sha256.txt"
 fi
 
 path_generator_log="${RUN_OUT_DIR}/${NAME}_path_generator.log"
@@ -520,6 +552,12 @@ run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
   echo "run_class=${RUN_CLASS}"
   echo "pilot_mode=${PILOT_MODE}"
   echo "pilot_method=${PILOT_METHOD}"
+  echo "pilot_condition=${PILOT_CONDITION}"
+  echo "block_segment_id=${BLOCK_SEGMENT_ID}"
+  echo "split_block=${SPLIT_BLOCK}"
+  echo "order_position=${ORDER_POSITION}"
+  echo "acquisition_retry=${ACQUISITION_RETRY}"
+  echo "retry_reason_file=${RETRY_REASON_FILE}"
   echo "allow_pilot_path_overwrite=${ALLOW_PILOT_PATH_OVERWRITE}"
   echo "run_label=${RUN_LABEL}"
   echo "name=${NAME}"
@@ -527,6 +565,9 @@ run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
   echo "max_record_sec=${MAX_RECORD_SEC}"
   echo "run_out_dir=${RUN_OUT_DIR}"
   echo "path_file=${PATH_FILE}"
+  echo "path_expected_sha256=${PATH_EXPECTED_SHA256}"
+  echo "path_actual_sha256=${PATH_ACTUAL_SHA256}"
+  echo "require_path_hash=${REQUIRE_PATH_HASH}"
   echo "path_source_mode=${PATH_SOURCE_MODE}"
   echo "path_command=${path_command_string}"
   echo "ref_topic=${REF_TOPIC}"
@@ -559,7 +600,9 @@ run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
 echo "================ SPMPC real fixed-path trial ================"
 echo "  variant       = ${VARIANT}"
 echo "  pilot         = ${PILOT_MODE} (${PILOT_METHOD:-direct parameters})"
+echo "  condition     = ${PILOT_CONDITION:-n/a}"
 echo "  run_label     = ${RUN_LABEL}"
+echo "  block_segment = ${BLOCK_SEGMENT_ID:-n/a} split=${SPLIT_BLOCK} position=${ORDER_POSITION:-n/a} retry=${ACQUISITION_RETRY}"
 echo "  cmd_topic     = ${CMD_TOPIC}"
 echo "  recorder      = ${RECORD_SEC}s max (Ctrl+C stops earlier)"
 echo "  out_dir       = ${RUN_OUT_DIR}"
@@ -608,6 +651,12 @@ echo "[record] starting black-box recorder before goal/planner"
   RUN_CLASS="${RUN_CLASS}" \
   PILOT_MODE="${PILOT_MODE}" \
   PILOT_METHOD="${PILOT_METHOD}" \
+  PILOT_CONDITION="${PILOT_CONDITION}" \
+  BLOCK_SEGMENT_ID="${BLOCK_SEGMENT_ID}" \
+  SPLIT_BLOCK="${SPLIT_BLOCK}" \
+  ORDER_POSITION="${ORDER_POSITION}" \
+  ACQUISITION_RETRY="${ACQUISITION_RETRY}" \
+  RETRY_REASON_FILE="${RETRY_REASON_FILE}" \
   RUN_LABEL="${RUN_LABEL}" \
   RECORD_SEC="${RECORD_SEC}" \
   OUT_DIR="${RUN_OUT_DIR}" \
@@ -633,6 +682,9 @@ echo "[record] starting black-box recorder before goal/planner"
   GOAL_YAW="${GOAL_YAW}" \
   PATH_SOURCE_MODE="${PATH_SOURCE_MODE}" \
   PATH_FILE="${PATH_FILE}" \
+  PATH_EXPECTED_SHA256="${PATH_EXPECTED_SHA256}" \
+  PATH_ACTUAL_SHA256="${PATH_ACTUAL_SHA256}" \
+  REQUIRE_PATH_HASH="${REQUIRE_PATH_HASH}" \
   START_POS_TOL="${START_POS_TOL}" \
   START_YAW_TOL="${START_YAW_TOL}" \
   START_HOLD_SEC="${START_HOLD_SEC}" \

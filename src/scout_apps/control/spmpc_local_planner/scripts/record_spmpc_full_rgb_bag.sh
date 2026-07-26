@@ -54,6 +54,12 @@ SOLVER_BACKEND="${SOLVER_BACKEND:-}"
 RUN_CLASS="${RUN_CLASS:-}"
 PILOT_MODE="${PILOT_MODE:-}"
 PILOT_METHOD="${PILOT_METHOD:-}"
+PILOT_CONDITION="${PILOT_CONDITION:-}"
+BLOCK_SEGMENT_ID="${BLOCK_SEGMENT_ID:-}"
+SPLIT_BLOCK="${SPLIT_BLOCK:-false}"
+ORDER_POSITION="${ORDER_POSITION:-}"
+ACQUISITION_RETRY="${ACQUISITION_RETRY:-false}"
+RETRY_REASON_FILE="${RETRY_REASON_FILE:-}"
 V_REF="${V_REF:-}"
 W_SLOSH="${W_SLOSH:-}"
 SLOSH_HEIGHT_MAX="${SLOSH_HEIGHT_MAX:-}"
@@ -67,6 +73,9 @@ GOAL_Y="${GOAL_Y:-}"
 GOAL_YAW="${GOAL_YAW:-}"
 PATH_SOURCE_MODE="${PATH_SOURCE_MODE:-}"
 PATH_FILE="${PATH_FILE:-}"
+PATH_EXPECTED_SHA256="${PATH_EXPECTED_SHA256:-}"
+PATH_ACTUAL_SHA256="${PATH_ACTUAL_SHA256:-}"
+REQUIRE_PATH_HASH="${REQUIRE_PATH_HASH:-false}"
 START_POS_TOL="${START_POS_TOL:-}"
 START_YAW_TOL="${START_YAW_TOL:-}"
 START_HOLD_SEC="${START_HOLD_SEC:-}"
@@ -224,6 +233,8 @@ record_topics=(
   /spmpc/debug/projector
   /spmpc/debug/stage0_reference
   /spmpc/debug/local_traj_head
+  /spmpc/debug/warm_start
+  /spmpc/debug/warm_start_status
   /spmpc/debug/warm_start_head
   /spmpc/debug/cmd_vel_output
   /spmpc/debug/cmd_vel_output_status
@@ -485,6 +496,12 @@ write_topic_info_snapshot
   echo "run_class=${RUN_CLASS}"
   echo "pilot_mode=${PILOT_MODE}"
   echo "pilot_method=${PILOT_METHOD}"
+  echo "pilot_condition=${PILOT_CONDITION}"
+  echo "block_segment_id=${BLOCK_SEGMENT_ID}"
+  echo "split_block=${SPLIT_BLOCK}"
+  echo "order_position=${ORDER_POSITION}"
+  echo "acquisition_retry=${ACQUISITION_RETRY}"
+  echo "retry_reason_file=${RETRY_REASON_FILE}"
   echo "v_ref=${V_REF}"
   echo "w_slosh=${W_SLOSH}"
   echo "slosh_height_max=${SLOSH_HEIGHT_MAX}"
@@ -498,6 +515,9 @@ write_topic_info_snapshot
   echo "goal_yaw=${GOAL_YAW}"
   echo "path_source_mode=${PATH_SOURCE_MODE}"
   echo "path_file=${PATH_FILE}"
+  echo "path_expected_sha256=${PATH_EXPECTED_SHA256}"
+  echo "path_actual_sha256=${PATH_ACTUAL_SHA256}"
+  echo "require_path_hash=${REQUIRE_PATH_HASH}"
   echo "start_pos_tol=${START_POS_TOL}"
   echo "start_yaw_tol=${START_YAW_TOL}"
   echo "start_hold_sec=${START_HOLD_SEC}"

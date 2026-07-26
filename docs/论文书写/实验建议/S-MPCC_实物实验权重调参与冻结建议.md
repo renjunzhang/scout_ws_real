@@ -3,12 +3,16 @@
 > 文档定位：本文档用于正式 88 次实物实验开始前的控制器开发、pilot 筛选和参数冻结。pilot 数据不计入正式样本，不与后续正式结果混合。
 >
 > 上位协议：`docs/论文书写/实验章节设计/S-MPCC_experimental_design.md` 和 `docs/论文书写/实验章节设计/SPMPC实验矩阵设计.md`。若本文档与正式 freeze artifacts 不一致，以正式归档配置为准。
+>
+> 当前执行口径：已与现场协议 `SMPCC-REAL-40-88-v1.0`（`0717_S-MPCC正式实物实验矩阵_先40后88.md`）同步。P3 固定为 H0 上 W1/W2/W5 的 15 次无 RGB 模型侧筛选；W10 不进入 v1.0；正式 RGB 只承担独立物理验证，不能反向选权。
+>
+> 本轮权重只对当前已实现的液体动力学、状态传播和 slosh cost 有效。若后续引入 rotation-consistent dynamics、相位能量/有符号功率代价或其他方法结构变更，必须新建 release 并重新执行独立 pilot，不得沿用本轮 `FREEZE_ID`。
 
 ## 1. 核心目标
 
 正式实验前需要找到一个能够让 Baseline MPCC、Smooth-only MPCC 和 S-MPCC 呈现出清晰机制差异的实物工作点。调参目标应表述为：
 
-> 在任务、安全、实时性和执行层准入条件下，选择能稳定产生液体状态相关规划行为和物理液面改善的最小拐点权重。
+> 在任务、安全、实时性和执行层准入条件下，选择能稳定产生液体状态相关规划行为和内部模型响应的最小拐点权重；真实液面改善留给后续正式 RGB 独立验证。
 
 不应把目标表述为“选择使 S-MPCC 比 baseline 好得最多的参数”。差距应来自高风险工况下的机制作用，而不是故意削弱 baseline、选择性查看结果或过度牺牲任务性能。
 
@@ -62,7 +66,8 @@ J_{\mathrm{slosh}}
 - `J_slosh_eta` 和 `J_slosh_eta_dot` 已进入 cost breakdown；
 - 增大 `w_slosh` 能在同一 pre-solve 状态下改变预测 horizon 或 optimized first action；
 - raw solver command、post-gate command 和 published command 可分层比较；
-- 相机、时间同步、液面提取和失败记录链完整。
+- 正式相机、时间同步和液面提取链可另行通过 P0/P8 smoke；P3 本身不录 RGB；
+- 失败、fallback、solve-budget overrun、observed inter-arrival gap proxy 和执行层记录链完整；不把 bag 到达间隔称为严格 control-cycle deadline miss。
 
 ## 4. 不参与本轮扫描的冻结量
 
@@ -85,7 +90,7 @@ Smooth-only MPCC 的增强平滑权重应在本轮扫描前先独立调整到“
 推荐使用：
 
 - 名义容器 \(C_1\)；
-- 冻结的高风险路径，或者一条与正式路径分离但具有类似曲率激励的开发路径；
+- 与正式 H1 分离、已冻结且机制激励相似的唯一 H0 开发路径；
 - 相同起点、方向、液深、静止准入和 post-arrival 窗口；
 - 每个候选至少 3 次独立完整 trial；
 - 方法和权重顺序轮换或平衡，避免液温、地面、电量和时间漂移与候选权重绑定。
@@ -99,9 +104,8 @@ Smooth-only MPCC 的增强平滑权重应在本轮扫描前先独立调整到“
 | P-W1 | S-MPCC，`w_slosh=1` | 3 | 弱液体代价候选 |
 | P-W2 | S-MPCC，`w_slosh=2` | 3 | 中弱液体代价候选 |
 | P-W5 | S-MPCC，`w_slosh=5` | 3 | 当前默认量级候选 |
-| P-W10 | S-MPCC，`w_slosh=10` | 3（条件性） | 仅在 P-W5 安全且跟踪合格时执行 |
 
-基本 pilot 为 15 次；若执行 P-W10，共 18 次。这些 trial 只服务于参数决策，不进入正式 40/64/88 次证据包。
+pilot 固定为 15 次，顺序以现场协议 v1.0 为准。W10 和任意临时候选不得现场追加；这些 trial 只服务于模型侧参数决策，不进入正式 40/64/88 个矩阵单元。
 
 ## 6. 记录与比较指标
 
@@ -112,27 +116,29 @@ Smooth-only MPCC 的增强平滑权重应在本轮扫描前先独立调整到“
 - 任务 success 和统一到达判据；
 - path-error p95 不超过预先冻结的容差；
 - completion time 位于可接受区间；
-- solver failure、deadline miss 和 fallback 不超过准入阈值；
+- solver failure、solve-budget overrun、observed inter-arrival gap proxy 和 fallback 不超过准入阈值；
 - \(r_{\mathrm{int}}\) 不超过 \(r_{\mathrm{int,max}}\)；
 - 无长时限速覆盖、反复方向反转、终端振荡或安全中止；
-- RGB、odometry、solver、raw/post/published command 和失败日志完整。
+- odometry、TF、冻结路径、solver、内部 slosh、完整 horizon、raw/post/published command 和失败日志完整；
+- RealSense 随基础栈保持启动，但 P3 固定 `RECORD_RGB=false`。
 
 未通过准入的候选不参与后续“收益大小”比较。
 
 ### 6.2 参数选择指标
 
+正式定义中 B0 和 B_smooth 关闭控制器液体状态，因此它们不存在可与 S-MPCC 在线信号等价比较的 `/spmpc/slosh_height` 或液体预测 horizon；缺失信号不得填零。为了估计跨 run 重复性，P3 的全部候选必须一致启动方法无关的 standalone slosh monitor，并在每次运动前 reset。Standalone `/slosh/*` 只用于重复性、噪声和执行运动诊断，不得伪称为 B0/B_smooth 的控制器内部状态。
+
 对通过准入的候选比较：
 
-- \(H_{\mathrm{vis}}\) 全运动窗口 p95 和 RMS；
-- post-arrival RGB RMS；
-- \(H_{\mathrm{modal}}\) p95，但仅作机制诊断；
+- 仅对 W1/W2/W5，比较控制器在线 \(H_{\mathrm{modal}}\) 与预测 horizon peak、RMS 和 post-arrival RMS；
+- 对全部候选，检查统一 reset 的 standalone monitor 输出是否完整，并仅用其预先估计重复性/噪声容差和排查执行异常；
 - executed \(v,\omega,a_x,a_y\) 的路径进度分布；
 - optimized first action 和完整预测 horizon 差异；
 - raw/post/published 三层命令的变化率和干预比例；
 - completion time、path-error p95 和 success；
-- solve-time p95、deadline miss、failure 和 fallback。
+- solve-time p95/overrun、observed inter-arrival gap proxy、failure 和 fallback。
 
-不得仅使用内部 \(H_{\mathrm{modal}}\) 或 cost breakdown 选择最终权重。内部量只能说明代价已生效，物理工作点仍需要独立 RGB 液面数据支持。
+不得只看 cost breakdown 或单次最小内部高度选权。必须联合完整内部时序、预测 horizon、optimized first action、任务、tracking、实时性和执行层干预；该步骤只能得到 `model-side frozen weight`，不能声称真实液面已经改善。
 
 ## 7. 候选权重决策规则
 
@@ -146,13 +152,25 @@ Smooth-only MPCC 的增强平滑权重应在本轮扫描前先独立调整到“
 
 候选权重应当能在高曲率或曲率反转区段稳定改变 optimized first action、局部速度或激励分配，而不是只把全程速度一致降低。
 
-### 第三层：物理响应
+### 第三层：模型响应
 
-在独立 pilot 重复中，S-MPCC 的 \(H_{\mathrm{vis}}\) 改善方向应稳定，并且不应依赖某一次极端 trial。需同时查看原始 trial 点和过程曲线，不能只看平均值。
+仅在 W1/W2/W5 三个 S-MPCC 候选之间比较控制器在线 \(H_{\mathrm{modal}}\)、预测 horizon 和 post-arrival 响应。在三个 block 中，改善方向应稳定且不依赖某一次极端 trial；需同时查看原始 trial 点和过程曲线，不能只看平均值。B0/B_smooth 只用于任务、执行和方法无关 monitor 重复性参考，不进入在线 \(H_{\mathrm{modal}}\)/horizon 排序。
 
 ### 第四层：最小拐点原则
 
-若两个候选的物理响应差异低于事先由相机重复性和 pilot 变异确定的实用等价容差 \(\delta_{\mathrm{pilot}}\)，选择较小的 `w_slosh`。例如，如果 `w=5` 与 `w=10` 的 RGB 改善相当，但 `w=10` 完成更慢、跟踪更差或执行层干预更高，则冻结 `w=5`。
+`delta_model` 固定来自 P3 全部 15 个矩阵单元中一致启用、每个 trial 运动前 reset 的方法无关 standalone `/slosh/*` monitor 重复性。对每个已冻结指标 \(q\in\{\mathrm{peak},\mathrm{RMS},\mathrm{post\mbox{-}arrival\ RMS}\}\)，v1.0 固定使用
+
+\[
+\delta_{\mathrm{repeat},q}
+=\max\!\left(
+\operatorname{range}_b q_{\mathrm{standalone}}(B0,b),
+\operatorname{range}_b q_{\mathrm{standalone}}(B_{\mathrm{smooth}},b)
+\right).
+\]
+
+未预注册独立 noise smoke 时，\(\delta_{\mathrm{model},q}=\delta_{\mathrm{repeat},q}\)；若在产生任何 P3 数据前已预注册，则固定为 \(\delta_{\mathrm{model},q}=\max(\delta_{\mathrm{repeat},q},\delta_{\mathrm{noise},q})\)。只有进度/时间窗的具体边界、数值结果和实现脚本 hash 待填；不得临场更换统计量或合并方式，也不得把方法间差异当作噪声。不得用 B0/B_smooth 缺失或人工置零的控制器在线 \(H_{\mathrm{modal}}\) 估计，也不得使用正式 RGB 回填。S-MPCC 的在线 `/spmpc/*` \(H_{\mathrm{modal}}\) 和预测 horizon 只作为 W 候选的机制与排序附加证据，不用来定义 `delta_model` 本身。
+
+若相邻 W 候选的额外在线模型收益低于已冻结的 `delta_model`，选择较小的 `w_slosh`。更大权重只有在提供稳定额外模型收益且不恶化任务、tracking、实时性或执行层干预时才能入选。
 
 ## 8. 避免结果导向调参的规则
 
@@ -166,12 +184,12 @@ Smooth-only MPCC 的增强平滑权重应在本轮扫描前先独立调整到“
 
 ## 9. Smooth-match 的执行顺序
 
-Smooth-match 只能在最终 S-MPCC `w_slosh` 冻结后调整。建议顺序为：
+Smooth-match 只能在最终 S-MPCC `w_slosh` 冻结后调整。固定顺序为：
 
 1. 冻结 Baseline 和 Smooth-only；
 2. 完成 `w_slosh` pilot 扫描；
 3. 冻结 S-MPCC 权重；
-4. 使用另一组独立 pilot 只根据 completion time 调整 Smooth-match 的参考速度；
+4. 按现场协议第 5.4 节执行固定 12 次 pilot，只根据 completion time 在 M-/M0/M+ 中选择；
 5. 不查看 Smooth-match pilot 的 RGB 结果；
 6. 冻结 Smooth-match 配置。
 
@@ -217,10 +235,12 @@ Smooth-match 不是第四个核心方法，也不参与 `w_slosh` 的选择。
 - [ ] 线速度/角速度执行延迟和相位补偿已验收；
 - [ ] `w_slosh` 在日志和 solver cost 中的实际生效值可核对；
 - [ ] Baseline 和 Smooth-only 已先行冻结，且 Smooth-only 是有竞争力的平滑对照；
-- [ ] `w_slosh=1/2/5`（及条件性 10）已按统一 pilot 协议采集；
+- [ ] `w_slosh=1/2/5` 已按固定 15 次 pilot 采集，未加入 W10 或临时候选；
+- [ ] standalone `/slosh/*` monitor 在 P3 全部 15 次中一致启用且每个 trial 前 reset，`delta_model` 按 v1.0 固定 within-method range/max 公式执行，其时间窗、脚本 hash 和待填数值在查看 W 在线排序前预注册；
+- [ ] B0/B_smooth 缺失的控制器在线 \(H_{\mathrm{modal}}\)/horizon 没有被填零或用于候选排序；
 - [ ] 所有候选的原始 trial 点、过程曲线、失败和执行层干预已审查；
-- [ ] 最终权重按“准入→机制→物理响应→最小拐点”规则选定；
-- [ ] Smooth-match 在最终 S-MPCC 冻结后使用独立 pilot 只按完成时间冻结；
+- [ ] 最终权重按“准入→机制→模型响应→最小拐点”规则选定，并标为模型侧冻结值；
+- [ ] Smooth-match 在最终 S-MPCC 冻结后按固定 12 次 pilot 只按完成时间冻结；
 - [ ] 四种论文配置、Git commit、hash、codegen 和编译信息已归档；
 - [ ] 正式区组和正式 RGB 结果尚未用于任何权重选择。
 
@@ -234,7 +254,7 @@ Smooth-match 不是第四个核心方法，也不参与 `w_slosh` 的选择。
 \rightarrow
 \text{冻结共享权重和 Smooth-only}
 \rightarrow
-\text{扫描 }w_{\eta}\in\{1,2,5,10\}
+\text{扫描 }w_{\eta}\in\{1,2,5\}
 \rightarrow
 \text{选择最小稳定拐点}
 \rightarrow

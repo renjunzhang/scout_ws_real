@@ -27,6 +27,7 @@ STRING_TOPICS = {
     "/spmpc/solver_backend",
     "/spmpc/debug/map_vref_status",
     "/spmpc/debug/execution_alignment_status",
+    "/spmpc/debug/warm_start_status",
 }
 FLOAT_TOPICS = {
     "/spmpc/solver_time_ms": "solver_time_ms",
@@ -46,6 +47,7 @@ MULTIARRAY_TOPICS = {
     "/spmpc/cost_breakdown",
     "/spmpc/debug/slosh_hard_constraint_effective",
     "/spmpc/debug/cmd_vel_output",
+    "/spmpc/debug/warm_start",
 }
 CMD_TOPIC = "/cmd_vel"
 CRITICAL_TOPICS = [
@@ -55,9 +57,15 @@ CRITICAL_TOPICS = [
     "/spmpc/debug/command_intervention",
     "/spmpc/debug/effective_config",
     "/spmpc/debug/cmd_odom_alignment",
+    "/spmpc/cost_breakdown",
+    "/spmpc/debug/warm_start",
+    "/spmpc/debug/warm_start_status",
+]
+SLOSH_ONLY_CRITICAL_TOPICS = [
+    "/spmpc/slosh_height",
+    "/spmpc/debug/slosh_state",
     "/spmpc/debug/slosh_cost_monitor",
     "/spmpc/slosh_horizon_summary",
-    "/spmpc/cost_breakdown",
 ]
 ZERO_REASON_FIELDS = [
     "zero_due_to_solver_failure",
@@ -416,15 +424,19 @@ def build_red_flags(summary):
     if (finite(yaw_p95) and yaw_p95 > 0.20) or (finite(omega_p95) and omega_p95 > 0.30):
         flags.append({"code": "solver_input_phase_shift_large", "detail": f"yaw_p95={fmt(yaw_p95)} rad, omega_p95={fmt(omega_p95)}"})
 
+    variant = summary.get("intent", {}).get("variant") or summary.get("observed", {}).get(
+        "controller_variant_last"
+    )
     opt = summary["metrics"].get("optimizer_pressure", {})
-    slosh_pct = opt.get("pct_slosh_total_abs_sum", {}).get("p50")
-    eta_dot_pct = opt.get("pct_eta_dot_in_slosh", {}).get("p50")
-    if finite(slosh_pct) and abs(slosh_pct) < 1.0:
-        flags.append({"code": "slosh_cost_inactive", "detail": f"median slosh pct={fmt(slosh_pct)}%"})
-    if finite(eta_dot_pct) and abs(eta_dot_pct) < 5.0:
-        flags.append({"code": "eta_dot_cost_inactive", "detail": f"median eta_dot share={fmt(eta_dot_pct)}%"})
-    if opt.get("h_modal_peak_pred_mm", {}).get("n", 0) == 0:
-        flags.append({"code": "horizon_peak_not_reduced_or_missing", "detail": "missing /spmpc/slosh_horizon_summary"})
+    if variant == "B_slosh":
+        slosh_pct = opt.get("pct_slosh_total_abs_sum", {}).get("p50")
+        eta_dot_pct = opt.get("pct_eta_dot_in_slosh", {}).get("p50")
+        if finite(slosh_pct) and abs(slosh_pct) < 1.0:
+            flags.append({"code": "slosh_cost_inactive", "detail": f"median slosh pct={fmt(slosh_pct)}%"})
+        if finite(eta_dot_pct) and abs(eta_dot_pct) < 5.0:
+            flags.append({"code": "eta_dot_cost_inactive", "detail": f"median eta_dot share={fmt(eta_dot_pct)}%"})
+        if opt.get("h_modal_peak_pred_mm", {}).get("n", 0) == 0:
+            flags.append({"code": "horizon_peak_missing", "detail": "missing /spmpc/slosh_horizon_summary"})
 
     cmd = summary["metrics"].get("command_intervention", {})
     limited = cmd.get("command_limiter_frac")
@@ -440,6 +452,27 @@ def build_red_flags(summary):
         detail = {"zero_reasons": bad_reasons, "status_fail_count": int(solver_fail_count)}
         flags.append({"code": "solver_fail_or_gate_fail", "detail": str(detail)})
 
+    warm_start = summary["metrics"].get("warm_start", {})
+    if warm_start.get("used_fallback_field_readable") is not True:
+        flags.append(
+            {
+                "code": "warm_start_fallback_field_unreadable",
+                "detail": "missing or unlabeled used_fallback field on /spmpc/debug/warm_start",
+            }
+        )
+    fallback_count = warm_start.get("used_fallback_count", 0)
+    if isinstance(fallback_count, int) and fallback_count > 0:
+        flags.append(
+            {
+                "code": "warm_start_fallback_used",
+                "detail": (
+                    f"count={fallback_count}, "
+                    f"frac={fmt(warm_start.get('used_fallback_frac'))}, "
+                    f"status={warm_start.get('status_counts', {})}"
+                ),
+            }
+        )
+
     mismatch = summary["metrics"].get("intent_effective", {}).get("mismatches", [])
     if mismatch:
         flags.append({"code": "sidecar_effective_config_mismatch", "detail": str(mismatch[:3])})
@@ -453,6 +486,14 @@ def summarize_bag(bag_path):
     if not present_topics:
         present_topics = set(data["topic_counts"].keys())
 
+    intended_variant = sidecars["meta"].get("variant") or sidecars["meta"].get("VARIANT")
+    observed_variants = data["strings"].get("/spmpc/controller_variant", [])
+    variant_for_contract = intended_variant or (observed_variants[-1] if observed_variants else None)
+    slosh_signals_expected = str(variant_for_contract or "") == "B_slosh"
+    required_topics = list(CRITICAL_TOPICS)
+    if slosh_signals_expected:
+        required_topics.extend(SLOSH_ONLY_CRITICAL_TOPICS)
+
     multi = data["multi"]
     raw_samples = multi.get("/spmpc/debug/raw_state", [])
     predicted_samples = multi.get("/spmpc/debug/predicted_state", [])
@@ -463,6 +504,8 @@ def summarize_bag(bag_path):
     cost_breakdown = multi.get("/spmpc/cost_breakdown", [])
     horizon = multi.get("/spmpc/slosh_horizon_summary", [])
     effective = multi.get("/spmpc/debug/effective_config", [])
+    warm_start = multi.get("/spmpc/debug/warm_start", [])
+    warm_start_fallback_values = series_field(warm_start, "used_fallback")
     j_slosh_eta = series_field(slosh_cost, "J_slosh_eta") or series_field(cost_breakdown, "J_slosh_eta")
     j_slosh_eta_dot = series_field(slosh_cost, "J_slosh_eta_dot") or series_field(cost_breakdown, "J_slosh_eta_dot")
     j_slosh_total = series_field(slosh_cost, "J_slosh_total")
@@ -492,14 +535,27 @@ def summarize_bag(bag_path):
         "duration_sec": duration,
         "sidecars": sidecars,
         "topics": {
-            "critical_missing": [topic for topic in CRITICAL_TOPICS if topic not in present_topics],
-            "counts": {topic: data["topic_info"].get(topic, {}).get("messages", int(data["topic_counts"].get(topic, 0))) for topic in sorted(CRITICAL_TOPICS + [CMD_TOPIC])},
+            "required": required_topics,
+            "critical_missing": [topic for topic in required_topics if topic not in present_topics],
+            "counts": {topic: data["topic_info"].get(topic, {}).get("messages", int(data["topic_counts"].get(topic, 0))) for topic in sorted(required_topics + [CMD_TOPIC])},
         },
         "intent": {
-            "variant": sidecars["meta"].get("variant") or sidecars["meta"].get("VARIANT"),
+            "variant": intended_variant,
+            "pilot_condition": sidecars["meta"].get("pilot_condition")
+            or sidecars["meta"].get("PILOT_CONDITION"),
             "solver_backend": sidecars["meta"].get("solver_backend") or sidecars["meta"].get("SOLVER_BACKEND"),
             "v_ref": sidecars["meta"].get("v_ref") or sidecars["meta"].get("V_REF"),
             "w_slosh": sidecars["meta"].get("w_slosh") or sidecars["meta"].get("W_SLOSH"),
+            "block_segment_id": sidecars["meta"].get("block_segment_id")
+            or sidecars["meta"].get("BLOCK_SEGMENT_ID"),
+            "split_block": sidecars["meta"].get("split_block")
+            or sidecars["meta"].get("SPLIT_BLOCK"),
+            "order_position": sidecars["meta"].get("order_position")
+            or sidecars["meta"].get("ORDER_POSITION"),
+            "acquisition_retry": sidecars["meta"].get("acquisition_retry")
+            or sidecars["meta"].get("ACQUISITION_RETRY"),
+            "retry_reason_file": sidecars["meta"].get("retry_reason_file")
+            or sidecars["meta"].get("RETRY_REASON_FILE"),
             "delay_phase_mode": sidecars["meta"].get("delay_phase_mode") or sidecars["meta"].get("DELAY_PHASE_MODE"),
             "delay_phase_linear_delay_sec": sidecars["meta"].get("delay_phase_linear_delay_sec") or sidecars["meta"].get("DELAY_PHASE_LINEAR_DELAY_SEC"),
             "delay_phase_angular_delay_sec": sidecars["meta"].get("delay_phase_angular_delay_sec") or sidecars["meta"].get("DELAY_PHASE_ANGULAR_DELAY_SEC"),
@@ -542,6 +598,25 @@ def summarize_bag(bag_path):
                 "h_modal_p95_pred_mm": numeric_summary(series_field_any(horizon, ["h_modal_p95_pred_mm", "h_p95_pred_mm", "h_p95_pred", "h_p95"])),
             },
             "command_intervention": summarize_command_intervention(cmd_samples),
+            "warm_start": {
+                "used_fallback_field_readable": bool(warm_start_fallback_values),
+                "valid_frac": fraction_true(series_field(warm_start, "valid")),
+                "used_flatness_frac": fraction_true(series_field(warm_start, "used_flatness")),
+                "used_previous_solution_frac": fraction_true(
+                    series_field(warm_start, "used_previous_solution")
+                ),
+                "used_fallback_frac": fraction_true(warm_start_fallback_values),
+                "used_fallback_count": int(
+                    sum(
+                        1
+                        for value in warm_start_fallback_values
+                        if abs(value) > 0.5
+                    )
+                ),
+                "status_counts": status_counts(
+                    data["strings"].get("/spmpc/debug/warm_start_status", [])
+                ),
+            },
             "intent_effective": compare_intent_effective(sidecars["meta"], effective),
             "effective_config_last": effective[-1] if effective else {},
         },
@@ -557,6 +632,7 @@ def render_markdown(summary):
     state_delta = delay.get("solver_minus_raw", {})
     opt = metrics.get("optimizer_pressure", {})
     cmd = metrics.get("command_intervention", {})
+    warm_start = metrics.get("warm_start", {})
     lines = []
     lines.append(f"# SPMPC real trial summary: {summary.get('run_label')}")
     lines.append("")
@@ -564,6 +640,16 @@ def render_markdown(summary):
     lines.append(f"- Duration: {fmt(summary.get('duration_sec'), 1)} s")
     intent = summary.get("intent", {})
     lines.append(f"- Intent: variant=`{intent.get('variant')}`, backend=`{intent.get('solver_backend')}`, v_ref=`{intent.get('v_ref')}`, delay=`{intent.get('delay_phase_linear_delay_sec')}/{intent.get('delay_phase_angular_delay_sec')}`")
+    if intent.get("pilot_condition"):
+        lines.append(f"- Pilot condition: `{intent.get('pilot_condition')}`")
+    lines.append(
+        f"- Block segment: id=`{intent.get('block_segment_id')}`, "
+        f"split=`{intent.get('split_block')}`, position=`{intent.get('order_position')}`"
+    )
+    lines.append(
+        f"- Acquisition retry: `{intent.get('acquisition_retry')}`, "
+        f"reason=`{intent.get('retry_reason_file')}`"
+    )
     observed = summary.get("observed", {})
     lines.append(f"- Observed: variant=`{observed.get('controller_variant_last')}`, backend=`{observed.get('solver_backend_last')}`, goal_reached=`{observed.get('goal_reached')}`")
     lines.append("")
@@ -578,7 +664,7 @@ def render_markdown(summary):
     missing = summary.get("topics", {}).get("critical_missing", [])
     lines.append(f"- Critical missing: {', '.join(f'`{t}`' for t in missing) if missing else 'none'}")
     counts = summary.get("topics", {}).get("counts", {})
-    for topic in CRITICAL_TOPICS:
+    for topic in summary.get("topics", {}).get("required", CRITICAL_TOPICS):
         lines.append(f"  - `{topic}`: {counts.get(topic, 0)}")
     lines.append("")
     lines.append("## Delay / state input")
@@ -611,6 +697,21 @@ def render_markdown(summary):
     lines.append(f"- |published_v - post_gate_v| p95: {fmt(cmd.get('published_minus_post_gate_v_abs', {}).get('p95'))}")
     lines.append(f"- |published_omega - post_gate_omega| p95: {fmt(cmd.get('published_minus_post_gate_omega_abs', {}).get('p95'))}")
     lines.append(f"- zero reasons: `{cmd.get('zero_reason_counts', {})}`")
+    lines.append("")
+    lines.append("## Warm start / fallback")
+    lines.append(
+        f"- used_fallback_field_readable: {warm_start.get('used_fallback_field_readable')}"
+    )
+    lines.append(f"- valid_frac: {fmt(warm_start.get('valid_frac'))}")
+    lines.append(f"- used_flatness_frac: {fmt(warm_start.get('used_flatness_frac'))}")
+    lines.append(
+        f"- used_previous_solution_frac: {fmt(warm_start.get('used_previous_solution_frac'))}"
+    )
+    lines.append(
+        f"- used_fallback: count={warm_start.get('used_fallback_count', 0)}, "
+        f"frac={fmt(warm_start.get('used_fallback_frac'))}"
+    )
+    lines.append(f"- status counts: `{warm_start.get('status_counts', {})}`")
     lines.append("")
     lines.append("## Status counts")
     for status, count in sorted(summary.get("observed", {}).get("status_counts", {}).items(), key=lambda kv: (-kv[1], kv[0])):

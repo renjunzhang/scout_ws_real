@@ -76,7 +76,7 @@ Ferrari 等使用视频提取的实验液面曲线 \(\bar\eta_{\mathrm{exp}}\) �
 
 ### 3.1 主要分析总体
 
-K6 的主要总体是 E1–E3 中全部正式 S-MPCC 尝试，共计划 32 次：
+K6 的主要总体是 E1–E3 中 32 个预注册 S-MPCC 正式矩阵单元：
 
 | 分层 | 条件 | 计划 trial 数 |
 | --- | --- | ---: |
@@ -86,7 +86,7 @@ K6 的主要总体是 E1–E3 中全部正式 S-MPCC 尝试，共计划 32 次�
 | K6-S4 | \(C_1\)，高风险等时间区组，E3 S-MPCC | 8 |
 | 合计 | — | 32 |
 
-所有 32 次正式尝试进入 K6 availability/failure 分母。连续一致性指标只对完成统一到达且通过信号质量检查的 trial 计算，并明确报告“有效数/全部尝试数”。
+占据这 32 个单元的方法失败全部进入 K6 availability/failure 分母。按上位协议允许补采的相机、rosbag 等采集故障尝试单独进入 exclusion log，不产生新的 K6 矩阵单元。连续一致性指标只对完成统一到达且通过信号质量检查的 trial 计算，并分别报告“32 个计划单元、实际物理尝试数、method failure 数、QC 有效数”。
 
 Baseline、Smooth-only 和 Smooth-match 的论文定义关闭液体状态，因此不得把不存在或为零的在线 \(H_{\mathrm{modal}}\) 当作其模型保真度。若未来用 executed-motion 离线传播同一模型覆盖全部 88 次，该结果必须标为独立的 supplementary replay，不得与本协议的 deployed-model fidelity 混合。
 
@@ -424,7 +424,7 @@ K6 无效不自动使 RQ1–RQ3 的视觉物理结果无效；反之，视觉结
 ## 12. 正式采集前 K6 no-go 检查
 
 - [ ] 协议版本固定为 K6-FID-v1.0，并已链接到实验总章和矩阵速查表；
-- [ ] 主要总体固定为 32 次正式 S-MPCC 尝试，K6-S1 至 K6-S4 分层已建立；
+- [ ] 主要总体固定为 32 个正式 S-MPCC 矩阵单元，额外采集尝试与 method failure/QC 分母规则已建立；
 - [ ] `/spmpc/slosh_height` topic、mm 单位和 modal-only 配置已验证；
 - [ ] RGB 使用 `h_mm_max_lcr_smooth_corr`，30 帧零点和 5 帧滚动中位数已验证；
 - [ ] 每帧至少两个标尺有效、clipping 和缺帧标志可导出；

@@ -1,0 +1,165 @@
+# SMPCC-REAL-40-88-v1.0 execution freeze manifest template.
+# Copy to freeze_manifest.yaml only after every required value is filled and
+# every gate below is true. An incomplete template never authorizes formal data.
+
+protocol_id: SMPCC-REAL-40-88-v1.0
+experimental_design_version: v1.2
+k6_protocol_id: K6-FID-v1.0
+freeze_id: ""
+status: NO-GO
+e4_enabled: false
+t_settle_sec: null
+
+upstream_protocols:
+  experimental_design_file: docs/论文书写/实验章节设计/S-MPCC_experimental_design.md
+  experimental_design_sha256: ""
+  matrix_index_file: docs/论文书写/实验章节设计/SPMPC实验矩阵设计.md
+  matrix_index_sha256: ""
+  k6_protocol_file: docs/论文书写/实验章节设计/K6_Ferrari模型视觉一致性冻结协议.md
+  k6_protocol_sha256: ""
+  field_matrix_file: docs/实物实验注意事项/对比试验/实物对比实验/0717_S-MPCC正式实物实验矩阵_先40后88.md
+  field_matrix_sha256: ""
+  field_commands_file: docs/实物实验注意事项/对比试验/实物对比实验/0717_S-MPCC正式实物实验启动与录制命令.md
+  field_commands_sha256: ""
+
+method_release:
+  release_id: ""
+  dynamics_source: ""
+  dynamics_sha256: ""
+  state_propagation_source: ""
+  state_propagation_sha256: ""
+  cost_structure_source: ""
+  cost_structure_sha256: ""
+  rotation_consistent_enabled: false
+  phase_energy_cost_enabled: false
+  signed_power_enabled: false
+
+software:
+  git_revision: ""
+  git_clean: null
+  acados_version: ""
+  codegen_hash: ""
+  build_log: ""
+  build_log_sha256: ""
+
+methods:
+  baseline_config: ""
+  baseline_sha256: ""
+  smooth_config: ""
+  smooth_sha256: ""
+  spmpc_config: ""
+  spmpc_sha256: ""
+  smooth_match_config: ""
+  smooth_match_sha256: ""
+  final_w_slosh: null
+  smooth_match_v_ref: null
+  smooth_match_safe_v_ref_min: null
+  smooth_match_safe_v_ref_max: null
+
+pilot_evidence:
+  standalone_monitor_config: ""
+  standalone_monitor_config_sha256: ""
+  delta_model_weight_decision_file: ""
+  delta_model_weight_decision_file_sha256: ""
+  p3a_endpoint_acceptance_report: ""
+  p3a_endpoint_acceptance_report_sha256: ""
+  p4_completion_match_report: ""
+  p4_completion_match_report_sha256: ""
+
+execution_smoke:
+  recorder_warm_start_report: ""
+  recorder_warm_start_report_sha256: ""
+  actual_zero_replay_report: ""
+  actual_zero_replay_report_sha256: ""
+
+paths:
+  h0_file: ""
+  h0_sha256: ""
+  h1_file: ""
+  h1_sha256: ""
+  l1_file: ""
+  l1_sha256: ""
+  geometry_summary_file: ""
+  geometry_summary_sha256: ""
+
+containers:
+  c1_config: tube_default
+  c1_config_file: ""
+  c1_config_sha256: ""
+  c1_radius_m: null
+  c1_liquid_height_m: null
+  c1_damping_ratio: null
+  c1_freeboard_m: null
+  c1_f1_hz: null
+  c1_camera_frames_per_cycle: null
+  c2_config: ""
+  c2_config_file: ""
+  c2_config_sha256: ""
+  c2_radius_m: null
+  c2_liquid_height_m: null
+  c2_damping_ratio: null
+  c2_freeboard_m: null
+  c2_f1_hz: null
+  c2_camera_frames_per_cycle: null
+  lambda_h: null
+
+vision_and_sync:
+  camera_serial: ""
+  camera_config_file: ""
+  camera_config_sha256: ""
+  calibration_file: ""
+  calibration_sha256: ""
+  tau_cal_sec: null
+  k6_fidelity_manifest: ""
+  k6_fidelity_manifest_sha256: ""
+  k6_protocol_smoke_report: ""
+  k6_protocol_smoke_report_sha256: ""
+  nominal_replay_report: ""
+  nominal_replay_report_sha256: ""
+
+randomization:
+  parameter_pilot_file: ""
+  parameter_pilot_sha256: ""
+  smooth_match_pilot_file: ""
+  smooth_match_pilot_sha256: ""
+  s1_order_file: ""
+  s1_order_sha256: ""
+  e1_order_file: ""
+  e1_order_sha256: ""
+  e2_c2_order_file: ""
+  e2_c2_order_sha256: ""
+
+analysis_tools:
+  rgb_script: ""
+  rgb_script_sha256: ""
+  actual_zero_replay_script: ""
+  actual_zero_replay_script_sha256: ""
+  k6_script: ""
+  k6_script_sha256: ""
+  runtime_script: ""
+  runtime_script_sha256: ""
+
+runtime_rules:
+  solve_budget_ms: 33.3333333
+  solve_budget_metric: solver_time_ms_overrun_rate
+  interarrival_metric: observed_command_intervention_inter_arrival_gap_rate
+  interarrival_gap_threshold_sec: null
+  interarrival_window: ""
+  interarrival_denominator: ""
+  strict_control_cycle_deadline_claim_enabled: false
+
+manifest_validation:
+  validator_script: src/scout_apps/control/spmpc_local_planner/scripts/validate_spmpc_formal_freeze.py
+  validator_script_sha256: ""
+
+gates:
+  parameter_pilot_pass: false
+  smooth_match_pilot_pass: false
+  h0_h1_l1_freeze_pass: false
+  c1_c2_freeze_pass: false
+  recorder_warm_start_smoke_pass: false
+  actual_zero_replay_smoke_pass: false
+  nominal_replay_reproduction_pass: false
+  visual_sync_smoke_pass: false
+  k6_fid_v1_0_no_go_check_pass: false
+  all_formal_prerequisites_pass: false

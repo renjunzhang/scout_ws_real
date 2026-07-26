@@ -6,6 +6,8 @@
 >
 > K6 模型—视觉一致性与敏感性分析的唯一详细口径是 `docs/论文书写/实验章节设计/K6_Ferrari模型视觉一致性冻结协议.md`（K6-FID-v1.0）。该协议已经冻结分析总体、信号、公式、窗口、同步、敏感性与失败规则；正式分析脚本、同步标定和 freeze manifest 通过 no-go 检查前，仍不得开始正式采集。
 >
+> **现场协议冻结说明：** 分阶段现场方案已冻结为 `SMPCC-REAL-40-88-v1.0`。C2 在首个正式 trial 前绑定同一 freeze ID，但其 24 个矩阵单元留到阶段 II-B 采集；E2-C1/E2-C2 只做容器内部区组，不把异期同编号写成同期配对或强 `method × container` 因果交互。
+>
 > **当前方法版本冻结说明：** 本轮 88 次正式实物实验遵循“先冻结、后采集”，全部绑定同一个实验 release。首个正式 trial 前应一次性冻结当前 S-MPCC 液体动力学与状态传播、代价结构与权重、三方法的预声明差异、两条路径、\(C_1/C_2\) 参数、执行代码与限制以及统计规则。40/64 次只是阶段性证据包和资源检查点，不是根据中间结果修改动力学、代价、权重、路径或分析口径的调参节点。若正式采集中途确需改方法，已采数据只能保留为旧版本正式数据或重新标记为 pilot，不能与新版本拼接成同一组 88 次；新版本必须另行冻结并独立重新采集。`S-MPCC_旋转一致液体状态与相位能量优化推进方案.md` 中的 rotation-consistent dynamics、相位能量/有符号功率等改动属于后续独立方法版本，不进入本轮矩阵。
 >
 > **探索性诊断说明：** `Long-horizon propagation and command-regularity audit` 降级为第二层探索性诊断，不属于 40/64/88 次正式证据包，也不再作为 96/104 次正式扩展计数。它不是 RQ1–RQ4、三项核心贡献或投稿完整性的必要条件。只有主实验、计算实验和常规日志审计完成后仍有资源，且扩展路径、安全运行、连续状态传播、视觉链和分层命令日志全部通过独立预验收时才考虑执行。默认投稿稿不设置该模块的 pending 小节；若完成且具有独立解释价值，优先放入补充材料，正文最多作一句受限说明。
@@ -583,16 +585,17 @@ RQ2 的 Smooth-match 是独立 pilot 后只按完成时间冻结的 `B_smooth` �
 
 #### 4.2.3 Experimental matrix
 
-完整方案采用 \(n=8\) 个随机区组、共 88 次正式实物实验：
+完整方案采用 \(n=8\) 个容器内随机区组、共 88 个预注册正式矩阵单元：
 
-| 证据块           | 条件                    | 方法                 | 次数 | 用途                 |
-| ---------------- | ----------------------- | -------------------- | ---: | -------------------- |
-| 低风险区组       | \(C_1\)，低风险路径     | 三种核心方法         |   24 | RQ1 双路径一致性     |
-| 容器 super-block | \(C_1/C_2\)，高风险路径 | 三种核心方法         |   48 | RQ1 高风险结果与 RQ3 |
-| 等时间区组       | \(C_1\)，高风险路径     | Smooth-match、S-MPCC |   16 | RQ2                  |
-| 合计             | —                      | —                   |   88 | RQ1–RQ4 与实时性    |
+| 证据块     | 条件                | 方法                 | 次数 | 用途             |
+| ---------- | ------------------- | -------------------- | ---: | ---------------- |
+| E1         | \(C_1\)，低风险路径 | 三种核心方法         |   24 | RQ1 双路径一致性 |
+| E2-C1      | \(C_1\)，高风险路径 | 三种核心方法         |   24 | RQ1 高风险结果   |
+| E2-C2      | \(C_2\)，高风险路径 | 三种核心方法         |   24 | RQ3 有限迁移     |
+| E3         | \(C_1\)，高风险路径 | Smooth-match、S-MPCC |   16 | RQ2              |
+| 合计       | —                   | —                    |   88 | RQ1–RQ4 与实时性 |
 
-可选物理参数失配组：在 \(C_2\) 上错误使用 \(C_1\) 参数运行 S-MPCC，每个 super-block 增加一次，共增加 8 次。若只完成该扩展，总数为 96。只有该组的外部 \(H_{\mathrm{vis}}\) 支持时，才能讨论几何参数更新对物理迁移效果的必要性。
+可选物理参数失配组：在 \(C_2\) 上错误使用 \(C_1\) 参数运行 S-MPCC，每个 E2-C2 block 增加一次，共增加 8 次。现场协议 v1.0 已固定 `E4_ENABLED=false`，所以本轮总数为 88；96 次只保留为第一条正式 trial 前升级协议的未来选项，不能依据 40/64/88 结果事后开启。只有未来该组的外部 \(H_{\mathrm{vis}}\) 支持时，才能讨论几何参数更新对物理迁移效果的必要性。
 
 长时传播与命令规律性审计不再定义为正式实验组，不预留固定的 8 次样本，也不改变 40/64/88/96 次证据包计数。若主实验完成后另行开展，应使用独立的 exploratory protocol 记录路径、重复数、预验收和停止规则，并与正式区组数据分开归档。
 
@@ -627,7 +630,7 @@ RQ4 纵向/横向四相位规划、实际传播状态 actual/zero replay，以�
 - 激励：\(\dot v\) 和 \(v\omega\)；
 - 液体模型：\((\eta_x,\dot\eta_x,\eta_y,\dot\eta_y)\) 与 \(H_{\mathrm{modal}}\)；
 - 物理液面：\(H_{\mathrm{vis}}\)；
-- 求解器：solve time、status、deadline miss、fallback 和 intervention。
+- 求解器：solve time/overrun、status、observed command-intervention inter-arrival gap proxy、fallback 和 intervention。
 
 必须区分预测控制与真实执行。运动和激励指标使用 odometry 与 executed command；预测量只用于机制解释。RQ4 计算实验必须由冻结的 replay 工具导出完整 \(v,\omega,v_s,\eta,\dot\eta,a,\alpha\) horizon，不能只依赖 XY path、前三个预测点或 horizon 摘要。
 
@@ -675,7 +678,7 @@ H_{\mathrm{vis}}(t):t\in\mathcal W_{\mathrm{full}}
 实时性指标包括：
 
 - solve-time median、p95、maximum；
-- deadline-miss rate；
+- solve-budget overrun rate 与 observed command-intervention inter-arrival gap proxy；
 - solver failure 和 fallback；
 - 实际控制频率。
 
@@ -686,7 +689,7 @@ H_{\mathrm{vis}}(t):t\in\mathcal W_{\mathrm{full}}
 写清：
 
 - 每个 block 内包含全部待比较方法；
-- 方法顺序随机，super-block 内容器顺序随机或平衡；
+- 方法顺序采用现场协议已冻结的位置平衡表；E2-C1/E2-C2 分别形成容器内部区组，不跨日期连接配对线；
 - RQ1 第一主比较预注册为 S-MPCC − Smooth-only，S-MPCC − Baseline 为关键次比较，Smooth-only − Baseline 为机制诊断；
 - RQ2 主比较预注册为 S-MPCC − Smooth-match；
 - 主要估计量为 block 内 paired difference；
@@ -799,7 +802,7 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 
 主图包括：
 
-- method × container interaction plot；
+- 两个容器内分层的方法效应，以及带日期/批次限制的跨容器效应差；
 - S-MPCC 在 \(C_1/C_2\) 上的 \(v(\sigma)\)；
 - \(a_y(\sigma)\)；
 - \(H_{\mathrm{modal}}\) 与 \(H_{\mathrm{vis}}\)。
@@ -886,7 +889,7 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 
 - solve-time median、p95、maximum；
 - solve-time ECDF；
-- deadline-miss rate；
+- solve-budget overrun rate 与 observed command-intervention inter-arrival gap proxy；
 - solver failure；
 - fallback；
 - achieved control frequency。
@@ -909,7 +912,7 @@ Smooth-match 的参考速度必须用独立 pilot 数据按完成时间调节，
 - \(C_2\) 正确/错误参数的计算 mismatch；
 - 可选的 8 次物理 mismatch 组。
 
-K6 主要总体固定为 E1–E3 的 32 次正式 S-MPCC 尝试，主要窗口固定为 \([t_{\mathrm{move}},t_{\mathrm{arrival}}+5\,\mathrm{s}]\)。禁止 per-trial 最佳时滞、幅值拟合、模型 topic 回退和依据正式结果重调参数。详细敏感性曲线和数值表放补充材料，正文只保留能够帮助解释模型适用范围的简洁结果；全部执行细节以 K6-FID-v1.0 为准。
+K6 主要总体固定为 E1–E3 的 32 个正式 S-MPCC 矩阵单元，额外采集尝试与 method failure/QC 分母按 K6-FID-v1.0 单独报告，主要窗口固定为 \([t_{\mathrm{move}},t_{\mathrm{arrival}}+5\,\mathrm{s}]\)。禁止 per-trial 最佳时滞、幅值拟合、模型 topic 回退和依据正式结果重调参数。详细敏感性曲线和数值表放补充材料，正文只保留能够帮助解释模型适用范围的简洁结果；全部执行细节以 K6-FID-v1.0 为准。
 
 #### 4.8.2 Exploratory long-horizon propagation and command-regularity audit
 
@@ -934,7 +937,7 @@ K6 主要总体固定为 E1–E3 的 32 次正式 S-MPCC 尝试，主要窗口�
 1. 实验装置、路径和容器；
 2. RQ1 路径—运动—激励—液面过程链；
 3. RQ2 等完成时间比较；
-4. RQ3 容器 interaction 与过程曲线；
+4. RQ3 两个容器内的方法效应、带日期/批次限制的效应差与过程曲线；
 5. RQ4 纵横向四相位规划、actual/zero optimized first-action difference 与 runtime ECDF。
 
 长时传播/命令规律性审计不进入上述五组核心图，默认只在补充材料中保存探索性全分布。只有其结果对解释主实验中的明确异常具有不可替代作用且篇幅允许时，正文才增加一句说明或一张紧凑表。
@@ -948,7 +951,7 @@ K6 主要总体固定为 E1–E3 的 32 次正式 S-MPCC 尝试，主要窗口�
 - 根据结果好坏排除 trial；
 - 用模型量替代 RGB 主结果；
 - 把方法失败归类为采集故障后重跑；
-- 用没有同期区组的历史数据直接比较 \(C_1/C_2\)；
+- 把异期 E2-C1/E2-C2 同编号画成配对线，或据此声称强容器因果交互；
 - 把同一可变 solver 上顺序执行的 actual/zero 求解当成公平反事实；
 - 把计算 mismatch 写成参数更新对真实物理迁移的必要性证据；
 - 把 optimized first-action difference 写成机器人已经执行的反事实命令；
@@ -1049,7 +1052,7 @@ K6 主要总体固定为 E1–E3 的 32 次正式 S-MPCC 尝试，主要窗口�
 | 物理液面得到改善                                             | RQ1                             | 正式 block-paired\(H_{\mathrm{vis}}\) 结果                                 |
 | 改善不只是通用平滑                                           | RQ1                             | Baseline、Smooth-only、S-MPCC 三方法比较                                   |
 | 改善不只是更慢                                               | RQ2                             | 独立 pilot 冻结后的等完成时间比较                                          |
-| 容器参数化可实现有限迁移                                     | RQ3                             | \(C_1/C_2\) super-block、参数切换规划与计算 mismatch                       |
+| 容器参数化可实现有限迁移                                     | RQ3                             | \(C_1/C_2\) 容器内方法效应方向、参数切换规划与计算 mismatch                |
 | 正式传播状态实际改变优化动作                                 | RQ4                             | 同一 pre-solve 快照下 actual/zero optimized first-action difference        |
 | 方法是真正的状态相关在线规划                                 | RQ4                             | 纵横向不同液体相位的完整预测计划与 optimized first action                  |
 | 方法可以实时运行                                             | RQ4                             | solve-time ECDF、p95、miss 和 failure                                      |
@@ -1084,7 +1087,7 @@ K6 主要总体固定为 E1–E3 的 32 次正式 S-MPCC 尝试，主要窗口�
 1. **冻结 Method：** 核心定义、符号、公式、执行层边界和方法名全部一致。
 2. **冻结实验协议：** 三方法映射、权重、\(\zeta\)、全运动窗口 primary、10%–90% 敏感性窗口、统计主比较、执行限制、RGB 处理和失败规则。
 3. **完成实验工具准备：** 冻结两条路径、\(C_2\)、相机标定和随机区组表；验证 raw/post-gate/published command 记录；验收 replay 快照克隆、actual 复现和完整 horizon 导出。
-4. **采集正式数据：** 使用唯一 freeze ID 按矩阵速查表优先完成 40 次核心机制包，再扩展到 64/88 次；这一分阶段安排只服务于资源管理和证据完整度判断，E1–E3 全程不得根据中间结果改动力学、代价、权重、路径、三方法映射或统计规则。若任何一项发生变化，应结束当前版本、隔离已有数据并从新冻结版本重新建立正式证据包。88 次主矩阵完成后，只有需要参数物理必要性主张时才按预冻结协议增加 8 次物理 mismatch。
+4. **采集正式数据：** 使用唯一 freeze ID 按矩阵速查表优先完成 40 次核心机制包，再扩展到 64/88 次；这一分阶段安排只服务于资源管理和证据完整度判断，E1–E3 全程不得根据中间结果改动力学、代价、权重、路径、三方法映射或统计规则。若任何一项发生变化，应结束当前版本、隔离已有数据并从新冻结版本重新建立正式证据包。当前 v1.0 固定不执行 E4；参数必要性物理扩展只能作为首条正式 trial 前升级协议的未来方案。
 5. **完成计算实验：** 执行纵横向四相位、actual/zero replay、容器参数切换和计算 mismatch。
 6. **填写 RQ1–RQ4：** 先生成原始配对点、过程曲线、效应量、区间、sign-flip 和 leave-one-block-out，再写结果解释。
 7. **反向修改 Introduction 与 Related Work：** 让贡献和主张与实际证据完全一致，并保持 Lim、CA-MPCC 和外部 baseline 的事实边界。
