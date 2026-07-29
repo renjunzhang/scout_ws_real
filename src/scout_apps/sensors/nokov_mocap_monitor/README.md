@@ -2,7 +2,7 @@
 
 Nokov/XINGYING 动捕监控包，用于 Scout 实物实验中的**外部轨迹监控、rosbag 真值记录、RViz 显示和离线分析**。
 
-> **隔离边界：** 本包只做监控，不参与规划控制闭环。它不替换 `/odom`，不作为任何 planner 的输入，不发布 `/cmd_vel`，默认不发布 TF，也不会发布 `map -> base_link` 或 `odom -> base_link` 这类控制链路 TF。
+> **隔离边界：** 动捕监控节点和 launch 只做监控，不参与规划控制闭环；它们不替换 `/odom`，不作为任何 planner 的输入，也不发布 `/cmd_vel`。只有操作者显式执行第 9.4 节的实物运动序列并设置 `ARM_MOTION=YES` 时，独立标定脚本才会发布 `/cmd_vel`。
 
 ---
 
@@ -412,6 +412,64 @@ mocap_monitor_topics:
 ```bash
 rosbag info <your_bag>.bag | grep -E 'mocap|vrpn'
 ```
+
+### 9.3 原地旋转的动捕/IMU 标定录包
+
+record_mocap_imu_spin.sh 只录制数据，不发布 /cmd_vel，也不会启动或停止机器人、IMU、VRPN、planner 或定位。它要求 /imu/data 和指定刚体的原始 VRPN pose 已经在发布，并自动录制当前存在的 IMU、磁力计、VRPN pose/twist/accel、/mocap/scout_pose、/mocap/scout_odom、/mocap/status、实际 /cmd_vel、/odom、TF 和底盘诊断。脚本有意不录不断累积的 /mocap/scout_path，避免长时间 bag 被重复 Path 数据迅速撑大。
+
+当前 WIT 驱动的 `/imu/data` 是 ROS 端未二次滤波的设备解码值，包含经尺度换算的加速度和角速度，并不是串口原始字节或整数计数；设备固件内部滤波仍未知。若现场还存在 `/imu/data_raw` 或 `/container_imu`，也会一并录入。后续应保留原始列，再离线比较不同滤波器，不要覆盖录制样本。
+
+正式独立旋转包应先静止至少 60 s，完成旋转后再静止至少 60 s：
+
+    MOCAP_TRACKER=Tracker0 \
+    RUN_LABEL=spin_ccw_01 \
+    bash src/scout_apps/sensors/nokov_mocap_monitor/scripts/record_mocap_imu_spin.sh
+
+默认录到 /home/geist/slosh_bags/real/<date>_mocap_imu_spin，按 Ctrl+C 结束。也可设置 RECORD_SEC 自动结束：
+
+    MOCAP_TRACKER=Tracker0 \
+    RUN_LABEL=spin_cw_01 \
+    RECORD_SEC=180 \
+    bash src/scout_apps/sensors/nokov_mocap_monitor/scripts/record_mocap_imu_spin.sh
+
+### 9.4 小场地平面 IMU/动捕原始数据序列
+
+run_mocap_imu_calibration_sequence.sh 会启动上述 recorder，并用单个长驻 ROS 进程持续以 50 Hz 发布 /cmd_vel。静止阶段也持续发布零速，运动切换不再创建和销毁 `rostopic pub` 进程：
+
+    静止前
+      -> 短直线加速/匀速/制动及反向回程
+      -> 原地左转、右转及 CCW-CW-CCW 直接反转
+      -> LR 短 S 弯与反向回程
+      -> RL 短 S 弯与反向回程
+      -> LR/RL 成对重复至少 3 次
+      -> 静止后
+
+独立左右圆弧已取消；每个 S 弯的左右段都保持一小段恒定 v/omega，再直接反转曲率。默认 `v=0.10 m/s`、`|omega|=0.40 rad/s`、每腿 1 s：每次前向命令路程约 0.20 m、半径约 0.25 m、名义横向激励约 0.04 m/s^2，随后按相反命令返回。
+
+默认直线速度为 0.10/0.15 m/s，持续 1.5 s；动态序列前后各录 60 s 静止数据。脚本记录一个完整 bag，同时写入 /mocap_imu_calib/segment、/mocap_imu_calib/status、使用 ROS 与 monotonic 双时间的 timeline.tsv、实际段长、命令样本数和主要序列参数。它持续监测 IMU、odom、原始动捕、recorder、命令发布冲突和 0.25 s 非零命令租约；任一条件失效都会先持续发布零速再中止。
+
+正常结束还会生成 `*_validation.json`、`*_bag_info.txt` 和 `*_sha256.txt`。只有 validation 的 `ok=true`、状态严格为 READY→RUNNING→COMPLETE、S 段数量/时长正确、末尾连续零速且不存在 `.bag.active` 时，才把该 bag 纳入正式分析。
+
+该脚本没有避障，启动前必须停止其他 /cmd_vel 发布者、清空约 1 m 安全范围，并由操作者持有急停。正式命令建议显式写全关键参数，避免继承旧 shell 环境：
+
+    ARM_MOTION=YES \
+    MOCAP_TRACKER=Tracker0 \
+    RUN_LABEL=imu_mocap_planar_r03 \
+    CMD_HZ=50 \
+    LINEAR_LOW=0.10 \
+    LINEAR_NOMINAL=0.15 \
+    S_V=0.10 \
+    S_OMEGA=0.40 \
+    STATIC_PRE_SEC=60 \
+    STATIC_POST_SEC=60 \
+    bash src/scout_apps/sensors/nokov_mocap_monitor/scripts/run_mocap_imu_calibration_sequence.sh
+
+默认 S_REPEATS=3，可在硬范围 3--5 内调整。该序列的目标是把平面 yaw、纵向/横向加速度、命令响应和动捕真值录好，供后续离线滤波和时延分析；它明确不做完整六轴安装旋转，也不包含夹具倾斜姿态。
+
+正式解锁前可只做在线话题、动捕状态和 /cmd_vel 发布者冲突检查；该命令不录包、不运动：
+
+    VALIDATE_ONLY=true MOCAP_TRACKER=Tracker0 \
+    bash src/scout_apps/sensors/nokov_mocap_monitor/scripts/run_mocap_imu_calibration_sequence.sh
 
 ---
 
