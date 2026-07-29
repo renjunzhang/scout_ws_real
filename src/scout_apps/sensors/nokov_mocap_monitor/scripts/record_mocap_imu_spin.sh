@@ -50,12 +50,16 @@ if [[ ! "${NAME}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
     echo "[${SCRIPT_NAME}] ERROR: NAME may contain only letters, digits, '.', '_' and '-'." >&2
     exit 2
 fi
+if [[ "${NAME}" == *.bag || "${NAME}" == *.active ]]; then
+    echo "[${SCRIPT_NAME}] ERROR: NAME must not end in .bag or .active; rosbag adds the suffix." >&2
+    exit 2
+fi
 if [[ ! "${RECORD_SEC}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
     echo "[${SCRIPT_NAME}] ERROR: RECORD_SEC must be a non-negative number." >&2
     exit 2
 fi
 
-if [[ -f /opt/ros/noetic/setup.bash ]]; then
+if ! command -v rostopic >/dev/null 2>&1 && [[ -f /opt/ros/noetic/setup.bash ]]; then
     # shellcheck disable=SC1091
     source /opt/ros/noetic/setup.bash
 fi

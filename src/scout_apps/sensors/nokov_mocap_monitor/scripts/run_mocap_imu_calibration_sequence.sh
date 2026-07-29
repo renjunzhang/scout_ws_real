@@ -154,6 +154,10 @@ if [[ ! "${RUN_LABEL}" =~ ^[A-Za-z0-9_.-]+$ || ! "${NAME}" =~ ^[A-Za-z0-9_.-]+$ 
     echo "[${SCRIPT_NAME}] ERROR: RUN_LABEL and NAME must be filesystem-safe." >&2
     exit 2
 fi
+if [[ "${NAME}" == *.bag || "${NAME}" == *.active ]]; then
+    echo "[${SCRIPT_NAME}] ERROR: NAME must not end in .bag or .active; the recorder adds the suffix." >&2
+    exit 2
+fi
 if [[ ! "${COUNTDOWN_SEC}" =~ ^[0-9]+$ ]]; then
     echo "[${SCRIPT_NAME}] ERROR: COUNTDOWN_SEC must be a non-negative integer." >&2
     exit 2
@@ -228,7 +232,7 @@ if ! awk -v low="${LINEAR_LOW}" -v nominal="${LINEAR_NOMINAL}" \
     exit 2
 fi
 
-if [[ -f /opt/ros/noetic/setup.bash ]]; then
+if ! command -v rostopic >/dev/null 2>&1 && [[ -f /opt/ros/noetic/setup.bash ]]; then
     # shellcheck disable=SC1091
     source /opt/ros/noetic/setup.bash
 fi
