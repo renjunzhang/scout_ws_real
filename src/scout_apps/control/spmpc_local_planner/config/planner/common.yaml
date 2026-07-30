@@ -11,6 +11,7 @@ solver_backend: continuous_mpcc_acados
 
 topics:
   odom: /odom
+  imu: /imu/data
   reference_path: /scout/global_path_fixed
   costmap: /map
   cmd_vel: /cmd_vel
@@ -19,6 +20,56 @@ frames:
   robot_base: base_link
   use_tf_pose: true
   tf_timeout_sec: 0.05
+
+# Processed IMU is a measurement-only liquid observer shadow.  It never feeds
+# SolverInput, the governor, delay prediction, or /cmd_vel in phase 1.
+# The gyro-z affine correction and approximate +15 ms sensor delay below come
+# from the 20260729 mocap/IMU run.  The filter cutoffs/phase delays are software
+# design values; accel scale and the full six-axis extrinsic remain uncalibrated.
+# The 0629 red_3ruler file calibrates RGB liquid height only and is not reused.
+# Tracker0-to-base yaw is a mocap-frame correction, not an IMU-axis correction,
+# and is therefore not applied a second time to online IMU samples.
+# The planar lever arm is the inverse of the nominal base_link-to-imu_link XY
+# translation, with the target provisionally placed at a base/ICR proxy.  It is
+# not identified from Tracker0 translation and is not a calibrated full extrinsic.
+imu_shadow:
+  enable: false
+  publish_diagnostics: true
+  expected_frame: imu_link
+  # Nominal cached discretization; accepted updates use their exact header dt.
+  observer_dt_sec: 0.020
+
+  gravity_mps2: 9.8
+  sensor_delay_sec: 0.015  # approximate measured lag; uncertainty is about +/-0.020 s
+  accel_cutoff_hz: 10.0
+  gyro_cutoff_hz: 12.0
+  accel_phase_delay_sec: 0.006834
+  gyro_phase_delay_sec: 0.005020
+  alpha_phase_delay_sec: 0.015001
+
+  gyro_scale: 1.001773
+  gyro_offset_radps: -0.000297
+  imu_to_base_yaw_rad: 0.0  # nominal development choice; installation yaw is not calibrated
+  lever_arm_imu_to_target_x_m: -0.100
+  lever_arm_imu_to_target_y_m: 0.045
+
+  bias_window_start_sec: 2.0
+  bias_window_end_sec: 10.0
+  bias_min_samples: 100
+  bias_max_accel_mad_mps2: 0.02
+  bias_max_gyro_p95_radps: 0.03
+  # Contract: keep the robot still through [2,10)s.  A failed bias check stays
+  # fail-closed across packet gaps; restart/reset only after restoring stillness.
+
+  filter_warmup_sec: 0.20
+  # Nominal input is 50 Hz.  The formal 0705 set contains one observed
+  # 31.059 ms interval, so >35 ms is treated as a dropped-sample epoch break.
+  max_sample_gap_sec: 0.035
+  clock_reset_threshold_sec: 0.50
+  max_receive_age_sec: 0.10
+  max_future_skew_sec: 0.005
+  quaternion_norm_min: 0.95
+  quaternion_norm_max: 1.05
 
 reference:
   lookahead_distance: 0.6

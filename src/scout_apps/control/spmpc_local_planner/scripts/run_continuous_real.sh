@@ -23,6 +23,18 @@
 
 set -euo pipefail
 
+# This historical development runner publishes the path before launching the
+# planner, so it cannot satisfy the processed-IMU [2,10)s stationary bias
+# contract.  Keep one authoritative, fail-closed shadow workflow instead of a
+# second subtly different implementation.
+case "${IMU_SHADOW_ENABLE:-false}" in
+  0|false|FALSE|no|NO|off|OFF) ;;
+  *)
+    echo "[ERR] processed-IMU shadow is not supported by this legacy runner; use run_spmpc_real_fixed_path_trial.sh, which gates path/goal publication on IMU READY." >&2
+    exit 2
+    ;;
+esac
+
 VARIANT="${VARIANT:-B0}"
 DATE="${DATE:-$(date +%Y%m%d)}"
 RECORD_SEC="${RECORD_SEC:-25}"

@@ -52,6 +52,8 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     primitive_pub_ = nh.advertise<std_msgs::Float32MultiArray>("primitive", 1);
     slosh_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_state", 1);
     slosh_height_pub_ = nh.advertise<std_msgs::Float32>("slosh_height", 1);
+    odom_slosh_observer_pub_ = nh.advertise<SloshObserverDebug>("debug/slosh_observer_odom", 1);
+    imu_slosh_observer_pub_ = nh.advertise<SloshObserverDebug>("debug/slosh_observer_imu", 1);
     slosh_horizon_summary_pub_ = nh.advertise<std_msgs::Float32MultiArray>("slosh_horizon_summary", 1);
     slosh_hard_constraint_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_hard_constraint", 1);
     slosh_hard_constraint_effective_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_hard_constraint_effective", 1);
@@ -882,6 +884,14 @@ void DiagnosticsPublisher::publishSloshHeight(double height_m) {
     std_msgs::Float32 msg;
     msg.data = static_cast<float>(1000.0 * height_m);
     slosh_height_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishOdomSloshObserver(const SloshObserverDebug& msg) {
+    odom_slosh_observer_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishImuSloshObserver(const SloshObserverDebug& msg) {
+    imu_slosh_observer_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishStatus(const std::string& status) {

@@ -6,6 +6,7 @@
 #include "spmpc_local_planner/ros/delay_phase_types.h"
 #include "spmpc_local_planner/PreSolveSnapshot.h"
 #include "spmpc_local_planner/PredictedHorizon.h"
+#include "spmpc_local_planner/SloshObserverDebug.h"
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Path.h>
 #include <ros/ros.h>
@@ -35,6 +36,8 @@ public:
                               bool angular_accel_limited);
     void publishSloshState(const SloshState& state);
     void publishSloshHeight(double height_m);
+    void publishOdomSloshObserver(const SloshObserverDebug& msg);
+    void publishImuSloshObserver(const SloshObserverDebug& msg);
     void publishSloshGovernor(const SloshRiskGovernorOutput& output);
     void publishDelayPhase(const DelayPhaseDebugSummary& summary);
     void publishOdomTiming(const OdomTimingDebug& timing);
@@ -69,6 +72,8 @@ private:
     ros::Publisher primitive_pub_;
     ros::Publisher slosh_state_pub_;
     ros::Publisher slosh_height_pub_;
+    ros::Publisher odom_slosh_observer_pub_;
+    ros::Publisher imu_slosh_observer_pub_;
     ros::Publisher slosh_horizon_summary_pub_;
     ros::Publisher slosh_hard_constraint_pub_;
     ros::Publisher slosh_hard_constraint_effective_pub_;

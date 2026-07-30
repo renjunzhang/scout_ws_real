@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -16,8 +17,26 @@ namespace spmpc_local_planner {
 
 namespace {
 
+constexpr double kMinimumOdomObserverDtSec = 1e-4;
+constexpr double kOdomClockResetThresholdSec = 0.5;
+
 const char* boolText(bool value) {
     return value ? "true" : "false";
+}
+
+ros::Time rosTimeFromNanoseconds(std::int64_t stamp_ns) {
+    ros::Time stamp;
+    if (stamp_ns > 0) {
+        stamp.fromNSec(static_cast<std::uint64_t>(stamp_ns));
+    }
+    return stamp;
+}
+
+double ageSeconds(std::int64_t receive_stamp_ns, std::int64_t value_stamp_ns) {
+    if (receive_stamp_ns <= 0 || value_stamp_ns <= 0) {
+        return -1.0;
+    }
+    return static_cast<double>(receive_stamp_ns - value_stamp_ns) * 1.0e-9;
 }
 
 const char* solverBackendRole(const std::string& backend) {
@@ -193,6 +212,12 @@ bool validateBackendPolicy(const SolverParams& params,
 SpmpcLocalPlannerROS::SpmpcLocalPlannerROS()
     : tf_listener_(tf_buffer_) {}
 
+SpmpcLocalPlannerROS::~SpmpcLocalPlannerROS() {
+    if (imu_spinner_) {
+        imu_spinner_->stop();
+    }
+}
+
 bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     nh_ = nh;
     pnh_ = pnh;
@@ -201,6 +226,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("planner_variant", variant_name, variant_name);
     pnh_.param("experiment_mode", experiment_mode_, experiment_mode_);
     pnh_.param("topics/odom", odom_topic_, odom_topic_);
+    pnh_.param("topics/imu", imu_topic_, imu_topic_);
     pnh_.param("topics/reference_path", path_topic_, path_topic_);
     pnh_.param("topics/costmap", costmap_topic_, costmap_topic_);
     pnh_.param("topics/cmd_vel", cmd_topic_, cmd_topic_);
@@ -209,6 +235,17 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("frames/use_tf_pose", use_tf_pose_, use_tf_pose_);
     pnh_.param("frames/tf_timeout_sec", tf_timeout_sec_, tf_timeout_sec_);
     pnh_.param("publish_cmd_vel", publish_cmd_vel_, publish_cmd_vel_);
+    pnh_.param("imu_shadow/enable", imu_shadow_enable_, imu_shadow_enable_);
+    pnh_.param("imu_shadow/publish_diagnostics",
+               imu_shadow_publish_diagnostics_,
+               imu_shadow_publish_diagnostics_);
+    pnh_.param("imu_shadow/expected_frame", imu_expected_frame_, imu_expected_frame_);
+    pnh_.param("imu_shadow/observer_dt_sec", imu_observer_dt_sec_, imu_observer_dt_sec_);
+    if (!std::isfinite(imu_observer_dt_sec_) || imu_observer_dt_sec_ <= 0.0) {
+        ROS_WARN("[spmpc_local_planner] invalid imu_shadow/observer_dt_sec=%.6f; using 0.02 s",
+                 imu_observer_dt_sec_);
+        imu_observer_dt_sec_ = 0.02;
+    }
     pnh_.param("control_frequency", control_frequency_, control_frequency_);
     pnh_.param("dt", dt_, dt_);
     pnh_.param("horizon_steps", horizon_steps_, horizon_steps_);
@@ -379,6 +416,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     }
     solver_params.slosh = loadSloshParams();
     solver_params.slosh.dt = dt_;
+    const ProcessedImuParams processed_imu_params = loadProcessedImuParams();
     slosh_risk_governor_params_ = loadSloshRiskGovernorParams();
 
     variant_ = makeVariantConfig(variant_name);
@@ -457,8 +495,17 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     effective_config_.delay_require_complete_history = delay_phase_params_.require_complete_history ? 1.0 : 0.0;
 
     problem_.configure(solver_params, variant_);
-    if (!slosh_observer_.configure(solver_params.slosh)) {
+    if (!slosh_observers_.configure(solver_params.slosh, imu_observer_dt_sec_)) {
         ROS_WARN("[spmpc_local_planner] slosh observer configure failed; slosh diagnostics stay zero");
+    }
+    if (imu_shadow_enable_ && !slosh_observers_.imuConfigured()) {
+        ROS_ERROR("[spmpc_local_planner] IMU shadow observer configure failed; disabling shadow");
+        imu_shadow_enable_ = false;
+    }
+    if (imu_shadow_enable_ &&
+        !imu_shadow_adapter_.configure(processed_imu_params, imu_expected_frame_)) {
+        ROS_ERROR("[spmpc_local_planner] processed-IMU pipeline configure failed; disabling shadow");
+        imu_shadow_enable_ = false;
     }
     if (!execution_predictor_.configure(solver_params.slosh)) {
         ROS_WARN("[spmpc_local_planner] delay_phase shadow slosh predictor configure failed; shadow slosh stays pass-through");
@@ -470,6 +517,16 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     obstacle_enable_ = solver_params.obstacle_enable;
 
     odom_sub_ = nh_.subscribe(odom_topic_, 1, &SpmpcLocalPlannerROS::odomCallback, this);
+    if (imu_shadow_enable_) {
+        imu_nh_ = nh_;
+        imu_nh_.setCallbackQueue(&imu_callback_queue_);
+        imu_sub_ = imu_nh_.subscribe<sensor_msgs::Imu>(
+            imu_topic_,
+            1,
+            &SpmpcLocalPlannerROS::imuCallback,
+            this,
+            ros::TransportHints().tcpNoDelay());
+    }
     path_sub_ = nh_.subscribe(path_topic_, 1, &SpmpcLocalPlannerROS::pathCallback, this);
     if (obstacle_enable_) {
         costmap_sub_ = nh_.subscribe(costmap_topic_, 1, &SpmpcLocalPlannerROS::costmapCallback, this);
@@ -485,9 +542,19 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
 
     const double period = 1.0 / std::max(1.0, control_frequency_);
     control_timer_ = nh_.createTimer(ros::Duration(period), &SpmpcLocalPlannerROS::controlTimerCallback, this);
+    if (imu_shadow_enable_) {
+        imu_spinner_.reset(new ros::AsyncSpinner(1, &imu_callback_queue_));
+        imu_spinner_->start();
+    }
 
-    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s",
-             variant_.name.c_str(), experiment_mode_.c_str(), path_topic_.c_str(), costmap_topic_.c_str(), cmd_topic_.c_str());
+    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s imu_shadow=%s imu_topic=%s",
+             variant_.name.c_str(),
+             experiment_mode_.c_str(),
+             path_topic_.c_str(),
+             costmap_topic_.c_str(),
+             cmd_topic_.c_str(),
+             boolText(imu_shadow_enable_),
+             imu_topic_.c_str());
     return true;
 }
 
@@ -1047,10 +1114,45 @@ bool SpmpcLocalPlannerROS::updateTrackingSafetyGate(const SolverInput& input,
 }
 
 void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
-    last_odom_receive_stamp_ = ros::Time::now();
-    updateSloshObserverFromOdom(*msg);
+    const ros::Time receive_stamp = ros::Time::now();
+    if (!processOdomInput(*msg, receive_stamp)) {
+        return;
+    }
+    // Commit odom to the formal control path only after the same monotonicity
+    // and finite-value checks used by the liquid-observer input boundary.
+    last_odom_receive_stamp_ = receive_stamp;
     last_odom_ = *msg;
     have_odom_ = true;
+}
+
+void SpmpcLocalPlannerROS::imuCallback(const sensor_msgs::ImuConstPtr& msg) {
+    const ProcessedImuOutput output = imu_shadow_adapter_.process(*msg, ros::Time::now());
+    if (output.excitation.valid) {
+        if (!slosh_observers_.stepImu(output.excitation)) {
+            ROS_WARN_THROTTLE(1.0,
+                              "[spmpc_local_planner] processed-IMU valid but shadow observer step failed");
+        }
+    } else {
+        // Invalid samples never advance the IMU observer and never reuse the
+        // previous acceleration.  Epoch changes also clear its modal state.
+        slosh_observers_.invalidateImu(output.reset_epoch);
+    }
+
+    if (output.status == ImuPipelineStatusCode::FrameMismatch) {
+        ROS_WARN_THROTTLE(2.0,
+                          "[spmpc_local_planner] IMU frame mismatch: expected '%s', got '%s'",
+                          imu_expected_frame_.c_str(),
+                          msg->header.frame_id.c_str());
+    } else if (output.status == ImuPipelineStatusCode::BiasInsufficient ||
+               output.status == ImuPipelineStatusCode::BiasMotionDetected) {
+        ROS_WARN_THROTTLE(2.0,
+                          "[spmpc_local_planner] processed-IMU calibration unavailable: %s",
+                          imuPipelineStatusName(output.status));
+    }
+
+    if (imu_shadow_publish_diagnostics_) {
+        publishImuSloshObserverDebug(*msg, output);
+    }
 }
 
 void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
@@ -1139,10 +1241,12 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         publishZeroCommand(intervention);
         return;
     }
-    input.slosh = current_slosh_;
+    // Phase-1 source invariant: processed IMU is shadow-only.  No IMU state is
+    // consulted by SolverInput, the governor, or the execution predictor.
+    input.slosh = slosh_observers_.solverState();
     input.dt = dt_;
     input.horizon_steps = horizon_steps_;
-    const double slosh_height_coeff = slosh_observer_.configured() ? slosh_observer_.heightCoeff() : 0.0;
+    const double slosh_height_coeff = slosh_observers_.heightCoeff();
     diagnostics_.publishRawState(input.robot, input.slosh, slosh_height_coeff);
 
     applyRuntimeVRef(input);
@@ -1236,9 +1340,9 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     // 统一用 solve_input 确保 bag 记录的状态与 solver 实际输入一致。
     diagnostics_.publishSloshState(solve_input.slosh);
     // 当前标量模型液面高度 = c_h·‖η‖ (+向心项), 由唯一物理核 SloshDynamics 计算; 单位米(模型 proxy)。
-    if (slosh_observer_.configured()) {
+    if (slosh_observers_.odomConfigured()) {
         const double omega_meas = last_odom_.twist.twist.angular.z;
-        diagnostics_.publishSloshHeight(slosh_observer_.height(solve_input.slosh, omega_meas));
+        diagnostics_.publishSloshHeight(slosh_observers_.solverHeight(solve_input.slosh, omega_meas));
     }
     publishDelayPhaseDiagnostics(
         delay_phase_now, delay_phase_status, shadow_prediction_ptr, output.solver_time_ms, delay_compensation_applied);
@@ -1305,52 +1409,257 @@ bool SpmpcLocalPlannerROS::robotStateFromLatest(RobotState& state) {
     }
 }
 
-void SpmpcLocalPlannerROS::updateSloshObserverFromOdom(const nav_msgs::Odometry& odom) {
+bool SpmpcLocalPlannerROS::processOdomInput(
+    const nav_msgs::Odometry& odom,
+    const ros::Time& receive_stamp) {
     OdomTimingDebug timing;
-    const ros::Time receive_stamp = last_odom_receive_stamp_.isZero() ? ros::Time::now() : last_odom_receive_stamp_;
     if (!receive_stamp.isZero() && !odom.header.stamp.isZero()) {
         timing.recv_age_ms = 1000.0 * (receive_stamp - odom.header.stamp).toSec();
     }
     timing.have_prev_odom = have_prev_odom_;
 
+    MotionExcitation excitation;
+    excitation.source = MotionExcitationSource::Odom;
+    excitation.source_stamp_ns = static_cast<std::int64_t>(odom.header.stamp.toNSec());
+    excitation.measurement_stamp_ns = excitation.source_stamp_ns;
+    excitation.accel_effective_stamp_ns = excitation.source_stamp_ns;
+    excitation.gyro_effective_stamp_ns = excitation.source_stamp_ns;
+    excitation.alpha_effective_stamp_ns = excitation.source_stamp_ns;
+    excitation.receive_stamp_ns = static_cast<std::int64_t>(receive_stamp.toNSec());
+
+    const geometry_msgs::Point& position = odom.pose.pose.position;
+    const geometry_msgs::Quaternion& orientation = odom.pose.pose.orientation;
+    const double orientation_norm_sq =
+        orientation.x * orientation.x + orientation.y * orientation.y +
+        orientation.z * orientation.z + orientation.w * orientation.w;
+    const double v = odom.twist.twist.linear.x;
+    const double omega = odom.twist.twist.angular.z;
+    const bool finite_control_state =
+        std::isfinite(position.x) && std::isfinite(position.y) &&
+        std::isfinite(orientation.x) && std::isfinite(orientation.y) &&
+        std::isfinite(orientation.z) && std::isfinite(orientation.w) &&
+        std::isfinite(orientation_norm_sq) &&
+        orientation_norm_sq > std::numeric_limits<double>::epsilon() &&
+        std::isfinite(v) && std::isfinite(omega);
+    if (receive_stamp.isZero() || odom.header.stamp.isZero() || !finite_control_state) {
+        timing.dt_clamped = true;
+        last_odom_timing_ = timing;
+        ROS_WARN_THROTTLE(
+            1.0,
+            "[spmpc_local_planner] rejecting odom control input with invalid stamp, pose, or twist");
+        if (imu_shadow_enable_ && imu_shadow_publish_diagnostics_) {
+            publishOdomSloshObserverDebug(odom, excitation, "ODOM_INVALID_SAMPLE");
+        }
+        return false;
+    }
+
     if (!have_prev_odom_) {
         prev_odom_ = odom;
         have_prev_odom_ = true;
         last_odom_timing_ = timing;
-        return;
+        if (imu_shadow_enable_ && imu_shadow_publish_diagnostics_) {
+            publishOdomSloshObserverDebug(odom, excitation, "ODOM_WAITING_FOR_PREVIOUS");
+        }
+        return true;
     }
 
     const double dt_msg = (odom.header.stamp - prev_odom_.header.stamp).toSec();
-    const bool dt_clamped = dt_msg <= 1e-4 || !std::isfinite(dt_msg);
-    const double dt_safe = !dt_clamped ? dt_msg : dt_;
-    const double v = odom.twist.twist.linear.x;
     const double prev_v = prev_odom_.twist.twist.linear.x;
-    const double omega = odom.twist.twist.angular.z;
-    const double ax = (v - prev_v) / std::max(1e-3, dt_safe);
-    const double ay = v * omega;
+    const double prev_omega = prev_odom_.twist.twist.angular.z;
+    if (!std::isfinite(dt_msg) || dt_msg <= kMinimumOdomObserverDtSec ||
+        !std::isfinite(prev_v) || !std::isfinite(prev_omega)) {
+        timing.stamp_dt_ms = std::isfinite(dt_msg) ? 1000.0 * dt_msg : 0.0;
+        timing.dt_clamped = true;
+        timing.have_prev_odom = true;
+        last_odom_timing_ = timing;
 
-    timing.stamp_dt_ms = 1000.0 * dt_safe;
+        const bool clock_reset = std::isfinite(dt_msg) &&
+                                 dt_msg < -kOdomClockResetThresholdSec;
+        const char* status = "ODOM_INVALID_TIMESTAMP";
+        if (clock_reset) {
+            status = "ODOM_CLOCK_RESET";
+        } else if (dt_msg == 0.0) {
+            status = "ODOM_DUPLICATE_TIMESTAMP";
+        } else if (std::isfinite(dt_msg) && dt_msg < 0.0) {
+            status = "ODOM_OUT_OF_ORDER_DROP";
+        } else if (std::isfinite(dt_msg)) {
+            status = "ODOM_DT_TOO_SMALL";
+        }
+        if (clock_reset) {
+            // A large source-clock regression starts a clean liquid epoch.  A
+            // small out-of-order packet is only dropped and cannot move the
+            // derivative baseline backwards.
+            slosh_observers_.resetOdom();
+            prev_odom_ = odom;
+        }
+        ROS_WARN_THROTTLE(
+            1.0,
+            "[spmpc_local_planner] rejecting odom slosh update: %s (dt=%.6f s)",
+            status,
+            dt_msg);
+        if (imu_shadow_enable_ && imu_shadow_publish_diagnostics_) {
+            publishOdomSloshObserverDebug(odom, excitation, status);
+        }
+        return clock_reset;
+    }
+
+    const double ax = (v - prev_v) / dt_msg;
+    const double ay = v * omega;
+    const double alpha = (omega - prev_omega) / dt_msg;
+    if (!std::isfinite(ax) || !std::isfinite(ay) || !std::isfinite(alpha)) {
+        timing.stamp_dt_ms = 1000.0 * dt_msg;
+        timing.dt_clamped = true;
+        timing.have_prev_odom = true;
+        last_odom_timing_ = timing;
+        ROS_WARN_THROTTLE(
+            1.0,
+            "[spmpc_local_planner] rejecting odom control input with non-finite derived excitation");
+        if (imu_shadow_enable_ && imu_shadow_publish_diagnostics_) {
+            publishOdomSloshObserverDebug(
+                odom, excitation, "ODOM_DERIVED_NONFINITE");
+        }
+        return false;
+    }
+
+    timing.stamp_dt_ms = 1000.0 * dt_msg;
     timing.ax = ax;
     timing.ay = ay;
     timing.omega = omega;
     timing.have_prev_odom = true;
-    timing.dt_clamped = dt_clamped;
+    timing.dt_clamped = false;
     last_odom_timing_ = timing;
 
-    if (!slosh_observer_.configured()) {
-        prev_odom_ = odom;
-        return;
+    excitation.valid = true;
+    excitation.ax = ax;
+    excitation.ay = ay;
+    excitation.omega_z = omega;
+    excitation.alpha_z = alpha;
+    excitation.sample_dt_sec = dt_msg;
+    const std::int64_t previous_stamp_ns =
+        static_cast<std::int64_t>(prev_odom_.header.stamp.toNSec());
+    const std::int64_t interval_midpoint_ns = previous_stamp_ns +
+        (excitation.source_stamp_ns - previous_stamp_ns) / 2;
+    excitation.accel_effective_stamp_ns = interval_midpoint_ns;
+    excitation.alpha_effective_stamp_ns = interval_midpoint_ns;
+    const bool observer_updated = slosh_observers_.stepOdom(excitation);
+    if (!observer_updated && slosh_observers_.odomConfigured()) {
+        ROS_WARN_THROTTLE(1.0, "[spmpc_local_planner] odom slosh observer step rejected");
+    } else if (!slosh_observers_.odomConfigured()) {
+        ROS_WARN_THROTTLE(1.0, "[spmpc_local_planner] slosh observer reconfigure failed");
     }
-
-    if (std::abs(dt_safe - slosh_observer_.params().dt) > 1e-4) {
-        auto params = slosh_observer_.params();
-        params.dt = dt_safe;
-        if (!slosh_observer_.configure(params)) {
-            ROS_WARN_THROTTLE(1.0, "[spmpc_local_planner] slosh observer reconfigure failed");
-        }
+    if (imu_shadow_enable_ && imu_shadow_publish_diagnostics_) {
+        publishOdomSloshObserverDebug(
+            odom,
+            excitation,
+            observer_updated ? "ODOM_READY" : "ODOM_OBSERVER_INVALID");
     }
-    current_slosh_ = slosh_observer_.step(current_slosh_, ax, ay, omega);
     prev_odom_ = odom;
+    return true;
+}
+
+void SpmpcLocalPlannerROS::publishOdomSloshObserverDebug(
+    const nav_msgs::Odometry& odom,
+    const MotionExcitation& excitation,
+    const std::string& status) {
+    const SloshObserverSnapshot& snapshot = slosh_observers_.odom();
+    SloshObserverDebug msg;
+    msg.header = odom.header;
+    msg.header.frame_id = odom.child_frame_id.empty() ? robot_base_frame_ : odom.child_frame_id;
+    msg.schema_version = 2;
+    msg.source = SloshObserverDebug::SOURCE_ODOM;
+    msg.excitation_axes_frame = msg.header.frame_id;
+    msg.excitation_reference_point = msg.header.frame_id;
+    msg.configured = snapshot.configured;
+    msg.valid = excitation.valid && snapshot.valid;
+    msg.input_status_code = 0;
+    msg.input_status = status;
+    msg.reset_epoch = excitation.reset_epoch;
+    msg.accepted_sample_count = snapshot.update_count;
+    msg.observer_update_count = snapshot.update_count;
+    msg.source_stamp = rosTimeFromNanoseconds(excitation.source_stamp_ns);
+    msg.measurement_stamp = rosTimeFromNanoseconds(excitation.measurement_stamp_ns);
+    msg.accel_effective_stamp = rosTimeFromNanoseconds(excitation.accel_effective_stamp_ns);
+    msg.gyro_effective_stamp = rosTimeFromNanoseconds(excitation.gyro_effective_stamp_ns);
+    msg.alpha_effective_stamp = rosTimeFromNanoseconds(excitation.alpha_effective_stamp_ns);
+    msg.receive_stamp = rosTimeFromNanoseconds(excitation.receive_stamp_ns);
+    msg.state_stamp = rosTimeFromNanoseconds(snapshot.state_stamp_ns);
+    msg.transport_age_sec = ageSeconds(
+        excitation.receive_stamp_ns, excitation.source_stamp_ns);
+    msg.measurement_age_sec = ageSeconds(
+        excitation.receive_stamp_ns, excitation.measurement_stamp_ns);
+    msg.state_age_sec = ageSeconds(excitation.receive_stamp_ns, snapshot.state_stamp_ns);
+    msg.sample_dt_sec = excitation.sample_dt_sec;
+    msg.ax_mps2 = excitation.ax;
+    msg.ay_mps2 = excitation.ay;
+    msg.omega_z_radps = excitation.omega_z;
+    msg.alpha_z_radps2 = excitation.alpha_z;
+    msg.eta_x = snapshot.state.eta_x;
+    msg.eta_x_dot = snapshot.state.eta_x_dot;
+    msg.eta_y = snapshot.state.eta_y;
+    msg.eta_y_dot = snapshot.state.eta_y_dot;
+    msg.modal_height_m = snapshot.modal_height_m;
+    msg.total_height_m = snapshot.total_height_m;
+    diagnostics_.publishOdomSloshObserver(msg);
+}
+
+void SpmpcLocalPlannerROS::publishImuSloshObserverDebug(
+    const sensor_msgs::Imu& imu,
+    const ProcessedImuOutput& output) {
+    const SloshObserverSnapshot& snapshot = slosh_observers_.imu();
+    const MotionExcitation& excitation = output.excitation;
+    SloshObserverDebug msg;
+    msg.header = imu.header;
+    msg.header.frame_id = robot_base_frame_;
+    msg.schema_version = 2;
+    msg.source = SloshObserverDebug::SOURCE_PROCESSED_IMU;
+    msg.excitation_axes_frame = robot_base_frame_;
+    msg.excitation_reference_point = "liquid_observer_target_icr_proxy";
+    msg.configured = snapshot.configured;
+    msg.valid = output.excitation.valid && snapshot.valid;
+    msg.input_status_code = static_cast<std::uint8_t>(output.status);
+    msg.input_status = imuPipelineStatusName(output.status);
+    msg.reset_epoch = output.reset_epoch;
+    msg.accepted_sample_count = output.accepted_sample_count;
+    msg.observer_update_count = snapshot.update_count;
+    msg.source_stamp = rosTimeFromNanoseconds(excitation.source_stamp_ns);
+    msg.measurement_stamp = rosTimeFromNanoseconds(excitation.measurement_stamp_ns);
+    msg.accel_effective_stamp = rosTimeFromNanoseconds(excitation.accel_effective_stamp_ns);
+    msg.gyro_effective_stamp = rosTimeFromNanoseconds(excitation.gyro_effective_stamp_ns);
+    msg.alpha_effective_stamp = rosTimeFromNanoseconds(excitation.alpha_effective_stamp_ns);
+    msg.receive_stamp = rosTimeFromNanoseconds(excitation.receive_stamp_ns);
+    msg.state_stamp = rosTimeFromNanoseconds(snapshot.state_stamp_ns);
+    // The filtered acceleration/gyro/alpha components have distinct phase
+    // delays.  Until explicit component re-alignment is introduced, the
+    // observer's nominal combined time is source minus sensor delay; the three
+    // component-effective stamps above preserve the exact alternatives.
+    msg.header.stamp = msg.measurement_stamp;
+    msg.transport_age_sec = output.transport_age_sec;
+    msg.measurement_age_sec = ageSeconds(
+        excitation.receive_stamp_ns, excitation.measurement_stamp_ns);
+    msg.state_age_sec = ageSeconds(excitation.receive_stamp_ns, snapshot.state_stamp_ns);
+    msg.sample_dt_sec = excitation.sample_dt_sec;
+    msg.ax_mps2 = excitation.ax;
+    msg.ay_mps2 = excitation.ay;
+    msg.omega_z_radps = excitation.omega_z;
+    msg.alpha_z_radps2 = excitation.alpha_z;
+    msg.bias_ready = output.bias_ready;
+    msg.filter_ready = output.filter_ready;
+    msg.bias_sample_count = static_cast<std::uint32_t>(std::min<std::size_t>(
+        output.bias_sample_count,
+        static_cast<std::size_t>(std::numeric_limits<std::uint32_t>::max())));
+    msg.bias_x_mps2 = output.bias_mps2[0];
+    msg.bias_y_mps2 = output.bias_mps2[1];
+    msg.bias_z_mps2 = output.bias_mps2[2];
+    msg.accel_filtered_base_x_mps2 = output.accel_filtered_base_mps2[0];
+    msg.accel_filtered_base_y_mps2 = output.accel_filtered_base_mps2[1];
+    msg.quaternion_norm = output.quaternion_norm;
+    msg.eta_x = snapshot.state.eta_x;
+    msg.eta_x_dot = snapshot.state.eta_x_dot;
+    msg.eta_y = snapshot.state.eta_y;
+    msg.eta_y_dot = snapshot.state.eta_y_dot;
+    msg.modal_height_m = snapshot.modal_height_m;
+    msg.total_height_m = snapshot.total_height_m;
+    diagnostics_.publishImuSloshObserver(msg);
 }
 
 bool SpmpcLocalPlannerROS::updateReferenceSignature(const nav_msgs::Path& path) {
@@ -1477,6 +1786,72 @@ SloshModelParams SpmpcLocalPlannerROS::loadSloshParams() const {
     pnh_.param("slosh/slosh_eta_dot_ratio", params.slosh_eta_dot_ratio, params.slosh_eta_dot_ratio);
     pnh_.param("slosh/use_linear_model", params.use_linear_model, params.use_linear_model);
     pnh_.param("slosh/use_parabola_term", params.use_parabola_term, params.use_parabola_term);
+    return params;
+}
+
+ProcessedImuParams SpmpcLocalPlannerROS::loadProcessedImuParams() const {
+    ProcessedImuParams params;
+    const std::string prefix = "imu_shadow/";
+    pnh_.param(prefix + "gravity_mps2", params.gravity_mps2, params.gravity_mps2);
+    pnh_.param(prefix + "sensor_delay_sec", params.sensor_delay_sec, params.sensor_delay_sec);
+    pnh_.param(prefix + "accel_cutoff_hz", params.accel_cutoff_hz, params.accel_cutoff_hz);
+    pnh_.param(prefix + "gyro_cutoff_hz", params.gyro_cutoff_hz, params.gyro_cutoff_hz);
+    pnh_.param(prefix + "accel_phase_delay_sec",
+               params.accel_phase_delay_sec,
+               params.accel_phase_delay_sec);
+    pnh_.param(prefix + "gyro_phase_delay_sec",
+               params.gyro_phase_delay_sec,
+               params.gyro_phase_delay_sec);
+    pnh_.param(prefix + "alpha_phase_delay_sec",
+               params.alpha_phase_delay_sec,
+               params.alpha_phase_delay_sec);
+    pnh_.param(prefix + "gyro_scale", params.gyro_scale, params.gyro_scale);
+    pnh_.param(prefix + "gyro_offset_radps",
+               params.gyro_offset_radps,
+               params.gyro_offset_radps);
+    pnh_.param(prefix + "imu_to_base_yaw_rad",
+               params.imu_to_base_yaw_rad,
+               params.imu_to_base_yaw_rad);
+    pnh_.param(prefix + "lever_arm_imu_to_target_x_m",
+               params.lever_arm_imu_to_target_x_m,
+               params.lever_arm_imu_to_target_x_m);
+    pnh_.param(prefix + "lever_arm_imu_to_target_y_m",
+               params.lever_arm_imu_to_target_y_m,
+               params.lever_arm_imu_to_target_y_m);
+    pnh_.param(prefix + "bias_window_start_sec",
+               params.bias_window_start_sec,
+               params.bias_window_start_sec);
+    pnh_.param(prefix + "bias_window_end_sec",
+               params.bias_window_end_sec,
+               params.bias_window_end_sec);
+    pnh_.param(prefix + "bias_min_samples", params.bias_min_samples, params.bias_min_samples);
+    pnh_.param(prefix + "bias_max_accel_mad_mps2",
+               params.bias_max_accel_mad_mps2,
+               params.bias_max_accel_mad_mps2);
+    pnh_.param(prefix + "bias_max_gyro_p95_radps",
+               params.bias_max_gyro_p95_radps,
+               params.bias_max_gyro_p95_radps);
+    pnh_.param(prefix + "filter_warmup_sec",
+               params.filter_warmup_sec,
+               params.filter_warmup_sec);
+    pnh_.param(prefix + "max_sample_gap_sec",
+               params.max_sample_gap_sec,
+               params.max_sample_gap_sec);
+    pnh_.param(prefix + "clock_reset_threshold_sec",
+               params.clock_reset_threshold_sec,
+               params.clock_reset_threshold_sec);
+    pnh_.param(prefix + "max_receive_age_sec",
+               params.max_receive_age_sec,
+               params.max_receive_age_sec);
+    pnh_.param(prefix + "max_future_skew_sec",
+               params.max_future_skew_sec,
+               params.max_future_skew_sec);
+    pnh_.param(prefix + "quaternion_norm_min",
+               params.quaternion_norm_min,
+               params.quaternion_norm_min);
+    pnh_.param(prefix + "quaternion_norm_max",
+               params.quaternion_norm_max,
+               params.quaternion_norm_max);
     return params;
 }
 

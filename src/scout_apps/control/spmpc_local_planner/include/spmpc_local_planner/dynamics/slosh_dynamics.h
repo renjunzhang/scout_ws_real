@@ -27,6 +27,15 @@ public:
     bool configured() const { return configured_; }
 
     SloshState step(const SloshState& state, double ax, double ay, double omega_z) const;
+    // Exact ZOH step at a caller-provided interval without mutating the cached
+    // nominal discretization.  Intended for timestamped measurement observers,
+    // not the fixed-step solver rollout.
+    bool stepWithDt(const SloshState& state,
+                    double ax,
+                    double ay,
+                    double omega_z,
+                    double dt_sec,
+                    SloshState& next_state) const;
     double height(const SloshState& state, double omega_z = 0.0) const;
     double etaNorm(const SloshState& state) const;
     double etaDotNorm(const SloshState& state) const;

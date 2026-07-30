@@ -7,6 +7,7 @@ RECORD_CAMERA="${RECORD_CAMERA:-true}"                 # RGB 原始图像只用�
 RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-false}"  # 在线 /liquid/* 是 realsense_liquid_measurement 调试 proxy，默认不录
 RECORD_MOCAP="${RECORD_MOCAP:-false}"                  # Nokov 动捕只作为监控/真值记录，不是 planner 输入
 MOCAP_TRACKER="${MOCAP_TRACKER:-Scout}"
+IMU_TOPIC="${IMU_TOPIC:-/imu/data}"
 mkdir -p "$OUT_DIR"
 
 record_topics=(
@@ -16,6 +17,8 @@ record_topics=(
   /spmpc/local_trajectory
   /spmpc/debug/progress_s
   /spmpc/debug/slosh_state
+  /spmpc/debug/slosh_observer_odom
+  /spmpc/debug/slosh_observer_imu
   /spmpc/slosh_horizon_summary
   /spmpc/corridor
   /spmpc/guidance
@@ -29,6 +32,7 @@ record_topics=(
   /spmpc/debug/delay_compensation
   /cmd_vel
   /odom
+  "${IMU_TOPIC}"
   /scout/global_path
   /scout/global_path_fixed
   /map

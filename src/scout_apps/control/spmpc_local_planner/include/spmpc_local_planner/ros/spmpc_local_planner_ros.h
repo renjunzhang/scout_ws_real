@@ -2,19 +2,25 @@
 
 #include "spmpc_local_planner/core/slosh_risk_governor.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
-#include "spmpc_local_planner/dynamics/slosh_dynamics.h"
+#include "spmpc_local_planner/estimation/processed_imu_pipeline.h"
+#include "spmpc_local_planner/estimation/slosh_observer_bank.h"
 #include "spmpc_local_planner/reference/reference_path_preprocessor.h"
 #include "spmpc_local_planner/ros/command_history_buffer.h"
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
 #include "spmpc_local_planner/ros/execution_state_predictor.h"
+#include "spmpc_local_planner/ros/imu_shadow_ros_adapter.h"
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
+#include <ros/callback_queue.h>
 #include <ros/ros.h>
+#include <ros/spinner.h>
+#include <sensor_msgs/Imu.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <cstddef>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -28,11 +34,13 @@ struct MapVRefProfileSample {
 class SpmpcLocalPlannerROS {
 public:
     SpmpcLocalPlannerROS();
+    ~SpmpcLocalPlannerROS();
     bool initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh);
     void spin();
 
 private:
     void odomCallback(const nav_msgs::OdometryConstPtr& msg);
+    void imuCallback(const sensor_msgs::ImuConstPtr& msg);
     void pathCallback(const nav_msgs::PathConstPtr& msg);
     void costmapCallback(const nav_msgs::OccupancyGridConstPtr& msg);
     void controlTimerCallback(const ros::TimerEvent&);
@@ -65,7 +73,13 @@ private:
     void resetTrackingSafetyGate();
     RobotState robotStateFromOdom(const nav_msgs::Odometry& odom) const;
     bool robotStateFromLatest(RobotState& state);
-    void updateSloshObserverFromOdom(const nav_msgs::Odometry& odom);
+    bool processOdomInput(const nav_msgs::Odometry& odom,
+                          const ros::Time& receive_stamp);
+    void publishOdomSloshObserverDebug(const nav_msgs::Odometry& odom,
+                                       const MotionExcitation& excitation,
+                                       const std::string& status);
+    void publishImuSloshObserverDebug(const sensor_msgs::Imu& imu,
+                                      const ProcessedImuOutput& output);
     bool updateReferenceSignature(const nav_msgs::Path& path);
     ReferencePath referencePathFromMsg(const nav_msgs::Path& path) const;
     CostmapGrid costmapFromMsg(const nav_msgs::OccupancyGrid& map) const;
@@ -77,11 +91,18 @@ private:
     void resetMapVRefProgress();
     void loadVariantOverrides(const std::string& variant_name);
     SloshModelParams loadSloshParams() const;
+    ProcessedImuParams loadProcessedImuParams() const;
     SloshRiskGovernorParams loadSloshRiskGovernorParams() const;
 
+    // The processed-IMU shadow runs on a private ROS1 callback queue so its
+    // filtering/matrix exponential/diagnostic publication cannot queue ahead
+    // of the formal odom/path/control callbacks on the global queue.
+    ros::CallbackQueue imu_callback_queue_;
     ros::NodeHandle nh_;
     ros::NodeHandle pnh_;
+    ros::NodeHandle imu_nh_;
     ros::Subscriber odom_sub_;
+    ros::Subscriber imu_sub_;
     ros::Subscriber path_sub_;
     ros::Subscriber costmap_sub_;
     ros::Publisher cmd_pub_;
@@ -94,8 +115,8 @@ private:
     VariantConfig variant_;
     ReferencePathPreprocessor reference_preprocessor_;
     ReferencePathPreprocessParams reference_preprocess_params_;
-    SloshDynamics slosh_observer_;
-    SloshState current_slosh_;
+    SloshObserverBank slosh_observers_;
+    ImuShadowRosAdapter imu_shadow_adapter_;
     SloshRiskGovernor slosh_risk_governor_;
     SloshRiskGovernorParams slosh_risk_governor_params_;
     SloshRiskGovernorOutput last_slosh_governor_output_;
@@ -124,13 +145,18 @@ private:
     double reference_signature_end_y_ = 0.0;
 
     std::string odom_topic_ = "/odom";
+    std::string imu_topic_ = "/imu/data";
     std::string path_topic_ = "/scout/global_path_fixed";
     std::string costmap_topic_ = "/map";
     std::string cmd_topic_ = "/cmd_vel";
     std::string robot_base_frame_ = "base_link";
+    std::string imu_expected_frame_ = "imu_link";
     std::string reference_target_frame_;
     std::string experiment_mode_ = "fixed_path";
     bool publish_cmd_vel_ = true;
+    bool imu_shadow_enable_ = false;
+    bool imu_shadow_publish_diagnostics_ = true;
+    double imu_observer_dt_sec_ = 0.02;
     bool use_tf_pose_ = true;
     bool obstacle_enable_ = false;
     bool shared_cmd_linear_accel_limit_enable_ = true;
@@ -163,6 +189,9 @@ private:
     double control_frequency_ = 30.0;
     double dt_ = 1.0 / 30.0;
     int horizon_steps_ = 60;
+    // Declared last so the worker stops before any callback-owned state is
+    // destroyed.  The explicit destructor also stops it before member teardown.
+    std::unique_ptr<ros::AsyncSpinner> imu_spinner_;
 };
 
 }  // namespace spmpc_local_planner

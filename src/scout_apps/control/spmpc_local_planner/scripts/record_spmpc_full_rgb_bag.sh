@@ -66,6 +66,8 @@ SLOSH_HEIGHT_MAX="${SLOSH_HEIGHT_MAX:-}"
 DELAY_PHASE_MODE="${DELAY_PHASE_MODE:-}"
 DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC:-}"
 DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC:-}"
+IMU_SHADOW_ENABLE="${IMU_SHADOW_ENABLE:-}"
+IMU_TOPIC="${IMU_TOPIC:-/imu/data}"
 CONTROL_FREQUENCY="${CONTROL_FREQUENCY:-}"
 MAP_FILE="${MAP_FILE:-}"
 GOAL_X="${GOAL_X:-}"
@@ -221,6 +223,8 @@ record_topics=(
   /spmpc/slosh_height
   /spmpc/slosh_horizon_summary
   /spmpc/debug/slosh_state
+  /spmpc/debug/slosh_observer_odom
+  /spmpc/debug/slosh_observer_imu
   /spmpc/debug/slosh_cost_monitor
   /spmpc/debug/slosh_hard_constraint
   /spmpc/debug/slosh_hard_constraint_effective
@@ -261,7 +265,7 @@ record_topics=(
   /spmpc/terminal/debug
 
   # IMU / inertial inputs used for post-analysis and fault diagnosis.
-  /imu/data
+  "${IMU_TOPIC}"
   /container_imu
   /wit/mag
   /camera/gyro/sample
@@ -508,6 +512,8 @@ write_topic_info_snapshot
   echo "delay_phase_mode=${DELAY_PHASE_MODE}"
   echo "delay_phase_linear_delay_sec=${DELAY_PHASE_LINEAR_DELAY_SEC}"
   echo "delay_phase_angular_delay_sec=${DELAY_PHASE_ANGULAR_DELAY_SEC}"
+  echo "imu_shadow_enable=${IMU_SHADOW_ENABLE}"
+  echo "imu_topic=${IMU_TOPIC}"
   echo "control_frequency=${CONTROL_FREQUENCY}"
   echo "map_file=${MAP_FILE}"
   echo "goal_x=${GOAL_X}"

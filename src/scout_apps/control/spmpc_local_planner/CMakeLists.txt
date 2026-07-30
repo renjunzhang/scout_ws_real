@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
+  sensor_msgs
   geometry_msgs
   nav_msgs
   message_generation
@@ -22,6 +23,7 @@ add_message_files(
   FILES
   PredictedHorizon.msg
   PreSolveSnapshot.msg
+  SloshObserverDebug.msg
 )
 
 generate_messages(
@@ -76,7 +78,7 @@ endif()
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}
-  CATKIN_DEPENDS roscpp std_msgs geometry_msgs nav_msgs message_runtime tf2 tf2_ros tf2_geometry_msgs slosh_models
+  CATKIN_DEPENDS roscpp std_msgs sensor_msgs geometry_msgs nav_msgs message_runtime tf2 tf2_ros tf2_geometry_msgs slosh_models
   DEPENDS EIGEN3
 )
 
@@ -98,6 +100,8 @@ add_library(${PROJECT_NAME}
   src/reference/progress_projector.cpp
   src/reference/reference_spline.cpp
   src/dynamics/slosh_dynamics.cpp
+  src/estimation/processed_imu_pipeline.cpp
+  src/estimation/slosh_observer_bank.cpp
   src/warm_start/diff_drive_flatness_warm_start.cpp
   src/warm_start/mecanum_warm_start.cpp
   src/warm_start/warm_start_factory.cpp
@@ -107,6 +111,7 @@ add_library(${PROJECT_NAME}
   src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
   src/ros/command_history_buffer.cpp
   src/ros/execution_state_predictor.cpp
+  src/ros/imu_shadow_ros_adapter.cpp
   src/ros/diagnostics_publisher.cpp
   src/ros/spmpc_local_planner_ros.cpp
 )
@@ -180,6 +185,20 @@ target_link_libraries(spmpc_local_planner_node
 )
 
 if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_processed_imu_pipeline test/test_processed_imu_pipeline.cpp)
+  if(TARGET test_processed_imu_pipeline)
+    target_link_libraries(test_processed_imu_pipeline
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_slosh_observer_bank test/test_slosh_observer_bank.cpp)
+  if(TARGET test_slosh_observer_bank)
+    target_link_libraries(test_slosh_observer_bank
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
   catkin_add_gtest(test_diff_drive_flatness_warm_start test/test_diff_drive_flatness_warm_start.cpp)
   if(TARGET test_diff_drive_flatness_warm_start)
     target_link_libraries(test_diff_drive_flatness_warm_start

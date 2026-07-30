@@ -5,6 +5,9 @@
 # frozen JSON path with a configurable start-pose gate. The script also starts
 # the black-box recorder and selected SPMPC variant. The recorder always has a
 # bounded duration; Ctrl+C stops the run earlier.
+# With IMU_SHADOW_ENABLE=true it records the complete stationary bias/filter
+# transient, waits for a valid READY diagnostic, and only then releases the
+# path/goal stage.  The default false path preserves the established odom run.
 
 set -euo pipefail
 
@@ -300,6 +303,16 @@ SOLVER_BACKEND="${SOLVER_BACKEND:-continuous_mpcc_acados}"
 V_REF="${V_REF:-0.20}"
 W_SLOSH="${W_SLOSH:--1.0}"
 SLOSH_HEIGHT_MAX="${SLOSH_HEIGHT_MAX:--1.0}"
+IMU_SHADOW_ENABLE="${IMU_SHADOW_ENABLE:-false}"
+IMU_TOPIC="${IMU_TOPIC:-/imu/data}"
+if truthy "${IMU_SHADOW_ENABLE}"; then
+  # roslaunch XML bool arguments are most reliable as literal true/false.
+  IMU_SHADOW_ENABLE=true
+else
+  IMU_SHADOW_ENABLE=false
+fi
+IMU_SHADOW_READY_TOPIC="${IMU_SHADOW_READY_TOPIC:-/spmpc/debug/slosh_observer_imu}"
+IMU_SHADOW_READY_TIMEOUT_SEC="${IMU_SHADOW_READY_TIMEOUT_SEC:-20}"
 if truthy "${PILOT_MODE}"; then
   DELAY_PHASE_MODE="${DELAY_PHASE_MODE:-fixed_closed_loop}"
   DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC:-0.15}"
@@ -342,6 +355,7 @@ else
   RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO:-true}"
   RECORDER_STARTUP_SEC="${RECORDER_STARTUP_SEC:-2}"
 fi
+RECORDER_ACTIVE_TIMEOUT_SEC="${RECORDER_ACTIVE_TIMEOUT_SEC:-15}"
 PLANNER_STARTUP_SEC="${PLANNER_STARTUP_SEC:-2}"
 SEND_ZERO_ON_EXIT="${SEND_ZERO_ON_EXIT:-true}"
 OPERATOR_NOTE="${OPERATOR_NOTE:-one_click_spmpc_real_fixed_path_trial}"
@@ -410,6 +424,16 @@ for kv in \
   "PLANNER_STARTUP_SEC=${PLANNER_STARTUP_SEC}"; do
   require_number "${kv%%=*}" "${kv#*=}"
 done
+if truthy "${IMU_SHADOW_ENABLE}"; then
+  require_number "IMU_SHADOW_READY_TIMEOUT_SEC" "${IMU_SHADOW_READY_TIMEOUT_SEC}"
+  require_number "RECORDER_ACTIVE_TIMEOUT_SEC" "${RECORDER_ACTIVE_TIMEOUT_SEC}"
+  if ! awk -v value="${IMU_SHADOW_READY_TIMEOUT_SEC}" 'BEGIN { exit !(value > 0.0) }'; then
+    fail "IMU_SHADOW_READY_TIMEOUT_SEC must be > 0, got '${IMU_SHADOW_READY_TIMEOUT_SEC}'"
+  fi
+  if ! awk -v value="${RECORDER_ACTIVE_TIMEOUT_SEC}" 'BEGIN { exit !(value > 0.0) }'; then
+    fail "RECORDER_ACTIVE_TIMEOUT_SEC must be > 0, got '${RECORDER_ACTIVE_TIMEOUT_SEC}'"
+  fi
+fi
 for kv in \
   "GOAL_REPEAT_COUNT=${GOAL_REPEAT_COUNT}" \
   "PATH_SMOOTH_ITERATIONS=${PATH_SMOOTH_ITERATIONS}"; do
@@ -419,6 +443,10 @@ for kv in \
 done
 if ! timeout 5s rostopic list >/dev/null 2>&1; then
   fail "ROS master is not reachable; source the workspace and start the real stack/roscore first"
+fi
+if truthy "${IMU_SHADOW_ENABLE}" && \
+   ! timeout 5s rostopic echo -n 1 "${IMU_TOPIC}" >/dev/null 2>&1; then
+  fail "IMU shadow is enabled but no message arrived on ${IMU_TOPIC} within 5s"
 fi
 
 mkdir -p "${RUN_OUT_DIR}"
@@ -448,10 +476,13 @@ path_generator_log="${RUN_OUT_DIR}/${NAME}_path_generator.log"
 send_goal_log="${RUN_OUT_DIR}/${NAME}_send_goal.log"
 recorder_log="${RUN_OUT_DIR}/${NAME}_recorder.log"
 planner_log="${RUN_OUT_DIR}/${NAME}_planner.log"
+imu_shadow_ready_log="${RUN_OUT_DIR}/${NAME}_imu_shadow_ready.log"
+recorder_active_bag="${RUN_OUT_DIR}/${NAME}.bag.active"
 
 path_generator_pid=""
 recorder_pid=""
 planner_pid=""
+gate_wait_pid=""
 cleaned_up=false
 
 kill_child() {
@@ -460,6 +491,22 @@ kill_child() {
   if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
     echo "[cleanup] stopping ${label} (pid=${pid})"
     kill -INT "${pid}" 2>/dev/null || true
+    wait "${pid}" 2>/dev/null || true
+  fi
+}
+
+signal_child() {
+  local pid="$1"
+  local label="$2"
+  if [[ -n "${pid}" ]] && kill -0 "${pid}" 2>/dev/null; then
+    echo "[cleanup] signaling ${label} (pid=${pid})"
+    kill -INT "${pid}" 2>/dev/null || true
+  fi
+}
+
+reap_child() {
+  local pid="$1"
+  if [[ -n "${pid}" ]]; then
     wait "${pid}" 2>/dev/null || true
   fi
 }
@@ -475,10 +522,18 @@ publish_zero_cmd() {
 cleanup() {
   ${cleaned_up} && return 0
   cleaned_up=true
-  kill_child "${planner_pid}" "planner"
+  # Stop all possible command/path producers first, publish zero immediately,
+  # then reap them and publish zero once more before closing the recorder.
+  signal_child "${gate_wait_pid}" "topic wait"
+  signal_child "${path_generator_pid}" "path source"
+  signal_child "${planner_pid}" "planner"
   publish_zero_cmd
-  kill_child "${recorder_pid}" "recorder"
-  kill_child "${path_generator_pid}" "path source"
+  reap_child "${gate_wait_pid}"
+  reap_child "${path_generator_pid}"
+  reap_child "${planner_pid}"
+  publish_zero_cmd
+  signal_child "${recorder_pid}" "recorder"
+  reap_child "${recorder_pid}"
 }
 
 on_interrupt() {
@@ -500,6 +555,8 @@ planner_cmd=(
   "delay_phase_mode:=${DELAY_PHASE_MODE}"
   "delay_phase_linear_delay_sec:=${DELAY_PHASE_LINEAR_DELAY_SEC}"
   "delay_phase_angular_delay_sec:=${DELAY_PHASE_ANGULAR_DELAY_SEC}"
+  "imu_topic:=${IMU_TOPIC}"
+  "imu_shadow_enable:=${IMU_SHADOW_ENABLE}"
   "v_ref:=${V_REF}"
   "w_slosh:=${W_SLOSH}"
   "slosh_height_max:=${SLOSH_HEIGHT_MAX}"
@@ -589,6 +646,11 @@ run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
   echo "delay_phase_mode=${DELAY_PHASE_MODE}"
   echo "delay_phase_linear_delay_sec=${DELAY_PHASE_LINEAR_DELAY_SEC}"
   echo "delay_phase_angular_delay_sec=${DELAY_PHASE_ANGULAR_DELAY_SEC}"
+  echo "imu_shadow_enable=${IMU_SHADOW_ENABLE}"
+  echo "imu_topic=${IMU_TOPIC}"
+  echo "imu_shadow_ready_topic=${IMU_SHADOW_READY_TOPIC}"
+  echo "imu_shadow_ready_timeout_sec=${IMU_SHADOW_READY_TIMEOUT_SEC}"
+  echo "recorder_active_timeout_sec=${RECORDER_ACTIVE_TIMEOUT_SEC}"
   echo "record_rgb=${RECORD_RGB}"
   echo "record_camera=${RECORD_CAMERA}"
   echo "record_camera_compressed=${RECORD_CAMERA_COMPRESSED}"
@@ -615,35 +677,196 @@ else
   echo "  goal          = (${GOAL_X}, ${GOAL_Y}, ${GOAL_YAW}) in ${GOAL_FRAME}"
 fi
 echo "  v_ref/w_slosh = ${V_REF} / ${W_SLOSH}"
+echo "  imu_shadow    = ${IMU_SHADOW_ENABLE} (${IMU_TOPIC})"
+if truthy "${IMU_SHADOW_ENABLE}"; then
+  echo "  shadow gate   = ${IMU_SHADOW_READY_TOPIC}, timeout ${IMU_SHADOW_READY_TIMEOUT_SEC}s"
+fi
 echo "============================================================="
 
-echo "[path] starting ${PATH_SOURCE_MODE} source -> ${REF_TOPIC}"
-"${path_cmd[@]}" > "${path_generator_log}" 2>&1 &
-path_generator_pid=$!
-sleep "${PATH_GENERATOR_STARTUP_SEC}"
-if ! child_running "${path_generator_pid}"; then
-  set +e
-  wait "${path_generator_pid}"
-  path_code=$?
-  set -e
-  show_log_tail "${path_generator_log}" "path source"
-  fail "Path source exited during startup (mode=${PATH_SOURCE_MODE}, code=${path_code})"
-fi
+require_shadow_topics_idle() {
+  local published_topics
+  if ! published_topics="$(timeout --foreground 5s rostopic list -p)"; then
+    fail "Could not query the ROS master publisher state for the IMU shadow safety gate"
+  fi
 
-if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
-  echo "[path] waiting up to ${START_GATE_TIMEOUT_SEC}s for the relaxed start gate and ${REF_TOPIC}"
-  if ! timeout "${START_GATE_TIMEOUT_SEC}s" rostopic echo -n 1 "${REF_TOPIC}" >/dev/null; then
-    show_log_tail "${path_generator_log}" "fixed-path replay"
-    fail "Timed out waiting for replay start gate/path on ${REF_TOPIC}"
+  local topic purpose
+  local guarded_topics=("${REF_TOPIC}" "${CMD_TOPIC}" "${IMU_SHADOW_READY_TOPIC}")
+  local guarded_purposes=("Reference topic" "Command topic" "IMU shadow READY topic")
+  if [[ "${PATH_SOURCE_MODE}" == "generate" ]]; then
+    guarded_topics+=("${GOAL_TOPIC}")
+    guarded_purposes+=("Goal topic")
+  fi
+  local index
+  for index in "${!guarded_topics[@]}"; do
+    topic="${guarded_topics[index]}"
+    purpose="${guarded_purposes[index]}"
+    if grep -Fxq -- "${topic}" <<< "${published_topics}"; then
+      fail "${purpose} ${topic} already has a publisher; stop the stale/conflicting node before enabling the IMU shadow startup gate"
+    fi
+  done
+}
+
+recorder_actively_recording() {
+  child_running "${recorder_pid}" && [[ -e "${recorder_active_bag}" ]]
+}
+
+require_shadow_run_active() {
+  local context="$1"
+  if ! recorder_actively_recording; then
+    show_log_tail "${recorder_log}" "recorder"
+    fail "Rosbag stopped actively recording during ${context}; stopping before an unrecorded motion trial"
+  fi
+  if ! child_running "${planner_pid}"; then
+    show_log_tail "${planner_log}" "planner"
+    fail "Planner stopped during ${context}; no motion trial was continued"
+  fi
+}
+
+start_path_source() {
+  local monitor_active_run="$1"
+  echo "[path] starting ${PATH_SOURCE_MODE} source -> ${REF_TOPIC}"
+  "${path_cmd[@]}" > "${path_generator_log}" 2>&1 &
+  path_generator_pid=$!
+  if truthy "${monitor_active_run}"; then
+    sleep "${PATH_GENERATOR_STARTUP_SEC}" &
+    gate_wait_pid=$!
+    while child_running "${gate_wait_pid}"; do
+      require_shadow_run_active "path-source startup"
+      if ! child_running "${path_generator_pid}"; then
+        kill_child "${gate_wait_pid}" "path-source startup wait"
+        gate_wait_pid=""
+        show_log_tail "${path_generator_log}" "path source"
+        fail "Path source exited during startup (mode=${PATH_SOURCE_MODE})"
+      fi
+      sleep 0.1
+    done
+    reap_child "${gate_wait_pid}"
+    gate_wait_pid=""
+    require_shadow_run_active "path-source startup"
+  else
+    sleep "${PATH_GENERATOR_STARTUP_SEC}"
   fi
   if ! child_running "${path_generator_pid}"; then
-    show_log_tail "${path_generator_log}" "fixed-path replay"
-    fail "Fixed-path replay stopped after publishing the path"
+    local path_code
+    set +e
+    wait "${path_generator_pid}"
+    path_code=$?
+    set -e
+    show_log_tail "${path_generator_log}" "path source"
+    fail "Path source exited during startup (mode=${PATH_SOURCE_MODE}, code=${path_code})"
   fi
-fi
+}
 
-echo "[record] starting black-box recorder before goal/planner"
-(
+wait_for_reference() {
+  local timeout_sec="$1"
+  local description="$2"
+  local monitor_active_run="$3"
+  local wait_code=0
+
+  if ! truthy "${monitor_active_run}"; then
+    if ! timeout --foreground "${timeout_sec}s" rostopic echo -n 1 "${REF_TOPIC}" >/dev/null; then
+      return 1
+    fi
+    return 0
+  fi
+
+  timeout --foreground "${timeout_sec}s" rostopic echo -n 1 "${REF_TOPIC}" >/dev/null 2>&1 &
+  gate_wait_pid=$!
+  while child_running "${gate_wait_pid}"; do
+    if ! recorder_actively_recording || ! child_running "${planner_pid}"; then
+      # Let the EXIT cleanup signal the topic wait, path source, and planner
+      # together; do not synchronously reap this low-priority waiter first.
+      require_shadow_run_active "${description}"
+    fi
+    sleep 0.1
+  done
+  set +e
+  wait "${gate_wait_pid}"
+  wait_code=$?
+  set -e
+  gate_wait_pid=""
+  if (( wait_code != 0 )); then
+    return 1
+  fi
+  require_shadow_run_active "completion of ${description}"
+  if ! child_running "${path_generator_pid}"; then
+    show_log_tail "${path_generator_log}" "path source"
+    fail "Path source stopped at completion of ${description}"
+  fi
+  return 0
+}
+
+prepare_reference() {
+  local monitor_active_run="$1"
+  if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
+    echo "[path] waiting up to ${START_GATE_TIMEOUT_SEC}s for the relaxed start gate and ${REF_TOPIC}"
+    if ! wait_for_reference "${START_GATE_TIMEOUT_SEC}" "replay start gate/path" "${monitor_active_run}"; then
+      show_log_tail "${path_generator_log}" "fixed-path replay"
+      fail "Timed out waiting for replay start gate/path on ${REF_TOPIC}"
+    fi
+    if ! child_running "${path_generator_pid}"; then
+      show_log_tail "${path_generator_log}" "fixed-path replay"
+      fail "Fixed-path replay stopped after publishing the path"
+    fi
+    return 0
+  fi
+
+  local goal_cmd=(
+    rosrun scout_local_planner send_fixed_goal.py
+    --goal-topic "${GOAL_TOPIC}"
+    --frame "${GOAL_FRAME}"
+    --x "${GOAL_X}"
+    --y "${GOAL_Y}"
+    --yaw "${GOAL_YAW}"
+    --repeat-count "${GOAL_REPEAT_COUNT}"
+    --repeat-rate "${GOAL_REPEAT_RATE}"
+  )
+  echo "[goal] sending fixed goal"
+  local goal_code=0
+  if truthy "${monitor_active_run}"; then
+    "${goal_cmd[@]}" > "${send_goal_log}" 2>&1 &
+    gate_wait_pid=$!
+    while child_running "${gate_wait_pid}"; do
+      require_shadow_run_active "fixed-goal publication"
+      if ! child_running "${path_generator_pid}"; then
+        kill_child "${gate_wait_pid}" "fixed-goal publisher"
+        gate_wait_pid=""
+        show_log_tail "${path_generator_log}" "path generator"
+        fail "Path generator stopped during fixed-goal publication"
+      fi
+      sleep 0.1
+    done
+    set +e
+    wait "${gate_wait_pid}"
+    goal_code=$?
+    set -e
+    gate_wait_pid=""
+    require_shadow_run_active "completion of fixed-goal publication"
+  else
+    set +e
+    "${goal_cmd[@]}" > "${send_goal_log}" 2>&1
+    goal_code=$?
+    set -e
+  fi
+  if (( goal_code != 0 )); then
+    show_log_tail "${send_goal_log}" "send fixed goal"
+    fail "Failed to send fixed goal"
+  fi
+
+  echo "[path] waiting for ${REF_TOPIC}"
+  if ! wait_for_reference "${GENERATED_PATH_WAIT_SEC}" "generated fixed path" "${monitor_active_run}"; then
+    show_log_tail "${path_generator_log}" "path generator"
+    fail "Timed out waiting for generated fixed path on ${REF_TOPIC}"
+  fi
+  if ! child_running "${path_generator_pid}"; then
+    show_log_tail "${path_generator_log}" "path generator"
+    fail "Path generator stopped after goal; fixed path may not remain available"
+  fi
+}
+
+start_recorder() {
+  echo "[record] starting black-box recorder"
+  (
   cd "${REPO_ROOT}"
   DATE="${DATE}" \
   STAMP="${STAMP}" \
@@ -677,6 +900,8 @@ echo "[record] starting black-box recorder before goal/planner"
   DELAY_PHASE_MODE="${DELAY_PHASE_MODE}" \
   DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC}" \
   DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
+  IMU_SHADOW_ENABLE="${IMU_SHADOW_ENABLE}" \
+  IMU_TOPIC="${IMU_TOPIC}" \
   GOAL_X="${GOAL_X}" \
   GOAL_Y="${GOAL_Y}" \
   GOAL_YAW="${GOAL_YAW}" \
@@ -691,74 +916,144 @@ echo "[record] starting black-box recorder before goal/planner"
   LAUNCH_COMMAND="${planner_command_string}" \
   OPERATOR_NOTE="${OPERATOR_NOTE}" \
   bash "${RECORDER_SCRIPT}"
-) > "${recorder_log}" 2>&1 &
-recorder_pid=$!
-sleep "${RECORDER_STARTUP_SEC}"
-if ! child_running "${recorder_pid}"; then
-  set +e
-  wait "${recorder_pid}"
-  recorder_code=$?
-  set -e
-  show_log_tail "${recorder_log}" "recorder"
-  fail "Recorder exited during startup (code=${recorder_code})"
+  ) > "${recorder_log}" 2>&1 &
+  recorder_pid=$!
+  sleep "${RECORDER_STARTUP_SEC}"
+  if ! child_running "${recorder_pid}"; then
+    local recorder_code
+    set +e
+    wait "${recorder_pid}"
+    recorder_code=$?
+    set -e
+    show_log_tail "${recorder_log}" "recorder"
+    fail "Recorder exited during startup (code=${recorder_code})"
+  fi
+  if truthy "${IMU_SHADOW_ENABLE}"; then
+    if ! timeout --foreground "${RECORDER_ACTIVE_TIMEOUT_SEC}s" \
+      bash -c 'while [[ ! -e "$1" ]]; do sleep 0.1; done' _ "${recorder_active_bag}"; then
+      show_log_tail "${recorder_log}" "recorder"
+      fail "Recorder did not create ${recorder_active_bag} within ${RECORDER_ACTIVE_TIMEOUT_SEC}s; refusing to start the IMU bias window"
+    fi
+    if ! recorder_actively_recording; then
+      show_log_tail "${recorder_log}" "recorder"
+      fail "Recorder stopped immediately after creating ${recorder_active_bag}; no motion trial was started"
+    fi
+  fi
+}
+
+start_planner() {
+  echo "[launch] starting planner"
+  "${planner_cmd[@]}" > "${planner_log}" 2>&1 &
+  planner_pid=$!
+  sleep "${PLANNER_STARTUP_SEC}"
+  if ! child_running "${planner_pid}"; then
+    local planner_code
+    set +e
+    wait "${planner_pid}"
+    planner_code=$?
+    set -e
+    show_log_tail "${planner_log}" "planner"
+    fail "Planner exited during startup (code=${planner_code})"
+  fi
+}
+
+wait_for_imu_shadow_ready() {
+  echo "[imu-shadow] keep the robot stationary; waiting for calibrated and filtered READY"
+  if ! timeout --foreground "${IMU_SHADOW_READY_TIMEOUT_SEC}s" \
+    rostopic echo -n 1 \
+      --filter "m.input_status == 'READY' and m.valid and m.bias_ready and m.filter_ready" \
+      "${IMU_SHADOW_READY_TOPIC}" > "${imu_shadow_ready_log}" 2>&1; then
+    show_log_tail "${imu_shadow_ready_log}" "IMU shadow READY gate"
+    echo "[debug] latest ${IMU_SHADOW_READY_TOPIC} sample:" >&2
+    timeout --foreground 2s rostopic echo -n 1 "${IMU_SHADOW_READY_TOPIC}" >&2 || true
+    show_log_tail "${planner_log}" "planner"
+    fail "IMU shadow did not become READY within ${IMU_SHADOW_READY_TIMEOUT_SEC}s; the robot may have moved during the bias window"
+  fi
+  require_shadow_run_active "completion of the IMU shadow READY gate"
+  echo "imu_shadow_ready_wall_time=$(date --iso-8601=seconds)" >> "${run_meta}"
+  echo "[imu-shadow] READY; enabling the path/goal stage"
+}
+
+if truthy "${IMU_SHADOW_ENABLE}"; then
+  # A pre-existing reference could make the planner move before calibration;
+  # a competing command publisher or stale debug publisher is equally unsafe.
+  require_shadow_topics_idle
+
+  # Keep the entire bias/filter transient in the bag.  With no reference path,
+  # the planner's control loop explicitly publishes a zero command.
+  start_recorder
+  # Close the recorder-startup TOCTOU window immediately before planner launch.
+  require_shadow_topics_idle
+  start_planner
+  wait_for_imu_shadow_ready
+  require_shadow_run_active "release of the path/goal stage"
+  start_path_source true
+  prepare_reference true
+else
+  # Preserve the established odom-only experiment order byte-for-byte in
+  # behavior: path/gate -> recorder -> goal (generate only) -> planner.
+  start_path_source false
+  if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
+    prepare_reference false
+  fi
+  start_recorder
+  if [[ "${PATH_SOURCE_MODE}" == "generate" ]]; then
+    prepare_reference false
+  fi
+  start_planner
 fi
 
-if [[ "${PATH_SOURCE_MODE}" == "generate" ]]; then
-  echo "[goal] sending fixed goal"
-  if ! rosrun scout_local_planner send_fixed_goal.py \
-    --goal-topic "${GOAL_TOPIC}" \
-    --frame "${GOAL_FRAME}" \
-    --x "${GOAL_X}" \
-    --y "${GOAL_Y}" \
-    --yaw "${GOAL_YAW}" \
-    --repeat-count "${GOAL_REPEAT_COUNT}" \
-    --repeat-rate "${GOAL_REPEAT_RATE}" \
-    > "${send_goal_log}" 2>&1; then
-    show_log_tail "${send_goal_log}" "send fixed goal"
-    fail "Failed to send fixed goal"
-  fi
-
-  echo "[path] waiting for ${REF_TOPIC}"
-  if ! timeout "${GENERATED_PATH_WAIT_SEC}s" rostopic echo -n 1 "${REF_TOPIC}" >/dev/null; then
-    show_log_tail "${path_generator_log}" "path generator"
-    fail "Timed out waiting for generated fixed path on ${REF_TOPIC}"
-  fi
-  if ! child_running "${path_generator_pid}"; then
-    show_log_tail "${path_generator_log}" "path generator"
-    fail "Path generator stopped after goal; fixed path may not remain available"
-  fi
-else
+if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
   echo "[goal] replay mode uses the frozen path directly; fixed-goal generation is skipped"
 fi
 
-echo "[launch] starting planner"
-"${planner_cmd[@]}" > "${planner_log}" 2>&1 &
-planner_pid=$!
-sleep "${PLANNER_STARTUP_SEC}"
-if ! child_running "${planner_pid}"; then
-  set +e
-  wait "${planner_pid}"
-  planner_code=$?
-  set -e
-  show_log_tail "${planner_log}" "planner"
-  fail "Planner exited during startup (code=${planner_code})"
-fi
-
 echo "[run] recording until Ctrl+C, ${RECORD_SEC}s recorder timeout, or planner exit"
-set +e
-wait -n "${recorder_pid}" "${planner_pid}"
-first_exit_code=$?
-set -e
-if child_running "${recorder_pid}"; then
-  show_log_tail "${planner_log}" "planner"
-  echo "[ERR] planner exited before recorder timeout (code=${first_exit_code}); stopping recorder/path source" >&2
-  recorder_code=1
-else
-  recorder_code=${first_exit_code}
-  if (( recorder_code != 0 )); then
-    show_log_tail "${recorder_log}" "recorder"
+if truthy "${IMU_SHADOW_ENABLE}"; then
+  # The recorder wrapper performs metadata work after rosbag closes, so its PID
+  # can remain alive after the .bag.active file disappears.  Stop motion at the
+  # actual recording boundary, then allow metadata finalization to finish.
+  while recorder_actively_recording && child_running "${planner_pid}"; do
+    sleep 0.1
+  done
+  if recorder_actively_recording && ! child_running "${planner_pid}"; then
+    show_log_tail "${planner_log}" "planner"
+    echo "[ERR] planner exited while rosbag was active; stopping recorder/path source" >&2
+    recorder_code=1
+  else
+    echo "[run] rosbag active recording ended; stopping planner/path source before recorder post-processing"
+    signal_child "${path_generator_pid}" "path source"
+    signal_child "${planner_pid}" "planner"
+    publish_zero_cmd
+    reap_child "${path_generator_pid}"
+    reap_child "${planner_pid}"
+    path_generator_pid=""
+    planner_pid=""
+    publish_zero_cmd
+    set +e
+    wait "${recorder_pid}"
+    recorder_code=$?
+    set -e
+    recorder_pid=""
+    if (( recorder_code != 0 )); then
+      show_log_tail "${recorder_log}" "recorder"
+    fi
   fi
-  echo "[run] recorder exited with code ${recorder_code}; stopping planner/path source"
+else
+  set +e
+  wait -n "${recorder_pid}" "${planner_pid}"
+  first_exit_code=$?
+  set -e
+  if child_running "${recorder_pid}"; then
+    show_log_tail "${planner_log}" "planner"
+    echo "[ERR] planner exited before recorder timeout (code=${first_exit_code}); stopping recorder/path source" >&2
+    recorder_code=1
+  else
+    recorder_code=${first_exit_code}
+    if (( recorder_code != 0 )); then
+      show_log_tail "${recorder_log}" "recorder"
+    fi
+    echo "[run] recorder exited with code ${recorder_code}; stopping planner/path source"
+  fi
 fi
 cleanup
 trap - EXIT INT TERM
