@@ -2,14 +2,18 @@
 
 本目录放 SPMPC 自研 planner 的正式实物辅助、pilot/smoke、录包、离线诊断和 acados 代码生成脚本。除 `run_external_baseline_real_fixed_path_trial.sh` 外，其他脚本都服务于 `spmpc_local_planner` 本身。
 
-当前正式实物协议固定为 `SMPCC-REAL-40-88-v1.0`。只有下表标为“正式链”的脚本可以进入 40/64/88 个矩阵单元，而且必须由只读 `freeze_manifest.yaml`、冻结 JSON、配置 hash 和 `validate_spmpc_formal_freeze.py` 共同准入。其余脚本只用于开发、仿真、pilot、历史复现或诊断，不能直接产生正式数据。
+当前候选协议已经升级为 `SMPCC-REAL-40-64-88-v2.0`，但尚未冻结；所有 Stage I/II formal trial 均为 `NO-GO`。本目录现有 validator、template 及若干 runner 仍带 `SMPCC-REAL-40-88-v1.0`/E2/E3 语义，旧 validator 的 PASS 不具有 v2.0 放行权。下表中的“正式链”仅表示未来完成 v2.0 升级后拟承担的角色；在只读 `freeze_manifest.yaml`、唯一 `FREEZE_ID`、新随机表、完整 G0--G6 报告链和 upgraded validator 同时存在前，任何脚本都不能直接产生 v2.0 formal 数据。其余脚本只用于开发、仿真、pilot、历史复现或诊断。
 
 | 脚本 | 用途 | 协议角色 |
 | --- | --- | --- |
-| `record_spmpc_full_rgb_bag.sh` | 正式黑匣子 recorder，录 ROS topic 和 sidecar | 正式链 |
-| `run_spmpc_real_fixed_path_trial.sh` | SPMPC 实物单次一键 runner，支持生成或重放路径 | 正式链；正式 run 只允许 replay |
-| `summarize_spmpc_real_trial.py` | 单包/目录离线完整性、配置和 fallback 摘要 | 正式链的即时 QC |
-| `validate_spmpc_formal_freeze.py` | 只读、fail-closed 的正式 freeze 校验 | 正式链的强制门控 |
+| `record_spmpc_full_rgb_bag.sh` | 候选黑匣子 recorder，录 ROS topic 和 sidecar | future v2.0 正式链；当前仅 development |
+| `run_spmpc_real_fixed_path_trial.sh` | SPMPC 实物单次一键 runner，支持生成或重放路径 | future v2.0 正式链；当前仅 development，未来 formal 只允许 replay |
+| `run_spmpc_g2s_h0s_source_selection_trial.sh` | 固定 H0_G2、Bsmooth、IMU READY gate 和在线 RGB stamped scalar 的单条 G2S paired unit；bag 禁止图像流 | development G2S；不进入 40/64/88 |
+| `analyze_spmpc_g2s_source_selection.sh` | 四条 G2S PASS 后的一键只读 source analyzer，自动加载 ROS/workspace 并使用冻结目录 | development source decision |
+| `analysis/validate_g2s_paired_trial.py` | 单条 G2S bag 的 motion/在线视觉质量/零图像话题/双 observer/READY/selection postflight | development fail-closed QC |
+| `analysis/analyze_g2s_source_selection.py` | 4 条同-trial paired unit 对 RGB 的 odom/IMU 决策 | development source decision；不自动签 formal release |
+| `summarize_spmpc_real_trial.py` | 单包/目录离线完整性、配置和 fallback 摘要 | future v2.0 即时 QC；schema 尚未升级完整 |
+| `validate_spmpc_formal_freeze.py` | 旧 v1.0 只读 freeze 校验 | **不得放行 v2.0**；必须升级后才可成为强制门控 |
 | `run_external_baseline_real_fixed_path_trial.sh` | LT-DWA、TEB、MPC 外部 baseline 的 shadow/actuated 实物运行 | 独立外部 baseline，不属于当前内部 88 单元 |
 | `record_spmpc_mainline_ground_smoke.sh` | 轻量地面 smoke recorder | smoke |
 | `record_spmpc_experiment.sh` | planner 已手动启动时的备用 recorder | 手动调试 |
@@ -34,15 +38,20 @@
 
 实物 SPMPC 黑匣子录包脚本。它只负责录制 topic 和保存 metadata，**不发送 `/cmd_vel`、不发送目标点、不启动/停止 planner**。
 
+文件名中的 `full_rgb` 是历史兼容名称；当前默认和 G2S/formal 政策均为 image-free，不代表会录视频。
+
 主要用途：正式实物 run 前先启动 recorder，把事后分析可能需要的证据一次录全，包括：
 
 - `/cmd_vel`、`/odom`、`/tf`、`/map`、固定路径/goal；
 - `/spmpc/status`、`/spmpc/solver_backend`、`/spmpc/controller_variant`；
 - `/spmpc/debug/effective_config`、`/spmpc/cost_breakdown`、`/spmpc/slosh_horizon_summary`；
 - `/spmpc/debug/raw_state`、`/spmpc/debug/predicted_state`、`/spmpc/debug/solver_input_state`、`/spmpc/debug/command_intervention`；
+- `/spmpc/debug/slosh_observer_odom`、`/spmpc/debug/slosh_observer_imu`、`/spmpc/debug/slosh_observer_selection`，用于区分 nominal/effective source、fallback、freshness 和 epoch；
 - `/spmpc/debug/predicted_horizon`、`/spmpc/debug/pre_solve_snapshot`，用于完整预测时域和 actual/zero replay；
 - `/spmpc/debug/warm_start`、`/spmpc/debug/warm_start_status`，用于核对 warm-start 来源和 `used_fallback`；
-- 相机、scan、standalone `/slosh/*`、在线 `/liquid/*` 等可选话题。
+- `/liquid/measurement`、`/liquid/height*`、camera_info、scan、standalone `/slosh/*` 等；当前默认不录 RGB/depth/debug 图像流。
+
+当前 recorder 默认 `RECORD_RGB=false`、`RECORD_ONLINE_LIQUID=true`、`RECORD_ONLINE_LIQUID_DEBUG_IMAGES=false`。G2S/G3/formal 应再设置 `FORBID_IMAGE_STREAMS=true`；这样启动时拒绝 `-a`/图像开关，闭包后还会检查 bag 内所有 message type，任何 `sensor_msgs/Image` 或 `CompressedImage` 都使 postflight 失败。相机仍实时向在线节点供图，但 bag 只保存带源图时间戳、有效性、零点原始样本/时间窗、置信度和裁剪状态的小体积派生消息。
 
 典型用法：
 
@@ -157,7 +166,7 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_pat
 
 pilot generate 默认拒绝覆盖已经存在的 H0。后续直接使用 replay；只有明确作废旧路径并准备重新冻结时，才可设置 `ALLOW_PILOT_PATH_OVERWRITE=true`。
 
-pilot 默认强制 `RECORD_RGB=false`，不向 bag 写入原始彩色图像；如果确实要做单独的视觉确认，必须显式设置 `PILOT_RECORD_RGB=true`。无 RGB pilot 只能用于内部 slosh model、跟踪、完成时间、求解实时性和执行层指标的模型侧参数筛选，不能单独证明真实液面高度改善。
+pilot 默认强制 `RECORD_RGB=false`，不向 bag 写入原始彩色图像。模型侧 pilot 默认也不启用视觉；需要物理液面证据时使用 `PILOT_RECORD_ONLINE_LIQUID=true` 并由冻结在线节点发布 `/liquid/measurement`。`PILOT_RECORD_RGB=true` 只保留给协议外的短时相机调试，不得用于 G2S、G3 或 formal bag。
 
 `PILOT_METHOD` 提供现场快速参数映射。正式协议 v1.0 只允许下列 5 个 P3 条件：
 
@@ -222,6 +231,64 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_pat
 ```
 
 该脚本只覆盖 SPMPC 内部消融，不用于外部 baseline。
+
+### liquid observer source 边界
+
+默认 `CURRENT_OBSERVER_SOURCE=odom`，保持当前发布语义。只有显式设置 `processed_imu` 时，IMU observer 才能作为当前液体状态进入 solver、risk governor 和 delay predictor；未来 horizon 仍由机器人/液体模型传播，不复制当前 IMU 值。
+
+```text
+CURRENT_OBSERVER_SOURCE=odom | processed_imu
+OBSERVER_FALLBACK_POLICY=odom | fail_closed
+OBSERVER_LATCH_FALLBACK=true
+OBSERVER_MAX_IMU_STATE_AGE_SEC=0.10
+OBSERVER_MAX_ODOM_STATE_AGE_SEC=0.50
+```
+
+nominal IMU 在本次节点生命周期第一次达到 `READY + valid + bias_ready + filter_ready` 前禁止 fallback，solver 消费液体状态的 variant 保持零命令；这避免一次 IMU trial 在启动阶段静默变成 odom trial。IMU 曾 READY 后若失效，默认转 odom 并锁存到本次节点退出。bag 中必须以 `/spmpc/debug/slosh_observer_selection` 的 `nominal_source/effective_source/fallback_active/reason/selection_epoch` 判定实际输入，不能只看启动参数。Bsmooth/B0 的 `solver_consumes_selected_state=false`，即便 parallel observers 正常发布，也不能写成 solver 使用了某路液体状态。
+
+## G2S：H0_G2 上的 odom/processed-IMU paired source selection
+
+该流程每次只运行一条，4 条均复用：
+
+```text
+/home/geist/fixed_paths/real/20260727_spmpc_development/H0/H0_G2.json
+SHA-256 = 578a4dd7663c2f49b4270c37755a08b2b0dc70735fb6b818da35b60a60f3990e
+```
+
+先只检查配置，不连车运动：
+
+```bash
+cd /home/geist/scout_ws
+VALIDATE_ONLY=true G2S_ROW=01 \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+```
+
+确认相机/容器/液深与指定 RGB 标定一致、场地清空、机器人已在旧 G2 起点并对齐后，逐条运行；`G2S_ROW` 依次改为 `01`、`02`、`03`、`04`，每条之间必须回位并等液体静稳：
+
+```bash
+ARM_MOTION=YES \
+CONFIRM_RGB_GEOMETRY=YES \
+G2S_ROW=01 \
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+```
+
+RealSense 仍提供 `1920x1080@30` 在线输入，并临时指向 `/home/geist/slosh_bags/real/20260629_calib/red_3ruler.yaml`；bag 不保存 raw/compressed/depth/debug 图像。只有相机固定姿态、容器几何与液深仍匹配时才能确认；否则先重新标定并通过 `RGB_CALIBRATION_FILE=/new/frozen.yaml` 指定。运行前还必须用 `set_realsense_rgb_manual_params.sh` 关闭自动曝光和自动白平衡；row 01 捕获 exposure/gain/white-balance，后续三条必须完全一致。
+
+脚本会自动启动 `online_liquid_height.launch`（强制 `publish_debug=false`），冻结并记录 calibration、detector、node、message、launch 和 config hash；等待 `/liquid/measurement` 达到 `zero_locked + valid + status=OK` 后才进入底层 runner。recorder 只收 stamped scalar/quality、camera_info 和控制/observer 证据，完整记录 IMU bias/filter transient，IMU READY 后才发布路径。90 s 录制结束后自动 postflight（默认同时计算 bag SHA-256），要求 image-stream count=0、在线视觉覆盖完整 motion/tail、实际速率至少 10 Hz、有效率至少 90%，并检查双 observer coverage、IMU READY、selection epoch 与 `GOAL_REACHED`。任一门失败时 attempt 保留但不进入 eligible 4 条。
+
+4 条都 PASS 后执行唯一 paired analyzer：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+
+python3 src/scout_apps/control/spmpc_local_planner/scripts/analysis/analyze_g2s_source_selection.py \
+  --bag-dir /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/H0s_Bsmooth \
+  --calibration /home/geist/slosh_bags/real/20260629_calib/red_3ruler.yaml \
+  --out-dir /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/analysis
+```
+
+analyzer 不再调用离线图像推理，也不需要视频；它直接读取消息内的源图 `header.stamp` 和 `height_max_lcr_mm`，对干净有效标量使用冻结的 5 帧 centered rolling median。禁止逐 trial 调 lag/scale/filter，固定用 observer `total_height_m` 对在线 RGB 标量的 motion-window MAE。只有 aggregate MAE 改善至少 10%、至少 3/4 trial 同方向、去掉最佳单条后总改善仍为正且 IMU coverage 不劣化时，输出 `processed_imu`；相当、冲突、不确定或任一 gate 失败均输出 `odom`。该输出仍是 development source decision；若选择 IMU，还要用新 revision 做 `publish_cmd_vel=false` replay 和 2--3 对 W2/W5 闭环确认，不能把 shadow-only 旧 revision 冒充为同一 release。
 
 ## summarize_spmpc_real_trial.py
 

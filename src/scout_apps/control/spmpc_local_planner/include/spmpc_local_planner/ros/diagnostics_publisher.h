@@ -7,12 +7,14 @@
 #include "spmpc_local_planner/PreSolveSnapshot.h"
 #include "spmpc_local_planner/PredictedHorizon.h"
 #include "spmpc_local_planner/SloshObserverDebug.h"
+#include "spmpc_local_planner/SloshObserverSelectionDebug.h"
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/Path.h>
 #include <ros/ros.h>
 #include <std_msgs/Float32.h>
 #include <std_msgs/Float32MultiArray.h>
 #include <std_msgs/String.h>
+#include <cstdint>
 
 namespace spmpc_local_planner {
 
@@ -25,7 +27,10 @@ public:
     void publishOutput(const SolverOutput& output, const std::string& frame_id);
     void publishRawState(const RobotState& robot, const SloshState& slosh, double height_coeff);
     void publishPredictedState(const ExecutionStatePrediction& prediction, double height_coeff);
-    void publishSolverInputState(const SolverInput& input, bool delay_compensation_applied, double height_coeff);
+    void publishSolverInputState(const SolverInput& input,
+                                 std::uint8_t source_code,
+                                 bool delay_compensation_applied,
+                                 double height_coeff);
     void publishCommandIntervention(const CommandInterventionDebug& intervention);
     void publishCommandOutput(const geometry_msgs::Twist& desired,
                               const geometry_msgs::Twist& limited,
@@ -38,6 +43,7 @@ public:
     void publishSloshHeight(double height_m);
     void publishOdomSloshObserver(const SloshObserverDebug& msg);
     void publishImuSloshObserver(const SloshObserverDebug& msg);
+    void publishSloshObserverSelection(const SloshObserverSelectionDebug& msg);
     void publishSloshGovernor(const SloshRiskGovernorOutput& output);
     void publishDelayPhase(const DelayPhaseDebugSummary& summary);
     void publishOdomTiming(const OdomTimingDebug& timing);
@@ -74,6 +80,7 @@ private:
     ros::Publisher slosh_height_pub_;
     ros::Publisher odom_slosh_observer_pub_;
     ros::Publisher imu_slosh_observer_pub_;
+    ros::Publisher slosh_observer_selection_pub_;
     ros::Publisher slosh_horizon_summary_pub_;
     ros::Publisher slosh_hard_constraint_pub_;
     ros::Publisher slosh_hard_constraint_effective_pub_;

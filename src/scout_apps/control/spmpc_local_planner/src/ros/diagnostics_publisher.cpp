@@ -54,6 +54,8 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     slosh_height_pub_ = nh.advertise<std_msgs::Float32>("slosh_height", 1);
     odom_slosh_observer_pub_ = nh.advertise<SloshObserverDebug>("debug/slosh_observer_odom", 1);
     imu_slosh_observer_pub_ = nh.advertise<SloshObserverDebug>("debug/slosh_observer_imu", 1);
+    slosh_observer_selection_pub_ = nh.advertise<SloshObserverSelectionDebug>(
+        "debug/slosh_observer_selection", 1);
     slosh_horizon_summary_pub_ = nh.advertise<std_msgs::Float32MultiArray>("slosh_horizon_summary", 1);
     slosh_hard_constraint_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_hard_constraint", 1);
     slosh_hard_constraint_effective_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_hard_constraint_effective", 1);
@@ -205,6 +207,7 @@ void DiagnosticsPublisher::publishPredictedState(const ExecutionStatePrediction&
 }
 
 void DiagnosticsPublisher::publishSolverInputState(const SolverInput& input,
+                                                   std::uint8_t source_code,
                                                    bool delay_compensation_applied,
                                                    double height_coeff) {
     std_msgs::Float32MultiArray msg;
@@ -214,7 +217,7 @@ void DiagnosticsPublisher::publishSolverInputState(const SolverInput& input,
     msg.layout.dim[0].size = 12;
     msg.layout.dim[0].stride = 12;
     msg.data.resize(12, 0.0f);
-    msg.data[0] = delay_compensation_applied ? 1.0f : 0.0f;
+    msg.data[0] = static_cast<float>(source_code);
     msg.data[1] = delay_compensation_applied ? 1.0f : 0.0f;
     msg.data[2] = static_cast<float>(input.robot.x);
     msg.data[3] = static_cast<float>(input.robot.y);
@@ -233,10 +236,10 @@ void DiagnosticsPublisher::publishCommandIntervention(const CommandInterventionD
     std_msgs::Float32MultiArray msg;
     msg.layout.dim.resize(1);
     msg.layout.dim[0].label =
-        "solver_cmd_v,solver_cmd_omega,post_gate_cmd_v,post_gate_cmd_omega,published_cmd_v,published_cmd_omega,output_success,zero_due_to_solver_failure,zero_due_to_waiting_for_odom,zero_due_to_waiting_for_reference,zero_due_to_waiting_for_tf,zero_due_to_terminal_spin_fail,zero_due_to_tracking_safety,linear_limited,angular_rate_limited,angular_accel_limited,publish_cmd_vel";
-    msg.layout.dim[0].size = 17;
-    msg.layout.dim[0].stride = 17;
-    msg.data.resize(17, 0.0f);
+        "solver_cmd_v,solver_cmd_omega,post_gate_cmd_v,post_gate_cmd_omega,published_cmd_v,published_cmd_omega,output_success,zero_due_to_solver_failure,zero_due_to_waiting_for_odom,zero_due_to_waiting_for_reference,zero_due_to_waiting_for_tf,zero_due_to_waiting_for_slosh_observer,zero_due_to_terminal_spin_fail,zero_due_to_tracking_safety,linear_limited,angular_rate_limited,angular_accel_limited,publish_cmd_vel";
+    msg.layout.dim[0].size = 18;
+    msg.layout.dim[0].stride = 18;
+    msg.data.resize(18, 0.0f);
     msg.data[0] = static_cast<float>(intervention.solver_cmd_v);
     msg.data[1] = static_cast<float>(intervention.solver_cmd_omega);
     msg.data[2] = static_cast<float>(intervention.post_gate_cmd_v);
@@ -248,12 +251,13 @@ void DiagnosticsPublisher::publishCommandIntervention(const CommandInterventionD
     msg.data[8] = intervention.zero_due_to_waiting_for_odom ? 1.0f : 0.0f;
     msg.data[9] = intervention.zero_due_to_waiting_for_reference ? 1.0f : 0.0f;
     msg.data[10] = intervention.zero_due_to_waiting_for_tf ? 1.0f : 0.0f;
-    msg.data[11] = intervention.zero_due_to_terminal_spin_fail ? 1.0f : 0.0f;
-    msg.data[12] = intervention.zero_due_to_tracking_safety ? 1.0f : 0.0f;
-    msg.data[13] = intervention.linear_limited ? 1.0f : 0.0f;
-    msg.data[14] = intervention.angular_rate_limited ? 1.0f : 0.0f;
-    msg.data[15] = intervention.angular_accel_limited ? 1.0f : 0.0f;
-    msg.data[16] = intervention.publish_cmd_vel ? 1.0f : 0.0f;
+    msg.data[11] = intervention.zero_due_to_waiting_for_slosh_observer ? 1.0f : 0.0f;
+    msg.data[12] = intervention.zero_due_to_terminal_spin_fail ? 1.0f : 0.0f;
+    msg.data[13] = intervention.zero_due_to_tracking_safety ? 1.0f : 0.0f;
+    msg.data[14] = intervention.linear_limited ? 1.0f : 0.0f;
+    msg.data[15] = intervention.angular_rate_limited ? 1.0f : 0.0f;
+    msg.data[16] = intervention.angular_accel_limited ? 1.0f : 0.0f;
+    msg.data[17] = intervention.publish_cmd_vel ? 1.0f : 0.0f;
     command_intervention_pub_.publish(msg);
 }
 
@@ -892,6 +896,11 @@ void DiagnosticsPublisher::publishOdomSloshObserver(const SloshObserverDebug& ms
 
 void DiagnosticsPublisher::publishImuSloshObserver(const SloshObserverDebug& msg) {
     imu_slosh_observer_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishSloshObserverSelection(
+    const SloshObserverSelectionDebug& msg) {
+    slosh_observer_selection_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishStatus(const std::string& status) {

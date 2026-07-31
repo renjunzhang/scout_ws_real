@@ -4,6 +4,7 @@
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/estimation/processed_imu_pipeline.h"
 #include "spmpc_local_planner/estimation/slosh_observer_bank.h"
+#include "spmpc_local_planner/estimation/slosh_observer_selector.h"
 #include "spmpc_local_planner/reference/reference_path_preprocessor.h"
 #include "spmpc_local_planner/ros/command_history_buffer.h"
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
@@ -20,7 +21,9 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -80,6 +83,10 @@ private:
                                        const std::string& status);
     void publishImuSloshObserverDebug(const sensor_msgs::Imu& imu,
                                       const ProcessedImuOutput& output);
+    void publishSloshObserverSelectionDebug(
+        const ros::Time& now,
+        const SloshObserverSelection& selection,
+        bool solver_consumes_selected_state);
     bool updateReferenceSignature(const nav_msgs::Path& path);
     ReferencePath referencePathFromMsg(const nav_msgs::Path& path) const;
     CostmapGrid costmapFromMsg(const nav_msgs::OccupancyGrid& map) const;
@@ -116,6 +123,8 @@ private:
     ReferencePathPreprocessor reference_preprocessor_;
     ReferencePathPreprocessParams reference_preprocess_params_;
     SloshObserverBank slosh_observers_;
+    SloshObserverSelector slosh_observer_selector_;
+    SloshObserverSelectorParams slosh_observer_selector_params_;
     ImuShadowRosAdapter imu_shadow_adapter_;
     SloshRiskGovernor slosh_risk_governor_;
     SloshRiskGovernorParams slosh_risk_governor_params_;
@@ -126,6 +135,9 @@ private:
     EffectiveConfigDebug effective_config_;
     OdomTimingDebug last_odom_timing_;
     ros::Time last_odom_receive_stamp_;
+    std::mutex slosh_observers_mutex_;
+    bool imu_input_ready_ = false;
+    std::uint32_t imu_input_reset_epoch_ = 0;
 
     nav_msgs::Odometry last_odom_;
     nav_msgs::Odometry prev_odom_;

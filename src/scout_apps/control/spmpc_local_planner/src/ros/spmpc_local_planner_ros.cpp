@@ -246,6 +246,47 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                  imu_observer_dt_sec_);
         imu_observer_dt_sec_ = 0.02;
     }
+    std::string observer_source = "odom";
+    std::string observer_fallback_policy = "odom";
+    pnh_.param("slosh_observer/source", observer_source, observer_source);
+    pnh_.param("slosh_observer/fallback_policy",
+               observer_fallback_policy,
+               observer_fallback_policy);
+    pnh_.param("slosh_observer/latch_fallback",
+               slosh_observer_selector_params_.latch_fallback,
+               slosh_observer_selector_params_.latch_fallback);
+    pnh_.param("slosh_observer/max_imu_state_age_sec",
+               slosh_observer_selector_params_.max_imu_state_age_sec,
+               slosh_observer_selector_params_.max_imu_state_age_sec);
+    pnh_.param("slosh_observer/max_odom_state_age_sec",
+               slosh_observer_selector_params_.max_odom_state_age_sec,
+               slosh_observer_selector_params_.max_odom_state_age_sec);
+    pnh_.param("slosh_observer/max_future_skew_sec",
+               slosh_observer_selector_params_.max_future_skew_sec,
+               slosh_observer_selector_params_.max_future_skew_sec);
+    if (!parseSloshObserverSource(
+            observer_source, slosh_observer_selector_params_.nominal_source)) {
+        ROS_FATAL("[spmpc_local_planner] invalid slosh_observer/source='%s'; "
+                  "expected odom|processed_imu",
+                  observer_source.c_str());
+        return false;
+    }
+    if (!parseSloshObserverFallbackPolicy(
+            observer_fallback_policy,
+            slosh_observer_selector_params_.fallback_policy)) {
+        ROS_FATAL("[spmpc_local_planner] invalid slosh_observer/fallback_policy='%s'; "
+                  "expected odom|fail_closed",
+                  observer_fallback_policy.c_str());
+        return false;
+    }
+    const bool imu_is_nominal =
+        slosh_observer_selector_params_.nominal_source ==
+        SloshObserverSource::ProcessedImu;
+    if (imu_is_nominal && !imu_shadow_enable_) {
+        ROS_WARN("[spmpc_local_planner] processed_imu is the nominal liquid observer; "
+                 "forcing imu_shadow/enable=true for the processed-IMU pipeline");
+        imu_shadow_enable_ = true;
+    }
     pnh_.param("control_frequency", control_frequency_, control_frequency_);
     pnh_.param("dt", dt_, dt_);
     pnh_.param("horizon_steps", horizon_steps_, horizon_steps_);
@@ -498,12 +539,24 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     if (!slosh_observers_.configure(solver_params.slosh, imu_observer_dt_sec_)) {
         ROS_WARN("[spmpc_local_planner] slosh observer configure failed; slosh diagnostics stay zero");
     }
+    if (!slosh_observer_selector_.configure(slosh_observer_selector_params_)) {
+        ROS_FATAL("[spmpc_local_planner] invalid slosh_observer selector parameters");
+        return false;
+    }
     if (imu_shadow_enable_ && !slosh_observers_.imuConfigured()) {
+        if (imu_is_nominal) {
+            ROS_FATAL("[spmpc_local_planner] nominal processed-IMU observer configure failed");
+            return false;
+        }
         ROS_ERROR("[spmpc_local_planner] IMU shadow observer configure failed; disabling shadow");
         imu_shadow_enable_ = false;
     }
     if (imu_shadow_enable_ &&
         !imu_shadow_adapter_.configure(processed_imu_params, imu_expected_frame_)) {
+        if (imu_is_nominal) {
+            ROS_FATAL("[spmpc_local_planner] nominal processed-IMU pipeline configure failed");
+            return false;
+        }
         ROS_ERROR("[spmpc_local_planner] processed-IMU pipeline configure failed; disabling shadow");
         imu_shadow_enable_ = false;
     }
@@ -547,14 +600,18 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         imu_spinner_->start();
     }
 
-    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s imu_shadow=%s imu_topic=%s",
+    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s imu_pipeline=%s imu_topic=%s observer_source=%s observer_fallback=%s latch_fallback=%s",
              variant_.name.c_str(),
              experiment_mode_.c_str(),
              path_topic_.c_str(),
              costmap_topic_.c_str(),
              cmd_topic_.c_str(),
              boolText(imu_shadow_enable_),
-             imu_topic_.c_str());
+             imu_topic_.c_str(),
+             sloshObserverSourceName(slosh_observer_selector_params_.nominal_source),
+             sloshObserverFallbackPolicyName(
+                 slosh_observer_selector_params_.fallback_policy),
+             boolText(slosh_observer_selector_params_.latch_fallback));
     return true;
 }
 
@@ -1127,15 +1184,25 @@ void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
 
 void SpmpcLocalPlannerROS::imuCallback(const sensor_msgs::ImuConstPtr& msg) {
     const ProcessedImuOutput output = imu_shadow_adapter_.process(*msg, ros::Time::now());
-    if (output.excitation.valid) {
-        if (!slosh_observers_.stepImu(output.excitation)) {
-            ROS_WARN_THROTTLE(1.0,
-                              "[spmpc_local_planner] processed-IMU valid but shadow observer step failed");
+    bool observer_step_ok = false;
+    {
+        std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
+        if (output.excitation.valid) {
+            observer_step_ok = slosh_observers_.stepImu(output.excitation);
+        } else {
+            // Invalid samples never advance the IMU observer and never reuse
+            // the previous acceleration. Epoch changes clear its modal state.
+            slosh_observers_.invalidateImu(output.reset_epoch);
         }
-    } else {
-        // Invalid samples never advance the IMU observer and never reuse the
-        // previous acceleration.  Epoch changes also clear its modal state.
-        slosh_observers_.invalidateImu(output.reset_epoch);
+        imu_input_ready_ = observer_step_ok &&
+                           output.status == ImuPipelineStatusCode::Ready &&
+                           output.bias_ready && output.filter_ready &&
+                           slosh_observers_.imu().valid;
+        imu_input_reset_epoch_ = output.reset_epoch;
+    }
+    if (output.excitation.valid && !observer_step_ok) {
+        ROS_WARN_THROTTLE(1.0,
+                          "[spmpc_local_planner] processed-IMU valid but observer step failed");
     }
 
     if (output.status == ImuPipelineStatusCode::FrameMismatch) {
@@ -1241,12 +1308,72 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         publishZeroCommand(intervention);
         return;
     }
-    // Phase-1 source invariant: processed IMU is shadow-only.  No IMU state is
-    // consulted by SolverInput, the governor, or the execution predictor.
-    input.slosh = slosh_observers_.solverState();
+    SloshObserverHealth odom_observer_health;
+    SloshObserverHealth imu_observer_health;
+    double slosh_height_coeff = 0.0;
+    {
+        std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
+        odom_observer_health.snapshot = slosh_observers_.odom();
+        // Odom has no separate bias/filter state. Snapshot validity and age are
+        // its complete admission contract.
+        odom_observer_health.input_ready = odom_observer_health.snapshot.valid;
+        imu_observer_health.snapshot = slosh_observers_.imu();
+        imu_observer_health.input_ready = imu_input_ready_;
+        imu_observer_health.input_reset_epoch = imu_input_reset_epoch_;
+        slosh_height_coeff = slosh_observers_.heightCoeff();
+    }
+    const ros::Time observer_selection_now = ros::Time::now();
+    const SloshObserverSelection observer_selection =
+        slosh_observer_selector_.select(
+            odom_observer_health,
+            imu_observer_health,
+            static_cast<std::int64_t>(observer_selection_now.toNSec()));
+    const bool solver_consumes_selected_state = variant_.slosh_enable;
+    publishSloshObserverSelectionDebug(
+        observer_selection_now,
+        observer_selection,
+        solver_consumes_selected_state);
+
+    if (solver_consumes_selected_state && !observer_selection.valid) {
+        resetTerminalSpinFailGate();
+        resetTrackingSafetyGate();
+        const std::string selection_status =
+            std::string("WAITING_FOR_SLOSH_OBSERVER_") +
+            sloshObserverSelectionStatusName(observer_selection.status) + "_" +
+            sloshObserverSelectionReasonName(observer_selection.reason);
+        diagnostics_.publishStatus(selection_status);
+        ROS_WARN_THROTTLE(
+            1.0,
+            "[spmpc_local_planner] fail-closed liquid observer: nominal=%s status=%s reason=%s odom_age=%.3f imu_age=%.3f",
+            sloshObserverSourceName(observer_selection.nominal_source),
+            sloshObserverSelectionStatusName(observer_selection.status),
+            sloshObserverSelectionReasonName(observer_selection.reason),
+            observer_selection.odom_state_age_sec,
+            observer_selection.imu_state_age_sec);
+        CommandInterventionDebug intervention;
+        intervention.zero_due_to_waiting_for_slosh_observer = true;
+        publishZeroCommand(intervention);
+        return;
+    }
+    if (observer_selection.fallback_active) {
+        ROS_WARN_THROTTLE(
+            1.0,
+            "[spmpc_local_planner] liquid observer fallback active: nominal=%s effective=%s reason=%s epoch=%llu",
+            sloshObserverSourceName(observer_selection.nominal_source),
+            sloshObserverSourceName(observer_selection.effective_source),
+            sloshObserverSelectionReasonName(observer_selection.reason),
+            static_cast<unsigned long long>(observer_selection.selection_epoch));
+    }
+    if (observer_selection.valid) {
+        input.slosh = observer_selection.state;
+    } else if (odom_observer_health.snapshot.configured &&
+               odom_observer_health.snapshot.valid) {
+        // A non-slosh comparator does not consume this field, but keeping its
+        // diagnostic state populated preserves useful paired observer evidence.
+        input.slosh = odom_observer_health.snapshot.state;
+    }
     input.dt = dt_;
     input.horizon_steps = horizon_steps_;
-    const double slosh_height_coeff = slosh_observers_.heightCoeff();
     diagnostics_.publishRawState(input.robot, input.slosh, slosh_height_coeff);
 
     applyRuntimeVRef(input);
@@ -1297,7 +1424,11 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         }
     }
 
-    diagnostics_.publishSolverInputState(solve_input, delay_compensation_applied, slosh_height_coeff);
+    diagnostics_.publishSolverInputState(
+        solve_input,
+        static_cast<std::uint8_t>(observer_selection.effective_source),
+        delay_compensation_applied,
+        slosh_height_coeff);
 
     SolverOutput output;
     problem_.solve(solve_input, output);
@@ -1340,9 +1471,17 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     // 统一用 solve_input 确保 bag 记录的状态与 solver 实际输入一致。
     diagnostics_.publishSloshState(solve_input.slosh);
     // 当前标量模型液面高度 = c_h·‖η‖ (+向心项), 由唯一物理核 SloshDynamics 计算; 单位米(模型 proxy)。
-    if (slosh_observers_.odomConfigured()) {
+    bool observer_dynamics_configured = false;
+    double selected_height_m = 0.0;
+    {
+        std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
+        observer_dynamics_configured = slosh_observers_.odomConfigured();
         const double omega_meas = last_odom_.twist.twist.angular.z;
-        diagnostics_.publishSloshHeight(slosh_observers_.solverHeight(solve_input.slosh, omega_meas));
+        selected_height_m = slosh_observers_.solverHeight(
+            solve_input.slosh, omega_meas);
+    }
+    if (observer_dynamics_configured) {
+        diagnostics_.publishSloshHeight(selected_height_m);
     }
     publishDelayPhaseDiagnostics(
         delay_phase_now, delay_phase_status, shadow_prediction_ptr, output.solver_time_ms, delay_compensation_applied);
@@ -1447,7 +1586,7 @@ bool SpmpcLocalPlannerROS::processOdomInput(
         ROS_WARN_THROTTLE(
             1.0,
             "[spmpc_local_planner] rejecting odom control input with invalid stamp, pose, or twist");
-        if (imu_shadow_enable_ && imu_shadow_publish_diagnostics_) {
+        if (imu_shadow_publish_diagnostics_) {
             publishOdomSloshObserverDebug(odom, excitation, "ODOM_INVALID_SAMPLE");
         }
         return false;
@@ -1457,7 +1596,7 @@ bool SpmpcLocalPlannerROS::processOdomInput(
         prev_odom_ = odom;
         have_prev_odom_ = true;
         last_odom_timing_ = timing;
-        if (imu_shadow_enable_ && imu_shadow_publish_diagnostics_) {
+        if (imu_shadow_publish_diagnostics_) {
             publishOdomSloshObserverDebug(odom, excitation, "ODOM_WAITING_FOR_PREVIOUS");
         }
         return true;
@@ -1489,7 +1628,10 @@ bool SpmpcLocalPlannerROS::processOdomInput(
             // A large source-clock regression starts a clean liquid epoch.  A
             // small out-of-order packet is only dropped and cannot move the
             // derivative baseline backwards.
-            slosh_observers_.resetOdom();
+            {
+                std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
+                slosh_observers_.resetOdom();
+            }
             prev_odom_ = odom;
         }
         ROS_WARN_THROTTLE(
@@ -1497,7 +1639,7 @@ bool SpmpcLocalPlannerROS::processOdomInput(
             "[spmpc_local_planner] rejecting odom slosh update: %s (dt=%.6f s)",
             status,
             dt_msg);
-        if (imu_shadow_enable_ && imu_shadow_publish_diagnostics_) {
+        if (imu_shadow_publish_diagnostics_) {
             publishOdomSloshObserverDebug(odom, excitation, status);
         }
         return clock_reset;
@@ -1514,7 +1656,7 @@ bool SpmpcLocalPlannerROS::processOdomInput(
         ROS_WARN_THROTTLE(
             1.0,
             "[spmpc_local_planner] rejecting odom control input with non-finite derived excitation");
-        if (imu_shadow_enable_ && imu_shadow_publish_diagnostics_) {
+        if (imu_shadow_publish_diagnostics_) {
             publishOdomSloshObserverDebug(
                 odom, excitation, "ODOM_DERIVED_NONFINITE");
         }
@@ -1541,13 +1683,19 @@ bool SpmpcLocalPlannerROS::processOdomInput(
         (excitation.source_stamp_ns - previous_stamp_ns) / 2;
     excitation.accel_effective_stamp_ns = interval_midpoint_ns;
     excitation.alpha_effective_stamp_ns = interval_midpoint_ns;
-    const bool observer_updated = slosh_observers_.stepOdom(excitation);
-    if (!observer_updated && slosh_observers_.odomConfigured()) {
+    bool observer_updated = false;
+    bool odom_observer_configured = false;
+    {
+        std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
+        observer_updated = slosh_observers_.stepOdom(excitation);
+        odom_observer_configured = slosh_observers_.odomConfigured();
+    }
+    if (!observer_updated && odom_observer_configured) {
         ROS_WARN_THROTTLE(1.0, "[spmpc_local_planner] odom slosh observer step rejected");
-    } else if (!slosh_observers_.odomConfigured()) {
+    } else if (!odom_observer_configured) {
         ROS_WARN_THROTTLE(1.0, "[spmpc_local_planner] slosh observer reconfigure failed");
     }
-    if (imu_shadow_enable_ && imu_shadow_publish_diagnostics_) {
+    if (imu_shadow_publish_diagnostics_) {
         publishOdomSloshObserverDebug(
             odom,
             excitation,
@@ -1561,7 +1709,11 @@ void SpmpcLocalPlannerROS::publishOdomSloshObserverDebug(
     const nav_msgs::Odometry& odom,
     const MotionExcitation& excitation,
     const std::string& status) {
-    const SloshObserverSnapshot& snapshot = slosh_observers_.odom();
+    SloshObserverSnapshot snapshot;
+    {
+        std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
+        snapshot = slosh_observers_.odom();
+    }
     SloshObserverDebug msg;
     msg.header = odom.header;
     msg.header.frame_id = odom.child_frame_id.empty() ? robot_base_frame_ : odom.child_frame_id;
@@ -1605,7 +1757,11 @@ void SpmpcLocalPlannerROS::publishOdomSloshObserverDebug(
 void SpmpcLocalPlannerROS::publishImuSloshObserverDebug(
     const sensor_msgs::Imu& imu,
     const ProcessedImuOutput& output) {
-    const SloshObserverSnapshot& snapshot = slosh_observers_.imu();
+    SloshObserverSnapshot snapshot;
+    {
+        std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
+        snapshot = slosh_observers_.imu();
+    }
     const MotionExcitation& excitation = output.excitation;
     SloshObserverDebug msg;
     msg.header = imu.header;
@@ -1660,6 +1816,47 @@ void SpmpcLocalPlannerROS::publishImuSloshObserverDebug(
     msg.modal_height_m = snapshot.modal_height_m;
     msg.total_height_m = snapshot.total_height_m;
     diagnostics_.publishImuSloshObserver(msg);
+}
+
+void SpmpcLocalPlannerROS::publishSloshObserverSelectionDebug(
+    const ros::Time& now,
+    const SloshObserverSelection& selection,
+    bool solver_consumes_selected_state) {
+    SloshObserverSelectionDebug msg;
+    msg.header.stamp = now;
+    msg.header.frame_id = robot_base_frame_;
+    msg.schema_version = 1;
+    msg.solver_consumes_selected_state = solver_consumes_selected_state;
+    msg.configured = selection.configured;
+    msg.valid = selection.valid;
+    msg.fallback_active = selection.fallback_active;
+    msg.fallback_latched = selection.fallback_latched;
+    msg.nominal_ready_seen = selection.nominal_ready_seen;
+    msg.nominal_source = static_cast<std::uint8_t>(selection.nominal_source);
+    msg.nominal_source_name = sloshObserverSourceName(selection.nominal_source);
+    msg.effective_source = static_cast<std::uint8_t>(selection.effective_source);
+    msg.effective_source_name = sloshObserverSourceName(selection.effective_source);
+    msg.fallback_policy = static_cast<std::uint8_t>(selection.fallback_policy);
+    msg.fallback_policy_name =
+        sloshObserverFallbackPolicyName(selection.fallback_policy);
+    msg.status_code = static_cast<std::uint8_t>(selection.status);
+    msg.status = sloshObserverSelectionStatusName(selection.status);
+    msg.reason_code = static_cast<std::uint8_t>(selection.reason);
+    msg.reason = sloshObserverSelectionReasonName(selection.reason);
+    msg.odom_snapshot_valid = selection.odom_snapshot_valid;
+    msg.imu_snapshot_valid = selection.imu_snapshot_valid;
+    msg.odom_fresh = selection.odom_fresh;
+    msg.imu_fresh = selection.imu_fresh;
+    msg.imu_pipeline_ready = selection.imu_pipeline_ready;
+    msg.selected_state_stamp =
+        rosTimeFromNanoseconds(selection.selected_state_stamp_ns);
+    msg.odom_state_stamp = rosTimeFromNanoseconds(selection.odom_state_stamp_ns);
+    msg.imu_state_stamp = rosTimeFromNanoseconds(selection.imu_state_stamp_ns);
+    msg.odom_state_age_sec = selection.odom_state_age_sec;
+    msg.imu_state_age_sec = selection.imu_state_age_sec;
+    msg.imu_reset_epoch = selection.imu_reset_epoch;
+    msg.selection_epoch = selection.selection_epoch;
+    diagnostics_.publishSloshObserverSelection(msg);
 }
 
 bool SpmpcLocalPlannerROS::updateReferenceSignature(const nav_msgs::Path& path) {

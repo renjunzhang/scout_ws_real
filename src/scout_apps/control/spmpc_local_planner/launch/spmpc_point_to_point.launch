@@ -3,6 +3,12 @@
   <arg name="reference_path_topic" default="/scout/global_path"/>
   <arg name="imu_topic" default="/imu/data"/>
   <arg name="imu_shadow_enable" default="false"/>
+  <arg name="observer_source" default="odom"/>
+  <arg name="observer_fallback_policy" default="odom"/>
+  <arg name="observer_latch_fallback" default="true"/>
+  <arg name="observer_max_imu_state_age_sec" default="0.10"/>
+  <arg name="observer_max_odom_state_age_sec" default="0.50"/>
+  <arg name="observer_max_future_skew_sec" default="0.005"/>
   <arg name="costmap_topic" default="/map"/>
   <arg name="solver_backend" default="continuous_mpcc_acados" doc="continuous_mpcc_acados(mainline)|continuous_mpcc_direct_omega_legacy(RouteB diagnostic)|primitive(debug fallback)"/>
   <arg name="w_slosh" default="-1.0" doc="覆盖 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
@@ -17,6 +23,12 @@
     <arg name="reference_path_topic" value="$(arg reference_path_topic)"/>
     <arg name="imu_topic" value="$(arg imu_topic)"/>
     <arg name="imu_shadow_enable" value="$(arg imu_shadow_enable)"/>
+    <arg name="observer_source" value="$(arg observer_source)"/>
+    <arg name="observer_fallback_policy" value="$(arg observer_fallback_policy)"/>
+    <arg name="observer_latch_fallback" value="$(arg observer_latch_fallback)"/>
+    <arg name="observer_max_imu_state_age_sec" value="$(arg observer_max_imu_state_age_sec)"/>
+    <arg name="observer_max_odom_state_age_sec" value="$(arg observer_max_odom_state_age_sec)"/>
+    <arg name="observer_max_future_skew_sec" value="$(arg observer_max_future_skew_sec)"/>
     <arg name="costmap_topic" value="$(arg costmap_topic)"/>
     <arg name="solver_backend" value="$(arg solver_backend)"/>
     <arg name="w_slosh" value="$(arg w_slosh)"/>

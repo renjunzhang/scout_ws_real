@@ -22,9 +22,8 @@ struct SloshObserverSnapshot {
 };
 
 // Owns two physically identical but completely independent observer states.
-// The odom channel remains the only channel exposed as solverState().  The IMU
-// channel is deliberately shadow-only in phase 1; no source selector is
-// provided here, which makes accidental control-path switching impossible.
+// Source admission is intentionally outside this integration bank and is
+// handled by SloshObserverSelector at the control-cycle boundary.
 class SloshObserverBank {
 public:
     bool configure(const SloshModelParams& params, double imu_observer_dt_sec);
@@ -39,7 +38,8 @@ public:
     const SloshObserverSnapshot& odom() const { return odom_snapshot_; }
     const SloshObserverSnapshot& imu() const { return imu_snapshot_; }
 
-    // Phase-1 invariant: the solver always consumes the odom observer.
+    // Legacy odom accessor retained for exact pre-selector equivalence tests.
+    // Runtime solver input must go through SloshObserverSelector.
     const SloshState& solverState() const { return odom_snapshot_.state; }
 
     bool odomConfigured() const { return odom_dynamics_.configured(); }

@@ -2,7 +2,7 @@
 
 > 候选协议 ID（仅在最终冻结 `n=8` 时成立）：`SMPCC-REAL-40-64-88-v2.0`
 >
-> 版本日期：2026-07-30
+> 版本日期：2026-07-31
 >
 > 当前状态：**development/smoke 可按各自 gate 执行；所有 formal Stage I/II trial NO-GO。**
 >
@@ -13,6 +13,222 @@
 > 2026-07-30 增补：吸收 20260727 G2 诊断和 20260729 IMU 标定证据，新增 ROS1 构建/回放门、`G2S` 输入源选择和 processed-IMU shadow 的自动 `READY` 启动顺序。该增补不增加第六条件，不改变 40 → 64 → 条件性 88。
 
 本文件只规定命令合同和现场顺序。矩阵、随机化、统计和 failure 规则以配套矩阵文档为准。
+
+> 现场优先使用精简版：[20260731_S-MPCC实物实验矩阵现场命令速查.md](./20260731_S-MPCC实物实验矩阵现场命令速查.md)。本文档保留完整协议合同与排错细节。
+
+## 现场实际只用下面 5 条命令
+
+长参数已经封装进脚本。不要拆开手动 `roslaunch` planner、path、recorder 或在线 RGB，否则会绕过 READY、录包和自动停车顺序。
+
+### 1. 启动基础传感器栈（终端 A，保持运行）
+
+```bash
+bash /home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/launch_real_sensors_stack.sh
+```
+
+### 2. 每个 batch 冻结一次相机参数（终端 B）
+
+```bash
+OUT_DIR=/home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/camera_params bash /home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/set_realsense_rgb_manual_params.sh
+```
+
+### 3. 检查 G2S 配置，不动车
+
+```bash
+VALIDATE_ONLY=true G2S_ROW=01 bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+```
+
+### 4. 执行一条 G2S，会自动发速度并自动停止
+
+```bash
+ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G2S_ROW=01 bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+```
+
+依次把 `G2S_ROW` 改成 `01`、`02`、`03`、`04`。每次只跑一条；回位并等液体静稳后再执行下一条。
+
+### 5. 四条都 PASS 后分析 odom/IMU
+
+```bash
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/analyze_spmpc_g2s_source_selection.sh
+```
+
+当前到这里就停止，不执行 W2/W5、G3 或正式 40 条。
+
+<details>
+<summary>展开：完整检查、协议合同和历史命令（现场通常不需要）</summary>
+
+## 0. 2026-07-31 现场命令速查（当前唯一执行入口）
+
+> 本节优先级高于后文旧 development-registry 和 formal 多终端模板。当前只允许完成 **4 条 G2S development trial**；G2C、G3 和 Stage I/II 均未放行。若后文命令与本节冲突，以本节为准，不得自行拼接。
+
+### 0.1 当前命令状态
+
+| 命令 | 当前状态 | 是否会驱动车辆 |
+| --- | --- | --- |
+| 基础传感器/定位栈 | 可执行 | 启动底盘驱动但不主动发送速度 |
+| RealSense 手动参数冻结 | 可执行 | 否 |
+| G2S `VALIDATE_ONLY` | 可执行 | 否 |
+| G2S `ARM_MOTION=YES` | 当前唯一允许的实车 development 运动 | **是，脚本发布 `/cmd_vel`** |
+| 4 条后的 source analyzer | 可执行 | 否 |
+| G2C/W2-W5、G3、Stage I/II | **NO-GO** | 不得执行 |
+
+### 0.2 终端 A：启动基础传感器栈
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+
+export SCOUT_WS=/home/geist/scout_ws
+export SENSOR_LOG_DIR="/home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/sensor_stack_$(date +%H%M%S)"
+
+SCOUT_WS="${SCOUT_WS}" \
+LOG_DIR="${SENSOR_LOG_DIR}" \
+REALSENSE_COLOR_WIDTH=1920 \
+REALSENSE_COLOR_HEIGHT=1080 \
+REALSENSE_COLOR_FPS=30 \
+REALSENSE_ENABLE_DEPTH=false \
+REALSENSE_ENABLE_INFRA=false \
+WAIT_FOR_ODOM=true \
+WAIT_FOR_LOCALIZATION_MAP=true \
+bash /home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/launch_real_sensors_stack.sh
+```
+
+该脚本会请求一次 `sudo` 配置 `can0`，随后启动底盘、NanoScan3、Cartographer localization、`/imu/data` 和 RealSense。保持终端 A 运行；全部 G2S 完成后才按 `Ctrl+C`，脚本会停止它启动的进程。它不会启动在线液面节点；G2S wrapper 会为每条 trial 单独启动并关闭冻结的在线节点。
+
+### 0.3 终端 B：冻结相机参数并检查基础数据
+
+每个 G2S batch 只执行一次 `freeze_current`，之后四条之间不得改曝光、增益、白平衡、相机姿态、容器姿态或液深：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+
+MODE=freeze_current \
+OUT_DIR=/home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/camera_params \
+bash /home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/set_realsense_rgb_manual_params.sh
+```
+
+然后检查：
+
+```bash
+rostopic echo --noarr -n 1 /odom
+rostopic echo --noarr -n 1 /imu/data
+rostopic echo --noarr -n 1 /camera/color/camera_info
+
+timeout 5s rostopic hz /imu/data || true
+timeout 5s rostopic hz /camera/color/image_raw || true
+timeout 5s rosrun tf tf_echo map base_link || true
+
+rosrun dynamic_reconfigure dynparam get /camera/rgb_camera | \
+  rg 'enable_auto_exposure|exposure:|gain:|enable_auto_white_balance|white_balance:'
+rostopic info /cmd_vel || true
+```
+
+必须看到 `1920×1080`、IMU frame 为 `imu_link`、自动曝光和自动白平衡均为 `false`，并且开始 trial 前没有旧 planner 在发布 `/cmd_vel`。若 `map -> base_link` 不存在或跳变，不能执行路径 replay。
+
+### 0.4 终端 B：先做只读检查
+
+该命令只检查路径、标定文件和最终 runner 环境，不启动 ROS 节点、不录 bag、不发布速度：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+
+VALIDATE_ONLY=true \
+G2S_ROW=01 \
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+```
+
+输出必须明确包含：
+
+```text
+PILOT_METHOD=Bsmooth
+PILOT_RECORD_RGB=false
+PILOT_RECORD_ONLINE_LIQUID=true
+FORBID_IMAGE_STREAMS=true
+PATH_FILE=/home/geist/fixed_paths/real/20260727_spmpc_development/H0/H0_G2.json
+PATH_EXPECTED_SHA256=578a4dd7663c2f49b4270c37755a08b2b0dc70735fb6b818da35b60a60f3990e
+```
+
+### 0.5 终端 B：执行一条 G2S
+
+执行前必须同时满足：车辆已回到旧 G2 起点并对齐、走廊清空、急停可用、液体静稳、0629 calibration 的 ROI/三标尺仍与当前相机和容器几何一致。确认后一次只执行一条：
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+
+DATE=20260731 \
+ARM_MOTION=YES \
+CONFIRM_RGB_GEOMETRY=YES \
+G2S_ROW=01 \
+G2S_ATTEMPT=01 \
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+```
+
+四条依次把 `G2S_ROW` 改为 `01`、`02`、`03`、`04`，每条的首次 attempt 都是 `G2S_ATTEMPT=01`。脚本行为固定为：
+
+```text
+检查相机手动参数与路径/calibration hash
+→ 自动启动在线 RGB（publish_debug=false）
+→ 等待 zero_locked + valid + status=OK
+→ 启动 recorder
+→ 启动 Bsmooth planner 和两路 observer
+→ 等待 processed-IMU READY
+→ replay H0_G2 并发布 /cmd_vel
+→ 90 s 录包边界到达后停止 planner/path、发送零速度
+→ 自动运行 image-free G2S postflight
+```
+
+它不会自动连续执行下一条。任何 `Ctrl+C`、planner/recorder 异常或超时都会进入清理并尝试发送零速度，但现场仍须保持急停就绪。
+
+### 0.6 每条结束后的验收
+
+以 row 01 为例：
+
+```bash
+export G2S_DIR=/home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/H0s_Bsmooth
+export G2S_STEM=DEV_G2S_H0s_C1_Bsmooth_u01_a01
+
+test -s "${G2S_DIR}/${G2S_STEM}.bag"
+test ! -e "${G2S_DIR}/${G2S_STEM}.bag.active"
+test -s "${G2S_DIR}/${G2S_STEM}_g2s_postflight.json"
+
+rg -n '"status"|"failures"|"recorded_image_topics"|"valid_motion_fraction"|"ready_fraction"' \
+  "${G2S_DIR}/${G2S_STEM}_g2s_postflight.json"
+```
+
+只有 postflight 顶层 `status` 为 `PASS`、`recorded_image_topics=[]`，且 failures 为空，才能回位、重新等液体静稳并执行下一 row。失败 bag 不删除、不覆盖，也不能直接把同一 row 重跑成 `a01`；先停止并分析 failure/retry 身份。
+
+### 0.7 四条 PASS 后进行唯一 source 分析
+
+```bash
+source /opt/ros/noetic/setup.bash
+source /home/geist/scout_ws/devel/setup.bash
+
+python3 /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/analysis/analyze_g2s_source_selection.py \
+  --bag-dir /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/H0s_Bsmooth \
+  --calibration /home/geist/slosh_bags/real/20260629_calib/red_3ruler.yaml \
+  --out-dir /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/analysis
+```
+
+读取：
+
+```bash
+python3 -m json.tool \
+  /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/analysis/G2S_SOURCE_SELECTION_REPORT.json | less
+```
+
+decision 只可能是 `odom` 或 `processed_imu`。这仍是 development source decision；生成报告后先停，不得直接接着运行 W2/W5 或 Stage I。
+
+### 0.8 当前禁止复制的命令
+
+- 不单独运行 `rosbag record /camera/color/image_raw`；
+- 不设置 `PILOT_RECORD_RGB=true`、`RECORD_CAMERA=true` 或 `RECORD_ALL_EXISTING_TOPICS=true`；
+- 不手动启动 `online_liquid_height.launch` 与 G2S wrapper 叠加；
+- 不执行本文件第 4.3 节的旧长模板；
+- 不执行第 4.4、4.5、6、7、8 节的 G2C/G3/formal 多终端命令；
+- 不把任何当前 bag 命名为 `S1_CORE`、`S2A_SELECTIVITY` 或 `S2B_TRANSFER`。
 
 ---
 
@@ -28,7 +244,7 @@
 | SmoothMatch | `B_smooth` + `v_ref` override | 候选可运行，值未冻结 |
 | Hamaguchi profile generator | `scout_profile_baselines` | development/sim 候选 |
 | FixedProfile current suite | `run_fixed_path_profile_baseline_suite.sh` + `slosh_experiment_sim.launch` | **不是实物 formal runner** |
-| recorder | `record_spmpc_full_rgb_bag.sh` | online topics 基本可用；FixedProfile condition contract 未验收 |
+| recorder | `record_spmpc_full_rgb_bag.sh`（历史文件名） | 默认在线标量、G2S 强制零图像流；FixedProfile/formal contract 未验收 |
 | freeze validator | `validate_spmpc_formal_freeze.py` | 仍硬编码旧 v1.0/E2/E3，拒绝 v2.0 |
 | manifest | 只有旧 template | 无 `freeze_manifest.yaml/FREEZE_ID` |
 | randomization | v2.0 文件不存在 | NO-GO |
@@ -36,9 +252,10 @@
 | online-input/zero-state tool | 未验收 | NO-GO |
 | longitudinal/lateral four-phase tool | 未冻结 | NO-GO |
 | K6 | 旧 32-unit 协议 | 与新 8/16/24 不兼容 |
-| processed-IMU pipeline | 已实现去重力、静止 bias、因果滤波、gyro 修正、杠臂补偿和独立 callback queue | **shadow only**，默认关闭，不能切换 solver 输入 |
-| odom/IMU 双 observer debug | `/spmpc/debug/slosh_observer_odom` 与 `/spmpc/debug/slosh_observer_imu` | 可 development replay/录包，尚未通过 RGB source-selection gate |
-| ROS1 整包门禁 | 当前开发机为 Ubuntu 24.04 + ROS2 Jazzy | message generation、adapter/node、acados ABI/link、launch/bag smoke 均未验证 |
+| processed-IMU pipeline | 已实现去重力、静止 bias、因果滤波、gyro 修正、杠臂补偿、显式 source selector、freshness 和 IMU→odom 锁存 fallback | development implementation PASS；输入源尚未由 4 条 G2S 冻结，formal NO-GO |
+| odom/IMU 双 observer debug | `/spmpc/debug/slosh_observer_odom`、`/spmpc/debug/slosh_observer_imu` 与 selection diagnostic | 可 development replay/录包，尚未通过在线 RGB source-selection gate |
+| 在线 RGB image-free 链 | `/liquid/measurement` + recorder/postflight/analyzer | message/launch/mock/validate-only PASS；真实相机吞吐与 4 条 G2S 未完成 |
+| ROS1 整包门禁 | 2026-07-31 已在本机 Ubuntu 20.04.6 + ROS1 Noetic 完成 codegen、构建、168 tests、ABI/link、launch 解析和隔离 bag replay | **development 技术门通过**；工作树非 clean、generated provenance 与 frozen report 尚未签署，formal 仍 NO-GO |
 
 因此即使 online 条件单独能运动，也不能把任何 run 标为 v2.0 formal。
 
@@ -55,7 +272,8 @@
 - 禁止把 IMU shadow 当成第六个 condition，或把同一 trial 重复计为 odom/IMU 两个样本；
 - 禁止 raw `/imu/data` 直接进入液体模型，禁止把当前 IMU 值复制到未来 MPC horizon；
 - 禁止在同一 formal release 或 Stage I 中途把液体当前状态输入从 odom 切成 IMU；
-- 禁止把 `IMU_SHADOW_ENABLE=true` 解释为 solver 已使用 IMU；当前代码无正式 source selector。
+- 禁止把 `IMU_SHADOW_ENABLE=true` 解释为 solver 已使用 IMU；working tree 虽有 selector，nominal source 仍须由 G2S 决策和 source-specific release 冻结。
+- 禁止 G2S/G3/formal bag 录入 raw/compressed RGB、depth 或 debug image；当前只允许冻结的在线 stamped scalar/quality。
 
 ---
 
@@ -63,12 +281,12 @@
 
 ### 2.1 基本环境
 
-开发机或现场机统一使用显式 workspace，不修改 `HOME`。当前用户路径如下；若 ROS1 实车机仍为 `/home/geist/scout_ws`，只改 `SCOUT_WS`，不要混用两个 workspace 的 build/devel：
+开发机或现场机统一使用显式 workspace，不修改 `HOME`。本机当前路径如下；若迁移主机，只改 `SCOUT_WS/SLOSH_BAG_ROOT`，不要混用两个 workspace 的 build/devel：
 
 ```bash
 set -euo pipefail
-export SCOUT_WS="${SCOUT_WS:-/home/zrj/scout_ws}"
-export SLOSH_BAG_ROOT="${SLOSH_BAG_ROOT:-/home/zrj/slosh_bags}"
+export SCOUT_WS="${SCOUT_WS:-/home/geist/scout_ws}"
+export SLOSH_BAG_ROOT="${SLOSH_BAG_ROOT:-/home/geist/slosh_bags/real}"
 test -r /opt/ros/noetic/setup.bash
 source /opt/ros/noetic/setup.bash
 test -r "${SCOUT_WS}/devel/setup.bash"
@@ -86,7 +304,7 @@ formal revision 必须等于 manifest 中的 revision，且工作树没有未归
 
 ### 2.2 ROS1 Noetic 构建门
 
-当前 Ubuntu 24.04 + ROS2 Jazzy 机器不能签署本门。必须在有 ROS1 Noetic、项目依赖和对应 acados 生成物的目标环境执行；`SCOUT_WS`、`ACADOS_SOURCE_DIR` 和证据目录必须显式给出，不能依赖操作者用户名：
+本机已经核实为 Ubuntu 20.04.6 + ROS1 Noetic，并在 revision `a2fe0c25cec12bb007612878ff69af17ee92b2a4` 上完成 development 技术门；证据位于 `/home/geist/slosh_bags/real/20260731_spmpc_preformal_gate/`。这不自动签署 formal：正式门仍要求 clean worktree、generated artifact provenance、冻结报告及 manifest 绑定。复跑时 `SCOUT_WS`、`ACADOS_SOURCE_DIR` 和新证据目录必须显式给出，不能依赖操作者用户名：
 
 ```bash
 set -euo pipefail
@@ -227,6 +445,34 @@ unset ROS_HOSTNAME ROS_NAMESPACE
 roscore -p 11321
 ```
 
+所有 freshness-sensitive IMU 回放固定使用 `--rate=1 --hz=1000`。2026-07-31 的实测表明，`rosbag play --clock` 默认 100 Hz 时，IMU header 会周期性领先当前 `/clock` 约 5--12 ms，超过当前 `max_future_skew_sec=0.005`，继而产生伪 `STALE_SAMPLE` 和 `SAMPLE_GAP`；4 倍速回放也不能签本门。
+
+`/use_sim_time=true` 且尚无 `/clock` 时，`rosbag record` 会等待而不创建 `.bag.active`。因此每一轮必须先用输入 bag 的起始时间启动临时 bootstrap clock；确认 recorder 的 `.bag.active` 已出现后停止 bootstrap publisher，再启动唯一的 `rosbag play --clock`。bootstrap 与 player 禁止同时存活：
+
+```bash
+: "${REPLAY_INPUT_BAG:?导出本轮输入 bag 的绝对路径}"
+read -r BOOTSTRAP_CLOCK_SECS BOOTSTRAP_CLOCK_NSECS < <(
+  python3 - "$REPLAY_INPUT_BAG" <<'PY'
+import math
+import sys
+import rosbag
+
+with rosbag.Bag(sys.argv[1], "r") as bag:
+    stamp = bag.get_start_time()
+secs = math.floor(stamp)
+nsecs = round((stamp - secs) * 1e9)
+if nsecs >= 1_000_000_000:
+    secs += 1
+    nsecs -= 1_000_000_000
+print(secs, nsecs)
+PY
+)
+rostopic pub -r 20 /clock rosgraph_msgs/Clock \
+  "clock: {secs: $BOOTSTRAP_CLOCK_SECS, nsecs: $BOOTSTRAP_CLOCK_NSECS}"
+```
+
+该终端保持运行；另一终端确认目标 `.bag.active` 后对它按 `Ctrl+C`，确认 bootstrap publisher 已退出，才允许执行下文 playback。READY 文本文件非空也不等于 READY：`rostopic echo` 在模拟时钟尚未开始时会写 warning；postflight 必须从完整 debug bag 验证实际存在 `input_status=READY && valid && bias_ready && filter_ready`。
+
 #### 2.3.1 0729 `planar_r03`：READY、bias 与时间异常门
 
 显式设置 `REPLAY_CAL_BAG` 为 `imu_mocap_planar_r03_153448.bag`。终端 B：
@@ -296,7 +542,8 @@ timeout 120s rostopic echo -n 1 \
 终端 D：
 
 ```bash
-rosbag play --clock "${REPLAY_CAL_BAG}" --topics /odom /imu/data /tf /tf_static \
+rosbag play -q --clock --rate=1 --hz=1000 "${REPLAY_CAL_BAG}" \
+  --topics /odom /imu/data /tf /tf_static \
   2>&1 | tee "${REPLAY_GATE_OUT}/planar_r03_playback.log"
 ```
 
@@ -382,7 +629,7 @@ rosbag record -O "${PAIR_OUTPUT_BAG}" \
 终端 D 对两轮使用完全相同的输入 topics：
 
 ```bash
-rosbag play --clock "${REPLAY_0705_BAG}" --topics \
+rosbag play -q --clock --rate=1 --hz=1000 "${REPLAY_0705_BAG}" --topics \
   /odom /imu/data /tf /tf_static /map /scout/global_path_fixed \
   2>&1 | tee "${REPLAY_GATE_OUT}/0705_shadow_${SHADOW_MODE}_playback.log"
 ```
@@ -422,7 +669,7 @@ REALSENSE_ENABLE_DEPTH=false \
 REALSENSE_ENABLE_INFRA=false \
 WAIT_FOR_ODOM=true \
 WAIT_FOR_LOCALIZATION_MAP=true \
-bash src/scout_apps/control/scout_local_planner/scripts/launch_real_sensors_stack.sh
+bash /home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/launch_real_sensors_stack.sh
 ```
 
 另开终端检查：
@@ -530,7 +777,27 @@ current 与 rotation-consistent candidate 必须先通过冻结的 rotation-rele
 
 若上述审计导致 predictor、积分器或 objective 改变，先建立新 development release。完成 G2A 后先进入 G2S 冻结输入源；此时不要提前补跑 W2/W5。输入源冻结后再执行 G2C，避免用 odom 选出的权重直接外推到相位/幅值不同的 IMU 输入。
 
-### 4.3 G2S：odom/processed-IMU/RGB 同 trial 输入源选择
+### 4.3 G2S：odom/processed-IMU/在线 RGB 标量同 trial 输入源选择
+
+> **2026-07-31 执行覆盖：** 本节后面的长命令模板仍保留旧 raw-RGB/development-registry 设计，只作历史合同参考，**当前不得直接执行**。G2S 的唯一现场入口已经改为下列 image-free wrapper；它自动启动冻结在线检测、强制 `publish_debug=false`，bag 只录 `/liquid/measurement`/质量/控制证据，并在闭包后验证所有 image message type 为 0：
+>
+> ```bash
+> VALIDATE_ONLY=true G2S_ROW=01 \
+> bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+>
+> ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G2S_ROW=01 \
+> bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+> ```
+>
+> `G2S_ROW=01..04` 每次只跑一条。旧模板中的 `PILOT_RECORD_RGB=true`、`/camera/color/image_raw` required topic 和 80 GiB raw-RGB 空间门均已被覆盖，不得复制到新命令。正式 development registry 以后要吸收新 wrapper 的 stamped-quality、相机手动参数和 algorithm/config hash，而不是重新启用视频录制。
+
+#### 4.3.1 当前语义
+
+G2S 使用 `Bsmooth` 产生与液体 observer 无关的同一段真实运动；同一 bag 同时记录 odom observer、processed-IMU observer 和冻结在线 RGB 标量。`Bsmooth` 不消费两路液体状态，因此这一步比较的是 observer 与同一物理参考的一致性，不是两套控制器。working tree 已有 selector/fallback implementation，但 nominal source 尚未由 4 条 G2S 决策冻结。
+
+#### 4.3.2 旧 development-registry 合同草案（不可执行）
+
+以下内容直到第 4.4 节仅保留尚未实现的完整 registry/retry/hash 合同，不能覆盖第 0 节的当前 wrapper，也不能从中复制 raw-RGB 或旧 runner 命令。
 
 G2S 是 G2C/G3 前的强制子门，不是论文第六条件。当前代码始终由 odom 向 solver 提供液体状态；`IMU_SHADOW_ENABLE=true` 只启动并行诊断。
 
@@ -3917,11 +4184,11 @@ printf 'pass=true\nactive_bag=%s\nsize_before=%s\nsize_after=%s\n' \
 
 这里的 `/slosh/reset` 只重置 terminal A 的 standalone monitor，不等价于 planner 内部 observer、delay predictor、governor、warm start 或 FixedProfile tracker 的 method-state reset。future unified runner 必须分别留下适用 backend 的 reset 成功证据；任一 reset 失败都不能继续等待或启动运动。
 
-按 Enter 前，future runner 还必须留下可审计的运动前 RGB 证据：recorder-ready/首个有效 RGB timestamp、满足 `T_RGB_PRE≥2 s` 的 elapsed gate，以及 bag 闭合后“首个有效 RGB → first effective motion”不少于 `T_RGB_PRE` 的复核 sidecar。当前 recorder/runner 没有这套自动合同，因此人工看到画面或等待约 2 s 不能解除 formal `NO-GO`。
+按 Enter 前，future runner 还必须留下可审计的运动前在线 RGB 证据：recorder-ready/首个 `zero_locked+valid` `/liquid/measurement.header.stamp`、满足 `T_RGB_PRE≥2 s` 的 elapsed gate，以及 bag 闭合后“首个有效源图 stamp → first effective motion”不少于 `T_RGB_PRE` 的复核 sidecar。人工看到画面或等待约 2 s 不能解除 formal `NO-GO`。
 
 随后确认：
 
-- recorder 已连续保存运动前 raw RGB；
+- recorder 已连续保存运动前 stamped online RGB scalar/quality，且 topic whitelist 不含任何图像流；
 - 起点/航向门合格；
 - condition/backend/config/profile hash 与随机表行一致；
 - `RAW_CMD_TOPIC/POST_GATE_TOPIC/PUBLISHED_CMD_TOPIC` 与当前 backend 一致、非空且 publisher 合法；
@@ -3929,7 +4196,7 @@ printf 'pass=true\nactive_bag=%s\nsize_before=%s\nsize_after=%s\n' \
 - `/cmd_vel` publisher 唯一；
 - 安全员、急停和路径走廊就位。
 
-回到终端 B 按 Enter。运动前 RGB 覆盖只证明数据存在；冻结且对 condition label 盲化的 visual-start QC 在采集后判定最终视觉资格。只有 QC 使用的全部帧都早于 first effective motion、且失败原因与 assignment 无关时，才可登记 acquisition failure 并按 verifier 授权的 `r02+`/split-block 规则处理。运动后的遮挡、clipping、振动或相机失效不得追溯改写成 visual-start failure。
+回到终端 B 按 Enter。运动前在线 RGB 覆盖只证明数据存在；冻结 visual-start/motion/tail QC 必须由 stamped-quality 字段重算。只有 visual-start QC 使用的全部 source stamps 都早于 first effective motion、且失败原因与 assignment 无关时，才可登记 acquisition failure 并按 verifier 授权的 `r02+`/split-block 规则处理。运动后的遮挡、clipping、振动或相机失效不得追溯改写成 visual-start failure；协议不保存视频，因此也不得事后换检测算法恢复。
 
 ### 8.2 到达或失败后的顺序
 
@@ -3960,7 +4227,7 @@ rostopic pub -1 /cmd_vel geometry_msgs/Twist \
 - protocol/`FREEZE_ID`、condition/backend、stage/block/position；
 - path/config/profile hashes；
 - `/cmd_vel`、`/odom`、raw `/imu/data`、`/tf`、`/tf_static`、`/scout/global_path_fixed`；
-- raw RGB 与 camera_info；
+- `/liquid/measurement` stamped scalar/quality、`/liquid/height*`、camera_info 和视觉配置/hash sidecar；bag 内 image message type 必须为 0；
 - method-native raw、post-gate、published command；
 - arrival/success/failure/fallback/intervention；
 - monitor reset 与 `T_SETTLE` 证据。
@@ -4083,3 +4350,5 @@ ROS1 Noetic build/test + publish_cmd_vel=false replay
 → 生成只读 FREEZE_ID
 → 才允许第一条 S1_CORE formal trial
 ```
+
+</details>

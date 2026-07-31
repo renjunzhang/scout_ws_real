@@ -3,7 +3,13 @@
   <arg name="experiment_mode" default="fixed_path" doc="fixed_path|point_to_point"/>
   <arg name="reference_path_topic" default="/scout/global_path_fixed"/>
   <arg name="imu_topic" default="/imu/data"/>
-  <arg name="imu_shadow_enable" default="false" doc="processed-IMU liquid observer shadow only; never changes SolverInput"/>
+  <arg name="imu_shadow_enable" default="false" doc="enable processed-IMU pipeline/parallel observer; forced true when observer_source=processed_imu"/>
+  <arg name="observer_source" default="odom" doc="odom|processed_imu; explicit nominal liquid-state source"/>
+  <arg name="observer_fallback_policy" default="odom" doc="odom|fail_closed; only applies to nominal processed_imu after first READY"/>
+  <arg name="observer_latch_fallback" default="true"/>
+  <arg name="observer_max_imu_state_age_sec" default="0.10"/>
+  <arg name="observer_max_odom_state_age_sec" default="0.50"/>
+  <arg name="observer_max_future_skew_sec" default="0.005"/>
   <arg name="costmap_topic" default="/map"/>
   <arg name="cmd_vel_topic" default="/cmd_vel"/>
   <arg name="publish_cmd_vel" default="true"/>
@@ -41,6 +47,12 @@
     <param name="topics/reference_path" value="$(arg reference_path_topic)"/>
     <param name="topics/imu" value="$(arg imu_topic)"/>
     <param name="imu_shadow/enable" value="$(arg imu_shadow_enable)"/>
+    <param name="slosh_observer/source" value="$(arg observer_source)"/>
+    <param name="slosh_observer/fallback_policy" value="$(arg observer_fallback_policy)"/>
+    <param name="slosh_observer/latch_fallback" value="$(arg observer_latch_fallback)"/>
+    <param name="slosh_observer/max_imu_state_age_sec" value="$(arg observer_max_imu_state_age_sec)"/>
+    <param name="slosh_observer/max_odom_state_age_sec" value="$(arg observer_max_odom_state_age_sec)"/>
+    <param name="slosh_observer/max_future_skew_sec" value="$(arg observer_max_future_skew_sec)"/>
     <param name="topics/costmap" value="$(arg costmap_topic)"/>
     <param name="topics/cmd_vel" value="$(arg cmd_vel_topic)"/>
     <param name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>

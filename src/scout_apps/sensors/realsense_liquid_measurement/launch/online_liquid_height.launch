@@ -3,11 +3,13 @@
        前提: 当天已标定 ROI+三标尺; HSV 在本 launch 中显式记录/可覆盖。 -->
   <arg name="calibration" doc="三标尺标定 yaml(与离线同一份, 当天标一次)"/>
   <arg name="image_topic" default="/camera/color/image_raw"/>
+  <arg name="measurement_topic" default="/liquid/measurement"/>
   <arg name="height_topic" default="/liquid/height"/>
   <arg name="height_lcr_topic" default="/liquid/height_lcr"/>
   <arg name="height_median_topic" default="/liquid/height_median"/>
   <arg name="debug_image_topic" default="/liquid/debug_image"/>
   <arg name="process_every" default="1" doc="每 N 帧处理一次(降 CPU)"/>
+  <arg name="zero_frames" default="30" doc="零点锁定所需的干净有效帧数"/>
   <arg name="publish_debug" default="false" doc="是否发布 debug_image_topic overlay"/>
   <arg name="height_bias_mm" default="0.0" doc="手动偏置(mm): 与当前静止显示值同号；静止显示+3mm则设3.0，显示-3mm则设-3.0"/>
   <arg name="hue1_low" default="0"/>
@@ -21,11 +23,13 @@
         name="online_liquid_height" output="screen">
     <param name="calibration" value="$(arg calibration)"/>
     <param name="image_topic" value="$(arg image_topic)"/>
+    <param name="measurement_topic" value="$(arg measurement_topic)"/>
     <param name="height_topic" value="$(arg height_topic)"/>
     <param name="height_lcr_topic" value="$(arg height_lcr_topic)"/>
     <param name="height_median_topic" value="$(arg height_median_topic)"/>
     <param name="debug_image_topic" value="$(arg debug_image_topic)"/>
     <param name="process_every" value="$(arg process_every)"/>
+    <param name="zero_frames" value="$(arg zero_frames)"/>
     <param name="publish_debug" value="$(arg publish_debug)"/>
     <param name="height_bias_mm" value="$(arg height_bias_mm)"/>
     <param name="hue1_low" value="$(arg hue1_low)"/>

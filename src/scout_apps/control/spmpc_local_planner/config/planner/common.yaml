@@ -21,8 +21,22 @@ frames:
   use_tf_pose: true
   tf_timeout_sec: 0.05
 
-# Processed IMU is a measurement-only liquid observer shadow.  It never feeds
-# SolverInput, the governor, delay prediction, or /cmd_vel in phase 1.
+# The default release remains odom. processed_imu can only enter the liquid
+# state through an explicit source setting plus READY/freshness admission.
+# A runtime IMU failure falls back to odom and latches for the rest of the node
+# lifetime by default; the typed selection diagnostic makes that trial visible.
+slosh_observer:
+  source: odom                 # odom | processed_imu
+  fallback_policy: odom       # odom | fail_closed
+  latch_fallback: true
+  max_imu_state_age_sec: 0.10
+  max_odom_state_age_sec: 0.50
+  max_future_skew_sec: 0.005
+
+# Processed-IMU pipeline and optional parallel observer. The legacy
+# imu_shadow/enable name is retained for compatibility; when source is
+# processed_imu the node forces this pipeline on and treats configuration
+# failure as fatal.
 # The gyro-z affine correction and approximate +15 ms sensor delay below come
 # from the 20260729 mocap/IMU run.  The filter cutoffs/phase delays are software
 # design values; accel scale and the full six-axis extrinsic remain uncalibrated.

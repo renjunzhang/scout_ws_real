@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Full rosbag recorder for real SPMPC smoke / RGB offline analysis.
+# Full rosbag recorder for real SPMPC trials. The current safe default records
+# stamped online liquid measurements, not RGB/depth image streams.
 # Safety: this script only records topics and metadata. It never sends velocity commands,
 # never sends goals, never starts/stops planners, and never changes rosparams.
 
@@ -17,13 +18,18 @@ NAME="${NAME:-spmpc_full_${RUN_LABEL}_${VARIANT}_${STAMP}}"
 # diagnostic runs when disk space is known to be sufficient.
 RECORD_ALL_EXISTING_TOPICS="${RECORD_ALL_EXISTING_TOPICS:-false}"
 # RECORD_RGB is the preferred switch. RECORD_CAMERA is kept as a backward-compatible alias.
-RECORD_RGB="${RECORD_RGB:-${RECORD_CAMERA:-true}}"
+RECORD_RGB="${RECORD_RGB:-${RECORD_CAMERA:-false}}"
 RECORD_CAMERA="${RECORD_CAMERA:-${RECORD_RGB}}"
+RECORD_CAMERA_INFO="${RECORD_CAMERA_INFO:-true}"
 RECORD_CAMERA_COMPRESSED="${RECORD_CAMERA_COMPRESSED:-false}"
 RECORD_DEPTH="${RECORD_DEPTH:-false}"
 RECORD_SCAN="${RECORD_SCAN:-true}"
 RECORD_STANDALONE_SLOSH="${RECORD_STANDALONE_SLOSH:-true}"
-RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-false}"
+RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-true}"
+RECORD_ONLINE_LIQUID_DEBUG_IMAGES="${RECORD_ONLINE_LIQUID_DEBUG_IMAGES:-false}"
+# When true, both the whitelist and the completed bag are checked so no
+# sensor_msgs/Image or sensor_msgs/CompressedImage can slip into the archive.
+FORBID_IMAGE_STREAMS="${FORBID_IMAGE_STREAMS:-false}"
 RECORD_MOCAP="${RECORD_MOCAP:-false}"
 RECORD_ROSOUT="${RECORD_ROSOUT:-true}"
 RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO:-true}"
@@ -34,6 +40,18 @@ ROSBAG_BUFFER_SIZE_MB="${ROSBAG_BUFFER_SIZE_MB:-4096}"
 LIQUID_EXPORT_AFTER_RECORD="${LIQUID_EXPORT_AFTER_RECORD:-false}"
 LIQUID_EXPORT_SOURCE="${LIQUID_EXPORT_SOURCE:-rgb}"
 LIQUID_CALIBRATION="${LIQUID_CALIBRATION:-}"
+RGB_CALIBRATION_EXPECTED_SHA256="${RGB_CALIBRATION_EXPECTED_SHA256:-}"
+RGB_CALIBRATION_ACTUAL_SHA256="${RGB_CALIBRATION_ACTUAL_SHA256:-}"
+RGB_EXPECTED_WIDTH="${RGB_EXPECTED_WIDTH:-}"
+RGB_EXPECTED_HEIGHT="${RGB_EXPECTED_HEIGHT:-}"
+RGB_EXPECTED_FPS="${RGB_EXPECTED_FPS:-}"
+ONLINE_LIQUID_MEASUREMENT_TOPIC="${ONLINE_LIQUID_MEASUREMENT_TOPIC:-/liquid/measurement}"
+ONLINE_LIQUID_PROTOCOL="${ONLINE_LIQUID_PROTOCOL:-}"
+ONLINE_LIQUID_CALIBRATION_SHA256="${ONLINE_LIQUID_CALIBRATION_SHA256:-}"
+ONLINE_LIQUID_DETECTOR_SHA256="${ONLINE_LIQUID_DETECTOR_SHA256:-}"
+ONLINE_LIQUID_NODE_SHA256="${ONLINE_LIQUID_NODE_SHA256:-}"
+ONLINE_LIQUID_MSG_SHA256="${ONLINE_LIQUID_MSG_SHA256:-}"
+ONLINE_LIQUID_CONFIG_SHA256="${ONLINE_LIQUID_CONFIG_SHA256:-}"
 LIQUID_EXPORT_OUT_DIR="${LIQUID_EXPORT_OUT_DIR:-${OUT_DIR}/${NAME}_liquid_variation}"
 LIQUID_IMAGE_TOPIC="${LIQUID_IMAGE_TOPIC:-/camera/color/image_raw}"
 LIQUID_ZERO_CORRECTION_FRAMES="${LIQUID_ZERO_CORRECTION_FRAMES:-30}"
@@ -68,6 +86,12 @@ DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC:-}"
 DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC:-}"
 IMU_SHADOW_ENABLE="${IMU_SHADOW_ENABLE:-}"
 IMU_TOPIC="${IMU_TOPIC:-/imu/data}"
+CURRENT_OBSERVER_SOURCE="${CURRENT_OBSERVER_SOURCE:-}"
+OBSERVER_FALLBACK_POLICY="${OBSERVER_FALLBACK_POLICY:-}"
+OBSERVER_LATCH_FALLBACK="${OBSERVER_LATCH_FALLBACK:-}"
+OBSERVER_MAX_IMU_STATE_AGE_SEC="${OBSERVER_MAX_IMU_STATE_AGE_SEC:-}"
+OBSERVER_MAX_ODOM_STATE_AGE_SEC="${OBSERVER_MAX_ODOM_STATE_AGE_SEC:-}"
+OBSERVER_MAX_FUTURE_SKEW_SEC="${OBSERVER_MAX_FUTURE_SKEW_SEC:-}"
 CONTROL_FREQUENCY="${CONTROL_FREQUENCY:-}"
 MAP_FILE="${MAP_FILE:-}"
 GOAL_X="${GOAL_X:-}"
@@ -114,6 +138,23 @@ truthy() {
     *) return 1 ;;
   esac
 }
+
+if truthy "${FORBID_IMAGE_STREAMS}"; then
+  truthy "${RECORD_ALL_EXISTING_TOPICS}" && {
+    echo "[record_spmpc_full_rgb_bag] ERROR: FORBID_IMAGE_STREAMS=true is incompatible with RECORD_ALL_EXISTING_TOPICS=true" >&2
+    exit 3
+  }
+  for image_switch in RECORD_CAMERA RECORD_CAMERA_COMPRESSED RECORD_DEPTH RECORD_ONLINE_LIQUID_DEBUG_IMAGES; do
+    if truthy "${!image_switch}"; then
+      echo "[record_spmpc_full_rgb_bag] ERROR: FORBID_IMAGE_STREAMS=true but ${image_switch}=true" >&2
+      exit 3
+    fi
+  done
+  if truthy "${LIQUID_EXPORT_AFTER_RECORD}" && [[ "${LIQUID_EXPORT_SOURCE}" != "online" ]]; then
+    echo "[record_spmpc_full_rgb_bag] ERROR: image-free bags can only export LIQUID_EXPORT_SOURCE=online" >&2
+    exit 3
+  fi
+fi
 
 write_selected_topic_snapshot() {
   local existing_count=0
@@ -225,6 +266,7 @@ record_topics=(
   /spmpc/debug/slosh_state
   /spmpc/debug/slosh_observer_odom
   /spmpc/debug/slosh_observer_imu
+  /spmpc/debug/slosh_observer_selection
   /spmpc/debug/slosh_cost_monitor
   /spmpc/debug/slosh_hard_constraint
   /spmpc/debug/slosh_hard_constraint_effective
@@ -384,9 +426,12 @@ fi
 if truthy "${RECORD_CAMERA}"; then
   record_topics+=(
     /camera/color/image_raw
-    /camera/color/camera_info
     /camera/color/metadata
   )
+fi
+
+if truthy "${RECORD_CAMERA_INFO}"; then
+  record_topics+=(/camera/color/camera_info)
 fi
 
 if truthy "${RECORD_CAMERA_COMPRESSED}"; then
@@ -417,10 +462,10 @@ fi
 
 if truthy "${RECORD_ONLINE_LIQUID}"; then
   record_topics+=(
+    "${ONLINE_LIQUID_MEASUREMENT_TOPIC}"
     /liquid/height
     /liquid/height_lcr
     /liquid/height_median
-    /liquid/debug_image
     /liquid_measurement/height_left_px
     /liquid_measurement/height_right_px
     /liquid_measurement/height_peak_px
@@ -432,8 +477,11 @@ if truthy "${RECORD_ONLINE_LIQUID}"; then
     /liquid_measurement/height_peak_rel_mm
     /liquid_measurement/meniscus_valid
     /liquid_measurement/meniscus_confidence
-    /liquid_measurement/debug_image
   )
+fi
+
+if truthy "${RECORD_ONLINE_LIQUID_DEBUG_IMAGES}"; then
+  record_topics+=(/liquid/debug_image /liquid_measurement/debug_image)
 fi
 
 if truthy "${RECORD_MOCAP}"; then
@@ -476,11 +524,14 @@ write_topic_info_snapshot
   echo "record_all_existing_topics=${RECORD_ALL_EXISTING_TOPICS}"
   echo "record_rgb=${RECORD_RGB}"
   echo "record_camera=${RECORD_CAMERA}"
+  echo "record_camera_info=${RECORD_CAMERA_INFO}"
   echo "record_camera_compressed=${RECORD_CAMERA_COMPRESSED}"
   echo "record_depth=${RECORD_DEPTH}"
   echo "record_scan=${RECORD_SCAN}"
   echo "record_standalone_slosh=${RECORD_STANDALONE_SLOSH}"
   echo "record_online_liquid=${RECORD_ONLINE_LIQUID}"
+  echo "record_online_liquid_debug_images=${RECORD_ONLINE_LIQUID_DEBUG_IMAGES}"
+  echo "forbid_image_streams=${FORBID_IMAGE_STREAMS}"
   echo "rosbag_buffer_size_mb=${ROSBAG_BUFFER_SIZE_MB}"
   echo "record_mocap=${RECORD_MOCAP}"
   echo "record_rosout=${RECORD_ROSOUT}"
@@ -488,6 +539,18 @@ write_topic_info_snapshot
   echo "liquid_export_after_record=${LIQUID_EXPORT_AFTER_RECORD}"
   echo "liquid_export_source=${LIQUID_EXPORT_SOURCE}"
   echo "liquid_calibration=${LIQUID_CALIBRATION}"
+  echo "rgb_calibration_expected_sha256=${RGB_CALIBRATION_EXPECTED_SHA256}"
+  echo "rgb_calibration_actual_sha256=${RGB_CALIBRATION_ACTUAL_SHA256}"
+  echo "rgb_expected_width=${RGB_EXPECTED_WIDTH}"
+  echo "rgb_expected_height=${RGB_EXPECTED_HEIGHT}"
+  echo "rgb_expected_fps=${RGB_EXPECTED_FPS}"
+  echo "online_liquid_measurement_topic=${ONLINE_LIQUID_MEASUREMENT_TOPIC}"
+  echo "online_liquid_protocol=${ONLINE_LIQUID_PROTOCOL}"
+  echo "online_liquid_calibration_sha256=${ONLINE_LIQUID_CALIBRATION_SHA256}"
+  echo "online_liquid_detector_sha256=${ONLINE_LIQUID_DETECTOR_SHA256}"
+  echo "online_liquid_node_sha256=${ONLINE_LIQUID_NODE_SHA256}"
+  echo "online_liquid_msg_sha256=${ONLINE_LIQUID_MSG_SHA256}"
+  echo "online_liquid_config_sha256=${ONLINE_LIQUID_CONFIG_SHA256}"
   echo "liquid_export_out_dir=${LIQUID_EXPORT_OUT_DIR}"
   echo "liquid_image_topic=${LIQUID_IMAGE_TOPIC}"
   echo "liquid_zero_correction_frames=${LIQUID_ZERO_CORRECTION_FRAMES}"
@@ -514,6 +577,12 @@ write_topic_info_snapshot
   echo "delay_phase_angular_delay_sec=${DELAY_PHASE_ANGULAR_DELAY_SEC}"
   echo "imu_shadow_enable=${IMU_SHADOW_ENABLE}"
   echo "imu_topic=${IMU_TOPIC}"
+  echo "current_observer_source=${CURRENT_OBSERVER_SOURCE}"
+  echo "observer_fallback_policy=${OBSERVER_FALLBACK_POLICY}"
+  echo "observer_latch_fallback=${OBSERVER_LATCH_FALLBACK}"
+  echo "observer_max_imu_state_age_sec=${OBSERVER_MAX_IMU_STATE_AGE_SEC}"
+  echo "observer_max_odom_state_age_sec=${OBSERVER_MAX_ODOM_STATE_AGE_SEC}"
+  echo "observer_max_future_skew_sec=${OBSERVER_MAX_FUTURE_SKEW_SEC}"
   echo "control_frequency=${CONTROL_FREQUENCY}"
   echo "map_file=${MAP_FILE}"
   echo "goal_x=${GOAL_X}"
@@ -537,7 +606,7 @@ write_topic_info_snapshot
 
 cat <<EOF
 ============================================
-  SPMPC full RGB rosbag recorder
+  SPMPC full-state rosbag recorder
 ============================================
   output       = ${BAG_PATH}
   variant      = ${VARIANT}
@@ -547,9 +616,12 @@ cat <<EOF
   topics       = ${#record_topics[@]} whitelist topics
   at start     = ${SELECTED_EXISTING_COUNT} selected topics exist, ${SELECTED_MISSING_COUNT} missing/not yet advertised
   camera RGB   = ${RECORD_CAMERA}
+  camera info  = ${RECORD_CAMERA_INFO}
   scan_front   = ${RECORD_SCAN}
   depth        = ${RECORD_DEPTH}
   liquid proxy = ${RECORD_ONLINE_LIQUID}
+  liquid images= ${RECORD_ONLINE_LIQUID_DEBUG_IMAGES}
+  forbid images= ${FORBID_IMAGE_STREAMS}
   liquid export= ${LIQUID_EXPORT_AFTER_RECORD} (${LIQUID_EXPORT_SOURCE})
   rosbag buffer= ${ROSBAG_BUFFER_SIZE_MB} MB
   mocap        = ${RECORD_MOCAP}
@@ -606,6 +678,26 @@ with open(missing_path, "w", encoding="utf-8") as f:
         if topic not in recorded_set:
             f.write(topic + "\n")
 PY
+  if truthy "${FORBID_IMAGE_STREAMS}"; then
+    python3 - "${BAG_PATH}" <<'PY'
+import sys
+import rosbag
+
+bag_path = sys.argv[1]
+with rosbag.Bag(bag_path, "r") as bag:
+    topics = bag.get_type_and_topic_info().topics
+image_topics = sorted(
+    topic for topic, info in topics.items()
+    if info.msg_type in {"sensor_msgs/Image", "sensor_msgs/CompressedImage"}
+)
+if image_topics:
+    raise SystemExit(
+        "FORBID_IMAGE_STREAMS violation; recorded image topics: "
+        + ", ".join(image_topics)
+    )
+print("[record_spmpc_full_rgb_bag] image-stream audit: PASS (0 image topics)")
+PY
+  fi
   echo "[record_spmpc_full_rgb_bag] metadata: ${BAG_INFO_PATH}"
   echo "[record_spmpc_full_rgb_bag] recorded topics: ${RECORDED_TOPIC_PATH}"
   echo "[record_spmpc_full_rgb_bag] selected-but-not-recorded topics: ${NOT_RECORDED_TOPIC_PATH}"

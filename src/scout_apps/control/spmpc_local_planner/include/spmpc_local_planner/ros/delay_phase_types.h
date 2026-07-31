@@ -62,6 +62,7 @@ struct CommandInterventionDebug {
     bool zero_due_to_waiting_for_odom = false;
     bool zero_due_to_waiting_for_reference = false;
     bool zero_due_to_waiting_for_tf = false;
+    bool zero_due_to_waiting_for_slosh_observer = false;
     bool zero_due_to_terminal_spin_fail = false;
     bool zero_due_to_tracking_safety = false;
     bool linear_limited = false;

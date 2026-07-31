@@ -174,6 +174,7 @@ STAMP="${STAMP:-$(date +%H%M%S)}"
 PILOT_MODE="${PILOT_MODE:-false}"
 PILOT_METHOD="${PILOT_METHOD:-}"
 PILOT_RECORD_RGB="${PILOT_RECORD_RGB:-false}"
+PILOT_RECORD_ONLINE_LIQUID="${PILOT_RECORD_ONLINE_LIQUID:-false}"
 ALLOW_PILOT_PATH_OVERWRITE="${ALLOW_PILOT_PATH_OVERWRITE:-false}"
 
 if [[ -z "${PATH_SOURCE_MODE:-}" ]]; then
@@ -305,6 +306,26 @@ W_SLOSH="${W_SLOSH:--1.0}"
 SLOSH_HEIGHT_MAX="${SLOSH_HEIGHT_MAX:--1.0}"
 IMU_SHADOW_ENABLE="${IMU_SHADOW_ENABLE:-false}"
 IMU_TOPIC="${IMU_TOPIC:-/imu/data}"
+CURRENT_OBSERVER_SOURCE="${CURRENT_OBSERVER_SOURCE:-${OBSERVER_SOURCE:-odom}}"
+OBSERVER_FALLBACK_POLICY="${OBSERVER_FALLBACK_POLICY:-odom}"
+OBSERVER_LATCH_FALLBACK="${OBSERVER_LATCH_FALLBACK:-true}"
+OBSERVER_MAX_IMU_STATE_AGE_SEC="${OBSERVER_MAX_IMU_STATE_AGE_SEC:-0.10}"
+OBSERVER_MAX_ODOM_STATE_AGE_SEC="${OBSERVER_MAX_ODOM_STATE_AGE_SEC:-0.50}"
+OBSERVER_MAX_FUTURE_SKEW_SEC="${OBSERVER_MAX_FUTURE_SKEW_SEC:-0.005}"
+case "${CURRENT_OBSERVER_SOURCE}" in
+  odom) ;;
+  processed_imu|imu) CURRENT_OBSERVER_SOURCE=processed_imu ;;
+  *) fail "CURRENT_OBSERVER_SOURCE must be odom|processed_imu, got '${CURRENT_OBSERVER_SOURCE}'" ;;
+esac
+case "${OBSERVER_FALLBACK_POLICY}" in
+  odom|fail_closed) ;;
+  *) fail "OBSERVER_FALLBACK_POLICY must be odom|fail_closed, got '${OBSERVER_FALLBACK_POLICY}'" ;;
+esac
+if [[ "${CURRENT_OBSERVER_SOURCE}" == "processed_imu" ]]; then
+  # A nominal IMU source cannot be launched without its input pipeline and
+  # startup READY gate, regardless of a stale shell export.
+  IMU_SHADOW_ENABLE=true
+fi
 if truthy "${IMU_SHADOW_ENABLE}"; then
   # roslaunch XML bool arguments are most reliable as literal true/false.
   IMU_SHADOW_ENABLE=true
@@ -312,6 +333,7 @@ else
   IMU_SHADOW_ENABLE=false
 fi
 IMU_SHADOW_READY_TOPIC="${IMU_SHADOW_READY_TOPIC:-/spmpc/debug/slosh_observer_imu}"
+OBSERVER_SELECTION_TOPIC="${OBSERVER_SELECTION_TOPIC:-/spmpc/debug/slosh_observer_selection}"
 IMU_SHADOW_READY_TIMEOUT_SEC="${IMU_SHADOW_READY_TIMEOUT_SEC:-20}"
 if truthy "${PILOT_MODE}"; then
   DELAY_PHASE_MODE="${DELAY_PHASE_MODE:-fixed_closed_loop}"
@@ -330,23 +352,40 @@ SHARED_ANGULAR_RATE_MAX="${SHARED_ANGULAR_RATE_MAX:-1.2}"
 SHARED_ANGULAR_ACCEL_MAX="${SHARED_ANGULAR_ACCEL_MAX:-1.2}"
 
 if truthy "${PILOT_MODE}"; then
-  # Pilot runs are model-side parameter screening by default. RGB can only be
-  # re-enabled through the explicit pilot override to avoid stale shell exports.
+  # Pilot image and online-scalar policies are explicit so stale shell exports
+  # cannot silently change the evidence stream.
   RECORD_RGB="${PILOT_RECORD_RGB}"
   RECORD_CAMERA="${PILOT_RECORD_RGB}"
+  RECORD_CAMERA_INFO="${RECORD_CAMERA_INFO:-true}"
   RECORD_CAMERA_COMPRESSED=false
   RECORD_DEPTH=false
-  RECORD_ONLINE_LIQUID=false
+  RECORD_ONLINE_LIQUID="${PILOT_RECORD_ONLINE_LIQUID}"
 else
   RECORD_RGB="${RECORD_RGB:-false}"
   RECORD_CAMERA="${RECORD_CAMERA:-${RECORD_RGB}}"
+  RECORD_CAMERA_INFO="${RECORD_CAMERA_INFO:-true}"
   RECORD_CAMERA_COMPRESSED="${RECORD_CAMERA_COMPRESSED:-false}"
   RECORD_DEPTH="${RECORD_DEPTH:-false}"
-  RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-false}"
+  RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID:-true}"
 fi
+RECORD_ONLINE_LIQUID_DEBUG_IMAGES="${RECORD_ONLINE_LIQUID_DEBUG_IMAGES:-false}"
+FORBID_IMAGE_STREAMS="${FORBID_IMAGE_STREAMS:-false}"
 RECORD_SCAN="${RECORD_SCAN:-true}"
 RECORD_STANDALONE_SLOSH="${RECORD_STANDALONE_SLOSH:-true}"
 RECORD_ALL_EXISTING_TOPICS="${RECORD_ALL_EXISTING_TOPICS:-false}"
+RGB_CALIBRATION_FILE="${RGB_CALIBRATION_FILE:-${LIQUID_CALIBRATION:-}}"
+RGB_CALIBRATION_EXPECTED_SHA256="${RGB_CALIBRATION_EXPECTED_SHA256:-}"
+RGB_CALIBRATION_ACTUAL_SHA256=""
+RGB_EXPECTED_WIDTH="${RGB_EXPECTED_WIDTH:-}"
+RGB_EXPECTED_HEIGHT="${RGB_EXPECTED_HEIGHT:-}"
+RGB_EXPECTED_FPS="${RGB_EXPECTED_FPS:-}"
+ONLINE_LIQUID_MEASUREMENT_TOPIC="${ONLINE_LIQUID_MEASUREMENT_TOPIC:-/liquid/measurement}"
+ONLINE_LIQUID_PROTOCOL="${ONLINE_LIQUID_PROTOCOL:-}"
+ONLINE_LIQUID_CALIBRATION_SHA256="${ONLINE_LIQUID_CALIBRATION_SHA256:-}"
+ONLINE_LIQUID_DETECTOR_SHA256="${ONLINE_LIQUID_DETECTOR_SHA256:-}"
+ONLINE_LIQUID_NODE_SHA256="${ONLINE_LIQUID_NODE_SHA256:-}"
+ONLINE_LIQUID_MSG_SHA256="${ONLINE_LIQUID_MSG_SHA256:-}"
+ONLINE_LIQUID_CONFIG_SHA256="${ONLINE_LIQUID_CONFIG_SHA256:-}"
 PATH_GENERATOR_STARTUP_SEC="${PATH_GENERATOR_STARTUP_SEC:-2}"
 if truthy "${PILOT_MODE}"; then
   RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO:-false}"
@@ -391,6 +430,16 @@ fi
 if truthy "${PILOT_MODE}" && [[ "${PATH_SOURCE_MODE}" == "generate" && -e "${PATH_FILE}" ]] && ! truthy "${ALLOW_PILOT_PATH_OVERWRITE}"; then
   fail "Pilot path already exists and will not be overwritten: ${PATH_FILE}. Use replay, choose a new PATH_FILE, or explicitly set ALLOW_PILOT_PATH_OVERWRITE=true."
 fi
+if [[ -n "${RGB_CALIBRATION_FILE}" ]]; then
+  [[ -s "${RGB_CALIBRATION_FILE}" ]] || fail "RGB calibration is missing or empty: ${RGB_CALIBRATION_FILE}"
+  RGB_CALIBRATION_ACTUAL_SHA256="$(sha256sum "${RGB_CALIBRATION_FILE}" | awk '{print $1}')"
+  if [[ -n "${RGB_CALIBRATION_EXPECTED_SHA256}" ]]; then
+    [[ "${RGB_CALIBRATION_EXPECTED_SHA256}" =~ ^[0-9a-fA-F]{64}$ ]] || \
+      fail "RGB_CALIBRATION_EXPECTED_SHA256 must be a 64-hex digest"
+    [[ "${RGB_CALIBRATION_ACTUAL_SHA256,,}" == "${RGB_CALIBRATION_EXPECTED_SHA256,,}" ]] || \
+      fail "RGB calibration SHA-256 mismatch: expected=${RGB_CALIBRATION_EXPECTED_SHA256}, actual=${RGB_CALIBRATION_ACTUAL_SHA256}"
+  fi
+fi
 case "${DELAY_PHASE_MODE}" in
   off|monitor|shadow|fixed_closed_loop) ;;
   *) fail "DELAY_PHASE_MODE must be off|monitor|shadow|fixed_closed_loop, got '${DELAY_PHASE_MODE}'" ;;
@@ -413,6 +462,9 @@ for kv in \
   "V_REF=${V_REF}" \
   "W_SLOSH=${W_SLOSH}" \
   "SLOSH_HEIGHT_MAX=${SLOSH_HEIGHT_MAX}" \
+  "OBSERVER_MAX_IMU_STATE_AGE_SEC=${OBSERVER_MAX_IMU_STATE_AGE_SEC}" \
+  "OBSERVER_MAX_ODOM_STATE_AGE_SEC=${OBSERVER_MAX_ODOM_STATE_AGE_SEC}" \
+  "OBSERVER_MAX_FUTURE_SKEW_SEC=${OBSERVER_MAX_FUTURE_SKEW_SEC}" \
   "DELAY_PHASE_LINEAR_DELAY_SEC=${DELAY_PHASE_LINEAR_DELAY_SEC}" \
   "DELAY_PHASE_ANGULAR_DELAY_SEC=${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
   "ALPHA_MAX=${ALPHA_MAX}" \
@@ -424,6 +476,11 @@ for kv in \
   "PLANNER_STARTUP_SEC=${PLANNER_STARTUP_SEC}"; do
   require_number "${kv%%=*}" "${kv#*=}"
 done
+if truthy "${OBSERVER_LATCH_FALLBACK}"; then
+  OBSERVER_LATCH_FALLBACK=true
+else
+  OBSERVER_LATCH_FALLBACK=false
+fi
 if truthy "${IMU_SHADOW_ENABLE}"; then
   require_number "IMU_SHADOW_READY_TIMEOUT_SEC" "${IMU_SHADOW_READY_TIMEOUT_SEC}"
   require_number "RECORDER_ACTIVE_TIMEOUT_SEC" "${RECORDER_ACTIVE_TIMEOUT_SEC}"
@@ -557,6 +614,12 @@ planner_cmd=(
   "delay_phase_angular_delay_sec:=${DELAY_PHASE_ANGULAR_DELAY_SEC}"
   "imu_topic:=${IMU_TOPIC}"
   "imu_shadow_enable:=${IMU_SHADOW_ENABLE}"
+  "observer_source:=${CURRENT_OBSERVER_SOURCE}"
+  "observer_fallback_policy:=${OBSERVER_FALLBACK_POLICY}"
+  "observer_latch_fallback:=${OBSERVER_LATCH_FALLBACK}"
+  "observer_max_imu_state_age_sec:=${OBSERVER_MAX_IMU_STATE_AGE_SEC}"
+  "observer_max_odom_state_age_sec:=${OBSERVER_MAX_ODOM_STATE_AGE_SEC}"
+  "observer_max_future_skew_sec:=${OBSERVER_MAX_FUTURE_SKEW_SEC}"
   "v_ref:=${V_REF}"
   "w_slosh:=${W_SLOSH}"
   "slosh_height_max:=${SLOSH_HEIGHT_MAX}"
@@ -650,12 +713,35 @@ run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
   echo "imu_topic=${IMU_TOPIC}"
   echo "imu_shadow_ready_topic=${IMU_SHADOW_READY_TOPIC}"
   echo "imu_shadow_ready_timeout_sec=${IMU_SHADOW_READY_TIMEOUT_SEC}"
+  echo "current_observer_source=${CURRENT_OBSERVER_SOURCE}"
+  echo "observer_fallback_policy=${OBSERVER_FALLBACK_POLICY}"
+  echo "observer_latch_fallback=${OBSERVER_LATCH_FALLBACK}"
+  echo "observer_max_imu_state_age_sec=${OBSERVER_MAX_IMU_STATE_AGE_SEC}"
+  echo "observer_max_odom_state_age_sec=${OBSERVER_MAX_ODOM_STATE_AGE_SEC}"
+  echo "observer_max_future_skew_sec=${OBSERVER_MAX_FUTURE_SKEW_SEC}"
+  echo "observer_selection_topic=${OBSERVER_SELECTION_TOPIC}"
   echo "recorder_active_timeout_sec=${RECORDER_ACTIVE_TIMEOUT_SEC}"
   echo "record_rgb=${RECORD_RGB}"
   echo "record_camera=${RECORD_CAMERA}"
+  echo "record_camera_info=${RECORD_CAMERA_INFO}"
   echo "record_camera_compressed=${RECORD_CAMERA_COMPRESSED}"
   echo "record_depth=${RECORD_DEPTH}"
   echo "record_online_liquid=${RECORD_ONLINE_LIQUID}"
+  echo "record_online_liquid_debug_images=${RECORD_ONLINE_LIQUID_DEBUG_IMAGES}"
+  echo "forbid_image_streams=${FORBID_IMAGE_STREAMS}"
+  echo "rgb_calibration_file=${RGB_CALIBRATION_FILE}"
+  echo "rgb_calibration_expected_sha256=${RGB_CALIBRATION_EXPECTED_SHA256}"
+  echo "rgb_calibration_actual_sha256=${RGB_CALIBRATION_ACTUAL_SHA256}"
+  echo "rgb_expected_width=${RGB_EXPECTED_WIDTH}"
+  echo "rgb_expected_height=${RGB_EXPECTED_HEIGHT}"
+  echo "rgb_expected_fps=${RGB_EXPECTED_FPS}"
+  echo "online_liquid_measurement_topic=${ONLINE_LIQUID_MEASUREMENT_TOPIC}"
+  echo "online_liquid_protocol=${ONLINE_LIQUID_PROTOCOL}"
+  echo "online_liquid_calibration_sha256=${ONLINE_LIQUID_CALIBRATION_SHA256}"
+  echo "online_liquid_detector_sha256=${ONLINE_LIQUID_DETECTOR_SHA256}"
+  echo "online_liquid_node_sha256=${ONLINE_LIQUID_NODE_SHA256}"
+  echo "online_liquid_msg_sha256=${ONLINE_LIQUID_MSG_SHA256}"
+  echo "online_liquid_config_sha256=${ONLINE_LIQUID_CONFIG_SHA256}"
   echo "planner_command=${planner_command_string}"
 } > "${run_meta}"
 
@@ -669,6 +755,8 @@ echo "  cmd_topic     = ${CMD_TOPIC}"
 echo "  recorder      = ${RECORD_SEC}s max (Ctrl+C stops earlier)"
 echo "  out_dir       = ${RUN_OUT_DIR}"
 echo "  record_rgb    = ${RECORD_RGB}"
+echo "  online_liquid = ${RECORD_ONLINE_LIQUID} (debug images ${RECORD_ONLINE_LIQUID_DEBUG_IMAGES})"
+echo "  forbid_images = ${FORBID_IMAGE_STREAMS}"
 echo "  path_source   = ${PATH_SOURCE_MODE}"
 echo "  path_file     = ${PATH_FILE}"
 if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
@@ -678,6 +766,7 @@ else
 fi
 echo "  v_ref/w_slosh = ${V_REF} / ${W_SLOSH}"
 echo "  imu_shadow    = ${IMU_SHADOW_ENABLE} (${IMU_TOPIC})"
+echo "  observer      = nominal ${CURRENT_OBSERVER_SOURCE}, fallback ${OBSERVER_FALLBACK_POLICY}, latch ${OBSERVER_LATCH_FALLBACK}"
 if truthy "${IMU_SHADOW_ENABLE}"; then
   echo "  shadow gate   = ${IMU_SHADOW_READY_TOPIC}, timeout ${IMU_SHADOW_READY_TIMEOUT_SEC}s"
 fi
@@ -690,8 +779,8 @@ require_shadow_topics_idle() {
   fi
 
   local topic purpose
-  local guarded_topics=("${REF_TOPIC}" "${CMD_TOPIC}" "${IMU_SHADOW_READY_TOPIC}")
-  local guarded_purposes=("Reference topic" "Command topic" "IMU shadow READY topic")
+  local guarded_topics=("${REF_TOPIC}" "${CMD_TOPIC}" "${IMU_SHADOW_READY_TOPIC}" "${OBSERVER_SELECTION_TOPIC}")
+  local guarded_purposes=("Reference topic" "Command topic" "IMU READY topic" "Observer selection topic")
   if [[ "${PATH_SOURCE_MODE}" == "generate" ]]; then
     guarded_topics+=("${GOAL_TOPIC}")
     guarded_purposes+=("Goal topic")
@@ -886,13 +975,29 @@ start_recorder() {
   NAME="${NAME}" \
   RECORD_RGB="${RECORD_RGB}" \
   RECORD_CAMERA="${RECORD_CAMERA}" \
+  RECORD_CAMERA_INFO="${RECORD_CAMERA_INFO}" \
   RECORD_CAMERA_COMPRESSED="${RECORD_CAMERA_COMPRESSED}" \
   RECORD_SCAN="${RECORD_SCAN}" \
   RECORD_DEPTH="${RECORD_DEPTH}" \
   RECORD_STANDALONE_SLOSH="${RECORD_STANDALONE_SLOSH}" \
   RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID}" \
+  RECORD_ONLINE_LIQUID_DEBUG_IMAGES="${RECORD_ONLINE_LIQUID_DEBUG_IMAGES}" \
+  FORBID_IMAGE_STREAMS="${FORBID_IMAGE_STREAMS}" \
   RECORD_ALL_EXISTING_TOPICS="${RECORD_ALL_EXISTING_TOPICS}" \
   RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO}" \
+  LIQUID_CALIBRATION="${RGB_CALIBRATION_FILE}" \
+  RGB_CALIBRATION_EXPECTED_SHA256="${RGB_CALIBRATION_EXPECTED_SHA256}" \
+  RGB_CALIBRATION_ACTUAL_SHA256="${RGB_CALIBRATION_ACTUAL_SHA256}" \
+  RGB_EXPECTED_WIDTH="${RGB_EXPECTED_WIDTH}" \
+  RGB_EXPECTED_HEIGHT="${RGB_EXPECTED_HEIGHT}" \
+  RGB_EXPECTED_FPS="${RGB_EXPECTED_FPS}" \
+  ONLINE_LIQUID_MEASUREMENT_TOPIC="${ONLINE_LIQUID_MEASUREMENT_TOPIC}" \
+  ONLINE_LIQUID_PROTOCOL="${ONLINE_LIQUID_PROTOCOL}" \
+  ONLINE_LIQUID_CALIBRATION_SHA256="${ONLINE_LIQUID_CALIBRATION_SHA256}" \
+  ONLINE_LIQUID_DETECTOR_SHA256="${ONLINE_LIQUID_DETECTOR_SHA256}" \
+  ONLINE_LIQUID_NODE_SHA256="${ONLINE_LIQUID_NODE_SHA256}" \
+  ONLINE_LIQUID_MSG_SHA256="${ONLINE_LIQUID_MSG_SHA256}" \
+  ONLINE_LIQUID_CONFIG_SHA256="${ONLINE_LIQUID_CONFIG_SHA256}" \
   SOLVER_BACKEND="${SOLVER_BACKEND}" \
   V_REF="${V_REF}" \
   W_SLOSH="${W_SLOSH}" \
@@ -902,6 +1007,12 @@ start_recorder() {
   DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
   IMU_SHADOW_ENABLE="${IMU_SHADOW_ENABLE}" \
   IMU_TOPIC="${IMU_TOPIC}" \
+  CURRENT_OBSERVER_SOURCE="${CURRENT_OBSERVER_SOURCE}" \
+  OBSERVER_FALLBACK_POLICY="${OBSERVER_FALLBACK_POLICY}" \
+  OBSERVER_LATCH_FALLBACK="${OBSERVER_LATCH_FALLBACK}" \
+  OBSERVER_MAX_IMU_STATE_AGE_SEC="${OBSERVER_MAX_IMU_STATE_AGE_SEC}" \
+  OBSERVER_MAX_ODOM_STATE_AGE_SEC="${OBSERVER_MAX_ODOM_STATE_AGE_SEC}" \
+  OBSERVER_MAX_FUTURE_SKEW_SEC="${OBSERVER_MAX_FUTURE_SKEW_SEC}" \
   GOAL_X="${GOAL_X}" \
   GOAL_Y="${GOAL_Y}" \
   GOAL_YAW="${GOAL_YAW}" \

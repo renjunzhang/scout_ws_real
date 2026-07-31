@@ -6,6 +6,7 @@ find_package(catkin REQUIRED)
 catkin_package()
 
 catkin_install_python(PROGRAMS
+  scripts/analyze_planar_imu_extrinsics.py
   scripts/mocap_pose_monitor.py
   scripts/mocap_imu_motion_sequence.py
   scripts/validate_mocap_imu_bag.py

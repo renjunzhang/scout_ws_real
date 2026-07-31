@@ -24,6 +24,7 @@ add_message_files(
   PredictedHorizon.msg
   PreSolveSnapshot.msg
   SloshObserverDebug.msg
+  SloshObserverSelectionDebug.msg
 )
 
 generate_messages(
@@ -102,6 +103,7 @@ add_library(${PROJECT_NAME}
   src/dynamics/slosh_dynamics.cpp
   src/estimation/processed_imu_pipeline.cpp
   src/estimation/slosh_observer_bank.cpp
+  src/estimation/slosh_observer_selector.cpp
   src/warm_start/diff_drive_flatness_warm_start.cpp
   src/warm_start/mecanum_warm_start.cpp
   src/warm_start/warm_start_factory.cpp
@@ -195,6 +197,13 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_slosh_observer_bank test/test_slosh_observer_bank.cpp)
   if(TARGET test_slosh_observer_bank)
     target_link_libraries(test_slosh_observer_bank
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_slosh_observer_selector test/test_slosh_observer_selector.cpp)
+  if(TARGET test_slosh_observer_selector)
+    target_link_libraries(test_slosh_observer_selector
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
     )
