@@ -38,7 +38,22 @@ get_config() {
 get_param_from_config() {
     local config="$1"
     local name="$2"
-    awk -F': ' -v key="${name}" '$1 == key {print $2; found=1; exit} END {if (!found) exit 1}' <<< "${config}"
+    SCOUT_DYN_CONFIG_TEXT="${config}" SCOUT_DYN_CONFIG_KEY="${name}" python3 - <<'PY'
+import os
+import sys
+
+import yaml
+
+config = yaml.safe_load(os.environ["SCOUT_DYN_CONFIG_TEXT"])
+key = os.environ["SCOUT_DYN_CONFIG_KEY"]
+if not isinstance(config, dict) or key not in config:
+    raise SystemExit(1)
+value = config[key]
+if isinstance(value, bool):
+    print(str(value).lower())
+else:
+    print(value)
+PY
 }
 
 if [[ "${MODE}" == "freeze_current" ]]; then

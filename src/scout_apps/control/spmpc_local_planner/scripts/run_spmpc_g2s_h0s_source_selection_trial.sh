@@ -3,9 +3,10 @@
 # The Bsmooth controller does not consume liquid state. The same bag records
 # odom observer, processed-IMU observer, and stamped online RGB-derived scalar
 # measurements, so source comparison is paired on an identical motion/time axis.
-# Raw/debug image streams are forbidden from the bag. This script never runs four
-# units automatically; return/alignment/liquid settling and RGB checks are
-# required between units.
+# G2S_RECORD_RAW_RGB=true additionally records the raw RGB stream for calibration
+# and relabel audits. Compressed/depth/debug image streams remain forbidden. This
+# script never runs four units automatically; return/alignment/liquid settling
+# and RGB checks are required between units.
 
 set -euo pipefail
 
@@ -51,10 +52,12 @@ STAMP="${STAMP:-$(date +%H%M%S)}"
 VALIDATE_ONLY="${VALIDATE_ONLY:-false}"
 ARM_MOTION="${ARM_MOTION:-NO}"
 CONFIRM_RGB_GEOMETRY="${CONFIRM_RGB_GEOMETRY:-NO}"
+G2S_RECORD_RAW_RGB="${G2S_RECORD_RAW_RGB:-false}"
 
 H0S_PATH="${H0S_PATH:-/home/geist/fixed_paths/real/20260727_spmpc_development/H0/H0_G2.json}"
 H0S_SHA256="578a4dd7663c2f49b4270c37755a08b2b0dc70735fb6b818da35b60a60f3990e"
-RGB_CALIBRATION_FILE="${RGB_CALIBRATION_FILE:-/home/geist/slosh_bags/real/20260629_calib/red_3ruler.yaml}"
+RGB_CALIBRATION_FILE="${RGB_CALIBRATION_FILE:-/home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/calibration/red_3ruler_g2s_20260731_frozen.yaml}"
+RGB_CALIBRATION_EXPECTED_SHA256="${RGB_CALIBRATION_EXPECTED_SHA256:-cfa5647892ee953b516a9309e2106c90af8e33e14d8db0adb331046d2352c62a}"
 RGB_EXPECTED_WIDTH="${RGB_EXPECTED_WIDTH:-1920}"
 RGB_EXPECTED_HEIGHT="${RGB_EXPECTED_HEIGHT:-1080}"
 RGB_EXPECTED_FPS="${RGB_EXPECTED_FPS:-30}"
@@ -73,8 +76,32 @@ ONLINE_LIQUID_HUE2_LOW="${ONLINE_LIQUID_HUE2_LOW:-173}"
 ONLINE_LIQUID_HUE2_HIGH="${ONLINE_LIQUID_HUE2_HIGH:-179}"
 ONLINE_LIQUID_SAT_MIN="${ONLINE_LIQUID_SAT_MIN:-80}"
 ONLINE_LIQUID_VAL_MIN="${ONLINE_LIQUID_VAL_MIN:-162}"
-MIN_FREE_GIB="${MIN_FREE_GIB:-5}"
+G2S_RAW_RGB_MIN_RATE_FRACTION="${G2S_RAW_RGB_MIN_RATE_FRACTION:-0.90}"
 POSTFLIGHT_HASH_BAG="${POSTFLIGHT_HASH_BAG:-true}"
+
+case "${G2S_RECORD_RAW_RGB}" in
+  1|true|TRUE|yes|YES|on|ON)
+    G2S_RECORD_RAW_RGB=true
+    G2S_IMAGE_POLICY=require_raw_rgb
+    G2S_IMAGE_PREREG=raw_rgb_required_other_image_streams_forbidden
+    G2S_FORBID_IMAGE_STREAMS=false
+    G2S_OPERATOR_NOTE=development_G2S_paired_odom_processed_imu_online_RGB_scalar_with_raw_RGB_audit
+    DEFAULT_MIN_FREE_GIB=25
+    ;;
+  0|false|FALSE|no|NO|off|OFF)
+    G2S_RECORD_RAW_RGB=false
+    G2S_IMAGE_POLICY=forbid
+    G2S_IMAGE_PREREG=forbidden
+    G2S_FORBID_IMAGE_STREAMS=true
+    G2S_OPERATOR_NOTE=development_G2S_paired_odom_processed_imu_online_RGB_scalar_no_images
+    DEFAULT_MIN_FREE_GIB=5
+    ;;
+  *) fail "G2S_RECORD_RAW_RGB must be true or false, got ${G2S_RECORD_RAW_RGB}" ;;
+esac
+MIN_FREE_GIB="${MIN_FREE_GIB:-${DEFAULT_MIN_FREE_GIB}}"
+if truthy "${G2S_RECORD_RAW_RGB}" && [[ "${RGB_IMAGE_TOPIC}" != "/camera/color/image_raw" ]]; then
+  fail "raw-RGB recorder currently requires RGB_IMAGE_TOPIC=/camera/color/image_raw"
+fi
 
 N_SRC="${N_SRC:-4}"
 DELTA_SRC="${DELTA_SRC:-0.10}"
@@ -158,6 +185,8 @@ actual_path_sha="$(sha256sum "${H0S_PATH}" | awk '{print $1}')"
 [[ -s "${RGB_CALIBRATION_FILE}" ]] || \
   fail "RGB calibration is missing: ${RGB_CALIBRATION_FILE}"
 rgb_calibration_sha="$(sha256sum "${RGB_CALIBRATION_FILE}" | awk '{print $1}')"
+[[ "${rgb_calibration_sha}" == "${RGB_CALIBRATION_EXPECTED_SHA256}" ]] || \
+  fail "RGB calibration hash mismatch: expected=${RGB_CALIBRATION_EXPECTED_SHA256}, actual=${rgb_calibration_sha}"
 online_launch_sha="$(sha256sum "${ONLINE_LIQUID_LAUNCH}" | awk '{print $1}')"
 online_node_sha="$(sha256sum "${ONLINE_LIQUID_NODE}" | awk '{print $1}')"
 online_detector_sha="$(sha256sum "${ONLINE_LIQUID_DETECTOR}" | awk '{print $1}')"
@@ -205,7 +234,11 @@ prereg_contents() {
     "imu_to_base_yaw_rad=0.0" \
     "lever_arm_imu_to_tube_xy_m=-0.100,0.045" \
     "rgb_reference=online_stamped_scalar_with_quality" \
-    "raw_or_debug_image_topics_in_bag=forbidden" \
+    "raw_or_debug_image_topics_in_bag=${G2S_IMAGE_PREREG}" \
+    "raw_rgb_recording=${G2S_RECORD_RAW_RGB}" \
+    "raw_rgb_topic=${RGB_IMAGE_TOPIC}" \
+    "raw_rgb_minimum_rate_fraction=${G2S_RAW_RGB_MIN_RATE_FRACTION}" \
+    "raw_rgb_intended_use=diagnostic_and_relabel_audit_not_primary_without_new_freeze" \
     "path_alias=H0s_equals_H0_G2_geometry" \
     "path_file=${H0S_PATH}" \
     "path_sha256=${H0S_SHA256}" \
@@ -253,7 +286,11 @@ echo "  path SHA    = ${H0S_SHA256}"
 echo "  controller  = Bsmooth (liquid state not consumed)"
 echo "  paired data = odom observer + processed-IMU observer + online RGB scalar"
 echo "  IMU freeze  = KEEP_NOMINAL_PLANAR_EXTRINSIC (${imu_planar_extrinsic_actual_sha})"
-echo "  bag images  = forbidden (raw/compressed/debug/depth all excluded)"
+if truthy "${G2S_RECORD_RAW_RGB}"; then
+  echo "  bag images  = raw RGB REQUIRED (${RGB_IMAGE_TOPIC}); compressed/debug/depth excluded"
+else
+  echo "  bag images  = forbidden (raw/compressed/debug/depth all excluded)"
+fi
 echo "  RGB freeze  = ${RGB_EXPECTED_WIDTH}x${RGB_EXPECTED_HEIGHT}@${RGB_EXPECTED_FPS}, ${RGB_CALIBRATION_FILE}"
 echo "  calibration = ${rgb_calibration_sha}"
 echo "  output      = ${BAG_PATH}"
@@ -266,7 +303,7 @@ runner_env=(
   "PILOT_MODE=true"
   "PILOT_METHOD=Bsmooth"
   "PILOT_CONDITION=G2S_H0s_source_selection"
-  "PILOT_RECORD_RGB=false"
+  "PILOT_RECORD_RGB=${G2S_RECORD_RAW_RGB}"
   "PILOT_RECORD_ONLINE_LIQUID=true"
   "RUN_LABEL=${RUN_LABEL}"
   "NAME=${RUN_LABEL}"
@@ -286,14 +323,14 @@ runner_env=(
   "CURRENT_OBSERVER_SOURCE=odom"
   "OBSERVER_FALLBACK_POLICY=odom"
   "OBSERVER_LATCH_FALLBACK=true"
-  "RECORD_RGB=false"
-  "RECORD_CAMERA=false"
+  "RECORD_RGB=${G2S_RECORD_RAW_RGB}"
+  "RECORD_CAMERA=${G2S_RECORD_RAW_RGB}"
   "RECORD_CAMERA_INFO=true"
   "RECORD_CAMERA_COMPRESSED=false"
   "RECORD_DEPTH=false"
   "RECORD_ONLINE_LIQUID=true"
   "RECORD_ONLINE_LIQUID_DEBUG_IMAGES=false"
-  "FORBID_IMAGE_STREAMS=true"
+  "FORBID_IMAGE_STREAMS=${G2S_FORBID_IMAGE_STREAMS}"
   "RECORD_ALL_EXISTING_TOPICS=false"
   "RGB_CALIBRATION_FILE=${RGB_CALIBRATION_FILE}"
   "RGB_CALIBRATION_EXPECTED_SHA256=${rgb_calibration_sha}"
@@ -311,7 +348,7 @@ runner_env=(
   "MAX_RECORD_SEC=${RECORD_SEC}"
   "BLOCK_SEGMENT_ID=G2S_u${G2S_ROW}"
   "ORDER_POSITION=${G2S_ROW}"
-  "OPERATOR_NOTE=development_G2S_paired_odom_processed_imu_online_RGB_scalar_no_images"
+  "OPERATOR_NOTE=${G2S_OPERATOR_NOTE}"
 )
 
 if truthy "${VALIDATE_ONLY}"; then
@@ -351,8 +388,21 @@ camera_dynparam="$(rosrun dynamic_reconfigure dynparam get "${RGB_DYNPARAM_NS}" 
   fail "cannot read RealSense RGB dynamic config: ${RGB_DYNPARAM_NS}"
 get_dynparam() {
   local key="$1"
-  awk -F': ' -v key="${key}" '$1 == key {print $2; found=1; exit} END {if (!found) exit 1}' \
-    <<< "${camera_dynparam}"
+  SCOUT_DYN_CONFIG_TEXT="${camera_dynparam}" SCOUT_DYN_CONFIG_KEY="${key}" python3 - <<'PY'
+import os
+
+import yaml
+
+config = yaml.safe_load(os.environ["SCOUT_DYN_CONFIG_TEXT"])
+key = os.environ["SCOUT_DYN_CONFIG_KEY"]
+if not isinstance(config, dict) or key not in config:
+    raise SystemExit(1)
+value = config[key]
+if isinstance(value, bool):
+    print(str(value).lower())
+else:
+    print(value)
+PY
 }
 RGB_CAMERA_AUTO_EXPOSURE="$(get_dynparam enable_auto_exposure)" || \
   fail "missing enable_auto_exposure in ${RGB_DYNPARAM_NS}"
@@ -397,12 +447,17 @@ else
 fi
 
 publisher_count() {
-  rostopic info "$1" 2>/dev/null | awk '
+  local topic_info
+  if ! topic_info="$(rostopic info "$1" 2>/dev/null)"; then
+    printf '0\n'
+    return 0
+  fi
+  awk '
     /^Publishers:/ {in_publishers=1; next}
     /^Subscribers:/ {in_publishers=0}
     in_publishers && /^[[:space:]]+\*/ {count++}
     END {print count+0}
-  ' || printf '0\n'
+  ' <<< "${topic_info}"
 }
 for output_topic in "${ONLINE_LIQUID_MEASUREMENT_TOPIC}" /liquid/height \
   /liquid/height_lcr /liquid/height_median /liquid/debug_image; do
@@ -483,6 +538,9 @@ env "${runner_env[@]}" bash "${RUNNER}"
 
 postflight_args=(
   "--bag" "${BAG_PATH}"
+  "--image-policy" "${G2S_IMAGE_POLICY}"
+  "--raw-rgb-topic" "${RGB_IMAGE_TOPIC}"
+  "--min-raw-rgb-rate-fraction" "${G2S_RAW_RGB_MIN_RATE_FRACTION}"
   "--expected-width" "${RGB_EXPECTED_WIDTH}"
   "--expected-height" "${RGB_EXPECTED_HEIGHT}"
   "--expected-fps" "${RGB_EXPECTED_FPS}"

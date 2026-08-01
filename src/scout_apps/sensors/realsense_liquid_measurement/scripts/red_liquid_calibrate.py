@@ -476,6 +476,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--roi-y", type=int, default=None)
     p.add_argument("--roi-w", type=int, default=None)
     p.add_argument("--roi-h", type=int, default=None)
+    p.add_argument(
+        "--wall-left-x", type=int, default=None,
+        help="Optional ROI-relative left inner-wall x; requires --wall-right-x and a CLI ROI.",
+    )
+    p.add_argument(
+        "--wall-right-x", type=int, default=None,
+        help="Optional ROI-relative right inner-wall x; requires --wall-left-x and a CLI ROI.",
+    )
     return p.parse_args()
 
 
@@ -508,6 +516,26 @@ def main() -> int:
         state.roi   = (args.roi_x, args.roi_y, args.roi_w, args.roi_h)
         state.phase = Phase.WALLS
         print(f"[INFO] ROI from CLI: {state.roi}")
+
+    wall_args = (args.wall_left_x, args.wall_right_x)
+    if any(value is not None for value in wall_args):
+        if state.roi is None or not all(value is not None for value in wall_args):
+            print(
+                "[ERROR] --wall-left-x/--wall-right-x require each other and a complete CLI ROI.",
+                file=sys.stderr,
+            )
+            return 1
+        wall_left, wall_right = sorted(int(value) for value in wall_args)
+        if wall_left < 0 or wall_right > state.roi[2] or wall_left >= wall_right:
+            print(
+                f"[ERROR] invalid preset walls for ROI width {state.roi[2]}: "
+                f"{wall_left}, {wall_right}",
+                file=sys.stderr,
+            )
+            return 1
+        state.wall_xs = [wall_left, wall_right]
+        state.phase = Phase.LEFT_X
+        print(f"[INFO] walls from CLI: x_left={wall_left} x_right={wall_right}")
 
     zoom = max(0.1, args.zoom)
 

@@ -90,7 +90,6 @@ def load_prereg(rows, calibration, args):
         "per_trial_lag_scale_filter_tuning": "forbidden",
         "rgb_calibration_sha256": file_sha256(calibration),
         "online_measurement_topic": args.measurement_topic,
-        "raw_or_debug_image_topics_in_bag": "forbidden",
     }
     mismatches = {
         key: {"expected": expected_value, "actual": values.get(key)}
@@ -99,6 +98,28 @@ def load_prereg(rows, calibration, args):
     }
     if mismatches:
         raise RuntimeError(f"analysis inputs differ from prereg: {mismatches}")
+    image_contract = values.get("raw_or_debug_image_topics_in_bag")
+    image_policy_by_contract = {
+        "forbidden": "forbid",
+        "raw_rgb_required_other_image_streams_forbidden": "require_raw_rgb",
+    }
+    if image_contract not in image_policy_by_contract:
+        raise RuntimeError(f"unsupported preregistered image contract: {image_contract}")
+    expected_image_policy = image_policy_by_contract[image_contract]
+    for row, bag, postflight in rows:
+        audit = postflight.get("image_stream_audit", {})
+        actual_image_policy = audit.get("policy", "forbid")
+        if actual_image_policy != expected_image_policy:
+            raise RuntimeError(
+                f"{row} postflight image policy mismatch: "
+                f"expected={expected_image_policy}, actual={actual_image_policy}, bag={bag}"
+            )
+        if expected_image_policy == "require_raw_rgb":
+            expected_raw_topic = values.get("raw_rgb_topic", "/camera/color/image_raw")
+            if audit.get("raw_rgb_topic") != expected_raw_topic:
+                raise RuntimeError(f"{row} raw RGB topic differs from prereg: {bag}")
+            if int(audit.get("raw_rgb_message_count", 0)) <= 0:
+                raise RuntimeError(f"{row} postflight has no raw RGB frames: {bag}")
     prereg_delta = parse_float(values.get("processed_imu_min_relative_improvement"))
     if prereg_delta is None or abs(prereg_delta - args.delta_src) > 1.0e-12:
         raise RuntimeError(
@@ -461,7 +482,11 @@ def main():
             "rgb_field": "height_max_lcr_mm_centered_rolling_median_5",
             "rgb_topic": args.measurement_topic,
             "rgb_smooth_frames": args.smooth_frames,
-            "raw_or_debug_image_topics_in_bag": "forbidden",
+            "raw_or_debug_image_topics_in_bag": prereg.get(
+                "raw_or_debug_image_topics_in_bag", ""
+            ),
+            "raw_rgb_recording": prereg.get("raw_rgb_recording", "false"),
+            "raw_rgb_intended_use": prereg.get("raw_rgb_intended_use", ""),
             "per_trial_lag_scale_filter_tuning": "forbidden",
             "additional_lag_sec": {"odom": 0.0, "processed_imu": 0.0},
             "delta_src": args.delta_src,

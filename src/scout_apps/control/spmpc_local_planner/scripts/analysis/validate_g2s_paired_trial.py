@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed postflight for one image-free Bsmooth H0s G2S paired trial."""
+"""Fail-closed postflight for one Bsmooth H0s G2S paired trial."""
 
 import argparse
 import collections
@@ -32,13 +32,21 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description=(
             "Validate completeness, IMU READY coverage, paired observer coverage, "
-            "source-selection invariants, stamped online RGB quality, and the absence "
-            "of all image streams in one G2S bag."
+            "source-selection invariants, stamped online RGB quality, and the frozen "
+            "image-recording policy in one G2S bag."
         )
     )
     parser.add_argument("--bag", required=True)
     parser.add_argument("--out-json", default="")
     parser.add_argument("--measurement-topic", default="/liquid/measurement")
+    parser.add_argument(
+        "--image-policy",
+        choices=("forbid", "require_raw_rgb"),
+        default="forbid",
+        help="Forbid every image stream, or require only the raw RGB audit stream.",
+    )
+    parser.add_argument("--raw-rgb-topic", default="/camera/color/image_raw")
+    parser.add_argument("--min-raw-rgb-rate-fraction", type=float, default=0.90)
     parser.add_argument("--expected-width", type=int, default=1920)
     parser.add_argument("--expected-height", type=int, default=1080)
     parser.add_argument("--expected-fps", type=float, default=30.0)
@@ -138,6 +146,9 @@ def main():
     camera_shapes = set()
     measurements = []
     image_topics = []
+    image_topic_counts = {}
+    raw_rgb_message_count = 0
+    raw_rgb_rate = 0.0
     start_time = None
     end_time = None
 
@@ -152,10 +163,34 @@ def main():
                 for topic, info in topic_info.items()
                 if info.msg_type in IMAGE_MESSAGE_TYPES
             )
-            if image_topics:
-                failures.append(
-                    "image-free protocol violated by: " + ", ".join(image_topics)
-                )
+            image_topic_counts = {
+                topic: int(topic_info[topic].message_count) for topic in image_topics
+            }
+            if args.image_policy == "forbid":
+                if image_topics:
+                    failures.append(
+                        "image-free protocol violated by: " + ", ".join(image_topics)
+                    )
+            else:
+                raw_info = topic_info.get(args.raw_rgb_topic)
+                if raw_info is None:
+                    failures.append(f"missing required raw RGB topic: {args.raw_rgb_topic}")
+                elif raw_info.msg_type != "sensor_msgs/Image":
+                    failures.append(
+                        f"raw RGB topic has unexpected type: {raw_info.msg_type}"
+                    )
+                else:
+                    raw_rgb_message_count = int(raw_info.message_count)
+                unexpected_image_topics = [
+                    topic for topic in image_topics if topic != args.raw_rgb_topic
+                ]
+                if unexpected_image_topics:
+                    failures.append(
+                        "unexpected compressed/depth/debug image topics: "
+                        + ", ".join(unexpected_image_topics)
+                    )
+            for topic, count in image_topic_counts.items():
+                counts[topic] = count
             for topic in required_topics:
                 if topic not in available_topics:
                     failures.append(f"missing required topic: {topic}")
@@ -231,6 +266,16 @@ def main():
         return 2
 
     duration = (end_time - start_time) if start_time is not None else 0.0
+    if args.image_policy == "require_raw_rgb":
+        raw_rgb_rate = fraction(raw_rgb_message_count, duration)
+        minimum_raw_rgb_count = int(
+            math.floor(args.expected_fps * args.min_raw_rgb_rate_fraction * duration)
+        )
+        if raw_rgb_message_count < minimum_raw_rgb_count:
+            failures.append(
+                f"raw RGB count {raw_rgb_message_count} < required "
+                f"{minimum_raw_rgb_count} for {duration:.3f}s"
+            )
     if duration < args.min_duration_sec:
         failures.append(
             f"bag duration {duration:.3f}s < required {args.min_duration_sec:.3f}s"
@@ -428,7 +473,16 @@ def main():
         "pre_motion_sec": pre_motion,
         "post_motion_sec": post_motion,
         "topic_counts": dict(sorted(counts.items())),
-        "image_stream_audit": {"recorded_image_topics": image_topics, "count": len(image_topics)},
+        "image_stream_audit": {
+            "policy": args.image_policy,
+            "raw_rgb_topic": args.raw_rgb_topic,
+            "recorded_image_topics": image_topics,
+            "image_topic_counts": image_topic_counts,
+            "count": len(image_topics),
+            "raw_rgb_message_count": raw_rgb_message_count,
+            "raw_rgb_rate_hz": raw_rgb_rate,
+            "minimum_raw_rgb_rate_fraction": args.min_raw_rgb_rate_fraction,
+        },
         "online_rgb": {
             "topic": args.measurement_topic,
             "samples": len(measurements),
@@ -478,7 +532,9 @@ def main():
     )
     print(
         f"  online RGB scalar = {len(measurements)} samples, {online_rate:.3f} Hz, "
-        f"valid={online_valid_fraction:.4f}; image topics={len(image_topics)}"
+        f"valid={online_valid_fraction:.4f}; image policy={args.image_policy}, "
+        f"topics={len(image_topics)}, raw RGB={raw_rgb_message_count} "
+        f"({raw_rgb_rate:.3f} Hz)"
     )
     print(
         f"  odom valid={odom_valid_fraction:.4f}; IMU READY={imu_ready_fraction:.4f}"

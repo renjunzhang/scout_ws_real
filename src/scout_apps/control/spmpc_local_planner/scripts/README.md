@@ -272,7 +272,7 @@ G2S_ROW=01 \
 bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
 ```
 
-RealSense 仍提供 `1920x1080@30` 在线输入，并临时指向 `/home/geist/slosh_bags/real/20260629_calib/red_3ruler.yaml`；bag 不保存 raw/compressed/depth/debug 图像。只有相机固定姿态、容器几何与液深仍匹配时才能确认；否则先重新标定并通过 `RGB_CALIBRATION_FILE=/new/frozen.yaml` 指定。运行前还必须用 `set_realsense_rgb_manual_params.sh` 关闭自动曝光和自动白平衡；row 01 捕获 exposure/gain/white-balance，后续三条必须完全一致。
+RealSense 仍提供 `1920x1080@30` 在线输入，G2S 使用 2026-07-31 当前场景冻结标定 `/home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/calibration/red_3ruler_g2s_20260731_frozen.yaml`。默认 bag 不保存 raw/compressed/depth/debug 图像；诊断采集可显式设置 `G2S_RECORD_RAW_RGB=true`，此时只允许 `/camera/color/image_raw`，仍禁止 compressed/depth/debug。该标定只用于 G2S development，不自动升格为正式 Stage 标定。运行前还必须用 `set_realsense_rgb_manual_params.sh` 关闭自动曝光和自动白平衡；row 01 捕获 exposure/gain/white-balance，后续三条必须完全一致。
 
 脚本会自动启动 `online_liquid_height.launch`（强制 `publish_debug=false`），冻结并记录 calibration、detector、node、message、launch 和 config hash；等待 `/liquid/measurement` 达到 `zero_locked + valid + status=OK` 后才进入底层 runner。recorder 只收 stamped scalar/quality、camera_info 和控制/observer 证据，完整记录 IMU bias/filter transient，IMU READY 后才发布路径。90 s 录制结束后自动 postflight（默认同时计算 bag SHA-256），要求 image-stream count=0、在线视觉覆盖完整 motion/tail、实际速率至少 10 Hz、有效率至少 90%，并检查双 observer coverage、IMU READY、selection epoch 与 `GOAL_REACHED`。任一门失败时 attempt 保留但不进入 eligible 4 条。
 
@@ -284,11 +284,19 @@ source /home/geist/scout_ws/devel/setup.bash
 
 python3 src/scout_apps/control/spmpc_local_planner/scripts/analysis/analyze_g2s_source_selection.py \
   --bag-dir /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/H0s_Bsmooth \
-  --calibration /home/geist/slosh_bags/real/20260629_calib/red_3ruler.yaml \
+  --calibration /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/calibration/red_3ruler_g2s_20260731_frozen.yaml \
   --out-dir /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/analysis
 ```
 
 analyzer 不再调用离线图像推理，也不需要视频；它直接读取消息内的源图 `header.stamp` 和 `height_max_lcr_mm`，对干净有效标量使用冻结的 5 帧 centered rolling median。禁止逐 trial 调 lag/scale/filter，固定用 observer `total_height_m` 对在线 RGB 标量的 motion-window MAE。只有 aggregate MAE 改善至少 10%、至少 3/4 trial 同方向、去掉最佳单条后总改善仍为正且 IMU coverage 不劣化时，输出 `processed_imu`；相当、冲突、不确定或任一 gate 失败均输出 `odom`。该输出仍是 development source decision；若选择 IMU，还要用新 revision 做 `publish_cmd_vel=false` replay 和 2--3 对 W2/W5 闭环确认，不能把 shadow-only 旧 revision 冒充为同一 release。
+
+2026-07-31 实际批次由操作员在 `u01..u03` 后停止，不补 `u04`，因此上面的正式四包 analyzer 不适用。随后三条 raw-RGB diagnostic bag 使用 v2 重标尺离线复算，processed-IMU 的平均 MAE 改善为 `34.56%`、方向 `3/3` 一致、两路 coverage 均为 `100%`。可重复生成 development-only 机器报告：
+
+```bash
+bash src/scout_apps/control/spmpc_local_planner/scripts/analyze_spmpc_g2s_raw_rgb_three_trial.sh
+```
+
+该报告只能放行 `run_spmpc_g2c_processed_imu_w2w5_trial.sh` 的 G2C development，不能写成正式四包 G2S PASS，也不能放行 G3 或 40/64/88。
 
 ## summarize_spmpc_real_trial.py
 
