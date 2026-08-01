@@ -1,0 +1,39 @@
+schema_version: 2
+protocol_id: SMPCC-REAL-40-88-v2.0
+scope: S1_CORE_40
+
+primary_outcome:
+  name: H_vis_p95_motion_plus_tail_mm
+  t_hvis_tail_sec: 5.0
+  source: /liquid/measurement
+  raw_image_reprocessing_available: false
+  valid_fraction_min: 0.98
+  maximum_source_future_skew_sec: 0.05
+
+completion:
+  source: odometry_projected_progress
+  first_arrival_rule: first_goal_reached_after_effective_motion
+  terminal_tail_sec: 5.0
+  maximum_bag_duration_sec: 70.0
+
+failure_inclusive_estimand:
+  planned_row_denominator: 40
+  method_success_precedes_continuous_outcome: true
+  acquisition_failure_after_authorized_retry: no_information_tie
+  observer_fallback: method_failure
+  method_failure_successful_replacement_allowed: false
+  no_early_stop: true
+
+comparisons:
+  primary: Bslosh_vs_Bsmooth
+  novelty_secondary: Bslosh_vs_FixedProfile
+  completion_comparator: Bslosh_vs_SmoothMatch
+  multiplicity: fixed_hierarchy
+
+runtime:
+  solve_budget_ms: 33.3333333
+  strict_deadline_claim: false
+  v_max_m_s: 0.8
+  omega_max_rad_s: 1.2
+  a_max_m_s2: 0.6
+  alpha_max_rad_s2: 1.2

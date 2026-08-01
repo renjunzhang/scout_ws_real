@@ -1,0 +1,27 @@
+schema_version: 1
+protocol: G5_comparator_fairness_minimal_v1
+
+smooth_match:
+  nominal_bsmooth_v_ref_m_s: 0.20
+  safe_v_ref_min_m_s: 0.15
+  safe_v_ref_max_m_s: 0.20
+  rounding_step_m_s: 0.005
+  completion_relative_tolerance: 0.05
+
+fixed_profile:
+  generator: src/scout_apps/control/scout_profile_baselines/scripts/hamaguchi/generate_profile.py
+  tracker_config: src/scout_apps/control/spmpc_experiments/config/benchmark/profile_tracking_common.yaml
+  base_speed_min_m_s: 0.20
+  base_speed_max_m_s: 0.65
+  base_speed_rounding_step_m_s: 0.005
+  completion_relative_tolerance: 0.05
+  omega_n_rad_s: 31.246
+  damping_ratio: 0.05
+  ds_m: 0.05
+  v_max_m_s: 0.8
+  omega_max_rad_s: 1.2
+  a_max_m_s2: 0.6
+  decel_max_m_s2: 0.6
+  alpha_max_rad_s2: 1.2
+  lateral_accel_max_m_s2: 0.6
+  curvature_smooth_passes: 5

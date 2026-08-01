@@ -1,0 +1,37 @@
+schema_version: 1
+protocol: G4_G3_snapshot_replay_v1
+
+# G3 row 02 is the first immutable W5 run.  Checkpoints are selected from this
+# row by geometry/excitation only, before any counterfactual solve is inspected.
+checkpoint_source_row: "02"
+
+trajectory:
+  # H0_G2 geometry transitions: initial turn, reverse turn, long middle
+  # straight, final turn, terminal straight.  Formal H1 must carry its own
+  # frozen boundaries; these development boundaries are never relabelled H1.
+  zone_boundaries_sigma: [0.0, 0.16, 0.37, 0.64, 0.87, 1.0]
+  tf_max_nearest_gap_sec: 0.10
+  monotonic_backtrack_tolerance_m: 0.05
+  progress_jump_margin_m: 0.10
+  resample_hz: 50.0
+  smoothing_window_samples: 5
+  minimum_motion_samples: 100
+  maximum_cross_track_p95_m: 0.10
+
+checkpoint_selection:
+  minimum_sigma: 0.10
+  maximum_sigma: 0.90
+  longitudinal_max_abs_omega_rad_s: 0.15
+  lateral_min_abs_omega_rad_s: 0.15
+  minimum_contiguous_pairs: 20
+  maximum_pair_gap_sec: 0.06
+
+replay:
+  slosh_height_ref_m: 0.005
+  constructed_phase_height_mm: 0.50
+  phases_rad: [0.0, 1.5707963267948966, 3.141592653589793, 4.71238898038469]
+  actual_first_action_abs_tolerance: 1.0e-8
+  actual_horizon_abs_tolerance: 1.0e-7
+  phase_first_action_detect_tolerance: 1.0e-4
+  phase_horizon_detect_tolerance: 1.0e-4
+  actual_zero_detect_tolerance: 1.0e-6

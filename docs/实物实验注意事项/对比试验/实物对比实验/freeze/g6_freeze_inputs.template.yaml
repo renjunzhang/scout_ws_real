@@ -1,0 +1,52 @@
+schema_version: 1
+protocol_id: SMPCC-REAL-40-88-v2.0
+scope: S1_CORE_40
+randomization_seed: SMPCC-S1-20260801-predeclared
+t_settle_sec: 10.0
+
+evidence:
+  g2s_report: /home/geist/slosh_bags/real/20260731_spmpc_g2s_rgb_diagnostic/analysis/G2S_RAW_RGB_THREE_TRIAL_DEVELOPMENT_REPORT.json
+  g2c_report: ""       # A single aggregate W5 final-candidate PASS report is still required.
+  g3_report: /home/geist/slosh_bags/real/20260801_spmpc_g3_processed_imu_w5_vs_bsmooth/H0/G3_EFFICACY_REPORT.json
+  g4_report: /home/geist/slosh_bags/real/20260801_spmpc_g4_from_g3/H0/G4_TRAJECTORY_REPLAY_REPORT.json
+  g5_report: /home/geist/slosh_bags/real/20260801_spmpc_g5_minimal/H0/G5_COMPARATOR_FAIRNESS_REPORT.json
+
+software:
+  build_test_report: ""  # Clean-HEAD ROS1 build/test/replay receipt.
+  codegen_json: src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/acados_ocp_spmpc_slosh.json
+
+source:
+  nominal_observer_source: processed_imu
+  fallback_source: odom
+  fallback_is_method_failure: true
+  final_w_slosh: 5.0
+
+methods:
+  B0: src/scout_apps/control/spmpc_local_planner/config/planner/variants.yaml
+  Bsmooth: src/scout_apps/control/spmpc_local_planner/config/planner/variants.yaml
+  Bslosh: src/scout_apps/control/spmpc_local_planner/config/planner/variants.yaml
+  SmoothMatch: /home/geist/slosh_bags/real/20260801_spmpc_g5_minimal/H0/G5_SMOOTH_MATCH_CONFIG.yaml
+  FixedProfile: /home/geist/slosh_bags/real/20260801_spmpc_g5_minimal/H0/G5_FIXED_PROFILE_CONFIG.yaml
+
+path:
+  h1_file: ""          # Must be distinct from the viewed G3 H0 path.
+  geometry_zones_report: ""
+
+container:
+  id: C1
+  config: src/scout_apps/control/spmpc_local_planner/config/containers/tube_default.yaml
+  radius_m: 0.0185
+  liquid_height_m: 0.058
+  damping_ratio: 0.05
+
+vision:
+  calibration: /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/calibration/red_3ruler_g2s_20260731_relabel_frozen_v2.yaml
+  camera_parameters: /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/camera_params/realsense_rgb_fixed_params_20260731_203322.yaml
+  metric_rule: /home/geist/slosh_bags/real/20260801_spmpc_g3_processed_imu_w5_vs_bsmooth/H0/G3_rgb_sync_and_metric.yaml
+
+analysis:
+  rules: docs/实物实验注意事项/对比试验/实物对比实验/freeze/analysis_rules_v2.yaml
+  rgb_validator: src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_g3_online_rgb_trial.py
+  trajectory_replay: src/scout_apps/control/spmpc_local_planner/scripts/analysis/g4_replay_from_g3.py
+  g5_validator: src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_g5_minimal_trial.py
+  formal_validator: src/scout_apps/control/spmpc_local_planner/scripts/validate_spmpc_formal_freeze_v2.py
