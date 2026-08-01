@@ -240,6 +240,14 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                imu_shadow_publish_diagnostics_,
                imu_shadow_publish_diagnostics_);
     pnh_.param("imu_shadow/expected_frame", imu_expected_frame_, imu_expected_frame_);
+    pnh_.param("imu_shadow/subscriber_queue_size",
+               imu_subscriber_queue_size_,
+               imu_subscriber_queue_size_);
+    if (imu_subscriber_queue_size_ < 1 || imu_subscriber_queue_size_ > 1000) {
+        ROS_WARN("[spmpc_local_planner] invalid imu_shadow/subscriber_queue_size=%d; using 10",
+                 imu_subscriber_queue_size_);
+        imu_subscriber_queue_size_ = 10;
+    }
     pnh_.param("imu_shadow/observer_dt_sec", imu_observer_dt_sec_, imu_observer_dt_sec_);
     if (!std::isfinite(imu_observer_dt_sec_) || imu_observer_dt_sec_ <= 0.0) {
         ROS_WARN("[spmpc_local_planner] invalid imu_shadow/observer_dt_sec=%.6f; using 0.02 s",
@@ -575,7 +583,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         imu_nh_.setCallbackQueue(&imu_callback_queue_);
         imu_sub_ = imu_nh_.subscribe<sensor_msgs::Imu>(
             imu_topic_,
-            1,
+            static_cast<std::uint32_t>(imu_subscriber_queue_size_),
             &SpmpcLocalPlannerROS::imuCallback,
             this,
             ros::TransportHints().tcpNoDelay());
@@ -600,7 +608,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         imu_spinner_->start();
     }
 
-    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s imu_pipeline=%s imu_topic=%s observer_source=%s observer_fallback=%s latch_fallback=%s",
+    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s imu_pipeline=%s imu_topic=%s imu_queue=%d observer_source=%s observer_fallback=%s latch_fallback=%s",
              variant_.name.c_str(),
              experiment_mode_.c_str(),
              path_topic_.c_str(),
@@ -608,6 +616,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
              cmd_topic_.c_str(),
              boolText(imu_shadow_enable_),
              imu_topic_.c_str(),
+             imu_subscriber_queue_size_,
              sloshObserverSourceName(slosh_observer_selector_params_.nominal_source),
              sloshObserverFallbackPolicyName(
                  slosh_observer_selector_params_.fallback_policy),

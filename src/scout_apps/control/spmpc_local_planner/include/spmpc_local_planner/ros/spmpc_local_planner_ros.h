@@ -168,6 +168,7 @@ private:
     bool publish_cmd_vel_ = true;
     bool imu_shadow_enable_ = false;
     bool imu_shadow_publish_diagnostics_ = true;
+    int imu_subscriber_queue_size_ = 10;
     double imu_observer_dt_sec_ = 0.02;
     bool use_tf_pose_ = true;
     bool obstacle_enable_ = false;

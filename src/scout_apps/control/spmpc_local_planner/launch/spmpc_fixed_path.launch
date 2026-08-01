@@ -3,6 +3,7 @@
   <arg name="reference_path_topic" default="/scout/global_path_fixed"/>
   <arg name="imu_topic" default="/imu/data"/>
   <arg name="imu_shadow_enable" default="false"/>
+  <arg name="imu_subscriber_queue_size" default="10"/>
   <arg name="observer_source" default="odom"/>
   <arg name="observer_fallback_policy" default="odom"/>
   <arg name="observer_latch_fallback" default="true"/>
@@ -17,6 +18,7 @@
   <arg name="w_slosh" default="-1.0" doc="覆盖 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
   <arg name="v_ref" default="-1.0" doc="诊断/消融用: 覆盖 v_ref; 负值时用 variants.yaml 原值"/>
   <arg name="slosh_height_max" default="-1.0" doc="覆盖 slosh/slosh_height_max(m); 负值时用 container yaml"/>
+  <arg name="w_smooth" default="-1.0"/>
   <arg name="w_alpha" default="-1.0"/>
   <arg name="w_du_a" default="-1.0"/>
   <arg name="w_du_vs" default="-1.0"/>
@@ -38,6 +40,7 @@
     <arg name="reference_path_topic" value="$(arg reference_path_topic)"/>
     <arg name="imu_topic" value="$(arg imu_topic)"/>
     <arg name="imu_shadow_enable" value="$(arg imu_shadow_enable)"/>
+    <arg name="imu_subscriber_queue_size" value="$(arg imu_subscriber_queue_size)"/>
     <arg name="observer_source" value="$(arg observer_source)"/>
     <arg name="observer_fallback_policy" value="$(arg observer_fallback_policy)"/>
     <arg name="observer_latch_fallback" value="$(arg observer_latch_fallback)"/>
@@ -52,6 +55,7 @@
     <arg name="w_slosh" value="$(arg w_slosh)"/>
     <arg name="v_ref" value="$(arg v_ref)"/>
     <arg name="slosh_height_max" value="$(arg slosh_height_max)"/>
+    <arg name="w_smooth" value="$(arg w_smooth)"/>
     <arg name="w_alpha" value="$(arg w_alpha)"/>
     <arg name="w_du_a" value="$(arg w_du_a)"/>
     <arg name="w_du_vs" value="$(arg w_du_vs)"/>

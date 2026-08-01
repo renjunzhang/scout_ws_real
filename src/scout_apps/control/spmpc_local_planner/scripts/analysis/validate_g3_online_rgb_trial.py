@@ -34,12 +34,44 @@ REQUIRED_TOPICS = (
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--bag", required=True)
-    parser.add_argument("--condition", choices=("Bsmooth", "W5"), required=True)
+    parser.add_argument("--condition", required=True)
+    parser.add_argument(
+        "--slosh-enabled",
+        choices=("auto", "true", "false"),
+        default="auto",
+        help="Whether the solver consumes the selected liquid state; auto preserves legacy W5/Bsmooth behavior.",
+    )
+    parser.add_argument(
+        "--smooth-priority-enabled",
+        choices=("auto", "true", "false"),
+        default="auto",
+    )
+    parser.add_argument(
+        "--protocol",
+        default="G3_processed_imu_W5_vs_Bsmooth_online_RGB_development_v1",
+    )
+    parser.add_argument("--report-suffix", default="_g3_postflight.json")
     parser.add_argument("--row", required=True)
     parser.add_argument("--block", required=True)
     parser.add_argument("--position", required=True)
     parser.add_argument("--measurement-topic", default="/liquid/measurement")
     parser.add_argument("--expected-weight", type=float, required=True)
+    parser.add_argument("--expected-w-smooth", type=float)
+    parser.add_argument("--expected-w-alpha", type=float)
+    parser.add_argument("--expected-w-du-a", type=float)
+    parser.add_argument("--expected-w-du-vs", type=float)
+    parser.add_argument("--expected-delay-mode-code", type=float)
+    parser.add_argument(
+        "--expected-solver-source-code",
+        type=int,
+        help="Expected /spmpc/debug/solver_input_state source_code during motion.",
+    )
+    parser.add_argument(
+        "--require-delay-compensation-applied",
+        choices=("auto", "true", "false"),
+        default="auto",
+    )
+    parser.add_argument("--require-state-diagnostics", action="store_true")
     parser.add_argument("--expected-v-ref", type=float, default=0.20)
     parser.add_argument("--expected-width", type=int, default=1920)
     parser.add_argument("--expected-height", type=int, default=1080)
@@ -174,9 +206,36 @@ def in_window(records, start, end, stamp_index=0):
 def main():
     args = parse_args()
     bag_path = Path(args.bag).expanduser().resolve()
-    out_path = bag_path.with_name(bag_path.stem + "_g3_postflight.json")
+    if not args.report_suffix.startswith("_") or not args.report_suffix.endswith(".json"):
+        print("[G3 postflight] --report-suffix must look like _name.json", file=sys.stderr)
+        return 2
+    out_path = bag_path.with_name(bag_path.stem + args.report_suffix)
     failures = []
     warnings = []
+    if args.slosh_enabled == "auto" and args.condition not in ("Bsmooth", "W5"):
+        print(
+            "[G3 postflight] unknown condition requires explicit --slosh-enabled",
+            file=sys.stderr,
+        )
+        return 2
+    if args.expected_solver_source_code is not None and not (
+        0 <= args.expected_solver_source_code <= 255
+    ):
+        print(
+            "[G3 postflight] --expected-solver-source-code must be in [0,255]",
+            file=sys.stderr,
+        )
+        return 2
+    slosh_enabled = (
+        args.condition == "W5"
+        if args.slosh_enabled == "auto"
+        else args.slosh_enabled == "true"
+    )
+    smooth_priority_enabled = (
+        not slosh_enabled
+        if args.smooth_priority_enabled == "auto"
+        else args.smooth_priority_enabled == "true"
+    )
 
     if not bag_path.is_file():
         print("[G3 postflight] missing bag: {}".format(bag_path), file=sys.stderr)
@@ -204,6 +263,9 @@ def main():
     stage0_records = []
     solver_records = []
     intervention_records = []
+    raw_state_records = []
+    predicted_state_records = []
+    solver_input_state_records = []
     image_topics = []
 
     try:
@@ -219,10 +281,20 @@ def main():
             if image_topics:
                 failures.append("image-free protocol violated by: " + ", ".join(image_topics))
             available = set(topic_info)
+            state_topics = (
+                "/spmpc/debug/raw_state",
+                "/spmpc/debug/predicted_state",
+                "/spmpc/debug/solver_input_state",
+            )
+            if args.require_state_diagnostics:
+                for topic in state_topics:
+                    if topic not in available:
+                        failures.append("missing required state diagnostic: {}".format(topic))
             for topic in required_topics:
                 if topic not in available:
                     failures.append("missing required topic: {}".format(topic))
             read_topics = [topic for topic in required_topics if topic in available]
+            read_topics.extend(topic for topic in state_topics if topic in available)
             for topic, msg, stamp in bag.read_messages(topics=read_topics):
                 bag_time = stamp.to_sec()
                 counts[topic] += 1
@@ -271,6 +343,12 @@ def main():
                     solver_records.append((bag_time, float(msg.data)))
                 elif topic == "/spmpc/debug/command_intervention":
                     intervention_records.append((bag_time, parse_multiarray(msg)))
+                elif topic == "/spmpc/debug/raw_state":
+                    raw_state_records.append((bag_time, parse_multiarray(msg)))
+                elif topic == "/spmpc/debug/predicted_state":
+                    predicted_state_records.append((bag_time, parse_multiarray(msg)))
+                elif topic == "/spmpc/debug/solver_input_state":
+                    solver_input_state_records.append((bag_time, parse_multiarray(msg)))
     except Exception as exc:  # noqa: BLE001
         print("[G3 postflight] rosbag read failed: {}".format(exc), file=sys.stderr)
         return 2
@@ -313,6 +391,11 @@ def main():
         if status == "GOAL_REACHED" and motion_start is not None and stamp >= motion_start
     ]
     first_arrival = min(arrival_candidates) if arrival_candidates else None
+    motion_to_arrival = (
+        first_arrival - motion_start
+        if first_arrival is not None and motion_start is not None
+        else math.nan
+    )
     if first_arrival is None:
         failures.append("planner never published GOAL_REACHED after motion started")
         window_end = (
@@ -321,6 +404,12 @@ def main():
             else motion_end
         )
     else:
+        if motion_to_arrival > args.t_motion_max_sec:
+            failures.append(
+                "first arrival {:.3f}s after motion start exceeds frozen {:.3f}s budget".format(
+                    motion_to_arrival, args.t_motion_max_sec
+                )
+            )
         window_end = first_arrival + args.t_hvis_tail_sec
     if window_end is not None and end_time < window_end:
         failures.append(
@@ -505,7 +594,7 @@ def main():
             and str(msg.status) == "NOMINAL_PROCESSED_IMU"
             and bool(msg.imu_pipeline_ready)
         )
-        consumes_good = bool(msg.solver_consumes_selected_state) == (args.condition == "W5")
+        consumes_good = bool(msg.solver_consumes_selected_state) == slosh_enabled
         if common_good and consumes_good:
             selection_good.append(msg)
     source_fraction = fraction(len(selection_good), len(selection_motion))
@@ -546,16 +635,119 @@ def main():
         failures.append("effective v_ref does not match frozen value")
     if not close(config.get("w_slosh"), args.expected_weight):
         failures.append("effective w_slosh does not match condition")
-    if args.condition == "W5":
-        if not close(config.get("slosh_enable"), 1.0):
-            failures.append("W5 slosh model is not enabled")
-        if not close(config.get("smooth_priority_enable"), 0.0):
-            failures.append("W5 unexpectedly enables smooth-priority mode")
-    else:
-        if not close(config.get("slosh_enable"), 0.0):
-            failures.append("Bsmooth unexpectedly enables the slosh model")
-        if not close(config.get("smooth_priority_enable"), 1.0):
-            failures.append("Bsmooth smooth-priority mode is not enabled")
+    expected_config_values = {
+        "w_smooth": args.expected_w_smooth,
+        "w_alpha": args.expected_w_alpha,
+        "w_du_a": args.expected_w_du_a,
+        "w_du_vs": args.expected_w_du_vs,
+        "delay_phase_mode_code": args.expected_delay_mode_code,
+    }
+    for field, expected in expected_config_values.items():
+        if expected is not None and not close(config.get(field), expected):
+            failures.append("effective {} does not match frozen value".format(field))
+    if not close(config.get("slosh_enable"), 1.0 if slosh_enabled else 0.0):
+        failures.append("effective slosh_enable does not match condition")
+    if not close(
+        config.get("smooth_priority_enable"),
+        1.0 if smooth_priority_enabled else 0.0,
+    ):
+        failures.append("effective smooth_priority_enable does not match condition")
+
+    state_window_end = window_end if window_end is not None else motion_end
+    imu_state_window = in_window(imu_records, motion_start, state_window_end)
+    raw_state_window = in_window(raw_state_records, motion_start, state_window_end)
+    predicted_state_window = in_window(predicted_state_records, motion_start, state_window_end)
+    solver_input_state_window = in_window(
+        solver_input_state_records, motion_start, state_window_end
+    )
+    raw_state_motion = in_window(raw_state_records, motion_start, motion_end)
+    predicted_state_motion = in_window(predicted_state_records, motion_start, motion_end)
+    solver_input_state_motion = in_window(
+        solver_input_state_records, motion_start, motion_end
+    )
+    imu_modal_height_mm = [
+        1000.0 * float(msg.modal_height_m)
+        for _, msg in imu_state_window
+        if bool(msg.valid) and finite(msg.modal_height_m)
+    ]
+    raw_modal_height_mm = [
+        record.get("h_modal_mm", math.nan) for _, record in raw_state_window
+    ]
+    predicted_modal_height_mm = [
+        record.get("h_modal_mm", math.nan)
+        for _, record in predicted_state_window
+        if record.get("valid", 0.0) > 0.5
+    ]
+    solver_input_modal_height_mm = [
+        record.get("h_modal_mm", math.nan)
+        for _, record in solver_input_state_window
+    ]
+    delay_applied_values = [
+        record.get("delay_compensation_applied", math.nan)
+        for _, record in solver_input_state_motion
+        if finite(record.get("delay_compensation_applied"))
+    ]
+    delay_applied_fraction = fraction(
+        sum(value > 0.5 for value in delay_applied_values),
+        len(delay_applied_values),
+    )
+    solver_source_values = [
+        int(round(record.get("source_code")))
+        for _, record in solver_input_state_motion
+        if finite(record.get("source_code"))
+    ]
+    solver_source_fraction = (
+        fraction(
+            sum(value == args.expected_solver_source_code for value in solver_source_values),
+            len(solver_source_values),
+        )
+        if args.expected_solver_source_code is not None
+        else math.nan
+    )
+    if args.require_state_diagnostics:
+        required_state_windows = {
+            "raw_state": raw_state_motion,
+            "predicted_state": predicted_state_motion,
+            "solver_input_state": solver_input_state_motion,
+        }
+        for name, records in required_state_windows.items():
+            if not records:
+                failures.append("required {} has no samples during motion".format(name))
+        required_modal_series = {
+            "processed-IMU modal height": imu_modal_height_mm,
+            "raw selected modal height": raw_modal_height_mm,
+            "valid predicted modal height": predicted_modal_height_mm,
+            "solver-input modal height": solver_input_modal_height_mm,
+        }
+        for name, values in required_modal_series.items():
+            if not any(finite(value) for value in values):
+                failures.append("required {} has no finite motion+tail samples".format(name))
+        if not delay_applied_values:
+            failures.append("solver-input diagnostics contain no delay-application flags")
+    if (
+        args.expected_solver_source_code is not None
+        and solver_source_fraction < args.min_source_fraction
+    ):
+        failures.append(
+            "solver-input source-code coverage {:.4f} < {:.4f} for expected {}".format(
+                solver_source_fraction,
+                args.min_source_fraction,
+                args.expected_solver_source_code,
+            )
+        )
+    if args.require_delay_compensation_applied != "auto":
+        expected_delay_applied = args.require_delay_compensation_applied == "true"
+        application_ok = (
+            delay_applied_fraction >= 0.98
+            if expected_delay_applied
+            else delay_applied_fraction <= 0.02
+        )
+        if not application_ok:
+            failures.append(
+                "delay-compensation application fraction {:.4f} violates required {}".format(
+                    delay_applied_fraction, args.require_delay_compensation_applied
+                )
+            )
 
     stage_motion = in_window(stage0_records, motion_start, motion_end)
     contour_values = [abs(record.get("contour_error", math.nan)) for _, record in stage_motion]
@@ -601,7 +793,7 @@ def main():
 
     report = {
         "schema_version": 1,
-        "protocol": "G3_processed_imu_W5_vs_Bsmooth_online_RGB_development_v1",
+        "protocol": args.protocol,
         "status": "PASS" if not failures else "FAIL",
         "condition": args.condition,
         "row": args.row,
@@ -616,6 +808,7 @@ def main():
         "motion_start_sec": motion_start,
         "motion_end_sec": motion_end,
         "motion_duration_sec": motion_duration,
+        "motion_to_arrival_sec": motion_to_arrival,
         "first_arrival_sec": first_arrival,
         "window_end_sec": window_end,
         "t_hvis_tail_sec": args.t_hvis_tail_sec,
@@ -664,7 +857,7 @@ def main():
             "imu_motion_samples": len(imu_motion),
             "ready_fraction": ready_fraction,
             "reset_epochs": reset_epochs,
-            "solver_consumes_selected_state": args.condition == "W5",
+            "solver_consumes_selected_state": slosh_enabled,
         },
         "tracking": {
             "stage0_samples": len(stage_motion),
@@ -675,6 +868,26 @@ def main():
             "solver_samples": len(solver_motion),
             "solver_p95_ms": solver_p95,
             "solver_max_ms": max(solver_motion) if solver_motion else math.nan,
+        },
+        "internal_state": {
+            "imu_modal_height_p95_mm": percentile(imu_modal_height_mm, 0.95),
+            "raw_selected_modal_height_p95_mm": percentile(raw_modal_height_mm, 0.95),
+            "predicted_modal_height_p95_mm": percentile(
+                predicted_modal_height_mm, 0.95
+            ),
+            "solver_input_modal_height_p95_mm": percentile(
+                solver_input_modal_height_mm, 0.95
+            ),
+            "delay_compensation_applied_fraction": delay_applied_fraction,
+            "solver_source_code_expected": args.expected_solver_source_code,
+            "solver_source_code_fraction": solver_source_fraction,
+            "imu_samples": len(imu_modal_height_mm),
+            "raw_samples": len(raw_modal_height_mm),
+            "predicted_samples": len(predicted_modal_height_mm),
+            "solver_input_samples": len(solver_input_modal_height_mm),
+            "raw_motion_samples": len(raw_state_motion),
+            "predicted_motion_samples": len(predicted_state_motion),
+            "solver_input_motion_samples": len(solver_input_state_motion),
         },
         "command_intervention": {
             "motion_samples": len(intervention_motion),

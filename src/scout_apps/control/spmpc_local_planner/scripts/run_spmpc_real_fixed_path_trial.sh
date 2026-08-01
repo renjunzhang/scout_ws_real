@@ -303,9 +303,14 @@ REFERENCE_TARGET_FRAME="${REFERENCE_TARGET_FRAME:-map}"
 SOLVER_BACKEND="${SOLVER_BACKEND:-continuous_mpcc_acados}"
 V_REF="${V_REF:-0.20}"
 W_SLOSH="${W_SLOSH:--1.0}"
+W_SMOOTH="${W_SMOOTH:--1.0}"
+W_ALPHA="${W_ALPHA:--1.0}"
+W_DU_A="${W_DU_A:--1.0}"
+W_DU_VS="${W_DU_VS:--1.0}"
 SLOSH_HEIGHT_MAX="${SLOSH_HEIGHT_MAX:--1.0}"
 IMU_SHADOW_ENABLE="${IMU_SHADOW_ENABLE:-false}"
 IMU_TOPIC="${IMU_TOPIC:-/imu/data}"
+IMU_SUBSCRIBER_QUEUE_SIZE="${IMU_SUBSCRIBER_QUEUE_SIZE:-10}"
 CURRENT_OBSERVER_SOURCE="${CURRENT_OBSERVER_SOURCE:-${OBSERVER_SOURCE:-odom}}"
 OBSERVER_FALLBACK_POLICY="${OBSERVER_FALLBACK_POLICY:-odom}"
 OBSERVER_LATCH_FALLBACK="${OBSERVER_LATCH_FALLBACK:-true}"
@@ -461,6 +466,10 @@ for kv in \
   "GENERATED_PATH_WAIT_SEC=${GENERATED_PATH_WAIT_SEC}" \
   "V_REF=${V_REF}" \
   "W_SLOSH=${W_SLOSH}" \
+  "W_SMOOTH=${W_SMOOTH}" \
+  "W_ALPHA=${W_ALPHA}" \
+  "W_DU_A=${W_DU_A}" \
+  "W_DU_VS=${W_DU_VS}" \
   "SLOSH_HEIGHT_MAX=${SLOSH_HEIGHT_MAX}" \
   "OBSERVER_MAX_IMU_STATE_AGE_SEC=${OBSERVER_MAX_IMU_STATE_AGE_SEC}" \
   "OBSERVER_MAX_ODOM_STATE_AGE_SEC=${OBSERVER_MAX_ODOM_STATE_AGE_SEC}" \
@@ -476,6 +485,12 @@ for kv in \
   "PLANNER_STARTUP_SEC=${PLANNER_STARTUP_SEC}"; do
   require_number "${kv%%=*}" "${kv#*=}"
 done
+case "${IMU_SUBSCRIBER_QUEUE_SIZE}" in
+  ''|*[!0-9]*) fail "IMU_SUBSCRIBER_QUEUE_SIZE must be an integer in [1,1000], got '${IMU_SUBSCRIBER_QUEUE_SIZE}'" ;;
+esac
+if (( IMU_SUBSCRIBER_QUEUE_SIZE < 1 || IMU_SUBSCRIBER_QUEUE_SIZE > 1000 )); then
+  fail "IMU_SUBSCRIBER_QUEUE_SIZE must be in [1,1000], got '${IMU_SUBSCRIBER_QUEUE_SIZE}'"
+fi
 if truthy "${OBSERVER_LATCH_FALLBACK}"; then
   OBSERVER_LATCH_FALLBACK=true
 else
@@ -614,6 +629,7 @@ planner_cmd=(
   "delay_phase_angular_delay_sec:=${DELAY_PHASE_ANGULAR_DELAY_SEC}"
   "imu_topic:=${IMU_TOPIC}"
   "imu_shadow_enable:=${IMU_SHADOW_ENABLE}"
+  "imu_subscriber_queue_size:=${IMU_SUBSCRIBER_QUEUE_SIZE}"
   "observer_source:=${CURRENT_OBSERVER_SOURCE}"
   "observer_fallback_policy:=${OBSERVER_FALLBACK_POLICY}"
   "observer_latch_fallback:=${OBSERVER_LATCH_FALLBACK}"
@@ -622,6 +638,10 @@ planner_cmd=(
   "observer_max_future_skew_sec:=${OBSERVER_MAX_FUTURE_SKEW_SEC}"
   "v_ref:=${V_REF}"
   "w_slosh:=${W_SLOSH}"
+  "w_smooth:=${W_SMOOTH}"
+  "w_alpha:=${W_ALPHA}"
+  "w_du_a:=${W_DU_A}"
+  "w_du_vs:=${W_DU_VS}"
   "slosh_height_max:=${SLOSH_HEIGHT_MAX}"
   "alpha_max:=${ALPHA_MAX}"
   "shared_linear_accel_limit_enable:=${SHARED_LINEAR_ACCEL_LIMIT_ENABLE}"
@@ -705,12 +725,17 @@ run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
   echo "solver_backend=${SOLVER_BACKEND}"
   echo "v_ref=${V_REF}"
   echo "w_slosh=${W_SLOSH}"
+  echo "w_smooth=${W_SMOOTH}"
+  echo "w_alpha=${W_ALPHA}"
+  echo "w_du_a=${W_DU_A}"
+  echo "w_du_vs=${W_DU_VS}"
   echo "slosh_height_max=${SLOSH_HEIGHT_MAX}"
   echo "delay_phase_mode=${DELAY_PHASE_MODE}"
   echo "delay_phase_linear_delay_sec=${DELAY_PHASE_LINEAR_DELAY_SEC}"
   echo "delay_phase_angular_delay_sec=${DELAY_PHASE_ANGULAR_DELAY_SEC}"
   echo "imu_shadow_enable=${IMU_SHADOW_ENABLE}"
   echo "imu_topic=${IMU_TOPIC}"
+  echo "imu_subscriber_queue_size=${IMU_SUBSCRIBER_QUEUE_SIZE}"
   echo "imu_shadow_ready_topic=${IMU_SHADOW_READY_TOPIC}"
   echo "imu_shadow_ready_timeout_sec=${IMU_SHADOW_READY_TIMEOUT_SEC}"
   echo "current_observer_source=${CURRENT_OBSERVER_SOURCE}"
@@ -1001,12 +1026,17 @@ start_recorder() {
   SOLVER_BACKEND="${SOLVER_BACKEND}" \
   V_REF="${V_REF}" \
   W_SLOSH="${W_SLOSH}" \
+  W_SMOOTH="${W_SMOOTH}" \
+  W_ALPHA="${W_ALPHA}" \
+  W_DU_A="${W_DU_A}" \
+  W_DU_VS="${W_DU_VS}" \
   SLOSH_HEIGHT_MAX="${SLOSH_HEIGHT_MAX}" \
   DELAY_PHASE_MODE="${DELAY_PHASE_MODE}" \
   DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC}" \
   DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
   IMU_SHADOW_ENABLE="${IMU_SHADOW_ENABLE}" \
   IMU_TOPIC="${IMU_TOPIC}" \
+  IMU_SUBSCRIBER_QUEUE_SIZE="${IMU_SUBSCRIBER_QUEUE_SIZE}" \
   CURRENT_OBSERVER_SOURCE="${CURRENT_OBSERVER_SOURCE}" \
   OBSERVER_FALLBACK_POLICY="${OBSERVER_FALLBACK_POLICY}" \
   OBSERVER_LATCH_FALLBACK="${OBSERVER_LATCH_FALLBACK}" \

@@ -50,6 +50,10 @@ imu_shadow:
   enable: false
   publish_diagnostics: true
   expected_frame: imu_link
+  # Keep enough callback backlog for short diagnostic-publication stalls.  A
+  # queue of one dropped a real 50 Hz sample in G3 Row 08 and falsely opened a
+  # new processed-IMU epoch even though /imu/data itself was complete.
+  subscriber_queue_size: 10
   # Nominal cached discretization; accepted updates use their exact header dt.
   observer_dt_sec: 0.020
 
