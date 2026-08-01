@@ -48,6 +48,14 @@ TEST(DelayPhaseTypes, ParsesFixedClosedLoopAliases) {
     EXPECT_EQ(parseDelayPhaseMode("p1_fixed_closed_loop"), DelayPhaseMode::FixedClosedLoop);
 }
 
+TEST(DelayPhaseTypes, ParsesFixedRobotOnlyAliases) {
+    EXPECT_EQ(parseDelayPhaseMode("fixed_robot_only"), DelayPhaseMode::FixedRobotOnly);
+    EXPECT_EQ(parseDelayPhaseMode("fixed-robot-only"), DelayPhaseMode::FixedRobotOnly);
+    EXPECT_EQ(parseDelayPhaseMode("robot_only_closed_loop"), DelayPhaseMode::FixedRobotOnly);
+    EXPECT_TRUE(isKnownDelayPhaseMode("FIXED_ROBOT_ONLY"));
+    EXPECT_EQ(delayPhaseModeName(DelayPhaseMode::FixedRobotOnly), "fixed_robot_only");
+}
+
 TEST(ExecutionStatePredictor, ConstantStraightCommandPredictsForwardState) {
     CommandHistoryBuffer history;
     history.configure(2.0);
@@ -94,6 +102,99 @@ TEST(ExecutionStatePredictor, CompleteHistoryInFixedClosedLoopReportsClosedLoopO
     EXPECT_TRUE(prediction.history_complete);
     EXPECT_EQ(prediction.status_code, DelayPhaseStatusCode::FixedClosedLoopOk);
     EXPECT_NEAR(prediction.predicted_robot.x, 0.20, 1e-6);
+}
+
+TEST(ExecutionStatePredictor, CompleteHistoryInFixedRobotOnlyReportsRobotOnlyOk) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    history.push(sample(9.80, 1.0, 0.0));
+
+    RobotState robot;
+    SloshState slosh;
+    auto p = params(0.20);
+    p.mode = DelayPhaseMode::FixedRobotOnly;
+    const auto prediction = makePredictor().predict(robot, slosh, history, stamp(10.0), p);
+
+    ASSERT_TRUE(prediction.valid);
+    EXPECT_TRUE(prediction.history_complete);
+    EXPECT_EQ(prediction.status_code, DelayPhaseStatusCode::FixedRobotOnlyOk);
+    EXPECT_EQ(prediction.status, "FIXED_ROBOT_ONLY_OK");
+    EXPECT_NEAR(prediction.predicted_robot.x, 0.20, 1e-6);
+}
+
+TEST(DelayPhaseApplication, FixedRobotOnlyReplacesRobotButPreservesMeasuredLiquid) {
+    SolverInput raw;
+    raw.robot.x = 1.0;
+    raw.robot.y = 2.0;
+    raw.slosh.eta_x = 0.11;
+    raw.slosh.eta_x_dot = -0.22;
+    raw.slosh.eta_y = 0.33;
+    raw.slosh.eta_y_dot = -0.44;
+
+    ExecutionStatePrediction prediction;
+    prediction.valid = true;
+    prediction.history_complete = true;
+    prediction.status_code = DelayPhaseStatusCode::FixedRobotOnlyOk;
+    prediction.predicted_robot.x = 3.0;
+    prediction.predicted_robot.y = 4.0;
+    prediction.predicted_slosh.eta_x = 9.0;
+    prediction.predicted_slosh.eta_x_dot = 8.0;
+    prediction.predicted_slosh.eta_y = 7.0;
+    prediction.predicted_slosh.eta_y_dot = 6.0;
+
+    const auto application = composeDelayPhaseSolverInput(
+        raw, prediction, DelayPhaseMode::FixedRobotOnly, true);
+
+    EXPECT_TRUE(application.robot_applied);
+    EXPECT_FALSE(application.liquid_applied);
+    EXPECT_TRUE(application.anyApplied());
+    EXPECT_DOUBLE_EQ(application.solver_input.robot.x, 3.0);
+    EXPECT_DOUBLE_EQ(application.solver_input.robot.y, 4.0);
+    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_x, raw.slosh.eta_x);
+    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_x_dot, raw.slosh.eta_x_dot);
+    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_y, raw.slosh.eta_y);
+    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_y_dot, raw.slosh.eta_y_dot);
+}
+
+TEST(DelayPhaseApplication, FixedClosedLoopStillReplacesRobotAndLiquid) {
+    SolverInput raw;
+    raw.slosh.eta_x = 0.11;
+
+    ExecutionStatePrediction prediction;
+    prediction.valid = true;
+    prediction.history_complete = true;
+    prediction.status_code = DelayPhaseStatusCode::FixedClosedLoopOk;
+    prediction.predicted_robot.x = 3.0;
+    prediction.predicted_slosh.eta_x = 9.0;
+
+    const auto application = composeDelayPhaseSolverInput(
+        raw, prediction, DelayPhaseMode::FixedClosedLoop, true);
+
+    EXPECT_TRUE(application.robot_applied);
+    EXPECT_TRUE(application.liquid_applied);
+    EXPECT_DOUBLE_EQ(application.solver_input.robot.x, 3.0);
+    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_x, 9.0);
+}
+
+TEST(DelayPhaseApplication, FailedExternalGuardAppliesNeitherState) {
+    SolverInput raw;
+    raw.robot.x = 1.0;
+    raw.slosh.eta_x = 0.11;
+
+    ExecutionStatePrediction prediction;
+    prediction.valid = true;
+    prediction.history_complete = true;
+    prediction.status_code = DelayPhaseStatusCode::FixedRobotOnlyOk;
+    prediction.predicted_robot.x = 3.0;
+    prediction.predicted_slosh.eta_x = 9.0;
+
+    const auto application = composeDelayPhaseSolverInput(
+        raw, prediction, DelayPhaseMode::FixedRobotOnly, false);
+
+    EXPECT_FALSE(application.robot_applied);
+    EXPECT_FALSE(application.liquid_applied);
+    EXPECT_DOUBLE_EQ(application.solver_input.robot.x, raw.robot.x);
+    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_x, raw.slosh.eta_x);
 }
 
 TEST(ExecutionStatePredictor, PartialHistoryIsReportedButAllowedByDefault) {

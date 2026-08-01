@@ -208,17 +208,21 @@ void DiagnosticsPublisher::publishPredictedState(const ExecutionStatePrediction&
 
 void DiagnosticsPublisher::publishSolverInputState(const SolverInput& input,
                                                    std::uint8_t source_code,
-                                                   bool delay_compensation_applied,
+                                                   bool robot_delay_compensation_applied,
+                                                   bool liquid_delay_compensation_applied,
                                                    double height_coeff) {
     std_msgs::Float32MultiArray msg;
     msg.layout.dim.resize(1);
     msg.layout.dim[0].label =
-        "source_code,delay_compensation_applied,x,y,yaw,v,omega,eta_x,eta_x_dot,eta_y,eta_y_dot,h_modal_mm";
-    msg.layout.dim[0].size = 12;
-    msg.layout.dim[0].stride = 12;
-    msg.data.resize(12, 0.0f);
+        "source_code,delay_compensation_applied,x,y,yaw,v,omega,eta_x,eta_x_dot,eta_y,eta_y_dot,h_modal_mm,robot_delay_compensation_applied,liquid_delay_compensation_applied";
+    msg.layout.dim[0].size = 14;
+    msg.layout.dim[0].stride = 14;
+    msg.data.resize(14, 0.0f);
     msg.data[0] = static_cast<float>(source_code);
-    msg.data[1] = delay_compensation_applied ? 1.0f : 0.0f;
+    // Keep the legacy aggregate field and all historical state indices stable.
+    msg.data[1] = (robot_delay_compensation_applied || liquid_delay_compensation_applied)
+                      ? 1.0f
+                      : 0.0f;
     msg.data[2] = static_cast<float>(input.robot.x);
     msg.data[3] = static_cast<float>(input.robot.y);
     msg.data[4] = static_cast<float>(input.robot.yaw);
@@ -229,6 +233,8 @@ void DiagnosticsPublisher::publishSolverInputState(const SolverInput& input,
     msg.data[9] = static_cast<float>(input.slosh.eta_y);
     msg.data[10] = static_cast<float>(input.slosh.eta_y_dot);
     msg.data[11] = static_cast<float>(modalHeightMm(input.slosh, height_coeff));
+    msg.data[12] = robot_delay_compensation_applied ? 1.0f : 0.0f;
+    msg.data[13] = liquid_delay_compensation_applied ? 1.0f : 0.0f;
     solver_input_state_pub_.publish(msg);
 }
 

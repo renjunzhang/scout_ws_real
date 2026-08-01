@@ -12,6 +12,10 @@ enum class DelayPhaseMode {
     Monitor = 1,
     Shadow = 2,
     FixedClosedLoop = 3,
+    // Predict the robot execution pose/twist, but keep the measured liquid
+    // state untouched.  This prevents command-history rollout from replacing
+    // the current processed-IMU state with a differently timed model state.
+    FixedRobotOnly = 4,
 };
 
 enum class DelayPhaseStatusCode {
@@ -27,6 +31,7 @@ enum class DelayPhaseStatusCode {
     OdomStale = 9,
     InvalidParams = 10,
     FixedClosedLoopOk = 11,
+    FixedRobotOnlyOk = 12,
 };
 
 struct DelayPhaseParams {
@@ -98,6 +103,16 @@ struct ExecutionStatePrediction {
     std::string status = "OFF";
 };
 
+struct DelayPhaseApplication {
+    SolverInput solver_input;
+    bool robot_applied = false;
+    bool liquid_applied = false;
+
+    bool anyApplied() const {
+        return robot_applied || liquid_applied;
+    }
+};
+
 struct DelayPhaseDebugSummary {
     DelayPhaseMode mode = DelayPhaseMode::Off;
     double cmd_age_ms = 0.0;
@@ -146,6 +161,8 @@ inline std::string delayPhaseModeName(DelayPhaseMode mode) {
         return "shadow";
     case DelayPhaseMode::FixedClosedLoop:
         return "fixed_closed_loop";
+    case DelayPhaseMode::FixedRobotOnly:
+        return "fixed_robot_only";
     case DelayPhaseMode::Off:
     default:
         return "off";
@@ -160,6 +177,8 @@ inline std::string delayPhaseStatusName(DelayPhaseStatusCode status) {
         return "SHADOW_OK";
     case DelayPhaseStatusCode::FixedClosedLoopOk:
         return "FIXED_CLOSED_LOOP_OK";
+    case DelayPhaseStatusCode::FixedRobotOnlyOk:
+        return "FIXED_ROBOT_ONLY_OK";
     case DelayPhaseStatusCode::NoOdom:
         return "NO_ODOM";
     case DelayPhaseStatusCode::NoReference:
@@ -197,6 +216,10 @@ inline DelayPhaseMode parseDelayPhaseMode(const std::string& mode_text) {
         value == "p1_fixed_closed_loop" || value == "p1-fixed-closed-loop") {
         return DelayPhaseMode::FixedClosedLoop;
     }
+    if (value == "fixed_robot_only" || value == "fixed-robot-only" ||
+        value == "robot_only_closed_loop" || value == "robot-only-closed-loop") {
+        return DelayPhaseMode::FixedRobotOnly;
+    }
     return DelayPhaseMode::Off;
 }
 
@@ -210,7 +233,56 @@ inline bool isKnownDelayPhaseMode(const std::string& mode_text) {
     return value == "off" || value == "monitor" || value == "p0" || value == "diagnostics" ||
            value == "shadow" || value == "p1_shadow" || value == "p1-shadow" ||
            value == "fixed_closed_loop" || value == "fixed-closed-loop" ||
-           value == "p1_fixed_closed_loop" || value == "p1-fixed-closed-loop";
+           value == "p1_fixed_closed_loop" || value == "p1-fixed-closed-loop" ||
+           value == "fixed_robot_only" || value == "fixed-robot-only" ||
+           value == "robot_only_closed_loop" || value == "robot-only-closed-loop";
+}
+
+inline bool delayPhaseUsesClosedLoop(DelayPhaseMode mode) {
+    return mode == DelayPhaseMode::FixedClosedLoop ||
+           mode == DelayPhaseMode::FixedRobotOnly;
+}
+
+inline bool delayPhaseUsesPrediction(DelayPhaseMode mode) {
+    return mode == DelayPhaseMode::Shadow || delayPhaseUsesClosedLoop(mode);
+}
+
+inline DelayPhaseStatusCode delayPhaseReadyStatus(DelayPhaseMode mode) {
+    if (mode == DelayPhaseMode::FixedClosedLoop) {
+        return DelayPhaseStatusCode::FixedClosedLoopOk;
+    }
+    if (mode == DelayPhaseMode::FixedRobotOnly) {
+        return DelayPhaseStatusCode::FixedRobotOnlyOk;
+    }
+    return DelayPhaseStatusCode::ShadowOk;
+}
+
+/// Build the exact SolverInput selected by a delay mode after external
+/// freshness guards (notably odom receive age) have passed.
+///
+/// FixedClosedLoop preserves the historical behavior and replaces both robot
+/// and liquid state. FixedRobotOnly replaces only robot state; its liquid
+/// state remains byte-for-byte sourced from the current observer selection.
+inline DelayPhaseApplication composeDelayPhaseSolverInput(
+    const SolverInput& raw_input,
+    const ExecutionStatePrediction& prediction,
+    DelayPhaseMode mode,
+    bool external_guards_passed) {
+    DelayPhaseApplication out;
+    out.solver_input = raw_input;
+    if (!external_guards_passed || !delayPhaseUsesClosedLoop(mode) ||
+        !prediction.valid || !prediction.history_complete ||
+        prediction.status_code != delayPhaseReadyStatus(mode)) {
+        return out;
+    }
+
+    out.solver_input.robot = prediction.predicted_robot;
+    out.robot_applied = true;
+    if (mode == DelayPhaseMode::FixedClosedLoop) {
+        out.solver_input.slosh = prediction.predicted_slosh;
+        out.liquid_applied = true;
+    }
+    return out;
 }
 
 }  // namespace spmpc_local_planner

@@ -168,7 +168,7 @@ slosh_risk_governor:
 # monitor/shadow only publish diagnostics. fixed_closed_loop uses guarded predicted
 # execution state as SolverInput and falls back to raw state when guards fail.
 delay_phase:
-  mode: off              # off | monitor | shadow | fixed_closed_loop
+  mode: off              # off | monitor | shadow | fixed_closed_loop | fixed_robot_only
   publish_diagnostics: true
   history_window_sec: 2.0
   cmd_timeout_sec: 0.5

@@ -124,9 +124,7 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(const RobotState& raw_
     out.predicted_slosh = slosh;
     out.valid = true;
     if (out.history_complete) {
-        out.status_code = params.mode == DelayPhaseMode::FixedClosedLoop
-                              ? DelayPhaseStatusCode::FixedClosedLoopOk
-                              : DelayPhaseStatusCode::ShadowOk;
+        out.status_code = delayPhaseReadyStatus(params.mode);
     } else {
         out.status_code = DelayPhaseStatusCode::PartialHistory;
     }

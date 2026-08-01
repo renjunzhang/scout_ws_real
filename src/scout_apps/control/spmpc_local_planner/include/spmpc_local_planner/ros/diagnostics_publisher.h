@@ -29,7 +29,8 @@ public:
     void publishPredictedState(const ExecutionStatePrediction& prediction, double height_coeff);
     void publishSolverInputState(const SolverInput& input,
                                  std::uint8_t source_code,
-                                 bool delay_compensation_applied,
+                                 bool robot_delay_compensation_applied,
+                                 bool liquid_delay_compensation_applied,
                                  double height_coeff);
     void publishCommandIntervention(const CommandInterventionDebug& intervention);
     void publishCommandOutput(const geometry_msgs::Twist& desired,

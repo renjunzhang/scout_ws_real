@@ -303,7 +303,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     delay_phase_params_.mode = parseDelayPhaseMode(delay_phase_mode);
     if (!isKnownDelayPhaseMode(delay_phase_mode)) {
         ROS_WARN("[spmpc_local_planner] 未知 delay_phase/mode=\"%s\"，已静默退化为 Off。"
-                 "合法值：off / monitor / shadow / fixed_closed_loop（及其别名）。",
+                 "合法值：off / monitor / shadow / fixed_closed_loop / fixed_robot_only（及其别名）。",
                  delay_phase_mode.c_str());
     }
     pnh_.param("delay_phase/publish_diagnostics", delay_phase_params_.publish_diagnostics, delay_phase_params_.publish_diagnostics);
@@ -836,12 +836,11 @@ bool SpmpcLocalPlannerROS::delayPhaseActive() const {
 }
 
 bool SpmpcLocalPlannerROS::delayPhasePredictionEnabled() const {
-    return delay_phase_params_.mode == DelayPhaseMode::Shadow ||
-           delay_phase_params_.mode == DelayPhaseMode::FixedClosedLoop;
+    return delayPhaseUsesPrediction(delay_phase_params_.mode);
 }
 
 bool SpmpcLocalPlannerROS::delayPhaseClosedLoopEnabled() const {
-    return delay_phase_params_.mode == DelayPhaseMode::FixedClosedLoop;
+    return delayPhaseUsesClosedLoop(delay_phase_params_.mode);
 }
 
 void SpmpcLocalPlannerROS::recordPublishedCommand(
@@ -885,12 +884,14 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
         return status == DelayPhaseStatusCode::MonitorOk ||
                status == DelayPhaseStatusCode::ShadowOk ||
                status == DelayPhaseStatusCode::FixedClosedLoopOk ||
+               status == DelayPhaseStatusCode::FixedRobotOnlyOk ||
                status == DelayPhaseStatusCode::PartialHistory;
     };
 
     if ((effective_status == DelayPhaseStatusCode::MonitorOk ||
          effective_status == DelayPhaseStatusCode::ShadowOk ||
-         effective_status == DelayPhaseStatusCode::FixedClosedLoopOk) &&
+         effective_status == DelayPhaseStatusCode::FixedClosedLoopOk ||
+         effective_status == DelayPhaseStatusCode::FixedRobotOnlyOk) &&
         !has_any_history) {
         effective_status = DelayPhaseStatusCode::NoCmdHistory;
         closed_loop_enabled = false;
@@ -1415,7 +1416,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     diagnostics_.publishPredictedState(shadow_prediction, slosh_height_coeff);
 
     SolverInput solve_input = input;
-    bool delay_compensation_applied = false;
+    bool robot_delay_compensation_applied = false;
+    bool liquid_delay_compensation_applied = false;
     if (delayPhaseClosedLoopEnabled() && shadow_prediction_ptr) {
         const bool have_odom_receive = !last_odom_receive_stamp_.isZero();
         const double odom_age_sec = have_odom_receive ? (delay_phase_now - last_odom_receive_stamp_).toSec() : -1.0;
@@ -1423,12 +1425,12 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
                                 (!std::isfinite(delay_phase_params_.odom_timeout_sec) ||
                                  delay_phase_params_.odom_timeout_sec <= 0.0 ||
                                  odom_age_sec <= delay_phase_params_.odom_timeout_sec);
-        if (shadow_prediction.valid && shadow_prediction.history_complete &&
-            shadow_prediction.status_code == DelayPhaseStatusCode::FixedClosedLoopOk && odom_fresh) {
-            solve_input.robot = shadow_prediction.predicted_robot;
-            solve_input.slosh = shadow_prediction.predicted_slosh;
-            delay_compensation_applied = true;
-        } else if (!odom_fresh) {
+        const DelayPhaseApplication application = composeDelayPhaseSolverInput(
+            input, shadow_prediction, delay_phase_params_.mode, odom_fresh);
+        solve_input = application.solver_input;
+        robot_delay_compensation_applied = application.robot_applied;
+        liquid_delay_compensation_applied = application.liquid_applied;
+        if (!odom_fresh) {
             delay_phase_status = DelayPhaseStatusCode::OdomStale;
         }
     }
@@ -1436,7 +1438,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     diagnostics_.publishSolverInputState(
         solve_input,
         static_cast<std::uint8_t>(observer_selection.effective_source),
-        delay_compensation_applied,
+        robot_delay_compensation_applied,
+        liquid_delay_compensation_applied,
         slosh_height_coeff);
 
     SolverOutput output;
@@ -1475,9 +1478,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     intervention.zero_due_to_terminal_spin_fail = terminal_spin_blocked;
     intervention.zero_due_to_tracking_safety = tracking_safety_blocked;
     diagnostics_.publishStatus(output.status);
-    // 诊断用 solve_input.slosh：fixed_closed_loop 补偿生效时 solve_input.slosh 是
-    // shadow_prediction.predicted_slosh；input.slosh 仍是原始测量值。
-    // 统一用 solve_input 确保 bag 记录的状态与 solver 实际输入一致。
+    // 诊断统一使用 solver 的实际液体输入：fixed_closed_loop 使用 rollout，
+    // fixed_robot_only 则保留当前 observer 测量。
     diagnostics_.publishSloshState(solve_input.slosh);
     // 当前标量模型液面高度 = c_h·‖η‖ (+向心项), 由唯一物理核 SloshDynamics 计算; 单位米(模型 proxy)。
     bool observer_dynamics_configured = false;
@@ -1493,7 +1495,11 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         diagnostics_.publishSloshHeight(selected_height_m);
     }
     publishDelayPhaseDiagnostics(
-        delay_phase_now, delay_phase_status, shadow_prediction_ptr, output.solver_time_ms, delay_compensation_applied);
+        delay_phase_now,
+        delay_phase_status,
+        shadow_prediction_ptr,
+        output.solver_time_ms,
+        robot_delay_compensation_applied || liquid_delay_compensation_applied);
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
 
     if (!output.success) {

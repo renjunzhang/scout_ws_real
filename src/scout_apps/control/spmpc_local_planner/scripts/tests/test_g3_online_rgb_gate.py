@@ -54,6 +54,37 @@ class G3OnlineRgbGateTest(unittest.TestCase):
         )
         self.assertEqual(output[-1], (1.0, 9.0))
 
+    def test_robot_only_delay_application_contract(self):
+        self.assertIsNone(
+            VALIDATOR.application_requirement_failure(
+                "robot-delay-compensation", [1.0] * 98 + [0.0] * 2, "true"
+            )
+        )
+        self.assertIsNone(
+            VALIDATOR.application_requirement_failure(
+                "liquid-delay-compensation", [0.0] * 100, "false"
+            )
+        )
+
+    def test_required_split_delay_flag_cannot_silently_use_legacy_bag(self):
+        self.assertFalse(VALIDATOR.finite(VALIDATOR.application_fraction([])))
+        failure = VALIDATOR.application_requirement_failure(
+            "robot-delay-compensation", [], "true"
+        )
+        self.assertIn("no application flags", failure)
+
+    def test_split_delay_application_gate_rejects_wrong_direction(self):
+        self.assertIsNotNone(
+            VALIDATOR.application_requirement_failure(
+                "robot-delay-compensation", [1.0] * 97 + [0.0] * 3, "true"
+            )
+        )
+        self.assertIsNotNone(
+            VALIDATOR.application_requirement_failure(
+                "liquid-delay-compensation", [0.0] * 97 + [1.0] * 3, "false"
+            )
+        )
+
     def test_four_consistent_pairs_pass(self):
         reports = reports_from_pairs(
             {block: (1.0, 0.8) for block in ("01", "02", "03", "04")}

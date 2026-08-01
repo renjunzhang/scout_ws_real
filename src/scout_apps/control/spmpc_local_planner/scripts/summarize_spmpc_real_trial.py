@@ -413,11 +413,20 @@ def build_red_flags(summary):
     delay = summary["metrics"].get("delay_state", {})
     intent_mode = str(summary.get("intent", {}).get("delay_phase_mode") or "").lower()
     effective_mode = summary["metrics"].get("effective_config_last", {}).get("delay_phase_mode_code")
-    fixed_closed_loop_expected = "fixed_closed_loop" in intent_mode or effective_mode == 3.0
+    fixed_closed_loop_expected = (
+        "fixed_closed_loop" in intent_mode
+        or "fixed_robot_only" in intent_mode
+        or effective_mode in (3.0, 4.0)
+    )
     if fixed_closed_loop_expected and finite(delay.get("delay_compensation_applied_frac")) and delay["delay_compensation_applied_frac"] < 0.95:
         flags.append({"code": "fixed_closed_loop_not_applied", "detail": f"applied_frac={fmt(delay['delay_compensation_applied_frac'])}"})
     if fixed_closed_loop_expected and finite(delay.get("history_complete_frac")) and delay["history_complete_frac"] < 0.95:
         flags.append({"code": "delay_history_incomplete", "detail": f"history_complete_frac={fmt(delay['history_complete_frac'])}"})
+    robot_only_expected = "fixed_robot_only" in intent_mode or effective_mode == 4.0
+    if robot_only_expected and finite(delay.get("robot_delay_compensation_applied_frac")) and delay["robot_delay_compensation_applied_frac"] < 0.95:
+        flags.append({"code": "robot_only_delay_not_applied", "detail": f"robot_applied_frac={fmt(delay['robot_delay_compensation_applied_frac'])}"})
+    if robot_only_expected and finite(delay.get("liquid_delay_compensation_applied_frac")) and delay["liquid_delay_compensation_applied_frac"] > 0.05:
+        flags.append({"code": "robot_only_delay_touched_liquid", "detail": f"liquid_applied_frac={fmt(delay['liquid_delay_compensation_applied_frac'])}"})
     state_delta = delay.get("solver_minus_raw", {})
     yaw_p95 = state_delta.get("abs_yaw_rad", {}).get("p95")
     omega_p95 = state_delta.get("abs_omega", {}).get("p95")
@@ -576,6 +585,8 @@ def summarize_bag(bag_path):
             "slosh_height_mm": numeric_summary(data["floats"].get("slosh_height_mm", [])),
             "delay_state": {
                 "delay_compensation_applied_frac": fraction_true(series_field(solver_input_samples, "delay_compensation_applied")),
+                "robot_delay_compensation_applied_frac": fraction_true(series_field(solver_input_samples, "robot_delay_compensation_applied")),
+                "liquid_delay_compensation_applied_frac": fraction_true(series_field(solver_input_samples, "liquid_delay_compensation_applied")),
                 "history_complete_frac": fraction_true(series_field(cmd_odom, "history_complete")),
                 "shadow_valid_frac": fraction_true(series_field(cmd_odom, "shadow_valid")),
                 "fixed_closed_loop_applied_frac": fraction_true(series_field(cmd_odom, "fixed_closed_loop_applied")),
@@ -669,6 +680,8 @@ def render_markdown(summary):
     lines.append("")
     lines.append("## Delay / state input")
     lines.append(f"- delay_compensation_applied_frac: {fmt(delay.get('delay_compensation_applied_frac'))}")
+    lines.append(f"- robot_delay_compensation_applied_frac: {fmt(delay.get('robot_delay_compensation_applied_frac'))}")
+    lines.append(f"- liquid_delay_compensation_applied_frac: {fmt(delay.get('liquid_delay_compensation_applied_frac'))}")
     lines.append(f"- history_complete_frac: {fmt(delay.get('history_complete_frac'))}")
     lines.append(f"- shadow_valid_frac: {fmt(delay.get('shadow_valid_frac'))}")
     lines.append(f"- fixed_closed_loop_applied_frac: {fmt(delay.get('fixed_closed_loop_applied_frac'))}")

@@ -446,8 +446,8 @@ if [[ -n "${RGB_CALIBRATION_FILE}" ]]; then
   fi
 fi
 case "${DELAY_PHASE_MODE}" in
-  off|monitor|shadow|fixed_closed_loop) ;;
-  *) fail "DELAY_PHASE_MODE must be off|monitor|shadow|fixed_closed_loop, got '${DELAY_PHASE_MODE}'" ;;
+  off|monitor|shadow|fixed_closed_loop|fixed_robot_only) ;;
+  *) fail "DELAY_PHASE_MODE must be off|monitor|shadow|fixed_closed_loop|fixed_robot_only, got '${DELAY_PHASE_MODE}'" ;;
 esac
 for kv in \
   "GOAL_X=${GOAL_X}" \

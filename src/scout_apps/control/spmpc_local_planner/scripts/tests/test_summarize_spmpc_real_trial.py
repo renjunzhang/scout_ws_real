@@ -65,6 +65,35 @@ class SummarizeSpmpcRealTrialTest(unittest.TestCase):
         }
         self.assertIn("horizon_peak_missing", codes)
 
+    def test_robot_only_delay_split_has_no_false_red_flag(self):
+        summary = base_summary("B0")
+        summary["intent"]["delay_phase_mode"] = "fixed_robot_only"
+        summary["metrics"]["effective_config_last"]["delay_phase_mode_code"] = 4.0
+        summary["metrics"]["delay_state"] = {
+            "delay_compensation_applied_frac": 1.0,
+            "history_complete_frac": 1.0,
+            "robot_delay_compensation_applied_frac": 1.0,
+            "liquid_delay_compensation_applied_frac": 0.0,
+        }
+        codes = {item["code"] for item in MODULE.build_red_flags(summary)}
+        self.assertNotIn("fixed_closed_loop_not_applied", codes)
+        self.assertNotIn("robot_only_delay_not_applied", codes)
+        self.assertNotIn("robot_only_delay_touched_liquid", codes)
+
+    def test_robot_only_delay_split_detects_wrong_solver_input(self):
+        summary = base_summary("B0")
+        summary["intent"]["delay_phase_mode"] = "fixed_robot_only"
+        summary["metrics"]["effective_config_last"]["delay_phase_mode_code"] = 4.0
+        summary["metrics"]["delay_state"] = {
+            "delay_compensation_applied_frac": 1.0,
+            "history_complete_frac": 1.0,
+            "robot_delay_compensation_applied_frac": 0.90,
+            "liquid_delay_compensation_applied_frac": 0.10,
+        }
+        codes = {item["code"] for item in MODULE.build_red_flags(summary)}
+        self.assertIn("robot_only_delay_not_applied", codes)
+        self.assertIn("robot_only_delay_touched_liquid", codes)
+
 
 if __name__ == "__main__":
     unittest.main()

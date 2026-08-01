@@ -70,6 +70,19 @@ def parse_args():
         "--require-delay-compensation-applied",
         choices=("auto", "true", "false"),
         default="auto",
+        help="Legacy aggregate gate: true when either robot or liquid compensation is applied.",
+    )
+    parser.add_argument(
+        "--require-robot-delay-compensation-applied",
+        choices=("auto", "true", "false"),
+        default="auto",
+        help="Gate the robot-specific application flag in solver_input_state.",
+    )
+    parser.add_argument(
+        "--require-liquid-delay-compensation-applied",
+        choices=("auto", "true", "false"),
+        default="auto",
+        help="Gate the liquid-specific application flag in solver_input_state.",
     )
     parser.add_argument("--require-state-diagnostics", action="store_true")
     parser.add_argument("--expected-v-ref", type=float, default=0.20)
@@ -114,6 +127,30 @@ def finite(value):
 
 def fraction(numerator, denominator):
     return float(numerator) / float(denominator) if denominator else 0.0
+
+
+def application_fraction(values):
+    clean = [float(value) for value in values if finite(value)]
+    if not clean:
+        return math.nan
+    return fraction(sum(value > 0.5 for value in clean), len(clean))
+
+
+def application_requirement_failure(label, values, requirement):
+    """Return a gate failure while preserving the legacy ``auto`` behavior."""
+    if requirement == "auto":
+        return None
+    clean = [float(value) for value in values if finite(value)]
+    if not clean:
+        return "{} diagnostics contain no application flags".format(label)
+    observed = application_fraction(clean)
+    expected = requirement == "true"
+    ok = observed >= 0.98 if expected else observed <= 0.02
+    if ok:
+        return None
+    return "{} application fraction {:.4f} violates required {}".format(
+        label, observed, requirement
+    )
 
 
 def percentile(values, quantile):
@@ -691,6 +728,18 @@ def main():
         sum(value > 0.5 for value in delay_applied_values),
         len(delay_applied_values),
     )
+    robot_delay_applied_values = [
+        record.get("robot_delay_compensation_applied", math.nan)
+        for _, record in solver_input_state_motion
+        if finite(record.get("robot_delay_compensation_applied"))
+    ]
+    robot_delay_applied_fraction = application_fraction(robot_delay_applied_values)
+    liquid_delay_applied_values = [
+        record.get("liquid_delay_compensation_applied", math.nan)
+        for _, record in solver_input_state_motion
+        if finite(record.get("liquid_delay_compensation_applied"))
+    ]
+    liquid_delay_applied_fraction = application_fraction(liquid_delay_applied_values)
     solver_source_values = [
         int(round(record.get("source_code")))
         for _, record in solver_input_state_motion
@@ -735,19 +784,27 @@ def main():
                 args.expected_solver_source_code,
             )
         )
-    if args.require_delay_compensation_applied != "auto":
-        expected_delay_applied = args.require_delay_compensation_applied == "true"
-        application_ok = (
-            delay_applied_fraction >= 0.98
-            if expected_delay_applied
-            else delay_applied_fraction <= 0.02
-        )
-        if not application_ok:
-            failures.append(
-                "delay-compensation application fraction {:.4f} violates required {}".format(
-                    delay_applied_fraction, args.require_delay_compensation_applied
-                )
-            )
+    application_requirements = (
+        (
+            "delay-compensation",
+            delay_applied_values,
+            args.require_delay_compensation_applied,
+        ),
+        (
+            "robot-delay-compensation",
+            robot_delay_applied_values,
+            args.require_robot_delay_compensation_applied,
+        ),
+        (
+            "liquid-delay-compensation",
+            liquid_delay_applied_values,
+            args.require_liquid_delay_compensation_applied,
+        ),
+    )
+    for label, values, requirement in application_requirements:
+        failure = application_requirement_failure(label, values, requirement)
+        if failure:
+            failures.append(failure)
 
     stage_motion = in_window(stage0_records, motion_start, motion_end)
     contour_values = [abs(record.get("contour_error", math.nan)) for _, record in stage_motion]
@@ -879,6 +936,8 @@ def main():
                 solver_input_modal_height_mm, 0.95
             ),
             "delay_compensation_applied_fraction": delay_applied_fraction,
+            "robot_delay_compensation_applied_fraction": robot_delay_applied_fraction,
+            "liquid_delay_compensation_applied_fraction": liquid_delay_applied_fraction,
             "solver_source_code_expected": args.expected_solver_source_code,
             "solver_source_code_fraction": solver_source_fraction,
             "imu_samples": len(imu_modal_height_mm),
