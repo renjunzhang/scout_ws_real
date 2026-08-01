@@ -206,6 +206,32 @@ class RobotOnlyWeightScreenTest(unittest.TestCase):
         result = SCREEN_V2.evaluate_screen(reports)
         self.assertEqual(result["status"], "SCREEN_INVALID")
 
+    def test_authorized_method_negative_is_retained_but_not_selectable(self):
+        reports = self.make_reports()
+        reports["04"]["status"] = "FAIL"
+        reports["04"]["failures"] = [
+            "stage-0 contour P95 0.053296m > 0.050000m"
+        ]
+        reports["04"]["tracking"]["contour_p95_m"] = 0.053296396508812904
+        result = SCREEN_V2.evaluate_screen(reports, method_negative_rows={"04"})
+        self.assertEqual(result["status"], "PROMOTE_FOR_PAIRED_CONFIRMATION")
+        self.assertEqual(result["selected"]["condition"], "W5_S10")
+        row04 = next(item for item in result["candidates"] if item["row"] == "04")
+        self.assertTrue(row04["method_negative"])
+        self.assertFalse(row04["eligible_for_selection"])
+        self.assertFalse(row04["screen_positive"])
+
+    def test_method_negative_without_authorization_invalidates_screen(self):
+        reports = self.make_reports()
+        reports["04"]["status"] = "FAIL"
+        reports["04"]["failures"] = [
+            "stage-0 contour P95 0.053296m > 0.050000m"
+        ]
+        reports["04"]["tracking"]["contour_p95_m"] = 0.053296396508812904
+        result = SCREEN_V2.evaluate_screen(reports)
+        self.assertEqual(result["status"], "SCREEN_INVALID")
+        self.assertTrue(any("row 04 postflight is not PASS" in item for item in result["failures"]))
+
     def test_cli_combines_frozen_external_baseline_and_four_candidates(self):
         reports = self.make_reports()
         screen_prereg = "a" * 64
@@ -312,13 +338,37 @@ class RobotOnlyWeightScreenTest(unittest.TestCase):
             baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
             baseline_sha = hashlib.sha256(baseline_path.read_bytes()).hexdigest()
 
-            for row in ("02", "04", "05"):
+            for row in ("02", "05"):
                 report = bind_report(
                     reports[row], screen_root / "row_{}.bag".format(row), SCREEN_V2.SCREEN_PROTOCOL
                 )
                 (screen_root / "DEV_G3R2_row_{}_g3r2_screen_postflight.json".format(row)).write_text(
                     json.dumps(report), encoding="utf-8"
                 )
+
+            method_negative = json.loads(json.dumps(reports["04"]))
+            method_negative["status"] = "FAIL"
+            method_negative["failures"] = [
+                "stage-0 contour P95 0.053296m > 0.050000m"
+            ]
+            method_negative["tracking"][
+                "contour_p95_m"
+            ] = 0.053296396508812904
+            method_negative = bind_report(
+                method_negative,
+                screen_root / "DEV_G3R2_H0_C1_W2_S10_r04_a01.bag",
+                SCREEN_V2.SCREEN_PROTOCOL,
+            )
+            method_negative_path = (
+                screen_root
+                / "DEV_G3R2_H0_C1_W2_S10_r04_a01_g3r2_screen_postflight.json"
+            )
+            method_negative_path.write_text(
+                json.dumps(method_negative), encoding="utf-8"
+            )
+            method_negative_sha = hashlib.sha256(
+                method_negative_path.read_bytes()
+            ).hexdigest()
 
             failed = json.loads(json.dumps(reports["03"]))
             failed["status"] = "FAIL"
@@ -370,6 +420,80 @@ class RobotOnlyWeightScreenTest(unittest.TestCase):
             )
             authorization_sha = hashlib.sha256(authorization_path.read_bytes()).hexdigest()
 
+            method_evidence_path = temporary_path / "method_outcome.env"
+            method_evidence_path.write_text(
+                "\n".join(
+                    (
+                        "report_type=DEVELOPMENT_METHOD_OUTCOME_EVIDENCE",
+                        "status=PASS",
+                        "outcome_class=METHOD_PERFORMANCE_FAILURE",
+                        "failure_reason_code=TRACKING_CONTOUR_P95_GATE_EXCEEDED",
+                        "method_failure=true",
+                        "acquisition_failure=false",
+                        "planned_row=04",
+                        "condition=W2_S10",
+                        "attempt_id=DEV_G3R2_H0_C1_W2_S10_r04_a01",
+                        "screen_prereg_sha256={}".format(screen_prereg),
+                        "bag_sha256={}".format(method_negative["bag_sha256"]),
+                        "postflight_sha256={}".format(method_negative_sha),
+                        "candidate_eligible_for_promotion=false",
+                        "row04_retry_authorized=false",
+                        "artifacts_must_be_preserved=true",
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            method_evidence_sha = hashlib.sha256(
+                method_evidence_path.read_bytes()
+            ).hexdigest()
+            continuation_path = temporary_path / "continuation.env"
+            continuation_path.write_text(
+                "\n".join(
+                    (
+                        "report_type=DEVELOPMENT_SCREEN_CONTINUATION_AUTHORIZATION",
+                        "status=PASS",
+                        "scope=G3R2_DEVELOPMENT_SINGLE_RUN_SCREEN",
+                        "continuation_authorized=true",
+                        "failed_method_row=04",
+                        "failed_method_condition=W2_S10",
+                        "failed_method_attempt_id=DEV_G3R2_H0_C1_W2_S10_r04_a01",
+                        "next_authorized_row=05",
+                        "next_authorized_condition=W5_S03",
+                        "next_authorized_attempt_id=DEV_G3R2_H0_C1_W5_S03_r05_a01",
+                        "outcome_class=METHOD_PERFORMANCE_FAILURE",
+                        "failure_reason_code=TRACKING_CONTOUR_P95_GATE_EXCEEDED",
+                        "method_failure=true",
+                        "acquisition_failure=false",
+                        "row04_retry_authorized=false",
+                        "row04_candidate_eligible_for_promotion=false",
+                        "row04_must_remain_in_dataset=true",
+                        "row05_must_keep_original_configuration=true",
+                        "screen_prereg_is_unchanged=true",
+                        "formal_efficacy_claim_authorized=false",
+                        "screen_prereg_sha256={}".format(screen_prereg),
+                        "method_outcome_evidence_path={}".format(
+                            method_evidence_path
+                        ),
+                        "method_outcome_evidence_sha256={}".format(
+                            method_evidence_sha
+                        ),
+                        "failed_bag_sha256={}".format(
+                            method_negative["bag_sha256"]
+                        ),
+                        "failed_postflight_sha256={}".format(
+                            method_negative_sha
+                        ),
+                        "analysis_policy=RETAIN_ROW04_AS_INELIGIBLE_METHOD_NEGATIVE",
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            continuation_sha = hashlib.sha256(
+                continuation_path.read_bytes()
+            ).hexdigest()
+
             completed = subprocess.run(
                 [
                     sys.executable,
@@ -388,6 +512,10 @@ class RobotOnlyWeightScreenTest(unittest.TestCase):
                     str(authorization_path),
                     "--retry-authorization-sha256",
                     authorization_sha,
+                    "--method-failure-authorization",
+                    str(continuation_path),
+                    "--method-failure-authorization-sha256",
+                    continuation_sha,
                 ],
                 check=False,
                 capture_output=True,
@@ -403,6 +531,10 @@ class RobotOnlyWeightScreenTest(unittest.TestCase):
             self.assertEqual(output["excluded_acquisition_attempts"][0]["attempt"], "01")
             eligible_row03 = next(item for item in output["dataset"] if item["row"] == "03")
             self.assertEqual(eligible_row03["attempt"], "02")
+            self.assertEqual(len(output["method_negative_candidates"]), 1)
+            self.assertEqual(output["method_negative_candidates"][0]["row"], "04")
+            row04 = next(item for item in output["dataset"] if item["row"] == "04")
+            self.assertFalse(row04["eligible_for_selection"])
 
 
 if __name__ == "__main__":

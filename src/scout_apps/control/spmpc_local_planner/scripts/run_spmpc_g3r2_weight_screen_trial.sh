@@ -75,6 +75,18 @@ FAILURE_EVIDENCE="${REPO_ROOT}/docs/实物实验注意事项/对比试验/实物
 FAILURE_EVIDENCE_SHA256="a5209f0723d1c9f50b5d1511ac8d6b31be06fed91bd24c87e7f33e52095eb543"
 RETRY_AUTHORIZATION="${REPO_ROOT}/docs/实物实验注意事项/对比试验/实物对比实验/正式论文实验/20260801_G3R2_Row03_a02_相机时间戳采集重试授权.env"
 RETRY_AUTHORIZATION_SHA256="599a24a8d556f66b5e43a72cdd5d5f11652a2c7ee5edc107a447e7aab46ed552"
+METHOD_NEGATIVE_ROW04_BAG="/home/geist/slosh_bags/real/20260801_spmpc_g3r2_robot_only_weight_screen/H0/DEV_G3R2_H0_C1_W2_S10_r04_a01.bag"
+METHOD_NEGATIVE_ROW04_BAG_SHA256="5b6fa9af7fca5cc381c8d6ab06504162d8ebb54e8c77a74e85ee58f244effe60"
+METHOD_NEGATIVE_ROW04_REPORT="/home/geist/slosh_bags/real/20260801_spmpc_g3r2_robot_only_weight_screen/H0/DEV_G3R2_H0_C1_W2_S10_r04_a01_g3r2_screen_postflight.json"
+METHOD_NEGATIVE_ROW04_REPORT_SHA256="8f1c51266dc4edd6a51b455eeb098fcf685f037b335cbd6e142ac46af7bccedc"
+METHOD_NEGATIVE_ROW04_PRE_ZERO="/home/geist/slosh_bags/real/20260801_spmpc_g3r2_robot_only_weight_screen/H0/DEV_G3R2_H0_C1_W2_S10_r04_a01_realsense_timestamp_pre_zero.json"
+METHOD_NEGATIVE_ROW04_PRE_ZERO_SHA256="21328bd09b6a661129c0fc2d74d5294a8e7c5c923ec949ddab3d8a669bec2c98"
+METHOD_NEGATIVE_ROW04_PRE_RECORD="/home/geist/slosh_bags/real/20260801_spmpc_g3r2_robot_only_weight_screen/H0/DEV_G3R2_H0_C1_W2_S10_r04_a01_realsense_timestamp_pre_record.json"
+METHOD_NEGATIVE_ROW04_PRE_RECORD_SHA256="134932be3a74b44da77018eb9b29dfeac987b95a59fdd391dd9fb43790903c2c"
+METHOD_OUTCOME_EVIDENCE="${REPO_ROOT}/docs/实物实验注意事项/对比试验/实物对比实验/正式论文实验/20260801_G3R2_Row04_a01_跟踪门槛方法失败证据.env"
+METHOD_OUTCOME_EVIDENCE_SHA256="e1bc6e81a3e943ecf51a7cfd885ace45eb3cbd8f7c22e9eae573168367b12ade"
+SCREEN_CONTINUATION_AUTHORIZATION="${REPO_ROOT}/docs/实物实验注意事项/对比试验/实物对比实验/正式论文实验/20260801_G3R2_Row05_方法失败后继续筛选授权.env"
+SCREEN_CONTINUATION_AUTHORIZATION_SHA256="abcbb8d5dbfc043c8dd5ae8224e303fa90266edaf7b3a27e26d8b715a000adc9"
 RETRY_OF_ATTEMPT_ID=""
 RETRY_REASON_FILE=""
 REPORT_SUFFIX="_g3r2_screen_postflight.json"
@@ -127,6 +139,9 @@ required_files=(
   "${RUNNER}" "${VALIDATOR}" "${ANALYZER}" "${SUMMARIZER}" "${CAMERA_PREP}" "${TIMESTAMP_GATE}"
   "${PATH_FILE}" "${SOURCE_REPORT}" "${BASELINE_BAG}" "${BASELINE_REPORT}"
   "${FAILED_ROW03_BAG}" "${FAILED_ROW03_REPORT}" "${FAILURE_EVIDENCE}" "${RETRY_AUTHORIZATION}"
+  "${METHOD_NEGATIVE_ROW04_BAG}" "${METHOD_NEGATIVE_ROW04_REPORT}"
+  "${METHOD_NEGATIVE_ROW04_PRE_ZERO}" "${METHOD_NEGATIVE_ROW04_PRE_RECORD}"
+  "${METHOD_OUTCOME_EVIDENCE}" "${SCREEN_CONTINUATION_AUTHORIZATION}"
   "${RGB_CALIBRATION_FILE}" "${RGB_CAMERA_PARAMS_FILE}"
   "${ONLINE_LIQUID_LAUNCH}" "${ONLINE_LIQUID_NODE}" "${ONLINE_LIQUID_DETECTOR}" "${ONLINE_LIQUID_MSG}"
   "${PLANNER_LIBRARY}" "${PLANNER_NODE}" "${SLOSH_MODELS_LIBRARY}"
@@ -154,6 +169,12 @@ verify_sha256 "${FAILED_ROW03_BAG}" "${FAILED_ROW03_BAG_SHA256}" "failed Row 03 
 verify_sha256 "${FAILED_ROW03_REPORT}" "${FAILED_ROW03_REPORT_SHA256}" "failed Row 03 postflight"
 verify_sha256 "${FAILURE_EVIDENCE}" "${FAILURE_EVIDENCE_SHA256}" "Row 03 failure evidence"
 verify_sha256 "${RETRY_AUTHORIZATION}" "${RETRY_AUTHORIZATION_SHA256}" "Row 03 retry authorization"
+verify_sha256 "${METHOD_NEGATIVE_ROW04_BAG}" "${METHOD_NEGATIVE_ROW04_BAG_SHA256}" "method-negative Row 04 bag"
+verify_sha256 "${METHOD_NEGATIVE_ROW04_REPORT}" "${METHOD_NEGATIVE_ROW04_REPORT_SHA256}" "method-negative Row 04 postflight"
+verify_sha256 "${METHOD_NEGATIVE_ROW04_PRE_ZERO}" "${METHOD_NEGATIVE_ROW04_PRE_ZERO_SHA256}" "Row 04 pre-zero timestamp gate"
+verify_sha256 "${METHOD_NEGATIVE_ROW04_PRE_RECORD}" "${METHOD_NEGATIVE_ROW04_PRE_RECORD_SHA256}" "Row 04 pre-record timestamp gate"
+verify_sha256 "${METHOD_OUTCOME_EVIDENCE}" "${METHOD_OUTCOME_EVIDENCE_SHA256}" "Row 04 method-outcome evidence"
+verify_sha256 "${SCREEN_CONTINUATION_AUTHORIZATION}" "${SCREEN_CONTINUATION_AUTHORIZATION_SHA256}" "Row 05 continuation authorization"
 verify_sha256 "${RGB_CALIBRATION_FILE}" "${RGB_CALIBRATION_SHA256}" "RGB calibration"
 verify_sha256 "${RGB_CAMERA_PARAMS_FILE}" "${RGB_CAMERA_PARAMS_SHA256}" "RealSense parameters"
 
@@ -278,6 +299,142 @@ if float(tracking.get("contour_p95_m", 1.0)) > 0.05 or float(tracking.get("yaw_p
     raise SystemExit("failed Row 03 also violated tracking gates")
 PY
 
+python3 - \
+  "${METHOD_OUTCOME_EVIDENCE}" "${SCREEN_CONTINUATION_AUTHORIZATION}" \
+  "${METHOD_NEGATIVE_ROW04_REPORT}" "${METHOD_NEGATIVE_ROW04_PRE_ZERO}" \
+  "${METHOD_NEGATIVE_ROW04_PRE_RECORD}" "${METHOD_OUTCOME_EVIDENCE_SHA256}" \
+  "${METHOD_NEGATIVE_ROW04_BAG_SHA256}" "${METHOD_NEGATIVE_ROW04_REPORT_SHA256}" \
+  "${METHOD_NEGATIVE_ROW04_PRE_ZERO_SHA256}" "${METHOD_NEGATIVE_ROW04_PRE_RECORD_SHA256}" \
+  "${SCREEN_RELEASE_REVISION}" <<'PY'
+import json
+import math
+import sys
+
+
+def read_unique_env(path):
+    result = {}
+    with open(path, encoding="utf-8") as stream:
+        for line_number, raw in enumerate(stream, 1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                raise SystemExit("invalid method-outcome evidence line {}".format(line_number))
+            key, value = line.split("=", 1)
+            if key in result:
+                raise SystemExit("duplicate method-outcome evidence key {}".format(key))
+            result[key] = value
+    return result
+
+
+evidence = read_unique_env(sys.argv[1])
+authorization = read_unique_env(sys.argv[2])
+with open(sys.argv[3], encoding="utf-8") as stream:
+    failed = json.load(stream)
+with open(sys.argv[4], encoding="utf-8") as stream:
+    pre_zero = json.load(stream)
+with open(sys.argv[5], encoding="utf-8") as stream:
+    pre_record = json.load(stream)
+
+expected_authorization = {
+    "report_type": "DEVELOPMENT_SCREEN_CONTINUATION_AUTHORIZATION",
+    "status": "PASS",
+    "scope": "G3R2_DEVELOPMENT_SINGLE_RUN_SCREEN",
+    "continuation_authorized": "true",
+    "failed_method_row": "04",
+    "failed_method_condition": "W2_S10",
+    "failed_method_attempt_id": "DEV_G3R2_H0_C1_W2_S10_r04_a01",
+    "next_authorized_row": "05",
+    "next_authorized_condition": "W5_S03",
+    "next_authorized_attempt_id": "DEV_G3R2_H0_C1_W5_S03_r05_a01",
+    "outcome_class": "METHOD_PERFORMANCE_FAILURE",
+    "failure_reason_code": "TRACKING_CONTOUR_P95_GATE_EXCEEDED",
+    "method_failure": "true",
+    "acquisition_failure": "false",
+    "row04_retry_authorized": "false",
+    "row04_candidate_eligible_for_promotion": "false",
+    "row04_must_remain_in_dataset": "true",
+    "row05_must_keep_original_configuration": "true",
+    "row05_replicates": "1",
+    "screen_prereg_is_unchanged": "true",
+    "formal_efficacy_claim_authorized": "false",
+    "original_release_revision": sys.argv[11],
+    "screen_prereg_sha256": "0a8f0af5395bc930d84ac4359ba4716e493acf007148781c45d3e2669993fe85",
+    "method_outcome_evidence_sha256": sys.argv[6],
+    "failed_bag_sha256": sys.argv[7],
+    "failed_postflight_sha256": sys.argv[8],
+    "failed_artifacts_must_be_preserved": "true",
+    "analysis_policy": "RETAIN_ROW04_AS_INELIGIBLE_METHOD_NEGATIVE",
+}
+for key, value in expected_authorization.items():
+    if authorization.get(key) != value:
+        raise SystemExit("screen continuation authorization mismatch for {}".format(key))
+
+expected_evidence = {
+    "report_type": "DEVELOPMENT_METHOD_OUTCOME_EVIDENCE",
+    "status": "PASS",
+    "outcome_class": "METHOD_PERFORMANCE_FAILURE",
+    "failure_reason_code": "TRACKING_CONTOUR_P95_GATE_EXCEEDED",
+    "method_failure": "true",
+    "acquisition_failure": "false",
+    "planned_row": "04",
+    "condition": "W2_S10",
+    "attempt_id": "DEV_G3R2_H0_C1_W2_S10_r04_a01",
+    "original_release_revision": sys.argv[11],
+    "screen_prereg_sha256": "0a8f0af5395bc930d84ac4359ba4716e493acf007148781c45d3e2669993fe85",
+    "bag_sha256": sys.argv[7],
+    "postflight_sha256": sys.argv[8],
+    "timestamp_pre_zero_sha256": sys.argv[9],
+    "timestamp_pre_record_sha256": sys.argv[10],
+    "candidate_eligible_for_promotion": "false",
+    "row04_retry_authorized": "false",
+    "artifacts_must_be_preserved": "true",
+}
+for key, value in expected_evidence.items():
+    if evidence.get(key) != value:
+        raise SystemExit("method-outcome evidence mismatch for {}".format(key))
+
+if failed.get("status") != "FAIL" or failed.get("row") != "04" or failed.get("condition") != "W2_S10":
+    raise SystemExit("method-negative Row 04 identity mismatch")
+if failed.get("protocol") != "G3R2_robot_only_weight_screen_v1":
+    raise SystemExit("method-negative Row 04 protocol mismatch")
+if failed.get("bag_sha256") != sys.argv[7]:
+    raise SystemExit("method-negative Row 04 bag binding mismatch")
+if failed.get("failures") != ["stage-0 contour P95 0.053296m > 0.050000m"]:
+    raise SystemExit("Row 04 failure is not limited to the frozen tracking gate")
+config = failed.get("effective_config_last", {})
+if not math.isclose(float(config.get("w_slosh", -1.0)), 2.0, abs_tol=1.0e-6):
+    raise SystemExit("method-negative Row 04 w_slosh mismatch")
+for field in ("w_smooth", "w_alpha", "w_du_a", "w_du_vs"):
+    if not math.isclose(float(config.get(field, -1.0)), 1.0, abs_tol=1.0e-6):
+        raise SystemExit("method-negative Row 04 {} mismatch".format(field))
+internal = failed.get("internal_state", {})
+processed = failed.get("processed_imu", {})
+tracking = failed.get("tracking", {})
+online = failed.get("online_rgb", {})
+if float(internal.get("robot_delay_compensation_applied_fraction", 0.0)) < 0.98:
+    raise SystemExit("method-negative Row 04 lacks robot delay compensation")
+if float(internal.get("liquid_delay_compensation_applied_fraction", 1.0)) > 0.02:
+    raise SystemExit("method-negative Row 04 applied forbidden liquid rollout")
+if float(internal.get("solver_source_code_fraction", 0.0)) < 0.98:
+    raise SystemExit("method-negative Row 04 lacks processed-IMU source coverage")
+if float(processed.get("ready_fraction", 0.0)) < 0.98 or int(processed.get("fallback_samples", -1)) != 0:
+    raise SystemExit("method-negative Row 04 has an IMU readiness/fallback failure")
+if processed.get("reset_epochs") != [0]:
+    raise SystemExit("method-negative Row 04 has an observer reset")
+if not math.isclose(float(tracking.get("contour_p95_m", 0.0)), 0.053296396508812904, abs_tol=1.0e-12):
+    raise SystemExit("method-negative Row 04 contour metric changed")
+if float(tracking.get("yaw_p95_rad", 1.0)) > 0.15:
+    raise SystemExit("method-negative Row 04 also violated yaw tracking")
+if float(online.get("motion_tail_valid_fraction", 0.0)) < 0.98:
+    raise SystemExit("method-negative Row 04 lacks RGB coverage")
+if failed.get("image_stream_audit", {}).get("count") != 0:
+    raise SystemExit("method-negative Row 04 recorded a forbidden image stream")
+for label, gate in (("pre-zero", pre_zero), ("pre-record", pre_record)):
+    if gate.get("status") != "PASS" or gate.get("failures"):
+        raise SystemExit("method-negative Row 04 {} timestamp gate failed".format(label))
+PY
+
 runtime_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
 relevant_repo_paths=(
   src/scout_apps/control/spmpc_local_planner/CMakeLists.txt
@@ -301,6 +458,8 @@ relevant_repo_paths=(
   src/scout_apps/sensors/realsense_liquid_measurement/scripts/red_liquid_infer_from_bag.py
   docs/实物实验注意事项/对比试验/实物对比实验/正式论文实验/20260801_G3R2_Row03_a01_相机时间戳采集失败证据.env
   docs/实物实验注意事项/对比试验/实物对比实验/正式论文实验/20260801_G3R2_Row03_a02_相机时间戳采集重试授权.env
+  docs/实物实验注意事项/对比试验/实物对比实验/正式论文实验/20260801_G3R2_Row04_a01_跟踪门槛方法失败证据.env
+  docs/实物实验注意事项/对比试验/实物对比实验/正式论文实验/20260801_G3R2_Row05_方法失败后继续筛选授权.env
 )
 tracked_missing=()
 for path in "${relevant_repo_paths[@]}"; do
@@ -510,7 +669,67 @@ validate_launch_contract() {
   echo "[G3R2-SCREEN] launch contract PASS (no planner started)"
 }
 
+validate_previous_row() {
+  [[ "${G3R2_ROW}" != "02" ]] || return 0
+  local previous_row previous_condition previous_attempt previous_suffix previous_report
+  previous_row="$(printf '%02d' "$((10#${G3R2_ROW} - 1))")"
+  case "${previous_row}" in
+    02) previous_condition=W2_S03 ;;
+    03) previous_condition=W5_S10 ;;
+    04) previous_condition=W2_S10 ;;
+    *) fail "unsupported previous G3R2 row: ${previous_row}" ;;
+  esac
+  previous_attempt=01
+  previous_suffix=_g3r2_screen_postflight.json
+  if [[ "${previous_row}" == "03" ]]; then
+    previous_attempt=02
+    previous_suffix=_g3r2_screen_retry_postflight.json
+  fi
+  previous_report="${RUN_OUT_DIR}/DEV_G3R2_H0_C1_${previous_condition}_r${previous_row}_a${previous_attempt}${previous_suffix}"
+  [[ -s "${previous_report}" ]] || fail "previous row postflight is missing: ${previous_report}"
+  if [[ "${previous_row}" == "04" && "${previous_report}" != "${METHOD_NEGATIVE_ROW04_REPORT}" ]]; then
+    fail "Row 05 continuation is bound to the frozen method-negative Row 04 postflight"
+  fi
+  python3 - \
+    "${previous_report}" "${previous_row}" "${PREREG_SHA256}" "${SOURCE_REPORT_SHA256}" \
+    "${METHOD_NEGATIVE_ROW04_BAG_SHA256}" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    report = json.load(stream)
+row = sys.argv[2]
+if str(report.get("row")) != row:
+    raise SystemExit("previous row binding mismatch")
+if report.get("protocol") != "G3R2_robot_only_weight_screen_v1":
+    raise SystemExit("previous protocol mismatch")
+bindings = report.get("bindings", {})
+if bindings.get("prereg_sha256") != sys.argv[3]:
+    raise SystemExit("previous prereg binding mismatch")
+if bindings.get("source_report_sha256") != sys.argv[4]:
+    raise SystemExit("previous source binding mismatch")
+if row == "04":
+    if report.get("status") != "FAIL":
+        raise SystemExit("authorized method-negative Row 04 is not FAIL")
+    if report.get("condition") != "W2_S10":
+        raise SystemExit("authorized method-negative Row 04 condition mismatch")
+    if report.get("bag_sha256") != sys.argv[5]:
+        raise SystemExit("authorized method-negative Row 04 bag mismatch")
+    if report.get("failures") != ["stage-0 contour P95 0.053296m > 0.050000m"]:
+        raise SystemExit("Row 04 has a failure outside the continuation authorization")
+else:
+    if report.get("status") != "PASS":
+        raise SystemExit("previous G3R2 candidate row is not PASS")
+PY
+  if [[ "${previous_row}" == "04" ]]; then
+    echo "[G3R2-SCREEN] previous Row 04 retained as an ineligible method-negative; Row 05 continuation PASS"
+  else
+    echo "[G3R2-SCREEN] previous Row ${previous_row} PASS"
+  fi
+}
+
 validate_launch_contract
+validate_previous_row
 
 if truthy "${VALIDATE_ONLY}"; then
   printf '[G3R2-SCREEN] validate-only runner command:\n  env '
@@ -525,40 +744,6 @@ fi
 [[ "${ARM_MOTION}" == "YES" ]] || fail "real motion is disarmed; set ARM_MOTION=YES after clearing the path"
 [[ "${CONFIRM_RGB_GEOMETRY}" == "YES" ]] || fail "set CONFIRM_RGB_GEOMETRY=YES after checking ROI/rulers/container"
 [[ ! -e "${BAG_PATH}" && ! -e "${BAG_PATH}.active" ]] || fail "attempt output already exists: ${BAG_PATH}"
-
-if [[ "${G3R2_ROW}" != "02" ]]; then
-  previous_row="$(printf '%02d' "$((10#${G3R2_ROW} - 1))")"
-  case "${previous_row}" in
-    02) previous_condition=W2_S03 ;;
-    03) previous_condition=W5_S10 ;;
-    04) previous_condition=W2_S10 ;;
-  esac
-  previous_attempt=01
-  previous_suffix=_g3r2_screen_postflight.json
-  if [[ "${previous_row}" == "03" ]]; then
-    previous_attempt=02
-    previous_suffix=_g3r2_screen_retry_postflight.json
-  fi
-  previous_report="${RUN_OUT_DIR}/DEV_G3R2_H0_C1_${previous_condition}_r${previous_row}_a${previous_attempt}${previous_suffix}"
-  [[ -s "${previous_report}" ]] || fail "previous row postflight is missing: ${previous_report}"
-  python3 - "${previous_report}" "${previous_row}" "${PREREG_SHA256}" "${SOURCE_REPORT_SHA256}" <<'PY'
-import json
-import sys
-with open(sys.argv[1], encoding="utf-8") as stream:
-    report = json.load(stream)
-if report.get("status") != "PASS":
-    raise SystemExit("previous G3R2 candidate row is not PASS")
-if str(report.get("row")) != sys.argv[2]:
-    raise SystemExit("previous row binding mismatch")
-if report.get("protocol") != "G3R2_robot_only_weight_screen_v1":
-    raise SystemExit("previous protocol mismatch")
-bindings = report.get("bindings", {})
-if bindings.get("prereg_sha256") != sys.argv[3]:
-    raise SystemExit("previous prereg binding mismatch")
-if bindings.get("source_report_sha256") != sys.argv[4]:
-    raise SystemExit("previous source binding mismatch")
-PY
-fi
 
 available_kib="$(df -Pk /home/geist/slosh_bags/real | awk 'NR == 2 {print $4}')"
 required_kib=$((MIN_FREE_GIB * 1024 * 1024))
@@ -586,6 +771,8 @@ printf '%s\n' \
   "baseline_report_sha256=${BASELINE_REPORT_SHA256}" "prereg_sha256=${PREREG_SHA256}" \
   "acquisition_retry=${ACQUISITION_RETRY}" "retry_of_attempt_id=${RETRY_OF_ATTEMPT_ID}" \
   "retry_authorization_sha256=${RETRY_AUTHORIZATION_SHA256}" \
+  "method_outcome_evidence_sha256=${METHOD_OUTCOME_EVIDENCE_SHA256}" \
+  "screen_continuation_authorization_sha256=${SCREEN_CONTINUATION_AUTHORIZATION_SHA256}" \
   "timestamp_gate_sha256=${timestamp_gate_sha}" \
   > "${RUN_OUT_DIR}/${RUN_LABEL}_g3r2_screen_binding.env"
 
@@ -673,6 +860,8 @@ if [[ "${G3R2_ROW}" == "05" ]]; then
     --screen-prereg-sha256 "${PREREG_SHA256}" --source-report-sha256 "${SOURCE_REPORT_SHA256}" \
     --retry-authorization "${RETRY_AUTHORIZATION}" \
     --retry-authorization-sha256 "${RETRY_AUTHORIZATION_SHA256}" \
+    --method-failure-authorization "${SCREEN_CONTINUATION_AUTHORIZATION}" \
+    --method-failure-authorization-sha256 "${SCREEN_CONTINUATION_AUTHORIZATION_SHA256}" \
     --minimum-rgb-p95-improvement-mm 0.05 --minimum-rgb-rms-improvement-mm 0.0 \
     --maximum-raw-imu-regression-mm 0.05
   analyzer_rc=$?

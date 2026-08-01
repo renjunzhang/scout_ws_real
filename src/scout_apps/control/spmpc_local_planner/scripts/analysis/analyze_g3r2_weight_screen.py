@@ -27,6 +27,10 @@ FAILED_ROW03_ATTEMPT_ID = "DEV_G3R2_H0_C1_W5_S10_r03_a01"
 RETRY_ROW03_ATTEMPT_ID = "DEV_G3R2_H0_C1_W5_S10_r03_a02"
 FAILED_ROW03_REPORT_NAME = FAILED_ROW03_ATTEMPT_ID + "_g3r2_screen_postflight.json"
 RETRY_ROW03_REPORT_NAME = RETRY_ROW03_ATTEMPT_ID + "_g3r2_screen_retry_postflight.json"
+METHOD_NEGATIVE_ROW04_ATTEMPT_ID = "DEV_G3R2_H0_C1_W2_S10_r04_a01"
+METHOD_NEGATIVE_ROW04_REPORT_NAME = (
+    METHOD_NEGATIVE_ROW04_ATTEMPT_ID + "_g3r2_screen_postflight.json"
+)
 
 
 def parse_args():
@@ -38,6 +42,8 @@ def parse_args():
     parser.add_argument("--source-report-sha256", required=True)
     parser.add_argument("--retry-authorization")
     parser.add_argument("--retry-authorization-sha256")
+    parser.add_argument("--method-failure-authorization")
+    parser.add_argument("--method-failure-authorization-sha256")
     parser.add_argument("--minimum-rgb-p95-improvement-mm", type=float, default=0.05)
     parser.add_argument("--minimum-rgb-rms-improvement-mm", type=float, default=0.0)
     parser.add_argument("--maximum-raw-imu-regression-mm", type=float, default=0.05)
@@ -93,9 +99,9 @@ def read_unique_env(path):
     return result
 
 
-def audit_state_contract(row, report, expected):
+def audit_state_contract(row, report, expected, allow_method_negative=False):
     failures = []
-    if report.get("status") != "PASS":
+    if report.get("status") != "PASS" and not allow_method_negative:
         failures.append("row {} postflight is not PASS".format(row))
     if str(report.get("row")) != row:
         failures.append("row {} row binding mismatch".format(row))
@@ -148,8 +154,15 @@ def normalized_metrics(row, report, expected):
     }
 
 
-def evaluate_screen(reports, p95_threshold=0.05, rms_threshold=0.0, raw_regression=0.05):
+def evaluate_screen(
+    reports,
+    p95_threshold=0.05,
+    rms_threshold=0.0,
+    raw_regression=0.05,
+    method_negative_rows=(),
+):
     failures = []
+    method_negative_rows = set(method_negative_rows)
     if set(reports) != set(EXPECTED_ROWS):
         failures.append(
             "row set mismatch: expected={} actual={}".format(
@@ -162,7 +175,11 @@ def evaluate_screen(reports, p95_threshold=0.05, rms_threshold=0.0, raw_regressi
         report = reports.get(row)
         if report is None:
             continue
-        failures.extend(audit_state_contract(row, report, expected))
+        failures.extend(
+            audit_state_contract(
+                row, report, expected, allow_method_negative=row in method_negative_rows
+            )
+        )
         normalized[row] = normalized_metrics(row, report, expected)
         for field in (
             "rgb_p95_mm",
@@ -185,11 +202,13 @@ def evaluate_screen(reports, p95_threshold=0.05, rms_threshold=0.0, raw_regressi
             p95_delta = baseline["rgb_p95_mm"] - candidate["rgb_p95_mm"]
             rms_delta = baseline["rgb_rms_mm"] - candidate["rgb_rms_mm"]
             raw_delta = baseline["raw_imu_p95_mm"] - candidate["raw_imu_p95_mm"]
+            eligible_for_selection = row not in method_negative_rows
             positive = (
                 p95_delta >= p95_threshold
                 and rms_delta >= rms_threshold
                 and raw_delta >= -raw_regression
                 and reports[row].get("status") == "PASS"
+                and eligible_for_selection
             )
             score = p95_delta + 0.5 * rms_delta + 0.25 * max(0.0, raw_delta)
             candidates.append(
@@ -198,6 +217,9 @@ def evaluate_screen(reports, p95_threshold=0.05, rms_threshold=0.0, raw_regressi
                     "rgb_p95_improvement_mm": p95_delta,
                     "rgb_rms_improvement_mm": rms_delta,
                     "raw_imu_p95_improvement_mm": raw_delta,
+                    "postflight_status": reports[row].get("status"),
+                    "method_negative": row in method_negative_rows,
+                    "eligible_for_selection": eligible_for_selection,
                     "screen_positive": positive,
                     "ranking_score": score,
                 }
@@ -294,6 +316,11 @@ def main():
         if args.retry_authorization
         else None
     )
+    method_failure_authorization_path = (
+        Path(args.method_failure_authorization).expanduser().resolve()
+        if args.method_failure_authorization
+        else None
+    )
     for name, value in (
         ("baseline-report", args.baseline_report_sha256),
         ("screen-prereg", args.screen_prereg_sha256),
@@ -314,6 +341,25 @@ def main():
         ) != args.retry_authorization_sha256:
             raise SystemExit("retry authorization is missing or differs from its frozen hash")
         retry_authorization = read_unique_env(retry_authorization_path)
+    if bool(method_failure_authorization_path) != bool(
+        args.method_failure_authorization_sha256
+    ):
+        raise SystemExit(
+            "method-failure authorization path and SHA-256 must be provided together"
+        )
+    method_failure_authorization = None
+    if method_failure_authorization_path:
+        if not valid_sha256(args.method_failure_authorization_sha256):
+            raise SystemExit("method-failure authorization SHA-256 is invalid")
+        if not method_failure_authorization_path.is_file() or sha256_file(
+            method_failure_authorization_path
+        ) != args.method_failure_authorization_sha256:
+            raise SystemExit(
+                "method-failure authorization is missing or differs from its frozen hash"
+            )
+        method_failure_authorization = read_unique_env(
+            method_failure_authorization_path
+        )
 
     with baseline_path.open(encoding="utf-8") as stream:
         baseline = json.load(stream)
@@ -428,11 +474,159 @@ def main():
     elif retry_authorization is not None:
         integrity_failures.append("retry authorization supplied but retry postflight is missing")
 
+    method_negative_rows = set()
+    method_negative_candidates = []
+    if method_failure_authorization is not None:
+        row04_report = reports.get("04")
+        row04_path = report_paths.get("04")
+        expected_method_authorization = {
+            "report_type": "DEVELOPMENT_SCREEN_CONTINUATION_AUTHORIZATION",
+            "status": "PASS",
+            "scope": "G3R2_DEVELOPMENT_SINGLE_RUN_SCREEN",
+            "continuation_authorized": "true",
+            "failed_method_row": "04",
+            "failed_method_condition": "W2_S10",
+            "failed_method_attempt_id": METHOD_NEGATIVE_ROW04_ATTEMPT_ID,
+            "next_authorized_row": "05",
+            "next_authorized_condition": "W5_S03",
+            "next_authorized_attempt_id": "DEV_G3R2_H0_C1_W5_S03_r05_a01",
+            "outcome_class": "METHOD_PERFORMANCE_FAILURE",
+            "failure_reason_code": "TRACKING_CONTOUR_P95_GATE_EXCEEDED",
+            "method_failure": "true",
+            "acquisition_failure": "false",
+            "row04_retry_authorized": "false",
+            "row04_candidate_eligible_for_promotion": "false",
+            "row04_must_remain_in_dataset": "true",
+            "row05_must_keep_original_configuration": "true",
+            "screen_prereg_is_unchanged": "true",
+            "formal_efficacy_claim_authorized": "false",
+            "screen_prereg_sha256": args.screen_prereg_sha256,
+            "analysis_policy": "RETAIN_ROW04_AS_INELIGIBLE_METHOD_NEGATIVE",
+        }
+        for key, value in expected_method_authorization.items():
+            if method_failure_authorization.get(key) != value:
+                integrity_failures.append(
+                    "method-failure authorization mismatch for {}".format(key)
+                )
+        evidence_hash = method_failure_authorization.get(
+            "method_outcome_evidence_sha256", ""
+        )
+        evidence_text = method_failure_authorization.get(
+            "method_outcome_evidence_path", ""
+        )
+        evidence = None
+        if not valid_sha256(evidence_hash) or not evidence_text:
+            integrity_failures.append(
+                "method-failure authorization lacks frozen outcome evidence"
+            )
+        else:
+            evidence_path = Path(evidence_text).expanduser().resolve()
+            if not evidence_path.is_file() or sha256_file(evidence_path) != evidence_hash:
+                integrity_failures.append(
+                    "method-outcome evidence is missing or differs from its frozen hash"
+                )
+            else:
+                evidence = read_unique_env(evidence_path)
+        if row04_report is None or row04_path is None:
+            integrity_failures.append(
+                "method-failure authorization has no preserved Row 04 outcome"
+            )
+        else:
+            if row04_path.name != METHOD_NEGATIVE_ROW04_REPORT_NAME:
+                integrity_failures.append(
+                    "method-negative Row 04 postflight attempt identity mismatch"
+                )
+            row04_bag = Path(str(row04_report.get("bag", ""))).expanduser()
+            if row04_bag.name != METHOD_NEGATIVE_ROW04_ATTEMPT_ID + ".bag":
+                integrity_failures.append(
+                    "method-negative Row 04 bag attempt identity mismatch"
+                )
+            if row04_report.get("status") != "FAIL":
+                integrity_failures.append("authorized method-negative Row 04 is not FAIL")
+            if row04_report.get("condition") != "W2_S10":
+                integrity_failures.append("method-negative Row 04 condition mismatch")
+            if row04_report.get("failures") != [
+                "stage-0 contour P95 0.053296m > 0.050000m"
+            ]:
+                integrity_failures.append(
+                    "method-negative Row 04 has a failure outside its authorization"
+                )
+            if method_failure_authorization.get(
+                "failed_postflight_sha256"
+            ) != sha256_file(row04_path):
+                integrity_failures.append(
+                    "method-failure authorization Row 04 postflight hash mismatch"
+                )
+            if method_failure_authorization.get(
+                "failed_bag_sha256"
+            ) != row04_report.get("bag_sha256"):
+                integrity_failures.append(
+                    "method-failure authorization Row 04 bag hash mismatch"
+                )
+            tracking = row04_report.get("tracking", {})
+            if not finite(tracking.get("contour_p95_m")) or float(
+                tracking.get("contour_p95_m")
+            ) <= 0.05:
+                integrity_failures.append(
+                    "method-negative Row 04 does not exceed the contour gate"
+                )
+            if not finite(tracking.get("yaw_p95_rad")) or float(
+                tracking.get("yaw_p95_rad")
+            ) > 0.15:
+                integrity_failures.append(
+                    "method-negative Row 04 has an unauthorized yaw failure"
+                )
+            if evidence is not None:
+                expected_evidence = {
+                    "report_type": "DEVELOPMENT_METHOD_OUTCOME_EVIDENCE",
+                    "status": "PASS",
+                    "outcome_class": "METHOD_PERFORMANCE_FAILURE",
+                    "failure_reason_code": "TRACKING_CONTOUR_P95_GATE_EXCEEDED",
+                    "method_failure": "true",
+                    "acquisition_failure": "false",
+                    "planned_row": "04",
+                    "condition": "W2_S10",
+                    "attempt_id": METHOD_NEGATIVE_ROW04_ATTEMPT_ID,
+                    "screen_prereg_sha256": args.screen_prereg_sha256,
+                    "bag_sha256": row04_report.get("bag_sha256"),
+                    "postflight_sha256": sha256_file(row04_path),
+                    "candidate_eligible_for_promotion": "false",
+                    "row04_retry_authorized": "false",
+                    "artifacts_must_be_preserved": "true",
+                }
+                for key, value in expected_evidence.items():
+                    if evidence.get(key) != value:
+                        integrity_failures.append(
+                            "method-outcome evidence mismatch for {}".format(key)
+                        )
+            method_negative_rows.add("04")
+            method_negative_candidates.append(
+                {
+                    "row": "04",
+                    "attempt": "01",
+                    "condition": row04_report.get("condition"),
+                    "status": row04_report.get("status"),
+                    "outcome_class": method_failure_authorization.get(
+                        "outcome_class"
+                    ),
+                    "failure_reason_code": method_failure_authorization.get(
+                        "failure_reason_code"
+                    ),
+                    "bag": row04_report.get("bag"),
+                    "bag_sha256": row04_report.get("bag_sha256"),
+                    "postflight": str(row04_path),
+                    "postflight_sha256": sha256_file(row04_path),
+                    "eligible_for_selection": False,
+                    "retry_authorized": False,
+                }
+            )
+
     result = evaluate_screen(
         reports,
         p95_threshold=args.minimum_rgb_p95_improvement_mm,
         rms_threshold=args.minimum_rgb_rms_improvement_mm,
         raw_regression=args.maximum_raw_imu_regression_mm,
+        method_negative_rows=method_negative_rows,
     )
     if integrity_failures:
         result["failures"].extend(integrity_failures)
@@ -448,6 +642,8 @@ def main():
             "bag_sha256": reports[row].get("bag_sha256"),
             "postflight": str(report_paths[row]),
             "postflight_sha256": sha256_file(report_paths[row]),
+            "postflight_status": reports[row].get("status"),
+            "eligible_for_selection": row not in method_negative_rows,
         }
         for row in sorted(reports)
     ]
@@ -467,9 +663,13 @@ def main():
             "screen_prereg_sha256": args.screen_prereg_sha256,
             "source_report_sha256": args.source_report_sha256,
             "retry_authorization_sha256": args.retry_authorization_sha256 or "",
+            "method_failure_authorization_sha256": (
+                args.method_failure_authorization_sha256 or ""
+            ),
         },
         "dataset": dataset,
         "excluded_acquisition_attempts": excluded_acquisition_attempts,
+        "method_negative_candidates": method_negative_candidates,
         "baseline": result["baseline"],
         "candidates": result["candidates"],
         "selected_candidate": result["selected"],
@@ -478,6 +678,7 @@ def main():
             "Each candidate has one run; this screen cannot establish repeatability or efficacy.",
             "Only a selected positive candidate may enter a newly frozen paired confirmation.",
             "Unselected candidates are not repeated after outcomes are observed.",
+            "Authorized method-performance failures remain in the dataset but cannot be selected.",
         ],
     }
     out_json = root / "G3R2_WEIGHT_SCREEN_REPORT.json"
@@ -498,6 +699,9 @@ def main():
             "rgb_p95_improvement_mm",
             "rgb_rms_improvement_mm",
             "raw_imu_p95_improvement_mm",
+            "postflight_status",
+            "method_negative",
+            "eligible_for_selection",
             "screen_positive",
             "ranking_score",
         )

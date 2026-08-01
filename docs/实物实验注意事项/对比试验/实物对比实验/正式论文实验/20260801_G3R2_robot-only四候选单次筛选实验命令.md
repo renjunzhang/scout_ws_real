@@ -39,7 +39,7 @@ online source future skew    = 1.944 s  > 0.050 s
 20260801_G3R2_Row03_a02_相机时间戳采集重试授权.env
 ```
 
-回到同一起点、液体静稳并确认急停可用后，唯一合法的下一条是保持 `W5_S10` 配置不变的 Row 03 attempt 02：
+Row 03 当时唯一合法的重录是保持 `W5_S10` 配置不变的 attempt 02，执行命令为：
 
 ```bash
 DATE=20260801 G3R2_ROW=03 G3R2_ATTEMPT=02 \
@@ -55,23 +55,32 @@ wrapper 会在运动前两次检查 `/camera/color/camera_info`，分别位于�
 [G3R2-SCREEN] acquisition PASS
 ```
 
-## 3. attempt 02 PASS 后的顺序
+## 3. Row 04 方法失败与 Row 05 继续授权
 
-Row 03 attempt 02 PASS、车辆回位且液体重新静稳后，逐条执行：
+Row 03 attempt 02 已 PASS。Row 04 `W2_S10` 的采集、RGB、processed-IMU 和时间戳均正常，但 postflight 因跟踪门槛失败：
 
-```bash
-DATE=20260801 G3R2_ROW=04 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_weight_screen_trial.sh
+```text
+stage-0 contour P95 = 0.053296 m > 0.050000 m
 ```
 
+该结果固定归类为 `METHOD_PERFORMANCE_FAILURE`：保留为不合格候选，不允许重录，也不能参与晋级。证据和继续筛选授权冻结在：
+
+```text
+20260801_G3R2_Row04_a01_跟踪门槛方法失败证据.env
+20260801_G3R2_Row05_方法失败后继续筛选授权.env
+```
+
+车辆回位、液体重新静稳后，唯一下一条为 Row 05 `W5_S03`：
+
 ```bash
-DATE=20260801 G3R2_ROW=05 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES \
+DATE=20260801 G3R2_ROW=05 G3R2_ATTEMPT=01 \
+ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES \
 bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_weight_screen_trial.sh
 ```
 
 不要使用循环，不要跳行。每条 bag 上限 `70 s`，不录图像，只录在线 RGB 标量。wrapper 自动核对 RealSense、路径、基线证据、二进制、权重、IMU source 和 robot/liquid 分流。
 
-Row 04 会强制要求 Row 03 attempt 02 的 retry postflight 为 PASS；不会把失败的 attempt 01 当成有效前序。最终分析器会登记并排除 attempt 01，只把冻结授权的 attempt 02 作为 Row 03 的候选结果。
+Row 05 wrapper 会同时核对 Row 03 retry 和 Row 04 方法失败授权。最终分析器会排除 Row 03 attempt 01 的采集故障，并把 Row 04 保留在数据集中但标记为 `eligible_for_selection=false`。
 
 Row 05 后自动生成：
 
