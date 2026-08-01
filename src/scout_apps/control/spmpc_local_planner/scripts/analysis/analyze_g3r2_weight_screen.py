@@ -23,6 +23,10 @@ EXPECTED_ROWS = {
 }
 BASELINE_PROTOCOL = "G3R2_robot_only_delay_smoke_v1"
 SCREEN_PROTOCOL = "G3R2_robot_only_weight_screen_v1"
+FAILED_ROW03_ATTEMPT_ID = "DEV_G3R2_H0_C1_W5_S10_r03_a01"
+RETRY_ROW03_ATTEMPT_ID = "DEV_G3R2_H0_C1_W5_S10_r03_a02"
+FAILED_ROW03_REPORT_NAME = FAILED_ROW03_ATTEMPT_ID + "_g3r2_screen_postflight.json"
+RETRY_ROW03_REPORT_NAME = RETRY_ROW03_ATTEMPT_ID + "_g3r2_screen_retry_postflight.json"
 
 
 def parse_args():
@@ -32,6 +36,8 @@ def parse_args():
     parser.add_argument("--baseline-report-sha256", required=True)
     parser.add_argument("--screen-prereg-sha256", required=True)
     parser.add_argument("--source-report-sha256", required=True)
+    parser.add_argument("--retry-authorization")
+    parser.add_argument("--retry-authorization-sha256")
     parser.add_argument("--minimum-rgb-p95-improvement-mm", type=float, default=0.05)
     parser.add_argument("--minimum-rgb-rms-improvement-mm", type=float, default=0.0)
     parser.add_argument("--maximum-raw-imu-regression-mm", type=float, default=0.05)
@@ -69,6 +75,22 @@ def sha256_file(path):
             if not block:
                 return digest.hexdigest()
             digest.update(block)
+
+
+def read_unique_env(path):
+    result = {}
+    with Path(path).open(encoding="utf-8") as stream:
+        for line_number, raw in enumerate(stream, 1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                raise ValueError("invalid env line {}".format(line_number))
+            key, value = line.split("=", 1)
+            if key in result:
+                raise ValueError("duplicate env key {}".format(key))
+            result[key] = value
+    return result
 
 
 def audit_state_contract(row, report, expected):
@@ -267,6 +289,11 @@ def main():
     args = parse_args()
     root = Path(args.root).expanduser().resolve()
     baseline_path = Path(args.baseline_report).expanduser().resolve()
+    retry_authorization_path = (
+        Path(args.retry_authorization).expanduser().resolve()
+        if args.retry_authorization
+        else None
+    )
     for name, value in (
         ("baseline-report", args.baseline_report_sha256),
         ("screen-prereg", args.screen_prereg_sha256),
@@ -276,6 +303,17 @@ def main():
             raise SystemExit("{} SHA-256 must be 64 hexadecimal characters".format(name))
     if not baseline_path.is_file() or sha256_file(baseline_path) != args.baseline_report_sha256:
         raise SystemExit("baseline postflight is missing or differs from the frozen hash")
+    if bool(retry_authorization_path) != bool(args.retry_authorization_sha256):
+        raise SystemExit("retry authorization path and SHA-256 must be provided together")
+    retry_authorization = None
+    if retry_authorization_path:
+        if not valid_sha256(args.retry_authorization_sha256):
+            raise SystemExit("retry authorization SHA-256 is invalid")
+        if not retry_authorization_path.is_file() or sha256_file(
+            retry_authorization_path
+        ) != args.retry_authorization_sha256:
+            raise SystemExit("retry authorization is missing or differs from its frozen hash")
+        retry_authorization = read_unique_env(retry_authorization_path)
 
     with baseline_path.open(encoding="utf-8") as stream:
         baseline = json.load(stream)
@@ -305,6 +343,91 @@ def main():
             "row {} {}".format(row, failure) for failure in audit_bag(report, root)
         )
 
+    excluded_acquisition_attempts = []
+    retry_paths = sorted(root.glob("DEV_G3R2_*_g3r2_screen_retry_postflight.json"))
+    if retry_paths:
+        if len(retry_paths) != 1:
+            raise SystemExit("expected exactly one authorized G3R2 retry postflight")
+        if retry_authorization is None:
+            raise SystemExit("retry postflight exists without frozen authorization")
+        retry_path = retry_paths[0]
+        with retry_path.open(encoding="utf-8") as stream:
+            retry_report = json.load(stream)
+        if retry_path.name != RETRY_ROW03_REPORT_NAME:
+            integrity_failures.append("retry postflight attempt identity mismatch")
+        retry_row = str(retry_report.get("row", ""))
+        if retry_row != "03" or retry_report.get("condition") != "W5_S10":
+            integrity_failures.append("retry postflight is not frozen Row 03 W5_S10")
+        retry_bag = Path(str(retry_report.get("bag", ""))).expanduser()
+        if retry_bag.name != RETRY_ROW03_ATTEMPT_ID + ".bag":
+            integrity_failures.append("retry bag attempt identity mismatch")
+        failed_report = reports.get("03")
+        failed_path = report_paths.get("03")
+        if failed_report is None or failed_path is None:
+            integrity_failures.append("retry has no preserved failed Row 03 attempt 01")
+        else:
+            if failed_path.name != FAILED_ROW03_REPORT_NAME:
+                integrity_failures.append("excluded Row 03 postflight attempt identity mismatch")
+            failed_bag = Path(str(failed_report.get("bag", ""))).expanduser()
+            if failed_bag.name != FAILED_ROW03_ATTEMPT_ID + ".bag":
+                integrity_failures.append("excluded Row 03 bag attempt identity mismatch")
+            if retry_authorization.get("report_type") != "DEVELOPMENT_RETRY_AUTHORIZATION":
+                integrity_failures.append("retry authorization report type mismatch")
+            if retry_authorization.get("status") != "PASS" or retry_authorization.get("retry_authorized") != "true":
+                integrity_failures.append("retry authorization is not PASS/authorized")
+            if retry_authorization.get("failed_attempt_id") != FAILED_ROW03_ATTEMPT_ID:
+                integrity_failures.append("retry authorization failed-attempt mismatch")
+            if retry_authorization.get("authorized_attempt_id") != RETRY_ROW03_ATTEMPT_ID:
+                integrity_failures.append("retry authorization attempt-02 mismatch")
+            if retry_authorization.get("retry_of_attempt_id") != FAILED_ROW03_ATTEMPT_ID:
+                integrity_failures.append("retry authorization retry-of mismatch")
+            if retry_authorization.get("maximum_authorized_attempt") != "02":
+                integrity_failures.append("retry authorization attempt limit mismatch")
+            if retry_authorization.get("failure_class") != "METHOD_INDEPENDENT_ACQUISITION":
+                integrity_failures.append("retry authorization failure class mismatch")
+            if retry_authorization.get("failure_reason_code") != "REALSENSE_SOURCE_TIMESTAMP_UNSTABLE_AT_VISUAL_START":
+                integrity_failures.append("retry authorization failure reason mismatch")
+            if retry_authorization.get("method_failure") != "false":
+                integrity_failures.append("retry authorization incorrectly marks a method failure")
+            if retry_authorization.get("screen_prereg_sha256") != args.screen_prereg_sha256:
+                integrity_failures.append("retry authorization screen-prereg mismatch")
+            if retry_authorization.get("failed_postflight_sha256") != sha256_file(failed_path):
+                integrity_failures.append("retry authorization failed-postflight hash mismatch")
+            if retry_authorization.get("failed_bag_sha256") != failed_report.get("bag_sha256"):
+                integrity_failures.append("retry authorization failed-bag hash mismatch")
+            if failed_report.get("status") != "FAIL":
+                integrity_failures.append("excluded Row 03 attempt 01 is not FAIL")
+            excluded_acquisition_attempts.append(
+                {
+                    "row": "03",
+                    "attempt": "01",
+                    "condition": failed_report.get("condition"),
+                    "status": failed_report.get("status"),
+                    "failure_class": retry_authorization.get("failure_class"),
+                    "failure_reason_code": retry_authorization.get("failure_reason_code"),
+                    "bag": failed_report.get("bag"),
+                    "bag_sha256": failed_report.get("bag_sha256"),
+                    "postflight": str(failed_path),
+                    "postflight_sha256": sha256_file(failed_path),
+                    "eligible_for_selection": False,
+                }
+            )
+
+        if retry_report.get("protocol") != SCREEN_PROTOCOL:
+            integrity_failures.append("retry protocol mismatch")
+        bindings = retry_report.get("bindings", {})
+        if bindings.get("prereg_sha256") != args.screen_prereg_sha256:
+            integrity_failures.append("retry screen prereg mismatch")
+        if bindings.get("source_report_sha256") != args.source_report_sha256:
+            integrity_failures.append("retry source report mismatch")
+        integrity_failures.extend(
+            "row 03 retry {}".format(failure) for failure in audit_bag(retry_report, root)
+        )
+        reports["03"] = retry_report
+        report_paths["03"] = retry_path
+    elif retry_authorization is not None:
+        integrity_failures.append("retry authorization supplied but retry postflight is missing")
+
     result = evaluate_screen(
         reports,
         p95_threshold=args.minimum_rgb_p95_improvement_mm,
@@ -319,6 +442,7 @@ def main():
     dataset = [
         {
             "row": row,
+            "attempt": "02" if row == "03" and retry_paths else "01",
             "condition": reports[row].get("condition"),
             "bag": reports[row].get("bag"),
             "bag_sha256": reports[row].get("bag_sha256"),
@@ -342,8 +466,10 @@ def main():
             "baseline_report_sha256": args.baseline_report_sha256,
             "screen_prereg_sha256": args.screen_prereg_sha256,
             "source_report_sha256": args.source_report_sha256,
+            "retry_authorization_sha256": args.retry_authorization_sha256 or "",
         },
         "dataset": dataset,
+        "excluded_acquisition_attempts": excluded_acquisition_attempts,
         "baseline": result["baseline"],
         "candidates": result["candidates"],
         "selected_candidate": result["selected"],

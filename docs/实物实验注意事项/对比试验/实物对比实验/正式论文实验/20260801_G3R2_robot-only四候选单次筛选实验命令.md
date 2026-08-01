@@ -23,14 +23,31 @@ robot/liquid      = 100% / 0%
 
 共同配置为 `fixed_robot_only`：机器人状态使用延迟预测，液体状态使用当前 processed-IMU，禁止 liquid delay rollout。
 
-## 2. 下一条：Row 02
+## 2. 当前进度与 Row 03 受控重录
 
-回到同一起点、液体静稳并确认急停可用后：
+Row 02 `W2_S03` 已 PASS。Row 03 attempt 01 的控制、processed-IMU、跟踪和求解均通过，只有 RealSense 源时间戳在启动阶段未收敛：
+
+```text
+online publish-lag P95       = 0.587 s  > 0.500 s
+online source future skew    = 1.944 s  > 0.050 s
+```
+
+因此 attempt 01 固定归类为 `METHOD_INDEPENDENT_ACQUISITION`，保留 bag 和 postflight，但其 RGB 指标永久不能参与候选筛选。失败证据和唯一一次重录授权分别冻结在：
+
+```text
+20260801_G3R2_Row03_a01_相机时间戳采集失败证据.env
+20260801_G3R2_Row03_a02_相机时间戳采集重试授权.env
+```
+
+回到同一起点、液体静稳并确认急停可用后，唯一合法的下一条是保持 `W5_S10` 配置不变的 Row 03 attempt 02：
 
 ```bash
-DATE=20260801 G3R2_ROW=02 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES \
+DATE=20260801 G3R2_ROW=03 G3R2_ATTEMPT=02 \
+ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES \
 bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_weight_screen_trial.sh
 ```
+
+wrapper 会在运动前两次检查 `/camera/color/camera_info`，分别位于在线 RGB 零点建立之前和录包之前。每次会在不动车的状态下等待连续 90 帧健康时间戳，最长 50 秒；到期仍不通过才会 fail-closed 停止。只有该 gate 最终返回 `PASS` 后流程才会继续。
 
 必须等到末尾出现：
 
@@ -38,14 +55,9 @@ bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run
 [G3R2-SCREEN] acquisition PASS
 ```
 
-## 3. 后续顺序
+## 3. attempt 02 PASS 后的顺序
 
-上一条 PASS、车辆回位且液体重新静稳后，逐条执行：
-
-```bash
-DATE=20260801 G3R2_ROW=03 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_weight_screen_trial.sh
-```
+Row 03 attempt 02 PASS、车辆回位且液体重新静稳后，逐条执行：
 
 ```bash
 DATE=20260801 G3R2_ROW=04 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES \
@@ -58,6 +70,8 @@ bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run
 ```
 
 不要使用循环，不要跳行。每条 bag 上限 `70 s`，不录图像，只录在线 RGB 标量。wrapper 自动核对 RealSense、路径、基线证据、二进制、权重、IMU source 和 robot/liquid 分流。
+
+Row 04 会强制要求 Row 03 attempt 02 的 retry postflight 为 PASS；不会把失败的 attempt 01 当成有效前序。最终分析器会登记并排除 attempt 01，只把冻结授权的 attempt 02 作为 Row 03 的候选结果。
 
 Row 05 后自动生成：
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import importlib.util
+import math
 import unittest
 from pathlib import Path
 
@@ -18,6 +19,12 @@ def load_module(name):
 
 VALIDATOR = load_module("validate_g3_online_rgb_trial")
 ANALYZER = load_module("analyze_g3_w5_vs_bsmooth")
+TIMESTAMP_GATE_PATH = ANALYSIS_DIR.parent / "validate_realsense_timestamp_health.py"
+TIMESTAMP_GATE_SPEC = importlib.util.spec_from_file_location(
+    "validate_realsense_timestamp_health", TIMESTAMP_GATE_PATH
+)
+TIMESTAMP_GATE = importlib.util.module_from_spec(TIMESTAMP_GATE_SPEC)
+TIMESTAMP_GATE_SPEC.loader.exec_module(TIMESTAMP_GATE)
 
 
 def reports_from_pairs(pairs):
@@ -84,6 +91,43 @@ class G3OnlineRgbGateTest(unittest.TestCase):
                 "liquid-delay-compensation", [0.0] * 97 + [1.0] * 3, "false"
             )
         )
+
+    def test_realsense_timestamp_gate_accepts_stable_clock(self):
+        records = [
+            (100.03 + index / 30.0, 100.0 + index / 30.0)
+            for index in range(90)
+        ]
+        result = TIMESTAMP_GATE.evaluate_timestamp_records(records)
+        self.assertEqual(result["status"], "PASS")
+        self.assertAlmostEqual(result["clock_rate_ratio"], 1.0)
+
+    def test_realsense_timestamp_gate_rejects_future_source_clock(self):
+        records = [
+            (100.0 + index / 30.0, 101.9 + index / 30.0)
+            for index in range(90)
+        ]
+        result = TIMESTAMP_GATE.evaluate_timestamp_records(records)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertTrue(any("future skew" in failure for failure in result["failures"]))
+
+    def test_realsense_timestamp_gate_rejects_clock_convergence(self):
+        records = [
+            (100.0 + index / 30.0, 100.0 + index / 60.0)
+            for index in range(90)
+        ]
+        result = TIMESTAMP_GATE.evaluate_timestamp_records(records)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertTrue(any("clock-rate ratio" in failure for failure in result["failures"]))
+
+    def test_realsense_timestamp_gate_rejects_nonfinite_sample(self):
+        records = [
+            (100.03 + index / 30.0, 100.0 + index / 30.0)
+            for index in range(90)
+        ]
+        records[45] = (math.nan, records[45][1])
+        result = TIMESTAMP_GATE.evaluate_timestamp_records(records)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(result["nonfinite_samples"], 1)
 
     def test_four_consistent_pairs_pass(self):
         reports = reports_from_pairs(

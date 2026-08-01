@@ -277,6 +277,133 @@ class RobotOnlyWeightScreenTest(unittest.TestCase):
             self.assertEqual(output["status"], "PROMOTE_FOR_PAIRED_CONFIRMATION")
             self.assertEqual(output["selected_candidate"]["condition"], "W5_S10")
 
+    def test_cli_excludes_authorized_failed_attempt_and_uses_retry(self):
+        reports = self.make_reports()
+        screen_prereg = "a" * 64
+        source_report = "b" * 64
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary_path = Path(temporary)
+            baseline_root = temporary_path / "baseline"
+            screen_root = temporary_path / "screen"
+            baseline_root.mkdir()
+            screen_root.mkdir()
+
+            def bind_report(report, bag_path, protocol):
+                bag_path.write_bytes(("bag-" + bag_path.stem).encode("ascii"))
+                bag_sha = hashlib.sha256(bag_path.read_bytes()).hexdigest()
+                report.update(
+                    {
+                        "bag": str(bag_path),
+                        "bag_size_bytes": bag_path.stat().st_size,
+                        "bag_sha256": bag_sha,
+                        "protocol": protocol,
+                        "bindings": {
+                            "prereg_sha256": screen_prereg,
+                            "source_report_sha256": source_report,
+                        },
+                    }
+                )
+                return report
+
+            baseline = bind_report(
+                reports["01"], baseline_root / "row_01.bag", SCREEN_V2.BASELINE_PROTOCOL
+            )
+            baseline_path = baseline_root / "baseline_g3r2_postflight.json"
+            baseline_path.write_text(json.dumps(baseline), encoding="utf-8")
+            baseline_sha = hashlib.sha256(baseline_path.read_bytes()).hexdigest()
+
+            for row in ("02", "04", "05"):
+                report = bind_report(
+                    reports[row], screen_root / "row_{}.bag".format(row), SCREEN_V2.SCREEN_PROTOCOL
+                )
+                (screen_root / "DEV_G3R2_row_{}_g3r2_screen_postflight.json".format(row)).write_text(
+                    json.dumps(report), encoding="utf-8"
+                )
+
+            failed = json.loads(json.dumps(reports["03"]))
+            failed["status"] = "FAIL"
+            failed["failures"] = ["timestamp acquisition failure"]
+            failed = bind_report(
+                failed,
+                screen_root / "DEV_G3R2_H0_C1_W5_S10_r03_a01.bag",
+                SCREEN_V2.SCREEN_PROTOCOL,
+            )
+            failed_path = (
+                screen_root
+                / "DEV_G3R2_H0_C1_W5_S10_r03_a01_g3r2_screen_postflight.json"
+            )
+            failed_path.write_text(json.dumps(failed), encoding="utf-8")
+            failed_sha = hashlib.sha256(failed_path.read_bytes()).hexdigest()
+
+            retry = bind_report(
+                json.loads(json.dumps(reports["03"])),
+                screen_root / "DEV_G3R2_H0_C1_W5_S10_r03_a02.bag",
+                SCREEN_V2.SCREEN_PROTOCOL,
+            )
+            retry_path = (
+                screen_root
+                / "DEV_G3R2_H0_C1_W5_S10_r03_a02_g3r2_screen_retry_postflight.json"
+            )
+            retry_path.write_text(json.dumps(retry), encoding="utf-8")
+
+            authorization_path = temporary_path / "retry.env"
+            authorization_path.write_text(
+                "\n".join(
+                    (
+                        "report_type=DEVELOPMENT_RETRY_AUTHORIZATION",
+                        "status=PASS",
+                        "retry_authorized=true",
+                        "retry_of_attempt_id=DEV_G3R2_H0_C1_W5_S10_r03_a01",
+                        "maximum_authorized_attempt=02",
+                        "failure_class=METHOD_INDEPENDENT_ACQUISITION",
+                        "failure_reason_code=REALSENSE_SOURCE_TIMESTAMP_UNSTABLE_AT_VISUAL_START",
+                        "method_failure=false",
+                        "failed_attempt_id=DEV_G3R2_H0_C1_W5_S10_r03_a01",
+                        "authorized_attempt_id=DEV_G3R2_H0_C1_W5_S10_r03_a02",
+                        "screen_prereg_sha256={}".format(screen_prereg),
+                        "failed_postflight_sha256={}".format(failed_sha),
+                        "failed_bag_sha256={}".format(failed["bag_sha256"]),
+                    )
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            authorization_sha = hashlib.sha256(authorization_path.read_bytes()).hexdigest()
+
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(ANALYSIS_DIR / "analyze_g3r2_weight_screen.py"),
+                    "--root",
+                    str(screen_root),
+                    "--baseline-report",
+                    str(baseline_path),
+                    "--baseline-report-sha256",
+                    baseline_sha,
+                    "--screen-prereg-sha256",
+                    screen_prereg,
+                    "--source-report-sha256",
+                    source_report,
+                    "--retry-authorization",
+                    str(authorization_path),
+                    "--retry-authorization-sha256",
+                    authorization_sha,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            output = json.loads(
+                (screen_root / "G3R2_WEIGHT_SCREEN_REPORT.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(len(output["excluded_acquisition_attempts"]), 1)
+            self.assertEqual(output["excluded_acquisition_attempts"][0]["attempt"], "01")
+            eligible_row03 = next(item for item in output["dataset"] if item["row"] == "03")
+            self.assertEqual(eligible_row03["attempt"], "02")
+
 
 if __name__ == "__main__":
     unittest.main()

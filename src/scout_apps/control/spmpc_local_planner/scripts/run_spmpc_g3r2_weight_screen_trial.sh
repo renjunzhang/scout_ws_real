@@ -22,6 +22,7 @@ VALIDATOR="${SCRIPT_DIR}/analysis/validate_g3_online_rgb_trial.py"
 ANALYZER="${SCRIPT_DIR}/analysis/analyze_g3r2_weight_screen.py"
 SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
 CAMERA_PREP="${SCRIPT_DIR}/prepare_spmpc_g3_realsense.sh"
+TIMESTAMP_GATE="${SCRIPT_DIR}/validate_realsense_timestamp_health.py"
 
 [[ -r /opt/ros/noetic/setup.bash ]] || fail "missing ROS Noetic setup"
 # shellcheck disable=SC1091
@@ -46,7 +47,13 @@ case "${G3R2_ROW}" in
   05) CONDITION=W5_S03; PILOT_METHOD=W5; W_SLOSH=5.0; SMOOTH=0.3 ;;
   *) fail "set G3R2_ROW=02..05; the frozen Bsmooth smoke already supplies Row 01" ;;
 esac
-[[ "${G3R2_ATTEMPT}" == "01" ]] || fail "screening permits one planned attempt per candidate"
+if [[ "${G3R2_ATTEMPT}" == "01" ]]; then
+  ACQUISITION_RETRY=false
+elif [[ "${G3R2_ROW}" == "03" && "${G3R2_ATTEMPT}" == "02" ]]; then
+  ACQUISITION_RETRY=true
+else
+  fail "only the frozen Row 03 acquisition retry permits G3R2_ATTEMPT=02"
+fi
 
 PATH_FILE="/home/geist/fixed_paths/real/20260727_spmpc_development/H0/H0_G2.json"
 PATH_SHA256="578a4dd7663c2f49b4270c37755a08b2b0dc70735fb6b818da35b60a60f3990e"
@@ -58,6 +65,24 @@ BASELINE_BAG="${BASELINE_ROOT}/DEV_G3R2_H0_C1_Bsmooth_robot_only_r01_a01.bag"
 BASELINE_BAG_SHA256="63399f5f6e80c9afe438e5dae65942c43545c4b2c54bffa866579d6a105820ba"
 BASELINE_REPORT="${BASELINE_ROOT}/DEV_G3R2_H0_C1_Bsmooth_robot_only_r01_a01_g3r2_postflight.json"
 BASELINE_REPORT_SHA256="9f645ae70b385d15935207d8b980bdd5a6ec5d1bcab2109056c5b3513a99e784"
+
+SCREEN_RELEASE_REVISION="795a0da1abfa0abe7044de16052cefaddaf34411"
+FAILED_ROW03_BAG="/home/geist/slosh_bags/real/20260801_spmpc_g3r2_robot_only_weight_screen/H0/DEV_G3R2_H0_C1_W5_S10_r03_a01.bag"
+FAILED_ROW03_BAG_SHA256="52518e6d66758afedf156fe01ab7e118f6f5e390135b8b5dc80030acff031a2d"
+FAILED_ROW03_REPORT="/home/geist/slosh_bags/real/20260801_spmpc_g3r2_robot_only_weight_screen/H0/DEV_G3R2_H0_C1_W5_S10_r03_a01_g3r2_screen_postflight.json"
+FAILED_ROW03_REPORT_SHA256="7a49e052af66fb2073cc01e0f3af3df7aeff1595c1d53553cfd5768292a8940e"
+FAILURE_EVIDENCE="${REPO_ROOT}/docs/实物实验注意事项/对比试验/实物对比实验/正式论文实验/20260801_G3R2_Row03_a01_相机时间戳采集失败证据.env"
+FAILURE_EVIDENCE_SHA256="a5209f0723d1c9f50b5d1511ac8d6b31be06fed91bd24c87e7f33e52095eb543"
+RETRY_AUTHORIZATION="${REPO_ROOT}/docs/实物实验注意事项/对比试验/实物对比实验/正式论文实验/20260801_G3R2_Row03_a02_相机时间戳采集重试授权.env"
+RETRY_AUTHORIZATION_SHA256="599a24a8d556f66b5e43a72cdd5d5f11652a2c7ee5edc107a447e7aab46ed552"
+RETRY_OF_ATTEMPT_ID=""
+RETRY_REASON_FILE=""
+REPORT_SUFFIX="_g3r2_screen_postflight.json"
+if truthy "${ACQUISITION_RETRY}"; then
+  RETRY_OF_ATTEMPT_ID="DEV_G3R2_H0_C1_W5_S10_r03_a01"
+  RETRY_REASON_FILE="${RETRY_AUTHORIZATION}"
+  REPORT_SUFFIX="_g3r2_screen_retry_postflight.json"
+fi
 
 RGB_CALIBRATION_FILE="/home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/calibration/red_3ruler_g2s_20260731_relabel_frozen_v2.yaml"
 RGB_CALIBRATION_SHA256="7186b4bda05a1b73c19fd97b3a34b08a82bfab0df52272eaf2829115de049d01"
@@ -99,8 +124,9 @@ METRIC_FILE="${RUN_OUT_DIR}/G3R2_weight_screen_metric.yaml"
 ONLINE_CONFIG_FILE="${RUN_OUT_DIR}/G3R2_online_liquid_config.env"
 
 required_files=(
-  "${RUNNER}" "${VALIDATOR}" "${ANALYZER}" "${SUMMARIZER}" "${CAMERA_PREP}"
+  "${RUNNER}" "${VALIDATOR}" "${ANALYZER}" "${SUMMARIZER}" "${CAMERA_PREP}" "${TIMESTAMP_GATE}"
   "${PATH_FILE}" "${SOURCE_REPORT}" "${BASELINE_BAG}" "${BASELINE_REPORT}"
+  "${FAILED_ROW03_BAG}" "${FAILED_ROW03_REPORT}" "${FAILURE_EVIDENCE}" "${RETRY_AUTHORIZATION}"
   "${RGB_CALIBRATION_FILE}" "${RGB_CAMERA_PARAMS_FILE}"
   "${ONLINE_LIQUID_LAUNCH}" "${ONLINE_LIQUID_NODE}" "${ONLINE_LIQUID_DETECTOR}" "${ONLINE_LIQUID_MSG}"
   "${PLANNER_LIBRARY}" "${PLANNER_NODE}" "${SLOSH_MODELS_LIBRARY}"
@@ -124,6 +150,10 @@ verify_sha256 "${PATH_FILE}" "${PATH_SHA256}" "path"
 verify_sha256 "${SOURCE_REPORT}" "${SOURCE_REPORT_SHA256}" "source report"
 verify_sha256 "${BASELINE_BAG}" "${BASELINE_BAG_SHA256}" "G3R2 baseline bag"
 verify_sha256 "${BASELINE_REPORT}" "${BASELINE_REPORT_SHA256}" "G3R2 baseline postflight"
+verify_sha256 "${FAILED_ROW03_BAG}" "${FAILED_ROW03_BAG_SHA256}" "failed Row 03 bag"
+verify_sha256 "${FAILED_ROW03_REPORT}" "${FAILED_ROW03_REPORT_SHA256}" "failed Row 03 postflight"
+verify_sha256 "${FAILURE_EVIDENCE}" "${FAILURE_EVIDENCE_SHA256}" "Row 03 failure evidence"
+verify_sha256 "${RETRY_AUTHORIZATION}" "${RETRY_AUTHORIZATION_SHA256}" "Row 03 retry authorization"
 verify_sha256 "${RGB_CALIBRATION_FILE}" "${RGB_CALIBRATION_SHA256}" "RGB calibration"
 verify_sha256 "${RGB_CAMERA_PARAMS_FILE}" "${RGB_CAMERA_PARAMS_SHA256}" "RealSense parameters"
 
@@ -166,7 +196,89 @@ if float(internal.get("solver_source_code_fraction", 0.0)) < 0.98:
     raise SystemExit("baseline lacks processed-IMU source coverage")
 PY
 
-release_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+python3 - \
+  "${FAILURE_EVIDENCE}" "${RETRY_AUTHORIZATION}" "${FAILED_ROW03_REPORT}" \
+  "${FAILURE_EVIDENCE_SHA256}" "${FAILED_ROW03_BAG_SHA256}" \
+  "${FAILED_ROW03_REPORT_SHA256}" "${SCREEN_RELEASE_REVISION}" <<'PY'
+import json
+import sys
+
+
+def read_unique_env(path):
+    result = {}
+    with open(path, encoding="utf-8") as stream:
+        for line_number, raw in enumerate(stream, 1):
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" not in line:
+                raise SystemExit("invalid retry evidence line {}".format(line_number))
+            key, value = line.split("=", 1)
+            if key in result:
+                raise SystemExit("duplicate retry evidence key {}".format(key))
+            result[key] = value
+    return result
+
+
+evidence = read_unique_env(sys.argv[1])
+authorization = read_unique_env(sys.argv[2])
+with open(sys.argv[3], encoding="utf-8") as stream:
+    failed = json.load(stream)
+
+expected_authorization = {
+    "report_type": "DEVELOPMENT_RETRY_AUTHORIZATION",
+    "status": "PASS",
+    "planned_row": "03",
+    "condition": "W5_S10",
+    "failed_attempt_id": "DEV_G3R2_H0_C1_W5_S10_r03_a01",
+    "authorized_attempt_id": "DEV_G3R2_H0_C1_W5_S10_r03_a02",
+    "retry_of_attempt_id": "DEV_G3R2_H0_C1_W5_S10_r03_a01",
+    "block_segment_id": "G3R2_screen",
+    "split_block": "false",
+    "failure_class": "METHOD_INDEPENDENT_ACQUISITION",
+    "failure_reason_code": "REALSENSE_SOURCE_TIMESTAMP_UNSTABLE_AT_VISUAL_START",
+    "condition_independent": "true",
+    "condition_specific": "false",
+    "motion_induced": "false",
+    "method_failure": "false",
+    "retry_authorized": "true",
+    "maximum_authorized_attempt": "02",
+    "original_release_revision": sys.argv[7],
+    "screen_prereg_sha256": "0a8f0af5395bc930d84ac4359ba4716e493acf007148781c45d3e2669993fe85",
+    "failure_evidence_manifest_sha256": sys.argv[4],
+    "failed_bag_sha256": sys.argv[5],
+    "failed_postflight_sha256": sys.argv[6],
+    "attempt_01_artifacts_must_be_preserved": "true",
+    "attempt_02_must_keep_identical_method_configuration": "true",
+}
+for key, value in expected_authorization.items():
+    if authorization.get(key) != value:
+        raise SystemExit("retry authorization mismatch for {}".format(key))
+if evidence.get("status") != "PASS" or evidence.get("failure_class") != "METHOD_INDEPENDENT_ACQUISITION":
+    raise SystemExit("failure evidence did not classify a method-independent acquisition fault")
+if evidence.get("failed_bag_sha256") != sys.argv[5] or evidence.get("failed_postflight_sha256") != sys.argv[6]:
+    raise SystemExit("failure evidence artifact binding mismatch")
+if failed.get("status") != "FAIL" or failed.get("row") != "03" or failed.get("condition") != "W5_S10":
+    raise SystemExit("failed Row 03 postflight identity mismatch")
+expected_failures = {
+    "online publish-lag P95 0.587s > 0.500s",
+    "online source stamp future skew 1.944s > 0.050s",
+}
+if set(failed.get("failures", [])) != expected_failures:
+    raise SystemExit("Row 03 failure is not limited to the frozen timestamp acquisition faults")
+internal = failed.get("internal_state", {})
+tracking = failed.get("tracking", {})
+if float(internal.get("robot_delay_compensation_applied_fraction", 0.0)) < 0.98:
+    raise SystemExit("failed Row 03 also lacks robot delay compensation")
+if float(internal.get("liquid_delay_compensation_applied_fraction", 1.0)) > 0.02:
+    raise SystemExit("failed Row 03 also applied liquid delay rollout")
+if float(internal.get("solver_source_code_fraction", 0.0)) < 0.98:
+    raise SystemExit("failed Row 03 also lacks processed-IMU coverage")
+if float(tracking.get("contour_p95_m", 1.0)) > 0.05 or float(tracking.get("yaw_p95_rad", 1.0)) > 0.15:
+    raise SystemExit("failed Row 03 also violated tracking gates")
+PY
+
+runtime_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
 relevant_repo_paths=(
   src/scout_apps/control/spmpc_local_planner/CMakeLists.txt
   src/scout_apps/control/spmpc_local_planner/config
@@ -178,6 +290,7 @@ relevant_repo_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_weight_screen_trial.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/validate_realsense_timestamp_health.py
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_g3_online_rgb_trial.py
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/analyze_g3r2_weight_screen.py
   src/scout_apps/control/spmpc_local_planner/scripts/prepare_spmpc_g3_realsense.sh
@@ -186,6 +299,8 @@ relevant_repo_paths=(
   src/scout_apps/sensors/realsense_liquid_measurement/msg/OnlineLiquidMeasurement.msg
   src/scout_apps/sensors/realsense_liquid_measurement/scripts/online_liquid_height_node.py
   src/scout_apps/sensors/realsense_liquid_measurement/scripts/red_liquid_infer_from_bag.py
+  docs/实物实验注意事项/对比试验/实物对比实验/正式论文实验/20260801_G3R2_Row03_a01_相机时间戳采集失败证据.env
+  docs/实物实验注意事项/对比试验/实物对比实验/正式论文实验/20260801_G3R2_Row03_a02_相机时间戳采集重试授权.env
 )
 tracked_missing=()
 for path in "${relevant_repo_paths[@]}"; do
@@ -197,7 +312,7 @@ if (( ${#tracked_missing[@]} > 0 )); then
   if truthy "${VALIDATE_ONLY}" && truthy "${ALLOW_DIRTY_VALIDATE_ONLY}"; then
     echo "[G3R2-SCREEN][WARN] developer validate-only with untracked code: ${tracked_missing[*]}" >&2
   else
-    fail "G3R2 screen code is not frozen in revision ${release_revision}: ${tracked_missing[*]}"
+    fail "G3R2 screen amendment is not frozen in revision ${runtime_revision}: ${tracked_missing[*]}"
   fi
 fi
 if ! git -C "${REPO_ROOT}" diff --quiet -- "${relevant_repo_paths[@]}" || \
@@ -205,13 +320,14 @@ if ! git -C "${REPO_ROOT}" diff --quiet -- "${relevant_repo_paths[@]}" || \
   if truthy "${VALIDATE_ONLY}" && truthy "${ALLOW_DIRTY_VALIDATE_ONLY}"; then
     echo "[G3R2-SCREEN][WARN] developer validate-only with dirty relevant paths" >&2
   else
-    fail "G3R2 screen runtime differs from release ${release_revision}; commit/freeze before motion"
+    fail "G3R2 screen runtime differs from amendment ${runtime_revision}; commit/freeze before motion"
   fi
 fi
 
 online_node_sha="$(sha256sum "${ONLINE_LIQUID_NODE}" | awk '{print $1}')"
 online_detector_sha="$(sha256sum "${ONLINE_LIQUID_DETECTOR}" | awk '{print $1}')"
 online_msg_sha="$(sha256sum "${ONLINE_LIQUID_MSG}" | awk '{print $1}')"
+timestamp_gate_sha="$(sha256sum "${TIMESTAMP_GATE}" | awk '{print $1}')"
 
 order_contents() {
   printf '%s\n' \
@@ -280,7 +396,7 @@ prereg_contents() {
     "baseline_report_sha256=${BASELINE_REPORT_SHA256}" \
     "planned_candidate_units=4" \
     "replicates_per_candidate=1" \
-    "release_revision=${release_revision}" \
+    "release_revision=${SCREEN_RELEASE_REVISION}" \
     "source_report_sha256=${SOURCE_REPORT_SHA256}" \
     "path_sha256=${PATH_SHA256}" \
     "delay_phase_mode=fixed_robot_only" \
@@ -334,17 +450,21 @@ runner_env=(
   "ONLINE_LIQUID_NODE_SHA256=${online_node_sha}" "ONLINE_LIQUID_MSG_SHA256=${online_msg_sha}"
   "ONLINE_LIQUID_CONFIG_SHA256=${ONLINE_CONFIG_SHA256}"
   "RECORD_SEC=${RECORD_SEC}" "MAX_RECORD_SEC=${RECORD_SEC}"
-  "BLOCK_SEGMENT_ID=G3R2_screen" "ORDER_POSITION=${G3R2_ROW}" "SEND_ZERO_ON_EXIT=true"
-  "OPERATOR_NOTE=G3R2_${CONDITION}_robot_only_baseline_${BASELINE_REPORT_SHA256}"
+  "BLOCK_SEGMENT_ID=G3R2_screen" "SPLIT_BLOCK=false" "ORDER_POSITION=${G3R2_ROW}"
+  "ACQUISITION_RETRY=${ACQUISITION_RETRY}" "RETRY_REASON_FILE=${RETRY_REASON_FILE}"
+  "SEND_ZERO_ON_EXIT=true"
+  "OPERATOR_NOTE=G3R2_${CONDITION}_robot_only_attempt_${G3R2_ATTEMPT}_retry_of_${RETRY_OF_ATTEMPT_ID:-none}_baseline_${BASELINE_REPORT_SHA256}"
 )
 
 echo "================ G3R2 robot-only weight screen ================"
-echo "  row/condition = ${G3R2_ROW}/${CONDITION}"
+echo "  row/attempt   = ${G3R2_ROW}/${G3R2_ATTEMPT}"
+echo "  condition     = ${CONDITION}"
 echo "  weights       = w_slosh ${W_SLOSH}; smooth split ${SMOOTH}"
 echo "  robot state   = fixed delay prediction"
 echo "  liquid state  = current processed-IMU; no delay rollout"
 echo "  baseline      = ${BASELINE_REPORT_SHA256}"
 echo "  output        = ${BAG_PATH}"
+echo "  acq retry     = ${ACQUISITION_RETRY} (${RETRY_OF_ATTEMPT_ID:-none})"
 echo "  claim         = one-run screen only; positive candidate needs repeats"
 echo "==============================================================="
 
@@ -413,7 +533,13 @@ if [[ "${G3R2_ROW}" != "02" ]]; then
     03) previous_condition=W5_S10 ;;
     04) previous_condition=W2_S10 ;;
   esac
-  previous_report="${RUN_OUT_DIR}/DEV_G3R2_H0_C1_${previous_condition}_r${previous_row}_a01_g3r2_screen_postflight.json"
+  previous_attempt=01
+  previous_suffix=_g3r2_screen_postflight.json
+  if [[ "${previous_row}" == "03" ]]; then
+    previous_attempt=02
+    previous_suffix=_g3r2_screen_retry_postflight.json
+  fi
+  previous_report="${RUN_OUT_DIR}/DEV_G3R2_H0_C1_${previous_condition}_r${previous_row}_a${previous_attempt}${previous_suffix}"
   [[ -s "${previous_report}" ]] || fail "previous row postflight is missing: ${previous_report}"
   python3 - "${previous_report}" "${previous_row}" "${PREREG_SHA256}" "${SOURCE_REPORT_SHA256}" <<'PY'
 import json
@@ -455,11 +581,28 @@ else
 fi
 
 printf '%s\n' \
-  "row=${G3R2_ROW}" "condition=${CONDITION}" "w_slosh=${W_SLOSH}" "smooth=${SMOOTH}" \
+  "row=${G3R2_ROW}" "attempt=${G3R2_ATTEMPT}" "condition=${CONDITION}" \
+  "w_slosh=${W_SLOSH}" "smooth=${SMOOTH}" \
   "baseline_report_sha256=${BASELINE_REPORT_SHA256}" "prereg_sha256=${PREREG_SHA256}" \
+  "acquisition_retry=${ACQUISITION_RETRY}" "retry_of_attempt_id=${RETRY_OF_ATTEMPT_ID}" \
+  "retry_authorization_sha256=${RETRY_AUTHORIZATION_SHA256}" \
+  "timestamp_gate_sha256=${timestamp_gate_sha}" \
   > "${RUN_OUT_DIR}/${RUN_LABEL}_g3r2_screen_binding.env"
 
 bash "${CAMERA_PREP}"
+
+run_timestamp_gate() {
+  local phase="$1"
+  local report="${RUN_OUT_DIR}/${RUN_LABEL}_realsense_timestamp_${phase}.json"
+  python3 "${TIMESTAMP_GATE}" \
+    --topic /camera/color/camera_info --samples 90 --timeout-sec 50 --settle-until-pass \
+    --max-future-skew-sec 0.05 --max-p95-lag-sec 0.20 \
+    --min-clock-rate-ratio 0.98 --max-clock-rate-ratio 1.02 \
+    --max-gap-sec 0.20 --report "${report}" || \
+    fail "RealSense timestamp ${phase} gate failed; no motion was started"
+}
+
+run_timestamp_gate pre_zero
 
 publisher_count() {
   local topic_info
@@ -497,6 +640,7 @@ timeout 20s rostopic echo -n 20 --filter "m.valid and m.zero_locked and m.status
   "${RGB_MEASUREMENT_TOPIC}" > "${ready_log}" 2>&1 || fail "online RGB did not reach clean zero-lock"
 ready_count="$(grep -Ec '^valid: (True|true)$' "${ready_log}" || true)"
 (( ready_count >= 20 )) || fail "online RGB ready samples ${ready_count} < 20"
+run_timestamp_gate pre_record
 
 env "${runner_env[@]}" bash "${RUNNER}"
 
@@ -504,7 +648,7 @@ python3 "${VALIDATOR}" \
   --bag "${BAG_PATH}" --condition "${CONDITION}" --row "${G3R2_ROW}" \
   --block screen --position "${G3R2_ROW}" --slosh-enabled true \
   --smooth-priority-enabled false \
-  --protocol G3R2_robot_only_weight_screen_v1 --report-suffix _g3r2_screen_postflight.json \
+  --protocol G3R2_robot_only_weight_screen_v1 --report-suffix "${REPORT_SUFFIX}" \
   --expected-weight "${W_SLOSH}" --expected-w-smooth "${SMOOTH}" \
   --expected-w-alpha "${SMOOTH}" --expected-w-du-a "${SMOOTH}" --expected-w-du-vs "${SMOOTH}" \
   --expected-delay-mode-code 4 --require-delay-compensation-applied true \
@@ -527,6 +671,8 @@ if [[ "${G3R2_ROW}" == "05" ]]; then
   python3 "${ANALYZER}" --root "${RUN_OUT_DIR}" \
     --baseline-report "${BASELINE_REPORT}" --baseline-report-sha256 "${BASELINE_REPORT_SHA256}" \
     --screen-prereg-sha256 "${PREREG_SHA256}" --source-report-sha256 "${SOURCE_REPORT_SHA256}" \
+    --retry-authorization "${RETRY_AUTHORIZATION}" \
+    --retry-authorization-sha256 "${RETRY_AUTHORIZATION_SHA256}" \
     --minimum-rgb-p95-improvement-mm 0.05 --minimum-rgb-rms-improvement-mm 0.0 \
     --maximum-raw-imu-regression-mm 0.05
   analyzer_rc=$?
