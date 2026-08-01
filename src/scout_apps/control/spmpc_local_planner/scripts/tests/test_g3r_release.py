@@ -25,6 +25,7 @@ def load_module(name):
 ALIGNMENT = load_module("analyze_g3_delay_state_alignment")
 SCREEN = load_module("analyze_g3r_weight_screen")
 SCREEN_V2 = load_module("analyze_g3r2_weight_screen")
+CONFIRM = load_module("analyze_g3r2_paired_confirmation")
 
 
 def screen_report(row, condition, w_slosh, smooth, rgb_p95, rgb_rms, raw_p95):
@@ -535,6 +536,126 @@ class RobotOnlyWeightScreenTest(unittest.TestCase):
             self.assertEqual(output["method_negative_candidates"][0]["row"], "04")
             row04 = next(item for item in output["dataset"] if item["row"] == "04")
             self.assertFalse(row04["eligible_for_selection"])
+
+
+class RobotOnlyPairedConfirmationTest(unittest.TestCase):
+    def make_reports(self):
+        values = {
+            "01": (0.80, 0.40, 1.20),
+            "02": (0.70, 0.34, 1.17),
+            "03": (0.65, 0.31, 1.14),
+            "04": (0.75, 0.38, 1.19),
+            "05": (0.82, 0.41, 1.22),
+            "06": (0.70, 0.35, 1.18),
+        }
+        reports = {}
+        for row, (block, position, condition) in CONFIRM.EXPECTED_ROWS.items():
+            p95, rms, raw = values[row]
+            report = g3r2_screen_report(
+                row,
+                condition,
+                0.0 if condition == "Bsmooth" else 5.0,
+                1.0,
+                p95,
+                rms,
+                raw,
+            )
+            report.update({"block": block, "position": position})
+            report["processed_imu"] = {
+                "ready_fraction": 1.0,
+                "fallback_samples": 0,
+                "reset_epochs": [0],
+            }
+            reports[row] = report
+        return reports
+
+    def test_three_consistent_pairs_confirm_w5_s10(self):
+        result = CONFIRM.evaluate_confirmation(self.make_reports())
+        self.assertEqual(result["status"], "PASS")
+        self.assertEqual(result["decision"], "W5_S10_PAIRED_CONFIRMED")
+        self.assertEqual(result["aggregate"]["positive_block_count"], 3)
+        self.assertGreaterEqual(
+            result["aggregate"]["mean_rgb_p95_improvement_mm"], 0.05
+        )
+
+    def test_single_block_dominated_effect_does_not_confirm(self):
+        reports = self.make_reports()
+        reports["02"]["online_rgb"]["h_vis_p95_mm"] = 0.82
+        reports["03"]["online_rgb"]["h_vis_p95_mm"] = 0.77
+        reports["06"]["online_rgb"]["h_vis_p95_mm"] = 0.52
+        result = CONFIRM.evaluate_confirmation(reports)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertFalse(result["aggregate"]["gates"]["positive_blocks_pass"])
+        self.assertFalse(
+            result["aggregate"]["gates"]["single_block_dominance_pass"]
+        )
+
+    def test_liquid_delay_rollout_invalidates_confirmation(self):
+        reports = self.make_reports()
+        reports["03"]["internal_state"][
+            "liquid_delay_compensation_applied_fraction"
+        ] = 0.03
+        result = CONFIRM.evaluate_confirmation(reports)
+        self.assertEqual(result["status"], "FAIL")
+        self.assertTrue(
+            any("forbidden liquid delay rollout" in item for item in result["failures"])
+        )
+
+    def test_cli_audits_bags_and_writes_confirmation_report(self):
+        reports = self.make_reports()
+        prereg = "a" * 64
+        window = "b" * 64
+        source = "c" * 64
+        screen = "d" * 64
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for row, report in reports.items():
+                bag = root / "DEV_G3R2C_row_{}.bag".format(row)
+                bag.write_bytes(("confirmation-bag-" + row).encode("ascii"))
+                report.update(
+                    {
+                        "protocol": CONFIRM.PROTOCOL,
+                        "bag": str(bag),
+                        "bag_size_bytes": bag.stat().st_size,
+                        "bag_sha256": hashlib.sha256(bag.read_bytes()).hexdigest(),
+                        "bindings": {
+                            "prereg_sha256": prereg,
+                            "outcome_window_rule_sha256": window,
+                            "source_report_sha256": source,
+                        },
+                    }
+                )
+                (root / "DEV_G3R2C_row_{}_g3r2c_postflight.json".format(row)).write_text(
+                    json.dumps(report), encoding="utf-8"
+                )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(ANALYSIS_DIR / "analyze_g3r2_paired_confirmation.py"),
+                    "--root",
+                    str(root),
+                    "--prereg-sha256",
+                    prereg,
+                    "--outcome-window-rule-sha256",
+                    window,
+                    "--source-report-sha256",
+                    source,
+                    "--screen-report-sha256",
+                    screen,
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            output = json.loads(
+                (root / "G3R2_PAIRED_CONFIRMATION_REPORT.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(output["status"], "PASS")
+            self.assertEqual(output["decision"], "W5_S10_PAIRED_CONFIRMED")
+            self.assertEqual(len(output["dataset"]), 6)
 
 
 if __name__ == "__main__":

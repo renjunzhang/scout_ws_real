@@ -90,3 +90,11 @@ Row 05 后自动生成：
 ```
 
 完成 Row 05 后停止，先检查 `PROMOTE_FOR_PAIRED_CONFIRMATION`、`NO_PROMOTION` 或 `SCREEN_INVALID`，不能直接进入重复采集。
+
+## 4. 筛选完成结论
+
+Row 05 已 PASS，完整报告为 `PROMOTE_FOR_PAIRED_CONFIRMATION`，唯一晋级候选是 `W5_S10`。后续三配对确认已单独冻结在：
+
+```text
+20260801_G3R2_W5_S10三配对确认实验命令.md
+```
