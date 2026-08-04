@@ -1,0 +1,390 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Offline tests for immutable R7 mechanism campaign control evidence."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import contextlib
+import importlib.util
+import json
+import os
+import stat
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+
+SCRIPT = (Path(__file__).resolve().parents[1] /
+          "smpcc_sim_mechanism_campaign_control.py")
+
+
+def load_target():
+    spec = importlib.util.spec_from_file_location(
+        "test_smpcc_sim_mechanism_campaign_control_target", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class MechanismCampaignControlTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.control = load_target()
+
+    @staticmethod
+    def _write_readonly(path: Path, value: dict) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n",
+            encoding="utf-8")
+        os.chmod(path, 0o444)
+
+    def _schedule(self) -> list[dict]:
+        rows = []
+        stages = (
+            ("SIM-S1_CORE", 40),
+            ("SIM-S2A_SELECTIVITY", 24),
+            ("SIM-S2B_TRANSFER", 24),
+        )
+        number = 0
+        for stage, count in stages:
+            for _ in range(count):
+                number += 1
+                rows.append({
+                    "planned_row_id": f"ROW{number:03d}",
+                    "stage": stage,
+                    "condition_id": f"CONDITION_{number:03d}",
+                })
+        self.assertEqual(88, len(rows))
+        return rows
+
+    def _record(self, row: dict, *, attempt_number: int = 1,
+                method_success: bool = True,
+                method_failure: bool = False,
+                motion_started: bool = True,
+                failure_class: str = "NONE",
+                manifest_path: Path | None = None,
+                manifest_hash: str = "a" * 64,
+                previous_hash: str = "0" * 64) -> dict:
+        attempt_id = (f"{row['planned_row_id']}_r{attempt_number:02d}")
+        core = {
+            "planned_row_id": row["planned_row_id"],
+            "attempt_id": attempt_id,
+            "stage": row["stage"],
+            "condition_id": row["condition_id"],
+            "method_success": method_success,
+            "method_failure": method_failure,
+            "motion_started": motion_started,
+            "failure_class": failure_class,
+            "attempt_manifest_path": str(
+                manifest_path or Path("/unused") / attempt_id /
+                "attempt_manifest.json"),
+            "attempt_manifest_hash": manifest_hash,
+            "previous_entry_hash": previous_hash,
+        }
+        return dict(core, entry_hash=self.control.runner.canonical_hash(core))
+
+    def _terminal_records(self, rows: list[dict], count: int) -> list[dict]:
+        records = []
+        previous = "0" * 64
+        for row in rows[:count]:
+            record = self._record(row, previous_hash=previous)
+            records.append(record)
+            previous = record["entry_hash"]
+        return records
+
+    @contextlib.contextmanager
+    def _environment(self, root: Path, records: list[dict],
+                     rows: list[dict]):
+        namespace = root / self.control.runner.NAMESPACE
+        release_path = (namespace / "release" /
+                        self.control.runner.RELEASE_ID /
+                        "mechanism_release.json")
+        master_path = (namespace / "freeze" /
+                       self.control.runner.RELEASE_ID /
+                       "mechanism_master.json")
+        freeze_path = master_path.with_name("mechanism_freeze.json")
+        result_root = namespace / "matrix_results"
+        index = result_root / "dataset_index.jsonl"
+        lock = namespace / "locks" / "r7_campaign.lock"
+        release = {"release_hash": "1" * 64}
+        master = {"master_hash": "2" * 64}
+        self._write_readonly(release_path, release)
+        self._write_readonly(master_path, master)
+        self._write_readonly(freeze_path, {"freeze_hash": "3" * 64})
+        admission = self.control.runner.CampaignAdmission(
+            release_path=release_path,
+            release=release,
+            freeze_path=freeze_path,
+            freeze={"freeze_hash": "3" * 64},
+            master_path=master_path,
+            master=master,
+        )
+        runner_values = {
+            "DEFAULT_RELEASE": release_path,
+            "DEFAULT_MASTER": master_path,
+            "DEFAULT_FREEZE": freeze_path,
+            "CANONICAL_NAMESPACE_ROOT": namespace,
+            "CANONICAL_RESULT_ROOT": result_root,
+            "CANONICAL_DATASET_INDEX": index,
+            "CAMPAIGN_LOCK": lock,
+        }
+        with mock.patch.multiple(self.control.runner, **runner_values), \
+                mock.patch.object(
+                    self.control.runner, "admit", return_value=admission) as admit, \
+                mock.patch.object(
+                    self.control.runner, "ledger_path", return_value=index), \
+                mock.patch.object(
+                    self.control.runner, "load_ledger", return_value=records), \
+                mock.patch.object(
+                    self.control.runner, "schedule", return_value=rows):
+            yield {
+                "namespace": namespace,
+                "release": release_path,
+                "master": master_path,
+                "freeze": freeze_path,
+                "result": result_root,
+                "index": index,
+                "lock": lock,
+                "admission": admission,
+                "admit": admit,
+            }
+
+    def test_old_release_is_rejected_before_admission_or_output(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            rows = self._schedule()
+            records = self._terminal_records(rows, 40)
+            with self._environment(
+                    Path(temporary), records, rows) as environment:
+                old_release = (Path(temporary) /
+                               "SMPCC-SIM-MECHANISM-40-64-88-R2" /
+                               "mechanism_release.json")
+                self._write_readonly(old_release, {"release_id": "R2"})
+                with self.assertRaisesRegex(
+                        self.control.CampaignControlError,
+                        "must be exactly"):
+                    self.control.create_stage_evidence(
+                        old_release, "SIM-S2A_SELECTIVITY",
+                        extension_reason="manual extension")
+                environment["admit"].assert_not_called()
+                self.assertFalse(environment["lock"].exists())
+                self.assertFalse((environment["result"] /
+                                  "stage_evidence").exists())
+
+    def test_stage_cannot_open_before_exact_terminal_boundary(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            rows = self._schedule()
+            records = self._terminal_records(rows, 39)
+            with self._environment(
+                    Path(temporary), records, rows) as environment:
+                with self.assertRaisesRegex(
+                        self.control.CampaignControlError,
+                        "prefix row 40/40 has no attempt"):
+                    self.control.create_stage_evidence(
+                        environment["release"], "SIM-S2A_SELECTIVITY",
+                        extension_reason="operator chose the frozen extension")
+                with self.assertRaises(self.control.CampaignControlError):
+                    self.control.authorize_stage(
+                        environment["release"], "SIM-S2A_SELECTIVITY")
+                self.assertFalse((environment["result"] /
+                                  "stage_authorizations").exists())
+
+    def test_s2b_requires_explicit_trigger_and_hash_bound_authorization(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            rows = self._schedule()
+            records = self._terminal_records(rows, 64)
+            with self._environment(
+                    Path(temporary), records, rows) as environment:
+                with self.assertRaisesRegex(
+                        self.control.CampaignControlError,
+                        "trigger_reason is required"):
+                    self.control.create_stage_evidence(
+                        environment["release"], "SIM-S2B_TRANSFER")
+
+                report = self.control.create_stage_evidence(
+                    environment["release"], "SIM-S2B_TRANSFER",
+                    trigger_reason=(
+                        "operator recorded a protocol-external selectivity "
+                        "trigger; the tool made no effect inference"))
+                self.assertEqual("PASS", report["status"])
+                self.assertFalse(report["physical_primary_eligible"])
+                evidence = report["evidence"]
+                self.assertEqual(
+                    {"s2a_closure", "selectivity_trigger"}, set(evidence))
+                for descriptor in evidence.values():
+                    path = Path(descriptor["path"])
+                    document = json.loads(path.read_text(encoding="utf-8"))
+                    core = dict(document)
+                    declared = core.pop("evidence_hash")
+                    self.assertEqual(
+                        declared, self.control.runner.canonical_hash(core))
+                    self.assertEqual(
+                        descriptor["sha256"],
+                        self.control.runner.sha256_file(path))
+                    self.assertEqual(
+                        0, stat.S_IMODE(path.stat().st_mode) &
+                        self.control.WRITE_BITS)
+                    self.assertFalse(document["physical_primary_eligible"])
+                trigger = json.loads(Path(
+                    evidence["selectivity_trigger"]["path"]
+                ).read_text(encoding="utf-8"))
+                self.assertEqual("TRIGGERED", trigger["decision"])
+                self.assertFalse(
+                    trigger["automatic_scientific_effect_inference"])
+                self.assertFalse(trigger["scientific_effect_evaluated_by_tool"])
+
+                authorization_report = self.control.authorize_stage(
+                    environment["release"], "SIM-S2B_TRANSFER")
+                authorization_path = Path(
+                    authorization_report["authorization"]["path"])
+                authorization = json.loads(
+                    authorization_path.read_text(encoding="utf-8"))
+                core = dict(authorization)
+                declared = core.pop("authorization_hash")
+                self.assertEqual(
+                    declared, self.control.runner.canonical_hash(core))
+                self.assertEqual(records[-1]["entry_hash"],
+                                 authorization["dataset_index_head_hash"])
+                self.assertEqual(
+                    {"s2a_closure", "selectivity_trigger"},
+                    set(authorization["evidence"]))
+                self.assertEqual(
+                    0, stat.S_IMODE(authorization_path.stat().st_mode) &
+                    self.control.WRITE_BITS)
+                self.control.runner._validate_stage_authorization(
+                    environment["admission"], "SIM-S2B_TRANSFER", records)
+
+                with self.assertRaisesRegex(
+                        self.control.CampaignControlError,
+                        "refusing to overwrite"):
+                    self.control.authorize_stage(
+                        environment["release"], "SIM-S2B_TRANSFER")
+
+    def test_tampered_evidence_hash_cannot_authorize_stage(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            rows = self._schedule()
+            records = self._terminal_records(rows, 40)
+            with self._environment(
+                    Path(temporary), records, rows) as environment:
+                report = self.control.create_stage_evidence(
+                    environment["release"], "SIM-S2A_SELECTIVITY",
+                    extension_reason="manual extension after S1 closure")
+                decision_path = Path(
+                    report["evidence"]["extension_decision"]["path"])
+                decision = json.loads(
+                    decision_path.read_text(encoding="utf-8"))
+                decision["extension_reason"] = "tampered after freezing"
+                os.chmod(decision_path, 0o644)
+                decision_path.write_text(
+                    json.dumps(decision, sort_keys=True) + "\n",
+                    encoding="utf-8")
+                os.chmod(decision_path, 0o444)
+                with self.assertRaisesRegex(
+                        self.control.CampaignControlError,
+                        "evidence_hash mismatch"):
+                    self.control.authorize_stage(
+                        environment["release"], "SIM-S2A_SELECTIVITY")
+                self.assertFalse((environment["result"] /
+                                  "stage_authorizations" /
+                                  "SIM-S2A_SELECTIVITY.json").exists())
+
+    def test_method_failure_is_terminal_and_cannot_be_retried(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            rows = self._schedule()
+            record = self._record(
+                rows[0], method_success=False, method_failure=True,
+                motion_started=True, failure_class="METHOD_FAILURE")
+            with self._environment(
+                    Path(temporary), [record], rows) as environment:
+                with self.assertRaisesRegex(
+                        self.control.CampaignControlError,
+                        "method failure is terminal"):
+                    self.control.authorize_retry(
+                        environment["release"], record["attempt_id"],
+                        "operator requested an invalid method retry")
+                self.assertFalse((environment["result"] /
+                                  "retry_authorizations").exists())
+
+    def test_retry_rejects_out_of_order_and_accepts_only_head_acquisition(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            rows = self._schedule()
+            first = self._record(
+                rows[0], method_success=False, method_failure=False,
+                motion_started=False,
+                failure_class="INFRASTRUCTURE_ACQUISITION")
+            second = self._record(
+                rows[1], method_success=False, method_failure=False,
+                motion_started=False,
+                failure_class="INFRASTRUCTURE_ACQUISITION",
+                previous_hash=first["entry_hash"])
+            with self._environment(
+                    Path(temporary), [first, second], rows) as environment:
+                with self.assertRaisesRegex(
+                        self.control.CampaignControlError,
+                        "unresolved ledger head"):
+                    self.control.authorize_retry(
+                        environment["release"], first["attempt_id"],
+                        "out-of-order retry must fail")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            rows = self._schedule()
+            namespace = root / self.control.runner.NAMESPACE
+            result_root = namespace / "matrix_results"
+            attempt_id = f"{rows[0]['planned_row_id']}_r01"
+            manifest_path = (result_root / "attempts" / attempt_id /
+                             "attempt_manifest.json")
+            manifest = {
+                "attempt_id": attempt_id,
+                "planned_row_id": rows[0]["planned_row_id"],
+                "method_success": False,
+                "method_failure": False,
+                "motion_started": False,
+                "failure_class": "INFRASTRUCTURE_ACQUISITION",
+            }
+            self._write_readonly(manifest_path, manifest)
+            record = self._record(
+                rows[0], method_success=False, method_failure=False,
+                motion_started=False,
+                failure_class="INFRASTRUCTURE_ACQUISITION",
+                manifest_path=manifest_path,
+                manifest_hash=self.control.runner.sha256_file(manifest_path))
+            with self._environment(
+                    root, [record], rows) as environment:
+                report = self.control.authorize_retry(
+                    environment["release"], attempt_id,
+                    "fresh master acquisition failed before motion")
+                self.assertEqual("ROW001_r02", report["next_attempt_id"])
+                path = Path(report["authorization"]["path"])
+                self.assertEqual(
+                    environment["result"] / "retry_authorizations" /
+                    "ROW001_r02.json", path)
+                authorization = json.loads(path.read_text(encoding="utf-8"))
+                core = dict(authorization)
+                declared = core.pop("authorization_hash")
+                self.assertEqual(
+                    declared, self.control.runner.canonical_hash(core))
+                self.assertEqual(record["entry_hash"],
+                                 authorization["previous_ledger_entry_hash"])
+                self.assertEqual(
+                    self.control.runner.sha256_file(manifest_path),
+                    authorization["previous_attempt_manifest_hash"])
+                self.assertFalse(authorization["method_failure"])
+                self.assertFalse(authorization["motion_started"])
+                self.assertFalse(
+                    authorization["physical_primary_eligible"])
+                self.assertEqual(
+                    0, stat.S_IMODE(path.stat().st_mode) &
+                    self.control.WRITE_BITS)
+                self.control.runner._validate_next_row(
+                    environment["admission"], rows[0], "ROW001_r02", path)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,591 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Offline binding tests for the R7-only SmoothMatch timing pilot."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import importlib.util
+import json
+import os
+import sys
+import tempfile
+import threading
+import time
+import unittest
+from pathlib import Path
+from typing import Optional
+from unittest import mock
+
+
+MODULE_PATH = Path(__file__).resolve().parents[1] / "smpcc_sim_mechanism_timing_pilot.py"
+SPEC = importlib.util.spec_from_file_location("smpcc_timing_pilot_tested", MODULE_PATH)
+assert SPEC is not None and SPEC.loader is not None
+pilot = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = pilot
+SPEC.loader.exec_module(pilot)
+
+
+def write_readonly(path: Path, value) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(value, (bytes, bytearray)):
+        path.write_bytes(value)
+    else:
+        path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
+    path.chmod(0o444)
+
+
+class TimingPilotBindingTest(unittest.TestCase):
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.candidate = self.root / "mechanism_freeze_candidate.json"
+        write_readonly(self.candidate, {
+            "protocol_id": pilot.PROTOCOL_ID,
+            "release_id": pilot.RELEASE_ID,
+            "formal_scope": "SIMULATION_MECHANISM_ONLY",
+            "physical_alignment": False,
+            "physical_primary_eligible": False,
+        })
+        self.configs = {
+            condition: {"path": str(self.root / f"{condition}.json"),
+                        "sha256": condition.lower().ljust(64, "0")[:64]}
+            for condition in ("Bslosh", "SmoothMatch")
+        }
+        path_asset = self.root / "H1.json"
+        write_readonly(path_asset, {
+            "points": [{"x": -4.0, "y": 0.0, "yaw": 0.0},
+                       {"x": 5.0, "y": 0.0, "yaw": 0.0}],
+        })
+        self.path_descriptor = {
+            "path": str(path_asset), "sha256": pilot.sha256_file(path_asset),
+        }
+        self.container_descriptor = {
+            "path": str(self.root / "C1.json"), "sha256": "2" * 64,
+        }
+        self.freeze = {
+            "effective_configs": self.configs,
+            "paths": {"H1": {"sim_path": self.path_descriptor}},
+            "containers": {"C1": self.container_descriptor},
+        }
+
+    def _attempt(self, condition: str, *,
+                 seed: int = pilot.TIMING_CALIBRATION_SEED,
+                 attempt_id: Optional[str] = None, duration: float = 20.0) -> Path:
+        if attempt_id is None:
+            attempt_id = pilot.TIMING_ATTEMPT_IDS[condition]
+        results, bags = pilot._pilot_roots(
+            self.candidate, enforce_canonical_root=False
+        )
+        directory = results / "attempts" / attempt_id
+        attempt_path = directory / "attempt_manifest.json"
+        case_path = directory / "case_manifest.json"
+        event_path = directory / "motion_goal_events.live.json"
+        stop_qc_path = directory / "process_stop_qc.json"
+        bag_qc_path = directory / "closed_bag_qc.json"
+        runtime_qc_path = directory / "runtime_qc_report.json"
+        tail_qc_path = directory / "tail_clock_qc.json"
+        raw_stop_path = directory / "raw_process_stops.json"
+        bag_path = bags / attempt_id / "capture.bag"
+        candidate_descriptor = {
+            "path": str(self.candidate.absolute()),
+            "sha256": pilot.sha256_file(self.candidate),
+        }
+        # Invalid-seed fixtures still carry the canonical yaw realization so
+        # validation reaches (and rejects) the seed identity itself; the
+        # production helper intentionally refuses to derive a second yaw.
+        fixture_yaw_offset = pilot._timing_initial_yaw_offset(
+            pilot.TIMING_CALIBRATION_SEED)
+        case = {
+            "schema_version": pilot.SCHEMA_VERSION,
+            "record_type": "SMPCC_SIM_MECHANISM_TIME_MATCH_CASE",
+            "runner_id": pilot.RUNNER_ID,
+            "protocol_id": pilot.PROTOCOL_ID,
+            "release_id": pilot.RELEASE_ID,
+            "formal": False,
+            "physical_primary_eligible": False,
+            "attempt_id": attempt_id,
+            "condition_id": condition,
+            "freeze_candidate": candidate_descriptor,
+            "condition_config": self.configs[condition],
+            "path": dict(self.path_descriptor, path_id="H1"),
+            "container": dict(self.container_descriptor, container_id="C1"),
+            "seed": seed,
+            "timing_policy": {
+                "settle_sec": 30.0, "goal_timeout_sec": 60.0,
+                "tail_sec": 5.0,
+            },
+            "pose_contract": {
+                "authoritative_pose_topic": "/odom",
+                "authoritative_pose_semantic": "gazebo_odometry_message",
+                "frozen_path_coordinate_contract": "gazebo_odometry_numeric_world",
+                "online_planner_use_tf_pose": False,
+                "controller_status_is_sufficient_for_success": False,
+                "common_seed_initial_yaw_offset_rad":
+                    fixture_yaw_offset,
+                "expected_spawn_yaw_rad":
+                    fixture_yaw_offset,
+            },
+        }
+        write_readonly(case_path, case)
+        endpoint = {
+            "initial_pose_gate": {
+                "pass": True, "start_distance_m": 0.0,
+                "yaw_rad": fixture_yaw_offset,
+                "expected_yaw_rad": fixture_yaw_offset,
+                "yaw_error_rad": 0.0,
+            },
+            "controller_goal_status_seen": {"controller_status": "GOAL_REACHED"},
+            "geometric_goal_gate": {"pass": True, "goal_distance_m": 0.15},
+            "goal_reached": {
+                "controller_status_gate_pass": True,
+                "geometric_gate_pass": True,
+                "goal_distance_m": 0.15,
+            },
+            "latest_odometry": {"x": 4.85, "y": 0.0, "goal_distance_m": 0.15},
+        }
+        write_readonly(event_path, {
+            "case_manifest_hash": pilot.sha256_file(case_path), **endpoint})
+        write_readonly(bag_path, b"fixture bag")
+        raw_stops = {
+            component: {
+                "label": component, "pid": index + 100,
+                "signal": ("SIGINT" if component == "recorder" else "SIGTERM"),
+                "already_exited": False, "returncode": 0,
+            }
+            for index, component in enumerate(
+                ("planner", "path_replay", "recorder"))
+        }
+        stop_qc = pilot.runtime_qc.validate_owned_stop_bundle(
+            raw_stops, motion_component="planner")
+        raw_stop_evidence = pilot.runtime_qc.build_owned_stop_evidence(
+            raw_stops, motion_component="planner",
+            protocol_id=pilot.PROTOCOL_ID, release_id=pilot.RELEASE_ID,
+            attempt_id=attempt_id,
+            case_manifest_hash=pilot.sha256_file(case_path), formal=False)
+        bag_qc_core = {
+            "schema_version": pilot.runtime_qc.SCHEMA_VERSION,
+            "record_type": "SMPCC_SIM_MECHANISM_CLOSED_ROSBAG_QC",
+            "formal_scope": pilot.runtime_qc.FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "status": "PASS", "formal": False,
+            "attempt_id": attempt_id,
+            "case_manifest_hash": pilot.sha256_file(case_path),
+            "protocol_id": pilot.PROTOCOL_ID,
+            "release_id": pilot.RELEASE_ID,
+            "bag": {"path": str(bag_path),
+                    "sha256": pilot.sha256_file(bag_path)},
+            "terminal": {"kind": "GOAL_REACHED"},
+        }
+        bag_qc = dict(
+            bag_qc_core,
+            bag_qc_hash=pilot.runtime_qc.canonical_hash(bag_qc_core))
+        completion_qc = pilot.runtime_qc.validate_completion_time(duration)
+        classification = pilot.runtime_qc.classify_outcome(
+            motion_started=True, primary_method_outcome="METHOD_SUCCESS")
+        runtime_report = pilot.runtime_qc.build_runtime_qc_report(
+            protocol_id=pilot.PROTOCOL_ID, release_id=pilot.RELEASE_ID,
+            attempt_id=attempt_id,
+            case_manifest_hash=pilot.sha256_file(case_path), formal=False,
+            stop_bundle=stop_qc, bag_qc=bag_qc,
+            completion_qc=completion_qc,
+            outcome_classification=classification)
+        tail_qc = pilot._build_clock_tail_receipt(
+            attempt_id=attempt_id,
+            case_manifest_hash=pilot.sha256_file(case_path),
+            start_ros_time_sec=100.0, end_ros_time_sec=105.25,
+            wall_elapsed_sec=5.5)
+        write_readonly(stop_qc_path, stop_qc)
+        write_readonly(bag_qc_path, bag_qc)
+        write_readonly(runtime_qc_path, runtime_report)
+        write_readonly(tail_qc_path, tail_qc)
+        write_readonly(raw_stop_path, raw_stop_evidence)
+        lifecycle = [
+            {"event": "preflight"}, {"event": "recorder_admitted"},
+            {"event": "deferred_diagnostic_publishers_admitted"},
+            {"event": "recorder_before_motion"},
+            {"event": "first_executed_motion"}, {"event": "goal_reached"},
+            {"event": "tail_ros_clock_interval_complete"},
+            {"event": "tail_recorded"}, {"event": "owned_pid_cleanup"},
+        ]
+        attempt = {
+            "schema_version": pilot.SCHEMA_VERSION,
+            "record_type": "SMPCC_SIM_MECHANISM_TIME_MATCH_ATTEMPT",
+            "runner_id": pilot.RUNNER_ID,
+            "protocol_id": pilot.PROTOCOL_ID,
+            "release_id": pilot.RELEASE_ID,
+            "formal": False,
+            "evidence_class": "SIMULATION_MECHANISM_CALIBRATION",
+            "physical_alignment": False,
+            "physical_primary_eligible": False,
+            "physical_primary": None,
+            "attempt_id": attempt_id,
+            "condition_id": condition,
+            "method_success": True,
+            "method_failure": False,
+            "failure_class": "NONE",
+            "outcome_classification": classification,
+            "goal_reached": True,
+            "motion_started": True,
+            "tail_complete": True,
+            "fresh_ros_gazebo": True,
+            "pre_ros_reachable": False,
+            "pre_gazebo_reachable": False,
+            "post_ros_reachable": False,
+            "post_gazebo_reachable": False,
+            "completion_time_sec": duration,
+            "seed": seed,
+            "freeze_candidate": candidate_descriptor,
+            "case_manifest_path": str(case_path),
+            "case_manifest_hash": pilot.sha256_file(case_path),
+            "events_path": str(event_path),
+            "events_hash": pilot.sha256_file(event_path),
+            "endpoint_evidence": endpoint,
+            "bag_path": str(bag_path),
+            "bag_hash": pilot.sha256_file(bag_path),
+            "runtime_qc_report": {
+                "path": str(runtime_qc_path),
+                "sha256": pilot.sha256_file(runtime_qc_path),
+                "runtime_qc_hash": runtime_report["runtime_qc_hash"],
+            },
+            "closed_bag_qc": {
+                "path": str(bag_qc_path),
+                "sha256": pilot.sha256_file(bag_qc_path),
+                "bag_qc_hash": bag_qc["bag_qc_hash"],
+            },
+            "ros_clock_tail_qc": {
+                "path": str(tail_qc_path),
+                "sha256": pilot.sha256_file(tail_qc_path),
+                "tail_clock_qc_hash": tail_qc["tail_clock_qc_hash"],
+            },
+            "raw_process_stops": {
+                "path": str(raw_stop_path),
+                "sha256": pilot.sha256_file(raw_stop_path),
+                "raw_stop_evidence_hash":
+                    raw_stop_evidence["raw_stop_evidence_hash"],
+            },
+            "lifecycle": lifecycle,
+            "runtime_error": None,
+        }
+        write_readonly(attempt_path, attempt)
+        return attempt_path
+
+    def test_valid_attempt_is_bound_through_case_event_and_bag(self) -> None:
+        attempt = self._attempt("Bslosh")
+        value = pilot._validate_attempt(
+            self.candidate, self.freeze, attempt, "Bslosh",
+            enforce_canonical_root=False,
+        )
+        self.assertEqual(pilot.TIMING_CALIBRATION_SEED, value["seed"])
+
+    def test_r2_namespace_and_cross_root_attempts_are_rejected(self) -> None:
+        old = self._attempt(
+            "Bslosh", attempt_id="SIM_MECH_R2_TIMEMATCH_BSLOSH_OLD"
+        )
+        with self.assertRaisesRegex(pilot.PilotError, "frozen R7 assignment"):
+            pilot._validate_attempt(
+                self.candidate, self.freeze, old, "Bslosh",
+                enforce_canonical_root=False,
+            )
+        valid = self._attempt("SmoothMatch")
+        copied = self.root / "copied_attempt.json"
+        copied.write_bytes(valid.read_bytes())
+        copied.chmod(0o444)
+        with self.assertRaisesRegex(pilot.PilotError, "outside the current R7"):
+            pilot._validate_attempt(
+                self.candidate, self.freeze, copied, "SmoothMatch",
+                enforce_canonical_root=False,
+            )
+
+    def test_case_manifest_or_candidate_drift_is_rejected(self) -> None:
+        attempt = self._attempt("Bslosh")
+        value = json.loads(attempt.read_text(encoding="utf-8"))
+        value["freeze_candidate"]["sha256"] = "0" * 64
+        attempt.chmod(0o644)
+        attempt.write_text(json.dumps(value) + "\n", encoding="utf-8")
+        attempt.chmod(0o444)
+        with self.assertRaisesRegex(pilot.PilotError, "not bound to the supplied"):
+            pilot._validate_attempt(
+                self.candidate, self.freeze, attempt, "Bslosh",
+                enforce_canonical_root=False,
+            )
+
+    def test_assemble_requires_common_seed_and_exact_output(self) -> None:
+        seed = pilot.TIMING_CALIBRATION_SEED
+        bslosh = self._attempt("Bslosh", seed=seed, duration=20.0)
+        smooth = self._attempt("SmoothMatch", seed=seed, duration=20.4)
+        output = self.candidate.parent / "smoothmatch_calibration.json"
+        with mock.patch.object(pilot, "candidate_freeze", return_value=self.freeze):
+            result = pilot.assemble(
+                self.candidate, bslosh, smooth, output,
+                enforce_canonical_root=False,
+            )
+        self.assertEqual("PASS", result["status"])
+        self.assertEqual(seed, result["common_seed"])
+        self.assertFalse(result["physical_primary_eligible"])
+
+    def test_assemble_rejects_method_dependent_seed_consumption(self) -> None:
+        bslosh = self._attempt(
+            "Bslosh", seed=pilot.TIMING_CALIBRATION_SEED)
+        smooth = self._attempt(
+            "SmoothMatch", seed=pilot.TIMING_CALIBRATION_SEED + 1)
+        output = self.candidate.parent / "smoothmatch_calibration.json"
+        with mock.patch.object(pilot, "candidate_freeze", return_value=self.freeze):
+            with self.assertRaisesRegex(pilot.PilotError, "frozen R7 CRN seed"):
+                pilot.assemble(
+                    self.candidate, bslosh, smooth, output,
+                    enforce_canonical_root=False,
+                )
+
+    def test_production_candidate_path_is_exact_not_merely_below_data(self) -> None:
+        with self.assertRaisesRegex(pilot.PilotError, "exact R7 candidate"):
+            pilot.candidate_freeze(self.candidate)
+        expected = list(pilot.freeze_tool.CANDIDATE_MISSING_REQUIREMENTS)
+        with mock.patch.object(pilot, "CANONICAL_CANDIDATE", self.candidate), \
+                mock.patch.object(
+                    pilot.freeze_tool, "validate_freeze",
+                    return_value={"status": "FAIL", "errors": expected}):
+            admitted = pilot.candidate_freeze(self.candidate)
+        self.assertEqual(pilot.PROTOCOL_ID, admitted["protocol_id"])
+        with mock.patch.object(pilot, "CANONICAL_CANDIDATE", self.candidate), \
+                mock.patch.object(
+                    pilot.freeze_tool, "validate_freeze",
+                    return_value={
+                        "status": "FAIL", "errors": list(reversed(expected)),
+                    }):
+            with self.assertRaisesRegex(
+                    pilot.PilotError, "exact pre-finalization"):
+                pilot.candidate_freeze(self.candidate)
+
+    def test_internal_helpers_are_not_public_subcommands(self) -> None:
+        parser = pilot.build_parser()
+        subparsers = next(
+            action for action in parser._actions  # pylint: disable=protected-access
+            if isinstance(action, argparse._SubParsersAction))
+        self.assertEqual({"run", "assemble"}, set(subparsers.choices))
+        parsed = parser.parse_args([
+            "run", "--freeze-candidate", str(self.candidate),
+            "--condition", "Bslosh"])
+        self.assertFalse(hasattr(parsed, "seed"))
+        self.assertFalse(hasattr(parsed, "attempt_id"))
+
+    def test_internal_helpers_reject_noncanonical_direct_invocation(self) -> None:
+        case_dir = self.root / "attempts" / "SIM_MECH_R7_TIMEMATCH_DIRECT"
+        path_args = argparse.Namespace(
+            path=str(self.root / "H1.json"), case_dir=str(case_dir),
+            case_manifest_hash="0" * 64)
+        monitor_args = argparse.Namespace(
+            case_dir=str(case_dir), case_manifest_hash="0" * 64)
+        with self.assertRaisesRegex(
+                pilot.PilotError, "canonical R7 timing attempt"):
+            pilot.command_path_replay(path_args)
+        with self.assertRaisesRegex(
+                pilot.PilotError, "canonical R7 timing attempt"):
+            pilot.command_event_monitor(monitor_args)
+
+    def test_wrong_seed_fails_before_lock_or_candidate_side_effect(self) -> None:
+        lock = self.root / "canonical" / "timing_pilot.lock"
+        with mock.patch.object(pilot, "TIMING_LOCK", lock):
+            with self.assertRaisesRegex(
+                    pilot.PilotError, "frozen R7 CRN seed"):
+                pilot.run_case(
+                    self.candidate, "Bslosh",
+                    pilot.TIMING_ATTEMPT_IDS["Bslosh"],
+                    pilot.TIMING_CALIBRATION_SEED + 1,
+                    "http://127.0.0.1:11550",
+                    "http://127.0.0.1:11584")
+        self.assertFalse(lock.exists())
+
+    def test_result_root_symlink_fails_before_lock_or_runtime(self) -> None:
+        target = self.root / "outside-results"
+        target.mkdir()
+        result_link = self.root / "canonical-results"
+        result_link.symlink_to(target, target_is_directory=True)
+        bag_root = self.root / "canonical-bags"
+        lock = self.root / "canonical-lock"
+        with mock.patch.object(pilot, "CANONICAL_CANDIDATE", self.candidate), \
+                mock.patch.object(pilot, "CANONICAL_RESULT_ROOT", result_link), \
+                mock.patch.object(pilot, "CANONICAL_BAG_ROOT", bag_root), \
+                mock.patch.object(pilot, "TIMING_LOCK", lock), \
+                mock.patch.object(
+                    pilot, "candidate_freeze", return_value=self.freeze):
+            with self.assertRaisesRegex(pilot.PilotError, "symlink"):
+                pilot.run_case(
+                    self.candidate, "Bslosh",
+                    pilot.TIMING_ATTEMPT_IDS["Bslosh"],
+                    pilot.TIMING_CALIBRATION_SEED,
+                    "http://127.0.0.1:11550",
+                    "http://127.0.0.1:11584")
+        self.assertFalse(lock.exists())
+        self.assertEqual([], list(target.iterdir()))
+
+    def test_bag_root_symlink_fails_before_lock_or_runtime(self) -> None:
+        result_root = self.root / "canonical-results"
+        result_root.mkdir()
+        target = self.root / "outside-bags"
+        target.mkdir()
+        bag_link = self.root / "canonical-bags"
+        bag_link.symlink_to(target, target_is_directory=True)
+        lock = self.root / "canonical-lock"
+        with mock.patch.object(pilot, "CANONICAL_CANDIDATE", self.candidate), \
+                mock.patch.object(pilot, "CANONICAL_RESULT_ROOT", result_root), \
+                mock.patch.object(pilot, "CANONICAL_BAG_ROOT", bag_link), \
+                mock.patch.object(pilot, "TIMING_LOCK", lock), \
+                mock.patch.object(
+                    pilot, "candidate_freeze", return_value=self.freeze):
+            with self.assertRaisesRegex(pilot.PilotError, "symlink"):
+                pilot.run_case(
+                    self.candidate, "SmoothMatch",
+                    pilot.TIMING_ATTEMPT_IDS["SmoothMatch"],
+                    pilot.TIMING_CALIBRATION_SEED,
+                    "http://127.0.0.1:11550",
+                    "http://127.0.0.1:11584")
+        self.assertFalse(lock.exists())
+        self.assertEqual([], list(target.iterdir()))
+
+    def test_float_seed_is_not_an_exact_integer_seed(self) -> None:
+        attempt = self._attempt(
+            "Bslosh", seed=float(pilot.TIMING_CALIBRATION_SEED))
+        with self.assertRaisesRegex(pilot.PilotError, "frozen R7 CRN seed"):
+            pilot._validate_attempt(
+                self.candidate, self.freeze, attempt, "Bslosh",
+                enforce_canonical_root=False)
+
+    def test_event_state_writes_are_serialized_and_infrastructure_is_not_method_failure(self) -> None:
+        output = self.root / "motion_goal_events.live.json"
+        state = {"odom_callbacks": 0, "status_callbacks": 0, "total": 0}
+        state_lock = threading.RLock()
+        reader_stop = threading.Event()
+        parse_errors = []
+        parsed_snapshots = []
+
+        def callback(field: str) -> None:
+            for _index in range(300):
+                def mutate() -> None:
+                    state[field] += 1
+                    state["total"] += 1
+                pilot._mutate_and_save_event_state(
+                    output, state, state_lock, mutate)
+
+        def parse_continuously() -> None:
+            while not reader_stop.is_set():
+                if output.is_file():
+                    try:
+                        snapshot = json.loads(output.read_text(encoding="utf-8"))
+                        if snapshot["total"] != (
+                                snapshot["odom_callbacks"] +
+                                snapshot["status_callbacks"]):
+                            raise AssertionError("callback snapshot is torn")
+                        parsed_snapshots.append(snapshot)
+                    except Exception as exc:  # captured for the main thread
+                        parse_errors.append(exc)
+                        return
+                time.sleep(0.0001)
+
+        reader = threading.Thread(target=parse_continuously)
+        odom_writer = threading.Thread(target=callback, args=("odom_callbacks",))
+        status_writer = threading.Thread(target=callback, args=("status_callbacks",))
+        reader.start(); odom_writer.start(); status_writer.start()
+        odom_writer.join(); status_writer.join()
+        reader_stop.set(); reader.join()
+        self.assertEqual([], parse_errors)
+        self.assertTrue(parsed_snapshots)
+        self.assertEqual(
+            {"odom_callbacks": 300, "status_callbacks": 300, "total": 600},
+            json.loads(output.read_text(encoding="utf-8")))
+
+        attempt_id = pilot.TIMING_ATTEMPT_IDS["Bslosh"]
+        case_hash = "a" * 64
+        raw_stops = {
+            component: {
+                "label": component, "pid": index + 100,
+                "signal": ("SIGINT" if component == "recorder" else "SIGTERM"),
+                "already_exited": False, "returncode": 0,
+            }
+            for index, component in enumerate(
+                ("planner", "path_replay", "recorder"))
+        }
+        stop_qc = pilot.runtime_qc.validate_owned_stop_bundle(
+            raw_stops, motion_component="planner")
+        bag_core = {
+            "schema_version": pilot.runtime_qc.SCHEMA_VERSION,
+            "record_type": "SMPCC_SIM_MECHANISM_CLOSED_ROSBAG_QC",
+            "formal_scope": pilot.runtime_qc.FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "status": "PASS", "formal": False,
+            "attempt_id": attempt_id,
+            "case_manifest_hash": case_hash,
+            "protocol_id": pilot.PROTOCOL_ID,
+            "release_id": pilot.RELEASE_ID,
+            "terminal": {"kind": "GOAL_TIMEOUT"},
+        }
+        bag_qc = dict(
+            bag_core,
+            bag_qc_hash=pilot.runtime_qc.canonical_hash(bag_core))
+        timeout_qc = pilot.runtime_qc.validate_timeout_terminal(60.05)
+        classification = pilot.runtime_qc.classify_outcome(
+            motion_started=True, primary_method_outcome="METHOD_FAILURE")
+        timeout_report = pilot._build_terminal_runtime_qc_report(
+            attempt_id=attempt_id, case_manifest_hash=case_hash,
+            stop_bundle=stop_qc, bag_qc=bag_qc,
+            classification=classification, completion_qc=None,
+            timeout_qc=timeout_qc)
+        self.assertEqual(
+            "GOAL_TIMEOUT", timeout_report["terminal_timing_qc"]["kind"])
+        self.assertEqual(
+            timeout_qc, timeout_report["terminal_timing_qc"]["receipt"])
+
+        publisher_graph = {
+            topic: ("/spmpc_local_planner",)
+            for topic in pilot.DEFERRED_RECORDER_MESSAGE_TOPICS
+        }
+        with mock.patch.object(
+                pilot.sim_only, "read_publisher_graph",
+                side_effect=[{}, publisher_graph]), mock.patch.object(
+                    pilot.time, "sleep", return_value=None):
+            admitted = pilot._wait_for_publisher_registrations(
+                "http://127.0.0.1:11311",
+                pilot.DEFERRED_RECORDER_MESSAGE_TOPICS,
+                timeout_sec=1.0)
+        self.assertEqual(publisher_graph, admitted)
+        with self.assertRaisesRegex(
+                pilot.PilotError, "differ from frozen policy"):
+            pilot._wait_for_publisher_registrations(
+                "http://127.0.0.1:11311", (pilot.H_MODAL,),
+                timeout_sec=0.0)
+
+        bag_dir = self.root / "active-artifacts"
+        bag_dir.mkdir()
+        unexpected_active = bag_dir / "capture.active.bag.active"
+        unexpected_active.write_bytes(b"still recording")
+        active_paths = pilot._recorder_active_artifact_paths(bag_dir)
+        self.assertIn(unexpected_active, active_paths)
+        with self.assertRaisesRegex(
+                pilot.PilotError, "recorder active artifact remains"):
+            pilot._require_active_artifacts_absent(active_paths)
+        unexpected_active.unlink()
+        pilot._require_active_artifacts_absent(
+            pilot._recorder_active_artifact_paths(bag_dir))
+
+        with self.assertRaisesRegex(
+                pilot.PilotError, "shorter than"):
+            pilot._build_clock_tail_receipt(
+                attempt_id=attempt_id, case_manifest_hash=case_hash,
+                start_ros_time_sec=10.0, end_ros_time_sec=14.999,
+                wall_elapsed_sec=5.0)
+        self.assertEqual(
+            "PROTOCOL_FAILURE_AFTER_MOTION",
+            pilot._classify_runtime_error(
+                "cannot read timing event state: Extra data", True),
+        )
+        self.assertEqual(
+            "PROTOCOL_FAILURE_AFTER_MOTION",
+            pilot._classify_runtime_error("frozen endpoint timeout", True),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

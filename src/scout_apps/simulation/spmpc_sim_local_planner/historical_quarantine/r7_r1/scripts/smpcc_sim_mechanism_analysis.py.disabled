@@ -1,0 +1,1960 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Fail-closed, read-only analysis for the frozen R7 mechanism matrix.
+
+This program is deliberately release-specific.  It first delegates admission
+and ledger validation to the immutable canonical R7 runner, then derives only
+descriptive, post-hoc mechanism metrics.  It never upgrades ``H_proxy`` or
+``H_modal`` to a physical primary and it has no scientific threshold or
+hypothesis-test path.
+
+The only accepted measurement windows come from each immutable
+``closed_bag_qc.json`` receipt:
+
+* motion: ``motion_start.ros_time_sec`` through ``terminal.ros_time_sec``;
+* tail: ``tail_anchor_ros_time_sec`` through anchor + required tail seconds.
+
+Odometry is windowed by ``msg.header.stamp``.  Headerless topics are windowed
+by their rosbag record time.  ``/slosh/height`` is H_proxy in metres and is
+converted to millimetres.  ``/sim_spmpc/slosh_height`` is H_modal and is already
+in millimetres.  FixedProfile must have no H_modal samples at all.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import csv
+import hashlib
+import html
+import importlib.util
+import json
+import math
+import os
+import shutil
+import stat
+import statistics
+import sys
+import tempfile
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+RUNNER_PATH = SCRIPT_DIR / "smpcc_sim_mechanism_runner.py"
+SCHEMA_VERSION = "smpcc-sim-mechanism-analysis-v1"
+ANALYSIS_CLASS = "DESCRIPTIVE_POST_HOC_MECHANISM_ONLY"
+FORMAL_SCOPE = "SIMULATION_MECHANISM_ONLY"
+RELEASE_ID = "SIM-MECHANISM-40-64-88-R7"
+STAGE_ORDER = (
+    "SIM-S1_CORE",
+    "SIM-S2A_SELECTIVITY",
+    "SIM-S2B_TRANSFER",
+)
+STAGE_ALIASES = {
+    "SIM-S1_CORE": "SIM-S1",
+    "SIM-S2A_SELECTIVITY": "SIM-S2A",
+    "SIM-S2B_TRANSFER": "SIM-S2B",
+}
+PREFIXES = ((40, (STAGE_ORDER[0],)),
+            (64, STAGE_ORDER[:2]),
+            (88, STAGE_ORDER))
+H_PROXY_TOPIC = "/slosh/height"
+H_MODAL_TOPIC = "/sim_spmpc/slosh_height"
+ODOM_TOPIC = "/odom"
+CMD_TOPIC = "/cmd_vel"
+ANALYSIS_TOPICS = (ODOM_TOPIC, CMD_TOPIC, H_PROXY_TOPIC, H_MODAL_TOPIC)
+ONLINE_CONDITIONS = frozenset(("B0", "Bsmooth", "SmoothMatch", "Bslosh"))
+FIXED_PROFILE = "FixedProfile"
+
+# These are descriptive outcomes only.  No field is a registered scientific
+# primary and H_proxy/H_modal are kept in disjoint, explicitly named columns.
+METRIC_FIELDS = (
+    "trajectory_sim_time_sec",
+    "completion_time_wall_sec",
+    "endpoint_goal_distance_m",
+    "tracking_mean_m",
+    "tracking_rmse_m",
+    "tracking_p95_m",
+    "tracking_max_m",
+    "odom_path_length_m",
+    "cmd_linear_rms_mps",
+    "cmd_linear_p95_abs_mps",
+    "cmd_angular_rms_radps",
+    "cmd_angular_p95_abs_radps",
+    "cmd_linear_total_variation_mps",
+    "cmd_angular_total_variation_radps",
+    "H_proxy_motion_rms_mm",
+    "H_proxy_motion_p95_abs_mm",
+    "H_proxy_motion_peak_abs_mm",
+    "H_proxy_motion_plus_tail_rms_mm",
+    "H_proxy_motion_plus_tail_p95_abs_mm",
+    "H_proxy_motion_plus_tail_peak_abs_mm",
+    "H_proxy_tail_rms_mm",
+    "H_proxy_tail_peak_abs_mm",
+    "H_modal_motion_rms_mm",
+    "H_modal_motion_p95_abs_mm",
+    "H_modal_motion_peak_abs_mm",
+    "H_modal_motion_plus_tail_rms_mm",
+    "H_modal_motion_plus_tail_p95_abs_mm",
+    "H_modal_motion_plus_tail_peak_abs_mm",
+    "H_modal_tail_rms_mm",
+    "H_modal_tail_peak_abs_mm",
+    "tail_cmd_linear_max_abs_mps",
+    "tail_cmd_angular_max_abs_radps",
+    "tail_odom_displacement_m",
+)
+
+# Long-form paired outputs use the outcome metrics that are meaningful for a
+# condition comparison.  Sample counts and QC diagnostics are not contrasts.
+PAIRED_METRICS = METRIC_FIELDS
+
+METRIC_UNITS = {
+    **{name: "s" for name in (
+        "trajectory_sim_time_sec", "completion_time_wall_sec")},
+    **{name: "m" for name in (
+        "endpoint_goal_distance_m", "tracking_mean_m", "tracking_rmse_m",
+        "tracking_p95_m", "tracking_max_m", "odom_path_length_m",
+        "tail_odom_displacement_m")},
+    **{name: "m/s" for name in (
+        "cmd_linear_rms_mps", "cmd_linear_p95_abs_mps",
+        "cmd_linear_total_variation_mps",
+        "tail_cmd_linear_max_abs_mps")},
+    **{name: "rad/s" for name in (
+        "cmd_angular_rms_radps", "cmd_angular_p95_abs_radps",
+        "cmd_angular_total_variation_radps",
+        "tail_cmd_angular_max_abs_radps")},
+    **{name: "mm" for name in METRIC_FIELDS
+       if name.startswith("H_proxy_") or name.startswith("H_modal_")},
+}
+if set(METRIC_UNITS) != set(METRIC_FIELDS):
+    raise RuntimeError("metric unit registry does not match metric fields")
+
+LOWER_IS_BETTER = frozenset({
+    "trajectory_sim_time_sec", "completion_time_wall_sec",
+    "endpoint_goal_distance_m", "tracking_mean_m", "tracking_rmse_m",
+    "tracking_p95_m", "tracking_max_m",
+    "cmd_linear_total_variation_mps", "cmd_angular_total_variation_radps",
+    "tail_cmd_linear_max_abs_mps", "tail_cmd_angular_max_abs_radps",
+    "tail_odom_displacement_m",
+    *(name for name in METRIC_FIELDS
+      if name.startswith("H_proxy_") or name.startswith("H_modal_")),
+})
+
+
+class AnalysisError(RuntimeError):
+    """Raised whenever the read-only analysis cannot prove its boundary."""
+
+
+def require(value: bool, message: str) -> None:
+    if not value:
+        raise AnalysisError(message)
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def canonical_hash(value: Any) -> str:
+    payload = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def read_json(path: Path, label: str) -> Mapping[str, Any]:
+    require(path.is_file(), f"{label} is missing: {path}")
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AnalysisError(f"cannot read {label} {path}: {exc}") from exc
+    require(isinstance(value, Mapping), f"{label} is not a JSON object: {path}")
+    return value
+
+
+def _finite(value: Any, label: str) -> float:
+    require(
+        isinstance(value, (int, float)) and not isinstance(value, bool),
+        f"{label} is not numeric",
+    )
+    result = float(value)
+    require(math.isfinite(result), f"{label} is not finite")
+    return result
+
+
+def load_runner():
+    """Load the frozen runner without importing ROS analysis dependencies."""
+
+    spec = importlib.util.spec_from_file_location(
+        "smpcc_sim_mechanism_analysis_bound_runner", RUNNER_PATH)
+    require(spec is not None and spec.loader is not None,
+            f"cannot import frozen runner {RUNNER_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@dataclass(frozen=True)
+class MeasurementWindows:
+    motion_start_sec: float
+    terminal_sec: float
+    tail_start_sec: float
+    tail_end_sec: float
+    required_tail_sec: float
+    terminal_kind: str
+
+
+def measurement_windows(closed_bag_qc: Mapping[str, Any]) -> MeasurementWindows:
+    """Return the only two permitted windows from a frozen QC receipt."""
+
+    require(closed_bag_qc.get("status") == "PASS",
+            "closed bag QC status is not PASS")
+    require(closed_bag_qc.get("formal") is True and
+            closed_bag_qc.get("formal_scope") == FORMAL_SCOPE and
+            closed_bag_qc.get("physical_primary_eligible") is False,
+            "closed bag QC escapes the mechanism-only/non-primary boundary")
+    motion = closed_bag_qc.get("motion_start")
+    terminal = closed_bag_qc.get("terminal")
+    tail = closed_bag_qc.get("zero_command_tail")
+    require(isinstance(motion, Mapping) and motion.get("recorded") is True,
+            "closed bag QC lacks a recorded motion start")
+    require(isinstance(terminal, Mapping), "closed bag QC lacks a terminal")
+    require(isinstance(tail, Mapping) and tail.get("pass") is True,
+            "closed bag QC lacks a passing frozen tail")
+    motion_start = _finite(motion.get("ros_time_sec"), "motion start")
+    terminal_sec = _finite(terminal.get("ros_time_sec"), "terminal")
+    tail_start = _finite(
+        tail.get("tail_anchor_ros_time_sec"), "tail anchor")
+    required_tail = _finite(tail.get("required_tail_sec"), "required tail")
+    terminal_kind = str(terminal.get("kind", ""))
+    require(terminal_kind in {"GOAL_REACHED", "GOAL_TIMEOUT"},
+            "closed bag QC terminal kind is invalid")
+    require(terminal_sec >= motion_start,
+            "closed bag QC terminal precedes motion")
+    require(tail_start >= terminal_sec,
+            "closed bag QC tail anchor precedes terminal")
+    require(required_tail >= 5.0,
+            "closed bag QC required tail is shorter than 5 seconds")
+    tail_end = tail_start + required_tail
+    require(math.isfinite(tail_end), "closed bag QC tail end is not finite")
+    return MeasurementWindows(
+        motion_start, terminal_sec, tail_start, tail_end,
+        required_tail, terminal_kind,
+    )
+
+
+def in_closed_window(stamp: float, start: float, end: float) -> bool:
+    value = _finite(stamp, "sample timestamp")
+    return start <= value <= end
+
+
+def normalize_slosh_mm(topic: str, value: Any) -> float:
+    """Normalize only the two explicitly registered mechanism channels."""
+
+    scalar = _finite(value, f"{topic} value")
+    if topic == H_PROXY_TOPIC:
+        return scalar * 1000.0
+    if topic == H_MODAL_TOPIC:
+        return scalar
+    raise AnalysisError(f"unregistered slosh topic: {topic}")
+
+
+def point_to_segment_distance(
+        px: Any, py: Any, ax: Any, ay: Any, bx: Any, by: Any) -> float:
+    """Euclidean distance from one point to one closed line segment."""
+
+    px_f, py_f = _finite(px, "point x"), _finite(py, "point y")
+    ax_f, ay_f = _finite(ax, "segment ax"), _finite(ay, "segment ay")
+    bx_f, by_f = _finite(bx, "segment bx"), _finite(by, "segment by")
+    dx, dy = bx_f - ax_f, by_f - ay_f
+    length_sq = dx * dx + dy * dy
+    if length_sq == 0.0:
+        return math.hypot(px_f - ax_f, py_f - ay_f)
+    projection = ((px_f - ax_f) * dx + (py_f - ay_f) * dy) / length_sq
+    projection = max(0.0, min(1.0, projection))
+    nearest_x = ax_f + projection * dx
+    nearest_y = ay_f + projection * dy
+    return math.hypot(px_f - nearest_x, py_f - nearest_y)
+
+
+def polyline_segment_distance(
+        x: Any, y: Any, points: Sequence[Mapping[str, Any]]) -> float:
+    """Minimum distance to the frozen path's piecewise-linear segments."""
+
+    require(isinstance(points, Sequence) and not isinstance(points, (str, bytes))
+            and len(points) >= 2, "frozen path needs at least two points")
+    distances = []
+    for first, second in zip(points, points[1:]):
+        require(isinstance(first, Mapping) and isinstance(second, Mapping),
+                "frozen path point is malformed")
+        distances.append(point_to_segment_distance(
+            x, y, first.get("x"), first.get("y"),
+            second.get("x"), second.get("y")))
+    return min(distances)
+
+
+def _percentile(values: Sequence[float], fraction: float) -> Optional[float]:
+    if not values:
+        return None
+    require(0.0 <= fraction <= 1.0, "percentile fraction is out of range")
+    ordered = sorted(_finite(item, "percentile sample") for item in values)
+    if len(ordered) == 1:
+        return ordered[0]
+    position = fraction * (len(ordered) - 1)
+    lower = int(math.floor(position))
+    upper = int(math.ceil(position))
+    if lower == upper:
+        return ordered[lower]
+    weight = position - lower
+    return ordered[lower] * (1.0 - weight) + ordered[upper] * weight
+
+
+def _numeric_summary(values: Sequence[Any]) -> Dict[str, Optional[float]]:
+    normalized = [_finite(value, "metric sample") for value in values]
+    if not normalized:
+        return {
+            "mean": None, "rms": None, "p95_abs": None,
+            "peak_abs": None, "median": None, "sd": None,
+            "min": None, "max": None,
+        }
+    absolute = [abs(value) for value in normalized]
+    return {
+        "mean": statistics.fmean(normalized),
+        "rms": math.sqrt(statistics.fmean(value * value
+                                          for value in normalized)),
+        "p95_abs": _percentile(absolute, 0.95),
+        "peak_abs": max(absolute),
+        "median": statistics.median(normalized),
+        "sd": statistics.stdev(normalized) if len(normalized) > 1 else 0.0,
+        "min": min(normalized),
+        "max": max(normalized),
+    }
+
+
+def _total_variation(values: Sequence[Any]) -> Optional[float]:
+    normalized = [_finite(item, "variation sample") for item in values]
+    if not normalized:
+        return None
+    return sum(abs(right - left) for left, right in
+               zip(normalized, normalized[1:]))
+
+
+def _path_length(samples: Sequence[Tuple[float, float, float]]) -> float:
+    return sum(
+        math.hypot(right[1] - left[1], right[2] - left[2])
+        for left, right in zip(samples, samples[1:])
+    )
+
+
+def _assert_nondecreasing(samples: Sequence[Sequence[float]], label: str) -> None:
+    times = [_finite(item[0], f"{label} timestamp") for item in samples]
+    require(all(right >= left for left, right in zip(times, times[1:])),
+            f"{label} timestamps moved backwards")
+
+
+def derive_attempt_metrics(
+        observations: Mapping[str, Mapping[str, Sequence[Any]]],
+        frozen_path_points: Sequence[Mapping[str, Any]],
+        condition_id: str,
+        windows: MeasurementWindows,
+        completion_time_wall_sec: Any,
+        zero_abs_tolerance: Any = 1e-9) -> Dict[str, Any]:
+    """Derive one eligible-success row from already-windowed observations.
+
+    This is intentionally a pure function, which makes the measurement
+    semantics independently testable without ROS or campaign evidence.
+    """
+
+    require(condition_id in ONLINE_CONDITIONS or condition_id == FIXED_PROFILE,
+            f"unknown condition {condition_id}")
+    require(set(observations) == {"motion", "tail", "motion_plus_tail"},
+            "observations must contain motion, tail, and motion_plus_tail")
+    motion = observations["motion"]
+    tail = observations["tail"]
+    motion_plus_tail = observations["motion_plus_tail"]
+    required_keys = {"odom", "cmd", "H_proxy", "H_modal"}
+    require(isinstance(motion, Mapping) and set(motion) == required_keys,
+            "motion observations have the wrong topic set")
+    require(isinstance(tail, Mapping) and set(tail) == required_keys,
+            "tail observations have the wrong topic set")
+    require(isinstance(motion_plus_tail, Mapping) and
+            set(motion_plus_tail) == required_keys,
+            "motion_plus_tail observations have the wrong topic set")
+    for window_name, values in (("motion", motion), ("tail", tail),
+                                ("motion_plus_tail", motion_plus_tail)):
+        for topic, samples in values.items():
+            require(isinstance(samples, Sequence) and
+                    not isinstance(samples, (str, bytes)),
+                    f"{window_name} {topic} samples are malformed")
+            _assert_nondecreasing(samples, f"{window_name} {topic}")
+
+    odom = list(motion["odom"])
+    commands = list(motion["cmd"])
+    proxy_motion = list(motion["H_proxy"])
+    modal_motion = list(motion["H_modal"])
+    proxy_outcome = list(motion_plus_tail["H_proxy"])
+    modal_outcome = list(motion_plus_tail["H_modal"])
+    require(odom, "eligible attempt has no motion-window odometry")
+    require(commands, "eligible attempt has no motion-window cmd_vel")
+    require(proxy_motion, "eligible attempt has no motion-window H_proxy")
+    require(proxy_outcome,
+            "eligible attempt has no motion-plus-tail H_proxy")
+    if condition_id == FIXED_PROFILE:
+        require(not modal_motion and not tail["H_modal"] and
+                not modal_outcome,
+                "FixedProfile unexpectedly contains H_modal samples")
+    else:
+        require(modal_motion,
+                "online eligible attempt has no motion-window H_modal")
+        require(modal_outcome,
+                "online eligible attempt has no motion-plus-tail H_modal")
+
+    for stamp, *_ in odom:
+        require(in_closed_window(stamp, windows.motion_start_sec,
+                                 windows.terminal_sec),
+                "odom sample escaped the motion window")
+    for topic in ("cmd", "H_proxy", "H_modal"):
+        for stamp, *_ in motion[topic]:
+            require(in_closed_window(stamp, windows.motion_start_sec,
+                                     windows.terminal_sec),
+                    f"{topic} sample escaped the motion window")
+    for topic in required_keys:
+        for stamp, *_ in tail[topic]:
+            require(in_closed_window(stamp, windows.tail_start_sec,
+                                     windows.tail_end_sec),
+                    f"{topic} sample escaped the tail window")
+        for stamp, *_ in motion_plus_tail[topic]:
+            require(in_closed_window(stamp, windows.motion_start_sec,
+                                     windows.tail_end_sec),
+                    f"{topic} sample escaped the motion-plus-tail window")
+
+    def tail_channel_covers(samples: Sequence[Any], label: str) -> bool:
+        if not samples:
+            return False
+        first = _finite(samples[0][0], f"{label} first tail timestamp")
+        last = _finite(samples[-1][0], f"{label} last tail timestamp")
+        # Both liquid channels normally publish at >=20 Hz.  A 0.5 s bracket
+        # is deliberately generous while still proving the frozen 5 s tail
+        # was actually observed rather than inferred from whole-bag counts.
+        return (first <= windows.tail_start_sec + 0.5 and
+                last >= windows.tail_end_sec - 0.5)
+
+    require(tail_channel_covers(tail["H_proxy"], "H_proxy"),
+            "H_proxy does not cover the frozen tail window")
+    h_modal_tail_covered = bool(
+        condition_id != FIXED_PROFILE and
+        tail_channel_covers(tail["H_modal"], "H_modal"))
+
+    errors = [polyline_segment_distance(sample[1], sample[2],
+                                        frozen_path_points)
+              for sample in odom]
+    tracking = _numeric_summary(errors)
+    linear = [_finite(sample[1], "linear command") for sample in commands]
+    angular = [_finite(sample[2], "angular command") for sample in commands]
+    linear_summary, angular_summary = (_numeric_summary(linear),
+                                       _numeric_summary(angular))
+    proxy_summary = _numeric_summary([sample[1] for sample in proxy_motion])
+    proxy_outcome_summary = _numeric_summary(
+        [sample[1] for sample in proxy_outcome])
+    proxy_tail_summary = _numeric_summary(
+        [sample[1] for sample in tail["H_proxy"]])
+    modal_summary = _numeric_summary([sample[1] for sample in modal_motion])
+    modal_outcome_summary = _numeric_summary(
+        [sample[1] for sample in modal_outcome]
+        if h_modal_tail_covered else [])
+    modal_tail_summary = _numeric_summary(
+        [sample[1] for sample in tail["H_modal"]]
+        if h_modal_tail_covered else [])
+
+    tolerance = _finite(zero_abs_tolerance, "tail zero tolerance")
+    require(tolerance >= 0.0, "tail zero tolerance is negative")
+    tail_commands = list(tail["cmd"])
+    require(tail_commands, "eligible attempt has no cmd_vel in frozen tail")
+    tail_cmd_linear_max = max(
+        abs(_finite(sample[1], "tail linear command"))
+        for sample in tail_commands)
+    tail_cmd_angular_max = max(
+        abs(_finite(sample[2], "tail angular command"))
+        for sample in tail_commands)
+    require(tail_cmd_linear_max <= tolerance and
+            tail_cmd_angular_max <= tolerance,
+            "analyzed frozen tail contains a nonzero command")
+    tail_odom = list(tail["odom"])
+    tail_displacement = None
+    if tail_odom:
+        tail_displacement = math.hypot(
+            tail_odom[-1][1] - tail_odom[0][1],
+            tail_odom[-1][2] - tail_odom[0][2],
+        )
+
+    metrics: Dict[str, Any] = {
+        "trajectory_sim_time_sec": windows.terminal_sec -
+        windows.motion_start_sec,
+        "completion_time_wall_sec": _finite(
+            completion_time_wall_sec, "completion wall time"),
+        # The pure bag-metric function cannot authenticate endpoint evidence;
+        # collect_evidence_and_metrics fills this from the hash-bound attempt
+        # manifest before the row is admitted to any aggregate.
+        "endpoint_goal_distance_m": None,
+        "tracking_mean_m": tracking["mean"],
+        "tracking_rmse_m": tracking["rms"],
+        "tracking_p95_m": tracking["p95_abs"],
+        "tracking_max_m": tracking["peak_abs"],
+        "odom_path_length_m": _path_length(odom),
+        "cmd_linear_rms_mps": linear_summary["rms"],
+        "cmd_linear_p95_abs_mps": linear_summary["p95_abs"],
+        "cmd_angular_rms_radps": angular_summary["rms"],
+        "cmd_angular_p95_abs_radps": angular_summary["p95_abs"],
+        "cmd_linear_total_variation_mps": _total_variation(linear),
+        "cmd_angular_total_variation_radps": _total_variation(angular),
+        "H_proxy_motion_rms_mm": proxy_summary["rms"],
+        "H_proxy_motion_p95_abs_mm": proxy_summary["p95_abs"],
+        "H_proxy_motion_peak_abs_mm": proxy_summary["peak_abs"],
+        "H_proxy_motion_plus_tail_rms_mm": proxy_outcome_summary["rms"],
+        "H_proxy_motion_plus_tail_p95_abs_mm": proxy_outcome_summary["p95_abs"],
+        "H_proxy_motion_plus_tail_peak_abs_mm": proxy_outcome_summary["peak_abs"],
+        "H_proxy_tail_rms_mm": proxy_tail_summary["rms"],
+        "H_proxy_tail_peak_abs_mm": proxy_tail_summary["peak_abs"],
+        "H_modal_motion_rms_mm": modal_summary["rms"],
+        "H_modal_motion_p95_abs_mm": modal_summary["p95_abs"],
+        "H_modal_motion_peak_abs_mm": modal_summary["peak_abs"],
+        "H_modal_motion_plus_tail_rms_mm": modal_outcome_summary["rms"],
+        "H_modal_motion_plus_tail_p95_abs_mm": modal_outcome_summary["p95_abs"],
+        "H_modal_motion_plus_tail_peak_abs_mm": modal_outcome_summary["peak_abs"],
+        "H_modal_tail_rms_mm": modal_tail_summary["rms"],
+        "H_modal_tail_peak_abs_mm": modal_tail_summary["peak_abs"],
+        "tail_cmd_linear_max_abs_mps": tail_cmd_linear_max,
+        "tail_cmd_angular_max_abs_radps": tail_cmd_angular_max,
+        "tail_odom_displacement_m": tail_displacement,
+        "N_odom_motion": len(odom),
+        "N_cmd_motion": len(commands),
+        "N_H_proxy_motion": len(proxy_motion),
+        "N_H_modal_motion": len(modal_motion),
+        "N_odom_tail": len(tail_odom),
+        "N_cmd_tail": len(tail_commands),
+        "N_H_proxy_tail": len(tail["H_proxy"]),
+        "N_H_modal_tail": len(tail["H_modal"]),
+        "N_H_proxy_motion_plus_tail": len(proxy_outcome),
+        "N_H_modal_motion_plus_tail": len(modal_outcome),
+        "H_proxy_available": True,
+        "H_modal_available": condition_id != FIXED_PROFILE,
+        "H_proxy_tail_available": True,
+        "H_modal_tail_available": h_modal_tail_covered,
+        "H_modal_tail_na_reason": (
+            None if h_modal_tail_covered else
+            "NOT_PUBLISHED_BY_DESIGN_FIXEDPROFILE"
+            if condition_id == FIXED_PROFILE else
+            "NOT_PUBLISHED_THROUGH_FROZEN_TAIL"),
+        "H_proxy_semantic": "LiquidSloshModel_proxy_mechanism_only",
+        "H_modal_semantic": "controller_internal_modal_only",
+        "physical_primary": None,
+        "physical_primary_eligible": False,
+        "analysis_class": ANALYSIS_CLASS,
+    }
+    require(set(METRIC_FIELDS).issubset(metrics),
+            "internal metric field registry is incomplete")
+    if condition_id == FIXED_PROFILE:
+        for key in metrics:
+            if key.startswith("H_modal_") and key != "H_modal_semantic":
+                if key in {"H_modal_available", "H_modal_tail_available",
+                           "H_modal_tail_na_reason"}:
+                    continue
+                require(metrics[key] in {None, 0},
+                        f"FixedProfile H_modal metric {key} is not NA")
+    return metrics
+
+
+def _stamp_seconds(value: Any, label: str) -> float:
+    try:
+        result = value.to_sec()
+    except AttributeError as exc:
+        raise AnalysisError(f"{label} has no to_sec()") from exc
+    return _finite(result, label)
+
+
+def _odom_stamp(message: Any) -> float:
+    try:
+        stamp = message.header.stamp
+    except AttributeError as exc:
+        raise AnalysisError("/odom message lacks header.stamp") from exc
+    return _stamp_seconds(stamp, "/odom header timestamp")
+
+
+def _odom_xy(message: Any) -> Tuple[float, float]:
+    try:
+        position = message.pose.pose.position
+        return (_finite(position.x, "/odom x"),
+                _finite(position.y, "/odom y"))
+    except AttributeError as exc:
+        raise AnalysisError("/odom message lacks pose.pose.position") from exc
+
+
+def _cmd_components(message: Any) -> Tuple[float, float]:
+    try:
+        return (_finite(message.linear.x, "/cmd_vel linear.x"),
+                _finite(message.angular.z, "/cmd_vel angular.z"))
+    except AttributeError as exc:
+        raise AnalysisError("/cmd_vel message lacks Twist components") from exc
+
+
+def _scalar_data(message: Any, topic: str) -> float:
+    try:
+        return _finite(message.data, f"{topic} data")
+    except AttributeError as exc:
+        raise AnalysisError(f"{topic} message lacks scalar data") from exc
+
+
+def extract_windowed_observations(
+        bag_path: Path, windows: MeasurementWindows,
+        condition_id: str) -> Dict[str, Dict[str, list[Any]]]:
+    """Read one finalized bag without consuming samples outside QC windows."""
+
+    try:
+        import rosbag  # type: ignore
+    except ImportError as exc:
+        raise AnalysisError(
+            "ROS1 rosbag Python module is unavailable; source Noetic first") from exc
+    require(bag_path.is_absolute() and bag_path.is_file(),
+            f"finalized bag is missing: {bag_path}")
+    require(condition_id in ONLINE_CONDITIONS or condition_id == FIXED_PROFILE,
+            f"unknown condition {condition_id}")
+    observations: Dict[str, Dict[str, list[Any]]] = {
+        "motion": {"odom": [], "cmd": [], "H_proxy": [], "H_modal": []},
+        "tail": {"odom": [], "cmd": [], "H_proxy": [], "H_modal": []},
+        "motion_plus_tail": {
+            "odom": [], "cmd": [], "H_proxy": [], "H_modal": []},
+    }
+    try:
+        context = rosbag.Bag(str(bag_path), "r")
+    except Exception as exc:  # noqa: BLE001 - normalize ROS errors
+        raise AnalysisError(f"cannot open finalized bag {bag_path}: {exc}") from exc
+    try:
+        with context as opened:
+            for topic, message, record_stamp in opened.read_messages(
+                    topics=list(ANALYSIS_TOPICS)):
+                if topic == ODOM_TOPIC:
+                    stamp = _odom_stamp(message)
+                else:
+                    stamp = _stamp_seconds(record_stamp,
+                                           f"{topic} bag timestamp")
+                in_motion = in_closed_window(
+                    stamp, windows.motion_start_sec, windows.terminal_sec)
+                in_tail = in_closed_window(
+                    stamp, windows.tail_start_sec, windows.tail_end_sec)
+                in_motion_plus_tail = in_closed_window(
+                    stamp, windows.motion_start_sec, windows.tail_end_sec)
+                # FixedProfile has no controller-modal producer.  Any message
+                # anywhere in its finalized bag is an identity leak, even if
+                # it falls outside the two metric windows.
+                if condition_id == FIXED_PROFILE and topic == H_MODAL_TOPIC:
+                    raise AnalysisError(
+                        "FixedProfile bag unexpectedly publishes H_modal")
+                if not in_motion_plus_tail:
+                    continue
+                if topic == ODOM_TOPIC:
+                    payload: Any = _odom_xy(message)
+                    key = "odom"
+                elif topic == CMD_TOPIC:
+                    payload = _cmd_components(message)
+                    key = "cmd"
+                elif topic in {H_PROXY_TOPIC, H_MODAL_TOPIC}:
+                    payload = (normalize_slosh_mm(
+                        topic, _scalar_data(message, topic)),)
+                    key = "H_proxy" if topic == H_PROXY_TOPIC else "H_modal"
+                else:  # pragma: no cover - rosbag topic filter is exact
+                    continue
+                if in_motion:
+                    observations["motion"][key].append((stamp, *payload))
+                if in_tail:
+                    observations["tail"][key].append((stamp, *payload))
+                if in_motion_plus_tail:
+                    observations["motion_plus_tail"][key].append(
+                        (stamp, *payload))
+    except AnalysisError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - normalize ROS read/close errors
+        raise AnalysisError(f"cannot read finalized bag {bag_path}: {exc}") from exc
+    if condition_id == FIXED_PROFILE:
+        require(not observations["motion"]["H_modal"] and
+                not observations["tail"]["H_modal"],
+                "FixedProfile bag unexpectedly publishes H_modal")
+    return observations
+
+
+def verify_descriptor(
+        descriptor: Any, label: str, *, hash_field: str = "sha256") -> Path:
+    require(isinstance(descriptor, Mapping), f"{label} descriptor is missing")
+    path = Path(str(descriptor.get("path", "")))
+    expected = descriptor.get(hash_field)
+    require(path.is_absolute() and path.is_file(), f"{label} is missing: {path}")
+    require(isinstance(expected, str) and len(expected) == 64,
+            f"{label} descriptor hash is malformed")
+    require(sha256_file(path) == expected, f"{label} hash mismatch")
+    return path
+
+
+def _manifest_for_record(record: Mapping[str, Any]) -> Mapping[str, Any]:
+    path = verify_descriptor({
+        "path": record.get("attempt_manifest_path"),
+        "sha256": record.get("attempt_manifest_hash"),
+    }, f"attempt {record.get('attempt_id')} manifest")
+    manifest = read_json(path, "attempt manifest")
+    for field in ("attempt_id", "planned_row_id", "stage", "condition_id",
+                  "method_success", "method_failure", "continuous_eligible",
+                  "failure_class"):
+        require(manifest.get(field) == record.get(field),
+                f"ledger/manifest {field} mismatch at {record.get('attempt_id')}")
+    require(manifest.get("formal") is True and
+            manifest.get("formal_scope") == FORMAL_SCOPE and
+            manifest.get("physical_alignment") is False and
+            manifest.get("physical_primary_eligible") is False and
+            "physical_primary" in manifest and
+            manifest.get("physical_primary") is None,
+            f"attempt {record.get('attempt_id')} escapes mechanism-only boundary")
+    return manifest
+
+
+def _history_entry(record: Mapping[str, Any]) -> Dict[str, Any]:
+    return {
+        "attempt_id": record.get("attempt_id"),
+        "method_success": record.get("method_success") is True,
+        "method_failure": record.get("method_failure") is True,
+        "continuous_eligible": record.get("continuous_eligible") is True,
+        "motion_started": record.get("motion_started") is True,
+        "assignment_consumed": record.get("assignment_consumed") is True,
+        "failure_class": record.get("failure_class"),
+        "protocol_qc_pass": record.get("protocol_qc_pass") is True,
+        "entry_hash": record.get("entry_hash"),
+    }
+
+
+def build_fixed_denominator_rows(
+        planned_rows: Sequence[Mapping[str, Any]],
+        ledger_records: Sequence[Mapping[str, Any]],
+        manifests: Mapping[str, Mapping[str, Any]],
+        metrics_by_attempt: Mapping[str, Mapping[str, Any]]) -> list[Dict[str, Any]]:
+    """Keep every planned row and attach its complete attempt history."""
+
+    require(len(planned_rows) == len({str(row.get("planned_row_id"))
+                                     for row in planned_rows}),
+            "planned rows repeat a row id")
+    known_rows = {str(row.get("planned_row_id")) for row in planned_rows}
+    history: Dict[str, list[Mapping[str, Any]]] = {key: [] for key in known_rows}
+    for record in ledger_records:
+        row_id = str(record.get("planned_row_id", ""))
+        require(row_id in history, f"ledger references unknown planned row {row_id}")
+        history[row_id].append(record)
+    output: list[Dict[str, Any]] = []
+    for planned_index, row in enumerate(planned_rows, 1):
+        row_id = str(row.get("planned_row_id"))
+        attempts = history[row_id]
+        terminals = [item for item in attempts
+                     if item.get("method_success") is True or
+                     item.get("method_failure") is True]
+        require(len(terminals) <= 1,
+                f"planned row {row_id} has multiple terminal outcomes")
+        terminal = terminals[0] if terminals else None
+        last = attempts[-1] if attempts else None
+        selected = terminal or last
+        selected_attempt = str(selected.get("attempt_id")) if selected else None
+        manifest = manifests.get(selected_attempt) if selected_attempt else None
+        if selected is not None:
+            require(isinstance(manifest, Mapping),
+                    f"planned row {row_id} has no selected attempt manifest")
+        metric = metrics_by_attempt.get(selected_attempt) if selected_attempt else None
+        eligible_success = bool(
+            terminal is not None and terminal.get("method_success") is True and
+            terminal.get("continuous_eligible") is True)
+        if metric is not None:
+            require(eligible_success,
+                    f"ineligible/non-success row {row_id} carries metrics")
+            require(metric.get("physical_primary") is None and
+                    metric.get("physical_primary_eligible") is False,
+                    f"row {row_id} metric promotes a physical primary")
+        fixed = row.get("fixed_denominator")
+        require(isinstance(fixed, Mapping),
+                f"planned row {row_id} lacks fixed denominator")
+        result: Dict[str, Any] = {
+            "planned_index": planned_index,
+            "planned_row_id": row_id,
+            "release_id": row.get("release_id"),
+            "protocol_id": row.get("protocol_id"),
+            "formal_scope": row.get("formal_scope"),
+            "stage": row.get("stage"),
+            "stage_alias": row.get("stage_alias"),
+            "block_id": row.get("block_id"),
+            "order_position": row.get("order_position"),
+            "planned_block_segment_id": row.get("planned_block_segment_id"),
+            "condition_id": row.get("condition_id"),
+            "method_backend": row.get("method_backend"),
+            "path_id": row.get("path_id"),
+            "container_id": row.get("container_id"),
+            "seed_bundle_id": row.get("seed_bundle_id"),
+            "seed_bundle_hash": row.get("seed_bundle_hash"),
+            "randomization_hash": row.get("randomization_hash"),
+            "randomization_table_id": row.get("randomization_table_id"),
+            "N_plan_total": fixed.get("N_plan_total"),
+            "N_plan_stage": fixed.get("N_plan_stage"),
+            "N_plan_condition": fixed.get("N_plan_condition"),
+            "N_attempt": len(attempts),
+            "N_acquisition_failure": sum(
+                item.get("failure_class") == "INFRASTRUCTURE_ACQUISITION"
+                for item in attempts),
+            "attempt_history_json": json.dumps(
+                [_history_entry(item) for item in attempts],
+                ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+            "selected_attempt_id": selected_attempt,
+            "terminal_attempt_id": (str(terminal.get("attempt_id"))
+                                    if terminal else None),
+            "row_resolution": (
+                "METHOD_SUCCESS" if terminal and
+                terminal.get("method_success") is True else
+                "METHOD_FAILURE" if terminal else
+                "UNRESOLVED" if selected else "NOT_ATTEMPTED"),
+            "method_success": (terminal.get("method_success") is True
+                               if terminal else False),
+            "method_failure": (terminal.get("method_failure") is True
+                               if terminal else False),
+            "continuous_eligible": eligible_success,
+            "failure_class": selected.get("failure_class") if selected else None,
+            "campaign_action": (selected.get("campaign_action")
+                                if selected else None),
+            "protocol_qc_pass": (selected.get("protocol_qc_pass") is True
+                                 if selected else False),
+            "motion_started": (selected.get("motion_started") is True
+                               if selected else False),
+            "assignment_consumed": (
+                selected.get("assignment_consumed") is True
+                if selected else False),
+            "terminal_kind": (manifest.get("terminal_kind")
+                              if manifest else None),
+            "terminal_elapsed_sec": (manifest.get("terminal_elapsed_sec")
+                                     if manifest else None),
+            "completion_time_sec": (manifest.get("completion_time_sec")
+                                    if manifest else None),
+            "goal_reached": (manifest.get("goal_reached") is True
+                             if manifest else False),
+            "tail_complete": (manifest.get("tail_complete") is True
+                              if manifest else False),
+            "fresh_ros_gazebo": (manifest.get("fresh_ros_gazebo") is True
+                                 if manifest else False),
+            "continuous_exclusion_reason": (
+                manifest.get("continuous_exclusion_reason")
+                if manifest else None),
+            "attempt_manifest_path": (selected.get("attempt_manifest_path")
+                                      if selected else None),
+            "attempt_manifest_hash": (selected.get("attempt_manifest_hash")
+                                      if selected else None),
+            "closed_bag_qc_path": (
+                manifest.get("closed_bag_qc", {}).get("path")
+                if isinstance(manifest, Mapping) and
+                isinstance(manifest.get("closed_bag_qc"), Mapping) else None),
+            "closed_bag_qc_sha256": (
+                manifest.get("closed_bag_qc", {}).get("sha256")
+                if isinstance(manifest, Mapping) and
+                isinstance(manifest.get("closed_bag_qc"), Mapping) else None),
+            "closed_bag_qc_hash": (
+                manifest.get("closed_bag_qc", {}).get("bag_qc_hash")
+                if isinstance(manifest, Mapping) and
+                isinstance(manifest.get("closed_bag_qc"), Mapping) else None),
+            "bag_path": manifest.get("bag_path") if manifest else None,
+            "bag_hash": manifest.get("bag_hash") if manifest else None,
+            "H_proxy_available": (metric.get("H_proxy_available")
+                                  if metric else False),
+            "H_modal_available": (metric.get("H_modal_available")
+                                  if metric else False),
+            "H_proxy_tail_available": (
+                metric.get("H_proxy_tail_available") if metric else False),
+            "H_modal_tail_available": (
+                metric.get("H_modal_tail_available") if metric else False),
+            "H_modal_tail_na_reason": (
+                metric.get("H_modal_tail_na_reason") if metric else None),
+            "H_proxy_semantic": "LiquidSloshModel_proxy_mechanism_only",
+            "H_modal_semantic": "controller_internal_modal_only",
+            "physical_primary": None,
+            "physical_primary_eligible": False,
+            "analysis_class": ANALYSIS_CLASS,
+            "motion_start_ros_time_sec": (
+                metric.get("motion_start_ros_time_sec") if metric else None),
+            "terminal_ros_time_sec": (
+                metric.get("terminal_ros_time_sec") if metric else None),
+            "tail_start_ros_time_sec": (
+                metric.get("tail_start_ros_time_sec") if metric else None),
+            "tail_end_ros_time_sec": (
+                metric.get("tail_end_ros_time_sec") if metric else None),
+        }
+        for field in METRIC_FIELDS:
+            result[field] = metric.get(field) if metric else None
+        for field in (
+                "N_odom_motion", "N_cmd_motion", "N_H_proxy_motion",
+                "N_H_modal_motion", "N_odom_tail", "N_cmd_tail",
+                "N_H_proxy_tail", "N_H_modal_tail",
+                "N_H_proxy_motion_plus_tail",
+                "N_H_modal_motion_plus_tail"):
+            result[field] = metric.get(field) if metric else None
+        if row.get("condition_id") == FIXED_PROFILE:
+            require(result["H_modal_available"] is False,
+                    f"FixedProfile row {row_id} has H_modal available")
+            require(all(result[field] is None for field in METRIC_FIELDS
+                        if field.startswith("H_modal_")),
+                    f"FixedProfile row {row_id} has H_modal metrics")
+        output.append(result)
+    return output
+
+
+def build_stage_condition_summary(
+        rows: Sequence[Mapping[str, Any]]) -> list[Dict[str, Any]]:
+    grouped: Dict[Tuple[str, str], list[Mapping[str, Any]]] = {}
+    for row in rows:
+        key = (str(row.get("stage")), str(row.get("condition_id")))
+        grouped.setdefault(key, []).append(row)
+    output: list[Dict[str, Any]] = []
+    for stage in STAGE_ORDER:
+        conditions = sorted(
+            (key[1] for key in grouped if key[0] == stage),
+            key=lambda condition: min(
+                int(item.get("order_position", 999))
+                for item in grouped[(stage, condition)]),
+        )
+        for condition in conditions:
+            selected = grouped[(stage, condition)]
+            require(len(selected) == 8,
+                    f"{stage} {condition} fixed denominator is not 8")
+            item: Dict[str, Any] = {
+                "stage": stage,
+                "stage_alias": STAGE_ALIASES[stage],
+                "condition_id": condition,
+                "N_plan": len(selected),
+                "N_attempt": sum(int(row.get("N_attempt", 0))
+                                 for row in selected),
+                "N_acquisition_failure": sum(
+                    int(row.get("N_acquisition_failure", 0))
+                    for row in selected),
+                "N_method_success": sum(row.get("method_success") is True
+                                        for row in selected),
+                "N_method_failure": sum(row.get("method_failure") is True
+                                        for row in selected),
+                "N_continuous_eligible": sum(
+                    row.get("continuous_eligible") is True for row in selected),
+                "N_unresolved": sum(row.get("row_resolution") in
+                                    {"UNRESOLVED", "NOT_ATTEMPTED"}
+                                    for row in selected),
+                "analysis_class": ANALYSIS_CLASS,
+                "release_id": selected[0].get("release_id"),
+                "release_hash": selected[0].get("release_hash"),
+                "freeze_hash": selected[0].get("freeze_hash"),
+                "master_hash": selected[0].get("master_hash"),
+                "protocol_id": selected[0].get("protocol_id"),
+                "formal_scope": selected[0].get("formal_scope"),
+                "physical_primary": None,
+                "physical_primary_eligible": False,
+            }
+            for metric in METRIC_FIELDS:
+                values = [float(row[metric]) for row in selected
+                          if row.get(metric) is not None]
+                stats = _numeric_summary(values)
+                item[f"{metric}__N"] = len(values)
+                item[f"{metric}__mean"] = stats["mean"]
+                item[f"{metric}__sd"] = stats["sd"]
+                item[f"{metric}__median"] = stats["median"]
+                item[f"{metric}__min"] = stats["min"]
+                item[f"{metric}__max"] = stats["max"]
+            output.append(item)
+    return output
+
+
+def _row_lookup(rows: Sequence[Mapping[str, Any]]) -> Dict[Tuple[str, str, str], Mapping[str, Any]]:
+    output: Dict[Tuple[str, str, str], Mapping[str, Any]] = {}
+    for row in rows:
+        key = (str(row.get("stage")), str(row.get("block_id")),
+               str(row.get("condition_id")))
+        require(key not in output, f"row lookup repeats {key}")
+        output[key] = row
+    return output
+
+
+def build_paired_outputs(
+        rows: Sequence[Mapping[str, Any]],
+        contrast_registry: Mapping[str, Any],
+        *, metrics: Sequence[str] = PAIRED_METRICS,
+        expected_protocol_pairs: Optional[Mapping[str, Any]] = None,
+        ) -> Tuple[list[Dict[str, Any]], list[Dict[str, Any]]]:
+    """Build protocol-pair and metric-pair denominators independently."""
+
+    contrasts = contrast_registry.get("contrasts")
+    require(contrast_registry.get("cross_stage_aggregation_forbidden") is True
+            and contrast_registry.get("cross_contrast_aggregation_forbidden") is True
+            and isinstance(contrasts, list),
+            "contrast registry does not enforce within-stage contrasts")
+    lookup = _row_lookup(rows)
+    block_rows: list[Dict[str, Any]] = []
+    summary_rows: list[Dict[str, Any]] = []
+    for contrast in contrasts:
+        require(isinstance(contrast, Mapping), "contrast entry is malformed")
+        contrast_id = str(contrast.get("contrast_id"))
+        stage = str(contrast.get("stage"))
+        left = str(contrast.get("left_condition_id"))
+        right = str(contrast.get("right_condition_id"))
+        require(stage in STAGE_ORDER and left != right,
+                f"registered contrast {contrast_id} is invalid")
+        n_block_plan = int(contrast.get("N_block_plan", -1))
+        require(n_block_plan == 8, f"contrast {contrast_id} N_block_plan is not 8")
+        protocol_blocks: list[str] = []
+        per_metric: Dict[str, list[float]] = {metric: [] for metric in metrics}
+        per_metric_pairs: Dict[str, list[Tuple[float, float]]] = {
+            metric: [] for metric in metrics}
+        per_metric_blocks: Dict[str, list[str]] = {
+            metric: [] for metric in metrics}
+        for block_number in range(1, 9):
+            block = f"b{block_number:02d}"
+            left_row = lookup.get((stage, block, left))
+            right_row = lookup.get((stage, block, right))
+            require(isinstance(left_row, Mapping) and
+                    isinstance(right_row, Mapping),
+                    f"contrast {contrast_id} lacks block {block}")
+            same_segment = (
+                left_row.get("planned_block_segment_id") ==
+                right_row.get("planned_block_segment_id"))
+            protocol_pair = bool(
+                same_segment and
+                left_row.get("method_success") is True and
+                right_row.get("method_success") is True and
+                left_row.get("continuous_eligible") is True and
+                right_row.get("continuous_eligible") is True)
+            if protocol_pair:
+                protocol_blocks.append(block)
+            for metric in metrics:
+                left_value = left_row.get(metric)
+                right_value = right_row.get(metric)
+                metric_pair = bool(protocol_pair and left_value is not None and
+                                   right_value is not None)
+                difference = None
+                if metric_pair:
+                    difference = _finite(left_value, f"{contrast_id} left {metric}") - _finite(
+                        right_value, f"{contrast_id} right {metric}")
+                    per_metric[metric].append(difference)
+                    per_metric_pairs[metric].append(
+                        (float(left_value), float(right_value)))
+                    per_metric_blocks[metric].append(block)
+                block_rows.append({
+                    "contrast_id": contrast_id,
+                    "stage": stage,
+                    "block_id": block,
+                    "left_condition_id": left,
+                    "right_condition_id": right,
+                    "left_planned_row_id": left_row.get("planned_row_id"),
+                    "right_planned_row_id": right_row.get("planned_row_id"),
+                    "left_attempt_id": left_row.get("terminal_attempt_id"),
+                    "right_attempt_id": right_row.get("terminal_attempt_id"),
+                    "same_planned_block_segment": same_segment,
+                    "protocol_pair_eligible": protocol_pair,
+                    "metric": metric,
+                    "unit": METRIC_UNITS[metric],
+                    "lower_is_better": metric in LOWER_IS_BETTER,
+                    "metric_pair_available": metric_pair,
+                    "left_value": left_value if metric_pair else None,
+                    "right_value": right_value if metric_pair else None,
+                    "difference_left_minus_right": difference,
+                    "analysis_class": ANALYSIS_CLASS,
+                    "release_id": left_row.get("release_id"),
+                    "release_hash": left_row.get("release_hash"),
+                    "master_hash": left_row.get("master_hash"),
+                    "protocol_id": left_row.get("protocol_id"),
+                    "formal_scope": left_row.get("formal_scope"),
+                    "physical_primary": None,
+                    "physical_primary_eligible": False,
+                })
+        if expected_protocol_pairs is not None:
+            expected = expected_protocol_pairs.get(contrast_id)
+            require(isinstance(expected, Mapping),
+                    f"runner summary lacks contrast {contrast_id}")
+            require(expected.get("N_pair") == len(protocol_blocks) and
+                    expected.get("eligible_blocks") == protocol_blocks,
+                    f"analysis protocol pairing differs from runner for {contrast_id}")
+        for metric in metrics:
+            differences = per_metric[metric]
+            pairs = per_metric_pairs[metric]
+            stats = _numeric_summary(differences)
+            relative = [
+                (left_value - right_value) / abs(left_value) * 100.0
+                for left_value, right_value in pairs if left_value != 0.0]
+            summary_rows.append({
+                "contrast_id": contrast_id,
+                "stage": stage,
+                "left_condition_id": left,
+                "right_condition_id": right,
+                "metric": metric,
+                "unit": METRIC_UNITS[metric],
+                "lower_is_better": metric in LOWER_IS_BETTER,
+                "difference_direction": "left_minus_right",
+                "N_block_plan": n_block_plan,
+                "N_pair_protocol": len(protocol_blocks),
+                "eligible_protocol_blocks_json": json.dumps(protocol_blocks),
+                "N_pair_metric": len(differences),
+                "eligible_metric_blocks_json": json.dumps(
+                    per_metric_blocks[metric]),
+                "left_mean": (statistics.fmean(pair[0] for pair in pairs)
+                              if pairs else None),
+                "right_mean": (statistics.fmean(pair[1] for pair in pairs)
+                               if pairs else None),
+                "mean_difference": stats["mean"],
+                "sd_difference": stats["sd"],
+                "median_difference": stats["median"],
+                "min_difference": stats["min"],
+                "max_difference": stats["max"],
+                "mean_relative_left_minus_right_percent": (
+                    statistics.fmean(relative) if relative else None),
+                "scientific_threshold_registered": False,
+                "scientific_pass": None,
+                "p_value": None,
+                "analysis_class": ANALYSIS_CLASS,
+                "release_id": rows[0].get("release_id") if rows else None,
+                "release_hash": rows[0].get("release_hash") if rows else None,
+                "master_hash": rows[0].get("master_hash") if rows else None,
+                "protocol_id": rows[0].get("protocol_id") if rows else None,
+                "formal_scope": rows[0].get("formal_scope") if rows else None,
+                "physical_primary": None,
+                "physical_primary_eligible": False,
+            })
+    return block_rows, summary_rows
+
+
+def prefix_summary(
+        boundary: int, stages: Sequence[str],
+        rows: Sequence[Mapping[str, Any]],
+        ledger_records: Sequence[Mapping[str, Any]],
+        paired_summary: Sequence[Mapping[str, Any]],
+        admission: Any) -> Dict[str, Any]:
+    selected = [row for row in rows if row.get("stage") in set(stages)]
+    require(len(selected) == boundary,
+            f"ledger prefix {boundary} has {len(selected)} planned rows")
+    ids = {str(row.get("planned_row_id")) for row in selected}
+    attempts = [record for record in ledger_records
+                if str(record.get("planned_row_id")) in ids]
+    pair_counts: Dict[str, int] = {}
+    for item in paired_summary:
+        if item.get("stage") in stages:
+            contrast_id = str(item.get("contrast_id"))
+            count = int(item.get("N_pair_protocol", 0))
+            previous = pair_counts.setdefault(contrast_id, count)
+            require(previous == count,
+                    f"metric rows disagree on protocol N_pair for {contrast_id}")
+    terminal = [row for row in selected
+                if row.get("method_success") is True or
+                row.get("method_failure") is True]
+    head_hash = attempts[-1].get("entry_hash") if attempts else "0" * 64
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_LEDGER_PREFIX_SUMMARY",
+        "analysis_class": ANALYSIS_CLASS,
+        "formal": True,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "release_id": admission.release.get("release_id"),
+        "release_hash": admission.release.get("release_hash"),
+        "freeze_hash": admission.freeze.get("freeze_hash"),
+        "master_hash": admission.master.get("master_hash"),
+        "prefix_boundary": boundary,
+        "included_stages": list(stages),
+        "N_plan": len(selected),
+        "N_attempt": len(attempts),
+        "N_terminal": len(terminal),
+        "N_method_success": sum(row.get("method_success") is True
+                                for row in selected),
+        "N_method_failure": sum(row.get("method_failure") is True
+                                for row in selected),
+        "N_continuous_eligible": sum(
+            row.get("continuous_eligible") is True for row in selected),
+        "N_unresolved": len(selected) - len(terminal),
+        "N_pair_by_registered_contrast": pair_counts,
+        "prefix_last_entry_hash": head_hash,
+        "scientific_conclusion": None,
+    }
+
+
+def _csv_text(rows: Sequence[Mapping[str, Any]]) -> str:
+    require(rows, "cannot emit an empty CSV")
+    fields: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        for field in row:
+            if field not in seen:
+                fields.append(field)
+                seen.add(field)
+    import io
+    stream = io.StringIO(newline="")
+    writer = csv.DictWriter(stream, fieldnames=fields, extrasaction="raise")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow({field: row.get(field) for field in fields})
+    return stream.getvalue()
+
+
+def _fmt(value: Any, digits: int = 4) -> str:
+    if value is None:
+        return "NA"
+    if isinstance(value, bool):
+        return "是" if value else "否"
+    if isinstance(value, (int, float)):
+        return f"{float(value):.{digits}f}"
+    return str(value)
+
+
+def render_stage_report(
+        stage: str, prefix: Mapping[str, Any],
+        stage_conditions: Sequence[Mapping[str, Any]]) -> str:
+    alias = STAGE_ALIASES[stage]
+    lines = [
+        f"# {alias} 机制仿真描述性报告",
+        "",
+        "> 口径：DESCRIPTIVE_POST_HOC_MECHANISM_ONLY。该阶段不对齐实物，"
+        "H_proxy/H_modal 均不是 physical primary；未注册科学阈值，本文不给出"
+        "疗效 PASS、p 值或物理有效性结论。",
+        "",
+        f"- 固定计划分母：{prefix['N_plan']}",
+        f"- attempt：{prefix['N_attempt']}",
+        f"- method success / failure：{prefix['N_method_success']} / "
+        f"{prefix['N_method_failure']}",
+        f"- continuous eligible：{prefix['N_continuous_eligible']}",
+        "",
+        "| condition | N_plan | N_attempt | success | failure | eligible | "
+        "完成时间均值(s) | tracking RMSE均值(m) | H_proxy motion+tail peak均值(mm) | "
+        "H_modal motion+tail peak均值(mm) |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for item in stage_conditions:
+        lines.append(
+            f"| {item['condition_id']} | {item['N_plan']} | {item['N_attempt']} | "
+            f"{item['N_method_success']} | {item['N_method_failure']} | "
+            f"{item['N_continuous_eligible']} | "
+            f"{_fmt(item.get('completion_time_wall_sec__mean'))} | "
+            f"{_fmt(item.get('tracking_rmse_m__mean'))} | "
+            f"{_fmt(item.get('H_proxy_motion_plus_tail_peak_abs_mm__mean'))} | "
+            f"{_fmt(item.get('H_modal_motion_plus_tail_peak_abs_mm__mean'))} |")
+    lines.extend([
+        "",
+        "FixedProfile 的 H_modal 按协议固定为 NA。失败 row 保留在固定分母，"
+        "且其连续指标为 NA；在线 H_modal 未覆盖完整冻结 tail 时，tail 与"
+        "motion+tail 指标同样为 NA。完整逐 row 与配对差值见同目录 CSV。",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def render_total_report(
+        prefix_summaries: Mapping[int, Mapping[str, Any]],
+        stage_conditions: Sequence[Mapping[str, Any]],
+        paired_summary: Sequence[Mapping[str, Any]]) -> str:
+    final = prefix_summaries[88]
+    lines = [
+        "# SIM-MECHANISM R7 40/64/88 总报告",
+        "",
+        "> 本报告仅为独立的仿真专用机制验证：SIMULATION_MECHANISM_ONLY / "
+        "DESCRIPTIVE_POST_HOC_MECHANISM_ONLY。它不对齐实物，不能作为 "
+        "physical-primary 或物理有效性结论。",
+        "",
+        "## 固定分母与执行结果",
+        "",
+        "| prefix | N_plan | N_attempt | success | failure | eligible | unresolved |",
+        "|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for boundary in (40, 64, 88):
+        item = prefix_summaries[boundary]
+        lines.append(
+            f"| {boundary} | {item['N_plan']} | {item['N_attempt']} | "
+            f"{item['N_method_success']} | {item['N_method_failure']} | "
+            f"{item['N_continuous_eligible']} | {item['N_unresolved']} |")
+    lines.extend([
+        "",
+        "## 证据绑定",
+        "",
+        f"- Release hash：`{final['release_hash']}`",
+        f"- Freeze hash：`{final['freeze_hash']}`",
+        f"- Master hash：`{final['master_hash']}`",
+        f"- 88-row ledger head：`{final['prefix_last_entry_hash']}`",
+        "",
+        "## 条件描述性汇总",
+        "",
+        "| stage | condition | N_success/plan | completion(s) | tracking RMSE(m) | H_proxy motion+tail peak(mm) | H_modal motion+tail peak(mm) |",
+        "|---|---|---:|---:|---:|---:|---:|",
+    ])
+    for item in stage_conditions:
+        lines.append(
+            f"| {item['stage_alias']} | {item['condition_id']} | "
+            f"{item['N_method_success']}/{item['N_plan']} | "
+            f"{_fmt(item.get('completion_time_wall_sec__mean'))} | "
+            f"{_fmt(item.get('tracking_rmse_m__mean'))} | "
+            f"{_fmt(item.get('H_proxy_motion_plus_tail_peak_abs_mm__mean'))} | "
+            f"{_fmt(item.get('H_modal_motion_plus_tail_peak_abs_mm__mean'))} |")
+    lines.extend([
+        "",
+        "## 注册配对对比（描述性）",
+        "",
+        "差值方向统一为 `left - right`；正值仅表示左侧数值更大。"
+        "它不是 scientific PASS，也不跨 stage 合并。",
+        "",
+        "| contrast | metric | unit | N_pair(protocol/metric) | left mean | right mean | mean(left-right) |",
+        "|---|---|---|---:|---:|---:|---:|",
+    ])
+    headline_metrics = {
+        "completion_time_wall_sec",
+        "H_proxy_motion_plus_tail_peak_abs_mm",
+    }
+    for item in paired_summary:
+        if item.get("metric") not in headline_metrics:
+            continue
+        lines.append(
+            f"| {item['contrast_id']} | {item['metric']} | {item['unit']} | "
+            f"{item['N_pair_protocol']}/{item['N_pair_metric']} | "
+            f"{_fmt(item.get('left_mean'))} | {_fmt(item.get('right_mean'))} | "
+            f"{_fmt(item.get('mean_difference'))} |")
+    lines.extend([
+        "",
+        "## 图表",
+        "",
+        "![](completion_time_by_condition.svg)",
+        "",
+        "![](H_proxy_peak_by_condition.svg)",
+        "",
+        "![](tracking_rmse_by_condition.svg)",
+        "",
+        "## 测量语义",
+        "",
+        "- H_proxy：`/slosh/height`，LiquidSloshModel 的机制代理，bag 中单位 m，"
+        "分析时转换为 mm；不是独立 plant truth。",
+        "- H_modal：`/sim_spmpc/slosh_height`，控制器内部 modal 量，原始单位 mm；"
+        "FixedProfile 固定为 NA；若 controller 未发布满冻结 tail，则 tail 与"
+        "motion+tail 指标为 NA。",
+        "- physical primary：`null`。",
+        "- path tracking：odom 点到冻结 polyline 各线段的最短欧氏距离。",
+        "- motion/tail 窗口：只取各 attempt 的 `closed_bag_qc.json` 冻结边界。",
+        "",
+        "## 分析边界",
+        "",
+        f"最终固定计划分母为 {final['N_plan']}，不存在跨 stage 或跨 contrast "
+        "合并 N_pair。`paired_contrasts.csv` 分开给出 protocol N_pair 与 "
+        "metric N_pair；这避免把 FixedProfile-H_modal 的协议配对误写成指标配对。",
+        "",
+        "所有汇总均为事后描述性统计。R7 未冻结分析阈值，因此不进行"
+        "显著性检验、不输出 scientific PASS，也不将差异解释为实物效果。",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def render_bar_svg(
+        title: str, groups: Sequence[Mapping[str, Any]], metric: str,
+        ylabel: str) -> str:
+    """Render a dependency-free, compact descriptive bar chart."""
+
+    values = [(f"{item['stage_alias']}/{item['condition_id']}",
+               item.get(f"{metric}__mean")) for item in groups]
+    numeric = [float(value) for _, value in values if value is not None]
+    width, height = 1200, 500
+    left, top, right, bottom = 90, 55, 20, 145
+    plot_w, plot_h = width - left - right, height - top - bottom
+    maximum = max(numeric) if numeric else 1.0
+    maximum = maximum if maximum > 0.0 else 1.0
+    slot = plot_w / max(1, len(values))
+    bars = []
+    labels = []
+    for index, (label, value) in enumerate(values):
+        x = left + index * slot + slot * 0.15
+        bar_w = slot * 0.7
+        if value is None:
+            bar_h = 0.0
+            text_value = "NA"
+        else:
+            bar_h = float(value) / maximum * plot_h
+            text_value = f"{float(value):.3g}"
+        y = top + plot_h - bar_h
+        color = ("#4c78a8" if label.startswith("SIM-S1") else
+                 "#f58518" if label.startswith("SIM-S2A") else "#54a24b")
+        bars.append(
+            f'<rect x="{x:.2f}" y="{y:.2f}" width="{bar_w:.2f}" '
+            f'height="{bar_h:.2f}" fill="{color}"/>')
+        labels.append(
+            f'<text x="{x + bar_w / 2:.2f}" y="{y - 5:.2f}" '
+            f'text-anchor="middle" font-size="11">{html.escape(text_value)}</text>')
+        labels.append(
+            f'<text transform="translate({x + bar_w / 2:.2f},'
+            f'{top + plot_h + 12:.2f}) rotate(55)" text-anchor="start" '
+            f'font-size="10">{html.escape(label)}</text>')
+    return "\n".join([
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+        f'viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" fill="white"/>',
+        f'<text x="{width / 2}" y="26" text-anchor="middle" font-size="18">'
+        f'{html.escape(title)}</text>',
+        f'<line x1="{left}" y1="{top + plot_h}" x2="{left + plot_w}" '
+        f'y2="{top + plot_h}" stroke="#333"/>',
+        f'<line x1="{left}" y1="{top}" x2="{left}" y2="{top + plot_h}" '
+        f'stroke="#333"/>',
+        f'<text transform="translate(20,{top + plot_h / 2}) rotate(-90)" '
+        f'text-anchor="middle" font-size="13">{html.escape(ylabel)}</text>',
+        *bars, *labels,
+        f'<text x="{width - 10}" y="{height - 8}" text-anchor="end" '
+        f'font-size="10">{ANALYSIS_CLASS}; not physical primary</text>',
+        '</svg>',
+    ]) + "\n"
+
+
+def _validate_analysis_boundary(admission: Any, summary: Mapping[str, Any],
+                                *, require_complete: bool) -> None:
+    release, freeze, master = admission.release, admission.freeze, admission.master
+    require(release.get("release_id") == RELEASE_ID and
+            freeze.get("release_id") == RELEASE_ID and
+            master.get("release_id") == RELEASE_ID and
+            summary.get("release_id") == RELEASE_ID,
+            f"this analyzer accepts only {RELEASE_ID}")
+    require(summary.get("status") == "PASS" and summary.get("formal") is True
+            and summary.get("formal_scope") == FORMAL_SCOPE and
+            summary.get("physical_primary_eligible") is False,
+            "canonical runner summary does not preserve mechanism scope")
+    for label, document in (("release", release), ("master", master)):
+        require(document.get("formal") is True and
+                document.get("formal_scope") == FORMAL_SCOPE and
+                document.get("physical_alignment") is False and
+                document.get("physical_primary_eligible") is False and
+                "physical_primary" in document and
+                document.get("physical_primary") is None,
+                f"{label} escapes mechanism-only/null-primary boundary")
+    measurements = freeze.get("measurements")
+    require(freeze.get("formal") is True and
+            freeze.get("formal_scope") == FORMAL_SCOPE and
+            freeze.get("physical_alignment") is False and
+            freeze.get("physical_primary_eligible") is False and
+            "physical_primary" in freeze and
+            freeze.get("physical_primary") is None and
+            isinstance(measurements, Mapping) and
+            "physical_primary" in measurements and
+            measurements.get("physical_primary") is None,
+            "freeze escapes mechanism-only/null-primary boundary")
+    rows = master.get("planned_rows")
+    require(isinstance(rows, list) and len(rows) == 88,
+            "master does not contain exactly 88 planned rows")
+    require(all(isinstance(row, Mapping) and row.get("formal") is True and
+                row.get("formal_scope") == FORMAL_SCOPE and
+                row.get("physical_alignment") is False and
+                row.get("physical_primary_eligible") is False and
+                "physical_primary" in row and row.get("physical_primary") is None
+                for row in rows),
+            "a planned row escapes mechanism-only/null-primary boundary")
+    if require_complete:
+        require(summary.get("N_plan") == 88,
+                "canonical summary N_plan is not 88")
+        terminal = int(summary.get("N_method_success", -1)) + int(
+            summary.get("N_method_failure", -1))
+        require(terminal == 88,
+                f"R7 matrix is incomplete: only {terminal}/88 terminal rows")
+        by_stage = summary.get("by_stage")
+        require(isinstance(by_stage, Mapping),
+                "canonical summary lacks per-stage counts")
+        expected = {"SIM-S1_CORE": 40, "SIM-S2A_SELECTIVITY": 24,
+                    "SIM-S2B_TRANSFER": 24}
+        for stage, count in expected.items():
+            item = by_stage.get(stage)
+            require(isinstance(item, Mapping) and item.get("N_plan") == count
+                    and int(item.get("N_method_success", -1)) +
+                    int(item.get("N_method_failure", -1)) == count,
+                    f"R7 stage {stage} is incomplete")
+
+
+def collect_evidence_and_metrics(
+        runner: Any, admission: Any, summary: Mapping[str, Any],
+        records: Sequence[Mapping[str, Any]],
+        ordered_rows: Sequence[Mapping[str, Any]],
+        dataset_index_hash: str,
+        ) -> Tuple[Dict[str, Mapping[str, Any]], Dict[str, Mapping[str, Any]], Dict[str, Any]]:
+    manifests: Dict[str, Mapping[str, Any]] = {}
+    metrics_by_attempt: Dict[str, Mapping[str, Any]] = {}
+    path_cache: Dict[str, Sequence[Mapping[str, Any]]] = {}
+    inventory_attempts = []
+    row_by_id = {str(row["planned_row_id"]): row for row in ordered_rows}
+    for ledger_position, record in enumerate(records, 1):
+        attempt_id = str(record.get("attempt_id"))
+        row_id = str(record.get("planned_row_id"))
+        row = row_by_id.get(row_id)
+        require(isinstance(row, Mapping),
+                f"ledger attempt {attempt_id} has no planned row")
+        manifest = _manifest_for_record(record)
+        manifests[attempt_id] = manifest
+        qc_descriptor = manifest.get("closed_bag_qc")
+        qc = None
+        windows = None
+        bag_descriptor = None
+        if qc_descriptor is not None:
+            qc_path = verify_descriptor(qc_descriptor,
+                                        f"attempt {attempt_id} closed bag QC")
+            qc = read_json(qc_path, "closed bag QC")
+            require(qc.get("attempt_id") == attempt_id and
+                    qc.get("case_manifest_hash") ==
+                    manifest.get("case_manifest_hash"),
+                    f"attempt {attempt_id} closed bag QC identity mismatch")
+            windows = measurement_windows(qc)
+            bag_descriptor = qc.get("bag")
+            bag_path = verify_descriptor(bag_descriptor,
+                                         f"attempt {attempt_id} bag")
+            require(manifest.get("bag_path") == str(bag_path) and
+                    manifest.get("bag_hash") == bag_descriptor.get("sha256"),
+                    f"attempt {attempt_id} manifest/QC bag mismatch")
+        eligible_success = bool(record.get("method_success") is True and
+                                record.get("continuous_eligible") is True)
+        if eligible_success:
+            require(isinstance(qc, Mapping) and windows is not None and
+                    isinstance(bag_descriptor, Mapping),
+                    f"eligible attempt {attempt_id} lacks closed bag QC")
+            bag_path = Path(str(bag_descriptor["path"]))
+            before_hash = str(bag_descriptor["sha256"])
+            observations = extract_windowed_observations(
+                bag_path, windows, str(row.get("condition_id")))
+            require(sha256_file(bag_path) == before_hash,
+                    f"attempt {attempt_id} bag changed during analysis")
+            path_id = str(row.get("path_id"))
+            if path_id not in path_cache:
+                path_descriptor = admission.freeze.get("paths", {}).get(
+                    path_id, {}).get("sim_path")
+                path_path = verify_descriptor(
+                    path_descriptor, f"frozen path {path_id}")
+                path_document = read_json(path_path, f"frozen path {path_id}")
+                points = path_document.get("points")
+                require(isinstance(points, list) and len(points) >= 2,
+                        f"frozen path {path_id} has insufficient points")
+                path_cache[path_id] = points
+            zero_tolerance = qc.get("zero_command_tail", {}).get(
+                "zero_abs_tolerance")
+            metrics_by_attempt[attempt_id] = derive_attempt_metrics(
+                observations, path_cache[path_id],
+                str(row.get("condition_id")), windows,
+                manifest.get("completion_time_sec"), zero_tolerance)
+            goal_evidence = manifest.get("endpoint_evidence", {}).get(
+                "goal_reached")
+            require(isinstance(goal_evidence, Mapping),
+                    f"eligible attempt {attempt_id} lacks goal evidence")
+            metrics_by_attempt[attempt_id]["endpoint_goal_distance_m"] = (
+                _finite(goal_evidence.get("goal_distance_m"),
+                        f"attempt {attempt_id} endpoint goal distance"))
+            metrics_by_attempt[attempt_id].update({
+                "motion_start_ros_time_sec": windows.motion_start_sec,
+                "terminal_ros_time_sec": windows.terminal_sec,
+                "tail_start_ros_time_sec": windows.tail_start_sec,
+                "tail_end_ros_time_sec": windows.tail_end_sec,
+            })
+        inventory_attempts.append({
+            "ledger_position": ledger_position,
+            "planned_row_id": row_id,
+            "attempt_id": attempt_id,
+            "entry_hash": record.get("entry_hash"),
+            "outcome": {
+                "method_success": record.get("method_success") is True,
+                "method_failure": record.get("method_failure") is True,
+                "continuous_eligible": record.get("continuous_eligible") is True,
+                "failure_class": record.get("failure_class"),
+                "protocol_qc_pass": record.get("protocol_qc_pass") is True,
+            },
+            "attempt_manifest": {
+                "path": record.get("attempt_manifest_path"),
+                "sha256": record.get("attempt_manifest_hash"),
+            },
+            "case_manifest": {
+                "path": manifest.get("case_manifest_path"),
+                "sha256": manifest.get("case_manifest_hash"),
+            },
+            "postflight": {
+                "path": manifest.get("postflight_path"),
+                "sha256": manifest.get("postflight_hash"),
+            },
+            "closed_bag_qc": dict(qc_descriptor)
+            if isinstance(qc_descriptor, Mapping) else None,
+            "bag": ({"path": bag_descriptor.get("path"),
+                     "sha256": bag_descriptor.get("sha256")}
+                    if isinstance(bag_descriptor, Mapping) else None),
+            "analysis_consumed_continuous_metrics": eligible_success,
+            "measurement_windows": ({
+                "motion_start_sec": windows.motion_start_sec,
+                "terminal_sec": windows.terminal_sec,
+                "tail_start_sec": windows.tail_start_sec,
+                "tail_end_sec": windows.tail_end_sec,
+                "required_tail_sec": windows.required_tail_sec,
+            } if windows else None),
+            "physical_primary": None,
+            "physical_primary_eligible": False,
+        })
+    result_root = Path(str(
+        admission.release.get("result_policy", {}).get("result_root", "")))
+    require(result_root.is_absolute() and result_root.is_dir(),
+            "release result root is unavailable for stage evidence inventory")
+    stage_relative_paths = (
+        "stage_evidence/SIM-S2A_SELECTIVITY/s1_closure.json",
+        "stage_evidence/SIM-S2A_SELECTIVITY/extension_decision.json",
+        "stage_authorizations/SIM-S2A_SELECTIVITY.json",
+        "stage_evidence/SIM-S2B_TRANSFER/s2a_closure.json",
+        "stage_evidence/SIM-S2B_TRANSFER/selectivity_trigger.json",
+        "stage_authorizations/SIM-S2B_TRANSFER.json",
+    )
+    stage_transition_evidence: Dict[str, Any] = {}
+    for relative in stage_relative_paths:
+        source = result_root / relative
+        document = read_json(source, f"stage transition evidence {relative}")
+        require(document.get("formal") is True and
+                document.get("formal_scope") == FORMAL_SCOPE and
+                document.get("physical_alignment") is False and
+                document.get("physical_primary_eligible") is False and
+                document.get("physical_primary") is None and
+                document.get("release_id") == RELEASE_ID and
+                document.get("release_hash") ==
+                admission.release.get("release_hash") and
+                document.get("master_hash") ==
+                admission.master.get("master_hash"),
+                f"stage transition evidence {relative} boundary mismatch")
+        mode = stat.S_IMODE(source.stat().st_mode)
+        require(mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH) == 0,
+                f"stage transition evidence is writable: {source}")
+        stage_transition_evidence[relative] = {
+            "path": str(source),
+            "sha256": sha256_file(source),
+            "mode_octal": oct(mode),
+            "semantic_hash": (document.get("authorization_hash") or
+                              document.get("evidence_hash")),
+            "dataset_index_head_hash":
+                document.get("dataset_index_head_hash"),
+        }
+    evidence = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_ANALYSIS_EVIDENCE_INVENTORY",
+        "analysis_class": ANALYSIS_CLASS,
+        "formal": True,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "release": {
+            "path": str(admission.release_path),
+            "sha256": sha256_file(admission.release_path),
+            "release_hash": admission.release.get("release_hash"),
+        },
+        "freeze": {
+            "path": str(admission.freeze_path),
+            "sha256": sha256_file(admission.freeze_path),
+            "freeze_hash": admission.freeze.get("freeze_hash"),
+        },
+        "master": {
+            "path": str(admission.master_path),
+            "sha256": sha256_file(admission.master_path),
+            "master_hash": admission.master.get("master_hash"),
+        },
+        "dataset_index": {
+            "path": str(runner.ledger_path(admission.master)),
+            "sha256": dataset_index_hash,
+            "N_attempt": len(records),
+            "head_entry_hash": (records[-1].get("entry_hash")
+                                if records else "0" * 64),
+        },
+        "canonical_runner_summary_hash": canonical_hash(summary),
+        "stage_transition_evidence": stage_transition_evidence,
+        "measurement_channels": {
+            "H_proxy": {
+                "topic": H_PROXY_TOPIC,
+                "source_unit": "m", "analysis_unit": "mm",
+                "semantic": "LiquidSloshModel_proxy_mechanism_only",
+                "physical_primary_eligible": False,
+            },
+            "H_modal": {
+                "topic": H_MODAL_TOPIC,
+                "source_unit": "mm", "analysis_unit": "mm",
+                "semantic": "controller_internal_modal_only",
+                "FixedProfile_available": False,
+                "tail_metric_policy": (
+                    "NA unless samples cover the complete frozen tail"),
+                "physical_primary_eligible": False,
+            },
+            "physical_primary": None,
+        },
+        "attempts": inventory_attempts,
+    }
+    evidence["inventory_hash"] = canonical_hash(evidence)
+    return manifests, metrics_by_attempt, evidence
+
+
+def _safe_output_dir(path: Path, forbidden_root: Path) -> Path:
+    # The requested Obsidian vault intentionally traverses a user-owned
+    # ``vaults`` symlink.  Resolve it for containment checks, but retain the
+    # lexical path so the published locations match the operator's request.
+    candidate = Path(os.path.abspath(os.fspath(path)))
+    resolved_candidate = candidate.resolve(strict=False)
+    forbidden = Path(os.path.abspath(os.fspath(forbidden_root))).resolve()
+    try:
+        resolved_candidate.relative_to(forbidden)
+    except ValueError:
+        pass
+    else:
+        raise AnalysisError(
+            f"analysis output may not modify frozen campaign root {forbidden}")
+    require(not candidate.exists(),
+            f"analysis output directory already exists: {candidate}")
+    return candidate
+
+
+def _write_new(path: Path, content: str) -> None:
+    require(not path.exists(), f"refusing to overwrite analysis output {path}")
+    with path.open("x", encoding="utf-8", newline="") as stream:
+        stream.write(content)
+
+
+def _json_text(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, indent=2,
+                      sort_keys=True) + "\n"
+
+
+def run_analysis(release_path: Path, output_dir: Path,
+                 *, require_complete: bool) -> Dict[str, Any]:
+    require(require_complete is True,
+            "R7 analysis requires explicit --require-complete")
+    runner = load_runner()
+    # Required ordering: admission and canonical summary are the first evidence
+    # operations.  Both are fail-closed and the summary recursively validates
+    # the append-only ledger and bound attempt evidence.
+    admission = runner.admit(release_path)
+    canonical_summary = runner.summarize(admission)
+    _validate_analysis_boundary(admission, canonical_summary,
+                                require_complete=require_complete)
+    index_path = runner.ledger_path(admission.master)
+    require(index_path.is_file(), "complete R7 analysis requires a dataset index")
+    index_hash_before = sha256_file(index_path)
+    records = runner.load_ledger(index_path, admission.master,
+                                 admission.release)
+    ordered_rows = runner.schedule(admission.master)
+    require(len(ordered_rows) == 88, "canonical schedule is not 88 rows")
+    output = _safe_output_dir(output_dir, runner.CANONICAL_NAMESPACE_ROOT)
+
+    manifests, metrics_by_attempt, evidence = collect_evidence_and_metrics(
+        runner, admission, canonical_summary, records, ordered_rows,
+        index_hash_before)
+    require(sha256_file(index_path) == index_hash_before,
+            "dataset index changed during analysis")
+    per_row = build_fixed_denominator_rows(
+        ordered_rows, records, manifests, metrics_by_attempt)
+    for result_row in per_row:
+        result_row.update({
+            "release_hash": admission.release.get("release_hash"),
+            "freeze_hash": admission.freeze.get("freeze_hash"),
+            "master_hash": admission.master.get("master_hash"),
+        })
+    require(len(per_row) == 88, "fixed-denominator output is not 88 rows")
+    require(sum(row.get("method_success") is True or
+                row.get("method_failure") is True for row in per_row) == 88,
+            "fixed-denominator output contains unresolved rows")
+    stage_condition = build_stage_condition_summary(per_row)
+    paired_blocks, paired_summary = build_paired_outputs(
+        per_row, admission.master["contrast_denominator_registry"],
+        expected_protocol_pairs=canonical_summary.get("N_pair_by_contrast"))
+    prefix_summaries = {
+        boundary: prefix_summary(boundary, stages, per_row, records,
+                                 paired_summary, admission)
+        for boundary, stages in PREFIXES
+    }
+    require(prefix_summaries[88]["N_method_success"] ==
+            canonical_summary.get("N_method_success") and
+            prefix_summaries[88]["N_method_failure"] ==
+            canonical_summary.get("N_method_failure") and
+            prefix_summaries[88]["N_attempt"] ==
+            canonical_summary.get("N_attempt"),
+            "analysis 88-row summary differs from canonical runner summary")
+
+    payloads: Dict[str, str] = {
+        "canonical_runner_summary_88.json": _json_text(canonical_summary),
+        "evidence_inventory.json": _json_text(evidence),
+        "metrics_per_planned_row.csv": _csv_text(per_row),
+        "metrics_by_stage_condition.csv": _csv_text(stage_condition),
+        "paired_differences_per_block.csv": _csv_text(paired_blocks),
+        "paired_contrasts.csv": _csv_text(paired_summary),
+        "ledger_summary_40.json": _json_text(prefix_summaries[40]),
+        "ledger_summary_64.json": _json_text(prefix_summaries[64]),
+        "ledger_summary_88.json": _json_text(prefix_summaries[88]),
+    }
+    for stage in STAGE_ORDER:
+        stage_prefix = prefix_summary(
+            {"SIM-S1_CORE": 40, "SIM-S2A_SELECTIVITY": 24,
+             "SIM-S2B_TRANSFER": 24}[stage], (stage,), per_row, records,
+            paired_summary, admission)
+        selected_groups = [item for item in stage_condition
+                           if item.get("stage") == stage]
+        payloads[f"{STAGE_ALIASES[stage]}_阶段报告.md"] = render_stage_report(
+            stage, stage_prefix, selected_groups)
+    payloads["40_64_88总报告.md"] = render_total_report(
+        prefix_summaries, stage_condition, paired_summary)
+    payloads["completion_time_by_condition.svg"] = render_bar_svg(
+        "R7 completion time by condition (descriptive)", stage_condition,
+        "completion_time_wall_sec", "wall completion time [s]")
+    payloads["H_proxy_peak_by_condition.svg"] = render_bar_svg(
+        "R7 H_proxy motion+frozen-tail peak by condition (mechanism proxy only)",
+        stage_condition, "H_proxy_motion_plus_tail_peak_abs_mm",
+        "H_proxy motion+tail peak [mm]")
+    payloads["tracking_rmse_by_condition.svg"] = render_bar_svg(
+        "R7 polyline tracking RMSE by condition (descriptive)",
+        stage_condition, "tracking_rmse_m", "tracking RMSE [m]")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(
+        prefix=f".{output.name}.staging-", dir=str(output.parent)))
+    published = False
+    try:
+        for filename, content in payloads.items():
+            _write_new(staging / filename, content)
+        output_inventory = {
+            filename: {
+                # Bind the location that becomes visible after the atomic
+                # directory rename, while hashing the staged bytes.
+                "path": str(output / filename),
+                "sha256": sha256_file(staging / filename),
+                "size_bytes": (staging / filename).stat().st_size,
+            }
+            for filename in sorted(payloads)
+        }
+        analysis_manifest = {
+            "schema_version": SCHEMA_VERSION,
+            "record_type": "SMPCC_SIM_MECHANISM_ANALYSIS_MANIFEST",
+            "analysis_class": ANALYSIS_CLASS,
+            "created_utc": utc_now(),
+            "formal": True,
+            "formal_scope": FORMAL_SCOPE,
+            "physical_alignment": False,
+            "physical_primary_eligible": False,
+            "physical_primary": None,
+            "scientific_threshold_registered": False,
+            "scientific_conclusion": None,
+            "release": evidence["release"],
+            "freeze": evidence["freeze"],
+            "master": evidence["master"],
+            "dataset_index": evidence["dataset_index"],
+            "canonical_runner": {
+                "path": str(RUNNER_PATH),
+                "sha256": sha256_file(RUNNER_PATH),
+            },
+            "analysis_program": {
+                "path": str(Path(__file__).resolve()),
+                "sha256": sha256_file(Path(__file__).resolve()),
+            },
+            "measurement_policy": {
+                "motion_window": (
+                    "closed_bag_qc motion_start through terminal inclusive"),
+                "tail_window": (
+                    "closed_bag_qc tail_anchor through "
+                    "anchor+required_tail_sec inclusive"),
+                "motion_plus_tail_window": (
+                    "closed_bag_qc motion_start through "
+                    "tail_anchor+required_tail_sec inclusive"),
+                "odom_time_source": "msg.header.stamp",
+                "headerless_topic_time_source": "rosbag_record_time",
+                "path_tracking": (
+                    "minimum Euclidean distance to frozen polyline segments"),
+                "H_proxy": (
+                    "metres_to_millimetres; mechanism proxy only"),
+                "H_modal": (
+                    "millimetres unchanged; controller internal; "
+                    "FixedProfile NA; tail NA unless fully covered"),
+                "failure_metrics": (
+                    "NA with row retained in fixed denominator"),
+                "pairing": (
+                    "registered contrast, within-stage, same block segment, "
+                    "both continuous eligible"),
+            },
+            "counts": prefix_summaries[88],
+            "outputs": output_inventory,
+        }
+        analysis_manifest["analysis_manifest_hash"] = canonical_hash(
+            analysis_manifest)
+        _write_new(staging / "analysis_manifest.json",
+                   _json_text(analysis_manifest))
+        require(sha256_file(index_path) == index_hash_before,
+                "dataset index changed before analysis publication completed")
+
+        # Flush every staged file and the directory entry before publication.
+        for staged_file in staging.iterdir():
+            require(staged_file.is_file(),
+                    f"unexpected non-file analysis artifact {staged_file}")
+            with staged_file.open("rb") as stream:
+                os.fsync(stream.fileno())
+        staging_fd = os.open(staging, os.O_RDONLY)
+        try:
+            os.fsync(staging_fd)
+        finally:
+            os.close(staging_fd)
+        require(not output.exists(),
+                f"analysis output appeared during staging: {output}")
+        staging.rename(output)
+        parent_fd = os.open(output.parent, os.O_RDONLY)
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
+        published = True
+    finally:
+        if not published and staging.exists():
+            # Only remove the analyzer-owned mkdtemp sibling; the validated
+            # final path and all campaign evidence remain untouched.
+            shutil.rmtree(staging)
+    return {
+        "status": "PASS",
+        "analysis_class": ANALYSIS_CLASS,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary": None,
+        "physical_primary_eligible": False,
+        "N_plan": 88,
+        "N_attempt": len(records),
+        "N_method_success": prefix_summaries[88]["N_method_success"],
+        "N_method_failure": prefix_summaries[88]["N_method_failure"],
+        "output_dir": str(output),
+        "analysis_manifest": str(output / "analysis_manifest.json"),
+        "analysis_manifest_sha256": sha256_file(
+            output / "analysis_manifest.json"),
+    }
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Read-only fail-closed analysis of canonical R7")
+    parser.add_argument("--release", required=True, type=Path,
+                        help="canonical immutable R7 mechanism_release.json")
+    parser.add_argument("--output-dir", required=True, type=Path,
+                        help="new analysis directory outside campaign storage")
+    parser.add_argument("--require-complete", action="store_true", required=True,
+                        help="require all 88 planned rows to be terminal")
+    return parser
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        report = run_analysis(args.release, args.output_dir,
+                              require_complete=args.require_complete)
+    except (AnalysisError, RuntimeError, OSError, ValueError, KeyError) as exc:
+        print(json.dumps({
+            "status": "NO_GO",
+            "analysis_class": ANALYSIS_CLASS,
+            "formal_scope": FORMAL_SCOPE,
+            "physical_primary": None,
+            "physical_primary_eligible": False,
+            "error": str(exc),
+        }, ensure_ascii=False, indent=2, sort_keys=True))
+        return 2
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

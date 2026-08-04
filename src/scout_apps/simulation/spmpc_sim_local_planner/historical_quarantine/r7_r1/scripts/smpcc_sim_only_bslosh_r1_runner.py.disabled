@@ -1,0 +1,1993 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Fresh-case runner for the isolated ``SIM_Bslosh_R1`` release.
+
+This program deliberately has no dependency on the original
+``SMPCC-SIM-40-64-88-v0.1`` campaign runner.  ``SIM_Bslosh_R1`` is a
+simulation-only controller release, not a physical-alignment freeze:
+
+* it has *cases* and *attempts*, never original-matrix planned rows;
+* every live case starts one owned proxy environment on fresh ROS/Gazebo
+  ports, and terminates only process groups it started;
+* H_proxy (``/slosh/height``) and H_modal (``/sim_spmpc/slosh_height``) are the
+  only liquid channels recorded.  No ``/sim_truth`` topic is accepted;
+* the precise 60-second outcome window starts at first observed base motion,
+  not at process launch; both success and timeout retain the same frozen tail;
+* result and bag storage is the SIM-ONLY release namespace.  Passing the
+  original protocol ID, an original matrix root, or a planned-row-looking
+  identifier fails before ROS/Gazebo is launched.
+
+The external proxy scripts under ``/data/a/scout_sim_replacement/scripts``
+remain opaque subprocesses.  In particular, the historic SPMPC *attach*
+wrapper is never used: it can launch a generic planner and therefore cannot
+prove the dedicated R1 admission gate.  This runner starts the environment
+wrapper only, then starts the fixed JSON path replayer and dedicated
+``spmpc_sim_only_bslosh_r1.launch`` as separately owned children.
+
+The public ``run`` command writes real case artifacts only under the storage
+roots frozen by the SIM-ONLY release manifest.  ``--dry-run`` is useful for
+testing the ledger/state machine; every such attempt is permanently labelled
+``dry_run=true`` and ``SIMULATION_ONLY_NOT_PHYSICAL_PRIMARY``.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import contextlib
+import dataclasses
+import fcntl
+import hashlib
+import importlib.util
+import json
+import math
+import os
+import random
+import re
+import shlex
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, Iterator, Mapping, MutableMapping, Optional, Sequence
+from urllib.parse import urlparse
+from xmlrpc.client import ServerProxy
+
+
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+WORKSPACE_ROOT = SCRIPT_PATH.parents[5]
+RELEASE_MODULE_PATH = SCRIPT_DIR / "smpcc_sim_only_bslosh_release.py"
+
+SIM_ROOT = Path("/data/a/scout_sim_replacement")
+SIM_ONLY_NAMESPACE = "SMPCC-SIM-ONLY-BSLOSH-R1"
+SIM_ONLY_ROOT = SIM_ROOT / SIM_ONLY_NAMESPACE
+RELEASE_ID = "SIM-ONLY-BSLOSH-R1"
+CANONICAL_RELEASE_MANIFEST = (
+    SIM_ONLY_ROOT / "releases" / RELEASE_ID / "release_manifest.json"
+)
+PROTOCOL_ID = "SMPCC-SIM-ONLY-BSLOSH-R1-v1"
+ORIGINAL_PROTOCOL_ID = "SMPCC-SIM-40-64-88-v0.1"
+CONDITION_ID = "SIM_Bslosh_R1"
+RUNNER_ID = "SMPCC-SIM-ONLY-BSLOSH-R1-FRESH-CASE-RUNNER-v1"
+SCHEMA_VERSION = "smpcc-sim-only-bslosh-r1-runner-v1"
+
+ENV_LAUNCH = (Path(__file__).resolve().parents[1] /
+              "scripts" / "launch_sim_environment.sh")
+WORLD_FILE = SIM_ROOT / "classic_ws/src/scout_mini_proxy_gazebo/worlds/open_walled_proxy.world"
+MAP_FILE = SIM_ROOT / "maps/proxy_world_manual_saved_20260611_154348.pbstream"
+PROXY_WS = SIM_ROOT / "classic_ws"
+ROS_SETUP = Path("/opt/ros/noetic/setup.bash")
+SCOUT_SETUP = Path("/home/a/scout_ws/devel/setup.bash")
+CARTOGRAPHER_SETUP = Path(
+    "/home/a/scout_ws/src/scout_apps/sensors/cartographer_ws/install_isolated/setup.bash"
+)
+
+# These are existing immutable P2 JSON candidate assets.  They are not H1/L1
+# and are never supplied to the original formal replay adapter.  A case records
+# both the selected JSON hash and the in-bag replayed /scout/global_path_fixed
+# message so a later source change cannot be confused with the executed path.
+P2_ASSET_ROOT = (
+    SIM_ROOT / "development_assets" / "20260802_p2_c2_d95_0705_candidate_v1" / "paths"
+)
+PATH_ASSETS = {
+    "SIM_ONLY_P2_HIGH": P2_ASSET_ROOT / "high_p2_sim.json",
+    "SIM_ONLY_P2_LOW": P2_ASSET_ROOT / "low_p2_sim.json",
+}
+PATH_ASSET_IDS = {
+    "SIM_ONLY_P2_HIGH": "DEV-HIGH-EXCITATION-P2-CANDIDATE",
+    "SIM_ONLY_P2_LOW": "DEV-LOW-EXCITATION-P2-CANDIDATE",
+}
+
+H_PROXY_TOPIC = "/slosh/height"
+H_MODAL_TOPIC = "/sim_spmpc/slosh_height"
+TRUTH_PREFIX = "/sim_truth/"
+RECORDER_TOPICS = (
+    "/odom",
+    "/tf",
+    "/tf_static",
+    "/scout/goal",
+    "/scout/global_path_fixed",
+    "/sim_spmpc/status",
+    "/sim_spmpc/terminal/mode",
+    "/sim_spmpc/debug/effective_config",
+    "/sim_spmpc/debug/cmd_vel_output",
+    H_PROXY_TOPIC,
+    H_MODAL_TOPIC,
+    "/cmd_vel",
+)
+LIQUID_MEASUREMENT_TOPICS = (H_PROXY_TOPIC, H_MODAL_TOPIC)
+
+SETTLE_SEC = 30.0
+GOAL_TIMEOUT_SEC = 60.0
+TAIL_SEC = 5.0
+MOTION_ACQUISITION_TIMEOUT_SEC = 20.0
+READINESS_TIMEOUT_SEC = 60.0
+POSTFLIGHT_ENDPOINT_TIMEOUT_SEC = 30.0
+RECORDER_READY_TIMEOUT_SEC = 15.0
+RECORDER_BUFFER_MB = 16
+RECORDER_CHUNK_KB = 64
+
+MOTION_LINEAR_THRESHOLD_MPS = 0.005
+MOTION_ANGULAR_THRESHOLD_RADPS = 0.01
+MOTION_POSITION_DELTA_M = 0.02
+
+EFFECTIVE_CONFIG_TOPIC = "/sim_spmpc/debug/effective_config"
+EFFECTIVE_CONFIG_FIELDS = (
+    "solver_backend_code",
+    "control_frequency",
+    "dt",
+    "horizon_steps",
+    "slosh_enable",
+    "slosh_constraint_enable",
+    "smooth_priority_enable",
+    "primitive_mode_code",
+    "v_ref",
+    "w_slosh",
+    "w_control",
+    "w_smooth",
+    "w_accel",
+    "w_alpha",
+    "w_du_a",
+    "w_du_vs",
+    "v_max",
+    "omega_max",
+    "a_max",
+    "alpha_max",
+    "shared_linear_accel_limit_enable",
+    "shared_linear_accel_max",
+    "shared_linear_accel_max_dt",
+    "shared_angular_limit_enable",
+    "shared_angular_rate_max",
+    "shared_angular_accel_max",
+    "shared_angular_accel_max_dt",
+    "container_radius",
+    "liquid_height",
+    "damping_ratio",
+    "slosh_height_ref",
+    "slosh_height_max",
+    "slosh_eta_dot_ratio",
+    "use_parabola_term",
+    "delay_phase_mode_code",
+    "delay_linear_sec",
+    "delay_angular_sec",
+    "delay_cmd_timeout_sec",
+    "delay_odom_timeout_sec",
+    "delay_history_window_sec",
+    "delay_require_complete_history",
+)
+
+
+class SimOnlyRunnerError(RuntimeError):
+    """A fail-closed SIM-ONLY runtime contract error."""
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise SimOnlyRunnerError(message)
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def canonical_bytes(value: Any) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def canonical_hash(value: Any) -> str:
+    return hashlib.sha256(canonical_bytes(value)).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def is_sha256(value: Any) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+
+def read_json(path: Path, label: str) -> Mapping[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SimOnlyRunnerError(f"cannot read {label} {path}: {exc}") from exc
+    require(isinstance(value, Mapping), f"{label} must be a JSON object")
+    return value
+
+
+def write_json_new(path: Path, value: Mapping[str, Any], *, readonly: bool = True) -> None:
+    """Write one new evidence document, never silently replacing an attempt."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    try:
+        with path.open("x", encoding="utf-8") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+    except FileExistsError as exc:
+        raise SimOnlyRunnerError(f"refusing to overwrite evidence artifact: {path}") from exc
+    if readonly:
+        os.chmod(path, 0o444)
+
+
+def ensure_below(path: Path, root: Path, label: str) -> Path:
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError as exc:
+        raise SimOnlyRunnerError(f"{label} must be below {root.resolve()}: {resolved}") from exc
+    return resolved
+
+
+def require_absolute_file(path: Path, label: str) -> Path:
+    require(path.is_absolute(), f"{label} must be absolute")
+    require(path.is_file(), f"{label} is missing: {path}")
+    return path.resolve()
+
+
+def load_release_module():
+    existing = sys.modules.get("smpcc_sim_only_bslosh_release")
+    if existing is not None:
+        return existing
+    require(RELEASE_MODULE_PATH.is_file(), f"SIM-ONLY release validator is missing: {RELEASE_MODULE_PATH}")
+    spec = importlib.util.spec_from_file_location("smpcc_sim_only_bslosh_release", RELEASE_MODULE_PATH)
+    require(spec is not None and spec.loader is not None, "cannot load SIM-ONLY release validator")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["smpcc_sim_only_bslosh_release"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@dataclasses.dataclass(frozen=True)
+class ReleaseAdmission:
+    manifest_path: Path
+    manifest_sha256: str
+    release_hash: str
+    effective_config_path: Path
+    effective_config_sha256: str
+    results_root: Path
+    bags_root: Path
+    containers: Mapping[str, Any]
+    artifact_bindings: Mapping[str, Any]
+
+
+def reject_original_matrix_text(value: Any, label: str) -> None:
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True).casefold()
+    forbidden = (
+        ORIGINAL_PROTOCOL_ID.casefold(),
+        "40-64-88",
+        "sim-s1",
+        "sim-s2a",
+        "sim-s2b",
+        "planned_row",
+        "h1",
+        "l1",
+        "w5_s10",
+    )
+    hits = [item for item in forbidden if item in text]
+    require(not hits, f"{label} attempts to enter original formal matrix namespace: {', '.join(hits)}")
+
+
+def admit_release(manifest_path: Path, *, strict_storage: bool = True) -> ReleaseAdmission:
+    """Validate the frozen release and bind all runtime storage to it."""
+
+    module = load_release_module()
+    manifest_path = require_absolute_file(manifest_path, "SIM-ONLY release manifest")
+    try:
+        report = module.validate_release_manifest(
+            manifest_path,
+            strict_storage_root=strict_storage,
+            strict_source_paths=True,
+        )
+    except Exception as exc:  # module owns detailed error format
+        raise SimOnlyRunnerError(f"SIM-ONLY release admission failed: {exc}") from exc
+    document = read_json(manifest_path, "SIM-ONLY release manifest")
+    require(report.get("status") == "PASS_SIMULATION_ONLY", "release validator did not return SIM-ONLY PASS")
+    require(document.get("protocol_id") == PROTOCOL_ID, "release protocol is not SIM-ONLY R1")
+    require(document.get("condition_id") == CONDITION_ID, "release condition is not SIM_Bslosh_R1")
+    require(document.get("formal") is False, "SIM-ONLY release must not be generic formal")
+    require(document.get("formal_simulation_only") is True, "release lacks formal_simulation_only=true")
+    require(document.get("physical_alignment") is False, "release must not claim physical alignment")
+    require(document.get("physical_primary_eligible") is False, "release must not claim physical primary")
+    require(document.get("original_matrix_40_64_88_eligible") is False, "release must reject 40/64/88")
+    # The release deliberately *names* the original protocol in a negative
+    # isolation declaration (``original_formal_protocol_id`` and
+    # ``planned_rows_generated=false``).  Do not mistake those deny-list
+    # strings for an attempted matrix input; only executable case inputs and
+    # storage roots are forbidden below.
+    storage = document.get("storage")
+    require(isinstance(storage, Mapping), "release storage is missing")
+    results_root = Path(str(storage.get("results_root", ""))).resolve()
+    bags_root = Path(str(storage.get("bags_root", ""))).resolve()
+    require(results_root.is_absolute() and bags_root.is_absolute(), "release storage roots must be absolute")
+    require(results_root != bags_root, "SIM-ONLY result and bag roots must differ")
+    for root in (results_root, bags_root):
+        if strict_storage:
+            ensure_below(root, SIM_ROOT, "SIM-ONLY storage root")
+            require(SIM_ONLY_NAMESPACE in root.parts, "SIM-ONLY storage root lacks isolated namespace")
+        rendered = str(root).casefold()
+        require("formal" not in rendered and "40-64-88" not in rendered, "SIM-ONLY storage overlaps original matrix namespace")
+    artifacts = document.get("artifact_bindings")
+    require(isinstance(artifacts, Mapping), "release artifact bindings are missing")
+    effective = artifacts.get("effective_config")
+    require(isinstance(effective, Mapping), "release effective config binding missing")
+    config_path = require_absolute_file(Path(str(effective.get("path", ""))), "effective config")
+    config_hash = str(effective.get("sha256", ""))
+    require(is_sha256(config_hash) and sha256_file(config_path) == config_hash, "effective config hash mismatch")
+    containers = document.get("admissible_simulation_container_conditions")
+    require(isinstance(containers, Mapping) and len(containers) == 2, "release container selectors are malformed")
+    return ReleaseAdmission(
+        manifest_path=manifest_path,
+        manifest_sha256=sha256_file(manifest_path),
+        release_hash=str(document.get("release_hash", "")),
+        effective_config_path=config_path,
+        effective_config_sha256=config_hash,
+        results_root=results_root,
+        bags_root=bags_root,
+        containers=containers,
+        artifact_bindings=artifacts,
+    )
+
+
+def selected_container(release: ReleaseAdmission, selector: str) -> tuple[str, Mapping[str, Any]]:
+    require(selector in {"C1", "C2"}, "container selector must be C1 or C2")
+    expected_id = (
+        "SIM_ONLY_C1_D37_H58_LEGACY_UNVALIDATED"
+        if selector == "C1"
+        else "SIM_ONLY_C2_D95_H58_UNVALIDATED"
+    )
+    item = release.containers.get(expected_id)
+    require(isinstance(item, Mapping), f"release lacks container {expected_id}")
+    require(item.get("formal") is False and item.get("physical_primary_eligible") is False, "container is not SIM-ONLY/non-primary")
+    return expected_id, item
+
+
+def validate_path_asset(path_key: str) -> Dict[str, Any]:
+    require(path_key in PATH_ASSETS, f"unknown SIM-ONLY path selector: {path_key}")
+    path = require_absolute_file(PATH_ASSETS[path_key], "SIM-ONLY P2 path asset")
+    document = read_json(path, "SIM-ONLY P2 path asset")
+    require(document.get("formal") is False, "SIM-ONLY P2 asset must not be generic formal")
+    require(document.get("formal_path_id") is None, "SIM-ONLY P2 asset must not identify H1/L1")
+    require(document.get("path_id") == PATH_ASSET_IDS[path_key], "P2 path identity mismatch")
+    points = document.get("points")
+    require(isinstance(points, list) and len(points) >= 2, "P2 path has too few points")
+    first, last = points[0], points[-1]
+    require(isinstance(first, Mapping) and isinstance(last, Mapping), "P2 path endpoints malformed")
+    for point, expected, label in ((first, (-4.0, 0.0), "start"), (last, (5.0, 0.0), "goal")):
+        require(
+            isinstance(point.get("x"), (int, float))
+            and isinstance(point.get("y"), (int, float))
+            and math.isclose(float(point["x"]), expected[0], abs_tol=1e-9)
+            and math.isclose(float(point["y"]), expected[1], abs_tol=1e-9),
+            f"P2 {label} endpoint differs from old open-field task",
+        )
+    return {
+        "path_selector": path_key,
+        "path_id": str(document["path_id"]),
+        "path": str(path),
+        "sha256": sha256_file(path),
+        "document_type": document.get("document_type"),
+        "source_evidence_class": document.get("evidence_class"),
+        "executed_path_semantic": "SIM_ONLY_OPEN_FIELD_P2_JSON_REPLAY_NOT_H1_L1",
+        "point_count": len(points),
+        "start": {"x": float(first["x"]), "y": float(first["y"]), "yaw": float(first.get("yaw", 0.0))},
+        "goal": {"x": float(last["x"]), "y": float(last["y"]), "yaw": float(last.get("yaw", 0.0))},
+    }
+
+
+def asset_descriptor(release: ReleaseAdmission, role: str) -> Dict[str, str]:
+    value = release.artifact_bindings.get(role)
+    require(isinstance(value, Mapping), f"release lacks artifact role {role}")
+    path = require_absolute_file(Path(str(value.get("path", ""))), f"release artifact {role}")
+    expected = str(value.get("sha256", ""))
+    require(is_sha256(expected) and sha256_file(path) == expected, f"release artifact {role} hash mismatch")
+    return {"path": str(path), "sha256": expected}
+
+
+def make_seed_bundle(case_id: str, seed: int) -> Dict[str, Any]:
+    require(isinstance(seed, int) and not isinstance(seed, bool), "seed must be an integer")
+    stream_names = (
+        "initial_robot_pose",
+        "initial_liquid_state",
+        "actuator_disturbance",
+        "sensor_noise",
+        "environment_contact_noise",
+        "simulator_rng",
+    )
+    base = f"{PROTOCOL_ID}|{case_id}|{seed}".encode("utf-8")
+    sub_seeds: Dict[str, int] = {}
+    traces: Dict[str, Dict[str, Any]] = {}
+    for name in stream_names:
+        digest = hashlib.sha256(base + b"|" + name.encode("utf-8")).digest()
+        sub_seed = int.from_bytes(digest[:8], "big") & ((1 << 63) - 1)
+        sub_seeds[name] = sub_seed
+        generator = random.Random(sub_seed)
+        samples = [
+            {"time_index_ms": index * 2000, "unit_uniform": round(generator.random(), 12)}
+            for index in range(31)
+        ]
+        trace_core = {"stream": name, "time_indexed": True, "samples": samples}
+        traces[name] = dict(trace_core, trace_hash=canonical_hash(trace_core))
+    core = {
+        "schema_version": "smpcc-sim-only-r1-seed-bundle-v1",
+        "seed_bundle_id": f"SIM-ONLY-R1-{case_id}-seed-{seed}",
+        "protocol_id": PROTOCOL_ID,
+        "case_id": case_id,
+        "base_seed": seed,
+        "independent_sub_seeds": True,
+        "time_indexed_traces": True,
+        "sub_seeds": sub_seeds,
+        "traces": traces,
+    }
+    return dict(core, seed_bundle_hash=canonical_hash(core))
+
+
+def validate_seed_bundle(bundle: Mapping[str, Any], case_id: str) -> None:
+    require(bundle.get("protocol_id") == PROTOCOL_ID and bundle.get("case_id") == case_id, "seed bundle identity mismatch")
+    require(bundle.get("independent_sub_seeds") is True and bundle.get("time_indexed_traces") is True, "seed bundle must use independent time-indexed streams")
+    core = dict(bundle)
+    declared = core.pop("seed_bundle_hash", None)
+    require(is_sha256(declared) and declared == canonical_hash(core), "seed bundle hash mismatch")
+
+
+def canonical_uri(value: str, label: str) -> str:
+    parsed = urlparse(value)
+    require(parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost"}, f"{label} must be a loopback http URI")
+    require(parsed.port is not None and 1024 <= parsed.port <= 65535, f"{label} must contain an unprivileged port")
+    require(not parsed.path or parsed.path == "/", f"{label} cannot contain a path")
+    return f"http://127.0.0.1:{parsed.port}"
+
+
+def endpoint_reachable(uri: str) -> bool:
+    parsed = urlparse(uri)
+    require(parsed.hostname is not None and parsed.port is not None, "invalid endpoint URI")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.25)
+        return probe.connect_ex((parsed.hostname, parsed.port)) == 0
+
+
+def endpoints_reachable(ros_uri: str, gazebo_uri: str) -> Dict[str, bool]:
+    return {"ros": endpoint_reachable(ros_uri), "gazebo": endpoint_reachable(gazebo_uri)}
+
+
+def wait_endpoints_down(ros_uri: str, gazebo_uri: str, timeout_sec: float) -> Dict[str, bool]:
+    deadline = time.monotonic() + timeout_sec
+    state = endpoints_reachable(ros_uri, gazebo_uri)
+    while (state["ros"] or state["gazebo"]) and time.monotonic() < deadline:
+        time.sleep(0.10)
+        state = endpoints_reachable(ros_uri, gazebo_uri)
+    return state
+
+
+@contextlib.contextmanager
+def exclusive_master_lock(root: Path) -> Iterator[None]:
+    """Serialize only SIM-ONLY cases; never take an original-matrix lock."""
+
+    root.mkdir(parents=True, exist_ok=True)
+    lock_path = root / ".sim_only_r1_master.lock"
+    with lock_path.open("a+", encoding="utf-8") as stream:
+        try:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise SimOnlyRunnerError("another SIM-ONLY R1 fresh case owns the master lock") from exc
+        try:
+            stream.seek(0)
+            stream.truncate()
+            stream.write(json.dumps({"runner_id": RUNNER_ID, "pid": os.getpid(), "utc": utc_now()}) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+            yield
+        finally:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+class OwnedChildren:
+    """Tracked child process groups only; intentionally no killall/pkill fallback."""
+
+    def __init__(self) -> None:
+        self._children: Dict[str, subprocess.Popen[Any]] = {}
+
+    def start(self, label: str, command: Sequence[str], environment: Mapping[str, str], *, stdout: Optional[Path] = None) -> subprocess.Popen[Any]:
+        require(label not in self._children, f"owned child label already exists: {label}")
+        output_handle = None
+        if stdout is not None:
+            stdout.parent.mkdir(parents=True, exist_ok=True)
+            output_handle = stdout.open("x", encoding="utf-8")
+        try:
+            child = subprocess.Popen(
+                list(command),
+                env=dict(environment),
+                stdout=output_handle if output_handle is not None else subprocess.DEVNULL,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                text=True,
+            )
+        finally:
+            if output_handle is not None:
+                output_handle.close()
+        self._children[label] = child
+        return child
+
+    @staticmethod
+    def _stop(child: subprocess.Popen[Any], sig: int, timeout_sec: float) -> Dict[str, Any]:
+        item: Dict[str, Any] = {"pid": child.pid, "signal": signal.Signals(sig).name, "already_exited": child.poll() is not None}
+        if child.poll() is not None:
+            item["returncode"] = child.returncode
+            return item
+        try:
+            os.killpg(child.pid, sig)
+        except ProcessLookupError:
+            item["gone_before_signal"] = True
+            return item
+        try:
+            child.wait(timeout=timeout_sec)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+                item["escalated_to"] = "SIGKILL"
+            except ProcessLookupError:
+                pass
+            try:
+                child.wait(timeout=3.0)
+            except subprocess.TimeoutExpired:
+                item["cleanup_error"] = "owned process group still alive after SIGKILL"
+        item["returncode"] = child.poll()
+        return item
+
+    def stop(self, label: str, sig: int = signal.SIGTERM, timeout_sec: float = 8.0) -> Dict[str, Any]:
+        child = self._children.get(label)
+        if child is None:
+            return {"label": label, "not_started": True}
+        return dict({"label": label}, **self._stop(child, sig, timeout_sec))
+
+    def stop_all(self) -> list[Dict[str, Any]]:
+        return [self.stop(label) for label in reversed(tuple(self._children))]
+
+
+def sourced_command(command: Sequence[str]) -> list[str]:
+    """Use the same read-only workspace overlay as the proxy scripts."""
+
+    require(ROS_SETUP.is_file(), f"ROS setup is missing: {ROS_SETUP}")
+    require(SCOUT_SETUP.is_file(), f"Scout setup is missing: {SCOUT_SETUP}")
+    workspace_source = WORKSPACE_ROOT / "src"
+    workspace_devel = WORKSPACE_ROOT / "devel"
+    require(workspace_source.is_dir(), f"Scout source space is missing: {workspace_source}")
+    require(workspace_devel.is_dir(), f"Scout devel space is missing: {workspace_devel}")
+    require((PROXY_WS / "devel").is_dir() and (PROXY_WS / "src").is_dir(), "isolated proxy workspace is unavailable")
+    shell_lines = [
+        "set -euo pipefail",
+        f"source {shlex.quote(str(ROS_SETUP))}",
+        f"source {shlex.quote(str(SCOUT_SETUP))}",
+    ]
+    if CARTOGRAPHER_SETUP.is_file():
+        shell_lines.append(f"source {shlex.quote(str(CARTOGRAPHER_SETUP))}")
+    proxy_devel = PROXY_WS / "devel"
+    proxy_src = PROXY_WS / "src"
+    shell_lines += [
+        f"export CMAKE_PREFIX_PATH={shlex.quote(str(workspace_devel))}:{shlex.quote(str(proxy_devel))}:${{CMAKE_PREFIX_PATH:-}}",
+        # A prior whitelisted catkin build can leave the top-level source
+        # space out of devel/setup.bash's ROS_PACKAGE_PATH.  Put the current
+        # workspace first explicitly so the dedicated R1 launch is resolved
+        # from the release-bound code, never from an arbitrary proxy overlay.
+        f"export ROS_PACKAGE_PATH={shlex.quote(str(workspace_source))}:{shlex.quote(str(proxy_src))}:${{ROS_PACKAGE_PATH:-}}",
+        f"export PATH={shlex.quote(str(workspace_devel / 'bin'))}:{shlex.quote(str(proxy_devel / 'bin'))}:${{PATH}}",
+        f"export LD_LIBRARY_PATH={shlex.quote(str(workspace_devel / 'lib'))}:{shlex.quote(str(proxy_devel / 'lib'))}:${{LD_LIBRARY_PATH:-}}",
+        f"export PYTHONPATH={shlex.quote(str(workspace_devel / 'lib/python3/dist-packages'))}:{shlex.quote(str(proxy_devel / 'lib/python3/dist-packages'))}:${{PYTHONPATH:-}}",
+        "exec " + shlex.join([str(item) for item in command]),
+    ]
+    return ["/bin/bash", "-lc", "; ".join(shell_lines)]
+
+
+def run_checked(command: Sequence[str], environment: Mapping[str, str], timeout_sec: float, label: str) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            list(command),
+            env=dict(environment),
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=timeout_sec,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise SimOnlyRunnerError(f"{label} timed out after {timeout_sec:g}s") from exc
+
+
+def wait_topic(topic: str, environment: Mapping[str, str], timeout_sec: float) -> None:
+    """Wait for one topic message without treating roscore startup as failure.
+
+    The owned environment launches ``roscore`` asynchronously.  A single
+    ``rostopic echo`` made immediately after spawning it can fail with
+    ``Unable to communicate with master`` even though the same owned process
+    becomes healthy moments later.  Retrying is appropriate only during this
+    bounded *pre-motion* readiness phase; a timeout still fails closed and
+    consumes no method assignment.
+    """
+
+    deadline = time.monotonic() + timeout_sec
+    output = ""
+    while time.monotonic() < deadline:
+        remaining = max(0.5, deadline - time.monotonic())
+        try:
+            result = run_checked(
+                sourced_command(("rostopic", "echo", "-n", "1", topic)),
+                environment,
+                min(3.0, remaining),
+                f"topic {topic}",
+            )
+            output = result.stdout
+            if result.returncode == 0:
+                return
+        except SimOnlyRunnerError as exc:
+            # ``rostopic echo`` blocks until its first message.  A bounded
+            # probe expiration is expected while Gazebo/spawn are coming up;
+            # it is still bounded by this pre-motion readiness deadline.
+            output = str(exc)
+        time.sleep(0.2)
+    raise SimOnlyRunnerError(
+        f"required topic did not appear within {timeout_sec:g}s: {topic}: "
+        f"{output[-500:]}"
+    )
+
+
+def wait_node(node: str, environment: Mapping[str, str], timeout_sec: float) -> None:
+    deadline = time.monotonic() + timeout_sec
+    output = ""
+    while time.monotonic() < deadline:
+        try:
+            result = run_checked(sourced_command(("rosnode", "list")), environment, min(3.0, max(0.5, deadline - time.monotonic())), "node list")
+            output = result.stdout
+            if result.returncode == 0 and node in {line.strip() for line in result.stdout.splitlines()}:
+                return
+        except SimOnlyRunnerError as exc:
+            output = str(exc)
+        time.sleep(0.2)
+    raise SimOnlyRunnerError(f"required node did not appear: {node}: {output[-500:]}")
+
+
+def runtime_environment(
+    *, ros_uri: str, gazebo_uri: str, case_dir: Path, path_info: Mapping[str, Any]
+) -> Dict[str, str]:
+    environment = dict(os.environ)
+    environment.update(
+        {
+            "ROS_MASTER_URI": ros_uri,
+            "GAZEBO_MASTER_URI": gazebo_uri,
+            "SCOUT_PROXY_FULL_ROS_MASTER_URI": ros_uri,
+            "SCOUT_PROXY_FULL_GAZEBO_MASTER_URI": gazebo_uri,
+            "MAP_FILE": str(MAP_FILE),
+            "WORLD_NAME": str(WORLD_FILE),
+            "SPAWN_X": str(path_info["start"]["x"]),
+            "SPAWN_Y": str(path_info["start"]["y"]),
+            "SPAWN_Z": "0.0",
+            "SPAWN_YAW": str(path_info["start"]["yaw"]),
+            "START_PROXY": "true",
+            "START_LOCALIZATION": "true",
+            "START_PATH_PUBLISHER": "false",
+            "START_SPMPC": "false",
+            "USE_RVIZ": "false",
+            "GAZEBO_GUI": "false",
+            "TRACKING_RVIZ": "false",
+            "LOCALIZATION_RVIZ": "false",
+            "HEADLESS": "true",
+            "REQUIRE_TRACKING_RVIZ": "false",
+            "ROS_LOG_DIR": str(case_dir / "ros_logs"),
+            "LOG_DIR": str(case_dir / "runtime_logs"),
+        }
+    )
+    return environment
+
+
+def planner_command(container_selector: str) -> list[str]:
+    """Dedicated release gate entry; no weight/observer/delay override exists."""
+
+    return sourced_command(
+        (
+            "roslaunch",
+            "spmpc_sim_local_planner",
+            "smpcc_sim_only_bslosh_r8.launch",
+            "sim_release_ack:=true",
+            f"sim_container_condition:={container_selector}",
+            "reference_path_topic:=/scout/global_path_fixed",
+            "costmap_topic:=/map",
+            "cmd_vel_topic:=/cmd_vel",
+            "publish_cmd_vel:=true",
+        )
+    )
+
+
+def h_proxy_monitor_command(container: Mapping[str, Any]) -> list[str]:
+    """Start the external record-only H_proxy monitor with no cmd input.
+
+    This is a distinct ROS process from the controller. It derives its model
+    response only from executed odometry and publishes `/slosh/height`; the
+    controller has no subscription to that topic.
+    """
+
+    slosh = container.get("slosh")
+    require(isinstance(slosh, Mapping), "H_proxy monitor container slosh contract is missing")
+    return sourced_command(
+        (
+            "roslaunch", "spmpc_sim_local_planner", "smpcc_sim_h_proxy_monitor.launch",
+            "odom_topic:=/odom", "subscribe_cmd_vel_debug:=false", "output_namespace:=/slosh",
+            f"container_radius:={float(slosh['container_radius_m']):.10g}",
+            f"liquid_height:={float(slosh['liquid_height_m']):.10g}",
+            f"liquid_density:={float(slosh['liquid_density_kgpm3']):.10g}",
+            f"mode_index:={int(slosh['mode_index'])}",
+            f"damping_ratio:={float(slosh['damping_ratio']):.10g}",
+            "model_dt:=0.02", "use_linear_model:=true", "use_parabola_term:=false",
+        )
+    )
+
+
+def path_replay_command(path: Path, case_dir: Path, manifest_hash: str) -> list[str]:
+    return sourced_command(
+        (
+            sys.executable,
+            str(SCRIPT_PATH),
+            "path-replay",
+            "--path",
+            str(path),
+            "--case-dir",
+            str(case_dir),
+            "--case-manifest-hash",
+            manifest_hash,
+        )
+    )
+
+
+def event_monitor_command(case_dir: Path, manifest_hash: str) -> list[str]:
+    return sourced_command(
+        (
+            sys.executable,
+            str(SCRIPT_PATH),
+            "event-monitor",
+            "--case-dir",
+            str(case_dir),
+            "--case-manifest-hash",
+            manifest_hash,
+        )
+    )
+
+
+def bag_audit_command(case_dir: Path, bag_path: Path, manifest_hash: str, container_id: str) -> list[str]:
+    return sourced_command(
+        (
+            sys.executable,
+            str(SCRIPT_PATH),
+            "bag-audit",
+            "--case-dir",
+            str(case_dir),
+            "--bag",
+            str(bag_path),
+            "--case-manifest-hash",
+            manifest_hash,
+            "--container-id",
+            container_id,
+        )
+    )
+
+
+def expected_effective_values(container: Mapping[str, Any]) -> Dict[str, float]:
+    slosh = container.get("slosh")
+    require(isinstance(slosh, Mapping), "container slosh values are missing")
+    # Values match the fixed R1 launch/common/platform configuration.  They are
+    # deliberately complete across the runtime Float32 ABI; an added/removed
+    # or mismatched field is a config failure, rather than a best-effort audit.
+    return {
+        "solver_backend_code": 1.0,
+        "control_frequency": 30.0,
+        "dt": 1.0 / 30.0,
+        "horizon_steps": 60.0,
+        "slosh_enable": 1.0,
+        "slosh_constraint_enable": 0.0,
+        "smooth_priority_enable": 0.0,
+        "primitive_mode_code": 1.0,
+        "v_ref": 0.20,
+        "w_slosh": 5.0,
+        "w_control": 0.3,
+        "w_smooth": 1.0,
+        "w_accel": 0.0,
+        "w_alpha": 1.0,
+        "w_du_a": 1.0,
+        "w_du_vs": 1.0,
+        "v_max": 0.8,
+        "omega_max": 1.2,
+        "a_max": 0.6,
+        "alpha_max": 1.2,
+        "shared_linear_accel_limit_enable": 1.0,
+        "shared_linear_accel_max": 0.6,
+        "shared_linear_accel_max_dt": 0.2,
+        "shared_angular_limit_enable": 0.0,
+        "shared_angular_rate_max": 1.2,
+        "shared_angular_accel_max": 1.2,
+        "shared_angular_accel_max_dt": 0.2,
+        "container_radius": float(slosh["container_radius_m"]),
+        "liquid_height": float(slosh["liquid_height_m"]),
+        "damping_ratio": float(slosh["damping_ratio"]),
+        "slosh_height_ref": float(slosh["slosh_height_ref_m"]),
+        "slosh_height_max": float(slosh["slosh_height_max_m"]),
+        "slosh_eta_dot_ratio": float(slosh["slosh_eta_dot_ratio"]),
+        "use_parabola_term": 0.0,
+        "delay_phase_mode_code": 0.0,
+        "delay_linear_sec": 0.15,
+        "delay_angular_sec": 0.22,
+        "delay_cmd_timeout_sec": 0.50,
+        "delay_odom_timeout_sec": 0.50,
+        "delay_history_window_sec": 2.0,
+        "delay_require_complete_history": 0.0,
+    }
+
+
+def case_id_valid(case_id: str) -> bool:
+    return re.fullmatch(r"SIM_ONLY_R1_[A-Za-z0-9][A-Za-z0-9_-]{2,95}", case_id) is not None
+
+
+def make_case_id() -> str:
+    return "SIM_ONLY_R1_" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "_" + os.urandom(3).hex()
+
+
+def index_core(record: Mapping[str, Any]) -> Dict[str, Any]:
+    return {key: value for key, value in record.items() if key != "entry_hash"}
+
+
+def load_index(index_path: Path) -> list[Mapping[str, Any]]:
+    if not index_path.exists():
+        return []
+    records: list[Mapping[str, Any]] = []
+    previous: Optional[str] = None
+    with index_path.open("r", encoding="utf-8") as stream:
+        for number, line in enumerate(stream, start=1):
+            require(line.strip(), f"dataset index has blank line {number}")
+            item = json.loads(line)
+            require(isinstance(item, Mapping), f"dataset index line {number} is not an object")
+            core = index_core(item)
+            require(core.get("previous_entry_hash") == previous, f"dataset index hash chain break at line {number}")
+            require(item.get("entry_hash") == canonical_hash(core), f"dataset index entry hash mismatch at line {number}")
+            require(item.get("protocol_id") == PROTOCOL_ID, f"dataset index line {number} enters another protocol")
+            require("planned_row_id" not in item, "SIM-ONLY index must never carry planned_row_id")
+            records.append(item)
+            previous = str(item["entry_hash"])
+    return records
+
+
+def append_index(index_path: Path, record: Mapping[str, Any]) -> Dict[str, Any]:
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    # The case master lock serializes all ordinary appends.  This second file
+    # lock protects against manual/admin tooling writing while a runner is live.
+    with index_path.open("a+", encoding="utf-8") as stream:
+        fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+        try:
+            stream.seek(0)
+            existing_text = stream.read()
+            previous: Optional[str] = None
+            known_ids: set[str] = set()
+            if existing_text:
+                for number, line in enumerate(existing_text.splitlines(), start=1):
+                    require(line.strip(), f"dataset index has blank line {number}")
+                    item = json.loads(line)
+                    require(isinstance(item, Mapping), f"dataset index line {number} malformed")
+                    core = index_core(item)
+                    require(core.get("previous_entry_hash") == previous, f"dataset index hash chain break at line {number}")
+                    require(item.get("entry_hash") == canonical_hash(core), f"dataset index entry hash mismatch at line {number}")
+                    previous = str(item["entry_hash"])
+                    known_ids.add(str(item.get("attempt_id")))
+            attempt_id = str(record.get("attempt_id", ""))
+            require(attempt_id and attempt_id not in known_ids, "append-only index already contains attempt_id")
+            core = dict(record)
+            core["previous_entry_hash"] = previous
+            entry = dict(core, entry_hash=canonical_hash(core))
+            stream.seek(0, os.SEEK_END)
+            stream.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+            return entry
+        finally:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+def build_retry_authorization(
+    previous_manifest_path: Path, next_attempt_id: str, *, result_root: Path
+) -> Dict[str, Any]:
+    """Authorize replacement only for a pre-motion acquisition failure.
+
+    A method failure/timeout is retained in the index and cannot be covered by
+    a succeeding run.  The caller writes this exact returned object through
+    ``authorize-retry`` and binds its hash in the new attempt manifest.
+    """
+
+    previous_manifest_path = ensure_below(previous_manifest_path, result_root, "previous SIM-ONLY attempt manifest")
+    previous = read_json(previous_manifest_path, "previous SIM-ONLY attempt manifest")
+    require(previous.get("protocol_id") == PROTOCOL_ID, "retry source is another protocol")
+    require(previous.get("method_failure") is False, "method failure cannot be replaced by retry")
+    require(previous.get("motion_started") is False and previous.get("assignment_consumed") is False, "post-motion attempt cannot be replaced by retry")
+    require(previous.get("failure_class") == "INFRASTRUCTURE_ACQUISITION_FAILURE", "only acquisition failure may be retried")
+    require(case_id_valid(next_attempt_id), "next retry attempt_id is malformed")
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "authorization_type": "SIM_ONLY_R1_INFRASTRUCTURE_RETRY_AUTHORIZATION",
+        "protocol_id": PROTOCOL_ID,
+        "formal": False,
+        "formal_simulation_only": True,
+        "physical_primary_eligible": False,
+        "previous_attempt_id": previous.get("attempt_id"),
+        "previous_attempt_manifest": str(previous_manifest_path),
+        "previous_attempt_manifest_hash": sha256_file(previous_manifest_path),
+        "previous_failure_class": previous.get("failure_class"),
+        "motion_started": False,
+        "assignment_consumed": False,
+        "method_failure": False,
+        "next_attempt_id": next_attempt_id,
+        "authorized_utc": utc_now(),
+    }
+    return dict(core, authorization_hash=canonical_hash(core))
+
+
+def validate_retry_authorization(path: Path, attempt_id: str, result_root: Path) -> Mapping[str, Any]:
+    path = ensure_below(path, result_root, "retry authorization")
+    item = read_json(path, "retry authorization")
+    core = dict(item)
+    declared = core.pop("authorization_hash", None)
+    require(is_sha256(declared) and declared == canonical_hash(core), "retry authorization hash mismatch")
+    require(item.get("authorization_type") == "SIM_ONLY_R1_INFRASTRUCTURE_RETRY_AUTHORIZATION", "retry authorization type mismatch")
+    require(item.get("protocol_id") == PROTOCOL_ID and item.get("next_attempt_id") == attempt_id, "retry authorization identity mismatch")
+    require(item.get("method_failure") is False and item.get("motion_started") is False and item.get("assignment_consumed") is False, "retry authorization is not pre-motion infrastructure only")
+    previous_path = ensure_below(Path(str(item.get("previous_attempt_manifest", ""))), result_root, "retry previous manifest")
+    require(previous_path.is_file() and sha256_file(previous_path) == item.get("previous_attempt_manifest_hash"), "retry previous manifest changed")
+    previous = read_json(previous_path, "retry previous manifest")
+    require(previous.get("failure_class") == "INFRASTRUCTURE_ACQUISITION_FAILURE" and previous.get("method_failure") is False, "retry previous attempt no longer qualifies")
+    return item
+
+
+@dataclasses.dataclass(frozen=True)
+class CaseRequest:
+    attempt_id: str
+    seed: int
+    container_selector: str
+    path_selector: str
+    ros_uri: str
+    gazebo_uri: str
+    dry_run: bool
+    dry_run_outcome: str
+    retry_authorization: Optional[Path] = None
+
+
+def default_case_launch_manifest(
+    *, release: ReleaseAdmission, request: CaseRequest, container_id: str, container: Mapping[str, Any], path_info: Mapping[str, Any], seed_bundle: Mapping[str, Any], case_dir: Path, bag_dir: Path
+) -> Dict[str, Any]:
+    artifacts = {
+        "world": asset_descriptor(release, "world"),
+        "map": asset_descriptor(release, "map"),
+        "effective_config": {"path": str(release.effective_config_path), "sha256": release.effective_config_sha256},
+        "planner_launch": asset_descriptor(release, "sim_only_launch"),
+        "isolated_environment_launcher": {
+            "path": str(require_absolute_file(ENV_LAUNCH, "isolated proxy environment launcher")),
+            "sha256": sha256_file(require_absolute_file(ENV_LAUNCH, "isolated proxy environment launcher")),
+        },
+        "runner": {"path": str(SCRIPT_PATH), "sha256": sha256_file(SCRIPT_PATH)},
+        "path_replayer": {"path": str(SCRIPT_PATH), "sha256": sha256_file(SCRIPT_PATH)},
+        "path_json": {"path": str(path_info["path"]), "sha256": str(path_info["sha256"])},
+    }
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": "SIM_ONLY_R1_CASE_LAUNCH_MANIFEST",
+        "runner_id": RUNNER_ID,
+        "protocol_id": PROTOCOL_ID,
+        "original_formal_protocol_id": ORIGINAL_PROTOCOL_ID,
+        "formal": False,
+        "formal_simulation_only": True,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "original_matrix_40_64_88_eligible": False,
+        "planned_row_generated": False,
+        "attempt_id": request.attempt_id,
+        "condition_id": CONDITION_ID,
+        "container_selector": request.container_selector,
+        "container_condition_id": container_id,
+        "container": dict(container),
+        "path": dict(path_info),
+        "profile": {"applicable": False, "status": "NOT_USED_NO_FIXEDPROFILE", "path": None, "sha256": None},
+        "release_manifest_path": str(release.manifest_path),
+        "release_manifest_sha256": release.manifest_sha256,
+        "release_hash": release.release_hash,
+        "artifacts": artifacts,
+        "seed_bundle_path": str(case_dir / "seed_bundle.json"),
+        "seed_bundle_hash": seed_bundle["seed_bundle_hash"],
+        "ros_master_uri": request.ros_uri,
+        "gazebo_master_uri": request.gazebo_uri,
+        "results_case_dir": str(case_dir),
+        "bags_case_dir": str(bag_dir),
+        "liquid_measurements": {
+            "H_proxy": {
+                "topic": H_PROXY_TOPIC,
+                "semantic": "shared_LiquidSloshModel_proxy_not_independent_plant_truth",
+                "physical_primary_eligible": False,
+            },
+            "H_modal": {
+                "topic": H_MODAL_TOPIC,
+                "semantic": "controller_internal_modal_only",
+                "physical_primary_eligible": False,
+            },
+            "H_plant": None,
+            "physical_primary": None,
+            "forbidden_truth_topic_prefix": TRUTH_PREFIX,
+        },
+        "timing": {
+            "settle_sec": SETTLE_SEC,
+            "goal_timeout_sec_from_first_executed_motion": GOAL_TIMEOUT_SEC,
+            "frozen_tail_sec_success": TAIL_SEC,
+            "frozen_tail_sec_timeout": TAIL_SEC,
+            "recorder_before_path_release_required": True,
+        },
+        "recorder_topics": list(RECORDER_TOPICS),
+        "recorder": {
+            "command": "rosbag record",
+            "buffer_mb": RECORDER_BUFFER_MB,
+            "chunk_kb": RECORDER_CHUNK_KB,
+            "artifact_growth_required_before_motion": True,
+            "artifact_growth_required_through_tail": True,
+        },
+        "dry_run": request.dry_run,
+        "created_utc": utc_now(),
+    }
+
+
+def event_path(case_dir: Path) -> Path:
+    return case_dir / "motion_goal_events.json"
+
+
+def read_event_state(case_dir: Path, manifest_hash: str) -> Mapping[str, Any]:
+    path = event_path(case_dir)
+    if not path.is_file():
+        return {}
+    item = read_json(path, "motion/goal event")
+    require(item.get("case_manifest_hash") == manifest_hash, "motion/goal event belongs to another case")
+    return item
+
+
+def publish_zero(environment: Mapping[str, str]) -> bool:
+    command = sourced_command(("rostopic", "pub", "-1", "/cmd_vel", "geometry_msgs/Twist", "{linear: {x: 0.0, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"))
+    try:
+        result = run_checked(command, environment, 5.0, "zero Twist publication")
+    except SimOnlyRunnerError:
+        return False
+    return result.returncode == 0
+
+
+def read_subscriber_graph(ros_uri: str) -> Dict[str, tuple[str, ...]]:
+    """Read only the ROS-master subscription half of the live graph."""
+
+    try:
+        code, _message, state = ServerProxy(ros_uri, allow_none=True).getSystemState(
+            "/sim_only_bslosh_r1_recorder_readiness"
+        )
+        require(code == 1 and isinstance(state, list) and len(state) == 3, "ROS master returned malformed system state")
+        subscriptions = state[1]
+        require(isinstance(subscriptions, list), "ROS master subscriptions are malformed")
+        graph: Dict[str, tuple[str, ...]] = {}
+        for row in subscriptions:
+            require(isinstance(row, list) and len(row) == 2 and isinstance(row[0], str) and isinstance(row[1], list), "ROS master subscription entry is malformed")
+            require(all(isinstance(node, str) and node.startswith("/") for node in row[1]), "ROS master subscriber node is malformed")
+            graph[row[0]] = tuple(sorted(set(row[1])))
+        return graph
+    except SimOnlyRunnerError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise SimOnlyRunnerError(f"cannot read ROS-master subscriber graph: {exc}") from exc
+
+
+def read_publisher_graph(ros_uri: str) -> Dict[str, tuple[str, ...]]:
+    """Read only the ROS-master publisher half of the live graph."""
+
+    try:
+        code, _message, state = ServerProxy(
+            ros_uri, allow_none=True).getSystemState(
+                "/sim_only_bslosh_r1_publisher_readiness")
+        require(code == 1 and isinstance(state, list) and len(state) == 3,
+                "ROS master returned malformed system state")
+        publications = state[0]
+        require(isinstance(publications, list),
+                "ROS master publications are malformed")
+        graph: Dict[str, tuple[str, ...]] = {}
+        for row in publications:
+            require(isinstance(row, list) and len(row) == 2 and
+                    isinstance(row[0], str) and isinstance(row[1], list),
+                    "ROS master publication entry is malformed")
+            require(all(isinstance(node, str) and node.startswith("/")
+                        for node in row[1]),
+                    "ROS master publisher node is malformed")
+            graph[row[0]] = tuple(sorted(set(row[1])))
+        return graph
+    except SimOnlyRunnerError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise SimOnlyRunnerError(
+            f"cannot read ROS-master publisher graph: {exc}") from exc
+
+
+def common_new_recorder_subscribers(
+    before: Mapping[str, Sequence[str]], after: Mapping[str, Sequence[str]]
+) -> list[str]:
+    """Return added nodes subscribing to every frozen recorder topic."""
+
+    additions = [set(after.get(topic, ())) - set(before.get(topic, ())) for topic in RECORDER_TOPICS]
+    return sorted(set.intersection(*additions)) if additions else []
+
+
+def wait_for_recorder_artifact(
+    path: Path,
+    ros_uri: str,
+    before_subscribers: Mapping[str, Sequence[str]],
+    recorder: subprocess.Popen[Any],
+    timeout_sec: float,
+) -> tuple[int, int, str, list[str]]:
+    """Require a new, nonempty recorder artifact before motion release.
+
+    ROS bag's writer can defer both chunk flush and target-file visibility
+    until close. A new case directory prevents stale-file reuse; either a
+    nonempty new artifact or a common newly-added subscriber across every
+    frozen recorder topic proves recorder admission. The closed-bag audit
+    separately verifies the recorded ``/odom`` time span includes the tail.
+    """
+
+    deadline = time.monotonic() + timeout_sec
+    while time.monotonic() < deadline:
+        require(recorder.poll() is None, "recorder exited before creating bag")
+        if path.exists() and path.stat().st_size > 0:
+            size = path.stat().st_size
+            require(recorder.poll() is None, "recorder exited before motion")
+            return size, size, "nonempty_bag_artifact", []
+        try:
+            common = common_new_recorder_subscribers(before_subscribers, read_subscriber_graph(ros_uri))
+        except SimOnlyRunnerError:
+            common = []
+        if common:
+            require(recorder.poll() is None, "recorder exited after subscriber admission")
+            return 0, 0, "ros_master_common_new_subscriber", common
+        time.sleep(0.10)
+    raise SimOnlyRunnerError("recorder did not create a nonempty bag artifact or subscribe to every frozen topic before motion")
+
+
+def immutable_case_dirs(release: ReleaseAdmission, attempt_id: str) -> tuple[Path, Path]:
+    require(case_id_valid(attempt_id), "attempt_id must be SIM_ONLY_R1_<unique-id>; planned rows are not accepted")
+    reject_original_matrix_text(attempt_id, "attempt_id")
+    case_dir = ensure_below(release.results_root / "attempts" / attempt_id, release.results_root, "result case directory")
+    bag_dir = ensure_below(release.bags_root / "attempts" / attempt_id, release.bags_root, "bag case directory")
+    require(not case_dir.exists() and not bag_dir.exists(), "SIM-ONLY attempt output already exists")
+    return case_dir, bag_dir
+
+
+def make_index_record(manifest_path: Path, manifest: Mapping[str, Any]) -> Dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SIM_ONLY_R1_ATTEMPT_INDEX_ENTRY",
+        "protocol_id": PROTOCOL_ID,
+        "formal": False,
+        "formal_simulation_only": True,
+        "physical_primary_eligible": False,
+        "attempt_id": manifest["attempt_id"],
+        "condition_id": manifest["condition_id"],
+        "container_condition_id": manifest["container_condition_id"],
+        "dry_run": manifest["dry_run"],
+        "method_success": manifest["method_success"],
+        "method_failure": manifest["method_failure"],
+        "failure_class": manifest["failure_class"],
+        "motion_started": manifest["motion_started"],
+        "assignment_consumed": manifest["assignment_consumed"],
+        "attempt_manifest": str(manifest_path),
+        "attempt_manifest_hash": sha256_file(manifest_path),
+        "created_utc": utc_now(),
+    }
+
+
+def _virtual_lifecycle(outcome: str) -> tuple[list[Dict[str, Any]], bool, bool, str]:
+    lifecycle: list[Dict[str, Any]] = [
+        {"event": "preflight_endpoints", "utc": utc_now(), "ros_reachable": False, "gazebo_reachable": False, "virtual": True},
+        {"event": "environment_started", "utc": utc_now(), "virtual": True},
+        {"event": "planner_gate_ready", "utc": utc_now(), "virtual": True},
+        {"event": "settle", "utc": utc_now(), "requested_sec": SETTLE_SEC, "elapsed_sec": SETTLE_SEC, "virtual": True},
+        {"event": "recorder_started", "utc": utc_now(), "virtual": True},
+        {"event": "recorder_artifact_ready", "utc": utc_now(), "virtual": True},
+        {"event": "path_replay_released", "utc": utc_now(), "virtual": True},
+        {"event": "first_executed_motion", "utc": utc_now(), "virtual": True},
+    ]
+    if outcome == "success":
+        lifecycle.append({"event": "goal_reached", "utc": utc_now(), "virtual": True})
+        goal_reached, failure = True, "NONE"
+    else:
+        lifecycle.append({"event": "goal_timeout", "utc": utc_now(), "timeout_sec": GOAL_TIMEOUT_SEC, "virtual": True})
+        goal_reached, failure = False, "METHOD_FAILURE"
+    lifecycle += [
+        {"event": "motion_stopped_before_tail", "utc": utc_now(), "virtual": True},
+        {"event": "tail_recorded", "utc": utc_now(), "tail_sec": TAIL_SEC, "virtual": True},
+        {"event": "owned_pid_cleanup", "utc": utc_now(), "children": [], "virtual": True},
+    ]
+    return lifecycle, True, goal_reached, failure
+
+
+def run_case(
+    release: ReleaseAdmission,
+    request: CaseRequest,
+    *,
+    strict_storage: bool = True,
+    endpoint_probe: Callable[[str, str], Mapping[str, bool]] = endpoints_reachable,
+) -> Dict[str, Any]:
+    """Run exactly one independent R1 case, or a clearly-labelled dry-run.
+
+    ``strict_storage=False`` is intentionally internal/test-only; the public
+    CLI always passes canonical release storage roots.  It permits unit tests
+    to exercise immutable manifests and append-only ledger behavior under a
+    temporary directory without ever touching ``/data``.
+    """
+
+    del strict_storage  # admission already establishes this; retained for explicit test call-site intent.
+    # R1 predates the source-separated release identity.  Preserve its
+    # immutable manifests and virtual lifecycle tests, but do not allow a new
+    # live process to be created from this historical path.  R8 is the only
+    # executable source-separated simulation release.
+    require(request.dry_run, "historical SIM-ONLY R1 live execution is quarantined; use a source-separated R8 release")
+    require(request.dry_run_outcome in {"success", "timeout"}, "dry-run outcome must be success or timeout")
+    require(case_id_valid(request.attempt_id), "invalid SIM-ONLY attempt_id")
+    require(request.ros_uri != request.gazebo_uri, "ROS and Gazebo URIs must use different fresh ports")
+    require(request.ros_uri == canonical_uri(request.ros_uri, "ROS master URI"), "ROS URI must be canonical")
+    require(request.gazebo_uri == canonical_uri(request.gazebo_uri, "Gazebo master URI"), "Gazebo URI must be canonical")
+    container_id, container = selected_container(release, request.container_selector)
+    path_info = validate_path_asset(request.path_selector)
+    case_dir, bag_dir = immutable_case_dirs(release, request.attempt_id)
+    index_path = release.results_root / "dataset_index.jsonl"
+    seed_bundle = make_seed_bundle(request.attempt_id, request.seed)
+    validate_seed_bundle(seed_bundle, request.attempt_id)
+    retry: Optional[Mapping[str, Any]] = None
+    if request.retry_authorization is not None:
+        retry = validate_retry_authorization(request.retry_authorization, request.attempt_id, release.results_root)
+
+    children = OwnedChildren()
+    lifecycle: list[Dict[str, Any]] = []
+    runtime_error: Optional[str] = None
+    failure_class = "NONE"
+    motion_started = False
+    assignment_consumed = False
+    goal_reached = False
+    tail_complete = False
+    pre = {"ros": True, "gazebo": True}
+    post = {"ros": True, "gazebo": True}
+    first_motion: Optional[Mapping[str, Any]] = None
+    goal_event: Optional[Mapping[str, Any]] = None
+    bag_active: Optional[Path] = None
+    bag_final: Optional[Path] = None
+    recorder_sizes: Dict[str, Optional[int]] = {"before_motion": None, "before_tail": None}
+    audit_report: Optional[Mapping[str, Any]] = None
+    manifest_path: Optional[Path] = None
+    postflight_path: Optional[Path] = None
+    case_manifest_path: Optional[Path] = None
+    case_manifest_hash: Optional[str] = None
+
+    with exclusive_master_lock(release.results_root):
+        case_dir.mkdir(parents=True, exist_ok=False)
+        bag_dir.mkdir(parents=True, exist_ok=False)
+        write_json_new(case_dir / "seed_bundle.json", seed_bundle)
+        launch_manifest = default_case_launch_manifest(
+            release=release,
+            request=request,
+            container_id=container_id,
+            container=container,
+            path_info=path_info,
+            seed_bundle=seed_bundle,
+            case_dir=case_dir,
+            bag_dir=bag_dir,
+        )
+        case_manifest_path = case_dir / "case_launch_manifest.json"
+        write_json_new(case_manifest_path, launch_manifest)
+        case_manifest_hash = sha256_file(case_manifest_path)
+        environment = runtime_environment(
+            ros_uri=request.ros_uri,
+            gazebo_uri=request.gazebo_uri,
+            case_dir=case_dir,
+            path_info=path_info,
+        )
+        try:
+            pre = dict(endpoint_probe(request.ros_uri, request.gazebo_uri))
+            require(pre == {"ros": False, "gazebo": False}, "fresh case preflight requires ROS/Gazebo reachability=false")
+            lifecycle.append({"event": "preflight_endpoints", "utc": utc_now(), "ros_reachable": False, "gazebo_reachable": False, "virtual": request.dry_run})
+            if request.dry_run:
+                lifecycle, motion_started, goal_reached, failure_class = _virtual_lifecycle(request.dry_run_outcome)
+                assignment_consumed = motion_started
+                tail_complete = True
+                post = {"ros": False, "gazebo": False}
+                audit_report = {
+                    "schema_version": SCHEMA_VERSION,
+                    "record_type": "SIM_ONLY_R1_BAG_AUDIT",
+                    "status": "NOT_LIVE_DRY_RUN",
+                    "formal": False,
+                    "physical_primary_eligible": False,
+                    "liquid_topics": {
+                        H_PROXY_TOPIC: {"semantic": "H_proxy", "count": None},
+                        H_MODAL_TOPIC: {"semantic": "H_modal", "count": None},
+                    },
+                    "physical_primary": None,
+                }
+            else:
+                require_absolute_file(ENV_LAUNCH, "isolated proxy environment launcher")
+                require_absolute_file(WORLD_FILE, "release world")
+                require_absolute_file(MAP_FILE, "release map")
+                children.start("environment", (str(ENV_LAUNCH),), environment, stdout=case_dir / "environment.log")
+                lifecycle.append({"event": "environment_started", "utc": utc_now(), "command_role": "isolated_proxy_environment"})
+                wait_topic("/odom", environment, READINESS_TIMEOUT_SEC)
+                wait_topic("/map", environment, READINESS_TIMEOUT_SEC)
+                # Gazebo itself owns this global value.  The dedicated C++ gate
+                # refuses R1 if it is absent/false; do not set it here.
+                use_sim_time = run_checked(sourced_command(("rosparam", "get", "/use_sim_time")), environment, 10.0, "/use_sim_time")
+                require(use_sim_time.returncode == 0 and use_sim_time.stdout.strip().casefold() == "true", "simulator did not establish /use_sim_time=true")
+                children.start("h_proxy_monitor", h_proxy_monitor_command(container), environment, stdout=case_dir / "h_proxy_monitor.log")
+                wait_topic(H_PROXY_TOPIC, environment, READINESS_TIMEOUT_SEC)
+                children.start("planner", planner_command(request.container_selector), environment, stdout=case_dir / "planner.log")
+                wait_node("/sim_spmpc_local_planner", environment, READINESS_TIMEOUT_SEC)
+                wait_topic("/sim_spmpc/status", environment, READINESS_TIMEOUT_SEC)
+                wait_topic(EFFECTIVE_CONFIG_TOPIC, environment, READINESS_TIMEOUT_SEC)
+                lifecycle.append({"event": "planner_gate_ready", "utc": utc_now(), "planner_variant": CONDITION_ID, "container_condition_id": container_id})
+
+                settle_start = time.monotonic()
+                time.sleep(SETTLE_SEC)
+                lifecycle.append({"event": "settle", "utc": utc_now(), "requested_sec": SETTLE_SEC, "elapsed_sec": round(time.monotonic() - settle_start, 6), "virtual": False})
+
+                bag_base = bag_dir / "capture.active"
+                bag_active = Path(str(bag_base) + ".bag")
+                bag_final = bag_dir / "capture.bag"
+                recorder_log = case_dir / "recorder.log"
+                recorder_subscribers_before = read_subscriber_graph(request.ros_uri)
+                recorder_command = sourced_command(
+                    (
+                        "rosbag",
+                        "record",
+                        f"--buffsize={RECORDER_BUFFER_MB}",
+                        f"--chunksize={RECORDER_CHUNK_KB}",
+                        "-O",
+                        str(bag_base),
+                        *RECORDER_TOPICS,
+                    )
+                )
+                recorder = children.start("recorder", recorder_command, environment, stdout=recorder_log)
+                lifecycle.append({"event": "recorder_started", "utc": utc_now(), "topics": list(RECORDER_TOPICS), "buffer_mb": RECORDER_BUFFER_MB, "chunk_kb": RECORDER_CHUNK_KB})
+                before, growing, readiness_source, recorder_nodes = wait_for_recorder_artifact(bag_active, request.ros_uri, recorder_subscribers_before, recorder, RECORDER_READY_TIMEOUT_SEC)
+                recorder_sizes["before_motion"] = growing
+                lifecycle.append({"event": "recorder_artifact_ready", "utc": utc_now(), "artifact_size_bytes": before, "readiness_source": readiness_source, "recorder_common_subscriber_nodes": recorder_nodes, "on_disk_growth_deferred_to_closed_bag_audit": growing == before})
+
+                children.start("event_monitor", event_monitor_command(case_dir, case_manifest_hash), environment, stdout=case_dir / "event_monitor.log")
+                children.start("path_replay", path_replay_command(Path(str(path_info["path"])), case_dir, case_manifest_hash), environment, stdout=case_dir / "path_replay.log")
+                lifecycle.append({"event": "path_replay_released", "utc": utc_now(), "path_sha256": path_info["sha256"]})
+
+                acquisition_deadline = time.monotonic() + MOTION_ACQUISITION_TIMEOUT_SEC
+                while time.monotonic() < acquisition_deadline:
+                    state = read_event_state(case_dir, case_manifest_hash)
+                    candidate = state.get("first_executed_motion")
+                    if isinstance(candidate, Mapping):
+                        first_motion = candidate
+                        break
+                    time.sleep(0.05)
+                require(first_motion is not None, "no executed base motion observed before acquisition deadline")
+                motion_started = True
+                assignment_consumed = True
+                lifecycle.append({"event": "first_executed_motion", "utc": utc_now(), **dict(first_motion)})
+                motion_deadline = float(first_motion["monotonic_sec"]) + GOAL_TIMEOUT_SEC
+                while time.monotonic() < motion_deadline:
+                    state = read_event_state(case_dir, case_manifest_hash)
+                    candidate = state.get("goal_reached")
+                    if isinstance(candidate, Mapping):
+                        goal_event = candidate
+                        goal_reached = True
+                        lifecycle.append({"event": "goal_reached", "utc": utc_now(), **dict(candidate)})
+                        break
+                    time.sleep(min(0.05, max(0.001, motion_deadline - time.monotonic())))
+                if not goal_reached:
+                    lifecycle.append({"event": "goal_timeout", "utc": utc_now(), "timeout_sec": GOAL_TIMEOUT_SEC, "deadline_monotonic_sec": motion_deadline})
+                    failure_class = "METHOD_FAILURE"
+
+                zero_published = publish_zero(environment)
+                planner_stop = children.stop("planner", signal.SIGTERM, 8.0)
+                path_stop = children.stop("path_replay", signal.SIGTERM, 5.0)
+                lifecycle.append({"event": "motion_stopped_before_tail", "utc": utc_now(), "zero_twist_publish_succeeded": zero_published, "planner": planner_stop, "path_replay": path_stop})
+                require(zero_published, "could not publish zero Twist before frozen tail")
+                require(recorder.poll() is None, "recorder exited before frozen tail")
+                assert bag_active is not None
+                recorder_sizes["before_tail"] = bag_active.stat().st_size if bag_active.exists() else None
+                tail_start = time.monotonic()
+                time.sleep(TAIL_SEC)
+                require(recorder.poll() is None, "recorder exited during frozen tail")
+                tail_complete = True
+                lifecycle.append({"event": "tail_recorded", "utc": utc_now(), "tail_sec": TAIL_SEC, "elapsed_sec": round(time.monotonic() - tail_start, 6), "recorder_live_through_tail": True, "closed_bag_odom_span_verification_required": True})
+                children.stop("recorder", signal.SIGINT, 12.0)
+                require(bag_active.is_file(), "closed recorder bag is missing")
+                os.replace(bag_active, bag_final)
+                lifecycle.append({"event": "recorder_closed", "utc": utc_now(), "bag": str(bag_final), "bag_sha256": sha256_file(bag_final)})
+        except SimOnlyRunnerError as exc:
+            runtime_error = str(exc)
+            if motion_started or assignment_consumed:
+                failure_class = "METHOD_FAILURE"
+            elif (
+                "preflight" in runtime_error
+                or "acquisition" in runtime_error
+                or "readiness" in runtime_error
+                or "required topic did not appear" in runtime_error
+                or ("topic /" in runtime_error and "timed out" in runtime_error)
+                or "no executed base motion" in runtime_error
+                or "recorder did not create" in runtime_error
+                or "recorder exited before creating bag" in runtime_error
+            ):
+                failure_class = "INFRASTRUCTURE_ACQUISITION_FAILURE"
+            else:
+                failure_class = "PROTOCOL_FAILURE"
+            lifecycle.append({"event": "runner_contract_failure", "utc": utc_now(), "error": runtime_error})
+        except Exception as exc:  # noqa: BLE001
+            runtime_error = repr(exc)
+            failure_class = "METHOD_FAILURE" if (motion_started or assignment_consumed) else "PROTOCOL_FAILURE"
+            lifecycle.append({"event": "runner_exception", "utc": utc_now(), "error": runtime_error})
+        finally:
+            # Preserve the frozen tail on *all* post-motion exceptional paths.
+            if not request.dry_run and (motion_started or assignment_consumed) and not tail_complete:
+                try:
+                    if "recorder" in children._children and children._children["recorder"].poll() is None:
+                        publish_zero(environment)
+                        children.stop("planner", signal.SIGTERM, 8.0)
+                        children.stop("path_replay", signal.SIGTERM, 5.0)
+                        if bag_active is not None and bag_active.exists():
+                            recorder_sizes["before_tail"] = bag_active.stat().st_size
+                        tail_start = time.monotonic()
+                        time.sleep(TAIL_SEC)
+                        tail_complete = recorder.poll() is None
+                        lifecycle.append({"event": "tail_recorded", "utc": utc_now(), "tail_sec": TAIL_SEC, "elapsed_sec": round(time.monotonic() - tail_start, 6), "after_failure": True, "complete": tail_complete, "recorder_live_through_tail": tail_complete, "closed_bag_odom_span_verification_required": True})
+                        if not tail_complete:
+                            failure_class = "PROTOCOL_FAILURE"
+                except Exception as exc:  # noqa: BLE001
+                    runtime_error = runtime_error or repr(exc)
+                    failure_class = "PROTOCOL_FAILURE"
+                    lifecycle.append({"event": "tail_failure", "utc": utc_now(), "error": repr(exc)})
+            cleanup = children.stop_all()
+            lifecycle.append({"event": "owned_pid_cleanup", "utc": utc_now(), "children": cleanup, "owned_pid_cleanup_only": True})
+            if any("cleanup_error" in item for item in cleanup):
+                failure_class = "PROTOCOL_FAILURE"
+                runtime_error = runtime_error or "owned PID cleanup incomplete"
+            if not request.dry_run:
+                post = wait_endpoints_down(request.ros_uri, request.gazebo_uri, POSTFLIGHT_ENDPOINT_TIMEOUT_SEC)
+            if post.get("ros") or post.get("gazebo"):
+                failure_class = "PROTOCOL_FAILURE"
+                runtime_error = runtime_error or "postflight ROS/Gazebo endpoint remained reachable"
+
+        # Bag audit happens after every owned ROS process is gone, so it cannot
+        # keep/attach to a master.  A successful motion without a complete
+        # measurement/config audit remains a method failure, not a new retry.
+        if not request.dry_run and bag_final is not None and bag_final.is_file() and case_manifest_hash is not None:
+            audit_output = case_dir / "bag_audit.json"
+            try:
+                result = run_checked(
+                    bag_audit_command(case_dir, bag_final, case_manifest_hash, container_id),
+                    environment,
+                    45.0,
+                    "SIM-ONLY bag audit",
+                )
+                require(result.returncode == 0 and audit_output.is_file(), "bag audit failed: " + result.stdout[-1000:])
+                audit_report = read_json(audit_output, "SIM-ONLY bag audit")
+                require(audit_report.get("status") == "PASS", "bag audit did not pass")
+            except SimOnlyRunnerError as exc:
+                runtime_error = runtime_error or str(exc)
+                if failure_class == "NONE":
+                    failure_class = "METHOD_FAILURE" if motion_started else "PROTOCOL_FAILURE"
+                lifecycle.append({"event": "bag_audit_failed", "utc": utc_now(), "error": str(exc)})
+        elif not request.dry_run:
+            if failure_class == "NONE":
+                runtime_error = "closed bag is unavailable for audit"
+                failure_class = "METHOD_FAILURE" if motion_started else "PROTOCOL_FAILURE"
+
+        if failure_class == "NONE" and not goal_reached:
+            failure_class = "METHOD_FAILURE" if motion_started else "PROTOCOL_FAILURE"
+        method_success = bool(goal_reached and failure_class == "NONE" and tail_complete and not post.get("ros") and not post.get("gazebo") and audit_report is not None and audit_report.get("status") in {"PASS", "NOT_LIVE_DRY_RUN"})
+        method_failure = bool((motion_started or assignment_consumed) and not method_success)
+        retry_allowed = bool(
+            failure_class == "INFRASTRUCTURE_ACQUISITION_FAILURE"
+            and not motion_started
+            and not assignment_consumed
+            and not method_failure
+        )
+        postflight = {
+            "schema_version": SCHEMA_VERSION,
+            "record_type": "SIM_ONLY_R1_POSTFLIGHT",
+            "protocol_id": PROTOCOL_ID,
+            "attempt_id": request.attempt_id,
+            "formal": False,
+            "formal_simulation_only": True,
+            "physical_primary_eligible": False,
+            "status": "PASS" if (not post.get("ros") and not post.get("gazebo") and tail_complete) else "FAIL",
+            "pre_ros_reachable": pre.get("ros"),
+            "pre_gazebo_reachable": pre.get("gazebo"),
+            "post_ros_reachable": post.get("ros"),
+            "post_gazebo_reachable": post.get("gazebo"),
+            "fresh_ros_gazebo": not post.get("ros") and not post.get("gazebo"),
+            "recorder_before_motion": bool(any(item.get("event") == "recorder_started" for item in lifecycle) and motion_started),
+            "tail_recorded": tail_complete,
+            "tail_sec": TAIL_SEC,
+            "owned_pid_cleanup_only": True,
+            "bag_audit_path": str(case_dir / "bag_audit.json") if (case_dir / "bag_audit.json").is_file() else None,
+            "bag_audit_hash": sha256_file(case_dir / "bag_audit.json") if (case_dir / "bag_audit.json").is_file() else None,
+            "created_utc": utc_now(),
+        }
+        postflight_path = case_dir / "postflight.json"
+        write_json_new(postflight_path, postflight)
+        manifest = {
+            "schema_version": SCHEMA_VERSION,
+            "record_type": "SIM_ONLY_R1_ATTEMPT_MANIFEST",
+            "runner_id": RUNNER_ID,
+            "protocol_id": PROTOCOL_ID,
+            "original_formal_protocol_id": ORIGINAL_PROTOCOL_ID,
+            "formal": False,
+            "formal_simulation_only": True,
+            "physical_alignment": False,
+            "physical_primary_eligible": False,
+            "original_matrix_40_64_88_eligible": False,
+            "planned_row_generated": False,
+            "planned_row_id": None,
+            "attempt_id": request.attempt_id,
+            "condition_id": CONDITION_ID,
+            "container_selector": request.container_selector,
+            "container_condition_id": container_id,
+            "case_launch_manifest_path": str(case_manifest_path),
+            "case_launch_manifest_hash": case_manifest_hash,
+            "release_manifest_path": str(release.manifest_path),
+            "release_manifest_sha256": release.manifest_sha256,
+            "release_hash": release.release_hash,
+            "seed_bundle_path": str(case_dir / "seed_bundle.json"),
+            "seed_bundle_hash": seed_bundle["seed_bundle_hash"],
+            "seed_trace_hashes": {name: item["trace_hash"] for name, item in seed_bundle["traces"].items()},
+            "path": path_info,
+            "profile": {"applicable": False, "status": "NOT_USED_NO_FIXEDPROFILE", "path": None, "sha256": None},
+            "world": asset_descriptor(release, "world"),
+            "map": asset_descriptor(release, "map"),
+            "effective_config_contract": {"path": str(release.effective_config_path), "sha256": release.effective_config_sha256},
+            "runtime_config_audit": audit_report,
+            "liquid_measurements": {
+                "H_proxy": {"topic": H_PROXY_TOPIC, "semantic": "shared_LiquidSloshModel_proxy_not_independent_plant_truth", "physical_primary_eligible": False},
+                "H_modal": {"topic": H_MODAL_TOPIC, "semantic": "controller_internal_modal_only", "physical_primary_eligible": False},
+                "H_plant": None,
+                "physical_primary": None,
+            },
+            "bag_active_path": str(bag_active) if bag_active is not None else None,
+            "bag_path": str(bag_final) if bag_final is not None and bag_final.exists() else None,
+            "bag_sha256": sha256_file(bag_final) if bag_final is not None and bag_final.is_file() else None,
+            "pre_ros_reachable": pre.get("ros"),
+            "pre_gazebo_reachable": pre.get("gazebo"),
+            "post_ros_reachable": post.get("ros"),
+            "post_gazebo_reachable": post.get("gazebo"),
+            "fresh_ros_gazebo": not post.get("ros") and not post.get("gazebo"),
+            "settle_sec": SETTLE_SEC,
+            "goal_timeout_sec_from_first_executed_motion": GOAL_TIMEOUT_SEC,
+            "tail_sec": TAIL_SEC,
+            "recorder_before_motion": postflight["recorder_before_motion"],
+            "recorder_sizes": recorder_sizes,
+            "motion_started": motion_started,
+            "assignment_consumed": assignment_consumed,
+            "first_executed_motion": first_motion,
+            "goal_reached": goal_reached,
+            "goal_event": goal_event,
+            "tail_complete": tail_complete,
+            "method_success": method_success,
+            "method_failure": method_failure,
+            "failure_class": failure_class,
+            "retry_authorization_allowed": retry_allowed,
+            "retry_authorization": dict(retry) if retry is not None else None,
+            "postflight_path": str(postflight_path),
+            "postflight_hash": sha256_file(postflight_path),
+            "dry_run": request.dry_run,
+            "runtime_error": runtime_error,
+            "lifecycle": lifecycle,
+            "created_utc": utc_now(),
+        }
+        manifest_path = case_dir / "attempt_manifest.json"
+        write_json_new(manifest_path, manifest)
+        index_entry = append_index(index_path, make_index_record(manifest_path, manifest))
+        return {
+            "status": "PASS" if method_success else "FAIL",
+            "protocol_id": PROTOCOL_ID,
+            "formal": False,
+            "formal_simulation_only": True,
+            "physical_primary_eligible": False,
+            "attempt_id": request.attempt_id,
+            "attempt_manifest": str(manifest_path),
+            "attempt_manifest_hash": sha256_file(manifest_path),
+            "postflight": str(postflight_path),
+            "dataset_index": str(index_path),
+            "dataset_index_head_hash": index_entry["entry_hash"],
+            "method_success": method_success,
+            "method_failure": method_failure,
+            "failure_class": failure_class,
+            "dry_run": request.dry_run,
+        }
+
+
+def command_run(args: argparse.Namespace) -> int:
+    require(args.protocol_id == PROTOCOL_ID, "runner only accepts the isolated SIM-ONLY protocol ID")
+    release = admit_release(Path(args.release_manifest), strict_storage=True)
+    request = CaseRequest(
+        attempt_id=args.attempt_id or make_case_id(),
+        seed=int(args.seed),
+        container_selector=args.container,
+        path_selector=args.path,
+        ros_uri=canonical_uri(args.ros_master_uri, "ROS master URI"),
+        gazebo_uri=canonical_uri(args.gazebo_master_uri, "Gazebo master URI"),
+        dry_run=bool(args.dry_run),
+        dry_run_outcome=args.dry_run_outcome,
+        retry_authorization=Path(args.retry_authorization) if args.retry_authorization else None,
+    )
+    report = run_case(release, request)
+    print(json.dumps(report, ensure_ascii=False, sort_keys=True))
+    return 0 if report["method_success"] or request.dry_run else 2
+
+
+def command_describe(_args: argparse.Namespace) -> int:
+    print(json.dumps({
+        "runner_id": RUNNER_ID,
+        "protocol_id": PROTOCOL_ID,
+        "condition_id": CONDITION_ID,
+        "formal": False,
+        "formal_simulation_only": True,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "original_matrix_40_64_88_eligible": False,
+        "planned_rows_generated": False,
+        "paths": {key: str(value) for key, value in PATH_ASSETS.items()},
+        "liquid_measurements": {"H_proxy": H_PROXY_TOPIC, "H_modal": H_MODAL_TOPIC, "H_plant": None, "physical_primary": None},
+        "timing": {"settle_sec": SETTLE_SEC, "goal_timeout_from_first_executed_motion_sec": GOAL_TIMEOUT_SEC, "tail_sec": TAIL_SEC},
+        "attach_wrapper_used": False,
+    }, ensure_ascii=False, sort_keys=True, indent=2))
+    return 0
+
+
+def command_authorize_retry(args: argparse.Namespace) -> int:
+    release = admit_release(Path(args.release_manifest), strict_storage=True)
+    authorization = build_retry_authorization(
+        Path(args.previous_attempt_manifest), args.next_attempt_id, result_root=release.results_root
+    )
+    output = ensure_below(Path(args.output), release.results_root, "retry authorization output")
+    require(output.parent == release.results_root / "retry_authorizations", "retry authorization must live in SIM-ONLY retry_authorizations root")
+    write_json_new(output, authorization)
+    print(json.dumps({"status": "PASS", "authorization": str(output), "authorization_hash": authorization["authorization_hash"], "formal": False}, ensure_ascii=False, sort_keys=True))
+    return 0
+
+
+def _atomic_overwrite_json(path: Path, value: Mapping[str, Any]) -> None:
+    """For one live monitor state file only; final evidence is immutable."""
+
+    temporary = path.with_name(path.name + ".tmp." + str(os.getpid()))
+    temporary.write_text(json.dumps(value, ensure_ascii=False, sort_keys=True) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def command_path_replay(args: argparse.Namespace) -> int:
+    """ROS child: publish a static JSON P2 path only after runner releases it."""
+
+    path = require_absolute_file(Path(args.path), "JSON replay path")
+    case_dir = Path(args.case_dir).resolve()
+    require(case_dir.is_dir(), "path replay case directory missing")
+    manifest_hash = str(args.case_manifest_hash)
+    require(is_sha256(manifest_hash), "path replay needs case manifest hash")
+    document = read_json(path, "JSON replay path")
+    points = document.get("points")
+    require(isinstance(points, list) and len(points) >= 2, "JSON replay path has too few points")
+    try:
+        import rospy  # type: ignore
+        from geometry_msgs.msg import PoseStamped  # type: ignore
+        from nav_msgs.msg import Path as RosPath  # type: ignore
+    except ImportError as exc:
+        raise SimOnlyRunnerError("path replay must run in sourced ROS environment") from exc
+    rospy.init_node("sim_only_bslosh_r1_path_replay")
+    path_pub = rospy.Publisher("/scout/global_path_fixed", RosPath, queue_size=1, latch=True)
+    goal_pub = rospy.Publisher("/scout/goal", PoseStamped, queue_size=1, latch=True)
+    message = RosPath()
+    message.header.frame_id = "map"
+    goal = PoseStamped()
+    goal.header.frame_id = "map"
+    for index, point in enumerate(points):
+        require(isinstance(point, Mapping), f"path point {index} malformed")
+        pose = PoseStamped()
+        pose.header.frame_id = "map"
+        pose.pose.position.x = float(point["x"])
+        pose.pose.position.y = float(point["y"])
+        yaw = float(point.get("yaw", 0.0))
+        pose.pose.orientation.z = math.sin(yaw / 2.0)
+        pose.pose.orientation.w = math.cos(yaw / 2.0)
+        message.poses.append(pose)
+    final = message.poses[-1]
+    goal.pose = final.pose
+    receipt = {
+        "record_type": "SIM_ONLY_R1_JSON_PATH_REPLAY_RECEIPT",
+        "protocol_id": PROTOCOL_ID,
+        "case_manifest_hash": manifest_hash,
+        "path": str(path),
+        "path_sha256": sha256_file(path),
+        "point_count": len(message.poses),
+        "formal": False,
+        "physical_primary_eligible": False,
+        "started_utc": utc_now(),
+    }
+    receipt_path = case_dir / "path_replay_receipt.json"
+    # A stale file means two path release processes target one case.  Do not
+    # overwrite it, since that would hide a duplicate motion release.
+    write_json_new(receipt_path, receipt)
+    rate = rospy.Rate(10.0)
+    while not rospy.is_shutdown():
+        now = rospy.Time.now()
+        message.header.stamp = now
+        goal.header.stamp = now
+        for pose in message.poses:
+            pose.header.stamp = now
+        path_pub.publish(message)
+        goal_pub.publish(goal)
+        rate.sleep()
+    return 0
+
+
+def command_event_monitor(args: argparse.Namespace) -> int:
+    """ROS child: record first real base motion and exact GOAL_REACHED only."""
+
+    case_dir = Path(args.case_dir).resolve()
+    require(case_dir.is_dir(), "event monitor case directory missing")
+    manifest_hash = str(args.case_manifest_hash)
+    require(is_sha256(manifest_hash), "event monitor needs case manifest hash")
+    try:
+        import rospy  # type: ignore
+        from nav_msgs.msg import Odometry  # type: ignore
+        from std_msgs.msg import String  # type: ignore
+    except ImportError as exc:
+        raise SimOnlyRunnerError("event monitor must run in sourced ROS environment") from exc
+    state: Dict[str, Any] = {
+        "record_type": "SIM_ONLY_R1_MOTION_GOAL_EVENTS",
+        "protocol_id": PROTOCOL_ID,
+        "case_manifest_hash": manifest_hash,
+        "formal": False,
+        "physical_primary_eligible": False,
+        "monitor_started_utc": utc_now(),
+    }
+    baseline: Dict[str, Optional[float]] = {"x": None, "y": None}
+    output = event_path(case_dir)
+    lock = __import__("threading").Lock()
+
+    def write_state() -> None:
+        with lock:
+            _atomic_overwrite_json(output, state)
+
+    def odom_callback(message: Any) -> None:
+        with lock:
+            x = float(message.pose.pose.position.x)
+            y = float(message.pose.pose.position.y)
+            if baseline["x"] is None:
+                baseline["x"], baseline["y"] = x, y
+            if "first_executed_motion" not in state:
+                linear = float(message.twist.twist.linear.x)
+                angular = float(message.twist.twist.angular.z)
+                delta = math.hypot(x - float(baseline["x"]), y - float(baseline["y"]))
+                if abs(linear) >= MOTION_LINEAR_THRESHOLD_MPS or abs(angular) >= MOTION_ANGULAR_THRESHOLD_RADPS or delta >= MOTION_POSITION_DELTA_M:
+                    state["first_executed_motion"] = {
+                        "utc": utc_now(),
+                        "monotonic_sec": time.monotonic(),
+                        "x": x,
+                        "y": y,
+                        "linear_x_mps": linear,
+                        "angular_z_radps": angular,
+                        "position_delta_m": delta,
+                    }
+            payload = dict(state)
+        _atomic_overwrite_json(output, payload)
+
+    def status_callback(message: Any) -> None:
+        if str(message.data).strip() != "GOAL_REACHED":
+            return
+        with lock:
+            if "goal_reached" not in state:
+                state["goal_reached"] = {"utc": utc_now(), "monotonic_sec": time.monotonic(), "controller_status": "GOAL_REACHED"}
+            payload = dict(state)
+        _atomic_overwrite_json(output, payload)
+
+    rospy.init_node("sim_only_bslosh_r1_event_monitor")
+    rospy.Subscriber("/odom", Odometry, odom_callback, queue_size=10)
+    rospy.Subscriber("/sim_spmpc/status", String, status_callback, queue_size=10)
+    write_state()
+    rospy.spin()
+    return 0
+
+
+def _float_diff(expected: Mapping[str, float], observed: Mapping[str, float]) -> Dict[str, Any]:
+    diff: Dict[str, Any] = {}
+    for key in sorted(set(expected) | set(observed)):
+        if key not in expected:
+            diff[key] = {"expected": "<MISSING>", "observed": observed[key]}
+        elif key not in observed:
+            diff[key] = {"expected": expected[key], "observed": "<MISSING>"}
+        elif not math.isclose(float(expected[key]), float(observed[key]), rel_tol=0.0, abs_tol=2e-5):
+            diff[key] = {"expected": expected[key], "observed": observed[key]}
+    return diff
+
+
+def command_bag_audit(args: argparse.Namespace) -> int:
+    """Offline ROS child: audit closed bag config and the only liquid topics."""
+
+    case_dir = Path(args.case_dir).resolve()
+    bag_path = Path(args.bag).resolve()
+    require(case_dir.is_dir() and bag_path.is_file(), "bag audit needs a case-local closed bag")
+    try:
+        bag_path.relative_to((case_dir.parents[3] if len(case_dir.parents) >= 4 else case_dir).resolve())
+    except ValueError:
+        # The actual bag root is deliberately distinct from results root, so
+        # do not assume a common parent.  The runner passes a direct bag path;
+        # this check only prohibits a clearly unrelated filesystem root.
+        require(SIM_ONLY_NAMESPACE in bag_path.parts or "tmp" in bag_path.parts, "bag audit refuses an unrelated bag path")
+    manifest_hash = str(args.case_manifest_hash)
+    require(is_sha256(manifest_hash), "bag audit needs case manifest hash")
+    manifest = read_json(case_dir / "case_launch_manifest.json", "case launch manifest")
+    require(sha256_file(case_dir / "case_launch_manifest.json") == manifest_hash, "bag audit case manifest hash mismatch")
+    require(manifest.get("protocol_id") == PROTOCOL_ID and manifest.get("container_condition_id") == args.container_id, "bag audit manifest identity mismatch")
+    try:
+        import rosbag  # type: ignore
+    except ImportError as exc:
+        raise SimOnlyRunnerError("bag audit must run in sourced ROS environment") from exc
+    release = load_release_module()
+    containers = manifest.get("container")
+    require(isinstance(containers, Mapping), "bag audit lacks container contract")
+    expected = expected_effective_values(containers)
+    counts: Dict[str, int] = {topic: 0 for topic in RECORDER_TOPICS}
+    observed_configs: list[Dict[str, float]] = []
+    forbidden_truth: list[str] = []
+    odom_first_stamp: Optional[float] = None
+    odom_last_stamp: Optional[float] = None
+    try:
+        with rosbag.Bag(str(bag_path), "r") as bag:
+            info = bag.get_type_and_topic_info()
+            for topic in info.topics:
+                if topic.startswith(TRUTH_PREFIX):
+                    forbidden_truth.append(topic)
+            for topic, message, _stamp in bag.read_messages(topics=list(RECORDER_TOPICS)):
+                counts[topic] = counts.get(topic, 0) + 1
+                if topic == "/odom":
+                    header = getattr(message, "header", None)
+                    stamp = getattr(header, "stamp", None)
+                    try:
+                        stamp_sec = float(stamp.to_sec())
+                    except (AttributeError, TypeError, ValueError) as exc:
+                        raise SimOnlyRunnerError("/odom bag message lacks a usable header timestamp") from exc
+                    odom_first_stamp = stamp_sec if odom_first_stamp is None else min(odom_first_stamp, stamp_sec)
+                    odom_last_stamp = stamp_sec if odom_last_stamp is None else max(odom_last_stamp, stamp_sec)
+                if topic != EFFECTIVE_CONFIG_TOPIC:
+                    continue
+                labels = []
+                if getattr(message.layout, "dim", None):
+                    labels = str(message.layout.dim[0].label).split(",")
+                data = list(getattr(message, "data", []))
+                require(tuple(labels) == EFFECTIVE_CONFIG_FIELDS, "effective config field layout drift")
+                require(len(data) == len(EFFECTIVE_CONFIG_FIELDS), "effective config data length drift")
+                observed_configs.append({name: float(data[index]) for index, name in enumerate(EFFECTIVE_CONFIG_FIELDS)})
+    except SimOnlyRunnerError:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        raise SimOnlyRunnerError(f"cannot read closed rosbag: {exc}") from exc
+    require(not forbidden_truth, "SIM-ONLY bag contains forbidden independent-truth topic(s): " + ", ".join(forbidden_truth))
+    for topic in LIQUID_MEASUREMENT_TOPICS:
+        require(counts.get(topic, 0) > 0, f"SIM-ONLY bag lacks required liquid measurement {topic}")
+    require(observed_configs, "SIM-ONLY bag lacks effective config diagnostic")
+    require(odom_first_stamp is not None and odom_last_stamp is not None, "SIM-ONLY bag lacks timestamped /odom")
+    odom_span_sec = odom_last_stamp - odom_first_stamp
+    require(odom_span_sec >= TAIL_SEC, f"closed bag /odom span {odom_span_sec:.3f}s is shorter than required frozen tail {TAIL_SEC:.3f}s")
+    diffs = [_float_diff(expected, item) for item in observed_configs]
+    aggregate = {str(index): diff for index, diff in enumerate(diffs) if diff}
+    report = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SIM_ONLY_R1_BAG_AUDIT",
+        "protocol_id": PROTOCOL_ID,
+        "formal": False,
+        "formal_simulation_only": True,
+        "physical_primary_eligible": False,
+        "case_manifest_hash": manifest_hash,
+        "bag_path": str(bag_path),
+        "bag_sha256": sha256_file(bag_path),
+        "liquid_topics": {
+            H_PROXY_TOPIC: {"semantic": "H_proxy_shared_LiquidSloshModel_not_truth", "count": counts[H_PROXY_TOPIC], "physical_primary_eligible": False},
+            H_MODAL_TOPIC: {"semantic": "H_modal_controller_internal", "count": counts[H_MODAL_TOPIC], "physical_primary_eligible": False},
+        },
+        "physical_primary": None,
+        "forbidden_truth_topics": forbidden_truth,
+        "recorded_topic_counts": counts,
+        "odom_time_span_sec": odom_span_sec,
+        "frozen_tail_odom_span_min_sec": TAIL_SEC,
+        "expected_effective_config": expected,
+        "observed_effective_config": observed_configs[-1],
+        "effective_config_diffs_all_messages": aggregate,
+        "effective_config_message_count": len(observed_configs),
+        "status": "PASS" if not aggregate else "FAIL",
+        "created_utc": utc_now(),
+    }
+    output = case_dir / "bag_audit.json"
+    write_json_new(output, report)
+    print(json.dumps({"status": report["status"], "output": str(output), "diff_count": len(aggregate), "formal": False}, ensure_ascii=False, sort_keys=True))
+    return 0 if report["status"] == "PASS" else 2
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    item = sub.add_parser("describe", help="describe the SIM-ONLY isolation/timing contract")
+    item.set_defaults(func=command_describe)
+    item = sub.add_parser("run", help="run one fresh SIM-ONLY R1 case; never an original planned row")
+    item.add_argument("--protocol-id", required=True, help="must equal SMPCC-SIM-ONLY-BSLOSH-R1-v1")
+    item.add_argument("--release-manifest", type=Path, default=CANONICAL_RELEASE_MANIFEST)
+    item.add_argument("--attempt-id", default=None, help="SIM_ONLY_R1_<unique-id>; generated if omitted")
+    item.add_argument("--seed", type=int, required=True)
+    item.add_argument("--container", choices=("C1", "C2"), required=True)
+    item.add_argument("--path", choices=tuple(PATH_ASSETS), default="SIM_ONLY_P2_HIGH")
+    item.add_argument("--ros-master-uri", default="http://127.0.0.1:11540")
+    item.add_argument("--gazebo-master-uri", default="http://127.0.0.1:11574")
+    item.add_argument("--retry-authorization", default=None)
+    item.add_argument("--dry-run", action="store_true", help="virtual lifecycle only; permanently non-formal/non-primary")
+    item.add_argument("--dry-run-outcome", choices=("success", "timeout"), default="success")
+    item.set_defaults(func=command_run)
+    item = sub.add_parser("authorize-retry", help="authorize only a pre-motion infrastructure retry")
+    item.add_argument("--release-manifest", type=Path, default=CANONICAL_RELEASE_MANIFEST)
+    item.add_argument("--previous-attempt-manifest", type=Path, required=True)
+    item.add_argument("--next-attempt-id", required=True)
+    item.add_argument("--output", type=Path, required=True)
+    item.set_defaults(func=command_authorize_retry)
+    # The following children are only reached through sourced owned subprocesses.
+    item = sub.add_parser("path-replay", help=argparse.SUPPRESS)
+    item.add_argument("--path", required=True)
+    item.add_argument("--case-dir", required=True)
+    item.add_argument("--case-manifest-hash", required=True)
+    item.set_defaults(func=command_path_replay)
+    item = sub.add_parser("event-monitor", help=argparse.SUPPRESS)
+    item.add_argument("--case-dir", required=True)
+    item.add_argument("--case-manifest-hash", required=True)
+    item.set_defaults(func=command_event_monitor)
+    item = sub.add_parser("bag-audit", help=argparse.SUPPRESS)
+    item.add_argument("--case-dir", required=True)
+    item.add_argument("--bag", required=True)
+    item.add_argument("--case-manifest-hash", required=True)
+    item.add_argument("--container-id", required=True)
+    item.set_defaults(func=command_bag_audit)
+    return parser
+
+
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        return int(args.func(args))
+    except SimOnlyRunnerError as exc:
+        print(json.dumps({"status": "FAIL", "runner_id": RUNNER_ID, "formal": False, "physical_primary_eligible": False, "error": str(exc)}, ensure_ascii=False, sort_keys=True), file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main())

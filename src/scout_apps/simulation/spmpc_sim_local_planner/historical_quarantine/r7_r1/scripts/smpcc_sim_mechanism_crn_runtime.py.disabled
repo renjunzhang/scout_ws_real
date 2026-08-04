@@ -1,0 +1,805 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Fail-closed runtime consumer for SIM-MECHANISM block CRN traces.
+
+The module is deliberately ROS/Gazebo independent.  It admits one immutable,
+condition-blind block asset from the five frozen environment bindings, samples
+only by elapsed ROS simulation time, derives the frozen spawn yaw, and builds
+or validates a hash-bound runtime acknowledgement.  It never generates a
+trace, consumes callback-count randomness, or selects by method/condition.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import bisect
+import copy
+import hashlib
+import json
+import math
+import os
+import re
+import stat
+from pathlib import Path
+from typing import Any, Mapping, MutableMapping, Optional, Sequence
+
+
+CONSUMER_ID = "SMPCC-SIM-MECHANISM-CRN-RUNTIME-CONSUMER-v1"
+PROTOCOL_ID = "SMPCC-SIM-MECHANISM-40-64-88-v3"
+RELEASE_ID = "SIM-MECHANISM-40-64-88-R7"
+FORMAL_SCOPE = "SIMULATION_MECHANISM_ONLY"
+TRACE_SCHEMA_VERSION = "smpcc-sim-mechanism-crn-trace-v1"
+TRACE_DOCUMENT_TYPE = "SMPCC_SIM_MECHANISM_BLOCK_CRN_TRACE"
+TIME_DOMAIN = "ROS_SIM_TIME_ELAPSED_FROM_FIRST_EFFECTIVE_MOTION"
+TIME_ORIGIN_EVENT = "FIRST_EFFECTIVE_MOTION"
+TIME_INDEX_FIELD = "time_index_ms"
+INTERPOLATION = "LINEAR_BY_TIME_INDEX_MS"
+TRACE_END_MS = 60000
+TRACE_STEP_MS = 2000
+INITIAL_YAW_MAX_ABS_RAD = 0.02
+INITIAL_YAW_ACK_TOLERANCE_RAD = 1e-6
+RUNTIME_ACK_SCHEMA_VERSION = "smpcc-sim-mechanism-crn-runtime-ack-v1"
+RUNTIME_ACK_DOCUMENT_TYPE = "SMPCC_SIM_MECHANISM_CRN_RUNTIME_ACK"
+
+REQUIRED_ENVIRONMENT = (
+    "SMPCC_CRN_TRACE_ASSET_PATH",
+    "SMPCC_CRN_TRACE_ASSET_SHA256",
+    "SMPCC_CRN_TRACE_ASSET_HASH",
+    "SMPCC_CRN_SEED_BUNDLE_ID",
+    "SMPCC_CRN_SEED_BUNDLE_HASH",
+)
+SEED_STREAMS = (
+    "initial_robot_pose",
+    "initial_liquid_state",
+    "actuator_disturbance",
+    "sensor_noise",
+    "environment_contact_noise",
+    "simulator_rng",
+)
+CONSUMPTION_PHASES = {
+    "initial_robot_pose": "PRE_MOTION_RESET",
+    "initial_liquid_state": "PRE_MOTION_RESET",
+    "actuator_disturbance": "MOTION_SIM_TIME",
+    "sensor_noise": "MOTION_SIM_TIME",
+    "environment_contact_noise": "MOTION_SIM_TIME",
+    "simulator_rng": "ENVIRONMENT_START",
+}
+ALLOWED_STAGES = frozenset((
+    "SIM-S1_CORE",
+    "SIM-S2A_SELECTIVITY",
+    "SIM-S2B_TRANSFER",
+))
+ASSET_FIELDS = frozenset((
+    "schema_version", "document_type", "protocol_id", "release_id",
+    "formal", "formal_scope", "physical_primary_eligible", "stage",
+    "block_id", "seed_bundle_id", "seed_bundle_hash", "condition_id",
+    "method_independent", "same_asset_for_every_condition_in_block",
+    "callback_count_rng_forbidden", "runtime_consumption_required",
+    "runtime_consumer_ack_required", "time_domain", "time_origin_event",
+    "time_index_field", "interpolation", "trace_end_ms",
+    "stream_consumption_phases", "initial_yaw_realization", "sub_seeds",
+    "traces", "stream_trace_hashes", "trace_asset_hash",
+))
+TRACE_FIELDS = frozenset((
+    "stream", "time_indexed", "samples", "trace_hash", "sample_count",
+))
+SAMPLE_FIELDS = frozenset(("time_index_ms", "unit_uniform"))
+INITIAL_YAW_FIELDS = frozenset((
+    "source_stream", "source_time_index_ms", "source_field", "mapping",
+    "max_abs_rad", "initial_yaw_offset_rad", "runtime_target",
+    "consumption_phase", "runtime_ack_required",
+))
+ACK_FIELDS = frozenset((
+    "schema_version", "document_type", "schema_hash", "consumer_id",
+    "protocol_id", "release_id", "formal", "formal_scope",
+    "physical_primary_eligible", "status", "stage", "block_id",
+    "seed_bundle_id", "seed_bundle_hash", "trace_asset_path",
+    "trace_asset_file_sha256", "trace_asset_hash", "stream_trace_hashes",
+    "consumed_streams", "time_domain", "time_origin_event",
+    "time_index_field", "interpolation", "condition_selector_used",
+    "callback_count_rng_used", "frozen_path_initial_yaw_rad",
+    "initial_yaw_offset_rad", "spawn_yaw_rad",
+    "observed_initial_yaw_rad", "initial_yaw_observation_error_rad",
+    "initial_yaw_offset_rad_applied", "applied", "ack_hash",
+))
+ACK_SCHEMA_DESCRIPTOR = {
+    "schema_version": RUNTIME_ACK_SCHEMA_VERSION,
+    "document_type": RUNTIME_ACK_DOCUMENT_TYPE,
+    "required_fields": sorted(ACK_FIELDS),
+    "seed_streams": list(SEED_STREAMS),
+    "time_domain": TIME_DOMAIN,
+    "time_origin_event": TIME_ORIGIN_EVENT,
+    "time_index_field": TIME_INDEX_FIELD,
+    "interpolation": INTERPOLATION,
+}
+SHA256_RE = re.compile(r"[0-9a-f]{64}")
+BLOCK_RE = re.compile(r"b0[1-8]")
+WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+_VALIDATED_RESULT_TOKEN = object()
+
+
+class CRNRuntimeError(RuntimeError):
+    """A fail-closed CRN admission, consumption, or ACK error."""
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise CRNRuntimeError(message)
+
+
+def canonical_json(value: Any) -> str:
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        allow_nan=False,
+    )
+
+
+def canonical_hash(value: Any) -> str:
+    return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+
+
+RUNTIME_ACK_SCHEMA_HASH = canonical_hash(ACK_SCHEMA_DESCRIPTOR)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _strict_pairs(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
+    output: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in output:
+            raise CRNRuntimeError(f"JSON repeats field {key!r}")
+        output[key] = value
+    return output
+
+
+def _read_json(path: Path, label: str) -> Mapping[str, Any]:
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            value = json.load(stream, object_pairs_hook=_strict_pairs)
+    except CRNRuntimeError:
+        raise
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise CRNRuntimeError(f"{label} is not strict JSON: {exc}") from exc
+    require(isinstance(value, Mapping), f"{label} must be a JSON object")
+    return value
+
+
+def _immutable_regular_file(raw_path: str) -> Path:
+    path = Path(raw_path)
+    require(path.is_absolute(), "CRN trace asset path must be absolute")
+    try:
+        resolved = path.resolve(strict=True)
+        status = path.stat()
+    except OSError as exc:
+        raise CRNRuntimeError(f"CRN trace asset is missing: {path}") from exc
+    require(path == resolved,
+            "CRN trace asset path must be canonical and contain no symlink")
+    require(stat.S_ISREG(status.st_mode),
+            "CRN trace asset must be a regular file")
+    require(not stat.S_IMODE(status.st_mode) & WRITE_BITS,
+            "CRN trace asset must be read-only")
+    return resolved
+
+
+def _finite_number(value: Any, label: str) -> float:
+    require(isinstance(value, (int, float)) and not isinstance(value, bool),
+            f"{label} must be numeric")
+    result = float(value)
+    require(math.isfinite(result), f"{label} must be finite")
+    return result
+
+
+def _validate_stage_block(stage: str, block_id: str) -> None:
+    require(stage in ALLOWED_STAGES, f"unsupported CRN stage: {stage!r}")
+    require(BLOCK_RE.fullmatch(block_id) is not None,
+            f"unsupported CRN block_id: {block_id!r}")
+
+
+def _validate_trace(stream: str, value: Any) -> tuple[Mapping[str, Any], str]:
+    require(isinstance(value, Mapping), f"CRN trace {stream} is malformed")
+    trace = value
+    require(set(trace) == TRACE_FIELDS,
+            f"CRN trace {stream} fields are not exact")
+    require(trace.get("stream") == stream,
+            f"CRN trace {stream} identity mismatch")
+    require(trace.get("time_indexed") is True,
+            f"CRN trace {stream} is not sim-time indexed")
+    samples = trace.get("samples")
+    require(isinstance(samples, list) and
+            len(samples) == TRACE_END_MS // TRACE_STEP_MS + 1,
+            f"CRN trace {stream} sample count is invalid")
+    normalized = []
+    for index, sample in enumerate(samples):
+        require(isinstance(sample, Mapping) and set(sample) == SAMPLE_FIELDS,
+                f"CRN trace {stream} sample {index} fields are not exact")
+        expected_time = index * TRACE_STEP_MS
+        require(type(sample.get("time_index_ms")) is int and
+                sample.get("time_index_ms") == expected_time,
+                f"CRN trace {stream} is not indexed by fixed sim time")
+        unit = _finite_number(
+            sample.get("unit_uniform"),
+            f"CRN trace {stream} sample {index} unit_uniform",
+        )
+        require(0.0 <= unit < 1.0,
+                f"CRN trace {stream} sample {index} is outside [0,1)")
+        normalized.append({"time_index_ms": expected_time,
+                           "unit_uniform": unit})
+    require(trace.get("sample_count") == len(samples),
+            f"CRN trace {stream} declared sample_count mismatch")
+    payload = {
+        "stream": stream,
+        "time_indexed": True,
+        "samples": normalized,
+    }
+    expected_hash = canonical_hash(payload)
+    require(trace.get("trace_hash") == expected_hash,
+            f"CRN trace {stream} semantic hash mismatch")
+    return trace, expected_hash
+
+
+def _validate_asset(asset: Mapping[str, Any], expected_stage: str,
+                    expected_block_id: str) -> dict[str, Any]:
+    _validate_stage_block(expected_stage, expected_block_id)
+    require(set(asset) == ASSET_FIELDS, "CRN trace asset fields are not exact")
+    expected_identity = {
+        "schema_version": TRACE_SCHEMA_VERSION,
+        "document_type": TRACE_DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": True,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "stage": expected_stage,
+        "block_id": expected_block_id,
+        "condition_id": None,
+        "method_independent": True,
+        "same_asset_for_every_condition_in_block": True,
+        "callback_count_rng_forbidden": True,
+        "runtime_consumption_required": True,
+        "runtime_consumer_ack_required": True,
+        "time_domain": TIME_DOMAIN,
+        "time_origin_event": TIME_ORIGIN_EVENT,
+        "time_index_field": TIME_INDEX_FIELD,
+        "interpolation": INTERPOLATION,
+        "trace_end_ms": TRACE_END_MS,
+        "stream_consumption_phases": CONSUMPTION_PHASES,
+    }
+    for field, expected in expected_identity.items():
+        require(asset.get(field) == expected,
+                f"CRN trace asset {field} mismatch")
+
+    seed_bundle_id = asset.get("seed_bundle_id")
+    seed_bundle_hash = asset.get("seed_bundle_hash")
+    require(seed_bundle_id == f"SEED_{expected_stage}_{expected_block_id}",
+            "CRN trace asset seed_bundle_id mismatch")
+    require(isinstance(seed_bundle_hash, str) and
+            SHA256_RE.fullmatch(seed_bundle_hash) is not None,
+            "CRN trace asset seed_bundle_hash is invalid")
+
+    sub_seeds = asset.get("sub_seeds")
+    traces = asset.get("traces")
+    stream_hashes = asset.get("stream_trace_hashes")
+    require(isinstance(sub_seeds, Mapping) and set(sub_seeds) == set(SEED_STREAMS),
+            "CRN trace asset sub_seeds are incomplete")
+    require(isinstance(traces, Mapping) and set(traces) == set(SEED_STREAMS),
+            "CRN trace asset streams are incomplete")
+    require(isinstance(stream_hashes, Mapping) and
+            set(stream_hashes) == set(SEED_STREAMS),
+            "CRN trace asset stream_trace_hashes are incomplete")
+    seed_values = []
+    validated_hashes = {}
+    for stream in SEED_STREAMS:
+        seed = sub_seeds.get(stream)
+        require(type(seed) is int and seed >= 0,
+                f"CRN sub-seed {stream} is invalid")
+        seed_values.append(seed)
+        _trace, trace_hash = _validate_trace(stream, traces.get(stream))
+        require(stream_hashes.get(stream) == trace_hash,
+                f"CRN stream hash registry mismatch for {stream}")
+        validated_hashes[stream] = trace_hash
+    require(len(set(seed_values)) == len(seed_values),
+            "CRN sub-seeds must be independent")
+
+    bundle_core = {
+        "stage": expected_stage,
+        "block_id": expected_block_id,
+        "sub_seeds": dict(sub_seeds),
+        "traces": dict(traces),
+        "independent_sub_seeds": True,
+        "time_indexed_traces": True,
+    }
+    require(seed_bundle_hash == canonical_hash(bundle_core),
+            "CRN seed bundle semantic hash mismatch")
+
+    yaw = asset.get("initial_yaw_realization")
+    require(isinstance(yaw, Mapping) and set(yaw) == INITIAL_YAW_FIELDS,
+            "CRN initial yaw realization fields are not exact")
+    expected_yaw_identity = {
+        "source_stream": "initial_robot_pose",
+        "source_time_index_ms": 0,
+        "source_field": "unit_uniform",
+        "mapping": "(2*unit_uniform-1)*max_abs_rad",
+        "max_abs_rad": INITIAL_YAW_MAX_ABS_RAD,
+        "runtime_target":
+            "SPAWN_YAW=frozen_path_initial_yaw+initial_yaw_offset_rad",
+        "consumption_phase": "PRE_MOTION_RESET",
+        "runtime_ack_required": True,
+    }
+    for field, expected in expected_yaw_identity.items():
+        require(yaw.get(field) == expected,
+                f"CRN initial yaw realization {field} mismatch")
+    first_uniform = float(traces["initial_robot_pose"]["samples"][0]["unit_uniform"])
+    expected_offset = round(
+        (2.0 * first_uniform - 1.0) * INITIAL_YAW_MAX_ABS_RAD, 12
+    )
+    offset = _finite_number(
+        yaw.get("initial_yaw_offset_rad"), "CRN initial yaw offset"
+    )
+    require(abs(offset) <= INITIAL_YAW_MAX_ABS_RAD and offset == expected_offset,
+            "CRN initial yaw offset mapping mismatch")
+
+    core = dict(asset)
+    declared_asset_hash = core.pop("trace_asset_hash", None)
+    require(isinstance(declared_asset_hash, str) and
+            SHA256_RE.fullmatch(declared_asset_hash) is not None and
+            declared_asset_hash == canonical_hash(core),
+            "CRN trace asset semantic hash mismatch")
+    return {
+        "asset": dict(asset),
+        "trace_asset_hash": declared_asset_hash,
+        "seed_bundle_id": seed_bundle_id,
+        "seed_bundle_hash": seed_bundle_hash,
+        "stream_trace_hashes": validated_hashes,
+        "initial_yaw_offset_rad": offset,
+    }
+
+
+def _read_and_validate_asset(raw_path: str, expected_stage: str,
+                             expected_block_id: str) -> dict[str, Any]:
+    path = _immutable_regular_file(raw_path)
+    result = _validate_asset(
+        _read_json(path, "CRN trace asset"), expected_stage, expected_block_id
+    )
+    result.update({
+        "path": path,
+        "file_sha256": sha256_file(path),
+    })
+    return result
+
+
+def required_environment(asset_path: Path, expected_stage: str,
+                         expected_block_id: str) -> dict[str, str]:
+    """Return the exact five environment bindings for one admitted asset."""
+
+    result = _read_and_validate_asset(
+        str(asset_path), expected_stage, expected_block_id
+    )
+    return _bindings_from_result(result)
+
+
+def _bindings_from_result(result: Mapping[str, Any]) -> dict[str, str]:
+    return {
+        "SMPCC_CRN_TRACE_ASSET_PATH": str(result["path"]),
+        "SMPCC_CRN_TRACE_ASSET_SHA256": result["file_sha256"],
+        "SMPCC_CRN_TRACE_ASSET_HASH": result["trace_asset_hash"],
+        "SMPCC_CRN_SEED_BUNDLE_ID": result["seed_bundle_id"],
+        "SMPCC_CRN_SEED_BUNDLE_HASH": result["seed_bundle_hash"],
+    }
+
+
+def _reject_namespaced_selectors(environment: Mapping[str, str]) -> None:
+    present = {key for key in environment if key.startswith("SMPCC_CRN_")}
+    expected = set(REQUIRED_ENVIRONMENT)
+    missing = sorted(expected - present)
+    unsupported = sorted(present - expected)
+    require(not missing, "missing CRN runtime environment: " + ", ".join(missing))
+    require(not unsupported,
+            "condition/callback/method CRN selectors are forbidden: " +
+            ", ".join(unsupported))
+
+
+def _exact_bindings(value: Any, label: str) -> dict[str, str]:
+    require(isinstance(value, Mapping) and
+            set(value) == set(REQUIRED_ENVIRONMENT),
+            f"{label} fields are not exact")
+    require(all(isinstance(value.get(name), str) and value.get(name)
+                for name in REQUIRED_ENVIRONMENT),
+            f"{label} values must be non-empty strings")
+    return {name: str(value[name]) for name in REQUIRED_ENVIRONMENT}
+
+
+class CRNTraceConsumer:
+    """One admitted, condition-blind block trace and its consumption ledger."""
+
+    __slots__ = (
+        "_asset", "_asset_path", "_asset_file_sha256",
+        "_trace_asset_hash", "_seed_bundle_id", "_seed_bundle_hash",
+        "_stage", "_block_id", "_stream_trace_hashes",
+        "_initial_yaw_offset_rad", "_consumed",
+    )
+
+    def __init__(self, result: Mapping[str, Any], *,
+                 _factory_token: object = None):
+        require(_factory_token is _VALIDATED_RESULT_TOKEN,
+                "CRNTraceConsumer must be created by validated factory")
+        self._asset = copy.deepcopy(dict(result["asset"]))
+        self._asset_path = Path(result["path"])
+        self._asset_file_sha256 = str(result["file_sha256"])
+        self._trace_asset_hash = str(result["trace_asset_hash"])
+        self._seed_bundle_id = str(result["seed_bundle_id"])
+        self._seed_bundle_hash = str(result["seed_bundle_hash"])
+        self._stage = str(self._asset["stage"])
+        self._block_id = str(self._asset["block_id"])
+        self._stream_trace_hashes = dict(result["stream_trace_hashes"])
+        self._initial_yaw_offset_rad = float(result["initial_yaw_offset_rad"])
+        self._consumed: MutableMapping[str, dict[str, Any]] = {}
+
+    @classmethod
+    def from_environment(
+        cls,
+        environment: Mapping[str, str],
+        expected_stage: str,
+        expected_block_id: str,
+        *,
+        expected_bindings: Mapping[str, str],
+    ) -> "CRNTraceConsumer":
+        _reject_namespaced_selectors(environment)
+        trusted = _exact_bindings(
+            expected_bindings, "trusted frozen CRN bindings"
+        )
+        for name in REQUIRED_ENVIRONMENT:
+            require(environment.get(name) == trusted[name],
+                    f"CRN runtime binding {name} differs from frozen binding")
+        result = _read_and_validate_asset(
+            str(environment["SMPCC_CRN_TRACE_ASSET_PATH"]),
+            expected_stage,
+            expected_block_id,
+        )
+        computed_bindings = _bindings_from_result(result)
+        for name in REQUIRED_ENVIRONMENT:
+            require(trusted[name] == computed_bindings[name],
+                    f"CRN runtime binding {name} mismatch")
+        return cls(result, _factory_token=_VALIDATED_RESULT_TOKEN)
+
+    @property
+    def asset(self) -> Mapping[str, Any]:
+        """Return a defensive copy; admitted trace bytes cannot be mutated."""
+
+        return copy.deepcopy(self._asset)
+
+    @property
+    def asset_path(self) -> Path:
+        return self._asset_path
+
+    @property
+    def asset_file_sha256(self) -> str:
+        return self._asset_file_sha256
+
+    @property
+    def trace_asset_hash(self) -> str:
+        return self._trace_asset_hash
+
+    @property
+    def seed_bundle_id(self) -> str:
+        return self._seed_bundle_id
+
+    @property
+    def seed_bundle_hash(self) -> str:
+        return self._seed_bundle_hash
+
+    @property
+    def stage(self) -> str:
+        return self._stage
+
+    @property
+    def block_id(self) -> str:
+        return self._block_id
+
+    @property
+    def stream_trace_hashes(self) -> Mapping[str, str]:
+        return dict(self._stream_trace_hashes)
+
+    @property
+    def initial_yaw_offset_rad(self) -> float:
+        return self._initial_yaw_offset_rad
+
+    @property
+    def consumed_streams(self) -> Mapping[str, Mapping[str, Any]]:
+        return copy.deepcopy(dict(self._consumed))
+
+    def consume(
+        self,
+        stream: str,
+        *,
+        elapsed_sim_time_sec: float,
+        consumption_phase: str,
+    ) -> dict[str, Any]:
+        require(stream in SEED_STREAMS, f"unknown CRN stream: {stream!r}")
+        expected_phase = CONSUMPTION_PHASES[stream]
+        require(consumption_phase == expected_phase,
+                f"CRN stream {stream} consumption phase mismatch")
+        elapsed = _finite_number(
+            elapsed_sim_time_sec, f"CRN stream {stream} elapsed sim time"
+        )
+        require(0.0 <= elapsed <= TRACE_END_MS / 1000.0,
+                f"CRN stream {stream} sim-time index is outside the trace")
+        if expected_phase != "MOTION_SIM_TIME":
+            require(elapsed == 0.0,
+                    f"CRN stream {stream} must be consumed at sim-time index zero")
+        time_index_ms = elapsed * 1000.0
+        trace = self._asset["traces"][stream]
+        sample_times = [item["time_index_ms"] for item in trace["samples"]]
+        position = bisect.bisect_left(sample_times, time_index_ms)
+        if position < len(sample_times) and sample_times[position] == time_index_ms:
+            value = float(trace["samples"][position]["unit_uniform"])
+        else:
+            require(0 < position < len(sample_times),
+                    f"CRN stream {stream} interpolation bracket is missing")
+            first = trace["samples"][position - 1]
+            second = trace["samples"][position]
+            ratio = ((time_index_ms - first["time_index_ms"]) /
+                     (second["time_index_ms"] - first["time_index_ms"]))
+            value = (float(first["unit_uniform"]) + ratio *
+                     (float(second["unit_uniform"]) -
+                      float(first["unit_uniform"])))
+        entry = self._consumed.setdefault(stream, {
+            "trace_hash": self._stream_trace_hashes[stream],
+            "consumption_phase": expected_phase,
+            "time_indices_ms": [],
+        })
+        if time_index_ms not in entry["time_indices_ms"]:
+            entry["time_indices_ms"].append(time_index_ms)
+            entry["time_indices_ms"].sort()
+        return {
+            "stream": stream,
+            "trace_hash": self._stream_trace_hashes[stream],
+            "consumption_phase": expected_phase,
+            "time_domain": TIME_DOMAIN,
+            "time_origin_event": TIME_ORIGIN_EVENT,
+            "time_index_ms": time_index_ms,
+            "interpolation": INTERPOLATION,
+            "unit_uniform": value,
+        }
+
+    def spawn_yaw(self, frozen_path_initial_yaw_rad: float) -> float:
+        path_yaw = _finite_number(
+            frozen_path_initial_yaw_rad, "frozen path initial yaw"
+        )
+        return path_yaw + self.initial_yaw_offset_rad
+
+    def build_runtime_ack(
+        self,
+        *,
+        frozen_path_initial_yaw_rad: float,
+        observed_initial_yaw_rad: float,
+        initial_yaw_offset_rad_applied: bool,
+        applied: bool,
+        formal: bool,
+    ) -> dict[str, Any]:
+        require(set(self._consumed) == set(SEED_STREAMS),
+                "runtime ACK requires consumption of every frozen CRN stream")
+        require(initial_yaw_offset_rad_applied is True,
+                "runtime ACK requires initial_yaw_offset_rad_applied=true")
+        require(applied is True, "runtime ACK requires applied=true")
+        require(type(formal) is bool, "runtime ACK formal must be boolean")
+        path_yaw = _finite_number(
+            frozen_path_initial_yaw_rad, "frozen path initial yaw"
+        )
+        observed_yaw = _finite_number(
+            observed_initial_yaw_rad, "observed initial yaw"
+        )
+        spawn_yaw = self.spawn_yaw(path_yaw)
+        yaw_error = math.atan2(
+            math.sin(observed_yaw - spawn_yaw),
+            math.cos(observed_yaw - spawn_yaw),
+        )
+        require(abs(yaw_error) <= INITIAL_YAW_ACK_TOLERANCE_RAD,
+                "observed initial yaw does not acknowledge applied CRN offset")
+        consumed = {
+            stream: {
+                "trace_hash": self._consumed[stream]["trace_hash"],
+                "consumption_phase": self._consumed[stream]["consumption_phase"],
+                "time_indices_ms": list(self._consumed[stream]["time_indices_ms"]),
+            }
+            for stream in SEED_STREAMS
+        }
+        core = {
+            "schema_version": RUNTIME_ACK_SCHEMA_VERSION,
+            "document_type": RUNTIME_ACK_DOCUMENT_TYPE,
+            "schema_hash": RUNTIME_ACK_SCHEMA_HASH,
+            "consumer_id": CONSUMER_ID,
+            "protocol_id": PROTOCOL_ID,
+            "release_id": RELEASE_ID,
+            "formal": formal,
+            "formal_scope": FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "status": "PASS",
+            "stage": self.stage,
+            "block_id": self.block_id,
+            "seed_bundle_id": self.seed_bundle_id,
+            "seed_bundle_hash": self.seed_bundle_hash,
+            "trace_asset_path": str(self.asset_path),
+            "trace_asset_file_sha256": self.asset_file_sha256,
+            "trace_asset_hash": self.trace_asset_hash,
+            "stream_trace_hashes": dict(self._stream_trace_hashes),
+            "consumed_streams": consumed,
+            "time_domain": TIME_DOMAIN,
+            "time_origin_event": TIME_ORIGIN_EVENT,
+            "time_index_field": TIME_INDEX_FIELD,
+            "interpolation": INTERPOLATION,
+            "condition_selector_used": False,
+            "callback_count_rng_used": False,
+            "frozen_path_initial_yaw_rad": path_yaw,
+            "initial_yaw_offset_rad": self.initial_yaw_offset_rad,
+            "spawn_yaw_rad": spawn_yaw,
+            "observed_initial_yaw_rad": observed_yaw,
+            "initial_yaw_observation_error_rad": yaw_error,
+            "initial_yaw_offset_rad_applied": True,
+            "applied": True,
+        }
+        return dict(core, ack_hash=canonical_hash(core))
+
+
+def validate_runtime_ack(
+    ack: Any,
+    consumer: CRNTraceConsumer,
+    *,
+    expected_frozen_path_initial_yaw_rad: float,
+    expected_observed_initial_yaw_rad: float,
+    expected_formal: bool,
+) -> dict[str, Any]:
+    require(isinstance(ack, Mapping), "CRN runtime ACK must be an object")
+    require(set(ack) == ACK_FIELDS, "CRN runtime ACK fields are not exact")
+    expected = {
+        "schema_version": RUNTIME_ACK_SCHEMA_VERSION,
+        "document_type": RUNTIME_ACK_DOCUMENT_TYPE,
+        "schema_hash": RUNTIME_ACK_SCHEMA_HASH,
+        "consumer_id": CONSUMER_ID,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "stage": consumer.stage,
+        "block_id": consumer.block_id,
+        "seed_bundle_id": consumer.seed_bundle_id,
+        "seed_bundle_hash": consumer.seed_bundle_hash,
+        "trace_asset_path": str(consumer.asset_path),
+        "trace_asset_file_sha256": consumer.asset_file_sha256,
+        "trace_asset_hash": consumer.trace_asset_hash,
+        "stream_trace_hashes": consumer.stream_trace_hashes,
+        "time_domain": TIME_DOMAIN,
+        "time_origin_event": TIME_ORIGIN_EVENT,
+        "time_index_field": TIME_INDEX_FIELD,
+        "interpolation": INTERPOLATION,
+        "condition_selector_used": False,
+        "callback_count_rng_used": False,
+        "initial_yaw_offset_rad": consumer.initial_yaw_offset_rad,
+        "initial_yaw_offset_rad_applied": True,
+        "applied": True,
+    }
+    for field, value in expected.items():
+        require(ack.get(field) == value,
+                f"CRN runtime ACK {field} mismatch")
+    require(type(ack.get("formal")) is bool,
+            "CRN runtime ACK formal must be boolean")
+    require(type(expected_formal) is bool and ack.get("formal") is expected_formal,
+            "CRN runtime ACK formal scope flag mismatch")
+    path_yaw = _finite_number(
+        ack.get("frozen_path_initial_yaw_rad"),
+        "CRN runtime ACK frozen path yaw",
+    )
+    expected_path_yaw = _finite_number(
+        expected_frozen_path_initial_yaw_rad,
+        "expected frozen path initial yaw",
+    )
+    require(path_yaw == expected_path_yaw,
+            "CRN runtime ACK belongs to another frozen path yaw")
+    expected_spawn = consumer.spawn_yaw(path_yaw)
+    spawn = _finite_number(ack.get("spawn_yaw_rad"),
+                           "CRN runtime ACK spawn yaw")
+    require(spawn == expected_spawn,
+            "CRN runtime ACK SPAWN_YAW formula mismatch")
+    observed = _finite_number(
+        ack.get("observed_initial_yaw_rad"),
+        "CRN runtime ACK observed initial yaw",
+    )
+    yaw_error = math.atan2(
+        math.sin(observed - expected_spawn),
+        math.cos(observed - expected_spawn),
+    )
+    require(abs(yaw_error) <= INITIAL_YAW_ACK_TOLERANCE_RAD and
+            ack.get("initial_yaw_observation_error_rad") == yaw_error,
+            "CRN runtime ACK observed initial yaw mismatch")
+    expected_observed = _finite_number(
+        expected_observed_initial_yaw_rad,
+        "expected observed initial yaw",
+    )
+    require(abs(math.atan2(
+        math.sin(observed - expected_observed),
+        math.cos(observed - expected_observed),
+    )) <= INITIAL_YAW_ACK_TOLERANCE_RAD,
+            "CRN runtime ACK belongs to another observed initial yaw")
+
+    consumed = ack.get("consumed_streams")
+    require(isinstance(consumed, Mapping) and
+            set(consumed) == set(SEED_STREAMS),
+            "CRN runtime ACK consumed_streams are incomplete")
+    actual_consumed = consumer.consumed_streams
+    require(set(actual_consumed) == set(SEED_STREAMS),
+            "CRN consumer actual runtime consumption ledger is incomplete")
+    for stream in SEED_STREAMS:
+        entry = consumed.get(stream)
+        require(isinstance(entry, Mapping) and
+                set(entry) == {"trace_hash", "consumption_phase",
+                               "time_indices_ms"},
+                f"CRN runtime ACK consumed stream {stream} is malformed")
+        require(entry.get("trace_hash") ==
+                consumer.stream_trace_hashes[stream],
+                f"CRN runtime ACK consumed trace hash mismatch for {stream}")
+        require(entry.get("consumption_phase") == CONSUMPTION_PHASES[stream],
+                f"CRN runtime ACK consumption phase mismatch for {stream}")
+        indices = entry.get("time_indices_ms")
+        require(isinstance(indices, list) and indices and
+                all(isinstance(item, (int, float)) and
+                    not isinstance(item, bool) and math.isfinite(float(item)) and
+                    0.0 <= float(item) <= TRACE_END_MS for item in indices) and
+                indices == sorted(set(indices)),
+                f"CRN runtime ACK sim-time indices are invalid for {stream}")
+        if CONSUMPTION_PHASES[stream] != "MOTION_SIM_TIME":
+            require(indices == [0.0] or indices == [0],
+                    f"CRN runtime ACK {stream} was not consumed at reset index")
+        require(dict(entry) == dict(actual_consumed[stream]),
+                f"CRN runtime ACK does not match actual consumption ledger "
+                f"for {stream}")
+    core = dict(ack)
+    declared_hash = core.pop("ack_hash", None)
+    require(isinstance(declared_hash, str) and
+            SHA256_RE.fullmatch(declared_hash) is not None and
+            declared_hash == canonical_hash(core),
+            "CRN runtime ACK hash mismatch")
+    return {
+        "status": "PASS",
+        "ack_hash": declared_hash,
+        "schema_hash": RUNTIME_ACK_SCHEMA_HASH,
+        "trace_asset_hash": consumer.trace_asset_hash,
+        "seed_bundle_hash": consumer.seed_bundle_hash,
+        "stream_trace_hashes": dict(consumer.stream_trace_hashes),
+        "observed_initial_yaw_rad": observed,
+        "initial_yaw_offset_rad_applied": True,
+        "applied": True,
+    }
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    env_parser = subparsers.add_parser(
+        "required-env", help="validate an immutable asset and print five bindings"
+    )
+    env_parser.add_argument("--asset", type=Path, required=True)
+    env_parser.add_argument("--stage", choices=sorted(ALLOWED_STAGES), required=True)
+    env_parser.add_argument("--block", choices=[f"b{i:02d}" for i in range(1, 9)],
+                            required=True)
+
+    args = parser.parse_args(argv)
+    try:
+        output: Any = required_environment(args.asset, args.stage, args.block)
+        print(canonical_json(output))
+        return 0
+    except CRNRuntimeError as exc:
+        print(f"CRN runtime consumer rejected input: {exc}", file=os.sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

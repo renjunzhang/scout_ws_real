@@ -1,0 +1,19 @@
+variants:
+  B_smooth:
+    slosh_enable: false
+    smooth_priority_enable: true
+    slosh_constraint_enable: false
+    primitive_mode: linear
+    w_contour: 1.0
+    w_lag: 0.2
+    w_progress: 0.2
+    w_v: 1.0
+    w_vs: 0.3
+    v_ref: 0.18
+    w_control: 0.3
+    w_accel: 0.0
+    w_smooth: 1.0
+    w_alpha: 1.0
+    w_du_a: 1.0
+    w_du_vs: 1.0
+    w_slosh: 0.0

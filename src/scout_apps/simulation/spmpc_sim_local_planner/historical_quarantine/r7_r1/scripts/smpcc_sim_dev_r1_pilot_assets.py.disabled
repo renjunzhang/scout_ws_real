@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Offline, fail-closed SIM-DEV R1 pilot declarations.
+
+This small tool writes only immutable *declarations*, never experiment data.
+It freezes a matched ``B_smooth`` declaration at ``v_ref=0.20`` beside the
+already selected ``SIM_Bslosh_R1`` vector, then proves that the two methods
+differ only in their intended slosh/smooth semantics.  SmoothMatch and
+FixedProfile remain explicit non-runnable NO-GO entries.
+
+The tool does not import ROS, start Gazebo, generate a profile, or write under
+``/data``.  A declaration is not an effective-config runtime readback and it
+does not authorize a pilot, a formal matrix, planned rows, or randomisation.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import hashlib
+import json
+import os
+import stat
+from pathlib import Path
+from typing import Any, Dict, Iterable, Mapping, Optional
+
+
+SCHEMA_VERSION = "smpcc-sim-dev-r1-pilot-assets-v1"
+DOCUMENT_TYPE = "SMPCC_SIM_DEV_R1_PILOT_DECLARATION_MANIFEST"
+PROTOCOL_ID = "SMPCC-SIM-DEV-R1-PILOT-v1"
+ORIGINAL_FORMAL_PROTOCOL_ID = "SMPCC-SIM-40-64-88-v0.1"
+
+BSLOSH_ID = "SIM_Bslosh_R1"
+BSMOOTH_ID = "SIM_Bsmooth_R1_PILOT"
+SMOOTHMATCH_ID = "SIM_SmoothMatch_R1_UNRESOLVED"
+FIXEDPROFILE_ID = "SIM_FixedProfile_R1_UNRESOLVED"
+
+
+class PilotAssetError(RuntimeError):
+    """An invalid declaration; no runtime admission may be inferred."""
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise PilotAssetError(message)
+
+
+def canonical_hash(value: Any) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _is_sha256(value: Any) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value)
+
+
+def _mapping(value: Any, label: str) -> Mapping[str, Any]:
+    require(isinstance(value, Mapping), f"{label} must be an object")
+    return value
+
+
+def _readonly(path: Path, label: str) -> None:
+    require(path.is_file(), f"{label} is missing: {path}")
+    require(stat.S_IMODE(path.stat().st_mode) & 0o222 == 0, f"{label} must be read-only: {path}")
+
+
+def _write_json_readonly(path: Path, value: Mapping[str, Any]) -> None:
+    require(not path.exists(), f"refusing to overwrite immutable declaration: {path}")
+    try:
+        with path.open("x", encoding="utf-8") as stream:
+            stream.write(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(path, 0o444)
+    except OSError as exc:
+        raise PilotAssetError(f"cannot write declaration {path}: {exc}") from exc
+
+
+def _read_json(path: Path, label: str) -> Mapping[str, Any]:
+    try:
+        return _mapping(json.loads(path.read_text(encoding="utf-8")), label)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise PilotAssetError(f"cannot read {label} {path}: {exc}") from exc
+
+
+def _below(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _output_root(path: Path) -> Path:
+    require(path.is_absolute(), "output root must be absolute")
+    root = path.resolve()
+    require(not _below(root, Path("/data")), "SIM-DEV declaration builder refuses /data output")
+    require(_below(root, Path("/home/a/scout_ws")) or _below(root, Path("/tmp")), "output root must be below workspace or /tmp")
+    require(not root.exists(), f"output root already exists: {root}")
+    return root
+
+
+def _controller_vector(*, slosh_enable: bool, smooth_priority_enable: bool, w_slosh: float) -> Dict[str, Any]:
+    return {
+        "slosh_enable": slosh_enable,
+        "smooth_priority_enable": smooth_priority_enable,
+        "slosh_constraint_enable": False,
+        "primitive_mode": "linear",
+        "w_contour": 1.0,
+        "w_lag": 0.2,
+        "w_progress": 0.2,
+        "w_v": 1.0,
+        "w_vs": 0.3,
+        "v_ref": 0.20,
+        "w_control": 0.3,
+        "w_accel": 0.0,
+        "w_smooth": 1.0,
+        "w_alpha": 1.0,
+        "w_du_a": 1.0,
+        "w_du_vs": 1.0,
+        "w_slosh": w_slosh,
+    }
+
+
+def build_declaration(condition_id: str) -> Dict[str, Any]:
+    """Build one pre-launch declaration; it is deliberately not runnable."""
+
+    require(condition_id in {BSLOSH_ID, BSMOOTH_ID}, "unsupported SIM-DEV pilot condition")
+    is_bslosh = condition_id == BSLOSH_ID
+    core: Dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_DEV_PRELAUNCH_EFFECTIVE_CONFIG_DECLARATION",
+        "protocol_id": PROTOCOL_ID,
+        "condition_id": condition_id,
+        "scope": "SIMULATION_DEVELOPMENT_ONLY",
+        "formal": False,
+        "development_only": True,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "original_matrix_40_64_88_eligible": False,
+        "declaration_kind": "PRELAUNCH_DECLARATION_NOT_RUNTIME_READBACK",
+        "runnable": False,
+        "runtime_planner_variant": BSLOSH_ID if is_bslosh else "B_smooth",
+        "controller": _controller_vector(
+            slosh_enable=is_bslosh,
+            smooth_priority_enable=not is_bslosh,
+            w_slosh=5.0 if is_bslosh else 0.0,
+        ),
+        "observer": {
+            "source": "odom",
+            "imu_shadow_enable": False,
+            "H_proxy_topic": "/slosh/height",
+            "H_proxy_semantic": "shared_LiquidSloshModel_proxy_not_independent_plant_truth",
+            "H_modal_topic": "/sim_spmpc/slosh_height",
+            "H_modal_semantic": "controller_internal_modal_only",
+            "physical_primary_eligible": False,
+        },
+        "delay": {"mode": "off"},
+        "runtime_gap": (
+            "SIM_ONLY_R1_PILOT_RUNNER_AND_READBACK_REQUIRED"
+            if is_bslosh
+            else "NO_LOCKED_SIM_ONLY_BSMOOTH_LAUNCH_OR_READBACK; GENERIC_B_SMOOTH_IS_MUTABLE"
+        ),
+    }
+    return dict(core, declaration_hash=canonical_hash(core))
+
+
+def compare_bsmooth_to_bslosh(bslosh: Any, bsmooth: Any) -> Dict[str, Any]:
+    """Prove the matched declaration has exactly the intended method deltas."""
+
+    bslosh = _mapping(bslosh, "Bslosh declaration")
+    bsmooth = _mapping(bsmooth, "Bsmooth declaration")
+    require(bslosh.get("condition_id") == BSLOSH_ID, "Bslosh declaration identity mismatch")
+    require(bsmooth.get("condition_id") == BSMOOTH_ID, "Bsmooth declaration identity mismatch")
+    left = _mapping(bslosh.get("controller"), "Bslosh controller")
+    right = _mapping(bsmooth.get("controller"), "Bsmooth controller")
+    diff = {
+        field: {BSLOSH_ID: left.get(field), BSMOOTH_ID: right.get(field)}
+        for field in sorted(set(left) | set(right))
+        if left.get(field) != right.get(field)
+    }
+    expected = {
+        "slosh_enable": {BSLOSH_ID: True, BSMOOTH_ID: False},
+        "smooth_priority_enable": {BSLOSH_ID: False, BSMOOTH_ID: True},
+        "w_slosh": {BSLOSH_ID: 5.0, BSMOOTH_ID: 0.0},
+    }
+    require(diff == expected, "Bsmooth declaration must differ from SIM_Bslosh_R1 only in intended method fields: " + json.dumps(diff, sort_keys=True))
+    require(right.get("v_ref") == 0.20, "SIM-DEV Bsmooth declaration must freeze v_ref=0.20")
+    for field in ("observer", "delay"):
+        require(bslosh.get(field) == bsmooth.get(field), f"Bsmooth declaration changes common {field}")
+    return {"status": "PASS", "allowed_method_differences": sorted(expected), "diff": diff}
+
+
+def _descriptor(path: Path) -> Dict[str, str]:
+    _readonly(path, "declaration")
+    return {"path": str(path.resolve()), "sha256": sha256_file(path)}
+
+
+def _unrunnable_condition(condition_id: str, status: str, reason: str) -> Dict[str, Any]:
+    return {
+        "condition_id": condition_id,
+        "status": status,
+        "runnable": False,
+        "reason": reason,
+    }
+
+
+def create_pilot_assets(output_root: Path) -> Dict[str, Any]:
+    """Write immutable declarations and a non-executable matrix manifest."""
+
+    root = _output_root(output_root)
+    bslosh = build_declaration(BSLOSH_ID)
+    bsmooth = build_declaration(BSMOOTH_ID)
+    comparison = compare_bsmooth_to_bslosh(bslosh, bsmooth)
+    root.mkdir(parents=True, exist_ok=False)
+    configs = root / "effective_config_declarations"
+    configs.mkdir()
+    bslosh_path = configs / "SIM_Bslosh_R1.json"
+    bsmooth_path = configs / "SIM_Bsmooth_R1_PILOT.json"
+    _write_json_readonly(bslosh_path, bslosh)
+    _write_json_readonly(bsmooth_path, bsmooth)
+    bslosh_descriptor = _descriptor(bslosh_path)
+    bsmooth_descriptor = _descriptor(bsmooth_path)
+    manifest_core: Dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "scope": "SIMULATION_DEVELOPMENT_ONLY",
+        "formal": False,
+        "development_only": True,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "original_matrix_40_64_88_eligible": False,
+        "matrix_execution_authorized": False,
+        "planned_rows_generated": False,
+        "randomization_generated": False,
+        "formal_dataset_roots": [],
+        "prohibited_claims": [
+            "PHYSICAL_ALIGNMENT",
+            "PHYSICAL_PRIMARY",
+            "ORIGINAL_FORMAL_40_64_88",
+        ],
+        "conditions": {
+            BSLOSH_ID: {
+                "effective_config_declaration": bslosh_descriptor,
+                "runnable": False,
+                "status": "DECLARATION_ONLY_R1_RUNTIME_RUNNER_READBACK_PENDING",
+            },
+            BSMOOTH_ID: {
+                "effective_config_declaration": bsmooth_descriptor,
+                "runnable": False,
+                "status": "DECLARATION_ONLY_NO_LOCKED_SIM_ONLY_BSMOOTH_RUNTIME",
+            },
+            SMOOTHMATCH_ID: _unrunnable_condition(
+                SMOOTHMATCH_ID,
+                "NO_GO_V_REF_UNFROZEN",
+                "SmoothMatch must be derived from later pilot/runtime evidence; no v_ref is guessed.",
+            ),
+            FIXEDPROFILE_ID: _unrunnable_condition(
+                FIXEDPROFILE_ID,
+                "NO_GO_NO_PREGENERATED_PROFILE_AND_HASH_LOCKED_TRACKER",
+                "Do not fake FixedProfile; no read-only profile/tracker runtime admission is present.",
+            ),
+        },
+        "bslosh_bsmooth_comparison": comparison,
+        "isolation": {
+            "original_formal_protocol_id": ORIGINAL_FORMAL_PROTOCOL_ID,
+            "original_planned_rows_or_randomization_created": False,
+            "H_proxy_or_H_modal_physical_primary": False,
+        },
+    }
+    manifest = dict(manifest_core, manifest_hash=canonical_hash(manifest_core))
+    manifest_path = root / "pilot_manifest.json"
+    _write_json_readonly(manifest_path, manifest)
+    report = validate_pilot_manifest(manifest_path)
+    return dict(report, output_root=str(root), pilot_manifest=str(manifest_path), results_or_bags_created=False)
+
+
+def validate_pilot_manifest(path: Path) -> Dict[str, Any]:
+    path = path.resolve()
+    _readonly(path, "pilot manifest")
+    manifest = _read_json(path, "pilot manifest")
+    expected_keys = {
+        "schema_version", "document_type", "protocol_id", "scope", "formal", "development_only", "physical_alignment",
+        "physical_primary_eligible", "original_matrix_40_64_88_eligible", "matrix_execution_authorized",
+        "planned_rows_generated", "randomization_generated", "formal_dataset_roots", "conditions",
+        "prohibited_claims", "bslosh_bsmooth_comparison", "isolation", "manifest_hash",
+    }
+    require(set(manifest) == expected_keys, "pilot manifest has unexpected/missing formal-matrix fields")
+    require(manifest.get("schema_version") == SCHEMA_VERSION and manifest.get("document_type") == DOCUMENT_TYPE, "pilot manifest schema mismatch")
+    require(manifest.get("protocol_id") == PROTOCOL_ID, "pilot manifest protocol mismatch")
+    require(manifest.get("scope") == "SIMULATION_DEVELOPMENT_ONLY", "pilot manifest scope mismatch")
+    for field in ("formal", "physical_alignment", "physical_primary_eligible", "original_matrix_40_64_88_eligible", "matrix_execution_authorized", "planned_rows_generated", "randomization_generated"):
+        require(manifest.get(field) is False, f"pilot manifest {field} must be false")
+    require(manifest.get("development_only") is True and manifest.get("formal_dataset_roots") == [], "pilot manifest must remain development-only without formal data roots")
+    require(
+        manifest.get("prohibited_claims") == ["PHYSICAL_ALIGNMENT", "PHYSICAL_PRIMARY", "ORIGINAL_FORMAL_40_64_88"],
+        "pilot manifest prohibited physical/formal claims drift",
+    )
+    conditions = _mapping(manifest.get("conditions"), "pilot conditions")
+    require(set(conditions) == {BSLOSH_ID, BSMOOTH_ID, SMOOTHMATCH_ID, FIXEDPROFILE_ID}, "pilot condition set mismatch")
+    declarations: Dict[str, Mapping[str, Any]] = {}
+    for condition in (BSLOSH_ID, BSMOOTH_ID):
+        entry = _mapping(conditions.get(condition), condition)
+        descriptor = _mapping(entry.get("effective_config_declaration"), f"{condition} declaration descriptor")
+        declaration_path = Path(str(descriptor.get("path", "")))
+        require(_is_sha256(descriptor.get("sha256")) and declaration_path.is_file(), f"{condition} declaration descriptor malformed")
+        _readonly(declaration_path, f"{condition} declaration")
+        require(sha256_file(declaration_path) == descriptor["sha256"], f"{condition} declaration hash mismatch")
+        declaration = _read_json(declaration_path, f"{condition} declaration")
+        require(declaration == build_declaration(condition), f"{condition} declaration content drift")
+        declarations[condition] = declaration
+        require(entry.get("runnable") is False, f"{condition} cannot be runtime-admitted by declaration")
+    comparison = compare_bsmooth_to_bslosh(declarations[BSLOSH_ID], declarations[BSMOOTH_ID])
+    require(manifest.get("bslosh_bsmooth_comparison") == comparison, "Bsmooth comparison receipt drift")
+    for condition in (SMOOTHMATCH_ID, FIXEDPROFILE_ID):
+        entry = _mapping(conditions.get(condition), condition)
+        require(entry.get("runnable") is False and str(entry.get("status", "")).startswith("NO_GO_"), f"{condition} must stay explicit NO-GO/non-runnable")
+    isolation = _mapping(manifest.get("isolation"), "isolation")
+    require(isolation.get("original_formal_protocol_id") == ORIGINAL_FORMAL_PROTOCOL_ID, "original formal protocol isolation mismatch")
+    require(isolation.get("original_planned_rows_or_randomization_created") is False, "pilot asset builder must not create formal rows/randomisation")
+    require(isolation.get("H_proxy_or_H_modal_physical_primary") is False, "H_proxy/H_modal must not enter physical-primary fields")
+    core = dict(manifest)
+    declared_hash = core.pop("manifest_hash", None)
+    require(_is_sha256(declared_hash) and declared_hash == canonical_hash(core), "pilot manifest hash mismatch")
+    return {
+        "status": "PASS_DECLARATIONS_ONLY_NOT_RUNNABLE",
+        "protocol_id": PROTOCOL_ID,
+        "matrix_execution_authorized": False,
+        "original_matrix_40_64_88_eligible": False,
+        "smoothmatch_runnable": False,
+        "fixedprofile_runnable": False,
+    }
+
+
+def _emit(value: Any) -> None:
+    print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+def command_create(args: argparse.Namespace) -> int:
+    try:
+        _emit(create_pilot_assets(Path(args.output_root)))
+    except PilotAssetError as exc:
+        _emit({"status": "NO_GO", "error": str(exc), "matrix_execution_authorized": False})
+        return 2
+    return 0
+
+
+def command_validate(args: argparse.Namespace) -> int:
+    try:
+        _emit(validate_pilot_manifest(Path(args.pilot_manifest)))
+    except PilotAssetError as exc:
+        _emit({"status": "NO_GO", "error": str(exc), "matrix_execution_authorized": False})
+        return 2
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="offline SIM-DEV R1 pilot declaration builder; no ROS/Gazebo/data output")
+    commands = parser.add_subparsers(dest="command", required=True)
+    create = commands.add_parser("create", help="create read-only non-runnable declarations")
+    create.add_argument("--output-root", type=Path, required=True)
+    create.set_defaults(func=command_create)
+    validate = commands.add_parser("validate", help="validate a declaration-only pilot manifest")
+    validate.add_argument("--pilot-manifest", type=Path, required=True)
+    validate.set_defaults(func=command_validate)
+    return parser
+
+
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    arguments = build_parser().parse_args(list(argv) if argv is not None else None)
+    return int(arguments.func(arguments))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

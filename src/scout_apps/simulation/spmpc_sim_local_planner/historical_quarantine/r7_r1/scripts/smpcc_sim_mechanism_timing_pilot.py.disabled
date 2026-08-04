@@ -1,0 +1,1550 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Fresh, non-primary timing pilot for SIM-MECHANISM SmoothMatch.
+
+This program may run exactly the two calibration conditions (``Bslosh`` and
+``SmoothMatch``) from a read-only mechanism-freeze *candidate*.  It is not a
+planned-row runner and cannot write the 40/64/88 ledger.  Its sole product is
+a hash-bound timing-calibration report that the separate mechanism freeze gate
+can consume.  It uses fresh loopback ROS/Gazebo masters, a 30 s settle, a
+60 s post-motion timeout, recorder-before-motion and a 5 s tail; all child
+process cleanup is process-group scoped.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import contextlib
+import errno
+import fcntl
+import hashlib
+import importlib.util
+import json
+import math
+import os
+import signal
+import stat
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, Iterator, Mapping, Optional, Sequence
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+SIM_ROOT = Path("/data/a/scout_sim_replacement")
+PROTOCOL_ID = "SMPCC-SIM-MECHANISM-40-64-88-v3"
+RELEASE_ID = "SIM-MECHANISM-40-64-88-R7"
+SCHEMA_VERSION = "smpcc-sim-mechanism-time-match-pilot-v3"
+RUNNER_ID = "SMPCC-SIM-MECHANISM-TIME-MATCH-PILOT-v3"
+CAMPAIGN_ROOT = SIM_ROOT / "SMPCC-SIM-MECHANISM-40-64-88-R7"
+FREEZE_ROOT = CAMPAIGN_ROOT / "freeze" / RELEASE_ID
+CANONICAL_CANDIDATE = FREEZE_ROOT / "mechanism_freeze_candidate.json"
+CANONICAL_CALIBRATION = FREEZE_ROOT / "smoothmatch_calibration.json"
+CANONICAL_RESULT_ROOT = FREEZE_ROOT / "timing_pilot" / "results"
+CANONICAL_BAG_ROOT = CAMPAIGN_ROOT / "timing_pilot" / "bags"
+TIMING_LOCK = FREEZE_ROOT / "timing_pilot" / "timing_pilot.lock"
+H_PROXY = "/slosh/height"
+H_MODAL = "/sim_spmpc/slosh_height"
+REQUIRED_TOPICS = ("/odom", "/map", "/sim_spmpc/status", "/sim_spmpc/debug/effective_config")
+DEFERRED_RECORDER_MESSAGE_TOPICS = (
+    "/sim_spmpc/terminal/debug", "/sim_spmpc/terminal/mode", H_MODAL,
+)
+WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+TAIL_SEC = 5.0
+TAIL_WALL_WATCHDOG_SEC = 30.0
+TAIL_HELPER_OUTER_TIMEOUT_SEC = TAIL_WALL_WATCHDOG_SEC + 5.0
+
+
+class PilotError(RuntimeError):
+    pass
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise PilotError(message)
+
+
+def load(name: str):
+    path = SCRIPT_DIR / name
+    spec = importlib.util.spec_from_file_location(path.stem + "_mechanism_pilot", path)
+    if spec is None or spec.loader is None:
+        raise PilotError(f"cannot load helper {path}")
+    module = importlib.util.module_from_spec(spec)
+    # dataclasses in the shared fresh-runner need their defining module to be
+    # registered while class decorators execute.
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+freeze_tool = load("smpcc_sim_mechanism_freeze.py")
+sim_only = load("smpcc_sim_only_bslosh_r1_runner.py")
+endpoint_gate = load("smpcc_sim_mechanism_endpoint_gate.py")
+runtime_qc = load("smpcc_sim_mechanism_runtime_qc.py")
+TIMING_CALIBRATION_SEED = int(freeze_tool.TIMING_CALIBRATION_SEED)
+TIMING_ATTEMPT_IDS = dict(freeze_tool.TIMING_ATTEMPT_IDS)
+
+
+def sha256_file(path: Path) -> str:
+    return str(sim_only.sha256_file(path))
+
+
+def canonical_hash(value: Any) -> str:
+    return str(sim_only.canonical_hash(value))
+
+
+def read_json(path: Path, label: str) -> Mapping[str, Any]:
+    return sim_only.read_json(path, label)
+
+
+def write_json_new(path: Path, value: Mapping[str, Any]) -> None:
+    sim_only.write_json_new(path, value)
+
+
+def utc_now() -> str:
+    return str(sim_only.utc_now())
+
+
+def _readonly(path: Path, label: str) -> None:
+    require(path.is_absolute() and path.is_file(), f"{label} is missing: {path}")
+    require(os.path.abspath(str(path)) == os.path.realpath(str(path)),
+            f"{label} may not resolve through a symlink")
+    require(stat.S_IMODE(path.stat().st_mode) & WRITE_BITS == 0, f"{label} must be read-only")
+
+
+def _lexical_absolute(path: Path) -> Path:
+    return Path(os.path.abspath(os.fspath(path)))
+
+
+def _reject_symlink_chain(path: Path, label: str) -> Path:
+    path = _lexical_absolute(path)
+    for component in (path, *path.parents):
+        if component.is_symlink():
+            raise PilotError(f"{label} may not contain a symlink: {component}")
+    return path
+
+
+def _valid_attempt_id(attempt_id: str) -> None:
+    require(attempt_id.startswith("SIM_MECH_R7_TIMEMATCH_") and
+            all(char.isalnum() or char in "_-" for char in attempt_id),
+            "attempt ID must use the isolated SIM_MECH_R7_TIMEMATCH namespace")
+    require("R1" not in attempt_id and "R2" not in attempt_id,
+            "R1/R2 timing attempt namespaces are excluded")
+
+
+@contextlib.contextmanager
+def _timing_lock(attempt_id: str) -> Iterator[Path]:
+    """Serialize timing pilots and authenticate their internal ROS helpers."""
+
+    _valid_attempt_id(attempt_id)
+    lock_path = _reject_symlink_chain(TIMING_LOCK, "R7 timing-pilot lock")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    _reject_symlink_chain(lock_path.parent, "R7 timing-pilot lock parent")
+    flags = os.O_RDWR | os.O_CREAT
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor = os.open(lock_path, flags, 0o600)
+    stream = os.fdopen(descriptor, "r+", encoding="utf-8")
+    try:
+        try:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            if exc.errno in (errno.EACCES, errno.EAGAIN):
+                raise PilotError("another R7 timing pilot holds the canonical lock") from exc
+            raise
+        stream.seek(0)
+        stream.truncate()
+        stream.write(json.dumps({
+            "runner_id": RUNNER_ID,
+            "pid": os.getpid(),
+            "attempt_id": attempt_id,
+            "utc": utc_now(),
+        }, sort_keys=True) + "\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+        yield lock_path
+    finally:
+        try:
+            fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+        finally:
+            stream.close()
+
+
+def candidate_freeze(path: Path, *, enforce_canonical_root: bool = True) -> Mapping[str, Any]:
+    path = path.absolute()
+    if enforce_canonical_root:
+        require(path == CANONICAL_CANDIDATE,
+                f"production timing pilot requires exact R7 candidate {CANONICAL_CANDIDATE}")
+    _readonly(path, "mechanism freeze candidate")
+    freeze = read_json(path, "mechanism freeze candidate")
+    report = freeze_tool.validate_freeze(freeze)
+    allowed = list(freeze_tool.CANDIDATE_MISSING_REQUIREMENTS)
+    require(
+        report.get("status") == "FAIL" and report.get("errors") == allowed,
+        "candidate has a defect beyond the exact pre-finalization "
+        "requirements: " + "; ".join(report.get("errors", [])),
+    )
+    require(freeze.get("protocol_id") == PROTOCOL_ID and
+            freeze.get("release_id") == RELEASE_ID and
+            freeze.get("formal_scope") == "SIMULATION_MECHANISM_ONLY" and
+            freeze.get("physical_alignment") is False and
+            freeze.get("physical_primary_eligible") is False,
+            "candidate identity/primary boundary mismatch")
+    return freeze
+
+
+def _descriptor_path(item: Any, label: str) -> Path:
+    require(isinstance(item, Mapping), f"{label} descriptor is malformed")
+    path = Path(str(item.get("path", ""))).resolve()
+    _readonly(path, label)
+    require(item.get("sha256") == sha256_file(path), f"{label} hash mismatch")
+    return path
+
+
+def _case_paths(freeze: Mapping[str, Any], condition: str) -> tuple[Path, Mapping[str, Any], Mapping[str, Any]]:
+    require(condition in {"Bslosh", "SmoothMatch"}, "timing pilot only permits Bslosh or SmoothMatch")
+    path = _descriptor_path(freeze["paths"]["H1"]["sim_path"], "H1 simulation path")
+    config = read_json(_descriptor_path(freeze["effective_configs"][condition], f"{condition} effective config"), f"{condition} effective config")
+    container = read_json(_descriptor_path(freeze["containers"]["C1"], "C1 container"), "C1 container")
+    require(config.get("condition_id") == condition and config.get("protocol_id") == PROTOCOL_ID, "condition config identity mismatch")
+    return path, config, container
+
+
+def _pilot_roots(freeze_path: Path, *, enforce_canonical_root: bool = True) -> tuple[Path, Path]:
+    if enforce_canonical_root:
+        require(freeze_path.absolute() == CANONICAL_CANDIDATE,
+                "timing roots require the exact R7 candidate")
+        return CANONICAL_RESULT_ROOT, CANONICAL_BAG_ROOT
+    return (freeze_path.absolute().parent / "timing_pilot" / "results",
+            freeze_path.absolute().parent / "timing_pilot" / "bags")
+
+
+def _canonical_case_paths(freeze_path: Path, condition_name: str,
+                          attempt_id: str) -> tuple[Path, Path, Path, Path]:
+    require(TIMING_ATTEMPT_IDS.get(condition_name) == attempt_id,
+            f"{condition_name} timing attempt ID must equal the frozen R7 ID")
+    results_root, bags_root = _pilot_roots(freeze_path)
+    require(results_root == CANONICAL_RESULT_ROOT and
+            bags_root == CANONICAL_BAG_ROOT,
+            "timing output roots are not the exact R7 roots")
+    case_dir = results_root / "attempts" / attempt_id
+    bag_dir = bags_root / attempt_id
+    for path, label in (
+            (results_root, "R7 timing result root"),
+            (bags_root, "R7 timing bag root")):
+        _reject_symlink_chain(path, label)
+        if os.path.lexists(path):
+            require(path.is_dir() and not path.is_symlink(),
+                    f"{label} is not an ordinary directory: {path}")
+    for path, label in (
+            (case_dir, "R7 timing case directory"),
+            (bag_dir, "R7 timing bag directory")):
+        _reject_symlink_chain(path, label)
+        require(not os.path.lexists(path),
+                f"{label} already exists: {path}")
+    return results_root, bags_root, case_dir, bag_dir
+
+
+def _planner_command(condition: Mapping[str, Any]) -> list[str]:
+    return sim_only.sourced_command((
+        "roslaunch", "spmpc_sim_local_planner", "smpcc_sim_mechanism_r8.launch",
+        "sim_release_ack:=true",
+        f"sim_controller_variant:={condition['planner_variant']}",
+        "sim_container_condition:=C1",
+        "reference_path_topic:=/scout/global_path_fixed",
+        "costmap_topic:=/map", "cmd_vel_topic:=/cmd_vel", "publish_cmd_vel:=true",
+    ))
+
+
+def _hproxy_command(container: Mapping[str, Any]) -> list[str]:
+    values = container.get("parameters")
+    require(isinstance(values, Mapping), "C1 parameters are missing")
+    return sim_only.sourced_command((
+        "roslaunch", "spmpc_sim_local_planner", "smpcc_sim_h_proxy_monitor.launch", "odom_topic:=/odom",
+        "subscribe_cmd_vel_debug:=false", "output_namespace:=/slosh",
+        f"container_radius:={float(values['container_radius']):.10g}",
+        f"liquid_height:={float(values['liquid_height']):.10g}",
+        f"liquid_density:={float(values['liquid_density']):.10g}",
+        f"mode_index:={int(values['mode_index'])}", f"damping_ratio:={float(values['damping_ratio']):.10g}",
+        "model_dt:=0.02", "use_linear_model:=true", "use_parabola_term:=false",
+    ))
+
+
+def _child_command(command: str, *args: str) -> list[str]:
+    return sim_only.sourced_command((sys.executable, str(Path(__file__).resolve()), command, *args))
+
+
+def _event_path(case_dir: Path) -> Path:
+    return case_dir / "motion_goal_events.live.json"
+
+
+def _tail_clock_path(case_dir: Path) -> Path:
+    return case_dir / "tail_clock_qc.json"
+
+
+def _raw_stop_path(case_dir: Path) -> Path:
+    return case_dir / "raw_process_stops.json"
+
+
+def _mutate_and_save_event_state(
+        output: Path, state: Dict[str, Any], state_lock: threading.RLock,
+        mutation: Optional[Callable[[], None]] = None) -> None:
+    """Serialize a callback mutation and its atomic JSON snapshot.
+
+    Both rospy callbacks use this exact helper.  The re-entrant lock is needed
+    because endpoint-gate state is shared by the odometry and status callback
+    threads, while the PID-scoped temporary pathname is shared by every save.
+    """
+
+    with state_lock:
+        if mutation is not None:
+            mutation()
+        temporary = output.with_name(
+            output.name + ".tmp." + str(os.getpid()))
+        temporary.write_text(
+            json.dumps(state, sort_keys=True, allow_nan=False) + "\n",
+            encoding="utf-8")
+        os.replace(temporary, output)
+
+
+def _build_clock_tail_receipt(
+        *, attempt_id: str, case_manifest_hash: str,
+        start_ros_time_sec: float, end_ros_time_sec: float,
+        wall_elapsed_sec: float,
+        required_tail_sec: float = TAIL_SEC,
+        wall_watchdog_sec: float = TAIL_WALL_WATCHDOG_SEC) -> Dict[str, Any]:
+    values = (
+        start_ros_time_sec, end_ros_time_sec, wall_elapsed_sec,
+        required_tail_sec, wall_watchdog_sec,
+    )
+    require(all(isinstance(value, (int, float)) and
+                not isinstance(value, bool) and math.isfinite(float(value))
+                for value in values),
+            "ROS clock tail receipt contains a non-finite numeric value")
+    start = float(start_ros_time_sec)
+    end = float(end_ros_time_sec)
+    wall_elapsed = float(wall_elapsed_sec)
+    required_tail = float(required_tail_sec)
+    wall_watchdog = float(wall_watchdog_sec)
+    require(required_tail >= TAIL_SEC,
+            f"ROS clock tail cannot be shorter than {TAIL_SEC:g}s")
+    require(wall_watchdog > required_tail and wall_elapsed >= 0.0 and
+            wall_elapsed <= wall_watchdog,
+            "ROS clock tail wall watchdog evidence is invalid")
+    require(end >= start,
+            "ROS /clock moved backwards during the frozen tail")
+    observed = end - start
+    require(observed >= required_tail,
+            f"ROS /clock tail {observed:.9f}s is shorter than "
+            f"{required_tail:.9f}s")
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_ROS_CLOCK_TAIL_QC",
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": False,
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "attempt_id": attempt_id,
+        "case_manifest_hash": case_manifest_hash,
+        "start_ros_time_sec": start,
+        "end_ros_time_sec": end,
+        "observed_tail_sec": observed,
+        "required_tail_sec": required_tail,
+        "wall_elapsed_sec": wall_elapsed,
+        "wall_watchdog_sec": wall_watchdog,
+    }
+    return dict(core, tail_clock_qc_hash=canonical_hash(core))
+
+
+def _validate_clock_tail_receipt(
+        receipt: Mapping[str, Any], *, attempt_id: str,
+        case_manifest_hash: str) -> Mapping[str, Any]:
+    require(isinstance(receipt, Mapping), "ROS clock tail receipt is malformed")
+    rebuilt = _build_clock_tail_receipt(
+        attempt_id=attempt_id,
+        case_manifest_hash=case_manifest_hash,
+        start_ros_time_sec=receipt.get("start_ros_time_sec"),
+        end_ros_time_sec=receipt.get("end_ros_time_sec"),
+        wall_elapsed_sec=receipt.get("wall_elapsed_sec"),
+        required_tail_sec=receipt.get("required_tail_sec"),
+        wall_watchdog_sec=receipt.get("wall_watchdog_sec"),
+    )
+    require(dict(receipt) == rebuilt,
+            "ROS clock tail receipt has noncanonical fields or semantics")
+    require(receipt.get("attempt_id") == attempt_id and
+            receipt.get("case_manifest_hash") == case_manifest_hash,
+            "ROS clock tail receipt belongs to another timing case")
+    return receipt
+
+
+def _recorder_active_artifact_paths(bag_dir: Path) -> tuple[Path, ...]:
+    """Enumerate every recorder-active name in this isolated attempt dir."""
+
+    names = {
+        "capture.active",
+        "capture.active.active",
+        "capture.active.bag",
+        "capture.active.bag.active",
+    }
+    if bag_dir.is_dir():
+        names.update(name for name in os.listdir(bag_dir)
+                     if name.startswith("capture.active"))
+    return tuple(bag_dir / name for name in sorted(names))
+
+
+def _require_active_artifacts_absent(paths: Sequence[Path]) -> None:
+    residual = [str(path) for path in paths if os.path.lexists(path)]
+    require(not residual,
+            "recorder active artifact remains after close: " +
+            ", ".join(residual))
+
+
+def _timing_initial_yaw_offset(seed: int) -> float:
+    """Map the common timing seed to one callback-order-independent yaw."""
+
+    return float(freeze_tool.timing_initial_yaw_offset(seed))
+
+
+def _read_event(path: Path, case_hash: str) -> Mapping[str, Any]:
+    require(path.is_file(), "event monitor has not written a state file")
+    value = read_json(path, "timing event state")
+    require(value.get("case_manifest_hash") == case_hash and value.get("protocol_id") == PROTOCOL_ID, "event monitor binding mismatch")
+    return value
+
+
+def _classify_runtime_error(error: str, motion_started: bool) -> str:
+    # A method failure is established only by the explicit 60 s terminal
+    # branch.  Exception text after executed motion can never fabricate or
+    # overwrite that primary outcome.
+    if motion_started:
+        return "PROTOCOL_FAILURE_AFTER_MOTION"
+    text = error.casefold()
+    infrastructure_tokens = (
+        "timing event state", "recorder", "required topic", "unreachable",
+        "communicate with master", "closed bag", "json",
+    )
+    if any(token in text for token in infrastructure_tokens):
+        return "INFRASTRUCTURE_ACQUISITION"
+    return "PROTOCOL_FAILURE"
+
+
+def _wait_for_publisher_registrations(
+        ros_uri: str, topics: Sequence[str], timeout_sec: float = 10.0
+        ) -> Dict[str, tuple[str, ...]]:
+    """Admit deferred diagnostics before any reference/motion is released."""
+
+    expected = tuple(DEFERRED_RECORDER_MESSAGE_TOPICS)
+    require(tuple(topics) == expected,
+            "deferred publisher admission topics differ from frozen policy")
+    deadline = time.monotonic() + float(timeout_sec)
+    latest: Dict[str, tuple[str, ...]] = {}
+    while time.monotonic() < deadline:
+        latest = sim_only.read_publisher_graph(ros_uri)
+        if all(latest.get(topic) for topic in expected):
+            return {topic: tuple(latest[topic]) for topic in expected}
+        time.sleep(0.05)
+    missing = [topic for topic in expected if not latest.get(topic)]
+    raise PilotError(
+        "required deferred diagnostic publishers are absent before motion: " +
+        ", ".join(missing))
+
+
+def _wait_for_ros_clock_tail(
+        children: Any, environment: Mapping[str, str], case_dir: Path,
+        case_manifest_hash: str, lifecycle: list[Dict[str, Any]]) -> Mapping[str, Any]:
+    """Wait for a real 5 s simulation-time tail with a finite wall watchdog."""
+
+    receipt_path = _tail_clock_path(case_dir)
+    require(not os.path.lexists(receipt_path),
+            "ROS clock tail receipt already exists")
+    child = children.start(
+        "tail_clock_wait",
+        _child_command(
+            "__internal-clock-tail", "--case-dir", str(case_dir),
+            "--case-manifest-hash", case_manifest_hash,
+            "--tail-sec", str(TAIL_SEC),
+            "--wall-watchdog-sec", str(TAIL_WALL_WATCHDOG_SEC)),
+        environment, stdout=case_dir / "tail_clock_wait.log")
+    try:
+        returncode = child.wait(timeout=TAIL_HELPER_OUTER_TIMEOUT_SEC)
+    except subprocess.TimeoutExpired as exc:
+        stop = children.stop("tail_clock_wait", signal.SIGTERM, 3.0)
+        raise PilotError(
+            "ROS /clock tail helper exceeded its outer wall watchdog: " +
+            json.dumps(stop, sort_keys=True)) from exc
+    require(returncode == 0,
+            f"ROS /clock tail helper exited with returncode {returncode}")
+    _readonly(receipt_path, "ROS clock tail receipt")
+    receipt = read_json(receipt_path, "ROS clock tail receipt")
+    _validate_clock_tail_receipt(
+        receipt, attempt_id=case_dir.name,
+        case_manifest_hash=case_manifest_hash)
+    lifecycle.append({
+        "event": "tail_ros_clock_interval_complete",
+        "utc": utc_now(),
+        "sec": receipt["observed_tail_sec"],
+        "tail_clock_qc_hash": receipt["tail_clock_qc_hash"],
+    })
+    return receipt
+
+
+def _build_terminal_runtime_qc_report(
+        *, attempt_id: str, case_manifest_hash: str,
+        stop_bundle: Mapping[str, Any], bag_qc: Mapping[str, Any],
+        classification: Mapping[str, Any],
+        completion_qc: Optional[Mapping[str, Any]],
+        timeout_qc: Optional[Mapping[str, Any]]) -> Mapping[str, Any]:
+    """Select exactly one timing receipt from the preserved method outcome."""
+
+    primary = classification.get("primary_method_outcome")
+    if primary == "METHOD_SUCCESS":
+        require(completion_qc is not None and timeout_qc is None,
+                "successful timing case lacks its completion receipt")
+        timing_arguments = {"completion_qc": completion_qc}
+    elif primary == "METHOD_FAILURE":
+        require(timeout_qc is not None and completion_qc is None,
+                "timed-out timing case lacks its timeout receipt")
+        timing_arguments = {"timeout_qc": timeout_qc}
+    else:
+        raise PilotError("runtime QC report requires a terminal method outcome")
+    return runtime_qc.build_runtime_qc_report(
+        protocol_id=PROTOCOL_ID, release_id=RELEASE_ID,
+        attempt_id=attempt_id, case_manifest_hash=case_manifest_hash,
+        formal=False, stop_bundle=stop_bundle, bag_qc=bag_qc,
+        outcome_classification=classification, **timing_arguments)
+
+
+def _persist_raw_stop_evidence(
+        case_dir: Path, case_manifest_hash: str,
+        results: Mapping[str, Mapping[str, Any]]) -> Mapping[str, Any]:
+    """Write once the raw PID-scoped stops used by the QC bundle."""
+
+    evidence = runtime_qc.build_owned_stop_evidence(
+        results, motion_component="planner",
+        protocol_id=PROTOCOL_ID, release_id=RELEASE_ID,
+        attempt_id=case_dir.name, case_manifest_hash=case_manifest_hash,
+        formal=False)
+    output = _raw_stop_path(case_dir)
+    if output.exists():
+        _readonly(output, "raw process stop evidence")
+        require(read_json(output, "raw process stop evidence") == evidence,
+                "existing raw process stop evidence differs")
+    else:
+        write_json_new(output, evidence)
+    return evidence
+
+
+def run_case(freeze_path: Path, condition_name: str, attempt_id: str,
+             seed: int, ros_uri: str, gazebo_uri: str) -> Dict[str, Any]:
+    """Run one calibration case while holding the internal-helper lock."""
+
+    _valid_attempt_id(attempt_id)
+    require(condition_name in {"Bslosh", "SmoothMatch"},
+            "timing pilot only permits Bslosh or SmoothMatch")
+    require(isinstance(seed, int) and not isinstance(seed, bool) and
+            seed == TIMING_CALIBRATION_SEED,
+            f"timing calibration seed must equal frozen R7 CRN seed "
+            f"{TIMING_CALIBRATION_SEED}")
+    require(sim_only.canonical_uri(ros_uri, "ROS master URI") == ros_uri,
+            "ROS URI must be canonical loopback")
+    require(sim_only.canonical_uri(
+        gazebo_uri, "Gazebo master URI") == gazebo_uri,
+        "Gazebo URI must be canonical loopback")
+    require(ros_uri != gazebo_uri,
+            "ROS and Gazebo masters must use distinct ports")
+    candidate_freeze(freeze_path)
+    _canonical_case_paths(freeze_path, condition_name, attempt_id)
+    with _timing_lock(attempt_id):
+        return _run_case_locked(
+            freeze_path, condition_name, attempt_id, seed, ros_uri, gazebo_uri)
+
+
+def _run_case_locked(freeze_path: Path, condition_name: str, attempt_id: str,
+                     seed: int, ros_uri: str,
+                     gazebo_uri: str) -> Dict[str, Any]:
+    freeze = candidate_freeze(freeze_path)
+    require(isinstance(seed, int) and not isinstance(seed, bool) and
+            seed == TIMING_CALIBRATION_SEED,
+            f"timing calibration seed must equal frozen R7 CRN seed "
+            f"{TIMING_CALIBRATION_SEED}")
+    _valid_attempt_id(attempt_id)
+    path, condition, container = _case_paths(freeze, condition_name)
+    results_root, bags_root, case_dir, bag_dir = _canonical_case_paths(
+        freeze_path, condition_name, attempt_id)
+    require(sim_only.canonical_uri(ros_uri, "ROS master URI") == ros_uri, "ROS URI must be canonical loopback")
+    require(sim_only.canonical_uri(gazebo_uri, "Gazebo master URI") == gazebo_uri, "Gazebo URI must be canonical loopback")
+    require(ros_uri != gazebo_uri, "ROS and Gazebo masters must use distinct ports")
+    path_doc = read_json(path, "H1 simulation path")
+    first = path_doc["points"][0]
+    yaw_offset = _timing_initial_yaw_offset(seed)
+    expected_spawn_yaw = float(first["yaw"]) + yaw_offset
+    path_info = {"start": {"x": first["x"], "y": first["y"], "yaw": expected_spawn_yaw}}
+    children = sim_only.OwnedChildren()
+    lifecycle: list[Dict[str, Any]] = []
+    failure_class = "NONE"; method_success = False; method_failure = False
+    motion_started = False; goal_reached = False; tail_complete = False; error: Optional[str] = None
+    primary_method_outcome: Optional[str] = None
+    exception_infrastructure = False; exception_protocol = False
+    terminal_kind: Optional[str] = None; terminal_ros_time: Optional[float] = None
+    stop_bundle_qc: Optional[Mapping[str, Any]] = None
+    bag_qc: Optional[Mapping[str, Any]] = None
+    completion_qc: Optional[Mapping[str, Any]] = None
+    timeout_qc: Optional[Mapping[str, Any]] = None
+    tail_clock_qc: Optional[Mapping[str, Any]] = None
+    raw_stop_evidence: Optional[Mapping[str, Any]] = None
+    tail_clock_attempted = False
+    runtime_qc_report: Optional[Mapping[str, Any]] = None
+    planner_stop: Optional[Mapping[str, Any]] = None
+    path_stop: Optional[Mapping[str, Any]] = None
+    recorder_stop: Optional[Mapping[str, Any]] = None
+    cleanup_ok = False
+    recorder_topics = tuple(freeze_tool.TIMING_RECORDER_TOPICS)
+    require(H_PROXY in recorder_topics and H_MODAL in recorder_topics,
+            "frozen timing recorder topics lost H_proxy/H_modal")
+    case_dir.mkdir(parents=True, exist_ok=False)
+    bag_dir.mkdir(parents=True, exist_ok=False)
+    for output_path, label in (
+            (results_root, "created R7 timing result root"),
+            (bags_root, "created R7 timing bag root"),
+            (case_dir, "created R7 timing case directory"),
+            (bag_dir, "created R7 timing bag directory")):
+        _reject_symlink_chain(output_path, label)
+        require(output_path.is_dir(), f"{label} is not a directory")
+    manifest_core = {
+        "schema_version": SCHEMA_VERSION, "record_type": "SMPCC_SIM_MECHANISM_TIME_MATCH_CASE",
+        "runner_id": RUNNER_ID, "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID, "formal": False,
+        "evidence_class": "SIMULATION_MECHANISM_CALIBRATION", "physical_alignment": False,
+        "physical_primary_eligible": False, "physical_primary": None, "attempt_id": attempt_id,
+        "condition_id": condition_name, "condition_config": {"path": str(freeze["effective_configs"][condition_name]["path"]), "sha256": freeze["effective_configs"][condition_name]["sha256"]},
+        "freeze_candidate": {"path": str(freeze_path.resolve()), "sha256": sha256_file(freeze_path)},
+        "path": {"path": str(path), "sha256": sha256_file(path), "path_id": "H1"},
+        "container": {"path": str(freeze["containers"]["C1"]["path"]), "sha256": freeze["containers"]["C1"]["sha256"], "container_id": "C1"},
+        "seed": seed, "ros_master_uri": ros_uri, "gazebo_master_uri": gazebo_uri,
+        "timing_policy": {
+            "settle_sec": 30.0, "goal_timeout_sec": 60.0,
+            "tail_sec": TAIL_SEC,
+        },
+        "pose_contract": {"authoritative_pose_topic": "/odom", "authoritative_pose_semantic": "gazebo_odometry_message", "frozen_path_coordinate_contract": "gazebo_odometry_numeric_world", "online_planner_use_tf_pose": False, "controller_status_is_sufficient_for_success": False, "common_seed_initial_yaw_offset_rad": yaw_offset, "expected_spawn_yaw_rad": expected_spawn_yaw},
+    }
+    case_manifest = dict(manifest_core, case_manifest_hash=canonical_hash(manifest_core))
+    manifest_path = case_dir / "case_manifest.json"; write_json_new(manifest_path, case_manifest)
+    case_hash = sha256_file(manifest_path)
+    environment = sim_only.runtime_environment(ros_uri=ros_uri, gazebo_uri=gazebo_uri, case_dir=case_dir, path_info=path_info)
+    environment["SMPCC_SIMULATOR_SEED"] = str(seed % 2147483647)
+    recorder = None; bag_active = bag_dir / "capture.active.bag"; bag_final = bag_dir / "capture.bag"
+    pre = {"ros": True, "gazebo": True}; post = {"ros": True, "gazebo": True}; events: Mapping[str, Any] = {}
+    try:
+        pre = sim_only.endpoints_reachable(ros_uri, gazebo_uri)
+        require(pre == {"ros": False, "gazebo": False}, "fresh preflight requires both masters unreachable")
+        lifecycle.append({"event": "preflight", "utc": utc_now(), "ros_reachable": False, "gazebo_reachable": False})
+        children.start("environment", (str(sim_only.ENV_LAUNCH),), environment, stdout=case_dir / "environment.log")
+        for topic in ("/odom", "/map"):
+            sim_only.wait_topic(topic, environment, 60.0)
+        sim_time = sim_only.run_checked(sim_only.sourced_command(("rosparam", "get", "/use_sim_time")), environment, 10.0, "sim time")
+        require(sim_time.returncode == 0 and sim_time.stdout.strip().casefold() == "true", "simulator did not establish /use_sim_time=true")
+        children.start("h_proxy", _hproxy_command(container), environment, stdout=case_dir / "h_proxy.log")
+        sim_only.wait_topic(H_PROXY, environment, 60.0)
+        children.start("planner", _planner_command(condition), environment, stdout=case_dir / "planner.log")
+        for topic in REQUIRED_TOPICS:
+            sim_only.wait_topic(topic, environment, 60.0)
+        deferred_publishers = _wait_for_publisher_registrations(
+            ros_uri, DEFERRED_RECORDER_MESSAGE_TOPICS)
+        lifecycle.append({
+            "event": "deferred_diagnostic_publishers_admitted",
+            "utc": utc_now(),
+            "publishers": {
+                topic: list(nodes)
+                for topic, nodes in deferred_publishers.items()
+            },
+            "message_admission_deferred_until_reference": True,
+        })
+        lifecycle.append({"event": "planner_gate_ready", "utc": utc_now(), "planner_variant": condition["planner_variant"]})
+        time.sleep(30.0); lifecycle.append({"event": "settle", "utc": utc_now(), "sec": 30.0})
+        subscribers_before = sim_only.read_subscriber_graph(ros_uri)
+        recorder = children.start("recorder", sim_only.sourced_command(("rosbag", "record", "--buffsize=16", "--chunksize=64", "-O", str(bag_dir / "capture.active"), *recorder_topics)), environment, stdout=case_dir / "recorder.log")
+        # rosbag may defer visible target creation under /use_sim_time.  The
+        # reviewed fresh runner therefore accepts either a nonempty artifact
+        # or one newly-added recorder subscriber common to every frozen topic;
+        # the closed-bag check below remains mandatory.
+        sim_only.RECORDER_TOPICS = recorder_topics
+        _size_before_motion, _size_growing, readiness_source, recorder_nodes = sim_only.wait_for_recorder_artifact(bag_active, ros_uri, subscribers_before, recorder, 15.0)
+        lifecycle.append({"event": "recorder_admitted", "utc": utc_now(), "readiness_source": readiness_source, "recorder_common_subscriber_nodes": recorder_nodes})
+        children.start("event_monitor", _child_command("__internal-event-monitor", "--case-dir", str(case_dir), "--case-manifest-hash", case_hash), environment, stdout=case_dir / "event_monitor.log")
+        initial_deadline = time.monotonic() + 10.0
+        while time.monotonic() < initial_deadline:
+            if _event_path(case_dir).is_file():
+                events = _read_event(_event_path(case_dir), case_hash)
+                if isinstance(events.get("initial_pose_gate"), Mapping):
+                    break
+            time.sleep(0.05)
+        initial_pose = events.get("initial_pose_gate")
+        require(isinstance(initial_pose, Mapping), "authoritative initial odometry was not acquired before timing path release")
+        require(initial_pose.get("pass") is True, "timing pilot initial odometry does not match frozen H1 start")
+        lifecycle.append({"event": "initial_pose_gate", **dict(initial_pose)})
+        children.start("path_replay", _child_command("__internal-path-replay", "--path", str(path), "--case-dir", str(case_dir), "--case-manifest-hash", case_hash), environment, stdout=case_dir / "path_replay.log")
+        lifecycle.append({"event": "recorder_before_motion", "utc": utc_now()})
+        deadline = time.monotonic() + 20.0
+        while time.monotonic() < deadline:
+            if not _event_path(case_dir).is_file():
+                time.sleep(0.05)
+                continue
+            events = _read_event(_event_path(case_dir), case_hash)
+            if isinstance(events.get("first_executed_motion"), Mapping): break
+            time.sleep(0.05)
+        require(isinstance(events.get("first_executed_motion"), Mapping), "no executed base motion within acquisition deadline")
+        motion_started = True; first_motion = events["first_executed_motion"]; lifecycle.append({"event": "first_executed_motion", **first_motion})
+        deadline = float(first_motion["monotonic_sec"]) + 60.0
+        while time.monotonic() < deadline:
+            if not _event_path(case_dir).is_file():
+                time.sleep(0.05)
+                continue
+            events = _read_event(_event_path(case_dir), case_hash)
+            goal_item = events.get("goal_reached")
+            if isinstance(goal_item, Mapping):
+                candidate_duration = (
+                    float(goal_item["monotonic_sec"]) -
+                    float(first_motion["monotonic_sec"])
+                )
+                try:
+                    completion_qc = runtime_qc.validate_completion_time(
+                        candidate_duration, max_completion_sec=60.0)
+                    goal_reached = True
+                except runtime_qc.RuntimeQCError:
+                    goal_reached = False
+                break
+            time.sleep(0.05)
+        lifecycle.append({"event": "goal_reached" if goal_reached else "goal_timeout", "utc": utc_now(), "timeout_sec": 60.0, "success_requires": "controller_status_AND_frozen_endpoint_geometry"})
+        if goal_reached:
+            primary_method_outcome = "METHOD_SUCCESS"
+            terminal_kind = "GOAL_REACHED"
+            terminal_ros_time = float(events["goal_reached"]["ros_time_sec"])
+        else:
+            primary_method_outcome = "METHOD_FAILURE"
+            terminal_kind = "GOAL_TIMEOUT"
+            timeout_qc = runtime_qc.validate_timeout_terminal(
+                time.monotonic() - float(first_motion["monotonic_sec"]),
+                min_timeout_sec=60.0, terminal_kind=terminal_kind)
+            latest = events.get("latest_odometry")
+            require(isinstance(latest, Mapping) and
+                    isinstance(latest.get("ros_time_sec"), (int, float)),
+                    "timeout lacks authoritative terminal ROS time")
+            terminal_ros_time = float(latest["ros_time_sec"])
+        planner_stop = children.stop("planner", signal.SIGTERM, 8.0)
+        path_stop = children.stop("path_replay", signal.SIGTERM, 5.0)
+        zero_ok = sim_only.publish_zero(environment)
+        require(zero_ok, "zero command publish failed before tail")
+        tail_clock_attempted = True
+        tail_clock_qc = _wait_for_ros_clock_tail(
+            children, environment, case_dir, case_hash, lifecycle)
+        require(recorder.poll() is None, "recorder failed frozen tail")
+        recorder_stop = children.stop("recorder", signal.SIGINT, 12.0)
+        stop_bundle_qc = runtime_qc.validate_owned_stop_bundle(
+            {"planner": planner_stop, "path_replay": path_stop,
+             "recorder": recorder_stop}, motion_component="planner")
+        raw_stop_evidence = _persist_raw_stop_evidence(
+            case_dir, case_hash,
+            {"planner": planner_stop, "path_replay": path_stop,
+             "recorder": recorder_stop})
+        require(runtime_qc.validate_owned_stop_evidence(
+                    raw_stop_evidence, motion_component="planner",
+                    protocol_id=PROTOCOL_ID, release_id=RELEASE_ID,
+                    attempt_id=attempt_id, case_manifest_hash=case_hash,
+                    formal=False) == stop_bundle_qc,
+                "raw stop evidence differs from process stop QC")
+        require(bag_active.is_file(), "closed bag unavailable")
+        os.replace(bag_active, bag_final)
+        active_artifact_paths = _recorder_active_artifact_paths(bag_dir)
+        _require_active_artifacts_absent(active_artifact_paths)
+        bag_qc = runtime_qc.audit_closed_rosbag(
+            bag_final, active_artifact_paths=active_artifact_paths,
+            required_topics=recorder_topics,
+            motion_start_ros_time_sec=float(first_motion["ros_time_sec"]),
+            terminal_ros_time_sec=terminal_ros_time,
+            terminal_kind=str(terminal_kind), attempt_id=attempt_id,
+            case_manifest_hash=case_hash, protocol_id=PROTOCOL_ID,
+            release_id=RELEASE_ID, formal=False, tail_sec=TAIL_SEC)
+        tail_complete = True
+        lifecycle.append({"event": "tail_recorded", "utc": utc_now(), "sec": TAIL_SEC, "tail_clock_qc_hash": tail_clock_qc["tail_clock_qc_hash"], "bag_qc_hash": bag_qc["bag_qc_hash"], "closed_bag_audited": True})
+        write_json_new(case_dir / "process_stop_qc.json", stop_bundle_qc)
+        write_json_new(case_dir / "closed_bag_qc.json", bag_qc)
+    except Exception as exc:  # noqa: BLE001
+        error = str(exc)
+        classified_error = _classify_runtime_error(error, motion_started)
+        exception_infrastructure = (
+            classified_error == "INFRASTRUCTURE_ACQUISITION")
+        exception_protocol = not exception_infrastructure
+        lifecycle.append({"event": "failure", "utc": utc_now(), "error": error, "failure_class": classified_error})
+    finally:
+        if motion_started and not tail_complete and recorder is not None and recorder.poll() is None:
+            try:
+                if planner_stop is None:
+                    planner_stop = children.stop("planner", signal.SIGTERM, 8.0)
+                if path_stop is None:
+                    path_stop = children.stop("path_replay", signal.SIGTERM, 5.0)
+                require(sim_only.publish_zero(environment),
+                        "zero command publish failed during failure tail")
+                require(not tail_clock_attempted,
+                        "ROS /clock tail acquisition already failed")
+                tail_clock_attempted = True
+                tail_clock_qc = _wait_for_ros_clock_tail(
+                    children, environment, case_dir, case_hash, lifecycle)
+                require(recorder.poll() is None,
+                        "recorder exited during failure tail")
+                if recorder_stop is None:
+                    recorder_stop = children.stop(
+                        "recorder", signal.SIGINT, 12.0)
+                stop_bundle_qc = runtime_qc.validate_owned_stop_bundle(
+                    {"planner": planner_stop, "path_replay": path_stop,
+                     "recorder": recorder_stop}, motion_component="planner")
+                raw_stop_evidence = _persist_raw_stop_evidence(
+                    case_dir, case_hash,
+                    {"planner": planner_stop, "path_replay": path_stop,
+                     "recorder": recorder_stop})
+                require(runtime_qc.validate_owned_stop_evidence(
+                            raw_stop_evidence, motion_component="planner",
+                            protocol_id=PROTOCOL_ID, release_id=RELEASE_ID,
+                            attempt_id=attempt_id,
+                            case_manifest_hash=case_hash,
+                            formal=False) == stop_bundle_qc,
+                        "raw stop evidence differs from process stop QC")
+                if bag_active.is_file() and not bag_final.exists():
+                    os.replace(bag_active, bag_final)
+                active_artifact_paths = _recorder_active_artifact_paths(bag_dir)
+                _require_active_artifacts_absent(active_artifact_paths)
+                if (primary_method_outcome is not None and
+                        terminal_ros_time is not None and
+                        isinstance(events.get("first_executed_motion"), Mapping)):
+                    bag_qc = runtime_qc.audit_closed_rosbag(
+                        bag_final, active_artifact_paths=active_artifact_paths,
+                        required_topics=recorder_topics,
+                        motion_start_ros_time_sec=float(
+                            events["first_executed_motion"]["ros_time_sec"]),
+                        terminal_ros_time_sec=terminal_ros_time,
+                        terminal_kind=str(terminal_kind), attempt_id=attempt_id,
+                        case_manifest_hash=case_hash, protocol_id=PROTOCOL_ID,
+                        release_id=RELEASE_ID, formal=False,
+                        tail_sec=TAIL_SEC)
+                    tail_complete = True
+                    if not (case_dir / "process_stop_qc.json").exists():
+                        write_json_new(case_dir / "process_stop_qc.json",
+                                       stop_bundle_qc)
+                    if not (case_dir / "closed_bag_qc.json").exists():
+                        write_json_new(case_dir / "closed_bag_qc.json", bag_qc)
+                lifecycle.append({"event": "failure_tail_qc", "utc": utc_now(), "sec": TAIL_SEC, "complete": tail_complete})
+            except Exception as exc:
+                error = error or str(exc)
+                exception_infrastructure = True
+        if recorder is not None and recorder.poll() is None:
+            try:
+                recorder_close = children.stop("recorder", signal.SIGINT, 12.0)
+                lifecycle.append({"event": "recorder_closed", "utc": utc_now(), "after_failure": error is not None, **recorder_close})
+            except Exception as exc:  # pragma: no cover - process transport race
+                error = error or str(exc)
+        cleanup = children.stop_all(); lifecycle.append({"event": "owned_pid_cleanup", "utc": utc_now(), "children": cleanup})
+        cleanup_ok = all(
+            item.get("cleanup_error") in (None, "") and
+            item.get("escalated_to") in (None, "") and
+            (item.get("not_started") is True or
+             isinstance(item.get("returncode"), int))
+            for item in cleanup
+        )
+        if not cleanup_ok:
+            error = error or "owned child cleanup QC failed"
+            exception_infrastructure = True
+        if _event_path(case_dir).is_file():
+            try: events = _read_event(_event_path(case_dir), case_hash)
+            except Exception: pass
+        try: post = sim_only.wait_endpoints_down(ros_uri, gazebo_uri, 30.0)
+        except Exception as exc:
+            error = error or str(exc)
+            exception_infrastructure = True
+        for artifact in (bag_final, _event_path(case_dir),
+                         case_dir / "process_stop_qc.json",
+                         case_dir / "closed_bag_qc.json",
+                         _tail_clock_path(case_dir),
+                         _raw_stop_path(case_dir)):
+            if artifact.is_file():
+                artifact.chmod(stat.S_IMODE(artifact.stat().st_mode) & ~WRITE_BITS)
+    duration = None
+    if isinstance(events.get("first_executed_motion"), Mapping) and isinstance(events.get("goal_reached"), Mapping): duration = float(events["goal_reached"]["monotonic_sec"]) - float(events["first_executed_motion"]["monotonic_sec"])
+    qc_failure = bool(
+        motion_started and (
+            not tail_complete or stop_bundle_qc is None or bag_qc is None or
+            not cleanup_ok or post != {"ros": False, "gazebo": False} or
+            error is not None or
+            (primary_method_outcome == "METHOD_SUCCESS" and
+             completion_qc is None) or
+            (primary_method_outcome == "METHOD_FAILURE" and
+             timeout_qc is None) or
+            tail_clock_qc is None or raw_stop_evidence is None
+        )
+    )
+    classification = runtime_qc.classify_outcome(
+        motion_started=motion_started,
+        primary_method_outcome=primary_method_outcome,
+        infrastructure_failure=exception_infrastructure,
+        qc_failure=qc_failure,
+        protocol_failure=exception_protocol,
+    )
+    failure_class = str(classification["failure_class"])
+    method_success = bool(classification["method_success"])
+    method_failure = bool(classification["method_failure"])
+    if classification.get("protocol_qc_pass") is True:
+        require(stop_bundle_qc is not None and bag_qc is not None and
+                tail_clock_qc is not None and raw_stop_evidence is not None and
+                error is None,
+                "terminal timing case lacks complete runtime QC")
+        runtime_qc_report = _build_terminal_runtime_qc_report(
+            attempt_id=attempt_id, case_manifest_hash=case_hash,
+            stop_bundle=stop_bundle_qc, bag_qc=bag_qc,
+            classification=classification, completion_qc=completion_qc,
+            timeout_qc=timeout_qc)
+        write_json_new(case_dir / "runtime_qc_report.json", runtime_qc_report)
+    candidate_descriptor = {"path": str(freeze_path.absolute()), "sha256": sha256_file(freeze_path)}
+    endpoint_evidence = {key: events.get(key) for key in ("initial_pose_gate", "controller_goal_status_seen", "geometric_goal_gate", "goal_reached", "latest_odometry")}
+    qc_descriptor = ({"path": str(case_dir / "runtime_qc_report.json"), "sha256": sha256_file(case_dir / "runtime_qc_report.json"), "runtime_qc_hash": runtime_qc_report["runtime_qc_hash"]} if runtime_qc_report is not None else None)
+    bag_qc_descriptor = ({"path": str(case_dir / "closed_bag_qc.json"), "sha256": sha256_file(case_dir / "closed_bag_qc.json"), "bag_qc_hash": bag_qc["bag_qc_hash"]} if bag_qc is not None else None)
+    tail_qc_descriptor = ({"path": str(_tail_clock_path(case_dir)), "sha256": sha256_file(_tail_clock_path(case_dir)), "tail_clock_qc_hash": tail_clock_qc["tail_clock_qc_hash"]} if tail_clock_qc is not None else None)
+    raw_stop_descriptor = ({"path": str(_raw_stop_path(case_dir)), "sha256": sha256_file(_raw_stop_path(case_dir)), "raw_stop_evidence_hash": raw_stop_evidence["raw_stop_evidence_hash"]} if raw_stop_evidence is not None else None)
+    outcome = {"schema_version": SCHEMA_VERSION, "record_type": "SMPCC_SIM_MECHANISM_TIME_MATCH_ATTEMPT", "runner_id": RUNNER_ID, "protocol_id": PROTOCOL_ID, "release_id": RELEASE_ID, "formal": False, "evidence_class": "SIMULATION_MECHANISM_CALIBRATION", "physical_alignment": False, "physical_primary_eligible": False, "physical_primary": None, "attempt_id": attempt_id, "condition_id": condition_name, "method_success": method_success, "method_failure": method_failure, "failure_class": failure_class, "outcome_classification": classification, "goal_reached": goal_reached, "motion_started": motion_started, "tail_complete": tail_complete, "completion_time_sec": duration, "seed": seed, "freeze_candidate": candidate_descriptor, "endpoint_evidence": endpoint_evidence, "runtime_qc_report": qc_descriptor, "closed_bag_qc": bag_qc_descriptor, "ros_clock_tail_qc": tail_qc_descriptor, "raw_process_stops": raw_stop_descriptor, "case_manifest_path": str(manifest_path), "case_manifest_hash": case_hash, "events_path": str(_event_path(case_dir)) if _event_path(case_dir).is_file() else None, "events": dict(events), "events_hash": sha256_file(_event_path(case_dir)) if _event_path(case_dir).is_file() else None, "bag_path": str(bag_final) if bag_final.is_file() else None, "bag_hash": sha256_file(bag_final) if bag_final.is_file() else None, "pre_ros_reachable": pre["ros"], "pre_gazebo_reachable": pre["gazebo"], "post_ros_reachable": post["ros"], "post_gazebo_reachable": post["gazebo"], "fresh_ros_gazebo": pre == {"ros": False, "gazebo": False} and post == {"ros": False, "gazebo": False}, "lifecycle": lifecycle, "runtime_error": error, "created_utc": utc_now()}
+    out = case_dir / "attempt_manifest.json"; write_json_new(out, outcome)
+    return {"status": "PASS" if method_success else "FAIL", "attempt_manifest": str(out), "attempt_manifest_hash": sha256_file(out), "completion_time_sec": duration, "formal": False, "physical_primary_eligible": False}
+
+
+def _validate_attempt(freeze_path: Path, freeze: Mapping[str, Any], attempt_path: Path,
+                      condition: str, *, enforce_canonical_root: bool) -> Mapping[str, Any]:
+    attempt_path = attempt_path.absolute()
+    _readonly(attempt_path, f"{condition} timing attempt")
+    item = read_json(attempt_path, f"{condition} timing attempt")
+    attempt_id = str(item.get("attempt_id", ""))
+    result_root, bag_root = _pilot_roots(
+        freeze_path, enforce_canonical_root=enforce_canonical_root
+    )
+    expected_attempt = result_root / "attempts" / attempt_id / "attempt_manifest.json"
+    require(attempt_path == expected_attempt,
+            f"{condition} attempt is outside the current R7 timing result namespace")
+    require(attempt_id == TIMING_ATTEMPT_IDS[condition],
+            f"{condition} attempt ID is not the frozen R7 assignment")
+    require(item.get("schema_version") == SCHEMA_VERSION and
+            item.get("record_type") == "SMPCC_SIM_MECHANISM_TIME_MATCH_ATTEMPT" and
+            item.get("runner_id") == RUNNER_ID and
+            item.get("protocol_id") == PROTOCOL_ID and
+            item.get("release_id") == RELEASE_ID and
+            item.get("condition_id") == condition,
+            f"{condition} attempt identity is not R7 timing-pilot v2")
+    require(item.get("formal") is False and
+            item.get("evidence_class") == "SIMULATION_MECHANISM_CALIBRATION" and
+            item.get("physical_alignment") is False and
+            item.get("physical_primary_eligible") is False and
+            item.get("physical_primary") is None,
+            f"{condition} attempt crossed the calibration/primary boundary")
+    expected_candidate = {"path": str(freeze_path.absolute()),
+                          "sha256": sha256_file(freeze_path)}
+    require(item.get("freeze_candidate") == expected_candidate,
+            f"{condition} attempt is not bound to the supplied R7 candidate")
+    require(item.get("method_success") is True and
+            item.get("method_failure") is False and
+            item.get("failure_class") == "NONE" and
+            item.get("goal_reached") is True and
+            item.get("motion_started") is True and
+            item.get("tail_complete") is True and
+            item.get("fresh_ros_gazebo") is True and
+            item.get("pre_ros_reachable") is False and
+            item.get("pre_gazebo_reachable") is False and
+            item.get("post_ros_reachable") is False and
+            item.get("post_gazebo_reachable") is False and
+            item.get("runtime_error") is None,
+            f"{condition} timing pilot is not a fresh successful frozen-tail case")
+    duration = item.get("completion_time_sec")
+    require(isinstance(duration, (int, float)) and math.isfinite(float(duration)) and
+            0.0 < float(duration) <= 60.0,
+            f"{condition} completion time violates the 60 s policy")
+    attempt_seed = item.get("seed")
+    require(isinstance(attempt_seed, int) and
+            not isinstance(attempt_seed, bool) and
+            attempt_seed == TIMING_CALIBRATION_SEED,
+            f"{condition} calibration seed is not the frozen R7 CRN seed")
+    case_path = Path(str(item.get("case_manifest_path", ""))).absolute()
+    require(case_path == attempt_path.parent / "case_manifest.json",
+            f"{condition} case manifest path escaped its attempt directory")
+    _readonly(case_path, f"{condition} timing case manifest")
+    require(item.get("case_manifest_hash") == sha256_file(case_path),
+            f"{condition} case manifest hash mismatch")
+    case = read_json(case_path, f"{condition} timing case manifest")
+    require(case.get("schema_version") == SCHEMA_VERSION and
+            case.get("record_type") == "SMPCC_SIM_MECHANISM_TIME_MATCH_CASE" and
+            case.get("runner_id") == RUNNER_ID and
+            case.get("protocol_id") == PROTOCOL_ID and
+            case.get("release_id") == RELEASE_ID and
+            case.get("attempt_id") == attempt_id and
+            case.get("condition_id") == condition and
+            case.get("formal") is False and
+            case.get("physical_primary_eligible") is False and
+            case.get("freeze_candidate") == expected_candidate and
+            isinstance(case.get("seed"), int) and
+            not isinstance(case.get("seed"), bool) and
+            case.get("seed") == attempt_seed,
+            f"{condition} case manifest is not bound to its attempt/candidate")
+    require(case.get("condition_config") == freeze["effective_configs"][condition],
+            f"{condition} case config descriptor drifted")
+    expected_path = dict(freeze["paths"]["H1"]["sim_path"], path_id="H1")
+    expected_container = dict(freeze["containers"]["C1"], container_id="C1")
+    require(case.get("path") == expected_path and
+            case.get("container") == expected_container,
+            f"{condition} path/container descriptor drifted")
+    require(case.get("timing_policy") == {
+        "settle_sec": 30.0, "goal_timeout_sec": 60.0, "tail_sec": 5.0,
+    }, f"{condition} timing policy drifted")
+    require(case.get("pose_contract") == {
+        "authoritative_pose_topic": "/odom",
+        "authoritative_pose_semantic": "gazebo_odometry_message",
+        "frozen_path_coordinate_contract": "gazebo_odometry_numeric_world",
+        "online_planner_use_tf_pose": False,
+        "controller_status_is_sufficient_for_success": False,
+        "common_seed_initial_yaw_offset_rad":
+            _timing_initial_yaw_offset(attempt_seed),
+        "expected_spawn_yaw_rad":
+            float(read_json(Path(str(expected_path["path"])),
+                            "timing validation path")["points"][0]["yaw"]) +
+            _timing_initial_yaw_offset(attempt_seed),
+    }, f"{condition} pose/endpoint contract drifted")
+    bag_path = Path(str(item.get("bag_path", ""))).absolute()
+    expected_bag = bag_root / attempt_id / "capture.bag"
+    require(bag_path == expected_bag, f"{condition} bag escaped the R7 timing namespace")
+    _readonly(bag_path, f"{condition} timing bag")
+    require(item.get("bag_hash") == sha256_file(bag_path),
+            f"{condition} timing bag hash mismatch")
+    runtime_descriptor = item.get("runtime_qc_report")
+    require(isinstance(runtime_descriptor, Mapping) and
+            set(runtime_descriptor) == {"path", "sha256", "runtime_qc_hash"},
+            f"{condition} runtime QC descriptor is missing")
+    runtime_path = Path(str(runtime_descriptor["path"])).absolute()
+    require(runtime_path == attempt_path.parent / "runtime_qc_report.json",
+            f"{condition} runtime QC escaped its attempt directory")
+    _readonly(runtime_path, f"{condition} runtime QC report")
+    require(runtime_descriptor.get("sha256") == sha256_file(runtime_path),
+            f"{condition} runtime QC file hash mismatch")
+    runtime_report = read_json(runtime_path, f"{condition} runtime QC report")
+    terminal_timing_qc = runtime_report.get("terminal_timing_qc")
+    require(isinstance(terminal_timing_qc, Mapping) and
+            set(terminal_timing_qc) == {"kind", "receipt"} and
+            terminal_timing_qc.get("kind") == "GOAL_REACHED_COMPLETION" and
+            isinstance(terminal_timing_qc.get("receipt"), Mapping),
+            f"{condition} terminal timing QC is invalid")
+    rebuilt_runtime = runtime_qc.build_runtime_qc_report(
+        protocol_id=PROTOCOL_ID, release_id=RELEASE_ID,
+        attempt_id=attempt_id,
+        case_manifest_hash=str(item["case_manifest_hash"]), formal=False,
+        stop_bundle=runtime_report.get("stop_bundle"),
+        bag_qc=runtime_report.get("bag_qc"),
+        completion_qc=terminal_timing_qc.get("receipt"),
+        outcome_classification=runtime_report.get("outcome_classification"))
+    require(runtime_report == rebuilt_runtime and
+            runtime_descriptor.get("runtime_qc_hash") ==
+            runtime_report.get("runtime_qc_hash"),
+            f"{condition} runtime QC semantic hash mismatch")
+    raw_stop_descriptor = item.get("raw_process_stops")
+    require(isinstance(raw_stop_descriptor, Mapping) and
+            set(raw_stop_descriptor) == {
+                "path", "sha256", "raw_stop_evidence_hash"},
+            f"{condition} raw process stop descriptor is missing")
+    raw_stop_path = Path(str(raw_stop_descriptor["path"])).absolute()
+    require(raw_stop_path == attempt_path.parent / "raw_process_stops.json",
+            f"{condition} raw process stop evidence escaped its attempt directory")
+    _readonly(raw_stop_path, f"{condition} raw process stop evidence")
+    require(raw_stop_descriptor.get("sha256") == sha256_file(raw_stop_path),
+            f"{condition} raw process stop evidence file hash mismatch")
+    raw_stop_evidence = read_json(
+        raw_stop_path, f"{condition} raw process stop evidence")
+    rebuilt_stop_bundle = runtime_qc.validate_owned_stop_evidence(
+        raw_stop_evidence, motion_component="planner",
+        protocol_id=PROTOCOL_ID, release_id=RELEASE_ID,
+        attempt_id=attempt_id,
+        case_manifest_hash=str(item["case_manifest_hash"]), formal=False)
+    require(raw_stop_descriptor.get("raw_stop_evidence_hash") ==
+            raw_stop_evidence.get("raw_stop_evidence_hash") and
+            rebuilt_stop_bundle == runtime_report.get("stop_bundle"),
+            f"{condition} raw stops do not rebuild the runtime stop bundle")
+    bag_qc_descriptor = item.get("closed_bag_qc")
+    require(isinstance(bag_qc_descriptor, Mapping) and
+            set(bag_qc_descriptor) == {"path", "sha256", "bag_qc_hash"},
+            f"{condition} closed-bag QC descriptor is missing")
+    bag_qc_path = Path(str(bag_qc_descriptor["path"])).absolute()
+    require(bag_qc_path == attempt_path.parent / "closed_bag_qc.json",
+            f"{condition} closed-bag QC escaped its attempt directory")
+    _readonly(bag_qc_path, f"{condition} closed-bag QC")
+    persisted_bag_qc = read_json(bag_qc_path, f"{condition} closed-bag QC")
+    require(bag_qc_descriptor.get("sha256") == sha256_file(bag_qc_path) and
+            bag_qc_descriptor.get("bag_qc_hash") ==
+            persisted_bag_qc.get("bag_qc_hash") and
+            persisted_bag_qc == runtime_report.get("bag_qc") and
+            persisted_bag_qc.get("bag", {}).get("sha256") ==
+            item.get("bag_hash"),
+            f"{condition} closed-bag QC binding mismatch")
+    require(terminal_timing_qc.get("receipt", {}).get(
+                "completion_time_sec") == float(duration) and
+            runtime_report.get("outcome_classification", {}).get(
+                "failure_class") == "NONE" and
+            item.get("outcome_classification") ==
+            runtime_report.get("outcome_classification"),
+            f"{condition} runtime QC outcome/time mismatch")
+    tail_descriptor = item.get("ros_clock_tail_qc")
+    require(isinstance(tail_descriptor, Mapping) and
+            set(tail_descriptor) == {
+                "path", "sha256", "tail_clock_qc_hash"},
+            f"{condition} ROS clock tail QC descriptor is missing")
+    tail_path = Path(str(tail_descriptor["path"])).absolute()
+    require(tail_path == attempt_path.parent / "tail_clock_qc.json",
+            f"{condition} ROS clock tail QC escaped its attempt directory")
+    _readonly(tail_path, f"{condition} ROS clock tail QC")
+    tail_receipt = read_json(tail_path, f"{condition} ROS clock tail QC")
+    _validate_clock_tail_receipt(
+        tail_receipt, attempt_id=attempt_id,
+        case_manifest_hash=str(item["case_manifest_hash"]))
+    require(tail_descriptor.get("sha256") == sha256_file(tail_path) and
+            tail_descriptor.get("tail_clock_qc_hash") ==
+            tail_receipt.get("tail_clock_qc_hash"),
+            f"{condition} ROS clock tail QC binding mismatch")
+    event_path = Path(str(item.get("events_path", ""))).absolute()
+    require(event_path == attempt_path.parent / "motion_goal_events.live.json",
+            f"{condition} event trace escaped its attempt directory")
+    _readonly(event_path, f"{condition} timing event trace")
+    require(item.get("events_hash") == sha256_file(event_path),
+            f"{condition} event trace hash mismatch")
+    event = read_json(event_path, f"{condition} timing event trace")
+    endpoint = item.get("endpoint_evidence")
+    require(isinstance(endpoint, Mapping) and
+            endpoint.get("initial_pose_gate") == event.get("initial_pose_gate") and
+            endpoint.get("controller_goal_status_seen") == event.get("controller_goal_status_seen") and
+            endpoint.get("geometric_goal_gate") == event.get("geometric_goal_gate") and
+            endpoint.get("goal_reached") == event.get("goal_reached") and
+            endpoint.get("latest_odometry") == event.get("latest_odometry"),
+            f"{condition} endpoint evidence is not bound to the event trace")
+    initial = event.get("initial_pose_gate")
+    controller = event.get("controller_goal_status_seen")
+    geometric = event.get("geometric_goal_gate")
+    goal_event = event.get("goal_reached")
+    require(isinstance(initial, Mapping) and initial.get("pass") is True and
+            isinstance(initial.get("yaw_rad"), (int, float)) and
+            isinstance(initial.get("yaw_error_rad"), (int, float)) and
+            abs(float(initial["yaw_error_rad"])) <= endpoint_gate.START_YAW_TOLERANCE_RAD and
+            math.isclose(float(initial["expected_yaw_rad"]), float(case["pose_contract"]["expected_spawn_yaw_rad"]), abs_tol=1e-12) and
+            isinstance(controller, Mapping) and
+            isinstance(geometric, Mapping) and geometric.get("pass") is True and
+            isinstance(goal_event, Mapping) and
+            goal_event.get("controller_status_gate_pass") is True and
+            goal_event.get("geometric_gate_pass") is True and
+            isinstance(goal_event.get("goal_distance_m"), (int, float)) and
+            float(goal_event["goal_distance_m"]) <= endpoint_gate.GOAL_TOLERANCE_M,
+            f"{condition} timing pilot lacks status-plus-frozen-geometry arrival evidence")
+    lifecycle = item.get("lifecycle")
+    require(isinstance(lifecycle, list), f"{condition} lifecycle is missing")
+    names = [entry.get("event") for entry in lifecycle if isinstance(entry, Mapping)]
+    for required in ("preflight", "recorder_admitted", "recorder_before_motion",
+                     "deferred_diagnostic_publishers_admitted",
+                     "first_executed_motion", "goal_reached",
+                     "tail_ros_clock_interval_complete", "tail_recorded",
+                     "owned_pid_cleanup"):
+        require(required in names, f"{condition} lifecycle lacks {required}")
+    require(names.index("recorder_before_motion") < names.index("first_executed_motion"),
+            f"{condition} recorder did not precede motion")
+    require(names.index("deferred_diagnostic_publishers_admitted") <
+            names.index("recorder_before_motion"),
+            f"{condition} deferred diagnostic publishers were not admitted before motion")
+    require(names.index("tail_ros_clock_interval_complete") <
+            names.index("tail_recorded"),
+            f"{condition} bag closed before the ROS clock tail completed")
+    return item
+
+
+def assemble(freeze_path: Path, bslosh_path: Path, smoothmatch_path: Path,
+             output: Path, *, enforce_canonical_root: bool = True) -> Dict[str, Any]:
+    freeze_path = freeze_path.absolute()
+    freeze = candidate_freeze(
+        freeze_path, enforce_canonical_root=enforce_canonical_root
+    )
+    bslosh = _validate_attempt(
+        freeze_path, freeze, bslosh_path, "Bslosh",
+        enforce_canonical_root=enforce_canonical_root,
+    )
+    smooth = _validate_attempt(
+        freeze_path, freeze, smoothmatch_path, "SmoothMatch",
+        enforce_canonical_root=enforce_canonical_root,
+    )
+    require(bslosh.get("seed") == smooth.get("seed") ==
+            TIMING_CALIBRATION_SEED,
+            "Bslosh and SmoothMatch timing pilots must use the frozen CRN seed")
+    result_root, _bag_root = _pilot_roots(
+        freeze_path, enforce_canonical_root=enforce_canonical_root)
+    attempt_root = result_root / "attempts"
+    require(attempt_root.is_dir() and not attempt_root.is_symlink(),
+            "timing attempt registry is missing or symlinked")
+    require({entry.name for entry in attempt_root.iterdir()} ==
+            set(TIMING_ATTEMPT_IDS.values()) and
+            all(entry.is_dir() and not entry.is_symlink()
+                for entry in attempt_root.iterdir()),
+            "timing calibration requires exactly the two frozen R7 attempts")
+    b_time, s_time = float(bslosh["completion_time_sec"]), float(smooth["completion_time_sec"])
+    tolerance = max(1.0, 0.05 * b_time); difference = s_time - b_time
+    output = output.absolute()
+    expected_output = (CANONICAL_CALIBRATION if enforce_canonical_root else
+                       freeze_path.parent / "smoothmatch_calibration.json")
+    require(output == expected_output,
+            f"calibration output must be exact current-candidate path {expected_output}")
+    require(not output.exists(), "refusing to overwrite timing calibration")
+    core = {"schema_version": SCHEMA_VERSION, "record_type": "SMPCC_SIM_MECHANISM_SMOOTHMATCH_CALIBRATION", "protocol_id": PROTOCOL_ID, "release_id": RELEASE_ID, "formal": False, "evidence_class": "SIMULATION_MECHANISM_CALIBRATION", "physical_alignment": False, "physical_primary_eligible": False, "physical_primary": None, "freeze_candidate": {"path": str(freeze_path), "sha256": sha256_file(freeze_path)}, "bslosh_attempt": {"path": str(bslosh_path.absolute()), "sha256": sha256_file(bslosh_path.absolute())}, "smoothmatch_attempt": {"path": str(smoothmatch_path.absolute()), "sha256": sha256_file(smoothmatch_path.absolute())}, "common_seed": bslosh["seed"], "bslosh_completion_time_sec": b_time, "smoothmatch_completion_time_sec": s_time, "difference_sec": difference, "tolerance_sec": tolerance, "within_tolerance": abs(difference) <= tolerance}
+    report = dict(core, status="PASS" if core["within_tolerance"] else "FAIL")
+    write_json_new(output, report)
+    return dict(report, output=str(output), output_hash=sha256_file(output))
+
+
+def _require_internal_parent_lock(case_dir: Path) -> None:
+    lock_path = _reject_symlink_chain(TIMING_LOCK, "internal timing lock")
+    require(lock_path.is_file() and not lock_path.is_symlink(),
+            "internal helper requires the active canonical timing lock")
+    try:
+        owner = read_json(lock_path, "active timing lock owner")
+    except (OSError, sim_only.SimOnlyRunnerError) as exc:
+        raise PilotError(f"cannot read active timing lock owner: {exc}") from exc
+    require(owner.get("runner_id") == RUNNER_ID and
+            owner.get("pid") == os.getppid() and
+            owner.get("attempt_id") == case_dir.name,
+            "internal helper parent is not the canonical timing runner")
+    with lock_path.open("r+", encoding="utf-8") as probe:
+        try:
+            fcntl.flock(probe.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            if exc.errno not in (errno.EACCES, errno.EAGAIN):
+                raise
+        else:
+            fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
+            raise PilotError("internal helper refuses an unlocked timing pilot")
+
+
+def _admit_internal_case(case_dir: Path, case_hash: str) -> tuple[
+        Mapping[str, Any], Mapping[str, Any]]:
+    case_dir = _reject_symlink_chain(case_dir, "internal timing case directory")
+    require(case_dir.parent == CANONICAL_RESULT_ROOT / "attempts",
+            "internal helper requires a canonical R7 timing attempt")
+    _require_internal_parent_lock(case_dir)
+    case_path = _reject_symlink_chain(
+        case_dir / "case_manifest.json", "internal timing case manifest")
+    _readonly(case_path, "internal timing case manifest")
+    require(case_hash == sha256_file(case_path),
+            "internal timing case file hash mismatch")
+    case = read_json(case_path, "internal timing case manifest")
+    core = dict(case)
+    declared = core.pop("case_manifest_hash", None)
+    require(declared == canonical_hash(core),
+            "internal timing case semantic hash mismatch")
+    condition_name = str(case.get("condition_id", ""))
+    _valid_attempt_id(case_dir.name)
+    require(
+        case.get("schema_version") == SCHEMA_VERSION and
+        case.get("record_type") == "SMPCC_SIM_MECHANISM_TIME_MATCH_CASE" and
+        case.get("runner_id") == RUNNER_ID and
+        case.get("protocol_id") == PROTOCOL_ID and
+        case.get("release_id") == RELEASE_ID and
+        case.get("formal") is False and
+        case.get("evidence_class") == "SIMULATION_MECHANISM_CALIBRATION" and
+        case.get("physical_alignment") is False and
+        case.get("physical_primary_eligible") is False and
+        case.get("physical_primary") is None and
+        case.get("attempt_id") == case_dir.name and
+        condition_name in {"Bslosh", "SmoothMatch"} and
+        isinstance(case.get("seed"), int) and
+        not isinstance(case.get("seed"), bool) and
+        case.get("seed") == TIMING_CALIBRATION_SEED,
+        "internal timing case identity/scope mismatch")
+    freeze = candidate_freeze(CANONICAL_CANDIDATE)
+    require(case.get("freeze_candidate") == {
+        "path": str(CANONICAL_CANDIDATE),
+        "sha256": sha256_file(CANONICAL_CANDIDATE),
+    }, "internal timing case candidate descriptor mismatch")
+    require(case.get("condition_config") ==
+            freeze["effective_configs"][condition_name],
+            "internal timing case condition config mismatch")
+    require(case.get("path") == dict(
+        freeze["paths"]["H1"]["sim_path"], path_id="H1"),
+        "internal timing case path mismatch")
+    require(case.get("container") == dict(
+        freeze["containers"]["C1"], container_id="C1"),
+        "internal timing case container mismatch")
+    require(case.get("timing_policy") == {
+        "settle_sec": 30.0, "goal_timeout_sec": 60.0, "tail_sec": 5.0,
+    }, "internal timing policy mismatch")
+    ros_uri = str(case.get("ros_master_uri", ""))
+    gazebo_uri = str(case.get("gazebo_master_uri", ""))
+    require(os.environ.get("ROS_MASTER_URI") == ros_uri and
+            sim_only.canonical_uri(ros_uri, "internal ROS master URI") == ros_uri,
+            "internal helper ROS master differs from the admitted case")
+    require(os.environ.get("GAZEBO_MASTER_URI") == gazebo_uri and
+            sim_only.canonical_uri(
+                gazebo_uri, "internal Gazebo master URI") == gazebo_uri and
+            gazebo_uri != ros_uri,
+            "internal helper Gazebo master differs from the admitted case")
+    return case, freeze
+
+
+def command_path_replay(args: argparse.Namespace) -> int:
+    path = _reject_symlink_chain(Path(args.path), "internal frozen path")
+    case_dir = _lexical_absolute(Path(args.case_dir))
+    case_hash = str(args.case_manifest_hash)
+    case, freeze = _admit_internal_case(case_dir, case_hash)
+    expected_path = freeze["paths"]["H1"]["sim_path"]
+    require(case.get("path") == dict(expected_path, path_id="H1") and
+            path == Path(str(expected_path["path"])) and
+            expected_path.get("sha256") == sha256_file(path),
+            "internal path replay is not the candidate H1 path")
+    document = read_json(path, "frozen path")
+    points = document.get("points")
+    require(isinstance(points, list) and len(points) >= 2,
+            "frozen path has too few points")
+    try:
+        import rospy  # type: ignore
+        from geometry_msgs.msg import PoseStamped  # type: ignore
+        from nav_msgs.msg import Path as RosPath  # type: ignore
+    except ImportError as exc:
+        raise PilotError("ROS path child needs sourced environment") from exc
+    rospy.init_node("sim_mechanism_timing_path_replay")
+    require(rospy.get_param("/use_sim_time", False) is True,
+            "internal timing path replay requires /use_sim_time=true")
+    path_pub = rospy.Publisher(
+        "/scout/global_path_fixed", RosPath, queue_size=1, latch=True)
+    goal_pub = rospy.Publisher(
+        "/scout/goal", PoseStamped, queue_size=1, latch=True)
+    msg = RosPath()
+    msg.header.frame_id = "map"
+    goal = PoseStamped()
+    goal.header.frame_id = "map"
+    for item in points:
+        pose = PoseStamped()
+        pose.header.frame_id = "map"
+        pose.pose.position.x = float(item["x"])
+        pose.pose.position.y = float(item["y"])
+        yaw = float(item.get("yaw", 0.0))
+        pose.pose.orientation.z = math.sin(yaw / 2.0)
+        pose.pose.orientation.w = math.cos(yaw / 2.0)
+        msg.poses.append(pose)
+    goal.pose = msg.poses[-1].pose
+    write_json_new(case_dir / "path_replay_receipt.json", {
+        "schema_version": SCHEMA_VERSION,
+        "protocol_id": PROTOCOL_ID,
+        "record_type": "SMPCC_SIM_MECHANISM_JSON_PATH_REPLAY",
+        "formal": False,
+        "physical_primary_eligible": False,
+        "case_manifest_hash": case_hash,
+        "path": str(path),
+        "path_hash": sha256_file(path),
+    })
+    rate = rospy.Rate(10)
+    try:
+        while not rospy.is_shutdown():
+            now = rospy.Time.now()
+            msg.header.stamp = now
+            goal.header.stamp = now
+            for pose in msg.poses:
+                pose.header.stamp = now
+            path_pub.publish(msg)
+            goal_pub.publish(goal)
+            rate.sleep()
+    except rospy.ROSInterruptException:
+        pass
+    return 0
+
+
+def command_clock_tail(args: argparse.Namespace) -> int:
+    """Internal subscriber that proves the frozen tail in ROS time."""
+
+    case_dir = _lexical_absolute(Path(args.case_dir))
+    case_hash = str(args.case_manifest_hash)
+    case, _freeze = _admit_internal_case(case_dir, case_hash)
+    tail_sec = float(args.tail_sec)
+    wall_watchdog_sec = float(args.wall_watchdog_sec)
+    require(math.isclose(
+                tail_sec, float(case["timing_policy"]["tail_sec"]),
+                rel_tol=0.0, abs_tol=1e-12) and
+            math.isclose(tail_sec, TAIL_SEC, rel_tol=0.0, abs_tol=1e-12),
+            "internal ROS clock tail duration differs from frozen policy")
+    require(math.isclose(
+                wall_watchdog_sec, TAIL_WALL_WATCHDOG_SEC,
+                rel_tol=0.0, abs_tol=1e-12),
+            "internal ROS clock tail wall watchdog differs from runner policy")
+    try:
+        import rospy  # type: ignore
+        from rosgraph_msgs.msg import Clock  # type: ignore
+    except ImportError as exc:
+        raise PilotError("ROS clock-tail child needs sourced environment") from exc
+    rospy.init_node("sim_mechanism_timing_clock_tail", disable_signals=True)
+    require(rospy.get_param("/use_sim_time", False) is True,
+            "internal ROS clock tail requires /use_sim_time=true")
+    condition = threading.Condition()
+    samples: Dict[str, Optional[float]] = {
+        "start": None, "last": None, "end": None,
+    }
+    regression: list[str] = []
+
+    def observe(message: Any) -> None:
+        value = float(message.clock.to_sec())
+        with condition:
+            previous = samples["last"]
+            if previous is not None and value < previous:
+                regression.append(
+                    f"ROS /clock regressed from {previous:.9f} to {value:.9f}")
+            if samples["start"] is None:
+                samples["start"] = value
+            samples["last"] = value
+            if (samples["start"] is not None and
+                    value - float(samples["start"]) >= tail_sec):
+                samples["end"] = value
+            condition.notify_all()
+
+    rospy.Subscriber("/clock", Clock, observe, queue_size=100)
+    wall_start = time.monotonic()
+    wall_deadline = wall_start + wall_watchdog_sec
+    with condition:
+        while samples["end"] is None and not regression:
+            remaining = wall_deadline - time.monotonic()
+            require(remaining > 0.0,
+                    "ROS /clock did not advance through the frozen tail "
+                    "before the wall watchdog")
+            require(not rospy.is_shutdown(),
+                    "ROS shut down before the frozen /clock tail completed")
+            condition.wait(timeout=min(0.1, remaining))
+    require(not regression, regression[0] if regression else
+            "ROS /clock regression detected")
+    wall_elapsed = time.monotonic() - wall_start
+    receipt = _build_clock_tail_receipt(
+        attempt_id=case_dir.name, case_manifest_hash=case_hash,
+        start_ros_time_sec=float(samples["start"]),
+        end_ros_time_sec=float(samples["end"]),
+        wall_elapsed_sec=wall_elapsed, required_tail_sec=tail_sec,
+        wall_watchdog_sec=wall_watchdog_sec)
+    write_json_new(_tail_clock_path(case_dir), receipt)
+    return 0
+
+
+def command_event_monitor(args: argparse.Namespace) -> int:
+    case_dir = _lexical_absolute(Path(args.case_dir))
+    case_hash = str(args.case_manifest_hash)
+    case, _freeze = _admit_internal_case(case_dir, case_hash)
+    path_document = read_json(Path(str(case["path"]["path"])), "timing event-monitor frozen path")
+    start = path_document["points"][0]
+    goal = path_document["points"][-1]
+    try:
+        import rospy  # type: ignore
+        from nav_msgs.msg import Odometry  # type: ignore
+        from std_msgs.msg import String  # type: ignore
+    except ImportError as exc:
+        raise PilotError("ROS monitor child needs sourced environment") from exc
+    base_state: Dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "protocol_id": PROTOCOL_ID,
+        "record_type": "SMPCC_SIM_MECHANISM_MOTION_GOAL_EVENTS",
+        "formal": False,
+        "physical_primary_eligible": False,
+        "case_manifest_hash": case_hash,
+        "success_contract": "controller_GOAL_REACHED_AND_frozen_endpoint_geometry",
+    }
+    gate = endpoint_gate.FrozenEndpointGate(
+        start_x=float(start["x"]), start_y=float(start["y"]),
+        start_yaw_rad=float(case["pose_contract"]["expected_spawn_yaw_rad"]),
+        goal_x=float(goal["x"]), goal_y=float(goal["y"]),
+        base_state=base_state,
+    )
+    state = gate.state
+    output = _event_path(case_dir)
+    state_lock = threading.RLock()
+
+    def odom(message: Any) -> None:
+        x = float(message.pose.pose.position.x)
+        y = float(message.pose.pose.position.y)
+        v = float(message.twist.twist.linear.x)
+        w = float(message.twist.twist.angular.z)
+        orientation = message.pose.pose.orientation
+        yaw = math.atan2(
+            2.0 * (float(orientation.w) * float(orientation.z) + float(orientation.x) * float(orientation.y)),
+            1.0 - 2.0 * (float(orientation.y) ** 2 + float(orientation.z) ** 2),
+        )
+        ros_stamp = float(message.header.stamp.to_sec()) if message.header.stamp else float(rospy.Time.now().to_sec())
+        def mutate() -> None:
+            gate.observe_odom(
+                x=x, y=y, linear_x_mps=v, angular_z_radps=w,
+                monotonic_sec=time.monotonic(), utc=utc_now(),
+                ros_time_sec=ros_stamp, yaw_rad=yaw)
+        _mutate_and_save_event_state(output, state, state_lock, mutate)
+
+    def status(message: Any) -> None:
+        def mutate() -> None:
+            gate.observe_status(
+                str(message.data), monotonic_sec=time.monotonic(), utc=utc_now(),
+                ros_time_sec=float(rospy.Time.now().to_sec()))
+        _mutate_and_save_event_state(output, state, state_lock, mutate)
+
+    rospy.init_node("sim_mechanism_timing_event_monitor")
+    require(rospy.get_param("/use_sim_time", False) is True,
+            "internal timing event monitor requires /use_sim_time=true")
+    rospy.Subscriber("/odom", Odometry, odom, queue_size=10)
+    rospy.Subscriber("/sim_spmpc/status", String, status, queue_size=10)
+    _mutate_and_save_event_state(output, state, state_lock)
+    rospy.spin()
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__); sub = parser.add_subparsers(dest="command", required=True)
+    run = sub.add_parser("run"); run.add_argument("--freeze-candidate", type=Path, required=True); run.add_argument("--condition", choices=("Bslosh", "SmoothMatch"), required=True); run.add_argument("--ros-master-uri", default="http://127.0.0.1:11550"); run.add_argument("--gazebo-master-uri", default="http://127.0.0.1:11584")
+    run.set_defaults(func=lambda a: run_case(a.freeze_candidate, a.condition, TIMING_ATTEMPT_IDS[a.condition], TIMING_CALIBRATION_SEED, a.ros_master_uri, a.gazebo_master_uri))
+    assemble_cmd = sub.add_parser("assemble"); assemble_cmd.add_argument("--freeze-candidate", type=Path, required=True); assemble_cmd.add_argument("--bslosh-attempt", type=Path, required=True); assemble_cmd.add_argument("--smoothmatch-attempt", type=Path, required=True); assemble_cmd.add_argument("--output", type=Path, required=True); assemble_cmd.set_defaults(func=lambda a: assemble(a.freeze_candidate, a.bslosh_attempt, a.smoothmatch_attempt, a.output))
+    return parser
+
+
+def _parse_internal(arguments: Sequence[str]) -> argparse.Namespace:
+    require(bool(arguments), "internal timing helper command is missing")
+    command = arguments[0]
+    parser = argparse.ArgumentParser(add_help=False)
+    if command == "__internal-path-replay":
+        parser.add_argument("--path", required=True)
+        parser.add_argument("--case-dir", required=True)
+        parser.add_argument("--case-manifest-hash", required=True)
+        parsed = parser.parse_args(arguments[1:])
+        parsed.func = command_path_replay
+        return parsed
+    if command == "__internal-event-monitor":
+        parser.add_argument("--case-dir", required=True)
+        parser.add_argument("--case-manifest-hash", required=True)
+        parsed = parser.parse_args(arguments[1:])
+        parsed.func = command_event_monitor
+        return parsed
+    if command == "__internal-clock-tail":
+        parser.add_argument("--case-dir", required=True)
+        parser.add_argument("--case-manifest-hash", required=True)
+        parser.add_argument("--tail-sec", required=True, type=float)
+        parser.add_argument("--wall-watchdog-sec", required=True, type=float)
+        parsed = parser.parse_args(arguments[1:])
+        parsed.func = command_clock_tail
+        return parsed
+    raise PilotError("unknown internal timing helper command")
+
+
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    try:
+        arguments = list(argv) if argv is not None else sys.argv[1:]
+        args = (_parse_internal(arguments)
+                if arguments and arguments[0].startswith("__internal-")
+                else build_parser().parse_args(arguments))
+        result = args.func(args)
+        if isinstance(result, Mapping): print(json.dumps(result, ensure_ascii=False, sort_keys=True)); return 0 if result.get("status") == "PASS" else 2
+        return int(result)
+    except (PilotError, sim_only.SimOnlyRunnerError, freeze_tool.MechanismFreezeError) as exc:
+        print(json.dumps({"status": "NO_GO", "formal": False, "physical_primary_eligible": False, "error": str(exc)}, ensure_ascii=False), file=sys.stderr); return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

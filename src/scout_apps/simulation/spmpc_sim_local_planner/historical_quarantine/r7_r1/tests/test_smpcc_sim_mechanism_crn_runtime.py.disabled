@@ -1,0 +1,494 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Nine fail-closed proofs for the SIM-MECHANISM CRN runtime consumer."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import copy
+import importlib.util
+import inspect
+import json
+import math
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
+RUNTIME_SCRIPT = SCRIPT_DIR / "smpcc_sim_mechanism_crn_runtime.py"
+FREEZE_SCRIPT = SCRIPT_DIR / "smpcc_sim_mechanism_freeze.py"
+
+
+def _load(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+runtime = _load("smpcc_crn_runtime_tested", RUNTIME_SCRIPT)
+freeze = _load("smpcc_crn_runtime_freeze_contract", FREEZE_SCRIPT)
+
+
+class CRNRuntimeConsumerTest(unittest.TestCase):
+    STAGE = "SIM-S1_CORE"
+    BLOCK = "b01"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        # The consumer deliberately has no import-time dependency on the freeze
+        # builder, but its public ABI must remain exactly synchronized with it.
+        bindings = (
+            ("trace schema", freeze.CRN_TRACE_SCHEMA_VERSION,
+             runtime.TRACE_SCHEMA_VERSION),
+            ("trace document", freeze.CRN_TRACE_DOCUMENT_TYPE,
+             runtime.TRACE_DOCUMENT_TYPE),
+            ("protocol", freeze.PROTOCOL_ID, runtime.PROTOCOL_ID),
+            ("release", freeze.RELEASE_ID, runtime.RELEASE_ID),
+            ("time domain", freeze.CRN_TIME_DOMAIN, runtime.TIME_DOMAIN),
+            ("time origin", freeze.CRN_TIME_ORIGIN_EVENT,
+             runtime.TIME_ORIGIN_EVENT),
+            ("interpolation", freeze.CRN_INTERPOLATION,
+             runtime.INTERPOLATION),
+            ("trace end", freeze.CRN_TRACE_END_MS, runtime.TRACE_END_MS),
+            ("required environment",
+             tuple(freeze.CRN_CONSUMER_REQUIRED_ENVIRONMENT),
+             runtime.REQUIRED_ENVIRONMENT),
+            ("seed streams", tuple(freeze.toolchain.SEED_STREAMS),
+             runtime.SEED_STREAMS),
+            ("consumption phases", freeze.CRN_CONSUMPTION_PHASES,
+             runtime.CONSUMPTION_PHASES),
+        )
+        for label, expected, actual in bindings:
+            if expected != actual:
+                raise AssertionError(
+                    f"CRN consumer {label} drift: "
+                    f"expected={expected!r} actual={actual!r}"
+                )
+
+    def _fixture(self, root: Path):
+        bundle = freeze._seed_bundle(
+            freeze.RANDOMIZATION_SEED, self.STAGE, 1,
+            root / "seed_traces",
+        )
+        path = Path(bundle["trace_asset"]["path"])
+        environment = runtime.required_environment(
+            path, self.STAGE, self.BLOCK
+        )
+        return bundle, path, environment
+
+    def _admit(self, environment, *, expected=None, stage=None, block=None):
+        return runtime.CRNTraceConsumer.from_environment(
+            environment,
+            self.STAGE if stage is None else stage,
+            self.BLOCK if block is None else block,
+            expected_bindings=(environment if expected is None else expected),
+        )
+
+    @staticmethod
+    def _environment_for(path: Path, asset: dict) -> dict[str, str]:
+        return {
+            "SMPCC_CRN_TRACE_ASSET_PATH": str(path.resolve()),
+            "SMPCC_CRN_TRACE_ASSET_SHA256": runtime.sha256_file(path),
+            "SMPCC_CRN_TRACE_ASSET_HASH": asset["trace_asset_hash"],
+            "SMPCC_CRN_SEED_BUNDLE_ID": asset["seed_bundle_id"],
+            "SMPCC_CRN_SEED_BUNDLE_HASH": asset["seed_bundle_hash"],
+        }
+
+    @staticmethod
+    def _rewrite_asset(path: Path, asset: dict) -> None:
+        path.chmod(0o644)
+        path.write_text(json.dumps(asset, sort_keys=True) + "\n",
+                        encoding="utf-8")
+        path.chmod(0o444)
+
+    @staticmethod
+    def _consume_all(consumer) -> None:
+        for stream in runtime.SEED_STREAMS:
+            phase = runtime.CONSUMPTION_PHASES[stream]
+            elapsed = 1.0 if phase == "MOTION_SIM_TIME" else 0.0
+            consumer.consume(
+                stream,
+                elapsed_sim_time_sec=elapsed,
+                consumption_phase=phase,
+            )
+
+    @staticmethod
+    def _rehash_ack(ack: dict) -> dict:
+        core = dict(ack)
+        core.pop("ack_hash", None)
+        ack["ack_hash"] = runtime.canonical_hash(core)
+        return ack
+
+    def test_missing_asset_rejected_before_cmd_publisher(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            missing = Path(temporary) / "missing.json"
+            environment = {
+                "SMPCC_CRN_TRACE_ASSET_PATH": str(missing),
+                "SMPCC_CRN_TRACE_ASSET_SHA256": "0" * 64,
+                "SMPCC_CRN_TRACE_ASSET_HASH": "0" * 64,
+                "SMPCC_CRN_SEED_BUNDLE_ID": "SEED_SIM-S1_CORE_b01",
+                "SMPCC_CRN_SEED_BUNDLE_HASH": "0" * 64,
+            }
+            with self.assertRaisesRegex(runtime.CRNRuntimeError, "missing"):
+                self._admit(environment)
+
+            _bundle, path, valid_environment = self._fixture(Path(temporary))
+            path.chmod(0o644)
+            with self.assertRaisesRegex(runtime.CRNRuntimeError, "read-only"):
+                self._admit(valid_environment)
+
+        source = RUNTIME_SCRIPT.read_text(encoding="utf-8")
+        self.assertNotIn("rospy", source)
+        self.assertNotIn("/cmd_vel", source)
+        self.assertNotIn("Publisher(", source)
+
+    def test_asset_file_hash_mismatch_rejected_before_cmd_publisher(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            _bundle, _path, environment = self._fixture(Path(temporary))
+            environment["SMPCC_CRN_TRACE_ASSET_SHA256"] = "0" * 64
+            with self.assertRaisesRegex(
+                runtime.CRNRuntimeError,
+                "SMPCC_CRN_TRACE_ASSET_SHA256 mismatch",
+            ):
+                self._admit(environment)
+
+    def test_asset_semantic_hash_mismatch_rejected_before_cmd_publisher(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            _bundle, path, _environment = self._fixture(Path(temporary))
+            asset = json.loads(path.read_text(encoding="utf-8"))
+            asset["trace_asset_hash"] = "0" * 64
+            self._rewrite_asset(path, asset)
+            environment = self._environment_for(path, asset)
+            with self.assertRaisesRegex(runtime.CRNRuntimeError,
+                                        "asset semantic hash mismatch"):
+                self._admit(environment)
+
+            # Bundle ID/hash and expected stage/block are independently bound.
+            _bundle, path, environment = self._fixture(
+                Path(temporary) / "second"
+            )
+            for key in ("SMPCC_CRN_SEED_BUNDLE_ID",
+                        "SMPCC_CRN_SEED_BUNDLE_HASH"):
+                changed = dict(environment)
+                changed[key] = "0" * 64
+                with self.subTest(binding=key), self.assertRaisesRegex(
+                    runtime.CRNRuntimeError, f"{key} mismatch"
+                ):
+                    self._admit(changed)
+            with self.assertRaisesRegex(runtime.CRNRuntimeError,
+                                        "stage mismatch"):
+                self._admit(environment, stage="SIM-S2A_SELECTIVITY")
+            with self.assertRaisesRegex(runtime.CRNRuntimeError,
+                                        "block_id mismatch"):
+                self._admit(environment, block="b02")
+
+    def test_condition_specific_trace_selection_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            _bundle, path, environment = self._fixture(Path(temporary))
+            from_environment_signature = inspect.signature(
+                runtime.CRNTraceConsumer.from_environment
+            )
+            self.assertNotIn("condition_selector",
+                             from_environment_signature.parameters)
+            self.assertFalse(any(
+                parameter.kind is inspect.Parameter.VAR_KEYWORD
+                for parameter in from_environment_signature.parameters.values()
+            ))
+            with self.assertRaisesRegex(TypeError, "condition_selector"):
+                runtime.CRNTraceConsumer.from_environment(
+                    environment, self.STAGE, self.BLOCK,
+                    expected_bindings=environment,
+                    condition_selector="Bslosh",
+                )
+            selected = dict(environment,
+                            SMPCC_CRN_CONDITION_ID="Bslosh")
+            with self.assertRaisesRegex(runtime.CRNRuntimeError,
+                                        "selectors are forbidden"):
+                self._admit(selected, expected=environment)
+
+            consumer = self._admit(environment)
+            with self.assertRaisesRegex(TypeError, "condition_id"):
+                consumer.consume(
+                    "actuator_disturbance", elapsed_sim_time_sec=1.0,
+                    consumption_phase="MOTION_SIM_TIME",
+                    condition_id="Bslosh",
+                )
+            with self.assertRaisesRegex(TypeError, "condition_id"):
+                consumer.spawn_yaw(0.0, condition_id="Bslosh")
+
+            asset = json.loads(path.read_text(encoding="utf-8"))
+            asset["condition_id"] = "Bslosh"
+            core = dict(asset)
+            core.pop("trace_asset_hash")
+            asset["trace_asset_hash"] = runtime.canonical_hash(core)
+            self._rewrite_asset(path, asset)
+            selected_asset_environment = self._environment_for(path, asset)
+            with self.assertRaisesRegex(runtime.CRNRuntimeError,
+                                        "condition_id mismatch"):
+                self._admit(selected_asset_environment)
+
+    def test_callback_count_rng_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            _bundle, _path, environment = self._fixture(Path(temporary))
+            consume_signature = inspect.signature(
+                runtime.CRNTraceConsumer.consume
+            )
+            self.assertNotIn("callback_count", consume_signature.parameters)
+            self.assertFalse(any(
+                parameter.kind is inspect.Parameter.VAR_KEYWORD
+                for parameter in consume_signature.parameters.values()
+            ))
+            with self.assertRaisesRegex(TypeError, "callback_count_rng"):
+                runtime.CRNTraceConsumer.from_environment(
+                    environment, self.STAGE, self.BLOCK,
+                    expected_bindings=environment,
+                    callback_count_rng=True,
+                )
+            changed = dict(environment, SMPCC_CRN_CALLBACK_COUNT="7")
+            with self.assertRaisesRegex(runtime.CRNRuntimeError,
+                                        "selectors are forbidden"):
+                self._admit(changed, expected=environment)
+            consumer = self._admit(environment)
+            with self.assertRaisesRegex(TypeError, "callback_count"):
+                consumer.consume(
+                    "actuator_disturbance", elapsed_sim_time_sec=1.0,
+                    consumption_phase="MOTION_SIM_TIME", callback_count=7,
+                )
+        source = RUNTIME_SCRIPT.read_text(encoding="utf-8")
+        self.assertNotIn("import random", source)
+        self.assertNotIn("random.Random", source)
+
+    def test_same_block_replay_consumes_identical_trace_hashes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            _bundle, path, environment = self._fixture(Path(temporary))
+            self.assertEqual(set(freeze.CRN_CONSUMER_REQUIRED_ENVIRONMENT),
+                             set(runtime.required_environment(
+                                 path, self.STAGE, self.BLOCK)))
+            with self.assertRaisesRegex(TypeError, "expected_bindings"):
+                runtime.CRNTraceConsumer.from_environment(
+                    environment, self.STAGE, self.BLOCK
+                )
+            with self.assertRaisesRegex(runtime.CRNRuntimeError,
+                                        "validated factory"):
+                runtime.CRNTraceConsumer({})
+
+            other_bundle = freeze._seed_bundle(
+                "COORDINATED-SUBSTITUTION-MUST-FAIL",
+                self.STAGE,
+                1,
+                Path(temporary) / "coordinated_substitution",
+            )
+            other_path = Path(other_bundle["trace_asset"]["path"])
+            other_environment = runtime.required_environment(
+                other_path, self.STAGE, self.BLOCK
+            )
+            # A coordinated replacement must be rejected against the frozen
+            # bindings before its internally self-consistent bytes are trusted.
+            with self.assertRaisesRegex(runtime.CRNRuntimeError,
+                                        "differs from frozen binding"):
+                self._admit(other_environment, expected=environment)
+
+            first = self._admit(environment)
+            second = self._admit(environment)
+            self.assertEqual(first.trace_asset_hash, second.trace_asset_hash)
+            self.assertEqual(first.seed_bundle_hash, second.seed_bundle_hash)
+            self.assertEqual(first.stream_trace_hashes,
+                             second.stream_trace_hashes)
+            for stream in runtime.SEED_STREAMS:
+                phase = runtime.CONSUMPTION_PHASES[stream]
+                elapsed = 3.25 if phase == "MOTION_SIM_TIME" else 0.0
+                left = first.consume(
+                    stream, elapsed_sim_time_sec=elapsed,
+                    consumption_phase=phase,
+                )
+                right = second.consume(
+                    stream, elapsed_sim_time_sec=elapsed,
+                    consumption_phase=phase,
+                )
+                self.assertEqual(left, right)
+
+            leaked_asset = first.asset
+            leaked_asset["traces"]["sensor_noise"]["samples"][0][
+                "unit_uniform"] = -1.0
+            self.assertGreaterEqual(
+                first.asset["traces"]["sensor_noise"]["samples"][0][
+                    "unit_uniform"], 0.0
+            )
+            leaked_hashes = dict(first.stream_trace_hashes)
+            leaked_hashes["sensor_noise"] = "0" * 64
+            self.assertNotEqual(
+                "0" * 64, first.stream_trace_hashes["sensor_noise"]
+            )
+            leaked_ledger = first.consumed_streams
+            leaked_ledger["sensor_noise"]["time_indices_ms"].append(999.0)
+            self.assertNotIn(
+                999.0,
+                first.consumed_streams["sensor_noise"]["time_indices_ms"],
+            )
+
+    def test_sim_time_indexing_verified(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            _bundle, _path, environment = self._fixture(Path(temporary))
+            consumer = self._admit(environment)
+            samples = consumer.asset["traces"]["actuator_disturbance"]["samples"]
+            midpoint = consumer.consume(
+                "actuator_disturbance", elapsed_sim_time_sec=1.0,
+                consumption_phase="MOTION_SIM_TIME",
+            )
+            self.assertEqual(1000.0, midpoint["time_index_ms"])
+            self.assertAlmostEqual(
+                (samples[0]["unit_uniform"] + samples[1]["unit_uniform"]) / 2.0,
+                midpoint["unit_uniform"], places=15,
+            )
+            exact = consumer.consume(
+                "actuator_disturbance", elapsed_sim_time_sec=2.0,
+                consumption_phase="MOTION_SIM_TIME",
+            )
+            self.assertEqual(samples[1]["unit_uniform"], exact["unit_uniform"])
+            for elapsed in (-0.001, 60.001, float("nan")):
+                with self.subTest(elapsed=elapsed), self.assertRaises(
+                    runtime.CRNRuntimeError
+                ):
+                    consumer.consume(
+                        "actuator_disturbance",
+                        elapsed_sim_time_sec=elapsed,
+                        consumption_phase="MOTION_SIM_TIME",
+                    )
+            with self.assertRaisesRegex(runtime.CRNRuntimeError,
+                                        "phase mismatch"):
+                consumer.consume(
+                    "sensor_noise", elapsed_sim_time_sec=0.0,
+                    consumption_phase="PRE_MOTION_RESET",
+                )
+
+    def test_runtime_ack_binds_consumed_trace_hashes(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            _bundle, _path, environment = self._fixture(Path(temporary))
+            consumer = self._admit(environment)
+            self._consume_all(consumer)
+            path_yaw = 0.25
+            observed = consumer.spawn_yaw(path_yaw)
+            ack = consumer.build_runtime_ack(
+                frozen_path_initial_yaw_rad=path_yaw,
+                observed_initial_yaw_rad=observed,
+                initial_yaw_offset_rad_applied=True,
+                applied=True,
+                formal=False,
+            )
+            report = runtime.validate_runtime_ack(
+                ack, consumer,
+                expected_frozen_path_initial_yaw_rad=path_yaw,
+                expected_observed_initial_yaw_rad=observed,
+                expected_formal=False,
+            )
+            self.assertEqual("PASS", report["status"])
+            self.assertEqual(consumer.stream_trace_hashes,
+                             report["stream_trace_hashes"])
+
+            fresh_consumer = self._admit(environment)
+            with self.assertRaisesRegex(
+                runtime.CRNRuntimeError, "actual runtime consumption ledger"
+            ):
+                runtime.validate_runtime_ack(
+                    ack, fresh_consumer,
+                    expected_frozen_path_initial_yaw_rad=path_yaw,
+                    expected_observed_initial_yaw_rad=observed,
+                    expected_formal=False,
+                )
+
+            mutations = {
+                "asset_file": lambda item: item.update(
+                    trace_asset_file_sha256="0" * 64),
+                "asset_semantic": lambda item: item.update(
+                    trace_asset_hash="0" * 64),
+                "bundle": lambda item: item.update(
+                    seed_bundle_hash="0" * 64),
+                "stream_registry": lambda item: item["stream_trace_hashes"].update(
+                    actuator_disturbance="0" * 64),
+                "consumed_stream": lambda item: item["consumed_streams"][
+                    "sensor_noise"].update(trace_hash="0" * 64),
+                "consumed_time_index": lambda item: item["consumed_streams"][
+                    "actuator_disturbance"]["time_indices_ms"].append(5000.0),
+            }
+            for name, mutation in mutations.items():
+                changed = copy.deepcopy(ack)
+                mutation(changed)
+                self._rehash_ack(changed)
+                with self.subTest(binding=name), self.assertRaises(
+                    runtime.CRNRuntimeError
+                ):
+                    runtime.validate_runtime_ack(
+                        changed, consumer,
+                        expected_frozen_path_initial_yaw_rad=path_yaw,
+                        expected_observed_initial_yaw_rad=observed,
+                        expected_formal=False,
+                    )
+
+    def test_initial_yaw_offset_applied_and_acknowledged(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            _bundle, _path, environment = self._fixture(Path(temporary))
+            consumer = self._admit(environment)
+            path_yaw = -0.4
+            expected_spawn = path_yaw + consumer.initial_yaw_offset_rad
+            self.assertEqual(expected_spawn, consumer.spawn_yaw(path_yaw))
+            self._consume_all(consumer)
+            for applied_field in ("initial_yaw_offset_rad_applied", "applied"):
+                arguments = {
+                    "frozen_path_initial_yaw_rad": path_yaw,
+                    "observed_initial_yaw_rad": expected_spawn,
+                    "initial_yaw_offset_rad_applied": True,
+                    "applied": True,
+                    "formal": False,
+                }
+                arguments[applied_field] = False
+                with self.subTest(field=applied_field), self.assertRaisesRegex(
+                    runtime.CRNRuntimeError, "requires .*true"
+                ):
+                    consumer.build_runtime_ack(**arguments)
+            with self.assertRaisesRegex(runtime.CRNRuntimeError,
+                                        "observed initial yaw"):
+                consumer.build_runtime_ack(
+                    frozen_path_initial_yaw_rad=path_yaw,
+                    observed_initial_yaw_rad=expected_spawn + 0.01,
+                    initial_yaw_offset_rad_applied=True,
+                    applied=True,
+                    formal=False,
+                )
+            ack = consumer.build_runtime_ack(
+                frozen_path_initial_yaw_rad=path_yaw,
+                observed_initial_yaw_rad=expected_spawn,
+                initial_yaw_offset_rad_applied=True,
+                applied=True,
+                formal=False,
+            )
+            self.assertEqual(expected_spawn, ack["observed_initial_yaw_rad"])
+            self.assertTrue(ack["initial_yaw_offset_rad_applied"])
+            self.assertTrue(ack["applied"])
+            runtime.validate_runtime_ack(
+                ack, consumer,
+                expected_frozen_path_initial_yaw_rad=path_yaw,
+                expected_observed_initial_yaw_rad=expected_spawn,
+                expected_formal=False,
+            )
+
+
+DISCOVERED_PROOFS = {
+    name[len("test_"):] for name in dir(CRNRuntimeConsumerTest)
+    if name.startswith("test_")
+}
+if DISCOVERED_PROOFS != set(freeze.CRN_CONSUMER_REQUIRED_PROOFS):
+    raise AssertionError(
+        "CRN consumer tests do not exactly cover required proofs: "
+        f"expected={sorted(freeze.CRN_CONSUMER_REQUIRED_PROOFS)} "
+        f"actual={sorted(DISCOVERED_PROOFS)}"
+    )
+
+
+if __name__ == "__main__":
+    unittest.main()

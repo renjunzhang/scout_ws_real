@@ -1,0 +1,307 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Offline fail-closed tests for the canonical R7 release boundary."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import importlib.util
+import json
+import os
+import sys
+import tempfile
+import unittest
+from contextlib import redirect_stdout
+from io import StringIO
+from pathlib import Path
+from unittest import mock
+
+
+MODULE_PATH = (
+    Path(__file__).resolve().parents[1] /
+    "smpcc_sim_mechanism_release.py"
+)
+
+
+def load_module():
+    spec = importlib.util.spec_from_file_location(
+        "smpcc_sim_mechanism_release_test_target", MODULE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load mechanism-release module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class MechanismReleaseTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_module()
+
+    def _initial_state(self) -> dict:
+        core = {
+            "result_root_state": "ABSENT",
+            "bag_root_state": "ABSENT",
+            "dataset_index_absent": True,
+            "attempts_dir_absent": True,
+            "N_attempt": 0,
+            "predecessor_attempts_migrated": 0,
+        }
+        return dict(
+            core,
+            initial_state_hash=self.module.canonical_hash(core),
+        )
+
+    def _release_shell(self) -> dict:
+        module = self.module
+        core = {
+            "schema_version": module.SCHEMA_VERSION,
+            "document_type": module.DOCUMENT_TYPE,
+            "protocol_id": module.PROTOCOL_ID,
+            "release_id": module.RELEASE_ID,
+            "namespace": module.NAMESPACE,
+            "formal": True,
+            "formal_scope": module.FORMAL_SCOPE,
+            "physical_alignment": False,
+            "physical_primary_eligible": False,
+            "physical_primary": None,
+            "evidence_class": module.EVIDENCE_CLASS,
+            "freeze": None,
+            "freeze_hash": "a" * 64,
+            "master": None,
+            "master_hash": "b" * 64,
+            "go_gate_evidence": None,
+            "go_gate_receipt_hash": "c" * 64,
+            "runtime_bindings_hash": "d" * 64,
+            "crn_runtime_consumer_contract": {
+                "path": "/fixture/crn_runtime_consumer_contract.json",
+                "sha256": "e" * 64,
+            },
+            "crn_runtime_consumer_contract_hash": "f" * 64,
+            "crn_runtime_ack_schema_hash": "1" * 64,
+            "result_policy": dict(module.EXPECTED_RESULT_POLICY),
+            "predecessor_exclusion": dict(module.PREDECESSOR_EXCLUSION),
+            "initial_state": self._initial_state(),
+            "canonical_runner": None,
+            "created_utc": "2026-08-03T00:00:00Z",
+        }
+        return dict(core, release_hash=module.canonical_hash(core))
+
+    @staticmethod
+    def _rehash(module, document: dict) -> None:
+        core = dict(document)
+        core.pop("release_hash", None)
+        document["release_hash"] = module.canonical_hash(core)
+
+    def test_release_hash_tamper_is_rejected(self):
+        release = self._release_shell()
+        release["release_hash"] = "0" * 64
+        report = self.module.validate_release(
+            release,
+            manifest_path=None,
+            require_canonical_paths=False,
+            require_empty=False,
+        )
+        self.assertEqual("FAIL", report["status"])
+        self.assertIn("release_hash mismatch", report["errors"])
+        self.assertFalse(report["physical_primary_eligible"])
+
+    def test_extra_physical_claim_is_rejected_even_when_rehashed(self):
+        release = self._release_shell()
+        release["physical_primary_claim"] = {
+            "topic": "/slosh/height",
+            "semantic": "forbidden",
+        }
+        self._rehash(self.module, release)
+        report = self.module.validate_release(
+            release,
+            manifest_path=None,
+            require_canonical_paths=False,
+            require_empty=False,
+        )
+        self.assertEqual("FAIL", report["status"])
+        self.assertIn(
+            "release fields are not the exact R7 schema",
+            report["errors"],
+        )
+
+    def test_missing_crn_consumer_contract_is_rejected_when_rehashed(self):
+        release = self._release_shell()
+        release["crn_runtime_consumer_contract"] = None
+        self._rehash(self.module, release)
+        report = self.module.validate_release(
+            release,
+            manifest_path=None,
+            require_canonical_paths=False,
+            require_empty=False,
+        )
+        self.assertEqual("FAIL", report["status"])
+        self.assertIn(
+            "release CRN runtime consumer contract is missing or malformed",
+            report["errors"],
+        )
+
+    def test_r2_redirect_and_predecessor_import_are_rejected(self):
+        module = self.module
+        release = self._release_shell()
+        release.update({
+            "protocol_id": "SMPCC-SIM-MECHANISM-40-64-88-v1",
+            "release_id": "SIM-MECHANISM-40-64-88-R2",
+            "namespace": "SMPCC-SIM-MECHANISM-40-64-88-R2",
+        })
+        release["predecessor_exclusion"] = {
+            **module.PREDECESSOR_EXCLUSION,
+            "attempt_import_allowed": True,
+            "attempts_imported": 6,
+        }
+        release["result_policy"] = {
+            **module.EXPECTED_RESULT_POLICY,
+            "predecessor_import_allowed": True,
+        }
+        self._rehash(module, release)
+        errors = module.validate_release(
+            release,
+            manifest_path=None,
+            require_canonical_paths=False,
+            require_empty=False,
+        )["errors"]
+        self.assertTrue(any("release protocol_id" in error for error in errors))
+        self.assertTrue(any("release release_id" in error for error in errors))
+        self.assertTrue(any("release namespace" in error for error in errors))
+        self.assertTrue(any("predecessor_exclusion" in error for error in errors))
+        self.assertTrue(any("result_policy" in error for error in errors))
+
+    def test_public_gate_refuses_noncanonical_and_predecessor_paths_before_reading(self):
+        module = self.module
+        forbidden = (
+            Path("/tmp/mechanism_release.json"),
+            Path(
+                "/data/a/scout_sim_replacement/"
+                "SMPCC-SIM-MECHANISM-40-64-88-R2/release/"
+                "SIM-MECHANISM-40-64-88-R2/mechanism_release.json"
+            ),
+            Path(
+                "/data/a/scout_sim_replacement/"
+                "SMPCC-SIM-MECHANISM-40-64-88-R4/release/"
+                "SIM-MECHANISM-40-64-88-R4/mechanism_release.json"
+            ),
+        )
+        for path in forbidden:
+            with self.subTest(path=path), redirect_stdout(StringIO()) as output:
+                status = module.main(["gate", "--release", str(path)])
+                self.assertEqual(2, status)
+                report = json.loads(output.getvalue())
+                self.assertEqual("NO_GO", report["status"])
+                self.assertFalse(report["formal"])
+                self.assertIn("must be exactly", report["errors"][0])
+
+    def test_handwritten_pass_go_receipt_is_not_evidence(self):
+        errors = self.module.freeze_tool.validate_go_gate_receipt(
+            {
+                "status": "PASS",
+                "physical_alignment": False,
+                "physical_primary_eligible": False,
+            },
+            "0" * 64,
+        )
+        self.assertIn(
+            "R7 GO gate checks are incomplete or contain unknown checks",
+            errors,
+        )
+        self.assertIn("R7 GO gate receipt hash mismatch", errors)
+        self.assertTrue(any("runtime rejection proof" in error
+                            for error in errors))
+
+    def test_initial_state_rejects_ledger_attempt_and_nonempty_bag(self):
+        module = self.module
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            result_root = root / "results"
+            bag_root = root / "bags"
+            index = result_root / "dataset_index.jsonl"
+            attempts = result_root / "attempts"
+            with mock.patch.multiple(
+                    module,
+                    RESULT_ROOT=result_root,
+                    BAG_ROOT=bag_root,
+                    DATASET_INDEX=index,
+                    ATTEMPTS_ROOT=attempts):
+                result_root.mkdir()
+                index.write_text("{}\n", encoding="utf-8")
+                with self.assertRaisesRegex(
+                        module.MechanismReleaseError,
+                        "dataset index must be absent"):
+                    module.inspect_initial_state()
+                index.unlink()
+
+                attempts.mkdir()
+                with self.assertRaisesRegex(
+                        module.MechanismReleaseError,
+                        "attempts directory must be absent"):
+                    module.inspect_initial_state()
+                attempts.rmdir()
+
+                bag_root.mkdir()
+                (bag_root / "old.bag").write_bytes(b"old attempt")
+                with self.assertRaisesRegex(
+                        module.MechanismReleaseError,
+                        "matrix bag root must be empty"):
+                    module.inspect_initial_state()
+
+    def test_initial_state_rejects_symlinked_result_root(self):
+        module = self.module
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "target"
+            target.mkdir()
+            result_root = root / "results-link"
+            os.symlink(target, result_root)
+            with mock.patch.multiple(
+                    module,
+                    RESULT_ROOT=result_root,
+                    BAG_ROOT=root / "bags",
+                    DATASET_INDEX=result_root / "dataset_index.jsonl",
+                    ATTEMPTS_ROOT=result_root / "attempts"):
+                with self.assertRaisesRegex(
+                        module.MechanismReleaseError,
+                        "may not traverse a symlink"):
+                    module.inspect_initial_state()
+
+    def test_malformed_bound_freeze_returns_fail_not_traceback(self):
+        module = self.module
+        with tempfile.TemporaryDirectory() as temporary:
+            freeze_path = Path(temporary) / "freeze.json"
+            freeze_path.write_text(
+                json.dumps({
+                    "simulator_assets": {
+                        "map": {}, "world": {}, "robot_model": {},
+                        "world_geometry": {},
+                    },
+                    "runtime_bindings": [],
+                }) + "\n",
+                encoding="utf-8",
+            )
+            os.chmod(freeze_path, 0o444)
+            release = self._release_shell()
+            release["freeze"] = {
+                "path": str(freeze_path),
+                "sha256": module.sha256_file(freeze_path),
+            }
+            self._rehash(module, release)
+            report = module.validate_release(
+                release,
+                manifest_path=None,
+                require_canonical_paths=False,
+                require_empty=False,
+            )
+            self.assertEqual("FAIL", report["status"])
+            self.assertTrue(any(
+                "release-bound freeze is not PASS" in error
+                for error in report["errors"]
+            ))
+
+
+if __name__ == "__main__":
+    unittest.main()

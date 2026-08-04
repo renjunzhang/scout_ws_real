@@ -1,0 +1,13 @@
+experiment:
+  mode: fixed_path
+  reference_source: global_path_fixed
+  corridor_width: 0.30
+  corridor_enable: false
+  corridor_hard_bound_enable: false
+  corridor_weight: 1.0
+  obstacle_enable: false
+  obstacle_weight: 1.0
+  obstacle_influence_radius: 0.45
+  homotopy_enable: false
+  homotopy_lateral_offset: 0.0
+  terminal_exclude_sec: 1.0

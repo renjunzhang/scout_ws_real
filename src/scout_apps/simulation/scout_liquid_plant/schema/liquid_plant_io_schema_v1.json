@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema_version": 1,
+  "title": "scout_liquid_plant development I/O contract",
+  "status": {
+    "development_only": true,
+    "formal": false,
+    "fidelity_validation_status": "UNVALIDATED",
+    "physical_primary_eligible": false
+  },
+  "input": {
+    "topic": "/odom",
+    "message_type": "nav_msgs/Odometry",
+    "semantic": "executed_simulated_base_motion_only",
+    "used_fields": [
+      "header.stamp",
+      "pose.pose.orientation",
+      "twist.twist.linear.x",
+      "twist.twist.linear.y",
+      "twist.twist.angular.z"
+    ],
+    "forbidden_input_classes": [
+      "raw_or_gated_command",
+      "controller_or_observer_state",
+      "monitor_output",
+      "another_sim_truth_topic"
+    ]
+  },
+  "outputs": {
+    "liquid_height": {
+      "topic": "/sim_truth/liquid_height",
+      "message_type": "std_msgs/Float64",
+      "unit": "m",
+      "semantic": "unvalidated_surrogate_crest_elevation_above_static_level"
+    },
+    "liquid_state": {
+      "topic": "/sim_truth/liquid_state",
+      "message_type": "std_msgs/Float64MultiArray",
+      "layout": {
+        "base_field_order": [
+          "stamp_sec",
+          "input_dt_sec",
+          "ax_body_mps2",
+          "ay_body_mps2",
+          "yaw_rate_radps",
+          "yaw_accel_radps2",
+          "liquid_height_m",
+          "modal_height_m",
+          "rotation_height_m"
+        ],
+        "per_mode_field_order": [
+          "mode_<id>_qx_m",
+          "mode_<id>_vx_mps",
+          "mode_<id>_qy_m",
+          "mode_<id>_vy_mps"
+        ],
+        "field_order_source": "/sim_truth/liquid_metadata.state_field_order"
+      }
+    },
+    "metadata": {
+      "topic": "/sim_truth/liquid_metadata",
+      "message_type": "std_msgs/String",
+      "encoding": "UTF-8 JSON, latched",
+      "required_keys": [
+        "development_only",
+        "formal",
+        "fidelity_validation_status",
+        "physical_primary_eligible",
+        "input",
+        "outputs",
+        "state_field_order",
+        "development_code_sha256"
+      ]
+    }
+  },
+  "invariants": [
+    "The package creates exactly one subscriber, /odom.",
+    "formal is always false.",
+    "fidelity_validation_status is always UNVALIDATED.",
+    "The output cannot be used as a controller input or a physical-primary result."
+  ]
+}

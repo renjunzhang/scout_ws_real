@@ -1,0 +1,31 @@
+#include "spmpc_sim_local_planner/solvers/solver_factory.h"
+
+#include "spmpc_sim_local_planner/solvers/rollout_sampling_solver.h"
+#include "spmpc_sim_local_planner/solvers/continuous_mpcc_solver_acados.h"
+#include "spmpc_sim_local_planner/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.h"
+
+#include <stdexcept>
+
+namespace spmpc_sim_local_planner {
+
+bool isKnownSolverBackend(const std::string& backend) {
+    return backend == kSolverBackendPrimitive ||
+           backend == kSolverBackendContinuousMpccAcados ||
+           backend == kSolverBackendContinuousMpccDirectOmegaLegacy;
+}
+
+std::unique_ptr<SpmpcSolver> makeSolver(const std::string& backend) {
+    if (backend == kSolverBackendContinuousMpccAcados) {
+        return std::unique_ptr<SpmpcSolver>(new ContinuousMpccSolverAcados());
+    }
+    if (backend == kSolverBackendContinuousMpccDirectOmegaLegacy) {
+        return std::unique_ptr<SpmpcSolver>(new ContinuousMpccDirectOmegaLegacySolverAcados());
+    }
+    if (backend == kSolverBackendPrimitive) {
+        // primitive 是显式 fallback/debug rollout sampler；调用方必须先完成 backend policy 校验。
+        return std::unique_ptr<SpmpcSolver>(new RolloutSamplingSolver());
+    }
+    throw std::invalid_argument("unknown SPMPC solver backend: " + backend);
+}
+
+}  // namespace spmpc_sim_local_planner

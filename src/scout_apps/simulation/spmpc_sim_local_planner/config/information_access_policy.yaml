@@ -1,0 +1,16 @@
+# Runtime graph firewall for the source-separated simulation target.
+# It is intentionally not stored in the physical benchmark policy.
+sim_information_access_policy:
+  forbidden_control_topic_prefixes:
+    - /sim_truth/
+    - /slosh/
+    - /benchmark/slosh_monitor/
+  protected_nodes:
+    - /sim_spmpc_local_planner
+    - /cmd_vel_guard
+  required_checkpoints:
+    - ready
+    - pre_motion
+    - postflight
+  recorder_and_metrics_may_subscribe: true
+  failure_code: CONTROLLER_SUBSCRIBES_TO_SIM_TRUTH_OR_PROXY

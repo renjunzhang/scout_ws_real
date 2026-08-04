@@ -1,0 +1,947 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Fail-closed runtime QC helpers shared by mechanism-only runners.
+
+The module is deliberately independent of a live ROS master.  Production bag
+inspection imports :mod:`rosbag` lazily and opens a finalized bag read-only;
+unit tests can inject a compatible bag factory.  A filename is never treated
+as proof that ``rosbag record`` closed cleanly.
+
+This module does not decide physical efficacy.  Every receipt permanently
+states that it is ineligible for a physical-primary claim.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import hashlib
+import json
+import math
+import os
+import signal
+import stat
+from pathlib import Path
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
+
+
+SCHEMA_VERSION = "smpcc-sim-mechanism-runtime-qc-v1"
+FORMAL_SCOPE = "SIMULATION_MECHANISM_ONLY"
+MAX_COMPLETION_SEC = 60.0
+TAIL_SEC = 5.0
+MOTION_BRACKET_MAX_GAP_SEC = 1.0
+ZERO_COMMAND_ABS_TOLERANCE = 1.0e-9
+
+STOP_POLICIES: Mapping[str, Mapping[str, Any]] = {
+    "recorder": {
+        "label": "recorder",
+        "signal": "SIGINT",
+        "allowed_returncodes": (0, -int(signal.SIGINT)),
+    },
+    "planner": {
+        "label": "planner",
+        "signal": "SIGTERM",
+        "allowed_returncodes": (0, -int(signal.SIGTERM)),
+    },
+    "profile_tracker": {
+        "label": "profile_tracker",
+        "signal": "SIGTERM",
+        "allowed_returncodes": (0, -int(signal.SIGTERM)),
+    },
+    "path_replay": {
+        "label": "path_replay",
+        "signal": "SIGTERM",
+        "allowed_returncodes": (0, -int(signal.SIGTERM)),
+    },
+}
+
+
+class RuntimeQCError(RuntimeError):
+    """A normalized, machine-identifiable fail-closed QC error."""
+
+    def __init__(self, code: str, message: str) -> None:
+        self.code = str(code)
+        super().__init__(f"{self.code}: {message}")
+
+
+def require(condition: bool, code: str, message: str) -> None:
+    if not condition:
+        raise RuntimeQCError(code, message)
+
+
+def _strict_bytes(value: Any) -> bytes:
+    try:
+        return json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise RuntimeQCError(
+            "NON_FINITE_OR_NON_JSON_VALUE",
+            f"QC evidence is not strict finite JSON: {exc}",
+        ) from exc
+
+
+def canonical_hash(value: Any) -> str:
+    return hashlib.sha256(_strict_bytes(value)).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _finite_number(value: Any, label: str) -> float:
+    require(
+        isinstance(value, (int, float)) and not isinstance(value, bool),
+        "NON_FINITE_NUMBER", f"{label} must be a finite number",
+    )
+    result = float(value)
+    require(math.isfinite(result), "NON_FINITE_NUMBER",
+            f"{label} must be finite")
+    return result
+
+
+def _nonempty_string(value: Any, label: str) -> str:
+    require(isinstance(value, str) and bool(value.strip()), "INVALID_IDENTITY",
+            f"{label} must be a nonempty string")
+    return str(value)
+
+
+def _sha256_string(value: Any, label: str) -> str:
+    require(
+        isinstance(value, str) and len(value) == 64 and
+        all(character in "0123456789abcdef" for character in value),
+        "INVALID_IDENTITY", f"{label} must be a lowercase SHA-256",
+    )
+    return str(value)
+
+
+def _hashed_receipt(core: Mapping[str, Any], hash_field: str) -> Dict[str, Any]:
+    strict = dict(core)
+    return dict(strict, **{hash_field: canonical_hash(strict)})
+
+
+def _validate_hashed_receipt(
+        receipt: Mapping[str, Any], hash_field: str, record_type: str) -> None:
+    require(isinstance(receipt, Mapping), "INVALID_QC_RECEIPT",
+            f"{record_type} receipt must be an object")
+    core = dict(receipt)
+    declared = core.pop(hash_field, None)
+    require(receipt.get("record_type") == record_type and
+            receipt.get("status") == "PASS" and
+            declared == canonical_hash(core),
+            "INVALID_QC_RECEIPT",
+            f"{record_type} receipt/hash is invalid")
+
+
+def validate_owned_stop_result(
+        result: Mapping[str, Any], component: str) -> Dict[str, Any]:
+    """Validate one explicit ``OwnedChildren.stop`` result.
+
+    A result from the later idempotent ``stop_all`` pass is intentionally not
+    admissible: the component must have been alive when its component-specific
+    stop signal was sent.  Escalation, a missing exit status, and an unexpected
+    return code all fail closed.
+    """
+
+    require(component in STOP_POLICIES, "UNKNOWN_STOP_COMPONENT",
+            f"no frozen stop policy for {component}")
+    require(isinstance(result, Mapping), "MALFORMED_STOP_RESULT",
+            f"{component} stop result must be an object")
+    policy = STOP_POLICIES[component]
+    require(result.get("label") == policy["label"], "STOP_LABEL_MISMATCH",
+            f"{component} stop label is not {policy['label']}")
+    require(result.get("not_started") is not True, "STOP_NOT_STARTED",
+            f"{component} was never started")
+    require(result.get("already_exited") is False, "STOP_ALREADY_EXITED",
+            f"{component} exited before its controlled stop")
+    require(result.get("gone_before_signal") is not True,
+            "STOP_GONE_BEFORE_SIGNAL",
+            f"{component} disappeared before the stop signal")
+    require(result.get("signal") == policy["signal"], "STOP_SIGNAL_MISMATCH",
+            f"{component} stop did not use {policy['signal']}")
+    require(result.get("escalated_to") in (None, ""), "STOP_ESCALATED",
+            f"{component} stop escalated to {result.get('escalated_to')}")
+    require(result.get("cleanup_error") in (None, ""), "STOP_CLEANUP_ERROR",
+            f"{component} cleanup reported {result.get('cleanup_error')}")
+    pid = result.get("pid")
+    require(isinstance(pid, int) and not isinstance(pid, bool) and pid > 0,
+            "STOP_PID_INVALID", f"{component} stop PID is invalid")
+    returncode = result.get("returncode")
+    require(isinstance(returncode, int) and not isinstance(returncode, bool),
+            "STOP_PROCESS_STILL_RUNNING",
+            f"{component} has no final integer return code")
+    allowed = tuple(int(value) for value in policy["allowed_returncodes"])
+    require(returncode in allowed, "STOP_RETURN_CODE_INVALID",
+            f"{component} return code {returncode} is not in {allowed}")
+    require(set(result) == {
+                "label", "pid", "signal", "already_exited", "returncode"},
+            "MALFORMED_STOP_RESULT",
+            f"{component} successful stop result fields are not exact")
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_PROCESS_STOP_QC",
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "component": component,
+        "label": result["label"],
+        "pid": pid,
+        "requested_signal": result["signal"],
+        "returncode": returncode,
+        "allowed_returncodes": list(allowed),
+        "was_running_before_stop": True,
+        "escalated": False,
+        "cleanup_error": None,
+        "raw_stop_result_hash": canonical_hash(dict(result)),
+    }
+    return _hashed_receipt(core, "stop_qc_hash")
+
+
+def validate_owned_stop_bundle(
+        results: Mapping[str, Mapping[str, Any]], *,
+        motion_component: str) -> Dict[str, Any]:
+    """Validate recorder, path replay and exactly one motion component."""
+
+    require(motion_component in {"planner", "profile_tracker"},
+            "UNKNOWN_STOP_COMPONENT",
+            "motion_component must be planner or profile_tracker")
+    expected = {"recorder", "path_replay", motion_component}
+    require(isinstance(results, Mapping) and set(results) == expected,
+            "STOP_BUNDLE_INCOMPLETE",
+            f"stop bundle must contain exactly {sorted(expected)}")
+    receipts = {
+        component: validate_owned_stop_result(results[component], component)
+        for component in sorted(expected)
+    }
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_PROCESS_STOP_BUNDLE_QC",
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "motion_component": motion_component,
+        "components": receipts,
+    }
+    return _hashed_receipt(core, "stop_bundle_qc_hash")
+
+
+def build_owned_stop_evidence(
+        results: Mapping[str, Mapping[str, Any]], *, motion_component: str,
+        protocol_id: str, release_id: str, attempt_id: str,
+        case_manifest_hash: str, formal: bool) -> Dict[str, Any]:
+    """Persist raw PID-scoped stop results and their rebuilt QC bundle."""
+
+    require(isinstance(formal, bool), "INVALID_IDENTITY",
+            "formal must be a JSON boolean")
+    stop_bundle = validate_owned_stop_bundle(
+        results, motion_component=motion_component)
+    strict_results = {
+        component: dict(results[component])
+        for component in sorted(results)
+    }
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_RAW_PROCESS_STOP_EVIDENCE",
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "formal": formal,
+        "protocol_id": _nonempty_string(protocol_id, "protocol_id"),
+        "release_id": _nonempty_string(release_id, "release_id"),
+        "attempt_id": _nonempty_string(attempt_id, "attempt_id"),
+        "case_manifest_hash": _sha256_string(
+            case_manifest_hash, "case_manifest_hash"),
+        "motion_component": motion_component,
+        "raw_stop_results": strict_results,
+        "rebuilt_stop_bundle_qc_hash":
+            stop_bundle["stop_bundle_qc_hash"],
+    }
+    return _hashed_receipt(core, "raw_stop_evidence_hash")
+
+
+def validate_owned_stop_evidence(
+        evidence: Mapping[str, Any], *, motion_component: str,
+        protocol_id: str, release_id: str, attempt_id: str,
+        case_manifest_hash: str, formal: bool) -> Dict[str, Any]:
+    """Rebuild persisted raw stop evidence and return its canonical bundle."""
+
+    require(isinstance(evidence, Mapping), "MALFORMED_STOP_RESULT",
+            "raw process stop evidence must be an object")
+    results = evidence.get("raw_stop_results")
+    require(isinstance(results, Mapping), "MALFORMED_STOP_RESULT",
+            "raw process stop evidence lacks raw_stop_results")
+    rebuilt = build_owned_stop_evidence(
+        results, motion_component=motion_component,
+        protocol_id=protocol_id, release_id=release_id,
+        attempt_id=attempt_id, case_manifest_hash=case_manifest_hash,
+        formal=formal)
+    require(dict(evidence) == rebuilt, "INVALID_QC_RECEIPT",
+            "raw process stop evidence fields/hash are not canonical")
+    return validate_owned_stop_bundle(
+        results, motion_component=motion_component)
+
+
+def validate_completion_time(
+        completion_time_sec: Any,
+        *, max_completion_sec: float = MAX_COMPLETION_SEC) -> Dict[str, Any]:
+    """Reject non-finite, non-positive, or over-limit completion times."""
+
+    completion = _finite_number(completion_time_sec, "completion_time_sec")
+    limit = _finite_number(max_completion_sec, "max_completion_sec")
+    require(limit > 0.0, "INVALID_COMPLETION_LIMIT",
+            "max_completion_sec must be positive")
+    require(completion > 0.0, "INVALID_COMPLETION_TIME",
+            "completion_time_sec must be positive")
+    require(completion <= limit, "COMPLETION_TIMEOUT",
+            f"completion {completion:.9f}s exceeds {limit:.9f}s")
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_COMPLETION_TIME_QC",
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "completion_time_sec": completion,
+        "max_completion_sec": limit,
+        "within_limit": True,
+    }
+    return _hashed_receipt(core, "completion_qc_hash")
+
+
+def validate_timeout_terminal(
+        elapsed_sec: Any, min_timeout_sec: float = MAX_COMPLETION_SEC, *,
+        terminal_kind: str = "GOAL_TIMEOUT") -> Dict[str, Any]:
+    """Build strict evidence that the 60-second method timeout elapsed.
+
+    A timeout is not a successful completion and must never be represented by
+    ``validate_completion_time(60)``.  The elapsed value may exceed 60 seconds
+    slightly because of polling/scheduling latency, but it must be finite and
+    cannot be shorter than the frozen timeout.
+    """
+
+    require(terminal_kind == "GOAL_TIMEOUT", "TERMINAL_KIND_INVALID",
+            "timeout terminal receipt requires terminal_kind=GOAL_TIMEOUT")
+    elapsed = _finite_number(elapsed_sec, "elapsed_sec")
+    minimum = _finite_number(min_timeout_sec, "min_timeout_sec")
+    require(minimum >= MAX_COMPLETION_SEC, "INVALID_TIMEOUT_LIMIT",
+            f"min_timeout_sec cannot be shorter than the frozen "
+            f"{MAX_COMPLETION_SEC:.9f}s timeout")
+    require(elapsed >= minimum, "TIMEOUT_NOT_REACHED",
+            f"motion elapsed {elapsed:.9f}s is shorter than the frozen "
+            f"{minimum:.9f}s timeout")
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_TIMEOUT_TERMINAL_QC",
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "terminal_kind": "GOAL_TIMEOUT",
+        "elapsed_sec": elapsed,
+        "min_timeout_sec": minimum,
+        "timeout_reached": True,
+    }
+    return _hashed_receipt(core, "timeout_qc_hash")
+
+
+def _stamp_seconds(stamp: Any, label: str) -> float:
+    try:
+        value = stamp.to_sec() if hasattr(stamp, "to_sec") else stamp
+    except Exception as exc:  # noqa: BLE001 - normalize ROS time implementations
+        raise RuntimeQCError("INVALID_BAG_TIMESTAMP",
+                             f"cannot read {label}: {exc}") from exc
+    return _finite_number(value, label)
+
+
+def _odom_time(message: Any) -> float:
+    header = getattr(message, "header", None)
+    require(header is not None and hasattr(header, "stamp"),
+            "INVALID_ODOM_MESSAGE", "/odom message lacks header.stamp")
+    return _stamp_seconds(header.stamp, "/odom header timestamp")
+
+
+def _clock_time(message: Any) -> float:
+    require(hasattr(message, "clock"), "INVALID_CLOCK_MESSAGE",
+            "/clock message lacks clock")
+    return _stamp_seconds(message.clock, "/clock value")
+
+
+def _twist_components(message: Any) -> tuple[float, ...]:
+    linear = getattr(message, "linear", None)
+    angular = getattr(message, "angular", None)
+    require(linear is not None and angular is not None,
+            "INVALID_CMD_VEL_MESSAGE",
+            "/cmd_vel message lacks linear/angular vectors")
+    return tuple(
+        _finite_number(getattr(vector, axis, None),
+                       f"/cmd_vel {group}.{axis}")
+        for group, vector in (("linear", linear), ("angular", angular))
+        for axis in ("x", "y", "z")
+    )
+
+
+def _load_rosbag_factory() -> Any:
+    try:
+        import rosbag  # type: ignore
+    except ImportError as exc:  # pragma: no cover - sourced ROS environment only
+        raise RuntimeQCError(
+            "ROSBAG_MODULE_UNAVAILABLE",
+            "offline rosbag QC requires the sourced ROS Python module",
+        ) from exc
+    return rosbag.Bag
+
+
+def _ordinary_absolute_file(path: Path, label: str) -> Path:
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    require(absolute.is_absolute() and absolute.is_file() and
+            not absolute.is_symlink(), "BAG_PATH_INVALID",
+            f"{label} must be an ordinary absolute file: {absolute}")
+    require(stat.S_ISREG(absolute.stat().st_mode), "BAG_PATH_INVALID",
+            f"{label} is not a regular file: {absolute}")
+    return absolute
+
+
+def audit_closed_rosbag(
+        bag_path: Path, *,
+        active_artifact_paths: Sequence[Path],
+        required_topics: Sequence[str],
+        motion_start_ros_time_sec: Any,
+        terminal_ros_time_sec: Any,
+        terminal_kind: str,
+        attempt_id: str,
+        case_manifest_hash: str,
+        protocol_id: str,
+        release_id: str,
+        formal: bool,
+        tail_sec: float = TAIL_SEC,
+        motion_bracket_max_gap_sec: float = MOTION_BRACKET_MAX_GAP_SEC,
+        zero_command_abs_tolerance: float = ZERO_COMMAND_ABS_TOLERANCE,
+        bag_factory_override: Optional[Any] = None) -> Dict[str, Any]:
+    """Open and audit a finalized ROS1 bag without modifying it.
+
+    ``motion_start_ros_time_sec`` and ``terminal_ros_time_sec`` must use the
+    same simulation-time domain recorded in ``/clock``, ``/odom`` headers and
+    rosbag connection timestamps.  A motion start is bracketed by nearby odom
+    samples.  The frozen tail starts at the first Twist in the final all-zero
+    suffix after the terminal event; all later Twist messages must remain zero,
+    and either ``/clock`` or ``/odom`` must extend at least ``tail_sec`` beyond
+    that final-zero anchor.
+    """
+
+    bag = _ordinary_absolute_file(Path(bag_path), "finalized rosbag")
+    require(bag.name.endswith(".bag") and not bag.name.endswith(".bag.active"),
+            "BAG_NOT_FINALIZED", "bag filename is not finalized .bag")
+    require(isinstance(active_artifact_paths, Sequence) and
+            not isinstance(active_artifact_paths, (str, bytes)) and
+            len(active_artifact_paths) > 0,
+            "ACTIVE_ARTIFACT_SET_MISSING",
+            "caller must enumerate the recorder's active artifact paths")
+    normalized_active = []
+    for raw in active_artifact_paths:
+        candidate = Path(os.path.abspath(os.fspath(raw)))
+        require(candidate != bag, "ACTIVE_ARTIFACT_PATH_INVALID",
+                "active artifact path aliases the finalized bag")
+        require(not os.path.lexists(candidate), "ACTIVE_BAG_REMAINS",
+                f"recorder active artifact still exists: {candidate}")
+        normalized_active.append(str(candidate))
+    required = tuple(sorted(set(required_topics)))
+    require(required and all(isinstance(topic, str) and topic.startswith("/")
+                             for topic in required),
+            "REQUIRED_TOPICS_INVALID",
+            "required_topics must be nonempty absolute ROS topic names")
+    require(len(required) == len(tuple(required_topics)),
+            "REQUIRED_TOPICS_INVALID", "required_topics contains duplicates")
+    required_set = set(required)
+    require({"/odom", "/cmd_vel"}.issubset(required_set),
+            "REQUIRED_TOPICS_INVALID",
+            "bag QC always requires /odom and /cmd_vel")
+    motion_start = _finite_number(
+        motion_start_ros_time_sec, "motion_start_ros_time_sec")
+    terminal = _finite_number(terminal_ros_time_sec,
+                              "terminal_ros_time_sec")
+    require(terminal >= motion_start, "TERMINAL_PRECEDES_MOTION",
+            "terminal time precedes first executed motion")
+    terminal_kind = _nonempty_string(terminal_kind, "terminal_kind")
+    require(terminal_kind in {"GOAL_REACHED", "GOAL_TIMEOUT"},
+            "TERMINAL_KIND_INVALID",
+            "terminal_kind must be GOAL_REACHED or GOAL_TIMEOUT")
+    tail = _finite_number(tail_sec, "tail_sec")
+    bracket_limit = _finite_number(
+        motion_bracket_max_gap_sec, "motion_bracket_max_gap_sec")
+    zero_tolerance = _finite_number(
+        zero_command_abs_tolerance, "zero_command_abs_tolerance")
+    require(tail >= TAIL_SEC, "TAIL_POLICY_INVALID",
+            f"tail_sec cannot be shorter than {TAIL_SEC:g}s")
+    require(bracket_limit > 0.0 and zero_tolerance >= 0.0,
+            "BAG_QC_POLICY_INVALID",
+            "motion bracket must be positive and zero tolerance nonnegative")
+    identity = {
+        "attempt_id": _nonempty_string(attempt_id, "attempt_id"),
+        "case_manifest_hash": _sha256_string(
+            case_manifest_hash, "case_manifest_hash"),
+        "protocol_id": _nonempty_string(protocol_id, "protocol_id"),
+        "release_id": _nonempty_string(release_id, "release_id"),
+    }
+    require(isinstance(formal, bool), "INVALID_IDENTITY",
+            "formal must be a JSON boolean")
+
+    before_size = bag.stat().st_size
+    require(before_size > 0, "EMPTY_BAG", "finalized rosbag is empty")
+    before_hash = sha256_file(bag)
+    factory = bag_factory_override or _load_rosbag_factory()
+    try:
+        context = factory(str(bag), "r")
+    except Exception as exc:  # noqa: BLE001 - normalize rosbag errors
+        raise RuntimeQCError("BAG_OPEN_FAILED",
+                             f"cannot open finalized rosbag read-only: {exc}") from exc
+
+    counts: Dict[str, int] = {topic: 0 for topic in required}
+    odom_times: list[float] = []
+    clock_times: list[float] = []
+    cmd_observations: list[Dict[str, Any]] = []
+    topics_to_read = sorted(required_set | {"/clock", "/odom", "/cmd_vel"})
+    try:
+        with context as opened:
+            try:
+                topic_info = opened.get_type_and_topic_info().topics
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeQCError(
+                    "BAG_INDEX_FAILED",
+                    f"cannot inspect rosbag topic index: {exc}",
+                ) from exc
+            require(isinstance(topic_info, Mapping), "BAG_INDEX_FAILED",
+                    "rosbag topic index is not a mapping")
+            missing_metadata = sorted(required_set - set(topic_info))
+            require(not missing_metadata, "BAG_REQUIRED_TOPIC_MISSING",
+                    "rosbag index lacks: " + ", ".join(missing_metadata))
+            try:
+                messages: Iterable[Any] = opened.read_messages(
+                    topics=topics_to_read)
+                for row in messages:
+                    require(isinstance(row, tuple) and len(row) == 3,
+                            "BAG_MESSAGE_ROW_INVALID",
+                            "rosbag reader returned a malformed row")
+                    topic, message, record_stamp = row
+                    require(isinstance(topic, str), "BAG_MESSAGE_ROW_INVALID",
+                            "rosbag topic is not a string")
+                    record_time = _stamp_seconds(
+                        record_stamp, f"{topic} record timestamp")
+                    if topic in counts:
+                        counts[topic] += 1
+                    if topic == "/odom":
+                        odom_times.append(_odom_time(message))
+                    elif topic == "/clock":
+                        clock_times.append(_clock_time(message))
+                    elif topic == "/cmd_vel":
+                        components = _twist_components(message)
+                        cmd_observations.append({
+                            "ros_time_sec": record_time,
+                            "max_abs_component": max(abs(value)
+                                                     for value in components),
+                            "is_zero": all(abs(value) <= zero_tolerance
+                                           for value in components),
+                        })
+            except RuntimeQCError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeQCError(
+                    "BAG_READ_FAILED", f"cannot read rosbag messages: {exc}",
+                ) from exc
+    except RuntimeQCError:
+        raise
+    except Exception as exc:  # noqa: BLE001 - includes close/index failures
+        raise RuntimeQCError("BAG_READ_FAILED",
+                             f"rosbag read/close failed: {exc}") from exc
+
+    after_size = bag.stat().st_size
+    after_hash = sha256_file(bag)
+    require(before_size == after_size and before_hash == after_hash,
+            "BAG_MUTATED_DURING_AUDIT",
+            "rosbag changed during read-only QC")
+    empty_required = sorted(topic for topic, count in counts.items()
+                            if count <= 0)
+    require(not empty_required, "BAG_REQUIRED_TOPIC_EMPTY",
+            "rosbag has no messages for: " + ", ".join(empty_required))
+    require(odom_times, "BAG_ODOM_EMPTY", "rosbag has no usable /odom")
+    require(cmd_observations, "BAG_CMD_VEL_EMPTY",
+            "rosbag has no usable /cmd_vel")
+    for source, values in (("/clock", clock_times), ("/odom", odom_times)):
+        require(all(later >= earlier for earlier, later in
+                    zip(values, values[1:])), "BAG_TIME_NON_MONOTONIC",
+                f"{source} time moved backwards within the finalized bag")
+
+    before_motion = [stamp for stamp in odom_times if stamp <= motion_start]
+    after_motion = [stamp for stamp in odom_times if stamp >= motion_start]
+    require(before_motion and after_motion, "MOTION_START_NOT_RECORDED",
+            "recorded /odom does not bracket first executed motion")
+    nearest_before = max(before_motion)
+    nearest_after = min(after_motion)
+    require(motion_start - nearest_before <= bracket_limit and
+            nearest_after - motion_start <= bracket_limit,
+            "MOTION_START_NOT_RECORDED",
+            "nearest /odom samples are too far from first executed motion")
+
+    post_terminal_commands = sorted(
+        (item for item in cmd_observations
+         if float(item["ros_time_sec"]) >= terminal),
+        key=lambda item: float(item["ros_time_sec"]),
+    )
+    require(post_terminal_commands, "POST_TERMINAL_CMD_MISSING",
+            "rosbag has no /cmd_vel at or after terminal")
+    # An immediate safety zero may precede shutdown of the method publisher,
+    # which can race one final nonzero command.  The auditable frozen tail is
+    # therefore the *final all-zero suffix*: the first zero after the last
+    # post-terminal nonzero.  This remains fail-closed because every later
+    # command must be zero and the full five-second span starts only there.
+    nonzero_indices = [
+        index for index, item in enumerate(post_terminal_commands)
+        if item["is_zero"] is not True
+    ]
+    last_nonzero_index = max(nonzero_indices, default=-1)
+    final_zero_index = last_nonzero_index + 1
+    require(final_zero_index < len(post_terminal_commands) and
+            post_terminal_commands[final_zero_index]["is_zero"] is True,
+            "POST_TERMINAL_ZERO_SUFFIX_MISSING",
+            "rosbag has no final all-zero /cmd_vel suffix after terminal")
+    tail_commands = post_terminal_commands[final_zero_index:]
+    nonzero_after_final_zero = [
+        item for item in tail_commands if item["is_zero"] is not True
+    ]
+    require(not nonzero_after_final_zero, "NONZERO_COMMAND_DURING_TAIL",
+            "a nonzero /cmd_vel appears in the final zero-command suffix")
+    final_zero_time = float(tail_commands[0]["ros_time_sec"])
+    last_nonzero_time = (
+        float(post_terminal_commands[last_nonzero_index]["ros_time_sec"])
+        if last_nonzero_index >= 0 else None
+    )
+    tail_anchor = max(terminal, final_zero_time)
+
+    tail_sources: Dict[str, Dict[str, Any]] = {}
+    for source, values in (("clock", clock_times), ("odom", odom_times)):
+        if not values:
+            tail_sources[source] = {
+                "available": False, "first_ros_time_sec": None,
+                "last_ros_time_sec": None, "span_after_tail_anchor_sec": None,
+                "pass": False,
+            }
+            continue
+        first_value, last_value = values[0], values[-1]
+        span = last_value - tail_anchor
+        tail_sources[source] = {
+            "available": True,
+            "first_ros_time_sec": first_value,
+            "last_ros_time_sec": last_value,
+            "span_after_tail_anchor_sec": span,
+            "covers_terminal": first_value <= terminal <= last_value,
+            "pass": first_value <= terminal and span >= tail,
+        }
+    passing_sources = sorted(
+        source for source, item in tail_sources.items()
+        if item["pass"] is True)
+    require(passing_sources, "FROZEN_TAIL_TOO_SHORT",
+            "neither /clock nor /odom proves the full post-zero frozen tail")
+
+    observation_chain = {
+        "odom_times": odom_times,
+        "clock_times": clock_times,
+        "cmd_vel": cmd_observations,
+    }
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_CLOSED_ROSBAG_QC",
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "formal": formal,
+        **identity,
+        "bag": {
+            "path": str(bag),
+            "sha256": before_hash,
+            "size_bytes": before_size,
+            "opened_read_only": True,
+            "index_readable": True,
+            "unchanged_during_audit": True,
+            "active_artifacts_absent": sorted(normalized_active),
+        },
+        "required_topic_message_counts": counts,
+        "motion_start": {
+            "ros_time_sec": motion_start,
+            "nearest_odom_before_ros_time_sec": nearest_before,
+            "nearest_odom_after_ros_time_sec": nearest_after,
+            "max_bracket_gap_sec": bracket_limit,
+            "recorded": True,
+        },
+        "terminal": {
+            "kind": terminal_kind,
+            "ros_time_sec": terminal,
+        },
+        "zero_command_tail": {
+            "zero_abs_tolerance": zero_tolerance,
+            "post_terminal_command_count": len(post_terminal_commands),
+            "last_nonzero_ros_time_sec": last_nonzero_time,
+            "final_zero_suffix_start_ros_time_sec": final_zero_time,
+            "final_zero_suffix_command_count": len(tail_commands),
+            "nonzero_after_final_zero_count": 0,
+            "tail_anchor_ros_time_sec": tail_anchor,
+            "required_tail_sec": tail,
+            "tail_sources": tail_sources,
+            "passing_sources": passing_sources,
+            "pass": True,
+        },
+        "observation_count": sum(counts.values()),
+        "observation_hash": canonical_hash(observation_chain),
+    }
+    return _hashed_receipt(core, "bag_qc_hash")
+
+
+def classify_outcome(
+        *, motion_started: bool,
+        primary_method_outcome: Optional[str],
+        infrastructure_failure: bool = False,
+        qc_failure: bool = False,
+        protocol_failure: bool = False) -> Dict[str, Any]:
+    """Classify one attempt without making post-motion faults retryable.
+
+    ``primary_method_outcome`` is ``METHOD_SUCCESS``, ``METHOD_FAILURE`` or
+    ``None``.  Once a method failure has been established (for example, the
+    60-second timeout), later recorder/tail QC cannot overwrite it.  A
+    post-motion infrastructure failure without an established method result is
+    a terminal protocol failure, never an acquisition retry.
+    """
+
+    require(isinstance(motion_started, bool), "OUTCOME_INPUT_INVALID",
+            "motion_started must be boolean")
+    for value, label in ((infrastructure_failure, "infrastructure_failure"),
+                         (qc_failure, "qc_failure"),
+                         (protocol_failure, "protocol_failure")):
+        require(isinstance(value, bool), "OUTCOME_INPUT_INVALID",
+                f"{label} must be boolean")
+    require(primary_method_outcome in {None, "METHOD_SUCCESS", "METHOD_FAILURE"},
+            "OUTCOME_INPUT_INVALID",
+            "primary_method_outcome is invalid")
+    require(primary_method_outcome is None or motion_started,
+            "OUTCOME_INPUT_INVALID",
+            "a method outcome requires executed motion")
+    secondary_failure = bool(infrastructure_failure or qc_failure or
+                             protocol_failure)
+
+    if primary_method_outcome == "METHOD_FAILURE":
+        failure_class = "METHOD_FAILURE"
+        method_success, method_failure = False, True
+        terminal, retryable = True, False
+        action = (
+            "STOP_CAMPAIGN_REVIEW_WITH_TERMINAL_METHOD_FAILURE"
+            if secondary_failure else "ADVANCE_WITH_TERMINAL_METHOD_FAILURE"
+        )
+        protocol_qc_pass = not secondary_failure
+        primary_preserved = True
+    elif primary_method_outcome == "METHOD_SUCCESS" and not secondary_failure:
+        failure_class = "NONE"
+        method_success, method_failure = True, False
+        terminal, retryable = True, False
+        action = "ADVANCE_WITH_METHOD_SUCCESS"
+        protocol_qc_pass = True
+        primary_preserved = True
+    elif motion_started:
+        require(secondary_failure, "OUTCOME_INPUT_INVALID",
+                "post-motion attempt has neither method outcome nor failure")
+        failure_class = "PROTOCOL_FAILURE_AFTER_MOTION"
+        method_success, method_failure = False, False
+        terminal, retryable = True, False
+        action = "STOP_CAMPAIGN_REVIEW"
+        protocol_qc_pass = False
+        primary_preserved = False
+    elif protocol_failure or qc_failure:
+        failure_class = "PROTOCOL_FAILURE"
+        method_success, method_failure = False, False
+        terminal, retryable = True, False
+        action = "STOP_CAMPAIGN_REVIEW"
+        protocol_qc_pass = False
+        primary_preserved = False
+    else:
+        require(infrastructure_failure, "OUTCOME_INPUT_INVALID",
+                "pre-motion attempt has no acquisition/protocol failure")
+        failure_class = "INFRASTRUCTURE_ACQUISITION"
+        method_success, method_failure = False, False
+        terminal, retryable = False, True
+        action = "REQUIRE_IMMUTABLE_RETRY_AUTHORIZATION"
+        protocol_qc_pass = False
+        primary_preserved = False
+
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_OUTCOME_CLASSIFICATION",
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "motion_started": motion_started,
+        "assignment_consumed": motion_started,
+        "primary_method_outcome": primary_method_outcome,
+        "primary_method_outcome_preserved": primary_preserved,
+        "secondary_failures": {
+            "infrastructure_failure": infrastructure_failure,
+            "qc_failure": qc_failure,
+            "protocol_failure": protocol_failure,
+        },
+        "failure_class": failure_class,
+        "method_success": method_success,
+        "method_failure": method_failure,
+        "terminal": terminal,
+        "retryable": retryable,
+        "protocol_qc_pass": protocol_qc_pass,
+        "campaign_action": action,
+    }
+    return _hashed_receipt(core, "outcome_qc_hash")
+
+
+def build_runtime_qc_report(
+        *, protocol_id: str, release_id: str, attempt_id: str,
+        case_manifest_hash: str, formal: bool,
+        stop_bundle: Mapping[str, Any], bag_qc: Mapping[str, Any],
+        outcome_classification: Mapping[str, Any],
+        completion_qc: Optional[Mapping[str, Any]] = None,
+        timeout_qc: Optional[Mapping[str, Any]] = None) -> Dict[str, Any]:
+    """Bind all successful runtime-QC receipts into one immutable document."""
+
+    require(isinstance(formal, bool), "INVALID_IDENTITY",
+            "formal must be a JSON boolean")
+    _validate_hashed_receipt(
+        stop_bundle, "stop_bundle_qc_hash",
+        "SMPCC_SIM_MECHANISM_PROCESS_STOP_BUNDLE_QC")
+    _validate_hashed_receipt(
+        bag_qc, "bag_qc_hash", "SMPCC_SIM_MECHANISM_CLOSED_ROSBAG_QC")
+    _validate_hashed_receipt(
+        outcome_classification, "outcome_qc_hash",
+        "SMPCC_SIM_MECHANISM_OUTCOME_CLASSIFICATION")
+    require((completion_qc is None) != (timeout_qc is None),
+            "TERMINAL_TIMING_RECEIPT_INVALID",
+            "provide exactly one of completion_qc or timeout_qc")
+    if completion_qc is not None:
+        _validate_hashed_receipt(
+            completion_qc, "completion_qc_hash",
+            "SMPCC_SIM_MECHANISM_COMPLETION_TIME_QC")
+        require(dict(completion_qc) == validate_completion_time(
+            completion_qc.get("completion_time_sec"),
+            max_completion_sec=completion_qc.get("max_completion_sec")),
+            "INVALID_QC_RECEIPT",
+            "completion receipt has noncanonical fields or semantics")
+        terminal_timing_kind = "GOAL_REACHED_COMPLETION"
+        terminal_timing_receipt = dict(completion_qc)
+        terminal_timing_hash = str(completion_qc["completion_qc_hash"])
+        require(
+            outcome_classification.get("primary_method_outcome") ==
+            "METHOD_SUCCESS" and
+            outcome_classification.get("method_success") is True and
+            outcome_classification.get("method_failure") is False and
+            outcome_classification.get("failure_class") == "NONE",
+            "TERMINAL_TIMING_OUTCOME_MISMATCH",
+            "completion receipt requires a successful primary method outcome",
+        )
+        expected_bag_terminal_kind = "GOAL_REACHED"
+    else:
+        assert timeout_qc is not None
+        _validate_hashed_receipt(
+            timeout_qc, "timeout_qc_hash",
+            "SMPCC_SIM_MECHANISM_TIMEOUT_TERMINAL_QC")
+        require(dict(timeout_qc) == validate_timeout_terminal(
+            timeout_qc.get("elapsed_sec"), timeout_qc.get("min_timeout_sec"),
+            terminal_kind=str(timeout_qc.get("terminal_kind", ""))),
+            "INVALID_QC_RECEIPT",
+            "timeout receipt has noncanonical fields or semantics")
+        terminal_timing_kind = "GOAL_TIMEOUT"
+        terminal_timing_receipt = dict(timeout_qc)
+        terminal_timing_hash = str(timeout_qc["timeout_qc_hash"])
+        require(
+            outcome_classification.get("primary_method_outcome") ==
+            "METHOD_FAILURE" and
+            outcome_classification.get("method_success") is False and
+            outcome_classification.get("method_failure") is True and
+            outcome_classification.get("failure_class") == "METHOD_FAILURE",
+            "TERMINAL_TIMING_OUTCOME_MISMATCH",
+            "timeout receipt requires a terminal primary method failure",
+        )
+        expected_bag_terminal_kind = "GOAL_TIMEOUT"
+    secondary = outcome_classification.get("secondary_failures")
+    require(isinstance(secondary, Mapping), "INVALID_QC_RECEIPT",
+            "outcome classification lacks secondary_failures")
+    require(dict(outcome_classification) == classify_outcome(
+        motion_started=outcome_classification.get("motion_started"),
+        primary_method_outcome=outcome_classification.get(
+            "primary_method_outcome"),
+        infrastructure_failure=secondary.get("infrastructure_failure"),
+        qc_failure=secondary.get("qc_failure"),
+        protocol_failure=secondary.get("protocol_failure")),
+        "INVALID_QC_RECEIPT",
+        "outcome classification has noncanonical fields or semantics")
+    require(outcome_classification.get("protocol_qc_pass") is True,
+            "PROTOCOL_QC_NOT_PASS",
+            "a PASS runtime QC report requires protocol_qc_pass=true")
+    identity = {
+        "protocol_id": _nonempty_string(protocol_id, "protocol_id"),
+        "release_id": _nonempty_string(release_id, "release_id"),
+        "attempt_id": _nonempty_string(attempt_id, "attempt_id"),
+        "case_manifest_hash": _sha256_string(
+            case_manifest_hash, "case_manifest_hash"),
+    }
+    for receipt, label in ((bag_qc, "bag QC"),):
+        require(all(receipt.get(key) == value for key, value in identity.items()),
+                "QC_IDENTITY_MISMATCH",
+                f"{label} belongs to another case")
+        require(receipt.get("formal") is formal, "QC_IDENTITY_MISMATCH",
+                f"{label} formal flag differs")
+    bag_terminal = bag_qc.get("terminal")
+    require(isinstance(bag_terminal, Mapping) and
+            bag_terminal.get("kind") == expected_bag_terminal_kind,
+            "TERMINAL_TIMING_OUTCOME_MISMATCH",
+            "bag terminal kind differs from the selected timing receipt")
+    core = {
+        "schema_version": SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_RUNTIME_QC_REPORT",
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "status": "PASS",
+        "formal": formal,
+        **identity,
+        "checks": {
+            "process_stops": {
+                "status": "PASS",
+                "receipt_hash": stop_bundle["stop_bundle_qc_hash"],
+            },
+            "closed_rosbag": {
+                "status": "PASS",
+                "receipt_hash": bag_qc["bag_qc_hash"],
+            },
+            "terminal_timing": {
+                "status": "PASS",
+                "kind": terminal_timing_kind,
+                "receipt_hash": terminal_timing_hash,
+            },
+            "outcome_classification": {
+                "status": "PASS",
+                "receipt_hash": outcome_classification["outcome_qc_hash"],
+            },
+        },
+        "stop_bundle": dict(stop_bundle),
+        "bag_qc": dict(bag_qc),
+        "terminal_timing_qc": {
+            "kind": terminal_timing_kind,
+            "receipt": terminal_timing_receipt,
+        },
+        "outcome_classification": dict(outcome_classification),
+    }
+    return _hashed_receipt(core, "runtime_qc_hash")
+
+
+__all__ = (
+    "RuntimeQCError", "SCHEMA_VERSION", "FORMAL_SCOPE",
+    "MAX_COMPLETION_SEC", "TAIL_SEC", "STOP_POLICIES",
+    "canonical_hash", "validate_owned_stop_result",
+    "validate_owned_stop_bundle", "build_owned_stop_evidence",
+    "validate_owned_stop_evidence", "validate_completion_time",
+    "validate_timeout_terminal",
+    "audit_closed_rosbag", "classify_outcome", "build_runtime_qc_report",
+)

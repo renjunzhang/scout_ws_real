@@ -1,0 +1,219 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Pure fail-closed endpoint state machine shared by mechanism runners.
+
+Controller status is evidence, never the outcome by itself.  A successful
+arrival requires the exact ``GOAL_REACHED`` status and five consecutive
+authoritative odometry samples inside the frozen endpoint tolerance at low
+speed.  Keeping this logic ROS-free makes the early-status failure mode
+unit-testable.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import math
+from typing import Any, Dict, Mapping, Optional
+
+
+START_TOLERANCE_M = 0.05
+START_YAW_TOLERANCE_RAD = 1.0e-4
+GOAL_TOLERANCE_M = 0.20
+GOAL_MAX_LINEAR_MPS = 0.03
+GOAL_MAX_ANGULAR_RADPS = 0.05
+GOAL_STABLE_SAMPLES = 5
+MOTION_LINEAR_THRESHOLD_MPS = 0.005
+MOTION_ANGULAR_THRESHOLD_RADPS = 0.01
+MOTION_POSITION_DELTA_M = 0.02
+
+
+def _finite(*values: float) -> bool:
+    return all(math.isfinite(float(value)) for value in values)
+
+
+class FrozenEndpointGate:
+    """Accumulate start, motion, controller-status and endpoint evidence."""
+
+    def __init__(self, *, start_x: float, start_y: float,
+                 goal_x: float, goal_y: float,
+                 start_yaw_rad: Optional[float] = None,
+                 base_state: Optional[Mapping[str, Any]] = None) -> None:
+        if not _finite(start_x, start_y, goal_x, goal_y):
+            raise ValueError("frozen endpoint coordinates must be finite")
+        self.start_x = float(start_x)
+        self.start_y = float(start_y)
+        self.goal_x = float(goal_x)
+        self.goal_y = float(goal_y)
+        if start_yaw_rad is not None and not _finite(start_yaw_rad):
+            raise ValueError("frozen start yaw must be finite")
+        self.start_yaw_rad = (None if start_yaw_rad is None
+                              else float(start_yaw_rad))
+        self.state: Dict[str, Any] = dict(base_state or {})
+        self._baseline_x: Optional[float] = None
+        self._baseline_y: Optional[float] = None
+        self._controller_goal_seen = False
+        self._stable_count = 0
+        self._latest: Optional[Dict[str, Any]] = None
+
+    @staticmethod
+    def _stamp(*, monotonic_sec: float, utc: str,
+               ros_time_sec: Optional[float]) -> Dict[str, Any]:
+        if not _finite(monotonic_sec):
+            raise ValueError("endpoint monotonic timestamp must be finite")
+        if ros_time_sec is not None and not _finite(ros_time_sec):
+            raise ValueError("endpoint ROS timestamp must be finite")
+        stamp: Dict[str, Any] = {
+            "monotonic_sec": float(monotonic_sec),
+            "utc": str(utc),
+        }
+        if ros_time_sec is not None:
+            stamp["ros_time_sec"] = float(ros_time_sec)
+        return stamp
+
+    def observe_status(self, status: str, *, monotonic_sec: float, utc: str,
+                       ros_time_sec: Optional[float] = None) -> None:
+        canonical = str(status).strip()
+        self.state["latest_controller_status"] = canonical
+        if canonical != "GOAL_REACHED":
+            return
+        if not self._controller_goal_seen:
+            evidence = self._stamp(
+                monotonic_sec=monotonic_sec, utc=utc,
+                ros_time_sec=ros_time_sec)
+            if self._latest is not None:
+                evidence.update({
+                    "x": self._latest["x"],
+                    "y": self._latest["y"],
+                    "goal_distance_m": self._latest["goal_distance_m"],
+                    "linear_x_mps": self._latest["linear_x_mps"],
+                    "angular_z_radps": self._latest["angular_z_radps"],
+                })
+                evidence["geometry_already_stable"] = (
+                    self._stable_count >= GOAL_STABLE_SAMPLES)
+            else:
+                evidence["geometry_already_stable"] = False
+            self.state["controller_goal_status_seen"] = evidence
+            self._controller_goal_seen = True
+        self._maybe_finish(monotonic_sec=monotonic_sec, utc=utc,
+                           ros_time_sec=ros_time_sec)
+
+    def observe_odom(self, *, x: float, y: float, linear_x_mps: float,
+                     angular_z_radps: float, monotonic_sec: float, utc: str,
+                     ros_time_sec: Optional[float] = None,
+                     yaw_rad: Optional[float] = None) -> None:
+        x = float(x)
+        y = float(y)
+        v = float(linear_x_mps)
+        w = float(angular_z_radps)
+        if (not _finite(x, y, v, w, monotonic_sec) or
+                (yaw_rad is not None and not _finite(yaw_rad)) or
+                (ros_time_sec is not None and not _finite(ros_time_sec))):
+            self.state["invalid_odometry_seen"] = True
+            return
+        if self._baseline_x is None:
+            self._baseline_x, self._baseline_y = x, y
+            start_distance = math.hypot(x - self.start_x, y - self.start_y)
+            yaw_error = None
+            yaw_pass = True
+            if self.start_yaw_rad is not None:
+                if yaw_rad is None or not math.isfinite(float(yaw_rad)):
+                    yaw_pass = False
+                else:
+                    yaw_error = math.atan2(
+                        math.sin(float(yaw_rad) - self.start_yaw_rad),
+                        math.cos(float(yaw_rad) - self.start_yaw_rad))
+            self.state["initial_pose_gate"] = {
+                **self._stamp(monotonic_sec=monotonic_sec, utc=utc,
+                              ros_time_sec=ros_time_sec),
+                "x": x,
+                "y": y,
+                "frozen_start_x": self.start_x,
+                "frozen_start_y": self.start_y,
+                "start_distance_m": start_distance,
+                "tolerance_m": START_TOLERANCE_M,
+                "yaw_rad": yaw_rad,
+                "expected_yaw_rad": self.start_yaw_rad,
+                "yaw_error_rad": yaw_error,
+                "yaw_tolerance_rad": (START_YAW_TOLERANCE_RAD
+                                      if self.start_yaw_rad is not None else None),
+                "yaw_pass": yaw_pass,
+                "pass": (start_distance <= START_TOLERANCE_M and yaw_pass and
+                         (yaw_error is None or
+                          abs(yaw_error) <= START_YAW_TOLERANCE_RAD)),
+                "pose_source": "gazebo_odometry_message",
+            }
+        baseline_distance = math.hypot(
+            x - float(self._baseline_x), y - float(self._baseline_y))
+        goal_distance = math.hypot(x - self.goal_x, y - self.goal_y)
+        latest = {
+            **self._stamp(monotonic_sec=monotonic_sec, utc=utc,
+                          ros_time_sec=ros_time_sec),
+            "x": x,
+            "y": y,
+            "linear_x_mps": v,
+            "angular_z_radps": w,
+            "goal_distance_m": goal_distance,
+            "yaw_rad": yaw_rad,
+        }
+        self._latest = latest
+        self.state["latest_odometry"] = dict(latest)
+        if ("first_executed_motion" not in self.state and
+                (abs(v) >= MOTION_LINEAR_THRESHOLD_MPS or
+                 abs(w) >= MOTION_ANGULAR_THRESHOLD_RADPS or
+                 baseline_distance >= MOTION_POSITION_DELTA_M)):
+            self.state["first_executed_motion"] = {
+                **latest,
+                "position_delta_m": baseline_distance,
+            }
+        near_and_still = (
+            goal_distance <= GOAL_TOLERANCE_M and
+            abs(v) <= GOAL_MAX_LINEAR_MPS and
+            abs(w) <= GOAL_MAX_ANGULAR_RADPS)
+        self._stable_count = self._stable_count + 1 if near_and_still else 0
+        self.state["geometric_goal_gate"] = {
+            **latest,
+            "frozen_goal_x": self.goal_x,
+            "frozen_goal_y": self.goal_y,
+            "tolerance_m": GOAL_TOLERANCE_M,
+            "max_linear_mps": GOAL_MAX_LINEAR_MPS,
+            "max_angular_radps": GOAL_MAX_ANGULAR_RADPS,
+            "stable_samples": self._stable_count,
+            "required_stable_samples": GOAL_STABLE_SAMPLES,
+            "pass": self._stable_count >= GOAL_STABLE_SAMPLES,
+        }
+        self._maybe_finish(monotonic_sec=monotonic_sec, utc=utc,
+                           ros_time_sec=ros_time_sec)
+
+    def _maybe_finish(self, *, monotonic_sec: float, utc: str,
+                      ros_time_sec: Optional[float]) -> None:
+        if "goal_reached" in self.state:
+            return
+        if (not self._controller_goal_seen or
+                self._stable_count < GOAL_STABLE_SAMPLES or
+                "first_executed_motion" not in self.state or
+                self._latest is None):
+            return
+        motion = self.state["first_executed_motion"]
+        finish = {
+            **self._stamp(monotonic_sec=monotonic_sec, utc=utc,
+                          ros_time_sec=ros_time_sec),
+            "controller_status": "GOAL_REACHED",
+            "controller_status_gate_pass": True,
+            "geometric_gate_pass": True,
+            "pose_source": "gazebo_odometry_message",
+            "x": self._latest["x"],
+            "y": self._latest["y"],
+            "linear_x_mps": self._latest["linear_x_mps"],
+            "angular_z_radps": self._latest["angular_z_radps"],
+            "goal_distance_m": self._latest["goal_distance_m"],
+            "stable_samples": self._stable_count,
+        }
+        if (ros_time_sec is not None and
+                isinstance(motion, Mapping) and
+                isinstance(motion.get("ros_time_sec"), (int, float))):
+            finish["trajectory_sim_duration_sec"] = (
+                float(ros_time_sec) - float(motion["ros_time_sec"]))
+        finish["trajectory_wall_duration_sec"] = (
+            float(monotonic_sec) - float(motion["monotonic_sec"]))
+        self.state["goal_reached"] = finish

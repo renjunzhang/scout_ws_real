@@ -1,0 +1,3 @@
+# A benign load target for an invalid selector.  The gate exits before it
+# executes the controller binary, so this never provides a fallback condition.
+variants: {}

@@ -1,0 +1,644 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Offline fail-closed guards for the R7 simulation-mechanism freeze."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import copy
+import importlib.util
+import inspect
+import json
+import math
+import stat
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+
+MODULE_PATH = Path(__file__).resolve().parents[1] / "smpcc_sim_mechanism_freeze.py"
+
+
+def load_module():
+    spec = importlib.util.spec_from_file_location(
+        "smpcc_sim_mechanism_freeze_test_target", MODULE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load mechanism-freeze module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class MechanismFreezeTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_module()
+
+    def test_r7_reuses_frozen_r3_design_seed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            release_root = Path(temporary) / "candidate"
+            with self.assertRaisesRegex(
+                    self.module.MechanismFreezeError,
+                    "R7 must reuse the predeclared R3 design seed"):
+                self.module.create_release(
+                    release_root,
+                    "forbidden-rerandomization-seed",
+                    0.18,
+                    None,
+                    None,
+                    enforce_canonical_root=False,
+                )
+            self.assertFalse(release_root.exists())
+
+            with self.assertRaisesRegex(
+                    self.module.MechanismFreezeError,
+                    "independently predeclared R7 development design value"):
+                self.module.create_release(
+                    release_root,
+                    self.module.RANDOMIZATION_SEED,
+                    0.19,
+                    None,
+                    None,
+                    enforce_canonical_root=False,
+                )
+            self.assertFalse(release_root.exists())
+
+        decision = self.module.SMOOTHMATCH_V_REF_DESIGN
+        self.assertEqual(0.18, self.module.SMOOTHMATCH_V_REF_M_S)
+        self.assertEqual(0.18, decision["value_m_s"])
+        self.assertEqual(
+            "PREDECLARED_DEVELOPMENT_DESIGN_VALUE",
+            decision["source_class"],
+        )
+        self.assertTrue(decision["same_numeric_value_as_predecessor"])
+        self.assertFalse(decision["predecessor_calibration_imported"])
+        self.assertFalse(decision["predecessor_attempt_imported"])
+        self.assertFalse(decision["predecessor_formal_evidence_reused"])
+        self.assertTrue(decision["fresh_r7_timing_calibration_required"])
+
+    def test_r7_binds_all_immutable_predecessor_invalidation_receipts(self):
+        module = self.module
+        self.assertEqual(
+            "SIM-MECHANISM-40-64-88-R6",
+            module.PREDECESSOR_RELEASE_IDS[-1],
+        )
+        r3 = module.invalidation_receipt_descriptor(
+            module.R3_INVALIDATION_RECEIPT,
+            module.R3_INVALIDATION_RECEIPT_SHA256,
+            "R3 invalidation receipt",
+        )
+        r4 = module.invalidation_receipt_descriptor(
+            module.R4_INVALIDATION_RECEIPT,
+            module.R4_INVALIDATION_RECEIPT_SHA256,
+            "R4 invalidation receipt",
+        )
+        r5 = module.invalidation_receipt_descriptor(
+            module.R5_INVALIDATION_RECEIPT,
+            module.R5_INVALIDATION_RECEIPT_SHA256,
+            "R5 invalidation receipt",
+        )
+        r6 = module.invalidation_receipt_descriptor(
+            module.R6_INVALIDATION_RECEIPT,
+            module.R6_INVALIDATION_RECEIPT_SHA256,
+            "R6 invalidation receipt",
+        )
+        self.assertEqual(module.R3_INVALIDATION_RECEIPT_SHA256, r3["sha256"])
+        self.assertEqual(module.R4_INVALIDATION_RECEIPT_SHA256, r4["sha256"])
+        self.assertEqual(module.R5_INVALIDATION_RECEIPT_SHA256, r5["sha256"])
+        self.assertEqual(module.R6_INVALIDATION_RECEIPT_SHA256, r6["sha256"])
+        r3_document = module.read_json(Path(r3["path"]), "R3 receipt")
+        r4_document = module.read_json(Path(r4["path"]), "R4 receipt")
+        r5_document = module.read_json(Path(r5["path"]), "R5 receipt")
+        r6_document = module.read_json(Path(r6["path"]), "R6 receipt")
+        self.assertEqual(
+            "INVALIDATED_PROTOCOL_FAILURE_ENDPOINT_NOT_REACHED",
+            r3_document["status"],
+        )
+        self.assertEqual(
+            "INVALIDATED_INFRASTRUCTURE_PROTOCOL_FAILURE_EVENT_STATE_WRITE_RACE",
+            r4_document["status"],
+        )
+        self.assertEqual("SIM-MECHANISM-40-64-88-R5",
+                         r4_document["successor_release_required"])
+        self.assertEqual(
+            "INVALIDATED_PREMOTION_ACQUISITION_LEDGER_PROTOCOL_FAILURE",
+            r5_document["status"],
+        )
+        self.assertEqual("SIM-MECHANISM-40-64-88-R6",
+                         r5_document["successor_release_required"])
+        self.assertFalse(r5_document["motion_started"])
+        self.assertEqual(0, r5_document["planned_rows_consumed"])
+        self.assertEqual(
+            "INVALIDATED_POSTMOTION_ZERO_TAIL_PROTOCOL_FAILURE",
+            r6_document["status"],
+        )
+        self.assertEqual(module.RELEASE_ID,
+                         r6_document["successor_release_required"])
+        self.assertEqual(30, r6_document["planned_rows_consumed"])
+        self.assertEqual(29, r6_document["successful_rows_before_failure"])
+
+        with tempfile.TemporaryDirectory() as temporary:
+            writable = Path(temporary) / "receipt.json"
+            writable.write_text("{}\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                    module.MechanismFreezeError, "must be read-only"):
+                module.invalidation_receipt_descriptor(
+                    writable, module.sha256_file(writable),
+                    "writable predecessor receipt",
+                )
+
+    def test_missing_go_receipt_fails_closed_before_asset_generation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fixture_files = {}
+            for name in ("world", "map", "robot", "profile_generator"):
+                path = root / name
+                path.write_text(f"offline {name} fixture\n", encoding="utf-8")
+                fixture_files[name] = path
+            release_root = root / "candidate"
+            with mock.patch.multiple(
+                    self.module,
+                    WORLD_FILE=fixture_files["world"],
+                    MAP_FILE=fixture_files["map"],
+                    ROBOT_MODEL_FILE=fixture_files["robot"],
+                    PROFILE_GENERATOR=fixture_files["profile_generator"],
+            ):
+                with mock.patch.object(
+                        self.module, "runtime_bindings", return_value={}):
+                    with self.assertRaisesRegex(
+                            self.module.MechanismFreezeError,
+                            "R7 GO gate receipt is required"):
+                        self.module.create_release(
+                            release_root,
+                            self.module.RANDOMIZATION_SEED,
+                            0.18,
+                            None,
+                            None,
+                            enforce_canonical_root=False,
+                        )
+            self.assertFalse(release_root.exists())
+
+    def test_pass_label_without_semantic_go_evidence_is_rejected(self):
+        errors = self.module.validate_go_gate_receipt(
+            {"status": "PASS"}, "0" * 64)
+        self.assertIn(
+            f"R7 GO gate schema_version must equal "
+            f"{self.module.GO_GATE_SCHEMA_VERSION!r}",
+            errors,
+        )
+        self.assertIn(
+            "R7 GO gate checks are incomplete or contain unknown checks",
+            errors,
+        )
+        self.assertIn("R7 GO gate receipt hash mismatch", errors)
+        self.assertGreater(len(errors), 10)
+
+    def test_runtime_binding_registry_rejects_missing_and_changed_sources(self):
+        bindings = self.module.runtime_bindings()
+        self.assertEqual(set(self.module.RUNTIME_BINDING_PATHS), set(bindings))
+
+        changed = json.loads(json.dumps(bindings))
+        changed_name = "mechanism_freeze_tool"
+        changed[changed_name]["sha256"] = "0" * 64
+        self.assertIn(
+            f"runtime binding {changed_name} hash mismatch",
+            self.module.validate_runtime_bindings(changed),
+        )
+
+        missing = json.loads(json.dumps(bindings))
+        missing.pop(changed_name)
+        self.assertEqual(
+            ["complete R7 runtime binding registry is missing"],
+            self.module.validate_runtime_bindings(missing),
+        )
+
+    def test_crn_trace_asset_is_condition_blind_and_tamper_evident(self):
+        module = self.module
+        with tempfile.TemporaryDirectory() as temporary:
+            trace_root = Path(temporary) / "seed_traces"
+            bundle = module._seed_bundle(
+                module.RANDOMIZATION_SEED, "SIM-S1_CORE", 1, trace_root)
+            report = module.validate_crn_trace_asset(
+                bundle, "SIM-S1_CORE", "b01")
+            self.assertEqual("PASS", report["status"])
+            self.assertLessEqual(
+                abs(bundle["initial_yaw_offset_rad"]),
+                module.CRN_INITIAL_YAW_MAX_ABS_RAD,
+            )
+
+            asset_path = Path(bundle["trace_asset"]["path"])
+            asset_path.chmod(0o644)
+            asset = json.loads(asset_path.read_text(encoding="utf-8"))
+            asset["condition_id"] = "Bslosh"
+            core = dict(asset); core.pop("trace_asset_hash")
+            asset["trace_asset_hash"] = module.canonical_hash(core)
+            asset_path.write_text(
+                json.dumps(asset, sort_keys=True) + "\n", encoding="utf-8")
+            asset_path.chmod(0o444)
+            bundle["trace_asset"] = {
+                "path": str(asset_path),
+                "sha256": module.sha256_file(asset_path),
+            }
+            bundle["trace_asset_hash"] = asset["trace_asset_hash"]
+            with self.assertRaisesRegex(
+                    module.MechanismFreezeError, "condition_id mismatch"):
+                module.validate_crn_trace_asset(
+                    bundle, "SIM-S1_CORE", "b01")
+
+    def test_crn_trace_file_byte_tamper_is_rejected(self):
+        module = self.module
+        with tempfile.TemporaryDirectory() as temporary:
+            bundle = module._seed_bundle(
+                module.RANDOMIZATION_SEED, "SIM-S1_CORE", 1,
+                Path(temporary) / "seed_traces")
+            asset_path = Path(bundle["trace_asset"]["path"])
+            asset_path.chmod(0o644)
+            asset_path.write_text(
+                asset_path.read_text(encoding="utf-8") + " ",
+                encoding="utf-8",
+            )
+            asset_path.chmod(0o444)
+            with self.assertRaisesRegex(
+                    module.MechanismFreezeError, "hash mismatch"):
+                module.validate_crn_trace_asset(
+                    bundle, "SIM-S1_CORE", "b01")
+
+    def test_freeze_missing_crn_consumer_contract_is_explicit_no_go(self):
+        report = self.module.validate_freeze({
+            "crn_runtime_consumer_contract": None,
+        })
+        self.assertEqual("FAIL", report["status"])
+        self.assertIn(
+            "CRN runtime consumer contract is missing", report["errors"])
+
+    def test_fabricated_incomplete_crn_consumer_evidence_is_rejected(self):
+        module = self.module
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = module._seed_bundle(
+                module.RANDOMIZATION_SEED, "SIM-S1_CORE", 1,
+                root / "seed_traces")
+            runner = root / "runner.py"
+            runner.write_text("# immutable runtime fixture\n", encoding="utf-8")
+            runner.chmod(0o444)
+            test_tool = root / "test_consumer.py"
+            test_tool.write_text("# immutable test fixture\n", encoding="utf-8")
+            test_tool.chmod(0o444)
+            runner_descriptor = module.descriptor(runner, "runner fixture")
+            candidate_path = root / "candidate.json"
+            candidate = {
+                "runtime_bindings": {
+                    "mechanism_runner": runner_descriptor,
+                },
+                "seed_bundles": {"SIM-S1_CORE:b01": bundle},
+            }
+            candidate_path.write_text(
+                json.dumps(candidate, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            candidate_path.chmod(0o444)
+            candidate_descriptor = module.descriptor(
+                candidate_path, "candidate fixture")
+
+            proofs = {
+                name: True for name in module.CRN_CONSUMER_REQUIRED_PROOFS
+            }
+            proofs["callback_count_rng_rejected"] = False
+            transcript_path = root / "consumer_test.log"
+            transcript_path.write_text(
+                "command=[]\nreturncode=0\n" +
+                "\n".join(
+                    f"test_{name} (fixture) ... ok"
+                    for name in module.CRN_CONSUMER_REQUIRED_PROOFS
+                ) +
+                f"\nRan {len(module.CRN_CONSUMER_REQUIRED_PROOFS)} tests "
+                "in 0.001s\n\nOK\n",
+                encoding="utf-8",
+            )
+            transcript_path.chmod(0o444)
+            stream_application = {
+                stream: {
+                    "consumption_phase": module.CRN_CONSUMPTION_PHASES[stream],
+                    "consumer_target": f"fixture::{stream}",
+                    "application_mode": module.CRN_APPLICATION_MODES[stream],
+                    "mapping_hash": module.canonical_hash({"stream": stream}),
+                }
+                for stream in module.toolchain.SEED_STREAMS
+            }
+            evidence_core = {
+                "schema_version": module.CRN_CONSUMER_EVIDENCE_SCHEMA_VERSION,
+                "document_type": module.CRN_CONSUMER_EVIDENCE_DOCUMENT_TYPE,
+                "protocol_id": module.PROTOCOL_ID,
+                "release_id": module.RELEASE_ID,
+                "formal": False,
+                "formal_scope": "SIMULATION_MECHANISM_ONLY",
+                "physical_primary_eligible": False,
+                "status": "PASS",
+                "consumer_id": "fixture-consumer-v1",
+                "freeze_candidate": candidate_descriptor,
+                "canonical_runner": runner_descriptor,
+                "test_tool": module.descriptor(test_tool, "test tool fixture"),
+                "test_transcript": module.descriptor(
+                    transcript_path, "test transcript fixture"),
+                "fixture_trace_asset": bundle["trace_asset"],
+                "stream_application": stream_application,
+                "proofs": proofs,
+                "test_count": len(module.CRN_CONSUMER_REQUIRED_PROOFS),
+                "created_utc": "2026-08-03T00:00:00Z",
+            }
+            evidence = dict(
+                evidence_core,
+                evidence_hash=module.canonical_hash(evidence_core),
+            )
+            evidence_path = root / "consumer_evidence.json"
+            evidence_path.write_text(
+                json.dumps(evidence, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            evidence_path.chmod(0o444)
+            contract_core = {
+                "schema_version": module.CRN_CONSUMER_SCHEMA_VERSION,
+                "document_type": module.CRN_CONSUMER_DOCUMENT_TYPE,
+                "protocol_id": module.PROTOCOL_ID,
+                "release_id": module.RELEASE_ID,
+                "formal": True,
+                "formal_scope": "SIMULATION_MECHANISM_ONLY",
+                "physical_primary_eligible": False,
+                "status": "PASS",
+                "consumer_id": "fixture-consumer-v1",
+                "consumer_implemented": True,
+                "freeze_candidate": candidate_descriptor,
+                "canonical_runner": runner_descriptor,
+                "trace_asset_schema_version": module.CRN_TRACE_SCHEMA_VERSION,
+                "seed_streams": list(module.toolchain.SEED_STREAMS),
+                "time_domain": module.CRN_TIME_DOMAIN,
+                "time_origin_event": module.CRN_TIME_ORIGIN_EVENT,
+                "time_index_field": "time_index_ms",
+                "interpolation": module.CRN_INTERPOLATION,
+                "required_environment":
+                    list(module.CRN_CONSUMER_REQUIRED_ENVIRONMENT),
+                "admit_before_any_method_cmd_vel_publisher": True,
+                "same_block_asset_for_all_conditions": True,
+                "fresh_state_reset_required": True,
+                "condition_specific_rng_forbidden": True,
+                "callback_count_rng_forbidden": True,
+                "runtime_ack_required": True,
+                "runtime_ack_schema_hash": "a" * 64,
+                "stream_consumption_phases": module.CRN_CONSUMPTION_PHASES,
+                "stream_application": stream_application,
+                "initial_yaw_runtime_contract": {
+                    "source": (
+                        "trace_asset.initial_yaw_realization."
+                        "initial_yaw_offset_rad"),
+                    "formula": (
+                        "SPAWN_YAW=frozen_path_initial_yaw+"
+                        "initial_yaw_offset_rad"),
+                    "consumption_phase": "PRE_MOTION_RESET",
+                    "max_abs_rad": module.CRN_INITIAL_YAW_MAX_ABS_RAD,
+                    "condition_override_forbidden": True,
+                    "runtime_ack_field":
+                        "initial_yaw_offset_rad_applied",
+                },
+                "consumer_test_evidence": module.descriptor(
+                    evidence_path, "consumer evidence fixture"),
+            }
+            contract = dict(
+                contract_core,
+                contract_hash=module.canonical_hash(contract_core),
+            )
+            contract_path = root / "consumer_contract.json"
+            contract_path.write_text(
+                json.dumps(contract, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            contract_path.chmod(0o444)
+
+            with self.assertRaisesRegex(
+                    module.MechanismFreezeError,
+                    "lacks required fail-closed proofs"):
+                module.validate_crn_runtime_consumer_contract(
+                    module.descriptor(contract_path, "consumer contract fixture"),
+                    candidate,
+                    candidate_path,
+                )
+
+    def test_old_release_identity_and_attempt_import_are_rejected(self):
+        stale = {
+            "protocol_id": self.module.PREDECESSOR_PROTOCOL_IDS[0],
+            "release_id": self.module.PREDECESSOR_RELEASE_IDS[-1],
+            "attempt_import_allowed": True,
+            "predecessor_attempts_imported": 1,
+        }
+        errors = self.module.validate_freeze(stale)["errors"]
+        self.assertIn(
+            f"protocol_id must equal {self.module.PROTOCOL_ID!r}", errors)
+        self.assertIn(
+            f"release_id must equal {self.module.RELEASE_ID!r}", errors)
+        self.assertIn("attempt_import_allowed must equal False", errors)
+        self.assertIn("predecessor_attempts_imported must equal 0", errors)
+        self.assertIn(
+            "R1/R2/R3/R4/R5/R6 predecessor exclusion contract mismatch", errors)
+        self.assertIn("R7 schedule provenance mismatch", errors)
+
+    def test_final_freeze_reproves_clock_tail_and_frozen_endpoint(self):
+        module = self.module
+        calibration_source = inspect.getsource(
+            module.validate_timing_calibration)
+        self.assertIn("runtime_qc.audit_closed_rosbag", calibration_source)
+        self.assertIn(
+            "reaudited_bag_qc == persisted_bag_qc", calibration_source)
+        self.assertIn(
+            "runtime_qc.validate_owned_stop_evidence", calibration_source)
+        self.assertIn(
+            "rebuilt_stop_bundle == runtime_report.get(\"stop_bundle\")",
+            calibration_source)
+        case_hash = "a" * 64
+        expected_yaw = 0.125
+        base_state = {
+            "schema_version": module.TIMING_SCHEMA_VERSION,
+            "protocol_id": module.PROTOCOL_ID,
+            "record_type": "SMPCC_SIM_MECHANISM_MOTION_GOAL_EVENTS",
+            "formal": False,
+            "physical_primary_eligible": False,
+            "case_manifest_hash": case_hash,
+            "success_contract":
+                "controller_GOAL_REACHED_AND_frozen_endpoint_geometry",
+        }
+        gate = module.endpoint_gate.FrozenEndpointGate(
+            start_x=0.0, start_y=0.0, start_yaw_rad=expected_yaw,
+            goal_x=1.0, goal_y=0.0, base_state=base_state)
+        gate.observe_odom(
+            x=0.0, y=0.0, yaw_rad=expected_yaw,
+            linear_x_mps=0.0, angular_z_radps=0.0,
+            monotonic_sec=1.0, ros_time_sec=10.0, utc="start")
+        gate.observe_odom(
+            x=0.03, y=0.0, yaw_rad=expected_yaw,
+            linear_x_mps=0.1, angular_z_radps=0.0,
+            monotonic_sec=2.0, ros_time_sec=11.0, utc="motion")
+        gate.observe_status(
+            "GOAL_REACHED", monotonic_sec=3.0,
+            ros_time_sec=12.0, utc="status")
+        for index in range(module.endpoint_gate.GOAL_STABLE_SAMPLES):
+            gate.observe_odom(
+                x=1.0, y=0.0, yaw_rad=expected_yaw,
+                linear_x_mps=0.0, angular_z_radps=0.0,
+                monotonic_sec=4.0 + index,
+                ros_time_sec=13.0 + index, utc=f"goal-{index}")
+        event = copy.deepcopy(gate.state)
+        duration = (
+            event["goal_reached"]["monotonic_sec"] -
+            event["first_executed_motion"]["monotonic_sec"])
+        endpoint_keys = (
+            "initial_pose_gate", "controller_goal_status_seen",
+            "geometric_goal_gate", "goal_reached", "latest_odometry")
+        attempt = {
+            "case_manifest_hash": case_hash,
+            "events": copy.deepcopy(event),
+            "endpoint_evidence": {
+                key: copy.deepcopy(event[key]) for key in endpoint_keys},
+        }
+        case = {"pose_contract": {
+            "expected_spawn_yaw_rad": expected_yaw,
+        }}
+        path = {"points": [
+            {"x": 0.0, "y": 0.0, "yaw": expected_yaw},
+            {"x": 1.0, "y": 0.0, "yaw": expected_yaw},
+        ]}
+        module._validate_timing_endpoint_evidence(
+            attempt=attempt, event=event, case=case,
+            path_document=path, duration_sec=duration,
+            label="fixture timing")
+
+        forged_event = copy.deepcopy(event)
+        forged_event["goal_reached"]["x"] = 0.7
+        forged_event["goal_reached"]["goal_distance_m"] = 0.3
+        forged_attempt = copy.deepcopy(attempt)
+        forged_attempt["events"] = copy.deepcopy(forged_event)
+        forged_attempt["endpoint_evidence"]["goal_reached"] = copy.deepcopy(
+            forged_event["goal_reached"])
+        with self.assertRaisesRegex(
+                module.MechanismFreezeError,
+                "status plus frozen-geometry arrival"):
+            module._validate_timing_endpoint_evidence(
+                attempt=forged_attempt, event=forged_event, case=case,
+                path_document=path, duration_sec=duration,
+                label="fixture timing")
+
+        tail_core = {
+            "schema_version": module.TIMING_SCHEMA_VERSION,
+            "record_type": "SMPCC_SIM_MECHANISM_ROS_CLOCK_TAIL_QC",
+            "protocol_id": module.PROTOCOL_ID,
+            "release_id": module.RELEASE_ID,
+            "formal": False,
+            "physical_primary_eligible": False,
+            "status": "PASS",
+            "attempt_id": module.TIMING_ATTEMPT_IDS["Bslosh"],
+            "case_manifest_hash": case_hash,
+            "start_ros_time_sec": 20.0,
+            "end_ros_time_sec": 25.1,
+            "observed_tail_sec": 5.1,
+            "required_tail_sec": module.TIMING_TAIL_SEC,
+            "wall_elapsed_sec": 6.0,
+            "wall_watchdog_sec": module.TIMING_TAIL_WALL_WATCHDOG_SEC,
+        }
+        tail = dict(
+            tail_core, tail_clock_qc_hash=module.canonical_hash(tail_core))
+        module._validate_timing_tail_receipt(
+            tail, attempt_id=module.TIMING_ATTEMPT_IDS["Bslosh"],
+            case_manifest_hash=case_hash)
+        short_core = dict(tail_core)
+        short_core.update({
+            "end_ros_time_sec": 24.9,
+            "observed_tail_sec": 4.9,
+        })
+        short = dict(
+            short_core,
+            tail_clock_qc_hash=module.canonical_hash(short_core))
+        with self.assertRaisesRegex(
+                module.MechanismFreezeError, "shorter than the frozen"):
+            module._validate_timing_tail_receipt(
+                short, attempt_id=module.TIMING_ATTEMPT_IDS["Bslosh"],
+                case_manifest_hash=case_hash)
+
+    def test_fixed_profiles_use_container_derived_frequency_and_exact_policy(self):
+        module = self.module
+        self.assertEqual(0.26, module.PROFILE_GENERATION_PARAMETERS["base_speed"])
+        self.assertEqual(55.0, module.PROFILE_MAX_DURATION_SEC)
+
+        c1 = module._load_container(
+            module.SIM_CONTROLLER_ROOT / "config/containers/C1_37mm_H58_sim.yaml", "C1")
+        c2 = module._load_container(
+            module.SIM_CONTROLLER_ROOT /
+            "config/containers/C2_95mm_H58_sim.yaml",
+            "C2",
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            path_json = root / "H1_sim.json"
+            path_json.write_text(
+                json.dumps(module._path_document(
+                    "H1", module._points_from_candidate("H1"), False)),
+                encoding="utf-8",
+            )
+
+            generated = {}
+            for container in (c1, c2):
+                container_id = container["container_id"]
+                profile_path = root / f"H1_{container_id}.csv"
+                report_path = root / f"H1_{container_id}_generation.json"
+                inputs = module._write_profile(
+                    profile_path, report_path, path_json, container)
+                report = json.loads(report_path.read_text(encoding="utf-8"))
+
+                parameters = container["parameters"]
+                expected_omega = math.sqrt(
+                    module.PROFILE_GRAVITY_M_S2 *
+                    module.PROFILE_MODE_ROOT_XI /
+                    float(parameters["container_radius"]) *
+                    math.tanh(
+                        module.PROFILE_MODE_ROOT_XI *
+                        float(parameters["liquid_height"]) /
+                        float(parameters["container_radius"])
+                    )
+                )
+                self.assertEqual(container["parameter_hash"],
+                                 inputs["container_parameter_hash"])
+                self.assertTrue(math.isclose(
+                    expected_omega,
+                    float(inputs["omega_n_rad_s"]),
+                    rel_tol=0.0,
+                    abs_tol=1e-12,
+                ))
+                self.assertEqual(0.26, report["unshaped_base_speed_m_s"])
+                self.assertGreater(float(report["duration_sec"]), 0.0)
+                self.assertLessEqual(
+                    float(report["duration_sec"]),
+                    module.PROFILE_MAX_DURATION_SEC,
+                )
+                self.assertIs(True, report["constraints"]["all_pass"])
+                self.assertEqual(
+                    0, stat.S_IMODE(profile_path.stat().st_mode) & 0o222)
+                self.assertEqual(
+                    0, stat.S_IMODE(report_path.stat().st_mode) & 0o222)
+                generated[container_id] = {
+                    "inputs": inputs,
+                    "profile_hash": module.sha256_file(profile_path),
+                }
+
+            self.assertNotEqual(
+                generated["C1"]["inputs"]["omega_n_rad_s"],
+                generated["C2"]["inputs"]["omega_n_rad_s"],
+            )
+            self.assertNotEqual(
+                generated["C1"]["profile_hash"],
+                generated["C2"]["profile_hash"],
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

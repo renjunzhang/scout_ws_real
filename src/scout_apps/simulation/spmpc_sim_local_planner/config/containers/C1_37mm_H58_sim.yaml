@@ -1,0 +1,16 @@
+# SIMULATION_MECHANISM_ONLY condition, not a physical container freeze.
+sim_container_condition: C1
+sim_container_config_id: SIM_ONLY_C1_D37_H58_UNVALIDATED
+formal: false
+physical_primary_eligible: false
+slosh:
+  container_radius: 0.0185
+  liquid_height: 0.058
+  liquid_density: 1000.0
+  damping_ratio: 0.05
+  mode_index: 1
+  slosh_height_ref: 0.005
+  slosh_height_max: 0.001
+  slosh_eta_dot_ratio: 0.3
+  use_linear_model: true
+  use_parabola_term: false

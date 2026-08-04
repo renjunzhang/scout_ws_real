@@ -1,0 +1,54 @@
+<launch>
+  <!--
+    H0 development-only runtime path source.  It is intentionally separate
+    from formal H1/L1 frozen JSON replay and never includes a legacy proxy or
+    physical-controller launch.  The node refuses to run until the explicit
+    H0 acknowledgement is supplied.
+  -->
+  <arg name="h0_development_ack" default="false"/>
+  <arg name="development_condition" default="H0"/>
+  <arg name="odom_topic" default="/odom"/>
+  <arg name="expected_odom_frame" default="odom"/>
+  <arg name="output_topic" default="/scout/global_path_fixed"/>
+  <arg name="goal_topic" default="/scout/goal"/>
+  <arg name="publish_goal" default="true"/>
+  <arg name="goal_x" default="5.0"/>
+  <arg name="goal_y" default="0.0"/>
+  <arg name="goal_yaw" default="0.0"/>
+  <arg name="path_template" default="s_curve" doc="H0-only: s_curve|straight"/>
+  <arg name="path_start_heading" default="current"/>
+  <arg name="path_amplitude_ratio" default="0.18"/>
+  <arg name="path_min_amplitude" default="0.25"/>
+  <arg name="path_max_amplitude" default="1.20"/>
+  <arg name="path_side" default="left"/>
+  <arg name="path_smooth_iterations" default="3"/>
+  <arg name="spacing_m" default="0.05"/>
+  <arg name="odom_timeout_sec" default="15.0"/>
+
+  <node pkg="spmpc_sim_local_planner"
+        type="smpcc_sim_h0_fixed_path_publisher.py"
+        name="sim_h0_fixed_path_publisher"
+        output="screen"
+        required="true">
+    <param name="h0_development_ack" value="$(arg h0_development_ack)"/>
+    <param name="development_condition" value="$(arg development_condition)"/>
+    <param name="evidence_class" value="DEVELOPMENT_SMOKE_NOT_FORMAL"/>
+    <param name="odom_topic" value="$(arg odom_topic)"/>
+    <param name="expected_odom_frame" value="$(arg expected_odom_frame)"/>
+    <param name="output_topic" value="$(arg output_topic)"/>
+    <param name="goal_topic" value="$(arg goal_topic)"/>
+    <param name="publish_goal" value="$(arg publish_goal)"/>
+    <param name="goal_x" value="$(arg goal_x)"/>
+    <param name="goal_y" value="$(arg goal_y)"/>
+    <param name="goal_yaw" value="$(arg goal_yaw)"/>
+    <param name="path_template" value="$(arg path_template)"/>
+    <param name="path_start_heading" value="$(arg path_start_heading)"/>
+    <param name="path_amplitude_ratio" value="$(arg path_amplitude_ratio)"/>
+    <param name="path_min_amplitude" value="$(arg path_min_amplitude)"/>
+    <param name="path_max_amplitude" value="$(arg path_max_amplitude)"/>
+    <param name="path_side" value="$(arg path_side)"/>
+    <param name="path_smooth_iterations" value="$(arg path_smooth_iterations)"/>
+    <param name="spacing_m" value="$(arg spacing_m)"/>
+    <param name="odom_timeout_sec" value="$(arg odom_timeout_sec)"/>
+  </node>
+</launch>

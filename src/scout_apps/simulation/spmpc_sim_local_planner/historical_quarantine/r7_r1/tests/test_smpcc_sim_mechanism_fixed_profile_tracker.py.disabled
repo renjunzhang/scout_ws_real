@@ -1,0 +1,337 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Unit tests for the isolated SIM-MECHANISM FixedProfile tracker."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import csv
+import importlib.util
+import json
+import math
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+
+
+SCRIPT = Path(__file__).resolve().parents[1] / "smpcc_sim_mechanism_fixed_profile_tracker.py"
+SPEC = importlib.util.spec_from_file_location("smpcc_fixed_profile_tracker_tested", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+tracker = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = tracker
+SPEC.loader.exec_module(tracker)
+
+
+class FixedProfileTrackerTest(unittest.TestCase):
+    @staticmethod
+    def _pose(x: float, y: float, yaw: float = 0.0):
+        return SimpleNamespace(pose=SimpleNamespace(
+            position=SimpleNamespace(x=x, y=y),
+            orientation=SimpleNamespace(
+                x=0.0, y=0.0, z=math.sin(yaw / 2.0),
+                w=math.cos(yaw / 2.0),
+            ),
+        ))
+
+    @classmethod
+    def _odom(cls, *, frame="odom", stamp=10.0, x=0.0, y=0.0,
+              yaw=0.0, v=0.0, omega=0.0):
+        pose = cls._pose(x, y, yaw).pose
+        return SimpleNamespace(
+            header=SimpleNamespace(
+                frame_id=frame,
+                stamp=SimpleNamespace(to_sec=lambda: stamp),
+            ),
+            pose=SimpleNamespace(pose=pose),
+            twist=SimpleNamespace(twist=SimpleNamespace(
+                linear=SimpleNamespace(x=v), angular=SimpleNamespace(z=omega),
+            )),
+        )
+
+    def _profile(self, root: Path, *, mutate=None, writable: bool = False) -> Path:
+        rows = [
+            {
+                "s_normalized": 0.0, "s_m": 0.0, "t_s": 0.0,
+                "x": 0.0, "y": 0.0, "yaw": 0.0, "v_ref_m_s": 0.0,
+                "a_ref_m_s2": 0.0, "jerk_ref_m_s3": 0.0,
+                "method": tracker.EXPECTED_METHOD,
+            },
+            {
+                "s_normalized": 0.5, "s_m": 1.0, "t_s": 2.0,
+                "x": 1.0, "y": 0.0, "yaw": 0.0, "v_ref_m_s": 0.4,
+                "a_ref_m_s2": 0.2, "jerk_ref_m_s3": 0.0,
+                "method": tracker.EXPECTED_METHOD,
+            },
+            {
+                "s_normalized": 1.0, "s_m": 2.0, "t_s": 4.0,
+                "x": 2.0, "y": 0.0, "yaw": 0.0, "v_ref_m_s": 0.0,
+                "a_ref_m_s2": -0.2, "jerk_ref_m_s3": 0.0,
+                "method": tracker.EXPECTED_METHOD,
+            },
+        ]
+        if mutate is not None:
+            mutate(rows)
+        path = root / "profile.csv"
+        with path.open("w", encoding="utf-8", newline="") as stream:
+            writer = csv.DictWriter(stream, fieldnames=tracker.CSV_COLUMNS)
+            writer.writeheader()
+            writer.writerows(rows)
+        path.chmod(0o644 if writable else 0o444)
+        return path
+
+    @staticmethod
+    def _parameters(path: Path) -> dict:
+        return {
+            "sim_mechanism_fixed_profile_launch": True,
+            "sim_only_release_ack": True,
+            "use_sim_time": True,
+            "sim_only_container_config_id":
+                "SIM_ONLY_C1_D37_H58_LEGACY_UNVALIDATED",
+            "frozen_profile_csv": str(path),
+            "frozen_profile_sha256": tracker.sha256_file(path),
+            "sim_mechanism_release_id": tracker.RELEASE_ID,
+            "mechanism_release_hash": "a" * 64,
+            "fixed_profile_id": "H1_C1",
+            "frozen_path_id": "H1",
+        }
+
+    def test_complete_valid_admission_and_fixed_profile_follower(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = self._profile(Path(temporary))
+            admitted, points = tracker.admit_runtime(
+                self._parameters(path), "http://127.0.0.1:11321"
+            )
+            self.assertEqual(path.resolve(), admitted)
+            self.assertEqual(3, len(points))
+            follower = tracker.ProfileFollower(points)
+            velocity, omega, distance = follower.command(0.0, 0.0, 0.0, 1 / 30)
+            self.assertGreater(velocity, 0.0)
+            self.assertLessEqual(velocity, 0.6 / 30 + 1e-12)
+            self.assertAlmostEqual(0.0, omega)
+            self.assertAlmostEqual(2.0, distance)
+            velocity, omega, distance = follower.command(2.0, 0.0, 0.0, 1 / 30)
+            self.assertGreaterEqual(velocity, 0.0)
+            self.assertAlmostEqual(0.0, omega)
+            self.assertAlmostEqual(0.0, distance)
+
+            release_request = tracker.release_request_for(
+                self._parameters(path)
+            )
+            gate = tracker.MotionReleaseGate(release_request)
+            self.assertEqual((0.0, 0.0), gate.filter_command(0.4, 0.2))
+            self.assertEqual(1, gate.zero_command_count)
+            with self.assertRaisesRegex(
+                tracker.FixedProfileAdmissionError, "before dynamic"
+            ):
+                gate.accept_release(tracker.canonical_json(release_request))
+            self.assertFalse(gate.motion_released)
+            self.assertEqual((0.0, 0.0), gate.filter_command(0.4, 0.2))
+            gate.admit_dynamic()
+            # Dynamic geometry/start admission is necessary but deliberately
+            # insufficient: recorder connectivity must precede explicit release.
+            self.assertEqual((0.0, 0.0), gate.filter_command(0.4, 0.2))
+            with self.assertRaisesRegex(
+                tracker.FixedProfileAdmissionError, "hash-bound contract"
+            ):
+                gate.accept_release(tracker.canonical_json(dict(
+                    release_request, profile_sha256="0" * 64
+                )))
+            self.assertFalse(gate.motion_released)
+            with self.assertRaisesRegex(
+                tracker.FixedProfileAdmissionError, "hash-bound contract"
+            ):
+                gate.accept_release(json.dumps(release_request, indent=2))
+            self.assertFalse(gate.motion_released)
+            gate.accept_release(tracker.canonical_json(release_request))
+            self.assertTrue(gate.motion_released)
+            self.assertEqual((0.4, 0.2), gate.filter_command(0.4, 0.2))
+
+    def test_every_identity_boundary_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = self._profile(Path(temporary))
+            valid = self._parameters(path)
+            changes = (
+                ("sim_mechanism_fixed_profile_launch", False,
+                 "marker must be explicitly true"),
+                ("sim_only_release_ack", False,
+                 "sim_only_release_ack must be explicitly true"),
+                ("use_sim_time", False, "/use_sim_time must be true"),
+                ("sim_only_container_config_id", "C1", "approved SIM-ONLY C1 or C2"),
+                ("sim_mechanism_release_id", "R2", "must equal"),
+                ("mechanism_release_hash", "bad", "canonical SHA-256"),
+                ("fixed_profile_id", "H1_C2", "identity tuple is invalid"),
+            )
+            for field, value, message in changes:
+                with self.subTest(field=field):
+                    parameters = dict(valid, **{field: value})
+                    with self.assertRaisesRegex(
+                        tracker.FixedProfileAdmissionError, message
+                    ):
+                        tracker.admit_runtime(
+                            parameters, "http://127.0.0.1:11321"
+                        )
+            for uri in (
+                "http://localhost:11321", "http://0.0.0.0:11321",
+                "http://127.0.0.1:80", "http://127.0.0.1:11321/",
+            ):
+                with self.subTest(uri=uri), self.assertRaisesRegex(
+                    tracker.FixedProfileAdmissionError,
+                    "canonical isolated loopback",
+                ):
+                    tracker.admit_runtime(valid, uri)
+
+    def test_missing_writable_symlink_and_hash_drift_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            writable = self._profile(root, writable=True)
+            parameters = self._parameters(writable)
+            with self.assertRaisesRegex(
+                tracker.FixedProfileAdmissionError, "must be read-only"
+            ):
+                tracker.admit_runtime(parameters, "http://127.0.0.1:11321")
+            writable.chmod(0o444)
+            frozen_bytes = writable.read_bytes()
+            frozen_stat = writable.stat()
+            admitted, _points = tracker.admit_runtime(
+                self._parameters(writable), "http://127.0.0.1:11321"
+            )
+            gate = tracker.MotionReleaseGate(
+                tracker.release_request_for(self._parameters(writable))
+            )
+            gate.filter_command(0.4, 0.2)
+            gate.admit_dynamic()
+            gate.accept_release(tracker.canonical_json(gate.release_request))
+            self.assertEqual(frozen_bytes, admitted.read_bytes())
+            self.assertEqual(frozen_stat.st_mtime_ns, admitted.stat().st_mtime_ns)
+            self.assertFalse(frozen_stat.st_mode & tracker.WRITE_BITS)
+            parameters["frozen_profile_sha256"] = "0" * 64
+            with self.assertRaisesRegex(
+                tracker.FixedProfileAdmissionError, "SHA-256 mismatch"
+            ):
+                tracker.admit_runtime(parameters, "http://127.0.0.1:11321")
+            link = root / "profile-link.csv"
+            os.symlink(writable, link)
+            parameters = self._parameters(writable)
+            parameters["frozen_profile_csv"] = str(link)
+            with self.assertRaisesRegex(
+                tracker.FixedProfileAdmissionError, "may not use symlinks"
+            ):
+                tracker.admit_runtime(parameters, "http://127.0.0.1:11321")
+
+    def test_profile_semantics_are_validated_without_fallback(self) -> None:
+        mutations = (
+            (lambda rows: rows[1].update(s_normalized=0.0),
+             "not strictly increasing"),
+            (lambda rows: rows[1].update(v_ref_m_s=-0.1), "speed is negative"),
+            (lambda rows: rows[1].update(x=4.0), "geometry/distance mismatch"),
+            (lambda rows: rows[1].update(method="OTHER"),
+             "method must be"),
+            (lambda rows: rows[-1].update(v_ref_m_s=0.1),
+             "endpoint speeds must be zero"),
+            (lambda rows: rows[0].update(t_s=0.1),
+             "start at zero progress/time"),
+            (lambda rows: rows[-1].update(t_s=56.0),
+             "duration exceeds"),
+            (lambda rows: rows[1].update(v_ref_m_s=0.81),
+             "speed exceeds tracker limit"),
+            (lambda rows: rows[1].update(a_ref_m_s2=0.61),
+             "acceleration exceeds tracker limit"),
+        )
+        for number, (mutation, reason) in enumerate(mutations):
+            with self.subTest(reason=reason), tempfile.TemporaryDirectory(
+                prefix=f"profile_semantics_{number}_"
+            ) as temporary:
+                path = self._profile(Path(temporary), mutate=mutation)
+                with self.assertRaisesRegex(
+                    tracker.FixedProfileAdmissionError, reason
+                ):
+                    tracker.admit_runtime(
+                        self._parameters(path), "http://127.0.0.1:11321"
+                    )
+
+    def test_extra_csv_cells_are_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = self._profile(Path(temporary))
+            path.chmod(0o644)
+            lines = path.read_text(encoding="utf-8").splitlines()
+            lines[1] += ",unexpected"
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            path.chmod(0o444)
+            with self.assertRaisesRegex(
+                tracker.FixedProfileAdmissionError, "extra CSV cells"
+            ):
+                tracker.admit_runtime(
+                    self._parameters(path), "http://127.0.0.1:11321"
+                )
+
+    def test_source_orders_zero_publisher_before_dynamic_admission_and_release(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+        run_node = source.index("def run_ros_node")
+        static_admission = source.index("admit_runtime(", run_node)
+        publisher = source.index('rospy.Publisher("/cmd_vel"', run_node)
+        initial_zero = source.index("publish_zero()", publisher)
+        path_gate = source.index("_profile_matches_activation(", publisher)
+        start_gate = source.index("START_POSITION_TOLERANCE_M", publisher)
+        path_subscriber = source.index(
+            '"/scout/global_path_fixed", RosPath, path_callback', publisher
+        )
+        release_subscriber = source.index(
+            "rospy.Subscriber(RELEASE_TOPIC", publisher
+        )
+        motion_release_check = source.index(
+            "if not released:", publisher
+        )
+        follower_command = source.index("follower.command(", publisher)
+        self.assertLess(static_admission, publisher)
+        self.assertLess(publisher, initial_zero)
+        self.assertLess(publisher, path_gate)
+        self.assertLess(publisher, start_gate)
+        self.assertLess(initial_zero, path_subscriber)
+        self.assertLess(initial_zero, release_subscriber)
+        self.assertLess(motion_release_check, follower_command)
+        self.assertIn("DYNAMIC_ADMITTED_ZERO_HOLD", source)
+        self.assertIn("runner_must_verify_recorder_cmd_connection", source)
+        self.assertIn("MOTION_RELEASED", source)
+        self.assertNotIn("scout_local_planner", source)
+        self.assertNotIn("/slosh/height", source)
+        self.assertNotIn("/sim_spmpc/slosh_height", source)
+
+    def test_activation_gate_checks_full_geometry_order_and_yaw(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = self._profile(Path(temporary))
+            _path, points = tracker.load_frozen_profile(
+                str(path), tracker.sha256_file(path)
+            )
+            valid = [self._pose(0.0, 0.0), self._pose(1.0, 0.0),
+                     self._pose(2.0, 0.0)]
+            self.assertTrue(tracker._profile_matches_activation(points, valid))
+            bowed = [self._pose(0.0, 0.0), self._pose(1.0, 0.20),
+                    self._pose(2.0, 0.0)]
+            self.assertFalse(tracker._profile_matches_activation(points, bowed))
+            self.assertFalse(tracker._profile_matches_activation(
+                points, list(reversed(valid))
+            ))
+            bad_yaw = [self._pose(0.0, 0.0, 0.3), self._pose(1.0, 0.0),
+                       self._pose(2.0, 0.0)]
+            self.assertFalse(tracker._profile_matches_activation(points, bad_yaw))
+
+    def test_odom_gate_rejects_frame_nonfinite_and_timestamp_drift(self) -> None:
+        values = tracker._odom_values(self._odom(), 10.1)
+        self.assertEqual((0.0, 0.0, 0.0, 0.0, 0.0, 10.0), values)
+        for message, reason in (
+            (self._odom(frame="base_link"), "frame"),
+            (self._odom(x=float("nan")), "non-finite"),
+            (self._odom(stamp=9.0), "stale"),
+        ):
+            with self.subTest(reason=reason), self.assertRaisesRegex(
+                tracker.FixedProfileAdmissionError, reason
+            ):
+                tracker._odom_values(message, 10.1)
+
+
+if __name__ == "__main__":
+    unittest.main()

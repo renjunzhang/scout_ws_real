@@ -1,0 +1,466 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Build hash-bound R7 CRN consumer evidence from executed proofs.
+
+The production CLI accepts only the canonical R7 candidate/output directory.
+It runs the candidate-bound nine-proof consumer test, parses every named
+result, snapshots the tested bytes, derives (rather than accepts) all PASS
+fields, and asks the freeze validator to re-admit the persisted contract.
+It never starts ROS/Gazebo and never creates a matrix row or attempt.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import ast
+import hashlib
+import importlib.util
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Mapping, Optional, Sequence
+
+
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+WORKSPACE = SCRIPT_PATH.parents[5]
+FREEZE_PATH = SCRIPT_DIR / "smpcc_sim_mechanism_freeze.py"
+RUNTIME_PATH = SCRIPT_DIR / "smpcc_sim_mechanism_crn_runtime.py"
+TEST_PATH = SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_crn_runtime.py"
+FIXTURE_KEY = "SIM-S1_CORE:b01"
+CREATED_UTC_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z")
+WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+APPLICATION_MAPPING_FIELDS = frozenset((
+    "stream", "source_field", "time_index_field", "application_mode",
+    "value_transform", "runtime_evidence",
+))
+FORBIDDEN_APPLICATION_TOKENS = (
+    "none", "noop", "no_op", "hash_only", "admit_only", "not_applied",
+)
+
+
+class CRNContractBuilderError(RuntimeError):
+    pass
+
+
+def require(value: bool, message: str) -> None:
+    if not value:
+        raise CRNContractBuilderError(message)
+
+
+def _load(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    require(spec is not None and spec.loader is not None,
+            f"cannot import required module: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+freeze = _load("smpcc_sim_mechanism_crn_contract_freeze", FREEZE_PATH)
+runtime = _load("smpcc_sim_mechanism_crn_contract_runtime", RUNTIME_PATH)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _descriptor(value: Any, label: str) -> tuple[Path, dict[str, str]]:
+    require(isinstance(value, Mapping) and
+            set(value) == {"path", "sha256"},
+            f"{label} descriptor is malformed")
+    path = Path(str(value.get("path", "")))
+    require(path.is_absolute() and path.is_file() and not path.is_symlink(),
+            f"{label} is missing or not a regular file")
+    resolved = path.resolve()
+    require(path == resolved and value.get("sha256") == sha256_file(path),
+            f"{label} path/hash mismatch")
+    return path, {"path": str(path), "sha256": str(value["sha256"])}
+
+
+def _write_bytes_new_readonly(path: Path, payload: bytes) -> None:
+    require(not path.exists(), f"refusing to overwrite immutable output: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("xb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(path, 0o444)
+    except OSError as exc:
+        raise CRNContractBuilderError(f"cannot write {path}: {exc}") from exc
+
+
+def _write_json_new_readonly(path: Path, value: Mapping[str, Any]) -> None:
+    payload = (json.dumps(
+        value, ensure_ascii=False, indent=2, sort_keys=True,
+    ) + "\n").encode("utf-8")
+    _write_bytes_new_readonly(path, payload)
+
+
+def _parse_proof_transcript(output: str, returncode: int) -> dict[str, bool]:
+    expected = tuple(freeze.CRN_CONSUMER_REQUIRED_PROOFS)
+    successes: list[str] = []
+    for line in output.splitlines():
+        match = re.match(r"^test_([A-Za-z0-9_]+) .* \.\.\. ok$", line.strip())
+        if match:
+            successes.append(match.group(1))
+    ran = re.findall(r"^Ran ([0-9]+) tests? in ", output, re.MULTILINE)
+    require(returncode == 0, "CRN consumer proof process returned nonzero")
+    require(len(ran) == 1 and int(ran[0]) == len(expected),
+            "CRN consumer transcript has the wrong test count")
+    require(output.rstrip().endswith("OK") and
+            "FAILED" not in output and "skipped=" not in output,
+            "CRN consumer transcript is not an unskipped OK run")
+    require(len(successes) == len(set(successes)) and
+            set(successes) == set(expected),
+            "CRN consumer transcript does not prove the exact required names")
+    return {name: name in successes for name in expected}
+
+
+def _run_proofs(test_tool: Path, timeout_sec: float = 180.0
+                ) -> tuple[dict[str, bool], bytes]:
+    command = (sys.executable, str(test_tool), "-v")
+    environment = dict(os.environ)
+    environment["PYTHONDONTWRITEBYTECODE"] = "1"
+    try:
+        completed = subprocess.run(
+            list(command), cwd=str(WORKSPACE), env=environment,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, check=False, timeout=timeout_sec,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise CRNContractBuilderError(
+            f"cannot complete CRN consumer proofs: {exc}") from exc
+    proofs = _parse_proof_transcript(completed.stdout, completed.returncode)
+    transcript = (
+        "command=" + json.dumps(list(command), ensure_ascii=False) + "\n" +
+        "returncode=0\n" +
+        "\n".join(
+            f"test_{name} (derived_from_executed_unittest) ... ok"
+            for name in freeze.CRN_CONSUMER_REQUIRED_PROOFS
+        ) +
+        f"\nRan {len(proofs)} tests in 0.000s\n\nOK\n"
+    ).encode("utf-8")
+    return proofs, transcript
+
+
+def _literal_assignment(path: Path, variable: str) -> Any:
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (OSError, UnicodeError, SyntaxError) as exc:
+        raise CRNContractBuilderError(
+            f"cannot parse canonical runner registry: {exc}") from exc
+    values = []
+    for node in tree.body:
+        value_node = None
+        if isinstance(node, ast.Assign) and any(
+                isinstance(target, ast.Name) and target.id == variable
+                for target in node.targets):
+            value_node = node.value
+        elif (isinstance(node, ast.AnnAssign) and
+              isinstance(node.target, ast.Name) and
+              node.target.id == variable):
+            value_node = node.value
+        if value_node is not None:
+            try:
+                values.append(ast.literal_eval(value_node))
+            except (ValueError, TypeError, SyntaxError) as exc:
+                raise CRNContractBuilderError(
+                    f"{variable} must be one literal assignment") from exc
+    require(len(values) == 1, f"runner must define exactly one literal {variable}")
+    return values[0]
+
+
+def _stream_applications(runner_path: Path) -> dict[str, dict[str, Any]]:
+    value = _literal_assignment(runner_path, "CRN_STREAM_APPLICATIONS")
+    require(isinstance(value, Mapping) and
+            set(value) == set(runtime.SEED_STREAMS),
+            "runner CRN stream application registry is incomplete")
+    output: dict[str, dict[str, Any]] = {}
+    for stream in runtime.SEED_STREAMS:
+        item = value.get(stream)
+        require(isinstance(item, Mapping) and
+                set(item) == {"consumption_phase", "consumer_target", "mapping"},
+                f"runner CRN application {stream} fields are not exact")
+        require(item.get("consumption_phase") ==
+                runtime.CONSUMPTION_PHASES[stream],
+                f"runner CRN application {stream} phase mismatch")
+        target = item.get("consumer_target")
+        require(isinstance(target, str) and target.strip(),
+                f"runner CRN application {stream} target is missing")
+        lowered_target = target.casefold()
+        require(not any(token in lowered_target
+                        for token in FORBIDDEN_APPLICATION_TOKENS),
+                f"runner CRN application {stream} target is a no-op")
+        mapping = item.get("mapping")
+        require(isinstance(mapping, Mapping) and
+                set(mapping) == APPLICATION_MAPPING_FIELDS,
+                f"runner CRN application {stream} mapping fields are not exact")
+        require(mapping.get("stream") == stream and
+                mapping.get("source_field") == "unit_uniform" and
+                mapping.get("time_index_field") == runtime.TIME_INDEX_FIELD and
+                mapping.get("application_mode") ==
+                freeze.CRN_APPLICATION_MODES[stream],
+                f"runner CRN application {stream} source/time binding mismatch")
+        for field in ("application_mode", "value_transform", "runtime_evidence"):
+            text = mapping.get(field)
+            require(isinstance(text, str) and text.strip(),
+                    f"runner CRN application {stream} {field} is missing")
+            require(not any(token in text.casefold()
+                            for token in FORBIDDEN_APPLICATION_TOKENS),
+                    f"runner CRN application {stream} {field} is a no-op")
+        if freeze.CRN_APPLICATION_MODES[stream] == "INACTIVE_ZERO_AMPLITUDE":
+            require(mapping.get("value_transform") == "unit_uniform_to_zero",
+                    f"runner CRN application {stream} is not frozen to zero")
+        output[stream] = {
+            "consumption_phase": str(item["consumption_phase"]),
+            "consumer_target": target,
+            "application_mode": str(mapping["application_mode"]),
+            "mapping_hash": freeze.canonical_hash(dict(mapping)),
+        }
+    return output
+
+
+def _admit_candidate(candidate_path: Path, *, enforce_canonical_root: bool
+                     ) -> tuple[Mapping[str, Any], dict[str, str], Path, Path]:
+    candidate_path = Path(os.path.abspath(str(candidate_path)))
+    require(candidate_path.is_file() and not candidate_path.is_symlink() and
+            candidate_path == candidate_path.resolve(),
+            "CRN contract freeze candidate is missing or traverses a symlink")
+    if enforce_canonical_root:
+        require(candidate_path == freeze.CANONICAL_RELEASE_ROOT /
+                "mechanism_freeze_candidate.json",
+                "production builder requires the canonical R7 candidate")
+    candidate_descriptor = {
+        "path": str(candidate_path), "sha256": sha256_file(candidate_path),
+    }
+    try:
+        admitted_path = freeze._readonly_file_descriptor(
+            candidate_descriptor, "CRN contract freeze candidate")
+        candidate = freeze.read_json(admitted_path, "CRN contract freeze candidate")
+    except Exception as exc:  # freeze translates exact descriptor failures
+        raise CRNContractBuilderError(str(exc)) from exc
+    bindings = candidate.get("runtime_bindings")
+    require(isinstance(bindings, Mapping),
+            "candidate runtime bindings are missing")
+    runner_path, runner_descriptor = _descriptor(
+        bindings.get("mechanism_runner"), "candidate mechanism runner")
+    runtime_path, _runtime_descriptor = _descriptor(
+        bindings.get("mechanism_crn_runtime"), "candidate CRN runtime")
+    test_path, _test_descriptor = _descriptor(
+        bindings.get("crn_runtime_test"), "candidate CRN runtime test")
+    require(runtime_path == RUNTIME_PATH and test_path == TEST_PATH,
+            "candidate is not bound to the current CRN runtime/test")
+    if enforce_canonical_root:
+        errors = freeze.validate_runtime_bindings(bindings)
+        require(not errors, "candidate runtime bindings drift: " + "; ".join(errors))
+        report = freeze.validate_freeze(candidate)
+        require(report.get("status") == "FAIL" and
+                tuple(report.get("errors", ())) ==
+                freeze.CANDIDATE_MISSING_REQUIREMENTS,
+                "candidate has defects beyond timing/CRN evidence")
+    return candidate, candidate_descriptor, runner_path, test_path
+
+
+def build_contract(candidate_path: Path, output_directory: Path,
+                   created_utc: str, *,
+                   enforce_canonical_root: bool = True) -> dict[str, Any]:
+    """Execute proofs and create immutable evidence/contract documents."""
+
+    require(isinstance(created_utc, str) and
+            CREATED_UTC_RE.fullmatch(created_utc) is not None,
+            "created_utc must be explicit UTC with whole-second precision")
+    try:
+        parsed_created_utc = datetime.strptime(
+            created_utc, "%Y-%m-%dT%H:%M:%SZ"
+        )
+    except ValueError as exc:
+        raise CRNContractBuilderError(
+            "created_utc is not a valid UTC calendar time") from exc
+    require(parsed_created_utc.strftime("%Y-%m-%dT%H:%M:%SZ") == created_utc,
+            "created_utc must use canonical zero-padded UTC format")
+    output_directory = Path(os.path.abspath(str(output_directory)))
+    require(output_directory == output_directory.resolve(),
+            "CRN output directory may not traverse a symlink")
+    if enforce_canonical_root:
+        require(output_directory == freeze.CANONICAL_RELEASE_ROOT,
+                "production builder output must be the canonical R7 freeze root")
+    evidence_path = output_directory / "crn_runtime_consumer_evidence.json"
+    contract_path = output_directory / "crn_runtime_consumer_contract.json"
+    evidence_root = output_directory / "crn_consumer_evidence"
+    test_snapshot = evidence_root / TEST_PATH.name
+    transcript_path = evidence_root / "crn_runtime_test.log"
+    for path in (evidence_path, contract_path, evidence_root,
+                 test_snapshot, transcript_path):
+        require(not path.exists(), f"refusing to overwrite CRN evidence: {path}")
+
+    candidate, candidate_descriptor, runner_path, test_tool = _admit_candidate(
+        candidate_path, enforce_canonical_root=enforce_canonical_root,
+    )
+    bundle = candidate.get("seed_bundles", {}).get(FIXTURE_KEY)
+    try:
+        freeze.validate_crn_trace_asset(bundle, "SIM-S1_CORE", "b01")
+    except Exception as exc:
+        raise CRNContractBuilderError(str(exc)) from exc
+    applications = _stream_applications(runner_path)
+    proofs, transcript = _run_proofs(test_tool)
+    require(set(proofs) == set(freeze.CRN_CONSUMER_REQUIRED_PROOFS) and
+            all(proofs.values()), "CRN proof derivation is incomplete")
+    derived_status = "PASS"
+
+    _write_bytes_new_readonly(test_snapshot, test_tool.read_bytes())
+    _write_bytes_new_readonly(transcript_path, transcript)
+    test_snapshot_descriptor = {
+        "path": str(test_snapshot), "sha256": sha256_file(test_snapshot),
+    }
+    require(test_snapshot_descriptor["sha256"] == sha256_file(test_tool),
+            "tested source snapshot hash mismatch")
+    runner_descriptor = dict(candidate["runtime_bindings"]["mechanism_runner"])
+    evidence_core = {
+        "schema_version": freeze.CRN_CONSUMER_EVIDENCE_SCHEMA_VERSION,
+        "document_type": freeze.CRN_CONSUMER_EVIDENCE_DOCUMENT_TYPE,
+        "protocol_id": freeze.PROTOCOL_ID,
+        "release_id": freeze.RELEASE_ID,
+        "formal": False,
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "physical_primary_eligible": False,
+        "status": derived_status,
+        "consumer_id": runtime.CONSUMER_ID,
+        "freeze_candidate": candidate_descriptor,
+        "canonical_runner": runner_descriptor,
+        "test_tool": test_snapshot_descriptor,
+        "test_transcript": {
+            "path": str(transcript_path),
+            "sha256": sha256_file(transcript_path),
+        },
+        "fixture_trace_asset": dict(bundle["trace_asset"]),
+        "stream_application": applications,
+        "proofs": proofs,
+        "test_count": len(proofs),
+        "created_utc": created_utc,
+    }
+    evidence = dict(
+        evidence_core,
+        evidence_hash=freeze.canonical_hash(evidence_core),
+    )
+    _write_json_new_readonly(evidence_path, evidence)
+
+    contract_core = {
+        "schema_version": freeze.CRN_CONSUMER_SCHEMA_VERSION,
+        "document_type": freeze.CRN_CONSUMER_DOCUMENT_TYPE,
+        "protocol_id": freeze.PROTOCOL_ID,
+        "release_id": freeze.RELEASE_ID,
+        "formal": True,
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "physical_primary_eligible": False,
+        "status": derived_status,
+        "consumer_id": runtime.CONSUMER_ID,
+        "consumer_implemented": True,
+        "freeze_candidate": candidate_descriptor,
+        "canonical_runner": runner_descriptor,
+        "trace_asset_schema_version": freeze.CRN_TRACE_SCHEMA_VERSION,
+        "seed_streams": list(runtime.SEED_STREAMS),
+        "time_domain": runtime.TIME_DOMAIN,
+        "time_origin_event": runtime.TIME_ORIGIN_EVENT,
+        "time_index_field": runtime.TIME_INDEX_FIELD,
+        "interpolation": runtime.INTERPOLATION,
+        "required_environment": list(runtime.REQUIRED_ENVIRONMENT),
+        "admit_before_any_method_cmd_vel_publisher": True,
+        "same_block_asset_for_all_conditions": True,
+        "fresh_state_reset_required": True,
+        "condition_specific_rng_forbidden": True,
+        "callback_count_rng_forbidden": True,
+        "runtime_ack_required": True,
+        "runtime_ack_schema_hash": runtime.RUNTIME_ACK_SCHEMA_HASH,
+        "stream_consumption_phases": dict(runtime.CONSUMPTION_PHASES),
+        "stream_application": applications,
+        "initial_yaw_runtime_contract": {
+            "source": (
+                "trace_asset.initial_yaw_realization.initial_yaw_offset_rad"
+            ),
+            "formula": (
+                "SPAWN_YAW=frozen_path_initial_yaw+initial_yaw_offset_rad"
+            ),
+            "consumption_phase": "PRE_MOTION_RESET",
+            "max_abs_rad": freeze.CRN_INITIAL_YAW_MAX_ABS_RAD,
+            "condition_override_forbidden": True,
+            "runtime_ack_field": "initial_yaw_offset_rad_applied",
+        },
+        "consumer_test_evidence": {
+            "path": str(evidence_path), "sha256": sha256_file(evidence_path),
+        },
+    }
+    contract = dict(
+        contract_core,
+        contract_hash=freeze.canonical_hash(contract_core),
+    )
+    _write_json_new_readonly(contract_path, contract)
+    try:
+        validation = freeze.validate_crn_runtime_consumer_contract(
+            {"path": str(contract_path), "sha256": sha256_file(contract_path)},
+            candidate,
+            Path(candidate_descriptor["path"]),
+        )
+    except Exception as exc:
+        raise CRNContractBuilderError(
+            f"persisted CRN contract rejected: {exc}") from exc
+    return {
+        "status": validation["status"],
+        "formal_experiment_data_created": False,
+        "gazebo_started": False,
+        "test_count": len(proofs),
+        "proofs": dict(proofs),
+        "contract": {
+            "path": str(contract_path), "sha256": sha256_file(contract_path),
+            "contract_hash": contract["contract_hash"],
+        },
+        "evidence": {
+            "path": str(evidence_path), "sha256": sha256_file(evidence_path),
+            "evidence_hash": evidence["evidence_hash"],
+        },
+        "test_transcript": {
+            "path": str(transcript_path), "sha256": sha256_file(transcript_path),
+        },
+    }
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--candidate", type=Path,
+        default=freeze.CANONICAL_RELEASE_ROOT /
+        "mechanism_freeze_candidate.json",
+    )
+    parser.add_argument(
+        "--output-directory", type=Path,
+        default=freeze.CANONICAL_RELEASE_ROOT,
+    )
+    parser.add_argument("--created-utc", required=True)
+    args = parser.parse_args(argv)
+    try:
+        report = build_contract(
+            args.candidate, args.output_directory, args.created_utc,
+            enforce_canonical_root=True,
+        )
+        print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0
+    except CRNContractBuilderError as exc:
+        print(f"CRN contract builder rejected input: {exc}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,112 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Tests for the explicitly non-formal P2/C2/0705 candidate generator."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import copy
+import importlib.util
+import json
+import stat
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+MODULE_PATH = Path(__file__).resolve().parents[1] / "smpcc_sim_development_candidate_assets.py"
+
+
+def load_module():
+    name = "smpcc_sim_development_candidate_assets_test_target"
+    spec = importlib.util.spec_from_file_location(name, MODULE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {MODULE_PATH}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class DevelopmentCandidateAssetsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_module()
+
+    def test_paths_share_p2_endpoints_and_high_is_more_exciting(self):
+        high = self.module.candidate_path(self.module.HIGH_PATH_ID, 0.95, "HIGH")
+        low = self.module.candidate_path(self.module.LOW_PATH_ID, 0.22, "LOW")
+        transform = {"rotation_rad": 0.0, "tx": 0.0, "ty": 0.0, "yaw_offset_rad": 0.0}
+        geometry = self.module.candidate_world_geometry("a" * 64)
+        high_report = self.module.validate_candidate_path_pair(
+            high,
+            self.module.transform_candidate_path(high, transform),
+            transform,
+            geometry,
+        )
+        low_report = self.module.validate_candidate_path_pair(
+            low,
+            self.module.transform_candidate_path(low, transform),
+            transform,
+            geometry,
+        )
+        for candidate in (high, low):
+            self.assertFalse(candidate["formal"])
+            self.assertTrue(candidate["development_only"])
+            self.assertIsNone(candidate["formal_path_id"])
+            self.assertEqual(
+                {"Z1", "Z2", "Z3", "Z4", "Z5"}, set(candidate["zones"])
+            )
+            first, last = candidate["points"][0], candidate["points"][-1]
+            self.assertEqual((-4.0, 0.0, 0.0), (first["x"], first["y"], first["yaw"]))
+            self.assertEqual((5.0, 0.0, 0.0), (last["x"], last["y"], last["yaw"]))
+        self.assertGreater(
+            high_report["maximum_abs_curvature_per_m"],
+            low_report["maximum_abs_curvature_per_m"],
+        )
+        self.assertGreaterEqual(high_report["minimum_clearance_m"], self.module.REQUIRED_CLEARANCE_M)
+
+    def test_c2_transfer_is_only_requested_diameter_change(self):
+        c1 = self.module._read_development_yaml(self.module.C1_TEMPLATE)
+        c2 = self.module._read_development_yaml(self.module.C2_TEMPLATE)
+        report = self.module.validate_development_container_templates(c1, c2)
+        self.assertEqual(0.095, report["c2_diameter_m"])
+        self.assertEqual(0.058, report["liquid_height_m"])
+        altered = copy.deepcopy(c2)
+        altered["container"]["offset_x_m"] = 0.01
+        with self.assertRaises(self.module.CandidateAssetError):
+            self.module.validate_development_container_templates(c1, altered)
+
+    def test_generated_bundle_is_hash_bound_readonly_and_formal_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "p2_c2_candidate"
+            result = self.module._generate_bundle(root, enforce_external_root=False)
+            self.assertEqual("PASS_DEVELOPMENT_ONLY_NOT_FORMAL", result["status"])
+            self.assertFalse(result["formal"])
+            self.assertFalse(result["formal_execution_authorized"])
+            manifest_path = Path(result["bundle_manifest"])
+            self.assertTrue(manifest_path.is_file())
+            self.assertEqual(0, stat.S_IMODE(manifest_path.stat().st_mode) & 0o222)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertFalse(manifest["formal"])
+            self.assertFalse(manifest["planned_rows_generated"])
+            self.assertFalse(manifest["randomization_generated"])
+            self.assertEqual("REJECTED_AS_EXPECTED", manifest["formal_gate_probe"]["status"])
+            self.assertIn("Bslosh", manifest["no_go"][2])
+            validation = self.module.validate_bundle_manifest(manifest_path)
+            self.assertEqual("PASS_DEVELOPMENT_ONLY_NOT_FORMAL", validation["status"])
+            self.assertEqual(0.095, validation["c2_diameter_m"])
+            self.assertGreater(
+                validation["high_max_abs_curvature_per_m"],
+                validation["low_max_abs_curvature_per_m"],
+            )
+
+    def test_cli_root_must_be_new_directory_below_development_assets(self):
+        with self.assertRaises(self.module.CandidateAssetError):
+            self.module._validate_development_output_root(Path("/tmp/not-allowed"))
+
+
+if __name__ == "__main__":
+    unittest.main()

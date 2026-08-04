@@ -1,0 +1,974 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Fail-closed release tooling for the isolated SIM-ONLY Bslosh R1 condition.
+
+``SIM_Bslosh_R1`` is a frozen controller identity for simulation-only work.  It
+is deliberately *not* an input to ``SMPCC-SIM-40-64-88-v0.1``: it does not
+align to a physical freeze, does not have physical-primary eligibility, and
+never creates original 40/64/88 planned rows, randomisation tables, or a
+formal dataset ledger.
+
+This module is intentionally offline.  It starts neither ROS nor Gazebo and
+does not write bags/results.  Its only write operation is a one-time,
+read-only controller release manifest and the matching effective-config
+contract beneath the SIM-ONLY release namespace.  The original matrix formal
+gate is probed explicitly and must reject this release with a non-zero exit
+and a protocol-mismatch error.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import copy
+import hashlib
+import json
+import math
+import os
+import re
+import stat
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover - CI/runtime dependency failure is explicit
+    yaml = None  # type: ignore[assignment]
+
+
+SCHEMA_VERSION = "smpcc-sim-only-bslosh-release-v1"
+EFFECTIVE_CONFIG_SCHEMA_VERSION = "smpcc-sim-only-bslosh-effective-config-v1"
+DOCUMENT_TYPE = "SMPCC_SIM_ONLY_BSLOSH_RELEASE"
+EFFECTIVE_CONFIG_DOCUMENT_TYPE = "SMPCC_SIM_ONLY_BSLOSH_EFFECTIVE_CONFIG"
+PROTOCOL_ID = "SMPCC-SIM-ONLY-BSLOSH-R1-v1"
+ORIGINAL_FORMAL_PROTOCOL_ID = "SMPCC-SIM-40-64-88-v0.1"
+CONDITION_ID = "SIM_Bslosh_R1"
+RELEASE_ID = "SIM-ONLY-BSLOSH-R1"
+
+DEFAULT_SIM_ROOT = Path("/data/a/scout_sim_replacement")
+SIM_ONLY_NAMESPACE = "SMPCC-SIM-ONLY-BSLOSH-R1"
+SIM_ONLY_ROOT = DEFAULT_SIM_ROOT / SIM_ONLY_NAMESPACE
+CANONICAL_RELEASE_ROOT = SIM_ONLY_ROOT / "releases" / RELEASE_ID
+CANONICAL_RESULTS_ROOT = SIM_ONLY_ROOT / "results" / RELEASE_ID
+CANONICAL_BAGS_ROOT = SIM_ONLY_ROOT / "bags" / RELEASE_ID
+
+SCRIPT_PATH = Path(__file__).resolve()
+WORKSPACE_ROOT = SCRIPT_PATH.parents[5]
+SIM_CONTROLLER_ROOT = WORKSPACE_ROOT / "src/scout_apps/simulation/spmpc_sim_local_planner"
+ORIGINAL_TOOLCHAIN_PATH = SCRIPT_PATH.with_name("smpcc_sim_toolchain.py")
+
+
+class SimOnlyReleaseError(RuntimeError):
+    """A release-contract failure that must keep the release NO-GO."""
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise SimOnlyReleaseError(message)
+
+
+def canonical_bytes(value: Any) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def canonical_hash(value: Any) -> str:
+    return hashlib.sha256(canonical_bytes(value)).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def is_sha256(value: Any) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
+
+
+def _as_mapping(value: Any, label: str) -> Mapping[str, Any]:
+    require(isinstance(value, Mapping), f"{label} must be an object")
+    return value
+
+
+def _absolute_existing_file(value: Any, label: str) -> Path:
+    require(isinstance(value, str) and value.strip(), f"{label} path must be a non-empty string")
+    path = Path(value)
+    require(path.is_absolute(), f"{label} path must be absolute: {path}")
+    require(path.is_file(), f"{label} file is missing: {path}")
+    resolved = path.resolve()
+    require(str(path) == str(resolved), f"{label} path must not traverse a symlink: {path}")
+    return resolved
+
+
+def _require_below(path: Path, root: Path, label: str) -> Path:
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(root.resolve())
+    except ValueError as exc:
+        raise SimOnlyReleaseError(f"{label} must be below {root.resolve()}: {resolved}") from exc
+    return resolved
+
+
+def _readonly(path: Path, label: str) -> None:
+    mode = stat.S_IMODE(path.stat().st_mode)
+    require(mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH) == 0, f"{label} must be read-only: {path}")
+
+
+def _write_json_new_readonly(path: Path, value: Mapping[str, Any], label: str) -> None:
+    """Create one immutable JSON artifact; an existing file is never reused."""
+
+    payload = (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    try:
+        with path.open("xb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(path, 0o444)
+    except FileExistsError as exc:
+        raise SimOnlyReleaseError(f"{label} already exists: {path}") from exc
+    except OSError as exc:
+        raise SimOnlyReleaseError(f"cannot write {label} {path}: {exc}") from exc
+
+
+def _read_json(path: Path, label: str) -> Mapping[str, Any]:
+    try:
+        with path.open("r", encoding="utf-8") as stream:
+            return _as_mapping(json.load(stream), label)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise SimOnlyReleaseError(f"cannot read {label} {path}: {exc}") from exc
+
+
+def default_source_artifact_paths() -> Dict[str, Path]:
+    """Return the exact source implementation set bound by an R1 release."""
+
+    return {
+        "variant_yaml": SIM_CONTROLLER_ROOT / "config/variants/SIM_Bslosh_R1.yaml",
+        "planner_common_yaml": SIM_CONTROLLER_ROOT / "config/planner/common_sim.yaml",
+        "platform_scout_mini_yaml": SIM_CONTROLLER_ROOT / "config/platforms/scout_mini_sim.yaml",
+        "fixed_path_experiment_yaml": SIM_CONTROLLER_ROOT / "config/experiments/fixed_path_sim.yaml",
+        "variant_config_cpp": SIM_CONTROLLER_ROOT / "CMakeLists.txt",
+        "sim_only_gate_cpp": SIM_CONTROLLER_ROOT / "scripts/smpcc_sim_controller_gate.py",
+        "sim_only_gate_header": SIM_CONTROLLER_ROOT / "config/containers/C2_95mm_H58_sim.yaml",
+        "sim_only_runtime_cpp": SIM_CONTROLLER_ROOT / "src/spmpc_sim_local_planner_node.cpp",
+        "sim_only_launch": SIM_CONTROLLER_ROOT / "launch/smpcc_sim_mechanism_r8.launch",
+        "fixed_path_launch": SIM_CONTROLLER_ROOT / "launch/smpcc_sim_only_bslosh_r8.launch",
+        "experiment_launch": SIM_CONTROLLER_ROOT / "launch/smpcc_sim_mechanism_r8.launch",
+        # Solver implementation/model are source-level fork assets.  Their
+        # solver model names are historical ABI identifiers only; no source
+        # or codegen path resolves into the real-robot controller package.
+        "solver_cpp": SIM_CONTROLLER_ROOT / "src/solvers/continuous_mpcc_solver_acados.cpp",
+        "solver_model_py": SIM_CONTROLLER_ROOT / "scripts/acados/spmpc_acados_model.py",
+        "container_c1_yaml": SIM_CONTROLLER_ROOT / "config/containers/C1_37mm_H58_sim.yaml",
+        "container_c2_sim_only_yaml": SIM_CONTROLLER_ROOT / "config/containers/C2_95mm_H58_sim.yaml",
+        # These are the actual isolated simulator assets used by the H0/P2
+        # runtime adapter, not similarly named checked-in placeholders.
+        "world": DEFAULT_SIM_ROOT / "classic_ws/src/scout_mini_proxy_gazebo/worlds/open_walled_proxy.world",
+        "map": DEFAULT_SIM_ROOT / "maps/proxy_world_manual_saved_20260611_154348.pbstream",
+    }
+
+
+SOURCE_ARTIFACT_ROLES = tuple(default_source_artifact_paths().keys())
+REQUIRED_ARTIFACT_ROLES = SOURCE_ARTIFACT_ROLES + ("effective_config",)
+
+
+EXPECTED_VARIANT = {
+    "slosh_enable": True,
+    "smooth_priority_enable": False,
+    "slosh_constraint_enable": False,
+    "primitive_mode": "linear",
+    "w_contour": 1.0,
+    "w_lag": 0.2,
+    "w_progress": 0.2,
+    "w_v": 1.0,
+    "w_vs": 0.3,
+    "v_ref": 0.20,
+    "w_control": 0.3,
+    "w_accel": 0.0,
+    "w_smooth": 1.0,
+    "w_alpha": 1.0,
+    "w_du_a": 1.0,
+    "w_du_vs": 1.0,
+    "w_slosh": 5.0,
+}
+
+
+def expected_effective_config() -> Dict[str, Any]:
+    """The complete R1 configuration, including fields not safely inferred at run time."""
+
+    core: Dict[str, Any] = {
+        "schema_version": EFFECTIVE_CONFIG_SCHEMA_VERSION,
+        "document_type": EFFECTIVE_CONFIG_DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "condition_id": CONDITION_ID,
+        "formal": False,
+        "formal_simulation_only": True,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "identity": {
+            "scope": "SIMULATION_ONLY",
+            "new_clean_sim_only_identity": True,
+            "not_w5_s10": True,
+            "not_historical_0705_identity": True,
+            "not_real_aligned_formal_bslosh": True,
+        },
+        "controller": {
+            "planner_variant": CONDITION_ID,
+            "solver_backend": "continuous_mpcc_acados",
+            "solver_model_id": "spmpc_slosh_10_state",
+            "solver_state_dimension": 10,
+            "slosh_enable": True,
+            "smooth_priority_enable": False,
+            "slosh_constraint_enable": False,
+            "primitive_mode": "linear",
+            "weights": {
+                "w_contour": 1.0,
+                "w_lag": 0.2,
+                "w_progress": 0.2,
+                "w_v": 1.0,
+                "w_vs": 0.3,
+                "w_control": 0.3,
+                "w_accel": 0.0,
+                "w_smooth": 1.0,
+                "w_alpha": 1.0,
+                "w_du_a": 1.0,
+                "w_du_vs": 1.0,
+                "w_slosh": 5.0,
+            },
+            "v_ref_mps": 0.20,
+            "runtime_overrides_forbidden": [
+                "planner_variant",
+                "solver_backend",
+                "slosh_observer/source",
+                "imu_shadow/enable",
+                "delay_phase/mode",
+                "w_control",
+                "w_smooth",
+                "w_alpha",
+                "w_du_a",
+                "w_du_vs",
+                "w_slosh",
+                "v_ref",
+            ],
+        },
+        "observer": {
+            "source": "odom",
+            "imu_shadow_enable": False,
+            "processed_imu_nominal": False,
+        },
+        "delay": {"mode": "off", "runtime_delay_override_allowed": False},
+        "admissible_simulation_container_conditions": {
+            "SIM_ONLY_C1_D37_H58_UNVALIDATED": {
+                "artifact_role": "container_c1_yaml",
+                "control_frequency_hz": 30.0,
+                "dt_sec": 0.0333333333,
+                "horizon_steps": 60,
+                "slosh": {
+                    "container_radius_m": 0.0185,
+                    "liquid_height_m": 0.058,
+                    "liquid_density_kgpm3": 1000.0,
+                    "damping_ratio": 0.05,
+                    "mode_index": 1,
+                    "slosh_height_ref_m": 0.005,
+                    "slosh_height_max_m": 0.001,
+                    "slosh_eta_dot_ratio": 0.3,
+                    "use_linear_model": True,
+                    "use_parabola_term": False,
+                },
+                "formal": False,
+                "physical_alignment": False,
+                "physical_primary_eligible": False,
+            },
+            "SIM_ONLY_C2_D95_H58_UNVALIDATED": {
+                "artifact_role": "container_c2_sim_only_yaml",
+                "control_frequency_hz": 30.0,
+                "dt_sec": 0.0333333333,
+                "horizon_steps": 60,
+                "slosh": {
+                    "container_radius_m": 0.0475,
+                    "liquid_height_m": 0.058,
+                    "liquid_density_kgpm3": 1000.0,
+                    "damping_ratio": 0.05,
+                    "mode_index": 1,
+                    "slosh_height_ref_m": 0.005,
+                    "slosh_height_max_m": 0.001,
+                    "slosh_eta_dot_ratio": 0.3,
+                    "use_linear_model": True,
+                    "use_parabola_term": False,
+                },
+                "formal": False,
+                "physical_alignment": False,
+                "physical_primary_eligible": False,
+            },
+        },
+        "runtime_admission": {
+            "explicit_sim_only_release_ack_required": True,
+            "simulator_owned_use_sim_time_required": True,
+            "launch_must_not_set_global_use_sim_time": True,
+        },
+        "measurement_channels": {
+            "H_proxy": {
+                "topic": "/slosh/height",
+                "semantic": "shared_LiquidSloshModel_proxy_not_independent_plant_truth",
+                "physical_primary_eligible": False,
+            },
+            "H_modal": {
+                "topic": "/sim_spmpc/slosh_height",
+                "semantic": "controller_internal_modal_only",
+                "physical_primary_eligible": False,
+            },
+            "physical_primary": None,
+        },
+    }
+    return dict(core, effective_config_hash=canonical_hash(core))
+
+
+def _source_descriptor(path: Path, role: str) -> Dict[str, str]:
+    require(path.is_file(), f"{role} source file is missing: {path}")
+    resolved = path.resolve()
+    return {"path": str(resolved), "sha256": sha256_file(resolved)}
+
+
+def _strip_c_family_comments(text: str) -> str:
+    # Static source admission must not be satisfied by an explanatory comment.
+    without_block = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
+    return re.sub(r"//[^\n]*", "", without_block)
+
+
+def _strip_xml_comments(text: str) -> str:
+    return re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+
+
+def _require_tokens(path: Path, tokens: Sequence[str], label: str, *, strip_comments: str = "none") -> None:
+    text = path.read_text(encoding="utf-8")
+    if strip_comments == "c":
+        text = _strip_c_family_comments(text)
+    elif strip_comments == "xml":
+        text = _strip_xml_comments(text)
+    elif strip_comments != "none":  # pragma: no cover - internal misuse guard
+        raise AssertionError(f"unexpected comment mode: {strip_comments}")
+    missing = [token for token in tokens if token not in text]
+    require(not missing, f"{label} lacks required SIM-ONLY contract tokens: {', '.join(missing)}")
+
+
+def _validate_variant_yaml(path: Path) -> None:
+    require(yaml is not None, "PyYAML is required to validate the SIM-ONLY variant YAML")
+    try:
+        parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:  # type: ignore[union-attr]
+        raise SimOnlyReleaseError(f"cannot parse variant YAML {path}: {exc}") from exc
+    document = _as_mapping(parsed, "variant YAML")
+    variants = _as_mapping(document.get("variants"), "variant YAML variants")
+    # Public simulation identity is mapped by the sim-owned launch to the
+    # separately linked engine's B_slosh parameter block.
+    variant = _as_mapping(variants.get("B_slosh"), "variant YAML B_slosh")
+    for field, expected in EXPECTED_VARIANT.items():
+        actual = variant.get(field)
+        if isinstance(expected, float):
+            require(isinstance(actual, (int, float)) and not isinstance(actual, bool), f"{CONDITION_ID}.{field} must be numeric")
+            require(math.isclose(float(actual), expected, rel_tol=0.0, abs_tol=1e-12), f"{CONDITION_ID}.{field} must equal {expected}")
+        else:
+            require(actual == expected, f"{CONDITION_ID}.{field} must equal {expected!r}")
+
+
+def _validate_container_yaml(path: Path, *, c2: bool) -> None:
+    """Validate the two explicitly allowed SIM-ONLY container inputs.
+
+    The legacy tube-default file has no formal status marker, so this validator
+    treats it as an unvalidated controller input and rejects an attempt to add
+    a positive formal/physical-primary assertion.  The 95 mm C2 file must
+    state its simulation-only, non-primary status itself.
+    """
+
+    require(yaml is not None, "PyYAML is required to validate SIM-ONLY container YAML")
+    try:
+        parsed = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:  # type: ignore[union-attr]
+        raise SimOnlyReleaseError(f"cannot parse SIM-ONLY container YAML {path}: {exc}") from exc
+    document = _as_mapping(parsed, "SIM-ONLY container YAML")
+    slosh = _as_mapping(document.get("slosh"), "SIM-ONLY container slosh")
+    expected_radius = 0.0475 if c2 else 0.0185
+    numeric_fields = {
+        "container_radius": expected_radius,
+        "liquid_height": 0.058,
+        "liquid_density": 1000.0,
+        "damping_ratio": 0.05,
+        "slosh_height_ref": 0.005,
+        "slosh_height_max": 0.001,
+        "slosh_eta_dot_ratio": 0.3,
+    }
+    for field, expected in numeric_fields.items():
+        actual = slosh.get(field)
+        require(isinstance(actual, (int, float)) and not isinstance(actual, bool), f"container {field} must be numeric")
+        require(math.isclose(float(actual), expected, rel_tol=0.0, abs_tol=1e-12), f"container {field} must equal {expected}")
+    require(slosh.get("mode_index") == 1, "container mode_index must equal 1")
+    require(slosh.get("use_linear_model") is True, "container use_linear_model must be true")
+    require(slosh.get("use_parabola_term") is False, "container use_parabola_term must be false")
+    require(document.get("formal") is not True, "SIM-ONLY container input must not claim formal=true")
+    require(document.get("physical_primary_eligible") is not True, "SIM-ONLY container input must not claim physical primary")
+    if c2:
+        require(document.get("sim_container_condition") == "C2", "SIM-ONLY C2 container selector mismatch")
+        require(document.get("formal") is False, "SIM-ONLY C2 must declare formal=false")
+        require(document.get("physical_primary_eligible") is False, "SIM-ONLY C2 must declare physical_primary_eligible=false")
+        require(document.get("sim_container_config_id") == "SIM_ONLY_C2_D95_H58_UNVALIDATED", "SIM-ONLY C2 condition identity mismatch")
+
+
+def _validate_source_contracts(bindings: Mapping[str, Any], *, strict_source_paths: bool) -> None:
+    require(set(bindings) == set(SOURCE_ARTIFACT_ROLES), "source artifact roles must be exact and complete")
+    expected_paths = default_source_artifact_paths()
+    resolved: Dict[str, Path] = {}
+    for role in SOURCE_ARTIFACT_ROLES:
+        descriptor = _as_mapping(bindings.get(role), f"artifact {role}")
+        require(set(descriptor) == {"path", "sha256"}, f"artifact {role} descriptor must contain exactly path and sha256")
+        path = _absolute_existing_file(descriptor.get("path"), f"artifact {role}")
+        expected_hash = descriptor.get("sha256")
+        require(is_sha256(expected_hash), f"artifact {role} sha256 must be lowercase SHA-256")
+        require(sha256_file(path) == expected_hash, f"artifact {role} hash mismatch: {path}")
+        if strict_source_paths:
+            require(path == expected_paths[role].resolve(), f"artifact {role} path is not the fixed R1 source path: {path}")
+        resolved[role] = path
+
+    _validate_variant_yaml(resolved["variant_yaml"])
+    for role in ("planner_common_yaml", "platform_scout_mini_yaml", "fixed_path_experiment_yaml"):
+        require(resolved[role].stat().st_size > 0, f"{role} must not be empty")
+    _require_tokens(
+        resolved["variant_config_cpp"],
+        ("spmpc_sim_local_planner", "generated/acados", "SIM_FORK_ORIGIN.md"),
+        "source-separated sim target CMake",
+    )
+    cmake_text = resolved["variant_config_cpp"].read_text(encoding="utf-8")
+    require("find_package(spmpc_local_planner" not in cmake_text,
+            "sim target CMake may not depend on the real controller package")
+    require("SPMPC_UPSTREAM_ROOT" not in cmake_text,
+            "sim target CMake may not read real-controller source")
+    _require_tokens(
+        resolved["sim_only_gate_cpp"],
+        (
+            "validate_snapshot",
+            "sim_adapter/release_ack",
+            "use_sim_time",
+            "slosh_observer/source",
+            "imu_shadow/enable",
+            "delay_phase/mode",
+            "continuous_mpcc_acados",
+            "sim_adapter/container_config_id",
+            "slosh/container_radius",
+            "control_frequency",
+            "horizon_steps",
+            "slosh/liquid_height",
+            "slosh/liquid_density",
+            "slosh/damping_ratio",
+            "slosh/mode_index",
+            "slosh/slosh_height_ref",
+            "slosh/slosh_height_max",
+            "slosh/slosh_eta_dot_ratio",
+            "slosh/use_linear_model",
+            "slosh/use_parabola_term",
+            "w_control",
+            "w_smooth",
+            "w_alpha",
+            "w_du_a",
+            "w_du_vs",
+            "w_slosh",
+            "v_ref",
+        ),
+        "SIM-ONLY runtime gate",
+    )
+    _require_tokens(
+        resolved["sim_only_gate_header"],
+        (
+            "SIM_ONLY_C2_D95_H58_UNVALIDATED",
+            "sim_container_condition",
+            "container_radius",
+        ),
+        "SIM-ONLY C2 configuration",
+    )
+    _require_tokens(
+        resolved["sim_only_runtime_cpp"],
+        ("spmpc_sim_local_planner", "SpmpcLocalPlannerROS"),
+        "SIM-ONLY separately linked runtime target",
+    )
+    # The dedicated launch must lock the controller identity, but must *not*
+    # set /use_sim_time: that global parameter is simulator-owned and is
+    # checked by the C++ gate after the simulator brings it up.
+    launch_text = _strip_xml_comments(resolved["sim_only_launch"].read_text(encoding="utf-8"))
+    launch_tokens = (
+        "SIM_Bslosh_R1",
+        "sim_release_ack",
+        "continuous_mpcc_acados",
+        "sim_container_condition",
+        "SIM_ONLY_C1_D37_H58_UNVALIDATED",
+        "SIM_ONLY_C2_D95_H58_UNVALIDATED",
+        "C2_95mm_H58_sim.yaml",
+        "invalid-sim-container-condition",
+    )
+    missing_launch = [token for token in launch_tokens if token not in launch_text]
+    require(not missing_launch, f"SIM-ONLY launch lacks fixed contract tokens: {', '.join(missing_launch)}")
+    require("use_sim_time" not in launch_text, "SIM-ONLY launch must not mutate simulator-owned /use_sim_time")
+    require(
+        '<arg name="container_config" default=' not in launch_text,
+        "SIM-ONLY launch must derive container_config from its C1/C2 selector, never accept a free YAML filename",
+    )
+    _require_tokens(
+        resolved["fixed_path_launch"],
+        ("SIM_Bslosh_R1", "sim_release_ack", "sim_container_condition"),
+        "sim-only Bslosh wrapper launch",
+        strip_comments="xml",
+    )
+    _require_tokens(
+        resolved["experiment_launch"],
+        (
+            "spmpc_sim_local_planner",
+            "sim_adapter/gate_id",
+            "sim_release_ack",
+            "sim_container_condition",
+        ),
+        "inner experiment launch",
+        strip_comments="xml",
+    )
+    _require_tokens(
+        resolved["solver_cpp"],
+        ("SPMPC_SLOSH_NX", "state_width = 10"),
+        "continuous ACADOS solver C++",
+        strip_comments="c",
+    )
+    _require_tokens(resolved["solver_model_py"], ("NX_SLOSH = 10",), "ACADOS solver model")
+    _validate_container_yaml(resolved["container_c1_yaml"], c2=False)
+    _validate_container_yaml(resolved["container_c2_sim_only_yaml"], c2=True)
+    _require_tokens(resolved["world"], ("<sdf",), "open-field world")
+    require(resolved["map"].stat().st_size > 0, "SIM-ONLY map must not be empty")
+
+
+def _storage_for_release(release_root: Path, *, strict_storage_root: bool) -> Dict[str, Any]:
+    release_root = release_root.resolve()
+    if strict_storage_root:
+        require(release_root == CANONICAL_RELEASE_ROOT.resolve(), f"R1 release root must be exactly {CANONICAL_RELEASE_ROOT}")
+        results_root = CANONICAL_RESULTS_ROOT.resolve()
+        bags_root = CANONICAL_BAGS_ROOT.resolve()
+    else:
+        # This branch exists solely for temporary unit-test artifacts.  The
+        # public CLI always uses the canonical /data namespace.
+        results_root = release_root.parent / "results" / RELEASE_ID
+        bags_root = release_root.parent / "bags" / RELEASE_ID
+    require(release_root.is_absolute() and results_root.is_absolute() and bags_root.is_absolute(), "SIM-ONLY storage roots must be absolute")
+    require(len({release_root, results_root, bags_root}) == 3, "SIM-ONLY release/results/bags roots must be distinct")
+    for name, path in (("release_root", release_root), ("results_root", results_root), ("bags_root", bags_root)):
+        rendered = str(path)
+        require(ORIGINAL_FORMAL_PROTOCOL_ID not in rendered, f"{name} must not name the original formal protocol")
+        require("40-64-88" not in rendered, f"{name} must not enter the original 40/64/88 namespace")
+        require("formal" not in rendered.casefold(), f"{name} must not be a formal-matrix dataset root")
+    return {
+        "namespace": SIM_ONLY_NAMESPACE,
+        "release_root": str(release_root),
+        "results_root": str(results_root),
+        "bags_root": str(bags_root),
+        "results_evidence_class": "SIMULATION_ONLY_NOT_PHYSICAL_PRIMARY",
+        "bags_evidence_class": "SIMULATION_ONLY_NOT_PHYSICAL_PRIMARY",
+        "formal_dataset_roots": [],
+    }
+
+
+def _validate_storage(storage: Any, *, strict_storage_root: bool) -> Dict[str, Any]:
+    storage = _as_mapping(storage, "SIM-ONLY storage")
+    expected_keys = {
+        "namespace",
+        "release_root",
+        "results_root",
+        "bags_root",
+        "results_evidence_class",
+        "bags_evidence_class",
+        "formal_dataset_roots",
+    }
+    require(set(storage) == expected_keys, "SIM-ONLY storage keys are malformed or contain a dataset escape hatch")
+    release_root = Path(str(storage.get("release_root", "")))
+    require(release_root.is_absolute(), "SIM-ONLY release_root must be absolute")
+    expected = _storage_for_release(release_root, strict_storage_root=strict_storage_root)
+    require(dict(storage) == expected, "SIM-ONLY storage does not use the isolated canonical roots")
+    require(storage["formal_dataset_roots"] == [], "SIM-ONLY release must have no formal dataset roots")
+    return expected
+
+
+def _matrix_isolation() -> Dict[str, Any]:
+    return {
+        "original_formal_protocol_id": ORIGINAL_FORMAL_PROTOCOL_ID,
+        "original_matrix_40_64_88_eligible": False,
+        "planned_rows_generated": False,
+        "randomization_generated": False,
+        "formal_dataset_roots": [],
+        "formal_dataset_ledger": None,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+    }
+
+
+def _original_gate_contract() -> Dict[str, Any]:
+    return {
+        "original_formal_gate_must_pass": False,
+        "required_nonzero_exit": True,
+        "required_error_substring": f"protocol_id must equal {ORIGINAL_FORMAL_PROTOCOL_ID}",
+    }
+
+
+def _release_identity() -> Dict[str, Any]:
+    return {
+        "scope": "SIMULATION_ONLY",
+        "new_clean_sim_only_identity": True,
+        "not_w5_s10": True,
+        "not_historical_0705_identity": True,
+        "physical_alignment_claim": "NONE",
+        "physical_primary_claim": "NONE",
+    }
+
+
+def _simulation_container_conditions() -> Dict[str, Any]:
+    """The only controller container configurations admissible to this release.
+
+    This is deliberately not named C1/C2 from the real-aligned matrix: both
+    entries remain unvalidated simulation inputs and neither can become a
+    physical-primary parameter source through this manifest.
+    """
+
+    return copy.deepcopy(expected_effective_config()["admissible_simulation_container_conditions"])
+
+
+def _descriptor_from_existing(path: Path, label: str) -> Dict[str, str]:
+    require(path.is_file(), f"{label} is missing: {path}")
+    return {"path": str(path.resolve()), "sha256": sha256_file(path.resolve())}
+
+
+def build_release_document(
+    release_root: Path,
+    source_bindings: Mapping[str, Any],
+    effective_config_path: Path,
+    *,
+    strict_storage_root: bool,
+    strict_source_paths: bool,
+) -> Dict[str, Any]:
+    """Build, but do not write, a deterministic R1 manifest."""
+
+    _validate_source_contracts(source_bindings, strict_source_paths=strict_source_paths)
+    storage = _storage_for_release(release_root, strict_storage_root=strict_storage_root)
+    effective_descriptor = _descriptor_from_existing(effective_config_path, "effective configuration")
+    artifacts = dict(source_bindings)
+    artifacts["effective_config"] = effective_descriptor
+    core: Dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "release_status": "FROZEN_SIMULATION_ONLY",
+        "release_scope": "SIMULATION_ONLY",
+        # Generic `formal` is deliberately false.  The positive formal claim
+        # is narrow and named `formal_simulation_only`, so generic real/formal
+        # tooling cannot mistake this release for an alignment freeze.
+        "formal": False,
+        "formal_simulation_only": True,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "original_matrix_40_64_88_eligible": False,
+        "condition_id": CONDITION_ID,
+        "identity": _release_identity(),
+        "admissible_simulation_container_conditions": _simulation_container_conditions(),
+        "effective_config_contract": {
+            "artifact_role": "effective_config",
+            "effective_config_hash": expected_effective_config()["effective_config_hash"],
+        },
+        "storage": storage,
+        "matrix_isolation": _matrix_isolation(),
+        "original_formal_gate_rejection": _original_gate_contract(),
+        "artifact_bindings": artifacts,
+    }
+    return dict(core, release_hash=canonical_hash(core))
+
+
+def _validate_effective_config_descriptor(
+    descriptor: Any,
+    release_root: Path,
+    *,
+    strict_storage_root: bool,
+) -> Dict[str, str]:
+    descriptor = _as_mapping(descriptor, "effective configuration artifact")
+    require(set(descriptor) == {"path", "sha256"}, "effective configuration descriptor must contain exactly path and sha256")
+    path = _absolute_existing_file(descriptor.get("path"), "effective configuration")
+    require(is_sha256(descriptor.get("sha256")), "effective configuration sha256 must be lowercase SHA-256")
+    require(sha256_file(path) == descriptor.get("sha256"), "effective configuration file hash mismatch")
+    _require_below(path, release_root, "effective configuration")
+    require(path == release_root / "effective_config.json", "effective configuration path must be release_root/effective_config.json")
+    _readonly(path, "effective configuration")
+    document = _read_json(path, "effective configuration")
+    require(dict(document) == expected_effective_config(), "effective configuration differs from fixed SIM_Bslosh_R1 contract")
+    if strict_storage_root:
+        require(path == CANONICAL_RELEASE_ROOT.resolve() / "effective_config.json", "effective configuration is outside canonical R1 release root")
+    return {"path": str(path), "sha256": str(descriptor["sha256"])}
+
+
+def validate_release_document(
+    document: Any,
+    *,
+    strict_storage_root: bool = True,
+    strict_source_paths: bool = True,
+) -> Dict[str, Any]:
+    """Validate an in-memory R1 document without launching any runtime process."""
+
+    document = _as_mapping(document, "SIM-ONLY release manifest")
+    expected_keys = {
+        "schema_version",
+        "document_type",
+        "protocol_id",
+        "release_id",
+        "release_status",
+        "release_scope",
+        "formal",
+        "formal_simulation_only",
+        "physical_alignment",
+        "physical_primary_eligible",
+        "original_matrix_40_64_88_eligible",
+        "condition_id",
+        "identity",
+        "admissible_simulation_container_conditions",
+        "effective_config_contract",
+        "storage",
+        "matrix_isolation",
+        "original_formal_gate_rejection",
+        "artifact_bindings",
+        "release_hash",
+    }
+    require(set(document) == expected_keys, "SIM-ONLY manifest keys are malformed or contain original-matrix fields")
+    require(document.get("schema_version") == SCHEMA_VERSION, "SIM-ONLY manifest schema_version mismatch")
+    require(document.get("document_type") == DOCUMENT_TYPE, "SIM-ONLY manifest document_type mismatch")
+    require(document.get("protocol_id") == PROTOCOL_ID, "SIM-ONLY manifest protocol_id mismatch")
+    require(document.get("release_id") == RELEASE_ID, "SIM-ONLY manifest release_id mismatch")
+    require(document.get("release_status") == "FROZEN_SIMULATION_ONLY", "SIM-ONLY release must be frozen simulation-only")
+    require(document.get("release_scope") == "SIMULATION_ONLY", "SIM-ONLY release scope mismatch")
+    require(document.get("formal") is False, "SIM-ONLY release must never set generic formal=true")
+    require(document.get("formal_simulation_only") is True, "SIM-ONLY release must explicitly be formal_simulation_only=true")
+    require(document.get("physical_alignment") is False, "SIM-ONLY release must set physical_alignment=false")
+    require(document.get("physical_primary_eligible") is False, "SIM-ONLY release must be physical_primary_eligible=false")
+    require(document.get("original_matrix_40_64_88_eligible") is False, "SIM-ONLY release must not be eligible for 40/64/88")
+    require(document.get("condition_id") == CONDITION_ID, "SIM-ONLY release condition_id mismatch")
+    require(document.get("identity") == _release_identity(), "SIM-ONLY release identity is not the fixed clean R1 identity")
+    require(
+        document.get("admissible_simulation_container_conditions") == _simulation_container_conditions(),
+        "SIM-ONLY admissible container conditions changed or claimed physical alignment",
+    )
+    require(document.get("matrix_isolation") == _matrix_isolation(), "SIM-ONLY release matrix isolation contract changed")
+    require(document.get("original_formal_gate_rejection") == _original_gate_contract(), "SIM-ONLY original-gate rejection contract changed")
+
+    storage = _validate_storage(document.get("storage"), strict_storage_root=strict_storage_root)
+    release_root = Path(storage["release_root"])
+    artifacts = _as_mapping(document.get("artifact_bindings"), "SIM-ONLY artifact bindings")
+    require(set(artifacts) == set(REQUIRED_ARTIFACT_ROLES), "SIM-ONLY artifact bindings must be exact and complete")
+    source_bindings = {role: artifacts[role] for role in SOURCE_ARTIFACT_ROLES}
+    _validate_source_contracts(source_bindings, strict_source_paths=strict_source_paths)
+    effective_descriptor = _validate_effective_config_descriptor(
+        artifacts["effective_config"],
+        release_root,
+        strict_storage_root=strict_storage_root,
+    )
+    config_contract = _as_mapping(document.get("effective_config_contract"), "effective configuration contract")
+    require(
+        config_contract
+        == {
+            "artifact_role": "effective_config",
+            "effective_config_hash": expected_effective_config()["effective_config_hash"],
+        },
+        "SIM-ONLY effective configuration contract mismatch",
+    )
+    core = dict(document)
+    declared_hash = core.pop("release_hash", None)
+    require(is_sha256(declared_hash), "SIM-ONLY release_hash must be lowercase SHA-256")
+    require(declared_hash == canonical_hash(core), "SIM-ONLY release_hash mismatch")
+    return {
+        "status": "PASS_SIMULATION_ONLY",
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "condition_id": CONDITION_ID,
+        "release_hash": str(declared_hash),
+        "effective_config_hash": expected_effective_config()["effective_config_hash"],
+        "effective_config_path": effective_descriptor["path"],
+        "formal_simulation_only": True,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "original_matrix_40_64_88_eligible": False,
+        "formal_dataset_roots": [],
+        "planned_rows_generated": False,
+        "randomization_generated": False,
+    }
+
+
+def validate_release_manifest(
+    manifest_path: Path,
+    *,
+    strict_storage_root: bool = True,
+    strict_source_paths: bool = True,
+) -> Dict[str, Any]:
+    manifest_path = _absolute_existing_file(str(manifest_path), "SIM-ONLY release manifest")
+    report = validate_release_document(
+        _read_json(manifest_path, "SIM-ONLY release manifest"),
+        strict_storage_root=strict_storage_root,
+        strict_source_paths=strict_source_paths,
+    )
+    release_root = Path(_as_mapping(_read_json(manifest_path, "SIM-ONLY release manifest").get("storage"), "SIM-ONLY storage")["release_root"])
+    require(manifest_path == release_root / "release_manifest.json", "SIM-ONLY manifest path must be release_root/release_manifest.json")
+    _readonly(manifest_path, "SIM-ONLY release manifest")
+    return dict(report, manifest_path=str(manifest_path), manifest_sha256=sha256_file(manifest_path))
+
+
+def probe_original_formal_gate(manifest_path: Path, *, timeout_sec: float = 15.0) -> Dict[str, Any]:
+    """Assert that the original matrix gate explicitly refuses this release.
+
+    Calling the CLI, rather than only importing its validator, makes the
+    non-zero process boundary executable and testable.  This is still offline:
+    ``formal-gate`` only reads JSON and validates contracts.
+    """
+
+    manifest_path = _absolute_existing_file(str(manifest_path), "SIM-ONLY release manifest")
+    require(ORIGINAL_TOOLCHAIN_PATH.is_file(), f"original formal toolchain is missing: {ORIGINAL_TOOLCHAIN_PATH}")
+    try:
+        result = subprocess.run(
+            [sys.executable, str(ORIGINAL_TOOLCHAIN_PATH), "formal-gate", "--freeze", str(manifest_path)],
+            check=False,
+            text=True,
+            capture_output=True,
+            timeout=timeout_sec,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SimOnlyReleaseError(f"original formal-gate probe could not run: {exc}") from exc
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as exc:
+        raise SimOnlyReleaseError(f"original formal-gate probe emitted invalid JSON: {result.stdout[-1000:]!r}") from exc
+    report = _as_mapping(payload, "original formal-gate result")
+    errors = report.get("errors")
+    require(result.returncode != 0, "original formal gate unexpectedly returned zero for SIM-ONLY release")
+    require(report.get("status") == "FAIL", "original formal gate unexpectedly passed SIM-ONLY release")
+    require(isinstance(errors, list) and all(isinstance(item, str) for item in errors), "original formal-gate result lacks errors")
+    required_error = _original_gate_contract()["required_error_substring"]
+    require(any(required_error in item for item in errors), "original formal gate did not explicitly report protocol mismatch")
+    return {
+        "status": "REJECTED_BY_ORIGINAL_FORMAL_GATE_AS_EXPECTED",
+        "original_formal_gate_exit_code": result.returncode,
+        "required_error_substring": required_error,
+        "errors": list(errors),
+        "stderr": result.stderr[-2000:],
+    }
+
+
+def generate_release(
+    release_root: Path = CANONICAL_RELEASE_ROOT,
+    *,
+    source_paths: Optional[Mapping[str, Path]] = None,
+    strict_storage_root: bool = True,
+    strict_source_paths: bool = True,
+    probe_original_gate: bool = True,
+) -> Dict[str, Any]:
+    """Write a new immutable SIM-ONLY release; never create data directories."""
+
+    release_root = Path(release_root)
+    require(release_root.is_absolute(), "release root must be absolute")
+    release_root = release_root.resolve()
+    if strict_storage_root:
+        require(release_root == CANONICAL_RELEASE_ROOT.resolve(), f"R1 release root must be exactly {CANONICAL_RELEASE_ROOT}")
+    require(not release_root.exists(), f"SIM-ONLY release root already exists: {release_root}")
+    sources = default_source_artifact_paths() if source_paths is None else {key: Path(value) for key, value in source_paths.items()}
+    require(set(sources) == set(SOURCE_ARTIFACT_ROLES), "source_paths must name the exact SIM-ONLY source artifact set")
+    source_bindings = {role: _source_descriptor(path, role) for role, path in sources.items()}
+    _validate_source_contracts(source_bindings, strict_source_paths=strict_source_paths)
+    # Validate all layout choices before writing the first output byte.
+    storage = _storage_for_release(release_root, strict_storage_root=strict_storage_root)
+    require(not Path(storage["results_root"]).exists(), "SIM-ONLY results root already exists; generator must not attach to data")
+    require(not Path(storage["bags_root"]).exists(), "SIM-ONLY bags root already exists; generator must not attach to data")
+
+    release_root.mkdir(parents=True, exist_ok=False)
+    config_path = release_root / "effective_config.json"
+    _write_json_new_readonly(config_path, expected_effective_config(), "SIM-ONLY effective configuration")
+    manifest = build_release_document(
+        release_root,
+        source_bindings,
+        config_path,
+        strict_storage_root=strict_storage_root,
+        strict_source_paths=strict_source_paths,
+    )
+    manifest_path = release_root / "release_manifest.json"
+    _write_json_new_readonly(manifest_path, manifest, "SIM-ONLY release manifest")
+    validation = validate_release_manifest(
+        manifest_path,
+        strict_storage_root=strict_storage_root,
+        strict_source_paths=strict_source_paths,
+    )
+    original_gate = probe_original_formal_gate(manifest_path) if probe_original_gate else None
+    return {
+        "status": "PASS_SIMULATION_ONLY_RELEASE_CREATED",
+        "release_manifest": str(manifest_path),
+        "effective_config": str(config_path),
+        "results_root": storage["results_root"],
+        "bags_root": storage["bags_root"],
+        "results_or_bags_created": False,
+        "formal_dataset_roots": [],
+        "validation": validation,
+        "original_formal_gate_probe": original_gate,
+    }
+
+
+def _emit(value: Any) -> None:
+    print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+def command_create(args: argparse.Namespace) -> int:
+    try:
+        report = generate_release(Path(args.release_root), probe_original_gate=True)
+    except SimOnlyReleaseError as exc:
+        _emit({"status": "NO_GO", "error": str(exc), "formal_simulation_only": True, "original_matrix_40_64_88_eligible": False})
+        return 2
+    _emit(report)
+    return 0
+
+
+def command_validate(args: argparse.Namespace) -> int:
+    try:
+        report = validate_release_manifest(Path(args.release_manifest))
+        report["original_formal_gate_probe"] = probe_original_formal_gate(Path(args.release_manifest))
+    except SimOnlyReleaseError as exc:
+        _emit({"status": "NO_GO", "error": str(exc), "formal_simulation_only": True, "original_matrix_40_64_88_eligible": False})
+        return 2
+    _emit(report)
+    return 0
+
+
+def command_original_gate_probe(args: argparse.Namespace) -> int:
+    try:
+        report = probe_original_formal_gate(Path(args.release_manifest))
+    except SimOnlyReleaseError as exc:
+        _emit({"status": "NO_GO", "error": str(exc)})
+        return 2
+    _emit(report)
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Fail-closed SIM-ONLY Bslosh R1 release tooling (no ROS/Gazebo execution)")
+    sub = parser.add_subparsers(dest="command", required=True)
+    create = sub.add_parser("create", help="create the one immutable canonical SIM-ONLY R1 release")
+    create.add_argument("--release-root", type=Path, default=CANONICAL_RELEASE_ROOT)
+    create.set_defaults(func=command_create)
+    validate = sub.add_parser("validate", help="validate a canonical R1 release and prove original-gate rejection")
+    validate.add_argument("--release-manifest", type=Path, required=True)
+    validate.set_defaults(func=command_validate)
+    probe = sub.add_parser("original-gate-probe", help="prove original 40/64/88 formal-gate refusal")
+    probe.add_argument("--release-manifest", type=Path, required=True)
+    probe.set_defaults(func=command_original_gate_probe)
+    return parser
+
+
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    args = build_parser().parse_args(list(argv) if argv is not None else None)
+    return int(args.func(args))
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

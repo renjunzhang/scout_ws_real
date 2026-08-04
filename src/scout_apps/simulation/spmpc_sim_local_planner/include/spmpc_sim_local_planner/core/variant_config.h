@@ -1,0 +1,34 @@
+#pragma once
+
+#include <string>
+
+namespace spmpc_sim_local_planner {
+
+struct VariantConfig {
+    std::string name = "B0";
+    bool slosh_enable = false;
+    bool smooth_priority_enable = false;
+    bool slosh_constraint_enable = false;
+    std::string primitive_mode = "linear";
+
+    double w_contour = 1.0;
+    double w_lag = 0.2;
+    double w_progress = 0.2;
+    double w_v = 1.0;
+    double w_vs = 0.3;
+    double v_ref = 0.25;
+    double w_control = 0.1;
+    // Supplemental non-slosh acceleration regularization baseline. Kept separate
+    // from w_control so B_accel can penalize a without changing omega weight.
+    double w_accel = 0.0;
+    // Legacy smoothness knob. Split weights below default to this value when unset.
+    double w_smooth = 0.1;
+    double w_alpha = -1.0;
+    double w_du_a = -1.0;
+    double w_du_vs = -1.0;
+    double w_slosh = 0.0;
+};
+
+VariantConfig makeVariantConfig(const std::string& variant_name);
+
+}  // namespace spmpc_sim_local_planner

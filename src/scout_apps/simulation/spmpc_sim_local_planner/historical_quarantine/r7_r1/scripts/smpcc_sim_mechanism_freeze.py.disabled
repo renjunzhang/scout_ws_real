@@ -1,0 +1,3021 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Freeze the independent simulation-mechanism 40 -> 64 -> 88 matrix.
+
+This is intentionally a *different* protocol from
+``SMPCC-SIM-40-64-88-v0.1``.  The latter remains an aligned-to-physical
+protocol and continues to reject these inputs.  This protocol uses the
+user-authorised open-field paths, 0705 controller vectors and a 95 mm C2
+container solely as simulation assumptions.  Its outcomes are mechanism
+evidence; no output can claim physical alignment or a physical primary.
+
+The builder is offline.  It writes new, read-only small assets below the
+dedicated simulation root and never starts ROS/Gazebo.  A final gate also
+requires a separately recorded (simulation-only) SmoothMatch timing pilot so
+that ``v_ref`` is not guessed, plus an immutable runtime-consumer contract
+proving that the frozen common-random-number assets are actually consumed.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import math
+import os
+import re
+import stat
+import subprocess
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
+
+
+SCHEMA_VERSION = "smpcc-sim-mechanism-freeze-v3"
+PROTOCOL_ID = "SMPCC-SIM-MECHANISM-40-64-88-v3"
+RELEASE_ID = "SIM-MECHANISM-40-64-88-R7"
+NAMESPACE = "SMPCC-SIM-MECHANISM-40-64-88-R7"
+GO_GATE_SCHEMA_VERSION = "smpcc-sim-mechanism-go-gate-v1"
+GO_GATE_DOCUMENT_TYPE = "SMPCC_SIM_MECHANISM_GO_GATE_RECEIPT"
+TIMING_SCHEMA_VERSION = "smpcc-sim-mechanism-time-match-pilot-v3"
+TIMING_RUNNER_ID = "SMPCC-SIM-MECHANISM-TIME-MATCH-PILOT-v3"
+TIMING_ATTEMPT_TYPE = "SMPCC_SIM_MECHANISM_TIME_MATCH_ATTEMPT"
+TIMING_CASE_TYPE = "SMPCC_SIM_MECHANISM_TIME_MATCH_CASE"
+TIMING_CALIBRATION_TYPE = "SMPCC_SIM_MECHANISM_SMOOTHMATCH_CALIBRATION"
+CRN_TRACE_SCHEMA_VERSION = "smpcc-sim-mechanism-crn-trace-v1"
+CRN_TRACE_DOCUMENT_TYPE = "SMPCC_SIM_MECHANISM_BLOCK_CRN_TRACE"
+CRN_CONSUMER_SCHEMA_VERSION = "smpcc-sim-mechanism-crn-consumer-v1"
+CRN_CONSUMER_DOCUMENT_TYPE = "SMPCC_SIM_MECHANISM_CRN_RUNTIME_CONSUMER_CONTRACT"
+CRN_CONSUMER_EVIDENCE_SCHEMA_VERSION = "smpcc-sim-mechanism-crn-consumer-evidence-v1"
+CRN_CONSUMER_EVIDENCE_DOCUMENT_TYPE = "SMPCC_SIM_MECHANISM_CRN_RUNTIME_CONSUMER_EVIDENCE"
+RANDOMIZATION_SEED = "SIM-MECHANISM-R2-20260802"
+TIMING_CALIBRATION_SEED = 20260803
+TIMING_TAIL_SEC = 5.0
+TIMING_TAIL_WALL_WATCHDOG_SEC = 30.0
+SMOOTHMATCH_V_REF_M_S = 0.18
+SMOOTHMATCH_V_REF_DESIGN = {
+    "decision_id": "SIM-MECHANISM-R7-SMOOTHMATCH-VREF-0P18",
+    "value_m_s": SMOOTHMATCH_V_REF_M_S,
+    "decision_scope": "R7_SIMULATION_MECHANISM_DESIGN_ONLY",
+    "source_class": "PREDECLARED_DEVELOPMENT_DESIGN_VALUE",
+    "same_numeric_value_as_predecessor": True,
+    "predecessor_calibration_imported": False,
+    "predecessor_attempt_imported": False,
+    "predecessor_formal_evidence_reused": False,
+    "fresh_r7_timing_calibration_required": True,
+}
+TIMING_ATTEMPT_IDS = {
+    "Bslosh": "SIM_MECH_R7_TIMEMATCH_BSLOSH_R01",
+    "SmoothMatch": "SIM_MECH_R7_TIMEMATCH_SMOOTHMATCH_R01",
+}
+TIMING_ATTEMPT_FIELDS = frozenset((
+    "schema_version", "record_type", "runner_id", "protocol_id",
+    "release_id", "formal", "evidence_class", "physical_alignment",
+    "physical_primary_eligible", "physical_primary", "attempt_id",
+    "condition_id", "method_success", "method_failure", "failure_class",
+    "outcome_classification", "goal_reached", "motion_started",
+    "tail_complete", "completion_time_sec", "seed", "freeze_candidate",
+    "endpoint_evidence", "runtime_qc_report", "closed_bag_qc",
+    "ros_clock_tail_qc", "raw_process_stops", "case_manifest_path",
+    "case_manifest_hash",
+    "events_path", "events", "events_hash", "bag_path", "bag_hash",
+    "pre_ros_reachable", "pre_gazebo_reachable", "post_ros_reachable",
+    "post_gazebo_reachable", "fresh_ros_gazebo", "lifecycle",
+    "runtime_error", "created_utc",
+))
+TIMING_CASE_FIELDS = frozenset((
+    "schema_version", "record_type", "runner_id", "protocol_id",
+    "release_id", "formal", "evidence_class", "physical_alignment",
+    "physical_primary_eligible", "physical_primary", "attempt_id",
+    "condition_id", "condition_config", "freeze_candidate", "path",
+    "container", "seed", "ros_master_uri", "gazebo_master_uri",
+    "timing_policy", "pose_contract", "case_manifest_hash",
+))
+TIMING_RECORDER_TOPICS = (
+    "/clock", "/odom", "/tf", "/tf_static",
+    "/scout/global_path_fixed", "/scout/goal", "/sim_spmpc/status",
+    "/sim_spmpc/terminal/debug", "/sim_spmpc/terminal/mode",
+    "/sim_spmpc/debug/effective_config", "/slosh/height",
+    "/sim_spmpc/slosh_height", "/cmd_vel",
+)
+RANDOMIZATION_SEED_COMMITMENT = hashlib.sha256(
+    RANDOMIZATION_SEED.encode("utf-8")
+).hexdigest()
+PROFILE_BASE_SPEED_M_S = 0.26
+PROFILE_MAX_DURATION_SEC = 55.0
+PROFILE_METHOD = "SIM_MECHANISM_HAMAGUCHI_STYLE"
+PROFILE_GRAVITY_M_S2 = 9.81
+PROFILE_MODE_ROOT_XI = 1.8411837813406593
+CRN_TIME_DOMAIN = "ROS_SIM_TIME_ELAPSED_FROM_FIRST_EFFECTIVE_MOTION"
+CRN_TIME_ORIGIN_EVENT = "FIRST_EFFECTIVE_MOTION"
+CRN_INTERPOLATION = "LINEAR_BY_TIME_INDEX_MS"
+CRN_TRACE_END_MS = 60000
+CRN_INITIAL_YAW_MAX_ABS_RAD = 0.02
+CRN_CONSUMER_REQUIRED_ENVIRONMENT = (
+    "SMPCC_CRN_TRACE_ASSET_PATH",
+    "SMPCC_CRN_TRACE_ASSET_SHA256",
+    "SMPCC_CRN_TRACE_ASSET_HASH",
+    "SMPCC_CRN_SEED_BUNDLE_ID",
+    "SMPCC_CRN_SEED_BUNDLE_HASH",
+)
+CRN_CONSUMPTION_PHASES = {
+    "initial_robot_pose": "PRE_MOTION_RESET",
+    "initial_liquid_state": "PRE_MOTION_RESET",
+    "actuator_disturbance": "MOTION_SIM_TIME",
+    "sensor_noise": "MOTION_SIM_TIME",
+    "environment_contact_noise": "MOTION_SIM_TIME",
+    "simulator_rng": "ENVIRONMENT_START",
+}
+CRN_APPLICATION_MODES = {
+    "initial_robot_pose": "ACTIVE",
+    "initial_liquid_state": "INACTIVE_ZERO_AMPLITUDE",
+    "actuator_disturbance": "INACTIVE_ZERO_AMPLITUDE",
+    "sensor_noise": "INACTIVE_ZERO_AMPLITUDE",
+    "environment_contact_noise": "INACTIVE_ZERO_AMPLITUDE",
+    "simulator_rng": "ACTIVE",
+}
+CRN_CONSUMER_REQUIRED_PROOFS = (
+    "missing_asset_rejected_before_cmd_publisher",
+    "asset_file_hash_mismatch_rejected_before_cmd_publisher",
+    "asset_semantic_hash_mismatch_rejected_before_cmd_publisher",
+    "condition_specific_trace_selection_rejected",
+    "callback_count_rng_rejected",
+    "same_block_replay_consumes_identical_trace_hashes",
+    "sim_time_indexing_verified",
+    "runtime_ack_binds_consumed_trace_hashes",
+    "initial_yaw_offset_applied_and_acknowledged",
+)
+CANDIDATE_MISSING_REQUIREMENTS = (
+    "CRN runtime consumer contract is missing",
+    "SmoothMatch timing calibration is missing",
+)
+PROFILE_GENERATION_PARAMETERS = {
+    "v_max": 0.8,
+    "base_speed": PROFILE_BASE_SPEED_M_S,
+    "omega_max": 1.2,
+    "alpha_max": 1.2,
+    "a_max": 0.6,
+    "decel_max": 0.6,
+    "dt": 0.02,
+    "lateral_accel_max": 0.6,
+    "num_samples": 201,
+    "method_name": PROFILE_METHOD,
+}
+PREDECESSOR_RELEASE_IDS = (
+    "SIM-MECHANISM-40-64-88-R1",
+    "SIM-MECHANISM-40-64-88-R2",
+    "SIM-MECHANISM-40-64-88-R3",
+    "SIM-MECHANISM-40-64-88-R4",
+    "SIM-MECHANISM-40-64-88-R5",
+    "SIM-MECHANISM-40-64-88-R6",
+)
+PREDECESSOR_PROTOCOL_IDS = (
+    "SMPCC-SIM-MECHANISM-40-64-88-v1",
+    "SMPCC-SIM-MECHANISM-40-64-88-v2",
+)
+SIM_ROOT = Path("/data/a/scout_sim_replacement")
+R3_INVALIDATION_RECEIPT = (
+    SIM_ROOT / "SMPCC-SIM-MECHANISM-40-64-88-R3" /
+    "R3_ENDPOINT_PROTOCOL_FAILURE_INVALIDATION_RECEIPT.json"
+)
+R3_INVALIDATION_RECEIPT_SHA256 = (
+    "25da4623d0bdd6d109ac3399e2f4f91e0a18443b34f0b5eb6793a87fa12f58fd"
+)
+R4_INVALIDATION_RECEIPT = (
+    SIM_ROOT / "SMPCC-SIM-MECHANISM-40-64-88-R4" /
+    "R4_TIMING_INFRASTRUCTURE_FAILURE_INVALIDATION_RECEIPT.json"
+)
+R4_INVALIDATION_RECEIPT_SHA256 = (
+    "6c12aac5f7993662ffd5ede1ccc74835aa13c074565343fc048d1985baa9b4e9"
+)
+R5_INVALIDATION_RECEIPT = (
+    SIM_ROOT / "SMPCC-SIM-MECHANISM-40-64-88-R5" /
+    "R5_PREMOTION_ACQUISITION_LEDGER_PROTOCOL_FAILURE_INVALIDATION_RECEIPT.json"
+)
+R5_INVALIDATION_RECEIPT_SHA256 = (
+    "1c08c7c950c55c05d5940205e86aa764c9f0544a939b5dc9d2afbe935663dbfc"
+)
+R6_INVALIDATION_RECEIPT = (
+    SIM_ROOT / "SMPCC-SIM-MECHANISM-40-64-88-R6" /
+    "R6_POSTMOTION_ZERO_TAIL_PROTOCOL_FAILURE_INVALIDATION_RECEIPT.json"
+)
+R6_INVALIDATION_RECEIPT_SHA256 = (
+    "ee70050c4f3fc96993ba417e4d662f71fd8361d9e4262f4450d7d147270bd6fc"
+)
+CANONICAL_RELEASE_ROOT = SIM_ROOT / NAMESPACE / "freeze" / RELEASE_ID
+CANONICAL_CRN_CONSUMER_CONTRACT = (
+    CANONICAL_RELEASE_ROOT / "crn_runtime_consumer_contract.json"
+)
+CANONICAL_GO_GATE_RECEIPT = (
+    SIM_ROOT / NAMESPACE / "go_gate" / RELEASE_ID / "go_gate_receipt.json"
+)
+ORIGINAL_ALIGNED_PROTOCOL_ID = "SMPCC-SIM-40-64-88-v0.1"
+WORKSPACE = Path(__file__).resolve().parents[5]
+SCRIPT_DIR = Path(__file__).resolve().parent
+SIM_CONTROLLER_ROOT = WORKSPACE / "src/scout_apps/simulation/spmpc_sim_local_planner"
+DEVELOPMENT_ASSETS = SIM_ROOT / "development_assets" / "20260802_p2_c2_d95_0705_candidate_v1"
+WORLD_FILE = SIM_ROOT / "classic_ws/src/scout_mini_proxy_gazebo/worlds/open_walled_proxy.world"
+MAP_FILE = SIM_ROOT / "maps/proxy_world_manual_saved_20260611_154348.pbstream"
+ROBOT_MODEL_FILE = SIM_ROOT / "classic_ws/src/scout_mini_proxy_description/urdf/scout_mini_proxy_stable.xacro"
+PROFILE_GENERATOR = SIM_CONTROLLER_ROOT / "scripts/fixed_profile/hamaguchi/generate_profile.py"
+
+# Every source, launch, configuration and built controller that can affect a
+# mechanism row is hash-bound into the candidate freeze.  Validation re-hashes
+# these live paths, so changing code after release immediately turns the gate
+# into NO-GO instead of silently mixing runtime versions.
+RUNTIME_BINDING_PATHS: Dict[str, Path] = {
+    "mechanism_freeze_tool": Path(__file__).resolve(),
+    "mechanism_matrix_tool": SCRIPT_DIR / "smpcc_sim_mechanism_matrix.py",
+    "mechanism_runner": SCRIPT_DIR / "smpcc_sim_mechanism_runner.py",
+    "mechanism_timing_pilot": SCRIPT_DIR / "smpcc_sim_mechanism_timing_pilot.py",
+    "mechanism_release_tool": SCRIPT_DIR / "smpcc_sim_mechanism_release.py",
+    "mechanism_campaign_control": SCRIPT_DIR / "smpcc_sim_mechanism_campaign_control.py",
+    "mechanism_endpoint_gate": SCRIPT_DIR / "smpcc_sim_mechanism_endpoint_gate.py",
+    "mechanism_crn_runtime": SCRIPT_DIR / "smpcc_sim_mechanism_crn_runtime.py",
+    "mechanism_runtime_qc": SCRIPT_DIR / "smpcc_sim_mechanism_runtime_qc.py",
+    "mechanism_crn_contract_builder": SCRIPT_DIR / "smpcc_sim_mechanism_crn_contract_builder.py",
+    "shared_randomization_tool": SCRIPT_DIR / "smpcc_sim_toolchain.py",
+    "shared_fresh_runtime": SCRIPT_DIR / "smpcc_sim_only_bslosh_r1_runner.py",
+    "online_variant_header": SIM_CONTROLLER_ROOT / "config/variants/SIM_Bslosh_R1.yaml",
+    "online_variant_source": SIM_CONTROLLER_ROOT / "config/variants/SIM_Bsmooth_R1.yaml",
+    "online_ros_source": SIM_CONTROLLER_ROOT / "src/spmpc_sim_local_planner_node.cpp",
+    "online_gate_header": SIM_CONTROLLER_ROOT / "scripts/smpcc_sim_controller_gate.py",
+    "online_gate_source": SIM_CONTROLLER_ROOT / "scripts/smpcc_sim_controller_gate.py",
+    "online_launch": SIM_CONTROLLER_ROOT / "launch/smpcc_sim_mechanism_r8.launch",
+    "online_fixed_path_launch": SIM_CONTROLLER_ROOT / "launch/smpcc_sim_mechanism_r8.launch",
+    "online_generic_launch": SIM_CONTROLLER_ROOT / "launch/smpcc_sim_mechanism_r8.launch",
+    "online_common_config": SIM_CONTROLLER_ROOT / "config/planner/common_sim.yaml",
+    "online_variants_config": SIM_CONTROLLER_ROOT / "config/variants/SIM_Bslosh_R1.yaml",
+    "online_platform_config": SIM_CONTROLLER_ROOT / "config/platforms/scout_mini_sim.yaml",
+    "online_c1_config": SIM_CONTROLLER_ROOT / "config/containers/C1_37mm_H58_sim.yaml",
+    "online_c2_config": SIM_CONTROLLER_ROOT / "config/containers/C2_95mm_H58_sim.yaml",
+    "online_experiment_config": SIM_CONTROLLER_ROOT / "config/experiments/fixed_path_sim.yaml",
+    "online_node_binary": WORKSPACE / "devel/lib/spmpc_sim_local_planner/spmpc_sim_local_planner_node",
+    "online_library_binary": WORKSPACE / "devel/lib/libspmpc_sim_local_planner.so",
+    "fixed_tracker_source": SCRIPT_DIR / "smpcc_sim_mechanism_fixed_profile_tracker.py",
+    "fixed_tracker_launch": SIM_CONTROLLER_ROOT / "launch/smpcc_sim_mechanism_fixed_profile.launch",
+    "profile_generator": PROFILE_GENERATOR,
+    "simulation_environment_launch": SIM_CONTROLLER_ROOT / "scripts/launch_sim_environment.sh",
+    "hproxy_launch": WORKSPACE / "src/scout_apps/control/slosh_models/launch/slosh_monitor.launch",
+    "hproxy_node_binary": WORKSPACE / "devel/lib/slosh_models/slosh_monitor_node",
+    "hproxy_library_binary": WORKSPACE / "devel/lib/libslosh_models.so",
+    "acados_runtime": Path("/home/a/acados/lib/libacados.so"),
+    "hpipm_runtime": Path("/home/a/acados/lib/libhpipm.so"),
+    "blasfeo_runtime": Path("/home/a/acados/lib/libblasfeo.so.0"),
+    "acados_solver_b0": SIM_CONTROLLER_ROOT / "generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+    "acados_solver_slosh": SIM_CONTROLLER_ROOT / "generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+    "acados_solver_b0_direct_omega": SIM_CONTROLLER_ROOT / "generated/acados/spmpc_b0_direct_omega_legacy/libacados_ocp_solver_spmpc_b0_direct_omega_legacy.so",
+    "acados_solver_slosh_direct_omega": SIM_CONTROLLER_ROOT / "generated/acados/spmpc_slosh_direct_omega/libacados_ocp_solver_spmpc_slosh_direct_omega.so",
+    "proxy_drive_plugin_binary": SIM_ROOT / "classic_ws/devel/lib/libscout_mini_proxy_stable_planar_drive.so",
+    "development_path_high": DEVELOPMENT_ASSETS / "paths/high_p2_sim.json",
+    "development_path_low": DEVELOPMENT_ASSETS / "paths/low_p2_sim.json",
+    "cpp_online_gate_test": SIM_CONTROLLER_ROOT / "tests/test_smpcc_sim_controller_gate.py",
+    "fixed_profile_tracker_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_fixed_profile_tracker.py",
+    "timing_pilot_binding_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_timing_pilot.py",
+    "launch_contract_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_launch_contract.py",
+    "launch_runtime_rejection_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_launch_runtime.py",
+    "freeze_contract_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_freeze.py",
+    "matrix_contract_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_matrix.py",
+    "runner_contract_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_runner.py",
+    "release_contract_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_release.py",
+    "campaign_control_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_campaign_control.py",
+    "endpoint_gate_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_endpoint_gate.py",
+    "crn_runtime_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_crn_runtime.py",
+    "runtime_qc_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_runtime_qc.py",
+    "crn_contract_builder_test": SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_crn_contract_builder.py",
+}
+
+
+def _bind_source_tree(prefix: str, root: Path) -> None:
+    if not root.is_dir():
+        return
+    for path in sorted(root.rglob("*")):
+        if (not path.is_file() or "__pycache__" in path.parts or
+                path.suffix in {".pyc", ".bag", ".active"}):
+            continue
+        relative = path.relative_to(root).as_posix().replace("/", "__")
+        RUNTIME_BINDING_PATHS[f"{prefix}__{relative}"] = path
+
+
+for _prefix, _root in (
+    ("sim_controller_src", SIM_CONTROLLER_ROOT / "src"),
+    ("sim_controller_include", SIM_CONTROLLER_ROOT / "include"),
+    ("sim_controller_messages", SIM_CONTROLLER_ROOT / "msg"),
+    ("sim_controller_generated", SIM_CONTROLLER_ROOT / "generated"),
+    ("sim_controller_launch", SIM_CONTROLLER_ROOT / "launch"),
+    ("sim_controller_config", SIM_CONTROLLER_ROOT / "config"),
+    ("sim_controller_scripts", SIM_CONTROLLER_ROOT / "scripts"),
+    ("hproxy_package", WORKSPACE / "src/scout_apps/control/slosh_models"),
+    ("proxy_gazebo_package", SIM_ROOT / "classic_ws/src/scout_mini_proxy_gazebo"),
+    ("proxy_nav_package", SIM_ROOT / "classic_ws/src/scout_mini_proxy_nav_adapter"),
+    ("proxy_description_package", SIM_ROOT / "classic_ws/src/scout_mini_proxy_description"),
+):
+    _bind_source_tree(_prefix, _root)
+
+STAGES: Dict[str, Dict[str, Any]] = {
+    "SIM-S1_CORE": {"path_id": "H1", "container_id": "C1", "conditions": ("B0", "Bsmooth", "SmoothMatch", "FixedProfile", "Bslosh")},
+    "SIM-S2A_SELECTIVITY": {"path_id": "L1", "container_id": "C1", "conditions": ("Bsmooth", "FixedProfile", "Bslosh")},
+    "SIM-S2B_TRANSFER": {"path_id": "H1", "container_id": "C2", "conditions": ("Bsmooth", "FixedProfile", "Bslosh")},
+}
+CONDITION_VARIANTS = {
+    "B0": "SIM_B0_R1",
+    "Bsmooth": "SIM_Bsmooth_R1",
+    "SmoothMatch": "SIM_SmoothMatch_R1",
+    "Bslosh": "SIM_Bslosh_R1",
+}
+BACKENDS = {"B0": "online_mpcc", "Bsmooth": "online_mpcc", "SmoothMatch": "online_mpcc", "FixedProfile": "fixed_profile_tracker", "Bslosh": "online_smpcc"}
+WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+SHA256_LENGTH = 64
+GO_CHECK_TEST_COUNTS = {
+    "build": 0,
+    "cpp_online_gate": 6,
+    "fixed_profile_tracker": 8,
+    "timing_pilot_binding": 13,
+    "launch_contract": 7,
+    "launch_runtime_rejection": 2,
+    "freeze_contract": 12,
+    "matrix_contract": 9,
+    "runner_contract": 15,
+    "endpoint_gate": 5,
+    "crn_runtime": 9,
+    "runtime_qc": 30,
+    "crn_contract_builder": 6,
+    "release_contract": 9,
+    "campaign_control": 6,
+}
+GO_BUILD_PACKAGES = (
+    "spmpc_sim_local_planner",
+    "slosh_models",
+)
+GO_CHECK_COMMANDS = {
+    "build": [
+        "/opt/ros/noetic/bin/catkin_make",
+        "-DCATKIN_WHITELIST_PACKAGES=" + ";".join(GO_BUILD_PACKAGES),
+        "-j2",
+    ],
+    "cpp_online_gate": [
+        sys.executable,
+        str(SIM_CONTROLLER_ROOT / "tests/test_smpcc_sim_controller_gate.py"),
+    ],
+    "fixed_profile_tracker": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_fixed_profile_tracker.py"),
+    ],
+    "timing_pilot_binding": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_timing_pilot.py"),
+    ],
+    "launch_contract": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_launch_contract.py"),
+    ],
+    "launch_runtime_rejection": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_launch_runtime.py"),
+    ],
+    "freeze_contract": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_freeze.py"),
+    ],
+    "matrix_contract": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_matrix.py"),
+    ],
+    "runner_contract": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_runner.py"),
+    ],
+    "endpoint_gate": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_endpoint_gate.py"),
+    ],
+    "crn_runtime": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_crn_runtime.py"),
+    ],
+    "runtime_qc": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_runtime_qc.py"),
+    ],
+    "crn_contract_builder": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_crn_contract_builder.py"),
+    ],
+    "release_contract": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_release.py"),
+    ],
+    "campaign_control": [
+        sys.executable,
+        str(SCRIPT_DIR / "tests/test_smpcc_sim_mechanism_campaign_control.py"),
+    ],
+}
+
+
+class MechanismFreezeError(RuntimeError):
+    pass
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise MechanismFreezeError(message)
+
+
+def is_sha256(value: Any) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == SHA256_LENGTH
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+def _has_symlink_component(path: Path) -> bool:
+    """Return true when an existing component redirects path resolution."""
+
+    absolute = path.absolute()
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current = current / part
+        if current.is_symlink():
+            return True
+        if not current.exists():
+            break
+    return False
+
+
+def require_exact_path(path: Path, expected: Path, label: str,
+                       *, must_exist: bool = True) -> Path:
+    absolute = Path(os.path.abspath(str(path)))
+    expected_absolute = Path(os.path.abspath(str(expected)))
+    require(absolute == expected_absolute, f"{label} must be exactly {expected_absolute}")
+    require(not _has_symlink_component(absolute), f"{label} may not traverse a symlink")
+    if must_exist:
+        require(absolute.exists(), f"{label} is missing: {absolute}")
+    return absolute
+
+
+def canonical_hash(value: Any) -> str:
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def read_json(path: Path, label: str) -> Mapping[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise MechanismFreezeError(f"cannot read {label}: {path}: {exc}") from exc
+    require(isinstance(value, Mapping), f"{label} must be a JSON object")
+    return value
+
+
+def require_file(path: Path, label: str) -> Path:
+    require(path.is_absolute() and path.is_file(), f"{label} is missing: {path}")
+    return path.resolve()
+
+
+def descriptor(path: Path, label: str) -> Dict[str, str]:
+    path = require_file(path, label)
+    return {"path": str(path), "sha256": sha256_file(path)}
+
+
+def invalidation_receipt_descriptor(path: Path, expected_sha256: str,
+                                    label: str) -> Dict[str, str]:
+    """Bind a predecessor receipt to its canonical immutable bytes."""
+
+    require(path.is_absolute() and not path.is_symlink() and
+            not _has_symlink_component(path),
+            f"{label} must be a canonical non-symlink path")
+    path = require_file(path, label)
+    require(stat.S_IMODE(path.stat().st_mode) & WRITE_BITS == 0,
+            f"{label} must be read-only")
+    actual_sha256 = sha256_file(path)
+    require(actual_sha256 == expected_sha256,
+            f"{label} hash mismatch")
+    return {"path": str(path), "sha256": expected_sha256}
+
+
+def runtime_bindings() -> Dict[str, Dict[str, str]]:
+    return {
+        name: descriptor(path, f"runtime binding {name}")
+        for name, path in sorted(RUNTIME_BINDING_PATHS.items())
+    }
+
+
+def validate_runtime_bindings(value: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(value, Mapping) or set(value) != set(RUNTIME_BINDING_PATHS):
+        return ["complete R7 runtime binding registry is missing"]
+    for name, expected_path in RUNTIME_BINDING_PATHS.items():
+        item = value.get(name)
+        if not isinstance(item, Mapping) or set(item) != {"path", "sha256"}:
+            errors.append(f"runtime binding {name} is malformed")
+            continue
+        path = Path(str(item.get("path", "")))
+        if not path.is_absolute() or path.resolve() != expected_path.resolve():
+            errors.append(f"runtime binding {name} path mismatch")
+            continue
+        if not path.is_file():
+            errors.append(f"runtime binding {name} is missing: {path}")
+            continue
+        if item.get("sha256") != sha256_file(path):
+            errors.append(f"runtime binding {name} hash mismatch")
+    return errors
+
+
+def validate_go_gate_receipt(value: Any, expected_bindings_hash: Any,
+                             *, receipt_path: Optional[Path] = None,
+                             require_canonical_path: bool = False) -> list[str]:
+    """Validate semantic test evidence rather than trusting a PASS label."""
+
+    errors: list[str] = []
+    if not isinstance(value, Mapping):
+        return ["R7 GO gate receipt is not an object"]
+    expected_identity = {
+        "schema_version": GO_GATE_SCHEMA_VERSION,
+        "document_type": GO_GATE_DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "namespace": NAMESPACE,
+        "status": "PASS",
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "gazebo_started": False,
+    }
+    expected_fields = set(expected_identity) | {
+        "runtime_bindings_hash",
+        "runtime_bindings_count",
+        "generator",
+        "checks",
+        "runtime_rejection_case_count",
+        "positive_fixture_case_count",
+        "cmd_vel_publisher_observed_in_rejection_cases",
+        "positive_fixture_cmd_vel_publisher_observed",
+        "created_utc",
+        "go_receipt_hash",
+    }
+    if set(value) != expected_fields:
+        errors.append("R7 GO gate receipt fields are not the exact schema")
+    for key, expected in expected_identity.items():
+        if value.get(key) != expected:
+            errors.append(f"R7 GO gate {key} must equal {expected!r}")
+    created_utc = value.get("created_utc")
+    if not isinstance(created_utc, str) or not created_utc.endswith("Z"):
+        errors.append("R7 GO gate created_utc is invalid")
+    if value.get("runtime_bindings_hash") != expected_bindings_hash:
+        errors.append("R7 GO gate evidence is not bound to runtime sources")
+    bindings_count = value.get("runtime_bindings_count")
+    if bindings_count != len(RUNTIME_BINDING_PATHS):
+        errors.append("R7 GO gate runtime binding count mismatch")
+    if receipt_path is not None:
+        try:
+            if require_canonical_path:
+                require_exact_path(receipt_path, CANONICAL_GO_GATE_RECEIPT,
+                                   "R7 GO gate receipt")
+            if receipt_path.is_symlink() or _has_symlink_component(receipt_path):
+                errors.append("R7 GO gate receipt may not traverse a symlink")
+            if stat.S_IMODE(receipt_path.stat().st_mode) & WRITE_BITS:
+                errors.append("R7 GO gate receipt must be read-only")
+        except (MechanismFreezeError, OSError) as exc:
+            errors.append(str(exc))
+    generator = value.get("generator")
+    expected_generator = RUNTIME_BINDING_PATHS["mechanism_release_tool"].resolve()
+    if not isinstance(generator, Mapping) or set(generator) != {"path", "sha256"}:
+        errors.append("R7 GO gate generator descriptor is malformed")
+    else:
+        generator_path = Path(str(generator.get("path", "")))
+        if (not generator_path.is_absolute() or
+                generator_path.resolve() != expected_generator or
+                not generator_path.is_file()):
+            errors.append("R7 GO gate generator path mismatch")
+        elif generator.get("sha256") != sha256_file(generator_path):
+            errors.append("R7 GO gate generator hash mismatch")
+    checks = value.get("checks")
+    if not isinstance(checks, Mapping) or set(checks) != set(GO_CHECK_TEST_COUNTS):
+        errors.append("R7 GO gate checks are incomplete or contain unknown checks")
+    else:
+        for name, expected_count in GO_CHECK_TEST_COUNTS.items():
+            check = checks.get(name)
+            if not isinstance(check, Mapping):
+                errors.append(f"R7 GO gate {name} check is malformed")
+                continue
+            expected_check_fields = {
+                "status", "command", "returncode", "test_count",
+                "failure_count", "error_count", "evidence",
+            }
+            if name == "build":
+                expected_check_fields.add("packages")
+            if set(check) != expected_check_fields:
+                errors.append(f"R7 GO gate {name} check fields are not exact")
+            if check.get("status") != "PASS" or check.get("returncode") != 0:
+                errors.append(f"R7 GO gate {name} did not PASS")
+            command = check.get("command")
+            if (not isinstance(command, list) or not command or
+                    not all(isinstance(token, str) and token for token in command)):
+                errors.append(f"R7 GO gate {name} command is missing")
+            elif command != GO_CHECK_COMMANDS[name]:
+                errors.append(f"R7 GO gate {name} command mismatch")
+            if check.get("test_count") != expected_count:
+                errors.append(f"R7 GO gate {name} test count mismatch")
+            if check.get("failure_count") != 0 or check.get("error_count") != 0:
+                errors.append(f"R7 GO gate {name} contains failures/errors")
+            evidence = check.get("evidence")
+            if not isinstance(evidence, Mapping) or set(evidence) != {"path", "sha256"}:
+                errors.append(f"R7 GO gate {name} evidence descriptor is malformed")
+                continue
+            evidence_path = Path(str(evidence.get("path", "")))
+            if (not evidence_path.is_absolute() or not evidence_path.is_file() or
+                    evidence_path.is_symlink() or _has_symlink_component(evidence_path)):
+                errors.append(f"R7 GO gate {name} evidence path is invalid")
+                continue
+            if stat.S_IMODE(evidence_path.stat().st_mode) & WRITE_BITS:
+                errors.append(f"R7 GO gate {name} evidence must be read-only")
+            if evidence.get("sha256") != sha256_file(evidence_path):
+                errors.append(f"R7 GO gate {name} evidence hash mismatch")
+            if require_canonical_path:
+                evidence_root = CANONICAL_GO_GATE_RECEIPT.parent / "evidence"
+                try:
+                    evidence_path.resolve().relative_to(evidence_root.resolve())
+                except ValueError:
+                    errors.append(f"R7 GO gate {name} evidence is outside canonical root")
+            try:
+                transcript = evidence_path.read_text(
+                    encoding="utf-8", errors="replace")
+                if "returncode=0" not in transcript:
+                    errors.append(f"R7 GO gate {name} transcript return code mismatch")
+                expected_command_line = (
+                    "command=" + json.dumps(
+                        GO_CHECK_COMMANDS[name], ensure_ascii=False
+                    )
+                )
+                if not transcript.startswith(expected_command_line + "\n"):
+                    errors.append(f"R7 GO gate {name} transcript command mismatch")
+                if name != "build":
+                    counts = re.findall(r"Ran ([0-9]+) tests?", transcript)
+                    if counts != [str(expected_count)] or "OK" not in transcript or "FAILED" in transcript or "skipped=" in transcript:
+                        errors.append(f"R7 GO gate {name} transcript semantics mismatch")
+                if name == "launch_runtime_rejection":
+                    if ("RUNTIME_REJECTION_CASES=18\n" not in transcript or
+                            "RUNTIME_POSITIVE_FIXTURE_CASES=1\n" not in transcript):
+                        errors.append(
+                            "R7 GO gate runtime case-count transcript mismatch"
+                        )
+            except OSError as exc:
+                errors.append(f"cannot read R7 GO gate {name} evidence: {exc}")
+            if (name == "build" and
+                    check.get("packages") != list(GO_BUILD_PACKAGES)):
+                errors.append("R7 GO gate build package set mismatch")
+    if value.get("runtime_rejection_case_count") != 18:
+        errors.append("R7 GO gate lacks the exact 18-case runtime rejection proof")
+    if value.get("positive_fixture_case_count") != 1:
+        errors.append("R7 GO gate lacks the one positive FixedProfile fixture proof")
+    if value.get("cmd_vel_publisher_observed_in_rejection_cases") is not False:
+        errors.append(
+            "R7 GO gate does not prove /cmd_vel publisher absence in rejection cases"
+        )
+    if value.get("positive_fixture_cmd_vel_publisher_observed") is not True:
+        errors.append(
+            "R7 GO gate does not prove /cmd_vel publication in the positive fixture"
+        )
+    core = dict(value)
+    declared_hash = core.pop("go_receipt_hash", None)
+    if not is_sha256(declared_hash) or declared_hash != canonical_hash(core):
+        errors.append("R7 GO gate receipt hash mismatch")
+    return errors
+
+
+def write_json_new_readonly(path: Path, value: Mapping[str, Any]) -> None:
+    require(not path.exists(), f"refusing to overwrite immutable asset: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = (json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    try:
+        with path.open("xb") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(path, 0o444)
+    except OSError as exc:
+        raise MechanismFreezeError(f"cannot write immutable asset {path}: {exc}") from exc
+
+
+def _load_toolchain():
+    path = Path(__file__).with_name("smpcc_sim_toolchain.py")
+    spec = importlib.util.spec_from_file_location("smpcc_sim_toolchain_mechanism", path)
+    if spec is None or spec.loader is None:
+        raise MechanismFreezeError(f"cannot load shared randomisation helpers: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+toolchain = _load_toolchain()
+
+
+def _load_runtime_qc():
+    path = Path(__file__).with_name("smpcc_sim_mechanism_runtime_qc.py")
+    spec = importlib.util.spec_from_file_location(
+        "smpcc_sim_mechanism_runtime_qc_freeze", path)
+    if spec is None or spec.loader is None:
+        raise MechanismFreezeError(f"cannot load runtime QC helpers: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+runtime_qc = _load_runtime_qc()
+
+
+def _load_endpoint_gate():
+    path = Path(__file__).with_name("smpcc_sim_mechanism_endpoint_gate.py")
+    spec = importlib.util.spec_from_file_location(
+        "smpcc_sim_mechanism_endpoint_gate_freeze", path)
+    if spec is None or spec.loader is None:
+        raise MechanismFreezeError(
+            f"cannot load endpoint gate helpers: {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+endpoint_gate = _load_endpoint_gate()
+
+
+def timing_initial_yaw_offset(seed: int) -> float:
+    """Condition-blind yaw realization shared with the R7 timing pilot."""
+
+    require(isinstance(seed, int) and not isinstance(seed, bool) and
+            seed == TIMING_CALIBRATION_SEED,
+            "timing yaw offset requires the frozen R7 calibration seed")
+    digest = hashlib.sha256(
+        f"{PROTOCOL_ID}:{seed}:timing-initial-yaw".encode("utf-8")
+    ).digest()
+    unit = int.from_bytes(digest[:8], "big") / float(2 ** 64 - 1)
+    return round((2.0 * unit - 1.0) * 0.02, 12)
+
+
+def _points_from_candidate(path_id: str) -> list[Dict[str, float]]:
+    filename = "high_p2_sim.json" if path_id == "H1" else "low_p2_sim.json"
+    source = read_json(DEVELOPMENT_ASSETS / "paths" / filename, f"{path_id} candidate path")
+    points = source.get("points")
+    require(isinstance(points, list) and len(points) >= 3, f"{path_id} candidate has no usable points")
+    output: list[Dict[str, float]] = []
+    for index, point in enumerate(points):
+        require(isinstance(point, Mapping), f"{path_id} point {index} is invalid")
+        values = {key: point.get(key) for key in ("x", "y", "yaw")}
+        require(all(isinstance(value, (int, float)) and math.isfinite(float(value)) for value in values.values()), f"{path_id} point {index} is not finite")
+        output.append({key: float(value) for key, value in values.items()})
+    require(output[0] == {"x": -4.0, "y": 0.0, "yaw": 0.0}, f"{path_id} start differs from authorised open-field start")
+    require(output[-1] == {"x": 5.0, "y": 0.0, "yaw": 0.0}, f"{path_id} goal differs from authorised open-field goal")
+    return output
+
+
+def _path_document(path_id: str, points: Sequence[Mapping[str, float]], source: bool) -> Dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_MECHANISM_FROZEN_SOURCE_PATH" if source else "SMPCC_SIM_MECHANISM_FROZEN_SIM_PATH",
+        "protocol_id": PROTOCOL_ID,
+        "formal": True,
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "development_only": False,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "path_id": path_id,
+        "source_mode": "frozen_json_replay",
+        "runtime_generation_forbidden": True,
+        # ``points`` is consumed by the reviewed frozen-path validator;
+        # ``poses`` is the identical read-only representation consumed by the
+        # offline Hamaguchi generator.  Neither permits runtime generation.
+        "points": list(points),
+        "poses": list(points),
+        "zones": {
+            "Z1": {"motion_intent": "accelerate_from_rest", "point_indices": [0, 29]},
+            "Z2": {"motion_intent": "sustained_first_curvature", "point_indices": [29, 81]},
+            "Z3": {"motion_intent": "curvature_reversal", "point_indices": [81, 115]},
+            "Z4": {"motion_intent": "exit_curve_reaccelerate", "point_indices": [115, 151]},
+            "Z5": {"motion_intent": "terminal_brake_to_goal", "point_indices": [151, 180]},
+        },
+    }
+
+
+def _geometry_document(world_hash: str) -> Dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_WORLD_CLEARANCE_GEOMETRY",
+        "protocol_id": PROTOCOL_ID,
+        "formal": True,
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "status": "FROZEN",
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "launched_world_hash": world_hash,
+        "world_runtime_format": "gazebo_sdf",
+        "bounds": [-5.94, 5.94, -3.94, 3.94],
+        "obstacles": [],
+        "robot_footprint_radius_m": 0.45,
+        "container_footprint_radius_m": 0.0475,
+    }
+
+
+def _controller_config(condition_id: str, smoothmatch_vref: float) -> Dict[str, Any]:
+    require(condition_id in {"B0", "Bsmooth", "SmoothMatch", "Bslosh"}, f"online config is unsupported for {condition_id}")
+    if condition_id == "B0":
+        weights = {"w_control": 0.1, "w_smooth": 0.1, "w_alpha": 0.1, "w_du_a": 0.1, "w_du_vs": 0.1, "w_slosh": 0.0}
+        slosh, smooth, v_ref = False, False, 0.20
+    elif condition_id == "Bslosh":
+        weights = {"w_control": 0.3, "w_smooth": 1.0, "w_alpha": 1.0, "w_du_a": 1.0, "w_du_vs": 1.0, "w_slosh": 5.0}
+        slosh, smooth, v_ref = True, False, 0.20
+    else:
+        weights = {"w_control": 0.3, "w_smooth": 1.0, "w_alpha": 1.0, "w_du_a": 1.0, "w_du_vs": 1.0, "w_slosh": 0.0}
+        slosh, smooth, v_ref = False, True, 0.20 if condition_id == "Bsmooth" else smoothmatch_vref
+    core: Dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_MECHANISM_EFFECTIVE_CONFIG",
+        "protocol_id": PROTOCOL_ID,
+        "formal": True,
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "development_only": False,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "condition_id": condition_id,
+        "planner_variant": CONDITION_VARIANTS[condition_id],
+        "method_backend": BACKENDS[condition_id],
+        "solver_backend": "continuous_mpcc_acados",
+        "controller": {
+            "slosh_enable": slosh, "smooth_priority_enable": smooth,
+            "slosh_constraint_enable": False, "primitive_mode": "linear",
+            "w_contour": 1.0, "w_lag": 0.2, "w_progress": 0.2,
+            "w_v": 1.0, "w_vs": 0.3, "w_accel": 0.0,
+            "v_ref": v_ref, **weights,
+        },
+        "observer": {"source": "odom", "imu_shadow_enable": False, "fallback_policy": "odom"},
+        # ``off`` disables use of delay prediction; it does not erase the
+        # underlying timing parameters loaded by the controller.  Freeze the
+        # effective values actually read back from the R1 simulation gate so
+        # an old ``-1`` CLI-sentinel can never masquerade as a full config.
+        "delay": {
+            "mode": "off", "linear_sec": 0.15, "angular_sec": 0.22,
+            "cmd_timeout_sec": 0.5, "odom_timeout_sec": 0.5,
+            "history_window_sec": 2.0, "require_complete_history": False,
+        },
+        "measurements": {
+            "H_proxy": {"topic": "/slosh/height", "semantic": "model_proxy_mechanism_only", "physical_primary_eligible": False},
+            "H_modal": {"topic": "/sim_spmpc/slosh_height", "semantic": "controller_internal_modal_only", "physical_primary_eligible": False},
+            "physical_primary": None,
+        },
+    }
+    return dict(core, effective_config_hash=canonical_hash(core))
+
+
+def _load_container(path: Path, container_id: str) -> Dict[str, Any]:
+    try:
+        import yaml  # type: ignore
+    except ImportError as exc:
+        raise MechanismFreezeError("PyYAML is required for simulation container capture") from exc
+    require_file(path, f"{container_id} controller container YAML")
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    require(isinstance(raw, Mapping) and isinstance(raw.get("slosh"), Mapping), f"{container_id} container YAML is invalid")
+    slosh = raw["slosh"]
+    required = ("container_radius", "liquid_height", "liquid_density", "damping_ratio", "mode_index", "slosh_height_ref", "slosh_height_max", "slosh_eta_dot_ratio", "use_linear_model", "use_parabola_term")
+    require(set(required).issubset(slosh), f"{container_id} controller container YAML lacks fields")
+    core = {
+        "schema_version": SCHEMA_VERSION, "document_type": "SMPCC_SIM_MECHANISM_CONTAINER_PARAMETERS",
+        "protocol_id": PROTOCOL_ID, "formal": True, "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "development_only": False, "physical_alignment": False, "physical_primary_eligible": False,
+        "container_id": container_id, "source_yaml": descriptor(path, f"{container_id} YAML"),
+        "parameters": {key: slosh[key] for key in required},
+        "description": "simulation assumption only; not a physical container manifest",
+    }
+    return dict(core, parameter_hash=canonical_hash(core))
+
+
+def _write_profile(profile_path: Path, report_path: Path, path_json: Path,
+                   container: Mapping[str, Any]) -> Dict[str, Any]:
+    # Container parameters affect only this offline profile-shaping step.  The
+    # dedicated runtime tracker replays the resulting immutable CSV and has no
+    # online liquid feedback, keeping FixedProfile isolated from Bslosh while
+    # still making the C1/C2 generation assumptions explicit and hash-bound.
+    require(container.get("container_id") in {"C1", "C2"},
+            "FixedProfile container identity is invalid")
+    container_parameters = container.get("parameters")
+    require(isinstance(container_parameters, Mapping),
+            "FixedProfile container parameters are missing")
+    radius = float(container_parameters["container_radius"])
+    height = float(container_parameters["liquid_height"])
+    damping = float(container_parameters["damping_ratio"])
+    require(radius > 0.0 and height > 0.0 and damping >= 0.0 and
+            all(math.isfinite(value) for value in (radius, height, damping)),
+            "FixedProfile liquid-derived inputs are invalid")
+    omega_n = math.sqrt(
+        PROFILE_GRAVITY_M_S2 * PROFILE_MODE_ROOT_XI / radius *
+        math.tanh(PROFILE_MODE_ROOT_XI * height / radius)
+    )
+    parameters = PROFILE_GENERATION_PARAMETERS
+    command = [
+        sys.executable,
+        str(require_file(PROFILE_GENERATOR, "FixedProfile generator")),
+        "--path-file", str(path_json),
+        "--out-csv", str(profile_path),
+        "--v-max", str(parameters["v_max"]),
+        "--base-speed", str(parameters["base_speed"]),
+        "--omega-max", str(parameters["omega_max"]),
+        "--alpha-max", str(parameters["alpha_max"]),
+        "--a-max", str(parameters["a_max"]),
+        "--decel-max", str(parameters["decel_max"]),
+        "--omega-n", str(omega_n),
+        "--damping-ratio", str(damping),
+        "--dt", str(parameters["dt"]),
+        "--lateral-accel-max", str(parameters["lateral_accel_max"]),
+        "--num-samples", str(parameters["num_samples"]),
+        "--method-name", str(parameters["method_name"]),
+        "--report-json", str(report_path),
+    ]
+    completed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False, timeout=30)
+    require(completed.returncode == 0, "FixedProfile generator failed: " + completed.stderr[-1000:])
+    require(profile_path.is_file() and report_path.is_file(), "FixedProfile generator did not produce profile/report")
+    report = read_json(report_path, "FixedProfile generation report")
+    duration = report.get("duration_sec")
+    require(report.get("status") == "PASS" and
+            report.get("profile_sha256") == sha256_file(profile_path) and
+            isinstance(duration, (int, float)) and math.isfinite(float(duration)) and
+            0.0 < float(duration) <= PROFILE_MAX_DURATION_SEC,
+            "FixedProfile constraint/duration audit did not PASS")
+    os.chmod(profile_path, 0o444)
+    os.chmod(report_path, 0o444)
+    derived_core = {
+        "container_id": container["container_id"],
+        "container_parameter_hash": container["parameter_hash"],
+        "container_radius_m": radius,
+        "liquid_height_m": height,
+        "damping_ratio": damping,
+        "gravity_m_s2": PROFILE_GRAVITY_M_S2,
+        "mode_root_xi": PROFILE_MODE_ROOT_XI,
+        "omega_n_rad_s": omega_n,
+        "derivation": "sqrt(g*xi/R*tanh(xi*h/R))",
+    }
+    return dict(derived_core, derived_input_hash=canonical_hash(derived_core))
+
+
+def _randomization(seed: str, stage: str) -> Dict[str, Any]:
+    # Reuse the reviewed complete-block algorithm, then rebind it to this
+    # protocol before it enters a mechanism-only freeze.
+    table = dict(toolchain.make_randomization(stage, 8, seed))
+    table["protocol_id"] = PROTOCOL_ID
+    core = {key: table[key] for key in ("schema_version", "table_id", "stage", "algorithm", "seed_commitment", "rows")}
+    table["randomization_hash"] = canonical_hash(core)
+    return table
+
+
+def _crn_trace_asset(bundle: Mapping[str, Any], stage: str,
+                     block_id: str) -> Dict[str, Any]:
+    """Materialise one immutable, condition-blind block trace payload.
+
+    ``make_seed_bundle`` historically embedded deterministic sample arrays in a
+    large freeze document.  That proved how the values were generated, but not
+    that a runtime ever received or consumed them.  R7 gives every block one
+    independently hashable asset.  Every method in that block must receive this
+    exact descriptor; no condition name appears in the asset.
+    """
+
+    seed_report = toolchain.validate_seed_bundle(bundle)
+    traces = bundle["traces"]
+    require(
+        all(
+            isinstance(trace, Mapping)
+            and trace.get("samples")
+            and trace["samples"][0].get("time_index_ms") == 0
+            and trace["samples"][-1].get("time_index_ms") == CRN_TRACE_END_MS
+            for trace in traces.values()
+        ),
+        "CRN trace streams must cover first motion through the 60 second motion window",
+    )
+    initial_pose_samples = traces["initial_robot_pose"]["samples"]
+    initial_yaw_offset_rad = round(
+        (2.0 * float(initial_pose_samples[0]["unit_uniform"]) - 1.0) *
+        CRN_INITIAL_YAW_MAX_ABS_RAD,
+        12,
+    )
+    require(abs(initial_yaw_offset_rad) <= CRN_INITIAL_YAW_MAX_ABS_RAD,
+            "CRN initial yaw offset exceeds its frozen bound")
+    core: Dict[str, Any] = {
+        "schema_version": CRN_TRACE_SCHEMA_VERSION,
+        "document_type": CRN_TRACE_DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": True,
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "physical_primary_eligible": False,
+        "stage": stage,
+        "block_id": block_id,
+        "seed_bundle_id": bundle["seed_bundle_id"],
+        "seed_bundle_hash": bundle["seed_bundle_hash"],
+        "condition_id": None,
+        "method_independent": True,
+        "same_asset_for_every_condition_in_block": True,
+        "callback_count_rng_forbidden": True,
+        "runtime_consumption_required": True,
+        "runtime_consumer_ack_required": True,
+        "time_domain": CRN_TIME_DOMAIN,
+        "time_origin_event": CRN_TIME_ORIGIN_EVENT,
+        "time_index_field": "time_index_ms",
+        "interpolation": CRN_INTERPOLATION,
+        "trace_end_ms": CRN_TRACE_END_MS,
+        "stream_consumption_phases": dict(CRN_CONSUMPTION_PHASES),
+        "initial_yaw_realization": {
+            "source_stream": "initial_robot_pose",
+            "source_time_index_ms": 0,
+            "source_field": "unit_uniform",
+            "mapping": "(2*unit_uniform-1)*max_abs_rad",
+            "max_abs_rad": CRN_INITIAL_YAW_MAX_ABS_RAD,
+            "initial_yaw_offset_rad": initial_yaw_offset_rad,
+            "runtime_target":
+                "SPAWN_YAW=frozen_path_initial_yaw+initial_yaw_offset_rad",
+            "consumption_phase": "PRE_MOTION_RESET",
+            "runtime_ack_required": True,
+        },
+        "sub_seeds": dict(bundle["sub_seeds"]),
+        "traces": dict(traces),
+        "stream_trace_hashes": dict(seed_report["trace_hashes"]),
+    }
+    return dict(core, trace_asset_hash=canonical_hash(core))
+
+
+def _seed_bundle(seed: str, stage: str, block: int,
+                 trace_root: Path) -> Dict[str, Any]:
+    bundle = dict(toolchain.make_seed_bundle(seed, stage, block))
+    bundle["protocol_id"] = PROTOCOL_ID
+    core = {key: bundle[key] for key in (
+        "stage", "block_id", "sub_seeds", "traces",
+        "independent_sub_seeds", "time_indexed_traces")}
+    bundle["seed_bundle_hash"] = canonical_hash(core)
+    asset = _crn_trace_asset(bundle, stage, f"b{block:02d}")
+    asset_path = trace_root / f"{stage}_b{block:02d}.json"
+    write_json_new_readonly(asset_path, asset)
+    bundle.update({
+        "trace_asset": descriptor(asset_path, f"{stage} b{block:02d} CRN trace"),
+        "trace_asset_hash": asset["trace_asset_hash"],
+        "runtime_consumption_required": True,
+        "runtime_consumer_ack_required": True,
+        "initial_yaw_offset_rad":
+            asset["initial_yaw_realization"]["initial_yaw_offset_rad"],
+    })
+    return bundle
+
+
+def validate_crn_trace_asset(bundle: Any, stage: str,
+                             block_id: str) -> Dict[str, Any]:
+    """Validate the immutable trace asset and its embedded seed bundle."""
+
+    require(isinstance(bundle, Mapping), f"{stage}:{block_id} seed bundle is malformed")
+    require(bundle.get("stage") == stage and bundle.get("block_id") == block_id,
+            f"{stage}:{block_id} seed bundle identity mismatch")
+    require(bundle.get("runtime_consumption_required") is True and
+            bundle.get("runtime_consumer_ack_required") is True,
+            f"{stage}:{block_id} does not require runtime trace consumption/ack")
+    seed_report = toolchain.validate_seed_bundle(bundle)
+    asset_path = _readonly_file_descriptor(
+        bundle.get("trace_asset"), f"{stage}:{block_id} CRN trace asset")
+    asset = read_json(asset_path, f"{stage}:{block_id} CRN trace asset")
+    expected_fields = {
+        "schema_version", "document_type", "protocol_id", "release_id",
+        "formal", "formal_scope", "physical_primary_eligible", "stage",
+        "block_id", "seed_bundle_id", "seed_bundle_hash", "condition_id",
+        "method_independent", "same_asset_for_every_condition_in_block",
+        "callback_count_rng_forbidden", "runtime_consumption_required",
+        "runtime_consumer_ack_required", "time_domain", "time_origin_event",
+        "time_index_field", "interpolation", "trace_end_ms",
+        "stream_consumption_phases", "initial_yaw_realization",
+        "sub_seeds", "traces",
+        "stream_trace_hashes", "trace_asset_hash",
+    }
+    require(set(asset) == expected_fields,
+            f"{stage}:{block_id} CRN trace asset fields are not exact")
+    expected_identity = {
+        "schema_version": CRN_TRACE_SCHEMA_VERSION,
+        "document_type": CRN_TRACE_DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": True,
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "physical_primary_eligible": False,
+        "stage": stage,
+        "block_id": block_id,
+        "seed_bundle_id": bundle.get("seed_bundle_id"),
+        "seed_bundle_hash": bundle.get("seed_bundle_hash"),
+        "condition_id": None,
+        "method_independent": True,
+        "same_asset_for_every_condition_in_block": True,
+        "callback_count_rng_forbidden": True,
+        "runtime_consumption_required": True,
+        "runtime_consumer_ack_required": True,
+        "time_domain": CRN_TIME_DOMAIN,
+        "time_origin_event": CRN_TIME_ORIGIN_EVENT,
+        "time_index_field": "time_index_ms",
+        "interpolation": CRN_INTERPOLATION,
+        "trace_end_ms": CRN_TRACE_END_MS,
+        "stream_consumption_phases": CRN_CONSUMPTION_PHASES,
+        "initial_yaw_realization": {
+            "source_stream": "initial_robot_pose",
+            "source_time_index_ms": 0,
+            "source_field": "unit_uniform",
+            "mapping": "(2*unit_uniform-1)*max_abs_rad",
+            "max_abs_rad": CRN_INITIAL_YAW_MAX_ABS_RAD,
+            "initial_yaw_offset_rad": bundle.get("initial_yaw_offset_rad"),
+            "runtime_target":
+                "SPAWN_YAW=frozen_path_initial_yaw+initial_yaw_offset_rad",
+            "consumption_phase": "PRE_MOTION_RESET",
+            "runtime_ack_required": True,
+        },
+        "sub_seeds": bundle.get("sub_seeds"),
+        "traces": bundle.get("traces"),
+        "stream_trace_hashes": seed_report["trace_hashes"],
+    }
+    for key, expected in expected_identity.items():
+        require(asset.get(key) == expected,
+                f"{stage}:{block_id} CRN trace asset {key} mismatch")
+    core = dict(asset)
+    declared_hash = core.pop("trace_asset_hash", None)
+    require(is_sha256(declared_hash) and declared_hash == canonical_hash(core),
+            f"{stage}:{block_id} CRN trace asset semantic hash mismatch")
+    require(bundle.get("trace_asset_hash") == declared_hash,
+            f"{stage}:{block_id} seed bundle/trace asset hash mismatch")
+    initial_yaw = bundle.get("initial_yaw_offset_rad")
+    require(isinstance(initial_yaw, (int, float)) and
+            math.isfinite(float(initial_yaw)) and
+            abs(float(initial_yaw)) <= CRN_INITIAL_YAW_MAX_ABS_RAD,
+            f"{stage}:{block_id} initial yaw offset is invalid")
+    return {
+        "status": "PASS",
+        "trace_asset_path": str(asset_path),
+        "trace_asset_file_hash": sha256_file(asset_path),
+        "trace_asset_hash": declared_hash,
+        "seed_bundle_hash": seed_report["seed_bundle_hash"],
+        "stream_trace_hashes": seed_report["trace_hashes"],
+    }
+
+
+def _expected_crn_seed_policy() -> Dict[str, Any]:
+    return {
+        "policy_id": "SIM-MECHANISM-BLOCK-CRN-TRACE-v1",
+        "seed_streams": list(toolchain.SEED_STREAMS),
+        "independent_sub_seeds": True,
+        "one_immutable_trace_asset_per_block": True,
+        "same_asset_for_every_condition_in_block": True,
+        "condition_specific_rng_forbidden": True,
+        "callback_count_rng_forbidden": True,
+        "time_indexed_traces": True,
+        "time_domain": CRN_TIME_DOMAIN,
+        "time_origin_event": CRN_TIME_ORIGIN_EVENT,
+        "time_index_field": "time_index_ms",
+        "interpolation": CRN_INTERPOLATION,
+        "trace_end_ms": CRN_TRACE_END_MS,
+        "initial_yaw_realization": {
+            "source_stream": "initial_robot_pose",
+            "source_time_index_ms": 0,
+            "mapping": "(2*unit_uniform-1)*max_abs_rad",
+            "max_abs_rad": CRN_INITIAL_YAW_MAX_ABS_RAD,
+            "runtime_target":
+                "SPAWN_YAW=frozen_path_initial_yaw+initial_yaw_offset_rad",
+            "runtime_ack_required": True,
+        },
+        "runtime_consumption_required": True,
+        "runtime_consumer_ack_required": True,
+        "runtime_consumer_contract_required_for_formal_release": True,
+    }
+
+
+def validate_crn_runtime_consumer_contract(
+        value: Any, candidate: Mapping[str, Any], candidate_path: Path) -> Dict[str, Any]:
+    """Require executable, tested runtime consumption rather than trace metadata.
+
+    This is intentionally impossible to satisfy by setting a boolean in the
+    freeze.  The contract binds the canonical runner bytes and an immutable test
+    receipt which, in turn, binds one of the candidate's real block assets.
+    """
+
+    contract_path = _readonly_file_descriptor(value, "CRN runtime consumer contract")
+    contract = read_json(contract_path, "CRN runtime consumer contract")
+    expected_fields = {
+        "schema_version", "document_type", "protocol_id", "release_id",
+        "formal", "formal_scope", "physical_primary_eligible", "status",
+        "consumer_id", "consumer_implemented", "freeze_candidate",
+        "canonical_runner", "trace_asset_schema_version", "seed_streams",
+        "time_domain", "time_origin_event", "time_index_field",
+        "interpolation", "required_environment",
+        "admit_before_any_method_cmd_vel_publisher",
+        "same_block_asset_for_all_conditions", "fresh_state_reset_required",
+        "condition_specific_rng_forbidden", "callback_count_rng_forbidden",
+        "runtime_ack_required", "runtime_ack_schema_hash",
+        "stream_consumption_phases", "stream_application",
+        "initial_yaw_runtime_contract",
+        "consumer_test_evidence", "contract_hash",
+    }
+    require(set(contract) == expected_fields,
+            "CRN runtime consumer contract fields are not exact")
+    expected_candidate = {
+        "path": str(candidate_path), "sha256": sha256_file(candidate_path)}
+    expected_runner = candidate.get("runtime_bindings", {}).get("mechanism_runner")
+    for key, expected in {
+        "schema_version": CRN_CONSUMER_SCHEMA_VERSION,
+        "document_type": CRN_CONSUMER_DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": True,
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "consumer_implemented": True,
+        "freeze_candidate": expected_candidate,
+        "canonical_runner": expected_runner,
+        "trace_asset_schema_version": CRN_TRACE_SCHEMA_VERSION,
+        "seed_streams": list(toolchain.SEED_STREAMS),
+        "time_domain": CRN_TIME_DOMAIN,
+        "time_origin_event": CRN_TIME_ORIGIN_EVENT,
+        "time_index_field": "time_index_ms",
+        "interpolation": CRN_INTERPOLATION,
+        "required_environment": list(CRN_CONSUMER_REQUIRED_ENVIRONMENT),
+        "admit_before_any_method_cmd_vel_publisher": True,
+        "same_block_asset_for_all_conditions": True,
+        "fresh_state_reset_required": True,
+        "condition_specific_rng_forbidden": True,
+        "callback_count_rng_forbidden": True,
+        "runtime_ack_required": True,
+        "stream_consumption_phases": CRN_CONSUMPTION_PHASES,
+        "initial_yaw_runtime_contract": {
+            "source": "trace_asset.initial_yaw_realization.initial_yaw_offset_rad",
+            "formula":
+                "SPAWN_YAW=frozen_path_initial_yaw+initial_yaw_offset_rad",
+            "consumption_phase": "PRE_MOTION_RESET",
+            "max_abs_rad": CRN_INITIAL_YAW_MAX_ABS_RAD,
+            "condition_override_forbidden": True,
+            "runtime_ack_field": "initial_yaw_offset_rad_applied",
+        },
+    }.items():
+        require(contract.get(key) == expected,
+                f"CRN runtime consumer contract {key} mismatch")
+    consumer_id = contract.get("consumer_id")
+    require(isinstance(consumer_id, str) and consumer_id,
+            "CRN runtime consumer contract consumer_id is missing")
+    require(is_sha256(contract.get("runtime_ack_schema_hash")),
+            "CRN runtime consumer ACK schema hash is invalid")
+    applications = contract.get("stream_application")
+    require(isinstance(applications, Mapping) and
+            set(applications) == set(toolchain.SEED_STREAMS),
+            "CRN runtime consumer must map every frozen seed stream")
+    for stream, phase in CRN_CONSUMPTION_PHASES.items():
+        item = applications.get(stream) if isinstance(applications, Mapping) else None
+        require(isinstance(item, Mapping) and
+                set(item) == {"consumption_phase", "consumer_target",
+                              "application_mode", "mapping_hash"},
+                f"CRN runtime consumer application {stream} is malformed")
+        require(item.get("consumption_phase") == phase,
+                f"CRN runtime consumer application {stream} phase mismatch")
+        require(item.get("application_mode") == CRN_APPLICATION_MODES[stream],
+                f"CRN runtime consumer application {stream} mode mismatch")
+        require(isinstance(item.get("consumer_target"), str) and
+                item.get("consumer_target"),
+                f"CRN runtime consumer application {stream} target is missing")
+        require(is_sha256(item.get("mapping_hash")),
+                f"CRN runtime consumer application {stream} mapping hash is invalid")
+    contract_core = dict(contract)
+    declared_contract_hash = contract_core.pop("contract_hash", None)
+    require(is_sha256(declared_contract_hash) and
+            declared_contract_hash == canonical_hash(contract_core),
+            "CRN runtime consumer contract hash mismatch")
+
+    evidence_path = _readonly_file_descriptor(
+        contract.get("consumer_test_evidence"),
+        "CRN runtime consumer test evidence")
+    evidence = read_json(evidence_path, "CRN runtime consumer test evidence")
+    evidence_fields = {
+        "schema_version", "document_type", "protocol_id", "release_id",
+        "formal", "formal_scope", "physical_primary_eligible", "status",
+        "consumer_id", "freeze_candidate", "canonical_runner", "test_tool",
+        "test_transcript", "fixture_trace_asset", "stream_application",
+        "proofs", "test_count", "created_utc", "evidence_hash",
+    }
+    require(set(evidence) == evidence_fields,
+            "CRN runtime consumer evidence fields are not exact")
+    for key, expected in {
+        "schema_version": CRN_CONSUMER_EVIDENCE_SCHEMA_VERSION,
+        "document_type": CRN_CONSUMER_EVIDENCE_DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": False,
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "consumer_id": consumer_id,
+        "freeze_candidate": expected_candidate,
+        "canonical_runner": expected_runner,
+        "test_count": len(CRN_CONSUMER_REQUIRED_PROOFS),
+    }.items():
+        require(evidence.get(key) == expected,
+                f"CRN runtime consumer evidence {key} mismatch")
+    require(isinstance(evidence.get("created_utc"), str) and
+            str(evidence["created_utc"]).endswith("Z"),
+            "CRN runtime consumer evidence created_utc is invalid")
+    _readonly_file_descriptor(evidence.get("test_tool"),
+                              "CRN runtime consumer test tool")
+    transcript_path = _readonly_file_descriptor(
+        evidence.get("test_transcript"),
+        "CRN runtime consumer test transcript")
+    try:
+        transcript = transcript_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise MechanismFreezeError(
+            f"cannot read CRN runtime consumer test transcript: {exc}") from exc
+    transcript_successes = []
+    for line in transcript.splitlines():
+        match = re.match(
+            r"^test_([A-Za-z0-9_]+) .* \.\.\. ok$", line.strip())
+        if match:
+            transcript_successes.append(match.group(1))
+    transcript_counts = re.findall(
+        r"^Ran ([0-9]+) tests? in ", transcript, re.MULTILINE)
+    require("returncode=0\n" in transcript and
+            len(transcript_counts) == 1 and
+            int(transcript_counts[0]) == len(CRN_CONSUMER_REQUIRED_PROOFS) and
+            transcript.rstrip().endswith("OK") and
+            "FAILED" not in transcript and "skipped=" not in transcript and
+            len(transcript_successes) == len(set(transcript_successes)) and
+            set(transcript_successes) == set(CRN_CONSUMER_REQUIRED_PROOFS),
+            "CRN runtime consumer test transcript lacks exact passing proofs")
+    candidate_trace_descriptors = {
+        canonical_hash(bundle.get("trace_asset")): bundle.get("trace_asset")
+        for bundle in candidate.get("seed_bundles", {}).values()
+        if isinstance(bundle, Mapping)
+    }
+    fixture_descriptor = evidence.get("fixture_trace_asset")
+    require(isinstance(fixture_descriptor, Mapping) and
+            canonical_hash(fixture_descriptor) in candidate_trace_descriptors and
+            candidate_trace_descriptors[canonical_hash(fixture_descriptor)] == fixture_descriptor,
+            "CRN runtime consumer evidence is not bound to a candidate trace asset")
+    _readonly_file_descriptor(fixture_descriptor,
+                              "CRN runtime consumer fixture trace asset")
+    require(evidence.get("stream_application") == applications,
+            "CRN runtime consumer evidence/application mapping mismatch")
+    proofs = evidence.get("proofs")
+    require(isinstance(proofs, Mapping) and
+            set(proofs) == set(CRN_CONSUMER_REQUIRED_PROOFS) and
+            all(proofs.get(name) is True for name in CRN_CONSUMER_REQUIRED_PROOFS),
+            "CRN runtime consumer evidence lacks required fail-closed proofs")
+    evidence_core = dict(evidence)
+    declared_evidence_hash = evidence_core.pop("evidence_hash", None)
+    require(is_sha256(declared_evidence_hash) and
+            declared_evidence_hash == canonical_hash(evidence_core),
+            "CRN runtime consumer evidence hash mismatch")
+    return {
+        "status": "PASS",
+        "contract_path": str(contract_path),
+        "contract_file_hash": sha256_file(contract_path),
+        "contract_hash": declared_contract_hash,
+        "consumer_id": consumer_id,
+        "runtime_ack_schema_hash": contract["runtime_ack_schema_hash"],
+        "evidence_path": str(evidence_path),
+        "evidence_file_hash": sha256_file(evidence_path),
+        "evidence_hash": declared_evidence_hash,
+    }
+
+
+def _readonly_descriptor(value: Any, label: str) -> Mapping[str, Any]:
+    path = _readonly_file_descriptor(value, label)
+    return read_json(path, label)
+
+
+def _readonly_file_descriptor(value: Any, label: str) -> Path:
+    """Verify a generic immutable path/hash descriptor.
+
+    JSON documents are common in the freeze, but the FixedProfile payload is
+    deliberately a CSV.  Checking just its path (the previous implementation)
+    would let a changed profile slip through the otherwise hash-bound freeze.
+    Keep the byte-level primitive separate from ``_readonly_descriptor`` so
+    non-JSON frozen assets get exactly the same protection.
+    """
+
+    require(isinstance(value, Mapping) and set(value) == {"path", "sha256"}, f"{label} must be a path/hash descriptor")
+    raw_path = Path(str(value["path"]))
+    require(raw_path.is_absolute(), f"{label} path must be absolute")
+    require(not raw_path.is_symlink() and not _has_symlink_component(raw_path),
+            f"{label} may not traverse a symlink")
+    path = require_file(raw_path, label)
+    require(stat.S_IMODE(path.stat().st_mode) & WRITE_BITS == 0, f"{label} must be read-only")
+    require(value.get("sha256") == sha256_file(path), f"{label} hash mismatch")
+    return path
+
+
+def _canonical_loopback_uri(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    match = re.fullmatch(r"http://127[.]0[.]0[.]1:([0-9]+)", value)
+    return match is not None and 1024 <= int(match.group(1)) <= 65535
+
+
+def _validate_timing_tail_receipt(
+        receipt: Any, *, attempt_id: str,
+        case_manifest_hash: str) -> None:
+    """Rebuild the timing pilot's ROS-clock tail receipt independently."""
+
+    require(isinstance(receipt, Mapping),
+            "timing ROS clock tail receipt is malformed")
+    numeric_fields = (
+        "start_ros_time_sec", "end_ros_time_sec", "observed_tail_sec",
+        "required_tail_sec", "wall_elapsed_sec", "wall_watchdog_sec",
+    )
+    values: Dict[str, float] = {}
+    for field in numeric_fields:
+        raw = receipt.get(field)
+        require(isinstance(raw, (int, float)) and not isinstance(raw, bool) and
+                math.isfinite(float(raw)),
+                f"timing ROS clock tail {field} is not finite")
+        values[field] = float(raw)
+    start = values["start_ros_time_sec"]
+    end = values["end_ros_time_sec"]
+    observed = values["observed_tail_sec"]
+    require(end >= start and
+            math.isclose(observed, end - start,
+                         rel_tol=0.0, abs_tol=1e-12),
+            "timing ROS clock tail interval is inconsistent")
+    require(values["required_tail_sec"] == TIMING_TAIL_SEC and
+            observed >= TIMING_TAIL_SEC,
+            "timing ROS clock tail is shorter than the frozen 5 seconds")
+    require(values["wall_watchdog_sec"] ==
+            TIMING_TAIL_WALL_WATCHDOG_SEC and
+            0.0 <= values["wall_elapsed_sec"] <=
+            TIMING_TAIL_WALL_WATCHDOG_SEC,
+            "timing ROS clock tail wall watchdog evidence is invalid")
+    core = {
+        "schema_version": TIMING_SCHEMA_VERSION,
+        "record_type": "SMPCC_SIM_MECHANISM_ROS_CLOCK_TAIL_QC",
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": False,
+        "physical_primary_eligible": False,
+        "status": "PASS",
+        "attempt_id": attempt_id,
+        "case_manifest_hash": case_manifest_hash,
+        **values,
+    }
+    expected = dict(core, tail_clock_qc_hash=canonical_hash(core))
+    require(dict(receipt) == expected,
+            "timing ROS clock tail receipt fields/hash are not canonical")
+
+
+def _timing_active_artifact_paths(bag_path: Path) -> tuple[Path, ...]:
+    """Enumerate every possible active recorder sibling for offline re-audit."""
+
+    bag_dir = bag_path.parent
+    names = {
+        "capture.active", "capture.active.active",
+        "capture.active.bag", "capture.active.bag.active",
+    }
+    if bag_dir.is_dir():
+        names.update(name for name in os.listdir(bag_dir)
+                     if name.startswith("capture.active"))
+    return tuple(bag_dir / name for name in sorted(names))
+
+
+def _timing_event_number(value: Mapping[str, Any], field: str,
+                         label: str) -> float:
+    raw = value.get(field)
+    require(isinstance(raw, (int, float)) and not isinstance(raw, bool) and
+            math.isfinite(float(raw)), f"{label} {field} is not finite")
+    return float(raw)
+
+
+def _validate_timing_endpoint_evidence(
+        *, attempt: Mapping[str, Any], event: Any,
+        case: Mapping[str, Any], path_document: Mapping[str, Any],
+        duration_sec: float, label: str) -> None:
+    """Re-prove start pose and status-plus-frozen-geometry arrival."""
+
+    require(isinstance(event, Mapping), f"{label} event trace is malformed")
+    expected_event_identity = {
+        "schema_version": TIMING_SCHEMA_VERSION,
+        "protocol_id": PROTOCOL_ID,
+        "record_type": "SMPCC_SIM_MECHANISM_MOTION_GOAL_EVENTS",
+        "formal": False,
+        "physical_primary_eligible": False,
+        "case_manifest_hash": str(attempt["case_manifest_hash"]),
+        "success_contract":
+            "controller_GOAL_REACHED_AND_frozen_endpoint_geometry",
+    }
+    require(all(event.get(key) == value
+                for key, value in expected_event_identity.items()),
+            f"{label} event trace identity/success contract mismatch")
+    require(attempt.get("events") == event,
+            f"{label} embedded event evidence differs from frozen trace")
+    endpoint = attempt.get("endpoint_evidence")
+    endpoint_fields = {
+        "initial_pose_gate", "controller_goal_status_seen",
+        "geometric_goal_gate", "goal_reached", "latest_odometry",
+    }
+    require(isinstance(endpoint, Mapping) and
+            set(endpoint) == endpoint_fields and
+            all(endpoint.get(key) == event.get(key)
+                for key in endpoint_fields),
+            f"{label} endpoint evidence is not exactly bound to event trace")
+
+    points = path_document.get("points")
+    require(isinstance(points, list) and len(points) >= 2 and
+            isinstance(points[0], Mapping) and
+            isinstance(points[-1], Mapping),
+            f"{label} frozen path has no endpoints")
+    start, goal = points[0], points[-1]
+    start_x = _timing_event_number(start, "x", f"{label} path start")
+    start_y = _timing_event_number(start, "y", f"{label} path start")
+    goal_x = _timing_event_number(goal, "x", f"{label} path goal")
+    goal_y = _timing_event_number(goal, "y", f"{label} path goal")
+    expected_yaw = _timing_event_number(
+        case["pose_contract"], "expected_spawn_yaw_rad",
+        f"{label} pose contract")
+
+    initial = event.get("initial_pose_gate")
+    require(isinstance(initial, Mapping),
+            f"{label} initial pose gate is missing")
+    initial_x = _timing_event_number(initial, "x", f"{label} initial pose")
+    initial_y = _timing_event_number(initial, "y", f"{label} initial pose")
+    initial_yaw = _timing_event_number(
+        initial, "yaw_rad", f"{label} initial pose")
+    start_distance = math.hypot(initial_x - start_x, initial_y - start_y)
+    yaw_error = math.atan2(
+        math.sin(initial_yaw - expected_yaw),
+        math.cos(initial_yaw - expected_yaw))
+    require(initial.get("pass") is True and
+            initial.get("yaw_pass") is True and
+            initial.get("pose_source") == "gazebo_odometry_message" and
+            _timing_event_number(initial, "frozen_start_x", label) == start_x and
+            _timing_event_number(initial, "frozen_start_y", label) == start_y and
+            _timing_event_number(initial, "tolerance_m", label) ==
+            endpoint_gate.START_TOLERANCE_M and
+            _timing_event_number(initial, "yaw_tolerance_rad", label) ==
+            endpoint_gate.START_YAW_TOLERANCE_RAD and
+            math.isclose(_timing_event_number(
+                initial, "start_distance_m", label), start_distance,
+                rel_tol=0.0, abs_tol=1e-9) and
+            start_distance <= endpoint_gate.START_TOLERANCE_M and
+            math.isclose(_timing_event_number(
+                initial, "expected_yaw_rad", label), expected_yaw,
+                rel_tol=0.0, abs_tol=1e-12) and
+            math.isclose(_timing_event_number(
+                initial, "yaw_error_rad", label), yaw_error,
+                rel_tol=0.0, abs_tol=1e-9) and
+            abs(yaw_error) <= endpoint_gate.START_YAW_TOLERANCE_RAD,
+            f"{label} initial odometry does not prove the frozen start pose")
+
+    motion = event.get("first_executed_motion")
+    controller = event.get("controller_goal_status_seen")
+    geometric = event.get("geometric_goal_gate")
+    goal_event = event.get("goal_reached")
+    latest = event.get("latest_odometry")
+    require(all(isinstance(item, Mapping) for item in
+                (motion, controller, geometric, goal_event, latest)),
+            f"{label} endpoint event chain is incomplete")
+    assert isinstance(motion, Mapping)
+    assert isinstance(controller, Mapping)
+    assert isinstance(geometric, Mapping)
+    assert isinstance(goal_event, Mapping)
+    motion_monotonic = _timing_event_number(
+        motion, "monotonic_sec", f"{label} first motion")
+    motion_ros = _timing_event_number(
+        motion, "ros_time_sec", f"{label} first motion")
+    goal_monotonic = _timing_event_number(
+        goal_event, "monotonic_sec", f"{label} goal")
+    goal_ros = _timing_event_number(
+        goal_event, "ros_time_sec", f"{label} goal")
+    finish_x = _timing_event_number(goal_event, "x", f"{label} goal")
+    finish_y = _timing_event_number(goal_event, "y", f"{label} goal")
+    finish_v = _timing_event_number(
+        goal_event, "linear_x_mps", f"{label} goal")
+    finish_w = _timing_event_number(
+        goal_event, "angular_z_radps", f"{label} goal")
+    finish_distance = math.hypot(finish_x - goal_x, finish_y - goal_y)
+    require(isinstance(controller.get("geometry_already_stable"), bool) and
+            geometric.get("pass") is True and
+            _timing_event_number(geometric, "frozen_goal_x", label) == goal_x and
+            _timing_event_number(geometric, "frozen_goal_y", label) == goal_y and
+            _timing_event_number(geometric, "tolerance_m", label) ==
+            endpoint_gate.GOAL_TOLERANCE_M and
+            _timing_event_number(geometric, "max_linear_mps", label) ==
+            endpoint_gate.GOAL_MAX_LINEAR_MPS and
+            _timing_event_number(geometric, "max_angular_radps", label) ==
+            endpoint_gate.GOAL_MAX_ANGULAR_RADPS and
+            geometric.get("required_stable_samples") ==
+            endpoint_gate.GOAL_STABLE_SAMPLES and
+            isinstance(geometric.get("stable_samples"), int) and
+            not isinstance(geometric.get("stable_samples"), bool) and
+            int(geometric["stable_samples"]) >= endpoint_gate.GOAL_STABLE_SAMPLES and
+            goal_event.get("controller_status") == "GOAL_REACHED" and
+            goal_event.get("controller_status_gate_pass") is True and
+            goal_event.get("geometric_gate_pass") is True and
+            goal_event.get("pose_source") == "gazebo_odometry_message" and
+            isinstance(goal_event.get("stable_samples"), int) and
+            not isinstance(goal_event.get("stable_samples"), bool) and
+            int(goal_event["stable_samples"]) >= endpoint_gate.GOAL_STABLE_SAMPLES and
+            math.isclose(_timing_event_number(
+                goal_event, "goal_distance_m", label), finish_distance,
+                rel_tol=0.0, abs_tol=1e-9) and
+            finish_distance <= endpoint_gate.GOAL_TOLERANCE_M and
+            abs(finish_v) <= endpoint_gate.GOAL_MAX_LINEAR_MPS and
+            abs(finish_w) <= endpoint_gate.GOAL_MAX_ANGULAR_RADPS and
+            goal_monotonic >= motion_monotonic and goal_ros >= motion_ros and
+            math.isclose(goal_monotonic - motion_monotonic, duration_sec,
+                         rel_tol=0.0, abs_tol=1e-9) and
+            math.isclose(_timing_event_number(
+                goal_event, "trajectory_wall_duration_sec", label),
+                duration_sec, rel_tol=0.0, abs_tol=1e-9) and
+            0.0 < duration_sec <= 60.0,
+            f"{label} lacks controller-status plus frozen-geometry arrival")
+
+
+def validate_timing_calibration(candidate: Mapping[str, Any],
+                                candidate_path: Path,
+                                calibration: Any,
+                                calibration_path: Path,
+                                *, require_canonical_paths: bool) -> list[str]:
+    """Prove both timing attempts executed the exact candidate runtime.
+
+    The R2 assembler checked only condition labels and success flags.  That
+    allowed an old attempt to be relabelled as calibration for a new
+    candidate.  This validator follows every descriptor down to the case
+    manifest, frozen condition/path/container and bag before finalization.
+    """
+
+    errors: list[str] = []
+    if not isinstance(calibration, Mapping):
+        return ["SmoothMatch calibration is not an object"]
+    expected_candidate = {
+        "path": str(candidate_path),
+        "sha256": sha256_file(candidate_path),
+    }
+    identity = {
+        "schema_version": TIMING_SCHEMA_VERSION,
+        "record_type": TIMING_CALIBRATION_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": False,
+        "evidence_class": "SIMULATION_MECHANISM_CALIBRATION",
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "status": "PASS",
+        "within_tolerance": True,
+        "freeze_candidate": expected_candidate,
+    }
+    for key, expected in identity.items():
+        if calibration.get(key) != expected:
+            errors.append(f"SmoothMatch calibration {key} mismatch")
+    if require_canonical_paths:
+        expected_calibration = candidate_path.parent / "smoothmatch_calibration.json"
+        if Path(os.path.abspath(str(calibration_path))) != expected_calibration:
+            errors.append("SmoothMatch calibration path is not canonical R7")
+    expected_results_root = (
+        candidate_path.parent / "timing_pilot" / "results" / "attempts")
+    if (_has_symlink_component(expected_results_root) or
+            not expected_results_root.is_dir()):
+        errors.append("R7 timing attempt registry is missing or symlinked")
+    else:
+        entries = tuple(expected_results_root.iterdir())
+        if ({entry.name for entry in entries} != set(TIMING_ATTEMPT_IDS.values()) or
+                any(not entry.is_dir() or entry.is_symlink()
+                    for entry in entries)):
+            errors.append("R7 timing registry must contain exactly two frozen attempts")
+    attempts: Dict[str, Mapping[str, Any]] = {}
+    for descriptor_key, condition in (
+            ("bslosh_attempt", "Bslosh"),
+            ("smoothmatch_attempt", "SmoothMatch")):
+        try:
+            attempt_path = _readonly_file_descriptor(
+                calibration.get(descriptor_key), f"calibration {descriptor_key}")
+            expected_attempt_id = TIMING_ATTEMPT_IDS[condition]
+            expected_attempt_path = (expected_results_root / expected_attempt_id /
+                                     "attempt_manifest.json")
+            require(attempt_path == expected_attempt_path,
+                    f"calibration {descriptor_key} is not the frozen R7 attempt")
+            attempt = read_json(attempt_path, f"calibration {descriptor_key}")
+            attempts[condition] = attempt
+            require(set(attempt) == TIMING_ATTEMPT_FIELDS,
+                    f"calibration {descriptor_key} attempt fields are not exact")
+            attempt_identity = {
+                "schema_version": TIMING_SCHEMA_VERSION,
+                "record_type": TIMING_ATTEMPT_TYPE,
+                "runner_id": TIMING_RUNNER_ID,
+                "protocol_id": PROTOCOL_ID,
+                "release_id": RELEASE_ID,
+                "formal": False,
+                "evidence_class": "SIMULATION_MECHANISM_CALIBRATION",
+                "physical_alignment": False,
+                "physical_primary_eligible": False,
+                "physical_primary": None,
+                "condition_id": condition,
+                "method_success": True,
+                "method_failure": False,
+                "failure_class": "NONE",
+                "goal_reached": True,
+                "motion_started": True,
+                "tail_complete": True,
+                "fresh_ros_gazebo": True,
+                "pre_ros_reachable": False,
+                "pre_gazebo_reachable": False,
+                "post_ros_reachable": False,
+                "post_gazebo_reachable": False,
+                "freeze_candidate": expected_candidate,
+                "runtime_error": None,
+            }
+            for key, expected in attempt_identity.items():
+                require(attempt.get(key) == expected,
+                        f"calibration {descriptor_key} {key} mismatch")
+            duration = attempt.get("completion_time_sec")
+            require(isinstance(duration, (int, float)) and
+                    math.isfinite(float(duration)) and 0.0 < float(duration) <= 60.0,
+                    f"calibration {descriptor_key} completion time is invalid")
+            attempt_id = attempt.get("attempt_id")
+            require(attempt_id == expected_attempt_id and
+                    attempt_path.parent.name == attempt_id,
+                    f"calibration {descriptor_key} attempt ID/path mismatch")
+            attempt_seed = attempt.get("seed")
+            require(isinstance(attempt_seed, int) and
+                    not isinstance(attempt_seed, bool) and
+                    attempt_seed == TIMING_CALIBRATION_SEED,
+                    f"calibration {descriptor_key} attempt seed is not exact")
+            case_path = Path(str(attempt.get("case_manifest_path", "")))
+            require(case_path.is_absolute() and case_path.parent == attempt_path.parent,
+                    f"calibration {descriptor_key} case manifest path mismatch")
+            case_path = _readonly_file_descriptor(
+                {"path": str(case_path),
+                 "sha256": str(attempt.get("case_manifest_hash", ""))},
+                f"calibration {descriptor_key} case manifest")
+            case = read_json(case_path, f"calibration {descriptor_key} case manifest")
+            require(set(case) == TIMING_CASE_FIELDS,
+                    f"calibration {descriptor_key} case fields are not exact")
+            case_core = dict(case)
+            declared_case_hash = case_core.pop("case_manifest_hash", None)
+            require(declared_case_hash == canonical_hash(case_core),
+                    f"calibration {descriptor_key} case manifest internal hash mismatch")
+            expected_path = {
+                **dict(candidate["paths"]["H1"]["sim_path"]),
+                "path_id": "H1",
+            }
+            path_document = read_json(
+                Path(str(expected_path["path"])),
+                f"calibration {descriptor_key} frozen H1 path")
+            points = path_document.get("points")
+            require(isinstance(points, list) and points and
+                    isinstance(points[0], Mapping),
+                    f"calibration {descriptor_key} frozen H1 path is malformed")
+            yaw_offset = timing_initial_yaw_offset(TIMING_CALIBRATION_SEED)
+            expected_pose_contract = {
+                "authoritative_pose_topic": "/odom",
+                "authoritative_pose_semantic": "gazebo_odometry_message",
+                "frozen_path_coordinate_contract":
+                    "gazebo_odometry_numeric_world",
+                "online_planner_use_tf_pose": False,
+                "controller_status_is_sufficient_for_success": False,
+                "common_seed_initial_yaw_offset_rad": yaw_offset,
+                "expected_spawn_yaw_rad":
+                    float(points[0]["yaw"]) + yaw_offset,
+            }
+            case_identity = {
+                "schema_version": TIMING_SCHEMA_VERSION,
+                "record_type": TIMING_CASE_TYPE,
+                "runner_id": TIMING_RUNNER_ID,
+                "protocol_id": PROTOCOL_ID,
+                "release_id": RELEASE_ID,
+                "formal": False,
+                "evidence_class": "SIMULATION_MECHANISM_CALIBRATION",
+                "physical_alignment": False,
+                "physical_primary_eligible": False,
+                "physical_primary": None,
+                "attempt_id": attempt_id,
+                "condition_id": condition,
+                "freeze_candidate": expected_candidate,
+                "condition_config": dict(candidate["effective_configs"][condition]),
+                "path": expected_path,
+                "container": {
+                    **dict(candidate["containers"]["C1"]),
+                    "container_id": "C1",
+                },
+                "timing_policy": {
+                    "settle_sec": 30.0,
+                    "goal_timeout_sec": 60.0,
+                    "tail_sec": 5.0,
+                },
+                "pose_contract": expected_pose_contract,
+            }
+            for key, expected in case_identity.items():
+                require(case.get(key) == expected,
+                        f"calibration {descriptor_key} case {key} mismatch")
+            require(isinstance(case.get("seed"), int) and
+                    not isinstance(case.get("seed"), bool) and
+                    case.get("seed") == TIMING_CALIBRATION_SEED,
+                    f"calibration {descriptor_key} seed is not the frozen R7 CRN seed")
+            require(case.get("seed") == attempt.get("seed"),
+                    f"calibration {descriptor_key} case/attempt seed mismatch")
+            ros_uri = case.get("ros_master_uri")
+            gazebo_uri = case.get("gazebo_master_uri")
+            require(_canonical_loopback_uri(ros_uri) and
+                    _canonical_loopback_uri(gazebo_uri) and ros_uri != gazebo_uri,
+                    f"calibration {descriptor_key} masters are not distinct canonical loopback")
+            bag_path = Path(os.path.abspath(str(attempt.get("bag_path", ""))))
+            require(bag_path.is_absolute() and bag_path.is_file() and
+                    not bag_path.is_symlink() and not _has_symlink_component(bag_path),
+                    f"calibration {descriptor_key} bag is missing or symlinked")
+            require(is_sha256(attempt.get("bag_hash")) and
+                    attempt.get("bag_hash") == sha256_file(bag_path),
+                    f"calibration {descriptor_key} bag hash mismatch")
+            require(stat.S_IMODE(bag_path.stat().st_mode) & WRITE_BITS == 0,
+                    f"calibration {descriptor_key} bag must be read-only")
+            expected_bag_root = (
+                SIM_ROOT / NAMESPACE / "timing_pilot" / "bags"
+                if require_canonical_paths
+                else candidate_path.parent / "timing_pilot" / "bags"
+            )
+            expected_bag = expected_bag_root / str(attempt_id) / "capture.bag"
+            require(bag_path == expected_bag,
+                    f"calibration {descriptor_key} bag path is outside current candidate")
+            runtime_descriptor = attempt.get("runtime_qc_report")
+            require(isinstance(runtime_descriptor, Mapping) and
+                    set(runtime_descriptor) == {
+                        "path", "sha256", "runtime_qc_hash"},
+                    f"calibration {descriptor_key} runtime QC descriptor is missing")
+            runtime_path = _readonly_file_descriptor(
+                {"path": runtime_descriptor["path"],
+                 "sha256": runtime_descriptor["sha256"]},
+                f"calibration {descriptor_key} runtime QC")
+            require(runtime_path == attempt_path.parent / "runtime_qc_report.json",
+                    f"calibration {descriptor_key} runtime QC path mismatch")
+            runtime_report = read_json(
+                runtime_path, f"calibration {descriptor_key} runtime QC")
+            terminal_timing_qc = runtime_report.get("terminal_timing_qc")
+            require(isinstance(terminal_timing_qc, Mapping) and
+                    set(terminal_timing_qc) == {"kind", "receipt"} and
+                    terminal_timing_qc.get("kind") ==
+                    "GOAL_REACHED_COMPLETION" and
+                    isinstance(terminal_timing_qc.get("receipt"), Mapping),
+                    f"calibration {descriptor_key} terminal timing QC is invalid")
+            rebuilt_runtime = runtime_qc.build_runtime_qc_report(
+                protocol_id=PROTOCOL_ID, release_id=RELEASE_ID,
+                attempt_id=str(attempt_id),
+                case_manifest_hash=str(attempt["case_manifest_hash"]),
+                formal=False, stop_bundle=runtime_report.get("stop_bundle"),
+                bag_qc=runtime_report.get("bag_qc"),
+                completion_qc=terminal_timing_qc.get("receipt"),
+                outcome_classification=runtime_report.get(
+                    "outcome_classification"))
+            require(runtime_report == rebuilt_runtime and
+                    runtime_descriptor.get("runtime_qc_hash") ==
+                    runtime_report.get("runtime_qc_hash"),
+                    f"calibration {descriptor_key} runtime QC hash mismatch")
+            raw_stop_descriptor = attempt.get("raw_process_stops")
+            require(isinstance(raw_stop_descriptor, Mapping) and
+                    set(raw_stop_descriptor) == {
+                        "path", "sha256", "raw_stop_evidence_hash"},
+                    f"calibration {descriptor_key} raw process stop "
+                    "descriptor is missing")
+            raw_stop_path = _readonly_file_descriptor(
+                {"path": raw_stop_descriptor["path"],
+                 "sha256": raw_stop_descriptor["sha256"]},
+                f"calibration {descriptor_key} raw process stops")
+            require(raw_stop_path ==
+                    attempt_path.parent / "raw_process_stops.json",
+                    f"calibration {descriptor_key} raw process stop path mismatch")
+            raw_stop_evidence = read_json(
+                raw_stop_path,
+                f"calibration {descriptor_key} raw process stops")
+            rebuilt_stop_bundle = runtime_qc.validate_owned_stop_evidence(
+                raw_stop_evidence, motion_component="planner",
+                protocol_id=PROTOCOL_ID, release_id=RELEASE_ID,
+                attempt_id=str(attempt_id),
+                case_manifest_hash=str(attempt["case_manifest_hash"]),
+                formal=False)
+            require(raw_stop_descriptor.get("raw_stop_evidence_hash") ==
+                    raw_stop_evidence.get("raw_stop_evidence_hash") and
+                    rebuilt_stop_bundle == runtime_report.get("stop_bundle"),
+                    f"calibration {descriptor_key} raw stops do not rebuild "
+                    "the runtime stop bundle")
+            bag_qc_descriptor = attempt.get("closed_bag_qc")
+            require(isinstance(bag_qc_descriptor, Mapping) and
+                    set(bag_qc_descriptor) == {
+                        "path", "sha256", "bag_qc_hash"},
+                    f"calibration {descriptor_key} bag QC descriptor is missing")
+            bag_qc_path = _readonly_file_descriptor(
+                {"path": bag_qc_descriptor["path"],
+                 "sha256": bag_qc_descriptor["sha256"]},
+                f"calibration {descriptor_key} bag QC")
+            require(bag_qc_path == attempt_path.parent / "closed_bag_qc.json",
+                    f"calibration {descriptor_key} bag QC path mismatch")
+            persisted_bag_qc = read_json(
+                bag_qc_path, f"calibration {descriptor_key} bag QC")
+            require(persisted_bag_qc == runtime_report.get("bag_qc") and
+                    bag_qc_descriptor.get("bag_qc_hash") ==
+                    persisted_bag_qc.get("bag_qc_hash") and
+                    persisted_bag_qc.get("bag", {}).get("sha256") ==
+                    attempt.get("bag_hash") and
+                    terminal_timing_qc.get("receipt", {}).get(
+                        "completion_time_sec") == float(duration) and
+                    runtime_report.get("outcome_classification", {}).get(
+                        "failure_class") == "NONE" and
+                    attempt.get("outcome_classification") ==
+                    runtime_report.get("outcome_classification"),
+                    f"calibration {descriptor_key} runtime/bag QC binding mismatch")
+            tail_descriptor = attempt.get("ros_clock_tail_qc")
+            require(isinstance(tail_descriptor, Mapping) and
+                    set(tail_descriptor) == {
+                        "path", "sha256", "tail_clock_qc_hash"},
+                    f"calibration {descriptor_key} ROS clock tail QC "
+                    "descriptor is missing")
+            tail_path = _readonly_file_descriptor(
+                {"path": tail_descriptor["path"],
+                 "sha256": tail_descriptor["sha256"]},
+                f"calibration {descriptor_key} ROS clock tail QC")
+            require(tail_path == attempt_path.parent / "tail_clock_qc.json",
+                    f"calibration {descriptor_key} ROS clock tail QC path mismatch")
+            tail_receipt = read_json(
+                tail_path, f"calibration {descriptor_key} ROS clock tail QC")
+            _validate_timing_tail_receipt(
+                tail_receipt, attempt_id=str(attempt_id),
+                case_manifest_hash=str(attempt["case_manifest_hash"]))
+            require(tail_descriptor.get("tail_clock_qc_hash") ==
+                    tail_receipt.get("tail_clock_qc_hash"),
+                    f"calibration {descriptor_key} ROS clock tail QC hash mismatch")
+            event_path = Path(os.path.abspath(str(attempt.get("events_path", ""))))
+            require(event_path == attempt_path.parent /
+                    "motion_goal_events.live.json" and event_path.is_file() and
+                    not event_path.is_symlink() and
+                    not _has_symlink_component(event_path),
+                    f"calibration {descriptor_key} event path mismatch")
+            require(attempt.get("events_hash") == sha256_file(event_path) and
+                    stat.S_IMODE(event_path.stat().st_mode) & WRITE_BITS == 0,
+                    f"calibration {descriptor_key} event evidence mismatch")
+            event = read_json(
+                event_path, f"calibration {descriptor_key} event evidence")
+            _validate_timing_endpoint_evidence(
+                attempt=attempt, event=event, case=case,
+                path_document=path_document, duration_sec=float(duration),
+                label=f"calibration {descriptor_key}")
+            first_motion = event.get("first_executed_motion")
+            goal_event = event.get("goal_reached")
+            motion_ros_time = (
+                _timing_event_number(
+                    first_motion, "ros_time_sec",
+                    f"calibration {descriptor_key} first motion")
+                if isinstance(first_motion, Mapping) else math.nan)
+            goal_ros_time = (
+                _timing_event_number(
+                    goal_event, "ros_time_sec",
+                    f"calibration {descriptor_key} goal")
+                if isinstance(goal_event, Mapping) else math.nan)
+            require(isinstance(first_motion, Mapping) and
+                    isinstance(goal_event, Mapping) and
+                    math.isclose(float(persisted_bag_qc.get(
+                        "motion_start", {}).get("ros_time_sec")),
+                        motion_ros_time,
+                        rel_tol=0.0, abs_tol=1e-9) and
+                    persisted_bag_qc.get("terminal", {}).get("kind") ==
+                    "GOAL_REACHED" and
+                    math.isclose(float(persisted_bag_qc.get(
+                        "terminal", {}).get("ros_time_sec")),
+                        goal_ros_time,
+                        rel_tol=0.0, abs_tol=1e-9),
+                    f"calibration {descriptor_key} bag terminal/event binding mismatch")
+            reaudited_bag_qc = runtime_qc.audit_closed_rosbag(
+                bag_path,
+                active_artifact_paths=_timing_active_artifact_paths(bag_path),
+                required_topics=TIMING_RECORDER_TOPICS,
+                motion_start_ros_time_sec=motion_ros_time,
+                terminal_ros_time_sec=goal_ros_time,
+                terminal_kind="GOAL_REACHED",
+                attempt_id=str(attempt_id),
+                case_manifest_hash=str(attempt["case_manifest_hash"]),
+                protocol_id=PROTOCOL_ID, release_id=RELEASE_ID,
+                formal=False, tail_sec=TIMING_TAIL_SEC)
+            require(reaudited_bag_qc == persisted_bag_qc,
+                    f"calibration {descriptor_key} raw bag re-audit differs "
+                    "from persisted bag QC")
+            lifecycle = attempt.get("lifecycle")
+            require(isinstance(lifecycle, list),
+                    f"calibration {descriptor_key} lifecycle is missing")
+            names = [entry.get("event") for entry in lifecycle
+                     if isinstance(entry, Mapping)]
+            required_events = (
+                "preflight", "deferred_diagnostic_publishers_admitted",
+                "recorder_admitted", "recorder_before_motion",
+                "first_executed_motion", "goal_reached",
+                "tail_ros_clock_interval_complete", "tail_recorded",
+                "owned_pid_cleanup",
+            )
+            require(all(event in names for event in required_events) and
+                    names.index("deferred_diagnostic_publishers_admitted") <
+                    names.index("recorder_before_motion") and
+                    names.index("recorder_before_motion") <
+                    names.index("first_executed_motion") and
+                    names.index("goal_reached") <
+                    names.index("tail_ros_clock_interval_complete") <
+                    names.index("tail_recorded"),
+                    f"calibration {descriptor_key} lifecycle/order mismatch")
+        except (MechanismFreezeError, runtime_qc.RuntimeQCError,
+                KeyError, OSError, TypeError, ValueError, OverflowError) as exc:
+            errors.append(str(exc))
+    if set(attempts) == {"Bslosh", "SmoothMatch"}:
+        try:
+            b_time = float(attempts["Bslosh"]["completion_time_sec"])
+            s_time = float(attempts["SmoothMatch"]["completion_time_sec"])
+            difference = s_time - b_time
+            tolerance = max(1.0, 0.05 * b_time)
+            require(math.isclose(float(calibration.get("bslosh_completion_time_sec")),
+                                 b_time, rel_tol=0.0, abs_tol=1e-9),
+                    "calibration Bslosh time differs from attempt")
+            require(math.isclose(float(calibration.get("smoothmatch_completion_time_sec")),
+                                 s_time, rel_tol=0.0, abs_tol=1e-9),
+                    "calibration SmoothMatch time differs from attempt")
+            require(math.isclose(float(calibration.get("difference_sec")),
+                                 difference, rel_tol=0.0, abs_tol=1e-9),
+                    "calibration timing difference mismatch")
+            require(math.isclose(float(calibration.get("tolerance_sec")),
+                                 tolerance, rel_tol=0.0, abs_tol=1e-9),
+                    "calibration tolerance mismatch")
+            require(abs(difference) <= tolerance,
+                    "SmoothMatch timing difference exceeds tolerance")
+            require(calibration.get("common_seed") == TIMING_CALIBRATION_SEED ==
+                    attempts["Bslosh"].get("seed") ==
+                    attempts["SmoothMatch"].get("seed"),
+                    "SmoothMatch calibration frozen common seed mismatch")
+        except (MechanismFreezeError, KeyError, TypeError, ValueError) as exc:
+            errors.append(str(exc))
+    return errors
+
+
+def validate_freeze(freeze: Any) -> Dict[str, Any]:
+    errors: list[str] = []
+    if not isinstance(freeze, Mapping):
+        return {"status": "FAIL", "errors": ["freeze is not an object"]}
+    expected_fields = {
+        "schema_version", "document_type", "protocol_id", "release_id",
+        "formal", "formal_scope", "development_only", "physical_alignment",
+        "physical_primary_eligible", "physical_primary", "evidence_class",
+        "original_aligned_protocol_id", "original_aligned_protocol_eligible",
+        "attempt_import_allowed", "predecessor_attempts_imported",
+        "predecessor_exclusion", "schedule_provenance", "sample_size",
+        "smoothmatch_v_ref_design",
+        "stage_counts", "runtime_bindings", "runtime_bindings_hash",
+        "go_gate_evidence", "measurements", "simulator_assets", "paths",
+        "containers", "effective_configs", "fixed_profiles",
+        "fixed_profile_generation_policy", "randomization_tables",
+        "seed_bundles", "recording_policy", "timing_calibration_policy",
+        "smoothmatch_calibration", "crn_seed_policy",
+        "crn_runtime_consumer_contract",
+        "freeze_hash",
+    }
+    if isinstance(freeze.get("smoothmatch_calibration"), Mapping):
+        expected_fields.add("freeze_candidate")
+    if set(freeze) != expected_fields:
+        errors.append("mechanism freeze fields are not the exact R7 schema")
+    checks = {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_MECHANISM_FREEZE",
+        "protocol_id": PROTOCOL_ID, "release_id": RELEASE_ID,
+        "formal": True, "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "development_only": False, "physical_alignment": False, "physical_primary_eligible": False,
+        "physical_primary": None,
+        "evidence_class": "SIMULATION_MECHANISM_VALIDATION_ONLY",
+        "sample_size": 8,
+        "stage_counts": {
+            "SIM-S1_CORE": 40,
+            "SIM-S2A_SELECTIVITY": 24,
+            "SIM-S2B_TRANSFER": 24,
+        },
+        "attempt_import_allowed": False,
+        "predecessor_attempts_imported": 0,
+    }
+    for key, expected in checks.items():
+        if freeze.get(key) != expected:
+            errors.append(f"{key} must equal {expected!r}")
+    if freeze.get("original_aligned_protocol_id") != ORIGINAL_ALIGNED_PROTOCOL_ID:
+        errors.append("original aligned protocol boundary is missing")
+    if freeze.get("original_aligned_protocol_eligible") is not False:
+        errors.append("mechanism freeze must explicitly reject original aligned protocol eligibility")
+    excluded = freeze.get("predecessor_exclusion")
+    expected_exclusion = {
+        "release_ids": list(PREDECESSOR_RELEASE_IDS),
+        "protocol_ids": list(PREDECESSOR_PROTOCOL_IDS),
+        "attempt_import_allowed": False,
+        "attempts_imported": 0,
+        "design_schedule_seed_reused_only": True,
+        "r3_invalidation_receipt": invalidation_receipt_descriptor(
+            R3_INVALIDATION_RECEIPT, R3_INVALIDATION_RECEIPT_SHA256,
+            "R3 invalidation receipt"),
+        "r4_invalidation_receipt": invalidation_receipt_descriptor(
+            R4_INVALIDATION_RECEIPT, R4_INVALIDATION_RECEIPT_SHA256,
+            "R4 invalidation receipt"),
+        "r5_invalidation_receipt": invalidation_receipt_descriptor(
+            R5_INVALIDATION_RECEIPT, R5_INVALIDATION_RECEIPT_SHA256,
+            "R5 invalidation receipt"),
+        "r6_invalidation_receipt": invalidation_receipt_descriptor(
+            R6_INVALIDATION_RECEIPT, R6_INVALIDATION_RECEIPT_SHA256,
+            "R6 invalidation receipt"),
+    }
+    if excluded != expected_exclusion:
+        errors.append("R1/R2/R3/R4/R5/R6 predecessor exclusion contract mismatch")
+    schedule = freeze.get("schedule_provenance")
+    expected_schedule = {
+        "policy": "R3_INVALIDATED_DESIGN_SCHEDULE_REUSED_WITH_ZERO_ATTEMPT_MIGRATION",
+        "seed_commitment": RANDOMIZATION_SEED_COMMITMENT,
+        "predecessor_release_id": "SIM-MECHANISM-40-64-88-R3",
+        "predecessor_attempts_imported": 0,
+        "predecessor_status": "INVALIDATED_PROTOCOL_FAILURE_ENDPOINT_NOT_REACHED",
+    }
+    if schedule != expected_schedule:
+        errors.append("R7 schedule provenance mismatch")
+    if freeze.get("smoothmatch_v_ref_design") != SMOOTHMATCH_V_REF_DESIGN:
+        errors.append(
+            "SmoothMatch v_ref must use the exact independent R7 "
+            "development design decision")
+    bindings = freeze.get("runtime_bindings")
+    errors.extend(validate_runtime_bindings(bindings))
+    declared_bindings_hash = freeze.get("runtime_bindings_hash")
+    if not isinstance(bindings, Mapping) or declared_bindings_hash != canonical_hash(bindings):
+        errors.append("runtime_bindings_hash mismatch")
+    gate_evidence = freeze.get("go_gate_evidence")
+    if not isinstance(gate_evidence, Mapping):
+        errors.append("R7 GO gate evidence is missing")
+    else:
+        try:
+            gate_path = _readonly_file_descriptor(gate_evidence, "R7 GO gate evidence")
+            gate = read_json(gate_path, "R7 GO gate evidence")
+            errors.extend(validate_go_gate_receipt(
+                gate, declared_bindings_hash, receipt_path=gate_path,
+                require_canonical_path=(gate_path == CANONICAL_GO_GATE_RECEIPT),
+            ))
+        except MechanismFreezeError as exc:
+            errors.append(str(exc))
+    expected_recording = {
+        "settle_sec": 30.0,
+        "goal_timeout_sec": 60.0,
+        "tail_sec": 5.0,
+        "fresh_ros_gazebo": True,
+        "recorder_before_motion": True,
+        "owned_pid_cleanup_only": True,
+    }
+    if freeze.get("recording_policy") != expected_recording:
+        errors.append("recording policy must remain exact 30/60/5 fresh-tail contract")
+    expected_timing_calibration = {
+        "conditions": ["Bslosh", "SmoothMatch"],
+        "attempt_ids": dict(TIMING_ATTEMPT_IDS),
+        "common_seed": TIMING_CALIBRATION_SEED,
+        "candidate_v_ref_m_s": SMOOTHMATCH_V_REF_M_S,
+        "fresh_r7_attempts_required": True,
+        "operator_seed_override_allowed": False,
+        "predecessor_attempt_import_allowed": False,
+    }
+    if freeze.get("timing_calibration_policy") != expected_timing_calibration:
+        errors.append("timing calibration must use the frozen R7 CRN seed")
+    if freeze.get("crn_seed_policy") != _expected_crn_seed_policy():
+        errors.append("CRN seed/trace policy is not the exact fail-closed policy")
+    simulator = freeze.get("simulator_assets")
+    expected_simulator_keys = {"map", "world", "robot_model", "world_geometry"}
+    if not isinstance(simulator, Mapping) or set(simulator) != expected_simulator_keys:
+        errors.append("complete simulator asset registry is missing")
+    else:
+        external_assets = {
+            "map": MAP_FILE.resolve(),
+            "world": WORLD_FILE.resolve(),
+            "robot_model": ROBOT_MODEL_FILE.resolve(),
+        }
+        for name in sorted(expected_simulator_keys):
+            try:
+                item = simulator.get(name)
+                require(isinstance(item, Mapping) and set(item) == {"path", "sha256"},
+                        f"simulator asset {name} descriptor is malformed")
+                asset_path = Path(str(item.get("path", "")))
+                require(asset_path.is_absolute() and asset_path.is_file(),
+                        f"simulator asset {name} is missing")
+                require(not asset_path.is_symlink() and
+                        not _has_symlink_component(asset_path),
+                        f"simulator asset {name} may not traverse a symlink")
+                require(item.get("sha256") == sha256_file(asset_path),
+                        f"simulator asset {name} hash mismatch")
+                if name in external_assets:
+                    require(asset_path.resolve() == external_assets[name],
+                            f"simulator asset {name} path mismatch")
+                elif name == "world_geometry":
+                    geometry_doc = read_json(asset_path, "world geometry")
+                    world_descriptor = simulator.get("world")
+                    launched_world_hash = (
+                        world_descriptor.get("sha256")
+                        if isinstance(world_descriptor, Mapping) else None
+                    )
+                    require(geometry_doc.get("protocol_id") == PROTOCOL_ID and
+                            geometry_doc.get("status") == "FROZEN" and
+                            geometry_doc.get("launched_world_hash") ==
+                            launched_world_hash and
+                            geometry_doc.get("physical_primary_eligible") is False,
+                            "world geometry identity/hash mismatch")
+            except (MechanismFreezeError, OSError, TypeError, ValueError) as exc:
+                errors.append(str(exc))
+    measurements = freeze.get("measurements")
+    if not isinstance(measurements, Mapping) or measurements.get("physical_primary") is not None:
+        errors.append("mechanism freeze may not define physical_primary")
+    for name in ("H_proxy", "H_modal"):
+        item = measurements.get(name) if isinstance(measurements, Mapping) else None
+        if not isinstance(item, Mapping) or item.get("physical_primary_eligible") is not False:
+            errors.append(f"{name} must remain non-primary")
+    configs = freeze.get("effective_configs")
+    if not isinstance(configs, Mapping) or set(configs) != {"B0", "Bsmooth", "SmoothMatch", "Bslosh"}:
+        errors.append("complete online effective-config registry is missing")
+    else:
+        loaded: Dict[str, Mapping[str, Any]] = {}
+        for condition, descriptor_value in configs.items():
+            try:
+                config = _readonly_descriptor(descriptor_value, f"{condition} effective config")
+                loaded[condition] = config
+                expected_config_fields = {
+                    "schema_version", "document_type", "protocol_id",
+                    "formal", "formal_scope", "development_only",
+                    "physical_alignment", "physical_primary_eligible",
+                    "physical_primary", "condition_id", "planner_variant",
+                    "method_backend", "solver_backend", "controller",
+                    "observer", "delay", "measurements",
+                    "effective_config_hash",
+                }
+                if set(config) != expected_config_fields:
+                    errors.append(
+                        f"{condition} effective config fields are not exact"
+                    )
+                if (config.get("schema_version") != SCHEMA_VERSION or
+                        config.get("document_type") != "SMPCC_SIM_MECHANISM_EFFECTIVE_CONFIG" or
+                        config.get("protocol_id") != PROTOCOL_ID or
+                        config.get("condition_id") != condition or
+                        config.get("formal_scope") != "SIMULATION_MECHANISM_ONLY" or
+                        config.get("physical_primary_eligible") is not False or
+                        config.get("physical_primary") is not None):
+                    errors.append(f"{condition} effective config identity mismatch")
+                config_core = dict(config)
+                declared_config_hash = config_core.pop("effective_config_hash", None)
+                if declared_config_hash != canonical_hash(config_core):
+                    errors.append(f"{condition} effective config internal hash mismatch")
+                observer = config.get("observer")
+                if observer != {"source": "odom", "imu_shadow_enable": False, "fallback_policy": "odom"}:
+                    errors.append(f"{condition} observer is not the frozen simulation-only odom policy")
+                delay = config.get("delay")
+                expected_delay = {"mode": "off", "linear_sec": 0.15, "angular_sec": 0.22, "cmd_timeout_sec": 0.5, "odom_timeout_sec": 0.5, "history_window_sec": 2.0, "require_complete_history": False}
+                if delay != expected_delay:
+                    errors.append(f"{condition} delay policy is not the full frozen effective policy")
+            except MechanismFreezeError as exc:
+                errors.append(str(exc))
+        if set(loaded) == set(configs):
+            left = dict(loaded["Bsmooth"].get("controller", {})); right = dict(loaded["SmoothMatch"].get("controller", {}))
+            diff = {key for key in set(left) | set(right) if left.get(key) != right.get(key)}
+            if diff != {"v_ref"}:
+                errors.append("SmoothMatch must differ from Bsmooth only by v_ref")
+    paths = freeze.get("paths")
+    if not isinstance(paths, Mapping) or set(paths) != {"H1", "L1"}:
+        errors.append("H1/L1 frozen JSON registry is missing")
+    else:
+        for path_id, item in paths.items():
+            if not isinstance(item, Mapping):
+                errors.append(f"{path_id} registry is malformed"); continue
+            for field in ("source_path", "sim_path", "transform", "fit_clearance_report"):
+                try:
+                    document = _readonly_descriptor(item.get(field), f"{path_id} {field}")
+                    if field in {"source_path", "sim_path"}:
+                        if (document.get("protocol_id") != PROTOCOL_ID or
+                                document.get("path_id") != path_id or
+                                document.get("runtime_generation_forbidden") is not True or
+                                document.get("physical_primary_eligible") is not False):
+                            errors.append(f"{path_id} {field} identity mismatch")
+                    elif field == "fit_clearance_report":
+                        if (document.get("protocol_id") != PROTOCOL_ID or
+                                document.get("status") != "PASS" or
+                                document.get("physical_primary_eligible") is not False):
+                            errors.append(f"{path_id} fit/clearance report is not PASS")
+                except MechanismFreezeError as exc:
+                    errors.append(str(exc))
+    containers = freeze.get("containers")
+    loaded_containers: Dict[str, Mapping[str, Any]] = {}
+    if not isinstance(containers, Mapping) or set(containers) != {"C1", "C2"}:
+        errors.append("C1/C2 simulation parameter registry is missing")
+    else:
+        for cid, item in containers.items():
+            try:
+                container_doc = _readonly_descriptor(item, f"{cid} container")
+                loaded_containers[cid] = container_doc
+                if (container_doc.get("schema_version") != SCHEMA_VERSION or
+                        container_doc.get("document_type") != "SMPCC_SIM_MECHANISM_CONTAINER_PARAMETERS" or
+                        container_doc.get("protocol_id") != PROTOCOL_ID or
+                        container_doc.get("container_id") != cid or
+                        container_doc.get("physical_primary_eligible") is not False):
+                    errors.append(f"{cid} container identity mismatch")
+                container_core = dict(container_doc)
+                declared_parameter_hash = container_core.pop("parameter_hash", None)
+                if declared_parameter_hash != canonical_hash(container_core):
+                    errors.append(f"{cid} container internal hash mismatch")
+                source_yaml = container_doc.get("source_yaml")
+                if not isinstance(source_yaml, Mapping):
+                    errors.append(f"{cid} container source YAML binding missing")
+                else:
+                    yaml_path = Path(str(source_yaml.get("path", "")))
+                    if (not yaml_path.is_absolute() or not yaml_path.is_file() or
+                            source_yaml.get("sha256") != sha256_file(yaml_path)):
+                        errors.append(f"{cid} container source YAML hash mismatch")
+            except MechanismFreezeError as exc: errors.append(str(exc))
+        if set(loaded_containers) == {"C1", "C2"}:
+            p1 = loaded_containers["C1"].get("parameters", {})
+            p2 = loaded_containers["C2"].get("parameters", {})
+            if not isinstance(p1, Mapping) or not isinstance(p2, Mapping):
+                errors.append("C1/C2 frozen container parameters are malformed")
+            else:
+                if (p1.get("container_radius") != 0.0185 or
+                        p2.get("container_radius") != 0.0475):
+                    errors.append("C1/C2 radius must be 37 mm/95 mm diameter")
+                if ({key: value for key, value in p1.items()
+                     if key != "container_radius"} !=
+                        {key: value for key, value in p2.items()
+                         if key != "container_radius"}):
+                    errors.append("C2 may differ from C1 only in container_radius")
+    profiles = freeze.get("fixed_profiles")
+    if not isinstance(profiles, Mapping) or set(profiles) != {"H1_C1", "L1_C1", "H1_C2"}:
+        errors.append("three frozen FixedProfile strata are missing")
+    else:
+        tracker_documents: list[Mapping[str, Any]] = []
+        generation_documents: Dict[str, Mapping[str, Any]] = {}
+        for key, item in profiles.items():
+            if not isinstance(item, Mapping): errors.append(f"{key} FixedProfile is malformed"); continue
+            if set(item) != {"profile", "generation_report", "tracker_config",
+                             "generation_inputs"}:
+                errors.append(f"{key} FixedProfile fields are not exact")
+            for field in ("profile", "generation_report", "tracker_config"):
+                try:
+                    # Profile is a CSV while the other two assets are JSON;
+                    # all three need a read-only hash check.
+                    if field == "profile":
+                        _readonly_file_descriptor(item.get(field), f"{key} FixedProfile profile")
+                    else:
+                        document = _readonly_descriptor(item.get(field), f"{key} FixedProfile {field}")
+                        if field == "tracker_config":
+                            tracker_documents.append(document)
+                        elif field == "generation_report":
+                            generation_documents[key] = document
+                except (MechanismFreezeError, AttributeError) as exc: errors.append(str(exc))
+        expected_tracker = {
+            "schema_version": SCHEMA_VERSION,
+            "document_type": "SMPCC_SIM_MECHANISM_FIXEDPROFILE_TRACKER",
+            "protocol_id": PROTOCOL_ID,
+            "release_id": RELEASE_ID,
+            "formal": True,
+            "formal_scope": "SIMULATION_MECHANISM_ONLY",
+            "physical_alignment": False,
+            "physical_primary_eligible": False,
+            "physical_primary": None,
+            "runtime_profile_regeneration": False,
+            "online_liquid_feedback": False,
+            "liquid_subscriptions": [],
+            "profile_hash_and_parse_before_publisher": True,
+            "tracker_id": "SIM-MECHANISM-FIXEDPROFILE-TRACKER-R1",
+            "implementation": "spmpc_sim_local_planner_dedicated_fixed_profile_tracker",
+            "common_limits": {
+                "v_max": 0.8, "omega_max": 1.2,
+                "a_max": 0.6, "alpha_max": 1.2,
+            },
+        }
+        if len(tracker_documents) != 3 or any(
+                document != expected_tracker for document in tracker_documents):
+            errors.append("FixedProfile tracker must be the dedicated no-liquid read-only implementation")
+        expected_profile_strata = {
+            "H1_C1": ("H1", "C1"),
+            "L1_C1": ("L1", "C1"),
+            "H1_C2": ("H1", "C2"),
+        }
+        for key, (path_id, container_id) in expected_profile_strata.items():
+            report = generation_documents.get(key)
+            if not isinstance(report, Mapping):
+                errors.append(f"{key} FixedProfile generation report missing")
+                continue
+            duration = report.get("duration_sec")
+            constraints = report.get("constraints")
+            hard_limits = report.get("hard_limits")
+            liquid_model = report.get("liquid_model")
+            expected_hard_limits = {
+                "a_max_m_s2": 0.6,
+                "alpha_max_rad_s2": 1.2,
+                "decel_max_m_s2": 0.6,
+                "lateral_accel_max_m_s2": 0.6,
+                "omega_max_rad_s": 1.2,
+                "v_max_m_s": 0.8,
+            }
+            container_doc = loaded_containers.get(container_id)
+            container_parameters = (container_doc.get("parameters")
+                                    if isinstance(container_doc, Mapping) else None)
+            if not isinstance(container_parameters, Mapping):
+                errors.append(f"{key} cannot resolve frozen container inputs")
+                continue
+            try:
+                radius = float(container_parameters["container_radius"])
+                height = float(container_parameters["liquid_height"])
+                damping = float(container_parameters["damping_ratio"])
+            except (KeyError, TypeError, ValueError):
+                errors.append(f"{key} has malformed frozen container inputs")
+                continue
+            omega_n = math.sqrt(
+                PROFILE_GRAVITY_M_S2 * PROFILE_MODE_ROOT_XI / radius *
+                math.tanh(PROFILE_MODE_ROOT_XI * height / radius)
+            )
+            report_omega = (liquid_model.get("omega_n_rad_s")
+                            if isinstance(liquid_model, Mapping) else None)
+            if (report.get("status") != "PASS" or
+                    report.get("report_type") != "HAMAGUCHI_FIXED_PROFILE_GENERATION" or
+                    report.get("method") != PROFILE_METHOD or
+                    report.get("sample_count") != 201 or
+                    report.get("unshaped_base_speed_m_s") != PROFILE_BASE_SPEED_M_S or
+                    not isinstance(duration, (int, float)) or
+                    not math.isfinite(float(duration)) or
+                    not 0.0 < float(duration) <= PROFILE_MAX_DURATION_SEC or
+                    not isinstance(constraints, Mapping) or
+                    constraints.get("all_pass") is not True or
+                    hard_limits != expected_hard_limits or
+                    not isinstance(liquid_model, Mapping) or
+                    liquid_model.get("damping_ratio") != damping or
+                    not isinstance(report_omega, (int, float)) or
+                    not math.isclose(float(report_omega),
+                                     omega_n, rel_tol=0.0, abs_tol=1e-12)):
+                errors.append(f"{key} FixedProfile generation policy/duration mismatch")
+            expected_derived_core = {
+                "container_id": container_id,
+                "container_parameter_hash": container_doc.get("parameter_hash"),
+                "container_radius_m": radius,
+                "liquid_height_m": height,
+                "damping_ratio": damping,
+                "gravity_m_s2": PROFILE_GRAVITY_M_S2,
+                "mode_root_xi": PROFILE_MODE_ROOT_XI,
+                "omega_n_rad_s": omega_n,
+                "derivation": "sqrt(g*xi/R*tanh(xi*h/R))",
+            }
+            expected_derived = dict(
+                expected_derived_core,
+                derived_input_hash=canonical_hash(expected_derived_core))
+            if profiles[key].get("generation_inputs") != expected_derived:
+                errors.append(f"{key} liquid-derived generation inputs mismatch")
+            profile_descriptor = profiles[key].get("profile")
+            path_entry = paths.get(path_id) if isinstance(paths, Mapping) else None
+            path_descriptor = (path_entry.get("sim_path")
+                               if isinstance(path_entry, Mapping) else None)
+            if (not isinstance(profile_descriptor, Mapping) or
+                    not isinstance(path_descriptor, Mapping) or
+                    report.get("profile_sha256") != profile_descriptor.get("sha256") or
+                    report.get("path_sha256") != path_descriptor.get("sha256") or
+                    report.get("profile_csv") != profile_descriptor.get("path") or
+                    report.get("path_file") != path_descriptor.get("path")):
+                errors.append(f"{key} FixedProfile report is not bound to frozen path/profile")
+    expected_profile_policy = {
+        "policy_id": "SIM-MECHANISM-R7-FIXEDPROFILE-OFFLINE-v1",
+        "generator": {
+            "path": str(PROFILE_GENERATOR.resolve()),
+            "sha256": sha256_file(PROFILE_GENERATOR),
+        },
+        "parameters": dict(PROFILE_GENERATION_PARAMETERS),
+        "liquid_parameter_derivation": {
+            "formula": "sqrt(g*xi/R*tanh(xi*h/R))",
+            "gravity_m_s2": PROFILE_GRAVITY_M_S2,
+            "mode_root_xi": PROFILE_MODE_ROOT_XI,
+            "radius_source": "frozen_container.parameters.container_radius",
+            "height_source": "frozen_container.parameters.liquid_height",
+            "damping_source": "frozen_container.parameters.damping_ratio",
+        },
+        "maximum_nominal_duration_sec": PROFILE_MAX_DURATION_SEC,
+        "goal_timeout_sec": 60.0,
+        "runtime_regeneration_forbidden": True,
+        "online_liquid_feedback": False,
+    }
+    if freeze.get("fixed_profile_generation_policy") != expected_profile_policy:
+        errors.append("FixedProfile generation command/parameters are not exact R7 policy")
+    tables = freeze.get("randomization_tables")
+    seeds = freeze.get("seed_bundles")
+    if not isinstance(tables, Mapping) or set(tables) != set(STAGES): errors.append("three frozen randomization tables are missing")
+    expected_seed_keys = {
+        f"{stage}:b{block:02d}"
+        for stage in STAGES for block in range(1, 9)
+    }
+    if not isinstance(seeds, Mapping) or set(seeds) != expected_seed_keys:
+        errors.append("24 frozen seed bundles are missing")
+    if isinstance(tables, Mapping):
+        for stage, spec in STAGES.items():
+            table = tables.get(stage)
+            if not isinstance(table, Mapping):
+                errors.append(f"{stage} table is malformed")
+                continue
+            if table.get("protocol_id") != PROTOCOL_ID:
+                errors.append(f"{stage} table protocol mismatch")
+            if table.get("seed_commitment") != RANDOMIZATION_SEED_COMMITMENT:
+                errors.append(f"{stage} table does not preserve the frozen R2 design seed")
+            try:
+                toolchain.validate_randomization_table(table, stage, 8)
+            except (
+                toolchain.ContractError,
+                AttributeError,
+                KeyError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                errors.append(str(exc))
+            rows = table.get("rows")
+            if (not isinstance(rows, list) or
+                    len(rows) != 8 * len(spec["conditions"])):
+                errors.append(f"{stage} table has wrong row count")
+    trace_paths: set[str] = set()
+    trace_file_hashes: set[str] = set()
+    trace_asset_hashes: set[str] = set()
+    if isinstance(seeds, Mapping):
+        for key in sorted(expected_seed_keys):
+            bundle = seeds.get(key)
+            stage, block = key.split(":", 1)
+            if not isinstance(bundle, Mapping):
+                errors.append(f"{key} seed bundle is malformed")
+                continue
+            if bundle.get("protocol_id") != PROTOCOL_ID:
+                errors.append(f"{key} seed bundle protocol mismatch")
+            if bundle.get("stage") != stage or bundle.get("block_id") != block:
+                errors.append(f"{key} seed bundle identity mismatch")
+            try:
+                trace_report = validate_crn_trace_asset(bundle, stage, block)
+                trace_paths.add(trace_report["trace_asset_path"])
+                trace_file_hashes.add(trace_report["trace_asset_file_hash"])
+                trace_asset_hashes.add(trace_report["trace_asset_hash"])
+            except (
+                MechanismFreezeError,
+                toolchain.ContractError,
+                AttributeError,
+                KeyError,
+                TypeError,
+                ValueError,
+            ) as exc:
+                errors.append(str(exc))
+        if (len(trace_paths) != 24 or len(trace_file_hashes) != 24 or
+                len(trace_asset_hashes) != 24):
+            errors.append("24 CRN trace assets must have unique paths and hashes")
+    consumer_contract = freeze.get("crn_runtime_consumer_contract")
+    if not isinstance(consumer_contract, Mapping):
+        errors.append("CRN runtime consumer contract is missing")
+    else:
+        candidate = freeze.get("freeze_candidate")
+        if not isinstance(candidate, Mapping):
+            errors.append("final mechanism freeze lacks candidate provenance for CRN")
+        else:
+            try:
+                candidate_path = _readonly_file_descriptor(
+                    candidate, "mechanism freeze candidate provenance for CRN")
+                candidate_doc = read_json(
+                    candidate_path,
+                    "mechanism freeze candidate provenance for CRN")
+                candidate_report = validate_freeze(candidate_doc)
+                if (candidate_report.get("status") != "FAIL" or
+                        tuple(candidate_report.get("errors", ())) !=
+                        CANDIDATE_MISSING_REQUIREMENTS):
+                    errors.append(
+                        "candidate provenance is not the immutable "
+                        "timing-and-CRN-only candidate")
+                validate_crn_runtime_consumer_contract(
+                    consumer_contract, candidate_doc, candidate_path)
+            except MechanismFreezeError as exc:
+                errors.append(str(exc))
+    calibration = freeze.get("smoothmatch_calibration")
+    if not isinstance(calibration, Mapping):
+        errors.append("SmoothMatch timing calibration is missing")
+    else:
+        try:
+            calibration_path = _readonly_file_descriptor(
+                calibration, "SmoothMatch timing calibration")
+            report = read_json(calibration_path, "SmoothMatch timing calibration")
+            candidate = freeze.get("freeze_candidate")
+            if not isinstance(candidate, Mapping):
+                errors.append("final mechanism freeze lacks candidate provenance")
+            else:
+                try:
+                    candidate_path = _readonly_file_descriptor(candidate, "mechanism freeze candidate provenance")
+                    candidate_doc = read_json(candidate_path, "mechanism freeze candidate provenance")
+                    candidate_report = validate_freeze(candidate_doc)
+                    if (candidate_report.get("status") != "FAIL" or
+                            tuple(candidate_report.get("errors", ())) !=
+                            CANDIDATE_MISSING_REQUIREMENTS):
+                        errors.append(
+                            "candidate provenance is not the immutable "
+                            "timing-and-CRN-only candidate")
+                    if report.get("freeze_candidate") != {"path": str(candidate_path), "sha256": sha256_file(candidate_path)}:
+                        errors.append("SmoothMatch timing calibration is not bound to final candidate provenance")
+                    errors.extend(validate_timing_calibration(
+                        candidate_doc, candidate_path, report, calibration_path,
+                        require_canonical_paths=(
+                            candidate_path == CANONICAL_RELEASE_ROOT /
+                            "mechanism_freeze_candidate.json"
+                        ),
+                    ))
+                except MechanismFreezeError as exc:
+                    errors.append(str(exc))
+        except MechanismFreezeError as exc: errors.append(str(exc))
+    core = dict(freeze); declared = core.pop("freeze_hash", None)
+    if declared != canonical_hash(core): errors.append("freeze_hash mismatch")
+    return {"status": "PASS" if not errors else "FAIL", "formal": True, "formal_scope": "SIMULATION_MECHANISM_ONLY", "physical_primary_eligible": False, "errors": errors, "freeze_hash": declared}
+
+
+def create_release(root: Path, seed: str, smoothmatch_vref: float,
+                   calibration: Optional[Path] = None,
+                   go_gate_receipt: Optional[Path] = None,
+                   *, enforce_canonical_root: bool = True) -> Dict[str, Any]:
+    require(root.is_absolute() and not root.exists(), f"release root must be a new absolute directory: {root}")
+    if enforce_canonical_root:
+        root = require_exact_path(root, CANONICAL_RELEASE_ROOT,
+                                  "production release root", must_exist=False)
+    else:
+        root = Path(os.path.abspath(str(root)))
+        require(not _has_symlink_component(root), "test release root may not traverse a symlink")
+    require(seed == RANDOMIZATION_SEED,
+            "R7 must reuse the predeclared R3 design seed; re-randomization after observed R3 attempts is forbidden")
+    require(isinstance(smoothmatch_vref, (int, float)) and
+            not isinstance(smoothmatch_vref, bool) and
+            math.isfinite(float(smoothmatch_vref)) and
+            float(smoothmatch_vref) == SMOOTHMATCH_V_REF_M_S,
+            "SmoothMatch v_ref must equal the independently predeclared "
+            f"R7 development design value {SMOOTHMATCH_V_REF_M_S:g} m/s")
+    for path, label in ((WORLD_FILE, "world"), (MAP_FILE, "map"), (ROBOT_MODEL_FILE, "robot"), (PROFILE_GENERATOR, "profile generator")):
+        require_file(path, label)
+    bindings = runtime_bindings()
+    bindings_hash = canonical_hash(bindings)
+    require(go_gate_receipt is not None, "R7 GO gate receipt is required")
+    if enforce_canonical_root:
+        go_gate_receipt = require_exact_path(
+            Path(go_gate_receipt), CANONICAL_GO_GATE_RECEIPT,
+            "R7 GO gate receipt")
+    else:
+        go_gate_receipt = Path(os.path.abspath(str(go_gate_receipt)))
+        require(not _has_symlink_component(go_gate_receipt),
+                "test GO gate receipt may not traverse a symlink")
+    go_gate_receipt = require_file(go_gate_receipt, "R7 GO gate receipt")
+    require(stat.S_IMODE(go_gate_receipt.stat().st_mode) & WRITE_BITS == 0,
+            "R7 GO gate receipt must be read-only")
+    gate = read_json(go_gate_receipt, "R7 GO gate receipt")
+    gate_errors = validate_go_gate_receipt(
+        gate, bindings_hash, receipt_path=go_gate_receipt,
+        require_canonical_path=enforce_canonical_root,
+    )
+    require(not gate_errors, "R7 GO gate receipt rejected: " + "; ".join(gate_errors))
+    gate_descriptor = descriptor(go_gate_receipt, "R7 GO gate receipt")
+    require(
+        enforce_canonical_root,
+        "noncanonical formal freeze generation is forbidden; unit fixtures "
+        "must be constructed explicitly with formal=false and fixture=true",
+    )
+    root.mkdir(parents=True)
+    source_dir, paths_dir, containers_dir, configs_dir, profiles_dir = (
+        root / name for name in (
+            "source", "paths", "containers", "effective_configs",
+            "fixed_profiles"))
+    trace_root = root / "seed_traces"
+    transform = {"rotation_rad": 0.0, "tx": 0.0, "ty": 0.0, "yaw_offset_rad": 0.0}
+    geometry_path = root / "world_clearance_geometry.json"
+    write_json_new_readonly(geometry_path, _geometry_document(sha256_file(WORLD_FILE)))
+    geometry = read_json(geometry_path, "world geometry")
+    path_registry: Dict[str, Any] = {}
+    for path_id in ("H1", "L1"):
+        points = _points_from_candidate(path_id)
+        source_path, sim_path, transform_path, fit_path = source_dir / f"{path_id}_source.json", paths_dir / f"{path_id}_sim.json", paths_dir / f"{path_id}_transform.json", paths_dir / f"{path_id}_fit_clearance.json"
+        write_json_new_readonly(source_path, _path_document(path_id, points, True))
+        write_json_new_readonly(sim_path, _path_document(path_id, points, False))
+        write_json_new_readonly(transform_path, transform)
+        result = toolchain.validate_path_replay(source_path, sim_path, transform, geometry, 0.30)
+        fit = {"schema_version": SCHEMA_VERSION, "document_type": "SMPCC_SIM_MECHANISM_PATH_FIT_CLEARANCE", "protocol_id": PROTOCOL_ID, "formal": True, "formal_scope": "SIMULATION_MECHANISM_ONLY", "status": "PASS", "physical_primary_eligible": False, **result}
+        write_json_new_readonly(fit_path, fit)
+        path_registry[path_id] = {"source_path": descriptor(source_path, f"{path_id} source"), "sim_path": descriptor(sim_path, f"{path_id} sim"), "transform": descriptor(transform_path, f"{path_id} transform"), "fit_clearance_report": descriptor(fit_path, f"{path_id} fit")}
+    c1 = _load_container(SIM_CONTROLLER_ROOT / "config/containers/C1_37mm_H58_sim.yaml", "C1")
+    c2 = _load_container(SIM_CONTROLLER_ROOT / "config/containers/C2_95mm_H58_sim.yaml", "C2")
+    container_registry: Dict[str, Any] = {}
+    for cid, document in (("C1", c1), ("C2", c2)):
+        path = containers_dir / f"{cid}.json"; write_json_new_readonly(path, document); container_registry[cid] = descriptor(path, f"{cid} container")
+    config_registry: Dict[str, Any] = {}
+    for cid in ("B0", "Bsmooth", "SmoothMatch", "Bslosh"):
+        path = configs_dir / f"{cid}.json"; write_json_new_readonly(path, _controller_config(cid, smoothmatch_vref)); config_registry[cid] = descriptor(path, f"{cid} config")
+    tracker_config = {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_MECHANISM_FIXEDPROFILE_TRACKER",
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": True,
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "runtime_profile_regeneration": False,
+        "online_liquid_feedback": False,
+        "liquid_subscriptions": [],
+        "profile_hash_and_parse_before_publisher": True,
+        "tracker_id": "SIM-MECHANISM-FIXEDPROFILE-TRACKER-R1",
+        "implementation": "spmpc_sim_local_planner_dedicated_fixed_profile_tracker",
+        "common_limits": {
+            "v_max": 0.8, "omega_max": 1.2,
+            "a_max": 0.6, "alpha_max": 1.2,
+        },
+    }
+    tracker_path = profiles_dir / "tracker_config.json"; write_json_new_readonly(tracker_path, tracker_config)
+    profiles: Dict[str, Any] = {}
+    for key, path_id, container_id in (("H1_C1", "H1", "C1"), ("L1_C1", "L1", "C1"), ("H1_C2", "H1", "C2")):
+        profile_path, report_path = profiles_dir / f"{key}.csv", profiles_dir / f"{key}_generation.json"
+        container_document = read_json(
+            Path(container_registry[container_id]["path"]),
+            f"{container_id} container")
+        generation_inputs = _write_profile(
+            profile_path, report_path,
+            Path(path_registry[path_id]["sim_path"]["path"]),
+            container_document)
+        profiles[key] = {
+            "profile": descriptor(profile_path, f"{key} profile"),
+            "generation_report": descriptor(report_path, f"{key} profile report"),
+            "tracker_config": descriptor(tracker_path, "tracker config"),
+            "generation_inputs": generation_inputs,
+        }
+    tables = {stage: _randomization(seed, stage) for stage in STAGES}
+    bundles = {
+        f"{stage}:b{block:02d}":
+            _seed_bundle(seed, stage, block, trace_root)
+        for stage in STAGES for block in range(1, 9)
+    }
+    # A production release is assembled from immutable candidate, timing and
+    # CRN-consumer artifacts.  Runtime evidence is obtained against the
+    # candidate itself and subsequently attached by ``finalize_release``;
+    # accepting it here would make candidate provenance circular.
+    require(calibration is None, "create emits a timing-only candidate; use finalize after a hash-bound timing pilot")
+    calibration_descriptor = None
+    predecessor_exclusion = {
+        "release_ids": list(PREDECESSOR_RELEASE_IDS),
+        "protocol_ids": list(PREDECESSOR_PROTOCOL_IDS),
+        "attempt_import_allowed": False,
+        "attempts_imported": 0,
+        "design_schedule_seed_reused_only": True,
+        "r3_invalidation_receipt": invalidation_receipt_descriptor(
+            R3_INVALIDATION_RECEIPT, R3_INVALIDATION_RECEIPT_SHA256,
+            "R3 invalidation receipt"),
+        "r4_invalidation_receipt": invalidation_receipt_descriptor(
+            R4_INVALIDATION_RECEIPT, R4_INVALIDATION_RECEIPT_SHA256,
+            "R4 invalidation receipt"),
+        "r5_invalidation_receipt": invalidation_receipt_descriptor(
+            R5_INVALIDATION_RECEIPT, R5_INVALIDATION_RECEIPT_SHA256,
+            "R5 invalidation receipt"),
+        "r6_invalidation_receipt": invalidation_receipt_descriptor(
+            R6_INVALIDATION_RECEIPT, R6_INVALIDATION_RECEIPT_SHA256,
+            "R6 invalidation receipt"),
+    }
+    schedule_provenance = {
+        "policy": "R3_INVALIDATED_DESIGN_SCHEDULE_REUSED_WITH_ZERO_ATTEMPT_MIGRATION",
+        "seed_commitment": RANDOMIZATION_SEED_COMMITMENT,
+        "predecessor_release_id": "SIM-MECHANISM-40-64-88-R3",
+        "predecessor_attempts_imported": 0,
+        "predecessor_status": "INVALIDATED_PROTOCOL_FAILURE_ENDPOINT_NOT_REACHED",
+    }
+    profile_generation_policy = {
+        "policy_id": "SIM-MECHANISM-R7-FIXEDPROFILE-OFFLINE-v1",
+        "generator": descriptor(PROFILE_GENERATOR, "FixedProfile generator"),
+        "parameters": dict(PROFILE_GENERATION_PARAMETERS),
+        "liquid_parameter_derivation": {
+            "formula": "sqrt(g*xi/R*tanh(xi*h/R))",
+            "gravity_m_s2": PROFILE_GRAVITY_M_S2,
+            "mode_root_xi": PROFILE_MODE_ROOT_XI,
+            "radius_source": "frozen_container.parameters.container_radius",
+            "height_source": "frozen_container.parameters.liquid_height",
+            "damping_source": "frozen_container.parameters.damping_ratio",
+        },
+        "maximum_nominal_duration_sec": PROFILE_MAX_DURATION_SEC,
+        "goal_timeout_sec": 60.0,
+        "runtime_regeneration_forbidden": True,
+        "online_liquid_feedback": False,
+    }
+    freeze_core: Dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_MECHANISM_FREEZE",
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": True,
+        "formal_scope": "SIMULATION_MECHANISM_ONLY",
+        "development_only": False,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "evidence_class": "SIMULATION_MECHANISM_VALIDATION_ONLY",
+        "original_aligned_protocol_id": ORIGINAL_ALIGNED_PROTOCOL_ID,
+        "original_aligned_protocol_eligible": False,
+        "attempt_import_allowed": False,
+        "predecessor_attempts_imported": 0,
+        "predecessor_exclusion": predecessor_exclusion,
+        "schedule_provenance": schedule_provenance,
+        "smoothmatch_v_ref_design": dict(SMOOTHMATCH_V_REF_DESIGN),
+        "sample_size": 8,
+        "stage_counts": {
+            stage: 8 * len(spec["conditions"])
+            for stage, spec in STAGES.items()
+        },
+        "runtime_bindings": bindings,
+        "runtime_bindings_hash": bindings_hash,
+        "go_gate_evidence": gate_descriptor,
+        "measurements": {
+            "H_proxy": {
+                "topic": "/slosh/height",
+                "physical_primary_eligible": False,
+            },
+            "H_modal": {
+                "topic": "/sim_spmpc/slosh_height",
+                "physical_primary_eligible": False,
+            },
+            "physical_primary": None,
+        },
+        "simulator_assets": {
+            "map": descriptor(MAP_FILE, "map"),
+            "world": descriptor(WORLD_FILE, "world"),
+            "robot_model": descriptor(ROBOT_MODEL_FILE, "robot"),
+            "world_geometry": descriptor(geometry_path, "world geometry"),
+        },
+        "paths": path_registry,
+        "containers": container_registry,
+        "effective_configs": config_registry,
+        "fixed_profiles": profiles,
+        "fixed_profile_generation_policy": profile_generation_policy,
+        "randomization_tables": tables,
+        "seed_bundles": bundles,
+        "crn_seed_policy": _expected_crn_seed_policy(),
+        "crn_runtime_consumer_contract": None,
+        "recording_policy": {
+            "settle_sec": 30.0,
+            "goal_timeout_sec": 60.0,
+            "tail_sec": 5.0,
+            "fresh_ros_gazebo": True,
+            "recorder_before_motion": True,
+            "owned_pid_cleanup_only": True,
+        },
+        "timing_calibration_policy": {
+            "conditions": ["Bslosh", "SmoothMatch"],
+            "attempt_ids": dict(TIMING_ATTEMPT_IDS),
+            "common_seed": TIMING_CALIBRATION_SEED,
+            "candidate_v_ref_m_s": SMOOTHMATCH_V_REF_M_S,
+            "fresh_r7_attempts_required": True,
+            "operator_seed_override_allowed": False,
+            "predecessor_attempt_import_allowed": False,
+        },
+        "smoothmatch_calibration": calibration_descriptor,
+    }
+    freeze = dict(freeze_core, freeze_hash=canonical_hash(freeze_core))
+    freeze_path = root / "mechanism_freeze_candidate.json"
+    write_json_new_readonly(freeze_path, freeze)
+    report = validate_freeze(read_json(freeze_path, "written mechanism freeze"))
+    require(report.get("status") == "FAIL" and
+            tuple(report.get("errors", ())) == CANDIDATE_MISSING_REQUIREMENTS,
+            "R7 candidate has a defect beyond the required timing/CRN "
+            "contracts: " +
+            "; ".join(report.get("errors", [])))
+    return dict(report, release_root=str(root), freeze_path=str(freeze_path), freeze_file_hash=sha256_file(freeze_path), original_aligned_protocol_eligible=False)
+
+
+def finalize_release(candidate_path: Path, calibration_path: Path,
+                     consumer_contract_path: Path, *,
+                     enforce_canonical_root: bool = True) -> Dict[str, Any]:
+    """Attach timing and CRN-consumer evidence without rewriting a candidate.
+
+    The final document contains a descriptor for both the candidate and the
+    evidence.  Validation recursively proves the candidate had exactly the two
+    declared deficiencies, and each report is bound to that exact candidate.
+    This is intentionally a new file, never an in-place mutation of a release
+    decision.
+    """
+
+    require(
+        enforce_canonical_root,
+        "noncanonical formal freeze finalization is forbidden; unit fixtures "
+        "must remain formal=false",
+    )
+    candidate_path = Path(os.path.abspath(str(candidate_path)))
+    if enforce_canonical_root:
+        candidate_path = require_exact_path(
+            candidate_path,
+            CANONICAL_RELEASE_ROOT / "mechanism_freeze_candidate.json",
+            "production mechanism candidate",
+        )
+    else:
+        require(not _has_symlink_component(candidate_path),
+                "test mechanism candidate may not traverse a symlink")
+    candidate_doc = read_json(_readonly_file_descriptor({"path": str(candidate_path), "sha256": sha256_file(candidate_path)}, "mechanism freeze candidate"), "mechanism freeze candidate")
+    candidate_report = validate_freeze(candidate_doc)
+    require(
+        candidate_report.get("status") == "FAIL" and
+        tuple(candidate_report.get("errors", ())) ==
+        CANDIDATE_MISSING_REQUIREMENTS,
+        "candidate has a defect beyond the required timing/CRN contracts")
+    calibration_path = Path(os.path.abspath(str(calibration_path)))
+    if enforce_canonical_root:
+        calibration_path = require_exact_path(
+            calibration_path,
+            CANONICAL_RELEASE_ROOT / "smoothmatch_calibration.json",
+            "production SmoothMatch calibration",
+        )
+    else:
+        require(not _has_symlink_component(calibration_path),
+                "test SmoothMatch calibration may not traverse a symlink")
+    calibration = read_json(_readonly_file_descriptor({"path": str(calibration_path), "sha256": sha256_file(calibration_path)}, "SmoothMatch calibration"), "SmoothMatch calibration")
+    require(calibration.get("status") == "PASS" and calibration.get("protocol_id") == PROTOCOL_ID and calibration.get("within_tolerance") is True, "SmoothMatch calibration is not PASS")
+    require(calibration.get("physical_primary_eligible") is False and calibration.get("physical_primary") is None, "SmoothMatch calibration must remain non-primary")
+    expected_candidate = {"path": str(candidate_path), "sha256": sha256_file(candidate_path)}
+    require(calibration.get("freeze_candidate") == expected_candidate, "SmoothMatch calibration is not bound to this candidate")
+    calibration_errors = validate_timing_calibration(
+        candidate_doc, candidate_path, calibration, calibration_path,
+        require_canonical_paths=enforce_canonical_root,
+    )
+    require(not calibration_errors,
+            "SmoothMatch calibration provenance rejected: " +
+            "; ".join(calibration_errors))
+    consumer_contract_path = Path(os.path.abspath(str(consumer_contract_path)))
+    if enforce_canonical_root:
+        consumer_contract_path = require_exact_path(
+            consumer_contract_path,
+            CANONICAL_CRN_CONSUMER_CONTRACT,
+            "production CRN runtime consumer contract",
+        )
+    else:
+        require(not _has_symlink_component(consumer_contract_path),
+                "test CRN runtime consumer contract may not traverse a symlink")
+    consumer_contract_descriptor = {
+        "path": str(consumer_contract_path),
+        "sha256": sha256_file(consumer_contract_path),
+    }
+    validate_crn_runtime_consumer_contract(
+        consumer_contract_descriptor, candidate_doc, candidate_path)
+    final_core = dict(candidate_doc)
+    final_core.pop("freeze_hash", None)
+    final_core["freeze_candidate"] = expected_candidate
+    final_core["smoothmatch_calibration"] = {"path": str(calibration_path), "sha256": sha256_file(calibration_path)}
+    final_core["crn_runtime_consumer_contract"] = (
+        consumer_contract_descriptor)
+    final = dict(final_core, freeze_hash=canonical_hash(final_core))
+    final_path = candidate_path.parent / "mechanism_freeze.json"
+    write_json_new_readonly(final_path, final)
+    report = validate_freeze(read_json(final_path, "written final mechanism freeze"))
+    require(report.get("status") == "PASS", "final mechanism freeze did not pass: " + "; ".join(report.get("errors", [])))
+    return dict(report, release_root=str(candidate_path.parent), freeze_path=str(final_path), freeze_file_hash=sha256_file(final_path), original_aligned_protocol_eligible=False)
+
+
+def _emit(value: Mapping[str, Any]) -> None:
+    print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="freeze an isolated simulation-mechanism 40/64/88 matrix")
+    sub = parser.add_subparsers(dest="command", required=True)
+    create = sub.add_parser("create")
+    create.add_argument("--root", type=Path, default=CANONICAL_RELEASE_ROOT)
+    create.add_argument("--seed", required=True)
+    create.add_argument("--smoothmatch-v-ref", type=float, required=True)
+    create.add_argument("--go-gate-receipt", type=Path,
+                        default=CANONICAL_GO_GATE_RECEIPT)
+    create.set_defaults(func=lambda args: _emit(create_release(
+        args.root, args.seed, args.smoothmatch_v_ref, None,
+        args.go_gate_receipt, enforce_canonical_root=True,
+    )) or 0)
+    finalize = sub.add_parser("finalize", help="attach a hash-bound timing calibration as a new immutable final freeze")
+    finalize.add_argument("--candidate", type=Path, default=CANONICAL_RELEASE_ROOT / "mechanism_freeze_candidate.json")
+    finalize.add_argument("--smoothmatch-calibration", type=Path, required=True)
+    finalize.add_argument(
+        "--crn-runtime-consumer-contract", type=Path, required=True)
+    finalize.set_defaults(func=lambda args: _emit(finalize_release(
+        args.candidate, args.smoothmatch_calibration,
+        args.crn_runtime_consumer_contract)) or 0)
+    gate = sub.add_parser("gate")
+    gate.add_argument("--freeze", type=Path,
+                      default=CANONICAL_RELEASE_ROOT / "mechanism_freeze.json")
+    def run_gate(args: argparse.Namespace) -> int:
+        freeze_path = require_exact_path(
+            args.freeze, CANONICAL_RELEASE_ROOT / "mechanism_freeze.json",
+            "production final mechanism freeze")
+        require(not freeze_path.is_symlink(),
+                "production final mechanism freeze may not be a symlink")
+        require(stat.S_IMODE(freeze_path.stat().st_mode) & WRITE_BITS == 0,
+                "production final mechanism freeze must be read-only")
+        report = validate_freeze(read_json(freeze_path, "mechanism freeze"))
+        _emit(report)
+        return 0 if report["status"] == "PASS" else 2
+    gate.set_defaults(func=run_gate)
+    return parser
+
+
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    try:
+        args = build_parser().parse_args(argv)
+        return int(args.func(args))
+    except MechanismFreezeError as exc:
+        _emit({"status": "NO_GO", "formal": False, "errors": [str(exc)]}); return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

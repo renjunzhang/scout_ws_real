@@ -1,0 +1,17 @@
+<launch>
+  <arg name="sim_release_ack" default="false"/>
+  <arg name="sim_container_condition" default="C1" doc="C1|C2"/>
+  <arg name="reference_path_topic" default="/scout/global_path_fixed"/>
+  <arg name="costmap_topic" default="/map"/>
+  <arg name="cmd_vel_topic" default="/cmd_vel"/>
+  <arg name="publish_cmd_vel" default="true"/>
+  <include file="$(find spmpc_sim_local_planner)/launch/smpcc_sim_mechanism_r8.launch">
+    <arg name="sim_release_ack" value="$(arg sim_release_ack)"/>
+    <arg name="sim_controller_variant" value="SIM_Bslosh_R1"/>
+    <arg name="sim_container_condition" value="$(arg sim_container_condition)"/>
+    <arg name="reference_path_topic" value="$(arg reference_path_topic)"/>
+    <arg name="costmap_topic" value="$(arg costmap_topic)"/>
+    <arg name="cmd_vel_topic" value="$(arg cmd_vel_topic)"/>
+    <arg name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>
+  </include>
+</launch>

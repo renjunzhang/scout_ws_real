@@ -1,0 +1,245 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""No-ROS tests for the separate SIM-ONLY R1 fresh-case runner.
+
+Every write occurs in a TemporaryDirectory.  In particular these tests do not
+create the canonical SIM-ONLY results/bags roots and do not launch Gazebo.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import importlib.util
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+
+SCRIPTS = Path(__file__).resolve().parents[1]
+RELEASE_PATH = SCRIPTS / "smpcc_sim_only_bslosh_release.py"
+RUNNER_PATH = SCRIPTS / "smpcc_sim_only_bslosh_r1_runner.py"
+
+
+def load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class SimOnlyR1RunnerTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.release_module = load_module("smpcc_sim_only_bslosh_release", RELEASE_PATH)
+        cls.runner = load_module("smpcc_sim_only_bslosh_r1_runner_test_target", RUNNER_PATH)
+
+    def temporary_admission(self, root: Path):
+        created = self.release_module.generate_release(
+            root / "release",
+            strict_storage_root=False,
+            strict_source_paths=True,
+            probe_original_gate=True,
+        )
+        return self.runner.admit_release(Path(created["release_manifest"]), strict_storage=False)
+
+    def request(self, attempt_id: str, *, outcome: str = "success"):
+        return self.runner.CaseRequest(
+            attempt_id=attempt_id,
+            seed=823,
+            container_selector="C2",
+            path_selector="SIM_ONLY_P2_HIGH",
+            ros_uri="http://127.0.0.1:17540",
+            gazebo_uri="http://127.0.0.1:17574",
+            dry_run=True,
+            dry_run_outcome=outcome,
+        )
+
+    def test_dry_run_writes_only_sim_only_attempt_index_and_never_planned_rows(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = self.temporary_admission(root)
+            report = self.runner.run_case(
+                release,
+                self.request("SIM_ONLY_R1_dry_success"),
+                strict_storage=False,
+                endpoint_probe=lambda _r, _g: {"ros": False, "gazebo": False},
+            )
+            self.assertTrue(report["method_success"])
+            self.assertTrue(report["dry_run"])
+            manifest = json.loads(Path(report["attempt_manifest"]).read_text(encoding="utf-8"))
+            self.assertEqual(self.runner.PROTOCOL_ID, manifest["protocol_id"])
+            self.assertFalse(manifest["formal"])
+            self.assertTrue(manifest["formal_simulation_only"])
+            self.assertFalse(manifest["physical_primary_eligible"])
+            self.assertFalse(manifest["planned_row_generated"])
+            self.assertIsNone(manifest["planned_row_id"])
+            self.assertEqual("NOT_USED_NO_FIXEDPROFILE", manifest["profile"]["status"])
+            self.assertEqual(self.runner.H_PROXY_TOPIC, manifest["liquid_measurements"]["H_proxy"]["topic"])
+            self.assertEqual(self.runner.H_MODAL_TOPIC, manifest["liquid_measurements"]["H_modal"]["topic"])
+            self.assertIsNone(manifest["liquid_measurements"]["physical_primary"])
+            self.assertNotIn("/sim_truth/liquid_height", manifest["liquid_measurements"])
+            launch_manifest = json.loads(Path(manifest["case_launch_manifest_path"]).read_text(encoding="utf-8"))
+            self.assertEqual(16, launch_manifest["recorder"]["buffer_mb"])
+            self.assertEqual(64, launch_manifest["recorder"]["chunk_kb"])
+            events = [item["event"] for item in manifest["lifecycle"]]
+            self.assertLess(events.index("recorder_started"), events.index("path_replay_released"))
+            self.assertIn("tail_recorded", events)
+            self.assertEqual(60.0, manifest["goal_timeout_sec_from_first_executed_motion"])
+            self.assertEqual(30.0, manifest["settle_sec"])
+            self.assertTrue(manifest["fresh_ros_gazebo"])
+            index = self.runner.load_index(Path(report["dataset_index"]))
+            self.assertEqual(1, len(index))
+            self.assertNotIn("planned_row_id", index[0])
+            self.assertEqual(report["dataset_index_head_hash"], index[0]["entry_hash"])
+
+    def test_timeout_keeps_frozen_tail_and_is_method_failure_not_retryable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = self.temporary_admission(root)
+            report = self.runner.run_case(
+                release,
+                self.request("SIM_ONLY_R1_dry_timeout", outcome="timeout"),
+                strict_storage=False,
+                endpoint_probe=lambda _r, _g: {"ros": False, "gazebo": False},
+            )
+            manifest = json.loads(Path(report["attempt_manifest"]).read_text(encoding="utf-8"))
+            self.assertFalse(manifest["method_success"])
+            self.assertTrue(manifest["method_failure"])
+            self.assertEqual("METHOD_FAILURE", manifest["failure_class"])
+            self.assertFalse(manifest["retry_authorization_allowed"])
+            self.assertTrue(manifest["motion_started"])
+            self.assertTrue(manifest["tail_complete"])
+            with self.assertRaises(self.runner.SimOnlyRunnerError):
+                self.runner.build_retry_authorization(
+                    Path(report["attempt_manifest"]),
+                    "SIM_ONLY_R1_illegal_coverup",
+                    result_root=release.results_root,
+                )
+
+    def test_historical_r1_live_execution_is_quarantined_before_any_process(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = self.temporary_admission(root)
+            request = self.request("SIM_ONLY_R1_no_live_execution")
+            request = self.runner.CaseRequest(
+                attempt_id=request.attempt_id,
+                seed=request.seed,
+                container_selector=request.container_selector,
+                path_selector=request.path_selector,
+                ros_uri=request.ros_uri,
+                gazebo_uri=request.gazebo_uri,
+                dry_run=False,
+                dry_run_outcome=request.dry_run_outcome,
+            )
+            with self.assertRaisesRegex(self.runner.SimOnlyRunnerError, "quarantined"):
+                self.runner.run_case(release, request, strict_storage=False)
+
+    def test_release_original_matrix_protocol_or_root_is_rejected_before_run(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = self.temporary_admission(root)
+            with self.assertRaises(self.runner.SimOnlyRunnerError):
+                self.runner.reject_original_matrix_text(
+                    {"protocol_id": self.runner.ORIGINAL_PROTOCOL_ID}, "test original protocol"
+                )
+            with self.assertRaises(self.runner.SimOnlyRunnerError):
+                self.runner.immutable_case_dirs(release, "SIM-S1_forbidden")
+            path = self.runner.validate_path_asset("SIM_ONLY_P2_HIGH")
+            self.assertEqual("SIM_ONLY_OPEN_FIELD_P2_JSON_REPLAY_NOT_H1_L1", path["executed_path_semantic"])
+            self.assertEqual(-4.0, path["start"]["x"])
+            self.assertEqual(5.0, path["goal"]["x"])
+
+    def test_seed_streams_are_independent_and_time_indexed(self):
+        first = self.runner.make_seed_bundle("SIM_ONLY_R1_seed_check", 19)
+        second = self.runner.make_seed_bundle("SIM_ONLY_R1_seed_check", 19)
+        self.runner.validate_seed_bundle(first, "SIM_ONLY_R1_seed_check")
+        self.assertEqual(first, second)
+        self.assertTrue(first["independent_sub_seeds"])
+        self.assertTrue(first["time_indexed_traces"])
+        self.assertEqual(6, len(set(first["sub_seeds"].values())))
+        self.assertEqual(0, first["traces"]["simulator_rng"]["samples"][0]["time_index_ms"])
+        self.assertEqual(2000, first["traces"]["simulator_rng"]["samples"][1]["time_index_ms"])
+
+    def test_topic_readiness_retries_roscore_startup_race(self):
+        attempts = [
+            self.runner.SimOnlyRunnerError("topic /odom timed out after 3s"),
+            subprocess.CompletedProcess(args=[], returncode=1, stdout="ERROR: Unable to communicate with master!\n"),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="data: ready\n"),
+        ]
+        with mock.patch.object(self.runner, "run_checked", side_effect=attempts) as run_checked:
+            with mock.patch.object(self.runner.time, "sleep") as sleep:
+                self.runner.wait_topic("/odom", {"ROS_MASTER_URI": "http://127.0.0.1:17540"}, 1.0)
+        self.assertEqual(3, run_checked.call_count)
+        self.assertEqual(2, sleep.call_count)
+        sleep.assert_called_with(0.2)
+
+    def test_node_readiness_retries_a_short_rosmaster_probe_timeout(self):
+        attempts = [
+            self.runner.SimOnlyRunnerError("node list timed out after 0.5s"),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="/rosout\n/spmpc_local_planner\n"),
+        ]
+        with mock.patch.object(self.runner, "run_checked", side_effect=attempts) as run_checked:
+            with mock.patch.object(self.runner.time, "sleep") as sleep:
+                self.runner.wait_node("/spmpc_local_planner", {"ROS_MASTER_URI": "http://127.0.0.1:17540"}, 1.0)
+        self.assertEqual(2, run_checked.call_count)
+        sleep.assert_called_once_with(0.2)
+
+    def test_sourced_commands_prefer_release_bound_workspace_over_proxy_overlay(self):
+        command = self.runner.sourced_command(("rospack", "find", "spmpc_local_planner"))
+        shell = command[-1]
+        workspace_source = str(self.runner.WORKSPACE_ROOT / "src")
+        workspace_devel = str(self.runner.WORKSPACE_ROOT / "devel")
+        proxy_source = str(self.runner.PROXY_WS / "src")
+        proxy_devel = str(self.runner.PROXY_WS / "devel")
+        self.assertIn("export ROS_PACKAGE_PATH=", shell)
+        self.assertIn("export CMAKE_PREFIX_PATH=", shell)
+        self.assertIn(workspace_source, shell)
+        self.assertIn(proxy_source, shell)
+        self.assertIn(workspace_devel, shell)
+        self.assertIn(proxy_devel, shell)
+        self.assertLess(shell.index(workspace_source), shell.index(proxy_source))
+        self.assertLess(shell.index(workspace_devel), shell.index(proxy_devel))
+
+    def test_h_proxy_monitor_is_external_odom_only_and_uses_selected_container(self):
+        command = self.runner.h_proxy_monitor_command({"slosh": {"container_radius_m": 0.0475, "liquid_height_m": 0.058, "liquid_density_kgpm3": 1000.0, "mode_index": 1, "damping_ratio": 0.05}})
+        shell = command[-1]
+        self.assertIn("spmpc_sim_local_planner smpcc_sim_h_proxy_monitor.launch", shell)
+        self.assertNotIn("slosh_models", shell)
+        self.assertIn("subscribe_cmd_vel_debug:=false", shell)
+        self.assertIn("container_radius:=0.0475", shell)
+
+    def test_recorder_readiness_accepts_nonempty_artifact_without_a_flush(self):
+        class Recorder:
+            @staticmethod
+            def poll():
+                return None
+
+        with tempfile.TemporaryDirectory() as temporary:
+            bag = Path(temporary) / "capture.active.bag"
+            bag.write_bytes(b"a")
+            with mock.patch.object(self.runner.time, "sleep") as sleep:
+                first, second, source, nodes = self.runner.wait_for_recorder_artifact(bag, "http://127.0.0.1:17540", {}, Recorder(), 1.0)
+        self.assertEqual(1, first)
+        self.assertEqual(1, second)
+        self.assertEqual("nonempty_bag_artifact", source)
+        self.assertEqual([], nodes)
+        sleep.assert_not_called()
+
+    def test_recorder_graph_requires_one_new_common_subscriber_for_all_topics(self):
+        before = {topic: ("/existing",) for topic in self.runner.RECORDER_TOPICS}
+        after = {topic: ("/existing", "/record_20260802") for topic in self.runner.RECORDER_TOPICS}
+        self.assertEqual(["/record_20260802"], self.runner.common_new_recorder_subscribers(before, after))
+        after[self.runner.RECORDER_TOPICS[-1]] = ("/existing",)
+        self.assertEqual([], self.runner.common_new_recorder_subscribers(before, after))
+
+
+if __name__ == "__main__":
+    unittest.main()

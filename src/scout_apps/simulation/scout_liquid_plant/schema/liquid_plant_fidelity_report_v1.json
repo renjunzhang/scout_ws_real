@@ -1,0 +1,344 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "smpcc-sim-liquid-plant-fidelity-validation-v1",
+  "title": "SMPCC-SIM development liquid-plant fidelity validation report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "report_type",
+    "report_schema_version",
+    "tool_id",
+    "generated_at_utc",
+    "verifier_source",
+    "status",
+    "formal",
+    "development_only",
+    "fidelity_validation_status",
+    "physical_primary_eligible",
+    "truth_topic",
+    "comparison_id",
+    "plant_code_hash",
+    "plant_parameter_hash",
+    "plant_input_schema_hash",
+    "plant_output_schema_hash",
+    "input_artifacts",
+    "threshold_policy",
+    "case_metrics",
+    "validation_dimensions",
+    "ranking",
+    "formal_gate_compatibility",
+    "errors",
+    "warnings"
+  ],
+  "properties": {
+    "report_type": {
+      "const": "SMPCC_SIM_LIQUID_PLANT_FIDELITY_VALIDATION"
+    },
+    "report_schema_version": {
+      "const": "smpcc-sim-liquid-plant-fidelity-validation-v1"
+    },
+    "tool_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at_utc": {
+      "type": "string",
+      "minLength": 1
+    },
+    "verifier_source": {
+      "$ref": "#/$defs/hashedArtifact"
+    },
+    "status": {
+      "enum": [
+        "NO_GO",
+        "DEVELOPMENT_METRICS_COMPLETE_NOT_FORMAL",
+        "DEVELOPMENT_METRICS_FAILED_NOT_FORMAL"
+      ]
+    },
+    "formal": {
+      "const": false
+    },
+    "development_only": {
+      "const": true
+    },
+    "fidelity_validation_status": {
+      "const": "UNVALIDATED_DEVELOPMENT_ONLY"
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "truth_topic": {
+      "const": "/sim_truth/liquid_height"
+    },
+    "comparison_id": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "minLength": 1
+        }
+      ]
+    },
+    "plant_code_hash": {
+      "$ref": "#/$defs/shaOrNull"
+    },
+    "plant_parameter_hash": {
+      "$ref": "#/$defs/shaOrNull"
+    },
+    "plant_input_schema_hash": {
+      "$ref": "#/$defs/shaOrNull"
+    },
+    "plant_output_schema_hash": {
+      "$ref": "#/$defs/shaOrNull"
+    },
+    "validation_dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amplitude",
+        "frequency",
+        "damping",
+        "phase",
+        "ranking"
+      ],
+      "properties": {
+        "amplitude": {
+          "$ref": "#/$defs/dimensionStatus"
+        },
+        "frequency": {
+          "$ref": "#/$defs/dimensionStatus"
+        },
+        "damping": {
+          "$ref": "#/$defs/dimensionStatus"
+        },
+        "phase": {
+          "$ref": "#/$defs/dimensionStatus"
+        },
+        "ranking": {
+          "$ref": "#/$defs/dimensionStatus"
+        }
+      }
+    },
+    "input_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "comparison_manifest",
+        "threshold_policy",
+        "cases"
+      ],
+      "properties": {
+        "comparison_manifest": {
+          "$ref": "#/$defs/boundArtifact"
+        },
+        "threshold_policy": {
+          "$ref": "#/$defs/boundArtifact"
+        },
+        "cases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "case_id",
+              "plant_signal",
+              "reference_signal",
+              "reference_evidence"
+            ],
+            "properties": {
+              "case_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "plant_signal": {
+                "$ref": "#/$defs/hashedArtifact"
+              },
+              "reference_signal": {
+                "$ref": "#/$defs/hashedArtifact"
+              },
+              "reference_evidence": {
+                "$ref": "#/$defs/hashedArtifact"
+              }
+            }
+          }
+        }
+      }
+    },
+    "threshold_policy": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "policy_id",
+            "path",
+            "sha256",
+            "amplitude_relative_error_max",
+            "frequency_relative_error_max",
+            "damping_absolute_error_max",
+            "phase_absolute_error_deg_max",
+            "ranking_metric",
+            "ranking_minimum_cases",
+            "ranking_tie_relative_tolerance"
+          ]
+        }
+      ]
+    },
+    "case_metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "case_id",
+          "plant_signal",
+          "reference_signal",
+          "reference_evidence",
+          "metrics",
+          "dimension_statuses"
+        ]
+      }
+    },
+    "ranking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "metric",
+        "reason",
+        "reference_order",
+        "plant_order"
+      ],
+      "properties": {
+        "status": {
+          "$ref": "#/$defs/dimensionStatus"
+        },
+        "metric": {
+          "const": "amplitude"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "reference_order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "plant_order": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "formal_gate_compatibility": {
+      "type": "object",
+      "required": [
+        "eligible",
+        "reasons"
+      ],
+      "properties": {
+        "eligible": {
+          "const": false
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "shaOrNull": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      ]
+    },
+    "hashedArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "boundArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "expected_sha256",
+        "actual_sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expected_sha256": {
+          "$ref": "#/$defs/shaOrNull"
+        },
+        "actual_sha256": {
+          "$ref": "#/$defs/shaOrNull"
+        }
+      }
+    },
+    "dimensionStatus": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NOT_EVALUATED"
+      ]
+    }
+  }
+}

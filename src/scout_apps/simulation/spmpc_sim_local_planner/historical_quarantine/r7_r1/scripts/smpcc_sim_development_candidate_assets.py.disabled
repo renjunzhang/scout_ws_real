@@ -1,0 +1,888 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Create and verify non-formal P2/C2/0705 development candidate assets.
+
+This command intentionally fills only the choices the user explicitly made
+for development work:
+
+* the old open-field P2 task has a common start/goal for the two paths;
+* C2 is a 95 mm-diameter *development* container with C1 liquid height;
+* B0/Bsmooth use the 0705 repository snapshot's historical weights.
+
+It is deliberately not a formal-freeze builder.  It never names either path
+H1/L1, never creates a planned-row/randomisation table, and never creates a
+formal Bslosh, SmoothMatch, or FixedProfile configuration.  The generated
+files are small, hash-bound candidate inputs below ``/data``; the actual
+Gazebo world is only provenance for the clearance audit.  No ROS/Gazebo
+process is started by this module.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import math
+import os
+import stat
+import sys
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Mapping, MutableMapping, Sequence, Tuple
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+WORKSPACE_ROOT = SCRIPT_DIR.parents[4]
+SIM_ROOT = Path("/data/a/scout_sim_replacement")
+DEVELOPMENT_ASSET_ROOT = SIM_ROOT / "development_assets"
+WORLD_FILE = SIM_ROOT / "classic_ws/src/scout_mini_proxy_gazebo/worlds/open_walled_proxy.world"
+LIQUID_PLANT_ROOT = WORKSPACE_ROOT / "src/scout_apps/simulation/scout_liquid_plant"
+C1_TEMPLATE = LIQUID_PLANT_ROOT / "config/C1_development_unvalidated.yaml"
+C2_TEMPLATE = LIQUID_PLANT_ROOT / "config/C2_development_unvalidated.yaml"
+HISTORICAL_0705_DOC = (
+    WORKSPACE_ROOT
+    / "docs/实物实验注意事项/对比试验/实物对比实验/0705B0_B_slosh_B_ours_SPMPC内部晃动高度实物验证指南.md"
+)
+HISTORICAL_REVISION = "3c558a5"
+HISTORICAL_0705_FIXTURE = (
+    SCRIPT_DIR.parent / "config/historical_0705_weights_fixture.json"
+)
+
+BUNDLE_ID = "SMPCC_SIM_DEV_P2_C2_D95_0705_CANDIDATES_v1"
+BUNDLE_SCHEMA_VERSION = "smpcc-sim-development-candidate-assets-v1"
+EVIDENCE_CLASS = "DEVELOPMENT_CANDIDATE_NOT_FORMAL"
+HIGH_PATH_ID = "DEV-HIGH-EXCITATION-P2-CANDIDATE"
+LOW_PATH_ID = "DEV-LOW-EXCITATION-P2-CANDIDATE"
+P2_START = (-4.0, 0.0, 0.0)
+P2_GOAL = (5.0, 0.0, 0.0)
+PATH_POINT_COUNT = 181
+REQUIRED_CLEARANCE_M = 0.30
+# The world has walls centred at +/- 6.0 (x) and +/- 4.0 (y), each 0.12 m
+# thick.  The inner free-space boundary is therefore +/-5.94 and +/-3.94.
+# 0.45 m is a deliberately conservative proxy footprint for this development
+# audit; it is not a frozen formal robot geometry value.
+DEVELOPMENT_WORLD_GEOMETRY = {
+    "bounds": [-5.94, 5.94, -3.94, 3.94],
+    "obstacles": [],
+    "robot_footprint_radius_m": 0.45,
+    "container_footprint_radius_m": 0.0475,
+}
+
+
+class CandidateAssetError(RuntimeError):
+    """An unsafe/ambiguous development candidate request."""
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise CandidateAssetError(message)
+
+
+def canonical_bytes(value: Any) -> bytes:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def canonical_hash(value: Any) -> str:
+    return hashlib.sha256(canonical_bytes(value)).hexdigest()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def read_json(path: Path, label: str) -> Mapping[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CandidateAssetError(f"cannot read {label}: {path}: {exc}") from exc
+    require(isinstance(value, Mapping), f"{label} must be a JSON object")
+    return value
+
+
+def write_json_new_readonly(path: Path, value: Mapping[str, Any]) -> None:
+    """Write a small candidate artifact once, without replacing evidence."""
+
+    require(not path.exists(), f"refusing to overwrite existing candidate artifact: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    try:
+        with path.open("x", encoding="utf-8") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(path, 0o444)
+    except FileExistsError as exc:
+        raise CandidateAssetError(f"refusing to overwrite existing candidate artifact: {path}") from exc
+
+
+def _load_toolchain():
+    existing = sys.modules.get("smpcc_sim_toolchain")
+    if existing is not None:
+        return existing
+    path = SCRIPT_DIR / "smpcc_sim_toolchain.py"
+    spec = importlib.util.spec_from_file_location("smpcc_sim_toolchain", path)
+    if spec is None or spec.loader is None:
+        raise CandidateAssetError(f"cannot load toolchain: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["smpcc_sim_toolchain"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _read_development_yaml(path: Path) -> Mapping[str, Any]:
+    try:
+        import yaml  # type: ignore
+    except ImportError as exc:
+        raise CandidateAssetError("PyYAML is required to inspect development C1/C2 templates") from exc
+    require(path.is_file(), f"development container template is missing: {path}")
+    try:
+        value = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise CandidateAssetError(f"cannot parse development container template {path}: {exc}") from exc
+    require(isinstance(value, Mapping), f"development container template must be an object: {path}")
+    return value
+
+
+def validate_development_container_templates(
+    c1: Mapping[str, Any], c2: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """Require the requested diameter-only candidate transfer semantics."""
+
+    for name, item in (("C1", c1), ("C2", c2)):
+        require(item.get("development_only") is True, f"{name} must stay development_only")
+        require(item.get("formal") is False, f"{name} must stay non-formal")
+        require(
+            item.get("fidelity_validation_status") == "UNVALIDATED",
+            f"{name} must stay UNVALIDATED",
+        )
+        require(
+            str(item.get("condition_template_id", "")).endswith("_DEVELOPMENT_TEMPLATE_UNFROZEN"),
+            f"{name} must identify an unfrozen development template",
+        )
+    c1_normal = dict(c1)
+    c2_normal = dict(c2)
+    c1_normal.pop("condition_template_id", None)
+    c2_normal.pop("condition_template_id", None)
+    c1_container = dict(c1_normal.pop("container", {}))
+    c2_container = dict(c2_normal.pop("container", {}))
+    require(c1_normal == c2_normal, "C2 development template changes fields outside the container")
+    c1_radius = c1_container.pop("container_radius_m", None)
+    c2_radius = c2_container.pop("container_radius_m", None)
+    require(c1_container == c2_container, "C2 development template changes non-radius container fields")
+    require(c1_radius == 0.0185, "C1 development candidate radius must be 0.0185 m")
+    require(c2_radius == 0.0475, "C2 development candidate radius must be 0.0475 m (95 mm diameter)")
+    require(c2_container.get("static_liquid_height_m") == 0.0580, "C2 liquid height must stay 0.058 m")
+    return {
+        "status": "PASS_DEVELOPMENT_ONLY",
+        "c1_radius_m": c1_radius,
+        "c2_radius_m": c2_radius,
+        "c2_diameter_m": 2.0 * float(c2_radius),
+        "liquid_height_m": c2_container["static_liquid_height_m"],
+        "allowed_changed_fields": ["container.container_radius_m"],
+    }
+
+
+def historical_0705_provenance() -> Dict[str, Any]:
+    """Load only B0/B_smooth historical settings and declare their limits.
+
+    The copied fixture is intentionally local to the simulation package.  It
+    records the historical values without making candidate generation read the
+    real-controller tree.  It still does not create a formal or real-release
+    effective configuration.
+    """
+
+    fixture = read_json(HISTORICAL_0705_FIXTURE, "0705 local weight fixture")
+    require(fixture.get("document_type") == "SMPCC_SIM_HISTORICAL_0705_WEIGHT_FIXTURE",
+            "0705 local fixture type is invalid")
+    require(fixture.get("fixture_only") is True and fixture.get("formal") is False,
+            "0705 local fixture must remain non-formal")
+    require(fixture.get("origin_commit") == HISTORICAL_REVISION,
+            "0705 local fixture origin revision drift")
+    variants = fixture.get("variants")
+    fallback = fixture.get("fallback_fields")
+    require(isinstance(variants, Mapping) and isinstance(fallback, Mapping),
+            "0705 local fixture is malformed")
+    require(fallback == {"w_alpha": "w_smooth", "w_du_a": "w_smooth", "w_du_vs": "w_smooth"},
+            "0705 local fallback fixture drift")
+    b0 = variants.get("B0")
+    bsmooth = variants.get("B_smooth")
+    require(isinstance(b0, Mapping) and isinstance(bsmooth, Mapping),
+            "0705 local fixture lacks B0/B_smooth")
+    require(HISTORICAL_0705_DOC.is_file(), f"0705 command document is missing: {HISTORICAL_0705_DOC}")
+    return {
+        "source_revision": HISTORICAL_REVISION,
+        "variants_source_path": str(HISTORICAL_0705_FIXTURE.resolve()),
+        "variants_source_sha256": sha256_file(HISTORICAL_0705_FIXTURE),
+        "variant_fallback_source_path": str(HISTORICAL_0705_FIXTURE.resolve()),
+        "variant_fallback_source_sha256": sha256_file(HISTORICAL_0705_FIXTURE),
+        "command_document_path": str(HISTORICAL_0705_DOC.resolve()),
+        "command_document_sha256": sha256_file(HISTORICAL_0705_DOC),
+        "historical_source_kind": "0705_LOCAL_SIM_FIXTURE_PLUS_COMMAND_DOCUMENT",
+        "effective_config_readback": "NOT_AVAILABLE_DO_NOT_TREAT_AS_FORMAL_EFFECTIVE_CONFIG",
+        "b0": dict(b0),
+        "bsmooth": dict(bsmooth),
+    }
+
+
+def candidate_control_config(
+    candidate_id: str, historical_variant: Mapping[str, Any], provenance: Mapping[str, Any]
+) -> Dict[str, Any]:
+    """Build an explicit non-formal *candidate* from the 0705 snapshot."""
+
+    w_smooth = float(historical_variant["w_smooth"])
+    return {
+        "schema_version": BUNDLE_SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_DEVELOPMENT_CONTROL_CANDIDATE",
+        "candidate_id": candidate_id,
+        "condition_id": candidate_id,
+        "development_only": True,
+        "formal": False,
+        "evidence_class": EVIDENCE_CLASS,
+        "formal_equivalence": "NONE",
+        "historical_variant_label": "B0" if candidate_id.endswith("B0") else "B_smooth",
+        "historical_weight_snapshot": {
+            key: historical_variant[key]
+            for key in (
+                "w_contour",
+                "w_lag",
+                "w_progress",
+                "w_v",
+                "w_vs",
+                "w_control",
+                "w_accel",
+                "w_smooth",
+                "w_slosh",
+            )
+        },
+        # The 0705 command line selected V_REF=0.20, overriding the variant
+        # default 0.25.  The fallback fields are source-derived, not a live
+        # readback, and remain subject to runtime readback before any use.
+        "w_control": float(historical_variant["w_control"]),
+        "w_smooth": w_smooth,
+        "w_alpha": w_smooth,
+        "w_du_a": w_smooth,
+        "w_du_vs": w_smooth,
+        "w_slosh": float(historical_variant["w_slosh"]),
+        "v_ref": 0.20,
+        "observer": {
+            "status": "NOT_FORMAL_RELEASE_RUNTIME_READBACK_REQUIRED",
+            "H_proxy": "/slosh/height",
+            "H_modal": "/sim_spmpc/slosh_height",
+            "physical_primary_eligible": False,
+        },
+        "delay": {
+            "mode": "fixed_closed_loop",
+            "linear_sec": 0.15,
+            "angular_sec": 0.22,
+            "status": "0705_COMMAND_CANDIDATE_RUNTIME_READBACK_REQUIRED",
+        },
+        "limits": {
+            "shared_linear_accel_limit_enable": True,
+            "shared_linear_accel_max_mps2": 0.6,
+            "shared_angular_limit_enable": True,
+            "shared_angular_rate_max_radps": 1.2,
+            "shared_angular_accel_max_radps2": 1.2,
+            "alpha_max_radps2": 1.2,
+            "goal_timeout_sec": 60.0,
+        },
+        "source_provenance": {
+            key: provenance[key]
+            for key in (
+                "source_revision",
+                "variants_source_path",
+                "variants_source_sha256",
+                "variant_fallback_source_path",
+                "variant_fallback_source_sha256",
+                "command_document_path",
+                "command_document_sha256",
+                "effective_config_readback",
+            )
+        },
+        "runtime_use": "BLOCKED_UNTIL_FULL_PROXY_OR_FORMAL_BACKEND_READBACK_COVERS_ALL_FIELDS",
+        "notes": [
+            "Historical weights are a development candidate only.",
+            "This does not create a formal Bslosh or a real/simulation alignment receipt.",
+            "The current legacy proxy does not bind all listed fields; use requires readback.",
+        ],
+    }
+
+
+def _curve_y(progress: float, amplitude: float) -> float:
+    """A zero-position/zero-tangent S curve with curvature reversal."""
+
+    return amplitude * math.sin(2.0 * math.pi * progress) * math.sin(math.pi * progress) ** 2
+
+
+def _path_points(target_lateral_peak_m: float) -> List[Dict[str, float]]:
+    values = [_curve_y(index / float(PATH_POINT_COUNT - 1), 1.0) for index in range(PATH_POINT_COUNT)]
+    scale = target_lateral_peak_m / max(abs(value) for value in values)
+    xs = [P2_START[0] + (P2_GOAL[0] - P2_START[0]) * index / float(PATH_POINT_COUNT - 1) for index in range(PATH_POINT_COUNT)]
+    ys = [scale * value for value in values]
+    points: List[Dict[str, float]] = []
+    for index, (x, y) in enumerate(zip(xs, ys)):
+        if index == 0 or index == len(xs) - 1:
+            yaw = 0.0
+        else:
+            yaw = math.atan2(ys[index + 1] - ys[index - 1], xs[index + 1] - xs[index - 1])
+        points.append({"x": round(x, 9), "y": round(y, 9), "yaw": round(yaw, 9)})
+    return points
+
+
+def candidate_path(path_id: str, target_lateral_peak_m: float, excitation: str) -> Dict[str, Any]:
+    require(path_id in {HIGH_PATH_ID, LOW_PATH_ID}, "unsupported development path ID")
+    require(excitation in {"HIGH", "LOW"}, "unsupported development excitation label")
+    points = _path_points(target_lateral_peak_m)
+    return {
+        "schema_version": BUNDLE_SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_DEVELOPMENT_FROZEN_JSON_CANDIDATE",
+        "path_id": path_id,
+        "source_mode": "development_pre_generated_json_replay_candidate",
+        "development_only": True,
+        "formal": False,
+        "evidence_class": EVIDENCE_CLASS,
+        "formal_path_id": None,
+        "runtime_regeneration_forbidden": True,
+        "same_p2_task": {
+            "frame_id": "map",
+            "start": {"x": P2_START[0], "y": P2_START[1], "yaw": P2_START[2]},
+            "goal": {"x": P2_GOAL[0], "y": P2_GOAL[1], "yaw": P2_GOAL[2]},
+        },
+        "excitation_class": excitation,
+        "target_lateral_peak_m": target_lateral_peak_m,
+        "zones": {
+            "Z1": {"point_indices": [0, 29], "motion_intent": "accelerate_from_rest"},
+            "Z2": {"point_indices": [29, 81], "motion_intent": "sustained_first_curvature"},
+            "Z3": {"point_indices": [81, 115], "motion_intent": "curvature_reversal"},
+            "Z4": {"point_indices": [115, 151], "motion_intent": "exit_curve_reaccelerate"},
+            "Z5": {"point_indices": [151, 180], "motion_intent": "terminal_brake_to_goal"},
+        },
+        "motion_constraints_candidate": {
+            "v_ref_mps": 0.20,
+            "shared_linear_accel_max_mps2": 0.6,
+            "shared_angular_rate_max_radps": 1.2,
+            "shared_angular_accel_max_radps2": 1.2,
+            "goal_timeout_sec": 60.0,
+        },
+        "points": points,
+        "notes": [
+            "The two development paths share exactly the old open-field P2 start and goal.",
+            "They are not H1/L1 and cannot be passed to the formal frozen-path replay adapter.",
+            "Zone motion intents require a future read-only profile/runtime admission before execution.",
+        ],
+    }
+
+
+def transform_candidate_path(source: Mapping[str, Any], transform: Mapping[str, float]) -> Dict[str, Any]:
+    for key in ("rotation_rad", "tx", "ty", "yaw_offset_rad"):
+        require(key in transform and math.isfinite(float(transform[key])), f"transform lacks finite {key}")
+    theta = float(transform["rotation_rad"])
+    c, s = math.cos(theta), math.sin(theta)
+    points = []
+    for point in source["points"]:
+        x, y, yaw = float(point["x"]), float(point["y"]), float(point["yaw"])
+        points.append(
+            {
+                "x": round(c * x - s * y + float(transform["tx"]), 9),
+                "y": round(s * x + c * y + float(transform["ty"]), 9),
+                "yaw": round(yaw + float(transform["yaw_offset_rad"]), 9),
+            }
+        )
+    derived = dict(source)
+    derived["document_type"] = "SMPCC_SIM_DEVELOPMENT_SIM_PATH_CANDIDATE"
+    derived["points"] = points
+    derived["derived_from"] = {
+        "source_path_id": source["path_id"],
+        "transform": dict(transform),
+    }
+    return derived
+
+
+def candidate_world_geometry(world_hash: str) -> Dict[str, Any]:
+    return {
+        "schema_version": BUNDLE_SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_DEVELOPMENT_WORLD_CLEARANCE_GEOMETRY",
+        "development_only": True,
+        "formal": False,
+        "evidence_class": EVIDENCE_CLASS,
+        "world_runtime_format": "gazebo_sdf",
+        "launched_world_path": str(WORLD_FILE.resolve()),
+        "launched_world_sha256": world_hash,
+        "geometry_derivation": "open_walled_proxy.world wall-centre +/-6,+/-4 with 0.12m wall thickness",
+        "geometry_assumptions": "conservative development robot/container footprint; not frozen formal geometry",
+        **DEVELOPMENT_WORLD_GEOMETRY,
+    }
+
+
+def _path_points_for_toolchain(document: Mapping[str, Any]) -> List[Tuple[float, float, float]]:
+    return [(float(item["x"]), float(item["y"]), float(item["yaw"])) for item in document["points"]]
+
+
+def validate_candidate_path_pair(
+    source: Mapping[str, Any],
+    derived: Mapping[str, Any],
+    transform: Mapping[str, Any],
+    geometry: Mapping[str, Any],
+) -> Dict[str, Any]:
+    """Rigid-transform/curvature/analytic-clearance audit for DEV path IDs."""
+
+    toolchain = _load_toolchain()
+    require(source.get("development_only") is True and source.get("formal") is False, "source path must stay development-only")
+    require(derived.get("development_only") is True and derived.get("formal") is False, "sim path must stay development-only")
+    require(source.get("path_id") in {HIGH_PATH_ID, LOW_PATH_ID}, "unexpected development path ID")
+    require(derived.get("path_id") == source.get("path_id"), "derived path ID differs from source")
+    require(source.get("formal_path_id") is None and derived.get("formal_path_id") is None, "development path claims a formal path ID")
+    require(source.get("runtime_regeneration_forbidden") is True, "path must forbid case-time regeneration")
+    zones = source.get("zones")
+    require(isinstance(zones, Mapping) and set(zones) == {"Z1", "Z2", "Z3", "Z4", "Z5"}, "candidate path needs Z1-Z5")
+    toolchain.validate_world_geometry(geometry)
+    source_points = _path_points_for_toolchain(source)
+    derived_points = _path_points_for_toolchain(derived)
+    require(len(source_points) == len(derived_points) == PATH_POINT_COUNT, "candidate path point count drift")
+    theta, tx, ty, yaw_offset = (
+        float(transform["rotation_rad"]),
+        float(transform["tx"]),
+        float(transform["ty"]),
+        float(transform["yaw_offset_rad"]),
+    )
+    c, s = math.cos(theta), math.sin(theta)
+    transform_error = 0.0
+    for original, simulated in zip(source_points, derived_points):
+        transform_error = max(
+            transform_error,
+            math.hypot(c * original[0] - s * original[1] + tx - simulated[0], s * original[0] + c * original[1] + ty - simulated[1]),
+            abs((original[2] + yaw_offset - simulated[2] + math.pi) % (2.0 * math.pi) - math.pi),
+        )
+    require(transform_error <= 1e-7, f"candidate rigid transform error too large: {transform_error}")
+    source_length = toolchain.path_length(source_points)
+    sim_length = toolchain.path_length(derived_points)
+    require(abs(source_length - sim_length) <= 1e-7, "candidate rigid transform changes arc length")
+    source_kappa = toolchain.path_curvatures(source_points)
+    sim_kappa = toolchain.path_curvatures(derived_points)
+    curvature_error = max([abs(left - right) for left, right in zip(source_kappa, sim_kappa)] or [0.0])
+    require(curvature_error <= 1e-5, "candidate rigid transform changes curvature")
+    footprint = float(geometry["robot_footprint_radius_m"]) + float(geometry["container_footprint_radius_m"])
+    clearances = [
+        toolchain.segment_clearance(left, right, geometry) - footprint
+        for left, right in zip(derived_points, derived_points[1:])
+    ]
+    min_clearance = min(clearances)
+    require(min_clearance >= REQUIRED_CLEARANCE_M, f"candidate path clearance {min_clearance:.6f} m below {REQUIRED_CLEARANCE_M:.6f} m")
+    start, goal = derived_points[0], derived_points[-1]
+    require(math.hypot(start[0] - P2_START[0], start[1] - P2_START[1]) <= 1e-7, "candidate start drift")
+    require(math.hypot(goal[0] - P2_GOAL[0], goal[1] - P2_GOAL[1]) <= 1e-7, "candidate goal drift")
+    return {
+        "status": "PASS_DEVELOPMENT_ONLY_NOT_FORMAL",
+        "formal_execution_authorized": False,
+        "path_id": source["path_id"],
+        "arc_length_m": source_length,
+        "maximum_abs_curvature_per_m": max(abs(value) for value in source_kappa),
+        "max_transform_error": transform_error,
+        "max_curvature_error": curvature_error,
+        "minimum_clearance_m": min_clearance,
+        "required_clearance_m": REQUIRED_CLEARANCE_M,
+        "clearance_method": "analytic_segment_circle_aabb_with_development_footprint",
+    }
+
+
+def _immutable_descriptor(path: Path) -> Dict[str, Any]:
+    require(path.is_file(), f"candidate asset is missing: {path}")
+    mode = stat.S_IMODE(path.stat().st_mode)
+    require(mode & (stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH) == 0, f"candidate asset is writable: {path}")
+    return {"path": str(path.resolve()), "sha256": sha256_file(path)}
+
+
+def _bound_source_descriptor(path: Path) -> Dict[str, Any]:
+    """Describe a checked-in/runtime source without claiming it is immutable.
+
+    Candidate output is write-once and hash-binds these development sources.
+    Requiring the workspace or the legacy Gazebo world itself to be chmod 0444
+    would be both impractical and a misleading substitute for a formal freeze.
+    """
+
+    require(path.is_file(), f"candidate source is missing: {path}")
+    return {
+        "path": str(path.resolve()),
+        "sha256": sha256_file(path),
+        "source_mutability": "HASH_BOUND_DEVELOPMENT_SOURCE_NOT_FORMAL_FREEZE",
+    }
+
+
+def _validate_development_output_root(output_root: Path) -> Path:
+    require(output_root.is_absolute(), "output root must be absolute")
+    root = output_root.resolve()
+    try:
+        root.relative_to(DEVELOPMENT_ASSET_ROOT.resolve())
+    except ValueError as exc:
+        raise CandidateAssetError(
+            f"development candidate output must be below {DEVELOPMENT_ASSET_ROOT}: {root}"
+        ) from exc
+    require(root != DEVELOPMENT_ASSET_ROOT.resolve(), "output root must be a new named directory below development_assets")
+    require(not root.exists(), f"development candidate output already exists: {root}")
+    return root
+
+
+def _path_report(
+    source_path: Path,
+    sim_path: Path,
+    transform_path: Path,
+    geometry_path: Path,
+    report: Mapping[str, Any],
+) -> Dict[str, Any]:
+    return {
+        "schema_version": BUNDLE_SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_DEVELOPMENT_PATH_FIT_CLEARANCE_REPORT",
+        "development_only": True,
+        "formal": False,
+        "evidence_class": EVIDENCE_CLASS,
+        "source_path": str(source_path.resolve()),
+        "source_path_sha256": sha256_file(source_path),
+        "sim_path": str(sim_path.resolve()),
+        "sim_path_sha256": sha256_file(sim_path),
+        "transform_path": str(transform_path.resolve()),
+        "transform_sha256": sha256_file(transform_path),
+        "world_geometry_path": str(geometry_path.resolve()),
+        "world_geometry_sha256": sha256_file(geometry_path),
+        **dict(report),
+    }
+
+
+def _formal_rejection_probe(bundle: Mapping[str, Any]) -> Dict[str, Any]:
+    """Prove that candidate assets cannot accidentally pass the formal gate."""
+
+    toolchain = _load_toolchain()
+    deliberately_nonformal = {
+        "protocol_id": "SMPCC_SIM_DEVELOPMENT_CANDIDATE_v1",
+        "development_only": True,
+        "formal": False,
+        "bundle_id": bundle["bundle_id"],
+        "candidate_manifest_hash": canonical_hash(bundle),
+    }
+    report = toolchain.validate_formal_freeze(deliberately_nonformal)
+    require(report.get("status") == "FAIL", "development candidate unexpectedly passed formal freeze validation")
+    return {
+        "status": "REJECTED_AS_EXPECTED",
+        "formal_execution_authorized": False,
+        "formal_gate_errors": list(report.get("errors", [])),
+    }
+
+
+def _generate_bundle(output_root: Path, *, enforce_external_root: bool) -> Dict[str, Any]:
+    root = _validate_development_output_root(output_root) if enforce_external_root else output_root.resolve()
+    require(not root.exists(), f"development candidate output already exists: {root}")
+    require(WORLD_FILE.is_file(), f"open-field world is missing: {WORLD_FILE}")
+    require("<sdf" in WORLD_FILE.read_text(encoding="utf-8").lower(), "open-field world is not SDF/XML")
+    c1 = _read_development_yaml(C1_TEMPLATE)
+    c2 = _read_development_yaml(C2_TEMPLATE)
+    container_report = validate_development_container_templates(c1, c2)
+    provenance = historical_0705_provenance()
+
+    root.mkdir(parents=True, exist_ok=False)
+    paths_root = root / "paths"
+    configs_root = root / "control_candidates"
+    containers_root = root / "containers"
+    world_root = root / "world"
+
+    world_hash = sha256_file(WORLD_FILE)
+    geometry = candidate_world_geometry(world_hash)
+    geometry_path = world_root / "open_walled_proxy_development_geometry.json"
+    write_json_new_readonly(geometry_path, geometry)
+
+    transform = {"rotation_rad": 0.0, "tx": 0.0, "ty": 0.0, "yaw_offset_rad": 0.0}
+    transform_path = paths_root / "p2_identity_rigid_transform.json"
+    write_json_new_readonly(
+        transform_path,
+        {
+            "schema_version": BUNDLE_SCHEMA_VERSION,
+            "document_type": "SMPCC_SIM_DEVELOPMENT_RIGID_TRANSFORM",
+            "development_only": True,
+            "formal": False,
+            "evidence_class": EVIDENCE_CLASS,
+            **transform,
+        },
+    )
+
+    path_descriptors: Dict[str, Dict[str, Any]] = {}
+    path_reports: Dict[str, Dict[str, Any]] = {}
+    for path_id, lateral_peak, excitation, slug in (
+        (HIGH_PATH_ID, 0.95, "HIGH", "high"),
+        (LOW_PATH_ID, 0.22, "LOW", "low"),
+    ):
+        source = candidate_path(path_id, lateral_peak, excitation)
+        derived = transform_candidate_path(source, transform)
+        source_path = paths_root / f"{slug}_p2_source.json"
+        sim_path = paths_root / f"{slug}_p2_sim.json"
+        write_json_new_readonly(source_path, source)
+        write_json_new_readonly(sim_path, derived)
+        fit = validate_candidate_path_pair(source, derived, transform, geometry)
+        report_path = paths_root / f"{slug}_p2_fit_clearance_report.json"
+        report = _path_report(source_path, sim_path, transform_path, geometry_path, fit)
+        write_json_new_readonly(report_path, report)
+        path_descriptors[path_id] = {
+            "source": _immutable_descriptor(source_path),
+            "sim": _immutable_descriptor(sim_path),
+            "fit_clearance_report": _immutable_descriptor(report_path),
+        }
+        path_reports[path_id] = report
+
+    high_curvature = float(path_reports[HIGH_PATH_ID]["maximum_abs_curvature_per_m"])
+    low_curvature = float(path_reports[LOW_PATH_ID]["maximum_abs_curvature_per_m"])
+    require(high_curvature > low_curvature, "high candidate is not more curved than low candidate")
+
+    container_path = containers_root / "c1_c2_d95_development_transfer_candidate.json"
+    container_document = {
+        "schema_version": BUNDLE_SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_DEVELOPMENT_CONTAINER_TRANSFER_CANDIDATE",
+        "development_only": True,
+        "formal": False,
+        "evidence_class": EVIDENCE_CLASS,
+        "formal_container_ids": None,
+        "C1": {
+            "template": _bound_source_descriptor(C1_TEMPLATE),
+            "condition_template_id": c1["condition_template_id"],
+        },
+        "C2": {
+            "template": _bound_source_descriptor(C2_TEMPLATE),
+            "condition_template_id": c2["condition_template_id"],
+        },
+        "transfer_validation": container_report,
+        "notes": [
+            "C2 is a 95 mm-diameter development candidate only.",
+            "No physical C1/C2 manifest or formal allowed-transfer diff exists yet.",
+        ],
+    }
+    write_json_new_readonly(container_path, container_document)
+
+    control_descriptors: Dict[str, Dict[str, Any]] = {}
+    for candidate_id, legacy_variant in (
+        ("DEV-0705-B0", provenance["b0"]),
+        ("DEV-0705-BSMOOTH", provenance["bsmooth"]),
+    ):
+        config = candidate_control_config(candidate_id, legacy_variant, provenance)
+        path = configs_root / f"{candidate_id.lower()}.json"
+        write_json_new_readonly(path, config)
+        # Exercise the common full-field validator, while retaining an
+        # unambiguous development-only condition identity.
+        toolchain = _load_toolchain()
+        toolchain.validate_effective_config(config, candidate_id)
+        control_descriptors[candidate_id] = _immutable_descriptor(path)
+
+    unresolved_path = configs_root / "formal_condition_gaps.json"
+    unresolved = {
+        "schema_version": BUNDLE_SCHEMA_VERSION,
+        "document_type": "SMPCC_SIM_DEVELOPMENT_UNRESOLVED_FORMAL_CONDITIONS",
+        "development_only": True,
+        "formal": False,
+        "evidence_class": EVIDENCE_CLASS,
+        "conditions": {
+            "Bslosh": {
+                "status": "UNRESOLVED_NO_FORMAL_RELEASE",
+                "reason": "bcedcf7 rejected W5_S10; a historical B_slosh snapshot cannot be renamed or promoted to formal Bslosh.",
+            },
+            "SmoothMatch": {
+                "status": "UNRESOLVED_NO_FROZEN_V_REF",
+                "reason": "It needs an independent condition ID and must differ from Bsmooth only by a predeclared v_ref.",
+            },
+            "FixedProfile": {
+                "status": "UNRESOLVED_NO_READ_ONLY_PROFILE_OR_TRACKER",
+                "reason": "Case-time profile regeneration is forbidden; no H1_C1/L1_C1/H1_C2 profile/tracker assets exist.",
+            },
+        },
+        "formal_randomization_generated": False,
+        "formal_planned_rows_generated": False,
+    }
+    write_json_new_readonly(unresolved_path, unresolved)
+
+    manifest_core: Dict[str, Any] = {
+        "schema_version": BUNDLE_SCHEMA_VERSION,
+        "bundle_id": BUNDLE_ID,
+        "development_only": True,
+        "formal": False,
+        "evidence_class": EVIDENCE_CLASS,
+        "formal_execution_authorized": False,
+        "planned_rows_generated": False,
+        "randomization_generated": False,
+        "P2_task": {
+            "frame_id": "map",
+            "start": {"x": P2_START[0], "y": P2_START[1], "yaw": P2_START[2]},
+            "goal": {"x": P2_GOAL[0], "y": P2_GOAL[1], "yaw": P2_GOAL[2]},
+            "note": "Old open-field development P2 task; it is not the physical H0_G2 hash-bound path.",
+        },
+        "world": {
+            "launched_world": _bound_source_descriptor(WORLD_FILE),
+            "development_clearance_geometry": _immutable_descriptor(geometry_path),
+        },
+        "identity_transform": _immutable_descriptor(transform_path),
+        "paths": path_descriptors,
+        "containers": _immutable_descriptor(container_path),
+        "control_candidates": control_descriptors,
+        "unresolved_formal_conditions": _immutable_descriptor(unresolved_path),
+        "high_vs_low_curvature": {
+            "high_max_abs_curvature_per_m": high_curvature,
+            "low_max_abs_curvature_per_m": low_curvature,
+            "ordering": "HIGH_GT_LOW",
+        },
+        "no_go": [
+            "No formal H1/L1 or physical H0 path freeze/approval.",
+            "No formal C1/C2 parameter manifests or C2 allowed-transfer diff.",
+            "No source-specific formal Bslosh; W5_S10 remains rejected.",
+            "No SmoothMatch v_ref or FixedProfile read-only assets.",
+            "No independent plant fidelity/real reference/external approval evidence.",
+            "No formal FREEZE_ID, randomisation, seed bundle, retry classifier, or runtime backend.",
+        ],
+    }
+    manifest = dict(manifest_core, bundle_hash=canonical_hash(manifest_core))
+    formal_probe = _formal_rejection_probe(manifest)
+    manifest["formal_gate_probe"] = formal_probe
+    # Rehash once after adding the expected-rejection receipt.  The probe is
+    # deterministically based on manifest_core, so no circular input exists.
+    final_core = dict(manifest)
+    final_core.pop("bundle_hash", None)
+    manifest["bundle_hash"] = canonical_hash(final_core)
+    manifest_path = root / "bundle_manifest.json"
+    write_json_new_readonly(manifest_path, manifest)
+
+    report = validate_bundle_manifest(manifest_path)
+    return {
+        "status": report["status"],
+        "formal": False,
+        "formal_execution_authorized": False,
+        "output_root": str(root),
+        "bundle_manifest": str(manifest_path),
+        "validation": report,
+    }
+
+
+def validate_bundle_manifest(manifest_path: Path) -> Dict[str, Any]:
+    """Verify hashes/labels and prove the bundle cannot be called formal."""
+
+    manifest = read_json(manifest_path, "development bundle manifest")
+    require(manifest.get("schema_version") == BUNDLE_SCHEMA_VERSION, "development bundle schema mismatch")
+    require(manifest.get("bundle_id") == BUNDLE_ID, "development bundle ID mismatch")
+    require(manifest.get("development_only") is True and manifest.get("formal") is False, "bundle must stay non-formal")
+    require(manifest.get("formal_execution_authorized") is False, "bundle must not authorize formal execution")
+    require(manifest.get("planned_rows_generated") is False, "candidate bundle must not generate planned rows")
+    require(manifest.get("randomization_generated") is False, "candidate bundle must not generate randomisation")
+    core = dict(manifest)
+    expected_hash = core.pop("bundle_hash", None)
+    require(expected_hash == canonical_hash(core), "development bundle hash mismatch")
+    probe = manifest.get("formal_gate_probe")
+    require(isinstance(probe, Mapping) and probe.get("status") == "REJECTED_AS_EXPECTED", "candidate formal rejection probe is missing")
+    require(probe.get("formal_execution_authorized") is False, "candidate probe accidentally authorizes formal execution")
+
+    def check_descriptor(value: Any, label: str, *, require_readonly: bool = True) -> None:
+        require(isinstance(value, Mapping), f"{label} descriptor is missing")
+        path = Path(str(value.get("path", "")))
+        expected = value.get("sha256")
+        require(path.is_file(), f"{label} file is missing: {path}")
+        require(isinstance(expected, str) and len(expected) == 64, f"{label} hash is malformed")
+        require(sha256_file(path) == expected, f"{label} hash mismatch")
+        if require_readonly:
+            require(stat.S_IMODE(path.stat().st_mode) & 0o222 == 0, f"{label} file is writable")
+
+    check_descriptor(manifest.get("identity_transform"), "identity transform")
+    world = manifest.get("world")
+    require(isinstance(world, Mapping), "world section is missing")
+    check_descriptor(world.get("launched_world"), "launched world", require_readonly=False)
+    check_descriptor(world.get("development_clearance_geometry"), "development geometry")
+    paths = manifest.get("paths")
+    require(isinstance(paths, Mapping) and set(paths) == {HIGH_PATH_ID, LOW_PATH_ID}, "candidate path registry is invalid")
+    fit_reports: Dict[str, Mapping[str, Any]] = {}
+    for path_id, item in paths.items():
+        require(isinstance(item, Mapping), f"{path_id} descriptor is invalid")
+        for key in ("source", "sim", "fit_clearance_report"):
+            check_descriptor(item.get(key), f"{path_id} {key}")
+        source = read_json(Path(item["source"]["path"]), f"{path_id} source")
+        sim = read_json(Path(item["sim"]["path"]), f"{path_id} sim")
+        transform = read_json(Path(manifest["identity_transform"]["path"]), "identity transform")
+        geometry = read_json(Path(world["development_clearance_geometry"]["path"]), "development geometry")
+        report = validate_candidate_path_pair(source, sim, transform, geometry)
+        fit_reports[path_id] = report
+    require(
+        fit_reports[HIGH_PATH_ID]["maximum_abs_curvature_per_m"]
+        > fit_reports[LOW_PATH_ID]["maximum_abs_curvature_per_m"],
+        "high candidate is not more curved than low candidate",
+    )
+    check_descriptor(manifest.get("containers"), "container candidate")
+    container = read_json(Path(manifest["containers"]["path"]), "container candidate")
+    require(container.get("formal") is False and container.get("development_only") is True, "container candidate is not explicitly development-only")
+    for container_id in ("C1", "C2"):
+        item = container.get(container_id)
+        require(isinstance(item, Mapping), f"{container_id} development source is missing")
+        template = item.get("template")
+        check_descriptor(template, f"{container_id} development template", require_readonly=False)
+        require(
+            isinstance(template, Mapping)
+            and template.get("source_mutability") == "HASH_BOUND_DEVELOPMENT_SOURCE_NOT_FORMAL_FREEZE",
+            f"{container_id} source mutability label drift",
+        )
+    transfer = container.get("transfer_validation")
+    require(isinstance(transfer, Mapping) and transfer.get("c2_diameter_m") == 0.095, "C2 candidate is not 95 mm")
+    require(transfer.get("liquid_height_m") == 0.058, "C2 candidate liquid height drift")
+    controls = manifest.get("control_candidates")
+    require(isinstance(controls, Mapping) and set(controls) == {"DEV-0705-B0", "DEV-0705-BSMOOTH"}, "0705 control candidates are invalid")
+    toolchain = _load_toolchain()
+    for identifier, descriptor in controls.items():
+        check_descriptor(descriptor, f"{identifier} control candidate")
+        config = read_json(Path(descriptor["path"]), f"{identifier} control candidate")
+        require(config.get("formal") is False and config.get("development_only") is True, f"{identifier} candidate is not development-only")
+        toolchain.validate_effective_config(config, identifier)
+    check_descriptor(manifest.get("unresolved_formal_conditions"), "unresolved condition list")
+    gaps = read_json(Path(manifest["unresolved_formal_conditions"]["path"]), "unresolved condition list")
+    conditions = gaps.get("conditions")
+    require(isinstance(conditions, Mapping) and set(conditions) == {"Bslosh", "SmoothMatch", "FixedProfile"}, "unresolved condition list drift")
+    require(all(str(item.get("status", "")).startswith("UNRESOLVED") for item in conditions.values() if isinstance(item, Mapping)), "formal gap was silently resolved")
+    return {
+        "status": "PASS_DEVELOPMENT_ONLY_NOT_FORMAL",
+        "formal": False,
+        "formal_execution_authorized": False,
+        "bundle_manifest": str(manifest_path.resolve()),
+        "bundle_hash": manifest["bundle_hash"],
+        "high_max_abs_curvature_per_m": fit_reports[HIGH_PATH_ID]["maximum_abs_curvature_per_m"],
+        "low_max_abs_curvature_per_m": fit_reports[LOW_PATH_ID]["maximum_abs_curvature_per_m"],
+        "c2_diameter_m": 0.095,
+        "c2_liquid_height_m": 0.058,
+    }
+
+
+def command_generate(args: argparse.Namespace) -> int:
+    report = _generate_bundle(Path(args.output_root), enforce_external_root=True)
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
+def command_validate(args: argparse.Namespace) -> int:
+    report = validate_bundle_manifest(Path(args.bundle_manifest))
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    generate = sub.add_parser("generate", help="write one non-formal development candidate bundle below /data")
+    generate.add_argument("--output-root", required=True, type=Path)
+    generate.set_defaults(func=command_generate)
+    validate = sub.add_parser("validate", help="verify an existing development candidate bundle")
+    validate.add_argument("--bundle-manifest", required=True, type=Path)
+    validate.set_defaults(func=command_validate)
+    return parser
+
+
+def main(argv: Iterable[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(list(argv) if argv is not None else None)
+    try:
+        return int(args.func(args))
+    except CandidateAssetError as exc:
+        print(json.dumps({"status": "FAIL", "formal": False, "error": str(exc)}, ensure_ascii=False, sort_keys=True), file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,1303 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Offline tests for the canonical R7 release, ledger and campaign boundary."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import contextlib
+import importlib.util
+import json
+import math
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+
+SCRIPT = Path(__file__).resolve().parents[1] / "smpcc_sim_mechanism_runner.py"
+
+
+def load_runner():
+    spec = importlib.util.spec_from_file_location("test_smpcc_sim_mechanism_runner_target", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class MechanismRunnerTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.runner = load_runner()
+
+    @contextlib.contextmanager
+    def _paths(self, root: Path):
+        namespace = root / self.runner.NAMESPACE
+        freeze = namespace / "freeze" / self.runner.RELEASE_ID / "mechanism_freeze.json"
+        master = freeze.parent / "mechanism_master.json"
+        release = namespace / "release" / self.runner.RELEASE_ID / "mechanism_release.json"
+        result = namespace / "matrix_results"
+        bags = namespace / "matrix_bags"
+        runner_values = {
+            "CANONICAL_NAMESPACE_ROOT": namespace,
+            "DEFAULT_FREEZE": freeze,
+            "DEFAULT_MASTER": master,
+            "DEFAULT_RELEASE": release,
+            "CANONICAL_RESULT_ROOT": result,
+            "CANONICAL_BAG_ROOT": bags,
+            "CANONICAL_DATASET_INDEX": result / "dataset_index.jsonl",
+            "CAMPAIGN_LOCK": namespace / "locks" / "r7_campaign.lock",
+        }
+        matrix_values = {
+            "CANONICAL_NAMESPACE_ROOT": namespace,
+            "CANONICAL_FREEZE_ROOT": freeze.parent,
+            "DEFAULT_FREEZE": freeze,
+            "DEFAULT_MASTER": master,
+            "CANONICAL_RESULT_ROOT": result,
+            "CANONICAL_BAG_ROOT": bags,
+            "CANONICAL_DATASET_INDEX": result / "dataset_index.jsonl",
+        }
+        with mock.patch.multiple(self.runner, **runner_values), mock.patch.multiple(
+            self.runner.matrix_tool, **matrix_values,
+        ):
+            yield {
+                "namespace": namespace,
+                "freeze": freeze,
+                "master": master,
+                "release": release,
+                "result": result,
+                "bags": bags,
+                "index": result / "dataset_index.jsonl",
+            }
+
+    def _schedule_master(self) -> dict:
+        tables = {}
+        rows = []
+        bundles = {}
+        for stage, spec in self.runner.matrix_tool.STAGES.items():
+            assignments = []
+            for block in range(1, 9):
+                block_id = f"b{block:02d}"
+                bundle_id = f"R7-{stage}-{block_id}"
+                bundle_hash = "a" * 64
+                stream_hashes = {
+                    stream: self.runner.canonical_hash({
+                        "stage": stage,
+                        "block_id": block_id,
+                        "stream": stream,
+                    })
+                    for stream in self.runner.crn_runtime.SEED_STREAMS
+                }
+                bundles[f"{stage}:{block_id}"] = {
+                    "seed_bundle_id": bundle_id,
+                    "seed_bundle_hash": bundle_hash,
+                    "sub_seeds": {
+                        stream: block * 1000 + index
+                        for index, stream in enumerate(
+                            self.runner.crn_runtime.SEED_STREAMS, 1
+                        )
+                    },
+                    "traces": {
+                        "simulator_rng": {
+                            "samples": [{
+                                "time_index_ms": 0,
+                                "unit_uniform": (block * 0.071) % 1.0,
+                            }],
+                        },
+                    },
+                }
+                for order, condition in enumerate(spec["conditions"], 1):
+                    assignment = {
+                        "path_id": spec["path_id"],
+                        "container_id": spec["container_id"],
+                        "condition_id": condition,
+                        "block_id": block_id,
+                        "order_position": order,
+                        "planned_block_segment_id": f"{stage}-{block_id}",
+                    }
+                    assignments.append(assignment)
+                    row_id = f"{stage}_{spec['path_id']}_{spec['container_id']}_{condition}_{block_id}"
+                    rows.append({
+                        "planned_row_id": row_id,
+                        "attempt_id_prefix": row_id,
+                        "stage": stage,
+                        "condition_id": condition,
+                        "method_backend": self.runner.matrix_tool.BACKENDS[condition],
+                        "block_id": block_id,
+                        "path_id": spec["path_id"],
+                        "container_id": spec["container_id"],
+                        "seed_bundle_id": bundle_id,
+                        "seed_bundle_hash": bundle_hash,
+                        "crn_trace_asset": {
+                            "path": f"/fixture/crn/{stage}/{block_id}.json",
+                            "sha256": self.runner.canonical_hash({
+                                "stage": stage,
+                                "block_id": block_id,
+                                "representation": "fixture-file",
+                            }),
+                        },
+                        "crn_trace_asset_hash": self.runner.canonical_hash({
+                            "stage": stage,
+                            "block_id": block_id,
+                            "representation": "fixture-semantic",
+                        }),
+                        "crn_stream_trace_hashes": stream_hashes,
+                        "crn_initial_yaw_offset_rad": 0.0,
+                    })
+            tables[stage] = {"rows": assignments}
+        return {
+            "protocol_id": self.runner.PROTOCOL_ID,
+            "release_id": self.runner.RELEASE_ID,
+            "master_hash": "b" * 64,
+            "planned_rows": rows,
+            "randomization_tables": tables,
+            "seed_bundles": bundles,
+            "contrast_denominator_registry":
+                self.runner.matrix_tool._contrast_denominator_registry(),
+            "result_policy": self.runner.matrix_tool.result_policy_for(
+                self.runner.DEFAULT_FREEZE, enforce_canonical_paths=True,
+            ),
+        }
+
+    @staticmethod
+    def _write_json(path: Path, value: dict) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(value, sort_keys=True) + "\n", encoding="utf-8")
+        os.chmod(path, 0o444)
+
+    def _bound_files(self, paths: dict[str, Path], master: dict, release: dict) -> None:
+        asset_root = paths["freeze"].parent / "fixture_assets"
+        path_registry = {}
+        for path_id in ("H1", "L1"):
+            path_asset = asset_root / f"{path_id}.json"
+            self._write_json(path_asset, {
+                "path_id": path_id,
+                "points": [
+                    {"x": -4.0, "y": 0.0, "yaw": 0.0},
+                    {"x": 5.0, "y": 0.0, "yaw": 0.0},
+                ],
+            })
+            path_registry[path_id] = {
+                "sim_path": {
+                    "path": str(path_asset),
+                    "sha256": self.runner.sha256_file(path_asset),
+                },
+            }
+        container_registry = {}
+        for container_id in ("C1", "C2"):
+            container_asset = asset_root / f"{container_id}.json"
+            self._write_json(container_asset, {
+                "container_id": container_id,
+                "container_radius": 0.0185 if container_id == "C1" else 0.0475,
+                "liquid_height": 0.058,
+            })
+            container_registry[container_id] = {
+                "path": str(container_asset),
+                "sha256": self.runner.sha256_file(container_asset),
+            }
+        profile_registry = {}
+        tracker_config_path = asset_root / "tracker_config.json"
+        self._write_json(tracker_config_path, {
+            "runtime_profile_regeneration": False,
+            "online_liquid_feedback": False,
+        })
+        tracker_config_descriptor = {
+            "path": str(tracker_config_path),
+            "sha256": self.runner.sha256_file(tracker_config_path),
+        }
+        for path_id, container_id in (("H1", "C1"), ("L1", "C1"),
+                                      ("H1", "C2")):
+            profile_path = asset_root / f"{path_id}_{container_id}.csv"
+            profile_path.parent.mkdir(parents=True, exist_ok=True)
+            profile_path.write_text("t,x,y,v\n0,-4,0,0\n", encoding="utf-8")
+            profile_path.chmod(0o444)
+            profile_registry[f"{path_id}_{container_id}"] = {
+                "profile": {
+                    "path": str(profile_path),
+                    "sha256": self.runner.sha256_file(profile_path),
+                },
+                "tracker_config": tracker_config_descriptor,
+            }
+        effective_configs = {}
+        for condition in self.runner.ONLINE_CONDITIONS:
+            config_path = asset_root / f"{condition}_config.json"
+            config_core = {
+                "condition_id": condition,
+                "observer": {
+                    "source": "odom", "fallback_policy": "reject",
+                    "imu_shadow_enable": False,
+                },
+                "delay": {
+                    "mode": "off", "linear_sec": 0.0,
+                    "angular_sec": 0.0, "cmd_timeout_sec": 0.0,
+                    "odom_timeout_sec": 0.0, "history_window_sec": 0.0,
+                    "require_complete_history": False,
+                },
+            }
+            config = dict(
+                config_core,
+                effective_config_hash=self.runner.canonical_hash(config_core))
+            self._write_json(config_path, config)
+            effective_configs[condition] = {
+                "path": str(config_path),
+                "sha256": self.runner.sha256_file(config_path),
+            }
+        simulator_assets = {}
+        for asset_name in ("map", "world", "world_geometry", "robot_model"):
+            asset_path = asset_root / f"{asset_name}.json"
+            self._write_json(asset_path, {"asset": asset_name})
+            simulator_assets[asset_name] = {
+                "path": str(asset_path),
+                "sha256": self.runner.sha256_file(asset_path),
+            }
+        freeze = {
+            "paths": path_registry,
+            "containers": container_registry,
+            "fixed_profiles": profile_registry,
+            "effective_configs": effective_configs,
+            "simulator_assets": simulator_assets,
+            "seed_bundles": master["seed_bundles"],
+            "recording_policy": {
+                "settle_sec": 30.0, "goal_timeout_sec": 60.0,
+                "tail_sec": 5.0,
+            },
+        }
+        self._write_json(paths["freeze"], freeze)
+        self._write_json(paths["master"], master)
+        self._write_json(paths["release"], release)
+
+    def _endpoint_success_evidence(self) -> dict:
+        gate = self.runner.endpoint_gate.FrozenEndpointGate(
+            start_x=0.0,
+            start_y=0.0,
+            goal_x=1.0,
+            goal_y=0.0,
+            start_yaw_rad=0.0,
+        )
+        gate.observe_odom(
+            x=0.0, y=0.0, linear_x_mps=0.0, angular_z_radps=0.0,
+            monotonic_sec=0.0, utc="2026-08-03T00:00:00Z",
+            ros_time_sec=0.0, yaw_rad=0.0,
+        )
+        gate.observe_odom(
+            x=0.1, y=0.0, linear_x_mps=0.1, angular_z_radps=0.0,
+            monotonic_sec=1.0, utc="2026-08-03T00:00:01Z",
+            ros_time_sec=1.0, yaw_rad=0.0,
+        )
+        gate.observe_status(
+            "GOAL_REACHED", monotonic_sec=2.0,
+            utc="2026-08-03T00:00:02Z", ros_time_sec=2.0,
+        )
+        for sample in range(self.runner.endpoint_gate.GOAL_STABLE_SAMPLES):
+            elapsed = 3.0 + sample
+            gate.observe_odom(
+                x=1.0, y=0.0, linear_x_mps=0.0, angular_z_radps=0.0,
+                monotonic_sec=elapsed,
+                utc=f"2026-08-03T00:00:{int(elapsed):02d}Z",
+                ros_time_sec=elapsed, yaw_rad=0.0,
+            )
+        if "goal_reached" not in gate.state:
+            raise AssertionError("endpoint success fixture did not reach the gate")
+        return dict(gate.state)
+
+    def _crn_runtime_ack(self, row: dict) -> dict:
+        consumed = {
+            stream: {
+                "trace_hash": row["crn_stream_trace_hashes"][stream],
+                "consumption_phase":
+                    self.runner.crn_runtime.CONSUMPTION_PHASES[stream],
+                "time_indices_ms": [0.0],
+            }
+            for stream in self.runner.crn_runtime.SEED_STREAMS
+        }
+        core = {
+            "schema_version": self.runner.crn_runtime.RUNTIME_ACK_SCHEMA_VERSION,
+            "document_type": self.runner.crn_runtime.RUNTIME_ACK_DOCUMENT_TYPE,
+            "schema_hash": self.runner.crn_runtime.RUNTIME_ACK_SCHEMA_HASH,
+            "consumer_id": self.runner.crn_runtime.CONSUMER_ID,
+            "protocol_id": self.runner.crn_runtime.PROTOCOL_ID,
+            "release_id": self.runner.crn_runtime.RELEASE_ID,
+            "formal": True,
+            "formal_scope": self.runner.crn_runtime.FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "status": "PASS",
+            "stage": row["stage"],
+            "block_id": row["block_id"],
+            "seed_bundle_id": row["seed_bundle_id"],
+            "seed_bundle_hash": row["seed_bundle_hash"],
+            "trace_asset_path": row["crn_trace_asset"]["path"],
+            "trace_asset_file_sha256": row["crn_trace_asset"]["sha256"],
+            "trace_asset_hash": row["crn_trace_asset_hash"],
+            "stream_trace_hashes": row["crn_stream_trace_hashes"],
+            "consumed_streams": consumed,
+            "time_domain": self.runner.crn_runtime.TIME_DOMAIN,
+            "time_origin_event": self.runner.crn_runtime.TIME_ORIGIN_EVENT,
+            "time_index_field": self.runner.crn_runtime.TIME_INDEX_FIELD,
+            "interpolation": self.runner.crn_runtime.INTERPOLATION,
+            "condition_selector_used": False,
+            "callback_count_rng_used": False,
+            "frozen_path_initial_yaw_rad": 0.0,
+            "initial_yaw_offset_rad": 0.0,
+            "spawn_yaw_rad": 0.0,
+            "observed_initial_yaw_rad": 0.0,
+            "initial_yaw_observation_error_rad": 0.0,
+            "initial_yaw_offset_rad_applied": True,
+            "applied": True,
+        }
+        return dict(core, ack_hash=self.runner.canonical_hash(core))
+
+    def _record(self, paths: dict[str, Path], master: dict, release: dict, row: dict, *, master_hash: str | None = None) -> dict:
+        attempt_id = str(row["planned_row_id"]) + "_r01"
+        recorder_topics, required_bag_topics = self.runner._bag_topic_contract(
+            str(row["condition_id"]))
+        attempt_root = paths["result"] / "attempts" / attempt_id
+        bag_root = paths["bags"] / attempt_id
+        attempt_root.mkdir(parents=True)
+        bag_root.mkdir(parents=True)
+        freeze = json.loads(paths["freeze"].read_text(encoding="utf-8"))
+        seed_bundle = freeze["seed_bundles"][
+            f"{row['stage']}:{row['block_id']}"]
+        simulator_seed = self.runner.frozen_simulator_seed(freeze, row)
+        case = {
+            "protocol_id": self.runner.PROTOCOL_ID,
+            "release_id": self.runner.RELEASE_ID,
+            "formal": True,
+            "formal_scope": self.runner.FORMAL_SCOPE,
+            "physical_alignment": False,
+            "physical_primary_eligible": False,
+            "physical_primary": None,
+            "attempt_id": attempt_id,
+            "planned_row": row,
+            "master": {
+                "path": str(paths["master"]),
+                "sha256": self.runner.sha256_file(paths["master"]),
+                "master_hash": master["master_hash"],
+            },
+            "release": {
+                "path": str(paths["release"]),
+                "sha256": self.runner.sha256_file(paths["release"]),
+                "release_hash": release["release_hash"],
+            },
+            "freeze": {
+                "path": str(paths["freeze"]),
+                "sha256": self.runner.sha256_file(paths["freeze"]),
+            },
+            "path": dict(freeze["paths"][row["path_id"]]["sim_path"]),
+            "container": dict(freeze["containers"][row["container_id"]]),
+            "profile": None,
+            "simulator_assets": freeze["simulator_assets"],
+            "execution_config": {
+                "kind": "ONLINE_EFFECTIVE_CONFIG",
+                "descriptor": freeze["effective_configs"][
+                    row["condition_id"]],
+            },
+            "seed": simulator_seed,
+            "seed_bundle": seed_bundle,
+            "seed_realization": {
+                "seed_bundle_id": row["seed_bundle_id"],
+                "seed_bundle_hash": row["seed_bundle_hash"],
+                "trace_asset": row["crn_trace_asset"],
+                "trace_asset_hash": row["crn_trace_asset_hash"],
+                "stream_trace_hashes": row["crn_stream_trace_hashes"],
+                "frozen_simulator_seed": simulator_seed,
+                "operator_seed_override_allowed": False,
+                "runtime_consumer_id": self.runner.crn_runtime.CONSUMER_ID,
+                "runtime_ack_schema_hash":
+                    self.runner.crn_runtime.RUNTIME_ACK_SCHEMA_HASH,
+                "stream_application_contract":
+                    self.runner.validate_crn_stream_application_registry(),
+                "nonzero_unfrozen_noise_invented": False,
+            },
+            "timing": freeze["recording_policy"],
+            "measurements": {
+                "H_proxy": {
+                    "topic": self.runner.H_PROXY,
+                    "semantic": "sim_modal_proxy_mechanism_only",
+                    "physical_primary_eligible": False,
+                },
+                "H_modal": {
+                    "topic": self.runner.H_MODAL,
+                    "semantic": "controller_internal_modal_only",
+                    "physical_primary_eligible": False,
+                },
+                "physical_primary": None,
+            },
+            "recording_contract": {
+                "recorder_topics": list(recorder_topics),
+                "required_nonempty_topics": list(required_bag_topics),
+                "pre_motion_publisher_gate_topics": (
+                    list(self.runner.DEFERRED_ONLINE_MESSAGE_TOPICS)
+                    if row["condition_id"] in self.runner.ONLINE_CONDITIONS
+                    else []),
+                "condition_specific_nonempty_gate": True,
+                "optional_superset_topics_may_be_empty": True,
+            },
+            "pose_contract": {
+                "authoritative_pose_topic": "/odom",
+                "authoritative_pose_semantic": "gazebo_odometry_message",
+                "frozen_path_coordinate_contract":
+                    "gazebo_odometry_numeric_world",
+                "online_planner_use_tf_pose": False,
+                "controller_status_is_sufficient_for_success": False,
+                "initial_yaw_offset_rad": 0.0,
+                "expected_spawn_yaw_rad": 0.0,
+            },
+        }
+        case_path = attempt_root / "case_manifest.json"
+        self._write_json(case_path, case)
+        case_hash = self.runner.sha256_file(case_path)
+        bag_path = bag_root / "capture.bag"
+        event_state = self._endpoint_success_evidence()
+        event_document = {
+            "schema_version": self.runner.SCHEMA_VERSION,
+            "record_type": "SMPCC_SIM_MECHANISM_MOTION_GOAL_EVENTS",
+            "formal": True, "formal_scope": self.runner.FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "case_manifest_hash": case_hash,
+            "success_contract":
+                "controller_GOAL_REACHED_AND_frozen_endpoint_geometry",
+            **event_state,
+        }
+        event_path = attempt_root / "motion_goal_events.live.json"
+        self._write_json(event_path, event_document)
+        endpoint_evidence = {
+            key: event_document.get(key) for key in (
+                "initial_pose_gate", "controller_goal_status_seen",
+                "geometric_goal_gate", "goal_reached", "latest_odometry")
+        }
+        completion_time = (
+            float(event_document["goal_reached"]["monotonic_sec"])
+            - float(event_document["first_executed_motion"]["monotonic_sec"])
+        )
+        import rosbag  # type: ignore
+        import rospy  # type: ignore
+        from geometry_msgs.msg import Twist  # type: ignore
+        from nav_msgs.msg import Odometry  # type: ignore
+        from rosgraph_msgs.msg import Clock  # type: ignore
+        from std_msgs.msg import String  # type: ignore
+
+        with rosbag.Bag(str(bag_path), "w") as opened:
+            for stamp in (0.0, 1.0, 7.0, 13.0):
+                ros_stamp = rospy.Time.from_sec(stamp)
+                odom = Odometry()
+                odom.header.stamp = ros_stamp
+                opened.write("/odom", odom, ros_stamp)
+                opened.write("/clock", Clock(clock=ros_stamp), ros_stamp)
+            moving = Twist(); moving.linear.x = 0.2
+            opened.write("/cmd_vel", moving, rospy.Time.from_sec(1.0))
+            opened.write("/cmd_vel", Twist(), rospy.Time.from_sec(7.0))
+            opened.write("/cmd_vel", Twist(), rospy.Time.from_sec(13.0))
+            for topic in required_bag_topics:
+                if topic in {"/odom", "/clock", "/cmd_vel"}:
+                    continue
+                opened.write(topic, String(data="fixture"),
+                             rospy.Time.from_sec(2.0))
+        os.chmod(bag_path, 0o444)
+        crn_ack = self._crn_runtime_ack(row)
+        crn_ack_path = attempt_root / "crn_runtime_ack.json"
+        self._write_json(crn_ack_path, crn_ack)
+        crn_ack_descriptor = {
+            "path": str(crn_ack_path),
+            "sha256": self.runner.sha256_file(crn_ack_path),
+            "ack_hash": crn_ack["ack_hash"],
+        }
+        policy = self.runner.validate_crn_stream_application_registry()
+        stream_application = {
+            stream: {
+                "trace_hash": row["crn_stream_trace_hashes"][stream],
+                "application_mode": policy[stream]["application_mode"],
+                "mapping_hash": policy[stream]["mapping_hash"],
+                "mapping_enforced": True,
+            }
+            for stream in self.runner.crn_runtime.SEED_STREAMS
+        }
+        crn_application = self.runner.build_crn_application_receipt(
+            case_manifest_hash=case_hash, row=row,
+            stream_application=stream_application,
+        )
+        crn_application_path = attempt_root / "crn_runtime_application_receipt.json"
+        self._write_json(crn_application_path, crn_application)
+        crn_application_descriptor = {
+            "path": str(crn_application_path),
+            "sha256": self.runner.sha256_file(crn_application_path),
+            "receipt_hash": crn_application["receipt_hash"],
+        }
+        expected_config = json.loads(Path(
+            freeze["effective_configs"][row["condition_id"]]["path"]
+        ).read_text(encoding="utf-8"))
+        effective_readback = {
+            "schema_version": self.runner.SCHEMA_VERSION,
+            "record_type": "SMPCC_SIM_MECHANISM_EFFECTIVE_CONFIG_READBACK",
+            "formal": True, "formal_scope": self.runner.FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "expected_config_hash": expected_config["effective_config_hash"],
+            "pose_contract": {
+                "authoritative_pose_topic": "/odom",
+                "planner_use_tf_pose": False,
+                "frozen_path_coordinate_contract":
+                    "gazebo_odometry_numeric_world",
+            },
+            "actual_float32_abi": {
+                field: 0.0 for field in self.runner.CONFIG_FIELDS
+            },
+            "runtime_parameter_readback": {
+                "/sim_spmpc_local_planner/slosh_observer/source": "odom",
+                "/sim_spmpc_local_planner/slosh_observer/fallback_policy": "reject",
+                "/sim_spmpc_local_planner/imu_shadow/enable": "false",
+                "/sim_spmpc_local_planner/delay_phase/mode": "off",
+                "/sim_spmpc_local_planner/frames/use_tf_pose": "false",
+            },
+            "differences": {}, "status": "PASS",
+        }
+        effective_readback_path = attempt_root / "effective_config_readback.json"
+        self._write_json(effective_readback_path, effective_readback)
+        effective_readback_descriptor = {
+            "path": str(effective_readback_path),
+            "sha256": self.runner.sha256_file(effective_readback_path),
+        }
+        motion_component = ("planner" if row["condition_id"] in
+                            self.runner.ONLINE_CONDITIONS else "profile_tracker")
+        raw_stops = {
+            motion_component: {
+                "label": motion_component, "pid": 101,
+                "signal": "SIGTERM", "already_exited": False,
+                "returncode": -15,
+            },
+            "path_replay": {
+                "label": "path_replay", "pid": 102,
+                "signal": "SIGTERM", "already_exited": False,
+                "returncode": -15,
+            },
+            "recorder": {
+                "label": "recorder", "pid": 103,
+                "signal": "SIGINT", "already_exited": False,
+                "returncode": -2,
+            },
+        }
+        stop_results = {
+            "schema_version": self.runner.SCHEMA_VERSION,
+            "record_type": "SMPCC_SIM_MECHANISM_OWNED_PROCESS_STOP_RESULTS",
+            "formal": True, "formal_scope": self.runner.FORMAL_SCOPE,
+            "physical_primary_eligible": False, "attempt_id": attempt_id,
+            "motion_component": motion_component, "results": raw_stops,
+        }
+        stop_results_path = attempt_root / "process_stop_results.json"
+        self._write_json(stop_results_path, stop_results)
+        stop_results_descriptor = {
+            "path": str(stop_results_path),
+            "sha256": self.runner.sha256_file(stop_results_path),
+        }
+        stop_qc = self.runner.runtime_qc.validate_owned_stop_bundle(
+            raw_stops, motion_component=motion_component)
+        stop_qc_path = attempt_root / "process_stop_qc.json"
+        self._write_json(stop_qc_path, stop_qc)
+        stop_qc_descriptor = {
+            "path": str(stop_qc_path),
+            "sha256": self.runner.sha256_file(stop_qc_path),
+            "stop_bundle_qc_hash": stop_qc["stop_bundle_qc_hash"],
+        }
+        completion_qc = self.runner.runtime_qc.validate_completion_time(
+            completion_time)
+        completion_path = attempt_root / "completion_time_qc.json"
+        self._write_json(completion_path, completion_qc)
+        completion_descriptor = {
+            "path": str(completion_path),
+            "sha256": self.runner.sha256_file(completion_path),
+            "completion_qc_hash": completion_qc["completion_qc_hash"],
+        }
+        classification = self.runner.runtime_qc.classify_outcome(
+            motion_started=True, primary_method_outcome="METHOD_SUCCESS")
+        classification_path = attempt_root / "outcome_classification.json"
+        self._write_json(classification_path, classification)
+        classification_descriptor = {
+            "path": str(classification_path),
+            "sha256": self.runner.sha256_file(classification_path),
+            "outcome_qc_hash": classification["outcome_qc_hash"],
+        }
+        bag_qc = self.runner.runtime_qc.audit_closed_rosbag(
+            bag_path,
+            active_artifact_paths=(
+                bag_root / "capture.active.bag",
+                bag_root / "capture.active.bag.active",
+            ),
+            required_topics=required_bag_topics,
+            motion_start_ros_time_sec=
+                event_document["first_executed_motion"]["ros_time_sec"],
+            terminal_ros_time_sec=
+                event_document["goal_reached"]["ros_time_sec"],
+            terminal_kind="GOAL_REACHED", attempt_id=attempt_id,
+            case_manifest_hash=case_hash,
+            protocol_id=self.runner.PROTOCOL_ID,
+            release_id=self.runner.RELEASE_ID, formal=True,
+            tail_sec=5.0,
+        )
+        bag_qc_path = attempt_root / "closed_bag_qc.json"
+        self._write_json(bag_qc_path, bag_qc)
+        bag_qc_descriptor = {
+            "path": str(bag_qc_path),
+            "sha256": self.runner.sha256_file(bag_qc_path),
+            "bag_qc_hash": bag_qc["bag_qc_hash"],
+        }
+        runtime_report = self.runner.runtime_qc.build_runtime_qc_report(
+            protocol_id=self.runner.PROTOCOL_ID,
+            release_id=self.runner.RELEASE_ID, attempt_id=attempt_id,
+            case_manifest_hash=case_hash, formal=True,
+            stop_bundle=stop_qc, bag_qc=bag_qc,
+            completion_qc=completion_qc,
+            outcome_classification=classification,
+        )
+        runtime_path = attempt_root / "runtime_qc_report.json"
+        self._write_json(runtime_path, runtime_report)
+        runtime_descriptor = {
+            "path": str(runtime_path),
+            "sha256": self.runner.sha256_file(runtime_path),
+            "runtime_qc_hash": runtime_report["runtime_qc_hash"],
+        }
+        postflight = {
+            "schema_version": self.runner.SCHEMA_VERSION,
+            "record_type": "SMPCC_SIM_MECHANISM_POSTFLIGHT",
+            "formal": True, "formal_scope": self.runner.FORMAL_SCOPE,
+            "physical_primary_eligible": False, "attempt_id": attempt_id,
+            "pre": {"ros": False, "gazebo": False},
+            "post": {"ros": False, "gazebo": False},
+            "fresh_ros_gazebo": True, "owned_pid_cleanup_only": True,
+            "owned_pid_cleanup_pass": True, "owned_pid_cleanup": [],
+            "tail_complete": True, "motion_evidence_uncertain": False,
+            "endpoint_evidence": endpoint_evidence,
+            "crn_runtime_ack": crn_ack_descriptor,
+            "crn_runtime_application_receipt": crn_application_descriptor,
+            "effective_config_readback": effective_readback_descriptor,
+            "fixed_profile_identity_readback": None,
+            "process_stop_results": stop_results_descriptor,
+            "process_stop_qc": stop_qc_descriptor,
+            "closed_bag_qc": bag_qc_descriptor,
+            "completion_time_qc": completion_descriptor,
+            "timeout_terminal_qc": None,
+            "outcome_classification": classification_descriptor,
+            "runtime_qc_report": runtime_descriptor,
+            "bag": {"path": str(bag_path),
+                    "sha256": self.runner.sha256_file(bag_path)},
+            "partial_bag_artifacts": [],
+        }
+        postflight_path = attempt_root / "postflight.json"
+        self._write_json(postflight_path, postflight)
+        manifest = {
+            "protocol_id": self.runner.PROTOCOL_ID,
+            "release_id": self.runner.RELEASE_ID,
+            "release_hash": release["release_hash"],
+            "master_hash": master["master_hash"],
+            "formal": True,
+            "formal_scope": self.runner.FORMAL_SCOPE,
+            "physical_alignment": False,
+            "physical_primary_eligible": False,
+            "physical_primary": None,
+            "attempt_id": attempt_id,
+            "planned_row_id": row["planned_row_id"],
+            "stage": row["stage"],
+            "condition_id": row["condition_id"],
+            "method_backend": row["method_backend"],
+            "block_id": row["block_id"],
+            "method_success": True,
+            "method_failure": False,
+            "continuous_eligible": True,
+            "motion_started": True,
+            "assignment_consumed": True,
+            "failure_class": "NONE",
+            "campaign_action": "ADVANCE_WITH_METHOD_SUCCESS",
+            "protocol_qc_pass": True,
+            "goal_reached": True,
+            "terminal_kind": "GOAL_REACHED",
+            "terminal_elapsed_sec": completion_time,
+            "completion_time_sec": completion_time,
+            "tail_complete": True,
+            "fresh_ros_gazebo": True,
+            "endpoint_evidence": endpoint_evidence,
+            "crn_runtime_ack": crn_ack_descriptor,
+            "crn_runtime_application_receipt": crn_application_descriptor,
+            "effective_config_readback": effective_readback_descriptor,
+            "fixed_profile_identity_readback": None,
+            "process_stop_results": stop_results_descriptor,
+            "process_stop_qc": stop_qc_descriptor,
+            "closed_bag_qc": bag_qc_descriptor,
+            "completion_time_qc": completion_descriptor,
+            "timeout_terminal_qc": None,
+            "outcome_classification": classification_descriptor,
+            "runtime_qc_report": runtime_descriptor,
+            "case_manifest_path": str(case_path),
+            "case_manifest_hash": case_hash,
+            "postflight_path": str(postflight_path),
+            "postflight_hash": self.runner.sha256_file(postflight_path),
+            "events_path": str(event_path),
+            "events_hash": self.runner.sha256_file(event_path),
+            "bag_path": str(bag_path),
+            "bag_hash": self.runner.sha256_file(bag_path),
+            "partial_bag_artifacts": [],
+            "retry_authorization_path": None,
+            "retry_authorization_hash": None,
+            "runtime_error": None,
+            "lifecycle": [
+                {"event": "preflight", "ros": False, "gazebo": False},
+                {"event": "deferred_diagnostic_publishers_admitted",
+                 "topics": {topic: ["/sim_spmpc_local_planner"] for topic in
+                            self.runner.DEFERRED_ONLINE_MESSAGE_TOPICS}},
+                {"event": "settle", "sec": 30.0},
+                {"event": "recorder_admitted"},
+                {"event": "recorder_before_motion"},
+                {"event": "first_executed_motion"},
+                {"event": "goal_reached"},
+                {"event": "tail_sim_interval_complete",
+                 "observed_guard_sec": 5.5},
+                {"event": "tail_recorded"},
+                {"event": "owned_pid_cleanup"},
+            ],
+        }
+        manifest_path = attempt_root / "attempt_manifest.json"
+        self._write_json(manifest_path, manifest)
+        core = {
+            "schema_version": self.runner.SCHEMA_VERSION,
+            "record_type": "SMPCC_SIM_MECHANISM_DATASET_INDEX_ENTRY",
+            "protocol_id": self.runner.PROTOCOL_ID,
+            "release_id": self.runner.RELEASE_ID,
+            "formal": True,
+            "formal_scope": self.runner.FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "release_hash": release["release_hash"],
+            "master_hash": master_hash or master["master_hash"],
+            "planned_row_id": row["planned_row_id"],
+            "attempt_id": attempt_id,
+            "stage": row["stage"],
+            "condition_id": row["condition_id"],
+            "method_success": True,
+            "method_failure": False,
+            "continuous_eligible": True,
+            "motion_started": True,
+            "assignment_consumed": True,
+            "failure_class": "NONE",
+            "campaign_action": "ADVANCE_WITH_METHOD_SUCCESS",
+            "protocol_qc_pass": True,
+            "outcome_qc_hash": classification["outcome_qc_hash"],
+            "attempt_manifest_path": str(manifest_path),
+            "attempt_manifest_hash": self.runner.sha256_file(manifest_path),
+            "created_utc": "2026-08-03T00:00:00Z",
+            "previous_entry_hash": "0" * 64,
+        }
+        return dict(core, entry_hash=self.runner.canonical_hash(core))
+
+    def test_public_cli_has_one_release_only_execution_entry(self):
+        parser = self.runner.build_parser()
+        subparsers = next(action for action in parser._actions if action.dest == "command")
+        choices = set(subparsers.choices)
+        self.assertEqual({"run-campaign"}, choices)
+        run = subparsers.choices["run-campaign"]
+        options = {option for action in run._actions for option in action.option_strings}
+        self.assertIn("--release", options)
+        self.assertNotIn("--seed", options)
+        self.assertNotIn("--planned-row-id", options)
+        self.assertNotIn("--freeze", options)
+        self.assertNotIn("--master", options)
+
+    def test_internal_helpers_reject_direct_unlocked_invocation(self):
+        with tempfile.TemporaryDirectory() as temporary, self._paths(Path(temporary)) as paths:
+            lock = self.runner.CAMPAIGN_LOCK
+            lock.parent.mkdir(parents=True)
+            lock.write_text(json.dumps({
+                "runner_id": self.runner.RUNNER_ID,
+                "pid": os.getppid(),
+                "utc": "2026-08-03T00:00:00Z",
+            }) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(self.runner.RunnerError, "unlocked campaign"):
+                self.runner._require_internal_parent_lock()
+            self.assertFalse((paths["result"] / "path_replay_receipt.json").exists())
+
+    def test_release_admission_rejects_test_root_and_all_predecessors_before_reading(self):
+        for path in (
+            Path("/data/a/scout_sim_replacement/test-root/mechanism_release.json"),
+            Path("/data/a/scout_sim_replacement/SMPCC-SIM-MECHANISM-40-64-88-R1/release/mechanism_release.json"),
+            Path("/data/a/scout_sim_replacement/SMPCC-SIM-MECHANISM-40-64-88-R2/release/mechanism_release.json"),
+            Path("/data/a/scout_sim_replacement/SMPCC-SIM-MECHANISM-40-64-88-R3/release/mechanism_release.json"),
+            Path("/data/a/scout_sim_replacement/SMPCC-SIM-MECHANISM-40-64-88-R4/release/mechanism_release.json"),
+        ):
+            with self.subTest(path=path), self.assertRaises(self.runner.RunnerError):
+                self.runner.admit(path)
+
+    def test_release_admission_accepts_only_fully_bound_r7_contract(self):
+        with tempfile.TemporaryDirectory() as temporary, self._paths(Path(temporary)) as paths:
+            go_path = paths["namespace"] / "go_gate" / "go_gate_receipt.json"
+            self._write_json(go_path, {"go_receipt_hash": "d" * 64})
+            go = {"path": str(go_path), "sha256": self.runner.sha256_file(go_path)}
+            runner_source = Path(self.runner.__file__).resolve()
+            runner_descriptor = {"path": str(runner_source), "sha256": self.runner.sha256_file(runner_source)}
+            candidate_path = paths["freeze"].parent / "mechanism_freeze_candidate.json"
+            self._write_json(candidate_path, {"fixture": True})
+            candidate_descriptor = {
+                "path": str(candidate_path),
+                "sha256": self.runner.sha256_file(candidate_path),
+            }
+            contract_path = paths["freeze"].parent / "crn_runtime_consumer_contract.json"
+            self._write_json(contract_path, {"fixture": True})
+            contract_descriptor = {
+                "path": str(contract_path),
+                "sha256": self.runner.sha256_file(contract_path),
+            }
+            contract_hash = "1" * 64
+            freeze = {
+                "protocol_id": self.runner.PROTOCOL_ID,
+                "release_id": self.runner.RELEASE_ID,
+                "physical_alignment": False,
+                "physical_primary_eligible": False,
+                "freeze_hash": "e" * 64,
+                "runtime_bindings_hash": "f" * 64,
+                "go_gate_evidence": go,
+                "runtime_bindings": {"mechanism_runner": runner_descriptor},
+                "freeze_candidate": candidate_descriptor,
+                "crn_runtime_consumer_contract": contract_descriptor,
+            }
+            self._write_json(paths["freeze"], freeze)
+            master = self._schedule_master()
+            master.update({
+                "freeze": {"path": str(paths["freeze"]), "sha256": self.runner.sha256_file(paths["freeze"])},
+                "freeze_hash": freeze["freeze_hash"],
+            })
+            self._write_json(paths["master"], master)
+            initial_core = {
+                "result_root_state": "ABSENT",
+                "bag_root_state": "ABSENT",
+                "dataset_index_absent": True,
+                "attempts_dir_absent": True,
+                "N_attempt": 0,
+                "predecessor_attempts_migrated": 0,
+            }
+            release_core = {
+                "schema_version": self.runner.RELEASE_SCHEMA_VERSION,
+                "document_type": self.runner.RELEASE_DOCUMENT_TYPE,
+                "protocol_id": self.runner.PROTOCOL_ID,
+                "release_id": self.runner.RELEASE_ID,
+                "namespace": self.runner.NAMESPACE,
+                "formal": True,
+                "formal_scope": self.runner.FORMAL_SCOPE,
+                "physical_alignment": False,
+                "physical_primary_eligible": False,
+                "physical_primary": None,
+                "evidence_class": self.runner.RELEASE_EVIDENCE_CLASS,
+                "freeze": {"path": str(paths["freeze"]), "sha256": self.runner.sha256_file(paths["freeze"])},
+                "freeze_hash": freeze["freeze_hash"],
+                "master": {"path": str(paths["master"]), "sha256": self.runner.sha256_file(paths["master"])},
+                "master_hash": master["master_hash"],
+                "go_gate_evidence": go,
+                "go_gate_receipt_hash": "d" * 64,
+                "runtime_bindings_hash": freeze["runtime_bindings_hash"],
+                "crn_runtime_consumer_contract": contract_descriptor,
+                "crn_runtime_consumer_contract_hash": contract_hash,
+                "crn_runtime_ack_schema_hash":
+                    self.runner.crn_runtime.RUNTIME_ACK_SCHEMA_HASH,
+                "result_policy": master["result_policy"],
+                "predecessor_exclusion": self.runner._expected_predecessor_exclusion(),
+                "initial_state": dict(initial_core, initial_state_hash=self.runner.canonical_hash(initial_core)),
+                "canonical_runner": runner_descriptor,
+                "created_utc": "2026-08-03T00:00:00Z",
+            }
+            release = dict(release_core, release_hash=self.runner.canonical_hash(release_core))
+            self._write_json(paths["release"], release)
+            crn_report = {
+                "status": "PASS",
+                "contract_hash": contract_hash,
+                "runtime_ack_schema_hash":
+                    self.runner.crn_runtime.RUNTIME_ACK_SCHEMA_HASH,
+            }
+            with mock.patch.object(self.runner.release_tool, "validate_release", return_value={"status": "PASS", "errors": []}), mock.patch.object(
+                self.runner.freeze_tool, "validate_freeze", return_value={"status": "PASS", "errors": [], "freeze_hash": freeze["freeze_hash"]},
+            ), mock.patch.object(
+                self.runner.matrix_tool, "validate_master", return_value={"status": "PASS", "errors": [], "master_hash": master["master_hash"]},
+            ), mock.patch.object(
+                self.runner.freeze_tool,
+                "validate_crn_runtime_consumer_contract",
+                return_value=crn_report,
+            ) as validate_crn:
+                admission = self.runner.admit(paths["release"])
+                validate_crn.assert_called_once_with(
+                    contract_descriptor, {"fixture": True}, candidate_path)
+                for field, bad_value, message in (
+                    ("crn_runtime_consumer_contract",
+                     dict(contract_descriptor, sha256="0" * 64),
+                     "differs from freeze"),
+                    ("crn_runtime_consumer_contract_hash", "0" * 64,
+                     "contract hash mismatch"),
+                    ("crn_runtime_ack_schema_hash", "0" * 64,
+                     "ACK schema hash mismatch"),
+                ):
+                    bad_core = dict(release_core, **{field: bad_value})
+                    bad_release = dict(
+                        bad_core,
+                        release_hash=self.runner.canonical_hash(bad_core),
+                    )
+                    paths["release"].chmod(0o644)
+                    self._write_json(paths["release"], bad_release)
+                    with self.subTest(field=field), self.assertRaisesRegex(
+                            self.runner.RunnerError, message):
+                        self.runner.admit(paths["release"])
+            self.assertEqual(self.runner.RELEASE_ID, admission.release["release_id"])
+            self.assertEqual(paths["master"], admission.master_path)
+
+    def test_frozen_seed_has_no_operator_override(self):
+        master = self._schedule_master()
+        row = master["planned_rows"][0]
+        unit = master["seed_bundles"][f"{row['stage']}:{row['block_id']}"]["traces"]["simulator_rng"]["samples"][0]["unit_uniform"]
+        expected = int(math.floor(unit * 2147483647.0))
+        self.assertEqual(expected, self.runner.frozen_simulator_seed(master, row))
+        policy = self.runner.validate_crn_stream_application_registry()
+        self.assertEqual("ACTIVE", policy["simulator_rng"]["application_mode"])
+        self.assertEqual(
+            "INACTIVE_ZERO_AMPLITUDE",
+            policy["sensor_noise"]["application_mode"],
+        )
+        trace_hashes = {
+            stream: self.runner.canonical_hash({"stream": stream})
+            for stream in self.runner.crn_runtime.SEED_STREAMS
+        }
+
+        class Consumer:
+            stream_trace_hashes = trace_hashes
+            initial_yaw_offset_rad = 0.01
+
+        units = {stream: 0.25 for stream in trace_hashes}
+        units["initial_robot_pose"] = 0.75
+        units["simulator_rng"] = unit
+        consumptions = {
+            stream: {
+                "stream": stream,
+                "trace_hash": trace_hashes[stream],
+                "consumption_phase":
+                    self.runner.crn_runtime.CONSUMPTION_PHASES[stream],
+                "time_domain": self.runner.crn_runtime.TIME_DOMAIN,
+                "time_origin_event": self.runner.crn_runtime.TIME_ORIGIN_EVENT,
+                "time_index_ms": 0.0,
+                "interpolation": self.runner.crn_runtime.INTERPOLATION,
+                "unit_uniform": units[stream],
+            }
+            for stream in trace_hashes
+        }
+        resolved = self.runner.resolve_crn_stream_applications(
+            consumptions, consumer=Consumer(),
+            frozen_path_initial_yaw_rad=0.0, simulator_seed=expected,
+        )
+        self.assertEqual(0.0, resolved["sensor_noise"]["applied_value"])
+        receipt = self.runner.build_crn_application_receipt(
+            case_manifest_hash="f" * 64, row=row,
+            stream_application=resolved,
+        )
+        self.assertFalse(receipt["nonzero_unfrozen_noise_invented"])
+        self.assertEqual(
+            self.runner.canonical_hash({
+                key: value for key, value in receipt.items()
+                if key != "receipt_hash"
+            }),
+            receipt["receipt_hash"],
+        )
+
+    def test_fixed_profile_command_consumes_release_and_frozen_descriptor_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = Path(temporary) / "H1_C1.csv"
+            profile.write_text("fixture\n", encoding="utf-8")
+            profile_hash = self.runner.sha256_file(profile)
+            row = {"path_id": "H1", "container_id": "C1"}
+            freeze = {
+                "fixed_profiles": {
+                    "H1_C1": {"profile": {"path": str(profile), "sha256": profile_hash}},
+                },
+            }
+            admission = self.runner.CampaignAdmission(
+                Path("/fixture/release.json"), {"release_hash": "c" * 64},
+                Path("/fixture/freeze.json"), freeze,
+                Path("/fixture/master.json"), {},
+            )
+            command = " ".join(self.runner._profile_command(admission, row, profile))
+            self.assertIn("spmpc_sim_local_planner", command)
+            self.assertNotIn("spmpc_experiments", command)
+            self.assertIn("smpcc_sim_mechanism_fixed_profile.launch", command)
+            self.assertIn(f"frozen_profile_sha256:={profile_hash}", command)
+            self.assertIn("mechanism_release_hash:=" + "c" * 64, command)
+            self.assertIn("fixed_profile_id:=H1_C1", command)
+            self.assertIn("frozen_path_id:=H1", command)
+            recorded, fixed_required = self.runner._bag_topic_contract(
+                "FixedProfile")
+            _recorded, online_required = self.runner._bag_topic_contract("Bslosh")
+            self.assertIn("/sim_mechanism/fixed_profile/identity", fixed_required)
+            self.assertIn("/sim_spmpc/status", fixed_required)
+            self.assertIn("/sim_spmpc/status", online_required)
+            self.assertNotIn(
+                "/sim_mechanism/fixed_profile/identity", online_required)
+            self.assertTrue(set(fixed_required).issubset(recorded))
+            self.assertTrue(set(online_required).issubset(recorded))
+
+    def test_shared_source_r7_execution_is_quarantined_before_release_io(self):
+        with self.assertRaisesRegex(self.runner.RunnerError, "source-separated R8"):
+            self.runner.run_campaign(
+                Path("/definitely/not/a/release.json"), None, 1,
+                11700, 11900, True,
+            )
+
+    def test_ledger_accepts_current_release_and_rejects_old_master(self):
+        with tempfile.TemporaryDirectory() as temporary, self._paths(Path(temporary)) as paths:
+            master = self._schedule_master(); release = {"release_hash": "c" * 64}
+            self._bound_files(paths, master, release)
+            record = self._record(paths, master, release, master["planned_rows"][0])
+            paths["index"].write_text(json.dumps(record, sort_keys=True) + "\n", encoding="utf-8")
+            loaded = self.runner.load_ledger(paths["index"], master, release)
+            self.assertEqual(1, len(loaded))
+            bad = dict(record, master_hash="d" * 64)
+            core = dict(bad); core.pop("entry_hash")
+            bad["entry_hash"] = self.runner.canonical_hash(core)
+            paths["index"].write_text(json.dumps(bad, sort_keys=True) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(self.runner.RunnerError, "another master"):
+                self.runner.load_ledger(paths["index"], master, release)
+
+            # Even a fully re-hashed ledger/manifest/postflight chain cannot
+            # turn a failed geometric endpoint gate into method success.
+            manifest_path = Path(str(record["attempt_manifest_path"]))
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            event_path = Path(str(manifest["events_path"]))
+            event = json.loads(event_path.read_text(encoding="utf-8"))
+            event["goal_reached"]["geometric_gate_pass"] = False
+            event_path.chmod(0o644)
+            self._write_json(event_path, event)
+            endpoint = {
+                key: event.get(key) for key in (
+                    "initial_pose_gate", "controller_goal_status_seen",
+                    "geometric_goal_gate", "goal_reached",
+                    "latest_odometry")
+            }
+            postflight_path = Path(str(manifest["postflight_path"]))
+            postflight = json.loads(
+                postflight_path.read_text(encoding="utf-8"))
+            postflight["endpoint_evidence"] = endpoint
+            postflight_path.chmod(0o644)
+            self._write_json(postflight_path, postflight)
+            manifest["endpoint_evidence"] = endpoint
+            manifest["events_hash"] = self.runner.sha256_file(event_path)
+            manifest["postflight_hash"] = self.runner.sha256_file(
+                postflight_path)
+            manifest_path.chmod(0o644)
+            self._write_json(manifest_path, manifest)
+            tampered = dict(record, master_hash=master["master_hash"],
+                            attempt_manifest_hash=
+                            self.runner.sha256_file(manifest_path))
+            tampered_core = dict(tampered)
+            tampered_core.pop("entry_hash")
+            tampered["entry_hash"] = self.runner.canonical_hash(tampered_core)
+            paths["index"].write_text(
+                json.dumps(tampered, sort_keys=True) + "\n",
+                encoding="utf-8")
+            with self.assertRaisesRegex(self.runner.RunnerError, "endpoint"):
+                self.runner.load_ledger(paths["index"], master, release)
+
+    def test_ledger_rejects_cross_release_manifest_and_orphan_old_attempt(self):
+        with tempfile.TemporaryDirectory() as temporary, self._paths(Path(temporary)) as paths:
+            master = self._schedule_master(); release = {"release_hash": "c" * 64}
+            self._bound_files(paths, master, release)
+            record = self._record(paths, master, release, master["planned_rows"][0])
+            record["attempt_manifest_path"] = str(Path(temporary) / "R2" / "attempt_manifest.json")
+            core = dict(record); core.pop("entry_hash")
+            record["entry_hash"] = self.runner.canonical_hash(core)
+            paths["index"].write_text(json.dumps(record, sort_keys=True) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(self.runner.RunnerError, "must be exactly"):
+                self.runner.load_ledger(paths["index"], master, release)
+
+        with tempfile.TemporaryDirectory() as temporary, self._paths(Path(temporary)) as paths:
+            master = self._schedule_master(); release = {"release_hash": "c" * 64}
+            (paths["result"] / "attempts" / "COPIED_FROM_R2").mkdir(parents=True)
+            with self.assertRaisesRegex(self.runner.RunnerError, "inventory"):
+                self.runner.load_ledger(paths["index"], master, release)
+
+    def test_append_reloads_head_under_lock_and_preserves_chain(self):
+        with tempfile.TemporaryDirectory() as temporary, self._paths(Path(temporary)) as paths:
+            master = self._schedule_master(); release = {"release_hash": "c" * 64}
+            self._bound_files(paths, master, release)
+            record = self._record(paths, master, release, master["planned_rows"][0])
+            core = dict(record); core.pop("entry_hash"); core.pop("previous_entry_hash")
+            entry = self.runner.append_ledger(paths["index"], core, master, release)
+            self.assertEqual("0" * 64, entry["previous_entry_hash"])
+            self.assertEqual([entry], self.runner.load_ledger(paths["index"], master, release))
+            with self.assertRaisesRegex(self.runner.RunnerError, "attempt"):
+                self.runner.append_ledger(paths["index"], core, master, release)
+
+    def test_campaign_lock_is_nonblocking_and_dry_refusal_has_no_side_effect(self):
+        with tempfile.TemporaryDirectory() as temporary, self._paths(Path(temporary)) as paths:
+            with self.runner.campaign_lock():
+                with self.assertRaisesRegex(self.runner.RunnerError, "another canonical runner"):
+                    with self.runner.campaign_lock():
+                        self.fail("second lock unexpectedly acquired")
+            lock = paths["namespace"] / "locks" / "r7_campaign.lock"
+            lock.unlink()
+            lock.parent.rmdir()
+            with self.assertRaisesRegex(self.runner.RunnerError, "explicit --execute"):
+                self.runner.run_campaign(paths["release"], None, 1, 11700, 11900, False)
+            self.assertFalse(lock.exists())
+
+    def test_s1_cannot_auto_advance_into_s2a_without_authorization(self):
+        with tempfile.TemporaryDirectory() as temporary, self._paths(Path(temporary)) as paths:
+            master = self._schedule_master(); release = {"release_hash": "c" * 64}
+            admission = self.runner.CampaignAdmission(
+                paths["release"], release, paths["freeze"], {},
+                paths["master"], master,
+            )
+            terminal_prefix = [
+                {
+                    "planned_row_id": row["planned_row_id"],
+                    "method_success": True,
+                    "method_failure": False,
+                    "entry_hash": f"{index:064x}",
+                }
+                for index, row in enumerate(master["planned_rows"][:40], 1)
+            ]
+            first_s2a = master["planned_rows"][40]
+            attempt_id = str(first_s2a["planned_row_id"]) + "_r01"
+            with mock.patch.object(self.runner, "load_ledger", return_value=terminal_prefix), self.assertRaisesRegex(
+                self.runner.RunnerError, "immutable stage authorization",
+            ):
+                self.runner._validate_next_row(admission, first_s2a, attempt_id, None)
+
+    def test_summary_reports_n_pair_only_per_registered_contrast(self):
+        with tempfile.TemporaryDirectory() as temporary, self._paths(Path(temporary)) as paths:
+            master = self._schedule_master()
+            release = {"release_hash": "c" * 64}
+            admission = self.runner.CampaignAdmission(
+                paths["release"], release, paths["freeze"], {},
+                paths["master"], master,
+            )
+            picked = [
+                row for row in master["planned_rows"]
+                if row["stage"] == "SIM-S1_CORE" and
+                row["block_id"] == "b01" and
+                row["condition_id"] in {"B0", "Bsmooth"}
+            ]
+            records = [{
+                "planned_row_id": row["planned_row_id"],
+                "stage": row["stage"],
+                "condition_id": row["condition_id"],
+                "method_success": True,
+                "method_failure": False,
+                "continuous_eligible": True,
+            } for row in picked]
+            with mock.patch.object(self.runner, "load_ledger", return_value=records):
+                summary = self.runner.summarize(admission)
+            contrast = "SIM-S1_CORE:B0-vs-Bsmooth"
+            self.assertNotIn("N_pair", summary)
+            self.assertIsNone(summary["N_pair_cross_contrast_aggregate"])
+            self.assertEqual(1, summary["N_pair_by_contrast"][contrast]["N_pair"])
+            self.assertEqual(["b01"], summary["N_pair_by_contrast"][contrast]["eligible_blocks"])
+
+    def test_symlink_dataset_index_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary, self._paths(Path(temporary)) as paths:
+            master = self._schedule_master(); release = {"release_hash": "c" * 64}
+            paths["result"].mkdir(parents=True)
+            target = Path(temporary) / "outside.jsonl"; target.write_text("", encoding="utf-8")
+            paths["index"].symlink_to(target)
+            with self.assertRaisesRegex(self.runner.RunnerError, "symlink"):
+                self.runner.load_ledger(paths["index"], master, release)
+
+    def test_event_race_is_post_motion_protocol_and_method_failure_is_preserved(self):
+        source = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("state_lock = threading.RLock()", source)
+        self.assertGreaterEqual(source.count("with state_lock:"), 3)
+        self.assertLess(
+            source.index('children.start("event_monitor"'),
+            source.index('time.sleep(30.0)'),
+        )
+        self.assertEqual(30.0, self.runner.INITIAL_POSE_ACQUISITION_TIMEOUT_SEC)
+        self.assertEqual(45.0, self.runner.MOTION_ACQUISITION_TIMEOUT_SEC)
+        self.assertEqual(5, self.runner.ZERO_COMMAND_MAX_ATTEMPTS)
+        self.assertEqual(2, self.runner.ZERO_COMMAND_REQUIRED_SUCCESSES)
+        zero_lifecycle = []
+        with mock.patch.object(
+                self.runner.sim_only, "publish_zero",
+                side_effect=[False, True, True]) as publish:
+            self.runner._publish_frozen_zero_suffix({}, zero_lifecycle)
+        self.assertEqual(3, publish.call_count)
+        self.assertEqual("redundant_zero_suffix_published",
+                         zero_lifecycle[-1]["event"])
+        self.assertEqual(2, sum(
+            item["published"] for item in
+            zero_lifecycle[-1]["attempts"]))
+        self.assertIn(
+            '"campaign_action": classification["campaign_action"]', source)
+        self.assertIn(
+            '"protocol_qc_pass": classification["protocol_qc_pass"]', source)
+        internal_case_source = source[
+            source.index("def _admit_internal_case"):
+            source.index("def command_path_replay")]
+        self.assertNotIn("admit(DEFAULT_RELEASE)", internal_case_source)
+        self.assertIn("internal canonical runner binding mismatch",
+                      internal_case_source)
+        self.assertEqual(
+            "PROTOCOL_FAILURE_AFTER_MOTION",
+            self.runner._classify("cannot read event state: Extra data", True),
+        )
+        classified = self.runner.runtime_qc.classify_outcome(
+            motion_started=True, primary_method_outcome="METHOD_FAILURE",
+            qc_failure=True,
+        )
+        self.assertTrue(classified["method_failure"])
+        self.assertFalse(classified["method_success"])
+        self.assertEqual("METHOD_FAILURE", classified["failure_class"])
+        self.assertEqual(
+            "STOP_CAMPAIGN_REVIEW_WITH_TERMINAL_METHOD_FAILURE",
+            classified["campaign_action"],
+        )
+        with tempfile.TemporaryDirectory() as temporary, self._paths(
+                Path(temporary)) as paths:
+            master = self._schedule_master()
+            release = {"release_hash": "c" * 64}
+            row = master["planned_rows"][0]
+            attempt_id = str(row["planned_row_id"]) + "_r01"
+            (paths["result"] / "attempts" / attempt_id).mkdir(parents=True)
+            (paths["bags"] / attempt_id).mkdir(parents=True)
+            core = {
+                "schema_version": self.runner.SCHEMA_VERSION,
+                "record_type": "SMPCC_SIM_MECHANISM_DATASET_INDEX_ENTRY",
+                "protocol_id": self.runner.PROTOCOL_ID,
+                "release_id": self.runner.RELEASE_ID,
+                "formal": True, "formal_scope": self.runner.FORMAL_SCOPE,
+                "physical_primary_eligible": False,
+                "release_hash": release["release_hash"],
+                "master_hash": master["master_hash"],
+                "planned_row_id": row["planned_row_id"],
+                "attempt_id": attempt_id, "stage": row["stage"],
+                "condition_id": row["condition_id"],
+                "method_success": False, "method_failure": True,
+                "continuous_eligible": False, "motion_started": True,
+                "assignment_consumed": True,
+                "failure_class": classified["failure_class"],
+                "campaign_action": classified["campaign_action"],
+                "protocol_qc_pass": classified["protocol_qc_pass"],
+                "outcome_qc_hash": classified["outcome_qc_hash"],
+                "attempt_manifest_path": str(
+                    paths["result"] / "attempts" / attempt_id /
+                    "attempt_manifest.json"),
+                "attempt_manifest_hash": "d" * 64,
+                "created_utc": "2026-08-03T00:00:00Z",
+                "previous_entry_hash": "0" * 64,
+            }
+            entry = dict(core, entry_hash=self.runner.canonical_hash(core))
+            with mock.patch.object(self.runner, "_validate_attempt_binding"):
+                self.runner._validate_ledger_records(
+                    [entry], master, release)
+            admission = self.runner.CampaignAdmission(
+                paths["release"], release, paths["freeze"], {},
+                paths["master"], master,
+            )
+            with mock.patch.object(
+                    self.runner, "load_ledger", return_value=[entry]):
+                _row, next_attempt, _authorization, reason = (
+                    self.runner._next_dispatch(admission))
+            self.assertIsNone(next_attempt)
+            self.assertEqual(
+                "PROTOCOL_OR_QC_FAILURE_REQUIRES_CAMPAIGN_REVIEW", reason)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,555 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Read-only development audit against the real S-MPCC command contract.
+
+This tool intentionally does *not* make a formal-freeze input, choose a
+candidate, create a randomisation table, launch ROS/Gazebo, or write data.
+It is a small, hash-bound inventory of the parameter values that are actually
+spelled out in the real-experiment command document, compared only with the
+current H0 development adapter.
+
+The distinction matters: the document says that Stage I/II is NO-GO and that
+the later formal templates are future contracts.  Consequently, a match in
+this report is named ``*_DEVELOPMENT_ONLY`` and is never an authorization to
+call a run formal.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import hashlib
+import importlib.util
+import json
+import os
+import re
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
+
+
+AUDITOR_ID = "SMPCC-SIM-PHYSICAL-COMMAND-ALIGNMENT-AUDITOR-v1"
+AUDIT_SCHEMA_VERSION = "smpcc-sim-physical-command-alignment-audit-v1"
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+# ``scripts/ -> spmpc_sim_local_planner/ -> simulation/ -> scout_apps/ -> src/ ->
+# scout_ws/``.  Keep this relative lookup so the auditor remains read-only
+# when the workspace is relocated.
+WORKSPACE_ROOT = SCRIPT_DIR.parents[4]
+DEFAULT_PHYSICAL_COMMAND_DOC = (
+    WORKSPACE_ROOT
+    / "docs/实物实验注意事项/对比试验/实物对比实验/0717_S-MPCC正式实物实验启动与录制命令.md"
+)
+DEFAULT_H0_ADAPTER = SCRIPT_DIR / "smpcc_sim_h0_runtime_adapter.py"
+
+
+class AuditError(RuntimeError):
+    """A source document is missing or no longer has the reviewed structure."""
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise AuditError(message)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def require_expected_sha256(actual: str, expected: str | None, label: str) -> None:
+    """Optionally pin a source artifact supplied by an external reviewer."""
+
+    if expected is None:
+        return
+    require(
+        re.fullmatch(r"[0-9a-f]{64}", expected) is not None,
+        f"expected {label} SHA-256 must be lowercase hexadecimal",
+    )
+    require(actual == expected, f"{label} SHA-256 does not match the supplied trust anchor")
+
+
+def read_numbered_lines(path: Path) -> List[str]:
+    require(path.is_file(), f"physical command document is missing: {path}")
+    try:
+        return path.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        raise AuditError(f"cannot read physical command document: {path}: {exc}") from exc
+
+
+def find_line(lines: Sequence[str], needle: str, *, start: int = 0) -> int:
+    for index in range(start, len(lines)):
+        if needle in lines[index]:
+            return index + 1
+    raise AuditError(f"physical command document lacks required reviewed text: {needle!r}")
+
+
+def section_after(lines: Sequence[str], marker: str, *, count: int) -> Tuple[int, Sequence[str]]:
+    line = find_line(lines, marker)
+    return line, lines[line - 1 : line - 1 + count]
+
+
+_ASSIGNMENT = re.compile(
+    r"^\s*([A-Z][A-Z0-9_]*)=(?:\"([^\"]*)\"|'([^']*)'|([^\s\\]+))\s*(?:\\)?\s*$"
+)
+
+
+def extract_assignments(lines: Sequence[str], *, first_line: int, wanted: Iterable[str]) -> Dict[str, Dict[str, Any]]:
+    wanted_set = set(wanted)
+    output: Dict[str, Dict[str, Any]] = {}
+    for offset, raw in enumerate(lines):
+        match = _ASSIGNMENT.match(raw)
+        if match is None or match.group(1) not in wanted_set:
+            continue
+        value = next((part for part in match.groups()[1:] if part is not None), "")
+        key = match.group(1)
+        # A duplicated field is a useful audit signal.  Preserve all source
+        # lines rather than quietly selecting the last one.
+        if key in output:
+            output[key]["occurrences"].append({"line": first_line + offset, "value": value})
+        else:
+            output[key] = {
+                "value": value,
+                "line": first_line + offset,
+                "occurrences": [{"line": first_line + offset, "value": value}],
+            }
+    return output
+
+
+def _load_h0_adapter(path: Path):
+    require(path.is_file(), f"H0 adapter is missing: {path}")
+    module_name = "smpcc_sim_physical_alignment_h0_adapter"
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise AuditError(f"cannot import H0 adapter: {path}")
+    module = importlib.util.module_from_spec(spec)
+    previous = sys.modules.get(module_name)
+    sys.modules[module_name] = module
+    try:
+        spec.loader.exec_module(module)
+    except Exception as exc:  # The audit must never fall back to guessed values.
+        raise AuditError(f"cannot import H0 adapter for read-only audit: {exc!r}") from exc
+    finally:
+        if previous is None:
+            sys.modules.pop(module_name, None)
+        else:
+            sys.modules[module_name] = previous
+    return module
+
+
+def _value(inventory: Mapping[str, Mapping[str, Any]], key: str) -> str | None:
+    record = inventory.get(key)
+    return None if record is None else str(record["value"])
+
+
+def _comparison(
+    identifier: str,
+    status: str,
+    *,
+    physical: Any,
+    simulation: Any,
+    rationale: str,
+    physical_lines: Sequence[int],
+) -> Dict[str, Any]:
+    return {
+        "id": identifier,
+        "status": status,
+        "physical": physical,
+        "simulation": simulation,
+        "rationale": rationale,
+        "physical_command_document_lines": list(physical_lines),
+        "formal_authorization": False,
+    }
+
+
+def inventory_physical_commands(lines: Sequence[str]) -> Dict[str, Any]:
+    """Extract the reviewed command fragments without pretending they are freeze data."""
+
+    protocol_line = find_line(lines, "SMPCC-REAL-40-64-88-v2.0")
+    no_go_line = find_line(lines, "所有 formal Stage I/II trial NO-GO")
+    active_only_line = find_line(lines, "当前只允许完成 **4 条 G2S development trial**")
+    matrix_line = find_line(lines, "| `S1/CORE` | H1/C1")
+    current_g2s_start, current_g2s_lines = section_after(lines, "### 0.4 终端 B：先做只读检查", count=56)
+    g2s_legacy_start, g2s_legacy_lines = section_after(lines, "PILOT_MODE=true", count=62)
+    # The first two matches are in G2S.  Locating G2C/G3 by their unique prior
+    # headings prevents a future newly-added template from being misclassified.
+    g2c_heading = find_line(lines, "### 4.4 G2C：选定输入源后的 W2/W5 最小确认")
+    g2c_start, g2c_lines = section_after(lines[g2c_heading - 1 :], "PILOT_MODE=true", count=62)
+    g2c_start += g2c_heading - 1
+    g3_heading = find_line(lines, "### 4.5 G3：独立 RGB efficacy pilot")
+    g3_start, g3_lines = section_after(lines[g3_heading - 1 :], "PILOT_MODE=true", count=62)
+    g3_start += g3_heading - 1
+
+    common_keys = (
+        "PILOT_MODE",
+        "PILOT_METHOD",
+        "PILOT_RECORD_RGB",
+        "PILOT_RECORD_ONLINE_LIQUID",
+        "FORBID_IMAGE_STREAMS",
+        "PATH_FILE",
+        "PATH_EXPECTED_SHA256",
+        "RECORD_SEC",
+        "MAX_RECORD_SEC",
+        "START_POS_TOL",
+        "START_YAW_TOL",
+        "START_HOLD_SEC",
+        "START_GATE_TIMEOUT_SEC",
+        "PATH_PUBLISH_RATE",
+        "V_REF",
+        "SLOSH_HEIGHT_MAX",
+        "ALPHA_MAX",
+        "SHARED_LINEAR_ACCEL_LIMIT_ENABLE",
+        "SHARED_LINEAR_ACCEL_MAX",
+        "SHARED_ANGULAR_LIMIT_ENABLE",
+        "SHARED_ANGULAR_RATE_MAX",
+        "SHARED_ANGULAR_ACCEL_MAX",
+        "DELAY_PHASE_MODE",
+        "DELAY_PHASE_LINEAR_DELAY_SEC",
+        "DELAY_PHASE_ANGULAR_DELAY_SEC",
+        "IMU_SHADOW_ENABLE",
+    )
+    active = extract_assignments(current_g2s_lines, first_line=current_g2s_start, wanted=common_keys)
+    legacy_g2s = extract_assignments(g2s_legacy_lines, first_line=g2s_legacy_start, wanted=common_keys)
+    g2c = extract_assignments(g2c_lines, first_line=g2c_start, wanted=common_keys)
+    g3 = extract_assignments(g3_lines, first_line=g3_start, wanted=common_keys)
+
+    require(_value(active, "PILOT_METHOD") == "Bsmooth", "active G2S no longer declares PILOT_METHOD=Bsmooth")
+    require(_value(active, "PILOT_RECORD_RGB") == "false", "active G2S no longer forbids RGB image recording")
+    require(_value(active, "PILOT_RECORD_ONLINE_LIQUID") == "true", "active G2S no longer records online liquid scalar")
+    require(_value(active, "FORBID_IMAGE_STREAMS") == "true", "active G2S no longer forbids image streams")
+    require(_value(active, "PATH_EXPECTED_SHA256") == "578a4dd7663c2f49b4270c37755a08b2b0dc70735fb6b818da35b60a60f3990e", "active G2S H0_G2 hash changed; review alignment before use")
+    require(_value(legacy_g2s, "V_REF") == "0.20", "reviewed legacy G2S Bsmooth v_ref is no longer 0.20")
+    require(_value(legacy_g2s, "DELAY_PHASE_MODE") == "off", "reviewed legacy G2S delay mode is no longer off")
+    require(_value(g2c, "V_REF") == "0.20" and _value(g2c, "DELAY_PHASE_MODE") == "fixed_closed_loop", "reviewed G2C template inventory changed")
+    require(_value(g3, "V_REF") == "0.20" and _value(g3, "DELAY_PHASE_MODE") == "fixed_closed_loop", "reviewed G3 template inventory changed")
+
+    return {
+        "document_protocol": {
+            "candidate_protocol_id": "SMPCC-REAL-40-64-88-v2.0",
+            "line": protocol_line,
+            "formal_status": "NO_GO",
+            "formal_status_line": no_go_line,
+            "active_execution_boundary": "G2S_DEVELOPMENT_ONLY",
+            "active_execution_boundary_line": active_only_line,
+        },
+        "matrix_contract": {
+            "line": matrix_line,
+            "S1": {"path_id": "H1", "container_id": "C1", "conditions": ["B0", "Bsmooth", "SmoothMatch", "FixedProfile", "Bslosh"], "blocks": 8},
+            "S2A": {"path_id": "L1", "container_id": "C1", "conditions": ["Bsmooth", "FixedProfile", "Bslosh"], "blocks": 8},
+            "S2B": {"path_id": "H1", "container_id": "C2", "conditions": ["Bsmooth", "FixedProfile", "Bslosh"], "blocks": 8},
+        },
+        "G2S_active_wrapper": {
+            "status": "DEVELOPMENT_ONLY_CURRENT_EXECUTION",
+            "line_range": [current_g2s_start, current_g2s_start + len(current_g2s_lines) - 1],
+            "assignments": active,
+            "motion_sequence_lines": [172, 180],
+        },
+        "G2S_legacy_registry_template": {
+            "status": "LEGACY_DEVELOPMENT_TEMPLATE_NOT_EXECUTABLE",
+            "line_range": [g2s_legacy_start, g2s_legacy_start + len(g2s_legacy_lines) - 1],
+            "assignments": legacy_g2s,
+        },
+        "G2C_template": {
+            "status": "DEVELOPMENT_TEMPLATE_NOT_FORMAL",
+            "line_range": [g2c_start, g2c_start + len(g2c_lines) - 1],
+            "assignments": g2c,
+        },
+        "G3_template": {
+            "status": "DEVELOPMENT_TEMPLATE_NOT_FORMAL",
+            "line_range": [g3_start, g3_start + len(g3_lines) - 1],
+            "assignments": g3,
+        },
+        "formal_contract_line_references": {
+            "formal_backend_launch_parameters": [3803, 3828],
+            "observer_delay_manifest_fields": [3021, 3033],
+            "fixed_profile_requirements": [2530, 2542],
+            "start_and_path_gate": [3440, 3453],
+            "motion_admission_and_rgb_pre": [3995, 4199],
+            "recording_topic_contract": [4224, 4235],
+            "failure_retry_contract": [4306, 4315],
+        },
+    }
+
+
+def compare_h0_to_physical(inventory: Mapping[str, Any], adapter_path: Path) -> Dict[str, Any]:
+    """Compare H0 only with the G2S Bsmooth development contract.
+
+    This intentionally does not compare H0 to Bslosh or a formal row: H0 is a
+    runtime s-curve Bsmooth smoke and the real document prohibits treating it
+    as either H1/L1 or Stage I data.
+    """
+
+    adapter = _load_h0_adapter(adapter_path)
+    declared = adapter.h0_declared_config()
+    fields = declared["fields"]
+    runtime = adapter.runtime_environment(
+        "http://127.0.0.1:19991",
+        "http://127.0.0.1:19992",
+        Path("/nonexistent/smpcc_alignment_audit_case"),
+    )
+    row = adapter.h0_row()
+    p2 = dict(adapter.P2)
+    active = inventory["G2S_active_wrapper"]["assignments"]
+    legacy = inventory["G2S_legacy_registry_template"]["assignments"]
+
+    comparisons = [
+        _comparison(
+            "h0_method_identity_vs_active_g2s",
+            "ALIGNED_DEVELOPMENT_ONLY",
+            physical={"PILOT_METHOD": _value(active, "PILOT_METHOD")},
+            simulation={"condition_id": row["condition_id"], "method_backend": row["method_backend"]},
+            rationale="Both are Bsmooth movement generators; this does not make H0 formal.",
+            physical_lines=[int(active["PILOT_METHOD"]["line"])],
+        ),
+        _comparison(
+            "h0_v_ref_vs_g2s_legacy_bsmooth",
+            "MISMATCH_DEVELOPMENT_ONLY",
+            physical={"V_REF": _value(legacy, "V_REF")},
+            simulation={"declared_effective_config.v_ref": fields["v_ref"], "runtime_env.V_REF": runtime["V_REF"]},
+            rationale="H0 is currently 0.25 while the reviewed, explicitly non-executable G2S Bsmooth template says 0.20. Neither value is a formal freeze value.",
+            physical_lines=[int(legacy["V_REF"]["line"])],
+        ),
+        _comparison(
+            "h0_delay_mode_vs_g2s_legacy_bsmooth",
+            "ALIGNED_DEVELOPMENT_ONLY",
+            physical={"DELAY_PHASE_MODE": _value(legacy, "DELAY_PHASE_MODE")},
+            simulation={"declared_effective_config.delay.mode": declared["delay"]["mode"], "runtime_env.DELAY_PHASE_MODE": runtime["DELAY_PHASE_MODE"]},
+            rationale="Both use delay mode off in the development comparison; disabled-delay scalar defaults are not a formal delay policy.",
+            physical_lines=[int(legacy["DELAY_PHASE_MODE"]["line"])],
+        ),
+        _comparison(
+            "h0_shared_angular_limiter_vs_g2s_legacy_bsmooth",
+            "MISMATCH_DEVELOPMENT_ONLY",
+            physical={
+                "SHARED_ANGULAR_LIMIT_ENABLE": _value(legacy, "SHARED_ANGULAR_LIMIT_ENABLE"),
+                "SHARED_ANGULAR_RATE_MAX": _value(legacy, "SHARED_ANGULAR_RATE_MAX"),
+                "SHARED_ANGULAR_ACCEL_MAX": _value(legacy, "SHARED_ANGULAR_ACCEL_MAX"),
+            },
+            simulation={
+                "shared_angular_limit_enable": fields["shared_angular_limit_enable"],
+                "shared_angular_rate_max": fields["shared_angular_rate_max"],
+                "shared_angular_accel_max": fields["shared_angular_accel_max"],
+            },
+            rationale="The legacy G2S template enables the shared angular limiter; H0's declared readback target disables it. This is an explicit development deviation.",
+            physical_lines=[
+                int(legacy["SHARED_ANGULAR_LIMIT_ENABLE"]["line"]),
+                int(legacy["SHARED_ANGULAR_RATE_MAX"]["line"]),
+                int(legacy["SHARED_ANGULAR_ACCEL_MAX"]["line"]),
+            ],
+        ),
+        _comparison(
+            "h0_path_mode_vs_active_g2s",
+            "SIM_SPECIFIC_DEVIATION_NOT_FORMAL",
+            physical={
+                "PATH_FILE": _value(active, "PATH_FILE"),
+                "PATH_EXPECTED_SHA256": _value(active, "PATH_EXPECTED_SHA256"),
+                "path_semantic": "frozen H0_G2 JSON replay",
+            },
+            simulation={
+                "path_id": row["path_id"],
+                "path_source_mode": "runtime_s_curve",
+                "P2_spawn": p2["spawn"],
+                "P2_goal": p2["goal"],
+            },
+            rationale="H0 uses a generated P2 open-field s-curve, not the real H0_G2 JSON and never an H1/L1 frozen replay.",
+            physical_lines=[int(active["PATH_FILE"]["line"]), int(active["PATH_EXPECTED_SHA256"]["line"])],
+        ),
+        _comparison(
+            "h0_online_liquid_measurement_vs_active_g2s",
+            "UNAVAILABLE_IN_H0_DEVELOPMENT_SMOKE",
+            physical={
+                "PILOT_RECORD_ONLINE_LIQUID": _value(active, "PILOT_RECORD_ONLINE_LIQUID"),
+                "FORBID_IMAGE_STREAMS": _value(active, "FORBID_IMAGE_STREAMS"),
+            },
+            simulation={
+                "H_proxy_topic": "/slosh/height",
+                "H_modal_topic": "/sim_spmpc/slosh_height",
+                "physical_primary_eligible": False,
+            },
+            rationale="H0 records model proxy/modal channels, not the real command document's online RGB scalar/quality measurement contract.",
+            physical_lines=[int(active["PILOT_RECORD_ONLINE_LIQUID"]["line"]), int(active["FORBID_IMAGE_STREAMS"]["line"])],
+        ),
+        _comparison(
+            "h0_disabled_slosh_constraint_vs_g2s_bsmooth",
+            "SIM_SPECIFIC_NOT_A_FORMAL_COMPARATOR",
+            physical={"PILOT_METHOD": _value(active, "PILOT_METHOD")},
+            simulation={"slosh_enable": fields["slosh_enable"], "w_slosh": fields["w_slosh"], "slosh_height_max": fields["slosh_height_max"]},
+            rationale="Bsmooth can appropriately have slosh disabled, but these H0 values cannot supply Bslosh, C1, or C2 formal parameters.",
+            physical_lines=[int(active["PILOT_METHOD"]["line"])],
+        ),
+        _comparison(
+            "h0_delay_scalar_declaration_vs_runtime_arguments",
+            "SIM_INTERNAL_DECLARATION_DIFFERENCE",
+            physical={"DELAY_PHASE_MODE": _value(legacy, "DELAY_PHASE_MODE")},
+            simulation={
+                "declared_delay_linear_sec": fields["delay_linear_sec"],
+                "declared_delay_angular_sec": fields["delay_angular_sec"],
+                "runtime_env_delay_linear_sec": runtime["DELAY_PHASE_LINEAR_DELAY_SEC"],
+                "runtime_env_delay_angular_sec": runtime["DELAY_PHASE_ANGULAR_DELAY_SEC"],
+            },
+            rationale="Delay is off, but the H0 readback target retains controller-resolved .15/.22 defaults while launch arguments are -1.0 sentinels. This needs runtime readback, not inference, before any development comparison.",
+            physical_lines=[int(legacy["DELAY_PHASE_MODE"]["line"])],
+        ),
+    ]
+
+    return {
+        "h0_adapter_path": str(adapter_path.resolve()),
+        "h0_adapter_sha256": sha256_file(adapter_path),
+        "h0_adapter_id": adapter.ADAPTER_ID,
+        "h0_development_only": True,
+        "h0_formal": False,
+        "comparisons": comparisons,
+    }
+
+
+def formal_unavailable_items() -> List[Dict[str, Any]]:
+    """Items intentionally not invented from a startup document."""
+
+    return [
+        {
+            "id": "H1_L1_frozen_source_json_transform_fit_clearance",
+            "status": "UNAVAILABLE_FORMAL_INPUT",
+            "source_lines": [242, 3309, 3453],
+            "reason": "The document describes the required replay contract but does not provide formal H1/L1 source JSON, transform, fit, clearance, or hashes.",
+        },
+        {
+            "id": "C1_C2_physical_manifests_and_C2_allowlist",
+            "status": "UNAVAILABLE_FORMAL_INPUT",
+            "source_lines": [3019, 3299, 3306],
+            "reason": "CONTAINER_CONFIG/radius/height/damping are manifest variables; no formal C1/C2 values or C2 transfer diff are supplied.",
+        },
+        {
+            "id": "five_condition_effective_configs_and_formal_Bslosh_release",
+            "status": "UNAVAILABLE_FORMAL_INPUT",
+            "source_lines": [243, 244, 264, 276, 3019],
+            "reason": "The document expressly leaves final weights, v_ref, Bslosh release, observer, delay, and profile hashes to a future read-only manifest; W5_S10 is excluded.",
+        },
+        {
+            "id": "formal_observer_source_and_fallback_policy",
+            "status": "UNAVAILABLE_FORMAL_INPUT",
+            "source_lines": [222, 3021, 3033],
+            "reason": "G2S only produces a development source decision. Formal nominal/effective source and fallback policy are not frozen.",
+        },
+        {
+            "id": "fixedprofile_H1_C1_L1_C1_H1_C2_assets",
+            "status": "UNAVAILABLE_FORMAL_INPUT",
+            "source_lines": [2530, 2542, 3035, 3049],
+            "reason": "Formal profiles/tracker/generator/constraint reports are described but absent.",
+        },
+        {
+            "id": "formal_RGB_primary_and_independent_plant_fidelity",
+            "status": "UNAVAILABLE_FORMAL_INPUT",
+            "source_lines": [4185, 4199, 4224, 4235, 4291, 4304],
+            "reason": "No formal RGB/reference evidence, primary QC rule, independent plant fidelity report, or approval is provided by the command document.",
+        },
+        {
+            "id": "formal_start_admission_command_topology",
+            "status": "UNAVAILABLE_FORMAL_INPUT",
+            "source_lines": [3111, 3115, 3440, 3453, 3995, 4199],
+            "reason": "The physical contract gives variables and future checks, but no frozen sim backend delegates or hash-bound start/admission/RAW-POST-PUBLISHED command topology.",
+        },
+        {
+            "id": "formal_randomization_seed_bundles_retry_classifier_receipt",
+            "status": "UNAVAILABLE_FORMAL_INPUT",
+            "source_lines": [248, 250, 3076, 3152, 4306, 4315],
+            "reason": "No v2.0 random tables, seed bundles, formal retry verifier, FREEZE_ID receipt, or executable backend is present.",
+        },
+        {
+            "id": "formal_motion_tail_numeric_values",
+            "status": "UNAVAILABLE_FORMAL_INPUT",
+            "source_lines": [3111, 3115, 4201, 4209],
+            "reason": "The command document names T_MOTION_MAX/T_HVIS_TAIL/T_ADMISSION_MAX as freeze variables; its old RECORD_SEC=60/90 examples are not a formal effective-motion/tail freeze.",
+        },
+    ]
+
+
+def build_audit(
+    physical_document: Path = DEFAULT_PHYSICAL_COMMAND_DOC,
+    h0_adapter: Path = DEFAULT_H0_ADAPTER,
+    *,
+    expected_physical_document_sha256: str | None = None,
+    expected_h0_adapter_sha256: str | None = None,
+) -> Dict[str, Any]:
+    physical_document = physical_document.resolve()
+    h0_adapter = h0_adapter.resolve()
+    require(physical_document.is_file(), f"physical command document is missing: {physical_document}")
+    require(h0_adapter.is_file(), f"H0 adapter is missing: {h0_adapter}")
+    document_hash = sha256_file(physical_document)
+    adapter_hash = sha256_file(h0_adapter)
+    require_expected_sha256(
+        document_hash,
+        expected_physical_document_sha256,
+        "physical command document",
+    )
+    require_expected_sha256(adapter_hash, expected_h0_adapter_sha256, "H0 adapter")
+    lines = read_numbered_lines(physical_document)
+    inventory = inventory_physical_commands(lines)
+    h0 = compare_h0_to_physical(inventory, h0_adapter)
+    statuses = [item["status"] for item in h0["comparisons"]]
+    return {
+        "audit_schema_version": AUDIT_SCHEMA_VERSION,
+        "auditor_id": AUDITOR_ID,
+        "status": "DEVELOPMENT_ONLY_ALIGNMENT_AUDIT_COMPLETE",
+        "formal": False,
+        "development_only": True,
+        "authorization": "NO_FORMAL_AUTHORIZATION_NO_FORMAL_FREEZE_CREATED",
+        "side_effects": {"writes_files": False, "launches_ros": False, "launches_gazebo": False, "touches_data_root": False},
+        "source_bindings": {
+            "physical_command_document_path": str(physical_document),
+            "physical_command_document_sha256": document_hash,
+            "physical_command_document_line_count": len(lines),
+            "h0_adapter_path": str(h0_adapter),
+            "h0_adapter_sha256": adapter_hash,
+            "external_physical_document_trust_anchor": expected_physical_document_sha256,
+            "external_h0_adapter_trust_anchor": expected_h0_adapter_sha256,
+        },
+        "physical_inventory": inventory,
+        "h0_comparison": h0,
+        "comparison_counts": {
+            "aligned_development_only": sum(status == "ALIGNED_DEVELOPMENT_ONLY" for status in statuses),
+            "mismatch_development_only": sum(status == "MISMATCH_DEVELOPMENT_ONLY" for status in statuses),
+            "sim_specific_or_unavailable": sum(status not in {"ALIGNED_DEVELOPMENT_ONLY", "MISMATCH_DEVELOPMENT_ONLY"} for status in statuses),
+        },
+        "formal_inputs_unavailable": formal_unavailable_items(),
+        "nonnegotiable_boundary": "This report may guide development alignment only. It cannot be used as a formal freeze, formal Bslosh selection, formal C1/C2 release, randomization table, or formal result.",
+    }
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--physical-command-document", type=Path, default=DEFAULT_PHYSICAL_COMMAND_DOC)
+    parser.add_argument("--h0-adapter", type=Path, default=DEFAULT_H0_ADAPTER)
+    parser.add_argument(
+        "--expected-physical-command-sha256",
+        help="optional external trust anchor; mismatch fails closed",
+    )
+    parser.add_argument(
+        "--expected-h0-adapter-sha256",
+        help="optional external trust anchor; mismatch fails closed",
+    )
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        report = build_audit(
+            args.physical_command_document,
+            args.h0_adapter,
+            expected_physical_document_sha256=args.expected_physical_command_sha256,
+            expected_h0_adapter_sha256=args.expected_h0_adapter_sha256,
+        )
+    except AuditError as exc:
+        print(json.dumps({"status": "FAIL", "formal": False, "error": str(exc)}, ensure_ascii=False, sort_keys=True))
+        return 2
+    print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

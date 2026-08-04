@@ -1,0 +1,44 @@
+<launch>
+  <!--
+    Simulation-owned, read-only Cartographer localization stack.  The nodes
+    are listed directly here rather than including a legacy proxy/navigation
+    launch, so this package's environment graph cannot acquire a controller or
+    a path publisher through a transitive launch include.
+  -->
+  <arg name="map_file"/>
+  <arg name="scan_topic" default="/scan_front"/>
+  <arg name="input_odom_topic" default="/odom"/>
+  <arg name="odom_topic" default="/odom_carto"/>
+  <arg name="use_rviz" default="false"/>
+
+  <node pkg="nanoscan3_bringup"
+        type="odom_monotonic_relay.py"
+        name="sim_environment_odom_monotonic_relay"
+        output="screen">
+    <param name="input" value="$(arg input_odom_topic)"/>
+    <param name="output" value="$(arg odom_topic)"/>
+  </node>
+
+  <node name="sim_environment_cartographer"
+        pkg="cartographer_ros"
+        type="cartographer_node"
+        args="-configuration_directory $(find nanoscan3_localization)/config
+              -configuration_basename scout_2d_localization_sim.lua
+              -load_state_filename $(arg map_file)"
+        output="screen">
+    <remap from="scan" to="$(arg scan_topic)"/>
+    <remap from="odom" to="$(arg odom_topic)"/>
+  </node>
+
+  <node name="sim_environment_cartographer_occupancy_grid"
+        pkg="cartographer_ros"
+        type="cartographer_occupancy_grid_node"
+        args="-resolution 0.05"/>
+
+  <node if="$(arg use_rviz)"
+        name="sim_environment_localization_rviz"
+        pkg="rviz"
+        type="rviz"
+        args="-d $(find nanoscan3_localization)/rviz/cartographer_localization.rviz"
+        output="screen"/>
+</launch>

@@ -1,0 +1,51 @@
+# Development template only.  These numbers are not a frozen C1 release and
+# must not be copied into a formal freeze or reported as validated fidelity.
+schema_version: 1
+development_only: true
+formal: false
+fidelity_validation_status: UNVALIDATED
+condition_template_id: C1_DEVELOPMENT_TEMPLATE_UNFROZEN
+
+# The plant refuses a different input or output topic to keep its information
+# boundary explicit: only executed simulator odometry enters this node.
+odom_topic: /odom
+height_topic: /sim_truth/liquid_height
+state_topic: /sim_truth/liquid_state
+metadata_topic: /sim_truth/liquid_metadata
+
+integration_step_sec: 0.002
+max_odom_dt_sec: 0.10
+rotation_height_gain_s2: 0.000015
+max_modal_displacement_m: 0.040
+max_modal_velocity_mps: 1.50
+height_limit_m: 0.035
+
+container:
+  # Illustrative development values only; physical C1 remains unfrozen.
+  container_radius_m: 0.0185
+  static_liquid_height_m: 0.0580
+  liquid_density_kgm3: 1000.0
+  offset_x_m: 0.000
+  offset_y_m: 0.000
+
+# Independent multi-mode surrogate parameters.  They are intentionally not a
+# controller parameter set and have no fidelity-PASS claim.
+modes:
+  - mode_id: m1
+    natural_frequency_radps: 10.5
+    damping_ratio: 0.080
+    input_gain: 1.00
+    height_gain: 0.72
+    cubic_stiffness_m2s2: 800.0
+  - mode_id: m2
+    natural_frequency_radps: 18.7
+    damping_ratio: 0.110
+    input_gain: 0.36
+    height_gain: 0.31
+    cubic_stiffness_m2s2: 2200.0
+  - mode_id: m3
+    natural_frequency_radps: 27.0
+    damping_ratio: 0.145
+    input_gain: 0.17
+    height_gain: 0.16
+    cubic_stiffness_m2s2: 4500.0

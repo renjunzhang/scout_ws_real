@@ -1,0 +1,15 @@
+<launch>
+  <!-- This launch is development-only.  It intentionally refuses to represent
+       a frozen formal condition or a validated physical-primary measurement. -->
+  <arg name="config"
+       default="$(find scout_liquid_plant)/config/C1_development_unvalidated.yaml" />
+
+  <node pkg="scout_liquid_plant"
+        type="liquid_plant_node.py"
+        name="liquid_plant_development"
+        output="screen"
+        required="true">
+    <rosparam command="load" file="$(arg config)" />
+    <param name="config_path" value="$(arg config)" />
+  </node>
+</launch>

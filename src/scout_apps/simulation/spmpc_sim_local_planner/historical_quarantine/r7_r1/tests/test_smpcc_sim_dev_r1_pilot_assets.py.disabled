@@ -1,0 +1,116 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Unit tests for the non-runnable SIM-DEV R1 pilot declarations only."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import importlib.util
+import json
+import stat
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+SCRIPTS = Path(__file__).resolve().parents[1]
+MODULE_PATH = SCRIPTS / "smpcc_sim_dev_r1_pilot_assets.py"
+
+
+def load_module():
+    spec = importlib.util.spec_from_file_location("smpcc_sim_dev_r1_pilot_assets_test_target", MODULE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load SIM-DEV R1 pilot asset builder")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class SimDevR1PilotAssetsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_module()
+
+    def test_matched_bsmooth_keeps_vref_and_only_changes_method_semantics(self):
+        bslosh = self.module.build_declaration(self.module.BSLOSH_ID)
+        bsmooth = self.module.build_declaration(self.module.BSMOOTH_ID)
+        comparison = self.module.compare_bsmooth_to_bslosh(bslosh, bsmooth)
+
+        self.assertFalse(bsmooth["formal"])
+        self.assertTrue(bsmooth["development_only"])
+        self.assertFalse(bsmooth["physical_alignment"])
+        self.assertFalse(bsmooth["physical_primary_eligible"])
+        self.assertFalse(bsmooth["original_matrix_40_64_88_eligible"])
+        self.assertFalse(bsmooth["runnable"])
+        self.assertEqual("B_smooth", bsmooth["runtime_planner_variant"])
+        self.assertEqual(0.20, bsmooth["controller"]["v_ref"])
+        self.assertEqual(0.3, bsmooth["controller"]["w_control"])
+        self.assertEqual(1.0, bsmooth["controller"]["w_smooth"])
+        self.assertEqual(
+            {"slosh_enable", "smooth_priority_enable", "w_slosh"},
+            set(comparison["allowed_method_differences"]),
+        )
+        self.assertEqual(
+            {
+                "slosh_enable": {self.module.BSLOSH_ID: True, self.module.BSMOOTH_ID: False},
+                "smooth_priority_enable": {self.module.BSLOSH_ID: False, self.module.BSMOOTH_ID: True},
+                "w_slosh": {self.module.BSLOSH_ID: 5.0, self.module.BSMOOTH_ID: 0.0},
+            },
+            comparison["diff"],
+        )
+
+    def test_builds_readonly_declarations_and_explicit_no_go_conditions(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as temporary:
+            root = Path(temporary) / "pilot_assets"
+            report = self.module.create_pilot_assets(root)
+            manifest_path = Path(report["pilot_manifest"])
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+            self.assertEqual("PASS_DECLARATIONS_ONLY_NOT_RUNNABLE", report["status"])
+            self.assertFalse(report["matrix_execution_authorized"])
+            self.assertFalse(report["original_matrix_40_64_88_eligible"])
+            self.assertFalse(report["results_or_bags_created"])
+            self.assertEqual(0, stat.S_IMODE(manifest_path.stat().st_mode) & 0o222)
+            self.assertFalse(manifest["formal"])
+            self.assertFalse(manifest["physical_alignment"])
+            self.assertFalse(manifest["physical_primary_eligible"])
+            self.assertFalse(manifest["original_matrix_40_64_88_eligible"])
+            self.assertFalse(manifest["planned_rows_generated"])
+            self.assertFalse(manifest["randomization_generated"])
+            self.assertEqual([], manifest["formal_dataset_roots"])
+            for condition in (self.module.SMOOTHMATCH_ID, self.module.FIXEDPROFILE_ID):
+                self.assertFalse(manifest["conditions"][condition]["runnable"])
+                self.assertTrue(manifest["conditions"][condition]["status"].startswith("NO_GO_"))
+            self.assertEqual(
+                "shared_LiquidSloshModel_proxy_not_independent_plant_truth",
+                json.loads(
+                    Path(manifest["conditions"][self.module.BSMOOTH_ID]["effective_config_declaration"]["path"])
+                    .read_text(encoding="utf-8")
+                )["observer"]["H_proxy_semantic"],
+            )
+
+    def test_hash_drift_or_data_output_is_rejected_fail_closed(self):
+        with tempfile.TemporaryDirectory(dir="/tmp") as temporary:
+            root = Path(temporary) / "pilot_assets"
+            report = self.module.create_pilot_assets(root)
+            manifest = json.loads(Path(report["pilot_manifest"]).read_text(encoding="utf-8"))
+            declaration_path = Path(
+                manifest["conditions"][self.module.BSMOOTH_ID]["effective_config_declaration"]["path"]
+            )
+            declaration_path.chmod(0o644)
+            declared = json.loads(declaration_path.read_text(encoding="utf-8"))
+            declared["controller"]["v_ref"] = 0.21
+            declaration_path.write_text(json.dumps(declared, sort_keys=True) + "\n", encoding="utf-8")
+            declaration_path.chmod(0o444)
+            with self.assertRaises(self.module.PilotAssetError):
+                self.module.validate_pilot_manifest(Path(report["pilot_manifest"]))
+
+        with self.assertRaises(self.module.PilotAssetError):
+            self.module._output_root(Path("/data/a/scout_sim_replacement/forbidden_sim_dev_pilot_assets"))
+
+
+if __name__ == "__main__":
+    unittest.main()

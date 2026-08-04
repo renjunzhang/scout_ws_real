@@ -1,0 +1,290 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Fail-closed tests for the R7 CRN evidence/contract builder."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import importlib.util
+import json
+import shutil
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+
+SCRIPT_DIR = Path(__file__).resolve().parents[1]
+BUILDER_PATH = SCRIPT_DIR / "smpcc_sim_mechanism_crn_contract_builder.py"
+
+
+def _load(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+builder = _load("smpcc_crn_contract_builder_tested", BUILDER_PATH)
+freeze = builder.freeze
+runtime = builder.runtime
+
+
+class CRNContractBuilderTest(unittest.TestCase):
+    CREATED_UTC = "2026-08-03T12:00:00Z"
+
+    @staticmethod
+    def _registry(*, omit=None, inactive_transform="unit_uniform_to_zero"):
+        result = {}
+        for stream in runtime.SEED_STREAMS:
+            if stream == omit:
+                continue
+            mode = freeze.CRN_APPLICATION_MODES[stream]
+            result[stream] = {
+                "consumption_phase": runtime.CONSUMPTION_PHASES[stream],
+                "consumer_target": f"fixture_target::{stream}",
+                "mapping": {
+                    "stream": stream,
+                    "source_field": "unit_uniform",
+                    "time_index_field": runtime.TIME_INDEX_FIELD,
+                    "application_mode": mode,
+                    "value_transform": (
+                        inactive_transform
+                        if mode == "INACTIVE_ZERO_AMPLITUDE"
+                        else f"fixture_active_transform::{stream}"
+                    ),
+                    "runtime_evidence": f"fixture_evidence::{stream}",
+                },
+            }
+        return result
+
+    def _candidate(self, root: Path, *, registry=None,
+                   runtime_hash_override=None):
+        runner = root / "runner.py"
+        runner.write_text(
+            "CRN_STREAM_APPLICATIONS = " +
+            repr(self._registry() if registry is None else registry) + "\n",
+            encoding="utf-8",
+        )
+        runner.chmod(0o444)
+        bundle = freeze._seed_bundle(
+            freeze.RANDOMIZATION_SEED,
+            "SIM-S1_CORE",
+            1,
+            root / "seed_traces",
+        )
+        runtime_descriptor = freeze.descriptor(
+            builder.RUNTIME_PATH, "fixture CRN runtime"
+        )
+        if runtime_hash_override is not None:
+            runtime_descriptor["sha256"] = runtime_hash_override
+        candidate = {
+            "runtime_bindings": {
+                "mechanism_runner": freeze.descriptor(
+                    runner, "fixture runner"
+                ),
+                "mechanism_crn_runtime": runtime_descriptor,
+                "crn_runtime_test": freeze.descriptor(
+                    builder.TEST_PATH, "fixture CRN test"
+                ),
+            },
+            "seed_bundles": {builder.FIXTURE_KEY: bundle},
+        }
+        candidate_path = root / "mechanism_freeze_candidate.json"
+        candidate_path.write_text(
+            json.dumps(candidate, ensure_ascii=False, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        candidate_path.chmod(0o444)
+        return candidate_path, candidate
+
+    @staticmethod
+    def _remove_outputs(root: Path) -> None:
+        for name in (
+            "crn_runtime_consumer_contract.json",
+            "crn_runtime_consumer_evidence.json",
+        ):
+            path = root / name
+            if path.exists():
+                path.unlink()
+        evidence_root = root / "crn_consumer_evidence"
+        if evidence_root.exists():
+            shutil.rmtree(str(evidence_root))
+
+    def test_builder_executes_exact_proofs_and_freeze_validator_passes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate_path, candidate = self._candidate(root)
+            report = builder.build_contract(
+                candidate_path, root, self.CREATED_UTC,
+                enforce_canonical_root=False,
+            )
+            self.assertEqual("PASS", report["status"])
+            self.assertEqual(
+                len(freeze.CRN_CONSUMER_REQUIRED_PROOFS),
+                report["test_count"],
+            )
+            self.assertEqual(
+                set(freeze.CRN_CONSUMER_REQUIRED_PROOFS),
+                set(report["proofs"]),
+            )
+            self.assertTrue(all(report["proofs"].values()))
+            self.assertFalse(report["formal_experiment_data_created"])
+            self.assertFalse(report["gazebo_started"])
+            contract_path = Path(report["contract"]["path"])
+            validation = freeze.validate_crn_runtime_consumer_contract(
+                {
+                    "path": str(contract_path),
+                    "sha256": freeze.sha256_file(contract_path),
+                },
+                candidate,
+                candidate_path,
+            )
+            self.assertEqual("PASS", validation["status"])
+            contract = freeze.read_json(contract_path, "built contract")
+            evidence = freeze.read_json(
+                Path(report["evidence"]["path"]), "built evidence"
+            )
+            self.assertEqual(
+                contract["stream_application"],
+                evidence["stream_application"],
+            )
+            for stream, mode in freeze.CRN_APPLICATION_MODES.items():
+                self.assertEqual(
+                    mode,
+                    contract["stream_application"][stream]["application_mode"],
+                )
+            for path in (
+                contract_path,
+                Path(report["evidence"]["path"]),
+                Path(report["test_transcript"]["path"]),
+            ):
+                self.assertEqual(0, path.stat().st_mode & builder.WRITE_BITS)
+
+    def test_fixed_inputs_reproduce_contract_and_evidence_bytes(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate_path, _candidate = self._candidate(root)
+            first = builder.build_contract(
+                candidate_path, root, self.CREATED_UTC,
+                enforce_canonical_root=False,
+            )
+            first_contract = Path(first["contract"]["path"]).read_bytes()
+            first_evidence = Path(first["evidence"]["path"]).read_bytes()
+            self._remove_outputs(root)
+            second = builder.build_contract(
+                candidate_path, root, self.CREATED_UTC,
+                enforce_canonical_root=False,
+            )
+            self.assertEqual(
+                first_contract, Path(second["contract"]["path"]).read_bytes()
+            )
+            self.assertEqual(
+                first_evidence, Path(second["evidence"]["path"]).read_bytes()
+            )
+
+    def test_missing_or_noop_stream_application_is_rejected(self):
+        cases = {
+            "missing": self._registry(omit="sensor_noise"),
+            "wrong_zero": self._registry(inactive_transform="unit_uniform_passthrough"),
+        }
+        for name, registry in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                candidate_path, _candidate = self._candidate(
+                    root, registry=registry
+                )
+                with self.assertRaises(builder.CRNContractBuilderError):
+                    builder.build_contract(
+                        candidate_path, root, self.CREATED_UTC,
+                        enforce_canonical_root=False,
+                    )
+                self.assertFalse(
+                    (root / "crn_runtime_consumer_contract.json").exists()
+                )
+
+    def test_proof_map_is_derived_not_accepted_or_fabricated(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate_path, _candidate = self._candidate(root)
+            one_proof = {
+                freeze.CRN_CONSUMER_REQUIRED_PROOFS[0]: True,
+            }
+            with mock.patch.object(
+                builder, "_run_proofs", return_value=(one_proof, b"forged")
+            ):
+                with self.assertRaisesRegex(
+                    builder.CRNContractBuilderError,
+                    "proof derivation is incomplete",
+                ):
+                    builder.build_contract(
+                        candidate_path, root, self.CREATED_UTC,
+                        enforce_canonical_root=False,
+                    )
+            self.assertFalse(
+                (root / "crn_runtime_consumer_evidence.json").exists()
+            )
+
+    def test_transcript_parser_rejects_failure_skip_and_name_drift(self):
+        proof = freeze.CRN_CONSUMER_REQUIRED_PROOFS[0]
+        cases = (
+            (f"test_{proof} (x) ... ok\nRan 1 test in 0.1s\nFAILED\n", 1),
+            (f"test_{proof} (x) ... skipped 'x'\nRan 1 test in 0.1s\nOK (skipped=1)\n", 0),
+            ("test_unreviewed_extra (x) ... ok\nRan 9 tests in 0.1s\nOK\n", 0),
+        )
+        for output, returncode in cases:
+            with self.subTest(output=output), self.assertRaises(
+                builder.CRNContractBuilderError
+            ):
+                builder._parse_proof_transcript(output, returncode)
+
+    def test_candidate_hash_timestamp_and_overwrite_are_fail_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bad_candidate_path, _candidate = self._candidate(
+                root, runtime_hash_override="0" * 64
+            )
+            with self.assertRaisesRegex(
+                builder.CRNContractBuilderError, "path/hash mismatch"
+            ):
+                builder.build_contract(
+                    bad_candidate_path, root, self.CREATED_UTC,
+                    enforce_canonical_root=False,
+                )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate_path, _candidate = self._candidate(root)
+            with self.assertRaisesRegex(
+                builder.CRNContractBuilderError, "created_utc"
+            ):
+                builder.build_contract(
+                    candidate_path, root, "NOW",
+                    enforce_canonical_root=False,
+                )
+            with self.assertRaisesRegex(
+                builder.CRNContractBuilderError, "valid UTC calendar"
+            ):
+                builder.build_contract(
+                    candidate_path, root, "2026-99-99T12:00:00Z",
+                    enforce_canonical_root=False,
+                )
+            builder.build_contract(
+                candidate_path, root, self.CREATED_UTC,
+                enforce_canonical_root=False,
+            )
+            with self.assertRaisesRegex(
+                builder.CRNContractBuilderError, "overwrite"
+            ):
+                builder.build_contract(
+                    candidate_path, root, self.CREATED_UTC,
+                    enforce_canonical_root=False,
+                )
+
+
+if __name__ == "__main__":
+    unittest.main()

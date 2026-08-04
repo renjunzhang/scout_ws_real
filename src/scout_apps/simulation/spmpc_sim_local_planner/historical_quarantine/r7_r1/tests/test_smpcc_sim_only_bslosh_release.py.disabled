@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Offline tests for the isolated SIM-ONLY Bslosh R1 release.
+
+All generated manifests here live only in ``TemporaryDirectory``.  They are
+controller-release fixtures, not result data; no ROS/Gazebo process is
+started, no bag/results root is created, and the original formal matrix gate
+is expected to reject every one of them.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import contextlib
+import copy
+import importlib.util
+import io
+import json
+import stat
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+SCRIPTS = Path(__file__).resolve().parents[1]
+MODULE_PATH = SCRIPTS / "smpcc_sim_only_bslosh_release.py"
+
+
+def load_module():
+    module_name = "smpcc_sim_only_bslosh_release_test_target"
+    spec = importlib.util.spec_from_file_location(module_name, MODULE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot load SIM-ONLY Bslosh release module")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class SimOnlyBsloshReleaseTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_module()
+
+    def _generate_temporary_release(self, root: Path):
+        return self.module.generate_release(
+            root / "release",
+            strict_storage_root=False,
+            # The source paths remain the real fixed source/runtime assets;
+            # only the write-once release output is a temporary test fixture.
+            strict_source_paths=True,
+            probe_original_gate=True,
+        )
+
+    @staticmethod
+    def _load_json(path: Path):
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def _resign(self, document):
+        core = dict(document)
+        core.pop("release_hash", None)
+        document["release_hash"] = self.module.canonical_hash(core)
+        return document
+
+    def test_release_is_hash_bound_simulation_only_and_creates_no_data_roots(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            report = self._generate_temporary_release(root)
+            manifest_path = Path(report["release_manifest"])
+            config_path = Path(report["effective_config"])
+            manifest = self._load_json(manifest_path)
+
+            self.assertEqual("PASS_SIMULATION_ONLY_RELEASE_CREATED", report["status"])
+            self.assertEqual(self.module.PROTOCOL_ID, manifest["protocol_id"])
+            self.assertEqual(self.module.CONDITION_ID, manifest["condition_id"])
+            self.assertFalse(manifest["formal"])
+            self.assertTrue(manifest["formal_simulation_only"])
+            self.assertFalse(manifest["physical_alignment"])
+            self.assertFalse(manifest["physical_primary_eligible"])
+            self.assertFalse(manifest["original_matrix_40_64_88_eligible"])
+            self.assertFalse(manifest["matrix_isolation"]["planned_rows_generated"])
+            self.assertFalse(manifest["matrix_isolation"]["randomization_generated"])
+            self.assertEqual([], manifest["matrix_isolation"]["formal_dataset_roots"])
+            self.assertIsNone(manifest["matrix_isolation"]["formal_dataset_ledger"])
+            self.assertEqual([], manifest["storage"]["formal_dataset_roots"])
+            self.assertEqual(set(self.module.REQUIRED_ARTIFACT_ROLES), set(manifest["artifact_bindings"]))
+            self.assertIn("container_c1_yaml", manifest["artifact_bindings"])
+            self.assertIn("container_c2_sim_only_yaml", manifest["artifact_bindings"])
+            self.assertIn("SIM_ONLY_C1_D37_H58_UNVALIDATED", manifest["admissible_simulation_container_conditions"])
+            self.assertIn("SIM_ONLY_C2_D95_H58_UNVALIDATED", manifest["admissible_simulation_container_conditions"])
+            c1 = manifest["admissible_simulation_container_conditions"]["SIM_ONLY_C1_D37_H58_UNVALIDATED"]
+            c2 = manifest["admissible_simulation_container_conditions"]["SIM_ONLY_C2_D95_H58_UNVALIDATED"]
+            self.assertEqual(30.0, c1["control_frequency_hz"])
+            self.assertEqual(0.0333333333, c1["dt_sec"])
+            self.assertEqual(60, c1["horizon_steps"])
+            self.assertEqual(0.0185, c1["slosh"]["container_radius_m"])
+            self.assertEqual(0.0475, c2["slosh"]["container_radius_m"])
+            self.assertEqual(0.058, c2["slosh"]["liquid_height_m"])
+            self.assertEqual(1000.0, c2["slosh"]["liquid_density_kgpm3"])
+            self.assertEqual(0.05, c2["slosh"]["damping_ratio"])
+            self.assertEqual(1, c2["slosh"]["mode_index"])
+            self.assertFalse(c2["slosh"]["use_parabola_term"])
+            self.assertFalse(c2["physical_primary_eligible"])
+            self.assertEqual(0, stat.S_IMODE(manifest_path.stat().st_mode) & 0o222)
+            self.assertEqual(0, stat.S_IMODE(config_path.stat().st_mode) & 0o222)
+            self.assertFalse(Path(report["results_root"]).exists())
+            self.assertFalse(Path(report["bags_root"]).exists())
+            self.assertFalse((root / "release" / "planned_rows.json").exists())
+            self.assertFalse((root / "release" / "dataset_index.jsonl").exists())
+
+            validation = self.module.validate_release_manifest(
+                manifest_path,
+                strict_storage_root=False,
+                strict_source_paths=True,
+            )
+            self.assertEqual("PASS_SIMULATION_ONLY", validation["status"])
+            self.assertEqual([], validation["formal_dataset_roots"])
+            probe = report["original_formal_gate_probe"]
+            self.assertEqual("REJECTED_BY_ORIGINAL_FORMAL_GATE_AS_EXPECTED", probe["status"])
+            self.assertNotEqual(0, probe["original_formal_gate_exit_code"])
+            self.assertTrue(
+                any(
+                    "protocol_id must equal " + self.module.ORIGINAL_FORMAL_PROTOCOL_ID in error
+                    for error in probe["errors"]
+                )
+            )
+
+    def test_mixed_real_formal_matrix_fields_are_rejected_even_if_resigned(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest_path = Path(self._generate_temporary_release(Path(temporary))["release_manifest"])
+            base = self._load_json(manifest_path)
+            mutations = []
+
+            protocol_mix = copy.deepcopy(base)
+            protocol_mix["protocol_id"] = self.module.ORIGINAL_FORMAL_PROTOCOL_ID
+            mutations.append(protocol_mix)
+
+            physical_mix = copy.deepcopy(base)
+            physical_mix["physical_alignment"] = True
+            mutations.append(physical_mix)
+
+            rows_mix = copy.deepcopy(base)
+            rows_mix["matrix_isolation"]["planned_rows_generated"] = True
+            mutations.append(rows_mix)
+
+            dataset_mix = copy.deepcopy(base)
+            dataset_mix["storage"]["formal_dataset_roots"] = ["/data/a/scout_sim_replacement/formal/results"]
+            mutations.append(dataset_mix)
+
+            smuggled_rows = copy.deepcopy(base)
+            smuggled_rows["planned_rows"] = [{"planned_row_id": "SIM-S1-forbidden"}]
+            mutations.append(smuggled_rows)
+
+            for document in mutations:
+                with self.subTest(document=document.get("protocol_id")):
+                    self._resign(document)
+                    with self.assertRaises(self.module.SimOnlyReleaseError):
+                        self.module.validate_release_document(
+                            document,
+                            strict_storage_root=False,
+                            strict_source_paths=True,
+                        )
+
+    def test_effective_config_extra_parameter_or_weight_drift_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest_path = Path(self._generate_temporary_release(Path(temporary))["release_manifest"])
+            document = self._load_json(manifest_path)
+            config_path = Path(document["artifact_bindings"]["effective_config"]["path"])
+            config = self._load_json(config_path)
+            config_path.chmod(0o644)
+            config["controller"]["weights"]["w_control"] = 0.1
+            config["unexpected_runtime_override"] = True
+            config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            config_path.chmod(0o444)
+            document["artifact_bindings"]["effective_config"]["sha256"] = self.module.sha256_file(config_path)
+            self._resign(document)
+            with self.assertRaises(self.module.SimOnlyReleaseError) as caught:
+                self.module.validate_release_document(
+                    document,
+                    strict_storage_root=False,
+                    strict_source_paths=True,
+                )
+            self.assertIn("effective configuration", str(caught.exception))
+
+    def test_artifact_hash_drift_and_cli_original_gate_probe_are_fail_closed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest_path = Path(self._generate_temporary_release(Path(temporary))["release_manifest"])
+            document = self._load_json(manifest_path)
+            document["artifact_bindings"]["world"]["sha256"] = "0" * 64
+            self._resign(document)
+            with self.assertRaises(self.module.SimOnlyReleaseError) as caught:
+                self.module.validate_release_document(
+                    document,
+                    strict_storage_root=False,
+                    strict_source_paths=True,
+                )
+            self.assertIn("world hash mismatch", str(caught.exception))
+
+            with contextlib.redirect_stdout(io.StringIO()) as stream:
+                status = self.module.main(["original-gate-probe", "--release-manifest", str(manifest_path)])
+            self.assertEqual(0, status)
+            output = json.loads(stream.getvalue())
+            self.assertNotEqual(0, output["original_formal_gate_exit_code"])
+            self.assertTrue(
+                any(
+                    "protocol_id must equal " + self.module.ORIGINAL_FORMAL_PROTOCOL_ID in error
+                    for error in output["errors"]
+                )
+            )
+
+    def test_default_bindings_use_the_actual_isolated_runtime_world_and_map(self):
+        paths = self.module.default_source_artifact_paths()
+        self.assertEqual(
+            "/data/a/scout_sim_replacement/classic_ws/src/scout_mini_proxy_gazebo/worlds/open_walled_proxy.world",
+            str(paths["world"]),
+        )
+        self.assertEqual(
+            "/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream",
+            str(paths["map"]),
+        )
+        self.assertTrue(paths["world"].is_file())
+        self.assertTrue(paths["map"].is_file())
+
+    def test_public_create_refuses_noncanonical_root_without_writing(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            forbidden_output = Path(temporary) / "would_be_release"
+            with contextlib.redirect_stdout(io.StringIO()) as stream:
+                status = self.module.main(["create", "--release-root", str(forbidden_output)])
+            self.assertEqual(2, status)
+            self.assertFalse(forbidden_output.exists())
+            self.assertEqual("NO_GO", json.loads(stream.getvalue())["status"])
+
+
+if __name__ == "__main__":
+    unittest.main()

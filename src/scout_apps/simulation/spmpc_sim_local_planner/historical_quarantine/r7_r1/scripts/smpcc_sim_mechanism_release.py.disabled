@@ -1,0 +1,760 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Create and gate the canonical R7 SIM-MECHANISM release.
+
+This module is the last offline admission boundary before the canonical
+campaign runner may consume any planned row.  It also creates the GO receipt
+by actually building and running the bounded admission suites; a hand-written
+``status=PASS`` document is never sufficient.
+
+No command in this file starts Gazebo or executes a matrix row.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import importlib.util
+import json
+import os
+import re
+import stat
+import subprocess
+import sys
+import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
+
+
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+WORKSPACE = SCRIPT_PATH.parents[5]
+
+
+class MechanismReleaseError(RuntimeError):
+    """A fail-closed release construction/admission error."""
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise MechanismReleaseError(message)
+
+
+def _load(filename: str):
+    path = SCRIPT_DIR / filename
+    spec = importlib.util.spec_from_file_location(
+        f"smpcc_sim_mechanism_release_{path.stem}", path)
+    if spec is None or spec.loader is None:
+        raise MechanismReleaseError(f"cannot load release dependency: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+freeze_tool = _load("smpcc_sim_mechanism_freeze.py")
+matrix_tool = _load("smpcc_sim_mechanism_matrix.py")
+
+SCHEMA_VERSION = "smpcc-sim-mechanism-release-v1"
+DOCUMENT_TYPE = "SMPCC_SIM_MECHANISM_RELEASE"
+EVIDENCE_CLASS = "SIMULATION_MECHANISM_RELEASE_ADMISSION"
+PROTOCOL_ID = freeze_tool.PROTOCOL_ID
+RELEASE_ID = freeze_tool.RELEASE_ID
+NAMESPACE = freeze_tool.NAMESPACE
+FORMAL_SCOPE = "SIMULATION_MECHANISM_ONLY"
+SIM_ROOT = freeze_tool.SIM_ROOT
+CAMPAIGN_ROOT = SIM_ROOT / NAMESPACE
+FREEZE_ROOT = freeze_tool.CANONICAL_RELEASE_ROOT
+FINAL_FREEZE = FREEZE_ROOT / "mechanism_freeze.json"
+MASTER = FREEZE_ROOT / "mechanism_master.json"
+GO_GATE_RECEIPT = freeze_tool.CANONICAL_GO_GATE_RECEIPT
+RELEASE_ROOT = CAMPAIGN_ROOT / "release" / RELEASE_ID
+RELEASE_MANIFEST = RELEASE_ROOT / "mechanism_release.json"
+RESULT_ROOT = CAMPAIGN_ROOT / "matrix_results"
+BAG_ROOT = CAMPAIGN_ROOT / "matrix_bags"
+DATASET_INDEX = RESULT_ROOT / "dataset_index.jsonl"
+ATTEMPTS_ROOT = RESULT_ROOT / "attempts"
+WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+
+EXPECTED_RESULT_POLICY = {
+    "release_id": RELEASE_ID,
+    "append_only_dataset_index": True,
+    "dataset_index_path": str(DATASET_INDEX),
+    "result_root": str(RESULT_ROOT),
+    "bag_root": str(BAG_ROOT),
+    "formal_scope": FORMAL_SCOPE,
+    "physical_primary_eligible": False,
+    "predecessor_import_allowed": False,
+}
+PREDECESSOR_EXCLUSION = {
+    "release_ids": [
+        "SIM-MECHANISM-40-64-88-R1",
+        "SIM-MECHANISM-40-64-88-R2",
+        "SIM-MECHANISM-40-64-88-R3",
+        "SIM-MECHANISM-40-64-88-R4",
+        "SIM-MECHANISM-40-64-88-R5",
+        "SIM-MECHANISM-40-64-88-R6",
+    ],
+    "protocol_ids": [
+        "SMPCC-SIM-MECHANISM-40-64-88-v1",
+        "SMPCC-SIM-MECHANISM-40-64-88-v2",
+    ],
+    "namespaces": [
+        "SMPCC-SIM-MECHANISM-40-64-88-R1",
+        "SMPCC-SIM-MECHANISM-40-64-88-R2",
+        "SMPCC-SIM-MECHANISM-40-64-88-R3",
+        "SMPCC-SIM-MECHANISM-40-64-88-R4",
+        "SMPCC-SIM-MECHANISM-40-64-88-R5",
+        "SMPCC-SIM-MECHANISM-40-64-88-R6",
+    ],
+    "attempt_import_allowed": False,
+    "attempts_imported": 0,
+    "r3_invalidation_receipt": {
+        "path": str(freeze_tool.R3_INVALIDATION_RECEIPT),
+        "sha256": freeze_tool.R3_INVALIDATION_RECEIPT_SHA256,
+    },
+    "r4_invalidation_receipt": {
+        "path": str(freeze_tool.R4_INVALIDATION_RECEIPT),
+        "sha256": freeze_tool.R4_INVALIDATION_RECEIPT_SHA256,
+    },
+    "r5_invalidation_receipt": {
+        "path": str(freeze_tool.R5_INVALIDATION_RECEIPT),
+        "sha256": freeze_tool.R5_INVALIDATION_RECEIPT_SHA256,
+    },
+    "r6_invalidation_receipt": {
+        "path": str(freeze_tool.R6_INVALIDATION_RECEIPT),
+        "sha256": freeze_tool.R6_INVALIDATION_RECEIPT_SHA256,
+    },
+}
+GO_BUILD_PACKAGES = freeze_tool.GO_BUILD_PACKAGES
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def canonical_hash(value: Any) -> str:
+    return str(freeze_tool.canonical_hash(value))
+
+
+def sha256_file(path: Path) -> str:
+    return str(freeze_tool.sha256_file(path))
+
+
+def read_json(path: Path, label: str) -> Mapping[str, Any]:
+    return freeze_tool.read_json(path, label)
+
+
+def _exact(path: Path, expected: Path, label: str,
+           *, must_exist: bool = True) -> Path:
+    try:
+        return freeze_tool.require_exact_path(
+            path, expected, label, must_exist=must_exist)
+    except freeze_tool.MechanismFreezeError as exc:
+        raise MechanismReleaseError(str(exc)) from exc
+
+
+def _readonly_descriptor(path: Path, expected: Path, label: str) -> Dict[str, str]:
+    path = _exact(path, expected, label)
+    require(path.is_file() and not path.is_symlink(), f"{label} must be a regular non-symlink file")
+    require(stat.S_IMODE(path.stat().st_mode) & WRITE_BITS == 0,
+            f"{label} must be read-only")
+    return {"path": str(path), "sha256": sha256_file(path)}
+
+
+def _read_bound(value: Any, expected: Path, label: str) -> tuple[Path, Mapping[str, Any]]:
+    require(isinstance(value, Mapping) and set(value) == {"path", "sha256"},
+            f"{label} descriptor is malformed")
+    path = _exact(Path(str(value.get("path", ""))), expected, label)
+    actual = _readonly_descriptor(path, expected, label)
+    require(dict(value) == actual, f"{label} hash mismatch")
+    return path, read_json(path, label)
+
+
+def _validate_freeze_crn_contract(
+        freeze: Mapping[str, Any]) -> Dict[str, Any]:
+    """Revalidate the executable CRN consumer at the release boundary."""
+
+    candidate_value = freeze.get("freeze_candidate")
+    candidate_path = freeze_tool._readonly_file_descriptor(
+        candidate_value, "release-bound CRN freeze candidate")
+    candidate = read_json(candidate_path, "release-bound CRN freeze candidate")
+    return freeze_tool.validate_crn_runtime_consumer_contract(
+        freeze.get("crn_runtime_consumer_contract"),
+        candidate,
+        candidate_path,
+    )
+
+
+def _directory_state(path: Path, label: str) -> str:
+    absolute = Path(os.path.abspath(str(path)))
+    require(not freeze_tool._has_symlink_component(absolute),
+            f"{label} may not traverse a symlink")
+    if not absolute.exists():
+        return "ABSENT"
+    require(absolute.is_dir() and not absolute.is_symlink(),
+            f"{label} must be an ordinary directory when present")
+    require(not any(absolute.iterdir()), f"{label} must be empty")
+    return "EMPTY"
+
+
+def inspect_initial_state() -> Dict[str, Any]:
+    require(not DATASET_INDEX.exists() and not DATASET_INDEX.is_symlink(),
+            "R7 dataset index must be absent before release")
+    require(not ATTEMPTS_ROOT.exists() and not ATTEMPTS_ROOT.is_symlink(),
+            "R7 attempts directory must be absent before release")
+    result_state = _directory_state(RESULT_ROOT, "R7 matrix result root")
+    bag_state = _directory_state(BAG_ROOT, "R7 matrix bag root")
+    core: Dict[str, Any] = {
+        "result_root_state": result_state,
+        "bag_root_state": bag_state,
+        "dataset_index_absent": True,
+        "attempts_dir_absent": True,
+        "N_attempt": 0,
+        "predecessor_attempts_migrated": 0,
+    }
+    return dict(core, initial_state_hash=canonical_hash(core))
+
+
+def _validate_initial_state(value: Any) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(value, Mapping):
+        return ["release initial_state is missing"]
+    core = dict(value)
+    declared = core.pop("initial_state_hash", None)
+    expected_keys = {
+        "result_root_state", "bag_root_state", "dataset_index_absent",
+        "attempts_dir_absent", "N_attempt",
+        "predecessor_attempts_migrated",
+    }
+    if set(core) != expected_keys:
+        errors.append("release initial_state fields mismatch")
+    if core.get("result_root_state") not in {"ABSENT", "EMPTY"}:
+        errors.append("release initial result root was not empty")
+    if core.get("bag_root_state") not in {"ABSENT", "EMPTY"}:
+        errors.append("release initial bag root was not empty")
+    for name in ("dataset_index_absent", "attempts_dir_absent"):
+        if core.get(name) is not True:
+            errors.append(f"release initial {name} must be true")
+    if core.get("N_attempt") != 0 or core.get("predecessor_attempts_migrated") != 0:
+        errors.append("release initial attempt counts must be zero")
+    if declared != canonical_hash(core):
+        errors.append("release initial_state_hash mismatch")
+    return errors
+
+
+def _write_new_readonly(path: Path, payload: str) -> None:
+    require(not path.exists(), f"refusing to overwrite immutable evidence: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with path.open("x", encoding="utf-8") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(path, 0o444)
+    except OSError as exc:
+        raise MechanismReleaseError(f"cannot write immutable evidence {path}: {exc}") from exc
+
+
+def _write_json_new_readonly(path: Path, value: Mapping[str, Any]) -> None:
+    _write_new_readonly(
+        path, json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+
+
+def _run_evidence(name: str, command: Sequence[str], evidence_root: Path,
+                  environment: Mapping[str, str], timeout: float) -> tuple[subprocess.CompletedProcess[str], Dict[str, str]]:
+    completed = subprocess.run(
+        list(command), cwd=str(WORKSPACE), env=dict(environment),
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+        check=False, timeout=timeout,
+    )
+    evidence_path = evidence_root / f"{name}.log"
+    transcript = (
+        "command=" + json.dumps(list(command), ensure_ascii=False) + "\n" +
+        f"returncode={completed.returncode}\n" + completed.stdout
+    )
+    _write_new_readonly(evidence_path, transcript)
+    return completed, {"path": str(evidence_path), "sha256": sha256_file(evidence_path)}
+
+
+def _unittest_count(output: str, label: str) -> int:
+    matches = re.findall(r"Ran ([0-9]+) tests?", output)
+    require(len(matches) == 1, f"{label} output lacks one unittest count")
+    require("OK" in output and "FAILED" not in output and "skipped=" not in output,
+            f"{label} did not complete without skips/failures")
+    return int(matches[0])
+
+
+def _runtime_case_count(output: str, name: str) -> int:
+    matches = re.findall(rf"^{re.escape(name)}=([0-9]+)$", output, re.MULTILINE)
+    require(len(matches) == 1, f"runtime suite lacks exact {name} evidence")
+    return int(matches[0])
+
+
+def create_go_gate_receipt(output: Path = GO_GATE_RECEIPT) -> Dict[str, Any]:
+    """Actually build/run the bounded non-Gazebo gate and freeze transcripts."""
+
+    output = _exact(output, GO_GATE_RECEIPT, "R7 GO gate receipt output",
+                    must_exist=False)
+    require(not output.exists(), "refusing to overwrite R7 GO gate receipt")
+    evidence_root = output.parent / "evidence"
+    require(not evidence_root.exists(), "R7 GO evidence directory already exists")
+    environment = dict(os.environ)
+    environment.setdefault("ACADOS_SOURCE_DIR", "/home/a/acados")
+    checks: Dict[str, Dict[str, Any]] = {}
+
+    build_command = tuple(freeze_tool.GO_CHECK_COMMANDS["build"])
+    build, evidence = _run_evidence(
+        "build", build_command, evidence_root, environment, 900.0)
+    require(build.returncode == 0, "R7 mechanism package build failed")
+    checks["build"] = {
+        "status": "PASS", "command": list(build_command),
+        "returncode": 0, "test_count": 0, "failure_count": 0,
+        "error_count": 0, "packages": list(GO_BUILD_PACKAGES),
+        "evidence": evidence,
+    }
+
+    cpp_command = tuple(freeze_tool.GO_CHECK_COMMANDS["cpp_online_gate"])
+    cpp, evidence = _run_evidence(
+        "cpp_online_gate", cpp_command, evidence_root, environment, 300.0)
+    tests = _unittest_count(cpp.stdout, "online admission gate")
+    require(cpp.returncode == 0 and tests == 6,
+            "online admission gate did not pass 6/6")
+    checks["cpp_online_gate"] = {
+        "status": "PASS", "command": list(cpp_command), "returncode": 0,
+        "test_count": tests, "failure_count": 0,
+        "error_count": 0, "evidence": evidence,
+    }
+
+    python_checks = (
+        ("fixed_profile_tracker", 180.0),
+        ("timing_pilot_binding", 180.0),
+        ("launch_contract", 180.0),
+        ("launch_runtime_rejection", 300.0),
+        ("freeze_contract", 180.0),
+        ("matrix_contract", 180.0),
+        ("runner_contract", 180.0),
+        ("endpoint_gate", 180.0),
+        ("crn_runtime", 180.0),
+        ("runtime_qc", 180.0),
+        ("crn_contract_builder", 180.0),
+        ("release_contract", 180.0),
+        ("campaign_control", 180.0),
+    )
+    runtime_rejection_count: Optional[int] = None
+    positive_fixture_count: Optional[int] = None
+    for name, timeout in python_checks:
+        expected_count = freeze_tool.GO_CHECK_TEST_COUNTS[name]
+        command = tuple(freeze_tool.GO_CHECK_COMMANDS[name])
+        completed, evidence = _run_evidence(
+            name, command, evidence_root, environment, timeout)
+        count = _unittest_count(completed.stdout, name)
+        require(completed.returncode == 0 and count == expected_count,
+                f"{name} test count/status mismatch")
+        checks[name] = {
+            "status": "PASS", "command": list(command), "returncode": 0,
+            "test_count": count, "failure_count": 0, "error_count": 0,
+            "evidence": evidence,
+        }
+        if name == "launch_runtime_rejection":
+            runtime_rejection_count = _runtime_case_count(
+                completed.stdout, "RUNTIME_REJECTION_CASES")
+            positive_fixture_count = _runtime_case_count(
+                completed.stdout, "RUNTIME_POSITIVE_FIXTURE_CASES")
+
+    require(runtime_rejection_count == 18,
+            "runtime suite did not prove exactly 18 rejection cases")
+    require(positive_fixture_count == 1,
+            "runtime suite did not prove exactly one positive fixture")
+
+    bindings = freeze_tool.runtime_bindings()
+    bindings_hash = canonical_hash(bindings)
+    core: Dict[str, Any] = {
+        "schema_version": freeze_tool.GO_GATE_SCHEMA_VERSION,
+        "document_type": freeze_tool.GO_GATE_DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "namespace": NAMESPACE,
+        "status": "PASS",
+        "formal_scope": FORMAL_SCOPE,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "gazebo_started": False,
+        "runtime_bindings_hash": bindings_hash,
+        "runtime_bindings_count": len(bindings),
+        "generator": {
+            "path": str(SCRIPT_PATH), "sha256": sha256_file(SCRIPT_PATH),
+        },
+        "checks": checks,
+        "runtime_rejection_case_count": runtime_rejection_count,
+        "positive_fixture_case_count": positive_fixture_count,
+        "cmd_vel_publisher_observed_in_rejection_cases": False,
+        "positive_fixture_cmd_vel_publisher_observed": True,
+        "created_utc": utc_now(),
+    }
+    receipt = dict(core, go_receipt_hash=canonical_hash(core))
+    errors = freeze_tool.validate_go_gate_receipt(
+        receipt, bindings_hash, receipt_path=None,
+        require_canonical_path=False,
+    )
+    require(not errors, "generated GO receipt rejected: " + "; ".join(errors))
+    _write_json_new_readonly(output, receipt)
+    persisted_errors = freeze_tool.validate_go_gate_receipt(
+        read_json(output, "persisted GO receipt"), bindings_hash,
+        receipt_path=output, require_canonical_path=True,
+    )
+    require(not persisted_errors,
+            "persisted GO receipt rejected: " + "; ".join(persisted_errors))
+    return {
+        "status": "PASS", "go_gate_receipt": str(output),
+        "go_gate_receipt_file_hash": sha256_file(output),
+        "go_receipt_hash": receipt["go_receipt_hash"],
+        "runtime_bindings_hash": bindings_hash,
+        "runtime_rejection_case_count": receipt["runtime_rejection_case_count"],
+        "positive_fixture_case_count": receipt["positive_fixture_case_count"],
+        "cmd_vel_publisher_observed_in_rejection_cases": False,
+        "positive_fixture_cmd_vel_publisher_observed": True,
+        "gazebo_started": False,
+    }
+
+
+def create_release(freeze_path: Path = FINAL_FREEZE,
+                   master_path: Path = MASTER,
+                   go_gate_path: Path = GO_GATE_RECEIPT,
+                   output: Path = RELEASE_MANIFEST,
+                   *, enforce_canonical_paths: bool = True) -> Dict[str, Any]:
+    require(
+        enforce_canonical_paths,
+        "noncanonical formal release generation is forbidden; unit fixtures "
+        "must be constructed explicitly with formal=false and fixture=true",
+    )
+    if enforce_canonical_paths:
+        freeze_path = _exact(freeze_path, FINAL_FREEZE, "final freeze")
+        master_path = _exact(master_path, MASTER, "planned-row master")
+        go_gate_path = _exact(go_gate_path, GO_GATE_RECEIPT, "GO gate receipt")
+        output = _exact(output, RELEASE_MANIFEST, "release manifest output",
+                        must_exist=False)
+    require(not output.exists(), "refusing to overwrite immutable release manifest")
+    freeze_desc = _readonly_descriptor(freeze_path, freeze_path, "final freeze")
+    master_desc = _readonly_descriptor(master_path, master_path, "planned-row master")
+    go_desc = _readonly_descriptor(go_gate_path, go_gate_path, "GO gate receipt")
+    freeze = read_json(freeze_path, "final freeze")
+    master = read_json(master_path, "planned-row master")
+    go_gate = read_json(go_gate_path, "GO gate receipt")
+    freeze_report = freeze_tool.validate_freeze(freeze)
+    require(freeze_report.get("status") == "PASS",
+            "final freeze gate is not PASS: " +
+            "; ".join(freeze_report.get("errors", [])))
+    master_report = matrix_tool.validate_master(master)
+    require(master_report.get("status") == "PASS",
+            "master gate is not PASS: " +
+            "; ".join(master_report.get("errors", [])))
+    require(master.get("freeze") == freeze_desc,
+            "master does not bind the supplied final freeze")
+    require(master.get("freeze_hash") == freeze.get("freeze_hash"),
+            "master freeze_hash mismatch")
+    require(master.get("result_policy") == EXPECTED_RESULT_POLICY,
+            "master result policy is not the exact R7 policy")
+    bindings_hash = freeze.get("runtime_bindings_hash")
+    gate_errors = freeze_tool.validate_go_gate_receipt(
+        go_gate, bindings_hash, receipt_path=go_gate_path,
+        require_canonical_path=enforce_canonical_paths,
+    )
+    require(not gate_errors, "GO gate rejected: " + "; ".join(gate_errors))
+    require(freeze.get("go_gate_evidence") == go_desc,
+            "freeze GO evidence differs from supplied GO receipt")
+    crn_report = _validate_freeze_crn_contract(freeze)
+    initial_state = inspect_initial_state()
+    core: Dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "namespace": NAMESPACE,
+        "formal": True,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "evidence_class": EVIDENCE_CLASS,
+        "freeze": freeze_desc,
+        "freeze_hash": freeze["freeze_hash"],
+        "master": master_desc,
+        "master_hash": master["master_hash"],
+        "go_gate_evidence": go_desc,
+        "go_gate_receipt_hash": go_gate["go_receipt_hash"],
+        "runtime_bindings_hash": bindings_hash,
+        "crn_runtime_consumer_contract": dict(
+            freeze["crn_runtime_consumer_contract"]),
+        "crn_runtime_consumer_contract_hash": crn_report["contract_hash"],
+        "crn_runtime_ack_schema_hash":
+            crn_report["runtime_ack_schema_hash"],
+        "result_policy": dict(EXPECTED_RESULT_POLICY),
+        "predecessor_exclusion": dict(PREDECESSOR_EXCLUSION),
+        "initial_state": initial_state,
+        "canonical_runner": dict(freeze["runtime_bindings"]["mechanism_runner"]),
+        "created_utc": utc_now(),
+    }
+    release = dict(core, release_hash=canonical_hash(core))
+    report = validate_release(
+        release, manifest_path=None, require_canonical_paths=False,
+        require_empty=True,
+    )
+    require(report.get("status") == "PASS",
+            "generated release rejected: " + "; ".join(report.get("errors", [])))
+    _write_json_new_readonly(output, release)
+    persisted = validate_release(
+        read_json(output, "persisted release"), manifest_path=output,
+        require_canonical_paths=enforce_canonical_paths, require_empty=True,
+    )
+    require(persisted.get("status") == "PASS",
+            "persisted release rejected: " +
+            "; ".join(persisted.get("errors", [])))
+    return dict(
+        persisted, release_manifest=str(output),
+        release_file_hash=sha256_file(output),
+    )
+
+
+def validate_release(release: Any, *, manifest_path: Optional[Path],
+                     require_canonical_paths: bool,
+                     require_empty: bool) -> Dict[str, Any]:
+    errors: list[str] = []
+    if not isinstance(release, Mapping):
+        return {"status": "FAIL", "errors": ["release is not an object"]}
+    identity = {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "namespace": NAMESPACE,
+        "formal": True,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "evidence_class": EVIDENCE_CLASS,
+        "result_policy": EXPECTED_RESULT_POLICY,
+        "predecessor_exclusion": PREDECESSOR_EXCLUSION,
+    }
+    expected_fields = set(identity) | {
+        "freeze", "freeze_hash", "master", "master_hash",
+        "go_gate_evidence", "go_gate_receipt_hash",
+        "runtime_bindings_hash", "crn_runtime_consumer_contract",
+        "crn_runtime_consumer_contract_hash",
+        "crn_runtime_ack_schema_hash", "initial_state", "canonical_runner",
+        "created_utc", "release_hash",
+    }
+    if set(release) != expected_fields:
+        errors.append("release fields are not the exact R7 schema")
+    for key, expected in identity.items():
+        if release.get(key) != expected:
+            errors.append(f"release {key} must equal {expected!r}")
+    created_utc = release.get("created_utc")
+    if not isinstance(created_utc, str) or not created_utc.endswith("Z"):
+        errors.append("release created_utc is invalid")
+    core = dict(release)
+    declared_release_hash = core.pop("release_hash", None)
+    if (not freeze_tool.is_sha256(declared_release_hash) or
+            declared_release_hash != canonical_hash(core)):
+        errors.append("release_hash mismatch")
+    crn_descriptor = release.get("crn_runtime_consumer_contract")
+    if (not isinstance(crn_descriptor, Mapping) or
+            set(crn_descriptor) != {"path", "sha256"}):
+        errors.append("release CRN runtime consumer contract is missing or malformed")
+    if not freeze_tool.is_sha256(
+            release.get("crn_runtime_consumer_contract_hash")):
+        errors.append("release CRN runtime consumer contract hash is invalid")
+    if not freeze_tool.is_sha256(release.get("crn_runtime_ack_schema_hash")):
+        errors.append("release CRN runtime ACK schema hash is invalid")
+    if manifest_path is not None and require_canonical_paths:
+        try:
+            path = _exact(manifest_path, RELEASE_MANIFEST, "release manifest")
+            if path.is_symlink() or stat.S_IMODE(path.stat().st_mode) & WRITE_BITS:
+                errors.append("release manifest must be non-symlink and read-only")
+        except (MechanismReleaseError, OSError) as exc:
+            errors.append(str(exc))
+    freeze: Optional[Mapping[str, Any]] = None
+    master: Optional[Mapping[str, Any]] = None
+    go_gate: Optional[Mapping[str, Any]] = None
+    def descriptor_path(value: Any, canonical: Path) -> Path:
+        if require_canonical_paths or not isinstance(value, Mapping):
+            return canonical
+        return Path(str(value.get("path", "")))
+    try:
+        expected = descriptor_path(release.get("freeze"), FINAL_FREEZE)
+        freeze_path, freeze = _read_bound(release.get("freeze"), expected, "release freeze")
+        freeze_report = freeze_tool.validate_freeze(freeze)
+        if freeze_report.get("status") != "PASS":
+            errors.append("release-bound freeze is not PASS")
+        if release.get("freeze_hash") != freeze_report.get("freeze_hash"):
+            errors.append("release freeze_hash mismatch")
+    except (
+        MechanismReleaseError,
+        freeze_tool.MechanismFreezeError,
+        AttributeError,
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        errors.append(str(exc))
+        freeze_path = FINAL_FREEZE
+    try:
+        expected = descriptor_path(release.get("master"), MASTER)
+        _master_path, master = _read_bound(release.get("master"), expected, "release master")
+        master_report = matrix_tool.validate_master(master)
+        if master_report.get("status") != "PASS":
+            errors.append("release-bound master is not PASS")
+        if release.get("master_hash") != master_report.get("master_hash"):
+            errors.append("release master_hash mismatch")
+        if master.get("freeze") != release.get("freeze"):
+            errors.append("release master/freeze descriptor mismatch")
+        if master.get("result_policy") != EXPECTED_RESULT_POLICY:
+            errors.append("release master result policy mismatch")
+    except (
+        MechanismReleaseError,
+        matrix_tool.MatrixError,
+        AttributeError,
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        errors.append(str(exc))
+    try:
+        expected = descriptor_path(release.get("go_gate_evidence"), GO_GATE_RECEIPT)
+        go_path, go_gate = _read_bound(release.get("go_gate_evidence"), expected, "release GO gate")
+        expected_bindings = release.get("runtime_bindings_hash")
+        go_errors = freeze_tool.validate_go_gate_receipt(
+            go_gate, expected_bindings, receipt_path=go_path,
+            require_canonical_path=require_canonical_paths,
+        )
+        errors.extend(go_errors)
+        if release.get("go_gate_receipt_hash") != go_gate.get("go_receipt_hash"):
+            errors.append("release GO receipt hash mismatch")
+    except (
+        MechanismReleaseError,
+        freeze_tool.MechanismFreezeError,
+        AttributeError,
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        errors.append(str(exc))
+    if freeze is not None:
+        if release.get("runtime_bindings_hash") != freeze.get("runtime_bindings_hash"):
+            errors.append("release runtime bindings differ from freeze")
+        if freeze.get("go_gate_evidence") != release.get("go_gate_evidence"):
+            errors.append("release GO evidence differs from freeze")
+        frozen_bindings = freeze.get("runtime_bindings")
+        expected_runner = (
+            frozen_bindings.get("mechanism_runner")
+            if isinstance(frozen_bindings, Mapping) else None
+        )
+        if release.get("canonical_runner") != expected_runner:
+            errors.append("release canonical runner descriptor mismatch")
+        try:
+            runtime_errors = freeze_tool.validate_runtime_bindings(
+                frozen_bindings)
+            errors.extend(runtime_errors)
+        except (AttributeError, KeyError, OSError, TypeError, ValueError) as exc:
+            errors.append(f"release runtime bindings are malformed: {exc}")
+        if (release.get("crn_runtime_consumer_contract") !=
+                freeze.get("crn_runtime_consumer_contract")):
+            errors.append("release CRN runtime consumer contract differs from freeze")
+        try:
+            crn_report = _validate_freeze_crn_contract(freeze)
+            if (release.get("crn_runtime_consumer_contract_hash") !=
+                    crn_report.get("contract_hash")):
+                errors.append("release CRN runtime consumer contract hash mismatch")
+            if (release.get("crn_runtime_ack_schema_hash") !=
+                    crn_report.get("runtime_ack_schema_hash")):
+                errors.append("release CRN runtime ACK schema hash mismatch")
+        except (
+            freeze_tool.MechanismFreezeError,
+            AttributeError,
+            KeyError,
+            OSError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            errors.append(f"release CRN runtime consumer contract rejected: {exc}")
+    errors.extend(_validate_initial_state(release.get("initial_state")))
+    if require_empty:
+        try:
+            inspect_initial_state()
+        except (MechanismReleaseError, OSError) as exc:
+            errors.append(str(exc))
+    return {
+        "status": "PASS" if not errors else "FAIL",
+        "formal": True,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "require_empty": require_empty,
+        "errors": errors,
+        "release_hash": declared_release_hash,
+    }
+
+
+def _emit(value: Mapping[str, Any]) -> None:
+    print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    go = sub.add_parser("create-go-receipt")
+    go.add_argument("--output", type=Path, default=GO_GATE_RECEIPT)
+    go.set_defaults(func=lambda args: create_go_gate_receipt(args.output))
+    create = sub.add_parser("create")
+    create.add_argument("--freeze", type=Path, default=FINAL_FREEZE)
+    create.add_argument("--master", type=Path, default=MASTER)
+    create.add_argument("--go-gate-receipt", type=Path,
+                        default=GO_GATE_RECEIPT)
+    create.add_argument("--output", type=Path, default=RELEASE_MANIFEST)
+    create.set_defaults(func=lambda args: create_release(
+        args.freeze, args.master, args.go_gate_receipt, args.output,
+        enforce_canonical_paths=True,
+    ))
+    gate = sub.add_parser("gate")
+    gate.add_argument("--release", type=Path, default=RELEASE_MANIFEST)
+    gate.add_argument("--require-empty", action="store_true")
+    def gate_command(args: argparse.Namespace) -> Dict[str, Any]:
+        path = _exact(args.release, RELEASE_MANIFEST, "release manifest")
+        release = read_json(path, "release manifest")
+        return validate_release(
+            release, manifest_path=path, require_canonical_paths=True,
+            require_empty=args.require_empty,
+        )
+    gate.set_defaults(func=gate_command)
+    return parser
+
+
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    try:
+        args = build_parser().parse_args(argv)
+        result = args.func(args)
+        _emit(result)
+        return 0 if result.get("status") == "PASS" else 2
+    except (
+        MechanismReleaseError,
+        freeze_tool.MechanismFreezeError,
+        matrix_tool.MatrixError,
+        subprocess.TimeoutExpired,
+        ET.ParseError,
+        OSError,
+    ) as exc:
+        _emit({
+            "status": "NO_GO", "formal": False,
+            "physical_primary_eligible": False, "errors": [str(exc)],
+        })
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,610 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Immutable planned-row master for the simulation-mechanism 40/64/88 study.
+
+This module is deliberately not a façade over the original physical-alignment
+matrix.  Its protocol is ``SMPCC-SIM-MECHANISM-40-64-88-v3`` and its only
+formal scope is simulation mechanism validation.  In particular, it will not
+accept a physical-primary field, an original aligned protocol ID, or a master
+whose freeze is outside the isolated simulation release namespace.
+
+The master is intentionally a small, read-only document.  It materialises the
+complete frozen randomisation into 40 SIM-S1, 24 SIM-S2A and 24 SIM-S2B rows,
+including the block CRN bundle, immutable asset hashes, retry-safe attempt
+prefix and fixed denominators.  Execution is owned by the separate single-row
+runner so generating this document never starts ROS or Gazebo.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import importlib.util
+import json
+import os
+import stat
+import sys
+from pathlib import Path
+from typing import Any, Dict, Iterable, Mapping, Optional
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+SIM_ROOT = Path("/data/a/scout_sim_replacement")
+SCHEMA_VERSION = "smpcc-sim-mechanism-matrix-v3"
+DOCUMENT_TYPE = "SMPCC_SIM_MECHANISM_MASTER_PLANNED_ROWS"
+PROTOCOL_ID = "SMPCC-SIM-MECHANISM-40-64-88-v3"
+RELEASE_ID = "SIM-MECHANISM-40-64-88-R7"
+NAMESPACE = "SMPCC-SIM-MECHANISM-40-64-88-R7"
+FORMAL_SCOPE = "SIMULATION_MECHANISM_ONLY"
+CANONICAL_NAMESPACE_ROOT = SIM_ROOT / NAMESPACE
+CANONICAL_FREEZE_ROOT = CANONICAL_NAMESPACE_ROOT / "freeze" / RELEASE_ID
+DEFAULT_FREEZE = CANONICAL_FREEZE_ROOT / "mechanism_freeze.json"
+DEFAULT_MASTER = DEFAULT_FREEZE.parent / "mechanism_master.json"
+CANONICAL_RESULT_ROOT = CANONICAL_NAMESPACE_ROOT / "matrix_results"
+CANONICAL_BAG_ROOT = CANONICAL_NAMESPACE_ROOT / "matrix_bags"
+CANONICAL_DATASET_INDEX = CANONICAL_RESULT_ROOT / "dataset_index.jsonl"
+WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+
+STAGES: Dict[str, Dict[str, Any]] = {
+    "SIM-S1_CORE": {"alias": "SIM-S1", "path_id": "H1", "container_id": "C1", "conditions": ("B0", "Bsmooth", "SmoothMatch", "FixedProfile", "Bslosh")},
+    "SIM-S2A_SELECTIVITY": {"alias": "SIM-S2A", "path_id": "L1", "container_id": "C1", "conditions": ("Bsmooth", "FixedProfile", "Bslosh")},
+    "SIM-S2B_TRANSFER": {"alias": "SIM-S2B", "path_id": "H1", "container_id": "C2", "conditions": ("Bsmooth", "FixedProfile", "Bslosh")},
+}
+BACKENDS = {
+    "B0": "online_mpcc",
+    "Bsmooth": "online_mpcc",
+    "SmoothMatch": "online_mpcc",
+    "FixedProfile": "fixed_profile_tracker",
+    "Bslosh": "online_smpcc",
+}
+CRN_POLICY = (
+    "shared_block_bundle_with_independent_subseeds_and_"
+    "runtime_consumed_time_indexed_traces"
+)
+N_PAIR_SCOPE = "PER_CONTRAST_CONTINUOUS_ELIGIBLE"
+MASTER_FIELDS = frozenset({
+    "schema_version", "document_type", "protocol_id", "release_id",
+    "formal", "formal_scope", "physical_alignment",
+    "physical_primary_eligible", "physical_primary", "evidence_class",
+    "fixture",
+    "freeze", "freeze_hash", "original_aligned_protocol_eligible",
+    "matrix_counts", "matrix_total", "randomization_tables", "seed_bundles",
+    "planned_rows", "contrast_denominator_registry", "retry_policy",
+    "result_policy", "master_hash",
+})
+ROW_FIELDS = frozenset({
+    "schema_version", "protocol_id", "release_id", "formal", "formal_scope",
+    "physical_alignment", "physical_primary_eligible", "physical_primary",
+    "evidence_class", "fixture", "stage", "stage_alias", "planned_row_id",
+    "attempt_id_prefix", "block_id", "order_position",
+    "planned_block_segment_id", "condition_id", "method_backend", "path_id",
+    "container_id", "randomization_table_id", "randomization_hash",
+    "seed_bundle_id", "seed_bundle_hash", "crn_policy",
+    "crn_trace_asset", "crn_trace_asset_hash",
+    "crn_stream_trace_hashes", "crn_initial_yaw_offset_rad",
+    "frozen_asset_hashes", "fixed_denominator",
+})
+
+
+class MatrixError(RuntimeError):
+    pass
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise MatrixError(message)
+
+
+def _load(name: str):
+    path = SCRIPT_DIR / name
+    spec = importlib.util.spec_from_file_location(f"smpcc_sim_mechanism_{path.stem}", path)
+    if spec is None or spec.loader is None:
+        raise MatrixError(f"cannot import {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+freeze_tool = _load("smpcc_sim_mechanism_freeze.py")
+
+
+def canonical_hash(value: Any) -> str:
+    return str(freeze_tool.canonical_hash(value))
+
+
+def sha256_file(path: Path) -> str:
+    return str(freeze_tool.sha256_file(path))
+
+
+def read_json(path: Path, label: str) -> Mapping[str, Any]:
+    return freeze_tool.read_json(path, label)
+
+
+def lexical_absolute(path: Path) -> Path:
+    """Return a normalized absolute path without following symlinks."""
+
+    return Path(os.path.abspath(os.fspath(path)))
+
+
+def reject_symlink_chain(path: Path, label: str) -> Path:
+    """Reject a symlink at the target or any existing parent component."""
+
+    path = lexical_absolute(path)
+    for component in (path, *path.parents):
+        if component.is_symlink():
+            raise MatrixError(f"{label} may not contain a symlink: {component}")
+    return path
+
+
+def require_exact_path(path: Path, expected: Path, label: str) -> Path:
+    path = reject_symlink_chain(path, label)
+    expected = reject_symlink_chain(expected, f"canonical {label}")
+    require(path == expected, f"{label} must be exactly {expected}, got {path}")
+    return path
+
+
+def descriptor(path: Path, label: str, *, readonly: bool = True) -> Dict[str, str]:
+    path = reject_symlink_chain(path, label)
+    require(path.is_absolute() and path.is_file(), f"{label} is missing: {path}")
+    if readonly:
+        require(stat.S_IMODE(path.stat().st_mode) & WRITE_BITS == 0, f"{label} must be read-only")
+    return {"path": str(path), "sha256": sha256_file(path)}
+
+
+def read_bound(value: Any, label: str) -> tuple[Path, Mapping[str, Any]]:
+    require(isinstance(value, Mapping) and set(value) == {"path", "sha256"}, f"{label} must be a path/hash descriptor")
+    path = reject_symlink_chain(Path(str(value["path"])), label)
+    actual = descriptor(path, label)
+    require(dict(value) == actual, f"{label} hash mismatch")
+    return path, read_json(path, label)
+
+
+def write_json_new_readonly(path: Path, value: Mapping[str, Any]) -> None:
+    path = reject_symlink_chain(path, "master output")
+    require(path.is_absolute(), "master output must be absolute")
+    require(not path.exists(), f"refusing to overwrite immutable master: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    with path.open("x", encoding="utf-8") as stream:
+        stream.write(payload)
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.chmod(path, 0o444)
+
+
+def result_policy_for(freeze_path: Path, *, enforce_canonical_paths: bool) -> Dict[str, Any]:
+    if enforce_canonical_paths:
+        result_root = CANONICAL_RESULT_ROOT
+        bag_root = CANONICAL_BAG_ROOT
+    else:
+        # Unit-test fixtures never reach the production runner.  Keeping their
+        # output beside the disposable freeze makes cleanup deterministic.
+        result_root = lexical_absolute(freeze_path.parent / "matrix_results")
+        bag_root = lexical_absolute(freeze_path.parent / "matrix_bags")
+    return {
+        "release_id": RELEASE_ID,
+        "append_only_dataset_index": True,
+        "dataset_index_path": str(result_root / "dataset_index.jsonl"),
+        "result_root": str(result_root),
+        "bag_root": str(bag_root),
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "predecessor_import_allowed": False,
+    }
+
+
+def require_initial_storage_empty(policy: Mapping[str, Any]) -> None:
+    """Prove a newly generated production master cannot inherit old attempts."""
+
+    for field in ("result_root", "bag_root"):
+        root = reject_symlink_chain(Path(str(policy[field])), f"initial {field}")
+        if root.exists():
+            require(root.is_dir(), f"initial {field} must be an absent or empty directory")
+            require(not any(root.iterdir()), f"initial {field} is not empty: {root}")
+    index = reject_symlink_chain(Path(str(policy["dataset_index_path"])), "initial dataset index")
+    require(not index.exists(), f"new R7 master refuses an existing dataset index: {index}")
+
+
+def _contrast_denominator_registry() -> Dict[str, Any]:
+    """Freeze N_pair per contrast; a complete block is not itself a pair."""
+
+    contrasts = []
+    for stage, spec in STAGES.items():
+        conditions = list(spec["conditions"])
+        for left_index, left in enumerate(conditions):
+            for right in conditions[left_index + 1:]:
+                contrasts.append({
+                    "contrast_id": f"{stage}:{left}-vs-{right}",
+                    "stage": stage,
+                    "left_condition_id": left,
+                    "right_condition_id": right,
+                    "N_block_plan": 8,
+                    "N_pair_initial": 0,
+                    "N_pair_scope": N_PAIR_SCOPE,
+                })
+    core: Dict[str, Any] = {
+        "schema_version": "smpcc-sim-mechanism-contrast-denominator-v1",
+        "scope": "PER_REGISTERED_CONTRAST_WITHIN_STAGE",
+        "n_pair_definition": (
+            "count blocks where both named conditions have eligible "
+            "continuous outcomes from the same uninterrupted block segment"
+        ),
+        "complete_block_is_not_n_pair": True,
+        "cross_contrast_aggregation_forbidden": True,
+        "cross_stage_aggregation_forbidden": True,
+        "contrasts": contrasts,
+    }
+    return dict(core, registry_hash=canonical_hash(core))
+
+
+def _asset_hashes(freeze: Mapping[str, Any], path_id: str, container_id: str, condition_id: str) -> Dict[str, str]:
+    path_entry = freeze["paths"][path_id]
+    container = freeze["containers"][container_id]
+    simulator = freeze["simulator_assets"]
+    values = {
+        "map_hash": simulator["map"]["sha256"],
+        "world_hash": simulator["world"]["sha256"],
+        "robot_model_hash": simulator["robot_model"]["sha256"],
+        "world_geometry_hash": simulator["world_geometry"]["sha256"],
+        "source_path_hash": path_entry["source_path"]["sha256"],
+        "sim_path_hash": path_entry["sim_path"]["sha256"],
+        "transform_hash": path_entry["transform"]["sha256"],
+        "fit_clearance_hash": path_entry["fit_clearance_report"]["sha256"],
+        "container_hash": container["sha256"],
+    }
+    if condition_id == "FixedProfile":
+        profile = freeze["fixed_profiles"][f"{path_id}_{container_id}"]
+        values.update({
+            "profile_hash": profile["profile"]["sha256"],
+            "profile_generation_report_hash": profile["generation_report"]["sha256"],
+            "profile_tracker_config_hash": profile["tracker_config"]["sha256"],
+        })
+    else:
+        values["effective_config_hash"] = freeze["effective_configs"][condition_id]["sha256"]
+    return {key: str(value) for key, value in values.items()}
+
+
+def _row(freeze: Mapping[str, Any], stage: str, assignment: Mapping[str, Any], total: int, *, formal: bool) -> Dict[str, Any]:
+    stage_spec = STAGES[stage]
+    condition = str(assignment["condition_id"])
+    block = str(assignment["block_id"])
+    table = freeze["randomization_tables"][stage]
+    bundle = freeze["seed_bundles"][f"{stage}:{block}"]
+    row_id = f"{stage}_{stage_spec['path_id']}_{stage_spec['container_id']}_{condition}_{block}"
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": formal,
+        "fixture": not formal,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "evidence_class": ("SIMULATION_MECHANISM_FORMAL_PLANNED_ROW" if formal
+                           else "SIMULATION_MECHANISM_MATRIX_FIXTURE_NOT_FORMAL"),
+        "stage": stage,
+        "stage_alias": stage_spec["alias"],
+        "planned_row_id": row_id,
+        "attempt_id_prefix": row_id,
+        "block_id": block,
+        "order_position": assignment["order_position"],
+        "planned_block_segment_id": assignment["planned_block_segment_id"],
+        "condition_id": condition,
+        "method_backend": BACKENDS[condition],
+        "path_id": stage_spec["path_id"],
+        "container_id": stage_spec["container_id"],
+        "randomization_table_id": table["table_id"],
+        "randomization_hash": table["randomization_hash"],
+        "seed_bundle_id": bundle["seed_bundle_id"],
+        "seed_bundle_hash": bundle["seed_bundle_hash"],
+        "crn_policy": CRN_POLICY,
+        "crn_trace_asset": dict(bundle["trace_asset"]),
+        "crn_trace_asset_hash": bundle["trace_asset_hash"],
+        "crn_stream_trace_hashes": {
+            stream: trace["trace_hash"]
+            for stream, trace in bundle["traces"].items()
+        },
+        "crn_initial_yaw_offset_rad": bundle["initial_yaw_offset_rad"],
+        "frozen_asset_hashes": _asset_hashes(freeze, stage_spec["path_id"], stage_spec["container_id"], condition),
+        "fixed_denominator": {
+            "N_plan_stage": 8 * len(stage_spec["conditions"]),
+            "N_plan_condition": 8,
+            "N_plan_total": total,
+            "N_block_plan_stage": 8,
+            "N_attempt_initial": 0,
+            "N_method_success_initial": 0,
+            "N_method_failure_initial": 0,
+            "N_pair_initial": 0,
+            "N_pair_scope": N_PAIR_SCOPE,
+        },
+    }
+
+
+def create_master(
+    freeze_path: Path,
+    output: Path,
+    *,
+    enforce_canonical_paths: bool = True,
+) -> Dict[str, Any]:
+    freeze_path = reject_symlink_chain(freeze_path, "mechanism freeze")
+    output = reject_symlink_chain(output, "mechanism master output")
+    if enforce_canonical_paths:
+        require_exact_path(freeze_path, DEFAULT_FREEZE, "mechanism freeze")
+        require_exact_path(output, DEFAULT_MASTER, "mechanism master output")
+    freeze_desc = descriptor(freeze_path, "mechanism freeze")
+    freeze = read_json(freeze_path, "mechanism freeze")
+    report = freeze_tool.validate_freeze(freeze)
+    require(report.get("status") == "PASS", "mechanism freeze gate is not PASS: " + "; ".join(report.get("errors", [])))
+    require(
+        freeze.get("protocol_id") == PROTOCOL_ID
+        and freeze.get("release_id") == RELEASE_ID
+        and freeze.get("physical_primary_eligible") is False
+        and freeze.get("physical_alignment") is False,
+        "mechanism master rejects a wrong-release, physical-alignment, or primary freeze",
+    )
+    require(output.parent == freeze_path.parent, "mechanism master must be created beside the final mechanism freeze")
+    policy = result_policy_for(freeze_path, enforce_canonical_paths=enforce_canonical_paths)
+    for field in ("result_root", "bag_root", "dataset_index_path"):
+        reject_symlink_chain(Path(str(policy[field])), f"master {field}")
+    if enforce_canonical_paths:
+        require_initial_storage_empty(policy)
+    total = sum(8 * len(spec["conditions"]) for spec in STAGES.values())
+    rows = []
+    for stage, spec in STAGES.items():
+        table = freeze["randomization_tables"].get(stage)
+        require(isinstance(table, Mapping), f"{stage} table is missing")
+        assignments = table.get("rows")
+        require(isinstance(assignments, list) and len(assignments) == 8 * len(spec["conditions"]), f"{stage} table count is wrong")
+        for assignment in assignments:
+            require(isinstance(assignment, Mapping), f"{stage} assignment is malformed")
+            require(assignment.get("path_id") == spec["path_id"] and assignment.get("container_id") == spec["container_id"], f"{stage} assignment path/container drift")
+            require(assignment.get("condition_id") in spec["conditions"], f"{stage} assignment condition drift")
+            rows.append(_row(freeze, stage, assignment, total,
+                             formal=enforce_canonical_paths))
+    master_core: Dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": enforce_canonical_paths,
+        "fixture": not enforce_canonical_paths,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "evidence_class": ("SIMULATION_MECHANISM_FORMAL_MASTER"
+                           if enforce_canonical_paths else
+                           "SIMULATION_MECHANISM_MATRIX_FIXTURE_NOT_FORMAL"),
+        "freeze": freeze_desc,
+        "freeze_hash": report["freeze_hash"],
+        "original_aligned_protocol_eligible": False,
+        "matrix_counts": {stage: 8 * len(spec["conditions"]) for stage, spec in STAGES.items()},
+        "matrix_total": total,
+        "randomization_tables": freeze["randomization_tables"],
+        "seed_bundles": freeze["seed_bundles"],
+        "planned_rows": rows,
+        "contrast_denominator_registry": _contrast_denominator_registry(),
+        "retry_policy": {
+            "retryable_failure_class": "INFRASTRUCTURE_ACQUISITION",
+            "retry_only_pre_motion": True,
+            "method_failure_terminal": True,
+            "method_failure_may_not_be_replaced_by_success": True,
+            "retry_authorization_required": True,
+        },
+        "result_policy": policy,
+    }
+    master = dict(master_core, master_hash=canonical_hash(master_core))
+    validate = validate_master(master, enforce_canonical_paths=enforce_canonical_paths)
+    require(validate.get("status") == "PASS", "generated mechanism master failed validation: " + "; ".join(validate.get("errors", [])))
+    write_json_new_readonly(output, master)
+    return dict(validate, master_path=str(output), master_file_hash=sha256_file(output), master_hash=master["master_hash"])
+
+
+def validate_master(master: Any, *, enforce_canonical_paths: bool = True) -> Dict[str, Any]:
+    errors: list[str] = []
+    if not isinstance(master, Mapping):
+        return {"status": "FAIL", "errors": ["master is not an object"]}
+    if set(master) != MASTER_FIELDS:
+        errors.append("master fields are not the exact R7 schema")
+    expected_formal = enforce_canonical_paths
+    expected_evidence = ("SIMULATION_MECHANISM_FORMAL_MASTER"
+                         if expected_formal else
+                         "SIMULATION_MECHANISM_MATRIX_FIXTURE_NOT_FORMAL")
+    for key, expected in {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": DOCUMENT_TYPE,
+        "protocol_id": PROTOCOL_ID,
+        "release_id": RELEASE_ID,
+        "formal": expected_formal,
+        "fixture": not expected_formal,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "original_aligned_protocol_eligible": False,
+        "matrix_total": 88,
+        "evidence_class": expected_evidence,
+    }.items():
+        if master.get(key) != expected:
+            errors.append(f"{key} must equal {expected!r}")
+    core = dict(master); declared = core.pop("master_hash", None)
+    if declared != canonical_hash(core): errors.append("master_hash mismatch")
+    freeze: Optional[Mapping[str, Any]] = None
+    try:
+        freeze_path, freeze = read_bound(master.get("freeze"), "master freeze")
+        if enforce_canonical_paths:
+            require_exact_path(freeze_path, DEFAULT_FREEZE, "master freeze")
+        freeze_report = freeze_tool.validate_freeze(freeze)
+        if freeze_report.get("status") != "PASS": errors.append("bound mechanism freeze is not PASS")
+        if master.get("freeze_hash") != freeze_report.get("freeze_hash"): errors.append("master freeze_hash differs from bound freeze")
+        if freeze.get("protocol_id") != PROTOCOL_ID or freeze.get("release_id") != RELEASE_ID:
+            errors.append("bound mechanism freeze belongs to another protocol/release")
+    except MatrixError as exc:
+        errors.append(str(exc))
+    policy = master.get("result_policy")
+    if freeze is not None:
+        expected_policy = result_policy_for(freeze_path, enforce_canonical_paths=enforce_canonical_paths)
+        if policy != expected_policy:
+            errors.append("result_policy must equal the exact R7 canonical storage policy")
+        else:
+            for field in ("result_root", "bag_root", "dataset_index_path"):
+                try:
+                    reject_symlink_chain(Path(str(policy[field])), f"master {field}")
+                except MatrixError as exc:
+                    errors.append(str(exc))
+    rows = master.get("planned_rows")
+    if not isinstance(rows, list):
+        return {"status": "FAIL", "errors": errors + ["planned_rows is missing"]}
+    if len(rows) != 88: errors.append(f"planned rows must total 88, got {len(rows)}")
+    row_ids = [item.get("planned_row_id") for item in rows if isinstance(item, Mapping)]
+    if len(row_ids) != len(rows) or len(set(row_ids)) != len(rows): errors.append("planned_row_id must be unique")
+    tables = master.get("randomization_tables")
+    bundles = master.get("seed_bundles")
+    if freeze is not None and tables != freeze.get("randomization_tables"): errors.append("master randomization tables differ from freeze")
+    if freeze is not None and bundles != freeze.get("seed_bundles"): errors.append("master seed bundles differ from freeze")
+    expected_retry = {
+        "retryable_failure_class": "INFRASTRUCTURE_ACQUISITION",
+        "retry_only_pre_motion": True,
+        "method_failure_terminal": True,
+        "method_failure_may_not_be_replaced_by_success": True,
+        "retry_authorization_required": True,
+    }
+    if master.get("retry_policy") != expected_retry:
+        errors.append("retry_policy is not the exact fail-closed R7 policy")
+    if master.get("contrast_denominator_registry") != (
+            _contrast_denominator_registry()):
+        errors.append(
+            "contrast denominator registry is not the exact per-contrast policy")
+    for stage, spec in STAGES.items():
+        stage_rows = [item for item in rows if isinstance(item, Mapping) and item.get("stage") == stage]
+        expected_count = 8 * len(spec["conditions"])
+        if len(stage_rows) != expected_count: errors.append(f"{stage} must contain {expected_count} rows")
+        positions: Dict[str, list[int]] = {name: [] for name in spec["conditions"]}
+        block_crn: Dict[str, Any] = {}
+        seen = set()
+        for row in stage_rows:
+            if set(row) != ROW_FIELDS:
+                errors.append(f"{stage} row fields are not the exact R7 schema")
+            condition = row.get("condition_id"); block = row.get("block_id")
+            if condition not in spec["conditions"]: errors.append(f"{stage} has unexpected condition {condition!r}"); continue
+            if block not in {f"b{index:02d}" for index in range(1, 9)}: errors.append(f"{stage} has invalid block {block!r}")
+            expected_id = f"{stage}_{spec['path_id']}_{spec['container_id']}_{condition}_{block}"
+            if row.get("planned_row_id") != expected_id or row.get("attempt_id_prefix") != expected_id: errors.append(f"{stage} row ID/prefix is non-canonical")
+            if row.get("schema_version") != SCHEMA_VERSION or row.get("protocol_id") != PROTOCOL_ID or row.get("release_id") != RELEASE_ID: errors.append(f"{stage} {condition} schema/protocol/release mismatch")
+            expected_row_evidence = ("SIMULATION_MECHANISM_FORMAL_PLANNED_ROW" if expected_formal else "SIMULATION_MECHANISM_MATRIX_FIXTURE_NOT_FORMAL")
+            if row.get("evidence_class") != expected_row_evidence or row.get("fixture") is expected_formal or row.get("stage_alias") != spec["alias"]: errors.append(f"{stage} {condition} evidence/fixture/stage alias mismatch")
+            if row.get("method_backend") != BACKENDS[condition]: errors.append(f"{stage} {condition} backend mismatch")
+            if row.get("path_id") != spec["path_id"] or row.get("container_id") != spec["container_id"]: errors.append(f"{stage} {condition} path/container mismatch")
+            if row.get("formal") is not expected_formal or row.get("formal_scope") != FORMAL_SCOPE or row.get("physical_alignment") is not False or row.get("physical_primary_eligible") is not False or row.get("physical_primary") is not None: errors.append(f"{stage} row has an invalid formal/fixture/scope/alignment/primary claim")
+            if row.get("crn_policy") != CRN_POLICY:
+                errors.append(f"{stage} {condition} CRN policy mismatch")
+            if freeze is not None and block in {f"b{index:02d}" for index in range(1, 9)}:
+                table = freeze["randomization_tables"][stage]
+                assignments = [item for item in table["rows"] if item.get("block_id") == block and item.get("condition_id") == condition]
+                if len(assignments) != 1:
+                    errors.append(f"{stage} {condition} cannot resolve one frozen assignment")
+                else:
+                    assignment = assignments[0]
+                    if (row.get("order_position") != assignment.get("order_position") or
+                            row.get("planned_block_segment_id") != assignment.get("planned_block_segment_id") or
+                            row.get("randomization_table_id") != table.get("table_id") or
+                            row.get("randomization_hash") != table.get("randomization_hash")):
+                        errors.append(f"{stage} {condition} randomization assignment drift")
+                bundle = freeze["seed_bundles"].get(f"{stage}:{block}")
+                if (not isinstance(bundle, Mapping) or
+                        row.get("seed_bundle_id") != bundle.get("seed_bundle_id") or
+                        row.get("seed_bundle_hash") != bundle.get("seed_bundle_hash")):
+                    errors.append(f"{stage} {condition} seed bundle drift")
+                if isinstance(bundle, Mapping):
+                    expected_stream_hashes = {
+                        stream: trace.get("trace_hash")
+                        for stream, trace in bundle.get("traces", {}).items()
+                        if isinstance(trace, Mapping)
+                    }
+                    if (row.get("crn_trace_asset") !=
+                            bundle.get("trace_asset") or
+                            row.get("crn_trace_asset_hash") !=
+                            bundle.get("trace_asset_hash") or
+                            row.get("crn_stream_trace_hashes") !=
+                            expected_stream_hashes or
+                            row.get("crn_initial_yaw_offset_rad") !=
+                            bundle.get("initial_yaw_offset_rad")):
+                        errors.append(
+                            f"{stage} {condition} CRN trace realization drift")
+                    crn_identity = {
+                        "trace_asset": row.get("crn_trace_asset"),
+                        "trace_asset_hash": row.get("crn_trace_asset_hash"),
+                        "stream_trace_hashes":
+                            row.get("crn_stream_trace_hashes"),
+                        "initial_yaw_offset_rad":
+                            row.get("crn_initial_yaw_offset_rad"),
+                    }
+                    previous = block_crn.setdefault(str(block), crn_identity)
+                    if previous != crn_identity:
+                        errors.append(
+                            f"{stage} {block} conditions do not share one "
+                            "identical CRN trace realization")
+            denominator = row.get("fixed_denominator")
+            expected_denom = {
+                "N_plan_stage": expected_count,
+                "N_plan_condition": 8,
+                "N_plan_total": 88,
+                "N_block_plan_stage": 8,
+                "N_attempt_initial": 0,
+                "N_method_success_initial": 0,
+                "N_method_failure_initial": 0,
+                "N_pair_initial": 0,
+                "N_pair_scope": N_PAIR_SCOPE,
+            }
+            if denominator != expected_denom: errors.append(f"{stage} {condition} fixed denominator mismatch")
+            hashes = row.get("frozen_asset_hashes")
+            if not isinstance(hashes, Mapping) or not hashes or not all(isinstance(v, str) and len(v) == 64 for v in hashes.values()): errors.append(f"{stage} {condition} frozen asset hashes malformed")
+            if freeze is not None:
+                try:
+                    if hashes != _asset_hashes(freeze, spec["path_id"], spec["container_id"], str(condition)): errors.append(f"{stage} {condition} frozen assets drift from freeze")
+                except (KeyError, MatrixError): errors.append(f"{stage} {condition} cannot resolve frozen assets")
+            if isinstance(row.get("order_position"), int): positions[str(condition)].append(row["order_position"])
+            seen.add((block, condition))
+        if len(seen) != expected_count: errors.append(f"{stage} does not contain all block/condition rows")
+        for condition, values in positions.items():
+            if len(values) == 8 and max(values.count(pos) for pos in range(1, len(spec["conditions"]) + 1)) - min(values.count(pos) for pos in range(1, len(spec["conditions"]) + 1)) > 1:
+                errors.append(f"{stage} {condition} is not position-balanced")
+    counts = master.get("matrix_counts")
+    if counts != {stage: 8 * len(spec["conditions"]) for stage, spec in STAGES.items()}: errors.append("40/24/24 matrix_counts mismatch")
+    return {"status": "PASS" if not errors else "FAIL", "formal": expected_formal, "fixture": not expected_formal, "formal_scope": FORMAL_SCOPE, "physical_primary_eligible": False, "errors": errors, "master_hash": declared}
+
+
+def _emit(value: Mapping[str, Any]) -> None:
+    print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+    create = sub.add_parser("create-master")
+    create.add_argument("--freeze", type=Path, default=DEFAULT_FREEZE)
+    create.add_argument("--output", type=Path, default=DEFAULT_MASTER)
+    create.set_defaults(func=lambda args: _emit(create_master(args.freeze, args.output)) or 0)
+    gate = sub.add_parser("validate-master")
+    gate.add_argument("--master", type=Path, default=DEFAULT_MASTER)
+    def validate_command(args: argparse.Namespace) -> int:
+        path = require_exact_path(args.master, DEFAULT_MASTER, "mechanism master")
+        result = validate_master(read_json(path, "mechanism master")); _emit(result); return 0 if result["status"] == "PASS" else 2
+    gate.set_defaults(func=validate_command)
+    return parser
+
+
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    try:
+        args = build_parser().parse_args(argv)
+        return int(args.func(args))
+    except (MatrixError, freeze_tool.MechanismFreezeError, OSError, ValueError, KeyError, TypeError) as exc:
+        _emit({"status": "NO_GO", "formal": False, "physical_primary_eligible": False, "errors": [str(exc)]})
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

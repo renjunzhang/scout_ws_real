@@ -1,0 +1,396 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Pure/offline tests for the R7 read-only mechanism analyzer."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import importlib.util
+import math
+import sys
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+
+
+SCRIPT = Path(__file__).resolve().parents[1] / "smpcc_sim_mechanism_analysis.py"
+
+
+def load_analysis():
+    spec = importlib.util.spec_from_file_location(
+        "test_smpcc_sim_mechanism_analysis_target", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class MechanismAnalysisTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.analysis = load_analysis()
+
+    def _qc(self):
+        return {
+            "status": "PASS",
+            "formal": True,
+            "formal_scope": self.analysis.FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "motion_start": {"recorded": True, "ros_time_sec": 10.0},
+            "terminal": {"kind": "GOAL_REACHED", "ros_time_sec": 42.0},
+            "zero_command_tail": {
+                "pass": True,
+                "tail_anchor_ros_time_sec": 42.25,
+                "required_tail_sec": 5.0,
+                "zero_abs_tolerance": 1e-9,
+            },
+        }
+
+    def _observations(self, *, modal=True):
+        return {
+            "motion": {
+                "odom": [(10.0, 0.0, 1.0), (20.0, 1.0, 1.0),
+                         (42.0, 2.0, 1.0)],
+                "cmd": [(10.0, 0.0, 0.0), (20.0, 0.5, 0.2),
+                        (42.0, 0.0, 0.0)],
+                "H_proxy": [(10.0, 1.0), (20.0, -2.0), (42.0, 3.0)],
+                "H_modal": ([(10.0, 4.0), (20.0, -5.0), (42.0, 6.0)]
+                            if modal else []),
+            },
+            "tail": {
+                "odom": [(42.25, 2.0, 1.0), (47.25, 2.001, 1.0)],
+                "cmd": [(42.25, 0.0, 0.0), (47.25, 0.0, 0.0)],
+                "H_proxy": [(42.25, 3.0), (47.25, 1.0)],
+                "H_modal": ([(42.25, 6.0), (47.25, 2.0)]
+                            if modal else []),
+            },
+            "motion_plus_tail": {
+                "odom": [(10.0, 0.0, 1.0), (20.0, 1.0, 1.0),
+                         (42.0, 2.0, 1.0), (42.1, 2.0, 1.0),
+                         (42.25, 2.0, 1.0), (47.25, 2.001, 1.0)],
+                "cmd": [(10.0, 0.0, 0.0), (20.0, 0.5, 0.2),
+                        (42.0, 0.0, 0.0), (42.1, 0.0, 0.0),
+                        (42.25, 0.0, 0.0), (47.25, 0.0, 0.0)],
+                "H_proxy": [(10.0, 1.0), (20.0, -2.0), (42.0, 3.0),
+                            (42.1, 7.0), (42.25, 3.0), (47.25, 1.0)],
+                "H_modal": ([(10.0, 4.0), (20.0, -5.0),
+                             (42.0, 6.0), (42.1, 8.0),
+                             (42.25, 6.0), (47.25, 2.0)]
+                            if modal else []),
+            },
+        }
+
+    @staticmethod
+    def _path():
+        return [{"x": 0.0, "y": 0.0}, {"x": 2.0, "y": 0.0}]
+
+    def _planned(self, row_id, condition, block="b01"):
+        return {
+            "planned_row_id": row_id,
+            "stage": "SIM-S1_CORE",
+            "stage_alias": "SIM-S1",
+            "block_id": block,
+            "order_position": 1,
+            "planned_block_segment_id": f"SIM-S1_CORE-{block}",
+            "condition_id": condition,
+            "method_backend": "fixed_profile_tracker" if condition ==
+            "FixedProfile" else "online_mpcc",
+            "path_id": "H1",
+            "container_id": "C1",
+            "seed_bundle_id": f"seed-{block}",
+            "seed_bundle_hash": "a" * 64,
+            "randomization_hash": "b" * 64,
+            "fixed_denominator": {
+                "N_plan_total": 88,
+                "N_plan_stage": 40,
+                "N_plan_condition": 8,
+            },
+        }
+
+    @staticmethod
+    def _record(row_id, attempt_id, *, success=False, failure=False,
+                eligible=False, failure_class="NONE"):
+        return {
+            "planned_row_id": row_id,
+            "attempt_id": attempt_id,
+            "stage": "SIM-S1_CORE",
+            "condition_id": "Bsmooth",
+            "method_success": success,
+            "method_failure": failure,
+            "continuous_eligible": eligible,
+            "motion_started": success or failure,
+            "assignment_consumed": success or failure,
+            "failure_class": failure_class,
+            "protocol_qc_pass": success or failure,
+            "entry_hash": "c" * 64,
+            "attempt_manifest_path": f"/fixture/{attempt_id}.json",
+            "attempt_manifest_hash": "d" * 64,
+        }
+
+    @staticmethod
+    def _manifest(attempt_id):
+        return {
+            "attempt_id": attempt_id,
+            "closed_bag_qc": None,
+            "bag_path": None,
+            "bag_hash": None,
+        }
+
+    def test_units_are_source_specific(self):
+        self.assertEqual(
+            1.25, self.analysis.normalize_slosh_mm(
+                self.analysis.H_PROXY_TOPIC, 0.00125))
+        self.assertEqual(
+            1.25, self.analysis.normalize_slosh_mm(
+                self.analysis.H_MODAL_TOPIC, 1.25))
+        with self.assertRaises(self.analysis.AnalysisError):
+            self.analysis.normalize_slosh_mm("/sim_truth/liquid_height", 1.0)
+
+    def test_windows_use_exact_qc_tail_end(self):
+        windows = self.analysis.measurement_windows(self._qc())
+        self.assertEqual(10.0, windows.motion_start_sec)
+        self.assertEqual(42.0, windows.terminal_sec)
+        self.assertEqual(42.25, windows.tail_start_sec)
+        self.assertEqual(47.25, windows.tail_end_sec)
+        self.assertTrue(self.analysis.in_closed_window(47.25, 42.25, 47.25))
+        self.assertFalse(self.analysis.in_closed_window(47.250001, 42.25, 47.25))
+
+    def test_short_or_preterminal_tail_is_rejected(self):
+        qc = self._qc()
+        qc["zero_command_tail"]["required_tail_sec"] = 4.999
+        with self.assertRaises(self.analysis.AnalysisError):
+            self.analysis.measurement_windows(qc)
+        qc = self._qc()
+        qc["zero_command_tail"]["tail_anchor_ros_time_sec"] = 41.9
+        with self.assertRaises(self.analysis.AnalysisError):
+            self.analysis.measurement_windows(qc)
+
+    def test_segment_distance_uses_projection_and_endpoints(self):
+        points = [{"x": 0.0, "y": 0.0}, {"x": 2.0, "y": 0.0},
+                  {"x": 2.0, "y": 2.0}]
+        self.assertAlmostEqual(
+            1.0, self.analysis.polyline_segment_distance(1.0, 1.0, points))
+        self.assertAlmostEqual(
+            math.sqrt(2.0),
+            self.analysis.polyline_segment_distance(-1.0, -1.0, points))
+
+    def test_metrics_use_polyline_and_preserve_source_names(self):
+        metrics = self.analysis.derive_attempt_metrics(
+            self._observations(), self._path(), "Bsmooth",
+            self.analysis.measurement_windows(self._qc()), 32.5)
+        self.assertAlmostEqual(1.0, metrics["tracking_rmse_m"])
+        self.assertAlmostEqual(3.0, metrics["H_proxy_motion_peak_abs_mm"])
+        self.assertAlmostEqual(6.0, metrics["H_modal_motion_peak_abs_mm"])
+        self.assertAlmostEqual(
+            7.0, metrics["H_proxy_motion_plus_tail_peak_abs_mm"])
+        self.assertAlmostEqual(
+            8.0, metrics["H_modal_motion_plus_tail_peak_abs_mm"])
+        self.assertIsNone(metrics["physical_primary"])
+        self.assertFalse(metrics["physical_primary_eligible"])
+
+    def test_fixed_profile_modal_is_na_and_unexpected_sample_fails(self):
+        metrics = self.analysis.derive_attempt_metrics(
+            self._observations(modal=False), self._path(), "FixedProfile",
+            self.analysis.measurement_windows(self._qc()), 32.5)
+        self.assertFalse(metrics["H_modal_available"])
+        for field in self.analysis.METRIC_FIELDS:
+            if field.startswith("H_modal_"):
+                self.assertIsNone(metrics[field])
+        with self.assertRaises(self.analysis.AnalysisError):
+            self.analysis.derive_attempt_metrics(
+                self._observations(modal=True), self._path(), "FixedProfile",
+                self.analysis.measurement_windows(self._qc()), 32.5)
+
+    def test_sample_outside_frozen_window_is_rejected(self):
+        observations = self._observations()
+        observations["tail"]["H_proxy"].append((47.251, 0.0))
+        with self.assertRaises(self.analysis.AnalysisError):
+            self.analysis.derive_attempt_metrics(
+                observations, self._path(), "Bsmooth",
+                self.analysis.measurement_windows(self._qc()), 32.5)
+
+    def test_missing_tail_liquid_channel_is_rejected(self):
+        observations = self._observations()
+        observations["tail"]["H_proxy"] = []
+        with self.assertRaises(self.analysis.AnalysisError):
+            self.analysis.derive_attempt_metrics(
+                observations, self._path(), "Bsmooth",
+                self.analysis.measurement_windows(self._qc()), 32.5)
+
+    def test_partial_modal_tail_is_explicit_na_not_fabricated(self):
+        observations = self._observations()
+        observations["tail"]["H_modal"] = [(42.25, 6.0), (43.0, 5.0)]
+        metrics = self.analysis.derive_attempt_metrics(
+            observations, self._path(), "Bsmooth",
+            self.analysis.measurement_windows(self._qc()), 32.5)
+        self.assertTrue(metrics["H_modal_available"])
+        self.assertFalse(metrics["H_modal_tail_available"])
+        self.assertEqual(
+            "NOT_PUBLISHED_THROUGH_FROZEN_TAIL",
+            metrics["H_modal_tail_na_reason"])
+        self.assertIsNone(metrics["H_modal_tail_peak_abs_mm"])
+        self.assertIsNone(
+            metrics["H_modal_motion_plus_tail_peak_abs_mm"])
+
+    def test_failure_row_is_retained_with_na_metrics(self):
+        success_row = self._planned("row-success", "Bsmooth")
+        failure_row = self._planned("row-failure", "Bsmooth", "b02")
+        success = self._record("row-success", "row-success_r01",
+                               success=True, eligible=True)
+        failure = self._record("row-failure", "row-failure_r01",
+                               failure=True, failure_class="METHOD_FAILURE")
+        metric = {
+            "physical_primary": None,
+            "physical_primary_eligible": False,
+            "H_proxy_available": True,
+            "H_modal_available": True,
+            "tracking_rmse_m": 0.1,
+        }
+        rows = self.analysis.build_fixed_denominator_rows(
+            [success_row, failure_row], [success, failure],
+            {"row-success_r01": self._manifest("row-success_r01"),
+             "row-failure_r01": self._manifest("row-failure_r01")},
+            {"row-success_r01": metric})
+        self.assertEqual(2, len(rows))
+        self.assertEqual("METHOD_FAILURE", rows[1]["row_resolution"])
+        self.assertIsNone(rows[1]["tracking_rmse_m"])
+        self.assertEqual(1, rows[1]["N_attempt"])
+
+    def test_metrics_cannot_be_attached_to_failure(self):
+        planned = self._planned("row-failure", "Bsmooth")
+        failure = self._record("row-failure", "row-failure_r01",
+                               failure=True, failure_class="METHOD_FAILURE")
+        with self.assertRaises(self.analysis.AnalysisError):
+            self.analysis.build_fixed_denominator_rows(
+                [planned], [failure],
+                {"row-failure_r01": self._manifest("row-failure_r01")},
+                {"row-failure_r01": {
+                    "physical_primary": None,
+                    "physical_primary_eligible": False,
+                }})
+
+    def test_method_failure_cannot_be_followed_by_success(self):
+        planned = self._planned("row-terminal", "Bsmooth")
+        failure = self._record(
+            "row-terminal", "row-terminal_r01", failure=True,
+            failure_class="METHOD_FAILURE")
+        success = self._record(
+            "row-terminal", "row-terminal_r02", success=True, eligible=True)
+        with self.assertRaises(self.analysis.AnalysisError):
+            self.analysis.build_fixed_denominator_rows(
+                [planned], [failure, success],
+                {"row-terminal_r01": self._manifest("row-terminal_r01"),
+                 "row-terminal_r02": self._manifest("row-terminal_r02")},
+                {})
+
+    def test_analyzer_rejects_non_r7_release_before_analysis(self):
+        admission = SimpleNamespace(
+            release={"release_id": "SIM-MECHANISM-40-64-88-R8"},
+            freeze={"release_id": "SIM-MECHANISM-40-64-88-R8"},
+            master={"release_id": "SIM-MECHANISM-40-64-88-R8"})
+        with self.assertRaises(self.analysis.AnalysisError):
+            self.analysis._validate_analysis_boundary(
+                admission,
+                {"release_id": "SIM-MECHANISM-40-64-88-R8"},
+                require_complete=True)
+
+    def test_attempt_history_retains_acquisition_before_terminal(self):
+        planned = self._planned("row-a", "Bsmooth")
+        acquisition = self._record(
+            "row-a", "row-a_r01", failure_class="INFRASTRUCTURE_ACQUISITION")
+        terminal = self._record(
+            "row-a", "row-a_r02", success=True, eligible=True)
+        metric = {
+            "physical_primary": None,
+            "physical_primary_eligible": False,
+            "H_proxy_available": True,
+            "H_modal_available": True,
+        }
+        rows = self.analysis.build_fixed_denominator_rows(
+            [planned], [acquisition, terminal],
+            {"row-a_r02": self._manifest("row-a_r02")},
+            {"row-a_r02": metric})
+        self.assertEqual(2, rows[0]["N_attempt"])
+        self.assertIn("INFRASTRUCTURE_ACQUISITION",
+                      rows[0]["attempt_history_json"])
+        self.assertEqual("row-a_r02", rows[0]["terminal_attempt_id"])
+
+    def _pair_rows(self):
+        rows = []
+        for index in range(1, 9):
+            block = f"b{index:02d}"
+            for condition in ("Bsmooth", "FixedProfile"):
+                rows.append({
+                    "planned_row_id": f"{condition}-{block}",
+                    "stage": "SIM-S1_CORE",
+                    "block_id": block,
+                    "planned_block_segment_id": f"segment-{block}",
+                    "condition_id": condition,
+                    "method_success": True,
+                    "method_failure": False,
+                    "continuous_eligible": True,
+                    "terminal_attempt_id": f"{condition}-{block}_r01",
+                    "tracking_rmse_m": 1.0 if condition == "Bsmooth" else 0.5,
+                    "H_modal_motion_peak_abs_mm": (
+                        2.0 if condition == "Bsmooth" else None),
+                })
+        return rows
+
+    def _registry(self):
+        return {
+            "cross_stage_aggregation_forbidden": True,
+            "cross_contrast_aggregation_forbidden": True,
+            "contrasts": [{
+                "contrast_id": "SIM-S1_CORE:Bsmooth-vs-FixedProfile",
+                "stage": "SIM-S1_CORE",
+                "left_condition_id": "Bsmooth",
+                "right_condition_id": "FixedProfile",
+                "N_block_plan": 8,
+            }],
+        }
+
+    def test_pair_eligibility_and_metric_denominators_are_separate(self):
+        blocks, summary = self.analysis.build_paired_outputs(
+            self._pair_rows(), self._registry(),
+            metrics=("tracking_rmse_m", "H_modal_motion_peak_abs_mm"))
+        self.assertEqual(16, len(blocks))
+        tracking = next(item for item in summary
+                        if item["metric"] == "tracking_rmse_m")
+        modal = next(item for item in summary
+                     if item["metric"] == "H_modal_motion_peak_abs_mm")
+        self.assertEqual(8, tracking["N_pair_protocol"])
+        self.assertEqual(8, tracking["N_pair_metric"])
+        self.assertAlmostEqual(0.5, tracking["mean_difference"])
+        self.assertEqual(8, modal["N_pair_protocol"])
+        self.assertEqual(0, modal["N_pair_metric"])
+        self.assertIsNone(modal["mean_difference"])
+
+    def test_pair_requires_both_continuous_eligible_in_same_segment(self):
+        rows = self._pair_rows()
+        target = next(row for row in rows
+                      if row["condition_id"] == "FixedProfile" and
+                      row["block_id"] == "b01")
+        target["continuous_eligible"] = False
+        _, summary = self.analysis.build_paired_outputs(
+            rows, self._registry(), metrics=("tracking_rmse_m",))
+        self.assertEqual(7, summary[0]["N_pair_protocol"])
+        self.assertEqual(7, summary[0]["N_pair_metric"])
+
+    def test_pair_must_match_canonical_runner_denominator(self):
+        expected = {
+            "SIM-S1_CORE:Bsmooth-vs-FixedProfile": {
+                "N_pair": 7,
+                "eligible_blocks": [f"b{index:02d}" for index in range(1, 8)],
+            },
+        }
+        with self.assertRaises(self.analysis.AnalysisError):
+            self.analysis.build_paired_outputs(
+                self._pair_rows(), self._registry(),
+                metrics=("tracking_rmse_m",),
+                expected_protocol_pairs=expected)
+
+
+if __name__ == "__main__":
+    unittest.main()

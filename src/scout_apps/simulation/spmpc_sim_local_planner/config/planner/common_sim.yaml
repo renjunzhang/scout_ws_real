@@ -1,0 +1,143 @@
+# Simulation-owned controller defaults.  These are deliberately copied into
+# the simulation target so a simulation launch never loads a real-controller
+# YAML file.
+control_frequency: 30.0
+dt: 0.0333333333
+horizon_steps: 60
+publish_cmd_vel: true
+solver_backend: continuous_mpcc_acados
+
+topics:
+  odom: /odom
+  imu: /imu/data
+  reference_path: /scout/global_path_fixed
+  costmap: /map
+  cmd_vel: /cmd_vel
+
+frames:
+  robot_base: base_link
+  use_tf_pose: false
+  tf_timeout_sec: 0.05
+
+slosh_observer:
+  source: odom
+  fallback_policy: odom
+  latch_fallback: true
+  max_imu_state_age_sec: 0.10
+  max_odom_state_age_sec: 0.50
+  max_future_skew_sec: 0.005
+
+imu_shadow:
+  enable: false
+  publish_diagnostics: true
+  expected_frame: imu_link
+  subscriber_queue_size: 10
+  observer_dt_sec: 0.020
+  gravity_mps2: 9.8
+  sensor_delay_sec: 0.015
+  accel_cutoff_hz: 10.0
+  gyro_cutoff_hz: 12.0
+  accel_phase_delay_sec: 0.006834
+  gyro_phase_delay_sec: 0.005020
+  alpha_phase_delay_sec: 0.015001
+  gyro_scale: 1.001773
+  gyro_offset_radps: -0.000297
+  imu_to_base_yaw_rad: 0.0
+  lever_arm_imu_to_target_x_m: -0.100
+  lever_arm_imu_to_target_y_m: 0.045
+  bias_window_start_sec: 2.0
+  bias_window_end_sec: 10.0
+  bias_min_samples: 100
+  bias_max_accel_mad_mps2: 0.02
+  bias_max_gyro_p95_radps: 0.03
+  filter_warmup_sec: 0.20
+  max_sample_gap_sec: 0.035
+  clock_reset_threshold_sec: 0.50
+  max_receive_age_sec: 0.10
+  max_future_skew_sec: 0.005
+  quaternion_norm_min: 0.95
+  quaternion_norm_max: 1.05
+
+reference:
+  lookahead_distance: 0.6
+  preprocess_enable: false
+  resample_spacing: 0.08
+  smoothing_window: 3
+  min_segment_length: 0.001
+
+terminal:
+  enable: true
+  goal_tolerance: 0.20
+  goal_reached_max_speed: 0.03
+  goal_reached_max_omega: 0.05
+  slowdown: {enable: true, distance: 1.20, v_max: 0.18}
+  capture_stop: {enable: true, distance: 0.70, v_cap: 0.18, goal_behind_x: -0.05}
+  command_clamp:
+    enable: true
+    rate_limit_enable: true
+    omega_enable: true
+    omega_max: 0.25
+    omega_near_goal_max: 0.10
+    omega_near_goal_distance: 0.35
+  spin_fail: {enable: true, omega_threshold: 0.20, max_duration_sec: 2.0}
+
+tracking_safety:
+  enable: true
+  projection: {enable: true, max_distance_m: 0.50, max_duration_sec: 0.20}
+  spin_fail: {enable: true, omega_threshold: 0.50, max_duration_sec: 2.0}
+
+start_lock_recovery:
+  enable: false
+  detect_only: true
+  start_window_s: 0.20
+  min_stall_duration_sec: 1.50
+  progress_epsilon_s: 0.005
+  cmd_v_small_threshold: 0.03
+  warm_start_v_s_min: 0.10
+  u0_v_s_max: 0.02
+  require_monotonic_clip: true
+  max_projection_distance_m: 0.50
+
+slosh_risk_governor:
+  enable: false
+  require_slosh_variant: true
+  horizon_steps: 30
+  height_limit_m: 0.006
+  risk_threshold: 1.0
+  release_threshold: 0.75
+  beta_min: 0.45
+  beta_grid_count: 12
+  min_v_ref: 0.05
+  accel_limit: 0.4
+  omega_decay_tau: 0.5
+  beta_rate_up_per_sec: 0.5
+  beta_rate_down_per_sec: 2.0
+  include_parabola_height: true
+
+delay_phase:
+  mode: off
+  publish_diagnostics: true
+  history_window_sec: 2.0
+  cmd_timeout_sec: 0.5
+  odom_timeout_sec: 0.5
+  linear_delay_sec: 0.15
+  angular_delay_sec: 0.22
+  max_prediction_sec: 0.40
+  max_integration_step_sec: 0.02
+  min_integration_step_sec: 0.001
+  require_complete_history: false
+
+platform:
+  kinematics: differential
+
+acados:
+  warm_start:
+    enable: true
+    type: diff_drive_flatness
+    use_previous_solution: true
+    use_slosh_rollout: true
+    curvature_speed_limit_enable: true
+    max_reference_fit_error: 0.10
+    fallback_to_previous_solution: false
+    fallback_to_primitive: true
+  warm_start_flatness_enable: false

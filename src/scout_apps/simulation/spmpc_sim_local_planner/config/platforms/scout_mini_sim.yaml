@@ -1,0 +1,27 @@
+# Simulation-owned platform contract.  It is not a physical calibration
+# manifest and is only valid behind the isolated Gazebo master gate.
+robot:
+  v_max: 0.8
+  omega_max: 1.2
+  a_max: 0.6
+  alpha_max: 1.2
+  geometry:
+    length: 0.612
+    width: 0.580
+    height: 0.245
+    wheelbase: 0.451
+    track_width: 0.490
+    footprint:
+      type: polygon
+      vertices: [[0.31, 0.2925], [0.31, -0.2925], [-0.31, -0.2925], [-0.31, 0.2925]]
+    circumscribed_radius: 0.426
+    inscribed_radius: 0.2925
+platform:
+  shared_constraints:
+    linear_accel_limit_enable: true
+    linear_accel_max: 0.6
+    linear_accel_max_dt: 0.2
+    angular_limit_enable: false
+    angular_rate_max: 1.2
+    angular_accel_max: 1.2
+    angular_accel_max_dt: 0.2

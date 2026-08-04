@@ -1,0 +1,304 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Offline R7 master/root isolation regression tests."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import importlib.util
+import json
+import os
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from unittest import mock
+
+
+SCRIPTS = Path(__file__).resolve().parents[1]
+
+
+def load(name: str):
+    path = SCRIPTS / name
+    spec = importlib.util.spec_from_file_location("test_" + path.stem, path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class MechanismMatrixTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.matrix = load("smpcc_sim_mechanism_matrix.py")
+
+    def _freeze(self, root: Path) -> Path:
+        digest = "a" * 64
+        tables = {}
+        bundles = {}
+        for stage, spec in self.matrix.STAGES.items():
+            rows = []
+            position = 0
+            for block in range(1, 9):
+                block_id = f"b{block:02d}"
+                trace_digest = self.matrix.canonical_hash({
+                    "stage": stage, "block_id": block_id,
+                })
+                bundles[f"{stage}:{block_id}"] = {
+                    "seed_bundle_id": f"{stage}-{block_id}",
+                    "seed_bundle_hash": trace_digest,
+                    "trace_asset": {
+                        "path": f"/fixture/{stage}_{block_id}_trace.json",
+                        "sha256": trace_digest,
+                    },
+                    "trace_asset_hash": trace_digest,
+                    "traces": {
+                        stream: {"trace_hash": trace_digest}
+                        for stream in self.matrix.freeze_tool.toolchain.SEED_STREAMS
+                    },
+                    "initial_yaw_offset_rad": round(block * 0.001, 12),
+                }
+                conditions = list(spec["conditions"])
+                offset = (block - 1) % len(conditions)
+                ordered = conditions[offset:] + conditions[:offset]
+                for order, condition in enumerate(ordered, 1):
+                    position += 1
+                    rows.append({
+                        "path_id": spec["path_id"],
+                        "container_id": spec["container_id"],
+                        "condition_id": condition,
+                        "block_id": block_id,
+                        "order_position": order,
+                        "planned_block_segment_id": f"{stage}-{block_id}",
+                    })
+            tables[stage] = {
+                "table_id": f"R7-{stage}",
+                "randomization_hash": digest,
+                "rows": rows,
+            }
+        descriptor = {"path": "/fixture/not-read-by-matrix", "sha256": digest}
+        freeze = {
+            "protocol_id": self.matrix.PROTOCOL_ID,
+            "release_id": self.matrix.RELEASE_ID,
+            "physical_alignment": False,
+            "physical_primary_eligible": False,
+            "freeze_hash": "b" * 64,
+            "simulator_assets": {
+                name: dict(descriptor) for name in ("map", "world", "robot_model", "world_geometry")
+            },
+            "paths": {
+                path_id: {
+                    name: dict(descriptor)
+                    for name in ("source_path", "sim_path", "transform", "fit_clearance_report")
+                }
+                for path_id in ("H1", "L1")
+            },
+            "containers": {name: dict(descriptor) for name in ("C1", "C2")},
+            "effective_configs": {
+                name: dict(descriptor) for name in ("B0", "Bsmooth", "SmoothMatch", "Bslosh")
+            },
+            "fixed_profiles": {
+                key: {
+                    name: dict(descriptor)
+                    for name in ("profile", "generation_report", "tracker_config")
+                }
+                for key in ("H1_C1", "L1_C1", "H1_C2")
+            },
+            "randomization_tables": tables,
+            "seed_bundles": bundles,
+        }
+        path = root / "mechanism_freeze.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(freeze, sort_keys=True) + "\n", encoding="utf-8")
+        os.chmod(path, 0o444)
+        return path
+
+    def _master(self, root: Path) -> tuple[Path, dict]:
+        freeze = self._freeze(root)
+        output = root / "mechanism_master.json"
+        validation = {
+            "status": "PASS",
+            "errors": [],
+            "freeze_hash": "b" * 64,
+        }
+        with mock.patch.object(self.matrix.freeze_tool, "validate_freeze", return_value=validation):
+            report = self.matrix.create_master(
+                freeze, output, enforce_canonical_paths=False,
+            )
+            self.assertEqual("PASS", report["status"])
+            master = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(
+                "PASS",
+                self.matrix.validate_master(master, enforce_canonical_paths=False)["status"],
+            )
+        return output, master
+
+    def test_master_materialises_40_24_24_with_exact_r7_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _path, master = self._master(Path(temporary))
+        self.assertEqual(self.matrix.PROTOCOL_ID, master["protocol_id"])
+        self.assertEqual(self.matrix.RELEASE_ID, master["release_id"])
+        self.assertEqual(
+            {"SIM-S1_CORE": 40, "SIM-S2A_SELECTIVITY": 24, "SIM-S2B_TRANSFER": 24},
+            master["matrix_counts"],
+        )
+        self.assertEqual(88, len(master["planned_rows"]))
+        self.assertTrue(all(row["release_id"] == self.matrix.RELEASE_ID for row in master["planned_rows"]))
+        self.assertFalse(master["physical_primary_eligible"])
+        self.assertFalse(master["formal"])
+        self.assertTrue(master["fixture"])
+        self.assertTrue(all(row["formal"] is False and row["fixture"] is True
+                            for row in master["planned_rows"]))
+        self.assertTrue(all(
+            row["fixed_denominator"]["N_pair_initial"] == 0 and
+            row["fixed_denominator"]["N_pair_scope"] ==
+            self.matrix.N_PAIR_SCOPE and
+            "N_pair_stage" not in row["fixed_denominator"]
+            for row in master["planned_rows"]
+        ))
+        registry = master["contrast_denominator_registry"]
+        self.assertTrue(registry["complete_block_is_not_n_pair"])
+        self.assertTrue(registry["cross_contrast_aggregation_forbidden"])
+        self.assertTrue(registry["cross_stage_aggregation_forbidden"])
+
+    def test_rehashed_master_cannot_redirect_results_to_r2(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _path, master = self._master(root)
+            master["result_policy"]["result_root"] = "/data/a/scout_sim_replacement/SMPCC-SIM-MECHANISM-40-64-88-R2/matrix_results"
+            core = dict(master); core.pop("master_hash")
+            master["master_hash"] = self.matrix.canonical_hash(core)
+            validation = {"status": "PASS", "errors": [], "freeze_hash": "b" * 64}
+            with mock.patch.object(self.matrix.freeze_tool, "validate_freeze", return_value=validation):
+                report = self.matrix.validate_master(master, enforce_canonical_paths=False)
+        self.assertEqual("FAIL", report["status"])
+        self.assertIn("result_policy must equal", "; ".join(report["errors"]))
+
+    def test_rehashed_row_cannot_add_fields_or_promote_alignment(self):
+        for mutation, expected in (
+            (lambda row: row.__setitem__("unexpected", "field"), "exact R7 schema"),
+            (lambda row: row.__setitem__("physical_alignment", True), "scope/alignment"),
+        ):
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as temporary:
+                _path, master = self._master(Path(temporary))
+                mutation(master["planned_rows"][0])
+                core = dict(master); core.pop("master_hash")
+                master["master_hash"] = self.matrix.canonical_hash(core)
+                validation = {"status": "PASS", "errors": [], "freeze_hash": "b" * 64}
+                with mock.patch.object(self.matrix.freeze_tool, "validate_freeze", return_value=validation):
+                    report = self.matrix.validate_master(
+                        master, enforce_canonical_paths=False
+                    )
+                self.assertEqual("FAIL", report["status"])
+                self.assertIn(expected, "; ".join(report["errors"]))
+
+    def test_same_block_crn_trace_drift_is_rejected_when_rehashed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            _path, master = self._master(Path(temporary))
+            target = next(
+                row for row in master["planned_rows"]
+                if row["stage"] == "SIM-S1_CORE" and
+                row["block_id"] == "b01" and
+                row["condition_id"] == "Bslosh"
+            )
+            target["crn_trace_asset_hash"] = "f" * 64
+            core = dict(master); core.pop("master_hash")
+            master["master_hash"] = self.matrix.canonical_hash(core)
+            validation = {
+                "status": "PASS", "errors": [], "freeze_hash": "b" * 64,
+            }
+            with mock.patch.object(
+                    self.matrix.freeze_tool, "validate_freeze",
+                    return_value=validation):
+                report = self.matrix.validate_master(
+                    master, enforce_canonical_paths=False)
+        self.assertEqual("FAIL", report["status"])
+        self.assertIn(
+            "conditions do not share one identical CRN trace realization",
+            "; ".join(report["errors"]),
+        )
+
+    def test_legacy_or_aggregate_n_pair_semantics_are_rejected(self):
+        mutations = (
+            lambda master: (
+                master["planned_rows"][0]["fixed_denominator"].pop(
+                    "N_pair_initial"),
+                master["planned_rows"][0]["fixed_denominator"].__setitem__(
+                    "N_pair_stage", 8),
+            ),
+            lambda master: master["contrast_denominator_registry"].__setitem__(
+                "cross_stage_aggregation_forbidden", False),
+        )
+        for mutation in mutations:
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as temporary:
+                _path, master = self._master(Path(temporary))
+                mutation(master)
+                core = dict(master); core.pop("master_hash")
+                master["master_hash"] = self.matrix.canonical_hash(core)
+                validation = {
+                    "status": "PASS", "errors": [],
+                    "freeze_hash": "b" * 64,
+                }
+                with mock.patch.object(
+                        self.matrix.freeze_tool, "validate_freeze",
+                        return_value=validation):
+                    report = self.matrix.validate_master(
+                        master, enforce_canonical_paths=False)
+                self.assertEqual("FAIL", report["status"])
+
+    def test_production_create_rejects_predecessors_or_test_root(self):
+        for candidate in (
+            Path("/data/a/scout_sim_replacement/SMPCC-SIM-MECHANISM-40-64-88-R1/freeze/SIM-MECHANISM-40-64-88-R1/mechanism_freeze.json"),
+            Path("/data/a/scout_sim_replacement/SMPCC-SIM-MECHANISM-40-64-88-R2/freeze/SIM-MECHANISM-40-64-88-R2/mechanism_freeze.json"),
+            Path("/data/a/scout_sim_replacement/SMPCC-SIM-MECHANISM-40-64-88-R3/freeze/SIM-MECHANISM-40-64-88-R3/mechanism_freeze.json"),
+            Path("/data/a/scout_sim_replacement/SMPCC-SIM-MECHANISM-40-64-88-R4/freeze/SIM-MECHANISM-40-64-88-R4/mechanism_freeze.json"),
+            Path("/data/a/scout_sim_replacement/test-root/mechanism_freeze.json"),
+        ):
+            with self.subTest(candidate=candidate), self.assertRaises(self.matrix.MatrixError):
+                self.matrix.create_master(candidate, self.matrix.DEFAULT_MASTER)
+
+    def test_production_create_refuses_nonempty_initial_storage(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            freeze = self._freeze(root / "freeze")
+            master_path = freeze.parent / "mechanism_master.json"
+            result_root = root / "matrix_results"
+            bag_root = root / "matrix_bags"
+            result_root.mkdir()
+            (result_root / "dataset_index.jsonl").write_text("old-r2\n", encoding="utf-8")
+            replacements = {
+                "DEFAULT_FREEZE": freeze,
+                "DEFAULT_MASTER": master_path,
+                "CANONICAL_RESULT_ROOT": result_root,
+                "CANONICAL_BAG_ROOT": bag_root,
+                "CANONICAL_DATASET_INDEX": result_root / "dataset_index.jsonl",
+            }
+            validation = {"status": "PASS", "errors": [], "freeze_hash": "b" * 64}
+            with mock.patch.multiple(self.matrix, **replacements), mock.patch.object(
+                self.matrix.freeze_tool, "validate_freeze", return_value=validation,
+            ), self.assertRaises(self.matrix.MatrixError):
+                self.matrix.create_master(freeze, master_path)
+
+    def test_symlink_in_storage_chain_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            target = root / "target"; target.mkdir()
+            link = root / "link"; link.symlink_to(target, target_is_directory=True)
+            with self.assertRaises(self.matrix.MatrixError):
+                self.matrix.reject_symlink_chain(link / "dataset_index.jsonl", "ledger")
+
+    def test_attempt_identifier_is_row_bound_and_retry_number_is_strict(self):
+        # Importing the runner here also proves its R7 constants agree with the
+        # matrix without touching any production artifact.
+        runner = load("smpcc_sim_mechanism_runner.py")
+        row_id = "SIM-S1_CORE_H1_C1_Bslosh_b01"
+        self.assertEqual(1, runner._attempt_number(row_id + "_r01", row_id))
+        for invalid in ("other_r01", row_id + "_r00", row_id + "_r1", row_id + "_r001"):
+            with self.subTest(invalid=invalid), self.assertRaises(runner.RunnerError):
+                runner._attempt_number(invalid, row_id)
+
+
+if __name__ == "__main__":
+    unittest.main()

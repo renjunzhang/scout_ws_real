@@ -1,0 +1,949 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Isolated read-only FixedProfile tracker for SIM-MECHANISM campaigns.
+
+This executable is intentionally separate from both production controller
+nodes.  It cannot generate a speed profile and it never subscribes to a liquid
+state topic.  Static release/profile admission completes before a ``/cmd_vel``
+publisher is created.  The publisher then exists in an explicit zero-command
+hold while the frozen path and fresh start pose are admitted.  Motion remains
+impossible until a hash-bound release request is received, allowing the
+canonical runner to prove that its recorder is connected first.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import csv
+import hashlib
+import json
+import math
+import os
+import re
+import stat
+import threading
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Iterable, Mapping, Optional, Sequence
+
+
+FORMAL_SCOPE = "SIMULATION_MECHANISM_ONLY"
+TRACKER_ID = "SIM-MECHANISM-FIXEDPROFILE-TRACKER-R1"
+RELEASE_ID = "SIM-MECHANISM-40-64-88-R7"
+EXPECTED_METHOD = "SIM_MECHANISM_HAMAGUCHI_STYLE"
+EXECUTION_COORDINATE = "spatial_path_progress_closed_loop_v_of_s"
+PROFILE_MAX_DURATION_SEC = 55.0
+PATH_GEOMETRY_TOLERANCE_M = 0.03
+PATH_LENGTH_RELATIVE_TOLERANCE = 0.01
+START_POSITION_TOLERANCE_M = 0.25
+START_YAW_TOLERANCE_RAD = 0.20
+MAX_CROSS_TRACK_ERROR_M = 0.50
+START_SPEED_TOLERANCE_M_S = 0.03
+START_OMEGA_TOLERANCE_RAD_S = 0.05
+HANDSHAKE_SCHEMA_VERSION = "sim-mechanism-fixed-profile-handshake-v1"
+READY_TOPIC = "/sim_mechanism/fixed_profile/zero_hold_ready"
+ADMISSION_TOPIC = "/sim_mechanism/fixed_profile/admission"
+RELEASE_TOPIC = "/sim_mechanism/fixed_profile/release"
+RELEASE_RECEIPT_TOPIC = "/sim_mechanism/fixed_profile/release_receipt"
+RELEASE_COMMAND = "RELEASE_MOTION"
+APPROVED_CONTAINERS = frozenset((
+    "SIM_ONLY_C1_D37_H58_LEGACY_UNVALIDATED",
+    "SIM_ONLY_C2_D95_H58_UNVALIDATED",
+))
+CSV_COLUMNS = (
+    "s_normalized", "s_m", "t_s", "x", "y", "yaw", "v_ref_m_s",
+    "a_ref_m_s2", "jerk_ref_m_s3", "method",
+)
+WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+SHA256_RE = re.compile(r"[0-9a-f]{64}")
+MASTER_RE = re.compile(r"http://127[.]0[.]0[.]1:([0-9]+)")
+
+
+class FixedProfileAdmissionError(RuntimeError):
+    """Raised by a fail-closed static, dynamic, or release gate."""
+
+
+@dataclass(frozen=True)
+class ProfilePoint:
+    s_normalized: float
+    s_m: float
+    t_s: float
+    x: float
+    y: float
+    yaw: float
+    v_ref_m_s: float
+    a_ref_m_s2: float
+    jerk_ref_m_s3: float
+    method: str
+
+
+@dataclass(frozen=True)
+class TrackerLimits:
+    control_hz: float = 30.0
+    lookahead_m: float = 0.35
+    start_speed_preview_m: float = 0.06
+    goal_tolerance_m: float = 0.16
+    v_max_m_s: float = 0.8
+    omega_max_rad_s: float = 1.2
+    a_max_m_s2: float = 0.6
+    alpha_max_rad_s2: float = 1.2
+
+
+def _profile_identity_matches(profile_id: Any, path_id: Any,
+                              container_config_id: Any) -> bool:
+    expected = {
+        "H1_C1": ("H1", "SIM_ONLY_C1_D37_H58_LEGACY_UNVALIDATED"),
+        "L1_C1": ("L1", "SIM_ONLY_C1_D37_H58_LEGACY_UNVALIDATED"),
+        "H1_C2": ("H1", "SIM_ONLY_C2_D95_H58_UNVALIDATED"),
+    }
+    return expected.get(profile_id) == (path_id, container_config_id)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def canonical_loopback_master(uri: str) -> bool:
+    match = MASTER_RE.fullmatch(uri)
+    if match is None:
+        return False
+    return 1024 <= int(match.group(1)) <= 65535
+
+
+def _finite(row: Mapping[str, str], name: str, line: int) -> float:
+    try:
+        value = float(row[name])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise FixedProfileAdmissionError(
+            f"frozen profile line {line} has invalid {name}"
+        ) from exc
+    if not math.isfinite(value):
+        raise FixedProfileAdmissionError(
+            f"frozen profile line {line} has non-finite {name}"
+        )
+    return value
+
+
+def _immutable_regular_file(raw_path: str) -> Path:
+    path = Path(raw_path)
+    if not path.is_absolute():
+        raise FixedProfileAdmissionError("frozen profile path must be absolute")
+    # Do not let an immutable-looking descriptor resolve through a changed
+    # symlink between release collection and execution.
+    if os.path.abspath(str(path)) != os.path.realpath(str(path)):
+        raise FixedProfileAdmissionError("frozen profile path may not use symlinks")
+    try:
+        status = path.stat()
+    except OSError as exc:
+        raise FixedProfileAdmissionError(f"frozen profile is missing: {path}") from exc
+    if not stat.S_ISREG(status.st_mode):
+        raise FixedProfileAdmissionError("frozen profile must be a regular file")
+    if stat.S_IMODE(status.st_mode) & WRITE_BITS:
+        raise FixedProfileAdmissionError("frozen profile must be read-only")
+    return path.resolve()
+
+
+def load_frozen_profile(raw_path: str, expected_sha256: str) -> tuple[Path, tuple[ProfilePoint, ...]]:
+    """Load an immutable, hash-bound profile without generating a fallback."""
+
+    if SHA256_RE.fullmatch(expected_sha256) is None:
+        raise FixedProfileAdmissionError("frozen profile SHA-256 descriptor is invalid")
+    path = _immutable_regular_file(raw_path)
+    actual_hash = sha256_file(path)
+    if actual_hash != expected_sha256:
+        raise FixedProfileAdmissionError(
+            f"frozen profile SHA-256 mismatch: expected {expected_sha256}, got {actual_hash}"
+        )
+    try:
+        stream = path.open("r", encoding="utf-8", newline="")
+    except OSError as exc:
+        raise FixedProfileAdmissionError("frozen profile cannot be opened") from exc
+    with stream:
+        reader = csv.DictReader(stream)
+        if tuple(reader.fieldnames or ()) != CSV_COLUMNS:
+            raise FixedProfileAdmissionError(
+                "frozen profile CSV columns do not match the canonical schema"
+            )
+        points = []
+        for line, row in enumerate(reader, 2):
+            if row.get(None):
+                raise FixedProfileAdmissionError(
+                    f"frozen profile line {line} has extra CSV cells"
+                )
+            method = str(row.get("method", "")).strip()
+            if method != EXPECTED_METHOD:
+                raise FixedProfileAdmissionError(
+                    f"frozen profile line {line} method must be {EXPECTED_METHOD}"
+                )
+            points.append(ProfilePoint(
+                s_normalized=_finite(row, "s_normalized", line),
+                s_m=_finite(row, "s_m", line),
+                t_s=_finite(row, "t_s", line),
+                x=_finite(row, "x", line),
+                y=_finite(row, "y", line),
+                yaw=_finite(row, "yaw", line),
+                v_ref_m_s=_finite(row, "v_ref_m_s", line),
+                a_ref_m_s2=_finite(row, "a_ref_m_s2", line),
+                jerk_ref_m_s3=_finite(row, "jerk_ref_m_s3", line),
+                method=method,
+            ))
+    if len(points) < 3:
+        raise FixedProfileAdmissionError("frozen profile needs at least three rows")
+    if (abs(points[0].s_normalized) > 1e-9 or
+            abs(points[0].s_m) > 1e-9 or abs(points[0].t_s) > 1e-9):
+        raise FixedProfileAdmissionError("frozen profile must start at zero progress/time")
+    if abs(points[-1].s_normalized - 1.0) > 1e-9:
+        raise FixedProfileAdmissionError("frozen profile must end at normalized progress 1")
+    if points[-1].s_m <= 0.0:
+        raise FixedProfileAdmissionError("frozen profile path length must be positive")
+    if points[-1].t_s > PROFILE_MAX_DURATION_SEC:
+        raise FixedProfileAdmissionError(
+            f"frozen profile duration exceeds {PROFILE_MAX_DURATION_SEC:.1f} s"
+        )
+    if abs(points[0].v_ref_m_s) > 1e-8 or abs(points[-1].v_ref_m_s) > 1e-8:
+        raise FixedProfileAdmissionError("frozen profile endpoint speeds must be zero")
+    for index, point in enumerate(points, 2):
+        if point.v_ref_m_s < 0.0:
+            raise FixedProfileAdmissionError(
+                f"frozen profile speed is negative at line {index}"
+            )
+        if point.v_ref_m_s > TrackerLimits().v_max_m_s:
+            raise FixedProfileAdmissionError(
+                f"frozen profile speed exceeds tracker limit at line {index}"
+            )
+        if abs(point.a_ref_m_s2) > TrackerLimits().a_max_m_s2:
+            raise FixedProfileAdmissionError(
+                f"frozen profile acceleration exceeds tracker limit at line {index}"
+            )
+    for index, (previous, current) in enumerate(zip(points, points[1:]), 3):
+        if current.s_normalized <= previous.s_normalized:
+            raise FixedProfileAdmissionError(
+                f"frozen profile normalized progress is not strictly increasing at line {index}"
+            )
+        if current.s_m <= previous.s_m or current.t_s <= previous.t_s:
+            raise FixedProfileAdmissionError(
+                f"frozen profile distance/time is not strictly increasing at line {index}"
+            )
+        chord = math.hypot(current.x - previous.x, current.y - previous.y)
+        ds = current.s_m - previous.s_m
+        if abs(chord - ds) > max(0.003, 0.03 * ds):
+            raise FixedProfileAdmissionError(
+                f"frozen profile geometry/distance mismatch at line {index}"
+            )
+    return path, tuple(points)
+
+
+def admit_runtime(parameters: Mapping[str, Any], ros_master_uri: str) -> tuple[Path, tuple[ProfilePoint, ...]]:
+    """Perform the complete static gate before ROS publishers are advertised."""
+
+    violations = []
+    if parameters.get("sim_mechanism_fixed_profile_launch") is not True:
+        violations.append("sim_mechanism_fixed_profile_launch marker must be explicitly true")
+    if parameters.get("sim_only_release_ack") is not True:
+        violations.append("sim_only_release_ack must be explicitly true")
+    if parameters.get("use_sim_time") is not True:
+        violations.append("/use_sim_time must be true")
+    if not canonical_loopback_master(ros_master_uri):
+        violations.append(
+            "ROS master must be canonical isolated loopback http://127.0.0.1:<port>"
+        )
+    if parameters.get("sim_only_container_config_id") not in APPROVED_CONTAINERS:
+        violations.append(
+            "sim_only_container_config_id must identify approved SIM-ONLY C1 or C2"
+        )
+    if parameters.get("sim_mechanism_release_id") != RELEASE_ID:
+        violations.append(f"sim_mechanism_release_id must equal {RELEASE_ID}")
+    if SHA256_RE.fullmatch(str(parameters.get("mechanism_release_hash", ""))) is None:
+        violations.append("mechanism_release_hash must be a canonical SHA-256")
+    if not _profile_identity_matches(
+        parameters.get("fixed_profile_id"), parameters.get("frozen_path_id"),
+        parameters.get("sim_only_container_config_id"),
+    ):
+        violations.append("FixedProfile/path/container identity tuple is invalid")
+    profile: Optional[tuple[Path, tuple[ProfilePoint, ...]]] = None
+    try:
+        profile = load_frozen_profile(
+            str(parameters.get("frozen_profile_csv", "")),
+            str(parameters.get("frozen_profile_sha256", "")),
+        )
+    except FixedProfileAdmissionError as exc:
+        violations.append(f"frozen profile failed read-only replay admission: {exc}")
+    if violations:
+        raise FixedProfileAdmissionError("; ".join(violations))
+    assert profile is not None
+    return profile
+
+
+def release_request_for(parameters: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the one exact motion-release request admitted by this process."""
+
+    return {
+        "schema_version": HANDSHAKE_SCHEMA_VERSION,
+        "command": RELEASE_COMMAND,
+        "tracker_id": TRACKER_ID,
+        "release_id": RELEASE_ID,
+        "release_hash": str(parameters["mechanism_release_hash"]),
+        "formal_scope": FORMAL_SCOPE,
+        "fixed_profile_id": str(parameters["fixed_profile_id"]),
+        "path_id": str(parameters["frozen_path_id"]),
+        "container_config_id": str(parameters["sim_only_container_config_id"]),
+        "profile_sha256": str(parameters["frozen_profile_sha256"]),
+    }
+
+
+def canonical_json(document: Mapping[str, Any]) -> str:
+    return json.dumps(document, sort_keys=True, separators=(",", ":"))
+
+
+def canonical_hash(document: Mapping[str, Any]) -> str:
+    return hashlib.sha256(canonical_json(document).encode("utf-8")).hexdigest()
+
+
+class MotionReleaseGate:
+    """Pure fail-closed gate shared by the ROS loop and unit tests.
+
+    Advertising a command publisher is deliberately not represented as motion
+    permission.  Before both dynamic admission and the exact explicit release,
+    every requested command is filtered to zero.
+    """
+
+    def __init__(self, release_request: Mapping[str, Any]):
+        self.release_request = dict(release_request)
+        self.dynamic_admitted = False
+        self.motion_released = False
+        self.zero_command_count = 0
+
+    def admit_dynamic(self) -> None:
+        if self.motion_released:
+            raise FixedProfileAdmissionError(
+                "dynamic admission cannot change after motion release"
+            )
+        self.dynamic_admitted = True
+
+    def accept_release(self, raw_request: str) -> None:
+        try:
+            decoded = json.loads(raw_request)
+        except (TypeError, json.JSONDecodeError) as exc:
+            raise FixedProfileAdmissionError(
+                "motion release request is not canonical JSON"
+            ) from exc
+        if (not isinstance(decoded, Mapping) or
+                dict(decoded) != self.release_request or
+                raw_request != canonical_json(self.release_request)):
+            raise FixedProfileAdmissionError(
+                "motion release request differs from the hash-bound contract"
+            )
+        if not self.dynamic_admitted:
+            raise FixedProfileAdmissionError(
+                "motion release arrived before dynamic path/start admission"
+            )
+        self.motion_released = True
+
+    def filter_command(self, linear: float, angular: float) -> tuple[float, float]:
+        if not self.motion_released:
+            self.zero_command_count += 1
+            return 0.0, 0.0
+        return linear, angular
+
+
+def _interpolate(points: Sequence[ProfilePoint], s_m: float) -> ProfilePoint:
+    if s_m <= points[0].s_m:
+        return points[0]
+    if s_m >= points[-1].s_m:
+        return points[-1]
+    low, high = 0, len(points) - 1
+    while low + 1 < high:
+        middle = (low + high) // 2
+        if points[middle].s_m <= s_m:
+            low = middle
+        else:
+            high = middle
+    first, second = points[low], points[high]
+    ratio = (s_m - first.s_m) / (second.s_m - first.s_m)
+    angle_delta = math.atan2(math.sin(second.yaw - first.yaw),
+                             math.cos(second.yaw - first.yaw))
+    return ProfilePoint(
+        s_normalized=first.s_normalized + ratio * (second.s_normalized - first.s_normalized),
+        s_m=s_m,
+        t_s=first.t_s + ratio * (second.t_s - first.t_s),
+        x=first.x + ratio * (second.x - first.x),
+        y=first.y + ratio * (second.y - first.y),
+        yaw=first.yaw + ratio * angle_delta,
+        v_ref_m_s=first.v_ref_m_s + ratio * (second.v_ref_m_s - first.v_ref_m_s),
+        a_ref_m_s2=first.a_ref_m_s2 + ratio * (second.a_ref_m_s2 - first.a_ref_m_s2),
+        jerk_ref_m_s3=first.jerk_ref_m_s3 + ratio * (second.jerk_ref_m_s3 - first.jerk_ref_m_s3),
+        method=first.method,
+    )
+
+
+class ProfileFollower:
+    """Deterministic path-coordinate tracker with fixed rate/command limits."""
+
+    def __init__(self, points: Sequence[ProfilePoint], limits: TrackerLimits = TrackerLimits()):
+        if len(points) < 3:
+            raise ValueError("profile is too short")
+        self.points = tuple(points)
+        self.limits = limits
+        self.nearest_index = 0
+        self.last_v = 0.0
+        self.last_w = 0.0
+        self.last_progress_m = 0.0
+        self.last_progress_normalized = 0.0
+        self.last_v_ref = 0.0
+        self.last_tracking_error_m = 0.0
+        self.last_heading_error_rad = 0.0
+
+    def _nearest(self, x: float, y: float) -> int:
+        # A bounded forward window prevents a self-near curve from jumping to
+        # a later branch while retaining monotonic path progress.
+        end = min(len(self.points), self.nearest_index + 81)
+        start = max(0, self.nearest_index - 3)
+        candidate = min(
+            range(start, end),
+            key=lambda index: (self.points[index].x - x) ** 2
+            + (self.points[index].y - y) ** 2,
+        )
+        self.nearest_index = max(self.nearest_index, candidate)
+        return self.nearest_index
+
+    @staticmethod
+    def _rate_limit(target: float, previous: float, rate: float, dt: float) -> float:
+        delta = rate * max(0.0, dt)
+        return max(previous - delta, min(previous + delta, target))
+
+    def command(self, x: float, y: float, yaw: float, dt: float) -> tuple[float, float, float]:
+        index = self._nearest(x, y)
+        progress = self.points[index].s_m
+        self.last_progress_m = progress
+        self.last_progress_normalized = self.points[index].s_normalized
+        self.last_tracking_error_m = math.hypot(
+            x - self.points[index].x, y - self.points[index].y
+        )
+        remaining = self.points[-1].s_m - progress
+        goal_distance = math.hypot(x - self.points[-1].x, y - self.points[-1].y)
+        if goal_distance <= self.limits.goal_tolerance_m and remaining <= 0.25:
+            target_v = 0.0
+            target_w = 0.0
+            self.last_v_ref = 0.0
+            self.last_heading_error_rad = 0.0
+        else:
+            speed_point = _interpolate(
+                self.points,
+                min(self.points[-1].s_m,
+                    progress + self.limits.start_speed_preview_m),
+            )
+            target = _interpolate(
+                self.points,
+                min(self.points[-1].s_m, progress + self.limits.lookahead_m),
+            )
+            target_v = speed_point.v_ref_m_s
+            self.last_v_ref = target_v
+            dx, dy = target.x - x, target.y - y
+            local_y = -math.sin(yaw) * dx + math.cos(yaw) * dy
+            distance2 = max(0.01, dx * dx + dy * dy)
+            curvature = 2.0 * local_y / distance2
+            heading_error = math.atan2(math.sin(target.yaw - yaw),
+                                       math.cos(target.yaw - yaw))
+            self.last_heading_error_rad = heading_error
+            target_w = target_v * curvature + 0.35 * heading_error
+            target_w = max(-self.limits.omega_max_rad_s,
+                           min(self.limits.omega_max_rad_s, target_w))
+        self.last_v = self._rate_limit(target_v, self.last_v,
+                                       self.limits.a_max_m_s2, dt)
+        self.last_w = self._rate_limit(target_w, self.last_w,
+                                       self.limits.alpha_max_rad_s2, dt)
+        return self.last_v, self.last_w, goal_distance
+
+
+def _angle_error(first: float, second: float) -> float:
+    return math.atan2(math.sin(first - second), math.cos(first - second))
+
+
+def _quaternion_yaw(orientation: Any) -> float:
+    values = tuple(float(getattr(orientation, name)) for name in ("x", "y", "z", "w"))
+    if not all(math.isfinite(value) for value in values):
+        raise FixedProfileAdmissionError("pose quaternion is non-finite")
+    x, y, z, w = values
+    norm = math.sqrt(x * x + y * y + z * z + w * w)
+    if not 0.99 <= norm <= 1.01:
+        raise FixedProfileAdmissionError("pose quaternion is not normalized")
+    return math.atan2(2.0 * (w * z + x * y),
+                      1.0 - 2.0 * (y * y + z * z))
+
+
+def _point_segment_distance(point: tuple[float, float],
+                            first: tuple[float, float],
+                            second: tuple[float, float]) -> float:
+    dx, dy = second[0] - first[0], second[1] - first[1]
+    length2 = dx * dx + dy * dy
+    if length2 <= 1e-16:
+        return math.hypot(point[0] - first[0], point[1] - first[1])
+    ratio = max(0.0, min(1.0, ((point[0] - first[0]) * dx
+                              + (point[1] - first[1]) * dy) / length2))
+    return math.hypot(point[0] - (first[0] + ratio * dx),
+                      point[1] - (first[1] + ratio * dy))
+
+
+def _directed_polyline_distance(source: Sequence[tuple[float, float]],
+                                target: Sequence[tuple[float, float]]) -> float:
+    return max(
+        min(_point_segment_distance(point, first, second)
+            for first, second in zip(target, target[1:]))
+        for point in source
+    )
+
+
+def _profile_matches_activation(points: Sequence[ProfilePoint],
+                                poses: Iterable[Any]) -> bool:
+    """Validate the complete ordered geometry, not merely its endpoints."""
+
+    activation = list(poses)
+    if len(activation) < 2:
+        return False
+    try:
+        activation_xy = [
+            (float(item.pose.position.x), float(item.pose.position.y))
+            for item in activation
+        ]
+        if not all(math.isfinite(x) and math.isfinite(y)
+                   for x, y in activation_xy):
+            return False
+        activation_yaw = [_quaternion_yaw(item.pose.orientation)
+                          for item in activation]
+    except (AttributeError, TypeError, ValueError, FixedProfileAdmissionError):
+        return False
+    profile_xy = [(point.x, point.y) for point in points]
+    if (math.hypot(activation_xy[0][0] - profile_xy[0][0],
+                   activation_xy[0][1] - profile_xy[0][1])
+            > PATH_GEOMETRY_TOLERANCE_M or
+            math.hypot(activation_xy[-1][0] - profile_xy[-1][0],
+                       activation_xy[-1][1] - profile_xy[-1][1])
+            > PATH_GEOMETRY_TOLERANCE_M):
+        return False
+    activation_length = sum(
+        math.hypot(second[0] - first[0], second[1] - first[1])
+        for first, second in zip(activation_xy, activation_xy[1:])
+    )
+    profile_length = points[-1].s_m
+    if abs(activation_length - profile_length) > max(
+            PATH_GEOMETRY_TOLERANCE_M,
+            PATH_LENGTH_RELATIVE_TOLERANCE * profile_length):
+        return False
+    if (_directed_polyline_distance(profile_xy, activation_xy)
+            > PATH_GEOMETRY_TOLERANCE_M or
+            _directed_polyline_distance(activation_xy, profile_xy)
+            > PATH_GEOMETRY_TOLERANCE_M):
+        return False
+    if (abs(_angle_error(activation_yaw[0], points[0].yaw)) > 0.10 or
+            abs(_angle_error(activation_yaw[-1], points[-1].yaw)) > 0.10):
+        return False
+    return True
+
+
+def _odom_values(message: Any, now_sec: float) -> tuple[float, float, float, float, float, float]:
+    frame = str(message.header.frame_id).lstrip("/")
+    if frame not in ("odom", "map"):
+        raise FixedProfileAdmissionError("odom frame must be odom or map")
+    position = message.pose.pose.position
+    x, y = float(position.x), float(position.y)
+    yaw = _quaternion_yaw(message.pose.pose.orientation)
+    linear = float(message.twist.twist.linear.x)
+    angular = float(message.twist.twist.angular.z)
+    stamp = float(message.header.stamp.to_sec())
+    if not all(math.isfinite(value) for value in (x, y, yaw, linear, angular, stamp)):
+        raise FixedProfileAdmissionError("odom contains a non-finite value")
+    if now_sec > 0.1 and stamp <= 0.0:
+        raise FixedProfileAdmissionError("odom timestamp must be nonzero under running sim time")
+    age = now_sec - stamp
+    if age > 0.5 or age < -0.1:
+        raise FixedProfileAdmissionError("odom timestamp is stale or in the future")
+    return x, y, yaw, linear, angular, stamp
+
+
+def run_ros_node() -> int:
+    # ROS imports remain local so the parser/gate can be unit-tested without a
+    # sourced ROS environment.
+    import rospy  # type: ignore
+    from geometry_msgs.msg import Twist  # type: ignore
+    from nav_msgs.msg import Odometry, Path as RosPath  # type: ignore
+    from std_msgs.msg import Float64MultiArray, String  # type: ignore
+
+    rospy.init_node("sim_mechanism_fixed_profile_tracker")
+    parameters = {
+        "sim_mechanism_fixed_profile_launch": rospy.get_param(
+            "~sim_mechanism_fixed_profile_launch", False),
+        "sim_only_release_ack": rospy.get_param("~sim_only_release_ack", False),
+        "use_sim_time": rospy.get_param("/use_sim_time", False),
+        "sim_only_container_config_id": rospy.get_param(
+            "~sim_only_container_config_id", ""),
+        "frozen_profile_csv": rospy.get_param("~frozen_profile_csv", ""),
+        "frozen_profile_sha256": rospy.get_param("~frozen_profile_sha256", ""),
+        "sim_mechanism_release_id": rospy.get_param(
+            "~sim_mechanism_release_id", ""),
+        "mechanism_release_hash": rospy.get_param(
+            "~mechanism_release_hash", ""),
+        "fixed_profile_id": rospy.get_param("~fixed_profile_id", ""),
+        "frozen_path_id": rospy.get_param("~frozen_path_id", ""),
+    }
+    try:
+        profile_path, points = admit_runtime(
+            parameters, os.environ.get("ROS_MASTER_URI", "")
+        )
+    except Exception as exc:  # noqa: BLE001 - every admission fault is fatal
+        rospy.logfatal(
+            "[SIM-MECHANISM FixedProfile] release gate rejected initialization: %s",
+            exc,
+        )
+        return 2
+
+    follower = ProfileFollower(points)
+    release_request = release_request_for(parameters)
+    motion_gate = MotionReleaseGate(release_request)
+    lock = threading.RLock()
+    state: dict[str, Any] = {
+        "odom": None, "last_odom_wall": None, "last_odom_stamp": None,
+        "activation_path": None, "odom_error": None,
+        "goal_stable": 0, "goal_reported": False,
+        "fatal": False,
+    }
+
+    # Static release/profile admission is complete.  The publisher must exist
+    # before dynamic path admission so rosbag can establish its connection
+    # while every command is still forced to zero.
+    cmd_pub = rospy.Publisher("/cmd_vel", Twist, queue_size=1)
+    status_pub = rospy.Publisher("/sim_spmpc/status", String, queue_size=1, latch=True)
+    diagnostics_pub = rospy.Publisher(
+        "/sim_mechanism/fixed_profile/diagnostics", Float64MultiArray,
+        queue_size=1,
+    )
+    identity_pub = rospy.Publisher(
+        "/sim_mechanism/fixed_profile/identity", String, queue_size=1,
+        latch=True,
+    )
+    ready_pub = rospy.Publisher(READY_TOPIC, String, queue_size=1, latch=True)
+    admission_pub = rospy.Publisher(
+        ADMISSION_TOPIC, String, queue_size=1, latch=True
+    )
+    release_receipt_pub = rospy.Publisher(
+        RELEASE_RECEIPT_TOPIC, String, queue_size=1, latch=True
+    )
+
+    def evidence(record_type: str, state_name: str) -> dict[str, Any]:
+        return {
+            "schema_version": HANDSHAKE_SCHEMA_VERSION,
+            "record_type": record_type,
+            "tracker_id": TRACKER_ID,
+            "release_id": RELEASE_ID,
+            "release_hash": parameters["mechanism_release_hash"],
+            "formal_scope": FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "fixed_profile_id": parameters["fixed_profile_id"],
+            "path_id": parameters["frozen_path_id"],
+            "container_config_id": parameters["sim_only_container_config_id"],
+            "profile_path": str(profile_path),
+            "profile_sha256": parameters["frozen_profile_sha256"],
+            "runtime_profile_regeneration": False,
+            "online_liquid_feedback": False,
+            "state": state_name,
+            "cmd_vel_topic": "/cmd_vel",
+        }
+
+    def publish_zero() -> None:
+        with lock:
+            motion_gate.filter_command(0.0, 0.0)
+        cmd_pub.publish(Twist())
+
+    def fail_closed(reason: str) -> None:
+        with lock:
+            if state["fatal"]:
+                return
+            state["fatal"] = True
+        try:
+            publish_zero()
+        except Exception:  # pragma: no cover - ROS shutdown transport race
+            pass
+        rospy.logfatal("FixedProfile fail-closed gate: %s", reason)
+        rospy.signal_shutdown(reason)
+
+    def validate_start(message: Any) -> tuple[float, float, float, float, float, float]:
+        values = _odom_values(message, float(rospy.Time.now().to_sec()))
+        start_x, start_y, start_yaw, start_v, start_w, _stamp = values
+        if math.hypot(start_x - points[0].x,
+                      start_y - points[0].y) > START_POSITION_TOLERANCE_M:
+            raise FixedProfileAdmissionError(
+                "fresh base pose is outside frozen profile start tolerance"
+            )
+        if abs(_angle_error(start_yaw, points[0].yaw)) > START_YAW_TOLERANCE_RAD:
+            raise FixedProfileAdmissionError(
+                "fresh base yaw is outside frozen profile start tolerance"
+            )
+        if (abs(start_v) > START_SPEED_TOLERANCE_M_S or
+                abs(start_w) > START_OMEGA_TOLERANCE_RAD_S):
+            raise FixedProfileAdmissionError(
+                "fresh base is moving before FixedProfile motion release"
+            )
+        return values
+
+    def try_dynamic_admission() -> None:
+        with lock:
+            if motion_gate.dynamic_admitted or state["fatal"]:
+                return
+            path_message = state["activation_path"]
+            odom_message = state["odom"]
+            if path_message is None or odom_message is None:
+                return
+            try:
+                start = validate_start(odom_message)
+                motion_gate.admit_dynamic()
+                receipt = evidence(
+                    "SMPCC_SIM_MECHANISM_FIXEDPROFILE_DYNAMIC_ADMISSION",
+                    "DYNAMIC_ADMITTED_ZERO_HOLD",
+                )
+                receipt.update({
+                    "path_frame": "map",
+                    "path_point_count": len(path_message.poses),
+                    "path_geometry_valid": True,
+                    "start_pose_valid": True,
+                    "start_stationary": True,
+                    "initial_odom_stamp_sim_sec": start[-1],
+                    "zero_command_count": motion_gate.zero_command_count,
+                    "motion_released": False,
+                    "release_topic": RELEASE_TOPIC,
+                    "release_request": release_request,
+                    "release_request_sha256": canonical_hash(release_request),
+                    "runner_must_verify_recorder_cmd_connection": True,
+                })
+                # Publish while holding the same lock used by release_callback;
+                # an explicit release cannot overtake this evidence.
+                admission_pub.publish(String(data=canonical_json(receipt)))
+                status_pub.publish(String(data="DYNAMIC_ADMITTED_ZERO_HOLD"))
+            except FixedProfileAdmissionError as exc:
+                fail_closed(str(exc))
+
+    def odom_callback(message: Odometry) -> None:
+        try:
+            values = _odom_values(message, float(rospy.Time.now().to_sec()))
+            stamp = values[-1]
+            with lock:
+                previous_stamp = state["last_odom_stamp"]
+                if (previous_stamp is not None and
+                        stamp + 1e-9 < float(previous_stamp)):
+                    raise FixedProfileAdmissionError("odom timestamp regressed")
+                state["odom"] = message
+                state["last_odom_stamp"] = stamp
+                state["last_odom_wall"] = time.monotonic()
+                state["odom_error"] = None
+            try_dynamic_admission()
+        except FixedProfileAdmissionError as exc:
+            with lock:
+                state["odom_error"] = str(exc)
+            fail_closed(str(exc))
+
+    def path_callback(message: RosPath) -> None:
+        try:
+            if message.header.frame_id != "map":
+                raise FixedProfileAdmissionError(
+                    "activation path frame must be map"
+                )
+            if not _profile_matches_activation(points, message.poses):
+                raise FixedProfileAdmissionError(
+                    "activation path full geometry/yaw does not match frozen profile"
+                )
+            with lock:
+                state["activation_path"] = message
+            try_dynamic_admission()
+        except FixedProfileAdmissionError as exc:
+            fail_closed(str(exc))
+
+    def release_callback(message: String) -> None:
+        try:
+            with lock:
+                if state["fatal"]:
+                    return
+                odom_message = state["odom"]
+                if odom_message is None:
+                    raise FixedProfileAdmissionError(
+                        "motion release has no fresh odom"
+                    )
+                validate_start(odom_message)
+                motion_gate.accept_release(str(message.data))
+                receipt = evidence(
+                    "SMPCC_SIM_MECHANISM_FIXEDPROFILE_RELEASE_RECEIPT",
+                    "MOTION_RELEASED",
+                )
+                receipt.update({
+                    "release_request_sha256": canonical_hash(release_request),
+                    "accepted_request_sha256": hashlib.sha256(
+                        str(message.data).encode("utf-8")
+                    ).hexdigest(),
+                    "zero_command_count_before_release":
+                        motion_gate.zero_command_count,
+                    "cmd_publisher_connection_count":
+                        int(cmd_pub.get_num_connections()),
+                    "motion_released": True,
+                    "release_stamp_sim_sec": float(rospy.Time.now().to_sec()),
+                })
+                release_receipt_pub.publish(String(data=canonical_json(receipt)))
+                status_pub.publish(String(data="MOTION_RELEASED"))
+        except FixedProfileAdmissionError as exc:
+            fail_closed(str(exc))
+
+    def stop() -> None:
+        try:
+            publish_zero()
+        except Exception:  # pragma: no cover - ROS shutdown transport race
+            pass
+
+    def control(event: Any) -> None:
+        now_wall = time.monotonic()
+        with lock:
+            if state["fatal"]:
+                publish_zero()
+                return
+            released = motion_gate.motion_released
+            odom_error = state["odom_error"]
+            message = state["odom"]
+            last_odom = state["last_odom_wall"]
+        if not released:
+            publish_zero()
+            return
+        if odom_error is not None:
+            fail_closed(str(odom_error))
+            return
+        try:
+            dt = (1.0 / TrackerLimits().control_hz if event.last_expected is None
+                  else float((event.current_expected - event.last_expected).to_sec()))
+        except (AttributeError, TypeError, ValueError):
+            dt = float("nan")
+        if not math.isfinite(dt) or not 0.0 < dt <= 0.2:
+            fail_closed(f"FixedProfile sim-time control step is invalid: {dt}")
+            return
+        if message is None or last_odom is None or now_wall - float(last_odom) > 0.5:
+            stop()
+            return
+        try:
+            x, y, yaw, odom_v, odom_w, odom_stamp = _odom_values(
+                message, float(rospy.Time.now().to_sec())
+            )
+        except FixedProfileAdmissionError as exc:
+            fail_closed(str(exc))
+            return
+        linear, angular, goal_distance = follower.command(
+            x, y, yaw, dt
+        )
+        if follower.last_tracking_error_m > MAX_CROSS_TRACK_ERROR_M:
+            fail_closed(
+                "FixedProfile cross-track gate exceeded: "
+                f"{follower.last_tracking_error_m:.6f} m"
+            )
+            return
+        with lock:
+            linear, angular = motion_gate.filter_command(linear, angular)
+        command = Twist()
+        command.linear.x, command.angular.z = linear, angular
+        cmd_pub.publish(command)
+        diagnostics_pub.publish(Float64MultiArray(data=[
+            float(follower.nearest_index), follower.last_progress_normalized,
+            follower.last_progress_m, follower.last_v_ref, linear, angular,
+            follower.last_tracking_error_m, follower.last_heading_error_rad,
+            goal_distance, odom_v, odom_w,
+            float(rospy.Time.now().to_sec()) - odom_stamp,
+        ]))
+        stopped = abs(odom_v) <= 0.03 and abs(odom_w) <= 0.05
+        near = goal_distance <= follower.limits.goal_tolerance_m and stopped
+        state["goal_stable"] = int(state["goal_stable"]) + 1 if near else 0
+        if int(state["goal_stable"]) >= 5 and not state["goal_reported"]:
+            state["goal_reported"] = True
+            status_pub.publish(String(data="GOAL_REACHED"))
+
+    # Establish and exercise the zero-command publisher before subscribing to
+    # either dynamic admission input.  A latched frozen path therefore cannot
+    # race directly into motion.
+    publish_zero()
+    ready = evidence(
+        "SMPCC_SIM_MECHANISM_FIXEDPROFILE_ZERO_HOLD_READY",
+        "STATIC_ADMITTED_ZERO_HOLD",
+    )
+    ready.update({
+        "command_publisher_created": True,
+        "zero_hold_active": True,
+        "dynamic_path_admitted": False,
+        "motion_released": False,
+        "zero_command_count": motion_gate.zero_command_count,
+        "admission_topic": ADMISSION_TOPIC,
+        "release_topic": RELEASE_TOPIC,
+        "release_receipt_topic": RELEASE_RECEIPT_TOPIC,
+        "release_request_sha256": canonical_hash(release_request),
+        "runner_must_verify_recorder_cmd_connection": True,
+    })
+    ready_pub.publish(String(data=canonical_json(ready)))
+    identity_pub.publish(String(data=canonical_json({
+        "tracker_id": TRACKER_ID,
+        "release_id": RELEASE_ID,
+        "release_hash": parameters["mechanism_release_hash"],
+        "formal_scope": FORMAL_SCOPE,
+        "physical_primary_eligible": False,
+        "fixed_profile_id": parameters["fixed_profile_id"],
+        "path_id": parameters["frozen_path_id"],
+        "container_config_id": parameters["sim_only_container_config_id"],
+        "profile_path": str(profile_path),
+        "profile_sha256": parameters["frozen_profile_sha256"],
+        "profile_method": EXPECTED_METHOD,
+        "profile_duration_sec": points[-1].t_s,
+        "execution_coordinate": EXECUTION_COORDINATE,
+        "runtime_profile_regeneration": False,
+        "online_liquid_feedback": False,
+        "command_handshake_schema": HANDSHAKE_SCHEMA_VERSION,
+        "zero_hold_ready_topic": READY_TOPIC,
+        "dynamic_admission_topic": ADMISSION_TOPIC,
+        "release_topic": RELEASE_TOPIC,
+        "release_receipt_topic": RELEASE_RECEIPT_TOPIC,
+        "release_request": release_request,
+        "diagnostics_layout": [
+            "nearest_index", "s_normalized", "s_m", "v_ref_m_s",
+            "cmd_v_m_s", "cmd_omega_rad_s", "cross_track_error_m",
+            "heading_error_rad", "goal_distance_m", "odom_v_m_s",
+            "odom_omega_rad_s", "odom_age_sim_sec",
+        ],
+    })))
+    status_pub.publish(String(data="STATIC_ADMITTED_ZERO_HOLD"))
+    rospy.Subscriber("/odom", Odometry, odom_callback, queue_size=1)
+    rospy.Subscriber(
+        "/scout/global_path_fixed", RosPath, path_callback, queue_size=1
+    )
+    rospy.Subscriber(RELEASE_TOPIC, String, release_callback, queue_size=1)
+    rospy.on_shutdown(stop)
+    rospy.Timer(rospy.Duration(1.0 / TrackerLimits().control_hz), control)
+    rospy.loginfo(
+        "[SIM-MECHANISM FixedProfile] release gate accepted: tracker=%s "
+        "profile=%s sha256=%s scope=%s execution=%s "
+        "state=STATIC_ADMITTED_ZERO_HOLD physical_primary_eligible=false",
+        TRACKER_ID, profile_path, parameters["frozen_profile_sha256"],
+        FORMAL_SCOPE, EXECUTION_COORDINATE,
+    )
+    rospy.spin()
+    return 0
+
+
+def main() -> int:
+    try:
+        return run_ros_node()
+    except Exception as exc:  # noqa: BLE001
+        # rospy may not have initialized far enough for logging.  A nonzero
+        # exit is still fail-closed and never enables a fallback tracker.
+        try:
+            import rospy  # type: ignore
+            rospy.logfatal("FixedProfile tracker fatal: %s", exc)
+        except Exception:
+            print(f"FixedProfile tracker fatal: {exc}")
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

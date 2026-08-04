@@ -1,0 +1,610 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import copy
+import importlib.util
+import math
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, Iterable, Optional
+
+
+SCRIPT = (Path(__file__).resolve().parents[1] /
+          "smpcc_sim_mechanism_runtime_qc.py")
+SPEC = importlib.util.spec_from_file_location("smpcc_runtime_qc_tested", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+qc = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = qc
+SPEC.loader.exec_module(qc)
+
+
+class FakeStamp:
+    def __init__(self, value: float) -> None:
+        self.value = value
+
+    def to_sec(self) -> float:
+        return self.value
+
+
+class FakeVector:
+    def __init__(self, x: float = 0.0, y: float = 0.0,
+                 z: float = 0.0) -> None:
+        self.x, self.y, self.z = x, y, z
+
+
+class FakeTwist:
+    def __init__(self, linear_x: float, angular_z: float = 0.0) -> None:
+        self.linear = FakeVector(x=linear_x)
+        self.angular = FakeVector(z=angular_z)
+
+
+class FakeOdom:
+    def __init__(self, stamp: float) -> None:
+        self.header = SimpleNamespace(stamp=FakeStamp(stamp))
+
+
+class FakeClock:
+    def __init__(self, stamp: float) -> None:
+        self.clock = FakeStamp(stamp)
+
+
+class FakeBag:
+    def __init__(self, messages: Iterable[tuple[str, Any, FakeStamp]], *,
+                 metadata_topics: Optional[Iterable[str]] = None,
+                 index_error: Optional[Exception] = None,
+                 read_error: Optional[Exception] = None) -> None:
+        self.messages = list(messages)
+        self.metadata_topics = set(
+            metadata_topics if metadata_topics is not None
+            else (topic for topic, _message, _stamp in self.messages))
+        self.index_error = index_error
+        self.read_error = read_error
+        self.entered = False
+        self.exited = False
+
+    def __enter__(self) -> "FakeBag":
+        self.entered = True
+        return self
+
+    def __exit__(self, *_args: Any) -> None:
+        self.exited = True
+
+    def get_type_and_topic_info(self) -> Any:
+        if self.index_error is not None:
+            raise self.index_error
+        return SimpleNamespace(topics={topic: object()
+                                       for topic in self.metadata_topics})
+
+    def read_messages(self, *, topics: Iterable[str]):
+        if self.read_error is not None:
+            raise self.read_error
+        selected = set(topics)
+        return (row for row in self.messages if row[0] in selected)
+
+
+class FakeFactory:
+    def __init__(self, bag: Optional[FakeBag] = None,
+                 error: Optional[Exception] = None) -> None:
+        self.bag = bag
+        self.error = error
+        self.calls: list[tuple[str, str]] = []
+
+    def __call__(self, path: str, mode: str) -> FakeBag:
+        self.calls.append((path, mode))
+        if self.error is not None:
+            raise self.error
+        assert self.bag is not None
+        return self.bag
+
+
+class RuntimeQCTest(unittest.TestCase):
+    REQUIRED_TOPICS = ("/clock", "/odom", "/cmd_vel", "/sim_spmpc/status")
+
+    @staticmethod
+    def valid_stop(component: str, *, returncode: int = 0) -> dict[str, Any]:
+        policy = qc.STOP_POLICIES[component]
+        return {
+            "label": policy["label"],
+            "pid": 1200,
+            "signal": policy["signal"],
+            "already_exited": False,
+            "returncode": returncode,
+        }
+
+    @staticmethod
+    def valid_messages() -> list[tuple[str, Any, FakeStamp]]:
+        rows: list[tuple[str, Any, FakeStamp]] = []
+        for stamp in (9.0, 10.0, 20.0, 25.2):
+            rows.append(("/clock", FakeClock(stamp), FakeStamp(stamp)))
+        for stamp in (9.8, 10.1, 20.0, 25.2):
+            rows.append(("/odom", FakeOdom(stamp), FakeStamp(stamp)))
+        rows.extend((
+            ("/cmd_vel", FakeTwist(0.2), FakeStamp(10.0)),
+            ("/cmd_vel", FakeTwist(0.1), FakeStamp(19.9)),
+            ("/cmd_vel", FakeTwist(0.0), FakeStamp(20.1)),
+            ("/cmd_vel", FakeTwist(0.0), FakeStamp(25.1)),
+            ("/sim_spmpc/status", SimpleNamespace(data="GOAL_REACHED"),
+             FakeStamp(20.0)),
+        ))
+        return rows
+
+    def audit(self, directory: Path, *,
+              messages: Optional[list[tuple[str, Any, FakeStamp]]] = None,
+              fake_bag: Optional[FakeBag] = None,
+              factory: Optional[FakeFactory] = None,
+              active_exists: bool = False,
+              terminal: float = 20.0,
+              terminal_kind: str = "GOAL_REACHED") -> dict[str, Any]:
+        bag_path = directory / "capture.bag"
+        bag_path.write_bytes(b"immutable-fake-bag")
+        active_path = directory / "capture.active.bag.active"
+        if active_exists:
+            active_path.write_bytes(b"still-active")
+        bag = fake_bag or FakeBag(messages or self.valid_messages())
+        selected_factory = factory or FakeFactory(bag)
+        return qc.audit_closed_rosbag(
+            bag_path,
+            active_artifact_paths=(active_path, directory / "capture.bag.active"),
+            required_topics=self.REQUIRED_TOPICS,
+            motion_start_ros_time_sec=10.0,
+            terminal_ros_time_sec=terminal,
+            terminal_kind=terminal_kind,
+            attempt_id="fixture_r01",
+            case_manifest_hash="a" * 64,
+            protocol_id="fixture-protocol",
+            release_id="fixture-release",
+            formal=True,
+            bag_factory_override=selected_factory,
+        )
+
+    def test_stop_result_accepts_controlled_recorder_planner_and_path(self) -> None:
+        for component in ("recorder", "planner", "profile_tracker",
+                          "path_replay"):
+            with self.subTest(component=component):
+                receipt = qc.validate_owned_stop_result(
+                    self.valid_stop(component), component)
+                self.assertEqual("PASS", receipt["status"])
+                core = dict(receipt)
+                declared = core.pop("stop_qc_hash")
+                self.assertEqual(qc.canonical_hash(core), declared)
+
+    def test_stop_result_rejects_escalation(self) -> None:
+        result = self.valid_stop("recorder")
+        result["escalated_to"] = "SIGKILL"
+        with self.assertRaisesRegex(qc.RuntimeQCError, "STOP_ESCALATED"):
+            qc.validate_owned_stop_result(result, "recorder")
+
+    def test_stop_result_rejects_cleanup_error(self) -> None:
+        result = self.valid_stop("planner")
+        result["cleanup_error"] = "still alive"
+        with self.assertRaisesRegex(qc.RuntimeQCError, "STOP_CLEANUP_ERROR"):
+            qc.validate_owned_stop_result(result, "planner")
+
+    def test_stop_result_rejects_missing_exit_status(self) -> None:
+        result = self.valid_stop("path_replay")
+        result["returncode"] = None
+        with self.assertRaisesRegex(
+                qc.RuntimeQCError, "STOP_PROCESS_STILL_RUNNING"):
+            qc.validate_owned_stop_result(result, "path_replay")
+
+    def test_stop_result_rejects_already_exited_and_abnormal_rc(self) -> None:
+        already = self.valid_stop("recorder")
+        already["already_exited"] = True
+        with self.assertRaisesRegex(qc.RuntimeQCError, "STOP_ALREADY_EXITED"):
+            qc.validate_owned_stop_result(already, "recorder")
+        abnormal = self.valid_stop("recorder", returncode=7)
+        with self.assertRaisesRegex(
+                qc.RuntimeQCError, "STOP_RETURN_CODE_INVALID"):
+            qc.validate_owned_stop_result(abnormal, "recorder")
+
+    def test_stop_bundle_requires_exact_components(self) -> None:
+        results = {
+            component: self.valid_stop(component)
+            for component in ("recorder", "planner", "path_replay")
+        }
+        receipt = qc.validate_owned_stop_bundle(
+            results, motion_component="planner")
+        self.assertEqual("PASS", receipt["status"])
+        raw_evidence = qc.build_owned_stop_evidence(
+            results, motion_component="planner",
+            protocol_id="fixture-protocol", release_id="fixture-release",
+            attempt_id="fixture_r01", case_manifest_hash="a" * 64,
+            formal=False)
+        rebuilt = qc.validate_owned_stop_evidence(
+            raw_evidence, motion_component="planner",
+            protocol_id="fixture-protocol", release_id="fixture-release",
+            attempt_id="fixture_r01", case_manifest_hash="a" * 64,
+            formal=False)
+        self.assertEqual(receipt, rebuilt)
+        forged = copy.deepcopy(raw_evidence)
+        forged["raw_stop_results"]["recorder"]["already_exited"] = True
+        forged_core = dict(forged)
+        forged_core.pop("raw_stop_evidence_hash")
+        forged["raw_stop_evidence_hash"] = qc.canonical_hash(forged_core)
+        with self.assertRaisesRegex(qc.RuntimeQCError,
+                                    "STOP_ALREADY_EXITED"):
+            qc.validate_owned_stop_evidence(
+                forged, motion_component="planner",
+                protocol_id="fixture-protocol",
+                release_id="fixture-release", attempt_id="fixture_r01",
+                case_manifest_hash="a" * 64, formal=False)
+        with self.assertRaisesRegex(
+            qc.RuntimeQCError, "STOP_BUNDLE_INCOMPLETE"):
+            qc.validate_owned_stop_bundle(
+                {"recorder": results["recorder"]},
+                motion_component="planner")
+
+    def test_closed_bag_happy_path_is_read_only_and_hash_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            fake_bag = FakeBag(self.valid_messages())
+            factory = FakeFactory(fake_bag)
+            report = self.audit(root, fake_bag=fake_bag, factory=factory)
+            self.assertEqual("PASS", report["status"])
+            self.assertEqual([(str(root / "capture.bag"), "r")], factory.calls)
+            self.assertTrue(fake_bag.entered and fake_bag.exited)
+            self.assertTrue(report["motion_start"]["recorded"])
+            self.assertEqual(["clock", "odom"],
+                             report["zero_command_tail"]["passing_sources"])
+            self.assertEqual(
+                20.1,
+                report["zero_command_tail"]
+                ["final_zero_suffix_start_ros_time_sec"],
+            )
+            core = dict(report)
+            declared = core.pop("bag_qc_hash")
+            self.assertEqual(qc.canonical_hash(core), declared)
+
+    def test_closed_bag_rejects_open_or_unindexed_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with self.assertRaisesRegex(qc.RuntimeQCError, "BAG_OPEN_FAILED"):
+                self.audit(root, factory=FakeFactory(error=OSError("bad bag")))
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bag = FakeBag(self.valid_messages(), index_error=RuntimeError("no index"))
+            with self.assertRaisesRegex(qc.RuntimeQCError, "BAG_INDEX_FAILED"):
+                self.audit(root, fake_bag=bag)
+
+    def test_closed_bag_rejects_active_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
+                qc.RuntimeQCError, "ACTIVE_BAG_REMAINS"):
+            self.audit(Path(temporary), active_exists=True)
+
+    def test_closed_bag_rejects_missing_or_empty_required_topic(self) -> None:
+        messages = self.valid_messages()
+        metadata = set(self.REQUIRED_TOPICS) - {"/sim_spmpc/status"}
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
+                qc.RuntimeQCError, "BAG_REQUIRED_TOPIC_MISSING"):
+            self.audit(Path(temporary), fake_bag=FakeBag(
+                messages, metadata_topics=metadata))
+        empty_status = [row for row in messages if row[0] != "/sim_spmpc/status"]
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
+                qc.RuntimeQCError, "BAG_REQUIRED_TOPIC_EMPTY"):
+            self.audit(Path(temporary), fake_bag=FakeBag(
+                empty_status, metadata_topics=self.REQUIRED_TOPICS))
+
+    def test_closed_bag_rejects_unrecorded_motion_start(self) -> None:
+        messages = [row for row in self.valid_messages() if row[0] != "/odom"]
+        messages.extend((
+            ("/odom", FakeOdom(1.0), FakeStamp(1.0)),
+            ("/odom", FakeOdom(25.2), FakeStamp(25.2)),
+        ))
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
+                qc.RuntimeQCError, "MOTION_START_NOT_RECORDED"):
+            self.audit(Path(temporary), messages=messages)
+
+    def test_closed_bag_rejects_short_tail(self) -> None:
+        messages = []
+        for topic, message, stamp in self.valid_messages():
+            value = stamp.to_sec()
+            if topic in {"/clock", "/odom", "/cmd_vel"} and value > 24.9:
+                continue
+            messages.append((topic, message, stamp))
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
+                qc.RuntimeQCError, "FROZEN_TAIL_TOO_SHORT"):
+            self.audit(Path(temporary), messages=messages)
+
+    def test_closed_bag_rejects_sim_time_reset(self) -> None:
+        messages = self.valid_messages()
+        messages.append(("/clock", FakeClock(21.0), FakeStamp(25.3)))
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
+                qc.RuntimeQCError, "BAG_TIME_NON_MONOTONIC"):
+            self.audit(Path(temporary), messages=messages)
+
+    def test_closed_bag_rejects_missing_post_terminal_zero(self) -> None:
+        messages = [row for row in self.valid_messages()
+                    if row[0] != "/cmd_vel"]
+        messages.extend((
+            ("/cmd_vel", FakeTwist(0.2), FakeStamp(10.0)),
+            ("/cmd_vel", FakeTwist(0.1), FakeStamp(20.1)),
+            ("/cmd_vel", FakeTwist(0.1), FakeStamp(25.1)),
+        ))
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
+                qc.RuntimeQCError, "POST_TERMINAL_ZERO_SUFFIX_MISSING"):
+            self.audit(Path(temporary), messages=messages)
+
+    def test_closed_bag_uses_final_zero_suffix_after_early_zero_race(self) -> None:
+        messages = self.valid_messages()
+        messages.append(("/cmd_vel", FakeTwist(0.1), FakeStamp(24.0)))
+        messages.extend((
+            ("/clock", FakeClock(30.2), FakeStamp(30.2)),
+            ("/odom", FakeOdom(30.2), FakeStamp(30.2)),
+        ))
+        with tempfile.TemporaryDirectory() as temporary:
+            report = self.audit(Path(temporary), messages=messages)
+        tail = report["zero_command_tail"]
+        self.assertEqual(24.0, tail["last_nonzero_ros_time_sec"])
+        self.assertEqual(25.1, tail["final_zero_suffix_start_ros_time_sec"])
+        self.assertEqual(0, tail["nonzero_after_final_zero_count"])
+        self.assertTrue(tail["pass"])
+
+    def test_closed_bag_rejects_nonfinite_message_number(self) -> None:
+        messages = self.valid_messages()
+        messages.append(("/cmd_vel", FakeTwist(math.nan), FakeStamp(24.0)))
+        with tempfile.TemporaryDirectory() as temporary, self.assertRaisesRegex(
+                qc.RuntimeQCError, "NON_FINITE_NUMBER"):
+            self.audit(Path(temporary), messages=messages)
+
+    def test_completion_time_accepts_boundary_and_rejects_over_limit(self) -> None:
+        receipt = qc.validate_completion_time(60.0)
+        self.assertEqual(60.0, receipt["completion_time_sec"])
+        with self.assertRaisesRegex(qc.RuntimeQCError, "COMPLETION_TIMEOUT"):
+            qc.validate_completion_time(60.000001)
+
+    def test_completion_time_rejects_nonfinite_numbers(self) -> None:
+        for value in (math.nan, math.inf, -math.inf):
+            with self.subTest(value=value), self.assertRaisesRegex(
+                    qc.RuntimeQCError, "NON_FINITE_NUMBER"):
+                qc.validate_completion_time(value)
+
+    def test_timeout_terminal_accepts_boundary_and_is_hash_bound(self) -> None:
+        receipt = qc.validate_timeout_terminal(60.0)
+        self.assertEqual("GOAL_TIMEOUT", receipt["terminal_kind"])
+        self.assertEqual(60.0, receipt["elapsed_sec"])
+        self.assertEqual(60.0, receipt["min_timeout_sec"])
+        core = dict(receipt)
+        declared = core.pop("timeout_qc_hash")
+        self.assertEqual(qc.canonical_hash(core), declared)
+
+    def test_timeout_terminal_rejects_early_nonfinite_or_wrong_kind(self) -> None:
+        with self.assertRaisesRegex(qc.RuntimeQCError, "TIMEOUT_NOT_REACHED"):
+            qc.validate_timeout_terminal(59.999999)
+        with self.assertRaisesRegex(qc.RuntimeQCError, "NON_FINITE_NUMBER"):
+            qc.validate_timeout_terminal(math.nan)
+        with self.assertRaisesRegex(qc.RuntimeQCError, "TERMINAL_KIND_INVALID"):
+            qc.validate_timeout_terminal(60.0, terminal_kind="GOAL_REACHED")
+        with self.assertRaisesRegex(qc.RuntimeQCError,
+                                    "INVALID_TIMEOUT_LIMIT"):
+            qc.validate_timeout_terminal(60.0, min_timeout_sec=59.0)
+
+    def test_pre_motion_infrastructure_is_retryable_acquisition(self) -> None:
+        result = qc.classify_outcome(
+            motion_started=False, primary_method_outcome=None,
+            infrastructure_failure=True)
+        self.assertEqual("INFRASTRUCTURE_ACQUISITION",
+                         result["failure_class"])
+        self.assertTrue(result["retryable"])
+        self.assertFalse(result["terminal"])
+        self.assertFalse(result["assignment_consumed"])
+        self.assertFalse(result["protocol_qc_pass"])
+
+    def test_post_motion_infrastructure_is_terminal_protocol_failure(self) -> None:
+        result = qc.classify_outcome(
+            motion_started=True, primary_method_outcome=None,
+            infrastructure_failure=True)
+        self.assertEqual("PROTOCOL_FAILURE_AFTER_MOTION",
+                         result["failure_class"])
+        self.assertFalse(result["retryable"])
+        self.assertTrue(result["terminal"])
+        self.assertEqual("STOP_CAMPAIGN_REVIEW", result["campaign_action"])
+        self.assertFalse(result["protocol_qc_pass"])
+
+    def test_normal_method_failure_can_advance_with_protocol_qc_pass(self) -> None:
+        result = qc.classify_outcome(
+            motion_started=True, primary_method_outcome="METHOD_FAILURE")
+        self.assertEqual("METHOD_FAILURE", result["failure_class"])
+        self.assertTrue(result["method_failure"])
+        self.assertTrue(result["protocol_qc_pass"])
+        self.assertEqual("ADVANCE_WITH_TERMINAL_METHOD_FAILURE",
+                         result["campaign_action"])
+
+    def test_method_failure_is_not_overwritten_by_secondary_qc(self) -> None:
+        result = qc.classify_outcome(
+            motion_started=True, primary_method_outcome="METHOD_FAILURE",
+            infrastructure_failure=True, qc_failure=True)
+        self.assertEqual("METHOD_FAILURE", result["failure_class"])
+        self.assertTrue(result["method_failure"])
+        self.assertTrue(result["primary_method_outcome_preserved"])
+        self.assertFalse(result["retryable"])
+        self.assertFalse(result["protocol_qc_pass"])
+        self.assertEqual(
+            "STOP_CAMPAIGN_REVIEW_WITH_TERMINAL_METHOD_FAILURE",
+            result["campaign_action"],
+        )
+
+    def test_claimed_success_with_secondary_qc_is_not_success(self) -> None:
+        result = qc.classify_outcome(
+            motion_started=True, primary_method_outcome="METHOD_SUCCESS",
+            qc_failure=True)
+        self.assertEqual("PROTOCOL_FAILURE_AFTER_MOTION",
+                         result["failure_class"])
+        self.assertFalse(result["method_success"])
+        self.assertEqual("STOP_CAMPAIGN_REVIEW", result["campaign_action"])
+        self.assertFalse(result["protocol_qc_pass"])
+
+    def test_runtime_report_binds_explicit_receipts_and_rejects_tamper(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            bag_qc = self.audit(Path(temporary))
+            stop_bundle = qc.validate_owned_stop_bundle({
+                component: self.valid_stop(component)
+                for component in ("recorder", "planner", "path_replay")
+            }, motion_component="planner")
+            completion = qc.validate_completion_time(10.0)
+            outcome = qc.classify_outcome(
+                motion_started=True, primary_method_outcome="METHOD_SUCCESS")
+            report = qc.build_runtime_qc_report(
+                protocol_id="fixture-protocol", release_id="fixture-release",
+                attempt_id="fixture_r01", case_manifest_hash="a" * 64,
+                formal=True, stop_bundle=stop_bundle, bag_qc=bag_qc,
+                completion_qc=completion,
+                outcome_classification=outcome)
+            self.assertEqual("PASS", report["status"])
+            self.assertIsNone(report["physical_primary"])
+            core = dict(report)
+            declared = core.pop("runtime_qc_hash")
+            self.assertEqual(qc.canonical_hash(core), declared)
+            tampered = dict(completion, completion_time_sec=9.0)
+            with self.assertRaisesRegex(
+                    qc.RuntimeQCError, "INVALID_QC_RECEIPT"):
+                qc.build_runtime_qc_report(
+                    protocol_id="fixture-protocol",
+                    release_id="fixture-release",
+                    attempt_id="fixture_r01", case_manifest_hash="a" * 64,
+                    formal=True, stop_bundle=stop_bundle, bag_qc=bag_qc,
+                    completion_qc=tampered,
+                    outcome_classification=outcome)
+
+    def test_runtime_report_accepts_strict_timeout_receipt(self) -> None:
+        messages: list[tuple[str, Any, FakeStamp]] = []
+        for stamp in (9.0, 10.0, 70.0, 75.2):
+            messages.append(("/clock", FakeClock(stamp), FakeStamp(stamp)))
+        for stamp in (9.8, 10.1, 70.0, 75.2):
+            messages.append(("/odom", FakeOdom(stamp), FakeStamp(stamp)))
+        messages.extend((
+            ("/cmd_vel", FakeTwist(0.2), FakeStamp(10.0)),
+            ("/cmd_vel", FakeTwist(0.1), FakeStamp(69.9)),
+            ("/cmd_vel", FakeTwist(0.0), FakeStamp(70.1)),
+            ("/cmd_vel", FakeTwist(0.0), FakeStamp(75.1)),
+            ("/sim_spmpc/status", SimpleNamespace(data="RUNNING"),
+             FakeStamp(70.0)),
+        ))
+        with tempfile.TemporaryDirectory() as temporary:
+            bag_qc = self.audit(
+                Path(temporary), messages=messages, terminal=70.0,
+                terminal_kind="GOAL_TIMEOUT")
+            stop_bundle = qc.validate_owned_stop_bundle({
+                component: self.valid_stop(component)
+                for component in ("recorder", "planner", "path_replay")
+            }, motion_component="planner")
+            timeout = qc.validate_timeout_terminal(60.0)
+            outcome = qc.classify_outcome(
+                motion_started=True,
+                primary_method_outcome="METHOD_FAILURE")
+            report = qc.build_runtime_qc_report(
+                protocol_id="fixture-protocol",
+                release_id="fixture-release", attempt_id="fixture_r01",
+                case_manifest_hash="a" * 64, formal=True,
+                stop_bundle=stop_bundle, bag_qc=bag_qc,
+                timeout_qc=timeout, outcome_classification=outcome)
+        self.assertEqual("PASS", report["status"])
+        self.assertEqual(
+            "GOAL_TIMEOUT", report["terminal_timing_qc"]["kind"])
+        self.assertEqual(
+            timeout["timeout_qc_hash"],
+            report["checks"]["terminal_timing"]["receipt_hash"],
+        )
+
+    def test_runtime_report_requires_exactly_one_matching_terminal_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            bag_qc = self.audit(Path(temporary))
+            stop_bundle = qc.validate_owned_stop_bundle({
+                component: self.valid_stop(component)
+                for component in ("recorder", "planner", "path_replay")
+            }, motion_component="planner")
+            completion = qc.validate_completion_time(10.0)
+            timeout = qc.validate_timeout_terminal(60.0)
+            success = qc.classify_outcome(
+                motion_started=True, primary_method_outcome="METHOD_SUCCESS")
+            common = {
+                "protocol_id": "fixture-protocol",
+                "release_id": "fixture-release",
+                "attempt_id": "fixture_r01",
+                "case_manifest_hash": "a" * 64,
+                "formal": True,
+                "stop_bundle": stop_bundle,
+                "bag_qc": bag_qc,
+                "outcome_classification": success,
+            }
+            with self.assertRaisesRegex(
+                    qc.RuntimeQCError, "TERMINAL_TIMING_RECEIPT_INVALID"):
+                qc.build_runtime_qc_report(**common)
+            with self.assertRaisesRegex(
+                    qc.RuntimeQCError, "TERMINAL_TIMING_RECEIPT_INVALID"):
+                qc.build_runtime_qc_report(
+                    **common, completion_qc=completion, timeout_qc=timeout)
+            with self.assertRaisesRegex(
+                    qc.RuntimeQCError, "TERMINAL_TIMING_OUTCOME_MISMATCH"):
+                qc.build_runtime_qc_report(**common, timeout_qc=timeout)
+
+    def test_runtime_report_rejects_rehashed_noncanonical_timing_receipt(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            bag_qc = self.audit(Path(temporary))
+            stop_bundle = qc.validate_owned_stop_bundle({
+                component: self.valid_stop(component)
+                for component in ("recorder", "planner", "path_replay")
+            }, motion_component="planner")
+            success = qc.classify_outcome(
+                motion_started=True, primary_method_outcome="METHOD_SUCCESS")
+            completion = qc.validate_completion_time(10.0)
+            forged_core = dict(completion)
+            forged_core.pop("completion_qc_hash")
+            forged_core["unfrozen_extra_field"] = True
+            forged = dict(
+                forged_core,
+                completion_qc_hash=qc.canonical_hash(forged_core),
+            )
+            with self.assertRaisesRegex(qc.RuntimeQCError,
+                                        "INVALID_QC_RECEIPT"):
+                qc.build_runtime_qc_report(
+                    protocol_id="fixture-protocol",
+                    release_id="fixture-release",
+                    attempt_id="fixture_r01", case_manifest_hash="a" * 64,
+                    formal=True, stop_bundle=stop_bundle, bag_qc=bag_qc,
+                    completion_qc=forged,
+                    outcome_classification=success)
+
+    def test_runtime_report_rejects_method_failure_with_secondary_qc(self) -> None:
+        messages: list[tuple[str, Any, FakeStamp]] = []
+        for stamp in (9.0, 10.0, 70.0, 75.2):
+            messages.append(("/clock", FakeClock(stamp), FakeStamp(stamp)))
+        for stamp in (9.8, 10.1, 70.0, 75.2):
+            messages.append(("/odom", FakeOdom(stamp), FakeStamp(stamp)))
+        messages.extend((
+            ("/cmd_vel", FakeTwist(0.2), FakeStamp(10.0)),
+            ("/cmd_vel", FakeTwist(0.0), FakeStamp(70.1)),
+            ("/cmd_vel", FakeTwist(0.0), FakeStamp(75.1)),
+            ("/sim_spmpc/status", SimpleNamespace(data="RUNNING"),
+             FakeStamp(70.0)),
+        ))
+        with tempfile.TemporaryDirectory() as temporary:
+            bag_qc = self.audit(
+                Path(temporary), messages=messages, terminal=70.0,
+                terminal_kind="GOAL_TIMEOUT")
+            stop_bundle = qc.validate_owned_stop_bundle({
+                component: self.valid_stop(component)
+                for component in ("recorder", "planner", "path_replay")
+            }, motion_component="planner")
+            timeout = qc.validate_timeout_terminal(60.0)
+            outcome = qc.classify_outcome(
+                motion_started=True, primary_method_outcome="METHOD_FAILURE",
+                qc_failure=True)
+            with self.assertRaisesRegex(qc.RuntimeQCError,
+                                        "PROTOCOL_QC_NOT_PASS"):
+                qc.build_runtime_qc_report(
+                    protocol_id="fixture-protocol",
+                    release_id="fixture-release",
+                    attempt_id="fixture_r01", case_manifest_hash="a" * 64,
+                    formal=True, stop_bundle=stop_bundle, bag_qc=bag_qc,
+                    timeout_qc=timeout, outcome_classification=outcome)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Read-only tests for the development-only physical command auditor."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import contextlib
+import hashlib
+import importlib.util
+import io
+import json
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+MODULE_PATH = Path(__file__).resolve().parents[1] / "smpcc_sim_physical_command_alignment_audit.py"
+
+
+def load_auditor():
+    spec = importlib.util.spec_from_file_location("smpcc_sim_physical_command_alignment_audit_test_target", MODULE_PATH)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("cannot import physical command alignment auditor")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+class PhysicalCommandAlignmentAuditTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.audit = load_auditor()
+
+    def test_report_binds_real_markdown_and_never_claims_formal(self):
+        report = self.audit.build_audit()
+        source = self.audit.DEFAULT_PHYSICAL_COMMAND_DOC
+        self.assertEqual("DEVELOPMENT_ONLY_ALIGNMENT_AUDIT_COMPLETE", report["status"])
+        self.assertFalse(report["formal"])
+        self.assertTrue(report["development_only"])
+        self.assertFalse(report["side_effects"]["writes_files"])
+        self.assertFalse(report["side_effects"]["launches_ros"])
+        self.assertFalse(report["side_effects"]["touches_data_root"])
+        self.assertEqual(
+            hashlib.sha256(source.read_bytes()).hexdigest(),
+            report["source_bindings"]["physical_command_document_sha256"],
+        )
+        self.assertEqual(4354, report["source_bindings"]["physical_command_document_line_count"])
+        self.assertEqual("NO_GO", report["physical_inventory"]["document_protocol"]["formal_status"])
+        self.assertEqual("G2S_DEVELOPMENT_ONLY", report["physical_inventory"]["document_protocol"]["active_execution_boundary"])
+
+    def test_inventories_g2s_g2c_g3_and_flags_h0_value_difference(self):
+        report = self.audit.build_audit()
+        physical = report["physical_inventory"]
+        active = physical["G2S_active_wrapper"]["assignments"]
+        legacy = physical["G2S_legacy_registry_template"]["assignments"]
+        g2c = physical["G2C_template"]["assignments"]
+        g3 = physical["G3_template"]["assignments"]
+        self.assertEqual("Bsmooth", active["PILOT_METHOD"]["value"])
+        self.assertEqual("false", active["PILOT_RECORD_RGB"]["value"])
+        self.assertEqual("true", active["PILOT_RECORD_ONLINE_LIQUID"]["value"])
+        self.assertEqual("0.20", legacy["V_REF"]["value"])
+        self.assertEqual("off", legacy["DELAY_PHASE_MODE"]["value"])
+        self.assertEqual("fixed_closed_loop", g2c["DELAY_PHASE_MODE"]["value"])
+        self.assertEqual("fixed_closed_loop", g3["DELAY_PHASE_MODE"]["value"])
+        comparisons = {item["id"]: item for item in report["h0_comparison"]["comparisons"]}
+        v_ref = comparisons["h0_v_ref_vs_g2s_legacy_bsmooth"]
+        self.assertEqual("MISMATCH_DEVELOPMENT_ONLY", v_ref["status"])
+        self.assertEqual("0.20", v_ref["physical"]["V_REF"])
+        self.assertEqual(0.25, v_ref["simulation"]["declared_effective_config.v_ref"])
+        self.assertEqual("ALIGNED_DEVELOPMENT_ONLY", comparisons["h0_delay_mode_vs_g2s_legacy_bsmooth"]["status"])
+        self.assertEqual("SIM_SPECIFIC_DEVIATION_NOT_FORMAL", comparisons["h0_path_mode_vs_active_g2s"]["status"])
+
+    def test_report_lists_unavailable_formal_inputs_instead_of_fabricating_them(self):
+        report = self.audit.build_audit()
+        unavailable = {item["id"]: item for item in report["formal_inputs_unavailable"]}
+        for key in (
+            "H1_L1_frozen_source_json_transform_fit_clearance",
+            "C1_C2_physical_manifests_and_C2_allowlist",
+            "five_condition_effective_configs_and_formal_Bslosh_release",
+            "formal_RGB_primary_and_independent_plant_fidelity",
+            "formal_randomization_seed_bundles_retry_classifier_receipt",
+        ):
+            self.assertEqual("UNAVAILABLE_FORMAL_INPUT", unavailable[key]["status"])
+        self.assertIn("cannot be used as a formal freeze", report["nonnegotiable_boundary"])
+
+    def test_missing_reviewed_marker_fails_closed(self):
+        original = self.audit.DEFAULT_PHYSICAL_COMMAND_DOC.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as temporary:
+            altered = Path(temporary) / "physical.md"
+            altered.write_text(original.replace("PILOT_METHOD=Bsmooth", "PILOT_METHOD=Changed", 1), encoding="utf-8")
+            with self.assertRaises(self.audit.AuditError):
+                self.audit.build_audit(altered, self.audit.DEFAULT_H0_ADAPTER)
+
+    def test_optional_external_source_hashes_are_verified(self):
+        physical_hash = hashlib.sha256(
+            self.audit.DEFAULT_PHYSICAL_COMMAND_DOC.read_bytes()
+        ).hexdigest()
+        adapter_hash = hashlib.sha256(self.audit.DEFAULT_H0_ADAPTER.read_bytes()).hexdigest()
+        report = self.audit.build_audit(
+            expected_physical_document_sha256=physical_hash,
+            expected_h0_adapter_sha256=adapter_hash,
+        )
+        self.assertEqual(physical_hash, report["source_bindings"]["external_physical_document_trust_anchor"])
+        self.assertEqual(adapter_hash, report["source_bindings"]["external_h0_adapter_trust_anchor"])
+        with self.assertRaises(self.audit.AuditError):
+            self.audit.build_audit(expected_physical_document_sha256="0" * 64)
+
+    def test_missing_input_is_reported_as_a_fail_closed_audit_error(self):
+        with self.assertRaises(self.audit.AuditError):
+            self.audit.build_audit(Path("/nonexistent/physical-command.md"))
+
+    def test_cli_emits_json_without_writing_an_output_file(self):
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            rc = self.audit.main([])
+        self.assertEqual(0, rc)
+        output = json.loads(stream.getvalue())
+        self.assertFalse(output["formal"])
+        self.assertFalse(output["side_effects"]["writes_files"])
+
+
+if __name__ == "__main__":
+    unittest.main()

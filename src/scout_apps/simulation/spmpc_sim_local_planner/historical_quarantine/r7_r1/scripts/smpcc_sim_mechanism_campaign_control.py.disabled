@@ -1,0 +1,779 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Immutable control-plane evidence for the canonical R7 mechanism campaign.
+
+This program never starts ROS, Gazebo, or a planned row.  It can only consume
+the exact canonical ``mechanism_release.json`` admitted by the R7 runner.  It
+creates the two manual stage-extension evidence documents, the corresponding
+stage authorization, or an acquisition-only retry authorization at their
+fixed canonical locations.
+
+Scientific effects are deliberately outside this tool.  In particular, the
+SIM-S2B selectivity trigger is an explicit operator statement supplied on the
+command line; it is never inferred from campaign measurements.
+"""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import argparse
+import importlib.util
+import json
+import os
+import stat
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
+
+
+SCRIPT_PATH = Path(__file__).resolve()
+SCRIPT_DIR = SCRIPT_PATH.parent
+
+
+class CampaignControlError(RuntimeError):
+    """A fail-closed campaign-control error."""
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise CampaignControlError(message)
+
+
+def _load_runner():
+    path = SCRIPT_DIR / "smpcc_sim_mechanism_runner.py"
+    spec = importlib.util.spec_from_file_location(
+        "smpcc_sim_mechanism_campaign_control_runner", path)
+    if spec is None or spec.loader is None:
+        raise CampaignControlError(f"cannot import canonical runner: {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+runner = _load_runner()
+
+SCHEMA_VERSION = "smpcc-sim-mechanism-campaign-control-v1"
+FORMAL_SCOPE = runner.FORMAL_SCOPE
+WRITE_BITS = stat.S_IWUSR | stat.S_IWGRP | stat.S_IWOTH
+STAGE_SPECS: Mapping[str, Mapping[str, Any]] = {
+    "SIM-S2A_SELECTIVITY": {
+        "required_prefix": 40,
+        "closed_stage": "SIM-S1_CORE",
+        "stage_terminal_rows": 40,
+        "closure_name": "s1_closure",
+        "decision_name": "extension_decision",
+        "decision": "OPEN",
+        "reason_field": "extension_reason",
+    },
+    "SIM-S2B_TRANSFER": {
+        "required_prefix": 64,
+        "closed_stage": "SIM-S2A_SELECTIVITY",
+        "stage_terminal_rows": 24,
+        "closure_name": "s2a_closure",
+        "decision_name": "selectivity_trigger",
+        "decision": "TRIGGERED",
+        "reason_field": "trigger_reason",
+    },
+}
+
+
+@dataclass(frozen=True)
+class Boundary:
+    stage: str
+    required_prefix: int
+    closed_stage: str
+    stage_terminal_rows: int
+    records: Sequence[Mapping[str, Any]]
+    terminal_records: Sequence[Mapping[str, Any]]
+    dataset_index_path: Path
+    head: Mapping[str, Any]
+
+
+def _canonical_stage_evidence_path(stage: str, name: str) -> Path:
+    return (runner.CANONICAL_RESULT_ROOT / "stage_evidence" / stage /
+            f"{name}.json")
+
+
+def _canonical_stage_authorization_path(stage: str) -> Path:
+    return (runner.CANONICAL_RESULT_ROOT / "stage_authorizations" /
+            f"{stage}.json")
+
+
+def _canonical_retry_authorization_path(next_attempt_id: str) -> Path:
+    return (runner.CANONICAL_RESULT_ROOT / "retry_authorizations" /
+            f"{next_attempt_id}.json")
+
+
+def _exact_release_path(path: Path) -> Path:
+    try:
+        return runner.require_exact_path(
+            path, runner.DEFAULT_RELEASE, "mechanism release")
+    except runner.RunnerError as exc:
+        raise CampaignControlError(str(exc)) from exc
+
+
+def _validate_reason(value: Optional[str], label: str) -> str:
+    require(isinstance(value, str), f"{label} is required")
+    normalized = value.strip()
+    require(normalized != "", f"{label} must not be blank")
+    require("\n" not in normalized and "\r" not in normalized,
+            f"{label} must be a single-line operator statement")
+    require(len(normalized) <= 1000, f"{label} exceeds 1000 characters")
+    return normalized
+
+
+def _reject_output(path: Path, expected: Path, label: str) -> Path:
+    try:
+        path = runner.require_exact_path(path, expected, label)
+        runner.reject_symlink_chain(path, label)
+    except runner.RunnerError as exc:
+        raise CampaignControlError(str(exc)) from exc
+    require(not os.path.lexists(path),
+            f"refusing to overwrite immutable {label}: {path}")
+    return path
+
+
+def _write_json_new_readonly(path: Path, value: Mapping[str, Any],
+                             label: str) -> None:
+    """Create one immutable canonical JSON file without following a symlink."""
+
+    _reject_output(path, path, label)
+    parent = path.parent
+    try:
+        runner.reject_symlink_chain(parent, f"{label} parent")
+        parent.mkdir(parents=True, exist_ok=True)
+        runner.reject_symlink_chain(parent, f"{label} parent")
+    except (runner.RunnerError, OSError) as exc:
+        raise CampaignControlError(str(exc)) from exc
+    require(parent.is_dir() and not parent.is_symlink(),
+            f"{label} parent is not an ordinary directory")
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    descriptor: Optional[int] = None
+    created = False
+    try:
+        descriptor = os.open(path, flags, 0o444)
+        created = True
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            descriptor = None
+            stream.write(json.dumps(
+                value, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+            os.fchmod(stream.fileno(), 0o444)
+        runner.reject_symlink_chain(path, label)
+        require(path.is_file() and not path.is_symlink(),
+                f"{label} was not created as a regular file")
+        require(stat.S_IMODE(path.stat().st_mode) & WRITE_BITS == 0,
+                f"{label} is not read-only")
+    except (OSError, runner.RunnerError, CampaignControlError) as exc:
+        if descriptor is not None:
+            os.close(descriptor)
+        if created:
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        if isinstance(exc, CampaignControlError):
+            raise
+        raise CampaignControlError(f"cannot create immutable {label}: {exc}") from exc
+
+
+def _readonly_descriptor(path: Path, expected: Path,
+                         label: str) -> Dict[str, str]:
+    try:
+        path = runner.require_exact_path(path, expected, label)
+        runner.reject_symlink_chain(path, label)
+    except runner.RunnerError as exc:
+        raise CampaignControlError(str(exc)) from exc
+    require(path.is_file() and not path.is_symlink(),
+            f"{label} is missing: {path}")
+    require(stat.S_IMODE(path.stat().st_mode) & WRITE_BITS == 0,
+            f"{label} must be read-only")
+    return {"path": str(path), "sha256": runner.sha256_file(path)}
+
+
+def _release_descriptor(admission: Any) -> Dict[str, str]:
+    return _readonly_descriptor(
+        admission.release_path, runner.DEFAULT_RELEASE, "mechanism release")
+
+
+def _master_descriptor(admission: Any) -> Dict[str, str]:
+    return _readonly_descriptor(
+        admission.master_path, runner.DEFAULT_MASTER, "mechanism master")
+
+
+def _ledger_record_hash_is_valid(record: Mapping[str, Any]) -> bool:
+    core = dict(record)
+    declared = core.pop("entry_hash", None)
+    return (isinstance(declared, str) and len(declared) == 64 and
+            declared == runner.canonical_hash(core))
+
+
+def _snapshot(release_path: Path) -> tuple[Any, Sequence[Mapping[str, Any]],
+                                          Sequence[Mapping[str, Any]], Path]:
+    exact = _exact_release_path(release_path)
+    try:
+        admission = runner.admit(exact)
+        index = runner.ledger_path(admission.master)
+        records = runner.load_ledger(
+            index, admission.master, admission.release)
+        ordered = runner.schedule(admission.master)
+    except (runner.RunnerError, OSError, ValueError, KeyError, TypeError) as exc:
+        raise CampaignControlError(str(exc)) from exc
+    require(len(ordered) == 88, "canonical master does not contain 88 rows")
+    require(len({str(row.get("planned_row_id")) for row in ordered}) == 88,
+            "canonical schedule repeats a planned row")
+    return admission, records, ordered, index
+
+
+def _history(records: Sequence[Mapping[str, Any]],
+             row_id: str) -> list[Mapping[str, Any]]:
+    return [item for item in records
+            if item.get("planned_row_id") == row_id]
+
+
+def _is_terminal(record: Mapping[str, Any]) -> bool:
+    return (record.get("method_success") is True or
+            record.get("method_failure") is True)
+
+
+def _boundary(stage: str, records: Sequence[Mapping[str, Any]],
+              ordered: Sequence[Mapping[str, Any]],
+              index: Path) -> Boundary:
+    spec = STAGE_SPECS.get(stage)
+    require(isinstance(spec, Mapping), f"unsupported stage: {stage}")
+    required = int(spec["required_prefix"])
+    prefix = list(ordered[:required])
+    suffix_ids = {str(row["planned_row_id"]) for row in ordered[required:]}
+    terminal: list[Mapping[str, Any]] = []
+    for position, row in enumerate(prefix, 1):
+        row_id = str(row["planned_row_id"])
+        row_history = _history(records, row_id)
+        require(row_history,
+                f"{stage} cannot open: prefix row {position}/{required} "
+                f"has no attempt ({row_id})")
+        require(_is_terminal(row_history[-1]),
+                f"{stage} cannot open: prefix row {position}/{required} "
+                f"is not terminal ({row_id})")
+        terminal.append(row_history[-1])
+    require(not any(str(item.get("planned_row_id")) in suffix_ids
+                    for item in records),
+            f"{stage} evidence must be created at the exact {required}-row "
+            "terminal boundary")
+    require(records and records[-1] == terminal[-1],
+            f"{stage} ledger head is not the terminal prefix head")
+    require(_ledger_record_hash_is_valid(records[-1]),
+            f"{stage} ledger head entry hash is invalid")
+    return Boundary(
+        stage=stage,
+        required_prefix=required,
+        closed_stage=str(spec["closed_stage"]),
+        stage_terminal_rows=int(spec["stage_terminal_rows"]),
+        records=tuple(records),
+        terminal_records=tuple(terminal),
+        dataset_index_path=index,
+        head=records[-1],
+    )
+
+
+def _head_binding(boundary: Boundary) -> Dict[str, Any]:
+    head = boundary.head
+    return {
+        "entry_hash": head["entry_hash"],
+        "planned_row_id": head["planned_row_id"],
+        "attempt_id": head["attempt_id"],
+        "attempt_manifest_path": head["attempt_manifest_path"],
+        "attempt_manifest_hash": head["attempt_manifest_hash"],
+    }
+
+
+def _common_evidence(admission: Any, boundary: Boundary,
+                     name: str, document_type: str) -> Dict[str, Any]:
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "document_type": document_type,
+        "evidence_name": name,
+        "protocol_id": runner.PROTOCOL_ID,
+        "release_id": runner.RELEASE_ID,
+        "formal": True,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "stage": boundary.stage,
+        "required_terminal_prefix_rows": boundary.required_prefix,
+        "dataset_index_path": str(boundary.dataset_index_path),
+        "dataset_index_head_hash": boundary.head["entry_hash"],
+        "ledger_head_entry": _head_binding(boundary),
+        "mechanism_release": _release_descriptor(admission),
+        "release_hash": admission.release["release_hash"],
+        "mechanism_master": _master_descriptor(admission),
+        "master_hash": admission.master["master_hash"],
+    }
+
+
+def _closure_document(admission: Any, boundary: Boundary,
+                      name: str) -> Dict[str, Any]:
+    core = _common_evidence(
+        admission, boundary, name,
+        "SMPCC_SIM_MECHANISM_STAGE_CLOSURE_EVIDENCE")
+    core.update({
+        "closed_stage": boundary.closed_stage,
+        "status": "PASS",
+        "terminal_prefix_rows": boundary.required_prefix,
+        "stage_terminal_rows": boundary.stage_terminal_rows,
+        "N_attempt_at_boundary": len(boundary.records),
+        "N_method_success": sum(
+            item.get("method_success") is True
+            for item in boundary.terminal_records),
+        "N_method_failure": sum(
+            item.get("method_failure") is True
+            for item in boundary.terminal_records),
+        "created_utc": runner.utc_now(),
+    })
+    return dict(core, evidence_hash=runner.canonical_hash(core))
+
+
+def _decision_document(admission: Any, boundary: Boundary, name: str,
+                       reason: str) -> Dict[str, Any]:
+    spec = STAGE_SPECS[boundary.stage]
+    core = _common_evidence(
+        admission, boundary, name,
+        "SMPCC_SIM_MECHANISM_MANUAL_STAGE_DECISION_EVIDENCE")
+    core.update({
+        "decision": spec["decision"],
+        str(spec["reason_field"]): reason,
+        "manual_operator_statement": True,
+        "automatic_scientific_effect_inference": False,
+        "scientific_effect_evaluated_by_tool": False,
+        "created_utc": runner.utc_now(),
+    })
+    return dict(core, evidence_hash=runner.canonical_hash(core))
+
+
+def _expected_closure_fields() -> set[str]:
+    return {
+        "schema_version", "document_type", "evidence_name", "protocol_id",
+        "release_id", "formal", "formal_scope", "physical_alignment",
+        "physical_primary_eligible", "physical_primary", "stage",
+        "required_terminal_prefix_rows", "dataset_index_path",
+        "dataset_index_head_hash", "ledger_head_entry",
+        "mechanism_release", "release_hash", "mechanism_master",
+        "master_hash", "closed_stage", "status", "terminal_prefix_rows",
+        "stage_terminal_rows", "N_attempt_at_boundary",
+        "N_method_success", "N_method_failure", "created_utc",
+        "evidence_hash",
+    }
+
+
+def _expected_decision_fields(reason_field: str) -> set[str]:
+    return {
+        "schema_version", "document_type", "evidence_name", "protocol_id",
+        "release_id", "formal", "formal_scope", "physical_alignment",
+        "physical_primary_eligible", "physical_primary", "stage",
+        "required_terminal_prefix_rows", "dataset_index_path",
+        "dataset_index_head_hash", "ledger_head_entry",
+        "mechanism_release", "release_hash", "mechanism_master",
+        "master_hash", "decision", reason_field,
+        "manual_operator_statement", "automatic_scientific_effect_inference",
+        "scientific_effect_evaluated_by_tool", "created_utc", "evidence_hash",
+    }
+
+
+def _validate_evidence_document(admission: Any, boundary: Boundary,
+                                name: str, path: Path) -> Mapping[str, Any]:
+    spec = STAGE_SPECS[boundary.stage]
+    closure = name == spec["closure_name"]
+    expected_path = _canonical_stage_evidence_path(boundary.stage, name)
+    descriptor = _readonly_descriptor(path, expected_path, f"{name} evidence")
+    try:
+        document = runner.read_json(path, f"{name} evidence")
+    except (runner.RunnerError, OSError, ValueError, TypeError) as exc:
+        raise CampaignControlError(str(exc)) from exc
+    fields = (_expected_closure_fields() if closure else
+              _expected_decision_fields(str(spec["reason_field"])))
+    require(set(document) == fields, f"{name} evidence fields are not exact")
+    core = dict(document)
+    declared = core.pop("evidence_hash", None)
+    require(declared == runner.canonical_hash(core),
+            f"{name} evidence_hash mismatch")
+    common = {
+        "schema_version": SCHEMA_VERSION,
+        "evidence_name": name,
+        "protocol_id": runner.PROTOCOL_ID,
+        "release_id": runner.RELEASE_ID,
+        "formal": True,
+        "formal_scope": FORMAL_SCOPE,
+        "physical_alignment": False,
+        "physical_primary_eligible": False,
+        "physical_primary": None,
+        "stage": boundary.stage,
+        "required_terminal_prefix_rows": boundary.required_prefix,
+        "dataset_index_path": str(boundary.dataset_index_path),
+        "dataset_index_head_hash": boundary.head["entry_hash"],
+        "ledger_head_entry": _head_binding(boundary),
+        "mechanism_release": _release_descriptor(admission),
+        "release_hash": admission.release["release_hash"],
+        "mechanism_master": _master_descriptor(admission),
+        "master_hash": admission.master["master_hash"],
+    }
+    for key, expected in common.items():
+        require(document.get(key) == expected,
+                f"{name} evidence {key} is stale or mismatched")
+    if closure:
+        require(
+            document.get("document_type") ==
+            "SMPCC_SIM_MECHANISM_STAGE_CLOSURE_EVIDENCE"
+            and document.get("closed_stage") == boundary.closed_stage
+            and document.get("status") == "PASS"
+            and document.get("terminal_prefix_rows") == boundary.required_prefix
+            and document.get("stage_terminal_rows") ==
+            boundary.stage_terminal_rows
+            and document.get("N_attempt_at_boundary") == len(boundary.records)
+            and document.get("N_method_success") == sum(
+                item.get("method_success") is True
+                for item in boundary.terminal_records)
+            and document.get("N_method_failure") == sum(
+                item.get("method_failure") is True
+                for item in boundary.terminal_records),
+            f"{name} closure evidence does not match the ledger boundary")
+    else:
+        reason_field = str(spec["reason_field"])
+        require(
+            document.get("document_type") ==
+            "SMPCC_SIM_MECHANISM_MANUAL_STAGE_DECISION_EVIDENCE"
+            and document.get("decision") == spec["decision"]
+            and document.get("manual_operator_statement") is True
+            and document.get("automatic_scientific_effect_inference") is False
+            and document.get("scientific_effect_evaluated_by_tool") is False,
+            f"{name} is not an explicit manual decision")
+        _validate_reason(document.get(reason_field), reason_field)
+    require(descriptor["sha256"] == runner.sha256_file(path),
+            f"{name} evidence file hash changed while validating")
+    return document
+
+
+def create_stage_evidence(release_path: Path, stage: str,
+                          extension_reason: Optional[str] = None,
+                          trigger_reason: Optional[str] = None) -> Dict[str, Any]:
+    """Freeze closure plus a manual extension/trigger decision."""
+
+    spec = STAGE_SPECS.get(stage)
+    require(isinstance(spec, Mapping), f"unsupported stage: {stage}")
+    if stage == "SIM-S2A_SELECTIVITY":
+        reason = _validate_reason(extension_reason, "extension_reason")
+        require(trigger_reason is None,
+                "trigger_reason is only valid for SIM-S2B_TRANSFER")
+    else:
+        reason = _validate_reason(trigger_reason, "trigger_reason")
+        require(extension_reason is None,
+                "extension_reason is only valid for SIM-S2A_SELECTIVITY")
+    exact = _exact_release_path(release_path)
+    with runner.campaign_lock():
+        admission, records, ordered, index = _snapshot(exact)
+        boundary = _boundary(stage, records, ordered, index)
+        closure_name = str(spec["closure_name"])
+        decision_name = str(spec["decision_name"])
+        closure_path = _canonical_stage_evidence_path(stage, closure_name)
+        decision_path = _canonical_stage_evidence_path(stage, decision_name)
+        _reject_output(closure_path, closure_path, f"{closure_name} evidence")
+        _reject_output(decision_path, decision_path, f"{decision_name} evidence")
+        closure = _closure_document(admission, boundary, closure_name)
+        decision = _decision_document(
+            admission, boundary, decision_name, reason)
+        _write_json_new_readonly(
+            closure_path, closure, f"{closure_name} evidence")
+        _write_json_new_readonly(
+            decision_path, decision, f"{decision_name} evidence")
+        return {
+            "status": "PASS",
+            "formal": True,
+            "formal_scope": FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "stage": stage,
+            "dataset_index_head_hash": boundary.head["entry_hash"],
+            "evidence": {
+                closure_name: _readonly_descriptor(
+                    closure_path, closure_path, f"{closure_name} evidence"),
+                decision_name: _readonly_descriptor(
+                    decision_path, decision_path, f"{decision_name} evidence"),
+            },
+        }
+
+
+def authorize_stage(release_path: Path, stage: str) -> Dict[str, Any]:
+    """Create the runner's exact immutable stage authorization."""
+
+    spec = STAGE_SPECS.get(stage)
+    require(isinstance(spec, Mapping), f"unsupported stage: {stage}")
+    exact = _exact_release_path(release_path)
+    with runner.campaign_lock():
+        admission, records, ordered, index = _snapshot(exact)
+        boundary = _boundary(stage, records, ordered, index)
+        evidence: Dict[str, Dict[str, str]] = {}
+        for name in (str(spec["closure_name"]), str(spec["decision_name"])):
+            path = _canonical_stage_evidence_path(stage, name)
+            _validate_evidence_document(admission, boundary, name, path)
+            evidence[name] = _readonly_descriptor(
+                path, path, f"{name} evidence")
+        output = _canonical_stage_authorization_path(stage)
+        _reject_output(output, output, f"{stage} authorization")
+        core: Dict[str, Any] = {
+            "schema_version": SCHEMA_VERSION,
+            "document_type": "SMPCC_SIM_MECHANISM_STAGE_AUTHORIZATION",
+            "protocol_id": runner.PROTOCOL_ID,
+            "release_id": runner.RELEASE_ID,
+            "formal": True,
+            "formal_scope": FORMAL_SCOPE,
+            "physical_alignment": False,
+            "physical_primary_eligible": False,
+            "physical_primary": None,
+            "stage": stage,
+            "decision": "OPEN",
+            "required_terminal_prefix_rows": boundary.required_prefix,
+            "dataset_index_path": str(index),
+            "dataset_index_head_hash": boundary.head["entry_hash"],
+            "ledger_head_entry": _head_binding(boundary),
+            "mechanism_release": _release_descriptor(admission),
+            "release_hash": admission.release["release_hash"],
+            "mechanism_master": _master_descriptor(admission),
+            "master_hash": admission.master["master_hash"],
+            "evidence": evidence,
+            "manual_authorization": True,
+            "automatic_scientific_effect_inference": False,
+            "scientific_effect_evaluated_by_tool": False,
+            "created_utc": runner.utc_now(),
+        }
+        authorization = dict(
+            core, authorization_hash=runner.canonical_hash(core))
+        _write_json_new_readonly(
+            output, authorization, f"{stage} authorization")
+        return {
+            "status": "PASS",
+            "formal": True,
+            "formal_scope": FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "stage": stage,
+            "dataset_index_head_hash": boundary.head["entry_hash"],
+            "authorization": _readonly_descriptor(
+                output, output, f"{stage} authorization"),
+            "authorization_hash": authorization["authorization_hash"],
+        }
+
+
+def _current_retry_record(records: Sequence[Mapping[str, Any]],
+                          ordered: Sequence[Mapping[str, Any]],
+                          requested_attempt_id: str) -> tuple[Mapping[str, Any],
+                                                              Mapping[str, Any],
+                                                              int]:
+    matches = [item for item in records
+               if item.get("attempt_id") == requested_attempt_id]
+    require(len(matches) == 1,
+            "previous_attempt_id is absent or repeated in the R7 ledger")
+    requested = matches[0]
+    require(requested.get("method_failure") is not True,
+            "method failure is terminal and cannot be retried")
+    require(requested.get("method_success") is not True,
+            "method success is terminal and cannot be retried")
+    require(requested.get("failure_class") ==
+            "INFRASTRUCTURE_ACQUISITION",
+            "only INFRASTRUCTURE_ACQUISITION may be retried")
+    require(requested.get("motion_started") is False,
+            "only a pre-motion acquisition failure may be retried")
+    require(records and requested == records[-1],
+            "retry authorization must target the unresolved ledger head")
+    require(_ledger_record_hash_is_valid(requested),
+            "previous retry ledger entry hash is invalid")
+
+    requested_row_id = str(requested.get("planned_row_id", ""))
+    current_row: Optional[Mapping[str, Any]] = None
+    current_history: list[Mapping[str, Any]] = []
+    for row in ordered:
+        row_id = str(row["planned_row_id"])
+        history = _history(records, row_id)
+        if not history:
+            current_row = row
+            current_history = []
+            break
+        if _is_terminal(history[-1]):
+            continue
+        current_row = row
+        current_history = history
+        break
+    require(isinstance(current_row, Mapping) and
+            current_row.get("planned_row_id") == requested_row_id and
+            current_history and current_history[-1] == requested,
+            "previous_attempt_id is out of frozen serial order")
+    try:
+        previous_number = runner._attempt_number(
+            requested_attempt_id, requested_row_id)
+    except runner.RunnerError as exc:
+        raise CampaignControlError(str(exc)) from exc
+    require(previous_number == len(current_history),
+            "previous attempt suffix/history is non-contiguous")
+    return requested, current_row, previous_number + 1
+
+
+def authorize_retry(release_path: Path, previous_attempt_id: str,
+                    reason: str) -> Dict[str, Any]:
+    """Authorize exactly one retry of the unresolved pre-motion acquisition."""
+
+    reason = _validate_reason(reason, "retry_reason")
+    require(isinstance(previous_attempt_id, str) and
+            previous_attempt_id.strip() == previous_attempt_id and
+            previous_attempt_id != "",
+            "previous_attempt_id must be a non-empty canonical ID")
+    exact = _exact_release_path(release_path)
+    with runner.campaign_lock():
+        admission, records, ordered, index = _snapshot(exact)
+        previous, row, next_number = _current_retry_record(
+            records, ordered, previous_attempt_id)
+        row_id = str(row["planned_row_id"])
+        next_attempt_id = f"{row_id}_r{next_number:02d}"
+        require(next_number <= 99,
+                "canonical retry suffix exceeds two digits")
+        manifest_path = Path(str(previous.get("attempt_manifest_path", "")))
+        expected_manifest = (runner.CANONICAL_RESULT_ROOT / "attempts" /
+                             previous_attempt_id / "attempt_manifest.json")
+        descriptor = _readonly_descriptor(
+            manifest_path, expected_manifest, "previous attempt manifest")
+        require(previous.get("attempt_manifest_hash") ==
+                descriptor["sha256"],
+                "previous attempt manifest hash differs from the ledger")
+        try:
+            manifest = runner.read_json(
+                manifest_path, "previous attempt manifest")
+        except (runner.RunnerError, OSError, ValueError, TypeError) as exc:
+            raise CampaignControlError(str(exc)) from exc
+        require(
+            manifest.get("attempt_id") == previous_attempt_id
+            and manifest.get("planned_row_id") == row_id
+            and manifest.get("method_success") is False
+            and manifest.get("method_failure") is False
+            and manifest.get("motion_started") is False
+            and manifest.get("failure_class") ==
+            "INFRASTRUCTURE_ACQUISITION",
+            "previous attempt manifest is not the same retryable acquisition")
+        output = _canonical_retry_authorization_path(next_attempt_id)
+        _reject_output(output, output, "retry authorization")
+        core: Dict[str, Any] = {
+            "schema_version": SCHEMA_VERSION,
+            "document_type": "SMPCC_SIM_MECHANISM_RETRY_AUTHORIZATION",
+            "protocol_id": runner.PROTOCOL_ID,
+            "release_id": runner.RELEASE_ID,
+            "formal": True,
+            "formal_scope": FORMAL_SCOPE,
+            "physical_alignment": False,
+            "physical_primary_eligible": False,
+            "physical_primary": None,
+            "mechanism_release": _release_descriptor(admission),
+            "release_hash": admission.release["release_hash"],
+            "mechanism_master": _master_descriptor(admission),
+            "master_hash": admission.master["master_hash"],
+            "dataset_index_path": str(index),
+            "dataset_index_head_hash": previous["entry_hash"],
+            "previous_ledger_entry_hash": previous["entry_hash"],
+            "planned_row_id": row_id,
+            "stage": row["stage"],
+            "condition_id": row["condition_id"],
+            "previous_attempt_id": previous_attempt_id,
+            "previous_attempt_manifest": descriptor,
+            "previous_attempt_manifest_hash": descriptor["sha256"],
+            "next_attempt_id": next_attempt_id,
+            "method_success": False,
+            "method_failure": False,
+            "motion_started": False,
+            "failure_class": "INFRASTRUCTURE_ACQUISITION",
+            "retry_reason": reason,
+            "manual_authorization": True,
+            "scientific_effect_evaluated_by_tool": False,
+            "created_utc": runner.utc_now(),
+        }
+        authorization = dict(
+            core, authorization_hash=runner.canonical_hash(core))
+        _write_json_new_readonly(
+            output, authorization, "retry authorization")
+        return {
+            "status": "PASS",
+            "formal": True,
+            "formal_scope": FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "planned_row_id": row_id,
+            "previous_attempt_id": previous_attempt_id,
+            "next_attempt_id": next_attempt_id,
+            "previous_ledger_entry_hash": previous["entry_hash"],
+            "authorization": _readonly_descriptor(
+                output, output, "retry authorization"),
+            "authorization_hash": authorization["authorization_hash"],
+        }
+
+
+def _emit(value: Mapping[str, Any]) -> None:
+    print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    evidence = sub.add_parser(
+        "create-stage-evidence",
+        help="freeze exact-boundary closure and manual decision evidence")
+    evidence.add_argument("--release", type=Path, required=True)
+    evidence.add_argument("--stage", choices=tuple(STAGE_SPECS), required=True)
+    evidence.add_argument("--extension-reason")
+    evidence.add_argument("--trigger-reason")
+    evidence.set_defaults(func=lambda args: create_stage_evidence(
+        args.release, args.stage, args.extension_reason,
+        args.trigger_reason))
+
+    stage = sub.add_parser(
+        "authorize-stage",
+        help="open one stage using its two immutable evidence files")
+    stage.add_argument("--release", type=Path, required=True)
+    stage.add_argument("--stage", choices=tuple(STAGE_SPECS), required=True)
+    stage.set_defaults(func=lambda args: authorize_stage(
+        args.release, args.stage))
+
+    retry = sub.add_parser(
+        "authorize-retry",
+        help="authorize one retry of the unresolved pre-motion acquisition")
+    retry.add_argument("--release", type=Path, required=True)
+    retry.add_argument("--previous-attempt-id", required=True)
+    retry.add_argument("--reason", required=True)
+    retry.set_defaults(func=lambda args: authorize_retry(
+        args.release, args.previous_attempt_id, args.reason))
+    return parser
+
+
+def main(argv: Optional[Iterable[str]] = None) -> int:
+    try:
+        args = build_parser().parse_args(argv)
+        result = args.func(args)
+        _emit(result)
+        return 0 if result.get("status") == "PASS" else 2
+    except (
+        CampaignControlError,
+        runner.RunnerError,
+        OSError,
+        ValueError,
+        KeyError,
+        TypeError,
+    ) as exc:
+        _emit({
+            "status": "NO_GO",
+            "formal": False,
+            "formal_scope": FORMAL_SCOPE,
+            "physical_primary_eligible": False,
+            "errors": [str(exc)],
+        })
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

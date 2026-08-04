@@ -1,0 +1,34 @@
+<launch>
+  <!--
+    Dedicated SIMULATION_MECHANISM_ONLY FixedProfile tracker.  This launch
+    never includes the deprecated local-planner node and exposes no tuning/profile generator
+    selector.  The node parses, hashes and admits the immutable CSV before it
+    creates /cmd_vel.  It then advertises /cmd_vel in a zero-only hold before
+    dynamic path admission; motion needs the dedicated hash-bound release
+    handshake after the runner has verified recorder connectivity.
+  -->
+  <arg name="sim_only_release_ack" default="false"/>
+  <arg name="sim_only_container_condition" default="invalid" doc="C1|C2"/>
+  <arg name="frozen_profile_csv" default=""/>
+  <arg name="frozen_profile_sha256" default=""/>
+  <arg name="mechanism_release_hash" default=""/>
+  <arg name="fixed_profile_id" default="invalid" doc="H1_C1|L1_C1|H1_C2"/>
+  <arg name="frozen_path_id" default="invalid" doc="H1|L1"/>
+
+  <node pkg="spmpc_sim_local_planner"
+        type="smpcc_sim_mechanism_fixed_profile_tracker.py"
+        name="sim_mechanism_fixed_profile_tracker"
+        output="screen"
+        required="true">
+    <param name="sim_mechanism_fixed_profile_launch" value="true"/>
+    <param name="sim_mechanism_release_id" value="SIM-MECHANISM-40-64-88-R7"/>
+    <param name="mechanism_release_hash" value="$(arg mechanism_release_hash)"/>
+    <param name="sim_only_release_ack" value="$(arg sim_only_release_ack)"/>
+    <param name="sim_only_container_config_id"
+           value="$(eval 'SIM_ONLY_C1_D37_H58_LEGACY_UNVALIDATED' if arg('sim_only_container_condition') == 'C1' else 'SIM_ONLY_C2_D95_H58_UNVALIDATED' if arg('sim_only_container_condition') == 'C2' else 'invalid-sim-only-container-condition')"/>
+    <param name="frozen_profile_csv" value="$(arg frozen_profile_csv)"/>
+    <param name="frozen_profile_sha256" value="$(arg frozen_profile_sha256)"/>
+    <param name="fixed_profile_id" value="$(arg fixed_profile_id)"/>
+    <param name="frozen_path_id" value="$(arg frozen_path_id)"/>
+  </node>
+</launch>

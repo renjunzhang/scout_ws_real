@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+# QUARANTINED_R7_R1_ARCHIVE: historical source only; never execute or import.
+"""Static contracts for the source-separated SIM mechanism launch path."""
+
+from __future__ import annotations
+raise SystemExit("QUARANTINED_R7_R1_ARCHIVE: this historical source is not executable")
+
+
+import unittest
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+
+WORKSPACE = Path(__file__).resolve().parents[6]
+SIM_ROOT = WORKSPACE / "src/scout_apps/simulation/spmpc_sim_local_planner"
+SIM_LAUNCH = SIM_ROOT / "launch/smpcc_sim_mechanism_r8.launch"
+SIM_BSLOSH_LAUNCH = SIM_ROOT / "launch/smpcc_sim_only_bslosh_r8.launch"
+REAL_ROOT = WORKSPACE / "src/scout_apps/control/spmpc_local_planner"
+FIXED_TRACKER_LAUNCH = SIM_ROOT / "launch/smpcc_sim_mechanism_fixed_profile.launch"
+
+
+def root_args(path: Path) -> set[str]:
+    return {element.attrib["name"] for element in ET.parse(path).getroot().findall("arg")}
+
+
+class SimMechanismLaunchContractTest(unittest.TestCase):
+    def test_online_launch_is_owned_by_simulation_package(self):
+        root = ET.parse(SIM_LAUNCH).getroot()
+        node = root.find("node")
+        self.assertIsNotNone(node)
+        assert node is not None
+        self.assertEqual("spmpc_sim_local_planner", node.attrib["pkg"])
+        self.assertEqual("smpcc_sim_controller_gate.py", node.attrib["type"])
+        self.assertEqual("sim_spmpc_local_planner", node.attrib["name"])
+        self.assertNotIn("spmpc_local_planner)/launch", SIM_LAUNCH.read_text())
+
+    def test_online_launch_exposes_no_semantic_tuning_argument(self):
+        arguments = root_args(SIM_LAUNCH)
+        public = {
+            "sim_release_ack", "sim_controller_variant", "sim_container_condition",
+            "reference_path_topic", "costmap_topic", "cmd_vel_topic", "publish_cmd_vel",
+        }
+        internal = {"engine_variant", "variant_config", "container_config", "container_config_id"}
+        self.assertEqual(public | internal, arguments)
+        for name in public:
+            self.assertFalse(any(token in name for token in ("w_", "v_ref", "observer", "delay", "solver")))
+
+    def test_gate_parameters_are_default_deny_and_sim_only(self):
+        root = ET.parse(SIM_LAUNCH).getroot()
+        node = root.find("node")
+        assert node is not None
+        params = {item.attrib["name"]: item.attrib.get("value", "") for item in node.findall("param")}
+        self.assertEqual("true", params["sim_adapter/launch_marker"])
+        self.assertEqual("$(arg sim_release_ack)", params["sim_adapter/release_ack"])
+        self.assertEqual("$(arg sim_controller_variant)", params["sim_adapter/condition_id"])
+        self.assertEqual("false", params["frames/use_tf_pose"])
+        self.assertEqual("odom", params["slosh_observer/source"])
+        self.assertEqual("off", params["delay_phase/mode"])
+
+    def test_every_loaded_configuration_is_sim_owned(self):
+        root = ET.parse(SIM_LAUNCH).getroot()
+        node = root.find("node")
+        assert node is not None
+        files = [item.attrib["file"] for item in node.findall("rosparam")]
+        self.assertEqual(5, len(files))
+        for value in files:
+            self.assertIn("$(find spmpc_sim_local_planner)/config/", value)
+
+    def test_bslosh_wrapper_cannot_select_a_real_variant(self):
+        root = ET.parse(SIM_BSLOSH_LAUNCH).getroot()
+        include = root.find("include")
+        self.assertIsNotNone(include)
+        assert include is not None
+        arguments = {item.attrib["name"]: item.attrib.get("value", "") for item in include.findall("arg")}
+        self.assertEqual("SIM_Bslosh_R1", arguments["sim_controller_variant"])
+        self.assertEqual("$(arg sim_release_ack)", arguments["sim_release_ack"])
+
+    def test_fixed_profile_stays_readonly_and_has_no_generator(self):
+        text = FIXED_TRACKER_LAUNCH.read_text(encoding="utf-8")
+        self.assertNotIn("generate", text.lower())
+        self.assertNotIn("s_curve", text.lower())
+        self.assertIn("frozen_profile_sha256", text)
+
+    def test_real_controller_contains_no_sim_release_gate_or_sim_launch(self):
+        for path in (
+            REAL_ROOT / "CMakeLists.txt",
+            REAL_ROOT / "config/planner/variants.yaml",
+            REAL_ROOT / "src/ros/spmpc_local_planner_ros.cpp",
+            REAL_ROOT / "launch/spmpc_experiment.launch",
+            REAL_ROOT / "launch/spmpc_fixed_path.launch",
+        ):
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn("SIM_Bslosh_R1", text, path)
+            self.assertNotIn("sim_only_release_ack", text, path)
+            self.assertNotIn("sim_mechanism_launch", text, path)
+
+
+if __name__ == "__main__":
+    unittest.main()

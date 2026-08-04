@@ -1,0 +1,46 @@
+{
+  "document_type": "SMPCC_SIM_HISTORICAL_0705_WEIGHT_FIXTURE",
+  "fixture_only": true,
+  "formal": false,
+  "origin_commit": "3c558a5",
+  "origin_description": "Read-only export of the 0705 B0 and B_smooth declarations; retained for development provenance without a runtime dependency on real-controller source.",
+  "fallback_fields": {
+    "w_alpha": "w_smooth",
+    "w_du_a": "w_smooth",
+    "w_du_vs": "w_smooth"
+  },
+  "variants": {
+    "B0": {
+      "slosh_enable": false,
+      "smooth_priority_enable": false,
+      "slosh_constraint_enable": false,
+      "primitive_mode": "linear",
+      "w_contour": 1.0,
+      "w_lag": 0.2,
+      "w_progress": 0.2,
+      "w_v": 1.0,
+      "w_vs": 0.3,
+      "v_ref": 0.25,
+      "w_control": 0.1,
+      "w_accel": 0.0,
+      "w_smooth": 0.1,
+      "w_slosh": 0.0
+    },
+    "B_smooth": {
+      "slosh_enable": false,
+      "smooth_priority_enable": true,
+      "slosh_constraint_enable": false,
+      "primitive_mode": "linear",
+      "w_contour": 1.0,
+      "w_lag": 0.2,
+      "w_progress": 0.2,
+      "w_v": 1.0,
+      "w_vs": 0.3,
+      "v_ref": 0.25,
+      "w_control": 0.3,
+      "w_accel": 0.0,
+      "w_smooth": 1.0,
+      "w_slosh": 0.0
+    }
+  }
+}

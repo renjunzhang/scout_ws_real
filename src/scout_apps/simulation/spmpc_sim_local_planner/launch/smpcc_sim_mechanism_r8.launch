@@ -1,0 +1,53 @@
+<launch>
+  <!-- The only online S-MPCC mechanism entry point after source separation.
+       It owns all simulation configuration and starts a separately linked
+       binary.  Invalid selectors deliberately reach the Python gate and exit
+       before the controller target is exec'd. -->
+  <arg name="sim_release_ack" default="false"/>
+  <arg name="sim_controller_variant" default="invalid"
+       doc="SIM_B0_R1|SIM_Bsmooth_R1|SIM_SmoothMatch_R1|SIM_Bslosh_R1|SIM_H0_Bsmooth_R1(development only)"/>
+  <arg name="sim_container_condition" default="invalid" doc="C1|C2"/>
+  <arg name="reference_path_topic" default="/scout/global_path_fixed"/>
+  <arg name="costmap_topic" default="/map"/>
+  <arg name="cmd_vel_topic" default="/cmd_vel"/>
+  <arg name="publish_cmd_vel" default="true"/>
+
+  <arg name="engine_variant"
+       value="$(eval 'B0' if arg('sim_controller_variant') == 'SIM_B0_R1' else 'B_smooth' if arg('sim_controller_variant') in ['SIM_Bsmooth_R1', 'SIM_SmoothMatch_R1', 'SIM_H0_Bsmooth_R1'] else 'B_slosh' if arg('sim_controller_variant') == 'SIM_Bslosh_R1' else 'B0')"/>
+  <arg name="variant_config"
+       value="$(eval 'SIM_B0_R1.yaml' if arg('sim_controller_variant') == 'SIM_B0_R1' else 'SIM_Bsmooth_R1.yaml' if arg('sim_controller_variant') == 'SIM_Bsmooth_R1' else 'SIM_SmoothMatch_R1.yaml' if arg('sim_controller_variant') == 'SIM_SmoothMatch_R1' else 'SIM_Bslosh_R1.yaml' if arg('sim_controller_variant') == 'SIM_Bslosh_R1' else 'SIM_H0_Bsmooth_R1.yaml' if arg('sim_controller_variant') == 'SIM_H0_Bsmooth_R1' else 'reject.yaml')"/>
+  <arg name="container_config"
+       value="$(eval 'C1_37mm_H58_sim.yaml' if arg('sim_container_condition') == 'C1' else 'C2_95mm_H58_sim.yaml' if arg('sim_container_condition') == 'C2' else 'C1_37mm_H58_sim.yaml')"/>
+  <arg name="container_config_id"
+       value="$(eval 'SIM_ONLY_C1_D37_H58_UNVALIDATED' if arg('sim_container_condition') == 'C1' else 'SIM_ONLY_C2_D95_H58_UNVALIDATED' if arg('sim_container_condition') == 'C2' else 'invalid-sim-container-condition')"/>
+
+  <node pkg="spmpc_sim_local_planner"
+        type="smpcc_sim_controller_gate.py"
+        name="sim_spmpc_local_planner"
+        output="screen"
+        required="true">
+    <rosparam command="load" file="$(find spmpc_sim_local_planner)/config/planner/common_sim.yaml"/>
+    <rosparam command="load" file="$(find spmpc_sim_local_planner)/config/platforms/scout_mini_sim.yaml"/>
+    <rosparam command="load" file="$(find spmpc_sim_local_planner)/config/containers/$(arg container_config)"/>
+    <rosparam command="load" file="$(find spmpc_sim_local_planner)/config/experiments/fixed_path_sim.yaml"/>
+    <rosparam command="load" file="$(find spmpc_sim_local_planner)/config/variants/$(arg variant_config)"/>
+    <param name="sim_adapter/target_id" value="SMPCC_SIM_LOCAL_PLANNER_TARGET_R8"/>
+    <param name="sim_adapter/gate_id" value="SMPCC_SIM_LOCAL_PLANNER_GATE_R8"/>
+    <param name="sim_adapter/launch_marker" value="true"/>
+    <param name="sim_adapter/release_ack" value="$(arg sim_release_ack)"/>
+    <param name="sim_adapter/condition_id" value="$(arg sim_controller_variant)"/>
+    <param name="sim_adapter/container_condition" value="$(arg sim_container_condition)"/>
+    <param name="sim_adapter/container_config_id" value="$(arg container_config_id)"/>
+    <param name="planner_variant" value="$(arg engine_variant)"/>
+    <param name="topics/reference_path" value="$(arg reference_path_topic)"/>
+    <param name="topics/costmap" value="$(arg costmap_topic)"/>
+    <param name="topics/cmd_vel" value="$(arg cmd_vel_topic)"/>
+    <param name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>
+    <param name="frames/use_tf_pose" value="false"/>
+    <param name="slosh_observer/source" value="odom"/>
+    <param name="slosh_observer/fallback_policy" value="odom"/>
+    <param name="imu_shadow/enable" value="false"/>
+    <param name="delay_phase/mode" value="off"/>
+    <param name="solver_backend" value="continuous_mpcc_acados"/>
+  </node>
+</launch>
