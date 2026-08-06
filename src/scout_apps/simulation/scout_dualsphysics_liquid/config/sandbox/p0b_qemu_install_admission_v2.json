@@ -1,0 +1,149 @@
+{
+  "schema_version": "smpcc-r8-liquid-qemu-install-admission-v2",
+  "document_type": "SMPCC_R8_LIQUID_QEMU_INSTALL_ADMISSION",
+  "admission_scope": "EXACT_OBSERVED_INSTALLATION_STATE_ONLY",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "historical_evidence": {
+    "predecessor_preserved": true,
+    "supersedes_predecessor": false,
+    "vm_policy_v1": {
+      "path": "config/sandbox/p0b_vm_policy_v1.json",
+      "sha256": "c0670e5f3a2b7bea943fc2e29ee988921ac3fbfa1c93bc1f845bff3ea619a516",
+      "system_install_authorized": false
+    },
+    "sandbox_gate_v1": {
+      "path": "scripts/r8_liquid_sandbox_gate.py",
+      "sha256": "10709cffa6e9e0c0aff35dde370c4550c810bc21da783f33958512eb3efdcb09"
+    },
+    "sandbox_schema_v1": {
+      "path": "schema/sandbox_preflight_v1.json",
+      "sha256": "1d272e601133cf21092fa5eb60a217c5f66a89a045d7dcda94cf1503345ef9fb"
+    },
+    "final_preinstall_receipts": [
+      {
+        "path": "/data/a/scout_sim_replacement/r8_liquid/audits/sandbox/sandbox_preflight_vm-host_20260805T035755Z.json",
+        "file_sha256": "87ea81b036fc8a53454e5f859e95de4141831f60a60f43e5682f1e406097dcd9",
+        "receipt_hash": "19f57eb59a16e75b9aa160372d29be7012dbc9a0086060f040f8dd0f2154ac81"
+      },
+      {
+        "path": "/data/a/scout_sim_replacement/r8_liquid/audits/sandbox/sandbox_preflight_cpu-build_20260805T035756Z.json",
+        "file_sha256": "9cbe09208ea7c3318fb83e5e14feb39379835413a711ba23e7ef59c4f0416e05",
+        "receipt_hash": "b6861f6dd439ac6bede2a833f9d9ca9ab5c5b29f150ec08f7ddcaec64598d42b"
+      }
+    ]
+  },
+  "host_platform": {
+    "os_id": "ubuntu",
+    "os_version_id": "20.04",
+    "dpkg_architecture": "amd64"
+  },
+  "ubuntu_pro_posture": {
+    "attached": true,
+    "enabled_service_names_exact": [
+      "esm-infra"
+    ],
+    "operation_in_progress": false,
+    "raw_status_must_not_be_recorded": true
+  },
+  "recorded_install_transaction": {
+    "evidence_only": true,
+    "history_path": "/var/log/apt/history.log",
+    "started_utc": "2026-08-05T07:18:34+00:00",
+    "ended_utc": "2026-08-05T07:18:42+00:00",
+    "requested_packages": [
+      "qemu-system-x86",
+      "qemu-utils"
+    ],
+    "no_install_recommends": true,
+    "upgraded_count": 0,
+    "newly_installed_count": 19,
+    "removed_count": 0,
+    "future_package_mutation_authorized": false
+  },
+  "required_packages_exact": [
+    {"name": "ipxe-qemu", "architecture": "all", "version": "1.0.0+git-20190109.133f4c4-0ubuntu3.2", "status": "install ok installed"},
+    {"name": "ipxe-qemu-256k-compat-efi-roms", "architecture": "all", "version": "1.0.0+git-20150424.a25a16d-0ubuntu4", "status": "install ok installed"},
+    {"name": "libaio1", "architecture": "amd64", "version": "0.3.112-5", "status": "install ok installed"},
+    {"name": "libcacard0", "architecture": "amd64", "version": "1:2.6.1-1", "status": "install ok installed"},
+    {"name": "libfdt1", "architecture": "amd64", "version": "1.5.1-1", "status": "install ok installed"},
+    {"name": "libiscsi7", "architecture": "amd64", "version": "1.18.0-2", "status": "install ok installed"},
+    {"name": "libpmem1", "architecture": "amd64", "version": "1.8-1ubuntu1", "status": "install ok installed"},
+    {"name": "librados2", "architecture": "amd64", "version": "15.2.17-0ubuntu0.20.04.6+esm1", "status": "install ok installed"},
+    {"name": "librbd1", "architecture": "amd64", "version": "15.2.17-0ubuntu0.20.04.6+esm1", "status": "install ok installed"},
+    {"name": "libslirp0", "architecture": "amd64", "version": "4.1.0-2ubuntu2.2", "status": "install ok installed"},
+    {"name": "libspice-server1", "architecture": "amd64", "version": "0.14.2-4ubuntu3.1", "status": "install ok installed"},
+    {"name": "libusbredirparser1", "architecture": "amd64", "version": "0.8.0-1ubuntu0.1", "status": "install ok installed"},
+    {"name": "libvirglrenderer1", "architecture": "amd64", "version": "0.8.2-1ubuntu1.1", "status": "install ok installed"},
+    {"name": "qemu-block-extra", "architecture": "amd64", "version": "1:4.2-3ubuntu6.30+esm3", "status": "install ok installed"},
+    {"name": "qemu-system-common", "architecture": "amd64", "version": "1:4.2-3ubuntu6.30+esm3", "status": "install ok installed"},
+    {"name": "qemu-system-data", "architecture": "all", "version": "1:4.2-3ubuntu6.30+esm3", "status": "install ok installed"},
+    {"name": "qemu-system-x86", "architecture": "amd64", "version": "1:4.2-3ubuntu6.30+esm3", "status": "install ok installed"},
+    {"name": "qemu-utils", "architecture": "amd64", "version": "1:4.2-3ubuntu6.30+esm3", "status": "install ok installed"},
+    {"name": "seabios", "architecture": "all", "version": "1.13.0-1ubuntu1.1", "status": "install ok installed"}
+  ],
+  "required_qemu_namespace_exact": [
+    "qemu-block-extra",
+    "qemu-system-common",
+    "qemu-system-data",
+    "qemu-system-x86",
+    "qemu-utils"
+  ],
+  "required_absent_packages_exact": [
+    "bridge-utils",
+    "libvirt-daemon",
+    "libvirt-daemon-system",
+    "ovmf",
+    "qemu-system-gui",
+    "qemu-user",
+    "qemu-user-binfmt",
+    "qemu-user-static"
+  ],
+  "critical_files_exact": [
+    {"path": "/usr/bin/qemu-system-x86_64", "dpkg_owner": "qemu-system-x86", "file_type": "regular", "symlink": false, "uid": 0, "gid": 0, "mode": "0755", "size": 16287496, "sha256": "6e8225fd4ffcdc6c4696dd5bf181cade84876689965946e46a50834ad4c5a718", "security_capabilities": [], "diverted": false},
+    {"path": "/usr/bin/qemu-img", "dpkg_owner": "qemu-utils", "file_type": "regular", "symlink": false, "uid": 0, "gid": 0, "mode": "0755", "size": 1997112, "sha256": "21348cee8cf446f7253011ba4d349db438f554590b0456894f56342ea24e5806", "security_capabilities": [], "diverted": false},
+    {"path": "/usr/share/qemu/init/qemu-kvm-init", "dpkg_owner": "qemu-system-common", "file_type": "regular", "symlink": false, "uid": 0, "gid": 0, "mode": "0755", "size": 2496, "sha256": "c769a6a149897575767c5a4377cc7cb15dcbb586a9a1eec1d6248dba098b08f2", "security_capabilities": [], "diverted": false},
+    {"path": "/lib/systemd/system/qemu-kvm.service", "dpkg_owner": "qemu-system-common", "file_type": "regular", "symlink": false, "uid": 0, "gid": 0, "mode": "0644", "size": 367, "sha256": "da0544deed8c3e9f9f8221c99f5e1ca67135f15f1f3f070767cb8966f705304a", "security_capabilities": [], "diverted": false},
+    {"path": "/etc/default/qemu-kvm", "dpkg_owner": "qemu-system-common", "file_type": "regular", "symlink": false, "uid": 0, "gid": 0, "mode": "0644", "size": 319, "sha256": "4096435ea01fef66dd5720445a38d02a6d5b00083e3604dcd41922556f14797d", "security_capabilities": [], "diverted": false}
+  ],
+  "required_quiescence": {
+    "qemu_kvm_service": {
+      "load_state": "loaded",
+      "unit_file_state": "disabled",
+      "active_state": "inactive",
+      "sub_state": "dead",
+      "fragment_path": "/lib/systemd/system/qemu-kvm.service"
+    },
+    "qemu_kvm_autostart_link": "/etc/systemd/system/multi-user.target.wants/qemu-kvm.service",
+    "qemu_kvm_autostart_link_required_absent": true,
+    "ksm_run_path": "/sys/kernel/mm/ksm/run",
+    "ksm_required_start_value": "0",
+    "ksm_required_end_value": "0",
+    "qemu_processes_required_empty": true,
+    "unprivileged_process_visibility_uid_min": 1000,
+    "privileged_processes_are_configuration_trust_boundary": true,
+    "unreadable_unprivileged_process_allowlist_exact": [
+      {"pid": 1927, "uid": 1000, "starttime_ticks": 2606, "ppid": 1926, "parent_starttime_ticks": 2606, "cgroup_sha256": "583bb7a90dfbd0220f3ed0852e7962b99eb56445f23c07569578495222229acd", "comm": "(sd-pam)", "argv0": "(sd-pam)"},
+      {"pid": 1940, "uid": 1000, "starttime_ticks": 2615, "ppid": 1, "parent_starttime_ticks": 12, "cgroup_sha256": "f66813ef47a3728a1f7fcda618ded948b39df66ae64d44ac54c195231f00c2de", "comm": "gnome-keyring-d", "argv0": "/usr/bin/gnome-keyring-daemon"},
+      {"pid": 2015, "uid": 1000, "starttime_ticks": 2797, "ppid": 1963, "parent_starttime_ticks": 2789, "cgroup_sha256": "f66813ef47a3728a1f7fcda618ded948b39df66ae64d44ac54c195231f00c2de", "comm": "ssh-agent", "argv0": "/usr/bin/ssh-agent"}
+    ]
+  },
+  "decision": {
+    "observed_installation_state_admitted": true,
+    "future_package_mutation_authorized": false,
+    "qemu_executed": false,
+    "qemu_img_executed": false,
+    "qemu_execution_admitted": false,
+    "qemu_img_execution_admitted": false,
+    "vm_started": false,
+    "image_created": false,
+    "image_creation_admitted": false,
+    "build_started": false,
+    "build_admitted": false,
+    "gencase_started": false,
+    "gencase_admitted": false,
+    "upstream_code_executed": false,
+    "status": "PASS_INSTALL_STATE_ONLY_EXECUTION_NOT_ADMITTED"
+  }
+}

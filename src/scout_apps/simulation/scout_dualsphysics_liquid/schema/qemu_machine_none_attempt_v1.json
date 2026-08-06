@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SIM-R8 QEMU machine-none one-shot attempt marker v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "document_type", "scope", "created_utc", "boot_id_sha256",
+    "runtime_uid", "runtime_gid", "policy", "admission_schema", "attempt_schema",
+    "receipt_schema", "implementation", "namespace_or_qemu_attempt_consumed",
+    "namespace_state_at_commit", "qemu_execution_state_at_commit",
+    "future_execution_authorized", "authorization_reusable", "never_auto_delete",
+    "marker_hash"
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "pattern": "^(config|schema|scripts)/"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_path", "gate_sha256", "binary_gate_path", "binary_gate_sha256",
+        "install_gate_path", "install_gate_sha256", "safety_gate_path", "safety_gate_sha256"
+      ],
+      "properties": {
+        "gate_path": {"const": "scripts/r8_liquid_qemu_machine_none_gate.py"},
+        "gate_sha256": {"$ref": "#/$defs/sha256"},
+        "binary_gate_path": {"const": "scripts/r8_liquid_qemu_binary_probe_gate.py"},
+        "binary_gate_sha256": {"$ref": "#/$defs/sha256"},
+        "install_gate_path": {"const": "scripts/r8_liquid_qemu_install_gate_v2.py"},
+        "install_gate_sha256": {"$ref": "#/$defs/sha256"},
+        "safety_gate_path": {"const": "scripts/r8_liquid_safety.py"},
+        "safety_gate_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-qemu-machine-none-attempt-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_QEMU_MACHINE_NONE_ATTEMPT"},
+    "scope": {"const": "ONE_MACHINE_NONE_NAMESPACE_OR_QEMU_ATTEMPT"},
+    "created_utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}\\+00:00$"},
+    "boot_id_sha256": {"$ref": "#/$defs/sha256"},
+    "runtime_uid": {"const": 1000},
+    "runtime_gid": {"const": 1000},
+    "policy": {
+      "allOf": [
+        {"$ref": "#/$defs/asset"},
+        {"type": "object", "properties": {"path": {"const": "config/sandbox/p0b_qemu_machine_none_admission_v1.json"}}}
+      ]
+    },
+    "admission_schema": {
+      "allOf": [
+        {"$ref": "#/$defs/asset"},
+        {"type": "object", "properties": {"path": {"const": "schema/qemu_machine_none_admission_v1.json"}}}
+      ]
+    },
+    "attempt_schema": {
+      "allOf": [
+        {"$ref": "#/$defs/asset"},
+        {"type": "object", "properties": {"path": {"const": "schema/qemu_machine_none_attempt_v1.json"}}}
+      ]
+    },
+    "receipt_schema": {
+      "allOf": [
+        {"$ref": "#/$defs/asset"},
+        {"type": "object", "properties": {"path": {"const": "schema/qemu_machine_none_receipt_v1.json"}}}
+      ]
+    },
+    "implementation": {"$ref": "#/$defs/implementation"},
+    "namespace_or_qemu_attempt_consumed": {"const": true},
+    "namespace_state_at_commit": {"const": "NOT_CREATED"},
+    "qemu_execution_state_at_commit": {"const": "NOT_EXECUTED"},
+    "future_execution_authorized": {"const": false},
+    "authorization_reusable": {"const": false},
+    "never_auto_delete": {"const": true},
+    "marker_hash": {"$ref": "#/$defs/sha256"}
+  }
+}

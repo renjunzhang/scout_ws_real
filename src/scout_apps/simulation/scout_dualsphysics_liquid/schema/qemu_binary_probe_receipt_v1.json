@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SIM-R8 QEMU binary probe result v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "document_type", "created_utc", "development_only", "formal",
+    "physical_primary_eligible", "policy", "implementation", "predecessor_install_receipt",
+    "snapshot_sequence", "stability", "probe_result", "qemu_executed", "qemu_img_executed",
+    "vm_started", "machine_initialized", "network_backend_initialized", "network_namespace_created",
+    "filesystem_sandbox_claimed", "image_created", "build_started", "gencase_started",
+    "upstream_code_executed", "execution_was_explicitly_requested", "future_execution_authorized",
+    "authorization_reusable", "status", "errors", "receipt_hash"
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pid", "uid", "starttime_ticks", "ppid", "parent_starttime_ticks", "cgroup_sha256", "comm", "argv0"],
+      "properties": {
+        "pid": {"type": "integer", "minimum": 1},
+        "uid": {"type": "integer", "minimum": 1000},
+        "starttime_ticks": {"type": "integer", "minimum": 1},
+        "ppid": {"type": "integer", "minimum": 1},
+        "parent_starttime_ticks": {"type": "integer", "minimum": 1},
+        "cgroup_sha256": {"$ref": "#/$defs/sha256"},
+        "comm": {"type": "string", "minLength": 1},
+        "argv0": {"type": "string", "minLength": 1}
+      }
+    },
+    "process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pid", "uid", "comm", "exe", "reasons"],
+      "properties": {
+        "pid": {"type": "integer", "minimum": 1},
+        "uid": {"type": "integer", "minimum": 0},
+        "comm": {"type": "string"},
+        "exe": {"type": ["string", "null"]},
+        "reasons": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["load_state", "unit_file_state", "active_state", "sub_state", "fragment_path"],
+      "properties": {
+        "load_state": {"type": "string"},
+        "unit_file_state": {"type": "string"},
+        "active_state": {"type": "string"},
+        "sub_state": {"type": "string"},
+        "fragment_path": {"type": "string"}
+      }
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "installed", "architecture", "version", "status"],
+      "properties": {
+        "name": {"const": "qemu-system-x86"},
+        "installed": {"const": true},
+        "architecture": {"const": "amd64"},
+        "version": {"const": "1:4.2-3ubuntu6.30+esm3"},
+        "status": {"const": "install ok installed"}
+      }
+    },
+    "package_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_package", "qemu_namespace_installed", "dpkg_verify", "binary_dpkg_owner", "binary_diverted"],
+      "properties": {
+        "required_package": {"$ref": "#/$defs/package"},
+        "qemu_namespace_installed": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "dpkg_verify": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["returncode", "stdout_empty", "stderr_empty"],
+          "properties": {
+            "returncode": {"type": "integer"},
+            "stdout_empty": {"type": "boolean"},
+            "stderr_empty": {"type": "boolean"}
+          }
+        },
+        "binary_dpkg_owner": {"type": "string", "minLength": 1},
+        "binary_diverted": {"type": "boolean"}
+      }
+    },
+    "binary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "file_type", "symlink", "uid", "gid", "mode", "size", "sha256", "security_capabilities", "device_id", "inode", "mtime_ns"],
+      "properties": {
+        "path": {"const": "/usr/bin/qemu-system-x86_64"},
+        "file_type": {"const": "regular"},
+        "symlink": {"const": false},
+        "uid": {"type": "integer", "minimum": 0},
+        "gid": {"type": "integer", "minimum": 0},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "size": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "security_capabilities": {"type": "array", "items": {"type": "string"}},
+        "device_id": {"type": "integer"},
+        "inode": {"type": "integer", "minimum": 1},
+        "mtime_ns": {"type": "integer", "minimum": 0}
+      }
+    },
+    "scratch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "uid", "gid", "mode", "device_id", "inode", "entries"],
+      "properties": {
+        "path": {"const": "/data/a/scout_sim_replacement/r8_liquid/scratch/vm"},
+        "uid": {"const": 1000},
+        "gid": {"const": 1000},
+        "mode": {"const": "0750"},
+        "device_id": {"type": "integer"},
+        "inode": {"type": "integer", "minimum": 1},
+        "entries": {"type": "array", "maxItems": 0}
+      }
+    },
+    "lock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "uid", "gid", "mode", "device_id", "inode", "entries"],
+      "properties": {
+        "path": {"const": "/data/a/scout_sim_replacement/r8_liquid/locks"},
+        "uid": {"const": 1000},
+        "gid": {"const": 1000},
+        "mode": {"const": "0750"},
+        "device_id": {"type": "integer"},
+        "inode": {"type": "integer", "minimum": 1},
+        "entries": {"type": "array", "maxItems": 0}
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase", "boot_id_sha256", "runtime_uid", "runtime_gid", "runtime_thread_count", "mem_available_bytes",
+        "qemu_kvm_service", "autostart_link_exists", "autostart_link_is_symlink", "ksm_value",
+        "simulation_ports", "package_state", "scratch", "lock", "implementation", "qemu_processes", "simulation_processes",
+        "process_visibility_errors", "process_visibility_exceptions", "binary"
+      ],
+      "properties": {
+        "phase": {"enum": ["A_PRELOCKED", "B_PREEXEC", "C_POSTCLEANUP"]},
+        "boot_id_sha256": {"$ref": "#/$defs/sha256"},
+        "runtime_uid": {"type": "integer", "minimum": 0},
+        "runtime_gid": {"type": "integer", "minimum": 0},
+        "runtime_thread_count": {"type": "integer", "minimum": 1},
+        "mem_available_bytes": {"type": "integer", "minimum": 0},
+        "qemu_kvm_service": {"$ref": "#/$defs/service"},
+        "autostart_link_exists": {"type": "boolean"},
+        "autostart_link_is_symlink": {"type": "boolean"},
+        "ksm_value": {"type": "string"},
+        "simulation_ports": {"type": "array", "uniqueItems": true, "items": {"type": "integer", "minimum": 1, "maximum": 65535}},
+        "package_state": {"$ref": "#/$defs/package_state"},
+        "scratch": {"$ref": "#/$defs/scratch"},
+        "lock": {"$ref": "#/$defs/lock"},
+        "implementation": {
+          "type": "object", "additionalProperties": false,
+          "required": ["gate_path", "gate_sha256", "install_gate_path", "install_gate_sha256", "safety_gate_path", "safety_gate_sha256"],
+          "properties": {
+            "gate_path": {"type": "string"}, "gate_sha256": {"$ref": "#/$defs/sha256"},
+            "install_gate_path": {"type": "string"}, "install_gate_sha256": {"$ref": "#/$defs/sha256"},
+            "safety_gate_path": {"type": "string"}, "safety_gate_sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "qemu_processes": {"type": "array", "items": {"$ref": "#/$defs/process"}},
+        "simulation_processes": {"type": "array", "items": {"$ref": "#/$defs/process"}},
+        "process_visibility_errors": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "process_visibility_exceptions": {"type": "array", "items": {"$ref": "#/$defs/identity"}},
+        "binary": {"$ref": "#/$defs/binary"}
+      }
+    },
+    "rlimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["core_bytes", "cpu_seconds_soft", "cpu_seconds_hard", "file_bytes", "open_files", "address_space_bytes"],
+      "properties": {
+        "core_bytes": {"const": 0},
+        "cpu_seconds_soft": {"const": 2},
+        "cpu_seconds_hard": {"const": 3},
+        "file_bytes": {"const": 8192},
+        "open_files": {"const": 64},
+        "address_space_bytes": {"const": 1073741824}
+      }
+    },
+    "hardening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_new_session", "fork_exec_launcher", "subprocess_preexec_fn", "parent_death_signal", "parent_ack_before_exec", "signals_reset_before_exec", "signal_mask_cleared_before_exec", "close_fds", "no_new_privs", "umask", "same_open_fd_hash_and_exec", "rlimits"],
+      "properties": {
+        "start_new_session": {"const": true},
+        "fork_exec_launcher": {"const": true},
+        "subprocess_preexec_fn": {"const": false},
+        "parent_death_signal": {"const": "SIGKILL"},
+        "parent_ack_before_exec": {"const": true},
+        "signals_reset_before_exec": {"const": true},
+        "signal_mask_cleared_before_exec": {"const": true},
+        "close_fds": {"const": true},
+        "no_new_privs": {"const": true},
+        "umask": {"const": "0077"},
+        "same_open_fd_hash_and_exec": {"const": true},
+        "rlimits": {"$ref": "#/$defs/rlimits"}
+      }
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "argv", "environment", "cwd", "binary_sha256", "pid", "pgid", "starttime_ticks",
+        "started_monotonic_ns", "finished_monotonic_ns", "exec_succeeded", "returncode", "signal",
+        "timed_out", "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256",
+        "stdout_text", "stderr_text", "version_line", "cleanup", "hardening"
+      ],
+      "properties": {
+        "argv": {"type": "array", "prefixItems": [{"const": "/usr/bin/qemu-system-x86_64"}, {"const": "-no-user-config"}, {"const": "-version"}], "items": false, "minItems": 3, "maxItems": 3},
+        "environment": {"type": "object", "additionalProperties": false, "required": ["PATH", "LANG", "LC_ALL"], "properties": {"PATH": {"const": "/usr/bin:/bin"}, "LANG": {"const": "C.UTF-8"}, "LC_ALL": {"const": "C.UTF-8"}}},
+        "cwd": {"const": "/data/a/scout_sim_replacement/r8_liquid/scratch/vm"},
+        "binary_sha256": {"$ref": "#/$defs/sha256"},
+        "pid": {"type": "integer", "minimum": 1},
+        "pgid": {"type": "integer", "minimum": 1},
+        "starttime_ticks": {"type": "integer", "minimum": 1},
+        "started_monotonic_ns": {"type": "integer", "minimum": 1},
+        "finished_monotonic_ns": {"type": "integer", "minimum": 1},
+        "exec_succeeded": {"const": true},
+        "returncode": {"const": 0},
+        "signal": {"type": "null"},
+        "timed_out": {"const": false},
+        "stdout_bytes": {"type": "integer", "minimum": 1, "maximum": 4096},
+        "stderr_bytes": {"const": 0},
+        "stdout_sha256": {"$ref": "#/$defs/sha256"},
+        "stderr_sha256": {"$ref": "#/$defs/sha256"},
+        "stdout_text": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "stderr_text": {"const": ""},
+        "version_line": {"const": "QEMU emulator version 4.2.1 (Debian 1:4.2-3ubuntu6.30+esm3)"},
+        "cleanup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["term_sent", "kill_sent", "owned_process_group_residual"],
+          "properties": {"term_sent": {"const": false}, "kill_sent": {"const": false}, "owned_process_group_residual": {"const": false}}
+        },
+        "hardening": {"$ref": "#/$defs/hardening"}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-qemu-binary-probe-result-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_QEMU_BINARY_PROBE_RESULT"},
+    "created_utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}\\+00:00$"},
+    "development_only": {"const": true},
+    "formal": {"const": false},
+    "physical_primary_eligible": {"const": false},
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "admission_schema_path", "admission_schema_sha256", "receipt_schema_path", "receipt_schema_sha256"],
+      "properties": {
+        "path": {"type": "string"}, "sha256": {"$ref": "#/$defs/sha256"},
+        "admission_schema_path": {"type": "string"}, "admission_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "receipt_schema_path": {"type": "string"}, "receipt_schema_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "implementation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gate_path", "gate_sha256", "install_gate_path", "install_gate_sha256", "safety_gate_path", "safety_gate_sha256"],
+      "properties": {
+        "gate_path": {"type": "string"}, "gate_sha256": {"$ref": "#/$defs/sha256"},
+        "install_gate_path": {"type": "string"}, "install_gate_sha256": {"$ref": "#/$defs/sha256"},
+        "safety_gate_path": {"type": "string"}, "safety_gate_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "predecessor_install_receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "expected_file_sha256", "actual_file_sha256", "expected_receipt_hash", "actual_receipt_hash", "self_hash_valid"],
+      "properties": {
+        "path": {"type": "string"}, "expected_file_sha256": {"$ref": "#/$defs/sha256"},
+        "actual_file_sha256": {"$ref": "#/$defs/nullable_sha256"}, "expected_receipt_hash": {"$ref": "#/$defs/sha256"},
+        "actual_receipt_hash": {"$ref": "#/$defs/nullable_sha256"}, "self_hash_valid": {"type": "boolean"}
+      }
+    },
+    "snapshot_sequence": {
+      "type": "array", "minItems": 3, "maxItems": 3, "items": false,
+      "prefixItems": [
+        {"type": "object", "additionalProperties": false, "required": ["phase", "sha256", "canonical", "invariants_pass"], "properties": {"phase": {"const": "A_PRELOCKED"}, "sha256": {"$ref": "#/$defs/sha256"}, "canonical": {"type": "string", "minLength": 2, "maxLength": 65536}, "invariants_pass": {"type": "boolean"}}},
+        {"type": "object", "additionalProperties": false, "required": ["phase", "sha256", "canonical", "invariants_pass"], "properties": {"phase": {"const": "B_PREEXEC"}, "sha256": {"$ref": "#/$defs/sha256"}, "canonical": {"type": "string", "minLength": 2, "maxLength": 65536}, "invariants_pass": {"type": "boolean"}}},
+        {"type": "object", "additionalProperties": false, "required": ["phase", "sha256", "canonical", "invariants_pass"], "properties": {"phase": {"const": "C_POSTCLEANUP"}, "sha256": {"$ref": "#/$defs/sha256"}, "canonical": {"type": "string", "minLength": 2, "maxLength": 65536}, "invariants_pass": {"type": "boolean"}}}
+      ]
+    },
+    "stability": {
+      "type": "object", "additionalProperties": false, "required": ["stable_projection_sha256", "ab_equal", "bc_equal"],
+      "properties": {
+        "stable_projection_sha256": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/sha256"}},
+        "ab_equal": {"type": "boolean"}, "bc_equal": {"type": "boolean"}
+      }
+    },
+    "probe_result": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/probe"}]},
+    "qemu_executed": {"type": "boolean"},
+    "qemu_img_executed": {"const": false},
+    "vm_started": {"const": false},
+    "machine_initialized": {"const": false},
+    "network_backend_initialized": {"const": false},
+    "network_namespace_created": {"const": false},
+    "filesystem_sandbox_claimed": {"const": false},
+    "image_created": {"const": false},
+    "build_started": {"const": false},
+    "gencase_started": {"const": false},
+    "upstream_code_executed": {"const": false},
+    "execution_was_explicitly_requested": {"type": "boolean"},
+    "future_execution_authorized": {"const": false},
+    "authorization_reusable": {"const": false},
+    "status": {"enum": ["PASS_READY_EXECUTION_NOT_PERFORMED", "PASS_BINARY_VERSION_PROBE_ONLY", "NO_GO"]},
+    "errors": {"type": "array", "items": {"type": "string"}},
+    "receipt_hash": {"$ref": "#/$defs/sha256"}
+  }
+}

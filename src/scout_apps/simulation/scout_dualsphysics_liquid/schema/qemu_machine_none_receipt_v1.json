@@ -1,0 +1,482 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SIM-R8 QEMU TCG machine-none PASS receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "document_type", "created_utc", "development_only", "formal",
+    "physical_primary_eligible", "policy", "implementation",
+    "predecessor_binary_probe_receipt", "attempt_marker", "snapshot_sequence",
+    "stability", "namespace_result", "smoke_result", "effects",
+    "execution_was_explicitly_requested", "future_execution_authorized",
+    "authorization_reusable", "status", "errors", "receipt_hash"
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pid", "uid", "starttime_ticks", "ppid", "parent_starttime_ticks", "cgroup_sha256", "comm", "argv0"],
+      "properties": {
+        "pid": {"type": "integer", "minimum": 1}, "uid": {"const": 1000},
+        "starttime_ticks": {"type": "integer", "minimum": 1},
+        "ppid": {"type": "integer", "minimum": 1},
+        "parent_starttime_ticks": {"type": "integer", "minimum": 1},
+        "cgroup_sha256": {"$ref": "#/$defs/sha256"},
+        "comm": {"type": "string", "minLength": 1}, "argv0": {"type": "string", "minLength": 1}
+      }
+    },
+    "process": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pid", "uid", "comm", "exe", "reasons"],
+      "properties": {
+        "pid": {"type": "integer", "minimum": 1}, "uid": {"type": "integer", "minimum": 0},
+        "comm": {"type": "string"}, "exe": {"type": ["string", "null"]},
+        "reasons": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}
+      }
+    },
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["load_state", "unit_file_state", "active_state", "sub_state", "fragment_path"],
+      "properties": {
+        "load_state": {"type": "string"}, "unit_file_state": {"type": "string"},
+        "active_state": {"type": "string"}, "sub_state": {"type": "string"},
+        "fragment_path": {"type": "string"}
+      }
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "installed", "architecture", "version", "status"],
+      "properties": {
+        "name": {"const": "qemu-system-x86"}, "installed": {"const": true},
+        "architecture": {"const": "amd64"}, "version": {"const": "1:4.2-3ubuntu6.30+esm3"},
+        "status": {"const": "install ok installed"}
+      }
+    },
+    "package_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_package", "qemu_namespace_installed", "dpkg_verify", "binary_dpkg_owner", "binary_diverted"],
+      "properties": {
+        "required_package": {"$ref": "#/$defs/package"},
+        "qemu_namespace_installed": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "dpkg_verify": {
+          "type": "object", "additionalProperties": false,
+          "required": ["returncode", "stdout_empty", "stderr_empty"],
+          "properties": {"returncode": {"const": 0}, "stdout_empty": {"const": true}, "stderr_empty": {"const": true}}
+        },
+        "binary_dpkg_owner": {"const": "qemu-system-x86"}, "binary_diverted": {"const": false}
+      }
+    },
+    "binary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "file_type", "symlink", "uid", "gid", "mode", "size", "sha256", "security_capabilities", "device_id", "inode", "mtime_ns"],
+      "properties": {
+        "path": {"const": "/usr/bin/qemu-system-x86_64"}, "file_type": {"const": "regular"},
+        "symlink": {"const": false}, "uid": {"const": 0}, "gid": {"const": 0},
+        "mode": {"const": "0755"}, "size": {"const": 16287496},
+        "sha256": {"const": "6e8225fd4ffcdc6c4696dd5bf181cade84876689965946e46a50834ad4c5a718"},
+        "security_capabilities": {"type": "array", "maxItems": 0},
+        "device_id": {"type": "integer"}, "inode": {"type": "integer", "minimum": 1},
+        "mtime_ns": {"type": "integer", "minimum": 0}
+      }
+    },
+    "directory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "uid", "gid", "mode", "device_id", "inode", "entries"],
+      "properties": {
+        "path": {"enum": ["/data/a/scout_sim_replacement/r8_liquid/scratch/vm", "/data/a/scout_sim_replacement/r8_liquid/locks"]},
+        "uid": {"const": 1000}, "gid": {"const": 1000}, "mode": {"const": "0750"},
+        "device_id": {"type": "integer"}, "inode": {"type": "integer", "minimum": 1},
+        "entries": {"type": "array", "maxItems": 0}
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_path", "gate_sha256", "binary_gate_path", "binary_gate_sha256", "install_gate_path", "install_gate_sha256", "safety_gate_path", "safety_gate_sha256"],
+      "properties": {
+        "gate_path": {"const": "scripts/r8_liquid_qemu_machine_none_gate.py"}, "gate_sha256": {"$ref": "#/$defs/sha256"},
+        "binary_gate_path": {"const": "scripts/r8_liquid_qemu_binary_probe_gate.py"}, "binary_gate_sha256": {"$ref": "#/$defs/sha256"},
+        "install_gate_path": {"const": "scripts/r8_liquid_qemu_install_gate_v2.py"}, "install_gate_sha256": {"$ref": "#/$defs/sha256"},
+        "safety_gate_path": {"const": "scripts/r8_liquid_safety.py"}, "safety_gate_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase", "boot_id_sha256", "runtime_uid", "runtime_gid", "runtime_thread_count",
+        "mem_available_bytes", "qemu_kvm_service", "autostart_link_exists",
+        "autostart_link_is_symlink", "ksm_value", "simulation_ports", "package_state",
+        "scratch", "lock", "host_kernel", "host_namespaces", "storage_mount", "storage_findmnt",
+        "storage_anchor_identity", "approved_root_identity", "audit_dir_identity",
+        "mount_points_affecting_root", "implementation",
+        "qemu_processes", "simulation_processes", "process_visibility_errors",
+        "process_visibility_exceptions", "binary"
+      ],
+      "properties": {
+        "phase": {"enum": ["A_PRELOCKED", "B_PREEXEC", "C_POSTCLEANUP"]},
+        "boot_id_sha256": {"$ref": "#/$defs/sha256"}, "runtime_uid": {"const": 1000},
+        "runtime_gid": {"const": 1000}, "runtime_thread_count": {"const": 1},
+        "mem_available_bytes": {"type": "integer", "minimum": 0},
+        "qemu_kvm_service": {"$ref": "#/$defs/service"},
+        "autostart_link_exists": {"const": false}, "autostart_link_is_symlink": {"const": false},
+        "ksm_value": {"const": "0"},
+        "simulation_ports": {"type": "array", "maxItems": 0},
+        "package_state": {"$ref": "#/$defs/package_state"},
+        "scratch": {"$ref": "#/$defs/directory"}, "lock": {"$ref": "#/$defs/directory"},
+        "host_kernel": {
+          "type": "object", "additionalProperties": false,
+          "required": ["release", "unprivileged_userns_clone", "max_user_namespaces"],
+          "properties": {
+            "release": {"type": "string", "minLength": 1},
+            "unprivileged_userns_clone": {"const": "1"},
+            "max_user_namespaces": {"type": "integer", "minimum": 1}
+          }
+        },
+        "host_namespaces": {
+          "type": "object", "additionalProperties": false, "required": ["user", "network"],
+          "properties": {
+            "user": {"type": "string", "pattern": "^user:\\[[0-9]+\\]$"},
+            "network": {"type": "string", "pattern": "^net:\\[[0-9]+\\]$"}
+          }
+        },
+        "storage_mount": {
+          "type": "object", "additionalProperties": false,
+          "required": ["target", "source", "fstype", "major_minor", "fsroot"],
+          "properties": {
+            "target": {"const": "/data"}, "source": {"const": "/dev/nvme1n1"},
+            "fstype": {"const": "xfs"}, "major_minor": {"const": "259:7"}, "fsroot": {"const": "/"}
+          }
+        },
+        "storage_findmnt": {
+          "type": "object", "additionalProperties": false,
+          "required": ["target", "source", "fstype", "uuid", "major_minor", "fsroot", "options"],
+          "properties": {
+            "target": {"const": "/data"}, "source": {"const": "/dev/nvme1n1"},
+            "fstype": {"const": "xfs"},
+            "uuid": {"const": "78023025-5a6d-4bf1-9a9c-6bea603df462"},
+            "major_minor": {"const": "259:7"}, "fsroot": {"const": "/"},
+            "options": {"type": "string", "minLength": 1}
+          }
+        },
+        "approved_root_identity": {
+          "type": "object", "additionalProperties": false,
+          "required": ["path", "resolved_path", "device_id", "inode", "uid", "gid", "mode", "is_symlink"],
+          "properties": {
+            "path": {"const": "/data/a/scout_sim_replacement/r8_liquid"},
+            "resolved_path": {"const": "/data/a/scout_sim_replacement/r8_liquid"},
+            "device_id": {"type": "integer"}, "inode": {"type": "integer", "minimum": 1},
+            "uid": {"const": 1000}, "gid": {"const": 1000}, "mode": {"const": "0750"},
+            "is_symlink": {"const": false}
+          }
+        },
+        "storage_anchor_identity": {
+          "type": "object", "additionalProperties": false,
+          "required": ["path", "resolved_path", "device_id", "inode", "uid", "gid", "mode", "is_symlink"],
+          "properties": {
+            "path": {"const": "/data/a"}, "resolved_path": {"const": "/data/a"},
+            "device_id": {"type": "integer"}, "inode": {"type": "integer", "minimum": 1},
+            "uid": {"const": 1000}, "gid": {"const": 1000}, "mode": {"const": "0755"},
+            "is_symlink": {"const": false}
+          }
+        },
+        "audit_dir_identity": {
+          "type": "object", "additionalProperties": false,
+          "required": ["path", "resolved_path", "device_id", "inode", "uid", "gid", "mode", "is_symlink"],
+          "properties": {
+            "path": {"const": "/data/a/scout_sim_replacement/r8_liquid/audits/sandbox"},
+            "resolved_path": {"const": "/data/a/scout_sim_replacement/r8_liquid/audits/sandbox"},
+            "device_id": {"type": "integer"}, "inode": {"type": "integer", "minimum": 1},
+            "uid": {"const": 1000}, "gid": {"const": 1000}, "mode": {"const": "0750"},
+            "is_symlink": {"const": false}
+          }
+        },
+        "mount_points_affecting_root": {"type": "array", "maxItems": 0},
+        "implementation": {"$ref": "#/$defs/implementation"},
+        "qemu_processes": {"type": "array", "maxItems": 0},
+        "simulation_processes": {"type": "array", "maxItems": 0},
+        "process_visibility_errors": {"type": "array", "maxItems": 0},
+        "process_visibility_exceptions": {"type": "array", "items": {"$ref": "#/$defs/identity"}},
+        "binary": {"$ref": "#/$defs/binary"}
+      }
+    },
+    "snapshot_record": {
+      "type": "object", "additionalProperties": false,
+      "required": ["phase", "sha256", "canonical", "invariants_pass"],
+      "properties": {
+        "phase": {"enum": ["A_PRELOCKED", "B_PREEXEC", "C_POSTCLEANUP"]},
+        "sha256": {"$ref": "#/$defs/sha256"}, "canonical": {"type": "string", "minLength": 2, "maxLength": 262144},
+        "invariants_pass": {"const": true}
+      }
+    },
+    "capabilities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"],
+      "properties": {
+        "CapInh": {"const": "0000000000000000"}, "CapPrm": {"const": "0000000000000000"},
+        "CapEff": {"const": "0000000000000000"}, "CapBnd": {"const": "0000000000000000"},
+        "CapAmb": {"const": "0000000000000000"}
+      }
+    },
+    "namespace": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "pid", "pgid", "starttime_ticks", "pidfd_opened", "parent_user_namespace",
+        "parent_network_namespace", "child_user_namespace", "child_network_namespace",
+        "child_user_namespace_device", "child_user_namespace_inode",
+        "child_network_namespace_device", "child_network_namespace_inode",
+        "user_namespace_distinct", "network_namespace_distinct", "uid_map", "gid_map",
+        "setgroups", "supplementary_groups", "capabilities", "no_new_privs",
+        "interface_names", "ipv4_routes", "ipv6_routes", "inet_socket_rows",
+        "loopback_up", "loopback_ipv4_configured", "loopback_ipv6_configured",
+        "verified_before_exec", "namespace_fds_pinned_during_verification",
+        "namespace_fds_closed_before_exec_ack", "pidfd_pinned_until_child_reap",
+        "persistent_bind_mount", "external_namespace_helper_executed"
+      ],
+      "properties": {
+        "pid": {"type": "integer", "minimum": 1}, "pgid": {"type": "integer", "minimum": 1},
+        "starttime_ticks": {"type": "integer", "minimum": 1}, "pidfd_opened": {"const": true},
+        "parent_user_namespace": {"type": "string", "pattern": "^user:\\[[0-9]+\\]$"},
+        "parent_network_namespace": {"type": "string", "pattern": "^net:\\[[0-9]+\\]$"},
+        "child_user_namespace": {"type": "string", "pattern": "^user:\\[[0-9]+\\]$"},
+        "child_network_namespace": {"type": "string", "pattern": "^net:\\[[0-9]+\\]$"},
+        "child_user_namespace_device": {"type": "integer"}, "child_user_namespace_inode": {"type": "integer", "minimum": 1},
+        "child_network_namespace_device": {"type": "integer"}, "child_network_namespace_inode": {"type": "integer", "minimum": 1},
+        "user_namespace_distinct": {"const": true}, "network_namespace_distinct": {"const": true},
+        "uid_map": {"const": "1000 1000 1\n"}, "gid_map": {"const": "1000 1000 1\n"},
+        "setgroups": {"const": "deny\n"}, "supplementary_groups": {"type": "array", "maxItems": 0},
+        "capabilities": {"$ref": "#/$defs/capabilities"}, "no_new_privs": {"const": "1"},
+        "interface_names": {"const": ["lo"]}, "ipv4_routes": {"type": "array", "maxItems": 0},
+        "ipv6_routes": {"type": "array", "maxItems": 0},
+        "inet_socket_rows": {
+          "type": "object", "additionalProperties": false,
+          "required": ["tcp", "tcp6", "udp", "udp6", "raw", "raw6"],
+          "properties": {
+            "tcp": {"type": "array", "maxItems": 0}, "tcp6": {"type": "array", "maxItems": 0},
+            "udp": {"type": "array", "maxItems": 0}, "udp6": {"type": "array", "maxItems": 0},
+            "raw": {"type": "array", "maxItems": 0}, "raw6": {"type": "array", "maxItems": 0}
+          }
+        },
+        "loopback_up": {"const": false}, "loopback_ipv4_configured": {"const": false},
+        "loopback_ipv6_configured": {"const": false}, "verified_before_exec": {"const": true},
+        "namespace_fds_pinned_during_verification": {"const": true},
+        "namespace_fds_closed_before_exec_ack": {"const": true},
+        "pidfd_pinned_until_child_reap": {"const": true}, "persistent_bind_mount": {"const": false},
+        "external_namespace_helper_executed": {"const": false}
+      }
+    },
+    "shutdown_event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["event", "data", "timestamp"],
+      "properties": {
+        "event": {"const": "SHUTDOWN"}, "data": {"const": {"guest": false, "reason": "host-qmp-quit"}},
+        "timestamp": {
+          "type": "object", "additionalProperties": false, "required": ["seconds", "microseconds"],
+          "properties": {
+            "seconds": {"type": "integer", "minimum": 0},
+            "microseconds": {"type": "integer", "minimum": 0, "maximum": 999999}
+          }
+        }
+      }
+    },
+    "qmp_frame": {
+      "oneOf": [
+        {"const": {"QMP": {"version": {"qemu": {"major": 4, "minor": 2, "micro": 1}, "package": "Debian 1:4.2-3ubuntu6.30+esm3"}, "capabilities": []}}},
+        {"const": {"return": {}, "id": "capabilities"}},
+        {"const": {"return": {"enabled": false, "present": true}, "id": "kvm"}},
+        {"const": {"return": [], "id": "block"}},
+        {"const": {"return": {"running": false, "singlestep": false, "status": "prelaunch"}, "id": "status"}},
+        {"const": {"return": {}, "id": "quit"}},
+        {"$ref": "#/$defs/shutdown_event"}
+      ]
+    },
+    "hardening": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "start_new_session", "fork_exec_launcher", "subprocess_preexec_fn", "pidfd_opened",
+        "parent_death_signal", "parent_ack_after_namespace_verification", "signals_reset_before_exec",
+        "signal_mask_cleared_before_exec", "close_fds", "no_new_privs", "umask",
+        "same_open_fd_hash_and_exec", "rlimits"
+      ],
+      "properties": {
+        "start_new_session": {"const": true}, "fork_exec_launcher": {"const": true},
+        "subprocess_preexec_fn": {"const": false}, "pidfd_opened": {"const": true},
+        "parent_death_signal": {"const": "SIGKILL"},
+        "parent_ack_after_namespace_verification": {"const": true},
+        "signals_reset_before_exec": {"const": true}, "signal_mask_cleared_before_exec": {"const": true},
+        "close_fds": {"const": true}, "no_new_privs": {"const": true}, "umask": {"const": "0077"},
+        "same_open_fd_hash_and_exec": {"const": true},
+        "rlimits": {"const": {"core_bytes": 0, "cpu_seconds_soft": 3, "cpu_seconds_hard": 4, "file_bytes": 0, "open_files": 64, "address_space_bytes": 1073741824, "memlock_bytes": 0}}
+      }
+    },
+    "attestation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pid_starttime_pgid_stable", "user_namespace_unchanged", "network_namespace_unchanged", "supplementary_groups_empty", "capability_sets_zero", "no_new_privs", "seccomp_mode_filter", "fd_classes", "forbidden_fd_count", "verified_after_qmp_greeting"],
+      "properties": {
+        "pid_starttime_pgid_stable": {"const": true}, "user_namespace_unchanged": {"const": true},
+        "network_namespace_unchanged": {"const": true}, "supplementary_groups_empty": {"const": true},
+        "capability_sets_zero": {"const": true}, "no_new_privs": {"const": true},
+        "seccomp_mode_filter": {"const": true},
+        "fd_classes": {
+          "type": "object", "additionalProperties": false, "required": ["pipe", "anon_inode", "dev_null", "other"],
+          "properties": {
+            "pipe": {"type": "integer", "minimum": 0}, "anon_inode": {"type": "integer", "minimum": 0},
+            "dev_null": {"type": "integer", "minimum": 0}, "other": {"const": 0}
+          }
+        },
+        "forbidden_fd_count": {"const": 0}, "verified_after_qmp_greeting": {"const": true}
+      }
+    },
+    "smoke": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "argv", "environment", "cwd", "binary_sha256", "pid", "pgid", "starttime_ticks",
+        "started_monotonic_ns", "finished_monotonic_ns", "exec_succeeded", "returncode",
+        "signal", "timed_out", "qmp_commands", "qmp_command_wire_sha256",
+        "qmp_command_bytes", "qmp_frames", "qmp_frame_count", "quit_command_write_complete",
+        "quit_response_observed", "shutdown_event_observed", "post_greeting_attestation",
+        "stdout_bytes", "stderr_bytes", "stdout_sha256", "stderr_sha256", "stdout_text", "stderr_text",
+        "unexpected_frames", "cleanup", "hardening"
+      ],
+      "properties": {
+        "argv": {"const": [
+          "/usr/bin/qemu-system-x86_64", "-no-user-config", "-machine", "none",
+          "-accel", "tcg,thread=single", "-S", "-nodefaults", "-display", "none",
+          "-monitor", "none", "-serial", "none", "-parallel", "none", "-nic", "none",
+          "-sandbox", "on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny",
+          "-qmp", "stdio"
+        ]},
+        "environment": {"const": {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}},
+        "cwd": {"const": "/data/a/scout_sim_replacement/r8_liquid/scratch/vm"},
+        "binary_sha256": {"const": "6e8225fd4ffcdc6c4696dd5bf181cade84876689965946e46a50834ad4c5a718"},
+        "pid": {"type": "integer", "minimum": 1}, "pgid": {"type": "integer", "minimum": 1},
+        "starttime_ticks": {"type": "integer", "minimum": 1},
+        "started_monotonic_ns": {"type": "integer", "minimum": 1},
+        "finished_monotonic_ns": {"type": "integer", "minimum": 1},
+        "exec_succeeded": {"const": true}, "returncode": {"const": 0}, "signal": {"type": "null"},
+        "timed_out": {"const": false},
+        "qmp_commands": {"const": [
+          {"execute": "qmp_capabilities", "id": "capabilities"},
+          {"execute": "query-kvm", "id": "kvm"},
+          {"execute": "query-block", "id": "block"},
+          {"execute": "query-status", "id": "status"},
+          {"execute": "quit", "id": "quit"}
+        ]},
+        "qmp_command_wire_sha256": {"$ref": "#/$defs/sha256"},
+        "qmp_command_bytes": {"type": "integer", "minimum": 1, "maximum": 512},
+        "qmp_frames": {"type": "array", "minItems": 5, "maxItems": 7, "items": {"$ref": "#/$defs/qmp_frame"}},
+        "qmp_frame_count": {"type": "integer", "minimum": 5, "maximum": 7},
+        "quit_command_write_complete": {"const": true},
+        "quit_response_observed": {"type": "boolean"}, "shutdown_event_observed": {"type": "boolean"},
+        "post_greeting_attestation": {"$ref": "#/$defs/attestation"},
+        "stdout_bytes": {"type": "integer", "minimum": 1, "maximum": 16384},
+        "stderr_bytes": {"const": 0}, "stdout_sha256": {"$ref": "#/$defs/sha256"},
+        "stderr_sha256": {"const": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+        "stdout_text": {"type": "string", "minLength": 1, "maxLength": 16384},
+        "stderr_text": {"const": ""},
+        "unexpected_frames": {"const": 0},
+        "cleanup": {
+          "type": "object", "additionalProperties": false, "required": ["term_sent", "kill_sent", "owned_process_group_residual"],
+          "properties": {"term_sent": {"const": false}, "kill_sent": {"const": false}, "owned_process_group_residual": {"const": false}}
+        },
+        "hardening": {"$ref": "#/$defs/hardening"}
+      }
+    },
+    "effects": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "qemu_executed", "qemu_main_loop_entered", "machine_type_none_selected",
+        "tcg_selected", "user_namespace_created", "network_namespace_created",
+        "qmp_commands_executed", "qemu_img_executed", "guest_code_executed",
+        "vcpu_ran", "vm_started", "kvm_enabled", "network_backend_configured",
+        "persistent_namespace_created", "filesystem_sandbox_claimed", "image_created",
+        "block_backend_configured", "firmware_configured", "host_mount_configured",
+        "build_started", "gencase_started", "upstream_code_executed", "ros_or_gazebo_started"
+      ],
+      "properties": {
+        "qemu_executed": {"const": true}, "qemu_main_loop_entered": {"const": true},
+        "machine_type_none_selected": {"const": true}, "tcg_selected": {"const": true},
+        "user_namespace_created": {"const": true}, "network_namespace_created": {"const": true},
+        "qmp_commands_executed": {"const": true}, "qemu_img_executed": {"const": false},
+        "guest_code_executed": {"const": false}, "vcpu_ran": {"const": false},
+        "vm_started": {"const": false}, "kvm_enabled": {"const": false},
+        "network_backend_configured": {"const": false}, "persistent_namespace_created": {"const": false},
+        "filesystem_sandbox_claimed": {"const": false}, "image_created": {"const": false},
+        "block_backend_configured": {"const": false}, "firmware_configured": {"const": false},
+        "host_mount_configured": {"const": false}, "build_started": {"const": false},
+        "gencase_started": {"const": false}, "upstream_code_executed": {"const": false},
+        "ros_or_gazebo_started": {"const": false}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-qemu-machine-none-result-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_QEMU_MACHINE_NONE_RESULT"},
+    "created_utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}\\+00:00$"},
+    "development_only": {"const": true}, "formal": {"const": false},
+    "physical_primary_eligible": {"const": false},
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "admission_schema_path", "admission_schema_sha256", "attempt_schema_path", "attempt_schema_sha256", "receipt_schema_path", "receipt_schema_sha256"],
+      "properties": {
+        "path": {"const": "config/sandbox/p0b_qemu_machine_none_admission_v1.json"}, "sha256": {"$ref": "#/$defs/sha256"},
+        "admission_schema_path": {"const": "schema/qemu_machine_none_admission_v1.json"}, "admission_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "attempt_schema_path": {"const": "schema/qemu_machine_none_attempt_v1.json"}, "attempt_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "receipt_schema_path": {"const": "schema/qemu_machine_none_receipt_v1.json"}, "receipt_schema_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "implementation": {"$ref": "#/$defs/implementation"},
+    "predecessor_binary_probe_receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "expected_file_sha256", "actual_file_sha256", "expected_receipt_hash", "actual_receipt_hash", "self_hash_valid", "semantic_valid"],
+      "properties": {
+        "path": {"const": "/data/a/scout_sim_replacement/r8_liquid/audits/sandbox/qemu_binary_probe_v1_boot_20260805T094926Z.json"},
+        "expected_file_sha256": {"const": "011038cdd9b8d0a95bab52b2663443a24cfa93404e4122f59b93786c45cc5978"},
+        "actual_file_sha256": {"const": "011038cdd9b8d0a95bab52b2663443a24cfa93404e4122f59b93786c45cc5978"},
+        "expected_receipt_hash": {"const": "f14772ebec5da5f0e3f3484984e5804575dfd4f573231070f182d63ea800d1a8"},
+        "actual_receipt_hash": {"const": "f14772ebec5da5f0e3f3484984e5804575dfd4f573231070f182d63ea800d1a8"},
+        "self_hash_valid": {"const": true}, "semantic_valid": {"const": true}
+      }
+    },
+    "attempt_marker": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "file_sha256", "bytes", "marker_hash", "stored_semantic_verification"],
+      "properties": {
+        "path": {"const": "/data/a/scout_sim_replacement/r8_liquid/audits/sandbox/qemu_machine_none_v1_boot_20260805T094926Z.attempt.json"},
+        "file_sha256": {"$ref": "#/$defs/sha256"}, "bytes": {"type": "integer", "minimum": 1, "maximum": 1048576},
+        "marker_hash": {"$ref": "#/$defs/sha256"}, "stored_semantic_verification": {"const": true}
+      }
+    },
+    "snapshot_sequence": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "prefixItems": [
+        {"allOf": [{"$ref": "#/$defs/snapshot_record"}, {"type": "object", "properties": {"phase": {"const": "A_PRELOCKED"}}}]},
+        {"allOf": [{"$ref": "#/$defs/snapshot_record"}, {"type": "object", "properties": {"phase": {"const": "B_PREEXEC"}}}]},
+        {"allOf": [{"$ref": "#/$defs/snapshot_record"}, {"type": "object", "properties": {"phase": {"const": "C_POSTCLEANUP"}}}]}
+      ],
+      "items": false
+    },
+    "stability": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stable_projection_sha256", "ab_equal", "bc_equal"],
+      "properties": {
+        "stable_projection_sha256": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/sha256"}},
+        "ab_equal": {"const": true}, "bc_equal": {"const": true}
+      }
+    },
+    "namespace_result": {"$ref": "#/$defs/namespace"},
+    "smoke_result": {"$ref": "#/$defs/smoke"},
+    "effects": {"$ref": "#/$defs/effects"},
+    "execution_was_explicitly_requested": {"const": true},
+    "future_execution_authorized": {"const": false}, "authorization_reusable": {"const": false},
+    "status": {"const": "PASS_TCG_MACHINE_NONE_QMP_CLEAN_QUIT_ONLY"},
+    "errors": {"type": "array", "maxItems": 0}, "receipt_hash": {"$ref": "#/$defs/sha256"}
+  }
+}

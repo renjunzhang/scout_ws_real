@@ -1,0 +1,44 @@
+{
+  "schema_version": "smpcc-r8-liquid-cpu-build-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_CPU_BUILD_POLICY",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "stage": "P0B_MINIMAL_CPU_BUILD_QUARANTINE",
+  "source": {
+    "repository_url": "https://github.com/DualSPHysics/DualSPHysics.git",
+    "commit": "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+    "manifest_file_sha256": "5ea1a431cfe992061c90617e1432017736a3c1be342b13982bf9cf10cd0ccad3",
+    "mount_mode": "read_only",
+    "disposable_copy_required": true,
+    "hardlinks_forbidden": true
+  },
+  "features": {
+    "cpu": true,
+    "cuda": false,
+    "chrono": false,
+    "wavegen": false,
+    "moordynplus": false
+  },
+  "sandbox": {
+    "network": "none",
+    "gpu_devices": [],
+    "ros_environment": "empty",
+    "gazebo_environment": "empty",
+    "workspace_mount": "forbidden",
+    "source_provenance_mount": "read_only",
+    "build_root": "/data/a/scout_sim_replacement/r8_liquid/dependency/build/<build_id>.partial",
+    "install_root": "/data/a/scout_sim_replacement/r8_liquid/dependency/install/<build_id>.partial",
+    "output_execution": "forbidden"
+  },
+  "resources": {
+    "vcpu_count": 4,
+    "minimum_available_memory_bytes": 4294967296,
+    "disk_reservation_bytes": 21474836480,
+    "wall_timeout_seconds": 3600,
+    "process_limit": 128,
+    "open_file_limit": 1024,
+    "core_dump_bytes": 0
+  },
+  "build_recipe_status": "NOT_FROZEN_NOT_AUTHORIZED_TO_RUN"
+}

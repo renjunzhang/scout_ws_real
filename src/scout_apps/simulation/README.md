@@ -10,6 +10,7 @@
 | --- | --- | --- |
 | 控制器 | [`spmpc_sim_local_planner`](spmpc_sim_local_planner/README.md)，节点 `/sim_spmpc_local_planner` | `control/spmpc_local_planner`，节点 `/spmpc_local_planner` |
 | 液体相关实现 | [`scout_liquid_plant`](scout_liquid_plant/)，仿真自有 H_proxy/modal/plant 工具 | `control/slosh_models` |
+| 离线物理液体评价 | [`scout_dualsphysics_liquid`](scout_dualsphysics_liquid/README.md)，closed-bag 后处理，当前仅 P0 依赖门禁 | 不接入实物控制源码，也不反馈 Gazebo/控制器 |
 | 构建与 devel | `/data/a/scout_sim_replacement/r8_controller_ws/{build,devel}` | `/home/a/scout_ws/build`、`/home/a/scout_ws/devel` |
 | ROS 诊断 | `/sim_spmpc/*` | `/spmpc/*` |
 
@@ -134,6 +135,17 @@ fail-closed。
 
 只有独立 plant、controller subscriber firewall 和保真验证通过后，仿真才可能给出
 仿真 primary 结论；它仍不能替代实物 primary 结论。
+
+## 离线物理液体接入状态
+
+`scout_dualsphysics_liquid` 与 ROS/catkin/Gazebo launch graph 完全分离。它只允许在现有
+SIM-R8 case 已完成、bag 已关闭且 postflight/manifest 已固定之后，离线回放 executed
+`/odom`。当前实现仅包含固定根安全检查、目录准备、DualSPHysics 固定提交获取和静态
+清单审计；不包含 case、solver runner 或高度提取器，也不编译或执行任何上游文件。
+
+外部数据只允许写入 `/data/a/scout_sim_replacement/r8_liquid`。详细 two-pass 设计、
+空间水位和 NO-GO 边界见
+[`20260805_DualSPHysics物理液体接入SIM-R8方案.md`](../../../docs/实物实验注意事项/对比试验/仿真接入液体/20260805_DualSPHysics物理液体接入SIM-R8方案.md)。
 
 ## 当前实验状态
 

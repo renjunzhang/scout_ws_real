@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SIM-R8 QEMU TCG machine-none admission v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "document_type", "admission_scope", "development_only",
+    "formal", "physical_primary_eligible", "predecessor_binary_probe_receipt",
+    "boot_session", "host_kernel", "binary", "namespace_boundary", "qmp_contract",
+    "execution_boundary", "admitted_effects", "forbidden_effects", "receipt"
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pid", "uid", "starttime_ticks", "ppid", "parent_starttime_ticks", "cgroup_sha256", "comm", "argv0"],
+      "properties": {
+        "pid": {"type": "integer", "minimum": 1},
+        "uid": {"const": 1000},
+        "starttime_ticks": {"type": "integer", "minimum": 1},
+        "ppid": {"type": "integer", "minimum": 1},
+        "parent_starttime_ticks": {"type": "integer", "minimum": 1},
+        "cgroup_sha256": {"$ref": "#/$defs/sha256"},
+        "comm": {"type": "string", "minLength": 1},
+        "argv0": {"type": "string", "minLength": 1}
+      }
+    },
+    "falseEffects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qemu_img_executed", "guest_code_executed", "vcpu_ran", "vm_started",
+        "kvm_enabled", "network_backend_configured", "persistent_namespace_created",
+        "filesystem_sandbox_claimed", "image_created", "block_backend_configured",
+        "firmware_configured", "host_mount_configured", "build_started", "gencase_started",
+        "upstream_code_executed", "ros_or_gazebo_started"
+      ],
+      "properties": {
+        "qemu_img_executed": {"const": false},
+        "guest_code_executed": {"const": false},
+        "vcpu_ran": {"const": false},
+        "vm_started": {"const": false},
+        "kvm_enabled": {"const": false},
+        "network_backend_configured": {"const": false},
+        "persistent_namespace_created": {"const": false},
+        "filesystem_sandbox_claimed": {"const": false},
+        "image_created": {"const": false},
+        "block_backend_configured": {"const": false},
+        "firmware_configured": {"const": false},
+        "host_mount_configured": {"const": false},
+        "build_started": {"const": false},
+        "gencase_started": {"const": false},
+        "upstream_code_executed": {"const": false},
+        "ros_or_gazebo_started": {"const": false}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-qemu-machine-none-admission-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_QEMU_MACHINE_NONE_ADMISSION"},
+    "admission_scope": {"const": "EXACT_QEMU_TCG_MACHINE_NONE_QMP_SMOKE_ONLY"},
+    "development_only": {"const": true},
+    "formal": {"const": false},
+    "physical_primary_eligible": {"const": false},
+    "predecessor_binary_probe_receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "file_sha256", "receipt_hash", "preserved", "execution_authorization_inherited"],
+      "properties": {
+        "path": {"const": "/data/a/scout_sim_replacement/r8_liquid/audits/sandbox/qemu_binary_probe_v1_boot_20260805T094926Z.json"},
+        "file_sha256": {"const": "011038cdd9b8d0a95bab52b2663443a24cfa93404e4122f59b93786c45cc5978"},
+        "receipt_hash": {"const": "f14772ebec5da5f0e3f3484984e5804575dfd4f573231070f182d63ea800d1a8"},
+        "preserved": {"const": true},
+        "execution_authorization_inherited": {"const": false}
+      }
+    },
+    "boot_session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boot_id_sha256", "uid", "unreadable_process_allowlist_exact"],
+      "properties": {
+        "boot_id_sha256": {"const": "18264e164ef3fb41d6dbac52d1ca8d989a9b5ab9e7154494af42f92e76730603"},
+        "uid": {"const": 1000},
+        "unreadable_process_allowlist_exact": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/identity"}}
+      }
+    },
+    "host_kernel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_release_exact", "installed_hwe_meta_version", "esm_candidate_hwe_meta_version", "namespace_security_update_required", "live_namespace_or_qemu_execution_authorized", "new_policy_and_boot_binding_required_after_update"],
+      "properties": {
+        "observed_release_exact": {"const": "5.15.0-139-generic"},
+        "installed_hwe_meta_version": {"const": "5.15.0.139.149~20.04.1"},
+        "esm_candidate_hwe_meta_version": {"const": "5.15.0.186.196~20.04.1"},
+        "namespace_security_update_required": {"const": true},
+        "live_namespace_or_qemu_execution_authorized": {"const": false},
+        "new_policy_and_boot_binding_required_after_update": {"const": true}
+      }
+    },
+    "binary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "dpkg_package", "dpkg_version", "sha256", "size", "mode", "uid", "gid", "security_capabilities", "argv_exact"],
+      "properties": {
+        "path": {"const": "/usr/bin/qemu-system-x86_64"},
+        "dpkg_package": {"const": "qemu-system-x86"},
+        "dpkg_version": {"const": "1:4.2-3ubuntu6.30+esm3"},
+        "sha256": {"const": "6e8225fd4ffcdc6c4696dd5bf181cade84876689965946e46a50834ad4c5a718"},
+        "size": {"const": 16287496},
+        "mode": {"const": "0755"},
+        "uid": {"const": 0},
+        "gid": {"const": 0},
+        "security_capabilities": {"type": "array", "maxItems": 0},
+        "argv_exact": {
+          "const": [
+            "/usr/bin/qemu-system-x86_64", "-no-user-config", "-machine", "none",
+            "-accel", "tcg,thread=single", "-S", "-nodefaults", "-display", "none",
+            "-monitor", "none", "-serial", "none", "-parallel", "none", "-nic", "none",
+            "-sandbox", "on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny",
+            "-qmp", "stdio"
+          ]
+        }
+      }
+    },
+    "namespace_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_runtime_uid", "host_runtime_gid", "unshare_syscall_only",
+        "external_namespace_helper_executed", "clone_newuser", "clone_newnet",
+        "clone_newns", "clone_newpid", "clone_newipc", "clone_newuts", "clone_newcgroup",
+        "clone_newtime", "persistent_namespace", "namespace_fds_pinned_until_child_reap",
+        "namespace_fds_closed_before_exec_ack", "pidfd_pinned_until_child_reap",
+        "persistent_bind_mount", "setns_allowed", "uid_map_exact", "gid_map_exact",
+        "setgroups_exact", "parent_user_namespace_must_differ",
+        "parent_network_namespace_must_differ", "child_pid_starttime_pgid_bound_before_exec",
+        "two_stage_parent_ack_required", "no_new_privs_verified_before_exec",
+        "supplementary_groups_empty_before_exec", "capability_sets_zero_before_exec",
+        "interface_names_exact", "loopback_up", "loopback_ipv4_configured",
+        "loopback_ipv6_configured", "ipv4_routes_must_be_empty", "ipv6_routes_must_be_empty",
+        "inet_sockets_must_be_empty", "network_backend_forbidden", "host_network_change_authorized"
+      ],
+      "properties": {
+        "host_runtime_uid": {"const": 1000}, "host_runtime_gid": {"const": 1000},
+        "unshare_syscall_only": {"const": true}, "external_namespace_helper_executed": {"const": false},
+        "clone_newuser": {"const": true}, "clone_newnet": {"const": true},
+        "clone_newns": {"const": false}, "clone_newpid": {"const": false},
+        "clone_newipc": {"const": false}, "clone_newuts": {"const": false},
+        "clone_newcgroup": {"const": false}, "clone_newtime": {"const": false},
+        "persistent_namespace": {"const": false}, "namespace_fds_pinned_until_child_reap": {"const": false},
+        "namespace_fds_closed_before_exec_ack": {"const": true}, "pidfd_pinned_until_child_reap": {"const": true},
+        "persistent_bind_mount": {"const": false}, "setns_allowed": {"const": false},
+        "uid_map_exact": {"const": "1000 1000 1\n"}, "gid_map_exact": {"const": "1000 1000 1\n"},
+        "setgroups_exact": {"const": "deny\n"},
+        "parent_user_namespace_must_differ": {"const": true},
+        "parent_network_namespace_must_differ": {"const": true},
+        "child_pid_starttime_pgid_bound_before_exec": {"const": true},
+        "two_stage_parent_ack_required": {"const": true},
+        "no_new_privs_verified_before_exec": {"const": true},
+        "supplementary_groups_empty_before_exec": {"const": true},
+        "capability_sets_zero_before_exec": {"const": true},
+        "interface_names_exact": {"const": ["lo"]},
+        "loopback_up": {"const": false}, "loopback_ipv4_configured": {"const": false},
+        "loopback_ipv6_configured": {"const": false},
+        "ipv4_routes_must_be_empty": {"const": true}, "ipv6_routes_must_be_empty": {"const": true},
+        "inet_sockets_must_be_empty": {"const": true}, "network_backend_forbidden": {"const": true},
+        "host_network_change_authorized": {"const": false}
+      }
+    },
+    "qmp_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transport", "encoding", "commands_exact", "expected_kvm", "expected_block",
+        "expected_status", "greeting_version_exact", "greeting_package_exact",
+        "events_before_quit_allowed", "shutdown_event_after_quit_allowed_exact",
+        "quit_response_may_be_absent_on_clean_eof", "maximum_frames", "command_wire_format",
+        "command_total_max_bytes", "clean_quit_required"
+      ],
+      "properties": {
+        "transport": {"const": "stdio"}, "encoding": {"const": "utf-8-json-lines"},
+        "commands_exact": {"const": [
+          {"execute": "qmp_capabilities", "id": "capabilities"},
+          {"execute": "query-kvm", "id": "kvm"},
+          {"execute": "query-block", "id": "block"},
+          {"execute": "query-status", "id": "status"},
+          {"execute": "quit", "id": "quit"}
+        ]},
+        "expected_kvm": {"const": {"enabled": false, "present": true}},
+        "expected_block": {"const": []},
+        "expected_status": {"const": {"running": false, "singlestep": false, "status": "prelaunch"}},
+        "greeting_version_exact": {"const": {"major": 4, "minor": 2, "micro": 1}},
+        "greeting_package_exact": {"const": "Debian 1:4.2-3ubuntu6.30+esm3"},
+        "events_before_quit_allowed": {"const": false},
+        "shutdown_event_after_quit_allowed_exact": {"const": {"guest": false, "reason": "host-qmp-quit"}},
+        "quit_response_may_be_absent_on_clean_eof": {"const": true},
+        "maximum_frames": {"const": 7}, "command_wire_format": {"const": "canonical-json-crlf"},
+        "command_total_max_bytes": {"const": 512}, "clean_quit_required": {"const": true}
+      }
+    },
+    "execution_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "self_check_executes_qemu", "self_check_creates_namespaces", "run_smoke_is_only_execution_entry",
+        "cwd", "environment_exact", "stdin", "stdout_max_bytes", "stderr_max_bytes",
+        "qmp_line_max_bytes", "timeout_seconds", "term_grace_seconds", "start_new_session",
+        "fork_exec_launcher", "subprocess_preexec_fn", "pidfd_open_required",
+        "parent_death_signal", "parent_ack_after_namespace_verification", "signals_reset_before_exec",
+        "signal_mask_cleared_before_exec", "close_fds", "no_new_privs", "umask", "parent_publication_umask", "rlimits",
+        "same_open_fd_hash_and_exec", "exec_path_template", "exclusive_lock", "lock_creates_file",
+        "scratch_must_be_empty_and_unchanged", "package_state_revalidated",
+        "ab_stable_projection_required_equal", "bc_stable_projection_required_equal",
+        "snapshot_sequence", "minimum_mem_available_bytes"
+      ],
+      "properties": {
+        "self_check_executes_qemu": {"const": false}, "self_check_creates_namespaces": {"const": false},
+        "run_smoke_is_only_execution_entry": {"const": true},
+        "cwd": {"const": "/data/a/scout_sim_replacement/r8_liquid/scratch/vm"},
+        "environment_exact": {"const": {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"}},
+        "stdin": {"const": "qmp-parent-pipe-only"}, "stdout_max_bytes": {"const": 16384},
+        "stderr_max_bytes": {"const": 8192}, "qmp_line_max_bytes": {"const": 4096},
+        "timeout_seconds": {"const": 8}, "term_grace_seconds": {"const": 1},
+        "start_new_session": {"const": true}, "fork_exec_launcher": {"const": true},
+        "subprocess_preexec_fn": {"const": false}, "pidfd_open_required": {"const": true},
+        "parent_death_signal": {"const": "SIGKILL"},
+        "parent_ack_after_namespace_verification": {"const": true},
+        "signals_reset_before_exec": {"const": true}, "signal_mask_cleared_before_exec": {"const": true},
+        "close_fds": {"const": true}, "no_new_privs": {"const": true}, "umask": {"const": "0077"},
+        "parent_publication_umask": {"const": "0027"},
+        "rlimits": {"const": {"core_bytes": 0, "cpu_seconds_soft": 3, "cpu_seconds_hard": 4, "file_bytes": 0, "open_files": 64, "address_space_bytes": 1073741824, "memlock_bytes": 0}},
+        "same_open_fd_hash_and_exec": {"const": true}, "exec_path_template": {"const": "/proc/self/fd/{fd}"},
+        "exclusive_lock": {"const": "/data/a/scout_sim_replacement/r8_liquid/locks"},
+        "lock_creates_file": {"const": false}, "scratch_must_be_empty_and_unchanged": {"const": true},
+        "package_state_revalidated": {"const": true}, "ab_stable_projection_required_equal": {"const": true},
+        "bc_stable_projection_required_equal": {"const": true},
+        "snapshot_sequence": {"const": ["A_PRELOCKED", "B_PREEXEC", "C_POSTCLEANUP"]},
+        "minimum_mem_available_bytes": {"const": 6442450944}
+      }
+    },
+    "admitted_effects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qemu_executed", "qemu_main_loop_entered", "machine_type_none_selected", "tcg_selected", "user_namespace_created", "network_namespace_created", "qmp_commands_executed"],
+      "properties": {
+        "qemu_executed": {"const": true}, "qemu_main_loop_entered": {"const": true},
+        "machine_type_none_selected": {"const": true}, "tcg_selected": {"const": true},
+        "user_namespace_created": {"const": true}, "network_namespace_created": {"const": true},
+        "qmp_commands_executed": {"const": true}
+      }
+    },
+    "forbidden_effects": {"$ref": "#/$defs/falseEffects"},
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "directory", "filename_exact", "attempt_marker_filename_exact", "attempt_marker_schema_relative",
+        "attempt_marker_create_new_and_fsync_before_fork", "attempt_marker_consumes_any_namespace_or_qemu_attempt",
+        "attempt_marker_never_auto_deleted", "create_new", "maximum_successful_receipts", "pass_only",
+        "failure_receipt_forbidden", "pii_and_cmdline_forbidden", "future_execution_authorized",
+        "authorization_reusable"
+      ],
+      "properties": {
+        "directory": {"const": "/data/a/scout_sim_replacement/r8_liquid/audits/sandbox"},
+        "filename_exact": {"const": "qemu_machine_none_v1_boot_20260805T094926Z.json"},
+        "attempt_marker_filename_exact": {"const": "qemu_machine_none_v1_boot_20260805T094926Z.attempt.json"},
+        "attempt_marker_schema_relative": {"const": "schema/qemu_machine_none_attempt_v1.json"},
+        "attempt_marker_create_new_and_fsync_before_fork": {"const": true},
+        "attempt_marker_consumes_any_namespace_or_qemu_attempt": {"const": true},
+        "attempt_marker_never_auto_deleted": {"const": true}, "create_new": {"const": true},
+        "maximum_successful_receipts": {"const": 1}, "pass_only": {"const": true},
+        "failure_receipt_forbidden": {"const": true}, "pii_and_cmdline_forbidden": {"const": true},
+        "future_execution_authorized": {"const": false}, "authorization_reusable": {"const": false}
+      }
+    }
+  }
+}

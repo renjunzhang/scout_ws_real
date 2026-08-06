@@ -1,0 +1,37 @@
+{
+  "schema_version": "smpcc-r8-liquid-gencase-admission-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_GENCASE_ADMISSION_POLICY",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "stage": "P0B_GENCASE_FIRST_EXECUTION_QUARANTINE",
+  "binary": {
+    "path": "bin/linux/GenCase_linux64",
+    "sha256": "a1b6414e0f716669363d1a80a05e133085c04995e15716e3c1f0406e0d023226",
+    "commit_signature_status": "N",
+    "source_available": false,
+    "current_admission": "NOT_EXECUTED_NOT_ADMITTED"
+  },
+  "first_execution": {
+    "environment": "disposable_kvm_vm",
+    "network": "none",
+    "gpu": false,
+    "host_shared_directories": [],
+    "input": "synthetic_non_project_case_only",
+    "output": "separate_fixed_size_image",
+    "trace_required": true,
+    "child_exec_forbidden": true,
+    "writes_outside_output_forbidden": true,
+    "deterministic_repeat_count": 2
+  },
+  "explicitly_not_admitted": [
+    "IsoSurface_linux64",
+    "MeasureTool_linux64",
+    "PartVTK_linux64",
+    "PartVTKOut_linux64",
+    "libChronoEngine.so",
+    "libdsphchrono.so",
+    "upstream_shell_scripts"
+  ],
+  "admission_status": "NO_GO_VM_RUNTIME_MISSING"
+}

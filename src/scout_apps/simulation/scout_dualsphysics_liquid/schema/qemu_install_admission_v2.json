@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SIM-R8 exact observed QEMU installation admission v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "admission_scope",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "historical_evidence",
+    "host_platform",
+    "ubuntu_pro_posture",
+    "recorded_install_transaction",
+    "required_packages_exact",
+    "required_qemu_namespace_exact",
+    "required_absent_packages_exact",
+    "critical_files_exact",
+    "required_quiescence",
+    "decision"
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\+00:00$"},
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "file_sha256", "receipt_hash"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/data/a/scout_sim_replacement/r8_liquid/audits/sandbox/[^/]+\\.json$"},
+        "file_sha256": {"$ref": "#/$defs/sha256"},
+        "receipt_hash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "architecture", "version", "status"],
+      "properties": {
+        "name": {"type": "string", "pattern": "^[a-z0-9][a-z0-9+.-]*$"},
+        "architecture": {"enum": ["all", "amd64"]},
+        "version": {"type": "string", "minLength": 1},
+        "status": {"const": "install ok installed"}
+      }
+    },
+    "critical_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "dpkg_owner", "file_type", "symlink", "uid", "gid", "mode", "size", "sha256", "security_capabilities", "diverted"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/(usr|lib|etc)/"},
+        "dpkg_owner": {"type": "string", "pattern": "^[a-z0-9][a-z0-9+.-]*$"},
+        "file_type": {"const": "regular"},
+        "symlink": {"const": false},
+        "uid": {"const": 0},
+        "gid": {"const": 0},
+        "mode": {"enum": ["0755", "0644"]},
+        "size": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "security_capabilities": {"type": "array", "maxItems": 0},
+        "diverted": {"const": false}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-qemu-install-admission-v2"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_QEMU_INSTALL_ADMISSION"},
+    "admission_scope": {"const": "EXACT_OBSERVED_INSTALLATION_STATE_ONLY"},
+    "development_only": {"const": true},
+    "formal": {"const": false},
+    "physical_primary_eligible": {"const": false},
+    "historical_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["predecessor_preserved", "supersedes_predecessor", "vm_policy_v1", "sandbox_gate_v1", "sandbox_schema_v1", "final_preinstall_receipts"],
+      "properties": {
+        "predecessor_preserved": {"const": true},
+        "supersedes_predecessor": {"const": false},
+        "vm_policy_v1": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "system_install_authorized"],
+          "properties": {
+            "path": {"const": "config/sandbox/p0b_vm_policy_v1.json"},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "system_install_authorized": {"const": false}
+          }
+        },
+        "sandbox_gate_v1": {"$ref": "#/$defs/artifact"},
+        "sandbox_schema_v1": {"$ref": "#/$defs/artifact"},
+        "final_preinstall_receipts": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {"$ref": "#/$defs/receipt"}
+        }
+      }
+    },
+    "host_platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os_id", "os_version_id", "dpkg_architecture"],
+      "properties": {
+        "os_id": {"const": "ubuntu"},
+        "os_version_id": {"const": "20.04"},
+        "dpkg_architecture": {"const": "amd64"}
+      }
+    },
+    "ubuntu_pro_posture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attached", "enabled_service_names_exact", "operation_in_progress", "raw_status_must_not_be_recorded"],
+      "properties": {
+        "attached": {"const": true},
+        "enabled_service_names_exact": {"const": ["esm-infra"]},
+        "operation_in_progress": {"const": false},
+        "raw_status_must_not_be_recorded": {"const": true}
+      }
+    },
+    "recorded_install_transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_only", "history_path", "started_utc", "ended_utc", "requested_packages", "no_install_recommends", "upgraded_count", "newly_installed_count", "removed_count", "future_package_mutation_authorized"],
+      "properties": {
+        "evidence_only": {"const": true},
+        "history_path": {"const": "/var/log/apt/history.log"},
+        "started_utc": {"$ref": "#/$defs/utc"},
+        "ended_utc": {"$ref": "#/$defs/utc"},
+        "requested_packages": {"const": ["qemu-system-x86", "qemu-utils"]},
+        "no_install_recommends": {"const": true},
+        "upgraded_count": {"const": 0},
+        "newly_installed_count": {"const": 19},
+        "removed_count": {"const": 0},
+        "future_package_mutation_authorized": {"const": false}
+      }
+    },
+    "required_packages_exact": {
+      "type": "array",
+      "minItems": 19,
+      "maxItems": 19,
+      "items": {"$ref": "#/$defs/package"}
+    },
+    "required_qemu_namespace_exact": {
+      "const": ["qemu-block-extra", "qemu-system-common", "qemu-system-data", "qemu-system-x86", "qemu-utils"]
+    },
+    "required_absent_packages_exact": {
+      "const": ["bridge-utils", "libvirt-daemon", "libvirt-daemon-system", "ovmf", "qemu-system-gui", "qemu-user", "qemu-user-binfmt", "qemu-user-static"]
+    },
+    "critical_files_exact": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": {"$ref": "#/$defs/critical_file"}
+    },
+    "required_quiescence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qemu_kvm_service", "qemu_kvm_autostart_link", "qemu_kvm_autostart_link_required_absent", "ksm_run_path", "ksm_required_start_value", "ksm_required_end_value", "qemu_processes_required_empty", "unprivileged_process_visibility_uid_min", "privileged_processes_are_configuration_trust_boundary", "unreadable_unprivileged_process_allowlist_exact"],
+      "properties": {
+        "qemu_kvm_service": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["load_state", "unit_file_state", "active_state", "sub_state", "fragment_path"],
+          "properties": {
+            "load_state": {"const": "loaded"},
+            "unit_file_state": {"const": "disabled"},
+            "active_state": {"const": "inactive"},
+            "sub_state": {"const": "dead"},
+            "fragment_path": {"const": "/lib/systemd/system/qemu-kvm.service"}
+          }
+        },
+        "qemu_kvm_autostart_link": {"const": "/etc/systemd/system/multi-user.target.wants/qemu-kvm.service"},
+        "qemu_kvm_autostart_link_required_absent": {"const": true},
+        "ksm_run_path": {"const": "/sys/kernel/mm/ksm/run"},
+        "ksm_required_start_value": {"const": "0"},
+        "ksm_required_end_value": {"const": "0"},
+        "qemu_processes_required_empty": {"const": true},
+        "unprivileged_process_visibility_uid_min": {"const": 1000},
+        "privileged_processes_are_configuration_trust_boundary": {"const": true},
+        "unreadable_unprivileged_process_allowlist_exact": {
+          "const": [
+            {"pid": 1927, "uid": 1000, "starttime_ticks": 2606, "ppid": 1926, "parent_starttime_ticks": 2606, "cgroup_sha256": "583bb7a90dfbd0220f3ed0852e7962b99eb56445f23c07569578495222229acd", "comm": "(sd-pam)", "argv0": "(sd-pam)"},
+            {"pid": 1940, "uid": 1000, "starttime_ticks": 2615, "ppid": 1, "parent_starttime_ticks": 12, "cgroup_sha256": "f66813ef47a3728a1f7fcda618ded948b39df66ae64d44ac54c195231f00c2de", "comm": "gnome-keyring-d", "argv0": "/usr/bin/gnome-keyring-daemon"},
+            {"pid": 2015, "uid": 1000, "starttime_ticks": 2797, "ppid": 1963, "parent_starttime_ticks": 2789, "cgroup_sha256": "f66813ef47a3728a1f7fcda618ded948b39df66ae64d44ac54c195231f00c2de", "comm": "ssh-agent", "argv0": "/usr/bin/ssh-agent"}
+          ]
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observed_installation_state_admitted", "future_package_mutation_authorized", "qemu_executed", "qemu_img_executed", "qemu_execution_admitted", "qemu_img_execution_admitted", "vm_started", "image_created", "image_creation_admitted", "build_started", "build_admitted", "gencase_started", "gencase_admitted", "upstream_code_executed", "status"],
+      "properties": {
+        "observed_installation_state_admitted": {"const": true},
+        "future_package_mutation_authorized": {"const": false},
+        "qemu_executed": {"const": false},
+        "qemu_img_executed": {"const": false},
+        "qemu_execution_admitted": {"const": false},
+        "qemu_img_execution_admitted": {"const": false},
+        "vm_started": {"const": false},
+        "image_created": {"const": false},
+        "image_creation_admitted": {"const": false},
+        "build_started": {"const": false},
+        "build_admitted": {"const": false},
+        "gencase_started": {"const": false},
+        "gencase_admitted": {"const": false},
+        "upstream_code_executed": {"const": false},
+        "status": {"const": "PASS_INSTALL_STATE_ONLY_EXECUTION_NOT_ADMITTED"}
+      }
+    }
+  }
+}

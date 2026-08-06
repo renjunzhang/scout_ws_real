@@ -1,0 +1,92 @@
+{
+  "schema_version": "smpcc-r8-liquid-qemu-binary-probe-admission-v1",
+  "document_type": "SMPCC_R8_LIQUID_QEMU_BINARY_PROBE_ADMISSION",
+  "admission_scope": "EXACT_QEMU_BINARY_LOAD_AND_VERSION_ONLY",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "predecessor_install_receipt": {
+    "path": "/data/a/scout_sim_replacement/r8_liquid/audits/sandbox/qemu_install_preflight_v2_20260805T091213Z.json",
+    "file_sha256": "a32240c319487f6c2560c46ced91d426930b12949ae02dec52db6fea54347292",
+    "receipt_hash": "a9f601fec190d269633d7638b916a9b9e40d93c915a141461f3d8afee5f055d7",
+    "preserved": true,
+    "execution_authorization_inherited": false
+  },
+  "boot_session": {
+    "boot_id_sha256": "18264e164ef3fb41d6dbac52d1ca8d989a9b5ab9e7154494af42f92e76730603",
+    "uid": 1000,
+    "unreadable_process_allowlist_exact": [
+      {"pid": 1994, "uid": 1000, "starttime_ticks": 3269, "ppid": 1993, "parent_starttime_ticks": 3268, "cgroup_sha256": "c3847cdb4d628b175f450f9c786b40a059d371547cab40f2e0126b2080d35a2b", "comm": "(sd-pam)", "argv0": "(sd-pam)"},
+      {"pid": 2007, "uid": 1000, "starttime_ticks": 3278, "ppid": 1, "parent_starttime_ticks": 12, "cgroup_sha256": "0027afc54b687534dcd9f0e69d182c658d5ce010a6502b5c4b2093e69e603918", "comm": "gnome-keyring-d", "argv0": "/usr/bin/gnome-keyring-daemon"},
+      {"pid": 2083, "uid": 1000, "starttime_ticks": 3455, "ppid": 2031, "parent_starttime_ticks": 3449, "cgroup_sha256": "0027afc54b687534dcd9f0e69d182c658d5ce010a6502b5c4b2093e69e603918", "comm": "ssh-agent", "argv0": "/usr/bin/ssh-agent"}
+    ]
+  },
+  "binary": {
+    "path": "/usr/bin/qemu-system-x86_64",
+    "dpkg_package": "qemu-system-x86",
+    "dpkg_version": "1:4.2-3ubuntu6.30+esm3",
+    "sha256": "6e8225fd4ffcdc6c4696dd5bf181cade84876689965946e46a50834ad4c5a718",
+    "size": 16287496,
+    "mode": "0755",
+    "uid": 0,
+    "gid": 0,
+    "security_capabilities": [],
+    "argv_exact": ["/usr/bin/qemu-system-x86_64", "-no-user-config", "-version"],
+    "expected_version_line": "QEMU emulator version 4.2.1 (Debian 1:4.2-3ubuntu6.30+esm3)"
+  },
+  "execution_boundary": {
+    "self_check_executes_qemu": false,
+    "run_probe_is_only_execution_entry": true,
+    "cwd": "/data/a/scout_sim_replacement/r8_liquid/scratch/vm",
+    "environment_exact": {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C.UTF-8"},
+    "stdin": "/dev/null",
+    "stdout_max_bytes": 4096,
+    "stderr_max_bytes": 4096,
+    "timeout_seconds": 5,
+    "term_grace_seconds": 1,
+    "start_new_session": true,
+    "fork_exec_launcher": true,
+    "subprocess_preexec_fn": false,
+    "parent_death_signal": "SIGKILL",
+    "parent_ack_before_exec": true,
+    "signals_reset_before_exec": true,
+    "signal_mask_cleared_before_exec": true,
+    "close_fds": true,
+    "no_new_privs": true,
+    "umask": "0077",
+    "rlimits": {"core_bytes": 0, "cpu_seconds_soft": 2, "cpu_seconds_hard": 3, "file_bytes": 8192, "open_files": 64, "address_space_bytes": 1073741824},
+    "same_open_fd_hash_and_exec": true,
+    "exec_path_template": "/proc/self/fd/{fd}",
+    "exclusive_lock": "/data/a/scout_sim_replacement/r8_liquid/locks",
+    "lock_creates_file": false,
+    "scratch_must_be_empty_and_unchanged": true,
+    "package_state_revalidated": true,
+    "ab_stable_projection_required_equal": true,
+    "bc_stable_projection_required_equal": true,
+    "snapshot_sequence": ["A_PRELOCKED", "B_PREEXEC", "C_POSTCLEANUP"],
+    "minimum_mem_available_bytes": 6442450944
+  },
+  "forbidden_effects": {
+    "qemu_img_executed": false,
+    "vm_started": false,
+    "machine_initialized": false,
+    "network_backend_initialized": false,
+    "network_namespace_created": false,
+    "filesystem_sandbox_claimed": false,
+    "image_created": false,
+    "build_started": false,
+    "gencase_started": false,
+    "upstream_code_executed": false,
+    "ros_or_gazebo_started": false
+  },
+  "receipt": {
+    "directory": "/data/a/scout_sim_replacement/r8_liquid/audits/sandbox",
+    "filename_exact": "qemu_binary_probe_v1_boot_20260805T094926Z.json",
+    "create_new": true,
+    "maximum_successful_receipts": 1,
+    "pass_only": true,
+    "failure_receipt_forbidden": true,
+    "pii_and_cmdline_forbidden": true,
+    "authorization_reusable": false
+  }
+}

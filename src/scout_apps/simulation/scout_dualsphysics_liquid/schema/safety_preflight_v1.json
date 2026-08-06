@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SIM-R8 DualSPHysics safety preflight",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "document_type",
+    "created_utc",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "approved_root",
+    "approved_root_exists",
+    "fidelity_validation_status",
+    "filesystem",
+    "resource_policy",
+    "simulation_process_check",
+    "status",
+    "errors",
+    "receipt_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-safety-preflight-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_SAFETY_PREFLIGHT"},
+    "created_utc": {"type": "string"},
+    "development_only": {"const": true},
+    "formal": {"const": false},
+    "physical_primary_eligible": {"const": false},
+    "approved_root": {"const": "/data/a/scout_sim_replacement/r8_liquid"},
+    "approved_root_exists": {"type": "boolean"},
+    "fidelity_validation_status": {"const": "UNVALIDATED"},
+    "filesystem": {"type": "object"},
+    "resource_policy": {"type": "object"},
+    "simulation_process_check": {"type": "object"},
+    "status": {"enum": ["PASS", "NO_GO"]},
+    "errors": {"type": "array", "items": {"type": "string"}},
+    "receipt_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": true
+}

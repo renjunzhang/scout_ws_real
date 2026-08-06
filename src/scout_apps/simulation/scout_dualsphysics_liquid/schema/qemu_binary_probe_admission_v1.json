@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SIM-R8 QEMU binary probe admission v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "admission_scope", "development_only", "formal", "physical_primary_eligible", "predecessor_install_receipt", "boot_session", "binary", "execution_boundary", "forbidden_effects", "receipt"],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pid", "uid", "starttime_ticks", "ppid", "parent_starttime_ticks", "cgroup_sha256", "comm", "argv0"],
+      "properties": {
+        "pid": {"type": "integer", "minimum": 1}, "uid": {"const": 1000}, "starttime_ticks": {"type": "integer", "minimum": 1},
+        "ppid": {"type": "integer", "minimum": 1}, "parent_starttime_ticks": {"type": "integer", "minimum": 1},
+        "cgroup_sha256": {"$ref": "#/$defs/sha256"}, "comm": {"type": "string", "minLength": 1}, "argv0": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-qemu-binary-probe-admission-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_QEMU_BINARY_PROBE_ADMISSION"},
+    "admission_scope": {"const": "EXACT_QEMU_BINARY_LOAD_AND_VERSION_ONLY"},
+    "development_only": {"const": true}, "formal": {"const": false}, "physical_primary_eligible": {"const": false},
+    "predecessor_install_receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "file_sha256", "receipt_hash", "preserved", "execution_authorization_inherited"],
+      "properties": {"path": {"type": "string", "pattern": "^/data/a/"}, "file_sha256": {"$ref": "#/$defs/sha256"}, "receipt_hash": {"$ref": "#/$defs/sha256"}, "preserved": {"const": true}, "execution_authorization_inherited": {"const": false}}
+    },
+    "boot_session": {
+      "type": "object", "additionalProperties": false, "required": ["boot_id_sha256", "uid", "unreadable_process_allowlist_exact"],
+      "properties": {"boot_id_sha256": {"$ref": "#/$defs/sha256"}, "uid": {"const": 1000}, "unreadable_process_allowlist_exact": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/identity"}}}
+    },
+    "binary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "dpkg_package", "dpkg_version", "sha256", "size", "mode", "uid", "gid", "security_capabilities", "argv_exact", "expected_version_line"],
+      "properties": {
+        "path": {"const": "/usr/bin/qemu-system-x86_64"}, "dpkg_package": {"const": "qemu-system-x86"}, "dpkg_version": {"const": "1:4.2-3ubuntu6.30+esm3"},
+        "sha256": {"$ref": "#/$defs/sha256"}, "size": {"type": "integer", "minimum": 1}, "mode": {"const": "0755"}, "uid": {"const": 0}, "gid": {"const": 0},
+        "security_capabilities": {"type": "array", "maxItems": 0}, "argv_exact": {"type": "array", "prefixItems": [{"const": "/usr/bin/qemu-system-x86_64"}, {"const": "-no-user-config"}, {"const": "-version"}], "items": false, "minItems": 3, "maxItems": 3},
+        "expected_version_line": {"type": "string", "minLength": 1}
+      }
+    },
+    "execution_boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["self_check_executes_qemu", "run_probe_is_only_execution_entry", "cwd", "environment_exact", "stdin", "stdout_max_bytes", "stderr_max_bytes", "timeout_seconds", "term_grace_seconds", "start_new_session", "fork_exec_launcher", "subprocess_preexec_fn", "parent_death_signal", "parent_ack_before_exec", "signals_reset_before_exec", "signal_mask_cleared_before_exec", "close_fds", "no_new_privs", "umask", "rlimits", "same_open_fd_hash_and_exec", "exec_path_template", "exclusive_lock", "lock_creates_file", "scratch_must_be_empty_and_unchanged", "package_state_revalidated", "ab_stable_projection_required_equal", "bc_stable_projection_required_equal", "snapshot_sequence", "minimum_mem_available_bytes"],
+      "properties": {
+        "self_check_executes_qemu": {"const": false}, "run_probe_is_only_execution_entry": {"const": true}, "cwd": {"const": "/data/a/scout_sim_replacement/r8_liquid/scratch/vm"},
+        "environment_exact": {"type": "object", "additionalProperties": false, "required": ["PATH", "LANG", "LC_ALL"], "properties": {"PATH": {"const": "/usr/bin:/bin"}, "LANG": {"const": "C.UTF-8"}, "LC_ALL": {"const": "C.UTF-8"}}},
+        "stdin": {"const": "/dev/null"}, "stdout_max_bytes": {"const": 4096}, "stderr_max_bytes": {"const": 4096}, "timeout_seconds": {"const": 5}, "term_grace_seconds": {"const": 1},
+        "start_new_session": {"const": true}, "fork_exec_launcher": {"const": true}, "subprocess_preexec_fn": {"const": false},
+        "parent_death_signal": {"const": "SIGKILL"}, "parent_ack_before_exec": {"const": true},
+        "signals_reset_before_exec": {"const": true}, "signal_mask_cleared_before_exec": {"const": true}, "close_fds": {"const": true},
+        "no_new_privs": {"const": true}, "umask": {"const": "0077"},
+        "rlimits": {"type": "object", "additionalProperties": false, "required": ["core_bytes", "cpu_seconds_soft", "cpu_seconds_hard", "file_bytes", "open_files", "address_space_bytes"], "properties": {"core_bytes": {"const": 0}, "cpu_seconds_soft": {"const": 2}, "cpu_seconds_hard": {"const": 3}, "file_bytes": {"const": 8192}, "open_files": {"const": 64}, "address_space_bytes": {"const": 1073741824}}},
+        "same_open_fd_hash_and_exec": {"const": true}, "exec_path_template": {"const": "/proc/self/fd/{fd}"}, "exclusive_lock": {"const": "/data/a/scout_sim_replacement/r8_liquid/locks"},
+        "lock_creates_file": {"const": false}, "scratch_must_be_empty_and_unchanged": {"const": true}, "package_state_revalidated": {"const": true}, "ab_stable_projection_required_equal": {"const": true}, "bc_stable_projection_required_equal": {"const": true},
+        "snapshot_sequence": {"type": "array", "prefixItems": [{"const": "A_PRELOCKED"}, {"const": "B_PREEXEC"}, {"const": "C_POSTCLEANUP"}], "items": false, "minItems": 3, "maxItems": 3},
+        "minimum_mem_available_bytes": {"const": 6442450944}
+      }
+    },
+    "forbidden_effects": {
+      "type": "object", "additionalProperties": false,
+      "required": ["qemu_img_executed", "vm_started", "machine_initialized", "network_backend_initialized", "network_namespace_created", "filesystem_sandbox_claimed", "image_created", "build_started", "gencase_started", "upstream_code_executed", "ros_or_gazebo_started"],
+      "properties": {
+        "qemu_img_executed": {"const": false}, "vm_started": {"const": false}, "machine_initialized": {"const": false},
+        "network_backend_initialized": {"const": false}, "network_namespace_created": {"const": false}, "filesystem_sandbox_claimed": {"const": false},
+        "image_created": {"const": false}, "build_started": {"const": false}, "gencase_started": {"const": false},
+        "upstream_code_executed": {"const": false}, "ros_or_gazebo_started": {"const": false}
+      }
+    },
+    "receipt": {
+      "type": "object", "additionalProperties": false, "required": ["directory", "filename_exact", "create_new", "maximum_successful_receipts", "pass_only", "failure_receipt_forbidden", "pii_and_cmdline_forbidden", "authorization_reusable"],
+      "properties": {"directory": {"const": "/data/a/scout_sim_replacement/r8_liquid/audits/sandbox"}, "filename_exact": {"const": "qemu_binary_probe_v1_boot_20260805T094926Z.json"}, "create_new": {"const": true}, "maximum_successful_receipts": {"const": 1}, "pass_only": {"const": true}, "failure_receipt_forbidden": {"const": true}, "pii_and_cmdline_forbidden": {"const": true}, "authorization_reusable": {"const": false}}
+    }
+  }
+}

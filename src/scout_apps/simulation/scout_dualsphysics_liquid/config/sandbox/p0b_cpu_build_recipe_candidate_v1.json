@@ -1,0 +1,72 @@
+{
+  "schema_version": "smpcc-r8-liquid-cpu-build-recipe-candidate-v1",
+  "document_type": "SMPCC_R8_LIQUID_CPU_BUILD_RECIPE_CANDIDATE",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "source": {
+    "commit": "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+    "makefile_relative_path": "src/source/Makefile_cpu",
+    "makefile_sha256": "4038165b761e233b207b7196f320dc59b3092737d5eaf8c98c9a282b9e900a91",
+    "cmake_relative_path": "src/source/CMakeLists.txt",
+    "cmake_sha256": "69a130cd319ff79beee3d88ad0bec54244af7c7c7aaaa3aef1aa584b0bf67e99",
+    "bundled_cpu_solver_present": false
+  },
+  "staging": {
+    "provenance_source": "read_only_not_mounted_in_build_guest",
+    "copy_include": ["src/source/**"],
+    "copy_exclude": [
+      ".git/**",
+      "bin/**",
+      "src/lib/**",
+      "examples/**",
+      "src_mphase/**"
+    ],
+    "hardlinks_forbidden": true,
+    "symlink_escape_forbidden": true,
+    "guest_source_root": "/work/source/src/source",
+    "guest_output_root": "/work/output"
+  },
+  "candidate_argv": [
+    "/usr/bin/make",
+    "-f",
+    "Makefile_cpu",
+    "-j4",
+    "CC=/usr/bin/g++",
+    "USE_DEBUG=NO",
+    "USE_FAST_MATH=NO",
+    "USE_NATIVE_CPU_OPTIMIZATIONS=NO",
+    "COMPILE_CHRONO=NO",
+    "COMPILE_WAVEGEN=NO",
+    "COMPILE_MOORDYNPLUS=NO",
+    "LIBS_DIRECTORIES=",
+    "EXECS_DIRECTORY=/work/output",
+    "/work/output/DualSPHysics5.4CPU_linux64"
+  ],
+  "working_directory": "/work/source/src/source",
+  "explicitly_forbidden_targets": ["all", "clean", "compile_libs"],
+  "explicitly_forbidden_build_systems": ["CMakeLists.txt"],
+  "reasons": {
+    "exact_target": "avoids the all target and its recursive rm -rf object cleanup",
+    "optional_modules_off": "avoids bundled Chrono, WaveGen and MoorDynPlus libraries",
+    "fast_math_off": "creates a conservative first CPU reference build",
+    "cmake_forbidden": "upstream CMake writes into bin/linux and applies -use_fast_math to GNU C++"
+  },
+  "expected_mutable_paths_inside_guest": [
+    "/work/source/src/source/*.o",
+    "/work/output/DualSPHysics5.4CPU_linux64"
+  ],
+  "post_build": {
+    "execute_output": false,
+    "static_checks": [
+      "sha256",
+      "file",
+      "readelf_headers",
+      "readelf_program_headers",
+      "readelf_dynamic",
+      "undefined_symbol_inventory"
+    ],
+    "publication": "create-new after static audit only"
+  },
+  "status": "STATIC_REVIEWED_CANDIDATE_NOT_AUTHORIZED_TO_RUN"
+}

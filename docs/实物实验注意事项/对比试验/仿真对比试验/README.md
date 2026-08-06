@@ -2,6 +2,20 @@
 
 > 本文件给后续新对话/agent 使用：先读这里，再跑点到点或固定路径对比。
 > 目标是避免误用旧仿真、旧 LT-DWA adapter、同一个 Gazebo session 反复 reset 等问题。
+>
+> 对**源码隔离 R8 仿真专用机制矩阵**，先读
+> [`20260804_SIM-R8源码隔离_仿真实验矩阵与执行方案.md`](./20260804_SIM-R8源码隔离_仿真实验矩阵与执行方案.md)。
+> R8 的唯一运行入口是 `src/scout_apps/simulation/`；历史 shared-source N=3/N=9
+> 结果、wrapper 与 R1–R7 artifacts 不能重标或混入 R8。
+>
+> 若任务是“对齐实物 v2.0 的正式 S-MPCC 矩阵”，先读
+> [`20260801_S-MPCC仿真实验矩阵_对齐实物40_64_88.md`](./20260801_S-MPCC仿真实验矩阵_对齐实物40_64_88.md)。
+> 当前该矩阵为 `DESIGN_ONLY / FORMAL_SIM_NO-GO`；本 README 中的旧 N=3/N=9 命令不能直接升格为 40/64/88 正式数据。
+>
+> 历史 `SIM_Bslosh_R1` 则只按
+> [`20260802_SIM_ONLY_Bslosh_R1_隔离发布.md`](./20260802_SIM_ONLY_Bslosh_R1_隔离发布.md)
+> 使用；它不是 R8 source-separated release，且与实物对齐矩阵、physical-primary
+> claim 和正式随机表隔离。
 
 ## 0. 红线与默认环境
 

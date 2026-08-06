@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Pinned DualSPHysics dependency manifest",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "document_type",
+    "created_utc",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "repository_url",
+    "requested_commit",
+    "resolved_commit",
+    "git_tree_hash",
+    "source_path",
+    "source_inventory_hash",
+    "source_file_count",
+    "source_total_file_bytes",
+    "precompiled_elf_artifacts",
+    "license_artifacts",
+    "working_tree_clean",
+    "submodules_initialized",
+    "status",
+    "manifest_hash"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-dependency-manifest-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_DEPENDENCY_MANIFEST"},
+    "created_utc": {"type": "string"},
+    "development_only": {"const": true},
+    "formal": {"const": false},
+    "physical_primary_eligible": {"const": false},
+    "repository_url": {"const": "https://github.com/DualSPHysics/DualSPHysics.git"},
+    "requested_commit": {
+      "const": "ef3721a861fda961f0e2f9ec4cd317b19de99086"
+    },
+    "resolved_commit": {
+      "const": "ef3721a861fda961f0e2f9ec4cd317b19de99086"
+    },
+    "git_tree_hash": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_path": {"type": "string"},
+    "source_inventory_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_file_count": {"type": "integer", "minimum": 1},
+    "source_total_file_bytes": {"type": "integer", "minimum": 1},
+    "precompiled_elf_artifacts": {"type": "array", "items": {"type": "object"}},
+    "license_artifacts": {"type": "array", "items": {"type": "object"}},
+    "working_tree_clean": {"const": true},
+    "submodules_initialized": {"const": false},
+    "status": {"const": "PINNED_SOURCE_VERIFIED_DEVELOPMENT_ONLY"},
+    "manifest_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "additionalProperties": true
+}
