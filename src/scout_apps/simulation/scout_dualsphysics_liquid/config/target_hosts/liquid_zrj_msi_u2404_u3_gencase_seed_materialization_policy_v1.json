@@ -1,0 +1,83 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-u3-gencase-seed-materialization-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_U3_GENCASE_SEED_MATERIALIZATION_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_U3_GENCASE_SEED_MATERIALIZATION_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "user_delegated_review_and_execution_approval": true,
+  "execution_scope": "one_exact_nonexecutable_gencase_seed_materialization",
+  "allowed_gate_commands": ["self-check", "preflight", "materialize"],
+  "frozen_attempt": {
+    "seed_id": "u3_c1_gencase_seed_20260807T031624Z",
+    "seed_root": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_20260807T031624Z.partial",
+    "input_root": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_20260807T031624Z.partial/input",
+    "receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_seed_20260807T031624Z.json",
+    "partial_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_seed_20260807T031624Z.json.partial"
+  },
+  "source_provenance": {
+    "full_bare_repository": "/home/zrj/scout_liquid_lab/dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.full_attempt_3.git",
+    "full_fetch_receipt": "/home/zrj/scout_liquid_lab/audits/u2_full_source_fetch_attempt_3_20260806T074600Z.json",
+    "full_fetch_receipt_sha256": "23745c0076c2c06fc549665c89f4e039761832bab66f4f568f63eff696ead18d",
+    "commit": "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+    "gencase": {
+      "tree_path": "bin/linux/GenCase_linux64",
+      "blob_sha1": "4db4dadbae8f6e3885cad3bb752340812036278a",
+      "sha256": "a1b6414e0f716669363d1a80a05e133085c04995e15716e3c1f0406e0d023226",
+      "size_bytes": 5809384,
+      "host_mode_after_materialization": "0400",
+      "host_execution": "forbidden"
+    },
+    "dsph_config": {
+      "tree_path": "bin/linux/DsphConfig.xml",
+      "blob_sha1": "d99d0f85d19a622f7faf2d5f1195b11f17951846",
+      "sha256": "0644c9a6a6687678950fc8966e352b4bbd3de9d3cb787db9e507c2eb7ccaddcd",
+      "size_bytes": 293,
+      "host_mode_after_materialization": "0400"
+    },
+    "case_template": {
+      "workspace_relative_path": "config/cases/u3_c1_static_v1.xml",
+      "sha256": "ef57582f69714f622e5b8a348c7626d233c203ad0b1eb6332b58fb1ffc09fa1a",
+      "host_filename": "C1_static_Def.xml",
+      "host_mode_after_materialization": "0400",
+      "classification": "SIM_ONLY_UNVALIDATED"
+    }
+  },
+  "trusted_tools": {
+    "git": {
+      "path": "/usr/bin/git",
+      "sha256": "2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668"
+    }
+  },
+  "materialization_contract": {
+    "new_parent_if_absent": "/home/zrj/scout_liquid_lab/dependency/runtime",
+    "runtime_parent_mode": "0750",
+    "seed_root_mode_after_success": "0500",
+    "input_root_mode_after_success": "0500",
+    "allowed_regular_files": ["GenCase_linux64", "DsphConfig.xml", "C1_static_Def.xml"],
+    "all_files_regular_single_link_no_symlink": true,
+    "all_files_read_only_nonexecutable": true,
+    "no_existing_attempt_reuse": true,
+    "no_delete_or_overwrite": true,
+    "git_operation": ["/usr/bin/git", "--no-replace-objects", "--git-dir", "<frozen_bare_repo>", "cat-file", "blob", "<frozen_blob_sha1>"],
+    "network": "not_used",
+    "upstream_code_execution": "forbidden"
+  },
+  "invariants": {
+    "no_sudo": true,
+    "no_apt": true,
+    "no_driver_or_kernel_change": true,
+    "no_sysctl_or_apparmor_change": true,
+    "no_network": true,
+    "no_gpu": true,
+    "no_ros_or_gazebo": true,
+    "no_precompiled_elf_execution": true,
+    "no_compiled_artifact_execution": true,
+    "no_source_write": true,
+    "no_workspace_mount": true,
+    "no_delete_or_overwrite": true
+  },
+  "status": "REVIEWED_NONEXECUTABLE_SEED_MATERIALIZATION_V1_PENDING_STATIC_VERIFICATION",
+  "next_allowed_stage": "MATERIALIZE_FIXED_READ_ONLY_SEED_THEN_CREATE_SEPARATE_GENCASE_RUNTIME_ADMISSION"
+}

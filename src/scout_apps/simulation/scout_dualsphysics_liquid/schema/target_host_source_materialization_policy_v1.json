@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MSI Ubuntu 24.04 static source materialization policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "static_source_materialization_authorized",
+    "build_execution_authorized",
+    "output_execution_authorized",
+    "upstream_code_execution_authorized",
+    "allowed_gate_commands",
+    "required_evidence",
+    "source",
+    "trusted_system_tools",
+    "git_commands",
+    "source_subset_expectations",
+    "output",
+    "resources",
+    "receipt",
+    "invariants",
+    "status",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-source-materialization-policy-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_SOURCE_MATERIALIZATION_POLICY"
+    },
+    "policy_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404_SOURCE_MATERIALIZATION_V1"
+    },
+    "host_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404"
+    },
+    "development_only": {
+      "const": true
+    },
+    "formal": {
+      "const": false
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "static_source_materialization_authorized": {
+      "const": true
+    },
+    "build_execution_authorized": {
+      "const": false
+    },
+    "output_execution_authorized": {
+      "const": false
+    },
+    "upstream_code_execution_authorized": {
+      "const": false
+    },
+    "allowed_gate_commands": {
+      "const": [
+        "self-check",
+        "materialize-source"
+      ]
+    },
+    "required_evidence": {
+      "type": "object"
+    },
+    "source": {
+      "type": "object"
+    },
+    "trusted_system_tools": {
+      "type": "object"
+    },
+    "git_commands": {
+      "type": "object"
+    },
+    "source_subset_expectations": {
+      "type": "object"
+    },
+    "output": {
+      "type": "object"
+    },
+    "resources": {
+      "type": "object"
+    },
+    "receipt": {
+      "type": "object"
+    },
+    "invariants": {
+      "type": "object"
+    },
+    "status": {
+      "const": "STATIC_SOURCE_MATERIALIZATION_ONLY_BUILD_NOT_AUTHORIZED"
+    },
+    "next_allowed_stage": {
+      "const": "MATERIALIZE_ONE_NEW_SOURCE_ATTEMPT_OR_REVIEW_NO_GO"
+    }
+  }
+}

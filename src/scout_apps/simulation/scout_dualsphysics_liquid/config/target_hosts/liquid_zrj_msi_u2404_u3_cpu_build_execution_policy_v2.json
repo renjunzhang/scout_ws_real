@@ -1,0 +1,163 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-u3-cpu-build-execution-policy-v2",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_U3_CPU_BUILD_EXECUTION_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_U3_CPU_BUILD_EXECUTION_V2",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "user_delegated_review_and_execution_approval": true,
+  "execution_scope": "one_exact_source_copy_and_one_exact_cpu_build_attempt",
+  "revision_reason": "v1_setpriv_clear_groups_failed_before_bwrap; v2 only moves that privilege drop to a fixed sudo-to-setpriv handoff",
+  "allowed_gate_commands": [
+    "self-check",
+    "preflight",
+    "run-source-copy",
+    "run-build"
+  ],
+  "frozen_attempt": {
+    "build_id": "u3_source_cpu_build_20260806T171401Z",
+    "attempt_root": "/home/zrj/scout_liquid_lab/build/u3_source_cpu_build_20260806T171401Z.partial",
+    "output_root": "/home/zrj/scout_liquid_lab/build/u3_source_cpu_build_20260806T171401Z.partial/output",
+    "source_copy_profile": "r8-liquid-u3-source-copy-v2",
+    "source_copy_profile_path": "config/apparmor_drafts/r8-liquid-u3-source-copy-v2.profile",
+    "build_profile": "r8-liquid-u3-cpu-build-v2",
+    "build_profile_path": "config/apparmor_drafts/r8-liquid-u3-cpu-build-v2.profile",
+    "source_copy_profile_sha256": "a7f5ffbfe0243c826f6b5093b53091a5dac1013065b55e5e691be95e60c3058b",
+    "build_profile_sha256": "a1ae900ae23adfa44b569e444f8261fa84c265ed302f34a194bb38ccececaa51"
+  },
+  "outer_privilege_handoff": {
+    "only_privileged_child_command": [
+      "/usr/bin/setpriv",
+      "--reuid=1000",
+      "--regid=1000",
+      "--clear-groups",
+      "--",
+      "/usr/bin/python3",
+      "r8_liquid_target_u3_cpu_build_gate.py",
+      "<fixed_phase>"
+    ],
+    "must_drop_before_aa_exec": true,
+    "required_uid": 1000,
+    "required_gid": 1000,
+    "required_supplementary_group_count": 0,
+    "root_access_to_source_or_output": "forbidden_after_exec"
+  },
+  "source_input": {
+    "root": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source",
+    "receipt": "/home/zrj/scout_liquid_lab/audits/u3_source_materialization_v1_20260806T155752Z.json",
+    "receipt_sha256": "90af263fb7ec8b7d6a46a53aa5354dd5b676cd4167d48fde93911e014a70b745",
+    "file_count": 352,
+    "total_bytes": 5473917,
+    "source_mount": "read_only_nosuid_nodev",
+    "source_write": "forbidden"
+  },
+  "isolation": {
+    "backend": "bubblewrap",
+    "network": "new_empty_network_namespace",
+    "namespaces": ["user", "pid", "ipc", "uts", "network"],
+    "disable_nested_user_namespaces": true,
+    "host_read_only_binds": ["/usr", "sealed source during copy only"],
+    "host_writable_binds": ["one exact new output root"],
+    "host_writable_bind_count": 1,
+    "forbidden_host_paths": [
+      "/home/zrj/scout_ws",
+      "/home/zrj/ros2_ws",
+      "/opt/ros/jazzy",
+      "/data",
+      "/home/zrj/scout_liquid_lab/dependency/source",
+      "/home/zrj/scout_liquid_lab/incoming",
+      "/home/zrj/scout_liquid_lab/results",
+      "/home/zrj/scout_liquid_lab/outgoing"
+    ],
+    "gpu_device_nodes": [],
+    "environment": {
+      "HOME": "/nonexistent",
+      "PATH": "/usr/bin:/bin",
+      "LC_ALL": "C.UTF-8",
+      "LANG": "C.UTF-8",
+      "TZ": "UTC"
+    }
+  },
+  "resources": {
+    "source_copy_wall_timeout_seconds": 300,
+    "source_copy_cpu_seconds": 120,
+    "source_copy_address_space_bytes": 1073741824,
+    "build_wall_timeout_seconds": 3600,
+    "build_cpu_seconds": 3600,
+    "build_address_space_bytes": 8589934592,
+    "process_limit": 4096,
+    "open_file_limit": 1024,
+    "file_size_limit_bytes": 2147483648,
+    "core_dump_bytes": 0,
+    "parallel_jobs": 4,
+    "minimum_available_memory_bytes": 8589934592,
+    "minimum_available_disk_bytes": 21474836480
+  },
+  "source_copy_command": [
+    "/usr/bin/cp",
+    "--recursive",
+    "--no-preserve=mode,ownership",
+    "--",
+    "/work/input/.",
+    "/work/output/buildtree/src/source/"
+  ],
+  "build_command": [
+    "/usr/bin/make",
+    "--no-builtin-rules",
+    "--no-builtin-variables",
+    "-f",
+    "U3Build.mk",
+    "-j4",
+    "CC=/usr/bin/x86_64-linux-gnu-g++-13",
+    "USE_DEBUG=NO",
+    "USE_FAST_MATH=NO",
+    "USE_NATIVE_CPU_OPTIMIZATIONS=NO",
+    "COMPILE_CHRONO=NO",
+    "COMPILE_WAVEGEN=NO",
+    "COMPILE_MOORDYNPLUS=NO",
+    "LIBS_DIRECTORIES=",
+    "EXECS_DIRECTORY=/work/output/artifacts",
+    "/work/output/artifacts/DualSPHysics5.4CPU_linux64"
+  ],
+  "generated_wrapper": {
+    "path": "output/buildtree/src/source/U3Build.mk",
+    "content": ".SUFFIXES:\n.SUFFIXES: .cpp .o\ninclude Makefile_cpu\n",
+    "purpose": "restore only the checked-in .cpp-to-.o suffix rule while GNU Make built-in rules remain disabled"
+  },
+  "static_artifact_audit": {
+    "candidate": "output/artifacts/DualSPHysics5.4CPU_linux64",
+    "execution": "forbidden_during_and_after_this_gate",
+    "interpreter": "/lib64/ld-linux-x86-64.so.2",
+    "required_needed": ["libgomp.so.1", "libstdc++.so.6", "libgcc_s.so.1", "libc.so.6"],
+    "forbidden_needed_substrings": ["chrono", "dsph", "cuda", "nvidia", "ros", "gazebo", "wavegen", "moordyn"],
+    "rpath_or_runpath": "forbidden",
+    "artifact_mode_after_audit": "0400"
+  },
+  "profile_lifecycle": {
+    "parser_static_check": "apparmor_parser -Q -K -T",
+    "transient_kernel_load": "allowed_only_for_one_exact_phase",
+    "persistent_profile_install": "forbidden",
+    "profile_remove_same_session": true,
+    "sudo_timestamp_clear": true
+  },
+  "invariants": {
+    "no_apt": true,
+    "no_driver_or_kernel_change": true,
+    "no_sysctl_or_apparmor_global_setting_change": true,
+    "no_network": true,
+    "no_gpu": true,
+    "no_ros_or_gazebo": true,
+    "no_precompiled_elf_execution": true,
+    "no_compiled_artifact_execution": true,
+    "no_source_write": true,
+    "no_workspace_mount": true,
+    "no_existing_attempt_reuse": true,
+    "no_delete_or_overwrite": true,
+    "no_persistent_profile_install": true,
+    "profile_cleanup_required": true,
+    "supplementary_groups_clear_before_aa_exec": true
+  },
+  "status": "REVIEWED_SINGLE_ATTEMPT_CPU_BUILD_V2_ADMITTED_PENDING_PARSER_CHECK",
+  "next_allowed_stage": "RUN_ONE_SOURCE_COPY_THEN_ONE_CPU_BUILD_AND_STATIC_ELF_AUDIT"
+}

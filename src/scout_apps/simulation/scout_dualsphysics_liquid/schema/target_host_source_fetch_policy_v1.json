@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MSI Ubuntu 24.04 exact source fetch policy",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "source_fetch_authorized",
+    "upstream_code_execution_authorized",
+    "allowed_gate_commands",
+    "required_target_profile",
+    "required_bwrap_smoke",
+    "source",
+    "trusted_system_tools",
+    "network",
+    "git_commands",
+    "resources",
+    "receipt",
+    "invariants"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-source-fetch-policy-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_SOURCE_FETCH_POLICY"
+    },
+    "development_only": {
+      "const": true
+    },
+    "formal": {
+      "const": false
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "source_fetch_authorized": {
+      "const": true
+    },
+    "upstream_code_execution_authorized": {
+      "const": false
+    }
+  },
+  "additionalProperties": true
+}

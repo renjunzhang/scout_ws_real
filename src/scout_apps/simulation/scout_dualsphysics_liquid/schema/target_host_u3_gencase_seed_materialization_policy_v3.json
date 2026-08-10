@@ -1,0 +1,177 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target-host-u3-gencase-seed-materialization-policy-v3.json",
+  "title": "R8 liquid U3 C1M GenCase seed materialization policy v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "user_delegated_review_and_execution_approval",
+    "execution_scope",
+    "revision_reason",
+    "allowed_gate_commands",
+    "frozen_attempt",
+    "nonreusable_predecessors",
+    "source_provenance",
+    "trusted_tools",
+    "materialization_contract",
+    "invariants",
+    "status",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-target-u3-gencase-seed-materialization-policy-v3"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_TARGET_U3_GENCASE_SEED_MATERIALIZATION_POLICY"},
+    "policy_id": {"const": "LIQUID_ZRJ_MSI_U2404_U3_GENCASE_SEED_MATERIALIZATION_V3"},
+    "host_id": {"const": "LIQUID_ZRJ_MSI_U2404"},
+    "development_only": {"const": true},
+    "formal": {"const": false},
+    "physical_primary_eligible": {"const": false},
+    "user_delegated_review_and_execution_approval": {"const": true},
+    "execution_scope": {"const": "one_exact_nonexecutable_gencase_seed_v3_materialization"},
+    "revision_reason": {
+      "const": "The v1 seed is permanently rejected because its C1 boundary cylinder used mask=\"1 | 2\", which removed both end caps and left no bottom, and because PartsOutMax is deprecated and ignored. The corrected v2 seed remains fixed-boundary evidence only: its 2669 fixed and zero moving particles cannot be reused for a replay-compatible moving-boundary restart. V3 uses a wholly new append-only C1M identity, rematerializes the two pinned upstream blobs directly from the audited bare repository, and binds only the pinned workspace C1M template with one casedef motion object at ref=0, begin mov=1/start=0, mvnull id=1, Shifting=1 and DtAllParticles=1. No v1 or v2 seed byte or path is a v3 materialization source."
+    },
+    "allowed_gate_commands": {"const": ["self-check", "preflight", "materialize"]},
+    "frozen_attempt": {
+      "const": {
+        "seed_id": "u3_c1m_gencase_seed_v3_20260808T150802Z",
+        "seed_root": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1m_gencase_seed_v3_20260808T150802Z.partial",
+        "input_root": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1m_gencase_seed_v3_20260808T150802Z.partial/input",
+        "receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gencase_seed_v3_20260808T150802Z.json",
+        "partial_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gencase_seed_v3_20260808T150802Z.json.partial"
+      }
+    },
+    "nonreusable_predecessors": {
+      "const": {
+        "rejected_v1": {
+          "seed_id": "u3_c1_gencase_seed_20260807T031624Z",
+          "seed_root": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_20260807T031624Z.partial",
+          "input_root": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_20260807T031624Z.partial/input",
+          "receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_seed_20260807T031624Z.json",
+          "receipt_sha256": "19ccbcc3c945a3e457b9cce99611c061ac8e6dfaf099129920cb555818fd6b6a",
+          "partial_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_seed_20260807T031624Z.json.partial",
+          "partial_receipt_sha256": "a265d086aead8e23054323f8892b6d99d02166ead35150ba65a7ce0fc6da5ac3",
+          "case_template_sha256": "ef57582f69714f622e5b8a348c7626d233c203ad0b1eb6332b58fb1ffc09fa1a",
+          "disposition": "PERMANENT_NO_GO_DO_NOT_EXECUTE_OR_REUSE",
+          "rejection_reasons": [
+            "mask_1_or_2_removed_both_cylinder_end_caps_and_left_no_bottom",
+            "deprecated_PartsOutMax_was_ignored"
+          ],
+          "preserved_append_only": true,
+          "is_v3_materialization_source": false
+        },
+        "fixed_boundary_v2": {
+          "seed_id": "u3_c1_gencase_seed_v2_20260807T135341Z",
+          "seed_root": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_v2_20260807T135341Z.partial",
+          "input_root": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_v2_20260807T135341Z.partial/input",
+          "receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_seed_v2_20260807T135341Z.json",
+          "receipt_sha256": "1bbf958dfe2f7ce026ce05d77e7ee2c2516c5d0ddc4345b021904e355003009d",
+          "partial_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_seed_v2_20260807T135341Z.json.partial",
+          "partial_receipt_sha256": "412b5fb1bc3fd482531cc3847c974fd4f4dba94c02eb78fe976d3cda117cb412",
+          "case_template_sha256": "d738d303300b3f339ac37ca3a604fbe8dff9e034d8c8ad7aacb2654434525819",
+          "disposition": "GEOMETRY_BASELINE_ONLY_FIXED_BOUNDARY_DO_NOT_REUSE_FOR_C1M",
+          "nonreuse_reasons": [
+            "v2_materializes_2669_fixed_and_zero_moving_boundary_particles",
+            "settled_fixed_particles_cannot_be_reclassified_for_restart",
+            "c1m_requires_a_fresh_gencase_particle_identity"
+          ],
+          "preserved_append_only": true,
+          "is_v3_materialization_source": false
+        }
+      }
+    },
+    "source_provenance": {
+      "const": {
+        "full_bare_repository": "/home/zrj/scout_liquid_lab/dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.full_attempt_3.git",
+        "full_fetch_receipt": "/home/zrj/scout_liquid_lab/audits/u2_full_source_fetch_attempt_3_20260806T074600Z.json",
+        "full_fetch_receipt_sha256": "23745c0076c2c06fc549665c89f4e039761832bab66f4f568f63eff696ead18d",
+        "commit": "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+        "gencase": {
+          "tree_path": "bin/linux/GenCase_linux64",
+          "blob_sha1": "4db4dadbae8f6e3885cad3bb752340812036278a",
+          "sha256": "a1b6414e0f716669363d1a80a05e133085c04995e15716e3c1f0406e0d023226",
+          "size_bytes": 5809384,
+          "host_mode_after_materialization": "0400",
+          "host_execution": "forbidden"
+        },
+        "dsph_config": {
+          "tree_path": "bin/linux/DsphConfig.xml",
+          "blob_sha1": "d99d0f85d19a622f7faf2d5f1195b11f17951846",
+          "sha256": "0644c9a6a6687678950fc8966e352b4bbd3de9d3cb787db9e507c2eb7ccaddcd",
+          "size_bytes": 293,
+          "host_mode_after_materialization": "0400"
+        },
+        "case_template": {
+          "workspace_relative_path": "config/cases/u3_c1m_moving_zero_v1.xml",
+          "sha256": "1711b10f366770cb1b6aa2af799c093596c9d606c914c4a68b9bcdb9fa844b52",
+          "size_bytes": 6070,
+          "host_filename": "C1M_moving_zero_Def.xml",
+          "host_mode_after_materialization": "0400",
+          "classification": "SIM_ONLY_UNVALIDATED_C1M_MOVING_ZERO_STATIC_REVIEW_V1"
+        }
+      }
+    },
+    "trusted_tools": {
+      "const": {
+        "git": {
+          "path": "/usr/bin/git",
+          "sha256": "2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668"
+        }
+      }
+    },
+    "materialization_contract": {
+      "const": {
+        "new_parent_if_absent": "/home/zrj/scout_liquid_lab/dependency/runtime",
+        "runtime_parent_mode": "0750",
+        "seed_root_mode_after_success": "0500",
+        "input_root_mode_after_success": "0500",
+        "allowed_regular_files": ["GenCase_linux64", "DsphConfig.xml", "C1M_moving_zero_Def.xml"],
+        "all_files_regular_single_link_no_symlink": true,
+        "all_files_read_only_nonexecutable": true,
+        "no_existing_attempt_reuse": true,
+        "no_delete_or_overwrite": true,
+        "predecessor_seeds_as_source": "forbidden",
+        "upstream_blob_source": "audited_bare_repository_only",
+        "case_source": "pinned_workspace_c1m_moving_zero_v1_template_only",
+        "git_operation": [
+          "/usr/bin/git",
+          "--no-replace-objects",
+          "--git-dir",
+          "<frozen_bare_repo>",
+          "cat-file",
+          "blob",
+          "<frozen_blob_sha1>"
+        ],
+        "network": "not_used",
+        "upstream_code_execution": "forbidden"
+      }
+    },
+    "invariants": {
+      "const": {
+        "no_sudo": true,
+        "no_apt": true,
+        "no_driver_or_kernel_change": true,
+        "no_sysctl_or_apparmor_change": true,
+        "no_network": true,
+        "no_gpu": true,
+        "no_ros_or_gazebo": true,
+        "no_precompiled_elf_execution": true,
+        "no_compiled_artifact_execution": true,
+        "no_source_write": true,
+        "no_workspace_mount": true,
+        "no_predecessor_seed_input_reuse": true,
+        "predecessor_evidence_must_remain_present": true,
+        "no_delete_or_overwrite": true
+      }
+    },
+    "status": {"const": "REVIEWED_NONEXECUTABLE_SEED_MATERIALIZATION_V3_PENDING_STATIC_VERIFICATION"},
+    "next_allowed_stage": {"const": "MATERIALIZE_FIXED_READ_ONLY_SEED_V3_THEN_CREATE_SEPARATE_GENCASE_RUNTIME_V3_ADMISSION"}
+  }
+}

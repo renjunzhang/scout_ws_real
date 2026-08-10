@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target-host-u3-stdio-apparmor-transport-probe-policy-v2.json",
+  "title": "R8 liquid U3 harmless stdio/AppArmor transport probe policy v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "static_review_authorized",
+    "profile_parse_load_select_authorized",
+    "harmless_probe_execution_authorized",
+    "production_runtime_authorized",
+    "allowed_gate_commands",
+    "frozen_identity",
+    "security_decision",
+    "reviewed_bytes",
+    "trusted_system_tools",
+    "stdio_transport",
+    "identity_contract",
+    "isolation",
+    "fixed_command",
+    "runtime_transition",
+    "resources",
+    "mount_rule_discovery",
+    "profile_lifecycle",
+    "evidence_interpretation",
+    "invariants",
+    "status",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-u3-stdio-apparmor-transport-probe-policy-v2"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_U3_STDIO_APPARMOR_TRANSPORT_PROBE_POLICY"
+    },
+    "policy_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404_U3_STDIO_APPARMOR_TRANSPORT_PROBE_V2"
+    },
+    "host_id": {"const": "LIQUID_ZRJ_MSI_U2404"},
+    "development_only": {"const": true},
+    "formal": {"const": false},
+    "physical_primary_eligible": {"const": false},
+    "static_review_authorized": {"const": true},
+    "profile_parse_load_select_authorized": {"const": false},
+    "harmless_probe_execution_authorized": {"const": false},
+    "production_runtime_authorized": {"const": false},
+    "allowed_gate_commands": {"const": ["self-check"]},
+    "frozen_identity": {"type": "object"},
+    "security_decision": {"type": "object"},
+    "reviewed_bytes": {"type": "object"},
+    "trusted_system_tools": {"type": "object"},
+    "stdio_transport": {"type": "object"},
+    "identity_contract": {"type": "object"},
+    "isolation": {"type": "object"},
+    "fixed_command": {"type": "object"},
+    "runtime_transition": {"type": "object"},
+    "resources": {"type": "object"},
+    "mount_rule_discovery": {"type": "object"},
+    "profile_lifecycle": {"type": "object"},
+    "evidence_interpretation": {"type": "object"},
+    "invariants": {"type": "object"},
+    "status": {
+      "const": "STATIC_NO_GO_V2_MOUNT_RULES_UNOBSERVED_EXECUTION_FORBIDDEN"
+    },
+    "next_allowed_stage": {
+      "const": "INDEPENDENT_STATIC_REVIEW_THEN_FRESH_SINGLE_DENIAL_DISCOVERY_SUCCESSOR"
+    }
+  }
+}

@@ -1,0 +1,939 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-u3-solver-cpu-settle-cold-a-execution-policy-v6",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_U3_SOLVER_CPU_SETTLE_COLD_A_EXECUTION_POLICY_V6",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_U3_SOLVER_CPU_SETTLE_COLD_A_EXECUTION_V6",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "execution_scope": "one_fresh_c1m_zero_motion_cpu_solver_8_05s_settle_cold_a_with_two_exact_quiet_deny_rules_and_one_exact_proc_directory_read_rule_after_static_review_and_explicit_admission",
+  "allowed_gate_commands": [
+    "self-check",
+    "internal-run"
+  ],
+  "frozen_attempt": {
+    "case_id": "u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z",
+    "campaign_id": "u3_c1m_solver_cpu_settle_ab_campaign_20260808T212044Z",
+    "campaign_role": "cold_a",
+    "cold_b_identity_allocated": false,
+    "supervisor_admission_token": "u3_c1m_solver_cpu_settle_ab_campaign_20260808T212044Z:u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z:single-cpu-solver-settle-cold-a-v6-attempt",
+    "attempt_root": "/home/zrj/scout_liquid_lab/cases/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.partial",
+    "output_root": "/home/zrj/scout_liquid_lab/cases/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.partial/output",
+    "start_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.start.json",
+    "execution_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.execution.json",
+    "lifecycle_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.lifecycle.json",
+    "lifecycle_failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.lifecycle_incomplete.json",
+    "console_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.console.log",
+    "snapshot_root": "/run/r8-liquid-u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.snapshot",
+    "bootstrap_profile": "r8-liquid-u3-c1m-solver-cpu-settle-cold-a-bootstrap-v6-20260808t212044z",
+    "runtime_profile": "r8-liquid-u3-c1m-solver-cpu-settle-cold-a-runtime-v6-20260808t212044z",
+    "attempts_per_identity": 1,
+    "same_identity_retry": "forbidden"
+  },
+  "provenance": {
+    "gencase_seed_v3_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gencase_seed_v3_20260808T150802Z.json",
+      "sha256": "79f43b54594843e0107aa78ad01db34937fa97f0a34a16d96e74ac9cd90095ed",
+      "size_bytes": 12382,
+      "status": "PASS_NONEXECUTABLE_GENCASE_SEED_V3_MATERIALIZATION",
+      "seed_id": "u3_c1m_gencase_seed_v3_20260808T150802Z"
+    },
+    "cpu_build_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_cpu_build_20260807T023724Z_cpu_build.json",
+      "sha256": "d407233107d4bc9eeea81b0c5a95cbfc98ad6529f1cb7494b68ae5ecc4b1d604",
+      "status": "PASS_U3_CPU_BUILD_STATIC_ELF_AUDIT",
+      "compiled_artifact_executed": false
+    },
+    "gencase_execution_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gencase_v8_20260808T153753Z.execution.json",
+      "sha256": "113ce7d570a15abe415cdd3e703604870c0980eaad37f845fe1b71a2242aac32",
+      "status": "PASS_U3_C1M_GENCASE_V8_CASE_EXPORTED_CLEANUP_PENDING"
+    },
+    "gencase_lifecycle_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gencase_v8_20260808T153753Z.lifecycle.json",
+      "sha256": "d595dc8665175f0b6e2dca0e88db41c9bcba4c9dbb63cec97c827a20459a7eea",
+      "status": "PASS_U3_C1M_GENCASE_V8_LIFECYCLE_CLEANUP_AND_CASE_EXPORT"
+    },
+    "consumed_v1_attempt": {
+      "case_id": "u3_c1_solver_cpu_smoke_v1_20260808T124816Z",
+      "identity_consumed": true,
+      "retry_forbidden": true,
+      "output_exported": false,
+      "failure_reason": "solver and gate returned zero with an 8480536-byte candidate frame, but one unexpected logged AppArmor denial for bwrap reading /etc/ld.so.cache correctly prevented export",
+      "observed_gate_returncode": 0,
+      "observed_solver_returncode": 0,
+      "candidate_frame_size_bytes": 8480536,
+      "receipts": {
+        "start": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1_solver_cpu_smoke_v1_20260808T124816Z.start.json",
+          "sha256": "779feb5bdccdb2c833a4c04dd06ebf6241434b3343a3506753a9b82544758238",
+          "size_bytes": 10274,
+          "status": "ONE_SHOT_STARTED_NO_RETRY_SAME_IDENTITY"
+        },
+        "execution": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1_solver_cpu_smoke_v1_20260808T124816Z.execution.json",
+          "sha256": "6c8a2600bcb40c1039976061ec296509c4a2d6d6e89e941de9b7bfb4edf48494",
+          "size_bytes": 7614,
+          "status": "ATTEMPT_ABORTED_NO_RETRY_SAME_IDENTITY"
+        },
+        "lifecycle_incomplete": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1_solver_cpu_smoke_v1_20260808T124816Z.lifecycle_incomplete.json",
+          "sha256": "412d7e8a5c1adfc340707f6af608ab29c23f2a9446dfa6c32453a12b48caa090",
+          "size_bytes": 5037,
+          "status": "LIFECYCLE_OR_EXECUTION_INCOMPLETE_NO_RETRY_SAME_IDENTITY"
+        }
+      }
+    },
+    "completed_c1_v2_attempt": {
+      "case_id": "u3_c1_solver_cpu_smoke_v2_20260808T134452Z",
+      "identity_consumed": true,
+      "retry_forbidden": true,
+      "output_exported": true,
+      "receipts": {
+        "start": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1_solver_cpu_smoke_v2_20260808T134452Z.start.json",
+          "sha256": "6050a28d4f1093761d94a502df8635bb5964eaa161aa3f69c20e63c056799a63",
+          "size_bytes": 10966,
+          "status": "V2_ONE_SHOT_STARTED_NO_RETRY_SAME_IDENTITY"
+        },
+        "execution": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1_solver_cpu_smoke_v2_20260808T134452Z.execution.json",
+          "sha256": "bfa560359e045158a25da9c75850f4a3c40f0fb22012e410f2abab46f36c88d0",
+          "size_bytes": 42463,
+          "status": "PASS_U3_C1_CPU_SOLVER_V2_SMOKE_EXPORTED_CLOSED_ZERO_UNEXPECTED_LOGGED_DENIALS_TWO_KNOWN_QUIET_DENY_RULES_CLEANUP_PENDING"
+        },
+        "lifecycle": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1_solver_cpu_smoke_v2_20260808T134452Z.lifecycle.json",
+          "sha256": "e01f81c864fa444b312dbe68b6d5490d45f53d8f99d180e3c71600fbcf6bad39",
+          "size_bytes": 6337,
+          "status": "PASS_U3_C1_CPU_SOLVER_V2_LIFECYCLE_CLEANUP_SMOKE_EXPORT_CLOSED_ZERO_UNEXPECTED_LOGGED_DENIALS_TWO_KNOWN_QUIET_DENY_RULES"
+        }
+      }
+    },
+    "solver_needed": [
+      "libgomp.so.1",
+      "libstdc++.so.6",
+      "libm.so.6",
+      "libgcc_s.so.1",
+      "libc.so.6"
+    ],
+    "solver_rpath": false,
+    "solver_runpath": false,
+    "completed_c1m_v3_smoke": {
+      "case_id": "u3_c1m_solver_cpu_smoke_v3_20260808T160108Z",
+      "identity_consumed": true,
+      "retry_forbidden": true,
+      "output_exported": true,
+      "policy": {
+        "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_solver_cpu_execution_policy_v3.json",
+        "sha256": "afef0482dabdde27c3552aa766a426a5c842c0c8d33ebb9f2c947c898d1fa6a0",
+        "size_bytes": 19495,
+        "status": "REVIEWED_FRESH_SINGLE_C1M_CPU_SOLVER_SMOKE_V3_TWO_KNOWN_QUIET_DENY_RULES_PENDING_STATIC_VERIFICATION"
+      },
+      "receipts": {
+        "start": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_smoke_v3_20260808T160108Z.start.json",
+          "sha256": "8a93606fa656bbd301ec6214809ea4f315a5e9c53863fcbe12af57d57d6e95cc",
+          "size_bytes": 11050,
+          "status": "V3_ONE_SHOT_STARTED_NO_RETRY_SAME_IDENTITY"
+        },
+        "execution": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_smoke_v3_20260808T160108Z.execution.json",
+          "sha256": "8ff89dd45a6548d684e75b18ef4443f63728c5604a850e81da890df7c74d916f",
+          "size_bytes": 43646,
+          "status": "PASS_U3_C1M_CPU_SOLVER_V3_SMOKE_EXPORTED_CLOSED_ZERO_UNEXPECTED_LOGGED_DENIALS_TWO_KNOWN_QUIET_DENY_RULES_CLEANUP_PENDING"
+        },
+        "lifecycle": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_smoke_v3_20260808T160108Z.lifecycle.json",
+          "sha256": "8d4541cfbba652dc0849dfaceb6ef1be2a876a0ee36136247365decef5f2ffe9",
+          "size_bytes": 6409,
+          "status": "PASS_U3_C1M_CPU_SOLVER_V3_LIFECYCLE_CLEANUP_SMOKE_EXPORT_CLOSED_ZERO_UNEXPECTED_LOGGED_DENIALS_TWO_KNOWN_QUIET_DENY_RULES"
+        }
+      },
+      "output_qc": {
+        "path": "/home/zrj/scout_liquid_lab/visualizations/u3_c1m_solver_cpu_smoke_v3_20260808T160108Z_v2/reports/solver_output_qc_v3.json",
+        "sha256": "e008fe0201802899a77e2f50bf273ef18c7cef92ca6d9a4a6d33c17adc47ee3e",
+        "size_bytes": 114699,
+        "status": "C1M_ZERO_MOTION_SMOKE_PASS",
+        "structural_pass": true,
+        "duration_eligible_for_settle_qc": false,
+        "tail_pass": false,
+        "numeric_settle_qc_pass": false,
+        "settled_state_freeze_eligible": false
+      },
+      "accepted_visualization": {
+        "root": "/home/zrj/scout_liquid_lab/visualizations/u3_c1m_solver_cpu_smoke_v3_20260808T160108Z_v2",
+        "artifact_manifest": {
+          "path": "/home/zrj/scout_liquid_lab/visualizations/u3_c1m_solver_cpu_smoke_v3_20260808T160108Z_v2/artifact_manifest.json",
+          "sha256": "d096e6663352b464646b81cea138797c98d86c8b6d351b2595a0b157cb003636",
+          "size_bytes": 6720,
+          "status": "PASS_U3_C1M_SOLVER_SMOKE_VISUALIZED_NOT_SETTLED"
+        },
+        "accepted_revision": "v2",
+        "settled_state_freeze_eligible": false
+      },
+      "source_use": "provenance_only_no_v3_solver_output_reuse"
+    },
+    "consumed_cold_a_v4_attempt": {
+      "case_id": "u3_c1m_solver_cpu_settle_cold_a_v4_20260808T174116Z",
+      "identity_consumed": true,
+      "retry_forbidden": true,
+      "output_exported": false,
+      "policy": {
+        "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_solver_cpu_settle_cold_a_execution_policy_v4.json",
+        "sha256": "df10e6a2f9075f4f4a11911bd341626009143af37d047ce97bb3b2eff7d4ab14",
+        "size_bytes": 27078,
+        "status": "REVIEWED_FRESH_C1M_CPU_SOLVER_SETTLE_COLD_A_V4_TWO_KNOWN_QUIET_DENY_RULES_PENDING_STATIC_VERIFICATION"
+      },
+      "workspace_freeze": {
+        "schema": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_solver_cpu_settle_cold_a_execution_policy_v4.json",
+          "sha256": "d5c16dc0bc3783e23bd19a2f07059f9d9e9d44a13e8ae4e485c4c533cad9754a",
+          "size_bytes": 2266
+        },
+        "profile": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-solver-cpu-settle-cold-a-v4.profile",
+          "sha256": "9e6b73a257ec791a6e4e06489a620d353248ccddc7cd22fcf948347e45c7896c",
+          "size_bytes": 3233
+        },
+        "gate": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_solver_cpu_settle_cold_a_gate_v4.py",
+          "sha256": "c6c06e062484df1e7605826ad604ba9fd0a2fac233accfbec6941adffd0c6bb3",
+          "size_bytes": 42540
+        },
+        "helper": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_solver_cpu_settle_cold_a_bootstrap_helper_v4.py",
+          "sha256": "8c52ee47941cf7ed59f466cb03edd174b82e4c34bdca758c085573f217b8fdeb",
+          "size_bytes": 26466
+        },
+        "supervisor": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_solver_cpu_settle_cold_a_supervisor_v4.py",
+          "sha256": "23ad114bdfdd80141aa785144a9a392e03fe2b9f28d58968b28d4b5e41938ccc",
+          "size_bytes": 74640
+        },
+        "test": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_target_u3_solver_cpu_settle_cold_a_gate_v4.py",
+          "sha256": "1a5bbe0d9e415d33b77d94b275642e92cd7da5d916980e444c69fc98f2e3d99b",
+          "size_bytes": 34228
+        }
+      },
+      "receipts": {
+        "start": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v4_20260808T174116Z.start.json",
+          "sha256": "2902ec385337b3a5f386ee05d94e55be02a0b1a9710d562245bc9dc3f7c10f42",
+          "size_bytes": 11531,
+          "status": "V4_COLD_A_ONE_SHOT_STARTED_NO_RETRY_SAME_IDENTITY"
+        },
+        "execution": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v4_20260808T174116Z.execution.json",
+          "sha256": "710086a44417cb41646c57dcdebcca6b8625b0619bf07e1459d9ed653392979e",
+          "size_bytes": 5197,
+          "status": "V4_COLD_A_ATTEMPT_ABORTED_NO_RETRY_SAME_IDENTITY"
+        },
+        "lifecycle_incomplete": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v4_20260808T174116Z.lifecycle_incomplete.json",
+          "sha256": "4a9ff90fb7754c93ac0cb79a27bb9b2699b543cb0e638683130a8a8059fc33e7",
+          "size_bytes": 6123,
+          "status": "V4_COLD_A_LIFECYCLE_OR_EXECUTION_INCOMPLETE_NO_RETRY_SAME_IDENTITY"
+        }
+      },
+      "observed_failure": {
+        "gate_returncode": 2,
+        "stdin_fully_written": true,
+        "stdin_size_bytes": 39527065,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_size_bytes": 0,
+        "stderr_sha256": "cef2979e52eca41b2921183cfa675add76e9a3d95c16ec4e32ed0b9fb167d460",
+        "stderr_size_bytes": 108,
+        "stderr_utf8_prefix": "{\"error\": \"outer guest process group remains after cleanup\", \"status\": \"SOLVER_CPU_SETTLE_COLD_A_V4_NO_GO\"}\n",
+        "primary_error": "SupervisorError: UID1000 solver gate did not return one clean successful frame",
+        "cleanup_errors": [],
+        "next_allowed_stage": "STOP_COLD_A_FAILED_NO_COLD_B_ADMISSION"
+      },
+      "cold_b_admission_authorized": false,
+      "settled_state_authorized": false,
+      "u4_authorized": false,
+      "production_authorized": false,
+      "source_use": "provenance_only_no_v4_snapshot_or_runtime_output_reuse"
+    },
+    "consumed_cold_a_v5_attempt": {
+      "case_id": "u3_c1m_solver_cpu_settle_cold_a_v5_20260808T203712Z",
+      "campaign_id": "u3_c1m_solver_cpu_settle_ab_campaign_20260808T203712Z",
+      "campaign_role": "cold_a",
+      "identity_consumed": true,
+      "retry_forbidden": true,
+      "output_exported": false,
+      "policy": {
+        "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_solver_cpu_settle_cold_a_execution_policy_v5.json",
+        "sha256": "d558833403082e9959c145d563fdecbbb7de740cbf6d3a9d0117fdb4d9d5b866",
+        "size_bytes": 32340,
+        "status": "REVIEWED_FRESH_C1M_CPU_SOLVER_SETTLE_COLD_A_V5_TWO_KNOWN_QUIET_DENY_RULES_PENDING_STATIC_VERIFICATION"
+      },
+      "workspace_freeze": {
+        "schema": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_solver_cpu_settle_cold_a_execution_policy_v5.json",
+          "sha256": "280a3500acb3a2cd8bee06f03cb8e508f2a8f734150305dc2201a0d913b94dca",
+          "size_bytes": 2266
+        },
+        "profile": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-solver-cpu-settle-cold-a-v5.profile",
+          "sha256": "70802ebedca241b5033ae84bec24ba98699489f8df77d067711b7a86fa2948d0",
+          "size_bytes": 3383
+        },
+        "gate": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_solver_cpu_settle_cold_a_gate_v5.py",
+          "sha256": "a7d44ce2a037744b62b20904dcf78fc2e5ef520a09806afc46bef60a43f3e1f8",
+          "size_bytes": 59086
+        },
+        "helper": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_solver_cpu_settle_cold_a_bootstrap_helper_v5.py",
+          "sha256": "815a019d240119c62b6d5146306ebd82f4dcd13b5ce8689f435ca4e1f3eb8f24",
+          "size_bytes": 36293
+        },
+        "supervisor": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_solver_cpu_settle_cold_a_supervisor_v5.py",
+          "sha256": "9a8034caebd18809d37be55bd94085ac7bdff65cd5a4e556f018ff80b4a5b875",
+          "size_bytes": 82704
+        },
+        "test": {
+          "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_target_u3_solver_cpu_settle_cold_a_gate_v5.py",
+          "sha256": "970e87c13110b8221fe65188ee737c6ef547c1d8c2999ae11e3a0f6772cfb91c",
+          "size_bytes": 63284
+        }
+      },
+      "receipts": {
+        "start": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v5_20260808T203712Z.start.json",
+          "sha256": "017774ba99487451b6e6a3dbaec58c54ee521829d0f9f486424963deefad5b90",
+          "size_bytes": 11634,
+          "status": "V5_COLD_A_ONE_SHOT_STARTED_NO_RETRY_SAME_IDENTITY"
+        },
+        "execution": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v5_20260808T203712Z.execution.json",
+          "sha256": "80e4cd66e8dabac2b80b18050a851a23b9cc5942ab073f1a2e3e6f093c028a0e",
+          "size_bytes": 13701,
+          "status": "V5_COLD_A_ATTEMPT_ABORTED_NO_RETRY_SAME_IDENTITY"
+        },
+        "lifecycle_incomplete": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v5_20260808T203712Z.lifecycle_incomplete.json",
+          "sha256": "d246d6a266198a253ee476da42f91344e2a106480b680140b6727e28cb1397c1",
+          "size_bytes": 6239,
+          "status": "V5_COLD_A_LIFECYCLE_OR_EXECUTION_INCOMPLETE_NO_RETRY_SAME_IDENTITY"
+        }
+      },
+      "observed_failure": {
+        "gate_returncode": 2,
+        "stdin_fully_written": true,
+        "stdin_size_bytes": 39536892,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_size_bytes": 0,
+        "stderr_sha256": "aee2529d45339ce39f1ac66d9517021dd73f32c93882edf72edbca2f755d264d",
+        "stderr_size_bytes": 153,
+        "stderr_utf8_prefix": "{\"error\":\"[Errno 13] Permission denied: '/proc'; solver cleanup failure: [Errno 13] Permission denied: '/proc'\",\"status\":\"GUEST_SOLVER_V5_COLD_A_NO_GO\"}\n",
+        "primary_error": "SupervisorError: AppArmor journal window is not closed with zero unexpected logged denials",
+        "cleanup_errors": [],
+        "unexpected_logged_denials": {
+          "matching_total": 2,
+          "unexpected_total": 2,
+          "stored_count": 2,
+          "storage_overflow": false,
+          "raw_stdout_sha256": "e14f421aada1708dcfc92e37dcdf793a363bae4d401077bad65e392110dea94b",
+          "raw_stdout_size_bytes": 1289,
+          "common_fields": {
+            "apparmor": "DENIED",
+            "operation": "open",
+            "class": "file",
+            "profile": "r8-liquid-u3-c1m-solver-cpu-settle-cold-a-bootstrap-v5-20260808t203712z",
+            "name": "/proc/",
+            "comm": "python3.12",
+            "requested_mask": "r",
+            "denied_mask": "r",
+            "fsuid": "1000",
+            "ouid": "0"
+          },
+          "records": [
+            {
+              "line_sha256": "4df54d03c54691460bb1a8f8e34833a2829db73afc82063bffe6538fd7e6b087",
+              "line_size_bytes": 314
+            },
+            {
+              "line_sha256": "93a9109c233a8eefe1abe135c8d75286ceddbb8ec9cd5cd28b3f9aa8e88ab55b",
+              "line_size_bytes": 314
+            }
+          ]
+        },
+        "required_profile_delta": "/proc/ r,",
+        "cleanup_evidence": {
+          "prequery_stable_zero_labels": [[], [], []],
+          "postquery_stable_zero_labels": [[], [], []],
+          "initial_stable_zero_labels": [[], [], []],
+          "cleanup_stable_zero_labels": [[], [], []],
+          "post_unload_stable_zero_labels": [[], [], []],
+          "profile_exact_counts": {
+            "r8-liquid-u3-c1m-solver-cpu-settle-cold-a-bootstrap-v5-20260808t203712z": 0,
+            "r8-liquid-u3-c1m-solver-cpu-settle-cold-a-runtime-v5-20260808t203712z": 0
+          },
+          "sysctls_unchanged": true,
+          "execution_receipt_linked": true
+        },
+        "next_allowed_stage": "STOP_COLD_A_FAILED_NO_COLD_B_ADMISSION"
+      },
+      "cold_b_admission_authorized": false,
+      "settled_state_authorized": false,
+      "u4_authorized": false,
+      "production_authorized": false,
+      "source_use": "provenance_only_no_v5_snapshot_or_runtime_output_reuse"
+    }
+  },
+  "trusted_artifacts": {
+    "gate": {
+      "path": "scripts/r8_liquid_target_u3_solver_cpu_settle_cold_a_gate_v6.py",
+      "sha256": "aa0510f17458a5d9cc2742c2f0b06170cb39b912cfe43e01926c9d6467435eb5",
+      "size_bytes": 68625
+    },
+    "helper": {
+      "path": "scripts/r8_liquid_u3_solver_cpu_settle_cold_a_bootstrap_helper_v6.py",
+      "sha256": "2e6290e27892cd00f9f75ee0f98e43ce8f0f44f0a5376a73cd5039b1080e1489",
+      "size_bytes": 36293
+    },
+    "supervisor": {
+      "path": "scripts/r8_liquid_target_u3_solver_cpu_settle_cold_a_supervisor_v6.py",
+      "sha256": "b1cf9cf1115cc44fa2b4d7e16da4ea5b33525d704ab4d0aa36bf6a96be8b401d",
+      "size_bytes": 96949
+    },
+    "profile": {
+      "path": "config/apparmor_drafts/r8-liquid-u3-solver-cpu-settle-cold-a-v6.profile",
+      "sha256": "a6841cd0fad78fa31e1a2a7b04eab0eb9158856884162112216ddcb8a01bfe0a",
+      "size_bytes": 3540
+    },
+    "schema": {
+      "path": "schema/target_host_u3_solver_cpu_settle_cold_a_execution_policy_v6.json",
+      "sha256": "1d7dd5ead66196ba7e29c98070c64fd9817810cd2620e19b473e048f5f74f4b8",
+      "size_bytes": 2266
+    }
+  },
+  "trusted_tools": {
+    "aa_exec": {
+      "path": "/usr/bin/aa-exec",
+      "sha256": "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e"
+    },
+    "aa_status": {
+      "path": "/usr/sbin/aa-status",
+      "sha256": "af9f579ad039f0e669bfb15735c55efd17896f838d684e7f9be15b09fa1e2dd4"
+    },
+    "apparmor_parser": {
+      "path": "/usr/sbin/apparmor_parser",
+      "sha256": "6bc852b37807961c14976be9a227ae96bd817f73b5189cb0e0ff5eca4448c01c"
+    },
+    "bwrap": {
+      "path": "/usr/bin/bwrap",
+      "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"
+    },
+    "python": {
+      "path": "/usr/bin/python3.12",
+      "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+    },
+    "setpriv": {
+      "path": "/usr/bin/setpriv",
+      "sha256": "96b083b79c32fd2f0c29657e88e20c7495839349fc64ad5d0503f32d26bf8733"
+    },
+    "sudo": {
+      "path": "/usr/bin/sudo",
+      "sha256": "136f2e48b0295b9fc595b8259cf2411ac43f27ddbfe02b956649ddaa2e92b9fa"
+    },
+    "timeout": {
+      "path": "/usr/bin/timeout",
+      "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"
+    }
+  },
+  "lifecycle_harness": {
+    "path": "scripts/r8_liquid_target_u3_stdio_apparmor_transport_probe_supervisor_v11.py",
+    "sha256": "72b7f1bf287b4fe750b46dccdb7a1eae9379230c7bdc30dbc6a6cb33a403ef5b",
+    "size_bytes": 159126,
+    "reuse_scope": [
+      "bounded_command",
+      "pidfd_all_task_label_cleanup",
+      "profile_state",
+      "journal_cursor_audit",
+      "sysctl_snapshot",
+      "sudo_timestamp_cleanup"
+    ],
+    "v11_identity_or_runtime_reexecuted": false
+  },
+  "immutable_transport": {
+    "abi_baseline": "cold_a_v5_normalized",
+    "abi_delta_from_v5": "version_discriminator_only",
+    "root_supervisor_snapshot": "root_owned_0555_directory_with_seventeen_exact_0444_regular_single_link_files",
+    "source_read_rule": "one_O_NOFOLLOW_descriptor_supplies_hash_and_copied_bytes",
+    "input_delivery": "fixed_length_stdin_frame_without_host_path_mounts",
+    "input_frame": {
+      "helper_magic": "R8SOLVERHELPV6\\0\\0",
+      "input_magic": "R8SOLVERINPUT6\\0\\0",
+      "segment_order": [
+        "DualSPHysics5.4CPU_linux64",
+        "DsphConfig.xml",
+        "C1M_zero.xml",
+        "C1M_zero.bi4",
+        "ld-linux-x86-64.so.2",
+        "libgomp.so.1",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "strict_eof_required": true,
+      "maximum_total_bytes": 50331648
+    },
+    "guest_helper_load": "python3.12_-I_-B_-S_compiles_exact_hash_pinned_helper_from_memory",
+    "guest_input_postcondition": "stdin_consumed_to_exact_EOF_then_fd0_replaced_by_guest_internal_EOF_pipe",
+    "output_delivery": "single_bounded_success_frame_retained_in_root_memory_until_cleanup_then_UID1000_O_EXCL_export",
+    "output_frame": {
+      "magic": "R8SOLVEROUTV6\\0\\0\\0",
+      "version": 6,
+      "header_format": ">16sIIQQQ",
+      "canonical_metadata_max_bytes": 262144,
+      "payload_total_max_bytes": 83886080,
+      "console_max_bytes": 4194304,
+      "trailing_bytes": "forbidden",
+      "frame_total_max_bytes": 88342576
+    },
+    "host_fd_delivery_to_guest": "bwrap_guest_receives_only_bounded_stdio_pipes",
+    "host_writable_mount_or_bind": "none"
+  },
+  "input_contract": {
+    "files": {
+      "DualSPHysics5.4CPU_linux64": {
+        "sha256": "5aa464a8f37b0185bac863987f0d1079a0f1a3d6daead6581562c832278ea202",
+        "size_bytes": 32649520
+      },
+      "DsphConfig.xml": {
+        "sha256": "0644c9a6a6687678950fc8966e352b4bbd3de9d3cb787db9e507c2eb7ccaddcd",
+        "size_bytes": 293
+      },
+      "C1M_zero.xml": {
+        "sha256": "28205c2234dda565da600947d03481c492c6bb493b2e058bd04cd360b7862acb",
+        "size_bytes": 7800
+      },
+      "C1M_zero.bi4": {
+        "sha256": "b463ddfe548b3db78b02f23b075dadbdd3c71ea766eb092701b56978ddb3a8e7",
+        "size_bytes": 400842
+      },
+      "ld-linux-x86-64.so.2": {
+        "sha256": "cd4df4f3c7b83673d61189bf2eaebd33ca4f2853ab9772b8a25e025ef99b1e81",
+        "size_bytes": 236616
+      },
+      "libgomp.so.1": {
+        "sha256": "135f3c8f006d2fe5e68e51281c7974cb991a03de3bfb3593d68d174dfcf854d1",
+        "size_bytes": 352304
+      },
+      "libstdc++.so.6": {
+        "sha256": "1fd75fe70354a416d75aef22bcae68c47bd25d20e2d0568c30b1a9838cf62f11",
+        "size_bytes": 2592224
+      },
+      "libm.so.6": {
+        "sha256": "e9c4b28d340e415b8137480ec442662f981e1399386c5931dae0e886e3639e91",
+        "size_bytes": 952616
+      },
+      "libgcc_s.so.1": {
+        "sha256": "d93224d2b0dab4247598be683adca02f5cf00586f99c187579cd7e92058fb7cb",
+        "size_bytes": 183024
+      },
+      "libc.so.6": {
+        "sha256": "8db37cf3f2169f59a0f07ef1fea308c35656668c64c8ff294e1860f4121eb161",
+        "size_bytes": 2125328
+      }
+    },
+    "c1m_case_semantics": {
+      "particle_count": 9078,
+      "fixed_boundary": 0,
+      "moving_boundary": 2669,
+      "fluid": 6409,
+      "floating": 0,
+      "dp_m": 0.002,
+      "moving_refmotion": 0,
+      "zero_motion_copies": 2,
+      "zero_motion_primitive": "objreal_ref0_begin_mov1_start0_mvnull_id1",
+      "shifting": 1,
+      "dt_all_particles": 1,
+      "expected_motion_output": "data/PartMotionRef.ibi4"
+    },
+    "copied_to_guest_tmpfs_before_execution": true,
+    "host_paths_visible_in_guest": false
+  },
+  "isolation": {
+    "backend": "bubblewrap_plus_transient_apparmor_rix_loader_inheritance",
+    "network": "new_empty_network_namespace",
+    "namespaces": [
+      "user",
+      "pid",
+      "ipc",
+      "uts",
+      "network"
+    ],
+    "disable_nested_user_namespaces": true,
+    "bwrap_capability_drop": "ALL",
+    "host_read_only_binds": [
+      "/usr"
+    ],
+    "host_writable_binds": [],
+    "host_writable_bind_count": 0,
+    "guest_proc": "/proc",
+    "guest_dev_mount": "absent",
+    "guest_sys_mount": "absent",
+    "guest_work_tmpfs_bytes": 268435456,
+    "gpu_device_nodes": [],
+    "solver_execution": "copied_dynamic_loader_maps_copied_CPU_solver_and_five_copied_libraries",
+    "forbidden_host_paths": [
+      "/home/zrj/scout_ws",
+      "/home/zrj/scout_liquid_lab",
+      "/dev",
+      "/sys"
+    ]
+  },
+  "resources": {
+    "guest_runtime_timeout_seconds": 10710,
+    "bwrap_timeout_seconds": 10770,
+    "gate_conduit_timeout_seconds": 10790,
+    "outer_wall_timeout_seconds": 10800,
+    "cpu_seconds": 10200,
+    "cpu_hard_seconds": 10210,
+    "address_space_bytes": 2147483648,
+    "process_limit": 16,
+    "open_file_limit": 256,
+    "file_size_limit_bytes": 16777216,
+    "core_dump_bytes": 0,
+    "guest_work_tmpfs_bytes": 268435456,
+    "guest_output_total_limit_bytes": 83886080,
+    "guest_console_limit_bytes": 4194304,
+    "export_timeout_seconds": 300
+  },
+  "fixed_guest_command": {
+    "guest_loader_argv_canonical_sha256": "1094b283355bf8516cc1bf10f4cfd9ea588f1688bc95e23906dbcd071e6abb40",
+    "solver_argv": [
+      "/work/runtime/ld-linux-x86-64.so.2",
+      "--inhibit-cache",
+      "--library-path",
+      "/work/runtime/lib",
+      "/work/runtime/DualSPHysics5.4CPU_linux64",
+      "/work/case/C1M_zero",
+      "/work/output",
+      "-cpu",
+      "-ompthreads:1",
+      "-stable:1",
+      "-vres:0",
+      "-cellmode:full",
+      "-tmax:8.05",
+      "-tout:0.05",
+      "-sv:binx,info",
+      "-svres:1",
+      "-svtimers:0",
+      "-svdomainvtk:0",
+      "-saveposdouble:1",
+      "-nortimes:1",
+      "-createdirs:1",
+      "-csvsep:0"
+    ],
+    "environment": {
+      "HOME": "/nonexistent",
+      "PATH": "/usr/bin",
+      "LC_ALL": "C",
+      "LANG": "C",
+      "TZ": "UTC0",
+      "TMPDIR": "/work/tmp",
+      "OMP_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "OMP_PROC_BIND": "FALSE"
+    },
+    "solver_process_group": "pidfd_and_birth_pgid_sid_anchor_double_proc_scan_clean_eof_0_2s_then_TERM_10s_KILL_3s_sole_leader_zombie_reap_and_final_empty_group_proof",
+    "upstream_shell_scripts": "forbidden"
+  },
+  "output_contract": {
+    "exact_file_count": 171,
+    "exact_root_files": [
+      "CfgInit_Domain.vtk",
+      "CfgInit_MapCells.vtk",
+      "Run.csv",
+      "Run.out",
+      "RunPARTs.csv"
+    ],
+    "exact_data_files": [
+      "PartInfo.ibi4",
+      "PartOut_000.obi4",
+      "Part_Head.ibi4",
+      "PartMotionRef.ibi4",
+      "Part_0000.bi4",
+      "Part_0001.bi4",
+      "Part_0002.bi4",
+      "Part_0003.bi4",
+      "Part_0004.bi4",
+      "Part_0005.bi4",
+      "Part_0006.bi4",
+      "Part_0007.bi4",
+      "Part_0008.bi4",
+      "Part_0009.bi4",
+      "Part_0010.bi4",
+      "Part_0011.bi4",
+      "Part_0012.bi4",
+      "Part_0013.bi4",
+      "Part_0014.bi4",
+      "Part_0015.bi4",
+      "Part_0016.bi4",
+      "Part_0017.bi4",
+      "Part_0018.bi4",
+      "Part_0019.bi4",
+      "Part_0020.bi4",
+      "Part_0021.bi4",
+      "Part_0022.bi4",
+      "Part_0023.bi4",
+      "Part_0024.bi4",
+      "Part_0025.bi4",
+      "Part_0026.bi4",
+      "Part_0027.bi4",
+      "Part_0028.bi4",
+      "Part_0029.bi4",
+      "Part_0030.bi4",
+      "Part_0031.bi4",
+      "Part_0032.bi4",
+      "Part_0033.bi4",
+      "Part_0034.bi4",
+      "Part_0035.bi4",
+      "Part_0036.bi4",
+      "Part_0037.bi4",
+      "Part_0038.bi4",
+      "Part_0039.bi4",
+      "Part_0040.bi4",
+      "Part_0041.bi4",
+      "Part_0042.bi4",
+      "Part_0043.bi4",
+      "Part_0044.bi4",
+      "Part_0045.bi4",
+      "Part_0046.bi4",
+      "Part_0047.bi4",
+      "Part_0048.bi4",
+      "Part_0049.bi4",
+      "Part_0050.bi4",
+      "Part_0051.bi4",
+      "Part_0052.bi4",
+      "Part_0053.bi4",
+      "Part_0054.bi4",
+      "Part_0055.bi4",
+      "Part_0056.bi4",
+      "Part_0057.bi4",
+      "Part_0058.bi4",
+      "Part_0059.bi4",
+      "Part_0060.bi4",
+      "Part_0061.bi4",
+      "Part_0062.bi4",
+      "Part_0063.bi4",
+      "Part_0064.bi4",
+      "Part_0065.bi4",
+      "Part_0066.bi4",
+      "Part_0067.bi4",
+      "Part_0068.bi4",
+      "Part_0069.bi4",
+      "Part_0070.bi4",
+      "Part_0071.bi4",
+      "Part_0072.bi4",
+      "Part_0073.bi4",
+      "Part_0074.bi4",
+      "Part_0075.bi4",
+      "Part_0076.bi4",
+      "Part_0077.bi4",
+      "Part_0078.bi4",
+      "Part_0079.bi4",
+      "Part_0080.bi4",
+      "Part_0081.bi4",
+      "Part_0082.bi4",
+      "Part_0083.bi4",
+      "Part_0084.bi4",
+      "Part_0085.bi4",
+      "Part_0086.bi4",
+      "Part_0087.bi4",
+      "Part_0088.bi4",
+      "Part_0089.bi4",
+      "Part_0090.bi4",
+      "Part_0091.bi4",
+      "Part_0092.bi4",
+      "Part_0093.bi4",
+      "Part_0094.bi4",
+      "Part_0095.bi4",
+      "Part_0096.bi4",
+      "Part_0097.bi4",
+      "Part_0098.bi4",
+      "Part_0099.bi4",
+      "Part_0100.bi4",
+      "Part_0101.bi4",
+      "Part_0102.bi4",
+      "Part_0103.bi4",
+      "Part_0104.bi4",
+      "Part_0105.bi4",
+      "Part_0106.bi4",
+      "Part_0107.bi4",
+      "Part_0108.bi4",
+      "Part_0109.bi4",
+      "Part_0110.bi4",
+      "Part_0111.bi4",
+      "Part_0112.bi4",
+      "Part_0113.bi4",
+      "Part_0114.bi4",
+      "Part_0115.bi4",
+      "Part_0116.bi4",
+      "Part_0117.bi4",
+      "Part_0118.bi4",
+      "Part_0119.bi4",
+      "Part_0120.bi4",
+      "Part_0121.bi4",
+      "Part_0122.bi4",
+      "Part_0123.bi4",
+      "Part_0124.bi4",
+      "Part_0125.bi4",
+      "Part_0126.bi4",
+      "Part_0127.bi4",
+      "Part_0128.bi4",
+      "Part_0129.bi4",
+      "Part_0130.bi4",
+      "Part_0131.bi4",
+      "Part_0132.bi4",
+      "Part_0133.bi4",
+      "Part_0134.bi4",
+      "Part_0135.bi4",
+      "Part_0136.bi4",
+      "Part_0137.bi4",
+      "Part_0138.bi4",
+      "Part_0139.bi4",
+      "Part_0140.bi4",
+      "Part_0141.bi4",
+      "Part_0142.bi4",
+      "Part_0143.bi4",
+      "Part_0144.bi4",
+      "Part_0145.bi4",
+      "Part_0146.bi4",
+      "Part_0147.bi4",
+      "Part_0148.bi4",
+      "Part_0149.bi4",
+      "Part_0150.bi4",
+      "Part_0151.bi4",
+      "Part_0152.bi4",
+      "Part_0153.bi4",
+      "Part_0154.bi4",
+      "Part_0155.bi4",
+      "Part_0156.bi4",
+      "Part_0157.bi4",
+      "Part_0158.bi4",
+      "Part_0159.bi4",
+      "Part_0160.bi4",
+      "Part_0161.bi4"
+    ],
+    "unexpected_guest_entry": "fail_closed_before_frame",
+    "run_out_required_markers": [
+      "[Simulation finished",
+      "CaseNfixed=0",
+      "CaseNmoving=2,669",
+      "Shifting=\"NoBound\"",
+      "DtAllParticles=True",
+      "Finished execution (code=0)."
+    ],
+    "host_reaudit_before_export": true,
+    "host_export": "post_cleanup_uid1000_dirfd_nofollow_o_excl_only",
+    "output_file_mode_after_audit": "0440",
+    "output_directory_mode_after_audit": "0550",
+    "console_log_mode": "0440",
+    "empty_console_preserved_as_zero_bytes": true,
+    "classification": "SIM_ONLY_UNVALIDATED",
+    "no_execution_of_output": true,
+    "expected_exact_sizes_bytes": {
+      "CfgInit_Domain.vtk": 1010,
+      "CfgInit_MapCells.vtk": 2386,
+      "data/PartInfo.ibi4": 115257,
+      "data/PartMotionRef.ibi4": 40833,
+      "data/PartOut_000.obi4": 584,
+      "data/Part_Head.ibi4": 1554,
+      "part_series": {
+        "first": "data/Part_0000.bi4",
+        "last": "data/Part_0161.bi4",
+        "count": 162,
+        "each_size_bytes": 401318
+      }
+    },
+    "text_file_limit_bytes": 65536,
+    "settled_state_authorized": false
+  },
+  "profile_lifecycle": {
+    "parser_static_check": "apparmor_parser_-Q_-K_-T",
+    "proc_directory_read_rule": "/proc/ r,",
+    "proc_authority_baseline": "cold_a_v5_profile_normalized",
+    "proc_authority_delta_from_v5": "one_exact_non_owner_proc_directory_read_rule_only",
+    "transient_kernel_load": "exact_root_owned_snapshot_bytes_only",
+    "persistent_profile_install": "forbidden",
+    "residue_authority": "/proc/<tgid>/task/<tid>/attr/current_exact_label",
+    "profile_unload_precondition": "three_stable_all_task_zero_label_scans",
+    "journal_success": "closed_zero_unexpected_logged_DENIED_records_same_boot_no_overflow",
+    "known_quiet_deny_rules": [
+      "deny /etc/ld.so.cache r,",
+      "deny capability dac_override,"
+    ],
+    "known_quiet_deny_origins": {
+      "deny /etc/ld.so.cache r,": "carried_forward_from_v2_after_v1_observed_bwrap_dynamic_loader_probe",
+      "deny capability dac_override,": "carried_forward_from_v2_preexisting_v1_bwrap_capability_rule"
+    },
+    "denial_visibility_boundary": "closed_zero_unexpected_logged_DENIED_records_with_two_explicit_unlogged_deny_rules;both_carried_from_successful_v2;does_not_claim_zero_denied_operations",
+    "quiet_deny_scope": "both exact rules are bootstrap-only; runtime profile contains zero effective deny rules and no related cache or dac_override authority",
+    "expected_sysctls": {
+      "/proc/sys/user/max_user_namespaces": {
+        "value": "61362\n",
+        "sha256": "e248d4e11a8c63b5bc8e417356d5d67ec5f44fa94d98fa1a954ba12aaa1e4f0e"
+      },
+      "/proc/sys/kernel/unprivileged_userns_clone": {
+        "value": "1\n",
+        "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+      },
+      "/proc/sys/kernel/apparmor_restrict_unprivileged_userns": {
+        "value": "1\n",
+        "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+      }
+    },
+    "host_sysctl_postcondition": "all_three_values_byte_identical",
+    "sudo_timestamp_clear": "UID1000_sudo_-K_then_sudo_-n_true_must_require_password",
+    "interrupt_and_exception_cleanup": true,
+    "export_precondition": "closed_zero_unexpected_logged_denials_window_zero_labels_profiles_unloaded_sysctls_unchanged",
+    "attempts_per_identity": 1
+  },
+  "invariants": {
+    "no_apt": true,
+    "no_driver_kernel_cuda_or_sysctl_change": true,
+    "no_external_network": true,
+    "no_gpu": true,
+    "no_ros_or_gazebo": true,
+    "no_source_write": true,
+    "no_workspace_case_or_library_mount": true,
+    "no_host_writable_bind": true,
+    "no_device_mount": true,
+    "no_existing_attempt_reuse": true,
+    "no_delete_or_overwrite": true,
+    "no_persistent_profile_install": true,
+    "profile_cleanup_required": true,
+    "same_identity_never_retried": true,
+    "v1_identity_consumed_and_never_retried": true,
+    "v2_identity_consumed_and_never_retried": true,
+    "known_quiet_deny_rules_do_not_authorize_cache_read_or_dac_override": true,
+    "zero_denied_operations_not_claimed": true,
+    "stage_completion_requires_execution_lifecycle_and_separate_output_qc": true,
+    "production_authorized": false,
+    "settled_state_authorized": false,
+    "v3_identity_consumed_and_never_retried": true,
+    "v3_outputs_are_provenance_only_and_never_runtime_inputs": true,
+    "v4_identity_consumed_and_never_retried": true,
+    "v4_snapshot_and_runtime_outputs_are_provenance_only": true,
+    "v5_identity_consumed_and_never_retried": true,
+    "v5_snapshot_and_runtime_outputs_are_provenance_only": true,
+    "v6_profile_delta_is_exact_proc_directory_read_only": true,
+    "no_broad_non_owner_proc_glob_or_write_authority": true,
+    "cold_a_is_fresh_identity": true,
+    "cold_a_failure_forbids_cold_b_policy_creation_or_execution": true,
+    "cold_b_admission_requires_cold_a_lifecycle_and_separate_output_qc_pass": true,
+    "restart_policy_requires_cold_a_and_cold_b_lifecycle_and_qc_pass": true,
+    "u4_authorized": false
+  },
+  "status": "REVIEWED_FRESH_C1M_CPU_SOLVER_SETTLE_COLD_A_V6_TWO_KNOWN_QUIET_DENY_RULES_PENDING_STATIC_VERIFICATION",
+  "next_allowed_stage": "SEPARATE_COLD_A_OUTPUT_QC_THEN_IF_PASS_FRESH_COLD_B_ADMISSION"
+}

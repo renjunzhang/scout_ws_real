@@ -1,0 +1,193 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-bwrap-output-bind-smoke-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_BWRAP_OUTPUT_BIND_SMOKE_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_BWRAP_OUTPUT_BIND_SMOKE_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "output_bind_smoke_authorized": true,
+  "upstream_code_execution_authorized": false,
+  "allowed_gate_commands": [
+    "self-check",
+    "run-output-bind-smoke"
+  ],
+  "required_evidence": {
+    "target_profile": {
+      "profile_id": "LIQUID_ZRJ_MSI_U2404_P0_V1",
+      "canonical_sha256": "fec0b980ca46df04d877290b73b3f3406af97887ccc20c9d52d58092c36f8838",
+      "required_status": "PASS_PROFILE_READ_ONLY_ONLY"
+    },
+    "bwrap_system_true_smoke_v3": {
+      "receipt_relative_path": "audits/u2_bwrap_system_true_smoke_v3_20260806T072112Z.json",
+      "file_sha256": "02de50da3e7e88b7dcc3150e06a51ccd06e9bd12978e61479cf2166deb5dec3b",
+      "receipt_sha256": "3adc42b366da120402e0886fb72586e14fa306f253c6494fda6c2847ee0c887e",
+      "status": "PASS_SYSTEM_TRUE_BWRAP_SMOKE",
+      "returncode": 0,
+      "namespace_created": true,
+      "network_accessed": false,
+      "host_writable_mounts": []
+    },
+    "source_cpu_build_policy": {
+      "policy_canonical_sha256": "bcad3eed1bda70e24e6e0bd317a2241eef54637b5fb83f1411f10cb1cf944dcb",
+      "required_status": "PASS_SOURCE_CPU_BUILD_POLICY_STATIC_ONLY",
+      "build_execution_authorized": false
+    }
+  },
+  "storage": {
+    "approved_root": "/home/zrj/scout_liquid_lab",
+    "build_directory": "build",
+    "audit_directory": "audits",
+    "minimum_available_bytes": 1073741824,
+    "attempt_directory_mode_octal": "0750",
+    "output_directory_mode_octal": "0700",
+    "receipt_mode_octal": "0640"
+  },
+  "trusted_system_tools": {
+    "bwrap": {
+      "path": "/usr/bin/bwrap",
+      "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"
+    },
+    "timeout": {
+      "path": "/usr/bin/timeout",
+      "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"
+    },
+    "prlimit": {
+      "path": "/usr/bin/prlimit",
+      "sha256": "f27cfd8c1512a4cc6541b59b80cb4cdfd6ef28c34aa21db4299b48264cd0d128"
+    },
+    "touch": {
+      "path": "/usr/bin/touch",
+      "sha256": "5244e873c97db0bc4cd9d491eac48d08fba366a7e6584b3fc6225e8aa9d2acaf"
+    }
+  },
+  "isolation": {
+    "network": "none",
+    "host_read_only_mounts": [
+      "/usr"
+    ],
+    "host_writable_mounts": [
+      "<ATTEMPT_OUTPUT_DIRECTORY>"
+    ],
+    "forbidden_host_path_prefixes": [
+      "/home/zrj/scout_ws",
+      "/home/zrj/ros2_ws",
+      "/opt/ros/jazzy",
+      "/data",
+      "/home/zrj/scout_liquid_lab/dependency",
+      "/home/zrj/scout_liquid_lab/incoming",
+      "/home/zrj/scout_liquid_lab/outgoing",
+      "/home/zrj/scout_liquid_lab/results"
+    ],
+    "user_namespace": "required_and_disabled_inside",
+    "pid_namespace": "required",
+    "ipc_namespace": "required",
+    "uts_namespace": "required",
+    "parent_death_kill": true,
+    "environment": "cleared_then_fixed_allowlist",
+    "apparmor": "observed_not_bypassed_or_modified",
+    "require_apparmor_restrict_unprivileged_userns_zero": true,
+    "gpu_device_nodes": [],
+    "bwrap_argv_template": [
+      "/usr/bin/bwrap",
+      "--die-with-parent",
+      "--new-session",
+      "--unshare-user",
+      "--unshare-pid",
+      "--unshare-net",
+      "--unshare-ipc",
+      "--unshare-uts",
+      "--disable-userns",
+      "--assert-userns-disabled",
+      "--hostname",
+      "r8-liquid-output-bind-smoke",
+      "--clearenv",
+      "--setenv",
+      "HOME",
+      "/work",
+      "--setenv",
+      "PATH",
+      "/usr/bin:/bin",
+      "--uid",
+      "0",
+      "--gid",
+      "0",
+      "--ro-bind",
+      "/usr",
+      "/usr",
+      "--symlink",
+      "usr/bin",
+      "/bin",
+      "--symlink",
+      "usr/lib",
+      "/lib",
+      "--symlink",
+      "usr/lib64",
+      "/lib64",
+      "--proc",
+      "/proc",
+      "--dev",
+      "/dev",
+      "--tmpfs",
+      "/tmp",
+      "--tmpfs",
+      "/work",
+      "--bind",
+      "<ATTEMPT_OUTPUT_DIRECTORY>",
+      "/work/output",
+      "--chdir",
+      "/work",
+      "--",
+      "/usr/bin/touch",
+      "--",
+      "/work/output/.r8_output_bind_smoke_v1"
+    ]
+  },
+  "resources": {
+    "wall_timeout_seconds": 30,
+    "parent_timeout_seconds": 40,
+    "kill_after_seconds": 5,
+    "cpu_time_seconds": 10,
+    "address_space_bytes": 1073741824,
+    "process_limit": 4096,
+    "minimum_process_headroom": 512,
+    "open_file_limit": 128,
+    "file_size_bytes": 1048576,
+    "core_dump_bytes": 0,
+    "stderr_max_bytes": 4096,
+    "stdout": "discarded_not_captured"
+  },
+  "attempt": {
+    "directory_name_regex": "^u3_bwrap_output_bind_smoke_v1_[0-9]{8}T[0-9]{6}Z$",
+    "output_child_name": "output",
+    "marker_name": ".r8_output_bind_smoke_v1",
+    "marker_mode_octal": "0600",
+    "marker_size_bytes": 0,
+    "only_expected_output_entry": true,
+    "create_new_only": true,
+    "no_symlink_or_hardlink": true
+  },
+  "receipt": {
+    "filename_regex": "^u3_bwrap_output_bind_smoke_v1_[0-9]{8}T[0-9]{6}Z\\.json$",
+    "partial_suffix": ".partial"
+  },
+  "invariants": {
+    "no_sudo": true,
+    "no_apt": true,
+    "no_network": true,
+    "no_source_checkout": true,
+    "no_source_materialization": true,
+    "no_source_or_precompiled_binary_mount": true,
+    "no_upstream_code_execution": true,
+    "no_cmake_or_make": true,
+    "no_compiler": true,
+    "no_ros_or_gazebo": true,
+    "no_gpu_device": true,
+    "single_new_host_writable_output_directory": true,
+    "single_empty_marker_file_only": true,
+    "no_destructive_cleanup": true,
+    "no_retry_in_existing_attempt_or_receipt": true,
+    "no_apparmor_or_sysctl_change": true,
+    "no_output_execution": true
+  }
+}

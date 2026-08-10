@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MSI Ubuntu 24.04 source-only CPU build policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "policy_review_authorized",
+    "source_materialization_authorized",
+    "sandbox_execution_authorized",
+    "build_execution_authorized",
+    "output_execution_authorized",
+    "allowed_gate_commands",
+    "required_evidence",
+    "source",
+    "build_layout",
+    "trusted_system_tools",
+    "sandbox",
+    "resources",
+    "toolchain",
+    "dynamic_library_policy",
+    "cross_host_coordination",
+    "invariants",
+    "status",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-source-cpu-build-policy-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_SOURCE_CPU_BUILD_POLICY"
+    },
+    "policy_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404_SOURCE_CPU_BUILD_V1"
+    },
+    "host_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404"
+    },
+    "development_only": {
+      "const": true
+    },
+    "formal": {
+      "const": false
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "policy_review_authorized": {
+      "const": true
+    },
+    "source_materialization_authorized": {
+      "const": false
+    },
+    "sandbox_execution_authorized": {
+      "const": false
+    },
+    "build_execution_authorized": {
+      "const": false
+    },
+    "output_execution_authorized": {
+      "const": false
+    },
+    "allowed_gate_commands": {
+      "const": [
+        "self-check"
+      ]
+    },
+    "required_evidence": {
+      "type": "object"
+    },
+    "source": {
+      "type": "object"
+    },
+    "build_layout": {
+      "type": "object"
+    },
+    "trusted_system_tools": {
+      "type": "object"
+    },
+    "sandbox": {
+      "type": "object"
+    },
+    "resources": {
+      "type": "object"
+    },
+    "toolchain": {
+      "type": "object"
+    },
+    "dynamic_library_policy": {
+      "type": "object"
+    },
+    "cross_host_coordination": {
+      "type": "object"
+    },
+    "invariants": {
+      "type": "object"
+    },
+    "status": {
+      "const": "STATIC_POLICY_REVIEWED_BUILD_NOT_AUTHORIZED_TO_RUN"
+    },
+    "next_allowed_stage": {
+      "const": "HUMAN_REVIEW_HARMLESS_OUTPUT_BIND_SMOKE_AND_SOURCE_MATERIALIZATION_POLICY"
+    }
+  }
+}

@@ -1,0 +1,881 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target-host-u3-proc-stat-apparmor-boundary-probe-policy-v1.json",
+  "title": "R8 liquid U3 one-shot proc-stat AppArmor boundary probe policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "policy_id",
+    "host_id",
+    "status",
+    "next_allowed_stage",
+    "authorization",
+    "frozen_identity",
+    "provenance",
+    "trusted_system_tools",
+    "reviewed_bytes",
+    "payload_conduit",
+    "fixed_commands",
+    "snapshot_bootstrap",
+    "profile_semantics",
+    "candidate_boundary",
+    "journal_contract",
+    "lifecycle_contract",
+    "evidence_classification",
+    "receipt_contract",
+    "trusted_artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-u3-proc-stat-apparmor-boundary-probe-policy-v1"
+    },
+    "policy_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V1"
+    },
+    "host_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404"
+    },
+    "status": {
+      "enum": [
+        "STATIC_DRAFT_V1_PENDING_REVIEWED_BYTE_HASH_FREEZE_AND_INDEPENDENT_REVIEW",
+        "STATIC_READY_V1_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_SINGLE_ATTEMPT"
+      ]
+    },
+    "next_allowed_stage": {
+      "enum": [
+        "FREEZE_REVIEWED_BYTES_THEN_INDEPENDENT_STATIC_REVIEW_ONLY_THEN_EXPLICIT_ROOT_SNAPSHOT_SINGLE_ATTEMPT",
+        "INDEPENDENT_STATIC_REVIEW_ONLY_THEN_EXPLICIT_ROOT_SNAPSHOT_SINGLE_ATTEMPT"
+      ]
+    },
+    "authorization": {
+      "const": {
+        "static_review_authorized": true,
+        "static_task_execution_performed": false,
+        "execution_authorized_now": false,
+        "attempts_per_identity": 1,
+        "same_identity_retry": "forbidden",
+        "admission_token": "u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z:single-proc-stat-boundary-candidate-attempt",
+        "public_token_is_authority": false,
+        "root_owned_fd_capability_required": true,
+        "explicit_root_command_required": true,
+        "recovery_only_available": true,
+        "solver_or_gencase_authorized": false,
+        "cold_a_successor_execution_authorized": false,
+        "production_authorized": false
+      }
+    },
+    "frozen_identity": {
+      "const": {
+        "probe_id": "u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z",
+        "snapshot_root": "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.snapshot",
+        "bootstrap_profile": "r8-liquid-u3-proc-stat-boundary-bootstrap-v1-20260809t002729z",
+        "runtime_profile": "r8-liquid-u3-proc-stat-boundary-runtime-v1-20260809t002729z",
+        "start_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.start.json",
+        "preflight_failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.preflight_incomplete.json",
+        "execution_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.execution.json",
+        "lifecycle_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.lifecycle.json",
+        "lifecycle_failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.lifecycle_incomplete.json",
+        "recovery_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.recovery.json"
+      }
+    },
+    "payload_conduit": {
+      "const": {
+        "frame_magic_hex": "523850524f435354415450524f42453100",
+        "success_magic_hex": "523850524f435354415450415353563100",
+        "success_status": "PASS_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V1",
+        "transport": "ANONYMOUS_PIPE_SIZE_HASH_CHECKED_IN_MEMORY_HELPER",
+        "strict_eof": true,
+        "fd0_replaced_with_anonymous_eof_pipe": true,
+        "external_payload_count": 0,
+        "host_writable_transport": false,
+        "maximum_payload_frame_bytes": 65536,
+        "maximum_success_frame_bytes": 16384,
+        "maximum_child_stderr_bytes": 4096,
+        "outer_deadline_seconds": 20,
+        "host_identity": {
+          "uid": [1000, 1000, 1000, 1000],
+          "gid": [1000, 1000, 1000, 1000],
+          "groups": [],
+          "capability_sets": {
+            "CapInh": 0,
+            "CapPrm": 0,
+            "CapEff": 0,
+            "CapBnd": 0,
+            "CapAmb": 0
+          },
+          "no_new_privs": 1
+        },
+        "guest_identity": {
+          "uid": [0, 0, 0, 0],
+          "gid": [0, 0, 0, 0],
+          "groups": [],
+          "capability_sets": {
+            "CapInh": 0,
+            "CapPrm": 0,
+            "CapEff": 0,
+            "CapBnd": 0,
+            "CapAmb": 0
+          },
+          "no_new_privs": 1,
+          "child_dumpable": 0
+        },
+        "isolation": {
+          "host_read_only_mounts": ["/usr"],
+          "host_writable_mounts": [],
+          "guest_work_tmpfs_bytes": 67108864,
+          "guest_proc": "/proc",
+          "guest_dev": "absent",
+          "namespaces": ["user", "pid", "network", "ipc", "uts"],
+          "nested_userns": "disabled",
+          "network": "new_empty_network_namespace",
+          "source_seed_workspace": "absent",
+          "solver_gencase_ros_gazebo_gpu": "not_executed_not_exposed"
+        },
+        "admission_capability": {
+          "transport": "ROOT_OWNED_ANONYMOUS_PIPE_FD",
+          "creator": "root_snapshot_supervisor",
+          "pipe_owner": [0, 0],
+          "pipe_mode": "0600",
+          "payload_size_bytes": 32,
+          "strict_eof": true,
+          "single_consumer": true,
+          "public_environment_token_is_authority": false,
+          "fd_closed_before_probe_child": true
+        }
+      }
+    },
+    "provenance": {
+      "const": {
+        "cold_a_v6_failure": {
+          "case_id": "u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z",
+          "campaign_id": "u3_c1m_solver_cpu_settle_ab_campaign_20260808T212044Z",
+          "policy": {
+            "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_solver_cpu_settle_cold_a_execution_policy_v6.json",
+            "sha256": "0affbcabd5b587464b1a32c38ebd2abb139063c4f50000e0252801d199d59270",
+            "size_bytes": 39382
+          },
+          "receipts": {
+            "start": {
+              "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.start.json",
+              "sha256": "07d1c2c3e212f8cd791531a59933695e7a078c7953808c842d28a19bd21f365f",
+              "size_bytes": 11634,
+              "status": "V6_COLD_A_ONE_SHOT_STARTED_NO_RETRY_SAME_IDENTITY"
+            },
+            "execution": {
+              "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.execution.json",
+              "sha256": "7cba88d4793a58e05d2b7a0c6d843a8d6f0fec2e19541a9ff138a814ab1d4316",
+              "size_bytes": 13787,
+              "status": "V6_COLD_A_ATTEMPT_ABORTED_NO_RETRY_SAME_IDENTITY"
+            },
+            "lifecycle_incomplete": {
+              "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.lifecycle_incomplete.json",
+              "sha256": "03958f6def1c609d21bd56120827d818085d5c3b96768a1da032f8b83c46b59f",
+              "size_bytes": 6239,
+              "status": "V6_COLD_A_LIFECYCLE_OR_EXECUTION_INCOMPLETE_NO_RETRY_SAME_IDENTITY"
+            }
+          },
+          "stat_denials": {
+            "line_sha256": [
+              "7fabb53adb6cf6f8626bdc0056f663a73896dc133dde2bc14d12d9fcf73ad8e2",
+              "e511e301bf3cec1956573781301b3827b64085c7b9f17c84d5251ab1def23d17"
+            ],
+            "line_size_bytes": [320, 320],
+            "name": "/proc/3/stat",
+            "operation": "open",
+            "class": "file",
+            "requested_mask": "r",
+            "denied_mask": "r",
+            "fsuid": "1000",
+            "ouid": "0"
+          },
+          "source_use": "failure_provenance_only_no_snapshot_output_or_runtime_reuse",
+          "identity_consumed": true,
+          "retry_forbidden": true,
+          "cold_b_authorized": false,
+          "production_authorized": false
+        }
+      }
+    },
+    "profile_semantics": {
+      "const": {
+        "profile_path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-proc-stat-boundary-probe-v1.profile",
+        "named_only": true,
+        "persistent_install": false,
+        "external_includes": [],
+        "effective_line_count": 62,
+        "effective_lines_sha256": "4c006956d13bd71f09241e4a16a82a614c81c731ba2066600fb1f41fca4ea097",
+        "runtime_profile_loaded_but_unreachable": true,
+        "runtime_profile_effective_rules": [],
+        "explicit_silent_denials": ["deny capability dac_override,"],
+        "forbidden_authority": [
+          "non_owner_/proc/**",
+          "/proc/[0-9]*/status",
+          "dynamic_proc_write",
+          "host_writable_bind",
+          "device_or_gpu",
+          "solver_or_gencase",
+          "persistent_profile"
+        ]
+      }
+    },
+    "candidate_boundary": {
+      "const": {
+        "candidate_rule": "/proc/[0-9]*/stat r,",
+        "candidate_rule_count": 1,
+        "candidate_rule_profile": "bootstrap_only",
+        "candidate_delta_from_v6": "one_non_owner_numeric_pid_stat_read_rule_only",
+        "proc_directory_rule": "/proc/ r,",
+        "owner_proc_baseline_rule": "owner /proc/** r,",
+        "status_rule_present": false,
+        "child_creation": "os_fork_single_child_no_exec",
+        "child_count": 1,
+        "child_session_contract": "setsid_then_pid_equals_pgid_equals_sid",
+        "child_identity": {
+          "uid": [0, 0, 0, 0],
+          "gid": [0, 0, 0, 0],
+          "groups": [],
+          "capability_sets": {
+            "CapInh": 0,
+            "CapPrm": 0,
+            "CapEff": 0,
+            "CapBnd": 0,
+            "CapAmb": 0
+          },
+          "no_new_privs": 1
+        },
+        "dumpable_transition": {
+          "set_operation": "prctl_PR_SET_DUMPABLE_0",
+          "verification_operation": "prctl_PR_GET_DUMPABLE_equals_0",
+          "ready_signal_after_verification": true
+        },
+        "birth_identity": {
+          "pidfd_required": true,
+          "starttime_required": true,
+          "pid_pgid_sid_required": true,
+          "double_stat_freeze_reads": 2
+        },
+        "live_phase": {
+          "full_group_scan_passes": 2,
+          "direct_stat_reads": 2,
+          "state": "non_zombie",
+          "identity_must_remain_frozen": true,
+          "stat_owner_must_equal_inner_overflow_projection": true
+        },
+        "status_boundary_control": {
+          "path_template": "/proc/<CHILD_PID>/status",
+          "open_attempts": 1,
+          "required_errno": 13,
+          "required_errno_name": "EACCES",
+          "no_retry_in_cleanup": true
+        },
+        "zombie_phase": {
+          "release_signal": "one_byte_R",
+          "wait_operation": "waitid_P_PIDFD_WEXITED_WNOWAIT",
+          "exit_code": 0,
+          "direct_stat_reads": 2,
+          "full_group_scan_passes": 2,
+          "state": "Z",
+          "identity_must_remain_frozen": true,
+          "stat_owner_must_remain_equal_inner_overflow_projection": true
+        },
+        "reap_phase": {
+          "operation": "waitid_P_PIDFD_WEXITED",
+          "exit_code": 0,
+          "post_reap_group_scans": 2,
+          "required_post_reap_members": []
+        },
+        "success_frame_required": true,
+        "host_file_writes": 0,
+        "solver_or_gencase_execution": false
+      }
+    },
+    "evidence_classification": {
+      "const": {
+        "success_requires_closed_frame": true,
+        "successful_gate_exit_is_pass": false,
+        "success_pass_requires": "returncode_zero_empty_stderr_byte_exact_success_frame_and_exactly_one_expected_dumpable_zero_child_status_denial_in_closed_boot_cursor_window",
+        "audit_storage_limit": 16,
+        "audit_line_limit_bytes": 4096,
+        "expected_counts": {
+          "matching_total": 1,
+          "stored_count": 1,
+          "dropped_count": 0,
+          "expected_status_total": 1,
+          "stat_denial_total": 0,
+          "unexpected_total": 0,
+          "storage_overflow": false
+        },
+        "expected_status_denial": {
+          "apparmor": "DENIED",
+          "operation": "open",
+          "class": "file",
+          "profile": "r8-liquid-u3-proc-stat-boundary-bootstrap-v1-20260809t002729z",
+          "name_template": "/proc/<SUCCESS_FRAME_CHILD_PID>/status",
+          "name_must_match_success_frame_child_pid": true,
+          "comm": "python3.12",
+          "requested_mask": "r",
+          "denied_mask": "r",
+          "fsuid": "1000",
+          "ouid": "0",
+          "allowed_field_names": [
+            "apparmor",
+            "operation",
+            "class",
+            "profile",
+            "name",
+            "pid",
+            "comm",
+            "requested_mask",
+            "denied_mask",
+            "fsuid",
+            "ouid"
+          ]
+        },
+        "journal_boundary_required": true,
+        "strict_utf8_required": true,
+        "duplicate_or_escaped_critical_field_is_pass": false,
+        "audit_overflow_is_pass": false,
+        "gate_no_go_is_pass": false,
+        "zero_logged_denials_required": false,
+        "zero_denied_operations_claimed": false,
+        "stderr_contract": {
+          "returncode": 0,
+          "stdout": "byte_exact_canonical_success_frame",
+          "stderr_utf8": ""
+        },
+        "any_other_failure": "UNCLASSIFIED_PROBE_FAILURE_CLEANUP_PENDING",
+        "success_authorizes": "only_independent_review_and_static_design_of_a_fresh_cold_a_successor_no_solver_gencase_or_production"
+      }
+    },
+    "reviewed_bytes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all_frozen", "helper", "loader", "payload_frame"],
+      "properties": {
+        "all_frozen": {"type": "boolean"},
+        "helper": {"$ref": "#/$defs/byte_identity"},
+        "loader": {"$ref": "#/$defs/byte_identity"},
+        "payload_frame": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["size_bytes", "sha256", "maximum_size_bytes"],
+          "properties": {
+            "size_bytes": {"type": "integer", "minimum": 0},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "maximum_size_bytes": {"const": 65536}
+          }
+        }
+      }
+    },
+    "snapshot_bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "all_frozen",
+        "source_size_bytes",
+        "source_sha256",
+        "loader_size_bytes",
+        "loader_sha256",
+        "manifest_artifacts",
+        "snapshot_owner",
+        "snapshot_mode",
+        "file_owner",
+        "file_mode",
+        "strict_eof",
+        "component_no_follow",
+        "final_metadata_fsync",
+        "reviewed_minimal_bootstrap_executed_as_root",
+        "workspace_runtime_artifacts_executed_or_imported_as_root",
+        "runtime_supervisor_entrypoint",
+        "direct_snapshot_supervisor_exec_forbidden",
+        "root_loader_c_source_contract",
+        "root_loader_c_source_shell_interpolation",
+        "root_loader_c_source_stdin_origin",
+        "producer_stdout_use",
+        "producer_stdout_direct_execution_forbidden",
+        "workspace_snapshot_producer_root_forbidden",
+        "workspace_snapshot_producer_exact_path",
+        "workspace_snapshot_producer_uid",
+        "workspace_snapshot_producer_gid",
+        "workspace_snapshot_producer_active_capability_sets",
+        "workspace_snapshot_producer_stdout_on_identity_failure"
+      ],
+      "properties": {
+        "all_frozen": {"type": "boolean"},
+        "source_size_bytes": {"type": "integer", "minimum": 0},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "loader_size_bytes": {"type": "integer", "minimum": 0},
+        "loader_sha256": {"$ref": "#/$defs/sha256"},
+        "manifest_artifacts": {"const": ["gate", "supervisor", "profile", "schema", "policy"]},
+        "snapshot_owner": {"const": [0, 0]},
+        "snapshot_mode": {"const": "0555"},
+        "file_owner": {"const": [0, 0]},
+        "file_mode": {"const": "0444"},
+        "strict_eof": {"const": true},
+        "component_no_follow": {"const": true},
+        "final_metadata_fsync": {"const": true},
+        "reviewed_minimal_bootstrap_executed_as_root": {"const": true},
+        "workspace_runtime_artifacts_executed_or_imported_as_root": {"const": false},
+        "runtime_supervisor_entrypoint": {"const": "/usr/bin/python3.12 -I -B reads root-owned 0444 snapshot supervisor"},
+        "direct_snapshot_supervisor_exec_forbidden": {"const": true},
+        "root_loader_c_source_contract": {"const": "reviewed_hash_pinned_literal_single_argv_token_after_-c"},
+        "root_loader_c_source_shell_interpolation": {"const": false},
+        "root_loader_c_source_stdin_origin": {"const": false},
+        "producer_stdout_use": {"const": "stdin_of_the_reviewed_hash_pinned_root_loader_only"},
+        "producer_stdout_direct_execution_forbidden": {"const": true},
+        "workspace_snapshot_producer_root_forbidden": {"const": true},
+        "workspace_snapshot_producer_exact_path": {"const": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v1.py"},
+        "workspace_snapshot_producer_uid": {"const": [1000, 1000, 1000, 1000]},
+        "workspace_snapshot_producer_gid": {"const": [1000, 1000, 1000, 1000]},
+        "workspace_snapshot_producer_active_capability_sets": {
+          "const": {"CapInh": 0, "CapPrm": 0, "CapEff": 0, "CapAmb": 0}
+        },
+        "workspace_snapshot_producer_stdout_on_identity_failure": {"const": "empty"}
+      }
+    },
+    "trusted_system_tools": {
+      "const": {
+        "unprivileged_runner": {
+          "aa_exec": {
+            "path": "/usr/bin/aa-exec",
+            "sha256": "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e"
+          },
+          "bwrap": {
+            "path": "/usr/bin/bwrap",
+            "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"
+          },
+          "python": {
+            "path": "/usr/bin/python3.12",
+            "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+          },
+          "timeout": {
+            "path": "/usr/bin/timeout",
+            "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"
+          }
+        },
+        "root_supervisor": {
+          "aa_status": {
+            "path": "/usr/sbin/aa-status",
+            "sha256": "af9f579ad039f0e669bfb15735c55efd17896f838d684e7f9be15b09fa1e2dd4"
+          },
+          "apparmor_parser": {
+            "path": "/usr/sbin/apparmor_parser",
+            "sha256": "6bc852b37807961c14976be9a227ae96bd817f73b5189cb0e0ff5eca4448c01c"
+          },
+          "journalctl": {
+            "path": "/usr/bin/journalctl",
+            "sha256": "c49bd25d7e7655b9a44ff867923952ed5a5e0a65e9df7a0510e239bf0558e3fa"
+          },
+          "python": {
+            "path": "/usr/bin/python3.12",
+            "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+          },
+          "setpriv": {
+            "path": "/usr/bin/setpriv",
+            "sha256": "96b083b79c32fd2f0c29657e88e20c7495839349fc64ad5d0503f32d26bf8733"
+          },
+          "sudo": {
+            "path": "/usr/bin/sudo",
+            "sha256": "136f2e48b0295b9fc595b8259cf2411ac43f27ddbfe02b956649ddaa2e92b9fa"
+          },
+          "timeout": {
+            "path": "/usr/bin/timeout",
+            "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"
+          },
+          "true": {
+            "path": "/usr/bin/true",
+            "sha256": "4b5a5694e3c0e8b1d58fc52ac6ef076e55e72c2f53195243ac86d5ff517cc2f6"
+          }
+        }
+      }
+    },
+    "trusted_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all_frozen", "gate", "supervisor", "profile", "schema"],
+      "properties": {
+        "all_frozen": {"type": "boolean"},
+        "gate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "size_bytes"],
+          "properties": {
+            "path": {"const": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_proc_stat_boundary_probe_gate_v1.py"},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "size_bytes": {"type": "integer", "minimum": 0}
+          }
+        },
+        "supervisor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "size_bytes"],
+          "properties": {
+            "path": {"const": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v1.py"},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "size_bytes": {"type": "integer", "minimum": 0}
+          }
+        },
+        "profile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "size_bytes"],
+          "properties": {
+            "path": {"const": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-proc-stat-boundary-probe-v1.profile"},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "size_bytes": {"type": "integer", "minimum": 0}
+          }
+        },
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "size_bytes"],
+          "properties": {
+            "path": {"const": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_proc_stat_boundary_probe_policy_v1.json"},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "size_bytes": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "fixed_commands": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "argv_hashes_frozen",
+        "aa_status_json_argv",
+        "bwrap_argv_sha256",
+        "gate_handoff_argv",
+        "parser_parse_argv",
+        "parser_load_argv",
+        "parser_unload_argv",
+        "journal_boot_id_path",
+        "journal_anchor_argv_template",
+        "journal_sync_argv",
+        "journal_query_argv_template",
+        "journal_anchor_stdout_ceiling_bytes",
+        "journal_query_stdout_ceiling_bytes",
+        "journal_stderr_ceiling_bytes",
+        "audit_line_ceiling_bytes",
+        "audit_storage_ceiling",
+        "snapshot_producer_argv",
+        "snapshot_root_loader_argv_template",
+        "run_argv_template",
+        "recover_argv_template",
+        "sudo_timestamp_clear_argv",
+        "sudo_timestamp_verify_argv",
+        "operator_transport",
+        "operator_boundary",
+        "shell",
+        "workspace_run_forbidden"
+      ],
+      "properties": {
+        "argv_hashes_frozen": {"type": "boolean"},
+        "aa_status_json_argv": {"const": ["/usr/sbin/aa-status", "--json"]},
+        "bwrap_argv_sha256": {"$ref": "#/$defs/sha256"},
+        "gate_handoff_argv": {
+          "const": [
+            "/usr/bin/setpriv",
+            "--reuid=1000",
+            "--regid=1000",
+            "--clear-groups",
+            "--bounding-set=-all",
+            "--inh-caps=-all",
+            "--ambient-caps=-all",
+            "--no-new-privs",
+            "--",
+            "/usr/bin/python3.12",
+            "-I",
+            "-B",
+            "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.snapshot/r8_liquid_target_u3_proc_stat_boundary_probe_gate_v1.py",
+            "internal-run"
+          ]
+        },
+        "parser_parse_argv": {
+          "const": [
+            "/usr/sbin/apparmor_parser",
+            "-Q",
+            "-K",
+            "-T",
+            "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.snapshot/r8-liquid-u3-proc-stat-boundary-probe-v1.profile"
+          ]
+        },
+        "parser_load_argv": {
+          "const": [
+            "/usr/sbin/apparmor_parser",
+            "-a",
+            "-K",
+            "-T",
+            "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.snapshot/r8-liquid-u3-proc-stat-boundary-probe-v1.profile"
+          ]
+        },
+        "parser_unload_argv": {
+          "const": [
+            "/usr/sbin/apparmor_parser",
+            "-R",
+            "-K",
+            "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.snapshot/r8-liquid-u3-proc-stat-boundary-probe-v1.profile"
+          ]
+        },
+        "journal_boot_id_path": {"const": "/proc/sys/kernel/random/boot_id"},
+        "journal_anchor_argv_template": {
+          "const": [
+            "/usr/bin/journalctl",
+            "-k",
+            "--no-pager",
+            "--quiet",
+            "--boot=<BOOT_ID_32HEX>",
+            "--lines=0",
+            "--show-cursor"
+          ]
+        },
+        "journal_sync_argv": {"const": ["/usr/bin/journalctl", "--sync"]},
+        "journal_query_argv_template": {
+          "const": [
+            "/usr/bin/journalctl",
+            "-k",
+            "--no-pager",
+            "--quiet",
+            "--output=short-iso-precise",
+            "--boot=<BOOT_ID_32HEX>",
+            "--after-cursor=<PRE_RUN_CURSOR>",
+            "--show-cursor"
+          ]
+        },
+        "journal_anchor_stdout_ceiling_bytes": {"const": 4096},
+        "journal_query_stdout_ceiling_bytes": {"const": 131072},
+        "journal_stderr_ceiling_bytes": {"const": 16384},
+        "audit_line_ceiling_bytes": {"const": 4096},
+        "audit_storage_ceiling": {"const": 16},
+        "snapshot_producer_argv": {
+          "const": [
+            "/usr/bin/python3.12",
+            "-I",
+            "-B",
+            "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v1.py",
+            "emit-bootstrap"
+          ]
+        },
+        "snapshot_root_loader_argv_template": {
+          "const": [
+            "/usr/bin/sudo",
+            "/usr/bin/python3.12",
+            "-I",
+            "-B",
+            "-c",
+            "<PINNED_SNAPSHOT_BOOTSTRAP_LOADER_SOURCE>",
+            "<TEN_SHA256_SIZE_MANIFEST_ARGUMENTS>"
+          ]
+        },
+        "run_argv_template": {
+          "const": [
+            "/usr/bin/sudo",
+            "/usr/bin/python3.12",
+            "-I",
+            "-B",
+            "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.snapshot/r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v1.py",
+            "run",
+            "--policy-sha256",
+            "<EXTERNALLY_FROZEN_POLICY_SHA256>",
+            "--admission-token",
+            "u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z:single-proc-stat-boundary-candidate-attempt"
+          ]
+        },
+        "recover_argv_template": {
+          "const": [
+            "/usr/bin/sudo",
+            "/usr/bin/python3.12",
+            "-I",
+            "-B",
+            "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.snapshot/r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v1.py",
+            "recover-only",
+            "--policy-sha256",
+            "<EXTERNALLY_FROZEN_POLICY_SHA256>",
+            "--recovery-token",
+            "u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z:cleanup-only-no-probe"
+          ]
+        },
+        "sudo_timestamp_clear_argv": {
+          "const": [
+            "/usr/bin/setpriv",
+            "--reuid=1000",
+            "--regid=1000",
+            "--groups=27",
+            "--inh-caps=-all",
+            "--ambient-caps=-all",
+            "--",
+            "/usr/bin/sudo",
+            "-K"
+          ]
+        },
+        "sudo_timestamp_verify_argv": {
+          "const": [
+            "/usr/bin/setpriv",
+            "--reuid=1000",
+            "--regid=1000",
+            "--groups=27",
+            "--inh-caps=-all",
+            "--ambient-caps=-all",
+            "--",
+            "/usr/bin/sudo",
+            "-n",
+            "/usr/bin/true"
+          ]
+        },
+        "operator_transport": {
+          "const": "snapshot producer stdout is only pinned root-loader stdin; root loader -c source is a reviewed hash-pinned literal argv token; run and recovery read only the root-owned snapshot supervisor"
+        },
+        "operator_boundary": {
+          "const": {
+            "run_and_recover_foreground_pty_required": true,
+            "inherited_dev_tty_password_input_only": true,
+            "sudo_dash_S_forbidden": true,
+            "password_environment_variable_forbidden": true,
+            "fd0_redirection_forbidden": true,
+            "background_or_detached_invocation_forbidden": true,
+            "shell_interpolation_forbidden": true
+          }
+        },
+        "shell": {"const": false},
+        "workspace_run_forbidden": {"const": true}
+      }
+    },
+    "journal_contract": {
+      "const": {
+        "boot_id_path": "/proc/sys/kernel/random/boot_id",
+        "anchor_before_profile_load": true,
+        "same_boot_id_required": true,
+        "start_cursor_required": true,
+        "end_cursor_required": true,
+        "after_cursor_query_required": true,
+        "strict_utf8_required": true,
+        "journal_sync_before_query": true,
+        "matching_labels": [
+          "r8-liquid-u3-proc-stat-boundary-bootstrap-v1-20260809t002729z",
+          "r8-liquid-u3-proc-stat-boundary-runtime-v1-20260809t002729z"
+        ],
+        "audit_storage_limit": 16,
+        "audit_line_limit_bytes": 4096,
+        "expected_status_denials": 1,
+        "unexpected_denials": 0,
+        "storage_overflow_allowed": false,
+        "profile_state_during_query": "both fresh profiles exactly once enforce before and after query",
+        "prequery_label_quiescence": "root all-task exact empty then three stable zero scans",
+        "postquery_label_quiescence": "root all-task three stable zero scans before classification"
+      }
+    },
+    "lifecycle_contract": {
+      "const": {
+        "authoritative_label_scan": "/proc/<tgid>/task/<tid>/attr/current_all_uids_by_root",
+        "stable_zero_label_scans": 3,
+        "pre_and_post_unload_scans": true,
+        "pid_reuse_protection": "birth_pidfd_for_direct_children_and_starttime_checked_tgid_pidfd_for_scanned_tasks",
+        "catchable_signals": ["SIGHUP", "SIGINT", "SIGTERM", "SIGQUIT", "SIGTSTP"],
+        "uncatchable_signals_require_recover_only": ["SIGKILL", "SIGSTOP", "power_loss", "interpreter_or_kernel_crash"],
+        "unload_requires_zero_labels": true,
+        "expected_sysctls": {
+          "/proc/sys/user/max_user_namespaces": {
+            "value": "61362\n",
+            "sha256": "e248d4e11a8c63b5bc8e417356d5d67ec5f44fa94d98fa1a954ba12aaa1e4f0e"
+          },
+          "/proc/sys/kernel/unprivileged_userns_clone": {
+            "value": "1\n",
+            "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+          },
+          "/proc/sys/kernel/apparmor_restrict_unprivileged_userns": {
+            "value": "1\n",
+            "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+          }
+        },
+        "sudo_timestamp_test": "UID1000 inherited foreground PTY sudo -K then sudo -n true must require password",
+        "guest_child_cleanup": "pidfd anchored release or SIGKILL then final reap without reopening child status",
+        "recovery": {
+          "command": "recover-only",
+          "token": "u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z:cleanup-only-no-probe",
+          "probe_execution": false,
+          "admission_fd_creation": false,
+          "label_cleanup_before_unload": true,
+          "repeat_safe": true,
+          "writes_existing_receipt": false,
+          "production_authorized": false
+        },
+        "static_and_runtime_invariants": {
+          "no_sudo_in_static_checks": true,
+          "no_parser_in_static_checks": true,
+          "no_namespace_in_static_checks": true,
+          "no_probe_in_static_checks": true,
+          "no_v6_snapshot_read_or_reuse": true,
+          "no_v6_output_reuse": true,
+          "no_solver_or_gencase": true,
+          "no_source_seed_workspace": true,
+          "no_host_writable_mount": true,
+          "no_dev": true,
+          "no_external_network_access": true,
+          "no_host_initial_namespace_sysctl_write": true,
+          "no_persistent_profile": true,
+          "no_ros_gazebo_gpu": true,
+          "no_production_authority": true
+        }
+      }
+    },
+    "receipt_contract": {
+      "const": {
+        "directory_policy": {
+          "/": [0, 0, "0755"],
+          "/home": [0, 0, "0755"],
+          "/home/zrj": [1000, 1000, "0750"],
+          "/home/zrj/scout_liquid_lab": [1000, 1000, "0750"],
+          "/home/zrj/scout_liquid_lab/audits": [1000, 1000, "0750"]
+        },
+        "file_owner": [1000, 1000],
+        "file_mode": "0440",
+        "creation": "O_EXCL_O_NOFOLLOW_ONE_SHOT",
+        "durability": "data_fsync_then_owner_mode_then_fsync_then_fstat_then_parent_fsync",
+        "execution_status_suffix": "CLEANUP_PENDING",
+        "separate_lifecycle": true,
+        "sudo_timestamp_scope": "ALL_UID1000_SUDO_TIMESTAMPS_INVALIDATED_BY_SUDO_-K_OTHER_TERMINALS_MUST_REAUTHENTICATE",
+        "sudo_group_membership": {
+          "path": "/etc/group",
+          "owner": [0, 0],
+          "mode": "0644",
+          "record": "sudo:x:27:zrj",
+          "group_name": "sudo",
+          "gid": 27,
+          "members": ["zrj"]
+        },
+        "sudo_cleanup_identity": {
+          "reuid": 1000,
+          "regid": 1000,
+          "supplementary_groups": [27],
+          "groups_mode": "EXACT_NUMERIC_GROUP_LIST_ONLY",
+          "bounding_mode": "preserve_host_only",
+          "bounding_argv_tokens": [],
+          "explicit_bounding_change_forbidden": true,
+          "inheritable_capabilities": "-all",
+          "ambient_capabilities": "-all",
+          "no_new_privs_option_present": false,
+          "shell": false,
+          "start_new_session": false,
+          "forbidden_group_options": ["--clear-groups", "--init-groups", "--keep-groups"]
+        },
+        "sudo_cleanup_bounding_mode": "preserve_host_only",
+        "same_uid_tamper_resistance_claimed": false
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "byte_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size_bytes", "sha256"],
+      "properties": {
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

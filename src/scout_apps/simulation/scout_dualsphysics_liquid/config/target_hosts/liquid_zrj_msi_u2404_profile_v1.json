@@ -1,0 +1,83 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-host-profile-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_HOST_PROFILE",
+  "profile_id": "LIQUID_ZRJ_MSI_U2404_P0_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "execution_authorized": false,
+  "allowed_script_commands": [
+    "self-check"
+  ],
+  "host": {
+    "hostname": "zrj",
+    "os_id": "ubuntu",
+    "os_version_id": "24.04",
+    "kernel_release_prefix": "6.8."
+  },
+  "storage": {
+    "approved_root": "/home/zrj/scout_liquid_lab",
+    "mount_target": "/home",
+    "mount_source": "/dev/nvme0n1p6",
+    "filesystem_type": "ext4",
+    "required_mount_options": [
+      "rw"
+    ],
+    "owner": "zrj",
+    "directory_mode_octal": "0750",
+    "minimum_free_bytes": 214748364800,
+    "required_directories": [
+      "audits",
+      "build",
+      "cases",
+      "coordination",
+      "coordination/receipts",
+      "dependency",
+      "incoming",
+      "locks",
+      "outgoing",
+      "quarantine",
+      "results",
+      "sandbox"
+    ],
+    "protected_paths": [
+      "/home/zrj/scout_ws",
+      "/home/zrj/ros2_ws",
+      "/opt/ros/jazzy",
+      "/data/a/scout_sim_replacement/r8_liquid"
+    ]
+  },
+  "resources": {
+    "minimum_memory_bytes": 16000000000,
+    "minimum_user_namespaces": 1
+  },
+  "required_tools": {
+    "bwrap": {
+      "path": "/usr/bin/bwrap",
+      "version_prefix": "bubblewrap 0.9.0"
+    },
+    "git": {
+      "path": "/usr/bin/git"
+    },
+    "gpp": {
+      "path": "/usr/bin/x86_64-linux-gnu-g++-13"
+    },
+    "make": {
+      "path": "/usr/bin/make"
+    }
+  },
+  "invariants": {
+    "old_host_profile_reusable": false,
+    "sandbox_created_by_self_check": false,
+    "network_namespace_created_by_self_check": false,
+    "user_namespace_created_by_self_check": false,
+    "upstream_code_executed_by_self_check": false,
+    "system_packages_changed_by_self_check": false
+  },
+  "evidence": {
+    "u1_root_receipt_sha256": "a43d1418dabe534be44f70573ae6ae64cfc3e3f12445c1bbd84334ae66884192",
+    "u2_source_metadata_receipt_sha256": "1f6f18e0e8a8bb20ee5b4d38f94261efb1e01c24db2820da6fda71f2ed7461a0",
+    "u2_bwrap_review_receipt_sha256": "6bc09b7ef69b9fea62417b60c007ecf8fb1570fed376c3f915d5f0e1c4901c62"
+  }
+}

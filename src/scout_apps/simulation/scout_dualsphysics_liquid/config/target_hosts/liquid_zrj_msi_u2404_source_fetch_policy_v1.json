@@ -1,0 +1,119 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-source-fetch-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_SOURCE_FETCH_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_SOURCE_FETCH_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "source_fetch_authorized": true,
+  "upstream_code_execution_authorized": false,
+  "allowed_gate_commands": [
+    "self-check",
+    "fetch-full-bare-source"
+  ],
+  "required_target_profile": {
+    "profile_id": "LIQUID_ZRJ_MSI_U2404_P0_V1",
+    "canonical_sha256": "fec0b980ca46df04d877290b73b3f3406af97887ccc20c9d52d58092c36f8838",
+    "required_status": "PASS_PROFILE_READ_ONLY_ONLY"
+  },
+  "required_bwrap_smoke": {
+    "receipt_relative_path": "audits/u2_bwrap_system_true_smoke_v3_20260806T072112Z.json",
+    "file_sha256": "02de50da3e7e88b7dcc3150e06a51ccd06e9bd12978e61479cf2166deb5dec3b",
+    "status": "PASS_SYSTEM_TRUE_BWRAP_SMOKE",
+    "returncode": 0
+  },
+  "source": {
+    "repository_url": "https://github.com/DualSPHysics/DualSPHysics.git",
+    "commit": "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+    "tree": "cef458cb358712f4694b9d2148f638440418e9dc",
+    "metadata_bare_relative_path": "dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.blobless.git",
+    "full_bare_relative_path": "dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.full_attempt_3.git",
+    "no_checkout": true,
+    "no_submodules": true,
+    "no_lfs_smudge": true,
+    "no_hooks": true,
+    "precompiled_binaries_execution": "forbidden"
+  },
+  "trusted_system_tools": {
+    "git": {
+      "path": "/usr/bin/git",
+      "sha256": "2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668"
+    },
+    "git_remote_https": {
+      "path": "/usr/lib/git-core/git-remote-https",
+      "symlink_target": "git-remote-http",
+      "resolved_path": "/usr/lib/git-core/git-remote-http",
+      "sha256": "8353a5124ddb2281838bc54bd97c21cbecfe900615fdb60b281198c5058ddb5b"
+    }
+  },
+  "network": {
+    "allowed_protocols": [
+      "https"
+    ],
+    "allowed_remote_url": "https://github.com/DualSPHysics/DualSPHysics.git",
+    "interactive_credentials": false,
+    "network_use": "exact_commit_git_fetch_only"
+  },
+  "git_commands": {
+    "init": [
+      "init",
+      "--bare"
+    ],
+    "remote_add": [
+      "remote",
+      "add",
+      "origin",
+      "https://github.com/DualSPHysics/DualSPHysics.git"
+    ],
+    "fetch": [
+      "fetch",
+      "--quiet",
+      "--no-tags",
+      "--depth=1",
+      "origin",
+      "ef3721a861fda961f0e2f9ec4cd317b19de99086"
+    ],
+    "fsck": [
+      "fsck",
+      "--full",
+      "--strict",
+      "--no-reflogs"
+    ],
+    "object_walk": [
+      "rev-list",
+      "--objects",
+      "--missing=print",
+      "--no-object-names",
+      "ef3721a861fda961f0e2f9ec4cd317b19de99086"
+    ]
+  },
+  "resources": {
+    "fetch_timeout_seconds": 900,
+    "short_command_timeout_seconds": 60,
+    "kill_grace_seconds": 5,
+    "stdout_stderr_max_bytes": 16384,
+    "object_walk_max_stdout_bytes": 131072,
+    "object_walk_max_records": 4096,
+    "object_walk_max_line_bytes": 128,
+    "object_walk_missing_sample_limit": 16,
+    "directory_mode_octal": "0750",
+    "receipt_mode_octal": "0640"
+  },
+  "receipt": {
+    "directory_relative_path": "audits",
+    "filename_regex": "^u2_full_source_fetch_attempt_3_[0-9]{8}T[0-9]{6}Z\\.json$"
+  },
+  "invariants": {
+    "no_sudo": true,
+    "no_apt": true,
+    "no_checkout": true,
+    "no_source_file_execution": true,
+    "no_precompiled_binary_execution": true,
+    "no_cmake_or_make": true,
+    "no_ros_or_gazebo": true,
+    "no_gpu_device": true,
+    "no_destructive_cleanup": true,
+    "no_retry_in_existing_attempt_directory": true
+  }
+}

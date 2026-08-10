@@ -1,0 +1,160 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-source-materialization-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_SOURCE_MATERIALIZATION_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_SOURCE_MATERIALIZATION_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "static_source_materialization_authorized": true,
+  "build_execution_authorized": false,
+  "output_execution_authorized": false,
+  "upstream_code_execution_authorized": false,
+  "allowed_gate_commands": [
+    "self-check",
+    "materialize-source"
+  ],
+  "required_evidence": {
+    "target_profile": {
+      "profile_id": "LIQUID_ZRJ_MSI_U2404_P0_V1",
+      "canonical_sha256": "fec0b980ca46df04d877290b73b3f3406af97887ccc20c9d52d58092c36f8838",
+      "required_status": "PASS_PROFILE_READ_ONLY_ONLY"
+    },
+    "full_source_fetch": {
+      "receipt_relative_path": "audits/u2_full_source_fetch_attempt_3_20260806T074600Z.json",
+      "file_sha256": "23745c0076c2c06fc549665c89f4e039761832bab66f4f568f63eff696ead18d",
+      "receipt_sha256": "90bd0c1cc03b022dc42dd4b0368a84f46af10b9b5b8c54108765d1fd16df0426",
+      "status": "PASS_FULL_BARE_SOURCE_FETCH"
+    },
+    "static_inventory": {
+      "receipt_relative_path": "audits/u2_full_source_static_inventory_v1_20260806T080500Z.json",
+      "file_sha256": "a3be7e2a7a5bbeae8483706dbd4a135c7af80513bd5fbd1f982122b4380efb28",
+      "receipt_sha256": "5eac669287c6711de0835409ed9f3ec9dc6829a3b03cef24cb6838ebb07e32ff",
+      "status": "PASS_OFFLINE_FULL_SOURCE_STATIC_INVENTORY"
+    },
+    "elf_metadata": {
+      "receipt_relative_path": "audits/u2_elf_metadata_v1_20260806T082300Z.json",
+      "file_sha256": "47e411b391afd677fc4d1b60ca6547c73545c287ef080bea92c2e66128ef6a74",
+      "receipt_sha256": "7686d2df11332dc4c5809f64985959ed8e05fd96b3b44c5120e516bbdd850024",
+      "status": "PASS_OFFLINE_ELF_METADATA"
+    }
+  },
+  "source": {
+    "repository_url": "https://github.com/DualSPHysics/DualSPHysics.git",
+    "commit": "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+    "tree": "cef458cb358712f4694b9d2148f638440418e9dc",
+    "full_bare_relative_path": "dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.full_attempt_3.git",
+    "allowed_source_prefix": "src/source/",
+    "materialization_parent_relative_path": "dependency/materialized",
+    "attempt_id_regex": "^u3_source_materialization_v1_[0-9]{8}T[0-9]{6}Z$",
+    "attempt_root_relative_template": "dependency/materialized/<attempt_id>.partial",
+    "materialized_tree_relative_path": "src/source",
+    "no_checkout": true,
+    "no_network": true,
+    "no_submodules": true,
+    "no_lfs_smudge": true,
+    "no_hooks": true,
+    "no_filters": true,
+    "precompiled_elf_execution": "forbidden",
+    "elf_magic_in_materialized_source": "forbidden"
+  },
+  "trusted_system_tools": {
+    "git": {
+      "path": "/usr/bin/git",
+      "sha256": "2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668"
+    }
+  },
+  "git_commands": {
+    "tree_identity": [
+      "rev-parse",
+      "ef3721a861fda961f0e2f9ec4cd317b19de99086^{tree}"
+    ],
+    "bare_identity": [
+      "rev-parse",
+      "--is-bare-repository"
+    ],
+    "remote_identity": [
+      "remote",
+      "get-url",
+      "origin"
+    ],
+    "source_tree_listing": [
+      "ls-tree",
+      "-r",
+      "-l",
+      "-z",
+      "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+      "--",
+      "src/source"
+    ],
+    "blob": [
+      "cat-file",
+      "blob"
+    ]
+  },
+  "source_subset_expectations": {
+    "source_tree_listing_sha256": "52adb0bc80591775a81a7edaa2217c313d216d59e1b7b13094f94b87c1627f9b",
+    "entry_count": 352,
+    "total_blob_bytes": 5473917,
+    "symlink_entry_count": 0,
+    "gitlink_entry_count": 0,
+    "input_executable_mode_paths": [
+      "src/source/JDsGaugeItem.cpp",
+      "src/source/JDsGaugeItem.h",
+      "src/source/JDsGaugeSystem.cpp",
+      "src/source/JDsGaugeSystem.h",
+      "src/source/JDsGauge_ker.cu",
+      "src/source/JDsGauge_ker.h"
+    ]
+  },
+  "output": {
+    "create_materialization_parent_if_absent": true,
+    "directory_mode_before_seal_octal": "0750",
+    "file_mode_before_seal_octal": "0640",
+    "directory_mode_after_seal_octal": "0550",
+    "file_mode_after_seal_octal": "0440",
+    "symlinks": "forbidden",
+    "hardlinks": "forbidden",
+    "preserve_input_executable_mode": false,
+    "output_content_execution": "forbidden"
+  },
+  "resources": {
+    "minimum_free_bytes": 16777216,
+    "materialization_timeout_seconds": 300,
+    "short_command_timeout_seconds": 60,
+    "tree_listing_timeout_seconds": 60,
+    "blob_read_timeout_seconds": 60,
+    "kill_grace_seconds": 5,
+    "short_command_output_max_bytes": 16384,
+    "tree_listing_output_max_bytes": 262144,
+    "blob_stderr_max_bytes": 16384,
+    "max_tree_entries": 512,
+    "max_tree_path_bytes": 512,
+    "max_total_blob_bytes": 16777216,
+    "max_single_blob_bytes": 1048576,
+    "directory_mode_octal": "0750",
+    "receipt_mode_octal": "0640"
+  },
+  "receipt": {
+    "directory_relative_path": "audits",
+    "filename_regex": "^u3_source_materialization_v1_[0-9]{8}T[0-9]{6}Z\\.json$"
+  },
+  "invariants": {
+    "no_sudo": true,
+    "no_apt": true,
+    "no_network": true,
+    "no_checkout": true,
+    "no_source_file_execution": true,
+    "no_precompiled_binary_execution": true,
+    "no_cmake_or_make": true,
+    "no_compiler": true,
+    "no_ros_or_gazebo": true,
+    "no_gpu_device": true,
+    "no_destructive_cleanup": true,
+    "no_retry_in_existing_attempt_path": true,
+    "new_files_non_executable": true,
+    "successful_tree_sealed_read_only": true
+  },
+  "status": "STATIC_SOURCE_MATERIALIZATION_ONLY_BUILD_NOT_AUTHORIZED",
+  "next_allowed_stage": "MATERIALIZE_ONE_NEW_SOURCE_ATTEMPT_OR_REVIEW_NO_GO"
+}

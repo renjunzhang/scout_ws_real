@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MSI Ubuntu 24.04 bwrap system-true smoke policy v3",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "system_binary_smoke_authorized",
+    "upstream_code_execution_authorized",
+    "allowed_gate_commands",
+    "required_target_profile",
+    "required_v2_diagnostic",
+    "storage",
+    "trusted_system_tools",
+    "isolation",
+    "bwrap_argv",
+    "resources",
+    "invariants"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-bwrap-system-true-smoke-policy-v3"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_BWRAP_SYSTEM_TRUE_SMOKE_POLICY"
+    },
+    "development_only": {
+      "const": true
+    },
+    "formal": {
+      "const": false
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "upstream_code_execution_authorized": {
+      "const": false
+    },
+    "allowed_gate_commands": {
+      "const": [
+        "self-check",
+        "run-system-true-smoke"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target-host-u3-gencase-seed-materialization-policy-v2.json",
+  "title": "R8 liquid U3 GenCase seed materialization policy v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "user_delegated_review_and_execution_approval",
+    "execution_scope",
+    "revision_reason",
+    "allowed_gate_commands",
+    "frozen_attempt",
+    "rejected_predecessor",
+    "source_provenance",
+    "trusted_tools",
+    "materialization_contract",
+    "invariants",
+    "status",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-target-u3-gencase-seed-materialization-policy-v2"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_TARGET_U3_GENCASE_SEED_MATERIALIZATION_POLICY"},
+    "policy_id": {"const": "LIQUID_ZRJ_MSI_U2404_U3_GENCASE_SEED_MATERIALIZATION_V2"},
+    "host_id": {"const": "LIQUID_ZRJ_MSI_U2404"},
+    "development_only": {"const": true},
+    "formal": {"const": false},
+    "physical_primary_eligible": {"const": false},
+    "user_delegated_review_and_execution_approval": {"const": true},
+    "execution_scope": {"const": "one_exact_nonexecutable_gencase_seed_v2_materialization"},
+    "revision_reason": {"type": "string", "minLength": 200},
+    "allowed_gate_commands": {"const": ["self-check", "preflight", "materialize"]},
+    "frozen_attempt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed_id", "seed_root", "input_root", "receipt", "partial_receipt"],
+      "properties": {
+        "seed_id": {"const": "u3_c1_gencase_seed_v2_20260807T135341Z"},
+        "seed_root": {"const": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_v2_20260807T135341Z.partial"},
+        "input_root": {"const": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_v2_20260807T135341Z.partial/input"},
+        "receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_seed_v2_20260807T135341Z.json"},
+        "partial_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_seed_v2_20260807T135341Z.json.partial"}
+      }
+    },
+    "rejected_predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "seed_id", "seed_root", "input_root", "receipt", "receipt_sha256",
+        "partial_receipt", "partial_receipt_sha256", "case_template_sha256",
+        "disposition", "rejection_reasons", "preserved_append_only",
+        "is_v2_materialization_source"
+      ],
+      "properties": {
+        "seed_id": {"const": "u3_c1_gencase_seed_20260807T031624Z"},
+        "seed_root": {"const": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_20260807T031624Z.partial"},
+        "input_root": {"const": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_20260807T031624Z.partial/input"},
+        "receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_seed_20260807T031624Z.json"},
+        "receipt_sha256": {"const": "19ccbcc3c945a3e457b9cce99611c061ac8e6dfaf099129920cb555818fd6b6a"},
+        "partial_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_seed_20260807T031624Z.json.partial"},
+        "partial_receipt_sha256": {"const": "a265d086aead8e23054323f8892b6d99d02166ead35150ba65a7ce0fc6da5ac3"},
+        "case_template_sha256": {"const": "ef57582f69714f622e5b8a348c7626d233c203ad0b1eb6332b58fb1ffc09fa1a"},
+        "disposition": {"const": "PERMANENT_NO_GO_DO_NOT_EXECUTE_OR_REUSE"},
+        "rejection_reasons": {
+          "const": [
+            "mask_1_or_2_removed_both_cylinder_end_caps_and_left_no_bottom",
+            "deprecated_PartsOutMax_was_ignored"
+          ]
+        },
+        "preserved_append_only": {"const": true},
+        "is_v2_materialization_source": {"const": false}
+      }
+    },
+    "source_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["full_bare_repository", "full_fetch_receipt", "full_fetch_receipt_sha256", "commit", "gencase", "dsph_config", "case_template"],
+      "properties": {
+        "full_bare_repository": {"const": "/home/zrj/scout_liquid_lab/dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.full_attempt_3.git"},
+        "full_fetch_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u2_full_source_fetch_attempt_3_20260806T074600Z.json"},
+        "full_fetch_receipt_sha256": {"const": "23745c0076c2c06fc549665c89f4e039761832bab66f4f568f63eff696ead18d"},
+        "commit": {"const": "ef3721a861fda961f0e2f9ec4cd317b19de99086"},
+        "gencase": {
+          "const": {
+            "tree_path": "bin/linux/GenCase_linux64",
+            "blob_sha1": "4db4dadbae8f6e3885cad3bb752340812036278a",
+            "sha256": "a1b6414e0f716669363d1a80a05e133085c04995e15716e3c1f0406e0d023226",
+            "size_bytes": 5809384,
+            "host_mode_after_materialization": "0400",
+            "host_execution": "forbidden"
+          }
+        },
+        "dsph_config": {
+          "const": {
+            "tree_path": "bin/linux/DsphConfig.xml",
+            "blob_sha1": "d99d0f85d19a622f7faf2d5f1195b11f17951846",
+            "sha256": "0644c9a6a6687678950fc8966e352b4bbd3de9d3cb787db9e507c2eb7ccaddcd",
+            "size_bytes": 293,
+            "host_mode_after_materialization": "0400"
+          }
+        },
+        "case_template": {
+          "const": {
+            "workspace_relative_path": "config/cases/u3_c1_static_v2.xml",
+            "sha256": "d738d303300b3f339ac37ca3a604fbe8dff9e034d8c8ad7aacb2654434525819",
+            "size_bytes": 5714,
+            "host_filename": "C1_static_Def.xml",
+            "host_mode_after_materialization": "0400",
+            "classification": "SIM_ONLY_UNVALIDATED_STATIC_REVIEW_V2"
+          }
+        }
+      }
+    },
+    "trusted_tools": {
+      "const": {
+        "git": {
+          "path": "/usr/bin/git",
+          "sha256": "2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668"
+        }
+      }
+    },
+    "materialization_contract": {
+      "const": {
+        "new_parent_if_absent": "/home/zrj/scout_liquid_lab/dependency/runtime",
+        "runtime_parent_mode": "0750",
+        "seed_root_mode_after_success": "0500",
+        "input_root_mode_after_success": "0500",
+        "allowed_regular_files": ["GenCase_linux64", "DsphConfig.xml", "C1_static_Def.xml"],
+        "all_files_regular_single_link_no_symlink": true,
+        "all_files_read_only_nonexecutable": true,
+        "no_existing_attempt_reuse": true,
+        "no_delete_or_overwrite": true,
+        "predecessor_seed_as_source": "forbidden",
+        "upstream_blob_source": "audited_bare_repository_only",
+        "case_source": "pinned_workspace_v2_template_only",
+        "git_operation": ["/usr/bin/git", "--no-replace-objects", "--git-dir", "<frozen_bare_repo>", "cat-file", "blob", "<frozen_blob_sha1>"],
+        "network": "not_used",
+        "upstream_code_execution": "forbidden"
+      }
+    },
+    "invariants": {
+      "const": {
+        "no_sudo": true,
+        "no_apt": true,
+        "no_driver_or_kernel_change": true,
+        "no_sysctl_or_apparmor_change": true,
+        "no_network": true,
+        "no_gpu": true,
+        "no_ros_or_gazebo": true,
+        "no_precompiled_elf_execution": true,
+        "no_compiled_artifact_execution": true,
+        "no_source_write": true,
+        "no_workspace_mount": true,
+        "no_predecessor_seed_input_reuse": true,
+        "predecessor_evidence_must_remain_present": true,
+        "no_delete_or_overwrite": true
+      }
+    },
+    "status": {"const": "REVIEWED_NONEXECUTABLE_SEED_MATERIALIZATION_V2_PENDING_STATIC_VERIFICATION"},
+    "next_allowed_stage": {"const": "MATERIALIZE_FIXED_READ_ONLY_SEED_V2_THEN_CREATE_SEPARATE_GENCASE_RUNTIME_V2_ADMISSION"}
+  }
+}

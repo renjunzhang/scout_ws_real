@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smpcc.local/schema/target-host-u3-cpu-build-execution-policy-v12.json",
+  "title": "R8 liquid target U3 CPU build execution policy v12",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "policy_id", "host_id", "development_only", "formal", "physical_primary_eligible", "user_delegated_review_and_execution_approval", "execution_scope", "revision_reason", "allowed_gate_commands", "frozen_attempt", "outer_privilege_handoff", "source_input", "isolation", "resources", "source_copy_command", "build_command", "generated_wrapper", "static_artifact_audit", "profile_lifecycle", "invariants", "status", "next_allowed_stage"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-target-u3-cpu-build-execution-policy-v12"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_TARGET_U3_CPU_BUILD_EXECUTION_POLICY"},
+    "policy_id": {"const": "LIQUID_ZRJ_MSI_U2404_U3_CPU_BUILD_EXECUTION_V12"},
+    "host_id": {"const": "LIQUID_ZRJ_MSI_U2404"},
+    "development_only": {"const": true}, "formal": {"const": false}, "physical_primary_eligible": {"const": false}, "user_delegated_review_and_execution_approval": {"const": true}, "execution_scope": {"const": "one_exact_source_copy_and_one_exact_cpu_build_attempt"}, "revision_reason": {"type": "string"}, "allowed_gate_commands": {"type": "array", "const": ["self-check", "preflight", "run-source-copy", "run-build"]}, "frozen_attempt": {"type": "object"}, "outer_privilege_handoff": {"type": "object"}, "source_input": {"type": "object"}, "isolation": {"type": "object"}, "resources": {"type": "object"}, "source_copy_command": {"type": "array"}, "build_command": {"type": "array"}, "generated_wrapper": {"type": "object"}, "static_artifact_audit": {"type": "object"}, "profile_lifecycle": {"type": "object"}, "invariants": {"type": "object"}, "status": {"const": "REVIEWED_SINGLE_ATTEMPT_CPU_BUILD_V12_PENDING_STATIC_VERIFICATION"}, "next_allowed_stage": {"const": "RUN_ONE_SOURCE_COPY_THEN_ONE_CPU_BUILD_AND_STATIC_ELF_AUDIT"}
+  }
+}

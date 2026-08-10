@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MSI Ubuntu 24.04 offline ELF metadata policy",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "offline_elf_metadata_read_authorized",
+    "upstream_code_execution_authorized",
+    "allowed_gate_commands",
+    "required_target_profile",
+    "required_static_inventory_receipt",
+    "source",
+    "trusted_system_tools",
+    "git_commands",
+    "elf_objects",
+    "elf_expectations",
+    "resources",
+    "receipt",
+    "invariants"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-elf-metadata-policy-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_ELF_METADATA_POLICY"
+    },
+    "development_only": {
+      "const": true
+    },
+    "formal": {
+      "const": false
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "offline_elf_metadata_read_authorized": {
+      "const": true
+    },
+    "upstream_code_execution_authorized": {
+      "const": false
+    }
+  },
+  "additionalProperties": true
+}

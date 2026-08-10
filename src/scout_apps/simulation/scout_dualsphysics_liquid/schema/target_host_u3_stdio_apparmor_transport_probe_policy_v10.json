@@ -1,0 +1,822 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target-host-u3-stdio-apparmor-transport-probe-policy-v10.json",
+  "title": "R8 liquid U3 one-shot harmless stdio/AppArmor exact proc-mount success policy v10",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "status",
+    "next_allowed_stage",
+    "authorization",
+    "frozen_identity",
+    "provenance",
+    "reviewed_bytes",
+    "snapshot_bootstrap",
+    "trusted_system_tools",
+    "trusted_artifacts",
+    "fixed_commands",
+    "stdio_transport",
+    "identity_contract",
+    "isolation",
+    "mount_discovery",
+    "profile_semantics",
+    "admission_capability",
+    "process_lifecycle",
+    "receipt_contract",
+    "recovery_contract",
+    "evidence_classification",
+    "invariants"
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 2097152}
+      }
+    },
+    "reviewedBytes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size_bytes", "sha256"],
+      "properties": {
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "size_bytes", "sha256"],
+      "properties": {
+        "name": {"enum": ["probe_alpha.bin", "probe_beta.bin", "probe_gamma.bin"]},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sysctl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "sha256"],
+      "properties": {
+        "value": {"type": "string", "minLength": 2, "maxLength": 32},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  },
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-u3-stdio-apparmor-transport-probe-policy-v10"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_U3_STDIO_APPARMOR_TRANSPORT_PROBE_POLICY"
+    },
+    "policy_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404_U3_STDIO_APPARMOR_TRANSPORT_PROBE_V10"
+    },
+    "host_id": {"const": "LIQUID_ZRJ_MSI_U2404"},
+    "status": {
+      "const": "STATIC_READY_V10_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_SINGLE_ATTEMPT"
+    },
+    "next_allowed_stage": {
+      "const": "INDEPENDENT_STATIC_REVIEW_ONLY_THEN_EXPLICIT_ROOT_SNAPSHOT_SINGLE_ATTEMPT"
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "static_review_authorized",
+        "static_task_execution_performed",
+        "execution_authorized_now",
+        "attempts_per_identity",
+        "admission_token",
+        "public_token_is_authority",
+        "root_owned_fd_capability_required",
+        "explicit_root_command_required",
+        "recovery_only_available",
+        "gencase_or_solver_authorized",
+        "production_authorized"
+      ],
+      "properties": {
+        "static_review_authorized": {"const": true},
+        "static_task_execution_performed": {"const": false},
+        "execution_authorized_now": {"const": false},
+        "attempts_per_identity": {"const": 1},
+        "admission_token": {"type": "string", "minLength": 32},
+        "public_token_is_authority": {"const": false},
+        "root_owned_fd_capability_required": {"const": true},
+        "explicit_root_command_required": {"const": true},
+        "recovery_only_available": {"const": true},
+        "gencase_or_solver_authorized": {"const": false},
+        "production_authorized": {"const": false}
+      }
+    },
+    "frozen_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "probe_id",
+        "snapshot_root",
+        "bootstrap_profile",
+        "runtime_profile",
+        "start_receipt",
+        "preflight_failure_receipt",
+        "execution_receipt",
+        "lifecycle_receipt",
+        "lifecycle_failure_receipt",
+        "recovery_receipt"
+      ],
+      "properties": {
+        "probe_id": {"const": "u3_stdio_apparmor_transport_probe_v10_20260808T045130Z"},
+        "snapshot_root": {"const": "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v10_20260808T045130Z.snapshot"},
+        "bootstrap_profile": {"const": "r8-liquid-u3-stdio-transport-bootstrap-v10-20260808t045130z"},
+        "runtime_profile": {"const": "r8-liquid-u3-stdio-transport-runtime-v10-20260808t045130z"},
+        "start_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v10_20260808T045130Z.start.json"},
+        "preflight_failure_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v10_20260808T045130Z.preflight_incomplete.json"},
+        "execution_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v10_20260808T045130Z.execution.json"},
+        "lifecycle_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v10_20260808T045130Z.lifecycle.json"},
+        "lifecycle_failure_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v10_20260808T045130Z.lifecycle_incomplete.json"},
+        "recovery_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v10_20260808T045130Z.recovery.json"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mount_baselines", "scope", "predecessor_no_go", "predecessor_v8", "predecessor_v9"],
+      "properties": {
+        "mount_baselines": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["role", "profile_sha256", "receipt_sha256", "receipt_path"],
+            "properties": {
+              "role": {"type": "string"},
+              "profile_sha256": {"$ref": "#/$defs/sha256"},
+              "receipt_sha256": {"$ref": "#/$defs/sha256"},
+              "receipt_path": {"type": "string", "pattern": "^/home/zrj/scout_liquid_lab/audits/"}
+            }
+          }
+        },
+        "scope": {"type": "string", "minLength": 32},
+        "predecessor_no_go": {
+          "const": {
+            "probe_id": "u3_stdio_apparmor_transport_probe_v7_20260807T175042Z",
+            "snapshot_root": "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v7_20260807T175042Z.snapshot",
+            "status": "PRE_START_SUDO_CLEANUP_BOUNDING_SET_NO_GO",
+            "no_retry_same_identity": true,
+            "snapshot": {
+              "created": true,
+              "preserve": true,
+              "directory_owner": [0, 0],
+              "directory_mode": "0555",
+              "file_owner": [0, 0],
+              "file_mode": "0444",
+              "workspace_bytes_match_snapshot": true
+            },
+            "frozen_workspace_artifacts": {
+              "gate": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_stdio_apparmor_transport_probe_gate_v7.py", "sha256": "57265e792840d77ae02a79f0fc1de21e81acbb8df1cbb787af491ab3b3e40aa4", "size_bytes": 66509},
+              "supervisor": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_stdio_apparmor_transport_probe_supervisor_v7.py", "sha256": "c44714dc0669d93fcc1dc026add632e686adcb75eba5372326ef10265393c0f4", "size_bytes": 98694},
+              "profile": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-stdio-transport-probe-v7.profile", "sha256": "14912c90f752d027ab5fa4fe09c6c0f7d21fcb1887d4fe545fe2539705b03169", "size_bytes": 3630},
+              "schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_stdio_apparmor_transport_probe_policy_v7.json", "sha256": "55dbc8c0b452014e8020e3f9ad1c06c5075195074ecf6d905ec63c76f7d449e5", "size_bytes": 30076},
+              "policy": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_stdio_apparmor_transport_probe_policy_v7.json", "sha256": "621585ec3b52a4f71d5e3951893fca1a07f68fc7a3655e65f5480fbe3ee50aef", "size_bytes": 23567},
+              "tests": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_target_u3_stdio_apparmor_transport_probe_gate_v7.py", "sha256": "a7af75096d5da37faf05e547e6b971cec3ca9267e77865ea7a24c3079466c23c", "size_bytes": 84688}
+            },
+            "preflight_receipt": {
+              "path": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v7_20260807T175042Z.preflight_incomplete.json",
+              "sha256": "24a9605a1619005a677372929e8fa4acc2c4a5e65bbb8e3e7095fd7f5950ffa7",
+              "size_bytes": 921,
+              "owner": [1000, 1000],
+              "mode": "0440",
+              "status": "PRE_START_FAILURE_SUDO_TIMESTAMP_CLEANUP_INCOMPLETE_NO_PROFILE_LOAD_OR_PROBE_IDENTITY_CONSUMED"
+            },
+            "other_receipts_absent": ["start", "execution", "lifecycle", "lifecycle_incomplete", "recovery"],
+            "execution_boundary": {
+              "start_receipt_created": false,
+              "parser_invoked": false,
+              "profile_load_attempted": false,
+              "profile_loaded": false,
+              "gate_executed": false,
+              "bwrap_executed": false,
+              "probe_payload_executed": false
+            },
+            "v7_cleanup": {
+              "attempted": true,
+              "proven": false,
+              "error": "SupervisorError: UID1000 sudo -K all-timestamp invalidation failed",
+              "observation_empty": true,
+              "frozen_argv_contract_contains": "--bounding-set=-all"
+            },
+            "independent_bounding_diagnostic": {
+              "single_diagnostic_not_v7_retry": true,
+              "persisted_receipt_created": false,
+              "operator_transcribed_live_pty_only": true,
+              "pty_combined_only": true,
+              "stdout_stderr_separation_claimed": false,
+              "prompt": {"utf8": "[sudo] password for zrj: ", "size_bytes": 25, "sha256": "60dee00584e33319a2c384208f72722145582a290af11358b630415578671361"},
+              "a_with_drop_all_bounding": {
+                "argv": ["/usr/bin/sudo", "/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--groups=27", "--bounding-set=-all", "--inh-caps=-all", "--ambient-caps=-all", "--", "/usr/bin/sudo", "-K"],
+                "returncode": 1,
+                "post_auth_pty_combined_utf8": "\r\nsudo: unable to change to root gid: Operation not permitted\r\nsudo: error initializing audit plugin sudoers_audit\r\n",
+                "post_auth_pty_combined_size_bytes": 116,
+                "post_auth_pty_combined_sha256": "eef20b8b5686fea157cd1874de2df2edd0d845a93ca7b76cf408f5ca33eb6ce1",
+                "exact_error_lines": ["sudo: unable to change to root gid: Operation not permitted", "sudo: error initializing audit plugin sudoers_audit"],
+                "full_pty_combined_size_bytes": 141,
+                "full_pty_combined_sha256": "1baf7191649ac711ddd1690ddadfed8d7e636b3bbca0c78362a57fc312d60d38"
+              },
+              "b_preserve_host_bounding": {
+                "argv": ["/usr/bin/sudo", "/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--groups=27", "--inh-caps=-all", "--ambient-caps=-all", "--", "/usr/bin/sudo", "-K"],
+                "only_difference_from_a": "removed_exact_--bounding-set=-all_token",
+                "returncode": 0,
+                "post_auth_pty_combined_hex": "0d0a",
+                "post_auth_pty_combined_size_bytes": 2,
+                "post_auth_pty_combined_sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+                "full_pty_combined_size_bytes": 27,
+                "full_pty_combined_sha256": "1d7494fa8e46a73ac403d90f2dc6bfa96c8855542b257972356fd40907961fca"
+              },
+              "post_b_noninteractive_true": {"argv": ["/usr/bin/sudo", "-n", "/usr/bin/true"], "returncode": 1, "pty_combined_utf8": "sudo: a password is required\r\n", "size_bytes": 30, "sha256": "a42b259ca32f8716aa70b7516558b63f261186cbbb0ddd85aa007794b4159dad"},
+              "final_plain_user_cleanup": {
+                "clear": {"argv": ["/usr/bin/sudo", "-K"], "returncode": 0, "pty_combined_size_bytes": 0, "pty_combined_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+                "independent_noninteractive_true": {"argv": ["/usr/bin/sudo", "-n", "/usr/bin/true"], "returncode": 1, "pty_combined_utf8": "sudo: a password is required\r\n", "size_bytes": 30, "sha256": "a42b259ca32f8716aa70b7516558b63f261186cbbb0ddd85aa007794b4159dad"},
+                "closed": true,
+                "closed_scope": "independent_diagnostic_observation_only",
+                "v7_lifecycle_cleanup_proven": false
+              }
+            },
+            "production_authorized": false,
+            "identity_consumed": true,
+            "preserve_snapshot": true,
+            "workspace_files_preserved": true
+          }
+        },
+        "predecessor_v8": {"const": {
+          "probe_id": "u3_stdio_apparmor_transport_probe_v8_20260807T183304Z",
+          "snapshot_root": "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v8_20260807T183304Z.snapshot",
+          "status": "PASS_MKDIR_DENIAL_DISCOVERY_AND_COMPLETE_LIFECYCLE_NO_PRODUCTION_AUTHORITY",
+          "identity_consumed": true,
+          "no_retry_same_identity": true,
+          "production_authorized": false,
+          "workspace_artifacts": {
+            "gate": {"sha256": "0f6366a5626f6c1de0c4678dc2f5f11944cbfb9a38d343262925af00c0374ca1", "size_bytes": 70337},
+            "supervisor": {"sha256": "f6fc7c4d4b2eb82cc0b3a33b498eaf91ed4f74c195c7f2123522a1b7b1d666c8", "size_bytes": 103209},
+            "profile": {"sha256": "a5e35f06655a760e3e8d3ae5e026c9983f9a74387176e9ca3d2b92e57e770450", "size_bytes": 3630},
+            "schema": {"sha256": "34c9069e5a7198d208b1e4cad61d5c20d7f69a4c16f67d12330e3683949edaea", "size_bytes": 32699},
+            "policy": {"sha256": "be99635844e66cac722dd4db23a460ac95168cfa825b92de2ce9e13b00191f1a", "size_bytes": 25912},
+            "tests": {"sha256": "dd169a15d6436b4a12f0a4960b7e218fa5990891a9ef0a1a8370a485c6904b51", "size_bytes": 98839}
+          },
+          "snapshot": {
+            "directory": {"owner": [0, 0], "mode": "0555", "nlink": 2},
+            "file_owner": [0, 0], "file_mode": "0444", "file_nlink": 1,
+            "artifacts": {
+              "gate": {"sha256": "0f6366a5626f6c1de0c4678dc2f5f11944cbfb9a38d343262925af00c0374ca1", "size_bytes": 70337},
+              "supervisor": {"sha256": "f6fc7c4d4b2eb82cc0b3a33b498eaf91ed4f74c195c7f2123522a1b7b1d666c8", "size_bytes": 103209},
+              "profile": {"sha256": "a5e35f06655a760e3e8d3ae5e026c9983f9a74387176e9ca3d2b92e57e770450", "size_bytes": 3630},
+              "schema": {"sha256": "34c9069e5a7198d208b1e4cad61d5c20d7f69a4c16f67d12330e3683949edaea", "size_bytes": 32699},
+              "policy": {"sha256": "be99635844e66cac722dd4db23a460ac95168cfa825b92de2ce9e13b00191f1a", "size_bytes": 25912}
+            }
+          },
+          "receipts": {
+            "start": {"sha256": "fc947306b5581d0017b73bc070837339349d2a6639beb1b910858ae6bfdce1c2", "size_bytes": 6270, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "status": "ONE_SHOT_STARTED_CLEANUP_REQUIRED"},
+            "execution": {"sha256": "9937cd5312fb1a61e47974fe578884be5c55fe6edca2685fef8d92ab5cb9a1de", "size_bytes": 9576, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "status": "PASS_FAIL_CLOSED_APPARMOR_DENIAL_DISCOVERY_CLEANUP_PENDING"},
+            "lifecycle": {"sha256": "4448309a90f4ee8beb3c05cb7369b555a3f97863e4a8a70e30978e3ceda891cc", "size_bytes": 5825, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "status": "PASS_V8_PROFILE_PROCESS_SYSCTL_SUDO_LIFECYCLE_CLEANUP"}
+          },
+          "discovery": {"matching_total": 1, "expected_mkdir_total": 1, "unexpected_total": 0, "storage_overflow": false, "profile": "r8-liquid-u3-stdio-transport-bootstrap-v8-20260807t183304z", "operation": "mkdir", "name": "/newroot/proc/"},
+          "cleanup": {"pre_unload_zero_scans": 3, "post_unload_zero_scans": 3, "profiles_absent": true, "sysctls_unchanged": true, "sudo_timestamp_cleanup_proven": true}
+        }},
+        "predecessor_v9": {"const": {
+          "probe_id": "u3_stdio_apparmor_transport_probe_v9_20260808T034143Z",
+          "snapshot_root": "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v9_20260808T034143Z.snapshot",
+          "status": "V9_EXACT_PROC_MOUNT_DENIAL_STDERR_PATH_MISMATCH_COMPLETE_LIFECYCLE_NO_PRODUCTION_AUTHORITY",
+          "identity_consumed": true,
+          "no_retry_same_identity": true,
+          "production_authorized": false,
+          "workspace_artifacts": {
+            "gate": {
+              "sha256": "7b126b8abd555b95fbbc0ca9e56b2590c07f582eeac8b9317ad318ad9d162126",
+              "size_bytes": 80584
+            },
+            "supervisor": {
+              "sha256": "7e0678a0b5444c04d68c291276364a498db765b626bd5fc5737b15a5df3eb7d1",
+              "size_bytes": 130328
+            },
+            "profile": {
+              "sha256": "275a4627a5a7046b63c965b9bc8565b539429eaf087e537acc9bfb4a9939bf27",
+              "size_bytes": 3789
+            },
+            "schema": {
+              "sha256": "ba5bd4181294430a3d31168577d82626ba01420889d11344831705d7ff9792d4",
+              "size_bytes": 39174
+            },
+            "policy": {
+              "sha256": "aeb0c8c4b5ae32c4051a4e06e25cb5b826adbc11eaa642ce5ce37b1002afaac9",
+              "size_bytes": 31304
+            },
+            "tests": {
+              "sha256": "222464f124d79d990db2e5cf2395dee4750bd9f0271bed1e5a750cb12ca689c5",
+              "size_bytes": 107282
+            }
+          },
+          "snapshot": {
+            "directory": {
+              "owner": [
+                0,
+                0
+              ],
+              "mode": "0555",
+              "nlink": 2
+            },
+            "file_owner": [
+              0,
+              0
+            ],
+            "file_mode": "0444",
+            "file_nlink": 1,
+            "artifacts": {
+              "gate": {
+                "sha256": "7b126b8abd555b95fbbc0ca9e56b2590c07f582eeac8b9317ad318ad9d162126",
+                "size_bytes": 80584
+              },
+              "supervisor": {
+                "sha256": "7e0678a0b5444c04d68c291276364a498db765b626bd5fc5737b15a5df3eb7d1",
+                "size_bytes": 130328
+              },
+              "profile": {
+                "sha256": "275a4627a5a7046b63c965b9bc8565b539429eaf087e537acc9bfb4a9939bf27",
+                "size_bytes": 3789
+              },
+              "schema": {
+                "sha256": "ba5bd4181294430a3d31168577d82626ba01420889d11344831705d7ff9792d4",
+                "size_bytes": 39174
+              },
+              "policy": {
+                "sha256": "aeb0c8c4b5ae32c4051a4e06e25cb5b826adbc11eaa642ce5ce37b1002afaac9",
+                "size_bytes": 31304
+              }
+            }
+          },
+          "receipts": {
+            "start": {
+              "sha256": "8fdcfc89e8aa7274a5f1492a8fb95e22ea22738fe498e96d4e53479f6bb6b948",
+              "size_bytes": 6826,
+              "owner": [
+                1000,
+                1000
+              ],
+              "mode": "0440",
+              "nlink": 1,
+              "status": "ONE_SHOT_STARTED_CLEANUP_REQUIRED"
+            },
+            "execution": {
+              "sha256": "67b7ee184ff11a922931c8c3046562f5705d84316243d74168c853e9da913a75",
+              "size_bytes": 18172,
+              "owner": [
+                1000,
+                1000
+              ],
+              "mode": "0440",
+              "nlink": 1,
+              "status": "UNCLASSIFIED_PROBE_FAILURE_CLEANUP_PENDING"
+            },
+            "lifecycle": {
+              "sha256": "5c6a85fe6e53c03791869e414eb217a23af133d73651eff87773422a3d18e854",
+              "size_bytes": 5827,
+              "owner": [
+                1000,
+                1000
+              ],
+              "mode": "0440",
+              "nlink": 1,
+              "status": "PASS_V9_PROFILE_PROCESS_SYSCTL_SUDO_LIFECYCLE_CLEANUP"
+            }
+          },
+          "other_receipts_absent": [
+            "preflight_incomplete",
+            "lifecycle_incomplete",
+            "recovery"
+          ],
+          "discovery": {
+            "capture_valid": true,
+            "matching_total": 1,
+            "expected_mount_total": 1,
+            "mkdir_total": 0,
+            "unexpected_total": 0,
+            "storage_overflow": false,
+            "profile": "r8-liquid-u3-stdio-transport-bootstrap-v9-20260808t034143z",
+            "operation": "mount",
+            "class": "mount",
+            "info": "failed mntpnt match",
+            "error": "-13",
+            "name": "/newroot/proc/",
+            "comm": "bwrap",
+            "fstype": "proc",
+            "srcname": "proc",
+            "flags": [
+              "rw",
+              "nosuid",
+              "nodev",
+              "noexec"
+            ],
+            "audit_line_sha256": "8f323812be682cda9d9cba86f046591e6147fac2bd4359189e5752be815c322f",
+            "gate_returncode": 1,
+            "gate_stdout_size_bytes": 0,
+            "gate_stderr_utf8": "bwrap: Can't mount proc on /newroot/proc: Permission denied\n",
+            "gate_stderr_sha256": "7ac86c8b8a73b272d765c8a17ce43c608c2230b9d7031aed53f6c5c6bbfb7700",
+            "classification_blocker": "frozen_v9_stderr_expected_/proc_but_observed_/newroot/proc"
+          },
+          "cleanup": {
+            "pre_unload_zero_scans": 3,
+            "post_unload_zero_scans": 3,
+            "profiles_absent": true,
+            "sysctls_unchanged": true,
+            "sudo_timestamp_cleanup_proven": true
+          }
+        }}
+      }
+    },
+    "reviewed_bytes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["helper", "loader", "inputs", "stdin_frame"],
+      "properties": {
+        "helper": {"$ref": "#/$defs/reviewedBytes"},
+        "loader": {"$ref": "#/$defs/reviewedBytes"},
+        "inputs": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {"$ref": "#/$defs/input"}
+        },
+        "stdin_frame": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["size_bytes", "sha256", "maximum_size_bytes"],
+          "properties": {
+            "size_bytes": {"type": "integer", "minimum": 1, "maximum": 65536},
+            "sha256": {"$ref": "#/$defs/sha256"},
+            "maximum_size_bytes": {"const": 65536}
+          }
+        }
+      }
+    },
+    "snapshot_bootstrap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_size_bytes",
+        "source_sha256",
+        "loader_size_bytes",
+        "loader_sha256",
+        "snapshot_owner",
+        "snapshot_mode",
+        "file_owner",
+        "file_mode",
+        "strict_eof",
+        "component_no_follow",
+        "final_metadata_fsync",
+        "reviewed_minimal_bootstrap_executed_as_root",
+        "workspace_runtime_artifacts_executed_or_imported_as_root",
+        "runtime_supervisor_entrypoint",
+        "direct_snapshot_supervisor_exec_forbidden",
+        "workspace_snapshot_producer_root_forbidden",
+        "workspace_snapshot_producer_exact_path",
+        "workspace_snapshot_producer_uid",
+        "workspace_snapshot_producer_gid",
+        "workspace_snapshot_producer_active_capability_sets",
+        "workspace_snapshot_producer_stdout_on_identity_failure"
+      ],
+      "properties": {
+        "source_size_bytes": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "source_sha256": {"$ref": "#/$defs/sha256"},
+        "loader_size_bytes": {"type": "integer", "minimum": 1, "maximum": 2048},
+        "loader_sha256": {"$ref": "#/$defs/sha256"},
+        "snapshot_owner": {"const": [0, 0]},
+        "snapshot_mode": {"const": "0555"},
+        "file_owner": {"const": [0, 0]},
+        "file_mode": {"const": "0444"},
+        "strict_eof": {"const": true},
+        "component_no_follow": {"const": true},
+        "final_metadata_fsync": {"const": true},
+        "reviewed_minimal_bootstrap_executed_as_root": {"const": true},
+        "workspace_runtime_artifacts_executed_or_imported_as_root": {"const": false},
+        "runtime_supervisor_entrypoint": {"const": "/usr/bin/python3.12 -I -B reads root-owned 0444 snapshot supervisor"},
+        "direct_snapshot_supervisor_exec_forbidden": {"const": true},
+        "workspace_snapshot_producer_root_forbidden": {"const": true},
+        "workspace_snapshot_producer_exact_path": {"const": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_stdio_apparmor_transport_probe_supervisor_v10.py"},
+        "workspace_snapshot_producer_uid": {"const": [1000, 1000, 1000, 1000]},
+        "workspace_snapshot_producer_gid": {"const": [1000, 1000, 1000, 1000]},
+        "workspace_snapshot_producer_active_capability_sets": {"const": {"CapInh": 0, "CapPrm": 0, "CapEff": 0, "CapAmb": 0}},
+        "workspace_snapshot_producer_stdout_on_identity_failure": {"const": "empty"}
+      }
+    },
+    "trusted_system_tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unprivileged_runner", "root_supervisor"],
+      "properties": {
+        "unprivileged_runner": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["aa_exec", "bwrap", "python", "sleep", "timeout"],
+          "properties": {
+            "aa_exec": {"$ref": "#/$defs/tool"},
+            "bwrap": {"$ref": "#/$defs/tool"},
+            "python": {"$ref": "#/$defs/tool"},
+            "sleep": {"$ref": "#/$defs/tool"},
+            "timeout": {"$ref": "#/$defs/tool"}
+          }
+        },
+        "root_supervisor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["aa_exec", "aa_status", "apparmor_parser", "bwrap", "journalctl", "python", "setpriv", "sleep", "sudo", "timeout", "true"],
+          "properties": {
+            "aa_exec": {"$ref": "#/$defs/tool"},
+            "aa_status": {"$ref": "#/$defs/tool"},
+            "apparmor_parser": {"$ref": "#/$defs/tool"},
+            "bwrap": {"$ref": "#/$defs/tool"},
+            "journalctl": {"$ref": "#/$defs/tool"},
+            "python": {"$ref": "#/$defs/tool"},
+            "setpriv": {"$ref": "#/$defs/tool"},
+            "sleep": {"$ref": "#/$defs/tool"},
+            "sudo": {"$ref": "#/$defs/tool"},
+            "timeout": {"$ref": "#/$defs/tool"},
+            "true": {"$ref": "#/$defs/tool"}
+          }
+        }
+      }
+    },
+    "trusted_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate", "supervisor", "profile", "schema"],
+      "properties": {
+        "gate": {"$ref": "#/$defs/artifact"},
+        "supervisor": {"$ref": "#/$defs/artifact"},
+        "profile": {"$ref": "#/$defs/artifact"},
+        "schema": {"$ref": "#/$defs/artifact"}
+      }
+    },
+    "fixed_commands": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["aa_status_json_argv", "bwrap_argv_sha256", "gate_handoff_argv", "parser_parse_argv", "parser_load_argv", "parser_unload_argv", "journal_boot_id_path", "journal_anchor_argv_template", "journal_sync_argv", "journal_query_argv_template", "journal_anchor_stdout_ceiling_bytes", "journal_query_stdout_ceiling_bytes", "journal_stderr_ceiling_bytes", "audit_line_ceiling_bytes", "audit_storage_ceiling", "snapshot_producer_argv", "snapshot_root_loader_argv_template", "run_argv_template", "recover_argv_template", "sudo_timestamp_clear_argv", "sudo_timestamp_verify_argv", "operator_transport", "shell", "workspace_run_forbidden"],
+      "properties": {
+        "aa_status_json_argv": {"const": ["/usr/sbin/aa-status", "--json"]},
+        "bwrap_argv_sha256": {"$ref": "#/$defs/sha256"},
+        "gate_handoff_argv": {"type": "array", "minItems": 10, "items": {"type": "string"}},
+        "parser_parse_argv": {"type": "array", "minItems": 5, "items": {"type": "string"}},
+        "parser_load_argv": {"type": "array", "minItems": 5, "items": {"type": "string"}},
+        "parser_unload_argv": {"type": "array", "minItems": 4, "items": {"type": "string"}},
+        "journal_boot_id_path": {"const": "/proc/sys/kernel/random/boot_id"},
+        "journal_anchor_argv_template": {"const": ["/usr/bin/journalctl", "-k", "--no-pager", "--quiet", "--boot=<BOOT_ID_32HEX>", "--lines=0", "--show-cursor"]},
+        "journal_sync_argv": {"const": ["/usr/bin/journalctl", "--sync"]},
+        "journal_query_argv_template": {"const": ["/usr/bin/journalctl", "-k", "--no-pager", "--quiet", "--output=short-iso-precise", "--boot=<BOOT_ID_32HEX>", "--after-cursor=<PRE_RUN_CURSOR>", "--show-cursor"]},
+        "journal_anchor_stdout_ceiling_bytes": {"const": 4096},
+        "journal_query_stdout_ceiling_bytes": {"const": 131072},
+        "journal_stderr_ceiling_bytes": {"const": 16384},
+        "audit_line_ceiling_bytes": {"const": 4096},
+        "audit_storage_ceiling": {"const": 16},
+        "snapshot_producer_argv": {"type": "array", "minItems": 5, "items": {"type": "string"}},
+        "snapshot_root_loader_argv_template": {"type": "array", "minItems": 7, "items": {"type": "string"}},
+        "run_argv_template": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"type": "string"}},
+        "recover_argv_template": {"type": "array", "minItems": 10, "maxItems": 10, "items": {"type": "string"}},
+        "sudo_timestamp_clear_argv": {"const": ["/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--groups=27", "--inh-caps=-all", "--ambient-caps=-all", "--", "/usr/bin/sudo", "-K"]},
+        "sudo_timestamp_verify_argv": {"const": ["/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--groups=27", "--inh-caps=-all", "--ambient-caps=-all", "--", "/usr/bin/sudo", "-n", "/usr/bin/true"]},
+        "operator_transport": {"type": "string", "minLength": 32},
+        "shell": {"const": false},
+        "workspace_run_forbidden": {"const": true}
+      }
+    },
+    "stdio_transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stdin_magic_hex", "success_magic_hex", "strict_eof", "fd0_anonymous_eof_pipe", "host_writable_transport", "claims"],
+      "properties": {
+        "stdin_magic_hex": {"const": "52384c51535444494f50524f4245313000"},
+        "success_magic_hex": {"const": "52384c51535444494f5041535356313000"},
+        "strict_eof": {"const": true},
+        "fd0_anonymous_eof_pipe": {"const": true},
+        "host_writable_transport": {"const": false},
+        "claims": {"type": "array", "minItems": 4, "items": {"type": "string"}}
+      }
+    },
+    "identity_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host_uid", "host_gid", "host_groups", "host_capability_sets", "host_no_new_privs", "guest_uid", "guest_gid", "guest_groups", "guest_capability_sets", "guest_no_new_privs"],
+      "properties": {
+        "host_uid": {"const": [1000, 1000, 1000, 1000]},
+        "host_gid": {"const": [1000, 1000, 1000, 1000]},
+        "host_groups": {"const": []},
+        "host_capability_sets": {"const": {"CapInh": 0, "CapPrm": 0, "CapEff": 0, "CapBnd": 0, "CapAmb": 0}},
+        "host_no_new_privs": {"const": 1},
+        "guest_uid": {"const": [0, 0, 0, 0]},
+        "guest_gid": {"const": [0, 0, 0, 0]},
+        "guest_groups": {"const": []},
+        "guest_capability_sets": {"const": {"CapInh": 0, "CapPrm": 0, "CapEff": 0, "CapBnd": 0, "CapAmb": 0}},
+        "guest_no_new_privs": {"const": 1}
+      }
+    },
+    "isolation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host_read_only_mounts", "host_writable_mounts", "guest_work_tmpfs_bytes", "guest_proc", "guest_dev", "network", "source_seed_workspace", "gencase_solver_ros_gpu"],
+      "properties": {
+        "host_read_only_mounts": {"const": ["/usr"]},
+        "host_writable_mounts": {"const": []},
+        "guest_work_tmpfs_bytes": {"const": 67108864},
+        "guest_proc": {"const": "/proc"},
+        "guest_dev": {"const": "absent"},
+        "network": {"const": "new_empty_network_namespace"},
+        "source_seed_workspace": {"const": "absent"},
+        "gencase_solver_ros_gpu": {"const": "not_executed_not_exposed"}
+      }
+    },
+    "mount_discovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effective_mount_rules", "effective_profile_lines_sha256", "directory_permission_delta", "proc_rules", "predecessor_v9_denial_evidence", "zero_fresh_denials_required", "rules_may_be_guessed", "success_frame_required", "discovery_authority"],
+      "properties": {
+        "effective_mount_rules": {"type": "array", "minItems": 12, "maxItems": 12, "items": {"type": "string"}},
+        "effective_profile_lines_sha256": {"const": "f8234289abd4585ef3be65a23845024b6ae38085e96042fba76623f4ef650d63"},
+        "directory_permission_delta": {"const": ["/newroot/proc/ rw,"]},
+        "proc_rules": {"const": ["mount fstype=proc options=(rw, nosuid, nodev, noexec) proc -> /newroot/proc/,"]},
+        "predecessor_v9_denial_evidence": {"const": {"profile": "bootstrap", "apparmor": "DENIED", "operation": "mount", "class": "mount", "info": "failed mntpnt match", "error": "-13", "name": "/newroot/proc/", "comm": "bwrap", "fstype": "proc", "srcname": "proc", "flags_required": ["rw", "nosuid", "nodev", "noexec"], "flags_optional": []}},
+        "zero_fresh_denials_required": {"const": true},
+        "rules_may_be_guessed": {"const": false},
+        "success_frame_required": {"const": true},
+        "discovery_authority": {"const": "one_exact_proc_mount_rule_from_frozen_v9_evidence_harmless_stdio_success_only_no_production_authority"}
+      }
+    },
+    "profile_semantics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effective_line_count", "effective_lines_sha256", "external_includes", "named_only", "persistent_install", "runtime_transition", "runtime_authority"],
+      "properties": {
+        "effective_line_count": {"const": 72},
+        "effective_lines_sha256": {"const": "f8234289abd4585ef3be65a23845024b6ae38085e96042fba76623f4ef650d63"},
+        "external_includes": {"const": []},
+        "named_only": {"const": true},
+        "persistent_install": {"const": false},
+        "runtime_transition": {"type": "string", "pattern": " rpx -> "},
+        "runtime_authority": {"const": "sleep_read_map_and_receive_signal_only"}
+      }
+    },
+    "admission_capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transport", "creator", "pipe_owner", "pipe_mode", "payload_size_bytes", "strict_eof", "single_consumer", "public_environment_token_is_authority", "fd_closed_before_probe_child"],
+      "properties": {
+        "transport": {"const": "ROOT_OWNED_ANONYMOUS_PIPE_FD"},
+        "creator": {"const": "root_snapshot_supervisor"},
+        "pipe_owner": {"const": [0, 0]},
+        "pipe_mode": {"const": "0600"},
+        "payload_size_bytes": {"const": 32},
+        "strict_eof": {"const": true},
+        "single_consumer": {"const": true},
+        "public_environment_token_is_authority": {"const": false},
+        "fd_closed_before_probe_child": {"const": true}
+      }
+    },
+    "process_lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authoritative_scan", "stable_zero_scans", "pre_and_post_unload_scans", "pid_reuse_protection", "catchable_signals", "uncatchable_signals_require_recover_only", "unload_requires_zero_labels", "expected_sysctls", "sudo_timestamp_test", "journal_boundary", "prequery_label_quiescence", "journal_flush", "profile_state_during_query", "postquery_label_quiescence"],
+      "properties": {
+        "authoritative_scan": {"const": "/proc/<tgid>/task/<tid>/attr/current_all_uids_by_root"},
+        "stable_zero_scans": {"const": 3},
+        "pre_and_post_unload_scans": {"const": true},
+        "pid_reuse_protection": {"const": "birth_pidfd_for_direct_children_and_starttime_checked_tgid_pidfd_for_scanned_tasks"},
+        "catchable_signals": {"const": ["SIGHUP", "SIGINT", "SIGTERM", "SIGQUIT", "SIGTSTP"]},
+        "uncatchable_signals_require_recover_only": {"const": ["SIGKILL", "SIGSTOP", "power_loss", "interpreter_or_kernel_crash"]},
+        "unload_requires_zero_labels": {"const": true},
+        "expected_sysctls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["/proc/sys/user/max_user_namespaces", "/proc/sys/kernel/unprivileged_userns_clone", "/proc/sys/kernel/apparmor_restrict_unprivileged_userns"],
+          "properties": {
+            "/proc/sys/user/max_user_namespaces": {"$ref": "#/$defs/sysctl"},
+            "/proc/sys/kernel/unprivileged_userns_clone": {"$ref": "#/$defs/sysctl"},
+            "/proc/sys/kernel/apparmor_restrict_unprivileged_userns": {"$ref": "#/$defs/sysctl"}
+          }
+        },
+        "sudo_timestamp_test": {"const": "UID1000_same_inherited_foreground_PTY_no_setsid_sudo_-K_removes_all_user_timestamps_then_sudo_-n_true_must_fail_with_password_stderr_empirical_at_execution"},
+        "journal_boundary": {"const": "canonical_boot_id_plus_pre_run_cursor_frozen_in_start_receipt_then_compact_boot_after_cursor_query"},
+        "prequery_label_quiescence": {"const": "root_all_task_exact_empty_without_term_or_kill_then_three_stable_zero_scans"},
+        "journal_flush": {"const": "/usr/bin/journalctl --sync exact_silent_success_before_after_cursor_query"},
+        "profile_state_during_query": {"const": "both_fresh_profiles_exactly_once_enforce_before_and_after_query"},
+        "postquery_label_quiescence": {"const": "root_all_task_three_stable_zero_scans_before_classification"}
+      }
+    },
+    "receipt_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["directory_policy", "file_owner", "file_mode", "creation", "durability", "execution_status_suffix", "separate_lifecycle", "sudo_timestamp_scope", "sudo_group_membership", "sudo_cleanup_identity", "sudo_cleanup_bounding_mode", "same_uid_tamper_resistance_claimed"],
+      "properties": {
+        "directory_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["/", "/home", "/home/zrj", "/home/zrj/scout_liquid_lab", "/home/zrj/scout_liquid_lab/audits"],
+          "properties": {
+            "/": {"const": [0, 0, "0755"]},
+            "/home": {"const": [0, 0, "0755"]},
+            "/home/zrj": {"const": [1000, 1000, "0750"]},
+            "/home/zrj/scout_liquid_lab": {"const": [1000, 1000, "0750"]},
+            "/home/zrj/scout_liquid_lab/audits": {"const": [1000, 1000, "0750"]}
+          }
+        },
+        "file_owner": {"const": [1000, 1000]},
+        "file_mode": {"const": "0440"},
+        "creation": {"const": "O_EXCL_O_NOFOLLOW_ONE_SHOT"},
+        "durability": {"const": "data_fsync_then_owner_mode_then_fsync_then_fstat_then_parent_fsync"},
+        "execution_status_suffix": {"const": "CLEANUP_PENDING"},
+        "separate_lifecycle": {"const": true},
+        "sudo_timestamp_scope": {"const": "ALL_UID1000_SUDO_TIMESTAMPS_INVALIDATED_BY_SUDO_-K_OTHER_TERMINALS_MUST_REAUTHENTICATE"},
+        "sudo_group_membership": {"const": {"path": "/etc/group", "owner": [0, 0], "mode": "0644", "record": "sudo:x:27:zrj", "group_name": "sudo", "gid": 27, "members": ["zrj"]}},
+        "sudo_cleanup_identity": {"const": {"reuid": 1000, "regid": 1000, "supplementary_groups": [27], "groups_mode": "EXACT_NUMERIC_GROUP_LIST_ONLY", "bounding_mode": "preserve_host_only", "bounding_argv_tokens": [], "explicit_bounding_change_forbidden": true, "inheritable_capabilities": "-all", "ambient_capabilities": "-all", "no_new_privs_option_present": false, "shell": false, "start_new_session": false, "forbidden_group_options": ["--clear-groups", "--init-groups", "--keep-groups"]}},
+        "sudo_cleanup_bounding_mode": {"const": "preserve_host_only"},
+        "same_uid_tamper_resistance_claimed": {"const": false}
+      }
+    },
+    "recovery_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "token", "probe_execution", "admission_fd_creation", "label_cleanup_before_unload", "repeat_safe", "writes_existing_receipt", "production_authorized"],
+      "properties": {
+        "command": {"const": "recover-only"},
+        "token": {"type": "string", "minLength": 32},
+        "probe_execution": {"const": false},
+        "admission_fd_creation": {"const": false},
+        "label_cleanup_before_unload": {"const": true},
+        "repeat_safe": {"const": true},
+        "writes_existing_receipt": {"const": false},
+        "production_authorized": {"const": false}
+      }
+    },
+    "evidence_classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["success_requires_closed_frame", "successful_gate_exit_is_pass", "success_pass_requires", "audit_storage_limit", "audit_line_limit_bytes", "expected_counts", "journal_boundary_required", "strict_utf8_required", "duplicate_or_escaped_critical_field_is_pass", "stderr_contract", "audit_overflow_is_pass", "gate_no_go_is_pass", "any_other_failure", "success_authorizes"],
+      "properties": {
+        "success_requires_closed_frame": {"const": true},
+        "successful_gate_exit_is_pass": {"const": false},
+        "success_pass_requires": {"const": "returncode_zero_empty_stderr_byte_exact_success_frame_and_zero_fresh_denials_in_closed_boot_cursor_window"},
+        "audit_storage_limit": {"const": 16},
+        "audit_line_limit_bytes": {"const": 4096},
+        "expected_counts": {"const": {"matching_total": 0, "stored_count": 0, "dropped_count": 0, "expected_mount_total": 0, "mkdir_total": 0, "unexpected_total": 0, "storage_overflow": false}},
+        "journal_boundary_required": {"const": true},
+        "strict_utf8_required": {"const": true},
+        "duplicate_or_escaped_critical_field_is_pass": {"const": false},
+        "stderr_contract": {"const": {"returncode": 0, "stdout": "byte_exact_canonical_success_frame", "stderr_utf8": ""}},
+        "audit_overflow_is_pass": {"const": false},
+        "gate_no_go_is_pass": {"const": false},
+        "any_other_failure": {"const": "UNCLASSIFIED_PROBE_FAILURE_CLEANUP_PENDING"},
+        "success_authorizes": {"const": "only_harmless_stdio_transport_confinement_evidence_and_independent_review_of_a_fresh_production_revision_no_gencase_solver_or_production"}
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["no_sudo_in_static_checks", "no_parser_in_static_checks", "no_namespace_in_static_checks", "no_probe_in_static_checks", "no_host_writable_mount", "no_dev", "no_source_seed_workspace", "no_gencase_solver", "no_ros_gazebo_gpu", "no_external_network_access", "no_host_initial_namespace_sysctl_write", "no_persistent_profile", "no_rule_guess", "no_v2_modification", "no_production_authority"],
+      "properties": {
+        "no_sudo_in_static_checks": {"const": true},
+        "no_parser_in_static_checks": {"const": true},
+        "no_namespace_in_static_checks": {"const": true},
+        "no_probe_in_static_checks": {"const": true},
+        "no_host_writable_mount": {"const": true},
+        "no_dev": {"const": true},
+        "no_source_seed_workspace": {"const": true},
+        "no_gencase_solver": {"const": true},
+        "no_ros_gazebo_gpu": {"const": true},
+        "no_external_network_access": {"const": true},
+        "no_host_initial_namespace_sysctl_write": {"const": true},
+        "no_persistent_profile": {"const": true},
+        "no_rule_guess": {"const": true},
+        "no_v2_modification": {"const": true},
+        "no_production_authority": {"const": true}
+      }
+    }
+  }
+}

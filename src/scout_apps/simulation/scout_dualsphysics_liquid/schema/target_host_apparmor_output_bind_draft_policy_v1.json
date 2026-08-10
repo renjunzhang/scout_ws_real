@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MSI Ubuntu 24.04 AppArmor output-bind review draft policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "draft_review_authorized",
+    "profile_installation_authorized",
+    "profile_loading_authorized",
+    "profile_execution_authorized",
+    "system_configuration_change_authorized",
+    "allowed_gate_commands",
+    "required_evidence",
+    "profile_draft",
+    "confinement_contract",
+    "admin_review_requirements",
+    "cross_host_coordination",
+    "invariants",
+    "status",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-apparmor-output-bind-draft-policy-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_APPARMOR_OUTPUT_BIND_DRAFT_POLICY"
+    },
+    "policy_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404_APPARMOR_OUTPUT_BIND_DRAFT_V1"
+    },
+    "host_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404"
+    },
+    "development_only": {
+      "const": true
+    },
+    "formal": {
+      "const": false
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "draft_review_authorized": {
+      "const": true
+    },
+    "profile_installation_authorized": {
+      "const": false
+    },
+    "profile_loading_authorized": {
+      "const": false
+    },
+    "profile_execution_authorized": {
+      "const": false
+    },
+    "system_configuration_change_authorized": {
+      "const": false
+    },
+    "allowed_gate_commands": {
+      "const": [
+        "self-check"
+      ]
+    },
+    "required_evidence": {
+      "type": "object"
+    },
+    "profile_draft": {
+      "type": "object"
+    },
+    "confinement_contract": {
+      "type": "object"
+    },
+    "admin_review_requirements": {
+      "type": "array"
+    },
+    "cross_host_coordination": {
+      "type": "object"
+    },
+    "invariants": {
+      "type": "object"
+    },
+    "status": {
+      "const": "STATIC_APPARMOR_DRAFT_REVIEWED_NOT_APPROVED_TO_LOAD"
+    },
+    "next_allowed_stage": {
+      "const": "INDEPENDENT_ADMIN_REVIEW_OF_NARROW_MOUNT_PLAN_AND_PROFILE_REVISION"
+    }
+  }
+}

@@ -1,0 +1,825 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-u3-stdio-apparmor-transport-probe-policy-v11",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_U3_STDIO_APPARMOR_TRANSPORT_PROBE_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_U3_STDIO_APPARMOR_TRANSPORT_PROBE_V11",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "status": "STATIC_READY_V11_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_SINGLE_ATTEMPT",
+  "next_allowed_stage": "INDEPENDENT_STATIC_REVIEW_ONLY_THEN_EXPLICIT_ROOT_SNAPSHOT_SINGLE_ATTEMPT",
+  "authorization": {
+    "static_review_authorized": true,
+    "static_task_execution_performed": false,
+    "execution_authorized_now": false,
+    "attempts_per_identity": 1,
+    "admission_token": "u3_stdio_apparmor_transport_probe_v11_20260808T052940Z:single-harmless-attempt",
+    "public_token_is_authority": false,
+    "root_owned_fd_capability_required": true,
+    "explicit_root_command_required": true,
+    "recovery_only_available": true,
+    "gencase_or_solver_authorized": false,
+    "production_authorized": false
+  },
+  "frozen_identity": {
+    "probe_id": "u3_stdio_apparmor_transport_probe_v11_20260808T052940Z",
+    "snapshot_root": "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.snapshot",
+    "bootstrap_profile": "r8-liquid-u3-stdio-transport-bootstrap-v11-20260808t052940z",
+    "runtime_profile": "r8-liquid-u3-stdio-transport-runtime-v11-20260808t052940z",
+    "start_receipt": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.start.json",
+    "preflight_failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.preflight_incomplete.json",
+    "execution_receipt": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.execution.json",
+    "lifecycle_receipt": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.lifecycle.json",
+    "lifecycle_failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.lifecycle_incomplete.json",
+    "recovery_receipt": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.recovery.json"
+  },
+  "provenance": {
+    "mount_baselines": [
+      {
+        "role": "exact_read_only_usr_root_setup_and_mount_rules",
+        "profile_sha256": "2c86b5074bc4f0e0d7c53ca559d183ed07ef8df4f26a6d94d2558af39dee9a52",
+        "receipt_sha256": "a738b035150bc03cd4d0f3448df1bc2d693414d4c3119fd74abff1272cbf7a95",
+        "receipt_path": "/home/zrj/scout_liquid_lab/audits/u2_apparmor_ro_usr_probe_v1_v8_20260806T151136Z.json"
+      },
+      {
+        "role": "exact_work_tmpfs_and_synthetic_lib_link_rules",
+        "profile_sha256": "e2697c3404b410ed93d8e2a0ba0b0a03bdb6cccc19e6ae6896ece224020ff167",
+        "receipt_sha256": "a6996cf4e685419c6762a9325b3968483610f6b52fa11645d5ce9202bb99abfa",
+        "receipt_path": "/home/zrj/scout_liquid_lab/audits/u3_apparmor_output_bind_probe_v1_20260806T152757Z.json"
+      },
+      {
+        "role": "latest_successful_u3_cpu_profile_and_lifecycle_reference_only",
+        "profile_sha256": "55e0d63e17acb6a30e19f13e268929c6bb8781448cd57e253a918347c4d3d8ef",
+        "receipt_sha256": "d407233107d4bc9eeea81b0c5a95cbfc98ad6529f1cb7494b68ae5ecc4b1d604",
+        "receipt_path": "/home/zrj/scout_liquid_lab/audits/u3_source_cpu_build_20260807T023724Z_cpu_build.json"
+      }
+    ],
+    "scope": "Only exact locally evidenced baseline rules are reused; no proc permission or proc mount rule is inferred.",
+    "predecessor_no_go": {
+      "probe_id": "u3_stdio_apparmor_transport_probe_v7_20260807T175042Z",
+      "snapshot_root": "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v7_20260807T175042Z.snapshot",
+      "status": "PRE_START_SUDO_CLEANUP_BOUNDING_SET_NO_GO",
+      "no_retry_same_identity": true,
+      "snapshot": {
+        "created": true,
+        "preserve": true,
+        "directory_owner": [0, 0],
+        "directory_mode": "0555",
+        "file_owner": [0, 0],
+        "file_mode": "0444",
+        "workspace_bytes_match_snapshot": true
+      },
+      "frozen_workspace_artifacts": {
+        "gate": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_stdio_apparmor_transport_probe_gate_v7.py", "sha256": "57265e792840d77ae02a79f0fc1de21e81acbb8df1cbb787af491ab3b3e40aa4", "size_bytes": 66509},
+        "supervisor": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_stdio_apparmor_transport_probe_supervisor_v7.py", "sha256": "c44714dc0669d93fcc1dc026add632e686adcb75eba5372326ef10265393c0f4", "size_bytes": 98694},
+        "profile": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-stdio-transport-probe-v7.profile", "sha256": "14912c90f752d027ab5fa4fe09c6c0f7d21fcb1887d4fe545fe2539705b03169", "size_bytes": 3630},
+        "schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_stdio_apparmor_transport_probe_policy_v7.json", "sha256": "55dbc8c0b452014e8020e3f9ad1c06c5075195074ecf6d905ec63c76f7d449e5", "size_bytes": 30076},
+        "policy": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_stdio_apparmor_transport_probe_policy_v7.json", "sha256": "621585ec3b52a4f71d5e3951893fca1a07f68fc7a3655e65f5480fbe3ee50aef", "size_bytes": 23567},
+        "tests": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_target_u3_stdio_apparmor_transport_probe_gate_v7.py", "sha256": "a7af75096d5da37faf05e547e6b971cec3ca9267e77865ea7a24c3079466c23c", "size_bytes": 84688}
+      },
+      "preflight_receipt": {
+        "path": "/home/zrj/scout_liquid_lab/audits/u3_stdio_apparmor_transport_probe_v7_20260807T175042Z.preflight_incomplete.json",
+        "sha256": "24a9605a1619005a677372929e8fa4acc2c4a5e65bbb8e3e7095fd7f5950ffa7",
+        "size_bytes": 921,
+        "owner": [1000, 1000],
+        "mode": "0440",
+        "status": "PRE_START_FAILURE_SUDO_TIMESTAMP_CLEANUP_INCOMPLETE_NO_PROFILE_LOAD_OR_PROBE_IDENTITY_CONSUMED"
+      },
+      "other_receipts_absent": ["start", "execution", "lifecycle", "lifecycle_incomplete", "recovery"],
+      "execution_boundary": {
+        "start_receipt_created": false,
+        "parser_invoked": false,
+        "profile_load_attempted": false,
+        "profile_loaded": false,
+        "gate_executed": false,
+        "bwrap_executed": false,
+        "probe_payload_executed": false
+      },
+      "v7_cleanup": {
+        "attempted": true,
+        "proven": false,
+        "error": "SupervisorError: UID1000 sudo -K all-timestamp invalidation failed",
+        "observation_empty": true,
+        "frozen_argv_contract_contains": "--bounding-set=-all"
+      },
+      "independent_bounding_diagnostic": {
+        "single_diagnostic_not_v7_retry": true,
+        "persisted_receipt_created": false,
+        "operator_transcribed_live_pty_only": true,
+        "pty_combined_only": true,
+        "stdout_stderr_separation_claimed": false,
+        "prompt": {"utf8": "[sudo] password for zrj: ", "size_bytes": 25, "sha256": "60dee00584e33319a2c384208f72722145582a290af11358b630415578671361"},
+        "a_with_drop_all_bounding": {
+          "argv": ["/usr/bin/sudo", "/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--groups=27", "--bounding-set=-all", "--inh-caps=-all", "--ambient-caps=-all", "--", "/usr/bin/sudo", "-K"],
+          "returncode": 1,
+          "post_auth_pty_combined_utf8": "\r\nsudo: unable to change to root gid: Operation not permitted\r\nsudo: error initializing audit plugin sudoers_audit\r\n",
+          "post_auth_pty_combined_size_bytes": 116,
+          "post_auth_pty_combined_sha256": "eef20b8b5686fea157cd1874de2df2edd0d845a93ca7b76cf408f5ca33eb6ce1",
+          "exact_error_lines": ["sudo: unable to change to root gid: Operation not permitted", "sudo: error initializing audit plugin sudoers_audit"],
+          "full_pty_combined_size_bytes": 141,
+          "full_pty_combined_sha256": "1baf7191649ac711ddd1690ddadfed8d7e636b3bbca0c78362a57fc312d60d38"
+        },
+        "b_preserve_host_bounding": {
+          "argv": ["/usr/bin/sudo", "/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--groups=27", "--inh-caps=-all", "--ambient-caps=-all", "--", "/usr/bin/sudo", "-K"],
+          "only_difference_from_a": "removed_exact_--bounding-set=-all_token",
+          "returncode": 0,
+          "post_auth_pty_combined_hex": "0d0a",
+          "post_auth_pty_combined_size_bytes": 2,
+          "post_auth_pty_combined_sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+          "full_pty_combined_size_bytes": 27,
+          "full_pty_combined_sha256": "1d7494fa8e46a73ac403d90f2dc6bfa96c8855542b257972356fd40907961fca"
+        },
+        "post_b_noninteractive_true": {"argv": ["/usr/bin/sudo", "-n", "/usr/bin/true"], "returncode": 1, "pty_combined_utf8": "sudo: a password is required\r\n", "size_bytes": 30, "sha256": "a42b259ca32f8716aa70b7516558b63f261186cbbb0ddd85aa007794b4159dad"},
+        "final_plain_user_cleanup": {
+          "clear": {"argv": ["/usr/bin/sudo", "-K"], "returncode": 0, "pty_combined_size_bytes": 0, "pty_combined_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+          "independent_noninteractive_true": {"argv": ["/usr/bin/sudo", "-n", "/usr/bin/true"], "returncode": 1, "pty_combined_utf8": "sudo: a password is required\r\n", "size_bytes": 30, "sha256": "a42b259ca32f8716aa70b7516558b63f261186cbbb0ddd85aa007794b4159dad"},
+          "closed": true,
+          "closed_scope": "independent_diagnostic_observation_only",
+          "v7_lifecycle_cleanup_proven": false
+        }
+      },
+      "production_authorized": false,
+      "identity_consumed": true,
+      "preserve_snapshot": true,
+      "workspace_files_preserved": true
+    },
+    "predecessor_v8": {
+      "probe_id": "u3_stdio_apparmor_transport_probe_v8_20260807T183304Z",
+      "snapshot_root": "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v8_20260807T183304Z.snapshot",
+      "status": "PASS_MKDIR_DENIAL_DISCOVERY_AND_COMPLETE_LIFECYCLE_NO_PRODUCTION_AUTHORITY",
+      "identity_consumed": true,
+      "no_retry_same_identity": true,
+      "production_authorized": false,
+      "workspace_artifacts": {
+        "gate": {"sha256": "0f6366a5626f6c1de0c4678dc2f5f11944cbfb9a38d343262925af00c0374ca1", "size_bytes": 70337},
+        "supervisor": {"sha256": "f6fc7c4d4b2eb82cc0b3a33b498eaf91ed4f74c195c7f2123522a1b7b1d666c8", "size_bytes": 103209},
+        "profile": {"sha256": "a5e35f06655a760e3e8d3ae5e026c9983f9a74387176e9ca3d2b92e57e770450", "size_bytes": 3630},
+        "schema": {"sha256": "34c9069e5a7198d208b1e4cad61d5c20d7f69a4c16f67d12330e3683949edaea", "size_bytes": 32699},
+        "policy": {"sha256": "be99635844e66cac722dd4db23a460ac95168cfa825b92de2ce9e13b00191f1a", "size_bytes": 25912},
+        "tests": {"sha256": "dd169a15d6436b4a12f0a4960b7e218fa5990891a9ef0a1a8370a485c6904b51", "size_bytes": 98839}
+      },
+      "snapshot": {
+        "directory": {"owner": [0, 0], "mode": "0555", "nlink": 2},
+        "file_owner": [0, 0], "file_mode": "0444", "file_nlink": 1,
+        "artifacts": {
+          "gate": {"sha256": "0f6366a5626f6c1de0c4678dc2f5f11944cbfb9a38d343262925af00c0374ca1", "size_bytes": 70337},
+          "supervisor": {"sha256": "f6fc7c4d4b2eb82cc0b3a33b498eaf91ed4f74c195c7f2123522a1b7b1d666c8", "size_bytes": 103209},
+          "profile": {"sha256": "a5e35f06655a760e3e8d3ae5e026c9983f9a74387176e9ca3d2b92e57e770450", "size_bytes": 3630},
+          "schema": {"sha256": "34c9069e5a7198d208b1e4cad61d5c20d7f69a4c16f67d12330e3683949edaea", "size_bytes": 32699},
+          "policy": {"sha256": "be99635844e66cac722dd4db23a460ac95168cfa825b92de2ce9e13b00191f1a", "size_bytes": 25912}
+        }
+      },
+      "receipts": {
+        "start": {"sha256": "fc947306b5581d0017b73bc070837339349d2a6639beb1b910858ae6bfdce1c2", "size_bytes": 6270, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "status": "ONE_SHOT_STARTED_CLEANUP_REQUIRED"},
+        "execution": {"sha256": "9937cd5312fb1a61e47974fe578884be5c55fe6edca2685fef8d92ab5cb9a1de", "size_bytes": 9576, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "status": "PASS_FAIL_CLOSED_APPARMOR_DENIAL_DISCOVERY_CLEANUP_PENDING"},
+        "lifecycle": {"sha256": "4448309a90f4ee8beb3c05cb7369b555a3f97863e4a8a70e30978e3ceda891cc", "size_bytes": 5825, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "status": "PASS_V8_PROFILE_PROCESS_SYSCTL_SUDO_LIFECYCLE_CLEANUP"}
+      },
+      "discovery": {"matching_total": 1, "expected_mkdir_total": 1, "unexpected_total": 0, "storage_overflow": false, "profile": "r8-liquid-u3-stdio-transport-bootstrap-v8-20260807t183304z", "operation": "mkdir", "name": "/newroot/proc/"},
+      "cleanup": {"pre_unload_zero_scans": 3, "post_unload_zero_scans": 3, "profiles_absent": true, "sysctls_unchanged": true, "sudo_timestamp_cleanup_proven": true}
+    },
+    "predecessor_v9": {
+      "probe_id": "u3_stdio_apparmor_transport_probe_v9_20260808T034143Z",
+      "snapshot_root": "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v9_20260808T034143Z.snapshot",
+      "status": "V9_EXACT_PROC_MOUNT_DENIAL_STDERR_PATH_MISMATCH_COMPLETE_LIFECYCLE_NO_PRODUCTION_AUTHORITY",
+      "identity_consumed": true,
+      "no_retry_same_identity": true,
+      "production_authorized": false,
+      "workspace_artifacts": {
+        "gate": {
+          "sha256": "7b126b8abd555b95fbbc0ca9e56b2590c07f582eeac8b9317ad318ad9d162126",
+          "size_bytes": 80584
+        },
+        "supervisor": {
+          "sha256": "7e0678a0b5444c04d68c291276364a498db765b626bd5fc5737b15a5df3eb7d1",
+          "size_bytes": 130328
+        },
+        "profile": {
+          "sha256": "275a4627a5a7046b63c965b9bc8565b539429eaf087e537acc9bfb4a9939bf27",
+          "size_bytes": 3789
+        },
+        "schema": {
+          "sha256": "ba5bd4181294430a3d31168577d82626ba01420889d11344831705d7ff9792d4",
+          "size_bytes": 39174
+        },
+        "policy": {
+          "sha256": "aeb0c8c4b5ae32c4051a4e06e25cb5b826adbc11eaa642ce5ce37b1002afaac9",
+          "size_bytes": 31304
+        },
+        "tests": {
+          "sha256": "222464f124d79d990db2e5cf2395dee4750bd9f0271bed1e5a750cb12ca689c5",
+          "size_bytes": 107282
+        }
+      },
+      "snapshot": {
+        "directory": {
+          "owner": [
+            0,
+            0
+          ],
+          "mode": "0555",
+          "nlink": 2
+        },
+        "file_owner": [
+          0,
+          0
+        ],
+        "file_mode": "0444",
+        "file_nlink": 1,
+        "artifacts": {
+          "gate": {
+            "sha256": "7b126b8abd555b95fbbc0ca9e56b2590c07f582eeac8b9317ad318ad9d162126",
+            "size_bytes": 80584
+          },
+          "supervisor": {
+            "sha256": "7e0678a0b5444c04d68c291276364a498db765b626bd5fc5737b15a5df3eb7d1",
+            "size_bytes": 130328
+          },
+          "profile": {
+            "sha256": "275a4627a5a7046b63c965b9bc8565b539429eaf087e537acc9bfb4a9939bf27",
+            "size_bytes": 3789
+          },
+          "schema": {
+            "sha256": "ba5bd4181294430a3d31168577d82626ba01420889d11344831705d7ff9792d4",
+            "size_bytes": 39174
+          },
+          "policy": {
+            "sha256": "aeb0c8c4b5ae32c4051a4e06e25cb5b826adbc11eaa642ce5ce37b1002afaac9",
+            "size_bytes": 31304
+          }
+        }
+      },
+      "receipts": {
+        "start": {
+          "sha256": "8fdcfc89e8aa7274a5f1492a8fb95e22ea22738fe498e96d4e53479f6bb6b948",
+          "size_bytes": 6826,
+          "owner": [
+            1000,
+            1000
+          ],
+          "mode": "0440",
+          "nlink": 1,
+          "status": "ONE_SHOT_STARTED_CLEANUP_REQUIRED"
+        },
+        "execution": {
+          "sha256": "67b7ee184ff11a922931c8c3046562f5705d84316243d74168c853e9da913a75",
+          "size_bytes": 18172,
+          "owner": [
+            1000,
+            1000
+          ],
+          "mode": "0440",
+          "nlink": 1,
+          "status": "UNCLASSIFIED_PROBE_FAILURE_CLEANUP_PENDING"
+        },
+        "lifecycle": {
+          "sha256": "5c6a85fe6e53c03791869e414eb217a23af133d73651eff87773422a3d18e854",
+          "size_bytes": 5827,
+          "owner": [
+            1000,
+            1000
+          ],
+          "mode": "0440",
+          "nlink": 1,
+          "status": "PASS_V9_PROFILE_PROCESS_SYSCTL_SUDO_LIFECYCLE_CLEANUP"
+        }
+      },
+      "other_receipts_absent": [
+        "preflight_incomplete",
+        "lifecycle_incomplete",
+        "recovery"
+      ],
+      "discovery": {
+        "capture_valid": true,
+        "matching_total": 1,
+        "expected_mount_total": 1,
+        "mkdir_total": 0,
+        "unexpected_total": 0,
+        "storage_overflow": false,
+        "profile": "r8-liquid-u3-stdio-transport-bootstrap-v9-20260808t034143z",
+        "operation": "mount",
+        "class": "mount",
+        "info": "failed mntpnt match",
+        "error": "-13",
+        "name": "/newroot/proc/",
+        "comm": "bwrap",
+        "fstype": "proc",
+        "srcname": "proc",
+        "flags": [
+          "rw",
+          "nosuid",
+          "nodev",
+          "noexec"
+        ],
+        "audit_line_sha256": "8f323812be682cda9d9cba86f046591e6147fac2bd4359189e5752be815c322f",
+        "gate_returncode": 1,
+        "gate_stdout_size_bytes": 0,
+        "gate_stderr_utf8": "bwrap: Can't mount proc on /newroot/proc: Permission denied\n",
+        "gate_stderr_sha256": "7ac86c8b8a73b272d765c8a17ce43c608c2230b9d7031aed53f6c5c6bbfb7700",
+        "classification_blocker": "frozen_v9_stderr_expected_/proc_but_observed_/newroot/proc"
+      },
+      "cleanup": {
+        "pre_unload_zero_scans": 3,
+        "post_unload_zero_scans": 3,
+        "profiles_absent": true,
+        "sysctls_unchanged": true,
+        "sudo_timestamp_cleanup_proven": true
+      }
+    },
+    "predecessor_v10": {
+      "probe_id": "u3_stdio_apparmor_transport_probe_v10_20260808T045130Z",
+      "snapshot_root": "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v10_20260808T045130Z.snapshot",
+      "status": "V10_NNP_RUNTIME_TRANSITION_AND_AUXILIARY_DENIALS_COMPLETE_LIFECYCLE_NO_PRODUCTION_AUTHORITY",
+      "identity_consumed": true,
+      "no_retry_same_identity": true,
+      "production_authorized": false,
+      "workspace_artifacts": {
+        "gate": {
+          "sha256": "009be0b30c814081216d99715e1ebdee1871e1b0b62c9124bb8a529b02078532",
+          "size_bytes": 94655
+        },
+        "supervisor": {
+          "sha256": "4ef6490a51efdfe227df5d00612e400853ce22772d0c1b379051e4798113a9b6",
+          "size_bytes": 144469
+        },
+        "profile": {
+          "sha256": "415488692f58c9d706a42a967649f7061fca3e13541a9df0ad4618f6bc1a0a62",
+          "size_bytes": 3869
+        },
+        "schema": {
+          "sha256": "64eeaca76c8468a280bbaa6aaafd64ac23719a357a8153de1da2d7f65ad433f8",
+          "size_bytes": 44851
+        },
+        "policy": {
+          "sha256": "ed4fa355e04fc7c3d4ed5d843129418868f60e3ebd14ca71c787e22669bad128",
+          "size_bytes": 36466
+        },
+        "tests": {
+          "sha256": "40bb191b393db45a93f6e4cdc84427e677abbb2f6047e4f625a41cea0b350166",
+          "size_bytes": 110000
+        }
+      },
+      "snapshot": {
+        "directory": {
+          "owner": [
+            0,
+            0
+          ],
+          "mode": "0555",
+          "nlink": 2
+        },
+        "file_owner": [
+          0,
+          0
+        ],
+        "file_mode": "0444",
+        "file_nlink": 1,
+        "artifacts": {
+          "gate": {
+            "sha256": "009be0b30c814081216d99715e1ebdee1871e1b0b62c9124bb8a529b02078532",
+            "size_bytes": 94655
+          },
+          "supervisor": {
+            "sha256": "4ef6490a51efdfe227df5d00612e400853ce22772d0c1b379051e4798113a9b6",
+            "size_bytes": 144469
+          },
+          "profile": {
+            "sha256": "415488692f58c9d706a42a967649f7061fca3e13541a9df0ad4618f6bc1a0a62",
+            "size_bytes": 3869
+          },
+          "schema": {
+            "sha256": "64eeaca76c8468a280bbaa6aaafd64ac23719a357a8153de1da2d7f65ad433f8",
+            "size_bytes": 44851
+          },
+          "policy": {
+            "sha256": "ed4fa355e04fc7c3d4ed5d843129418868f60e3ebd14ca71c787e22669bad128",
+            "size_bytes": 36466
+          }
+        }
+      },
+      "receipts": {
+        "start": {
+          "sha256": "ce58b05d6d701e198535313399dbde34ec9b25eda9e7abb13bd3186a350e1a86",
+          "size_bytes": 6848,
+          "owner": [
+            1000,
+            1000
+          ],
+          "mode": "0440",
+          "nlink": 1,
+          "status": "ONE_SHOT_STARTED_CLEANUP_REQUIRED"
+        },
+        "execution": {
+          "sha256": "46a354c267c8c19803cce115291e81fdec2307d8e246c29e2aec02ad1af230f4",
+          "size_bytes": 34743,
+          "owner": [
+            1000,
+            1000
+          ],
+          "mode": "0440",
+          "nlink": 1,
+          "status": "UNCLASSIFIED_PROBE_FAILURE_CLEANUP_PENDING"
+        },
+        "lifecycle": {
+          "sha256": "987c3e21b5d426544d4b5fe97f7ca32290e39d6c9aeee19961db849ffb393395",
+          "size_bytes": 5841,
+          "owner": [
+            1000,
+            1000
+          ],
+          "mode": "0440",
+          "nlink": 1,
+          "status": "PASS_V10_PROFILE_PROCESS_SYSCTL_SUDO_LIFECYCLE_CLEANUP"
+        }
+      },
+      "other_receipts_absent": [
+        "preflight_incomplete",
+        "lifecycle_incomplete",
+        "recovery"
+      ],
+      "discovery": {
+        "capture_valid": true,
+        "matching_total": 5,
+        "stored_count": 5,
+        "dropped_count": 0,
+        "storage_overflow": false,
+        "expected_mount_total": 0,
+        "mkdir_total": 0,
+        "unexpected_total": 5,
+        "raw_stdout_sha256": "d1e4a1a19d2de5ad585995dc43525696fb7eff937ce417d7228e3a830fc90f60",
+        "raw_stdout_size_bytes": 2412,
+        "gate_returncode": 2,
+        "gate_stdout_size_bytes": 0,
+        "gate_stderr_utf8": "R8_STDIO_PROBE_V10_NO_GO\n",
+        "gate_stderr_sha256": "0fdf8b96e164e369038c761c6f794b0265aa6afd426937fd052eb7e6525d0939",
+        "denials": [
+          {
+            "line_sha256": "b38249522a99cce59e006c91a37cbcab1d2aa451f8f5adaa14d4d90f722511ad",
+            "line_size_bytes": 269,
+            "operation": "capable",
+            "class": "cap",
+            "comm": "bwrap",
+            "capname": "dac_override"
+          },
+          {
+            "line_sha256": "28e547a65c4974114d82688dbbb130efb22578b3650f5685625afdc0e8c0e6fb",
+            "line_size_bytes": 323,
+            "operation": "open",
+            "class": "file",
+            "comm": "python3.12",
+            "name": "/usr/share/zoneinfo/Etc/UTC"
+          },
+          {
+            "line_sha256": "bf65ee62a249c5016135dfee8b1c238a3cfb296a1d4178d8f1b004074e337dc1",
+            "line_size_bytes": 336,
+            "operation": "open",
+            "class": "file",
+            "comm": "python3.12",
+            "name": "/usr/local/lib/python3.12/dist-packages/"
+          },
+          {
+            "line_sha256": "f0687844071237c28f274e4fcf17fb6e8aba36062d7a0426483d81891df5266f",
+            "line_size_bytes": 336,
+            "operation": "open",
+            "class": "file",
+            "comm": "python3.12",
+            "name": "/usr/local/lib/python3.12/dist-packages/"
+          },
+          {
+            "line_sha256": "d13104f000a18994b3da8b9c2dcacb7e45cf1b0ce3c35bc7944d815d8126dd8b",
+            "line_size_bytes": 406,
+            "operation": "exec",
+            "class": "file",
+            "comm": "python3.12",
+            "name": "/usr/bin/sleep",
+            "info": "no new privs",
+            "error": "-1",
+            "target": "r8-liquid-u3-stdio-transport-runtime-v10-20260808t045130z"
+          }
+        ],
+        "classification_blocker": "five_fresh_denials_including_fatal_sleep_rpx_transition_rejected_by_no_new_privs"
+      },
+      "cleanup": {
+        "pre_unload_zero_scans": 3,
+        "post_unload_zero_scans": 3,
+        "profiles_absent": true,
+        "sysctls_unchanged": true,
+        "sudo_timestamp_cleanup_proven": true
+      }
+    }
+  },
+  "reviewed_bytes": {
+    "helper": {
+      "size_bytes": 9679,
+      "sha256": "55c0a48a7543c90a394558d8b83d7048f69bff186df0c6746e57394db04a4e3a"
+    },
+    "loader": {
+      "size_bytes": 591,
+      "sha256": "45ca6485c120f6742a87839503689e6c98d134689ceae3a9b5fb9d12daa9592a"
+    },
+    "inputs": [
+      {
+        "name": "probe_alpha.bin",
+        "size_bytes": 275,
+        "sha256": "23f5a93dd2e8f837d38b55a657781d0cf61ce27bba03f45b02de2ec8103e04d7"
+      },
+      {
+        "name": "probe_beta.bin",
+        "size_bytes": 520,
+        "sha256": "740b7ba62c092ee12b02ceaba860f530207c6c17aeb58d9ec25637c3f0d91055"
+      },
+      {
+        "name": "probe_gamma.bin",
+        "size_bytes": 993,
+        "sha256": "3cf78c849414a2de89b003b64a690ee01af9c1355c384bb444fa47932df50701"
+      }
+    ],
+    "stdin_frame": {
+      "size_bytes": 11640,
+      "sha256": "1e37c7e72058c27583093161285f25a20177ec0a453cd99aa8b1bf878cb1f56c",
+      "maximum_size_bytes": 65536
+    }
+  },
+  "snapshot_bootstrap": {
+    "source_size_bytes": 3335,
+    "source_sha256": "992cf250a5010223fb0c30113af3b30a911ac7a423357abf0e3dfe8dce3b99dd",
+    "loader_size_bytes": 417,
+    "loader_sha256": "9699c53720250287be97128e29c9174635a29e1fe0e071702a96dda30d4c26a4",
+    "snapshot_owner": [0, 0],
+    "snapshot_mode": "0555",
+    "file_owner": [0, 0],
+    "file_mode": "0444",
+    "strict_eof": true,
+    "component_no_follow": true,
+    "final_metadata_fsync": true,
+    "reviewed_minimal_bootstrap_executed_as_root": true,
+    "workspace_runtime_artifacts_executed_or_imported_as_root": false,
+    "runtime_supervisor_entrypoint": "/usr/bin/python3.12 -I -B reads root-owned 0444 snapshot supervisor",
+    "direct_snapshot_supervisor_exec_forbidden": true,
+    "workspace_snapshot_producer_root_forbidden": true,
+    "workspace_snapshot_producer_exact_path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_stdio_apparmor_transport_probe_supervisor_v11.py",
+    "workspace_snapshot_producer_uid": [1000, 1000, 1000, 1000],
+    "workspace_snapshot_producer_gid": [1000, 1000, 1000, 1000],
+    "workspace_snapshot_producer_active_capability_sets": {"CapInh": 0, "CapPrm": 0, "CapEff": 0, "CapAmb": 0},
+    "workspace_snapshot_producer_stdout_on_identity_failure": "empty"
+  },
+  "trusted_system_tools": {
+    "unprivileged_runner": {
+      "aa_exec": {"path": "/usr/bin/aa-exec", "sha256": "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e"},
+      "bwrap": {"path": "/usr/bin/bwrap", "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"},
+      "python": {"path": "/usr/bin/python3.12", "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"},
+      "sleep": {"path": "/usr/bin/sleep", "sha256": "a65efec857cfac0d4f43fc53affa73794ff1d1fdcb547931d4b92a98bda8e646"},
+      "timeout": {"path": "/usr/bin/timeout", "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"}
+    },
+    "root_supervisor": {
+      "aa_exec": {"path": "/usr/bin/aa-exec", "sha256": "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e"},
+      "aa_status": {"path": "/usr/sbin/aa-status", "sha256": "af9f579ad039f0e669bfb15735c55efd17896f838d684e7f9be15b09fa1e2dd4"},
+      "apparmor_parser": {"path": "/usr/sbin/apparmor_parser", "sha256": "6bc852b37807961c14976be9a227ae96bd817f73b5189cb0e0ff5eca4448c01c"},
+      "bwrap": {"path": "/usr/bin/bwrap", "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"},
+      "journalctl": {"path": "/usr/bin/journalctl", "sha256": "c49bd25d7e7655b9a44ff867923952ed5a5e0a65e9df7a0510e239bf0558e3fa"},
+      "python": {"path": "/usr/bin/python3.12", "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"},
+      "setpriv": {"path": "/usr/bin/setpriv", "sha256": "96b083b79c32fd2f0c29657e88e20c7495839349fc64ad5d0503f32d26bf8733"},
+      "sleep": {"path": "/usr/bin/sleep", "sha256": "a65efec857cfac0d4f43fc53affa73794ff1d1fdcb547931d4b92a98bda8e646"},
+      "sudo": {"path": "/usr/bin/sudo", "sha256": "136f2e48b0295b9fc595b8259cf2411ac43f27ddbfe02b956649ddaa2e92b9fa"},
+      "timeout": {"path": "/usr/bin/timeout", "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"},
+      "true": {"path": "/usr/bin/true", "sha256": "4b5a5694e3c0e8b1d58fc52ac6ef076e55e72c2f53195243ac86d5ff517cc2f6"}
+    }
+  },
+  "trusted_artifacts": {
+    "gate": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_stdio_apparmor_transport_probe_gate_v11.py",
+      "sha256": "d6072f54513c1d6ce51044e29cd12e1b88afdc6cffc9f71aeca3cd8215041214",
+      "size_bytes": 109184
+    },
+    "supervisor": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_stdio_apparmor_transport_probe_supervisor_v11.py",
+      "sha256": "72b7f1bf287b4fe750b46dccdb7a1eae9379230c7bdc30dbc6a6cb33a403ef5b",
+      "size_bytes": 159126
+    },
+    "profile": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-stdio-transport-probe-v11.profile",
+      "sha256": "d5ca8c34f763e41afee6a2432970a097ebcfd6ddefe4d6e025e70aca467c81ee",
+      "size_bytes": 4140
+    },
+    "schema": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_stdio_apparmor_transport_probe_policy_v11.json",
+      "sha256": "428a3631fcc4f4089886d4798e47a01337ac6ed6756aa7afc99157f7a7c54bd6",
+      "size_bytes": 52320
+    }
+  },
+  "fixed_commands": {
+    "aa_status_json_argv": ["/usr/sbin/aa-status", "--json"],
+    "bwrap_argv_sha256": "7119710279d95c18938b13b5e6dacab8a1fa321328d46cf3cbb653f8c6f6885f",
+    "gate_handoff_argv": [
+      "/usr/bin/setpriv",
+      "--reuid=1000",
+      "--regid=1000",
+      "--clear-groups",
+      "--bounding-set=-all",
+      "--inh-caps=-all",
+      "--ambient-caps=-all",
+      "--no-new-privs",
+      "--",
+      "/usr/bin/python3.12",
+      "-I",
+      "-B",
+      "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.snapshot/r8_liquid_target_u3_stdio_apparmor_transport_probe_gate_v11.py",
+      "internal-run"
+    ],
+    "parser_parse_argv": ["/usr/sbin/apparmor_parser", "-Q", "-K", "-T", "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.snapshot/r8-liquid-u3-stdio-transport-probe-v11.profile"],
+    "parser_load_argv": ["/usr/sbin/apparmor_parser", "-a", "-K", "-T", "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.snapshot/r8-liquid-u3-stdio-transport-probe-v11.profile"],
+    "parser_unload_argv": ["/usr/sbin/apparmor_parser", "-R", "-K", "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.snapshot/r8-liquid-u3-stdio-transport-probe-v11.profile"],
+    "journal_boot_id_path": "/proc/sys/kernel/random/boot_id",
+    "journal_anchor_argv_template": ["/usr/bin/journalctl", "-k", "--no-pager", "--quiet", "--boot=<BOOT_ID_32HEX>", "--lines=0", "--show-cursor"],
+    "journal_sync_argv": ["/usr/bin/journalctl", "--sync"],
+    "journal_query_argv_template": ["/usr/bin/journalctl", "-k", "--no-pager", "--quiet", "--output=short-iso-precise", "--boot=<BOOT_ID_32HEX>", "--after-cursor=<PRE_RUN_CURSOR>", "--show-cursor"],
+    "journal_anchor_stdout_ceiling_bytes": 4096,
+    "journal_query_stdout_ceiling_bytes": 131072,
+    "journal_stderr_ceiling_bytes": 16384,
+    "audit_line_ceiling_bytes": 4096,
+    "audit_storage_ceiling": 16,
+    "snapshot_producer_argv": ["/usr/bin/python3.12", "-I", "-B", "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_stdio_apparmor_transport_probe_supervisor_v11.py", "emit-bootstrap"],
+    "snapshot_root_loader_argv_template": ["/usr/bin/sudo", "/usr/bin/python3.12", "-I", "-B", "-c", "<PINNED_SNAPSHOT_BOOTSTRAP_LOADER_SOURCE>", "<TEN_SHA256_SIZE_MANIFEST_ARGUMENTS>"],
+    "run_argv_template": ["/usr/bin/sudo", "/usr/bin/python3.12", "-I", "-B", "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.snapshot/r8_liquid_target_u3_stdio_apparmor_transport_probe_supervisor_v11.py", "run", "--policy-sha256", "<EXTERNALLY_FROZEN_POLICY_SHA256>", "--admission-token", "u3_stdio_apparmor_transport_probe_v11_20260808T052940Z:single-harmless-attempt"],
+    "recover_argv_template": ["/usr/bin/sudo", "/usr/bin/python3.12", "-I", "-B", "/run/r8-liquid-u3_stdio_apparmor_transport_probe_v11_20260808T052940Z.snapshot/r8_liquid_target_u3_stdio_apparmor_transport_probe_supervisor_v11.py", "recover-only", "--policy-sha256", "<EXTERNALLY_FROZEN_POLICY_SHA256>", "--recovery-token", "u3_stdio_apparmor_transport_probe_v11_20260808T052940Z:cleanup-only-no-probe"],
+    "sudo_timestamp_clear_argv": ["/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--groups=27", "--inh-caps=-all", "--ambient-caps=-all", "--", "/usr/bin/sudo", "-K"],
+    "sudo_timestamp_verify_argv": ["/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--groups=27", "--inh-caps=-all", "--ambient-caps=-all", "--", "/usr/bin/sudo", "-n", "/usr/bin/true"],
+    "operator_transport": "snapshot producer stdout is root loader stdin; run and recover use pinned Python to read the root-owned 0444 snapshot supervisor; sudo password is read only from the inherited /dev/tty",
+    "shell": false,
+    "workspace_run_forbidden": true
+  },
+  "stdio_transport": {
+    "stdin_magic_hex": "52384c51535444494f50524f4245313100",
+    "success_magic_hex": "52384c51535444494f5041535356313100",
+    "strict_eof": true,
+    "fd0_anonymous_eof_pipe": true,
+    "host_writable_transport": false,
+    "claims": [
+      "helper bytes are size/hash checked before in-memory compile",
+      "each synthetic input header and content is checked before use",
+      "original stdin is consumed to strict EOF and replaced by an anonymous EOF pipe",
+      "success stdout is a single canonical JSON frame with digest and exact closed evidence"
+    ]
+  },
+  "identity_contract": {
+    "host_uid": [1000, 1000, 1000, 1000],
+    "host_gid": [1000, 1000, 1000, 1000],
+    "host_groups": [],
+    "host_capability_sets": {"CapInh": 0, "CapPrm": 0, "CapEff": 0, "CapBnd": 0, "CapAmb": 0},
+    "host_no_new_privs": 1,
+    "guest_uid": [0, 0, 0, 0],
+    "guest_gid": [0, 0, 0, 0],
+    "guest_groups": [],
+    "guest_capability_sets": {"CapInh": 0, "CapPrm": 0, "CapEff": 0, "CapBnd": 0, "CapAmb": 0},
+    "guest_no_new_privs": 1
+  },
+  "isolation": {
+    "host_read_only_mounts": ["/usr"],
+    "host_writable_mounts": [],
+    "guest_work_tmpfs_bytes": 67108864,
+    "guest_proc": "/proc",
+    "guest_dev": "absent",
+    "network": "new_empty_network_namespace",
+    "source_seed_workspace": "absent",
+    "gencase_solver_ros_gpu": "not_executed_not_exposed"
+  },
+  "mount_discovery": {
+    "effective_mount_rules": [
+      "mount options=(rw, silent, rslave) -> /,",
+      "mount fstype=tmpfs options=(rw, nosuid, nodev) -> /tmp/\u002c",
+      "mount options=(rw, rbind) /tmp/newroot/ -> /tmp/newroot/\u002c",
+      "pivot_root oldroot=/tmp/oldroot/ /tmp/\u002c",
+      "mount options=(rw, silent, rprivate) -> /oldroot/\u002c",
+      "umount /oldroot/\u002c",
+      "pivot_root oldroot=/newroot/ /newroot/\u002c",
+      "umount /,",
+      "mount options=(rw, rbind) /oldroot/usr/ -> /newroot/usr/,",
+      "remount options=(ro, nosuid, nodev, bind, silent, relatime) /newroot/usr/,",
+      "mount fstype=tmpfs options=(rw, nosuid, nodev) -> /newroot/work/\u002c",
+      "mount fstype=proc options=(rw, nosuid, nodev, noexec) proc -> /newroot/proc/\u002c"
+    ],
+    "effective_profile_lines_sha256": "253697b76af6a928c33ca7011a116906024c87c0000eb5b826d2bd7494f3ce17",
+    "directory_permission_delta": ["/newroot/proc/ rw,"],
+    "proc_rules": ["mount fstype=proc options=(rw, nosuid, nodev, noexec) proc -> /newroot/proc/,"],
+    "predecessor_v9_denial_evidence": {
+      "profile": "bootstrap",
+      "apparmor": "DENIED",
+      "operation": "mount",
+      "class": "mount",
+      "info": "failed mntpnt match",
+      "error": "-13",
+      "name": "/newroot/proc/",
+      "comm": "bwrap",
+      "fstype": "proc",
+      "srcname": "proc",
+      "flags_required": ["rw", "nosuid", "nodev", "noexec"],
+      "flags_optional": []
+    },
+    "zero_logged_denials_required": true,
+    "rules_may_be_guessed": false,
+    "success_frame_required": true,
+    "discovery_authority": "one_exact_proc_mount_rule_from_frozen_v9_evidence_harmless_stdio_success_only_no_production_authority"
+  },
+  "profile_semantics": {
+    "effective_line_count": 72,
+    "effective_lines_sha256": "253697b76af6a928c33ca7011a116906024c87c0000eb5b826d2bd7494f3ce17",
+    "external_includes": [],
+    "named_only": true,
+    "persistent_install": false,
+    "runtime_execution": "/usr/bin/sleep rix,",
+    "runtime_profile_loaded_but_unreachable": true,
+    "runtime_authority": "inherits_bootstrap_label_with_empty_groups_zero_caps_nnp_nested_userns_disabled_and_empty_network_namespace",
+    "explicit_silent_denials": ["deny capability dac_override,"],
+    "avoidable_python_reads_prevented_by": ["python_-S", "TZ=UTC0"]
+  },
+  "admission_capability": {
+    "transport": "ROOT_OWNED_ANONYMOUS_PIPE_FD",
+    "creator": "root_snapshot_supervisor",
+    "pipe_owner": [0, 0],
+    "pipe_mode": "0600",
+    "payload_size_bytes": 32,
+    "strict_eof": true,
+    "single_consumer": true,
+    "public_environment_token_is_authority": false,
+    "fd_closed_before_probe_child": true
+  },
+  "process_lifecycle": {
+    "authoritative_scan": "/proc/<tgid>/task/<tid>/attr/current_all_uids_by_root",
+    "stable_zero_scans": 3,
+    "pre_and_post_unload_scans": true,
+    "pid_reuse_protection": "birth_pidfd_for_direct_children_and_starttime_checked_tgid_pidfd_for_scanned_tasks",
+    "catchable_signals": ["SIGHUP", "SIGINT", "SIGTERM", "SIGQUIT", "SIGTSTP"],
+    "uncatchable_signals_require_recover_only": ["SIGKILL", "SIGSTOP", "power_loss", "interpreter_or_kernel_crash"],
+    "unload_requires_zero_labels": true,
+    "expected_sysctls": {
+      "/proc/sys/user/max_user_namespaces": {"value": "61362\n", "sha256": "e248d4e11a8c63b5bc8e417356d5d67ec5f44fa94d98fa1a954ba12aaa1e4f0e"},
+      "/proc/sys/kernel/unprivileged_userns_clone": {"value": "1\n", "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"},
+      "/proc/sys/kernel/apparmor_restrict_unprivileged_userns": {"value": "1\n", "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"}
+    },
+    "sudo_timestamp_test": "UID1000_same_inherited_foreground_PTY_no_setsid_sudo_-K_removes_all_user_timestamps_then_sudo_-n_true_must_fail_with_password_stderr_empirical_at_execution",
+    "journal_boundary": "canonical_boot_id_plus_pre_run_cursor_frozen_in_start_receipt_then_compact_boot_after_cursor_query",
+    "prequery_label_quiescence": "root_all_task_exact_empty_without_term_or_kill_then_three_stable_zero_scans",
+    "journal_flush": "/usr/bin/journalctl --sync exact_silent_success_before_after_cursor_query",
+    "profile_state_during_query": "both_fresh_profiles_exactly_once_enforce_before_and_after_query",
+    "postquery_label_quiescence": "root_all_task_three_stable_zero_scans_before_classification"
+  },
+  "receipt_contract": {
+    "directory_policy": {
+      "/": [0, 0, "0755"],
+      "/home": [0, 0, "0755"],
+      "/home/zrj": [1000, 1000, "0750"],
+      "/home/zrj/scout_liquid_lab": [1000, 1000, "0750"],
+      "/home/zrj/scout_liquid_lab/audits": [1000, 1000, "0750"]
+    },
+    "file_owner": [1000, 1000],
+    "file_mode": "0440",
+    "creation": "O_EXCL_O_NOFOLLOW_ONE_SHOT",
+    "durability": "data_fsync_then_owner_mode_then_fsync_then_fstat_then_parent_fsync",
+    "execution_status_suffix": "CLEANUP_PENDING",
+    "separate_lifecycle": true,
+    "sudo_timestamp_scope": "ALL_UID1000_SUDO_TIMESTAMPS_INVALIDATED_BY_SUDO_-K_OTHER_TERMINALS_MUST_REAUTHENTICATE",
+    "sudo_group_membership": {"path": "/etc/group", "owner": [0, 0], "mode": "0644", "record": "sudo:x:27:zrj", "group_name": "sudo", "gid": 27, "members": ["zrj"]},
+    "sudo_cleanup_identity": {"reuid": 1000, "regid": 1000, "supplementary_groups": [27], "groups_mode": "EXACT_NUMERIC_GROUP_LIST_ONLY", "bounding_mode": "preserve_host_only", "bounding_argv_tokens": [], "explicit_bounding_change_forbidden": true, "inheritable_capabilities": "-all", "ambient_capabilities": "-all", "no_new_privs_option_present": false, "shell": false, "start_new_session": false, "forbidden_group_options": ["--clear-groups", "--init-groups", "--keep-groups"]},
+    "sudo_cleanup_bounding_mode": "preserve_host_only",
+    "same_uid_tamper_resistance_claimed": false
+  },
+  "recovery_contract": {
+    "command": "recover-only",
+    "token": "u3_stdio_apparmor_transport_probe_v11_20260808T052940Z:cleanup-only-no-probe",
+    "probe_execution": false,
+    "admission_fd_creation": false,
+    "label_cleanup_before_unload": true,
+    "repeat_safe": true,
+    "writes_existing_receipt": false,
+    "production_authorized": false
+  },
+  "evidence_classification": {
+    "success_requires_closed_frame": true,
+    "successful_gate_exit_is_pass": false,
+    "success_pass_requires": "returncode_zero_empty_stderr_byte_exact_success_frame_and_zero_logged_denials_in_closed_boot_cursor_window_with_exact_silent_dac_override_deny",
+    "audit_storage_limit": 16,
+    "audit_line_limit_bytes": 4096,
+    "expected_counts": {"matching_total": 0, "stored_count": 0, "dropped_count": 0, "expected_mount_total": 0, "mkdir_total": 0, "unexpected_total": 0, "storage_overflow": false},
+    "journal_boundary_required": true,
+    "strict_utf8_required": true,
+    "duplicate_or_escaped_critical_field_is_pass": false,
+    "stderr_contract": {"returncode": 0, "stdout": "byte_exact_canonical_success_frame", "stderr_utf8": ""},
+    "audit_overflow_is_pass": false,
+    "gate_no_go_is_pass": false,
+    "any_other_failure": "UNCLASSIFIED_PROBE_FAILURE_CLEANUP_PENDING",
+    "success_authorizes": "only_harmless_stdio_transport_confinement_evidence_and_independent_review_of_a_fresh_production_revision_no_gencase_solver_or_production"
+  },
+  "invariants": {
+    "no_sudo_in_static_checks": true,
+    "no_parser_in_static_checks": true,
+    "no_namespace_in_static_checks": true,
+    "no_probe_in_static_checks": true,
+    "no_host_writable_mount": true,
+    "no_dev": true,
+    "no_source_seed_workspace": true,
+    "no_gencase_solver": true,
+    "no_ros_gazebo_gpu": true,
+    "no_external_network_access": true,
+    "no_host_initial_namespace_sysctl_write": true,
+    "no_persistent_profile": true,
+    "no_rule_guess": true,
+    "no_v2_modification": true,
+    "no_production_authority": true
+  }
+}

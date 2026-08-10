@@ -1,0 +1,207 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-source-static-inventory-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_SOURCE_STATIC_INVENTORY_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_SOURCE_STATIC_INVENTORY_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "static_blob_read_authorized": true,
+  "upstream_code_execution_authorized": false,
+  "allowed_gate_commands": [
+    "self-check",
+    "write-static-inventory-receipt"
+  ],
+  "required_target_profile": {
+    "profile_id": "LIQUID_ZRJ_MSI_U2404_P0_V1",
+    "canonical_sha256": "fec0b980ca46df04d877290b73b3f3406af97887ccc20c9d52d58092c36f8838",
+    "required_status": "PASS_PROFILE_READ_ONLY_ONLY"
+  },
+  "required_source_fetch_receipt": {
+    "receipt_relative_path": "audits/u2_full_source_fetch_attempt_3_20260806T074600Z.json",
+    "file_sha256": "23745c0076c2c06fc549665c89f4e039761832bab66f4f568f63eff696ead18d",
+    "receipt_sha256": "90bd0c1cc03b022dc42dd4b0368a84f46af10b9b5b8c54108765d1fd16df0426",
+    "status": "PASS_FULL_BARE_SOURCE_FETCH",
+    "next_allowed_stage": "OFFLINE_FULL_BLOB_STATIC_INVENTORY_ONLY"
+  },
+  "source": {
+    "repository_url": "https://github.com/DualSPHysics/DualSPHysics.git",
+    "commit": "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+    "tree": "cef458cb358712f4694b9d2148f638440418e9dc",
+    "full_bare_relative_path": "dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.full_attempt_3.git",
+    "no_checkout": true,
+    "no_network": true,
+    "no_submodules": true,
+    "no_lfs_smudge": true,
+    "no_hooks": true,
+    "precompiled_binaries_execution": "forbidden"
+  },
+  "trusted_system_tools": {
+    "git": {
+      "path": "/usr/bin/git",
+      "sha256": "2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668"
+    },
+    "git_remote_https": {
+      "path": "/usr/lib/git-core/git-remote-https",
+      "symlink_target": "git-remote-http",
+      "resolved_path": "/usr/lib/git-core/git-remote-http",
+      "sha256": "8353a5124ddb2281838bc54bd97c21cbecfe900615fdb60b281198c5058ddb5b"
+    }
+  },
+  "git_commands": {
+    "tree_identity": [
+      "rev-parse",
+      "ef3721a861fda961f0e2f9ec4cd317b19de99086^{tree}"
+    ],
+    "bare_identity": [
+      "rev-parse",
+      "--is-bare-repository"
+    ],
+    "remote_identity": [
+      "remote",
+      "get-url",
+      "origin"
+    ],
+    "tree_listing": [
+      "ls-tree",
+      "-r",
+      "-l",
+      "-z",
+      "ef3721a861fda961f0e2f9ec4cd317b19de99086"
+    ],
+    "blob": [
+      "cat-file",
+      "blob"
+    ]
+  },
+  "inventory_expectations": {
+    "tree_entry_count": 768,
+    "total_blob_bytes": 293416502,
+    "executable_mode_paths": [
+      "bin/linux/DsphConfig.xml",
+      "bin/linux/GenCase_linux64",
+      "bin/linux/IsoSurface_linux64",
+      "bin/linux/MeasureTool_linux64",
+      "bin/linux/PartVTKOut_linux64",
+      "bin/linux/PartVTK_linux64",
+      "bin/linux/README.txt",
+      "bin/linux/VERSION_INFO.txt",
+      "bin/linux/libChronoEngine.so",
+      "bin/linux/libdsphchrono.so",
+      "src/source/JDsGaugeItem.cpp",
+      "src/source/JDsGaugeItem.h",
+      "src/source/JDsGaugeSystem.cpp",
+      "src/source/JDsGaugeSystem.h",
+      "src/source/JDsGauge_ker.cu",
+      "src/source/JDsGauge_ker.h"
+    ],
+    "symlink_entry_count": 0,
+    "gitlink_entry_count": 0,
+    "bin_linux_entries": [
+      {
+        "path": "bin/linux/DsphConfig.xml",
+        "mode": "100755",
+        "object_id": "d99d0f85d19a622f7faf2d5f1195b11f17951846",
+        "size_bytes": 293,
+        "expected_elf": false
+      },
+      {
+        "path": "bin/linux/GenCase_linux64",
+        "mode": "100755",
+        "object_id": "4db4dadbae8f6e3885cad3bb752340812036278a",
+        "size_bytes": 5809384,
+        "expected_elf": true
+      },
+      {
+        "path": "bin/linux/IsoSurface_linux64",
+        "mode": "100755",
+        "object_id": "99308e40373cb62cfd0189c8e06e611636b18fd8",
+        "size_bytes": 6210152,
+        "expected_elf": true
+      },
+      {
+        "path": "bin/linux/MeasureTool_linux64",
+        "mode": "100755",
+        "object_id": "99308e40373cb62cfd0189c8e06e611636b18fd8",
+        "size_bytes": 6210152,
+        "expected_elf": true
+      },
+      {
+        "path": "bin/linux/PartVTKOut_linux64",
+        "mode": "100755",
+        "object_id": "99308e40373cb62cfd0189c8e06e611636b18fd8",
+        "size_bytes": 6210152,
+        "expected_elf": true
+      },
+      {
+        "path": "bin/linux/PartVTK_linux64",
+        "mode": "100755",
+        "object_id": "99308e40373cb62cfd0189c8e06e611636b18fd8",
+        "size_bytes": 6210152,
+        "expected_elf": true
+      },
+      {
+        "path": "bin/linux/README.txt",
+        "mode": "100755",
+        "object_id": "04ed5435c5a4898a91a1e4389e51e00ed4ea1d3b",
+        "size_bytes": 231,
+        "expected_elf": false
+      },
+      {
+        "path": "bin/linux/VERSION_INFO.txt",
+        "mode": "100755",
+        "object_id": "92ffbc0b0ef63b353f6bf36a3e96d8630a5ae778",
+        "size_bytes": 284,
+        "expected_elf": false
+      },
+      {
+        "path": "bin/linux/libChronoEngine.so",
+        "mode": "100755",
+        "object_id": "f0892cc22c7ee34bb25a815333c6a14521d77531",
+        "size_bytes": 28283072,
+        "expected_elf": true
+      },
+      {
+        "path": "bin/linux/libdsphchrono.so",
+        "mode": "100755",
+        "object_id": "87330bada49b0e97f636c0c8919d39af5f5f4f82",
+        "size_bytes": 646160,
+        "expected_elf": true
+      }
+    ]
+  },
+  "resources": {
+    "short_command_timeout_seconds": 60,
+    "tree_listing_timeout_seconds": 60,
+    "blob_read_timeout_seconds": 60,
+    "kill_grace_seconds": 5,
+    "short_command_output_max_bytes": 16384,
+    "tree_listing_output_max_bytes": 524288,
+    "max_tree_entries": 1024,
+    "max_tree_path_bytes": 1024,
+    "max_total_blob_bytes": 536870912,
+    "max_candidate_blob_bytes": 67108864,
+    "max_unique_candidate_blob_bytes": 67108864,
+    "blob_stderr_max_bytes": 16384,
+    "blob_prefix_bytes": 16,
+    "directory_mode_octal": "0750",
+    "receipt_mode_octal": "0640"
+  },
+  "receipt": {
+    "directory_relative_path": "audits",
+    "filename_regex": "^u2_full_source_static_inventory_v1_[0-9]{8}T[0-9]{6}Z\\.json$"
+  },
+  "invariants": {
+    "no_sudo": true,
+    "no_apt": true,
+    "no_network": true,
+    "no_checkout": true,
+    "no_source_file_execution": true,
+    "no_precompiled_binary_execution": true,
+    "no_cmake_or_make": true,
+    "no_ros_or_gazebo": true,
+    "no_gpu_device": true,
+    "no_destructive_cleanup": true,
+    "no_retry_in_existing_receipt_path": true
+  }
+}

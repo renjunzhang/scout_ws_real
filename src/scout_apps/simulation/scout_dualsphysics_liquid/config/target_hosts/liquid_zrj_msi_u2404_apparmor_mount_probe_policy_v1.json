@@ -1,0 +1,150 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-apparmor-mount-probe-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_APPARMOR_MOUNT_PROBE_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_APPARMOR_MOUNT_PROBE_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "static_review_authorized": true,
+  "profile_loading_or_replay_authorized": false,
+  "system_configuration_change_authorized": false,
+  "allowed_gate_commands": [
+    "self-check"
+  ],
+  "required_prior_evidence": {
+    "userns_probe_receipt_relative_path": "audits/u2_apparmor_userns_probe_v1_20260806T131601Z.json",
+    "userns_probe_receipt_sha256": "b36b9233815b6f1c68bbf85a68d68538f85f4fd7110e4ebe48f74638bde71123",
+    "userns_probe_status": "PASS_USERNS_ADMISSION_MOUNT_DENIED",
+    "bubblewrap_documented_mount_namespace_behavior": "bubblewrap_always_creates_a_new_mount_namespace"
+  },
+  "profile_contract": {
+    "relative_path": "config/apparmor_drafts/r8-liquid-system-true-mount-probe.profile",
+    "profile_name": "r8-liquid-system-true-mount-probe",
+    "file_sha256": "c3b2d6516db3fcf44b52d72e01193a6db92994a549e65640f4069f3446c4a6c6",
+    "attachment_mode": "named_only_no_attachment_path",
+    "persistent_installation": "forbidden",
+    "only_permitted_exec_paths": [
+      "/usr/bin/bwrap",
+      "/usr/bin/true"
+    ],
+    "only_owner_proc_write_paths": [
+      "/proc/*/uid_map",
+      "/proc/*/gid_map",
+      "/proc/*/setgroups"
+    ],
+    "only_permitted_mount_rule": "mount options=(rw, silent, rslave) -> /,",
+    "mount_scope": "one_root_propagation_transition_in_bwrap_new_mount_namespace_only",
+    "forbidden_mount_operations": [
+      "generic_mount",
+      "bind",
+      "rbind",
+      "move",
+      "remount",
+      "umount",
+      "tmpfs",
+      "procfs",
+      "devtmpfs",
+      "host_writable_bind"
+    ],
+    "network_rules": [
+      "network unix dgram",
+      "network inet dgram",
+      "network inet6 dgram",
+      "network netlink raw"
+    ],
+    "capabilities": [
+      "sys_admin",
+      "sys_ptrace",
+      "setpcap",
+      "net_admin"
+    ]
+  },
+  "fixed_probe_contract": {
+    "outer_argv": [
+      "/usr/bin/timeout",
+      "--preserve-status",
+      "--signal=TERM",
+      "--kill-after=2s",
+      "30s",
+      "/usr/bin/prlimit",
+      "--as=1073741824",
+      "--cpu=10",
+      "--nproc=4096",
+      "--nofile=128",
+      "--",
+      "/usr/bin/aa-exec",
+      "-p",
+      "r8-liquid-system-true-mount-probe",
+      "--",
+      "/usr/bin/bwrap",
+      "--unshare-user",
+      "--unshare-pid",
+      "--unshare-net",
+      "--unshare-ipc",
+      "--unshare-uts",
+      "--",
+      "/usr/bin/true"
+    ],
+    "wall_timeout_seconds": 30,
+    "address_space_bytes": 1073741824,
+    "cpu_time_seconds": 10,
+    "process_limit": 4096,
+    "open_file_limit": 128,
+    "network_namespace": "required",
+    "host_writable_mounts": [],
+    "source_or_output_bind": "forbidden",
+    "upstream_command": "forbidden"
+  },
+  "trusted_system_tools": {
+    "aa_exec": {
+      "path": "/usr/bin/aa-exec",
+      "sha256": "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e"
+    },
+    "bwrap": {
+      "path": "/usr/bin/bwrap",
+      "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"
+    },
+    "timeout": {
+      "path": "/usr/bin/timeout",
+      "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"
+    },
+    "prlimit": {
+      "path": "/usr/bin/prlimit",
+      "sha256": "f27cfd8c1512a4cc6541b59b80cb4cdfd6ef28c34aa21db4299b48264cd0d128"
+    },
+    "system_true": {
+      "path": "/usr/bin/true",
+      "sha256": "4b5a5694e3c0e8b1d58fc52ac6ef076e55e72c2f53195243ac86d5ff517cc2f6"
+    }
+  },
+  "cross_host_coordination": {
+    "allowed_exchange": [
+      "Git commit or reviewed patch",
+      "profile/policy/schema/gate/test SHA-256 manifest",
+      "static self-check report",
+      "sanitized AppArmor audit excerpt that contains no credentials"
+    ],
+    "system_profile_or_privileged_command_transfer": "forbidden",
+    "source_or_binary_transfer_for_execution": "forbidden",
+    "secrets_or_credentials_in_handoff": "forbidden",
+    "result_interpretation": "a future result can establish only the fixed system-true mount probe; it cannot authorize output-bind, build, GenCase, solver, ROS, GPU, or any mount not listed here"
+  },
+  "invariants": {
+    "no_persistent_system_profile_install": true,
+    "no_sysctl_change": true,
+    "no_driver_or_package_change": true,
+    "no_generic_or_bind_mount_rule": true,
+    "no_host_writable_bind": true,
+    "no_network_execution": true,
+    "no_source_checkout_or_materialization": true,
+    "no_upstream_code_or_precompiled_elf_execution": true,
+    "no_cmake_or_make": true,
+    "no_ros_or_gazebo": true,
+    "no_gpu_device": true,
+    "no_destructive_cleanup": true,
+    "no_future_probe_replay_from_this_static_gate": true
+  },
+  "status": "STATIC_MOUNT_CONFINEMENT_PLAN_ONLY",
+  "next_allowed_stage": "EXPLICIT_LOCAL_AUTHORIZATION_FOR_ONE_BOUNDED_SYSTEM_TRUE_MOUNT_PROBE"
+}

@@ -1,0 +1,141 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-bwrap-system-true-smoke-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_BWRAP_SYSTEM_TRUE_SMOKE_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_BWRAP_SYSTEM_TRUE_SMOKE_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "system_binary_smoke_authorized": true,
+  "upstream_code_execution_authorized": false,
+  "allowed_gate_commands": [
+    "self-check",
+    "run-system-true-smoke"
+  ],
+  "required_target_profile": {
+    "profile_id": "LIQUID_ZRJ_MSI_U2404_P0_V1",
+    "canonical_sha256": "fec0b980ca46df04d877290b73b3f3406af97887ccc20c9d52d58092c36f8838",
+    "required_status": "PASS_PROFILE_READ_ONLY_ONLY"
+  },
+  "storage": {
+    "approved_root": "/home/zrj/scout_liquid_lab",
+    "receipt_directory": "audits",
+    "receipt_filename_regex": "^u2_bwrap_system_true_smoke_[0-9]{8}T[0-9]{6}Z\\.json$",
+    "receipt_mode_octal": "0640"
+  },
+  "trusted_system_tools": {
+    "bwrap": {
+      "path": "/usr/bin/bwrap",
+      "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"
+    },
+    "timeout": {
+      "path": "/usr/bin/timeout",
+      "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"
+    },
+    "prlimit": {
+      "path": "/usr/bin/prlimit",
+      "sha256": "f27cfd8c1512a4cc6541b59b80cb4cdfd6ef28c34aa21db4299b48264cd0d128"
+    },
+    "system_true": {
+      "path": "/usr/bin/true",
+      "sha256": "4b5a5694e3c0e8b1d58fc52ac6ef076e55e72c2f53195243ac86d5ff517cc2f6"
+    }
+  },
+  "isolation": {
+    "network": "none",
+    "host_writable_mounts": [],
+    "host_read_only_mounts": [
+      "/usr"
+    ],
+    "forbidden_host_path_prefixes": [
+      "/",
+      "/home",
+      "/data",
+      "/home/zrj/scout_ws",
+      "/home/zrj/ros2_ws",
+      "/opt/ros/jazzy"
+    ],
+    "ephemeral_tmpfs_paths": [
+      "/tmp",
+      "/work"
+    ],
+    "user_namespace": "required_and_disabled_inside",
+    "pid_namespace": "required",
+    "ipc_namespace": "required",
+    "uts_namespace": "required",
+    "parent_death_kill": true,
+    "environment": "cleared_then_fixed_allowlist"
+  },
+  "bwrap_argv": [
+    "--die-with-parent",
+    "--new-session",
+    "--unshare-user",
+    "--unshare-pid",
+    "--unshare-net",
+    "--unshare-ipc",
+    "--unshare-uts",
+    "--disable-userns",
+    "--assert-userns-disabled",
+    "--hostname",
+    "r8-liquid-system-true-smoke",
+    "--clearenv",
+    "--setenv",
+    "HOME",
+    "/work",
+    "--setenv",
+    "PATH",
+    "/usr/bin:/bin",
+    "--uid",
+    "65534",
+    "--gid",
+    "65534",
+    "--ro-bind",
+    "/usr",
+    "/usr",
+    "--symlink",
+    "usr/bin",
+    "/bin",
+    "--symlink",
+    "usr/lib",
+    "/lib",
+    "--symlink",
+    "usr/lib64",
+    "/lib64",
+    "--proc",
+    "/proc",
+    "--dev",
+    "/dev",
+    "--tmpfs",
+    "/tmp",
+    "--tmpfs",
+    "/work",
+    "--chdir",
+    "/work",
+    "--",
+    "/usr/bin/true"
+  ],
+  "resources": {
+    "wall_timeout_seconds": 30,
+    "parent_timeout_seconds": 40,
+    "kill_after_seconds": 5,
+    "cpu_time_seconds": 10,
+    "address_space_bytes": 1073741824,
+    "process_limit": 512,
+    "open_file_limit": 128,
+    "file_size_bytes": 1048576,
+    "core_dump_bytes": 0,
+    "stdout_stderr": "discarded_not_captured"
+  },
+  "invariants": {
+    "no_sudo": true,
+    "no_apt": true,
+    "no_network": true,
+    "no_source_checkout": true,
+    "no_cmake_or_make": true,
+    "no_upstream_binary": true,
+    "no_ros_or_gazebo": true,
+    "no_gpu_device": true,
+    "no_host_output_mount": true,
+    "no_destructive_cleanup": true
+  }
+}

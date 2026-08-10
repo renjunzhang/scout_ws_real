@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MSI Ubuntu 24.04 transient AppArmor user-namespace probe policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "static_review_authorized",
+    "profile_loading_or_replay_authorized",
+    "system_configuration_change_authorized",
+    "allowed_gate_commands",
+    "profile_contract",
+    "fixed_probe_contract",
+    "observed_result",
+    "cross_host_coordination",
+    "invariants",
+    "status",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-apparmor-userns-probe-policy-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_APPARMOR_USERNS_PROBE_POLICY"
+    },
+    "policy_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404_APPARMOR_USERNS_PROBE_V1"
+    },
+    "host_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404"
+    },
+    "development_only": {
+      "const": true
+    },
+    "formal": {
+      "const": false
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "static_review_authorized": {
+      "const": true
+    },
+    "profile_loading_or_replay_authorized": {
+      "const": false
+    },
+    "system_configuration_change_authorized": {
+      "const": false
+    },
+    "allowed_gate_commands": {
+      "const": [
+        "self-check"
+      ]
+    },
+    "profile_contract": {
+      "type": "object"
+    },
+    "fixed_probe_contract": {
+      "type": "object"
+    },
+    "observed_result": {
+      "type": "object"
+    },
+    "cross_host_coordination": {
+      "type": "object"
+    },
+    "invariants": {
+      "type": "object"
+    },
+    "status": {
+      "const": "OBSERVED_USERNS_ADMISSION_MOUNT_DENIED"
+    },
+    "next_allowed_stage": {
+      "const": "INDEPENDENT_REVIEW_OF_EXACT_MOUNT_CONFINEMENT_ONLY"
+    }
+  }
+}

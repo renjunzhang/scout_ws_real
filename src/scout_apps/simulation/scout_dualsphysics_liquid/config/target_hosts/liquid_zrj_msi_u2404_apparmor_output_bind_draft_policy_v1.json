@@ -1,0 +1,115 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-apparmor-output-bind-draft-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_APPARMOR_OUTPUT_BIND_DRAFT_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_APPARMOR_OUTPUT_BIND_DRAFT_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "draft_review_authorized": true,
+  "profile_installation_authorized": false,
+  "profile_loading_authorized": false,
+  "profile_execution_authorized": false,
+  "system_configuration_change_authorized": false,
+  "allowed_gate_commands": [
+    "self-check"
+  ],
+  "required_evidence": {
+    "output_bind_smoke_no_go": {
+      "receipt_relative_path": "audits/u3_bwrap_output_bind_smoke_v1_20260806T111936Z.json",
+      "file_sha256": "be0de443d5a25a8273366ad823a892a920ed574f46c258a0d39157bf668c24d0",
+      "status": "NO_GO_STATIC_PRECHECK",
+      "blocking_condition": "kernel.apparmor_restrict_unprivileged_userns=1"
+    },
+    "source_cpu_build_policy": {
+      "policy_canonical_sha256": "bcad3eed1bda70e24e6e0bd317a2241eef54637b5fb83f1411f10cb1cf944dcb",
+      "required_status": "PASS_SOURCE_CPU_BUILD_POLICY_STATIC_ONLY",
+      "build_execution_authorized": false
+    },
+    "host_apparmor_observation": {
+      "observed_at_utc": "2026-08-06",
+      "apparmor_package_version": "4.0.1really4.0.1-0ubuntu0.24.04.7",
+      "caller_label": "vscode (unconfined)",
+      "unprivileged_userns_restriction": 1
+    }
+  },
+  "profile_draft": {
+    "relative_path": "config/apparmor_drafts/r8-liquid-output-bind-smoke.profile",
+    "profile_name": "r8-liquid-output-bind-smoke",
+    "file_sha256": "4046975cdd27c064c7297a8b0cdec2740610c77840e476e3898dee3b5c05f560",
+    "review_state": "DRAFT_ONLY_NOT_APPROVED_FOR_LOADING",
+    "attachment_mode": "named_only_no_attachment_path",
+    "static_text_validation_only": true,
+    "required_header_markers": [
+      "DRAFT_ONLY: NOT_APPROVED_FOR_LOADING",
+      "has no attachment path",
+      "cannot authorize bubblewrap"
+    ],
+    "approved_write_paths": [
+      "/home/zrj/scout_liquid_lab/build/u3_bwrap_output_bind_smoke_v1_*/output/",
+      "/home/zrj/scout_liquid_lab/build/u3_bwrap_output_bind_smoke_v1_*/output/.r8_output_bind_smoke_v1"
+    ]
+  },
+  "confinement_contract": {
+    "user_namespace": "review_target_only_not_an_activation_grant",
+    "network": "default_deny_no_network_rule",
+    "mount_operations": "default_deny_no_mount_umount_or_remount_rule",
+    "capabilities": "default_deny_no_capability_rule",
+    "executables": "default_deny_no_execute_rule",
+    "broad_filesystem_rule": "forbidden",
+    "unconfined_flag": "forbidden",
+    "output_marker_creation": "not_authorized_by_this_draft",
+    "forbidden_host_path_prefixes": [
+      "/home/zrj/scout_ws",
+      "/home/zrj/ros2_ws",
+      "/opt/ros/jazzy",
+      "/data",
+      "/home/zrj/scout_liquid_lab/dependency",
+      "/home/zrj/scout_liquid_lab/incoming",
+      "/home/zrj/scout_liquid_lab/outgoing",
+      "/home/zrj/scout_liquid_lab/results"
+    ]
+  },
+  "admin_review_requirements": [
+    "Independently review this draft against Ubuntu 24.04 AppArmor 4.0.1 semantics before any activation proposal.",
+    "Derive an exact minimal mount-namespace plan from the frozen one-marker bwrap argv; do not add broad mount rules or capability sys_admin.",
+    "Review profile transition and child-execution semantics so that only the future fixed argv can reach the marker path.",
+    "Create a new reviewed profile revision and a separate execution admission before any system installation, loading, profile selection, namespace attempt, or retry."
+  ],
+  "cross_host_coordination": {
+    "allowed_exchange": [
+      "Git commit or reviewed patch",
+      "policy/schema/profile/gate/test SHA-256 manifest",
+      "static self-check JSON/text report"
+    ],
+    "profile_transfer_to_gazebo_host": "review_text_and_hash_only",
+    "system_profile_or_privileged_command_transfer": "forbidden",
+    "source_or_binary_transfer_for_execution": "forbidden",
+    "secrets_or_credentials_in_handoff": "forbidden",
+    "each_handoff_requires_manifest_and_sha256": true
+  },
+  "invariants": {
+    "no_sudo": true,
+    "no_system_profile_install": true,
+    "no_profile_load": true,
+    "no_profile_enable": true,
+    "no_profile_execution": true,
+    "no_aa_exec": true,
+    "no_profile_parser": true,
+    "no_sysctl_change": true,
+    "no_apparmor_change": true,
+    "no_network_permission": true,
+    "no_mount_permission": true,
+    "no_capability_permission": true,
+    "no_unconfined_flag": true,
+    "no_broad_file_rule": true,
+    "no_workspace_or_ros_access": true,
+    "no_source_or_precompiled_binary_access": true,
+    "no_namespace_attempt": true,
+    "no_upstream_code_execution": true,
+    "no_build": true,
+    "no_destructive_cleanup": true
+  },
+  "status": "STATIC_APPARMOR_DRAFT_REVIEWED_NOT_APPROVED_TO_LOAD",
+  "next_allowed_stage": "INDEPENDENT_ADMIN_REVIEW_OF_NARROW_MOUNT_PLAN_AND_PROFILE_REVISION"
+}

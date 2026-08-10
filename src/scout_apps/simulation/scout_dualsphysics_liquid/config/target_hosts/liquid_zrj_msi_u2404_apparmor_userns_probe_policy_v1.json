@@ -1,0 +1,145 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-apparmor-userns-probe-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_APPARMOR_USERNS_PROBE_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_APPARMOR_USERNS_PROBE_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "static_review_authorized": true,
+  "profile_loading_or_replay_authorized": false,
+  "system_configuration_change_authorized": false,
+  "allowed_gate_commands": [
+    "self-check"
+  ],
+  "profile_contract": {
+    "relative_path": "config/apparmor_drafts/r8-liquid-system-true-userns-probe.profile",
+    "profile_name": "r8-liquid-system-true-userns-probe",
+    "file_sha256": "5b6fe28c63184d41224f462e9f8ee05b8b6f28aca3202fa3bdc66264a0694b31",
+    "attachment_mode": "named_only_no_attachment_path",
+    "persistent_installation": "forbidden",
+    "activation_lifecycle": [
+      "manual single-use workspace load only",
+      "select the exact named profile only for the fixed bounded probe",
+      "remove the profile immediately after the probe",
+      "verify zero loaded-profile matches and zero bwrap_or_aa_exec residues"
+    ],
+    "only_permitted_exec_paths": [
+      "/usr/bin/bwrap",
+      "/usr/bin/true"
+    ],
+    "only_owner_proc_write_paths": [
+      "/proc/*/uid_map",
+      "/proc/*/gid_map",
+      "/proc/*/setgroups"
+    ],
+    "mount_rule": "absent_default_deny",
+    "network_rules": [
+      "network unix dgram",
+      "network inet dgram",
+      "network inet6 dgram",
+      "network netlink raw"
+    ],
+    "capabilities": [
+      "sys_admin",
+      "sys_ptrace",
+      "setpcap",
+      "net_admin"
+    ]
+  },
+  "fixed_probe_contract": {
+    "outer_argv": [
+      "/usr/bin/timeout",
+      "--preserve-status",
+      "--signal=TERM",
+      "--kill-after=2s",
+      "30s",
+      "/usr/bin/prlimit",
+      "--as=1073741824",
+      "--cpu=10",
+      "--nproc=4096",
+      "--nofile=128",
+      "--",
+      "/usr/bin/aa-exec",
+      "-p",
+      "r8-liquid-system-true-userns-probe",
+      "--",
+      "/usr/bin/bwrap",
+      "--unshare-user",
+      "--unshare-pid",
+      "--unshare-net",
+      "--unshare-ipc",
+      "--unshare-uts",
+      "--",
+      "/usr/bin/true"
+    ],
+    "wall_timeout_seconds": 30,
+    "address_space_bytes": 1073741824,
+    "cpu_time_seconds": 10,
+    "process_limit": 4096,
+    "open_file_limit": 128,
+    "network_namespace": "required",
+    "host_writable_mounts": [],
+    "source_or_output_bind": "forbidden",
+    "upstream_command": "forbidden"
+  },
+  "observed_result": {
+    "observed_at_local": "2026-08-06T21:15:23+08:00",
+    "returncode": 1,
+    "terminal_stderr": "bwrap: Failed to make / slave: Permission denied",
+    "user_namespace_admission": "reached_uid_gid_mapping_then_mount_boundary",
+    "first_nonpermitted_operation": {
+      "apparmor_class": "mount",
+      "mount_target": "/",
+      "flags": [
+        "rw",
+        "silent",
+        "rslave"
+      ],
+      "result": "DENIED_BY_ABSENT_APPARMOR_MOUNT_RULE"
+    },
+    "namespace_completed": false,
+    "host_writable_mounts_created": [],
+    "network_used": false,
+    "source_checkout_created": false,
+    "upstream_code_executed": false,
+    "profile_removed_after_probe": true,
+    "loaded_profile_match_count_after_removal": 0,
+    "bwrap_or_aa_exec_process_residue_count_after_removal": 0,
+    "receipt": {
+      "relative_path": "audits/u2_apparmor_userns_probe_v1_20260806T131601Z.json",
+      "file_sha256": "b36b9233815b6f1c68bbf85a68d68538f85f4fd7110e4ebe48f74638bde71123",
+      "mode_octal": "0640",
+      "status": "PASS_USERNS_ADMISSION_MOUNT_DENIED"
+    }
+  },
+  "cross_host_coordination": {
+    "allowed_exchange": [
+      "Git commit or reviewed patch",
+      "profile/policy/schema/gate/test SHA-256 manifest",
+      "static self-check report",
+      "sanitized AppArmor audit excerpt that contains no credentials"
+    ],
+    "system_profile_or_privileged_command_transfer": "forbidden",
+    "source_or_binary_transfer_for_execution": "forbidden",
+    "secrets_or_credentials_in_handoff": "forbidden",
+    "result_interpretation": "userns admission evidence only; not output-bind, build, GenCase, solver, ROS, GPU, or mount authorization"
+  },
+  "invariants": {
+    "no_persistent_system_profile_install": true,
+    "no_sysctl_change": true,
+    "no_driver_or_package_change": true,
+    "no_mount_rule": true,
+    "no_host_writable_bind": true,
+    "no_network_execution": true,
+    "no_source_checkout_or_materialization": true,
+    "no_upstream_code_or_precompiled_elf_execution": true,
+    "no_cmake_or_make": true,
+    "no_ros_or_gazebo": true,
+    "no_gpu_device": true,
+    "no_destructive_cleanup": true,
+    "no_future_probe_replay_from_this_static_gate": true
+  },
+  "status": "OBSERVED_USERNS_ADMISSION_MOUNT_DENIED",
+  "next_allowed_stage": "INDEPENDENT_REVIEW_OF_EXACT_MOUNT_CONFINEMENT_ONLY"
+}

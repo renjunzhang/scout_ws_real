@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MSI Ubuntu 24.04 offline full-source static inventory policy",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "static_blob_read_authorized",
+    "upstream_code_execution_authorized",
+    "allowed_gate_commands",
+    "required_target_profile",
+    "required_source_fetch_receipt",
+    "source",
+    "trusted_system_tools",
+    "git_commands",
+    "inventory_expectations",
+    "resources",
+    "receipt",
+    "invariants"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-source-static-inventory-policy-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_SOURCE_STATIC_INVENTORY_POLICY"
+    },
+    "development_only": {
+      "const": true
+    },
+    "formal": {
+      "const": false
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "static_blob_read_authorized": {
+      "const": true
+    },
+    "upstream_code_execution_authorized": {
+      "const": false
+    }
+  },
+  "additionalProperties": true
+}

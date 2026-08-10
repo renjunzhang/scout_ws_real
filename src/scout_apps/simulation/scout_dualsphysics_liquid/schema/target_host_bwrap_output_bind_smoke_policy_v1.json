@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MSI Ubuntu 24.04 bwrap output-bind smoke policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "output_bind_smoke_authorized",
+    "upstream_code_execution_authorized",
+    "allowed_gate_commands",
+    "required_evidence",
+    "storage",
+    "trusted_system_tools",
+    "isolation",
+    "resources",
+    "attempt",
+    "receipt",
+    "invariants"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-bwrap-output-bind-smoke-policy-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_BWRAP_OUTPUT_BIND_SMOKE_POLICY"
+    },
+    "policy_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404_BWRAP_OUTPUT_BIND_SMOKE_V1"
+    },
+    "host_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404"
+    },
+    "development_only": {
+      "const": true
+    },
+    "formal": {
+      "const": false
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "output_bind_smoke_authorized": {
+      "const": true
+    },
+    "upstream_code_execution_authorized": {
+      "const": false
+    },
+    "allowed_gate_commands": {
+      "const": [
+        "self-check",
+        "run-output-bind-smoke"
+      ]
+    },
+    "required_evidence": {
+      "type": "object"
+    },
+    "storage": {
+      "type": "object"
+    },
+    "trusted_system_tools": {
+      "type": "object"
+    },
+    "isolation": {
+      "type": "object"
+    },
+    "resources": {
+      "type": "object"
+    },
+    "attempt": {
+      "type": "object"
+    },
+    "receipt": {
+      "type": "object"
+    },
+    "invariants": {
+      "type": "object"
+    }
+  }
+}

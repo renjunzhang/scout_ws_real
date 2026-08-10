@@ -1,0 +1,127 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-apparmor-source-cpu-build-draft-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_APPARMOR_SOURCE_CPU_BUILD_DRAFT_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_APPARMOR_SOURCE_CPU_BUILD_DRAFT_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "draft_review_authorized": true,
+  "profile_installation_authorized": false,
+  "profile_loading_authorized": false,
+  "profile_execution_authorized": false,
+  "source_copy_execution_authorized": false,
+  "build_execution_authorized": false,
+  "output_execution_authorized": false,
+  "allowed_gate_commands": [
+    "self-check"
+  ],
+  "required_evidence": {
+    "target_profile": {
+      "policy_relative_path": "config/target_hosts/liquid_zrj_msi_u2404_profile_v1.json",
+      "policy_canonical_sha256": "fec0b980ca46df04d877290b73b3f3406af97887ccc20c9d52d58092c36f8838",
+      "approved_root": "/home/zrj/scout_liquid_lab",
+      "required_status": "PASS_PROFILE_READ_ONLY_ONLY"
+    },
+    "source_materialization": {
+      "receipt_relative_path": "audits/u3_source_materialization_v1_20260806T155752Z.json",
+      "file_sha256": "90af263fb7ec8b7d6a46a53aa5354dd5b676cd4167d48fde93911e014a70b745",
+      "receipt_sha256": "017a660bd38da43ae14fb97df9f19cc6cd2b90cf56f91ce047869dbf795d93e2",
+      "status": "PASS_STATIC_SOURCE_MATERIALIZATION",
+      "materialized_attempt_root": "dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial",
+      "sealed_manifest_sha256": "a9a3debebff5ae30bb2d6226deb997f15a6eae0d07581a7c147ce95b9c3da9d2",
+      "file_count": 352,
+      "total_bytes": 5473917
+    },
+    "source_cpu_build_policy": {
+      "policy_relative_path": "config/target_hosts/liquid_zrj_msi_u2404_source_cpu_build_policy_v1.json",
+      "policy_canonical_sha256": "bcad3eed1bda70e24e6e0bd317a2241eef54637b5fb83f1411f10cb1cf944dcb",
+      "required_status": "PASS_SOURCE_CPU_BUILD_POLICY_STATIC_ONLY",
+      "build_execution_authorized": false
+    },
+    "one_marker_output_bind": {
+      "receipt_relative_path": "audits/u3_apparmor_output_bind_probe_v1_20260806T152757Z.json",
+      "file_sha256": "a6996cf4e685419c6762a9325b3968483610f6b52fa11645d5ce9202bb99abfa",
+      "status": "PASS_RESTRICTED_ONE_MARKER_OUTPUT_BIND_SMOKE",
+      "scope": "one_empty_marker_only_not_a_build_authorization"
+    }
+  },
+  "profile_draft": {
+    "relative_path": "config/apparmor_drafts/r8-liquid-source-cpu-build-draft-v1.profile",
+    "profile_name": "r8-liquid-source-cpu-build-draft-v1",
+    "file_sha256": "58a9b8cdf9307b4588324a64f742ab0a633949c1996cc9ddcb01388bfb1607ca",
+    "review_state": "DRAFT_ONLY_NOT_APPROVED_FOR_LOADING",
+    "attachment_mode": "named_only_no_attachment_path",
+    "static_text_validation_only": true,
+    "source_read_root": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source/",
+    "prospective_output_root_template": "/home/zrj/scout_liquid_lab/build/u3_source_cpu_build_*.partial/output/"
+  },
+  "future_execution_contract": {
+    "source_guest_path": "/work/input/src/source",
+    "source_mount_mode": "read_only",
+    "host_read_only_bind_count": 1,
+    "host_writable_bind_count": 1,
+    "host_writable_bind_template": "/home/zrj/scout_liquid_lab/build/u3_source_cpu_build_<timestamp>.partial/output",
+    "network": "none",
+    "gpu_device_nodes": [],
+    "user_pid_ipc_uts_network_namespaces": "required",
+    "bwrap_disable_userns_after_setup": "required",
+    "source_copy_phase": "separate_exact_argv_and_profile_review_required",
+    "make_and_compiler_phase": "separate_exact_argv_and_profile_review_required",
+    "output_execution": "forbidden",
+    "precompiled_elf_execution": "forbidden"
+  },
+  "confinement_contract": {
+    "executables": "default_deny_no_execute_rule",
+    "mount_operations": "default_deny_no_mount_umount_or_remount_rule",
+    "capabilities": "default_deny_no_capability_rule",
+    "network": "default_deny_no_network_rule",
+    "unconfined_flag": "forbidden",
+    "source_write": "forbidden",
+    "workspace_ros_gpu_and_legacy_paths": "forbidden",
+    "prospective_output_tree": "review_target_only_not_authorized_by_this_draft"
+  },
+  "admin_review_requirements": [
+    "Review a new profile revision against Ubuntu 24.04 AppArmor semantics; this draft is not loadable authority.",
+    "Freeze exact bwrap setup/mount/pivot/remount transitions from a separately reviewed argv; do not add generic mount or broad host path rules.",
+    "Separate the non-executing source-copy phase from the Make/compiler phase, with exact system-tool hashes and argv for each.",
+    "Require one fresh output attempt path, no source write, no network/GPU/ROS, resource enforcement evidence, and post-build static ELF audit before any output use.",
+    "Create a new execution admission and explicit local authorization before any profile load, aa-exec, bwrap, copy, Make, compiler, GenCase, solver, or artifact execution."
+  ],
+  "cross_host_coordination": {
+    "allowed_exchange": [
+      "Git commit or reviewed patch",
+      "policy/schema/profile/gate/test SHA-256 manifest",
+      "static self-check report",
+      "sanitized AppArmor audit excerpt without credentials"
+    ],
+    "system_profile_or_privileged_command_transfer": "forbidden",
+    "source_or_binary_transfer_for_execution": "forbidden",
+    "secrets_or_credentials_in_handoff": "forbidden",
+    "result_interpretation": "this draft establishes only a review boundary; it cannot authorize a namespace, bind mount, copy, build, GenCase, solver, ROS, GPU, or output execution"
+  },
+  "invariants": {
+    "no_sudo": true,
+    "no_system_profile_install": true,
+    "no_profile_load": true,
+    "no_profile_enable": true,
+    "no_profile_execution": true,
+    "no_aa_exec": true,
+    "no_profile_parser": true,
+    "no_sysctl_or_apparmor_change": true,
+    "no_network_permission": true,
+    "no_mount_permission": true,
+    "no_capability_permission": true,
+    "no_unconfined_flag": true,
+    "no_source_write_or_chmod": true,
+    "no_source_copy_execution": true,
+    "no_make_or_compiler": true,
+    "no_output_execution": true,
+    "no_precompiled_elf_execution": true,
+    "no_ros_or_gazebo": true,
+    "no_gpu_device": true,
+    "no_destructive_cleanup": true
+  },
+  "status": "STATIC_APPARMOR_SOURCE_CPU_BUILD_DRAFT_NOT_APPROVED_TO_LOAD",
+  "next_allowed_stage": "INDEPENDENT_ADMIN_REVIEW_OF_EXACT_BUILD_MOUNT_AND_TRANSITION_PROFILE"
+}

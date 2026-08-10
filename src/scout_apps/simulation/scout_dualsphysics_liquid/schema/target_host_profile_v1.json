@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Read-only target-host profile for the MSI Ubuntu 24.04 liquid workstation",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "document_type",
+    "profile_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "execution_authorized",
+    "allowed_script_commands",
+    "host",
+    "storage",
+    "resources",
+    "required_tools",
+    "invariants",
+    "evidence"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-host-profile-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_HOST_PROFILE"
+    },
+    "development_only": {
+      "const": true
+    },
+    "formal": {
+      "const": false
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "execution_authorized": {
+      "const": false
+    },
+    "allowed_script_commands": {
+      "const": [
+        "self-check"
+      ]
+    },
+    "storage": {
+      "type": "object",
+      "required": [
+        "approved_root",
+        "mount_target",
+        "mount_source",
+        "filesystem_type",
+        "owner",
+        "directory_mode_octal",
+        "minimum_free_bytes",
+        "required_directories",
+        "protected_paths"
+      ]
+    }
+  },
+  "additionalProperties": true
+}

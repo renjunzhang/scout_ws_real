@@ -1,0 +1,3574 @@
+#!/usr/bin/env python3
+"""Static gate and unprivileged runner for one fresh proc-stat boundary probe.
+
+``self-check`` is read-only and never invokes a subprocess. ``internal-run``
+is a supervisor-only entry point: it requires the exact root-owned snapshot,
+UID/GID 1000, empty groups, zero capabilities, NNP=1, and an explicit
+one-shot admission token.  It never writes a host file.
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import errno
+import hashlib
+import json
+import os
+import re
+import selectors
+import signal
+import stat
+import struct
+import subprocess
+import sys
+import time
+from collections import Counter
+from pathlib import Path
+from typing import Any, Mapping
+
+
+SCRIPT_PATH = Path(__file__).resolve()
+PACKAGE_DIR = SCRIPT_PATH.parent.parent
+WORKSPACE_ROOT = Path("/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid")
+SNAPSHOT_ENV = "R8_LIQUID_U3_PROC_STAT_BOUNDARY_PROBE_V5_SNAPSHOT"
+ADMISSION_ENV = "R8_LIQUID_U3_PROC_STAT_BOUNDARY_PROBE_V5_ADMISSION"
+ADMISSION_FD_ENV = "R8_LIQUID_U3_PROC_STAT_BOUNDARY_PROBE_V5_ADMISSION_FD"
+ADMISSION_SHA256_ENV = "R8_LIQUID_U3_PROC_STAT_BOUNDARY_PROBE_V5_ADMISSION_SHA256"
+PROBE_ID = "u3_proc_stat_apparmor_boundary_probe_v5_20260809T042751Z"
+SNAPSHOT_ROOT = Path(f"/run/r8-liquid-{PROBE_ID}.snapshot")
+ADMISSION_TOKEN = f"{PROBE_ID}:single-proc-stat-boundary-candidate-attempt"
+FROZEN_V6_FAILURE = {
+    "case_id": "u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z",
+    "campaign_id": "u3_c1m_solver_cpu_settle_ab_campaign_20260808T212044Z",
+    "policy": {
+        "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_solver_cpu_settle_cold_a_execution_policy_v6.json",
+        "sha256": "0affbcabd5b587464b1a32c38ebd2abb139063c4f50000e0252801d199d59270",
+        "size_bytes": 39_382,
+    },
+    "receipts": {
+        "start": {
+            "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.start.json",
+            "sha256": "07d1c2c3e212f8cd791531a59933695e7a078c7953808c842d28a19bd21f365f",
+            "size_bytes": 11_634,
+            "status": "V6_COLD_A_ONE_SHOT_STARTED_NO_RETRY_SAME_IDENTITY",
+        },
+        "execution": {
+            "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.execution.json",
+            "sha256": "7cba88d4793a58e05d2b7a0c6d843a8d6f0fec2e19541a9ff138a814ab1d4316",
+            "size_bytes": 13_787,
+            "status": "V6_COLD_A_ATTEMPT_ABORTED_NO_RETRY_SAME_IDENTITY",
+        },
+        "lifecycle_incomplete": {
+            "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.lifecycle_incomplete.json",
+            "sha256": "03958f6def1c609d21bd56120827d818085d5c3b96768a1da032f8b83c46b59f",
+            "size_bytes": 6_239,
+            "status": "V6_COLD_A_LIFECYCLE_OR_EXECUTION_INCOMPLETE_NO_RETRY_SAME_IDENTITY",
+        },
+    },
+    "stat_denials": {
+        "line_sha256": [
+            "7fabb53adb6cf6f8626bdc0056f663a73896dc133dde2bc14d12d9fcf73ad8e2",
+            "e511e301bf3cec1956573781301b3827b64085c7b9f17c84d5251ab1def23d17",
+        ],
+        "line_size_bytes": [320, 320],
+        "name": "/proc/3/stat",
+        "operation": "open",
+        "class": "file",
+        "requested_mask": "r",
+        "denied_mask": "r",
+        "fsuid": "1000",
+        "ouid": "0",
+    },
+    "source_use": "failure_provenance_only_no_snapshot_output_or_runtime_reuse",
+    "identity_consumed": True,
+    "retry_forbidden": True,
+    "cold_b_authorized": False,
+    "production_authorized": False,
+}
+V6_PROFILE_BASELINE = {
+    "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-solver-cpu-settle-cold-a-v6.profile",
+    "sha256": "a6841cd0fad78fa31e1a2a7b04eab0eb9158856884162112216ddcb8a01bfe0a",
+    "size_bytes": 3_540,
+    "bootstrap_profile": "r8-liquid-u3-c1m-solver-cpu-settle-cold-a-bootstrap-v6-20260808t212044z",
+    "runtime_profile": "r8-liquid-u3-c1m-solver-cpu-settle-cold-a-runtime-v6-20260808t212044z",
+    "effective_line_count": 64,
+}
+FROZEN_V1_NO_GO = {
+    "probe_id": "u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z",
+    "decision": "STATIC_NO_GO_FULL_PROFILE_AUTHORITY_DELTA_VIOLATION",
+    "blocker": {
+        "reason": "v1_added_three_dynamic_linker_read_allows_beyond_the_single_candidate_rule",
+        "exact_differences": [
+            {
+                "v1_rule": "/etc/ld.so.cache r,",
+                "v6_rule": "deny /etc/ld.so.cache r,",
+                "classification": "frozen_explicit_deny_replaced_by_allow",
+            },
+            {
+                "v1_rule": "/etc/ld.so.conf r,",
+                "v6_rule": None,
+                "classification": "new_allow_absent_from_v6",
+            },
+            {
+                "v1_rule": "/etc/ld.so.conf.d/** r,",
+                "v6_rule": None,
+                "classification": "new_allow_absent_from_v6",
+            },
+        ],
+    },
+    "snapshot": {
+        "root": "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.snapshot",
+        "owner": [0, 0],
+        "mode": "0555",
+        "nlink": 2,
+        "preserve_unchanged": True,
+        "files": {
+            "gate": {
+                "name": "r8_liquid_target_u3_proc_stat_boundary_probe_gate_v1.py",
+                "sha256": "07c4b9e0f962b9edc50945e3ad0eca09899b58487593ca021e4e8a537b9dcd32",
+                "size_bytes": 97_647,
+                "owner": [0, 0], "mode": "0444", "nlink": 1,
+            },
+            "supervisor": {
+                "name": "r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v1.py",
+                "sha256": "060467492da3fee5689f342b1ab6ecbe3ca33f99894e59a8967a871c07725e34",
+                "size_bytes": 147_548,
+                "owner": [0, 0], "mode": "0444", "nlink": 1,
+            },
+            "profile": {
+                "name": "r8-liquid-u3-proc-stat-boundary-probe-v1.profile",
+                "sha256": "d4949a663426e465c1f523170717f622420d5527792a6864239a7e46fbbcdfa8",
+                "size_bytes": 3_217,
+                "owner": [0, 0], "mode": "0444", "nlink": 1,
+            },
+            "schema": {
+                "name": "target_host_u3_proc_stat_boundary_probe_policy_v1.json",
+                "sha256": "b496cd89adab90fcb787d7c17fd0c25c47649c7856a7db84bb026956e82b8116",
+                "size_bytes": 35_116,
+                "owner": [0, 0], "mode": "0444", "nlink": 1,
+            },
+            "policy": {
+                "name": "liquid_zrj_msi_u2404_u3_proc_stat_boundary_probe_policy_v1.json",
+                "sha256": "27395abee5ae0a7784e9d49ae38d6c3a68a62b9f123a9e7a3854cd9be0605f0a",
+                "size_bytes": 26_497,
+                "owner": [0, 0], "mode": "0444", "nlink": 1,
+            },
+        },
+    },
+    "receipt_paths": {
+        "start": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.start.json",
+        "preflight_failure": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.preflight_incomplete.json",
+        "execution": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.execution.json",
+        "lifecycle": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.lifecycle.json",
+        "lifecycle_failure": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.lifecycle_incomplete.json",
+        "recovery": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.recovery.json",
+    },
+    "receipts_observed_absent": True,
+    "observed_facts": {
+        "snapshot_created": True,
+        "profile_loaded": False,
+        "probe_executed": False,
+        "receipt_created": False,
+    },
+    "source_use": "static_no_go_provenance_only_no_runtime_baseline_or_snapshot_artifact_reuse",
+    "identity_consumed": True,
+    "retry_forbidden": True,
+    "production_authorized": False,
+}
+FROZEN_V2_PRESTART_NO_GO = {
+    "probe_id": "u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z",
+    "decision": "PRE_START_NO_GO_IDENTITY_CONSUMED_RETRY_FORBIDDEN",
+    "snapshot": {
+        "root": "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.snapshot",
+        "owner": [0, 0],
+        "mode": "0555",
+        "nlink": 2,
+        "preserve_unchanged": True,
+        "files": {
+            "gate": {
+                "name": "r8_liquid_target_u3_proc_stat_boundary_probe_gate_v2.py",
+                "sha256": "7e6834a0bea5dde4d8678a0f95ad372d3e949f2293aa9c2f6bd36557826b35ce",
+                "size_bytes": 110_806,
+                "owner": [0, 0], "mode": "0444", "nlink": 1,
+            },
+            "supervisor": {
+                "name": "r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v2.py",
+                "sha256": "7d0c250583292fcc001166248cb035175102fbb0642d615423597398f4e1adaf",
+                "size_bytes": 160_716,
+                "owner": [0, 0], "mode": "0444", "nlink": 1,
+            },
+            "profile": {
+                "name": "r8-liquid-u3-proc-stat-boundary-probe-v2.profile",
+                "sha256": "aecb3951ab0c737c3c17f0d4fbcbb63ae4dea60564378612ff6a6b244edf3eea",
+                "size_bytes": 3_435,
+                "owner": [0, 0], "mode": "0444", "nlink": 1,
+            },
+            "schema": {
+                "name": "target_host_u3_proc_stat_boundary_probe_policy_v2.json",
+                "sha256": "a246d91891dae67368d2c94a15e3410f81d0b15d586eac5aff9806acd57d36c3",
+                "size_bytes": 44_684,
+                "owner": [0, 0], "mode": "0444", "nlink": 1,
+            },
+            "policy": {
+                "name": "liquid_zrj_msi_u2404_u3_proc_stat_boundary_probe_policy_v2.json",
+                "sha256": "53817a6e4e4fc2a0a05a15733587fb3bd14c94a4ccdeabd8fa2dcce483ec4249",
+                "size_bytes": 33_134,
+                "owner": [0, 0], "mode": "0444", "nlink": 1,
+            },
+        },
+    },
+    "preflight_receipt": {
+        "path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.preflight_incomplete.json",
+        "sha256": "6a110a57eb73e826aed0a64b23e48b624e0d2b1a5c57ac73129ec4a8547a5c9d",
+        "size_bytes": 3_418,
+        "owner": [1000, 1000],
+        "mode": "0440",
+        "nlink": 1,
+        "document_type": "SMPCC_R8_LIQUID_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V2_PREFLIGHT_FAILURE_RECEIPT",
+        "status": "PRE_START_FAILURE_IDENTITY_CONSUMED_NO_RETRY_SUDO_TIMESTAMP_CLEANED_NO_PROFILE_LOAD_OR_PROBE_EXECUTED",
+        "primary_error": "SupervisorError: snapshot artifact policy path differs: gate",
+        "requested_policy_sha256": "53817a6e4e4fc2a0a05a15733587fb3bd14c94a4ccdeabd8fa2dcce483ec4249",
+        "identity_consumed": True,
+        "parser_invoked_by_this_run": False,
+        "profile_load_attempted_by_this_run": False,
+        "probe_executed_by_this_run": False,
+        "start_receipt_created_by_this_run": False,
+        "sudo_timestamp_cleanup_attempted": True,
+        "sudo_timestamp_cleanup_proven": True,
+        "sudo_timestamp_cleanup_error": None,
+    },
+    "other_receipt_paths": {
+        "start": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.start.json",
+        "execution": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.execution.json",
+        "lifecycle": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.lifecycle.json",
+        "lifecycle_failure": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.lifecycle_incomplete.json",
+        "recovery": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.recovery.json",
+    },
+    "other_receipts_observed_absent": True,
+    "observed_facts": {
+        "snapshot_created": True,
+        "parser_invoked": False,
+        "profile_loaded": False,
+        "probe_executed": False,
+        "preflight_receipt_created": True,
+        "sudo_timestamp_cleanup_proven": True,
+    },
+    "source_use": "pre_start_no_go_snapshot_and_receipt_provenance_only_no_runtime_baseline_or_snapshot_artifact_reuse",
+    "runtime_baseline_authorized": False,
+    "snapshot_artifact_reuse_authorized": False,
+    "identity_consumed": True,
+    "retry_forbidden": True,
+    "solver_or_gencase_authorized": False,
+    "cold_a_successor_execution_authorized": False,
+    "u4_authorized": False,
+    "production_authorized": False,
+}
+
+FROZEN_V3_NO_GO = {
+    "probe_id": "u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z",
+    "decision": "RUNTIME_UNCLASSIFIED_NO_GO_LIFECYCLE_CLEANUP_PASS_IDENTITY_CONSUMED",
+    "policy_sha256": "ebcf74185757c456c0d6e04c7f24bea75dbf58aad9452fb38bf1317195777ff7",
+    "profiles": {
+        "bootstrap": "r8-liquid-u3-proc-stat-boundary-bootstrap-v3-20260809t022402z",
+        "runtime": "r8-liquid-u3-proc-stat-boundary-runtime-v3-20260809t022402z",
+    },
+    "snapshot": {
+        "root": "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.snapshot",
+        "owner": [0, 0], "mode": "0555", "nlink": 2, "preserve_unchanged": True,
+        "files": {
+            "gate": {"name": "r8_liquid_target_u3_proc_stat_boundary_probe_gate_v3.py", "sha256": "092041036cfb33639680e0b2c22d8dea2ab4f19184aae23dae7d1cf41849231e", "size_bytes": 126_425, "owner": [0, 0], "mode": "0444", "nlink": 1},
+            "supervisor": {"name": "r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v3.py", "sha256": "0d7c8c0c5ae19e2776669461d10b188c23ec7f2c62c1a64d5fd440a6e50d2945", "size_bytes": 177_888, "owner": [0, 0], "mode": "0444", "nlink": 1},
+            "profile": {"name": "r8-liquid-u3-proc-stat-boundary-probe-v3.profile", "sha256": "46c1af030a7798be0f259effe9ee790a91e7800307db01800980cd7f81513821", "size_bytes": 3_435, "owner": [0, 0], "mode": "0444", "nlink": 1},
+            "schema": {"name": "target_host_u3_proc_stat_boundary_probe_policy_v3.json", "sha256": "1a776f146042f0ce896b0999f3c2d2c61a7942bd183e13433f61615a6d4aa18a", "size_bytes": 50_093, "owner": [0, 0], "mode": "0444", "nlink": 1},
+            "policy": {"name": "liquid_zrj_msi_u2404_u3_proc_stat_boundary_probe_policy_v3.json", "sha256": "ebcf74185757c456c0d6e04c7f24bea75dbf58aad9452fb38bf1317195777ff7", "size_bytes": 38_063, "owner": [0, 0], "mode": "0444", "nlink": 1},
+        },
+    },
+    "receipts": {
+        "start": {"path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.start.json", "sha256": "6777d08c090ab2eebeae2fa05f60a8611d3405f37b15849997de81523c1ab27e", "size_bytes": 6_875, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "document_type": "SMPCC_R8_LIQUID_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V3_START_RECEIPT", "status": "ONE_SHOT_STARTED_NO_RETRY_CLEANUP_REQUIRED"},
+        "execution": {"path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.execution.json", "sha256": "6e360adb3a7b0270c3ffab4d5e19161c873f4d70315803cf331a1d05e5e6ab66", "size_bytes": 13_671, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "document_type": "SMPCC_R8_LIQUID_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V3_EXECUTION_RECEIPT", "status": "UNCLASSIFIED_PROBE_FAILURE_CLEANUP_PENDING"},
+        "lifecycle": {"path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.lifecycle.json", "sha256": "a24ecdcb5f0e5669bd2a480202f67dbccc8bc0df102677446e11f7ac1e789493", "size_bytes": 5_885, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "document_type": "SMPCC_R8_LIQUID_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V3_LIFECYCLE_RECEIPT", "status": "PASS_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V3_LIFECYCLE_CLEANUP"},
+    },
+    "receipt_chain": {
+        "execution_references_start": {"creation": "O_EXCL_NOFOLLOW_ONE_SHOT_NOT_IMMUTABLE_PARENT_OWNER_CAN_REMOVE", "file_and_parent_fsynced": True, "gid": 1000, "mode": "0440", "path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.start.json", "sha256": "6777d08c090ab2eebeae2fa05f60a8611d3405f37b15849997de81523c1ab27e", "size_bytes": 6_875, "uid": 1000},
+        "lifecycle_references_execution": {"creation": "O_EXCL_NOFOLLOW_ONE_SHOT_NOT_IMMUTABLE_PARENT_OWNER_CAN_REMOVE", "file_and_parent_fsynced": True, "gid": 1000, "mode": "0440", "path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.execution.json", "sha256": "6e360adb3a7b0270c3ffab4d5e19161c873f4d70315803cf331a1d05e5e6ab66", "size_bytes": 13_671, "uid": 1000},
+    },
+    "other_receipt_paths": {
+        "preflight_failure": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.preflight_incomplete.json",
+        "lifecycle_failure": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.lifecycle_incomplete.json",
+        "recovery": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.recovery.json",
+    },
+    "other_receipts_observed_absent": True,
+    "observed_facts": {
+        "snapshot_created": True, "profile_loaded": True, "probe_executed": True,
+        "gate_returncode": 2, "gate_stdout_size_bytes": 0, "gate_stderr_size_bytes": 28,
+        "gate_stderr_sha256": "b3eac43cdab8709f6554e701f1681049eaea7dc13eb2c56372b3c88948a893f2",
+        "gate_stderr_utf8_prefix": "R8_PROC_STAT_PROBE_V3_NO_GO\n", "gate_success_frame": None,
+        "audit_capture_valid": True, "audit_capture_errors": [], "expected_child_pid": None,
+        "matching_total": 0, "stat_denial_total": 0, "unexpected_total": 0,
+        "lifecycle_cleanup_pass": True, "profiles_unloaded": True,
+        "sysctls_unchanged": True, "sudo_timestamp_cleanup_proven": True,
+        "gencase_or_solver_executed": False, "host_writable_mount_used": False,
+        "network_or_device_exposed": False, "production_authorized": False,
+    },
+    "evidence_interpretation": {
+        "root_cause_claimed": False, "zero_logged_denials_is_lossless_authority_proof": False,
+        "lifecycle_pass_is_probe_pass": False,
+        "next_allowed_stage": "REVIEW_THIS_SINGLE_ATTEMPT_RECEIPT_AND_CREATE_FRESH_SUCCESSOR_ONLY",
+    },
+    "source_use": "runtime_no_go_provenance_only_no_snapshot_output_or_runtime_baseline_reuse",
+    "runtime_baseline_authorized": False, "snapshot_artifact_reuse_authorized": False,
+    "output_reuse_authorized": False, "identity_consumed": True, "retry_forbidden": True,
+    "cold_a_successor_execution_authorized": False, "u4_authorized": False,
+    "production_authorized": False,
+}
+
+FROZEN_V4_NO_GO = {
+    "probe_id": "u3_proc_stat_apparmor_boundary_probe_v4_20260809T031752Z",
+    "decision": "RUNTIME_ENUMERATED_HELPER_FAILURE_NO_GO_LIFECYCLE_CLEANUP_PASS_IDENTITY_CONSUMED",
+    "policy_sha256": "c9a8519862dbf46c37c6ec01dddee46e013a85b2dee63e16d133f256295f75d9",
+    "profiles": {
+        "bootstrap": "r8-liquid-u3-proc-stat-boundary-bootstrap-v4-20260809t031752z",
+        "runtime": "r8-liquid-u3-proc-stat-boundary-runtime-v4-20260809t031752z",
+    },
+    "snapshot": {
+        "root": "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v4_20260809T031752Z.snapshot",
+        "owner": [0, 0], "mode": "0555", "nlink": 2, "preserve_unchanged": True,
+        "files": {
+            "gate": {"name": "r8_liquid_target_u3_proc_stat_boundary_probe_gate_v4.py", "sha256": "2f82367c6f8c254936542a7c254aa9444001af988b91cdf9c1fe019e98707e94", "size_bytes": 153_408, "owner": [0, 0], "mode": "0444", "nlink": 1},
+            "supervisor": {"name": "r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v4.py", "sha256": "d1b84fe2a4f8ab5f97fc4636c289ce173d20fcda5f1b022d8082594205b62c91", "size_bytes": 206_047, "owner": [0, 0], "mode": "0444", "nlink": 1},
+            "profile": {"name": "r8-liquid-u3-proc-stat-boundary-probe-v4.profile", "sha256": "0fda8e9c96c473d0591d6e35edb1506f95634985c1ce9f0b0691cb1b37cb19fd", "size_bytes": 3_436, "owner": [0, 0], "mode": "0444", "nlink": 1},
+            "schema": {"name": "target_host_u3_proc_stat_boundary_probe_policy_v4.json", "sha256": "7076251bda663f2e413f1b736695081715b5b217cb66377a75152cb29a817b82", "size_bytes": 60_098, "owner": [0, 0], "mode": "0444", "nlink": 1},
+            "policy": {"name": "liquid_zrj_msi_u2404_u3_proc_stat_boundary_probe_policy_v4.json", "sha256": "c9a8519862dbf46c37c6ec01dddee46e013a85b2dee63e16d133f256295f75d9", "size_bytes": 47_148, "owner": [0, 0], "mode": "0444", "nlink": 1},
+        },
+    },
+    "receipts": {
+        "start": {"path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v4_20260809T031752Z.start.json", "sha256": "fd2fe250179651fe75a6affaab44d175240f48503c8d3a449b698ecbbc0a7dc4", "size_bytes": 6_875, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "document_type": "SMPCC_R8_LIQUID_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V4_START_RECEIPT", "status": "ONE_SHOT_STARTED_NO_RETRY_CLEANUP_REQUIRED"},
+        "execution": {"path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v4_20260809T031752Z.execution.json", "sha256": "35423eaee924044192b59ea8057b8ba65165587f03d6768948bc4c834cacca7e", "size_bytes": 14_127, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "document_type": "SMPCC_R8_LIQUID_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V4_EXECUTION_RECEIPT", "status": "ENUMERATED_HELPER_FAILURE_CLEANUP_PENDING"},
+        "lifecycle": {"path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v4_20260809T031752Z.lifecycle.json", "sha256": "ca5ffa0babdf92d4248d4d944206c12cc78694260caaf747d1fdbe785ea0106e", "size_bytes": 5_885, "owner": [1000, 1000], "mode": "0440", "nlink": 1, "document_type": "SMPCC_R8_LIQUID_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V4_LIFECYCLE_RECEIPT", "status": "PASS_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V4_LIFECYCLE_CLEANUP"},
+    },
+    "receipt_chain": {
+        "execution_references_start": {"creation": "O_EXCL_NOFOLLOW_ONE_SHOT_NOT_IMMUTABLE_PARENT_OWNER_CAN_REMOVE", "file_and_parent_fsynced": True, "gid": 1000, "mode": "0440", "path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v4_20260809T031752Z.start.json", "sha256": "fd2fe250179651fe75a6affaab44d175240f48503c8d3a449b698ecbbc0a7dc4", "size_bytes": 6_875, "uid": 1000},
+        "lifecycle_references_execution": {"creation": "O_EXCL_NOFOLLOW_ONE_SHOT_NOT_IMMUTABLE_PARENT_OWNER_CAN_REMOVE", "file_and_parent_fsynced": True, "gid": 1000, "mode": "0440", "path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v4_20260809T031752Z.execution.json", "sha256": "35423eaee924044192b59ea8057b8ba65165587f03d6768948bc4c834cacca7e", "size_bytes": 14_127, "uid": 1000},
+    },
+    "other_receipt_paths": {
+        "preflight_failure": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v4_20260809T031752Z.preflight_incomplete.json",
+        "lifecycle_failure": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v4_20260809T031752Z.lifecycle_incomplete.json",
+        "recovery": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v4_20260809T031752Z.recovery.json",
+    },
+    "other_receipts_observed_absent": True,
+    "journal_boundary": {
+        "boot_id": "aa0baa8d-a338-4ce7-99ab-e08ea38d73ca",
+        "admission_cursor": "s=5bee55426bd647e099b4bc581184b666;i=1cac9a;b=aa0baa8da3384ce799abe08ea38d73ca;m=de136f52c;t=658955a6adeda;x=31e11d9c19104f02",
+        "execution_start_cursor": "s=5bee55426bd647e099b4bc581184b666;i=1caccb;b=aa0baa8da3384ce799abe08ea38d73ca;m=e23ba0a2d;t=658959cedf3db;x=6e916cb29b9f9d1f",
+        "execution_end_cursor": "s=5bee55426bd647e099b4bc581184b666;i=1caccc;b=aa0baa8da3384ce799abe08ea38d73ca;m=e23c32635;t=658959cf70fe3;x=21dbd71609fff271",
+        "admission_anchor_sha256": "7f15cfa4dd02ff939b57d2353cec071acc58729dc1273a32719813add339d3bc",
+        "post_load_anchor_distinct": True,
+    },
+    "observed_facts": {
+        "gate_returncode": 2, "gate_stdout_size_bytes": 0,
+        "gate_stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "gate_stderr_size_bytes": 243,
+        "gate_stderr_sha256": "c324a9c1e610b1e25a89788d701d2c687dd7787b0a718e5ffdae1dd145b3421e",
+        "failure_frame": {"boundary_status": "STATUS_NOT_REACHED", "failure_code": "LIVE_STAT_NOT_NON_OWNER_ROOT_PROJECTION"},
+        "root_cause_status": "NOT_CLAIMED", "gate_success_frame": None,
+        "audit_capture_valid": True, "audit_capture_errors": [],
+        "audit_loss_marker_status": "NOT_OBSERVED", "audit_loss_marker_matching_total": 0,
+        "expected_child_pid": None, "matching_total": 0, "expected_status_total": 0,
+        "stat_denial_total": 0, "unexpected_total": 0, "stored_count": 0,
+        "dropped_count": 0, "storage_overflow": False,
+        "lifecycle_cleanup_pass": True, "profiles_unloaded": True,
+        "sysctls_unchanged": True, "sudo_timestamp_cleanup_proven": True,
+        "gencase_or_solver_executed": False, "host_writable_mount_used": False,
+        "network_or_device_exposed": False, "production_authorized": False,
+    },
+    "evidence_interpretation": {
+        "root_cause_claimed": False, "status_boundary_reached": False,
+        "zero_logged_denials_is_lossless_authority_proof": False,
+        "lifecycle_pass_is_probe_pass": False,
+        "next_allowed_stage": "REVIEW_THIS_SINGLE_ATTEMPT_RECEIPT_AND_CREATE_FRESH_SUCCESSOR_ONLY",
+    },
+    "source_use": "runtime_enumerated_no_go_provenance_only_no_snapshot_output_or_runtime_baseline_reuse",
+    "runtime_baseline_authorized": False, "snapshot_artifact_reuse_authorized": False,
+    "output_reuse_authorized": False, "identity_consumed": True, "retry_forbidden": True,
+    "cold_a_successor_execution_authorized": False, "u4_authorized": False,
+    "production_authorized": False,
+}
+
+BOOTSTRAP_PROFILE = "r8-liquid-u3-proc-stat-boundary-bootstrap-v5-20260809t042751z"
+RUNTIME_PROFILE = "r8-liquid-u3-proc-stat-boundary-runtime-v5-20260809t042751z"
+HOST_UID = 1000
+HOST_GID = 1000
+SUDO_GROUP_GID = 27
+SUDO_GROUP_MEMBERSHIP_CONTRACT = {
+    "path": "/etc/group",
+    "owner": [0, 0],
+    "mode": "0644",
+    "record": "sudo:x:27:zrj",
+    "group_name": "sudo",
+    "gid": SUDO_GROUP_GID,
+    "members": ["zrj"],
+}
+SUDO_CLEANUP_BOUNDING_MODE = "preserve_host_only"
+SUDO_CLEANUP_IDENTITY_CONTRACT = {
+    "reuid": HOST_UID,
+    "regid": HOST_GID,
+    "supplementary_groups": [SUDO_GROUP_GID],
+    "groups_mode": "EXACT_NUMERIC_GROUP_LIST_ONLY",
+    "bounding_mode": SUDO_CLEANUP_BOUNDING_MODE,
+    "bounding_argv_tokens": [],
+    "explicit_bounding_change_forbidden": True,
+    "inheritable_capabilities": "-all",
+    "ambient_capabilities": "-all",
+    "no_new_privs_option_present": False,
+    "shell": False,
+    "start_new_session": False,
+    "forbidden_group_options": ["--clear-groups", "--init-groups", "--keep-groups"],
+}
+TMPFS_BYTES = 67_108_864
+
+POLICY_NAME = "liquid_zrj_msi_u2404_u3_proc_stat_boundary_probe_policy_v5.json"
+SCHEMA_NAME = "target_host_u3_proc_stat_boundary_probe_policy_v5.json"
+PROFILE_NAME = "r8-liquid-u3-proc-stat-boundary-probe-v5.profile"
+SUPERVISOR_NAME = "r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v5.py"
+WORKSPACE_SUPERVISOR_PATH = WORKSPACE_ROOT / "scripts" / SUPERVISOR_NAME
+AA_STATUS_JSON_ARGV = ("/usr/sbin/aa-status", "--json")
+FROZEN_RECEIPT_PATHS = {
+    "start_receipt": f"/home/zrj/scout_liquid_lab/audits/{PROBE_ID}.start.json",
+    "preflight_failure_receipt": f"/home/zrj/scout_liquid_lab/audits/{PROBE_ID}.preflight_incomplete.json",
+    "execution_receipt": f"/home/zrj/scout_liquid_lab/audits/{PROBE_ID}.execution.json",
+    "lifecycle_receipt": f"/home/zrj/scout_liquid_lab/audits/{PROBE_ID}.lifecycle.json",
+    "lifecycle_failure_receipt": f"/home/zrj/scout_liquid_lab/audits/{PROBE_ID}.lifecycle_incomplete.json",
+    "recovery_receipt": f"/home/zrj/scout_liquid_lab/audits/{PROBE_ID}.recovery.json",
+}
+
+if SNAPSHOT_ENV in os.environ:
+    BASE = Path(os.environ[SNAPSHOT_ENV])
+    POLICY_PATH = BASE / POLICY_NAME
+    SCHEMA_PATH = BASE / SCHEMA_NAME
+    PROFILE_PATH = BASE / PROFILE_NAME
+    SUPERVISOR_PATH = BASE / SUPERVISOR_NAME
+else:
+    BASE = PACKAGE_DIR
+    POLICY_PATH = BASE / "config/target_hosts" / POLICY_NAME
+    SCHEMA_PATH = BASE / "schema" / SCHEMA_NAME
+    PROFILE_PATH = BASE / "config/apparmor_drafts" / PROFILE_NAME
+    SUPERVISOR_PATH = SCRIPT_PATH.with_name(SUPERVISOR_NAME)
+
+PAYLOAD_MAGIC = b"R8PROCSTATPROBE5\x00"
+SUCCESS_MAGIC = b"R8PROCSTATPASSV5\x00"
+FAILURE_MAGIC = b"R8PROCSTATFAILV5\x00"
+MAX_PAYLOAD_FRAME_BYTES = 65_536
+MAX_SUCCESS_FRAME_BYTES = 16_384
+FAILURE_PAYLOAD_BYTES = 192
+EXACT_FAILURE_FRAME_BYTES = len(FAILURE_MAGIC) + 2 + FAILURE_PAYLOAD_BYTES + 32
+MAX_CHILD_STDERR_BYTES = 4_096
+OUTER_DEADLINE_SECONDS = 20
+
+PROBE_ERROR_CODES = (
+    "self_status_parse", "guest_identity", "guest_capability_boundary",
+    "guest_no_new_privs", "bootstrap_label", "fd_leak", "tmpfs_size",
+    "mountinfo_parse", "mountinfo_fields", "tmpfs_identity",
+    "tmpfs_mount_options", "trailing_input", "stdin_eof_pipe",
+    "short_pipe_write", "child_ready_frame_size", "child_ready_frame_boundary",
+    "child_ready_frame_json", "child_ready_frame_canonical", "process_stat_size",
+    "process_stat_ascii", "process_stat_newline", "process_stat_identity",
+    "process_stat_fields", "process_stat_numeric", "process_stat_nonpositive",
+    "process_stat_zero_group", "process_group_double_scan_unstable",
+    "pidfd_unavailable", "leader_disappeared_during_freeze",
+    "leader_identity_changed_during_freeze",
+    "leader_state_or_owner_changed_during_freeze",
+    "leader_not_session_group_anchor", "stat_pair_missing", "stat_pair_identity",
+    "live_stat_is_zombie", "zombie_stat_state", "stat_pair_unstable",
+    "leader_absent_from_group_scan", "status_other_errno",
+    "status_unexpectedly_readable", "pr_set_dumpable", "pr_get_dumpable",
+    "child_identity_keys", "child_identity_boundary",
+    "live_stat_not_root_projection", "child_waitid_wnowait",
+    "zombie_stat_owner_changed", "zombie_group_not_exact", "child_final_reap",
+    "post_reap_group_residue", "success_payload_size",
+)
+HELPER_FAILURE_CODES = tuple(code.upper() for code in PROBE_ERROR_CODES) + (
+    "UNEXPECTED_OSERROR", "UNEXPECTED_VALUE_ERROR", "UNEXPECTED_UNICODE_ERROR",
+    "UNEXPECTED_INTERNAL_ERROR",
+)
+FAILURE_BOUNDARY_STATUSES = (
+    "STATUS_NOT_REACHED", "STATUS_READABLE",
+    "STATUS_EACCES_THEN_LATER_FAILURE", "STATUS_OTHER_ERRNO",
+)
+POST_EACCES_FAILURE_CODES = frozenset({
+    "SHORT_PIPE_WRITE", "PROCESS_STAT_SIZE", "PROCESS_STAT_ASCII",
+    "PROCESS_STAT_NEWLINE", "PROCESS_STAT_IDENTITY", "PROCESS_STAT_FIELDS",
+    "PROCESS_STAT_NUMERIC", "PROCESS_STAT_NONPOSITIVE", "PROCESS_STAT_ZERO_GROUP",
+    "PROCESS_GROUP_DOUBLE_SCAN_UNSTABLE", "STAT_PAIR_MISSING", "STAT_PAIR_IDENTITY",
+    "ZOMBIE_STAT_STATE", "STAT_PAIR_UNSTABLE", "CHILD_WAITID_WNOWAIT",
+    "ZOMBIE_STAT_OWNER_CHANGED", "ZOMBIE_GROUP_NOT_EXACT", "CHILD_FINAL_REAP",
+    "POST_REAP_GROUP_RESIDUE", "FD_LEAK", "SUCCESS_PAYLOAD_SIZE",
+    "UNEXPECTED_OSERROR", "UNEXPECTED_VALUE_ERROR", "UNEXPECTED_UNICODE_ERROR",
+    "UNEXPECTED_INTERNAL_ERROR",
+})
+PRE_OR_POST_FAILURE_CODES = frozenset({
+    "SHORT_PIPE_WRITE", "PROCESS_STAT_SIZE", "PROCESS_STAT_ASCII",
+    "PROCESS_STAT_NEWLINE", "PROCESS_STAT_IDENTITY", "PROCESS_STAT_FIELDS",
+    "PROCESS_STAT_NUMERIC", "PROCESS_STAT_NONPOSITIVE", "PROCESS_STAT_ZERO_GROUP",
+    "PROCESS_GROUP_DOUBLE_SCAN_UNSTABLE", "STAT_PAIR_MISSING", "STAT_PAIR_IDENTITY",
+    "STAT_PAIR_UNSTABLE", "FD_LEAK", "UNEXPECTED_OSERROR", "UNEXPECTED_VALUE_ERROR",
+    "UNEXPECTED_UNICODE_ERROR", "UNEXPECTED_INTERNAL_ERROR",
+})
+POST_EACCES_ONLY_FAILURE_CODES = POST_EACCES_FAILURE_CODES - PRE_OR_POST_FAILURE_CODES
+
+
+def failure_frame_semantics_are_compatible(failure_code: str, boundary_status: str) -> bool:
+    if boundary_status == "STATUS_READABLE":
+        return failure_code == "STATUS_UNEXPECTEDLY_READABLE"
+    if boundary_status == "STATUS_OTHER_ERRNO":
+        return failure_code == "STATUS_OTHER_ERRNO"
+    if failure_code in {"STATUS_UNEXPECTEDLY_READABLE", "STATUS_OTHER_ERRNO"}:
+        return False
+    if boundary_status == "STATUS_EACCES_THEN_LATER_FAILURE":
+        return failure_code in POST_EACCES_FAILURE_CODES
+    return (
+        boundary_status == "STATUS_NOT_REACHED"
+        and failure_code not in POST_EACCES_ONLY_FAILURE_CODES
+    )
+
+
+def failure_diagnostics_contract() -> dict[str, Any]:
+    codes = list(HELPER_FAILURE_CODES)
+    statuses = list(FAILURE_BOUNDARY_STATUSES)
+    pairs = sorted([
+        [code, status]
+        for code in codes
+        for status in statuses
+        if failure_frame_semantics_are_compatible(code, status)
+    ])
+
+    def digest(value: Any) -> str:
+        raw = json.dumps(value, ensure_ascii=True, separators=(",", ":")).encode("ascii")
+        return hashlib.sha256(raw).hexdigest()
+
+    return {
+        "transport": "STDERR_ONLY_STDOUT_RESERVED_FOR_SUCCESS_FRAME",
+        "encoding": "MAGIC_U16_LENGTH_CANONICAL_ASCII_JSON_ZERO_PADDING_SHA256_PAYLOAD",
+        "failure_magic_hex": FAILURE_MAGIC.hex(),
+        "failure_payload_bytes": FAILURE_PAYLOAD_BYTES,
+        "exact_failure_frame_bytes": EXACT_FAILURE_FRAME_BYTES,
+        "frame_keys": ["boundary_status", "failure_code"],
+        "failure_code_count": len(codes),
+        "failure_codes_sha256": digest(codes),
+        "boundary_status_count": len(statuses),
+        "boundary_statuses_sha256": digest(statuses),
+        "compatible_pair_count": len(pairs),
+        "compatible_pairs_sha256": digest(pairs),
+        "semantic_pair_validation_required": True,
+        "diagnostic_disclosure": "ENUM_ONLY_NO_PID_PATH_ERRNO_TEXT_ARGV_ENV_OR_NONCE",
+        "raw_exception_text_allowed": False,
+        "root_cause_claimed_by_enum": False,
+        "enumerated_failure_status": "ENUMERATED_HELPER_FAILURE_CLEANUP_PENDING",
+    }
+
+TRUSTED_TOOLS: dict[str, tuple[Path, str]] = {
+    "aa_exec": (Path("/usr/bin/aa-exec"), "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e"),
+    "bwrap": (Path("/usr/bin/bwrap"), "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"),
+    "python": (Path("/usr/bin/python3.12"), "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"),
+    "timeout": (Path("/usr/bin/timeout"), "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"),
+}
+
+
+PROC_MOUNT_RULE = 'mount fstype=proc options=(rw, nosuid, nodev, noexec) proc -> /newroot/proc/,'
+
+EVIDENCE_CLASSIFICATION_CONTRACT = {'success_requires_closed_frame': True, 'successful_gate_exit_is_pass': False, 'success_pass_requires': 'returncode_zero_empty_stderr_byte_exact_success_frame_userspace_proc_owner_projection_0_0_and_exactly_one_expected_dumpable_zero_child_status_denial_fsuid_1000_ouid_0_in_closed_boot_cursor_window', 'audit_storage_limit': 16, 'audit_line_limit_bytes': 4096, 'expected_counts': {'matching_total': 1, 'stored_count': 1, 'dropped_count': 0, 'expected_status_total': 1, 'stat_denial_total': 0, 'unexpected_total': 0, 'storage_overflow': False}, 'expected_status_denial': {'apparmor': 'DENIED', 'operation': 'open', 'class': 'file', 'profile': 'r8-liquid-u3-proc-stat-boundary-bootstrap-v5-20260809t042751z', 'name_template': '/proc/<SUCCESS_FRAME_CHILD_PID>/status', 'name_must_match_success_frame_child_pid': True, 'comm': 'python3.12', 'requested_mask': 'r', 'denied_mask': 'r', 'fsuid': '1000', 'ouid': '0', 'allowed_field_names': ['apparmor', 'operation', 'class', 'profile', 'name', 'pid', 'comm', 'requested_mask', 'denied_mask', 'fsuid', 'ouid']}, 'journal_boundary_required': True, 'strict_utf8_required': True, 'duplicate_or_escaped_critical_field_is_pass': False, 'audit_overflow_is_pass': False, 'gate_no_go_is_pass': False, 'userspace_owner_projection_is_non_owner_proof': False, 'exact_status_denial_is_non_owner_proof': True, 'zero_logged_denials_required': False, 'zero_denied_operations_claimed': False, 'stderr_contract': {'returncode': 0, 'stdout': 'byte_exact_canonical_success_frame', 'stderr_utf8': ''}, 'any_other_failure': 'UNCLASSIFIED_PROBE_FAILURE_CLEANUP_PENDING', 'success_authorizes': 'only_independent_review_and_static_design_of_a_fresh_cold_a_successor_no_solver_gencase_or_production'}
+JOURNAL_CONTRACT = {
+    "boot_id_path": "/proc/sys/kernel/random/boot_id",
+    "anchor_before_profile_load": True,
+    "admission_anchor_before_profile_load": True,
+    "pre_run_sync_after_profile_load": True,
+    "execution_anchor_after_profile_load_and_pre_run_sync": True,
+    "execution_window_excludes_profile_load_events": True,
+    "same_boot_id_required": True,
+    "start_cursor_required": True,
+    "end_cursor_required": True,
+    "after_cursor_query_required": True,
+    "strict_utf8_required": True,
+    "journal_sync_before_query": True,
+    "final_sync_before_execution_query": True,
+    "audit_suppression_or_loss_marker_fail_closed": True,
+    "audit_loss_marker_codes": [
+        "KAUDITD_CALLBACKS_SUPPRESSED",
+        "AUDIT_BACKLOG_LIMIT_EXCEEDED",
+        "AUDIT_RECORDS_LOST",
+    ],
+    "matching_labels": [BOOTSTRAP_PROFILE, RUNTIME_PROFILE],
+    "audit_storage_limit": 16,
+    "audit_line_limit_bytes": 4096,
+    "expected_status_denials": 1,
+    "unexpected_denials": 0,
+    "storage_overflow_allowed": False,
+    "profile_state_during_query":
+        "both fresh profiles exactly once enforce before and after query",
+    "prequery_label_quiescence":
+        "root all-task exact empty then three stable zero scans",
+    "postquery_label_quiescence":
+        "root all-task three stable zero scans before classification",
+}
+
+BASELINE_MOUNT_RULES = (
+    "mount options=(rw, silent, rslave) -> /,",
+    'mount fstype=tmpfs options=(rw, nosuid, nodev) -> /tmp/,',
+    'mount options=(rw, rbind) /tmp/newroot/ -> /tmp/newroot/,',
+    'pivot_root oldroot=/tmp/oldroot/ /tmp/,',
+    "mount options=(rw, silent, rprivate) -> /oldroot/,",
+    'umount /oldroot/,',
+    'pivot_root oldroot=/newroot/ /newroot/,',
+    "umount /,",
+    "mount options=(rw, rbind) /oldroot/usr/ -> /newroot/usr/,",
+    "remount options=(ro, nosuid, nodev, bind, silent, relatime) /newroot/usr/,",
+    'mount fstype=tmpfs options=(rw, nosuid, nodev) -> /newroot/work/,',
+    'mount fstype=proc options=(rw, nosuid, nodev, noexec) proc -> /newroot/proc/,',
+)
+
+EXPECTED_PROFILE_LINES = (
+    f"profile {BOOTSTRAP_PROFILE} flags=(attach_disconnected,mediate_deleted) {{",
+    "userns create,",
+    "/usr/bin/bwrap rix,",
+    "/usr/bin/python3.12 rix,",
+    "/ r,",
+    "/usr/ r,",
+    "/usr/lib/** mr,",
+    "/usr/lib64/** mr,",
+    "/lib/** mr,",
+    "/lib64/** mr,",
+    "deny /etc/ld.so.cache r,",
+    "/work/ rw,",
+    "/proc/ r,",
+    "owner /proc/** r,",
+    "owner /proc/*/uid_map w,",
+    "owner /proc/*/gid_map w,",
+    "owner /proc/*/setgroups w,",
+    "/proc/[0-9]*/stat r,",
+    "/proc/filesystems r,",
+    "/proc/sys/kernel/overflowuid r,",
+    "/proc/sys/kernel/overflowgid r,",
+    "/proc/sys/user/max_user_namespaces w,",
+    "/proc/stat r,",
+    *BASELINE_MOUNT_RULES,
+    "/tmp/newroot/ rw,",
+    "/tmp/newroot/** rw,",
+    "/tmp/oldroot/ rw,",
+    "/tmp/oldroot/** rw,",
+    "/newroot/usr/ rw,",
+    "/newroot/lib wl,",
+    "/newroot/lib64 wl,",
+    "/newroot/work/ rw,",
+    "/newroot/proc/ rw,",
+    "deny capability dac_override,",
+    "capability sys_admin,",
+    "capability sys_ptrace,",
+    "capability sys_resource,",
+    "capability setpcap,",
+    "capability net_admin,",
+    f"ptrace (read, readby) peer={BOOTSTRAP_PROFILE},",
+    f"signal (send,receive) set=(term,kill,exists) peer={BOOTSTRAP_PROFILE},",
+    "signal (receive) set=(term,kill,exists) peer=unconfined,",
+    "network unix dgram,",
+    "network inet dgram,",
+    "network inet6 dgram,",
+    "network netlink raw,",
+    "}",
+    f"profile {RUNTIME_PROFILE} flags=(attach_disconnected,mediate_deleted) {{",
+    "}",
+)
+EXPECTED_PROFILE_LINES_SHA256 = hashlib.sha256(
+    ("\n".join(EXPECTED_PROFILE_LINES) + "\n").encode("utf-8")
+).hexdigest()
+EXPECTED_FULL_AUTHORITY_ADDITIONS = ("/proc/[0-9]*/stat r,",)
+EXPECTED_FULL_AUTHORITY_REMOVALS = (
+    "/work/runtime/ld-linux-x86-64.so.2 rix,",
+    "/work/** rw,",
+    "/work/runtime/ld-linux-x86-64.so.2 mr,",
+    "/work/runtime/DualSPHysics5.4CPU_linux64 mr,",
+    "/work/runtime/lib/** mr,",
+)
+EXPECTED_NORMALIZED_PROFILE_LINES_SHA256 = "93bd45c83d3a8cece8f9acd327f478322e0d85dc35a01ba725da86635e3097b6"
+
+
+HELPER_SOURCE = rf'''import ctypes
+import errno
+import hashlib
+import json
+import os
+import signal
+import stat
+import struct
+import sys
+from collections import namedtuple
+
+READ_EXACT = FRAME_READ_EXACT
+STREAM = FRAME_STREAM
+BOOTSTRAP_PROFILE = {BOOTSTRAP_PROFILE!r}
+SUCCESS_MAGIC = {SUCCESS_MAGIC!r}
+FAILURE_MAGIC = {FAILURE_MAGIC!r}
+FAILURE_PAYLOAD_BYTES = {FAILURE_PAYLOAD_BYTES}
+EXACT_FAILURE_FRAME_BYTES = {EXACT_FAILURE_FRAME_BYTES}
+PROBE_ERROR_CODES = {PROBE_ERROR_CODES!r}
+FAILURE_CODES = {HELPER_FAILURE_CODES!r}
+FAILURE_BOUNDARY_STATUSES = {FAILURE_BOUNDARY_STATUSES!r}
+POST_EACCES_FAILURE_CODES = frozenset({tuple(sorted(POST_EACCES_FAILURE_CODES))!r})
+POST_EACCES_ONLY_FAILURE_CODES = frozenset({tuple(sorted(POST_EACCES_ONLY_FAILURE_CODES))!r})
+WORK_TMPFS_BYTES = {TMPFS_BYTES}
+ProcessMember = namedtuple("ProcessMember", "pid state pgrp session starttime file_uid file_gid")
+STATUS_OBSERVATION = "STATUS_NOT_REACHED"
+
+def failure_frame_semantics_are_compatible(failure_code, boundary_status):
+    if boundary_status == "STATUS_READABLE":
+        return failure_code == "STATUS_UNEXPECTEDLY_READABLE"
+    if boundary_status == "STATUS_OTHER_ERRNO":
+        return failure_code == "STATUS_OTHER_ERRNO"
+    if failure_code in {{"STATUS_UNEXPECTEDLY_READABLE", "STATUS_OTHER_ERRNO"}}:
+        return False
+    if boundary_status == "STATUS_EACCES_THEN_LATER_FAILURE":
+        return failure_code in POST_EACCES_FAILURE_CODES
+    return (
+        boundary_status == "STATUS_NOT_REACHED"
+        and failure_code not in POST_EACCES_ONLY_FAILURE_CODES
+    )
+
+class ProbeError(RuntimeError):
+    def __init__(self, code):
+        if code not in PROBE_ERROR_CODES:
+            raise RuntimeError("unregistered_probe_error")
+        self.code = code
+        super().__init__(code)
+
+def read_self_identity():
+    fields = {{}}
+    with open("/proc/self/status", "r", encoding="ascii") as source:
+        for line in source:
+            if ":" in line:
+                key, value = line.split(":", 1)
+                fields[key] = value.strip()
+    try:
+        result = {{
+            "uid": [int(value) for value in fields["Uid"].split()],
+            "gid": [int(value) for value in fields["Gid"].split()],
+            "groups": [int(value) for value in fields["Groups"].split()],
+            "capabilities": {{
+                key: int(fields[key], 16)
+                for key in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")
+            }},
+            "no_new_privs": int(fields["NoNewPrivs"]),
+        }}
+    except (KeyError, ValueError) as exc:
+        raise ProbeError("self_status_parse") from exc
+    if result["uid"] != [0, 0, 0, 0] or result["gid"] != [0, 0, 0, 0]:
+        raise ProbeError("guest_identity")
+    if result["groups"] or any(result["capabilities"].values()):
+        raise ProbeError("guest_capability_boundary")
+    if result["no_new_privs"] != 1:
+        raise ProbeError("guest_no_new_privs")
+    return result
+
+def read_label():
+    with open("/proc/self/attr/current", "r", encoding="ascii") as source:
+        observed = source.read().strip()
+    expected = BOOTSTRAP_PROFILE + " (enforce)"
+    if observed != expected:
+        raise ProbeError("bootstrap_label")
+    return observed
+
+def live_fds(expected):
+    live = set()
+    for name in os.listdir("/proc/self/fd"):
+        try:
+            descriptor = int(name)
+        except ValueError:
+            continue
+        try:
+            os.fstat(descriptor)
+        except OSError as exc:
+            if exc.errno == errno.EBADF:
+                continue
+            raise
+        live.add(descriptor)
+    if live != set(expected):
+        raise ProbeError("fd_leak")
+    return sorted(live)
+
+def verify_work_tmpfs():
+    facts = os.statvfs("/work")
+    total_bytes = facts.f_blocks * facts.f_frsize
+    if total_bytes != WORK_TMPFS_BYTES:
+        raise ProbeError("tmpfs_size")
+    matches = []
+    with open("/proc/self/mountinfo", "r", encoding="ascii") as source:
+        for line in source:
+            left, separator, right = line.rstrip("\n").partition(" - ")
+            if not separator:
+                raise ProbeError("mountinfo_parse")
+            fields = left.split()
+            filesystem_fields = right.split()
+            if len(fields) < 6 or len(filesystem_fields) < 3:
+                raise ProbeError("mountinfo_fields")
+            if fields[4] == "/work":
+                matches.append({{
+                    "filesystem_type": filesystem_fields[0],
+                    "mount_options": fields[5].split(","),
+                }})
+    if len(matches) != 1 or matches[0]["filesystem_type"] != "tmpfs":
+        raise ProbeError("tmpfs_identity")
+    if not {{"rw", "nosuid", "nodev"}}.issubset(set(matches[0]["mount_options"])):
+        raise ProbeError("tmpfs_mount_options")
+    return {{
+        "filesystem_type": "tmpfs",
+        "total_bytes": total_bytes,
+        "mount_options": matches[0]["mount_options"],
+    }}
+
+def consume_payload_and_install_eof():
+    if STREAM.read(1) != b"":
+        raise ProbeError("trailing_input")
+    STREAM.close()
+    try:
+        os.close(0)
+    except OSError as exc:
+        if exc.errno != errno.EBADF:
+            raise
+    read_end, write_end = os.pipe2(os.O_CLOEXEC)
+    os.close(write_end)
+    if read_end != 0:
+        os.dup2(read_end, 0, inheritable=True)
+        os.close(read_end)
+    else:
+        os.set_inheritable(0, True)
+    if os.read(0, 1) != b"" or not os.get_inheritable(0):
+        raise ProbeError("stdin_eof_pipe")
+
+def write_all(descriptor, raw):
+    view = memoryview(raw)
+    while view:
+        count = os.write(descriptor, view)
+        if count <= 0:
+            raise ProbeError("short_pipe_write")
+        view = view[count:]
+
+def read_child_frame(descriptor):
+    value = bytearray()
+    while True:
+        block = os.read(descriptor, 512)
+        if not block:
+            break
+        value.extend(block)
+        if len(value) > 4096:
+            raise ProbeError("child_ready_frame_size")
+    if not value.endswith(b"\n") or value.count(b"\n") != 1:
+        raise ProbeError("child_ready_frame_boundary")
+    try:
+        observed = json.loads(value[:-1].decode("ascii"))
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise ProbeError("child_ready_frame_json") from exc
+    canonical = json.dumps(observed, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+    if canonical != bytes(value):
+        raise ProbeError("child_ready_frame_canonical")
+    return observed
+
+def member_record(member):
+    return {{
+        "pid": member.pid,
+        "state": member.state,
+        "pgrp": member.pgrp,
+        "session": member.session,
+        "starttime": member.starttime,
+        "stat_uid": member.file_uid,
+        "stat_gid": member.file_gid,
+    }}
+
+def read_process_member(pid, skip_ungrouped_kernel_task=False):
+    path = f"/proc/{{pid}}/stat"
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except FileNotFoundError:
+        return None
+    try:
+        metadata = os.fstat(descriptor)
+        raw = bytearray()
+        while len(raw) <= 4096:
+            block = os.read(descriptor, 4097 - len(raw))
+            if not block:
+                break
+            raw.extend(block)
+        if len(raw) > 4096 or os.read(descriptor, 1) != b"":
+            raise ProbeError("process_stat_size")
+    finally:
+        os.close(descriptor)
+    try:
+        text = bytes(raw).decode("ascii")
+    except UnicodeError as exc:
+        raise ProbeError("process_stat_ascii") from exc
+    if not text.endswith("\n"):
+        raise ProbeError("process_stat_newline")
+    close = text.rfind(")")
+    if close < 2 or not text[:close].startswith(f"{{pid}} ("):
+        raise ProbeError("process_stat_identity")
+    fields = text[close + 2:].split()
+    if len(fields) < 20 or len(fields[0]) != 1:
+        raise ProbeError("process_stat_fields")
+    try:
+        pgrp = int(fields[2])
+        session_id = int(fields[3])
+        starttime = int(fields[19])
+    except ValueError as exc:
+        raise ProbeError("process_stat_numeric") from exc
+    if pgrp < 0 or session_id < 0 or starttime < 1:
+        raise ProbeError("process_stat_nonpositive")
+    if pgrp == 0 and session_id == 0 and skip_ungrouped_kernel_task:
+        return None
+    if pgrp == 0 or session_id == 0:
+        raise ProbeError("process_stat_zero_group")
+    return ProcessMember(
+        pid, fields[0], pgrp, session_id, starttime, metadata.st_uid, metadata.st_gid
+    )
+
+def scan_group_members_once(pgid):
+    members = []
+    with os.scandir("/proc") as entries:
+        for entry in entries:
+            if not entry.name.isascii() or not entry.name.isdecimal():
+                continue
+            member = read_process_member(
+                int(entry.name), skip_ungrouped_kernel_task=True
+            )
+            if member is not None and member.pgrp == pgid:
+                members.append(member)
+    return sorted(members)
+
+def group_members(pgid):
+    first = scan_group_members_once(pgid)
+    second = scan_group_members_once(pgid)
+    if first != second:
+        raise ProbeError("process_group_double_scan_unstable")
+    return first
+
+def capture_group(pid):
+    if not hasattr(os, "pidfd_open") or not hasattr(os, "P_PIDFD"):
+        raise ProbeError("pidfd_unavailable")
+    pidfd = os.pidfd_open(pid, 0)
+    try:
+        first = read_process_member(pid)
+        second = read_process_member(pid)
+        if first is None or second is None:
+            raise ProbeError("leader_disappeared_during_freeze")
+        identity = (pid, first.pgrp, first.session, first.starttime)
+        if identity != (pid, second.pgrp, second.session, second.starttime):
+            raise ProbeError("leader_identity_changed_during_freeze")
+        if (
+            first.state != second.state
+            or first.file_uid != second.file_uid
+            or first.file_gid != second.file_gid
+        ):
+            raise ProbeError("leader_state_or_owner_changed_during_freeze")
+        if (
+            pid != first.pgrp
+            or pid != first.session
+            or os.getpgid(pid) != pid
+            or os.getsid(pid) != pid
+        ):
+            raise ProbeError("leader_not_session_group_anchor")
+        return pidfd, identity, first
+    except BaseException:
+        os.close(pidfd)
+        raise
+
+def require_pair(pid, expected_identity, expected_state):
+    first = read_process_member(pid)
+    second = read_process_member(pid)
+    if first is None or second is None:
+        raise ProbeError("stat_pair_missing")
+    records = [first, second]
+    for member in records:
+        identity = (member.pid, member.pgrp, member.session, member.starttime)
+        if identity != expected_identity:
+            raise ProbeError("stat_pair_identity")
+        if expected_state == "live" and member.state == "Z":
+            raise ProbeError("live_stat_is_zombie")
+        if expected_state == "zombie" and member.state != "Z":
+            raise ProbeError("zombie_stat_state")
+    if (
+        first.state != second.state
+        or first.file_uid != second.file_uid
+        or first.file_gid != second.file_gid
+    ):
+        raise ProbeError("stat_pair_unstable")
+    return [member_record(first), member_record(second)]
+
+def preflight_group_scan(expected_identity):
+    members = group_members(expected_identity[1])
+    if not any(
+        (member.pid, member.pgrp, member.session, member.starttime)
+        == expected_identity
+        for member in members
+    ):
+        raise ProbeError("leader_absent_from_group_scan")
+    return [member_record(member) for member in members]
+
+def expected_inner_proc_root_owner():
+    # On this Ubuntu 24.04 / Linux 6.8 host, fstat(2) for the dumpable-zero
+    # child remains projected as root:root inside the user namespace.  This
+    # userspace projection is only a consistency check; the outer journal's
+    # exact status DENIED (fsuid=1000, ouid=0) is the non-owner proof.
+    return {{"uid": 0, "gid": 0}}
+
+def require_status_eacces_once(pid):
+    global STATUS_OBSERVATION
+    path = f"/proc/{{pid}}/status"
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    except OSError as exc:
+        if type(exc.errno) is not int or exc.errno != errno.EACCES:
+            STATUS_OBSERVATION = "STATUS_OTHER_ERRNO"
+            raise ProbeError("status_other_errno") from exc
+        STATUS_OBSERVATION = "STATUS_EACCES_OBSERVED"
+        return {{"attempt_count": 1, "path": path, "errno": errno.EACCES}}
+    else:
+        os.close(descriptor)
+        STATUS_OBSERVATION = "STATUS_READABLE"
+        raise ProbeError("status_unexpectedly_readable")
+
+def child_main(ready_fd, release_fd):
+    try:
+        os.setsid()
+        identity = read_self_identity()
+        libc = ctypes.CDLL(None, use_errno=True)
+        ctypes.set_errno(0)
+        if libc.prctl(4, 0, 0, 0, 0) != 0:
+            raise ProbeError("pr_set_dumpable")
+        if libc.prctl(3, 0, 0, 0, 0) != 0:
+            raise ProbeError("pr_get_dumpable")
+        identity.update({{
+            "pid": os.getpid(),
+            "pgrp": os.getpgrp(),
+            "session": os.getsid(0),
+            "dumpable": 0,
+        }})
+        raw = json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("ascii") + b"\n"
+        write_all(ready_fd, raw)
+        os.close(ready_fd)
+        released = os.read(release_fd, 2)
+        os.close(release_fd)
+        os._exit(0 if released == b"R" else 92)
+    except BaseException:
+        try:
+            os.close(ready_fd)
+        except OSError:
+            pass
+        try:
+            os.close(release_fd)
+        except OSError:
+            pass
+        os._exit(91)
+
+def run_proc_stat_probe():
+    ready_read, ready_write = os.pipe2(os.O_CLOEXEC)
+    release_read, release_write = os.pipe2(os.O_CLOEXEC)
+    pid = os.fork()
+    if pid == 0:
+        os.close(ready_read)
+        os.close(release_write)
+        child_main(ready_write, release_read)
+    os.close(ready_write)
+    os.close(release_read)
+    pidfd = -1
+    released = False
+    reaped = False
+    try:
+        child_identity = read_child_frame(ready_read)
+        os.close(ready_read)
+        ready_read = -1
+        expected_child_keys = {{
+            "uid", "gid", "groups", "capabilities", "no_new_privs",
+            "pid", "pgrp", "session", "dumpable",
+        }}
+        if set(child_identity) != expected_child_keys:
+            raise ProbeError("child_identity_keys")
+        if (
+            child_identity["pid"] != pid
+            or child_identity["pgrp"] != pid
+            or child_identity["session"] != pid
+            or child_identity["dumpable"] != 0
+            or child_identity["uid"] != [0, 0, 0, 0]
+            or child_identity["gid"] != [0, 0, 0, 0]
+            or child_identity["groups"] != []
+            or child_identity["no_new_privs"] != 1
+            or any(child_identity["capabilities"].values())
+        ):
+            raise ProbeError("child_identity_boundary")
+        pidfd, identity, frozen = capture_group(pid)
+        live_group = preflight_group_scan(identity)
+        live_stat_pair = require_pair(pid, identity, "live")
+        root_owner = expected_inner_proc_root_owner()
+        if any(
+            member["stat_uid"] != root_owner["uid"]
+            or member["stat_gid"] != root_owner["gid"]
+            for member in live_stat_pair
+        ):
+            raise ProbeError("live_stat_not_root_projection")
+        status_denial = require_status_eacces_once(pid)
+        write_all(release_write, b"R")
+        os.close(release_write)
+        release_write = -1
+        released = True
+        observed = os.waitid(os.P_PIDFD, pidfd, os.WEXITED | os.WNOWAIT)
+        if (
+            observed is None
+            or observed.si_pid != pid
+            or observed.si_code != os.CLD_EXITED
+            or observed.si_status != 0
+        ):
+            raise ProbeError("child_waitid_wnowait")
+        zombie_stat_pair = require_pair(pid, identity, "zombie")
+        if any(
+            member["stat_uid"] != root_owner["uid"]
+            or member["stat_gid"] != root_owner["gid"]
+            for member in zombie_stat_pair
+        ):
+            raise ProbeError("zombie_stat_owner_changed")
+        zombie_members = group_members(identity[1])
+        if zombie_members != [
+            ProcessMember(
+                pid, "Z", identity[1], identity[2], identity[3],
+                frozen.file_uid, frozen.file_gid,
+            )
+        ]:
+            raise ProbeError("zombie_group_not_exact")
+        reaped_result = os.waitid(os.P_PIDFD, pidfd, os.WEXITED)
+        reaped = True
+        if (
+            reaped_result is None
+            or reaped_result.si_pid != pid
+            or reaped_result.si_code != os.CLD_EXITED
+            or reaped_result.si_status != 0
+        ):
+            raise ProbeError("child_final_reap")
+        final_scans = [
+            [member_record(member) for member in scan_group_members_once(identity[1])],
+            [member_record(member) for member in scan_group_members_once(identity[1])],
+        ]
+        if final_scans != [[], []]:
+            raise ProbeError("post_reap_group_residue")
+        return {{
+            "child_identity": child_identity,
+            "frozen_identity": {{
+                "pid": identity[0],
+                "pgrp": identity[1],
+                "session": identity[2],
+                "starttime": identity[3],
+                "pidfd_opened": True,
+            }},
+            "live_group_scan": live_group,
+            "live_stat_pair": live_stat_pair,
+            "inner_proc_owner_projection": root_owner,
+            "status_denial": status_denial,
+            "waitid_wnowait": {{
+                "pid": observed.si_pid,
+                "code": observed.si_code,
+                "status": observed.si_status,
+            }},
+            "zombie_stat_pair": zombie_stat_pair,
+            "final_reap": {{
+                "pid": reaped_result.si_pid,
+                "code": reaped_result.si_code,
+                "status": reaped_result.si_status,
+            }},
+            "post_reap_group_scans": final_scans,
+        }}
+    finally:
+        if ready_read >= 0:
+            try:
+                os.close(ready_read)
+            except OSError:
+                pass
+        if not reaped:
+            if not released and release_write >= 0:
+                try:
+                    write_all(release_write, b"R")
+                    released = True
+                except (OSError, ProbeError):
+                    pass
+            if release_write >= 0:
+                try:
+                    os.close(release_write)
+                except OSError:
+                    pass
+                release_write = -1
+            try:
+                waited, _status = os.waitpid(pid, os.WNOHANG)
+            except ChildProcessError:
+                waited = pid
+            if waited == 0:
+                try:
+                    if pidfd >= 0:
+                        signal.pidfd_send_signal(pidfd, signal.SIGKILL)
+                    else:
+                        os.killpg(pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                try:
+                    os.waitpid(pid, 0)
+                except ChildProcessError:
+                    pass
+        elif release_write >= 0:
+            try:
+                os.close(release_write)
+            except OSError:
+                pass
+        if pidfd >= 0:
+            os.close(pidfd)
+
+def emit_success(value):
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii")
+    if len(payload) > 8192:
+        raise ProbeError("success_payload_size")
+    frame = SUCCESS_MAGIC + struct.pack(">I", len(payload)) + payload + hashlib.sha256(payload).digest()
+    write_all(1, frame)
+
+def emit_failure(code):
+    failure_code = code.upper()
+    boundary_status = STATUS_OBSERVATION
+    if boundary_status == "STATUS_EACCES_OBSERVED":
+        boundary_status = "STATUS_EACCES_THEN_LATER_FAILURE"
+    if (
+        failure_code not in FAILURE_CODES
+        or boundary_status not in FAILURE_BOUNDARY_STATUSES
+        or not failure_frame_semantics_are_compatible(failure_code, boundary_status)
+    ):
+        failure_code = "UNEXPECTED_INTERNAL_ERROR"
+        boundary_status = "STATUS_NOT_REACHED"
+    payload = json.dumps(
+        {{"boundary_status": boundary_status, "failure_code": failure_code}},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("ascii")
+    if len(payload) > FAILURE_PAYLOAD_BYTES:
+        return
+    padding = b"\x00" * (FAILURE_PAYLOAD_BYTES - len(payload))
+    frame = FAILURE_MAGIC + struct.pack(">H", len(payload)) + payload + padding + hashlib.sha256(payload).digest()
+    if len(frame) != EXACT_FAILURE_FRAME_BYTES:
+        return
+    try:
+        view = memoryview(frame)
+        while view:
+            count = os.write(2, view)
+            if count <= 0:
+                return
+            view = view[count:]
+    except OSError:
+        pass
+
+def main():
+    bootstrap_label = read_label()
+    bootstrap_identity = read_self_identity()
+    work_tmpfs = verify_work_tmpfs()
+    consume_payload_and_install_eof()
+    fds_after_payload = live_fds({{0, 1, 2}})
+    probe = run_proc_stat_probe()
+    fds_before_success = live_fds({{0, 1, 2}})
+    emit_success({{
+        "status": "PASS_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V5",
+        "bootstrap_profile": BOOTSTRAP_PROFILE,
+        "bootstrap_label": bootstrap_label,
+        "bootstrap_identity": bootstrap_identity,
+        "work_tmpfs": work_tmpfs,
+        "host_payload_consumed_and_fd0_replaced_with_eof_pipe": True,
+        "fds_after_payload": fds_after_payload,
+        "proc_stat_probe": probe,
+        "fds_before_success": fds_before_success,
+        "host_writable_mounts": [],
+    }})
+    return 0
+
+try:
+    raise SystemExit(main())
+except ProbeError as exc:
+    emit_failure(exc.code)
+    raise SystemExit(2)
+except UnicodeError:
+    emit_failure("UNEXPECTED_UNICODE_ERROR")
+    raise SystemExit(2)
+except ValueError:
+    emit_failure("UNEXPECTED_VALUE_ERROR")
+    raise SystemExit(2)
+except OSError:
+    emit_failure("UNEXPECTED_OSERROR")
+    raise SystemExit(2)
+except Exception:
+    emit_failure("UNEXPECTED_INTERNAL_ERROR")
+    raise SystemExit(2)
+'''
+HELPER_BYTES = HELPER_SOURCE.encode("utf-8")
+HELPER_SHA256 = hashlib.sha256(HELPER_BYTES).hexdigest()
+HELPER_SIZE_BYTES = len(HELPER_BYTES)
+
+LOADER_SOURCE = f'''import hashlib,struct,sys
+B=sys.stdin.buffer
+def r(n):
+ d=bytearray()
+ while len(d)<n:
+  x=B.read(n-len(d))
+  if not x: raise SystemExit(91)
+  d.extend(x)
+ return bytes(d)
+if r({len(PAYLOAD_MAGIC)})!={PAYLOAD_MAGIC!r}: raise SystemExit(92)
+n=struct.unpack(">I",r(4))[0]
+h=r(32)
+if n!={HELPER_SIZE_BYTES} or h.hex()!="{HELPER_SHA256}": raise SystemExit(93)
+p=r(n)
+if hashlib.sha256(p).digest()!=h: raise SystemExit(94)
+g={{"__name__":"__main__","FRAME_READ_EXACT":r,"FRAME_STREAM":B}}
+exec(compile(p,"<r8-proc-stat-boundary-helper-v5>","exec",dont_inherit=True,optimize=2),g,g)
+'''
+LOADER_BYTES = LOADER_SOURCE.encode("ascii")
+LOADER_SHA256 = hashlib.sha256(LOADER_BYTES).hexdigest()
+LOADER_SIZE_BYTES = len(LOADER_BYTES)
+
+sys.dont_write_bytecode = True
+
+
+class GateError(RuntimeError):
+    """A fail-closed static, identity, framing, or conduit error."""
+
+
+def read_regular_bytes(path: Path, *, limit: int = 2 * 1024 * 1024) -> bytes:
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1 or metadata.st_size > limit:
+            raise GateError(f"unsafe regular file: {path}")
+        result = bytearray()
+        while True:
+            block = os.read(descriptor, min(1 << 20, limit + 1 - len(result)))
+            if not block:
+                return bytes(result)
+            result.extend(block)
+            if len(result) > limit:
+                raise GateError(f"regular file exceeds ceiling: {path}")
+    finally:
+        os.close(descriptor)
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        value: dict[str, Any] = {}
+        for key, item in pairs:
+            if key in value:
+                raise GateError(f"duplicate JSON key in {path}: {key}")
+            value[key] = item
+        return value
+
+    try:
+        value = json.loads(
+            read_regular_bytes(path).decode("utf-8"),
+            object_pairs_hook=reject_duplicates,
+        )
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise GateError(f"invalid JSON: {path}") from exc
+    if not isinstance(value, dict):
+        raise GateError(f"JSON root is not an object: {path}")
+    return value
+
+
+def sha256_bytes(raw: bytes) -> str:
+    return hashlib.sha256(raw).hexdigest()
+
+
+def verify_v6_failure_provenance() -> dict[str, Any]:
+    frozen = FROZEN_V6_FAILURE
+    policy_record = frozen["policy"]
+    policy_raw = read_regular_bytes(Path(policy_record["path"]))
+    if (
+        len(policy_raw) != policy_record["size_bytes"]
+        or sha256_bytes(policy_raw) != policy_record["sha256"]
+    ):
+        raise GateError("frozen v6 policy bytes differ")
+    try:
+        v6_policy = json.loads(
+            policy_raw.decode("utf-8"),
+            object_pairs_hook=lambda pairs: _strict_pairs(pairs, "frozen v6 policy"),
+        )
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise GateError("frozen v6 policy JSON differs") from exc
+    attempt = v6_policy.get("frozen_attempt", {})
+    if (
+        attempt.get("case_id") != frozen["case_id"]
+        or attempt.get("campaign_id") != frozen["campaign_id"]
+        or attempt.get("campaign_role") != "cold_a"
+        or attempt.get("cold_b_identity_allocated") is not False
+        or v6_policy.get("invariants", {}).get("production_authorized") is not False
+    ):
+        raise GateError("frozen v6 policy failure identity differs")
+    documents: dict[str, dict[str, Any]] = {}
+    for name, record in frozen["receipts"].items():
+        path = Path(record["path"])
+        raw = read_regular_bytes(path)
+        metadata = os.stat(path, follow_symlinks=False)
+        if (
+            len(raw) != record["size_bytes"]
+            or sha256_bytes(raw) != record["sha256"]
+            or metadata.st_uid != HOST_UID
+            or metadata.st_gid != HOST_GID
+            or stat.S_IMODE(metadata.st_mode) != 0o440
+            or metadata.st_nlink != 1
+        ):
+            raise GateError(f"frozen v6 receipt bytes or inode differ: {name}")
+        try:
+            document = json.loads(
+                raw.decode("utf-8"),
+                object_pairs_hook=lambda pairs: _strict_pairs(pairs, f"frozen v6 receipt {name}"),
+            )
+        except (json.JSONDecodeError, UnicodeError) as exc:
+            raise GateError(f"frozen v6 receipt JSON differs: {name}") from exc
+        if (
+            document.get("case_id") != frozen["case_id"]
+            or document.get("campaign_id") != frozen["campaign_id"]
+            or document.get("campaign_role") != "cold_a"
+            or document.get("status") != record["status"]
+            or document.get("policy_sha256") not in (None, policy_record["sha256"])
+        ):
+            raise GateError(f"frozen v6 receipt identity differs: {name}")
+        documents[name] = document
+    start_link = documents["execution"].get("start_receipt", {})
+    execution_link = documents["lifecycle_incomplete"].get("execution_receipt", {})
+    if (
+        start_link.get("path") != frozen["receipts"]["start"]["path"]
+        or start_link.get("sha256") != frozen["receipts"]["start"]["sha256"]
+        or start_link.get("size_bytes") != frozen["receipts"]["start"]["size_bytes"]
+        or execution_link.get("path") != frozen["receipts"]["execution"]["path"]
+        or execution_link.get("sha256") != frozen["receipts"]["execution"]["sha256"]
+        or execution_link.get("size_bytes") != frozen["receipts"]["execution"]["size_bytes"]
+    ):
+        raise GateError("frozen v6 receipt chain differs")
+    execution = documents["execution"]
+    audit = execution.get("audit", {})
+    denials = audit.get("unexpected_denials")
+    if (
+        audit.get("capture_valid") is not True
+        or audit.get("capture_errors") != []
+        or audit.get("matching_total") != 2
+        or audit.get("stored_count") != 2
+        or audit.get("unexpected_total") != 2
+        or audit.get("storage_overflow") is not False
+        or not isinstance(denials, list)
+        or len(denials) != 2
+        or audit.get("sanitized_denials") != denials
+    ):
+        raise GateError("frozen v6 stat denial accounting differs")
+    expected = frozen["stat_denials"]
+    expected_fields = {
+        "apparmor": "DENIED",
+        "operation": expected["operation"],
+        "class": expected["class"],
+        "profile": "r8-liquid-u3-c1m-solver-cpu-settle-cold-a-bootstrap-v6-20260808t212044z",
+        "name": expected["name"],
+        "comm": "python3.12",
+        "requested_mask": expected["requested_mask"],
+        "denied_mask": expected["denied_mask"],
+        "fsuid": expected["fsuid"],
+        "ouid": expected["ouid"],
+    }
+    for index, denial in enumerate(denials):
+        fields = denial.get("fields")
+        if not isinstance(fields, list):
+            raise GateError("frozen v6 denial fields differ")
+        if (
+            len(fields) != 11
+            or any(
+                not isinstance(field, dict)
+                or set(field) != {"key", "raw_value", "value"}
+                or not isinstance(field["raw_value"], str)
+                for field in fields
+            )
+        ):
+            raise GateError("frozen v6 denial field records differ")
+        keys = [field["key"] for field in fields]
+        if any(not isinstance(key, str) for key in keys) or len(set(keys)) != 11:
+            raise GateError("frozen v6 denial field keys are not unique")
+        values = {field["key"]: field["value"] for field in fields}
+        audit_pid = values.pop("pid", None)
+        if (
+            values != expected_fields
+            or not isinstance(audit_pid, str)
+            or not audit_pid.isdecimal()
+            or int(audit_pid) < 1
+            or denial.get("line_sha256") != expected["line_sha256"][index]
+            or denial.get("line_size_bytes") != expected["line_size_bytes"][index]
+            or denial.get("parse_status") != "PARSED_UNIQUE_KV"
+            or denial.get("parse_error") is not None
+            or denial.get("line_truncated") is not False
+        ):
+            raise GateError("frozen v6 denial semantics differ")
+    incomplete = documents["lifecycle_incomplete"]
+    cleanup = incomplete.get("cleanup_observation", {})
+    if (
+        incomplete.get("primary_error")
+        != "SupervisorError: AppArmor journal window is not closed with zero unexpected logged denials"
+        or incomplete.get("cleanup_errors") != []
+        or incomplete.get("next_allowed_stage") != "STOP_COLD_A_FAILED_NO_COLD_B_ADMISSION"
+        or any(incomplete.get(key) is not False for key in (
+            "production_authorized", "settled_state_authorized", "cold_b_admission_authorized"
+        ))
+        or cleanup.get("initial") != []
+        or cleanup.get("after_term") != []
+        or cleanup.get("stable_zero_scans") != [[], [], []]
+        or cleanup.get("post_unload_stable_zero_scans") != [[], [], []]
+    ):
+        raise GateError("frozen v6 failure or cleanup closure differs")
+    return {
+        "policy": policy_record,
+        "receipts": frozen["receipts"],
+        "stat_denials": expected,
+        "identity_consumed": True,
+        "retry_forbidden": True,
+        "snapshot_read": False,
+        "output_reused": False,
+    }
+
+
+def _strict_pairs(pairs: list[tuple[str, Any]], context: str) -> dict[str, Any]:
+    value: dict[str, Any] = {}
+    for key, item in pairs:
+        if key in value:
+            raise GateError(f"duplicate JSON key in {context}: {key}")
+        value[key] = item
+    return value
+
+
+def verify_v1_no_go_provenance() -> dict[str, Any]:
+    frozen = FROZEN_V1_NO_GO
+    snapshot = frozen["snapshot"]
+    root = Path(snapshot["root"])
+    metadata = os.lstat(root)
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or [metadata.st_uid, metadata.st_gid] != snapshot["owner"]
+        or stat.S_IMODE(metadata.st_mode) != int(snapshot["mode"], 8)
+        or metadata.st_nlink != snapshot["nlink"]
+    ):
+        raise GateError("frozen v1 NO-GO snapshot root metadata differs")
+    expected_names = {record["name"] for record in snapshot["files"].values()}
+    if set(os.listdir(root)) != expected_names:
+        raise GateError("frozen v1 NO-GO snapshot file set differs")
+    observed_files: dict[str, dict[str, Any]] = {}
+    for name, record in snapshot["files"].items():
+        path = root / record["name"]
+        file_metadata = os.lstat(path)
+        raw = read_regular_bytes(path)
+        if (
+            not stat.S_ISREG(file_metadata.st_mode)
+            or [file_metadata.st_uid, file_metadata.st_gid] != record["owner"]
+            or stat.S_IMODE(file_metadata.st_mode) != int(record["mode"], 8)
+            or file_metadata.st_nlink != record["nlink"]
+            or len(raw) != record["size_bytes"]
+            or sha256_bytes(raw) != record["sha256"]
+        ):
+            raise GateError(f"frozen v1 NO-GO snapshot artifact differs: {name}")
+        observed_files[name] = {
+            "path": str(path),
+            "sha256": record["sha256"],
+            "size_bytes": record["size_bytes"],
+            "owner": list(record["owner"]),
+            "mode": record["mode"],
+            "nlink": record["nlink"],
+        }
+    policy_record = snapshot["files"]["policy"]
+    try:
+        v1_policy = json.loads(
+            read_regular_bytes(root / policy_record["name"]).decode("utf-8"),
+            object_pairs_hook=lambda pairs: _strict_pairs(pairs, "frozen v1 NO-GO policy"),
+        )
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise GateError("frozen v1 NO-GO snapshot policy JSON differs") from exc
+    if (
+        v1_policy.get("schema_version")
+        != "smpcc-r8-liquid-target-u3-proc-stat-apparmor-boundary-probe-policy-v1"
+        or v1_policy.get("policy_id")
+        != "LIQUID_ZRJ_MSI_U2404_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V1"
+        or v1_policy.get("status")
+        != "STATIC_READY_V1_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_SINGLE_ATTEMPT"
+        or v1_policy.get("frozen_identity", {}).get("probe_id") != frozen["probe_id"]
+        or v1_policy.get("authorization", {}).get("static_task_execution_performed") is not False
+        or v1_policy.get("authorization", {}).get("execution_authorized_now") is not False
+        or v1_policy.get("authorization", {}).get("solver_or_gencase_authorized") is not False
+        or v1_policy.get("authorization", {}).get("production_authorized") is not False
+    ):
+        raise GateError("frozen v1 NO-GO snapshot policy identity or non-execution state differs")
+    for receipt_path in frozen["receipt_paths"].values():
+        try:
+            os.lstat(receipt_path)
+        except FileNotFoundError:
+            continue
+        raise GateError(f"frozen v1 receipt must remain absent: {receipt_path}")
+    return {
+        "decision": frozen["decision"],
+        "blocker": frozen["blocker"],
+        "snapshot": {
+            "root": str(root),
+            "owner": list(snapshot["owner"]),
+            "mode": snapshot["mode"],
+            "nlink": snapshot["nlink"],
+            "files": observed_files,
+            "preserved_unchanged": True,
+        },
+        "receipts_absent": True,
+        "observed_facts": dict(frozen["observed_facts"]),
+        "runtime_baseline_used": False,
+        "snapshot_artifact_reused": False,
+        "identity_consumed": True,
+        "retry_forbidden": True,
+    }
+
+
+def verify_v2_prestart_no_go_provenance() -> dict[str, Any]:
+    frozen = FROZEN_V2_PRESTART_NO_GO
+    snapshot = frozen["snapshot"]
+    root = Path(snapshot["root"])
+    metadata = os.lstat(root)
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or [metadata.st_uid, metadata.st_gid] != snapshot["owner"]
+        or stat.S_IMODE(metadata.st_mode) != int(snapshot["mode"], 8)
+        or metadata.st_nlink != snapshot["nlink"]
+    ):
+        raise GateError("frozen v2 pre-start NO-GO snapshot root metadata differs")
+    expected_names = {record["name"] for record in snapshot["files"].values()}
+    if set(os.listdir(root)) != expected_names:
+        raise GateError("frozen v2 pre-start NO-GO snapshot file set differs")
+    observed_files: dict[str, dict[str, Any]] = {}
+    for name, record in snapshot["files"].items():
+        path = root / record["name"]
+        file_metadata = os.lstat(path)
+        raw = read_regular_bytes(path)
+        if (
+            not stat.S_ISREG(file_metadata.st_mode)
+            or [file_metadata.st_uid, file_metadata.st_gid] != record["owner"]
+            or stat.S_IMODE(file_metadata.st_mode) != int(record["mode"], 8)
+            or file_metadata.st_nlink != record["nlink"]
+            or len(raw) != record["size_bytes"]
+            or sha256_bytes(raw) != record["sha256"]
+        ):
+            raise GateError(f"frozen v2 pre-start NO-GO snapshot artifact differs: {name}")
+        observed_files[name] = {
+            "path": str(path),
+            "sha256": record["sha256"],
+            "size_bytes": record["size_bytes"],
+            "owner": list(record["owner"]),
+            "mode": record["mode"],
+            "nlink": record["nlink"],
+        }
+
+    policy_record = snapshot["files"]["policy"]
+    try:
+        v2_policy = json.loads(
+            read_regular_bytes(root / policy_record["name"]).decode("utf-8"),
+            object_pairs_hook=lambda pairs: _strict_pairs(pairs, "frozen v2 pre-start NO-GO policy"),
+        )
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise GateError("frozen v2 pre-start NO-GO snapshot policy JSON differs") from exc
+    if (
+        v2_policy.get("schema_version")
+        != "smpcc-r8-liquid-target-u3-proc-stat-apparmor-boundary-probe-policy-v2"
+        or v2_policy.get("policy_id")
+        != "LIQUID_ZRJ_MSI_U2404_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V2"
+        or v2_policy.get("status")
+        != "STATIC_READY_V2_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_SINGLE_ATTEMPT"
+        or v2_policy.get("frozen_identity", {}).get("probe_id") != frozen["probe_id"]
+        or v2_policy.get("authorization", {}).get("static_task_execution_performed") is not False
+        or v2_policy.get("authorization", {}).get("execution_authorized_now") is not False
+        or v2_policy.get("authorization", {}).get("solver_or_gencase_authorized") is not False
+        or v2_policy.get("authorization", {}).get("production_authorized") is not False
+    ):
+        raise GateError("frozen v2 pre-start NO-GO snapshot policy identity differs")
+
+    receipt_record = frozen["preflight_receipt"]
+    receipt_path = Path(receipt_record["path"])
+    try:
+        receipt_metadata = os.lstat(receipt_path)
+    except FileNotFoundError as exc:
+        raise GateError("frozen v2 preflight receipt is absent") from exc
+    receipt_raw = read_regular_bytes(receipt_path)
+    if (
+        not stat.S_ISREG(receipt_metadata.st_mode)
+        or [receipt_metadata.st_uid, receipt_metadata.st_gid] != receipt_record["owner"]
+        or stat.S_IMODE(receipt_metadata.st_mode) != int(receipt_record["mode"], 8)
+        or receipt_metadata.st_nlink != receipt_record["nlink"]
+        or len(receipt_raw) != receipt_record["size_bytes"]
+        or sha256_bytes(receipt_raw) != receipt_record["sha256"]
+    ):
+        raise GateError("frozen v2 preflight receipt bytes or inode differ")
+    try:
+        receipt = json.loads(
+            receipt_raw.decode("utf-8"),
+            object_pairs_hook=lambda pairs: _strict_pairs(pairs, "frozen v2 preflight receipt"),
+        )
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise GateError("frozen v2 preflight receipt JSON differs") from exc
+    receipt_fields = (
+        "document_type", "status", "primary_error", "requested_policy_sha256",
+        "identity_consumed", "parser_invoked_by_this_run",
+        "profile_load_attempted_by_this_run", "probe_executed_by_this_run",
+        "start_receipt_created_by_this_run", "sudo_timestamp_cleanup_attempted",
+        "sudo_timestamp_cleanup_proven", "sudo_timestamp_cleanup_error",
+    )
+    if (
+        receipt.get("probe_id") != frozen["probe_id"]
+        or receipt.get("production_authorized") is not False
+        or any(receipt.get(key) != receipt_record[key] for key in receipt_fields)
+    ):
+        raise GateError("frozen v2 preflight receipt semantics differ")
+    for path in frozen["other_receipt_paths"].values():
+        try:
+            os.lstat(path)
+        except FileNotFoundError:
+            continue
+        raise GateError(f"frozen v2 non-preflight receipt must remain absent: {path}")
+    return {
+        "decision": frozen["decision"],
+        "snapshot": {
+            "root": str(root),
+            "owner": list(snapshot["owner"]),
+            "mode": snapshot["mode"],
+            "nlink": snapshot["nlink"],
+            "files": observed_files,
+            "preserved_unchanged": True,
+        },
+        "preflight_receipt": {
+            "path": str(receipt_path),
+            "sha256": receipt_record["sha256"],
+            "size_bytes": receipt_record["size_bytes"],
+            "owner": list(receipt_record["owner"]),
+            "mode": receipt_record["mode"],
+            "nlink": receipt_record["nlink"],
+            "status": receipt_record["status"],
+            "primary_error": receipt_record["primary_error"],
+        },
+        "other_receipts_absent": True,
+        "observed_facts": dict(frozen["observed_facts"]),
+        "runtime_baseline_used": False,
+        "snapshot_artifact_reused": False,
+        "identity_consumed": True,
+        "retry_forbidden": True,
+        "production_authorized": False,
+    }
+
+
+def verify_v3_runtime_no_go_provenance() -> dict[str, Any]:
+    frozen = FROZEN_V3_NO_GO
+    snapshot = frozen["snapshot"]
+    root = Path(snapshot["root"])
+    metadata = os.lstat(root)
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or [metadata.st_uid, metadata.st_gid] != snapshot["owner"]
+        or stat.S_IMODE(metadata.st_mode) != int(snapshot["mode"], 8)
+        or metadata.st_nlink != snapshot["nlink"]
+    ):
+        raise GateError("frozen v3 runtime NO-GO snapshot root metadata differs")
+    expected_names = {record["name"] for record in snapshot["files"].values()}
+    if set(os.listdir(root)) != expected_names:
+        raise GateError("frozen v3 runtime NO-GO snapshot file set differs")
+    observed_files: dict[str, dict[str, Any]] = {}
+    receipt_snapshot: dict[str, dict[str, Any]] = {}
+    for name, record in snapshot["files"].items():
+        path = root / record["name"]
+        file_metadata = os.lstat(path)
+        raw = read_regular_bytes(path)
+        if (
+            not stat.S_ISREG(file_metadata.st_mode)
+            or [file_metadata.st_uid, file_metadata.st_gid] != record["owner"]
+            or stat.S_IMODE(file_metadata.st_mode) != int(record["mode"], 8)
+            or file_metadata.st_nlink != record["nlink"]
+            or len(raw) != record["size_bytes"]
+            or sha256_bytes(raw) != record["sha256"]
+        ):
+            raise GateError(f"frozen v3 runtime NO-GO snapshot artifact differs: {name}")
+        observed_files[name] = {
+            "path": str(path), "sha256": record["sha256"],
+            "size_bytes": record["size_bytes"], "owner": list(record["owner"]),
+            "mode": record["mode"], "nlink": record["nlink"],
+        }
+        receipt_snapshot[name] = {
+            "gid": record["owner"][1], "mode": record["mode"], "path": str(path),
+            "sha256": record["sha256"], "size_bytes": record["size_bytes"],
+            "uid": record["owner"][0],
+        }
+
+    policy_record = snapshot["files"]["policy"]
+    try:
+        v3_policy = json.loads(
+            read_regular_bytes(root / policy_record["name"]).decode("utf-8"),
+            object_pairs_hook=lambda pairs: _strict_pairs(pairs, "frozen v3 runtime NO-GO policy"),
+        )
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise GateError("frozen v3 runtime NO-GO snapshot policy JSON differs") from exc
+    profiles = frozen["profiles"]
+    identity = v3_policy.get("frozen_identity", {})
+    authorization = v3_policy.get("authorization", {})
+    if (
+        v3_policy.get("schema_version")
+        != "smpcc-r8-liquid-target-u3-proc-stat-apparmor-boundary-probe-policy-v3"
+        or v3_policy.get("policy_id")
+        != "LIQUID_ZRJ_MSI_U2404_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V3"
+        or v3_policy.get("status")
+        != "STATIC_READY_V3_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_SINGLE_ATTEMPT"
+        or identity.get("probe_id") != frozen["probe_id"]
+        or identity.get("snapshot_root") != snapshot["root"]
+        or identity.get("bootstrap_profile") != profiles["bootstrap"]
+        or identity.get("runtime_profile") != profiles["runtime"]
+        or authorization.get("attempts_per_identity") != 1
+        or authorization.get("same_identity_retry") != "forbidden"
+        or authorization.get("execution_authorized_now") is not False
+        or authorization.get("solver_or_gencase_authorized") is not False
+        or authorization.get("production_authorized") is not False
+    ):
+        raise GateError("frozen v3 runtime NO-GO snapshot policy identity differs")
+
+    receipts: dict[str, dict[str, Any]] = {}
+    observed_receipts: dict[str, dict[str, Any]] = {}
+    for name, record in frozen["receipts"].items():
+        path = Path(record["path"])
+        try:
+            receipt_metadata = os.lstat(path)
+        except FileNotFoundError as exc:
+            raise GateError(f"frozen v3 runtime NO-GO receipt is absent: {name}") from exc
+        raw = read_regular_bytes(path)
+        if (
+            not stat.S_ISREG(receipt_metadata.st_mode)
+            or [receipt_metadata.st_uid, receipt_metadata.st_gid] != record["owner"]
+            or stat.S_IMODE(receipt_metadata.st_mode) != int(record["mode"], 8)
+            or receipt_metadata.st_nlink != record["nlink"]
+            or len(raw) != record["size_bytes"]
+            or sha256_bytes(raw) != record["sha256"]
+        ):
+            raise GateError(f"frozen v3 runtime NO-GO receipt differs: {name}")
+        try:
+            value = json.loads(
+                raw.decode("utf-8"),
+                object_pairs_hook=lambda pairs, n=name: _strict_pairs(
+                    pairs, f"frozen v3 {n} receipt"
+                ),
+            )
+        except (json.JSONDecodeError, UnicodeError) as exc:
+            raise GateError(f"frozen v3 runtime NO-GO receipt JSON differs: {name}") from exc
+        if (
+            value.get("probe_id") != frozen["probe_id"]
+            or value.get("document_type") != record["document_type"]
+            or value.get("status") != record["status"]
+        ):
+            raise GateError(f"frozen v3 runtime NO-GO receipt semantics differ: {name}")
+        receipts[name] = value
+        observed_receipts[name] = {
+            "path": str(path), "sha256": record["sha256"],
+            "size_bytes": record["size_bytes"], "owner": list(record["owner"]),
+            "mode": record["mode"], "nlink": record["nlink"],
+            "status": record["status"],
+        }
+    for path in frozen["other_receipt_paths"].values():
+        try:
+            os.lstat(path)
+        except FileNotFoundError:
+            continue
+        raise GateError(f"frozen v3 non-authoritative receipt must remain absent: {path}")
+
+    start, execution, lifecycle = (
+        receipts["start"], receipts["execution"], receipts["lifecycle"]
+    )
+    chain = frozen["receipt_chain"]
+    gate = execution.get("gate", {})
+    audit = execution.get("apparmor_audit", {})
+    labels = (profiles["bootstrap"], profiles["runtime"])
+    loaded = execution.get("profiles_loaded", {})
+    after = lifecycle.get("profiles_after", {})
+    cleanup = lifecycle.get("cleanup", {})
+    sudo_timestamp = lifecycle.get("sudo_timestamp", {})
+    sysctls = lifecycle.get("sysctls", {})
+    if (
+        start.get("policy_sha256") != frozen["policy_sha256"]
+        or execution.get("policy_sha256") != frozen["policy_sha256"]
+        or start.get("snapshot") != receipt_snapshot
+        or execution.get("snapshot") != receipt_snapshot
+        or execution.get("start_receipt") != chain["execution_references_start"]
+        or lifecycle.get("execution_receipt") != chain["lifecycle_references_execution"]
+        or execution.get("cleanup_complete") is not False
+        or execution.get("error") is not None
+        or gate.get("returncode") != 2
+        or gate.get("stdout_size_bytes") != 0
+        or gate.get("stderr_size_bytes") != 28
+        or gate.get("stderr_sha256") != frozen["observed_facts"]["gate_stderr_sha256"]
+        or gate.get("stderr_utf8_prefix") != "R8_PROC_STAT_PROBE_V3_NO_GO\n"
+        or gate.get("success_frame") is not None
+        or audit.get("capture_valid") is not True
+        or audit.get("capture_errors") != []
+        or audit.get("expected_child_pid") is not None
+        or audit.get("matching_total") != 0
+        or audit.get("stat_denial_total") != 0
+        or audit.get("unexpected_total") != 0
+        or execution.get("gencase_or_solver_executed") is not False
+        or execution.get("host_writable_mount_used") is not False
+        or execution.get("network_or_device_exposed") is not False
+        or execution.get("production_authorized") is not False
+        or loaded.get("kernel_exact_counts") != {label: 1 for label in labels}
+        or lifecycle.get("next_allowed_stage")
+        != frozen["evidence_interpretation"]["next_allowed_stage"]
+        or lifecycle.get("production_authorized") is not False
+        or after.get("kernel_exact_counts") != {label: 0 for label in labels}
+        or sysctls.get("unchanged") is not True
+        or sysctls.get("before") != sysctls.get("after")
+        or sudo_timestamp.get("clear", {}).get("returncode") != 0
+        or sudo_timestamp.get("noninteractive_true_must_fail", {}).get("returncode") != 1
+        or cleanup.get("stable_zero_scans") != [[], [], []]
+        or cleanup.get("post_unload_stable_zero_scans") != [[], [], []]
+    ):
+        raise GateError("frozen v3 runtime NO-GO receipt chain or evidence differs")
+    return {
+        "decision": frozen["decision"],
+        "snapshot": {
+            "root": str(root), "owner": list(snapshot["owner"]),
+            "mode": snapshot["mode"], "nlink": snapshot["nlink"],
+            "files": observed_files, "preserved_unchanged": True,
+        },
+        "receipts": observed_receipts,
+        "receipt_chain_verified": True,
+        "other_receipts_absent": True,
+        "observed_facts": dict(frozen["observed_facts"]),
+        "evidence_interpretation": dict(frozen["evidence_interpretation"]),
+        "runtime_baseline_used": False, "snapshot_artifact_reused": False,
+        "output_reused": False, "identity_consumed": True, "retry_forbidden": True,
+        "production_authorized": False,
+    }
+
+
+def verify_v4_runtime_no_go_provenance() -> dict[str, Any]:
+    """Verify v4's consumed NO-GO evidence without reusing any runtime bytes."""
+    frozen = FROZEN_V4_NO_GO
+    snapshot = frozen["snapshot"]
+    root = Path(snapshot["root"])
+    metadata = os.lstat(root)
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or [metadata.st_uid, metadata.st_gid] != snapshot["owner"]
+        or stat.S_IMODE(metadata.st_mode) != int(snapshot["mode"], 8)
+        or metadata.st_nlink != snapshot["nlink"]
+    ):
+        raise GateError("frozen v4 runtime NO-GO snapshot root metadata differs")
+    expected_names = {record["name"] for record in snapshot["files"].values()}
+    if set(os.listdir(root)) != expected_names:
+        raise GateError("frozen v4 runtime NO-GO snapshot file set differs")
+
+    def read_frozen(path: Path, record: Mapping[str, Any], context: str) -> bytes:
+        try:
+            descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        except OSError as exc:
+            raise GateError(f"frozen v4 {context} is absent or unsafe") from exc
+        try:
+            observed = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(observed.st_mode)
+                or [observed.st_uid, observed.st_gid] != record["owner"]
+                or stat.S_IMODE(observed.st_mode) != int(record["mode"], 8)
+                or observed.st_nlink != record["nlink"]
+                or observed.st_size != record["size_bytes"]
+            ):
+                raise GateError(f"frozen v4 {context} metadata differs")
+            raw = bytearray()
+            while len(raw) <= record["size_bytes"]:
+                block = os.read(descriptor, record["size_bytes"] + 1 - len(raw))
+                if not block:
+                    break
+                raw.extend(block)
+            value = bytes(raw)
+            if len(value) != record["size_bytes"] or sha256_bytes(value) != record["sha256"]:
+                raise GateError(f"frozen v4 {context} bytes differ")
+            return value
+        finally:
+            os.close(descriptor)
+
+    observed_files: dict[str, dict[str, Any]] = {}
+    receipt_snapshot: dict[str, dict[str, Any]] = {}
+    snapshot_raw: dict[str, bytes] = {}
+    for name, record in snapshot["files"].items():
+        path = root / record["name"]
+        raw = read_frozen(path, record, f"snapshot artifact {name}")
+        snapshot_raw[name] = raw
+        observed_files[name] = {
+            "path": str(path), "sha256": record["sha256"],
+            "size_bytes": record["size_bytes"], "owner": list(record["owner"]),
+            "mode": record["mode"], "nlink": record["nlink"],
+        }
+        receipt_snapshot[name] = {
+            "gid": record["owner"][1], "mode": record["mode"], "path": str(path),
+            "sha256": record["sha256"], "size_bytes": record["size_bytes"],
+            "uid": record["owner"][0],
+        }
+    try:
+        v4_policy = json.loads(
+            snapshot_raw["policy"].decode("utf-8"),
+            object_pairs_hook=lambda pairs: _strict_pairs(
+                pairs, "frozen v4 runtime NO-GO policy"
+            ),
+        )
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise GateError("frozen v4 runtime NO-GO snapshot policy JSON differs") from exc
+    profiles = frozen["profiles"]
+    identity = v4_policy.get("frozen_identity", {})
+    authorization = v4_policy.get("authorization", {})
+    if (
+        v4_policy.get("schema_version")
+        != "smpcc-r8-liquid-target-u3-proc-stat-apparmor-boundary-probe-policy-v4"
+        or v4_policy.get("policy_id")
+        != "LIQUID_ZRJ_MSI_U2404_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V4"
+        or v4_policy.get("status")
+        != "STATIC_READY_V4_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_SINGLE_ATTEMPT"
+        or identity.get("probe_id") != frozen["probe_id"]
+        or identity.get("snapshot_root") != snapshot["root"]
+        or identity.get("bootstrap_profile") != profiles["bootstrap"]
+        or identity.get("runtime_profile") != profiles["runtime"]
+        or authorization.get("attempts_per_identity") != 1
+        or authorization.get("same_identity_retry") != "forbidden"
+        or authorization.get("execution_authorized_now") is not False
+        or authorization.get("solver_or_gencase_authorized") is not False
+        or authorization.get("cold_a_successor_execution_authorized") is not False
+        or authorization.get("production_authorized") is not False
+    ):
+        raise GateError("frozen v4 runtime NO-GO snapshot policy identity differs")
+
+    receipts: dict[str, dict[str, Any]] = {}
+    observed_receipts: dict[str, dict[str, Any]] = {}
+    for name, record in frozen["receipts"].items():
+        path = Path(record["path"])
+        raw = read_frozen(path, record, f"runtime NO-GO receipt {name}")
+        try:
+            value = json.loads(
+                raw.decode("utf-8"),
+                object_pairs_hook=lambda pairs, n=name: _strict_pairs(
+                    pairs, f"frozen v4 {n} receipt"
+                ),
+            )
+        except (json.JSONDecodeError, UnicodeError) as exc:
+            raise GateError(f"frozen v4 runtime NO-GO receipt JSON differs: {name}") from exc
+        if (
+            value.get("probe_id") != frozen["probe_id"]
+            or value.get("document_type") != record["document_type"]
+            or value.get("status") != record["status"]
+        ):
+            raise GateError(f"frozen v4 runtime NO-GO receipt semantics differ: {name}")
+        receipts[name] = value
+        observed_receipts[name] = {
+            "path": str(path), "sha256": record["sha256"],
+            "size_bytes": record["size_bytes"], "owner": list(record["owner"]),
+            "mode": record["mode"], "nlink": record["nlink"],
+            "status": record["status"],
+        }
+    for path_value in frozen["other_receipt_paths"].values():
+        try:
+            os.lstat(path_value)
+        except FileNotFoundError:
+            continue
+        raise GateError(f"frozen v4 non-authoritative receipt must remain absent: {path_value}")
+
+    start, execution, lifecycle = (
+        receipts["start"], receipts["execution"], receipts["lifecycle"]
+    )
+    chain = frozen["receipt_chain"]
+    facts = frozen["observed_facts"]
+    boundary = frozen["journal_boundary"]
+    gate = execution.get("gate", {})
+    audit = execution.get("apparmor_audit", {})
+    labels = (profiles["bootstrap"], profiles["runtime"])
+    loaded = execution.get("profiles_loaded", {})
+    after = lifecycle.get("profiles_after", {})
+    cleanup = lifecycle.get("cleanup", {})
+    sudo_timestamp = lifecycle.get("sudo_timestamp", {})
+    sysctls = lifecycle.get("sysctls", {})
+    start_anchor = start.get("journal_anchor", {})
+    query_argv = audit.get("journal_query_argv", [])
+    if (
+        start.get("policy_sha256") != frozen["policy_sha256"]
+        or execution.get("policy_sha256") != frozen["policy_sha256"]
+        or start.get("snapshot") != receipt_snapshot
+        or execution.get("snapshot") != receipt_snapshot
+        or execution.get("start_receipt") != chain["execution_references_start"]
+        or lifecycle.get("execution_receipt") != chain["lifecycle_references_execution"]
+        or execution.get("cleanup_complete") is not False
+        or execution.get("error") is not None
+        or gate.get("capture_status") != "BOUNDED_CAPTURE_COMPLETE"
+        or gate.get("diagnostic_disclosure") != "ENUM_ONLY_NO_PID_PATH_ERRNO_TEXT_ARGV_ENV_OR_NONCE"
+        or gate.get("returncode") != facts["gate_returncode"]
+        or gate.get("stdout_size_bytes") != facts["gate_stdout_size_bytes"]
+        or gate.get("stdout_sha256") != facts["gate_stdout_sha256"]
+        or gate.get("stderr_size_bytes") != facts["gate_stderr_size_bytes"]
+        or gate.get("stderr_sha256") != facts["gate_stderr_sha256"]
+        or gate.get("failure_frame") != facts["failure_frame"]
+        or gate.get("root_cause_status") != facts["root_cause_status"]
+        or gate.get("success_frame") is not None
+        or audit.get("capture_valid") is not facts["audit_capture_valid"]
+        or audit.get("capture_errors") != facts["audit_capture_errors"]
+        or audit.get("audit_loss_marker_status") != facts["audit_loss_marker_status"]
+        or audit.get("audit_loss_marker_matching_total") != facts["audit_loss_marker_matching_total"]
+        or audit.get("audit_loss_marker_storage_overflow") is not False
+        or audit.get("audit_loss_markers") != []
+        or audit.get("expected_child_pid") is not None
+        or audit.get("matching_total") != facts["matching_total"]
+        or audit.get("expected_status_total") != facts["expected_status_total"]
+        or audit.get("expected_status_denials") != []
+        or audit.get("stat_denial_total") != facts["stat_denial_total"]
+        or audit.get("unexpected_total") != facts["unexpected_total"]
+        or audit.get("unexpected_denials") != []
+        or audit.get("stored_count") != facts["stored_count"]
+        or audit.get("dropped_count") != facts["dropped_count"]
+        or audit.get("storage_overflow") is not facts["storage_overflow"]
+        or start_anchor.get("boot_id") != boundary["boot_id"]
+        or start_anchor.get("cursor") != boundary["admission_cursor"]
+        or audit.get("boot_id_before") != boundary["boot_id"]
+        or audit.get("boot_id_after") != boundary["boot_id"]
+        or audit.get("start_cursor") != boundary["execution_start_cursor"]
+        or audit.get("end_cursor") != boundary["execution_end_cursor"]
+        or audit.get("admission_journal_anchor_sha256") != boundary["admission_anchor_sha256"]
+        or boundary["execution_start_cursor"] == boundary["admission_cursor"]
+        or f"--after-cursor={boundary['execution_start_cursor']}" not in query_argv
+        or f"--after-cursor={boundary['admission_cursor']}" in query_argv
+        or execution.get("gencase_or_solver_executed") is not False
+        or execution.get("host_writable_mount_used") is not False
+        or execution.get("network_or_device_exposed") is not False
+        or execution.get("production_authorized") is not False
+        or loaded.get("kernel_exact_counts") != {label: 1 for label in labels}
+        or lifecycle.get("next_allowed_stage")
+        != frozen["evidence_interpretation"]["next_allowed_stage"]
+        or lifecycle.get("production_authorized") is not False
+        or after.get("kernel_exact_counts") != {label: 0 for label in labels}
+        or sysctls.get("unchanged") is not True
+        or sysctls.get("before") != sysctls.get("after")
+        or sudo_timestamp.get("clear", {}).get("returncode") != 0
+        or sudo_timestamp.get("noninteractive_true_must_fail", {}).get("returncode") != 1
+        or cleanup.get("stable_zero_scans") != [[], [], []]
+        or cleanup.get("post_unload_stable_zero_scans") != [[], [], []]
+    ):
+        raise GateError("frozen v4 runtime NO-GO receipt chain or evidence differs")
+    return {
+        "decision": frozen["decision"],
+        "snapshot": {
+            "root": str(root), "owner": list(snapshot["owner"]),
+            "mode": snapshot["mode"], "nlink": snapshot["nlink"],
+            "files": observed_files, "preserved_unchanged": True,
+        },
+        "receipts": observed_receipts, "receipt_chain_verified": True,
+        "other_receipts_absent": True, "journal_boundary_verified": True,
+        "observed_facts": dict(facts),
+        "evidence_interpretation": dict(frozen["evidence_interpretation"]),
+        "runtime_baseline_used": False, "snapshot_artifact_reused": False,
+        "output_reused": False, "identity_consumed": True, "retry_forbidden": True,
+        "production_authorized": False,
+    }
+
+
+def require_tool(name: str) -> dict[str, Any]:
+    path, expected = TRUSTED_TOOLS[name]
+    raw = read_regular_bytes(path, limit=512 * 1024 * 1024)
+    metadata = os.stat(path, follow_symlinks=False)
+    if metadata.st_uid != 0 or metadata.st_gid != 0 or not metadata.st_mode & stat.S_IXUSR:
+        raise GateError(f"trusted tool metadata differs: {path}")
+    if sha256_bytes(raw) != expected:
+        raise GateError(f"trusted tool digest differs: {path}")
+    return {"path": str(path), "sha256": expected, "size_bytes": len(raw)}
+
+
+def trusted_tool_policy() -> dict[str, dict[str, str]]:
+    return {name: {"path": str(path), "sha256": digest} for name, (path, digest) in TRUSTED_TOOLS.items()}
+
+
+def build_payload_frame() -> bytes:
+    frame = b"".join((
+        PAYLOAD_MAGIC,
+        struct.pack(">I", HELPER_SIZE_BYTES),
+        bytes.fromhex(HELPER_SHA256),
+        HELPER_BYTES,
+    ))
+    if len(frame) > MAX_PAYLOAD_FRAME_BYTES:
+        raise GateError("payload frame exceeds its fixed ceiling")
+    return frame
+
+
+def parse_payload_frame(frame: bytes) -> dict[str, Any]:
+    if len(frame) > MAX_PAYLOAD_FRAME_BYTES:
+        raise GateError("payload frame exceeds ceiling")
+    view = memoryview(frame)
+    position = 0
+
+    def take(size: int) -> bytes:
+        nonlocal position
+        if size < 0 or position + size > len(view):
+            raise GateError("payload frame truncation")
+        result = bytes(view[position:position + size])
+        position += size
+        return result
+
+    if take(len(PAYLOAD_MAGIC)) != PAYLOAD_MAGIC:
+        raise GateError("payload frame magic differs")
+    helper_size = struct.unpack(">I", take(4))[0]
+    helper_hash = take(32).hex()
+    helper = take(helper_size)
+    if helper_size != HELPER_SIZE_BYTES or helper_hash != HELPER_SHA256 or sha256_bytes(helper) != helper_hash:
+        raise GateError("payload helper identity differs")
+    if position != len(view):
+        raise GateError("payload frame has trailing bytes")
+    return {
+        "helper": {"size_bytes": helper_size, "sha256": helper_hash},
+        "size_bytes": len(frame),
+        "sha256": sha256_bytes(frame),
+    }
+
+
+def parse_success_frame(frame: bytes) -> dict[str, Any]:
+    prefix_size = len(SUCCESS_MAGIC)
+    payload_offset = prefix_size + 4
+    if not payload_offset + 2 + 32 <= len(frame) <= MAX_SUCCESS_FRAME_BYTES or not frame.startswith(SUCCESS_MAGIC):
+        raise GateError("success frame size or magic differs")
+    size = struct.unpack(">I", frame[prefix_size:payload_offset])[0]
+    if size < 2 or payload_offset + size + 32 != len(frame):
+        raise GateError("success frame declared length differs")
+    payload = frame[payload_offset:payload_offset + size]
+    if hashlib.sha256(payload).digest() != frame[-32:]:
+        raise GateError("success frame digest differs")
+    try:
+        value = json.loads(payload.decode("ascii"))
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise GateError("success frame JSON differs") from exc
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii")
+    if canonical != payload or not isinstance(value, dict):
+        raise GateError("success frame is not canonical")
+    expected_keys = {
+        "status", "bootstrap_profile", "bootstrap_label", "bootstrap_identity",
+        "work_tmpfs", "host_payload_consumed_and_fd0_replaced_with_eof_pipe",
+        "fds_after_payload", "proc_stat_probe", "fds_before_success",
+        "host_writable_mounts",
+    }
+    if set(value) != expected_keys:
+        raise GateError("success frame key set differs")
+    if value["status"] != "PASS_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V5":
+        raise GateError("success status differs")
+    if value["bootstrap_profile"] != BOOTSTRAP_PROFILE or value["bootstrap_label"] != BOOTSTRAP_PROFILE + " (enforce)":
+        raise GateError("bootstrap label evidence differs")
+    if value["host_writable_mounts"] != [] or value["host_payload_consumed_and_fd0_replaced_with_eof_pipe"] is not True:
+        raise GateError("success isolation evidence differs")
+    if (type(value["fds_after_payload"]) is not list or type(value["fds_before_success"]) is not list
+            or any(type(descriptor) is not int for descriptor in value["fds_after_payload"] + value["fds_before_success"])
+            or value["fds_after_payload"] != [0, 1, 2] or value["fds_before_success"] != [0, 1, 2]):
+        raise GateError("success descriptor evidence differs")
+
+    def require_guest_identity(observed: Any, context: str) -> None:
+        if not isinstance(observed, dict) or set(observed) != {"uid", "gid", "groups", "capabilities", "no_new_privs"}:
+            raise GateError(f"{context} identity key set differs")
+        uid, gid, groups = observed["uid"], observed["gid"], observed["groups"]
+        if (type(uid) is not list or type(gid) is not list or type(groups) is not list
+                or any(type(item) is not int for item in uid + gid + groups)
+                or uid != [0, 0, 0, 0] or gid != [0, 0, 0, 0] or groups != []):
+            raise GateError(f"{context} identity differs")
+        capabilities = observed["capabilities"]
+        cap_keys = {"CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"}
+        if (type(capabilities) is not dict or set(capabilities) != cap_keys
+                or any(type(capabilities[key]) is not int or capabilities[key] != 0 for key in cap_keys)):
+            raise GateError(f"{context} capability evidence differs")
+        if type(observed["no_new_privs"]) is not int or observed["no_new_privs"] != 1:
+            raise GateError(f"{context} NNP evidence differs")
+
+    require_guest_identity(value["bootstrap_identity"], "bootstrap")
+    work_tmpfs = value["work_tmpfs"]
+    if not isinstance(work_tmpfs, dict) or set(work_tmpfs) != {"filesystem_type", "total_bytes", "mount_options"}:
+        raise GateError("success tmpfs key set differs")
+    options = work_tmpfs["mount_options"]
+    if (work_tmpfs["filesystem_type"] != "tmpfs" or work_tmpfs["total_bytes"] != TMPFS_BYTES
+            or isinstance(work_tmpfs["total_bytes"], bool) or not isinstance(options, list)
+            or any(not isinstance(option, str) for option in options) or len(options) != len(set(options))
+            or not {"rw", "nosuid", "nodev"}.issubset(set(options))):
+        raise GateError("success tmpfs evidence differs")
+    probe = value["proc_stat_probe"]
+    expected_probe_keys = {
+        "child_identity", "frozen_identity", "live_group_scan",
+        "live_stat_pair", "inner_proc_owner_projection", "status_denial",
+        "waitid_wnowait", "zombie_stat_pair", "final_reap",
+        "post_reap_group_scans",
+    }
+    if not isinstance(probe, dict) or set(probe) != expected_probe_keys:
+        raise GateError("proc-stat probe evidence key set differs")
+    child = probe["child_identity"]
+    child_extra = {"pid", "pgrp", "session", "dumpable"}
+    if not isinstance(child, dict) or set(child) != {
+        "uid", "gid", "groups", "capabilities", "no_new_privs", *child_extra
+    }:
+        raise GateError("dumpable-zero child identity key set differs")
+    require_guest_identity(
+        {key: child[key] for key in ("uid", "gid", "groups", "capabilities", "no_new_privs")},
+        "dumpable-zero child",
+    )
+    pid = child["pid"]
+    if (
+        type(pid) is not int
+        or pid < 2
+        or child["pgrp"] != pid
+        or child["session"] != pid
+        or type(child["pgrp"]) is not int
+        or type(child["session"]) is not int
+        or type(child["dumpable"]) is not int
+        or child["dumpable"] != 0
+    ):
+        raise GateError("dumpable-zero child process identity differs")
+    frozen = probe["frozen_identity"]
+    if (
+        not isinstance(frozen, dict)
+        or set(frozen) != {"pid", "pgrp", "session", "starttime", "pidfd_opened"}
+        or frozen["pid"] != pid
+        or frozen["pgrp"] != pid
+        or frozen["session"] != pid
+        or type(frozen["starttime"]) is not int
+        or frozen["starttime"] < 1
+        or frozen["pidfd_opened"] is not True
+    ):
+        raise GateError("frozen child birth identity differs")
+    owner = probe["inner_proc_owner_projection"]
+    if (
+        not isinstance(owner, dict)
+        or set(owner) != {"uid", "gid"}
+        or type(owner["uid"]) is not int
+        or type(owner["gid"]) is not int
+        or owner != {"uid": 0, "gid": 0}
+    ):
+        raise GateError("inner proc owner projection differs")
+
+    member_keys = {"pid", "state", "pgrp", "session", "starttime", "stat_uid", "stat_gid"}
+
+    def require_member(member: Any, *, zombie: bool) -> None:
+        if not isinstance(member, dict) or set(member) != member_keys:
+            raise GateError("proc-stat member key set differs")
+        if (
+            member["pid"] != pid
+            or member["pgrp"] != pid
+            or member["session"] != pid
+            or member["starttime"] != frozen["starttime"]
+            or member["stat_uid"] != owner["uid"]
+            or member["stat_gid"] != owner["gid"]
+            or type(member["state"]) is not str
+            or len(member["state"]) != 1
+            or (member["state"] == "Z") is not zombie
+        ):
+            raise GateError("proc-stat member identity, owner, or state differs")
+
+    live_pair = probe["live_stat_pair"]
+    zombie_pair = probe["zombie_stat_pair"]
+    if not isinstance(live_pair, list) or len(live_pair) != 2:
+        raise GateError("live stat pair count differs")
+    if not isinstance(zombie_pair, list) or len(zombie_pair) != 2:
+        raise GateError("zombie stat pair count differs")
+    for member in live_pair:
+        require_member(member, zombie=False)
+    for member in zombie_pair:
+        require_member(member, zombie=True)
+    if live_pair[0] != live_pair[1] or zombie_pair[0] != zombie_pair[1]:
+        raise GateError("live or zombie stat double-read is unstable")
+    group = probe["live_group_scan"]
+    if not isinstance(group, list) or len(group) != 1:
+        raise GateError("live process group must contain exactly the isolated child")
+    require_member(group[0], zombie=False)
+    if group[0] != live_pair[0]:
+        raise GateError("full group scan and live stat reads differ")
+    denial = probe["status_denial"]
+    if (
+        not isinstance(denial, dict)
+        or set(denial) != {"attempt_count", "path", "errno"}
+        or type(denial["attempt_count"]) is not int
+        or denial["attempt_count"] != 1
+        or denial["path"] != f"/proc/{pid}/status"
+        or type(denial["errno"]) is not int
+        or denial["errno"] != errno.EACCES
+    ):
+        raise GateError("single child status EACCES evidence differs")
+    expected_wait = {"pid": pid, "code": os.CLD_EXITED, "status": 0}
+    for name in ("waitid_wnowait", "final_reap"):
+        wait = probe[name]
+        if (
+            not isinstance(wait, dict)
+            or set(wait) != {"pid", "code", "status"}
+            or any(type(wait[key]) is not int for key in ("pid", "code", "status"))
+            or wait != expected_wait
+        ):
+            raise GateError("WNOWAIT or final reap evidence differs")
+    if probe["post_reap_group_scans"] != [[], []]:
+        raise GateError("post-reap process group is not double-empty")
+    return value
+
+
+def parse_failure_frame(frame: bytes) -> dict[str, str]:
+    prefix_size = len(FAILURE_MAGIC)
+    payload_offset = prefix_size + 2
+    if len(frame) != EXACT_FAILURE_FRAME_BYTES or not frame.startswith(FAILURE_MAGIC):
+        raise GateError("failure frame size or magic differs")
+    size = struct.unpack(">H", frame[prefix_size:payload_offset])[0]
+    if not 2 <= size <= FAILURE_PAYLOAD_BYTES:
+        raise GateError("failure frame declared length differs")
+    payload = frame[payload_offset:payload_offset + size]
+    padding = frame[payload_offset + size:payload_offset + FAILURE_PAYLOAD_BYTES]
+    if padding != b"\x00" * len(padding):
+        raise GateError("failure frame padding differs")
+    if hashlib.sha256(payload).digest() != frame[-32:]:
+        raise GateError("failure frame digest differs")
+    try:
+        value = json.loads(payload.decode("ascii"))
+    except (json.JSONDecodeError, UnicodeError) as exc:
+        raise GateError("failure frame JSON differs") from exc
+    canonical = json.dumps(value, sort_keys=True, separators=(",", ":")).encode("ascii")
+    if canonical != payload or not isinstance(value, dict):
+        raise GateError("failure frame is not canonical")
+    if set(value) != {"boundary_status", "failure_code"}:
+        raise GateError("failure frame key set differs")
+    if value["failure_code"] not in HELPER_FAILURE_CODES:
+        raise GateError("failure frame code is not enumerated")
+    if value["boundary_status"] not in FAILURE_BOUNDARY_STATUSES:
+        raise GateError("failure frame boundary status is not enumerated")
+    if not failure_frame_semantics_are_compatible(
+        value["failure_code"], value["boundary_status"]
+    ):
+        raise GateError("failure frame code and boundary status are incompatible")
+    return value
+
+
+def sudo_timestamp_argvs() -> tuple[list[str], list[str]]:
+    prefix = [
+        "/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--groups=27",
+        "--inh-caps=-all", "--ambient-caps=-all", "--",
+    ]
+    argvs = (
+        prefix + ["/usr/bin/sudo", "-K"],
+        prefix + ["/usr/bin/sudo", "-n", "/usr/bin/true"],
+    )
+    validate_sudo_cleanup_argv_contract(argvs[0], ["/usr/bin/sudo", "-K"])
+    validate_sudo_cleanup_argv_contract(argvs[1], ["/usr/bin/sudo", "-n", "/usr/bin/true"])
+    return argvs
+
+
+def validate_sudo_cleanup_argv_contract(argv: list[str], command_tail: list[str]) -> None:
+    expected_prefix = [
+        "/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--groups=27",
+        "--inh-caps=-all", "--ambient-caps=-all", "--",
+    ]
+    if type(argv) is not list or any(type(token) is not str for token in argv):
+        raise GateError("sudo cleanup argv type differs")
+    if command_tail not in (["/usr/bin/sudo", "-K"], ["/usr/bin/sudo", "-n", "/usr/bin/true"]):
+        raise GateError("sudo cleanup inner command differs")
+    if argv != expected_prefix + command_tail:
+        raise GateError("sudo cleanup argv differs or contains injected arguments")
+    if any(token == "--bounding-set" or token.startswith("--bounding-set=") for token in argv):
+        raise GateError("sudo cleanup must preserve the host bounding set without a bounding argv token")
+    if argv.count("--") != 1 or any(token in argv for token in ("--clear-groups", "--init-groups", "--keep-groups", "--no-new-privs")):
+        raise GateError("sudo cleanup group, delimiter, or NNP argv contract differs")
+
+
+def bwrap_argv() -> list[str]:
+    return [
+        "/usr/bin/timeout", "--foreground", "--signal=TERM", "--kill-after=2s", "15s",
+        "/usr/bin/aa-exec", "-p", BOOTSTRAP_PROFILE, "--",
+        "/usr/bin/bwrap", "--die-with-parent", "--new-session",
+        "--unshare-user", "--unshare-pid", "--unshare-net", "--unshare-ipc", "--unshare-uts",
+        "--disable-userns", "--assert-userns-disabled",
+        "--uid", "0", "--gid", "0", "--cap-drop", "ALL",
+        "--hostname", "r8-liquid-proc-stat-v5", "--clearenv",
+        "--setenv", "HOME", "/nonexistent", "--setenv", "PATH", "/usr/bin",
+        "--setenv", "LC_ALL", "C.UTF-8", "--setenv", "LANG", "C.UTF-8", "--setenv", "TZ", "UTC0",
+        "--ro-bind", "/usr", "/usr", "--symlink", "usr/lib", "/lib", "--symlink", "usr/lib64", "/lib64",
+        "--size", str(TMPFS_BYTES), "--tmpfs", "/work", "--proc", "/proc", "--chdir", "/work", "--",
+        "/usr/bin/python3.12", "-I", "-B", "-S", "-c", LOADER_SOURCE,
+    ]
+
+
+def verify_argv_contract(argv: list[str]) -> None:
+    if argv != bwrap_argv():
+        raise GateError("fixed argv differs")
+    for forbidden in ("--bind", "--bind-fd", "--file", "--dev", "--dev-bind", "--share-net"):
+        if forbidden in argv:
+            raise GateError(f"forbidden bwrap option present: {forbidden}")
+    if argv.count("--ro-bind") != 1 or argv[argv.index("--ro-bind") + 1:argv.index("--ro-bind") + 3] != ["/usr", "/usr"]:
+        raise GateError("read-only host bind differs")
+    index = argv.index("--size")
+    if argv[index:index + 4] != ["--size", str(TMPFS_BYTES), "--tmpfs", "/work"]:
+        raise GateError("bounded /work tmpfs differs")
+    if argv[argv.index("--proc"):argv.index("--proc") + 2] != ["--proc", "/proc"]:
+        raise GateError("single proc discovery target differs")
+
+
+def _effective_lines(text: str) -> tuple[str, ...]:
+    return tuple(line.strip() for line in (raw.split("#", 1)[0] for raw in text.splitlines()) if line.strip())
+
+
+def _normalize_profile_authority(
+    lines: tuple[str, ...], bootstrap_label: str, runtime_label: str,
+) -> tuple[str, ...]:
+    return tuple(
+        line.replace(bootstrap_label, "r8-liquid-u3-NORMALIZED-bootstrap").replace(
+            runtime_label, "r8-liquid-u3-NORMALIZED-runtime"
+        )
+        for line in lines
+    )
+
+
+def _ordered_multiset_delta(
+    candidate: tuple[str, ...], baseline: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    baseline_remaining = Counter(baseline)
+    additions: list[str] = []
+    for line in candidate:
+        if baseline_remaining[line] > 0:
+            baseline_remaining[line] -= 1
+        else:
+            additions.append(line)
+    candidate_remaining = Counter(candidate)
+    removals: list[str] = []
+    for line in baseline:
+        if candidate_remaining[line] > 0:
+            candidate_remaining[line] -= 1
+        else:
+            removals.append(line)
+    return tuple(additions), tuple(removals)
+
+
+def verify_full_authority_delta(candidate_lines: tuple[str, ...]) -> dict[str, Any]:
+    baseline_path = Path(V6_PROFILE_BASELINE["path"])
+    raw = read_regular_bytes(baseline_path, limit=128 * 1024)
+    if (
+        len(raw) != V6_PROFILE_BASELINE["size_bytes"]
+        or sha256_bytes(raw) != V6_PROFILE_BASELINE["sha256"]
+    ):
+        raise GateError("frozen v6 profile authority baseline bytes differ")
+    try:
+        baseline_lines = _effective_lines(raw.decode("utf-8"))
+    except UnicodeError as exc:
+        raise GateError("frozen v6 profile authority baseline is not UTF-8") from exc
+    if len(baseline_lines) != V6_PROFILE_BASELINE["effective_line_count"]:
+        raise GateError("frozen v6 profile effective-line count differs")
+    normalized_candidate = _normalize_profile_authority(
+        candidate_lines, BOOTSTRAP_PROFILE, RUNTIME_PROFILE
+    )
+    normalized_baseline = _normalize_profile_authority(
+        baseline_lines,
+        V6_PROFILE_BASELINE["bootstrap_profile"],
+        V6_PROFILE_BASELINE["runtime_profile"],
+    )
+    normalized_digest = hashlib.sha256(
+        ("\n".join(normalized_candidate) + "\n").encode("utf-8")
+    ).hexdigest()
+    if normalized_digest != EXPECTED_NORMALIZED_PROFILE_LINES_SHA256:
+        raise GateError("normalized v5 full-profile digest differs")
+    additions, removals = _ordered_multiset_delta(
+        normalized_candidate, normalized_baseline
+    )
+    if additions != EXPECTED_FULL_AUTHORITY_ADDITIONS:
+        raise GateError("full normalized profile authority additions exceed the single candidate")
+    if removals != EXPECTED_FULL_AUTHORITY_REMOVALS:
+        raise GateError("full normalized profile authority removals differ")
+    return {
+        "baseline": dict(V6_PROFILE_BASELINE),
+        "comparison": "ordered_multiset_effective_lines_after_exact_profile_label_normalization",
+        "candidate_effective_line_count": len(candidate_lines),
+        "normalized_candidate_sha256": normalized_digest,
+        "additions": list(additions),
+        "removals": list(removals),
+        "only_addition_is_candidate": True,
+    }
+
+
+def verify_profile() -> dict[str, Any]:
+    raw = read_regular_bytes(PROFILE_PATH, limit=128 * 1024)
+    text = raw.decode("utf-8")
+    for raw_line in text.splitlines():
+        stripped = raw_line.lstrip()
+        if re.match(r"#\s*include\b", stripped) or re.match(r"include\b", stripped):
+            raise GateError("AppArmor include directives are forbidden")
+    lines = _effective_lines(text)
+    if lines != EXPECTED_PROFILE_LINES:
+        raise GateError("effective AppArmor rule set differs from the exact reviewed tuple")
+    lines_sha256 = hashlib.sha256(("\n".join(lines) + "\n").encode("utf-8")).hexdigest()
+    if lines_sha256 != EXPECTED_PROFILE_LINES_SHA256:
+        raise GateError("effective AppArmor rule-set digest differs")
+    if lines.count(f"profile {BOOTSTRAP_PROFILE} flags=(attach_disconnected,mediate_deleted) {{") != 1:
+        raise GateError("bootstrap profile identity differs")
+    if lines.count(f"profile {RUNTIME_PROFILE} flags=(attach_disconnected,mediate_deleted) {{") != 1:
+        raise GateError("runtime profile identity differs")
+    candidate_rule = "/proc/[0-9]*/stat r,"
+    if lines.count(candidate_rule) != 1:
+        raise GateError("exact numeric proc-stat candidate rule count differs")
+    if lines.count("deny capability dac_override,") != 1:
+        raise GateError("exact evidence-derived silent dac_override deny differs")
+    if lines.count("deny /etc/ld.so.cache r,") != 1:
+        raise GateError("frozen v6 dynamic-linker cache deny differs")
+    if any(line in lines for line in (
+        "/etc/ld.so.cache r,", "/etc/ld.so.conf r,", "/etc/ld.so.conf.d/** r,"
+    )):
+        raise GateError("dynamic-linker read authority exceeds frozen v6")
+    mount_lines = tuple(line for line in lines if line.startswith(("mount ", "remount ", "pivot_root ", "umount ")))
+    if mount_lines != BASELINE_MOUNT_RULES:
+        raise GateError("provenance-pinned mount baseline differs")
+    if lines.count("/newroot/proc/ rw,") != 1:
+        raise GateError("exact bootstrap /newroot/proc directory permission differs")
+    if lines.count(PROC_MOUNT_RULE) != 1:
+        raise GateError("exact evidence-derived proc mount rule differs")
+    forbidden = (
+        "/newroot/proc/**", "/newroot/proc/*", "/dev/", "/dev ",
+        "GenCase", "DualSPHysics", "/home/zrj/scout_ws", "/opt/ros",
+        "flags=(unconfined)", " mount,", "/proc/*/stat r,",
+        "/proc/**/stat", "/proc/[0-9]*/**", "/proc/[0-9]*/status",
+        "/proc/[0-9]*/{stat,status}", "/**/stat", "@{PROC}",
+    )
+    effective = "\n".join(lines)
+    if any(token in effective for token in forbidden):
+        raise GateError("profile contains forbidden or guessed authority")
+    bootstrap, runtime = effective.split(f"profile {RUNTIME_PROFILE}", 1)
+    if candidate_rule not in bootstrap or candidate_rule in runtime:
+        raise GateError("numeric proc-stat rule is not bootstrap-only")
+    for token in ("userns ", "mount ", "capability ", "network ", "/proc", "/dev", "/work", "/usr/bin/python"):
+        if token in runtime:
+            raise GateError(f"runtime profile contains forbidden authority: {token}")
+    authority_delta = verify_full_authority_delta(lines)
+    return {
+        "path": str(PROFILE_PATH),
+        "sha256": sha256_bytes(raw),
+        "effective_lines_sha256": lines_sha256,
+        "effective_line_count": len(lines),
+        "mount_rules": list(mount_lines),
+        "candidate_rule": candidate_rule,
+        "candidate_rule_count": 1,
+        "full_effective_authority_delta": authority_delta,
+        "production_authorized": False,
+    }
+
+
+def _assert_schema_objects_closed(node: Any, path: str = "$") -> None:
+    if isinstance(node, dict):
+        if node.get("type") == "object" and node.get("additionalProperties") is not False:
+            raise GateError(f"schema object is not closed: {path}")
+        for key, value in node.items():
+            _assert_schema_objects_closed(value, f"{path}.{key}")
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            _assert_schema_objects_closed(value, f"{path}[{index}]")
+
+
+def _json_equal(left: Any, right: Any) -> bool:
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return set(left) == set(right) and all(_json_equal(left[key], right[key]) for key in left)
+    if isinstance(left, list):
+        return len(left) == len(right) and all(_json_equal(a, b) for a, b in zip(left, right))
+    return left == right
+
+
+def _validate_schema_instance(instance: Any, node: Mapping[str, Any], root: Mapping[str, Any], path: str = "$") -> None:
+    reference = node.get("$ref")
+    if reference is not None:
+        if not isinstance(reference, str) or not reference.startswith("#/"):
+            raise GateError(f"unsupported schema reference: {path}")
+        target: Any = root
+        for part in reference[2:].split("/"):
+            target = target[part.replace("~1", "/").replace("~0", "~")]
+        if not isinstance(target, dict):
+            raise GateError(f"schema reference target differs: {path}")
+        _validate_schema_instance(instance, target, root, path)
+        return
+    if "const" in node and not _json_equal(instance, node["const"]):
+        raise GateError(f"policy const differs: {path}")
+    if "enum" in node and not any(_json_equal(instance, option) for option in node["enum"]):
+        raise GateError(f"policy enum differs: {path}")
+    expected_type = node.get("type")
+    type_ok = {
+        "object": isinstance(instance, dict),
+        "array": isinstance(instance, list),
+        "string": isinstance(instance, str),
+        "integer": isinstance(instance, int) and not isinstance(instance, bool),
+        "boolean": isinstance(instance, bool),
+    }.get(expected_type, True)
+    if not type_ok:
+        raise GateError(f"policy type differs: {path}")
+    if expected_type == "object":
+        properties = node.get("properties", {})
+        required = node.get("required", [])
+        if not isinstance(properties, dict) or not isinstance(required, list) or any(key not in instance for key in required):
+            raise GateError(f"policy required object key differs: {path}")
+        if node.get("additionalProperties") is False and any(key not in properties for key in instance):
+            raise GateError(f"policy object has an additional key: {path}")
+        for key, value in instance.items():
+            child = properties.get(key)
+            if isinstance(child, dict):
+                _validate_schema_instance(value, child, root, f"{path}.{key}")
+    elif expected_type == "array":
+        if len(instance) < node.get("minItems", 0) or len(instance) > node.get("maxItems", 1 << 60):
+            raise GateError(f"policy array length differs: {path}")
+        child = node.get("items")
+        if isinstance(child, dict):
+            for index, value in enumerate(instance):
+                _validate_schema_instance(value, child, root, f"{path}[{index}]")
+    elif expected_type == "string":
+        if len(instance) < node.get("minLength", 0) or len(instance) > node.get("maxLength", 1 << 60):
+            raise GateError(f"policy string length differs: {path}")
+        pattern = node.get("pattern")
+        if pattern is not None and re.search(pattern, instance) is None:
+            raise GateError(f"policy string pattern differs: {path}")
+    elif expected_type == "integer":
+        if instance < node.get("minimum", -(1 << 63)) or instance > node.get("maximum", 1 << 63):
+            raise GateError(f"policy integer range differs: {path}")
+
+
+def artifact_paths() -> dict[str, Path]:
+    return {"gate": SCRIPT_PATH, "supervisor": SUPERVISOR_PATH, "profile": PROFILE_PATH, "schema": SCHEMA_PATH}
+
+
+def artifact_policy_paths() -> dict[str, Path]:
+    return {
+        "gate": WORKSPACE_ROOT / "scripts" / SCRIPT_PATH.name,
+        "supervisor": WORKSPACE_SUPERVISOR_PATH,
+        "profile": WORKSPACE_ROOT / "config/apparmor_drafts" / PROFILE_NAME,
+        "schema": WORKSPACE_ROOT / "schema" / SCHEMA_NAME,
+    }
+
+
+def _top_level_assignment(tree: ast.Module, name: str) -> ast.expr:
+    matches: list[ast.expr] = []
+    for node in tree.body:
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == name
+        ):
+            matches.append(node.value)
+    if len(matches) != 1:
+        raise GateError(f"supervisor path-contract assignment count differs: {name}")
+    return matches[0]
+
+
+def _ast_expression_matches(node: ast.expr, expected: str) -> bool:
+    expected_node = ast.parse(expected, mode="eval").body
+    return ast.dump(node, include_attributes=False) == ast.dump(
+        expected_node, include_attributes=False
+    )
+
+
+def verify_supervisor_repository_path_contract(
+    source_path: Path | None = None,
+) -> dict[str, Any]:
+    """Independently review canonical/snapshot path derivation in supervisor source."""
+
+    path = SUPERVISOR_PATH if source_path is None else source_path
+    raw = read_regular_bytes(path)
+    try:
+        tree = ast.parse(raw.decode("utf-8"), filename=str(path))
+    except (SyntaxError, UnicodeError) as exc:
+        raise GateError("supervisor source is not valid UTF-8 Python") from exc
+
+    workspace = _top_level_assignment(tree, "WORKSPACE_ROOT")
+    if not _ast_expression_matches(
+        workspace,
+        'Path("/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid")',
+    ):
+        raise GateError("supervisor canonical WORKSPACE_ROOT AST differs")
+
+    supervisor_name = _top_level_assignment(tree, "SUPERVISOR_NAME")
+    if (
+        not isinstance(supervisor_name, ast.Constant)
+        or supervisor_name.value != SUPERVISOR_NAME
+    ):
+        raise GateError("supervisor name must be a fresh v5 literal")
+
+    workspace_supervisor = _top_level_assignment(tree, "WORKSPACE_SUPERVISOR_PATH")
+    if not _ast_expression_matches(
+        workspace_supervisor, 'WORKSPACE_ROOT / "scripts" / SUPERVISOR_NAME'
+    ):
+        raise GateError("supervisor canonical entrypoint AST differs")
+
+    repository = _top_level_assignment(tree, "REPOSITORY_PATHS")
+    if not isinstance(repository, ast.Dict):
+        raise GateError("supervisor REPOSITORY_PATHS must be an exact dict")
+    expected_values = {
+        "gate": 'WORKSPACE_ROOT / "scripts" / GATE_NAME',
+        "supervisor": 'WORKSPACE_ROOT / "scripts" / SUPERVISOR_NAME',
+        "profile": 'WORKSPACE_ROOT / "config/apparmor_drafts" / PROFILE_NAME',
+        "schema": 'WORKSPACE_ROOT / "schema" / SCHEMA_NAME',
+        "policy": 'WORKSPACE_ROOT / "config/target_hosts" / POLICY_NAME',
+    }
+    observed: dict[str, ast.expr] = {}
+    for key, value in zip(repository.keys, repository.values):
+        if not isinstance(key, ast.Constant) or not isinstance(key.value, str):
+            raise GateError("supervisor REPOSITORY_PATHS key AST differs")
+        if key.value in observed:
+            raise GateError("supervisor REPOSITORY_PATHS has a duplicate key")
+        observed[key.value] = value
+    if set(observed) != set(expected_values) or any(
+        not _ast_expression_matches(observed[name], expression)
+        for name, expression in expected_values.items()
+    ):
+        raise GateError("supervisor canonical REPOSITORY_PATHS AST differs")
+
+    snapshot = _top_level_assignment(tree, "SNAPSHOT_PATHS")
+    if not _ast_expression_matches(
+        snapshot,
+        "{name: SNAPSHOT_ROOT / path.name for name, path in REPOSITORY_PATHS.items()}",
+    ):
+        raise GateError("supervisor fresh SNAPSHOT_PATHS AST differs")
+    return {
+        "source_path": str(path),
+        "source_sha256": sha256_bytes(raw),
+        "workspace_root": str(WORKSPACE_ROOT),
+        "repository_path_source": "canonical_workspace_constants_only",
+        "snapshot_path_source": "fresh_snapshot_root_plus_repository_filenames_only",
+        "v2_package_dir_or_script_path_derivation": False,
+    }
+
+
+def verify_static() -> dict[str, Any]:
+    path_contract = verify_supervisor_repository_path_contract()
+    policy = read_json(POLICY_PATH)
+    schema = read_json(SCHEMA_PATH)
+    _assert_schema_objects_closed(schema)
+    _validate_schema_instance(policy, schema, schema)
+    if schema.get("additionalProperties") is not False or set(policy) != set(schema.get("required", [])):
+        raise GateError("closed top-level policy/schema contract differs")
+
+    identities = {
+        "schema_version": "smpcc-r8-liquid-target-u3-proc-stat-apparmor-boundary-probe-policy-v5",
+        "policy_id": "LIQUID_ZRJ_MSI_U2404_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V5",
+        "host_id": "LIQUID_ZRJ_MSI_U2404",
+    }
+    if any(policy.get(key) != value for key, value in identities.items()):
+        raise GateError("fresh proc-stat policy identity differs")
+    draft_status = "STATIC_DRAFT_V5_PENDING_REVIEWED_BYTE_HASH_FREEZE_AND_INDEPENDENT_REVIEW"
+    ready_status = "STATIC_READY_V5_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_SINGLE_ATTEMPT"
+    draft_next = "FREEZE_REVIEWED_BYTES_THEN_INDEPENDENT_STATIC_REVIEW_ONLY_THEN_EXPLICIT_ROOT_SNAPSHOT_SINGLE_ATTEMPT"
+    ready_next = "INDEPENDENT_STATIC_REVIEW_ONLY_THEN_EXPLICIT_ROOT_SNAPSHOT_SINGLE_ATTEMPT"
+    if (policy.get("status"), policy.get("next_allowed_stage")) not in {
+        (draft_status, draft_next), (ready_status, ready_next),
+    }:
+        raise GateError("fresh policy review state differs")
+    frozen_ready = policy["status"] == ready_status
+
+    authorization = policy.get("authorization", {})
+    if (
+        authorization.get("static_review_authorized") is not True
+        or authorization.get("static_task_execution_performed") is not False
+        or authorization.get("execution_authorized_now") is not False
+        or authorization.get("attempts_per_identity") != 1
+        or authorization.get("same_identity_retry") != "forbidden"
+        or authorization.get("admission_token") != ADMISSION_TOKEN
+        or authorization.get("public_token_is_authority") is not False
+        or authorization.get("root_owned_fd_capability_required") is not True
+        or authorization.get("solver_or_gencase_authorized") is not False
+        or authorization.get("cold_a_successor_execution_authorized") is not False
+        or authorization.get("production_authorized") is not False
+    ):
+        raise GateError("static-only one-shot authorization differs")
+    expected_frozen = {
+        "probe_id": PROBE_ID,
+        "snapshot_root": str(SNAPSHOT_ROOT),
+        "bootstrap_profile": BOOTSTRAP_PROFILE,
+        "runtime_profile": RUNTIME_PROFILE,
+        **FROZEN_RECEIPT_PATHS,
+    }
+    if policy.get("frozen_identity") != expected_frozen:
+        raise GateError("frozen probe identity, labels, or receipt paths differ")
+    expected_provenance = {
+        "cold_a_v6_failure": FROZEN_V6_FAILURE,
+        "proc_stat_v1_static_no_go": FROZEN_V1_NO_GO,
+        "proc_stat_v2_prestart_no_go": FROZEN_V2_PRESTART_NO_GO,
+        "proc_stat_v3_runtime_no_go": FROZEN_V3_NO_GO,
+        "proc_stat_v4_runtime_no_go": FROZEN_V4_NO_GO,
+    }
+    if policy.get("provenance") != expected_provenance:
+        raise GateError("frozen v6 and proc-stat v1-v4 NO-GO provenance policy differs")
+    v6 = verify_v6_failure_provenance()
+    v1_no_go = verify_v1_no_go_provenance()
+    v2_no_go = verify_v2_prestart_no_go_provenance()
+    v3_no_go = verify_v3_runtime_no_go_provenance()
+    v4_no_go = verify_v4_runtime_no_go_provenance()
+
+    if policy.get("failure_diagnostics") != failure_diagnostics_contract():
+        raise GateError("failure diagnostics contract differs")
+
+    if policy.get("trusted_system_tools", {}).get("unprivileged_runner") != trusted_tool_policy():
+        raise GateError("unprivileged trusted-tool contract differs")
+    root_python = policy.get("trusted_system_tools", {}).get("root_supervisor", {}).get("python")
+    if root_python != trusted_tool_policy()["python"]:
+        raise GateError("root Python entrypoint identity differs")
+
+    frame = build_payload_frame()
+    parsed_frame = parse_payload_frame(frame)
+    reviewed = policy.get("reviewed_bytes", {})
+    expected_reviewed = {
+        "all_frozen": True,
+        "helper": {"size_bytes": HELPER_SIZE_BYTES, "sha256": HELPER_SHA256},
+        "loader": {"size_bytes": LOADER_SIZE_BYTES, "sha256": LOADER_SHA256},
+        "payload_frame": {
+            "size_bytes": len(frame),
+            "sha256": sha256_bytes(frame),
+            "maximum_size_bytes": MAX_PAYLOAD_FRAME_BYTES,
+        },
+    }
+    if frozen_ready:
+        if reviewed != expected_reviewed:
+            raise GateError("reviewed payload bytes differ")
+    else:
+        if (
+            reviewed.get("all_frozen") is not False
+            or reviewed.get("helper") != {"size_bytes": 0, "sha256": "0" * 64}
+            or reviewed.get("loader") != {"size_bytes": 0, "sha256": "0" * 64}
+            or reviewed.get("payload_frame") != {
+                "size_bytes": 0, "sha256": "0" * 64,
+                "maximum_size_bytes": MAX_PAYLOAD_FRAME_BYTES,
+            }
+        ):
+            raise GateError("draft reviewed-byte placeholders differ")
+
+    payload = policy.get("payload_conduit", {})
+    if (
+        payload.get("frame_magic_hex") != PAYLOAD_MAGIC.hex()
+        or payload.get("success_magic_hex") != SUCCESS_MAGIC.hex()
+        or payload.get("success_status") != "PASS_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V5"
+        or payload.get("external_payload_count") != 0
+        or payload.get("host_writable_transport") is not False
+        or payload.get("maximum_payload_frame_bytes") != MAX_PAYLOAD_FRAME_BYTES
+        or payload.get("maximum_success_frame_bytes") != MAX_SUCCESS_FRAME_BYTES
+        or payload.get("maximum_child_stderr_bytes") != MAX_CHILD_STDERR_BYTES
+        or payload.get("outer_deadline_seconds") != OUTER_DEADLINE_SECONDS
+        or payload.get("isolation", {}).get("host_read_only_mounts") != ["/usr"]
+        or payload.get("isolation", {}).get("host_writable_mounts") != []
+        or payload.get("isolation", {}).get("namespaces") != ["user", "pid", "network", "ipc", "uts"]
+        or payload.get("isolation", {}).get("guest_dev") != "absent"
+        or payload.get("isolation", {}).get("solver_gencase_ros_gazebo_gpu") != "not_executed_not_exposed"
+    ):
+        raise GateError("payload conduit or isolation policy differs")
+
+    verify_argv_contract(bwrap_argv())
+    commands = policy.get("fixed_commands", {})
+    bwrap_hash = sha256_bytes(
+        json.dumps(bwrap_argv(), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    )
+    if frozen_ready:
+        if commands.get("argv_hashes_frozen") is not True or commands.get("bwrap_argv_sha256") != bwrap_hash:
+            raise GateError("frozen bwrap argv identity differs")
+    elif commands.get("argv_hashes_frozen") is not False or commands.get("bwrap_argv_sha256") != "0" * 64:
+        raise GateError("draft bwrap argv placeholder differs")
+    if commands.get("aa_status_json_argv") != list(AA_STATUS_JSON_ARGV):
+        raise GateError("fixed aa-status argv differs")
+    expected_handoff = [
+        "/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--clear-groups",
+        "--bounding-set=-all", "--inh-caps=-all", "--ambient-caps=-all",
+        "--no-new-privs", "--", "/usr/bin/python3.12", "-I", "-B",
+        str(SNAPSHOT_ROOT / SCRIPT_PATH.name), "internal-run",
+    ]
+    if commands.get("gate_handoff_argv") != expected_handoff:
+        raise GateError("fixed gate handoff argv differs")
+    profile_path = str(SNAPSHOT_ROOT / PROFILE_NAME)
+    parser_contract = {
+        "parser_parse_argv": ["/usr/sbin/apparmor_parser", "-Q", "-K", "-T", profile_path],
+        "parser_load_argv": ["/usr/sbin/apparmor_parser", "-a", "-K", "-T", profile_path],
+        "parser_unload_argv": ["/usr/sbin/apparmor_parser", "-R", "-K", profile_path],
+    }
+    if any(commands.get(key) != value for key, value in parser_contract.items()):
+        raise GateError("fixed parser argv differs")
+    journal_commands = {
+        "journal_boot_id_path": "/proc/sys/kernel/random/boot_id",
+        "journal_anchor_argv_template": ["/usr/bin/journalctl", "-k", "--no-pager", "--quiet", "--boot=<BOOT_ID_32HEX>", "--lines=0", "--show-cursor"],
+        "journal_sync_argv": ["/usr/bin/journalctl", "--sync"],
+        "journal_query_argv_template": ["/usr/bin/journalctl", "-k", "--no-pager", "--quiet", "--output=short-iso-precise", "--boot=<BOOT_ID_32HEX>", "--after-cursor=<PRE_RUN_CURSOR>", "--show-cursor"],
+        "journal_anchor_stdout_ceiling_bytes": 4096,
+        "journal_query_stdout_ceiling_bytes": 131072,
+        "journal_stderr_ceiling_bytes": 16384,
+        "audit_line_ceiling_bytes": 4096,
+        "audit_storage_ceiling": 16,
+    }
+    if any(commands.get(key) != value for key, value in journal_commands.items()):
+        raise GateError("fixed journal evidence argv differs")
+    clear_argv, verify_argv = sudo_timestamp_argvs()
+    if (
+        commands.get("sudo_timestamp_clear_argv") != clear_argv
+        or commands.get("sudo_timestamp_verify_argv") != verify_argv
+        or commands.get("shell") is not False
+        or commands.get("workspace_run_forbidden") is not True
+    ):
+        raise GateError("fixed sudo or shell boundary differs")
+    snapshot_supervisor = str(SNAPSHOT_ROOT / SUPERVISOR_NAME)
+    if commands.get("run_argv_template") != [
+        "/usr/bin/sudo", "/usr/bin/python3.12", "-I", "-B", snapshot_supervisor,
+        "run", "--policy-sha256", "<EXTERNALLY_FROZEN_POLICY_SHA256>",
+        "--admission-token", ADMISSION_TOKEN,
+    ]:
+        raise GateError("fixed run argv differs")
+    if commands.get("recover_argv_template") != [
+        "/usr/bin/sudo", "/usr/bin/python3.12", "-I", "-B", snapshot_supervisor,
+        "recover-only", "--policy-sha256", "<EXTERNALLY_FROZEN_POLICY_SHA256>",
+        "--recovery-token", f"{PROBE_ID}:cleanup-only-no-probe",
+    ]:
+        raise GateError("fixed recovery argv differs")
+    operator = commands.get("operator_boundary", {})
+    if any(operator.get(key) is not True for key in (
+        "run_and_recover_foreground_pty_required",
+        "inherited_dev_tty_password_input_only", "sudo_dash_S_forbidden",
+        "password_environment_variable_forbidden", "fd0_redirection_forbidden",
+        "background_or_detached_invocation_forbidden", "shell_interpolation_forbidden",
+    )):
+        raise GateError("operator foreground PTY boundary differs")
+
+    profile = verify_profile()
+    semantics = policy.get("profile_semantics", {})
+    if (
+        semantics.get("effective_line_count") != len(EXPECTED_PROFILE_LINES)
+        or semantics.get("effective_lines_sha256") != EXPECTED_PROFILE_LINES_SHA256
+        or semantics.get("effective_lines_sha256") != profile["effective_lines_sha256"]
+        or semantics.get("external_includes") != []
+        or semantics.get("named_only") is not True
+        or semantics.get("persistent_install") is not False
+        or semantics.get("runtime_profile_loaded_but_unreachable") is not True
+        or semantics.get("runtime_profile_effective_rules") != []
+        or semantics.get("explicit_silent_denials")
+        != ["deny /etc/ld.so.cache r,", "deny capability dac_override,"]
+        or semantics.get("full_effective_authority_delta")
+        != profile["full_effective_authority_delta"]
+        or semantics.get("dynamic_linker_contract") != {
+            "cache_rule": "deny /etc/ld.so.cache r,",
+            "ld_so_conf_rule_present": False,
+            "ld_so_conf_d_rule_present": False,
+            "frozen_v6_system_python_started_with_cache_deny": True,
+        }
+    ):
+        raise GateError("profile semantics differ")
+    candidate = policy.get("candidate_boundary", {})
+    if (
+        candidate.get("candidate_rule") != "/proc/[0-9]*/stat r,"
+        or candidate.get("candidate_rule_count") != 1
+        or candidate.get("candidate_rule_profile") != "bootstrap_only"
+        or candidate.get("candidate_delta_from_v6")
+        != "full_effective_authority_additions_after_exact_label_normalization_equal_only_the_bootstrap_numeric_pid_stat_rule"
+        or candidate.get("status_rule_present") is not False
+        or candidate.get("child_creation") != "os_fork_single_child_no_exec"
+        or candidate.get("child_count") != 1
+        or candidate.get("live_phase", {}).get("direct_stat_reads") != 2
+        or candidate.get("live_phase", {}).get("stat_owner_must_equal_inner_root_projection") is not True
+        or candidate.get("status_boundary_control", {}).get("open_attempts") != 1
+        or candidate.get("status_boundary_control", {}).get("required_errno") != errno.EACCES
+        or candidate.get("zombie_phase", {}).get("direct_stat_reads") != 2
+        or candidate.get("zombie_phase", {}).get("stat_owner_must_remain_equal_inner_root_projection") is not True
+        or candidate.get("reap_phase", {}).get("post_reap_group_scans") != 2
+        or candidate.get("host_file_writes") != 0
+        or candidate.get("solver_or_gencase_execution") is not False
+    ):
+        raise GateError("candidate state-machine policy differs")
+    if policy.get("journal_contract") != JOURNAL_CONTRACT:
+        raise GateError("journal status-denial policy differs")
+    if policy.get("evidence_classification") != EVIDENCE_CLASSIFICATION_CONTRACT:
+        raise GateError("status-denial evidence classification policy differs")
+    lifecycle = policy.get("lifecycle_contract", {})
+    if (
+        lifecycle.get("stable_zero_label_scans") != 3
+        or lifecycle.get("unload_requires_zero_labels") is not True
+        or lifecycle.get("guest_child_cleanup")
+        != "pidfd anchored release or SIGKILL then final reap without reopening child status"
+        or lifecycle.get("recovery", {}).get("token") != f"{PROBE_ID}:cleanup-only-no-probe"
+        or lifecycle.get("recovery", {}).get("probe_execution") is not False
+    ):
+        raise GateError("lifecycle policy differs")
+    receipt = policy.get("receipt_contract", {})
+    if (
+        receipt.get("sudo_group_membership") != SUDO_GROUP_MEMBERSHIP_CONTRACT
+        or receipt.get("sudo_cleanup_identity") != SUDO_CLEANUP_IDENTITY_CONTRACT
+        or receipt.get("sudo_cleanup_bounding_mode") != SUDO_CLEANUP_BOUNDING_MODE
+    ):
+        raise GateError("sudo cleanup policy differs")
+
+    bootstrap = policy.get("snapshot_bootstrap", {})
+    if (
+        bootstrap.get("all_frozen") is not frozen_ready
+        or bootstrap.get("reviewed_minimal_bootstrap_executed_as_root") is not frozen_ready
+        or bootstrap.get("file_mode") != "0444"
+        or bootstrap.get("runtime_supervisor_entrypoint")
+        != "/usr/bin/python3.12 -I -B reads root-owned 0444 snapshot supervisor"
+        or bootstrap.get("direct_snapshot_supervisor_exec_forbidden") is not True
+        or bootstrap.get("root_loader_c_source_contract")
+        != "reviewed_hash_pinned_literal_single_argv_token_after_-c"
+        or bootstrap.get("producer_stdout_use")
+        != "stdin_of_the_reviewed_hash_pinned_root_loader_only"
+        or bootstrap.get("workspace_snapshot_producer_root_forbidden") is not True
+        or bootstrap.get("workspace_snapshot_producer_exact_path") != str(WORKSPACE_SUPERVISOR_PATH)
+        or bootstrap.get("workspace_snapshot_producer_uid") != [HOST_UID] * 4
+        or bootstrap.get("workspace_snapshot_producer_gid") != [HOST_GID] * 4
+    ):
+        raise GateError("snapshot bootstrap boundary differs")
+    for key in ("source_sha256", "loader_sha256"):
+        digest = bootstrap.get(key)
+        if frozen_ready:
+            if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None or digest == "0" * 64:
+                raise GateError("snapshot bootstrap digest is not frozen")
+        elif digest != "0" * 64:
+            raise GateError("draft snapshot bootstrap digest differs")
+    if not frozen_ready and (
+        bootstrap.get("source_size_bytes") != 0
+        or bootstrap.get("loader_size_bytes") != 0
+    ):
+        raise GateError("draft snapshot bootstrap size placeholder differs")
+
+    artifacts = policy.get("trusted_artifacts", {})
+    if set(artifacts) != {"all_frozen", *artifact_paths()}:
+        raise GateError("trusted artifact set differs")
+    if artifacts.get("all_frozen") is not frozen_ready:
+        raise GateError("trusted artifact aggregate freeze state differs")
+    observed_artifacts: dict[str, dict[str, Any]] = {}
+    policy_paths = artifact_policy_paths()
+    for name, path in artifact_paths().items():
+        raw = read_regular_bytes(path)
+        entry = artifacts[name]
+        bytes_match = entry.get("sha256") == sha256_bytes(raw) and entry.get("size_bytes") == len(raw)
+        if entry.get("path") != str(policy_paths[name]):
+            raise GateError(f"trusted artifact canonical path differs: {name}")
+        if frozen_ready and not bytes_match:
+            raise GateError(f"trusted artifact freeze state differs: {name}")
+        if not frozen_ready and (
+            entry.get("sha256") != "0" * 64 or entry.get("size_bytes") != 0
+        ):
+            raise GateError(f"draft trusted artifact placeholder differs: {name}")
+        observed_artifacts[name] = {
+            "path": str(path), "sha256": sha256_bytes(raw), "size_bytes": len(raw),
+        }
+
+    return {
+        "policy_sha256": sha256_bytes(read_regular_bytes(POLICY_PATH)),
+        "artifacts": observed_artifacts,
+        "profile": profile,
+        "payload_frame": parsed_frame,
+        "helper_sha256": HELPER_SHA256,
+        "loader_sha256": LOADER_SHA256,
+        "v6_failure": v6,
+        "v1_static_no_go": v1_no_go,
+        "v2_prestart_no_go": v2_no_go,
+        "v3_runtime_no_go": v3_no_go,
+        "v4_runtime_no_go": v4_no_go,
+        "supervisor_repository_path_contract": path_contract,
+        "freeze_ready": frozen_ready,
+        "execution_performed": False,
+    }
+
+
+def read_identity_status(path: Path = Path("/proc/self/status")) -> dict[str, Any]:
+    fields: dict[str, str] = {}
+    for line in path.read_text(encoding="ascii").splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1)
+            fields[key] = value.strip()
+    try:
+        return {
+            "uid": [int(value) for value in fields["Uid"].split()],
+            "gid": [int(value) for value in fields["Gid"].split()],
+            "groups": [int(value) for value in fields["Groups"].split()],
+            "capabilities": {key: int(fields[key], 16) for key in ("CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb")},
+            "no_new_privs": int(fields["NoNewPrivs"]),
+        }
+    except (KeyError, ValueError) as exc:
+        raise GateError("cannot parse host child identity") from exc
+
+
+def verify_host_identity(status_value: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    observed = dict(read_identity_status() if status_value is None else status_value)
+    if set(observed) != {"uid", "gid", "groups", "capabilities", "no_new_privs"}:
+        raise GateError("host gate identity key set differs")
+    uid, gid, groups = observed.get("uid"), observed.get("gid"), observed.get("groups")
+    if (type(uid) is not list or type(gid) is not list
+            or any(type(item) is not int for item in uid + gid)
+            or uid != [HOST_UID] * 4 or gid != [HOST_GID] * 4):
+        raise GateError("host gate UID/GID fields differ")
+    if type(groups) is not list or any(type(item) is not int for item in groups) or groups != []:
+        raise GateError("host gate supplementary groups differ")
+    caps = observed.get("capabilities")
+    if (type(caps) is not dict or set(caps) != {"CapInh", "CapPrm", "CapEff", "CapBnd", "CapAmb"}
+            or any(type(value) is not int or value != 0 for value in caps.values())):
+        raise GateError("host gate capability sets differ")
+    if type(observed.get("no_new_privs")) is not int or observed.get("no_new_privs") != 1:
+        raise GateError("host gate NNP must be one before aa-exec")
+    return observed
+
+
+def verify_snapshot_runtime() -> dict[str, Any]:
+    if SNAPSHOT_ENV not in os.environ or Path(os.environ[SNAPSHOT_ENV]) != SNAPSHOT_ROOT:
+        raise GateError("internal-run requires the exact snapshot environment")
+    if SCRIPT_PATH.parent != SNAPSHOT_ROOT:
+        raise GateError("internal-run gate is not executing from the snapshot")
+    root_metadata = os.lstat(SNAPSHOT_ROOT)
+    if not stat.S_ISDIR(root_metadata.st_mode) or root_metadata.st_uid != 0 or root_metadata.st_gid != 0 or stat.S_IMODE(root_metadata.st_mode) != 0o555:
+        raise GateError("snapshot directory ownership or mode differs")
+    for path in (SCRIPT_PATH, POLICY_PATH, SCHEMA_PATH, PROFILE_PATH, SUPERVISOR_PATH):
+        metadata = os.lstat(path)
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_gid != 0 or metadata.st_nlink != 1 or stat.S_IMODE(metadata.st_mode) != 0o444:
+            raise GateError(f"snapshot artifact metadata differs: {path.name}")
+    return {"root": str(SNAPSHOT_ROOT), "mode": "0555", "owner": [0, 0]}
+
+
+def consume_root_admission_capability() -> dict[str, Any]:
+    try:
+        descriptor = int(os.environ[ADMISSION_FD_ENV])
+        expected_sha256 = os.environ[ADMISSION_SHA256_ENV]
+    except (KeyError, ValueError) as exc:
+        raise GateError("root admission FD capability metadata is absent") from exc
+    if descriptor < 3 or len(expected_sha256) != 64 or any(character not in "0123456789abcdef" for character in expected_sha256):
+        raise GateError("root admission FD capability metadata differs")
+    payload = bytearray()
+    try:
+        metadata = os.fstat(descriptor)
+        if (not stat.S_ISFIFO(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_gid != 0
+                or stat.S_IMODE(metadata.st_mode) != 0o600 or not os.get_inheritable(descriptor)):
+            raise GateError("root admission FD capability inode differs")
+        while len(payload) < 32:
+            block = os.read(descriptor, 32 - len(payload))
+            if not block:
+                raise GateError("root admission FD capability is truncated")
+            payload.extend(block)
+        if os.read(descriptor, 1) != b"":
+            raise GateError("root admission FD capability has trailing bytes")
+    finally:
+        os.close(descriptor)
+    if hashlib.sha256(payload).hexdigest() != expected_sha256:
+        raise GateError("root admission FD capability digest differs")
+    os.environ.pop(ADMISSION_FD_ENV, None)
+    os.environ.pop(ADMISSION_SHA256_ENV, None)
+    return {
+        "transport": "ROOT_OWNED_ANONYMOUS_PIPE_SINGLE_STRICT_EOF_READ",
+        "size_bytes": len(payload),
+        "sha256": expected_sha256,
+        "pipe_uid": metadata.st_uid,
+        "pipe_gid": metadata.st_gid,
+        "pipe_mode": "0600",
+    }
+
+
+def _proc_starttime(pid: int) -> int | None:
+    try:
+        raw = Path(f"/proc/{pid}/stat").read_text(encoding="ascii")
+    except FileNotFoundError:
+        return None
+    end = raw.rfind(")")
+    fields = raw[end + 2:].split() if end >= 0 else []
+    if len(fields) < 20:
+        return None
+    try:
+        return int(fields[19])
+    except ValueError:
+        return None
+
+
+def _proc_labeled_members(proc_root: Path = Path("/proc")) -> list[dict[str, Any]]:
+    """Enumerate all threads in the fixed UID1000 gate tree under fresh labels.
+
+    This is deliberately local unprivileged cleanup evidence, not a claim of
+    all-UID label absence.  The root supervisor performs the authoritative
+    all-task scan before and after profile lifecycle operations.
+    """
+
+    members: list[dict[str, Any]] = []
+    for entry in proc_root.iterdir():
+        if not entry.name.isdecimal():
+            continue
+        pid = int(entry.name)
+        try:
+            status_raw = (entry / "status").read_text(encoding="ascii")
+            uid_line = next((line for line in status_raw.splitlines() if line.startswith("Uid:")), "")
+            uid_fields = [int(value) for value in uid_line.split()[1:]]
+            if len(uid_fields) != 4:
+                raise GateError(f"cannot parse task UID authority for pid {pid}")
+            if uid_fields != [HOST_UID] * 4:
+                continue
+            leader_stat_raw = (entry / "stat").read_text(encoding="ascii")
+            task_entries = tuple((entry / "task").iterdir())
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        except OSError as exc:
+            if exc.errno in (errno.ENOENT, errno.ESRCH):
+                continue
+            raise GateError(f"cannot read labeled task authority for pid {pid}: {exc}") from exc
+        end = leader_stat_raw.rfind(")")
+        leader_fields = leader_stat_raw[end + 2:].split() if end >= 0 else []
+        if len(leader_fields) < 20:
+            raise GateError(f"cannot parse labeled task stat for pid {pid}")
+        tgid_starttime = int(leader_fields[19])
+        if tgid_starttime < 1:
+            raise GateError(f"non-positive tgid starttime for pid {pid}")
+        for task_entry in task_entries:
+            if not task_entry.name.isdecimal():
+                continue
+            tid = int(task_entry.name)
+            try:
+                attr_raw = (task_entry / "attr/current").read_text(encoding="utf-8")
+                task_stat_raw = (task_entry / "stat").read_text(encoding="ascii")
+            except (FileNotFoundError, ProcessLookupError):
+                continue
+            except OSError as exc:
+                if exc.errno in (errno.ENOENT, errno.ESRCH):
+                    continue
+                raise GateError(f"cannot read labeled thread authority for tgid {pid} tid {tid}: {exc}") from exc
+            task_end = task_stat_raw.rfind(")")
+            task_fields = task_stat_raw[task_end + 2:].split() if task_end >= 0 else []
+            if len(task_fields) < 20:
+                raise GateError(f"cannot parse labeled thread stat for tgid {pid} tid {tid}")
+            tid_starttime = int(task_fields[19])
+            if tid_starttime < 1:
+                raise GateError(f"non-positive tid starttime for tgid {pid} tid {tid}")
+            label = attr_raw.strip().split(" (", 1)[0]
+            if label in (BOOTSTRAP_PROFILE, RUNTIME_PROFILE):
+                members.append({
+                    "tgid": pid,
+                    "tid": tid,
+                    "pgrp": int(task_fields[2]),
+                    "tgid_starttime": tgid_starttime,
+                    "tid_starttime": tid_starttime,
+                    "label": label,
+                })
+    return sorted(members, key=lambda item: (item["tgid"], item["tid"]))
+
+
+def _signal_open_pidfd(pidfd: int, sig: signal.Signals) -> bool:
+    try:
+        signal.pidfd_send_signal(pidfd, sig)
+        return True
+    except ProcessLookupError:
+        return False
+
+
+def _signal_pid(pid: int, sig: signal.Signals, starttime: int) -> bool:
+    if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+        raise GateError("pidfd signaling is unavailable")
+    if not isinstance(starttime, int) or isinstance(starttime, bool) or starttime < 1:
+        raise GateError("refusing to signal a task without a frozen positive starttime")
+    try:
+        pidfd = os.pidfd_open(pid, 0)
+    except ProcessLookupError:
+        return False
+    try:
+        if _proc_starttime(pid) != starttime:
+            return False
+        return _signal_open_pidfd(pidfd, sig)
+    finally:
+        os.close(pidfd)
+
+
+def _terminate_probe_tree(process: subprocess.Popen[bytes], leader_pidfd: int) -> dict[str, Any]:
+    """Bounded pidfd cleanup independent of leader lifetime and process group."""
+
+    evidence: dict[str, Any] = {"term": [], "kill": [], "stable_zero_scans": []}
+    if process.poll() is None and _signal_open_pidfd(leader_pidfd, signal.SIGTERM):
+        evidence["term"].append({"pid": process.pid, "role": "leader"})
+    signaled_tgids: set[int] = set()
+    for item in _proc_labeled_members():
+        if item["tgid"] == process.pid or item["tgid"] in signaled_tgids:
+            continue
+        if _signal_pid(item["tgid"], signal.SIGTERM, item["tgid_starttime"]):
+            signaled_tgids.add(item["tgid"])
+            evidence["term"].append(item)
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline:
+        if process.poll() is not None and not _proc_labeled_members():
+            break
+        time.sleep(0.05)
+    if process.poll() is None and _signal_open_pidfd(leader_pidfd, signal.SIGKILL):
+        evidence["kill"].append({"pid": process.pid, "role": "leader"})
+    signaled_tgids = set()
+    for item in _proc_labeled_members():
+        if item["tgid"] == process.pid or item["tgid"] in signaled_tgids:
+            continue
+        if _signal_pid(item["tgid"], signal.SIGKILL, item["tgid_starttime"]):
+            signaled_tgids.add(item["tgid"])
+            evidence["kill"].append(item)
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline and _proc_labeled_members():
+        time.sleep(0.05)
+    for index in range(3):
+        current = _proc_labeled_members()
+        evidence["stable_zero_scans"].append(current)
+        if current:
+            raise GateError(f"labeled task residue remains after bounded cleanup: {current}")
+        if index < 2:
+            time.sleep(0.05)
+    return evidence
+
+
+def _bounded_extend(target: bytearray, block: bytes, limit: int) -> bool:
+    remaining = max(0, limit - len(target))
+    target.extend(block[:remaining])
+    return len(block) > remaining
+
+
+def run_bounded_guest(argv: list[str], input_frame: bytes) -> tuple[int, bytes, bytes, int]:
+    if len(input_frame) > MAX_PAYLOAD_FRAME_BYTES:
+        raise GateError("guest stdin exceeds its hard ceiling")
+    if not hasattr(os, "pidfd_open") or not hasattr(signal, "pidfd_send_signal"):
+        raise GateError("pidfd signaling is unavailable")
+    process = subprocess.Popen(
+        argv,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        cwd="/",
+        env={"HOME": "/nonexistent", "PATH": "/usr/bin:/usr/sbin", "LC_ALL": "C.UTF-8", "LANG": "C.UTF-8", "TZ": "UTC"},
+        close_fds=True,
+        start_new_session=True,
+    )
+    try:
+        leader_pidfd = os.pidfd_open(process.pid, 0)
+    except BaseException:
+        # The unreaped direct child PID cannot be reused here, so Popen.kill is
+        # the only safe fallback when a birth-time pidfd cannot be retained.
+        process.kill()
+        try:
+            process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            pass
+        raise
+    selector: selectors.BaseSelector | None = None
+    stdout = bytearray()
+    stderr = bytearray()
+    position = 0
+    failure: str | None = None
+    cleanup_failure: str | None = None
+    deadline = time.monotonic() + OUTER_DEADLINE_SECONDS
+    try:
+        if process.stdin is None or process.stdout is None or process.stderr is None:
+            raise GateError("guest conduit pipes are unavailable")
+        descriptors = {"stdin": process.stdin.fileno(), "stdout": process.stdout.fileno(), "stderr": process.stderr.fileno()}
+        for descriptor in descriptors.values():
+            os.set_blocking(descriptor, False)
+        selector = selectors.DefaultSelector()
+        selector.register(descriptors["stdin"], selectors.EVENT_WRITE, "stdin")
+        selector.register(descriptors["stdout"], selectors.EVENT_READ, "stdout")
+        selector.register(descriptors["stderr"], selectors.EVENT_READ, "stderr")
+        while selector.get_map():
+            if time.monotonic() >= deadline:
+                failure = failure or "guest conduit exceeded its outer deadline"
+                break
+            events = selector.select(timeout=0.1)
+            for key, _mask in events:
+                descriptor = key.fd
+                channel = key.data
+                if channel == "stdin":
+                    try:
+                        count = os.write(descriptor, input_frame[position:position + 4096])
+                    except BrokenPipeError:
+                        count = 0
+                    except BlockingIOError:
+                        continue
+                    if count:
+                        position += count
+                    if not count or position == len(input_frame):
+                        selector.unregister(descriptor)
+                        process.stdin.close()
+                    continue
+                try:
+                    block = os.read(descriptor, 4096)
+                except BlockingIOError:
+                    continue
+                if not block:
+                    selector.unregister(descriptor)
+                    (process.stdout if channel == "stdout" else process.stderr).close()
+                    continue
+                target = stdout if channel == "stdout" else stderr
+                limit = MAX_SUCCESS_FRAME_BYTES if channel == "stdout" else MAX_CHILD_STDERR_BYTES
+                if _bounded_extend(target, block, limit):
+                    failure = f"guest {channel} exceeded its hard byte ceiling"
+                    break
+            if failure is not None:
+                break
+    finally:
+        if selector is not None:
+            selector.close()
+        for stream in (process.stdin, process.stdout, process.stderr):
+            try:
+                stream.close()
+            except (OSError, AttributeError):
+                pass
+        try:
+            members = _proc_labeled_members()
+            if process.poll() is None or members:
+                _terminate_probe_tree(process, leader_pidfd)
+        except (GateError, OSError) as exc:
+            cleanup_failure = f"bounded labeled-task cleanup failed: {exc}"
+        finally:
+            if process.poll() is None:
+                try:
+                    _signal_open_pidfd(leader_pidfd, signal.SIGKILL)
+                except OSError as exc:
+                    cleanup_failure = cleanup_failure or f"final leader pidfd kill failed: {exc}"
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                cleanup_failure = cleanup_failure or "guest leader did not reap after final pidfd kill"
+            os.close(leader_pidfd)
+        if cleanup_failure is not None:
+            raise GateError(cleanup_failure)
+    returncode = process.returncode
+    if returncode is None:
+        raise GateError("guest leader return code is unavailable after reap")
+    if failure is not None:
+        raise GateError(failure)
+    return returncode, bytes(stdout), bytes(stderr), position
+
+
+def internal_run() -> tuple[int, bytes, bytes]:
+    if os.environ.get(ADMISSION_ENV) != ADMISSION_TOKEN:
+        raise GateError("explicit one-shot admission token is absent")
+    verify_snapshot_runtime()
+    verify_host_identity()
+    consume_root_admission_capability()
+    review = verify_static()
+    if review.get("freeze_ready") is not True:
+        raise GateError("internal-run requires the fully frozen STATIC_READY policy")
+    for name in TRUSTED_TOOLS:
+        require_tool(name)
+    frame = build_payload_frame()
+    if parse_payload_frame(frame)["sha256"] != review["payload_frame"]["sha256"]:
+        raise GateError("runtime payload frame differs from static review")
+    returncode, stdout, stderr, consumed = run_bounded_guest(bwrap_argv(), frame)
+    if returncode == 0:
+        if consumed != len(frame):
+            raise GateError("successful guest did not consume the complete fixed payload frame")
+        if stderr:
+            raise GateError("successful guest emitted stderr")
+        parse_success_frame(stdout)
+        return returncode, stdout, b""
+    if stdout:
+        raise GateError("failed guest emitted forbidden stdout")
+    if returncode != 2:
+        raise GateError("failed guest return code is outside the helper failure contract")
+    if consumed != len(frame):
+        raise GateError("failed helper did not consume the complete fixed payload frame")
+    parse_failure_frame(stderr)
+    return returncode, b"", stderr
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("command", choices=("self-check", "internal-run"))
+    arguments = parser.parse_args(argv)
+    try:
+        if arguments.command == "self-check":
+            review = verify_static()
+            state = "STATIC_READY" if review["freeze_ready"] else "STATIC_DRAFT"
+            print(json.dumps({"status": f"PASS_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V5_{state}_EXECUTION_NOT_PERFORMED", "review": review}, ensure_ascii=False, sort_keys=True))
+            return 0
+        returncode, stdout, stderr = internal_run()
+        if stdout:
+            sys.stdout.buffer.write(stdout)
+            sys.stdout.buffer.flush()
+        if stderr:
+            sys.stderr.buffer.write(stderr)
+            sys.stderr.buffer.flush()
+        return 0 if returncode == 0 else min(125, max(1, returncode))
+    except (GateError, OSError, ValueError, UnicodeError, subprocess.SubprocessError) as exc:
+        stream = sys.stderr if arguments.command == "internal-run" else sys.stdout
+        print(json.dumps({"status": "NO_GO", "error": str(exc)}, ensure_ascii=False, sort_keys=True), file=stream)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

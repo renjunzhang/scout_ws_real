@@ -1,0 +1,1059 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-u3-proc-stat-apparmor-boundary-probe-policy-v3",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V3",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "status": "STATIC_READY_V3_PENDING_INDEPENDENT_REVIEW_AND_EXPLICIT_SINGLE_ATTEMPT",
+  "next_allowed_stage": "INDEPENDENT_STATIC_REVIEW_ONLY_THEN_EXPLICIT_ROOT_SNAPSHOT_SINGLE_ATTEMPT",
+  "authorization": {
+    "static_review_authorized": true,
+    "static_task_execution_performed": false,
+    "execution_authorized_now": false,
+    "attempts_per_identity": 1,
+    "same_identity_retry": "forbidden",
+    "admission_token": "u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z:single-proc-stat-boundary-candidate-attempt",
+    "public_token_is_authority": false,
+    "root_owned_fd_capability_required": true,
+    "explicit_root_command_required": true,
+    "recovery_only_available": true,
+    "solver_or_gencase_authorized": false,
+    "cold_a_successor_execution_authorized": false,
+    "production_authorized": false
+  },
+  "frozen_identity": {
+    "probe_id": "u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z",
+    "snapshot_root": "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.snapshot",
+    "bootstrap_profile": "r8-liquid-u3-proc-stat-boundary-bootstrap-v3-20260809t022402z",
+    "runtime_profile": "r8-liquid-u3-proc-stat-boundary-runtime-v3-20260809t022402z",
+    "start_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.start.json",
+    "preflight_failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.preflight_incomplete.json",
+    "execution_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.execution.json",
+    "lifecycle_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.lifecycle.json",
+    "lifecycle_failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.lifecycle_incomplete.json",
+    "recovery_receipt": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.recovery.json"
+  },
+  "payload_conduit": {
+    "frame_magic_hex": "523850524f435354415450524f42453300",
+    "success_magic_hex": "523850524f435354415450415353563300",
+    "success_status": "PASS_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V3",
+    "transport": "ANONYMOUS_PIPE_SIZE_HASH_CHECKED_IN_MEMORY_HELPER",
+    "strict_eof": true,
+    "fd0_replaced_with_anonymous_eof_pipe": true,
+    "external_payload_count": 0,
+    "host_writable_transport": false,
+    "maximum_payload_frame_bytes": 65536,
+    "maximum_success_frame_bytes": 16384,
+    "maximum_child_stderr_bytes": 4096,
+    "outer_deadline_seconds": 20,
+    "host_identity": {
+      "uid": [
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "gid": [
+        1000,
+        1000,
+        1000,
+        1000
+      ],
+      "groups": [],
+      "capability_sets": {
+        "CapInh": 0,
+        "CapPrm": 0,
+        "CapEff": 0,
+        "CapBnd": 0,
+        "CapAmb": 0
+      },
+      "no_new_privs": 1
+    },
+    "guest_identity": {
+      "uid": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "gid": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "groups": [],
+      "capability_sets": {
+        "CapInh": 0,
+        "CapPrm": 0,
+        "CapEff": 0,
+        "CapBnd": 0,
+        "CapAmb": 0
+      },
+      "no_new_privs": 1,
+      "child_dumpable": 0
+    },
+    "isolation": {
+      "host_read_only_mounts": [
+        "/usr"
+      ],
+      "host_writable_mounts": [],
+      "guest_work_tmpfs_bytes": 67108864,
+      "guest_proc": "/proc",
+      "guest_dev": "absent",
+      "namespaces": [
+        "user",
+        "pid",
+        "network",
+        "ipc",
+        "uts"
+      ],
+      "nested_userns": "disabled",
+      "network": "new_empty_network_namespace",
+      "source_seed_workspace": "absent",
+      "solver_gencase_ros_gazebo_gpu": "not_executed_not_exposed"
+    },
+    "admission_capability": {
+      "transport": "ROOT_OWNED_ANONYMOUS_PIPE_FD",
+      "creator": "root_snapshot_supervisor",
+      "pipe_owner": [
+        0,
+        0
+      ],
+      "pipe_mode": "0600",
+      "payload_size_bytes": 32,
+      "strict_eof": true,
+      "single_consumer": true,
+      "public_environment_token_is_authority": false,
+      "fd_closed_before_probe_child": true
+    }
+  },
+  "provenance": {
+    "cold_a_v6_failure": {
+      "case_id": "u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z",
+      "campaign_id": "u3_c1m_solver_cpu_settle_ab_campaign_20260808T212044Z",
+      "policy": {
+        "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_solver_cpu_settle_cold_a_execution_policy_v6.json",
+        "sha256": "0affbcabd5b587464b1a32c38ebd2abb139063c4f50000e0252801d199d59270",
+        "size_bytes": 39382
+      },
+      "receipts": {
+        "start": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.start.json",
+          "sha256": "07d1c2c3e212f8cd791531a59933695e7a078c7953808c842d28a19bd21f365f",
+          "size_bytes": 11634,
+          "status": "V6_COLD_A_ONE_SHOT_STARTED_NO_RETRY_SAME_IDENTITY"
+        },
+        "execution": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.execution.json",
+          "sha256": "7cba88d4793a58e05d2b7a0c6d843a8d6f0fec2e19541a9ff138a814ab1d4316",
+          "size_bytes": 13787,
+          "status": "V6_COLD_A_ATTEMPT_ABORTED_NO_RETRY_SAME_IDENTITY"
+        },
+        "lifecycle_incomplete": {
+          "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_solver_cpu_settle_cold_a_v6_20260808T212044Z.lifecycle_incomplete.json",
+          "sha256": "03958f6def1c609d21bd56120827d818085d5c3b96768a1da032f8b83c46b59f",
+          "size_bytes": 6239,
+          "status": "V6_COLD_A_LIFECYCLE_OR_EXECUTION_INCOMPLETE_NO_RETRY_SAME_IDENTITY"
+        }
+      },
+      "stat_denials": {
+        "line_sha256": [
+          "7fabb53adb6cf6f8626bdc0056f663a73896dc133dde2bc14d12d9fcf73ad8e2",
+          "e511e301bf3cec1956573781301b3827b64085c7b9f17c84d5251ab1def23d17"
+        ],
+        "line_size_bytes": [
+          320,
+          320
+        ],
+        "name": "/proc/3/stat",
+        "operation": "open",
+        "class": "file",
+        "requested_mask": "r",
+        "denied_mask": "r",
+        "fsuid": "1000",
+        "ouid": "0"
+      },
+      "source_use": "failure_provenance_only_no_snapshot_output_or_runtime_reuse",
+      "identity_consumed": true,
+      "retry_forbidden": true,
+      "cold_b_authorized": false,
+      "production_authorized": false
+    },
+    "proc_stat_v1_static_no_go": {
+      "blocker": {
+        "exact_differences": [
+          {
+            "classification": "frozen_explicit_deny_replaced_by_allow",
+            "v1_rule": "/etc/ld.so.cache r,",
+            "v6_rule": "deny /etc/ld.so.cache r,"
+          },
+          {
+            "classification": "new_allow_absent_from_v6",
+            "v1_rule": "/etc/ld.so.conf r,",
+            "v6_rule": null
+          },
+          {
+            "classification": "new_allow_absent_from_v6",
+            "v1_rule": "/etc/ld.so.conf.d/** r,",
+            "v6_rule": null
+          }
+        ],
+        "reason": "v1_added_three_dynamic_linker_read_allows_beyond_the_single_candidate_rule"
+      },
+      "decision": "STATIC_NO_GO_FULL_PROFILE_AUTHORITY_DELTA_VIOLATION",
+      "identity_consumed": true,
+      "observed_facts": {
+        "probe_executed": false,
+        "profile_loaded": false,
+        "receipt_created": false,
+        "snapshot_created": true
+      },
+      "probe_id": "u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z",
+      "production_authorized": false,
+      "receipt_paths": {
+        "execution": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.execution.json",
+        "lifecycle": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.lifecycle.json",
+        "lifecycle_failure": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.lifecycle_incomplete.json",
+        "preflight_failure": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.preflight_incomplete.json",
+        "recovery": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.recovery.json",
+        "start": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.start.json"
+      },
+      "receipts_observed_absent": true,
+      "retry_forbidden": true,
+      "snapshot": {
+        "files": {
+          "gate": {
+            "mode": "0444",
+            "name": "r8_liquid_target_u3_proc_stat_boundary_probe_gate_v1.py",
+            "nlink": 1,
+            "owner": [
+              0,
+              0
+            ],
+            "sha256": "07c4b9e0f962b9edc50945e3ad0eca09899b58487593ca021e4e8a537b9dcd32",
+            "size_bytes": 97647
+          },
+          "policy": {
+            "mode": "0444",
+            "name": "liquid_zrj_msi_u2404_u3_proc_stat_boundary_probe_policy_v1.json",
+            "nlink": 1,
+            "owner": [
+              0,
+              0
+            ],
+            "sha256": "27395abee5ae0a7784e9d49ae38d6c3a68a62b9f123a9e7a3854cd9be0605f0a",
+            "size_bytes": 26497
+          },
+          "profile": {
+            "mode": "0444",
+            "name": "r8-liquid-u3-proc-stat-boundary-probe-v1.profile",
+            "nlink": 1,
+            "owner": [
+              0,
+              0
+            ],
+            "sha256": "d4949a663426e465c1f523170717f622420d5527792a6864239a7e46fbbcdfa8",
+            "size_bytes": 3217
+          },
+          "schema": {
+            "mode": "0444",
+            "name": "target_host_u3_proc_stat_boundary_probe_policy_v1.json",
+            "nlink": 1,
+            "owner": [
+              0,
+              0
+            ],
+            "sha256": "b496cd89adab90fcb787d7c17fd0c25c47649c7856a7db84bb026956e82b8116",
+            "size_bytes": 35116
+          },
+          "supervisor": {
+            "mode": "0444",
+            "name": "r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v1.py",
+            "nlink": 1,
+            "owner": [
+              0,
+              0
+            ],
+            "sha256": "060467492da3fee5689f342b1ab6ecbe3ca33f99894e59a8967a871c07725e34",
+            "size_bytes": 147548
+          }
+        },
+        "mode": "0555",
+        "nlink": 2,
+        "owner": [
+          0,
+          0
+        ],
+        "preserve_unchanged": true,
+        "root": "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v1_20260809T002729Z.snapshot"
+      },
+      "source_use": "static_no_go_provenance_only_no_runtime_baseline_or_snapshot_artifact_reuse"
+    },
+    "proc_stat_v2_prestart_no_go": {
+      "probe_id": "u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z",
+      "decision": "PRE_START_NO_GO_IDENTITY_CONSUMED_RETRY_FORBIDDEN",
+      "snapshot": {
+        "root": "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.snapshot",
+        "owner": [
+          0,
+          0
+        ],
+        "mode": "0555",
+        "nlink": 2,
+        "preserve_unchanged": true,
+        "files": {
+          "gate": {
+            "name": "r8_liquid_target_u3_proc_stat_boundary_probe_gate_v2.py",
+            "sha256": "7e6834a0bea5dde4d8678a0f95ad372d3e949f2293aa9c2f6bd36557826b35ce",
+            "size_bytes": 110806,
+            "owner": [
+              0,
+              0
+            ],
+            "mode": "0444",
+            "nlink": 1
+          },
+          "supervisor": {
+            "name": "r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v2.py",
+            "sha256": "7d0c250583292fcc001166248cb035175102fbb0642d615423597398f4e1adaf",
+            "size_bytes": 160716,
+            "owner": [
+              0,
+              0
+            ],
+            "mode": "0444",
+            "nlink": 1
+          },
+          "profile": {
+            "name": "r8-liquid-u3-proc-stat-boundary-probe-v2.profile",
+            "sha256": "aecb3951ab0c737c3c17f0d4fbcbb63ae4dea60564378612ff6a6b244edf3eea",
+            "size_bytes": 3435,
+            "owner": [
+              0,
+              0
+            ],
+            "mode": "0444",
+            "nlink": 1
+          },
+          "schema": {
+            "name": "target_host_u3_proc_stat_boundary_probe_policy_v2.json",
+            "sha256": "a246d91891dae67368d2c94a15e3410f81d0b15d586eac5aff9806acd57d36c3",
+            "size_bytes": 44684,
+            "owner": [
+              0,
+              0
+            ],
+            "mode": "0444",
+            "nlink": 1
+          },
+          "policy": {
+            "name": "liquid_zrj_msi_u2404_u3_proc_stat_boundary_probe_policy_v2.json",
+            "sha256": "53817a6e4e4fc2a0a05a15733587fb3bd14c94a4ccdeabd8fa2dcce483ec4249",
+            "size_bytes": 33134,
+            "owner": [
+              0,
+              0
+            ],
+            "mode": "0444",
+            "nlink": 1
+          }
+        }
+      },
+      "preflight_receipt": {
+        "path": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.preflight_incomplete.json",
+        "sha256": "6a110a57eb73e826aed0a64b23e48b624e0d2b1a5c57ac73129ec4a8547a5c9d",
+        "size_bytes": 3418,
+        "owner": [
+          1000,
+          1000
+        ],
+        "mode": "0440",
+        "nlink": 1,
+        "document_type": "SMPCC_R8_LIQUID_U3_PROC_STAT_APPARMOR_BOUNDARY_PROBE_V2_PREFLIGHT_FAILURE_RECEIPT",
+        "status": "PRE_START_FAILURE_IDENTITY_CONSUMED_NO_RETRY_SUDO_TIMESTAMP_CLEANED_NO_PROFILE_LOAD_OR_PROBE_EXECUTED",
+        "primary_error": "SupervisorError: snapshot artifact policy path differs: gate",
+        "requested_policy_sha256": "53817a6e4e4fc2a0a05a15733587fb3bd14c94a4ccdeabd8fa2dcce483ec4249",
+        "identity_consumed": true,
+        "parser_invoked_by_this_run": false,
+        "profile_load_attempted_by_this_run": false,
+        "probe_executed_by_this_run": false,
+        "start_receipt_created_by_this_run": false,
+        "sudo_timestamp_cleanup_attempted": true,
+        "sudo_timestamp_cleanup_proven": true,
+        "sudo_timestamp_cleanup_error": null
+      },
+      "other_receipt_paths": {
+        "start": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.start.json",
+        "execution": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.execution.json",
+        "lifecycle": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.lifecycle.json",
+        "lifecycle_failure": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.lifecycle_incomplete.json",
+        "recovery": "/home/zrj/scout_liquid_lab/audits/u3_proc_stat_apparmor_boundary_probe_v2_20260809T014926Z.recovery.json"
+      },
+      "other_receipts_observed_absent": true,
+      "observed_facts": {
+        "snapshot_created": true,
+        "parser_invoked": false,
+        "profile_loaded": false,
+        "probe_executed": false,
+        "preflight_receipt_created": true,
+        "sudo_timestamp_cleanup_proven": true
+      },
+      "source_use": "pre_start_no_go_snapshot_and_receipt_provenance_only_no_runtime_baseline_or_snapshot_artifact_reuse",
+      "runtime_baseline_authorized": false,
+      "snapshot_artifact_reuse_authorized": false,
+      "identity_consumed": true,
+      "retry_forbidden": true,
+      "solver_or_gencase_authorized": false,
+      "cold_a_successor_execution_authorized": false,
+      "u4_authorized": false,
+      "production_authorized": false
+    }
+  },
+  "profile_semantics": {
+    "profile_path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-proc-stat-boundary-probe-v3.profile",
+    "named_only": true,
+    "persistent_install": false,
+    "external_includes": [],
+    "effective_line_count": 60,
+    "effective_lines_sha256": "326542a2aed21a90aeee69970435320148a17edb6502c7f94ce821eef1d1c948",
+    "runtime_profile_loaded_but_unreachable": true,
+    "runtime_profile_effective_rules": [],
+    "explicit_silent_denials": [
+      "deny /etc/ld.so.cache r,",
+      "deny capability dac_override,"
+    ],
+    "forbidden_authority": [
+      "non_owner_/proc/**",
+      "dynamic_linker_config_reads",
+      "/proc/[0-9]*/status",
+      "dynamic_proc_write",
+      "host_writable_bind",
+      "device_or_gpu",
+      "solver_or_gencase",
+      "persistent_profile"
+    ],
+    "full_effective_authority_delta": {
+      "additions": [
+        "/proc/[0-9]*/stat r,"
+      ],
+      "baseline": {
+        "bootstrap_profile": "r8-liquid-u3-c1m-solver-cpu-settle-cold-a-bootstrap-v6-20260808t212044z",
+        "effective_line_count": 64,
+        "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-solver-cpu-settle-cold-a-v6.profile",
+        "runtime_profile": "r8-liquid-u3-c1m-solver-cpu-settle-cold-a-runtime-v6-20260808t212044z",
+        "sha256": "a6841cd0fad78fa31e1a2a7b04eab0eb9158856884162112216ddcb8a01bfe0a",
+        "size_bytes": 3540
+      },
+      "candidate_effective_line_count": 60,
+      "comparison": "ordered_multiset_effective_lines_after_exact_profile_label_normalization",
+      "normalized_candidate_sha256": "93bd45c83d3a8cece8f9acd327f478322e0d85dc35a01ba725da86635e3097b6",
+      "only_addition_is_candidate": true,
+      "removals": [
+        "/work/runtime/ld-linux-x86-64.so.2 rix,",
+        "/work/** rw,",
+        "/work/runtime/ld-linux-x86-64.so.2 mr,",
+        "/work/runtime/DualSPHysics5.4CPU_linux64 mr,",
+        "/work/runtime/lib/** mr,"
+      ]
+    },
+    "dynamic_linker_contract": {
+      "cache_rule": "deny /etc/ld.so.cache r,",
+      "ld_so_conf_rule_present": false,
+      "ld_so_conf_d_rule_present": false,
+      "frozen_v6_system_python_started_with_cache_deny": true
+    }
+  },
+  "candidate_boundary": {
+    "candidate_rule": "/proc/[0-9]*/stat r,",
+    "candidate_rule_count": 1,
+    "candidate_rule_profile": "bootstrap_only",
+    "candidate_delta_from_v6": "full_effective_authority_additions_after_exact_label_normalization_equal_only_the_bootstrap_numeric_pid_stat_rule",
+    "proc_directory_rule": "/proc/ r,",
+    "owner_proc_baseline_rule": "owner /proc/** r,",
+    "status_rule_present": false,
+    "child_creation": "os_fork_single_child_no_exec",
+    "child_count": 1,
+    "child_session_contract": "setsid_then_pid_equals_pgid_equals_sid",
+    "child_identity": {
+      "uid": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "gid": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "groups": [],
+      "capability_sets": {
+        "CapInh": 0,
+        "CapPrm": 0,
+        "CapEff": 0,
+        "CapBnd": 0,
+        "CapAmb": 0
+      },
+      "no_new_privs": 1
+    },
+    "dumpable_transition": {
+      "set_operation": "prctl_PR_SET_DUMPABLE_0",
+      "verification_operation": "prctl_PR_GET_DUMPABLE_equals_0",
+      "ready_signal_after_verification": true
+    },
+    "birth_identity": {
+      "pidfd_required": true,
+      "starttime_required": true,
+      "pid_pgid_sid_required": true,
+      "double_stat_freeze_reads": 2
+    },
+    "live_phase": {
+      "full_group_scan_passes": 2,
+      "direct_stat_reads": 2,
+      "state": "non_zombie",
+      "identity_must_remain_frozen": true,
+      "stat_owner_must_equal_inner_overflow_projection": true
+    },
+    "status_boundary_control": {
+      "path_template": "/proc/<CHILD_PID>/status",
+      "open_attempts": 1,
+      "required_errno": 13,
+      "required_errno_name": "EACCES",
+      "no_retry_in_cleanup": true
+    },
+    "zombie_phase": {
+      "release_signal": "one_byte_R",
+      "wait_operation": "waitid_P_PIDFD_WEXITED_WNOWAIT",
+      "exit_code": 0,
+      "direct_stat_reads": 2,
+      "full_group_scan_passes": 2,
+      "state": "Z",
+      "identity_must_remain_frozen": true,
+      "stat_owner_must_remain_equal_inner_overflow_projection": true
+    },
+    "reap_phase": {
+      "operation": "waitid_P_PIDFD_WEXITED",
+      "exit_code": 0,
+      "post_reap_group_scans": 2,
+      "required_post_reap_members": []
+    },
+    "success_frame_required": true,
+    "host_file_writes": 0,
+    "solver_or_gencase_execution": false
+  },
+  "evidence_classification": {
+    "success_requires_closed_frame": true,
+    "successful_gate_exit_is_pass": false,
+    "success_pass_requires": "returncode_zero_empty_stderr_byte_exact_success_frame_and_exactly_one_expected_dumpable_zero_child_status_denial_in_closed_boot_cursor_window",
+    "audit_storage_limit": 16,
+    "audit_line_limit_bytes": 4096,
+    "expected_counts": {
+      "matching_total": 1,
+      "stored_count": 1,
+      "dropped_count": 0,
+      "expected_status_total": 1,
+      "stat_denial_total": 0,
+      "unexpected_total": 0,
+      "storage_overflow": false
+    },
+    "expected_status_denial": {
+      "apparmor": "DENIED",
+      "operation": "open",
+      "class": "file",
+      "profile": "r8-liquid-u3-proc-stat-boundary-bootstrap-v3-20260809t022402z",
+      "name_template": "/proc/<SUCCESS_FRAME_CHILD_PID>/status",
+      "name_must_match_success_frame_child_pid": true,
+      "comm": "python3.12",
+      "requested_mask": "r",
+      "denied_mask": "r",
+      "fsuid": "1000",
+      "ouid": "0",
+      "allowed_field_names": [
+        "apparmor",
+        "operation",
+        "class",
+        "profile",
+        "name",
+        "pid",
+        "comm",
+        "requested_mask",
+        "denied_mask",
+        "fsuid",
+        "ouid"
+      ]
+    },
+    "journal_boundary_required": true,
+    "strict_utf8_required": true,
+    "duplicate_or_escaped_critical_field_is_pass": false,
+    "audit_overflow_is_pass": false,
+    "gate_no_go_is_pass": false,
+    "zero_logged_denials_required": false,
+    "zero_denied_operations_claimed": false,
+    "stderr_contract": {
+      "returncode": 0,
+      "stdout": "byte_exact_canonical_success_frame",
+      "stderr_utf8": ""
+    },
+    "any_other_failure": "UNCLASSIFIED_PROBE_FAILURE_CLEANUP_PENDING",
+    "success_authorizes": "only_independent_review_and_static_design_of_a_fresh_cold_a_successor_no_solver_gencase_or_production"
+  },
+  "reviewed_bytes": {
+    "all_frozen": true,
+    "helper": {
+      "size_bytes": 19439,
+      "sha256": "27f9e4fe2eedbf674e7df9c8d95ed90666fa352625a40841d8840c45fe31d4cd"
+    },
+    "loader": {
+      "size_bytes": 598,
+      "sha256": "b21c2911a24fdbee44d9b52744de545430fe13fdb74265c2615c4699710ff2a7"
+    },
+    "payload_frame": {
+      "size_bytes": 19492,
+      "sha256": "2b81b526932e429dde1604b7a33204e34230d1096ce40241f9b82ea30da77d6f",
+      "maximum_size_bytes": 65536
+    }
+  },
+  "snapshot_bootstrap": {
+    "all_frozen": true,
+    "source_size_bytes": 3300,
+    "source_sha256": "8553f4652209ebac806202f3debfc83278ea278ace2f34bf16b03d99c0420e00",
+    "loader_size_bytes": 423,
+    "loader_sha256": "85daca8e134c56e200a53797a21c1b9ba4b7f2a094e4955f7059f97d2d3d601a",
+    "manifest_artifacts": [
+      "gate",
+      "supervisor",
+      "profile",
+      "schema",
+      "policy"
+    ],
+    "snapshot_owner": [
+      0,
+      0
+    ],
+    "snapshot_mode": "0555",
+    "file_owner": [
+      0,
+      0
+    ],
+    "file_mode": "0444",
+    "strict_eof": true,
+    "component_no_follow": true,
+    "final_metadata_fsync": true,
+    "reviewed_minimal_bootstrap_executed_as_root": true,
+    "workspace_runtime_artifacts_executed_or_imported_as_root": false,
+    "runtime_supervisor_entrypoint": "/usr/bin/python3.12 -I -B reads root-owned 0444 snapshot supervisor",
+    "direct_snapshot_supervisor_exec_forbidden": true,
+    "root_loader_c_source_contract": "reviewed_hash_pinned_literal_single_argv_token_after_-c",
+    "root_loader_c_source_shell_interpolation": false,
+    "root_loader_c_source_stdin_origin": false,
+    "producer_stdout_use": "stdin_of_the_reviewed_hash_pinned_root_loader_only",
+    "producer_stdout_direct_execution_forbidden": true,
+    "workspace_snapshot_producer_root_forbidden": true,
+    "workspace_snapshot_producer_exact_path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v3.py",
+    "workspace_snapshot_producer_uid": [
+      1000,
+      1000,
+      1000,
+      1000
+    ],
+    "workspace_snapshot_producer_gid": [
+      1000,
+      1000,
+      1000,
+      1000
+    ],
+    "workspace_snapshot_producer_active_capability_sets": {
+      "CapInh": 0,
+      "CapPrm": 0,
+      "CapEff": 0,
+      "CapAmb": 0
+    },
+    "workspace_snapshot_producer_stdout_on_identity_failure": "empty"
+  },
+  "trusted_system_tools": {
+    "unprivileged_runner": {
+      "aa_exec": {
+        "path": "/usr/bin/aa-exec",
+        "sha256": "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e"
+      },
+      "bwrap": {
+        "path": "/usr/bin/bwrap",
+        "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"
+      },
+      "python": {
+        "path": "/usr/bin/python3.12",
+        "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+      },
+      "timeout": {
+        "path": "/usr/bin/timeout",
+        "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"
+      }
+    },
+    "root_supervisor": {
+      "aa_status": {
+        "path": "/usr/sbin/aa-status",
+        "sha256": "af9f579ad039f0e669bfb15735c55efd17896f838d684e7f9be15b09fa1e2dd4"
+      },
+      "apparmor_parser": {
+        "path": "/usr/sbin/apparmor_parser",
+        "sha256": "6bc852b37807961c14976be9a227ae96bd817f73b5189cb0e0ff5eca4448c01c"
+      },
+      "journalctl": {
+        "path": "/usr/bin/journalctl",
+        "sha256": "c49bd25d7e7655b9a44ff867923952ed5a5e0a65e9df7a0510e239bf0558e3fa"
+      },
+      "python": {
+        "path": "/usr/bin/python3.12",
+        "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+      },
+      "setpriv": {
+        "path": "/usr/bin/setpriv",
+        "sha256": "96b083b79c32fd2f0c29657e88e20c7495839349fc64ad5d0503f32d26bf8733"
+      },
+      "sudo": {
+        "path": "/usr/bin/sudo",
+        "sha256": "136f2e48b0295b9fc595b8259cf2411ac43f27ddbfe02b956649ddaa2e92b9fa"
+      },
+      "timeout": {
+        "path": "/usr/bin/timeout",
+        "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"
+      },
+      "true": {
+        "path": "/usr/bin/true",
+        "sha256": "4b5a5694e3c0e8b1d58fc52ac6ef076e55e72c2f53195243ac86d5ff517cc2f6"
+      }
+    }
+  },
+  "trusted_artifacts": {
+    "all_frozen": true,
+    "gate": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_proc_stat_boundary_probe_gate_v3.py",
+      "sha256": "092041036cfb33639680e0b2c22d8dea2ab4f19184aae23dae7d1cf41849231e",
+      "size_bytes": 126425
+    },
+    "supervisor": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v3.py",
+      "sha256": "0d7c8c0c5ae19e2776669461d10b188c23ec7f2c62c1a64d5fd440a6e50d2945",
+      "size_bytes": 177888
+    },
+    "profile": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-proc-stat-boundary-probe-v3.profile",
+      "sha256": "46c1af030a7798be0f259effe9ee790a91e7800307db01800980cd7f81513821",
+      "size_bytes": 3435
+    },
+    "schema": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_proc_stat_boundary_probe_policy_v3.json",
+      "sha256": "1a776f146042f0ce896b0999f3c2d2c61a7942bd183e13433f61615a6d4aa18a",
+      "size_bytes": 50093
+    }
+  },
+  "fixed_commands": {
+    "argv_hashes_frozen": true,
+    "aa_status_json_argv": [
+      "/usr/sbin/aa-status",
+      "--json"
+    ],
+    "bwrap_argv_sha256": "143abe9528cdd0707bba39f366956bdf3d5496bfeaf7504dd54970aaa1032f04",
+    "gate_handoff_argv": [
+      "/usr/bin/setpriv",
+      "--reuid=1000",
+      "--regid=1000",
+      "--clear-groups",
+      "--bounding-set=-all",
+      "--inh-caps=-all",
+      "--ambient-caps=-all",
+      "--no-new-privs",
+      "--",
+      "/usr/bin/python3.12",
+      "-I",
+      "-B",
+      "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.snapshot/r8_liquid_target_u3_proc_stat_boundary_probe_gate_v3.py",
+      "internal-run"
+    ],
+    "parser_parse_argv": [
+      "/usr/sbin/apparmor_parser",
+      "-Q",
+      "-K",
+      "-T",
+      "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.snapshot/r8-liquid-u3-proc-stat-boundary-probe-v3.profile"
+    ],
+    "parser_load_argv": [
+      "/usr/sbin/apparmor_parser",
+      "-a",
+      "-K",
+      "-T",
+      "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.snapshot/r8-liquid-u3-proc-stat-boundary-probe-v3.profile"
+    ],
+    "parser_unload_argv": [
+      "/usr/sbin/apparmor_parser",
+      "-R",
+      "-K",
+      "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.snapshot/r8-liquid-u3-proc-stat-boundary-probe-v3.profile"
+    ],
+    "journal_boot_id_path": "/proc/sys/kernel/random/boot_id",
+    "journal_anchor_argv_template": [
+      "/usr/bin/journalctl",
+      "-k",
+      "--no-pager",
+      "--quiet",
+      "--boot=<BOOT_ID_32HEX>",
+      "--lines=0",
+      "--show-cursor"
+    ],
+    "journal_sync_argv": [
+      "/usr/bin/journalctl",
+      "--sync"
+    ],
+    "journal_query_argv_template": [
+      "/usr/bin/journalctl",
+      "-k",
+      "--no-pager",
+      "--quiet",
+      "--output=short-iso-precise",
+      "--boot=<BOOT_ID_32HEX>",
+      "--after-cursor=<PRE_RUN_CURSOR>",
+      "--show-cursor"
+    ],
+    "journal_anchor_stdout_ceiling_bytes": 4096,
+    "journal_query_stdout_ceiling_bytes": 131072,
+    "journal_stderr_ceiling_bytes": 16384,
+    "audit_line_ceiling_bytes": 4096,
+    "audit_storage_ceiling": 16,
+    "snapshot_producer_argv": [
+      "/usr/bin/python3.12",
+      "-I",
+      "-B",
+      "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v3.py",
+      "emit-bootstrap"
+    ],
+    "snapshot_root_loader_argv_template": [
+      "/usr/bin/sudo",
+      "/usr/bin/python3.12",
+      "-I",
+      "-B",
+      "-c",
+      "<PINNED_SNAPSHOT_BOOTSTRAP_LOADER_SOURCE>",
+      "<TEN_SHA256_SIZE_MANIFEST_ARGUMENTS>"
+    ],
+    "run_argv_template": [
+      "/usr/bin/sudo",
+      "/usr/bin/python3.12",
+      "-I",
+      "-B",
+      "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.snapshot/r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v3.py",
+      "run",
+      "--policy-sha256",
+      "<EXTERNALLY_FROZEN_POLICY_SHA256>",
+      "--admission-token",
+      "u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z:single-proc-stat-boundary-candidate-attempt"
+    ],
+    "recover_argv_template": [
+      "/usr/bin/sudo",
+      "/usr/bin/python3.12",
+      "-I",
+      "-B",
+      "/run/r8-liquid-u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z.snapshot/r8_liquid_target_u3_proc_stat_boundary_probe_supervisor_v3.py",
+      "recover-only",
+      "--policy-sha256",
+      "<EXTERNALLY_FROZEN_POLICY_SHA256>",
+      "--recovery-token",
+      "u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z:cleanup-only-no-probe"
+    ],
+    "sudo_timestamp_clear_argv": [
+      "/usr/bin/setpriv",
+      "--reuid=1000",
+      "--regid=1000",
+      "--groups=27",
+      "--inh-caps=-all",
+      "--ambient-caps=-all",
+      "--",
+      "/usr/bin/sudo",
+      "-K"
+    ],
+    "sudo_timestamp_verify_argv": [
+      "/usr/bin/setpriv",
+      "--reuid=1000",
+      "--regid=1000",
+      "--groups=27",
+      "--inh-caps=-all",
+      "--ambient-caps=-all",
+      "--",
+      "/usr/bin/sudo",
+      "-n",
+      "/usr/bin/true"
+    ],
+    "operator_transport": "snapshot producer stdout is only pinned root-loader stdin; root loader -c source is a reviewed hash-pinned literal argv token; run and recovery read only the root-owned snapshot supervisor",
+    "operator_boundary": {
+      "run_and_recover_foreground_pty_required": true,
+      "inherited_dev_tty_password_input_only": true,
+      "sudo_dash_S_forbidden": true,
+      "password_environment_variable_forbidden": true,
+      "fd0_redirection_forbidden": true,
+      "background_or_detached_invocation_forbidden": true,
+      "shell_interpolation_forbidden": true
+    },
+    "shell": false,
+    "workspace_run_forbidden": true
+  },
+  "journal_contract": {
+    "boot_id_path": "/proc/sys/kernel/random/boot_id",
+    "anchor_before_profile_load": true,
+    "same_boot_id_required": true,
+    "start_cursor_required": true,
+    "end_cursor_required": true,
+    "after_cursor_query_required": true,
+    "strict_utf8_required": true,
+    "journal_sync_before_query": true,
+    "matching_labels": [
+      "r8-liquid-u3-proc-stat-boundary-bootstrap-v3-20260809t022402z",
+      "r8-liquid-u3-proc-stat-boundary-runtime-v3-20260809t022402z"
+    ],
+    "audit_storage_limit": 16,
+    "audit_line_limit_bytes": 4096,
+    "expected_status_denials": 1,
+    "unexpected_denials": 0,
+    "storage_overflow_allowed": false,
+    "profile_state_during_query": "both fresh profiles exactly once enforce before and after query",
+    "prequery_label_quiescence": "root all-task exact empty then three stable zero scans",
+    "postquery_label_quiescence": "root all-task three stable zero scans before classification"
+  },
+  "lifecycle_contract": {
+    "authoritative_label_scan": "/proc/<tgid>/task/<tid>/attr/current_all_uids_by_root",
+    "stable_zero_label_scans": 3,
+    "pre_and_post_unload_scans": true,
+    "pid_reuse_protection": "birth_pidfd_for_direct_children_and_starttime_checked_tgid_pidfd_for_scanned_tasks",
+    "catchable_signals": [
+      "SIGHUP",
+      "SIGINT",
+      "SIGTERM",
+      "SIGQUIT",
+      "SIGTSTP"
+    ],
+    "uncatchable_signals_require_recover_only": [
+      "SIGKILL",
+      "SIGSTOP",
+      "power_loss",
+      "interpreter_or_kernel_crash"
+    ],
+    "unload_requires_zero_labels": true,
+    "expected_sysctls": {
+      "/proc/sys/user/max_user_namespaces": {
+        "value": "61362\n",
+        "sha256": "e248d4e11a8c63b5bc8e417356d5d67ec5f44fa94d98fa1a954ba12aaa1e4f0e"
+      },
+      "/proc/sys/kernel/unprivileged_userns_clone": {
+        "value": "1\n",
+        "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+      },
+      "/proc/sys/kernel/apparmor_restrict_unprivileged_userns": {
+        "value": "1\n",
+        "sha256": "4355a46b19d348dc2f57c046f8ef63d4538ebb936000f3c9ee954a27460dd865"
+      }
+    },
+    "sudo_timestamp_test": "UID1000 inherited foreground PTY sudo -K then sudo -n true must require password",
+    "guest_child_cleanup": "pidfd anchored release or SIGKILL then final reap without reopening child status",
+    "recovery": {
+      "command": "recover-only",
+      "token": "u3_proc_stat_apparmor_boundary_probe_v3_20260809T022402Z:cleanup-only-no-probe",
+      "probe_execution": false,
+      "admission_fd_creation": false,
+      "label_cleanup_before_unload": true,
+      "repeat_safe": true,
+      "writes_existing_receipt": false,
+      "production_authorized": false
+    },
+    "static_and_runtime_invariants": {
+      "no_sudo_in_static_checks": true,
+      "no_parser_in_static_checks": true,
+      "no_namespace_in_static_checks": true,
+      "no_probe_in_static_checks": true,
+      "no_v6_snapshot_read_or_reuse": true,
+      "no_v6_output_reuse": true,
+      "no_solver_or_gencase": true,
+      "no_source_seed_workspace": true,
+      "no_host_writable_mount": true,
+      "no_dev": true,
+      "no_external_network_access": true,
+      "no_host_initial_namespace_sysctl_write": true,
+      "no_persistent_profile": true,
+      "no_ros_gazebo_gpu": true,
+      "no_production_authority": true
+    }
+  },
+  "receipt_contract": {
+    "directory_policy": {
+      "/": [
+        0,
+        0,
+        "0755"
+      ],
+      "/home": [
+        0,
+        0,
+        "0755"
+      ],
+      "/home/zrj": [
+        1000,
+        1000,
+        "0750"
+      ],
+      "/home/zrj/scout_liquid_lab": [
+        1000,
+        1000,
+        "0750"
+      ],
+      "/home/zrj/scout_liquid_lab/audits": [
+        1000,
+        1000,
+        "0750"
+      ]
+    },
+    "file_owner": [
+      1000,
+      1000
+    ],
+    "file_mode": "0440",
+    "creation": "O_EXCL_O_NOFOLLOW_ONE_SHOT",
+    "durability": "data_fsync_then_owner_mode_then_fsync_then_fstat_then_parent_fsync",
+    "execution_status_suffix": "CLEANUP_PENDING",
+    "separate_lifecycle": true,
+    "sudo_timestamp_scope": "ALL_UID1000_SUDO_TIMESTAMPS_INVALIDATED_BY_SUDO_-K_OTHER_TERMINALS_MUST_REAUTHENTICATE",
+    "sudo_group_membership": {
+      "path": "/etc/group",
+      "owner": [
+        0,
+        0
+      ],
+      "mode": "0644",
+      "record": "sudo:x:27:zrj",
+      "group_name": "sudo",
+      "gid": 27,
+      "members": [
+        "zrj"
+      ]
+    },
+    "sudo_cleanup_identity": {
+      "reuid": 1000,
+      "regid": 1000,
+      "supplementary_groups": [
+        27
+      ],
+      "groups_mode": "EXACT_NUMERIC_GROUP_LIST_ONLY",
+      "bounding_mode": "preserve_host_only",
+      "bounding_argv_tokens": [],
+      "explicit_bounding_change_forbidden": true,
+      "inheritable_capabilities": "-all",
+      "ambient_capabilities": "-all",
+      "no_new_privs_option_present": false,
+      "shell": false,
+      "start_new_session": false,
+      "forbidden_group_options": [
+        "--clear-groups",
+        "--init-groups",
+        "--keep-groups"
+      ]
+    },
+    "sudo_cleanup_bounding_mode": "preserve_host_only",
+    "same_uid_tamper_resistance_claimed": false
+  }
+}

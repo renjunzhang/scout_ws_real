@@ -1,0 +1,155 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-u3-gencase-execution-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_U3_GENCASE_EXECUTION_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_U3_GENCASE_EXECUTION_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "user_delegated_review_and_execution_approval": true,
+  "execution_scope": "one_exact_c1_gencase_generation_attempt",
+  "allowed_gate_commands": ["self-check", "preflight", "run"],
+  "frozen_attempt": {
+    "case_id": "u3_c1_gencase_20260807T032831Z",
+    "attempt_root": "/home/zrj/scout_liquid_lab/cases/u3_c1_gencase_20260807T032831Z.partial",
+    "output_root": "/home/zrj/scout_liquid_lab/cases/u3_c1_gencase_20260807T032831Z.partial/output",
+    "receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_20260807T032831Z.json",
+    "partial_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_20260807T032831Z.json.partial",
+    "console_log": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_20260807T032831Z.console.log",
+    "bootstrap_profile": "r8-liquid-u3-gencase-bootstrap-v1",
+    "runtime_profile": "r8-liquid-u3-gencase-runtime-v1",
+    "profile_path": "config/apparmor_drafts/r8-liquid-u3-gencase-v1.profile",
+    "profile_sha256": "32465fecbaf25b181845d12fba776e1b564f0b6ba908f3db7313d00a4a7eb5c3"
+  },
+  "outer_privilege_handoff": {
+    "only_privileged_child_command": ["/usr/bin/setpriv", "--reuid=1000", "--regid=1000", "--clear-groups", "--", "/usr/bin/python3", "r8_liquid_target_u3_gencase_gate_v1.py", "run"],
+    "must_drop_before_aa_exec": true,
+    "required_uid": 1000,
+    "required_gid": 1000,
+    "required_supplementary_group_count": 0,
+    "root_access_to_input_or_output": "forbidden_after_exec"
+  },
+  "input_provenance": {
+    "seed_root": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_20260807T031624Z.partial",
+    "input_root": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1_gencase_seed_20260807T031624Z.partial/input",
+    "seed_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1_gencase_seed_20260807T031624Z.json",
+    "seed_receipt_sha256": "19ccbcc3c945a3e457b9cce99611c061ac8e6dfaf099129920cb555818fd6b6a",
+    "elf_metadata_receipt": "/home/zrj/scout_liquid_lab/audits/u2_elf_metadata_v1_20260806T082300Z.json",
+    "elf_metadata_receipt_sha256": "47e411b391afd677fc4d1b60ca6547c73545c287ef080bea92c2e66128ef6a74",
+    "gencase": {
+      "filename": "GenCase_linux64",
+      "sha256": "a1b6414e0f716669363d1a80a05e133085c04995e15716e3c1f0406e0d023226",
+      "size_bytes": 5809384,
+      "host_mode": "0400",
+      "guest_copy_mode": "0500",
+      "guest_execution": "only_via_runtime_profile"
+    },
+    "dsph_config": {
+      "filename": "DsphConfig.xml",
+      "sha256": "0644c9a6a6687678950fc8966e352b4bbd3de9d3cb787db9e507c2eb7ccaddcd",
+      "size_bytes": 293,
+      "host_mode": "0400"
+    },
+    "case_definition": {
+      "filename": "C1_static_Def.xml",
+      "sha256": "ef57582f69714f622e5b8a348c7626d233c203ad0b1eb6332b58fb1ffc09fa1a",
+      "host_mode": "0400",
+      "classification": "SIM_ONLY_UNVALIDATED"
+    }
+  },
+  "trusted_tools": {
+    "aa_exec": {"path": "/usr/bin/aa-exec", "sha256": "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e"},
+    "apparmor_parser": {"path": "/usr/sbin/apparmor_parser", "sha256": "6bc852b37807961c14976be9a227ae96bd817f73b5189cb0e0ff5eca4448c01c"},
+    "bwrap": {"path": "/usr/bin/bwrap", "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"},
+    "chmod": {"path": "/usr/bin/chmod", "sha256": "f7ba478ce7ff158ccd3ba01bac1c4231e68cbd490fe49b5562a6ea008a586696"},
+    "cp": {"path": "/usr/bin/cp", "sha256": "6187dab32cd7b6291d96c54425a22915a6eeb39add6d95ee9008e1dbba427131"},
+    "dash": {"path": "/usr/bin/dash", "sha256": "86d31f6fb799e91fa21bad341484564510ca287703a16e9e46c53338776f4f42"},
+    "env": {"path": "/usr/bin/env", "sha256": "0aefff8f912fb75716c5d4de3b6acde93edbe8fa280fc8ee895c1226d3e373ef"},
+    "prlimit": {"path": "/usr/bin/prlimit", "sha256": "f27cfd8c1512a4cc6541b59b80cb4cdfd6ef28c34aa21db4299b48264cd0d128"},
+    "setpriv": {"path": "/usr/bin/setpriv", "sha256": "96b083b79c32fd2f0c29657e88e20c7495839349fc64ad5d0503f32d26bf8733"},
+    "timeout": {"path": "/usr/bin/timeout", "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"}
+  },
+  "isolation": {
+    "backend": "bubblewrap_plus_transient_apparmor_profile_transition",
+    "network": "new_empty_network_namespace_and_runtime_profile_has_no_network_rule",
+    "namespaces": ["user", "pid", "ipc", "uts", "network"],
+    "disable_nested_user_namespaces": true,
+    "disable_userns_mechanism": {
+      "bubblewrap_package_version": "0.9.0-1ubuntu0.1",
+      "proc_path": "/proc/sys/user/max_user_namespaces",
+      "open_mode": "O_WRONLY",
+      "write_value": "1",
+      "write_namespace": "first-level bubblewrap user namespace only",
+      "kernel_write_capability": "CAP_SYS_RESOURCE in that first-level user namespace only",
+      "host_initial_namespace_postcondition": "exact host value unchanged before and after the child"
+    },
+    "host_read_only_binds": ["/usr", "one fixed frozen seed input root"],
+    "host_writable_binds": ["one exact new C1 output root"],
+    "host_writable_bind_count": 1,
+    "synthetic_symlinks": [{"link": "/lib", "target": "usr/lib"}, {"link": "/lib64", "target": "usr/lib64"}],
+    "guest_proc_and_dev": "absent",
+    "guest_tmpfs": ["/work", "/runtime"],
+    "runtime_binary_materialization": "copy_from_read_only_seed_to_guest_tmpfs_then_chmod_0500_inside_guest_only",
+    "forbidden_host_paths": ["/home/zrj/scout_ws", "/home/zrj/ros2_ws", "/opt/ros/jazzy", "/data", "/home/zrj/scout_liquid_lab/dependency/source", "/home/zrj/scout_liquid_lab/build", "/home/zrj/scout_liquid_lab/incoming", "/home/zrj/scout_liquid_lab/results", "/home/zrj/scout_liquid_lab/outgoing"],
+    "gpu_device_nodes": [],
+    "environment": {"HOME": "/nonexistent", "PATH": "/usr/bin", "LC_ALL": "C.UTF-8", "LANG": "C.UTF-8", "TZ": "UTC"}
+  },
+  "resources": {
+    "wall_timeout_seconds": 120,
+    "cpu_seconds": 90,
+    "address_space_bytes": 1073741824,
+    "process_limit": 8,
+    "open_file_limit": 256,
+    "file_size_limit_bytes": 16777216,
+    "core_dump_bytes": 0,
+    "minimum_available_memory_bytes": 2147483648,
+    "minimum_available_disk_bytes": 1073741824,
+    "postflight_console_log_max_bytes": 1048576
+  },
+  "fixed_guest_command": {
+    "setup_shell": ["/usr/bin/dash", "-c", "umask 077; /usr/bin/cp -- /work/input/GenCase_linux64 /runtime/GenCase_linux64; /usr/bin/cp -- /work/input/DsphConfig.xml /runtime/DsphConfig.xml; /usr/bin/chmod 0500 /runtime/GenCase_linux64; /usr/bin/chmod 0400 /runtime/DsphConfig.xml; exec /runtime/GenCase_linux64 /work/input/C1_static_Def /work/output/C1_static -dp:0.002 -threads:1 -save:-all,+bi -createdirs:1"],
+    "gencase_argv": ["/runtime/GenCase_linux64", "/work/input/C1_static_Def", "/work/output/C1_static", "-dp:0.002", "-threads:1", "-save:-all,+bi", "-createdirs:1"],
+    "upstream_shell_scripts": "forbidden",
+    "runtime_profile_transition": "/runtime/GenCase_linux64 rPx -> r8-liquid-u3-gencase-runtime-v1"
+  },
+  "output_contract": {
+    "expected_regular_files": {
+      "C1_static.bi4": {"minimum_size_bytes": 1, "maximum_size_bytes": 16777216},
+      "C1_static.xml": {"minimum_size_bytes": 1, "maximum_size_bytes": 524288}
+    },
+    "directories": "only_the_empty_output_root",
+    "all_entries_regular_single_link_non_symlink": true,
+    "unexpected_output_files": "fail_closed",
+    "output_mode_after_audit": "0440",
+    "output_directory_mode_after_audit": "0550",
+    "no_execution_of_output": true
+  },
+  "profile_lifecycle": {
+    "parser_static_check": "apparmor_parser -Q -K -T",
+    "transient_kernel_load": "allowed_only_for_this_one_run",
+    "persistent_profile_install": "forbidden",
+    "profile_remove_same_sudo_session": true,
+    "sudo_timestamp_clear": true,
+    "runtime_transition_required": true
+  },
+  "invariants": {
+    "no_apt": true,
+    "no_driver_or_kernel_change": true,
+    "no_host_initial_namespace_sysctl_or_apparmor_global_setting_change": true,
+    "no_network": true,
+    "no_gpu": true,
+    "no_ros_or_gazebo": true,
+    "only_reviewed_gencase_may_execute": true,
+    "no_other_precompiled_elf_execution": true,
+    "no_compiled_artifact_execution": true,
+    "no_source_write": true,
+    "no_workspace_mount": true,
+    "no_existing_attempt_reuse": true,
+    "no_delete_or_overwrite": true,
+    "no_persistent_profile_install": true,
+    "profile_cleanup_required": true,
+    "supplementary_groups_clear_before_aa_exec": true
+  },
+  "status": "REVIEWED_SINGLE_GENCASE_RUNTIME_V1_PENDING_STATIC_VERIFICATION",
+  "next_allowed_stage": "LOAD_TRANSIENT_PROFILE_RUN_ONE_GENCASE_ATTEMPT_REMOVE_PROFILE_AND_AUDIT"
+}

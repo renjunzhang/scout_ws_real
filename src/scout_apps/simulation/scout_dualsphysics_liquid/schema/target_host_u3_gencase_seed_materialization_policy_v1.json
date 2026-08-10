@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target-host-u3-gencase-seed-materialization-policy-v1.json",
+  "title": "R8 liquid U3 GenCase seed materialization policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "user_delegated_review_and_execution_approval",
+    "execution_scope",
+    "allowed_gate_commands",
+    "frozen_attempt",
+    "source_provenance",
+    "trusted_tools",
+    "materialization_contract",
+    "invariants",
+    "status",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-target-u3-gencase-seed-materialization-policy-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_TARGET_U3_GENCASE_SEED_MATERIALIZATION_POLICY"},
+    "policy_id": {"const": "LIQUID_ZRJ_MSI_U2404_U3_GENCASE_SEED_MATERIALIZATION_V1"},
+    "host_id": {"const": "LIQUID_ZRJ_MSI_U2404"},
+    "development_only": {"const": true},
+    "formal": {"const": false},
+    "physical_primary_eligible": {"const": false},
+    "user_delegated_review_and_execution_approval": {"const": true},
+    "execution_scope": {"const": "one_exact_nonexecutable_gencase_seed_materialization"},
+    "allowed_gate_commands": {
+      "type": "array",
+      "const": ["self-check", "preflight", "materialize"]
+    },
+    "frozen_attempt": {"type": "object"},
+    "source_provenance": {"type": "object"},
+    "trusted_tools": {"type": "object"},
+    "materialization_contract": {"type": "object"},
+    "invariants": {"type": "object"},
+    "status": {"const": "REVIEWED_NONEXECUTABLE_SEED_MATERIALIZATION_V1_PENDING_STATIC_VERIFICATION"},
+    "next_allowed_stage": {"const": "MATERIALIZE_FIXED_READ_ONLY_SEED_THEN_CREATE_SEPARATE_GENCASE_RUNTIME_ADMISSION"}
+  }
+}

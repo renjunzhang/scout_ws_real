@@ -1,0 +1,145 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-elf-metadata-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_ELF_METADATA_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_ELF_METADATA_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "offline_elf_metadata_read_authorized": true,
+  "upstream_code_execution_authorized": false,
+  "allowed_gate_commands": [
+    "self-check",
+    "write-elf-metadata-receipt"
+  ],
+  "required_target_profile": {
+    "profile_id": "LIQUID_ZRJ_MSI_U2404_P0_V1",
+    "canonical_sha256": "fec0b980ca46df04d877290b73b3f3406af97887ccc20c9d52d58092c36f8838",
+    "required_status": "PASS_PROFILE_READ_ONLY_ONLY"
+  },
+  "required_static_inventory_receipt": {
+    "receipt_relative_path": "audits/u2_full_source_static_inventory_v1_20260806T080500Z.json",
+    "file_sha256": "a3be7e2a7a5bbeae8483706dbd4a135c7af80513bd5fbd1f982122b4380efb28",
+    "receipt_sha256": "5eac669287c6711de0835409ed9f3ec9dc6829a3b03cef24cb6838ebb07e32ff",
+    "status": "PASS_OFFLINE_FULL_SOURCE_STATIC_INVENTORY",
+    "next_allowed_stage": "OFFLINE_ELF_METADATA_AND_DYNAMIC_DEPENDENCY_POLICY_ONLY"
+  },
+  "source": {
+    "repository_url": "https://github.com/DualSPHysics/DualSPHysics.git",
+    "commit": "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+    "tree": "cef458cb358712f4694b9d2148f638440418e9dc",
+    "full_bare_relative_path": "dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.full_attempt_3.git",
+    "no_checkout": true,
+    "no_network": true,
+    "no_submodules": true,
+    "no_lfs_smudge": true,
+    "no_hooks": true,
+    "precompiled_binaries_execution": "forbidden"
+  },
+  "trusted_system_tools": {
+    "git": {
+      "path": "/usr/bin/git",
+      "sha256": "2a8c18fbf43da9f692d75474c72bea9dfd796c260b0f3dfe456376abc3bbd668"
+    },
+    "git_remote_https": {
+      "path": "/usr/lib/git-core/git-remote-https",
+      "symlink_target": "git-remote-http",
+      "resolved_path": "/usr/lib/git-core/git-remote-http",
+      "sha256": "8353a5124ddb2281838bc54bd97c21cbecfe900615fdb60b281198c5058ddb5b"
+    }
+  },
+  "git_commands": {
+    "tree_identity": [
+      "rev-parse",
+      "ef3721a861fda961f0e2f9ec4cd317b19de99086^{tree}"
+    ],
+    "bare_identity": [
+      "rev-parse",
+      "--is-bare-repository"
+    ],
+    "remote_identity": [
+      "remote",
+      "get-url",
+      "origin"
+    ],
+    "blob": [
+      "cat-file",
+      "blob"
+    ]
+  },
+  "elf_objects": [
+    {
+      "object_id": "4db4dadbae8f6e3885cad3bb752340812036278a",
+      "sha256": "a1b6414e0f716669363d1a80a05e133085c04995e15716e3c1f0406e0d023226",
+      "size_bytes": 5809384,
+      "paths": [
+        "bin/linux/GenCase_linux64"
+      ]
+    },
+    {
+      "object_id": "99308e40373cb62cfd0189c8e06e611636b18fd8",
+      "sha256": "ef711ee081613ddb97ac4f86f24652dc92eab3fc37c6e78c3fb9ef4ec02ad400",
+      "size_bytes": 6210152,
+      "paths": [
+        "bin/linux/IsoSurface_linux64",
+        "bin/linux/MeasureTool_linux64",
+        "bin/linux/PartVTKOut_linux64",
+        "bin/linux/PartVTK_linux64"
+      ]
+    },
+    {
+      "object_id": "f0892cc22c7ee34bb25a815333c6a14521d77531",
+      "sha256": "3adb8a5ef36b988add7717d60ee5e50bf7107a5623b448c3a5300d087c2b32e7",
+      "size_bytes": 28283072,
+      "paths": [
+        "bin/linux/libChronoEngine.so"
+      ]
+    },
+    {
+      "object_id": "87330bada49b0e97f636c0c8919d39af5f5f4f82",
+      "sha256": "6a7a94ed7adcdd4e9dddee58cde0f080dee95d930e169bd39cc78894d1a2c937",
+      "size_bytes": 646160,
+      "paths": [
+        "bin/linux/libdsphchrono.so"
+      ]
+    }
+  ],
+  "elf_expectations": {
+    "class": "ELF64",
+    "endianness": "little",
+    "machine": 62,
+    "maximum_program_headers": 256,
+    "maximum_dynamic_entries": 2048,
+    "maximum_string_table_bytes": 8388608,
+    "maximum_dynamic_string_bytes": 1024,
+    "maximum_needed_entries": 128
+  },
+  "resources": {
+    "short_command_timeout_seconds": 60,
+    "blob_read_timeout_seconds": 60,
+    "kill_grace_seconds": 5,
+    "short_command_output_max_bytes": 16384,
+    "max_blob_bytes": 67108864,
+    "max_total_elf_blob_bytes": 67108864,
+    "blob_stderr_max_bytes": 16384,
+    "receipt_mode_octal": "0640"
+  },
+  "receipt": {
+    "directory_relative_path": "audits",
+    "filename_regex": "^u2_elf_metadata_v1_[0-9]{8}T[0-9]{6}Z\\.json$"
+  },
+  "invariants": {
+    "no_sudo": true,
+    "no_apt": true,
+    "no_network": true,
+    "no_checkout": true,
+    "no_source_file_execution": true,
+    "no_precompiled_binary_execution": true,
+    "no_external_elf_parser": true,
+    "no_cmake_or_make": true,
+    "no_ros_or_gazebo": true,
+    "no_gpu_device": true,
+    "no_destructive_cleanup": true,
+    "no_retry_in_existing_receipt_path": true
+  }
+}
