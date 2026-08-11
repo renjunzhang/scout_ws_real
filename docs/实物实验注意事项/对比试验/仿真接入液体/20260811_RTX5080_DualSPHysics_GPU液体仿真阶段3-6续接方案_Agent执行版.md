@@ -6,8 +6,8 @@
 - Origin Mode: `plan`
 - Origin Date: `2026-08-11 Asia/Shanghai`
 - Verification Status: `STAGES_1_2_3_PASS / STAGE_4_LIQUID_ONLY_DEVELOPMENT_VALIDATION_PASS`
-- Version Label: `gpu_liquid_stage_3_6_continuation_v5_status_sync`
-- Last Status Sync: `2026-08-11 23:09:24+08:00`
+- Version Label: `gpu_liquid_stage_3_6_continuation_v8_one_primary_optional_pair`
+- Last Status Sync: `2026-08-12 00:22:22+08:00`
 
 > 本文是 create-new 的续接方案，不修改、不取代也不重新冻结
 > [RTX 5080 GPU 8 小时快速构建方案](./20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md)。
@@ -16,7 +16,7 @@
 > `9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d`
 >
 > 本文只定义阶段 3–6 的执行合同和验收边界，不授权构建、加载 AppArmor、暴露 GPU、
-> 执行 candidate、运行 solver、复制实际运动数据或启动 ROS/Gazebo。
+> 执行 candidate、运行 solver、复制/改写原始 bag 或启动 ROS/Gazebo。
 
 ## 0. 结论与当前起点
 
@@ -28,8 +28,8 @@
 | 2 | 静态审计 | GPU 构建方案 G4/G6/G7 | **PASS**；`sm_120`/PTX/对象/依赖已静态核验 |
 | 3 | GPU 运行冒烟测试 | 新 GPU runtime admission；U3 1 s C1M smoke | **PASS**；V6 one-shot smoke 和 create-new postvalidation/QC 已通过 |
 | 4 | 液体单独验证 | U3 settled state、CPU/GPU parity、U4 合成运动 | **PASS（development-only）；未验证实物保真** |
-| 5 | 小车与液体耦合 | U5 实际运动离线回放 | **本文完整定义** |
-| 6 | 回放与对比 | 动态可视化、CPU/GPU、SIM/实物五维比较 | **本文完整定义** |
+| 5 | 小车与液体耦合 | U5 R7 Gazebo 已执行运动离线回放 | **本轮只执行 1 个主 bag，最多再执行 1 个可选配对 bag** |
+| 6 | 回放与对比 | 选定 R7 bag 信号/液体模型比较、动态可视化；实物参考待补 | **只闭合实际执行的 1–2 行 development-only 通道** |
 
 当前已完成阶段 1–4。阶段 4 的最终结论为
 `PASS_U3_STAGE4_LIQUID_ONLY_DEVELOPMENT_VALIDATION`；该 PASS 只覆盖固定软件、固定数值合同和
@@ -58,7 +58,7 @@ DEVELOPMENT_ONLY=true
 PHYSICAL_FIDELITY_VALIDATED=false
 PHASE5_ADMITTED=false
 U4=SYNTHETIC_ZERO_TRANSLATION_YAW_PASS
-U5=NOT_STARTED
+U5_SIM_R7_EXECUTED_MOTION=NOT_STARTED
 ```
 
 旧 campaign `u3_source_gpu_build_sm120_20260810T102641Z` 及其 `TIMEBOX_EXHAUSTED`
@@ -116,6 +116,127 @@ stage5_admitted=false
 next=STAGE5_REQUIRES_SEPARATE_USER_AUTHORIZATION_AND_PHYSICAL_INPUTS
 ```
 
+上面的 `next` 是阶段 4 receipt 发布时的原始字段，作为历史证据保持字面不改；本方案在获得
+R7 bag 候选输入加入后新增的当前操作入口以 `0.1` 和 `12` 的 S5A0 为准，不会反向改写该
+receipt。本轮执行范围已经收缩为 1 个主 bag、最多 1 个可选配对 bag；88 行 corpus 只保留为
+只读背景，不进入本轮封存、导出、solver 或阶段 6 验收分母。
+
+### 0.1 R7 ROS1 bag 候选输入快照与本轮精确选择（只读观察，尚非正式 receipt）
+
+阶段 5 的当前候选输入位于：
+
+~~~text
+/home/zrj/slosh_bags/matrix_bags/
+source_domain=SIM_R7_EXECUTED_GAZEBO_MOTION
+physical_robot_bag=false
+r8_release=false
+format=ROS1_BAG_V2
+bags=88
+total_bytes=1368771842
+index_parse=88/88 PASS
+active_files=0
+~~~
+
+Bag 路径合同如下；任何 Agent 都不得用 basename 全盘搜索或“选最新 bag”代替 exact path：
+
+~~~text
+bag_root:
+  /home/zrj/slosh_bags/matrix_bags
+
+per_attempt_template:
+  /home/zrj/slosh_bags/matrix_bags/<attempt_id>/capture.bag
+
+S1 template:
+  /home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_<condition>_b<01..08>_r01/capture.bag
+
+S2A template:
+  /home/zrj/slosh_bags/matrix_bags/SIM-S2A_SELECTIVITY_L1_C1_<condition>_b<01..08>_r01/capture.bag
+
+S2B template:
+  /home/zrj/slosh_bags/matrix_bags/SIM-S2B_TRANSFER_H1_C2_<condition>_b<01..08>_r01/capture.bag
+
+known failure exact path:
+  /home/zrj/slosh_bags/matrix_bags/SIM-S2B_TRANSFER_H1_C2_FixedProfile_b08_r01/capture.bag
+~~~
+
+本轮唯一默认输入和唯一可选配对输入固定为：
+
+~~~text
+EXECUTION_SCOPE=ONE_PRIMARY_PLUS_ZERO_OR_ONE_OPTIONAL_PAIR
+
+PRIMARY_ATTEMPT=SIM-S1_CORE_H1_C1_Bsmooth_b01_r01
+PRIMARY_BAG=/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag
+PRIMARY_OBSERVED_SIZE=13996902
+PRIMARY_OBSERVED_MODE=0755
+PRIMARY_OBSERVED_SHA256=c82c1f16b41bced51ab0aff63e4ef40b469501e185851344789fc3d62399fc07
+PRIMARY_OBSERVED_DURATION_SECONDS=49.409
+
+OPTIONAL_SECOND_ATTEMPT=SIM-S1_CORE_H1_C1_Bslosh_b01_r01
+OPTIONAL_SECOND_BAG=/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bslosh_b01_r01/capture.bag
+OPTIONAL_SECOND_OBSERVED_SIZE=14075948
+OPTIONAL_SECOND_OBSERVED_MODE=0755
+OPTIONAL_SECOND_OBSERVED_SHA256=620c05067e62bd998d9b8bb9350f1c0d56a843802beac42463165b5a450a2b54
+OPTIONAL_SECOND_OBSERVED_DURATION_SECONDS=49.549
+OPTIONAL_SECOND_DEFAULT=NOT_RUN
+
+SELECTED_CONTAINER=C1
+SELECTED_STAGE_PATH_BLOCK=SIM-S1_CORE/H1/C1/b01
+FULL_CORPUS_INTAKE_OUT_OF_SCOPE=true
+SIX_ROW_PILOT_OUT_OF_SCOPE=true
+FULL_88_REPLAY_OUT_OF_SCOPE=true
+C2_REPLAY_OUT_OF_SCOPE=true
+~~~
+
+选择 `Bsmooth_b01` 作为单 bag 基线，是因为它属于当前可复用 C1 geometry/mount/settled-state
+链。若用户明确继续第二行，只增加同一 stage/path/container/block 的 `Bslosh_b01`，用于主要方法
+与基线的配对比较；它不得因主 bag PASS 而自动运行。不得换成 C2，也不得在看到液体结果后更换
+condition 或 block。上面 size/mode/hash/duration 只是方案编写时的 expected witness；S5A0 仍须
+在只读 sandbox 中独立重算后才能发布正式 receipt。
+
+当前 88/88 `capture.bag` 的观察 mode 均为 `0755`，包括上面两条精确路径。这不是执行授权，也
+不得通过 `chmod` 改写原始输入；S5A0 必须把选定文件的 mode 作为 provenance 固定，在断网只读
+sandbox 中只按数据打开，明确 `source_bag_executed=false`。
+
+这是 R7 Gazebo 仿真矩阵的已执行运动，不是实物小车采集，也不是 R8 formal release。当前目录只有
+每个 attempt 的 `capture.bag`，没有 attempt manifest、postflight 或 release sidecar，因此只能进入
+“sealed imported bag-only development lane”；provenance 必须保持 `PARTIAL`，不得把它升级成
+formal 或 physical evidence。
+
+矩阵只读普查为：
+
+| Stage | 路径/容器 | 条件 | Block | Bag |
+| --- | --- | --- | ---: | ---: |
+| `SIM-S1_CORE` | H1 / C1 | B0、Bsmooth、SmoothMatch、FixedProfile、Bslosh | 8 | 40 |
+| `SIM-S2A_SELECTIVITY` | L1 / C1 | Bsmooth、FixedProfile、Bslosh | 8 | 24 |
+| `SIM-S2B_TRANSFER` | H1 / C2 | Bsmooth、FixedProfile、Bslosh | 8 | 24 |
+| **合计** |  |  |  | **88** |
+
+88/88 均为 regular ROS1 Bag V2、索引可读；每个 attempt 目录恰有一个 `capture.bag`，未观察到
+symlink、hardlink、special file 或 `.active`。单 bag 记录时长为 `46.528–75.315 s`。以
+“相对路径 + 每 bag SHA-256”排序后得到的候选聚合摘要为：
+
+~~~text
+observed_sorted_relative_sha256_manifest_digest=
+7db18f7a0771c31e84f6dbefab571304241ef99438f4eb6891b4cddebf01f567
+~~~
+
+该值只是方案编写时的只读观察，不是 S5A0 final receipt；执行 Agent 必须独立重算、逐项核验并
+将新 manifest 原子发布到独立 audit root，绝不能在原 bag 目录写入清单、缓存或重建索引。
+
+原 R7 证据链的唯一方法失败仍须原样保留，但它不属于本轮选定行集，也不得为“保留失败行”而
+加入本轮 replay：
+
+~~~text
+attempt_id=SIM-S2B_TRANSFER_H1_C2_FixedProfile_b08_r01
+source_outcome=METHOD_FAILURE
+terminal=GOAL_TIMEOUT
+retryable=false
+~~~
+
+不得从 `/spmpc/status` 重新推断或用液体 replay 成功覆盖该 source outcome。本轮阶段 5/6 的
+planned denominator 只能是 `1`；仅当用户另行确认可选配对行后才是 `2`，绝不能写成 `6` 或
+`88`。
+
 因此当前实际顺序是：
 
 ```text
@@ -123,8 +244,8 @@ next=STAGE5_REQUIRES_SEPARATE_USER_AUTHORIZATION_AND_PHYSICAL_INPUTS
   → 阶段 2 静态审计 PASS
   → 阶段 3 GPU functional smoke PASS
   → 阶段 4 液体单独验证 PASS（development-only，当前停止点）
-  ↛ 阶段 5 实际运动单向回放（未启动；需实物输入和单独授权）
-  ↛ 阶段 6 回放与对比（未准入）
+  ↛ 阶段 5 R7 Gazebo 已执行运动单向回放（未启动；先做只读 bag 封存门禁）
+  ↛ 阶段 6 R7 bag/液体模型回放与对比（未准入；实物 reference 仍缺失）
 ```
 
 任何前一门禁失败都不得借用后一阶段的权限、数据或结果来“补证”。
@@ -133,10 +254,13 @@ next=STAGE5_REQUIRES_SEPARATE_USER_AUTHORIZATION_AND_PHYSICAL_INPUTS
 
 ### 1.1 “小车与液体耦合”的准确含义
 
-本文阶段 5 的“耦合”固定为 **two-pass、离线、单向运动耦合**：
+本文阶段 5 的“耦合”固定为 **two-pass、离线、单向运动耦合**。本轮只消费 1 个主 bag，最多
+再消费 1 个由用户明确启用的同条件配对 bag；输入通道名固定为
+`SIM_R7_EXECUTED_GAZEBO_MOTION`：
 
-1. Gazebo/小车 attempt 先独立完成并关闭 bag；
-2. 从不可变 bag 的 `/odom`、`/tf`、`/tf_static` 导出容器实际位姿；
+1. R7 Gazebo attempt 已独立完成并关闭 bag；
+2. 只以不可变 bag 的 `/odom` executed pose 为 primary motion；`/tf`、`/tf_static` 只做
+   frame/位姿交叉检查；
 3. DualSPHysics 在另一阶段离线重放该容器运动；
 4. 液体结果只进入 append-only secondary ledger 和事后比较报告。
 
@@ -147,6 +271,10 @@ next=STAGE5_REQUIRES_SEPARATE_USER_AUTHORIZATION_AND_PHYSICAL_INPUTS
 - 把液面或液体力反馈给小车、控制器、planner 或底盘；
 - 用液体 replay 的结果改变原 source attempt 的成功/失败结论；
 - 把本方案表述为实时双向 FSI/co-simulation。
+
+“已执行运动”只表示 Gazebo 中实际走出的 odometry，而不是命令轨迹；它不等于实物小车运动。
+未来实物 bag 必须使用新的 `PHYSICAL_EXECUTED_MOTION` source domain、独立 ABI 身份和物理
+reference 门禁，不能把本轮 R7 transfer package 改名复用。
 
 若未来确需液体反作用力影响小车动力学，必须新成立 two-way co-simulation 项目，重新设计
 plant ABI、时序、稳定性、安全防火墙和 formal 验收；不属于本文阶段 3–6。
@@ -164,8 +292,17 @@ production_authorized=false
 do_not_override_source_attempt=true
 ```
 
-GPU functional PASS、U3 settled PASS、U4 synthetic PASS、U5 real-motion replay PASS 和
-实物 fidelity PASS 是五个不同结论，禁止相互代替。
+GPU functional PASS、U3 settled PASS、U4 synthetic PASS、
+`U5_SIM_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY` 和实物 fidelity PASS 是五个
+不同结论，禁止相互代替。当前 R7 bag 通道在阶段 5/6 的结果身份上限分别为：
+
+~~~text
+U5_SIM_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY
+S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY
+S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY
+optional_if_separately_authorized=S5B1/S6_PAIRED
+PHYSICAL_REFERENCE_PENDING=true
+~~~
 
 ## 2. 父输入、固定身份与待冻结输入
 
@@ -238,7 +375,7 @@ U3 current state:
   zero/translation/yaw synthetic motion = PASS
   phase-4 final status = PASS_U3_STAGE4_LIQUID_ONLY_DEVELOPMENT_VALIDATION
   physical fidelity = NOT_VALIDATED
-  phase-5 = NOT_STARTED / REQUIRES_PHYSICAL_INPUTS_AND_SEPARATE_AUTHORIZATION
+  phase-5 = NOT_STARTED / NEXT_IS_READ_ONLY_PRIMARY_R7_BAG_INTAKE
 ```
 
 这些身份只能用于设计和后续 parent-hash 核验。CPU candidate 的存在不授权执行它；阶段 3 的
@@ -258,7 +395,10 @@ path/inode/mode/size/SHA-256 与 parent receipts。任何后续 GPU run 仍需�
 6. primary 晃动高度采用 `H_crest`、absolute elevation 还是 peak-to-peak；
 7. 单 case 最长离线时间、可用 GPU 时段、磁盘保留预算和重复次数。
 
-未知物理字段必须显式为 `UNKNOWN`，不得静默使用默认值后冒充实物参数。
+未知物理字段必须显式为 `UNKNOWN`，不得静默使用默认值后冒充实物参数。R7 development-only
+replay 可以使用独立冻结的仿真 C1/C2 geometry、fluid 和 mount manifests，但必须明确
+`source=SIM_R7`。C1 与 C2 必须是两套不同身份；不得用当前 C1M、C1 参数或 bag 内单条
+`/tf_static` 冒充 C2 容器/安装合同。
 
 ## 3. 全局执行合同
 
@@ -317,16 +457,20 @@ STAGES_1_2_PASS
   → U3_SETTLED_STATE_FROZEN
   → U4_SYNTHETIC_MOTION_PASS
   → S4_LIQUID_STANDALONE_VALIDATION_PASS
-  → U5_INPUT_PACKAGE_VERIFIED_ACCEPTED
-  → U5_REAL_MOTION_REPLAY_PASS
-  → S6_REPLAY_AND_COMPARISON_PASS
+  → S5A0_PRIMARY_R7_BAG_SEALED_DEVELOPMENT_ONLY
+  → S5A1_PRIMARY_R7_MOTION_TRANSFER_VERIFIED_ACCEPTED
+  → S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY
+  → S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY
+  [optional new authorization]
+  → S5B1_OPTIONAL_PAIRED_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY
+  → S6_PAIRED_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY
 ```
 
 任意 `FAIL`、`NO_GO`、`TIMEOUT` 或 parent drift 都进入 `STOP_AND_PRESERVE_EVIDENCE`，
 不得自动跨阶段。
 
 当前已到达并停在 `S4_LIQUID_STANDALONE_VALIDATION_PASS` 的 development-only 实例；
-这不会自动授权 `U5_INPUT_PACKAGE_VERIFIED_ACCEPTED`。
+这不会自动授权 S5A0，也不会自动授权任何 GPU replay。
 
 ## 4. 阶段 3：GPU 运行冒烟测试
 
@@ -422,7 +566,7 @@ status=PASS_GPU_FUNCTIONAL_SMOKE_DEVELOPMENT_ONLY | exact failure
 
 ## 5. 阶段 4：液体单独验证
 
-阶段 4 不接收小车实际运动，分为 U3 静水闭合、CPU/GPU parity、数值收敛和 U4 合成运动。
+阶段 4 不接收 R7 或实物小车运动，分为 U3 静水闭合、CPU/GPU parity、数值收敛和 U4 合成运动。
 
 ### 5.1 S4-A：先完成现有 DDT-ramp 只读 QC
 
@@ -631,217 +775,485 @@ STAGE5_STARTED=false
 
 `dp=0.75/0.5 mm` 空间收敛、完整时间步/物性矩阵、C2 转移和实物参数验证仍未执行，因而不得把
 本轮 PASS 写成 formal、production 或 physical-fidelity PASS。阶段 5 不会自动准入；开始前仍需
-单独授权、实测容器/液体/安装参数以及不可变小车运动输入包。
+单独授权。本轮选定 R7 development replay 只需要独立冻结的 C1 geometry/fluid/mount 和不可变
+bag transfer；未来 C2 或 physical replay 仍分别需要自己的几何/安装/实测参数，三者不得混用。
 
-## 6. 阶段 5：小车实际运动单向耦合
+## 6. 阶段 5：R7 Gazebo 已执行运动的离线单向耦合
 
-### 6.1 前置条件
+本阶段消费的是 R7 Gazebo odometry，不是实物小车轨迹。它回答的是：“固定的
+DualSPHysics development case 能否完整重放 Gazebo 中实际走出的运动，并产生可审计液体结果？”
+它不回答实物液面是否准确，也不改写原 R7 formal-simulation release。
 
-必须同时满足：
+### 6.1 Source domain、前置条件与身份上限
 
-- 阶段 4 精确 parent 状态为 `PASS_U3_STAGE4_LIQUID_ONLY_DEVELOPMENT_VALIDATION`，且其
+任何 GPU replay 前必须同时满足：
+
+- 阶段 4 精确 parent 状态为 `PASS_U3_STAGE4_LIQUID_ONLY_DEVELOPMENT_VALIDATION`，且
   QC/metrics/settled/parity receipts 的 path/hash 均未漂移；
-- 一个 source Gazebo attempt 已关闭，postflight 完成且身份/hash 固定；
-- `R8-LIQUID-HANDOFF-ABI-v2` 输入包完整；
-- 容器安装位姿、物理参数、settled state、solver profile 和 Gauge policy 已冻结；
-- source attempt 的成功、timeout 或 method-failure 标签原样保留；
-- 新 `transfer_id`、`replay_id`、输入验收 receipt 和 output root 均 fresh。
+- S5A0 已只读封存本次 exact source bag，topic/time/frame/inventory receipt 为 PASS；
+- S5A1 已按 `R8-LIQUID-HANDOFF-ABI-v3` 为该 bag 生成并验收 exact transfer package；
+- source domain 固定为 `SIM_R7_EXECUTED_GAZEBO_MOTION`；
+- source attempt 的 success、`GOAL_TIMEOUT` 或 method-failure 标签来自冻结 R7 证据，不从
+  topic 临时重判，也不被 replay 结果覆盖；
+- 本轮只使用 C1，C1 geometry、mount、fluid、moving-boundary 和 settled-state 的兼容性逐 hash
+  闭合；C2 明确不准入；
+- 新 `transfer_id`、`replay_id`、profile、input/output receipt 和 output root 均 fresh；
+- planned row 在读取任何新液体结果前冻结：默认只有 primary；optional pair 只有经新的明确授权
+  后才能把分母从 1 改为 2。
 
-不得只挑选“曲线好看”或 method success 的 attempt。若研究目标包含 failure-inclusive 分析，失败和
-timeout attempt 必须按预注册规则保留。
+阶段 4 当前冻结的是 C1M `Part_0901`，它只能证明既有 development chain。除非逐 hash 证明
+C1 与 C1M 的 geometry/fluid/moving-boundary/particle-set 完全兼容，否则 C1 也必须另做 exact
+settle。本轮不创建、替代或推断 C2 身份。
 
-当前状态为 `NOT_STARTED / NOT_ADMITTED`：尚未冻结实测参数、source attempt、transfer package
-和 exact Stage-5 profile，也未取得执行授权。
+当前 bag 根没有 attempt manifest/postflight sidecar。允许先走 bag-only development lane，但必须：
 
-### 6.2 输入包
+~~~text
+source_provenance=PARTIAL
+formal_eligible=false
+physical_primary_eligible=false
+do_not_override_r7_release=true
+~~~
 
-输入目录固定为：
+若无法从冻结 R7 ledger/分析证据绑定某行的 source outcome，则写 `UNKNOWN`，不得用
+`/spmpc/status`、goal distance 或 bag 长度自行改判。已知的 C2 failure row 保持在原 R7 证据链，
+但不属于本轮 planned rows，不进入液体 replay 或阶段 6 分母。
 
-```text
+### 6.2 S5A0：选定 bag 的只读封存和输入准入
+
+S5A0 不运行 solver、不暴露 GPU、不启动 ROS/Gazebo，也不修改原目录。bag parser 必须断网并在
+只读 bind/sandbox 中只看到本 goal 获准的 exact bag；只允许向独立 create-new audit root 写
+receipt。默认只允许：
+
+~~~text
+/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag
+~~~
+
+可选 `Bslosh_b01` 不得随 primary 预读、预封存或自动加入；若用户之后启用第二行，它必须用自己的
+exact path/hash 和 create-new receipt 重走同一 S5A0。执行顺序：
+
+1. 冻结获准文件及所有父路径的 device/inode、挂载来源、只读策略和采集时间；
+2. 核验 exact path，没有 basename 搜索、glob 或“最新文件”选择；
+3. 核验 regular、`nlink=1`、无 symlink/special/`.active`、size、mode、mtime、SHA-256；即使源
+   mode 为 `0755` 也只作为数据读取，sandbox/profile 明确禁止执行；
+4. 只读解析该 ROS1 Bag V2 header、connection 和 chunk/index；冻结每个 connection 的 topic、
+   type、MD5 和 message-definition SHA-256，拒绝同 topic 冲突定义；禁止 `rosbag reindex`、
+   修复或缓存；
+5. 核验 attempt ID 与 selected role（`PRIMARY` 或另行授权的 `OPTIONAL_PAIR`）精确一致；
+6. 输出该 bag 的 topic/type/message-count/time-range、schema 和 parse error；
+7. 检查 `/odom.header.stamp`、bag record timestamp、`/clock` 的范围/单调性，并枚举
+   `/tf`/`/tf_static` frame graph；本步只报告，不生成 motion；
+8. 重读原文件 identity/hash，原子发布 selected-bag manifest、topic census、time/frame report
+   和 final receipt。
+
+当前主机只有 ROS 2 Jazzy，不能假定 ROS1 `rosbag` CLI 或第三方 `rosbags` Python 包存在。
+若实现纯 Python ROS1 reader，必须 create-new、离线、固定 hash，以最小/损坏/截断/冲突
+connection/路径攻击 fixtures 通过后再读取选定 bag；解析时强制 timeout、RSS、单 chunk
+解压尺寸和总输出上限。不得联网安装依赖，不得用解析失败作为重建 bag 索引的理由。
+
+S5A0 final receipt 至少包含：
+
+~~~text
+source_root / mount identity / read_only_enforced
+selected_role / attempt_id / exact absolute and relative path
+selected_count=1 / bytes / path-size-mode-mtime-device-inode-nlink-SHA256
+ROS1 format/index parse result
+topic schema/types/MD5/message-definition hashes/exact counts
+per-topic record/header/clock time ranges
+frame inventory and anomaly list
+source files before/after identity
+files_written_under_source_root=0
+source_bag_executed=false
+status=S5A0_SELECTED_R7_BAG_SEALED_DEVELOPMENT_ONLY | exact failure
+~~~
+
+方案编写时记录的 selected size/mode/hash/duration 只能作为 expected witness；S5A0 必须独立
+重算，匹配后才可 PASS。任何 bag hash 漂移、索引损坏、非预期 topic schema、路径越界或原 root
+写入都 `STOP_AND_PRESERVE_EVIDENCE`。不要求也不允许以完成 S5A0 为理由解析其余 87 个 bag。
+
+### 6.3 选定 bag 的真实 topic 合同
+
+primary 与 optional pair 均来自 corpus 的 `SPMPC_NON_FIXED` schema。下表消息数是 88 行只读普查
+得到的允许观察范围；S5A0 必须另行冻结选定 bag 的精确计数：
+
+| Topic | ROS type | 每 bag 消息数 | 允许用途 | 明确禁止 |
+| --- | --- | ---: | --- | --- |
+| `/odom` | `nav_msgs/Odometry` | 2326–3766 | **唯一 primary executed-motion 来源**；pose 为主，twist 作 QC | 不用别的 topic 替换 |
+| `/clock` | `rosgraph_msgs/Clock` | 46532–75326 | 时间一致性 witness | 不直接驱动 solver motion |
+| `/tf` | `tf2_msgs/TFMessage` | 8652–13883 | 动态 frame/pose 交叉检查 | 不在与 odom 冲突时静默择优 |
+| `/tf_static` | `tf2_msgs/TFMessage` | 1 | 静态 frame witness | 不得替代 container mount manifest |
+| `/cmd_vel` | `geometry_msgs/Twist` | 939–1721 | 命令与执行差异诊断 | **禁止作为液体运动输入** |
+| `/scout/global_path_fixed` | `nav_msgs/Path` | 308–574 | 计划轨迹上下文 | **禁止作为液体运动输入** |
+| `/scout/goal` | `geometry_msgs/PoseStamped` | 308–574 | goal 上下文 | 禁止补写/延长实际运动 |
+| `/slosh/height` | `std_msgs/Float32` | 2326–3766 | `H_proxy`；阶段 6 secondary comparator | 非实物 reference，禁止进 exporter/solver |
+| `/spmpc/status` | `std_msgs/String` | 3–1302 | 事件 witness | 不得单独重判 source outcome |
+
+除共同 topic 外，选定 bag 必须存在 `/spmpc/debug/effective_config`、
+`/spmpc/slosh_height`、`/spmpc/terminal/debug` 和 `/spmpc/terminal/mode`，因此本轮每个成功导出的
+bag 都有 `H_proxy + H_modal`。任何 selected bag 出现 `FIXED_PROFILE` schema、required topic
+缺失或未登记 extra，都由 S5A0 fail-closed；FixedProfile/C2 的 NA 规则只保留在 corpus 背景中，
+不进入本轮 planned rows。
+
+### 6.4 S5A1：`R8-LIQUID-HANDOFF-ABI-v3` 和 motion exporter
+
+每个 attempt 对应一个独立 transfer package：
+
+~~~text
 incoming/<transfer_id>/
 ├── transfer_manifest.json
+├── selected_bag_receipt_ref.json
+├── source_bag_ref.json
+├── source_outcome.json
+├── topic_contract.json
+├── time_window.json
+├── frame_contract.json
+├── odom_raw.csv
+├── clock_alignment.csv
+├── tf_alignment.json
 ├── motion.csv
+├── solver_path.csv
 ├── motion_manifest.json
-├── container_spec.json
+├── interpolation_qc.json
+├── solver_path_qc.json
+├── container_geometry_manifest.json
+├── container_mount_manifest.json
 ├── fluid_spec.json
 ├── run_spec.json
 └── checksums.sha256
-```
+~~~
 
-验收必须逐项检查普通文件类型、size、SHA-256、closed file set 和 closed schema，拒绝 extra、
-symlink、hardlink、FIFO、socket、device、可执行文件、路径穿越和压缩炸弹。只有
-`VERIFIED_ACCEPTED` 才允许 replay；输入完整但运行未授权时返回 `RUN_NOT_AUTHORIZED`，不能把它
-解释为 source attempt 失败。
+`source_bag_ref.json` 必须绑定 selected-bag receipt、role、attempt ID、relative path、absolute path、
+size 和 SHA-256。
+默认不复制 bag；若未来要求可移植副本，必须另建 ABI variant，逐字节 copy 后核验 hash，原 bag
+仍不得改写。
 
-`motion.csv` 的首版合同为：
+`odom_raw.csv` 保存原始证据，`motion.csv` 保存经过冻结坐标变换后的 canonical quaternion 轨迹，
+`solver_path.csv` 才是 DualSPHysics `mvpathfile` 的可追溯、必须经过误差门禁的派生输入：
 
-```text
-t_s,x_m,y_m,z_m,qx,qy,qz,qw
-```
+~~~text
+odom_raw.csv:
+bag_record_t_ns,odom_header_t_ns,frame_id,child_frame_id,
+x_m,y_m,z_m,qx,qy,qz,qw,vx_m_s,vy_m_s,vz_m_s,wx_rad_s,wy_rad_s,wz_rad_s
 
-其中 `t_s` 从 0 开始严格递增，平移使用 m，四元数为 `x,y,z,w` 且归一化/符号连续，表达
-`T_odom_container(t)`：
+motion.csv:
+t_s,x_rel_m,y_rel_m,z_rel_m,qx_rel,qy_rel,qz_rel,qw_rel
 
-```text
-T_odom_container = T_odom_base × T_base_container
-```
+solver_path.csv (首行可用 # 注释，数据恰为 7 个数值字段):
+t_s,x_rel_m,y_rel_m,z_rel_m,ang1_deg,ang2_deg,ang3_deg
+~~~
 
-禁止用 `/cmd_vel`、计划路径、`H_proxy` 或 `H_modal` 作为运动输入。
+若要保留 covariance，使用 closed-schema companion 文件或明确扩展 v3 minor version，不得临时增加
+列。绝对容器位姿和实际送入 solver 的相对位姿表达为：
 
-### 6.3 唯一 replay 生命周期
+~~~text
+T_odom_container(t) = T_odom_base_from_odom(t) × T_base_container_from_frozen_manifest
+T_rel(t) = inverse(T_odom_container(t0)) × T_odom_container(t)
+~~~
 
-```text
-只读验证 transfer package
+`t0` 是冻结窗口的第一条 canonical pose；因此 `T_rel(t0)=I`。禁止把 odom 的绝对初始位置直接
+送入 solver，否则会造成容器首次更新瞬移。完整 `T_odom_container` 仍保留在证据文件中，solver
+只消费 `T_rel`。
+
+时间和插值合同必须在导出前冻结：
+
+- primary time 唯一为 `/odom.header.stamp`；
+- bag record timestamp 与 `/clock` 仅作 alignment witness，不能在 primary 失败时静默回退；
+- `t_s` 从冻结窗口起点归零并严格递增；重复、回退、reset、超限 gap 一律 fail；
+- position 只允许预注册的线性插值，orientation 只允许归一化 quaternion SLERP；
+- quaternion 必须 finite、单位化、符号连续；不得 Euler 逐轴插值；
+- 不做平滑、去噪、路径投影、补终点或基于液体结果的重采样；
+- interpolation grid、最大 gap、clock/header/record mismatch 容差先写入
+  `time_window.json`，再读取液体结果。
+
+当前 DualSPHysics 5.4 源码在 `JMotion.cpp` 的 `mvpathfile` 分支消费
+`time,x,y,z,ang1,ang2,ang3`，并在相邻行间对 position 和 Euler angles 线性插值。因此 exporter
+必须显式冻结以下 solver bridge，不能依赖默认值：
+
+~~~text
+motion_element=mvpathfile
+fields=7
+fieldtime/fieldx/fieldy/fieldz/fieldang1/fieldang2/fieldang3=0/1/2/3/4/5/6
+anglesunits=degrees
+axes=ZYX
+intrinsic=true
+movecenter=true
+rotation_center=exact_case_container_reference_from_frozen_geometry_manifest
+angle_order=continuous_yaw_Z,pitch_Y,roll_X
+canonical_orientation=normalized_quaternion_SLERP
+~~~
+
+先在 canonical grid 上做 quaternion SLERP，再把每个 `T_rel` 转为固定 `intrinsic ZYX`，对 yaw
+做连续 unwrap 后生成 `solver_path.csv`；不得直接对原始 Euler 角插值。生成后必须从
+`solver_path.csv` 重建 rotation matrix/quaternion，与 canonical `motion.csv` 逐时刻 round-trip
+比较，并在全部 solver query/output 时刻模拟 DualSPHysics 的 Euler 线性插值；最大位置误差、最大
+角距离、gimbal-lock/非有限值和首行 identity 均须在读取液体输出前冻结阈值并 PASS。最终还要用
+`executed_boundary_motion.csv` 复核真实 moving boundary，而不能只证明 CSV 自洽。
+
+窗口合同固定为：“first-effective-motion 前固定 pre-roll + 完整已执行运动 + source terminal/timeout
+后的固定 recorded tail”。first-effective-motion 阈值、pre-roll 和 tail 时长必须在导出前冻结。
+若 bag-only provenance 无可信 terminal sidecar，保守消费到最后一个合法 `/odom` 样本并标记
+`terminal_provenance=PARTIAL`；不得根据 goal 是否到达裁短。额外 solver relaxation tail 只能由
+`run_spec.json` 预注册为 final-pose zero hold，并与 source recorded tail 分栏记录。
+
+`/cmd_vel`、path、goal、`H_proxy`、`H_modal`、status 及 FixedProfile lifecycle topics 不得进入
+motion exporter 或 solver argv。exporter 必须有负测证明：即使这些 topic 与 odom 冲突，也只会
+FAIL/QC，而不会改变 `motion.csv`。
+
+本轮 package 必须绑定 C1 的 `container_geometry_manifest.json` 和
+`container_mount_manifest.json`，并证明它们与 chosen settled state 兼容。C2 package 不生成；
+禁止以 C1M/C1 代跑 C2。H1 轨迹预计累计平移约 9 m，S5A1 还必须报告相对轨迹包围盒和最大位移；
+S5B0 在完整运行前以它预估 moving-domain/cell-grid、峰值显存和边界越界风险。不得裁短、缩放轨迹
+或把 9 m 运动偷偷投影为原地晃动来绕过资源门禁。
+
+### 6.5 单主行 replay，最多增加一个同层配对行
+
+本轮不做 pilot 或完整矩阵。执行层级固定为：
+
+| 层级 | 内容 | Solver/GPU | 通过后允许 |
+| --- | --- | --- | --- |
+| S5A0 | 只读封存 primary exact bag；optional 如获新授权则另发 receipt | 否 | 进入对应 exporter |
+| S5A1 | 为已封存的 selected bag 生成并验收 ABI-v3 transfer | 否 | 进入对应 replay |
+| S5B0 | primary `Bsmooth_b01` 完整 motion + tail | 是，单独授权 | 阶段 6 单行回放/QC |
+| S5B1 | optional `Bslosh_b01` 完整 motion + tail | 是，**默认不运行，另行授权** | 阶段 6 同层配对比较 |
+
+精确行集为：
+
+~~~text
+required planned row:
+  attempt_id=SIM-S1_CORE_H1_C1_Bsmooth_b01_r01
+  role=PRIMARY_BASELINE
+  bag=/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag
+
+optional planned row:
+  attempt_id=SIM-S1_CORE_H1_C1_Bslosh_b01_r01
+  role=OPTIONAL_METHOD_PAIR
+  bag=/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bslosh_b01_r01/capture.bag
+  default=NOT_RUN
+~~~
+
+两行都属于 `SIM-S1_CORE / H1 / C1 / b01`，因此可以复用同一份经过兼容性核验的 C1
+geometry、mount、fluid 和 settled-state 内容，但每行必须 fresh clone、fresh replay ID 和独立
+receipt。primary 的 planned denominator 固定为 1；只有用户明确启用 optional 后，paired analysis
+的 planned denominator 才固定为 2。不得自动增加 B0、SmoothMatch、FixedProfile、其他 block、
+L1、C2 或 failure row。
+
+primary 的结果足以交付“一条小车已执行运动驱动一箱液体”的动态回放和数值 QC。optional 的唯一
+新增价值是 `Bsmooth` 与 `Bslosh` 的同层配对比较；它不是 primary PASS 的必要条件，也不得在看到
+primary 曲线后改成别的 bag。6-row pilot、S5B2、full-88 scheduler/closure、88-run ETA 和全矩阵
+磁盘预算均为 `OUT_OF_SCOPE`。
+
+### 6.6 唯一 replay 生命周期
+
+~~~text
+只读验证 exact ABI-v3 transfer package
+  → 核验 C1 exact geometry/mount/fluid/settled compatibility
   → create-new safety preflight receipt
-  → 从冻结 settled state 创建只读 fresh clone
+  → 从同 stratum 冻结 settled state 创建 fresh clone
   → create-new <replay_id>.partial
-  → 加载 exact runtime profile
-  → 运行完整实际运动窗口 + 冻结 tail
-  → finally 卸载 profile并核验零残留
+  → 加载 exact runtime profile并只暴露最小 GPU devices
+  → 运行完整 executed motion + recorded tail + 预注册 solver tail
+  → finally 卸载 profile并核验 process/mount/device/lock/sudo 零残留
   → 输出 inventory/QC/hash
   → 原子发布 final result
-  → append-only secondary ledger
-```
+  → append-only liquid secondary ledger
+~~~
 
-每个 source attempt 必须单独 replay。可以复用相同配置的 settled-state 内容，但必须为每个 replay
-创建 fresh clone；不得复用某次动态液体结果。
+每个 source attempt 必须单独 replay。可以复用同一 geometry/parameter identity 的 settled-state
+内容，但每个 replay 必须 fresh clone；不得复用另一行的动态液体末态。source bag、R7 release
+ledger 和原 88 行 outcome 永远只读。primary 与 optional 之间也不得共享 `.partial` root、动态 Part
+末态、日志、锁或 receipt。
 
-### 6.4 输出和验收
+### 6.7 输出、验收和状态
 
 最小结果包：
 
-```text
+~~~text
 outgoing/<replay_id>/
 ├── result_manifest.json
+├── executed_boundary_motion.csv
 ├── gauge_zsurf.csv
 ├── slosh_height.csv
 ├── summary.json
 ├── qc_report.json
+├── resource_samples.jsonl
 ├── build_and_runtime.txt
-├── solver.log
+├── solver.stdout.log
+├── solver.stderr.log
 └── checksums.sha256
-```
+~~~
 
 必须证明：
 
-- 完整 motion 和 tail 已消费，无时间倒退、重复、断点、非法四元数或未登记插值；
+- 完整 motion 和全部 tail 已消费，无倒退、重复、断点、非法 quaternion 或未登记插值；
 - boundary 实际运动与 motion manifest 在冻结容差内；
+- C1 的 geometry/mount/settled identities 正确，未引入 C2 或替代 case；
 - 所有 Gauge 时间槽完整，invalid 比例低于预冻结上限；
 - 粒子数/质量/ID 完整，`Nout=0`，无 NaN/Inf、泄漏和越界；
 - GPU、CUDA、Xid、温度、显存、资源和 timeout 门禁通过；
-- result manifest 绑定 transfer、settled state、source/binary/profile/config 和全部输出 hash；
-- 原 source bag/attempt、输入包和 settled state 在前后未改变；
-- 结果只作 post-hoc，不改变 source attempt outcome。
+- result manifest 绑定 transfer、settled state、source bag、binary、profile、config 和全部输出 hash；
+- 原 source bag、ABI package 和 settled state 在前后未改变；
+- replay receipt 单独保留 source outcome；replay PASS 不把 `GOAL_TIMEOUT` 改成 success。
 
-成功状态：
+单行成功状态只能是：
 
-```text
-U5_REAL_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY
-```
+~~~text
+U5_SIM_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY
+~~~
 
-该状态只证明一个不可变实际运动已被液体 solver 完整离线回放，不证明实物液面准确，也不证明
-双向车液动力学。
+primary PASS 只覆盖 `Bsmooth_b01` 这一行，可发布：
 
-## 7. 阶段 6：动态回放与 CPU/实物对比
+~~~text
+S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY
+planned_denominator=1
+~~~
 
-### 7.1 输入冻结
+若 optional 经新授权并独立 PASS，才可另外发布：
+
+~~~text
+S5B1_OPTIONAL_PAIRED_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY
+paired_planned_denominator=2
+~~~
+
+两个状态都只证明各自 R7 Gazebo executed-motion 被液体 solver 完整离线重放，不是 corpus closure，
+也不证明实物液面准确或双向车液动力学。
+
+## 7. 阶段 6：R7 bag 回放、液体模型比较与动态交付
+
+### 7.1 输入冻结与证据链隔离
 
 分析和可视化只能消费 finalized manifest，不扫描“最新目录”。开始前冻结：
 
-- source attempt、transfer、replay、CPU/GPU run 和实物 reference IDs/hashes；
-- 时间零点、first-effective-motion、运动窗口、tail 和重采样网格；
-- 坐标变换、probe 集、无效值处理、滤波和缺失数据规则；
-- primary metric、辅助 metric、比较容差和排序规则；
-- RGB ROI、像素到长度标定、时间同步/延迟修正及其不确定度；
+- S5A0 selected-bag receipt、source bag、source outcome、transfer、replay 和 GPU run IDs/hashes；
+- planned-row 集合及固定分母：primary-only 为 1，explicit paired 为 2；两者身份不得混写；
+- `/odom.header.stamp` 时间零点、first-effective-motion、motion、recorded/solver tail 和网格；
+- 坐标变换、probe 集、无效值、滤波、缺失和 NA 规则；
+- primary/secondary metrics、比较容差、配对和排序规则；
+- 若未来加入实物 reference：RGB ROI、标定、同步/延迟和不确定度；
 - 重复次数、异常 run 排除条件和统计汇总方法。
 
-不得在看到算法标签或结果后修改 probe、滤波、窗口、ROI 或 primary metric。
+原 R7 formal-simulation release 与本次 liquid replay 是两条证据链。阶段 6 只能写 create-new
+comparison manifest 和 liquid secondary ledger；不得编辑 R7 的 88 行 outcome、append-only chain
+或 formal 结论。
 
-### 7.2 统一液面指标
+当前 bag 没有 RGB、IMU 或实物液面传感器 topic，且没有物理 reference sidecar。因此可以完成
+R7 bag/model development comparison，但：
+
+~~~text
+PHYSICAL_REFERENCE_PENDING=true
+PHYSICAL_FIDELITY_VALIDATED=false
+~~~
+
+### 7.2 统一 DualSPHysics 液面指标
 
 圆周 probe 的界面高为 `h_i(t)`，冻结静态液深为 `h0`：
 
-```text
+~~~text
 eta_i(t)            = h_i(t) - h0
 H_crest(t)          = max_i eta_i(t)
 H_abs(t)            = max_i |eta_i(t)|
 H_peak_to_peak(t)   = max_i h_i(t) - min_i h_i(t)
-```
+~~~
 
-primary candidate 为 `H_crest(t)`；单个最高粒子 `maxz` 只能做 splash/QC。最终 primary 必须与
-实物 RGB/液位传感器的测量语义一致后再冻结。
+DualSPHysics development primary candidate 为 `H_crest(t)`；单个最高粒子 `maxz` 只能做
+splash/QC。若未来做实物 fidelity，最终 physical primary 必须与 RGB/液位传感器测量语义对齐后
+另行冻结，不能沿用本轮选择自动获得资格。
 
-每个 run 至少报告：
+每个 replay 至少报告：
 
-- first 15 s、完整运动窗口和 tail 的 peak/p95/RMS；
+- first 15 s、完整 motion window、recorded tail 和 solver tail 的 peak/p95/RMS；
 - 主频、峰值时刻、相位和衰减率/阻尼；
-- 每个 probe 的原始 `zsurf` 和 missing/invalid 比例；
+- 每个 probe 原始 `zsurf` 和 missing/invalid 比例；
 - 粒子质量守恒、泄漏、NaN、越界和 splash QC；
-- backend/device/seed/resolution/time-step/配置和资源身份。
+- backend/device/resolution/time-step/geometry/config 和资源身份。
 
-### 7.3 三类比较
+### 7.3 Bag 信号可用性与 NA 合同
+
+| 信号 | 覆盖 | 语义 | 阶段 6 角色 |
+| --- | ---: | --- | --- |
+| DualSPHysics `H_crest/H_abs/H_peak_to_peak` | 仅已成功 replay 行 | 新 GPU 液体模型结果 | 本轮 liquid development primary |
+| `/slosh/height` = `H_proxy` | primary 1/1；paired 时 2/2 | R7 仿真模型代理，原分析按 m→mm | secondary comparator |
+| `/spmpc/slosh_height` = `H_modal` | primary 1/1；paired 时 2/2 | 控制器/模型族信号 | secondary comparator |
+| RGB/独立液位/实物 reference | selected 0/1 或 0/2 | 选定 bag 中不存在 | `PHYSICAL_REFERENCE_PENDING` |
+
+`H_proxy` 和 `H_modal` 与 R7 controller/plant model 同属仿真证据，不是独立 liquid truth。
+它们不能作为 motion exporter 输入、solver forcing、调参目标或 physical reference。
+
+### 7.4 比较设计
 
 #### A. GPU 与 CPU
 
-同一 case、输入、数值参数和输出时间槽下，比较粒子状态、Gauge、汇总指标、重复性和资源消耗。
-按冻结容差给出 `PASS_CPU_GPU_COMPARISON` 或精确差异，不以“曲线看起来接近”代替数值门禁。
+阶段 4 的固定 synthetic case 已完成 CPU/GPU parity，它只作为 backend parent evidence。本轮不为
+49 s executed-motion 追加 CPU replay，也不得把阶段 4 parity 冒充所选 bag 的逐轨迹 CPU/GPU
+一致性；selected-bag CPU comparison 明确为 `OUT_OF_SCOPE`。若未来确需该比较，必须另立 goal、
+按同一 geometry/motion/参数/初态/输出槽运行并预冻结容差。
 
-#### B. DualSPHysics 与现有仿真信号
+#### B. DualSPHysics 与 R7 `H_proxy/H_modal`
 
-`H_sph` 与 `H_proxy/H_modal` 只作事后相关性、误差和 cross-method ranking；后两者不能作为
-DualSPHysics 的实物 reference，也不能反向调参使排名吻合。
+先用共同的 `/odom.header.stamp` 运动窗口和预注册 alignment policy 对齐，再报告 amplitude、
+frequency、damping、phase、相关/误差。比较必须：
 
-#### C. 仿真与实物实验
+- 以 planned row 为统计单位和固定分母，不以 topic message 为样本量；
+- primary-only 只做 `Bsmooth_b01` 内 DualSPHysics 对 H_proxy/H_modal 的对齐，不声称
+  cross-method ranking；
+- 只有 optional 也成功时，才做同一 `SIM-S1_CORE/H1/C1/b01` 的
+  `Bsmooth ↔ Bslosh` 配对并报告 cross-method ranking；
+- 不跨 H1/L1、C1/C2/block 混配，不加入 FixedProfile 或 failure row；
+- 缺 replay、无效 Gauge 或 source provenance partial 分别报告，不从分母静默删除；
+- 禁止看结果后改 window、filter、probe、单位、行集或只展示正向 condition。
 
-实物 reference 只能来自冻结的 RGB liquid-height 或独立液位传感器 pipeline。必须按五维报告：
+这类结果只能称为 `R7_BAG_REPLAY_AND_MODEL_COMPARISON`。DualSPHysics 与 H_proxy/H_modal 接近，
+或 Bslosh 的排序一致，都不能证明真实液面改善。
 
-```text
+#### C. 未来仿真与实物实验
+
+实物 reference 只能来自另行冻结的 RGB liquid-height 或独立液位传感器 pipeline。必须按五维报告：
+
+~~~text
 amplitude
 frequency
 damping
 phase
 cross-case / cross-method ranking
-```
+~~~
 
-每一维分别报告偏差、测量/重复不确定度、接受阈值和 PASS/FAIL。DualSPHysics 与另一 CFD/SPH
-后端相互接近不能替代实物证据。
+每一维分别报告偏差、测量/重复不确定度、接受阈值和 PASS/FAIL。当前选定 bag 不具备该输入，
+所以阶段 6 本轮不得生成 physical comparison PASS。
 
-### 7.4 动态回放交付
+### 7.5 动态回放交付
 
 每个选定 replay 生成：
 
-- 基于真实 solver 帧的 MP4；
+- 基于 finalized solver 帧的 MP4；
 - 用于快速审阅的 GIF 或等价低带宽预览；
 - 带容器坐标、时间、粒子类别和液面 probe 的静态关键帧；
-- `H_crest/H_abs/peak-to-peak` 时间序列图；
-- CPU/GPU 和 SIM/实物对比图；
+- `H_crest/H_abs/peak-to-peak` 与已登记 H_proxy/H_modal 的时间序列图；
+- R7 model-comparison 图；如只有 primary，不画伪造的 paired/CPU 对比；实物列明确 `PENDING`；
 - 可机读 CSV/JSON、绘图数据、工具/参数 hash 和 checksums；
-- append-only comparison manifest、evidence index 和 secondary-ledger entry。
+- append-only comparison manifest、evidence index 和 liquid secondary-ledger entry。
 
-可视化不得平滑、裁剪或重采样原始数据而不在 manifest 中记录；GIF/MP4 不是数值证据事实源，
-事实源仍是 finalized BI4/Gauge/CSV/JSON 及其 hash。
+可视化不得未登记地平滑、裁剪或重采样原始数据；GIF/MP4 不是数值证据事实源，事实源仍是
+finalized BI4/Gauge/CSV/JSON、source bag 及其 hash。
 
-### 7.5 阶段 6 结论
+### 7.6 阶段 6 结论
 
-阶段 6 只有在预注册比较矩阵和所有必需 reference 完整后才能得到：
+若预注册的 R7 行集、replay 和 model comparison 全部闭合，本轮最大状态为：
 
-```text
-S6_REPLAY_AND_COMPARISON_PASS_DEVELOPMENT_ONLY
-```
+~~~text
+S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY
+planned_denominator=1
+PHYSICAL_REFERENCE_PENDING=true
+~~~
 
-若缺少实物输入，可以完成动态回放和 CPU/GPU 对比，但总体只能是：
+若 optional 经独立授权、replay 和 QC 后也闭合，才可追加
+`S6_PAIRED_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY / planned_denominator=2`。
 
-```text
-S6_PARTIAL_PASS_PHYSICAL_REFERENCE_PENDING
-```
-
-这不是 blocker 的掩饰，也不能写成 physical fidelity PASS。只有 P0–P3 全部通过并完成 P4
-formal 设计复审后，才可决定是否申请新的 formal release；本文不授权该步骤。
+这不是总体 physical-fidelity PASS。只有未来独立 physical source domain、reference、校准和五维
+验收完成，才可另立 physical-fidelity goal；只有 P0–P3 全部通过并完成 P4 formal 设计复审后，
+才可决定是否申请新的 formal release。本文不授权这些步骤。
 
 ## 8. 分阶段实现工作包
 
 后续实现必须使用 versioned create-new 文件；不得修改冻结 GPU G1/A 文件、既有 CPU receipts、
-历史 raw output 或本文父方案。
+历史 raw output、原 88 个 bag 或本文父方案。
 
 | 工作包 | 需实现的最小组件 | 静态门禁 | 系统/运行授权 |
 | --- | --- | --- | --- |
@@ -850,8 +1262,13 @@ formal 设计复审后，才可决定是否申请新的 formal release；本文�
 | S4-A DDT QC | read-only parser、closed result schema、baseline comparator、tests | fixture/negative tests、hash/inventory | 只读，不运行 solver |
 | S4-B/C settle | numerical manifest/schema、fresh-run gate、settle/restart QC | 参数/阈值/容差冻结 | 每个 run 单独授权 |
 | S4-D/E/F parity/synthetic | Idp comparator、motion builder、Gauge/height extractor、matrix manifest | synthetic tests、no-cherry-pick negative tests | 每个矩阵/资源预算单独授权 |
-| S5 transfer/replay | ABI schema、package validator、motion QC、replay gate、secondary ledger | malicious-file/path/time-series 负测 | exact transfer/replay/profile 单独授权 |
-| S6 visualization/comparison | finalized-result reader、plot/animation、CPU/real comparator、report schema | golden fixture、axis/unit/time alignment、hash tests | 只读分析；实物包另验收 |
+| S5A0 selected-bag intake | ROS1 Bag V2 只读 reader、selected topic/time/frame schema、receipt/tests | exact path/hash、损坏索引/topic-conflict/path/symlink/execute 负测；原 root 零写入 | 默认只读 primary，不运行 solver/GPU |
+| S5A1 ABI-v3 exporter | package schema、odom-only exporter、relative transform、quaternion-to-`mvpathfile` bridge | cmd/path/H_proxy/status 冲突负测、C1 identity、SLERP/Euler round-trip、closed package | 只读 selected bag；只写 create-new transfer |
+| S5B0 primary replay | replay gate、profile、resource/Xid monitor、moving-domain、boundary/Gauge QC | exact primary transfer/geometry/settled/profile/hash 与 fresh-root preflight | `Bsmooth_b01` 一个 exact replay 单独授权 |
+| S5B1 optional pair | 复用组件但 fresh root/clone/receipt；paired manifest | 同 stage/path/C1/block、planned denominator=2、no result-driven row swap | `Bslosh_b01` 默认不运行，另行授权 |
+| S6A selected-signal extraction | H_proxy/H_modal reader、provenance schema、alignment QC | primary 1/1；paired 时 2/2；单位/时间负测 | 只读 |
+| S6B visualization/comparison | finalized-result reader、plot/animation、selected R7 comparator、report schema | golden fixture、pairing/axis/unit/time/hash tests | 只读分析 |
+| S6C physical comparison | future physical ABI、RGB/level reference、calibration/uncertainty | 独立 physical contract 和五维门禁 | 当前不授权 |
 
 每个工作包普通实现或测试失败应在自身范围内完成“定位证据 → 最小修复 → 聚焦测试 → 完整回归”；
 不得通过放宽 closed schema、路径、权限、阈值或比较窗口让测试通过。
@@ -868,13 +1285,24 @@ formal 设计复审后，才可决定是否申请新的 formal release；本文�
    `Shifting=None / CFL=0.1 / ViscoArtificial=0.3` development-only 合同；
 5. `S4C_U3_SETTLE_COLD_AB_RESTART`：**已完成 / PASS**，状态为 `U3_SETTLED_STATE_FROZEN`；
 6. `S4D_CPU_GPU_PARITY_AND_U4_SYNTHETIC`：**已完成本轮授权范围 / PASS（development-only）**；
-7. `S5A_VALIDATE_REAL_MOTION_PACKAGE`：**下一候选 goal，尚未授权**；只验收输入，不运行 solver；
-8. `S5B_REAL_MOTION_REPLAY_ONE_SHOT`：针对 exact replay/profile 单独授权；
-9. `S6_REPLAY_CPU_PHYSICAL_COMPARISON`：只读生成回放、统计和证据包；
-10. `P4_FORMAL_INTEGRATION_REVIEW`：仅在 P0–P3 全通过后由用户另行决定是否创建。
+7. `S5A0_SEAL_PRIMARY_R7_BAG_READ_ONLY`：**当前唯一下一 goal**；只读封存 exact
+   `SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag`，不读取其余 bag、不生成 motion、不运行 solver；
+8. `S5A1_BUILD_PRIMARY_R8_LIQUID_HANDOFF_ABI_V3_TRANSFER`：实现并验证 odom-only exporter、
+   `T_rel`、`solver_path.csv` 和 `mvpathfile` round-trip；
+9. `S5B0_RUN_PRIMARY_C1_COUPLED_REPLAY`：只运行 primary，单独 GPU/profile 授权；
+10. `S6A_RENDER_AND_QC_PRIMARY_REPLAY_DEVELOPMENT_ONLY`：只读生成一条动态回放、数值 QC、
+    H_proxy/H_modal 对齐和证据包；做到这里已经满足用户的单 bag 目标；
+11. `S5B1_OPTIONAL_RUN_PAIRED_C1_REPLAY`：仅用户明确要求第二个 bag 时，先为 exact
+    `SIM-S1_CORE_H1_C1_Bslosh_b01_r01/capture.bag` 重走 S5A0/S5A1，再单独授权 GPU replay；
+12. `S6B_OPTIONAL_COMPARE_BSMOOTH_VS_BSLOSH_DEVELOPMENT_ONLY`：只有两行 finalized 后执行；
+13. `S6C_PHYSICAL_REFERENCE_COMPARISON`：未来独立 physical 输入和授权；当前不可进入；
+14. `P4_FORMAL_INTEGRATION_REVIEW`：仅在对应 formal 前置全部通过后由用户另行决定是否创建。
 
 阶段成功不能自动授权下一 goal。涉及 profile lifecycle、sudo、GPU device、candidate/solver 执行、
 跨机输入或大规模矩阵时，必须列出 exact path/name/hash/argv/资源上限并取得新的明确授权。
+S5A0/S5A1 的只读或派生文件权限不得被解释成 S5B0 的 GPU runtime 授权；primary 的权限和 PASS
+也不得被解释成 optional bag 的读取、导出或执行授权。6-row pilot、S5B2 和 full-88 在本版中没有
+goal，也没有授权路径。
 
 ## 10. 时间和资源规划原则
 
@@ -883,11 +1311,25 @@ formal 设计复审后，才可决定是否申请新的 formal release；本文�
 
 - 阶段 3 只含 1 s C1M smoke，以固定 wall timeout 保护；
 - 阶段 4 的 settle、收敛和参数矩阵可能远超 8 小时，必须先估算每点粒子数、显存、磁盘和 wall time；
-- 阶段 5 每个 actual-motion replay 独立预算，不静默缩短 motion 或 tail；
+- 阶段 5 每个 R7 executed-motion replay 独立预算，不静默缩短 motion 或 tail；
 - 阶段 6 只读分析与可视化单独预算，不能为节省空间自动删除 raw BI4/reference。
 
-阶段 3/4 已有 C1M 的真实 GPU benchmark，但在冻结 C2 geometry、0.5 mm 粒子规模和 actual-motion
-窗口前，仍不承诺 C2/0.5 mm 或完整 60 s replay 的完成时间。
+primary 记录时长约 `49.409 s`，optional 约 `49.549 s`，但 bag 时长不等于 GPU wall time。
+根据当前同类 C1M GPU 实测约 `78–80 × physical time` 的粗略倍率，在不含新增 relaxation tail、
+首次工程调试和 exporter/QC 的情况下：primary solver 约 `64–66 min`，两行 solver 合计约
+`129–132 min`（约 `2.2 h`）。每个 raw 输出按约 `0.4 GB` 预留，实际仍由 S5B0 报告：
+
+~~~text
+solver_wall_seconds / replay_physical_seconds
+output_bytes / replay_physical_seconds
+peak_vram / peak_rss / max_temperature
+fixed_per-run_overhead
+~~~
+
+首次从 ROS1 reader、exporter、C1 compatibility、moving-domain 到动画的工程闭环仍可能需要半天至
+一天；上面 65 min 只是 solver 量级，不是承诺的端到端完成时间。S5B0 取得实测后再更新 optional
+ETA；不因赶时间缩短 motion/tail、降低验证或自动执行第二行。C2、6-row 和 88-row 的时间/磁盘
+估算均不属于本轮。
 
 ## 11. 最终验收检查表
 
@@ -912,29 +1354,43 @@ formal 设计复审后，才可决定是否申请新的 formal release；本文�
 
 ### 阶段 5
 
-- [ ] `R8-LIQUID-HANDOFF-ABI-v2` 包逐文件验收；
-- [ ] motion 来自已执行容器位姿，不是 `/cmd_vel` 或计划轨迹；
-- [ ] fresh settled-state clone、完整 motion+tail 和 result package 通过；
-- [ ] liquid 结果未反馈控制器、未改变 source attempt outcome。
+- [ ] primary exact ROS1 Bag V2 只读封存、文件 hash、索引和 `SPMPC_NON_FIXED` topic schema 通过；
+- [ ] 原 bag root 零写入、源 bag 未执行；S5A0 selected-bag receipt 原子发布；
+- [ ] primary `R8-LIQUID-HANDOFF-ABI-v3` package 逐文件/closed-schema 验收；
+- [ ] primary time/motion 只来自 `/odom.header.stamp`/pose；bag time、`/clock`、`/tf` 仅作 witness；
+- [ ] `/cmd_vel`、path、goal、H_proxy/H_modal/status 未进入 exporter/solver；
+- [ ] `T_rel(t0)=I`，canonical quaternion/SLERP 到 `mvpathfile` Euler path 的 round-trip 通过；
+- [ ] C1 geometry/mount/fluid/settled compatibility identity 通过，未引入或冒充 C2；
+- [ ] pre-roll、完整 motion、timeout/terminal 和 tail 未被裁短；
+- [ ] primary planned denominator=1，exact `Bsmooth_b01` 在看结果前冻结并独立裁决；
+- [ ] optional 默认未读取/未运行；若获新授权，exact `Bslosh_b01` 单独封存、导出、运行和裁决；
+- [ ] fresh settled-state clone、result package、profile/process/mount/device 零残留通过；
+- [ ] liquid 结果未反馈控制器、未修改原 R7 release/source outcome。
 
 ### 阶段 6
 
 - [ ] 动态回放由 finalized solver 帧生成并绑定 hash；
-- [ ] CPU/GPU 对比、重复性和资源报告完成；
-- [ ] probe/filter/window/ROI/时间同步在看结果前冻结；
-- [ ] amplitude/frequency/damping/phase/ranking 五维实物比较完成；
+- [ ] primary 的 H_proxy/H_modal 各为 1/1 secondary；若 paired，则各为 2/2；
+- [ ] planned-row 分母为 1，或在 optional 明确授权后为 2；没有把 6/88 当作本轮分母；
+- [ ] 单 bag 报告不声称 cross-method ranking；只有 paired 才比较 Bsmooth/Bslosh；
+- [ ] 阶段 4 CPU/GPU parity 只作为 parent，不伪称 selected trajectory CPU comparison；
+- [ ] probe/filter/window/时间同步在看结果前冻结；
+- [ ] amplitude/frequency/damping/phase 的单行 R7 model comparison 完成；paired 时再增加 ranking；
 - [ ] comparison manifest、evidence index、secondary ledger 和 checksums 完整；
+- [ ] `PHYSICAL_REFERENCE_PENDING=true`，未伪造 RGB/IMU/实物液面比较；
 - [ ] 未把 development 结果表述为 formal、production 或 physical-primary。
 
 ## 12. 当前唯一允许的下一步
 
-本文完成了阶段 3–6 的离线规划，并同步了阶段 1–4 的最新不可变证据。阶段 4 已取得
-development-only 液体单独验证 PASS；repeatability、parity 和本轮 U4 synthetic 均已完成，
-无需重跑。阶段 5/6 尚未开始，也不会因阶段 4 PASS 自动授权。
+本文完成了阶段 3–6 的离线规划，并同步阶段 1–4 的不可变证据与 R7 corpus 的只读背景普查。
+阶段 4 的 repeatability、parity 和本轮 U4 synthetic 已完成，无需重跑。阶段 5/6 尚未开始，也不会
+因阶段 4 PASS 或“bag 已复制到本机”自动授权。
 
-若用户决定进入阶段 5，下一 goal 只能先验收实测容器/液体/安装参数以及一个已关闭、hash 固定的
-source Gazebo attempt，并冻结 `R8-LIQUID-HANDOFF-ABI-v2` transfer package；在该只读门禁通过前
-不得运行新的 DualSPHysics replay。
+当前唯一下一步是 S5A0：只读封存/验证 primary exact bag
+`/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag`。它不要求运行
+GPU，不读取其余 87 个 bag，也不要求先伪装成实物输入。S5A0 PASS 后才允许 S5A1 为这一行生成
+ABI-v3 transfer；C1 geometry/mount/settled compatibility 未冻结时，可以只读验收/导出 odom，
+但 solver replay 必须保持 `NOT_ADMITTED`。optional `Bslosh_b01` 默认不读、不导出、不运行。
 
 ```text
 PLAN_STAGE_3_6_STATUS=STATIC_CONTINUATION_PLAN_COMPLETE
@@ -949,10 +1405,29 @@ CPU_GPU_PARITY_STATUS=PASS_CPU_GPU_PARITY_DEVELOPMENT_ONLY
 U4_SYNTHETIC_STATUS=ZERO_TRANSLATION_YAW_PASS_DEVELOPMENT_ONLY
 DEVELOPMENT_ONLY=true
 PHYSICAL_FIDELITY_VALIDATED=false
+R7_BAG_ROOT=/home/zrj/slosh_bags/matrix_bags
+R7_BAG_CORPUS_OBSERVED=88_ROS1_BAG_V2
+EXECUTION_SCOPE=ONE_PRIMARY_PLUS_ZERO_OR_ONE_OPTIONAL_PAIR
+PRIMARY_ATTEMPT=SIM-S1_CORE_H1_C1_Bsmooth_b01_r01
+PRIMARY_BAG=/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag
+PRIMARY_BAG_SEALED=false
+OPTIONAL_SECOND_ATTEMPT=SIM-S1_CORE_H1_C1_Bslosh_b01_r01
+OPTIONAL_SECOND_BAG=/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bslosh_b01_r01/capture.bag
+OPTIONAL_SECOND_DEFAULT=NOT_RUN
+PLANNED_DENOMINATOR=1
+MAX_PLANNED_DENOMINATOR=2
+FULL_CORPUS_INTAKE_OUT_OF_SCOPE=true
+SIX_ROW_PILOT_OUT_OF_SCOPE=true
+FULL_88_REPLAY_OUT_OF_SCOPE=true
+C2_REPLAY_OUT_OF_SCOPE=true
+SOURCE_DOMAIN=SIM_R7_EXECUTED_GAZEBO_MOTION
+SOURCE_PROVENANCE=PARTIAL_BAG_ONLY
+HANDOFF_ABI=R8-LIQUID-HANDOFF-ABI-v3_NOT_MATERIALIZED
 U5_STARTED=false
 PHASE5_ADMITTED=false
 CURRENT=STOP_AFTER_STAGE4_LIQUID_ONLY_DEVELOPMENT_VALIDATION_PASS
-NEXT=STAGE5_REQUIRES_SEPARATE_USER_AUTHORIZATION_AND_PHYSICAL_INPUTS
+NEXT=S5A0_SEAL_PRIMARY_R7_BAG_READ_ONLY
+PHYSICAL_REFERENCE_PENDING=true
 ```
 
 ## 13. 权威参考
@@ -961,3 +1436,5 @@ NEXT=STAGE5_REQUIRES_SEPARATE_USER_AUTHORIZATION_AND_PHYSICAL_INPUTS
 2. [DualSPHysics 物理液体接入 SIM-R8 方案](./20260805_DualSPHysics物理液体接入SIM-R8方案.md)
 3. [Ubuntu 24.04 液体仿真电脑任务与数据交接说明](./20260806_Ubuntu24.04液体仿真电脑任务与数据交接说明.md)
 4. [RTX 5080 GPU 构建阶段进度与下一步（当前状态页）](./20260810_RTX5080_DualSPHysics_GPU构建阶段进度与下一步.md)
+5. [SIM-MECHANISM-R7 40/64/88 结果分析与正式实物流程对照](../仿真对比试验分析/20260804_SIM-MECHANISM-R7_40_64_88结果分析与正式实物S-MPCC流程对照.md)
+6. [SIM-R8 源码隔离、仿真实验矩阵与执行方案](../仿真对比试验/20260804_SIM-R8源码隔离_仿真实验矩阵与执行方案.md)
