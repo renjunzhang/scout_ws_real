@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_damped_restart_qc_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "captured_at_utc",
+    "inputs",
+    "intervention_proof",
+    "initialization",
+    "undamped_tail",
+    "verdict"
+  ],
+  "properties": {
+    "schema_version": {"const": "r8-liquid-u3-damped-restart-qc-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_DAMPED_RESTART_QC_V1"},
+    "captured_at_utc": {"type": "string", "minLength": 20, "maxLength": 64},
+    "inputs": {"$ref": "#/$defs/inputs"},
+    "intervention_proof": {"$ref": "#/$defs/intervention"},
+    "initialization": {"$ref": "#/$defs/initialization"},
+    "undamped_tail": {"$ref": "#/$defs/undampedTail"},
+    "verdict": {"$ref": "#/$defs/verdict"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "inode", "mode", "size_bytes", "nlink", "uid", "gid", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+        "inode": {"type": "integer", "minimum": 1},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "size_bytes": {"type": "integer", "minimum": 0, "maximum": 536870912},
+        "nlink": {"const": 1},
+        "uid": {"type": "integer", "minimum": 0},
+        "gid": {"type": "integer", "minimum": 0},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "runner", "qc_script", "qc_schema", "qc_tests", "init_receipt", "tail_receipt", "checkpoint"],
+      "properties": {
+        "policy": {"$ref": "#/$defs/identity"},
+        "runner": {"$ref": "#/$defs/identity"},
+        "qc_script": {"$ref": "#/$defs/identity"},
+        "qc_schema": {"$ref": "#/$defs/identity"},
+        "qc_tests": {"$ref": "#/$defs/identity"},
+        "init_receipt": {"$ref": "#/$defs/identity"},
+        "tail_receipt": {"$ref": "#/$defs/identity"},
+        "checkpoint": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "intervention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "single_intervention",
+        "case_semantics_equal_after_removing_special",
+        "damping_present_in_initialization_xml",
+        "damping_absent_from_validation_xml",
+        "damping_reported_by_initialization_solver",
+        "damping_not_reported_by_validation_solver",
+        "checkpoint_transfer_exact",
+        "cfl_shifting_ddt_dp_unchanged",
+        "evaluation_uses_only_undamped_tail"
+      ],
+      "properties": {
+        "single_intervention": {"const": "INITIALIZATION_ONLY_STANDARD_DAMPING_PLANE"},
+        "case_semantics_equal_after_removing_special": {"const": true},
+        "damping_present_in_initialization_xml": {"const": true},
+        "damping_absent_from_validation_xml": {"const": true},
+        "damping_reported_by_initialization_solver": {"const": true},
+        "damping_not_reported_by_validation_solver": {"const": true},
+        "checkpoint_transfer_exact": {"const": true},
+        "cfl_shifting_ddt_dp_unchanged": {"const": true},
+        "evaluation_uses_only_undamped_tail": {"const": true}
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_count", "part_file_count", "part_first", "part_last", "total_bytes", "canonical_sha256"],
+      "properties": {
+        "file_count": {"type": "integer", "minimum": 1},
+        "part_file_count": {"type": "integer", "minimum": 1},
+        "part_first": {"type": "integer", "minimum": 0},
+        "part_last": {"type": "integer", "minimum": 0},
+        "total_bytes": {"type": "integer", "minimum": 1},
+        "canonical_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "checkpointState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part", "time_s", "particle_count", "moving_count", "fluid_count", "nout", "all_finite", "domain_and_density_valid"],
+      "properties": {
+        "part": {"const": 201},
+        "time_s": {"type": "number", "minimum": 10.049, "maximum": 10.051},
+        "particle_count": {"const": 9078},
+        "moving_count": {"const": 2669},
+        "fluid_count": {"const": 6409},
+        "nout": {"const": 0},
+        "all_finite": {"const": true},
+        "domain_and_density_valid": {"const": true}
+      }
+    },
+    "initialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "run_id", "returncode", "elapsed_seconds", "inventory", "checkpoint_state"],
+      "properties": {
+        "status": {"const": "PASS_DAMPED_INITIALIZATION_RAW_AND_CHECKPOINT_QC"},
+        "run_id": {"type": "string", "minLength": 8, "maxLength": 128},
+        "returncode": {"const": 0},
+        "elapsed_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 3600},
+        "inventory": {"$ref": "#/$defs/inventory"},
+        "checkpoint_state": {"$ref": "#/$defs/checkpointState"}
+      }
+    },
+    "metricVector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "density_mean_relative_bias",
+        "density_mean_relative_range",
+        "density_p01_p99_relative_deviation",
+        "position_interframe_max_m_s",
+        "position_interframe_p95_m_s",
+        "position_interframe_rms_m_s",
+        "position_net_max_m_s",
+        "position_net_p95_m_s",
+        "position_net_rms_m_s",
+        "specific_kinetic_energy_j_kg",
+        "speed_max_m_s",
+        "speed_p95_m_s",
+        "speed_rms_m_s",
+        "surface_abs_bias_m",
+        "surface_abs_drift_m_s",
+        "surface_spread_m",
+        "surface_temporal_range_m"
+      ],
+      "properties": {
+        "density_mean_relative_bias": {"type": "number", "minimum": 0},
+        "density_mean_relative_range": {"type": "number", "minimum": 0},
+        "density_p01_p99_relative_deviation": {"type": "number", "minimum": 0},
+        "position_interframe_max_m_s": {"type": "number", "minimum": 0},
+        "position_interframe_p95_m_s": {"type": "number", "minimum": 0},
+        "position_interframe_rms_m_s": {"type": "number", "minimum": 0},
+        "position_net_max_m_s": {"type": "number", "minimum": 0},
+        "position_net_p95_m_s": {"type": "number", "minimum": 0},
+        "position_net_rms_m_s": {"type": "number", "minimum": 0},
+        "specific_kinetic_energy_j_kg": {"type": "number", "minimum": 0},
+        "speed_max_m_s": {"type": "number", "minimum": 0},
+        "speed_p95_m_s": {"type": "number", "minimum": 0},
+        "speed_rms_m_s": {"type": "number", "minimum": 0},
+        "surface_abs_bias_m": {"type": "number", "minimum": 0},
+        "surface_abs_drift_m_s": {"type": "number", "minimum": 0},
+        "surface_spread_m": {"type": "number", "minimum": 0},
+        "surface_temporal_range_m": {"type": "number", "minimum": 0}
+      }
+    },
+    "metricPass": {
+      "type": "object",
+      "additionalProperties": {"type": "boolean"},
+      "minProperties": 17,
+      "maxProperties": 17
+    },
+    "trajectory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_time_s", "minimum_speed_rms_m_s", "final_time_s", "final_speed_rms_m_s", "final_to_minimum_ratio", "rebound_after_minimum"],
+      "properties": {
+        "minimum_time_s": {"type": "number", "minimum": 10, "maximum": 21},
+        "minimum_speed_rms_m_s": {"type": "number", "minimum": 0},
+        "final_time_s": {"type": "number", "minimum": 20, "maximum": 21},
+        "final_speed_rms_m_s": {"type": "number", "minimum": 0},
+        "final_to_minimum_ratio": {"type": "number", "minimum": 0},
+        "rebound_after_minimum": {"type": "boolean"}
+      }
+    },
+    "undampedTail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "run_id", "returncode", "elapsed_seconds", "inventory", "frame_count", "first_time_s", "last_time_s", "actual_cfl", "shifting", "ddt", "dp_m", "structural_checks_all_pass", "metrics", "metric_limits", "metric_absolute_pass", "failed_absolute_metrics", "trajectory"],
+      "properties": {
+        "status": {"enum": ["PASS_UNDAMPED_TAIL_ALL_17_LIMITS", "FAIL_UNDAMPED_TAIL_ABSOLUTE_SETTLING_LIMITS"]},
+        "run_id": {"type": "string", "minLength": 8, "maxLength": 128},
+        "returncode": {"const": 0},
+        "elapsed_seconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 3600},
+        "inventory": {"$ref": "#/$defs/inventory"},
+        "frame_count": {"const": 201},
+        "first_time_s": {"type": "number", "minimum": 10.049, "maximum": 10.051},
+        "last_time_s": {"type": "number", "minimum": 20.049, "maximum": 20.051},
+        "actual_cfl": {"const": 0.1},
+        "shifting": {"const": "None"},
+        "ddt": {"type": "object"},
+        "dp_m": {"const": 0.002},
+        "structural_checks_all_pass": {"const": true},
+        "metrics": {"$ref": "#/$defs/metricVector"},
+        "metric_limits": {"$ref": "#/$defs/metricVector"},
+        "metric_absolute_pass": {"$ref": "#/$defs/metricPass"},
+        "failed_absolute_metrics": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "trajectory": {"$ref": "#/$defs/trajectory"}
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "u3_remediation_candidate_pass", "settled_state_frozen", "stage4_complete", "phase5_admitted", "exact_blocker", "next", "development_only", "formal", "physical_primary_eligible", "solver_executed_by_this_tool", "gpu_exposed_by_this_tool", "network_used_by_this_tool", "inputs_modified"],
+      "properties": {
+        "status": {"enum": ["PASS_U3_DAMPED_INITIALIZATION_UNDAMPED_TAIL_SETTLED_CANDIDATE", "FAIL_U3_DAMPED_INITIALIZATION_UNDAMPED_TAIL_NOT_SETTLED"]},
+        "u3_remediation_candidate_pass": {"type": "boolean"},
+        "settled_state_frozen": {"const": false},
+        "stage4_complete": {"const": false},
+        "phase5_admitted": {"const": false},
+        "exact_blocker": {"type": "string", "minLength": 1, "maxLength": 512},
+        "next": {"type": "string", "minLength": 1, "maxLength": 256},
+        "development_only": {"const": true},
+        "formal": {"const": false},
+        "physical_primary_eligible": {"const": false},
+        "solver_executed_by_this_tool": {"const": false},
+        "gpu_exposed_by_this_tool": {"const": false},
+        "network_used_by_this_tool": {"const": false},
+        "inputs_modified": {"const": false}
+      }
+    }
+  }
+}

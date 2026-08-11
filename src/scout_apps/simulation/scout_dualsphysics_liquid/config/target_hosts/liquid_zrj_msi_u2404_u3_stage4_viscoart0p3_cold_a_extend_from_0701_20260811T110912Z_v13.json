@@ -1,0 +1,245 @@
+{
+  "claim_ceiling": "DEVELOPMENT_ONLY_SOFTWARE_NUMERICAL_NOT_PHYSICAL_FIDELITY",
+  "document_type": "SMPCC_R8_LIQUID_U3_VISCOART0P3_COLD_A_EXTENSION_POLICY_V1",
+  "expected_output": {
+    "start_time_s": 35.05,
+    "end_time_s": 45.05,
+    "output_period_s": 0.05,
+    "part_first": 701,
+    "part_last": 901,
+    "part_count": 201,
+    "maximum_output_bytes": 134217728
+  },
+  "gpu": {
+    "device_paths": [
+      "/dev/nvidia0",
+      "/dev/nvidiactl",
+      "/dev/nvidia-uvm",
+      "/dev/nvidia-uvm-tools"
+    ],
+    "driver_version": "580.173.02",
+    "index": 0,
+    "name": "NVIDIA GeForce RTX 5080 Laptop GPU",
+    "pci_bus_id": "00000000:01:00.0",
+    "uuid": "GPU-d29cd22d-8b25-8f4e-9dcf-f2fc4bb113fb"
+  },
+  "inputs": {
+    "candidate": {
+      "inode": 15733148,
+      "mode": "0400",
+      "nlink": 1,
+      "path": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T170339Z_a.partial/output/artifacts/DualSPHysics5.4_linux64",
+      "sha256": "cace408f99c3ca75b53bfb542565e92ec134631a41f1d233aace346e6455b39f",
+      "size_bytes": 105654136
+    },
+    "case_bi4": {
+      "inode": 14944257,
+      "mode": "0440",
+      "nlink": 1,
+      "path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.bi4",
+      "sha256": "b463ddfe548b3db78b02f23b075dadbdd3c71ea766eb092701b56978ddb3a8e7",
+      "size_bytes": 400842
+    },
+    "case_xml": {
+      "inode": 14944258,
+      "mode": "0440",
+      "nlink": 1,
+      "path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.xml",
+      "sha256": "28205c2234dda565da600947d03481c492c6bb493b2e058bd04cd360b7862acb",
+      "size_bytes": 7800
+    },
+    "dsph_config": {
+      "inode": 14944233,
+      "mode": "0400",
+      "nlink": 1,
+      "path": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1m_gencase_seed_v3_20260808T150802Z.partial/input/DsphConfig.xml",
+      "sha256": "0644c9a6a6687678950fc8966e352b4bbd3de9d3cb787db9e507c2eb7ccaddcd",
+      "size_bytes": 293
+    },
+    "restart_head": {
+      "path": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_viscoart0p3_cold_a_20260811T101427Z_v12.partial/output/data/Part_Head.ibi4",
+      "sha256": "e97b32ce2a99a1bb1054cb1032f89ec542b172722cde860211d3b437f835c1c0",
+      "size_bytes": 1554,
+      "mode": "0440",
+      "inode": 15742880,
+      "nlink": 1
+    },
+    "restart_part": {
+      "path": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_viscoart0p3_cold_a_20260811T101427Z_v12.partial/output/data/Part_0701.bi4",
+      "sha256": "40a12e5d90578c039f6b75df1794d3420d2f0810e1fdc36b0362b47feca456af",
+      "size_bytes": 401410,
+      "mode": "0440",
+      "inode": 15742879,
+      "nlink": 1
+    }
+  },
+  "limits": {
+    "wall_timeout_seconds": 1200,
+    "kill_after_seconds": 10,
+    "monitor_interval_seconds": 10,
+    "minimum_mem_available_bytes": 4294967296,
+    "maximum_output_bytes": 134217728
+  },
+  "parents": {
+    "build_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_build_final.json",
+      "sha256": "2ff3da17da7658da35587a6b1233f3bb1c039488325345537c00d40ebf30e9da"
+    },
+    "legacy_runner": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_gpu_stage4_runner_v4.py",
+      "sha256": "bd3a21d818e2b104256462ae6b34a3bf4844ab2298adaa5ecedad1482f43c3c3"
+    },
+    "numerical_contract": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_stage4_numerical_contract_v1.json",
+      "sha256": "7b3d7447485d901cd60402f2a7ddd422c587ffa57ba3e5664130d8cd3abd9cd7"
+    },
+    "plan": {
+      "path": "/home/zrj/scout_ws/docs/实物实验注意事项/对比试验/仿真接入液体/20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md",
+      "sha256": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+    },
+    "prior_policy": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_stage4_viscoart0p3_cold_a_20260811T101427Z_v12.json",
+      "sha256": "cf63dbccd33e778e7099f8b475030092b42269ff7b77b321ba70073a9bb17262"
+    },
+    "prior_qc": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_cold_a_20260811T101427Z_v12.qc_v1.json",
+      "sha256": "7bb34f2a280572963b4bb993e5247415f0a6d98e649ef6849f76c1462d59fbec"
+    },
+    "prior_tail_final": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_cold_a_20260811T101427Z_v12.final.json",
+      "sha256": "0176099ea2b261ba79c2fb1d05a757e7dd6e4df7a04b5005994b1dfd04d74d2b"
+    },
+    "qc": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_viscoart0p3_cold_a_extension_qc_v1.py",
+      "sha256": "cfe25984fbe2a24571a150ef16c5243d5c085620b2cbe4251297b59d2b2bb937"
+    },
+    "qc_schema": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_viscoart0p3_cold_a_extension_qc_v1.json",
+      "sha256": "c1c6c6822624a7be3b99d4387e2d3c3d116d7f3011384b770f4b8cebe27d5b44"
+    },
+    "qc_tests": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_u3_viscoart0p3_cold_a_extension_qc_v1.py",
+      "sha256": "1fe2688fb3e72cc7911280340d9df89bbaecfd3e47cf73981d59175aa58de567"
+    },
+    "runner": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_gpu_viscoart0p3_cold_a_extension_runner_v1.py",
+      "sha256": "218505a618450278505819723663ab5a548e536d51eaddb089b9843f86bbaee3"
+    },
+    "schema": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_viscoart0p3_cold_a_extension_policy_v1.json",
+      "sha256": "3ad891e086340576cd687d99cf694c89000ea1240bd87f85d7826622616d0367"
+    },
+    "stage3_postvalidation": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v6_20260810T190500Z.postvalidation_v1.json",
+      "sha256": "9cbf9cdb48b240a73129eadbde36cf55ea3f0b1ad23e229f79aabe287085367e"
+    },
+    "static_audit_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_static_audit_v2.json",
+      "sha256": "794ecf80d8665b65ba7e31d1a8bf32a67f8cca7c7cc24ea33718cb30c27c97fb"
+    },
+    "tests": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_u3_gpu_viscoart0p3_cold_a_extension_runner_v1.py",
+      "sha256": "0f311a92302e21d1852498e7fc38c9445388007470673d4bb1f1ccb0fb123228"
+    }
+  },
+  "purpose": "viscoart0p3_cold_a_settling_extension",
+  "restart": {
+    "enabled": true,
+    "part_index": 701,
+    "part_first": 701,
+    "guest_dir": "/restart"
+  },
+  "run": {
+    "attempt_root": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_viscoart0p3_cold_a_extend_from_0701_20260811T110912Z_v13.partial",
+    "output_root": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_viscoart0p3_cold_a_extend_from_0701_20260811T110912Z_v13.partial/output",
+    "start_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_cold_a_extend_from_0701_20260811T110912Z_v13.start.json",
+    "final_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_cold_a_extend_from_0701_20260811T110912Z_v13.final.json",
+    "failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_cold_a_extend_from_0701_20260811T110912Z_v13.failure.json",
+    "stdout_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_cold_a_extend_from_0701_20260811T110912Z_v13.stdout.log",
+    "stderr_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_cold_a_extend_from_0701_20260811T110912Z_v13.stderr.log",
+    "resource_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_cold_a_extend_from_0701_20260811T110912Z_v13.resources.jsonl"
+  },
+  "run_id": "u3_c1m_gpu_viscoart0p3_cold_a_extend_from_0701_20260811T110912Z_v13",
+  "sandbox": {
+    "apparmor_profile_used": false,
+    "guest_cap_eff": "0000000000000000",
+    "guest_gid": 1000,
+    "guest_groups": [
+      1000
+    ],
+    "guest_uid": 1000,
+    "host_write_bind_count": 1,
+    "model": "ROOT_ONLY_VAR_TMP_TRANSPORT_TO_UID1000_CAP0_BWRAP_NETNS_TO_O_EXCL_LAB_EXPORT",
+    "network": false,
+    "preserve_stage": true,
+    "project_workspace_write_bind_count": 0,
+    "stage_root": "/var/tmp/r8-liquid-u3-stage4-u3-c1m-gpu-viscoart0p3-cold-a-extend-from-0701-20260811t110912z-v13"
+  },
+  "schema_version": "smpcc-r8-liquid-u3-viscoart0p3-cold-a-extension-policy-v1",
+  "single_delta": {
+    "parameter": "SIMULATION_END_TIME_S",
+    "baseline": "35.05",
+    "candidate": "45.05",
+    "other_numerical_parameters_changed": false
+  },
+  "solver": {
+    "argv": [
+      "/runtime/DualSPHysics5.4_linux64",
+      "/case/C1M_zero",
+      "/output",
+      "-gpu:0",
+      "-ompthreads:1",
+      "-stable:1",
+      "-vres:0",
+      "-cellmode:full",
+      "-cfl:0.1",
+      "-partbegin:701:701",
+      "/restart",
+      "-shifting:none",
+      "-viscoart:0.3",
+      "-tmax:45.05",
+      "-tout:0.05",
+      "-sv:binx,info",
+      "-svres:1",
+      "-svtimers:0",
+      "-svdomainvtk:0",
+      "-saveposdouble:1",
+      "-nortimes:1",
+      "-createdirs:1",
+      "-csvsep:0"
+    ],
+    "environment": {
+      "CUDA_VISIBLE_DEVICES": "0",
+      "HOME": "/nonexistent",
+      "LANG": "C",
+      "LC_ALL": "C",
+      "OMP_DYNAMIC": "FALSE",
+      "OMP_NUM_THREADS": "1",
+      "PATH": "/usr/bin",
+      "TMPDIR": "/tmp",
+      "TZ": "UTC0"
+    },
+    "expected_fluid": 6409,
+    "expected_moving": 2669,
+    "expected_particles": 9078
+  },
+  "status": "FROZEN_PENDING_EXACTLY_ONE_GPU_SETTLING_EXTENSION",
+  "tools": {
+    "bwrap": {
+      "path": "/usr/bin/bwrap",
+      "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"
+    },
+    "nvidia_smi": {
+      "path": "/usr/bin/nvidia-smi",
+      "sha256": "22964713c1701fb62b4dd10b26b0dd25d174e100af5bda20c65e0b0fcc32b3be"
+    },
+    "python": {
+      "path": "/usr/bin/python3.12",
+      "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+    },
+    "sudo": {
+      "path": "/usr/bin/sudo",
+      "sha256": "136f2e48b0295b9fc595b8259cf2411ac43f27ddbfe02b956649ddaa2e92b9fa"
+    }
+  }
+}

@@ -1,0 +1,392 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_damped_restart_viscoart0p1_qc_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "captured_at_utc",
+    "inputs",
+    "remediation_delta",
+    "upstream_example_proof",
+    "runtime_viscosity_proof",
+    "inherited_qc_canonical_sha256",
+    "settling_evaluation",
+    "verdict"
+  ],
+  "properties": {
+    "schema_version": {"const": "r8-liquid-u3-damped-restart-viscoart0p1-qc-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_DAMPED_RESTART_VISCOART0P1_QC_V1"},
+    "captured_at_utc": {"type": "string", "minLength": 20, "maxLength": 64},
+    "inputs": {"$ref": "#/$defs/inputs"},
+    "remediation_delta": {"$ref": "#/$defs/remediationDelta"},
+    "upstream_example_proof": {"$ref": "#/$defs/upstreamExample"},
+    "runtime_viscosity_proof": {"$ref": "#/$defs/runtimeViscosity"},
+    "inherited_qc_canonical_sha256": {"$ref": "#/$defs/sha256"},
+    "settling_evaluation": {"$ref": "#/$defs/settling"},
+    "verdict": {"$ref": "#/$defs/verdict"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "inode", "mode", "size_bytes", "nlink", "uid", "gid", "sha256"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+        "inode": {"type": "integer", "minimum": 1},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "size_bytes": {"type": "integer", "minimum": 0, "maximum": 536870912},
+        "nlink": {"const": 1},
+        "uid": {"type": "integer", "minimum": 0},
+        "gid": {"type": "integer", "minimum": 0},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy", "runner", "qc_script", "qc_schema", "qc_tests",
+        "prior_policy", "prior_qc", "init_receipt", "tail_receipt"
+      ],
+      "properties": {
+        "policy": {"$ref": "#/$defs/identity"},
+        "runner": {"$ref": "#/$defs/identity"},
+        "qc_script": {"$ref": "#/$defs/identity"},
+        "qc_schema": {"$ref": "#/$defs/identity"},
+        "qc_tests": {"$ref": "#/$defs/identity"},
+        "prior_policy": {"$ref": "#/$defs/identity"},
+        "prior_qc": {"$ref": "#/$defs/identity"},
+        "init_receipt": {"$ref": "#/$defs/identity"},
+        "tail_receipt": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "deltaChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "acceptance_unchanged",
+        "damped_init_argv_only_changes_viscoart_strength",
+        "damped_init_case_xml_input_unchanged",
+        "damped_init_expected_output_unchanged",
+        "damped_init_limits_unchanged",
+        "damped_init_purpose_unchanged",
+        "damped_init_restart_unchanged",
+        "damped_init_sandbox_boundary_unchanged",
+        "damping_contract_unchanged",
+        "gpu_unchanged",
+        "inputs_unchanged",
+        "result_boundary_unchanged",
+        "solver_invariants_unchanged",
+        "tools_unchanged",
+        "undamped_tail_argv_only_changes_viscoart_strength",
+        "undamped_tail_case_xml_input_unchanged",
+        "undamped_tail_expected_output_unchanged",
+        "undamped_tail_limits_unchanged",
+        "undamped_tail_purpose_unchanged",
+        "undamped_tail_restart_unchanged",
+        "undamped_tail_sandbox_boundary_unchanged"
+      ],
+      "properties": {
+        "acceptance_unchanged": {"const": true},
+        "damped_init_argv_only_changes_viscoart_strength": {"const": true},
+        "damped_init_case_xml_input_unchanged": {"const": true},
+        "damped_init_expected_output_unchanged": {"const": true},
+        "damped_init_limits_unchanged": {"const": true},
+        "damped_init_purpose_unchanged": {"const": true},
+        "damped_init_restart_unchanged": {"const": true},
+        "damped_init_sandbox_boundary_unchanged": {"const": true},
+        "damping_contract_unchanged": {"const": true},
+        "gpu_unchanged": {"const": true},
+        "inputs_unchanged": {"const": true},
+        "result_boundary_unchanged": {"const": true},
+        "solver_invariants_unchanged": {"const": true},
+        "tools_unchanged": {"const": true},
+        "undamped_tail_argv_only_changes_viscoart_strength": {"const": true},
+        "undamped_tail_case_xml_input_unchanged": {"const": true},
+        "undamped_tail_expected_output_unchanged": {"const": true},
+        "undamped_tail_limits_unchanged": {"const": true},
+        "undamped_tail_purpose_unchanged": {"const": true},
+        "undamped_tail_restart_unchanged": {"const": true},
+        "undamped_tail_sandbox_boundary_unchanged": {"const": true}
+      }
+    },
+    "argvHashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prior_canonical_sha256",
+        "current_canonical_sha256",
+        "current_normalized_to_prior_canonical_sha256"
+      ],
+      "properties": {
+        "prior_canonical_sha256": {"$ref": "#/$defs/sha256"},
+        "current_canonical_sha256": {"$ref": "#/$defs/sha256"},
+        "current_normalized_to_prior_canonical_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "remediationDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parameter", "baseline", "candidate", "baseline_argument", "candidate_argument",
+        "applied_to_phases", "other_numerical_parameters_changed", "checks", "argv_canonical_sha256"
+      ],
+      "properties": {
+        "parameter": {"const": "ARTIFICIAL_VISCOSITY_COEFFICIENT"},
+        "baseline": {"const": 0.01},
+        "candidate": {"const": 0.1},
+        "baseline_argument": {"const": "-viscoart:0.01"},
+        "candidate_argument": {"const": "-viscoart:0.1"},
+        "applied_to_phases": {
+          "type": "array",
+          "prefixItems": [{"const": "damped_init"}, {"const": "undamped_tail"}],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "other_numerical_parameters_changed": {"const": false},
+        "checks": {"$ref": "#/$defs/deltaChecks"},
+        "argv_canonical_sha256": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["damped_init", "undamped_tail"],
+          "properties": {
+            "damped_init": {"$ref": "#/$defs/argvHashes"},
+            "undamped_tail": {"$ref": "#/$defs/argvHashes"}
+          }
+        }
+      }
+    },
+    "upstreamExample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "commit", "path", "blob", "content_sha256",
+        "declared_visco_treatment", "declared_visco", "three_dimensional_geometry", "network_used"
+      ],
+      "properties": {
+        "commit": {"const": "ef3721a861fda961f0e2f9ec4cd317b19de99086"},
+        "path": {"const": "examples/main/01_DamBreak/CaseDambreak_Def.xml"},
+        "blob": {"const": "6c96b6898bdd198e7af037e1a4c9cc5f7d68b3c4"},
+        "content_sha256": {"const": "6457dace118a01efd8052e60d335d35242806f84b8d5991db6981c443f978943"},
+        "declared_visco_treatment": {"const": 1},
+        "declared_visco": {"const": 0.1},
+        "three_dimensional_geometry": {"const": true},
+        "network_used": {"const": false}
+      }
+    },
+    "viscosityEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value", "run_out"],
+      "properties": {
+        "name": {"enum": ["Laminar", "Artificial"]},
+        "value": {"type": "number", "minimum": 0, "maximum": 1},
+        "run_out": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "phaseViscosity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["damped_init", "undamped_tail"],
+      "properties": {
+        "damped_init": {"$ref": "#/$defs/viscosityEvidence"},
+        "undamped_tail": {"$ref": "#/$defs/viscosityEvidence"}
+      }
+    },
+    "runtimeViscosity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prior", "candidate", "candidate_init_and_tail_exact"],
+      "properties": {
+        "prior": {"$ref": "#/$defs/phaseViscosity"},
+        "candidate": {"$ref": "#/$defs/phaseViscosity"},
+        "candidate_init_and_tail_exact": {"const": true}
+      }
+    },
+    "metricVector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation",
+        "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s",
+        "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s",
+        "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s",
+        "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"
+      ],
+      "properties": {
+        "density_mean_relative_bias": {"type": "number", "minimum": 0},
+        "density_mean_relative_range": {"type": "number", "minimum": 0},
+        "density_p01_p99_relative_deviation": {"type": "number", "minimum": 0},
+        "position_interframe_max_m_s": {"type": "number", "minimum": 0},
+        "position_interframe_p95_m_s": {"type": "number", "minimum": 0},
+        "position_interframe_rms_m_s": {"type": "number", "minimum": 0},
+        "position_net_max_m_s": {"type": "number", "minimum": 0},
+        "position_net_p95_m_s": {"type": "number", "minimum": 0},
+        "position_net_rms_m_s": {"type": "number", "minimum": 0},
+        "specific_kinetic_energy_j_kg": {"type": "number", "minimum": 0},
+        "speed_max_m_s": {"type": "number", "minimum": 0},
+        "speed_p95_m_s": {"type": "number", "minimum": 0},
+        "speed_rms_m_s": {"type": "number", "minimum": 0},
+        "surface_abs_bias_m": {"type": "number", "minimum": 0},
+        "surface_abs_drift_m_s": {"type": "number", "minimum": 0},
+        "surface_spread_m": {"type": "number", "minimum": 0},
+        "surface_temporal_range_m": {"type": "number", "minimum": 0}
+      }
+    },
+    "metricLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation",
+        "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s",
+        "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s",
+        "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s",
+        "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"
+      ],
+      "properties": {
+        "density_mean_relative_bias": {"const": 0.01},
+        "density_mean_relative_range": {"const": 0.005},
+        "density_p01_p99_relative_deviation": {"const": 0.05},
+        "position_interframe_max_m_s": {"const": 0.005},
+        "position_interframe_p95_m_s": {"const": 0.001},
+        "position_interframe_rms_m_s": {"const": 0.001},
+        "position_net_max_m_s": {"const": 0.005},
+        "position_net_p95_m_s": {"const": 0.001},
+        "position_net_rms_m_s": {"const": 0.001},
+        "specific_kinetic_energy_j_kg": {"const": 5e-7},
+        "speed_max_m_s": {"const": 0.005},
+        "speed_p95_m_s": {"const": 0.001},
+        "speed_rms_m_s": {"const": 0.001},
+        "surface_abs_bias_m": {"const": 0.001},
+        "surface_abs_drift_m_s": {"const": 0.0001},
+        "surface_spread_m": {"const": 0.001},
+        "surface_temporal_range_m": {"const": 0.0005}
+      }
+    },
+    "metricPass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation",
+        "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s",
+        "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s",
+        "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s",
+        "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"
+      ],
+      "properties": {
+        "density_mean_relative_bias": {"type": "boolean"},
+        "density_mean_relative_range": {"type": "boolean"},
+        "density_p01_p99_relative_deviation": {"type": "boolean"},
+        "position_interframe_max_m_s": {"type": "boolean"},
+        "position_interframe_p95_m_s": {"type": "boolean"},
+        "position_interframe_rms_m_s": {"type": "boolean"},
+        "position_net_max_m_s": {"type": "boolean"},
+        "position_net_p95_m_s": {"type": "boolean"},
+        "position_net_rms_m_s": {"type": "boolean"},
+        "specific_kinetic_energy_j_kg": {"type": "boolean"},
+        "speed_max_m_s": {"type": "boolean"},
+        "speed_p95_m_s": {"type": "boolean"},
+        "speed_rms_m_s": {"type": "boolean"},
+        "surface_abs_bias_m": {"type": "boolean"},
+        "surface_abs_drift_m_s": {"type": "boolean"},
+        "surface_spread_m": {"type": "boolean"},
+        "surface_temporal_range_m": {"type": "boolean"}
+      }
+    },
+    "trajectory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "minimum_time_s", "minimum_speed_rms_m_s", "final_time_s",
+        "final_speed_rms_m_s", "final_to_minimum_ratio", "rebound_after_minimum"
+      ],
+      "properties": {
+        "minimum_time_s": {"type": "number", "minimum": 10, "maximum": 21},
+        "minimum_speed_rms_m_s": {"type": "number", "minimum": 0},
+        "final_time_s": {"type": "number", "minimum": 20, "maximum": 21},
+        "final_speed_rms_m_s": {"type": "number", "minimum": 0},
+        "final_to_minimum_ratio": {"type": "number", "minimum": 0},
+        "rebound_after_minimum": {"type": "boolean"}
+      }
+    },
+    "settling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status", "structural_checks_all_pass", "frame_count", "first_time_s", "last_time_s",
+        "metrics", "metric_limits", "metric_absolute_pass", "failed_absolute_metrics", "trajectory"
+      ],
+      "properties": {
+        "status": {"enum": ["PASS_UNDAMPED_TAIL_ALL_17_LIMITS", "FAIL_UNDAMPED_TAIL_ABSOLUTE_SETTLING_LIMITS"]},
+        "structural_checks_all_pass": {"const": true},
+        "frame_count": {"const": 201},
+        "first_time_s": {"type": "number", "minimum": 10.049, "maximum": 10.051},
+        "last_time_s": {"type": "number", "minimum": 20.049, "maximum": 20.051},
+        "metrics": {"$ref": "#/$defs/metricVector"},
+        "metric_limits": {"$ref": "#/$defs/metricLimits"},
+        "metric_absolute_pass": {"$ref": "#/$defs/metricPass"},
+        "failed_absolute_metrics": {
+          "type": "array",
+          "items": {"enum": [
+            "density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation",
+            "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s",
+            "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s",
+            "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s",
+            "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"
+          ]},
+          "uniqueItems": true,
+          "maxItems": 17
+        },
+        "trajectory": {"$ref": "#/$defs/trajectory"}
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status", "u3_remediation_candidate_pass", "settled_state_frozen", "stage4_complete",
+        "phase5_admitted", "exact_blocker", "next", "development_only", "formal",
+        "physical_primary_eligible", "solver_executed_by_this_tool", "gpu_exposed_by_this_tool",
+        "network_used_by_this_tool", "inputs_modified"
+      ],
+      "properties": {
+        "status": {"enum": [
+          "PASS_U3_VISCOART0P1_DAMPED_INITIALIZATION_UNDAMPED_TAIL_SETTLED_CANDIDATE",
+          "FAIL_U3_VISCOART0P1_DAMPED_INITIALIZATION_UNDAMPED_TAIL_NOT_SETTLED"
+        ]},
+        "u3_remediation_candidate_pass": {"type": "boolean"},
+        "settled_state_frozen": {"const": false},
+        "stage4_complete": {"const": false},
+        "phase5_admitted": {"const": false},
+        "exact_blocker": {"type": "string", "minLength": 1, "maxLength": 128},
+        "next": {"enum": ["COLD_B_RESTART_EQUIVALENCE_THEN_PARITY_U4", "STOP_AND_PRESERVE_REMEDIATION_EVIDENCE"]},
+        "development_only": {"const": true},
+        "formal": {"const": false},
+        "physical_primary_eligible": {"const": false},
+        "solver_executed_by_this_tool": {"const": false},
+        "gpu_exposed_by_this_tool": {"const": false},
+        "network_used_by_this_tool": {"const": false},
+        "inputs_modified": {"const": false}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"u3_remediation_candidate_pass": {"const": true}}},
+          "then": {"properties": {
+            "status": {"const": "PASS_U3_VISCOART0P1_DAMPED_INITIALIZATION_UNDAMPED_TAIL_SETTLED_CANDIDATE"},
+            "exact_blocker": {"const": "NONE"},
+            "next": {"const": "COLD_B_RESTART_EQUIVALENCE_THEN_PARITY_U4"}
+          }},
+          "else": {"properties": {
+            "status": {"const": "FAIL_U3_VISCOART0P1_DAMPED_INITIALIZATION_UNDAMPED_TAIL_NOT_SETTLED"},
+            "exact_blocker": {"pattern": "^UNDAMPED_TAIL_FAILS_[1-9][0-9]?_OF_17_ABSOLUTE_SETTLING_LIMITS$"},
+            "next": {"const": "STOP_AND_PRESERVE_REMEDIATION_EVIDENCE"}
+          }}
+        }
+      ]
+    }
+  }
+}

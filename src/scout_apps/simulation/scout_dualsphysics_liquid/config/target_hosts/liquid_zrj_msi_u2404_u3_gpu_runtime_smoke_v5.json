@@ -1,0 +1,61 @@
+{
+  "schema_version": "smpcc-r8-liquid-u3-gpu-runtime-smoke-revision-v5",
+  "document_type": "SMPCC_R8_LIQUID_U3_GPU_RUNTIME_SMOKE_REVISION_V5",
+  "revision_id": "LIQUID_ZRJ_MSI_U2404_U3_GPU_RUNTIME_SMOKE_V5",
+  "status": "V5_NAMESPACE_INVARIANT_STAGED_MODES_FROZEN_PENDING_ONE_SHOT",
+  "parents": {
+    "v4_revision": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_gpu_runtime_smoke_v4.json", "sha256": "c0e2335c318ef1f7dd8c5ef8bf82a04647e540fd5cabe7fa79d294ce4dbf7cc6"},
+    "v4_schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_gpu_runtime_smoke_revision_v4.json", "sha256": "96a306b94979091d6a0e94bb38155d596862c4f09287d0a3e84a0a5f03fa8170"},
+    "v4_runner": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_gpu_runtime_smoke_v4.py", "sha256": "9866dc5a75159e4f3bba33b7edc93967dba6e8224c46431f900ecbe184db40f0"},
+    "v4_tests": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_u3_gpu_runtime_smoke_v4.py", "sha256": "5e401d82a270cc6050dc776d92620798e9c5a66c250e3edd72a649b260a729c8"},
+    "v4_probe_failure": {"path": "/home/zrj/scout_liquid_lab/audits/u3_gpu_smoke_v4_stage_probe_20260810T185500Z.failure.json", "sha256": "9d2f12e3e58911b3b5b03baee969e5c30819a835386080a16925129936f2b33a"}
+  },
+  "diagnosis": {
+    "failure_class": "USER_NAMESPACE_GUEST_UID_IS_NOT_HOST_UID_DAC_OWNER",
+    "observed_error": "PermissionError: [Errno 13] Permission denied: '/runtime/DualSPHysics5.4_linux64'",
+    "guest_uid": 1000,
+    "host_staged_uid": 1000,
+    "candidate_started": false,
+    "candidate_restored": true
+  },
+  "semantic_delta": {
+    "operation": "NAMESPACE_INVARIANT_READ_EXECUTE_BITS_INSIDE_ROOT_ONLY_RUN_STAGE",
+    "stage_root_uid": 0,
+    "stage_root_mode": "0700",
+    "staged_file_uid": 0,
+    "staged_file_gid": 0,
+    "candidate_transient_mode": "0555",
+    "data_transient_mode": "0444",
+    "guest_bind_read_only": true,
+    "new_devices": 0,
+    "new_network": false,
+    "new_project_write_targets": 0,
+    "solver_argv_changed": false,
+    "home_permissions_changed": false
+  },
+  "transport": {
+    "stage_root": "/run/r8-liquid-u3-c1m-gpu-smoke-v5-20260810t190000z",
+    "probe_stage_root": "/run/r8-liquid-u3-gpu-smoke-v5-stage-probe-20260810t190000z",
+    "probe_receipt": "/home/zrj/scout_liquid_lab/audits/u3_gpu_smoke_v5_stage_probe_20260810T190000Z.json",
+    "probe_output_root": "/home/zrj/scout_liquid_lab/probes/u3_gpu_smoke_v5_stage_probe_20260810T190000Z.partial/output",
+    "input_copy": "O_NOFOLLOW_TO_O_EXCL_ROOT_OWNED_NAMESPACE_INVARIANT_MODES_AND_SHA256_VERIFY",
+    "guest_write_target": "/run_stage/output_only",
+    "export": "ROOT_PARENT_O_NOFOLLOW_READ_TO_USER_OWNED_O_EXCL_LAB_OUTPUT",
+    "candidate_stage_final_mode": "0400",
+    "preserve_stage": true
+  },
+  "run": {
+    "run_id": "u3_c1m_gpu_smoke_v5_20260810T190000Z",
+    "attempt_root": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_v5_20260810T190000Z.partial",
+    "output_root": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_v5_20260810T190000Z.partial/output",
+    "start_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v5_20260810T190000Z.start.json",
+    "final_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v5_20260810T190000Z.final.json",
+    "failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v5_20260810T190000Z.failure.json",
+    "stdout_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v5_20260810T190000Z.stdout.log",
+    "stderr_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v5_20260810T190000Z.stderr.log",
+    "resource_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v5_20260810T190000Z.resources.jsonl",
+    "qc_report": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v5_20260810T190000Z.qc.json",
+    "gpu_lock": "/home/zrj/scout_liquid_lab/locks/gpu0.lock",
+    "attempts_per_identity": 1
+  }
+}

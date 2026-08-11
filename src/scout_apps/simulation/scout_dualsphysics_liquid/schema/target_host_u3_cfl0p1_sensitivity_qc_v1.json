@@ -1,0 +1,473 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_cfl0p1_sensitivity_qc_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "captured_at_utc", "inputs", "contract", "baseline", "candidate", "pair_checks", "paired_state_comparison", "metric_comparison", "verdict"],
+  "properties": {
+    "schema_version": {"const": "r8-liquid-u3-cfl0p1-sensitivity-qc-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_CFL0P1_SENSITIVITY_QC_V1"},
+    "captured_at_utc": {"type": "string", "format": "date-time"},
+    "inputs": {"$ref": "#/$defs/inputs"},
+    "contract": {"$ref": "#/$defs/contract"},
+    "baseline": {"$ref": "#/$defs/run"},
+    "candidate": {"$ref": "#/$defs/run"},
+    "pair_checks": {"$ref": "#/$defs/pairChecks"},
+    "paired_state_comparison": {"$ref": "#/$defs/pairedState"},
+    "metric_comparison": {"$ref": "#/$defs/comparison"},
+    "verdict": {"$ref": "#/$defs/verdict"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "nonnegativeNumber": {"type": "number", "minimum": 0},
+    "numberOrNull": {"type": ["number", "null"]},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size_bytes", "sha256", "mode", "nlink"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "nlink": {"const": 1}
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qc_script", "qc_schema", "qc_tests", "plan", "contract", "case_bi4", "case_xml", "prior_checkpoint", "baseline_qc", "baseline_policy", "candidate_policy", "baseline_final", "candidate_final"],
+      "properties": {
+        "qc_script": {"$ref": "#/$defs/identity"},
+        "qc_schema": {"$ref": "#/$defs/identity"},
+        "qc_tests": {"$ref": "#/$defs/identity"},
+        "plan": {"$ref": "#/$defs/identity"},
+        "contract": {"$ref": "#/$defs/identity"},
+        "case_bi4": {"$ref": "#/$defs/identity"},
+        "case_xml": {"$ref": "#/$defs/identity"},
+        "prior_checkpoint": {"$ref": "#/$defs/identity"},
+        "baseline_qc": {"$ref": "#/$defs/identity"},
+        "baseline_policy": {"$ref": "#/$defs/identity"},
+        "candidate_policy": {"$ref": "#/$defs/identity"},
+        "baseline_final": {"$ref": "#/$defs/identity"},
+        "candidate_final": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "metricValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation", "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s", "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s", "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s", "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"],
+      "properties": {
+        "density_mean_relative_bias": {"$ref": "#/$defs/nonnegativeNumber"},
+        "density_mean_relative_range": {"$ref": "#/$defs/nonnegativeNumber"},
+        "density_p01_p99_relative_deviation": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_interframe_max_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_interframe_p95_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_interframe_rms_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_net_max_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_net_p95_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_net_rms_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "specific_kinetic_energy_j_kg": {"$ref": "#/$defs/nonnegativeNumber"},
+        "speed_max_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "speed_p95_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "speed_rms_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_abs_bias_m": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_abs_drift_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_spread_m": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_temporal_range_m": {"$ref": "#/$defs/nonnegativeNumber"}
+      }
+    },
+    "metricPass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation", "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s", "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s", "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s", "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"],
+      "properties": {
+        "density_mean_relative_bias": {"type": "boolean"},
+        "density_mean_relative_range": {"type": "boolean"},
+        "density_p01_p99_relative_deviation": {"type": "boolean"},
+        "position_interframe_max_m_s": {"type": "boolean"},
+        "position_interframe_p95_m_s": {"type": "boolean"},
+        "position_interframe_rms_m_s": {"type": "boolean"},
+        "position_net_max_m_s": {"type": "boolean"},
+        "position_net_p95_m_s": {"type": "boolean"},
+        "position_net_rms_m_s": {"type": "boolean"},
+        "specific_kinetic_energy_j_kg": {"type": "boolean"},
+        "speed_max_m_s": {"type": "boolean"},
+        "speed_p95_m_s": {"type": "boolean"},
+        "speed_rms_m_s": {"type": "boolean"},
+        "surface_abs_bias_m": {"type": "boolean"},
+        "surface_abs_drift_m_s": {"type": "boolean"},
+        "surface_spread_m": {"type": "boolean"},
+        "surface_temporal_range_m": {"type": "boolean"}
+      }
+    },
+    "metricName": {"enum": ["density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation", "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s", "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s", "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s", "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"]},
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all_original_absolute_limits_required", "no_metric_material_regression_required", "maximum_regression_fraction_of_limit", "minimum_primary_metrics_meaningfully_improved", "meaningful_improvement_fraction_of_limit", "maximum_primary_normalized_score_ratio", "same_gpu_backend_required", "same_initial_state_arrays_required"],
+      "properties": {
+        "all_original_absolute_limits_required": {"const": true},
+        "no_metric_material_regression_required": {"const": true},
+        "maximum_regression_fraction_of_limit": {"const": 0.05},
+        "minimum_primary_metrics_meaningfully_improved": {"const": 2},
+        "meaningful_improvement_fraction_of_limit": {"const": 0.02},
+        "maximum_primary_normalized_score_ratio": {"const": 0.95},
+        "same_gpu_backend_required": {"const": true},
+        "same_initial_state_arrays_required": {"const": true}
+      }
+    },
+    "policyChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["same_solver_argv_after_removing_exact_cfl_argument", "same_solver_non_argv_contract", "same_input_contract", "same_restart_contract", "same_gpu_contract", "same_expected_output_contract", "candidate_declares_exact_cfl_single_delta"],
+      "properties": {
+        "same_solver_argv_after_removing_exact_cfl_argument": {"const": true},
+        "same_solver_non_argv_contract": {"const": true},
+        "same_input_contract": {"const": true},
+        "same_restart_contract": {"const": true},
+        "same_gpu_contract": {"const": true},
+        "same_expected_output_contract": {"const": true},
+        "candidate_declares_exact_cfl_single_delta": {"const": true}
+      }
+    },
+    "policyProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inserted_argument", "baseline_solver_argv_canonical_sha256", "candidate_solver_argv_canonical_sha256", "candidate_without_cfl_canonical_sha256", "checks"],
+      "properties": {
+        "inserted_argument": {"const": "-cfl:0.1"},
+        "baseline_solver_argv_canonical_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_solver_argv_canonical_sha256": {"$ref": "#/$defs/sha256"},
+        "candidate_without_cfl_canonical_sha256": {"$ref": "#/$defs/sha256"},
+        "checks": {"$ref": "#/$defs/policyChecks"}
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frozen_before_qc", "threshold_overrides_allowed", "window_part_indices", "window_time_s", "tail_window_s", "baseline_cfl", "candidate_cfl", "single_numerical_delta", "metric_limits", "primary_metrics", "acceptance", "policy_delta_proof"],
+      "properties": {
+        "frozen_before_qc": {"const": true},
+        "threshold_overrides_allowed": {"const": false},
+        "window_part_indices": {"type": "array", "prefixItems": [{"const": 201}, {"const": 401}], "items": false, "minItems": 2, "maxItems": 2},
+        "window_time_s": {"type": "array", "prefixItems": [{"const": 10.05}, {"const": 20.05}], "items": false, "minItems": 2, "maxItems": 2},
+        "tail_window_s": {"const": 1.0},
+        "baseline_cfl": {"const": 0.2},
+        "candidate_cfl": {"const": 0.1},
+        "single_numerical_delta": {"const": "CFL_0P2_TO_0P1"},
+        "metric_limits": {"$ref": "#/$defs/metricValues"},
+        "primary_metrics": {"type": "array", "prefixItems": [{"const": "speed_rms_m_s"}, {"const": "speed_p95_m_s"}, {"const": "speed_max_m_s"}, {"const": "specific_kinetic_energy_j_kg"}], "items": false, "minItems": 4, "maxItems": 4},
+        "acceptance": {"$ref": "#/$defs/acceptance"},
+        "policy_delta_proof": {"$ref": "#/$defs/policyProof"}
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_count", "total_bytes", "canonical_sha256"],
+      "properties": {
+        "file_count": {"const": 210},
+        "total_bytes": {"type": "integer", "minimum": 1, "maximum": 134217728},
+        "canonical_sha256": {"enum": ["d6b70b50b348b8a234b6022c2972bd7bfc6e3892fc7a9c6c8eb9bcb5b808beb5", "4606d4ab2968fc2608751e7aaa1cd64dc7eb387c52533e3531b940712ee7c918"]}
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "part_file_sha256", "particle_count", "canonical_by_id_array_sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "part_file_sha256": {"$ref": "#/$defs/sha256"},
+        "particle_count": {"const": 9078},
+        "canonical_by_id_array_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "ddt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "tramp_s", "tmax_s", "value_max"],
+      "properties": {
+        "value": {"const": 0.1},
+        "tramp_s": {"type": "null"},
+        "tmax_s": {"type": "null"},
+        "value_max": {"type": "null"}
+      }
+    },
+    "backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device_index", "device_name", "gpu_uuid", "run_mode", "run_csv_hardware", "run_csv_run_mode"],
+      "properties": {
+        "device_index": {"const": 0},
+        "device_name": {"const": "NVIDIA GeForce RTX 5080 Laptop GPU"},
+        "gpu_uuid": {"const": "GPU-d29cd22d-8b25-8f4e-9dcf-f2fc4bb113fb"},
+        "run_mode": {"const": "Stable - Pos-Cell - Single-GPU"},
+        "run_csv_hardware": {"const": "Gpu_0=\"NVIDIA GeForce RTX 5080 Laptop GPU\""},
+        "run_csv_run_mode": {"const": "CellsFull - Stable - Pos-Cell - Single-GPU"}
+      }
+    },
+    "structural": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exact_inventory", "exact_part_range", "strictly_increasing_times", "monotonic_steps", "start_time_matches", "end_time_matches", "all_particle_arrays_finite", "all_ids_complete_unique_in_range", "particle_classes_constant", "root_invariants_match_case", "moving_boundary_zero_motion", "zero_nout", "finite_inside_domain_density", "motion_reference_zero_aligned", "runparts_matches", "run_csv_matches", "run_out_clean_complete"],
+      "properties": {
+        "exact_inventory": {"const": true},
+        "exact_part_range": {"const": true},
+        "strictly_increasing_times": {"const": true},
+        "monotonic_steps": {"const": true},
+        "start_time_matches": {"const": true},
+        "end_time_matches": {"const": true},
+        "all_particle_arrays_finite": {"const": true},
+        "all_ids_complete_unique_in_range": {"const": true},
+        "particle_classes_constant": {"const": true},
+        "root_invariants_match_case": {"const": true},
+        "moving_boundary_zero_motion": {"const": true},
+        "zero_nout": {"const": true},
+        "finite_inside_domain_density": {"const": true},
+        "motion_reference_zero_aligned": {"const": true},
+        "runparts_matches": {"const": true},
+        "run_csv_matches": {"const": true},
+        "run_out_clean_complete": {"const": true}
+      }
+    },
+    "tail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part_count", "start_time_s", "end_time_s", "coverage_s", "surface_valid_part_count"],
+      "properties": {
+        "part_count": {"type": "integer", "minimum": 20, "maximum": 22},
+        "start_time_s": {"type": "number", "minimum": 19, "maximum": 20},
+        "end_time_s": {"type": "number", "minimum": 20, "maximum": 21},
+        "coverage_s": {"type": "number", "minimum": 0.95, "maximum": 1.05},
+        "surface_valid_part_count": {"type": "integer", "minimum": 20, "maximum": 22}
+      }
+    },
+    "trajectoryPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part", "time_s", "speed_rms_m_s"],
+      "properties": {
+        "part": {"type": "integer", "minimum": 201, "maximum": 401},
+        "time_s": {"type": "number", "minimum": 10, "maximum": 21},
+        "speed_rms_m_s": {"$ref": "#/$defs/nonnegativeNumber"}
+      }
+    },
+    "trajectory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["initial", "minimum", "final", "final_to_minimum_ratio", "rebound_after_minimum"],
+      "properties": {
+        "initial": {"$ref": "#/$defs/trajectoryPoint"},
+        "minimum": {"$ref": "#/$defs/trajectoryPoint"},
+        "final": {"$ref": "#/$defs/trajectoryPoint"},
+        "final_to_minimum_ratio": {"type": "number", "minimum": 0},
+        "rebound_after_minimum": {"type": "boolean"}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "inventory", "frame_count", "first_time_s", "last_time_s", "run_out_sha256", "run_csv_sha256", "actual_cfl", "shifting", "ddt_parameters", "backend", "run_configuration", "dp_m", "restart_input_state", "restart_output_state", "restart_state_arrays_match", "structural_checks", "tail", "metrics", "metric_absolute_pass", "trajectory"],
+      "properties": {
+        "root": {"$ref": "#/$defs/absolutePath"},
+        "inventory": {"$ref": "#/$defs/inventory"},
+        "frame_count": {"const": 201},
+        "first_time_s": {"type": "number", "minimum": 10, "maximum": 11},
+        "last_time_s": {"type": "number", "minimum": 20, "maximum": 21},
+        "run_out_sha256": {"enum": ["e35bb1305bd98460d77660a5502805ed425a02d87303f5ccca7a67efad3fde04", "01821b42e210ab7eac24aebd7909bf2cacf70fb82f183b5f541320d501821a45"]},
+        "run_csv_sha256": {"enum": ["a802809c49bc1aa8351d3a0055f9f1a51385fdf07cb465178673e57630daa14d", "9dcf433db2dcc90675d37922d25f3ccd24aa29cd8fa56af26654f4ae8cfe7c2b"]},
+        "actual_cfl": {"enum": [0.2, 0.1]},
+        "shifting": {"const": "None"},
+        "ddt_parameters": {"$ref": "#/$defs/ddt"},
+        "backend": {"$ref": "#/$defs/backend"},
+        "run_configuration": {"type": "string", "minLength": 1, "maxLength": 1024},
+        "dp_m": {"const": 0.002},
+        "restart_input_state": {"$ref": "#/$defs/state"},
+        "restart_output_state": {"$ref": "#/$defs/state"},
+        "restart_state_arrays_match": {"const": true},
+        "structural_checks": {"$ref": "#/$defs/structural"},
+        "tail": {"$ref": "#/$defs/tail"},
+        "metrics": {"$ref": "#/$defs/metricValues"},
+        "metric_absolute_pass": {"$ref": "#/$defs/metricPass"},
+        "trajectory": {"$ref": "#/$defs/trajectory"}
+      }
+    },
+    "pairChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["both_final_receipts_pass_raw_output", "both_exact_210_file_inventories_match_receipts", "same_candidate_binary_identity", "same_gpu_backend", "same_initial_state_arrays_by_particle_id", "same_window_and_output_schedule", "same_shifting_ddt_dp_and_configuration", "actual_cfl_is_exact_single_delta", "policy_contract_is_exact_single_delta", "both_structural_checks_pass", "candidate_source_not_executed_and_network_not_used"],
+      "properties": {
+        "both_final_receipts_pass_raw_output": {"const": true},
+        "both_exact_210_file_inventories_match_receipts": {"const": true},
+        "same_candidate_binary_identity": {"const": true},
+        "same_gpu_backend": {"const": true},
+        "same_initial_state_arrays_by_particle_id": {"const": true},
+        "same_window_and_output_schedule": {"const": true},
+        "same_shifting_ddt_dp_and_configuration": {"const": true},
+        "actual_cfl_is_exact_single_delta": {"const": true},
+        "policy_contract_is_exact_single_delta": {"const": true},
+        "both_structural_checks_pass": {"const": true},
+        "candidate_source_not_executed_and_network_not_used": {"const": true}
+      }
+    },
+    "distanceStats": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rms", "p95", "max"],
+      "properties": {
+        "rms": {"$ref": "#/$defs/nonnegativeNumber"},
+        "p95": {"$ref": "#/$defs/nonnegativeNumber"},
+        "max": {"$ref": "#/$defs/nonnegativeNumber"}
+      }
+    },
+    "pairedFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part", "position_m", "velocity_m_s", "density_kg_m3"],
+      "properties": {
+        "part": {"type": "integer", "minimum": 201, "maximum": 401},
+        "position_m": {"$ref": "#/$defs/distanceStats"},
+        "velocity_m_s": {"$ref": "#/$defs/distanceStats"},
+        "density_kg_m3": {"$ref": "#/$defs/distanceStats"}
+      }
+    },
+    "extremePoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part", "value"],
+      "properties": {
+        "part": {"type": "integer", "minimum": 201, "maximum": 401},
+        "value": {"$ref": "#/$defs/nonnegativeNumber"}
+      }
+    },
+    "quantityExtremes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position_m", "velocity_m_s", "density_kg_m3"],
+      "properties": {
+        "position_m": {"$ref": "#/$defs/extremePoint"},
+        "velocity_m_s": {"$ref": "#/$defs/extremePoint"},
+        "density_kg_m3": {"$ref": "#/$defs/extremePoint"}
+      }
+    },
+    "trajectoryMaximum": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rms", "p95", "max"],
+      "properties": {
+        "rms": {"$ref": "#/$defs/quantityExtremes"},
+        "p95": {"$ref": "#/$defs/quantityExtremes"},
+        "max": {"$ref": "#/$defs/quantityExtremes"}
+      }
+    },
+    "pairedState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["particle_id_alignment", "fluid_particle_count", "frames_compared", "initial_arrays_exact", "per_frame_summary_canonical_sha256", "initial", "final", "trajectory_maximum"],
+      "properties": {
+        "particle_id_alignment": {"const": true},
+        "fluid_particle_count": {"const": 6409},
+        "frames_compared": {"const": 201},
+        "initial_arrays_exact": {"const": true},
+        "per_frame_summary_canonical_sha256": {"$ref": "#/$defs/sha256"},
+        "initial": {"$ref": "#/$defs/pairedFrame"},
+        "final": {"$ref": "#/$defs/pairedFrame"},
+        "trajectory_maximum": {"$ref": "#/$defs/trajectoryMaximum"}
+      }
+    },
+    "metricRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline", "candidate", "delta", "candidate_to_baseline_ratio", "percent_change", "absolute_limit", "candidate_absolute_pass", "no_material_regression", "meaningful_improvement"],
+      "properties": {
+        "baseline": {"$ref": "#/$defs/nonnegativeNumber"},
+        "candidate": {"$ref": "#/$defs/nonnegativeNumber"},
+        "delta": {"type": "number"},
+        "candidate_to_baseline_ratio": {"$ref": "#/$defs/numberOrNull"},
+        "percent_change": {"$ref": "#/$defs/numberOrNull"},
+        "absolute_limit": {"type": "number", "exclusiveMinimum": 0},
+        "candidate_absolute_pass": {"type": "boolean"},
+        "no_material_regression": {"type": "boolean"},
+        "meaningful_improvement": {"type": "boolean"}
+      }
+    },
+    "metricRecords": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation", "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s", "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s", "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s", "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"],
+      "properties": {
+        "density_mean_relative_bias": {"$ref": "#/$defs/metricRecord"},
+        "density_mean_relative_range": {"$ref": "#/$defs/metricRecord"},
+        "density_p01_p99_relative_deviation": {"$ref": "#/$defs/metricRecord"},
+        "position_interframe_max_m_s": {"$ref": "#/$defs/metricRecord"},
+        "position_interframe_p95_m_s": {"$ref": "#/$defs/metricRecord"},
+        "position_interframe_rms_m_s": {"$ref": "#/$defs/metricRecord"},
+        "position_net_max_m_s": {"$ref": "#/$defs/metricRecord"},
+        "position_net_p95_m_s": {"$ref": "#/$defs/metricRecord"},
+        "position_net_rms_m_s": {"$ref": "#/$defs/metricRecord"},
+        "specific_kinetic_energy_j_kg": {"$ref": "#/$defs/metricRecord"},
+        "speed_max_m_s": {"$ref": "#/$defs/metricRecord"},
+        "speed_p95_m_s": {"$ref": "#/$defs/metricRecord"},
+        "speed_rms_m_s": {"$ref": "#/$defs/metricRecord"},
+        "surface_abs_bias_m": {"$ref": "#/$defs/metricRecord"},
+        "surface_abs_drift_m_s": {"$ref": "#/$defs/metricRecord"},
+        "surface_spread_m": {"$ref": "#/$defs/metricRecord"},
+        "surface_temporal_range_m": {"$ref": "#/$defs/metricRecord"}
+      }
+    },
+    "comparisonChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all_candidate_absolute_limits_pass", "no_metric_materially_regresses", "minimum_primary_metrics_meaningfully_improve", "primary_normalized_score_improves_by_at_least_5_percent"],
+      "properties": {
+        "all_candidate_absolute_limits_pass": {"type": "boolean"},
+        "no_metric_materially_regresses": {"type": "boolean"},
+        "minimum_primary_metrics_meaningfully_improve": {"type": "boolean"},
+        "primary_normalized_score_improves_by_at_least_5_percent": {"type": "boolean"}
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metrics", "baseline_primary_normalized_score", "candidate_primary_normalized_score", "candidate_to_baseline_primary_score_ratio", "primary_metrics_meaningfully_improved", "checks", "pass"],
+      "properties": {
+        "metrics": {"$ref": "#/$defs/metricRecords"},
+        "baseline_primary_normalized_score": {"$ref": "#/$defs/nonnegativeNumber"},
+        "candidate_primary_normalized_score": {"$ref": "#/$defs/nonnegativeNumber"},
+        "candidate_to_baseline_primary_score_ratio": {"$ref": "#/$defs/numberOrNull"},
+        "primary_metrics_meaningfully_improved": {"type": "integer", "minimum": 0, "maximum": 4},
+        "checks": {"$ref": "#/$defs/comparisonChecks"},
+        "pass": {"type": "boolean"}
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "sensitivity_candidate_selected", "candidate_settled_state", "candidate_failed_absolute_metrics", "materially_regressed_metrics", "baseline_numerical_rebound_detected", "candidate_numerical_rebound_detected", "stage4_adjudication_status", "phase4_execution_and_adjudication_complete", "phase5_admitted", "exact_blocker", "next", "development_only", "formal", "physical_primary_eligible", "solver_executed_by_this_tool", "candidate_executed_by_this_tool", "gpu_exposed_by_this_tool", "network_used_by_this_tool", "inputs_modified"],
+      "properties": {
+        "status": {"enum": ["PASS_U3_CFL0P1_SENSITIVITY_NUMERICAL_CANDIDATE", "FAIL_U3_CFL0P1_SENSITIVITY_NUMERICAL_STABILITY"]},
+        "sensitivity_candidate_selected": {"type": "boolean"},
+        "candidate_settled_state": {"type": "boolean"},
+        "candidate_failed_absolute_metrics": {"type": "array", "items": {"$ref": "#/$defs/metricName"}, "uniqueItems": true, "maxItems": 17},
+        "materially_regressed_metrics": {"type": "array", "items": {"$ref": "#/$defs/metricName"}, "uniqueItems": true, "maxItems": 17},
+        "baseline_numerical_rebound_detected": {"type": "boolean"},
+        "candidate_numerical_rebound_detected": {"type": "boolean"},
+        "stage4_adjudication_status": {"enum": ["PASS_PHASE4_LIQUID_STANDALONE_NUMERICAL_PREREQUISITE", "FAIL_PHASE4_LIQUID_STANDALONE_NUMERICAL_STABILITY"]},
+        "phase4_execution_and_adjudication_complete": {"const": true},
+        "phase5_admitted": {"type": "boolean"},
+        "exact_blocker": {"type": "string", "minLength": 1, "maxLength": 256},
+        "next": {"enum": ["S4C_REPEATABILITY", "STOP_BEFORE_PHASE5_REQUIRES_NUMERICAL_REMEDIATION_AND_NEW_AUTHORIZATION"]},
+        "development_only": {"const": true},
+        "formal": {"const": false},
+        "physical_primary_eligible": {"const": false},
+        "solver_executed_by_this_tool": {"const": false},
+        "candidate_executed_by_this_tool": {"const": false},
+        "gpu_exposed_by_this_tool": {"const": false},
+        "network_used_by_this_tool": {"const": false},
+        "inputs_modified": {"const": false}
+      }
+    }
+  }
+}

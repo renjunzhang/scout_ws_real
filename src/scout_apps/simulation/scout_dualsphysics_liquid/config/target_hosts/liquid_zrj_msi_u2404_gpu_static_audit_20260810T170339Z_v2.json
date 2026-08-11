@@ -1,0 +1,398 @@
+{
+  "acceptance": {
+    "dynamic_libcudart_forbidden": true,
+    "elf_class": "ELF64",
+    "elf_data": "2's complement, little endian",
+    "elf_type": "DYN (Position-Independent Executable file)",
+    "exact_gencode": "-gencode=arch=compute_120,code=[sm_120,compute_120]",
+    "flags_1": [
+      "NOW",
+      "PIE"
+    ],
+    "function_symbol_required": true,
+    "gnu_stack_executable": false,
+    "interpreter": "/lib64/ld-linux-x86-64.so.2",
+    "loader_dependency_revision": {
+      "added_soname": "ld-linux-x86-64.so.2",
+      "reason": "evidence_driven_ubuntu_24_04_cudart_static_loader_dependency",
+      "silent_allowlist_change": false
+    },
+    "machine": "Advanced Micro Devices X86-64",
+    "native_arches": [
+      "sm_120"
+    ],
+    "nonzero_executable_text_required": true,
+    "nvcc_command_count": 11,
+    "parent_needed_allowlist": [
+      "libgomp.so.1",
+      "libstdc++.so.6",
+      "libm.so.6",
+      "libgcc_s.so.1",
+      "libc.so.6"
+    ],
+    "ptx_arches": [
+      "sm_120"
+    ],
+    "revised_needed_allowlist": [
+      "libgomp.so.1",
+      "libstdc++.so.6",
+      "libm.so.6",
+      "libgcc_s.so.1",
+      "libc.so.6",
+      "ld-linux-x86-64.so.2"
+    ],
+    "rpath": null,
+    "runpath": null
+  },
+  "build_id": "u3_source_gpu_build_sm120_20260810T170339Z_a",
+  "campaign_id": "u3_source_gpu_build_sm120_20260810T170339Z",
+  "candidate": {
+    "mode_octal": "0400",
+    "nlink": 1,
+    "path": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T170339Z_a.partial/output/artifacts/DualSPHysics5.4_linux64",
+    "sha256": "cace408f99c3ca75b53bfb542565e92ec134631a41f1d233aace346e6455b39f",
+    "size_bytes": 105654136,
+    "st_ino": 15733148
+  },
+  "candidate_commands": [
+    {
+      "argv": [
+        "/usr/bin/file",
+        "/audit/input/DualSPHysics5.4_linux64"
+      ],
+      "id": "file",
+      "resource": "metadata"
+    },
+    {
+      "argv": [
+        "/usr/bin/readelf",
+        "-hW",
+        "/audit/input/DualSPHysics5.4_linux64"
+      ],
+      "id": "readelf_header",
+      "resource": "metadata"
+    },
+    {
+      "argv": [
+        "/usr/bin/readelf",
+        "-lW",
+        "/audit/input/DualSPHysics5.4_linux64"
+      ],
+      "id": "readelf_program_headers",
+      "resource": "metadata"
+    },
+    {
+      "argv": [
+        "/usr/bin/readelf",
+        "-dW",
+        "/audit/input/DualSPHysics5.4_linux64"
+      ],
+      "id": "readelf_dynamic",
+      "resource": "metadata"
+    },
+    {
+      "argv": [
+        "/usr/bin/readelf",
+        "-nW",
+        "/audit/input/DualSPHysics5.4_linux64"
+      ],
+      "id": "readelf_notes",
+      "resource": "metadata"
+    },
+    {
+      "argv": [
+        "/usr/local/cuda-12.8/bin/cuobjdump",
+        "--list-elf",
+        "/audit/input/DualSPHysics5.4_linux64"
+      ],
+      "id": "cuobjdump_list_elf",
+      "resource": "cuobjdump_list"
+    },
+    {
+      "argv": [
+        "/usr/bin/python3",
+        "-I",
+        "-S",
+        "-c",
+        "import hashlib\nimport json\nimport os\nimport re\nimport stat\nimport subprocess\nimport sys\n\nROOT = \"/audit/tmp\"\nCANDIDATE = \"/audit/input/DualSPHysics5.4_linux64\"\nEXPECTED = [f\"DualSPHysics5.{index}.sm_120.cubin\" for index in range(1, 12)]\n\nextracted = subprocess.run(\n    [\"/usr/local/cuda-12.8/bin/cuobjdump\", \"--extract-elf\", \"all\", CANDIDATE],\n    cwd=ROOT,\n    stdout=subprocess.PIPE,\n    stderr=subprocess.PIPE,\n    timeout=240,\n    check=False,\n)\nif extracted.returncode != 0:\n    print(json.dumps({\"status\": \"FAIL_EXTRACT\", \"returncode\": extracted.returncode,\n                      \"stdout_sha256\": hashlib.sha256(extracted.stdout).hexdigest(),\n                      \"stderr_sha256\": hashlib.sha256(extracted.stderr).hexdigest()}))\n    raise SystemExit(20)\nactual = sorted(os.listdir(ROOT))\nif actual != sorted(EXPECTED):\n    print(json.dumps({\"status\": \"FAIL_FILE_SET\", \"actual\": actual}))\n    raise SystemExit(21)\n\nrecords = []\ntotal_text = 0\nfor name in EXPECTED:\n    path = os.path.join(ROOT, name)\n    info = os.lstat(path)\n    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size <= 0:\n        print(json.dumps({\"status\": \"FAIL_FILE_TYPE\", \"name\": name}))\n        raise SystemExit(22)\n    digest = hashlib.sha256()\n    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)\n    try:\n        while True:\n            block = os.read(descriptor, 1024 * 1024)\n            if not block:\n                break\n            digest.update(block)\n    finally:\n        os.close(descriptor)\n    parsed = subprocess.run(\n        [\"/usr/bin/readelf\", \"-hW\", \"-SW\", path],\n        cwd=ROOT,\n        stdout=subprocess.PIPE,\n        stderr=subprocess.PIPE,\n        timeout=30,\n        check=False,\n    )\n    if parsed.returncode != 0 or len(parsed.stdout) > 8 * 1024 * 1024 or len(parsed.stderr) > 8 * 1024 * 1024:\n        print(json.dumps({\"status\": \"FAIL_READELF\", \"name\": name,\n                          \"returncode\": parsed.returncode,\n                          \"stdout_bytes\": len(parsed.stdout),\n                          \"stderr_bytes\": len(parsed.stderr)}))\n        raise SystemExit(23)\n    text = parsed.stdout.decode(\"utf-8\", \"strict\")\n    type_match = re.search(r\"^\\s*Type:\\s*(.+?)\\s*$\", text, re.MULTILINE)\n    machine_match = re.search(r\"^\\s*Machine:\\s*(.+?)\\s*$\", text, re.MULTILINE)\n    if type_match is None or machine_match is None:\n        print(json.dumps({\"status\": \"FAIL_HEADER\", \"name\": name}))\n        raise SystemExit(24)\n    nonzero = 0\n    for line in text.splitlines():\n        match = re.match(\n            r\"^\\s*\\[\\s*\\d+\\]\\s+(\\.text\\.\\S+)\\s+PROGBITS\\s+\\S+\\s+\\S+\\s+([0-9a-fA-F]+)\\s+\\S+\\s+([A-Z]+)\",\n            line,\n        )\n        if match and int(match.group(2), 16) > 0 and \"X\" in match.group(3):\n            nonzero += 1\n    if type_match.group(1) != \"EXEC (Executable file)\" or machine_match.group(1) != \"NVIDIA CUDA architecture\" or nonzero < 1:\n        print(json.dumps({\"status\": \"FAIL_CUBIN_STRUCTURE\", \"name\": name,\n                          \"type\": type_match.group(1), \"machine\": machine_match.group(1),\n                          \"nonzero_executable_text\": nonzero}))\n        raise SystemExit(25)\n    total_text += nonzero\n    records.append({\n        \"name\": name,\n        \"size_bytes\": info.st_size,\n        \"sha256\": digest.hexdigest(),\n        \"elf_type\": type_match.group(1),\n        \"machine\": machine_match.group(1),\n        \"nonzero_executable_text\": nonzero,\n        \"readelf_stdout_sha256\": hashlib.sha256(parsed.stdout).hexdigest(),\n        \"readelf_stderr_sha256\": hashlib.sha256(parsed.stderr).hexdigest(),\n        \"readelf_stderr_bytes\": len(parsed.stderr),\n    })\nprint(json.dumps({\n    \"status\": \"PASS_EXTRACTED_CUBIN_STATIC_METADATA\",\n    \"cubin_count\": len(records),\n    \"architecture\": \"sm_120\",\n    \"nonzero_executable_text_section_count\": total_text,\n    \"extract_stdout_sha256\": hashlib.sha256(extracted.stdout).hexdigest(),\n    \"extract_stderr_sha256\": hashlib.sha256(extracted.stderr).hexdigest(),\n    \"records\": records,\n    \"guest_tmpfs_only\": True,\n}, sort_keys=True, separators=(\",\", \":\")))\n"
+      ],
+      "id": "cuobjdump_dump_elf",
+      "resource": "cuobjdump_dump"
+    },
+    {
+      "argv": [
+        "/usr/local/cuda-12.8/bin/cuobjdump",
+        "--dump-elf-symbols",
+        "--gpu-architecture",
+        "sm_120",
+        "/audit/input/DualSPHysics5.4_linux64"
+      ],
+      "id": "cuobjdump_dump_elf_symbols",
+      "resource": "cuobjdump_dump"
+    },
+    {
+      "argv": [
+        "/usr/local/cuda-12.8/bin/cuobjdump",
+        "--list-ptx",
+        "/audit/input/DualSPHysics5.4_linux64"
+      ],
+      "id": "cuobjdump_list_ptx",
+      "resource": "cuobjdump_list"
+    },
+    {
+      "argv": [
+        "/usr/local/cuda-12.8/bin/cuobjdump",
+        "--dump-ptx",
+        "/audit/input/DualSPHysics5.4_linux64"
+      ],
+      "id": "cuobjdump_dump_ptx",
+      "resource": "cuobjdump_dump"
+    },
+    {
+      "argv": [
+        "/usr/bin/sha256sum",
+        "/audit/input/DualSPHysics5.4_linux64"
+      ],
+      "id": "sha256sum",
+      "resource": "metadata"
+    }
+  ],
+  "development_only": true,
+  "document_type": "R8_LIQUID_GPU_STATIC_AUDIT_POLICY",
+  "formal": false,
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "implementation": {
+    "gate_path": "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_gpu_static_audit_gate_v2.py",
+    "profile_generator": {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_gpu_static_audit_revision_v2_generator.py",
+      "sha256": "2c163e6fff6a1054cb64a819d4a3186e68389ba4beaed7cc270152c5f66dd86d"
+    },
+    "receipt_schema": {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_gpu_static_audit_receipt_v1.json",
+      "sha256": "cd6d421b91759a3c1ab2af42d2dfa77095d7f1ebd4fa7eeb326bd69f4805d996"
+    },
+    "supervisor_path": "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_gpu_static_audit_supervisor_v2.py",
+    "tests_path": "src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_gpu_static_audit_gate_v2.py"
+  },
+  "object_command": {
+    "argv_template": [
+      "/usr/bin/readelf",
+      "-hW",
+      "/audit/input/<OBJECT_NAME>"
+    ],
+    "id": "readelf_header",
+    "resource": "metadata"
+  },
+  "objects": {
+    "build_receipt_inventory_sha256": "19fcea3c6207ca00e33e177e9da6f35667dd168951bbd89c188765172fdefd9b",
+    "count": 131,
+    "cpp_count": 120,
+    "cuda_count": 11,
+    "name_contract_sha256": "38023e8b24f1d1731ba3a7d03bbb5fdf2e74e5623341402d607cba046b08d7e2",
+    "root": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T170339Z_a.partial/output/buildtree/src/source"
+  },
+  "outputs": {
+    "evidence_root": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_static_audit_v2.evidence",
+    "lifecycle_receipt": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_static_audit_v2_lifecycle.json",
+    "receipt": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_static_audit_v2.json"
+  },
+  "parent_inputs": {
+    "build_lifecycle": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_build_lifecycle.json",
+      "sha256": "43f11a72ef6216704431e4c3e140ad8077cfa3ef193278800d1667453f7b4b19"
+    },
+    "build_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_build_final.json",
+      "sha256": "2ff3da17da7658da35587a6b1233f3bb1c039488325345537c00d40ebf30e9da"
+    },
+    "build_stderr": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_build.stderr.log",
+      "sha256": "e2fb5d59d3ba5d71ad15d37da0b505704a95d343bfb3e1c81fbaf7c3a8bf2895"
+    },
+    "build_stdout": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_build.stdout.log",
+      "sha256": "755de9a76d22bf3e5ec12dce7c77a12a3cd0d8b3f4ed8b0d9f451a78366f1acb"
+    },
+    "campaign_gate": {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_gpu_stage4_campaign_gate_v3.py",
+      "sha256": "1c1bfc0df0e1959cc723ab22cdbb1163c2307ed4c19e9783f862b63ccfb7643d"
+    },
+    "campaign_policy": {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_gpu_stage4_campaign_20260810T170339Z_v3.json",
+      "sha256": "63b5cf7d00441faf77f946fec0fd4e57a4e8b06df242013b836dd3471860414f"
+    },
+    "g1_gate": {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_gpu_build_gate_v1.py",
+      "sha256": "e34ab0facc3c665c6befbb792c7344e0af6e652fd3c6b30dfa81ca8cbea5b502"
+    },
+    "g1_policy": {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_gpu_build_execution_policy_v1.json",
+      "sha256": "f3831fdfe09716fe5b8f0371bda25d087a6f10e0b0570b90eebea2caf90b7f57"
+    },
+    "g1_schema": {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_gpu_build_execution_policy_v1.json",
+      "sha256": "250d32def4a6a0c37405d8cc9d9920b8f5882abe7bb36de7ca95e7308de54cad"
+    },
+    "g1_tests": {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_target_u3_gpu_build_gate_v1.py",
+      "sha256": "a26602c650557044bab6e84d54197f91b44e5e854548522043962c01b7b399e9"
+    },
+    "plan": {
+      "path": "docs/实物实验注意事项/对比试验/仿真接入液体/20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md",
+      "sha256": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+    }
+  },
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_GPU_STATIC_AUDIT_20260810T170339Z_V2",
+  "profile": {
+    "mode_octal": "0600",
+    "name": "r8-liquid-u3-gpu-static-audit-20260810T170339Z-v2",
+    "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T170339Z-v2.profile",
+    "sha256": "b3a2225ed5d988932387cbc487dab637bd88a565de219d74a7cf5afd9a60647f",
+    "size_bytes": 61138
+  },
+  "revision_evidence": {
+    "candidate_executed": false,
+    "candidate_rebuilt": false,
+    "failed_lifecycle": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_static_audit_v1_lifecycle.json",
+      "sha256": "48d9ef83a0673df5a2befa3d3e5fa1074218268699928abc9cc3fb13340ed656"
+    },
+    "network_or_gpu_added": false,
+    "oversize_output": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_static_audit_v1.evidence/006_cuobjdump_dump_elf.stdout.log",
+      "sha256": "d8804829915fc3809357375cf82dae201dfefe0e637700dba7ed982fa9e74731",
+      "size_bytes": 268435456
+    },
+    "parent_policy": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_gpu_static_audit_20260810T170339Z_v1.json",
+      "sha256": "e81b735acb74d3a73fd81a384576f65ffb1835e18f2caecbbad7a93de0d7e347"
+    },
+    "parent_profile": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T170339Z.profile",
+      "sha256": "d38092826e9b17d59c20d9ef1be3b30517c5cc106e316c394877c45c72f693ed"
+    },
+    "root_cause": "RAW_CUOBJDUMP_DUMP_ELF_EXCEEDED_FROZEN_256_MIB_OUTPUT_LIMIT",
+    "single_semantic_delta": "EXTRACT_11_CUBINS_TO_GUEST_TMPFS_AND_EMIT_BOUNDED_READELF_JSON"
+  },
+  "safety": {
+    "binary_content_parser_executed_on_host": false,
+    "candidate_executed": false,
+    "compiler_run": false,
+    "gpu_device_exposed": false,
+    "make_run": false,
+    "network_used": false,
+    "root_parser_run": false
+  },
+  "sandbox": {
+    "invariants": {
+      "candidate_executable": false,
+      "compiler_allowed": false,
+      "dev_exposed": false,
+      "gpu_exposed": false,
+      "home": "/nonexistent",
+      "host_writable_bind_count": 0,
+      "ldd_allowed": false,
+      "make_allowed": false,
+      "proc_exposed": false,
+      "shell_allowed": false,
+      "unshare_ipc": true,
+      "unshare_net": true,
+      "unshare_pid": true,
+      "unshare_user": true,
+      "unshare_uts": true
+    },
+    "output_limit_bytes": 268435456,
+    "prefix_limit_bytes": 65536,
+    "resource_classes": {
+      "cuobjdump_dump": {
+        "address_space_bytes": 4294967296,
+        "cpu_seconds": 300,
+        "wall_seconds": 300
+      },
+      "cuobjdump_list": {
+        "address_space_bytes": 2147483648,
+        "cpu_seconds": 120,
+        "wall_seconds": 120
+      },
+      "metadata": {
+        "address_space_bytes": 1073741824,
+        "cpu_seconds": 60,
+        "wall_seconds": 60
+      }
+    },
+    "timeout_kill_after_seconds": 5
+  },
+  "schema_version": "r8-liquid-gpu-static-audit-policy-v2",
+  "trusted_tools": [
+    {
+      "path": "/usr/bin/aa-exec",
+      "realpath": "/usr/bin/aa-exec",
+      "sha256": "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e"
+    },
+    {
+      "path": "/usr/bin/bwrap",
+      "realpath": "/usr/bin/bwrap",
+      "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"
+    },
+    {
+      "path": "/usr/bin/timeout",
+      "realpath": "/usr/bin/timeout",
+      "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"
+    },
+    {
+      "path": "/usr/bin/env",
+      "realpath": "/usr/bin/env",
+      "sha256": "0aefff8f912fb75716c5d4de3b6acde93edbe8fa280fc8ee895c1226d3e373ef"
+    },
+    {
+      "path": "/usr/bin/prlimit",
+      "realpath": "/usr/bin/prlimit",
+      "sha256": "f27cfd8c1512a4cc6541b59b80cb4cdfd6ef28c34aa21db4299b48264cd0d128"
+    },
+    {
+      "path": "/usr/bin/file",
+      "realpath": "/usr/bin/file",
+      "sha256": "6741f44dde8e51309325c8bcf88ee16bc1e022985d584415680484c11ee89e0d"
+    },
+    {
+      "path": "/usr/bin/readelf",
+      "realpath": "/usr/bin/x86_64-linux-gnu-readelf",
+      "sha256": "64c58e15274bbbb5153f31078e455e9e77ee5f51489e709bba5bb788ce9df2b0"
+    },
+    {
+      "path": "/usr/bin/x86_64-linux-gnu-readelf",
+      "realpath": "/usr/bin/x86_64-linux-gnu-readelf",
+      "sha256": "64c58e15274bbbb5153f31078e455e9e77ee5f51489e709bba5bb788ce9df2b0"
+    },
+    {
+      "path": "/usr/bin/sha256sum",
+      "realpath": "/usr/bin/sha256sum",
+      "sha256": "9992e1f1feb6f0f396bc8d6691ebc1adbfc269fd628bce84eda1d4ba5c3995c7"
+    },
+    {
+      "path": "/usr/local/cuda-12.8/bin/cuobjdump",
+      "realpath": "/usr/local/cuda-12.8/bin/cuobjdump",
+      "sha256": "9d515ac6f60c246ef63fe87b0a95d209b00ff3e25b716f8f263520010760e8f8"
+    },
+    {
+      "path": "/etc/magic",
+      "realpath": "/etc/magic",
+      "sha256": "58219ec4bfe06d84640b4e86341feb3099cb078146c9eee73ec55152819df247"
+    },
+    {
+      "path": "/usr/lib/file/magic.mgc",
+      "realpath": "/usr/lib/file/magic.mgc",
+      "sha256": "72a25195a2623fe160e926bf20952b6b74b29d6c91e0174a5fa062f02beee1aa"
+    },
+    {
+      "path": "/usr/bin/python3",
+      "realpath": "/usr/bin/python3.12",
+      "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+    },
+    {
+      "path": "/usr/bin/python3.12",
+      "realpath": "/usr/bin/python3.12",
+      "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+    }
+  ]
+}

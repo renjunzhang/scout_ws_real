@@ -1,0 +1,109 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_gpu_runtime_smoke_revision_v4.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "revision_id", "status", "parents", "diagnosis", "semantic_delta", "transport", "run"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-u3-gpu-runtime-smoke-revision-v4"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_GPU_RUNTIME_SMOKE_REVISION_V4"},
+    "revision_id": {"const": "LIQUID_ZRJ_MSI_U2404_U3_GPU_RUNTIME_SMOKE_V4"},
+    "status": {"const": "V4_GUEST_OWNED_STAGED_INPUTS_FROZEN_PENDING_ONE_SHOT"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "diagnosis": {"$ref": "#/$defs/diagnosis"},
+    "semantic_delta": {"$ref": "#/$defs/delta"},
+    "transport": {"$ref": "#/$defs/transport"},
+    "run": {"$ref": "#/$defs/run"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\x00]*$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["v3_revision", "v3_schema", "v3_runner", "v3_tests", "v3_failure"],
+      "properties": {
+        "v3_revision": {"$ref": "#/$defs/identity"},
+        "v3_schema": {"$ref": "#/$defs/identity"},
+        "v3_runner": {"$ref": "#/$defs/identity"},
+        "v3_tests": {"$ref": "#/$defs/identity"},
+        "v3_failure": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "diagnosis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_class", "observed_stderr", "stdout_empty", "solver_candidate_started", "candidate_restored"],
+      "properties": {
+        "failure_class": {"const": "STAGED_INPUT_DAC_ROOT_OWNER_DENIED_GUEST_UID1000_PRE_EXEC"},
+        "observed_stderr": {"const": "bwrap: execvp /runtime/DualSPHysics5.4_linux64: Permission denied"},
+        "stdout_empty": {"const": true},
+        "solver_candidate_started": {"const": false},
+        "candidate_restored": {"const": true}
+      }
+    },
+    "delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "stage_root_uid", "stage_root_mode", "staged_file_uid", "staged_file_gid", "candidate_transient_mode", "data_transient_mode", "new_devices", "new_network", "new_project_write_targets", "solver_argv_changed", "home_permissions_changed"],
+      "properties": {
+        "operation": {"const": "STAGED_FILES_OWNED_BY_GUEST_INSIDE_ROOT_ONLY_RUN_TRANSPORT"},
+        "stage_root_uid": {"const": 0},
+        "stage_root_mode": {"const": "0700"},
+        "staged_file_uid": {"const": 1000},
+        "staged_file_gid": {"const": 1000},
+        "candidate_transient_mode": {"const": "0500"},
+        "data_transient_mode": {"const": "0400"},
+        "new_devices": {"const": 0},
+        "new_network": {"const": false},
+        "new_project_write_targets": {"const": 0},
+        "solver_argv_changed": {"const": false},
+        "home_permissions_changed": {"const": false}
+      }
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage_root", "probe_stage_root", "probe_receipt", "probe_output_root", "input_copy", "guest_write_target", "export", "candidate_stage_final_mode", "preserve_stage"],
+      "properties": {
+        "stage_root": {"const": "/run/r8-liquid-u3-c1m-gpu-smoke-v4-20260810t185500z"},
+        "probe_stage_root": {"const": "/run/r8-liquid-u3-gpu-smoke-v4-stage-probe-20260810t185500z"},
+        "probe_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_gpu_smoke_v4_stage_probe_20260810T185500Z.json"},
+        "probe_output_root": {"const": "/home/zrj/scout_liquid_lab/probes/u3_gpu_smoke_v4_stage_probe_20260810T185500Z.partial/output"},
+        "input_copy": {"const": "O_NOFOLLOW_TO_O_EXCL_THEN_FCHOWN_UID1000_AND_SHA256_VERIFY"},
+        "guest_write_target": {"const": "/run_stage/output_only"},
+        "export": {"const": "ROOT_PARENT_O_NOFOLLOW_READ_TO_USER_OWNED_O_EXCL_LAB_OUTPUT"},
+        "candidate_stage_final_mode": {"const": "0400"},
+        "preserve_stage": {"const": true}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "attempt_root", "output_root", "start_receipt", "final_receipt", "failure_receipt", "stdout_log", "stderr_log", "resource_log", "qc_report", "gpu_lock", "attempts_per_identity"],
+      "properties": {
+        "run_id": {"const": "u3_c1m_gpu_smoke_v4_20260810T185500Z"},
+        "attempt_root": {"const": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_v4_20260810T185500Z.partial"},
+        "output_root": {"const": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_v4_20260810T185500Z.partial/output"},
+        "start_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v4_20260810T185500Z.start.json"},
+        "final_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v4_20260810T185500Z.final.json"},
+        "failure_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v4_20260810T185500Z.failure.json"},
+        "stdout_log": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v4_20260810T185500Z.stdout.log"},
+        "stderr_log": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v4_20260810T185500Z.stderr.log"},
+        "resource_log": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v4_20260810T185500Z.resources.jsonl"},
+        "qc_report": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v4_20260810T185500Z.qc.json"},
+        "gpu_lock": {"const": "/home/zrj/scout_liquid_lab/locks/gpu0.lock"},
+        "attempts_per_identity": {"const": 1}
+      }
+    }
+  }
+}

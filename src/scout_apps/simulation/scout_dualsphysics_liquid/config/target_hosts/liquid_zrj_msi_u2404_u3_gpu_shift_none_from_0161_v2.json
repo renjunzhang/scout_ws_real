@@ -1,0 +1,172 @@
+{
+  "schema_version": "smpcc-r8-liquid-u3-gpu-stage4-run-policy-v2",
+  "document_type": "SMPCC_R8_LIQUID_U3_GPU_STAGE4_RUN_POLICY_V2",
+  "run_id": "u3_c1m_gpu_shift_none_from_0161_v2",
+  "purpose": "remediation_probe",
+  "status": "FROZEN_PENDING_EXACTLY_ONE_GPU_RUN",
+  "claim_ceiling": "DEVELOPMENT_ONLY_SOFTWARE_NUMERICAL_NOT_PHYSICAL_FIDELITY",
+  "parents": {
+    "plan": {
+      "path": "/home/zrj/scout_ws/docs/实物实验注意事项/对比试验/仿真接入液体/20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md",
+      "sha256": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+    },
+    "build_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_build_final.json",
+      "sha256": "2ff3da17da7658da35587a6b1233f3bb1c039488325345537c00d40ebf30e9da"
+    },
+    "static_audit_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_static_audit_v2.json",
+      "sha256": "794ecf80d8665b65ba7e31d1a8bf32a67f8cca7c7cc24ea33718cb30c27c97fb"
+    },
+    "stage3_postvalidation": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v6_20260810T190500Z.postvalidation_v1.json",
+      "sha256": "9cbf9cdb48b240a73129eadbde36cf55ea3f0b1ad23e229f79aabe287085367e"
+    },
+    "numerical_contract": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_stage4_numerical_contract_v1.json",
+      "sha256": "7b3d7447485d901cd60402f2a7ddd422c587ffa57ba3e5664130d8cd3abd9cd7"
+    },
+    "previous_start_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_from_0161_v1.start.json",
+      "sha256": "426ab174a6c9cbc403951da71cfa806fde8dfcc2b9cf5bc06e3deb6407d9bf5f"
+    },
+    "previous_failure_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_from_0161_v1.failure.json",
+      "sha256": "282b1e9b194a4f7bad0c71e764463fe40a4f4b4b2e39be8eeba147f48b224522"
+    },
+    "runner": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_gpu_stage4_runner_v2.py",
+      "sha256": "0b5be137f11722092ded6008cc8638e806d81a85f5a5e7cffb883d448816d5d3"
+    },
+    "schema": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_gpu_stage4_run_policy_v2.json",
+      "sha256": "68dfcdbc2795626cedac3c98b62a50db6bcb5545ca330e6cb7f0114320b05909"
+    }
+  },
+  "tools": {
+    "bwrap": {"path": "/usr/bin/bwrap", "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"},
+    "nvidia_smi": {"path": "/usr/bin/nvidia-smi", "sha256": "22964713c1701fb62b4dd10b26b0dd25d174e100af5bda20c65e0b0fcc32b3be"},
+    "python": {"path": "/usr/bin/python3.12", "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"},
+    "sudo": {"path": "/usr/bin/sudo", "sha256": "136f2e48b0295b9fc595b8259cf2411ac43f27ddbfe02b956649ddaa2e92b9fa"}
+  },
+  "gpu": {
+    "index": 0,
+    "uuid": "GPU-d29cd22d-8b25-8f4e-9dcf-f2fc4bb113fb",
+    "pci_bus_id": "00000000:01:00.0",
+    "name": "NVIDIA GeForce RTX 5080 Laptop GPU",
+    "driver_version": "580.173.02",
+    "device_paths": ["/dev/nvidia0", "/dev/nvidiactl", "/dev/nvidia-uvm", "/dev/nvidia-uvm-tools"]
+  },
+  "inputs": {
+    "candidate": {
+      "path": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T170339Z_a.partial/output/artifacts/DualSPHysics5.4_linux64",
+      "sha256": "cace408f99c3ca75b53bfb542565e92ec134631a41f1d233aace346e6455b39f",
+      "size_bytes": 105654136,
+      "mode": "0400",
+      "inode": 15733148,
+      "nlink": 1
+    },
+    "dsph_config": {
+      "path": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1m_gencase_seed_v3_20260808T150802Z.partial/input/DsphConfig.xml",
+      "sha256": "0644c9a6a6687678950fc8966e352b4bbd3de9d3cb787db9e507c2eb7ccaddcd",
+      "size_bytes": 293,
+      "mode": "0400",
+      "inode": 14944233,
+      "nlink": 1
+    },
+    "case_bi4": {
+      "path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.bi4",
+      "sha256": "b463ddfe548b3db78b02f23b075dadbdd3c71ea766eb092701b56978ddb3a8e7",
+      "size_bytes": 400842,
+      "mode": "0440",
+      "inode": 14944257,
+      "nlink": 1
+    },
+    "case_xml": {
+      "path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.xml",
+      "sha256": "28205c2234dda565da600947d03481c492c6bb493b2e058bd04cd360b7862acb",
+      "size_bytes": 7800,
+      "mode": "0440",
+      "inode": 14944258,
+      "nlink": 1
+    },
+    "restart_part": {
+      "path": "/home/zrj/scout_liquid_lab/direct_runs/u3_c1m_settle_extension_from_0161_retry1_20260809T113242Z.partial/output/data/Part_0161.bi4",
+      "sha256": "98d35a8aa6b62ba608879d5f70869853c696c3add868f128e0463489809ba96a",
+      "size_bytes": 401318,
+      "mode": "0664",
+      "inode": 14965066,
+      "nlink": 1
+    },
+    "restart_head": {
+      "path": "/home/zrj/scout_liquid_lab/direct_runs/u3_c1m_settle_extension_from_0161_retry1_20260809T113242Z.partial/output/data/Part_Head.ibi4",
+      "sha256": "7cd0d48340f10137e15418afbf1458d1ca774f1965388a64f8ff3e17d7c7c51b",
+      "size_bytes": 1554,
+      "mode": "0664",
+      "inode": 14965062,
+      "nlink": 1
+    }
+  },
+  "restart": {"enabled": true, "part_index": 161, "part_first": 161, "guest_dir": "/restart"},
+  "solver": {
+    "argv": [
+      "/runtime/DualSPHysics5.4_linux64", "/case/C1M_zero", "/output",
+      "-gpu:0", "-ompthreads:1", "-stable:1", "-vres:0", "-cellmode:full",
+      "-partbegin:161:161", "/restart", "-shifting:none", "-tmax:10.05", "-tout:0.05",
+      "-sv:binx,info", "-svres:1", "-svtimers:0", "-svdomainvtk:0",
+      "-saveposdouble:1", "-nortimes:1", "-createdirs:1", "-csvsep:0"
+    ],
+    "environment": {
+      "HOME": "/nonexistent", "PATH": "/usr/bin", "LC_ALL": "C", "LANG": "C", "TZ": "UTC0",
+      "TMPDIR": "/tmp", "OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE", "CUDA_VISIBLE_DEVICES": "0"
+    },
+    "expected_particles": 9078,
+    "expected_moving": 2669,
+    "expected_fluid": 6409
+  },
+  "sandbox": {
+    "model": "ROOT_ONLY_VAR_TMP_TRANSPORT_TO_UID1000_CAP0_BWRAP_NETNS_TO_O_EXCL_LAB_EXPORT",
+    "stage_root": "/var/tmp/r8-liquid-u3-stage4-u3-c1m-gpu-shift-none-from-0161-v2",
+    "network": false,
+    "guest_uid": 1000,
+    "guest_gid": 1000,
+    "guest_groups": [1000],
+    "guest_cap_eff": "0000000000000000",
+    "host_write_bind_count": 1,
+    "project_workspace_write_bind_count": 0,
+    "apparmor_profile_used": false,
+    "preserve_stage": true
+  },
+  "run": {
+    "attempt_root": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_shift_none_from_0161_v2.partial",
+    "output_root": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_shift_none_from_0161_v2.partial/output",
+    "start_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_from_0161_v2.start.json",
+    "final_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_from_0161_v2.final.json",
+    "failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_from_0161_v2.failure.json",
+    "stdout_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_from_0161_v2.stdout.log",
+    "stderr_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_from_0161_v2.stderr.log",
+    "resource_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_from_0161_v2.resources.jsonl"
+  },
+  "expected_output": {
+    "start_time_s": 8.05,
+    "end_time_s": 10.05,
+    "output_period_s": 0.05,
+    "part_first": 161,
+    "part_last": 201,
+    "part_count": 41,
+    "maximum_output_bytes": 134217728
+  },
+  "limits": {
+    "wall_timeout_seconds": 600,
+    "kill_after_seconds": 10,
+    "monitor_interval_seconds": 10,
+    "minimum_mem_available_bytes": 4294967296,
+    "maximum_output_bytes": 134217728
+  },
+  "single_delta": {
+    "parameter": "Shifting",
+    "baseline": "NoBound(-2,2.75,Full)",
+    "candidate": "None",
+    "other_numerical_parameters_changed": false
+  }
+}

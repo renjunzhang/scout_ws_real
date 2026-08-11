@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  U3 C1M development-only hydrostatic case, moving-boundary zero-motion v1.
+
+  This is intentionally not a measurement-derived vessel model.  It preserves
+  the C1 v2 smoke geometry exactly: nominal 37 mm inner diameter, 58 mm static
+  liquid depth, 2 mm particle spacing and 8 mm development freeboard.  Its
+  output must remain labelled SIM_ONLY_UNVALIDATED until the physical vessel
+  dimensions, bottom geometry, wall material and filled-water mass have been
+  accepted.
+
+  C1M classifies the single mkbound=0 container as a predefined moving object
+  from GenCase time.  U3 keeps that object strictly stationary with one
+  ref=0/mvnull motion so a settled PART can later be restarted without changing
+  fixed/moving particle identity.  Shifting ignores every boundary and all
+  particle velocities participate in the time-step bound.
+-->
+<case app="GenCase v5.4.354.01 (07-04-2025)" date="08-08-2026 15:57:23">
+    <casedef>
+        <constantsdef>
+            <gravity x="0" y="0" z="-9.81" comment="Gravitational acceleration" units_comment="m/s^2" />
+            <rhop0 value="1000" comment="Reference density of water" units_comment="kg/m^3" />
+            <rhopgradient value="2" comment="Water-column density gradient" />
+            <hswl value="0.058" auto="false" comment="Nominal static liquid depth" units_comment="m" />
+            <gamma value="7" comment="Polytropic constant" />
+            <speedsystem value="0" auto="true" comment="Automatic development speed scale" />
+            <coefsound value="20" comment="Weakly-compressible sound-speed factor" />
+            <speedsound value="0" auto="true" comment="Automatic sound speed" />
+            <coefh value="1.0" comment="Smoothing-length coefficient" />
+            <cflnumber value="0.2" comment="CFL coefficient" />
+        </constantsdef>
+        <mkconfig boundcount="1" fluidcount="1" />
+        <geometry>
+            <definition dp="0.002" units_comment="metres">
+                <pointmin x="-0.021" y="-0.021" z="-0.002" />
+                <pointmax x="0.021" y="0.021" z="0.070" />
+            </definition>
+            <commands>
+                <mainlist>
+                    <setshapemode>dp | bound</setshapemode>
+                    <setdrawmode mode="full" />
+                    <!-- Fluid is drawn first; the following tube/bottom boundary
+                         overwrites only the physical container surface. -->
+                    <setmkfluid mk="0" />
+                    <drawcylinder radius="0.0185">
+                        <point x="0" y="0" z="0" />
+                        <point x="0" y="0" z="0.058" />
+                    </drawcylinder>
+                    <!-- GenCase maskfaceshide face 2 is the p2/upper cover.
+                         Hiding it keeps the p1/lower cover and side wall. -->
+                    <setmkbound mk="0" />
+                    <drawcylinder radius="0.0185" mask="2">
+                        <point x="0" y="0" z="0" />
+                        <point x="0" y="0" z="0.066" />
+                    </drawcylinder>
+                </mainlist>
+            </commands>
+        </geometry>
+        <motion>
+            <objreal ref="0">
+                <begin mov="1" start="45.05001991890928" />
+                <mvnull id="1" />
+            </objreal>
+        </motion>
+    </casedef>
+    <execution>
+        <parameters>
+            <parameter key="SavePosDouble" value="1" comment="Preserve C1 particle positions in double precision" />
+            <parameter key="StepAlgorithm" value="2" comment="Symplectic integration" />
+            <parameter key="Kernel" value="2" comment="Wendland kernel" />
+            <parameter key="ViscoTreatment" value="3" comment="Laminar viscosity" />
+            <parameter key="Visco" value="0.000001" comment="Water kinematic viscosity" />
+            <parameter key="ViscoBoundFactor" value="1" comment="Boundary viscosity factor" />
+            <parameter key="DensityDT" value="2" comment="Fourtakas density diffusion" />
+            <parameter key="DensityDTvalue" value="0.1" comment="Density-diffusion coefficient" />
+            <parameter key="Shifting" value="1" comment="No shifting next to fixed or moving boundaries" />
+            <parameter key="ShiftCoef" value="-2" comment="Default shifting coefficient" />
+            <parameter key="ShiftTFS" value="2.75" comment="3D free-surface threshold" />
+            <parameter key="RigidAlgorithm" value="1" comment="SPH rigid algorithm retained; no floating bodies" />
+            <parameter key="FtPause" value="0" comment="No floating-body freeze; prescribed U3 motion is null" units_comment="seconds" />
+            <parameter key="CoefDtMin" value="0.05" comment="Minimum-step coefficient" />
+            <parameter key="DtIni" value="0" comment="Automatic initial time step" units_comment="seconds" />
+            <parameter key="DtMin" value="0" comment="Automatic minimum time step" units_comment="seconds" />
+            <parameter key="DtFixed" value="0" comment="No fixed time step" units_comment="seconds" />
+            <parameter key="DtFixedFile" value="NONE" comment="No external time-step file" />
+            <parameter key="DtAllParticles" value="1" comment="All particle velocities determine dt" />
+            <parameter key="TimeMax" value="1.0" comment="Development settle duration; runner pins this too" units_comment="seconds" />
+            <parameter key="TimeOut" value="0.05" comment="Output interval" units_comment="seconds" />
+            <parameter key="MinFluidStop" value="1" comment="Stop if any initial normal-fluid particle is lost" />
+            <parameter key="RhopOutMin" value="700" comment="Minimum valid density" units_comment="kg/m^3" />
+            <parameter key="RhopOutMax" value="1300" comment="Maximum valid density" units_comment="kg/m^3" />
+            <simulationdomain comment="Defines domain of simulation (default=Uses minimum and maximum position of the generated particles)">
+                <posmin x="-0.021" y="-0.021" z="-0.002" comment="e.g.: x=0.5, y=default-1, z=default-10%" />
+                <posmax x="0.021" y="0.021" z="0.070" />
+            </simulationdomain>
+        </parameters>
+        <particles np="9078" nb="2669" nbf="0" mkboundfirst="2" mkfluidfirst="1">
+            <_summary>
+                <positions units_comment="metres (m)">
+                    <posmin x="-0.017" y="-0.017" z="0" />
+                    <posmax x="0.019" y="0.019" z="0.066" />
+                </positions>
+                <moving count="2669" id="0-2668" mkcount="1" mkvalues="2" />
+                <fluid count="6409" id="2669-9077" mkcount="1" mkvalues="1" />
+            </_summary>
+            <moving mkbound="0" mk="2" begin="0" count="2669" refmotion="0" />
+            <fluid mkfluid="0" mk="1" begin="2669" count="6409" />
+        </particles>
+        <constants>
+            <data2d value="false" />
+            <gravity x="0" y="0" z="-9.81" units_comment="m/s^2" />
+            <cflnumber value="0.2" />
+            <gamma value="7" />
+            <rhop0 value="1000" units_comment="kg/m^3" />
+            <dp value="0.002" units_comment="metres (m)" />
+            <h value="0.0034641016151" units_comment="metres (m)" />
+            <b value="32513.142857" units_comment="Pascal (Pa)" />
+            <massbound value="0.000008" units_comment="kg" />
+            <massfluid value="0.000008" units_comment="kg" />
+        </constants>
+        <uservars>
+            <varnum name="VResId" value="0" />
+        </uservars>
+        <motion>
+            <objreal ref="0">
+                <begin mov="1" start="45.05001991890928" />
+                <mvnull id="1" />
+            </objreal>
+        </motion>
+        <vtkout mkboundfirst="2" mkfluidfirst="1" />
+    </execution>
+</case>

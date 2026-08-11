@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_stage4_extended_settling_contract_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "contract_id", "status", "claim_ceiling", "parents", "rationale", "checkpoint", "extension", "frozen_solver", "settled_limits", "execution_limits", "result_boundary"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-u3-stage4-extended-settling-contract-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_STAGE4_EXTENDED_SETTLING_CONTRACT_V1"},
+    "contract_id": {"const": "u3_c1m_gpu_shift_none_extend_10p05_to_20p05_v1"},
+    "status": {"const": "FROZEN_PENDING_EXACTLY_ONE_GPU_EXTENSION"},
+    "claim_ceiling": {"const": "DEVELOPMENT_ONLY_SOFTWARE_NUMERICAL_NOT_PHYSICAL_FIDELITY"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "rationale": {"$ref": "#/$defs/rationale"},
+    "checkpoint": {"$ref": "#/$defs/checkpoint"},
+    "extension": {"$ref": "#/$defs/extension"},
+    "frozen_solver": {"$ref": "#/$defs/frozenSolver"},
+    "settled_limits": {"$ref": "#/$defs/settledLimits"},
+    "execution_limits": {"$ref": "#/$defs/executionLimits"},
+    "result_boundary": {"$ref": "#/$defs/resultBoundary"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "parent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan", "stage4_numerical_contract", "gpu_probe_final", "gpu_probe_qc"],
+      "properties": {
+        "plan": {"$ref": "#/$defs/parent"},
+        "stage4_numerical_contract": {"$ref": "#/$defs/parent"},
+        "gpu_probe_final": {"$ref": "#/$defs/parent"},
+        "gpu_probe_qc": {"$ref": "#/$defs/parent"}
+      }
+    },
+    "rationale": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["probe_directionally_promising", "primary_metrics_improved", "primary_normalized_score_ratio", "absolute_limits_passed", "question"],
+      "properties": {
+        "probe_directionally_promising": {"const": true},
+        "primary_metrics_improved": {"const": 4},
+        "primary_normalized_score_ratio": {"type": "number", "minimum": 0, "maximum": 0.95},
+        "absolute_limits_passed": {"const": false},
+        "question": {"const": "DOES_SHIFT_NONE_DECAY_BELOW_FROZEN_SETTLED_LIMITS_WITH_MORE_SETTLING_TIME"}
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part_index", "time_s", "part_path", "part_sha256", "part_size_bytes", "part_mode", "part_inode", "part_nlink", "head_path", "head_sha256", "head_size_bytes", "head_mode", "head_inode", "head_nlink"],
+      "properties": {
+        "part_index": {"const": 201},
+        "time_s": {"const": 10.05},
+        "part_path": {"$ref": "#/$defs/absolutePath"},
+        "part_sha256": {"const": "0eee6feb93759f733030601d767521f343ed8cd348f8b2b47104a9ebd4f1d54c"},
+        "part_size_bytes": {"const": 401410},
+        "part_mode": {"const": "0440"},
+        "part_inode": {"const": 15733550},
+        "part_nlink": {"const": 1},
+        "head_path": {"$ref": "#/$defs/absolutePath"},
+        "head_sha256": {"const": "50acccd4000605758061c62ac62d86d32f46aabefbf0afd5b08d729da71ce4c1"},
+        "head_size_bytes": {"const": 1554},
+        "head_mode": {"const": "0440"},
+        "head_inode": {"const": 15733551},
+        "head_nlink": {"const": 1}
+      }
+    },
+    "extension": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_time_s", "end_time_s", "duration_s", "output_period_s", "part_first", "part_last", "part_count", "tail_window_s", "minimum_tail_coverage_s"],
+      "properties": {
+        "start_time_s": {"const": 10.05},
+        "end_time_s": {"const": 20.05},
+        "duration_s": {"const": 10.0},
+        "output_period_s": {"const": 0.05},
+        "part_first": {"const": 201},
+        "part_last": {"const": 401},
+        "part_count": {"const": 201},
+        "tail_window_s": {"const": 1.0},
+        "minimum_tail_coverage_s": {"const": 0.95}
+      }
+    },
+    "frozenSolver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend", "shifting", "ddt", "dp_m", "cfl", "parallel_runs", "omp_threads", "numerical_parameters_changed_from_probe", "only_observation_window_extended"],
+      "properties": {
+        "backend": {"const": "GPU_0"},
+        "shifting": {"const": "None"},
+        "ddt": {"const": "DDT2(0.1)"},
+        "dp_m": {"const": 0.002},
+        "cfl": {"const": 0.2},
+        "parallel_runs": {"const": 1},
+        "omp_threads": {"const": 1},
+        "numerical_parameters_changed_from_probe": {"const": false},
+        "only_observation_window_extended": {"const": true}
+      }
+    },
+    "settledLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["speed_rms_m_s", "speed_p95_m_s", "speed_max_m_s", "specific_kinetic_energy_j_kg", "position_interframe_rms_m_s", "position_interframe_p95_m_s", "position_interframe_max_m_s", "position_net_rms_m_s", "position_net_p95_m_s", "position_net_max_m_s", "density_mean_relative_range", "density_mean_relative_bias", "density_p01_p99_relative_deviation", "surface_abs_bias_m", "surface_spread_m", "surface_temporal_range_m", "surface_abs_drift_m_s"],
+      "properties": {
+        "speed_rms_m_s": {"const": 0.001},
+        "speed_p95_m_s": {"const": 0.001},
+        "speed_max_m_s": {"const": 0.005},
+        "specific_kinetic_energy_j_kg": {"const": 5e-7},
+        "position_interframe_rms_m_s": {"const": 0.001},
+        "position_interframe_p95_m_s": {"const": 0.001},
+        "position_interframe_max_m_s": {"const": 0.005},
+        "position_net_rms_m_s": {"const": 0.001},
+        "position_net_p95_m_s": {"const": 0.001},
+        "position_net_max_m_s": {"const": 0.005},
+        "density_mean_relative_range": {"const": 0.005},
+        "density_mean_relative_bias": {"const": 0.01},
+        "density_p01_p99_relative_deviation": {"const": 0.05},
+        "surface_abs_bias_m": {"const": 0.001},
+        "surface_spread_m": {"const": 0.001},
+        "surface_temporal_range_m": {"const": 0.0005},
+        "surface_abs_drift_m_s": {"const": 0.0001}
+      }
+    },
+    "executionLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wall_timeout_seconds", "kill_after_seconds", "monitor_interval_seconds", "minimum_mem_available_bytes", "maximum_output_bytes", "network", "project_workspace_write_bind_count"],
+      "properties": {
+        "wall_timeout_seconds": {"const": 900},
+        "kill_after_seconds": {"const": 10},
+        "monitor_interval_seconds": {"const": 10},
+        "minimum_mem_available_bytes": {"const": 4294967296},
+        "maximum_output_bytes": {"const": 268435456},
+        "network": {"const": false},
+        "project_workspace_write_bind_count": {"const": 0}
+      }
+    },
+    "resultBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["development_only", "formal", "physical_primary_eligible", "candidate_execution_source_disallowed", "new_campaign_claimed"],
+      "properties": {
+        "development_only": {"const": true},
+        "formal": {"const": false},
+        "physical_primary_eligible": {"const": false},
+        "candidate_execution_source_disallowed": {"const": true},
+        "new_campaign_claimed": {"const": false}
+      }
+    }
+  }
+}

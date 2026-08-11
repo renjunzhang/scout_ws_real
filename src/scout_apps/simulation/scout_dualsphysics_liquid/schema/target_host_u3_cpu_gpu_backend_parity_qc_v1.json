@@ -1,0 +1,323 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_cpu_gpu_backend_parity_qc_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "captured_at_utc",
+    "inputs",
+    "contract",
+    "repeatability",
+    "backend_comparison",
+    "resources",
+    "solver_summaries",
+    "verdict"
+  ],
+  "properties": {
+    "schema_version": { "const": "r8-liquid-u3-cpu-gpu-backend-parity-qc-v1" },
+    "document_type": { "const": "SMPCC_R8_LIQUID_U3_CPU_GPU_BACKEND_PARITY_QC_V1" },
+    "captured_at_utc": { "type": "string", "format": "date-time" },
+    "inputs": { "$ref": "#/$defs/inputs" },
+    "contract": { "$ref": "#/$defs/contract" },
+    "repeatability": { "$ref": "#/$defs/repeatability" },
+    "backend_comparison": { "$ref": "#/$defs/backendComparison" },
+    "resources": { "$ref": "#/$defs/resources" },
+    "solver_summaries": { "$ref": "#/$defs/solverSummaries" },
+    "verdict": { "$ref": "#/$defs/verdict" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "absolutePath": { "type": "string", "pattern": "^/[^\\u0000]*$" },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "mode", "inode", "nlink"],
+      "properties": {
+        "path": { "$ref": "#/$defs/absolutePath" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "size_bytes": { "type": "integer", "minimum": 0, "maximum": 134217728 },
+        "mode": { "type": "string", "pattern": "^[0-7]{4}$" },
+        "inode": { "type": "integer", "minimum": 1 },
+        "nlink": { "const": 1 }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan",
+        "settled_qc",
+        "cpu_a_policy",
+        "cpu_b_policy",
+        "gpu_a_policy",
+        "cpu_a_final",
+        "cpu_b_final",
+        "gpu_a_final",
+        "gpu_reference_final",
+        "script",
+        "schema",
+        "tests"
+      ],
+      "properties": {
+        "plan": { "$ref": "#/$defs/identity" },
+        "settled_qc": { "$ref": "#/$defs/identity" },
+        "cpu_a_policy": { "$ref": "#/$defs/identity" },
+        "cpu_b_policy": { "$ref": "#/$defs/identity" },
+        "gpu_a_policy": { "$ref": "#/$defs/identity" },
+        "cpu_a_final": { "$ref": "#/$defs/identity" },
+        "cpu_b_final": { "$ref": "#/$defs/identity" },
+        "gpu_a_final": { "$ref": "#/$defs/identity" },
+        "gpu_reference_final": { "$ref": "#/$defs/identity" },
+        "script": { "$ref": "#/$defs/identity" },
+        "schema": { "$ref": "#/$defs/identity" },
+        "tests": { "$ref": "#/$defs/identity" }
+      }
+    },
+    "tolerances": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time_abs_max_s",
+        "position_l2_max_m",
+        "position_l2_rms_m",
+        "velocity_l2_max_m_s",
+        "velocity_l2_rms_m_s",
+        "density_relative_max",
+        "density_relative_rms"
+      ],
+      "properties": {
+        "time_abs_max_s": { "const": 0.0001 },
+        "position_l2_max_m": { "const": 0.00005 },
+        "position_l2_rms_m": { "const": 0.000005 },
+        "velocity_l2_max_m_s": { "const": 0.001 },
+        "velocity_l2_rms_m_s": { "const": 0.0001 },
+        "density_relative_max": { "const": 0.0005 },
+        "density_relative_rms": { "const": 0.00005 }
+      }
+    },
+    "metricVector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time_abs_max_s",
+        "position_l2_max_m",
+        "position_l2_rms_m",
+        "velocity_l2_max_m_s",
+        "velocity_l2_rms_m_s",
+        "density_relative_max",
+        "density_relative_rms"
+      ],
+      "properties": {
+        "time_abs_max_s": { "type": "number", "minimum": 0 },
+        "position_l2_max_m": { "type": "number", "minimum": 0 },
+        "position_l2_rms_m": { "type": "number", "minimum": 0 },
+        "velocity_l2_max_m_s": { "type": "number", "minimum": 0 },
+        "velocity_l2_rms_m_s": { "type": "number", "minimum": 0 },
+        "density_relative_max": { "type": "number", "minimum": 0 },
+        "density_relative_rms": { "type": "number", "minimum": 0 }
+      }
+    },
+    "metricPass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time_abs_max_s",
+        "position_l2_max_m",
+        "position_l2_rms_m",
+        "velocity_l2_max_m_s",
+        "velocity_l2_rms_m_s",
+        "density_relative_max",
+        "density_relative_rms"
+      ],
+      "properties": {
+        "time_abs_max_s": { "type": "boolean" },
+        "position_l2_max_m": { "type": "boolean" },
+        "position_l2_rms_m": { "type": "boolean" },
+        "velocity_l2_max_m_s": { "type": "boolean" },
+        "velocity_l2_rms_m_s": { "type": "boolean" },
+        "density_relative_max": { "type": "boolean" },
+        "density_relative_rms": { "type": "boolean" }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "window_start_s",
+        "window_end_s",
+        "output_period_s",
+        "part_first",
+        "part_last",
+        "part_count",
+        "expected_particles",
+        "expected_fluid",
+        "tolerances",
+        "threshold_overrides_allowed",
+        "determinism_class"
+      ],
+      "properties": {
+        "window_start_s": { "const": 0.0 },
+        "window_end_s": { "const": 0.25 },
+        "output_period_s": { "const": 0.05 },
+        "part_first": { "const": 0 },
+        "part_last": { "const": 5 },
+        "part_count": { "const": 6 },
+        "expected_particles": { "const": 9078 },
+        "expected_fluid": { "const": 6409 },
+        "tolerances": { "$ref": "#/$defs/tolerances" },
+        "threshold_overrides_allowed": { "const": false },
+        "determinism_class": { "const": "ENVIRONMENT_SENSITIVE_BACKEND_WITH_DETERMINISTIC_WITHIN_BACKEND_REPEATS" }
+      }
+    },
+    "repeatResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frame_count", "raw_equality_required", "raw_equal_count", "canonical_equal_count", "comparison_canonical_sha256", "pass"],
+      "properties": {
+        "frame_count": { "const": 6 },
+        "raw_equality_required": { "type": "boolean" },
+        "raw_equal_count": { "type": "integer", "minimum": 0, "maximum": 6 },
+        "canonical_equal_count": { "type": "integer", "minimum": 0, "maximum": 6 },
+        "comparison_canonical_sha256": { "$ref": "#/$defs/sha256" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "repeatability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu", "gpu"],
+      "properties": {
+        "cpu": { "$ref": "#/$defs/repeatResult" },
+        "gpu": { "$ref": "#/$defs/repeatResult" }
+      }
+    },
+    "comparisonResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fluid_only", "frame_count", "particle_pairs", "metrics", "limits", "metric_pass", "comparison_canonical_sha256", "pass"],
+      "properties": {
+        "fluid_only": { "type": "boolean" },
+        "frame_count": { "const": 6 },
+        "particle_pairs": { "type": "integer", "minimum": 38454, "maximum": 54468 },
+        "metrics": { "$ref": "#/$defs/metricVector" },
+        "limits": { "$ref": "#/$defs/tolerances" },
+        "metric_pass": { "$ref": "#/$defs/metricPass" },
+        "comparison_canonical_sha256": { "$ref": "#/$defs/sha256" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "backendComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all_particles", "fluid_particles"],
+      "properties": {
+        "all_particles": { "$ref": "#/$defs/comparisonResult" },
+        "fluid_particles": { "$ref": "#/$defs/comparisonResult" }
+      }
+    },
+    "resourceSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elapsed_seconds",
+        "sample_count",
+        "minimum_mem_available_bytes",
+        "minimum_swap_free_bytes",
+        "observed_process_group_rss_peak_bytes",
+        "gpu_memory_used_peak_mib",
+        "gpu_temperature_peak_c",
+        "resource_log",
+        "rss_scope"
+      ],
+      "properties": {
+        "elapsed_seconds": { "type": "number", "exclusiveMinimum": 0, "maximum": 1800 },
+        "sample_count": { "type": "integer", "minimum": 1, "maximum": 200 },
+        "minimum_mem_available_bytes": { "type": "integer", "minimum": 4294967296 },
+        "minimum_swap_free_bytes": { "type": "integer", "minimum": 0 },
+        "observed_process_group_rss_peak_bytes": { "type": "integer", "minimum": 0 },
+        "gpu_memory_used_peak_mib": { "type": ["number", "null"], "minimum": 0 },
+        "gpu_temperature_peak_c": { "type": ["number", "null"], "minimum": 0, "maximum": 120 },
+        "resource_log": { "$ref": "#/$defs/identity" },
+        "rss_scope": { "const": "HOST_BWRAP_PROCESS_GROUP_OBSERVED_NOT_SOLVER_PEAK" }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu_a", "cpu_b", "gpu_a", "cpu_elapsed_mean_seconds", "gpu_elapsed_seconds", "wall_time_speedup_cpu_mean_over_gpu"],
+      "properties": {
+        "cpu_a": { "$ref": "#/$defs/resourceSummary" },
+        "cpu_b": { "$ref": "#/$defs/resourceSummary" },
+        "gpu_a": { "$ref": "#/$defs/resourceSummary" },
+        "cpu_elapsed_mean_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "gpu_elapsed_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "wall_time_speedup_cpu_mean_over_gpu": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "solverSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend", "run_out", "total_runtime_seconds", "simulation_runtime_seconds", "reported_cpu_memory_bytes", "reported_gpu_memory_bytes", "excluded_particles", "partout_total_nout"],
+      "properties": {
+        "backend": { "enum": ["CPU", "GPU"] },
+        "run_out": { "$ref": "#/$defs/identity" },
+        "total_runtime_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "simulation_runtime_seconds": { "type": "number", "exclusiveMinimum": 0 },
+        "reported_cpu_memory_bytes": { "type": "integer", "minimum": 1 },
+        "reported_gpu_memory_bytes": { "type": ["integer", "null"], "minimum": 1 },
+        "excluded_particles": { "const": 0 },
+        "partout_total_nout": { "const": 0 }
+      }
+    },
+    "solverSummaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["cpu_a", "cpu_b", "gpu_a"],
+      "properties": {
+        "cpu_a": { "$ref": "#/$defs/solverSummary" },
+        "cpu_b": { "$ref": "#/$defs/solverSummary" },
+        "gpu_a": { "$ref": "#/$defs/solverSummary" }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "backend_parity_pass",
+        "cpu_repeatability_pass",
+        "gpu_repeatability_pass",
+        "all_particle_metric_pass",
+        "fluid_metric_pass",
+        "development_only",
+        "formal",
+        "physical_primary_eligible",
+        "phase5_admitted",
+        "solver_executed_by_this_tool",
+        "gpu_exposed_by_this_tool",
+        "network_used_by_this_tool",
+        "inputs_modified",
+        "next"
+      ],
+      "properties": {
+        "status": { "enum": ["PASS_CPU_GPU_PARITY_DEVELOPMENT_ONLY", "FAIL_CPU_GPU_PARITY"] },
+        "backend_parity_pass": { "type": "boolean" },
+        "cpu_repeatability_pass": { "type": "boolean" },
+        "gpu_repeatability_pass": { "type": "boolean" },
+        "all_particle_metric_pass": { "$ref": "#/$defs/metricPass" },
+        "fluid_metric_pass": { "$ref": "#/$defs/metricPass" },
+        "development_only": { "const": true },
+        "formal": { "const": false },
+        "physical_primary_eligible": { "const": false },
+        "phase5_admitted": { "const": false },
+        "solver_executed_by_this_tool": { "const": false },
+        "gpu_exposed_by_this_tool": { "const": false },
+        "network_used_by_this_tool": { "const": false },
+        "inputs_modified": { "const": false },
+        "next": { "enum": ["FREEZE_SETTLED_REPLAY_AND_SYNTHETIC_MOTION_CONTRACT", "STOP"] }
+      }
+    }
+  }
+}

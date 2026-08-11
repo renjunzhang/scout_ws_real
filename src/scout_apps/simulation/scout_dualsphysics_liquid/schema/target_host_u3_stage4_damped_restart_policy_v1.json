@@ -1,0 +1,371 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_stage4_damped_restart_policy_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "experiment_id",
+    "status",
+    "claim_ceiling",
+    "parents",
+    "tools",
+    "gpu",
+    "inputs",
+    "damping_contract",
+    "solver_invariants",
+    "phases",
+    "acceptance",
+    "result_boundary"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-u3-stage4-damped-restart-policy-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_STAGE4_DAMPED_RESTART_POLICY_V1"},
+    "experiment_id": {"type": "string", "pattern": "^u3_c1m_gpu_damped_init_undamped_tail_[0-9]{8}T[0-9]{6}Z_v[0-9]+$"},
+    "status": {"const": "FROZEN_PENDING_DAMPED_INIT_THEN_UNDAMPED_TAIL"},
+    "claim_ceiling": {"const": "DEVELOPMENT_ONLY_NUMERICAL_REMEDIATION_NOT_PHYSICAL_FIDELITY"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "tools": {"$ref": "#/$defs/tools"},
+    "gpu": {"$ref": "#/$defs/gpu"},
+    "inputs": {"$ref": "#/$defs/inputs"},
+    "damping_contract": {"$ref": "#/$defs/dampingContract"},
+    "solver_invariants": {"$ref": "#/$defs/solverInvariants"},
+    "phases": {"$ref": "#/$defs/phases"},
+    "acceptance": {"$ref": "#/$defs/acceptance"},
+    "result_boundary": {"$ref": "#/$defs/resultBoundary"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "parentIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "fileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "mode", "inode", "nlink"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 134217728},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "inode": {"type": "integer", "minimum": 1},
+        "nlink": {"const": 1}
+      }
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan",
+        "build_receipt",
+        "static_audit_receipt",
+        "stage3_postvalidation",
+        "stage4_failed_adjudication",
+        "numerical_contract",
+        "prior_qc",
+        "damping_source",
+        "gpu_call_source",
+        "restart_source",
+        "legacy_runner",
+        "metric_source",
+        "runner",
+        "schema",
+        "tests",
+        "qc",
+        "qc_schema",
+        "qc_tests"
+      ],
+      "properties": {
+        "plan": {"$ref": "#/$defs/parentIdentity"},
+        "build_receipt": {"$ref": "#/$defs/parentIdentity"},
+        "static_audit_receipt": {"$ref": "#/$defs/parentIdentity"},
+        "stage3_postvalidation": {"$ref": "#/$defs/parentIdentity"},
+        "stage4_failed_adjudication": {"$ref": "#/$defs/parentIdentity"},
+        "numerical_contract": {"$ref": "#/$defs/parentIdentity"},
+        "prior_qc": {"$ref": "#/$defs/parentIdentity"},
+        "damping_source": {"$ref": "#/$defs/parentIdentity"},
+        "gpu_call_source": {"$ref": "#/$defs/parentIdentity"},
+        "restart_source": {"$ref": "#/$defs/parentIdentity"},
+        "legacy_runner": {"$ref": "#/$defs/parentIdentity"},
+        "metric_source": {"$ref": "#/$defs/parentIdentity"},
+        "runner": {"$ref": "#/$defs/parentIdentity"},
+        "schema": {"$ref": "#/$defs/parentIdentity"},
+        "tests": {"$ref": "#/$defs/parentIdentity"},
+        "qc": {"$ref": "#/$defs/parentIdentity"},
+        "qc_schema": {"$ref": "#/$defs/parentIdentity"},
+        "qc_tests": {"$ref": "#/$defs/parentIdentity"}
+      }
+    },
+    "toolIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "tools": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bwrap", "nvidia_smi", "python", "sudo"],
+      "properties": {
+        "bwrap": {"$ref": "#/$defs/toolIdentity"},
+        "nvidia_smi": {"$ref": "#/$defs/toolIdentity"},
+        "python": {"$ref": "#/$defs/toolIdentity"},
+        "sudo": {"$ref": "#/$defs/toolIdentity"}
+      }
+    },
+    "gpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "uuid", "pci_bus_id", "name", "driver_version", "device_paths"],
+      "properties": {
+        "index": {"const": 0},
+        "uuid": {"const": "GPU-d29cd22d-8b25-8f4e-9dcf-f2fc4bb113fb"},
+        "pci_bus_id": {"const": "00000000:01:00.0"},
+        "name": {"const": "NVIDIA GeForce RTX 5080 Laptop GPU"},
+        "driver_version": {"const": "580.173.02"},
+        "device_paths": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "/dev/nvidia0"},
+            {"const": "/dev/nvidiactl"},
+            {"const": "/dev/nvidia-uvm"},
+            {"const": "/dev/nvidia-uvm-tools"}
+          ],
+          "items": false,
+          "minItems": 4,
+          "maxItems": 4
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate", "dsph_config", "case_bi4", "undamped_case_xml", "damped_case_xml"],
+      "properties": {
+        "candidate": {"$ref": "#/$defs/fileIdentity"},
+        "dsph_config": {"$ref": "#/$defs/fileIdentity"},
+        "case_bi4": {"$ref": "#/$defs/fileIdentity"},
+        "undamped_case_xml": {"$ref": "#/$defs/fileIdentity"},
+        "damped_case_xml": {"$ref": "#/$defs/fileIdentity"}
+      }
+    },
+    "point3": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "z"],
+      "properties": {
+        "x": {"type": "number"},
+        "y": {"type": "number"},
+        "z": {"type": "number"}
+      }
+    },
+    "dampingContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "single_intervention",
+        "xml_xpath",
+        "type",
+        "limitmin_m",
+        "limitmax_m",
+        "overlimit_m",
+        "redumax_per_s",
+        "factorxyz",
+        "normal_fluid_only",
+        "initialization_only",
+        "built_in_time_cutoff",
+        "undamped_tail_required",
+        "semantic_delta_check_required"
+      ],
+      "properties": {
+        "single_intervention": {"const": "INITIALIZATION_ONLY_STANDARD_DAMPING_PLANE"},
+        "xml_xpath": {"const": "case.execution.special.damping.dampingzone"},
+        "type": {"const": "plane"},
+        "limitmin_m": {"$ref": "#/$defs/point3"},
+        "limitmax_m": {"$ref": "#/$defs/point3"},
+        "overlimit_m": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "redumax_per_s": {"type": "number", "exclusiveMinimum": 0, "maximum": 100},
+        "factorxyz": {"$ref": "#/$defs/point3"},
+        "normal_fluid_only": {"const": true},
+        "initialization_only": {"const": true},
+        "built_in_time_cutoff": {"const": false},
+        "undamped_tail_required": {"const": true},
+        "semantic_delta_check_required": {"const": true}
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["HOME", "PATH", "LC_ALL", "LANG", "TZ", "TMPDIR", "OMP_NUM_THREADS", "OMP_DYNAMIC", "CUDA_VISIBLE_DEVICES"],
+      "properties": {
+        "HOME": {"const": "/nonexistent"},
+        "PATH": {"const": "/usr/bin"},
+        "LC_ALL": {"const": "C"},
+        "LANG": {"const": "C"},
+        "TZ": {"const": "UTC0"},
+        "TMPDIR": {"const": "/tmp"},
+        "OMP_NUM_THREADS": {"const": "1"},
+        "OMP_DYNAMIC": {"const": "FALSE"},
+        "CUDA_VISIBLE_DEVICES": {"const": "0"}
+      }
+    },
+    "solverInvariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment", "cfl", "shifting", "ddt", "dp_m", "parallel_runs", "omp_threads", "expected_particles", "expected_moving", "expected_fluid"],
+      "properties": {
+        "environment": {"$ref": "#/$defs/environment"},
+        "cfl": {"const": 0.1},
+        "shifting": {"const": "None"},
+        "ddt": {"const": "DDT2(0.1)"},
+        "dp_m": {"const": 0.002},
+        "parallel_runs": {"const": 1},
+        "omp_threads": {"const": 1},
+        "expected_particles": {"const": 9078},
+        "expected_moving": {"const": 2669},
+        "expected_fluid": {"const": 6409}
+      }
+    },
+    "restart": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "part_index", "part_first", "guest_dir", "source_phase"],
+      "properties": {
+        "enabled": {"type": "boolean"},
+        "part_index": {"type": ["integer", "null"], "minimum": 0, "maximum": 9999},
+        "part_first": {"type": ["integer", "null"], "minimum": 0, "maximum": 9999},
+        "guest_dir": {"enum": ["/restart", null]},
+        "source_phase": {"enum": ["damped_init", null]}
+      }
+    },
+    "runPaths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt_root", "output_root", "start_receipt", "final_receipt", "failure_receipt", "stdout_log", "stderr_log", "resource_log"],
+      "properties": {
+        "attempt_root": {"$ref": "#/$defs/absolutePath"},
+        "output_root": {"$ref": "#/$defs/absolutePath"},
+        "start_receipt": {"$ref": "#/$defs/absolutePath"},
+        "final_receipt": {"$ref": "#/$defs/absolutePath"},
+        "failure_receipt": {"$ref": "#/$defs/absolutePath"},
+        "stdout_log": {"$ref": "#/$defs/absolutePath"},
+        "stderr_log": {"$ref": "#/$defs/absolutePath"},
+        "resource_log": {"$ref": "#/$defs/absolutePath"}
+      }
+    },
+    "expectedOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_time_s", "end_time_s", "output_period_s", "part_first", "part_last", "part_count", "maximum_output_bytes"],
+      "properties": {
+        "start_time_s": {"type": "number", "minimum": 0, "maximum": 120},
+        "end_time_s": {"type": "number", "exclusiveMinimum": 0, "maximum": 120},
+        "output_period_s": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+        "part_first": {"type": "integer", "minimum": 0, "maximum": 9999},
+        "part_last": {"type": "integer", "minimum": 0, "maximum": 9999},
+        "part_count": {"type": "integer", "minimum": 2, "maximum": 2401},
+        "maximum_output_bytes": {"type": "integer", "minimum": 1048576, "maximum": 536870912}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wall_timeout_seconds", "kill_after_seconds", "monitor_interval_seconds", "minimum_mem_available_bytes", "maximum_output_bytes"],
+      "properties": {
+        "wall_timeout_seconds": {"type": "integer", "minimum": 60, "maximum": 3600},
+        "kill_after_seconds": {"type": "integer", "minimum": 5, "maximum": 30},
+        "monitor_interval_seconds": {"type": "integer", "minimum": 10, "maximum": 30},
+        "minimum_mem_available_bytes": {"type": "integer", "minimum": 4294967296},
+        "maximum_output_bytes": {"type": "integer", "minimum": 1048576, "maximum": 536870912}
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage_root", "network", "guest_uid", "guest_gid", "guest_groups", "guest_cap_eff", "host_write_bind_count", "project_workspace_write_bind_count", "apparmor_profile_used", "preserve_stage"],
+      "properties": {
+        "stage_root": {"type": "string", "pattern": "^/var/tmp/r8-liquid-u3-stage4-u3-[a-z0-9-]+-v[0-9]+$"},
+        "network": {"const": false},
+        "guest_uid": {"const": 1000},
+        "guest_gid": {"const": 1000},
+        "guest_groups": {"type": "array", "prefixItems": [{"const": 1000}], "items": false, "minItems": 1, "maxItems": 1},
+        "guest_cap_eff": {"const": "0000000000000000"},
+        "host_write_bind_count": {"const": 1},
+        "project_workspace_write_bind_count": {"const": 0},
+        "apparmor_profile_used": {"const": false},
+        "preserve_stage": {"const": true}
+      }
+    },
+    "phase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "purpose", "case_xml_input", "restart", "solver_argv", "sandbox", "run", "expected_output", "limits"],
+      "properties": {
+        "run_id": {"type": "string", "pattern": "^u3_c1m_gpu_[a-z0-9_]+_[0-9]{8}T[0-9]{6}Z_v[0-9]+$"},
+        "purpose": {"enum": ["damped_initialization", "undamped_validation_tail"]},
+        "case_xml_input": {"enum": ["damped_case_xml", "undamped_case_xml"]},
+        "restart": {"$ref": "#/$defs/restart"},
+        "solver_argv": {
+          "type": "array",
+          "items": {"type": "string", "minLength": 1, "maxLength": 256},
+          "minItems": 18,
+          "maxItems": 32
+        },
+        "sandbox": {"$ref": "#/$defs/sandbox"},
+        "run": {"$ref": "#/$defs/runPaths"},
+        "expected_output": {"$ref": "#/$defs/expectedOutput"},
+        "limits": {"$ref": "#/$defs/limits"}
+      }
+    },
+    "phases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["damped_init", "undamped_tail"],
+      "properties": {
+        "damped_init": {"$ref": "#/$defs/phase"},
+        "undamped_tail": {"$ref": "#/$defs/phase"}
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evaluation_phase", "tail_window_s", "all_17_absolute_limits_required", "threshold_overrides_allowed", "metric_limits"],
+      "properties": {
+        "evaluation_phase": {"const": "undamped_tail"},
+        "tail_window_s": {"const": 1.0},
+        "all_17_absolute_limits_required": {"const": true},
+        "threshold_overrides_allowed": {"const": false},
+        "metric_limits": {
+          "type": "object",
+          "additionalProperties": {"type": "number", "exclusiveMinimum": 0},
+          "minProperties": 17,
+          "maxProperties": 17
+        }
+      }
+    },
+    "resultBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["development_only", "formal", "physical_primary_eligible", "phase5_admitted_before_full_stage4", "candidate_source_executed", "network_used"],
+      "properties": {
+        "development_only": {"const": true},
+        "formal": {"const": false},
+        "physical_primary_eligible": {"const": false},
+        "phase5_admitted_before_full_stage4": {"const": false},
+        "candidate_source_executed": {"const": false},
+        "network_used": {"const": false}
+      }
+    }
+  }
+}

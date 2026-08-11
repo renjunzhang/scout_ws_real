@@ -1,0 +1,458 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smpcc.local/schema/target-host-u3-gpu-build-remediation-draft-v1.json",
+  "title": "R8 liquid U3 GPU fresh-campaign offline remediation draft v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "remediation_id",
+    "created_at",
+    "status",
+    "scope",
+    "source_evidence",
+    "parent_hashes",
+    "base_template",
+    "remediation_template",
+    "semantic_delta",
+    "future_identity",
+    "invariants",
+    "validation_contract",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-u3-gpu-build-remediation-draft-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_U3_GPU_BUILD_OFFLINE_REMEDIATION_DRAFT"
+    },
+    "remediation_id": {
+      "const": "R8_LIQUID_U3_GPU_PREPIVOT_WORK_TMP_MKDIR_V1"
+    },
+    "created_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{9}\\+08:00$"
+    },
+    "status": {
+      "const": "OFFLINE_REMEDIATION_DRAFT_NOT_AUTHORIZED"
+    },
+    "scope": {
+      "const": "FRESH_CAMPAIGN_OFFLINE_PREPARATION_ONLY"
+    },
+    "source_evidence": {
+      "$ref": "#/$defs/source_evidence"
+    },
+    "parent_hashes": {
+      "$ref": "#/$defs/parent_hashes"
+    },
+    "base_template": {
+      "$ref": "#/$defs/base_template"
+    },
+    "remediation_template": {
+      "$ref": "#/$defs/remediation_template"
+    },
+    "semantic_delta": {
+      "$ref": "#/$defs/semantic_delta"
+    },
+    "future_identity": {
+      "$ref": "#/$defs/future_identity"
+    },
+    "invariants": {
+      "$ref": "#/$defs/invariants"
+    },
+    "validation_contract": {
+      "$ref": "#/$defs/validation_contract"
+    },
+    "next_allowed_stage": {
+      "const": "FRESH_CAMPAIGN_AND_EXACT_PROFILE_HASH_USER_AUTHORIZATION_REQUIRED"
+    }
+  },
+  "$defs": {
+    "file_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "mode_octal",
+        "size_bytes",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode_octal": {
+          "type": "string",
+          "pattern": "^0[0-7]{3}$"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "source_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_campaign_id",
+        "n1_evidence_index",
+        "n1_final_failure_receipt",
+        "g4"
+      ],
+      "properties": {
+        "source_campaign_id": {
+          "const": "u3_source_gpu_build_sm120_20260810T102641Z"
+        },
+        "n1_evidence_index": {
+          "$ref": "#/$defs/file_identity"
+        },
+        "n1_final_failure_receipt": {
+          "$ref": "#/$defs/file_identity"
+        },
+        "g4": {
+          "$ref": "#/$defs/g4_evidence"
+        }
+      }
+    },
+    "g4_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "state",
+        "candidate",
+        "root_cause",
+        "audit_operation",
+        "audit_path",
+        "audit_requested_mask",
+        "audit_denied_mask",
+        "kernel_audit_normalized_line_sha256"
+      ],
+      "properties": {
+        "state": {
+          "const": "RETRY_B_ELIGIBLE"
+        },
+        "candidate": {
+          "const": "ABSENT"
+        },
+        "root_cause": {
+          "const": "A_BUILD_APPARMOR_MISSING_PRE_PIVOT_/newroot/work/tmp/_MKDIR_CREATE_PERMISSION"
+        },
+        "audit_operation": {
+          "const": "mkdir"
+        },
+        "audit_path": {
+          "const": "/newroot/work/tmp/"
+        },
+        "audit_requested_mask": {
+          "const": "c"
+        },
+        "audit_denied_mask": {
+          "const": "c"
+        },
+        "kernel_audit_normalized_line_sha256": {
+          "const": "6aff32b36b40233301ee853c23b9f98c925c48a42ca1232acef753e51b7b5b69"
+        }
+      }
+    },
+    "parent_hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "g1",
+        "g2"
+      ],
+      "properties": {
+        "g1": {
+          "$ref": "#/$defs/g1_hashes"
+        },
+        "g2": {
+          "$ref": "#/$defs/g2_hashes"
+        }
+      }
+    },
+    "g1_hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy",
+        "schema",
+        "gate",
+        "tests",
+        "copy_template",
+        "build_template",
+        "a_copy_profile",
+        "a_build_profile",
+        "static_audit_profile"
+      ],
+      "properties": {
+        "policy": {"const": "f3831fdfe09716fe5b8f0371bda25d087a6f10e0b0570b90eebea2caf90b7f57"},
+        "schema": {"const": "250d32def4a6a0c37405d8cc9d9920b8f5882abe7bb36de7ca95e7308de54cad"},
+        "gate": {"const": "e34ab0facc3c665c6befbb792c7344e0af6e652fd3c6b30dfa81ca8cbea5b502"},
+        "tests": {"const": "a26602c650557044bab6e84d54197f91b44e5e854548522043962c01b7b399e9"},
+        "copy_template": {"const": "67359e87d8b243c9d31e03634998369ff6530bf8617ad3d5f9c5e4b0fc9b613b"},
+        "build_template": {"const": "11c175f63c901b337c5e8899aceedbc898fde0716c07a323746d723b15021fc4"},
+        "a_copy_profile": {"const": "2461550a249284dafc72e473b745ed829463c239e93e805fff623e54a29de8e1"},
+        "a_build_profile": {"const": "fbcc9f417103f17f59003b6da1b8bb7f08e59b2a68015b7ac38cdf1db8c19b10"},
+        "static_audit_profile": {"const": "d23da58b35c69f458d7f9a7fcf03b9fc2493283cd580191d58f7ced460b45168"}
+      }
+    },
+    "g2_hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "execution_policy_v2",
+        "receipt_schema_v1",
+        "gate_v2",
+        "tests_v2",
+        "gate_v3",
+        "tests_v3"
+      ],
+      "properties": {
+        "execution_policy_v2": {"const": "17472c30021bd70d81180fca6be1317a84cf5ae6f104e0c7cc707dc88ed4b58d"},
+        "receipt_schema_v1": {"const": "10ede832aae19632b9b5543b9916a7d1803e210c743db90910a66a37a1e02173"},
+        "gate_v2": {"const": "d9d02b2aa6a237ed49b7e64cbf0f19d769a32f22c372dbc56b18be47e376eb7f"},
+        "tests_v2": {"const": "54e96cb0b90b56353419ca1cce6f181ca6ea024318a5f897e8e6d7f14b85c9e2"},
+        "gate_v3": {"const": "2ea0eaa66a88a8c6fa448472e9c603f22f24691133e573abd14e3038ac4b62e7"},
+        "tests_v3": {"const": "d60db7c0465fd063775b7edb0ba22f2f0313480972ee3edc16c075fa66b96618"}
+      }
+    },
+    "base_template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "size_bytes",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-v1.profile.template"
+        },
+        "size_bytes": {
+          "const": 3217
+        },
+        "sha256": {
+          "const": "11c175f63c901b337c5e8899aceedbc898fde0716c07a323746d723b15021fc4"
+        }
+      }
+    },
+    "remediation_template": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "size_bytes",
+        "sha256",
+        "persistent_profile_instance"
+      ],
+      "properties": {
+        "path": {
+          "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-remediation-v1.profile.template"
+        },
+        "size_bytes": {
+          "const": 3242
+        },
+        "sha256": {
+          "const": "dd28bd5e75c1fec0e4861390ac6d2c196412c1b9ff3de9b375bf2e8a9bf51429"
+        },
+        "persistent_profile_instance": {
+          "const": false
+        }
+      }
+    },
+    "semantic_delta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delta_id",
+        "catalog_id",
+        "operation",
+        "anchor_before_utf8",
+        "anchor_after_utf8",
+        "rule",
+        "expected_insertion_count",
+        "expected_deletion_count"
+      ],
+      "properties": {
+        "delta_id": {
+          "const": "APPARMOR_PREPIVOT_WORK_TMP_MKDIR_CREATE_V1"
+        },
+        "catalog_id": {
+          "const": "apparmor_exact_evidence_permission"
+        },
+        "operation": {
+          "const": "INSERT_EXACT_APPARMOR_FILE_RULE"
+        },
+        "anchor_before_utf8": {
+          "const": "  /newroot/work/ rw,\n"
+        },
+        "anchor_after_utf8": {
+          "const": "  /newroot/work/output/ rw,\n"
+        },
+        "rule": {
+          "$ref": "#/$defs/delta_rule"
+        },
+        "expected_insertion_count": {
+          "const": 1
+        },
+        "expected_deletion_count": {
+          "const": 0
+        }
+      }
+    },
+    "delta_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "access_kind",
+        "apparmor_rule_utf8",
+        "apparmor_rule_sha256",
+        "audit_operation",
+        "audit_requested_mask"
+      ],
+      "properties": {
+        "path": {
+          "const": "/newroot/work/tmp/"
+        },
+        "access_kind": {
+          "const": "rw_guest_tmp_only"
+        },
+        "apparmor_rule_utf8": {
+          "const": "  /newroot/work/tmp/ rw,\n"
+        },
+        "apparmor_rule_sha256": {
+          "const": "bb6f1474949a3cdc6c6cd8478df4d7966ff7c542b76461610c3af16a2b2fb6ba"
+        },
+        "audit_operation": {
+          "const": "mkdir"
+        },
+        "audit_requested_mask": {
+          "const": "c"
+        }
+      }
+    },
+    "future_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_id",
+        "build_id",
+        "attempt_root",
+        "profile_name",
+        "profile_instance_path",
+        "profile_instance_sha256"
+      ],
+      "properties": {
+        "campaign_id": {"const": "NOT_FROZEN"},
+        "build_id": {"const": "NOT_FROZEN"},
+        "attempt_root": {"const": "NOT_FROZEN"},
+        "profile_name": {"const": "NOT_FROZEN"},
+        "profile_instance_path": {"const": "NOT_MATERIALIZED"},
+        "profile_instance_sha256": {"const": "NOT_MATERIALIZED"}
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "base_template_unchanged_except_exact_delta",
+        "toolchain",
+        "architectures",
+        "gxx13_added",
+        "execute_tool_delta_count",
+        "read_path_delta_count",
+        "additional_apparmor_rule_count",
+        "network_permission_added",
+        "gpu_permission_added",
+        "home_permission_added",
+        "host_output_permission_added",
+        "unconfined_transition_added",
+        "new_campaign_created",
+        "build_root_created",
+        "source_copied",
+        "profile_loaded",
+        "sudo_used",
+        "make_nvcc_candidate_run"
+      ],
+      "properties": {
+        "base_template_unchanged_except_exact_delta": {"const": true},
+        "toolchain": {"const": "CUDA_12.8_GXX_11_UNCHANGED"},
+        "architectures": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "compute_120"},
+            {"const": "sm_120"}
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "gxx13_added": {"const": false},
+        "execute_tool_delta_count": {"const": 0},
+        "read_path_delta_count": {"const": 0},
+        "additional_apparmor_rule_count": {"const": 0},
+        "network_permission_added": {"const": false},
+        "gpu_permission_added": {"const": false},
+        "home_permission_added": {"const": false},
+        "host_output_permission_added": {"const": false},
+        "unconfined_transition_added": {"const": false},
+        "new_campaign_created": {"const": false},
+        "build_root_created": {"const": false},
+        "source_copied": {"const": false},
+        "profile_loaded": {"const": false},
+        "sudo_used": {"const": false},
+        "make_nvcc_candidate_run": {"const": false}
+      }
+    },
+    "validation_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ast_required",
+        "closed_schema_required",
+        "unit_tests_required",
+        "negative_tests_required",
+        "apparmor_query_required",
+        "apparmor_query_argv",
+        "apparmor_query_non_loading",
+        "query_fixture_persistent",
+        "self_check_required",
+        "hash_inventory_git_boundary_required"
+      ],
+      "properties": {
+        "ast_required": {"const": true},
+        "closed_schema_required": {"const": true},
+        "unit_tests_required": {"const": true},
+        "negative_tests_required": {"const": true},
+        "apparmor_query_required": {"const": true},
+        "apparmor_query_argv": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "/usr/sbin/apparmor_parser"},
+            {"const": "-Q"},
+            {"const": "-K"},
+            {"const": "-T"},
+            {"const": "--"},
+            {"const": "<EPHEMERAL_QUERY_ONLY_PROFILE>"}
+          ],
+          "items": false,
+          "minItems": 6,
+          "maxItems": 6
+        },
+        "apparmor_query_non_loading": {"const": true},
+        "query_fixture_persistent": {"const": false},
+        "self_check_required": {"const": true},
+        "hash_inventory_git_boundary_required": {"const": true}
+      }
+    }
+  }
+}

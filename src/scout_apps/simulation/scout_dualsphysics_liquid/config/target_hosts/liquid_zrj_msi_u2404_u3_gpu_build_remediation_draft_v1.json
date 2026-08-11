@@ -1,0 +1,133 @@
+{
+  "schema_version": "smpcc-r8-liquid-u3-gpu-build-remediation-draft-v1",
+  "document_type": "SMPCC_R8_LIQUID_U3_GPU_BUILD_OFFLINE_REMEDIATION_DRAFT",
+  "remediation_id": "R8_LIQUID_U3_GPU_PREPIVOT_WORK_TMP_MKDIR_V1",
+  "created_at": "2026-08-10T23:40:00.463131819+08:00",
+  "status": "OFFLINE_REMEDIATION_DRAFT_NOT_AUTHORIZED",
+  "scope": "FRESH_CAMPAIGN_OFFLINE_PREPARATION_ONLY",
+  "source_evidence": {
+    "source_campaign_id": "u3_source_gpu_build_sm120_20260810T102641Z",
+    "n1_evidence_index": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_g7_timebox_evidence_index_v1.json",
+      "mode_octal": "0640",
+      "size_bytes": 8390,
+      "sha256": "69c4eca4f944435562946d4e4ea0977802545addb45d5372400d3c8a79946334"
+    },
+    "n1_final_failure_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_g7_final_failure_v1.json",
+      "mode_octal": "0640",
+      "size_bytes": 2963,
+      "sha256": "4c07823fc2319e1f1973cc5042066ee079c3806fb10d1461600f708e57ed58e3"
+    },
+    "g4": {
+      "state": "RETRY_B_ELIGIBLE",
+      "candidate": "ABSENT",
+      "root_cause": "A_BUILD_APPARMOR_MISSING_PRE_PIVOT_/newroot/work/tmp/_MKDIR_CREATE_PERMISSION",
+      "audit_operation": "mkdir",
+      "audit_path": "/newroot/work/tmp/",
+      "audit_requested_mask": "c",
+      "audit_denied_mask": "c",
+      "kernel_audit_normalized_line_sha256": "6aff32b36b40233301ee853c23b9f98c925c48a42ca1232acef753e51b7b5b69"
+    }
+  },
+  "parent_hashes": {
+    "g1": {
+      "policy": "f3831fdfe09716fe5b8f0371bda25d087a6f10e0b0570b90eebea2caf90b7f57",
+      "schema": "250d32def4a6a0c37405d8cc9d9920b8f5882abe7bb36de7ca95e7308de54cad",
+      "gate": "e34ab0facc3c665c6befbb792c7344e0af6e652fd3c6b30dfa81ca8cbea5b502",
+      "tests": "a26602c650557044bab6e84d54197f91b44e5e854548522043962c01b7b399e9",
+      "copy_template": "67359e87d8b243c9d31e03634998369ff6530bf8617ad3d5f9c5e4b0fc9b613b",
+      "build_template": "11c175f63c901b337c5e8899aceedbc898fde0716c07a323746d723b15021fc4",
+      "a_copy_profile": "2461550a249284dafc72e473b745ed829463c239e93e805fff623e54a29de8e1",
+      "a_build_profile": "fbcc9f417103f17f59003b6da1b8bb7f08e59b2a68015b7ac38cdf1db8c19b10",
+      "static_audit_profile": "d23da58b35c69f458d7f9a7fcf03b9fc2493283cd580191d58f7ced460b45168"
+    },
+    "g2": {
+      "execution_policy_v2": "17472c30021bd70d81180fca6be1317a84cf5ae6f104e0c7cc707dc88ed4b58d",
+      "receipt_schema_v1": "10ede832aae19632b9b5543b9916a7d1803e210c743db90910a66a37a1e02173",
+      "gate_v2": "d9d02b2aa6a237ed49b7e64cbf0f19d769a32f22c372dbc56b18be47e376eb7f",
+      "tests_v2": "54e96cb0b90b56353419ca1cce6f181ca6ea024318a5f897e8e6d7f14b85c9e2",
+      "gate_v3": "2ea0eaa66a88a8c6fa448472e9c603f22f24691133e573abd14e3038ac4b62e7",
+      "tests_v3": "d60db7c0465fd063775b7edb0ba22f2f0313480972ee3edc16c075fa66b96618"
+    }
+  },
+  "base_template": {
+    "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-v1.profile.template",
+    "size_bytes": 3217,
+    "sha256": "11c175f63c901b337c5e8899aceedbc898fde0716c07a323746d723b15021fc4"
+  },
+  "remediation_template": {
+    "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-remediation-v1.profile.template",
+    "size_bytes": 3242,
+    "sha256": "dd28bd5e75c1fec0e4861390ac6d2c196412c1b9ff3de9b375bf2e8a9bf51429",
+    "persistent_profile_instance": false
+  },
+  "semantic_delta": {
+    "delta_id": "APPARMOR_PREPIVOT_WORK_TMP_MKDIR_CREATE_V1",
+    "catalog_id": "apparmor_exact_evidence_permission",
+    "operation": "INSERT_EXACT_APPARMOR_FILE_RULE",
+    "anchor_before_utf8": "  /newroot/work/ rw,\n",
+    "anchor_after_utf8": "  /newroot/work/output/ rw,\n",
+    "rule": {
+      "path": "/newroot/work/tmp/",
+      "access_kind": "rw_guest_tmp_only",
+      "apparmor_rule_utf8": "  /newroot/work/tmp/ rw,\n",
+      "apparmor_rule_sha256": "bb6f1474949a3cdc6c6cd8478df4d7966ff7c542b76461610c3af16a2b2fb6ba",
+      "audit_operation": "mkdir",
+      "audit_requested_mask": "c"
+    },
+    "expected_insertion_count": 1,
+    "expected_deletion_count": 0
+  },
+  "future_identity": {
+    "campaign_id": "NOT_FROZEN",
+    "build_id": "NOT_FROZEN",
+    "attempt_root": "NOT_FROZEN",
+    "profile_name": "NOT_FROZEN",
+    "profile_instance_path": "NOT_MATERIALIZED",
+    "profile_instance_sha256": "NOT_MATERIALIZED"
+  },
+  "invariants": {
+    "base_template_unchanged_except_exact_delta": true,
+    "toolchain": "CUDA_12.8_GXX_11_UNCHANGED",
+    "architectures": [
+      "compute_120",
+      "sm_120"
+    ],
+    "gxx13_added": false,
+    "execute_tool_delta_count": 0,
+    "read_path_delta_count": 0,
+    "additional_apparmor_rule_count": 0,
+    "network_permission_added": false,
+    "gpu_permission_added": false,
+    "home_permission_added": false,
+    "host_output_permission_added": false,
+    "unconfined_transition_added": false,
+    "new_campaign_created": false,
+    "build_root_created": false,
+    "source_copied": false,
+    "profile_loaded": false,
+    "sudo_used": false,
+    "make_nvcc_candidate_run": false
+  },
+  "validation_contract": {
+    "ast_required": true,
+    "closed_schema_required": true,
+    "unit_tests_required": true,
+    "negative_tests_required": true,
+    "apparmor_query_required": true,
+    "apparmor_query_argv": [
+      "/usr/sbin/apparmor_parser",
+      "-Q",
+      "-K",
+      "-T",
+      "--",
+      "<EPHEMERAL_QUERY_ONLY_PROFILE>"
+    ],
+    "apparmor_query_non_loading": true,
+    "query_fixture_persistent": false,
+    "self_check_required": true,
+    "hash_inventory_git_boundary_required": true
+  },
+  "next_allowed_stage": "FRESH_CAMPAIGN_AND_EXACT_PROFILE_HASH_USER_AUTHORIZATION_REQUIRED"
+}

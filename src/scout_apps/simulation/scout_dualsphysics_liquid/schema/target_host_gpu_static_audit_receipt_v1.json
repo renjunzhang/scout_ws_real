@@ -1,0 +1,319 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smpcc.local/schema/target-host-gpu-static-audit-receipt-v1.json",
+  "title": "RTX 5080 DualSPHysics static-audit receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "campaign_id",
+    "build_id",
+    "status",
+    "started_at_utc",
+    "completed_at_utc",
+    "identities",
+    "candidate_before",
+    "candidate_after",
+    "object_inventory_before",
+    "object_inventory_after",
+    "commands",
+    "elf",
+    "cuda",
+    "objects",
+    "build_provenance",
+    "safety",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "r8-liquid-gpu-static-audit-receipt-v1"
+    },
+    "document_type": {
+      "const": "R8_LIQUID_GPU_STATIC_AUDIT_RECEIPT"
+    },
+    "campaign_id": {
+      "const": "u3_source_gpu_build_sm120_20260810T170339Z"
+    },
+    "build_id": {
+      "const": "u3_source_gpu_build_sm120_20260810T170339Z_a"
+    },
+    "status": {
+      "enum": [
+        "PASS_GPU_BUILD_SM120_STATIC_AUDIT",
+        "FAIL_GPU_BUILD_STATIC_AUDIT"
+      ]
+    },
+    "started_at_utc": {"type": "string", "format": "date-time"},
+    "completed_at_utc": {"type": "string", "format": "date-time"},
+    "identities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan",
+        "policy",
+        "schema",
+        "gate",
+        "profile",
+        "profile_generator",
+        "build_receipt",
+        "build_lifecycle"
+      ],
+      "properties": {
+        "plan": {"$ref": "#/$defs/file_identity"},
+        "policy": {"$ref": "#/$defs/file_identity"},
+        "schema": {"$ref": "#/$defs/file_identity"},
+        "gate": {"$ref": "#/$defs/file_identity"},
+        "profile": {"$ref": "#/$defs/file_identity"},
+        "profile_generator": {"$ref": "#/$defs/file_identity"},
+        "build_receipt": {"$ref": "#/$defs/file_identity"},
+        "build_lifecycle": {"$ref": "#/$defs/file_identity"}
+      }
+    },
+    "candidate_before": {"$ref": "#/$defs/content_identity"},
+    "candidate_after": {"$ref": "#/$defs/content_identity"},
+    "object_inventory_before": {"$ref": "#/$defs/inventory_identity"},
+    "object_inventory_after": {"$ref": "#/$defs/inventory_identity"},
+    "commands": {
+      "type": "array",
+      "minItems": 142,
+      "maxItems": 142,
+      "items": {"$ref": "#/$defs/command_result"}
+    },
+    "elf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "class",
+        "data",
+        "type",
+        "machine",
+        "interpreter",
+        "entry_point_hex",
+        "entry_in_executable_load",
+        "gnu_stack_executable",
+        "flags_1",
+        "needed",
+        "rpath",
+        "runpath",
+        "loader_dependency_revision"
+      ],
+      "properties": {
+        "class": {"const": "ELF64"},
+        "data": {"const": "2's complement, little endian"},
+        "type": {"const": "DYN (Position-Independent Executable file)"},
+        "machine": {"const": "Advanced Micro Devices X86-64"},
+        "interpreter": {"const": "/lib64/ld-linux-x86-64.so.2"},
+        "entry_point_hex": {"type": "string", "pattern": "^0x[0-9a-f]+$"},
+        "entry_in_executable_load": {"const": true},
+        "gnu_stack_executable": {"const": false},
+        "flags_1": {
+          "type": "array",
+          "const": ["NOW", "PIE"]
+        },
+        "needed": {
+          "type": "array",
+          "const": [
+            "libgomp.so.1",
+            "libstdc++.so.6",
+            "libm.so.6",
+            "libgcc_s.so.1",
+            "libc.so.6",
+            "ld-linux-x86-64.so.2"
+          ]
+        },
+        "rpath": {"type": "null"},
+        "runpath": {"type": "null"},
+        "loader_dependency_revision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["parent_allowlist_count", "observed_count", "added_soname", "reason", "silent_allowlist_change"],
+          "properties": {
+            "parent_allowlist_count": {"const": 5},
+            "observed_count": {"const": 6},
+            "added_soname": {"const": "ld-linux-x86-64.so.2"},
+            "reason": {"const": "evidence_driven_ubuntu_24_04_cudart_static_loader_dependency"},
+            "silent_allowlist_change": {"const": false}
+          }
+        }
+      }
+    },
+    "cuda": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "native_cubin_count",
+        "native_arches",
+        "ptx_count",
+        "ptx_arches",
+        "nonzero_executable_text_section_count",
+        "function_symbol_count",
+        "gencode_proof"
+      ],
+      "properties": {
+        "native_cubin_count": {"type": "integer", "minimum": 1},
+        "native_arches": {"const": ["sm_120"]},
+        "ptx_count": {"type": "integer", "minimum": 1},
+        "ptx_arches": {"const": ["sm_120"]},
+        "nonzero_executable_text_section_count": {"type": "integer", "minimum": 1},
+        "function_symbol_count": {"type": "integer", "minimum": 1},
+        "gencode_proof": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["nvcc_command_count", "all_use_cuda_12_8", "all_use_exact_gencode", "compute_120_proven"],
+          "properties": {
+            "nvcc_command_count": {"const": 11},
+            "all_use_cuda_12_8": {"const": true},
+            "all_use_exact_gencode": {"const": true},
+            "compute_120_proven": {"const": true}
+          }
+        }
+      }
+    },
+    "objects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "cpp_count", "cuda_count", "all_regular", "all_et_rel", "all_x86_64", "entries"],
+      "properties": {
+        "count": {"const": 131},
+        "cpp_count": {"const": 120},
+        "cuda_count": {"const": 11},
+        "all_regular": {"const": true},
+        "all_et_rel": {"const": true},
+        "all_x86_64": {"const": true},
+        "entries": {
+          "type": "array",
+          "minItems": 131,
+          "maxItems": 131,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "size_bytes", "sha256", "elf_type", "machine"],
+            "properties": {
+              "name": {"type": "string", "pattern": "^[A-Za-z0-9_]+\\.o$"},
+              "size_bytes": {"type": "integer", "minimum": 1},
+              "sha256": {"$ref": "#/$defs/sha256"},
+              "elf_type": {"const": "REL (Relocatable file)"},
+              "machine": {"const": "Advanced Micro Devices X86-64"}
+            }
+          }
+        }
+      }
+    },
+    "build_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["make_returncode", "make_count", "parallel_jobs", "object_count", "object_inventory_sha256", "candidate_disarmed", "build_profile_zero_residue"],
+      "properties": {
+        "make_returncode": {"const": 0},
+        "make_count": {"const": 1},
+        "parallel_jobs": {"const": 1},
+        "object_count": {"const": 131},
+        "object_inventory_sha256": {"const": "19fcea3c6207ca00e33e177e9da6f35667dd168951bbd89c188765172fdefd9b"},
+        "candidate_disarmed": {"const": true},
+        "build_profile_zero_residue": {"const": true}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binary_content_parser_executed_on_host",
+        "candidate_executed",
+        "network_used",
+        "gpu_device_exposed",
+        "proc_exposed",
+        "dev_exposed",
+        "host_writable_bind_count",
+        "compiler_run",
+        "make_run",
+        "root_parser_run"
+      ],
+      "properties": {
+        "binary_content_parser_executed_on_host": {"const": false},
+        "candidate_executed": {"const": false},
+        "network_used": {"const": false},
+        "gpu_device_exposed": {"const": false},
+        "proc_exposed": {"const": false},
+        "dev_exposed": {"const": false},
+        "host_writable_bind_count": {"const": 0},
+        "compiler_run": {"const": false},
+        "make_run": {"const": false},
+        "root_parser_run": {"const": false}
+      }
+    },
+    "next_allowed_stage": {
+      "enum": [
+        "SEPARATE_GPU_RUNTIME_EXECUTION_ADMISSION_REQUIRED",
+        "STOP_PRESERVE_EVIDENCE"
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "mode_octal", "size_bytes", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "mode_octal": {"type": "string", "pattern": "^0[0-7]{3}$"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "content_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "st_dev", "st_ino", "mode_octal", "nlink", "size_bytes", "sha256", "regular", "symlink"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "st_dev": {"type": "integer", "minimum": 0},
+        "st_ino": {"type": "integer", "minimum": 1},
+        "mode_octal": {"const": "0400"},
+        "nlink": {"const": 1},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "regular": {"const": true},
+        "symlink": {"const": false}
+      }
+    },
+    "inventory_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "total_bytes", "canonical_sha256"],
+      "properties": {
+        "count": {"const": 131},
+        "total_bytes": {"type": "integer", "minimum": 1},
+        "canonical_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "command_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "input", "argv", "returncode", "elapsed_seconds", "stdout", "stderr", "timed_out", "output_limit_exceeded"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "input": {"type": "string", "minLength": 1},
+        "argv": {"type": "array", "minItems": 2, "maxItems": 96, "items": {"type": "string"}},
+        "returncode": {"const": 0},
+        "elapsed_seconds": {"type": "number", "minimum": 0},
+        "stdout": {"$ref": "#/$defs/stream_result"},
+        "stderr": {"$ref": "#/$defs/stream_result"},
+        "timed_out": {"const": false},
+        "output_limit_exceeded": {"const": false}
+      }
+    },
+    "stream_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size_bytes", "sha256", "prefix_utf8"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "size_bytes": {"type": "integer", "minimum": 0, "maximum": 268435456},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "prefix_utf8": {"type": "string", "maxLength": 65536}
+      }
+    }
+  }
+}

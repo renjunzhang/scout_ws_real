@@ -1,0 +1,205 @@
+{
+  "schema_version": "r8-liquid-u3-stage4-synthetic-motion-contract-v1",
+  "document_type": "SMPCC_R8_LIQUID_U3_STAGE4_SYNTHETIC_MOTION_CONTRACT_V1",
+  "contract_id": "u3_c1m_stage4_synthetic_motion_20260811T135543Z_v20",
+  "claim_ceiling": "DEVELOPMENT_ONLY_SOFTWARE_NUMERICAL_NOT_PHYSICAL_FIDELITY",
+  "parents": {
+    "plan": {
+      "path": "/home/zrj/scout_ws/docs/实物实验注意事项/对比试验/仿真接入液体/20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md",
+      "sha256": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+    },
+    "numerical_contract": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_stage4_numerical_contract_v1.json",
+      "sha256": "7b3d7447485d901cd60402f2a7ddd422c587ffa57ba3e5664130d8cd3abd9cd7"
+    },
+    "settled_qc": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_repeatability_restart_20260811T124800Z_v15.qc_v1.json",
+      "sha256": "4703c08e09b33fb16ad68b368dd5e99c2b2c930a3091008fa399241fc58a7fd8"
+    },
+    "backend_parity_qc": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_cpu_gpu_backend_parity_20260811T133800Z_v19.qc_v1.json",
+      "sha256": "41080d61f749e25db1d54da63d701c26b9e2badc2d89fdebd748997282eb18f1"
+    },
+    "base_case_xml": {
+      "path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.xml",
+      "sha256": "28205c2234dda565da600947d03481c492c6bb493b2e058bd04cd360b7862acb",
+      "size_bytes": 7800,
+      "mode": "0440",
+      "inode": 14944258,
+      "nlink": 1
+    },
+    "motion_parser_source": {
+      "path": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source/JMotion.cpp",
+      "sha256": "f013c7d7a036f3368d0a3a6a3ab00e6f77977a7aca0e9d786d0187f2164cac1c",
+      "size_bytes": 45218,
+      "mode": "0440",
+      "inode": 14952796,
+      "nlink": 1
+    },
+    "motion_writer_source": {
+      "path": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source/JMotionMov.cpp",
+      "sha256": "5a1affd64632c4e801a514d2058454b3b044ec69ae6aab0a07e078807a915448",
+      "size_bytes": 18292,
+      "mode": "0440",
+      "inode": 14952803,
+      "nlink": 1
+    }
+  },
+  "checkpoint": {
+    "part": {
+      "path": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_viscoart0p3_cold_b_20260811T113902Z_v14.partial/output/data/Part_0901.bi4",
+      "sha256": "023c2ae47281351f7c601a60709799cf8155745193d7e2aa5ee862256ad9b1f4",
+      "size_bytes": 401410,
+      "mode": "0440",
+      "inode": 15744106,
+      "nlink": 1
+    },
+    "head": {
+      "path": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_viscoart0p3_cold_b_20260811T113902Z_v14.partial/output/data/Part_Head.ibi4",
+      "sha256": "6511cbf54319ce0fbdde9aefc6303f75dee53b56530db3aa25b18212281c266a",
+      "size_bytes": 1554,
+      "mode": "0440",
+      "inode": 15744107,
+      "nlink": 1
+    },
+    "part_index": 901,
+    "part_first": 901,
+    "time_s": 45.05001991890928,
+    "particle_count": 9078,
+    "moving_count": 2669,
+    "fluid_count": 6409,
+    "backend": "GPU_0",
+    "gpu_uuid": "GPU-d29cd22d-8b25-8f4e-9dcf-f2fc4bb113fb"
+  },
+  "fixed_numerics": {
+    "dp_m": 0.002,
+    "cfl": 0.1,
+    "shifting": "None",
+    "viscosity_model": "ARTIFICIAL",
+    "viscoart": 0.3,
+    "output_period_s": 0.05,
+    "coordinate_frame": "CASE_XYZ_Z_UP_CONTAINER_BODY",
+    "container_axis": "Z",
+    "container_radius_m": 0.0185,
+    "nominal_surface_z_m": 0.058
+  },
+  "cases": {
+    "zero": {
+      "case_id": "SETTLED_ZERO_REPLAY",
+      "run_id": "u3_c1m_gpu_settled_zero_replay_20260811T135543Z_v20",
+      "output_xml": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/cases/u3_c1m_settled_zero_replay_20260811T135543Z_v20.xml",
+      "family": "SETTLED_REPLAY_ZERO",
+      "motion_kind": "ZERO",
+      "start_time_s": 45.05001991890928,
+      "active_duration_s": 0.0,
+      "tail_duration_s": 1.0,
+      "end_time_s": 46.05001991890928,
+      "frequency_hz": 0.0,
+      "phase_rad": 0.0,
+      "translation_axis": "NONE",
+      "translation_amplitude_m": 0.0,
+      "yaw_axis": "NONE",
+      "yaw_amplitude_deg": 0.0,
+      "part_first": 901,
+      "part_last": 921,
+      "part_count": 21,
+      "maximum_output_bytes": 16777216
+    },
+    "translation": {
+      "case_id": "SYNTHETIC_TRANSLATION_X",
+      "run_id": "u3_c1m_gpu_synthetic_translation_20260811T135543Z_v21",
+      "output_xml": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/cases/u3_c1m_synthetic_translation_20260811T135543Z_v21.xml",
+      "family": "SYNTHETIC_TRANSLATION",
+      "motion_kind": "TRANSLATION",
+      "start_time_s": 45.05001991890928,
+      "active_duration_s": 2.0,
+      "tail_duration_s": 1.0,
+      "end_time_s": 48.05001991890928,
+      "frequency_hz": 1.0,
+      "phase_rad": 0.0,
+      "translation_axis": "X",
+      "translation_amplitude_m": 0.002,
+      "yaw_axis": "NONE",
+      "yaw_amplitude_deg": 0.0,
+      "part_first": 901,
+      "part_last": 961,
+      "part_count": 61,
+      "maximum_output_bytes": 33554432
+    },
+    "yaw": {
+      "case_id": "SYNTHETIC_YAW_Z",
+      "run_id": "u3_c1m_gpu_synthetic_yaw_20260811T135543Z_v22",
+      "output_xml": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/cases/u3_c1m_synthetic_yaw_20260811T135543Z_v22.xml",
+      "family": "SYNTHETIC_YAW",
+      "motion_kind": "YAW",
+      "start_time_s": 45.05001991890928,
+      "active_duration_s": 2.0,
+      "tail_duration_s": 1.0,
+      "end_time_s": 48.05001991890928,
+      "frequency_hz": 1.0,
+      "phase_rad": 0.0,
+      "translation_axis": "NONE",
+      "translation_amplitude_m": 0.0,
+      "yaw_axis": "Z",
+      "yaw_amplitude_deg": 2.0,
+      "part_first": 901,
+      "part_last": 961,
+      "part_count": 61,
+      "maximum_output_bytes": 33554432
+    }
+  },
+  "surface_proxy": {
+    "method": "FLUID_PARTICLE_Z_QUANTILE_PER_CONTAINER_FRAME_AZIMUTH_SECTOR",
+    "sector_count": 16,
+    "annulus_inner_radius_fraction": 0.45,
+    "annulus_outer_radius_fraction": 0.95,
+    "surface_quantile": 0.98,
+    "minimum_particles_per_sector": 128,
+    "minimum_valid_fraction": 0.95,
+    "frame": "INVERSE_ACTUAL_BOUNDARY_RIGID_TRANSFORM_CONTAINER_BODY",
+    "center_radius_fraction": 0.25,
+    "mid_annulus_inner_fraction": 0.25,
+    "mid_annulus_outer_fraction": 0.55
+  },
+  "acceptance": {
+    "all_frames_required": true,
+    "particle_id_set_exact": true,
+    "nout_required": 0,
+    "finite_required": true,
+    "time_abs_tolerance_s": 0.0001,
+    "zero_boundary_displacement_max_m": 1e-10,
+    "translation_boundary_position_error_max_m": 0.00005,
+    "yaw_boundary_position_error_max_m": 0.00005,
+    "yaw_angle_error_max_deg": 0.05,
+    "translation_surface_first_harmonic_min_m": 0.00001,
+    "dynamic_fluid_speed_rms_over_zero_ratio_min": 1.1,
+    "free_decay_initial_window_s": 0.4,
+    "free_decay_final_window_s": 0.2,
+    "free_decay_final_to_initial_peak_ke_ratio_max": 0.95,
+    "input_frequency_abs_tolerance_hz": 0.05,
+    "phase_report_required": true,
+    "surface_metrics_required": [
+      "crest",
+      "absolute",
+      "peak_to_peak",
+      "peak",
+      "p95",
+      "rms",
+      "first_azimuthal_harmonic"
+    ]
+  },
+  "execution_boundary": {
+    "runner_revision": "r8_liquid_u3_stage4_experiment_runner_v1",
+    "backend": "GPU",
+    "gpu_index": 0,
+    "parallel_runs": 1,
+    "network": false,
+    "sudo": false,
+    "apparmor": false,
+    "workspace_write_bind_count": 0,
+    "candidate_source_executed": false,
+    "combined_motion_authorized": false,
+    "stage5_authorized": false,
+    "formal_physical_claim_authorized": false
+  }
+}

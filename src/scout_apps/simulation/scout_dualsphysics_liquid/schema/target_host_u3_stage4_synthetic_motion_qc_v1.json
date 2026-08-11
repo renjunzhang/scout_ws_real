@@ -1,0 +1,729 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_stage4_synthetic_motion_qc_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "captured_at_utc",
+    "inputs",
+    "contract",
+    "runs",
+    "comparisons",
+    "series_output",
+    "verdict"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "r8-liquid-u3-stage4-synthetic-motion-qc-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_U3_STAGE4_SYNTHETIC_MOTION_QC_V1"
+    },
+    "captured_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "inputs": {
+      "$ref": "#/$defs/inputs"
+    },
+    "contract": {
+      "$ref": "#/$defs/contract"
+    },
+    "runs": {
+      "$ref": "#/$defs/runs"
+    },
+    "comparisons": {
+      "$ref": "#/$defs/comparisons"
+    },
+    "series_output": {
+      "$ref": "#/$defs/identity"
+    },
+    "verdict": {
+      "$ref": "#/$defs/verdict"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "absolutePath": {
+      "type": "string",
+      "pattern": "^/[^\\u0000]*$"
+    },
+    "finiteNumber": {
+      "type": "number"
+    },
+    "nonnegativeNumber": {
+      "type": "number",
+      "minimum": 0
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes",
+        "mode",
+        "inode",
+        "nlink"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 268435456
+        },
+        "mode": {
+          "type": "string",
+          "pattern": "^[0-7]{4}$"
+        },
+        "inode": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nlink": {
+          "const": 1
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan",
+        "motion_contract",
+        "zero_policy",
+        "translation_policy",
+        "yaw_policy",
+        "zero_final",
+        "translation_final",
+        "yaw_final",
+        "bi4_reader",
+        "frame_reader",
+        "solver_qc",
+        "legacy_identity",
+        "experiment_runner",
+        "script",
+        "schema",
+        "tests",
+        "candidate_source"
+      ],
+      "properties": {
+        "plan": { "$ref": "#/$defs/identity" },
+        "motion_contract": { "$ref": "#/$defs/identity" },
+        "zero_policy": { "$ref": "#/$defs/identity" },
+        "translation_policy": { "$ref": "#/$defs/identity" },
+        "yaw_policy": { "$ref": "#/$defs/identity" },
+        "zero_final": { "$ref": "#/$defs/identity" },
+        "translation_final": { "$ref": "#/$defs/identity" },
+        "yaw_final": { "$ref": "#/$defs/identity" },
+        "bi4_reader": { "$ref": "#/$defs/identity" },
+        "frame_reader": { "$ref": "#/$defs/identity" },
+        "solver_qc": { "$ref": "#/$defs/identity" },
+        "legacy_identity": { "$ref": "#/$defs/identity" },
+        "experiment_runner": { "$ref": "#/$defs/identity" },
+        "script": { "$ref": "#/$defs/identity" },
+        "schema": { "$ref": "#/$defs/identity" },
+        "tests": { "$ref": "#/$defs/identity" },
+        "candidate_source": { "$ref": "#/$defs/identity" }
+      }
+    },
+    "partRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first", "last", "count"],
+      "properties": {
+        "first": { "type": "integer", "minimum": 0 },
+        "last": { "type": "integer", "minimum": 0 },
+        "count": { "type": "integer", "minimum": 1, "maximum": 128 }
+      }
+    },
+    "partRanges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zero", "translation", "yaw"],
+      "properties": {
+        "zero": { "$ref": "#/$defs/partRange" },
+        "translation": { "$ref": "#/$defs/partRange" },
+        "yaw": { "$ref": "#/$defs/partRange" }
+      }
+    },
+    "surfaceProxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "sector_count",
+        "annulus_inner_radius_fraction",
+        "annulus_outer_radius_fraction",
+        "surface_quantile",
+        "minimum_particles_per_sector",
+        "minimum_valid_fraction",
+        "frame",
+        "center_radius_fraction",
+        "mid_annulus_inner_fraction",
+        "mid_annulus_outer_fraction"
+      ],
+      "properties": {
+        "method": { "const": "FLUID_PARTICLE_Z_QUANTILE_PER_CONTAINER_FRAME_AZIMUTH_SECTOR" },
+        "sector_count": { "const": 16 },
+        "annulus_inner_radius_fraction": { "const": 0.45 },
+        "annulus_outer_radius_fraction": { "const": 0.95 },
+        "surface_quantile": { "const": 0.98 },
+        "minimum_particles_per_sector": { "const": 128 },
+        "minimum_valid_fraction": { "const": 0.95 },
+        "frame": { "const": "INVERSE_ACTUAL_BOUNDARY_RIGID_TRANSFORM_CONTAINER_BODY" },
+        "center_radius_fraction": { "const": 0.25 },
+        "mid_annulus_inner_fraction": { "const": 0.25 },
+        "mid_annulus_outer_fraction": { "const": 0.55 }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "all_frames_required",
+        "particle_id_set_exact",
+        "nout_required",
+        "finite_required",
+        "time_abs_tolerance_s",
+        "zero_boundary_displacement_max_m",
+        "translation_boundary_position_error_max_m",
+        "yaw_boundary_position_error_max_m",
+        "yaw_angle_error_max_deg",
+        "translation_surface_first_harmonic_min_m",
+        "dynamic_fluid_speed_rms_over_zero_ratio_min",
+        "free_decay_initial_window_s",
+        "free_decay_final_window_s",
+        "free_decay_final_to_initial_peak_ke_ratio_max",
+        "input_frequency_abs_tolerance_hz",
+        "phase_report_required",
+        "surface_metrics_required"
+      ],
+      "properties": {
+        "all_frames_required": { "const": true },
+        "particle_id_set_exact": { "const": true },
+        "nout_required": { "const": 0 },
+        "finite_required": { "const": true },
+        "time_abs_tolerance_s": { "const": 0.0001 },
+        "zero_boundary_displacement_max_m": { "const": 1e-10 },
+        "translation_boundary_position_error_max_m": { "const": 0.00005 },
+        "yaw_boundary_position_error_max_m": { "const": 0.00005 },
+        "yaw_angle_error_max_deg": { "const": 0.05 },
+        "translation_surface_first_harmonic_min_m": { "const": 0.00001 },
+        "dynamic_fluid_speed_rms_over_zero_ratio_min": { "const": 1.1 },
+        "free_decay_initial_window_s": { "const": 0.4 },
+        "free_decay_final_window_s": { "const": 0.2 },
+        "free_decay_final_to_initial_peak_ke_ratio_max": { "const": 0.95 },
+        "input_frequency_abs_tolerance_hz": { "const": 0.05 },
+        "phase_report_required": { "const": true },
+        "surface_metrics_required": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "crest" },
+            { "const": "absolute" },
+            { "const": "peak_to_peak" },
+            { "const": "peak" },
+            { "const": "p95" },
+            { "const": "rms" },
+            { "const": "first_azimuthal_harmonic" }
+          ],
+          "items": false,
+          "minItems": 7,
+          "maxItems": 7
+        }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_id",
+        "claim_ceiling",
+        "start_time_s",
+        "active_duration_s",
+        "tail_duration_s",
+        "output_period_s",
+        "particle_count",
+        "moving_count",
+        "fluid_count",
+        "container_radius_m",
+        "nominal_surface_z_m",
+        "part_ranges",
+        "surface_proxy",
+        "acceptance",
+        "threshold_overrides_allowed"
+      ],
+      "properties": {
+        "contract_id": { "const": "u3_c1m_stage4_synthetic_motion_20260811T135543Z_v20" },
+        "claim_ceiling": { "const": "DEVELOPMENT_ONLY_SOFTWARE_NUMERICAL_NOT_PHYSICAL_FIDELITY" },
+        "start_time_s": { "const": 45.05001991890928 },
+        "active_duration_s": { "const": 2.0 },
+        "tail_duration_s": { "const": 1.0 },
+        "output_period_s": { "const": 0.05 },
+        "particle_count": { "const": 9078 },
+        "moving_count": { "const": 2669 },
+        "fluid_count": { "const": 6409 },
+        "container_radius_m": { "const": 0.0185 },
+        "nominal_surface_z_m": { "const": 0.058 },
+        "part_ranges": { "$ref": "#/$defs/partRanges" },
+        "surface_proxy": { "$ref": "#/$defs/surfaceProxy" },
+        "acceptance": { "$ref": "#/$defs/acceptance" },
+        "threshold_overrides_allowed": { "const": false }
+      }
+    },
+    "surfaceFrame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sector_counts",
+        "sector_heights_m",
+        "valid_fraction",
+        "crest_above_nominal_m",
+        "absolute_deviation_max_m",
+        "peak_to_peak_m",
+        "peak_height_m",
+        "p95_height_m",
+        "rms_deviation_m",
+        "first_azimuthal_harmonic_m",
+        "first_azimuthal_harmonic_phase_rad"
+      ],
+      "properties": {
+        "sector_counts": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0 },
+          "minItems": 16,
+          "maxItems": 16
+        },
+        "sector_heights_m": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/finiteNumber" },
+          "minItems": 16,
+          "maxItems": 16
+        },
+        "valid_fraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "crest_above_nominal_m": { "$ref": "#/$defs/finiteNumber" },
+        "absolute_deviation_max_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "peak_to_peak_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "peak_height_m": { "$ref": "#/$defs/finiteNumber" },
+        "p95_height_m": { "$ref": "#/$defs/finiteNumber" },
+        "rms_deviation_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "first_azimuthal_harmonic_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "first_azimuthal_harmonic_phase_rad": { "$ref": "#/$defs/finiteNumber" }
+      }
+    },
+    "frameMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "part",
+        "time_s",
+        "relative_time_s",
+        "step",
+        "particle_count",
+        "nout",
+        "all_finite",
+        "boundary_signal_name",
+        "boundary_observed",
+        "boundary_expected",
+        "actual_translation_x_m",
+        "actual_yaw_ccw_rad",
+        "boundary_position_error_max_m",
+        "fluid_speed_rms_lab_m_s",
+        "fluid_speed_rms_container_m_s",
+        "fluid_tangential_speed_rms_container_m_s",
+        "specific_kinetic_energy_lab_j_kg",
+        "specific_kinetic_energy_container_j_kg",
+        "surface"
+      ],
+      "properties": {
+        "part": { "type": "integer", "minimum": 0 },
+        "time_s": { "$ref": "#/$defs/finiteNumber" },
+        "relative_time_s": { "$ref": "#/$defs/finiteNumber" },
+        "step": { "type": "integer", "minimum": 0 },
+        "particle_count": { "const": 9078 },
+        "nout": { "const": 0 },
+        "all_finite": { "const": true },
+        "boundary_signal_name": {
+          "enum": ["zero", "translation_x_m", "yaw_solver_deg"]
+        },
+        "boundary_observed": { "$ref": "#/$defs/finiteNumber" },
+        "boundary_expected": { "$ref": "#/$defs/finiteNumber" },
+        "actual_translation_x_m": { "$ref": "#/$defs/finiteNumber" },
+        "actual_yaw_ccw_rad": { "$ref": "#/$defs/finiteNumber" },
+        "boundary_position_error_max_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "fluid_speed_rms_lab_m_s": { "$ref": "#/$defs/nonnegativeNumber" },
+        "fluid_speed_rms_container_m_s": { "$ref": "#/$defs/nonnegativeNumber" },
+        "fluid_tangential_speed_rms_container_m_s": { "$ref": "#/$defs/nonnegativeNumber" },
+        "specific_kinetic_energy_lab_j_kg": { "$ref": "#/$defs/nonnegativeNumber" },
+        "specific_kinetic_energy_container_j_kg": { "$ref": "#/$defs/nonnegativeNumber" },
+        "surface": { "$ref": "#/$defs/surfaceFrame" }
+      }
+    },
+    "boundarySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "motion_kind",
+        "position_error_max_m",
+        "zero_displacement_max_m",
+        "translation_yz_error_max_m",
+        "yaw_angle_error_max_deg",
+        "observed_peak_translation_m",
+        "observed_peak_yaw_deg",
+        "all_expected_rigid_transform",
+        "pass"
+      ],
+      "properties": {
+        "motion_kind": { "enum": ["ZERO", "TRANSLATION", "YAW"] },
+        "position_error_max_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "zero_displacement_max_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "translation_yz_error_max_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "yaw_angle_error_max_deg": { "$ref": "#/$defs/nonnegativeNumber" },
+        "observed_peak_translation_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "observed_peak_yaw_deg": { "$ref": "#/$defs/nonnegativeNumber" },
+        "all_expected_rigid_transform": { "type": "boolean" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "frequencyFit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "signal_name",
+        "requested_frequency_hz",
+        "observed_frequency_hz",
+        "frequency_abs_error_hz",
+        "requested_amplitude",
+        "observed_amplitude",
+        "requested_phase_rad",
+        "observed_phase_rad",
+        "phase_abs_error_rad",
+        "offset",
+        "fit_rmse",
+        "fit_r_squared",
+        "pass"
+      ],
+      "properties": {
+        "signal_name": { "enum": ["zero", "translation_x_m", "yaw_solver_deg"] },
+        "requested_frequency_hz": { "$ref": "#/$defs/nonnegativeNumber" },
+        "observed_frequency_hz": { "$ref": "#/$defs/nonnegativeNumber" },
+        "frequency_abs_error_hz": { "$ref": "#/$defs/nonnegativeNumber" },
+        "requested_amplitude": { "$ref": "#/$defs/nonnegativeNumber" },
+        "observed_amplitude": { "$ref": "#/$defs/nonnegativeNumber" },
+        "requested_phase_rad": { "$ref": "#/$defs/finiteNumber" },
+        "observed_phase_rad": { "$ref": "#/$defs/finiteNumber" },
+        "phase_abs_error_rad": { "$ref": "#/$defs/nonnegativeNumber" },
+        "offset": { "$ref": "#/$defs/finiteNumber" },
+        "fit_rmse": { "$ref": "#/$defs/nonnegativeNumber" },
+        "fit_r_squared": { "type": "number", "minimum": 0, "maximum": 1.000000001 },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "motionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "size_bytes",
+        "frame_count",
+        "reference_ids",
+        "all_posref_finite",
+        "aligned_with_particle_parts",
+        "root_geometry_matched",
+        "pass"
+      ],
+      "properties": {
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "size_bytes": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+        "frame_count": { "type": "integer", "minimum": 1, "maximum": 128 },
+        "reference_ids": {
+          "type": "array",
+          "items": { "type": "integer", "minimum": 0, "maximum": 2668 },
+          "minItems": 3,
+          "maxItems": 3,
+          "uniqueItems": true
+        },
+        "all_posref_finite": { "type": "boolean" },
+        "aligned_with_particle_parts": { "type": "boolean" },
+        "root_geometry_matched": { "type": "boolean" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "fluidSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_speed_rms_lab_m_s",
+        "active_speed_rms_container_m_s",
+        "active_tangential_speed_rms_container_m_s",
+        "peak_tangential_speed_rms_container_m_s",
+        "series_finite",
+        "pass"
+      ],
+      "properties": {
+        "active_speed_rms_lab_m_s": { "$ref": "#/$defs/nonnegativeNumber" },
+        "active_speed_rms_container_m_s": { "$ref": "#/$defs/nonnegativeNumber" },
+        "active_tangential_speed_rms_container_m_s": { "$ref": "#/$defs/nonnegativeNumber" },
+        "peak_tangential_speed_rms_container_m_s": { "$ref": "#/$defs/nonnegativeNumber" },
+        "series_finite": { "type": "boolean" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "surfaceSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valid_frame_count",
+        "frame_count",
+        "minimum_sector_particles_observed",
+        "maximum_sector_particles_observed",
+        "minimum_valid_fraction_observed",
+        "peak_first_azimuthal_harmonic_m",
+        "peak_to_peak_max_m",
+        "all_required_metrics_finite",
+        "pass"
+      ],
+      "properties": {
+        "valid_frame_count": { "type": "integer", "minimum": 0, "maximum": 128 },
+        "frame_count": { "type": "integer", "minimum": 1, "maximum": 128 },
+        "minimum_sector_particles_observed": { "type": "integer", "minimum": 0 },
+        "maximum_sector_particles_observed": { "type": "integer", "minimum": 0 },
+        "minimum_valid_fraction_observed": { "type": "number", "minimum": 0, "maximum": 1 },
+        "peak_first_azimuthal_harmonic_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "peak_to_peak_max_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "all_required_metrics_finite": { "type": "boolean" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "runResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "motion_kind",
+        "output_inventory_canonical_sha256",
+        "part_first",
+        "part_last",
+        "frame_count",
+        "particle_count_all_frames",
+        "exact_id_set_all_frames",
+        "nout_zero_all_frames",
+        "finite_all_frames",
+        "time_alignment_max_abs_s",
+        "boundary",
+        "frequency_fit",
+        "motion_ref",
+        "fluid",
+        "surface",
+        "frames_canonical_sha256",
+        "frames",
+        "pass"
+      ],
+      "properties": {
+        "run_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "motion_kind": { "enum": ["ZERO", "TRANSLATION", "YAW"] },
+        "output_inventory_canonical_sha256": { "$ref": "#/$defs/sha256" },
+        "part_first": { "type": "integer", "minimum": 0 },
+        "part_last": { "type": "integer", "minimum": 0 },
+        "frame_count": { "type": "integer", "minimum": 1, "maximum": 128 },
+        "particle_count_all_frames": { "const": 9078 },
+        "exact_id_set_all_frames": { "type": "boolean" },
+        "nout_zero_all_frames": { "type": "boolean" },
+        "finite_all_frames": { "type": "boolean" },
+        "time_alignment_max_abs_s": { "$ref": "#/$defs/nonnegativeNumber" },
+        "boundary": { "$ref": "#/$defs/boundarySummary" },
+        "frequency_fit": { "$ref": "#/$defs/frequencyFit" },
+        "motion_ref": { "$ref": "#/$defs/motionRef" },
+        "fluid": { "$ref": "#/$defs/fluidSummary" },
+        "surface": { "$ref": "#/$defs/surfaceSummary" },
+        "frames_canonical_sha256": { "$ref": "#/$defs/sha256" },
+        "frames": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/frameMetric" },
+          "minItems": 1,
+          "maxItems": 128
+        },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "runs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zero", "translation", "yaw"],
+      "properties": {
+        "zero": { "$ref": "#/$defs/runResult" },
+        "translation": { "$ref": "#/$defs/runResult" },
+        "yaw": { "$ref": "#/$defs/runResult" }
+      }
+    },
+    "zeroStability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initial_specific_ke_lab_j_kg",
+        "final_specific_ke_lab_j_kg",
+        "final_to_initial_ke_ratio",
+        "maximum_sector_height_drift_m",
+        "boundary_displacement_max_m",
+        "non_growth_observed",
+        "pass"
+      ],
+      "properties": {
+        "initial_specific_ke_lab_j_kg": { "$ref": "#/$defs/nonnegativeNumber" },
+        "final_specific_ke_lab_j_kg": { "$ref": "#/$defs/nonnegativeNumber" },
+        "final_to_initial_ke_ratio": { "$ref": "#/$defs/nonnegativeNumber" },
+        "maximum_sector_height_drift_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "boundary_displacement_max_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "non_growth_observed": { "type": "boolean" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "dynamicResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "active_speed_rms_lab_m_s",
+        "zero_speed_rms_lab_m_s",
+        "dynamic_over_zero_ratio",
+        "peak_surface_first_harmonic_m",
+        "peak_tangential_speed_rms_container_m_s",
+        "speed_ratio_pass",
+        "surface_harmonic_required",
+        "surface_harmonic_pass",
+        "interpretation",
+        "pass"
+      ],
+      "properties": {
+        "active_speed_rms_lab_m_s": { "$ref": "#/$defs/nonnegativeNumber" },
+        "zero_speed_rms_lab_m_s": { "$ref": "#/$defs/nonnegativeNumber" },
+        "dynamic_over_zero_ratio": { "$ref": "#/$defs/nonnegativeNumber" },
+        "peak_surface_first_harmonic_m": { "$ref": "#/$defs/nonnegativeNumber" },
+        "peak_tangential_speed_rms_container_m_s": { "$ref": "#/$defs/nonnegativeNumber" },
+        "speed_ratio_pass": { "type": "boolean" },
+        "surface_harmonic_required": { "type": "boolean" },
+        "surface_harmonic_pass": { "type": "boolean" },
+        "interpretation": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "decayResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initial_window_start_s",
+        "initial_window_end_s",
+        "final_window_start_s",
+        "final_window_end_s",
+        "initial_peak_specific_ke_lab_j_kg",
+        "final_mean_specific_ke_lab_j_kg",
+        "final_to_initial_peak_ratio",
+        "pass"
+      ],
+      "properties": {
+        "initial_window_start_s": { "$ref": "#/$defs/finiteNumber" },
+        "initial_window_end_s": { "$ref": "#/$defs/finiteNumber" },
+        "final_window_start_s": { "$ref": "#/$defs/finiteNumber" },
+        "final_window_end_s": { "$ref": "#/$defs/finiteNumber" },
+        "initial_peak_specific_ke_lab_j_kg": { "$ref": "#/$defs/nonnegativeNumber" },
+        "final_mean_specific_ke_lab_j_kg": { "$ref": "#/$defs/nonnegativeNumber" },
+        "final_to_initial_peak_ratio": { "$ref": "#/$defs/nonnegativeNumber" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "freeDecay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["translation", "yaw", "pass"],
+      "properties": {
+        "translation": { "$ref": "#/$defs/decayResult" },
+        "yaw": { "$ref": "#/$defs/decayResult" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "inputReconstruction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["translation", "yaw", "pass"],
+      "properties": {
+        "translation": { "$ref": "#/$defs/frequencyFit" },
+        "yaw": { "$ref": "#/$defs/frequencyFit" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "comparisons": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "zero_stability",
+        "translation_response",
+        "yaw_response",
+        "free_decay",
+        "input_reconstruction"
+      ],
+      "properties": {
+        "zero_stability": { "$ref": "#/$defs/zeroStability" },
+        "translation_response": { "$ref": "#/$defs/dynamicResponse" },
+        "yaw_response": { "$ref": "#/$defs/dynamicResponse" },
+        "free_decay": { "$ref": "#/$defs/freeDecay" },
+        "input_reconstruction": { "$ref": "#/$defs/inputReconstruction" }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "stage4_liquid_only_validation_complete",
+        "development_only",
+        "formal",
+        "physical_fidelity_validated",
+        "production_eligible",
+        "stage5_admitted",
+        "all_frozen_thresholds_pass",
+        "candidate_source_executed",
+        "solver_executed_by_this_tool",
+        "gpu_exposed_by_this_tool",
+        "network_used_by_this_tool",
+        "inputs_modified",
+        "next"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "PASS_U3_STAGE4_LIQUID_ONLY_DEVELOPMENT_VALIDATION",
+            "FAIL_U3_STAGE4_SYNTHETIC_MOTION_QC"
+          ]
+        },
+        "stage4_liquid_only_validation_complete": { "type": "boolean" },
+        "development_only": { "const": true },
+        "formal": { "const": false },
+        "physical_fidelity_validated": { "const": false },
+        "production_eligible": { "const": false },
+        "stage5_admitted": { "const": false },
+        "all_frozen_thresholds_pass": { "type": "boolean" },
+        "candidate_source_executed": { "const": false },
+        "solver_executed_by_this_tool": { "const": false },
+        "gpu_exposed_by_this_tool": { "const": false },
+        "network_used_by_this_tool": { "const": false },
+        "inputs_modified": { "const": false },
+        "next": {
+          "enum": [
+            "STAGE5_REQUIRES_SEPARATE_USER_AUTHORIZATION_AND_PHYSICAL_INPUTS",
+            "STOP_REVIEW_STAGE4_QC_FAILURE"
+          ]
+        }
+      }
+    }
+  }
+}

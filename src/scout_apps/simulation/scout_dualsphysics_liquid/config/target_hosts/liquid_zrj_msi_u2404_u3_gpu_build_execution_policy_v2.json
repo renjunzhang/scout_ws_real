@@ -1,0 +1,209 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-u3-gpu-build-execution-policy-v2",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_U3_GPU_BUILD_EXECUTION_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_U3_GPU_BUILD_EXECUTION_V2",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "goal": "G2A_TO_G4_ATTEMPT_A_ONE_SHOT",
+  "execution_scope": "one_exact_attempt_a_source_copy_one_exact_make_and_mandatory_g4_decision",
+  "plan_identity": {
+    "commit": "a7409aff3bd280392491606503893e36f1cc5888",
+    "blob": "7b2eb275d0fb6cb882ec701aabd7b7af229f353c",
+    "sha256": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+  },
+  "g1_parent_hashes": {
+    "src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_gpu_build_execution_policy_v1.json": "f3831fdfe09716fe5b8f0371bda25d087a6f10e0b0570b90eebea2caf90b7f57",
+    "src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_gpu_build_execution_policy_v1.json": "250d32def4a6a0c37405d8cc9d9920b8f5882abe7bb36de7ca95e7308de54cad",
+    "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_gpu_build_gate_v1.py": "e34ab0facc3c665c6befbb792c7344e0af6e652fd3c6b30dfa81ca8cbea5b502",
+    "src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_target_u3_gpu_build_gate_v1.py": "a26602c650557044bab6e84d54197f91b44e5e854548522043962c01b7b399e9",
+    "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-v1.profile.template": "67359e87d8b243c9d31e03634998369ff6530bf8617ad3d5f9c5e4b0fc9b613b",
+    "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-v1.profile.template": "11c175f63c901b337c5e8899aceedbc898fde0716c07a323746d723b15021fc4",
+    "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-20260810T102641Z-a.profile": "2461550a249284dafc72e473b745ed829463c239e93e805fff623e54a29de8e1",
+    "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-20260810T102641Z-a.profile": "fbcc9f417103f17f59003b6da1b8bb7f08e59b2a68015b7ac38cdf1db8c19b10",
+    "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T102641Z.profile": "d23da58b35c69f458d7f9a7fcf03b9fc2493283cd580191d58f7ced460b45168"
+  },
+  "receipt_schema": {
+    "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_gpu_build_execution_receipt_v1.json",
+    "sha256": "10ede832aae19632b9b5543b9916a7d1803e210c743db90910a66a37a1e02173",
+    "draft": "2020-12",
+    "recursive_object_closure_required": true
+  },
+  "campaign": {
+    "campaign_id": "u3_source_gpu_build_sm120_20260810T102641Z",
+    "build_id_a": "u3_source_gpu_build_sm120_20260810T102641Z_a",
+    "root_a": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial",
+    "build_id_b": "u3_source_gpu_build_sm120_20260810T102641Z_b",
+    "root_b": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_b.partial",
+    "attempt_b_forbidden": true,
+    "parallel_jobs": 1
+  },
+  "deadlines": {
+    "t0": "2026-08-10T17:17:51.731823359+08:00",
+    "candidate_deadline": "2026-08-10T23:17:51.731823359+08:00",
+    "final_deadline": "2026-08-11T01:17:51.731823359+08:00",
+    "t0_reset_forbidden": true,
+    "candidate_process_group_hard_stop": true
+  },
+  "runtime_identity": {
+    "uid": 1000,
+    "gid": 1000,
+    "supplementary_group_count": 0,
+    "sudo_setpriv_prefix": [
+      "/usr/bin/sudo",
+      "--",
+      "/usr/bin/setpriv",
+      "--reuid=1000",
+      "--regid=1000",
+      "--clear-groups",
+      "--",
+      "/usr/bin/python3",
+      "<FROZEN_EXECUTION_GATE_PATH>",
+      "<FIXED_PHASE>"
+    ],
+    "gate_identity_recheck_before_every_call": true
+  },
+  "system_tools": [
+    {"path": "/usr/bin/sudo", "sha256": "136f2e48b0295b9fc595b8259cf2411ac43f27ddbfe02b956649ddaa2e92b9fa"},
+    {"path": "/usr/bin/setpriv", "sha256": "96b083b79c32fd2f0c29657e88e20c7495839349fc64ad5d0503f32d26bf8733"},
+    {"path": "/usr/sbin/apparmor_parser", "sha256": "6bc852b37807961c14976be9a227ae96bd817f73b5189cb0e0ff5eca4448c01c"},
+    {"path": "/usr/sbin/aa-status", "sha256": "af9f579ad039f0e669bfb15735c55efd17896f838d684e7f9be15b09fa1e2dd4"},
+    {"path": "/usr/bin/aa-exec", "sha256": "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e"},
+    {"path": "/usr/bin/bwrap", "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"},
+    {"path": "/usr/bin/timeout", "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"},
+    {"path": "/usr/bin/prlimit", "sha256": "f27cfd8c1512a4cc6541b59b80cb4cdfd6ef28c34aa21db4299b48264cd0d128"}
+  ],
+  "command_surface": [
+    "self-check",
+    "preflight",
+    "prepare-source-copy",
+    "run-source-copy",
+    "finalize-source-copy",
+    "prepare-build",
+    "run-build",
+    "run-static-audit"
+  ],
+  "receipt_paths": {
+    "source_copy_start": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_source_copy.json.partial",
+    "source_copy_run": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_source_copy_run.json",
+    "source_copy_final": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_source_copy.json",
+    "gpu_build_start": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_gpu_build.json.partial",
+    "gpu_build_final": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_gpu_build.json",
+    "gpu_build_stdout": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_gpu_build.stdout.log",
+    "gpu_build_stderr": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_gpu_build.stderr.log",
+    "gpu_build_monitor": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_gpu_build.resource.jsonl",
+    "static_audit_final": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_gpu_static_audit.json",
+    "static_audit_parser_output": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_gpu_static_audit.parser-output.bin",
+    "static_audit_command_summary": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_gpu_static_audit.commands.jsonl"
+  },
+  "phase_machine": [
+    "STATIC_LAYER_VALIDATED",
+    "SOURCE_COPY_START_CREATE_NEW",
+    "ROOT_A_CREATE_NEW",
+    "A_COPY_PROFILE_LOADED",
+    "ONE_ISOLATED_SOURCE_COPY",
+    "A_COPY_PROFILE_UNLOADED_ZERO_RESIDUE",
+    "SEALED_352_REVERIFIED_AFTER_UNLOAD",
+    "WRAPPER_O_EXCL_0600_CREATED",
+    "COMPLETE_353_VERIFIED",
+    "SOURCE_COPY_FINAL_CREATE_NEW",
+    "GPU_BUILD_START_CREATE_NEW",
+    "A_BUILD_PROFILE_LOADED",
+    "ONE_MAKE_INVOCATION",
+    "CANDIDATE_DISARMED_IF_PRESENT",
+    "A_BUILD_PROFILE_UNLOADED_ZERO_RESIDUE",
+    "STATIC_AUDIT_OR_LOG_ONLY_G4",
+    "STOP_BEFORE_G5"
+  ],
+  "source_copy": {
+    "g1_argv_source": "source_copy_contract.full_execution_argv",
+    "only_delta": {
+      "token_from": "PATH=/usr/bin:/usr/local/cuda-12.8/bin",
+      "token_to": "PATH=/usr/bin",
+      "replacement_count": 1
+    },
+    "copy_command_unchanged": true,
+    "sealed_file_count": 352,
+    "sealed_total_bytes": 5473917,
+    "wrapper_file_count": 1,
+    "complete_file_count": 353,
+    "copy_may_run_once": true,
+    "same_attempt_retry_forbidden": true
+  },
+  "build": {
+    "g1_full_execution_argv_reused_exactly": true,
+    "g1_make_argv_reused_exactly": true,
+    "make_invocation_limit": 1,
+    "parallel_jobs": 1,
+    "wall_timeout_seconds": 5400,
+    "cpu_limit_seconds": 5400,
+    "address_space_limit_bytes": 8589934592,
+    "minimum_available_memory_bytes": 4294967296,
+    "monitor_interval_seconds": 20,
+    "monitor_interval_minimum_seconds": 10,
+    "monitor_interval_maximum_seconds": 30,
+    "stdout_stderr_complete_files": true,
+    "candidate_path": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial/output/artifacts/DualSPHysics5.4_linux64",
+    "candidate_disarm_mode_octal": "0400",
+    "candidate_open_flags": ["O_RDONLY", "O_NOFOLLOW", "O_CLOEXEC"],
+    "candidate_regular_nlink1_positive_size_required": true,
+    "attempt_b_or_second_make_forbidden": true
+  },
+  "static_audit": {
+    "g1_exact_argv_builder_reused": true,
+    "candidate_command_count": 11,
+    "object_command_count": 546,
+    "total_command_count": 557,
+    "object_count": 131,
+    "cpp_object_count": 120,
+    "cuda_object_count": 11,
+    "aggregate_parser_output_limit_bytes": 268435456,
+    "per_command_output_limit_bytes": 268435456,
+    "bounded_prefix_bytes": 65536,
+    "candidate_and_objects_identity_unchanged_required": true,
+    "host_binary_content_parser_forbidden": true,
+    "all_content_parsers_inside_exact_read_only_disconnected_sandbox": true,
+    "candidate_execution_forbidden": true
+  },
+  "profiles": {
+    "a_copy": {
+      "name": "r8-liquid-u3-gpu-copy-20260810T102641Z-a",
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-20260810T102641Z-a.profile",
+      "sha256": "2461550a249284dafc72e473b745ed829463c239e93e805fff623e54a29de8e1"
+    },
+    "a_build": {
+      "name": "r8-liquid-u3-gpu-build-20260810T102641Z-a",
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-20260810T102641Z-a.profile",
+      "sha256": "fbcc9f417103f17f59003b6da1b8bb7f08e59b2a68015b7ac38cdf1db8c19b10"
+    },
+    "static_audit": {
+      "name": "r8-liquid-u3-gpu-static-audit-20260810T102641Z",
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T102641Z.profile",
+      "sha256": "d23da58b35c69f458d7f9a7fcf03b9fc2493283cd580191d58f7ced460b45168"
+    },
+    "load_argv": ["/usr/bin/sudo", "--", "/usr/sbin/apparmor_parser", "-K", "-T", "-a", "--", "<EXACT_PROFILE_PATH>"],
+    "status_argv": ["/usr/bin/sudo", "--", "/usr/sbin/aa-status"],
+    "unload_argv": ["/usr/bin/sudo", "--", "/usr/sbin/apparmor_parser", "-K", "-T", "-R", "--", "<EXACT_PROFILE_PATH>"],
+    "sudo_timestamp_clear_argv": ["/usr/bin/sudo", "-k"],
+    "replace_forbidden": true,
+    "persistent_install_forbidden": true,
+    "zero_residue_required": true
+  },
+  "invariants": {
+    "create_new_only": true,
+    "no_overwrite_delete_or_cleanup": true,
+    "no_source_write": true,
+    "no_workspace_write_except_this_four_file_execution_revision": true,
+    "no_network": true,
+    "no_gpu_device": true,
+    "no_gpu_runtime": true,
+    "no_candidate_execution": true,
+    "no_make_dry_run_or_second_make": true,
+    "no_cmake": true,
+    "no_gxx13_in_attempt_a": true,
+    "no_architecture_downgrade": true,
+    "no_b_root_profile_or_receipt": true,
+    "no_g5_g6_g7": true,
+    "git_commit_push_pr_forbidden": true
+  },
+  "status": "G2A_EXECUTION_LAYER_FROZEN_PENDING_STATIC_VALIDATION",
+  "next_allowed_stage": "STATIC_VALIDATION_THEN_CONDITIONAL_G2_ATTEMPT_A_SOURCE_COPY"
+}

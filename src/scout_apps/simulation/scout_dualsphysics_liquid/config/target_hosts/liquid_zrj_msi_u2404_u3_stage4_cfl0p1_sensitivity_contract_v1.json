@@ -1,0 +1,103 @@
+{
+  "schema_version": "smpcc-r8-liquid-u3-stage4-cfl0p1-sensitivity-contract-v1",
+  "document_type": "SMPCC_R8_LIQUID_U3_STAGE4_CFL0P1_SENSITIVITY_CONTRACT_V1",
+  "contract_id": "u3_c1m_gpu_shift_none_cfl0p1_10p05_to_20p05_v1",
+  "status": "FROZEN_PENDING_EXACTLY_ONE_GPU_CFL_SENSITIVITY_RUN",
+  "claim_ceiling": "DEVELOPMENT_ONLY_SOFTWARE_NUMERICAL_NOT_PHYSICAL_FIDELITY",
+  "parents": {
+    "plan": {
+      "path": "/home/zrj/scout_ws/docs/实物实验注意事项/对比试验/仿真接入液体/20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md",
+      "sha256": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+    },
+    "stage4_numerical_contract": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_stage4_numerical_contract_v1.json",
+      "sha256": "7b3d7447485d901cd60402f2a7ddd422c587ffa57ba3e5664130d8cd3abd9cd7"
+    },
+    "cfl0p2_extension_final": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_extend_from_0201_v3.final.json",
+      "sha256": "c7f26f9ba2b742718113094b0ef7c24ce742d0063acaa4918c9083810a3143b5"
+    },
+    "cfl0p2_extension_qc": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_extend_from_0201_v3.qc_v1.json",
+      "sha256": "2487ace02470ae7e85338450611648185490e8df0457f015ea091665f0e09e56"
+    },
+    "cli_parser_source": {
+      "path": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T170339Z_a.partial/output/buildtree/src/source/JSphCfgRun.cpp",
+      "sha256": "51b8dc214181edc0518e4c7de42a71b9248dee891064de3efb74aa8b095a2c96"
+    },
+    "solver_override_source": {
+      "path": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T170339Z_a.partial/output/buildtree/src/source/JSph.cpp",
+      "sha256": "206e4486a3a0d304e02da1a73d2e7c7ed96354d559ce481275d09f5245b8c9e7"
+    }
+  },
+  "cli_override_evidence": {
+    "exact_argv": "-cfl:0.1",
+    "parser_semantics": "CFLnumber=atof(value)_AND_REJECT_IF_LE_ZERO",
+    "solver_semantics": "IF_CFG_CFLNUMBER_GT_ZERO_OVERRIDE_CASE_CFLNUMBER",
+    "candidate_help_executed": false,
+    "source_read_only": true
+  },
+  "checkpoint": {
+    "part_index": 201,
+    "time_s": 10.05,
+    "part_path": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_shift_none_from_0161_v2.partial/output/data/Part_0201.bi4",
+    "part_sha256": "0eee6feb93759f733030601d767521f343ed8cd348f8b2b47104a9ebd4f1d54c",
+    "part_size_bytes": 401410,
+    "part_mode": "0440",
+    "part_inode": 15733550,
+    "part_nlink": 1,
+    "head_path": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_shift_none_from_0161_v2.partial/output/data/Part_Head.ibi4",
+    "head_sha256": "50acccd4000605758061c62ac62d86d32f46aabefbf0afd5b08d729da71ce4c1",
+    "head_size_bytes": 1554,
+    "head_mode": "0440",
+    "head_inode": 15733551,
+    "head_nlink": 1
+  },
+  "paired_window": {
+    "start_time_s": 10.05,
+    "end_time_s": 20.05,
+    "output_period_s": 0.05,
+    "part_first": 201,
+    "part_last": 401,
+    "part_count": 201,
+    "tail_window_s": 1.0,
+    "baseline_cfl": 0.2,
+    "candidate_cfl": 0.1,
+    "single_delta": "CFL_0P2_TO_0P1"
+  },
+  "frozen_solver": {
+    "backend": "GPU_0",
+    "shifting": "None",
+    "ddt": "DDT2(0.1)",
+    "dp_m": 0.002,
+    "parallel_runs": 1,
+    "omp_threads": 1,
+    "other_numerical_parameters_changed": false
+  },
+  "acceptance": {
+    "all_original_absolute_limits_required": true,
+    "no_metric_material_regression_required": true,
+    "maximum_regression_fraction_of_limit": 0.05,
+    "minimum_primary_metrics_meaningfully_improved": 2,
+    "meaningful_improvement_fraction_of_limit": 0.02,
+    "maximum_primary_normalized_score_ratio": 0.95,
+    "same_gpu_backend_required": true,
+    "same_initial_state_arrays_required": true
+  },
+  "execution_limits": {
+    "wall_timeout_seconds": 1500,
+    "kill_after_seconds": 10,
+    "monitor_interval_seconds": 10,
+    "minimum_mem_available_bytes": 4294967296,
+    "maximum_output_bytes": 268435456,
+    "network": false,
+    "project_workspace_write_bind_count": 0
+  },
+  "result_boundary": {
+    "development_only": true,
+    "formal": false,
+    "physical_primary_eligible": false,
+    "candidate_execution_source_disallowed": true,
+    "new_campaign_claimed": false
+  }
+}

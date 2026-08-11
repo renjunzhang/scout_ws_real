@@ -1,0 +1,259 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_stage4_synthetic_motion_figure_receipt_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "captured_at_utc",
+    "inputs",
+    "figure_spec",
+    "outputs",
+    "machine_audit",
+    "visual_review",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "r8-liquid-u3-stage4-synthetic-motion-figure-receipt-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_U3_STAGE4_SYNTHETIC_MOTION_FIGURE_RECEIPT_V1"
+    },
+    "captured_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "inputs": {
+      "$ref": "#/$defs/inputs"
+    },
+    "figure_spec": {
+      "$ref": "#/$defs/figureSpec"
+    },
+    "outputs": {
+      "$ref": "#/$defs/outputs"
+    },
+    "machine_audit": {
+      "$ref": "#/$defs/machineAudit"
+    },
+    "visual_review": {
+      "$ref": "#/$defs/visualReview"
+    },
+    "claims": {
+      "$ref": "#/$defs/claims"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "absolutePath": {
+      "type": "string",
+      "pattern": "^/[^\\u0000]*$"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "mode", "inode", "nlink"],
+      "properties": {
+        "path": { "$ref": "#/$defs/absolutePath" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "size_bytes": { "type": "integer", "minimum": 1, "maximum": 268435456 },
+        "mode": { "type": "string", "pattern": "^[0-7]{4}$" },
+        "inode": { "type": "integer", "minimum": 1 },
+        "nlink": { "const": 1 }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qc_receipt",
+        "metrics_csv",
+        "qc_schema",
+        "qc_script",
+        "qc_tests",
+        "setup_style",
+        "export_figure",
+        "layout_tools",
+        "visual_qa",
+        "check_figure",
+        "script",
+        "schema",
+        "tests"
+      ],
+      "properties": {
+        "qc_receipt": { "$ref": "#/$defs/identity" },
+        "metrics_csv": { "$ref": "#/$defs/identity" },
+        "qc_schema": { "$ref": "#/$defs/identity" },
+        "qc_script": { "$ref": "#/$defs/identity" },
+        "qc_tests": { "$ref": "#/$defs/identity" },
+        "setup_style": { "$ref": "#/$defs/identity" },
+        "export_figure": { "$ref": "#/$defs/identity" },
+        "layout_tools": { "$ref": "#/$defs/identity" },
+        "visual_qa": { "$ref": "#/$defs/identity" },
+        "check_figure": { "$ref": "#/$defs/identity" },
+        "script": { "$ref": "#/$defs/identity" },
+        "schema": { "$ref": "#/$defs/identity" },
+        "tests": { "$ref": "#/$defs/identity" }
+      }
+    },
+    "palette": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zero", "translation", "yaw"],
+      "properties": {
+        "zero": { "const": "#4D4D4D" },
+        "translation": { "const": "#0072B2" },
+        "yaw": { "const": "#D55E00" }
+      }
+    },
+    "figureSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "width_inches",
+        "height_inches",
+        "dpi",
+        "language",
+        "panel_count",
+        "panels",
+        "palette",
+        "heatmap_colormap",
+        "heatmap_center",
+        "dual_y_axes_used",
+        "uncertainty_band_used",
+        "claim_ceiling"
+      ],
+      "properties": {
+        "width_inches": { "const": 7.2 },
+        "height_inches": { "const": 7.2 },
+        "dpi": { "const": 300 },
+        "language": { "const": "zh-CN" },
+        "panel_count": { "const": 6 },
+        "panels": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "translation_boundary_reconstruction" },
+            { "const": "yaw_boundary_reconstruction" },
+            { "const": "fluid_speed_rms_time_series" },
+            { "const": "specific_kinetic_energy_free_decay" },
+            { "const": "surface_first_azimuthal_harmonic" },
+            { "const": "translation_and_yaw_16_sector_surface_delta_heatmap" }
+          ],
+          "items": false,
+          "minItems": 6,
+          "maxItems": 6
+        },
+        "palette": { "$ref": "#/$defs/palette" },
+        "heatmap_colormap": { "const": "RdBu_r" },
+        "heatmap_center": { "const": 0.0 },
+        "dual_y_axes_used": { "const": false },
+        "uncertainty_band_used": { "const": false },
+        "claim_ceiling": { "const": "DEVELOPMENT_ONLY_NUMERICAL_RESPONSE_NOT_PHYSICAL_FIDELITY" }
+      }
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preview_png", "png", "grayscale_png", "pdf", "svg"],
+      "properties": {
+        "preview_png": { "$ref": "#/$defs/identity" },
+        "png": { "$ref": "#/$defs/identity" },
+        "grayscale_png": { "$ref": "#/$defs/identity" },
+        "pdf": { "$ref": "#/$defs/identity" },
+        "svg": { "$ref": "#/$defs/identity" }
+      }
+    },
+    "machineAudit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "layout_verdict",
+        "layout_issues",
+        "publication_check_strict_pass",
+        "files_checked",
+        "grayscale_generated",
+        "missing_glyphs_detected",
+        "text_clipping_detected",
+        "tick_overlap_detected"
+      ],
+      "properties": {
+        "layout_verdict": { "const": "PASS" },
+        "layout_issues": { "type": "array", "maxItems": 0 },
+        "publication_check_strict_pass": { "const": true },
+        "files_checked": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/absolutePath" },
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "grayscale_generated": { "const": true },
+        "missing_glyphs_detected": { "const": false },
+        "text_clipping_detected": { "const": false },
+        "tick_overlap_detected": { "const": false }
+      }
+    },
+    "visualReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewer",
+        "preview_inspected",
+        "legend_does_not_cover_data",
+        "panel_labels_aligned",
+        "color_and_grayscale_distinguishable",
+        "heatmap_has_labeled_colorbar",
+        "axes_units_readable",
+        "no_visual_clipping",
+        "yaw_interpretation_not_overclaimed",
+        "overall_pass"
+      ],
+      "properties": {
+        "reviewer": { "const": "CODEX_AI_VISUAL_REVIEW" },
+        "preview_inspected": { "const": true },
+        "legend_does_not_cover_data": { "const": true },
+        "panel_labels_aligned": { "const": true },
+        "color_and_grayscale_distinguishable": { "const": true },
+        "heatmap_has_labeled_colorbar": { "const": true },
+        "axes_units_readable": { "const": true },
+        "no_visual_clipping": { "const": true },
+        "yaw_interpretation_not_overclaimed": { "const": true },
+        "overall_pass": { "const": true }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "development_only",
+        "formal",
+        "physical_fidelity_validated",
+        "production_eligible",
+        "stage5_entered",
+        "stage6_replay_claimed",
+        "solver_executed_by_figure_tool",
+        "gpu_exposed_by_figure_tool",
+        "network_used",
+        "inputs_modified",
+        "status"
+      ],
+      "properties": {
+        "development_only": { "const": true },
+        "formal": { "const": false },
+        "physical_fidelity_validated": { "const": false },
+        "production_eligible": { "const": false },
+        "stage5_entered": { "const": false },
+        "stage6_replay_claimed": { "const": false },
+        "solver_executed_by_figure_tool": { "const": false },
+        "gpu_exposed_by_figure_tool": { "const": false },
+        "network_used": { "const": false },
+        "inputs_modified": { "const": false },
+        "status": { "const": "PASS_STAGE4_DIAGNOSTIC_FIGURE_DEVELOPMENT_ONLY" }
+      }
+    }
+  }
+}

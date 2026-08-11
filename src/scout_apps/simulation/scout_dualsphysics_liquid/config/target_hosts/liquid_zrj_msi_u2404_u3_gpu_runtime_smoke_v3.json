@@ -1,0 +1,51 @@
+{
+  "schema_version": "smpcc-r8-liquid-u3-gpu-runtime-smoke-revision-v3",
+  "document_type": "SMPCC_R8_LIQUID_U3_GPU_RUNTIME_SMOKE_REVISION_V3",
+  "revision_id": "LIQUID_ZRJ_MSI_U2404_U3_GPU_RUNTIME_SMOKE_V3",
+  "status": "V3_ROOT_OWNED_RUN_TRANSPORT_FROZEN_PENDING_ONE_SHOT",
+  "parents": {
+    "base_policy": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_gpu_runtime_smoke_v1.json", "sha256": "9a05ef4377d2a7a2365c0354352acddc758bfb14808d21c125dc51971e10d041"},
+    "base_schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_gpu_runtime_smoke_policy_v1.json", "sha256": "1f93baffc84605c642e4b50b29f7a1ca9afa2a17eb25be7cb84e6e9e976b5336"},
+    "base_runner": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_gpu_runtime_smoke_v1.py", "sha256": "57ebb86cc36d150ebe9ef35b37b16f66abce7e76ac904e3c2149720e78174694"},
+    "v2_revision": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_gpu_runtime_smoke_v2.json", "sha256": "c0dbc0e89274c96403c60c756819fc188dde32adde3a370eac47b123fb8c9487"},
+    "v2_schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_gpu_runtime_smoke_revision_v2.json", "sha256": "ab0edf6e81d81a45edc74f47782379ef78d468bf9b5f7b032b16a9bdf117886d"},
+    "v2_runner": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_gpu_runtime_smoke_v2.py", "sha256": "b038d3bde8d9deac13195292fcc8b92ecbb2cded54de86ba6f2e22eb4441063e"}
+  },
+  "diagnosis": {
+    "failure_class": "BWRAP_0P9_BIND_FD_PROC_SELF_FD_DAC_DENIED_PRE_EXEC",
+    "observed_stderr": "bwrap: Can't find source path /proc/self/fd/3: Permission denied",
+    "trusted_probe_started": false,
+    "candidate_process_started": false,
+    "candidate_restored": true
+  },
+  "semantic_delta": {
+    "operation": "ROOT_OWNED_RUN_TMPFS_TRANSPORT_AND_O_EXCL_EXPORT",
+    "new_devices": 0,
+    "new_network": false,
+    "new_project_write_targets": 0,
+    "solver_argv_changed": false,
+    "home_permissions_changed": false
+  },
+  "transport": {
+    "stage_root": "/run/r8-liquid-u3-c1m-gpu-smoke-v3-20260810t184500z",
+    "input_copy": "O_NOFOLLOW_READ_TO_O_EXCL_ROOT_OWNED_FILES_THEN_SHA256_VERIFY",
+    "guest_write_target": "/run_stage/output_only",
+    "export": "ROOT_PARENT_O_NOFOLLOW_READ_TO_USER_OWNED_O_EXCL_LAB_OUTPUT",
+    "candidate_stage_final_mode": "0400",
+    "preserve_stage": true
+  },
+  "run": {
+    "run_id": "u3_c1m_gpu_smoke_v3_20260810T184500Z",
+    "attempt_root": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_v3_20260810T184500Z.partial",
+    "output_root": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_v3_20260810T184500Z.partial/output",
+    "start_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v3_20260810T184500Z.start.json",
+    "final_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v3_20260810T184500Z.final.json",
+    "failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v3_20260810T184500Z.failure.json",
+    "stdout_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v3_20260810T184500Z.stdout.log",
+    "stderr_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v3_20260810T184500Z.stderr.log",
+    "resource_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v3_20260810T184500Z.resources.jsonl",
+    "qc_report": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v3_20260810T184500Z.qc.json",
+    "gpu_lock": "/home/zrj/scout_liquid_lab/locks/gpu0.lock",
+    "attempts_per_identity": 1
+  }
+}

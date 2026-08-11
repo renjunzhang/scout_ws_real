@@ -1,0 +1,6701 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smpcc.local/schema/target-host-u3-gpu-build-execution-policy-v1.json",
+  "title": "R8 liquid RTX 5080 DualSPHysics GPU build execution policy v1 exact closed schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "host_id",
+    "development_only",
+    "formal",
+    "physical_primary_eligible",
+    "execution_scope",
+    "allowed_gate_commands",
+    "plan_identity",
+    "g0_input",
+    "timebox",
+    "campaign",
+    "frozen_reference_inputs",
+    "source_input",
+    "object_contract",
+    "wrapper_contract",
+    "resources",
+    "toolchain",
+    "profiles",
+    "source_copy_contract",
+    "build_contract",
+    "static_audit_contract",
+    "b_admission_contract",
+    "profile_lifecycle",
+    "receipt_contracts",
+    "invariants",
+    "status",
+    "gpu_build_status",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-target-u3-gpu-build-execution-policy-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_TARGET_U3_GPU_BUILD_EXECUTION_POLICY"
+    },
+    "policy_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404_U3_GPU_BUILD_EXECUTION_V1"
+    },
+    "host_id": {
+      "const": "LIQUID_ZRJ_MSI_U2404"
+    },
+    "development_only": {
+      "const": true
+    },
+    "formal": {
+      "const": false
+    },
+    "physical_primary_eligible": {
+      "const": false
+    },
+    "execution_scope": {
+      "const": "g1_static_contract_only_no_gpu_build"
+    },
+    "allowed_gate_commands": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "const": "self-check"
+        },
+        {
+          "const": "validate-b-admission"
+        }
+      ],
+      "items": false
+    },
+    "plan_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "commit",
+        "blob",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "const": "docs/实物实验注意事项/对比试验/仿真接入液体/20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md"
+        },
+        "commit": {
+          "const": "a7409aff3bd280392491606503893e36f1cc5888"
+        },
+        "blob": {
+          "const": "7b2eb275d0fb6cb882ec701aabd7b7af229f353c"
+        },
+        "sha256": {
+          "const": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+        }
+      }
+    },
+    "g0_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "parallel_jobs",
+        "evidence_reference",
+        "evidence_sha256",
+        "post_reboot_revalidation_reference",
+        "post_reboot_revalidation_sha256",
+        "post_reboot_revalidation_status"
+      ],
+      "properties": {
+        "status": {
+          "const": "PREFLIGHT_PASS"
+        },
+        "parallel_jobs": {
+          "const": 1
+        },
+        "evidence_reference": {
+          "const": "codex-goal-transcript://019feaad-0106-7903-9b3e-7e3d79a12305#g0-section-7.1-tool-calls-and-final-audit"
+        },
+        "evidence_sha256": {
+          "const": "7899ba67f494c548d8cd94e347fe9f7db08b1d1f08260c17d0022673339530d7"
+        },
+        "post_reboot_revalidation_reference": {
+          "const": "codex-goal-transcript://019feaad-0106-7903-9b3e-7e3d79a12305#g1-post-reboot-section-7.1-normalized-json"
+        },
+        "post_reboot_revalidation_sha256": {
+          "const": "6e7e264fa5f24874a2fc12859d0c390c3e5d4b11a25e44e812147dc67925aba2"
+        },
+        "post_reboot_revalidation_status": {
+          "const": "PREFLIGHT_PASS"
+        }
+      }
+    },
+    "timebox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "t0",
+        "t0_reset",
+        "g1_target",
+        "hard_stop_t_plus_6",
+        "hard_stop_t_plus_8",
+        "host_reboot_at"
+      ],
+      "properties": {
+        "t0": {
+          "const": "2026-08-10T17:17:51.731823359+08:00"
+        },
+        "t0_reset": {
+          "const": false
+        },
+        "g1_target": {
+          "const": "2026-08-10T19:07:51.731823359+08:00"
+        },
+        "hard_stop_t_plus_6": {
+          "const": "2026-08-10T23:17:51.731823359+08:00"
+        },
+        "hard_stop_t_plus_8": {
+          "const": "2026-08-11T01:17:51.731823359+08:00"
+        },
+        "host_reboot_at": {
+          "const": "2026-08-10T19:45:17+08:00"
+        }
+      }
+    },
+    "campaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "campaign_id",
+        "attempt_a",
+        "attempt_b"
+      ],
+      "properties": {
+        "campaign_id": {
+          "const": "u3_source_gpu_build_sm120_20260810T102641Z"
+        },
+        "attempt_a": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "build_id",
+            "attempt_root",
+            "output_root",
+            "identity_frozen",
+            "root_created"
+          ],
+          "properties": {
+            "build_id": {
+              "const": "u3_source_gpu_build_sm120_20260810T102641Z_a"
+            },
+            "attempt_root": {
+              "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial"
+            },
+            "output_root": {
+              "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial/output"
+            },
+            "identity_frozen": {
+              "const": true
+            },
+            "root_created": {
+              "const": false
+            }
+          }
+        },
+        "attempt_b": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "build_id",
+            "attempt_root",
+            "output_root",
+            "identity_frozen",
+            "identity_only",
+            "root_created",
+            "copy_profile_materialized",
+            "build_profile_materialized",
+            "receipt_materialized"
+          ],
+          "properties": {
+            "build_id": {
+              "const": "u3_source_gpu_build_sm120_20260810T102641Z_b"
+            },
+            "attempt_root": {
+              "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_b.partial"
+            },
+            "output_root": {
+              "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_b.partial/output"
+            },
+            "identity_frozen": {
+              "const": true
+            },
+            "identity_only": {
+              "const": true
+            },
+            "root_created": {
+              "const": false
+            },
+            "copy_profile_materialized": {
+              "const": false
+            },
+            "build_profile_materialized": {
+              "const": false
+            },
+            "receipt_materialized": {
+              "const": false
+            }
+          }
+        }
+      }
+    },
+    "frozen_reference_inputs": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "prefixItems": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-source-copy-v15.profile"
+            },
+            "sha256": {
+              "const": "3d6ef41054dda30a64b16ee4586c3b0cf21e7e66a756ae873dbab11a0f43b116"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-cpu-build-v15.profile"
+            },
+            "sha256": {
+              "const": "55e0d63e17acb6a30e19f13e268929c6bb8781448cd57e253a918347c4d3d8ef"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_cpu_build_execution_policy_v15.json"
+            },
+            "sha256": {
+              "const": "1f01cd7918cda1f8f23a35d32e77e96afb99512f08c1a0a2f6fddc9d67262030"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_cpu_build_execution_policy_v15.json"
+            },
+            "sha256": {
+              "const": "3e0f80a5084e30068110155ceb3906b39ced20a883399f0aa072e23ce6754122"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_cpu_build_gate_v15.py"
+            },
+            "sha256": {
+              "const": "08e5f0c0ec1b16d7a6c730c6f1c5c80ec259c2f9813b86f5bcddad2e9f40d52f"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_target_u3_cpu_build_gate_v15.py"
+            },
+            "sha256": {
+              "const": "9757bcce5f3ba274be20f1720b33309e65f7f1d699383af556a539ee4b4f43fc"
+            }
+          }
+        }
+      ],
+      "items": false
+    },
+    "source_input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "upstream_url",
+        "upstream_commit",
+        "upstream_tree",
+        "sealed_source_root",
+        "sealed_attempt_root",
+        "source_receipt",
+        "source_receipt_sha256",
+        "source_receipt_canonical_sha256",
+        "sealed_manifest_sha256",
+        "sealed_file_count",
+        "sealed_total_bytes",
+        "sealed_symlink_count",
+        "sealed_hardlink_count",
+        "cpu_build_receipt",
+        "cpu_build_receipt_sha256",
+        "makefile_path",
+        "makefile_sha256"
+      ],
+      "properties": {
+        "upstream_url": {
+          "const": "https://github.com/DualSPHysics/DualSPHysics"
+        },
+        "upstream_commit": {
+          "const": "ef3721a861fda961f0e2f9ec4cd317b19de99086"
+        },
+        "upstream_tree": {
+          "const": "cef458cb358712f4694b9d2148f638440418e9dc"
+        },
+        "sealed_source_root": {
+          "const": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source"
+        },
+        "sealed_attempt_root": {
+          "const": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial"
+        },
+        "source_receipt": {
+          "const": "/home/zrj/scout_liquid_lab/audits/u3_source_materialization_v1_20260806T155752Z.json"
+        },
+        "source_receipt_sha256": {
+          "const": "90af263fb7ec8b7d6a46a53aa5354dd5b676cd4167d48fde93911e014a70b745"
+        },
+        "source_receipt_canonical_sha256": {
+          "const": "017a660bd38da43ae14fb97df9f19cc6cd2b90cf56f91ce047869dbf795d93e2"
+        },
+        "sealed_manifest_sha256": {
+          "const": "a9a3debebff5ae30bb2d6226deb997f15a6eae0d07581a7c147ce95b9c3da9d2"
+        },
+        "sealed_file_count": {
+          "const": 352
+        },
+        "sealed_total_bytes": {
+          "const": 5473917
+        },
+        "sealed_symlink_count": {
+          "const": 0
+        },
+        "sealed_hardlink_count": {
+          "const": 0
+        },
+        "cpu_build_receipt": {
+          "const": "/home/zrj/scout_liquid_lab/audits/u3_source_cpu_build_20260807T023724Z_cpu_build.json"
+        },
+        "cpu_build_receipt_sha256": {
+          "const": "d407233107d4bc9eeea81b0c5a95cbfc98ad6529f1cb7494b68ae5ecc4b1d604"
+        },
+        "makefile_path": {
+          "const": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source/Makefile"
+        },
+        "makefile_sha256": {
+          "const": "0e7d60ed96437ae22c1d411ec7d12fcae1adad8a9e91f39dd0ea6023846c63f1"
+        }
+      }
+    },
+    "object_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "total_object_count",
+        "cpp_object_count",
+        "cuda_object_count",
+        "duplicate_count",
+        "object_names",
+        "cpp_object_names",
+        "cuda_object_names",
+        "canonicalization",
+        "object_names_canonical_sha256",
+        "derivation",
+        "object_location",
+        "post_build_type"
+      ],
+      "properties": {
+        "total_object_count": {
+          "const": 131
+        },
+        "cpp_object_count": {
+          "const": 120
+        },
+        "cuda_object_count": {
+          "const": 11
+        },
+        "duplicate_count": {
+          "const": 0
+        },
+        "object_names": {
+          "type": "array",
+          "minItems": 131,
+          "maxItems": 131,
+          "prefixItems": [
+            {
+              "const": "FunGeo3d.o"
+            },
+            {
+              "const": "FunSphKernelsCfg.o"
+            },
+            {
+              "const": "Functions.o"
+            },
+            {
+              "const": "FunctionsCuda.o"
+            },
+            {
+              "const": "JAppInfo.o"
+            },
+            {
+              "const": "JArraysCpu.o"
+            },
+            {
+              "const": "JArraysGpu.o"
+            },
+            {
+              "const": "JBinaryData.o"
+            },
+            {
+              "const": "JBoxDef.o"
+            },
+            {
+              "const": "JCaseCtes.o"
+            },
+            {
+              "const": "JCaseEParms.o"
+            },
+            {
+              "const": "JCaseParts.o"
+            },
+            {
+              "const": "JCaseProperties.o"
+            },
+            {
+              "const": "JCaseVRes.o"
+            },
+            {
+              "const": "JCellDivCpu.o"
+            },
+            {
+              "const": "JCellDivCpuSingle.o"
+            },
+            {
+              "const": "JCellDivGpu.o"
+            },
+            {
+              "const": "JCellDivGpuSingle.o"
+            },
+            {
+              "const": "JCellDivGpuSingle_ker.o"
+            },
+            {
+              "const": "JCellDivGpu_ker.o"
+            },
+            {
+              "const": "JCfgRunBase.o"
+            },
+            {
+              "const": "JChronoGeoObj.o"
+            },
+            {
+              "const": "JChronoObjects.o"
+            },
+            {
+              "const": "JComputeMotionRef.o"
+            },
+            {
+              "const": "JDataArrays.o"
+            },
+            {
+              "const": "JDebugSphCpu.o"
+            },
+            {
+              "const": "JDebugSphGpu.o"
+            },
+            {
+              "const": "JDsAccInput.o"
+            },
+            {
+              "const": "JDsAccInput_ker.o"
+            },
+            {
+              "const": "JDsDamping.o"
+            },
+            {
+              "const": "JDsDcell.o"
+            },
+            {
+              "const": "JDsExtraData.o"
+            },
+            {
+              "const": "JDsFixedDt.o"
+            },
+            {
+              "const": "JDsFtForcePoints.o"
+            },
+            {
+              "const": "JDsGaugeItem.o"
+            },
+            {
+              "const": "JDsGaugeSystem.o"
+            },
+            {
+              "const": "JDsGauge_ker.o"
+            },
+            {
+              "const": "JDsGpuInfo.o"
+            },
+            {
+              "const": "JDsInitialize.o"
+            },
+            {
+              "const": "JDsMooredFloatings.o"
+            },
+            {
+              "const": "JDsMotion.o"
+            },
+            {
+              "const": "JDsOutputParts.o"
+            },
+            {
+              "const": "JDsOutputTime.o"
+            },
+            {
+              "const": "JDsPartFloatSave.o"
+            },
+            {
+              "const": "JDsPartMotionSave.o"
+            },
+            {
+              "const": "JDsPartsInit.o"
+            },
+            {
+              "const": "JDsPartsOut.o"
+            },
+            {
+              "const": "JDsPips.o"
+            },
+            {
+              "const": "JDsPips_ker.o"
+            },
+            {
+              "const": "JDsSaveDt.o"
+            },
+            {
+              "const": "JDsTimers.o"
+            },
+            {
+              "const": "JDsViscoInput.o"
+            },
+            {
+              "const": "JDsVresData.o"
+            },
+            {
+              "const": "JDsphConfig.o"
+            },
+            {
+              "const": "JException.o"
+            },
+            {
+              "const": "JLinearValue.o"
+            },
+            {
+              "const": "JLog2.o"
+            },
+            {
+              "const": "JMLPistonsGpu.o"
+            },
+            {
+              "const": "JMeshData.o"
+            },
+            {
+              "const": "JMeshTDatas.o"
+            },
+            {
+              "const": "JMeshTDatasDsVel.o"
+            },
+            {
+              "const": "JMeshTDatasLoad.o"
+            },
+            {
+              "const": "JMeshTDatasSave.o"
+            },
+            {
+              "const": "JMeshTDatasXml.o"
+            },
+            {
+              "const": "JMotion.o"
+            },
+            {
+              "const": "JMotionData.o"
+            },
+            {
+              "const": "JMotionList.o"
+            },
+            {
+              "const": "JMotionMov.o"
+            },
+            {
+              "const": "JMotionObj.o"
+            },
+            {
+              "const": "JMotionPos.o"
+            },
+            {
+              "const": "JObject.o"
+            },
+            {
+              "const": "JObjectGpu.o"
+            },
+            {
+              "const": "JOutputCsv.o"
+            },
+            {
+              "const": "JPartDataBi4.o"
+            },
+            {
+              "const": "JPartDataHead.o"
+            },
+            {
+              "const": "JPartFloatInfoBi4.o"
+            },
+            {
+              "const": "JPartMotRefBi4Save.o"
+            },
+            {
+              "const": "JPartOutBi4Save.o"
+            },
+            {
+              "const": "JPartsLoad4.o"
+            },
+            {
+              "const": "JRadixSort.o"
+            },
+            {
+              "const": "JRangeFilter.o"
+            },
+            {
+              "const": "JReadDatafile.o"
+            },
+            {
+              "const": "JReduSum_ker.o"
+            },
+            {
+              "const": "JRelaxZone_ker.o"
+            },
+            {
+              "const": "JRelaxZonesGpu.o"
+            },
+            {
+              "const": "JSaveCsv2.o"
+            },
+            {
+              "const": "JSimpleNeigs.o"
+            },
+            {
+              "const": "JSpVtkData.o"
+            },
+            {
+              "const": "JSpVtkShape.o"
+            },
+            {
+              "const": "JSph.o"
+            },
+            {
+              "const": "JSphCfgRun.o"
+            },
+            {
+              "const": "JSphCpu.o"
+            },
+            {
+              "const": "JSphCpuSingle.o"
+            },
+            {
+              "const": "JSphCpuSingle_InOut.o"
+            },
+            {
+              "const": "JSphCpuSingle_VRes.o"
+            },
+            {
+              "const": "JSphCpu_InOut.o"
+            },
+            {
+              "const": "JSphCpu_VRes.o"
+            },
+            {
+              "const": "JSphCpu_mdbc.o"
+            },
+            {
+              "const": "JSphCpu_preloop.o"
+            },
+            {
+              "const": "JSphFlexStruc.o"
+            },
+            {
+              "const": "JSphGpu.o"
+            },
+            {
+              "const": "JSphGpuSimple_ker.o"
+            },
+            {
+              "const": "JSphGpuSingle.o"
+            },
+            {
+              "const": "JSphGpuSingle_InOut.o"
+            },
+            {
+              "const": "JSphGpuSingle_VRes.o"
+            },
+            {
+              "const": "JSphGpu_ker.o"
+            },
+            {
+              "const": "JSphInOut.o"
+            },
+            {
+              "const": "JSphInOutGridData.o"
+            },
+            {
+              "const": "JSphInOutPoints.o"
+            },
+            {
+              "const": "JSphInOutVel.o"
+            },
+            {
+              "const": "JSphInOutVelAwas.o"
+            },
+            {
+              "const": "JSphInOutZone.o"
+            },
+            {
+              "const": "JSphInOutZsurf.o"
+            },
+            {
+              "const": "JSphMk.o"
+            },
+            {
+              "const": "JSphShifting.o"
+            },
+            {
+              "const": "JSphShiftingAdv.o"
+            },
+            {
+              "const": "JSphShifting_ker.o"
+            },
+            {
+              "const": "JSphVRes.o"
+            },
+            {
+              "const": "JSphVResZone.o"
+            },
+            {
+              "const": "JTimeControl.o"
+            },
+            {
+              "const": "JTrianglesMesh.o"
+            },
+            {
+              "const": "JVResDataLimits.o"
+            },
+            {
+              "const": "JWaveOrder2_ker.o"
+            },
+            {
+              "const": "JWaveSpectrumGpu.o"
+            },
+            {
+              "const": "JXml.o"
+            },
+            {
+              "const": "main.o"
+            },
+            {
+              "const": "randomc.o"
+            },
+            {
+              "const": "tinystr.o"
+            },
+            {
+              "const": "tinyxml.o"
+            },
+            {
+              "const": "tinyxmlerror.o"
+            },
+            {
+              "const": "tinyxmlparser.o"
+            }
+          ],
+          "items": false
+        },
+        "cpp_object_names": {
+          "type": "array",
+          "minItems": 120,
+          "maxItems": 120,
+          "prefixItems": [
+            {
+              "const": "FunGeo3d.o"
+            },
+            {
+              "const": "FunSphKernelsCfg.o"
+            },
+            {
+              "const": "Functions.o"
+            },
+            {
+              "const": "FunctionsCuda.o"
+            },
+            {
+              "const": "JAppInfo.o"
+            },
+            {
+              "const": "JArraysCpu.o"
+            },
+            {
+              "const": "JArraysGpu.o"
+            },
+            {
+              "const": "JBinaryData.o"
+            },
+            {
+              "const": "JBoxDef.o"
+            },
+            {
+              "const": "JCaseCtes.o"
+            },
+            {
+              "const": "JCaseEParms.o"
+            },
+            {
+              "const": "JCaseParts.o"
+            },
+            {
+              "const": "JCaseProperties.o"
+            },
+            {
+              "const": "JCaseVRes.o"
+            },
+            {
+              "const": "JCellDivCpu.o"
+            },
+            {
+              "const": "JCellDivCpuSingle.o"
+            },
+            {
+              "const": "JCellDivGpu.o"
+            },
+            {
+              "const": "JCellDivGpuSingle.o"
+            },
+            {
+              "const": "JCfgRunBase.o"
+            },
+            {
+              "const": "JChronoGeoObj.o"
+            },
+            {
+              "const": "JChronoObjects.o"
+            },
+            {
+              "const": "JComputeMotionRef.o"
+            },
+            {
+              "const": "JDataArrays.o"
+            },
+            {
+              "const": "JDebugSphCpu.o"
+            },
+            {
+              "const": "JDebugSphGpu.o"
+            },
+            {
+              "const": "JDsAccInput.o"
+            },
+            {
+              "const": "JDsDamping.o"
+            },
+            {
+              "const": "JDsDcell.o"
+            },
+            {
+              "const": "JDsExtraData.o"
+            },
+            {
+              "const": "JDsFixedDt.o"
+            },
+            {
+              "const": "JDsFtForcePoints.o"
+            },
+            {
+              "const": "JDsGaugeItem.o"
+            },
+            {
+              "const": "JDsGaugeSystem.o"
+            },
+            {
+              "const": "JDsGpuInfo.o"
+            },
+            {
+              "const": "JDsInitialize.o"
+            },
+            {
+              "const": "JDsMooredFloatings.o"
+            },
+            {
+              "const": "JDsMotion.o"
+            },
+            {
+              "const": "JDsOutputParts.o"
+            },
+            {
+              "const": "JDsOutputTime.o"
+            },
+            {
+              "const": "JDsPartFloatSave.o"
+            },
+            {
+              "const": "JDsPartMotionSave.o"
+            },
+            {
+              "const": "JDsPartsInit.o"
+            },
+            {
+              "const": "JDsPartsOut.o"
+            },
+            {
+              "const": "JDsPips.o"
+            },
+            {
+              "const": "JDsSaveDt.o"
+            },
+            {
+              "const": "JDsTimers.o"
+            },
+            {
+              "const": "JDsViscoInput.o"
+            },
+            {
+              "const": "JDsVresData.o"
+            },
+            {
+              "const": "JDsphConfig.o"
+            },
+            {
+              "const": "JException.o"
+            },
+            {
+              "const": "JLinearValue.o"
+            },
+            {
+              "const": "JLog2.o"
+            },
+            {
+              "const": "JMLPistonsGpu.o"
+            },
+            {
+              "const": "JMeshData.o"
+            },
+            {
+              "const": "JMeshTDatas.o"
+            },
+            {
+              "const": "JMeshTDatasDsVel.o"
+            },
+            {
+              "const": "JMeshTDatasLoad.o"
+            },
+            {
+              "const": "JMeshTDatasSave.o"
+            },
+            {
+              "const": "JMeshTDatasXml.o"
+            },
+            {
+              "const": "JMotion.o"
+            },
+            {
+              "const": "JMotionData.o"
+            },
+            {
+              "const": "JMotionList.o"
+            },
+            {
+              "const": "JMotionMov.o"
+            },
+            {
+              "const": "JMotionObj.o"
+            },
+            {
+              "const": "JMotionPos.o"
+            },
+            {
+              "const": "JObject.o"
+            },
+            {
+              "const": "JObjectGpu.o"
+            },
+            {
+              "const": "JOutputCsv.o"
+            },
+            {
+              "const": "JPartDataBi4.o"
+            },
+            {
+              "const": "JPartDataHead.o"
+            },
+            {
+              "const": "JPartFloatInfoBi4.o"
+            },
+            {
+              "const": "JPartMotRefBi4Save.o"
+            },
+            {
+              "const": "JPartOutBi4Save.o"
+            },
+            {
+              "const": "JPartsLoad4.o"
+            },
+            {
+              "const": "JRadixSort.o"
+            },
+            {
+              "const": "JRangeFilter.o"
+            },
+            {
+              "const": "JReadDatafile.o"
+            },
+            {
+              "const": "JRelaxZonesGpu.o"
+            },
+            {
+              "const": "JSaveCsv2.o"
+            },
+            {
+              "const": "JSimpleNeigs.o"
+            },
+            {
+              "const": "JSpVtkData.o"
+            },
+            {
+              "const": "JSpVtkShape.o"
+            },
+            {
+              "const": "JSph.o"
+            },
+            {
+              "const": "JSphCfgRun.o"
+            },
+            {
+              "const": "JSphCpu.o"
+            },
+            {
+              "const": "JSphCpuSingle.o"
+            },
+            {
+              "const": "JSphCpuSingle_InOut.o"
+            },
+            {
+              "const": "JSphCpuSingle_VRes.o"
+            },
+            {
+              "const": "JSphCpu_InOut.o"
+            },
+            {
+              "const": "JSphCpu_VRes.o"
+            },
+            {
+              "const": "JSphCpu_mdbc.o"
+            },
+            {
+              "const": "JSphCpu_preloop.o"
+            },
+            {
+              "const": "JSphFlexStruc.o"
+            },
+            {
+              "const": "JSphGpu.o"
+            },
+            {
+              "const": "JSphGpuSingle.o"
+            },
+            {
+              "const": "JSphGpuSingle_InOut.o"
+            },
+            {
+              "const": "JSphGpuSingle_VRes.o"
+            },
+            {
+              "const": "JSphInOut.o"
+            },
+            {
+              "const": "JSphInOutGridData.o"
+            },
+            {
+              "const": "JSphInOutPoints.o"
+            },
+            {
+              "const": "JSphInOutVel.o"
+            },
+            {
+              "const": "JSphInOutVelAwas.o"
+            },
+            {
+              "const": "JSphInOutZone.o"
+            },
+            {
+              "const": "JSphInOutZsurf.o"
+            },
+            {
+              "const": "JSphMk.o"
+            },
+            {
+              "const": "JSphShifting.o"
+            },
+            {
+              "const": "JSphShiftingAdv.o"
+            },
+            {
+              "const": "JSphVRes.o"
+            },
+            {
+              "const": "JSphVResZone.o"
+            },
+            {
+              "const": "JTimeControl.o"
+            },
+            {
+              "const": "JTrianglesMesh.o"
+            },
+            {
+              "const": "JVResDataLimits.o"
+            },
+            {
+              "const": "JWaveSpectrumGpu.o"
+            },
+            {
+              "const": "JXml.o"
+            },
+            {
+              "const": "main.o"
+            },
+            {
+              "const": "randomc.o"
+            },
+            {
+              "const": "tinystr.o"
+            },
+            {
+              "const": "tinyxml.o"
+            },
+            {
+              "const": "tinyxmlerror.o"
+            },
+            {
+              "const": "tinyxmlparser.o"
+            }
+          ],
+          "items": false
+        },
+        "cuda_object_names": {
+          "type": "array",
+          "minItems": 11,
+          "maxItems": 11,
+          "prefixItems": [
+            {
+              "const": "JCellDivGpuSingle_ker.o"
+            },
+            {
+              "const": "JCellDivGpu_ker.o"
+            },
+            {
+              "const": "JDsAccInput_ker.o"
+            },
+            {
+              "const": "JDsGauge_ker.o"
+            },
+            {
+              "const": "JDsPips_ker.o"
+            },
+            {
+              "const": "JReduSum_ker.o"
+            },
+            {
+              "const": "JRelaxZone_ker.o"
+            },
+            {
+              "const": "JSphGpuSimple_ker.o"
+            },
+            {
+              "const": "JSphGpu_ker.o"
+            },
+            {
+              "const": "JSphShifting_ker.o"
+            },
+            {
+              "const": "JWaveOrder2_ker.o"
+            }
+          ],
+          "items": false
+        },
+        "canonicalization": {
+          "const": "SHA256(UTF8(JSON_COMPACT(sorted(object_names))))"
+        },
+        "object_names_canonical_sha256": {
+          "const": "38023e8b24f1d1731ba3a7d03bbb5fdf2e74e5623341402d607cba046b08d7e2"
+        },
+        "derivation": {
+          "const": "static_parse_of_fixed_Makefile_variable_assignments_and_explicit_dot_cu_rules_no_make_invocation"
+        },
+        "object_location": {
+          "const": "output/buildtree/src/source/<exact_object_name>"
+        },
+        "post_build_type": {
+          "const": "regular_non_symlink_nlink_1_ELF64_little_endian_x86_64_ET_REL_no_execute_bits"
+        }
+      }
+    },
+    "wrapper_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path_relative_to_attempt",
+        "content_utf8",
+        "size_bytes",
+        "sha256",
+        "mode_octal",
+        "create_flags",
+        "attempt_a_ccflags_only",
+        "nccflags_preinclude"
+      ],
+      "properties": {
+        "path_relative_to_attempt": {
+          "const": "output/buildtree/src/source/U3GpuBuild.mk"
+        },
+        "content_utf8": {
+          "const": ".SUFFIXES:\n.SUFFIXES: .cpp .o\ninclude Makefile\noverride CCFLAGS += -include cstdint\n"
+        },
+        "size_bytes": {
+          "const": 84
+        },
+        "sha256": {
+          "const": "33883dcdde741c253a09d78decb3c21c5ab92c7c9152acf793d7dd025f07300d"
+        },
+        "mode_octal": {
+          "const": "0600"
+        },
+        "create_flags": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {
+              "const": "O_WRONLY"
+            },
+            {
+              "const": "O_CREAT"
+            },
+            {
+              "const": "O_EXCL"
+            },
+            {
+              "const": "O_NOFOLLOW"
+            }
+          ],
+          "items": false
+        },
+        "attempt_a_ccflags_only": {
+          "const": true
+        },
+        "nccflags_preinclude": {
+          "const": false
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parallel_jobs",
+        "parallel_jobs_memory_threshold_bytes",
+        "minimum_available_memory_bytes",
+        "minimum_available_disk_bytes",
+        "wall_timeout_seconds",
+        "cpu_limit_seconds",
+        "address_space_limit_bytes",
+        "kill_after_seconds",
+        "stalled_seconds",
+        "memory_monitor_interval_seconds",
+        "memory_monitor_interval_minimum_seconds",
+        "memory_monitor_interval_maximum_seconds",
+        "monitor_fields",
+        "process_limit",
+        "open_file_limit",
+        "file_size_limit_bytes",
+        "core_dump_bytes",
+        "source_copy_wall_timeout_seconds",
+        "source_copy_cpu_limit_seconds",
+        "source_copy_address_space_limit_bytes"
+      ],
+      "properties": {
+        "parallel_jobs": {
+          "const": 1
+        },
+        "parallel_jobs_memory_threshold_bytes": {
+          "const": 8589934592
+        },
+        "minimum_available_memory_bytes": {
+          "const": 4294967296
+        },
+        "minimum_available_disk_bytes": {
+          "const": 21474836480
+        },
+        "wall_timeout_seconds": {
+          "const": 5400
+        },
+        "cpu_limit_seconds": {
+          "const": 5400
+        },
+        "address_space_limit_bytes": {
+          "const": 8589934592
+        },
+        "kill_after_seconds": {
+          "const": 5
+        },
+        "stalled_seconds": {
+          "const": 600
+        },
+        "memory_monitor_interval_seconds": {
+          "const": 20
+        },
+        "memory_monitor_interval_minimum_seconds": {
+          "const": 10
+        },
+        "memory_monitor_interval_maximum_seconds": {
+          "const": 30
+        },
+        "monitor_fields": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "prefixItems": [
+            {
+              "const": "MemAvailable"
+            },
+            {
+              "const": "SwapFree"
+            },
+            {
+              "const": "vmstat_si"
+            },
+            {
+              "const": "vmstat_so"
+            },
+            {
+              "const": "memory_psi_some"
+            },
+            {
+              "const": "memory_psi_full"
+            },
+            {
+              "const": "cicc_rss"
+            },
+            {
+              "const": "ptxas_rss"
+            },
+            {
+              "const": "cc1plus_rss"
+            }
+          ],
+          "items": false
+        },
+        "process_limit": {
+          "const": 4096
+        },
+        "open_file_limit": {
+          "const": 1024
+        },
+        "file_size_limit_bytes": {
+          "const": 2147483648
+        },
+        "core_dump_bytes": {
+          "const": 0
+        },
+        "source_copy_wall_timeout_seconds": {
+          "const": 300
+        },
+        "source_copy_cpu_limit_seconds": {
+          "const": 120
+        },
+        "source_copy_address_space_limit_bytes": {
+          "const": 1073741824
+        }
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cuda_root",
+        "nvcc_release",
+        "nvcc_version",
+        "cuobjdump_version",
+        "host_compiler",
+        "host_compiler_version",
+        "compute_arch",
+        "binary_arch",
+        "gencode_argv",
+        "single_gencode",
+        "fast_math",
+        "native_cpu_optimizations",
+        "chrono",
+        "wavegen",
+        "moordynplus",
+        "attempt_a_forbidden_tools",
+        "tools"
+      ],
+      "properties": {
+        "cuda_root": {
+          "const": "/usr/local/cuda-12.8"
+        },
+        "nvcc_release": {
+          "const": "12.8"
+        },
+        "nvcc_version": {
+          "const": "12.8.93"
+        },
+        "cuobjdump_version": {
+          "const": "12.8.90"
+        },
+        "host_compiler": {
+          "const": "/usr/bin/x86_64-linux-gnu-g++-11"
+        },
+        "host_compiler_version": {
+          "const": "11.5.0"
+        },
+        "compute_arch": {
+          "const": "compute_120"
+        },
+        "binary_arch": {
+          "const": "sm_120"
+        },
+        "gencode_argv": {
+          "const": "GENCODE=-gencode=arch=compute_120,code=\\\"sm_120,compute_120\\\""
+        },
+        "single_gencode": {
+          "const": true
+        },
+        "fast_math": {
+          "const": false
+        },
+        "native_cpu_optimizations": {
+          "const": false
+        },
+        "chrono": {
+          "const": false
+        },
+        "wavegen": {
+          "const": false
+        },
+        "moordynplus": {
+          "const": false
+        },
+        "attempt_a_forbidden_tools": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {
+              "const": "/usr/bin/x86_64-linux-gnu-g++-13"
+            },
+            {
+              "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus"
+            },
+            {
+              "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2"
+            }
+          ],
+          "items": false
+        },
+        "tools": {
+          "type": "array",
+          "minItems": 40,
+          "maxItems": 40,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/local/cuda-12.8/bin/nvcc"
+                },
+                "realpath": {
+                  "const": "/usr/local/cuda-12.8/bin/nvcc"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 24828456
+                },
+                "sha256": {
+                  "const": "59e4e55f9a38b78c590df1e28a69dad91052958f18a03868ca4a547c043fbba7"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/local/cuda-12.8/bin/cudafe++"
+                },
+                "realpath": {
+                  "const": "/usr/local/cuda-12.8/bin/cudafe++"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 8718680
+                },
+                "sha256": {
+                  "const": "55e0cf419d081730daf98bc94d8d32513fd8be78c5fb3adb0677c9bed1940a1e"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/local/cuda-12.8/bin/ptxas"
+                },
+                "realpath": {
+                  "const": "/usr/local/cuda-12.8/bin/ptxas"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 31912192
+                },
+                "sha256": {
+                  "const": "c960a4f238b17d5c5d3c01ad2bbc1ebd2c5aecc459cb4d223bff10b45f9b8fca"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/local/cuda-12.8/bin/fatbinary"
+                },
+                "realpath": {
+                  "const": "/usr/local/cuda-12.8/bin/fatbinary"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 1249368
+                },
+                "sha256": {
+                  "const": "a4b58769fbea16862a0b3f505aad71a05f5e199be436e189e4a4026bc073e6d2"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/local/cuda-12.8/bin/nvlink"
+                },
+                "realpath": {
+                  "const": "/usr/local/cuda-12.8/bin/nvlink"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 32376952
+                },
+                "sha256": {
+                  "const": "21d779007ac9f54e7bc7552a4009c5bacc6f547d07638b7d77905f864739f1d7"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/local/cuda-12.8/bin/cuobjdump"
+                },
+                "realpath": {
+                  "const": "/usr/local/cuda-12.8/bin/cuobjdump"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 568992
+                },
+                "sha256": {
+                  "const": "9d515ac6f60c246ef63fe87b0a95d209b00ff3e25b716f8f263520010760e8f8"
+                },
+                "role": {
+                  "const": "static_audit_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/local/cuda-12.8/nvvm/bin/cicc"
+                },
+                "realpath": {
+                  "const": "/usr/local/cuda-12.8/nvvm/bin/cicc"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 77645416
+                },
+                "sha256": {
+                  "const": "411f568b8acb34a4d03285b554fa6c839956c47eba182290914c8576fa9eef66"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/local/cuda-12.8/lib64/libcudart_static.a"
+                },
+                "realpath": {
+                  "const": "/usr/local/cuda-12.8/targets/x86_64-linux/lib/libcudart_static.a"
+                },
+                "mode_octal": {
+                  "const": "0644"
+                },
+                "size_bytes": {
+                  "const": 1373394
+                },
+                "sha256": {
+                  "const": "548012438f65d00ecc28c30bd4a11ca6b090cc8773a990174ccc33e0b81aa966"
+                },
+                "role": {
+                  "const": "attempt_a_read_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/local/cuda-12.8/bin/nvcc.profile"
+                },
+                "realpath": {
+                  "const": "/usr/local/cuda-12.8/bin/nvcc.profile"
+                },
+                "mode_octal": {
+                  "const": "0644"
+                },
+                "size_bytes": {
+                  "const": 425
+                },
+                "sha256": {
+                  "const": "4a5b882b5c16a8912ef84275d860f5b371164f3b354dad830f04fd6f128dbe2e"
+                },
+                "role": {
+                  "const": "attempt_a_read_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/local/cuda-12.8/include/cuda_runtime.h"
+                },
+                "realpath": {
+                  "const": "/usr/local/cuda-12.8/targets/x86_64-linux/include/cuda_runtime.h"
+                },
+                "mode_octal": {
+                  "const": "0644"
+                },
+                "size_bytes": {
+                  "const": 98570
+                },
+                "sha256": {
+                  "const": "1aaa84ed2ac4086acdf908390e4f742d28ecfb1bca94766944b9691fb2d47a13"
+                },
+                "role": {
+                  "const": "attempt_a_read_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/local/cuda-12.8/nvvm/libdevice/libdevice.10.bc"
+                },
+                "realpath": {
+                  "const": "/usr/local/cuda-12.8/nvvm/libdevice/libdevice.10.bc"
+                },
+                "mode_octal": {
+                  "const": "0644"
+                },
+                "size_bytes": {
+                  "const": 484900
+                },
+                "sha256": {
+                  "const": "25498d6e3c64782833ff15a5f56665ff09e5d21177163148a1cf008c61733449"
+                },
+                "role": {
+                  "const": "attempt_a_read_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/x86_64-linux-gnu-g++-11"
+                },
+                "realpath": {
+                  "const": "/usr/bin/x86_64-linux-gnu-g++-11"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 932784
+                },
+                "sha256": {
+                  "const": "02ba98cc5feefe173cfb8c28c98089817737800537dc7189138ed66b07cf56ec"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/lib/gcc/x86_64-linux-gnu/11/cc1plus"
+                },
+                "realpath": {
+                  "const": "/usr/lib/gcc/x86_64-linux-gnu/11/cc1plus"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 28300488
+                },
+                "sha256": {
+                  "const": "d8e3d43bae463fb937d6025f77d5c34609d32f67269e38705aa6dd35ab47e388"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/lib/gcc/x86_64-linux-gnu/11/collect2"
+                },
+                "realpath": {
+                  "const": "/usr/lib/gcc/x86_64-linux-gnu/11/collect2"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 303184
+                },
+                "sha256": {
+                  "const": "46486e7904af6aa989614a7f4fb5092f82c31105c3cf8ae883acb18576d3fb32"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/x86_64-linux-gnu-g++-13"
+                },
+                "realpath": {
+                  "const": "/usr/bin/x86_64-linux-gnu-g++-13"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 1027128
+                },
+                "sha256": {
+                  "const": "1353e9bdd29a7295c7226bf6c63abccce056d8cac31f112e5cdbecc3f28c2769"
+                },
+                "role": {
+                  "const": "b_compiler_delta_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus"
+                },
+                "realpath": {
+                  "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 32675168
+                },
+                "sha256": {
+                  "const": "840b332fb62ec6f694ac77d91fe69ef7f80b0d69512ed89374af0ee7a506255d"
+                },
+                "role": {
+                  "const": "b_compiler_delta_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2"
+                },
+                "realpath": {
+                  "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 336056
+                },
+                "sha256": {
+                  "const": "4d1f341ae5b763b513258ee2812422a45e063c30a2f1924a0cf63d3699f3a158"
+                },
+                "role": {
+                  "const": "b_compiler_delta_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/timeout"
+                },
+                "realpath": {
+                  "const": "/usr/bin/timeout"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 39880
+                },
+                "sha256": {
+                  "const": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"
+                },
+                "role": {
+                  "const": "outer_supervisor_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/aa-exec"
+                },
+                "realpath": {
+                  "const": "/usr/bin/aa-exec"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 18744
+                },
+                "sha256": {
+                  "const": "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e"
+                },
+                "role": {
+                  "const": "outer_supervisor_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/sbin/apparmor_parser"
+                },
+                "realpath": {
+                  "const": "/usr/sbin/apparmor_parser"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 1629848
+                },
+                "sha256": {
+                  "const": "6bc852b37807961c14976be9a227ae96bd817f73b5189cb0e0ff5eca4448c01c"
+                },
+                "role": {
+                  "const": "query_or_separately_authorized_lifecycle"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/bwrap"
+                },
+                "realpath": {
+                  "const": "/usr/bin/bwrap"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 72160
+                },
+                "sha256": {
+                  "const": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"
+                },
+                "role": {
+                  "const": "all_sandbox_phases_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/env"
+                },
+                "realpath": {
+                  "const": "/usr/bin/env"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 48072
+                },
+                "sha256": {
+                  "const": "0aefff8f912fb75716c5d4de3b6acde93edbe8fa280fc8ee895c1226d3e373ef"
+                },
+                "role": {
+                  "const": "all_sandbox_phases_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/prlimit"
+                },
+                "realpath": {
+                  "const": "/usr/bin/prlimit"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 27536
+                },
+                "sha256": {
+                  "const": "f27cfd8c1512a4cc6541b59b80cb4cdfd6ef28c34aa21db4299b48264cd0d128"
+                },
+                "role": {
+                  "const": "all_sandbox_phases_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/make"
+                },
+                "realpath": {
+                  "const": "/usr/bin/make"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 259808
+                },
+                "sha256": {
+                  "const": "d78b8f1d099fbcfb6f2f49ab87223b9b68fb3956642f92d6ec6de812e8afa965"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/dash"
+                },
+                "realpath": {
+                  "const": "/usr/bin/dash"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 129784
+                },
+                "sha256": {
+                  "const": "86d31f6fb799e91fa21bad341484564510ca287703a16e9e46c53338776f4f42"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/rm"
+                },
+                "realpath": {
+                  "const": "/usr/bin/rm"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 59912
+                },
+                "sha256": {
+                  "const": "aedf2ef491e1ca4ea2682b88a031f7c3960ebb133677a339743e859fa3d3d8b5"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/cp"
+                },
+                "realpath": {
+                  "const": "/usr/bin/cp"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 141848
+                },
+                "sha256": {
+                  "const": "6187dab32cd7b6291d96c54425a22915a6eeb39add6d95ee9008e1dbba427131"
+                },
+                "role": {
+                  "const": "attempt_a_copy_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/as"
+                },
+                "realpath": {
+                  "const": "/usr/bin/x86_64-linux-gnu-as"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 745768
+                },
+                "sha256": {
+                  "const": "21aff249b692b5c31a44007491f922dcb49f41323e362c57d2ada3f52eddb7f0"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/ld"
+                },
+                "realpath": {
+                  "const": "/usr/bin/x86_64-linux-gnu-ld.bfd"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 1359128
+                },
+                "sha256": {
+                  "const": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/ld.bfd"
+                },
+                "realpath": {
+                  "const": "/usr/bin/x86_64-linux-gnu-ld.bfd"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 1359128
+                },
+                "sha256": {
+                  "const": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/x86_64-linux-gnu-as"
+                },
+                "realpath": {
+                  "const": "/usr/bin/x86_64-linux-gnu-as"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 745768
+                },
+                "sha256": {
+                  "const": "21aff249b692b5c31a44007491f922dcb49f41323e362c57d2ada3f52eddb7f0"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/x86_64-linux-gnu-ld"
+                },
+                "realpath": {
+                  "const": "/usr/bin/x86_64-linux-gnu-ld.bfd"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 1359128
+                },
+                "sha256": {
+                  "const": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/x86_64-linux-gnu-ld.bfd"
+                },
+                "realpath": {
+                  "const": "/usr/bin/x86_64-linux-gnu-ld.bfd"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 1359128
+                },
+                "sha256": {
+                  "const": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b"
+                },
+                "role": {
+                  "const": "attempt_a_build_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/file"
+                },
+                "realpath": {
+                  "const": "/usr/bin/file"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 31336
+                },
+                "sha256": {
+                  "const": "6741f44dde8e51309325c8bcf88ee16bc1e022985d584415680484c11ee89e0d"
+                },
+                "role": {
+                  "const": "static_audit_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/readelf"
+                },
+                "realpath": {
+                  "const": "/usr/bin/x86_64-linux-gnu-readelf"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 789280
+                },
+                "sha256": {
+                  "const": "64c58e15274bbbb5153f31078e455e9e77ee5f51489e709bba5bb788ce9df2b0"
+                },
+                "role": {
+                  "const": "static_audit_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/x86_64-linux-gnu-readelf"
+                },
+                "realpath": {
+                  "const": "/usr/bin/x86_64-linux-gnu-readelf"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 789280
+                },
+                "sha256": {
+                  "const": "64c58e15274bbbb5153f31078e455e9e77ee5f51489e709bba5bb788ce9df2b0"
+                },
+                "role": {
+                  "const": "static_audit_execute_target"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/sha256sum"
+                },
+                "realpath": {
+                  "const": "/usr/bin/sha256sum"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 39336
+                },
+                "sha256": {
+                  "const": "9992e1f1feb6f0f396bc8d6691ebc1adbfc269fd628bce84eda1d4ba5c3995c7"
+                },
+                "role": {
+                  "const": "static_audit_execute"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": true
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/vmstat"
+                },
+                "realpath": {
+                  "const": "/usr/bin/vmstat"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 39712
+                },
+                "sha256": {
+                  "const": "6f043d6af3c19bd2d1f331b70870bf7bf14375873390cd401eb5588f795f5511"
+                },
+                "role": {
+                  "const": "host_resource_monitor_read_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/etc/magic"
+                },
+                "realpath": {
+                  "const": "/etc/magic"
+                },
+                "mode_octal": {
+                  "const": "0644"
+                },
+                "size_bytes": {
+                  "const": 111
+                },
+                "sha256": {
+                  "const": "58219ec4bfe06d84640b4e86341feb3099cb078146c9eee73ec55152819df247"
+                },
+                "role": {
+                  "const": "static_audit_read_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/lib/file/magic.mgc"
+                },
+                "realpath": {
+                  "const": "/usr/lib/file/magic.mgc"
+                },
+                "mode_octal": {
+                  "const": "0644"
+                },
+                "size_bytes": {
+                  "const": 8510760
+                },
+                "sha256": {
+                  "const": "72a25195a2623fe160e926bf20952b6b74b29d6c91e0174a5fa062f02beee1aa"
+                },
+                "role": {
+                  "const": "static_audit_read_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "template_tokens",
+        "copy_template",
+        "build_template",
+        "attempt_a_copy",
+        "attempt_a_build",
+        "attempt_b_copy",
+        "attempt_b_build",
+        "campaign_static_audit",
+        "requirements"
+      ],
+      "properties": {
+        "template_tokens": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "const": "@@PROFILE_NAME@@"
+            },
+            {
+              "const": "@@ATTEMPT_ROOT@@"
+            }
+          ],
+          "items": false
+        },
+        "copy_template": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-v1.profile.template"
+            },
+            "sha256": {
+              "const": "67359e87d8b243c9d31e03634998369ff6530bf8617ad3d5f9c5e4b0fc9b613b"
+            }
+          }
+        },
+        "build_template": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-v1.profile.template"
+            },
+            "sha256": {
+              "const": "11c175f63c901b337c5e8899aceedbc898fde0716c07a323746d723b15021fc4"
+            }
+          }
+        },
+        "attempt_a_copy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "path",
+            "sha256",
+            "attempt_root"
+          ],
+          "properties": {
+            "name": {
+              "const": "r8-liquid-u3-gpu-copy-20260810T102641Z-a"
+            },
+            "path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-20260810T102641Z-a.profile"
+            },
+            "sha256": {
+              "const": "2461550a249284dafc72e473b745ed829463c239e93e805fff623e54a29de8e1"
+            },
+            "attempt_root": {
+              "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial"
+            }
+          }
+        },
+        "attempt_a_build": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "path",
+            "sha256",
+            "attempt_root"
+          ],
+          "properties": {
+            "name": {
+              "const": "r8-liquid-u3-gpu-build-20260810T102641Z-a"
+            },
+            "path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-20260810T102641Z-a.profile"
+            },
+            "sha256": {
+              "const": "fbcc9f417103f17f59003b6da1b8bb7f08e59b2a68015b7ac38cdf1db8c19b10"
+            },
+            "attempt_root": {
+              "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial"
+            }
+          }
+        },
+        "attempt_b_copy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "planned_path",
+            "materialized",
+            "sha256"
+          ],
+          "properties": {
+            "name": {
+              "const": "r8-liquid-u3-gpu-copy-20260810T102641Z-b"
+            },
+            "planned_path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-20260810T102641Z-b.profile"
+            },
+            "materialized": {
+              "const": false
+            },
+            "sha256": {
+              "const": "NOT_MATERIALIZED"
+            }
+          }
+        },
+        "attempt_b_build": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "planned_path",
+            "materialized",
+            "sha256"
+          ],
+          "properties": {
+            "name": {
+              "const": "r8-liquid-u3-gpu-build-20260810T102641Z-b"
+            },
+            "planned_path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-20260810T102641Z-b.profile"
+            },
+            "materialized": {
+              "const": false
+            },
+            "sha256": {
+              "const": "NOT_MATERIALIZED"
+            }
+          }
+        },
+        "campaign_static_audit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "path",
+            "sha256",
+            "attempt_roots_read_only"
+          ],
+          "properties": {
+            "name": {
+              "const": "r8-liquid-u3-gpu-static-audit-20260810T102641Z"
+            },
+            "path": {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T102641Z.profile"
+            },
+            "sha256": {
+              "const": "d23da58b35c69f458d7f9a7fcf03b9fc2493283cd580191d58f7ced460b45168"
+            },
+            "attempt_roots_read_only": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "prefixItems": [
+                {
+                  "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial"
+                },
+                {
+                  "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_b.partial"
+                }
+              ],
+              "items": false
+            }
+          }
+        },
+        "requirements": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "exact_one_writable_attempt_per_copy_or_build_profile",
+            "no_glob_attempt_root",
+            "no_gpu_device_permission",
+            "no_stream_or_packet_network",
+            "no_unconfined_transition",
+            "attempt_a_build_contains_gxx13"
+          ],
+          "properties": {
+            "exact_one_writable_attempt_per_copy_or_build_profile": {
+              "const": true
+            },
+            "no_glob_attempt_root": {
+              "const": true
+            },
+            "no_gpu_device_permission": {
+              "const": true
+            },
+            "no_stream_or_packet_network": {
+              "const": true
+            },
+            "no_unconfined_transition": {
+              "const": true
+            },
+            "attempt_a_build_contains_gxx13": {
+              "const": false
+            }
+          }
+        }
+      }
+    },
+    "source_copy_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_record",
+        "final_receipt",
+        "state_machine",
+        "copy_command",
+        "full_execution_argv",
+        "sealed_inventory",
+        "post_wrapper_inventory",
+        "receipt_publish_rule"
+      ],
+      "properties": {
+        "start_record": {
+          "const": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_source_copy.json.partial"
+        },
+        "final_receipt": {
+          "const": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_source_copy.json"
+        },
+        "state_machine": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "prefixItems": [
+            {
+              "const": "START_RECORD_CREATE_NEW"
+            },
+            {
+              "const": "ISOLATED_COPY_COMPLETE"
+            },
+            {
+              "const": "SEALED_352_INVENTORY_VERIFIED"
+            },
+            {
+              "const": "COPY_PROFILE_UNLOADED_ZERO_RESIDUE"
+            },
+            {
+              "const": "WRAPPER_O_EXCL_0600_CREATED"
+            },
+            {
+              "const": "COMPLETE_353_BUILD_INPUT_INVENTORY_VERIFIED"
+            },
+            {
+              "const": "FINAL_RECEIPT_CREATE_NEW"
+            }
+          ],
+          "items": false
+        },
+        "copy_command": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "prefixItems": [
+            {
+              "const": "/usr/bin/cp"
+            },
+            {
+              "const": "--recursive"
+            },
+            {
+              "const": "--no-preserve=mode,ownership"
+            },
+            {
+              "const": "--"
+            },
+            {
+              "const": "/work/input/."
+            },
+            {
+              "const": "/work/output/buildtree/src/source/"
+            }
+          ],
+          "items": false
+        },
+        "full_execution_argv": {
+          "type": "array",
+          "minItems": 66,
+          "maxItems": 66,
+          "prefixItems": [
+            {
+              "const": "/usr/bin/timeout"
+            },
+            {
+              "const": "--foreground"
+            },
+            {
+              "const": "--kill-after=5s"
+            },
+            {
+              "const": "300s"
+            },
+            {
+              "const": "/usr/bin/aa-exec"
+            },
+            {
+              "const": "-p"
+            },
+            {
+              "const": "r8-liquid-u3-gpu-copy-20260810T102641Z-a"
+            },
+            {
+              "const": "--"
+            },
+            {
+              "const": "/usr/bin/bwrap"
+            },
+            {
+              "const": "--die-with-parent"
+            },
+            {
+              "const": "--new-session"
+            },
+            {
+              "const": "--clearenv"
+            },
+            {
+              "const": "--unshare-user"
+            },
+            {
+              "const": "--unshare-pid"
+            },
+            {
+              "const": "--unshare-net"
+            },
+            {
+              "const": "--unshare-ipc"
+            },
+            {
+              "const": "--unshare-uts"
+            },
+            {
+              "const": "--disable-userns"
+            },
+            {
+              "const": "--assert-userns-disabled"
+            },
+            {
+              "const": "--ro-bind"
+            },
+            {
+              "const": "/usr"
+            },
+            {
+              "const": "/usr"
+            },
+            {
+              "const": "--symlink"
+            },
+            {
+              "const": "usr/lib"
+            },
+            {
+              "const": "/lib"
+            },
+            {
+              "const": "--symlink"
+            },
+            {
+              "const": "usr/lib64"
+            },
+            {
+              "const": "/lib64"
+            },
+            {
+              "const": "--tmpfs"
+            },
+            {
+              "const": "/work"
+            },
+            {
+              "const": "--dir"
+            },
+            {
+              "const": "/work/input"
+            },
+            {
+              "const": "--dir"
+            },
+            {
+              "const": "/work/output"
+            },
+            {
+              "const": "--ro-bind"
+            },
+            {
+              "const": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source"
+            },
+            {
+              "const": "/work/input"
+            },
+            {
+              "const": "--bind"
+            },
+            {
+              "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial/output"
+            },
+            {
+              "const": "/work/output"
+            },
+            {
+              "const": "--chdir"
+            },
+            {
+              "const": "/work"
+            },
+            {
+              "const": "/usr/bin/env"
+            },
+            {
+              "const": "-i"
+            },
+            {
+              "const": "HOME=/nonexistent"
+            },
+            {
+              "const": "PATH=/usr/bin:/usr/local/cuda-12.8/bin"
+            },
+            {
+              "const": "LC_ALL=C.UTF-8"
+            },
+            {
+              "const": "LANG=C.UTF-8"
+            },
+            {
+              "const": "TZ=UTC"
+            },
+            {
+              "const": "TMPDIR=/work/tmp"
+            },
+            {
+              "const": "TMP=/work/tmp"
+            },
+            {
+              "const": "TEMP=/work/tmp"
+            },
+            {
+              "const": "/usr/bin/prlimit"
+            },
+            {
+              "const": "--cpu=120"
+            },
+            {
+              "const": "--as=1073741824"
+            },
+            {
+              "const": "--fsize=2147483648"
+            },
+            {
+              "const": "--nproc=64"
+            },
+            {
+              "const": "--nofile=128"
+            },
+            {
+              "const": "--core=0"
+            },
+            {
+              "const": "--"
+            },
+            {
+              "const": "/usr/bin/cp"
+            },
+            {
+              "const": "--recursive"
+            },
+            {
+              "const": "--no-preserve=mode,ownership"
+            },
+            {
+              "const": "--"
+            },
+            {
+              "const": "/work/input/."
+            },
+            {
+              "const": "/work/output/buildtree/src/source/"
+            }
+          ],
+          "items": false
+        },
+        "sealed_inventory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "required_entry_count",
+            "extra_entries",
+            "symlinks",
+            "hardlinks",
+            "elf_files",
+            "execute_bits"
+          ],
+          "properties": {
+            "required_entry_count": {
+              "const": 352
+            },
+            "extra_entries": {
+              "const": "forbidden"
+            },
+            "symlinks": {
+              "const": "forbidden"
+            },
+            "hardlinks": {
+              "const": "forbidden"
+            },
+            "elf_files": {
+              "const": "forbidden"
+            },
+            "execute_bits": {
+              "const": "forbidden"
+            }
+          }
+        },
+        "post_wrapper_inventory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "required_entry_count",
+            "required_sealed_entry_count",
+            "required_wrapper_entry_count",
+            "extra_entries",
+            "symlinks",
+            "hardlinks",
+            "elf_files",
+            "execute_bits",
+            "wrapper_mode_octal",
+            "wrapper_sha256"
+          ],
+          "properties": {
+            "required_entry_count": {
+              "const": 353
+            },
+            "required_sealed_entry_count": {
+              "const": 352
+            },
+            "required_wrapper_entry_count": {
+              "const": 1
+            },
+            "extra_entries": {
+              "const": "forbidden"
+            },
+            "symlinks": {
+              "const": "forbidden"
+            },
+            "hardlinks": {
+              "const": "forbidden"
+            },
+            "elf_files": {
+              "const": "forbidden"
+            },
+            "execute_bits": {
+              "const": "forbidden"
+            },
+            "wrapper_mode_octal": {
+              "const": "0600"
+            },
+            "wrapper_sha256": {
+              "const": "33883dcdde741c253a09d78decb3c21c5ab92c7c9152acf793d7dd025f07300d"
+            }
+          }
+        },
+        "receipt_publish_rule": {
+          "const": "final_receipt_timestamp_strictly_after_complete_353_inventory_and_copy_profile_unload"
+        }
+      }
+    },
+    "build_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_path",
+        "gpu_build_receipt",
+        "make_argv",
+        "full_execution_argv",
+        "sanitized_environment",
+        "working_directory",
+        "temporary_directory",
+        "default_target_forbidden",
+        "clean_target_forbidden",
+        "stdout_stderr_contract",
+        "candidate_execution",
+        "candidate_post_build_mode_octal",
+        "gpu_device_exposed",
+        "network_used"
+      ],
+      "properties": {
+        "candidate_path": {
+          "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial/output/artifacts/DualSPHysics5.4_linux64"
+        },
+        "gpu_build_receipt": {
+          "const": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_gpu_build.json"
+        },
+        "make_argv": {
+          "type": "array",
+          "minItems": 21,
+          "maxItems": 21,
+          "prefixItems": [
+            {
+              "const": "/usr/bin/make"
+            },
+            {
+              "const": "--no-builtin-rules"
+            },
+            {
+              "const": "--no-builtin-variables"
+            },
+            {
+              "const": "-f"
+            },
+            {
+              "const": "U3GpuBuild.mk"
+            },
+            {
+              "const": "-j1"
+            },
+            {
+              "const": "SHELL=/usr/bin/dash"
+            },
+            {
+              "const": "CC=/usr/bin/x86_64-linux-gnu-g++-11"
+            },
+            {
+              "const": "NCC=/usr/local/cuda-12.8/bin/nvcc"
+            },
+            {
+              "const": "CUDA=12"
+            },
+            {
+              "const": "DIRTOOLKIT=/usr/local/cuda-12.8"
+            },
+            {
+              "const": "GENCODE=-gencode=arch=compute_120,code=\\\"sm_120,compute_120\\\""
+            },
+            {
+              "const": "USE_DEBUG=NO"
+            },
+            {
+              "const": "USE_FAST_MATH=NO"
+            },
+            {
+              "const": "USE_NATIVE_CPU_OPTIMIZATIONS=NO"
+            },
+            {
+              "const": "COMPILE_CHRONO=NO"
+            },
+            {
+              "const": "COMPILE_WAVEGEN=NO"
+            },
+            {
+              "const": "COMPILE_MOORDYNPLUS=NO"
+            },
+            {
+              "const": "LIBS_DIRECTORIES="
+            },
+            {
+              "const": "EXECS_DIRECTORY=/work/output/artifacts"
+            },
+            {
+              "const": "/work/output/artifacts/DualSPHysics5.4_linux64"
+            }
+          ],
+          "items": false
+        },
+        "full_execution_argv": {
+          "type": "array",
+          "minItems": 78,
+          "maxItems": 78,
+          "prefixItems": [
+            {
+              "const": "/usr/bin/timeout"
+            },
+            {
+              "const": "--foreground"
+            },
+            {
+              "const": "--kill-after=5s"
+            },
+            {
+              "const": "5400s"
+            },
+            {
+              "const": "/usr/bin/aa-exec"
+            },
+            {
+              "const": "-p"
+            },
+            {
+              "const": "r8-liquid-u3-gpu-build-20260810T102641Z-a"
+            },
+            {
+              "const": "--"
+            },
+            {
+              "const": "/usr/bin/bwrap"
+            },
+            {
+              "const": "--die-with-parent"
+            },
+            {
+              "const": "--new-session"
+            },
+            {
+              "const": "--clearenv"
+            },
+            {
+              "const": "--unshare-user"
+            },
+            {
+              "const": "--unshare-pid"
+            },
+            {
+              "const": "--unshare-net"
+            },
+            {
+              "const": "--unshare-ipc"
+            },
+            {
+              "const": "--unshare-uts"
+            },
+            {
+              "const": "--disable-userns"
+            },
+            {
+              "const": "--assert-userns-disabled"
+            },
+            {
+              "const": "--ro-bind"
+            },
+            {
+              "const": "/usr"
+            },
+            {
+              "const": "/usr"
+            },
+            {
+              "const": "--symlink"
+            },
+            {
+              "const": "usr/lib"
+            },
+            {
+              "const": "/lib"
+            },
+            {
+              "const": "--symlink"
+            },
+            {
+              "const": "usr/lib64"
+            },
+            {
+              "const": "/lib64"
+            },
+            {
+              "const": "--tmpfs"
+            },
+            {
+              "const": "/work"
+            },
+            {
+              "const": "--dir"
+            },
+            {
+              "const": "/work/tmp"
+            },
+            {
+              "const": "--dir"
+            },
+            {
+              "const": "/work/output"
+            },
+            {
+              "const": "--bind"
+            },
+            {
+              "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial/output"
+            },
+            {
+              "const": "/work/output"
+            },
+            {
+              "const": "--chdir"
+            },
+            {
+              "const": "/work/output/buildtree/src/source"
+            },
+            {
+              "const": "/usr/bin/env"
+            },
+            {
+              "const": "-i"
+            },
+            {
+              "const": "HOME=/nonexistent"
+            },
+            {
+              "const": "PATH=/usr/bin:/usr/local/cuda-12.8/bin"
+            },
+            {
+              "const": "LC_ALL=C.UTF-8"
+            },
+            {
+              "const": "LANG=C.UTF-8"
+            },
+            {
+              "const": "TZ=UTC"
+            },
+            {
+              "const": "TMPDIR=/work/tmp"
+            },
+            {
+              "const": "TMP=/work/tmp"
+            },
+            {
+              "const": "TEMP=/work/tmp"
+            },
+            {
+              "const": "/usr/bin/prlimit"
+            },
+            {
+              "const": "--cpu=5400"
+            },
+            {
+              "const": "--as=8589934592"
+            },
+            {
+              "const": "--fsize=2147483648"
+            },
+            {
+              "const": "--nproc=4096"
+            },
+            {
+              "const": "--nofile=1024"
+            },
+            {
+              "const": "--core=0"
+            },
+            {
+              "const": "--"
+            },
+            {
+              "const": "/usr/bin/make"
+            },
+            {
+              "const": "--no-builtin-rules"
+            },
+            {
+              "const": "--no-builtin-variables"
+            },
+            {
+              "const": "-f"
+            },
+            {
+              "const": "U3GpuBuild.mk"
+            },
+            {
+              "const": "-j1"
+            },
+            {
+              "const": "SHELL=/usr/bin/dash"
+            },
+            {
+              "const": "CC=/usr/bin/x86_64-linux-gnu-g++-11"
+            },
+            {
+              "const": "NCC=/usr/local/cuda-12.8/bin/nvcc"
+            },
+            {
+              "const": "CUDA=12"
+            },
+            {
+              "const": "DIRTOOLKIT=/usr/local/cuda-12.8"
+            },
+            {
+              "const": "GENCODE=-gencode=arch=compute_120,code=\\\"sm_120,compute_120\\\""
+            },
+            {
+              "const": "USE_DEBUG=NO"
+            },
+            {
+              "const": "USE_FAST_MATH=NO"
+            },
+            {
+              "const": "USE_NATIVE_CPU_OPTIMIZATIONS=NO"
+            },
+            {
+              "const": "COMPILE_CHRONO=NO"
+            },
+            {
+              "const": "COMPILE_WAVEGEN=NO"
+            },
+            {
+              "const": "COMPILE_MOORDYNPLUS=NO"
+            },
+            {
+              "const": "LIBS_DIRECTORIES="
+            },
+            {
+              "const": "EXECS_DIRECTORY=/work/output/artifacts"
+            },
+            {
+              "const": "/work/output/artifacts/DualSPHysics5.4_linux64"
+            }
+          ],
+          "items": false
+        },
+        "sanitized_environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "HOME",
+            "PATH",
+            "LC_ALL",
+            "LANG",
+            "TZ",
+            "TMPDIR",
+            "TMP",
+            "TEMP"
+          ],
+          "properties": {
+            "HOME": {
+              "const": "/nonexistent"
+            },
+            "PATH": {
+              "const": "/usr/bin:/usr/local/cuda-12.8/bin"
+            },
+            "LC_ALL": {
+              "const": "C.UTF-8"
+            },
+            "LANG": {
+              "const": "C.UTF-8"
+            },
+            "TZ": {
+              "const": "UTC"
+            },
+            "TMPDIR": {
+              "const": "/work/tmp"
+            },
+            "TMP": {
+              "const": "/work/tmp"
+            },
+            "TEMP": {
+              "const": "/work/tmp"
+            }
+          }
+        },
+        "working_directory": {
+          "const": "/work/output/buildtree/src/source"
+        },
+        "temporary_directory": {
+          "const": "/work/tmp"
+        },
+        "default_target_forbidden": {
+          "const": true
+        },
+        "clean_target_forbidden": {
+          "const": true
+        },
+        "stdout_stderr_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "streaming",
+            "complete_byte_count",
+            "sha256",
+            "bounded_prefix_bytes",
+            "output_file_in_build_tree"
+          ],
+          "properties": {
+            "streaming": {
+              "const": true
+            },
+            "complete_byte_count": {
+              "const": true
+            },
+            "sha256": {
+              "const": true
+            },
+            "bounded_prefix_bytes": {
+              "const": 65536
+            },
+            "output_file_in_build_tree": {
+              "const": false
+            }
+          }
+        },
+        "candidate_execution": {
+          "const": "forbidden"
+        },
+        "candidate_post_build_mode_octal": {
+          "const": "0400"
+        },
+        "gpu_device_exposed": {
+          "const": false
+        },
+        "network_used": {
+          "const": false
+        }
+      }
+    },
+    "static_audit_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "host_supervisor_allowed_operations",
+        "binary_content_parser_executed_on_host",
+        "profile_name",
+        "profile_path",
+        "profile_sha256",
+        "call_chain",
+        "timeout_prefix",
+        "aa_exec_prefix",
+        "bwrap_prefix_before_exact_input",
+        "exact_input_bind",
+        "bwrap_suffix_after_exact_input",
+        "resource_classes",
+        "prlimit_suffix",
+        "output_limit_bytes",
+        "candidate_inputs",
+        "object_input_contract",
+        "candidate_tool_suffixes",
+        "object_tool_suffix_templates",
+        "sandbox_invariants",
+        "candidate_identity_fields",
+        "candidate_identity_before_after_must_match",
+        "artifact_acceptance"
+      ],
+      "properties": {
+        "phase": {
+          "const": "mandatory_separate_read_only_disconnected_sandbox"
+        },
+        "host_supervisor_allowed_operations": {
+          "type": "array",
+          "minItems": 10,
+          "maxItems": 10,
+          "prefixItems": [
+            {
+              "const": "path"
+            },
+            {
+              "const": "fd"
+            },
+            {
+              "const": "lstat"
+            },
+            {
+              "const": "fstat"
+            },
+            {
+              "const": "mode"
+            },
+            {
+              "const": "owner"
+            },
+            {
+              "const": "device"
+            },
+            {
+              "const": "inode"
+            },
+            {
+              "const": "size"
+            },
+            {
+              "const": "sha256"
+            }
+          ],
+          "items": false
+        },
+        "binary_content_parser_executed_on_host": {
+          "const": false
+        },
+        "profile_name": {
+          "const": "r8-liquid-u3-gpu-static-audit-20260810T102641Z"
+        },
+        "profile_path": {
+          "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T102641Z.profile"
+        },
+        "profile_sha256": {
+          "const": "d23da58b35c69f458d7f9a7fcf03b9fc2493283cd580191d58f7ced460b45168"
+        },
+        "call_chain": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "prefixItems": [
+            {
+              "const": "/usr/bin/timeout"
+            },
+            {
+              "const": "/usr/bin/aa-exec"
+            },
+            {
+              "const": "/usr/bin/bwrap"
+            },
+            {
+              "const": "/usr/bin/env"
+            },
+            {
+              "const": "/usr/bin/prlimit"
+            },
+            {
+              "const": "one_exact_parser_tool"
+            }
+          ],
+          "items": false
+        },
+        "timeout_prefix": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {
+              "const": "/usr/bin/timeout"
+            },
+            {
+              "const": "--foreground"
+            },
+            {
+              "const": "--kill-after=5s"
+            },
+            {
+              "const": "<RESOURCE_CLASS_WALL_SECONDS>s"
+            }
+          ],
+          "items": false
+        },
+        "aa_exec_prefix": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {
+              "const": "/usr/bin/aa-exec"
+            },
+            {
+              "const": "-p"
+            },
+            {
+              "const": "r8-liquid-u3-gpu-static-audit-20260810T102641Z"
+            },
+            {
+              "const": "--"
+            }
+          ],
+          "items": false
+        },
+        "bwrap_prefix_before_exact_input": {
+          "type": "array",
+          "minItems": 31,
+          "maxItems": 31,
+          "prefixItems": [
+            {
+              "const": "/usr/bin/bwrap"
+            },
+            {
+              "const": "--die-with-parent"
+            },
+            {
+              "const": "--new-session"
+            },
+            {
+              "const": "--clearenv"
+            },
+            {
+              "const": "--unshare-user"
+            },
+            {
+              "const": "--unshare-pid"
+            },
+            {
+              "const": "--unshare-net"
+            },
+            {
+              "const": "--unshare-ipc"
+            },
+            {
+              "const": "--unshare-uts"
+            },
+            {
+              "const": "--disable-userns"
+            },
+            {
+              "const": "--assert-userns-disabled"
+            },
+            {
+              "const": "--ro-bind"
+            },
+            {
+              "const": "/usr"
+            },
+            {
+              "const": "/usr"
+            },
+            {
+              "const": "--symlink"
+            },
+            {
+              "const": "usr/lib"
+            },
+            {
+              "const": "/lib"
+            },
+            {
+              "const": "--symlink"
+            },
+            {
+              "const": "usr/lib64"
+            },
+            {
+              "const": "/lib64"
+            },
+            {
+              "const": "--dir"
+            },
+            {
+              "const": "/etc"
+            },
+            {
+              "const": "--ro-bind"
+            },
+            {
+              "const": "/etc/magic"
+            },
+            {
+              "const": "/etc/magic"
+            },
+            {
+              "const": "--tmpfs"
+            },
+            {
+              "const": "/audit"
+            },
+            {
+              "const": "--dir"
+            },
+            {
+              "const": "/audit/input"
+            },
+            {
+              "const": "--dir"
+            },
+            {
+              "const": "/audit/tmp"
+            }
+          ],
+          "items": false
+        },
+        "exact_input_bind": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {
+              "const": "--ro-bind"
+            },
+            {
+              "const": "<EXACT_ALLOWED_HOST_INPUT>"
+            },
+            {
+              "const": "<EXACT_GUEST_INPUT>"
+            }
+          ],
+          "items": false
+        },
+        "bwrap_suffix_after_exact_input": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "prefixItems": [
+            {
+              "const": "--chdir"
+            },
+            {
+              "const": "/audit"
+            },
+            {
+              "const": "/usr/bin/env"
+            },
+            {
+              "const": "-i"
+            },
+            {
+              "const": "HOME=/nonexistent"
+            },
+            {
+              "const": "PATH=/usr/bin:/usr/local/cuda-12.8/bin"
+            },
+            {
+              "const": "LC_ALL=C.UTF-8"
+            },
+            {
+              "const": "LANG=C.UTF-8"
+            },
+            {
+              "const": "TZ=UTC"
+            },
+            {
+              "const": "TMPDIR=/audit/tmp"
+            },
+            {
+              "const": "TMP=/audit/tmp"
+            },
+            {
+              "const": "TEMP=/audit/tmp"
+            }
+          ],
+          "items": false
+        },
+        "resource_classes": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "metadata",
+            "cuobjdump_list",
+            "cuobjdump_dump"
+          ],
+          "properties": {
+            "metadata": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "wall_seconds",
+                "cpu_seconds",
+                "address_space_bytes"
+              ],
+              "properties": {
+                "wall_seconds": {
+                  "const": 60
+                },
+                "cpu_seconds": {
+                  "const": 60
+                },
+                "address_space_bytes": {
+                  "const": 1073741824
+                }
+              }
+            },
+            "cuobjdump_list": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "wall_seconds",
+                "cpu_seconds",
+                "address_space_bytes"
+              ],
+              "properties": {
+                "wall_seconds": {
+                  "const": 120
+                },
+                "cpu_seconds": {
+                  "const": 120
+                },
+                "address_space_bytes": {
+                  "const": 2147483648
+                }
+              }
+            },
+            "cuobjdump_dump": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "wall_seconds",
+                "cpu_seconds",
+                "address_space_bytes"
+              ],
+              "properties": {
+                "wall_seconds": {
+                  "const": 300
+                },
+                "cpu_seconds": {
+                  "const": 300
+                },
+                "address_space_bytes": {
+                  "const": 4294967296
+                }
+              }
+            }
+          }
+        },
+        "prlimit_suffix": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "prefixItems": [
+            {
+              "const": "/usr/bin/prlimit"
+            },
+            {
+              "const": "--cpu=<RESOURCE_CLASS_CPU_SECONDS>"
+            },
+            {
+              "const": "--as=<RESOURCE_CLASS_AS_BYTES>"
+            },
+            {
+              "const": "--nproc=64"
+            },
+            {
+              "const": "--nofile=128"
+            },
+            {
+              "const": "--core=0"
+            },
+            {
+              "const": "--"
+            }
+          ],
+          "items": false
+        },
+        "output_limit_bytes": {
+          "const": 268435456
+        },
+        "candidate_inputs": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "build_id",
+                "host_path",
+                "guest_path"
+              ],
+              "properties": {
+                "build_id": {
+                  "const": "u3_source_gpu_build_sm120_20260810T102641Z_a"
+                },
+                "host_path": {
+                  "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial/output/artifacts/DualSPHysics5.4_linux64"
+                },
+                "guest_path": {
+                  "const": "/audit/input/DualSPHysics5.4_linux64"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "build_id",
+                "host_path",
+                "guest_path"
+              ],
+              "properties": {
+                "build_id": {
+                  "const": "u3_source_gpu_build_sm120_20260810T102641Z_b"
+                },
+                "host_path": {
+                  "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_b.partial/output/artifacts/DualSPHysics5.4_linux64"
+                },
+                "guest_path": {
+                  "const": "/audit/input/DualSPHysics5.4_linux64"
+                }
+              }
+            }
+          ],
+          "items": false
+        },
+        "object_input_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "build_ids",
+            "host_root_suffix",
+            "object_names",
+            "guest_root",
+            "exact_enumeration_required"
+          ],
+          "properties": {
+            "build_ids": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "prefixItems": [
+                {
+                  "const": "u3_source_gpu_build_sm120_20260810T102641Z_a"
+                },
+                {
+                  "const": "u3_source_gpu_build_sm120_20260810T102641Z_b"
+                }
+              ],
+              "items": false
+            },
+            "host_root_suffix": {
+              "const": "output/buildtree/src/source"
+            },
+            "object_names": {
+              "type": "array",
+              "minItems": 131,
+              "maxItems": 131,
+              "prefixItems": [
+                {
+                  "const": "FunGeo3d.o"
+                },
+                {
+                  "const": "FunSphKernelsCfg.o"
+                },
+                {
+                  "const": "Functions.o"
+                },
+                {
+                  "const": "FunctionsCuda.o"
+                },
+                {
+                  "const": "JAppInfo.o"
+                },
+                {
+                  "const": "JArraysCpu.o"
+                },
+                {
+                  "const": "JArraysGpu.o"
+                },
+                {
+                  "const": "JBinaryData.o"
+                },
+                {
+                  "const": "JBoxDef.o"
+                },
+                {
+                  "const": "JCaseCtes.o"
+                },
+                {
+                  "const": "JCaseEParms.o"
+                },
+                {
+                  "const": "JCaseParts.o"
+                },
+                {
+                  "const": "JCaseProperties.o"
+                },
+                {
+                  "const": "JCaseVRes.o"
+                },
+                {
+                  "const": "JCellDivCpu.o"
+                },
+                {
+                  "const": "JCellDivCpuSingle.o"
+                },
+                {
+                  "const": "JCellDivGpu.o"
+                },
+                {
+                  "const": "JCellDivGpuSingle.o"
+                },
+                {
+                  "const": "JCellDivGpuSingle_ker.o"
+                },
+                {
+                  "const": "JCellDivGpu_ker.o"
+                },
+                {
+                  "const": "JCfgRunBase.o"
+                },
+                {
+                  "const": "JChronoGeoObj.o"
+                },
+                {
+                  "const": "JChronoObjects.o"
+                },
+                {
+                  "const": "JComputeMotionRef.o"
+                },
+                {
+                  "const": "JDataArrays.o"
+                },
+                {
+                  "const": "JDebugSphCpu.o"
+                },
+                {
+                  "const": "JDebugSphGpu.o"
+                },
+                {
+                  "const": "JDsAccInput.o"
+                },
+                {
+                  "const": "JDsAccInput_ker.o"
+                },
+                {
+                  "const": "JDsDamping.o"
+                },
+                {
+                  "const": "JDsDcell.o"
+                },
+                {
+                  "const": "JDsExtraData.o"
+                },
+                {
+                  "const": "JDsFixedDt.o"
+                },
+                {
+                  "const": "JDsFtForcePoints.o"
+                },
+                {
+                  "const": "JDsGaugeItem.o"
+                },
+                {
+                  "const": "JDsGaugeSystem.o"
+                },
+                {
+                  "const": "JDsGauge_ker.o"
+                },
+                {
+                  "const": "JDsGpuInfo.o"
+                },
+                {
+                  "const": "JDsInitialize.o"
+                },
+                {
+                  "const": "JDsMooredFloatings.o"
+                },
+                {
+                  "const": "JDsMotion.o"
+                },
+                {
+                  "const": "JDsOutputParts.o"
+                },
+                {
+                  "const": "JDsOutputTime.o"
+                },
+                {
+                  "const": "JDsPartFloatSave.o"
+                },
+                {
+                  "const": "JDsPartMotionSave.o"
+                },
+                {
+                  "const": "JDsPartsInit.o"
+                },
+                {
+                  "const": "JDsPartsOut.o"
+                },
+                {
+                  "const": "JDsPips.o"
+                },
+                {
+                  "const": "JDsPips_ker.o"
+                },
+                {
+                  "const": "JDsSaveDt.o"
+                },
+                {
+                  "const": "JDsTimers.o"
+                },
+                {
+                  "const": "JDsViscoInput.o"
+                },
+                {
+                  "const": "JDsVresData.o"
+                },
+                {
+                  "const": "JDsphConfig.o"
+                },
+                {
+                  "const": "JException.o"
+                },
+                {
+                  "const": "JLinearValue.o"
+                },
+                {
+                  "const": "JLog2.o"
+                },
+                {
+                  "const": "JMLPistonsGpu.o"
+                },
+                {
+                  "const": "JMeshData.o"
+                },
+                {
+                  "const": "JMeshTDatas.o"
+                },
+                {
+                  "const": "JMeshTDatasDsVel.o"
+                },
+                {
+                  "const": "JMeshTDatasLoad.o"
+                },
+                {
+                  "const": "JMeshTDatasSave.o"
+                },
+                {
+                  "const": "JMeshTDatasXml.o"
+                },
+                {
+                  "const": "JMotion.o"
+                },
+                {
+                  "const": "JMotionData.o"
+                },
+                {
+                  "const": "JMotionList.o"
+                },
+                {
+                  "const": "JMotionMov.o"
+                },
+                {
+                  "const": "JMotionObj.o"
+                },
+                {
+                  "const": "JMotionPos.o"
+                },
+                {
+                  "const": "JObject.o"
+                },
+                {
+                  "const": "JObjectGpu.o"
+                },
+                {
+                  "const": "JOutputCsv.o"
+                },
+                {
+                  "const": "JPartDataBi4.o"
+                },
+                {
+                  "const": "JPartDataHead.o"
+                },
+                {
+                  "const": "JPartFloatInfoBi4.o"
+                },
+                {
+                  "const": "JPartMotRefBi4Save.o"
+                },
+                {
+                  "const": "JPartOutBi4Save.o"
+                },
+                {
+                  "const": "JPartsLoad4.o"
+                },
+                {
+                  "const": "JRadixSort.o"
+                },
+                {
+                  "const": "JRangeFilter.o"
+                },
+                {
+                  "const": "JReadDatafile.o"
+                },
+                {
+                  "const": "JReduSum_ker.o"
+                },
+                {
+                  "const": "JRelaxZone_ker.o"
+                },
+                {
+                  "const": "JRelaxZonesGpu.o"
+                },
+                {
+                  "const": "JSaveCsv2.o"
+                },
+                {
+                  "const": "JSimpleNeigs.o"
+                },
+                {
+                  "const": "JSpVtkData.o"
+                },
+                {
+                  "const": "JSpVtkShape.o"
+                },
+                {
+                  "const": "JSph.o"
+                },
+                {
+                  "const": "JSphCfgRun.o"
+                },
+                {
+                  "const": "JSphCpu.o"
+                },
+                {
+                  "const": "JSphCpuSingle.o"
+                },
+                {
+                  "const": "JSphCpuSingle_InOut.o"
+                },
+                {
+                  "const": "JSphCpuSingle_VRes.o"
+                },
+                {
+                  "const": "JSphCpu_InOut.o"
+                },
+                {
+                  "const": "JSphCpu_VRes.o"
+                },
+                {
+                  "const": "JSphCpu_mdbc.o"
+                },
+                {
+                  "const": "JSphCpu_preloop.o"
+                },
+                {
+                  "const": "JSphFlexStruc.o"
+                },
+                {
+                  "const": "JSphGpu.o"
+                },
+                {
+                  "const": "JSphGpuSimple_ker.o"
+                },
+                {
+                  "const": "JSphGpuSingle.o"
+                },
+                {
+                  "const": "JSphGpuSingle_InOut.o"
+                },
+                {
+                  "const": "JSphGpuSingle_VRes.o"
+                },
+                {
+                  "const": "JSphGpu_ker.o"
+                },
+                {
+                  "const": "JSphInOut.o"
+                },
+                {
+                  "const": "JSphInOutGridData.o"
+                },
+                {
+                  "const": "JSphInOutPoints.o"
+                },
+                {
+                  "const": "JSphInOutVel.o"
+                },
+                {
+                  "const": "JSphInOutVelAwas.o"
+                },
+                {
+                  "const": "JSphInOutZone.o"
+                },
+                {
+                  "const": "JSphInOutZsurf.o"
+                },
+                {
+                  "const": "JSphMk.o"
+                },
+                {
+                  "const": "JSphShifting.o"
+                },
+                {
+                  "const": "JSphShiftingAdv.o"
+                },
+                {
+                  "const": "JSphShifting_ker.o"
+                },
+                {
+                  "const": "JSphVRes.o"
+                },
+                {
+                  "const": "JSphVResZone.o"
+                },
+                {
+                  "const": "JTimeControl.o"
+                },
+                {
+                  "const": "JTrianglesMesh.o"
+                },
+                {
+                  "const": "JVResDataLimits.o"
+                },
+                {
+                  "const": "JWaveOrder2_ker.o"
+                },
+                {
+                  "const": "JWaveSpectrumGpu.o"
+                },
+                {
+                  "const": "JXml.o"
+                },
+                {
+                  "const": "main.o"
+                },
+                {
+                  "const": "randomc.o"
+                },
+                {
+                  "const": "tinystr.o"
+                },
+                {
+                  "const": "tinyxml.o"
+                },
+                {
+                  "const": "tinyxmlerror.o"
+                },
+                {
+                  "const": "tinyxmlparser.o"
+                }
+              ],
+              "items": false
+            },
+            "guest_root": {
+              "const": "/audit/input"
+            },
+            "exact_enumeration_required": {
+              "const": true
+            }
+          }
+        },
+        "candidate_tool_suffixes": {
+          "type": "array",
+          "minItems": 11,
+          "maxItems": 11,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "file"
+                },
+                "resource_class": {
+                  "const": "metadata"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/bin/file"
+                    },
+                    {
+                      "const": "/audit/input/DualSPHysics5.4_linux64"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "readelf_header"
+                },
+                "resource_class": {
+                  "const": "metadata"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/bin/readelf"
+                    },
+                    {
+                      "const": "-hW"
+                    },
+                    {
+                      "const": "/audit/input/DualSPHysics5.4_linux64"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "readelf_program_headers"
+                },
+                "resource_class": {
+                  "const": "metadata"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/bin/readelf"
+                    },
+                    {
+                      "const": "-lW"
+                    },
+                    {
+                      "const": "/audit/input/DualSPHysics5.4_linux64"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "readelf_dynamic"
+                },
+                "resource_class": {
+                  "const": "metadata"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/bin/readelf"
+                    },
+                    {
+                      "const": "-dW"
+                    },
+                    {
+                      "const": "/audit/input/DualSPHysics5.4_linux64"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "readelf_notes"
+                },
+                "resource_class": {
+                  "const": "metadata"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/bin/readelf"
+                    },
+                    {
+                      "const": "-nW"
+                    },
+                    {
+                      "const": "/audit/input/DualSPHysics5.4_linux64"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "cuobjdump_list_elf"
+                },
+                "resource_class": {
+                  "const": "cuobjdump_list"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/local/cuda-12.8/bin/cuobjdump"
+                    },
+                    {
+                      "const": "--list-elf"
+                    },
+                    {
+                      "const": "/audit/input/DualSPHysics5.4_linux64"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "cuobjdump_dump_elf"
+                },
+                "resource_class": {
+                  "const": "cuobjdump_dump"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 5,
+                  "maxItems": 5,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/local/cuda-12.8/bin/cuobjdump"
+                    },
+                    {
+                      "const": "--dump-elf"
+                    },
+                    {
+                      "const": "--gpu-architecture"
+                    },
+                    {
+                      "const": "sm_120"
+                    },
+                    {
+                      "const": "/audit/input/DualSPHysics5.4_linux64"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "cuobjdump_dump_elf_symbols"
+                },
+                "resource_class": {
+                  "const": "cuobjdump_dump"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 5,
+                  "maxItems": 5,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/local/cuda-12.8/bin/cuobjdump"
+                    },
+                    {
+                      "const": "--dump-elf-symbols"
+                    },
+                    {
+                      "const": "--gpu-architecture"
+                    },
+                    {
+                      "const": "sm_120"
+                    },
+                    {
+                      "const": "/audit/input/DualSPHysics5.4_linux64"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "cuobjdump_list_ptx"
+                },
+                "resource_class": {
+                  "const": "cuobjdump_list"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/local/cuda-12.8/bin/cuobjdump"
+                    },
+                    {
+                      "const": "--list-ptx"
+                    },
+                    {
+                      "const": "/audit/input/DualSPHysics5.4_linux64"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "cuobjdump_dump_ptx"
+                },
+                "resource_class": {
+                  "const": "cuobjdump_dump"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/local/cuda-12.8/bin/cuobjdump"
+                    },
+                    {
+                      "const": "--dump-ptx"
+                    },
+                    {
+                      "const": "/audit/input/DualSPHysics5.4_linux64"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "sha256sum"
+                },
+                "resource_class": {
+                  "const": "metadata"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/bin/sha256sum"
+                    },
+                    {
+                      "const": "/audit/input/DualSPHysics5.4_linux64"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            }
+          ],
+          "items": false
+        },
+        "object_tool_suffix_templates": {
+          "type": "array",
+          "minItems": 6,
+          "maxItems": 6,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "object_file"
+                },
+                "resource_class": {
+                  "const": "metadata"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/bin/file"
+                    },
+                    {
+                      "const": "/audit/input/<EXACT_OBJECT_NAME>"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "object_readelf_header"
+                },
+                "resource_class": {
+                  "const": "metadata"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/bin/readelf"
+                    },
+                    {
+                      "const": "-hW"
+                    },
+                    {
+                      "const": "/audit/input/<EXACT_OBJECT_NAME>"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "object_readelf_sections"
+                },
+                "resource_class": {
+                  "const": "metadata"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/bin/readelf"
+                    },
+                    {
+                      "const": "-SW"
+                    },
+                    {
+                      "const": "/audit/input/<EXACT_OBJECT_NAME>"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "object_sha256sum"
+                },
+                "resource_class": {
+                  "const": "metadata"
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/bin/sha256sum"
+                    },
+                    {
+                      "const": "/audit/input/<EXACT_OBJECT_NAME>"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "cuda_only",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "cuda_object_list_elf"
+                },
+                "resource_class": {
+                  "const": "cuobjdump_list"
+                },
+                "cuda_only": {
+                  "const": true
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/local/cuda-12.8/bin/cuobjdump"
+                    },
+                    {
+                      "const": "--list-elf"
+                    },
+                    {
+                      "const": "/audit/input/<EXACT_CUDA_OBJECT_NAME>"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "resource_class",
+                "cuda_only",
+                "argv"
+              ],
+              "properties": {
+                "id": {
+                  "const": "cuda_object_list_ptx"
+                },
+                "resource_class": {
+                  "const": "cuobjdump_list"
+                },
+                "cuda_only": {
+                  "const": true
+                },
+                "argv": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/local/cuda-12.8/bin/cuobjdump"
+                    },
+                    {
+                      "const": "--list-ptx"
+                    },
+                    {
+                      "const": "/audit/input/<EXACT_CUDA_OBJECT_NAME>"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            }
+          ],
+          "items": false
+        },
+        "sandbox_invariants": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "host_writable_bind_count",
+            "network_namespace",
+            "proc_exposed",
+            "dev_exposed",
+            "gpu_exposed",
+            "candidate_executable",
+            "home",
+            "shell_allowed",
+            "compiler_allowed",
+            "make_allowed",
+            "ldd_allowed"
+          ],
+          "properties": {
+            "host_writable_bind_count": {
+              "const": 0
+            },
+            "network_namespace": {
+              "const": "new_empty"
+            },
+            "proc_exposed": {
+              "const": false
+            },
+            "dev_exposed": {
+              "const": false
+            },
+            "gpu_exposed": {
+              "const": false
+            },
+            "candidate_executable": {
+              "const": false
+            },
+            "home": {
+              "const": "/nonexistent"
+            },
+            "shell_allowed": {
+              "const": false
+            },
+            "compiler_allowed": {
+              "const": false
+            },
+            "make_allowed": {
+              "const": false
+            },
+            "ldd_allowed": {
+              "const": false
+            }
+          }
+        },
+        "candidate_identity_fields": {
+          "type": "array",
+          "minItems": 12,
+          "maxItems": 12,
+          "prefixItems": [
+            {
+              "const": "realpath"
+            },
+            {
+              "const": "parent_realpath"
+            },
+            {
+              "const": "uid"
+            },
+            {
+              "const": "gid"
+            },
+            {
+              "const": "st_dev"
+            },
+            {
+              "const": "st_ino"
+            },
+            {
+              "const": "regular"
+            },
+            {
+              "const": "symlink"
+            },
+            {
+              "const": "nlink"
+            },
+            {
+              "const": "size"
+            },
+            {
+              "const": "mode_octal"
+            },
+            {
+              "const": "sha256"
+            }
+          ],
+          "items": false
+        },
+        "candidate_identity_before_after_must_match": {
+          "const": true
+        },
+        "artifact_acceptance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "elf_type",
+            "df_1_pie",
+            "interpreter",
+            "gnu_stack_executable",
+            "rpath_runpath",
+            "required_needed",
+            "dynamic_libcudart_forbidden",
+            "native_cubin_arches",
+            "ptx_arches",
+            "nonzero_executable_text_section_required",
+            "function_symbol_in_verified_text_required"
+          ],
+          "properties": {
+            "elf_type": {
+              "const": "ET_DYN"
+            },
+            "df_1_pie": {
+              "const": true
+            },
+            "interpreter": {
+              "const": "/lib64/ld-linux-x86-64.so.2"
+            },
+            "gnu_stack_executable": {
+              "const": false
+            },
+            "rpath_runpath": {
+              "const": false
+            },
+            "required_needed": {
+              "type": "array",
+              "minItems": 5,
+              "maxItems": 5,
+              "prefixItems": [
+                {
+                  "const": "libgomp.so.1"
+                },
+                {
+                  "const": "libstdc++.so.6"
+                },
+                {
+                  "const": "libm.so.6"
+                },
+                {
+                  "const": "libgcc_s.so.1"
+                },
+                {
+                  "const": "libc.so.6"
+                }
+              ],
+              "items": false
+            },
+            "dynamic_libcudart_forbidden": {
+              "const": true
+            },
+            "native_cubin_arches": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "prefixItems": [
+                {
+                  "const": "sm_120"
+                }
+              ],
+              "items": false
+            },
+            "ptx_arches": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "prefixItems": [
+                {
+                  "const": "sm_120"
+                }
+              ],
+              "items": false
+            },
+            "nonzero_executable_text_section_required": {
+              "const": true
+            },
+            "function_symbol_in_verified_text_required": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "b_admission_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "b_identity_only_in_g1",
+        "b_root_creation_before_admission",
+        "b_profiles_before_root_cause",
+        "manifest_required_keys",
+        "manifest_schema_version",
+        "manifest_document_type",
+        "manifest_status",
+        "manifest_next_allowed_stage",
+        "parent_file_paths",
+        "required_parent_hash_algorithm",
+        "gxx13_exact_tools",
+        "forbidden_permission_prefixes",
+        "delta_catalog",
+        "permission_rule",
+        "wrapper_variants"
+      ],
+      "properties": {
+        "b_identity_only_in_g1": {
+          "const": true
+        },
+        "b_root_creation_before_admission": {
+          "const": "forbidden"
+        },
+        "b_profiles_before_root_cause": {
+          "const": "forbidden"
+        },
+        "manifest_required_keys": {
+          "type": "array",
+          "minItems": 16,
+          "maxItems": 16,
+          "prefixItems": [
+            {
+              "const": "schema_version"
+            },
+            {
+              "const": "document_type"
+            },
+            {
+              "const": "campaign_id"
+            },
+            {
+              "const": "build_id"
+            },
+            {
+              "const": "attempt_root"
+            },
+            {
+              "const": "selected_delta_id"
+            },
+            {
+              "const": "root_cause_evidence_sha256"
+            },
+            {
+              "const": "parent_hashes"
+            },
+            {
+              "const": "make_argv"
+            },
+            {
+              "const": "wrapper_sha256"
+            },
+            {
+              "const": "copy_profile"
+            },
+            {
+              "const": "build_profile"
+            },
+            {
+              "const": "permission_delta"
+            },
+            {
+              "const": "created_at_utc"
+            },
+            {
+              "const": "status"
+            },
+            {
+              "const": "next_allowed_stage"
+            }
+          ],
+          "items": false
+        },
+        "manifest_schema_version": {
+          "const": "smpcc-r8-liquid-u3-gpu-b-admission-v1"
+        },
+        "manifest_document_type": {
+          "const": "SMPCC_R8_LIQUID_U3_GPU_B_ADMISSION"
+        },
+        "manifest_status": {
+          "const": "PASS_B_SPECIFIC_GPU_BUILD_ADMISSION"
+        },
+        "manifest_next_allowed_stage": {
+          "const": "SEPARATE_EXACT_B_PROFILE_SYSTEM_ACTION_AUTHORIZATION_REQUIRED"
+        },
+        "parent_file_paths": {
+          "type": "array",
+          "minItems": 9,
+          "maxItems": 9,
+          "prefixItems": [
+            {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_gpu_build_execution_policy_v1.json"
+            },
+            {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_gpu_build_execution_policy_v1.json"
+            },
+            {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_gpu_build_gate_v1.py"
+            },
+            {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_target_u3_gpu_build_gate_v1.py"
+            },
+            {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-v1.profile.template"
+            },
+            {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-v1.profile.template"
+            },
+            {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-20260810T102641Z-a.profile"
+            },
+            {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-20260810T102641Z-a.profile"
+            },
+            {
+              "const": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T102641Z.profile"
+            }
+          ],
+          "items": false
+        },
+        "required_parent_hash_algorithm": {
+          "const": "sha256"
+        },
+        "gxx13_exact_tools": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/bin/x86_64-linux-gnu-g++-13"
+                },
+                "realpath": {
+                  "const": "/usr/bin/x86_64-linux-gnu-g++-13"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 1027128
+                },
+                "sha256": {
+                  "const": "1353e9bdd29a7295c7226bf6c63abccce056d8cac31f112e5cdbecc3f28c2769"
+                },
+                "role": {
+                  "const": "b_compiler_delta_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus"
+                },
+                "realpath": {
+                  "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 32675168
+                },
+                "sha256": {
+                  "const": "840b332fb62ec6f694ac77d91fe69ef7f80b0d69512ed89374af0ee7a506255d"
+                },
+                "role": {
+                  "const": "b_compiler_delta_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "path",
+                "realpath",
+                "mode_octal",
+                "size_bytes",
+                "sha256",
+                "role",
+                "attempt_a_execute_allowed"
+              ],
+              "properties": {
+                "path": {
+                  "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2"
+                },
+                "realpath": {
+                  "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2"
+                },
+                "mode_octal": {
+                  "const": "0755"
+                },
+                "size_bytes": {
+                  "const": 336056
+                },
+                "sha256": {
+                  "const": "4d1f341ae5b763b513258ee2812422a45e063c30a2f1924a0cf63d3699f3a158"
+                },
+                "role": {
+                  "const": "b_compiler_delta_only"
+                },
+                "attempt_a_execute_allowed": {
+                  "const": false
+                }
+              }
+            }
+          ],
+          "items": false
+        },
+        "forbidden_permission_prefixes": {
+          "type": "array",
+          "minItems": 7,
+          "maxItems": 7,
+          "prefixItems": [
+            {
+              "const": "/home/zrj/scout_ws"
+            },
+            {
+              "const": "/home/zrj/ros2_ws"
+            },
+            {
+              "const": "/opt/ros"
+            },
+            {
+              "const": "/data"
+            },
+            {
+              "const": "/dev"
+            },
+            {
+              "const": "network"
+            },
+            {
+              "const": "unconfined"
+            }
+          ],
+          "items": false
+        },
+        "delta_catalog": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "root_cause",
+                "admissible_for_this_campaign",
+                "reason",
+                "wrapper_variant",
+                "gxx13_permission"
+              ],
+              "properties": {
+                "id": {
+                  "const": "parallel_jobs_oom_j2_to_j1"
+                },
+                "root_cause": {
+                  "const": "A OOM or kill with frozen j2"
+                },
+                "admissible_for_this_campaign": {
+                  "const": false
+                },
+                "reason": {
+                  "const": "attempt A is already frozen to parallel_jobs=1"
+                },
+                "wrapper_variant": {
+                  "const": "base"
+                },
+                "gxx13_permission": {
+                  "const": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "root_cause",
+                "admissible_for_this_campaign",
+                "wrapper_variant",
+                "gxx13_permission",
+                "make_replacement",
+                "execute_tool_paths",
+                "gcc13_read_root"
+              ],
+              "properties": {
+                "id": {
+                  "const": "host_compiler_gxx13"
+                },
+                "root_cause": {
+                  "const": "single proven g++-11-specific host compile error"
+                },
+                "admissible_for_this_campaign": {
+                  "const": true
+                },
+                "wrapper_variant": {
+                  "const": "base"
+                },
+                "gxx13_permission": {
+                  "const": true
+                },
+                "make_replacement": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "from",
+                    "to"
+                  ],
+                  "properties": {
+                    "from": {
+                      "const": "CC=/usr/bin/x86_64-linux-gnu-g++-11"
+                    },
+                    "to": {
+                      "const": "CC=/usr/bin/x86_64-linux-gnu-g++-13"
+                    }
+                  }
+                },
+                "execute_tool_paths": {
+                  "type": "array",
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "prefixItems": [
+                    {
+                      "const": "/usr/bin/x86_64-linux-gnu-g++-13"
+                    },
+                    {
+                      "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus"
+                    },
+                    {
+                      "const": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2"
+                    }
+                  ],
+                  "items": false
+                },
+                "gcc13_read_root": {
+                  "const": "/usr/lib/gcc/x86_64-linux-gnu/13"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "root_cause",
+                "admissible_for_this_campaign",
+                "wrapper_variant",
+                "gxx13_permission",
+                "wrapper_content_utf8",
+                "wrapper_size_bytes",
+                "wrapper_sha256"
+              ],
+              "properties": {
+                "id": {
+                  "const": "cuda_cstdint_preinclude"
+                },
+                "root_cause": {
+                  "const": "single proven CUDA translation-unit SIZE_MAX or uint*_t error"
+                },
+                "admissible_for_this_campaign": {
+                  "const": true
+                },
+                "wrapper_variant": {
+                  "const": "ncc_preinclude"
+                },
+                "gxx13_permission": {
+                  "const": false
+                },
+                "wrapper_content_utf8": {
+                  "const": ".SUFFIXES:\n.SUFFIXES: .cpp .o\ninclude Makefile\noverride CCFLAGS += -include cstdint\noverride NCCFLAGS += --pre-include cstdint\n"
+                },
+                "wrapper_size_bytes": {
+                  "const": 127
+                },
+                "wrapper_sha256": {
+                  "const": "5776cbe97e46ef8ff3d55889a8fc1e91dc3a18918dbe139904aa160327568c9b"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "root_cause",
+                "admissible_for_this_campaign",
+                "wrapper_variant",
+                "gxx13_permission",
+                "required_nvcc",
+                "required_arches"
+              ],
+              "properties": {
+                "id": {
+                  "const": "cuda_12_8_absolute_path_repair"
+                },
+                "root_cause": {
+                  "const": "single proven unsupported architecture caused by wrong NVCC path"
+                },
+                "admissible_for_this_campaign": {
+                  "const": true
+                },
+                "wrapper_variant": {
+                  "const": "base"
+                },
+                "gxx13_permission": {
+                  "const": false
+                },
+                "required_nvcc": {
+                  "const": "/usr/local/cuda-12.8/bin/nvcc"
+                },
+                "required_arches": {
+                  "type": "array",
+                  "minItems": 2,
+                  "maxItems": 2,
+                  "prefixItems": [
+                    {
+                      "const": "compute_120"
+                    },
+                    {
+                      "const": "sm_120"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "root_cause",
+                "admissible_for_this_campaign",
+                "wrapper_variant",
+                "gxx13_permission",
+                "required_assignments"
+              ],
+              "properties": {
+                "id": {
+                  "const": "optional_dependency_override_repair"
+                },
+                "root_cause": {
+                  "const": "single proven Chrono WaveGen or MoorDynPlus override failure"
+                },
+                "admissible_for_this_campaign": {
+                  "const": true
+                },
+                "wrapper_variant": {
+                  "const": "base"
+                },
+                "gxx13_permission": {
+                  "const": false
+                },
+                "required_assignments": {
+                  "type": "array",
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "prefixItems": [
+                    {
+                      "const": "COMPILE_CHRONO=NO"
+                    },
+                    {
+                      "const": "COMPILE_WAVEGEN=NO"
+                    },
+                    {
+                      "const": "COMPILE_MOORDYNPLUS=NO"
+                    },
+                    {
+                      "const": "LIBS_DIRECTORIES="
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "root_cause",
+                "admissible_for_this_campaign",
+                "wrapper_variant",
+                "gxx13_permission",
+                "only_read_path"
+              ],
+              "properties": {
+                "id": {
+                  "const": "cudart_static_read_visibility"
+                },
+                "root_cause": {
+                  "const": "single proven libcudart_static read-visibility denial"
+                },
+                "admissible_for_this_campaign": {
+                  "const": true
+                },
+                "wrapper_variant": {
+                  "const": "base"
+                },
+                "gxx13_permission": {
+                  "const": false
+                },
+                "only_read_path": {
+                  "const": "/usr/local/cuda-12.8/lib64/libcudart_static.a"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "root_cause",
+                "admissible_for_this_campaign",
+                "wrapper_variant",
+                "gxx13_permission",
+                "maximum_permission_entries",
+                "allowed_access_kinds"
+              ],
+              "properties": {
+                "id": {
+                  "const": "apparmor_exact_evidence_permission"
+                },
+                "root_cause": {
+                  "const": "single AppArmor deny with exact phase path and access evidence"
+                },
+                "admissible_for_this_campaign": {
+                  "const": true
+                },
+                "wrapper_variant": {
+                  "const": "base"
+                },
+                "gxx13_permission": {
+                  "const": false
+                },
+                "maximum_permission_entries": {
+                  "const": 1
+                },
+                "allowed_access_kinds": {
+                  "type": "array",
+                  "minItems": 4,
+                  "maxItems": 4,
+                  "prefixItems": [
+                    {
+                      "const": "r"
+                    },
+                    {
+                      "const": "mr"
+                    },
+                    {
+                      "const": "rix"
+                    },
+                    {
+                      "const": "rw_guest_tmp_only"
+                    }
+                  ],
+                  "items": false
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "root_cause",
+                "admissible_for_this_campaign",
+                "wrapper_variant",
+                "gxx13_permission",
+                "required_gencode"
+              ],
+              "properties": {
+                "id": {
+                  "const": "gencode_quote_repair"
+                },
+                "root_cause": {
+                  "const": "single proven GENCODE quoting or Make override failure"
+                },
+                "admissible_for_this_campaign": {
+                  "const": true
+                },
+                "wrapper_variant": {
+                  "const": "base"
+                },
+                "gxx13_permission": {
+                  "const": false
+                },
+                "required_gencode": {
+                  "const": "GENCODE=-gencode=arch=compute_120,code=\\\"sm_120,compute_120\\\""
+                }
+              }
+            }
+          ],
+          "items": false
+        },
+        "permission_rule": {
+          "const": "exactly_one_selected_delta; non-compiler deltas forbid all g++-13 tools; compiler delta replaces rather than unions g++-11 helpers; no profile may write both attempt roots"
+        },
+        "wrapper_variants": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "base",
+            "ncc_preinclude"
+          ],
+          "properties": {
+            "base": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sha256",
+                "size_bytes"
+              ],
+              "properties": {
+                "sha256": {
+                  "const": "33883dcdde741c253a09d78decb3c21c5ab92c7c9152acf793d7dd025f07300d"
+                },
+                "size_bytes": {
+                  "const": 84
+                }
+              }
+            },
+            "ncc_preinclude": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sha256",
+                "size_bytes"
+              ],
+              "properties": {
+                "sha256": {
+                  "const": "5776cbe97e46ef8ff3d55889a8fc1e91dc3a18918dbe139904aa160327568c9b"
+                },
+                "size_bytes": {
+                  "const": 127
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "profile_lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "g1_query_only",
+        "profile_loaded_in_g1",
+        "parser_query_argv_prefix",
+        "separate_authorization_required_for_load",
+        "persistent_install_forbidden",
+        "unload_same_phase",
+        "zero_residue_required",
+        "future_exact_profiles"
+      ],
+      "properties": {
+        "g1_query_only": {
+          "const": true
+        },
+        "profile_loaded_in_g1": {
+          "const": false
+        },
+        "parser_query_argv_prefix": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "prefixItems": [
+            {
+              "const": "/usr/sbin/apparmor_parser"
+            },
+            {
+              "const": "-Q"
+            },
+            {
+              "const": "-K"
+            },
+            {
+              "const": "-T"
+            }
+          ],
+          "items": false
+        },
+        "separate_authorization_required_for_load": {
+          "const": true
+        },
+        "persistent_install_forbidden": {
+          "const": true
+        },
+        "unload_same_phase": {
+          "const": true
+        },
+        "zero_residue_required": {
+          "const": true
+        },
+        "future_exact_profiles": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "prefixItems": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "path",
+                "sha256"
+              ],
+              "properties": {
+                "name": {
+                  "const": "r8-liquid-u3-gpu-copy-20260810T102641Z-a"
+                },
+                "path": {
+                  "const": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-20260810T102641Z-a.profile"
+                },
+                "sha256": {
+                  "const": "2461550a249284dafc72e473b745ed829463c239e93e805fff623e54a29de8e1"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "path",
+                "sha256"
+              ],
+              "properties": {
+                "name": {
+                  "const": "r8-liquid-u3-gpu-build-20260810T102641Z-a"
+                },
+                "path": {
+                  "const": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-20260810T102641Z-a.profile"
+                },
+                "sha256": {
+                  "const": "fbcc9f417103f17f59003b6da1b8bb7f08e59b2a68015b7ac38cdf1db8c19b10"
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "path",
+                "sha256"
+              ],
+              "properties": {
+                "name": {
+                  "const": "r8-liquid-u3-gpu-static-audit-20260810T102641Z"
+                },
+                "path": {
+                  "const": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T102641Z.profile"
+                },
+                "sha256": {
+                  "const": "d23da58b35c69f458d7f9a7fcf03b9fc2493283cd580191d58f7ced460b45168"
+                }
+              }
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "receipt_contracts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_copy",
+        "gpu_build"
+      ],
+      "properties": {
+        "source_copy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "create_new",
+            "start_before_copy",
+            "final_after_complete_353_inventory",
+            "status",
+            "next_allowed_stage"
+          ],
+          "properties": {
+            "create_new": {
+              "const": true
+            },
+            "start_before_copy": {
+              "const": true
+            },
+            "final_after_complete_353_inventory": {
+              "const": true
+            },
+            "status": {
+              "const": "PASS_U3_GPU_SOURCE_COPY"
+            },
+            "next_allowed_stage": {
+              "const": "SEPARATE_GPU_BUILD_EXECUTION_ADMISSION_REQUIRED"
+            }
+          }
+        },
+        "gpu_build": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "create_new",
+            "make_success_not_sufficient",
+            "static_audit_required",
+            "success_status",
+            "gpu_runtime_status",
+            "u3_acceptance",
+            "u4_authorized",
+            "u5_authorized",
+            "next_allowed_stage"
+          ],
+          "properties": {
+            "create_new": {
+              "const": true
+            },
+            "make_success_not_sufficient": {
+              "const": true
+            },
+            "static_audit_required": {
+              "const": true
+            },
+            "success_status": {
+              "const": "PASS_GPU_BUILD_SM120_STATIC_AUDIT"
+            },
+            "gpu_runtime_status": {
+              "const": "NOT_RUN"
+            },
+            "u3_acceptance": {
+              "const": "NO_GO_NOT_SETTLED"
+            },
+            "u4_authorized": {
+              "const": false
+            },
+            "u5_authorized": {
+              "const": false
+            },
+            "next_allowed_stage": {
+              "const": "SEPARATE_GPU_RUNTIME_EXECUTION_ADMISSION_REQUIRED"
+            }
+          }
+        }
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "no_make_invocation_in_g1",
+        "no_nvcc_compilation_in_g1",
+        "no_compiler_compilation_in_g1",
+        "no_build_root_creation_in_g1",
+        "no_source_copy_in_g1",
+        "no_wrapper_materialization_in_g1",
+        "no_receipt_materialization_in_g1",
+        "no_profile_load_in_g1",
+        "no_sudo_in_g1",
+        "no_network_access_in_g1",
+        "no_gpu_device_exposure",
+        "no_candidate_execution",
+        "no_binary_content_parser_on_host",
+        "no_frozen_plan_write_after_identity_restore",
+        "no_cpu_v15_write",
+        "no_sealed_source_write",
+        "no_git_commit_push_or_pr",
+        "no_g2_entry"
+      ],
+      "properties": {
+        "no_make_invocation_in_g1": {
+          "const": true
+        },
+        "no_nvcc_compilation_in_g1": {
+          "const": true
+        },
+        "no_compiler_compilation_in_g1": {
+          "const": true
+        },
+        "no_build_root_creation_in_g1": {
+          "const": true
+        },
+        "no_source_copy_in_g1": {
+          "const": true
+        },
+        "no_wrapper_materialization_in_g1": {
+          "const": true
+        },
+        "no_receipt_materialization_in_g1": {
+          "const": true
+        },
+        "no_profile_load_in_g1": {
+          "const": true
+        },
+        "no_sudo_in_g1": {
+          "const": true
+        },
+        "no_network_access_in_g1": {
+          "const": true
+        },
+        "no_gpu_device_exposure": {
+          "const": true
+        },
+        "no_candidate_execution": {
+          "const": true
+        },
+        "no_binary_content_parser_on_host": {
+          "const": true
+        },
+        "no_frozen_plan_write_after_identity_restore": {
+          "const": true
+        },
+        "no_cpu_v15_write": {
+          "const": true
+        },
+        "no_sealed_source_write": {
+          "const": true
+        },
+        "no_git_commit_push_or_pr": {
+          "const": true
+        },
+        "no_g2_entry": {
+          "const": true
+        }
+      }
+    },
+    "status": {
+      "const": "A_CONTRACT_AND_PROFILES_FROZEN"
+    },
+    "gpu_build_status": {
+      "const": "NOT_RUN"
+    },
+    "next_allowed_stage": {
+      "const": "G2_REQUIRES_SEPARATE_EXACT_PROFILE_HASH_SYSTEM_ACTION_AUTHORIZATION"
+    }
+  }
+}

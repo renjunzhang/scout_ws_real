@@ -1,0 +1,1846 @@
+{
+  "schema_version": "smpcc-r8-liquid-target-u3-gpu-build-execution-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_TARGET_U3_GPU_BUILD_EXECUTION_POLICY",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_U3_GPU_BUILD_EXECUTION_V1",
+  "host_id": "LIQUID_ZRJ_MSI_U2404",
+  "development_only": true,
+  "formal": false,
+  "physical_primary_eligible": false,
+  "execution_scope": "g1_static_contract_only_no_gpu_build",
+  "allowed_gate_commands": [
+    "self-check",
+    "validate-b-admission"
+  ],
+  "plan_identity": {
+    "path": "docs/实物实验注意事项/对比试验/仿真接入液体/20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md",
+    "commit": "a7409aff3bd280392491606503893e36f1cc5888",
+    "blob": "7b2eb275d0fb6cb882ec701aabd7b7af229f353c",
+    "sha256": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+  },
+  "g0_input": {
+    "status": "PREFLIGHT_PASS",
+    "parallel_jobs": 1,
+    "evidence_reference": "codex-goal-transcript://019feaad-0106-7903-9b3e-7e3d79a12305#g0-section-7.1-tool-calls-and-final-audit",
+    "evidence_sha256": "7899ba67f494c548d8cd94e347fe9f7db08b1d1f08260c17d0022673339530d7",
+    "post_reboot_revalidation_reference": "codex-goal-transcript://019feaad-0106-7903-9b3e-7e3d79a12305#g1-post-reboot-section-7.1-normalized-json",
+    "post_reboot_revalidation_sha256": "6e7e264fa5f24874a2fc12859d0c390c3e5d4b11a25e44e812147dc67925aba2",
+    "post_reboot_revalidation_status": "PREFLIGHT_PASS"
+  },
+  "timebox": {
+    "t0": "2026-08-10T17:17:51.731823359+08:00",
+    "t0_reset": false,
+    "g1_target": "2026-08-10T19:07:51.731823359+08:00",
+    "hard_stop_t_plus_6": "2026-08-10T23:17:51.731823359+08:00",
+    "hard_stop_t_plus_8": "2026-08-11T01:17:51.731823359+08:00",
+    "host_reboot_at": "2026-08-10T19:45:17+08:00"
+  },
+  "campaign": {
+    "campaign_id": "u3_source_gpu_build_sm120_20260810T102641Z",
+    "attempt_a": {
+      "build_id": "u3_source_gpu_build_sm120_20260810T102641Z_a",
+      "attempt_root": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial",
+      "output_root": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial/output",
+      "identity_frozen": true,
+      "root_created": false
+    },
+    "attempt_b": {
+      "build_id": "u3_source_gpu_build_sm120_20260810T102641Z_b",
+      "attempt_root": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_b.partial",
+      "output_root": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_b.partial/output",
+      "identity_frozen": true,
+      "identity_only": true,
+      "root_created": false,
+      "copy_profile_materialized": false,
+      "build_profile_materialized": false,
+      "receipt_materialized": false
+    }
+  },
+  "frozen_reference_inputs": [
+    {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-source-copy-v15.profile",
+      "sha256": "3d6ef41054dda30a64b16ee4586c3b0cf21e7e66a756ae873dbab11a0f43b116"
+    },
+    {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-cpu-build-v15.profile",
+      "sha256": "55e0d63e17acb6a30e19f13e268929c6bb8781448cd57e253a918347c4d3d8ef"
+    },
+    {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_cpu_build_execution_policy_v15.json",
+      "sha256": "1f01cd7918cda1f8f23a35d32e77e96afb99512f08c1a0a2f6fddc9d67262030"
+    },
+    {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_cpu_build_execution_policy_v15.json",
+      "sha256": "3e0f80a5084e30068110155ceb3906b39ced20a883399f0aa072e23ce6754122"
+    },
+    {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_cpu_build_gate_v15.py",
+      "sha256": "08e5f0c0ec1b16d7a6c730c6f1c5c80ec259c2f9813b86f5bcddad2e9f40d52f"
+    },
+    {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_target_u3_cpu_build_gate_v15.py",
+      "sha256": "9757bcce5f3ba274be20f1720b33309e65f7f1d699383af556a539ee4b4f43fc"
+    }
+  ],
+  "source_input": {
+    "upstream_url": "https://github.com/DualSPHysics/DualSPHysics",
+    "upstream_commit": "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+    "upstream_tree": "cef458cb358712f4694b9d2148f638440418e9dc",
+    "sealed_source_root": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source",
+    "sealed_attempt_root": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial",
+    "source_receipt": "/home/zrj/scout_liquid_lab/audits/u3_source_materialization_v1_20260806T155752Z.json",
+    "source_receipt_sha256": "90af263fb7ec8b7d6a46a53aa5354dd5b676cd4167d48fde93911e014a70b745",
+    "source_receipt_canonical_sha256": "017a660bd38da43ae14fb97df9f19cc6cd2b90cf56f91ce047869dbf795d93e2",
+    "sealed_manifest_sha256": "a9a3debebff5ae30bb2d6226deb997f15a6eae0d07581a7c147ce95b9c3da9d2",
+    "sealed_file_count": 352,
+    "sealed_total_bytes": 5473917,
+    "sealed_symlink_count": 0,
+    "sealed_hardlink_count": 0,
+    "cpu_build_receipt": "/home/zrj/scout_liquid_lab/audits/u3_source_cpu_build_20260807T023724Z_cpu_build.json",
+    "cpu_build_receipt_sha256": "d407233107d4bc9eeea81b0c5a95cbfc98ad6529f1cb7494b68ae5ecc4b1d604",
+    "makefile_path": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source/Makefile",
+    "makefile_sha256": "0e7d60ed96437ae22c1d411ec7d12fcae1adad8a9e91f39dd0ea6023846c63f1"
+  },
+  "object_contract": {
+    "total_object_count": 131,
+    "cpp_object_count": 120,
+    "cuda_object_count": 11,
+    "duplicate_count": 0,
+    "object_names": [
+      "FunGeo3d.o",
+      "FunSphKernelsCfg.o",
+      "Functions.o",
+      "FunctionsCuda.o",
+      "JAppInfo.o",
+      "JArraysCpu.o",
+      "JArraysGpu.o",
+      "JBinaryData.o",
+      "JBoxDef.o",
+      "JCaseCtes.o",
+      "JCaseEParms.o",
+      "JCaseParts.o",
+      "JCaseProperties.o",
+      "JCaseVRes.o",
+      "JCellDivCpu.o",
+      "JCellDivCpuSingle.o",
+      "JCellDivGpu.o",
+      "JCellDivGpuSingle.o",
+      "JCellDivGpuSingle_ker.o",
+      "JCellDivGpu_ker.o",
+      "JCfgRunBase.o",
+      "JChronoGeoObj.o",
+      "JChronoObjects.o",
+      "JComputeMotionRef.o",
+      "JDataArrays.o",
+      "JDebugSphCpu.o",
+      "JDebugSphGpu.o",
+      "JDsAccInput.o",
+      "JDsAccInput_ker.o",
+      "JDsDamping.o",
+      "JDsDcell.o",
+      "JDsExtraData.o",
+      "JDsFixedDt.o",
+      "JDsFtForcePoints.o",
+      "JDsGaugeItem.o",
+      "JDsGaugeSystem.o",
+      "JDsGauge_ker.o",
+      "JDsGpuInfo.o",
+      "JDsInitialize.o",
+      "JDsMooredFloatings.o",
+      "JDsMotion.o",
+      "JDsOutputParts.o",
+      "JDsOutputTime.o",
+      "JDsPartFloatSave.o",
+      "JDsPartMotionSave.o",
+      "JDsPartsInit.o",
+      "JDsPartsOut.o",
+      "JDsPips.o",
+      "JDsPips_ker.o",
+      "JDsSaveDt.o",
+      "JDsTimers.o",
+      "JDsViscoInput.o",
+      "JDsVresData.o",
+      "JDsphConfig.o",
+      "JException.o",
+      "JLinearValue.o",
+      "JLog2.o",
+      "JMLPistonsGpu.o",
+      "JMeshData.o",
+      "JMeshTDatas.o",
+      "JMeshTDatasDsVel.o",
+      "JMeshTDatasLoad.o",
+      "JMeshTDatasSave.o",
+      "JMeshTDatasXml.o",
+      "JMotion.o",
+      "JMotionData.o",
+      "JMotionList.o",
+      "JMotionMov.o",
+      "JMotionObj.o",
+      "JMotionPos.o",
+      "JObject.o",
+      "JObjectGpu.o",
+      "JOutputCsv.o",
+      "JPartDataBi4.o",
+      "JPartDataHead.o",
+      "JPartFloatInfoBi4.o",
+      "JPartMotRefBi4Save.o",
+      "JPartOutBi4Save.o",
+      "JPartsLoad4.o",
+      "JRadixSort.o",
+      "JRangeFilter.o",
+      "JReadDatafile.o",
+      "JReduSum_ker.o",
+      "JRelaxZone_ker.o",
+      "JRelaxZonesGpu.o",
+      "JSaveCsv2.o",
+      "JSimpleNeigs.o",
+      "JSpVtkData.o",
+      "JSpVtkShape.o",
+      "JSph.o",
+      "JSphCfgRun.o",
+      "JSphCpu.o",
+      "JSphCpuSingle.o",
+      "JSphCpuSingle_InOut.o",
+      "JSphCpuSingle_VRes.o",
+      "JSphCpu_InOut.o",
+      "JSphCpu_VRes.o",
+      "JSphCpu_mdbc.o",
+      "JSphCpu_preloop.o",
+      "JSphFlexStruc.o",
+      "JSphGpu.o",
+      "JSphGpuSimple_ker.o",
+      "JSphGpuSingle.o",
+      "JSphGpuSingle_InOut.o",
+      "JSphGpuSingle_VRes.o",
+      "JSphGpu_ker.o",
+      "JSphInOut.o",
+      "JSphInOutGridData.o",
+      "JSphInOutPoints.o",
+      "JSphInOutVel.o",
+      "JSphInOutVelAwas.o",
+      "JSphInOutZone.o",
+      "JSphInOutZsurf.o",
+      "JSphMk.o",
+      "JSphShifting.o",
+      "JSphShiftingAdv.o",
+      "JSphShifting_ker.o",
+      "JSphVRes.o",
+      "JSphVResZone.o",
+      "JTimeControl.o",
+      "JTrianglesMesh.o",
+      "JVResDataLimits.o",
+      "JWaveOrder2_ker.o",
+      "JWaveSpectrumGpu.o",
+      "JXml.o",
+      "main.o",
+      "randomc.o",
+      "tinystr.o",
+      "tinyxml.o",
+      "tinyxmlerror.o",
+      "tinyxmlparser.o"
+    ],
+    "cpp_object_names": [
+      "FunGeo3d.o",
+      "FunSphKernelsCfg.o",
+      "Functions.o",
+      "FunctionsCuda.o",
+      "JAppInfo.o",
+      "JArraysCpu.o",
+      "JArraysGpu.o",
+      "JBinaryData.o",
+      "JBoxDef.o",
+      "JCaseCtes.o",
+      "JCaseEParms.o",
+      "JCaseParts.o",
+      "JCaseProperties.o",
+      "JCaseVRes.o",
+      "JCellDivCpu.o",
+      "JCellDivCpuSingle.o",
+      "JCellDivGpu.o",
+      "JCellDivGpuSingle.o",
+      "JCfgRunBase.o",
+      "JChronoGeoObj.o",
+      "JChronoObjects.o",
+      "JComputeMotionRef.o",
+      "JDataArrays.o",
+      "JDebugSphCpu.o",
+      "JDebugSphGpu.o",
+      "JDsAccInput.o",
+      "JDsDamping.o",
+      "JDsDcell.o",
+      "JDsExtraData.o",
+      "JDsFixedDt.o",
+      "JDsFtForcePoints.o",
+      "JDsGaugeItem.o",
+      "JDsGaugeSystem.o",
+      "JDsGpuInfo.o",
+      "JDsInitialize.o",
+      "JDsMooredFloatings.o",
+      "JDsMotion.o",
+      "JDsOutputParts.o",
+      "JDsOutputTime.o",
+      "JDsPartFloatSave.o",
+      "JDsPartMotionSave.o",
+      "JDsPartsInit.o",
+      "JDsPartsOut.o",
+      "JDsPips.o",
+      "JDsSaveDt.o",
+      "JDsTimers.o",
+      "JDsViscoInput.o",
+      "JDsVresData.o",
+      "JDsphConfig.o",
+      "JException.o",
+      "JLinearValue.o",
+      "JLog2.o",
+      "JMLPistonsGpu.o",
+      "JMeshData.o",
+      "JMeshTDatas.o",
+      "JMeshTDatasDsVel.o",
+      "JMeshTDatasLoad.o",
+      "JMeshTDatasSave.o",
+      "JMeshTDatasXml.o",
+      "JMotion.o",
+      "JMotionData.o",
+      "JMotionList.o",
+      "JMotionMov.o",
+      "JMotionObj.o",
+      "JMotionPos.o",
+      "JObject.o",
+      "JObjectGpu.o",
+      "JOutputCsv.o",
+      "JPartDataBi4.o",
+      "JPartDataHead.o",
+      "JPartFloatInfoBi4.o",
+      "JPartMotRefBi4Save.o",
+      "JPartOutBi4Save.o",
+      "JPartsLoad4.o",
+      "JRadixSort.o",
+      "JRangeFilter.o",
+      "JReadDatafile.o",
+      "JRelaxZonesGpu.o",
+      "JSaveCsv2.o",
+      "JSimpleNeigs.o",
+      "JSpVtkData.o",
+      "JSpVtkShape.o",
+      "JSph.o",
+      "JSphCfgRun.o",
+      "JSphCpu.o",
+      "JSphCpuSingle.o",
+      "JSphCpuSingle_InOut.o",
+      "JSphCpuSingle_VRes.o",
+      "JSphCpu_InOut.o",
+      "JSphCpu_VRes.o",
+      "JSphCpu_mdbc.o",
+      "JSphCpu_preloop.o",
+      "JSphFlexStruc.o",
+      "JSphGpu.o",
+      "JSphGpuSingle.o",
+      "JSphGpuSingle_InOut.o",
+      "JSphGpuSingle_VRes.o",
+      "JSphInOut.o",
+      "JSphInOutGridData.o",
+      "JSphInOutPoints.o",
+      "JSphInOutVel.o",
+      "JSphInOutVelAwas.o",
+      "JSphInOutZone.o",
+      "JSphInOutZsurf.o",
+      "JSphMk.o",
+      "JSphShifting.o",
+      "JSphShiftingAdv.o",
+      "JSphVRes.o",
+      "JSphVResZone.o",
+      "JTimeControl.o",
+      "JTrianglesMesh.o",
+      "JVResDataLimits.o",
+      "JWaveSpectrumGpu.o",
+      "JXml.o",
+      "main.o",
+      "randomc.o",
+      "tinystr.o",
+      "tinyxml.o",
+      "tinyxmlerror.o",
+      "tinyxmlparser.o"
+    ],
+    "cuda_object_names": [
+      "JCellDivGpuSingle_ker.o",
+      "JCellDivGpu_ker.o",
+      "JDsAccInput_ker.o",
+      "JDsGauge_ker.o",
+      "JDsPips_ker.o",
+      "JReduSum_ker.o",
+      "JRelaxZone_ker.o",
+      "JSphGpuSimple_ker.o",
+      "JSphGpu_ker.o",
+      "JSphShifting_ker.o",
+      "JWaveOrder2_ker.o"
+    ],
+    "canonicalization": "SHA256(UTF8(JSON_COMPACT(sorted(object_names))))",
+    "object_names_canonical_sha256": "38023e8b24f1d1731ba3a7d03bbb5fdf2e74e5623341402d607cba046b08d7e2",
+    "derivation": "static_parse_of_fixed_Makefile_variable_assignments_and_explicit_dot_cu_rules_no_make_invocation",
+    "object_location": "output/buildtree/src/source/<exact_object_name>",
+    "post_build_type": "regular_non_symlink_nlink_1_ELF64_little_endian_x86_64_ET_REL_no_execute_bits"
+  },
+  "wrapper_contract": {
+    "path_relative_to_attempt": "output/buildtree/src/source/U3GpuBuild.mk",
+    "content_utf8": ".SUFFIXES:\n.SUFFIXES: .cpp .o\ninclude Makefile\noverride CCFLAGS += -include cstdint\n",
+    "size_bytes": 84,
+    "sha256": "33883dcdde741c253a09d78decb3c21c5ab92c7c9152acf793d7dd025f07300d",
+    "mode_octal": "0600",
+    "create_flags": [
+      "O_WRONLY",
+      "O_CREAT",
+      "O_EXCL",
+      "O_NOFOLLOW"
+    ],
+    "attempt_a_ccflags_only": true,
+    "nccflags_preinclude": false
+  },
+  "resources": {
+    "parallel_jobs": 1,
+    "parallel_jobs_memory_threshold_bytes": 8589934592,
+    "minimum_available_memory_bytes": 4294967296,
+    "minimum_available_disk_bytes": 21474836480,
+    "wall_timeout_seconds": 5400,
+    "cpu_limit_seconds": 5400,
+    "address_space_limit_bytes": 8589934592,
+    "kill_after_seconds": 5,
+    "stalled_seconds": 600,
+    "memory_monitor_interval_seconds": 20,
+    "memory_monitor_interval_minimum_seconds": 10,
+    "memory_monitor_interval_maximum_seconds": 30,
+    "monitor_fields": [
+      "MemAvailable",
+      "SwapFree",
+      "vmstat_si",
+      "vmstat_so",
+      "memory_psi_some",
+      "memory_psi_full",
+      "cicc_rss",
+      "ptxas_rss",
+      "cc1plus_rss"
+    ],
+    "process_limit": 4096,
+    "open_file_limit": 1024,
+    "file_size_limit_bytes": 2147483648,
+    "core_dump_bytes": 0,
+    "source_copy_wall_timeout_seconds": 300,
+    "source_copy_cpu_limit_seconds": 120,
+    "source_copy_address_space_limit_bytes": 1073741824
+  },
+  "toolchain": {
+    "cuda_root": "/usr/local/cuda-12.8",
+    "nvcc_release": "12.8",
+    "nvcc_version": "12.8.93",
+    "cuobjdump_version": "12.8.90",
+    "host_compiler": "/usr/bin/x86_64-linux-gnu-g++-11",
+    "host_compiler_version": "11.5.0",
+    "compute_arch": "compute_120",
+    "binary_arch": "sm_120",
+    "gencode_argv": "GENCODE=-gencode=arch=compute_120,code=\\\"sm_120,compute_120\\\"",
+    "single_gencode": true,
+    "fast_math": false,
+    "native_cpu_optimizations": false,
+    "chrono": false,
+    "wavegen": false,
+    "moordynplus": false,
+    "attempt_a_forbidden_tools": [
+      "/usr/bin/x86_64-linux-gnu-g++-13",
+      "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus",
+      "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2"
+    ],
+    "tools": [
+      {
+        "path": "/usr/local/cuda-12.8/bin/nvcc",
+        "realpath": "/usr/local/cuda-12.8/bin/nvcc",
+        "mode_octal": "0755",
+        "size_bytes": 24828456,
+        "sha256": "59e4e55f9a38b78c590df1e28a69dad91052958f18a03868ca4a547c043fbba7",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/local/cuda-12.8/bin/cudafe++",
+        "realpath": "/usr/local/cuda-12.8/bin/cudafe++",
+        "mode_octal": "0755",
+        "size_bytes": 8718680,
+        "sha256": "55e0cf419d081730daf98bc94d8d32513fd8be78c5fb3adb0677c9bed1940a1e",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/local/cuda-12.8/bin/ptxas",
+        "realpath": "/usr/local/cuda-12.8/bin/ptxas",
+        "mode_octal": "0755",
+        "size_bytes": 31912192,
+        "sha256": "c960a4f238b17d5c5d3c01ad2bbc1ebd2c5aecc459cb4d223bff10b45f9b8fca",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/local/cuda-12.8/bin/fatbinary",
+        "realpath": "/usr/local/cuda-12.8/bin/fatbinary",
+        "mode_octal": "0755",
+        "size_bytes": 1249368,
+        "sha256": "a4b58769fbea16862a0b3f505aad71a05f5e199be436e189e4a4026bc073e6d2",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/local/cuda-12.8/bin/nvlink",
+        "realpath": "/usr/local/cuda-12.8/bin/nvlink",
+        "mode_octal": "0755",
+        "size_bytes": 32376952,
+        "sha256": "21d779007ac9f54e7bc7552a4009c5bacc6f547d07638b7d77905f864739f1d7",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/local/cuda-12.8/bin/cuobjdump",
+        "realpath": "/usr/local/cuda-12.8/bin/cuobjdump",
+        "mode_octal": "0755",
+        "size_bytes": 568992,
+        "sha256": "9d515ac6f60c246ef63fe87b0a95d209b00ff3e25b716f8f263520010760e8f8",
+        "role": "static_audit_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/local/cuda-12.8/nvvm/bin/cicc",
+        "realpath": "/usr/local/cuda-12.8/nvvm/bin/cicc",
+        "mode_octal": "0755",
+        "size_bytes": 77645416,
+        "sha256": "411f568b8acb34a4d03285b554fa6c839956c47eba182290914c8576fa9eef66",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/local/cuda-12.8/lib64/libcudart_static.a",
+        "realpath": "/usr/local/cuda-12.8/targets/x86_64-linux/lib/libcudart_static.a",
+        "mode_octal": "0644",
+        "size_bytes": 1373394,
+        "sha256": "548012438f65d00ecc28c30bd4a11ca6b090cc8773a990174ccc33e0b81aa966",
+        "role": "attempt_a_read_only",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/local/cuda-12.8/bin/nvcc.profile",
+        "realpath": "/usr/local/cuda-12.8/bin/nvcc.profile",
+        "mode_octal": "0644",
+        "size_bytes": 425,
+        "sha256": "4a5b882b5c16a8912ef84275d860f5b371164f3b354dad830f04fd6f128dbe2e",
+        "role": "attempt_a_read_only",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/local/cuda-12.8/include/cuda_runtime.h",
+        "realpath": "/usr/local/cuda-12.8/targets/x86_64-linux/include/cuda_runtime.h",
+        "mode_octal": "0644",
+        "size_bytes": 98570,
+        "sha256": "1aaa84ed2ac4086acdf908390e4f742d28ecfb1bca94766944b9691fb2d47a13",
+        "role": "attempt_a_read_only",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/local/cuda-12.8/nvvm/libdevice/libdevice.10.bc",
+        "realpath": "/usr/local/cuda-12.8/nvvm/libdevice/libdevice.10.bc",
+        "mode_octal": "0644",
+        "size_bytes": 484900,
+        "sha256": "25498d6e3c64782833ff15a5f56665ff09e5d21177163148a1cf008c61733449",
+        "role": "attempt_a_read_only",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/bin/x86_64-linux-gnu-g++-11",
+        "realpath": "/usr/bin/x86_64-linux-gnu-g++-11",
+        "mode_octal": "0755",
+        "size_bytes": 932784,
+        "sha256": "02ba98cc5feefe173cfb8c28c98089817737800537dc7189138ed66b07cf56ec",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/lib/gcc/x86_64-linux-gnu/11/cc1plus",
+        "realpath": "/usr/lib/gcc/x86_64-linux-gnu/11/cc1plus",
+        "mode_octal": "0755",
+        "size_bytes": 28300488,
+        "sha256": "d8e3d43bae463fb937d6025f77d5c34609d32f67269e38705aa6dd35ab47e388",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/lib/gcc/x86_64-linux-gnu/11/collect2",
+        "realpath": "/usr/lib/gcc/x86_64-linux-gnu/11/collect2",
+        "mode_octal": "0755",
+        "size_bytes": 303184,
+        "sha256": "46486e7904af6aa989614a7f4fb5092f82c31105c3cf8ae883acb18576d3fb32",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/x86_64-linux-gnu-g++-13",
+        "realpath": "/usr/bin/x86_64-linux-gnu-g++-13",
+        "mode_octal": "0755",
+        "size_bytes": 1027128,
+        "sha256": "1353e9bdd29a7295c7226bf6c63abccce056d8cac31f112e5cdbecc3f28c2769",
+        "role": "b_compiler_delta_only",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus",
+        "realpath": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus",
+        "mode_octal": "0755",
+        "size_bytes": 32675168,
+        "sha256": "840b332fb62ec6f694ac77d91fe69ef7f80b0d69512ed89374af0ee7a506255d",
+        "role": "b_compiler_delta_only",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2",
+        "realpath": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2",
+        "mode_octal": "0755",
+        "size_bytes": 336056,
+        "sha256": "4d1f341ae5b763b513258ee2812422a45e063c30a2f1924a0cf63d3699f3a158",
+        "role": "b_compiler_delta_only",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/bin/timeout",
+        "realpath": "/usr/bin/timeout",
+        "mode_octal": "0755",
+        "size_bytes": 39880,
+        "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08",
+        "role": "outer_supervisor_execute",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/bin/aa-exec",
+        "realpath": "/usr/bin/aa-exec",
+        "mode_octal": "0755",
+        "size_bytes": 18744,
+        "sha256": "f28cbce3c8664cab5154492fdbc55ecb937a3e7ce1a9478c881a5f5965d7ce3e",
+        "role": "outer_supervisor_execute",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/sbin/apparmor_parser",
+        "realpath": "/usr/sbin/apparmor_parser",
+        "mode_octal": "0755",
+        "size_bytes": 1629848,
+        "sha256": "6bc852b37807961c14976be9a227ae96bd817f73b5189cb0e0ff5eca4448c01c",
+        "role": "query_or_separately_authorized_lifecycle",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/bin/bwrap",
+        "realpath": "/usr/bin/bwrap",
+        "mode_octal": "0755",
+        "size_bytes": 72160,
+        "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712",
+        "role": "all_sandbox_phases_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/env",
+        "realpath": "/usr/bin/env",
+        "mode_octal": "0755",
+        "size_bytes": 48072,
+        "sha256": "0aefff8f912fb75716c5d4de3b6acde93edbe8fa280fc8ee895c1226d3e373ef",
+        "role": "all_sandbox_phases_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/prlimit",
+        "realpath": "/usr/bin/prlimit",
+        "mode_octal": "0755",
+        "size_bytes": 27536,
+        "sha256": "f27cfd8c1512a4cc6541b59b80cb4cdfd6ef28c34aa21db4299b48264cd0d128",
+        "role": "all_sandbox_phases_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/make",
+        "realpath": "/usr/bin/make",
+        "mode_octal": "0755",
+        "size_bytes": 259808,
+        "sha256": "d78b8f1d099fbcfb6f2f49ab87223b9b68fb3956642f92d6ec6de812e8afa965",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/dash",
+        "realpath": "/usr/bin/dash",
+        "mode_octal": "0755",
+        "size_bytes": 129784,
+        "sha256": "86d31f6fb799e91fa21bad341484564510ca287703a16e9e46c53338776f4f42",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/rm",
+        "realpath": "/usr/bin/rm",
+        "mode_octal": "0755",
+        "size_bytes": 59912,
+        "sha256": "aedf2ef491e1ca4ea2682b88a031f7c3960ebb133677a339743e859fa3d3d8b5",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/cp",
+        "realpath": "/usr/bin/cp",
+        "mode_octal": "0755",
+        "size_bytes": 141848,
+        "sha256": "6187dab32cd7b6291d96c54425a22915a6eeb39add6d95ee9008e1dbba427131",
+        "role": "attempt_a_copy_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/as",
+        "realpath": "/usr/bin/x86_64-linux-gnu-as",
+        "mode_octal": "0755",
+        "size_bytes": 745768,
+        "sha256": "21aff249b692b5c31a44007491f922dcb49f41323e362c57d2ada3f52eddb7f0",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/ld",
+        "realpath": "/usr/bin/x86_64-linux-gnu-ld.bfd",
+        "mode_octal": "0755",
+        "size_bytes": 1359128,
+        "sha256": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/ld.bfd",
+        "realpath": "/usr/bin/x86_64-linux-gnu-ld.bfd",
+        "mode_octal": "0755",
+        "size_bytes": 1359128,
+        "sha256": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/x86_64-linux-gnu-as",
+        "realpath": "/usr/bin/x86_64-linux-gnu-as",
+        "mode_octal": "0755",
+        "size_bytes": 745768,
+        "sha256": "21aff249b692b5c31a44007491f922dcb49f41323e362c57d2ada3f52eddb7f0",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/x86_64-linux-gnu-ld",
+        "realpath": "/usr/bin/x86_64-linux-gnu-ld.bfd",
+        "mode_octal": "0755",
+        "size_bytes": 1359128,
+        "sha256": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/x86_64-linux-gnu-ld.bfd",
+        "realpath": "/usr/bin/x86_64-linux-gnu-ld.bfd",
+        "mode_octal": "0755",
+        "size_bytes": 1359128,
+        "sha256": "e9ceb054c12207970f2726dfc07e9a66b411602748628baf27399f02a9bbb31b",
+        "role": "attempt_a_build_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/file",
+        "realpath": "/usr/bin/file",
+        "mode_octal": "0755",
+        "size_bytes": 31336,
+        "sha256": "6741f44dde8e51309325c8bcf88ee16bc1e022985d584415680484c11ee89e0d",
+        "role": "static_audit_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/readelf",
+        "realpath": "/usr/bin/x86_64-linux-gnu-readelf",
+        "mode_octal": "0755",
+        "size_bytes": 789280,
+        "sha256": "64c58e15274bbbb5153f31078e455e9e77ee5f51489e709bba5bb788ce9df2b0",
+        "role": "static_audit_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/x86_64-linux-gnu-readelf",
+        "realpath": "/usr/bin/x86_64-linux-gnu-readelf",
+        "mode_octal": "0755",
+        "size_bytes": 789280,
+        "sha256": "64c58e15274bbbb5153f31078e455e9e77ee5f51489e709bba5bb788ce9df2b0",
+        "role": "static_audit_execute_target",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/sha256sum",
+        "realpath": "/usr/bin/sha256sum",
+        "mode_octal": "0755",
+        "size_bytes": 39336,
+        "sha256": "9992e1f1feb6f0f396bc8d6691ebc1adbfc269fd628bce84eda1d4ba5c3995c7",
+        "role": "static_audit_execute",
+        "attempt_a_execute_allowed": true
+      },
+      {
+        "path": "/usr/bin/vmstat",
+        "realpath": "/usr/bin/vmstat",
+        "mode_octal": "0755",
+        "size_bytes": 39712,
+        "sha256": "6f043d6af3c19bd2d1f331b70870bf7bf14375873390cd401eb5588f795f5511",
+        "role": "host_resource_monitor_read_only",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/etc/magic",
+        "realpath": "/etc/magic",
+        "mode_octal": "0644",
+        "size_bytes": 111,
+        "sha256": "58219ec4bfe06d84640b4e86341feb3099cb078146c9eee73ec55152819df247",
+        "role": "static_audit_read_only",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/lib/file/magic.mgc",
+        "realpath": "/usr/lib/file/magic.mgc",
+        "mode_octal": "0644",
+        "size_bytes": 8510760,
+        "sha256": "72a25195a2623fe160e926bf20952b6b74b29d6c91e0174a5fa062f02beee1aa",
+        "role": "static_audit_read_only",
+        "attempt_a_execute_allowed": false
+      }
+    ]
+  },
+  "profiles": {
+    "template_tokens": [
+      "@@PROFILE_NAME@@",
+      "@@ATTEMPT_ROOT@@"
+    ],
+    "copy_template": {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-v1.profile.template",
+      "sha256": "67359e87d8b243c9d31e03634998369ff6530bf8617ad3d5f9c5e4b0fc9b613b"
+    },
+    "build_template": {
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-v1.profile.template",
+      "sha256": "11c175f63c901b337c5e8899aceedbc898fde0716c07a323746d723b15021fc4"
+    },
+    "attempt_a_copy": {
+      "name": "r8-liquid-u3-gpu-copy-20260810T102641Z-a",
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-20260810T102641Z-a.profile",
+      "sha256": "2461550a249284dafc72e473b745ed829463c239e93e805fff623e54a29de8e1",
+      "attempt_root": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial"
+    },
+    "attempt_a_build": {
+      "name": "r8-liquid-u3-gpu-build-20260810T102641Z-a",
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-20260810T102641Z-a.profile",
+      "sha256": "fbcc9f417103f17f59003b6da1b8bb7f08e59b2a68015b7ac38cdf1db8c19b10",
+      "attempt_root": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial"
+    },
+    "attempt_b_copy": {
+      "name": "r8-liquid-u3-gpu-copy-20260810T102641Z-b",
+      "planned_path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-20260810T102641Z-b.profile",
+      "materialized": false,
+      "sha256": "NOT_MATERIALIZED"
+    },
+    "attempt_b_build": {
+      "name": "r8-liquid-u3-gpu-build-20260810T102641Z-b",
+      "planned_path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-20260810T102641Z-b.profile",
+      "materialized": false,
+      "sha256": "NOT_MATERIALIZED"
+    },
+    "campaign_static_audit": {
+      "name": "r8-liquid-u3-gpu-static-audit-20260810T102641Z",
+      "path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T102641Z.profile",
+      "sha256": "d23da58b35c69f458d7f9a7fcf03b9fc2493283cd580191d58f7ced460b45168",
+      "attempt_roots_read_only": [
+        "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial",
+        "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_b.partial"
+      ]
+    },
+    "requirements": {
+      "exact_one_writable_attempt_per_copy_or_build_profile": true,
+      "no_glob_attempt_root": true,
+      "no_gpu_device_permission": true,
+      "no_stream_or_packet_network": true,
+      "no_unconfined_transition": true,
+      "attempt_a_build_contains_gxx13": false
+    }
+  },
+  "source_copy_contract": {
+    "start_record": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_source_copy.json.partial",
+    "final_receipt": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_source_copy.json",
+    "state_machine": [
+      "START_RECORD_CREATE_NEW",
+      "ISOLATED_COPY_COMPLETE",
+      "SEALED_352_INVENTORY_VERIFIED",
+      "COPY_PROFILE_UNLOADED_ZERO_RESIDUE",
+      "WRAPPER_O_EXCL_0600_CREATED",
+      "COMPLETE_353_BUILD_INPUT_INVENTORY_VERIFIED",
+      "FINAL_RECEIPT_CREATE_NEW"
+    ],
+    "copy_command": [
+      "/usr/bin/cp",
+      "--recursive",
+      "--no-preserve=mode,ownership",
+      "--",
+      "/work/input/.",
+      "/work/output/buildtree/src/source/"
+    ],
+    "full_execution_argv": [
+      "/usr/bin/timeout",
+      "--foreground",
+      "--kill-after=5s",
+      "300s",
+      "/usr/bin/aa-exec",
+      "-p",
+      "r8-liquid-u3-gpu-copy-20260810T102641Z-a",
+      "--",
+      "/usr/bin/bwrap",
+      "--die-with-parent",
+      "--new-session",
+      "--clearenv",
+      "--unshare-user",
+      "--unshare-pid",
+      "--unshare-net",
+      "--unshare-ipc",
+      "--unshare-uts",
+      "--disable-userns",
+      "--assert-userns-disabled",
+      "--ro-bind",
+      "/usr",
+      "/usr",
+      "--symlink",
+      "usr/lib",
+      "/lib",
+      "--symlink",
+      "usr/lib64",
+      "/lib64",
+      "--tmpfs",
+      "/work",
+      "--dir",
+      "/work/input",
+      "--dir",
+      "/work/output",
+      "--ro-bind",
+      "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source",
+      "/work/input",
+      "--bind",
+      "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial/output",
+      "/work/output",
+      "--chdir",
+      "/work",
+      "/usr/bin/env",
+      "-i",
+      "HOME=/nonexistent",
+      "PATH=/usr/bin:/usr/local/cuda-12.8/bin",
+      "LC_ALL=C.UTF-8",
+      "LANG=C.UTF-8",
+      "TZ=UTC",
+      "TMPDIR=/work/tmp",
+      "TMP=/work/tmp",
+      "TEMP=/work/tmp",
+      "/usr/bin/prlimit",
+      "--cpu=120",
+      "--as=1073741824",
+      "--fsize=2147483648",
+      "--nproc=64",
+      "--nofile=128",
+      "--core=0",
+      "--",
+      "/usr/bin/cp",
+      "--recursive",
+      "--no-preserve=mode,ownership",
+      "--",
+      "/work/input/.",
+      "/work/output/buildtree/src/source/"
+    ],
+    "sealed_inventory": {
+      "required_entry_count": 352,
+      "extra_entries": "forbidden",
+      "symlinks": "forbidden",
+      "hardlinks": "forbidden",
+      "elf_files": "forbidden",
+      "execute_bits": "forbidden"
+    },
+    "post_wrapper_inventory": {
+      "required_entry_count": 353,
+      "required_sealed_entry_count": 352,
+      "required_wrapper_entry_count": 1,
+      "extra_entries": "forbidden",
+      "symlinks": "forbidden",
+      "hardlinks": "forbidden",
+      "elf_files": "forbidden",
+      "execute_bits": "forbidden",
+      "wrapper_mode_octal": "0600",
+      "wrapper_sha256": "33883dcdde741c253a09d78decb3c21c5ab92c7c9152acf793d7dd025f07300d"
+    },
+    "receipt_publish_rule": "final_receipt_timestamp_strictly_after_complete_353_inventory_and_copy_profile_unload"
+  },
+  "build_contract": {
+    "candidate_path": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial/output/artifacts/DualSPHysics5.4_linux64",
+    "gpu_build_receipt": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T102641Z_a_gpu_build.json",
+    "make_argv": [
+      "/usr/bin/make",
+      "--no-builtin-rules",
+      "--no-builtin-variables",
+      "-f",
+      "U3GpuBuild.mk",
+      "-j1",
+      "SHELL=/usr/bin/dash",
+      "CC=/usr/bin/x86_64-linux-gnu-g++-11",
+      "NCC=/usr/local/cuda-12.8/bin/nvcc",
+      "CUDA=12",
+      "DIRTOOLKIT=/usr/local/cuda-12.8",
+      "GENCODE=-gencode=arch=compute_120,code=\\\"sm_120,compute_120\\\"",
+      "USE_DEBUG=NO",
+      "USE_FAST_MATH=NO",
+      "USE_NATIVE_CPU_OPTIMIZATIONS=NO",
+      "COMPILE_CHRONO=NO",
+      "COMPILE_WAVEGEN=NO",
+      "COMPILE_MOORDYNPLUS=NO",
+      "LIBS_DIRECTORIES=",
+      "EXECS_DIRECTORY=/work/output/artifacts",
+      "/work/output/artifacts/DualSPHysics5.4_linux64"
+    ],
+    "full_execution_argv": [
+      "/usr/bin/timeout",
+      "--foreground",
+      "--kill-after=5s",
+      "5400s",
+      "/usr/bin/aa-exec",
+      "-p",
+      "r8-liquid-u3-gpu-build-20260810T102641Z-a",
+      "--",
+      "/usr/bin/bwrap",
+      "--die-with-parent",
+      "--new-session",
+      "--clearenv",
+      "--unshare-user",
+      "--unshare-pid",
+      "--unshare-net",
+      "--unshare-ipc",
+      "--unshare-uts",
+      "--disable-userns",
+      "--assert-userns-disabled",
+      "--ro-bind",
+      "/usr",
+      "/usr",
+      "--symlink",
+      "usr/lib",
+      "/lib",
+      "--symlink",
+      "usr/lib64",
+      "/lib64",
+      "--tmpfs",
+      "/work",
+      "--dir",
+      "/work/tmp",
+      "--dir",
+      "/work/output",
+      "--bind",
+      "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial/output",
+      "/work/output",
+      "--chdir",
+      "/work/output/buildtree/src/source",
+      "/usr/bin/env",
+      "-i",
+      "HOME=/nonexistent",
+      "PATH=/usr/bin:/usr/local/cuda-12.8/bin",
+      "LC_ALL=C.UTF-8",
+      "LANG=C.UTF-8",
+      "TZ=UTC",
+      "TMPDIR=/work/tmp",
+      "TMP=/work/tmp",
+      "TEMP=/work/tmp",
+      "/usr/bin/prlimit",
+      "--cpu=5400",
+      "--as=8589934592",
+      "--fsize=2147483648",
+      "--nproc=4096",
+      "--nofile=1024",
+      "--core=0",
+      "--",
+      "/usr/bin/make",
+      "--no-builtin-rules",
+      "--no-builtin-variables",
+      "-f",
+      "U3GpuBuild.mk",
+      "-j1",
+      "SHELL=/usr/bin/dash",
+      "CC=/usr/bin/x86_64-linux-gnu-g++-11",
+      "NCC=/usr/local/cuda-12.8/bin/nvcc",
+      "CUDA=12",
+      "DIRTOOLKIT=/usr/local/cuda-12.8",
+      "GENCODE=-gencode=arch=compute_120,code=\\\"sm_120,compute_120\\\"",
+      "USE_DEBUG=NO",
+      "USE_FAST_MATH=NO",
+      "USE_NATIVE_CPU_OPTIMIZATIONS=NO",
+      "COMPILE_CHRONO=NO",
+      "COMPILE_WAVEGEN=NO",
+      "COMPILE_MOORDYNPLUS=NO",
+      "LIBS_DIRECTORIES=",
+      "EXECS_DIRECTORY=/work/output/artifacts",
+      "/work/output/artifacts/DualSPHysics5.4_linux64"
+    ],
+    "sanitized_environment": {
+      "HOME": "/nonexistent",
+      "PATH": "/usr/bin:/usr/local/cuda-12.8/bin",
+      "LC_ALL": "C.UTF-8",
+      "LANG": "C.UTF-8",
+      "TZ": "UTC",
+      "TMPDIR": "/work/tmp",
+      "TMP": "/work/tmp",
+      "TEMP": "/work/tmp"
+    },
+    "working_directory": "/work/output/buildtree/src/source",
+    "temporary_directory": "/work/tmp",
+    "default_target_forbidden": true,
+    "clean_target_forbidden": true,
+    "stdout_stderr_contract": {
+      "streaming": true,
+      "complete_byte_count": true,
+      "sha256": true,
+      "bounded_prefix_bytes": 65536,
+      "output_file_in_build_tree": false
+    },
+    "candidate_execution": "forbidden",
+    "candidate_post_build_mode_octal": "0400",
+    "gpu_device_exposed": false,
+    "network_used": false
+  },
+  "static_audit_contract": {
+    "phase": "mandatory_separate_read_only_disconnected_sandbox",
+    "host_supervisor_allowed_operations": [
+      "path",
+      "fd",
+      "lstat",
+      "fstat",
+      "mode",
+      "owner",
+      "device",
+      "inode",
+      "size",
+      "sha256"
+    ],
+    "binary_content_parser_executed_on_host": false,
+    "profile_name": "r8-liquid-u3-gpu-static-audit-20260810T102641Z",
+    "profile_path": "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T102641Z.profile",
+    "profile_sha256": "d23da58b35c69f458d7f9a7fcf03b9fc2493283cd580191d58f7ced460b45168",
+    "call_chain": [
+      "/usr/bin/timeout",
+      "/usr/bin/aa-exec",
+      "/usr/bin/bwrap",
+      "/usr/bin/env",
+      "/usr/bin/prlimit",
+      "one_exact_parser_tool"
+    ],
+    "timeout_prefix": [
+      "/usr/bin/timeout",
+      "--foreground",
+      "--kill-after=5s",
+      "<RESOURCE_CLASS_WALL_SECONDS>s"
+    ],
+    "aa_exec_prefix": [
+      "/usr/bin/aa-exec",
+      "-p",
+      "r8-liquid-u3-gpu-static-audit-20260810T102641Z",
+      "--"
+    ],
+    "bwrap_prefix_before_exact_input": [
+      "/usr/bin/bwrap",
+      "--die-with-parent",
+      "--new-session",
+      "--clearenv",
+      "--unshare-user",
+      "--unshare-pid",
+      "--unshare-net",
+      "--unshare-ipc",
+      "--unshare-uts",
+      "--disable-userns",
+      "--assert-userns-disabled",
+      "--ro-bind",
+      "/usr",
+      "/usr",
+      "--symlink",
+      "usr/lib",
+      "/lib",
+      "--symlink",
+      "usr/lib64",
+      "/lib64",
+      "--dir",
+      "/etc",
+      "--ro-bind",
+      "/etc/magic",
+      "/etc/magic",
+      "--tmpfs",
+      "/audit",
+      "--dir",
+      "/audit/input",
+      "--dir",
+      "/audit/tmp"
+    ],
+    "exact_input_bind": [
+      "--ro-bind",
+      "<EXACT_ALLOWED_HOST_INPUT>",
+      "<EXACT_GUEST_INPUT>"
+    ],
+    "bwrap_suffix_after_exact_input": [
+      "--chdir",
+      "/audit",
+      "/usr/bin/env",
+      "-i",
+      "HOME=/nonexistent",
+      "PATH=/usr/bin:/usr/local/cuda-12.8/bin",
+      "LC_ALL=C.UTF-8",
+      "LANG=C.UTF-8",
+      "TZ=UTC",
+      "TMPDIR=/audit/tmp",
+      "TMP=/audit/tmp",
+      "TEMP=/audit/tmp"
+    ],
+    "resource_classes": {
+      "metadata": {
+        "wall_seconds": 60,
+        "cpu_seconds": 60,
+        "address_space_bytes": 1073741824
+      },
+      "cuobjdump_list": {
+        "wall_seconds": 120,
+        "cpu_seconds": 120,
+        "address_space_bytes": 2147483648
+      },
+      "cuobjdump_dump": {
+        "wall_seconds": 300,
+        "cpu_seconds": 300,
+        "address_space_bytes": 4294967296
+      }
+    },
+    "prlimit_suffix": [
+      "/usr/bin/prlimit",
+      "--cpu=<RESOURCE_CLASS_CPU_SECONDS>",
+      "--as=<RESOURCE_CLASS_AS_BYTES>",
+      "--nproc=64",
+      "--nofile=128",
+      "--core=0",
+      "--"
+    ],
+    "output_limit_bytes": 268435456,
+    "candidate_inputs": [
+      {
+        "build_id": "u3_source_gpu_build_sm120_20260810T102641Z_a",
+        "host_path": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial/output/artifacts/DualSPHysics5.4_linux64",
+        "guest_path": "/audit/input/DualSPHysics5.4_linux64"
+      },
+      {
+        "build_id": "u3_source_gpu_build_sm120_20260810T102641Z_b",
+        "host_path": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_b.partial/output/artifacts/DualSPHysics5.4_linux64",
+        "guest_path": "/audit/input/DualSPHysics5.4_linux64"
+      }
+    ],
+    "object_input_contract": {
+      "build_ids": [
+        "u3_source_gpu_build_sm120_20260810T102641Z_a",
+        "u3_source_gpu_build_sm120_20260810T102641Z_b"
+      ],
+      "host_root_suffix": "output/buildtree/src/source",
+      "object_names": [
+        "FunGeo3d.o",
+        "FunSphKernelsCfg.o",
+        "Functions.o",
+        "FunctionsCuda.o",
+        "JAppInfo.o",
+        "JArraysCpu.o",
+        "JArraysGpu.o",
+        "JBinaryData.o",
+        "JBoxDef.o",
+        "JCaseCtes.o",
+        "JCaseEParms.o",
+        "JCaseParts.o",
+        "JCaseProperties.o",
+        "JCaseVRes.o",
+        "JCellDivCpu.o",
+        "JCellDivCpuSingle.o",
+        "JCellDivGpu.o",
+        "JCellDivGpuSingle.o",
+        "JCellDivGpuSingle_ker.o",
+        "JCellDivGpu_ker.o",
+        "JCfgRunBase.o",
+        "JChronoGeoObj.o",
+        "JChronoObjects.o",
+        "JComputeMotionRef.o",
+        "JDataArrays.o",
+        "JDebugSphCpu.o",
+        "JDebugSphGpu.o",
+        "JDsAccInput.o",
+        "JDsAccInput_ker.o",
+        "JDsDamping.o",
+        "JDsDcell.o",
+        "JDsExtraData.o",
+        "JDsFixedDt.o",
+        "JDsFtForcePoints.o",
+        "JDsGaugeItem.o",
+        "JDsGaugeSystem.o",
+        "JDsGauge_ker.o",
+        "JDsGpuInfo.o",
+        "JDsInitialize.o",
+        "JDsMooredFloatings.o",
+        "JDsMotion.o",
+        "JDsOutputParts.o",
+        "JDsOutputTime.o",
+        "JDsPartFloatSave.o",
+        "JDsPartMotionSave.o",
+        "JDsPartsInit.o",
+        "JDsPartsOut.o",
+        "JDsPips.o",
+        "JDsPips_ker.o",
+        "JDsSaveDt.o",
+        "JDsTimers.o",
+        "JDsViscoInput.o",
+        "JDsVresData.o",
+        "JDsphConfig.o",
+        "JException.o",
+        "JLinearValue.o",
+        "JLog2.o",
+        "JMLPistonsGpu.o",
+        "JMeshData.o",
+        "JMeshTDatas.o",
+        "JMeshTDatasDsVel.o",
+        "JMeshTDatasLoad.o",
+        "JMeshTDatasSave.o",
+        "JMeshTDatasXml.o",
+        "JMotion.o",
+        "JMotionData.o",
+        "JMotionList.o",
+        "JMotionMov.o",
+        "JMotionObj.o",
+        "JMotionPos.o",
+        "JObject.o",
+        "JObjectGpu.o",
+        "JOutputCsv.o",
+        "JPartDataBi4.o",
+        "JPartDataHead.o",
+        "JPartFloatInfoBi4.o",
+        "JPartMotRefBi4Save.o",
+        "JPartOutBi4Save.o",
+        "JPartsLoad4.o",
+        "JRadixSort.o",
+        "JRangeFilter.o",
+        "JReadDatafile.o",
+        "JReduSum_ker.o",
+        "JRelaxZone_ker.o",
+        "JRelaxZonesGpu.o",
+        "JSaveCsv2.o",
+        "JSimpleNeigs.o",
+        "JSpVtkData.o",
+        "JSpVtkShape.o",
+        "JSph.o",
+        "JSphCfgRun.o",
+        "JSphCpu.o",
+        "JSphCpuSingle.o",
+        "JSphCpuSingle_InOut.o",
+        "JSphCpuSingle_VRes.o",
+        "JSphCpu_InOut.o",
+        "JSphCpu_VRes.o",
+        "JSphCpu_mdbc.o",
+        "JSphCpu_preloop.o",
+        "JSphFlexStruc.o",
+        "JSphGpu.o",
+        "JSphGpuSimple_ker.o",
+        "JSphGpuSingle.o",
+        "JSphGpuSingle_InOut.o",
+        "JSphGpuSingle_VRes.o",
+        "JSphGpu_ker.o",
+        "JSphInOut.o",
+        "JSphInOutGridData.o",
+        "JSphInOutPoints.o",
+        "JSphInOutVel.o",
+        "JSphInOutVelAwas.o",
+        "JSphInOutZone.o",
+        "JSphInOutZsurf.o",
+        "JSphMk.o",
+        "JSphShifting.o",
+        "JSphShiftingAdv.o",
+        "JSphShifting_ker.o",
+        "JSphVRes.o",
+        "JSphVResZone.o",
+        "JTimeControl.o",
+        "JTrianglesMesh.o",
+        "JVResDataLimits.o",
+        "JWaveOrder2_ker.o",
+        "JWaveSpectrumGpu.o",
+        "JXml.o",
+        "main.o",
+        "randomc.o",
+        "tinystr.o",
+        "tinyxml.o",
+        "tinyxmlerror.o",
+        "tinyxmlparser.o"
+      ],
+      "guest_root": "/audit/input",
+      "exact_enumeration_required": true
+    },
+    "candidate_tool_suffixes": [
+      {
+        "id": "file",
+        "resource_class": "metadata",
+        "argv": [
+          "/usr/bin/file",
+          "/audit/input/DualSPHysics5.4_linux64"
+        ]
+      },
+      {
+        "id": "readelf_header",
+        "resource_class": "metadata",
+        "argv": [
+          "/usr/bin/readelf",
+          "-hW",
+          "/audit/input/DualSPHysics5.4_linux64"
+        ]
+      },
+      {
+        "id": "readelf_program_headers",
+        "resource_class": "metadata",
+        "argv": [
+          "/usr/bin/readelf",
+          "-lW",
+          "/audit/input/DualSPHysics5.4_linux64"
+        ]
+      },
+      {
+        "id": "readelf_dynamic",
+        "resource_class": "metadata",
+        "argv": [
+          "/usr/bin/readelf",
+          "-dW",
+          "/audit/input/DualSPHysics5.4_linux64"
+        ]
+      },
+      {
+        "id": "readelf_notes",
+        "resource_class": "metadata",
+        "argv": [
+          "/usr/bin/readelf",
+          "-nW",
+          "/audit/input/DualSPHysics5.4_linux64"
+        ]
+      },
+      {
+        "id": "cuobjdump_list_elf",
+        "resource_class": "cuobjdump_list",
+        "argv": [
+          "/usr/local/cuda-12.8/bin/cuobjdump",
+          "--list-elf",
+          "/audit/input/DualSPHysics5.4_linux64"
+        ]
+      },
+      {
+        "id": "cuobjdump_dump_elf",
+        "resource_class": "cuobjdump_dump",
+        "argv": [
+          "/usr/local/cuda-12.8/bin/cuobjdump",
+          "--dump-elf",
+          "--gpu-architecture",
+          "sm_120",
+          "/audit/input/DualSPHysics5.4_linux64"
+        ]
+      },
+      {
+        "id": "cuobjdump_dump_elf_symbols",
+        "resource_class": "cuobjdump_dump",
+        "argv": [
+          "/usr/local/cuda-12.8/bin/cuobjdump",
+          "--dump-elf-symbols",
+          "--gpu-architecture",
+          "sm_120",
+          "/audit/input/DualSPHysics5.4_linux64"
+        ]
+      },
+      {
+        "id": "cuobjdump_list_ptx",
+        "resource_class": "cuobjdump_list",
+        "argv": [
+          "/usr/local/cuda-12.8/bin/cuobjdump",
+          "--list-ptx",
+          "/audit/input/DualSPHysics5.4_linux64"
+        ]
+      },
+      {
+        "id": "cuobjdump_dump_ptx",
+        "resource_class": "cuobjdump_dump",
+        "argv": [
+          "/usr/local/cuda-12.8/bin/cuobjdump",
+          "--dump-ptx",
+          "/audit/input/DualSPHysics5.4_linux64"
+        ]
+      },
+      {
+        "id": "sha256sum",
+        "resource_class": "metadata",
+        "argv": [
+          "/usr/bin/sha256sum",
+          "/audit/input/DualSPHysics5.4_linux64"
+        ]
+      }
+    ],
+    "object_tool_suffix_templates": [
+      {
+        "id": "object_file",
+        "resource_class": "metadata",
+        "argv": [
+          "/usr/bin/file",
+          "/audit/input/<EXACT_OBJECT_NAME>"
+        ]
+      },
+      {
+        "id": "object_readelf_header",
+        "resource_class": "metadata",
+        "argv": [
+          "/usr/bin/readelf",
+          "-hW",
+          "/audit/input/<EXACT_OBJECT_NAME>"
+        ]
+      },
+      {
+        "id": "object_readelf_sections",
+        "resource_class": "metadata",
+        "argv": [
+          "/usr/bin/readelf",
+          "-SW",
+          "/audit/input/<EXACT_OBJECT_NAME>"
+        ]
+      },
+      {
+        "id": "object_sha256sum",
+        "resource_class": "metadata",
+        "argv": [
+          "/usr/bin/sha256sum",
+          "/audit/input/<EXACT_OBJECT_NAME>"
+        ]
+      },
+      {
+        "id": "cuda_object_list_elf",
+        "resource_class": "cuobjdump_list",
+        "cuda_only": true,
+        "argv": [
+          "/usr/local/cuda-12.8/bin/cuobjdump",
+          "--list-elf",
+          "/audit/input/<EXACT_CUDA_OBJECT_NAME>"
+        ]
+      },
+      {
+        "id": "cuda_object_list_ptx",
+        "resource_class": "cuobjdump_list",
+        "cuda_only": true,
+        "argv": [
+          "/usr/local/cuda-12.8/bin/cuobjdump",
+          "--list-ptx",
+          "/audit/input/<EXACT_CUDA_OBJECT_NAME>"
+        ]
+      }
+    ],
+    "sandbox_invariants": {
+      "host_writable_bind_count": 0,
+      "network_namespace": "new_empty",
+      "proc_exposed": false,
+      "dev_exposed": false,
+      "gpu_exposed": false,
+      "candidate_executable": false,
+      "home": "/nonexistent",
+      "shell_allowed": false,
+      "compiler_allowed": false,
+      "make_allowed": false,
+      "ldd_allowed": false
+    },
+    "candidate_identity_fields": [
+      "realpath",
+      "parent_realpath",
+      "uid",
+      "gid",
+      "st_dev",
+      "st_ino",
+      "regular",
+      "symlink",
+      "nlink",
+      "size",
+      "mode_octal",
+      "sha256"
+    ],
+    "candidate_identity_before_after_must_match": true,
+    "artifact_acceptance": {
+      "elf_type": "ET_DYN",
+      "df_1_pie": true,
+      "interpreter": "/lib64/ld-linux-x86-64.so.2",
+      "gnu_stack_executable": false,
+      "rpath_runpath": false,
+      "required_needed": [
+        "libgomp.so.1",
+        "libstdc++.so.6",
+        "libm.so.6",
+        "libgcc_s.so.1",
+        "libc.so.6"
+      ],
+      "dynamic_libcudart_forbidden": true,
+      "native_cubin_arches": [
+        "sm_120"
+      ],
+      "ptx_arches": [
+        "sm_120"
+      ],
+      "nonzero_executable_text_section_required": true,
+      "function_symbol_in_verified_text_required": true
+    }
+  },
+  "b_admission_contract": {
+    "b_identity_only_in_g1": true,
+    "b_root_creation_before_admission": "forbidden",
+    "b_profiles_before_root_cause": "forbidden",
+    "manifest_required_keys": [
+      "schema_version",
+      "document_type",
+      "campaign_id",
+      "build_id",
+      "attempt_root",
+      "selected_delta_id",
+      "root_cause_evidence_sha256",
+      "parent_hashes",
+      "make_argv",
+      "wrapper_sha256",
+      "copy_profile",
+      "build_profile",
+      "permission_delta",
+      "created_at_utc",
+      "status",
+      "next_allowed_stage"
+    ],
+    "manifest_schema_version": "smpcc-r8-liquid-u3-gpu-b-admission-v1",
+    "manifest_document_type": "SMPCC_R8_LIQUID_U3_GPU_B_ADMISSION",
+    "manifest_status": "PASS_B_SPECIFIC_GPU_BUILD_ADMISSION",
+    "manifest_next_allowed_stage": "SEPARATE_EXACT_B_PROFILE_SYSTEM_ACTION_AUTHORIZATION_REQUIRED",
+    "parent_file_paths": [
+      "src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_gpu_build_execution_policy_v1.json",
+      "src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_gpu_build_execution_policy_v1.json",
+      "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_target_u3_gpu_build_gate_v1.py",
+      "src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_target_u3_gpu_build_gate_v1.py",
+      "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-v1.profile.template",
+      "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-v1.profile.template",
+      "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-20260810T102641Z-a.profile",
+      "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-20260810T102641Z-a.profile",
+      "src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T102641Z.profile"
+    ],
+    "required_parent_hash_algorithm": "sha256",
+    "gxx13_exact_tools": [
+      {
+        "path": "/usr/bin/x86_64-linux-gnu-g++-13",
+        "realpath": "/usr/bin/x86_64-linux-gnu-g++-13",
+        "mode_octal": "0755",
+        "size_bytes": 1027128,
+        "sha256": "1353e9bdd29a7295c7226bf6c63abccce056d8cac31f112e5cdbecc3f28c2769",
+        "role": "b_compiler_delta_only",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus",
+        "realpath": "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus",
+        "mode_octal": "0755",
+        "size_bytes": 32675168,
+        "sha256": "840b332fb62ec6f694ac77d91fe69ef7f80b0d69512ed89374af0ee7a506255d",
+        "role": "b_compiler_delta_only",
+        "attempt_a_execute_allowed": false
+      },
+      {
+        "path": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2",
+        "realpath": "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2",
+        "mode_octal": "0755",
+        "size_bytes": 336056,
+        "sha256": "4d1f341ae5b763b513258ee2812422a45e063c30a2f1924a0cf63d3699f3a158",
+        "role": "b_compiler_delta_only",
+        "attempt_a_execute_allowed": false
+      }
+    ],
+    "forbidden_permission_prefixes": [
+      "/home/zrj/scout_ws",
+      "/home/zrj/ros2_ws",
+      "/opt/ros",
+      "/data",
+      "/dev",
+      "network",
+      "unconfined"
+    ],
+    "delta_catalog": [
+      {
+        "id": "parallel_jobs_oom_j2_to_j1",
+        "root_cause": "A OOM or kill with frozen j2",
+        "admissible_for_this_campaign": false,
+        "reason": "attempt A is already frozen to parallel_jobs=1",
+        "wrapper_variant": "base",
+        "gxx13_permission": false
+      },
+      {
+        "id": "host_compiler_gxx13",
+        "root_cause": "single proven g++-11-specific host compile error",
+        "admissible_for_this_campaign": true,
+        "wrapper_variant": "base",
+        "gxx13_permission": true,
+        "make_replacement": {
+          "from": "CC=/usr/bin/x86_64-linux-gnu-g++-11",
+          "to": "CC=/usr/bin/x86_64-linux-gnu-g++-13"
+        },
+        "execute_tool_paths": [
+          "/usr/bin/x86_64-linux-gnu-g++-13",
+          "/usr/libexec/gcc/x86_64-linux-gnu/13/cc1plus",
+          "/usr/libexec/gcc/x86_64-linux-gnu/13/collect2"
+        ],
+        "gcc13_read_root": "/usr/lib/gcc/x86_64-linux-gnu/13"
+      },
+      {
+        "id": "cuda_cstdint_preinclude",
+        "root_cause": "single proven CUDA translation-unit SIZE_MAX or uint*_t error",
+        "admissible_for_this_campaign": true,
+        "wrapper_variant": "ncc_preinclude",
+        "gxx13_permission": false,
+        "wrapper_content_utf8": ".SUFFIXES:\n.SUFFIXES: .cpp .o\ninclude Makefile\noverride CCFLAGS += -include cstdint\noverride NCCFLAGS += --pre-include cstdint\n",
+        "wrapper_size_bytes": 127,
+        "wrapper_sha256": "5776cbe97e46ef8ff3d55889a8fc1e91dc3a18918dbe139904aa160327568c9b"
+      },
+      {
+        "id": "cuda_12_8_absolute_path_repair",
+        "root_cause": "single proven unsupported architecture caused by wrong NVCC path",
+        "admissible_for_this_campaign": true,
+        "wrapper_variant": "base",
+        "gxx13_permission": false,
+        "required_nvcc": "/usr/local/cuda-12.8/bin/nvcc",
+        "required_arches": [
+          "compute_120",
+          "sm_120"
+        ]
+      },
+      {
+        "id": "optional_dependency_override_repair",
+        "root_cause": "single proven Chrono WaveGen or MoorDynPlus override failure",
+        "admissible_for_this_campaign": true,
+        "wrapper_variant": "base",
+        "gxx13_permission": false,
+        "required_assignments": [
+          "COMPILE_CHRONO=NO",
+          "COMPILE_WAVEGEN=NO",
+          "COMPILE_MOORDYNPLUS=NO",
+          "LIBS_DIRECTORIES="
+        ]
+      },
+      {
+        "id": "cudart_static_read_visibility",
+        "root_cause": "single proven libcudart_static read-visibility denial",
+        "admissible_for_this_campaign": true,
+        "wrapper_variant": "base",
+        "gxx13_permission": false,
+        "only_read_path": "/usr/local/cuda-12.8/lib64/libcudart_static.a"
+      },
+      {
+        "id": "apparmor_exact_evidence_permission",
+        "root_cause": "single AppArmor deny with exact phase path and access evidence",
+        "admissible_for_this_campaign": true,
+        "wrapper_variant": "base",
+        "gxx13_permission": false,
+        "maximum_permission_entries": 1,
+        "allowed_access_kinds": [
+          "r",
+          "mr",
+          "rix",
+          "rw_guest_tmp_only"
+        ]
+      },
+      {
+        "id": "gencode_quote_repair",
+        "root_cause": "single proven GENCODE quoting or Make override failure",
+        "admissible_for_this_campaign": true,
+        "wrapper_variant": "base",
+        "gxx13_permission": false,
+        "required_gencode": "GENCODE=-gencode=arch=compute_120,code=\\\"sm_120,compute_120\\\""
+      }
+    ],
+    "permission_rule": "exactly_one_selected_delta; non-compiler deltas forbid all g++-13 tools; compiler delta replaces rather than unions g++-11 helpers; no profile may write both attempt roots",
+    "wrapper_variants": {
+      "base": {
+        "sha256": "33883dcdde741c253a09d78decb3c21c5ab92c7c9152acf793d7dd025f07300d",
+        "size_bytes": 84
+      },
+      "ncc_preinclude": {
+        "sha256": "5776cbe97e46ef8ff3d55889a8fc1e91dc3a18918dbe139904aa160327568c9b",
+        "size_bytes": 127
+      }
+    }
+  },
+  "profile_lifecycle": {
+    "g1_query_only": true,
+    "profile_loaded_in_g1": false,
+    "parser_query_argv_prefix": [
+      "/usr/sbin/apparmor_parser",
+      "-Q",
+      "-K",
+      "-T"
+    ],
+    "separate_authorization_required_for_load": true,
+    "persistent_install_forbidden": true,
+    "unload_same_phase": true,
+    "zero_residue_required": true,
+    "future_exact_profiles": [
+      {
+        "name": "r8-liquid-u3-gpu-copy-20260810T102641Z-a",
+        "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-copy-20260810T102641Z-a.profile",
+        "sha256": "2461550a249284dafc72e473b745ed829463c239e93e805fff623e54a29de8e1"
+      },
+      {
+        "name": "r8-liquid-u3-gpu-build-20260810T102641Z-a",
+        "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-build-20260810T102641Z-a.profile",
+        "sha256": "fbcc9f417103f17f59003b6da1b8bb7f08e59b2a68015b7ac38cdf1db8c19b10"
+      },
+      {
+        "name": "r8-liquid-u3-gpu-static-audit-20260810T102641Z",
+        "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T102641Z.profile",
+        "sha256": "d23da58b35c69f458d7f9a7fcf03b9fc2493283cd580191d58f7ced460b45168"
+      }
+    ]
+  },
+  "receipt_contracts": {
+    "source_copy": {
+      "create_new": true,
+      "start_before_copy": true,
+      "final_after_complete_353_inventory": true,
+      "status": "PASS_U3_GPU_SOURCE_COPY",
+      "next_allowed_stage": "SEPARATE_GPU_BUILD_EXECUTION_ADMISSION_REQUIRED"
+    },
+    "gpu_build": {
+      "create_new": true,
+      "make_success_not_sufficient": true,
+      "static_audit_required": true,
+      "success_status": "PASS_GPU_BUILD_SM120_STATIC_AUDIT",
+      "gpu_runtime_status": "NOT_RUN",
+      "u3_acceptance": "NO_GO_NOT_SETTLED",
+      "u4_authorized": false,
+      "u5_authorized": false,
+      "next_allowed_stage": "SEPARATE_GPU_RUNTIME_EXECUTION_ADMISSION_REQUIRED"
+    }
+  },
+  "invariants": {
+    "no_make_invocation_in_g1": true,
+    "no_nvcc_compilation_in_g1": true,
+    "no_compiler_compilation_in_g1": true,
+    "no_build_root_creation_in_g1": true,
+    "no_source_copy_in_g1": true,
+    "no_wrapper_materialization_in_g1": true,
+    "no_receipt_materialization_in_g1": true,
+    "no_profile_load_in_g1": true,
+    "no_sudo_in_g1": true,
+    "no_network_access_in_g1": true,
+    "no_gpu_device_exposure": true,
+    "no_candidate_execution": true,
+    "no_binary_content_parser_on_host": true,
+    "no_frozen_plan_write_after_identity_restore": true,
+    "no_cpu_v15_write": true,
+    "no_sealed_source_write": true,
+    "no_git_commit_push_or_pr": true,
+    "no_g2_entry": true
+  },
+  "status": "A_CONTRACT_AND_PROFILES_FROZEN",
+  "gpu_build_status": "NOT_RUN",
+  "next_allowed_stage": "G2_REQUIRES_SEPARATE_EXACT_PROFILE_HASH_SYSTEM_ACTION_AUTHORIZATION"
+}

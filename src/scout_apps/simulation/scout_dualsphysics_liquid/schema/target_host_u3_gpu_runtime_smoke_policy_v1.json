@@ -1,0 +1,216 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_gpu_runtime_smoke_policy_v1.json",
+  "title": "U3 RTX 5080 GPU runtime smoke policy v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "policy_id",
+    "status",
+    "development_only",
+    "parents",
+    "run",
+    "inputs",
+    "gpu",
+    "solver",
+    "sandbox",
+    "limits",
+    "tools",
+    "qc"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-u3-gpu-runtime-smoke-policy-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_GPU_RUNTIME_SMOKE_POLICY_V1"},
+    "policy_id": {"const": "LIQUID_ZRJ_MSI_U2404_U3_GPU_RUNTIME_SMOKE_V1"},
+    "status": {"const": "STAGE3_RUNTIME_CONTRACT_FROZEN_PENDING_ONE_SHOT"},
+    "development_only": {"const": true},
+    "parents": {"$ref": "#/$defs/parents"},
+    "run": {"$ref": "#/$defs/run"},
+    "inputs": {"$ref": "#/$defs/inputs"},
+    "gpu": {"$ref": "#/$defs/gpu"},
+    "solver": {"$ref": "#/$defs/solver"},
+    "sandbox": {"$ref": "#/$defs/sandbox"},
+    "limits": {"$ref": "#/$defs/limits"},
+    "tools": {
+      "type": "object",
+      "minProperties": 5,
+      "additionalProperties": {"$ref": "#/$defs/fileIdentity"}
+    },
+    "qc": {"$ref": "#/$defs/qc"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\x00]*$"},
+    "fileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "mode": {"type": "string", "pattern": "^0[0-7]{3}$"},
+        "inode": {"type": "integer", "minimum": 1},
+        "nlink": {"const": 1},
+        "status": {"type": "string", "minLength": 1}
+      }
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan", "build_receipt", "static_audit_receipt", "static_audit_lifecycle"],
+      "properties": {
+        "plan": {"$ref": "#/$defs/fileIdentity"},
+        "build_receipt": {"$ref": "#/$defs/fileIdentity"},
+        "static_audit_receipt": {"$ref": "#/$defs/fileIdentity"},
+        "static_audit_lifecycle": {"$ref": "#/$defs/fileIdentity"}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id", "attempt_root", "output_root", "start_receipt", "final_receipt",
+        "failure_receipt", "stdout_log", "stderr_log", "resource_log", "qc_report",
+        "gpu_lock", "attempts_per_identity"
+      ],
+      "properties": {
+        "run_id": {"const": "u3_c1m_gpu_smoke_20260810T181205Z"},
+        "attempt_root": {"$ref": "#/$defs/absolutePath"},
+        "output_root": {"$ref": "#/$defs/absolutePath"},
+        "start_receipt": {"$ref": "#/$defs/absolutePath"},
+        "final_receipt": {"$ref": "#/$defs/absolutePath"},
+        "failure_receipt": {"$ref": "#/$defs/absolutePath"},
+        "stdout_log": {"$ref": "#/$defs/absolutePath"},
+        "stderr_log": {"$ref": "#/$defs/absolutePath"},
+        "resource_log": {"$ref": "#/$defs/absolutePath"},
+        "qc_report": {"$ref": "#/$defs/absolutePath"},
+        "gpu_lock": {"$ref": "#/$defs/absolutePath"},
+        "attempts_per_identity": {"const": 1}
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate", "case_bi4", "case_xml", "dsph_config"],
+      "properties": {
+        "candidate": {"$ref": "#/$defs/fileIdentity"},
+        "case_bi4": {"$ref": "#/$defs/fileIdentity"},
+        "case_xml": {"$ref": "#/$defs/fileIdentity"},
+        "dsph_config": {"$ref": "#/$defs/fileIdentity"}
+      }
+    },
+    "gpu": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "uuid", "pci_bus_id", "name", "driver_version", "device_paths"],
+      "properties": {
+        "index": {"const": 0},
+        "uuid": {"const": "GPU-d29cd22d-8b25-8f4e-9dcf-f2fc4bb113fb"},
+        "pci_bus_id": {"const": "00000000:01:00.0"},
+        "name": {"const": "NVIDIA GeForce RTX 5080 Laptop GPU"},
+        "driver_version": {"const": "580.173.02"},
+        "device_paths": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "prefixItems": [
+            {"const": "/dev/nvidia0"},
+            {"const": "/dev/nvidiactl"},
+            {"const": "/dev/nvidia-uvm"},
+            {"const": "/dev/nvidia-uvm-tools"}
+          ],
+          "items": false
+        }
+      }
+    },
+    "solver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["argv", "environment", "expected_particles", "expected_moving", "expected_fluid"],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "minItems": 18,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["HOME", "PATH", "LC_ALL", "LANG", "TZ", "TMPDIR", "OMP_NUM_THREADS", "OMP_DYNAMIC", "CUDA_VISIBLE_DEVICES"],
+          "properties": {
+            "HOME": {"const": "/nonexistent"},
+            "PATH": {"const": "/usr/bin"},
+            "LC_ALL": {"const": "C"},
+            "LANG": {"const": "C"},
+            "TZ": {"const": "UTC0"},
+            "TMPDIR": {"const": "/tmp"},
+            "OMP_NUM_THREADS": {"const": "1"},
+            "OMP_DYNAMIC": {"const": "FALSE"},
+            "CUDA_VISIBLE_DEVICES": {"const": "0"}
+          }
+        },
+        "expected_particles": {"const": 9078},
+        "expected_moving": {"const": 2669},
+        "expected_fluid": {"const": 6409}
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model", "network_namespace", "child_uid", "child_gid", "capabilities",
+        "host_root_write_bind_count", "project_write_bind_count", "writable_bind_targets",
+        "read_only_system_mounts", "apparmor_profile"
+      ],
+      "properties": {
+        "model": {"const": "sudo_root_bwrap_mount_namespace_drop_to_uid1000"},
+        "network_namespace": {"const": "isolated_loopback_down"},
+        "child_uid": {"const": 1000},
+        "child_gid": {"const": 1000},
+        "capabilities": {"const": "ALL_DROPPED"},
+        "host_root_write_bind_count": {"const": 1},
+        "project_write_bind_count": {"const": 0},
+        "writable_bind_targets": {
+          "type": "array",
+          "prefixItems": [{"const": "/output"}],
+          "items": false
+        },
+        "read_only_system_mounts": {
+          "type": "array",
+          "prefixItems": [{"const": "/usr"}, {"const": "/sys"}, {"const": "/etc/ld.so.cache"}],
+          "items": false
+        },
+        "apparmor_profile": {"const": "NOT_USED_EPHEMERAL_ROOT_BWRAP"}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wall_timeout_seconds", "kill_after_seconds", "monitor_interval_seconds", "minimum_mem_available_bytes", "maximum_output_bytes"],
+      "properties": {
+        "wall_timeout_seconds": {"const": 600},
+        "kill_after_seconds": {"const": 10},
+        "monitor_interval_seconds": {"const": 10},
+        "minimum_mem_available_bytes": {"const": 4294967296},
+        "maximum_output_bytes": {"const": 134217728}
+      }
+    },
+    "qc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["script", "reader", "expected_status", "expected_file_count", "expected_part_count", "expected_nout"],
+      "properties": {
+        "script": {"$ref": "#/$defs/fileIdentity"},
+        "reader": {"$ref": "#/$defs/fileIdentity"},
+        "expected_status": {"const": "C1M_ZERO_MOTION_SMOKE_PASS"},
+        "expected_file_count": {"const": 30},
+        "expected_part_count": {"const": 21},
+        "expected_nout": {"const": 0}
+      }
+    }
+  }
+}

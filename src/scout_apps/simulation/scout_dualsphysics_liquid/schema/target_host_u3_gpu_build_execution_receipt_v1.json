@@ -1,0 +1,440 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://smpcc.local/schema/target-host-u3-gpu-build-execution-receipt-v1.json",
+  "title": "R8 liquid U3 GPU one-shot execution receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "campaign_id",
+    "build_id",
+    "attempt_root",
+    "phase",
+    "status",
+    "created_at_utc",
+    "gate_identity",
+    "preflight",
+    "execution",
+    "inventories",
+    "trace",
+    "resource_samples",
+    "artifacts",
+    "logs",
+    "static_checks",
+    "references",
+    "safety",
+    "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-u3-gpu-build-execution-receipt-v1"
+    },
+    "document_type": {
+      "enum": [
+        "SMPCC_R8_LIQUID_U3_GPU_SOURCE_COPY_START",
+        "SMPCC_R8_LIQUID_U3_GPU_SOURCE_COPY_RUN",
+        "SMPCC_R8_LIQUID_U3_GPU_SOURCE_COPY_RECEIPT",
+        "SMPCC_R8_LIQUID_U3_GPU_BUILD_START",
+        "SMPCC_R8_LIQUID_U3_GPU_BUILD_RECEIPT",
+        "SMPCC_R8_LIQUID_U3_GPU_STATIC_AUDIT_RECEIPT"
+      ]
+    },
+    "campaign_id": {
+      "const": "u3_source_gpu_build_sm120_20260810T102641Z"
+    },
+    "build_id": {
+      "const": "u3_source_gpu_build_sm120_20260810T102641Z_a"
+    },
+    "attempt_root": {
+      "const": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T102641Z_a.partial"
+    },
+    "phase": {
+      "enum": [
+        "prepare-source-copy",
+        "run-source-copy",
+        "finalize-source-copy",
+        "prepare-build",
+        "run-build",
+        "run-static-audit"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "created_at_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}\\+00:00$"
+    },
+    "gate_identity": {
+      "$ref": "#/$defs/gate_identity"
+    },
+    "preflight": {
+      "oneOf": [
+        {"$ref": "#/$defs/preflight"},
+        {"type": "null"}
+      ]
+    },
+    "execution": {
+      "oneOf": [
+        {"$ref": "#/$defs/execution"},
+        {"type": "null"}
+      ]
+    },
+    "inventories": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/inventory"},
+      "maxItems": 8
+    },
+    "trace": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/trace_event"},
+      "maxItems": 16
+    },
+    "resource_samples": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/resource_sample"},
+      "maxItems": 32768
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/artifact"},
+      "maxItems": 1024
+    },
+    "logs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/log"},
+      "maxItems": 32
+    },
+    "static_checks": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/static_check"},
+      "maxItems": 4096
+    },
+    "references": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/reference"},
+      "maxItems": 64
+    },
+    "safety": {
+      "$ref": "#/$defs/safety"
+    },
+    "next_allowed_stage": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    }
+  },
+  "$defs": {
+    "gate_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "mode_octal", "size_bytes", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "mode_octal": {"type": "string", "pattern": "^0[0-7]{3}$"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "invoker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uid", "euid", "gid", "egid", "supplementary_groups"],
+      "properties": {
+        "uid": {"const": 1000},
+        "euid": {"const": 1000},
+        "gid": {"const": 1000},
+        "egid": {"const": 1000},
+        "supplementary_groups": {
+          "type": "array",
+          "maxItems": 0,
+          "items": false
+        }
+      }
+    },
+    "preflight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "captured_at_utc",
+        "invoker",
+        "plan_sha256",
+        "g1_parent_set_canonical_sha256",
+        "execution_policy_sha256",
+        "receipt_schema_sha256",
+        "source_receipt_sha256",
+        "sealed_manifest_sha256",
+        "sealed_file_count",
+        "sealed_total_bytes",
+        "memory_available_bytes",
+        "swap_free_bytes",
+        "disk_free_bytes",
+        "candidate_deadline_remaining_seconds",
+        "final_deadline_remaining_seconds",
+        "conflicting_processes",
+        "attempt_b_root_exists",
+        "candidate_exists"
+      ],
+      "properties": {
+        "captured_at_utc": {"type": "string", "minLength": 1},
+        "invoker": {"$ref": "#/$defs/invoker"},
+        "plan_sha256": {"const": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"},
+        "g1_parent_set_canonical_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "execution_policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "receipt_schema_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "source_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "sealed_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "sealed_file_count": {"const": 352},
+        "sealed_total_bytes": {"const": 5473917},
+        "memory_available_bytes": {"type": "integer", "minimum": 0},
+        "swap_free_bytes": {"type": "integer", "minimum": 0},
+        "disk_free_bytes": {"type": "integer", "minimum": 0},
+        "candidate_deadline_remaining_seconds": {"type": "number"},
+        "final_deadline_remaining_seconds": {"type": "number"},
+        "conflicting_processes": {
+          "type": "array",
+          "items": {"type": "string", "maxLength": 4096},
+          "maxItems": 256
+        },
+        "attempt_b_root_exists": {"const": false},
+        "candidate_exists": {"type": "boolean"}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "argv",
+        "return_code",
+        "elapsed_seconds",
+        "stdout_bytes",
+        "stdout_sha256",
+        "stdout_prefix_utf8",
+        "stderr_bytes",
+        "stderr_sha256",
+        "stderr_prefix_utf8",
+        "timed_out",
+        "candidate_deadline_hit"
+      ],
+      "properties": {
+        "argv": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "maxItems": 256
+        },
+        "return_code": {"type": "integer"},
+        "elapsed_seconds": {"type": "number", "minimum": 0},
+        "stdout_bytes": {"type": "integer", "minimum": 0},
+        "stdout_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "stdout_prefix_utf8": {"type": "string", "maxLength": 65536},
+        "stderr_bytes": {"type": "integer", "minimum": 0},
+        "stderr_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "stderr_prefix_utf8": {"type": "string", "maxLength": 65536},
+        "timed_out": {"type": "boolean"},
+        "candidate_deadline_hit": {"type": "boolean"}
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "label",
+        "entry_count",
+        "sealed_entry_count",
+        "wrapper_entry_count",
+        "extra_count",
+        "symlink_count",
+        "hardlink_count",
+        "elf_count",
+        "executable_count",
+        "total_bytes",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "label": {"type": "string", "minLength": 1},
+        "entry_count": {"type": "integer", "minimum": 0},
+        "sealed_entry_count": {"type": "integer", "minimum": 0},
+        "wrapper_entry_count": {"type": "integer", "minimum": 0},
+        "extra_count": {"type": "integer", "minimum": 0},
+        "symlink_count": {"type": "integer", "minimum": 0},
+        "hardlink_count": {"type": "integer", "minimum": 0},
+        "elf_count": {"type": "integer", "minimum": 0},
+        "executable_count": {"type": "integer", "minimum": 0},
+        "total_bytes": {"type": "integer", "minimum": 0},
+        "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "trace_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "sequence", "captured_at_ns", "evidence_json", "evidence_sha256"],
+      "properties": {
+        "state": {"type": "string", "minLength": 1},
+        "sequence": {"type": "integer", "minimum": 1, "maximum": 32},
+        "captured_at_ns": {"type": "integer", "minimum": 1},
+        "evidence_json": {"type": "string", "minLength": 2, "maxLength": 65536},
+        "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "process_rss": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "pid", "rss_bytes"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "pid": {"type": "integer", "minimum": 1},
+        "rss_bytes": {"type": "integer", "minimum": 0}
+      }
+    },
+    "sensor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 512},
+        "value": {"type": "string", "maxLength": 4096}
+      }
+    },
+    "resource_sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "captured_at_utc",
+        "monotonic_seconds",
+        "memory_available_bytes",
+        "swap_free_bytes",
+        "vmstat_si_pages",
+        "vmstat_so_pages",
+        "memory_psi_some",
+        "memory_psi_full",
+        "disk_free_bytes",
+        "compiler_processes",
+        "temperature_and_power"
+      ],
+      "properties": {
+        "captured_at_utc": {"type": "string", "minLength": 1},
+        "monotonic_seconds": {"type": "number", "minimum": 0},
+        "memory_available_bytes": {"type": "integer", "minimum": 0},
+        "swap_free_bytes": {"type": "integer", "minimum": 0},
+        "vmstat_si_pages": {"type": "integer", "minimum": 0},
+        "vmstat_so_pages": {"type": "integer", "minimum": 0},
+        "memory_psi_some": {"type": "string", "maxLength": 4096},
+        "memory_psi_full": {"type": "string", "maxLength": 4096},
+        "disk_free_bytes": {"type": "integer", "minimum": 0},
+        "compiler_processes": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/process_rss"},
+          "maxItems": 4096
+        },
+        "temperature_and_power": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/sensor"},
+          "maxItems": 1024
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "kind",
+        "realpath",
+        "parent_realpath",
+        "uid",
+        "gid",
+        "st_dev",
+        "st_ino",
+        "regular",
+        "symlink",
+        "nlink",
+        "size_bytes",
+        "mode_octal",
+        "sha256"
+      ],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["candidate", "object", "wrapper"]},
+        "realpath": {"type": "string", "minLength": 1},
+        "parent_realpath": {"type": "string", "minLength": 1},
+        "uid": {"type": "integer", "minimum": 0},
+        "gid": {"type": "integer", "minimum": 0},
+        "st_dev": {"type": "integer", "minimum": 0},
+        "st_ino": {"type": "integer", "minimum": 1},
+        "regular": {"type": "boolean"},
+        "symlink": {"type": "boolean"},
+        "nlink": {"type": "integer", "minimum": 1},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "mode_octal": {"type": "string", "pattern": "^0[0-7]{3}$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "path", "mode_octal", "size_bytes", "sha256"],
+      "properties": {
+        "role": {"type": "string", "minLength": 1},
+        "path": {"type": "string", "minLength": 1},
+        "mode_octal": {"type": "string", "pattern": "^0[0-7]{3}$"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "static_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "passed", "evidence", "evidence_sha256"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1, "maxLength": 256},
+        "passed": {"type": "boolean"},
+        "evidence": {"type": "string", "maxLength": 65536},
+        "evidence_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "upstream_code_executed",
+        "precompiled_binary_executed",
+        "candidate_executed",
+        "network_used",
+        "gpu_device_exposed",
+        "binary_content_parser_executed_on_host",
+        "make_invocation_count",
+        "expected_profile_name"
+      ],
+      "properties": {
+        "upstream_code_executed": {"const": false},
+        "precompiled_binary_executed": {"const": false},
+        "candidate_executed": {"const": false},
+        "network_used": {"const": false},
+        "gpu_device_exposed": {"const": false},
+        "binary_content_parser_executed_on_host": {"const": false},
+        "make_invocation_count": {"type": "integer", "minimum": 0, "maximum": 1},
+        "expected_profile_name": {
+          "enum": [
+            "NONE",
+            "r8-liquid-u3-gpu-copy-20260810T102641Z-a",
+            "r8-liquid-u3-gpu-build-20260810T102641Z-a",
+            "r8-liquid-u3-gpu-static-audit-20260810T102641Z"
+          ]
+        }
+      }
+    }
+  }
+}

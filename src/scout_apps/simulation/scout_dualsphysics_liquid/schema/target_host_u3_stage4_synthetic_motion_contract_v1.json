@@ -1,0 +1,327 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_stage4_synthetic_motion_contract_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "contract_id",
+    "claim_ceiling",
+    "parents",
+    "checkpoint",
+    "fixed_numerics",
+    "cases",
+    "surface_proxy",
+    "acceptance",
+    "execution_boundary"
+  ],
+  "properties": {
+    "schema_version": { "const": "r8-liquid-u3-stage4-synthetic-motion-contract-v1" },
+    "document_type": { "const": "SMPCC_R8_LIQUID_U3_STAGE4_SYNTHETIC_MOTION_CONTRACT_V1" },
+    "contract_id": {
+      "type": "string",
+      "pattern": "^u3_c1m_stage4_synthetic_motion_[0-9]{8}T[0-9]{6}Z_v[0-9]+$",
+      "maxLength": 128
+    },
+    "claim_ceiling": { "const": "DEVELOPMENT_ONLY_SOFTWARE_NUMERICAL_NOT_PHYSICAL_FIDELITY" },
+    "parents": { "$ref": "#/$defs/parents" },
+    "checkpoint": { "$ref": "#/$defs/checkpoint" },
+    "fixed_numerics": { "$ref": "#/$defs/fixedNumerics" },
+    "cases": { "$ref": "#/$defs/cases" },
+    "surface_proxy": { "$ref": "#/$defs/surfaceProxy" },
+    "acceptance": { "$ref": "#/$defs/acceptance" },
+    "execution_boundary": { "$ref": "#/$defs/executionBoundary" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "absolutePath": {
+      "type": "string",
+      "pattern": "^/[^\\u0000]*$",
+      "maxLength": 512
+    },
+    "parentIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/absolutePath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "fileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "mode", "inode", "nlink"],
+      "properties": {
+        "path": { "$ref": "#/$defs/absolutePath" },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "size_bytes": { "type": "integer", "minimum": 1, "maximum": 134217728 },
+        "mode": { "type": "string", "pattern": "^[0-7]{4}$" },
+        "inode": { "type": "integer", "minimum": 1 },
+        "nlink": { "const": 1 }
+      }
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan",
+        "numerical_contract",
+        "settled_qc",
+        "backend_parity_qc",
+        "base_case_xml",
+        "motion_parser_source",
+        "motion_writer_source"
+      ],
+      "properties": {
+        "plan": { "$ref": "#/$defs/parentIdentity" },
+        "numerical_contract": { "$ref": "#/$defs/parentIdentity" },
+        "settled_qc": { "$ref": "#/$defs/parentIdentity" },
+        "backend_parity_qc": { "$ref": "#/$defs/parentIdentity" },
+        "base_case_xml": { "$ref": "#/$defs/fileIdentity" },
+        "motion_parser_source": { "$ref": "#/$defs/fileIdentity" },
+        "motion_writer_source": { "$ref": "#/$defs/fileIdentity" }
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "part",
+        "head",
+        "part_index",
+        "part_first",
+        "time_s",
+        "particle_count",
+        "moving_count",
+        "fluid_count",
+        "backend",
+        "gpu_uuid"
+      ],
+      "properties": {
+        "part": { "$ref": "#/$defs/fileIdentity" },
+        "head": { "$ref": "#/$defs/fileIdentity" },
+        "part_index": { "const": 901 },
+        "part_first": { "const": 901 },
+        "time_s": { "const": 45.05001991890928 },
+        "particle_count": { "const": 9078 },
+        "moving_count": { "const": 2669 },
+        "fluid_count": { "const": 6409 },
+        "backend": { "const": "GPU_0" },
+        "gpu_uuid": { "const": "GPU-d29cd22d-8b25-8f4e-9dcf-f2fc4bb113fb" }
+      }
+    },
+    "fixedNumerics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dp_m",
+        "cfl",
+        "shifting",
+        "viscosity_model",
+        "viscoart",
+        "output_period_s",
+        "coordinate_frame",
+        "container_axis",
+        "container_radius_m",
+        "nominal_surface_z_m"
+      ],
+      "properties": {
+        "dp_m": { "const": 0.002 },
+        "cfl": { "const": 0.1 },
+        "shifting": { "const": "None" },
+        "viscosity_model": { "const": "ARTIFICIAL" },
+        "viscoart": { "const": 0.3 },
+        "output_period_s": { "const": 0.05 },
+        "coordinate_frame": { "const": "CASE_XYZ_Z_UP_CONTAINER_BODY" },
+        "container_axis": { "const": "Z" },
+        "container_radius_m": { "const": 0.0185 },
+        "nominal_surface_z_m": { "const": 0.058 }
+      }
+    },
+    "motionCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "case_id",
+        "run_id",
+        "output_xml",
+        "family",
+        "motion_kind",
+        "start_time_s",
+        "active_duration_s",
+        "tail_duration_s",
+        "end_time_s",
+        "frequency_hz",
+        "phase_rad",
+        "translation_axis",
+        "translation_amplitude_m",
+        "yaw_axis",
+        "yaw_amplitude_deg",
+        "part_first",
+        "part_last",
+        "part_count",
+        "maximum_output_bytes"
+      ],
+      "properties": {
+        "case_id": {
+          "enum": ["SETTLED_ZERO_REPLAY", "SYNTHETIC_TRANSLATION_X", "SYNTHETIC_YAW_Z"]
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^u3_c1m_gpu_[A-Za-z0-9_]+_v[0-9]+$",
+          "maxLength": 160
+        },
+        "output_xml": { "$ref": "#/$defs/absolutePath" },
+        "family": { "enum": ["SETTLED_REPLAY_ZERO", "SYNTHETIC_TRANSLATION", "SYNTHETIC_YAW"] },
+        "motion_kind": { "enum": ["ZERO", "TRANSLATION", "YAW"] },
+        "start_time_s": { "const": 45.05001991890928 },
+        "active_duration_s": { "type": "number", "minimum": 0, "maximum": 2 },
+        "tail_duration_s": { "const": 1.0 },
+        "end_time_s": { "type": "number", "minimum": 46, "maximum": 49 },
+        "frequency_hz": { "type": "number", "minimum": 0, "maximum": 1 },
+        "phase_rad": { "const": 0.0 },
+        "translation_axis": { "enum": ["NONE", "X"] },
+        "translation_amplitude_m": { "type": "number", "minimum": 0, "maximum": 0.002 },
+        "yaw_axis": { "enum": ["NONE", "Z"] },
+        "yaw_amplitude_deg": { "type": "number", "minimum": 0, "maximum": 2.0 },
+        "part_first": { "const": 901 },
+        "part_last": { "type": "integer", "minimum": 921, "maximum": 961 },
+        "part_count": { "type": "integer", "minimum": 21, "maximum": 61 },
+        "maximum_output_bytes": { "type": "integer", "minimum": 16777216, "maximum": 67108864 }
+      }
+    },
+    "cases": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["zero", "translation", "yaw"],
+      "properties": {
+        "zero": { "$ref": "#/$defs/motionCase" },
+        "translation": { "$ref": "#/$defs/motionCase" },
+        "yaw": { "$ref": "#/$defs/motionCase" }
+      }
+    },
+    "surfaceProxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "sector_count",
+        "annulus_inner_radius_fraction",
+        "annulus_outer_radius_fraction",
+        "surface_quantile",
+        "minimum_particles_per_sector",
+        "minimum_valid_fraction",
+        "frame",
+        "center_radius_fraction",
+        "mid_annulus_inner_fraction",
+        "mid_annulus_outer_fraction"
+      ],
+      "properties": {
+        "method": { "const": "FLUID_PARTICLE_Z_QUANTILE_PER_CONTAINER_FRAME_AZIMUTH_SECTOR" },
+        "sector_count": { "const": 16 },
+        "annulus_inner_radius_fraction": { "const": 0.45 },
+        "annulus_outer_radius_fraction": { "const": 0.95 },
+        "surface_quantile": { "const": 0.98 },
+        "minimum_particles_per_sector": { "const": 128 },
+        "minimum_valid_fraction": { "const": 0.95 },
+        "frame": { "const": "INVERSE_ACTUAL_BOUNDARY_RIGID_TRANSFORM_CONTAINER_BODY" },
+        "center_radius_fraction": { "const": 0.25 },
+        "mid_annulus_inner_fraction": { "const": 0.25 },
+        "mid_annulus_outer_fraction": { "const": 0.55 }
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "all_frames_required",
+        "particle_id_set_exact",
+        "nout_required",
+        "finite_required",
+        "time_abs_tolerance_s",
+        "zero_boundary_displacement_max_m",
+        "translation_boundary_position_error_max_m",
+        "yaw_boundary_position_error_max_m",
+        "yaw_angle_error_max_deg",
+        "translation_surface_first_harmonic_min_m",
+        "dynamic_fluid_speed_rms_over_zero_ratio_min",
+        "free_decay_initial_window_s",
+        "free_decay_final_window_s",
+        "free_decay_final_to_initial_peak_ke_ratio_max",
+        "input_frequency_abs_tolerance_hz",
+        "phase_report_required",
+        "surface_metrics_required"
+      ],
+      "properties": {
+        "all_frames_required": { "const": true },
+        "particle_id_set_exact": { "const": true },
+        "nout_required": { "const": 0 },
+        "finite_required": { "const": true },
+        "time_abs_tolerance_s": { "const": 0.0001 },
+        "zero_boundary_displacement_max_m": { "const": 1e-10 },
+        "translation_boundary_position_error_max_m": { "const": 0.00005 },
+        "yaw_boundary_position_error_max_m": { "const": 0.00005 },
+        "yaw_angle_error_max_deg": { "const": 0.05 },
+        "translation_surface_first_harmonic_min_m": { "const": 0.00001 },
+        "dynamic_fluid_speed_rms_over_zero_ratio_min": { "const": 1.1 },
+        "free_decay_initial_window_s": { "const": 0.4 },
+        "free_decay_final_window_s": { "const": 0.2 },
+        "free_decay_final_to_initial_peak_ke_ratio_max": { "const": 0.95 },
+        "input_frequency_abs_tolerance_hz": { "const": 0.05 },
+        "phase_report_required": { "const": true },
+        "surface_metrics_required": {
+          "type": "array",
+          "prefixItems": [
+            { "const": "crest" },
+            { "const": "absolute" },
+            { "const": "peak_to_peak" },
+            { "const": "peak" },
+            { "const": "p95" },
+            { "const": "rms" },
+            { "const": "first_azimuthal_harmonic" }
+          ],
+          "items": false,
+          "minItems": 7,
+          "maxItems": 7
+        }
+      }
+    },
+    "executionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner_revision",
+        "backend",
+        "gpu_index",
+        "parallel_runs",
+        "network",
+        "sudo",
+        "apparmor",
+        "workspace_write_bind_count",
+        "candidate_source_executed",
+        "combined_motion_authorized",
+        "stage5_authorized",
+        "formal_physical_claim_authorized"
+      ],
+      "properties": {
+        "runner_revision": { "const": "r8_liquid_u3_stage4_experiment_runner_v1" },
+        "backend": { "const": "GPU" },
+        "gpu_index": { "const": 0 },
+        "parallel_runs": { "const": 1 },
+        "network": { "const": false },
+        "sudo": { "const": false },
+        "apparmor": { "const": false },
+        "workspace_write_bind_count": { "const": 0 },
+        "candidate_source_executed": { "const": false },
+        "combined_motion_authorized": { "const": false },
+        "stage5_authorized": { "const": false },
+        "formal_physical_claim_authorized": { "const": false }
+      }
+    }
+  }
+}

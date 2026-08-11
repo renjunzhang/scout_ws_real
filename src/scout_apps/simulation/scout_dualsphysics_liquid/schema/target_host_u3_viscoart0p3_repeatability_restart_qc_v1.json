@@ -1,0 +1,393 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_viscoart0p3_repeatability_restart_qc_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "captured_at_utc",
+    "inputs",
+    "contract",
+    "pre_checkpoint_repeatability",
+    "checkpoint_equivalence",
+    "post_checkpoint_equivalence",
+    "settled_checkpoint",
+    "verdict"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "r8-liquid-u3-viscoart0p3-repeatability-restart-qc-v1"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_U3_VISCOART0P3_REPEATABILITY_RESTART_QC_V1"
+    },
+    "captured_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "inputs": {
+      "$ref": "#/$defs/inputs"
+    },
+    "contract": {
+      "$ref": "#/$defs/contract"
+    },
+    "pre_checkpoint_repeatability": {
+      "$ref": "#/$defs/preRepeatability"
+    },
+    "checkpoint_equivalence": {
+      "$ref": "#/$defs/checkpointEquivalence"
+    },
+    "post_checkpoint_equivalence": {
+      "$ref": "#/$defs/postEquivalence"
+    },
+    "settled_checkpoint": {
+      "$ref": "#/$defs/settledCheckpoint"
+    },
+    "verdict": {
+      "$ref": "#/$defs/verdict"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "absolutePath": {
+      "type": "string",
+      "pattern": "^/[^\\u0000]*$"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes",
+        "mode",
+        "inode",
+        "nlink"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 134217728
+        },
+        "mode": {
+          "type": "string",
+          "pattern": "^[0-7]{4}$"
+        },
+        "inode": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nlink": {
+          "const": 1
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan",
+        "a_base_policy",
+        "a_base_final",
+        "a_base_qc",
+        "a_restart_policy",
+        "a_restart_final",
+        "a_restart_qc",
+        "b_policy",
+        "b_final",
+        "b_qc",
+        "script",
+        "schema",
+        "tests"
+      ],
+      "properties": {
+        "plan": { "$ref": "#/$defs/identity" },
+        "a_base_policy": { "$ref": "#/$defs/identity" },
+        "a_base_final": { "$ref": "#/$defs/identity" },
+        "a_base_qc": { "$ref": "#/$defs/identity" },
+        "a_restart_policy": { "$ref": "#/$defs/identity" },
+        "a_restart_final": { "$ref": "#/$defs/identity" },
+        "a_restart_qc": { "$ref": "#/$defs/identity" },
+        "b_policy": { "$ref": "#/$defs/identity" },
+        "b_final": { "$ref": "#/$defs/identity" },
+        "b_qc": { "$ref": "#/$defs/identity" },
+        "script": { "$ref": "#/$defs/identity" },
+        "schema": { "$ref": "#/$defs/identity" },
+        "tests": { "$ref": "#/$defs/identity" }
+      }
+    },
+    "tolerances": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time_abs_max_s",
+        "position_l2_max_m",
+        "position_l2_rms_m",
+        "velocity_l2_max_m_s",
+        "velocity_l2_rms_m_s",
+        "density_relative_max",
+        "density_relative_rms"
+      ],
+      "properties": {
+        "time_abs_max_s": { "const": 0.0001 },
+        "position_l2_max_m": { "const": 0.00005 },
+        "position_l2_rms_m": { "const": 0.000005 },
+        "velocity_l2_max_m_s": { "const": 0.0001 },
+        "velocity_l2_rms_m_s": { "const": 0.00002 },
+        "density_relative_max": { "const": 0.0001 },
+        "density_relative_rms": { "const": 0.00002 }
+      }
+    },
+    "metricVector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time_abs_max_s",
+        "position_l2_max_m",
+        "position_l2_rms_m",
+        "velocity_l2_max_m_s",
+        "velocity_l2_rms_m_s",
+        "density_relative_max",
+        "density_relative_rms"
+      ],
+      "properties": {
+        "time_abs_max_s": { "type": "number", "minimum": 0 },
+        "position_l2_max_m": { "type": "number", "minimum": 0 },
+        "position_l2_rms_m": { "type": "number", "minimum": 0 },
+        "velocity_l2_max_m_s": { "type": "number", "minimum": 0 },
+        "velocity_l2_rms_m_s": { "type": "number", "minimum": 0 },
+        "density_relative_max": { "type": "number", "minimum": 0 },
+        "density_relative_rms": { "type": "number", "minimum": 0 }
+      }
+    },
+    "metricPass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "time_abs_max_s",
+        "position_l2_max_m",
+        "position_l2_rms_m",
+        "velocity_l2_max_m_s",
+        "velocity_l2_rms_m_s",
+        "density_relative_max",
+        "density_relative_rms"
+      ],
+      "properties": {
+        "time_abs_max_s": { "type": "boolean" },
+        "position_l2_max_m": { "type": "boolean" },
+        "position_l2_rms_m": { "type": "boolean" },
+        "velocity_l2_max_m_s": { "type": "boolean" },
+        "velocity_l2_rms_m_s": { "type": "boolean" },
+        "density_relative_max": { "type": "boolean" },
+        "density_relative_rms": { "type": "boolean" }
+      }
+    },
+    "metricResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max", "rms"],
+      "properties": {
+        "max": { "type": "number", "minimum": 0 },
+        "rms": { "type": "number", "minimum": 0 }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dp_m",
+        "pre_checkpoint_raw_byte_equality_required",
+        "checkpoint_canonical_array_equality_required",
+        "post_part_first",
+        "post_part_last",
+        "post_frame_count",
+        "expected_particles",
+        "tolerances",
+        "threshold_overrides_allowed"
+      ],
+      "properties": {
+        "dp_m": { "const": 0.001 },
+        "pre_checkpoint_raw_byte_equality_required": { "const": true },
+        "checkpoint_canonical_array_equality_required": { "const": true },
+        "post_part_first": { "const": 701 },
+        "post_part_last": { "const": 901 },
+        "post_frame_count": { "const": 201 },
+        "expected_particles": { "const": 9078 },
+        "tolerances": { "$ref": "#/$defs/tolerances" },
+        "threshold_overrides_allowed": { "const": false }
+      }
+    },
+    "preRepeatability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "part_first",
+        "part_last",
+        "part_count",
+        "raw_sha256_equal_count",
+        "mismatch_count",
+        "mismatch_parts_prefix",
+        "comparison_canonical_sha256",
+        "pass"
+      ],
+      "properties": {
+        "part_first": { "const": 0 },
+        "part_last": { "const": 701 },
+        "part_count": { "const": 702 },
+        "raw_sha256_equal_count": { "type": "integer", "minimum": 0, "maximum": 702 },
+        "mismatch_count": { "type": "integer", "minimum": 0, "maximum": 702 },
+        "mismatch_parts_prefix": {
+          "type": "array",
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0, "maximum": 701 }
+        },
+        "comparison_canonical_sha256": { "$ref": "#/$defs/sha256" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "checkpointDigestMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a_base", "a_restart_output", "b_continuous"],
+      "properties": {
+        "a_base": { "$ref": "#/$defs/sha256" },
+        "a_restart_output": { "$ref": "#/$defs/sha256" },
+        "b_continuous": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "checkpointTimeMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["a_base", "a_restart_output", "b_continuous"],
+      "properties": {
+        "a_base": { "type": "number", "minimum": 35.049, "maximum": 35.051 },
+        "a_restart_output": { "type": "number", "minimum": 35.049, "maximum": 35.051 },
+        "b_continuous": { "type": "number", "minimum": 35.049, "maximum": 35.051 }
+      }
+    },
+    "checkpointEquivalence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part", "canonical_array_sha256", "time_s", "pass"],
+      "properties": {
+        "part": { "const": 701 },
+        "canonical_array_sha256": { "$ref": "#/$defs/checkpointDigestMap" },
+        "time_s": { "$ref": "#/$defs/checkpointTimeMap" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "postEquivalence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "part_first",
+        "part_last",
+        "frame_count",
+        "particle_pairs",
+        "metrics",
+        "limits",
+        "metric_pass",
+        "frame_comparison_canonical_sha256",
+        "pass"
+      ],
+      "properties": {
+        "part_first": { "const": 701 },
+        "part_last": { "const": 901 },
+        "frame_count": { "const": 201 },
+        "particle_pairs": { "const": 1824678 },
+        "metrics": { "$ref": "#/$defs/metricVector" },
+        "limits": { "$ref": "#/$defs/tolerances" },
+        "metric_pass": { "$ref": "#/$defs/metricPass" },
+        "frame_comparison_canonical_sha256": { "$ref": "#/$defs/sha256" },
+        "pass": { "type": "boolean" }
+      }
+    },
+    "settledCheckpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "file",
+        "canonical_array_sha256",
+        "time_s",
+        "particle_count",
+        "backend",
+        "device_uuid",
+        "candidate_sha256",
+        "case_bi4_sha256",
+        "viscoart",
+        "cfl",
+        "shifting"
+      ],
+      "properties": {
+        "path": {
+          "const": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_viscoart0p3_cold_b_20260811T113902Z_v14.partial/output/data/Part_0901.bi4"
+        },
+        "file": { "$ref": "#/$defs/identity" },
+        "canonical_array_sha256": { "$ref": "#/$defs/sha256" },
+        "time_s": { "type": "number", "minimum": 45.049, "maximum": 45.051 },
+        "particle_count": { "const": 9078 },
+        "backend": { "const": "GPU_0" },
+        "device_uuid": { "const": "GPU-d29cd22d-8b25-8f4e-9dcf-f2fc4bb113fb" },
+        "candidate_sha256": { "const": "cace408f99c3ca75b53bfb542565e92ec134631a41f1d233aace346e6455b39f" },
+        "case_bi4_sha256": { "const": "b463ddfe548b3db78b02f23b075dadbdd3c71ea766eb092701b56978ddb3a8e7" },
+        "viscoart": { "const": 0.3 },
+        "cfl": { "const": 0.1 },
+        "shifting": { "const": "None" }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "u3_settled_state_frozen",
+        "cold_ab_repeatability_pass",
+        "checkpoint_restart_equivalence_pass",
+        "development_only",
+        "formal",
+        "physical_primary_eligible",
+        "phase5_admitted",
+        "solver_executed_by_this_tool",
+        "gpu_exposed_by_this_tool",
+        "network_used_by_this_tool",
+        "inputs_modified",
+        "next"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "U3_SETTLED_STATE_FROZEN",
+            "FAIL_U3_REPEATABILITY_OR_RESTART_EQUIVALENCE"
+          ]
+        },
+        "u3_settled_state_frozen": { "type": "boolean" },
+        "cold_ab_repeatability_pass": { "type": "boolean" },
+        "checkpoint_restart_equivalence_pass": { "type": "boolean" },
+        "development_only": { "const": true },
+        "formal": { "const": false },
+        "physical_primary_eligible": { "const": false },
+        "phase5_admitted": { "const": false },
+        "solver_executed_by_this_tool": { "const": false },
+        "gpu_exposed_by_this_tool": { "const": false },
+        "network_used_by_this_tool": { "const": false },
+        "inputs_modified": { "const": false },
+        "next": {
+          "enum": ["FREEZE_CPU_GPU_PARITY_CONTRACT", "STOP"]
+        }
+      }
+    }
+  }
+}

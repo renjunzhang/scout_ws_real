@@ -1,0 +1,105 @@
+{
+  "schema_version": "smpcc-r8-liquid-u3-stage4-extended-settling-contract-v1",
+  "document_type": "SMPCC_R8_LIQUID_U3_STAGE4_EXTENDED_SETTLING_CONTRACT_V1",
+  "contract_id": "u3_c1m_gpu_shift_none_extend_10p05_to_20p05_v1",
+  "status": "FROZEN_PENDING_EXACTLY_ONE_GPU_EXTENSION",
+  "claim_ceiling": "DEVELOPMENT_ONLY_SOFTWARE_NUMERICAL_NOT_PHYSICAL_FIDELITY",
+  "parents": {
+    "plan": {
+      "path": "/home/zrj/scout_ws/docs/实物实验注意事项/对比试验/仿真接入液体/20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md",
+      "sha256": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+    },
+    "stage4_numerical_contract": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_stage4_numerical_contract_v1.json",
+      "sha256": "7b3d7447485d901cd60402f2a7ddd422c587ffa57ba3e5664130d8cd3abd9cd7"
+    },
+    "gpu_probe_final": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_from_0161_v2.final.json",
+      "sha256": "66bb86587d7963650cb16685eaae2dc6a8bc5fc0a0a94fbbe71c5316606d6644"
+    },
+    "gpu_probe_qc": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_shift_none_from_0161_v2.qc_v1.json",
+      "sha256": "682de1a6a80697ac01444337e6cae65b380166be7c328b5a613d1c4791570af9"
+    }
+  },
+  "rationale": {
+    "probe_directionally_promising": true,
+    "primary_metrics_improved": 4,
+    "primary_normalized_score_ratio": 0.9194742931929519,
+    "absolute_limits_passed": false,
+    "question": "DOES_SHIFT_NONE_DECAY_BELOW_FROZEN_SETTLED_LIMITS_WITH_MORE_SETTLING_TIME"
+  },
+  "checkpoint": {
+    "part_index": 201,
+    "time_s": 10.05,
+    "part_path": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_shift_none_from_0161_v2.partial/output/data/Part_0201.bi4",
+    "part_sha256": "0eee6feb93759f733030601d767521f343ed8cd348f8b2b47104a9ebd4f1d54c",
+    "part_size_bytes": 401410,
+    "part_mode": "0440",
+    "part_inode": 15733550,
+    "part_nlink": 1,
+    "head_path": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_shift_none_from_0161_v2.partial/output/data/Part_Head.ibi4",
+    "head_sha256": "50acccd4000605758061c62ac62d86d32f46aabefbf0afd5b08d729da71ce4c1",
+    "head_size_bytes": 1554,
+    "head_mode": "0440",
+    "head_inode": 15733551,
+    "head_nlink": 1
+  },
+  "extension": {
+    "start_time_s": 10.05,
+    "end_time_s": 20.05,
+    "duration_s": 10.0,
+    "output_period_s": 0.05,
+    "part_first": 201,
+    "part_last": 401,
+    "part_count": 201,
+    "tail_window_s": 1.0,
+    "minimum_tail_coverage_s": 0.95
+  },
+  "frozen_solver": {
+    "backend": "GPU_0",
+    "shifting": "None",
+    "ddt": "DDT2(0.1)",
+    "dp_m": 0.002,
+    "cfl": 0.2,
+    "parallel_runs": 1,
+    "omp_threads": 1,
+    "numerical_parameters_changed_from_probe": false,
+    "only_observation_window_extended": true
+  },
+  "settled_limits": {
+    "speed_rms_m_s": 0.001,
+    "speed_p95_m_s": 0.001,
+    "speed_max_m_s": 0.005,
+    "specific_kinetic_energy_j_kg": 5e-7,
+    "position_interframe_rms_m_s": 0.001,
+    "position_interframe_p95_m_s": 0.001,
+    "position_interframe_max_m_s": 0.005,
+    "position_net_rms_m_s": 0.001,
+    "position_net_p95_m_s": 0.001,
+    "position_net_max_m_s": 0.005,
+    "density_mean_relative_range": 0.005,
+    "density_mean_relative_bias": 0.01,
+    "density_p01_p99_relative_deviation": 0.05,
+    "surface_abs_bias_m": 0.001,
+    "surface_spread_m": 0.001,
+    "surface_temporal_range_m": 0.0005,
+    "surface_abs_drift_m_s": 0.0001
+  },
+  "execution_limits": {
+    "wall_timeout_seconds": 900,
+    "kill_after_seconds": 10,
+    "monitor_interval_seconds": 10,
+    "minimum_mem_available_bytes": 4294967296,
+    "maximum_output_bytes": 268435456,
+    "network": false,
+    "project_workspace_write_bind_count": 0
+  },
+  "result_boundary": {
+    "development_only": true,
+    "formal": false,
+    "physical_primary_eligible": false,
+    "candidate_execution_source_disallowed": true,
+    "new_campaign_claimed": false
+  }
+}

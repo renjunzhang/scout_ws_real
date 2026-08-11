@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_gpu_runtime_smoke_revision_v6.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "revision_id", "status", "parents", "diagnosis", "semantic_delta", "transport", "run"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-u3-gpu-runtime-smoke-revision-v6"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_GPU_RUNTIME_SMOKE_REVISION_V6"},
+    "revision_id": {"const": "LIQUID_ZRJ_MSI_U2404_U3_GPU_RUNTIME_SMOKE_V6"},
+    "status": {"const": "V6_EXEC_CAPABLE_ROOT_ONLY_TRANSPORT_FROZEN_PENDING_ONE_SHOT"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "diagnosis": {"$ref": "#/$defs/diagnosis"},
+    "semantic_delta": {"$ref": "#/$defs/delta"},
+    "transport": {"$ref": "#/$defs/transport"},
+    "run": {"$ref": "#/$defs/run"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\x00]*$"},
+    "identity": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+      "properties": {"path": {"$ref": "#/$defs/absolutePath"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "parents": {
+      "type": "object", "additionalProperties": false,
+      "required": ["v5_revision", "v5_schema", "v5_runner", "v5_tests", "v5_probe_failure"],
+      "properties": {
+        "v5_revision": {"$ref": "#/$defs/identity"},
+        "v5_schema": {"$ref": "#/$defs/identity"},
+        "v5_runner": {"$ref": "#/$defs/identity"},
+        "v5_tests": {"$ref": "#/$defs/identity"},
+        "v5_probe_failure": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "diagnosis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["failure_class", "observed_mount_target", "observed_mount_fstype", "observed_noexec", "inputs_readable", "candidate_executable", "candidate_started"],
+      "properties": {
+        "failure_class": {"const": "RUN_TRANSPORT_MOUNT_HAS_NOEXEC"},
+        "observed_mount_target": {"const": "/run"},
+        "observed_mount_fstype": {"const": "tmpfs"},
+        "observed_noexec": {"const": true},
+        "inputs_readable": {"const": true},
+        "candidate_executable": {"const": false},
+        "candidate_started": {"const": false}
+      }
+    },
+    "delta": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "old_transport_root", "new_transport_root", "new_transport_fstype", "new_transport_noexec", "stage_root_uid", "stage_root_mode", "candidate_transient_mode", "data_transient_mode", "guest_bind_read_only", "new_devices", "new_network", "new_project_write_targets", "solver_argv_changed", "home_permissions_changed"],
+      "properties": {
+        "operation": {"const": "MOVE_ROOT_ONLY_STAGE_FROM_NOEXEC_RUN_TO_EXEC_CAPABLE_VAR_TMP"},
+        "old_transport_root": {"const": "/run"},
+        "new_transport_root": {"const": "/var/tmp"},
+        "new_transport_fstype": {"const": "ext4"},
+        "new_transport_noexec": {"const": false},
+        "stage_root_uid": {"const": 0},
+        "stage_root_mode": {"const": "0700"},
+        "candidate_transient_mode": {"const": "0555"},
+        "data_transient_mode": {"const": "0444"},
+        "guest_bind_read_only": {"const": true},
+        "new_devices": {"const": 0},
+        "new_network": {"const": false},
+        "new_project_write_targets": {"const": 0},
+        "solver_argv_changed": {"const": false},
+        "home_permissions_changed": {"const": false}
+      }
+    },
+    "transport": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage_root", "probe_stage_root", "probe_receipt", "probe_output_root", "input_copy", "guest_write_target", "export", "candidate_stage_final_mode", "preserve_stage"],
+      "properties": {
+        "stage_root": {"const": "/var/tmp/r8-liquid-u3-c1m-gpu-smoke-v6-20260810t190500z"},
+        "probe_stage_root": {"const": "/var/tmp/r8-liquid-u3-gpu-smoke-v6-stage-probe-20260810t190500z"},
+        "probe_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_gpu_smoke_v6_stage_probe_20260810T190500Z.json"},
+        "probe_output_root": {"const": "/home/zrj/scout_liquid_lab/probes/u3_gpu_smoke_v6_stage_probe_20260810T190500Z.partial/output"},
+        "input_copy": {"const": "O_NOFOLLOW_TO_O_EXCL_ROOT_OWNED_NAMESPACE_INVARIANT_MODES_AND_SHA256_VERIFY"},
+        "guest_write_target": {"const": "/var_tmp_stage/output_only"},
+        "export": {"const": "ROOT_PARENT_O_NOFOLLOW_READ_TO_USER_OWNED_O_EXCL_LAB_OUTPUT"},
+        "candidate_stage_final_mode": {"const": "0400"},
+        "preserve_stage": {"const": true}
+      }
+    },
+    "run": {
+      "type": "object", "additionalProperties": false,
+      "required": ["run_id", "attempt_root", "output_root", "start_receipt", "final_receipt", "failure_receipt", "stdout_log", "stderr_log", "resource_log", "qc_report", "gpu_lock", "attempts_per_identity"],
+      "properties": {
+        "run_id": {"const": "u3_c1m_gpu_smoke_v6_20260810T190500Z"},
+        "attempt_root": {"const": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_v6_20260810T190500Z.partial"},
+        "output_root": {"const": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_v6_20260810T190500Z.partial/output"},
+        "start_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v6_20260810T190500Z.start.json"},
+        "final_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v6_20260810T190500Z.final.json"},
+        "failure_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v6_20260810T190500Z.failure.json"},
+        "stdout_log": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v6_20260810T190500Z.stdout.log"},
+        "stderr_log": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v6_20260810T190500Z.stderr.log"},
+        "resource_log": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v6_20260810T190500Z.resources.jsonl"},
+        "qc_report": {"const": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v6_20260810T190500Z.qc.json"},
+        "gpu_lock": {"const": "/home/zrj/scout_liquid_lab/locks/gpu0.lock"},
+        "attempts_per_identity": {"const": 1}
+      }
+    }
+  }
+}

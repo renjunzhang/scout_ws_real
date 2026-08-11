@@ -1,0 +1,199 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_stage4_numerical_contract_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "contract_id", "status", "claim_ceiling", "parents", "s4a_adjudication", "remediation_probe", "settled_limits", "repeatability_tolerances", "cpu_gpu_parity_tolerances", "synthetic_contract", "matrix_scope", "execution_limits", "result_boundary"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-u3-stage4-numerical-contract-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_STAGE4_NUMERICAL_CONTRACT_V1"},
+    "contract_id": {"const": "liquid_zrj_msi_u2404_u3_stage4_numerical_contract_v1"},
+    "status": {"const": "S4B_NUMERICAL_CONTRACT_V1_FROZEN"},
+    "claim_ceiling": {"const": "DEVELOPMENT_ONLY_SOFTWARE_NUMERICAL_NOT_PHYSICAL_FIDELITY"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "s4a_adjudication": {"$ref": "#/$defs/s4a"},
+    "remediation_probe": {"$ref": "#/$defs/probe"},
+    "settled_limits": {"$ref": "#/$defs/settled"},
+    "repeatability_tolerances": {"$ref": "#/$defs/parity"},
+    "cpu_gpu_parity_tolerances": {"$ref": "#/$defs/parity"},
+    "synthetic_contract": {"$ref": "#/$defs/synthetic"},
+    "matrix_scope": {"$ref": "#/$defs/matrix"},
+    "execution_limits": {"$ref": "#/$defs/execution"},
+    "result_boundary": {"$ref": "#/$defs/boundary"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {"path": {"$ref": "#/$defs/absolutePath"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan", "stage3_postvalidation", "s4a_gate", "s4a_schema", "s4a_tests", "s4a_result"],
+      "properties": {
+        "plan": {"$ref": "#/$defs/identity"},
+        "stage3_postvalidation": {"$ref": "#/$defs/identity"},
+        "s4a_gate": {"$ref": "#/$defs/identity"},
+        "s4a_schema": {"$ref": "#/$defs/identity"},
+        "s4a_tests": {"$ref": "#/$defs/identity"},
+        "s4a_result": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "s4a": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "candidate_selected", "primary_normalized_score_ratio", "primary_metrics_meaningfully_improved", "single_metric_improvement_not_sufficient", "raw_outputs_modified"],
+      "properties": {
+        "status": {"const": "FAIL_U3_DDT_RAMP_NUMERICAL_CANDIDATE"},
+        "candidate_selected": {"const": false},
+        "primary_normalized_score_ratio": {"type": "number", "exclusiveMinimum": 1},
+        "primary_metrics_meaningfully_improved": {"const": 0},
+        "single_metric_improvement_not_sufficient": {"const": true},
+        "raw_outputs_modified": {"const": false}
+      }
+    },
+    "singleDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parameter", "baseline", "candidate", "implementation", "other_numerical_parameters_changed"],
+      "properties": {
+        "parameter": {"const": "Shifting"},
+        "baseline": {"const": "NoBound(-2,2.75,Full)"},
+        "candidate": {"const": "None"},
+        "implementation": {"const": "EXACT_SOLVER_ARG_-shifting:none"},
+        "other_numerical_parameters_changed": {"const": false}
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part_index", "time_s", "part_path", "part_sha256", "head_path", "head_sha256"],
+      "properties": {
+        "part_index": {"const": 161}, "time_s": {"const": 8.05},
+        "part_path": {"$ref": "#/$defs/absolutePath"}, "part_sha256": {"$ref": "#/$defs/sha256"},
+        "head_path": {"$ref": "#/$defs/absolutePath"}, "head_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_time_s", "end_time_s", "output_period_s", "part_first", "part_last", "part_count", "tail_window_s", "minimum_tail_coverage_s"],
+      "properties": {
+        "start_time_s": {"const": 8.05}, "end_time_s": {"const": 10.05}, "output_period_s": {"const": 0.05},
+        "part_first": {"const": 161}, "part_last": {"const": 201}, "part_count": {"const": 41},
+        "tail_window_s": {"const": 1.0}, "minimum_tail_coverage_s": {"const": 0.95}
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all_absolute_limits_required", "no_metric_material_regression_required", "maximum_regression_fraction_of_limit", "minimum_primary_metrics_meaningfully_improved", "meaningful_improvement_fraction_of_limit", "maximum_primary_normalized_score_ratio", "structural_integrity_required"],
+      "properties": {
+        "all_absolute_limits_required": {"const": true},
+        "no_metric_material_regression_required": {"const": true},
+        "maximum_regression_fraction_of_limit": {"const": 0.05},
+        "minimum_primary_metrics_meaningfully_improved": {"const": 2},
+        "meaningful_improvement_fraction_of_limit": {"const": 0.02},
+        "maximum_primary_normalized_score_ratio": {"const": 0.95},
+        "structural_integrity_required": {"const": true}
+      }
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["probe_id", "hypothesis", "single_delta", "checkpoint", "window", "acceptance"],
+      "properties": {
+        "probe_id": {"const": "u3_c1m_gpu_shift_none_from_0161_v1"},
+        "hypothesis": {"type": "string", "minLength": 40},
+        "single_delta": {"$ref": "#/$defs/singleDelta"},
+        "checkpoint": {"$ref": "#/$defs/checkpoint"},
+        "window": {"$ref": "#/$defs/window"},
+        "acceptance": {"$ref": "#/$defs/acceptance"}
+      }
+    },
+    "settled": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["speed_rms_m_s", "speed_p95_m_s", "speed_max_m_s", "specific_kinetic_energy_j_kg", "position_interframe_rms_m_s", "position_interframe_p95_m_s", "position_interframe_max_m_s", "position_net_rms_m_s", "position_net_p95_m_s", "position_net_max_m_s", "density_mean_relative_range", "density_mean_relative_bias", "density_p01_p99_relative_deviation", "surface_abs_bias_m", "surface_spread_m", "surface_temporal_range_m", "surface_abs_drift_m_s", "nout", "nonfinite", "domain_outside"],
+      "properties": {
+        "speed_rms_m_s": {"const": 0.001}, "speed_p95_m_s": {"const": 0.001}, "speed_max_m_s": {"const": 0.005},
+        "specific_kinetic_energy_j_kg": {"const": 0.0000005},
+        "position_interframe_rms_m_s": {"const": 0.001}, "position_interframe_p95_m_s": {"const": 0.001}, "position_interframe_max_m_s": {"const": 0.005},
+        "position_net_rms_m_s": {"const": 0.001}, "position_net_p95_m_s": {"const": 0.001}, "position_net_max_m_s": {"const": 0.005},
+        "density_mean_relative_range": {"const": 0.005}, "density_mean_relative_bias": {"const": 0.01}, "density_p01_p99_relative_deviation": {"const": 0.05},
+        "surface_abs_bias_m": {"const": 0.001}, "surface_spread_m": {"const": 0.001}, "surface_temporal_range_m": {"const": 0.0005}, "surface_abs_drift_m_s": {"const": 0.0001},
+        "nout": {"const": 0}, "nonfinite": {"const": 0}, "domain_outside": {"const": 0}
+      }
+    },
+    "parity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["position_rms_m", "position_p95_m", "position_max_m", "velocity_rms_m_s", "velocity_p95_m_s", "velocity_max_m_s", "density_rms_kg_m3", "density_p95_kg_m3", "density_max_kg_m3"],
+      "properties": {
+        "position_rms_m": {"type": "number", "exclusiveMinimum": 0}, "position_p95_m": {"type": "number", "exclusiveMinimum": 0}, "position_max_m": {"type": "number", "exclusiveMinimum": 0},
+        "velocity_rms_m_s": {"type": "number", "exclusiveMinimum": 0}, "velocity_p95_m_s": {"type": "number", "exclusiveMinimum": 0}, "velocity_max_m_s": {"type": "number", "exclusiveMinimum": 0},
+        "density_rms_kg_m3": {"type": "number", "exclusiveMinimum": 0}, "density_p95_kg_m3": {"type": "number", "exclusiveMinimum": 0}, "density_max_kg_m3": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "motion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["axis", "frequency_hz", "excitation_duration_s", "tail_duration_s"],
+      "properties": {
+        "axis": {"enum": ["x", "z"]}, "frequency_hz": {"const": 1.0}, "excitation_duration_s": {"const": 2.0}, "tail_duration_s": {"const": 1.0},
+        "amplitude_m": {"const": 0.002}, "amplitude_degrees": {"const": 2.0}
+      },
+      "oneOf": [
+        {"required": ["amplitude_m"], "not": {"required": ["amplitude_degrees"]}},
+        {"required": ["amplitude_degrees"], "not": {"required": ["amplitude_m"]}}
+      ]
+    },
+    "synthetic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["translation", "yaw", "output_period_s", "minimum_azimuth_sectors", "minimum_valid_fraction", "zero_nout_required", "finite_required"],
+      "properties": {
+        "translation": {"$ref": "#/$defs/motion"}, "yaw": {"$ref": "#/$defs/motion"},
+        "output_period_s": {"const": 0.05}, "minimum_azimuth_sectors": {"const": 16}, "minimum_valid_fraction": {"const": 0.95},
+        "zero_nout_required": {"const": true}, "finite_required": {"const": true}
+      }
+    },
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dp_m", "cfl", "shifting", "ddt", "physical_parameter_matrix_status", "spatial_convergence_status", "claim_restriction"],
+      "properties": {
+        "dp_m": {"type": "array", "prefixItems": [{"const": 0.002}], "items": false, "minItems": 1, "maxItems": 1},
+        "cfl": {"type": "array", "prefixItems": [{"const": 0.2}, {"const": 0.1}], "items": false, "minItems": 2, "maxItems": 2},
+        "shifting": {"type": "array", "prefixItems": [{"const": "NoBound"}, {"const": "None"}], "items": false, "minItems": 2, "maxItems": 2},
+        "ddt": {"type": "array", "prefixItems": [{"const": "DDT2(0.1)"}, {"const": "DDT2(0.1:t10.05:t8.05:v0.2)"}], "items": false, "minItems": 2, "maxItems": 2},
+        "physical_parameter_matrix_status": {"const": "BLOCKED_MISSING_MEASURED_VESSEL_FLUID_SENSOR_INPUTS"},
+        "spatial_convergence_status": {"const": "NOT_CLAIMED_DP_1MM_0P75MM_0P5MM_NOT_AVAILABLE"},
+        "claim_restriction": {"const": "DP_2MM_SOFTWARE_NUMERICAL_SENSITIVITY_ONLY"}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gpu_index", "parallel_runs", "minimum_mem_available_bytes", "monitor_interval_seconds", "wall_timeout_seconds_per_run", "kill_after_seconds", "maximum_output_bytes_per_run", "network", "ros_gazebo", "project_workspace_write_bind_count"],
+      "properties": {
+        "gpu_index": {"const": 0}, "parallel_runs": {"const": 1}, "minimum_mem_available_bytes": {"const": 4294967296},
+        "monitor_interval_seconds": {"const": 10}, "wall_timeout_seconds_per_run": {"const": 1800}, "kill_after_seconds": {"const": 10},
+        "maximum_output_bytes_per_run": {"const": 536870912}, "network": {"const": false}, "ros_gazebo": {"const": false}, "project_workspace_write_bind_count": {"const": 0}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["development_only", "formal", "physical_primary_eligible", "production_authorized", "missing_measured_physical_inputs_prevent_formal_stage4_pass"],
+      "properties": {
+        "development_only": {"const": true}, "formal": {"const": false}, "physical_primary_eligible": {"const": false},
+        "production_authorized": {"const": false}, "missing_measured_physical_inputs_prevent_formal_stage4_pass": {"const": true}
+      }
+    }
+  }
+}

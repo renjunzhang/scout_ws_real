@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_extended_settling_qc_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "captured_at_utc", "inputs", "contract", "run", "verdict"],
+  "properties": {
+    "schema_version": {"const": "r8-liquid-u3-extended-settling-qc-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_EXTENDED_SETTLING_QC_V1"},
+    "captured_at_utc": {"type": "string", "format": "date-time"},
+    "inputs": {"$ref": "#/$defs/inputs"},
+    "contract": {"$ref": "#/$defs/contract"},
+    "run": {"$ref": "#/$defs/run"},
+    "verdict": {"$ref": "#/$defs/verdict"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "nonnegativeNumber": {"type": "number", "minimum": 0},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size_bytes", "sha256", "mode", "nlink"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "nlink": {"const": 1}
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qc_script", "qc_schema", "qc_tests", "plan", "contract", "policy", "case_bi4", "case_xml", "final_receipt"],
+      "properties": {
+        "qc_script": {"$ref": "#/$defs/identity"},
+        "qc_schema": {"$ref": "#/$defs/identity"},
+        "qc_tests": {"$ref": "#/$defs/identity"},
+        "plan": {"$ref": "#/$defs/identity"},
+        "contract": {"$ref": "#/$defs/identity"},
+        "policy": {"$ref": "#/$defs/identity"},
+        "case_bi4": {"$ref": "#/$defs/identity"},
+        "case_xml": {"$ref": "#/$defs/identity"},
+        "final_receipt": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "metricValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation", "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s", "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s", "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s", "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"],
+      "properties": {
+        "density_mean_relative_bias": {"$ref": "#/$defs/nonnegativeNumber"},
+        "density_mean_relative_range": {"$ref": "#/$defs/nonnegativeNumber"},
+        "density_p01_p99_relative_deviation": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_interframe_max_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_interframe_p95_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_interframe_rms_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_net_max_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_net_p95_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_net_rms_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "specific_kinetic_energy_j_kg": {"$ref": "#/$defs/nonnegativeNumber"},
+        "speed_max_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "speed_p95_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "speed_rms_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_abs_bias_m": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_abs_drift_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_spread_m": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_temporal_range_m": {"$ref": "#/$defs/nonnegativeNumber"}
+      }
+    },
+    "metricPass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation", "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s", "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s", "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s", "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"],
+      "properties": {
+        "density_mean_relative_bias": {"type": "boolean"},
+        "density_mean_relative_range": {"type": "boolean"},
+        "density_p01_p99_relative_deviation": {"type": "boolean"},
+        "position_interframe_max_m_s": {"type": "boolean"},
+        "position_interframe_p95_m_s": {"type": "boolean"},
+        "position_interframe_rms_m_s": {"type": "boolean"},
+        "position_net_max_m_s": {"type": "boolean"},
+        "position_net_p95_m_s": {"type": "boolean"},
+        "position_net_rms_m_s": {"type": "boolean"},
+        "specific_kinetic_energy_j_kg": {"type": "boolean"},
+        "speed_max_m_s": {"type": "boolean"},
+        "speed_p95_m_s": {"type": "boolean"},
+        "speed_rms_m_s": {"type": "boolean"},
+        "surface_abs_bias_m": {"type": "boolean"},
+        "surface_abs_drift_m_s": {"type": "boolean"},
+        "surface_spread_m": {"type": "boolean"},
+        "surface_temporal_range_m": {"type": "boolean"}
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["window_part_indices", "window_time_s", "tail_window_s", "metric_limits", "threshold_overrides_allowed"],
+      "properties": {
+        "window_part_indices": {"type": "array", "prefixItems": [{"const": 201}, {"const": 401}], "items": false, "minItems": 2, "maxItems": 2},
+        "window_time_s": {"type": "array", "prefixItems": [{"const": 10.05}, {"const": 20.05}], "items": false, "minItems": 2, "maxItems": 2},
+        "tail_window_s": {"const": 1.0},
+        "metric_limits": {"$ref": "#/$defs/metricValues"},
+        "threshold_overrides_allowed": {"const": false}
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_count", "total_bytes", "canonical_sha256"],
+      "properties": {
+        "file_count": {"const": 210},
+        "total_bytes": {"type": "integer", "minimum": 1, "maximum": 134217728},
+        "canonical_sha256": {"const": "d6b70b50b348b8a234b6022c2972bd7bfc6e3892fc7a9c6c8eb9bcb5b808beb5"}
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "part_file_sha256", "particle_count", "canonical_array_sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "part_file_sha256": {"$ref": "#/$defs/sha256"},
+        "particle_count": {"const": 9078},
+        "canonical_array_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "ddt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "tramp_s", "tmax_s", "value_max"],
+      "properties": {
+        "value": {"const": 0.1},
+        "tramp_s": {"type": "null"},
+        "tmax_s": {"type": "null"},
+        "value_max": {"type": "null"}
+      }
+    },
+    "structural": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exact_inventory", "exact_part_range", "strictly_increasing_times", "monotonic_steps", "start_time_matches", "end_time_matches", "all_particle_arrays_finite", "all_ids_complete_unique_in_range", "particle_classes_constant", "root_invariants_match_case", "moving_boundary_zero_motion", "zero_nout", "finite_inside_domain_density", "motion_reference_zero_aligned", "runparts_matches", "run_csv_matches", "run_out_clean_complete"],
+      "properties": {
+        "exact_inventory": {"const": true},
+        "exact_part_range": {"const": true},
+        "strictly_increasing_times": {"const": true},
+        "monotonic_steps": {"const": true},
+        "start_time_matches": {"const": true},
+        "end_time_matches": {"const": true},
+        "all_particle_arrays_finite": {"const": true},
+        "all_ids_complete_unique_in_range": {"const": true},
+        "particle_classes_constant": {"const": true},
+        "root_invariants_match_case": {"const": true},
+        "moving_boundary_zero_motion": {"const": true},
+        "zero_nout": {"const": true},
+        "finite_inside_domain_density": {"const": true},
+        "motion_reference_zero_aligned": {"const": true},
+        "runparts_matches": {"const": true},
+        "run_csv_matches": {"const": true},
+        "run_out_clean_complete": {"const": true}
+      }
+    },
+    "tail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part_count", "start_time_s", "end_time_s", "coverage_s", "surface_valid_part_count"],
+      "properties": {
+        "part_count": {"type": "integer", "minimum": 20, "maximum": 22},
+        "start_time_s": {"type": "number"},
+        "end_time_s": {"type": "number"},
+        "coverage_s": {"type": "number", "minimum": 0.95},
+        "surface_valid_part_count": {"type": "integer", "minimum": 20, "maximum": 22}
+      }
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part", "time_s", "speed_rms_m_s"],
+      "properties": {
+        "part": {"type": "integer", "minimum": 201, "maximum": 401},
+        "time_s": {"type": "number", "minimum": 10, "maximum": 21},
+        "speed_rms_m_s": {"$ref": "#/$defs/nonnegativeNumber"}
+      }
+    },
+    "trajectory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["initial", "minimum", "final", "final_to_minimum_ratio", "rebound_after_minimum"],
+      "properties": {
+        "initial": {"$ref": "#/$defs/point"},
+        "minimum": {"$ref": "#/$defs/point"},
+        "final": {"$ref": "#/$defs/point"},
+        "final_to_minimum_ratio": {"type": "number", "minimum": 1},
+        "rebound_after_minimum": {"type": "boolean"}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "inventory", "frame_count", "first_time_s", "last_time_s", "run_out_sha256", "run_csv_sha256", "shifting", "ddt_parameters", "restart_input_state", "restart_output_state", "restart_state_arrays_match", "structural_checks", "tail", "metrics", "metric_absolute_pass", "trajectory"],
+      "properties": {
+        "root": {"$ref": "#/$defs/absolutePath"},
+        "inventory": {"$ref": "#/$defs/inventory"},
+        "frame_count": {"const": 201},
+        "first_time_s": {"type": "number"},
+        "last_time_s": {"type": "number"},
+        "run_out_sha256": {"const": "e35bb1305bd98460d77660a5502805ed425a02d87303f5ccca7a67efad3fde04"},
+        "run_csv_sha256": {"$ref": "#/$defs/sha256"},
+        "shifting": {"const": "None"},
+        "ddt_parameters": {"$ref": "#/$defs/ddt"},
+        "restart_input_state": {"$ref": "#/$defs/state"},
+        "restart_output_state": {"$ref": "#/$defs/state"},
+        "restart_state_arrays_match": {"const": true},
+        "structural_checks": {"$ref": "#/$defs/structural"},
+        "tail": {"$ref": "#/$defs/tail"},
+        "metrics": {"$ref": "#/$defs/metricValues"},
+        "metric_absolute_pass": {"$ref": "#/$defs/metricPass"},
+        "trajectory": {"$ref": "#/$defs/trajectory"}
+      }
+    },
+    "metricName": {"enum": ["density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation", "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s", "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s", "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s", "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"]},
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "settled_state", "failed_metrics", "numerical_rebound_detected", "next", "development_only", "formal", "physical_primary_eligible", "solver_executed_by_this_tool", "inputs_modified"],
+      "properties": {
+        "status": {"enum": ["PASS_U3_EXTENDED_SETTLING", "FAIL_U3_EXTENDED_SETTLING_NUMERICAL_STABILITY"]},
+        "settled_state": {"type": "boolean"},
+        "failed_metrics": {"type": "array", "items": {"$ref": "#/$defs/metricName"}, "uniqueItems": true, "maxItems": 17},
+        "numerical_rebound_detected": {"type": "boolean"},
+        "next": {"enum": ["S4C_REPEATABILITY", "CFL_0P1_SENSITIVITY_OR_STOP"]},
+        "development_only": {"const": true},
+        "formal": {"const": false},
+        "physical_primary_eligible": {"const": false},
+        "solver_executed_by_this_tool": {"const": false},
+        "inputs_modified": {"const": false}
+      }
+    }
+  }
+}

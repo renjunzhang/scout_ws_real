@@ -1,0 +1,172 @@
+{
+  "schema_version": "smpcc-r8-liquid-u3-stage4-numerical-contract-v1",
+  "document_type": "SMPCC_R8_LIQUID_U3_STAGE4_NUMERICAL_CONTRACT_V1",
+  "contract_id": "liquid_zrj_msi_u2404_u3_stage4_numerical_contract_v1",
+  "status": "S4B_NUMERICAL_CONTRACT_V1_FROZEN",
+  "claim_ceiling": "DEVELOPMENT_ONLY_SOFTWARE_NUMERICAL_NOT_PHYSICAL_FIDELITY",
+  "parents": {
+    "plan": {
+      "path": "/home/zrj/scout_ws/docs/实物实验注意事项/对比试验/仿真接入液体/20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md",
+      "sha256": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+    },
+    "stage3_postvalidation": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v6_20260810T190500Z.postvalidation_v1.json",
+      "sha256": "9cbf9cdb48b240a73129eadbde36cf55ea3f0b1ad23e229f79aabe287085367e"
+    },
+    "s4a_gate": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_ddt_ramp_qc_v1.py",
+      "sha256": "9e7aad43965f94b0e9d5615e98229ed32d418ecf7dd89f650b5fa5a0a77795e3"
+    },
+    "s4a_schema": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_ddt_ramp_qc_v1.json",
+      "sha256": "6fe7b3449bb397c8c7c530bd5654ae23b3fdbc5a8fd5d24268ca71e77d74bc96"
+    },
+    "s4a_tests": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_u3_ddt_ramp_qc_v1.py",
+      "sha256": "022360e13207ffbed8fee4ea9362ffc73aacd62526438aad0d576f528749f19f"
+    },
+    "s4a_result": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_ddt_ramp_0p2_to_0p1_readonly_qc_v1.json",
+      "sha256": "a9dd201b8cb7a2dbcccc2b645632dc1d1f63673bdb3cae6880c44dffb1a05cf2"
+    }
+  },
+  "s4a_adjudication": {
+    "status": "FAIL_U3_DDT_RAMP_NUMERICAL_CANDIDATE",
+    "candidate_selected": false,
+    "primary_normalized_score_ratio": 1.0888842260611837,
+    "primary_metrics_meaningfully_improved": 0,
+    "single_metric_improvement_not_sufficient": true,
+    "raw_outputs_modified": false
+  },
+  "remediation_probe": {
+    "probe_id": "u3_c1m_gpu_shift_none_from_0161_v1",
+    "hypothesis": "NoBound particle shifting sustains the residual hydrostatic velocity floor; disabling shifting reduces velocity and position-rate tails without violating density, surface, domain, or particle-integrity limits.",
+    "single_delta": {
+      "parameter": "Shifting",
+      "baseline": "NoBound(-2,2.75,Full)",
+      "candidate": "None",
+      "implementation": "EXACT_SOLVER_ARG_-shifting:none",
+      "other_numerical_parameters_changed": false
+    },
+    "checkpoint": {
+      "part_index": 161,
+      "time_s": 8.05,
+      "part_path": "/home/zrj/scout_liquid_lab/direct_runs/u3_c1m_settle_extension_from_0161_retry1_20260809T113242Z.partial/output/data/Part_0161.bi4",
+      "part_sha256": "98d35a8aa6b62ba608879d5f70869853c696c3add868f128e0463489809ba96a",
+      "head_path": "/home/zrj/scout_liquid_lab/direct_runs/u3_c1m_settle_extension_from_0161_retry1_20260809T113242Z.partial/output/data/Part_Head.ibi4",
+      "head_sha256": "7cd0d48340f10137e15418afbf1458d1ca774f1965388a64f8ff3e17d7c7c51b"
+    },
+    "window": {
+      "start_time_s": 8.05,
+      "end_time_s": 10.05,
+      "output_period_s": 0.05,
+      "part_first": 161,
+      "part_last": 201,
+      "part_count": 41,
+      "tail_window_s": 1.0,
+      "minimum_tail_coverage_s": 0.95
+    },
+    "acceptance": {
+      "all_absolute_limits_required": true,
+      "no_metric_material_regression_required": true,
+      "maximum_regression_fraction_of_limit": 0.05,
+      "minimum_primary_metrics_meaningfully_improved": 2,
+      "meaningful_improvement_fraction_of_limit": 0.02,
+      "maximum_primary_normalized_score_ratio": 0.95,
+      "structural_integrity_required": true
+    }
+  },
+  "settled_limits": {
+    "speed_rms_m_s": 0.001,
+    "speed_p95_m_s": 0.001,
+    "speed_max_m_s": 0.005,
+    "specific_kinetic_energy_j_kg": 0.0000005,
+    "position_interframe_rms_m_s": 0.001,
+    "position_interframe_p95_m_s": 0.001,
+    "position_interframe_max_m_s": 0.005,
+    "position_net_rms_m_s": 0.001,
+    "position_net_p95_m_s": 0.001,
+    "position_net_max_m_s": 0.005,
+    "density_mean_relative_range": 0.005,
+    "density_mean_relative_bias": 0.01,
+    "density_p01_p99_relative_deviation": 0.05,
+    "surface_abs_bias_m": 0.001,
+    "surface_spread_m": 0.001,
+    "surface_temporal_range_m": 0.0005,
+    "surface_abs_drift_m_s": 0.0001,
+    "nout": 0,
+    "nonfinite": 0,
+    "domain_outside": 0
+  },
+  "repeatability_tolerances": {
+    "position_rms_m": 0.000001,
+    "position_p95_m": 0.000002,
+    "position_max_m": 0.00001,
+    "velocity_rms_m_s": 0.00001,
+    "velocity_p95_m_s": 0.00002,
+    "velocity_max_m_s": 0.0001,
+    "density_rms_kg_m3": 0.01,
+    "density_p95_kg_m3": 0.02,
+    "density_max_kg_m3": 0.1
+  },
+  "cpu_gpu_parity_tolerances": {
+    "position_rms_m": 0.00002,
+    "position_p95_m": 0.00005,
+    "position_max_m": 0.0002,
+    "velocity_rms_m_s": 0.0005,
+    "velocity_p95_m_s": 0.001,
+    "velocity_max_m_s": 0.005,
+    "density_rms_kg_m3": 1.0,
+    "density_p95_kg_m3": 2.0,
+    "density_max_kg_m3": 10.0
+  },
+  "synthetic_contract": {
+    "translation": {
+      "axis": "x",
+      "amplitude_m": 0.002,
+      "frequency_hz": 1.0,
+      "excitation_duration_s": 2.0,
+      "tail_duration_s": 1.0
+    },
+    "yaw": {
+      "axis": "z",
+      "amplitude_degrees": 2.0,
+      "frequency_hz": 1.0,
+      "excitation_duration_s": 2.0,
+      "tail_duration_s": 1.0
+    },
+    "output_period_s": 0.05,
+    "minimum_azimuth_sectors": 16,
+    "minimum_valid_fraction": 0.95,
+    "zero_nout_required": true,
+    "finite_required": true
+  },
+  "matrix_scope": {
+    "dp_m": [0.002],
+    "cfl": [0.2, 0.1],
+    "shifting": ["NoBound", "None"],
+    "ddt": ["DDT2(0.1)", "DDT2(0.1:t10.05:t8.05:v0.2)"],
+    "physical_parameter_matrix_status": "BLOCKED_MISSING_MEASURED_VESSEL_FLUID_SENSOR_INPUTS",
+    "spatial_convergence_status": "NOT_CLAIMED_DP_1MM_0P75MM_0P5MM_NOT_AVAILABLE",
+    "claim_restriction": "DP_2MM_SOFTWARE_NUMERICAL_SENSITIVITY_ONLY"
+  },
+  "execution_limits": {
+    "gpu_index": 0,
+    "parallel_runs": 1,
+    "minimum_mem_available_bytes": 4294967296,
+    "monitor_interval_seconds": 10,
+    "wall_timeout_seconds_per_run": 1800,
+    "kill_after_seconds": 10,
+    "maximum_output_bytes_per_run": 536870912,
+    "network": false,
+    "ros_gazebo": false,
+    "project_workspace_write_bind_count": 0
+  },
+  "result_boundary": {
+    "development_only": true,
+    "formal": false,
+    "physical_primary_eligible": false,
+    "production_authorized": false,
+    "missing_measured_physical_inputs_prevent_formal_stage4_pass": true
+  }
+}

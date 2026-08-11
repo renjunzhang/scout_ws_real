@@ -1,0 +1,353 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_shift_none_qc_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "captured_at_utc", "inputs", "contract", "baseline", "candidate", "pair_checks", "comparison", "verdict"],
+  "properties": {
+    "schema_version": {"const": "r8-liquid-u3-shift-none-qc-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_SHIFT_NONE_QC_V1"},
+    "captured_at_utc": {"type": "string", "format": "date-time"},
+    "inputs": {"$ref": "#/$defs/inputs"},
+    "contract": {"$ref": "#/$defs/contract"},
+    "baseline": {"$ref": "#/$defs/run"},
+    "candidate": {"$ref": "#/$defs/run"},
+    "pair_checks": {"$ref": "#/$defs/pairChecks"},
+    "comparison": {"$ref": "#/$defs/comparison"},
+    "verdict": {"$ref": "#/$defs/verdict"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "nonnegativeNumber": {"type": "number", "minimum": 0},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "size_bytes", "sha256", "mode", "nlink"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "nlink": {"const": 1}
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["qc_script", "qc_schema", "qc_tests", "plan", "case_bi4", "case_xml", "baseline_qc", "numerical_contract", "s4a_result", "gpu_policy", "gpu_final"],
+      "properties": {
+        "qc_script": {"$ref": "#/$defs/identity"},
+        "qc_schema": {"$ref": "#/$defs/identity"},
+        "qc_tests": {"$ref": "#/$defs/identity"},
+        "plan": {"$ref": "#/$defs/identity"},
+        "case_bi4": {"$ref": "#/$defs/identity"},
+        "case_xml": {"$ref": "#/$defs/identity"},
+        "baseline_qc": {"$ref": "#/$defs/identity"},
+        "numerical_contract": {"$ref": "#/$defs/identity"},
+        "s4a_result": {"$ref": "#/$defs/identity"},
+        "gpu_policy": {"$ref": "#/$defs/identity"},
+        "gpu_final": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "contractValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_start_time_s", "expected_end_time_s", "expected_output_period_s", "physical_time_tolerance_s", "tail_window_s", "minimum_tail_coverage_s", "expected_particle_count", "expected_moving_count", "expected_fluid_count", "baseline_ddt_value", "candidate_ddt_value", "candidate_ddt_value_max", "candidate_ddt_tmax_s", "candidate_ddt_tramp_s", "maximum_metric_regression_fraction_of_limit", "meaningful_metric_improvement_fraction_of_limit", "minimum_primary_metrics_improved", "maximum_primary_normalized_score_ratio"],
+      "properties": {
+        "expected_start_time_s": {"const": 8.05},
+        "expected_end_time_s": {"const": 10.05},
+        "expected_output_period_s": {"const": 0.05},
+        "physical_time_tolerance_s": {"const": 0.00005},
+        "tail_window_s": {"const": 1.0},
+        "minimum_tail_coverage_s": {"const": 0.95},
+        "expected_particle_count": {"const": 9078},
+        "expected_moving_count": {"const": 2669},
+        "expected_fluid_count": {"const": 6409},
+        "baseline_ddt_value": {"const": 0.1},
+        "candidate_ddt_value": {"const": 0.1},
+        "candidate_ddt_value_max": {"const": 0.2},
+        "candidate_ddt_tmax_s": {"const": 8.05},
+        "candidate_ddt_tramp_s": {"const": 10.05},
+        "maximum_metric_regression_fraction_of_limit": {"const": 0.05},
+        "meaningful_metric_improvement_fraction_of_limit": {"const": 0.02},
+        "minimum_primary_metrics_improved": {"const": 2},
+        "maximum_primary_normalized_score_ratio": {"const": 0.95}
+      }
+    },
+    "metricValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation", "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s", "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s", "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s", "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"],
+      "properties": {
+        "density_mean_relative_bias": {"$ref": "#/$defs/nonnegativeNumber"},
+        "density_mean_relative_range": {"$ref": "#/$defs/nonnegativeNumber"},
+        "density_p01_p99_relative_deviation": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_interframe_max_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_interframe_p95_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_interframe_rms_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_net_max_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_net_p95_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "position_net_rms_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "specific_kinetic_energy_j_kg": {"$ref": "#/$defs/nonnegativeNumber"},
+        "speed_max_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "speed_p95_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "speed_rms_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_abs_bias_m": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_abs_drift_m_s": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_spread_m": {"$ref": "#/$defs/nonnegativeNumber"},
+        "surface_temporal_range_m": {"$ref": "#/$defs/nonnegativeNumber"}
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frozen_before_comparison_execution", "command_line_threshold_overrides_allowed", "window_part_indices", "window_time_s", "tail_window_s", "metric_limits", "primary_metrics", "single_variable", "baseline_shifting", "candidate_shifting", "other_numerical_parameters_changed", "backend_must_match_for_causal_single_variable_claim"],
+      "properties": {
+        "frozen_before_comparison_execution": {"const": true},
+        "command_line_threshold_overrides_allowed": {"const": false},
+        "window_part_indices": {"type": "array", "prefixItems": [{"const": 161}, {"const": 201}], "items": false, "minItems": 2, "maxItems": 2},
+        "window_time_s": {"type": "array", "prefixItems": [{"const": 8.05}, {"const": 10.05}], "items": false, "minItems": 2, "maxItems": 2},
+        "tail_window_s": {"const": 1.0},
+        "metric_limits": {"$ref": "#/$defs/metricValues"},
+        "primary_metrics": {"type": "array", "prefixItems": [{"const": "speed_rms_m_s"}, {"const": "speed_p95_m_s"}, {"const": "speed_max_m_s"}, {"const": "specific_kinetic_energy_j_kg"}], "items": false, "minItems": 4, "maxItems": 4},
+        "single_variable": {"const": "SHIFTING_NOBOUND_TO_NONE"},
+        "baseline_shifting": {"const": "NoBound(-2,2.75,Full)"},
+        "candidate_shifting": {"const": "None"},
+        "other_numerical_parameters_changed": {"const": false},
+        "backend_must_match_for_causal_single_variable_claim": {"const": true}
+      }
+    },
+    "fileRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["size_bytes", "sha256", "mode", "nlink"],
+      "properties": {
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "nlink": {"const": 1}
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_count", "total_bytes", "canonical_sha256", "files"],
+      "properties": {
+        "file_count": {"const": 50},
+        "total_bytes": {"type": "integer", "minimum": 1, "maximum": 67108864},
+        "canonical_sha256": {"$ref": "#/$defs/sha256"},
+        "files": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 50,
+          "maxProperties": 50,
+          "patternProperties": {"^[A-Za-z0-9_./-]+$": {"$ref": "#/$defs/fileRecord"}}
+        }
+      }
+    },
+    "ddtParameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "tramp_s", "tmax_s", "value_max"],
+      "properties": {
+        "value": {"type": "number"},
+        "tramp_s": {"type": ["number", "null"]},
+        "tmax_s": {"type": ["number", "null"]},
+        "value_max": {"type": ["number", "null"]}
+      }
+    },
+    "shiftingIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_out_sha256", "value"],
+      "properties": {
+        "run_out_sha256": {"$ref": "#/$defs/sha256"},
+        "value": {"enum": ["NoBound", "None"]}
+      }
+    },
+    "initialStateArrays": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part_file_sha256", "particle_count", "canonical_array_sha256"],
+      "properties": {
+        "part_file_sha256": {"$ref": "#/$defs/sha256"},
+        "particle_count": {"const": 9078},
+        "canonical_array_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "backend": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hardware", "run_mode"],
+      "properties": {
+        "hardware": {"type": "string", "minLength": 1, "maxLength": 256},
+        "run_mode": {"type": "string", "minLength": 1, "maxLength": 256}
+      }
+    },
+    "tail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part_count", "start_time_s", "end_time_s", "coverage_s", "surface_valid_part_count"],
+      "properties": {
+        "part_count": {"type": "integer", "minimum": 20, "maximum": 22},
+        "start_time_s": {"type": "number"},
+        "end_time_s": {"type": "number"},
+        "coverage_s": {"type": "number", "minimum": 0.95},
+        "surface_valid_part_count": {"type": "integer", "minimum": 20, "maximum": 22}
+      }
+    },
+    "structuralChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exact_inventory", "exact_part_range", "strictly_increasing_times", "monotonic_steps", "start_time_matches", "end_time_matches", "all_particle_arrays_finite", "all_ids_complete_unique_in_range", "particle_classes_constant", "root_invariants_match_case", "moving_boundary_zero_motion", "zero_nout", "finite_inside_domain_density", "motion_reference_zero_aligned", "runparts_matches", "run_csv_matches", "run_out_clean_complete"],
+      "properties": {
+        "exact_inventory": {"const": true},
+        "exact_part_range": {"const": true},
+        "strictly_increasing_times": {"const": true},
+        "monotonic_steps": {"const": true},
+        "start_time_matches": {"const": true},
+        "end_time_matches": {"const": true},
+        "all_particle_arrays_finite": {"const": true},
+        "all_ids_complete_unique_in_range": {"const": true},
+        "particle_classes_constant": {"const": true},
+        "root_invariants_match_case": {"const": true},
+        "moving_boundary_zero_motion": {"const": true},
+        "zero_nout": {"const": true},
+        "finite_inside_domain_density": {"const": true},
+        "motion_reference_zero_aligned": {"const": true},
+        "runparts_matches": {"const": true},
+        "run_csv_matches": {"const": true},
+        "run_out_clean_complete": {"const": true}
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "inventory", "run_out_sha256", "run_csv_sha256", "configuration_without_ddt", "configuration_without_single_delta", "ddt_parameters", "shifting", "backend", "initial_state_arrays", "frame_count", "first_part", "last_part", "first_time_s", "last_time_s", "initial_checkpoint_sha256", "tail", "metrics", "structural_checks"],
+      "properties": {
+        "root": {"$ref": "#/$defs/absolutePath"},
+        "inventory": {"$ref": "#/$defs/inventory"},
+        "run_out_sha256": {"$ref": "#/$defs/sha256"},
+        "run_csv_sha256": {"$ref": "#/$defs/sha256"},
+        "configuration_without_ddt": {"type": "string", "minLength": 1},
+        "configuration_without_single_delta": {"type": "string", "minLength": 1},
+        "ddt_parameters": {"$ref": "#/$defs/ddtParameters"},
+        "shifting": {"$ref": "#/$defs/shiftingIdentity"},
+        "backend": {"$ref": "#/$defs/backend"},
+        "initial_state_arrays": {"$ref": "#/$defs/initialStateArrays"},
+        "frame_count": {"const": 41},
+        "first_part": {"const": 161},
+        "last_part": {"const": 201},
+        "first_time_s": {"type": "number"},
+        "last_time_s": {"type": "number"},
+        "initial_checkpoint_sha256": {"$ref": "#/$defs/sha256"},
+        "tail": {"$ref": "#/$defs/tail"},
+        "metrics": {"$ref": "#/$defs/metricValues"},
+        "structural_checks": {"$ref": "#/$defs/structuralChecks"}
+      }
+    },
+    "pairChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["same_initial_state_arrays", "same_non_shifting_numerical_configuration", "same_frame_and_time_window", "both_structural_checks_pass", "candidate_inventory_matches_gpu_receipt", "same_backend"],
+      "properties": {
+        "same_initial_state_arrays": {"const": true},
+        "same_non_shifting_numerical_configuration": {"const": true},
+        "same_frame_and_time_window": {"const": true},
+        "both_structural_checks_pass": {"const": true},
+        "candidate_inventory_matches_gpu_receipt": {"const": true},
+        "same_backend": {"type": "boolean"}
+      }
+    },
+    "metricComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline", "candidate", "delta", "candidate_to_baseline_ratio", "percent_change", "absolute_limit", "candidate_absolute_pass", "no_material_regression", "meaningful_improvement"],
+      "properties": {
+        "baseline": {"$ref": "#/$defs/nonnegativeNumber"},
+        "candidate": {"$ref": "#/$defs/nonnegativeNumber"},
+        "delta": {"type": "number"},
+        "candidate_to_baseline_ratio": {"type": ["number", "null"], "minimum": 0},
+        "percent_change": {"type": ["number", "null"]},
+        "absolute_limit": {"type": "number", "exclusiveMinimum": 0},
+        "candidate_absolute_pass": {"type": "boolean"},
+        "no_material_regression": {"type": "boolean"},
+        "meaningful_improvement": {"type": "boolean"}
+      }
+    },
+    "comparisonChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all_candidate_absolute_limits_pass", "no_metric_materially_regresses", "minimum_primary_metrics_meaningfully_improve", "primary_normalized_score_improves_by_at_least_5_percent"],
+      "properties": {
+        "all_candidate_absolute_limits_pass": {"type": "boolean"},
+        "no_metric_materially_regresses": {"type": "boolean"},
+        "minimum_primary_metrics_meaningfully_improve": {"type": "boolean"},
+        "primary_normalized_score_improves_by_at_least_5_percent": {"type": "boolean"}
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metrics", "baseline_primary_normalized_score", "candidate_primary_normalized_score", "candidate_to_baseline_primary_score_ratio", "primary_metrics_meaningfully_improved", "checks", "pass"],
+      "properties": {
+        "metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["density_mean_relative_bias", "density_mean_relative_range", "density_p01_p99_relative_deviation", "position_interframe_max_m_s", "position_interframe_p95_m_s", "position_interframe_rms_m_s", "position_net_max_m_s", "position_net_p95_m_s", "position_net_rms_m_s", "specific_kinetic_energy_j_kg", "speed_max_m_s", "speed_p95_m_s", "speed_rms_m_s", "surface_abs_bias_m", "surface_abs_drift_m_s", "surface_spread_m", "surface_temporal_range_m"],
+          "properties": {
+            "density_mean_relative_bias": {"$ref": "#/$defs/metricComparison"},
+            "density_mean_relative_range": {"$ref": "#/$defs/metricComparison"},
+            "density_p01_p99_relative_deviation": {"$ref": "#/$defs/metricComparison"},
+            "position_interframe_max_m_s": {"$ref": "#/$defs/metricComparison"},
+            "position_interframe_p95_m_s": {"$ref": "#/$defs/metricComparison"},
+            "position_interframe_rms_m_s": {"$ref": "#/$defs/metricComparison"},
+            "position_net_max_m_s": {"$ref": "#/$defs/metricComparison"},
+            "position_net_p95_m_s": {"$ref": "#/$defs/metricComparison"},
+            "position_net_rms_m_s": {"$ref": "#/$defs/metricComparison"},
+            "specific_kinetic_energy_j_kg": {"$ref": "#/$defs/metricComparison"},
+            "speed_max_m_s": {"$ref": "#/$defs/metricComparison"},
+            "speed_p95_m_s": {"$ref": "#/$defs/metricComparison"},
+            "speed_rms_m_s": {"$ref": "#/$defs/metricComparison"},
+            "surface_abs_bias_m": {"$ref": "#/$defs/metricComparison"},
+            "surface_abs_drift_m_s": {"$ref": "#/$defs/metricComparison"},
+            "surface_spread_m": {"$ref": "#/$defs/metricComparison"},
+            "surface_temporal_range_m": {"$ref": "#/$defs/metricComparison"}
+          }
+        },
+        "baseline_primary_normalized_score": {"$ref": "#/$defs/nonnegativeNumber"},
+        "candidate_primary_normalized_score": {"$ref": "#/$defs/nonnegativeNumber"},
+        "candidate_to_baseline_primary_score_ratio": {"type": ["number", "null"], "minimum": 0},
+        "primary_metrics_meaningfully_improved": {"type": "integer", "minimum": 0, "maximum": 4},
+        "checks": {"$ref": "#/$defs/comparisonChecks"},
+        "pass": {"type": "boolean"}
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "candidate_selected", "directionally_promising", "causal_single_variable_isolation_pass", "failed_acceptance_checks", "next", "development_only", "formal", "fidelity_validation_status", "physical_primary_eligible", "solver_executed_by_this_tool", "inputs_modified", "settled_state_claim_allowed"],
+      "properties": {
+        "status": {"enum": ["PASS_U3_SHIFT_NONE_NUMERICAL_CANDIDATE", "FAIL_U3_SHIFT_NONE_NUMERICAL_CANDIDATE"]},
+        "candidate_selected": {"type": "boolean"},
+        "directionally_promising": {"type": "boolean"},
+        "causal_single_variable_isolation_pass": {"type": "boolean"},
+        "failed_acceptance_checks": {
+          "type": "array",
+          "items": {"enum": ["all_candidate_absolute_limits_pass", "no_metric_materially_regresses", "minimum_primary_metrics_meaningfully_improve", "primary_normalized_score_improves_by_at_least_5_percent"]},
+          "uniqueItems": true,
+          "maxItems": 4
+        },
+        "next": {"enum": ["S4C_SETTLED_STATE_MATRIX", "FRESH_GPU_CONTROL_AND_EXTENDED_SETTLING_REQUIRED"]},
+        "development_only": {"const": true},
+        "formal": {"const": false},
+        "fidelity_validation_status": {"const": "SIM_ONLY_UNVALIDATED"},
+        "physical_primary_eligible": {"const": false},
+        "solver_executed_by_this_tool": {"const": false},
+        "inputs_modified": {"const": false},
+        "settled_state_claim_allowed": {"type": "boolean"}
+      }
+    }
+  }
+}

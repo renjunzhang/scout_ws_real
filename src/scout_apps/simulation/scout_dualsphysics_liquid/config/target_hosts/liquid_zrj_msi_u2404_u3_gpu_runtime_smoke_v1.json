@@ -1,0 +1,165 @@
+{
+  "schema_version": "smpcc-r8-liquid-u3-gpu-runtime-smoke-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_U3_GPU_RUNTIME_SMOKE_POLICY_V1",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_U3_GPU_RUNTIME_SMOKE_V1",
+  "status": "STAGE3_RUNTIME_CONTRACT_FROZEN_PENDING_ONE_SHOT",
+  "development_only": true,
+  "parents": {
+    "plan": {
+      "path": "/home/zrj/scout_ws/docs/实物实验注意事项/对比试验/仿真接入液体/20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md",
+      "sha256": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+    },
+    "build_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_build_final.json",
+      "sha256": "2ff3da17da7658da35587a6b1233f3bb1c039488325345537c00d40ebf30e9da",
+      "status": "PASS_GPU_BUILD_CANDIDATE_DISARMED"
+    },
+    "static_audit_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_static_audit_v2.json",
+      "sha256": "794ecf80d8665b65ba7e31d1a8bf32a67f8cca7c7cc24ea33718cb30c27c97fb",
+      "status": "PASS_GPU_BUILD_SM120_STATIC_AUDIT"
+    },
+    "static_audit_lifecycle": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_source_gpu_build_sm120_20260810T170339Z_a_static_audit_v2_lifecycle.json",
+      "sha256": "b29c4be44532f8eefa899d19427b25c4781cb535f12a6971ab7d4e958c3a3d83",
+      "status": "PASS_STATIC_AUDIT_PROFILE_LIFECYCLE_AND_GATE"
+    }
+  },
+  "run": {
+    "run_id": "u3_c1m_gpu_smoke_20260810T181205Z",
+    "attempt_root": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_20260810T181205Z.partial",
+    "output_root": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_20260810T181205Z.partial/output",
+    "start_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_20260810T181205Z.start.json",
+    "final_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_20260810T181205Z.final.json",
+    "failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_20260810T181205Z.failure.json",
+    "stdout_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_20260810T181205Z.stdout.log",
+    "stderr_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_20260810T181205Z.stderr.log",
+    "resource_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_20260810T181205Z.resources.jsonl",
+    "qc_report": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_20260810T181205Z.qc.json",
+    "gpu_lock": "/home/zrj/scout_liquid_lab/locks/gpu0.lock",
+    "attempts_per_identity": 1
+  },
+  "inputs": {
+    "candidate": {
+      "path": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T170339Z_a.partial/output/artifacts/DualSPHysics5.4_linux64",
+      "sha256": "cace408f99c3ca75b53bfb542565e92ec134631a41f1d233aace346e6455b39f",
+      "size_bytes": 105654136,
+      "mode": "0400",
+      "inode": 15733148,
+      "nlink": 1
+    },
+    "case_bi4": {
+      "path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.bi4",
+      "sha256": "b463ddfe548b3db78b02f23b075dadbdd3c71ea766eb092701b56978ddb3a8e7",
+      "size_bytes": 400842,
+      "mode": "0440",
+      "inode": 14944257,
+      "nlink": 1
+    },
+    "case_xml": {
+      "path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.xml",
+      "sha256": "28205c2234dda565da600947d03481c492c6bb493b2e058bd04cd360b7862acb",
+      "size_bytes": 7800,
+      "mode": "0440",
+      "inode": 14944258,
+      "nlink": 1
+    },
+    "dsph_config": {
+      "path": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1m_gencase_seed_v3_20260808T150802Z.partial/input/DsphConfig.xml",
+      "sha256": "0644c9a6a6687678950fc8966e352b4bbd3de9d3cb787db9e507c2eb7ccaddcd",
+      "size_bytes": 293,
+      "mode": "0400",
+      "inode": 14944233,
+      "nlink": 1
+    }
+  },
+  "gpu": {
+    "index": 0,
+    "uuid": "GPU-d29cd22d-8b25-8f4e-9dcf-f2fc4bb113fb",
+    "pci_bus_id": "00000000:01:00.0",
+    "name": "NVIDIA GeForce RTX 5080 Laptop GPU",
+    "driver_version": "580.173.02",
+    "device_paths": [
+      "/dev/nvidia0",
+      "/dev/nvidiactl",
+      "/dev/nvidia-uvm",
+      "/dev/nvidia-uvm-tools"
+    ]
+  },
+  "solver": {
+    "argv": [
+      "/runtime/DualSPHysics5.4_linux64",
+      "/case/C1M_zero",
+      "/output",
+      "-gpu:0",
+      "-ompthreads:1",
+      "-stable:1",
+      "-vres:0",
+      "-cellmode:full",
+      "-tmax:1.0",
+      "-tout:0.05",
+      "-sv:binx,info",
+      "-svres:1",
+      "-svtimers:0",
+      "-svdomainvtk:0",
+      "-saveposdouble:1",
+      "-nortimes:1",
+      "-createdirs:1",
+      "-csvsep:0"
+    ],
+    "environment": {
+      "HOME": "/nonexistent",
+      "PATH": "/usr/bin",
+      "LC_ALL": "C",
+      "LANG": "C",
+      "TZ": "UTC0",
+      "TMPDIR": "/tmp",
+      "OMP_NUM_THREADS": "1",
+      "OMP_DYNAMIC": "FALSE",
+      "CUDA_VISIBLE_DEVICES": "0"
+    },
+    "expected_particles": 9078,
+    "expected_moving": 2669,
+    "expected_fluid": 6409
+  },
+  "sandbox": {
+    "model": "sudo_root_bwrap_mount_namespace_drop_to_uid1000",
+    "network_namespace": "isolated_loopback_down",
+    "child_uid": 1000,
+    "child_gid": 1000,
+    "capabilities": "ALL_DROPPED",
+    "host_root_write_bind_count": 1,
+    "project_write_bind_count": 0,
+    "writable_bind_targets": ["/output"],
+    "read_only_system_mounts": ["/usr", "/sys", "/etc/ld.so.cache"],
+    "apparmor_profile": "NOT_USED_EPHEMERAL_ROOT_BWRAP"
+  },
+  "limits": {
+    "wall_timeout_seconds": 600,
+    "kill_after_seconds": 10,
+    "monitor_interval_seconds": 10,
+    "minimum_mem_available_bytes": 4294967296,
+    "maximum_output_bytes": 134217728
+  },
+  "tools": {
+    "bwrap": {"path": "/usr/bin/bwrap", "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"},
+    "sudo": {"path": "/usr/bin/sudo", "sha256": "136f2e48b0295b9fc595b8259cf2411ac43f27ddbfe02b956649ddaa2e92b9fa"},
+    "nvidia_smi": {"path": "/usr/bin/nvidia-smi", "sha256": "22964713c1701fb62b4dd10b26b0dd25d174e100af5bda20c65e0b0fcc32b3be"},
+    "python": {"path": "/usr/bin/python3.12", "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"},
+    "timeout": {"path": "/usr/bin/timeout", "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"}
+  },
+  "qc": {
+    "script": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_solver_output_qc_v3.py",
+      "sha256": "ca2b4784731587f99e5a38e0f1f8ef6e3c6f0a103c81f6e2bbdc97c006619ced"
+    },
+    "reader": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_bi4_reader_v1.py",
+      "sha256": "104d271b750eed15985bf29f743a59678d66c50b9dfae9d1a3fd1663510dbc14"
+    },
+    "expected_status": "C1M_ZERO_MOTION_SMOKE_PASS",
+    "expected_file_count": 30,
+    "expected_part_count": 21,
+    "expected_nout": 0
+  }
+}

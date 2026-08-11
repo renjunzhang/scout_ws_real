@@ -1,0 +1,848 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_viscoart0p2_settle_extension_qc_v3.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "captured_at_utc",
+    "inputs",
+    "contract",
+    "run",
+    "verdict"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "r8-liquid-u3-viscoart0p2-settle-extension-qc-v3"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_U3_VISCOART0P2_SETTLE_EXTENSION_QC_V3"
+    },
+    "captured_at_utc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "inputs": {
+      "$ref": "#/$defs/inputs"
+    },
+    "contract": {
+      "$ref": "#/$defs/contract"
+    },
+    "run": {
+      "$ref": "#/$defs/run"
+    },
+    "verdict": {
+      "$ref": "#/$defs/verdict"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "absolutePath": {
+      "type": "string",
+      "pattern": "^/[^\\u0000]*$"
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes",
+        "mode",
+        "inode",
+        "nlink"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 134217728
+        },
+        "mode": {
+          "type": "string",
+          "pattern": "^[0-7]{4}$"
+        },
+        "inode": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nlink": {
+          "const": 1
+        }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan",
+        "policy",
+        "runner",
+        "runner_schema",
+        "runner_tests",
+        "qc_script",
+        "qc_schema",
+        "qc_tests",
+        "prior_qc",
+        "prior_tail_final",
+        "restart_part",
+        "restart_head",
+        "final_receipt"
+      ],
+      "properties": {
+        "plan": {
+          "$ref": "#/$defs/identity"
+        },
+        "policy": {
+          "$ref": "#/$defs/identity"
+        },
+        "runner": {
+          "$ref": "#/$defs/identity"
+        },
+        "runner_schema": {
+          "$ref": "#/$defs/identity"
+        },
+        "runner_tests": {
+          "$ref": "#/$defs/identity"
+        },
+        "qc_script": {
+          "$ref": "#/$defs/identity"
+        },
+        "qc_schema": {
+          "$ref": "#/$defs/identity"
+        },
+        "qc_tests": {
+          "$ref": "#/$defs/identity"
+        },
+        "prior_qc": {
+          "$ref": "#/$defs/identity"
+        },
+        "prior_tail_final": {
+          "$ref": "#/$defs/identity"
+        },
+        "restart_part": {
+          "$ref": "#/$defs/identity"
+        },
+        "restart_head": {
+          "$ref": "#/$defs/identity"
+        },
+        "final_receipt": {
+          "$ref": "#/$defs/identity"
+        }
+      }
+    },
+    "singleDelta": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parameter",
+        "baseline",
+        "candidate",
+        "other_numerical_parameters_changed"
+      ],
+      "properties": {
+        "parameter": {
+          "const": "SIMULATION_END_TIME_S"
+        },
+        "baseline": {
+          "const": "36.05"
+        },
+        "candidate": {
+          "const": "40.05"
+        },
+        "other_numerical_parameters_changed": {
+          "const": false
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "density_mean_relative_bias",
+        "density_mean_relative_range",
+        "density_p01_p99_relative_deviation",
+        "position_interframe_max_m_s",
+        "position_interframe_p95_m_s",
+        "position_interframe_rms_m_s",
+        "position_net_max_m_s",
+        "position_net_p95_m_s",
+        "position_net_rms_m_s",
+        "specific_kinetic_energy_j_kg",
+        "speed_max_m_s",
+        "speed_p95_m_s",
+        "speed_rms_m_s",
+        "surface_abs_bias_m",
+        "surface_abs_drift_m_s",
+        "surface_spread_m",
+        "surface_temporal_range_m"
+      ],
+      "properties": {
+        "density_mean_relative_bias": {
+          "type": "number",
+          "minimum": 0
+        },
+        "density_mean_relative_range": {
+          "type": "number",
+          "minimum": 0
+        },
+        "density_p01_p99_relative_deviation": {
+          "type": "number",
+          "minimum": 0
+        },
+        "position_interframe_max_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "position_interframe_p95_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "position_interframe_rms_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "position_net_max_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "position_net_p95_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "position_net_rms_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "specific_kinetic_energy_j_kg": {
+          "type": "number",
+          "minimum": 0
+        },
+        "speed_max_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "speed_p95_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "speed_rms_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "surface_abs_bias_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "surface_abs_drift_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "surface_spread_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "surface_temporal_range_m": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "metricPass": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "density_mean_relative_bias",
+        "density_mean_relative_range",
+        "density_p01_p99_relative_deviation",
+        "position_interframe_max_m_s",
+        "position_interframe_p95_m_s",
+        "position_interframe_rms_m_s",
+        "position_net_max_m_s",
+        "position_net_p95_m_s",
+        "position_net_rms_m_s",
+        "specific_kinetic_energy_j_kg",
+        "speed_max_m_s",
+        "speed_p95_m_s",
+        "speed_rms_m_s",
+        "surface_abs_bias_m",
+        "surface_abs_drift_m_s",
+        "surface_spread_m",
+        "surface_temporal_range_m"
+      ],
+      "properties": {
+        "density_mean_relative_bias": {
+          "type": "boolean"
+        },
+        "density_mean_relative_range": {
+          "type": "boolean"
+        },
+        "density_p01_p99_relative_deviation": {
+          "type": "boolean"
+        },
+        "position_interframe_max_m_s": {
+          "type": "boolean"
+        },
+        "position_interframe_p95_m_s": {
+          "type": "boolean"
+        },
+        "position_interframe_rms_m_s": {
+          "type": "boolean"
+        },
+        "position_net_max_m_s": {
+          "type": "boolean"
+        },
+        "position_net_p95_m_s": {
+          "type": "boolean"
+        },
+        "position_net_rms_m_s": {
+          "type": "boolean"
+        },
+        "specific_kinetic_energy_j_kg": {
+          "type": "boolean"
+        },
+        "speed_max_m_s": {
+          "type": "boolean"
+        },
+        "speed_p95_m_s": {
+          "type": "boolean"
+        },
+        "speed_rms_m_s": {
+          "type": "boolean"
+        },
+        "surface_abs_bias_m": {
+          "type": "boolean"
+        },
+        "surface_abs_drift_m_s": {
+          "type": "boolean"
+        },
+        "surface_spread_m": {
+          "type": "boolean"
+        },
+        "surface_temporal_range_m": {
+          "type": "boolean"
+        }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "window_start_s",
+        "window_end_s",
+        "tail_window_s",
+        "part_first",
+        "part_last",
+        "part_count",
+        "metric_limits",
+        "threshold_overrides_allowed",
+        "single_delta"
+      ],
+      "properties": {
+        "window_start_s": {
+          "const": 36.05
+        },
+        "window_end_s": {
+          "const": 40.05
+        },
+        "tail_window_s": {
+          "const": 1.0
+        },
+        "part_first": {
+          "const": 721
+        },
+        "part_last": {
+          "const": 801
+        },
+        "part_count": {
+          "const": 81
+        },
+        "metric_limits": {
+          "$ref": "#/$defs/metrics"
+        },
+        "threshold_overrides_allowed": {
+          "const": false
+        },
+        "single_delta": {
+          "$ref": "#/$defs/singleDelta"
+        }
+      }
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_count",
+        "part_file_count",
+        "part_first",
+        "part_last",
+        "total_bytes",
+        "canonical_sha256"
+      ],
+      "properties": {
+        "file_count": {
+          "const": 90
+        },
+        "part_file_count": {
+          "const": 81
+        },
+        "part_first": {
+          "const": 721
+        },
+        "part_last": {
+          "const": 801
+        },
+        "total_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "canonical_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "part_file_sha256",
+        "particle_count",
+        "canonical_array_sha256"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "part_file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "particle_count": {
+          "const": 9078
+        },
+        "canonical_array_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "structuralChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "exact_inventory",
+        "exact_part_range",
+        "strictly_increasing_times",
+        "monotonic_steps",
+        "start_time_matches",
+        "end_time_matches",
+        "all_particle_arrays_finite",
+        "all_ids_complete_unique_in_range",
+        "particle_classes_constant",
+        "root_invariants_match_case",
+        "moving_boundary_zero_motion",
+        "zero_nout",
+        "finite_inside_domain_density",
+        "motion_reference_zero_aligned",
+        "runparts_matches",
+        "run_csv_matches",
+        "run_out_clean_complete"
+      ],
+      "properties": {
+        "exact_inventory": {
+          "const": true
+        },
+        "exact_part_range": {
+          "const": true
+        },
+        "strictly_increasing_times": {
+          "const": true
+        },
+        "monotonic_steps": {
+          "const": true
+        },
+        "start_time_matches": {
+          "const": true
+        },
+        "end_time_matches": {
+          "const": true
+        },
+        "all_particle_arrays_finite": {
+          "const": true
+        },
+        "all_ids_complete_unique_in_range": {
+          "const": true
+        },
+        "particle_classes_constant": {
+          "const": true
+        },
+        "root_invariants_match_case": {
+          "const": true
+        },
+        "moving_boundary_zero_motion": {
+          "const": true
+        },
+        "zero_nout": {
+          "const": true
+        },
+        "finite_inside_domain_density": {
+          "const": true
+        },
+        "motion_reference_zero_aligned": {
+          "const": true
+        },
+        "runparts_matches": {
+          "const": true
+        },
+        "run_csv_matches": {
+          "const": true
+        },
+        "run_out_clean_complete": {
+          "const": true
+        }
+      }
+    },
+    "solverProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "cfl",
+        "shifting",
+        "viscosity_formulation",
+        "viscosity_value",
+        "ddt_value",
+        "ddt_tramp_s",
+        "tmax_s",
+        "tout_s",
+        "other_numerical_parameters_changed"
+      ],
+      "properties": {
+        "backend": {
+          "const": "GPU_0"
+        },
+        "cfl": {
+          "const": 0.1
+        },
+        "shifting": {
+          "const": "None"
+        },
+        "viscosity_formulation": {
+          "const": "Artificial"
+        },
+        "viscosity_value": {
+          "const": 0.2
+        },
+        "ddt_value": {
+          "const": 0.1
+        },
+        "ddt_tramp_s": {
+          "type": "null"
+        },
+        "tmax_s": {
+          "const": 40.05
+        },
+        "tout_s": {
+          "const": 0.05
+        },
+        "other_numerical_parameters_changed": {
+          "const": false
+        }
+      }
+    },
+    "tail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "part_count",
+        "start_time_s",
+        "end_time_s",
+        "coverage_s",
+        "surface_valid_part_count"
+      ],
+      "properties": {
+        "part_count": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 22
+        },
+        "start_time_s": {
+          "type": "number",
+          "minimum": 39.04,
+          "maximum": 39.11
+        },
+        "end_time_s": {
+          "type": "number",
+          "minimum": 40.04,
+          "maximum": 40.06
+        },
+        "coverage_s": {
+          "type": "number",
+          "minimum": 0.9499,
+          "maximum": 1.06
+        },
+        "surface_valid_part_count": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 22
+        }
+      }
+    },
+    "trajectory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "initial_part",
+        "initial_time_s",
+        "initial_speed_rms_m_s",
+        "minimum_part",
+        "minimum_time_s",
+        "minimum_speed_rms_m_s",
+        "final_part",
+        "final_time_s",
+        "final_speed_rms_m_s",
+        "final_to_minimum_ratio",
+        "rebound_after_minimum",
+        "minimum_is_zero"
+      ],
+      "properties": {
+        "initial_part": {
+          "const": 721
+        },
+        "initial_time_s": {
+          "type": "number",
+          "minimum": 36.04,
+          "maximum": 36.06
+        },
+        "initial_speed_rms_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "minimum_part": {
+          "type": "integer",
+          "minimum": 721,
+          "maximum": 801
+        },
+        "minimum_time_s": {
+          "type": "number",
+          "minimum": 36.04,
+          "maximum": 40.06
+        },
+        "minimum_speed_rms_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "final_part": {
+          "const": 801
+        },
+        "final_time_s": {
+          "type": "number",
+          "minimum": 40.04,
+          "maximum": 40.06
+        },
+        "final_speed_rms_m_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "final_to_minimum_ratio": {
+          "oneOf": [
+            {
+              "type": "number",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rebound_after_minimum": {
+          "type": "boolean"
+        },
+        "minimum_is_zero": {
+          "type": "boolean"
+        }
+      }
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "inventory",
+        "frame_count",
+        "first_time_s",
+        "last_time_s",
+        "restart_input_state",
+        "restart_output_state",
+        "restart_state_arrays_match",
+        "structural_checks",
+        "solver_proof",
+        "tail",
+        "metrics",
+        "metric_absolute_pass",
+        "failed_absolute_metrics",
+        "trajectory",
+        "final_checkpoint"
+      ],
+      "properties": {
+        "root": {
+          "$ref": "#/$defs/absolutePath"
+        },
+        "inventory": {
+          "$ref": "#/$defs/inventory"
+        },
+        "frame_count": {
+          "const": 81
+        },
+        "first_time_s": {
+          "type": "number",
+          "minimum": 36.04,
+          "maximum": 36.06
+        },
+        "last_time_s": {
+          "type": "number",
+          "minimum": 40.04,
+          "maximum": 40.06
+        },
+        "restart_input_state": {
+          "$ref": "#/$defs/state"
+        },
+        "restart_output_state": {
+          "$ref": "#/$defs/state"
+        },
+        "restart_state_arrays_match": {
+          "const": true
+        },
+        "structural_checks": {
+          "$ref": "#/$defs/structuralChecks"
+        },
+        "solver_proof": {
+          "$ref": "#/$defs/solverProof"
+        },
+        "tail": {
+          "$ref": "#/$defs/tail"
+        },
+        "metrics": {
+          "$ref": "#/$defs/metrics"
+        },
+        "metric_absolute_pass": {
+          "$ref": "#/$defs/metricPass"
+        },
+        "failed_absolute_metrics": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "density_mean_relative_bias",
+              "density_mean_relative_range",
+              "density_p01_p99_relative_deviation",
+              "position_interframe_max_m_s",
+              "position_interframe_p95_m_s",
+              "position_interframe_rms_m_s",
+              "position_net_max_m_s",
+              "position_net_p95_m_s",
+              "position_net_rms_m_s",
+              "specific_kinetic_energy_j_kg",
+              "speed_max_m_s",
+              "speed_p95_m_s",
+              "speed_rms_m_s",
+              "surface_abs_bias_m",
+              "surface_abs_drift_m_s",
+              "surface_spread_m",
+              "surface_temporal_range_m"
+            ]
+          },
+          "maxItems": 17
+        },
+        "trajectory": {
+          "$ref": "#/$defs/trajectory"
+        },
+        "final_checkpoint": {
+          "$ref": "#/$defs/identity"
+        }
+      }
+    },
+    "verdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "u3_remediation_candidate_pass",
+        "settled_state_frozen",
+        "stage4_complete",
+        "phase5_admitted",
+        "exact_blocker",
+        "next",
+        "development_only",
+        "formal",
+        "physical_primary_eligible",
+        "solver_executed_by_this_tool",
+        "gpu_exposed_by_this_tool",
+        "network_used_by_this_tool",
+        "inputs_modified"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "PASS_U3_VISCOART0P2_SETTLING_EXTENSION_CANDIDATE",
+            "FAIL_U3_VISCOART0P2_SETTLING_EXTENSION_NOT_SETTLED"
+          ]
+        },
+        "u3_remediation_candidate_pass": {
+          "type": "boolean"
+        },
+        "settled_state_frozen": {
+          "const": false
+        },
+        "stage4_complete": {
+          "const": false
+        },
+        "phase5_admitted": {
+          "const": false
+        },
+        "exact_blocker": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "next": {
+          "enum": [
+            "FREEZE_FRESH_0_TO_36P05_REPEATABILITY_AND_RESTART_EQUIVALENCE_CONTRACT",
+            "STOP_OR_FREEZE_ONE_NEW_NUMERICAL_DELTA"
+          ]
+        },
+        "development_only": {
+          "const": true
+        },
+        "formal": {
+          "const": false
+        },
+        "physical_primary_eligible": {
+          "const": false
+        },
+        "solver_executed_by_this_tool": {
+          "const": false
+        },
+        "gpu_exposed_by_this_tool": {
+          "const": false
+        },
+        "network_used_by_this_tool": {
+          "const": false
+        },
+        "inputs_modified": {
+          "const": false
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_stage4_cfl0p1_sensitivity_contract_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "contract_id", "status", "claim_ceiling", "parents", "cli_override_evidence", "checkpoint", "paired_window", "frozen_solver", "acceptance", "execution_limits", "result_boundary"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-u3-stage4-cfl0p1-sensitivity-contract-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_STAGE4_CFL0P1_SENSITIVITY_CONTRACT_V1"},
+    "contract_id": {"const": "u3_c1m_gpu_shift_none_cfl0p1_10p05_to_20p05_v1"},
+    "status": {"const": "FROZEN_PENDING_EXACTLY_ONE_GPU_CFL_SENSITIVITY_RUN"},
+    "claim_ceiling": {"const": "DEVELOPMENT_ONLY_SOFTWARE_NUMERICAL_NOT_PHYSICAL_FIDELITY"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "cli_override_evidence": {"$ref": "#/$defs/cliEvidence"},
+    "checkpoint": {"$ref": "#/$defs/checkpoint"},
+    "paired_window": {"$ref": "#/$defs/window"},
+    "frozen_solver": {"$ref": "#/$defs/solver"},
+    "acceptance": {"$ref": "#/$defs/acceptance"},
+    "execution_limits": {"$ref": "#/$defs/execution"},
+    "result_boundary": {"$ref": "#/$defs/boundary"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "parent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {"path": {"$ref": "#/$defs/absolutePath"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan", "stage4_numerical_contract", "cfl0p2_extension_final", "cfl0p2_extension_qc", "cli_parser_source", "solver_override_source"],
+      "properties": {
+        "plan": {"$ref": "#/$defs/parent"},
+        "stage4_numerical_contract": {"$ref": "#/$defs/parent"},
+        "cfl0p2_extension_final": {"$ref": "#/$defs/parent"},
+        "cfl0p2_extension_qc": {"$ref": "#/$defs/parent"},
+        "cli_parser_source": {"$ref": "#/$defs/parent"},
+        "solver_override_source": {"$ref": "#/$defs/parent"}
+      }
+    },
+    "cliEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exact_argv", "parser_semantics", "solver_semantics", "candidate_help_executed", "source_read_only"],
+      "properties": {
+        "exact_argv": {"const": "-cfl:0.1"},
+        "parser_semantics": {"const": "CFLnumber=atof(value)_AND_REJECT_IF_LE_ZERO"},
+        "solver_semantics": {"const": "IF_CFG_CFLNUMBER_GT_ZERO_OVERRIDE_CASE_CFLNUMBER"},
+        "candidate_help_executed": {"const": false},
+        "source_read_only": {"const": true}
+      }
+    },
+    "checkpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["part_index", "time_s", "part_path", "part_sha256", "part_size_bytes", "part_mode", "part_inode", "part_nlink", "head_path", "head_sha256", "head_size_bytes", "head_mode", "head_inode", "head_nlink"],
+      "properties": {
+        "part_index": {"const": 201}, "time_s": {"const": 10.05},
+        "part_path": {"$ref": "#/$defs/absolutePath"},
+        "part_sha256": {"const": "0eee6feb93759f733030601d767521f343ed8cd348f8b2b47104a9ebd4f1d54c"},
+        "part_size_bytes": {"const": 401410}, "part_mode": {"const": "0440"},
+        "part_inode": {"const": 15733550}, "part_nlink": {"const": 1},
+        "head_path": {"$ref": "#/$defs/absolutePath"},
+        "head_sha256": {"const": "50acccd4000605758061c62ac62d86d32f46aabefbf0afd5b08d729da71ce4c1"},
+        "head_size_bytes": {"const": 1554}, "head_mode": {"const": "0440"},
+        "head_inode": {"const": 15733551}, "head_nlink": {"const": 1}
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_time_s", "end_time_s", "output_period_s", "part_first", "part_last", "part_count", "tail_window_s", "baseline_cfl", "candidate_cfl", "single_delta"],
+      "properties": {
+        "start_time_s": {"const": 10.05}, "end_time_s": {"const": 20.05},
+        "output_period_s": {"const": 0.05}, "part_first": {"const": 201},
+        "part_last": {"const": 401}, "part_count": {"const": 201},
+        "tail_window_s": {"const": 1.0}, "baseline_cfl": {"const": 0.2},
+        "candidate_cfl": {"const": 0.1}, "single_delta": {"const": "CFL_0P2_TO_0P1"}
+      }
+    },
+    "solver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["backend", "shifting", "ddt", "dp_m", "parallel_runs", "omp_threads", "other_numerical_parameters_changed"],
+      "properties": {
+        "backend": {"const": "GPU_0"}, "shifting": {"const": "None"},
+        "ddt": {"const": "DDT2(0.1)"}, "dp_m": {"const": 0.002},
+        "parallel_runs": {"const": 1}, "omp_threads": {"const": 1},
+        "other_numerical_parameters_changed": {"const": false}
+      }
+    },
+    "acceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all_original_absolute_limits_required", "no_metric_material_regression_required", "maximum_regression_fraction_of_limit", "minimum_primary_metrics_meaningfully_improved", "meaningful_improvement_fraction_of_limit", "maximum_primary_normalized_score_ratio", "same_gpu_backend_required", "same_initial_state_arrays_required"],
+      "properties": {
+        "all_original_absolute_limits_required": {"const": true},
+        "no_metric_material_regression_required": {"const": true},
+        "maximum_regression_fraction_of_limit": {"const": 0.05},
+        "minimum_primary_metrics_meaningfully_improved": {"const": 2},
+        "meaningful_improvement_fraction_of_limit": {"const": 0.02},
+        "maximum_primary_normalized_score_ratio": {"const": 0.95},
+        "same_gpu_backend_required": {"const": true},
+        "same_initial_state_arrays_required": {"const": true}
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["wall_timeout_seconds", "kill_after_seconds", "monitor_interval_seconds", "minimum_mem_available_bytes", "maximum_output_bytes", "network", "project_workspace_write_bind_count"],
+      "properties": {
+        "wall_timeout_seconds": {"const": 1500}, "kill_after_seconds": {"const": 10},
+        "monitor_interval_seconds": {"const": 10}, "minimum_mem_available_bytes": {"const": 4294967296},
+        "maximum_output_bytes": {"const": 268435456}, "network": {"const": false},
+        "project_workspace_write_bind_count": {"const": 0}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["development_only", "formal", "physical_primary_eligible", "candidate_execution_source_disallowed", "new_campaign_claimed"],
+      "properties": {
+        "development_only": {"const": true}, "formal": {"const": false},
+        "physical_primary_eligible": {"const": false},
+        "candidate_execution_source_disallowed": {"const": true},
+        "new_campaign_claimed": {"const": false}
+      }
+    }
+  }
+}

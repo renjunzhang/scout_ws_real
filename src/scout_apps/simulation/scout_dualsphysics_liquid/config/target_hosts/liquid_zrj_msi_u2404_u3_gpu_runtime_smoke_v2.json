@@ -1,0 +1,63 @@
+{
+  "schema_version": "smpcc-r8-liquid-u3-gpu-runtime-smoke-revision-v2",
+  "document_type": "SMPCC_R8_LIQUID_U3_GPU_RUNTIME_SMOKE_REVISION_V2",
+  "revision_id": "LIQUID_ZRJ_MSI_U2404_U3_GPU_RUNTIME_SMOKE_V2",
+  "status": "V2_FD_PINNED_DELIVERY_FROZEN_PENDING_ONE_SHOT",
+  "parents": {
+    "base_policy": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_u3_gpu_runtime_smoke_v1.json",
+      "sha256": "9a05ef4377d2a7a2365c0354352acddc758bfb14808d21c125dc51971e10d041"
+    },
+    "base_schema": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_u3_gpu_runtime_smoke_policy_v1.json",
+      "sha256": "1f93baffc84605c642e4b50b29f7a1ca9afa2a17eb25be7cb84e6e9e976b5336"
+    },
+    "base_runner": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_u3_gpu_runtime_smoke_v1.py",
+      "sha256": "57ebb86cc36d150ebe9ef35b37b16f66abce7e76ac904e3c2149720e78174694"
+    },
+    "v1_failure": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_20260810T181205Z.failure.json",
+      "sha256": "3b61586408fa61d9d7534832605e17ecca73710d0d7f8ab979c41eae222667f8",
+      "status": "FAIL_GPU_FUNCTIONAL_SMOKE"
+    },
+    "v1_stderr": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_20260810T181205Z.stderr.log",
+      "sha256": "5d79c650e383f612085f70ba9a86c956e971467c1cf3fecbe00397dbfd961269"
+    }
+  },
+  "diagnosis": {
+    "failure_class": "SANDBOX_PRE_EXEC_SOURCE_PATH_TRAVERSAL_DENIED",
+    "observed_stderr": "bwrap: Can't find source path /home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T170339Z_a.partial/output/artifacts/DualSPHysics5.4_linux64: Permission denied",
+    "bwrap_started": true,
+    "candidate_process_started": false,
+    "output_file_count": 0,
+    "candidate_restored": true
+  },
+  "semantic_delta": {
+    "operation": "REPLACE_PATH_TRAVERSAL_WITH_PINNED_FD_BINDS",
+    "input_delivery_before": "bwrap --ro-bind host-path guest-path",
+    "input_delivery_after": "O_NOFOLLOW identity-pinned fd + bwrap --ro-bind-fd",
+    "output_delivery_before": "bwrap --bind host-path /output",
+    "output_delivery_after": "O_NOFOLLOW directory fd + bwrap --bind-fd /output",
+    "new_paths": 0,
+    "new_devices": 0,
+    "new_network": false,
+    "new_write_targets": 0,
+    "solver_argv_changed": false
+  },
+  "run": {
+    "run_id": "u3_c1m_gpu_smoke_v2_20260810T183300Z",
+    "attempt_root": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_v2_20260810T183300Z.partial",
+    "output_root": "/home/zrj/scout_liquid_lab/gpu_runs/u3_c1m_gpu_smoke_v2_20260810T183300Z.partial/output",
+    "start_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v2_20260810T183300Z.start.json",
+    "final_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v2_20260810T183300Z.final.json",
+    "failure_receipt": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v2_20260810T183300Z.failure.json",
+    "stdout_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v2_20260810T183300Z.stdout.log",
+    "stderr_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v2_20260810T183300Z.stderr.log",
+    "resource_log": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v2_20260810T183300Z.resources.jsonl",
+    "qc_report": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_smoke_v2_20260810T183300Z.qc.json",
+    "gpu_lock": "/home/zrj/scout_liquid_lab/locks/gpu0.lock",
+    "attempts_per_identity": 1
+  }
+}

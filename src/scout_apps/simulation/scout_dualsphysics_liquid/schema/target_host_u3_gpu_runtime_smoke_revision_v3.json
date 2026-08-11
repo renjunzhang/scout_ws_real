@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_u3_gpu_runtime_smoke_revision_v3.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "revision_id", "status", "parents", "diagnosis", "semantic_delta", "transport", "run"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-u3-gpu-runtime-smoke-revision-v3"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_U3_GPU_RUNTIME_SMOKE_REVISION_V3"},
+    "revision_id": {"const": "LIQUID_ZRJ_MSI_U2404_U3_GPU_RUNTIME_SMOKE_V3"},
+    "status": {"const": "V3_ROOT_OWNED_RUN_TRANSPORT_FROZEN_PENDING_ONE_SHOT"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "diagnosis": {"$ref": "#/$defs/diagnosis"},
+    "semantic_delta": {"$ref": "#/$defs/delta"},
+    "transport": {"$ref": "#/$defs/transport"},
+    "run": {"$ref": "#/$defs/run"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\x00]*$"},
+    "identity": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+      "properties": {"path": {"$ref": "#/$defs/absolutePath"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "parents": {
+      "type": "object", "additionalProperties": false,
+      "required": ["base_policy", "base_schema", "base_runner", "v2_revision", "v2_schema", "v2_runner"],
+      "properties": {
+        "base_policy": {"$ref": "#/$defs/identity"}, "base_schema": {"$ref": "#/$defs/identity"},
+        "base_runner": {"$ref": "#/$defs/identity"}, "v2_revision": {"$ref": "#/$defs/identity"},
+        "v2_schema": {"$ref": "#/$defs/identity"}, "v2_runner": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "diagnosis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["failure_class", "observed_stderr", "trusted_probe_started", "candidate_process_started", "candidate_restored"],
+      "properties": {
+        "failure_class": {"const": "BWRAP_0P9_BIND_FD_PROC_SELF_FD_DAC_DENIED_PRE_EXEC"},
+        "observed_stderr": {"const": "bwrap: Can't find source path /proc/self/fd/3: Permission denied"},
+        "trusted_probe_started": {"const": false},
+        "candidate_process_started": {"const": false},
+        "candidate_restored": {"const": true}
+      }
+    },
+    "delta": {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "new_devices", "new_network", "new_project_write_targets", "solver_argv_changed", "home_permissions_changed"],
+      "properties": {
+        "operation": {"const": "ROOT_OWNED_RUN_TMPFS_TRANSPORT_AND_O_EXCL_EXPORT"},
+        "new_devices": {"const": 0}, "new_network": {"const": false},
+        "new_project_write_targets": {"const": 0}, "solver_argv_changed": {"const": false},
+        "home_permissions_changed": {"const": false}
+      }
+    },
+    "transport": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage_root", "input_copy", "guest_write_target", "export", "candidate_stage_final_mode", "preserve_stage"],
+      "properties": {
+        "stage_root": {"const": "/run/r8-liquid-u3-c1m-gpu-smoke-v3-20260810t184500z"},
+        "input_copy": {"const": "O_NOFOLLOW_READ_TO_O_EXCL_ROOT_OWNED_FILES_THEN_SHA256_VERIFY"},
+        "guest_write_target": {"const": "/run_stage/output_only"},
+        "export": {"const": "ROOT_PARENT_O_NOFOLLOW_READ_TO_USER_OWNED_O_EXCL_LAB_OUTPUT"},
+        "candidate_stage_final_mode": {"const": "0400"},
+        "preserve_stage": {"const": true}
+      }
+    },
+    "run": {
+      "type": "object", "additionalProperties": false,
+      "required": ["run_id", "attempt_root", "output_root", "start_receipt", "final_receipt", "failure_receipt", "stdout_log", "stderr_log", "resource_log", "qc_report", "gpu_lock", "attempts_per_identity"],
+      "properties": {
+        "run_id": {"const": "u3_c1m_gpu_smoke_v3_20260810T184500Z"},
+        "attempt_root": {"$ref": "#/$defs/absolutePath"}, "output_root": {"$ref": "#/$defs/absolutePath"},
+        "start_receipt": {"$ref": "#/$defs/absolutePath"}, "final_receipt": {"$ref": "#/$defs/absolutePath"},
+        "failure_receipt": {"$ref": "#/$defs/absolutePath"}, "stdout_log": {"$ref": "#/$defs/absolutePath"},
+        "stderr_log": {"$ref": "#/$defs/absolutePath"}, "resource_log": {"$ref": "#/$defs/absolutePath"},
+        "qc_report": {"$ref": "#/$defs/absolutePath"},
+        "gpu_lock": {"const": "/home/zrj/scout_liquid_lab/locks/gpu0.lock"}, "attempts_per_identity": {"const": 1}
+      }
+    }
+  }
+}
