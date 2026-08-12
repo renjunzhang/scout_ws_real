@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_primary_selected_signals_v7.json",
+  "title": "S6 primary selected comparison signals v7",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "document_type", "status", "attempt_id",
+    "planned_denominator", "source_outcome", "parents", "reader_contract",
+    "time_alignment", "series", "integrity", "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-primary-selected-signals-v7"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_PRIMARY_SELECTED_SIGNALS_V7"},
+    "status": {"const": "PASS_S6_PRIMARY_SELECTED_SIGNALS_V7_READ_ONLY"},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "source_outcome": {"const": "UNKNOWN"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "reader_contract": {"$ref": "#/$defs/readerContract"},
+    "time_alignment": {"$ref": "#/$defs/alignment"},
+    "series": {"$ref": "#/$defs/series"},
+    "integrity": {"$ref": "#/$defs/integrity"},
+    "claims": {"$ref": "#/$defs/claims"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "fileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "mode", "device", "inode", "nlink", "mtime_ns", "ctime_ns"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "sha256": {"$ref": "#/$defs/sha"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "device": {"type": "integer", "minimum": 0},
+        "inode": {"type": "integer", "minimum": 1},
+        "nlink": {"const": 1},
+        "mtime_ns": {"type": "integer"},
+        "ctime_ns": {"type": "integer"}
+      }
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["s5a0_selected_bag_receipt", "s5a1_transfer_manifest", "source_bag"],
+      "properties": {
+        "s5a0_selected_bag_receipt": {"$ref": "#/$defs/fileIdentity"},
+        "s5a1_transfer_manifest": {"$ref": "#/$defs/fileIdentity"},
+        "source_bag": {"$ref": "#/$defs/fileIdentity"}
+      }
+    },
+    "readerContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["extractor", "reader_core", "reader_v4", "extractor_v3", "input_surface"],
+      "properties": {
+        "extractor": {"$ref": "#/$defs/tool"},
+        "reader_core": {"$ref": "#/$defs/tool"},
+        "reader_v4": {"$ref": "#/$defs/tool"},
+        "extractor_v3": {"$ref": "#/$defs/tool"},
+        "input_surface": {"const": "IMMUTABLE_BOUNDED_EXACT_PRIMARY_BAG_BYTES_ONLY"}
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256"],
+      "properties": {
+        "relative_path": {"type": "string", "pattern": "^scripts/[A-Za-z0-9_.-]+$"},
+        "sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "alignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x_axis", "motion_time_source", "signal_native_time_source", "mapping_method",
+        "odom_header_origin_ns", "odom_header_end_ns", "offset_sample_count",
+        "record_to_odom_header_offset_ns", "residual_mean_ns", "residual_rms_ns",
+        "residual_max_abs_ns", "maximum_allowed_residual_ns", "residuals_sha256",
+        "mapping_extrapolation", "overlap_start_s", "overlap_end_s"
+      ],
+      "properties": {
+        "x_axis": {"const": "time_since_odom_header_origin_s"},
+        "motion_time_source": {"const": "/odom.header.stamp"},
+        "signal_native_time_source": {"const": "ROS1_BAG_RECORD_TIME_NS"},
+        "mapping_method": {"const": "LOWER_MEDIAN_ODOM_HEADER_MINUS_RECORD_OFFSET_V1"},
+        "odom_header_origin_ns": {"type": "integer", "minimum": 0},
+        "odom_header_end_ns": {"type": "integer", "minimum": 0},
+        "offset_sample_count": {"type": "integer", "minimum": 3},
+        "record_to_odom_header_offset_ns": {"type": "integer"},
+        "residual_mean_ns": {"type": "number"},
+        "residual_rms_ns": {"type": "number", "minimum": 0},
+        "residual_max_abs_ns": {"type": "integer", "minimum": 0},
+        "maximum_allowed_residual_ns": {"const": 5000000},
+        "residuals_sha256": {"$ref": "#/$defs/sha"},
+        "mapping_extrapolation": {"const": false},
+        "overlap_start_s": {"type": "number", "minimum": 0},
+        "overlap_end_s": {"type": "number", "minimum": 0}
+      }
+    },
+    "series": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["H_proxy", "H_modal"],
+      "properties": {
+        "H_proxy": {"$ref": "#/$defs/hProxy"},
+        "H_modal": {"$ref": "#/$defs/hModal"}
+      }
+    },
+    "hProxy": {
+      "allOf": [
+        {"$ref": "#/$defs/signal"},
+        {"properties": {"topic": {"const": "/slosh/height"}, "native_unit": {"const": "m"}, "comparison_unit": {"const": "mm"}, "scale_to_comparison": {"const": 1000.0}, "offset_to_comparison": {"const": 0.0}}}
+      ]
+    },
+    "hModal": {
+      "allOf": [
+        {"$ref": "#/$defs/signal"},
+        {"properties": {"topic": {"const": "/spmpc/slosh_height"}, "native_unit": {"const": "mm"}, "comparison_unit": {"const": "mm"}, "scale_to_comparison": {"const": 1.0}, "offset_to_comparison": {"const": 0.0}}}
+      ]
+    },
+    "signal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topic", "message_type", "native_unit", "comparison_unit", "scale_to_comparison", "offset_to_comparison", "sample_count", "samples"],
+      "properties": {
+        "topic": {"type": "string"},
+        "message_type": {"const": "std_msgs/Float32"},
+        "native_unit": {"type": "string"},
+        "comparison_unit": {"const": "mm"},
+        "scale_to_comparison": {"type": "number"},
+        "offset_to_comparison": {"const": 0.0},
+        "sample_count": {"type": "integer", "minimum": 2, "maximum": 100000},
+        "samples": {"type": "array", "minItems": 2, "maxItems": 100000, "items": {"$ref": "#/$defs/sample"}}
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bag_record_t_ns", "mapped_odom_header_t_ns", "time_since_odom_origin_s", "value_native", "value_comparison_mm"],
+      "properties": {
+        "bag_record_t_ns": {"type": "integer", "minimum": 0},
+        "mapped_odom_header_t_ns": {"type": "integer", "minimum": 0},
+        "time_since_odom_origin_s": {"type": "number", "minimum": 0},
+        "value_native": {"type": "number"},
+        "value_comparison_mm": {"type": "number"}
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_bag_sha256", "H_proxy_samples_sha256", "H_modal_samples_sha256", "reader_anomalies_absent", "parents_unchanged"],
+      "properties": {
+        "source_bag_sha256": {"$ref": "#/$defs/sha"},
+        "H_proxy_samples_sha256": {"$ref": "#/$defs/sha"},
+        "H_modal_samples_sha256": {"$ref": "#/$defs/sha"},
+        "reader_anomalies_absent": {"const": true},
+        "parents_unchanged": {"const": true}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "read_only", "comparison_only", "optional_bag_read", "source_bag_executed",
+        "ros_started", "motion_exporter_consumed_selected_signals",
+        "solver_forcing_consumed_selected_signals", "stage6_pass", "development_only",
+        "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison",
+        "physical_reference_pending", "physical_fidelity_validated", "formal", "production"
+      ],
+      "properties": {
+        "read_only": {"const": true},
+        "comparison_only": {"const": true},
+        "optional_bag_read": {"const": false},
+        "source_bag_executed": {"const": false},
+        "ros_started": {"const": false},
+        "motion_exporter_consumed_selected_signals": {"const": false},
+        "solver_forcing_consumed_selected_signals": {"const": false},
+        "stage6_pass": {"const": false},
+        "development_only": {"const": true},
+        "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false},
+        "selected_trajectory_cpu_comparison": {"const": false},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false},
+        "formal": {"const": false},
+        "production": {"const": false}
+      }
+    }
+  }
+}

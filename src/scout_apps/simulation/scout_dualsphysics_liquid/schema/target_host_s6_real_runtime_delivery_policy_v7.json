@@ -37,13 +37,17 @@
     "canonicalInputs": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["finalized_frame_reader", "finalized_frame_manifest_schema", "bi4_reader", "required_frame_schema_version", "required_frame_status", "required_gauge_schema_version"],
+      "required": ["finalized_frame_reader", "finalized_frame_manifest_schema", "bi4_reader", "required_frame_schema_version", "required_frame_status", "required_external_inventory_receipt_schema_version", "required_canonical_ids_sha256", "required_particle_count", "required_class_counts", "required_gauge_schema_version"],
       "properties": {
         "finalized_frame_reader": {"$ref": "#/$defs/frozenTool"},
         "finalized_frame_manifest_schema": {"$ref": "#/$defs/frozenTool"},
         "bi4_reader": {"$ref": "#/$defs/frozenTool"},
-        "required_frame_schema_version": {"const": "smpcc-r8-liquid-s5b0-finalized-solver-frames-manifest-v1"},
-        "required_frame_status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V1"},
+        "required_frame_schema_version": {"const": "smpcc-r8-liquid-s5b0-finalized-solver-frames-manifest-v2"},
+        "required_frame_status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V2"},
+        "required_external_inventory_receipt_schema_version": {"const": "smpcc-r8-liquid-s5b0-output-inventory-receipt-v9"},
+        "required_canonical_ids_sha256": {"const": "dbce99d36546067ed3a903e5892383885b6bb9b94feb1f4171411743fec9bdcf"},
+        "required_particle_count": {"const": 9078},
+        "required_class_counts": {"const": {"fixed_boundary": 0, "moving_boundary": 2669, "floating": 0, "fluid": 6409}},
         "required_gauge_schema_version": {"const": "smpcc-r8-liquid-s5b0-native-gauge-manifest-v1"}
       }
     },
@@ -92,8 +96,9 @@
     "analysisContract": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["windows", "surfaces", "secondaries", "metrics", "motion_time_source", "interpolation", "outside_overlap", "smoothing", "extrapolation"],
+      "required": ["h0_m", "windows", "surfaces", "secondaries", "metrics", "motion_time_source", "interpolation", "outside_overlap", "smoothing", "extrapolation"],
       "properties": {
+        "h0_m": {"const": 0.058},
         "windows": {"const": ["first15", "full_motion", "recorded_tail", "solver_tail"]},
         "surfaces": {"const": ["H_crest", "H_abs", "H_peak_to_peak"]},
         "secondaries": {"const": ["H_proxy", "H_modal"]},

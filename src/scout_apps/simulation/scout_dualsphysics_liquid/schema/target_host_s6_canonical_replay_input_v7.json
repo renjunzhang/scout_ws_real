@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_canonical_replay_input_v7.json",
+  "title": "S6 canonical replay input admission v7",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "document_type", "status", "mode", "attempt_id",
+    "planned_denominator", "source_outcome", "pinned_dependencies",
+    "finalized_frames", "native_gauges", "integrity", "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-canonical-replay-input-v7"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_CANONICAL_REPLAY_INPUT_V7"},
+    "status": {"const": "PASS_S6_CANONICAL_REPLAY_INPUT_ADMISSION_V7"},
+    "mode": {"enum": ["FIXTURE_SELF_CHECK", "EXPLICIT_READ_ONLY_BYTES"]},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "source_outcome": {"const": "UNKNOWN"},
+    "pinned_dependencies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finalized_frame_reader", "finalized_frame_manifest_schema", "bi4_reader"],
+      "properties": {
+        "finalized_frame_reader": {
+          "$ref": "#/$defs/finalizedFrameReader"
+        },
+        "finalized_frame_manifest_schema": {
+          "$ref": "#/$defs/finalizedFrameSchema"
+        },
+        "bi4_reader": {
+          "$ref": "#/$defs/bi4Reader"
+        }
+      }
+    },
+    "finalized_frames": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root", "schema_version", "status", "manifest_sha256",
+        "external_inventory_receipt_sha256", "expected_inventory_sha256",
+        "inventory_sha256", "frame_manifest_sha256", "start_index",
+        "frame_count", "time_grid_sha256", "particle_count",
+        "canonical_ids_sha256", "class_counts"
+      ],
+      "properties": {
+        "root": {"$ref": "#/$defs/absolutePath"},
+        "schema_version": {"const": "smpcc-r8-liquid-s5b0-finalized-solver-frames-manifest-v2"},
+        "status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V2"},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "external_inventory_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "expected_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "frame_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "start_index": {"type": "integer", "minimum": 0},
+        "frame_count": {"type": "integer", "minimum": 1},
+        "time_grid_sha256": {"$ref": "#/$defs/sha256"},
+        "particle_count": {"const": 9078},
+        "canonical_ids_sha256": {"const": "dbce99d36546067ed3a903e5892383885b6bb9b94feb1f4171411743fec9bdcf"},
+        "class_counts": {"$ref": "#/$defs/particleClasses"}
+      }
+    },
+    "native_gauges": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version", "status", "fact_source", "attachment_frame",
+        "probe_count", "probe_radius_m", "angular_spacing_deg", "probe_grid",
+        "probe_grid_sha256", "time_grid_sha256", "slot_count",
+        "minimum_valid_probes_per_slot", "maximum_invalid_ratio",
+        "manifest_sha256", "actual_csv_inventory_sha256", "files"
+      ],
+      "properties": {
+        "schema_version": {"const": "smpcc-r8-liquid-s5b0-native-gauge-manifest-v1"},
+        "status": {"const": "PASS_S5B0_NATIVE_GAUGE_MANIFEST_V1"},
+        "fact_source": {"const": "SIXTEEN_RAW_NATIVE_JGAUGESWL_CSV"},
+        "attachment_frame": {"const": "MOVING_CONTAINER_REFERENCE_REF_0"},
+        "probe_count": {"const": 16},
+        "probe_radius_m": {"const": 0.0145},
+        "angular_spacing_deg": {"const": 22.5},
+        "probe_grid": {
+          "type": "array",
+          "minItems": 16,
+          "maxItems": 16,
+          "items": {"$ref": "#/$defs/probe"}
+        },
+        "probe_grid_sha256": {"$ref": "#/$defs/sha256"},
+        "time_grid_sha256": {"$ref": "#/$defs/sha256"},
+        "slot_count": {"type": "integer", "minimum": 1},
+        "minimum_valid_probes_per_slot": {"const": 16},
+        "maximum_invalid_ratio": {"const": 0.001},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "actual_csv_inventory_sha256": {"$ref": "#/$defs/sha256"},
+        "files": {
+          "type": "array",
+          "minItems": 16,
+          "maxItems": 16,
+          "items": {"$ref": "#/$defs/gaugeFile"}
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dependencies_byte_pinned", "frame_schema_deep_closed",
+        "external_inventory_receipt_bound", "expected_inventory_bound",
+        "frame_inventory_exact", "frame_indices_contiguous",
+        "frame_times_match_external_grid", "particle_count_stable",
+        "particle_id_set_canonical", "particle_array_order_normalized",
+        "particle_classes_stable", "nout_zero",
+        "all_numeric_values_finite", "gauge_names_exact_and_ordered",
+        "gauge_coordinates_exact", "gauge_attachment_exact",
+        "gauge_csv_hashes_and_sizes_exact", "gauge_time_grids_identical",
+        "frame_and_gauge_time_grid_identical"
+      ],
+      "properties": {
+        "dependencies_byte_pinned": {"const": true},
+        "frame_schema_deep_closed": {"const": true},
+        "external_inventory_receipt_bound": {"const": true},
+        "expected_inventory_bound": {"const": true},
+        "frame_inventory_exact": {"const": true},
+        "frame_indices_contiguous": {"const": true},
+        "frame_times_match_external_grid": {"const": true},
+        "particle_count_stable": {"const": true},
+        "particle_id_set_canonical": {"const": true},
+        "particle_array_order_normalized": {"const": true},
+        "particle_classes_stable": {"const": true},
+        "nout_zero": {"const": true},
+        "all_numeric_values_finite": {"const": true},
+        "gauge_names_exact_and_ordered": {"const": true},
+        "gauge_coordinates_exact": {"const": true},
+        "gauge_attachment_exact": {"const": true},
+        "gauge_csv_hashes_and_sizes_exact": {"const": true},
+        "gauge_time_grids_identical": {"const": true},
+        "frame_and_gauge_time_grid_identical": {"const": true}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "optional_not_read", "PHYSICAL_REFERENCE_PENDING", "stage6_pass",
+        "development_only", "physical_fidelity_validated", "paired_ranking",
+        "cross_method_ranking", "selected_trajectory_cpu_comparison",
+        "candidate_or_solver_executed", "gpu_exposed", "sudo_used",
+        "network_used", "external_persistent_write"
+      ],
+      "properties": {
+        "optional_not_read": {"const": true},
+        "PHYSICAL_REFERENCE_PENDING": {"const": true},
+        "stage6_pass": {"const": false},
+        "development_only": {"const": true},
+        "physical_fidelity_validated": {"const": false},
+        "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false},
+        "selected_trajectory_cpu_comparison": {"const": false},
+        "candidate_or_solver_executed": {"const": false},
+        "gpu_exposed": {"const": false},
+        "sudo_used": {"const": false},
+        "network_used": {"const": false},
+        "external_persistent_write": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "finalizedFrameReader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256"],
+      "properties": {
+        "relative_path": {"const": "scripts/r8_liquid_s5b0_finalized_frame_reader_v2.py"},
+        "sha256": {"const": "aecd5125625ce4da91b9782f6a28eed017ff5e163056fc648b414aca96e2af4c"}
+      }
+    },
+    "finalizedFrameSchema": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256"],
+      "properties": {
+        "relative_path": {"const": "schema/target_host_s5b0_finalized_solver_frames_manifest_v2.json"},
+        "sha256": {"const": "4f75694305cd8530ebc0b3c744ec8f3e9d880a0c63d7160cb9a7fb6b6b92853a"}
+      }
+    },
+    "bi4Reader": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256"],
+      "properties": {
+        "relative_path": {"const": "scripts/r8_liquid_bi4_reader_v1.py"},
+        "sha256": {"const": "104d271b750eed15985bf29f743a59678d66c50b9dfae9d1a3fd1663510dbc14"}
+      }
+    },
+    "particleClasses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixed_boundary", "moving_boundary", "floating", "fluid"],
+      "properties": {
+        "fixed_boundary": {"const": 0},
+        "moving_boundary": {"const": 2669},
+        "floating": {"const": 0},
+        "fluid": {"const": 6409}
+      }
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slot", "name", "angle_deg", "x_m", "y_m"],
+      "properties": {
+        "slot": {"type": "integer", "minimum": 0, "maximum": 15},
+        "name": {"type": "string", "pattern": "^s5b0_p(?:0[0-9]|1[0-5])$"},
+        "angle_deg": {"type": "number"},
+        "x_m": {"type": "number"},
+        "y_m": {"type": "number"}
+      }
+    },
+    "gaugeFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slot", "probe_name", "relative_path", "sha256", "size_bytes", "time_grid_sha256", "row_count", "valid_count", "missing_count", "invalid_count"],
+      "properties": {
+        "slot": {"type": "integer", "minimum": 0, "maximum": 15},
+        "probe_name": {"type": "string", "pattern": "^s5b0_p(?:0[0-9]|1[0-5])$"},
+        "relative_path": {"type": "string", "pattern": "^GaugesSwl_s5b0_p(?:0[0-9]|1[0-5])\\.csv$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "time_grid_sha256": {"$ref": "#/$defs/sha256"},
+        "row_count": {"type": "integer", "minimum": 1},
+        "valid_count": {"type": "integer", "minimum": 1},
+        "missing_count": {"type": "integer", "minimum": 0},
+        "invalid_count": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

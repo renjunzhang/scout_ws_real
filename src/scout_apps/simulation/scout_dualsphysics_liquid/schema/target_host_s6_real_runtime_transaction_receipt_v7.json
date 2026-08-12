@@ -4,7 +4,7 @@
   "title": "S6 recoverable transaction receipt v7",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "document_type", "status", "transaction_id", "attempt_id", "planned_denominator", "source_outcome", "runtime_contract_sha256", "expected_previous_ledger_sha256", "staging", "publication", "ledger", "receipt", "consumer_acceptance", "claims"],
+  "required": ["schema_version", "document_type", "status", "transaction_id", "attempt_id", "planned_denominator", "source_outcome", "runtime_contract_sha256", "precommit_bundle_sha256", "expected_previous_ledger_sha256", "staging", "publication", "ledger", "receipt", "consumer_acceptance", "claims"],
   "properties": {
     "schema_version": {"const": "smpcc-r8-liquid-s6-real-runtime-transaction-receipt-v7"},
     "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_TRANSACTION_RECEIPT_V7"},
@@ -14,6 +14,7 @@
     "planned_denominator": {"const": 1},
     "source_outcome": {"const": "UNKNOWN"},
     "runtime_contract_sha256": {"$ref": "#/$defs/sha"},
+    "precommit_bundle_sha256": {"$ref": "#/$defs/sha"},
     "expected_previous_ledger_sha256": {"$ref": "#/$defs/sha"},
     "staging": {"$ref": "#/$defs/staging"},
     "publication": {"$ref": "#/$defs/publication"},

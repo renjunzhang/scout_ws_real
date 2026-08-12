@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_replay_execution_policy_v9.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "document_type", "status", "selection", "parents",
+    "build_dependency", "replay", "sources", "solver", "resources", "devices",
+    "output_contract", "lifecycle", "execution_components", "schemas", "publication",
+    "journal", "authorization", "claims", "next"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5b0-replay-execution-policy-v9"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5B0_REPLAY_EXECUTION_POLICY_V9"},
+    "status": {"const": "STATIC_FROZEN_BUILD_AND_EXACT_REPLAY_AUTHORIZATION_REQUIRED"},
+    "selection": {"$ref": "#/$defs/selection"},
+    "parents": {
+      "type": "array", "minItems": 15, "maxItems": 15,
+      "items": {"$ref": "#/$defs/parent"}
+    },
+    "build_dependency": {
+      "type": "object", "additionalProperties": false,
+      "required": ["campaign_id", "build_id", "candidate_path", "campaign_final_receipt", "required_status", "materialized"],
+      "properties": {
+        "campaign_id": {"const": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11"},
+        "build_id": {"const": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a"},
+        "candidate_path": {"const": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.partial/output/artifacts/DualSPHysics5.4_linux64"},
+        "campaign_final_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.evidence/15_campaign_final_v11.json"},
+        "required_status": {"const": "PASS_MOTION_GAUGE_GPU_BUILD_SM120_STATIC_AUDIT_DEVELOPMENT_CANDIDATE"},
+        "materialized": {"const": false}
+      }
+    },
+    "replay": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "replay_id", "stage_root", "partial_root", "final_root", "audit_root",
+        "profile_name", "profile_path", "token_path", "start_receipt", "attempt_receipt", "final_receipt",
+        "failure_receipt", "lifecycle_receipt", "output_inventory_receipt",
+        "result_package_receipt", "finalized"
+      ],
+      "properties": {
+        "replay_id": {"const": "s5b0_primary_bsmooth_b01_20260812T110635Z_v9"},
+        "stage_root": {"const": "/home/zrj/scout_liquid_lab/replays/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.stage.partial"},
+        "partial_root": {"const": "/home/zrj/scout_liquid_lab/replays/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.partial"},
+        "final_root": {"const": "/home/zrj/scout_liquid_lab/outgoing/s5b0_primary_bsmooth_b01_20260812T110635Z_v9"},
+        "audit_root": {"const": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.evidence"},
+        "profile_name": {"const": "r8-liquid-s5b0-primary-bsmooth-b01-20260812t110635z-v9"},
+        "profile_path": {"const": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-s5b0-primary-bsmooth-b01-20260812t110635z-v9.profile"},
+        "token_path": {"const": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.authorization.json"},
+        "start_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.start.json"},
+        "attempt_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.runtime_attempt.json"},
+        "final_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.final.json"},
+        "failure_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.failure.json"},
+        "lifecycle_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.lifecycle.json"},
+        "output_inventory_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.output_inventory.json"},
+        "result_package_receipt": {"const": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.result_package.json"},
+        "finalized": {"const": false}
+      }
+    },
+    "sources": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_bag", "transfer_root", "transfer_manifest", "transfer_checksums", "solver_path", "case_xml", "case_bi4", "restart_part", "restart_head", "dsph_config", "settled_receipt"],
+      "properties": {
+        "source_bag": {"$ref": "#/$defs/file"},
+        "transfer_root": {"type": "string", "pattern": "^/"},
+        "transfer_manifest": {"$ref": "#/$defs/file"},
+        "transfer_checksums": {"$ref": "#/$defs/file"},
+        "solver_path": {"$ref": "#/$defs/file"},
+        "case_xml": {"$ref": "#/$defs/file"},
+        "case_bi4": {"$ref": "#/$defs/file"},
+        "restart_part": {"$ref": "#/$defs/file"},
+        "restart_head": {"$ref": "#/$defs/file"},
+        "dsph_config": {"$ref": "#/$defs/file"},
+        "settled_receipt": {"$ref": "#/$defs/file"}
+      }
+    },
+    "solver": {"$ref": "#/$defs/solver"},
+    "resources": {"$ref": "#/$defs/resources"},
+    "devices": {"const": ["/dev/nvidia0", "/dev/nvidiactl", "/dev/nvidia-uvm", "/dev/nvidia-uvm-tools"]},
+    "output_contract": {"$ref": "#/$defs/output_contract"},
+    "lifecycle": {"$ref": "#/$defs/lifecycle"},
+    "execution_components": {"$ref": "#/$defs/execution_components"},
+    "schemas": {"$ref": "#/$defs/schemas"},
+    "publication": {"$ref": "#/$defs/publication"},
+    "journal": {"$ref": "#/$defs/journal"},
+    "authorization": {"$ref": "#/$defs/authorization"},
+    "claims": {"$ref": "#/$defs/claims"},
+    "next": {"const": "V11_BUILD_PASS_THEN_EXACT_V9_PROFILE_TOKEN_CANDIDATE_HASH_USER_AUTHORIZATION_REQUIRED"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolute_path": {"type": "string", "pattern": "^/"},
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempt_id", "role", "source_bag_path", "source_bag_sha256", "planned_denominator", "optional_bag_read", "optional_authorized", "c2_authorized", "second_execution_authorized", "cross_method_ranking"],
+      "properties": {
+        "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+        "role": {"const": "PRIMARY_BASELINE"},
+        "source_bag_path": {"const": "/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag"},
+        "source_bag_sha256": {"const": "c82c1f16b41bced51ab0aff63e4ef40b469501e185851344789fc3d62399fc07"},
+        "planned_denominator": {"const": 1}, "optional_bag_read": {"const": false},
+        "optional_authorized": {"const": false}, "c2_authorized": {"const": false},
+        "second_execution_authorized": {"const": false}, "cross_method_ranking": {"const": false}
+      }
+    },
+    "parent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "path", "sha256"],
+      "properties": {"role": {"type": "string", "minLength": 1}, "path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha"}}
+    },
+    "file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "mode"],
+      "properties": {"path": {"$ref": "#/$defs/absolute_path"}, "sha256": {"$ref": "#/$defs/sha"}, "size_bytes": {"type": "integer", "minimum": 1}, "mode": {"type": "string", "pattern": "^[0-7]{4}$"}}
+    },
+    "solver": {
+      "type": "object", "additionalProperties": false,
+      "required": ["backend", "candidate_execution_count", "parallel_jobs", "restart_part", "settled_time_s", "recorded_motion_end_s", "solver_tail_s", "replay_physical_seconds", "tout_s", "argv_suffix", "environment"],
+      "properties": {
+        "backend": {"const": "GPU_0"}, "candidate_execution_count": {"const": 1}, "parallel_jobs": {"const": 1},
+        "restart_part": {"const": 901}, "settled_time_s": {"const": 45.05001991890928},
+        "recorded_motion_end_s": {"const": 49.379999999999995}, "solver_tail_s": {"const": 1.0},
+        "replay_physical_seconds": {"const": 50.379999999999995}, "tout_s": {"const": 0.05},
+        "argv_suffix": {"const": ["-gpu:0", "-partbegin:901:901", "/restart", "-tmax:95.43001991890927", "-tout:0.05", "-ompthreads:1", "-stable:1", "-vres:0", "-cellmode:full", "-cfl:0.1", "-shifting:none", "-viscoart:0.3", "-sv:binx,info", "-svres:1", "-svtimers:0", "-svdomainvtk:0", "-saveposdouble:1", "-nortimes:1", "-createdirs:1", "-csvsep:0"]},
+        "environment": {"const": {"HOME": "/nonexistent", "PATH": "/usr/bin", "LC_ALL": "C", "LANG": "C", "TZ": "UTC0", "TMPDIR": "/tmp", "OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE", "CUDA_VISIBLE_DEVICES": "0"}}
+      }
+    },
+    "resources": {
+      "type": "object", "additionalProperties": false,
+      "required": ["wall_timeout_seconds", "kill_after_seconds", "sample_min_seconds", "sample_max_seconds", "minimum_available_memory_bytes", "minimum_free_vram_bytes", "maximum_output_bytes", "xid_zero_required"],
+      "properties": {"wall_timeout_seconds": {"const": 5400}, "kill_after_seconds": {"const": 30}, "sample_min_seconds": {"const": 10}, "sample_max_seconds": {"const": 30}, "minimum_available_memory_bytes": {"const": 4294967296}, "minimum_free_vram_bytes": {"const": 6442450944}, "maximum_output_bytes": {"const": 1073741824}, "xid_zero_required": {"const": true}}
+    },
+    "output_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["particles", "moving", "fluid", "nout", "canonical_ids_sha256", "raw_gauge_count", "raw_gauge_names", "required_root_files", "required_data_files", "part_file_pattern", "raw_gauge_format", "normalized_gauge_format", "maximum_invalid_ratio", "motion_ref_required", "runparts_required", "boundary_qc_required", "raw_normalized_provenance_required", "external_inventory_receipt_required", "frame_reader_revision", "qc_pipeline"],
+      "properties": {
+        "particles": {"const": 9078}, "moving": {"const": 2669}, "fluid": {"const": 6409}, "nout": {"const": 0},
+        "canonical_ids_sha256": {"const": "dbce99d36546067ed3a903e5892383885b6bb9b94feb1f4171411743fec9bdcf"},
+        "raw_gauge_count": {"const": 16},
+        "raw_gauge_names": {"type": "array", "minItems": 16, "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "pattern": "^GaugesSwl_s5b0_p[0-1][0-9]\\.csv$"}},
+        "required_root_files": {"const": ["Run.csv", "Run.out", "RunPARTs.csv"]},
+        "required_data_files": {"const": ["data/Part_Head.ibi4", "data/PartInfo.ibi4", "data/PartMotionRef.ibi4", "data/PartOut_000.obi4"]},
+        "part_file_pattern": {"const": "^data/Part_[0-9]{4}\\.bi4$"},
+        "raw_gauge_format": {"const": "DUALSPHYSICS_5_4_JGAUGESWL_SEMICOLON_10_COLUMN"},
+        "normalized_gauge_format": {"const": "RFC4180_TIME_S_ZSURF_M_V1"},
+        "maximum_invalid_ratio": {"const": 0.001}, "motion_ref_required": {"const": true},
+        "runparts_required": {"const": true}, "boundary_qc_required": {"const": true},
+        "raw_normalized_provenance_required": {"const": true}, "external_inventory_receipt_required": {"const": true},
+        "frame_reader_revision": {"const": 2},
+        "qc_pipeline": {"const": ["frame_reader.read_finalized", "frame_reader.parse_runparts", "output_qc.parse_motion_ref", "output_qc.boundary_qc", "output_qc.normalize_gauges"]}
+      }
+    },
+    "lifecycle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["create_new", "load_verify_run_finally_unload", "zero_profile_residue", "zero_process_residue", "zero_mount_residue", "candidate_source_mode", "network_unshared", "host_writable_bind_count", "candidate_source_unchanged", "failure_preserved"],
+      "properties": {"create_new": {"const": true}, "load_verify_run_finally_unload": {"const": true}, "zero_profile_residue": {"const": true}, "zero_process_residue": {"const": true}, "zero_mount_residue": {"const": true}, "candidate_source_mode": {"const": "0400"}, "network_unshared": {"const": true}, "host_writable_bind_count": {"const": 1}, "candidate_source_unchanged": {"const": true}, "failure_preserved": {"const": true}}
+    },
+    "execution_components": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gate", "runtime_supervisor", "lifecycle_supervisor", "authorization_token_producer"],
+      "properties": {"gate": {"$ref": "#/$defs/absolute_path"}, "runtime_supervisor": {"$ref": "#/$defs/absolute_path"}, "lifecycle_supervisor": {"$ref": "#/$defs/absolute_path"}, "authorization_token_producer": {"$ref": "#/$defs/absolute_path"}}
+    },
+    "schemas": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy", "authorization_token", "execution_receipt", "result_package"],
+      "properties": {"policy": {"$ref": "#/$defs/absolute_path"}, "authorization_token": {"$ref": "#/$defs/absolute_path"}, "execution_receipt": {"$ref": "#/$defs/absolute_path"}, "result_package": {"$ref": "#/$defs/absolute_path"}}
+    },
+    "publication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["partial_root", "final_root", "rename_syscall", "rename_flag", "rename_flag_value", "parent_fsync_required", "checksums_relative_path", "checksums_scope", "partial_preserved_on_failure"],
+      "properties": {"partial_root": {"$ref": "#/$defs/absolute_path"}, "final_root": {"$ref": "#/$defs/absolute_path"}, "rename_syscall": {"const": "renameat2"}, "rename_flag": {"const": "RENAME_NOREPLACE"}, "rename_flag_value": {"const": 1}, "parent_fsync_required": {"const": true}, "checksums_relative_path": {"const": "checksums.sha256"}, "checksums_scope": {"const": "ALL_REGULAR_PACKAGE_FILES_EXCEPT_CHECKSUMS_MANIFEST"}, "partial_preserved_on_failure": {"const": true}}
+    },
+    "journal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["boot_id_path", "anchor_argv", "sync_argv", "query_argv_template", "xid_pattern", "same_boot_required", "zero_xid_required"],
+      "properties": {"boot_id_path": {"const": "/proc/sys/kernel/random/boot_id"}, "anchor_argv": {"const": ["/usr/bin/journalctl", "-k", "--show-cursor", "-n", "0", "--no-pager"]}, "sync_argv": {"const": ["/usr/bin/journalctl", "--sync"]}, "query_argv_template": {"const": ["/usr/bin/journalctl", "-k", "--boot", "{boot_id}", "--after-cursor", "{cursor}", "--show-cursor", "--no-pager", "-o", "cat"]}, "xid_pattern": {"const": "NVRM: Xid"}, "same_boot_required": {"const": true}, "zero_xid_required": {"const": true}}
+    },
+    "authorization": {
+      "type": "object", "additionalProperties": false,
+      "required": ["default_authorized", "uid", "gid", "supplementary_groups", "exact_new_user_authorization_required", "token_schema", "token_mode", "profile_sha256", "candidate_sha256"],
+      "properties": {"default_authorized": {"const": false}, "uid": {"const": 1000}, "gid": {"const": 1000}, "supplementary_groups": {"const": 0}, "exact_new_user_authorization_required": {"const": true}, "token_schema": {"$ref": "#/$defs/absolute_path"}, "token_mode": {"const": "0600"}, "profile_sha256": {"type": "null"}, "candidate_sha256": {"type": "null"}}
+    },
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": ["build_started", "replay_started", "candidate_executed", "gpu_exposed", "profile_loaded", "sudo_used", "network_used", "files_written", "optional_bag_read", "stage6_pass", "development_only", "physical_reference_pending", "physical_fidelity_validated", "formal", "production"],
+      "properties": {"build_started": {"const": false}, "replay_started": {"const": false}, "candidate_executed": {"const": false}, "gpu_exposed": {"const": false}, "profile_loaded": {"const": false}, "sudo_used": {"const": false}, "network_used": {"const": false}, "files_written": {"const": false}, "optional_bag_read": {"const": false}, "stage6_pass": {"const": false}, "development_only": {"const": true}, "physical_reference_pending": {"const": true}, "physical_fidelity_validated": {"const": false}, "formal": {"const": false}, "production": {"const": false}}
+    }
+  }
+}

@@ -66,29 +66,45 @@
     "canonicalS5b0": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["frame_manifest", "gauge_manifest", "canonical_time_grid", "probe_grid_sha256", "frame_reader", "bi4_reader", "integrity"],
+      "required": ["frame_manifest", "gauge_manifest", "canonical_time_grid", "probe_grid_sha256", "frame_reader", "frame_schema", "bi4_reader", "integrity"],
       "properties": {
         "frame_manifest": {"$ref": "#/$defs/frameManifest"},
         "gauge_manifest": {"$ref": "#/$defs/gaugeManifest"},
         "canonical_time_grid": {"$ref": "#/$defs/timeGrid"},
         "probe_grid_sha256": {"$ref": "#/$defs/sha"},
-        "frame_reader": {"$ref": "#/$defs/toolIdentity"},
+        "frame_reader": {"$ref": "#/$defs/frameReaderIdentity"},
+        "frame_schema": {"$ref": "#/$defs/frameSchemaIdentity"},
         "bi4_reader": {"$ref": "#/$defs/toolIdentity"},
         "integrity": {"$ref": "#/$defs/s5b0Integrity"}
       }
     },
+    "frameReaderIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relative_path", "sha256"],
+      "properties": {"relative_path": {"const": "scripts/r8_liquid_s5b0_finalized_frame_reader_v2.py"},
+        "sha256": {"const": "aecd5125625ce4da91b9782f6a28eed017ff5e163056fc648b414aca96e2af4c"}}
+    },
+    "frameSchemaIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relative_path", "sha256"],
+      "properties": {"relative_path": {"const": "schema/target_host_s5b0_finalized_solver_frames_manifest_v2.json"},
+        "sha256": {"const": "4f75694305cd8530ebc0b3c744ec8f3e9d880a0c63d7160cb9a7fb6b6b92853a"}}
+    },
     "frameManifest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["identity", "schema_version", "status", "frame_manifest_sha256", "frame_count", "particle_count", "ids_sha256"],
+      "required": ["identity", "schema_version", "status", "frame_manifest_sha256", "external_inventory_receipt_sha256", "expected_inventory_sha256", "frame_count", "particle_count", "canonical_ids_sha256", "class_counts"],
       "properties": {
         "identity": {"$ref": "#/$defs/fileIdentity"},
-        "schema_version": {"const": "smpcc-r8-liquid-s5b0-finalized-solver-frames-manifest-v1"},
-        "status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V1"},
+        "schema_version": {"const": "smpcc-r8-liquid-s5b0-finalized-solver-frames-manifest-v2"},
+        "status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V2"},
         "frame_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "external_inventory_receipt_sha256": {"$ref": "#/$defs/sha"},
+        "expected_inventory_sha256": {"$ref": "#/$defs/sha"},
         "frame_count": {"type": "integer", "minimum": 1},
-        "particle_count": {"type": "integer", "minimum": 1},
-        "ids_sha256": {"$ref": "#/$defs/sha"}
+        "particle_count": {"const": 9078},
+        "canonical_ids_sha256": {"const": "dbce99d36546067ed3a903e5892383885b6bb9b94feb1f4171411743fec9bdcf"},
+        "class_counts": {"$ref": "#/$defs/particleClasses"}
       }
     },
     "gaugeManifest": {
@@ -102,6 +118,17 @@
         "native_gauge_manifest_sha256": {"$ref": "#/$defs/sha"},
         "probe_count": {"const": 16},
         "attachment_frame": {"const": "MOVING_CONTAINER_REFERENCE_REF_0"}
+      }
+    },
+    "particleClasses": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixed_boundary", "moving_boundary", "floating", "fluid"],
+      "properties": {
+        "fixed_boundary": {"const": 0},
+        "moving_boundary": {"const": 2669},
+        "floating": {"const": 0},
+        "fluid": {"const": 6409}
       }
     },
     "timeGrid": {

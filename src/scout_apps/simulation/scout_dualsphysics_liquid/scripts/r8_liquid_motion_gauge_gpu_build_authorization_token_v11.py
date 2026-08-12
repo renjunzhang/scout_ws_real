@@ -29,6 +29,7 @@ POLICY_PATH = ROOT / "config/target_hosts/liquid_zrj_msi_u2404_motion_gauge_gpu_
 GATE_PATH = ROOT / "scripts/r8_liquid_motion_gauge_gpu_build_execution_gate_v11.py"
 SUPERVISOR_PATH = ROOT / "scripts/r8_liquid_motion_gauge_gpu_build_lifecycle_supervisor_v11.py"
 TOKEN_SCHEMA_PATH = ROOT / "schema/target_host_motion_gauge_gpu_build_authorization_token_v11.json"
+SUPERVISOR_RECEIPT_SCHEMA_PATH = ROOT / "schema/target_host_motion_gauge_gpu_build_supervisor_receipt_v11.json"
 CAMPAIGN_ID = "motion_gauge_gpu_build_sm120_20260812T073037Z_v11"
 TOKEN_PATH = Path("/home/zrj/scout_liquid_lab/audits") / f"{CAMPAIGN_ID}_a.authorization.json"
 IDENTITY_KEYS = ("path", "mode_octal", "size_bytes", "sha256")
@@ -156,6 +157,12 @@ def frozen_inputs() -> tuple[dict[str, Any], dict[str, Any], list[dict[str, Any]
         raise TokenError("policy token producer path drift")
     if resolve_pinned(authorization.get("supervisor_path", "")) != SUPERVISOR_PATH:
         raise TokenError("policy supervisor path drift")
+    if resolve_pinned(authorization.get("supervisor_receipt_schema_path", "")) != SUPERVISOR_RECEIPT_SCHEMA_PATH:
+        raise TokenError("policy supervisor receipt schema path drift")
+    file_identity(
+        SUPERVISOR_RECEIPT_SCHEMA_PATH,
+        expected_sha256=authorization["supervisor_receipt_schema_sha256"],
+    )
     profiles = policy.get("profiles")
     if not isinstance(profiles, list) or [item.get("role") for item in profiles] != [
         "SOURCE_COPY", "PATCH", "BUILD", "STATIC_AUDIT"
@@ -205,6 +212,7 @@ def build_token(authorization_reference: str,
         "policy": file_identity(POLICY_PATH),
         "gate": file_identity(GATE_PATH),
         "supervisor": file_identity(SUPERVISOR_PATH),
+        "supervisor_receipt_schema": file_identity(SUPERVISOR_RECEIPT_SCHEMA_PATH),
         "token_producer": file_identity(Path(__file__).resolve()),
     }
     value = {
@@ -234,6 +242,7 @@ def self_check() -> dict[str, Any]:
     identities = {
         "policy": file_identity(POLICY_PATH), "gate": file_identity(GATE_PATH),
         "supervisor": file_identity(SUPERVISOR_PATH),
+        "supervisor_receipt_schema": file_identity(SUPERVISOR_RECEIPT_SCHEMA_PATH),
         "token_producer": file_identity(Path(__file__).resolve()),
     }
     if os.path.lexists(TOKEN_PATH):

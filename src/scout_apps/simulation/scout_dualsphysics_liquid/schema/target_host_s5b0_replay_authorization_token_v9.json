@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_replay_authorization_token_v9.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "decision", "created_at", "authorization_reference",
+    "authorization_reference_sha256", "attempt_id", "planned_denominator", "replay_id",
+    "policy", "gate", "runtime_supervisor", "lifecycle_supervisor", "token_producer",
+    "profile", "candidate", "build_final_receipt", "schemas", "static_audit_status",
+    "roots", "devices", "authorization", "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5b0-replay-authorization-token-v9"},
+    "decision": {"const": "USER_AUTHORIZED_EXACT_SINGLE_PRIMARY_REPLAY_V9"},
+    "created_at": {"type": "string", "minLength": 20, "maxLength": 64},
+    "authorization_reference": {"type": "string", "minLength": 16, "maxLength": 4096},
+    "authorization_reference_sha256": {"$ref": "#/$defs/sha"},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "replay_id": {"const": "s5b0_primary_bsmooth_b01_20260812T110635Z_v9"},
+    "policy": {"$ref": "#/$defs/file"},
+    "gate": {"$ref": "#/$defs/file"},
+    "runtime_supervisor": {"$ref": "#/$defs/file"},
+    "lifecycle_supervisor": {"$ref": "#/$defs/file"},
+    "token_producer": {"$ref": "#/$defs/file"},
+    "profile": {"$ref": "#/$defs/file"},
+    "candidate": {"$ref": "#/$defs/file"},
+    "build_final_receipt": {"$ref": "#/$defs/file"},
+    "schemas": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy", "authorization_token", "execution_receipt", "result_package"],
+      "properties": {
+        "policy": {"$ref": "#/$defs/file"},
+        "authorization_token": {"$ref": "#/$defs/file"},
+        "execution_receipt": {"$ref": "#/$defs/file"},
+        "result_package": {"$ref": "#/$defs/file"}
+      }
+    },
+    "static_audit_status": {"const": "PASS_MOTION_GAUGE_GPU_BUILD_SM120_STATIC_AUDIT_DEVELOPMENT_CANDIDATE"},
+    "roots": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage_root", "partial_root", "final_root", "audit_root"],
+      "properties": {
+        "stage_root": {"type": "string", "pattern": "^/"},
+        "partial_root": {"type": "string", "pattern": "^/"},
+        "final_root": {"type": "string", "pattern": "^/"},
+        "audit_root": {"type": "string", "pattern": "^/"}
+      }
+    },
+    "devices": {"const": ["/dev/nvidia0", "/dev/nvidiactl", "/dev/nvidia-uvm", "/dev/nvidia-uvm-tools"]},
+    "authorization": {
+      "type": "object", "additionalProperties": false,
+      "required": ["user_authorized", "candidate_execution_count", "profile_lifecycle_count", "sudo_scope"],
+      "properties": {
+        "user_authorized": {"const": true},
+        "candidate_execution_count": {"const": 1},
+        "profile_lifecycle_count": {"const": 1},
+        "sudo_scope": {"const": "EXACT_PROFILE_LOAD_STATUS_UNLOAD_AND_SETUID_DROP_ONLY"}
+      }
+    },
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": ["optional_bag_read", "optional_execution", "c2_execution", "second_execution", "network_use", "cross_method_ranking"],
+      "properties": {
+        "optional_bag_read": {"const": false}, "optional_execution": {"const": false},
+        "c2_execution": {"const": false}, "second_execution": {"const": false},
+        "network_use": {"const": false}, "cross_method_ranking": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "mode"],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "sha256": {"$ref": "#/$defs/sha"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"}
+      }
+    }
+  }
+}

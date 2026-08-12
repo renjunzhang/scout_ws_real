@@ -1,0 +1,96 @@
+{
+  "schema_version": "smpcc-r8-liquid-s6-real-runtime-delivery-policy-v7",
+  "document_type": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_DELIVERY_POLICY_V7",
+  "policy_id": "liquid_zrj_msi_u2404_s6_real_runtime_delivery_policy_v7",
+  "status": "STATIC_POLICY_FROZEN_RUNTIME_NOT_ADMITTED",
+  "selection": {
+    "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+    "role": "PRIMARY_BASELINE_ONLY",
+    "planned_denominator": 1,
+    "source_outcome": "UNKNOWN",
+    "optional_bag_read": false,
+    "paired_ranking": false,
+    "cross_method_ranking": false,
+    "selected_trajectory_cpu_comparison": false
+  },
+  "canonical_inputs": {
+    "finalized_frame_reader": {"relative_path":"scripts/r8_liquid_s5b0_finalized_frame_reader_v2.py","sha256":"aecd5125625ce4da91b9782f6a28eed017ff5e163056fc648b414aca96e2af4c"},
+    "finalized_frame_manifest_schema": {"relative_path":"schema/target_host_s5b0_finalized_solver_frames_manifest_v2.json","sha256":"4f75694305cd8530ebc0b3c744ec8f3e9d880a0c63d7160cb9a7fb6b6b92853a"},
+    "bi4_reader": {"relative_path":"scripts/r8_liquid_bi4_reader_v1.py","sha256":"104d271b750eed15985bf29f743a59678d66c50b9dfae9d1a3fd1663510dbc14"},
+    "required_frame_schema_version": "smpcc-r8-liquid-s5b0-finalized-solver-frames-manifest-v2",
+    "required_frame_status": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V2",
+    "required_external_inventory_receipt_schema_version": "smpcc-r8-liquid-s5b0-output-inventory-receipt-v9",
+    "required_canonical_ids_sha256": "dbce99d36546067ed3a903e5892383885b6bb9b94feb1f4171411743fec9bdcf",
+    "required_particle_count": 9078,
+    "required_class_counts": {"fixed_boundary": 0, "moving_boundary": 2669, "floating": 0, "fluid": 6409},
+    "required_gauge_schema_version": "smpcc-r8-liquid-s5b0-native-gauge-manifest-v1"
+  },
+  "gauge_contract": {
+    "fact_source": "SIXTEEN_RAW_NATIVE_JGAUGESWL_CSV",
+    "probe_count": 16,
+    "attachment_frame": "MOVING_CONTAINER_REFERENCE_REF_0",
+    "probe_radius_m": 0.0145,
+    "angular_spacing_deg": 22.5,
+    "probe_grid": [
+      {"name":"s5b0_p00","angle_deg":0.0,"x_m":0.0145,"y_m":0.0},
+      {"name":"s5b0_p01","angle_deg":22.5,"x_m":0.013396253221413659,"y_m":0.005548909769293802},
+      {"name":"s5b0_p02","angle_deg":45.0,"x_m":0.010253048327204941,"y_m":0.01025304832720494},
+      {"name":"s5b0_p03","angle_deg":67.5,"x_m":0.005548909769293803,"y_m":0.013396253221413659},
+      {"name":"s5b0_p04","angle_deg":90.0,"x_m":0.0,"y_m":0.0145},
+      {"name":"s5b0_p05","angle_deg":112.5,"x_m":-0.005548909769293802,"y_m":0.013396253221413659},
+      {"name":"s5b0_p06","angle_deg":135.0,"x_m":-0.01025304832720494,"y_m":0.010253048327204941},
+      {"name":"s5b0_p07","angle_deg":157.5,"x_m":-0.013396253221413659,"y_m":0.005548909769293803},
+      {"name":"s5b0_p08","angle_deg":180.0,"x_m":-0.0145,"y_m":0.0},
+      {"name":"s5b0_p09","angle_deg":202.5,"x_m":-0.01339625322141366,"y_m":-0.005548909769293801},
+      {"name":"s5b0_p10","angle_deg":225.0,"x_m":-0.010253048327204943,"y_m":-0.01025304832720494},
+      {"name":"s5b0_p11","angle_deg":247.5,"x_m":-0.00554890976929381,"y_m":-0.013396253221413655},
+      {"name":"s5b0_p12","angle_deg":270.0,"x_m":0.0,"y_m":-0.0145},
+      {"name":"s5b0_p13","angle_deg":292.5,"x_m":0.005548909769293805,"y_m":-0.013396253221413657},
+      {"name":"s5b0_p14","angle_deg":315.0,"x_m":0.010253048327204937,"y_m":-0.010253048327204943},
+      {"name":"s5b0_p15","angle_deg":337.5,"x_m":0.013396253221413655,"y_m":-0.005548909769293811}
+    ],
+    "frame_and_gauge_time_grid_sha256_must_match": true,
+    "missing_or_reordered_probe_rejected": true,
+    "coordinate_drift_rejected": true
+  },
+  "analysis_contract": {
+    "h0_m": 0.058,
+    "windows": ["first15","full_motion","recorded_tail","solver_tail"],
+    "surfaces": ["H_crest","H_abs","H_peak_to_peak"],
+    "secondaries": ["H_proxy","H_modal"],
+    "metrics": ["amplitude","frequency","damping","phase","correlation","rmse"],
+    "motion_time_source": "/odom.header.stamp",
+    "interpolation": "LINEAR_WITHIN_COMMON_OVERLAP_ONLY",
+    "outside_overlap": "EXPLICIT_NULL_NA",
+    "smoothing": false,
+    "extrapolation": false
+  },
+  "transaction_contract": {
+    "ordered_states": ["NOT_ADMITTED","PREPARED_ONLY","PUBLISHED_PENDING_COMMIT","COMMITTED_PENDING_RECEIPT","COMMITTED_RECEIPT_CONSISTENT"],
+    "prepared_stage6_pass": false,
+    "publish_semantics": "RENAMEAT2_RENAME_NOREPLACE_THEN_FSYNC_PARENT",
+    "commit_semantics": "FLOCK_COMPARE_APPEND_COMMITTED_FSYNC",
+    "receipt_semantics": "CREATE_NEW_O_EXCL_FINAL_TRANSACTION_RECEIPT",
+    "consumer_acceptance_requires": ["EXACT_FINAL_ROOT_INVENTORY_HASH","MATCHING_PREPARED_LEDGER_ENTRY","MATCHING_COMMITTED_LEDGER_ENTRY","MATCHING_O_EXCL_FINAL_TRANSACTION_RECEIPT"],
+    "recovery_required": true
+  },
+  "delivery_contract": {
+    "final_bundle_forbids_planned_or_pending_artifacts": true,
+    "media_is_numeric_fact_source": false,
+    "comparison_ledger_append_only": true,
+    "checksums_required": true
+  },
+  "claim_ceiling": {
+    "maximum_status": "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY",
+    "stage6_pass_now": false,
+    "development_only": true,
+    "physical_reference_pending": true,
+    "physical_fidelity_validated": false,
+    "paired_ranking": false,
+    "cross_method_ranking": false,
+    "selected_trajectory_cpu_comparison": false,
+    "formal": false,
+    "production": false,
+    "physical_primary": false
+  }
+}

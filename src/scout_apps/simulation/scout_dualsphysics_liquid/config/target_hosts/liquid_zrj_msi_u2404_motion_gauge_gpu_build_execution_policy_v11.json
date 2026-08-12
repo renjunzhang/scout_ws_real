@@ -11,6 +11,8 @@
     "candidate_path": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.partial/output/artifacts/DualSPHysics5.4_linux64",
     "audit_root": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.evidence",
     "authorization_token_path": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.authorization.json",
+    "supervisor_final_receipt_path": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.supervisor.final.json",
+    "supervisor_failure_receipt_path": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.supervisor.failure.json",
     "attempt_count": 1,
     "attempt_reuse_forbidden": true
   },
@@ -39,11 +41,14 @@
     {"role":"PROFILE_STATIC_PARENT","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-u3-gpu-static-audit-20260810T170339Z-v2.profile","mode_octal":"0600","size_bytes":61138,"sha256":"b3a2225ed5d988932387cbc487dab637bd88a565de219d74a7cf5afd9a60647f"},
     {"role":"V11_PATCH_CHILD","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_motion_gauge_gpu_patch_child_v11.py","mode_octal":"0664","size_bytes":15178,"sha256":"fb3c18b40d717d8d361a53a9629db2a17a95c692084c5cb073e2446fc305015f"},
     {"role":"V11_PROFILE_GENERATOR","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_motion_gauge_gpu_profile_generator_v11.py","mode_octal":"0664","size_bytes":21347,"sha256":"e188582f30fb064e4583fee9e304142672934db61d118137c0399b8ac367a255"},
-    {"role":"V11_POLICY_SCHEMA","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_motion_gauge_gpu_build_execution_policy_v11.json","mode_octal":"0664","size_bytes":11978,"sha256":"dc4a1a8f57cc70e3ba0af202146ebac66a6d3b09813862f180df910e3e15c7a9"},
+    {"role":"V11_POLICY_SCHEMA","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_motion_gauge_gpu_build_execution_policy_v11.json","mode_octal":"0664","size_bytes":12570,"sha256":"51c4dd767128d85ff7c0c3215b11702a3a95e25cd0fccb2da1206d146fad89cf"},
     {"role":"V11_RECEIPT_SCHEMA","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_motion_gauge_gpu_build_execution_receipt_v11.json","mode_octal":"0664","size_bytes":5017,"sha256":"71e8389d301d9164ec274bc1aa732dd7e16b8656139b16ca7e3e29afb21f063f"},
-    {"role":"V11_TOKEN_SCHEMA","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_motion_gauge_gpu_build_authorization_token_v11.json","mode_octal":"0664","size_bytes":2040,"sha256":"2c312b36497b9e1d88e480ad8b843fca01df0cccda49bca161ee01559ad551d4"},
-    {"role":"V11_GATE","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_motion_gauge_gpu_build_execution_gate_v11.py","mode_octal":"0664","size_bytes":58337,"sha256":"c6dcc0a4caa493ef3174a25bef3b1b24fe29a710d64bcf66ccef737d4ef76c00"},
-    {"role":"V11_TESTS","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_motion_gauge_gpu_build_execution_gate_v11.py","mode_octal":"0664","size_bytes":17881,"sha256":"f96e637ecbe6e2853398fe270ea29bcd2dc03e14be792bd3a66d3b88129969f1"}
+    {"role":"V11_TOKEN_SCHEMA","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_motion_gauge_gpu_build_authorization_token_v11.json","mode_octal":"0664","size_bytes":2137,"sha256":"218d69494162afea2871359157413aa143e2cf354d123b91ad14847f8cb2d541"},
+    {"role":"V11_SUPERVISOR_RECEIPT_SCHEMA","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_motion_gauge_gpu_build_supervisor_receipt_v11.json","mode_octal":"0664","size_bytes":3770,"sha256":"69338ea911abd05aab6e7dc113da1ea3e962900cd0178765ea2f34688ac91620"},
+    {"role":"V11_GATE","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_motion_gauge_gpu_build_execution_gate_v11.py","mode_octal":"0664","size_bytes":68188,"sha256":"a20f49865417794fd3c941e8095d36fa7d1f8c6da06a2a57be7d6128200a7fe7"},
+    {"role":"V11_TOKEN_PRODUCER","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_motion_gauge_gpu_build_authorization_token_v11.py","mode_octal":"0664","size_bytes":13386,"sha256":"272bb0c8723639354460057957fddc4c1030fb850dc8b67fbe707cc7fd75b8ce"},
+    {"role":"V11_SUPERVISOR","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_motion_gauge_gpu_build_lifecycle_supervisor_v11.py","mode_octal":"0664","size_bytes":26137,"sha256":"260b5798bc318c21ec58f2c2b99e140e4d6247a5fcc91434c6a7733deb0b8deb"},
+    {"role":"V11_TESTS","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_motion_gauge_gpu_build_execution_gate_v11.py","mode_octal":"0664","size_bytes":31002,"sha256":"6bed2afaf8b39f25177c8dd36a99d5aa4a281cb0d3f6f4e2664d52064666fba1"}
   ],
   "profiles": [
     {"role":"SOURCE_COPY","name":"r8-liquid-motion-gauge-gpu-source-copy-20260812t073037z-v11","path":"src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-motion-gauge-gpu-source-copy-20260812t073037z-v11.profile","mode_octal":"0644","size_bytes":3691,"sha256":"5031c278c878d8d010dd26048e9ab24bb67e7166b5df318665c17ad6b55e7984"},
@@ -84,6 +89,7 @@
     {"role":"COLLECT2_11","path":"/usr/lib/gcc/x86_64-linux-gnu/11/collect2","mode_octal":"0755","size_bytes":303184,"sha256":"46486e7904af6aa989614a7f4fb5092f82c31105c3cf8ae883acb18576d3fb32"},
     {"role":"MAGIC","path":"/etc/magic","mode_octal":"0644","size_bytes":111,"sha256":"58219ec4bfe06d84640b4e86341feb3099cb078146c9eee73ec55152819df247"},
     {"role":"MAGIC_DATABASE","path":"/usr/lib/file/magic.mgc","mode_octal":"0644","size_bytes":8510760,"sha256":"72a25195a2623fe160e926bf20952b6b74b29d6c91e0174a5fa062f02beee1aa"}
+    ,{"role":"NVIDIA_SMI_TELEMETRY","path":"/usr/bin/nvidia-smi","mode_octal":"0755","size_bytes":1244096,"sha256":"22964713c1701fb62b4dd10b26b0dd25d174e100af5bda20c65e0b0fcc32b3be"}
   ],
   "authorization": {
     "default_authorized": false,
@@ -91,9 +97,11 @@
     "gid": 1000,
     "supplementary_groups": 0,
     "token_schema_path": "src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_motion_gauge_gpu_build_authorization_token_v11.json",
-    "token_schema_sha256": "2c312b36497b9e1d88e480ad8b843fca01df0cccda49bca161ee01559ad551d4",
+    "token_schema_sha256": "218d69494162afea2871359157413aa143e2cf354d123b91ad14847f8cb2d541",
     "token_producer_path": "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_motion_gauge_gpu_build_authorization_token_v11.py",
     "supervisor_path": "src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_motion_gauge_gpu_build_lifecycle_supervisor_v11.py",
+    "supervisor_receipt_schema_path": "src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_motion_gauge_gpu_build_supervisor_receipt_v11.json",
+    "supervisor_receipt_schema_sha256": "69338ea911abd05aab6e7dc113da1ea3e962900cd0178765ea2f34688ac91620",
     "token_mode_octal": "0600",
     "exact_new_user_authorization_required": true,
     "public_gate_dynamic_default_deny": true

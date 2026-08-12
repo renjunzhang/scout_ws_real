@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_finalized_solver_frames_manifest_v2.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "root", "contract", "inventory", "bindings", "frames", "integrity", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5b0-finalized-solver-frames-manifest-v2"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V2"},
+    "status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V2"},
+    "root": {"type": "string", "pattern": "^/"},
+    "contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["expected_root", "external_inventory_receipt_sha256", "expected_inventory_sha256", "expected_start_index", "expected_frame_count", "expected_times_sha256", "expected_particle_count", "expected_canonical_ids_sha256", "expected_class_counts", "time_tolerance_s", "runparts_step_semantics"],
+      "properties": {
+        "expected_root": {"type": "string", "pattern": "^/"},
+        "external_inventory_receipt_sha256": {"$ref": "#/$defs/sha"},
+        "expected_inventory_sha256": {"$ref": "#/$defs/sha"},
+        "expected_start_index": {"type": "integer", "minimum": 0},
+        "expected_frame_count": {"type": "integer", "minimum": 1},
+        "expected_times_sha256": {"$ref": "#/$defs/sha"},
+        "expected_particle_count": {"const": 9078},
+        "expected_canonical_ids_sha256": {"const": "dbce99d36546067ed3a903e5892383885b6bb9b94feb1f4171411743fec9bdcf"},
+        "expected_class_counts": {"$ref": "#/$defs/classes"},
+        "time_tolerance_s": {"const": 0.00002},
+        "runparts_step_semantics": {"const": "RESTART_FIRST_ROW_ZERO_FIRST_INTERVAL_MINUS_ONE_THEN_ACCUMULATE"}
+      }
+    },
+    "inventory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["file_count", "directory_count", "canonical_sha256", "files"],
+      "properties": {
+        "file_count": {"type": "integer", "minimum": 8},
+        "directory_count": {"type": "integer", "minimum": 1},
+        "canonical_sha256": {"$ref": "#/$defs/sha"},
+        "files": {"type": "array", "minItems": 8, "items": {"$ref": "#/$defs/file"}}
+      }
+    },
+    "bindings": {
+      "type": "object", "additionalProperties": false,
+      "required": ["run_files", "part_head", "part_info", "part_motion_ref", "part_out"],
+      "properties": {
+        "run_files": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"$ref": "#/$defs/file"}},
+        "part_head": {"$ref": "#/$defs/file"}, "part_info": {"$ref": "#/$defs/file"},
+        "part_motion_ref": {"$ref": "#/$defs/file"}, "part_out": {"$ref": "#/$defs/file"}
+      }
+    },
+    "frames": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/frame"}},
+    "integrity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["external_inventory_receipt_bound", "exact_root", "exact_inventory", "no_symlinks", "no_hardlinks", "no_special_files", "no_toctou", "frame_indices_contiguous", "frame_times_match_runparts", "runparts_restart_step_contract", "particle_count_stable", "particle_id_set_canonical", "particle_array_order_normalized", "particle_classes_stable", "nout_zero", "finite", "frame_manifest_sha256"],
+      "properties": {
+        "external_inventory_receipt_bound": {"const": true}, "exact_root": {"const": true},
+        "exact_inventory": {"const": true}, "no_symlinks": {"const": true},
+        "no_hardlinks": {"const": true}, "no_special_files": {"const": true},
+        "no_toctou": {"const": true}, "frame_indices_contiguous": {"const": true},
+        "frame_times_match_runparts": {"const": true}, "runparts_restart_step_contract": {"const": true},
+        "particle_count_stable": {"const": true},
+        "particle_id_set_canonical": {"const": true}, "particle_array_order_normalized": {"const": true},
+        "particle_classes_stable": {"const": true}, "nout_zero": {"const": true},
+        "finite": {"const": true}, "frame_manifest_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": ["reader_is_post_execution", "candidate_executed_by_reader", "solver_executed_by_reader", "gpu_exposed", "network_used", "sudo_used", "apparmor_loaded", "real_bag_read", "optional_bag_read"],
+      "properties": {
+        "reader_is_post_execution": {"const": true}, "candidate_executed_by_reader": {"const": false},
+        "solver_executed_by_reader": {"const": false}, "gpu_exposed": {"const": false},
+        "network_used": {"const": false}, "sudo_used": {"const": false},
+        "apparmor_loaded": {"const": false}, "real_bag_read": {"const": false},
+        "optional_bag_read": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "classes": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fixed_boundary", "moving_boundary", "floating", "fluid"],
+      "properties": {"fixed_boundary": {"const": 0}, "moving_boundary": {"const": 2669}, "floating": {"const": 0}, "fluid": {"const": 6409}}
+    },
+    "file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relative_path", "type", "mode", "size_bytes", "device", "inode", "nlink", "sha256"],
+      "properties": {
+        "relative_path": {"type": "string", "minLength": 1}, "type": {"const": "regular"},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"}, "size_bytes": {"type": "integer", "minimum": 1},
+        "device": {"type": "integer", "minimum": 0}, "inode": {"type": "integer", "minimum": 1},
+        "nlink": {"const": 1}, "sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "frame": {
+      "type": "object", "additionalProperties": false,
+      "required": ["index", "time_s", "step", "runparts_steps_since_previous", "particle_count", "nout", "canonical_ids_sha256", "source_order_sha256", "source_order_was_canonical", "canonical_particle_arrays_sha256", "finite", "class_counts", "identity"],
+      "properties": {
+        "index": {"type": "integer", "minimum": 0}, "time_s": {"type": "number"},
+        "step": {"type": "integer", "minimum": 0},
+        "runparts_steps_since_previous": {"type": "integer", "minimum": 0},
+        "particle_count": {"const": 9078}, "nout": {"const": 0},
+        "canonical_ids_sha256": {"const": "dbce99d36546067ed3a903e5892383885b6bb9b94feb1f4171411743fec9bdcf"},
+        "source_order_sha256": {"$ref": "#/$defs/sha"}, "source_order_was_canonical": {"type": "boolean"},
+        "canonical_particle_arrays_sha256": {"$ref": "#/$defs/sha"}, "finite": {"const": true},
+        "class_counts": {"$ref": "#/$defs/classes"}, "identity": {"$ref": "#/$defs/file"}
+      }
+    }
+  }
+}

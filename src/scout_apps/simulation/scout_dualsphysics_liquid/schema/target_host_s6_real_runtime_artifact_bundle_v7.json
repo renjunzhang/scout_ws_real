@@ -1,182 +1,144 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://scout.local/schema/target_host_s6_real_runtime_artifact_bundle_v7.json",
-  "title": "S6 committed artifact bundle v7",
+  "title": "S6 pre-commit artifact admission bundle v7",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "source_outcome", "contract", "canonical_inputs", "numeric_artifacts", "figures", "media", "comparison", "evidence_index", "checksums", "transaction", "claims"],
+  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "source_outcome", "contract", "canonical_inputs", "required_artifacts", "inventory", "inventory_sha256", "quality", "claims"],
   "properties": {
     "schema_version": {"const": "smpcc-r8-liquid-s6-real-runtime-artifact-bundle-v7"},
     "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_ARTIFACT_BUNDLE_V7"},
-    "status": {"const": "S6_PRIMARY_ARTIFACT_BUNDLE_COMPLETE_AWAITING_TRANSACTION_COMMIT_V7"},
+    "status": {"const": "S6_PRIMARY_ARTIFACT_BUNDLE_PRECOMMIT_ADMISSION_PASS_V7"},
     "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
     "planned_denominator": {"const": 1},
     "source_outcome": {"const": "UNKNOWN"},
-    "contract": {"$ref": "#/$defs/fileIdentity"},
+    "contract": {"$ref": "#/$defs/contractIdentity"},
     "canonical_inputs": {"$ref": "#/$defs/canonicalInputs"},
-    "numeric_artifacts": {"$ref": "#/$defs/numericArtifacts"},
-    "figures": {"$ref": "#/$defs/figures"},
-    "media": {"$ref": "#/$defs/media"},
-    "comparison": {"$ref": "#/$defs/comparison"},
-    "evidence_index": {"$ref": "#/$defs/fileIdentity"},
-    "checksums": {"$ref": "#/$defs/checksums"},
-    "transaction": {"$ref": "#/$defs/transaction"},
+    "required_artifacts": {"$ref": "#/$defs/requiredArtifacts"},
+    "inventory": {"type": "array", "minItems": 23, "maxItems": 23, "items": {"$ref": "#/$defs/artifactIdentity"}},
+    "inventory_sha256": {"$ref": "#/$defs/sha"},
+    "quality": {"$ref": "#/$defs/quality"},
     "claims": {"$ref": "#/$defs/claims"}
   },
   "$defs": {
     "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
     "relativePath": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"},
-    "fileIdentity": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["relative_path", "sha256", "size_bytes", "mode", "nlink"],
+    "contractIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sha256", "size_bytes"],
+      "properties": {"sha256": {"$ref": "#/$defs/sha"}, "size_bytes": {"type": "integer", "minimum": 1}}
+    },
+    "artifactIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relative_path", "sha256", "size_bytes", "mode"],
       "properties": {
         "relative_path": {"$ref": "#/$defs/relativePath"},
         "sha256": {"$ref": "#/$defs/sha"},
         "size_bytes": {"type": "integer", "minimum": 1},
-        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
-        "nlink": {"const": 1}
+        "mode": {"const": "0440"}
       }
     },
-    "manifestIdentity": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["identity", "schema_version", "status", "content_sha256"],
-      "properties": {
-        "identity": {"$ref": "#/$defs/fileIdentity"},
-        "schema_version": {"type": "string", "minLength": 1},
-        "status": {"type": "string", "pattern": "^PASS_[A-Z0-9_]+$"},
-        "content_sha256": {"$ref": "#/$defs/sha"}
-      }
+    "requiredArtifacts": {
+      "const": [
+        "animation/primary.mp4",
+        "animation/primary_preview.gif",
+        "checksums.sha256",
+        "comparison_manifest.json",
+        "data/metrics.csv",
+        "data/metrics.json",
+        "data/selected_signals.json",
+        "data/surface_timeseries.csv",
+        "data/surface_timeseries.json",
+        "evidence_index.json",
+        "figures/primary_shared_x_timeseries.pdf",
+        "figures/primary_shared_x_timeseries.png",
+        "figures/primary_shared_x_timeseries.svg",
+        "figures/primary_shared_x_timeseries_grayscale.png",
+        "keyframes/primary_first.png",
+        "keyframes/primary_last.png",
+        "keyframes/primary_middle.png",
+        "reports/analysis_result.json",
+        "reports/eda_report.json",
+        "reports/figure_manifest.json",
+        "reports/media_manifest.json",
+        "reports/quality_control.json",
+        "reports/visual_qa.json"
+      ]
     },
     "canonicalInputs": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["finalized_frame_manifest", "native_gauge_manifest", "time_grid_sha256", "probe_grid_sha256", "frame_reader_sha256", "bi4_reader_sha256"],
+      "type": "object", "additionalProperties": false,
+      "required": ["finalized_frame_manifest", "external_inventory_receipt_sha256", "expected_inventory_sha256", "canonical_ids_sha256", "particle_count", "class_counts", "native_gauge_manifest", "time_grid_sha256", "probe_grid_sha256", "frame_reader_sha256", "frame_schema_sha256", "bi4_reader_sha256"],
       "properties": {
-        "finalized_frame_manifest": {"$ref": "#/$defs/manifestIdentity"},
-        "native_gauge_manifest": {"$ref": "#/$defs/manifestIdentity"},
+        "finalized_frame_manifest": {"$ref": "#/$defs/finalizedFrame"},
+        "external_inventory_receipt_sha256": {"$ref": "#/$defs/sha"},
+        "expected_inventory_sha256": {"$ref": "#/$defs/sha"},
+        "canonical_ids_sha256": {"const": "dbce99d36546067ed3a903e5892383885b6bb9b94feb1f4171411743fec9bdcf"},
+        "particle_count": {"const": 9078},
+        "class_counts": {"$ref": "#/$defs/particleClasses"},
+        "native_gauge_manifest": {"$ref": "#/$defs/nativeGauge"},
         "time_grid_sha256": {"$ref": "#/$defs/sha"},
         "probe_grid_sha256": {"$ref": "#/$defs/sha"},
-        "frame_reader_sha256": {"$ref": "#/$defs/sha"},
+        "frame_reader_sha256": {"const": "aecd5125625ce4da91b9782f6a28eed017ff5e163056fc648b414aca96e2af4c"},
+        "frame_schema_sha256": {"const": "4f75694305cd8530ebc0b3c744ec8f3e9d880a0c63d7160cb9a7fb6b6b92853a"},
         "bi4_reader_sha256": {"$ref": "#/$defs/sha"}
       }
     },
-    "numericArtifacts": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["eda_report", "surface_timeseries_csv", "surface_timeseries_json", "selected_signals_json", "metrics_csv", "metrics_json", "quality_control_json"],
+    "finalizedFrame": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "status", "content_sha256"],
       "properties": {
-        "eda_report": {"$ref": "#/$defs/fileIdentity"},
-        "surface_timeseries_csv": {"$ref": "#/$defs/fileIdentity"},
-        "surface_timeseries_json": {"$ref": "#/$defs/fileIdentity"},
-        "selected_signals_json": {"$ref": "#/$defs/fileIdentity"},
-        "metrics_csv": {"$ref": "#/$defs/fileIdentity"},
-        "metrics_json": {"$ref": "#/$defs/fileIdentity"},
-        "quality_control_json": {"$ref": "#/$defs/fileIdentity"}
+        "schema_version": {"const": "smpcc-r8-liquid-s5b0-finalized-solver-frames-manifest-v2"},
+        "status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V2"},
+        "content_sha256": {"$ref": "#/$defs/sha"}
       }
     },
-    "figures": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["manifest", "color_png", "grayscale_png", "vector_pdf", "keyframes", "qa"],
+    "nativeGauge": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "status", "content_sha256", "probe_count", "attachment_frame"],
       "properties": {
-        "manifest": {"$ref": "#/$defs/manifestIdentity"},
-        "color_png": {"$ref": "#/$defs/fileIdentity"},
-        "grayscale_png": {"$ref": "#/$defs/fileIdentity"},
-        "vector_pdf": {"$ref": "#/$defs/fileIdentity"},
-        "keyframes": {"$ref": "#/$defs/fileList"},
-        "qa": {"$ref": "#/$defs/figureQa"}
+        "schema_version": {"const": "smpcc-r8-liquid-s5b0-native-gauge-manifest-v1"},
+        "status": {"const": "PASS_S5B0_NATIVE_GAUGE_MANIFEST_V1"},
+        "content_sha256": {"$ref": "#/$defs/sha"},
+        "probe_count": {"const": 16},
+        "attachment_frame": {"const": "MOVING_CONTAINER_REFERENCE_REF_0"}
       }
     },
-    "media": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["manifest", "mp4", "gif", "qa"],
-      "properties": {
-        "manifest": {"$ref": "#/$defs/manifestIdentity"},
-        "mp4": {"$ref": "#/$defs/fileIdentity"},
-        "gif": {"$ref": "#/$defs/fileIdentity"},
-        "qa": {"$ref": "#/$defs/mediaQa"}
-      }
+    "particleClasses": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fixed_boundary", "moving_boundary", "floating", "fluid"],
+      "properties": {"fixed_boundary": {"const": 0}, "moving_boundary": {"const": 2669}, "floating": {"const": 0}, "fluid": {"const": 6409}}
     },
-    "fileList": {
-      "type": "array",
-      "minItems": 3,
-      "maxItems": 3,
-      "items": {"$ref": "#/$defs/fileIdentity"}
-    },
-    "figureQa": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["color_render_pass", "grayscale_render_pass", "no_clipping", "no_missing_glyphs", "no_dual_y_axis", "source_data_hash_bound"],
+    "quality": {
+      "type": "object", "additionalProperties": false,
+      "required": ["analysis_status", "figure_manifest_sha256", "media_manifest_sha256", "visual_qa_sha256", "comparison_manifest_sha256", "evidence_index_sha256", "checksums_sha256", "figure_formats", "keyframe_count", "mp4_complete_decode", "gif_complete_decode", "media_timing_verified", "programmatic_visual_qa", "multimodal_visual_review", "no_clipping", "no_missing_glyphs", "no_legend_occlusion", "panel_alignment", "grayscale_distinguishable", "no_dual_y_axis"],
       "properties": {
-        "color_render_pass": {"const": true},
-        "grayscale_render_pass": {"const": true},
-        "no_clipping": {"const": true},
-        "no_missing_glyphs": {"const": true},
-        "no_dual_y_axis": {"const": true},
-        "source_data_hash_bound": {"const": true}
-      }
-    },
-    "mediaQa": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["mp4_complete_decode", "gif_complete_decode", "frame_count_matches_manifest", "duration_matches_manifest", "media_is_numeric_fact_source"],
-      "properties": {
+        "analysis_status": {"const": "PASS_S6_PRIMARY_ANALYSIS_V7"},
+        "figure_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "media_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "visual_qa_sha256": {"$ref": "#/$defs/sha"},
+        "comparison_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "evidence_index_sha256": {"$ref": "#/$defs/sha"},
+        "checksums_sha256": {"$ref": "#/$defs/sha"},
+        "figure_formats": {"const": ["PNG", "PDF", "SVG", "GRAYSCALE_PNG"]},
+        "keyframe_count": {"const": 3},
         "mp4_complete_decode": {"const": true},
         "gif_complete_decode": {"const": true},
-        "frame_count_matches_manifest": {"const": true},
-        "duration_matches_manifest": {"const": true},
-        "media_is_numeric_fact_source": {"const": false}
-      }
-    },
-    "comparison": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["manifest", "attempt_count", "planned_denominator", "compared_secondaries", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "physical_reference_pending", "physical_fidelity_validated"],
-      "properties": {
-        "manifest": {"$ref": "#/$defs/manifestIdentity"},
-        "attempt_count": {"const": 1},
-        "planned_denominator": {"const": 1},
-        "compared_secondaries": {"const": ["H_proxy", "H_modal"]},
-        "paired_ranking": {"const": false},
-        "cross_method_ranking": {"const": false},
-        "selected_trajectory_cpu_comparison": {"const": false},
-        "physical_reference_pending": {"const": true},
-        "physical_fidelity_validated": {"const": false}
-      }
-    },
-    "checksums": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["manifest", "covered_file_count", "complete_inventory", "canonical_inventory_sha256"],
-      "properties": {
-        "manifest": {"$ref": "#/$defs/fileIdentity"},
-        "covered_file_count": {"type": "integer", "minimum": 1},
-        "complete_inventory": {"const": true},
-        "canonical_inventory_sha256": {"$ref": "#/$defs/sha"}
-      }
-    },
-    "transaction": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["transaction_id", "bundle_sha256", "prepared_entry_sha256", "committed_entry_sha256", "final_receipt_sha256", "three_way_consistent"],
-      "properties": {
-        "transaction_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{7,127}$"},
-        "bundle_sha256": {"$ref": "#/$defs/sha"},
-        "prepared_entry_sha256": {"$ref": "#/$defs/sha"},
-        "committed_entry_sha256": {"$ref": "#/$defs/sha"},
-        "final_receipt_sha256": {"$ref": "#/$defs/sha"},
-        "three_way_consistent": {"const": true}
+        "media_timing_verified": {"const": true},
+        "programmatic_visual_qa": {"const": true},
+        "multimodal_visual_review": {"const": true},
+        "no_clipping": {"const": true},
+        "no_missing_glyphs": {"const": true},
+        "no_legend_occlusion": {"const": true},
+        "panel_alignment": {"const": true},
+        "grayscale_distinguishable": {"const": true},
+        "no_dual_y_axis": {"const": true}
       }
     },
     "claims": {
-      "type": "object",
-      "additionalProperties": false,
+      "type": "object", "additionalProperties": false,
       "required": ["stage6_pass", "development_only", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "formal", "production", "physical_primary"],
       "properties": {
-        "stage6_pass": {"const": true},
+        "stage6_pass": {"const": false},
         "development_only": {"const": true},
         "physical_reference_pending": {"const": true},
         "physical_fidelity_validated": {"const": false},

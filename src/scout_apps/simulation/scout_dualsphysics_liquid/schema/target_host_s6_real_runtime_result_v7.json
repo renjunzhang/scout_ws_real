@@ -4,7 +4,7 @@
   "title": "S6 consumer-visible runtime result v7",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "source_outcome", "runtime_contract_sha256", "transaction_receipt_sha256", "publication", "ledger", "receipt", "checks", "claims"],
+  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "source_outcome", "runtime_contract_sha256", "precommit_bundle_sha256", "transaction_receipt_sha256", "publication", "ledger", "receipt", "checks", "claims"],
   "properties": {
     "schema_version": {"const": "smpcc-r8-liquid-s6-real-runtime-result-v7"},
     "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_RESULT_V7"},
@@ -13,6 +13,7 @@
     "planned_denominator": {"const": 1},
     "source_outcome": {"const": "UNKNOWN"},
     "runtime_contract_sha256": {"$ref": "#/$defs/sha"},
+    "precommit_bundle_sha256": {"$ref": "#/$defs/sha"},
     "transaction_receipt_sha256": {"$ref": "#/$defs/nullableSha"},
     "publication": {"$ref": "#/$defs/publication"},
     "ledger": {"$ref": "#/$defs/ledger"},

@@ -15,7 +15,7 @@
     "status": {"const": "STATIC_FROZEN_DEFAULT_DENY_EXACT_AUTHORIZATION_REQUIRED"},
     "campaign": {
       "type": "object", "additionalProperties": false,
-      "required": ["campaign_id", "build_id", "attempt_root", "output_root", "source_root", "candidate_path", "audit_root", "authorization_token_path", "attempt_count", "attempt_reuse_forbidden"],
+      "required": ["campaign_id", "build_id", "attempt_root", "output_root", "source_root", "candidate_path", "audit_root", "authorization_token_path", "supervisor_final_receipt_path", "supervisor_failure_receipt_path", "attempt_count", "attempt_reuse_forbidden"],
       "properties": {
         "campaign_id": {"const": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11"},
         "build_id": {"const": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a"},
@@ -25,6 +25,8 @@
         "candidate_path": {"const": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.partial/output/artifacts/DualSPHysics5.4_linux64"},
         "audit_root": {"const": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.evidence"},
         "authorization_token_path": {"const": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.authorization.json"},
+        "supervisor_final_receipt_path": {"const": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.supervisor.final.json"},
+        "supervisor_failure_receipt_path": {"const": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.supervisor.failure.json"},
         "attempt_count": {"const": 1},
         "attempt_reuse_forbidden": {"const": true}
       }
@@ -45,11 +47,12 @@
     "system_tools": {"type": "array", "minItems": 20, "items": {"$ref": "#/$defs/file_pin"}},
     "authorization": {
       "type": "object", "additionalProperties": false,
-      "required": ["default_authorized", "uid", "gid", "supplementary_groups", "token_schema_path", "token_schema_sha256", "token_producer_path", "supervisor_path", "token_mode_octal", "exact_new_user_authorization_required", "public_gate_dynamic_default_deny"],
+      "required": ["default_authorized", "uid", "gid", "supplementary_groups", "token_schema_path", "token_schema_sha256", "token_producer_path", "supervisor_path", "supervisor_receipt_schema_path", "supervisor_receipt_schema_sha256", "token_mode_octal", "exact_new_user_authorization_required", "public_gate_dynamic_default_deny"],
       "properties": {
         "default_authorized": {"const": false}, "uid": {"const": 1000}, "gid": {"const": 1000},
         "supplementary_groups": {"const": 0}, "token_schema_path": {"type": "string"},
         "token_schema_sha256": {"$ref": "#/$defs/hash"}, "token_producer_path": {"type": "string"}, "supervisor_path": {"type": "string"},
+        "supervisor_receipt_schema_path": {"type": "string"}, "supervisor_receipt_schema_sha256": {"$ref": "#/$defs/hash"},
         "token_mode_octal": {"const": "0600"}, "exact_new_user_authorization_required": {"const": true},
         "public_gate_dynamic_default_deny": {"const": true}
       }

@@ -52,6 +52,9 @@ ARTIFACTS_ROOT = OUTPUT_ROOT / "artifacts"
 CANDIDATE_PATH = ARTIFACTS_ROOT / "DualSPHysics5.4_linux64"
 AUDIT_ROOT = Path("/home/zrj/scout_liquid_lab/audits") / f"{BUILD_ID}.evidence"
 TOKEN_PATH = Path("/home/zrj/scout_liquid_lab/audits") / f"{BUILD_ID}.authorization.json"
+SUPERVISOR_FINAL_PATH = Path("/home/zrj/scout_liquid_lab/audits") / f"{BUILD_ID}.supervisor.final.json"
+SUPERVISOR_FAILURE_PATH = Path("/home/zrj/scout_liquid_lab/audits") / f"{BUILD_ID}.supervisor.failure.json"
+NVIDIA_SMI = "/usr/bin/nvidia-smi"
 PHASES = ("source-copy", "patch", "wrapper", "build", "static-audit")
 PROFILE_ROLES = {
     "source-copy": "SOURCE_COPY", "patch": "PATCH", "wrapper": "NONE",
@@ -83,6 +86,17 @@ PATCH_AFTER_SIZE_BYTES = {
     "JSph.cpp": 177907,
     "JSph.h": 35634,
 }
+ALWAYS_CONFLICTING_PROCESS_NAMES = {
+    "make", "nvcc", "cicc", "ptxas", "fatbinary", "nvlink", "cc1plus",
+    "collect2", "as", "ld", "ld.bfd", "g++", "g++-11",
+    "x86_64-linux-gnu-g++-11", "DualSPHysics5.4_linux64",
+}
+CONDITIONAL_SANDBOX_PROCESS_NAMES = {"aa-exec", "bwrap", "timeout", "prlimit"}
+LIQUID_BUILD_PROCESS_MARKERS = (
+    CAMPAIGN_ID, BUILD_ID, str(ATTEMPT_ROOT), str(AUDIT_ROOT),
+    "r8-liquid-motion-gauge-gpu-", "/usr/bin/make",
+    "/usr/local/cuda-12.8/bin/nvcc",
+)
 
 
 class GateError(RuntimeError):
@@ -287,8 +301,21 @@ def source_contract() -> tuple[Path, dict[str, dict[str, Any]]]:
     if file_identity(receipt_path)["sha256"] != contract["sealed_receipt_sha256"]:
         raise GateError("sealed source receipt drift")
     receipt = read_json(receipt_path)
-    entries = receipt["results"]["materialization"]["sealed_output"]["entries"]
-    if not isinstance(entries, list) or len(entries) != 352:
+    try:
+        sealed_output = receipt["results"]["materialization"]["sealed_output"]
+        entries = sealed_output["entries"]
+    except (KeyError, TypeError) as exc:
+        raise GateError("sealed source receipt structure drift") from exc
+    if sealed_output.get("manifest_sha256") != contract["sealed_manifest_sha256"]:
+        raise GateError("sealed source manifest SHA-256 drift")
+    serialized_entries = json.dumps(
+        entries, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    if sha256_bytes(serialized_entries) != contract["sealed_manifest_sha256"]:
+        raise GateError("sealed source manifest canonical content drift")
+    if sealed_output.get("total_bytes") != contract["total_bytes"]:
+        raise GateError("sealed source receipt byte total drift")
+    if not isinstance(entries, list) or len(entries) != contract["entry_count"]:
         raise GateError("sealed source entry count drift")
     expected: dict[str, dict[str, Any]] = {}
     for entry in entries:
@@ -557,6 +584,49 @@ def create_attempt_tree() -> None:
         os.chmod(path, mode, follow_symlinks=False)
 
 
+def ancestor_pids() -> set[int]:
+    result: set[int] = set()
+    pid = os.getpid()
+    while pid > 1 and pid not in result:
+        result.add(pid)
+        try:
+            raw = (Path("/proc") / str(pid) / "stat").read_text(encoding="utf-8")
+            tail = raw[raw.rfind(")") + 2:].split()
+            pid = int(tail[1])
+        except (FileNotFoundError, PermissionError, ProcessLookupError, ValueError, IndexError):
+            break
+    result.add(1)
+    return result
+
+
+def is_conflicting_process(comm: str, cmdline: str) -> bool:
+    if comm in ALWAYS_CONFLICTING_PROCESS_NAMES:
+        return True
+    if any(marker in cmdline for marker in (str(ATTEMPT_ROOT), str(AUDIT_ROOT))):
+        return True
+    return comm in CONDITIONAL_SANDBOX_PROCESS_NAMES and any(
+        marker in cmdline for marker in LIQUID_BUILD_PROCESS_MARKERS
+    )
+
+
+def conflicting_processes() -> list[dict[str, Any]]:
+    ancestors = ancestor_pids()
+    result: list[dict[str, Any]] = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdecimal() or int(entry.name) in ancestors:
+            continue
+        try:
+            comm = (entry / "comm").read_text(encoding="utf-8").strip()
+            cmdline = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode(
+                "utf-8", "replace"
+            )
+        except (FileNotFoundError, PermissionError, ProcessLookupError):
+            continue
+        if is_conflicting_process(comm, cmdline):
+            result.append({"pid": int(entry.name), "comm": comm, "argv": cmdline[:3072]})
+    return sorted(result, key=lambda item: item["pid"])
+
+
 def dynamic_preflight(*, require_fresh: bool) -> dict[str, Any]:
     current, _ = policy()
     verify_pins(current["parents"])
@@ -574,8 +644,12 @@ def dynamic_preflight(*, require_fresh: bool) -> dict[str, Any]:
     available_disk = disk.f_bavail * disk.f_frsize
     if available_disk < current["resources"]["minimum_available_disk_bytes"]:
         raise GateError("available build disk below 20 GiB")
+    conflicts = conflicting_processes()
+    if conflicts:
+        raise GateError(f"competing build/compiler processes exist: {conflicts}")
     return {"memory_available_bytes": memory.get("MemAvailable", 0),
-            "swap_free_bytes": memory.get("SwapFree", 0), "disk_available_bytes": available_disk}
+            "swap_free_bytes": memory.get("SwapFree", 0), "disk_available_bytes": available_disk,
+            "competing_processes": conflicts}
 
 
 def bounded_capture(argv: Sequence[str], *, limit: int, timeout_seconds: int,
@@ -695,19 +769,28 @@ def assert_same_artifact_inode(first: Mapping[str, Any] | None,
         raise GateError("candidate inode changed after first observation")
 
 
-def _phase_start(sequence: int, previous: str | None, phase: str, argv: list[str], profile: str) -> str:
+def _phase_start(sequence: int, previous: str | None, phase: str, argv: list[str], profile: str,
+                 *, evidence: Mapping[str, Any] | None = None) -> str:
+    supplied = dict(evidence or {})
+    supplied["argv"] = argv
     item = emit_receipt(phase, "START", sequence, previous, f"START_{phase.upper()}",
-                        evidence={"argv": argv}, profile_name=profile)
+                        evidence=supplied, profile_name=profile)
     return item["sha256"]
 
 
 def run_source_copy() -> int:
     require_user_identity()
     current, _ = policy()
-    dynamic_preflight(require_fresh=True)
+    preflight = dynamic_preflight(require_fresh=True)
     create_attempt_tree()
+    preflight["captured_at_ns"] = time.time_ns()
+    preflight_identity = write_new(AUDIT_ROOT / "source-copy.preflight.json",
+                                   canonical_json(preflight), mode=0o640)
     argv = source_copy_argv(current)
-    chain = _phase_start(1, None, "source-copy", argv, profile_map(current)["SOURCE_COPY"]["name"])
+    chain = _phase_start(
+        1, None, "source-copy", argv, profile_map(current)["SOURCE_COPY"]["name"],
+        evidence={"monitor_sha256": preflight_identity["sha256"]},
+    )
     status = "FAIL_SOURCE_COPY_NO_RETRY"
     try:
         result, _, _ = bounded_capture(argv, limit=16 * 1024 * 1024, timeout_seconds=300)
@@ -807,6 +890,76 @@ def run_wrapper() -> int:
         return 3
 
 
+def _vmstat_swap() -> dict[str, int]:
+    values: dict[str, int] = {}
+    for line in Path("/proc/vmstat").read_text(encoding="ascii").splitlines():
+        fields = line.split()
+        if len(fields) == 2 and fields[0] in {"pswpin", "pswpout"}:
+            values[fields[0]] = int(fields[1])
+    return {"pswpin_pages": values.get("pswpin", 0),
+            "pswpout_pages": values.get("pswpout", 0)}
+
+
+def _compiler_process_rss() -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    wanted = {"cicc", "ptxas", "cc1plus"}
+    page_size = os.sysconf("SC_PAGE_SIZE")
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdecimal():
+            continue
+        try:
+            name = (entry / "comm").read_text(encoding="utf-8").strip()
+            if name not in wanted:
+                continue
+            rss_pages = int((entry / "statm").read_text(encoding="ascii").split()[1])
+            result.append({"name": name, "pid": int(entry.name),
+                           "rss_bytes": rss_pages * page_size})
+        except (FileNotFoundError, PermissionError, ProcessLookupError, ValueError, IndexError):
+            continue
+    return sorted(result, key=lambda item: (item["name"], item["pid"]))
+
+
+def _temperature_and_power() -> list[dict[str, str]]:
+    result: list[dict[str, str]] = []
+    for zone in sorted(Path("/sys/class/thermal").glob("thermal_zone*")):
+        try:
+            sensor_type = (zone / "type").read_text(encoding="utf-8").strip()
+            value = (zone / "temp").read_text(encoding="ascii").strip()
+            result.append({"name": f"thermal:{zone.name}:{sensor_type}", "value": value})
+        except (FileNotFoundError, PermissionError, OSError):
+            continue
+    for hwmon in sorted(Path("/sys/class/hwmon").glob("hwmon*")):
+        try:
+            hwname = (hwmon / "name").read_text(encoding="utf-8").strip()
+        except (FileNotFoundError, PermissionError, OSError):
+            hwname = hwmon.name
+        for sensor in sorted(hwmon.glob("temp*_input")):
+            try:
+                value = sensor.read_text(encoding="ascii").strip()
+                result.append({"name": f"hwmon:{hwname}:{sensor.name}", "value": value})
+            except (FileNotFoundError, PermissionError, OSError):
+                continue
+    for supply in sorted(Path("/sys/class/power_supply").glob("*")):
+        for field in ("online", "status", "power_now"):
+            try:
+                value = (supply / field).read_text(encoding="utf-8").strip()
+                result.append({"name": f"power:{supply.name}:{field}", "value": value})
+            except (FileNotFoundError, PermissionError, OSError):
+                continue
+    return result[:1024]
+
+
+def _gpu_telemetry() -> dict[str, Any]:
+    result, stdout, stderr = bounded_capture(
+        [NVIDIA_SMI, "--query-gpu=uuid,temperature.gpu,power.draw",
+         "--format=csv,noheader,nounits"],
+        limit=65536, timeout_seconds=10,
+    )
+    return {"return_code": result["return_code"],
+            "stdout": stdout.decode("utf-8", "replace").strip(),
+            "stderr": stderr.decode("utf-8", "replace").strip()}
+
+
 def _resource_snapshot() -> dict[str, Any]:
     available = 0
     swap = 0
@@ -814,8 +967,17 @@ def _resource_snapshot() -> dict[str, Any]:
         fields = line.split()
         if fields and fields[0] == "MemAvailable:": available = int(fields[1]) * 1024
         if fields and fields[0] == "SwapFree:": swap = int(fields[1]) * 1024
-    return {"captured_at_ns": time.time_ns(), "memory_available_bytes": available,
-            "swap_free_bytes": swap, "psi": Path("/proc/pressure/memory").read_text(encoding="ascii")}
+    disk = os.statvfs(ATTEMPT_ROOT.parent)
+    return {
+        "captured_at_ns": time.time_ns(), "memory_available_bytes": available,
+        "swap_free_bytes": swap,
+        "memory_psi": Path("/proc/pressure/memory").read_text(encoding="ascii"),
+        "vmstat": _vmstat_swap(),
+        "disk_available_bytes": disk.f_bavail * disk.f_frsize,
+        "compiler_processes": _compiler_process_rss(),
+        "temperature_and_power": _temperature_and_power(),
+        "gpu_telemetry": _gpu_telemetry(),
+    }
 
 
 def run_build() -> int:
@@ -824,10 +986,16 @@ def run_build() -> int:
     previous, chain = previous_receipt(8, "wrapper", "FINAL")
     if previous["status"] != "PASS_BUILD_INPUT_353":
         raise GateError("wrapper receipt does not admit build")
-    dynamic_preflight(require_fresh=False)
+    preflight = dynamic_preflight(require_fresh=False)
     inventory(SOURCE_ROOT, stage="wrapped")
     argv = build_argv(current)
-    chain = _phase_start(9, chain, "build", argv, profile_map(current)["BUILD"]["name"])
+    preflight["captured_at_ns"] = time.time_ns()
+    preflight_identity = write_new(AUDIT_ROOT / "build.preflight.json",
+                                   canonical_json(preflight), mode=0o640)
+    chain = _phase_start(
+        9, chain, "build", argv, profile_map(current)["BUILD"]["name"],
+        evidence={"monitor_sha256": preflight_identity["sha256"]},
+    )
     stdout_path = AUDIT_ROOT / "build.stdout.log"
     stderr_path = AUDIT_ROOT / "build.stderr.log"
     monitor_path = AUDIT_ROOT / "build.resource.jsonl"
@@ -840,6 +1008,29 @@ def run_build() -> int:
     stdout_bytes = stderr_bytes = 0
     candidate: dict[str, Any] | None = None
     error: str | None = None
+    selector: selectors.BaseSelector | None = None
+
+    def consume_streams(*, until_eof: bool) -> None:
+        nonlocal stdout_bytes, stderr_bytes
+        if selector is None:
+            return
+        while selector.get_map():
+            ready = selector.select(timeout=0.25 if until_eof else 1.0)
+            if not ready:
+                if until_eof and process is not None and process.poll() is None:
+                    continue
+                break
+            for key, _ in ready:
+                block = os.read(key.fd, 65536)
+                if not block:
+                    selector.unregister(key.fileobj)
+                    continue
+                if key.data == "stdout":
+                    write_all(stdout_fd, block); stdout_sha.update(block); stdout_bytes += len(block)
+                else:
+                    write_all(stderr_fd, block); stderr_sha.update(block); stderr_bytes += len(block)
+                if stdout_bytes + stderr_bytes > current["resources"]["stream_limit_bytes"]:
+                    raise GateError("Make output exceeded frozen bound")
     try:
         process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    start_new_session=True, close_fds=True)
@@ -861,16 +1052,7 @@ def run_build() -> int:
             if now - started >= current["resources"]["wall_timeout_seconds"] and process.poll() is None:
                 try: os.killpg(process.pid, signal.SIGTERM)
                 except ProcessLookupError: pass
-            for key, _ in selector.select(timeout=1.0):
-                block = os.read(key.fd, 65536)
-                if not block:
-                    selector.unregister(key.fileobj); continue
-                if key.data == "stdout":
-                    write_all(stdout_fd, block); stdout_sha.update(block); stdout_bytes += len(block)
-                else:
-                    write_all(stderr_fd, block); stderr_sha.update(block); stderr_bytes += len(block)
-                if stdout_bytes + stderr_bytes > current["resources"]["stream_limit_bytes"]:
-                    raise GateError("Make output exceeded frozen bound")
+            consume_streams(until_eof=False)
         rc = process.wait()
         observed_candidate = disarm_candidate()
         assert_same_artifact_inode(candidate, observed_candidate)
@@ -896,17 +1078,31 @@ def run_build() -> int:
                 except ProcessLookupError: pass
                 process.wait()
         try:
+            consume_streams(until_eof=True)
+        except Exception as stream_error:
+            error += f"; stream-drain={stream_error}"
+        try:
             observed_candidate = disarm_candidate()
             assert_same_artifact_inode(candidate, observed_candidate)
             candidate = observed_candidate or candidate
         except Exception as disarm_error: error += f"; disarm={disarm_error}"
+        for descriptor in (stdout_fd, stderr_fd, monitor_fd):
+            try: os.fsync(descriptor)
+            except OSError as sync_error: error += f"; fsync={sync_error}"
+        stdout_identity = file_identity(stdout_path)
+        stderr_identity = file_identity(stderr_path)
+        monitor_identity = file_identity(monitor_path)
         emit_receipt("build", "FAILURE", 10, chain, "FAIL_BUILD_NO_RETRY",
                      evidence={"argv": argv, "return_code": 3, "elapsed_seconds": time.monotonic()-started,
-                               "stdout_sha256": stdout_sha.hexdigest(), "stderr_sha256": stderr_sha.hexdigest(),
+                               "stdout_sha256": stdout_identity["sha256"],
+                               "stderr_sha256": stderr_identity["sha256"],
+                               "monitor_sha256": monitor_identity["sha256"],
                                "candidate": candidate, "error": error},
                      profile_name=profile_map(current)["BUILD"]["name"])
         return 3
     finally:
+        if selector is not None:
+            selector.close()
         for descriptor in (stdout_fd, stderr_fd, monitor_fd):
             try: os.close(descriptor)
             except OSError: pass
@@ -995,10 +1191,24 @@ def run_static_audit() -> int:
                      profile_name=profile_map(current)["STATIC_AUDIT"]["name"])
         return 0
     except Exception as exc:
+        sync_errors: list[str] = []
+        for descriptor in (framed_fd, summary_fd):
+            try:
+                os.fsync(descriptor)
+            except OSError as sync_error:
+                sync_errors.append(str(sync_error))
+        framed_identity = file_identity(framed_path)
+        summary_identity = file_identity(summary_path)
+        error = str(exc)
+        if sync_errors:
+            error += f"; fsync={sync_errors}"
         emit_receipt("static-audit", "FAILURE", 13, chain, "FAIL_STATIC_AUDIT_NO_RETRY",
                      evidence={"argv": ["557_EXACT_CONFINED_COMMANDS"], "return_code": 4,
                                "elapsed_seconds": time.monotonic()-started, "static_commands": len(outputs),
-                               "objects": 131, "candidate": candidate, "error": str(exc)},
+                               "objects": 131, "candidate": candidate,
+                               "stdout_sha256": framed_identity["sha256"],
+                               "stderr_sha256": summary_identity["sha256"],
+                               "error": error},
                      profile_name=profile_map(current)["STATIC_AUDIT"]["name"])
         return 4
     finally:
@@ -1049,6 +1259,7 @@ def validate_authorization_token(path: Path) -> dict[str, Any]:
         raise GateError("authorization token gate identity drift")
     authorization = current["authorization"]
     for field, policy_key in (("supervisor", "supervisor_path"),
+                              ("supervisor_receipt_schema", "supervisor_receipt_schema_path"),
                               ("token_producer", "token_producer_path")):
         pinned_path = _resolve_pinned(authorization[policy_key])
         observed = file_identity(pinned_path)
@@ -1062,7 +1273,8 @@ def validate_authorization_token(path: Path) -> dict[str, Any]:
     return value
 
 
-def validate_static_contract(*, require_fresh: bool = True) -> dict[str, Any]:
+def validate_static_contract(*, require_fresh: bool = True,
+                             require_token_fresh: bool = True) -> dict[str, Any]:
     current, policy_sha = policy()
     parents = verify_pins(current["parents"])
     tools = verify_pins(current["system_tools"])
@@ -1072,8 +1284,12 @@ def validate_static_contract(*, require_fresh: bool = True) -> dict[str, Any]:
     if authorization is not None:
         authorization_tools = [
             file_identity(_resolve_pinned(authorization[path_key]))
-            for path_key in ("token_producer_path", "supervisor_path")
+            for path_key in (
+                "token_producer_path", "supervisor_path", "supervisor_receipt_schema_path",
+            )
         ]
+        if authorization_tools[-1]["sha256"] != authorization["supervisor_receipt_schema_sha256"]:
+            raise GateError("supervisor receipt schema identity drift")
     g1 = load_g1(); g1_policy = g1.validate_policy_schema()
     g1.verify_plan_identity(); g1.verify_source_inputs(g1_policy); g1.verify_object_contract(g1_policy)
     source_root, _ = source_contract(); sealed, _ = inventory(source_root, stage="sealed")
@@ -1082,8 +1298,12 @@ def validate_static_contract(*, require_fresh: bool = True) -> dict[str, Any]:
         raise GateError("policy Make argv differs from frozen G1")
     if len(static) != 557 or len(profiles) != 4 or sealed["entry_count"] != 352:
         raise GateError("static cardinality drift")
-    if require_fresh and (os.path.lexists(ATTEMPT_ROOT) or os.path.lexists(AUDIT_ROOT) or os.path.lexists(TOKEN_PATH)):
-        raise GateError("fresh v11 external path already exists")
+    if require_fresh and any(os.path.lexists(path) for path in (
+        ATTEMPT_ROOT, AUDIT_ROOT, SUPERVISOR_FINAL_PATH, SUPERVISOR_FAILURE_PATH,
+    )):
+        raise GateError("fresh v11 campaign output path already exists")
+    if require_token_fresh and os.path.lexists(TOKEN_PATH):
+        raise GateError("fresh v11 authorization token path already exists")
     return {
         "status": "PASS_MOTION_GAUGE_GPU_BUILD_V11_STATIC_DEFAULT_DENY",
         "policy_sha256": policy_sha, "parent_count": len(parents), "system_tool_count": len(tools),

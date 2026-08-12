@@ -1,0 +1,122 @@
+{
+  "schema_version": "smpcc-r8-liquid-s5b0-replay-execution-policy-v9",
+  "document_type": "SMPCC_R8_LIQUID_S5B0_REPLAY_EXECUTION_POLICY_V9",
+  "status": "STATIC_FROZEN_BUILD_AND_EXACT_REPLAY_AUTHORIZATION_REQUIRED",
+  "selection": {
+    "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01", "role": "PRIMARY_BASELINE",
+    "source_bag_path": "/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag",
+    "source_bag_sha256": "c82c1f16b41bced51ab0aff63e4ef40b469501e185851344789fc3d62399fc07",
+    "planned_denominator": 1, "optional_bag_read": false, "optional_authorized": false,
+    "c2_authorized": false, "second_execution_authorized": false, "cross_method_ranking": false
+  },
+  "parents": [
+    {"role": "STAGE_3_6_PLAN", "path": "docs/实物实验注意事项/对比试验/仿真接入液体/20260811_RTX5080_DualSPHysics_GPU液体仿真阶段3-6续接方案_Agent执行版.md", "sha256": "bb64db0f62cfab74cd4040798d046dfd6420a04276605296bf9492cddb691f01"},
+    {"role": "S5B0_V8_POLICY", "path": "config/target_hosts/liquid_zrj_msi_u2404_s5b0_replay_execution_policy_v8.json", "sha256": "e35678793ea4de12ff1451a692d608b597295fbb13288f7c73bf71b4d904c064"},
+    {"role": "S5B0_V8_POLICY_SCHEMA", "path": "schema/target_host_s5b0_replay_execution_policy_v8.json", "sha256": "398a344a4124569ac1f5105c748af8b8084c0c41cbc0d79b6f22c283c08227f2"},
+    {"role": "S5B0_V8_GATE", "path": "scripts/r8_liquid_s5b0_replay_execution_gate_v8.py", "sha256": "18a46577bf4b6a7d40e1031c29c43b96096911365a0fa12ced1c2de8244d541f"},
+    {"role": "S5B0_V8_RUNTIME", "path": "scripts/r8_liquid_s5b0_replay_runtime_supervisor_v8.py", "sha256": "765b8608758d0d1888bb6929f65f1dfdeae4c608036e532bdcf34c7aa1a04167"},
+    {"role": "FINALIZED_FRAME_READER_V2", "path": "scripts/r8_liquid_s5b0_finalized_frame_reader_v2.py", "sha256": "aecd5125625ce4da91b9782f6a28eed017ff5e163056fc648b414aca96e2af4c"},
+    {"role": "S5B0_ADMISSION_V4", "path": "config/target_hosts/liquid_zrj_msi_u2404_s5b0_replay_admission_policy_v4.json", "sha256": "d972f66d14882c28abe5629828d2ccaab1013f82a65b82f6250cf55716e41f21"},
+    {"role": "STAGING_V4", "path": "scripts/r8_liquid_s5b0_staging_case_materializer_v4.py", "sha256": "83c56eda6c13654f1e0d3868511f24e1448e61da3b66b1e1a8a795f81c95346e"},
+    {"role": "V11_BUILD_POLICY", "path": "config/target_hosts/liquid_zrj_msi_u2404_motion_gauge_gpu_build_execution_policy_v11.json", "sha256": "258ced66bff9ff65a19c5d59d454031534738f4f9668f1b19174bfe673f0ebda"},
+    {"role": "V11_BUILD_GATE", "path": "scripts/r8_liquid_motion_gauge_gpu_build_execution_gate_v11.py", "sha256": "a20f49865417794fd3c941e8095d36fa7d1f8c6da06a2a57be7d6128200a7fe7"},
+    {"role": "V11_BUILD_SUPERVISOR", "path": "scripts/r8_liquid_motion_gauge_gpu_build_lifecycle_supervisor_v11.py", "sha256": "260b5798bc318c21ec58f2c2b99e140e4d6247a5fcc91434c6a7733deb0b8deb"},
+    {"role": "TRANSFER_MANIFEST_V10", "path": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10/transfer_manifest.json", "sha256": "8c653953fb121961ba206508fed992c1dee77148b6cd4302052d3bc48fa86cf6"},
+    {"role": "TRANSFER_CHECKSUMS_V10", "path": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10/checksums.sha256", "sha256": "55227d3fe126d86aa2199d7c851f1ae893d35402e220cb11fc24f7500d549c1d"},
+    {"role": "SOLVER_PATH_V10", "path": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10/solver_path.csv", "sha256": "681f7acb30cf0c31b0e7750e85144c7652d3abcbc2da427fefcdadd1f6147453"},
+    {"role": "SETTLED_RECEIPT", "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_repeatability_restart_20260811T124800Z_v15.qc_v1.json", "sha256": "4703c08e09b33fb16ad68b368dd5e99c2b2c930a3091008fa399241fc58a7fd8"}
+  ],
+  "build_dependency": {
+    "campaign_id": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11",
+    "build_id": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a",
+    "candidate_path": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.partial/output/artifacts/DualSPHysics5.4_linux64",
+    "campaign_final_receipt": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.evidence/15_campaign_final_v11.json",
+    "required_status": "PASS_MOTION_GAUGE_GPU_BUILD_SM120_STATIC_AUDIT_DEVELOPMENT_CANDIDATE", "materialized": false
+  },
+  "replay": {
+    "replay_id": "s5b0_primary_bsmooth_b01_20260812T110635Z_v9",
+    "stage_root": "/home/zrj/scout_liquid_lab/replays/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.stage.partial",
+    "partial_root": "/home/zrj/scout_liquid_lab/replays/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.partial",
+    "final_root": "/home/zrj/scout_liquid_lab/outgoing/s5b0_primary_bsmooth_b01_20260812T110635Z_v9",
+    "audit_root": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.evidence",
+    "profile_name": "r8-liquid-s5b0-primary-bsmooth-b01-20260812t110635z-v9",
+    "profile_path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-s5b0-primary-bsmooth-b01-20260812t110635z-v9.profile",
+    "token_path": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.authorization.json",
+    "start_receipt": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.start.json",
+    "attempt_receipt": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.runtime_attempt.json",
+    "final_receipt": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.final.json",
+    "failure_receipt": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.failure.json",
+    "lifecycle_receipt": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.lifecycle.json",
+    "output_inventory_receipt": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.output_inventory.json",
+    "result_package_receipt": "/home/zrj/scout_liquid_lab/audits/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.result_package.json",
+    "finalized": false
+  },
+  "sources": {
+    "source_bag": {"path": "/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag", "sha256": "c82c1f16b41bced51ab0aff63e4ef40b469501e185851344789fc3d62399fc07", "size_bytes": 13996902, "mode": "0755"},
+    "transfer_root": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10",
+    "transfer_manifest": {"path": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10/transfer_manifest.json", "sha256": "8c653953fb121961ba206508fed992c1dee77148b6cd4302052d3bc48fa86cf6", "size_bytes": 6807, "mode": "0600"},
+    "transfer_checksums": {"path": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10/checksums.sha256", "sha256": "55227d3fe126d86aa2199d7c851f1ae893d35402e220cb11fc24f7500d549c1d", "size_bytes": 1638, "mode": "0600"},
+    "solver_path": {"path": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10/solver_path.csv", "sha256": "681f7acb30cf0c31b0e7750e85144c7652d3abcbc2da427fefcdadd1f6147453", "size_bytes": 78627, "mode": "0600"},
+    "case_xml": {"path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.xml", "sha256": "28205c2234dda565da600947d03481c492c6bb493b2e058bd04cd360b7862acb", "size_bytes": 7800, "mode": "0440"},
+    "case_bi4": {"path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.bi4", "sha256": "b463ddfe548b3db78b02f23b075dadbdd3c71ea766eb092701b56978ddb3a8e7", "size_bytes": 400842, "mode": "0440"},
+    "restart_part": {"path": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_viscoart0p3_cold_b_20260811T113902Z_v14.partial/output/data/Part_0901.bi4", "sha256": "023c2ae47281351f7c601a60709799cf8155745193d7e2aa5ee862256ad9b1f4", "size_bytes": 401410, "mode": "0440"},
+    "restart_head": {"path": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_viscoart0p3_cold_b_20260811T113902Z_v14.partial/output/data/Part_Head.ibi4", "sha256": "6511cbf54319ce0fbdde9aefc6303f75dee53b56530db3aa25b18212281c266a", "size_bytes": 1554, "mode": "0440"},
+    "dsph_config": {"path": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1m_gencase_seed_v3_20260808T150802Z.partial/input/DsphConfig.xml", "sha256": "0644c9a6a6687678950fc8966e352b4bbd3de9d3cb787db9e507c2eb7ccaddcd", "size_bytes": 293, "mode": "0400"},
+    "settled_receipt": {"path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_repeatability_restart_20260811T124800Z_v15.qc_v1.json", "sha256": "4703c08e09b33fb16ad68b368dd5e99c2b2c930a3091008fa399241fc58a7fd8", "size_bytes": 8743, "mode": "0640"}
+  },
+  "solver": {"backend": "GPU_0", "candidate_execution_count": 1, "parallel_jobs": 1, "restart_part": 901, "settled_time_s": 45.05001991890928, "recorded_motion_end_s": 49.379999999999995, "solver_tail_s": 1.0, "replay_physical_seconds": 50.379999999999995, "tout_s": 0.05, "argv_suffix": ["-gpu:0", "-partbegin:901:901", "/restart", "-tmax:95.43001991890927", "-tout:0.05", "-ompthreads:1", "-stable:1", "-vres:0", "-cellmode:full", "-cfl:0.1", "-shifting:none", "-viscoart:0.3", "-sv:binx,info", "-svres:1", "-svtimers:0", "-svdomainvtk:0", "-saveposdouble:1", "-nortimes:1", "-createdirs:1", "-csvsep:0"], "environment": {"HOME": "/nonexistent", "PATH": "/usr/bin", "LC_ALL": "C", "LANG": "C", "TZ": "UTC0", "TMPDIR": "/tmp", "OMP_NUM_THREADS": "1", "OMP_DYNAMIC": "FALSE", "CUDA_VISIBLE_DEVICES": "0"}},
+  "resources": {"wall_timeout_seconds": 5400, "kill_after_seconds": 30, "sample_min_seconds": 10, "sample_max_seconds": 30, "minimum_available_memory_bytes": 4294967296, "minimum_free_vram_bytes": 6442450944, "maximum_output_bytes": 1073741824, "xid_zero_required": true},
+  "devices": ["/dev/nvidia0", "/dev/nvidiactl", "/dev/nvidia-uvm", "/dev/nvidia-uvm-tools"],
+  "output_contract": {
+    "particles": 9078, "moving": 2669, "fluid": 6409, "nout": 0,
+    "canonical_ids_sha256": "dbce99d36546067ed3a903e5892383885b6bb9b94feb1f4171411743fec9bdcf",
+    "raw_gauge_count": 16,
+    "raw_gauge_names": ["GaugesSwl_s5b0_p00.csv", "GaugesSwl_s5b0_p01.csv", "GaugesSwl_s5b0_p02.csv", "GaugesSwl_s5b0_p03.csv", "GaugesSwl_s5b0_p04.csv", "GaugesSwl_s5b0_p05.csv", "GaugesSwl_s5b0_p06.csv", "GaugesSwl_s5b0_p07.csv", "GaugesSwl_s5b0_p08.csv", "GaugesSwl_s5b0_p09.csv", "GaugesSwl_s5b0_p10.csv", "GaugesSwl_s5b0_p11.csv", "GaugesSwl_s5b0_p12.csv", "GaugesSwl_s5b0_p13.csv", "GaugesSwl_s5b0_p14.csv", "GaugesSwl_s5b0_p15.csv"],
+    "required_root_files": ["Run.csv", "Run.out", "RunPARTs.csv"],
+    "required_data_files": ["data/Part_Head.ibi4", "data/PartInfo.ibi4", "data/PartMotionRef.ibi4", "data/PartOut_000.obi4"],
+    "part_file_pattern": "^data/Part_[0-9]{4}\\.bi4$",
+    "raw_gauge_format": "DUALSPHYSICS_5_4_JGAUGESWL_SEMICOLON_10_COLUMN",
+    "normalized_gauge_format": "RFC4180_TIME_S_ZSURF_M_V1",
+    "maximum_invalid_ratio": 0.001,
+    "motion_ref_required": true, "runparts_required": true,
+    "boundary_qc_required": true, "raw_normalized_provenance_required": true,
+    "external_inventory_receipt_required": true, "frame_reader_revision": 2,
+    "qc_pipeline": ["frame_reader.read_finalized", "frame_reader.parse_runparts", "output_qc.parse_motion_ref", "output_qc.boundary_qc", "output_qc.normalize_gauges"]
+  },
+  "lifecycle": {"create_new": true, "load_verify_run_finally_unload": true, "zero_profile_residue": true, "zero_process_residue": true, "zero_mount_residue": true, "candidate_source_mode": "0400", "network_unshared": true, "host_writable_bind_count": 1, "candidate_source_unchanged": true, "failure_preserved": true},
+  "execution_components": {
+    "gate": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5b0_replay_execution_gate_v9.py",
+    "runtime_supervisor": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5b0_replay_runtime_supervisor_v9.py",
+    "lifecycle_supervisor": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5b0_replay_lifecycle_supervisor_v9.py",
+    "authorization_token_producer": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5b0_replay_authorization_token_v9.py"
+  },
+  "schemas": {
+    "policy": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5b0_replay_execution_policy_v9.json",
+    "authorization_token": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5b0_replay_authorization_token_v9.json",
+    "execution_receipt": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5b0_replay_execution_receipt_v9.json",
+    "result_package": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5b0_replay_result_package_v9.json"
+  },
+  "publication": {
+    "partial_root": "/home/zrj/scout_liquid_lab/replays/s5b0_primary_bsmooth_b01_20260812T110635Z_v9.partial",
+    "final_root": "/home/zrj/scout_liquid_lab/outgoing/s5b0_primary_bsmooth_b01_20260812T110635Z_v9",
+    "rename_syscall": "renameat2", "rename_flag": "RENAME_NOREPLACE", "rename_flag_value": 1,
+    "parent_fsync_required": true, "checksums_relative_path": "checksums.sha256",
+    "checksums_scope": "ALL_REGULAR_PACKAGE_FILES_EXCEPT_CHECKSUMS_MANIFEST",
+    "partial_preserved_on_failure": true
+  },
+  "journal": {
+    "boot_id_path": "/proc/sys/kernel/random/boot_id",
+    "anchor_argv": ["/usr/bin/journalctl", "-k", "--show-cursor", "-n", "0", "--no-pager"],
+    "sync_argv": ["/usr/bin/journalctl", "--sync"],
+    "query_argv_template": ["/usr/bin/journalctl", "-k", "--boot", "{boot_id}", "--after-cursor", "{cursor}", "--show-cursor", "--no-pager", "-o", "cat"],
+    "xid_pattern": "NVRM: Xid", "same_boot_required": true, "zero_xid_required": true
+  },
+  "authorization": {
+    "default_authorized": false, "uid": 1000, "gid": 1000, "supplementary_groups": 0,
+    "exact_new_user_authorization_required": true,
+    "token_schema": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5b0_replay_authorization_token_v9.json",
+    "token_mode": "0600", "profile_sha256": null, "candidate_sha256": null
+  },
+  "claims": {"build_started": false, "replay_started": false, "candidate_executed": false, "gpu_exposed": false, "profile_loaded": false, "sudo_used": false, "network_used": false, "files_written": false, "optional_bag_read": false, "stage6_pass": false, "development_only": true, "physical_reference_pending": true, "physical_fidelity_validated": false, "formal": false, "production": false},
+  "next": "V11_BUILD_PASS_THEN_EXACT_V9_PROFILE_TOKEN_CANDIDATE_HASH_USER_AUTHORIZATION_REQUIRED"
+}

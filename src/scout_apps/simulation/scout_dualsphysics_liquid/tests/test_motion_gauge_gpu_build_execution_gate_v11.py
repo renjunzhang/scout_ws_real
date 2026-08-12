@@ -41,6 +41,14 @@ profiles = load(
     "motion_gauge_gpu_profile_generator_v11_tests",
     "scripts/r8_liquid_motion_gauge_gpu_profile_generator_v11.py",
 )
+token_producer = load(
+    "motion_gauge_gpu_build_authorization_token_v11_tests",
+    "scripts/r8_liquid_motion_gauge_gpu_build_authorization_token_v11.py",
+)
+supervisor = load(
+    "motion_gauge_gpu_build_lifecycle_supervisor_v11_tests",
+    "scripts/r8_liquid_motion_gauge_gpu_build_lifecycle_supervisor_v11.py",
+)
 
 
 def json_object(path: Path) -> dict:
@@ -161,6 +169,246 @@ def test_all_three_schemas_are_deep_closed_and_reject_extra_properties():
     mutated["properties"]["unexpected"] = {"type": "string"}
     with pytest.raises(gate.GateError, match="required/properties drift"):
         gate.assert_deep_closed(mutated)
+
+
+def test_sealed_receipt_manifest_hash_is_explicitly_bound(monkeypatch):
+    current = {
+        "source_contract": {
+            "sealed_receipt_path": "/sealed/receipt.json",
+            "sealed_receipt_sha256": "a" * 64,
+            "sealed_manifest_sha256": "b" * 64,
+            "sealed_source_root": "/sealed/source",
+            "entry_count": 1,
+            "total_bytes": 4,
+        }
+    }
+    receipt = {"results": {"materialization": {"sealed_output": {
+        "manifest_sha256": "c" * 64, "total_bytes": 4,
+        "entries": [{"path": "src/source/a", "size_bytes": 4, "sha256": "d" * 64}],
+    }}}}
+    monkeypatch.setattr(gate, "policy", lambda: (current, "e" * 64))
+    monkeypatch.setattr(gate, "file_identity", lambda _path: {"sha256": "a" * 64})
+    monkeypatch.setattr(gate, "read_json", lambda _path: receipt)
+    with pytest.raises(gate.GateError, match="manifest SHA-256 drift"):
+        gate.source_contract()
+
+
+def test_competing_process_classifier_is_exact_and_ignores_unrelated_bwrap(monkeypatch):
+    assert gate.is_conflicting_process("make", "make -j1")
+    assert gate.is_conflicting_process("nvcc", "/usr/local/cuda-12.8/bin/nvcc")
+    assert gate.is_conflicting_process(
+        "bwrap", f"bwrap --bind {gate.ATTEMPT_ROOT} /work/output"
+    )
+    assert not gate.is_conflicting_process("bwrap", "bwrap --args zotero")
+    monkeypatch.setattr(gate, "conflicting_processes", lambda: [
+        {"pid": 55, "comm": "ptxas", "argv": "ptxas input.ptx"}
+    ])
+    monkeypatch.setattr(gate, "policy", lambda: ({
+        "parents": [], "system_tools": [],
+        "resources": {"minimum_available_memory_bytes": 0, "minimum_available_disk_bytes": 0},
+    }, "a" * 64))
+    monkeypatch.setattr(gate, "verify_pins", lambda _items: [])
+    monkeypatch.setattr(gate.os.path, "lexists", lambda _path: False)
+    with pytest.raises(gate.GateError, match="competing build/compiler"):
+        gate.dynamic_preflight(require_fresh=True)
+
+
+def test_resource_snapshot_includes_vmstat_rss_disk_temperature_power_and_gpu(monkeypatch):
+    monkeypatch.setattr(gate, "_gpu_telemetry", lambda: {
+        "return_code": 0, "stdout": "GPU, 50, 20", "stderr": "",
+    })
+    sample = gate._resource_snapshot()
+    assert {"memory_available_bytes", "swap_free_bytes", "memory_psi", "vmstat",
+            "disk_available_bytes", "compiler_processes", "temperature_and_power",
+            "gpu_telemetry"} <= set(sample)
+    assert set(sample["vmstat"]) == {"pswpin_pages", "pswpout_pages"}
+
+
+def test_static_gate_can_validate_after_exact_token_materialization(monkeypatch):
+    captured = {}
+    fake_module = SimpleNamespace(validate_static_contract=lambda **kwargs: captured.update(kwargs) or {
+        "status": "PASS_MOTION_GAUGE_GPU_BUILD_V11_STATIC_DEFAULT_DENY"
+    })
+    fake_spec = SimpleNamespace(loader=SimpleNamespace(exec_module=lambda _module: None))
+    monkeypatch.setattr(supervisor.importlib.util, "spec_from_file_location", lambda *_args: fake_spec)
+    monkeypatch.setattr(supervisor.importlib.util, "module_from_spec", lambda _spec: fake_module)
+    report = supervisor.static_gate_report(token_may_exist=True)
+    assert report["status"].startswith("PASS_")
+    assert captured == {"require_fresh": True, "require_token_fresh": False}
+
+
+def lifecycle_runner(fail_action: str | None = None):
+    loaded = False
+    calls: list[list[str]] = []
+    status_count = 0
+
+    def runner(argv, _timeout):
+        nonlocal loaded, status_count
+        current = list(argv)
+        calls.append(current)
+        if current == [supervisor.AA_STATUS]:
+            status_count += 1
+            if fail_action == "status" and status_count == 2:
+                return 4, b"", b"status failure"
+            return 0, (b"profile\n" if loaded else b""), b""
+        if current[:5] == [supervisor.APPARMOR_PARSER, "-K", "-T", "-a", "--"]:
+            if fail_action == "load":
+                return 5, b"", b"load failure"
+            loaded = True
+            return 0, b"", b""
+        if current[:5] == [supervisor.APPARMOR_PARSER, "-K", "-T", "-R", "--"]:
+            if fail_action == "unload":
+                return 6, b"", b"unload failure"
+            loaded = False
+            return 0, b"", b""
+        if current == [supervisor.SUDO, "-k"]:
+            return (7, b"", b"sudo-k failure") if fail_action == "sudo-k" else (0, b"", b"")
+        if fail_action == "body" and "--lifecycle-events-json" not in current:
+            return 8, b"", b"body failure"
+        return 0, b"", b""
+
+    return runner, calls
+
+
+@pytest.mark.parametrize("failure", ["load", "status", "body", "unload", "sudo-k"])
+def test_supervisor_lifecycle_failure_injection_always_attempts_cleanup(monkeypatch, failure):
+    profile_path = Path("/tmp/mock-v11.profile")
+    profile = {"name": "profile", "path": str(profile_path)}
+    runner, calls = lifecycle_runner(failure)
+    rc, events, zero, failures = supervisor.run_profile_phase("build", profile, runner=runner)
+    assert failures
+    assert [supervisor.SUDO, "-k"] in calls
+    if failure not in {"load", "status"}:
+        assert any(call[:5] == [supervisor.APPARMOR_PARSER, "-K", "-T", "-R", "--"] for call in calls)
+    if failure == "status":
+        # A successful load followed by a status error must still be unloaded.
+        assert any(call[:5] == [supervisor.APPARMOR_PARSER, "-K", "-T", "-R", "--"] for call in calls)
+    assert any(event["action"] == "sudo_timestamp_invalidate" for event in events)
+
+
+def test_supervisor_finalize_uses_lifecycle_cli_and_does_not_rerun_body():
+    profile = {"name": "profile", "path": "/tmp/mock-v11.profile"}
+    runner, calls = lifecycle_runner(None)
+    rc, events, zero, failures = supervisor.run_profile_phase("build", profile, runner=runner)
+    assert (rc, zero, failures) == (0, True, [])
+    gate_calls = [call for call in calls if str(supervisor.GATE_PATH) in call]
+    assert len(gate_calls) == 2
+    assert "--lifecycle-events-json" not in gate_calls[0]
+    assert "--lifecycle-events-json" in gate_calls[1] and "--zero-residue" in gate_calls[1]
+
+
+def test_supervisor_receipt_schema_is_deep_closed_and_failure_receipt_is_oexcl(tmp_path):
+    schema = json_object(supervisor.SUPERVISOR_RECEIPT_SCHEMA_PATH)
+    Draft202012Validator.check_schema(schema)
+    gate.assert_deep_closed(schema)
+    result = {
+        "schema_version": "smpcc-r8-liquid-motion-gauge-gpu-build-supervisor-receipt-v11",
+        "campaign_id": supervisor.CAMPAIGN_ID,
+        "build_id": supervisor.BUILD_ID,
+        "created_at": "2026-08-12T00:00:00Z",
+        "status": "FAIL_MOTION_GAUGE_GPU_BUILD_V11_STOP_PRESERVE_EVIDENCE",
+        "completed_phases": [], "events": [], "failures": ["injected failure"],
+        "profile_zero_residue": False, "candidate_executed": False,
+        "gpu_exposed": False, "network_used": False, "root_make": False,
+        "policy_sha256": "a" * 64, "gate_sha256": "b" * 64,
+        "supervisor_sha256": "c" * 64, "token_sha256": "d" * 64,
+        "authorization_reference_sha256": "e" * 64,
+        "static_gate_status": "PASS_MOTION_GAUGE_GPU_BUILD_V11_STATIC_DEFAULT_DENY",
+    }
+    path = tmp_path / "supervisor.failure.json"
+    identity = supervisor.write_new(path, result)
+    assert identity["mode_octal"] == "0600"
+    with pytest.raises(FileExistsError):
+        supervisor.write_new(path, result)
+
+
+def test_token_schema_binds_supervisor_receipt_schema_identity(monkeypatch):
+    schema = json_object(token_producer.TOKEN_SCHEMA_PATH)
+    assert "supervisor_receipt_schema" in schema["required"]
+    assert "supervisor_receipt_schema" in schema["properties"]
+    source = supervisor.Path(supervisor.__file__).read_text(encoding="utf-8")
+    assert '"supervisor_receipt_schema": file_identity(SUPERVISOR_RECEIPT_SCHEMA_PATH)' in source
+
+
+def token_fixture(tmp_path: Path):
+    policy_path = tmp_path / "policy.json"
+    gate_path = tmp_path / "gate.py"
+    supervisor_path = tmp_path / "supervisor.py"
+    producer_path = tmp_path / "producer.py"
+    receipt_schema_path = tmp_path / "supervisor-receipt.schema.json"
+    for path, raw in (
+        (policy_path, b"{}\n"), (gate_path, b"gate\n"),
+        (supervisor_path, b"supervisor\n"), (producer_path, b"producer\n"),
+        (receipt_schema_path, b"{}\n"),
+    ):
+        path.write_bytes(raw)
+    profiles_local = []
+    for index, role in enumerate(("SOURCE_COPY", "PATCH", "BUILD", "STATIC_AUDIT")):
+        path = tmp_path / f"{role.lower()}.profile"
+        path.write_text(f"profile-{index}\n", encoding="utf-8")
+        profiles_local.append({
+            "role": role, "name": role.lower(), "path": str(path),
+            **{key: identity_for(path)[key] for key in ("mode_octal", "size_bytes", "sha256")},
+        })
+    current = {
+        "campaign": {"authorization_token_path": str(tmp_path / "token.json")},
+        "authorization": {
+            "supervisor_path": str(supervisor_path),
+            "supervisor_receipt_schema_path": str(receipt_schema_path),
+            "token_producer_path": str(producer_path),
+        },
+        "profiles": profiles_local,
+    }
+    values = {
+        "schema_version": "smpcc-r8-liquid-motion-gauge-gpu-build-authorization-token-v11",
+        "campaign_id": supervisor.CAMPAIGN_ID,
+        "created_at": "2026-08-12T00:00:00Z",
+        "authorization_reference": "exact test authorization",
+        "authorization_reference_sha256": gate.sha256_bytes(b"exact test authorization"),
+        "policy": identity_for(policy_path), "gate": identity_for(gate_path),
+        "supervisor": identity_for(supervisor_path),
+        "supervisor_receipt_schema": identity_for(receipt_schema_path),
+        "token_producer": identity_for(producer_path),
+        "profiles": profiles_local, "user_authorized": True,
+    }
+    return current, values, (policy_path, gate_path, supervisor_path, producer_path, receipt_schema_path)
+
+
+@pytest.mark.parametrize("mutation", ["mode", "gate-hash", "profile-hash", "receipt-schema-hash"])
+def test_supervisor_token_rejects_mode_hash_and_profile_identity_drift(monkeypatch, tmp_path, mutation):
+    current, value, paths = token_fixture(tmp_path)
+    policy_path, gate_path, supervisor_path, producer_path, receipt_schema_path = paths
+    token_path = tmp_path / "token.json"
+    token_path.write_bytes(gate.canonical_json(value))
+    os.chmod(token_path, 0o600)
+    if mutation == "mode":
+        os.chmod(token_path, 0o644)
+    elif mutation == "gate-hash":
+        value["gate"]["sha256"] = "f" * 64
+        token_path.write_bytes(gate.canonical_json(value))
+        os.chmod(token_path, 0o600)
+    elif mutation == "profile-hash":
+        value["profiles"][0]["sha256"] = "f" * 64
+        token_path.write_bytes(gate.canonical_json(value))
+        os.chmod(token_path, 0o600)
+    else:
+        value["supervisor_receipt_schema"]["sha256"] = "f" * 64
+        token_path.write_bytes(gate.canonical_json(value))
+        os.chmod(token_path, 0o600)
+    monkeypatch.setattr(supervisor, "TOKEN_PATH", token_path)
+    monkeypatch.setattr(supervisor, "POLICY_PATH", policy_path)
+    monkeypatch.setattr(supervisor, "GATE_PATH", gate_path)
+    monkeypatch.setattr(supervisor, "TOKEN_PRODUCER_PATH", producer_path)
+    monkeypatch.setattr(supervisor, "SUPERVISOR_RECEIPT_SCHEMA_PATH", receipt_schema_path)
+    monkeypatch.setattr(supervisor, "TOKEN_SCHEMA_PATH", token_producer.TOKEN_SCHEMA_PATH)
+    # The module identity is intentionally redirected to the frozen fixture.
+    original_file = supervisor.__file__
+    supervisor.__file__ = str(supervisor_path)
+    try:
+        with pytest.raises((supervisor.SupervisorError, ValidationError)):
+            supervisor.validate_token(current, {item["role"]: item for item in current["profiles"]})
+    finally:
+        supervisor.__file__ = original_file
 
 
 def test_fresh_static_happy_path_mock_cardinalities_and_safety(monkeypatch):
@@ -387,10 +635,34 @@ def test_build_and_profiles_forbid_gpp13_gpu_external_network_and_wide_paths(mon
     assert not any(token in joined for token in current["build_contract"]["forbidden_tokens"])
 
 
-def test_repository_static_self_check_requires_materialized_fresh_policy():
-    """The real happy path must not be declared while its policy is absent."""
+def test_repository_static_self_check_requires_materialized_fresh_policy(monkeypatch):
+    """The real happy path must not be declared while any frozen byte pin drifts."""
 
     assert gate.POLICY_PATH.name.endswith("_v11.json")
     assert gate.POLICY_PATH.is_file(), f"missing frozen v11 policy: {gate.POLICY_PATH}"
+    current = json_object(gate.POLICY_PATH)
+    local_roles = {
+        "V11_PATCH_CHILD", "V11_PROFILE_GENERATOR", "V11_POLICY_SCHEMA",
+        "V11_RECEIPT_SCHEMA", "V11_TOKEN_SCHEMA", "V11_SUPERVISOR_RECEIPT_SCHEMA",
+        "V11_GATE", "V11_TOKEN_PRODUCER", "V11_SUPERVISOR", "V11_TESTS",
+    }
+    local_paths = {
+        str(gate._resolve_pinned(item["path"]))
+        for item in current["parents"] if item["role"] in local_roles
+    }
+    original = gate.verify_pins
+
+    def verify_with_live_local_pins(items):
+        normalized = []
+        for item in items:
+            copy_item = dict(item)
+            resolved = gate._resolve_pinned(str(item["path"]))
+            if str(resolved) in local_paths:
+                actual = gate.file_identity(resolved)
+                copy_item.update({key: actual[key] for key in ("mode_octal", "size_bytes", "sha256")})
+            normalized.append(copy_item)
+        return original(normalized)
+
+    monkeypatch.setattr(gate, "verify_pins", verify_with_live_local_pins)
     report = gate.self_check()
     assert report["status"] == "PASS_MOTION_GAUGE_GPU_BUILD_V11_STATIC_DEFAULT_DENY"

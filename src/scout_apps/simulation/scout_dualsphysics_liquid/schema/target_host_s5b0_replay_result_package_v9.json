@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_replay_result_package_v9.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "attempt_id", "replay_id", "planned_denominator", "parents", "identities", "provenance", "qc", "publication", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5b0-replay-result-package-v9"},
+    "status": {"const": "S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY"},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "replay_id": {"const": "s5b0_primary_bsmooth_b01_20260812T110635Z_v9"},
+    "planned_denominator": {"const": 1},
+    "parents": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_bag_sha256", "transfer_manifest_sha256", "candidate_sha256", "profile_sha256", "settled_part_sha256"],
+      "properties": {"source_bag_sha256": {"$ref": "#/$defs/sha"}, "transfer_manifest_sha256": {"$ref": "#/$defs/sha"}, "candidate_sha256": {"$ref": "#/$defs/sha"}, "profile_sha256": {"$ref": "#/$defs/sha"}, "settled_part_sha256": {"$ref": "#/$defs/sha"}}
+    },
+    "identities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["execution_receipt", "output_inventory_receipt", "frame_manifest", "native_gauge_provenance", "executed_boundary_motion", "checksums"],
+      "properties": {"execution_receipt": {"$ref": "#/$defs/file"}, "output_inventory_receipt": {"$ref": "#/$defs/file"}, "frame_manifest": {"$ref": "#/$defs/file"}, "native_gauge_provenance": {"$ref": "#/$defs/file"}, "executed_boundary_motion": {"$ref": "#/$defs/file"}, "checksums": {"$ref": "#/$defs/file"}}
+    },
+    "provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["raw_format", "normalized_format", "raw_preserved", "native_and_normalized_hashes_bound", "probe_count", "files", "manifest_sha256"],
+      "properties": {
+        "raw_format": {"const": "DUALSPHYSICS_5_4_JGAUGESWL_SEMICOLON_10_COLUMN"},
+        "normalized_format": {"const": "RFC4180_TIME_S_ZSURF_M_V1"}, "raw_preserved": {"const": true},
+        "native_and_normalized_hashes_bound": {"const": true}, "probe_count": {"const": 16},
+        "files": {"type": "array", "minItems": 16, "maxItems": 16, "items": {"$ref": "#/$defs/provenance_file"}},
+        "manifest_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "qc": {
+      "type": "object", "additionalProperties": false,
+      "required": ["particles", "moving", "fluid", "nout", "ids_complete_unique", "finite", "runparts_aligned", "part_motion_ref_aligned", "boundary_motion_aligned", "gauge_count", "gauge_invalid_ratio", "xid_count", "pass"],
+      "properties": {"particles": {"const": 9078}, "moving": {"const": 2669}, "fluid": {"const": 6409}, "nout": {"const": 0}, "ids_complete_unique": {"const": true}, "finite": {"const": true}, "runparts_aligned": {"const": true}, "part_motion_ref_aligned": {"const": true}, "boundary_motion_aligned": {"const": true}, "gauge_count": {"const": 16}, "gauge_invalid_ratio": {"type": "number", "minimum": 0, "maximum": 0.001}, "xid_count": {"const": 0}, "pass": {"const": true}}
+    },
+    "publication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["partial_root", "final_root", "renameat2_noreplace", "parent_fsynced", "exact_inventory", "checksums_complete"],
+      "properties": {"partial_root": {"type": "string", "pattern": "^/"}, "final_root": {"type": "string", "pattern": "^/"}, "renameat2_noreplace": {"const": true}, "parent_fsynced": {"const": true}, "exact_inventory": {"const": true}, "checksums_complete": {"const": true}}
+    },
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": ["raw_gauges_preserved", "native_and_normalized_hashes_bound", "optional_bag_read", "paired_ranking", "source_outcome_overridden", "physical_reference_pending", "physical_fidelity_validated", "formal", "production"],
+      "properties": {"raw_gauges_preserved": {"const": true}, "native_and_normalized_hashes_bound": {"const": true}, "optional_bag_read": {"const": false}, "paired_ranking": {"const": false}, "source_outcome_overridden": {"const": false}, "physical_reference_pending": {"const": true}, "physical_fidelity_validated": {"const": false}, "formal": {"const": false}, "production": {"const": false}}
+    }
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file": {"type": "object", "additionalProperties": false, "required": ["path", "sha256", "size_bytes", "mode"], "properties": {"path": {"type": "string", "pattern": "^/"}, "sha256": {"$ref": "#/$defs/sha"}, "size_bytes": {"type": "integer", "minimum": 1}, "mode": {"type": "string", "pattern": "^[0-7]{4}$"}}},
+    "provenance_file": {"type": "object", "additionalProperties": false, "required": ["slot", "probe_name", "raw_relative_path", "raw_sha256", "raw_size_bytes", "normalized_relative_path", "normalized_sha256", "normalized_size_bytes", "row_count", "invalid_count", "time_grid_sha256"], "properties": {"slot": {"type": "integer", "minimum": 0, "maximum": 15}, "probe_name": {"type": "string", "pattern": "^s5b0_p[0-1][0-9]$"}, "raw_relative_path": {"type": "string", "pattern": "^gauges/native/GaugesSwl_s5b0_p[0-1][0-9]\\.csv$"}, "raw_sha256": {"$ref": "#/$defs/sha"}, "raw_size_bytes": {"type": "integer", "minimum": 1}, "normalized_relative_path": {"type": "string", "pattern": "^gauges/normalized/GaugesSwl_s5b0_p[0-1][0-9]\\.csv$"}, "normalized_sha256": {"$ref": "#/$defs/sha"}, "normalized_size_bytes": {"type": "integer", "minimum": 1}, "row_count": {"type": "integer", "minimum": 1}, "invalid_count": {"type": "integer", "minimum": 0}, "time_grid_sha256": {"$ref": "#/$defs/sha"}}}
+  }
+}

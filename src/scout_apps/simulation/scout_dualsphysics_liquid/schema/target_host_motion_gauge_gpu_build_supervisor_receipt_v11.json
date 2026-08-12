@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_motion_gauge_gpu_build_supervisor_receipt_v11.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "campaign_id",
+    "build_id",
+    "created_at",
+    "status",
+    "completed_phases",
+    "events",
+    "failures",
+    "profile_zero_residue",
+    "candidate_executed",
+    "gpu_exposed",
+    "network_used",
+    "root_make",
+    "policy_sha256",
+    "gate_sha256",
+    "supervisor_sha256",
+    "token_sha256",
+    "authorization_reference_sha256",
+    "static_gate_status"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-motion-gauge-gpu-build-supervisor-receipt-v11"
+    },
+    "campaign_id": {
+      "const": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11"
+    },
+    "build_id": {
+      "const": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a"
+    },
+    "created_at": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 64
+    },
+    "status": {
+      "enum": [
+        "PASS_MOTION_GAUGE_GPU_BUILD_V11_ONE_SHOT_STATIC_AUDIT_DEVELOPMENT_CANDIDATE",
+        "FAIL_MOTION_GAUGE_GPU_BUILD_V11_STOP_PRESERVE_EVIDENCE"
+      ]
+    },
+    "completed_phases": {
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["source-copy", "patch", "wrapper", "build", "static-audit"]
+      }
+    },
+    "events": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/$defs/lifecycle_event"
+      }
+    },
+    "failures": {
+      "type": "array",
+      "maxItems": 128,
+      "items": {
+        "type": "string",
+        "maxLength": 65536
+      }
+    },
+    "profile_zero_residue": {
+      "type": "boolean"
+    },
+    "candidate_executed": {
+      "const": false
+    },
+    "gpu_exposed": {
+      "const": false
+    },
+    "network_used": {
+      "const": false
+    },
+    "root_make": {
+      "const": false
+    },
+    "policy_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "gate_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "supervisor_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "token_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "authorization_reference_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "static_gate_status": {
+      "const": "PASS_MOTION_GAUGE_GPU_BUILD_V11_STATIC_DEFAULT_DENY"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "lifecycle_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action",
+        "argv",
+        "return_code",
+        "elapsed_seconds",
+        "stdout_sha256",
+        "stderr_sha256",
+        "stdout_tail",
+        "stderr_tail",
+        "loaded"
+      ],
+      "properties": {
+        "action": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "argv": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "string",
+            "maxLength": 65536
+          }
+        },
+        "return_code": {
+          "type": "integer"
+        },
+        "elapsed_seconds": {
+          "type": "number",
+          "minimum": 0
+        },
+        "stdout_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "stderr_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "stdout_tail": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "stderr_tail": {
+          "type": "string",
+          "maxLength": 65536
+        },
+        "loaded": {
+          "oneOf": [
+            {"type": "null"},
+            {"type": "boolean"}
+          ]
+        }
+      }
+    }
+  }
+}

@@ -32,10 +32,13 @@ POLICY_PATH = ROOT / "config/target_hosts/liquid_zrj_msi_u2404_motion_gauge_gpu_
 POLICY_SCHEMA_PATH = ROOT / "schema/target_host_motion_gauge_gpu_build_execution_policy_v11.json"
 GATE_PATH = ROOT / "scripts/r8_liquid_motion_gauge_gpu_build_execution_gate_v11.py"
 TOKEN_SCHEMA_PATH = ROOT / "schema/target_host_motion_gauge_gpu_build_authorization_token_v11.json"
+SUPERVISOR_RECEIPT_SCHEMA_PATH = ROOT / "schema/target_host_motion_gauge_gpu_build_supervisor_receipt_v11.json"
 TOKEN_PRODUCER_PATH = ROOT / "scripts/r8_liquid_motion_gauge_gpu_build_authorization_token_v11.py"
 CAMPAIGN_ID = "motion_gauge_gpu_build_sm120_20260812T073037Z_v11"
 BUILD_ID = CAMPAIGN_ID + "_a"
 TOKEN_PATH = Path("/home/zrj/scout_liquid_lab/audits") / f"{BUILD_ID}.authorization.json"
+SUPERVISOR_FINAL_PATH = Path("/home/zrj/scout_liquid_lab/audits") / f"{BUILD_ID}.supervisor.final.json"
+SUPERVISOR_FAILURE_PATH = Path("/home/zrj/scout_liquid_lab/audits") / f"{BUILD_ID}.supervisor.failure.json"
 APPARMOR_PARSER = "/usr/sbin/apparmor_parser"
 AA_STATUS = "/usr/sbin/aa-status"
 SETPRIV = "/usr/bin/setpriv"
@@ -130,6 +133,7 @@ def policy_and_profiles() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
         "token_schema_path": TOKEN_SCHEMA_PATH,
         "token_producer_path": TOKEN_PRODUCER_PATH,
         "supervisor_path": Path(__file__).resolve(),
+        "supervisor_receipt_schema_path": SUPERVISOR_RECEIPT_SCHEMA_PATH,
     }
     for key, expected in expected_paths.items():
         if resolve_pinned(authorization.get(key, "")) != expected:
@@ -137,6 +141,9 @@ def policy_and_profiles() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     token_schema_identity = file_identity(TOKEN_SCHEMA_PATH)
     if token_schema_identity["sha256"] != authorization["token_schema_sha256"]:
         raise SupervisorError("policy token schema SHA-256 drift")
+    receipt_schema_identity = file_identity(SUPERVISOR_RECEIPT_SCHEMA_PATH)
+    if receipt_schema_identity["sha256"] != authorization["supervisor_receipt_schema_sha256"]:
+        raise SupervisorError("policy supervisor receipt schema SHA-256 drift")
     profile_list = current.get("profiles")
     if not isinstance(profile_list, list):
         raise SupervisorError("policy profiles are not an array")
@@ -151,16 +158,53 @@ def policy_and_profiles() -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     return current, profiles
 
 
-def static_gate_report() -> dict[str, Any]:
+def static_gate_report(*, token_may_exist: bool = False) -> dict[str, Any]:
     spec = importlib.util.spec_from_file_location("r8_motion_v11_gate_for_supervisor", GATE_PATH)
     if spec is None or spec.loader is None:
         raise SupervisorError("cannot load exact v11 gate for static admission")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    report = module.self_check()
+    report = module.validate_static_contract(
+        require_fresh=True, require_token_fresh=not token_may_exist
+    )
     if report.get("status") != "PASS_MOTION_GAUGE_GPU_BUILD_V11_STATIC_DEFAULT_DENY":
         raise SupervisorError("v11 gate static admission is not PASS")
     return report
+
+
+def canonical_json(value: Any) -> bytes:
+    return (json.dumps(value, ensure_ascii=False, allow_nan=False, sort_keys=True,
+                       separators=(",", ":")) + "\n").encode("utf-8")
+
+
+def write_all(descriptor: int, raw: bytes) -> None:
+    offset = 0
+    while offset < len(raw):
+        count = os.write(descriptor, raw[offset:])
+        if count <= 0:
+            raise SupervisorError("short supervisor receipt write")
+        offset += count
+
+
+def write_new(path: Path, value: Mapping[str, Any]) -> dict[str, Any]:
+    schema = read_json(SUPERVISOR_RECEIPT_SCHEMA_PATH)
+    Draft202012Validator.check_schema(schema)
+    Draft202012Validator(schema).validate(value)
+    descriptor = os.open(
+        path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600,
+    )
+    try:
+        os.fchmod(descriptor, 0o600)
+        write_all(descriptor, canonical_json(value))
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+    return file_identity(path)
 
 
 def validate_token(current: Mapping[str, Any], profiles: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
@@ -179,6 +223,7 @@ def validate_token(current: Mapping[str, Any], profiles: Mapping[str, Mapping[st
         "policy": file_identity(POLICY_PATH),
         "gate": file_identity(GATE_PATH),
         "supervisor": file_identity(Path(__file__).resolve()),
+        "supervisor_receipt_schema": file_identity(SUPERVISOR_RECEIPT_SCHEMA_PATH),
         "token_producer": file_identity(TOKEN_PRODUCER_PATH),
     }
     for key, expected in expected_identities.items():
@@ -216,8 +261,8 @@ def run_capture(argv: Sequence[str], *, timeout: int,
         "argv": list(argv), "return_code": int(rc),
         "elapsed_seconds": round(time.monotonic() - started, 6),
         "stdout_sha256": sha256_bytes(stdout), "stderr_sha256": sha256_bytes(stderr),
-        "stdout_tail": stdout.decode("utf-8", "replace")[-65536:],
-        "stderr_tail": stderr.decode("utf-8", "replace")[-65536:],
+        "stdout_tail": stdout.decode("utf-8", "replace")[-4096:],
+        "stderr_tail": stderr.decode("utf-8", "replace")[-4096:],
         "loaded": None,
     }
 
@@ -370,7 +415,7 @@ def execute_one_shot(*,
     if os.environ.get("SUDO_UID") != "1000" or os.environ.get("SUDO_GID") != "1000":
         raise SupervisorError("dynamic entry requires exact SUDO_UID=1000 and SUDO_GID=1000")
     current, profiles = policy_and_profiles()
-    static_gate_report()
+    static_gate_report(token_may_exist=True)
     validate_token(current, profiles)
     all_events: list[dict[str, Any]] = []
     failures: list[str] = []
@@ -416,7 +461,16 @@ def execute_one_shot(*,
                     failures.append(f"{profile['name']}: final sweep found profile residue")
             except Exception as exc:
                 failures.append(f"{profile['name']}: final sweep exception={exc}")
-    return {
+    token_value = read_json(TOKEN_PATH, limit=16384)
+    zero_residue = not any(
+        failure for failure in failures
+        if "residue" in failure or "unload" in failure or "aa-status" in failure
+        or "profile absent" in failure or "profile already loaded" in failure
+    )
+    result = {
+        "schema_version": "smpcc-r8-liquid-motion-gauge-gpu-build-supervisor-receipt-v11",
+        "build_id": BUILD_ID,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "status": (
             "PASS_MOTION_GAUGE_GPU_BUILD_V11_ONE_SHOT_STATIC_AUDIT_DEVELOPMENT_CANDIDATE"
             if completed == list(FULL_PHASES) and not failures
@@ -426,16 +480,27 @@ def execute_one_shot(*,
         "completed_phases": completed,
         "events": all_events,
         "failures": failures,
-        "profile_zero_residue": not any("residue" in failure for failure in failures),
+        "profile_zero_residue": zero_residue,
         "candidate_executed": False,
         "gpu_exposed": False,
         "network_used": False,
         "root_make": False,
+        "policy_sha256": file_identity(POLICY_PATH)["sha256"],
+        "gate_sha256": file_identity(GATE_PATH)["sha256"],
+        "supervisor_sha256": file_identity(Path(__file__).resolve())["sha256"],
+        "token_sha256": file_identity(TOKEN_PATH)["sha256"],
+        "authorization_reference_sha256": token_value["authorization_reference_sha256"],
+        "static_gate_status": "PASS_MOTION_GAUGE_GPU_BUILD_V11_STATIC_DEFAULT_DENY",
     }
+    receipt_path = SUPERVISOR_FINAL_PATH if result["status"].startswith("PASS_") else SUPERVISOR_FAILURE_PATH
+    write_new(receipt_path, result)
+    return result
 
 
 def self_check() -> dict[str, Any]:
     current, profiles = policy_and_profiles()
+    receipt_schema = read_json(SUPERVISOR_RECEIPT_SCHEMA_PATH)
+    Draft202012Validator.check_schema(receipt_schema)
     gate_report = static_gate_report()
     argv = {phase: child_argv(phase) for phase in FULL_PHASES}
     for phase, current_argv in argv.items():
@@ -459,6 +524,7 @@ def self_check() -> dict[str, Any]:
         "setpriv_uid": 1000, "setpriv_gid": 1000, "supplementary_groups": 0,
         "wrapper_profile": "NONE",
         "token_validated": False,
+        "supervisor_receipt_schema_sha256": file_identity(SUPERVISOR_RECEIPT_SCHEMA_PATH)["sha256"],
         "gate_static_status": gate_report["status"],
         "system_actions_performed": False,
         "profile_loaded": False,

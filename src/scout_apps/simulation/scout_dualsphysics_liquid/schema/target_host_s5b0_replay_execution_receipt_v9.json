@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_replay_execution_receipt_v9.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "phase", "attempt_id", "replay_id", "policy_sha256", "created_at", "evidence", "journal", "lifecycle", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5b0-replay-execution-receipt-v9"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5B0_REPLAY_EXECUTION_RECEIPT_V9"},
+    "status": {"enum": ["STARTED", "RUNTIME_CHILD_ATTEMPT_COMMITTED", "LIFECYCLE_CLEANUP_PASS_AWAITING_FINAL", "STOP_AND_PRESERVE_EVIDENCE", "S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY"]},
+    "phase": {"enum": ["START", "ATTEMPT", "LIFECYCLE", "FINAL", "FAILURE"]},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "replay_id": {"const": "s5b0_primary_bsmooth_b01_20260812T110635Z_v9"},
+    "policy_sha256": {"$ref": "#/$defs/sha"},
+    "created_at": {"type": "string", "minLength": 20, "maxLength": 64},
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["runtime_child_attempted", "argv", "return_code", "elapsed_seconds", "stdout_sha256", "stderr_sha256", "resource_log_sha256", "output_inventory_sha256", "result_package_sha256", "candidate", "profile", "runtime_attempt_receipt", "lifecycle_receipt", "error"],
+      "properties": {
+        "runtime_child_attempted": {"type": "boolean"},
+        "argv": {"type": "array", "maxItems": 512, "items": {"type": "string", "maxLength": 65536}},
+        "return_code": {"type": ["integer", "null"]}, "elapsed_seconds": {"type": "number", "minimum": 0},
+        "stdout_sha256": {"$ref": "#/$defs/sha"}, "stderr_sha256": {"$ref": "#/$defs/sha"},
+        "resource_log_sha256": {"$ref": "#/$defs/sha"}, "output_inventory_sha256": {"$ref": "#/$defs/sha"},
+        "result_package_sha256": {"$ref": "#/$defs/sha"},
+        "candidate": {"anyOf": [{"$ref": "#/$defs/file"}, {"type": "null"}]},
+        "profile": {"anyOf": [{"$ref": "#/$defs/file"}, {"type": "null"}]},
+        "runtime_attempt_receipt": {"anyOf": [{"$ref": "#/$defs/file"}, {"type": "null"}]},
+        "lifecycle_receipt": {"anyOf": [{"$ref": "#/$defs/file"}, {"type": "null"}]},
+        "error": {"type": ["string", "null"], "maxLength": 65536}
+      }
+    },
+    "journal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["boot_id_before", "boot_id_after", "start_cursor", "end_cursor", "xid_count", "same_boot", "cursor_anchored"],
+      "properties": {
+        "boot_id_before": {"type": ["string", "null"], "maxLength": 128},
+        "boot_id_after": {"type": ["string", "null"], "maxLength": 128},
+        "start_cursor": {"type": ["string", "null"], "maxLength": 4096},
+        "end_cursor": {"type": ["string", "null"], "maxLength": 4096},
+        "xid_count": {"type": "integer", "minimum": 0},
+        "same_boot": {"type": "boolean"}, "cursor_anchored": {"type": "boolean"}
+      }
+    },
+    "lifecycle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile_loaded", "profile_unloaded", "zero_profile_residue", "zero_process_residue", "zero_mount_residue", "sudo_timestamp_cleared", "failure_preserved"],
+      "properties": {
+        "profile_loaded": {"type": "boolean"}, "profile_unloaded": {"type": "boolean"},
+        "zero_profile_residue": {"type": "boolean"}, "zero_process_residue": {"type": "boolean"},
+        "zero_mount_residue": {"type": "boolean"}, "sudo_timestamp_cleared": {"type": "boolean"},
+        "failure_preserved": {"type": "boolean"}
+      }
+    },
+    "claims": {"$ref": "#/$defs/claims"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file": {"type": "object", "additionalProperties": false, "required": ["path", "sha256", "size_bytes", "mode"], "properties": {"path": {"type": "string", "pattern": "^/"}, "sha256": {"$ref": "#/$defs/sha"}, "size_bytes": {"type": "integer", "minimum": 1}, "mode": {"type": "string", "pattern": "^[0-7]{4}$"}}},
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": ["planned_denominator", "candidate_execution_count", "candidate_source_executed", "staged_candidate_executed", "gpu_exposed", "network_used", "optional_bag_read", "c2_executed", "second_execution", "source_outcome_overridden", "development_only", "physical_reference_pending", "physical_fidelity_validated", "formal", "production"],
+      "properties": {
+        "planned_denominator": {"const": 1}, "candidate_execution_count": {"type": "integer", "minimum": 0, "maximum": 1},
+        "candidate_source_executed": {"const": false}, "staged_candidate_executed": {"type": "boolean"},
+        "gpu_exposed": {"type": "boolean"}, "network_used": {"const": false}, "optional_bag_read": {"const": false},
+        "c2_executed": {"const": false}, "second_execution": {"const": false}, "source_outcome_overridden": {"const": false},
+        "development_only": {"const": true}, "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false}, "formal": {"const": false}, "production": {"const": false}
+      }
+    }
+  }
+}
