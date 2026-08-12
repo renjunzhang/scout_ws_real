@@ -1,0 +1,28 @@
+# S5B0 STATIC TEMPLATE V1 — NOT INSTANTIATED, NOT LOADABLE AS-IS.
+# Replace every @@...@@ token only under a new create-new authorization.
+# This file is queried as text; no apparmor_parser/status/load operation is allowed.
+#include <tunables/global>
+
+profile @@PROFILE_NAME@@ flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  /runtime/candidate rix,
+  /runtime/DsphConfig.xml r,
+  /case/C1M_case.xml r,
+  /case/C1M_case.bi4 r,
+  /case/solver_path.csv r,
+  /restart/Part_0901.bi4 r,
+  /restart/Part_Head.ibi4 r,
+  @@GPU_DEVICE@@ rw,
+  @@OUTPUT_ROOT@@/ rw,
+  @@OUTPUT_ROOT@@/** rwk,
+
+  deny /case/** wklx,
+  deny /restart/** wklx,
+  deny /runtime/** wkl,
+  deny network,
+  deny mount,
+  deny umount,
+  deny pivot_root,
+  deny ptrace,
+}

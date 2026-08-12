@@ -1,0 +1,184 @@
+{
+  "schema_version": "smpcc-r8-liquid-s5b0-primary-replay-static-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_S5B0_PRIMARY_REPLAY_STATIC_POLICY_V1",
+  "policy_id": "liquid_zrj_msi_u2404_s5b0_primary_replay_static_v1",
+  "status": "STATIC_DESIGN_ONLY_NOT_ADMITTED",
+  "selection": {
+    "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+    "role": "PRIMARY_BASELINE",
+    "container": "C1",
+    "source_domain": "SIM_R7_EXECUTED_GAZEBO_MOTION",
+    "source_provenance": "PARTIAL_BAG_ONLY",
+    "planned_denominator": 1,
+    "optional_authorized": false,
+    "c2_authorized": false
+  },
+  "parent_transfer": {
+    "transfer_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v1",
+    "abi": "R8-LIQUID-HANDOFF-ABI-v3",
+    "state": "NOT_MATERIALIZED",
+    "receipt_path": null,
+    "receipt_sha256": null,
+    "package_root": null,
+    "manifest_sha256": null
+  },
+  "frozen_parents": {
+    "gpu_candidate": {
+      "path": "/home/zrj/scout_liquid_lab/build/u3_source_gpu_build_sm120_20260810T170339Z_a.partial/output/artifacts/DualSPHysics5.4_linux64",
+      "sha256": "cace408f99c3ca75b53bfb542565e92ec134631a41f1d233aace346e6455b39f"
+    },
+    "c1m_case_bi4": {
+      "path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.bi4",
+      "sha256": "b463ddfe548b3db78b02f23b075dadbdd3c71ea766eb092701b56978ddb3a8e7"
+    },
+    "c1m_case_xml": {
+      "path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.xml",
+      "sha256": "28205c2234dda565da600947d03481c492c6bb493b2e058bd04cd360b7862acb"
+    },
+    "compatibility_contract": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5_c1_compatibility_v1.json",
+      "sha256": "f0786be1f7054fcbc29a9eb0d7f611c2bd3bdee8e9dbe4f022962713e70b6e73"
+    },
+    "compatibility_gate": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5_c1_compatibility_gate_v1.py",
+      "sha256": "8c924726550a85fc7d5d0bf7af03f7f92ca60218dbe3d97c75df4ea43defba4b"
+    },
+    "settled_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_repeatability_restart_20260811T124800Z_v15.qc_v1.json",
+      "sha256": "4703c08e09b33fb16ad68b368dd5e99c2b2c930a3091008fa399241fc58a7fd8"
+    }
+  },
+  "settled_clone_contract": {
+    "clone_state": "NOT_MATERIALIZED",
+    "fresh_create_new_required": true,
+    "source_unchanged_required": true,
+    "dynamic_state_reuse_forbidden": true,
+    "required_files": [
+      {
+        "name": "Part_0901.bi4",
+        "sha256": "023c2ae47281351f7c601a60709799cf8155745193d7e2aa5ee862256ad9b1f4"
+      },
+      {
+        "name": "Part_Head.ibi4",
+        "sha256": "6511cbf54319ce0fbdde9aefc6303f75dee53b56530db3aa25b18212281c266a"
+      }
+    ],
+    "part_index": 901,
+    "part_time_s": 45.05001991890928,
+    "particle_count": 9078
+  },
+  "geometry": {
+    "container_radius_m": 0.0185,
+    "boundary_height_m": 0.066,
+    "rotation_center_m": [0.0, 0.0, 0.0],
+    "particle_spacing_m": 0.002
+  },
+  "moving_domain_budget": {
+    "margin_m": 0.012,
+    "cell_size_m": 0.004,
+    "maximum_axis_span_m": 8.0,
+    "maximum_cells": 50000000,
+    "maximum_cell_code_bits": 63,
+    "bytes_per_cell": 64,
+    "bytes_per_particle": 2048,
+    "fixed_gpu_bytes": 2147483648,
+    "maximum_gpu_bytes": 12884901888
+  },
+  "runtime_budget": {
+    "solver_timeout_seconds": 5400,
+    "output_period_s": 0.05,
+    "fixed_output_bytes": 16777216,
+    "output_bytes_per_physical_second": 10485760,
+    "maximum_output_bytes": 1073741824
+  },
+  "mvpathfile_contract": {
+    "mode": "DRY_STATIC_ONLY",
+    "filename": "solver_path.csv",
+    "fields": 7,
+    "field_indexes": [0, 1, 2, 3, 4, 5, 6],
+    "anglesunits": "degrees",
+    "axes": "ZYX",
+    "intrinsic": true,
+    "movecenter": true,
+    "center_m": [0.0, 0.0, 0.0],
+    "begin_start_s": 45.05001991890928,
+    "duration_source": "FINAL_TRANSFER_SOLVER_PATH_LAST_T_S",
+    "next_motion_id": 2,
+    "final_hold_motion": "mvnull",
+    "solver_tail_s": 1.0,
+    "motion_block_replacement_count": 2,
+    "first_row_identity_required": true,
+    "strict_time_required": true
+  },
+  "profile_contract": {
+    "template_path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/apparmor_drafts/r8-liquid-s5b0-primary-replay-v1.profile.template",
+    "template_state": "NOT_INSTANTIATED_NOT_LOADED",
+    "fresh_profile_required": true,
+    "load_authorized": false,
+    "query_mode": "STATIC_TEMPLATE_TEXT_ONLY",
+    "required_placeholders": ["@@PROFILE_NAME@@", "@@GPU_DEVICE@@", "@@OUTPUT_ROOT@@"],
+    "required_rules": [
+      "  /runtime/candidate rix,",
+      "  /runtime/DsphConfig.xml r,",
+      "  /case/C1M_case.xml r,",
+      "  /case/C1M_case.bi4 r,",
+      "  /case/solver_path.csv r,",
+      "  /restart/Part_0901.bi4 r,",
+      "  /restart/Part_Head.ibi4 r,",
+      "  @@GPU_DEVICE@@ rw,",
+      "  @@OUTPUT_ROOT@@/ rw,",
+      "  @@OUTPUT_ROOT@@/** rwk,",
+      "  deny /case/** wklx,",
+      "  deny /restart/** wklx,",
+      "  deny network,",
+      "  deny mount,",
+      "  deny umount,",
+      "  deny pivot_root,"
+    ],
+    "forbidden_rules": [
+      "  /case/** rw,",
+      "  /restart/** rw,",
+      "  capability sys_admin,",
+      "  network,",
+      "  mount,"
+    ]
+  },
+  "result_contract": {
+    "fresh_partial_root_required": true,
+    "atomic_noreplace_publish_required": true,
+    "failure_preserves_partial": true,
+    "required_inventory": [
+      "result_manifest.json",
+      "executed_boundary_motion.csv",
+      "gauge_zsurf.csv",
+      "slosh_height.csv",
+      "summary.json",
+      "qc_report.json",
+      "resource_samples.jsonl",
+      "build_and_runtime.txt",
+      "solver.stdout.log",
+      "solver.stderr.log",
+      "checksums.sha256"
+    ],
+    "gauge_slots_complete_required": true,
+    "boundary_motion_qc_required": true,
+    "particle_count_required": 9078,
+    "nout_required": 0,
+    "finite_required": true,
+    "cuda_xid_zero_required": true,
+    "profile_zero_residual_required": true
+  },
+  "execution_boundary": {
+    "transfer_materialized": false,
+    "compatibility_receipt_materialized": false,
+    "settled_clone_materialized": false,
+    "gpu_replay_authorized": false,
+    "profile_instantiated": false,
+    "profile_loaded": false,
+    "solver_executed": false,
+    "external_root_created": false,
+    "formal": false,
+    "physical_fidelity_validated": false
+  },
+  "next": "MATERIALIZE_EXACT_S5A1_TRANSFER_THEN_CREATE_NEW_S5B0_AUTHORIZATION"
+}

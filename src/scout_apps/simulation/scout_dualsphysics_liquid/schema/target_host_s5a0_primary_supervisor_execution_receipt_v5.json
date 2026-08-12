@@ -1,0 +1,248 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5a0_primary_supervisor_execution_receipt_v5.json",
+  "title": "S5A0 one-shot host supervisor execution receipt v5",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "execution_id", "captured_at_utc", "status", "failure", "policy", "selection", "host_source", "sandbox", "worker", "evidence", "claims", "output"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5a0-primary-supervisor-execution-receipt-v5"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5A0_PRIMARY_SUPERVISOR_EXECUTION_RECEIPT_V5"},
+    "execution_id": {"const": "s5a0_primary_bsmooth_b01_20260811T200154Z_v5"},
+    "captured_at_utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "status": {"enum": ["PASS_S5A0_PRIMARY_ONE_SHOT_DEVELOPMENT_ONLY", "STOP_AND_PRESERVE_EVIDENCE"]},
+    "failure": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/failure"}]},
+    "policy": {"$ref": "#/$defs/policy"},
+    "selection": {"$ref": "#/$defs/selection"},
+    "host_source": {"$ref": "#/$defs/host_source"},
+    "sandbox": {"$ref": "#/$defs/sandbox"},
+    "worker": {"$ref": "#/$defs/worker"},
+    "evidence": {"$ref": "#/$defs/evidence"},
+    "claims": {"$ref": "#/$defs/claims"},
+    "output": {"$ref": "#/$defs/output"}
+  },
+  "allOf": [
+    {
+      "if": {"$ref": "#/$defs/pass_condition"},
+      "then": {"$ref": "#/$defs/pass_constraints"},
+      "else": {"$ref": "#/$defs/failure_constraints"}
+    }
+  ],
+  "$defs": {
+    "pass_condition": {
+      "type": "object", "additionalProperties": false, "required": ["status"],
+      "properties": {
+        "schema_version": true, "document_type": true, "execution_id": true, "captured_at_utc": true,
+        "status": {"const": "PASS_S5A0_PRIMARY_ONE_SHOT_DEVELOPMENT_ONLY"},
+        "failure": true, "policy": true, "selection": true, "host_source": true, "sandbox": true,
+        "worker": true, "evidence": true, "claims": true, "output": true
+      }
+    },
+    "pass_constraints": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "schema_version": true, "document_type": true, "execution_id": true, "captured_at_utc": true,
+        "status": true, "failure": {"type": "null"}, "policy": {"$ref": "#/$defs/pass_policy"},
+        "selection": true, "host_source": {"$ref": "#/$defs/pass_host_source"}, "sandbox": true,
+        "worker": {"$ref": "#/$defs/pass_worker"}, "evidence": {"$ref": "#/$defs/pass_evidence"},
+        "claims": true, "output": {"$ref": "#/$defs/pass_output"}
+      }
+    },
+    "failure_constraints": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "schema_version": true, "document_type": true, "execution_id": true, "captured_at_utc": true,
+        "status": true, "failure": {"$ref": "#/$defs/failure"}, "policy": true, "selection": true,
+        "host_source": true, "sandbox": true, "worker": true, "evidence": true, "claims": true,
+        "output": {"$ref": "#/$defs/failure_output"}
+      }
+    },
+    "pass_policy": {
+      "type": "object", "additionalProperties": false,
+      "properties": {"path": true, "sha256": true, "schema_path": true, "schema_sha256": true, "static_inputs_verified": {"const": true}}
+    },
+    "pass_host_source": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "path_chain_before": true, "path_chain_after": true, "mount_before": true, "mount_after": true,
+        "file_before": true, "file_after": true, "root_before": true, "root_after": true,
+        "path_unchanged": {"const": true}, "mount_unchanged": {"const": true},
+        "file_unchanged": {"const": true}, "root_unchanged": {"const": true}, "root_scope": true,
+        "corpus_root_enumerated": true, "source_root_writable_bind_exposed": true,
+        "files_written_under_selected_attempt_root": {"const": 0}
+      }
+    },
+    "pass_worker": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "started": {"const": true}, "return_code": {"const": 0}, "timed_out": {"const": false},
+        "inner_receipt_schema_valid": {"const": true},
+        "inner_receipt_status": {"const": "S5A0_SELECTED_R7_BAG_SEALED_DEVELOPMENT_ONLY"},
+        "inner_receipt": {"$ref": "#/$defs/file"}, "stdout": {"$ref": "#/$defs/file"},
+        "stderr": {"$ref": "#/$defs/file"}, "rc_file": {"$ref": "#/$defs/file"}
+      }
+    },
+    "pass_evidence": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "partial_root": true, "final_root": true, "partial_create_new": {"const": true},
+        "reservation_o_excl": {"const": true}, "partial_preserved": {"const": false},
+        "atomic_rename_noreplace": {"const": true}, "inventory": {"minItems": 5, "maxItems": 5}
+      }
+    },
+    "pass_output": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "final_receipt_path": true, "failure_receipt_path": true,
+        "published_path": {"$ref": "#/$defs/path"},
+        "create_new": true, "temporary_o_excl": true, "final_link_noreplace": true, "mode": true,
+        "atomic_noreplace": true, "overwrote_existing_audit": true
+      }
+    },
+    "failure_output": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "final_receipt_path": true, "failure_receipt_path": true,
+        "published_path": {"$ref": "#/$defs/path"},
+        "create_new": true, "temporary_o_excl": true, "final_link_noreplace": true, "mode": true,
+        "atomic_noreplace": true, "overwrote_existing_audit": true
+      }
+    },
+    "failure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "phase", "message"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
+        "phase": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1, "maxLength": 4096}
+      }
+    },
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "schema_path", "schema_sha256", "static_inputs_verified"],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"}, "sha256": {"$ref": "#/$defs/sha"},
+        "schema_path": {"$ref": "#/$defs/path"}, "schema_sha256": {"$ref": "#/$defs/sha"},
+        "static_inputs_verified": {"type": ["boolean", "null"]}
+      }
+    },
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempt_id", "selected_role", "selected_count", "source_root", "absolute_path", "relative_path", "expected_size_bytes", "expected_mode", "expected_sha256", "optional_pair_exposed"],
+      "properties": {
+        "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+        "selected_role": {"const": "PRIMARY"}, "selected_count": {"const": 1},
+        "source_root": {"$ref": "#/$defs/path"}, "absolute_path": {"$ref": "#/$defs/path"},
+        "relative_path": {"type": "string", "minLength": 1},
+        "expected_size_bytes": {"type": "integer", "minimum": 1},
+        "expected_mode": {"$ref": "#/$defs/mode"}, "expected_sha256": {"$ref": "#/$defs/sha"},
+        "optional_pair_exposed": {"const": false}
+      }
+    },
+    "host_source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path_chain_before", "path_chain_after", "mount_before", "mount_after", "file_before", "file_after", "root_before", "root_after", "path_unchanged", "mount_unchanged", "file_unchanged", "root_unchanged", "root_scope", "corpus_root_enumerated", "source_root_writable_bind_exposed", "files_written_under_selected_attempt_root"],
+      "properties": {
+        "path_chain_before": {"type": "array", "items": {"$ref": "#/$defs/path_identity"}},
+        "path_chain_after": {"type": "array", "items": {"$ref": "#/$defs/path_identity"}},
+        "mount_before": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/mount"}]},
+        "mount_after": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/mount"}]},
+        "file_before": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/file_identity"}]},
+        "file_after": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/file_identity"}]},
+        "root_before": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/snapshot"}]},
+        "root_after": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/snapshot"}]},
+        "path_unchanged": {"type": ["boolean", "null"]},
+        "mount_unchanged": {"type": ["boolean", "null"]},
+        "file_unchanged": {"type": ["boolean", "null"]},
+        "root_unchanged": {"type": ["boolean", "null"]},
+        "root_scope": {"const": "SELECTED_ATTEMPT_ROOT_ONLY"},
+        "corpus_root_enumerated": {"const": false},
+        "source_root_writable_bind_exposed": {"const": false},
+        "files_written_under_selected_attempt_root": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "path_identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "kind", "mode", "device", "inode", "nlink", "size_bytes", "mtime_ns", "ctime_ns", "symlink"],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"}, "kind": {"enum": ["directory", "regular"]}, "mode": {"$ref": "#/$defs/mode"},
+        "device": {"type": "integer", "minimum": 0}, "inode": {"type": "integer", "minimum": 1}, "nlink": {"type": "integer", "minimum": 1},
+        "size_bytes": {"type": "integer", "minimum": 0}, "mtime_ns": {"type": "integer"}, "ctime_ns": {"type": "integer"}, "symlink": {"const": false}
+      }
+    },
+    "mount": {
+      "type": "object", "additionalProperties": false,
+      "required": ["mount_id", "device", "root", "mount_point", "filesystem_type", "mount_source", "mount_options", "super_options"],
+      "properties": {
+        "mount_id": {"type": "integer", "minimum": 1}, "device": {"type": "string"}, "root": {"type": "string"}, "mount_point": {"$ref": "#/$defs/path"},
+        "filesystem_type": {"type": "string", "minLength": 1}, "mount_source": {"type": "string", "minLength": 1},
+        "mount_options": {"type": "array", "items": {"type": "string"}}, "super_options": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "file_identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "mode", "uid", "gid", "device", "inode", "nlink", "mtime_ns", "ctime_ns"],
+      "properties": {
+        "path": {"$ref": "#/$defs/path"}, "sha256": {"$ref": "#/$defs/sha"}, "size_bytes": {"type": "integer", "minimum": 1}, "mode": {"$ref": "#/$defs/mode"},
+        "uid": {"type": "integer", "minimum": 0}, "gid": {"type": "integer", "minimum": 0}, "device": {"type": "integer", "minimum": 0},
+        "inode": {"type": "integer", "minimum": 1}, "nlink": {"const": 1}, "mtime_ns": {"type": "integer"}, "ctime_ns": {"type": "integer"}
+      }
+    },
+    "snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["root", "entry_count", "sha256"],
+      "properties": {"root": {"$ref": "#/$defs/path"}, "entry_count": {"type": "integer", "minimum": 1}, "sha256": {"$ref": "#/$defs/sha"}}
+    },
+    "sandbox": {
+      "type": "object", "additionalProperties": false,
+      "required": ["argv", "argv_sha256", "source_read_only_bind", "network_unshared", "proc_mounted", "dev_mounted", "audit_root_bound", "dedicated_evidence_root_bound", "optional_pair_exposed", "tools", "limits"],
+      "properties": {
+        "argv": {"type": "array", "items": {"type": "string"}}, "argv_sha256": {"$ref": "#/$defs/sha"},
+        "source_read_only_bind": {"const": true}, "network_unshared": {"const": true}, "proc_mounted": {"const": false}, "dev_mounted": {"const": false},
+        "audit_root_bound": {"const": false}, "dedicated_evidence_root_bound": {"const": true}, "optional_pair_exposed": {"const": false},
+        "tools": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/tool"}}, "limits": {"$ref": "#/$defs/limits"}
+      }
+    },
+    "tool": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "path", "expected_sha256", "observed_sha256", "matched"],
+      "properties": {"name": {"type": "string"}, "path": {"$ref": "#/$defs/path"}, "expected_sha256": {"$ref": "#/$defs/sha"}, "observed_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha"}]}, "matched": {"type": ["boolean", "null"]}}
+    },
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["timeout_seconds", "kill_after_seconds", "maximum_rss_bytes", "maximum_address_space_bytes", "nofile_limit", "nproc_limit"],
+      "properties": {"timeout_seconds": {"type": "integer", "minimum": 1}, "kill_after_seconds": {"type": "integer", "minimum": 1}, "maximum_rss_bytes": {"type": "integer", "minimum": 1}, "maximum_address_space_bytes": {"type": "integer", "minimum": 1}, "nofile_limit": {"type": "integer", "minimum": 1}, "nproc_limit": {"type": "integer", "minimum": 1}}
+    },
+    "worker": {
+      "type": "object", "additionalProperties": false,
+      "required": ["started", "return_code", "timed_out", "inner_receipt_schema_valid", "inner_receipt_status", "inner_receipt", "stdout", "stderr", "rc_file"],
+      "properties": {
+        "started": {"type": "boolean"}, "return_code": {"type": ["integer", "null"]}, "timed_out": {"type": "boolean"}, "inner_receipt_schema_valid": {"type": ["boolean", "null"]}, "inner_receipt_status": {"type": ["string", "null"]},
+        "inner_receipt": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/file"}]}, "stdout": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/file"}]}, "stderr": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/file"}]}, "rc_file": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/file"}]}
+      }
+    },
+    "file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "size_bytes", "mode", "nlink", "sha256"],
+      "properties": {"path": {"$ref": "#/$defs/path"}, "size_bytes": {"type": "integer", "minimum": 0}, "mode": {"$ref": "#/$defs/mode"}, "nlink": {"const": 1}, "sha256": {"$ref": "#/$defs/sha"}}
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["partial_root", "final_root", "partial_create_new", "reservation_o_excl", "partial_preserved", "atomic_rename_noreplace", "inventory"],
+      "properties": {"partial_root": {"$ref": "#/$defs/path"}, "final_root": {"$ref": "#/$defs/path"}, "partial_create_new": {"type": "boolean"}, "reservation_o_excl": {"type": "boolean"}, "partial_preserved": {"type": "boolean"}, "atomic_rename_noreplace": {"type": "boolean"}, "inventory": {"type": "array", "items": {"$ref": "#/$defs/file"}}}
+    },
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": ["development_only", "formal", "physical_primary_eligible", "source_outcome", "source_bag_executed", "ros_started", "gpu_exposed", "solver_started", "sudo_used"],
+      "properties": {"development_only": {"const": true}, "formal": {"const": false}, "physical_primary_eligible": {"const": false}, "source_outcome": {"const": "UNKNOWN"}, "source_bag_executed": {"const": false}, "ros_started": {"const": false}, "gpu_exposed": {"const": false}, "solver_started": {"const": false}, "sudo_used": {"const": false}}
+    },
+    "output": {
+      "type": "object", "additionalProperties": false,
+      "required": ["final_receipt_path", "failure_receipt_path", "published_path", "create_new", "temporary_o_excl", "final_link_noreplace", "mode", "atomic_noreplace", "overwrote_existing_audit"],
+      "properties": {"final_receipt_path": {"$ref": "#/$defs/path"}, "failure_receipt_path": {"$ref": "#/$defs/path"}, "published_path": {"type": ["string", "null"]}, "create_new": {"const": true}, "temporary_o_excl": {"const": true}, "final_link_noreplace": {"const": true}, "mode": {"const": "0600"}, "atomic_noreplace": {"const": true}, "overwrote_existing_audit": {"const": false}}
+    },
+    "path": {"type": "string", "pattern": "^/"},
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "mode": {"type": "string", "pattern": "^[0-7]{4}$"}
+  }
+}

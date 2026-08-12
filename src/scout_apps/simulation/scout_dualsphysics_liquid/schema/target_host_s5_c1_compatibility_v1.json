@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5_c1_compatibility_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "contract_id", "status", "source_scope", "parents", "r7_c1_model", "replay_c1m", "mount_contract", "compatibility_checks", "claim_ceiling", "next"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5-c1-compatibility-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5_C1_COMPATIBILITY_CONTRACT_V1"},
+    "contract_id": {"const": "liquid_zrj_msi_u2404_s5_c1_compatibility_v1"},
+    "status": {"const": "S5_C1_TO_C1M_DEVELOPMENT_REPLAY_COMPATIBILITY_FROZEN"},
+    "source_scope": {"$ref": "#/$defs/sourceScope"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "r7_c1_model": {"$ref": "#/$defs/r7Model"},
+    "replay_c1m": {"$ref": "#/$defs/replay"},
+    "mount_contract": {"$ref": "#/$defs/mount"},
+    "compatibility_checks": {"$ref": "#/$defs/checks"},
+    "claim_ceiling": {"$ref": "#/$defs/ceiling"},
+    "next": {"const": "S5A0_SELECTED_BAG_RECEIPT_REQUIRED_THEN_S5A1_ABI_V3_TRANSFER"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "vec3": {
+      "type": "array",
+      "prefixItems": [{"type": "number"}, {"type": "number"}, {"type": "number"}],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "quat": {
+      "type": "array",
+      "prefixItems": [{"type": "number"}, {"type": "number"}, {"type": "number"}, {"type": "number"}],
+      "items": false,
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "sourceScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_domain", "selected_container", "selected_attempt", "source_provenance", "exact_attempt_sidecar_available", "source_outcome", "optional_pair_read_or_admitted", "c2_read_or_admitted"],
+      "properties": {
+        "source_domain": {"const": "SIM_R7_EXECUTED_GAZEBO_MOTION"},
+        "selected_container": {"const": "C1"},
+        "selected_attempt": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+        "source_provenance": {"const": "PARTIAL_BAG_ONLY"},
+        "exact_attempt_sidecar_available": {"const": false},
+        "source_outcome": {"const": "UNKNOWN"},
+        "optional_pair_read_or_admitted": {"const": false},
+        "c2_read_or_admitted": {"const": false}
+      }
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["continuation_plan", "gpu_build_plan", "r7_c1_model_yaml", "r7_hproxy_launch", "r7_runner_source", "c1m_source_definition", "c1m_case_bi4", "c1m_case_xml", "c1m_gencase_lifecycle", "settled_checkpoint", "settled_receipt", "stage4_parity_receipt", "stage4_final_receipt", "bi4_reader"],
+      "properties": {
+        "continuation_plan": {"$ref": "#/$defs/identity"},
+        "gpu_build_plan": {"$ref": "#/$defs/identity"},
+        "r7_c1_model_yaml": {"$ref": "#/$defs/identity"},
+        "r7_hproxy_launch": {"$ref": "#/$defs/identity"},
+        "r7_runner_source": {"$ref": "#/$defs/identity"},
+        "c1m_source_definition": {"$ref": "#/$defs/identity"},
+        "c1m_case_bi4": {"$ref": "#/$defs/identity"},
+        "c1m_case_xml": {"$ref": "#/$defs/identity"},
+        "c1m_gencase_lifecycle": {"$ref": "#/$defs/identity"},
+        "settled_checkpoint": {"$ref": "#/$defs/identity"},
+        "settled_receipt": {"$ref": "#/$defs/identity"},
+        "stage4_parity_receipt": {"$ref": "#/$defs/identity"},
+        "stage4_final_receipt": {"$ref": "#/$defs/identity"},
+        "bi4_reader": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "r7Model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["config_id", "formal", "physical_primary_eligible", "container_radius_m", "static_liquid_height_m", "liquid_density_kg_m3", "geometry_manifest_present_in_r7_source", "particle_manifest_present_in_r7_source"],
+      "properties": {
+        "config_id": {"const": "SIM_ONLY_C1_D37_H58_UNVALIDATED"},
+        "formal": {"const": false},
+        "physical_primary_eligible": {"const": false},
+        "container_radius_m": {"const": 0.0185},
+        "static_liquid_height_m": {"const": 0.058},
+        "liquid_density_kg_m3": {"const": 1000.0},
+        "geometry_manifest_present_in_r7_source": {"const": false},
+        "particle_manifest_present_in_r7_source": {"const": false}
+      }
+    },
+    "replay": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["geometry_source", "container_radius_m", "static_liquid_height_m", "boundary_height_m", "particle_spacing_m", "liquid_density_kg_m3", "gravity_m_s2", "particle_count", "moving_boundary_count", "moving_boundary_id_first", "moving_boundary_id_last", "fluid_count", "fluid_id_first", "fluid_id_last", "moving_boundary_position_sha256", "settled_part_index", "settled_time_s", "settled_cfl", "settled_shifting", "settled_viscoart"],
+      "properties": {
+        "geometry_source": {"const": "EXACT_HASHED_C1M_GENCASE_V8"},
+        "container_radius_m": {"const": 0.0185},
+        "static_liquid_height_m": {"const": 0.058},
+        "boundary_height_m": {"const": 0.066},
+        "particle_spacing_m": {"const": 0.002},
+        "liquid_density_kg_m3": {"const": 1000.0},
+        "gravity_m_s2": {"$ref": "#/$defs/vec3"},
+        "particle_count": {"const": 9078},
+        "moving_boundary_count": {"const": 2669},
+        "moving_boundary_id_first": {"const": 0},
+        "moving_boundary_id_last": {"const": 2668},
+        "fluid_count": {"const": 6409},
+        "fluid_id_first": {"const": 2669},
+        "fluid_id_last": {"const": 9077},
+        "moving_boundary_position_sha256": {"const": "ca588478d1348cb753b572ebe9f5df9e0a8374db50f1f25fd7cbebaba61e18c6"},
+        "settled_part_index": {"const": 901},
+        "settled_time_s": {"const": 45.05001991890928},
+        "settled_cfl": {"const": 0.1},
+        "settled_shifting": {"const": "None"},
+        "settled_viscoart": {"const": 0.3}
+      }
+    },
+    "mount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["parent_frame", "child_frame", "translation_m", "quaternion_xyzw", "case_rotation_center_m", "basis", "exact_r7_attempt_sidecar_proof", "development_assumption", "physical_mount_validated", "translation_uncertainty_m", "rotation_uncertainty_deg"],
+      "properties": {
+        "parent_frame": {"const": "base_footprint"},
+        "child_frame": {"const": "c1m_container_reference"},
+        "translation_m": {"$ref": "#/$defs/vec3"},
+        "quaternion_xyzw": {"$ref": "#/$defs/quat"},
+        "case_rotation_center_m": {"$ref": "#/$defs/vec3"},
+        "basis": {"const": "R7_HPROXY_ZERO_OFFSET_DEFAULT_AND_RUNNER_NO_OVERRIDE"},
+        "exact_r7_attempt_sidecar_proof": {"const": false},
+        "development_assumption": {"const": true},
+        "physical_mount_validated": {"const": false},
+        "translation_uncertainty_m": {"const": "UNKNOWN"},
+        "rotation_uncertainty_deg": {"const": "UNKNOWN"}
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["c1_radius_matches_c1m", "c1_liquid_height_matches_c1m", "c1_density_matches_c1m", "replay_geometry_is_exact_c1m", "moving_boundary_positions_unchanged_through_settle", "particle_id_set_and_class_counts_match", "settled_checkpoint_bound_to_exact_c1m_case", "new_exact_settle_required", "r7_model_geometry_claimed_byte_identical_to_c1m", "physical_geometry_compatibility_claimed"],
+      "properties": {
+        "c1_radius_matches_c1m": {"const": true},
+        "c1_liquid_height_matches_c1m": {"const": true},
+        "c1_density_matches_c1m": {"const": true},
+        "replay_geometry_is_exact_c1m": {"const": true},
+        "moving_boundary_positions_unchanged_through_settle": {"const": true},
+        "particle_id_set_and_class_counts_match": {"const": true},
+        "settled_checkpoint_bound_to_exact_c1m_case": {"const": true},
+        "new_exact_settle_required": {"const": false},
+        "r7_model_geometry_claimed_byte_identical_to_c1m": {"const": false},
+        "physical_geometry_compatibility_claimed": {"const": false}
+      }
+    },
+    "ceiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["development_only", "formal", "physical_primary_eligible", "physical_fidelity_validated", "gpu_replay_authorized", "source_outcome_override_allowed", "admission"],
+      "properties": {
+        "development_only": {"const": true},
+        "formal": {"const": false},
+        "physical_primary_eligible": {"const": false},
+        "physical_fidelity_validated": {"const": false},
+        "gpu_replay_authorized": {"const": false},
+        "source_outcome_override_allowed": {"const": false},
+        "admission": {"const": "S5A1_EXPORT_PRECONDITION_ONLY"}
+      }
+    }
+  }
+}

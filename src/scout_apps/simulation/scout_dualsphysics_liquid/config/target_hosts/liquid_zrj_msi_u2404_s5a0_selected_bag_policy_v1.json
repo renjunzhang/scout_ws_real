@@ -1,0 +1,171 @@
+{
+  "schema_version": "smpcc-r8-liquid-s5a0-selected-bag-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_S5A0_SELECTED_BAG_POLICY_V1",
+  "policy_id": "liquid_zrj_msi_u2404_s5a0_primary_bsmooth_b01_v1",
+  "status": "STATIC_POLICY_ONLY_NOT_EXECUTED",
+  "parents": {
+    "continuation_plan_path": "/home/zrj/scout_ws/docs/实物实验注意事项/对比试验/仿真接入液体/20260811_RTX5080_DualSPHysics_GPU液体仿真阶段3-6续接方案_Agent执行版.md",
+    "continuation_plan_sha256": "bb64db0f62cfab74cd4040798d046dfd6420a04276605296bf9492cddb691f01",
+    "reader_path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_ros1_bag_v2_reader_v1.py",
+    "reader_sha256": "bc3975ba446e22097c399e10a8f6c4e60b4f8e78c5c7d613394028daa76c94fc"
+  },
+  "selection": {
+    "source_domain": "SIM_R7_EXECUTED_GAZEBO_MOTION",
+    "source_provenance": "PARTIAL_BAG_ONLY",
+    "source_root": "/home/zrj/slosh_bags/matrix_bags",
+    "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+    "selected_role": "PRIMARY",
+    "selected_count": 1,
+    "relative_path": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag",
+    "absolute_path": "/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag",
+    "expected_size_bytes": 13996902,
+    "expected_mode": "0755",
+    "expected_sha256": "c82c1f16b41bced51ab0aff63e4ef40b469501e185851344789fc3d62399fc07",
+    "optional_pair_authorized": false,
+    "forbidden_optional_path": "/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bslosh_b01_r01/capture.bag"
+  },
+  "filesystem_contract": {
+    "exact_path_only": true,
+    "glob_forbidden": true,
+    "basename_search_forbidden": true,
+    "latest_file_selection_forbidden": true,
+    "regular_file_required": true,
+    "nlink_required": 1,
+    "parent_symlinks_forbidden": true,
+    "special_files_forbidden": true,
+    "active_marker_forbidden": true,
+    "selected_attempt_inventory": [
+      "capture.bag"
+    ],
+    "source_root_writes_allowed": 0,
+    "source_bag_execution_forbidden": true
+  },
+  "topic_contract": {
+    "contract_id": "R7_SPMPC_NON_FIXED_SELECTED_BAG_V1",
+    "allow_extra_topics": false,
+    "required_topics": [
+      {
+        "topic": "/clock",
+        "type": "rosgraph_msgs/Clock",
+        "md5sum": "a9c97c1d230cfc112e270351a944ee47"
+      },
+      {
+        "topic": "/cmd_vel",
+        "type": "geometry_msgs/Twist",
+        "md5sum": "9f195f881246fdfa2798d1d3eebca84a"
+      },
+      {
+        "topic": "/odom",
+        "type": "nav_msgs/Odometry",
+        "md5sum": "cd5e73d190d741a2f92e81eda573aca7"
+      },
+      {
+        "topic": "/scout/global_path_fixed",
+        "type": "nav_msgs/Path",
+        "md5sum": "6227e2b7e9cce15051f669a5e197bbf7"
+      },
+      {
+        "topic": "/scout/goal",
+        "type": "geometry_msgs/PoseStamped",
+        "md5sum": "d3812c3cbc69362b77dc0b19b345f8f5"
+      },
+      {
+        "topic": "/slosh/height",
+        "type": "std_msgs/Float32",
+        "md5sum": "73fcbf46b49191e672908e50842a83d4"
+      },
+      {
+        "topic": "/spmpc/debug/effective_config",
+        "type": "std_msgs/Float32MultiArray",
+        "md5sum": "6a40e0ffa6a17a503ac3f8616991b1f6"
+      },
+      {
+        "topic": "/spmpc/slosh_height",
+        "type": "std_msgs/Float32",
+        "md5sum": "73fcbf46b49191e672908e50842a83d4"
+      },
+      {
+        "topic": "/spmpc/status",
+        "type": "std_msgs/String",
+        "md5sum": "992ce8a1687cec8c8bd883ec73ca41d1"
+      },
+      {
+        "topic": "/spmpc/terminal/debug",
+        "type": "std_msgs/Float32MultiArray",
+        "md5sum": "6a40e0ffa6a17a503ac3f8616991b1f6"
+      },
+      {
+        "topic": "/spmpc/terminal/mode",
+        "type": "std_msgs/String",
+        "md5sum": "992ce8a1687cec8c8bd883ec73ca41d1"
+      },
+      {
+        "topic": "/tf",
+        "type": "tf2_msgs/TFMessage",
+        "md5sum": "94810edda583a504dfda3829e70d7eec"
+      },
+      {
+        "topic": "/tf_static",
+        "type": "tf2_msgs/TFMessage",
+        "md5sum": "94810edda583a504dfda3829e70d7eec"
+      }
+    ],
+    "odom_primary_time": "/odom.header.stamp",
+    "record_time_witness_required": true,
+    "clock_witness_required": true,
+    "dynamic_tf_witness_required": true,
+    "static_tf_witness_required": true,
+    "definition_conflicts_forbidden": true
+  },
+  "sandbox_contract": {
+    "backend": "BWRAP_READ_ONLY_UNSHARED_NETWORK",
+    "bwrap_path": "/usr/bin/bwrap",
+    "timeout_path": "/usr/bin/timeout",
+    "prlimit_path": "/usr/bin/prlimit",
+    "python_path": "/usr/bin/python3",
+    "source_visible_path": "/selected/capture.bag",
+    "policy_visible_path": "/policy/policy.json",
+    "receipt_visible_root": "/audit",
+    "audit_root": "/home/zrj/scout_liquid_lab/audits",
+    "network_unshared_required": true,
+    "read_only_bind_required": true,
+    "clear_environment_required": true,
+    "gpu_devices_exposed": false,
+    "ros_started": false,
+    "solver_started": false,
+    "source_bag_executed": false
+  },
+  "limits": {
+    "timeout_seconds": 30,
+    "maximum_rss_bytes": 536870912,
+    "maximum_address_space_bytes": 805306368,
+    "maximum_receipt_bytes": 2097152,
+    "maximum_output_files": 1,
+    "maximum_source_entries": 512,
+    "maximum_parent_components": 32,
+    "maximum_file_bytes": 67108864,
+    "maximum_record_header_bytes": 1048576,
+    "maximum_record_data_bytes": 67108864,
+    "maximum_field_bytes": 4194304,
+    "maximum_message_bytes": 16777216,
+    "maximum_message_definition_bytes": 2097152,
+    "maximum_chunk_uncompressed_bytes": 134217728,
+    "maximum_total_uncompressed_bytes": 268435456,
+    "maximum_records": 1000000,
+    "maximum_messages": 1000000,
+    "maximum_connections": 4096,
+    "maximum_chunks": 4096,
+    "maximum_array_count": 1000000,
+    "maximum_string_bytes": 1048576
+  },
+  "claim_ceiling": {
+    "development_only": true,
+    "formal": false,
+    "physical_robot_bag": false,
+    "physical_primary_eligible": false,
+    "r8_release": false,
+    "source_outcome": "UNKNOWN",
+    "admission": "S5A0_PRIMARY_SELECTED_BAG_ONLY"
+  },
+  "next": "S5A0_STATIC_TESTS_THEN_SEPARATELY_AUTHORIZED_READ_ONLY_PRIMARY_INTAKE"
+}

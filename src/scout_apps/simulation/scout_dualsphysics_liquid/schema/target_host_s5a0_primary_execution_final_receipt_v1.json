@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5a0_primary_execution_final_receipt_v1.json",
+  "title": "S5A0 primary one-shot final or failure receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "execution_id",
+    "captured_at_utc",
+    "status",
+    "failure",
+    "policy",
+    "selection",
+    "host_source",
+    "sandbox",
+    "worker",
+    "evidence",
+    "claims",
+    "output"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5a0-primary-execution-final-receipt-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5A0_PRIMARY_EXECUTION_FINAL_RECEIPT_V1"},
+    "execution_id": {"const": "s5a0_primary_bsmooth_b01_20260811T173630Z_v1"},
+    "captured_at_utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+    "status": {"enum": ["PASS_S5A0_PRIMARY_ONE_SHOT_DEVELOPMENT_ONLY", "STOP_AND_PRESERVE_EVIDENCE"]},
+    "failure": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/failure"}]},
+    "policy": {"$ref": "#/$defs/policy"},
+    "selection": {"$ref": "#/$defs/selection"},
+    "host_source": {"$ref": "#/$defs/host_source"},
+    "sandbox": {"$ref": "#/$defs/sandbox"},
+    "worker": {"$ref": "#/$defs/worker"},
+    "evidence": {"$ref": "#/$defs/evidence"},
+    "claims": {"$ref": "#/$defs/claims"},
+    "output": {"$ref": "#/$defs/output"}
+  },
+  "$defs": {
+    "failure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "message", "phase"],
+      "properties": {
+        "code": {"type": "string", "pattern": "^[A-Z0-9_]+$"},
+        "message": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "phase": {"type": "string", "minLength": 1}
+      }
+    },
+    "policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "base_policy_sha256", "gate_v2_sha256", "inner_schema_sha256", "final_schema_sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolute_path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "base_policy_sha256": {"$ref": "#/$defs/sha256"},
+        "gate_v2_sha256": {"$ref": "#/$defs/sha256"},
+        "inner_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "final_schema_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempt_id", "selected_role", "selected_count", "source_root", "absolute_path", "relative_path", "expected_size_bytes", "expected_mode", "expected_sha256", "optional_pair_exposed"],
+      "properties": {
+        "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+        "selected_role": {"const": "PRIMARY"},
+        "selected_count": {"const": 1},
+        "source_root": {"$ref": "#/$defs/absolute_path"},
+        "absolute_path": {"$ref": "#/$defs/absolute_path"},
+        "relative_path": {"type": "string", "minLength": 1},
+        "expected_size_bytes": {"type": "integer", "minimum": 1},
+        "expected_mode": {"$ref": "#/$defs/mode"},
+        "expected_sha256": {"$ref": "#/$defs/sha256"},
+        "optional_pair_exposed": {"const": false}
+      }
+    },
+    "host_source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path_chain_before", "path_chain_after", "path_chain_unchanged", "root_before", "root_after", "root_inventory_unchanged", "files_written_under_source_root"],
+      "properties": {
+        "path_chain_before": {"type": "array", "items": {"$ref": "#/$defs/path_identity"}},
+        "path_chain_after": {"type": "array", "items": {"$ref": "#/$defs/path_identity"}},
+        "path_chain_unchanged": {"type": ["boolean", "null"]},
+        "root_before": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/snapshot"}]},
+        "root_after": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/snapshot"}]},
+        "root_inventory_unchanged": {"type": ["boolean", "null"]},
+        "files_written_under_source_root": {"type": ["integer", "null"], "minimum": 0}
+      }
+    },
+    "path_identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "kind", "mode", "device", "inode", "nlink", "size_bytes", "mtime_ns", "ctime_ns", "symlink"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolute_path"},
+        "kind": {"enum": ["directory", "regular"]},
+        "mode": {"$ref": "#/$defs/mode"},
+        "device": {"type": "integer", "minimum": 0},
+        "inode": {"type": "integer", "minimum": 1},
+        "nlink": {"type": "integer", "minimum": 1},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "mtime_ns": {"type": "integer"},
+        "ctime_ns": {"type": "integer"},
+        "symlink": {"const": false}
+      }
+    },
+    "snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["root", "entry_count", "sha256"],
+      "properties": {
+        "root": {"$ref": "#/$defs/absolute_path"},
+        "entry_count": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sandbox": {
+      "type": "object", "additionalProperties": false,
+      "required": ["argv_sha256", "argv", "network_unshared", "audit_root_bound", "dedicated_partial_root_bound", "source_read_only_bound", "optional_pair_exposed", "tools", "limits"],
+      "properties": {
+        "argv_sha256": {"$ref": "#/$defs/sha256"},
+        "argv": {"type": "array", "items": {"type": "string"}},
+        "network_unshared": {"const": true},
+        "audit_root_bound": {"const": false},
+        "dedicated_partial_root_bound": {"const": true},
+        "source_read_only_bound": {"const": true},
+        "optional_pair_exposed": {"const": false},
+        "tools": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"$ref": "#/$defs/tool"}},
+        "limits": {"$ref": "#/$defs/limits"}
+      }
+    },
+    "tool": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "path", "expected_sha256", "observed_sha256", "matched"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1},
+        "path": {"$ref": "#/$defs/absolute_path"},
+        "expected_sha256": {"$ref": "#/$defs/sha256"},
+        "observed_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "matched": {"type": ["boolean", "null"]}
+      }
+    },
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["timeout_seconds", "kill_after_seconds", "maximum_rss_bytes", "maximum_address_space_bytes", "nofile_limit", "nproc_limit"],
+      "properties": {
+        "timeout_seconds": {"type": "integer", "minimum": 1},
+        "kill_after_seconds": {"type": "integer", "minimum": 1},
+        "maximum_rss_bytes": {"type": "integer", "minimum": 1},
+        "maximum_address_space_bytes": {"type": "integer", "minimum": 1},
+        "nofile_limit": {"type": "integer", "minimum": 1},
+        "nproc_limit": {"type": "integer", "minimum": 1}
+      }
+    },
+    "worker": {
+      "type": "object", "additionalProperties": false,
+      "required": ["started", "return_code", "timed_out", "inner_receipt_schema_valid", "inner_receipt_status", "inner_receipt", "stdout", "stderr", "rc_file"],
+      "properties": {
+        "started": {"type": "boolean"},
+        "return_code": {"type": ["integer", "null"]},
+        "timed_out": {"type": "boolean"},
+        "inner_receipt_schema_valid": {"type": ["boolean", "null"]},
+        "inner_receipt_status": {"type": ["string", "null"]},
+        "inner_receipt": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/file"}]},
+        "stdout": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/file"}]},
+        "stderr": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/file"}]},
+        "rc_file": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/file"}]}
+      }
+    },
+    "file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "size_bytes", "mode", "nlink", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolute_path"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "mode": {"$ref": "#/$defs/mode"},
+        "nlink": {"const": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["audit_root", "reservation_path", "partial_root", "final_root", "reservation_o_excl", "partial_mkdir_create_new", "partial_preserved", "renamed_noreplace", "inventory"],
+      "properties": {
+        "audit_root": {"$ref": "#/$defs/absolute_path"},
+        "reservation_path": {"$ref": "#/$defs/absolute_path"},
+        "partial_root": {"$ref": "#/$defs/absolute_path"},
+        "final_root": {"$ref": "#/$defs/absolute_path"},
+        "reservation_o_excl": {"type": "boolean"},
+        "partial_mkdir_create_new": {"type": "boolean"},
+        "partial_preserved": {"type": "boolean"},
+        "renamed_noreplace": {"type": "boolean"},
+        "inventory": {"type": "array", "items": {"$ref": "#/$defs/file"}}
+      }
+    },
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": ["development_only", "formal", "physical_primary_eligible", "source_outcome", "source_bag_executed", "ros_started", "gpu_exposed", "solver_started"],
+      "properties": {
+        "development_only": {"const": true},
+        "formal": {"const": false},
+        "physical_primary_eligible": {"const": false},
+        "source_outcome": {"const": "UNKNOWN"},
+        "source_bag_executed": {"const": false},
+        "ros_started": {"const": false},
+        "gpu_exposed": {"const": false},
+        "solver_started": {"const": false}
+      }
+    },
+    "output": {
+      "type": "object", "additionalProperties": false,
+      "required": ["final_receipt_path", "failure_receipt_path", "published_path", "o_excl", "o_nofollow", "overwrote_existing_audit"],
+      "properties": {
+        "final_receipt_path": {"$ref": "#/$defs/absolute_path"},
+        "failure_receipt_path": {"$ref": "#/$defs/absolute_path"},
+        "published_path": {"type": ["string", "null"]},
+        "o_excl": {"const": true},
+        "o_nofollow": {"const": true},
+        "overwrote_existing_audit": {"const": false}
+      }
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+    "absolute_path": {"type": "string", "pattern": "^/"}
+  }
+}

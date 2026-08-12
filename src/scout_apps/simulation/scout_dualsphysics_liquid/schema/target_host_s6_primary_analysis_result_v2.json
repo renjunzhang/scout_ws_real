@@ -1,0 +1,295 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_primary_analysis_result_v2.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "status",
+    "attempt_id",
+    "planned_denominator",
+    "parent_bindings",
+    "analysis_method",
+    "alignment",
+    "derived_surface_series",
+    "window_summaries",
+    "spectral_metrics",
+    "model_comparisons",
+    "qc",
+    "materialization",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-primary-analysis-result-v2"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_PRIMARY_ANALYSIS_RESULT_V2"},
+    "status": {"const": "S6_PRIMARY_SYNTHETIC_PURE_ANALYSIS_VALIDATED_NOT_FINAL"},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "parent_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selected_signals_document_sha256",
+        "finalized_replay_document_sha256",
+        "s5a0_selected_bag_receipt_sha256",
+        "source_bag_sha256",
+        "s5a1_transfer_manifest_sha256",
+        "s5b0_finalized_manifest_sha256",
+        "gpu_run_receipt_sha256",
+        "settled_state_manifest_sha256",
+        "solver_config_sha256",
+        "geometry_sha256",
+        "finalized_bi4_sha256",
+        "gauge_zsurf_sha256"
+      ],
+      "properties": {
+        "selected_signals_document_sha256": {"$ref": "#/$defs/sha256"},
+        "finalized_replay_document_sha256": {"$ref": "#/$defs/sha256"},
+        "s5a0_selected_bag_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "source_bag_sha256": {"$ref": "#/$defs/sha256"},
+        "s5a1_transfer_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "s5b0_finalized_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "gpu_run_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "settled_state_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "solver_config_sha256": {"$ref": "#/$defs/sha256"},
+        "geometry_sha256": {"$ref": "#/$defs/sha256"},
+        "finalized_bi4_sha256": {"$ref": "#/$defs/sha256"},
+        "gauge_zsurf_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "analysis_method": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "surface_source",
+        "surface_definitions",
+        "peak_definition",
+        "p95_method",
+        "rms_method",
+        "frequency_method",
+        "damping_method",
+        "phase_method"
+      ],
+      "properties": {
+        "surface_source": {"const": "RAW_PROBE_ZSURF_MINUS_FROZEN_H0"},
+        "surface_definitions": {"const": "H_crest=max(eta);H_abs=max(abs(eta));H_peak_to_peak=max(zsurf)-min(zsurf)"},
+        "peak_definition": {"const": "MAX_VALUE_EARLIEST_TIE"},
+        "p95_method": {"const": "LINEAR_INTERPOLATED_ORDER_STATISTIC"},
+        "rms_method": {"const": "SQRT_MEAN_SQUARE"},
+        "frequency_method": {"const": "MEAN_CENTERED_DFT_DOMINANT_NONZERO_BIN"},
+        "damping_method": {"const": "NEGATIVE_LOG_ABS_LOCAL_PEAK_SLOPE"},
+        "phase_method": {"const": "DOMINANT_DFT_PHASE_WRAPPED_TO_MINUS_PI_PI"}
+      }
+    },
+    "alignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x_axis",
+        "sample_time_source",
+        "odom_header_origin_ns",
+        "record_to_odom_offset_ns",
+        "grid_source",
+        "output_grid_sha256",
+        "uniform_dt_s",
+        "interpolation",
+        "overlap_start_s",
+        "overlap_end_s",
+        "extrapolation",
+        "smoothing",
+        "sample_count"
+      ],
+      "properties": {
+        "x_axis": {"const": "time_since_odom_header_origin_s"},
+        "sample_time_source": {"const": "ROS1_BAG_RECORD_TIME_NS"},
+        "odom_header_origin_ns": {"type": "integer", "minimum": 0},
+        "record_to_odom_offset_ns": {"type": "integer"},
+        "grid_source": {"const": "FINALIZED_REPLAY_OUTPUT_SLOTS"},
+        "output_grid_sha256": {"$ref": "#/$defs/sha256"},
+        "uniform_dt_s": {"type": "number", "exclusiveMinimum": 0},
+        "interpolation": {"const": "LINEAR_WITHIN_OVERLAP_ONLY"},
+        "overlap_start_s": {"type": "number"},
+        "overlap_end_s": {"type": "number"},
+        "extrapolation": {"const": false},
+        "smoothing": {"const": false},
+        "sample_count": {"type": "integer", "minimum": 16}
+      }
+    },
+    "derived_surface_series": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 100000,
+      "items": {"$ref": "#/$defs/derivedRow"}
+    },
+    "window_summaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first15", "full_motion", "recorded_tail", "solver_tail"],
+      "properties": {
+        "first15": {"$ref": "#/$defs/windowSummary"},
+        "full_motion": {"$ref": "#/$defs/windowSummary"},
+        "recorded_tail": {"$ref": "#/$defs/windowSummary"},
+        "solver_tail": {"$ref": "#/$defs/windowSummary"}
+      }
+    },
+    "spectral_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["H_crest", "H_abs", "H_peak_to_peak"],
+      "properties": {
+        "H_crest": {"$ref": "#/$defs/spectralMetric"},
+        "H_abs": {"$ref": "#/$defs/spectralMetric"},
+        "H_peak_to_peak": {"$ref": "#/$defs/spectralMetric"}
+      }
+    },
+    "model_comparisons": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["H_proxy", "H_modal"],
+      "properties": {
+        "H_proxy": {"$ref": "#/$defs/comparisonMetric"},
+        "H_modal": {"$ref": "#/$defs/comparisonMetric"}
+      }
+    },
+    "qc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registered_probe_count",
+        "output_slot_count",
+        "total_probe_values",
+        "invalid_probe_values",
+        "invalid_probe_ratio",
+        "minimum_valid_probes_per_slot",
+        "precomputed_surface_columns_consumed",
+        "window_cherry_pick_detected",
+        "probe_cherry_pick_detected",
+        "nonfinite",
+        "pass"
+      ],
+      "properties": {
+        "registered_probe_count": {"const": 4},
+        "output_slot_count": {"type": "integer", "minimum": 16},
+        "total_probe_values": {"type": "integer", "minimum": 64},
+        "invalid_probe_values": {"type": "integer", "minimum": 0},
+        "invalid_probe_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "minimum_valid_probes_per_slot": {"const": 2},
+        "precomputed_surface_columns_consumed": {"const": false},
+        "window_cherry_pick_detected": {"const": false},
+        "probe_cherry_pick_detected": {"const": false},
+        "nonfinite": {"const": false},
+        "pass": {"const": true}
+      }
+    },
+    "materialization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "final_outputs_generated", "animation_executed", "external_write_performed"],
+      "properties": {
+        "status": {"const": "NOT_ADMITTED_SYNTHETIC_FIXTURE_ONLY"},
+        "final_outputs_generated": {"const": false},
+        "animation_executed": {"const": false},
+        "external_write_performed": {"const": false}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stage6_pass",
+        "paired_ranking",
+        "cpu_selected_trajectory_comparison",
+        "physical_reference_pending",
+        "physical_fidelity_validated",
+        "formal",
+        "production",
+        "physical_primary"
+      ],
+      "properties": {
+        "stage6_pass": {"const": false},
+        "paired_ranking": {"const": false},
+        "cpu_selected_trajectory_comparison": {"const": false},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false},
+        "formal": {"const": false},
+        "production": {"const": false},
+        "physical_primary": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "derivedRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["t_s", "H_crest_mm", "H_abs_mm", "H_peak_to_peak_mm", "valid_probe_count", "invalid_probe_count"],
+      "properties": {
+        "t_s": {"type": "number"},
+        "H_crest_mm": {"type": "number"},
+        "H_abs_mm": {"type": "number", "minimum": 0},
+        "H_peak_to_peak_mm": {"type": "number", "minimum": 0},
+        "valid_probe_count": {"type": "integer", "minimum": 2, "maximum": 4},
+        "invalid_probe_count": {"type": "integer", "minimum": 0, "maximum": 2}
+      }
+    },
+    "windowMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["peak_mm", "p95_mm", "rms_mm", "peak_time_s"],
+      "properties": {
+        "peak_mm": {"type": "number"},
+        "p95_mm": {"type": "number"},
+        "rms_mm": {"type": "number", "minimum": 0},
+        "peak_time_s": {"type": "number"}
+      }
+    },
+    "windowSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_s", "end_s", "slot_count", "invalid_probe_ratio", "H_crest", "H_abs", "H_peak_to_peak"],
+      "properties": {
+        "start_s": {"type": "number"},
+        "end_s": {"type": "number"},
+        "slot_count": {"type": "integer", "minimum": 1},
+        "invalid_probe_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "H_crest": {"$ref": "#/$defs/windowMetric"},
+        "H_abs": {"$ref": "#/$defs/windowMetric"},
+        "H_peak_to_peak": {"$ref": "#/$defs/windowMetric"}
+      }
+    },
+    "spectralMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amplitude_peak_mm", "dominant_frequency_hz", "damping_rate_per_s", "phase_rad"],
+      "properties": {
+        "amplitude_peak_mm": {"type": "number", "minimum": 0},
+        "dominant_frequency_hz": {"type": "number", "minimum": 0},
+        "damping_rate_per_s": {"type": "number"},
+        "phase_rad": {"type": "number", "minimum": -3.141592653589793, "maximum": 3.141592653589793}
+      }
+    },
+    "comparisonMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample_count",
+        "amplitude_error_mm",
+        "frequency_error_hz",
+        "damping_error_per_s",
+        "phase_error_rad",
+        "rmse_mm",
+        "correlation"
+      ],
+      "properties": {
+        "sample_count": {"type": "integer", "minimum": 16},
+        "amplitude_error_mm": {"type": "number"},
+        "frequency_error_hz": {"type": "number"},
+        "damping_error_per_s": {"type": "number"},
+        "phase_error_rad": {"type": "number", "minimum": -3.141592653589793, "maximum": 3.141592653589793},
+        "rmse_mm": {"type": "number", "minimum": 0},
+        "correlation": {"type": "number", "minimum": -1, "maximum": 1}
+      }
+    }
+  }
+}

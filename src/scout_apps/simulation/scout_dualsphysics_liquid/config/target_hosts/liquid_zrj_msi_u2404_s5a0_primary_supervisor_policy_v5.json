@@ -1,0 +1,226 @@
+{
+  "schema_version": "smpcc-r8-liquid-s5a0-primary-supervisor-policy-v5",
+  "document_type": "SMPCC_R8_LIQUID_S5A0_PRIMARY_SUPERVISOR_POLICY_V5",
+  "execution_id": "s5a0_primary_bsmooth_b01_20260811T200154Z_v5",
+  "status": "STATIC_FILE_HEADER_PADDING_REMEDIATION_NOT_EXECUTED",
+  "selection": {
+    "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+    "selected_role": "PRIMARY",
+    "selected_count": 1,
+    "source_root": "/home/zrj/slosh_bags/matrix_bags",
+    "absolute_path": "/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag",
+    "relative_path": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag",
+    "expected_size_bytes": 13996902,
+    "expected_mode": "0755",
+    "expected_sha256": "c82c1f16b41bced51ab0aff63e4ef40b469501e185851344789fc3d62399fc07",
+    "optional_pair_authorized": false,
+    "forbidden_optional_path": "/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bslosh_b01_r01/capture.bag"
+  },
+  "inputs": {
+    "base_policy": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5a0_selected_bag_policy_v1.json",
+      "sha256": "1a6edcf7920034cd1cbfe3b19d2be73cc0ece3c24185c8baeebe6b44bfb15227"
+    },
+    "reader_v1": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_ros1_bag_v2_reader_v1.py",
+      "sha256": "bc3975ba446e22097c399e10a8f6c4e60b4f8e78c5c7d613394028daa76c94fc"
+    },
+    "reader_v2": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_ros1_bag_v2_reader_v2.py",
+      "sha256": "7b2e4d773a94547af4eb8e609a715d6846828596545e8fa87ac87d63217db113"
+    },
+    "reader_v3": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_ros1_bag_v2_reader_v3.py",
+      "sha256": "6b9e27e194c8315c7122096cfa18d522e56cc1a0e96b97f8b52270ef1f55c0ce"
+    },
+    "reader_v4": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_ros1_bag_v2_reader_v4.py",
+      "sha256": "dfb4f075504eef25753752179a2d8cf8f5585f2fbeb9260254f9b411d77f1b7b"
+    },
+    "gate_v1": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_selected_bag_intake_gate_v1.py",
+      "sha256": "62386e9eebf39db581d490a930d98ecca72a72972504d2fa396b4084a181f9b4"
+    },
+    "gate_v2": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_selected_bag_intake_gate_v2.py",
+      "sha256": "4d8e01b3795f4c7ba7ed6f53f0d47f16e4a03b9978205cf53d7f7629f6c30549"
+    },
+    "worker_v4": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_selected_bag_worker_v4.py",
+      "sha256": "7ec24cf4120fddd760ad04bca1519a8b18144c11ef1c280ad571c3a795737594"
+    },
+    "worker_v5": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_selected_bag_worker_v5.py",
+      "sha256": "375266fdf33caecd62f999d0e4f5a8e76d68054692b44fa86affb784f4f5f763"
+    },
+    "worker_v6": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_selected_bag_worker_v6.py",
+      "sha256": "fd3582808464bfb0a934991bc062de8df0cbba63801a2ec830aab8b3b646aab0"
+    },
+    "worker_v7": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_selected_bag_worker_v7.py",
+      "sha256": "a24c026dff92017280bf5c2bd2a7e4be30b42da76fe2249a318ea373792cb0d0"
+    },
+    "inner_schema_v2": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a0_selected_bag_receipt_v2.json",
+      "sha256": "ec78b8e62d9e31fd7adedeaa8a46b10645fce45c7f9a4e80f23eb6f825310976"
+    },
+    "base_supervisor_v1": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_primary_one_shot_supervisor_v1.py",
+      "sha256": "d6c917c8bd77a1000180e4c00d3f616b52bc4138e5b27a84a4d18da973789af7"
+    },
+    "outer_schema_v2": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a0_primary_supervisor_execution_receipt_v2.json",
+      "sha256": "43f630fed085a022763188a4c4e8d28a3f59249cecc1cd93f423c7cb62a5bcbb"
+    },
+    "outer_schema_v4": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a0_primary_supervisor_execution_receipt_v4.json",
+      "sha256": "597fa7efd22ea920af51ef80aae740e955e0a958feac74fb7bb87868711a313c"
+    },
+    "outer_schema_v5": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a0_primary_supervisor_execution_receipt_v5.json",
+      "sha256": "636c03e4f0457cdbb0d56d0837a669a1efcb0a4574e41f243676b0a05a5371a2"
+    },
+    "supervisor_v3": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_primary_one_shot_supervisor_v3.py",
+      "sha256": "62a9eb768492f564e230d371ff2fa3a9518f05ce7e05c3bdac4ffbda984bb81f"
+    },
+    "supervisor_v4": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_primary_one_shot_supervisor_v4.py",
+      "sha256": "7ffc606618ab835746877afce02aacbfe6916bd7c9ebcf1512aa197bcf06821c"
+    },
+    "supervisor_v5": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_primary_one_shot_supervisor_v5.py",
+      "sha256": "0c46e0aa07b6b619760f499b7b1f751b460789a8229f57a169c18cbae6ef0a8b"
+    },
+    "prior_v3_policy": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5a0_primary_supervisor_policy_v3.json",
+      "sha256": "fd88a969d95bd2ab1b9fd8590ce6254a5bbfe421094415ec2bb9d50b6678c70d"
+    },
+    "prior_v4_policy": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5a0_primary_supervisor_policy_v4.json",
+      "sha256": "94f4b5830062ebb8db3515dcae3922c70c206cb90da5360bb4761d872056a545"
+    },
+    "prior_v2_failure_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T192108Z_v2.host.failure.json",
+      "sha256": "a1f1101a29ca9be16818f5cc946cb341b4a6d2082b3de7d83739255ad70ef20f"
+    },
+    "prior_v2_worker_stderr": {
+      "path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T192108Z_v2.host.partial/worker.stderr.log",
+      "sha256": "8b8c680ec137432329de7243e48d6a0f5f8a2866f4c7c85e64ad63485153a8cb"
+    },
+    "prior_v3_reservation": {
+      "path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T193602Z_v3.host.partial/reservation.json",
+      "sha256": "6cf8b240745ef7f5c470ad9abe93cd47a3398edc5ee9a0ae72dbf0603b3d1251"
+    },
+    "prior_v3_worker_rc": {
+      "path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T193602Z_v3.host.partial/worker.rc.json",
+      "sha256": "df344380f3c458a10bf13eb8864d9407d3fc37f79f6735fcb0f059d22813563a"
+    },
+    "prior_v3_worker_stderr": {
+      "path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T193602Z_v3.host.partial/worker.stderr.log",
+      "sha256": "cf5e7bd84886e59cde11a34129b9aee73aa3e454882711fe47f3236d536002c4"
+    },
+    "prior_v3_worker_stdout": {
+      "path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T193602Z_v3.host.partial/worker.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "prior_v4_failure_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T194936Z_v4.host.failure.json",
+      "sha256": "49a571be2feddfa8b1d66a2742ced2be72449d3b607ec254b58f64417fc5e8c9"
+    },
+    "prior_v4_reservation": {
+      "path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T194936Z_v4.host.partial/reservation.json",
+      "sha256": "e62f7748f01096c7ab1f4f95f24af1d41b0357d174d21cc29c6e9144a6d64c5f"
+    },
+    "prior_v4_worker_rc": {
+      "path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T194936Z_v4.host.partial/worker.rc.json",
+      "sha256": "df344380f3c458a10bf13eb8864d9407d3fc37f79f6735fcb0f059d22813563a"
+    },
+    "prior_v4_worker_stderr": {
+      "path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T194936Z_v4.host.partial/worker.stderr.log",
+      "sha256": "2f94b9964c2844ef3aab92e36a261b3bf42dd27986eb890c3ae13fc85cd74371"
+    },
+    "prior_v4_worker_stdout": {
+      "path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T194936Z_v4.host.partial/worker.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "tools": [
+    {"name": "bwrap", "path": "/usr/bin/bwrap", "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"},
+    {"name": "timeout", "path": "/usr/bin/timeout", "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"},
+    {"name": "prlimit", "path": "/usr/bin/prlimit", "sha256": "f27cfd8c1512a4cc6541b59b80cb4cdfd6ef28c34aa21db4299b48264cd0d128"},
+    {"name": "python3", "path": "/usr/bin/python3", "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"}
+  ],
+  "paths": {
+    "audit_root": "/home/zrj/scout_liquid_lab/audits",
+    "partial_evidence_root": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T200154Z_v5.host.partial",
+    "final_evidence_root": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T200154Z_v5.host.evidence",
+    "reservation_name": "reservation.json",
+    "final_receipt_path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T200154Z_v5.host.final.json",
+    "failure_receipt_path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T200154Z_v5.host.failure.json",
+    "inner_receipt_name": "selected_bag_inner_receipt_v2.json",
+    "stdout_name": "worker.stdout.log",
+    "stderr_name": "worker.stderr.log",
+    "rc_name": "worker.rc.json"
+  },
+  "limits": {
+    "timeout_seconds": 30,
+    "kill_after_seconds": 2,
+    "maximum_rss_bytes": 536870912,
+    "maximum_address_space_bytes": 805306368,
+    "maximum_stdout_bytes": 65536,
+    "maximum_stderr_bytes": 262144,
+    "maximum_inner_receipt_bytes": 2097152,
+    "maximum_execution_receipt_bytes": 1048576,
+    "maximum_source_entries": 512,
+    "maximum_parent_components": 32,
+    "nofile_limit": 64,
+    "nproc_limit": 1
+  },
+  "contract": {
+    "one_shot": true,
+    "exact_path_only": true,
+    "glob_forbidden": true,
+    "dedicated_evidence_root_only": true,
+    "audit_root_bind_forbidden": true,
+    "source_fd_o_nofollow": true,
+    "source_fd_pread_hash": true,
+    "source_fd_copy_to_private_tmpfs": true,
+    "source_fd_number": 9,
+    "sandbox_source_mode_0400": true,
+    "sandbox_source_nlink_one": true,
+    "sandbox_source_tmpfs_remount_ro": true,
+    "network_unshared": true,
+    "proc_mount_forbidden": true,
+    "dev_mount_forbidden": true,
+    "inner_receipt_required": true,
+    "host_closed_schema_validation": true,
+    "final_receipt_o_excl": true,
+    "final_receipt_mode": "0600",
+    "atomic_noreplace_publish": true,
+    "failure_preserves_partial": true,
+    "prior_v2_failure_preserved": true,
+    "prior_v3_partial_preserved": true,
+    "prior_v3_worker_failure_bound": true,
+    "connection_data_topic_header_match_required": true,
+    "prior_v4_failure_preserved": true,
+    "prior_v4_worker_failure_bound": true,
+    "file_header_padding_preserved_in_memory": true,
+    "file_header_padding_exact_boundary_verified": true,
+    "source_repaired_or_written": false,
+    "outer_schema_execution_identity_exact": true,
+    "source_bag_executed": false,
+    "ros_started": false,
+    "gpu_exposed": false,
+    "solver_started": false,
+    "sudo_used": false
+  },
+  "expected_evidence_inventory": [
+    "reservation.json",
+    "selected_bag_inner_receipt_v2.json",
+    "worker.rc.json",
+    "worker.stderr.log",
+    "worker.stdout.log"
+  ]
+}

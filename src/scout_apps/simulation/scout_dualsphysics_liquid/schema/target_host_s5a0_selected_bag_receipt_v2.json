@@ -1,0 +1,1230 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5a0_selected_bag_receipt_v2.json",
+  "title": "S5A0 selected ROS1 bag intake remediation receipt v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "receipt_id",
+    "captured_at_utc",
+    "status",
+    "policy",
+    "selection",
+    "sandbox",
+    "mount",
+    "path_chain",
+    "source",
+    "host_source_provenance",
+    "bag",
+    "topic_contract",
+    "claims",
+    "output"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-s5a0-selected-bag-receipt-v2"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_S5A0_SELECTED_BAG_RECEIPT_V2"
+    },
+    "receipt_id": {
+      "type": "string",
+      "pattern": "^S5A0-[A-Za-z0-9._-]+$"
+    },
+    "captured_at_utc": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "status": {
+      "const": "S5A0_SELECTED_R7_BAG_SEALED_DEVELOPMENT_ONLY"
+    },
+    "policy": {
+      "$ref": "#/$defs/policy_ref"
+    },
+    "selection": {
+      "$ref": "#/$defs/selection"
+    },
+    "sandbox": {
+      "$ref": "#/$defs/sandbox"
+    },
+    "mount": {
+      "$ref": "#/$defs/mount"
+    },
+    "path_chain": {
+      "$ref": "#/$defs/path_chain"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "host_source_provenance": {
+      "$ref": "#/$defs/host_source_provenance"
+    },
+    "bag": {
+      "$ref": "#/$defs/bag"
+    },
+    "topic_contract": {
+      "$ref": "#/$defs/topic_contract"
+    },
+    "claims": {
+      "$ref": "#/$defs/claims"
+    },
+    "output": {
+      "$ref": "#/$defs/output"
+    }
+  },
+  "$defs": {
+    "host_source_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "identity_scope",
+        "absolute_path",
+        "expected_mode",
+        "expected_size_bytes",
+        "expected_sha256",
+        "guest_copy_distinct_inode",
+        "guest_copy_mode"
+      ],
+      "properties": {
+        "identity_scope": {"const": "OUTER_SUPERVISOR_VERIFIED_HOST_SOURCE"},
+        "absolute_path": {"type": "string", "pattern": "^/"},
+        "expected_mode": {"const": "0755"},
+        "expected_size_bytes": {"type": "integer", "minimum": 1},
+        "expected_sha256": {"$ref": "#/$defs/sha256"},
+        "guest_copy_distinct_inode": {"const": true},
+        "guest_copy_mode": {"const": "0400"}
+      }
+    },
+    "policy_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_id",
+        "policy_sha256",
+        "continuation_plan_sha256",
+        "reader_sha256"
+      ],
+      "properties": {
+        "policy_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "policy_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "continuation_plan_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "reader_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_domain",
+        "source_provenance",
+        "source_root",
+        "attempt_id",
+        "selected_role",
+        "selected_count",
+        "relative_path",
+        "absolute_path",
+        "optional_pair_read_or_admitted"
+      ],
+      "properties": {
+        "source_domain": {
+          "const": "SIM_R7_EXECUTED_GAZEBO_MOTION"
+        },
+        "source_provenance": {
+          "const": "PARTIAL_BAG_ONLY"
+        },
+        "source_root": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "attempt_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "selected_role": {
+          "const": "PRIMARY"
+        },
+        "selected_count": {
+          "const": 1
+        },
+        "relative_path": {
+          "type": "string",
+          "pattern": "^[^/][^*?\\[\\]]*/capture\\.bag$"
+        },
+        "absolute_path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "optional_pair_read_or_admitted": {
+          "const": false
+        }
+      }
+    },
+    "sandbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "read_only_enforced",
+        "network_unshared",
+        "clear_environment",
+        "source_visible_path",
+        "source_bag_executed",
+        "ros_started",
+        "gpu_exposed",
+        "solver_started",
+        "bwrap_argv_sha256",
+        "limits"
+      ],
+      "properties": {
+        "backend": {
+          "const": "BWRAP_READ_ONLY_UNSHARED_NETWORK"
+        },
+        "read_only_enforced": {
+          "const": true
+        },
+        "network_unshared": {
+          "const": true
+        },
+        "clear_environment": {
+          "const": true
+        },
+        "source_visible_path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "source_bag_executed": {
+          "const": false
+        },
+        "ros_started": {
+          "const": false
+        },
+        "gpu_exposed": {
+          "const": false
+        },
+        "solver_started": {
+          "const": false
+        },
+        "bwrap_argv_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "limits": {
+          "$ref": "#/$defs/runtime_limits"
+        }
+      }
+    },
+    "runtime_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "timeout_seconds",
+        "maximum_rss_bytes",
+        "maximum_address_space_bytes",
+        "maximum_receipt_bytes",
+        "maximum_output_files",
+        "maximum_chunk_uncompressed_bytes",
+        "maximum_total_uncompressed_bytes"
+      ],
+      "properties": {
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_rss_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_address_space_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_receipt_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_output_files": {
+          "const": 1
+        },
+        "maximum_chunk_uncompressed_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_total_uncompressed_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "mount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mount_id",
+        "device",
+        "root",
+        "mount_point",
+        "filesystem_type",
+        "mount_source",
+        "mount_options",
+        "super_options",
+        "mountinfo_read_only",
+        "statvfs_read_only"
+      ],
+      "properties": {
+        "mount_id": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "device": {
+          "type": "string",
+          "pattern": "^[0-9]+:[0-9]+$"
+        },
+        "root": {
+          "type": "string"
+        },
+        "mount_point": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "filesystem_type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mount_source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mount_options": {
+          "$ref": "#/$defs/string_array"
+        },
+        "super_options": {
+          "$ref": "#/$defs/string_array"
+        },
+        "mountinfo_read_only": {
+          "const": true
+        },
+        "statvfs_read_only": {
+          "const": true
+        }
+      }
+    },
+    "path_chain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "before",
+        "after",
+        "unchanged"
+      ],
+      "properties": {
+        "before": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/path_identity"
+          }
+        },
+        "after": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "$ref": "#/$defs/path_identity"
+          }
+        },
+        "unchanged": {
+          "const": true
+        }
+      }
+    },
+    "path_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "kind",
+        "mode",
+        "device",
+        "inode",
+        "nlink",
+        "size_bytes",
+        "mtime_ns",
+        "ctime_ns",
+        "symlink"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "kind": {
+          "enum": [
+            "directory",
+            "regular"
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/mode"
+        },
+        "device": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inode": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nlink": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mtime_ns": {
+          "type": "integer"
+        },
+        "ctime_ns": {
+          "type": "integer"
+        },
+        "symlink": {
+          "const": false
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "directory_before",
+        "directory_after",
+        "directory_unchanged",
+        "selected_before",
+        "selected_after",
+        "selected_unchanged",
+        "active_marker_present",
+        "files_written_under_source_root"
+      ],
+      "properties": {
+        "directory_before": {
+          "$ref": "#/$defs/directory_snapshot"
+        },
+        "directory_after": {
+          "$ref": "#/$defs/directory_snapshot"
+        },
+        "directory_unchanged": {
+          "const": true
+        },
+        "selected_before": {
+          "$ref": "#/$defs/file_identity"
+        },
+        "selected_after": {
+          "$ref": "#/$defs/file_identity"
+        },
+        "selected_unchanged": {
+          "const": true
+        },
+        "active_marker_present": {
+          "const": false
+        },
+        "files_written_under_source_root": {
+          "const": 0
+        }
+      }
+    },
+    "directory_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "root",
+        "entry_count",
+        "sha256",
+        "entries"
+      ],
+      "properties": {
+        "root": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "entry_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/snapshot_entry"
+          }
+        }
+      }
+    },
+    "snapshot_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relative_path",
+        "kind",
+        "mode",
+        "device",
+        "inode",
+        "nlink",
+        "size_bytes",
+        "mtime_ns",
+        "ctime_ns"
+      ],
+      "properties": {
+        "relative_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "enum": [
+            "directory",
+            "regular"
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/mode"
+        },
+        "device": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inode": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nlink": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mtime_ns": {
+          "type": "integer"
+        },
+        "ctime_ns": {
+          "type": "integer"
+        }
+      }
+    },
+    "file_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "size_bytes",
+        "mode",
+        "uid",
+        "gid",
+        "device",
+        "inode",
+        "nlink",
+        "mtime_ns",
+        "ctime_ns"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "mode": {
+          "$ref": "#/$defs/mode"
+        },
+        "uid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "gid": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "device": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inode": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "nlink": {
+          "const": 1
+        },
+        "mtime_ns": {
+          "type": "integer"
+        },
+        "ctime_ns": {
+          "type": "integer"
+        }
+      }
+    },
+    "bag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "version",
+        "indexed",
+        "file_header",
+        "compression",
+        "total_message_count",
+        "qc_nonfinite_sentinel_count",
+        "record_time_range",
+        "connections",
+        "topics",
+        "odom",
+        "clock",
+        "frame_graph",
+        "index_verified",
+        "chunk_info_verified",
+        "topic_conflicts",
+        "anomalies",
+        "limits"
+      ],
+      "properties": {
+        "format": {
+          "const": "ROS1_BAG_V2"
+        },
+        "version": {
+          "const": "2.0"
+        },
+        "indexed": {
+          "const": true
+        },
+        "file_header": {
+          "$ref": "#/$defs/file_header"
+        },
+        "compression": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "none",
+              "bz2"
+            ]
+          }
+        },
+        "total_message_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "qc_nonfinite_sentinel_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "record_time_range": {
+          "$ref": "#/$defs/time_range"
+        },
+        "connections": {
+          "type": "array",
+          "minItems": 13,
+          "items": {
+            "$ref": "#/$defs/connection"
+          }
+        },
+        "topics": {
+          "type": "array",
+          "minItems": 13,
+          "maxItems": 13,
+          "items": {
+            "$ref": "#/$defs/topic"
+          }
+        },
+        "odom": {
+          "$ref": "#/$defs/odom"
+        },
+        "clock": {
+          "$ref": "#/$defs/clock"
+        },
+        "frame_graph": {
+          "$ref": "#/$defs/frame_graph"
+        },
+        "index_verified": {
+          "const": true
+        },
+        "chunk_info_verified": {
+          "const": true
+        },
+        "topic_conflicts": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "anomalies": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "limits": {
+          "$ref": "#/$defs/reader_limits"
+        }
+      }
+    },
+    "file_header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index_pos",
+        "connection_count",
+        "chunk_count"
+      ],
+      "properties": {
+        "index_pos": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "connection_count": {
+          "type": "integer",
+          "minimum": 13
+        },
+        "chunk_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "connection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connection_id",
+        "topic",
+        "type",
+        "md5sum",
+        "message_definition_sha256",
+        "message_definition_size_bytes",
+        "canonical_message_definition_sha256",
+        "canonical_message_definition_size_bytes",
+        "callerid",
+        "latching",
+        "message_count",
+        "record_time_range"
+      ],
+      "properties": {
+        "connection_id": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "topic": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "md5sum": {
+          "$ref": "#/$defs/md5"
+        },
+        "message_definition_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "message_definition_size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "canonical_message_definition_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "canonical_message_definition_size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "callerid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "latching": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "message_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "record_time_range": {
+          "$ref": "#/$defs/time_range"
+        }
+      }
+    },
+    "topic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "topic",
+        "type",
+        "md5sum",
+        "message_definition_sha256",
+        "connection_ids",
+        "message_count",
+        "record_time_range",
+        "header_time_range",
+        "header_time_monotonic"
+      ],
+      "properties": {
+        "topic": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "type": {
+          "type": "string",
+          "minLength": 1
+        },
+        "md5sum": {
+          "$ref": "#/$defs/md5"
+        },
+        "message_definition_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "connection_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "message_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "record_time_range": {
+          "$ref": "#/$defs/time_range"
+        },
+        "header_time_range": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/time_range"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "header_time_monotonic": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "odom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "message_count",
+        "record_time_range",
+        "header_time_range",
+        "record_time_monotonic",
+        "header_time_monotonic",
+        "header_record_max_abs_delta_ns",
+        "frame_pairs"
+      ],
+      "properties": {
+        "message_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "record_time_range": {
+          "$ref": "#/$defs/time_range"
+        },
+        "header_time_range": {
+          "$ref": "#/$defs/time_range"
+        },
+        "record_time_monotonic": {
+          "const": true
+        },
+        "header_time_monotonic": {
+          "const": true
+        },
+        "header_record_max_abs_delta_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frame_pairs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/frame_pair"
+          }
+        }
+      }
+    },
+    "clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "message_count",
+        "record_time_range",
+        "clock_time_range",
+        "record_time_monotonic",
+        "clock_time_monotonic"
+      ],
+      "properties": {
+        "message_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "record_time_range": {
+          "$ref": "#/$defs/time_range"
+        },
+        "clock_time_range": {
+          "$ref": "#/$defs/time_range"
+        },
+        "record_time_monotonic": {
+          "const": true
+        },
+        "clock_time_monotonic": {
+          "const": true
+        }
+      }
+    },
+    "frame_graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dynamic_edges",
+        "static_edges"
+      ],
+      "properties": {
+        "dynamic_edges": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/frame_edge"
+          }
+        },
+        "static_edges": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/frame_edge"
+          }
+        }
+      }
+    },
+    "frame_pair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frame_id",
+        "child_frame_id",
+        "message_count"
+      ],
+      "properties": {
+        "frame_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "child_frame_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message_count": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "frame_edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "parent_frame",
+        "child_frame",
+        "message_count",
+        "first_record_time_ns",
+        "last_record_time_ns"
+      ],
+      "properties": {
+        "parent_frame": {
+          "type": "string",
+          "minLength": 1
+        },
+        "child_frame": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "first_record_time_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_record_time_ns": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "time_range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "first_ns",
+        "last_ns",
+        "minimum_ns",
+        "maximum_ns",
+        "monotonic"
+      ],
+      "properties": {
+        "first_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "last_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "minimum_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maximum_ns": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "monotonic": {
+          "const": true
+        }
+      }
+    },
+    "reader_limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maximum_file_bytes",
+        "maximum_record_header_bytes",
+        "maximum_record_data_bytes",
+        "maximum_field_bytes",
+        "maximum_message_bytes",
+        "maximum_message_definition_bytes",
+        "maximum_chunk_uncompressed_bytes",
+        "maximum_total_uncompressed_bytes",
+        "maximum_records",
+        "maximum_messages",
+        "maximum_connections",
+        "maximum_chunks",
+        "maximum_array_count",
+        "maximum_string_bytes"
+      ],
+      "properties": {
+        "maximum_file_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_record_header_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_record_data_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_field_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_message_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_message_definition_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_chunk_uncompressed_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_total_uncompressed_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_records": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_messages": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_connections": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_chunks": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_array_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maximum_string_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "topic_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contract_id",
+        "required_topic_count",
+        "missing_topics",
+        "unexpected_topics",
+        "definition_conflicts",
+        "all_record_times_monotonic",
+        "validated"
+      ],
+      "properties": {
+        "contract_id": {
+          "const": "R7_SPMPC_NON_FIXED_SELECTED_BAG_V1"
+        },
+        "required_topic_count": {
+          "const": 13
+        },
+        "missing_topics": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "unexpected_topics": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "definition_conflicts": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "all_record_times_monotonic": {
+          "const": true
+        },
+        "validated": {
+          "const": true
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "development_only",
+        "formal",
+        "physical_robot_bag",
+        "physical_primary_eligible",
+        "r8_release",
+        "source_outcome"
+      ],
+      "properties": {
+        "development_only": {
+          "const": true
+        },
+        "formal": {
+          "const": false
+        },
+        "physical_robot_bag": {
+          "const": false
+        },
+        "physical_primary_eligible": {
+          "const": false
+        },
+        "r8_release": {
+          "const": false
+        },
+        "source_outcome": {
+          "const": "UNKNOWN"
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "receipt_path",
+        "create_new",
+        "o_excl",
+        "o_nofollow",
+        "mode",
+        "maximum_output_files",
+        "maximum_receipt_bytes"
+      ],
+      "properties": {
+        "receipt_path": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "create_new": {
+          "const": true
+        },
+        "o_excl": {
+          "const": true
+        },
+        "o_nofollow": {
+          "const": true
+        },
+        "mode": {
+          "const": "0440"
+        },
+        "maximum_output_files": {
+          "const": 1
+        },
+        "maximum_receipt_bytes": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "md5": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "mode": {
+      "type": "string",
+      "pattern": "^[0-7]{4}$"
+    },
+    "string_array": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "schema_version": "smpcc-r8-liquid-s5a0-primary-execution-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_S5A0_PRIMARY_EXECUTION_POLICY_V1",
+  "execution_id": "s5a0_primary_bsmooth_b01_20260811T173630Z_v1",
+  "status": "STATIC_ONE_SHOT_POLICY_NOT_EXECUTED",
+  "selection": {
+    "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+    "selected_role": "PRIMARY",
+    "source_root": "/home/zrj/slosh_bags/matrix_bags",
+    "absolute_path": "/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag",
+    "relative_path": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag",
+    "expected_size_bytes": 13996902,
+    "expected_mode": "0755",
+    "expected_sha256": "c82c1f16b41bced51ab0aff63e4ef40b469501e185851344789fc3d62399fc07",
+    "optional_pair_authorized": false,
+    "forbidden_optional_path": "/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bslosh_b01_r01/capture.bag"
+  },
+  "static_inputs": {
+    "base_policy": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5a0_selected_bag_policy_v1.json",
+      "sha256": "1a6edcf7920034cd1cbfe3b19d2be73cc0ece3c24185c8baeebe6b44bfb15227"
+    },
+    "reader": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_ros1_bag_v2_reader_v1.py",
+      "sha256": "bc3975ba446e22097c399e10a8f6c4e60b4f8e78c5c7d613394028daa76c94fc"
+    },
+    "gate_v1": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_selected_bag_intake_gate_v1.py",
+      "sha256": "62386e9eebf39db581d490a930d98ecca72a72972504d2fa396b4084a181f9b4"
+    },
+    "gate_v2": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a0_selected_bag_intake_gate_v2.py",
+      "sha256": "4d8e01b3795f4c7ba7ed6f53f0d47f16e4a03b9978205cf53d7f7629f6c30549"
+    },
+    "inner_schema": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a0_selected_bag_receipt_v1.json",
+      "sha256": "4d748556a0a03c55dae3bdeefc0159221d267a0d71dc9ea23112710ffe73573a"
+    }
+  },
+  "tools": [
+    {
+      "name": "bwrap",
+      "path": "/usr/bin/bwrap",
+      "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"
+    },
+    {
+      "name": "timeout",
+      "path": "/usr/bin/timeout",
+      "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"
+    },
+    {
+      "name": "prlimit",
+      "path": "/usr/bin/prlimit",
+      "sha256": "f27cfd8c1512a4cc6541b59b80cb4cdfd6ef28c34aa21db4299b48264cd0d128"
+    },
+    {
+      "name": "python3",
+      "path": "/usr/bin/python3",
+      "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"
+    }
+  ],
+  "paths": {
+    "audit_root": "/home/zrj/scout_liquid_lab/audits",
+    "partial_evidence_root": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T173630Z_v1.partial",
+    "final_evidence_root": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T173630Z_v1.evidence",
+    "reservation_path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T173630Z_v1.reserve",
+    "final_receipt_path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T173630Z_v1.final.json",
+    "failure_receipt_path": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T173630Z_v1.failure.json",
+    "inner_receipt_name": "selected_bag_inner_receipt_v1.json",
+    "stdout_name": "worker.stdout.log",
+    "stderr_name": "worker.stderr.log",
+    "rc_name": "worker.rc.json"
+  },
+  "limits": {
+    "timeout_seconds": 30,
+    "kill_after_seconds": 2,
+    "maximum_rss_bytes": 536870912,
+    "maximum_address_space_bytes": 805306368,
+    "maximum_stdout_bytes": 65536,
+    "maximum_stderr_bytes": 262144,
+    "maximum_inner_receipt_bytes": 2097152,
+    "maximum_final_receipt_bytes": 1048576,
+    "maximum_source_entries": 512,
+    "maximum_parent_components": 32,
+    "nofile_limit": 64,
+    "nproc_limit": 1
+  },
+  "execution_contract": {
+    "one_shot": true,
+    "network_unshared": true,
+    "source_read_only_bind": true,
+    "audit_root_bind_forbidden": true,
+    "dedicated_partial_root_only": true,
+    "worker_runtime_schema_validation": true,
+    "host_inner_receipt_validation": true,
+    "host_source_before_after_validation": true,
+    "host_root_inventory_before_after_validation": true,
+    "stdout_stderr_rc_frozen": true,
+    "reservation_o_excl": true,
+    "receipt_o_excl": true,
+    "evidence_rename_noreplace": true,
+    "failure_preserves_partial": true,
+    "source_bag_executed": false,
+    "ros_started": false,
+    "gpu_exposed": false,
+    "solver_started": false
+  },
+  "expected_worker_inventory": [
+    "selected_bag_inner_receipt_v1.json",
+    "worker.rc.json",
+    "worker.stderr.log",
+    "worker.stdout.log"
+  ],
+  "claim_ceiling": {
+    "development_only": true,
+    "formal": false,
+    "physical_primary_eligible": false,
+    "source_outcome": "UNKNOWN"
+  }
+}

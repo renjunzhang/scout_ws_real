@@ -1,0 +1,141 @@
+{
+  "schema_version": "smpcc-r8-liquid-s5-c1-compatibility-v1",
+  "document_type": "SMPCC_R8_LIQUID_S5_C1_COMPATIBILITY_CONTRACT_V1",
+  "contract_id": "liquid_zrj_msi_u2404_s5_c1_compatibility_v1",
+  "status": "S5_C1_TO_C1M_DEVELOPMENT_REPLAY_COMPATIBILITY_FROZEN",
+  "source_scope": {
+    "source_domain": "SIM_R7_EXECUTED_GAZEBO_MOTION",
+    "selected_container": "C1",
+    "selected_attempt": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+    "source_provenance": "PARTIAL_BAG_ONLY",
+    "exact_attempt_sidecar_available": false,
+    "source_outcome": "UNKNOWN",
+    "optional_pair_read_or_admitted": false,
+    "c2_read_or_admitted": false
+  },
+  "parents": {
+    "continuation_plan": {
+      "path": "/home/zrj/scout_ws/docs/实物实验注意事项/对比试验/仿真接入液体/20260811_RTX5080_DualSPHysics_GPU液体仿真阶段3-6续接方案_Agent执行版.md",
+      "sha256": "bb64db0f62cfab74cd4040798d046dfd6420a04276605296bf9492cddb691f01"
+    },
+    "gpu_build_plan": {
+      "path": "/home/zrj/scout_ws/docs/实物实验注意事项/对比试验/仿真接入液体/20260810_RTX5080_DualSPHysics_GPU_8小时快速构建方案_Agent执行版.md",
+      "sha256": "9a17c2296417b2ea3bc0b65a710e88e287a99abc4cbf6e264857efe06d1bd27d"
+    },
+    "r7_c1_model_yaml": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/spmpc_sim_local_planner/config/containers/C1_37mm_H58_sim.yaml",
+      "sha256": "cb91dc6f642caa3c907be9ef4432d1b05805395c9944be8faad80bf93b5924d4"
+    },
+    "r7_hproxy_launch": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/spmpc_sim_local_planner/launch/smpcc_sim_h_proxy_monitor.launch",
+      "sha256": "8aab5c05350f797e1fc9d6fe708f581e01467ccf404b108e861d0ad99b28ad1f"
+    },
+    "r7_runner_source": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/spmpc_sim_local_planner/historical_quarantine/r7_r1/scripts/smpcc_sim_mechanism_runner.py.disabled",
+      "sha256": "21ae12fdb541e89ed4cf290b96352dc753eb72685690ba37b1bbab8cb5193594"
+    },
+    "c1m_source_definition": {
+      "path": "/home/zrj/scout_liquid_lab/dependency/runtime/u3_c1m_gencase_seed_v3_20260808T150802Z.partial/input/C1M_moving_zero_Def.xml",
+      "sha256": "1711b10f366770cb1b6aa2af799c093596c9d606c914c4a68b9bcdb9fa844b52"
+    },
+    "c1m_case_bi4": {
+      "path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.bi4",
+      "sha256": "b463ddfe548b3db78b02f23b075dadbdd3c71ea766eb092701b56978ddb3a8e7"
+    },
+    "c1m_case_xml": {
+      "path": "/home/zrj/scout_liquid_lab/cases/u3_c1m_gencase_v8_20260808T153753Z.partial/output/C1M_zero.xml",
+      "sha256": "28205c2234dda565da600947d03481c492c6bb493b2e058bd04cd360b7862acb"
+    },
+    "c1m_gencase_lifecycle": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gencase_v8_20260808T153753Z.lifecycle.json",
+      "sha256": "d595dc8665175f0b6e2dca0e88db41c9bcba4c9dbb63cec97c827a20459a7eea"
+    },
+    "settled_checkpoint": {
+      "path": "/home/zrj/scout_liquid_lab/gpu_stage4_runs/u3_c1m_gpu_viscoart0p3_cold_b_20260811T113902Z_v14.partial/output/data/Part_0901.bi4",
+      "sha256": "023c2ae47281351f7c601a60709799cf8155745193d7e2aa5ee862256ad9b1f4"
+    },
+    "settled_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_viscoart0p3_repeatability_restart_20260811T124800Z_v15.qc_v1.json",
+      "sha256": "4703c08e09b33fb16ad68b368dd5e99c2b2c930a3091008fa399241fc58a7fd8"
+    },
+    "stage4_parity_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_cpu_gpu_backend_parity_20260811T133800Z_v19.qc_v1.json",
+      "sha256": "41080d61f749e25db1d54da63d701c26b9e2badc2d89fdebd748997282eb18f1"
+    },
+    "stage4_final_receipt": {
+      "path": "/home/zrj/scout_liquid_lab/audits/u3_c1m_gpu_synthetic_motion_20260811T143346Z_v23.qc_v1.json",
+      "sha256": "1f837ce7c52ce80971adb981e121eace3c92968095193bb6db3519b39776e383"
+    },
+    "bi4_reader": {
+      "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_bi4_reader_v1.py",
+      "sha256": "104d271b750eed15985bf29f743a59678d66c50b9dfae9d1a3fd1663510dbc14"
+    }
+  },
+  "r7_c1_model": {
+    "config_id": "SIM_ONLY_C1_D37_H58_UNVALIDATED",
+    "formal": false,
+    "physical_primary_eligible": false,
+    "container_radius_m": 0.0185,
+    "static_liquid_height_m": 0.058,
+    "liquid_density_kg_m3": 1000.0,
+    "geometry_manifest_present_in_r7_source": false,
+    "particle_manifest_present_in_r7_source": false
+  },
+  "replay_c1m": {
+    "geometry_source": "EXACT_HASHED_C1M_GENCASE_V8",
+    "container_radius_m": 0.0185,
+    "static_liquid_height_m": 0.058,
+    "boundary_height_m": 0.066,
+    "particle_spacing_m": 0.002,
+    "liquid_density_kg_m3": 1000.0,
+    "gravity_m_s2": [0.0, 0.0, -9.81],
+    "particle_count": 9078,
+    "moving_boundary_count": 2669,
+    "moving_boundary_id_first": 0,
+    "moving_boundary_id_last": 2668,
+    "fluid_count": 6409,
+    "fluid_id_first": 2669,
+    "fluid_id_last": 9077,
+    "moving_boundary_position_sha256": "ca588478d1348cb753b572ebe9f5df9e0a8374db50f1f25fd7cbebaba61e18c6",
+    "settled_part_index": 901,
+    "settled_time_s": 45.05001991890928,
+    "settled_cfl": 0.1,
+    "settled_shifting": "None",
+    "settled_viscoart": 0.3
+  },
+  "mount_contract": {
+    "parent_frame": "base_footprint",
+    "child_frame": "c1m_container_reference",
+    "translation_m": [0.0, 0.0, 0.0],
+    "quaternion_xyzw": [0.0, 0.0, 0.0, 1.0],
+    "case_rotation_center_m": [0.0, 0.0, 0.0],
+    "basis": "R7_HPROXY_ZERO_OFFSET_DEFAULT_AND_RUNNER_NO_OVERRIDE",
+    "exact_r7_attempt_sidecar_proof": false,
+    "development_assumption": true,
+    "physical_mount_validated": false,
+    "translation_uncertainty_m": "UNKNOWN",
+    "rotation_uncertainty_deg": "UNKNOWN"
+  },
+  "compatibility_checks": {
+    "c1_radius_matches_c1m": true,
+    "c1_liquid_height_matches_c1m": true,
+    "c1_density_matches_c1m": true,
+    "replay_geometry_is_exact_c1m": true,
+    "moving_boundary_positions_unchanged_through_settle": true,
+    "particle_id_set_and_class_counts_match": true,
+    "settled_checkpoint_bound_to_exact_c1m_case": true,
+    "new_exact_settle_required": false,
+    "r7_model_geometry_claimed_byte_identical_to_c1m": false,
+    "physical_geometry_compatibility_claimed": false
+  },
+  "claim_ceiling": {
+    "development_only": true,
+    "formal": false,
+    "physical_primary_eligible": false,
+    "physical_fidelity_validated": false,
+    "gpu_replay_authorized": false,
+    "source_outcome_override_allowed": false,
+    "admission": "S5A1_EXPORT_PRECONDITION_ONLY"
+  },
+  "next": "S5A0_SELECTED_BAG_RECEIPT_REQUIRED_THEN_S5A1_ABI_V3_TRANSFER"
+}

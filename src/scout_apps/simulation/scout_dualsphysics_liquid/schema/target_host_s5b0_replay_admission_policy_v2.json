@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_replay_admission_policy_v2.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "selection", "parent_transfer", "c1_parents", "case_contract", "solver_contract", "moving_envelope", "resource_contract", "profile_contract", "result_contract", "lifecycle", "authorization", "next"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5b0-replay-admission-policy-v2"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5B0_REPLAY_ADMISSION_POLICY_V2"},
+    "status": {"const": "STATIC_TEMPLATE_NOT_ADMITTED"},
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempt_id", "role", "container", "planned_denominator", "optional_authorized", "c2_authorized"],
+      "properties": {
+        "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"}, "role": {"const": "PRIMARY_BASELINE"},
+        "container": {"const": "C1"}, "planned_denominator": {"const": 1},
+        "optional_authorized": {"const": false}, "c2_authorized": {"const": false}
+      }
+    },
+    "parent_transfer": {
+      "type": "object", "additionalProperties": false,
+      "required": ["abi", "required_status", "finalized", "transfer_id", "package_root", "manifest_sha256", "execution_receipt_sha256"],
+      "properties": {
+        "abi": {"const": "R8-LIQUID-HANDOFF-ABI-v3"}, "required_status": {"const": "S5A1_PRIMARY_R7_MOTION_TRANSFER_VERIFIED_ACCEPTED"},
+        "finalized": {"const": false}, "transfer_id": {"type": "null"}, "package_root": {"type": "null"},
+        "manifest_sha256": {"type": "null"}, "execution_receipt_sha256": {"type": "null"}
+      }
+    },
+    "c1_parents": {
+      "type": "object", "additionalProperties": false,
+      "required": ["case_xml_sha256", "case_bi4_sha256", "compatibility_contract_sha256", "settled_part_sha256", "settled_head_sha256", "settled_part_index", "settled_time_s", "particle_count", "moving_boundary_count", "fluid_count"],
+      "properties": {
+        "case_xml_sha256": {"$ref": "#/$defs/sha256"}, "case_bi4_sha256": {"$ref": "#/$defs/sha256"},
+        "compatibility_contract_sha256": {"$ref": "#/$defs/sha256"}, "settled_part_sha256": {"$ref": "#/$defs/sha256"},
+        "settled_head_sha256": {"$ref": "#/$defs/sha256"}, "settled_part_index": {"const": 901},
+        "settled_time_s": {"const": 45.05001991890928}, "particle_count": {"const": 9078},
+        "moving_boundary_count": {"const": 2669}, "fluid_count": {"const": 6409}
+      }
+    },
+    "case_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["motion_replacement_locations", "motion_replacement_count", "motion_element", "solver_path_name", "field_indices", "anglesunits", "axes", "intrinsic", "movecenter", "solver_tail_s", "solver_path_last_t_already_includes_tail", "tmax_formula", "gauge_contract_required"],
+      "properties": {
+        "motion_replacement_locations": {"type": "array", "prefixItems": [{"const": "/case/casedef/motion"}, {"const": "/case/execution/motion"}], "items": false},
+        "motion_replacement_count": {"const": 2}, "motion_element": {"const": "mvpathfile"}, "solver_path_name": {"const": "solver_path.csv"},
+        "field_indices": {"type": "array", "prefixItems": [{"const": 0}, {"const": 1}, {"const": 2}, {"const": 3}, {"const": 4}, {"const": 5}, {"const": 6}], "items": false},
+        "anglesunits": {"const": "degrees"}, "axes": {"const": "ZYX"}, "intrinsic": {"const": true}, "movecenter": {"const": true},
+        "solver_tail_s": {"const": 1.0}, "solver_path_last_t_already_includes_tail": {"const": true},
+        "tmax_formula": {"const": "45.05001991890928+solver_path_last_t_s"}, "gauge_contract_required": {"const": true}
+      }
+    },
+    "solver_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["backend_flag", "common_flags", "restart_flag", "output_period_s", "j_flag_policy", "candidate_source_execution_forbidden", "staged_candidate_execution_required"],
+      "properties": {
+        "backend_flag": {"const": "-gpu:0"}, "common_flags": {"$ref": "#/$defs/nonempty_strings"},
+        "restart_flag": {"const": "-partbegin:901:901"}, "output_period_s": {"const": 0.05},
+        "j_flag_policy": {"const": "IGNORED_FOR_GPU_AND_FORBIDDEN"}, "candidate_source_execution_forbidden": {"const": true},
+        "staged_candidate_execution_required": {"const": true}
+      }
+    },
+    "moving_envelope": {"$ref": "#/$defs/numeric_contract"},
+    "resource_contract": {"$ref": "#/$defs/resource_contract"},
+    "profile_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["template", "devices", "uvm_tools_default", "uvm_tools_only_after_exact_denial", "only_host_writable_bind", "load_authorized"],
+      "properties": {
+        "template": {"const": "r8-liquid-s5b0-replay-v2.profile.template"},
+        "devices": {"type": "array", "prefixItems": [{"const": "/dev/nvidia0"}, {"const": "/dev/nvidiactl"}, {"const": "/dev/nvidia-uvm"}], "items": false},
+        "uvm_tools_default": {"const": false}, "uvm_tools_only_after_exact_denial": {"const": true},
+        "only_host_writable_bind": {"const": "OUTPUT_ROOT"}, "load_authorized": {"const": false}
+      }
+    },
+    "result_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["required_inventory", "boundary_motion_required", "gauge_slots_complete_required", "particle_ids_mass_finite_required", "nout_required"],
+      "properties": {
+        "required_inventory": {"$ref": "#/$defs/nonempty_strings"}, "boundary_motion_required": {"const": true},
+        "gauge_slots_complete_required": {"const": true}, "particle_ids_mass_finite_required": {"const": true}, "nout_required": {"const": 0}
+      }
+    },
+    "lifecycle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["replay_id", "partial_root", "final_root", "start_receipt", "final_receipt", "failure_receipt", "fresh_create_new_required", "failure_preserves_partial", "atomic_noreplace_publish", "zero_residue_required"],
+      "properties": {
+        "replay_id": {"type": "null"}, "partial_root": {"type": "null"}, "final_root": {"type": "null"},
+        "start_receipt": {"type": "null"}, "final_receipt": {"type": "null"}, "failure_receipt": {"type": "null"},
+        "fresh_create_new_required": {"const": true}, "failure_preserves_partial": {"const": true},
+        "atomic_noreplace_publish": {"const": true}, "zero_residue_required": {"const": true}
+      }
+    },
+    "authorization": {
+      "type": "object", "additionalProperties": false,
+      "required": ["replay_identity_frozen", "gpu_execution_authorized", "profile_load_authorized", "candidate_execution_authorized"],
+      "properties": {"replay_identity_frozen": {"const": false}, "gpu_execution_authorized": {"const": false}, "profile_load_authorized": {"const": false}, "candidate_execution_authorized": {"const": false}}
+    },
+    "next": {"const": "FINALIZE_S5A1_THEN_CREATE_NEW_EXACT_REPLAY_POLICY_PROFILE_AND_AUTHORIZATION"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nonempty_strings": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+    "numeric_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["interval_subdivisions", "include_solver_output_grid", "maximum_axis_span_m", "container_radius_m", "container_height_m", "margin_m", "cell_size_m", "maximum_cells", "cumulative_path_length_is_not_axis_span"],
+      "properties": {
+        "interval_subdivisions": {"const": 4}, "include_solver_output_grid": {"const": true}, "maximum_axis_span_m": {"const": 8.0},
+        "container_radius_m": {"const": 0.0185}, "container_height_m": {"const": 0.066}, "margin_m": {"const": 0.012},
+        "cell_size_m": {"const": 0.004}, "maximum_cells": {"const": 50000000}, "cumulative_path_length_is_not_axis_span": {"const": true}
+      }
+    },
+    "resource_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["estimate_label", "fixed_gpu_bytes", "bytes_per_cell", "bytes_per_particle", "minimum_dynamic_free_bytes", "minimum_dynamic_headroom_bytes", "dynamic_free_and_headroom_required", "monitor_interval_seconds", "monitor_interval_max_seconds", "wall_timeout_seconds", "pgid_kill_required", "xid_reset_zero_required"],
+      "properties": {
+        "estimate_label": {"const": "PREFLIGHT_ESTIMATE_NOT_OBSERVED_USAGE"}, "fixed_gpu_bytes": {"type": "integer", "minimum": 1},
+        "bytes_per_cell": {"type": "integer", "minimum": 1}, "bytes_per_particle": {"type": "integer", "minimum": 1},
+        "minimum_dynamic_free_bytes": {"type": "integer", "minimum": 1}, "minimum_dynamic_headroom_bytes": {"type": "integer", "minimum": 1},
+        "dynamic_free_and_headroom_required": {"const": true}, "monitor_interval_seconds": {"type": "integer", "minimum": 10, "maximum": 30},
+        "monitor_interval_max_seconds": {"const": 30}, "wall_timeout_seconds": {"type": "integer", "minimum": 1},
+        "pgid_kill_required": {"const": true}, "xid_reset_zero_required": {"const": true}
+      }
+    }
+  }
+}

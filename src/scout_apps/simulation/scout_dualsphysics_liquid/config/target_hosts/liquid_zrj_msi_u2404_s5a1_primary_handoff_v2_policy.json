@@ -1,0 +1,69 @@
+{
+  "schema_version": "smpcc-r8-liquid-s5a1-primary-handoff-v2-policy",
+  "document_type": "SMPCC_R8_LIQUID_S5A1_PRIMARY_HANDOFF_V2_POLICY",
+  "execution_id": "s5a1_primary_bsmooth_b01_20260811T193016Z_v2",
+  "status": "STATIC_NOT_ADMITTED",
+  "selection": {
+    "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+    "role": "PRIMARY",
+    "selected_count": 1,
+    "optional_authorized": false,
+    "host_source_path": "/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag",
+    "host_source_mode": "0755",
+    "host_source_size_bytes": 13996902,
+    "host_source_sha256": "c82c1f16b41bced51ab0aff63e4ef40b469501e185851344789fc3d62399fc07",
+    "sandbox_copy_path": "/selected/capture.bag",
+    "sandbox_copy_mode": "0400"
+  },
+  "s5a0_v2": {
+    "outer_final_receipt": "/home/zrj/scout_liquid_lab/audits/s5a0_primary_bsmooth_b01_20260811T192108Z_v2.host.final.json",
+    "outer_policy": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5a0_primary_supervisor_policy_v2.json", "sha256": "2bf6911639f61ffe5bfd0445da8a6b9c0113cd534fff47db5a7493757328bc1f"},
+    "outer_schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a0_primary_supervisor_execution_receipt_v2.json", "sha256": "43f630fed085a022763188a4c4e8d28a3f59249cecc1cd93f423c7cb62a5bcbb"},
+    "inner_schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a0_selected_bag_receipt_v2.json", "sha256": "ec78b8e62d9e31fd7adedeaa8a46b10645fce45c7f9a4e80f23eb6f825310976"},
+    "inner_receipt_name": "selected_bag_inner_receipt_v2.json"
+  },
+  "v1_parents": {
+    "gate": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a1_handoff_gate_v1.py", "sha256": "7556f7aeebd9a358299c485ad232f8f6263990a437bba9c9ec06feb0d1fc9fd6"},
+    "extractor": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a1_ros1_signal_extractor_v1.py", "sha256": "2ae263a2efa9ebc68d1fceb22201e5297db3a96df26002597d0f0a6ba60ad4bf"},
+    "motion_bridge": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a1_motion_bridge_v1.py", "sha256": "c840f7bb467d5145f55d2e9904b7b8b62781658818ae47f3e95bd139904e2aa1"},
+    "package_schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a1_handoff_package_v1.json", "sha256": "4e1c10d7bd721e072def81dfd491c1d6d72e2aa45e4b2e8e773a1f69dc471496"}
+  },
+  "time_window": {
+    "pre_roll_seconds": 1.0,
+    "pre_roll_semantics": "EXACT_FIRST_EFFECTIVE_MINUS_WINDOW_START",
+    "solver_relaxation_tail_seconds": 1.0,
+    "motion_source": "ODOM_ONLY"
+  },
+  "sandbox": {
+    "python_argv": ["/usr/bin/python3", "-I", "-B", "/app/worker.py", "sandbox-worker"],
+    "cap_drop": "ALL",
+    "network": false,
+    "proc": false,
+    "dev": false,
+    "gpu": false,
+    "sudo": false,
+    "host_worker_subcommand_allowed": false
+  },
+  "tools": {
+    "bwrap": {"path": "/usr/bin/bwrap", "sha256": "52231e1caf55bcbc667b269f49c63599a6f7db4767ae6a039580d0ff853db712"},
+    "timeout": {"path": "/usr/bin/timeout", "sha256": "4fccd5b0192653a2446b745d5385ea547b78e466150e07ade9e2caff2b7f4e08"},
+    "prlimit": {"path": "/usr/bin/prlimit", "sha256": "f27cfd8c1512a4cc6541b59b80cb4cdfd6ef28c34aa21db4299b48264cd0d128"},
+    "python3": {"path": "/usr/bin/python3", "sha256": "1643dacd9feaedc58f3cc581e4d22577dfe25c09b10282936186ccf0f2e61118"}
+  },
+  "outputs": {
+    "partial_root": "/home/zrj/scout_liquid_lab/incoming/s5a1_primary_bsmooth_b01_20260811T193016Z_v2.partial",
+    "final_root": "/home/zrj/scout_liquid_lab/incoming/s5a1_primary_bsmooth_b01_20260811T193016Z_v2",
+    "failure_receipt_partial": "/home/zrj/scout_liquid_lab/audits/s5a1_primary_bsmooth_b01_20260811T193016Z_v2.failure.json.partial",
+    "failure_receipt_final": "/home/zrj/scout_liquid_lab/audits/s5a1_primary_bsmooth_b01_20260811T193016Z_v2.failure.json"
+  },
+  "execution_contract": {
+    "state_order": ["VERIFY_PARENTS", "RESERVE_FAILURE_RECEIPT", "CREATE_PARTIAL_ROOT", "RUN_ONE_SANDBOX_WORKER", "VALIDATE_PACKAGE", "FSYNC_FILES_AND_DIRECTORIES", "RENAME_NOREPLACE", "PUBLISH_FINAL_RECEIPT"],
+    "stdout_max_bytes": 65536,
+    "stderr_max_bytes": 65536,
+    "o_excl": true,
+    "mode": "0600",
+    "fsync_before_publication": true,
+    "failure_preserves_partial": true
+  },
+  "next": "S5A0_V2_FINAL_RECEIPT_AND_NEW_EXECUTION_AUTHORIZATION_REQUIRED"
+}

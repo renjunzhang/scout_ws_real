@@ -1,0 +1,126 @@
+{
+  "schema_version": "smpcc-r8-liquid-s5b0-replay-admission-policy-v2",
+  "document_type": "SMPCC_R8_LIQUID_S5B0_REPLAY_ADMISSION_POLICY_V2",
+  "status": "STATIC_TEMPLATE_NOT_ADMITTED",
+  "selection": {
+    "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+    "role": "PRIMARY_BASELINE",
+    "container": "C1",
+    "planned_denominator": 1,
+    "optional_authorized": false,
+    "c2_authorized": false
+  },
+  "parent_transfer": {
+    "abi": "R8-LIQUID-HANDOFF-ABI-v3",
+    "required_status": "S5A1_PRIMARY_R7_MOTION_TRANSFER_VERIFIED_ACCEPTED",
+    "finalized": false,
+    "transfer_id": null,
+    "package_root": null,
+    "manifest_sha256": null,
+    "execution_receipt_sha256": null
+  },
+  "c1_parents": {
+    "case_xml_sha256": "28205c2234dda565da600947d03481c492c6bb493b2e058bd04cd360b7862acb",
+    "case_bi4_sha256": "b463ddfe548b3db78b02f23b075dadbdd3c71ea766eb092701b56978ddb3a8e7",
+    "compatibility_contract_sha256": "f0786be1f7054fcbc29a9eb0d7f611c2bd3bdee8e9dbe4f022962713e70b6e73",
+    "settled_part_sha256": "023c2ae47281351f7c601a60709799cf8155745193d7e2aa5ee862256ad9b1f4",
+    "settled_head_sha256": "6511cbf54319ce0fbdde9aefc6303f75dee53b56530db3aa25b18212281c266a",
+    "settled_part_index": 901,
+    "settled_time_s": 45.05001991890928,
+    "particle_count": 9078,
+    "moving_boundary_count": 2669,
+    "fluid_count": 6409
+  },
+  "case_contract": {
+    "motion_replacement_locations": ["/case/casedef/motion", "/case/execution/motion"],
+    "motion_replacement_count": 2,
+    "motion_element": "mvpathfile",
+    "solver_path_name": "solver_path.csv",
+    "field_indices": [0, 1, 2, 3, 4, 5, 6],
+    "anglesunits": "degrees",
+    "axes": "ZYX",
+    "intrinsic": true,
+    "movecenter": true,
+    "solver_tail_s": 1.0,
+    "solver_path_last_t_already_includes_tail": true,
+    "tmax_formula": "45.05001991890928+solver_path_last_t_s",
+    "gauge_contract_required": true
+  },
+  "solver_contract": {
+    "backend_flag": "-gpu:0",
+    "common_flags": [
+      "-ompthreads:1", "-stable:1", "-vres:0", "-cellmode:full",
+      "-cfl:0.1", "-shifting:none", "-viscoart:0.3", "-sv:binx,info",
+      "-svres:1", "-svtimers:0", "-svdomainvtk:0", "-saveposdouble:1",
+      "-nortimes:1", "-createdirs:1", "-csvsep:0"
+    ],
+    "restart_flag": "-partbegin:901:901",
+    "output_period_s": 0.05,
+    "j_flag_policy": "IGNORED_FOR_GPU_AND_FORBIDDEN",
+    "candidate_source_execution_forbidden": true,
+    "staged_candidate_execution_required": true
+  },
+  "moving_envelope": {
+    "interval_subdivisions": 4,
+    "include_solver_output_grid": true,
+    "maximum_axis_span_m": 8.0,
+    "container_radius_m": 0.0185,
+    "container_height_m": 0.066,
+    "margin_m": 0.012,
+    "cell_size_m": 0.004,
+    "maximum_cells": 50000000,
+    "cumulative_path_length_is_not_axis_span": true
+  },
+  "resource_contract": {
+    "estimate_label": "PREFLIGHT_ESTIMATE_NOT_OBSERVED_USAGE",
+    "fixed_gpu_bytes": 2147483648,
+    "bytes_per_cell": 64,
+    "bytes_per_particle": 2048,
+    "minimum_dynamic_free_bytes": 6442450944,
+    "minimum_dynamic_headroom_bytes": 2147483648,
+    "dynamic_free_and_headroom_required": true,
+    "monitor_interval_seconds": 10,
+    "monitor_interval_max_seconds": 30,
+    "wall_timeout_seconds": 5400,
+    "pgid_kill_required": true,
+    "xid_reset_zero_required": true
+  },
+  "profile_contract": {
+    "template": "r8-liquid-s5b0-replay-v2.profile.template",
+    "devices": ["/dev/nvidia0", "/dev/nvidiactl", "/dev/nvidia-uvm"],
+    "uvm_tools_default": false,
+    "uvm_tools_only_after_exact_denial": true,
+    "only_host_writable_bind": "OUTPUT_ROOT",
+    "load_authorized": false
+  },
+  "result_contract": {
+    "required_inventory": [
+      "result_manifest.json", "executed_boundary_motion.csv", "gauge_zsurf.csv",
+      "slosh_height.csv", "summary.json", "qc_report.json", "resource_samples.jsonl",
+      "build_and_runtime.txt", "solver.stdout.log", "solver.stderr.log", "checksums.sha256"
+    ],
+    "boundary_motion_required": true,
+    "gauge_slots_complete_required": true,
+    "particle_ids_mass_finite_required": true,
+    "nout_required": 0
+  },
+  "lifecycle": {
+    "replay_id": null,
+    "partial_root": null,
+    "final_root": null,
+    "start_receipt": null,
+    "final_receipt": null,
+    "failure_receipt": null,
+    "fresh_create_new_required": true,
+    "failure_preserves_partial": true,
+    "atomic_noreplace_publish": true,
+    "zero_residue_required": true
+  },
+  "authorization": {
+    "replay_identity_frozen": false,
+    "gpu_execution_authorized": false,
+    "profile_load_authorized": false,
+    "candidate_execution_authorized": false
+  },
+  "next": "FINALIZE_S5A1_THEN_CREATE_NEW_EXACT_REPLAY_POLICY_PROFILE_AND_AUTHORIZATION"
+}

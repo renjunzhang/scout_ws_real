@@ -1,0 +1,97 @@
+{
+  "schema_version": "smpcc-r8-liquid-s6-primary-static-policy-v1",
+  "document_type": "SMPCC_R8_LIQUID_S6_PRIMARY_STATIC_ANALYSIS_POLICY_V1",
+  "policy_id": "liquid_zrj_msi_u2404_s6_primary_static_analysis_v1",
+  "status": "S6_PRIMARY_STATIC_CONTRACT_FROZEN_NOT_ADMITTED",
+  "selection": {
+    "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+    "role": "PRIMARY_BASELINE",
+    "planned_denominator": 1,
+    "optional_pair_admitted": false,
+    "paired_ranking_allowed": false
+  },
+  "parents": {
+    "s5a0_selected_bag_receipt": {"state": "NOT_MATERIALIZED", "path": null, "sha256": null},
+    "s5a1_transfer_manifest": {"state": "NOT_MATERIALIZED", "path": null, "sha256": null},
+    "s5b0_finalized_replay_manifest": {"state": "NOT_MATERIALIZED", "path": null, "sha256": null}
+  },
+  "selected_signals": {
+    "maximum_source_bytes": 67108864,
+    "maximum_messages_per_topic": 100000,
+    "minimum_messages_per_topic": 2,
+    "time_source": "ROS1_BAG_RECORD_TIME_NS",
+    "strictly_increasing_time": true,
+    "signals": [
+      {"name": "H_proxy", "topic": "/slosh/height", "message_type": "std_msgs/Float32", "native_unit": "m", "comparison_unit": "mm", "scale_to_comparison": 1000.0},
+      {"name": "H_modal", "topic": "/spmpc/slosh_height", "message_type": "std_msgs/Float32", "native_unit": "mm", "comparison_unit": "mm", "scale_to_comparison": 1.0}
+    ]
+  },
+  "replay": {
+    "finalized_required": true,
+    "required_status": "S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY",
+    "required_surface_metrics": ["H_crest", "H_abs", "H_peak_to_peak"],
+    "required_numeric_sources": ["finalized_bi4", "gauge_zsurf_csv", "slosh_height_csv"],
+    "synthetic_fixture_allowed_for_static_tests": true
+  },
+  "alignment": {
+    "x_axis": "time_since_odom_header_origin_s",
+    "grid_source": "FINALIZED_REPLAY_OUTPUT_SLOTS",
+    "interpolation": "LINEAR_WITHIN_OVERLAP_ONLY",
+    "extrapolation": false,
+    "smoothing": false,
+    "result_driven_window": false,
+    "result_driven_filter": false
+  },
+  "comparison": {
+    "comparison_unit": "mm",
+    "dimensions": ["amplitude", "frequency", "damping", "phase"],
+    "single_row_only": true,
+    "cpu_selected_trajectory_claim_allowed": false,
+    "physical_reference_pending": true,
+    "physical_fidelity_validated": false
+  },
+  "visualization": {
+    "layout": "THREE_VERTICAL_SHARED_X_PANELS",
+    "shared_x": true,
+    "dual_y_axes": false,
+    "panel_y_axis_count": 1,
+    "panels": [
+      {"panel_id": "a", "series": ["H_crest", "H_abs", "H_peak_to_peak"], "unit": "mm"},
+      {"panel_id": "b", "series": ["H_proxy", "H_modal"], "unit": "mm"},
+      {"panel_id": "c", "series": ["H_crest_minus_H_proxy", "H_crest_minus_H_modal"], "unit": "mm"}
+    ],
+    "palette": "OKABE_ITO_COLORBLIND_SAFE",
+    "redundant_line_styles": true,
+    "rainbow_colormap_allowed": false,
+    "grayscale_review_required": true
+  },
+  "delivery": {
+    "write_semantics": "CREATE_NEW_ONLY",
+    "final_outputs_allowed": false,
+    "planned_inventory": [
+      "comparison_manifest.json",
+      "data/dualsphysics_surface_metrics.csv",
+      "data/h_proxy.csv",
+      "data/h_modal.csv",
+      "data/aligned_primary_comparison.csv",
+      "reports/primary_summary.json",
+      "reports/primary_qc.json",
+      "figures/primary_shared_x_timeseries.png",
+      "keyframes/primary_t000.png",
+      "animation/primary.mp4",
+      "animation/primary_preview.gif",
+      "evidence_index.json",
+      "secondary_ledger_entry.json",
+      "checksums.sha256"
+    ]
+  },
+  "claim_ceiling": {
+    "development_only": true,
+    "stage6_pass": false,
+    "formal": false,
+    "production": false,
+    "physical_primary": false,
+    "physical_reference_pending": true,
+    "admission": "NOT_ADMITTED_FINALIZED_S5B0_REPLAY_REQUIRED"
+  }
+}

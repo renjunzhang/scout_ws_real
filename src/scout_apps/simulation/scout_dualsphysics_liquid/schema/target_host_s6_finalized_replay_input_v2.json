@@ -1,0 +1,293 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_finalized_replay_input_v2.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "status",
+    "synthetic_fixture",
+    "finalized",
+    "attempt_id",
+    "planned_denominator",
+    "parents",
+    "numeric_sources",
+    "time_contract",
+    "probe_contract",
+    "raw_probe_zsurf",
+    "claims"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-finalized-replay-input-v2"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_FINALIZED_REPLAY_INPUT_V2"},
+    "status": {"const": "S6_SYNTHETIC_FINALIZED_REPLAY_INPUT_FROZEN_NOT_FINAL"},
+    "synthetic_fixture": {"const": true},
+    "finalized": {"const": true},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "s5a0_selected_bag_receipt",
+        "source_bag",
+        "s5a1_transfer_manifest",
+        "s5b0_finalized_manifest",
+        "gpu_run_receipt",
+        "settled_state_manifest",
+        "solver_config",
+        "geometry"
+      ],
+      "properties": {
+        "s5a0_selected_bag_receipt": {"$ref": "#/$defs/s5a0Identity"},
+        "source_bag": {"$ref": "#/$defs/sourceIdentity"},
+        "s5a1_transfer_manifest": {"$ref": "#/$defs/s5a1Identity"},
+        "s5b0_finalized_manifest": {"$ref": "#/$defs/s5b0Identity"},
+        "gpu_run_receipt": {"$ref": "#/$defs/gpuIdentity"},
+        "settled_state_manifest": {"$ref": "#/$defs/settledIdentity"},
+        "solver_config": {"$ref": "#/$defs/configIdentity"},
+        "geometry": {"$ref": "#/$defs/geometryIdentity"}
+      }
+    },
+    "numeric_sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finalized_bi4", "gauge_zsurf", "derived_surface_metrics"],
+      "properties": {
+        "finalized_bi4": {"$ref": "#/$defs/bi4Identity"},
+        "gauge_zsurf": {"$ref": "#/$defs/gaugeIdentity"},
+        "derived_surface_metrics": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["role", "precomputed_columns_consumed"],
+          "properties": {
+            "role": {"const": "DERIVE_FROM_INLINE_RAW_PROBE_ZSURF_ONLY"},
+            "precomputed_columns_consumed": {"const": false}
+          }
+        }
+      }
+    },
+    "time_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x_axis",
+        "odom_header_origin_ns",
+        "output_slots_s",
+        "output_grid_sha256",
+        "uniform_grid_required",
+        "window_contract_sha256",
+        "windows"
+      ],
+      "properties": {
+        "x_axis": {"const": "time_since_odom_header_origin_s"},
+        "odom_header_origin_ns": {"type": "integer", "minimum": 0},
+        "output_slots_s": {"type": "array", "minItems": 16, "maxItems": 100000, "items": {"type": "number"}},
+        "output_grid_sha256": {"$ref": "#/$defs/sha256"},
+        "uniform_grid_required": {"const": true},
+        "window_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "windows": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["first15", "full_motion", "recorded_tail", "solver_tail"],
+          "properties": {
+            "first15": {"$ref": "#/$defs/window"},
+            "full_motion": {"$ref": "#/$defs/window"},
+            "recorded_tail": {"$ref": "#/$defs/window"},
+            "solver_tail": {"$ref": "#/$defs/window"}
+          }
+        }
+      }
+    },
+    "probe_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "h0_mm",
+        "raw_unit",
+        "probe_ids",
+        "probe_set_sha256",
+        "selection",
+        "minimum_valid_probes_per_slot",
+        "invalid_encoding"
+      ],
+      "properties": {
+        "h0_mm": {"type": "number"},
+        "raw_unit": {"const": "mm"},
+        "probe_ids": {"const": ["p00", "p01", "p02", "p03"]},
+        "probe_set_sha256": {"$ref": "#/$defs/sha256"},
+        "selection": {"const": "ALL_REGISTERED_PROBES_NO_CHERRY_PICK"},
+        "minimum_valid_probes_per_slot": {"const": 2},
+        "invalid_encoding": {"const": "JSON_NULL"}
+      }
+    },
+    "raw_probe_zsurf": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 100000,
+      "items": {"$ref": "#/$defs/probeRow"}
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "real_bi4_read",
+        "solver_or_gpu_executed",
+        "stage6_pass",
+        "paired_ranking",
+        "cpu_selected_trajectory_comparison",
+        "physical_reference_pending",
+        "physical_fidelity_validated",
+        "final_materialization_admitted"
+      ],
+      "properties": {
+        "real_bi4_read": {"const": false},
+        "solver_or_gpu_executed": {"const": false},
+        "stage6_pass": {"const": false},
+        "paired_ranking": {"const": false},
+        "cpu_selected_trajectory_comparison": {"const": false},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false},
+        "final_materialization_admitted": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "s5a0Identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "real_parent_materialized"],
+      "properties": {
+        "kind": {"const": "SYNTHETIC_S5A0_SELECTED_BAG_RECEIPT"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "real_parent_materialized": {"const": false}
+      }
+    },
+    "sourceIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "real_parent_materialized"],
+      "properties": {
+        "kind": {"const": "SYNTHETIC_ROS1_BAG_V2_BYTES"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "real_parent_materialized": {"const": false}
+      }
+    },
+    "s5a1Identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "real_parent_materialized"],
+      "properties": {
+        "kind": {"const": "SYNTHETIC_S5A1_TRANSFER_MANIFEST"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "real_parent_materialized": {"const": false}
+      }
+    },
+    "s5b0Identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "real_parent_materialized", "output_grid_sha256", "window_contract_sha256", "probe_set_sha256"],
+      "properties": {
+        "kind": {"const": "SYNTHETIC_S5B0_FINALIZED_MANIFEST"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "real_parent_materialized": {"const": false},
+        "output_grid_sha256": {"$ref": "#/$defs/sha256"},
+        "window_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "probe_set_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "gpuIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "real_parent_materialized"],
+      "properties": {
+        "kind": {"const": "SYNTHETIC_GPU_RUN_RECEIPT_NOT_EXECUTED"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "real_parent_materialized": {"const": false}
+      }
+    },
+    "settledIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "real_parent_materialized"],
+      "properties": {
+        "kind": {"const": "SYNTHETIC_SETTLED_STATE_MANIFEST"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "real_parent_materialized": {"const": false}
+      }
+    },
+    "configIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "real_parent_materialized"],
+      "properties": {
+        "kind": {"const": "SYNTHETIC_SOLVER_CONFIG"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "real_parent_materialized": {"const": false}
+      }
+    },
+    "geometryIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "real_parent_materialized"],
+      "properties": {
+        "kind": {"const": "SYNTHETIC_C1_GEOMETRY"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "real_parent_materialized": {"const": false}
+      }
+    },
+    "bi4Identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "role", "read_performed"],
+      "properties": {
+        "kind": {"const": "SYNTHETIC_FINALIZED_BI4_IDENTITY"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "role": {"const": "IDENTITY_ONLY"},
+        "read_performed": {"const": false}
+      }
+    },
+    "gaugeIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "role", "read_performed"],
+      "properties": {
+        "kind": {"const": "SYNTHETIC_INLINE_RAW_GAUGE_ZSURF"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "role": {"const": "INLINE_FIXTURE_FACT_SOURCE"},
+        "read_performed": {"const": false}
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_s", "end_s", "selection"],
+      "properties": {
+        "start_s": {"type": "number"},
+        "end_s": {"type": "number"},
+        "selection": {"const": "PRE_REGISTERED_CLOSED_INTERVAL"}
+      }
+    },
+    "probeRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["t_s", "zsurf_mm"],
+      "properties": {
+        "t_s": {"type": "number"},
+        "zsurf_mm": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["p00", "p01", "p02", "p03"],
+          "properties": {
+            "p00": {"type": ["number", "null"]},
+            "p01": {"type": ["number", "null"]},
+            "p02": {"type": ["number", "null"]},
+            "p03": {"type": ["number", "null"]}
+          }
+        }
+      }
+    }
+  }
+}

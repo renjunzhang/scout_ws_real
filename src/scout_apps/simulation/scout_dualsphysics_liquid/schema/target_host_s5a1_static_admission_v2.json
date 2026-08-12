@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5a1_static_admission_v2.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "execution_id", "status", "policy_sha256", "parents_verified", "s5a0_outer_final_present", "real_input_read", "external_write", "bwrap_run", "next"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5a1-static-admission-v2"},
+    "execution_id": {"const": "s5a1_primary_bsmooth_b01_20260811T193016Z_v2"},
+    "status": {"enum": ["NOT_ADMITTED_S5A0_V2_FINAL_RECEIPT_ABSENT", "READY_FOR_SEPARATE_ONE_SHOT_AUTHORIZATION"]},
+    "policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "parents_verified": {"const": true},
+    "s5a0_outer_final_present": {"type": "boolean"},
+    "real_input_read": {"const": false},
+    "external_write": {"const": false},
+    "bwrap_run": {"const": false},
+    "next": {"enum": ["WAIT_FOR_S5A0_V2_FINAL_RECEIPT", "NEW_EXACT_S5A1_V2_EXECUTION_AUTHORIZATION_REQUIRED"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "NOT_ADMITTED_S5A0_V2_FINAL_RECEIPT_ABSENT"}}, "required": ["status"]},
+      "then": {"properties": {"s5a0_outer_final_present": {"const": false}, "next": {"const": "WAIT_FOR_S5A0_V2_FINAL_RECEIPT"}}},
+      "else": {"properties": {"s5a0_outer_final_present": {"const": true}, "next": {"const": "NEW_EXACT_S5A1_V2_EXECUTION_AUTHORIZATION_REQUIRED"}}}
+    }
+  ]
+}

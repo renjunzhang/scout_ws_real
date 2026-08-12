@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_primary_replay_static_receipt_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "receipt_id",
+    "status",
+    "policy",
+    "parent_transfer",
+    "selection",
+    "checks",
+    "estimates",
+    "safety",
+    "admission",
+    "next"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5b0-primary-replay-static-receipt-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5B0_PRIMARY_REPLAY_STATIC_RECEIPT_V1"},
+    "receipt_id": {"const": "liquid_zrj_msi_u2404_s5b0_primary_replay_static_v1_receipt"},
+    "status": {"const": "NOT_ADMITTED_PARENT_TRANSFER_NOT_MATERIALIZED"},
+    "policy": {"$ref": "#/$defs/policy"},
+    "parent_transfer": {"$ref": "#/$defs/parent_transfer"},
+    "selection": {"$ref": "#/$defs/selection"},
+    "checks": {"$ref": "#/$defs/checks"},
+    "estimates": {"type": "null"},
+    "safety": {"$ref": "#/$defs/safety"},
+    "admission": {"$ref": "#/$defs/admission"},
+    "next": {"const": "MATERIALIZE_EXACT_S5A1_TRANSFER_THEN_CREATE_NEW_S5B0_AUTHORIZATION"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_id", "path", "sha256", "schema_path", "schema_sha256", "profile_template_path", "profile_template_sha256"],
+      "properties": {
+        "policy_id": {"const": "liquid_zrj_msi_u2404_s5b0_primary_replay_static_v1"},
+        "path": {"$ref": "#/$defs/path"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "schema_path": {"$ref": "#/$defs/path"},
+        "schema_sha256": {"$ref": "#/$defs/sha256"},
+        "profile_template_path": {"$ref": "#/$defs/path"},
+        "profile_template_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "parent_transfer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transfer_id", "abi", "state", "receipt_path", "receipt_sha256", "package_root", "manifest_sha256"],
+      "properties": {
+        "transfer_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v1"},
+        "abi": {"const": "R8-LIQUID-HANDOFF-ABI-v3"},
+        "state": {"const": "NOT_MATERIALIZED"},
+        "receipt_path": {"type": "null"},
+        "receipt_sha256": {"type": "null"},
+        "package_root": {"type": "null"},
+        "manifest_sha256": {"type": "null"}
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt_id", "role", "container", "planned_denominator", "optional_authorized", "c2_authorized"],
+      "properties": {
+        "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+        "role": {"const": "PRIMARY_BASELINE"},
+        "container": {"const": "C1"},
+        "planned_denominator": {"const": 1},
+        "optional_authorized": {"const": false},
+        "c2_authorized": {"const": false}
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_valid",
+        "schema_deep_closed",
+        "profile_template_valid",
+        "frozen_parent_identities_present",
+        "transfer_materialized",
+        "compatibility_execution_receipt_verified",
+        "settled_clone_verified",
+        "moving_domain_budget_verified",
+        "mvpathfile_case_generated",
+        "runtime_profile_instantiated",
+        "result_contract_executed"
+      ],
+      "properties": {
+        "policy_valid": {"const": true},
+        "schema_deep_closed": {"const": true},
+        "profile_template_valid": {"const": true},
+        "frozen_parent_identities_present": {"const": true},
+        "transfer_materialized": {"const": false},
+        "compatibility_execution_receipt_verified": {"const": false},
+        "settled_clone_verified": {"const": false},
+        "moving_domain_budget_verified": {"const": false},
+        "mvpathfile_case_generated": {"const": false},
+        "runtime_profile_instantiated": {"const": false},
+        "result_contract_executed": {"const": false}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["real_bag_read", "external_root_created", "gpu_exposed", "solver_executed", "sudo_used", "bwrap_used", "profile_queried", "profile_loaded", "files_written"],
+      "properties": {
+        "real_bag_read": {"const": false},
+        "external_root_created": {"const": false},
+        "gpu_exposed": {"const": false},
+        "solver_executed": {"const": false},
+        "sudo_used": {"const": false},
+        "bwrap_used": {"const": false},
+        "profile_queried": {"const": false},
+        "profile_loaded": {"const": false},
+        "files_written": {"const": false}
+      }
+    },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["admitted", "gpu_replay_authorized", "profile_load_authorized", "reason", "claim_ceiling"],
+      "properties": {
+        "admitted": {"const": false},
+        "gpu_replay_authorized": {"const": false},
+        "profile_load_authorized": {"const": false},
+        "reason": {"const": "EXACT_S5A1_TRANSFER_AND_CREATE_NEW_EXECUTION_AUTHORIZATION_REQUIRED"},
+        "claim_ceiling": {"const": "DEVELOPMENT_ONLY_NOT_EXECUTED"}
+      }
+    }
+  }
+}

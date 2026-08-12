@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5a1_handoff_package_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "transfer_id", "abi", "status", "claim_ceiling", "parents", "source", "contract", "package", "window", "motion_qc", "solver_path_qc", "safety", "next"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5a1-package-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5A1_TRANSFER_MANIFEST_V1"},
+    "transfer_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v1"},
+    "abi": {"const": "R8-LIQUID-HANDOFF-ABI-v3"},
+    "status": {"const": "S5A1_PRIMARY_R7_MOTION_TRANSFER_VERIFIED_ACCEPTED"},
+    "claim_ceiling": {"$ref": "#/$defs/claimCeiling"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "source": {"$ref": "#/$defs/source"},
+    "contract": {"$ref": "#/$defs/contract"},
+    "package": {"$ref": "#/$defs/package"},
+    "window": {"$ref": "#/$defs/window"},
+    "motion_qc": {"$ref": "#/$defs/motionQc"},
+    "solver_path_qc": {"$ref": "#/$defs/solverQc"},
+    "safety": {"$ref": "#/$defs/safety"},
+    "next": {"const": "S5B0_REQUIRES_EXACT_TRANSFER_HASH_AND_NEW_GPU_AUTHORIZATION"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {"path": {"$ref": "#/$defs/absolutePath"}, "sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "size_bytes", "sha256"],
+      "properties": {
+        "name": {"type": "string", "enum": ["selected_bag_receipt_ref.json", "source_bag_ref.json", "source_outcome.json", "topic_contract.json", "time_window.json", "frame_contract.json", "odom_raw.csv", "clock_alignment.csv", "tf_alignment.json", "motion.csv", "solver_path.csv", "motion_manifest.json", "interpolation_qc.json", "solver_path_qc.json", "container_geometry_manifest.json", "container_mount_manifest.json", "fluid_spec.json", "run_spec.json"]},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "claimCeiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["development_only", "formal_eligible", "physical_primary_eligible", "gpu_replay_authorized"],
+      "properties": {"development_only": {"const": true}, "formal_eligible": {"const": false}, "physical_primary_eligible": {"const": false}, "gpu_replay_authorized": {"const": false}}
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "s5a0_receipt", "compatibility_contract", "motion_bridge", "settled_checkpoint"],
+      "properties": {"policy": {"$ref": "#/$defs/identity"}, "s5a0_receipt": {"$ref": "#/$defs/identity"}, "compatibility_contract": {"$ref": "#/$defs/identity"}, "motion_bridge": {"$ref": "#/$defs/identity"}, "settled_checkpoint": {"$ref": "#/$defs/identity"}}
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["domain", "attempt_id", "role", "source_provenance", "source_outcome", "bag_path", "bag_size_bytes", "bag_sha256", "receipt_status"],
+      "properties": {
+        "domain": {"const": "SIM_R7_EXECUTED_GAZEBO_MOTION"},
+        "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+        "role": {"const": "PRIMARY"},
+        "source_provenance": {"const": "PARTIAL_BAG_ONLY"},
+        "source_outcome": {"const": "UNKNOWN"},
+        "bag_path": {"const": "/home/zrj/slosh_bags/matrix_bags/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01/capture.bag"},
+        "bag_size_bytes": {"const": 13996902},
+        "bag_sha256": {"const": "c82c1f16b41bced51ab0aff63e4ef40b469501e185851344789fc3d62399fc07"},
+        "receipt_status": {"const": "S5A0_SELECTED_R7_BAG_SEALED_DEVELOPMENT_ONLY"}
+      }
+    },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_time_source", "position_interpolation", "orientation_interpolation", "euler_convention", "solver_field_count", "compatibility_status"],
+      "properties": {
+        "primary_time_source": {"const": "/odom.header.stamp"},
+        "position_interpolation": {"const": "LINEAR"},
+        "orientation_interpolation": {"const": "NORMALIZED_QUATERNION_SLERP"},
+        "euler_convention": {"const": "INTRINSIC_ZYX_CONTINUOUS_YAW_PITCH_ROLL_DEGREES"},
+        "solver_field_count": {"const": 7},
+        "compatibility_status": {"const": "S5_C1_TO_C1M_DEVELOPMENT_REPLAY_COMPATIBILITY_FROZEN"}
+      }
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inventory", "checksummed_files", "artifacts", "file_mode", "create_new"],
+      "properties": {
+        "inventory": {"type": "array", "items": {"type": "string"}, "minItems": 20, "maxItems": 20, "uniqueItems": true},
+        "checksummed_files": {"type": "array", "items": {"type": "string"}, "minItems": 19, "maxItems": 19, "uniqueItems": true},
+        "artifacts": {"type": "array", "items": {"$ref": "#/$defs/artifact"}, "minItems": 18, "maxItems": 18},
+        "file_mode": {"const": "0600"},
+        "create_new": {"const": true}
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_header_t_ns", "end_header_t_ns", "duration_s", "sample_count", "first_effective_t_s", "pre_roll_s", "terminal_provenance", "recorded_tail_rule", "solver_relaxation_tail_s"],
+      "properties": {
+        "start_header_t_ns": {"type": "integer", "minimum": 0},
+        "end_header_t_ns": {"type": "integer", "minimum": 1},
+        "duration_s": {"type": "number", "exclusiveMinimum": 0},
+        "sample_count": {"type": "integer", "minimum": 2},
+        "first_effective_t_s": {"type": "number", "minimum": 0},
+        "pre_roll_s": {"const": 1.0},
+        "terminal_provenance": {"const": "PARTIAL"},
+        "recorded_tail_rule": {"const": "CONSUME_TO_LAST_LEGAL_ODOM_SAMPLE"},
+        "solver_relaxation_tail_s": {"const": 1.0}
+      }
+    },
+    "motionQc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sample_count", "first_pose_identity", "strict_time", "quaternion_normalized", "quaternion_sign_continuous", "bbox_min_m", "bbox_max_m", "maximum_displacement_m", "trajectory_length_m", "forbidden_signal_consumed"],
+      "properties": {
+        "sample_count": {"type": "integer", "minimum": 2},
+        "first_pose_identity": {"const": true},
+        "strict_time": {"const": true},
+        "quaternion_normalized": {"const": true},
+        "quaternion_sign_continuous": {"const": true},
+        "bbox_min_m": {"$ref": "#/$defs/vec3"},
+        "bbox_max_m": {"$ref": "#/$defs/vec3"},
+        "maximum_displacement_m": {"type": "number", "minimum": 0},
+        "trajectory_length_m": {"type": "number", "minimum": 0},
+        "forbidden_signal_consumed": {"const": false}
+      }
+    },
+    "solverQc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row_count", "field_count", "first_row_identity", "gimbal_lock", "nonfinite", "query_grid", "subdivisions_per_interval", "query_count", "max_position_error_m", "max_quaternion_angular_distance_rad", "max_rotation_matrix_angular_distance_rad", "pass"],
+      "properties": {
+        "row_count": {"type": "integer", "minimum": 2},
+        "field_count": {"const": 7},
+        "first_row_identity": {"const": true},
+        "gimbal_lock": {"const": false},
+        "nonfinite": {"const": false},
+        "query_grid": {"const": "EVERY_PATH_INTERVAL_QUARTERS"},
+        "subdivisions_per_interval": {"const": 4},
+        "query_count": {"type": "integer", "minimum": 5},
+        "max_position_error_m": {"type": "number", "minimum": 0, "maximum": 1e-09},
+        "max_quaternion_angular_distance_rad": {"type": "number", "minimum": 0, "maximum": 1e-07},
+        "max_rotation_matrix_angular_distance_rad": {"type": "number", "minimum": 0, "maximum": 1e-07},
+        "pass": {"const": true}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["real_bag_read", "optional_bag_read", "source_written", "solver_executed", "gpu_exposed", "sudo_used", "network_used"],
+      "properties": {"real_bag_read": {"type": "boolean"}, "optional_bag_read": {"const": false}, "source_written": {"const": false}, "solver_executed": {"const": false}, "gpu_exposed": {"const": false}, "sudo_used": {"const": false}, "network_used": {"const": false}}
+    },
+    "vec3": {
+      "type": "array",
+      "prefixItems": [{"type": "number"}, {"type": "number"}, {"type": "number"}],
+      "items": false,
+      "minItems": 3,
+      "maxItems": 3
+    }
+  }
+}

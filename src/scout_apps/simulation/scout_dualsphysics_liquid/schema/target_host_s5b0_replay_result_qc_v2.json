@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_replay_result_qc_v2.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "boundary", "gauge", "particles", "resources", "integrity", "pass"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5b0-replay-result-qc-v2"},
+    "boundary": {"type": "object", "additionalProperties": false, "required": ["expected_slots", "observed_slots", "max_position_error_m", "max_angular_error_rad", "finite", "complete"], "properties": {"expected_slots": {"type": "integer", "minimum": 1}, "observed_slots": {"type": "integer", "minimum": 0}, "max_position_error_m": {"type": "number", "minimum": 0}, "max_angular_error_rad": {"type": "number", "minimum": 0}, "finite": {"type": "boolean"}, "complete": {"type": "boolean"}}},
+    "gauge": {"type": "object", "additionalProperties": false, "required": ["expected_slots", "observed_slots", "invalid_count", "invalid_ratio", "maximum_invalid_ratio", "complete"], "properties": {"expected_slots": {"type": "integer", "minimum": 1}, "observed_slots": {"type": "integer", "minimum": 0}, "invalid_count": {"type": "integer", "minimum": 0}, "invalid_ratio": {"type": "number", "minimum": 0, "maximum": 1}, "maximum_invalid_ratio": {"type": "number", "minimum": 0, "maximum": 1}, "complete": {"type": "boolean"}}},
+    "particles": {"type": "object", "additionalProperties": false, "required": ["expected_count", "observed_count", "moving_boundary_count", "fluid_count", "ids_complete_unique", "mass_conserved", "nout", "finite"], "properties": {"expected_count": {"const": 9078}, "observed_count": {"type": "integer", "minimum": 0}, "moving_boundary_count": {"type": "integer", "minimum": 0}, "fluid_count": {"type": "integer", "minimum": 0}, "ids_complete_unique": {"type": "boolean"}, "mass_conserved": {"type": "boolean"}, "nout": {"type": "integer", "minimum": 0}, "finite": {"type": "boolean"}}},
+    "resources": {"type": "object", "additionalProperties": false, "required": ["timed_out", "xid_count", "reset_count", "cuda_error_count", "oom", "peak_vram_bytes", "dynamic_free_bytes_at_start", "estimate_label"], "properties": {"timed_out": {"type": "boolean"}, "xid_count": {"type": "integer", "minimum": 0}, "reset_count": {"type": "integer", "minimum": 0}, "cuda_error_count": {"type": "integer", "minimum": 0}, "oom": {"type": "boolean"}, "peak_vram_bytes": {"type": "integer", "minimum": 0}, "dynamic_free_bytes_at_start": {"type": "integer", "minimum": 0}, "estimate_label": {"const": "PREFLIGHT_ESTIMATE_NOT_OBSERVED_USAGE"}}},
+    "integrity": {"type": "object", "additionalProperties": false, "required": ["inputs_unchanged", "inventory_exact", "checksums_valid", "source_outcome_overridden"], "properties": {"inputs_unchanged": {"type": "boolean"}, "inventory_exact": {"type": "boolean"}, "checksums_valid": {"type": "boolean"}, "source_outcome_overridden": {"const": false}}},
+    "pass": {"type": "boolean"}
+  }
+}

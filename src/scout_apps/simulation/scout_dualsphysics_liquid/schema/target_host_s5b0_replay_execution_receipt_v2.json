@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_replay_execution_receipt_v2.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "document_type", "replay_id", "status", "phase", "policy_sha256", "transfer", "roots", "execution", "lifecycle", "result_qc", "failure"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5b0-replay-execution-receipt-v2"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5B0_REPLAY_EXECUTION_RECEIPT_V2"},
+    "replay_id": {"type": ["string", "null"]},
+    "status": {"enum": ["NOT_ADMITTED_S5A1_FINALIZED_REQUIRED", "STARTED_CLEANUP_PENDING", "S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY", "STOP_AND_PRESERVE_EVIDENCE"]},
+    "phase": {"enum": ["STATIC", "PREFLIGHT", "RUNNING", "FINALIZED", "FAILED"]},
+    "policy_sha256": {"$ref": "#/$defs/nullable_sha"},
+    "transfer": {"type": "object", "additionalProperties": false, "required": ["finalized", "transfer_id", "manifest_sha256"], "properties": {"finalized": {"type": "boolean"}, "transfer_id": {"type": ["string", "null"]}, "manifest_sha256": {"$ref": "#/$defs/nullable_sha"}}},
+    "roots": {"type": "object", "additionalProperties": false, "required": ["partial", "final", "fresh", "failure_preserved", "atomic_noreplace"], "properties": {"partial": {"type": ["string", "null"]}, "final": {"type": ["string", "null"]}, "fresh": {"type": "boolean"}, "failure_preserved": {"type": "boolean"}, "atomic_noreplace": {"type": "boolean"}}},
+    "execution": {"type": "object", "additionalProperties": false, "required": ["authorized", "candidate_source_executed", "staged_candidate_executed", "gpu_flag", "j_flag_present", "wall_timeout_seconds", "monitor_interval_seconds", "pgid_owned"], "properties": {"authorized": {"type": "boolean"}, "candidate_source_executed": {"const": false}, "staged_candidate_executed": {"type": "boolean"}, "gpu_flag": {"const": "-gpu:0"}, "j_flag_present": {"const": false}, "wall_timeout_seconds": {"const": 5400}, "monitor_interval_seconds": {"type": "integer", "minimum": 10, "maximum": 30}, "pgid_owned": {"type": "boolean"}}},
+    "lifecycle": {"type": "object", "additionalProperties": false, "required": ["profile_loaded", "profile_unloaded", "process_residue", "mount_residue", "device_residue", "lock_residue", "sudo_residue"], "properties": {"profile_loaded": {"type": "boolean"}, "profile_unloaded": {"type": "boolean"}, "process_residue": {"type": "integer", "minimum": 0}, "mount_residue": {"type": "integer", "minimum": 0}, "device_residue": {"type": "integer", "minimum": 0}, "lock_residue": {"type": "integer", "minimum": 0}, "sudo_residue": {"type": "integer", "minimum": 0}}},
+    "result_qc": {"anyOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["path", "sha256", "pass"], "properties": {"path": {"type": "string"}, "sha256": {"$ref": "#/$defs/nullable_sha"}, "pass": {"type": "boolean"}}}]},
+    "failure": {"anyOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["code", "message"], "properties": {"code": {"type": "string"}, "message": {"type": "string"}}}]}
+  },
+  "$defs": {"nullable_sha": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}}
+}

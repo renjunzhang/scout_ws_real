@@ -1,0 +1,36 @@
+{
+  "selected_document_sha256": "c6bf7d2e41df73762ca6dbd97ed3e8c4d829391c17228aa3c7db77bdbcc34467",
+  "replay_document_sha256": "aaf6b4eec23b7889936aab5469d159eb7b183884d750260e0e80b72375af75cc",
+  "derived_t1": {
+    "H_crest_mm": 9.512294245006998,
+    "H_abs_mm": 9.512294245006998,
+    "H_peak_to_peak_mm": 5.707376547004003
+  },
+  "qc": {
+    "output_slot_count": 25,
+    "invalid_probe_values": 1,
+    "invalid_probe_ratio": 0.01
+  },
+  "window_slot_counts": {
+    "first15": 16,
+    "full_motion": 21,
+    "recorded_tail": 3,
+    "solver_tail": 3
+  },
+  "full_motion_H_abs": {
+    "peak_mm": 9.512294245006998,
+    "p95_mm": 8.607079764250997,
+    "rms_mm": 4.533539793329913,
+    "peak_time_s": 1.0
+  },
+  "spectral": {
+    "H_crest_frequency_hz": 0.24,
+    "H_abs_frequency_hz": 0.48,
+    "H_abs_damping_rate_per_s": 0.049999999999996415,
+    "H_peak_to_peak_frequency_hz": 0.48
+  },
+  "model_comparisons": {
+    "H_proxy_phase_error_rad": 0.32150280734441994,
+    "H_modal_phase_error_rad": -2.990942250218362
+  }
+}

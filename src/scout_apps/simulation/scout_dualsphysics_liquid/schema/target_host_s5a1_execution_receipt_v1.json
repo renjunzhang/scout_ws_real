@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5a1_execution_receipt_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "receipt_id", "status", "parents", "execution", "inputs", "roots", "package", "compatibility", "safety", "failure", "next"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5a1-execution-receipt-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5A1_EXECUTION_RECEIPT_V1"},
+    "receipt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v1_execution"},
+    "status": {"enum": ["S5A1_PRIMARY_R7_MOTION_TRANSFER_VERIFIED_ACCEPTED", "S5A1_EXECUTION_FAILED_PRESERVED"]},
+    "parents": {"$ref": "#/$defs/parents"},
+    "execution": {"$ref": "#/$defs/execution"},
+    "inputs": {"$ref": "#/$defs/inputs"},
+    "roots": {"$ref": "#/$defs/roots"},
+    "package": {"$ref": "#/$defs/package"},
+    "compatibility": {"$ref": "#/$defs/compatibility"},
+    "safety": {"$ref": "#/$defs/safety"},
+    "failure": {"type": ["string", "null"], "maxLength": 4096},
+    "next": {"enum": ["S5B0_REQUIRES_EXACT_TRANSFER_HASH_AND_NEW_GPU_AUTHORIZATION", "STOP_AND_PRESERVE_EVIDENCE"]}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "S5A1_PRIMARY_R7_MOTION_TRANSFER_VERIFIED_ACCEPTED"}}},
+      "then": {
+        "properties": {
+          "failure": {"const": null},
+          "next": {"const": "S5B0_REQUIRES_EXACT_TRANSFER_HASH_AND_NEW_GPU_AUTHORIZATION"},
+          "execution": {"properties": {"return_code": {"const": 0}}},
+          "inputs": {"properties": {"source_unchanged": {"const": true}}},
+          "roots": {"properties": {"atomic_rename": {"const": true}, "partial_after": {"properties": {"exists": {"const": false}}}, "final_after": {"properties": {"exists": {"const": true}, "mode": {"const": "0700"}, "entry_count": {"const": 20}}}}},
+          "package": {"properties": {"manifest_sha256": {"$ref": "#/$defs/sha256"}, "checksums_sha256": {"$ref": "#/$defs/sha256"}, "inventory_sha256": {"$ref": "#/$defs/sha256"}, "entry_count": {"const": 20}, "all_file_modes_0600": {"const": true}, "validated": {"const": true}}},
+          "safety": {"properties": {"real_bag_read_attempted": {"const": true}, "real_bag_read_confirmed": {"const": true}, "failure_preserved": {"const": false}}}
+        }
+      },
+      "else": {
+        "properties": {
+          "failure": {"type": "string", "minLength": 1, "maxLength": 4096},
+          "next": {"const": "STOP_AND_PRESERVE_EVIDENCE"},
+          "safety": {"properties": {"failure_preserved": {"const": true}}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "identity": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"$ref": "#/$defs/path"}, "sha256": {"$ref": "#/$defs/sha256"}}},
+    "fileIdentity": {"type": "object", "additionalProperties": false, "required": ["path", "sha256", "size_bytes", "mode", "inode", "nlink"], "properties": {"path": {"$ref": "#/$defs/path"}, "sha256": {"$ref": "#/$defs/sha256"}, "size_bytes": {"type": "integer", "minimum": 1}, "mode": {"pattern": "^[0-7]{4}$"}, "inode": {"type": "integer", "minimum": 1}, "nlink": {"const": 1}}},
+    "parents": {"type": "object", "additionalProperties": false, "required": ["policy", "package_schema", "handoff_gate", "signal_extractor", "s5a0_receipt_schema", "s5a0_final_receipt_schema", "s5a0_supervisor_policy", "compatibility_gate", "execution_supervisor", "execution_receipt_schema"], "properties": {"policy": {"$ref": "#/$defs/identity"}, "package_schema": {"$ref": "#/$defs/identity"}, "handoff_gate": {"$ref": "#/$defs/identity"}, "signal_extractor": {"$ref": "#/$defs/identity"}, "s5a0_receipt_schema": {"$ref": "#/$defs/identity"}, "s5a0_final_receipt_schema": {"$ref": "#/$defs/identity"}, "s5a0_supervisor_policy": {"$ref": "#/$defs/identity"}, "compatibility_gate": {"$ref": "#/$defs/identity"}, "execution_supervisor": {"$ref": "#/$defs/identity"}, "execution_receipt_schema": {"$ref": "#/$defs/identity"}}},
+    "execution": {"type": "object", "additionalProperties": false, "required": ["uid", "gid", "supplementary_groups", "bwrap_path", "timeout_path", "prlimit_path", "python_path", "argv_sha256", "timeout_seconds", "return_code", "one_shot"], "properties": {"uid": {"const": 1000}, "gid": {"const": 1000}, "supplementary_groups": {"type": "array", "items": {"type": "integer", "minimum": 0}, "uniqueItems": true}, "bwrap_path": {"const": "/usr/bin/bwrap"}, "timeout_path": {"const": "/usr/bin/timeout"}, "prlimit_path": {"const": "/usr/bin/prlimit"}, "python_path": {"const": "/usr/bin/python3"}, "argv_sha256": {"$ref": "#/$defs/sha256"}, "timeout_seconds": {"const": 180}, "return_code": {"type": "integer"}, "one_shot": {"const": true}}},
+    "inputs": {"type": "object", "additionalProperties": false, "required": ["s5a0_receipt", "source_before", "source_after", "source_unchanged", "source_provenance"], "properties": {"s5a0_receipt": {"$ref": "#/$defs/fileIdentity"}, "source_before": {"$ref": "#/$defs/fileIdentity"}, "source_after": {"$ref": "#/$defs/fileIdentity"}, "source_unchanged": {"type": "boolean"}, "source_provenance": {"const": "PARTIAL_BAG_ONLY"}}},
+    "rootIdentity": {"type": "object", "additionalProperties": false, "required": ["path", "exists", "mode", "entry_count", "inventory_sha256"], "properties": {"path": {"$ref": "#/$defs/path"}, "exists": {"type": "boolean"}, "mode": {"enum": ["0700", "ABSENT"]}, "entry_count": {"type": "integer", "minimum": 0, "maximum": 20}, "inventory_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}}},
+    "roots": {"type": "object", "additionalProperties": false, "required": ["partial_before", "partial_after", "final_before", "final_after", "atomic_rename"], "properties": {"partial_before": {"$ref": "#/$defs/rootIdentity"}, "partial_after": {"$ref": "#/$defs/rootIdentity"}, "final_before": {"$ref": "#/$defs/rootIdentity"}, "final_after": {"$ref": "#/$defs/rootIdentity"}, "atomic_rename": {"type": "boolean"}}},
+    "package": {"type": "object", "additionalProperties": false, "required": ["manifest_sha256", "checksums_sha256", "inventory_sha256", "entry_count", "all_file_modes_0600", "validated"], "properties": {"manifest_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}, "checksums_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}, "inventory_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}, "entry_count": {"type": "integer", "minimum": 0, "maximum": 20}, "all_file_modes_0600": {"type": "boolean"}, "validated": {"type": "boolean"}}},
+    "compatibility": {"type": "object", "additionalProperties": false, "required": ["gate_sha256", "status", "files_written", "solver_executed", "gpu_exposed"], "properties": {"gate_sha256": {"$ref": "#/$defs/sha256"}, "status": {"const": "PASS_S5_C1_TO_C1M_DEVELOPMENT_REPLAY_COMPATIBILITY_V1"}, "files_written": {"const": false}, "solver_executed": {"const": false}, "gpu_exposed": {"const": false}}},
+    "safety": {"type": "object", "additionalProperties": false, "required": ["real_bag_read_attempted", "real_bag_read_confirmed", "source_bag_executed", "optional_bag_read", "ros_started", "gpu_exposed", "solver_executed", "network_used", "sudo_used", "failure_preserved"], "properties": {"real_bag_read_attempted": {"type": "boolean"}, "real_bag_read_confirmed": {"type": "boolean"}, "source_bag_executed": {"const": false}, "optional_bag_read": {"const": false}, "ros_started": {"const": false}, "gpu_exposed": {"const": false}, "solver_executed": {"const": false}, "network_used": {"const": false}, "sudo_used": {"const": false}, "failure_preserved": {"type": "boolean"}}}
+  }
+}
