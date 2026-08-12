@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_staging_case_manifest_v3.json",
+  "title": "S5B0 exact staging and case materialization manifest v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "stage_root", "contract", "sources", "staged", "integrity", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5b0-staging-case-manifest-v3"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5B0_STAGING_CASE_MANIFEST_V3"},
+    "status": {"const": "PASS_S5B0_STAGING_CASE_MATERIALIZED_V3"},
+    "stage_root": {"type": "string", "pattern": "^/.*\\.partial$"},
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exact_stage_root", "restart_part_index", "settled_time_s", "solver_path_row_count", "solver_path_last_t_s", "solver_tail_s", "tmax_s", "motion_block_count", "motion_element", "field_indices", "anglesunits", "axes", "intrinsic", "movecenter", "t0_identity"],
+      "properties": {
+        "exact_stage_root": {"type": "string", "pattern": "^/.*\\.partial$"},
+        "restart_part_index": {"type": "integer", "minimum": 0},
+        "settled_time_s": {"type": "number"},
+        "solver_path_row_count": {"type": "integer", "minimum": 3},
+        "solver_path_last_t_s": {"type": "number", "exclusiveMinimum": 0},
+        "solver_tail_s": {"type": "number", "exclusiveMinimum": 0},
+        "tmax_s": {"type": "number", "exclusiveMinimum": 0},
+        "motion_block_count": {"const": 2},
+        "motion_element": {"const": "mvpathfile"},
+        "field_indices": {"const": [0, 1, 2, 3, 4, 5, 6]},
+        "anglesunits": {"const": "degrees"},
+        "axes": {"const": "ZYX"},
+        "intrinsic": {"const": true},
+        "movecenter": {"const": true},
+        "t0_identity": {"const": true}
+      }
+    },
+    "sources": {"$ref": "#/$defs/roleIdentities"},
+    "staged": {"$ref": "#/$defs/roleIdentities"},
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_identities_exact", "fresh_root", "o_excl_writes", "inventory_exact", "no_symlinks", "no_hardlinks", "no_special_files", "no_toctou", "two_motion_blocks_exact", "solver_path_exact_copy", "semantic_manifest_sha256"],
+      "properties": {
+        "external_identities_exact": {"const": true},
+        "fresh_root": {"const": true},
+        "o_excl_writes": {"const": true},
+        "inventory_exact": {"const": true},
+        "no_symlinks": {"const": true},
+        "no_hardlinks": {"const": true},
+        "no_special_files": {"const": true},
+        "no_toctou": {"const": true},
+        "two_motion_blocks_exact": {"const": true},
+        "solver_path_exact_copy": {"const": true},
+        "semantic_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_candidate_executed", "staged_candidate_executed", "solver_executed", "gpu_exposed", "network_used", "sudo_used", "apparmor_loaded", "real_bag_read", "real_solver_output_read"],
+      "properties": {
+        "source_candidate_executed": {"const": false},
+        "staged_candidate_executed": {"const": false},
+        "solver_executed": {"const": false},
+        "gpu_exposed": {"const": false},
+        "network_used": {"const": false},
+        "sudo_used": {"const": false},
+        "apparmor_loaded": {"const": false},
+        "real_bag_read": {"const": false},
+        "real_solver_output_read": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "mode", "size_bytes", "device", "inode", "nlink", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "device": {"type": "integer", "minimum": 0},
+        "inode": {"type": "integer", "minimum": 1},
+        "nlink": {"const": 1},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "roleIdentities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate", "dsph_config", "case_xml", "case_bi4", "restart_part", "restart_head", "solver_path"],
+      "properties": {
+        "candidate": {"$ref": "#/$defs/identity"},
+        "dsph_config": {"$ref": "#/$defs/identity"},
+        "case_xml": {"$ref": "#/$defs/identity"},
+        "case_bi4": {"$ref": "#/$defs/identity"},
+        "restart_part": {"$ref": "#/$defs/identity"},
+        "restart_head": {"$ref": "#/$defs/identity"},
+        "solver_path": {"$ref": "#/$defs/identity"}
+      }
+    }
+  }
+}

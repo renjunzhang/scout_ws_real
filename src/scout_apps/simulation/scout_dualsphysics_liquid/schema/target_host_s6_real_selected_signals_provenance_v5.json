@@ -1,0 +1,194 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_selected_signals_provenance_v5.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "mode", "fixture_only", "real_input_admitted", "attempt_id", "planned_denominator", "parents", "reader_contract", "provenance", "time_alignment", "series", "integrity", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-selected-signals-provenance-v5"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_SELECTED_SIGNALS_PROVENANCE_V5"},
+    "status": {"const": "S6_REAL_SELECTED_SIGNALS_SHAPE_FIXTURE_PRODUCED_NOT_ADMITTED"},
+    "mode": {"const": "STATIC_FIXTURE_ONLY_REAL_SHAPE"},
+    "fixture_only": {"const": true},
+    "real_input_admitted": {"const": false},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["s5a0_selected_bag_receipt", "s5a1_transfer_manifest", "source_bag"],
+      "properties": {
+        "s5a0_selected_bag_receipt": {"$ref": "#/$defs/parentIdentity"},
+        "s5a1_transfer_manifest": {"$ref": "#/$defs/parentIdentity"},
+        "source_bag": {"$ref": "#/$defs/sourceIdentity"}
+      }
+    },
+    "reader_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["reader_revision", "reader_core_sha256", "reader_v4_sha256", "extractor_v3_sha256", "input_surface"],
+      "properties": {
+        "reader_revision": {"const": "ROS1_BAG_V2_READER_V4_WITH_V1_SEMANTIC_HOOK"},
+        "reader_core_sha256": {"$ref": "#/$defs/sha256"},
+        "reader_v4_sha256": {"$ref": "#/$defs/sha256"},
+        "extractor_v3_sha256": {"$ref": "#/$defs/sha256"},
+        "input_surface": {"const": "IMMUTABLE_BOUNDED_BYTES_ONLY"}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_outcome", "primary_only", "optional_bag_read", "source_bag_executed", "ros_started", "external_write_performed", "motion_exporter_consumed_selected_signals", "solver_forcing_consumed_selected_signals", "forbidden_forcing_signals_consumed", "comparison_only", "qc_only_topics"],
+      "properties": {
+        "source_outcome": {"const": "SPMPC_NON_FIXED"},
+        "primary_only": {"const": true},
+        "optional_bag_read": {"const": false},
+        "source_bag_executed": {"const": false},
+        "ros_started": {"const": false},
+        "external_write_performed": {"const": false},
+        "motion_exporter_consumed_selected_signals": {"const": false},
+        "solver_forcing_consumed_selected_signals": {"const": false},
+        "forbidden_forcing_signals_consumed": {"const": false},
+        "comparison_only": {"const": true},
+        "qc_only_topics": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/topicCount"}
+        }
+      }
+    },
+    "time_alignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x_axis", "motion_time_source", "signal_native_time_source", "mapping_method", "odom_header_origin_ns", "odom_header_end_ns", "offset_sample_count", "record_to_odom_header_offset_ns", "residual_mean_ns", "residual_rms_ns", "residual_max_abs_ns", "maximum_allowed_residual_ns", "residuals_sha256", "mapping_extrapolation", "overlap_start_s", "overlap_end_s"],
+      "properties": {
+        "x_axis": {"const": "time_since_odom_header_origin_s"},
+        "motion_time_source": {"const": "/odom.header.stamp"},
+        "signal_native_time_source": {"const": "ROS1_BAG_RECORD_TIME_NS"},
+        "mapping_method": {"const": "LOWER_MEDIAN_ODOM_HEADER_MINUS_RECORD_OFFSET_V1"},
+        "odom_header_origin_ns": {"type": "integer", "minimum": 0},
+        "odom_header_end_ns": {"type": "integer", "minimum": 0},
+        "offset_sample_count": {"type": "integer", "minimum": 3},
+        "record_to_odom_header_offset_ns": {"type": "integer"},
+        "residual_mean_ns": {"type": "number"},
+        "residual_rms_ns": {"type": "number", "minimum": 0},
+        "residual_max_abs_ns": {"type": "integer", "minimum": 0},
+        "maximum_allowed_residual_ns": {"const": 5000000},
+        "residuals_sha256": {"$ref": "#/$defs/sha256"},
+        "mapping_extrapolation": {"const": false},
+        "overlap_start_s": {"type": "number", "minimum": 0},
+        "overlap_end_s": {"type": "number", "minimum": 0}
+      }
+    },
+    "series": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["H_proxy", "H_modal"],
+      "properties": {
+        "H_proxy": {"$ref": "#/$defs/hProxy"},
+        "H_modal": {"$ref": "#/$defs/hModal"}
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_bag_sha256", "H_proxy_samples_sha256", "H_modal_samples_sha256", "qc_only_topics_sha256"],
+      "properties": {
+        "source_bag_sha256": {"$ref": "#/$defs/sha256"},
+        "H_proxy_samples_sha256": {"$ref": "#/$defs/sha256"},
+        "H_modal_samples_sha256": {"$ref": "#/$defs/sha256"},
+        "qc_only_topics_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage6_pass", "single_row", "paired_ranking", "cross_method_ranking", "cpu_selected_trajectory_comparison", "physical_reference_pending", "physical_fidelity_validated", "formal", "production"],
+      "properties": {
+        "stage6_pass": {"const": false},
+        "single_row": {"const": true},
+        "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false},
+        "cpu_selected_trajectory_comparison": {"const": false},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false},
+        "formal": {"const": false},
+        "production": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "parentIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "real_parent_materialized"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "real_parent_materialized": {"const": false}
+      }
+    },
+    "sourceIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "size_bytes", "real_parent_materialized"],
+      "properties": {
+        "kind": {"const": "SYNTHETIC_PRIMARY_ROS1_BAG_V2_BYTES"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "real_parent_materialized": {"const": false}
+      }
+    },
+    "topicCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topic", "message_count", "consumed_as_forcing"],
+      "properties": {
+        "topic": {"enum": ["/cmd_vel", "/scout/global_path_fixed", "/scout/goal", "/spmpc/debug/effective_config", "/spmpc/status", "/spmpc/terminal/debug", "/spmpc/terminal/mode"]},
+        "message_count": {"type": "integer", "minimum": 0},
+        "consumed_as_forcing": {"const": false}
+      }
+    },
+    "sample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bag_record_t_ns", "mapped_odom_header_t_ns", "time_since_odom_origin_s", "value_native", "value_comparison_mm"],
+      "properties": {
+        "bag_record_t_ns": {"type": "integer", "minimum": 0},
+        "mapped_odom_header_t_ns": {"type": "integer", "minimum": 0},
+        "time_since_odom_origin_s": {"type": "number", "minimum": 0},
+        "value_native": {"type": "number"},
+        "value_comparison_mm": {"type": "number"}
+      }
+    },
+    "hProxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topic", "message_type", "native_unit", "comparison_unit", "scale_to_comparison", "offset_to_comparison", "sample_count", "samples"],
+      "properties": {
+        "topic": {"const": "/slosh/height"},
+        "message_type": {"const": "std_msgs/Float32"},
+        "native_unit": {"const": "m"},
+        "comparison_unit": {"const": "mm"},
+        "scale_to_comparison": {"const": 1000.0},
+        "offset_to_comparison": {"const": 0.0},
+        "sample_count": {"type": "integer", "minimum": 2, "maximum": 100000},
+        "samples": {"type": "array", "minItems": 2, "maxItems": 100000, "items": {"$ref": "#/$defs/sample"}}
+      }
+    },
+    "hModal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topic", "message_type", "native_unit", "comparison_unit", "scale_to_comparison", "offset_to_comparison", "sample_count", "samples"],
+      "properties": {
+        "topic": {"const": "/spmpc/slosh_height"},
+        "message_type": {"const": "std_msgs/Float32"},
+        "native_unit": {"const": "mm"},
+        "comparison_unit": {"const": "mm"},
+        "scale_to_comparison": {"const": 1.0},
+        "offset_to_comparison": {"const": 0.0},
+        "sample_count": {"type": "integer", "minimum": 2, "maximum": 100000},
+        "samples": {"type": "array", "minItems": 2, "maxItems": 100000, "items": {"$ref": "#/$defs/sample"}}
+      }
+    }
+  }
+}

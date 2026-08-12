@@ -1,0 +1,53 @@
+{
+  "schema_version": "smpcc-r8-liquid-s5a1-execution-policy-v9",
+  "document_type": "SMPCC_R8_LIQUID_S5A1_EXECUTION_POLICY_V9",
+  "execution_id": "s5a1_primary_bsmooth_b01_20260811T223334Z_v9",
+  "transfer_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v5",
+  "parent_v8": {
+    "policy": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5a1_execution_policy_v8.json", "sha256": "507d097c3ec5927e0c4505c157ded97acee9bd3e74d1d08a62a95a1ecee60c22", "mode": "0664", "size_bytes": 6009},
+    "policy_schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a1_execution_policy_v8.json", "sha256": "3dca1655baa4029e10ab0b3c324683fcc89797b1d1c78c6be000dae210d9573d", "mode": "0664", "size_bytes": 5289},
+    "receipt_schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a1_execution_receipt_v8.json", "sha256": "7eb80dab78e18454d623afedc76e2aafc49c5aecf5e8f4210e3b12e45f907135", "mode": "0664", "size_bytes": 752},
+    "supervisor": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a1_execution_supervisor_v8.py", "sha256": "429c45cde074ca64ff0e9abd14690b0a622210b393fc85cf11d154b909b8b0ab", "mode": "0664", "size_bytes": 22598},
+    "tests": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_s5a1_execution_supervisor_v8.py", "sha256": "2b2b39af73938336895c8da6364982d22f32509bf9c48430f349d3ccf454e061", "mode": "0664", "size_bytes": 4092}
+  },
+  "base_v6_policy": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5a1_execution_policy_v6.json", "sha256": "d59a0158bbcdafc40fd875fa14a7b3bcf2765287c735989e1dfc8951f8536954", "mode": "0664", "size_bytes": 4918},
+  "extractor_v5": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a1_ros1_signal_extractor_v5.py", "sha256": "d661aaecb387a899dce9941a9d578636b424c9b8b6b103c642c9bc3f4fbd383d", "mode": "0664", "size_bytes": 8246},
+  "extractor_v5_tests": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_s5a1_ros1_signal_extractor_v5.py", "sha256": "c4659d116ca051f7e93141a294ed0eb82aae86bc8729a5719dc3c3ddad94a976", "mode": "0664", "size_bytes": 5024},
+  "package_v5": {
+    "policy": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5a1_primary_handoff_v3_v5.json", "sha256": "7f48330153e992326d0a241faf93dbd122cb28ad31149d01d87d2ff42a48b474", "mode": "0664", "size_bytes": 820},
+    "schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a1_handoff_package_v5.json", "sha256": "3f69af8085e5b3f944c3eff917725b0d764619adef903b5671f4cad2e75b0d82", "mode": "0664", "size_bytes": 483},
+    "gate": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a1_handoff_gate_v7.py", "sha256": "892b014d95e379ed19f3b564ec73ea738064759ef9142004564e65fbcbe074df", "mode": "0664", "size_bytes": 5798},
+    "tests": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_s5a1_handoff_gate_v7.py", "sha256": "c204ccdd56cbfe3ebbf0b7c3abccb73572739453dabc9fd89747d39818d677d0", "mode": "0664", "size_bytes": 2163}
+  },
+  "v9_contract": {
+    "policy": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a1_execution_policy_v9.json", "sha256": "5e8a4457159a018c62cc240475f31c5b9c100c57286b00cec6b1ca739df513f4", "mode": "0664", "size_bytes": 5990},
+    "schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a1_execution_receipt_v9.json", "sha256": "294465bde3cfb74d27357ab40edb24e6b75318bcf6c6573dbf9db7ae6569f4e8", "mode": "0664", "size_bytes": 997},
+    "gate": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a1_execution_supervisor_v9.py", "sha256": "a86dd77860bc2d2c01f582cfa899896e95d7655da5e716e646f3d55af74bd1ec", "mode": "0664", "size_bytes": 25111},
+    "tests": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_s5a1_execution_supervisor_v9.py", "sha256": "bb5888a83949488ca35f5790f8a4309d87a5881e22e8842471d5fbbce387e89d", "mode": "0664", "size_bytes": 5194}
+  },
+  "preserved_v8": {
+    "partial_root": {"path": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v4.partial", "inode": 15748711, "mode": "0700", "size_bytes": 4096, "nlink": 2, "entry_count": 0, "inventory_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+    "empty_receipt_reservation": {"path": "/home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v4.execution_v8.json.partial", "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "mode": "0440", "size_bytes": 0},
+    "final_root_absent": true,
+    "final_receipt_absent": true
+  },
+  "tf_contract": {
+    "comparison_frame": "T0_INVERSE_TIMES_T_RELATIVE_SE3",
+    "maximum_time_delta_s": 0.5,
+    "maximum_position_delta_m": 0.05,
+    "maximum_angular_delta_rad": 0.1,
+    "tf_used_as_motion": false,
+    "real_diagnostic_witness": {"absolute_maximum_position_delta_m": 3.9934499955863565, "maximum_time_delta_s": 0.005, "absolute_maximum_angular_delta_rad": 0.023228249162941604, "relative_maximum_translation_delta_m": 0.03995630546880967, "relative_rms_translation_delta_m": 0.022725548786785066, "relative_maximum_angular_delta_rad": 0.003657518055773045}
+  },
+  "sandbox": {
+    "canonical_argv_sha256": "ff2289208b8f73e4a3b37df2c50c06977f85ef8232649a874e3975c89e602ffd",
+    "canonical_token_count": 182,
+    "fd_placeholders": ["@S5A0_RECEIPT_FD@", "@SOURCE_BAG_FD@"],
+    "child_environment": {"PATH": "/usr/bin", "HOME": "/nonexistent", "PYTHONDONTWRITEBYTECODE": "1"},
+    "host_environment": {"PATH": "/usr/bin", "HOME": "/nonexistent", "PYTHONDONTWRITEBYTECODE": "1"},
+    "uid": 1000, "gid": 1000,
+    "mapped_groups": [65534,65534,65534,65534,65534,65534,65534,65534,1000],
+    "writable_bind": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v5.partial"
+  },
+  "safety": {"optional_bag_read": false, "gpu_exposed": false, "solver_executed": false, "network_used": false, "sudo_used": false, "v8_evidence_preserved": true, "parent_publisher_used": false}
+}

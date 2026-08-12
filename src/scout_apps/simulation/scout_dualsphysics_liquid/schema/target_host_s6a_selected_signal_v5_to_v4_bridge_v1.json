@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6a_selected_signal_v5_to_v4_bridge_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "mode", "fixture_only", "real_input_consumed", "optional_input_consumed", "source_contract", "grid_contract", "parent_bindings", "analyzer_input", "integrity", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6a-selected-signal-v5-to-v4-bridge-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6A_SELECTED_SIGNAL_V5_TO_V4_BRIDGE_V1"},
+    "status": {"const": "S6A_V5_TO_V4_BRIDGE_VALIDATED_NOT_ADMITTED"},
+    "mode": {"const": "FIXTURE_ONLY_REAL_INPUT_NOT_CONSUMED"},
+    "fixture_only": {"const": true},
+    "real_input_consumed": {"const": false},
+    "optional_input_consumed": {"const": false},
+    "source_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_v5_document_sha256", "source_v5_schema_sha256", "source_v5_producer_sha256", "target_v4_schema_sha256", "target_v4_analyzer_sha256", "source_odom_header_origin_ns", "source_record_to_odom_header_offset_ns"],
+      "properties": {
+        "source_v5_document_sha256": {"$ref": "#/$defs/sha256"},
+        "source_v5_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "source_v5_producer_sha256": {"$ref": "#/$defs/sha256"},
+        "target_v4_schema_sha256": {"$ref": "#/$defs/sha256"},
+        "target_v4_analyzer_sha256": {"$ref": "#/$defs/sha256"},
+        "source_odom_header_origin_ns": {"type": "integer", "minimum": 0},
+        "source_record_to_odom_header_offset_ns": {"type": "integer"}
+      }
+    },
+    "grid_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["output_grid_sha256", "sample_count", "start_s", "end_s", "strictly_increasing", "uniform", "inside_selected_overlap"],
+      "properties": {
+        "output_grid_sha256": {"$ref": "#/$defs/sha256"},
+        "sample_count": {"type": "integer", "minimum": 16},
+        "start_s": {"type": "number", "minimum": 0},
+        "end_s": {"type": "number", "minimum": 0},
+        "strictly_increasing": {"const": true},
+        "uniform": {"const": true},
+        "inside_selected_overlap": {"const": true}
+      }
+    },
+    "parent_bindings": {
+      "type": "object", "additionalProperties": false,
+      "required": ["s5a0_selected_bag_receipt_sha256", "s5a1_transfer_manifest_sha256", "source_bag_sha256"],
+      "properties": {
+        "s5a0_selected_bag_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "s5a1_transfer_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "source_bag_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "analyzer_input": {"$ref": "#/$defs/analyzerInput"},
+    "integrity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["analyzer_input_sha256", "H_proxy_samples_sha256", "H_modal_samples_sha256"],
+      "properties": {
+        "analyzer_input_sha256": {"$ref": "#/$defs/sha256"},
+        "H_proxy_samples_sha256": {"$ref": "#/$defs/sha256"},
+        "H_modal_samples_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage6_pass", "real_input_admitted", "real_input_consumed", "optional_admitted", "paired_ranking", "physical_reference_pending", "physical_fidelity_validated", "formal", "production"],
+      "properties": {
+        "stage6_pass": {"const": false}, "real_input_admitted": {"const": false},
+        "real_input_consumed": {"const": false}, "optional_admitted": {"const": false},
+        "paired_ranking": {"const": false}, "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false}, "formal": {"const": false},
+        "production": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "parentIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "sha256", "real_parent_materialized"],
+      "properties": {
+        "kind": {"enum": ["FINALIZED_S5A0_RECEIPT_IDENTITY_FIXTURE", "FINALIZED_S5A1_TRANSFER_IDENTITY_FIXTURE"]},
+        "sha256": {"$ref": "#/$defs/sha256"}, "real_parent_materialized": {"const": false}
+      }
+    },
+    "sourceIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "sha256", "size_bytes", "real_parent_materialized"],
+      "properties": {
+        "kind": {"const": "SOURCE_ROS1_BAG_IDENTITY_FIXTURE"}, "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1}, "real_parent_materialized": {"const": false}
+      }
+    },
+    "sample": {
+      "type": "object", "additionalProperties": false,
+      "required": ["bag_record_t_ns", "value_native"],
+      "properties": {"bag_record_t_ns": {"type": "integer", "minimum": 0}, "value_native": {"type": "number"}}
+    },
+    "series": {
+      "type": "object", "additionalProperties": false,
+      "required": ["topic", "message_type", "native_unit", "comparison_unit", "scale_to_comparison", "offset_to_comparison", "samples"],
+      "properties": {
+        "topic": {"enum": ["/slosh/height", "/spmpc/slosh_height"]},
+        "message_type": {"const": "std_msgs/Float32"},
+        "native_unit": {"enum": ["m", "mm"]}, "comparison_unit": {"const": "mm"},
+        "scale_to_comparison": {"enum": [1000.0, 1.0]}, "offset_to_comparison": {"const": 0.0},
+        "samples": {"type": "array", "minItems": 16, "maxItems": 100000, "items": {"$ref": "#/$defs/sample"}}
+      }
+    },
+    "analyzerInput": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "document_type", "status", "mode", "real_input_admitted", "attempt_id", "planned_denominator", "parents", "provenance", "time_alignment", "series", "claims"],
+      "properties": {
+        "schema_version": {"const": "smpcc-r8-liquid-s6-real-selected-signal-input-contract-v4"},
+        "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_SELECTED_SIGNAL_INPUT_CONTRACT_V4"},
+        "status": {"const": "S6_REAL_SELECTED_SIGNAL_SHAPE_FIXTURE_VALIDATED_NOT_ADMITTED"},
+        "mode": {"const": "STATIC_FIXTURE_FOR_REAL_INPUT_CONTRACT"},
+        "real_input_admitted": {"const": false},
+        "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+        "planned_denominator": {"const": 1},
+        "parents": {
+          "type": "object", "additionalProperties": false,
+          "required": ["s5a0_selected_bag_receipt", "s5a1_transfer_manifest", "source_bag"],
+          "properties": {
+            "s5a0_selected_bag_receipt": {"$ref": "#/$defs/parentIdentity"},
+            "s5a1_transfer_manifest": {"$ref": "#/$defs/parentIdentity"},
+            "source_bag": {"$ref": "#/$defs/sourceIdentity"}
+          }
+        },
+        "provenance": {
+          "type": "object", "additionalProperties": false,
+          "required": ["target_s5a0_status", "target_s5a1_status", "source_outcome", "original_root_zero_write_required", "real_files_read", "motion_exporter_consumed_selected_signals", "solver_forcing_consumed_selected_signals", "comparison_only"],
+          "properties": {
+            "target_s5a0_status": {"const": "S5A0_PRIMARY_SELECTED_BAG_ACCEPTED"},
+            "target_s5a1_status": {"const": "S5A1_PRIMARY_R7_MOTION_TRANSFER_VERIFIED_ACCEPTED"},
+            "source_outcome": {"const": "SPMPC_NON_FIXED"}, "original_root_zero_write_required": {"const": true},
+            "real_files_read": {"const": false}, "motion_exporter_consumed_selected_signals": {"const": false},
+            "solver_forcing_consumed_selected_signals": {"const": false}, "comparison_only": {"const": true}
+          }
+        },
+        "time_alignment": {
+          "type": "object", "additionalProperties": false,
+          "required": ["x_axis", "sample_time_source", "odom_header_origin_ns", "record_to_odom_offset_ns", "overlap_start_s", "overlap_end_s", "output_grid_sha256", "interpolation", "extrapolation", "smoothing"],
+          "properties": {
+            "x_axis": {"const": "time_since_odom_header_origin_s"}, "sample_time_source": {"const": "ROS1_BAG_RECORD_TIME_NS"},
+            "odom_header_origin_ns": {"type": "integer", "minimum": 0}, "record_to_odom_offset_ns": {"type": "integer"},
+            "overlap_start_s": {"type": "number"}, "overlap_end_s": {"type": "number"},
+            "output_grid_sha256": {"$ref": "#/$defs/sha256"}, "interpolation": {"const": "LINEAR_WITHIN_OVERLAP_ONLY"},
+            "extrapolation": {"const": false}, "smoothing": {"const": false}
+          }
+        },
+        "series": {
+          "type": "object", "additionalProperties": false,
+          "required": ["H_proxy", "H_modal"],
+          "properties": {"H_proxy": {"$ref": "#/$defs/series"}, "H_modal": {"$ref": "#/$defs/series"}}
+        },
+        "claims": {
+          "type": "object", "additionalProperties": false,
+          "required": ["stage6_pass", "single_row", "paired_ranking", "cpu_selected_trajectory_comparison", "physical_reference_pending", "physical_fidelity_validated", "formal", "production"],
+          "properties": {
+            "stage6_pass": {"const": false}, "single_row": {"const": true}, "paired_ranking": {"const": false},
+            "cpu_selected_trajectory_comparison": {"const": false}, "physical_reference_pending": {"const": true},
+            "physical_fidelity_validated": {"const": false}, "formal": {"const": false}, "production": {"const": false}
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5a1_execution_policy_v6.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "document_type", "execution_id", "transfer_id", "roots", "base_v5", "package_revision", "v6_contract", "preserved_v5_failure", "mapped_groups", "sandbox", "safety"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5a1-execution-policy-v6"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5A1_EXECUTION_POLICY_V6"},
+    "execution_id": {"const": "s5a1_primary_bsmooth_b01_20260811T213146Z_v6"},
+    "transfer_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v2"},
+    "roots": {"$ref": "#/$defs/roots"},
+    "base_v5": {"$ref": "#/$defs/file"},
+    "package_revision": {"$ref": "#/$defs/packageRevision"},
+    "v6_contract": {"$ref": "#/$defs/v6Contract"},
+    "preserved_v5_failure": {"$ref": "#/$defs/preserved"},
+    "mapped_groups": {"const": [65534,65534,65534,65534,65534,65534,65534,65534,1000]},
+    "sandbox": {"$ref": "#/$defs/sandbox"},
+    "safety": {"const": {"optional_bag_read": false, "gpu_exposed": false, "solver_executed": false, "network_used": false, "sudo_used": false, "v5_evidence_preserved": true}}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "file": {"type": "object", "additionalProperties": false, "required": ["path","sha256","mode","size_bytes"], "properties": {"path":{"$ref":"#/$defs/path"},"sha256":{"$ref":"#/$defs/sha"},"mode":{"type":"string","pattern":"^[0-7]{4}$"},"size_bytes":{"type":"integer","minimum":0}}},
+    "identity": {"type": "object", "additionalProperties": false, "required": ["path","sha256"], "properties": {"path":{"$ref":"#/$defs/path"},"sha256":{"$ref":"#/$defs/sha"}}},
+    "roots": {"type":"object","additionalProperties":false,"required":["partial","final","receipt","receipt_partial"],"properties":{"partial":{"const":"/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v2.partial"},"final":{"const":"/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v2"},"receipt":{"const":"/home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v2.execution_v6.json"},"receipt_partial":{"const":"/home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v2.execution_v6.json.partial"}}},
+    "packageRevision": {"type":"object","additionalProperties":false,"required":["policy_delta","schema_delta","gate","tests"],"properties":{"policy_delta":{"$ref":"#/$defs/file"},"schema_delta":{"$ref":"#/$defs/file"},"gate":{"$ref":"#/$defs/file"},"tests":{"$ref":"#/$defs/file"}}},
+    "v6Contract": {"type":"object","additionalProperties":false,"required":["policy_schema","receipt_schema","supervisor","tests"],"properties":{"policy_schema":{"$ref":"#/$defs/file"},"receipt_schema":{"$ref":"#/$defs/file"},"supervisor":{"$ref":"#/$defs/file"},"tests":{"$ref":"#/$defs/file"}}},
+    "dirIdentity": {"type":"object","additionalProperties":false,"required":["path","inode","mode","size_bytes","nlink","entry_count","inventory_sha256"],"properties":{"path":{"$ref":"#/$defs/path"},"inode":{"type":"integer","minimum":1},"mode":{"const":"0700"},"size_bytes":{"type":"integer","minimum":1},"nlink":{"const":2},"entry_count":{"const":0},"inventory_sha256":{"const":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}}},
+    "preserved": {"type":"object","additionalProperties":false,"required":["partial_root","empty_reservation","final_receipt_absent"],"properties":{"partial_root":{"$ref":"#/$defs/dirIdentity"},"empty_reservation":{"$ref":"#/$defs/file"},"final_receipt_absent":{"const":true}}},
+    "sandbox": {"type":"object","additionalProperties":false,"required":["canonical_argv_contract","child_environment","host_environment","uid","gid","mapped_groups","limits","writable_bind","hook_installation"],"properties":{"canonical_argv_contract":{"type":"object","additionalProperties":false,"required":["derivation","sha256","token_count","fd_placeholders"],"properties":{"derivation":{"const":"SUPERVISOR_V6_CANONICAL_BUILDER_V1"},"sha256":{"$ref":"#/$defs/sha"},"token_count":{"type":"integer","minimum":1},"fd_placeholders":{"const":["@S5A0_RECEIPT_FD@","@SOURCE_BAG_FD@"]}}},"child_environment":{"const":{"PATH":"/usr/bin","HOME":"/nonexistent","PYTHONDONTWRITEBYTECODE":"1"}},"host_environment":{"const":{"PATH":"/usr/bin","HOME":"/nonexistent","PYTHONDONTWRITEBYTECODE":"1"}},"uid":{"const":1000},"gid":{"const":1000},"mapped_groups":{"const":[65534,65534,65534,65534,65534,65534,65534,65534,1000]},"limits":{"const":{"timeout_seconds":180,"kill_after_seconds":5,"address_space_bytes":1073741824,"rss_bytes":805306368,"nofile":256,"stdout_bytes":65536,"stderr_bytes":65536}},"writable_bind":{"const":"/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v2.partial"},"hook_installation":{"const":"INSTALL_ONCE_BUILD_ARGV_MUST_NOT_MUTATE_HOOKS"}}}
+  }
+}

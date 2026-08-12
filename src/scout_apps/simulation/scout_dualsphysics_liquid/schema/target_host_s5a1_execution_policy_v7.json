@@ -1,0 +1,14 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema","type":"object","additionalProperties":false,
+  "required":["schema_version","execution_id","transfer_id","base_v6_policy","extractor_v4","extractor_v4_tests","package_v3","preserved_v6","canonical_argv_sha256","canonical_token_count"],
+  "properties":{
+    "schema_version":{"const":"smpcc-r8-liquid-s5a1-execution-policy-v7"},
+    "execution_id":{"const":"s5a1_primary_bsmooth_b01_20260811T214500Z_v7"},
+    "transfer_id":{"const":"SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v3"},
+    "base_v6_policy":{"$ref":"#/$defs/file"},"extractor_v4":{"$ref":"#/$defs/file"},"extractor_v4_tests":{"$ref":"#/$defs/file"},
+    "package_v3":{"type":"object","additionalProperties":false,"required":["policy","schema","gate","tests"],"properties":{"policy":{"$ref":"#/$defs/file"},"schema":{"$ref":"#/$defs/file"},"gate":{"$ref":"#/$defs/file"},"tests":{"$ref":"#/$defs/file"}}},
+    "preserved_v6":{"type":"object","additionalProperties":false,"required":["failure_receipt","partial_root"],"properties":{"failure_receipt":{"$ref":"#/$defs/file"},"partial_root":{"type":"object","additionalProperties":false,"required":["path","inode","mode","size_bytes","nlink","entry_count","inventory_sha256"],"properties":{"path":{"type":"string"},"inode":{"type":"integer"},"mode":{"const":"0700"},"size_bytes":{"type":"integer"},"nlink":{"const":2},"entry_count":{"const":0},"inventory_sha256":{"const":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}}}}},
+    "canonical_argv_sha256":{"$ref":"#/$defs/sha"},"canonical_token_count":{"type":"integer","minimum":1}
+  },
+  "$defs":{"sha":{"type":"string","pattern":"^[0-9a-f]{64}$"},"file":{"type":"object","additionalProperties":false,"required":["path","sha256","mode","size_bytes"],"properties":{"path":{"type":"string"},"sha256":{"$ref":"#/$defs/sha"},"mode":{"type":"string"},"size_bytes":{"type":"integer","minimum":0}}}}
+}

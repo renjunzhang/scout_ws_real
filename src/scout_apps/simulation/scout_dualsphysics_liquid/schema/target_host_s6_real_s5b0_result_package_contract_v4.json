@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_s5b0_result_package_contract_v4.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "mode", "real_input_admitted", "attempt_id", "planned_denominator", "target_finalization", "parents", "package_contract", "time_contract", "probe_contract", "raw_probe_zsurf", "qc_fixture", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-s5b0-result-package-contract-v4"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_S5B0_RESULT_PACKAGE_CONTRACT_V4"},
+    "status": {"const": "S6_REAL_S5B0_PACKAGE_SHAPE_FIXTURE_VALIDATED_NOT_ADMITTED"},
+    "mode": {"const": "STATIC_FIXTURE_FOR_REAL_INPUT_CONTRACT"},
+    "real_input_admitted": {"const": false},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "target_finalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_s5b0_status", "required_phase", "required_result_qc_pass", "observed_real_status"],
+      "properties": {
+        "required_s5b0_status": {"const": "S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY"},
+        "required_phase": {"const": "FINALIZED"},
+        "required_result_qc_pass": {"const": true},
+        "observed_real_status": {"type": "null"}
+      }
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["s5a0_selected_bag_receipt", "source_bag", "s5a1_transfer_manifest", "s5b0_finalized_manifest", "gpu_run_receipt", "settled_state_manifest", "solver_config", "geometry"],
+      "properties": {
+        "s5a0_selected_bag_receipt": {"$ref": "#/$defs/identity"},
+        "source_bag": {"$ref": "#/$defs/identity"},
+        "s5a1_transfer_manifest": {"$ref": "#/$defs/identity"},
+        "s5b0_finalized_manifest": {"$ref": "#/$defs/s5b0Identity"},
+        "gpu_run_receipt": {"$ref": "#/$defs/identity"},
+        "settled_state_manifest": {"$ref": "#/$defs/identity"},
+        "solver_config": {"$ref": "#/$defs/identity"},
+        "geometry": {"$ref": "#/$defs/identity"}
+      }
+    },
+    "package_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_inventory", "artifacts", "checksums_algorithm", "checksums_verified", "artifact_bytes_read"],
+      "properties": {
+        "required_inventory": {
+          "const": [
+            "result_manifest.json",
+            "executed_boundary_motion.csv",
+            "gauge_zsurf.csv",
+            "slosh_height.csv",
+            "summary.json",
+            "qc_report.json",
+            "resource_samples.jsonl",
+            "build_and_runtime.txt",
+            "solver.stdout.log",
+            "solver.stderr.log",
+            "finalized_solver_frames_manifest.json",
+            "checksums.sha256"
+          ]
+        },
+        "artifacts": {"type": "array", "minItems": 12, "maxItems": 12, "items": {"$ref": "#/$defs/artifact"}},
+        "checksums_algorithm": {"const": "SHA-256"},
+        "checksums_verified": {"const": false},
+        "artifact_bytes_read": {"const": false}
+      }
+    },
+    "time_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x_axis", "odom_header_origin_ns", "output_slots_s", "output_grid_sha256", "uniform_grid_required", "window_contract_sha256", "windows"],
+      "properties": {
+        "x_axis": {"const": "time_since_odom_header_origin_s"},
+        "odom_header_origin_ns": {"type": "integer", "minimum": 0},
+        "output_slots_s": {"type": "array", "minItems": 16, "maxItems": 100000, "items": {"type": "number"}},
+        "output_grid_sha256": {"$ref": "#/$defs/sha256"},
+        "uniform_grid_required": {"const": true},
+        "window_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "windows": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["first15", "full_motion", "recorded_tail", "solver_tail"],
+          "properties": {
+            "first15": {"$ref": "#/$defs/window"},
+            "full_motion": {"$ref": "#/$defs/window"},
+            "recorded_tail": {"$ref": "#/$defs/window"},
+            "solver_tail": {"$ref": "#/$defs/window"}
+          }
+        }
+      }
+    },
+    "probe_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["h0_mm", "raw_unit", "probe_ids", "probe_set_sha256", "selection", "minimum_valid_probes_per_slot", "invalid_encoding"],
+      "properties": {
+        "h0_mm": {"type": "number"},
+        "raw_unit": {"const": "mm"},
+        "probe_ids": {"type": "array", "minItems": 4, "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "pattern": "^p[0-9]{2}$"}},
+        "probe_set_sha256": {"$ref": "#/$defs/sha256"},
+        "selection": {"const": "ALL_REGISTERED_PROBES_NO_CHERRY_PICK"},
+        "minimum_valid_probes_per_slot": {"type": "integer", "minimum": 2},
+        "invalid_encoding": {"const": "JSON_NULL"}
+      }
+    },
+    "raw_probe_zsurf": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 100000,
+      "items": {"$ref": "#/$defs/probeRow"}
+    },
+    "qc_fixture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["boundary_complete", "gauge_complete", "particle_mass_conserved", "nout", "finite", "xid_count", "process_residue", "profile_residue", "fixture_evidence_only", "real_qc_pass_claimed"],
+      "properties": {
+        "boundary_complete": {"const": true},
+        "gauge_complete": {"const": true},
+        "particle_mass_conserved": {"const": true},
+        "nout": {"const": 0},
+        "finite": {"const": true},
+        "xid_count": {"const": 0},
+        "process_residue": {"const": 0},
+        "profile_residue": {"const": 0},
+        "fixture_evidence_only": {"const": true},
+        "real_qc_pass_claimed": {"const": false}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["real_bag_read", "real_bi4_read", "gpu_or_solver_executed", "stage6_pass", "single_row", "paired_ranking", "cpu_selected_trajectory_comparison", "physical_reference_pending", "physical_fidelity_validated"],
+      "properties": {
+        "real_bag_read": {"const": false},
+        "real_bi4_read": {"const": false},
+        "gpu_or_solver_executed": {"const": false},
+        "stage6_pass": {"const": false},
+        "single_row": {"const": true},
+        "paired_ranking": {"const": false},
+        "cpu_selected_trajectory_comparison": {"const": false},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "real_parent_materialized"],
+      "properties": {
+        "kind": {"type": "string", "pattern": "^[A-Z0-9_]+_IDENTITY_FIXTURE$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "real_parent_materialized": {"const": false}
+      }
+    },
+    "s5b0Identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "sha256", "output_grid_sha256", "window_contract_sha256", "probe_set_sha256", "real_parent_materialized"],
+      "properties": {
+        "kind": {"const": "FINALIZED_S5B0_MANIFEST_IDENTITY_FIXTURE"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "output_grid_sha256": {"$ref": "#/$defs/sha256"},
+        "window_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "probe_set_sha256": {"$ref": "#/$defs/sha256"},
+        "real_parent_materialized": {"const": false}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "fixture_identity_only"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "fixture_identity_only": {"const": true}
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_s", "end_s", "selection"],
+      "properties": {
+        "start_s": {"type": "number"},
+        "end_s": {"type": "number"},
+        "selection": {"const": "PRE_REGISTERED_CLOSED_INTERVAL"}
+      }
+    },
+    "probeValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["probe_id", "zsurf_mm"],
+      "properties": {
+        "probe_id": {"type": "string", "pattern": "^p[0-9]{2}$"},
+        "zsurf_mm": {"type": ["number", "null"]}
+      }
+    },
+    "probeRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["t_s", "probes"],
+      "properties": {
+        "t_s": {"type": "number"},
+        "probes": {"type": "array", "minItems": 4, "maxItems": 64, "items": {"$ref": "#/$defs/probeValue"}}
+      }
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5a1_execution_policy_v10.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "execution_id", "transfer_id", "parent_v9", "package_v6", "v10_contract", "preserved_v8", "preserved_v9_preflight", "tf_contract", "sandbox", "safety"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5a1-execution-policy-v10"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5A1_EXECUTION_POLICY_V10"},
+    "execution_id": {"const": "s5a1_primary_bsmooth_b01_20260811T225436Z_v10"},
+    "transfer_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v6"},
+    "parent_v9": {"$ref": "#/$defs/revision5"},
+    "package_v6": {"$ref": "#/$defs/revision4"},
+    "v10_contract": {"$ref": "#/$defs/revision4"},
+    "preserved_v8": {"$ref": "#/$defs/preservedV8"},
+    "preserved_v9_preflight": {"$ref": "#/$defs/preservedV9"},
+    "tf_contract": {"$ref": "#/$defs/tfContract"},
+    "sandbox": {"$ref": "#/$defs/sandbox"},
+    "safety": {"$ref": "#/$defs/safety"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "file": {"type": "object", "additionalProperties": false, "required": ["path", "sha256", "mode", "size_bytes"], "properties": {"path": {"$ref": "#/$defs/path"}, "sha256": {"$ref": "#/$defs/sha"}, "mode": {"type": "string", "pattern": "^[0-7]{4}$"}, "size_bytes": {"type": "integer", "minimum": 0}}},
+    "revision4": {"type": "object", "additionalProperties": false, "required": ["policy", "schema", "gate", "tests"], "properties": {"policy": {"$ref": "#/$defs/file"}, "schema": {"$ref": "#/$defs/file"}, "gate": {"$ref": "#/$defs/file"}, "tests": {"$ref": "#/$defs/file"}}},
+    "revision5": {"type": "object", "additionalProperties": false, "required": ["policy", "policy_schema", "receipt_schema", "supervisor", "tests"], "properties": {"policy": {"$ref": "#/$defs/file"}, "policy_schema": {"$ref": "#/$defs/file"}, "receipt_schema": {"$ref": "#/$defs/file"}, "supervisor": {"$ref": "#/$defs/file"}, "tests": {"$ref": "#/$defs/file"}}},
+    "emptyDir": {"type": "object", "additionalProperties": false, "required": ["path", "inode", "mode", "size_bytes", "nlink", "entry_count", "inventory_sha256"], "properties": {"path": {"$ref": "#/$defs/path"}, "inode": {"type": "integer", "minimum": 1}, "mode": {"const": "0700"}, "size_bytes": {"type": "integer", "minimum": 1}, "nlink": {"const": 2}, "entry_count": {"const": 0}, "inventory_sha256": {"const": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"}}},
+    "preservedV8": {"type": "object", "additionalProperties": false, "required": ["partial_root", "empty_receipt_reservation", "final_root_absent", "final_receipt_absent"], "properties": {"partial_root": {"$ref": "#/$defs/emptyDir"}, "empty_receipt_reservation": {"$ref": "#/$defs/file"}, "final_root_absent": {"const": true}, "final_receipt_absent": {"const": true}}},
+    "outputsAbsent": {"type": "object", "additionalProperties": false, "required": ["partial_root", "final_root", "partial_receipt", "final_receipt"], "properties": {"partial_root": {"const": true}, "final_root": {"const": true}, "partial_receipt": {"const": true}, "final_receipt": {"const": true}}},
+    "preservedV9": {"type": "object", "additionalProperties": false, "required": ["execution_id", "status", "return_code", "error", "outputs_absent", "real_bag_read", "files_written"], "properties": {"execution_id": {"const": "s5a1_primary_bsmooth_b01_20260811T223334Z_v9"}, "status": {"const": "FAIL_CLOSED"}, "return_code": {"const": 2}, "error": {"const": "unsafe input identity: /home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v4.execution_v8.json.partial"}, "outputs_absent": {"$ref": "#/$defs/outputsAbsent"}, "real_bag_read": {"const": false}, "files_written": {"const": false}}},
+    "diagnostic": {"type": "object", "additionalProperties": false, "required": ["absolute_maximum_position_delta_m", "maximum_time_delta_s", "absolute_maximum_angular_delta_rad", "relative_maximum_translation_delta_m", "relative_rms_translation_delta_m", "relative_maximum_angular_delta_rad"], "properties": {"absolute_maximum_position_delta_m": {"const": 3.9934499955863565}, "maximum_time_delta_s": {"const": 0.005}, "absolute_maximum_angular_delta_rad": {"const": 0.023228249162941604}, "relative_maximum_translation_delta_m": {"const": 0.03995630546880967}, "relative_rms_translation_delta_m": {"const": 0.022725548786785066}, "relative_maximum_angular_delta_rad": {"const": 0.003657518055773045}}},
+    "tfContract": {"type": "object", "additionalProperties": false, "required": ["comparison_frame", "maximum_time_delta_s", "maximum_position_delta_m", "maximum_angular_delta_rad", "tf_used_as_motion", "real_diagnostic_witness"], "properties": {"comparison_frame": {"const": "T0_INVERSE_TIMES_T_RELATIVE_SE3"}, "maximum_time_delta_s": {"const": 0.5}, "maximum_position_delta_m": {"const": 0.05}, "maximum_angular_delta_rad": {"const": 0.1}, "tf_used_as_motion": {"const": false}, "real_diagnostic_witness": {"$ref": "#/$defs/diagnostic"}}},
+    "environment": {"type": "object", "additionalProperties": false, "required": ["PATH", "HOME", "PYTHONDONTWRITEBYTECODE"], "properties": {"PATH": {"const": "/usr/bin"}, "HOME": {"const": "/nonexistent"}, "PYTHONDONTWRITEBYTECODE": {"const": "1"}}},
+    "sandbox": {"type": "object", "additionalProperties": false, "required": ["canonical_argv_sha256", "canonical_token_count", "fd_placeholders", "child_environment", "host_environment", "uid", "gid", "mapped_groups", "writable_bind", "generic_nonempty_parent_map_exclusion"], "properties": {"canonical_argv_sha256": {"$ref": "#/$defs/sha"}, "canonical_token_count": {"type": "integer", "minimum": 1}, "fd_placeholders": {"const": ["@S5A0_RECEIPT_FD@", "@SOURCE_BAG_FD@"]}, "child_environment": {"$ref": "#/$defs/environment"}, "host_environment": {"$ref": "#/$defs/environment"}, "uid": {"const": 1000}, "gid": {"const": 1000}, "mapped_groups": {"const": [65534,65534,65534,65534,65534,65534,65534,65534,1000]}, "writable_bind": {"const": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v6.partial"}, "generic_nonempty_parent_map_exclusion": {"const": "/home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v4.execution_v8.json.partial"}}},
+    "safety": {"type": "object", "additionalProperties": false, "required": ["optional_bag_read", "gpu_exposed", "solver_executed", "network_used", "sudo_used", "v8_evidence_preserved", "v9_preflight_preserved", "parent_publisher_used", "real_bag_read", "files_written"], "properties": {"optional_bag_read": {"const": false}, "gpu_exposed": {"const": false}, "solver_executed": {"const": false}, "network_used": {"const": false}, "sudo_used": {"const": false}, "v8_evidence_preserved": {"const": true}, "v9_preflight_preserved": {"const": true}, "parent_publisher_used": {"const": false}, "real_bag_read": {"const": false}, "files_written": {"const": false}}}
+  }
+}

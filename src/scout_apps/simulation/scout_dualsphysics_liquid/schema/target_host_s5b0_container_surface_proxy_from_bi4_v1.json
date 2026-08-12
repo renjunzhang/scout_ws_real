@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_container_surface_proxy_from_bi4_v1.json",
+  "title": "S5B0 in-memory finalized-BI4 container surface proxy adapter v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "fixture_only", "case_id", "source_contract", "baseline", "surface_contract", "frames", "qc", "integrity", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5b0-container-surface-proxy-from-bi4-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5B0_CONTAINER_SURFACE_PROXY_FROM_BI4_V1"},
+    "status": {"enum": ["FIXTURE_ONLY_BI4_SURFACE_PROXY_VALID_NOT_ADMITTED", "FIXTURE_ONLY_BI4_SURFACE_PROXY_INVALID_SECTORS_NOT_ADMITTED"]},
+    "fixture_only": {"const": true},
+    "case_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+    "source_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["finalized_manifest_sha256", "finalized_frame_manifest_sha256", "finalized_reader_sha256", "safe_bi4_reader_sha256", "surface_proxy_v3_sha256", "input_surface"],
+      "properties": {
+        "finalized_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "finalized_frame_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "finalized_reader_sha256": {"$ref": "#/$defs/sha256"},
+        "safe_bi4_reader_sha256": {"$ref": "#/$defs/sha256"},
+        "surface_proxy_v3_sha256": {"$ref": "#/$defs/sha256"},
+        "input_surface": {"const": "IN_MEMORY_VALIDATED_MANIFEST_AND_SAFE_BI4_PARTICLES_ONLY"}
+      }
+    },
+    "baseline": {
+      "type": "object", "additionalProperties": false,
+      "required": ["h0_m", "h0_source_method", "settled_boundary_reference_sha256", "source_identity"],
+      "properties": {
+        "h0_m": {"type": "number", "minimum": 0},
+        "h0_source_method": {"const": "FROZEN_SETTLED_REFERENCE_H0_V1"},
+        "settled_boundary_reference_sha256": {"$ref": "#/$defs/sha256"},
+        "source_identity": {"$ref": "#/$defs/fileIdentity"}
+      }
+    },
+    "surface_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["surface_source", "transform_method", "surface_statistic", "sector_ids", "sector_count", "quantile", "explicit_non_gauge", "is_solver_gauge", "is_jgaugeswl", "is_point_probe"],
+      "properties": {
+        "surface_source": {"const": "OFFLINE_FINALIZED_BI4_CONTAINER_FRAME_PARTICLE_Q98_PROXY"},
+        "transform_method": {"const": "FULL_SE3_KABSCH_MOVING_BOUNDARY_ID_EXACT_V1"},
+        "surface_statistic": {"const": "CONTAINER_FRAME_FLUID_PARTICLE_Z_Q98"},
+        "sector_ids": {"const": ["s00", "s01", "s02", "s03", "s04", "s05", "s06", "s07", "s08", "s09", "s10", "s11", "s12", "s13", "s14", "s15"]},
+        "sector_count": {"const": 16},
+        "quantile": {"const": 0.98},
+        "explicit_non_gauge": {"const": true},
+        "is_solver_gauge": {"const": false},
+        "is_jgaugeswl": {"const": false},
+        "is_point_probe": {"const": false}
+      }
+    },
+    "frames": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/frame"}},
+    "qc": {
+      "type": "object", "additionalProperties": false,
+      "required": ["expected_frame_count", "observed_frame_count", "frame_bindings_exact", "time_sequence_complete", "particle_ids_stable", "particle_classes_stable", "boundary_reference_exact", "all_sector_rows_complete", "all_sectors_valid", "invalid_sector_count", "algorithm_valid"],
+      "properties": {
+        "expected_frame_count": {"type": "integer", "minimum": 1},
+        "observed_frame_count": {"type": "integer", "minimum": 1},
+        "frame_bindings_exact": {"const": true},
+        "time_sequence_complete": {"const": true},
+        "particle_ids_stable": {"const": true},
+        "particle_classes_stable": {"const": true},
+        "boundary_reference_exact": {"const": true},
+        "all_sector_rows_complete": {"const": true},
+        "all_sectors_valid": {"type": "boolean"},
+        "invalid_sector_count": {"type": "integer", "minimum": 0},
+        "algorithm_valid": {"type": "boolean"}
+      }
+    },
+    "integrity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["particle_frames_sha256", "surface_proxy_v3_result_sha256", "output_frames_sha256"],
+      "properties": {
+        "particle_frames_sha256": {"$ref": "#/$defs/sha256"},
+        "surface_proxy_v3_result_sha256": {"$ref": "#/$defs/sha256"},
+        "output_frames_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": ["real_external_output_read_by_adapter", "real_bi4_read_by_adapter", "real_bag_read", "solver_executed", "gpu_exposed", "network_used", "sudo_used", "raw_solver_surface_measured", "stage5b0_pass"],
+      "properties": {
+        "real_external_output_read_by_adapter": {"const": false},
+        "real_bi4_read_by_adapter": {"const": false},
+        "real_bag_read": {"const": false},
+        "solver_executed": {"const": false},
+        "gpu_exposed": {"const": false},
+        "network_used": {"const": false},
+        "sudo_used": {"const": false},
+        "raw_solver_surface_measured": {"const": false},
+        "stage5b0_pass": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "fileIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relative_path", "type", "mode", "size_bytes", "device", "inode", "nlink", "sha256"],
+      "properties": {
+        "relative_path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+        "type": {"const": "regular"}, "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "size_bytes": {"type": "integer", "minimum": 0}, "device": {"type": "integer", "minimum": 0},
+        "inode": {"type": "integer", "minimum": 1}, "nlink": {"const": 1}, "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "classCounts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fixed_boundary", "moving_boundary", "floating", "fluid"],
+      "properties": {
+        "fixed_boundary": {"type": "integer", "minimum": 0}, "moving_boundary": {"type": "integer", "minimum": 4},
+        "floating": {"type": "integer", "minimum": 0}, "fluid": {"type": "integer", "minimum": 1}
+      }
+    },
+    "transform": {
+      "type": "object", "additionalProperties": false,
+      "required": ["world_to_container_rotation", "world_to_container_translation_m", "determinant", "orthogonality_error", "rms_residual_m", "maximum_residual_m", "reflection_detected", "reference_rank", "singular_value_ratio"],
+      "properties": {
+        "world_to_container_rotation": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number"}}},
+        "world_to_container_translation_m": {"type": "array", "minItems": 3, "maxItems": 3, "items": {"type": "number"}},
+        "determinant": {"type": "number"}, "orthogonality_error": {"type": "number", "minimum": 0},
+        "rms_residual_m": {"type": "number", "minimum": 0}, "maximum_residual_m": {"type": "number", "minimum": 0},
+        "reflection_detected": {"const": false}, "reference_rank": {"type": "integer", "minimum": 3},
+        "singular_value_ratio": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "sector": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sector_id", "count", "valid", "q98_z_m", "h_proxy_relative_h0_m", "null_reason"],
+      "properties": {
+        "sector_id": {"enum": ["s00", "s01", "s02", "s03", "s04", "s05", "s06", "s07", "s08", "s09", "s10", "s11", "s12", "s13", "s14", "s15"]},
+        "count": {"type": "integer", "minimum": 0}, "valid": {"type": "boolean"},
+        "q98_z_m": {"type": ["number", "null"]}, "h_proxy_relative_h0_m": {"type": ["number", "null"]},
+        "null_reason": {"type": ["string", "null"]}
+      },
+      "oneOf": [
+        {"properties": {"valid": {"const": true}, "q98_z_m": {"type": "number"}, "h_proxy_relative_h0_m": {"type": "number"}, "null_reason": {"const": null}}},
+        {"properties": {"valid": {"const": false}, "q98_z_m": {"const": null}, "h_proxy_relative_h0_m": {"const": null}, "null_reason": {"const": "INSUFFICIENT_PARTICLES"}}}
+      ]
+    },
+    "frame": {
+      "type": "object", "additionalProperties": false,
+      "required": ["frame_index", "time_s", "source_identity", "particle_ids_sha256", "class_counts", "transform", "selected_fluid_particle_count", "excluded_radial_particle_count", "sectors", "valid_sector_count", "frame_valid"],
+      "properties": {
+        "frame_index": {"type": "integer", "minimum": 0}, "time_s": {"type": "number"},
+        "source_identity": {"$ref": "#/$defs/fileIdentity"}, "particle_ids_sha256": {"$ref": "#/$defs/sha256"},
+        "class_counts": {"$ref": "#/$defs/classCounts"}, "transform": {"$ref": "#/$defs/transform"},
+        "selected_fluid_particle_count": {"type": "integer", "minimum": 0},
+        "excluded_radial_particle_count": {"type": "integer", "minimum": 0},
+        "sectors": {"type": "array", "minItems": 16, "maxItems": 16, "items": {"$ref": "#/$defs/sector"}},
+        "valid_sector_count": {"type": "integer", "minimum": 0, "maximum": 16}, "frame_valid": {"type": "boolean"}
+      }
+    }
+  }
+}

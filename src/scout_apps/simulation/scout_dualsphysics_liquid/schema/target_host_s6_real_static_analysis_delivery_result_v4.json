@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_static_analysis_delivery_result_v4.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "mode", "attempt_id", "planned_denominator", "input_bindings", "alignment", "surface_derivation", "window_summaries", "spectral_metrics", "model_comparisons", "visualization", "producer_interfaces", "delivery", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-static-analysis-delivery-result-v4"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_STATIC_ANALYSIS_DELIVERY_RESULT_V4"},
+    "status": {"const": "S6_REAL_INPUT_STATIC_FIXTURE_ANALYSIS_VALIDATED_NOT_REAL_PASS"},
+    "mode": {"const": "STATIC_FIXTURE_FOR_REAL_INPUT_CONTRACT"},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "input_bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selected_document_sha256", "s5b0_package_document_sha256", "s5a0_receipt_sha256", "source_bag_sha256", "s5a1_transfer_sha256", "s5b0_manifest_sha256", "gpu_run_receipt_sha256", "settled_state_sha256", "solver_config_sha256", "geometry_sha256"],
+      "properties": {
+        "selected_document_sha256": {"$ref": "#/$defs/sha256"},
+        "s5b0_package_document_sha256": {"$ref": "#/$defs/sha256"},
+        "s5a0_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "source_bag_sha256": {"$ref": "#/$defs/sha256"},
+        "s5a1_transfer_sha256": {"$ref": "#/$defs/sha256"},
+        "s5b0_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "gpu_run_receipt_sha256": {"$ref": "#/$defs/sha256"},
+        "settled_state_sha256": {"$ref": "#/$defs/sha256"},
+        "solver_config_sha256": {"$ref": "#/$defs/sha256"},
+        "geometry_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "alignment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x_axis", "odom_header_origin_ns", "record_to_odom_offset_ns", "output_grid_sha256", "uniform_dt_s", "interpolation", "overlap_start_s", "overlap_end_s", "extrapolation", "smoothing", "sample_count"],
+      "properties": {
+        "x_axis": {"const": "time_since_odom_header_origin_s"},
+        "odom_header_origin_ns": {"type": "integer", "minimum": 0},
+        "record_to_odom_offset_ns": {"type": "integer"},
+        "output_grid_sha256": {"$ref": "#/$defs/sha256"},
+        "uniform_dt_s": {"type": "number", "exclusiveMinimum": 0},
+        "interpolation": {"const": "LINEAR_WITHIN_OVERLAP_ONLY"},
+        "overlap_start_s": {"type": "number"},
+        "overlap_end_s": {"type": "number"},
+        "extrapolation": {"const": false},
+        "smoothing": {"const": false},
+        "sample_count": {"type": "integer", "minimum": 16}
+      }
+    },
+    "surface_derivation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "definitions", "registered_probe_count", "row_count", "derived_rows_sha256", "invalid_probe_values", "invalid_probe_ratio", "precomputed_surface_columns_consumed"],
+      "properties": {
+        "source": {"const": "INLINE_FIXTURE_SHAPED_AS_FINALIZED_S5B0_RAW_GAUGE_ZSURF"},
+        "definitions": {"const": "eta=zsurf-h0;H_crest=max(eta);H_abs=max(abs(eta));H_peak_to_peak=max(zsurf)-min(zsurf)"},
+        "registered_probe_count": {"type": "integer", "minimum": 4},
+        "row_count": {"type": "integer", "minimum": 16},
+        "derived_rows_sha256": {"$ref": "#/$defs/sha256"},
+        "invalid_probe_values": {"type": "integer", "minimum": 0},
+        "invalid_probe_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "precomputed_surface_columns_consumed": {"const": false}
+      }
+    },
+    "window_summaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first15", "full_motion", "recorded_tail", "solver_tail"],
+      "properties": {
+        "first15": {"$ref": "#/$defs/windowSummary"},
+        "full_motion": {"$ref": "#/$defs/windowSummary"},
+        "recorded_tail": {"$ref": "#/$defs/windowSummary"},
+        "solver_tail": {"$ref": "#/$defs/windowSummary"}
+      }
+    },
+    "spectral_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["H_crest", "H_abs", "H_peak_to_peak"],
+      "properties": {
+        "H_crest": {"$ref": "#/$defs/spectralMetric"},
+        "H_abs": {"$ref": "#/$defs/spectralMetric"},
+        "H_peak_to_peak": {"$ref": "#/$defs/spectralMetric"}
+      }
+    },
+    "model_comparisons": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["H_proxy", "H_modal"],
+      "properties": {
+        "H_proxy": {"$ref": "#/$defs/comparisonMetric"},
+        "H_modal": {"$ref": "#/$defs/comparisonMetric"}
+      }
+    },
+    "visualization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["layout", "shared_x", "axes_count", "panel_y_axis_count", "dual_y_axes", "panels", "palette", "line_styles", "rainbow_colormap", "figure_size_inches", "dpi", "font_family", "minimum_font_size_pt", "pdf_fonttype", "color_output", "grayscale_output", "grayscale_qa", "layout_qa"],
+      "properties": {
+        "layout": {"const": "THREE_VERTICAL_SHARED_X_PANELS"},
+        "shared_x": {"const": true},
+        "axes_count": {"const": 3},
+        "panel_y_axis_count": {"const": 1},
+        "dual_y_axes": {"const": false},
+        "panels": {"const": [{"panel_id": "a", "series": ["H_crest", "H_abs", "H_peak_to_peak"], "unit": "mm"}, {"panel_id": "b", "series": ["H_proxy", "H_modal"], "unit": "mm"}, {"panel_id": "c", "series": ["H_crest_minus_H_proxy", "H_crest_minus_H_modal"], "unit": "mm"}]},
+        "palette": {"const": {"name": "OKABE_ITO_COLORBLIND_SAFE", "H_crest": "#0072B2", "H_abs": "#E69F00", "H_peak_to_peak": "#009E73", "H_proxy": "#0072B2", "H_modal": "#CC79A7", "H_crest_minus_H_proxy": "#000000", "H_crest_minus_H_modal": "#E69F00"}},
+        "line_styles": {"const": {"H_crest": "-", "H_abs": "--", "H_peak_to_peak": ":", "H_proxy": "-", "H_modal": "--", "H_crest_minus_H_proxy": "-", "H_crest_minus_H_modal": "--"}},
+        "rainbow_colormap": {"const": false},
+        "figure_size_inches": {"const": [7.2, 6.6]},
+        "dpi": {"const": 300},
+        "font_family": {"const": "DejaVu Sans"},
+        "minimum_font_size_pt": {"const": 8},
+        "pdf_fonttype": {"const": 42},
+        "color_output": {"const": "figures/primary_shared_x_timeseries.png"},
+        "grayscale_output": {"const": "figures/primary_shared_x_timeseries_grayscale.png"},
+        "grayscale_qa": {"$ref": "#/$defs/pendingQa"},
+        "layout_qa": {"$ref": "#/$defs/pendingQa"}
+      }
+    },
+    "producer_interfaces": {
+      "const": {
+        "data_producer": {"status": "INTERFACE_ONLY_NOT_EXECUTED", "outputs": ["data/derived_surface_metrics.csv", "data/aligned_primary_comparison.csv", "reports/primary_summary.json"]},
+        "figure_renderer": {"status": "INTERFACE_ONLY_NOT_EXECUTED", "outputs": ["figures/primary_shared_x_timeseries.png", "figures/primary_shared_x_timeseries_grayscale.png", "figures/primary_shared_x_timeseries.pdf"]},
+        "animation_producer": {"status": "INTERFACE_ONLY_NOT_EXECUTED", "fact_source": "FINALIZED_SOLVER_FRAMES_ONLY", "outputs": ["animation/primary.mp4", "animation/primary_preview.gif", "keyframes/primary_t000.png"]},
+        "manifest_producer": {"status": "INTERFACE_ONLY_NOT_EXECUTED", "outputs": ["comparison_manifest.json"]},
+        "evidence_index_producer": {"status": "INTERFACE_ONLY_NOT_EXECUTED", "outputs": ["evidence_index.json"]},
+        "secondary_ledger_producer": {"status": "INTERFACE_ONLY_NOT_EXECUTED", "outputs": ["secondary_ledger_entry.json"]},
+        "checksum_producer": {"status": "INTERFACE_ONLY_NOT_EXECUTED", "algorithm": "SHA-256", "outputs": ["checksums.sha256"]}
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["write_semantics", "artifacts_materialized", "final_artifacts_allowed", "renderer_executed", "animation_executed", "evidence_written", "ledger_appended", "checksums_materialized", "planned_inventory"],
+      "properties": {
+        "write_semantics": {"const": "CREATE_NEW_ONLY_AFTER_SEPARATE_REAL_INPUT_ADMISSION"},
+        "artifacts_materialized": {"const": false},
+        "final_artifacts_allowed": {"const": false},
+        "renderer_executed": {"const": false},
+        "animation_executed": {"const": false},
+        "evidence_written": {"const": false},
+        "ledger_appended": {"const": false},
+        "checksums_materialized": {"const": false},
+        "planned_inventory": {"const": ["comparison_manifest.json", "data/derived_surface_metrics.csv", "data/aligned_primary_comparison.csv", "reports/primary_summary.json", "figures/primary_shared_x_timeseries.png", "figures/primary_shared_x_timeseries_grayscale.png", "figures/primary_shared_x_timeseries.pdf", "animation/primary.mp4", "animation/primary_preview.gif", "keyframes/primary_t000.png", "evidence_index.json", "secondary_ledger_entry.json", "checksums.sha256"]}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage6_pass", "single_row", "paired_ranking", "cross_method_ranking", "cpu_selected_trajectory_comparison", "cpu_selected_trajectory_scope", "physical_reference_pending", "physical_fidelity_validated", "formal", "production", "physical_primary"],
+      "properties": {
+        "stage6_pass": {"const": false},
+        "single_row": {"const": true},
+        "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false},
+        "cpu_selected_trajectory_comparison": {"const": false},
+        "cpu_selected_trajectory_scope": {"const": "OUT_OF_SCOPE"},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false},
+        "formal": {"const": false},
+        "production": {"const": false},
+        "physical_primary": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "windowMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["peak_mm", "p95_mm", "rms_mm", "peak_time_s"],
+      "properties": {"peak_mm": {"type": "number"}, "p95_mm": {"type": "number"}, "rms_mm": {"type": "number", "minimum": 0}, "peak_time_s": {"type": "number"}}
+    },
+    "windowSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_s", "end_s", "slot_count", "invalid_probe_ratio", "H_crest", "H_abs", "H_peak_to_peak"],
+      "properties": {"start_s": {"type": "number"}, "end_s": {"type": "number"}, "slot_count": {"type": "integer", "minimum": 1}, "invalid_probe_ratio": {"type": "number", "minimum": 0, "maximum": 1}, "H_crest": {"$ref": "#/$defs/windowMetric"}, "H_abs": {"$ref": "#/$defs/windowMetric"}, "H_peak_to_peak": {"$ref": "#/$defs/windowMetric"}}
+    },
+    "spectralMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["amplitude_peak_mm", "dominant_frequency_hz", "damping_rate_per_s", "phase_rad"],
+      "properties": {"amplitude_peak_mm": {"type": "number", "minimum": 0}, "dominant_frequency_hz": {"type": "number", "minimum": 0}, "damping_rate_per_s": {"type": "number"}, "phase_rad": {"type": "number", "minimum": -3.141592653589793, "maximum": 3.141592653589793}}
+    },
+    "comparisonMetric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sample_count", "amplitude_error_mm", "frequency_error_hz", "damping_error_per_s", "phase_error_rad", "rmse_mm", "correlation"],
+      "properties": {"sample_count": {"type": "integer", "minimum": 16}, "amplitude_error_mm": {"type": "number"}, "frequency_error_hz": {"type": "number"}, "damping_error_per_s": {"type": "number"}, "phase_error_rad": {"type": "number", "minimum": -3.141592653589793, "maximum": 3.141592653589793}, "rmse_mm": {"type": "number", "minimum": 0}, "correlation": {"type": "number", "minimum": -1, "maximum": 1}}
+    },
+    "pendingQa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "checks", "status", "executed", "pass_claimed"],
+      "properties": {
+        "required": {"const": true},
+        "checks": {"type": "array", "minItems": 2, "uniqueItems": true, "items": {"type": "string"}},
+        "status": {"const": "REQUIRED_NOT_EXECUTED"},
+        "executed": {"const": false},
+        "pass_claimed": {"const": false}
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "schema_version": "smpcc-r8-liquid-s5a1-policy-delta-v6",
+  "document_type": "SMPCC_R8_LIQUID_S5A1_PRIMARY_HANDOFF_POLICY_DELTA_V6",
+  "base": {
+    "path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5a1_primary_handoff_v3_v1.json",
+    "sha256": "1ba40330581c3736442dcd6191d19f798cef5d658d092af6026de924e4b93c2c"
+  },
+  "overrides": {
+    "policy_id": "liquid_zrj_msi_u2404_s5a1_primary_handoff_v3_v6",
+    "transfer_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v6",
+    "planned_partial_root": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v6.partial",
+    "planned_final_root": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v6"
+  }
+}

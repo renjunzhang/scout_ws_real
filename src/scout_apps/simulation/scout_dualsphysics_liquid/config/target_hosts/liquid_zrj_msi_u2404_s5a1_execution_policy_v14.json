@@ -1,0 +1,97 @@
+{
+  "schema_version": "smpcc-r8-liquid-s5a1-execution-policy-v14",
+  "document_type": "SMPCC_R8_LIQUID_S5A1_EXECUTION_POLICY_V14",
+  "execution_id": "s5a1_primary_bsmooth_b01_20260812T010107Z_v14",
+  "transfer_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10",
+  "parent_v13": {
+    "policy": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5a1_execution_policy_v13.json", "sha256": "8dcd8e7709badc51a70efbf2c9a614365bda9e88af19c6efee1bb76715ab8ad7", "mode": "0664", "size_bytes": 8578},
+    "policy_schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a1_execution_policy_v13.json", "sha256": "d9fc2f504e863376afaced4baca4fdd0be3e16153591fa19b27df1c0c6de4124", "mode": "0664", "size_bytes": 8359},
+    "receipt_schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a1_execution_receipt_v13.json", "sha256": "696bee877054186a67ca0c9bade2b4bea16462da6fb3539f247e40b59dd82503", "mode": "0664", "size_bytes": 1713},
+    "supervisor": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a1_execution_supervisor_v13.py", "sha256": "f1b37105b6c43c7578227de66c3fdb0160e0d15ce28ed0bf084ee0c2b4b894bd", "mode": "0664", "size_bytes": 42518},
+    "tests": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_s5a1_execution_supervisor_v13.py", "sha256": "3546a8ab7e13152c68fae40ac5c17f7d1ebce3e4b109fa0fa0e3db591dd504a4", "mode": "0664", "size_bytes": 11749}
+  },
+  "package_v10": {
+    "policy": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/config/target_hosts/liquid_zrj_msi_u2404_s5a1_primary_handoff_v3_v10.json", "sha256": "a49147c072645f916e8c1e0b0a42123df7e9c83b1d33a74cba4c05b62e1beb3a", "mode": "0664", "size_bytes": 826},
+    "schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a1_handoff_package_v10.json", "sha256": "bdf3504dc82af2a37b3c120a38be07a8f19a9ec480d5f223352aef3300d19c38", "mode": "0664", "size_bytes": 486},
+    "gate": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a1_handoff_gate_v12.py", "sha256": "aa1103006bb518668f23f58350c64424f7b2b66a0a89ccac82a981d6ed9d8b91", "mode": "0664", "size_bytes": 5934},
+    "tests": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_s5a1_handoff_gate_v12.py", "sha256": "85a02c08f9dde5e9627bec4eff608b2b0bee53b85b978a98a9191438ed3b7524", "mode": "0664", "size_bytes": 2429}
+  },
+  "v14_contract": {
+    "policy": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a1_execution_policy_v14.json", "sha256": "39da10d4ad4768d8950aa69bd34ac8725841fd4625754c788bac802075c90aad", "mode": "0664", "size_bytes": 9388},
+    "schema": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/schema/target_host_s5a1_execution_receipt_v14.json", "sha256": "b40e4fd13049eca7da9cd087d334f1a73469f4068a49106e775a428f2859b42c", "mode": "0664", "size_bytes": 1714},
+    "gate": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_s5a1_execution_supervisor_v14.py", "sha256": "dbc91a923a6f88100848771b345cae927bfcb9cccd3dcd1b27e8049c96e29c7e", "mode": "0664", "size_bytes": 32569},
+    "tests": {"path": "/home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/tests/test_s5a1_execution_supervisor_v14.py", "sha256": "5944e8ddb581597bb8f5d19d7cf327f13b9cdea91f8020c75a7d5b399d18fa6c", "mode": "0664", "size_bytes": 12038}
+  },
+  "preserved_v13": {
+    "partial_root_absent": true,
+    "final_root": {"path": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v9", "inode": 15749004, "mode": "0700", "size_bytes": 4096, "nlink": 2, "entry_count": 20, "inventory_sha256": "34a08d169bb6122be30be90445715ba0d9ac3380f2c4b80eecfea2a7bbd1c59c"},
+    "empty_receipt_reservation": {"path": "/home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v9.execution_v13.json.partial", "inode": 14966687, "mode": "0440", "size_bytes": 0, "nlink": 1, "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+    "final_receipt_absent": true,
+    "cli_return_code": 2,
+    "publication_error": "parent v12 transform failed: parent v11 transform failed: success lacks both strong semantic validations",
+    "primary_bag_post_sha256": "c82c1f16b41bced51ab0aff63e4ef40b469501e185851344789fc3d62399fc07",
+    "real_bag_read_attempted": true,
+    "real_bag_read_confirmed": true,
+    "bwrap_run": true,
+    "package_entries": 20,
+    "package_gate_status": "PASS_S5A1_HANDOFF_GATE_V3_STRONG_SEMANTICS"
+  },
+  "tf_contract": {
+    "comparison_frame": "T0_INVERSE_TIMES_T_RELATIVE_SE3",
+    "maximum_time_delta_s": 0.5,
+    "maximum_position_delta_m": 0.05,
+    "maximum_angular_delta_rad": 0.1,
+    "tf_used_as_motion": false,
+    "real_diagnostic_witness": {
+      "absolute_maximum_position_delta_m": 3.9934499955863565,
+      "maximum_time_delta_s": 0.005,
+      "absolute_maximum_angular_delta_rad": 0.023228249162941604,
+      "relative_maximum_translation_delta_m": 0.03995630546880967,
+      "relative_rms_translation_delta_m": 0.022725548786785066,
+      "relative_maximum_angular_delta_rad": 0.003657518055773045
+    }
+  },
+  "sandbox": {
+    "canonical_argv_sha256": "c08e03535181d0e9f47aa5d2c2f306dcf5e5d7fb711a8dcf698e58cb1c070f0a",
+    "canonical_token_count": 233,
+    "fd_placeholders": ["@S5A0_RECEIPT_FD@", "@SOURCE_BAG_FD@"],
+    "child_environment": {"PATH": "/usr/bin", "HOME": "/nonexistent", "PYTHONDONTWRITEBYTECODE": "1"},
+    "host_environment": {"PATH": "/usr/bin", "HOME": "/nonexistent", "PYTHONDONTWRITEBYTECODE": "1"},
+    "uid": 1000,
+    "gid": 1000,
+    "mapped_groups": [65534,65534,65534,65534,65534,65534,65534,65534,1000],
+    "writable_bind": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10.partial",
+    "recursive_parent_policies": ["v13", "v12", "v11", "v10", "v9"],
+    "generic_nonempty_parent_map_exclusions": [
+      "/home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v4.execution_v8.json.partial",
+      "/home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v6.execution_v10.json.partial",
+      "/home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v7.execution_v11.json.partial",
+      "/home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v9.execution_v13.json.partial"
+    ],
+    "base_receipt_parent_coverage": true,
+    "local_python_import_closure_count": 32,
+    "local_python_import_closure_sha256": "0e82e5cb8115d0fb36176bf4f877eefc408d617c85a9ebb0195983cf06ebb1ad",
+    "all_local_imports_ro_bound": true,
+    "runtime_binding_guard": true,
+    "runtime_binding_fields": ["SCRIPT", "POLICY", "PACKAGE_SCHEMA", "RECEIPT_SCHEMA", "GATE", "EXTRACTOR", "BRIDGE", "READER", "COMPAT_GATE", "TRANSFER_ID", "PARTIAL_ROOT", "FINAL_ROOT", "EXECUTION_RECEIPT", "EXECUTION_RECEIPT_PARTIAL", "S5A0_FINAL_RECEIPT", "S5A0_EVIDENCE_ROOT", "S5A0_INNER_RECEIPT", "EXPECTED", "gate", "extractor", "build_bwrap_argv", "load_package", "reserve_receipt", "publish_reserved_receipt", "mock_failure_receipt", "subprocess"],
+    "v6_module_state_guard": true,
+    "v6_module_state_fields": ["PARTIAL_ROOT", "FINAL_ROOT", "EXECUTION_ID"],
+    "exact_raw_v1_origin_only": true
+  },
+  "safety": {
+    "optional_bag_read": false,
+    "gpu_exposed": false,
+    "solver_executed": false,
+    "network_used": false,
+    "sudo_used": false,
+    "v8_evidence_preserved": true,
+    "v10_evidence_preserved": true,
+    "v11_evidence_preserved": true,
+    "v12_evidence_preserved": true,
+    "v13_evidence_preserved": true,
+    "parent_publisher_used": false,
+    "real_bag_read_attempted": "UNKNOWN",
+    "real_bag_read_confirmed": "UNKNOWN",
+    "bwrap_run": "UNKNOWN"
+  }
+}

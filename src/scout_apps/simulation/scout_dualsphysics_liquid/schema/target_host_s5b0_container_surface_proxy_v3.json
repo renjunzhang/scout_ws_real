@@ -1,0 +1,514 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_container_surface_proxy_v3.json",
+  "title": "S5B0 fixture-only container-frame particle surface proxy v3",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "document_type",
+    "case_id",
+    "fixture_only",
+    "raw_moving_solver_gauge_available",
+    "surface_source",
+    "is_solver_gauge",
+    "is_jgaugeswl",
+    "is_point_probe",
+    "method_contract",
+    "frame_contract",
+    "particle_contract",
+    "frames",
+    "qc",
+    "integrity",
+    "claims",
+    "result_status"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "smpcc-r8-liquid-s5b0-container-surface-proxy-v3"
+    },
+    "document_type": {
+      "const": "SMPCC_R8_LIQUID_S5B0_CONTAINER_SURFACE_PROXY_V3"
+    },
+    "case_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "fixture_only": {
+      "const": true
+    },
+    "raw_moving_solver_gauge_available": {
+      "const": false
+    },
+    "surface_source": {
+      "const": "OFFLINE_CONTAINER_FRAME_PARTICLE_Q98_PROXY"
+    },
+    "is_solver_gauge": {
+      "const": false
+    },
+    "is_jgaugeswl": {
+      "const": false
+    },
+    "is_point_probe": {
+      "const": false
+    },
+    "method_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "transform_method",
+        "container_frame_origin",
+        "sector_assignment",
+        "sector_ids",
+        "sector_count",
+        "annulus_inner_radius_ratio",
+        "annulus_outer_radius_ratio",
+        "minimum_particles_per_sector",
+        "surface_statistic",
+        "quantile",
+        "quantile_method",
+        "maximum_rms_residual_m",
+        "maximum_point_residual_m",
+        "minimum_reference_rank",
+        "minimum_singular_value_ratio"
+      ],
+      "properties": {
+        "transform_method": {
+          "const": "FULL_SE3_KABSCH_MOVING_BOUNDARY_ID_EXACT_V1"
+        },
+        "container_frame_origin": {
+          "const": "SETTLED_MOVING_BOUNDARY_REFERENCE"
+        },
+        "sector_assignment": {
+          "const": "ATAN2_HALF_OPEN_EQUAL_AZIMUTH_V1"
+        },
+        "sector_ids": {
+          "const": [
+            "s00", "s01", "s02", "s03", "s04", "s05", "s06", "s07",
+            "s08", "s09", "s10", "s11", "s12", "s13", "s14", "s15"
+          ]
+        },
+        "sector_count": {
+          "const": 16
+        },
+        "annulus_inner_radius_ratio": {
+          "const": 0.45
+        },
+        "annulus_outer_radius_ratio": {
+          "const": 0.95
+        },
+        "minimum_particles_per_sector": {
+          "const": 128
+        },
+        "surface_statistic": {
+          "const": "CONTAINER_FRAME_FLUID_PARTICLE_Z_Q98"
+        },
+        "quantile": {
+          "const": 0.98
+        },
+        "quantile_method": {
+          "const": "SORTED_LINEAR_TYPE7_V1"
+        },
+        "maximum_rms_residual_m": {
+          "const": 1e-08
+        },
+        "maximum_point_residual_m": {
+          "const": 5e-08
+        },
+        "minimum_reference_rank": {
+          "const": 3
+        },
+        "minimum_singular_value_ratio": {
+          "const": 1e-06
+        }
+      }
+    },
+    "frame_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start_index",
+        "end_index",
+        "index_step",
+        "start_time_s",
+        "time_step_s",
+        "time_tolerance_s"
+      ],
+      "properties": {
+        "start_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "end_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "index_step": {
+          "const": 1
+        },
+        "start_time_s": {
+          "type": "number"
+        },
+        "time_step_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "time_tolerance_s": {
+          "const": 1e-09
+        }
+      }
+    },
+    "particle_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "container_radius_m",
+        "moving_boundary_reference_count",
+        "fluid_particle_count",
+        "moving_boundary_ids_sha256",
+        "fluid_ids_sha256",
+        "moving_boundary_ids_complete_unique",
+        "fluid_ids_complete_unique",
+        "particle_classes_disjoint"
+      ],
+      "properties": {
+        "container_radius_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "moving_boundary_reference_count": {
+          "type": "integer",
+          "minimum": 4
+        },
+        "fluid_particle_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "moving_boundary_ids_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fluid_ids_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "moving_boundary_ids_complete_unique": {
+          "const": true
+        },
+        "fluid_ids_complete_unique": {
+          "const": true
+        },
+        "particle_classes_disjoint": {
+          "const": true
+        }
+      }
+    },
+    "frames": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/frame"
+      }
+    },
+    "qc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_frame_count",
+        "observed_frame_count",
+        "frame_sequence_complete",
+        "time_sequence_complete",
+        "finite",
+        "all_transforms_rigid",
+        "all_sector_rows_complete",
+        "all_sectors_valid",
+        "invalid_sector_count",
+        "algorithm_valid"
+      ],
+      "properties": {
+        "expected_frame_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "observed_frame_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "frame_sequence_complete": {
+          "const": true
+        },
+        "time_sequence_complete": {
+          "const": true
+        },
+        "finite": {
+          "const": true
+        },
+        "all_transforms_rigid": {
+          "const": true
+        },
+        "all_sector_rows_complete": {
+          "const": true
+        },
+        "all_sectors_valid": {
+          "type": "boolean"
+        },
+        "invalid_sector_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "algorithm_valid": {
+          "type": "boolean"
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_fixture_sha256",
+        "method_contract_sha256",
+        "derived_frames_sha256"
+      ],
+      "properties": {
+        "source_fixture_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "method_contract_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "derived_frames_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fixture_only",
+        "real_bi4_read",
+        "solver_or_gpu_executed",
+        "raw_solver_surface_measured",
+        "stage5b0_pass"
+      ],
+      "properties": {
+        "fixture_only": {
+          "const": true
+        },
+        "real_bi4_read": {
+          "const": false
+        },
+        "solver_or_gpu_executed": {
+          "const": false
+        },
+        "raw_solver_surface_measured": {
+          "const": false
+        },
+        "stage5b0_pass": {
+          "const": false
+        }
+      }
+    },
+    "result_status": {
+      "enum": [
+        "FIXTURE_ONLY_PROXY_VALID_NOT_ADMITTED",
+        "FIXTURE_ONLY_PROXY_INVALID_SECTORS_NOT_ADMITTED"
+      ]
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "vector3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "number"
+      }
+    },
+    "matrix3": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "$ref": "#/$defs/vector3"
+      }
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "world_to_container_rotation",
+        "world_to_container_translation_m",
+        "determinant",
+        "orthogonality_error",
+        "rms_residual_m",
+        "maximum_residual_m",
+        "reflection_detected",
+        "reference_rank",
+        "singular_value_ratio"
+      ],
+      "properties": {
+        "world_to_container_rotation": {
+          "$ref": "#/$defs/matrix3"
+        },
+        "world_to_container_translation_m": {
+          "$ref": "#/$defs/vector3"
+        },
+        "determinant": {
+          "type": "number",
+          "minimum": 0.999999999,
+          "maximum": 1.000000001
+        },
+        "orthogonality_error": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1e-09
+        },
+        "rms_residual_m": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1e-08
+        },
+        "maximum_residual_m": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 5e-08
+        },
+        "reflection_detected": {
+          "const": false
+        },
+        "reference_rank": {
+          "const": 3
+        },
+        "singular_value_ratio": {
+          "type": "number",
+          "minimum": 1e-06,
+          "maximum": 1
+        }
+      }
+    },
+    "sector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sector_id",
+        "count",
+        "valid",
+        "q98_z_m",
+        "null_reason"
+      ],
+      "properties": {
+        "sector_id": {
+          "enum": [
+            "s00", "s01", "s02", "s03", "s04", "s05", "s06", "s07",
+            "s08", "s09", "s10", "s11", "s12", "s13", "s14", "s15"
+          ]
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "valid": {
+          "type": "boolean"
+        },
+        "q98_z_m": {
+          "type": ["number", "null"]
+        },
+        "null_reason": {
+          "type": ["string", "null"],
+          "enum": [null, "INSUFFICIENT_PARTICLES"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "valid": {
+                "const": true
+              }
+            },
+            "required": ["valid"]
+          },
+          "then": {
+            "properties": {
+              "count": {
+                "minimum": 128
+              },
+              "q98_z_m": {
+                "type": "number"
+              },
+              "null_reason": {
+                "const": null
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "count": {
+                "maximum": 127
+              },
+              "q98_z_m": {
+                "const": null
+              },
+              "null_reason": {
+                "const": "INSUFFICIENT_PARTICLES"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "frame": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frame_index",
+        "time_s",
+        "transform",
+        "selected_fluid_particle_count",
+        "excluded_radial_particle_count",
+        "sectors",
+        "valid_sector_count",
+        "frame_valid"
+      ],
+      "properties": {
+        "frame_index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "time_s": {
+          "type": "number"
+        },
+        "transform": {
+          "$ref": "#/$defs/transform"
+        },
+        "selected_fluid_particle_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "excluded_radial_particle_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sectors": {
+          "type": "array",
+          "minItems": 16,
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/sector"
+          }
+        },
+        "valid_sector_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16
+        },
+        "frame_valid": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

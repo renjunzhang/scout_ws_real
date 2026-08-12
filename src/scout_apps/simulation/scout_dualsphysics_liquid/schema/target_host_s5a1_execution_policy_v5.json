@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5a1_execution_policy_v5.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "execution_id", "transfer_id", "roots", "contracts", "tools", "sandbox", "apparmor", "safety"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s5a1-execution-policy-v5"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S5A1_EXECUTION_POLICY_V5"},
+    "execution_id": {"const": "s5a1_primary_bsmooth_b01_20260811T210719Z_v5"},
+    "transfer_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v1"},
+    "roots": {
+      "type": "object", "additionalProperties": false,
+      "required": ["partial", "final", "receipt", "receipt_partial", "expected_package_entries"],
+      "properties": {
+        "partial": {"const": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v1.partial"},
+        "final": {"const": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v1"},
+        "receipt": {"const": "/home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v1.execution_v5.json"},
+        "receipt_partial": {"const": "/home/zrj/scout_liquid_lab/audits/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v1.execution_v5.json.partial"},
+        "expected_package_entries": {"const": 20}
+      }
+    },
+    "contracts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["compatibility_gate_v1", "execution_policy_schema_v5", "execution_receipt_schema_v1", "execution_receipt_schema_v3", "execution_receipt_schema_v4", "execution_receipt_schema_v5", "execution_supervisor_v1", "execution_supervisor_v3", "execution_supervisor_v4", "execution_supervisor_v5", "execution_supervisor_v5_tests", "handoff_gate_v1", "handoff_gate_v2", "handoff_gate_v3", "handoff_gate_v3_tests", "motion_bridge_v1", "package_policy", "package_schema", "reader_v1", "reader_v2", "reader_v3", "reader_v4", "s5a0_inner_receipt", "s5a0_inner_receipt_schema_v2", "s5a0_outer_final_receipt", "s5a0_outer_receipt_schema_v5", "s5a0_supervisor_policy_v5", "signal_extractor_v1", "signal_extractor_v2", "signal_extractor_v3", "signal_extractor_v3_tests"],
+      "properties": {
+        "compatibility_gate_v1": {"$ref": "#/$defs/fileIdentity"}, "execution_policy_schema_v5": {"$ref": "#/$defs/fileIdentity"},
+        "execution_receipt_schema_v1": {"$ref": "#/$defs/fileIdentity"}, "execution_receipt_schema_v3": {"$ref": "#/$defs/fileIdentity"}, "execution_receipt_schema_v4": {"$ref": "#/$defs/fileIdentity"}, "execution_receipt_schema_v5": {"$ref": "#/$defs/fileIdentity"},
+        "execution_supervisor_v1": {"$ref": "#/$defs/fileIdentity"}, "execution_supervisor_v3": {"$ref": "#/$defs/fileIdentity"}, "execution_supervisor_v4": {"$ref": "#/$defs/fileIdentity"}, "execution_supervisor_v5": {"$ref": "#/$defs/fileIdentity"}, "execution_supervisor_v5_tests": {"$ref": "#/$defs/fileIdentity"},
+        "handoff_gate_v1": {"$ref": "#/$defs/fileIdentity"}, "handoff_gate_v2": {"$ref": "#/$defs/fileIdentity"}, "handoff_gate_v3": {"$ref": "#/$defs/fileIdentity"}, "handoff_gate_v3_tests": {"$ref": "#/$defs/fileIdentity"},
+        "motion_bridge_v1": {"$ref": "#/$defs/fileIdentity"}, "package_policy": {"$ref": "#/$defs/fileIdentity"}, "package_schema": {"$ref": "#/$defs/fileIdentity"},
+        "reader_v1": {"$ref": "#/$defs/fileIdentity"}, "reader_v2": {"$ref": "#/$defs/fileIdentity"}, "reader_v3": {"$ref": "#/$defs/fileIdentity"}, "reader_v4": {"$ref": "#/$defs/fileIdentity"},
+        "s5a0_inner_receipt": {"$ref": "#/$defs/fileIdentity"}, "s5a0_inner_receipt_schema_v2": {"$ref": "#/$defs/fileIdentity"}, "s5a0_outer_final_receipt": {"$ref": "#/$defs/fileIdentity"}, "s5a0_outer_receipt_schema_v5": {"$ref": "#/$defs/fileIdentity"}, "s5a0_supervisor_policy_v5": {"$ref": "#/$defs/fileIdentity"},
+        "signal_extractor_v1": {"$ref": "#/$defs/fileIdentity"}, "signal_extractor_v2": {"$ref": "#/$defs/fileIdentity"}, "signal_extractor_v3": {"$ref": "#/$defs/fileIdentity"}, "signal_extractor_v3_tests": {"$ref": "#/$defs/fileIdentity"}
+      }
+    },
+    "tools": {
+      "type": "object", "additionalProperties": false,
+      "required": ["bwrap", "timeout", "prlimit", "python3"],
+      "properties": {
+        "bwrap": {"$ref": "#/$defs/toolIdentity"},
+        "timeout": {"$ref": "#/$defs/toolIdentity"},
+        "prlimit": {"$ref": "#/$defs/toolIdentity"},
+        "python3": {"$ref": "#/$defs/toolIdentity"}
+      }
+    },
+    "sandbox": {
+      "type": "object", "additionalProperties": false,
+      "required": ["canonical_argv", "canonical_argv_sha256", "fd_placeholders", "child_environment", "host_subprocess_environment", "uid", "gid", "supplementary_groups", "writable_bind", "writable_bind_count", "limits"],
+      "properties": {
+        "canonical_argv": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "canonical_argv_sha256": {"$ref": "#/$defs/sha256"},
+        "fd_placeholders": {"const": {"s5a0_receipt": "@S5A0_RECEIPT_FD@", "source_bag": "@SOURCE_BAG_FD@"}},
+        "child_environment": {"const": {"PATH": "/usr/bin", "HOME": "/nonexistent", "PYTHONDONTWRITEBYTECODE": "1"}},
+        "host_subprocess_environment": {"const": {"PATH": "/usr/bin", "HOME": "/nonexistent", "PYTHONDONTWRITEBYTECODE": "1"}},
+        "uid": {"const": 1000}, "gid": {"const": 1000}, "supplementary_groups": {"const": []},
+        "writable_bind": {"const": "/home/zrj/scout_liquid_lab/incoming/SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v1.partial"},
+        "writable_bind_count": {"const": 1},
+        "limits": {
+          "const": {"timeout_seconds": 180, "kill_after_seconds": 5, "address_space_bytes": 1073741824, "rss_bytes": 805306368, "nofile": 256, "stdout_bytes": 65536, "stderr_bytes": 65536}
+        }
+      }
+    },
+    "apparmor": {"const": {"status": "NOT_USED", "profile_name": null, "reason": "bubblewrap user-namespace sandbox; no AppArmor lifecycle authorized"}},
+    "safety": {"const": {"optional_bag": false, "gpu_exposed": false, "solver_executed": false, "network_used": false, "sudo_used": false}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "path": {"type": "string", "pattern": "^/[^\\u0000]*$"},
+    "fileIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "mode", "size_bytes"],
+      "properties": {"path": {"$ref": "#/$defs/path"}, "sha256": {"$ref": "#/$defs/sha256"}, "mode": {"type": "string", "pattern": "^[0-7]{4}$"}, "size_bytes": {"type": "integer", "minimum": 1}}
+    },
+    "toolIdentity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "resolved_path", "sha256", "mode", "size_bytes"],
+      "properties": {"path": {"$ref": "#/$defs/path"}, "resolved_path": {"$ref": "#/$defs/path"}, "sha256": {"$ref": "#/$defs/sha256"}, "mode": {"const": "0755"}, "size_bytes": {"type": "integer", "minimum": 1}}
+    }
+  }
+}
