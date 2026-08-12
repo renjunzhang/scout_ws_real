@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_runtime_transaction_receipt_v7.json",
+  "title": "S6 recoverable transaction receipt v7",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "transaction_id", "attempt_id", "planned_denominator", "source_outcome", "runtime_contract_sha256", "expected_previous_ledger_sha256", "staging", "publication", "ledger", "receipt", "consumer_acceptance", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-runtime-transaction-receipt-v7"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_TRANSACTION_RECEIPT_V7"},
+    "status": {"enum": ["NOT_ADMITTED", "PREPARED_ONLY", "PUBLISHED_PENDING_COMMIT", "COMMITTED_PENDING_RECEIPT", "COMMITTED_RECEIPT_CONSISTENT"]},
+    "transaction_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{7,127}$"},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "source_outcome": {"const": "UNKNOWN"},
+    "runtime_contract_sha256": {"$ref": "#/$defs/sha"},
+    "expected_previous_ledger_sha256": {"$ref": "#/$defs/sha"},
+    "staging": {"$ref": "#/$defs/staging"},
+    "publication": {"$ref": "#/$defs/publication"},
+    "ledger": {"$ref": "#/$defs/ledger"},
+    "receipt": {"$ref": "#/$defs/receipt"},
+    "consumer_acceptance": {"$ref": "#/$defs/consumerAcceptance"},
+    "claims": {"$ref": "#/$defs/claims"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "NOT_ADMITTED"}}, "required": ["status"]},
+      "then": {"properties": {
+        "staging": {"properties": {"complete": {"const": false}}},
+        "publication": {"properties": {"performed": {"const": false}, "final_root_inventory_sha256": {"type": "null"}}},
+        "ledger": {"properties": {"prepared_appended": {"const": false}, "prepared_entry_sha256": {"type": "null"}, "committed_appended": {"const": false}, "committed_entry_sha256": {"type": "null"}}},
+        "receipt": {"properties": {"created": {"const": false}, "sha256": {"type": "null"}}},
+        "consumer_acceptance": {"properties": {"accepted": {"const": false}, "three_way_consistent": {"const": false}}},
+        "claims": {"properties": {"stage6_pass": {"const": false}}}
+      }}
+    },
+    {
+      "if": {"properties": {"status": {"const": "PREPARED_ONLY"}}, "required": ["status"]},
+      "then": {"properties": {
+        "staging": {"properties": {"complete": {"const": true}}},
+        "publication": {"properties": {"performed": {"const": false}, "final_root_inventory_sha256": {"type": "null"}}},
+        "ledger": {"properties": {"prepared_appended": {"const": true}, "prepared_entry_sha256": {"$ref": "#/$defs/sha"}, "committed_appended": {"const": false}, "committed_entry_sha256": {"type": "null"}}},
+        "receipt": {"properties": {"created": {"const": false}, "sha256": {"type": "null"}}},
+        "consumer_acceptance": {"properties": {"accepted": {"const": false}, "three_way_consistent": {"const": false}}},
+        "claims": {"properties": {"stage6_pass": {"const": false}}}
+      }}
+    },
+    {
+      "if": {"properties": {"status": {"const": "PUBLISHED_PENDING_COMMIT"}}, "required": ["status"]},
+      "then": {"properties": {
+        "staging": {"properties": {"complete": {"const": true}}},
+        "publication": {"properties": {"performed": {"const": true}, "final_root_inventory_sha256": {"$ref": "#/$defs/sha"}}},
+        "ledger": {"properties": {"prepared_appended": {"const": true}, "prepared_entry_sha256": {"$ref": "#/$defs/sha"}, "committed_appended": {"const": false}, "committed_entry_sha256": {"type": "null"}}},
+        "receipt": {"properties": {"created": {"const": false}, "sha256": {"type": "null"}}},
+        "consumer_acceptance": {"properties": {"accepted": {"const": false}, "three_way_consistent": {"const": false}}},
+        "claims": {"properties": {"stage6_pass": {"const": false}}}
+      }}
+    },
+    {
+      "if": {"properties": {"status": {"const": "COMMITTED_PENDING_RECEIPT"}}, "required": ["status"]},
+      "then": {"properties": {
+        "staging": {"properties": {"complete": {"const": true}}},
+        "publication": {"properties": {"performed": {"const": true}, "final_root_inventory_sha256": {"$ref": "#/$defs/sha"}}},
+        "ledger": {"properties": {"prepared_appended": {"const": true}, "prepared_entry_sha256": {"$ref": "#/$defs/sha"}, "committed_appended": {"const": true}, "committed_entry_sha256": {"$ref": "#/$defs/sha"}}},
+        "receipt": {"properties": {"created": {"const": false}, "sha256": {"type": "null"}}},
+        "consumer_acceptance": {"properties": {"accepted": {"const": false}, "three_way_consistent": {"const": false}}},
+        "claims": {"properties": {"stage6_pass": {"const": false}}}
+      }}
+    },
+    {
+      "if": {"properties": {"status": {"const": "COMMITTED_RECEIPT_CONSISTENT"}}, "required": ["status"]},
+      "then": {"properties": {
+        "staging": {"properties": {"complete": {"const": true}}},
+        "publication": {"properties": {"performed": {"const": true}, "final_root_inventory_sha256": {"$ref": "#/$defs/sha"}}},
+        "ledger": {"properties": {"prepared_appended": {"const": true}, "prepared_entry_sha256": {"$ref": "#/$defs/sha"}, "committed_appended": {"const": true}, "committed_entry_sha256": {"$ref": "#/$defs/sha"}}},
+        "receipt": {"properties": {"created": {"const": true}, "sha256": {"$ref": "#/$defs/sha"}}},
+        "consumer_acceptance": {"properties": {"accepted": {"const": true}, "three_way_consistent": {"const": true}}},
+        "claims": {"properties": {"stage6_pass": {"const": true}}}
+      }}
+    }
+  ],
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableSha": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha"}]},
+    "absolutePath": {"type": "string", "pattern": "^/(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "staging": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["partial_root", "complete", "bundle_sha256", "inventory_sha256", "file_count", "fsynced"],
+      "properties": {
+        "partial_root": {"$ref": "#/$defs/absolutePath"},
+        "complete": {"type": "boolean"},
+        "bundle_sha256": {"$ref": "#/$defs/nullableSha"},
+        "inventory_sha256": {"$ref": "#/$defs/nullableSha"},
+        "file_count": {"type": "integer", "minimum": 0},
+        "fsynced": {"type": "boolean"}
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["final_root", "performed", "rename_noreplace", "parent_fsynced", "final_root_inventory_sha256"],
+      "properties": {
+        "final_root": {"$ref": "#/$defs/absolutePath"},
+        "performed": {"type": "boolean"},
+        "rename_noreplace": {"type": "boolean"},
+        "parent_fsynced": {"type": "boolean"},
+        "final_root_inventory_sha256": {"$ref": "#/$defs/nullableSha"}
+      }
+    },
+    "ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "prepared_appended", "prepared_entry_sha256", "prepared_stage6_pass", "committed_appended", "committed_entry_sha256", "fsynced"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "prepared_appended": {"type": "boolean"},
+        "prepared_entry_sha256": {"$ref": "#/$defs/nullableSha"},
+        "prepared_stage6_pass": {"const": false},
+        "committed_appended": {"type": "boolean"},
+        "committed_entry_sha256": {"$ref": "#/$defs/nullableSha"},
+        "fsynced": {"type": "boolean"}
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "created", "create_new_o_excl", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "created": {"type": "boolean"},
+        "create_new_o_excl": {"type": "boolean"},
+        "sha256": {"$ref": "#/$defs/nullableSha"}
+      }
+    },
+    "consumerAcceptance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted", "exact_final_root", "prepared_matches_final", "committed_matches_final", "receipt_matches_committed", "three_way_consistent"],
+      "properties": {
+        "accepted": {"type": "boolean"},
+        "exact_final_root": {"type": "boolean"},
+        "prepared_matches_final": {"type": "boolean"},
+        "committed_matches_final": {"type": "boolean"},
+        "receipt_matches_committed": {"type": "boolean"},
+        "three_way_consistent": {"type": "boolean"}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage6_pass", "development_only", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "formal", "production", "physical_primary"],
+      "properties": {
+        "stage6_pass": {"type": "boolean"},
+        "development_only": {"const": true},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false},
+        "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false},
+        "selected_trajectory_cpu_comparison": {"const": false},
+        "formal": {"const": false},
+        "production": {"const": false},
+        "physical_primary": {"const": false}
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_delivery_execution_receipt_v4.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "attempt_id", "contract_sha256", "parents_materialized", "package_published", "ledger_appended", "side_effects", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-delivery-execution-receipt-v4"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_DELIVERY_EXECUTION_RECEIPT_V4"},
+    "status": {"enum": ["NOT_ADMITTED_EXACT_FINALIZED_S5B0_AND_PRIMARY_BAG_IDENTITIES_REQUIRED", "S6_PRIMARY_R7_DELIVERY_PUBLISHED_DEVELOPMENT_EVIDENCE_NOT_STAGE6_PASS"]},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "contract_sha256": {"$ref": "#/$defs/sha"},
+    "parents_materialized": {"type": "boolean"},
+    "package_published": {"type": "boolean"},
+    "ledger_appended": {"type": "boolean"},
+    "side_effects": {"type": "object", "additionalProperties": false, "required": ["primary_bag_read", "optional_bag_read", "s5b0_read", "external_write_performed", "solver_executed", "gpu_exposed", "network_used", "sudo_used"], "properties": {"primary_bag_read": {"type": "boolean"}, "optional_bag_read": {"const": false}, "s5b0_read": {"type": "boolean"}, "external_write_performed": {"type": "boolean"}, "solver_executed": {"const": false}, "gpu_exposed": {"const": false}, "network_used": {"const": false}, "sudo_used": {"const": false}}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["stage6_pass", "planned_denominator", "ranking_claimed", "physical_reference_pending", "formal", "production"], "properties": {"stage6_pass": {"const": false}, "planned_denominator": {"const": 1}, "ranking_claimed": {"const": false}, "physical_reference_pending": {"const": true}, "formal": {"const": false}, "production": {"const": false}}}
+  },
+  "$defs": {"sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

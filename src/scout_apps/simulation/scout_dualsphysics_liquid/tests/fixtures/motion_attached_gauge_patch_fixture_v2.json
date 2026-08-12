@@ -1,0 +1,31 @@
+{
+  "schema_version": "smpcc-r8-liquid-motion-attached-gauge-fixture-v2",
+  "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+  "motionref": 0,
+  "mkbound": 0,
+  "ray_axis": "GLOBAL_Z",
+  "probe_radius_m": 0.0145,
+  "point0_z_m": 0.002,
+  "point2_z_m": 0.064,
+  "pointdp_m": 0.001,
+  "h0_m": 0.058,
+  "maximum_invalid_ratio": 0.001,
+  "probes": [
+    {"probe_id":"s5b0_p00","angle_deg":0.0,"point0_m":[0.0145,0.0,0.002],"point2_m":[0.0145,0.0,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p01","angle_deg":22.5,"point0_m":[0.013396253221413659,0.005548909769293802,0.002],"point2_m":[0.013396253221413659,0.005548909769293802,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p02","angle_deg":45.0,"point0_m":[0.010253048327204941,0.010253048327204939,0.002],"point2_m":[0.010253048327204941,0.010253048327204939,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p03","angle_deg":67.5,"point0_m":[0.005548909769293803,0.013396253221413659,0.002],"point2_m":[0.005548909769293803,0.013396253221413659,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p04","angle_deg":90.0,"point0_m":[0.0,0.0145,0.002],"point2_m":[0.0,0.0145,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p05","angle_deg":112.5,"point0_m":[-0.005548909769293802,0.013396253221413659,0.002],"point2_m":[-0.005548909769293802,0.013396253221413659,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p06","angle_deg":135.0,"point0_m":[-0.010253048327204939,0.010253048327204941,0.002],"point2_m":[-0.010253048327204939,0.010253048327204941,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p07","angle_deg":157.5,"point0_m":[-0.013396253221413659,0.005548909769293803,0.002],"point2_m":[-0.013396253221413659,0.005548909769293803,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p08","angle_deg":180.0,"point0_m":[-0.0145,0.0,0.002],"point2_m":[-0.0145,0.0,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p09","angle_deg":202.5,"point0_m":[-0.01339625322141366,-0.005548909769293801,0.002],"point2_m":[-0.01339625322141366,-0.005548909769293801,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p10","angle_deg":225.0,"point0_m":[-0.010253048327204943,-0.010253048327204939,0.002],"point2_m":[-0.010253048327204943,-0.010253048327204939,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p11","angle_deg":247.5,"point0_m":[-0.00554890976929381,-0.013396253221413655,0.002],"point2_m":[-0.00554890976929381,-0.013396253221413655,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p12","angle_deg":270.0,"point0_m":[0.0,-0.0145,0.002],"point2_m":[0.0,-0.0145,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p13","angle_deg":292.5,"point0_m":[0.005548909769293805,-0.013396253221413657,0.002],"point2_m":[0.005548909769293805,-0.013396253221413657,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p14","angle_deg":315.0,"point0_m":[0.010253048327204937,-0.010253048327204943,0.002],"point2_m":[0.010253048327204937,-0.010253048327204943,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0},
+    {"probe_id":"s5b0_p15","angle_deg":337.5,"point0_m":[0.013396253221413655,-0.005548909769293811,0.002],"point2_m":[0.013396253221413655,-0.005548909769293811,0.064],"pointdp_m":0.001,"motionref":0,"mkbound":0}
+  ]
+}

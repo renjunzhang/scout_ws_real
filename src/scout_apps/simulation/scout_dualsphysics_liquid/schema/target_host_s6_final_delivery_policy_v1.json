@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_final_delivery_policy_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "policy_id", "status", "selection", "s5b0_parent", "gauge_contract", "selected_signal_contract", "grid_and_window_contract", "analysis_contract", "visual_contract", "media_contract", "delivery_contract", "claim_ceiling"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-final-delivery-policy-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_FINAL_DELIVERY_POLICY_V1"},
+    "policy_id": {"const": "liquid_zrj_msi_u2404_s6_final_delivery_policy_v1"},
+    "status": {"const": "NOT_ADMITTED_FINALIZED_S5B0_REPLAY_REQUIRED"},
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempt_id", "role", "planned_denominator", "optional_bag_read", "paired_or_cross_method_ranking_allowed", "selected_trajectory_cpu_comparison"],
+      "properties": {
+        "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+        "role": {"const": "PRIMARY_ONLY"}, "planned_denominator": {"const": 1},
+        "optional_bag_read": {"const": false}, "paired_or_cross_method_ranking_allowed": {"const": false},
+        "selected_trajectory_cpu_comparison": {"const": "OUT_OF_SCOPE"}
+      }
+    },
+    "s5b0_parent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "required_execution_status", "required_execution_phase", "required_frame_manifest_status", "package_root", "package_root_sha256", "execution_receipt_sha256", "frame_manifest_sha256", "checksums_sha256"],
+      "properties": {
+        "state": {"const": "NOT_MATERIALIZED"},
+        "required_execution_status": {"const": "S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY"},
+        "required_execution_phase": {"const": "FINALIZED"},
+        "required_frame_manifest_status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V1"},
+        "package_root": {"type": "null"}, "package_root_sha256": {"type": "null"},
+        "execution_receipt_sha256": {"type": "null"}, "frame_manifest_sha256": {"type": "null"},
+        "checksums_sha256": {"type": "null"}
+      }
+    },
+    "gauge_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fact_source", "time_column", "probe_ids", "unit", "h0_mm", "missing_tokens", "minimum_valid_probes_per_slot", "maximum_missing_or_invalid_ratio_per_probe", "bi4_surface_role"],
+      "properties": {
+        "fact_source": {"const": "RAW_GAUGE_ZSURF_CSV"}, "time_column": {"const": "time_s"},
+        "probe_ids": {"const": ["p00", "p01", "p02", "p03"]}, "unit": {"const": "mm"},
+        "h0_mm": {"const": 100.0}, "missing_tokens": {"const": ["", "NA", "N/A", "null"]},
+        "minimum_valid_probes_per_slot": {"const": 2},
+        "maximum_missing_or_invalid_ratio_per_probe": {"const": 0.25},
+        "bi4_surface_role": {"const": "SPLASH_ANIMATION_QC_ONLY_NOT_GAUGE"}
+      }
+    },
+    "selected_signal_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_schema", "source_outcome_evidence_allowed", "outcome_inference_from_schema_forbidden", "x_axis", "interpolation", "extrapolation", "smoothing", "signals"],
+      "properties": {
+        "source_schema": {"const": "SPMPC_NON_FIXED"},
+        "source_outcome_evidence_allowed": {"const": ["UNKNOWN", "AUTHORITATIVE_SIDECAR"]},
+        "outcome_inference_from_schema_forbidden": {"const": true},
+        "x_axis": {"const": "time_since_odom_header_origin_s"},
+        "interpolation": {"const": "LINEAR_WITHIN_REGISTERED_OVERLAP_ONLY"},
+        "extrapolation": {"const": false}, "smoothing": {"const": false},
+        "signals": {"type": "array", "minItems": 2, "maxItems": 2, "prefixItems": [{"$ref": "#/$defs/proxySignal"}, {"$ref": "#/$defs/modalSignal"}], "items": false}
+      }
+    },
+    "grid_and_window_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["solver_output_grid", "comparison_grid", "coverage_outside_overlap", "silent_denominator_deletion", "result_driven_window_or_filter", "windows"],
+      "properties": {
+        "solver_output_grid": {"const": "FINALIZED_S5B0_GAUGE_OUTPUT_SLOTS_COMPLETE"},
+        "comparison_grid": {"const": "SOLVER_SLOTS_WITHIN_PRE_REGISTERED_COMMON_SIGNAL_OVERLAP"},
+        "coverage_outside_overlap": {"const": "EXPLICIT_NULL_NA_OUTSIDE_REGISTERED_OVERLAP"},
+        "silent_denominator_deletion": {"const": false}, "result_driven_window_or_filter": {"const": false},
+        "windows": {"type": "object", "additionalProperties": false, "required": ["first15", "full_motion", "recorded_tail", "solver_tail"], "properties": {
+          "first15": {"const": "MOTION_START_TO_MIN_MOTION_END_OR_PLUS_15S_CLOSED"},
+          "full_motion": {"const": "FROZEN_MOTION_WINDOW_CLOSED"},
+          "recorded_tail": {"const": "FROZEN_RECORDED_TAIL_CLOSED"},
+          "solver_tail": {"const": "FROZEN_SOLVER_TAIL_CLOSED"}
+        }}
+      }
+    },
+    "analysis_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["surface_series", "secondary_series", "comparison_dimensions", "comparison_matrix", "window_statistics", "physical_dimension"],
+      "properties": {
+        "surface_series": {"const": ["H_crest", "H_abs", "H_peak_to_peak"]},
+        "secondary_series": {"const": ["H_proxy", "H_modal"]},
+        "comparison_dimensions": {"const": ["amplitude", "frequency", "damping", "phase"]},
+        "comparison_matrix": {"const": "THREE_SURFACE_BY_TWO_SECONDARY_WITHOUT_RANKING"},
+        "window_statistics": {"const": ["peak", "p95", "rms", "peak_time"]},
+        "physical_dimension": {"const": "PENDING_NO_REFERENCE"}
+      }
+    },
+    "visual_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["layout", "dual_y_axes", "palette", "redundant_line_styles_and_markers", "rainbow_colormap", "grayscale_qa_required", "layout_qa_required", "minimum_font_size_pt", "png_dpi", "pdf_fonttype"],
+      "properties": {
+        "layout": {"const": "THREE_VERTICAL_SHARED_X_PANELS"}, "dual_y_axes": {"const": false},
+        "palette": {"const": "OKABE_ITO_COLORBLIND_SAFE"}, "redundant_line_styles_and_markers": {"const": true},
+        "rainbow_colormap": {"const": false}, "grayscale_qa_required": {"const": true}, "layout_qa_required": {"const": true},
+        "minimum_font_size_pt": {"const": 7}, "png_dpi": {"const": 300}, "pdf_fonttype": {"const": 42}
+      }
+    },
+    "media_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "mp4_encoder", "gif_encoder", "complete_decode_qa", "keyframes", "numeric_fact_source"],
+      "properties": {
+        "source": {"const": "FINALIZED_SOLVER_FRAME_MANIFEST_ONLY"}, "mp4_encoder": {"const": "OPENCV_VIDEOWRITER_MP4V"},
+        "gif_encoder": {"const": "PILLOW_SAVE_ALL"}, "complete_decode_qa": {"const": true},
+        "keyframes": {"const": "FIRST_MIDDLE_LAST"}, "numeric_fact_source": {"const": false}
+      }
+    },
+    "delivery_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["write_semantics", "real_publication_allowed", "required_inventory"],
+      "properties": {
+        "write_semantics": {"const": "CREATE_NEW_ONLY"}, "real_publication_allowed": {"const": false},
+        "required_inventory": {"type": "array", "minItems": 17, "maxItems": 17, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "claim_ceiling": {
+      "type": "object", "additionalProperties": false,
+      "required": ["maximum_real_status_after_all_gates", "stage6_pass_now", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "formal", "production", "physical_primary"],
+      "properties": {
+        "maximum_real_status_after_all_gates": {"const": "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY"},
+        "stage6_pass_now": {"const": false}, "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false}, "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false}, "selected_trajectory_cpu_comparison": {"const": false},
+        "formal": {"const": false}, "production": {"const": false}, "physical_primary": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "signalBase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "topic", "native_unit", "comparison_unit", "scale_to_comparison", "role"],
+      "properties": {
+        "name": {"type": "string"}, "topic": {"type": "string"}, "native_unit": {"type": "string"},
+        "comparison_unit": {"const": "mm"}, "scale_to_comparison": {"type": "number"},
+        "role": {"const": "SECONDARY_COMPARATOR_ONLY"}
+      }
+    },
+    "proxySignal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "topic", "native_unit", "comparison_unit", "scale_to_comparison", "role"],
+      "properties": {"name": {"const": "H_proxy"}, "topic": {"const": "/slosh/height"}, "native_unit": {"const": "m"}, "comparison_unit": {"const": "mm"}, "scale_to_comparison": {"const": 1000.0}, "role": {"const": "SECONDARY_COMPARATOR_ONLY"}}
+    },
+    "modalSignal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "topic", "native_unit", "comparison_unit", "scale_to_comparison", "role"],
+      "properties": {"name": {"const": "H_modal"}, "topic": {"const": "/spmpc/slosh_height"}, "native_unit": {"const": "mm"}, "comparison_unit": {"const": "mm"}, "scale_to_comparison": {"const": 1.0}, "role": {"const": "SECONDARY_COMPARATOR_ONLY"}}
+    }
+  }
+}

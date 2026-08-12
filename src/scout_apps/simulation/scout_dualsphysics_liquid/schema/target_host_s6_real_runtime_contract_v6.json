@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_runtime_contract_v6.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "parents", "s5b0", "runtime", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-runtime-contract-v6"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_CONTRACT_V6"},
+    "status": {"const": "ADMITTED_EXACT_FINALIZED_S5B0_PRIMARY_RUNTIME_MATERIALIZED_V6"},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "parents": {"type": "object", "additionalProperties": false, "required": ["policy", "s5a0_receipt", "s5a1_transfer_manifest", "primary_bag"], "properties": {"policy": {"$ref": "#/$defs/fileIdentity"}, "s5a0_receipt": {"$ref": "#/$defs/fileIdentity"}, "s5a1_transfer_manifest": {"$ref": "#/$defs/fileIdentity"}, "primary_bag": {"$ref": "#/$defs/fileIdentity"}}},
+    "s5b0": {"type": "object", "additionalProperties": false, "required": ["root", "inventory_sha256", "inventory", "required_parents"], "properties": {"root": {"type": "string", "pattern": "^/"}, "inventory_sha256": {"$ref": "#/$defs/sha"}, "inventory": {"type": "array", "minItems": 23, "items": {"$ref": "#/$defs/inventoryIdentity"}}, "required_parents": {"type": "object", "additionalProperties": false, "required": ["execution_receipt_sha256", "result_qc_sha256", "frame_manifest_sha256", "native_gauge_manifest_sha256", "checksums_sha256"], "properties": {"execution_receipt_sha256": {"$ref": "#/$defs/sha"}, "result_qc_sha256": {"$ref": "#/$defs/sha"}, "frame_manifest_sha256": {"$ref": "#/$defs/sha"}, "native_gauge_manifest_sha256": {"$ref": "#/$defs/sha"}, "checksums_sha256": {"$ref": "#/$defs/sha"}}}}},
+    "runtime": {"type": "object", "additionalProperties": false, "required": ["final_root", "external_ledger_path", "external_ledger_expected_previous_sha256", "fps", "windows"], "properties": {"final_root": {"type": "string", "pattern": "^/"}, "external_ledger_path": {"type": "string", "pattern": "^/"}, "external_ledger_expected_previous_sha256": {"$ref": "#/$defs/sha"}, "fps": {"type": "integer", "minimum": 1, "maximum": 30}, "windows": {"type": "object", "additionalProperties": false, "required": ["first15", "full_motion", "recorded_tail", "solver_tail"], "properties": {"first15": {"$ref": "#/$defs/window"}, "full_motion": {"$ref": "#/$defs/window"}, "recorded_tail": {"$ref": "#/$defs/window"}, "solver_tail": {"$ref": "#/$defs/window"}}}}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["optional_bag_read", "ranking_allowed", "selected_trajectory_cpu_comparison", "physical_reference_pending", "stage6_pass"], "properties": {"optional_bag_read": {"const": false}, "ranking_allowed": {"const": false}, "selected_trajectory_cpu_comparison": {"const": false}, "physical_reference_pending": {"const": true}, "stage6_pass": {"const": false}}}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "fileIdentity": {"type": "object", "additionalProperties": false, "required": ["path", "sha256", "size_bytes", "mode", "device", "inode", "nlink", "mtime_ns", "ctime_ns"], "properties": {"path": {"type": "string", "pattern": "^/"}, "sha256": {"$ref": "#/$defs/sha"}, "size_bytes": {"type": "integer", "minimum": 1}, "mode": {"type": "string", "pattern": "^[0-7]{4}$"}, "device": {"type": "integer", "minimum": 0}, "inode": {"type": "integer", "minimum": 1}, "nlink": {"const": 1}, "mtime_ns": {"type": "integer"}, "ctime_ns": {"type": "integer"}}},
+    "inventoryIdentity": {"type": "object", "additionalProperties": false, "required": ["relative_path", "sha256", "size_bytes", "mode", "device", "inode", "nlink", "mtime_ns", "ctime_ns"], "properties": {"relative_path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"}, "sha256": {"$ref": "#/$defs/sha"}, "size_bytes": {"type": "integer", "minimum": 1}, "mode": {"type": "string", "pattern": "^[0-7]{4}$"}, "device": {"type": "integer", "minimum": 0}, "inode": {"type": "integer", "minimum": 1}, "nlink": {"const": 1}, "mtime_ns": {"type": "integer"}, "ctime_ns": {"type": "integer"}}},
+    "window": {"type": "object", "additionalProperties": false, "required": ["start_s", "end_s"], "properties": {"start_s": {"type": "number"}, "end_s": {"type": "number"}}}
+  }
+}

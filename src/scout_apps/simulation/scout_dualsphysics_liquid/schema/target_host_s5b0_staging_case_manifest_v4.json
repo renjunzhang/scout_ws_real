@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_staging_case_manifest_v4.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","document_type","status","mode","stage_root","bindings","evidence","contract","sources","staged","integrity","claims"],
+  "properties": {
+    "schema_version": {"const":"smpcc-r8-liquid-s5b0-staging-case-manifest-v4"},
+    "document_type": {"const":"SMPCC_R8_LIQUID_S5B0_STAGING_CASE_MANIFEST_V4"},
+    "status": {"const":"PASS_S5B0_STAGING_CASE_WITH_16_NATIVE_ATTACHED_SWL_V4"},
+    "mode": {"enum":["FIXTURE","REAL"]},
+    "stage_root": {"type":"string","pattern":"^/.*\\.partial$"},
+    "bindings": {
+      "type":"object","additionalProperties":false,
+      "required":["s5b0_policy_sha256","s5b0_policy_schema_sha256","gauge_contract_sha256","required_candidate_capability"],
+      "properties": {
+        "s5b0_policy_sha256":{"const":"d972f66d14882c28abe5629828d2ccaab1013f82a65b82f6250cf55716e41f21"},
+        "s5b0_policy_schema_sha256":{"const":"897d617b56619b3761025eff64d27f68977ae9d15ac8ac481cea3beaea099d66"},
+        "gauge_contract_sha256":{"const":"d0cde7388bf0984ca664258e22cf00dc5f1702951811d5cb29c3282e57583328"},
+        "required_candidate_capability":{"const":"MOTION_ATTACHED_16_RAW_JGAUGESWL"}
+      }
+    },
+    "evidence": {"$ref":"#/$defs/evidence"},
+    "contract": {
+      "type":"object","additionalProperties":false,
+      "required":["restart_part_index","settled_time_s","solver_path_row_count","solver_path_last_t_s","solver_tail_s","tmax_s","motion_block_count","motion_ref","mkbound","refmotion","gauge_type","probe_count","probe_names","motionref","gauge_mkbound","probe_radius_m","point0_z_m","point2_z_m","pointdp_m","masslimit_coef","compute_dt_s","output_dt_s","savevtkpart","output","expected_raw_gauge_csv","required_result_artifacts"],
+      "properties": {
+        "restart_part_index":{"const":901},"settled_time_s":{"const":45.05001991890928},
+        "solver_path_row_count":{"type":"integer","minimum":3},"solver_path_last_t_s":{"type":"number","exclusiveMinimum":0},"solver_tail_s":{"const":1.0},"tmax_s":{"type":"number","exclusiveMinimum":45.05001991890928},
+        "motion_block_count":{"const":2},"motion_ref":{"const":0},"mkbound":{"const":0},"refmotion":{"const":0},
+        "gauge_type":{"const":"JGaugeSwl"},"probe_count":{"const":16},"probe_names":{"const":["s5b0_p00","s5b0_p01","s5b0_p02","s5b0_p03","s5b0_p04","s5b0_p05","s5b0_p06","s5b0_p07","s5b0_p08","s5b0_p09","s5b0_p10","s5b0_p11","s5b0_p12","s5b0_p13","s5b0_p14","s5b0_p15"]},
+        "motionref":{"const":0},"gauge_mkbound":{"const":0},"probe_radius_m":{"const":0.0145},"point0_z_m":{"const":0.002},"point2_z_m":{"const":0.064},"pointdp_m":{"const":0.001},"masslimit_coef":{"const":0.5},"compute_dt_s":{"const":0.05},"output_dt_s":{"const":0.05},"savevtkpart":{"const":false},"output":{"const":true},
+        "expected_raw_gauge_csv":{"const":["GaugesSwl_s5b0_p00.csv","GaugesSwl_s5b0_p01.csv","GaugesSwl_s5b0_p02.csv","GaugesSwl_s5b0_p03.csv","GaugesSwl_s5b0_p04.csv","GaugesSwl_s5b0_p05.csv","GaugesSwl_s5b0_p06.csv","GaugesSwl_s5b0_p07.csv","GaugesSwl_s5b0_p08.csv","GaugesSwl_s5b0_p09.csv","GaugesSwl_s5b0_p10.csv","GaugesSwl_s5b0_p11.csv","GaugesSwl_s5b0_p12.csv","GaugesSwl_s5b0_p13.csv","GaugesSwl_s5b0_p14.csv","GaugesSwl_s5b0_p15.csv"]},
+        "required_result_artifacts":{"const":["executed_boundary_motion.csv","gauge_zsurf.csv","qc_report.json","finalized_solver_frames_manifest.json","checksums.sha256"]}
+      }
+    },
+    "sources":{"$ref":"#/$defs/roles"},
+    "staged":{"$ref":"#/$defs/roles"},
+    "integrity": {
+      "type":"object","additionalProperties":false,
+      "required":["fresh_root","o_excl_writes","exact_inventory","no_symlinks","no_hardlinks","no_special_files","no_toctou","source_identities_unchanged","candidate_is_fresh_patched_not_old","two_motion_blocks_exact","one_gauge_list_exact","sixteen_swl_exact","semantic_manifest_sha256"],
+      "properties": {
+        "fresh_root":{"const":true},"o_excl_writes":{"const":true},"exact_inventory":{"const":true},"no_symlinks":{"const":true},"no_hardlinks":{"const":true},"no_special_files":{"const":true},"no_toctou":{"const":true},"source_identities_unchanged":{"const":true},"candidate_is_fresh_patched_not_old":{"const":true},"two_motion_blocks_exact":{"const":true},"one_gauge_list_exact":{"const":true},"sixteen_swl_exact":{"const":true},"semantic_manifest_sha256":{"$ref":"#/$defs/sha"}
+      }
+    },
+    "claims": {
+      "type":"object","additionalProperties":false,
+      "required":["real_bag_read","optional_bag_read","candidate_executed","solver_executed","gpu_exposed","network_used","sudo_used","apparmor_loaded","raw_gauge_csv_read","real_solver_output_read","replay_authorized"],
+      "properties": {
+        "real_bag_read":{"const":false},"optional_bag_read":{"const":false},"candidate_executed":{"const":false},"solver_executed":{"const":false},"gpu_exposed":{"const":false},"network_used":{"const":false},"sudo_used":{"const":false},"apparmor_loaded":{"const":false},"raw_gauge_csv_read":{"const":false},"real_solver_output_read":{"const":false},"replay_authorized":{"type":"boolean"}
+      }
+    }
+  },
+  "$defs": {
+    "sha":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "identity": {
+      "type":"object","additionalProperties":false,
+      "required":["path","mode","size_bytes","device","inode","nlink","sha256"],
+      "properties":{"path":{"type":"string","minLength":1},"mode":{"type":"string","pattern":"^[0-7]{4}$"},"size_bytes":{"type":"integer","minimum":0},"device":{"type":"integer","minimum":0},"inode":{"type":"integer","minimum":1},"nlink":{"const":1},"sha256":{"$ref":"#/$defs/sha"}}
+    },
+    "roles": {
+      "type":"object","additionalProperties":false,
+      "required":["candidate","dsph_config","case_xml","case_bi4","restart_part","restart_head","solver_path"],
+      "properties":{"candidate":{"$ref":"#/$defs/identity"},"dsph_config":{"$ref":"#/$defs/identity"},"case_xml":{"$ref":"#/$defs/identity"},"case_bi4":{"$ref":"#/$defs/identity"},"restart_part":{"$ref":"#/$defs/identity"},"restart_head":{"$ref":"#/$defs/identity"},"solver_path":{"$ref":"#/$defs/identity"}}
+    },
+    "evidence": {
+      "type":"object","additionalProperties":false,
+      "required":["authorization_status","real_staging_authorized","candidate","transfer","settled_clone","result_qc"],
+      "properties": {
+        "authorization_status":{"enum":["FIXTURE_ONLY_NOT_REAL_AUTHORIZATION","EXACT_REAL_STAGING_AUTHORIZATION"]},"real_staging_authorized":{"type":"boolean"},
+        "candidate":{"type":"object","additionalProperties":false,"required":["capability","sha256","fresh_patched_build","build_receipt_sha256","static_audit_receipt_sha256","built","static_audit_passed","old_candidate_reused"],"properties":{"capability":{"const":"MOTION_ATTACHED_16_RAW_JGAUGESWL"},"sha256":{"$ref":"#/$defs/sha"},"fresh_patched_build":{"const":true},"build_receipt_sha256":{"$ref":"#/$defs/sha"},"static_audit_receipt_sha256":{"$ref":"#/$defs/sha"},"built":{"const":true},"static_audit_passed":{"const":true},"old_candidate_reused":{"const":false}}},
+        "transfer":{"type":"object","additionalProperties":false,"required":["transfer_id","status","finalized","manifest_sha256","solver_path_sha256","execution_receipt_sha256"],"properties":{"transfer_id":{"const":"SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10"},"status":{"const":"S5A1_PRIMARY_R7_MOTION_TRANSFER_VERIFIED_ACCEPTED"},"finalized":{"const":true},"manifest_sha256":{"$ref":"#/$defs/sha"},"solver_path_sha256":{"$ref":"#/$defs/sha"},"execution_receipt_sha256":{"$ref":"#/$defs/sha"}}},
+        "settled_clone":{"type":"object","additionalProperties":false,"required":["case_xml_sha256","case_bi4_sha256","restart_part_sha256","restart_head_sha256","dsph_config_sha256","particle_count","moving_boundary_count","fluid_count","nout","ids_complete_unique","finite","leak_zero","unique_motion_ref","motion_ref","mkbound","refmotion"],"properties":{"case_xml_sha256":{"$ref":"#/$defs/sha"},"case_bi4_sha256":{"$ref":"#/$defs/sha"},"restart_part_sha256":{"$ref":"#/$defs/sha"},"restart_head_sha256":{"$ref":"#/$defs/sha"},"dsph_config_sha256":{"$ref":"#/$defs/sha"},"particle_count":{"const":9078},"moving_boundary_count":{"const":2669},"fluid_count":{"const":6409},"nout":{"const":0},"ids_complete_unique":{"const":true},"finite":{"const":true},"leak_zero":{"const":true},"unique_motion_ref":{"const":true},"motion_ref":{"const":0},"mkbound":{"const":0},"refmotion":{"const":0}}},
+        "result_qc":{"type":"object","additionalProperties":false,"required":["raw_gauge_csv_count","raw_gauge_csv_names","gauge_slots_complete","executed_boundary_motion_required","part_motion_ref_required","particle_count_required","ids_complete_unique_required","nout_required","finite_required","leak_zero_required","domain_outside_zero_required","inputs_unchanged_required","checksums_required"],"properties":{"raw_gauge_csv_count":{"const":16},"raw_gauge_csv_names":{"const":["GaugesSwl_s5b0_p00.csv","GaugesSwl_s5b0_p01.csv","GaugesSwl_s5b0_p02.csv","GaugesSwl_s5b0_p03.csv","GaugesSwl_s5b0_p04.csv","GaugesSwl_s5b0_p05.csv","GaugesSwl_s5b0_p06.csv","GaugesSwl_s5b0_p07.csv","GaugesSwl_s5b0_p08.csv","GaugesSwl_s5b0_p09.csv","GaugesSwl_s5b0_p10.csv","GaugesSwl_s5b0_p11.csv","GaugesSwl_s5b0_p12.csv","GaugesSwl_s5b0_p13.csv","GaugesSwl_s5b0_p14.csv","GaugesSwl_s5b0_p15.csv"]},"gauge_slots_complete":{"const":true},"executed_boundary_motion_required":{"const":true},"part_motion_ref_required":{"const":true},"particle_count_required":{"const":9078},"ids_complete_unique_required":{"const":true},"nout_required":{"const":0},"finite_required":{"const":true},"leak_zero_required":{"const":true},"domain_outside_zero_required":{"const":true},"inputs_unchanged_required":{"const":true},"checksums_required":{"const":true}}}
+      }
+    }
+  }
+}

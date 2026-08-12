@@ -1,0 +1,14 @@
+{
+  "schema_version": "smpcc-r8-liquid-motion-gauge-gpu-build-execution-policy-v9",
+  "document_type": "SMPCC_R8_LIQUID_MOTION_GAUGE_GPU_BUILD_EXECUTION_POLICY_V9",
+  "status": "EXECUTION_READY_DEFAULT_DENY",
+  "parents": {"v8_policy_sha256": "ecad1a5fe229995d28f34f38df31a005267731da02a498b55fdb267295b9c0f0", "v7_gate_sha256": "6ceee723690047d36775a47fb519dfaf5e1ced444807aab270f48d435b13164d", "v6_gate_sha256": "40db6612dedcb86253f67d028a4f3def1c29b199e0c2f64cc7f79c4b910d3c01", "g1_gate_sha256": "e34ab0facc3c665c6befbb792c7344e0af6e652fd3c6b30dfa81ca8cbea5b502", "g2_gate_sha256": "d9d02b2aa6a237ed49b7e64cbf0f19d769a32f22c372dbc56b18be47e376eb7f"},
+  "authorization": {"default_deny": true, "token_mode": "0600", "uid": 1000, "gid": 1000, "supplementary_groups": 0, "token_fields": ["policy_sha256", "gate", "supervisor", "profiles", "user_authorized"]},
+  "phases": ["source-copy", "patch", "wrapper", "build", "static-audit"],
+  "limits": {"parallel_jobs": 1, "wall_seconds": 5400, "cpu_seconds": 5400, "address_space_bytes": 8589934592, "minimum_available_memory_bytes": 4294967296, "monitor_seconds": 20, "source_entries": 352, "final_entries": 353, "unchanged_entries": 346, "patch_files": 6, "wrapper_bytes": 84, "object_count": 131, "cpp_object_count": 120, "cuda_object_count": 11, "static_commands": 557, "static_per_command_bytes": 268435456, "static_total_bytes": 268435456},
+  "build_contract": {"cuda": "/usr/local/cuda-12.8", "compiler": "/usr/bin/x86_64-linux-gnu-g++-11", "make_parallel_argument": "-j1", "gencode": ["compute_120", "sm_120"], "forbidden": ["-j2", "-j4", "g++-13", "--use_fast_math", "native", "Chrono", "WaveGen", "MoorDynPlus"]},
+  "profile_contract": {"draft": "r8-liquid-motion-gauge-gpu-build-v4.profile", "only_delta": ["/newroot/work/tmp/ rw,", "/newroot/work/tmp/** rw,"], "no_profile_is_loaded_by_this_gate": true},
+  "receipt_contract": {"kinds": ["START", "FINAL", "FAILURE", "LIFECYCLE"], "create_new": true, "o_nofollow": true, "fsync": true, "hash_chain": true, "failure_preserves_partial": true},
+  "safety": {"source_copy_path": "/usr/bin", "wrapper_mode": "0600", "candidate_mode": "0400", "candidate_never_executes": true, "gpu_never_exposed": true, "network_never_used": true, "binary_parser_host_forbidden": true, "finally_unload_zero_residue": true, "no_attempt_b": true},
+  "next_allowed_stage": "EXACT_V9_TOKEN_PROFILE_HASH_AND_USER_AUTHORIZATION_REQUIRED"
+}

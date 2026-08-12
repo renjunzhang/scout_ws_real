@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_motion_gauge_gpu_build_execution_receipt_v11.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "campaign_id", "build_id", "sequence", "previous_sha256", "phase", "kind", "status", "created_at", "policy_sha256", "evidence", "safety"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-motion-gauge-gpu-build-execution-receipt-v11"},
+    "campaign_id": {"const": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11"},
+    "build_id": {"const": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a"},
+    "sequence": {"type": "integer", "minimum": 1, "maximum": 15},
+    "previous_sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/hash"}]},
+    "phase": {"enum": ["source-copy", "patch", "wrapper", "build", "static-audit", "campaign"]},
+    "kind": {"enum": ["START", "RUN", "LIFECYCLE", "FINAL", "FAILURE"]},
+    "status": {"type": "string", "minLength": 1, "maxLength": 160},
+    "created_at": {"type": "string", "minLength": 20, "maxLength": 64},
+    "policy_sha256": {"$ref": "#/$defs/hash"},
+    "evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["argv", "return_code", "elapsed_seconds", "stdout_sha256", "stderr_sha256", "monitor_sha256", "inventory_sha256", "inventory_entries", "patched_files", "unchanged_entries", "wrapper_sha256", "objects", "static_commands", "semantic_checks", "candidate", "patch_journal_sha256", "lifecycle_events", "error"],
+      "properties": {
+        "argv": {"type": "array", "items": {"type": "string"}},
+        "return_code": {"oneOf": [{"type": "null"}, {"type": "integer"}]},
+        "elapsed_seconds": {"type": "number", "minimum": 0},
+        "stdout_sha256": {"$ref": "#/$defs/hash"}, "stderr_sha256": {"$ref": "#/$defs/hash"},
+        "monitor_sha256": {"$ref": "#/$defs/hash"}, "inventory_sha256": {"$ref": "#/$defs/hash"},
+        "inventory_entries": {"type": "integer", "minimum": 0}, "patched_files": {"type": "integer", "minimum": 0},
+        "unchanged_entries": {"type": "integer", "minimum": 0}, "wrapper_sha256": {"$ref": "#/$defs/hash"},
+        "objects": {"type": "integer", "minimum": 0}, "static_commands": {"type": "integer", "minimum": 0},
+        "semantic_checks": {"type": "integer", "minimum": 0},
+        "candidate": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/artifact"}]},
+        "patch_journal_sha256": {"$ref": "#/$defs/hash"},
+        "lifecycle_events": {"type": "array", "items": {"$ref": "#/$defs/lifecycle_event"}},
+        "error": {"oneOf": [{"type": "null"}, {"type": "string", "maxLength": 65536}]}
+      }
+    },
+    "safety": {
+      "type": "object", "additionalProperties": false,
+      "required": ["uid", "gid", "supplementary_groups", "create_new", "o_nofollow", "fsync", "profile_name", "profile_zero_residue", "candidate_executed", "gpu_exposed", "network_used", "host_binary_content_parser_run", "make_count", "failure_preserved"],
+      "properties": {
+        "uid": {"type": "integer", "minimum": 0}, "gid": {"type": "integer", "minimum": 0},
+        "supplementary_groups": {"type": "integer", "minimum": 0}, "create_new": {"const": true},
+        "o_nofollow": {"const": true}, "fsync": {"const": true},
+        "profile_name": {"type": "string"}, "profile_zero_residue": {"type": "boolean"},
+        "candidate_executed": {"const": false}, "gpu_exposed": {"const": false}, "network_used": {"const": false},
+        "host_binary_content_parser_run": {"const": false}, "make_count": {"type": "integer", "minimum": 0, "maximum": 1},
+        "failure_preserved": {"const": true}
+      }
+    }
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "mode_octal", "size_bytes", "sha256", "device", "inode", "nlink"],
+      "properties": {
+        "path": {"type": "string"}, "mode_octal": {"pattern": "^[0-7]{4}$"}, "size_bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/hash"}, "device": {"type": "integer", "minimum": 0},
+        "inode": {"type": "integer", "minimum": 1}, "nlink": {"const": 1}
+      }
+    },
+    "lifecycle_event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action", "argv", "return_code", "elapsed_seconds", "stdout_sha256", "stderr_sha256", "stdout_tail", "stderr_tail", "loaded"],
+      "properties": {
+        "action": {"type": "string"}, "argv": {"type": "array", "items": {"type": "string"}},
+        "return_code": {"type": "integer"}, "elapsed_seconds": {"type": "number", "minimum": 0},
+        "stdout_sha256": {"$ref": "#/$defs/hash"}, "stderr_sha256": {"$ref": "#/$defs/hash"},
+        "stdout_tail": {"type": "string", "maxLength": 65536}, "stderr_tail": {"type": "string", "maxLength": 65536},
+        "loaded": {"oneOf": [{"type": "null"}, {"type": "boolean"}]}
+      }
+    }
+  }
+}

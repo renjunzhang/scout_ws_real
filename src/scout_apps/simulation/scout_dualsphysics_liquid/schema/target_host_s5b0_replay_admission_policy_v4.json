@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s5b0_replay_admission_policy_v4.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","document_type","status","selection","finalized_transfer","frozen_parents","future_candidate","moving_envelope","resource_estimate","gauge_contract","lifecycle_placeholders","authorization","next"],
+  "properties": {
+    "schema_version": {"const":"smpcc-r8-liquid-s5b0-replay-admission-policy-v4"},
+    "document_type": {"const":"SMPCC_R8_LIQUID_S5B0_REPLAY_ADMISSION_POLICY_V4"},
+    "status": {"const":"NOT_ADMITTED_MOTION_ATTACHED_GAUGE_CANDIDATE_REQUIRED"},
+    "selection": {
+      "type":"object","additionalProperties":false,
+      "required":["attempt_id","role","container","planned_denominator","optional_authorized","c2_authorized"],
+      "properties": {
+        "attempt_id":{"const":"SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},"role":{"const":"PRIMARY_BASELINE"},"container":{"const":"C1"},
+        "planned_denominator":{"const":1},"optional_authorized":{"const":false},"c2_authorized":{"const":false}
+      }
+    },
+    "finalized_transfer": {
+      "type":"object","additionalProperties":false,
+      "required":["abi","required_status","finalized","transfer_id","package_root","manifest_path","manifest_sha256","checksums_sha256","execution_receipt_path","execution_receipt_sha256","solver_path_path","solver_path_sha256","solver_path_rows","solver_path_last_t_s","gpu_replay_authorized"],
+      "properties": {
+        "abi":{"const":"R8-LIQUID-HANDOFF-ABI-v3"},"required_status":{"const":"S5A1_PRIMARY_R7_MOTION_TRANSFER_VERIFIED_ACCEPTED"},"finalized":{"const":true},
+        "transfer_id":{"const":"SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10"},"package_root":{"$ref":"#/$defs/absolute_path"},
+        "manifest_path":{"$ref":"#/$defs/absolute_path"},"manifest_sha256":{"$ref":"#/$defs/sha256"},"checksums_sha256":{"$ref":"#/$defs/sha256"},
+        "execution_receipt_path":{"$ref":"#/$defs/absolute_path"},"execution_receipt_sha256":{"$ref":"#/$defs/sha256"},
+        "solver_path_path":{"$ref":"#/$defs/absolute_path"},"solver_path_sha256":{"$ref":"#/$defs/sha256"},"solver_path_rows":{"const":990},
+        "solver_path_last_t_s":{"const":50.379999999999995},"gpu_replay_authorized":{"const":false}
+      }
+    },
+    "frozen_parents": {
+      "type":"object","additionalProperties":false,
+      "required":["g1_policy_sha256","g1_schema_sha256","g1_gate_sha256","g1_tests_sha256","g2_policy_sha256","g2_receipt_schema_sha256","g2_gate_sha256","g2_tests_sha256","old_candidate_path","old_candidate_sha256","old_candidate_admitted","compatibility_contract_sha256","case_xml_sha256","case_bi4_sha256","settled_part_sha256","settled_head_sha256","particle_count","moving_boundary_count","fluid_count"],
+      "properties": {
+        "g1_policy_sha256":{"$ref":"#/$defs/sha256"},"g1_schema_sha256":{"$ref":"#/$defs/sha256"},"g1_gate_sha256":{"$ref":"#/$defs/sha256"},"g1_tests_sha256":{"$ref":"#/$defs/sha256"},
+        "g2_policy_sha256":{"$ref":"#/$defs/sha256"},"g2_receipt_schema_sha256":{"$ref":"#/$defs/sha256"},"g2_gate_sha256":{"$ref":"#/$defs/sha256"},"g2_tests_sha256":{"$ref":"#/$defs/sha256"},
+        "old_candidate_path":{"$ref":"#/$defs/absolute_path"},"old_candidate_sha256":{"$ref":"#/$defs/sha256"},"old_candidate_admitted":{"const":false},
+        "compatibility_contract_sha256":{"$ref":"#/$defs/sha256"},"case_xml_sha256":{"$ref":"#/$defs/sha256"},"case_bi4_sha256":{"$ref":"#/$defs/sha256"},
+        "settled_part_sha256":{"$ref":"#/$defs/sha256"},"settled_head_sha256":{"$ref":"#/$defs/sha256"},"particle_count":{"const":9078},"moving_boundary_count":{"const":2669},"fluid_count":{"const":6409}
+      }
+    },
+    "future_candidate": {
+      "type":"object","additionalProperties":false,
+      "required":["required_capability","candidate_path","candidate_sha256","build_receipt_path","build_receipt_sha256","static_audit_receipt_path","static_audit_receipt_sha256","compiler","gpp13_allowed","built","static_audit_passed","candidate_execution_authorized"],
+      "properties": {
+        "required_capability":{"const":"MOTION_ATTACHED_16_RAW_JGAUGESWL"},"candidate_path":{"type":"null"},"candidate_sha256":{"type":"null"},
+        "build_receipt_path":{"type":"null"},"build_receipt_sha256":{"type":"null"},"static_audit_receipt_path":{"type":"null"},"static_audit_receipt_sha256":{"type":"null"},
+        "compiler":{"const":"g++-11"},"gpp13_allowed":{"const":false},"built":{"const":false},"static_audit_passed":{"const":false},"candidate_execution_authorized":{"const":false}
+      }
+    },
+    "moving_envelope": {
+      "type":"object","additionalProperties":false,
+      "required":["method","old_maximum_axis_span_m","old_gate_pass","bbox_min_m","bbox_max_m","axis_spans_m","maximum_axis_span_m","cell_size_m","cell_counts","total_cells","maximum_cells","query_count","cumulative_path_length_m","path_length_is_axis_span"],
+      "properties": {
+        "method":{"const":"FULL_SOLVER_PATH_INTERVAL_QUARTERS_PLUS_OUTPUT_GRID"},"old_maximum_axis_span_m":{"const":8.0},"old_gate_pass":{"const":false},
+        "bbox_min_m":{"$ref":"#/$defs/three_numbers"},"bbox_max_m":{"$ref":"#/$defs/three_numbers"},"axis_spans_m":{"$ref":"#/$defs/three_numbers"},
+        "maximum_axis_span_m":{"const":8.883036647976011},"cell_size_m":{"const":0.004},"cell_counts":{"type":"array","prefixItems":[{"const":2221},{"const":475},{"const":23}],"items":false},
+        "total_cells":{"const":24264425},"maximum_cells":{"const":50000000},"query_count":{"const":3977},"cumulative_path_length_m":{"const":9.856328485254489},"path_length_is_axis_span":{"const":false}
+      }
+    },
+    "resource_estimate": {
+      "type":"object","additionalProperties":false,
+      "required":["label","fixed_gpu_bytes","cell_gpu_bytes","particle_gpu_bytes","gauge_gpu_bytes","estimated_vram_bytes","minimum_dynamic_free_bytes","minimum_dynamic_headroom_bytes","estimated_output_bytes","maximum_output_bytes","wall_timeout_seconds","monitor_interval_seconds","xid_reset_zero_required","observed_usage"],
+      "properties": {
+        "label":{"const":"PREFLIGHT_ESTIMATE_INCLUDES_16_SWL_RESULT_BUFFERS_NOT_OBSERVED_USAGE"},"fixed_gpu_bytes":{"const":2147483648},"cell_gpu_bytes":{"const":1552923200},
+        "particle_gpu_bytes":{"const":18591744},"gauge_gpu_bytes":{"const":192},"estimated_vram_bytes":{"const":3718998784},"minimum_dynamic_free_bytes":{"const":6442450944},
+        "minimum_dynamic_headroom_bytes":{"const":2147483648},"estimated_output_bytes":{"const":545049804},"maximum_output_bytes":{"const":1073741824},
+        "wall_timeout_seconds":{"const":5400},"monitor_interval_seconds":{"const":10},"xid_reset_zero_required":{"const":true},"observed_usage":{"const":false}
+      }
+    },
+    "gauge_contract": {
+      "type":"object","additionalProperties":false,
+      "required":["measurement_source","probe_count","attachment_frame","update_semantics","world_fixed_xml_gauge_allowed","q98_proxy_allowed","is_solver_gauge","class_name","probe_radius_m","point0_z_m","point2_z_m","pointdp_m","masslimit_coef","compute_dt_s","output_dt_s","h0_m","invalid_rule","maximum_invalid_ratio","raw_output_pattern","derived_output","probes"],
+      "properties": {
+        "measurement_source":{"const":"RAW_NATIVE_JGAUGESWL_CSV"},"probe_count":{"const":16},"attachment_frame":{"const":"MOVING_CONTAINER_REFERENCE_REF_0"},
+        "update_semantics":{"const":"PATCHED_EACH_SOLVER_STEP_BEFORE_GAUGE_COMPUTE"},"world_fixed_xml_gauge_allowed":{"const":false},"q98_proxy_allowed":{"const":false},
+        "is_solver_gauge":{"const":true},"class_name":{"const":"JGaugeSwl"},"probe_radius_m":{"const":0.0145},"point0_z_m":{"const":0.002},"point2_z_m":{"const":0.064},
+        "pointdp_m":{"const":0.001},"masslimit_coef":{"const":0.5},"compute_dt_s":{"const":0.05},"output_dt_s":{"const":0.05},"h0_m":{"const":0.058},
+        "invalid_rule":{"const":"NONFINITE_OR_OUTSIDE_CLOSED_POINT0_POINT2_SEGMENT"},"maximum_invalid_ratio":{"const":0.001},
+        "raw_output_pattern":{"const":"GaugesSwl_s5b0_p00..s5b0_p15.csv"},"derived_output":{"const":"gauge_zsurf.csv"},
+        "probes":{"type":"array","minItems":16,"maxItems":16,"items":{"$ref":"#/$defs/probe"}}
+      }
+    },
+    "lifecycle_placeholders": {
+      "type":"object","additionalProperties":false,
+      "required":["replay_id","stage_root","partial_root","final_root","start_receipt","final_receipt","failure_receipt","profile_name","profile_path","profile_sha256","fresh_create_new_required","atomic_noreplace_publish_required","failure_preserves_partial","zero_residue_required"],
+      "properties": {
+        "replay_id":{"type":"null"},"stage_root":{"type":"null"},"partial_root":{"type":"null"},"final_root":{"type":"null"},"start_receipt":{"type":"null"},"final_receipt":{"type":"null"},"failure_receipt":{"type":"null"},
+        "profile_name":{"type":"null"},"profile_path":{"type":"null"},"profile_sha256":{"type":"null"},"fresh_create_new_required":{"const":true},"atomic_noreplace_publish_required":{"const":true},"failure_preserves_partial":{"const":true},"zero_residue_required":{"const":true}
+      }
+    },
+    "authorization": {
+      "type":"object","additionalProperties":false,
+      "required":["replay_identity_frozen","gpu_execution_authorized","profile_load_authorized","candidate_execution_authorized","solver_execution_authorized"],
+      "properties":{"replay_identity_frozen":{"const":false},"gpu_execution_authorized":{"const":false},"profile_load_authorized":{"const":false},"candidate_execution_authorized":{"const":false},"solver_execution_authorized":{"const":false}}
+    },
+    "next":{"const":"BUILD_AND_STATIC_AUDIT_MOTION_ATTACHED_GAUGE_CANDIDATE_THEN_CREATE_NEW_EXACT_RUNTIME_AUTHORIZATION"}
+  },
+  "$defs": {
+    "sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "absolute_path":{"type":"string","pattern":"^/[^\\n\\r*?\\[\\]{}]+$"},
+    "three_numbers":{"type":"array","prefixItems":[{"type":"number"},{"type":"number"},{"type":"number"}],"items":false},
+    "probe":{"type":"object","additionalProperties":false,"required":["name","angle_deg","x_m","y_m"],"properties":{"name":{"type":"string","pattern":"^s5b0_p(?:0[0-9]|1[0-5])$"},"angle_deg":{"type":"number","minimum":0,"exclusiveMaximum":360},"x_m":{"type":"number"},"y_m":{"type":"number"}}}
+  }
+}

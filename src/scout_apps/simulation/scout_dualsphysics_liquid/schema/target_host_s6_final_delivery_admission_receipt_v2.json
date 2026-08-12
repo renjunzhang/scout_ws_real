@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_final_delivery_admission_receipt_v2.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "policy_sha256", "package_root", "identities", "checks", "side_effects", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-final-delivery-admission-receipt-v2"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_FINAL_DELIVERY_ADMISSION_RECEIPT_V2"},
+    "status": {"enum": ["NOT_ADMITTED_FINALIZED_S5B0_REPLAY_REQUIRED", "ADMITTED_FINALIZED_S5B0_PRIMARY_PACKAGE_V2"]},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"}, "planned_denominator": {"const": 1},
+    "policy_sha256": {"$ref": "#/$defs/sha"}, "package_root": {"type": ["string", "null"], "pattern": "^/"},
+    "identities": {
+      "type": "object", "additionalProperties": false,
+      "required": ["execution_receipt", "result_qc", "frame_manifest", "gauge_manifest", "checksums"],
+      "properties": {"execution_receipt": {"$ref": "#/$defs/nullableIdentity"}, "result_qc": {"$ref": "#/$defs/nullableIdentity"}, "frame_manifest": {"$ref": "#/$defs/nullableIdentity"}, "gauge_manifest": {"$ref": "#/$defs/nullableIdentity"}, "checksums": {"$ref": "#/$defs/nullableIdentity"}}
+    },
+    "checks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["exact_root", "no_symlink_components", "no_hardlinks", "no_special_files", "no_toctou", "exact_inventory", "execution_finalized", "execution_status_exact", "result_qc_pass", "frame_manifest_status_exact", "frame_manifest_integrity_pass", "checksums_complete", "gauge_bound_by_checksums", "gauge_contract_v4_exact", "attempt_exact", "optional_unread"],
+      "properties": {
+        "exact_root": {"type": "boolean"}, "no_symlink_components": {"type": "boolean"}, "no_hardlinks": {"type": "boolean"}, "no_special_files": {"type": "boolean"}, "no_toctou": {"type": "boolean"}, "exact_inventory": {"type": "boolean"},
+        "execution_finalized": {"type": "boolean"}, "execution_status_exact": {"type": "boolean"}, "result_qc_pass": {"type": "boolean"}, "frame_manifest_status_exact": {"type": "boolean"}, "frame_manifest_integrity_pass": {"type": "boolean"},
+        "checksums_complete": {"type": "boolean"}, "gauge_bound_by_checksums": {"type": "boolean"}, "gauge_contract_v4_exact": {"type": "boolean"}, "attempt_exact": {"type": "boolean"}, "optional_unread": {"const": true}
+      }
+    },
+    "side_effects": {"$ref": "#/$defs/sideEffects"}, "claims": {"$ref": "#/$defs/claims"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {"type": "object", "additionalProperties": false, "required": ["relative_path", "sha256", "size_bytes"], "properties": {"relative_path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha"}, "size_bytes": {"type": "integer", "minimum": 1}}},
+    "nullableIdentity": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/identity"}]},
+    "sideEffects": {"type": "object", "additionalProperties": false, "required": ["bag_read", "optional_bag_read", "solver_executed", "gpu_exposed", "network_used", "sudo_used", "external_write_performed"], "properties": {"bag_read": {"const": false}, "optional_bag_read": {"const": false}, "solver_executed": {"const": false}, "gpu_exposed": {"const": false}, "network_used": {"const": false}, "sudo_used": {"const": false}, "external_write_performed": {"const": false}}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["stage6_pass", "single_row", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "formal", "production", "physical_primary"], "properties": {"stage6_pass": {"const": false}, "single_row": {"const": true}, "physical_reference_pending": {"const": true}, "physical_fidelity_validated": {"const": false}, "paired_ranking": {"const": false}, "cross_method_ranking": {"const": false}, "formal": {"const": false}, "production": {"const": false}, "physical_primary": {"const": false}}}
+  },
+  "allOf": [{"if": {"properties": {"status": {"const": "ADMITTED_FINALIZED_S5B0_PRIMARY_PACKAGE_V2"}}, "required": ["status"]}, "then": {"properties": {"package_root": {"type": "string", "pattern": "^/"}, "identities": {"properties": {"execution_receipt": {"$ref": "#/$defs/identity"}, "result_qc": {"$ref": "#/$defs/identity"}, "frame_manifest": {"$ref": "#/$defs/identity"}, "gauge_manifest": {"$ref": "#/$defs/identity"}, "checksums": {"$ref": "#/$defs/identity"}}}, "checks": {"properties": {"exact_root": {"const": true}, "no_symlink_components": {"const": true}, "no_hardlinks": {"const": true}, "no_special_files": {"const": true}, "no_toctou": {"const": true}, "exact_inventory": {"const": true}, "execution_finalized": {"const": true}, "execution_status_exact": {"const": true}, "result_qc_pass": {"const": true}, "frame_manifest_status_exact": {"const": true}, "frame_manifest_integrity_pass": {"const": true}, "checksums_complete": {"const": true}, "gauge_bound_by_checksums": {"const": true}, "gauge_contract_v4_exact": {"const": true}, "attempt_exact": {"const": true}}}}}}]
+}

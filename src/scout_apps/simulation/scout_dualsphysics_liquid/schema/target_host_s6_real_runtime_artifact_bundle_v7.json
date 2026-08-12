@@ -1,0 +1,192 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_runtime_artifact_bundle_v7.json",
+  "title": "S6 committed artifact bundle v7",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "source_outcome", "contract", "canonical_inputs", "numeric_artifacts", "figures", "media", "comparison", "evidence_index", "checksums", "transaction", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-runtime-artifact-bundle-v7"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_ARTIFACT_BUNDLE_V7"},
+    "status": {"const": "S6_PRIMARY_ARTIFACT_BUNDLE_COMPLETE_AWAITING_TRANSACTION_COMMIT_V7"},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "source_outcome": {"const": "UNKNOWN"},
+    "contract": {"$ref": "#/$defs/fileIdentity"},
+    "canonical_inputs": {"$ref": "#/$defs/canonicalInputs"},
+    "numeric_artifacts": {"$ref": "#/$defs/numericArtifacts"},
+    "figures": {"$ref": "#/$defs/figures"},
+    "media": {"$ref": "#/$defs/media"},
+    "comparison": {"$ref": "#/$defs/comparison"},
+    "evidence_index": {"$ref": "#/$defs/fileIdentity"},
+    "checksums": {"$ref": "#/$defs/checksums"},
+    "transaction": {"$ref": "#/$defs/transaction"},
+    "claims": {"$ref": "#/$defs/claims"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "relativePath": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*$"},
+    "fileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256", "size_bytes", "mode", "nlink"],
+      "properties": {
+        "relative_path": {"$ref": "#/$defs/relativePath"},
+        "sha256": {"$ref": "#/$defs/sha"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "nlink": {"const": 1}
+      }
+    },
+    "manifestIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "schema_version", "status", "content_sha256"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/fileIdentity"},
+        "schema_version": {"type": "string", "minLength": 1},
+        "status": {"type": "string", "pattern": "^PASS_[A-Z0-9_]+$"},
+        "content_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "canonicalInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finalized_frame_manifest", "native_gauge_manifest", "time_grid_sha256", "probe_grid_sha256", "frame_reader_sha256", "bi4_reader_sha256"],
+      "properties": {
+        "finalized_frame_manifest": {"$ref": "#/$defs/manifestIdentity"},
+        "native_gauge_manifest": {"$ref": "#/$defs/manifestIdentity"},
+        "time_grid_sha256": {"$ref": "#/$defs/sha"},
+        "probe_grid_sha256": {"$ref": "#/$defs/sha"},
+        "frame_reader_sha256": {"$ref": "#/$defs/sha"},
+        "bi4_reader_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "numericArtifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eda_report", "surface_timeseries_csv", "surface_timeseries_json", "selected_signals_json", "metrics_csv", "metrics_json", "quality_control_json"],
+      "properties": {
+        "eda_report": {"$ref": "#/$defs/fileIdentity"},
+        "surface_timeseries_csv": {"$ref": "#/$defs/fileIdentity"},
+        "surface_timeseries_json": {"$ref": "#/$defs/fileIdentity"},
+        "selected_signals_json": {"$ref": "#/$defs/fileIdentity"},
+        "metrics_csv": {"$ref": "#/$defs/fileIdentity"},
+        "metrics_json": {"$ref": "#/$defs/fileIdentity"},
+        "quality_control_json": {"$ref": "#/$defs/fileIdentity"}
+      }
+    },
+    "figures": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest", "color_png", "grayscale_png", "vector_pdf", "keyframes", "qa"],
+      "properties": {
+        "manifest": {"$ref": "#/$defs/manifestIdentity"},
+        "color_png": {"$ref": "#/$defs/fileIdentity"},
+        "grayscale_png": {"$ref": "#/$defs/fileIdentity"},
+        "vector_pdf": {"$ref": "#/$defs/fileIdentity"},
+        "keyframes": {"$ref": "#/$defs/fileList"},
+        "qa": {"$ref": "#/$defs/figureQa"}
+      }
+    },
+    "media": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest", "mp4", "gif", "qa"],
+      "properties": {
+        "manifest": {"$ref": "#/$defs/manifestIdentity"},
+        "mp4": {"$ref": "#/$defs/fileIdentity"},
+        "gif": {"$ref": "#/$defs/fileIdentity"},
+        "qa": {"$ref": "#/$defs/mediaQa"}
+      }
+    },
+    "fileList": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {"$ref": "#/$defs/fileIdentity"}
+    },
+    "figureQa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["color_render_pass", "grayscale_render_pass", "no_clipping", "no_missing_glyphs", "no_dual_y_axis", "source_data_hash_bound"],
+      "properties": {
+        "color_render_pass": {"const": true},
+        "grayscale_render_pass": {"const": true},
+        "no_clipping": {"const": true},
+        "no_missing_glyphs": {"const": true},
+        "no_dual_y_axis": {"const": true},
+        "source_data_hash_bound": {"const": true}
+      }
+    },
+    "mediaQa": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mp4_complete_decode", "gif_complete_decode", "frame_count_matches_manifest", "duration_matches_manifest", "media_is_numeric_fact_source"],
+      "properties": {
+        "mp4_complete_decode": {"const": true},
+        "gif_complete_decode": {"const": true},
+        "frame_count_matches_manifest": {"const": true},
+        "duration_matches_manifest": {"const": true},
+        "media_is_numeric_fact_source": {"const": false}
+      }
+    },
+    "comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest", "attempt_count", "planned_denominator", "compared_secondaries", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "physical_reference_pending", "physical_fidelity_validated"],
+      "properties": {
+        "manifest": {"$ref": "#/$defs/manifestIdentity"},
+        "attempt_count": {"const": 1},
+        "planned_denominator": {"const": 1},
+        "compared_secondaries": {"const": ["H_proxy", "H_modal"]},
+        "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false},
+        "selected_trajectory_cpu_comparison": {"const": false},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false}
+      }
+    },
+    "checksums": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifest", "covered_file_count", "complete_inventory", "canonical_inventory_sha256"],
+      "properties": {
+        "manifest": {"$ref": "#/$defs/fileIdentity"},
+        "covered_file_count": {"type": "integer", "minimum": 1},
+        "complete_inventory": {"const": true},
+        "canonical_inventory_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transaction_id", "bundle_sha256", "prepared_entry_sha256", "committed_entry_sha256", "final_receipt_sha256", "three_way_consistent"],
+      "properties": {
+        "transaction_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{7,127}$"},
+        "bundle_sha256": {"$ref": "#/$defs/sha"},
+        "prepared_entry_sha256": {"$ref": "#/$defs/sha"},
+        "committed_entry_sha256": {"$ref": "#/$defs/sha"},
+        "final_receipt_sha256": {"$ref": "#/$defs/sha"},
+        "three_way_consistent": {"const": true}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage6_pass", "development_only", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "formal", "production", "physical_primary"],
+      "properties": {
+        "stage6_pass": {"const": true},
+        "development_only": {"const": true},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false},
+        "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false},
+        "selected_trajectory_cpu_comparison": {"const": false},
+        "formal": {"const": false},
+        "production": {"const": false},
+        "physical_primary": {"const": false}
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_final_delivery_engine_receipt_v3.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "command", "attempt_id", "policy_sha256", "parent_materialized", "external_write_performed", "optional_bag_read", "stage6_pass"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-final-delivery-engine-receipt-v3"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_FINAL_DELIVERY_ENGINE_RECEIPT_V3"},
+    "status": {"const": "NOT_ADMITTED_FINALIZED_S5B0_REPLAY_REQUIRED"},
+    "command": {"enum": ["admit", "extract-selected", "analyze", "render-figure", "render-media", "publish", "accept", "run-one-shot"]},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"}, "policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "parent_materialized": {"const": false}, "external_write_performed": {"const": false}, "optional_bag_read": {"const": false}, "stage6_pass": {"const": false}
+  }
+}

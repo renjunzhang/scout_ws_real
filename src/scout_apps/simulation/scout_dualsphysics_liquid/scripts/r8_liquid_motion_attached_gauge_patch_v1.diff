@@ -1,0 +1,5 @@
+# Deterministic unified patch artifact v1.
+# The exact unified diff is rendered by:
+#   python3 r8_liquid_motion_attached_gauge_patch_gate_v1.py render-unified
+# This create-new marker is intentionally not an executable patch.  The gate
+# freezes the SHA-256 of its rendered bytes and will fail closed on source drift.

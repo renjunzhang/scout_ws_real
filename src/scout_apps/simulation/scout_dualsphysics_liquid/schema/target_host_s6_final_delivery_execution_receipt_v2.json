@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_final_delivery_execution_receipt_v2.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "document_type", "command", "status", "attempt_id", "planned_denominator", "policy_sha256", "admission_receipt_sha256", "checks", "publication_plan", "side_effects", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-final-delivery-execution-receipt-v2"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_FINAL_DELIVERY_EXECUTION_RECEIPT_V2"},
+    "command": {"enum": ["extract-selected", "analyze", "render-figure", "render-media", "publish", "accept", "run-one-shot"]},
+    "status": {"const": "NOT_ADMITTED_FINALIZED_S5B0_REPLAY_REQUIRED"},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"}, "planned_denominator": {"const": 1},
+    "policy_sha256": {"$ref": "#/$defs/sha"}, "admission_receipt_sha256": {"$ref": "#/$defs/sha"},
+    "checks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["real_parent_materialized", "admission_pass", "command_surface_closed", "gauge_contract_v4_exact", "optional_unread", "external_write_absent"],
+      "properties": {"real_parent_materialized": {"const": false}, "admission_pass": {"const": false}, "command_surface_closed": {"const": true}, "gauge_contract_v4_exact": {"const": true}, "optional_unread": {"const": true}, "external_write_absent": {"const": true}}
+    },
+    "publication_plan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["required_inventory", "inventory_count", "artifacts_materialized", "ledger_append_performed"],
+      "properties": {"required_inventory": {"type": "array", "minItems": 17, "maxItems": 17, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}, "inventory_count": {"const": 17}, "artifacts_materialized": {"const": false}, "ledger_append_performed": {"const": false}}
+    },
+    "side_effects": {"$ref": "#/$defs/sideEffects"}, "claims": {"$ref": "#/$defs/claims"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "sideEffects": {"type": "object", "additionalProperties": false, "required": ["bag_read", "optional_bag_read", "solver_executed", "gpu_exposed", "network_used", "sudo_used", "external_write_performed"], "properties": {"bag_read": {"const": false}, "optional_bag_read": {"const": false}, "solver_executed": {"const": false}, "gpu_exposed": {"const": false}, "network_used": {"const": false}, "sudo_used": {"const": false}, "external_write_performed": {"const": false}}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["stage6_pass", "single_row", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "formal", "production", "physical_primary"], "properties": {"stage6_pass": {"const": false}, "single_row": {"const": true}, "physical_reference_pending": {"const": true}, "physical_fidelity_validated": {"const": false}, "paired_ranking": {"const": false}, "cross_method_ranking": {"const": false}, "selected_trajectory_cpu_comparison": {"const": false}, "formal": {"const": false}, "production": {"const": false}, "physical_primary": {"const": false}}}
+  }
+}

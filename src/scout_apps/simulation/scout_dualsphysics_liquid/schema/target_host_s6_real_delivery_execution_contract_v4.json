@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_delivery_execution_contract_v4.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "contract_id", "status", "selection", "dependencies", "parents", "runtime", "authorization", "constraints", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-delivery-execution-contract-v4"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_DELIVERY_EXECUTION_CONTRACT_V4"},
+    "contract_id": {"const": "liquid_zrj_msi_u2404_s6_real_delivery_execution_contract_v4"},
+    "status": {"enum": ["NOT_ADMITTED_EXACT_FINALIZED_S5B0_AND_PRIMARY_BAG_IDENTITIES_REQUIRED", "ADMITTED_EXACT_FINALIZED_S5B0_PRIMARY_RUNTIME_MATERIALIZED_V4"]},
+    "selection": {"$ref": "#/$defs/selection"},
+    "dependencies": {"$ref": "#/$defs/dependencies"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "runtime": {"$ref": "#/$defs/runtime"},
+    "authorization": {"$ref": "#/$defs/authorization"},
+    "constraints": {"$ref": "#/$defs/constraints"},
+    "claims": {"$ref": "#/$defs/claims"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "NOT_ADMITTED_EXACT_FINALIZED_S5B0_AND_PRIMARY_BAG_IDENTITIES_REQUIRED"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "parents": {"properties": {"s5a0_receipt": {"type": "null"}, "s5a1_transfer_manifest": {"type": "null"}, "primary_bag": {"type": "null"}, "s5b0_package": {"type": "null"}}},
+          "runtime": {"properties": {"final_root": {"type": "null"}, "external_ledger_path": {"type": "null"}, "external_ledger_expected_previous_sha256": {"type": "null"}, "windows": {"properties": {"first15": {"type": "null"}, "full_motion": {"type": "null"}, "recorded_tail": {"type": "null"}, "solver_tail": {"type": "null"}}}}},
+          "authorization": {"properties": {"exact_parents_materialized": {"const": false}, "runtime_read_authorized": {"const": false}, "create_new_publish_authorized": {"const": false}}}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "ADMITTED_EXACT_FINALIZED_S5B0_PRIMARY_RUNTIME_MATERIALIZED_V4"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "parents": {"properties": {"s5a0_receipt": {"$ref": "#/$defs/fileIdentity"}, "s5a1_transfer_manifest": {"$ref": "#/$defs/fileIdentity"}, "primary_bag": {"$ref": "#/$defs/fileIdentity"}, "s5b0_package": {"$ref": "#/$defs/packageIdentity"}}},
+          "runtime": {"properties": {"final_root": {"type": "string", "pattern": "^/"}, "external_ledger_path": {"type": "string", "pattern": "^/"}, "external_ledger_expected_previous_sha256": {"$ref": "#/$defs/sha"}, "windows": {"properties": {"first15": {"$ref": "#/$defs/window"}, "full_motion": {"$ref": "#/$defs/window"}, "recorded_tail": {"$ref": "#/$defs/window"}, "solver_tail": {"$ref": "#/$defs/window"}}}}},
+          "authorization": {"properties": {"exact_parents_materialized": {"const": true}, "runtime_read_authorized": {"const": true}, "create_new_publish_authorized": {"const": true}}}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "selection": {"type": "object", "additionalProperties": false, "required": ["attempt_id", "role", "planned_denominator", "optional_bag_read", "ranking_allowed", "selected_trajectory_cpu_comparison"], "properties": {"attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"}, "role": {"const": "PRIMARY_BASELINE_ONLY"}, "planned_denominator": {"const": 1}, "optional_bag_read": {"const": false}, "ranking_allowed": {"const": false}, "selected_trajectory_cpu_comparison": {"const": false}}},
+    "dependencies": {"type": "object", "additionalProperties": false, "required": ["s6_engine_v3_path", "s6_engine_v3_sha256", "selected_signal_v5_path", "selected_signal_v5_sha256", "figure_media_v1_path", "figure_media_v1_sha256", "bi4_reader_v1_path", "bi4_reader_v1_sha256", "finalized_frame_reader_v1_path", "finalized_frame_reader_v1_sha256"], "properties": {"s6_engine_v3_path": {"const": "scripts/r8_liquid_s6_final_delivery_engine_v3.py"}, "s6_engine_v3_sha256": {"$ref": "#/$defs/sha"}, "selected_signal_v5_path": {"const": "scripts/r8_liquid_s6_real_selected_signal_extractor_v5.py"}, "selected_signal_v5_sha256": {"$ref": "#/$defs/sha"}, "figure_media_v1_path": {"const": "scripts/r8_liquid_s6_final_delivery_contract_v1.py"}, "figure_media_v1_sha256": {"$ref": "#/$defs/sha"}, "bi4_reader_v1_path": {"const": "scripts/r8_liquid_bi4_reader_v1.py"}, "bi4_reader_v1_sha256": {"$ref": "#/$defs/sha"}, "finalized_frame_reader_v1_path": {"const": "scripts/r8_liquid_s5b0_finalized_frame_reader_v1.py"}, "finalized_frame_reader_v1_sha256": {"$ref": "#/$defs/sha"}}},
+    "fileIdentity": {"type": "object", "additionalProperties": false, "required": ["path", "sha256", "size_bytes", "mode", "device", "inode", "nlink", "mtime_ns", "ctime_ns"], "properties": {"path": {"type": "string", "pattern": "^/"}, "sha256": {"$ref": "#/$defs/sha"}, "size_bytes": {"type": "integer", "minimum": 1}, "mode": {"type": "string", "pattern": "^[0-7]{4}$"}, "device": {"type": "integer", "minimum": 0}, "inode": {"type": "integer", "minimum": 1}, "nlink": {"const": 1}, "mtime_ns": {"type": "integer"}, "ctime_ns": {"type": "integer"}}},
+    "inventoryIdentity": {"type": "object", "additionalProperties": false, "required": ["relative_path", "sha256", "size_bytes", "mode", "device", "inode", "nlink", "mtime_ns", "ctime_ns"], "properties": {"relative_path": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"}, "sha256": {"$ref": "#/$defs/sha"}, "size_bytes": {"type": "integer", "minimum": 1}, "mode": {"type": "string", "pattern": "^[0-7]{4}$"}, "device": {"type": "integer", "minimum": 0}, "inode": {"type": "integer", "minimum": 1}, "nlink": {"const": 1}, "mtime_ns": {"type": "integer"}, "ctime_ns": {"type": "integer"}}},
+    "requiredParents": {"type": "object", "additionalProperties": false, "required": ["execution_receipt_sha256", "result_qc_sha256", "frame_manifest_sha256", "native_gauge_manifest_sha256", "checksums_sha256"], "properties": {"execution_receipt_sha256": {"$ref": "#/$defs/sha"}, "result_qc_sha256": {"$ref": "#/$defs/sha"}, "frame_manifest_sha256": {"$ref": "#/$defs/sha"}, "native_gauge_manifest_sha256": {"$ref": "#/$defs/sha"}, "checksums_sha256": {"$ref": "#/$defs/sha"}}},
+    "packageIdentity": {"type": "object", "additionalProperties": false, "required": ["root", "inventory_sha256", "inventory", "required_parents"], "properties": {"root": {"type": "string", "pattern": "^/"}, "inventory_sha256": {"$ref": "#/$defs/sha"}, "inventory": {"type": "array", "minItems": 23, "items": {"$ref": "#/$defs/inventoryIdentity"}}, "required_parents": {"$ref": "#/$defs/requiredParents"}}},
+    "parents": {"type": "object", "additionalProperties": false, "required": ["s5a0_receipt", "s5a1_transfer_manifest", "primary_bag", "s5b0_package"], "properties": {"s5a0_receipt": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/fileIdentity"}]}, "s5a1_transfer_manifest": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/fileIdentity"}]}, "primary_bag": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/fileIdentity"}]}, "s5b0_package": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/packageIdentity"}]}}},
+    "window": {"type": "object", "additionalProperties": false, "required": ["start_s", "end_s"], "properties": {"start_s": {"type": "number"}, "end_s": {"type": "number"}}},
+    "windows": {"type": "object", "additionalProperties": false, "required": ["first15", "full_motion", "recorded_tail", "solver_tail"], "properties": {"first15": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/window"}]}, "full_motion": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/window"}]}, "recorded_tail": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/window"}]}, "solver_tail": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/window"}]}}},
+    "runtime": {"type": "object", "additionalProperties": false, "required": ["final_root", "external_ledger_path", "external_ledger_expected_previous_sha256", "fps", "windows", "required_inventory"], "properties": {"final_root": {"type": ["string", "null"], "pattern": "^/"}, "external_ledger_path": {"type": ["string", "null"], "pattern": "^/"}, "external_ledger_expected_previous_sha256": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha"}]}, "fps": {"type": "integer", "minimum": 1, "maximum": 30}, "windows": {"$ref": "#/$defs/windows"}, "required_inventory": {"type": "array", "minItems": 17, "maxItems": 17, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}}},
+    "authorization": {"type": "object", "additionalProperties": false, "required": ["exact_parents_materialized", "runtime_read_authorized", "create_new_publish_authorized"], "properties": {"exact_parents_materialized": {"type": "boolean"}, "runtime_read_authorized": {"type": "boolean"}, "create_new_publish_authorized": {"type": "boolean"}}},
+    "constraints": {"type": "object", "additionalProperties": false, "required": ["source_bag_input", "gauge_fact_source", "frame_source", "write_semantics", "external_ledger_semantics", "smoothing", "extrapolation", "optional_root_must_not_be_opened"], "properties": {"source_bag_input": {"const": "EXACT_REGULAR_SINGLE_LINK_FD_BYTES"}, "gauge_fact_source": {"const": "SIXTEEN_RAW_NATIVE_JGAUGESWL_CSV"}, "frame_source": {"const": "FINALIZED_FRAME_MANIFEST_BOUND_BI4_ONLY"}, "write_semantics": {"const": "DIRFD_O_EXCL_FSYNC_RENAME_NOREPLACE"}, "external_ledger_semantics": {"const": "FLOCK_COMPARE_AND_APPEND_FSYNC"}, "smoothing": {"const": false}, "extrapolation": {"const": false}, "optional_root_must_not_be_opened": {"const": true}}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["stage6_pass", "development_only", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "formal", "production"], "properties": {"stage6_pass": {"const": false}, "development_only": {"const": true}, "physical_reference_pending": {"const": true}, "physical_fidelity_validated": {"const": false}, "paired_ranking": {"const": false}, "cross_method_ranking": {"const": false}, "formal": {"const": false}, "production": {"const": false}}}
+  }
+}

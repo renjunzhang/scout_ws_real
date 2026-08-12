@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_motion_gauge_gpu_build_execution_policy_v11.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "document_type", "status", "campaign", "plans",
+    "parents", "profiles", "system_tools", "authorization", "resources",
+    "source_contract", "patch_contract", "wrapper_contract", "build_contract",
+    "static_audit_contract", "receipt_contract", "safety", "next_allowed_stage"
+  ],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-motion-gauge-gpu-build-execution-policy-v11"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_MOTION_GAUGE_GPU_BUILD_EXECUTION_POLICY_V11"},
+    "status": {"const": "STATIC_FROZEN_DEFAULT_DENY_EXACT_AUTHORIZATION_REQUIRED"},
+    "campaign": {
+      "type": "object", "additionalProperties": false,
+      "required": ["campaign_id", "build_id", "attempt_root", "output_root", "source_root", "candidate_path", "audit_root", "authorization_token_path", "attempt_count", "attempt_reuse_forbidden"],
+      "properties": {
+        "campaign_id": {"const": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11"},
+        "build_id": {"const": "motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a"},
+        "attempt_root": {"const": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.partial"},
+        "output_root": {"const": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.partial/output"},
+        "source_root": {"const": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.partial/output/buildtree/src/source"},
+        "candidate_path": {"const": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.partial/output/artifacts/DualSPHysics5.4_linux64"},
+        "audit_root": {"const": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.evidence"},
+        "authorization_token_path": {"const": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T073037Z_v11_a.authorization.json"},
+        "attempt_count": {"const": 1},
+        "attempt_reuse_forbidden": {"const": true}
+      }
+    },
+    "plans": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gpu_build_plan_path", "gpu_build_plan_sha256", "stage_3_6_plan_path", "stage_3_6_plan_sha256"],
+      "properties": {
+        "gpu_build_plan_path": {"type": "string"}, "gpu_build_plan_sha256": {"$ref": "#/$defs/hash"},
+        "stage_3_6_plan_path": {"type": "string"}, "stage_3_6_plan_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "parents": {"type": "array", "minItems": 20, "items": {"$ref": "#/$defs/file_pin"}},
+    "profiles": {
+      "type": "array", "minItems": 4, "maxItems": 4,
+      "items": {"$ref": "#/$defs/profile_pin"}
+    },
+    "system_tools": {"type": "array", "minItems": 20, "items": {"$ref": "#/$defs/file_pin"}},
+    "authorization": {
+      "type": "object", "additionalProperties": false,
+      "required": ["default_authorized", "uid", "gid", "supplementary_groups", "token_schema_path", "token_schema_sha256", "token_producer_path", "supervisor_path", "token_mode_octal", "exact_new_user_authorization_required", "public_gate_dynamic_default_deny"],
+      "properties": {
+        "default_authorized": {"const": false}, "uid": {"const": 1000}, "gid": {"const": 1000},
+        "supplementary_groups": {"const": 0}, "token_schema_path": {"type": "string"},
+        "token_schema_sha256": {"$ref": "#/$defs/hash"}, "token_producer_path": {"type": "string"}, "supervisor_path": {"type": "string"},
+        "token_mode_octal": {"const": "0600"}, "exact_new_user_authorization_required": {"const": true},
+        "public_gate_dynamic_default_deny": {"const": true}
+      }
+    },
+    "resources": {
+      "type": "object", "additionalProperties": false,
+      "required": ["parallel_jobs", "wall_timeout_seconds", "cpu_limit_seconds", "address_space_limit_bytes", "minimum_available_memory_bytes", "minimum_available_disk_bytes", "monitor_interval_seconds", "kill_after_seconds", "stream_limit_bytes", "static_per_command_limit_bytes", "static_total_limit_bytes"],
+      "properties": {
+        "parallel_jobs": {"const": 1}, "wall_timeout_seconds": {"const": 5400},
+        "cpu_limit_seconds": {"const": 5400}, "address_space_limit_bytes": {"const": 8589934592},
+        "minimum_available_memory_bytes": {"const": 4294967296}, "minimum_available_disk_bytes": {"const": 21474836480},
+        "monitor_interval_seconds": {"minimum": 10, "maximum": 30}, "kill_after_seconds": {"const": 30},
+        "stream_limit_bytes": {"const": 268435456}, "static_per_command_limit_bytes": {"const": 268435456},
+        "static_total_limit_bytes": {"const": 268435456}
+      }
+    },
+    "source_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sealed_source_root", "sealed_receipt_path", "sealed_receipt_sha256", "sealed_manifest_sha256", "entry_count", "total_bytes", "copy_path", "source_child_path", "no_source_write"],
+      "properties": {
+        "sealed_source_root": {"type": "string"}, "sealed_receipt_path": {"type": "string"},
+        "sealed_receipt_sha256": {"$ref": "#/$defs/hash"}, "sealed_manifest_sha256": {"$ref": "#/$defs/hash"},
+        "entry_count": {"const": 352}, "total_bytes": {"const": 5473917}, "copy_path": {"const": "/usr/bin"},
+        "source_child_path": {"const": "/work/input"}, "no_source_write": {"const": true}
+      }
+    },
+    "patch_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["patch_module_path", "patch_module_sha256", "patch_child_path", "changed_count", "unchanged_count", "patched_six_file_aggregate_sha256", "files", "per_file_atomic_replace", "cross_file_atomicity_claimed", "journal_required"],
+      "properties": {
+        "patch_module_path": {"type": "string"}, "patch_module_sha256": {"$ref": "#/$defs/hash"},
+        "patch_child_path": {"type": "string"}, "changed_count": {"const": 6}, "unchanged_count": {"const": 346},
+        "patched_six_file_aggregate_sha256": {"const": "3cf3e7d883f7c751d7b5455eec352c6df46ff669cf6b5a989471be5f7731f528"},
+        "files": {"type": "array", "minItems": 6, "maxItems": 6, "items": {"$ref": "#/$defs/patch_file"}},
+        "per_file_atomic_replace": {"const": true}, "cross_file_atomicity_claimed": {"const": false}, "journal_required": {"const": true}
+      }
+    },
+    "wrapper_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["relative_path", "content_utf8", "size_bytes", "mode_octal", "sha256", "o_excl", "nccflags_fallback"],
+      "properties": {
+        "relative_path": {"const": "U3GpuBuild.mk"}, "content_utf8": {"type": "string"}, "size_bytes": {"const": 84},
+        "mode_octal": {"const": "0600"}, "sha256": {"const": "33883dcdde741c253a09d78decb3c21c5ab92c7c9152acf793d7dd025f07300d"},
+        "o_excl": {"const": true}, "nccflags_fallback": {"const": false}
+      }
+    },
+    "build_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cuda_root", "host_compiler", "compute_arch", "binary_arch", "make_argv", "make_invocation_limit", "object_count", "cpp_object_count", "cuda_object_count", "object_names_canonical_sha256", "profile_permission_delta", "sandbox_argv_delta", "forbidden_tokens"],
+      "properties": {
+        "cuda_root": {"const": "/usr/local/cuda-12.8"}, "host_compiler": {"const": "/usr/bin/x86_64-linux-gnu-g++-11"},
+        "compute_arch": {"const": "compute_120"}, "binary_arch": {"const": "sm_120"},
+        "make_argv": {"type": "array", "minItems": 20, "items": {"type": "string"}}, "make_invocation_limit": {"const": 1},
+        "object_count": {"const": 131}, "cpp_object_count": {"const": 120}, "cuda_object_count": {"const": 11},
+        "object_names_canonical_sha256": {"const": "38023e8b24f1d1731ba3a7d03bbb5fdf2e74e5623341402d607cba046b08d7e2"},
+        "profile_permission_delta": {"const": ["/newroot/work/tmp/ rw,", "/newroot/bin wl,"]},
+        "sandbox_argv_delta": {"const": ["--symlink", "usr/bin", "/bin"]},
+        "forbidden_tokens": {"type": "array", "minItems": 10, "items": {"type": "string"}}
+      }
+    },
+    "static_audit_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidate_commands", "object_commands", "total_commands", "candidate_mode_octal", "host_content_parser_forbidden", "sandbox_network", "sandbox_gpu", "sandbox_proc", "candidate_executed", "input_identity_unchanged", "required_arches"],
+      "properties": {
+        "candidate_commands": {"const": 11}, "object_commands": {"const": 546}, "total_commands": {"const": 557},
+        "candidate_mode_octal": {"const": "0400"}, "host_content_parser_forbidden": {"const": true},
+        "sandbox_network": {"const": false}, "sandbox_gpu": {"const": false}, "sandbox_proc": {"const": false},
+        "candidate_executed": {"const": false}, "input_identity_unchanged": {"const": true},
+        "required_arches": {"const": ["compute_120", "sm_120"]}
+      }
+    },
+    "receipt_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_path", "schema_sha256", "audit_root_mode_octal", "receipt_mode_octal", "create_new", "o_nofollow", "fsync", "hash_chain", "sequence_count", "failure_preserves_root"],
+      "properties": {
+        "schema_path": {"type": "string"}, "schema_sha256": {"$ref": "#/$defs/hash"},
+        "audit_root_mode_octal": {"const": "0750"}, "receipt_mode_octal": {"const": "0640"},
+        "create_new": {"const": true}, "o_nofollow": {"const": true}, "fsync": {"const": true},
+        "hash_chain": {"const": true}, "sequence_count": {"const": 15}, "failure_preserves_root": {"const": true}
+      }
+    },
+    "safety": {
+      "type": "object", "additionalProperties": false,
+      "required": ["network_used", "gpu_exposed", "candidate_executed", "runtime_smoke_included", "attempt_b_included", "gxx13_allowed", "profile_replace_allowed", "root_make_allowed", "profile_zero_residue_required", "frozen_inputs_immutable"],
+      "properties": {
+        "network_used": {"const": false}, "gpu_exposed": {"const": false}, "candidate_executed": {"const": false},
+        "runtime_smoke_included": {"const": false}, "attempt_b_included": {"const": false}, "gxx13_allowed": {"const": false},
+        "profile_replace_allowed": {"const": false}, "root_make_allowed": {"const": false},
+        "profile_zero_residue_required": {"const": true}, "frozen_inputs_immutable": {"const": true}
+      }
+    },
+    "next_allowed_stage": {"const": "EXACT_V11_TOKEN_PROFILE_HASH_AND_NEW_USER_AUTHORIZATION_REQUIRED"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "file_pin": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "path", "mode_octal", "size_bytes", "sha256"],
+      "properties": {
+        "role": {"type": "string"}, "path": {"type": "string"}, "mode_octal": {"pattern": "^[0-7]{4}$"},
+        "size_bytes": {"type": "integer", "minimum": 0}, "sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "profile_pin": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "name", "path", "mode_octal", "size_bytes", "sha256"],
+      "properties": {
+        "role": {"enum": ["SOURCE_COPY", "PATCH", "BUILD", "STATIC_AUDIT"]}, "name": {"type": "string"},
+        "path": {"type": "string"}, "mode_octal": {"const": "0644"}, "size_bytes": {"type": "integer", "minimum": 1},
+        "sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "patch_file": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "before_sha256", "after_sha256"],
+      "properties": {"path": {"type": "string"}, "before_sha256": {"$ref": "#/$defs/hash"}, "after_sha256": {"$ref": "#/$defs/hash"}}
+    }
+  }
+}

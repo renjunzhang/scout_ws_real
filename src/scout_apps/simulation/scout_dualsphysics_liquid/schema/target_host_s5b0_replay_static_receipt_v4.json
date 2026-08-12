@@ -1,0 +1,20 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://scout.local/schema/target_host_s5b0_replay_static_receipt_v4.json",
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","document_type","status","policy_sha256","transfer","candidate","envelope","gauge","profile","authorization","claims"],
+  "properties": {
+    "schema_version":{"const":"smpcc-r8-liquid-s5b0-replay-static-receipt-v4"},
+    "document_type":{"const":"SMPCC_R8_LIQUID_S5B0_REPLAY_STATIC_RECEIPT_V4"},
+    "status":{"const":"NOT_ADMITTED_MOTION_ATTACHED_GAUGE_CANDIDATE_REQUIRED"},
+    "policy_sha256":{"$ref":"#/$defs/sha256"},
+    "transfer":{"type":"object","additionalProperties":false,"required":["finalized","transfer_id","manifest_sha256","execution_receipt_sha256","solver_path_sha256"],"properties":{"finalized":{"const":true},"transfer_id":{"const":"SIM-S1_CORE_H1_C1_Bsmooth_b01_r01_r8_liquid_handoff_v3_v10"},"manifest_sha256":{"$ref":"#/$defs/sha256"},"execution_receipt_sha256":{"$ref":"#/$defs/sha256"},"solver_path_sha256":{"$ref":"#/$defs/sha256"}}},
+    "candidate":{"type":"object","additionalProperties":false,"required":["old_candidate_admitted","new_candidate_materialized","build_receipt_materialized","static_audit_receipt_materialized","required_capability"],"properties":{"old_candidate_admitted":{"const":false},"new_candidate_materialized":{"const":false},"build_receipt_materialized":{"const":false},"static_audit_receipt_materialized":{"const":false},"required_capability":{"const":"MOTION_ATTACHED_16_RAW_JGAUGESWL"}}},
+    "envelope":{"type":"object","additionalProperties":false,"required":["old_8m_gate_pass","maximum_axis_span_m","total_cells","estimated_vram_bytes","dynamic_vram_observed"],"properties":{"old_8m_gate_pass":{"const":false},"maximum_axis_span_m":{"const":8.883036647976011},"total_cells":{"const":24264425},"estimated_vram_bytes":{"const":3718998784},"dynamic_vram_observed":{"const":false}}},
+    "gauge":{"type":"object","additionalProperties":false,"required":["probe_count","source","motion_attached","world_fixed_allowed","q98_allowed","raw_outputs_read"],"properties":{"probe_count":{"const":16},"source":{"const":"RAW_NATIVE_JGAUGESWL_CSV"},"motion_attached":{"const":true},"world_fixed_allowed":{"const":false},"q98_allowed":{"const":false},"raw_outputs_read":{"const":false}}},
+    "profile":{"type":"object","additionalProperties":false,"required":["template_sha256","rendered_only","queried","loaded"],"properties":{"template_sha256":{"$ref":"#/$defs/sha256"},"rendered_only":{"const":true},"queried":{"const":false},"loaded":{"const":false}}},
+    "authorization":{"type":"object","additionalProperties":false,"required":["replay_identity_frozen","gpu_execution_authorized","profile_load_authorized","candidate_execution_authorized","solver_execution_authorized"],"properties":{"replay_identity_frozen":{"const":false},"gpu_execution_authorized":{"const":false},"profile_load_authorized":{"const":false},"candidate_execution_authorized":{"const":false},"solver_execution_authorized":{"const":false}}},
+    "claims":{"type":"object","additionalProperties":false,"required":["optional_bag_read","c2_admitted","gpp13_admitted","files_written","solver_executed","gpu_exposed","sudo_used","apparmor_loaded"],"properties":{"optional_bag_read":{"const":false},"c2_admitted":{"const":false},"gpp13_admitted":{"const":false},"files_written":{"const":false},"solver_executed":{"const":false},"gpu_exposed":{"const":false},"sudo_used":{"const":false},"apparmor_loaded":{"const":false}}}
+  },
+  "$defs":{"sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"}}
+}

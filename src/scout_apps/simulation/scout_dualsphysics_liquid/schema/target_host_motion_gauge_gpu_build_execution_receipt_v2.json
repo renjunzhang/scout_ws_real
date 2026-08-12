@@ -1,0 +1,19 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"https://scout.local/schema/target_host_motion_gauge_gpu_build_execution_receipt_v2.json",
+  "type":"object","additionalProperties":false,
+  "required":["schema_version","document_type","campaign_id","build_id","phase","kind","status","policy_sha256","authorization","input_identity","output_identity","execution","safety","next_allowed_stage"],
+  "properties":{
+    "schema_version":{"const":"smpcc-r8-liquid-motion-gauge-gpu-build-execution-receipt-v2"},
+    "document_type":{"const":"SMPCC_R8_LIQUID_MOTION_GAUGE_GPU_BUILD_EXECUTION_RECEIPT_V2"},
+    "campaign_id":{"const":"motion_gauge_gpu_build_sm120_20260812T034446Z_v1"},"build_id":{"const":"motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a"},
+    "phase":{"enum":["SOURCE_COPY","PATCH","WRAPPER","BUILD","STATIC_AUDIT"]},"kind":{"enum":["START","FINAL","FAILURE","LIFECYCLE"]},"status":{"type":"string","minLength":1},"policy_sha256":{"$ref":"#/$defs/sha"},
+    "authorization":{"$ref":"#/$defs/auth"},"input_identity":{"type":["object","null"],"additionalProperties":false,"required":["entry_count","manifest_sha256"],"properties":{"entry_count":{"type":"integer","minimum":0},"manifest_sha256":{"$ref":"#/$defs/sha"}}},"output_identity":{"type":["object","null"],"additionalProperties":false,"required":["entry_count","manifest_sha256"],"properties":{"entry_count":{"type":"integer","minimum":0},"manifest_sha256":{"$ref":"#/$defs/sha"}}},"execution":{"$ref":"#/$defs/execution"},"safety":{"$ref":"#/$defs/safety"},"next_allowed_stage":{"enum":["STOP_NOT_AUTHORIZED","STOP_PRESERVE_EVIDENCE","NEXT_PHASE_REQUIRES_NEW_AUTHORIZATION","SEPARATE_RUNTIME_SMOKE_CONTRACT_REQUIRED"]}
+  },
+  "$defs":{
+    "sha":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "auth":{"type":"object","additionalProperties":false,"required":["execute_flag_present","token_valid","policy_hash_match"],"properties":{"execute_flag_present":{"type":"boolean"},"token_valid":{"type":"boolean"},"policy_hash_match":{"type":"boolean"}}},
+    "execution":{"type":"object","additionalProperties":false,"required":["exact_argv","return_code","timed_out","make_count","resource_samples"],"properties":{"exact_argv":{"type":"array","items":{"type":"string"}},"return_code":{"type":["integer","null"]},"timed_out":{"type":"boolean"},"make_count":{"type":"integer","minimum":0,"maximum":1},"resource_samples":{"type":"integer","minimum":0}}},
+    "safety":{"type":"object","additionalProperties":false,"required":["create_new_only","o_nofollow","fd_identity_rechecked","sealed_source_unchanged","candidate_mode_octal","candidate_executed","gpu_exposed","network_used","profile_zero_residue","failure_preserved"],"properties":{"create_new_only":{"const":true},"o_nofollow":{"const":true},"fd_identity_rechecked":{"type":"boolean"},"sealed_source_unchanged":{"type":"boolean"},"candidate_mode_octal":{"type":["string","null"],"pattern":"^0[0-7]{3}$"},"candidate_executed":{"const":false},"gpu_exposed":{"const":false},"network_used":{"const":false},"profile_zero_residue":{"type":"boolean"},"failure_preserved":{"type":"boolean"}}}
+  }
+}

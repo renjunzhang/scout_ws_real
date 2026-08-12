@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_runtime_result_v7.json",
+  "title": "S6 consumer-visible runtime result v7",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "source_outcome", "runtime_contract_sha256", "transaction_receipt_sha256", "publication", "ledger", "receipt", "checks", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-runtime-result-v7"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_RESULT_V7"},
+    "status": {"enum": ["NOT_ADMITTED", "PREPARED_ONLY", "PUBLISHED_PENDING_COMMIT", "COMMITTED_PENDING_RECEIPT", "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY"]},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "source_outcome": {"const": "UNKNOWN"},
+    "runtime_contract_sha256": {"$ref": "#/$defs/sha"},
+    "transaction_receipt_sha256": {"$ref": "#/$defs/nullableSha"},
+    "publication": {"$ref": "#/$defs/publication"},
+    "ledger": {"$ref": "#/$defs/ledger"},
+    "receipt": {"$ref": "#/$defs/receipt"},
+    "checks": {"$ref": "#/$defs/checks"},
+    "claims": {"$ref": "#/$defs/claims"}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "status": {"enum": ["NOT_ADMITTED", "PREPARED_ONLY", "PUBLISHED_PENDING_COMMIT", "COMMITTED_PENDING_RECEIPT"]},
+        "claims": {"properties": {"stage6_pass": {"const": false}}}
+      },
+      "required": ["status", "claims"]
+    },
+    {
+      "properties": {
+        "status": {"const": "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY"},
+        "transaction_receipt_sha256": {"$ref": "#/$defs/sha"},
+        "publication": {"properties": {"final_root_present": {"const": true}, "exact_inventory": {"const": true}, "inventory_sha256": {"$ref": "#/$defs/sha"}}},
+        "ledger": {"properties": {"prepared_present": {"const": true}, "prepared_stage6_pass": {"const": false}, "committed_present": {"const": true}, "prepared_entry_sha256": {"$ref": "#/$defs/sha"}, "committed_entry_sha256": {"$ref": "#/$defs/sha"}}},
+        "receipt": {"properties": {"final_receipt_present": {"const": true}, "receipt_sha256": {"$ref": "#/$defs/sha"}, "matches_committed": {"const": true}}},
+        "checks": {"properties": {"three_way_transaction_consistent": {"const": true}, "canonical_finalized_frame_manifest": {"const": true}, "native_gauge_grid_exact": {"const": true}, "frame_gauge_time_grid_same": {"const": true}, "analysis_complete": {"const": true}, "figure_complete": {"const": true}, "media_complete_decode": {"const": true}, "evidence_index_complete": {"const": true}, "checksums_complete": {"const": true}, "optional_unread": {"const": true}}},
+        "claims": {"properties": {"stage6_pass": {"const": true}}}
+      },
+      "required": ["status", "transaction_receipt_sha256", "publication", "ledger", "receipt", "checks", "claims"]
+    }
+  ],
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableSha": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha"}]},
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "final_root_present", "exact_inventory", "inventory_sha256", "atomic_noreplace"],
+      "properties": {
+        "root": {"type": "string", "pattern": "^/"},
+        "final_root_present": {"type": "boolean"},
+        "exact_inventory": {"type": "boolean"},
+        "inventory_sha256": {"$ref": "#/$defs/nullableSha"},
+        "atomic_noreplace": {"type": "boolean"}
+      }
+    },
+    "ledger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prepared_present", "prepared_stage6_pass", "prepared_entry_sha256", "committed_present", "committed_entry_sha256"],
+      "properties": {
+        "prepared_present": {"type": "boolean"},
+        "prepared_stage6_pass": {"const": false},
+        "prepared_entry_sha256": {"$ref": "#/$defs/nullableSha"},
+        "committed_present": {"type": "boolean"},
+        "committed_entry_sha256": {"$ref": "#/$defs/nullableSha"}
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["final_receipt_present", "receipt_sha256", "matches_committed"],
+      "properties": {
+        "final_receipt_present": {"type": "boolean"},
+        "receipt_sha256": {"$ref": "#/$defs/nullableSha"},
+        "matches_committed": {"type": "boolean"}
+      }
+    },
+    "checks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["three_way_transaction_consistent", "canonical_finalized_frame_manifest", "native_gauge_grid_exact", "frame_gauge_time_grid_same", "analysis_complete", "figure_complete", "media_complete_decode", "evidence_index_complete", "checksums_complete", "optional_unread"],
+      "properties": {
+        "three_way_transaction_consistent": {"type": "boolean"},
+        "canonical_finalized_frame_manifest": {"type": "boolean"},
+        "native_gauge_grid_exact": {"type": "boolean"},
+        "frame_gauge_time_grid_same": {"type": "boolean"},
+        "analysis_complete": {"type": "boolean"},
+        "figure_complete": {"type": "boolean"},
+        "media_complete_decode": {"type": "boolean"},
+        "evidence_index_complete": {"type": "boolean"},
+        "checksums_complete": {"type": "boolean"},
+        "optional_unread": {"const": true}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage6_pass", "development_only", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "formal", "production", "physical_primary"],
+      "properties": {
+        "stage6_pass": {"type": "boolean"},
+        "development_only": {"const": true},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false},
+        "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false},
+        "selected_trajectory_cpu_comparison": {"const": false},
+        "formal": {"const": false},
+        "production": {"const": false},
+        "physical_primary": {"const": false}
+      }
+    }
+  }
+}

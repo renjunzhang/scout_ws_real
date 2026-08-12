@@ -1,0 +1,83 @@
+{
+  "schema_version": "smpcc-r8-liquid-motion-gauge-gpu-build-execution-policy-v2",
+  "document_type": "SMPCC_R8_LIQUID_MOTION_GAUGE_GPU_BUILD_EXECUTION_POLICY_V2",
+  "policy_id": "LIQUID_ZRJ_MSI_U2404_MOTION_GAUGE_GPU_BUILD_EXECUTION_V2",
+  "status": "STATIC_EXECUTION_CONTRACT_FROZEN_NOT_AUTHORIZED",
+  "campaign": {
+    "campaign_id": "motion_gauge_gpu_build_sm120_20260812T034446Z_v1",
+    "build_id": "motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a",
+    "attempt_root": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial",
+    "output_root": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output",
+    "source_root": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/buildtree/src/source",
+    "candidate_path": "/home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/artifacts/DualSPHysics5.4_linux64",
+    "audit_prefix": "/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a",
+    "root_absent_observed_at_freeze": true,
+    "receipt_prefix_absent_observed_at_freeze": true,
+    "freshness_must_be_rechecked_at_authorized_execution": true
+  },
+  "parents": {
+    "motion_patch_v2": [
+      {"path":"scripts/r8_liquid_motion_attached_gauge_patch_gate_v2.py","mode_octal":"0664","size_bytes":12312,"sha256":"1bac7e958e2c15db3c2d45638496c23a780c4b455447e90616bafb9ad50eb835"},
+      {"path":"config/target_hosts/liquid_zrj_msi_u2404_motion_attached_gauge_patch_policy_v2.json","mode_octal":"0664","size_bytes":4398,"sha256":"5e75a844863801f949ea01e3328d0d1e3ba74b050078beb8168d5993ff287255"},
+      {"path":"schema/target_host_motion_attached_gauge_patch_policy_v2.json","mode_octal":"0664","size_bytes":5230,"sha256":"adf3a9ebd9d21dfde3548613627b21fd5bc06e88f1a40ab5543b76125deb11c1"},
+      {"path":"tests/fixtures/motion_attached_gauge_patch_fixture_v2.json","mode_octal":"0664","size_bytes":3531,"sha256":"0d131e3e0182b6a4a71d96f58e93fb06d9b4b4dfeb10ddcf9985288440e879a1"},
+      {"path":"tests/test_motion_attached_gauge_patch_gate_v2.py","mode_octal":"0664","size_bytes":4053,"sha256":"fb8c52517b772db640e28ddc4429ea40eaf99b9d34df6e2c8589893e8a7de1c8"},
+      {"path":"scripts/r8_liquid_motion_attached_gauge_patch_v1.diff","mode_octal":"0664","size_bytes":319,"sha256":"82c441235ffc3ab69fc7797c24849a2f0763664b190b30d09ccbb92531e8b256"}
+    ],
+    "g1": [
+      {"path":"config/target_hosts/liquid_zrj_msi_u2404_u3_gpu_build_execution_policy_v1.json","sha256":"f3831fdfe09716fe5b8f0371bda25d087a6f10e0b0570b90eebea2caf90b7f57"},
+      {"path":"schema/target_host_u3_gpu_build_execution_policy_v1.json","sha256":"250d32def4a6a0c37405d8cc9d9920b8f5882abe7bb36de7ca95e7308de54cad"},
+      {"path":"scripts/r8_liquid_target_u3_gpu_build_gate_v1.py","sha256":"e34ab0facc3c665c6befbb792c7344e0af6e652fd3c6b30dfa81ca8cbea5b502"},
+      {"path":"tests/test_target_u3_gpu_build_gate_v1.py","sha256":"a26602c650557044bab6e84d54197f91b44e5e854548522043962c01b7b399e9"}
+    ],
+    "g2": [
+      {"path":"config/target_hosts/liquid_zrj_msi_u2404_u3_gpu_build_execution_policy_v2.json","sha256":"17472c30021bd70d81180fca6be1317a84cf5ae6f104e0c7cc707dc88ed4b58d"},
+      {"path":"schema/target_host_u3_gpu_build_execution_receipt_v1.json","sha256":"10ede832aae19632b9b5543b9916a7d1803e210c743db90910a66a37a1e02173"},
+      {"path":"scripts/r8_liquid_target_u3_gpu_build_gate_v2.py","sha256":"d9d02b2aa6a237ed49b7e64cbf0f19d769a32f22c372dbc56b18be47e376eb7f"},
+      {"path":"tests/test_target_u3_gpu_build_gate_v2.py","sha256":"54e96cb0b90b56353419ca1cce6f181ca6ea024318a5f897e8e6d7f14b85c9e2"}
+    ]
+  },
+  "sealed_source": {
+    "root": "/home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source",
+    "receipt_path": "/home/zrj/scout_liquid_lab/audits/u3_source_materialization_v1_20260806T155752Z.json",
+    "receipt_sha256": "90af263fb7ec8b7d6a46a53aa5354dd5b676cd4167d48fde93911e014a70b745",
+    "manifest_sha256": "a9a3debebff5ae30bb2d6226deb997f15a6eae0d07581a7c147ce95b9c3da9d2",
+    "entry_count": 352,
+    "total_bytes": 5473917,
+    "symlink_count": 0,
+    "hardlink_count": 0,
+    "before_and_after_fd_inventory_required": true
+  },
+  "patch_transition": {
+    "rendered_patch_sha256": "eddf77839699291eb1d9a09f9e3922d7040dcc78fc857d6a6176a4ae2320b16b",
+    "six_file_aggregate_sha256": "3cf3e7d883f7c751d7b5455eec352c6df46ff669cf6b5a989471be5f7731f528",
+    "changed_count": 6,
+    "unchanged_count": 346,
+    "files": [
+      {"path":"JDsGaugeItem.cpp","before_sha256":"909d0accec54daf2b767d7ab99338ff92ff15b49e9a0bf4c221d7dc6edecb0a4","after_sha256":"283793b308f07579affdf428cf267f62f9ab033c75d25cb54e4620f7d2bf3d01"},
+      {"path":"JDsGaugeItem.h","before_sha256":"4ceee0be27e86b0686d5530574ab79bd8a99a4f64596b474c9234b8da6df2823","after_sha256":"8ff282de107eeb50691cda2ea77cbf6ec507e73f964231f446e4711a2c46ae2e"},
+      {"path":"JDsGaugeSystem.cpp","before_sha256":"1ccef263531c3757d513284c7187a4e14fec43c88fc1ff4b5ba4092cca2e1e80","after_sha256":"3dec0381b413f9f736242036abc4b60599dcaf724edddc6202df17de4079ad5e"},
+      {"path":"JDsGaugeSystem.h","before_sha256":"473831ed3614277ca7e82f2b2ce065a0c37c6039ecbaf9cfcaddef624a2ff86d","after_sha256":"4d97c40b14105f9c4e0df372bff9229b6c8daf881686c4d50f64a7fc0a5e6c6c"},
+      {"path":"JSph.cpp","before_sha256":"206e4486a3a0d304e02da1a73d2e7c7ed96354d559ce481275d09f5245b8c9e7","after_sha256":"07e197ff8661d91a6e9b30053dfc0b8b138b6293892c6dc72aa2c0031b63676f"},
+      {"path":"JSph.h","before_sha256":"abb087c020641d94c3968507f0ce067da4f45cac246ff6bc586d4e8665e39eda","after_sha256":"d82074fd35998a96585c6698b09cb8bbddce79835fed4d3e07683270633b08fb"}
+    ]
+  },
+  "wrapper": {"relative_path":"U3GpuBuild.mk","content_utf8":".SUFFIXES:\n.SUFFIXES: .cpp .o\ninclude Makefile\noverride CCFLAGS += -include cstdint\n","size_bytes":84,"sha256":"33883dcdde741c253a09d78decb3c21c5ab92c7c9152acf793d7dd025f07300d","mode_octal":"0600","creation_flags":["O_WRONLY","O_CREAT","O_EXCL","O_NOFOLLOW","O_CLOEXEC"]},
+  "build": {
+    "make_argv": ["/usr/bin/make","--no-builtin-rules","--no-builtin-variables","-f","U3GpuBuild.mk","-j1","SHELL=/usr/bin/dash","CC=/usr/bin/x86_64-linux-gnu-g++-11","NCC=/usr/local/cuda-12.8/bin/nvcc","CUDA=12","DIRTOOLKIT=/usr/local/cuda-12.8","GENCODE=-gencode=arch=compute_120,code=\"sm_120,compute_120\"","USE_DEBUG=NO","USE_FAST_MATH=NO","USE_NATIVE_CPU_OPTIMIZATIONS=NO","COMPILE_CHRONO=NO","COMPILE_WAVEGEN=NO","COMPILE_MOORDYNPLUS=NO","LIBS_DIRECTORIES=","EXECS_DIRECTORY=/work/output/artifacts","/work/output/artifacts/DualSPHysics5.4_linux64"],
+    "host_compiler":"/usr/bin/x86_64-linux-gnu-g++-11","cuda_root":"/usr/local/cuda-12.8","native_arch":"sm_120","ptx_arch":"compute_120","parallel_jobs":1,"make_limit":1,"wall_timeout_seconds":5400,"minimum_memavailable_bytes":4294967296,"candidate_mode_octal":"0400","object_count":131,"object_names_parent":"parents.g1[0]#/object_contract/object_names","object_names_canonical_sha256":"38023e8b24f1d1731ba3a7d03bbb5fdf2e74e5623341402d607cba046b08d7e2"
+  },
+  "static_audit": {"candidate_command_count":11,"cpp_object_command_count":480,"cuda_object_command_count":66,"total_command_count":557,"candidate_execution_forbidden":true,"gpu_exposure_forbidden":true,"compiler_and_make_forbidden":true,"identity_before_after_required":true},
+  "profiles": [
+    {"role":"SOURCE_COPY","name":"r8-liquid-motion-gauge-gpu-source-copy-20260812t034446z-v2","path":"config/apparmor_drafts/r8-liquid-motion-gauge-gpu-source-copy-20260812t034446z-v2.profile","mode_octal":"0664","size_bytes":1154,"sha256":"36be0d4ccf42feff4ac868e325d4fbde87a8f8a635c04a4b2e9cc396ba2ce412"},
+    {"role":"PATCH","name":"r8-liquid-motion-gauge-gpu-patch-20260812t034446z-v2","path":"config/apparmor_drafts/r8-liquid-motion-gauge-gpu-patch-20260812t034446z-v2.profile","mode_octal":"0664","size_bytes":1778,"sha256":"29a1aee543ab06325c4d0a34bce7faf925edd64ec3fcb30c99c0fddde0c95bc8"},
+    {"role":"BUILD","name":"r8-liquid-motion-gauge-gpu-build-20260812t034446z-v2","path":"config/apparmor_drafts/r8-liquid-motion-gauge-gpu-build-20260812t034446z-v2.profile","mode_octal":"0664","size_bytes":1392,"sha256":"8437d4cdaa20c05ee41d706a5a4925acb834e83136688900a3d5edd71780fc8f"},
+    {"role":"STATIC_AUDIT","name":"r8-liquid-motion-gauge-gpu-static-audit-20260812t034446z-v2","path":"config/apparmor_drafts/r8-liquid-motion-gauge-gpu-static-audit-20260812t034446z-v2.profile","mode_octal":"0664","size_bytes":1010,"sha256":"1ed09af69060d8db361910c0cf92f6c4fb66643b52343e00ef2b567ceb5f412b"}
+  ],
+  "profile_query": {"argv_template":["/usr/sbin/apparmor_parser","-Q","-K","-T","<EXACT_PROFILE_PATH>"],"non_loading":true,"all_four_must_pass":true},
+  "receipt_contract": {"schema":"schema/target_host_motion_gauge_gpu_build_execution_receipt_v2.json","phases":["SOURCE_COPY","PATCH","WRAPPER","BUILD","STATIC_AUDIT"],"kinds":["START","FINAL","FAILURE","LIFECYCLE"],"path_template":"/home/zrj/scout_liquid_lab/audits/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a_<phase>_<kind>_v2.json","create_new_flags":["O_WRONLY","O_CREAT","O_EXCL","O_NOFOLLOW","O_CLOEXEC"],"fsync_file_and_parent":true,"failure_preserves_partial":true},
+  "authorization": {"default_authorized":false,"outer_execute_flag":"--execute","outer_authorization_token_flag":"--authorization-token-file","exact_policy_sha256_in_token_required":true,"all_real_phases_authorized":false},
+  "execution_implementation": {"real_phase_runner_implemented":false,"receipt_producer_implemented":false,"dirfd_anchored_toctou_implemented":false,"apparmor_lifecycle_implemented":false,"resource_monitor_implemented":false,"reason":"CREATE_NEW_STATIC_FREEZE_ONLY_NEXT_REVISION_REQUIRED"},
+  "runtime_smoke": {"included":false,"candidate_execution_authorized":false,"gpu_exposure_authorized":false,"next_contract":"SEPARATE_CREATE_NEW_RUNTIME_SMOKE_V1"},
+  "next_allowed_stage": "CREATE_NEW_EXECUTION_V3_AFTER_REVIEW_AND_EXACT_USER_AUTHORIZATION"
+}

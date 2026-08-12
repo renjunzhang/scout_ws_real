@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_runtime_delivery_policy_v6.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "policy_id", "status", "selection", "parent_contract", "gauge", "analysis", "visual", "delivery", "claim_ceiling"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-runtime-delivery-policy-v6"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_DELIVERY_POLICY_V6"},
+    "policy_id": {"const": "liquid_zrj_msi_u2404_s6_real_runtime_delivery_policy_v6"},
+    "status": {"const": "NOT_ADMITTED_FINALIZED_S5B0_RUNTIME_CONTRACT_REQUIRED"},
+    "selection": {"$ref": "#/$defs/selection"},
+    "parent_contract": {"$ref": "#/$defs/parentContract"},
+    "gauge": {"$ref": "#/$defs/gauge"},
+    "analysis": {"$ref": "#/$defs/analysis"},
+    "visual": {"$ref": "#/$defs/visual"},
+    "delivery": {"$ref": "#/$defs/delivery"},
+    "claim_ceiling": {"$ref": "#/$defs/claims"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "selection": {"type": "object", "additionalProperties": false, "required": ["attempt_id", "role", "planned_denominator", "optional_bag_read", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison"], "properties": {"attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"}, "role": {"const": "PRIMARY_BASELINE_ONLY"}, "planned_denominator": {"const": 1}, "optional_bag_read": {"const": false}, "paired_ranking": {"const": false}, "cross_method_ranking": {"const": false}, "selected_trajectory_cpu_comparison": {"const": false}}},
+    "parentContract": {"type": "object", "additionalProperties": false, "required": ["state", "runtime_contract_path", "runtime_contract_sha256", "required_status", "required_execution_status", "required_qc_status", "required_frame_status", "required_gauge_schema"], "properties": {"state": {"const": "NOT_MATERIALIZED"}, "runtime_contract_path": {"type": "null"}, "runtime_contract_sha256": {"type": "null"}, "required_status": {"const": "ADMITTED_EXACT_FINALIZED_S5B0_PRIMARY_RUNTIME_MATERIALIZED_V6"}, "required_execution_status": {"const": "S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY"}, "required_qc_status": {"const": "PASS_S5B0_REPLAY_RESULT_QC_V2"}, "required_frame_status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V1"}, "required_gauge_schema": {"const": "smpcc-r8-liquid-s5b0-native-gauge-manifest-v1"}}},
+    "gauge": {"type": "object", "additionalProperties": false, "required": ["fact_source", "probe_names", "h0_m", "point0_z_m", "point2_z_m", "maximum_invalid_ratio", "minimum_valid_probes_per_slot", "attachment_frame"], "properties": {"fact_source": {"const": "SIXTEEN_RAW_NATIVE_JGAUGESWL_CSV"}, "probe_names": {"type": "array", "minItems": 16, "maxItems": 16, "uniqueItems": true, "items": {"pattern": "^s5b0_p(?:0[0-9]|1[0-5])$"}}, "h0_m": {"const": 0.058}, "point0_z_m": {"const": 0.002}, "point2_z_m": {"const": 0.064}, "maximum_invalid_ratio": {"const": 0.001}, "minimum_valid_probes_per_slot": {"const": 15}, "attachment_frame": {"const": "MOVING_CONTAINER_REFERENCE_REF_0"}}},
+    "analysis": {"type": "object", "additionalProperties": false, "required": ["windows", "surfaces", "secondaries", "metrics", "interpolation", "outside_overlap", "smoothing", "extrapolation"], "properties": {"windows": {"const": ["first15", "full_motion", "recorded_tail", "solver_tail"]}, "surfaces": {"const": ["H_crest", "H_abs", "H_peak_to_peak"]}, "secondaries": {"const": ["H_proxy", "H_modal"]}, "metrics": {"const": ["amplitude", "frequency", "damping", "phase", "correlation", "rmse"]}, "interpolation": {"const": "LINEAR_WITHIN_REGISTERED_OVERLAP_ONLY"}, "outside_overlap": {"const": "EXPLICIT_NULL_NA"}, "smoothing": {"const": false}, "extrapolation": {"const": false}}},
+    "visual": {"type": "object", "additionalProperties": false, "required": ["figure_layout", "dual_y_axes", "color_png", "grayscale_png", "pdf", "mp4", "gif", "keyframes", "complete_decode_qa", "media_is_numeric_fact_source"], "properties": {"figure_layout": {"const": "THREE_VERTICAL_SHARED_X_PANELS"}, "dual_y_axes": {"const": false}, "color_png": {"const": true}, "grayscale_png": {"const": true}, "pdf": {"const": true}, "mp4": {"const": true}, "gif": {"const": true}, "keyframes": {"const": "FIRST_MIDDLE_LAST"}, "complete_decode_qa": {"const": true}, "media_is_numeric_fact_source": {"const": false}}},
+    "delivery": {"type": "object", "additionalProperties": false, "required": ["write_semantics", "ledger_semantics", "required_inventory"], "properties": {"write_semantics": {"const": "CREATE_NEW_PARTIAL_DIRFD_O_EXCL_FSYNC_RENAME_NOREPLACE"}, "ledger_semantics": {"const": "FLOCK_COMPARE_APPEND_FSYNC"}, "required_inventory": {"type": "array", "minItems": 19, "maxItems": 19, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["stage6_pass_now", "maximum_runtime_status", "physical_reference_pending", "physical_fidelity_validated", "formal", "production", "physical_primary"], "properties": {"stage6_pass_now": {"const": false}, "maximum_runtime_status": {"const": "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY"}, "physical_reference_pending": {"const": true}, "physical_fidelity_validated": {"const": false}, "formal": {"const": false}, "production": {"const": false}, "physical_primary": {"const": false}}}
+  }
+}

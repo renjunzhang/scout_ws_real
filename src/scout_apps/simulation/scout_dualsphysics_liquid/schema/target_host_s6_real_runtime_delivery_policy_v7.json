@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_runtime_delivery_policy_v7.json",
+  "title": "S6 real runtime delivery policy v7",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "policy_id", "status", "selection", "canonical_inputs", "gauge_contract", "analysis_contract", "transaction_contract", "delivery_contract", "claim_ceiling"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-runtime-delivery-policy-v7"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_DELIVERY_POLICY_V7"},
+    "policy_id": {"const": "liquid_zrj_msi_u2404_s6_real_runtime_delivery_policy_v7"},
+    "status": {"const": "STATIC_POLICY_FROZEN_RUNTIME_NOT_ADMITTED"},
+    "selection": {"$ref": "#/$defs/selection"},
+    "canonical_inputs": {"$ref": "#/$defs/canonicalInputs"},
+    "gauge_contract": {"$ref": "#/$defs/gaugeContract"},
+    "analysis_contract": {"$ref": "#/$defs/analysisContract"},
+    "transaction_contract": {"$ref": "#/$defs/transactionContract"},
+    "delivery_contract": {"$ref": "#/$defs/deliveryContract"},
+    "claim_ceiling": {"$ref": "#/$defs/claimCeiling"}
+  },
+  "$defs": {
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["attempt_id", "role", "planned_denominator", "source_outcome", "optional_bag_read", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison"],
+      "properties": {
+        "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+        "role": {"const": "PRIMARY_BASELINE_ONLY"},
+        "planned_denominator": {"const": 1},
+        "source_outcome": {"const": "UNKNOWN"},
+        "optional_bag_read": {"const": false},
+        "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false},
+        "selected_trajectory_cpu_comparison": {"const": false}
+      }
+    },
+    "canonicalInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["finalized_frame_reader", "finalized_frame_manifest_schema", "bi4_reader", "required_frame_schema_version", "required_frame_status", "required_gauge_schema_version"],
+      "properties": {
+        "finalized_frame_reader": {"$ref": "#/$defs/frozenTool"},
+        "finalized_frame_manifest_schema": {"$ref": "#/$defs/frozenTool"},
+        "bi4_reader": {"$ref": "#/$defs/frozenTool"},
+        "required_frame_schema_version": {"const": "smpcc-r8-liquid-s5b0-finalized-solver-frames-manifest-v1"},
+        "required_frame_status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V1"},
+        "required_gauge_schema_version": {"const": "smpcc-r8-liquid-s5b0-native-gauge-manifest-v1"}
+      }
+    },
+    "frozenTool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256"],
+      "properties": {
+        "relative_path": {"type": "string", "pattern": "^(?:scripts|schema)/[A-Za-z0-9_.-]+$"},
+        "sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "gaugeContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fact_source", "probe_count", "attachment_frame", "probe_radius_m", "angular_spacing_deg", "probe_grid", "frame_and_gauge_time_grid_sha256_must_match", "missing_or_reordered_probe_rejected", "coordinate_drift_rejected"],
+      "properties": {
+        "fact_source": {"const": "SIXTEEN_RAW_NATIVE_JGAUGESWL_CSV"},
+        "probe_count": {"const": 16},
+        "attachment_frame": {"const": "MOVING_CONTAINER_REFERENCE_REF_0"},
+        "probe_radius_m": {"const": 0.0145},
+        "angular_spacing_deg": {"const": 22.5},
+        "probe_grid": {"const": [
+          {"name":"s5b0_p00","angle_deg":0.0,"x_m":0.0145,"y_m":0.0},
+          {"name":"s5b0_p01","angle_deg":22.5,"x_m":0.013396253221413659,"y_m":0.005548909769293802},
+          {"name":"s5b0_p02","angle_deg":45.0,"x_m":0.010253048327204941,"y_m":0.010253048327204939},
+          {"name":"s5b0_p03","angle_deg":67.5,"x_m":0.005548909769293803,"y_m":0.013396253221413659},
+          {"name":"s5b0_p04","angle_deg":90.0,"x_m":0.0,"y_m":0.0145},
+          {"name":"s5b0_p05","angle_deg":112.5,"x_m":-0.005548909769293802,"y_m":0.013396253221413659},
+          {"name":"s5b0_p06","angle_deg":135.0,"x_m":-0.010253048327204939,"y_m":0.010253048327204941},
+          {"name":"s5b0_p07","angle_deg":157.5,"x_m":-0.013396253221413659,"y_m":0.005548909769293803},
+          {"name":"s5b0_p08","angle_deg":180.0,"x_m":-0.0145,"y_m":0.0},
+          {"name":"s5b0_p09","angle_deg":202.5,"x_m":-0.01339625322141366,"y_m":-0.005548909769293801},
+          {"name":"s5b0_p10","angle_deg":225.0,"x_m":-0.010253048327204943,"y_m":-0.010253048327204939},
+          {"name":"s5b0_p11","angle_deg":247.5,"x_m":-0.00554890976929381,"y_m":-0.013396253221413655},
+          {"name":"s5b0_p12","angle_deg":270.0,"x_m":0.0,"y_m":-0.0145},
+          {"name":"s5b0_p13","angle_deg":292.5,"x_m":0.005548909769293805,"y_m":-0.013396253221413657},
+          {"name":"s5b0_p14","angle_deg":315.0,"x_m":0.010253048327204937,"y_m":-0.010253048327204943},
+          {"name":"s5b0_p15","angle_deg":337.5,"x_m":0.013396253221413655,"y_m":-0.005548909769293811}
+        ]},
+        "frame_and_gauge_time_grid_sha256_must_match": {"const": true},
+        "missing_or_reordered_probe_rejected": {"const": true},
+        "coordinate_drift_rejected": {"const": true}
+      }
+    },
+    "analysisContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["windows", "surfaces", "secondaries", "metrics", "motion_time_source", "interpolation", "outside_overlap", "smoothing", "extrapolation"],
+      "properties": {
+        "windows": {"const": ["first15", "full_motion", "recorded_tail", "solver_tail"]},
+        "surfaces": {"const": ["H_crest", "H_abs", "H_peak_to_peak"]},
+        "secondaries": {"const": ["H_proxy", "H_modal"]},
+        "metrics": {"const": ["amplitude", "frequency", "damping", "phase", "correlation", "rmse"]},
+        "motion_time_source": {"const": "/odom.header.stamp"},
+        "interpolation": {"const": "LINEAR_WITHIN_COMMON_OVERLAP_ONLY"},
+        "outside_overlap": {"const": "EXPLICIT_NULL_NA"},
+        "smoothing": {"const": false},
+        "extrapolation": {"const": false}
+      }
+    },
+    "transactionContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ordered_states", "prepared_stage6_pass", "publish_semantics", "commit_semantics", "receipt_semantics", "consumer_acceptance_requires", "recovery_required"],
+      "properties": {
+        "ordered_states": {"const": ["NOT_ADMITTED", "PREPARED_ONLY", "PUBLISHED_PENDING_COMMIT", "COMMITTED_PENDING_RECEIPT", "COMMITTED_RECEIPT_CONSISTENT"]},
+        "prepared_stage6_pass": {"const": false},
+        "publish_semantics": {"const": "RENAMEAT2_RENAME_NOREPLACE_THEN_FSYNC_PARENT"},
+        "commit_semantics": {"const": "FLOCK_COMPARE_APPEND_COMMITTED_FSYNC"},
+        "receipt_semantics": {"const": "CREATE_NEW_O_EXCL_FINAL_TRANSACTION_RECEIPT"},
+        "consumer_acceptance_requires": {"const": ["EXACT_FINAL_ROOT_INVENTORY_HASH", "MATCHING_PREPARED_LEDGER_ENTRY", "MATCHING_COMMITTED_LEDGER_ENTRY", "MATCHING_O_EXCL_FINAL_TRANSACTION_RECEIPT"]},
+        "recovery_required": {"const": true}
+      }
+    },
+    "deliveryContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["final_bundle_forbids_planned_or_pending_artifacts", "media_is_numeric_fact_source", "comparison_ledger_append_only", "checksums_required"],
+      "properties": {
+        "final_bundle_forbids_planned_or_pending_artifacts": {"const": true},
+        "media_is_numeric_fact_source": {"const": false},
+        "comparison_ledger_append_only": {"const": true},
+        "checksums_required": {"const": true}
+      }
+    },
+    "claimCeiling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maximum_status", "stage6_pass_now", "development_only", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "formal", "production", "physical_primary"],
+      "properties": {
+        "maximum_status": {"const": "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY"},
+        "stage6_pass_now": {"const": false},
+        "development_only": {"const": true},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false},
+        "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false},
+        "selected_trajectory_cpu_comparison": {"const": false},
+        "formal": {"const": false},
+        "production": {"const": false},
+        "physical_primary": {"const": false}
+      }
+    },
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

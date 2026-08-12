@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:smpcc:r8-liquid:motion-attached-gauge-patch-policy:v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","contract_status","upstream","attachment_contract","source_files","patch_identity","forbidden_actions"],
+  "properties": {
+    "schema_version": {"const":"smpcc-r8-liquid-motion-attached-gauge-patch-policy-v1"},
+    "contract_status": {"const":"STATIC_PATCH_CONTRACT_ONLY_NOT_BUILD_AUTHORIZATION"},
+    "upstream": {
+      "type":"object","additionalProperties":false,
+      "required":["commit","bare_repository","source_prefix","fresh_isolated_copy_required","sealed_source_write_forbidden","existing_candidate_write_forbidden"],
+      "properties": {
+        "commit":{"const":"ef3721a861fda961f0e2f9ec4cd317b19de99086"},
+        "bare_repository":{"const":"/home/zrj/scout_liquid_lab/dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.full_attempt_3.git"},
+        "source_prefix":{"const":"src/source"},
+        "fresh_isolated_copy_required":{"const":true},"sealed_source_write_forbidden":{"const":true},"existing_candidate_write_forbidden":{"const":true}
+      }
+    },
+    "attachment_contract": {
+      "type":"object","additionalProperties":false,
+      "required":["gauge_type","probe_count","motionref","mkbound","identity_pair_required","ray_axis","horizontal_position_follows_rigid_motion","config_dom_mcel_fixed","calc_motion_hook","restart_pose","additional_proces_time_calls"],
+      "properties": {
+        "gauge_type":{"const":"JGaugeSwl"},"probe_count":{"const":16},"motionref":{"const":0},"mkbound":{"const":0},"identity_pair_required":{"const":true},
+        "ray_axis":{"const":"GLOBAL_Z"},"horizontal_position_follows_rigid_motion":{"const":true},"config_dom_mcel_fixed":{"const":false},
+        "calc_motion_hook":{"const":"AFTER_DSMOTION_PROCESTIME_BEFORE_GETACTIVEMOTION"},
+        "restart_pose":{"const":"ABSOLUTE_TIMESTEPINI_PARTBEGIN_FROM_EXISTING_SINGLE_PROCESTIME"},"additional_proces_time_calls":{"const":0}
+      }
+    },
+    "source_files": {
+      "type":"array","minItems":6,"maxItems":6,"uniqueItems":true,
+      "items":{"type":"object","additionalProperties":false,"required":["path","before_sha256","after_sha256"],"properties":{"path":{"enum":["src/source/JDsGaugeItem.cpp","src/source/JDsGaugeItem.h","src/source/JDsGaugeSystem.cpp","src/source/JDsGaugeSystem.h","src/source/JSph.cpp","src/source/JSph.h"]},"before_sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},"after_sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"}}}
+    },
+    "patch_identity": {
+      "type":"object","additionalProperties":false,"required":["unified_patch_sha256","patched_six_file_aggregate_sha256","canonical_aggregate_format"],
+      "properties":{"unified_patch_sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},"patched_six_file_aggregate_sha256":{"type":"string","pattern":"^[0-9a-f]{64}$"},"canonical_aggregate_format":{"const":"UTF8_PATH_NUL_AFTER_SHA256_LF_SORTED_BY_PATH"}}
+    },
+    "forbidden_actions":{"type":"array","minItems":12,"uniqueItems":true,"items":{"enum":["MODIFY_SEALED_SOURCE","MODIFY_EXISTING_CANDIDATE","PATCH_NON_FRESH_COPY","MAKE","NVCC","COMPILER","SOLVER","GPU","SUDO","APPARMOR","NETWORK","READ_OPTIONAL_BAG","ADD_SECOND_PROCESTIME"]}}
+  }
+}

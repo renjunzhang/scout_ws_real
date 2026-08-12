@@ -1,0 +1,43 @@
+{
+  "schema_version": "smpcc-r8-liquid-motion-attached-gauge-patch-policy-v1",
+  "contract_status": "STATIC_PATCH_CONTRACT_ONLY_NOT_BUILD_AUTHORIZATION",
+  "upstream": {
+    "commit": "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+    "bare_repository": "/home/zrj/scout_liquid_lab/dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.full_attempt_3.git",
+    "source_prefix": "src/source",
+    "fresh_isolated_copy_required": true,
+    "sealed_source_write_forbidden": true,
+    "existing_candidate_write_forbidden": true
+  },
+  "attachment_contract": {
+    "gauge_type": "JGaugeSwl",
+    "probe_count": 16,
+    "motionref": 0,
+    "mkbound": 0,
+    "identity_pair_required": true,
+    "ray_axis": "GLOBAL_Z",
+    "horizontal_position_follows_rigid_motion": true,
+    "config_dom_mcel_fixed": false,
+    "calc_motion_hook": "AFTER_DSMOTION_PROCESTIME_BEFORE_GETACTIVEMOTION",
+    "restart_pose": "ABSOLUTE_TIMESTEPINI_PARTBEGIN_FROM_EXISTING_SINGLE_PROCESTIME",
+    "additional_proces_time_calls": 0
+  },
+  "source_files": [
+    {"path":"src/source/JDsGaugeItem.cpp","before_sha256":"909d0accec54daf2b767d7ab99338ff92ff15b49e9a0bf4c221d7dc6edecb0a4","after_sha256":"283793b308f07579affdf428cf267f62f9ab033c75d25cb54e4620f7d2bf3d01"},
+    {"path":"src/source/JDsGaugeItem.h","before_sha256":"4ceee0be27e86b0686d5530574ab79bd8a99a4f64596b474c9234b8da6df2823","after_sha256":"8ff282de107eeb50691cda2ea77cbf6ec507e73f964231f446e4711a2c46ae2e"},
+    {"path":"src/source/JDsGaugeSystem.cpp","before_sha256":"1ccef263531c3757d513284c7187a4e14fec43c88fc1ff4b5ba4092cca2e1e80","after_sha256":"3dec0381b413f9f736242036abc4b60599dcaf724edddc6202df17de4079ad5e"},
+    {"path":"src/source/JDsGaugeSystem.h","before_sha256":"473831ed3614277ca7e82f2b2ce065a0c37c6039ecbaf9cfcaddef624a2ff86d","after_sha256":"4d97c40b14105f9c4e0df372bff9229b6c8daf881686c4d50f64a7fc0a5e6c6c"},
+    {"path":"src/source/JSph.cpp","before_sha256":"206e4486a3a0d304e02da1a73d2e7c7ed96354d559ce481275d09f5245b8c9e7","after_sha256":"07e197ff8661d91a6e9b30053dfc0b8b138b6293892c6dc72aa2c0031b63676f"},
+    {"path":"src/source/JSph.h","before_sha256":"abb087c020641d94c3968507f0ce067da4f45cac246ff6bc586d4e8665e39eda","after_sha256":"d82074fd35998a96585c6698b09cb8bbddce79835fed4d3e07683270633b08fb"}
+  ],
+  "patch_identity": {
+    "unified_patch_sha256": "eddf77839699291eb1d9a09f9e3922d7040dcc78fc857d6a6176a4ae2320b16b",
+    "patched_six_file_aggregate_sha256": "3cf3e7d883f7c751d7b5455eec352c6df46ff669cf6b5a989471be5f7731f528",
+    "canonical_aggregate_format": "UTF8_PATH_NUL_AFTER_SHA256_LF_SORTED_BY_PATH"
+  },
+  "forbidden_actions": [
+    "MODIFY_SEALED_SOURCE", "MODIFY_EXISTING_CANDIDATE", "PATCH_NON_FRESH_COPY",
+    "MAKE", "NVCC", "COMPILER", "SOLVER", "GPU", "SUDO", "APPARMOR",
+    "NETWORK", "READ_OPTIONAL_BAG", "ADD_SECOND_PROCESTIME"
+  ]
+}

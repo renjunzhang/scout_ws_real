@@ -1,0 +1,62 @@
+{
+  "schema_version": "smpcc-r8-liquid-motion-attached-gauge-patch-policy-v2",
+  "contract_status": "STATIC_PATCH_AND_CROSS_LAYER_CONTRACT_ONLY_NOT_BUILD_AUTHORIZATION",
+  "upstream": {
+    "commit": "ef3721a861fda961f0e2f9ec4cd317b19de99086",
+    "bare_repository": "/home/zrj/scout_liquid_lab/dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.full_attempt_3.git",
+    "source_prefix": "src/source",
+    "fresh_isolated_copy_required": true,
+    "sealed_source_write_forbidden": true,
+    "existing_candidate_write_forbidden": true
+  },
+  "parent_v1": {
+    "policy_sha256": "86aade6fcce0fb297ae1710afdc8e3c06cd3e15cf49eea35a36e3d4a8300fa36",
+    "schema_sha256": "76977615b7431aa8a1feb3fcaae68c1b33622f11015c6cee65a4e31ece4abd23",
+    "gate_sha256": "601682672f39ccd19533149024e7531ec54157bd058368f7f40e63a6f894f3cf",
+    "tests_sha256": "ec30ab9ae47395e1702a8b1b163f806dd5e8693869b1c067bc9a30425af69e48",
+    "unified_patch_sha256": "eddf77839699291eb1d9a09f9e3922d7040dcc78fc857d6a6176a4ae2320b16b",
+    "patched_six_file_aggregate_sha256": "3cf3e7d883f7c751d7b5455eec352c6df46ff669cf6b5a989471be5f7731f528",
+    "source_patch_bytes_reused_without_change": true
+  },
+  "s5b0_v4_binding": {
+    "policy_sha256": "d972f66d14882c28abe5629828d2ccaab1013f82a65b82f6250cf55716e41f21",
+    "policy_schema_sha256": "897d617b56619b3761025eff64d27f68977ae9d15ac8ac481cea3beaea099d66",
+    "gauge_contract_sha256": "d0cde7388bf0984ca664258e22cf00dc5f1702951811d5cb29c3282e57583328",
+    "fixture_v2_sha256": "0d131e3e0182b6a4a71d96f58e93fb06d9b4b4dfeb10ddcf9985288440e879a1"
+  },
+  "attachment_contract": {
+    "gauge_type": "JGaugeSwl",
+    "probe_count": 16,
+    "probe_names": ["s5b0_p00","s5b0_p01","s5b0_p02","s5b0_p03","s5b0_p04","s5b0_p05","s5b0_p06","s5b0_p07","s5b0_p08","s5b0_p09","s5b0_p10","s5b0_p11","s5b0_p12","s5b0_p13","s5b0_p14","s5b0_p15"],
+    "motionref": 0,
+    "mkbound": 0,
+    "identity_pair_required": true,
+    "ray_axis": "GLOBAL_Z",
+    "probe_radius_m": 0.0145,
+    "point0_z_m": 0.002,
+    "point2_z_m": 0.064,
+    "pointdp_m": 0.001,
+    "h0_m": 0.058,
+    "maximum_invalid_ratio": 0.001,
+    "horizontal_position_follows_rigid_motion": true,
+    "config_dom_mcel_fixed": false,
+    "calc_motion_hook": "AFTER_DSMOTION_PROCESTIME_BEFORE_GETACTIVEMOTION",
+    "restart_pose": "ABSOLUTE_TIMESTEPINI_PARTBEGIN_FROM_EXISTING_SINGLE_PROCESTIME",
+    "additional_proces_time_calls": 0,
+    "runtime_order_witness": "CALC_MOTION_UPDATES_GAUGE_FOR_T_PLUS_DT_THEN_GAUGE_COMPUTE_PRECEDES_BOUNDARY_RUNMOTION",
+    "runtime_order_requires_fresh_smoke_before_s5b0": true
+  },
+  "source_files": [
+    {"path":"src/source/JDsGaugeItem.cpp","before_sha256":"909d0accec54daf2b767d7ab99338ff92ff15b49e9a0bf4c221d7dc6edecb0a4","after_sha256":"283793b308f07579affdf428cf267f62f9ab033c75d25cb54e4620f7d2bf3d01"},
+    {"path":"src/source/JDsGaugeItem.h","before_sha256":"4ceee0be27e86b0686d5530574ab79bd8a99a4f64596b474c9234b8da6df2823","after_sha256":"8ff282de107eeb50691cda2ea77cbf6ec507e73f964231f446e4711a2c46ae2e"},
+    {"path":"src/source/JDsGaugeSystem.cpp","before_sha256":"1ccef263531c3757d513284c7187a4e14fec43c88fc1ff4b5ba4092cca2e1e80","after_sha256":"3dec0381b413f9f736242036abc4b60599dcaf724edddc6202df17de4079ad5e"},
+    {"path":"src/source/JDsGaugeSystem.h","before_sha256":"473831ed3614277ca7e82f2b2ce065a0c37c6039ecbaf9cfcaddef624a2ff86d","after_sha256":"4d97c40b14105f9c4e0df372bff9229b6c8daf881686c4d50f64a7fc0a5e6c6c"},
+    {"path":"src/source/JSph.cpp","before_sha256":"206e4486a3a0d304e02da1a73d2e7c7ed96354d559ce481275d09f5245b8c9e7","after_sha256":"07e197ff8661d91a6e9b30053dfc0b8b138b6293892c6dc72aa2c0031b63676f"},
+    {"path":"src/source/JSph.h","before_sha256":"abb087c020641d94c3968507f0ce067da4f45cac246ff6bc586d4e8665e39eda","after_sha256":"d82074fd35998a96585c6698b09cb8bbddce79835fed4d3e07683270633b08fb"}
+  ],
+  "solver_order_sources": [
+    {"path":"src/source/JSphGpuSingle.cpp","sha256":"a8652f2422e1c7656f39aaac526c432ed992fc506e48de297410bb36cabe0361"},
+    {"path":"src/source/JSphCpuSingle.cpp","sha256":"a261620354e4970f99e8314ddfede1349acef5de236af32e9921af324c021608"}
+  ],
+  "forbidden_actions": ["MODIFY_SEALED_SOURCE","MODIFY_EXISTING_CANDIDATE","PATCH_NON_FRESH_COPY","MAKE","NVCC","COMPILER","SOLVER","GPU","SUDO","APPARMOR","NETWORK","READ_OPTIONAL_BAG","ADD_SECOND_PROCESTIME","CLAIM_RUNTIME_PASS_FROM_STATIC_CONTRACT"]
+}

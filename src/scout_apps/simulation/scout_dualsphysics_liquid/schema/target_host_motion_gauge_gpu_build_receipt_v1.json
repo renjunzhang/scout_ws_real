@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_motion_gauge_gpu_build_receipt_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "campaign_id", "build_id", "phase", "kind", "status", "policy_sha256", "parent_patch_v2_sha256", "inventory", "patch", "build", "static_audit", "safety", "next_allowed_stage"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-motion-gauge-gpu-build-receipt-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_MOTION_GAUGE_GPU_BUILD_RECEIPT_V1"},
+    "campaign_id": {"const": "motion_gauge_gpu_build_sm120_20260812T034446Z_v1"},
+    "build_id": {"const": "motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a"},
+    "phase": {"enum": ["SOURCE_COPY", "PATCH", "BUILD", "STATIC_AUDIT"]},
+    "kind": {"enum": ["START", "FINAL", "FAILURE", "LIFECYCLE"]},
+    "status": {"type": "string", "minLength": 1},
+    "policy_sha256": {"$ref": "#/$defs/sha"},
+    "parent_patch_v2_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "inventory": {"$ref": "#/$defs/inventory"},
+    "patch": {"$ref": "#/$defs/patch"},
+    "build": {"$ref": "#/$defs/build"},
+    "static_audit": {"$ref": "#/$defs/audit"},
+    "safety": {"$ref": "#/$defs/safety"},
+    "next_allowed_stage": {"enum": ["STOP_PARENT_HASH_REQUIRED", "NEXT_PHASE_REQUIRES_SEPARATE_AUTHORIZATION", "SEPARATE_RUNTIME_ADMISSION_REQUIRED", "STOP_PRESERVE_EVIDENCE"]}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "inventory": {"type": ["object", "null"], "additionalProperties": false, "required": ["label", "entry_count", "canonical_sha256"], "properties": {"label": {"type": "string"}, "entry_count": {"type": "integer", "minimum": 0}, "canonical_sha256": {"$ref": "#/$defs/sha"}}},
+    "patch": {"type": ["object", "null"], "additionalProperties": false, "required": ["changed_count", "unchanged_count", "before_sha256", "after_sha256", "full_inventory_pass"], "properties": {"changed_count": {"const": 6}, "unchanged_count": {"const": 346}, "before_sha256": {"$ref": "#/$defs/sha"}, "after_sha256": {"$ref": "#/$defs/sha"}, "full_inventory_pass": {"type": "boolean"}}},
+    "build": {"type": ["object", "null"], "additionalProperties": false, "required": ["make_count", "return_code", "object_count", "candidate_sha256", "candidate_mode_octal"], "properties": {"make_count": {"type": "integer", "minimum": 0, "maximum": 1}, "return_code": {"type": ["integer", "null"]}, "object_count": {"type": "integer", "minimum": 0, "maximum": 131}, "candidate_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}, "candidate_mode_octal": {"type": ["string", "null"], "pattern": "^0[0-7]{3}$"}}},
+    "audit": {"type": ["object", "null"], "additionalProperties": false, "required": ["command_count", "candidate_identity_unchanged", "objects_identity_unchanged", "sm120_pass"], "properties": {"command_count": {"type": "integer", "minimum": 0, "maximum": 142}, "candidate_identity_unchanged": {"type": "boolean"}, "objects_identity_unchanged": {"type": "boolean"}, "sm120_pass": {"type": "boolean"}}},
+    "safety": {"type": "object", "additionalProperties": false, "required": ["create_new_only", "sealed_source_unchanged", "candidate_executed", "gpu_exposed", "optional_bag_read", "network_used", "sudo_used", "apparmor_loaded"], "properties": {"create_new_only": {"const": true}, "sealed_source_unchanged": {"type": "boolean"}, "candidate_executed": {"const": false}, "gpu_exposed": {"const": false}, "optional_bag_read": {"const": false}, "network_used": {"const": false}, "sudo_used": {"type": "boolean"}, "apparmor_loaded": {"type": "boolean"}}}
+  }
+}

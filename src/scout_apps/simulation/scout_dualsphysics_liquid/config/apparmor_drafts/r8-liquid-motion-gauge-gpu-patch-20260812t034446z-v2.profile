@@ -1,0 +1,31 @@
+# Exact create-new instance for the frozen motion-Gauge six-file patch phase.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile r8-liquid-motion-gauge-gpu-patch-20260812t034446z-v2 flags=(attach_disconnected,mediate_deleted) {
+  /usr/bin/timeout rix,
+  /usr/bin/aa-exec rix,
+  /usr/bin/bwrap rix,
+  /usr/bin/env rix,
+  /usr/bin/prlimit rix,
+  /usr/bin/python3 rix,
+  /usr/bin/python3.12 rix,
+  /home/zrj/scout_ws/src/scout_apps/simulation/scout_dualsphysics_liquid/scripts/r8_liquid_motion_gauge_gpu_build_execution_gate_v2.py rix,
+  /usr/ r,
+  /usr/lib/** mr,
+  /usr/lib64/** mr,
+  /lib/** mr,
+  /lib64/** mr,
+  /etc/ld.so.cache r,
+  /dev/null rw,
+  /dev/zero r,
+  /dev/urandom r,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/buildtree/src/source/ r,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/buildtree/src/source/** r,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/buildtree/src/source/JDsGaugeItem.cpp rw,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/buildtree/src/source/JDsGaugeItem.h rw,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/buildtree/src/source/JDsGaugeSystem.cpp rw,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/buildtree/src/source/JDsGaugeSystem.h rw,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/buildtree/src/source/JSph.cpp rw,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/buildtree/src/source/JSph.h rw,
+}

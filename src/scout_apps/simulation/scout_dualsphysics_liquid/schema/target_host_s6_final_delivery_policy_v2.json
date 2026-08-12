@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_final_delivery_policy_v2.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "policy_id", "status", "selection", "s5b0_parent", "s5b0_v4_binding", "gauge_contract", "execution_contract", "claim_ceiling"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-final-delivery-policy-v2"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_FINAL_DELIVERY_POLICY_V2"},
+    "policy_id": {"const": "liquid_zrj_msi_u2404_s6_final_delivery_policy_v2"},
+    "status": {"const": "NOT_ADMITTED_FINALIZED_S5B0_REPLAY_REQUIRED"},
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempt_id", "role", "planned_denominator", "optional_bag_read", "paired_or_cross_method_ranking_allowed", "selected_trajectory_cpu_comparison"],
+      "properties": {
+        "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"}, "role": {"const": "PRIMARY_ONLY"},
+        "planned_denominator": {"const": 1}, "optional_bag_read": {"const": false},
+        "paired_or_cross_method_ranking_allowed": {"const": false}, "selected_trajectory_cpu_comparison": {"const": "OUT_OF_SCOPE"}
+      }
+    },
+    "s5b0_parent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "required_execution_status", "required_frame_manifest_status", "package_root", "package_root_sha256", "execution_receipt_sha256", "result_qc_sha256", "frame_manifest_sha256", "gauge_manifest_sha256", "checksums_sha256"],
+      "properties": {
+        "state": {"const": "NOT_MATERIALIZED"},
+        "required_execution_status": {"const": "S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY"},
+        "required_frame_manifest_status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V1"},
+        "package_root": {"type": "null"}, "package_root_sha256": {"type": "null"}, "execution_receipt_sha256": {"type": "null"},
+        "result_qc_sha256": {"type": "null"}, "frame_manifest_sha256": {"type": "null"}, "gauge_manifest_sha256": {"type": "null"}, "checksums_sha256": {"type": "null"}
+      }
+    },
+    "s5b0_v4_binding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy_path", "policy_sha256", "policy_schema_sha256", "gauge_contract_sha256"],
+      "properties": {
+        "policy_path": {"const": "config/target_hosts/liquid_zrj_msi_u2404_s5b0_replay_admission_policy_v4.json"},
+        "policy_sha256": {"$ref": "#/$defs/sha"}, "policy_schema_sha256": {"$ref": "#/$defs/sha"}, "gauge_contract_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "gauge_contract": {"$ref": "#/$defs/gauge"},
+    "execution_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["commands", "real_parent_required", "external_writes_allowed", "create_new_only", "required_inventory"],
+      "properties": {
+        "commands": {"const": ["admit", "extract-selected", "analyze", "render-figure", "render-media", "publish", "accept", "run-one-shot"]},
+        "real_parent_required": {"const": true}, "external_writes_allowed": {"const": false}, "create_new_only": {"const": true},
+        "required_inventory": {"type": "array", "minItems": 17, "maxItems": 17, "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      }
+    },
+    "claim_ceiling": {
+      "type": "object", "additionalProperties": false,
+      "required": ["maximum_real_status", "stage6_pass_now", "physical_reference_pending", "physical_fidelity_validated", "formal", "production", "physical_primary"],
+      "properties": {
+        "maximum_real_status": {"const": "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY"},
+        "stage6_pass_now": {"const": false}, "physical_reference_pending": {"const": true}, "physical_fidelity_validated": {"const": false},
+        "formal": {"const": false}, "production": {"const": false}, "physical_primary": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "probe": {
+      "type": "object", "additionalProperties": false, "required": ["name", "angle_deg", "x_m", "y_m"],
+      "properties": {"name": {"pattern": "^s5b0_p(?:0[0-9]|1[0-5])$"}, "angle_deg": {"type": "number"}, "x_m": {"type": "number"}, "y_m": {"type": "number"}}
+    },
+    "gauge": {
+      "type": "object", "additionalProperties": false,
+      "required": ["measurement_source", "probe_count", "attachment_frame", "update_semantics", "world_fixed_xml_gauge_allowed", "q98_proxy_allowed", "is_solver_gauge", "class_name", "probe_radius_m", "point0_z_m", "point2_z_m", "pointdp_m", "masslimit_coef", "compute_dt_s", "output_dt_s", "h0_m", "invalid_rule", "maximum_invalid_ratio", "raw_output_pattern", "derived_output", "probes"],
+      "properties": {
+        "measurement_source": {"const": "RAW_NATIVE_JGAUGESWL_CSV"}, "probe_count": {"const": 16},
+        "attachment_frame": {"const": "MOVING_CONTAINER_REFERENCE_REF_0"}, "update_semantics": {"const": "PATCHED_EACH_SOLVER_STEP_BEFORE_GAUGE_COMPUTE"},
+        "world_fixed_xml_gauge_allowed": {"const": false}, "q98_proxy_allowed": {"const": false}, "is_solver_gauge": {"const": true}, "class_name": {"const": "JGaugeSwl"},
+        "probe_radius_m": {"const": 0.0145}, "point0_z_m": {"const": 0.002}, "point2_z_m": {"const": 0.064}, "pointdp_m": {"const": 0.001},
+        "masslimit_coef": {"const": 0.5}, "compute_dt_s": {"const": 0.05}, "output_dt_s": {"const": 0.05}, "h0_m": {"const": 0.058},
+        "invalid_rule": {"const": "NONFINITE_OR_OUTSIDE_CLOSED_POINT0_POINT2_SEGMENT"}, "maximum_invalid_ratio": {"const": 0.001},
+        "raw_output_pattern": {"const": "GaugesSwl_s5b0_p00..s5b0_p15.csv"}, "derived_output": {"const": "gauge_zsurf.csv"},
+        "probes": {"type": "array", "minItems": 16, "maxItems": 16, "items": {"$ref": "#/$defs/probe"}}
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+# Exact create-new instance for the frozen motion-Gauge source-copy phase.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile r8-liquid-motion-gauge-gpu-source-copy-20260812t034446z-v2 flags=(attach_disconnected,mediate_deleted) {
+  /usr/bin/timeout rix,
+  /usr/bin/aa-exec rix,
+  /usr/bin/bwrap rix,
+  /usr/bin/env rix,
+  /usr/bin/prlimit rix,
+  /usr/bin/cp rix,
+  /usr/ r,
+  /usr/lib/** mr,
+  /usr/lib64/** mr,
+  /lib/** mr,
+  /lib64/** mr,
+  /etc/ld.so.cache r,
+  /dev/null rw,
+  /dev/zero r,
+  /dev/urandom r,
+  /home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source/ r,
+  /home/zrj/scout_liquid_lab/dependency/materialized/u3_source_materialization_v1_20260806T155752Z.partial/src/source/** r,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/ rw,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/ rw,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/** rw,
+  /work/input/ r,
+  /work/input/** r,
+  /work/output/ rw,
+  /work/output/** rw,
+}

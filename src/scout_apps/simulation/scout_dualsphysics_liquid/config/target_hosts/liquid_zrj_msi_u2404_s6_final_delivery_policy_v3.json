@@ -1,0 +1,85 @@
+{
+  "schema_version": "smpcc-r8-liquid-s6-final-delivery-policy-v3",
+  "document_type": "SMPCC_R8_LIQUID_S6_FINAL_DELIVERY_POLICY_V3",
+  "policy_id": "liquid_zrj_msi_u2404_s6_final_delivery_policy_v3",
+  "status": "NOT_ADMITTED_FINALIZED_S5B0_REPLAY_REQUIRED",
+  "selection": {
+    "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+    "planned_denominator": 1,
+    "optional_bag_read": false,
+    "ranking_allowed": false,
+    "selected_trajectory_cpu_comparison": "OUT_OF_SCOPE"
+  },
+  "parent": {
+    "state": "NOT_MATERIALIZED",
+    "package_root": null,
+    "inventory_sha256": null,
+    "execution_receipt_sha256": null,
+    "result_qc_sha256": null,
+    "frame_manifest_sha256": null,
+    "native_gauge_manifest_sha256": null,
+    "checksums_sha256": null,
+    "required_execution_status": "S5B0_PRIMARY_R7_EXECUTED_MOTION_REPLAY_PASS_DEVELOPMENT_ONLY",
+    "required_qc_status": "PASS_S5B0_REPLAY_RESULT_QC_V2",
+    "required_frame_status": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V1"
+  },
+  "bindings": {
+    "s5b0_v4_policy_path": "config/target_hosts/liquid_zrj_msi_u2404_s5b0_replay_admission_policy_v4.json",
+    "s5b0_v4_policy_sha256": "d972f66d14882c28abe5629828d2ccaab1013f82a65b82f6250cf55716e41f21",
+    "s5b0_v4_gauge_contract_sha256": "d0cde7388bf0984ca664258e22cf00dc5f1702951811d5cb29c3282e57583328",
+    "s6_v2_policy_path": "config/target_hosts/liquid_zrj_msi_u2404_s6_final_delivery_policy_v2.json",
+    "s6_v2_policy_sha256": "13ad1e55f855be19c986b91c739987dc4237dfe88eeeb579573eacfd2176bd70"
+  },
+  "gauge": {
+    "probe_names": ["s5b0_p00", "s5b0_p01", "s5b0_p02", "s5b0_p03", "s5b0_p04", "s5b0_p05", "s5b0_p06", "s5b0_p07", "s5b0_p08", "s5b0_p09", "s5b0_p10", "s5b0_p11", "s5b0_p12", "s5b0_p13", "s5b0_p14", "s5b0_p15"],
+    "h0_m": 0.058,
+    "point0_z_m": 0.002,
+    "point2_z_m": 0.064,
+    "maximum_invalid_ratio": 0.001,
+    "minimum_valid_probes_per_slot": 15
+  },
+  "analysis": {
+    "windows": ["first15", "full_motion", "recorded_tail", "solver_tail"],
+    "surface_series": ["H_crest", "H_abs", "H_peak_to_peak"],
+    "secondary_series": ["H_proxy", "H_modal"],
+    "statistics": ["peak", "p95", "rms", "peak_time"],
+    "comparison_dimensions": ["amplitude", "frequency", "damping", "phase", "correlation", "rmse"],
+    "interpolation": "LINEAR_WITHIN_REGISTERED_OVERLAP_ONLY",
+    "outside_overlap": "EXPLICIT_NULL_NA",
+    "smoothing": false,
+    "extrapolation": false
+  },
+  "delivery": {
+    "write_semantics": "CREATE_NEW_ATOMIC_RENAME_NOREPLACE",
+    "file_mode": "0440",
+    "required_inventory": [
+      "data/raw_gauge_zsurf.json",
+      "data/aligned_primary_comparison.csv",
+      "reports/analysis_result.json",
+      "figures/primary_shared_x_timeseries.png",
+      "figures/primary_shared_x_timeseries_grayscale.png",
+      "figures/primary_shared_x_timeseries.pdf",
+      "animation/primary.mp4",
+      "animation/primary_preview.gif",
+      "keyframes/primary_first.png",
+      "keyframes/primary_middle.png",
+      "keyframes/primary_last.png",
+      "comparison_manifest.json",
+      "evidence_index.json",
+      "liquid_secondary_ledger.jsonl",
+      "secondary_ledger_append_receipt.json",
+      "acceptance_receipt.json",
+      "checksums.sha256"
+    ]
+  },
+  "claim_ceiling": {
+    "stage6_pass_now": false,
+    "physical_reference_pending": true,
+    "physical_fidelity_validated": false,
+    "paired_ranking": false,
+    "cross_method_ranking": false,
+    "formal": false,
+    "production": false,
+    "physical_primary": false
+  }
+}

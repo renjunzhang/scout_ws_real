@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_runtime_contract_v7.json",
+  "title": "S6 exact primary runtime contract v7",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "source_outcome", "parents", "canonical_s5b0", "runtime_paths", "analysis_windows", "transaction_admission", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-runtime-contract-v7"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_CONTRACT_V7"},
+    "status": {"const": "ADMITTED_EXACT_FINALIZED_S5B0_PRIMARY_RUNTIME_MATERIALIZED_V7"},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "source_outcome": {"const": "UNKNOWN"},
+    "parents": {"$ref": "#/$defs/parents"},
+    "canonical_s5b0": {"$ref": "#/$defs/canonicalS5b0"},
+    "runtime_paths": {"$ref": "#/$defs/runtimePaths"},
+    "analysis_windows": {"$ref": "#/$defs/analysisWindows"},
+    "transaction_admission": {"$ref": "#/$defs/transactionAdmission"},
+    "claims": {"$ref": "#/$defs/claims"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "absolutePath": {"type": "string", "pattern": "^/(?!.*(?:^|/)\\.\\.(?:/|$)).+$"},
+    "fileIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "size_bytes", "mode", "device", "inode", "nlink", "mtime_ns", "ctime_ns"],
+      "properties": {
+        "path": {"$ref": "#/$defs/absolutePath"},
+        "sha256": {"$ref": "#/$defs/sha"},
+        "size_bytes": {"type": "integer", "minimum": 1},
+        "mode": {"type": "string", "pattern": "^[0-7]{4}$"},
+        "device": {"type": "integer", "minimum": 0},
+        "inode": {"type": "integer", "minimum": 1},
+        "nlink": {"const": 1},
+        "mtime_ns": {"type": "integer"},
+        "ctime_ns": {"type": "integer"}
+      }
+    },
+    "parents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "s5a0_selected_bag_receipt", "s5a1_transfer_manifest", "source_bag", "s5b0_result_package"],
+      "properties": {
+        "policy": {"$ref": "#/$defs/fileIdentity"},
+        "s5a0_selected_bag_receipt": {"$ref": "#/$defs/fileIdentity"},
+        "s5a1_transfer_manifest": {"$ref": "#/$defs/fileIdentity"},
+        "source_bag": {"$ref": "#/$defs/fileIdentity"},
+        "s5b0_result_package": {"$ref": "#/$defs/packageIdentity"}
+      }
+    },
+    "packageIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["root", "inventory_sha256", "file_count", "receipt_sha256", "result_qc_sha256", "checksums_sha256"],
+      "properties": {
+        "root": {"$ref": "#/$defs/absolutePath"},
+        "inventory_sha256": {"$ref": "#/$defs/sha"},
+        "file_count": {"type": "integer", "minimum": 1},
+        "receipt_sha256": {"$ref": "#/$defs/sha"},
+        "result_qc_sha256": {"$ref": "#/$defs/sha"},
+        "checksums_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "canonicalS5b0": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frame_manifest", "gauge_manifest", "canonical_time_grid", "probe_grid_sha256", "frame_reader", "bi4_reader", "integrity"],
+      "properties": {
+        "frame_manifest": {"$ref": "#/$defs/frameManifest"},
+        "gauge_manifest": {"$ref": "#/$defs/gaugeManifest"},
+        "canonical_time_grid": {"$ref": "#/$defs/timeGrid"},
+        "probe_grid_sha256": {"$ref": "#/$defs/sha"},
+        "frame_reader": {"$ref": "#/$defs/toolIdentity"},
+        "bi4_reader": {"$ref": "#/$defs/toolIdentity"},
+        "integrity": {"$ref": "#/$defs/s5b0Integrity"}
+      }
+    },
+    "frameManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "schema_version", "status", "frame_manifest_sha256", "frame_count", "particle_count", "ids_sha256"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/fileIdentity"},
+        "schema_version": {"const": "smpcc-r8-liquid-s5b0-finalized-solver-frames-manifest-v1"},
+        "status": {"const": "PASS_S5B0_FINALIZED_SOLVER_FRAMES_MANIFEST_V1"},
+        "frame_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "frame_count": {"type": "integer", "minimum": 1},
+        "particle_count": {"type": "integer", "minimum": 1},
+        "ids_sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "gaugeManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "schema_version", "status", "native_gauge_manifest_sha256", "probe_count", "attachment_frame"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/fileIdentity"},
+        "schema_version": {"const": "smpcc-r8-liquid-s5b0-native-gauge-manifest-v1"},
+        "status": {"const": "PASS_S5B0_NATIVE_GAUGE_MANIFEST_V1"},
+        "native_gauge_manifest_sha256": {"$ref": "#/$defs/sha"},
+        "probe_count": {"const": 16},
+        "attachment_frame": {"const": "MOVING_CONTAINER_REFERENCE_REF_0"}
+      }
+    },
+    "timeGrid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "slot_count", "source", "frame_manifest_declares_same", "gauge_manifest_declares_same"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha"},
+        "slot_count": {"type": "integer", "minimum": 1},
+        "source": {"const": "REAL_FINALIZED_FRAME_AND_NATIVE_GAUGE_MANIFESTS"},
+        "frame_manifest_declares_same": {"const": true},
+        "gauge_manifest_declares_same": {"const": true}
+      }
+    },
+    "toolIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256"],
+      "properties": {
+        "relative_path": {"type": "string", "pattern": "^scripts/[A-Za-z0-9_.-]+$"},
+        "sha256": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "s5b0Integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["canonical_manifest_not_flat_replacement", "exact_inventory", "contiguous_frame_indices", "particle_count_stable", "particle_ids_stable", "particle_classes_stable", "nout_zero", "finite", "no_symlink_hardlink_special_or_toctou"],
+      "properties": {
+        "canonical_manifest_not_flat_replacement": {"const": true},
+        "exact_inventory": {"const": true},
+        "contiguous_frame_indices": {"const": true},
+        "particle_count_stable": {"const": true},
+        "particle_ids_stable": {"const": true},
+        "particle_classes_stable": {"const": true},
+        "nout_zero": {"const": true},
+        "finite": {"const": true},
+        "no_symlink_hardlink_special_or_toctou": {"const": true}
+      }
+    },
+    "runtimePaths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["partial_root", "final_root", "comparison_ledger", "final_transaction_receipt", "evidence_index", "checksums"],
+      "properties": {
+        "partial_root": {"$ref": "#/$defs/absolutePath"},
+        "final_root": {"$ref": "#/$defs/absolutePath"},
+        "comparison_ledger": {"$ref": "#/$defs/absolutePath"},
+        "final_transaction_receipt": {"$ref": "#/$defs/absolutePath"},
+        "evidence_index": {"$ref": "#/$defs/absolutePath"},
+        "checksums": {"$ref": "#/$defs/absolutePath"}
+      }
+    },
+    "analysisWindows": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["materialization_source", "time_grid_sha256", "first15", "full_motion", "recorded_tail", "solver_tail"],
+      "properties": {
+        "materialization_source": {"const": "FUTURE_REAL_FINALIZED_TIME_GRID_ONLY"},
+        "time_grid_sha256": {"$ref": "#/$defs/sha"},
+        "first15": {"$ref": "#/$defs/window"},
+        "full_motion": {"$ref": "#/$defs/window"},
+        "recorded_tail": {"$ref": "#/$defs/window"},
+        "solver_tail": {"$ref": "#/$defs/window"}
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_index", "end_index", "start_s", "end_s"],
+      "properties": {
+        "start_index": {"type": "integer", "minimum": 0},
+        "end_index": {"type": "integer", "minimum": 0},
+        "start_s": {"type": "number", "minimum": 0},
+        "end_s": {"type": "number", "minimum": 0}
+      }
+    },
+    "transactionAdmission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transaction_id", "expected_previous_ledger_sha256", "prepared_then_publish_then_committed_then_receipt", "staging_complete_before_prepared", "consumer_requires_three_way_consistency"],
+      "properties": {
+        "transaction_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{7,127}$"},
+        "expected_previous_ledger_sha256": {"$ref": "#/$defs/sha"},
+        "prepared_then_publish_then_committed_then_receipt": {"const": true},
+        "staging_complete_before_prepared": {"const": true},
+        "consumer_requires_three_way_consistency": {"const": true}
+      }
+    },
+    "claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage6_pass", "development_only", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "formal", "production", "physical_primary"],
+      "properties": {
+        "stage6_pass": {"const": false},
+        "development_only": {"const": true},
+        "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false},
+        "paired_ranking": {"const": false},
+        "cross_method_ranking": {"const": false},
+        "selected_trajectory_cpu_comparison": {"const": false},
+        "formal": {"const": false},
+        "production": {"const": false},
+        "physical_primary": {"const": false}
+      }
+    }
+  }
+}

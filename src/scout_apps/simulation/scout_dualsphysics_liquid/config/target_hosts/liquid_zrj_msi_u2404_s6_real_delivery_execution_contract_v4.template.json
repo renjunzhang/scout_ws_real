@@ -1,0 +1,88 @@
+{
+  "schema_version": "smpcc-r8-liquid-s6-real-delivery-execution-contract-v4",
+  "document_type": "SMPCC_R8_LIQUID_S6_REAL_DELIVERY_EXECUTION_CONTRACT_V4",
+  "contract_id": "liquid_zrj_msi_u2404_s6_real_delivery_execution_contract_v4",
+  "status": "NOT_ADMITTED_EXACT_FINALIZED_S5B0_AND_PRIMARY_BAG_IDENTITIES_REQUIRED",
+  "selection": {
+    "attempt_id": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01",
+    "role": "PRIMARY_BASELINE_ONLY",
+    "planned_denominator": 1,
+    "optional_bag_read": false,
+    "ranking_allowed": false,
+    "selected_trajectory_cpu_comparison": false
+  },
+  "dependencies": {
+    "s6_engine_v3_path": "scripts/r8_liquid_s6_final_delivery_engine_v3.py",
+    "s6_engine_v3_sha256": "0009e63d7569b81933b8fbb1fb5d65ff3b1dcb4008349a69a805243cbe511d56",
+    "selected_signal_v5_path": "scripts/r8_liquid_s6_real_selected_signal_extractor_v5.py",
+    "selected_signal_v5_sha256": "991bdc10f89b5056978ead95acb89fb904ffbe199a0c6769cafa64855e327373",
+    "figure_media_v1_path": "scripts/r8_liquid_s6_final_delivery_contract_v1.py",
+    "figure_media_v1_sha256": "1ce74166be2fbff9634d073e83732eaad4605c28d9547d4e1fa62b1ee3285804",
+    "bi4_reader_v1_path": "scripts/r8_liquid_bi4_reader_v1.py",
+    "bi4_reader_v1_sha256": "104d271b750eed15985bf29f743a59678d66c50b9dfae9d1a3fd1663510dbc14",
+    "finalized_frame_reader_v1_path": "scripts/r8_liquid_s5b0_finalized_frame_reader_v1.py",
+    "finalized_frame_reader_v1_sha256": "239bd4a29e5735e194db6e18da2ad658626119687d0cfef7cbb8bdbe3bfe7932"
+  },
+  "parents": {
+    "s5a0_receipt": null,
+    "s5a1_transfer_manifest": null,
+    "primary_bag": null,
+    "s5b0_package": null
+  },
+  "runtime": {
+    "final_root": null,
+    "external_ledger_path": null,
+    "external_ledger_expected_previous_sha256": null,
+    "fps": 5,
+    "windows": {
+      "first15": null,
+      "full_motion": null,
+      "recorded_tail": null,
+      "solver_tail": null
+    },
+    "required_inventory": [
+      "data/raw_gauge_zsurf.json",
+      "data/aligned_primary_comparison.csv",
+      "reports/analysis_result.json",
+      "figures/primary_shared_x_timeseries.png",
+      "figures/primary_shared_x_timeseries_grayscale.png",
+      "figures/primary_shared_x_timeseries.pdf",
+      "animation/primary.mp4",
+      "animation/primary_preview.gif",
+      "keyframes/primary_first.png",
+      "keyframes/primary_middle.png",
+      "keyframes/primary_last.png",
+      "comparison_manifest.json",
+      "evidence_index.json",
+      "liquid_secondary_ledger.jsonl",
+      "secondary_ledger_append_receipt.json",
+      "acceptance_receipt.json",
+      "checksums.sha256"
+    ]
+  },
+  "authorization": {
+    "exact_parents_materialized": false,
+    "runtime_read_authorized": false,
+    "create_new_publish_authorized": false
+  },
+  "constraints": {
+    "source_bag_input": "EXACT_REGULAR_SINGLE_LINK_FD_BYTES",
+    "gauge_fact_source": "SIXTEEN_RAW_NATIVE_JGAUGESWL_CSV",
+    "frame_source": "FINALIZED_FRAME_MANIFEST_BOUND_BI4_ONLY",
+    "write_semantics": "DIRFD_O_EXCL_FSYNC_RENAME_NOREPLACE",
+    "external_ledger_semantics": "FLOCK_COMPARE_AND_APPEND_FSYNC",
+    "smoothing": false,
+    "extrapolation": false,
+    "optional_root_must_not_be_opened": true
+  },
+  "claims": {
+    "stage6_pass": false,
+    "development_only": true,
+    "physical_reference_pending": true,
+    "physical_fidelity_validated": false,
+    "paired_ranking": false,
+    "cross_method_ranking": false,
+    "formal": false,
+    "production": false
+  }
+}

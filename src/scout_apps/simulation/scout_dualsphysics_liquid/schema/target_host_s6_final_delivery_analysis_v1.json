@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_final_delivery_analysis_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "mode", "attempt_id", "planned_denominator", "provenance", "grids", "windows", "probe_qc", "solver_rows", "comparison_rows", "window_summaries", "series_metrics", "comparison_matrix", "visual_contract", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-final-delivery-analysis-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_FINAL_DELIVERY_ANALYSIS_V1"},
+    "status": {"enum": ["S6_FINAL_DELIVERY_STATIC_FIXTURE_VALIDATED_NOT_REAL_PASS", "S6_FINAL_DELIVERY_REAL_ANALYSIS_COMPLETE_PENDING_DELIVERY_QA"]},
+    "mode": {"enum": ["STATIC_FIXTURE_ONLY", "ADMITTED_FINALIZED_S5B0_PRIMARY"]},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "provenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_schema", "source_outcome_evidence", "source_outcome_sidecar_sha256", "outcome_inferred_from_schema", "gauge_fact_source", "bi4_surface_role"],
+      "properties": {
+        "source_schema": {"const": "SPMPC_NON_FIXED"},
+        "source_outcome_evidence": {"enum": ["UNKNOWN", "AUTHORITATIVE_SIDECAR"]},
+        "source_outcome_sidecar_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "outcome_inferred_from_schema": {"const": false}, "gauge_fact_source": {"const": "RAW_GAUGE_ZSURF_CSV"},
+        "bi4_surface_role": {"const": "SPLASH_ANIMATION_QC_ONLY_NOT_GAUGE"}
+      }
+    },
+    "grids": {
+      "type": "object", "additionalProperties": false,
+      "required": ["solver_output_grid", "comparison_grid", "registered_overlap", "interpolation", "extrapolation", "smoothing", "outside_overlap_encoding", "denominator_preserved"],
+      "properties": {
+        "solver_output_grid": {"$ref": "#/$defs/grid"}, "comparison_grid": {"$ref": "#/$defs/grid"},
+        "registered_overlap": {"$ref": "#/$defs/range"},
+        "interpolation": {"const": "LINEAR_WITHIN_REGISTERED_OVERLAP_ONLY"}, "extrapolation": {"const": false},
+        "smoothing": {"const": false}, "outside_overlap_encoding": {"const": "EXPLICIT_NULL_NA_OUTSIDE_REGISTERED_OVERLAP"},
+        "denominator_preserved": {"const": true}
+      }
+    },
+    "windows": {
+      "type": "object", "additionalProperties": false,
+      "required": ["first15", "full_motion", "recorded_tail", "solver_tail"],
+      "properties": {"first15": {"$ref": "#/$defs/range"}, "full_motion": {"$ref": "#/$defs/range"}, "recorded_tail": {"$ref": "#/$defs/range"}, "solver_tail": {"$ref": "#/$defs/range"}}
+    },
+    "probe_qc": {
+      "type": "object", "additionalProperties": false,
+      "required": ["registered_probe_count", "row_count", "minimum_valid_probes_per_slot", "per_probe"],
+      "properties": {
+        "registered_probe_count": {"type": "integer", "minimum": 4}, "row_count": {"type": "integer", "minimum": 16},
+        "minimum_valid_probes_per_slot": {"type": "integer", "minimum": 2},
+        "per_probe": {"type": "array", "minItems": 4, "uniqueItems": true, "items": {"$ref": "#/$defs/probeQc"}}
+      }
+    },
+    "solver_rows": {"type": "array", "minItems": 16, "items": {"$ref": "#/$defs/solverRow"}},
+    "comparison_rows": {"type": "array", "minItems": 4, "items": {"$ref": "#/$defs/comparisonRow"}},
+    "window_summaries": {
+      "type": "object", "additionalProperties": false,
+      "required": ["first15", "full_motion", "recorded_tail", "solver_tail"],
+      "properties": {"first15": {"$ref": "#/$defs/windowSummary"}, "full_motion": {"$ref": "#/$defs/windowSummary"}, "recorded_tail": {"$ref": "#/$defs/windowSummary"}, "solver_tail": {"$ref": "#/$defs/windowSummary"}}
+    },
+    "series_metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["H_crest", "H_abs", "H_peak_to_peak", "H_proxy", "H_modal"],
+      "properties": {"H_crest": {"$ref": "#/$defs/seriesMetric"}, "H_abs": {"$ref": "#/$defs/seriesMetric"}, "H_peak_to_peak": {"$ref": "#/$defs/seriesMetric"}, "H_proxy": {"$ref": "#/$defs/seriesMetric"}, "H_modal": {"$ref": "#/$defs/seriesMetric"}}
+    },
+    "comparison_matrix": {
+      "type": "array", "minItems": 6, "maxItems": 6, "items": {"$ref": "#/$defs/comparisonMetric"}
+    },
+    "visual_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["layout", "shared_x", "dual_y_axes", "palette", "redundant_encoding", "grayscale_qa_required", "layout_qa_required", "physical_reference_label"],
+      "properties": {
+        "layout": {"const": "THREE_VERTICAL_SHARED_X_PANELS"}, "shared_x": {"const": true}, "dual_y_axes": {"const": false},
+        "palette": {"const": "OKABE_ITO_COLORBLIND_SAFE"}, "redundant_encoding": {"const": true},
+        "grayscale_qa_required": {"const": true}, "layout_qa_required": {"const": true},
+        "physical_reference_label": {"const": "PENDING_NO_REFERENCE"}
+      }
+    },
+    "claims": {"$ref": "#/$defs/claims"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "range": {"type": "object", "additionalProperties": false, "required": ["start_s", "end_s"], "properties": {"start_s": {"type": "number"}, "end_s": {"type": "number"}}},
+    "grid": {"type": "object", "additionalProperties": false, "required": ["sample_count", "start_s", "end_s", "canonical_sha256"], "properties": {"sample_count": {"type": "integer", "minimum": 1}, "start_s": {"type": "number"}, "end_s": {"type": "number"}, "canonical_sha256": {"$ref": "#/$defs/sha256"}}},
+    "probeQc": {"type": "object", "additionalProperties": false, "required": ["probe_id", "valid_count", "missing_count", "invalid_count", "missing_ratio", "invalid_ratio", "missing_or_invalid_ratio", "pass"], "properties": {"probe_id": {"type": "string", "pattern": "^p[0-9]{2}$"}, "valid_count": {"type": "integer", "minimum": 0}, "missing_count": {"type": "integer", "minimum": 0}, "invalid_count": {"type": "integer", "minimum": 0}, "missing_ratio": {"type": "number", "minimum": 0, "maximum": 1}, "invalid_ratio": {"type": "number", "minimum": 0, "maximum": 1}, "missing_or_invalid_ratio": {"type": "number", "minimum": 0, "maximum": 1}, "pass": {"type": "boolean"}}},
+    "nullableNumber": {"type": ["number", "null"]},
+    "solverRow": {"type": "object", "additionalProperties": false, "required": ["time_s", "H_crest_mm", "H_abs_mm", "H_peak_to_peak_mm", "valid_probe_count", "H_proxy_mm", "H_modal_mm", "H_proxy_coverage", "H_modal_coverage"], "properties": {"time_s": {"type": "number"}, "H_crest_mm": {"type": "number"}, "H_abs_mm": {"type": "number", "minimum": 0}, "H_peak_to_peak_mm": {"type": "number", "minimum": 0}, "valid_probe_count": {"type": "integer", "minimum": 2}, "H_proxy_mm": {"$ref": "#/$defs/nullableNumber"}, "H_modal_mm": {"$ref": "#/$defs/nullableNumber"}, "H_proxy_coverage": {"enum": ["IN_REGISTERED_OVERLAP", "NA_OUTSIDE_REGISTERED_OVERLAP"]}, "H_modal_coverage": {"enum": ["IN_REGISTERED_OVERLAP", "NA_OUTSIDE_REGISTERED_OVERLAP"]}}},
+    "comparisonRow": {"type": "object", "additionalProperties": false, "required": ["time_s", "H_crest_mm", "H_abs_mm", "H_peak_to_peak_mm", "H_proxy_mm", "H_modal_mm"], "properties": {"time_s": {"type": "number"}, "H_crest_mm": {"type": "number"}, "H_abs_mm": {"type": "number"}, "H_peak_to_peak_mm": {"type": "number"}, "H_proxy_mm": {"type": "number"}, "H_modal_mm": {"type": "number"}}},
+    "windowStat": {"type": "object", "additionalProperties": false, "required": ["peak_mm", "p95_mm", "rms_mm", "peak_time_s"], "properties": {"peak_mm": {"type": "number"}, "p95_mm": {"type": "number"}, "rms_mm": {"type": "number", "minimum": 0}, "peak_time_s": {"type": "number"}}},
+    "windowSummary": {"type": "object", "additionalProperties": false, "required": ["slot_count", "H_crest", "H_abs", "H_peak_to_peak"], "properties": {"slot_count": {"type": "integer", "minimum": 1}, "H_crest": {"$ref": "#/$defs/windowStat"}, "H_abs": {"$ref": "#/$defs/windowStat"}, "H_peak_to_peak": {"$ref": "#/$defs/windowStat"}}},
+    "seriesMetric": {"type": "object", "additionalProperties": false, "required": ["amplitude_peak_mm", "dominant_frequency_hz", "damping_rate_per_s", "phase_rad"], "properties": {"amplitude_peak_mm": {"type": "number", "minimum": 0}, "dominant_frequency_hz": {"type": "number", "minimum": 0}, "damping_rate_per_s": {"type": "number"}, "phase_rad": {"type": "number", "minimum": -3.141592653589793, "maximum": 3.141592653589793}}},
+    "comparisonMetric": {"type": "object", "additionalProperties": false, "required": ["surface", "secondary", "dimensions", "rmse_mm", "correlation", "ranking_claimed"], "properties": {"surface": {"enum": ["H_crest", "H_abs", "H_peak_to_peak"]}, "secondary": {"enum": ["H_proxy", "H_modal"]}, "dimensions": {"type": "object", "additionalProperties": false, "required": ["amplitude_error_mm", "frequency_error_hz", "damping_error_per_s", "phase_error_rad"], "properties": {"amplitude_error_mm": {"type": "number"}, "frequency_error_hz": {"type": "number"}, "damping_error_per_s": {"type": "number"}, "phase_error_rad": {"type": "number", "minimum": -3.141592653589793, "maximum": 3.141592653589793}}}, "rmse_mm": {"type": "number", "minimum": 0}, "correlation": {"type": "number", "minimum": -1, "maximum": 1}, "ranking_claimed": {"const": false}}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["stage6_pass", "single_row", "paired_ranking", "cross_method_ranking", "cpu_selected_trajectory_comparison", "physical_reference_pending", "physical_fidelity_validated", "formal", "production", "physical_primary"], "properties": {"stage6_pass": {"type": "boolean"}, "single_row": {"const": true}, "paired_ranking": {"const": false}, "cross_method_ranking": {"const": false}, "cpu_selected_trajectory_comparison": {"const": false}, "physical_reference_pending": {"const": true}, "physical_fidelity_validated": {"const": false}, "formal": {"const": false}, "production": {"const": false}, "physical_primary": {"const": false}}}
+  }
+}

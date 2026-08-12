@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_final_delivery_receipt_v2.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "gates", "publication", "acceptance_checks", "side_effects", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-final-delivery-receipt-v2"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_FINAL_DELIVERY_RECEIPT_V2"},
+    "status": {"enum": ["NOT_ADMITTED_FINALIZED_S5B0_REPLAY_REQUIRED", "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY"]},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"}, "planned_denominator": {"const": 1},
+    "gates": {
+      "type": "object", "additionalProperties": false,
+      "required": ["admission", "extract_selected", "analysis", "figure", "media", "publish"],
+      "properties": {"admission": {"$ref": "#/$defs/gate"}, "extract_selected": {"$ref": "#/$defs/gate"}, "analysis": {"$ref": "#/$defs/gate"}, "figure": {"$ref": "#/$defs/gate"}, "media": {"$ref": "#/$defs/gate"}, "publish": {"$ref": "#/$defs/gate"}}
+    },
+    "publication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["inventory", "comparison_manifest", "evidence_index", "ledger", "ledger_append_receipt", "checksums", "acceptance_receipt"],
+      "properties": {
+        "inventory": {"type": "array", "minItems": 17, "maxItems": 17, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "comparison_manifest": {"$ref": "#/$defs/nullableIdentity"}, "evidence_index": {"$ref": "#/$defs/nullableIdentity"},
+        "ledger": {"$ref": "#/$defs/nullableIdentity"}, "ledger_append_receipt": {"$ref": "#/$defs/nullableIdentity"},
+        "checksums": {"$ref": "#/$defs/nullableIdentity"}, "acceptance_receipt": {"$ref": "#/$defs/nullableIdentity"}
+      }
+    },
+    "acceptance_checks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["all_receipts_schema_valid", "all_receipt_hashes_bound", "all_gate_passes", "inventory_exact", "checksums_complete", "ledger_append_verified", "planned_row_closed_1_of_1", "optional_unread", "no_ranking", "physical_pending", "create_new_only", "all_delivery_assets_verified"],
+      "properties": {"all_receipts_schema_valid": {"type": "boolean"}, "all_receipt_hashes_bound": {"type": "boolean"}, "all_gate_passes": {"type": "boolean"}, "inventory_exact": {"type": "boolean"}, "checksums_complete": {"type": "boolean"}, "ledger_append_verified": {"type": "boolean"}, "planned_row_closed_1_of_1": {"type": "boolean"}, "optional_unread": {"const": true}, "no_ranking": {"const": true}, "physical_pending": {"const": true}, "create_new_only": {"const": true}, "all_delivery_assets_verified": {"type": "boolean"}}
+    },
+    "side_effects": {"$ref": "#/$defs/sideEffects"}, "claims": {"$ref": "#/$defs/claims"}
+  },
+  "$defs": {
+    "sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "identity": {"type": "object", "additionalProperties": false, "required": ["relative_path", "sha256", "size_bytes"], "properties": {"relative_path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha"}, "size_bytes": {"type": "integer", "minimum": 1}}},
+    "nullableIdentity": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/identity"}]},
+    "gate": {"type": "object", "additionalProperties": false, "required": ["pass", "receipt_sha256"], "properties": {"pass": {"type": "boolean"}, "receipt_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}}},
+    "sideEffects": {"type": "object", "additionalProperties": false, "required": ["bag_read", "optional_bag_read", "solver_executed", "gpu_exposed", "network_used", "sudo_used", "external_write_performed"], "properties": {"bag_read": {"const": false}, "optional_bag_read": {"const": false}, "solver_executed": {"const": false}, "gpu_exposed": {"const": false}, "network_used": {"const": false}, "sudo_used": {"const": false}, "external_write_performed": {"const": false}}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["stage6_pass", "development_only", "single_row", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "formal", "production", "physical_primary"], "properties": {"stage6_pass": {"type": "boolean"}, "development_only": {"const": true}, "single_row": {"const": true}, "physical_reference_pending": {"const": true}, "physical_fidelity_validated": {"const": false}, "paired_ranking": {"const": false}, "cross_method_ranking": {"const": false}, "selected_trajectory_cpu_comparison": {"const": false}, "formal": {"const": false}, "production": {"const": false}, "physical_primary": {"const": false}}}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "gates": {"properties": {"admission": {"properties": {"pass": {"const": true}, "receipt_sha256": {"$ref": "#/$defs/sha"}}}, "extract_selected": {"properties": {"pass": {"const": true}, "receipt_sha256": {"$ref": "#/$defs/sha"}}}, "analysis": {"properties": {"pass": {"const": true}, "receipt_sha256": {"$ref": "#/$defs/sha"}}}, "figure": {"properties": {"pass": {"const": true}, "receipt_sha256": {"$ref": "#/$defs/sha"}}}, "media": {"properties": {"pass": {"const": true}, "receipt_sha256": {"$ref": "#/$defs/sha"}}}, "publish": {"properties": {"pass": {"const": true}, "receipt_sha256": {"$ref": "#/$defs/sha"}}}}},
+          "publication": {"properties": {"comparison_manifest": {"$ref": "#/$defs/identity"}, "evidence_index": {"$ref": "#/$defs/identity"}, "ledger": {"$ref": "#/$defs/identity"}, "ledger_append_receipt": {"$ref": "#/$defs/identity"}, "checksums": {"$ref": "#/$defs/identity"}, "acceptance_receipt": {"$ref": "#/$defs/identity"}}},
+          "acceptance_checks": {"properties": {"all_receipts_schema_valid": {"const": true}, "all_receipt_hashes_bound": {"const": true}, "all_gate_passes": {"const": true}, "inventory_exact": {"const": true}, "checksums_complete": {"const": true}, "ledger_append_verified": {"const": true}, "planned_row_closed_1_of_1": {"const": true}, "all_delivery_assets_verified": {"const": true}}},
+          "claims": {"properties": {"stage6_pass": {"const": true}}}
+        }
+      },
+      "else": {"properties": {"claims": {"properties": {"stage6_pass": {"const": false}}}}}
+    }
+  ]
+}

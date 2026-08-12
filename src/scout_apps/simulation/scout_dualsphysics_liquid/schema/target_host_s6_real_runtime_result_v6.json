@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_real_runtime_result_v6.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "runtime_contract_sha256", "publication", "ledger", "checks", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-real-runtime-result-v6"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_REAL_RUNTIME_RESULT_V6"},
+    "status": {"enum": ["NOT_ADMITTED_FINALIZED_S5B0_RUNTIME_CONTRACT_REQUIRED", "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY"]},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "runtime_contract_sha256": {"$ref": "#/$defs/sha"},
+    "publication": {"type": "object", "additionalProperties": false, "required": ["root", "inventory_sha256", "file_count", "atomic_noreplace"], "properties": {"root": {"type": ["string", "null"], "pattern": "^/"}, "inventory_sha256": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha"}]}, "file_count": {"type": "integer", "minimum": 0, "maximum": 19}, "atomic_noreplace": {"type": "boolean"}}},
+    "ledger": {"type": "object", "additionalProperties": false, "required": ["append_performed", "entry_sha256", "previous_entry_sha256"], "properties": {"append_performed": {"type": "boolean"}, "entry_sha256": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha"}]}, "previous_entry_sha256": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/sha"}]}}},
+    "checks": {"type": "object", "additionalProperties": false, "required": ["exact_parent", "primary_bag_read", "sixteen_gauge_csv", "finalized_bi4_frames", "analysis_complete", "figure_complete", "media_complete_decode", "inventory_complete", "optional_unread"], "properties": {"exact_parent": {"type": "boolean"}, "primary_bag_read": {"type": "boolean"}, "sixteen_gauge_csv": {"type": "boolean"}, "finalized_bi4_frames": {"type": "boolean"}, "analysis_complete": {"type": "boolean"}, "figure_complete": {"type": "boolean"}, "media_complete_decode": {"type": "boolean"}, "inventory_complete": {"type": "boolean"}, "optional_unread": {"const": true}}},
+    "claims": {"type": "object", "additionalProperties": false, "required": ["stage6_pass", "development_only", "physical_reference_pending", "physical_fidelity_validated", "paired_ranking", "cross_method_ranking", "selected_trajectory_cpu_comparison", "formal", "production", "physical_primary"], "properties": {"stage6_pass": {"type": "boolean"}, "development_only": {"const": true}, "physical_reference_pending": {"const": true}, "physical_fidelity_validated": {"const": false}, "paired_ranking": {"const": false}, "cross_method_ranking": {"const": false}, "selected_trajectory_cpu_comparison": {"const": false}, "formal": {"const": false}, "production": {"const": false}, "physical_primary": {"const": false}}}
+  },
+  "$defs": {"sha": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}

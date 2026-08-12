@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://scout.local/schema/target_host_s6_final_delivery_receipt_v1.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "document_type", "status", "attempt_id", "planned_denominator", "admission", "analysis", "figure_qa", "media_qa", "publication", "acceptance_checks", "side_effects", "claims"],
+  "properties": {
+    "schema_version": {"const": "smpcc-r8-liquid-s6-final-delivery-receipt-v1"},
+    "document_type": {"const": "SMPCC_R8_LIQUID_S6_FINAL_DELIVERY_RECEIPT_V1"},
+    "status": {"enum": ["NOT_ADMITTED_FINALIZED_S5B0_REPLAY_REQUIRED", "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY"]},
+    "attempt_id": {"const": "SIM-S1_CORE_H1_C1_Bsmooth_b01_r01"},
+    "planned_denominator": {"const": 1},
+    "admission": {"$ref": "#/$defs/gate"},
+    "analysis": {"$ref": "#/$defs/gate"},
+    "figure_qa": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pass", "three_shared_x_panels", "dual_y_axes_absent", "okabe_ito", "redundant_encoding", "rainbow_absent", "minimum_font_size_pass", "missing_glyphs_absent", "text_clipping_absent", "tick_overlap_absent", "legend_occlusion_absent", "panel_alignment_pass", "grayscale_distinguishable", "receipt_sha256"],
+      "properties": {
+        "pass": {"type": "boolean"}, "three_shared_x_panels": {"type": "boolean"}, "dual_y_axes_absent": {"type": "boolean"},
+        "okabe_ito": {"type": "boolean"}, "redundant_encoding": {"type": "boolean"}, "rainbow_absent": {"type": "boolean"},
+        "minimum_font_size_pass": {"type": "boolean"}, "missing_glyphs_absent": {"type": "boolean"},
+        "text_clipping_absent": {"type": "boolean"}, "tick_overlap_absent": {"type": "boolean"},
+        "legend_occlusion_absent": {"type": "boolean"}, "panel_alignment_pass": {"type": "boolean"},
+        "grayscale_distinguishable": {"type": "boolean"}, "receipt_sha256": {"$ref": "#/$defs/nullableSha"}
+      }
+    },
+    "media_qa": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pass", "manifest_driven_frames", "frame_hashes_bound", "mp4_complete_decode", "gif_complete_decode", "keyframes_first_middle_last", "dimensions_consistent", "timestamps_monotonic", "numeric_fact_source_claimed", "receipt_sha256"],
+      "properties": {
+        "pass": {"type": "boolean"}, "manifest_driven_frames": {"type": "boolean"}, "frame_hashes_bound": {"type": "boolean"},
+        "mp4_complete_decode": {"type": "boolean"}, "gif_complete_decode": {"type": "boolean"},
+        "keyframes_first_middle_last": {"type": "boolean"}, "dimensions_consistent": {"type": "boolean"},
+        "timestamps_monotonic": {"type": "boolean"}, "numeric_fact_source_claimed": {"const": false},
+        "receipt_sha256": {"$ref": "#/$defs/nullableSha"}
+      }
+    },
+    "publication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["comparison_manifest", "evidence_index", "checksums", "secondary_ledger_entry", "secondary_ledger_append_receipt", "inventory_exact", "create_new_only"],
+      "properties": {
+        "comparison_manifest": {"$ref": "#/$defs/nullableIdentity"}, "evidence_index": {"$ref": "#/$defs/nullableIdentity"},
+        "checksums": {"$ref": "#/$defs/nullableIdentity"}, "secondary_ledger_entry": {"$ref": "#/$defs/nullableIdentity"},
+        "secondary_ledger_append_receipt": {"$ref": "#/$defs/nullableIdentity"},
+        "inventory_exact": {"type": "boolean"}, "create_new_only": {"const": true}
+      }
+    },
+    "acceptance_checks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["planned_row_closed_1_of_1", "solver_grid_complete", "comparison_overlap_explicit", "no_extrapolation", "outside_overlap_na_explicit", "gauge_is_numeric_fact_source", "per_probe_qc_reported", "four_dimensions_complete", "no_ranking", "optional_unread", "physical_pending", "all_delivery_assets_verified"],
+      "properties": {
+        "planned_row_closed_1_of_1": {"type": "boolean"}, "solver_grid_complete": {"type": "boolean"},
+        "comparison_overlap_explicit": {"type": "boolean"}, "no_extrapolation": {"type": "boolean"},
+        "outside_overlap_na_explicit": {"type": "boolean"}, "gauge_is_numeric_fact_source": {"type": "boolean"},
+        "per_probe_qc_reported": {"type": "boolean"}, "four_dimensions_complete": {"type": "boolean"},
+        "no_ranking": {"type": "boolean"}, "optional_unread": {"const": true}, "physical_pending": {"const": true},
+        "all_delivery_assets_verified": {"type": "boolean"}
+      }
+    },
+    "side_effects": {
+      "type": "object", "additionalProperties": false,
+      "required": ["bag_read", "optional_bag_read", "solver_executed", "gpu_exposed", "network_used", "sudo_used"],
+      "properties": {"bag_read": {"const": false}, "optional_bag_read": {"const": false}, "solver_executed": {"const": false}, "gpu_exposed": {"const": false}, "network_used": {"const": false}, "sudo_used": {"const": false}}
+    },
+    "claims": {"$ref": "#/$defs/claims"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullableSha": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "gate": {"type": "object", "additionalProperties": false, "required": ["pass", "receipt_sha256"], "properties": {"pass": {"type": "boolean"}, "receipt_sha256": {"$ref": "#/$defs/nullableSha"}}},
+    "nullableIdentity": {"anyOf": [{"type": "null"}, {"type": "object", "additionalProperties": false, "required": ["relative_path", "sha256", "size_bytes"], "properties": {"relative_path": {"type": "string", "minLength": 1}, "sha256": {"$ref": "#/$defs/sha256"}, "size_bytes": {"type": "integer", "minimum": 1}}}]},
+    "claims": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage6_pass", "development_only", "single_row", "paired_ranking", "cross_method_ranking", "cpu_selected_trajectory_comparison", "physical_reference_pending", "physical_fidelity_validated", "formal", "production", "physical_primary"],
+      "properties": {
+        "stage6_pass": {"type": "boolean"}, "development_only": {"const": true}, "single_row": {"const": true},
+        "paired_ranking": {"const": false}, "cross_method_ranking": {"const": false},
+        "cpu_selected_trajectory_comparison": {"const": false}, "physical_reference_pending": {"const": true},
+        "physical_fidelity_validated": {"const": false}, "formal": {"const": false}, "production": {"const": false},
+        "physical_primary": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "S6_PRIMARY_R7_BAG_REPLAY_AND_MODEL_COMPARISON_PASS_DEVELOPMENT_ONLY"}}, "required": ["status"]},
+      "then": {
+        "properties": {
+          "admission": {"properties": {"pass": {"const": true}}}, "analysis": {"properties": {"pass": {"const": true}}},
+          "figure_qa": {"properties": {"pass": {"const": true}}}, "media_qa": {"properties": {"pass": {"const": true}}},
+          "claims": {"properties": {"stage6_pass": {"const": true}}}
+        }
+      },
+      "else": {"properties": {"claims": {"properties": {"stage6_pass": {"const": false}}}}}
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+# NOT LOADABLE AS-IS: S5B0 v4 future motion-attached Gauge replay template.
+# Rendering is static only.  Loading and candidate execution require a later
+# exact policy/profile hash authorization.
+#include <tunables/global>
+
+profile @@PROFILE_NAME@@ flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  @@STAGED_CANDIDATE@@ rix,
+  @@DSPH_CONFIG@@ r,
+  @@LIBCUDA@@ mr,
+  @@LIBNVIDIA_PTXJIT@@ mr,
+  @@CASE_ROOT@@/ r,
+  @@CASE_ROOT@@/** r,
+  @@RESTART_ROOT@@/ r,
+  @@RESTART_ROOT@@/** r,
+
+  @@NVIDIA0@@ rw,
+  @@NVIDIACTL@@ rw,
+  @@NVIDIAUVM@@ rw,
+
+  @@OUTPUT_ROOT@@/ rw,
+  @@OUTPUT_ROOT@@/** rwk,
+
+  deny network,
+  deny mount,
+  deny umount,
+  deny pivot_root,
+  deny /dev/nvidia-uvm-tools rw,
+  deny /dev/nvidia-modeset rw,
+  deny /dev/dri/** rw,
+}

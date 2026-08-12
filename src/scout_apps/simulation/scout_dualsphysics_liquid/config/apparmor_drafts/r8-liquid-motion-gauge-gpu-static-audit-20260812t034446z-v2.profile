@@ -1,0 +1,32 @@
+# Exact create-new instance for the frozen read-only static-audit phase.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile r8-liquid-motion-gauge-gpu-static-audit-20260812t034446z-v2 flags=(attach_disconnected,mediate_deleted) {
+  /usr/bin/timeout rix,
+  /usr/bin/aa-exec rix,
+  /usr/bin/bwrap rix,
+  /usr/bin/env rix,
+  /usr/bin/prlimit rix,
+  /usr/bin/file rix,
+  /usr/bin/readelf rix,
+  /usr/bin/x86_64-linux-gnu-readelf rix,
+  /usr/bin/sha256sum rix,
+  /usr/local/cuda-12.8/bin/cuobjdump rix,
+  /usr/ r,
+  /usr/lib/** mr,
+  /usr/lib64/** mr,
+  /lib/** mr,
+  /lib64/** mr,
+  /etc/ld.so.cache r,
+  /etc/magic r,
+  /dev/null rw,
+  /dev/zero r,
+  /dev/urandom r,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/artifacts/DualSPHysics5.4_linux64 r,
+  /home/zrj/scout_liquid_lab/build/motion_gauge_gpu_build_sm120_20260812T034446Z_v1_a.partial/output/buildtree/src/source/*.o r,
+  /audit/input/ r,
+  /audit/input/** r,
+  /audit/tmp/ rw,
+  /audit/tmp/** rw,
+}

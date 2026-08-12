@@ -1,0 +1,24 @@
+{
+  "schema_version": "smpcc-r8-liquid-motion-attached-gauge-fixture-v1",
+  "motionref": 0,
+  "mkbound": 0,
+  "ray_axis": "GLOBAL_Z",
+  "probes": [
+    {"probe_id":"swl_00","point0_m":[0.0148,0.0,0.002],"point2_m":[0.0148,0.0,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_01","point0_m":[0.013674,0.005664,0.002],"point2_m":[0.013674,0.005664,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_02","point0_m":[0.010465,0.010465,0.002],"point2_m":[0.010465,0.010465,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_03","point0_m":[0.005664,0.013674,0.002],"point2_m":[0.005664,0.013674,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_04","point0_m":[0.0,0.0148,0.002],"point2_m":[0.0,0.0148,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_05","point0_m":[-0.005664,0.013674,0.002],"point2_m":[-0.005664,0.013674,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_06","point0_m":[-0.010465,0.010465,0.002],"point2_m":[-0.010465,0.010465,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_07","point0_m":[-0.013674,0.005664,0.002],"point2_m":[-0.013674,0.005664,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_08","point0_m":[-0.0148,0.0,0.002],"point2_m":[-0.0148,0.0,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_09","point0_m":[-0.013674,-0.005664,0.002],"point2_m":[-0.013674,-0.005664,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_10","point0_m":[-0.010465,-0.010465,0.002],"point2_m":[-0.010465,-0.010465,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_11","point0_m":[-0.005664,-0.013674,0.002],"point2_m":[-0.005664,-0.013674,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_12","point0_m":[0.0,-0.0148,0.002],"point2_m":[0.0,-0.0148,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_13","point0_m":[0.005664,-0.013674,0.002],"point2_m":[0.005664,-0.013674,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_14","point0_m":[0.010465,-0.010465,0.002],"point2_m":[0.010465,-0.010465,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0},
+    {"probe_id":"swl_15","point0_m":[0.013674,-0.005664,0.002],"point2_m":[0.013674,-0.005664,0.064],"pointdp_m":0.002,"motionref":0,"mkbound":0}
+  ]
+}

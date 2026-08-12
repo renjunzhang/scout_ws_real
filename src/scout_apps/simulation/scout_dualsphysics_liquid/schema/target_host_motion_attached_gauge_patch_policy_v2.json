@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:smpcc:r8-liquid:motion-attached-gauge-patch-policy:v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version","contract_status","upstream","parent_v1","s5b0_v4_binding","attachment_contract","source_files","solver_order_sources","forbidden_actions"],
+  "properties": {
+    "schema_version": {"const":"smpcc-r8-liquid-motion-attached-gauge-patch-policy-v2"},
+    "contract_status": {"const":"STATIC_PATCH_AND_CROSS_LAYER_CONTRACT_ONLY_NOT_BUILD_AUTHORIZATION"},
+    "upstream": {
+      "type":"object","additionalProperties":false,
+      "required":["commit","bare_repository","source_prefix","fresh_isolated_copy_required","sealed_source_write_forbidden","existing_candidate_write_forbidden"],
+      "properties":{
+        "commit":{"const":"ef3721a861fda961f0e2f9ec4cd317b19de99086"},
+        "bare_repository":{"const":"/home/zrj/scout_liquid_lab/dependency/source/DualSPHysics_ef3721a861fda961f0e2f9ec4cd317b19de99086.full_attempt_3.git"},
+        "source_prefix":{"const":"src/source"},
+        "fresh_isolated_copy_required":{"const":true},
+        "sealed_source_write_forbidden":{"const":true},
+        "existing_candidate_write_forbidden":{"const":true}
+      }
+    },
+    "parent_v1": {
+      "type":"object","additionalProperties":false,
+      "required":["policy_sha256","schema_sha256","gate_sha256","tests_sha256","unified_patch_sha256","patched_six_file_aggregate_sha256","source_patch_bytes_reused_without_change"],
+      "properties":{
+        "policy_sha256":{"$ref":"#/$defs/sha"},"schema_sha256":{"$ref":"#/$defs/sha"},"gate_sha256":{"$ref":"#/$defs/sha"},"tests_sha256":{"$ref":"#/$defs/sha"},
+        "unified_patch_sha256":{"$ref":"#/$defs/sha"},"patched_six_file_aggregate_sha256":{"$ref":"#/$defs/sha"},"source_patch_bytes_reused_without_change":{"const":true}
+      }
+    },
+    "s5b0_v4_binding": {
+      "type":"object","additionalProperties":false,
+      "required":["policy_sha256","policy_schema_sha256","gauge_contract_sha256","fixture_v2_sha256"],
+      "properties":{"policy_sha256":{"$ref":"#/$defs/sha"},"policy_schema_sha256":{"$ref":"#/$defs/sha"},"gauge_contract_sha256":{"$ref":"#/$defs/sha"},"fixture_v2_sha256":{"$ref":"#/$defs/sha"}}
+    },
+    "attachment_contract": {
+      "type":"object","additionalProperties":false,
+      "required":["gauge_type","probe_count","probe_names","motionref","mkbound","identity_pair_required","ray_axis","probe_radius_m","point0_z_m","point2_z_m","pointdp_m","h0_m","maximum_invalid_ratio","horizontal_position_follows_rigid_motion","config_dom_mcel_fixed","calc_motion_hook","restart_pose","additional_proces_time_calls","runtime_order_witness","runtime_order_requires_fresh_smoke_before_s5b0"],
+      "properties":{
+        "gauge_type":{"const":"JGaugeSwl"},"probe_count":{"const":16},
+        "probe_names":{"const":["s5b0_p00","s5b0_p01","s5b0_p02","s5b0_p03","s5b0_p04","s5b0_p05","s5b0_p06","s5b0_p07","s5b0_p08","s5b0_p09","s5b0_p10","s5b0_p11","s5b0_p12","s5b0_p13","s5b0_p14","s5b0_p15"]},
+        "motionref":{"const":0},"mkbound":{"const":0},"identity_pair_required":{"const":true},"ray_axis":{"const":"GLOBAL_Z"},
+        "probe_radius_m":{"const":0.0145},"point0_z_m":{"const":0.002},"point2_z_m":{"const":0.064},"pointdp_m":{"const":0.001},"h0_m":{"const":0.058},"maximum_invalid_ratio":{"const":0.001},
+        "horizontal_position_follows_rigid_motion":{"const":true},"config_dom_mcel_fixed":{"const":false},
+        "calc_motion_hook":{"const":"AFTER_DSMOTION_PROCESTIME_BEFORE_GETACTIVEMOTION"},
+        "restart_pose":{"const":"ABSOLUTE_TIMESTEPINI_PARTBEGIN_FROM_EXISTING_SINGLE_PROCESTIME"},"additional_proces_time_calls":{"const":0},
+        "runtime_order_witness":{"const":"CALC_MOTION_UPDATES_GAUGE_FOR_T_PLUS_DT_THEN_GAUGE_COMPUTE_PRECEDES_BOUNDARY_RUNMOTION"},
+        "runtime_order_requires_fresh_smoke_before_s5b0":{"const":true}
+      }
+    },
+    "source_files":{"type":"array","minItems":6,"maxItems":6,"uniqueItems":true,"items":{"$ref":"#/$defs/sourceFile"}},
+    "solver_order_sources":{"type":"array","minItems":2,"maxItems":2,"uniqueItems":true,"items":{"$ref":"#/$defs/orderFile"}},
+    "forbidden_actions":{"type":"array","minItems":14,"maxItems":14,"uniqueItems":true,"items":{"enum":["MODIFY_SEALED_SOURCE","MODIFY_EXISTING_CANDIDATE","PATCH_NON_FRESH_COPY","MAKE","NVCC","COMPILER","SOLVER","GPU","SUDO","APPARMOR","NETWORK","READ_OPTIONAL_BAG","ADD_SECOND_PROCESTIME","CLAIM_RUNTIME_PASS_FROM_STATIC_CONTRACT"]}}
+  },
+  "$defs": {
+    "sha":{"type":"string","pattern":"^[0-9a-f]{64}$"},
+    "sourceFile":{"type":"object","additionalProperties":false,"required":["path","before_sha256","after_sha256"],"properties":{"path":{"enum":["src/source/JDsGaugeItem.cpp","src/source/JDsGaugeItem.h","src/source/JDsGaugeSystem.cpp","src/source/JDsGaugeSystem.h","src/source/JSph.cpp","src/source/JSph.h"]},"before_sha256":{"$ref":"#/$defs/sha"},"after_sha256":{"$ref":"#/$defs/sha"}}},
+    "orderFile":{"type":"object","additionalProperties":false,"required":["path","sha256"],"properties":{"path":{"enum":["src/source/JSphGpuSingle.cpp","src/source/JSphCpuSingle.cpp"]},"sha256":{"$ref":"#/$defs/sha"}}}
+  }
+}
