@@ -1,0 +1,379 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="1800"
+     height="1080"
+     viewBox="0 0 1800 1080"
+     role="img"
+     aria-labelledby="title desc">
+  <title id="title">执行前沿对齐的相位重接残差 S-MPCC 方法结构</title>
+  <desc id="desc">展示离线防晃名义序列、相位索引尾段恢复对象、在线执行前沿对齐、短时域残差 S-MPCC、终端重接判据和恢复降级闭环。</desc>
+
+  <defs>
+    <style>
+      .canvas {
+        fill: #ffffff;
+      }
+      .lane-offline {
+        fill: #f5f8fc;
+        stroke: #b7cbe3;
+        stroke-width: 2;
+      }
+      .lane-online {
+        fill: #f2faf7;
+        stroke: #a8d4c7;
+        stroke-width: 2;
+      }
+      .lane-exec {
+        fill: #fff8f1;
+        stroke: #e8c7a4;
+        stroke-width: 2;
+      }
+      .header-offline {
+        fill: #dce9f7;
+        stroke: #6d96bf;
+        stroke-width: 2;
+      }
+      .header-online {
+        fill: #d9eee8;
+        stroke: #4c9785;
+        stroke-width: 2;
+      }
+      .header-exec {
+        fill: #f8e4cf;
+        stroke: #bd8650;
+        stroke-width: 2;
+      }
+      .box-offline {
+        fill: #e9f1fb;
+        stroke: #477cae;
+        stroke-width: 2.5;
+      }
+      .box-model {
+        fill: #e5f2f7;
+        stroke: #3f849c;
+        stroke-width: 2.5;
+      }
+      .box-online {
+        fill: #e3f3ee;
+        stroke: #2f806d;
+        stroke-width: 2.5;
+      }
+      .box-main {
+        fill: #d4ede6;
+        stroke: #176b5a;
+        stroke-width: 3;
+      }
+      .box-gate {
+        fill: #fff2c9;
+        stroke: #bd8114;
+        stroke-width: 3;
+      }
+      .box-publish {
+        fill: #e0f1ea;
+        stroke: #277761;
+        stroke-width: 2.5;
+      }
+      .box-system {
+        fill: #e8effa;
+        stroke: #537eae;
+        stroke-width: 2.5;
+      }
+      .box-recovery {
+        fill: #e8f4ed;
+        stroke: #4c8b69;
+        stroke-width: 2.5;
+      }
+      .box-fallback {
+        fill: #fde9df;
+        stroke: #bd6347;
+        stroke-width: 2.5;
+      }
+      .g0 {
+        fill: #fff8dc;
+        stroke: #c5942d;
+        stroke-width: 2;
+        stroke-dasharray: 9 7;
+      }
+      .connector {
+        fill: none;
+        stroke: #334155;
+        stroke-width: 3;
+        stroke-linecap: square;
+        stroke-linejoin: miter;
+        marker-end: url(#arrow);
+      }
+      .artifact {
+        fill: none;
+        stroke: #476b91;
+        stroke-width: 2.5;
+        stroke-dasharray: 8 6;
+        stroke-linecap: square;
+        stroke-linejoin: miter;
+        marker-end: url(#arrow-blue);
+      }
+      .feedback {
+        fill: none;
+        stroke: #5b6b7d;
+        stroke-width: 3;
+        stroke-dasharray: 10 7;
+        stroke-linecap: square;
+        stroke-linejoin: miter;
+        marker-end: url(#arrow);
+      }
+      .title {
+        font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+        font-size: 34px;
+        font-weight: 700;
+        fill: #172033;
+        text-anchor: middle;
+      }
+      .lane-title {
+        font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+        font-size: 21px;
+        font-weight: 700;
+        fill: #243449;
+        text-anchor: middle;
+      }
+      .box-title {
+        font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+        font-size: 22px;
+        font-weight: 700;
+        fill: #172033;
+        text-anchor: middle;
+      }
+      .box-text {
+        font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+        font-size: 17px;
+        font-weight: 400;
+        fill: #35445a;
+        text-anchor: middle;
+      }
+      .box-math {
+        font-family: "Noto Sans CJK SC", "DejaVu Sans", sans-serif;
+        font-size: 17px;
+        font-weight: 500;
+        fill: #263850;
+        text-anchor: middle;
+      }
+      .label {
+        font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        fill: #40516a;
+        text-anchor: middle;
+      }
+      .label-green {
+        font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+        font-size: 17px;
+        font-weight: 700;
+        fill: #246b57;
+        text-anchor: middle;
+      }
+      .label-red {
+        font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+        font-size: 17px;
+        font-weight: 700;
+        fill: #a24d34;
+        text-anchor: middle;
+      }
+      .note {
+        font-family: "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif;
+        font-size: 16px;
+        font-weight: 500;
+        fill: #5b493a;
+        text-anchor: middle;
+      }
+    </style>
+
+    <marker id="arrow"
+            markerWidth="10"
+            markerHeight="10"
+            refX="9"
+            refY="5"
+            orient="auto"
+            markerUnits="strokeWidth">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155"/>
+    </marker>
+    <marker id="arrow-blue"
+            markerWidth="10"
+            markerHeight="10"
+            refX="9"
+            refY="5"
+            orient="auto"
+            markerUnits="strokeWidth">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#476b91"/>
+    </marker>
+  </defs>
+
+  <rect class="canvas" x="0" y="0" width="1800" height="1080"/>
+  <text class="title" x="900" y="58">执行前沿对齐的相位重接残差 S-MPCC 方法结构</text>
+
+  <!-- 分区背景 -->
+  <rect class="lane-offline" x="30" y="95" width="1740" height="300" rx="12"/>
+  <rect class="lane-online" x="30" y="420" width="1740" height="415" rx="12"/>
+  <rect class="lane-exec" x="30" y="860" width="1740" height="190" rx="12"/>
+
+  <!-- 分区标题 -->
+  <rect class="header-offline" x="48" y="112" width="132" height="40" rx="8"/>
+  <text class="lane-title" x="114" y="139">离线准备</text>
+
+  <rect class="header-online" x="48" y="438" width="132" height="40" rx="8"/>
+  <text class="lane-title" x="114" y="465">在线闭环</text>
+
+  <rect class="header-exec" x="48" y="878" width="152" height="40" rx="8"/>
+  <text class="lane-title" x="124" y="905">执行与降级</text>
+
+  <!-- 离线流程 -->
+  <rect class="box-offline" x="90" y="175" width="250" height="125" rx="12"/>
+  <text class="box-title" x="215" y="208">冻结路径与任务合同</text>
+  <text class="box-text" x="215" y="239">
+    <tspan x="215" dy="0">几何路径、容器与液位</tspan>
+    <tspan x="215" dy="26">输入边界、终端合同</tspan>
+    <tspan x="215" dy="26">路径 / 模型 / 配置哈希</tspan>
+  </text>
+
+  <rect class="box-model" x="390" y="175" width="285" height="125" rx="12"/>
+  <text class="box-title" x="532.5" y="208">执行—液体增广模型</text>
+  <text class="box-text" x="532.5" y="239">
+    <tspan x="532.5" dy="0">线 / 角双通道延迟与惯性</tspan>
+    <tspan x="532.5" dy="26">最终发布命令 → 真实运动</tspan>
+    <tspan x="532.5" dy="26">容器激励 → 低阶液体状态</tspan>
+  </text>
+
+  <rect class="box-offline" x="730" y="175" width="255" height="125" rx="12"/>
+  <text class="box-title" x="857.5" y="208">OfflineSloshOCP</text>
+  <text class="box-text" x="857.5" y="239">
+    <tspan x="857.5" dy="0">优化最终发布命令</tspan>
+    <tspan x="857.5" dy="26">满足路径、平台与液体约束</tspan>
+    <tspan x="857.5" dy="26">生成完整防晃动作</tspan>
+  </text>
+
+  <rect class="box-offline" x="1040" y="175" width="290" height="125" rx="12"/>
+  <text class="box-title" x="1185" y="208">完整防晃名义序列</text>
+  <text class="box-text" x="1185" y="240">
+    <tspan x="1185" dy="0">机器人、执行器与液体状态</tspan>
+    <tspan x="1185" dy="27">最终发布命令序列</tspan>
+    <tspan x="1185" dy="26">保留后续相位抵消关系</tspan>
+  </text>
+
+  <rect class="box-offline" x="1385" y="175" width="325" height="125" rx="12"/>
+  <text class="box-title" x="1547.5" y="208">相位索引尾段恢复对象</text>
+  <text class="box-math" x="1547.5" y="239">
+    <tspan x="1547.5" dy="0">鲁棒：F_rob(i) 与 κ(i)</tspan>
+    <tspan x="1547.5" dy="27">经验：R_emp(i) 与 κ_emp(i)</tspan>
+    <tspan class="box-text" x="1547.5" dy="26">编码完整剩余防晃尾段</tspan>
+  </text>
+
+  <path class="connector" d="M 340 237.5 H 390"/>
+  <path class="connector" d="M 675 237.5 H 730"/>
+  <path class="connector" d="M 985 237.5 H 1040"/>
+  <path class="connector" d="M 1330 237.5 H 1385"/>
+
+  <rect class="g0" x="410" y="325" width="980" height="48" rx="8"/>
+  <text class="label" x="900" y="356">实施前放行门 G0：总预测提前量可信，且当前新命令对恢复终端具有可检测控制作用</text>
+
+  <!-- 在线流程 -->
+  <rect class="box-online" x="80" y="500" width="280" height="130" rx="12"/>
+  <text class="box-title" x="220" y="533">真实状态与命令历史</text>
+  <text class="box-text" x="220" y="565">
+    <tspan x="220" dy="0">位姿、真实 v / ω、执行器状态</tspan>
+    <tspan x="220" dy="27">液体内部状态与时间戳</tspan>
+    <tspan x="220" dy="27">最终发布命令延迟队列</tspan>
+  </text>
+
+  <rect class="box-online" x="410" y="500" width="300" height="130" rx="12"/>
+  <text class="box-title" x="560" y="533">双通道执行前沿对齐</text>
+  <text class="box-text" x="560" y="565">
+    <tspan x="560" dy="0">分别传播线 / 角延迟与惯性</tspan>
+    <tspan x="560" dy="27">预测真实运动和容器激励</tspan>
+    <tspan x="560" dy="27">共同叙事前沿 j_f = j + n_f</tspan>
+  </text>
+
+  <rect class="box-online" x="760" y="500" width="280" height="130" rx="12"/>
+  <text class="box-title" x="900" y="533">有限候选相位重接</text>
+  <text class="box-text" x="900" y="565">
+    <tspan x="900" dy="0">只枚举当前附近名义索引 j</tspan>
+    <tspan x="900" dy="27">联合检查几何、命令队列与液体误差</tspan>
+    <tspan x="900" dy="27">禁止任意时间伸缩和全局跳转</tspan>
+  </text>
+
+  <rect class="box-main" x="1090" y="480" width="340" height="170" rx="12"/>
+  <text class="box-title" x="1260" y="515">短时域残差 S-MPCC</text>
+  <text class="box-math" x="1260" y="547">
+    <tspan x="1260" dy="0">u_opt = u_nom(j+k) + delta_u</tspan>
+    <tspan class="box-text" x="1260" dy="28">机器人—执行器—液体耦合至 N_e</tspan>
+    <tspan class="box-text" x="1260" dy="27">几何 MPCC：轮廓 / 滞后 / 进度</tspan>
+    <tspan class="box-text" x="1260" dy="27">长预览 Nᵣ 不增加液体盲自由控制</tspan>
+  </text>
+
+  <rect class="box-gate" x="1490" y="500" width="240" height="130" rx="12"/>
+  <text class="box-title" x="1610" y="533">终端重接判据</text>
+  <text class="box-math" x="1610" y="566">
+    <tspan x="1610" dy="0">鲁棒：T_e ⊆ F_rob(j_e)</tspan>
+    <tspan x="1610" dy="27">经验：e_e ∈ R_emp(j_e)</tspan>
+    <tspan class="box-text" x="1610" dy="27">j_e = j + n_f + N_l</tspan>
+  </text>
+
+  <path class="connector" d="M 360 565 H 410"/>
+  <path class="connector" d="M 710 565 H 760"/>
+  <path class="connector" d="M 1040 565 H 1090"/>
+  <path class="connector" d="M 1430 565 H 1490"/>
+
+  <!-- 离线 artifact 输入在线控制器 -->
+  <path class="artifact" d="M 1185 300 V 315 H 1420 V 445 H 1260 V 480"/>
+  <text class="label" x="1302" y="437">名义序列</text>
+
+  <path class="artifact" d="M 1547.5 300 V 500"/>
+  <text class="label" x="1620" y="412">恢复集合 / 策略</text>
+
+  <!-- 在线输出 -->
+  <rect class="box-publish" x="1100" y="710" width="320" height="90" rx="12"/>
+  <text class="box-title" x="1260" y="741">只发布第一拍</text>
+  <text class="box-math" x="1260" y="772">
+    <tspan x="1260" dy="0">u_pub = G_pub(u_nom(j) + delta_u)</tspan>
+    <tspan class="box-text" x="1260" dy="25">下一周期读取真实结果并重新求解</tspan>
+  </text>
+
+  <path class="connector" d="M 1610 630 V 680 H 1260 V 710"/>
+  <text class="label-green" x="1470" y="671">判据通过</text>
+
+  <!-- 执行、恢复和降级 -->
+  <rect class="box-system" x="250" y="900" width="330" height="110" rx="12"/>
+  <text class="box-title" x="415" y="934">Scout 真实运动与液体响应</text>
+  <text class="box-text" x="415" y="966">
+    <tspan x="415" dy="0">执行 v / ω，产生容器真实激励</tspan>
+    <tspan x="415" dy="27">记录 odom / IMU / RGB 独立评价</tspan>
+  </text>
+
+  <rect class="box-recovery" x="700" y="900" width="350" height="110" rx="12"/>
+  <text class="box-title" x="875" y="934">已保存的可移位恢复策略</text>
+  <text class="box-text" x="875" y="966">
+    <tspan x="875" dy="0">求解失败时先执行 (T, π) 前缀</tspan>
+    <tspan x="875" dy="27">进入恢复集合后依次调用 κᵢ</tspan>
+  </text>
+
+  <rect class="box-fallback" x="1210" y="900" width="420" height="110" rx="12"/>
+  <text class="box-title" x="1420" y="934">无法重接或方法合同失效</text>
+  <text class="box-text" x="1420" y="966">
+    <tspan x="1420" dy="0">防晃减速 / 受控停车</tspan>
+    <tspan x="1420" dy="27">必要时重置液体状态并重新规划</tspan>
+  </text>
+
+  <path class="connector" d="M 1260 800 V 830 H 415 V 900"/>
+  <text class="label" x="820" y="822">最终发布命令</text>
+
+  <path class="connector" d="M 1160 650 V 690 H 875 V 900"/>
+  <text class="label" x="982" y="681">求解失败且备用策略仍有效</text>
+
+  <path class="connector" d="M 700 955 H 580"/>
+
+  <path class="connector" d="M 1730 565 H 1750 V 955 H 1630"/>
+  <text class="label-red" x="1685" y="941">不可重接</text>
+
+  <!-- 闭环反馈 -->
+  <path class="feedback" d="M 250 955 H 55 V 565 H 80"/>
+  <text class="label" x="156" y="847">状态、时间戳与最终命令历史反馈</text>
+
+  <text class="note" x="900" y="1038">注：只有满足逐拍鲁棒包含、终端正不变与在线策略移位时才称“恢复证书 / 漏斗”；否则称“经验恢复集合 / 门”。</text>
+</svg>
