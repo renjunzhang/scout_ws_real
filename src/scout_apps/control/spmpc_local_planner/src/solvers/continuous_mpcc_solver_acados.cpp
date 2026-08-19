@@ -623,6 +623,7 @@ bool ContinuousMpccSolverAcados::solve(
     const ReferencePath& reference,
     SolverOutput& output) const {
     output = SolverOutput{};
+    output.cycle_timing = input.cycle_timing;
     if (capsule_ == nullptr) {
         output.status = "ACADOS_NOT_CREATED";
         return false;
@@ -718,6 +719,8 @@ bool ContinuousMpccSolverAcados::solve(
     snapshot.state_width = 10;
     snapshot.control_width = 3;
     snapshot.parameter_width = gen->np;
+    snapshot.slosh_cost_horizon_steps = variant_.slosh_cost_horizon_steps;
+    snapshot.slosh_cost_tail_discount = variant_.slosh_cost_tail_discount;
     snapshot.robot = input.robot;
     snapshot.slosh = input.slosh;
     snapshot.min_progress_s = input.min_progress_s;
@@ -809,12 +812,16 @@ bool ContinuousMpccSolverAcados::solve(
         p[KAPPA_Y] = 1.0;
         p[ETA_REF] = eta_ref;
         p[ETA_DOT_REF] = eta_dot_ref;
-        p[W_SLOSH_ETA] = variant_.w_slosh;
-        p[W_SLOSH_ETA_DOT] = variant_.w_slosh * params_.slosh.slosh_eta_dot_ratio;
         p[ETA_MAX_SQ] = eta_max_sq;
     }
 
     for (int stage = 0; stage <= n; ++stage) {
+        if (slosh) {
+            const double stage_scale = sloshCostStageScale(variant_, stage, n);
+            p[W_SLOSH_ETA] = variant_.w_slosh * stage_scale;
+            p[W_SLOSH_ETA_DOT] = variant_.w_slosh *
+                params_.slosh.slosh_eta_dot_ratio * stage_scale;
+        }
         // omega 已是状态(初值=实测 omega)，跨周期连续性由状态保证；仅 a/v_s 做第一帧连续性。
         if (stage == 0 && have_u_prev_) {
             p[W_DU_A] = variant_.w_du_a;
@@ -939,6 +946,10 @@ bool ContinuousMpccSolverAcados::solve(
     output.predicted_horizon.slosh_enabled = slosh;
     output.predicted_horizon.control_semantics = "alpha";
     output.predicted_horizon.dt = input.dt;
+    output.predicted_horizon.slosh_cost_horizon_steps =
+        variant_.slosh_cost_horizon_steps;
+    output.predicted_horizon.slosh_cost_tail_discount =
+        variant_.slosh_cost_tail_discount;
     output.predicted_horizon.states.reserve(static_cast<size_t>(n + 1));
     output.predicted_horizon.controls.reserve(static_cast<size_t>(n));
     std::vector<WarmStartState> solved_states;
@@ -981,8 +992,11 @@ bool ContinuousMpccSolverAcados::solve(
             output.slosh_summary.eta_dot_norm_peak = std::max(output.slosh_summary.eta_dot_norm_peak, eta_dot_norm);
             output.slosh_cost_monitor.eta_norm_peak = std::max(output.slosh_cost_monitor.eta_norm_peak, eta_norm);
             output.slosh_cost_monitor.eta_dot_norm_peak = std::max(output.slosh_cost_monitor.eta_dot_norm_peak, eta_dot_norm);
-            output.cost.J_slosh_eta += variant_.w_slosh * (eta_norm / eta_ref) * (eta_norm / eta_ref) * inv_n;
-            output.cost.J_slosh_eta_dot += variant_.w_slosh * params_.slosh.slosh_eta_dot_ratio *
+            const double stage_scale = sloshCostStageScale(variant_, k, n);
+            output.cost.J_slosh_eta += variant_.w_slosh * stage_scale *
+                (eta_norm / eta_ref) * (eta_norm / eta_ref) * inv_n;
+            output.cost.J_slosh_eta_dot += variant_.w_slosh * stage_scale *
+                params_.slosh.slosh_eta_dot_ratio *
                 (eta_dot_norm / eta_dot_ref) * (eta_dot_norm / eta_dot_ref) * inv_n;
         }
     }
@@ -1140,9 +1154,9 @@ bool ContinuousMpccSolverAcados::solve(
     const SolverInput& input,
     const ReferencePath& reference,
     SolverOutput& output) const {
-    (void)input;
     (void)reference;
     output = SolverOutput{};
+    output.cycle_timing = input.cycle_timing;
     output.success = false;
     output.status = "ACADOS_NOT_IMPLEMENTED";
     return false;

@@ -328,6 +328,48 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         delay_phase_params_.min_integration_step_sec = delay_phase_params_.max_integration_step_sec;
     }
     command_history_.configure(delay_phase_params_.history_window_sec);
+    pnh_.param("state_timing/require_common_epoch",
+               state_timing_params_.require_common_epoch,
+               state_timing_params_.require_common_epoch);
+    pnh_.param("state_timing/max_raw_skew_sec",
+               state_timing_params_.max_raw_skew_sec,
+               state_timing_params_.max_raw_skew_sec);
+    pnh_.param("state_timing/odom_history_sec",
+               state_timing_params_.odom_history_sec,
+               state_timing_params_.odom_history_sec);
+    pnh_.param("state_timing/max_interpolation_gap_sec",
+               state_timing_params_.max_interpolation_gap_sec,
+               state_timing_params_.max_interpolation_gap_sec);
+    pnh_.param("state_timing/max_robot_extrapolation_sec",
+               state_timing_params_.max_robot_extrapolation_sec,
+               state_timing_params_.max_robot_extrapolation_sec);
+    pnh_.param("execution_contract/fail_closed_on_post_limit_change",
+               command_contract_params_.fail_closed_on_post_limit_change,
+               command_contract_params_.fail_closed_on_post_limit_change);
+    pnh_.param("execution_contract/max_post_limit_delta_v",
+               command_contract_params_.max_post_limit_delta_v,
+               command_contract_params_.max_post_limit_delta_v);
+    pnh_.param("execution_contract/max_post_limit_delta_omega",
+               command_contract_params_.max_post_limit_delta_omega,
+               command_contract_params_.max_post_limit_delta_omega);
+    const bool valid_state_timing =
+        std::isfinite(state_timing_params_.max_raw_skew_sec) &&
+        state_timing_params_.max_raw_skew_sec >= 0.0 &&
+        std::isfinite(state_timing_params_.odom_history_sec) &&
+        state_timing_params_.odom_history_sec > 0.0 &&
+        std::isfinite(state_timing_params_.max_interpolation_gap_sec) &&
+        state_timing_params_.max_interpolation_gap_sec > 0.0 &&
+        std::isfinite(state_timing_params_.max_robot_extrapolation_sec) &&
+        state_timing_params_.max_robot_extrapolation_sec >= 0.0;
+    const bool valid_command_contract =
+        std::isfinite(command_contract_params_.max_post_limit_delta_v) &&
+        command_contract_params_.max_post_limit_delta_v >= 0.0 &&
+        std::isfinite(command_contract_params_.max_post_limit_delta_omega) &&
+        command_contract_params_.max_post_limit_delta_omega >= 0.0;
+    if (!valid_state_timing || !valid_command_contract) {
+        ROS_FATAL("[spmpc_local_planner] invalid state_timing/execution_contract parameters");
+        return false;
+    }
     pnh_.param("reference/preprocess_enable", reference_preprocess_params_.enable, reference_preprocess_params_.enable);
     pnh_.param("reference/resample_spacing", reference_preprocess_params_.resample_spacing, reference_preprocess_params_.resample_spacing);
     pnh_.param("reference/smoothing_window", reference_preprocess_params_.smoothing_window, reference_preprocess_params_.smoothing_window);
@@ -478,6 +520,66 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                  "可能未加载，变体权重回退到内置 B0 默认值。正式实验请用 launch 加载 variants.yaml",
                  variant_.name.c_str());
     }
+    if (variant_.slosh_cost_horizon_steps < -1 ||
+        !std::isfinite(variant_.slosh_cost_tail_discount) ||
+        variant_.slosh_cost_tail_discount < 0.0 ||
+        variant_.slosh_cost_tail_discount > 1.0) {
+        ROS_FATAL("[spmpc_local_planner] invalid liquid cost horizon for variant=%s: steps=%d tail=%.6f",
+                  variant_.name.c_str(),
+                  variant_.slosh_cost_horizon_steps,
+                  variant_.slosh_cost_tail_discount);
+        return false;
+    }
+    const bool matched_development_variant =
+        variant_.name == "B_slosh_matched0" ||
+        variant_.name == "B_slosh_matched5";
+    if (variant_.slosh_enable && state_timing_params_.require_common_epoch &&
+        delay_phase_params_.mode == DelayPhaseMode::FixedRobotOnly) {
+        ROS_FATAL("[spmpc_local_planner] fixed_robot_only is forbidden when a slosh solver requires a common robot/liquid epoch");
+        return false;
+    }
+    if (matched_development_variant && delayPhaseClosedLoopEnabled()) {
+        ROS_FATAL("[spmpc_local_planner] matched short-horizon variants require delay_phase=off|monitor|shadow; command-history rollout is audit-only until validated");
+        return false;
+    }
+    if (matched_development_variant) {
+        const bool common_weights =
+            std::abs(variant_.w_contour - 1.0) <= 1e-12 &&
+            std::abs(variant_.w_lag - 0.2) <= 1e-12 &&
+            std::abs(variant_.w_progress - 0.2) <= 1e-12 &&
+            std::abs(variant_.w_v - 1.0) <= 1e-12 &&
+            std::abs(variant_.w_vs - 0.3) <= 1e-12 &&
+            std::abs(variant_.v_ref - 0.20) <= 1e-12 &&
+            std::abs(variant_.w_control - 0.3) <= 1e-12 &&
+            std::abs(variant_.w_smooth - 1.0) <= 1e-12 &&
+            std::abs(variant_.w_alpha - 1.0) <= 1e-12 &&
+            std::abs(variant_.w_du_a - 1.0) <= 1e-12 &&
+            std::abs(variant_.w_du_vs - 1.0) <= 1e-12 &&
+            std::abs(variant_.w_accel) <= 1e-12;
+        const double expected_slosh_weight =
+            variant_.name == "B_slosh_matched5" ? 5.0 : 0.0;
+        const bool release_contract =
+            solver_params.solver_backend == kSolverBackendContinuousMpccAcados &&
+            variant_.slosh_enable && variant_.smooth_priority_enable &&
+            !variant_.slosh_constraint_enable && common_weights &&
+            std::abs(variant_.w_slosh - expected_slosh_weight) <= 1e-12 &&
+            variant_.slosh_cost_horizon_steps == 3 &&
+            std::abs(variant_.slosh_cost_tail_discount) <= 1e-12 &&
+            slosh_observer_selector_params_.nominal_source ==
+                SloshObserverSource::ProcessedImu &&
+            slosh_observer_selector_params_.fallback_policy ==
+                SloshObserverFallbackPolicy::FailClosed &&
+            state_timing_params_.require_common_epoch &&
+            delay_phase_params_.mode == DelayPhaseMode::Shadow &&
+            !shared_cmd_linear_accel_limit_enable_ &&
+            !shared_cmd_angular_limit_enable_ &&
+            command_contract_params_.fail_closed_on_post_limit_change;
+        if (!release_contract) {
+            ROS_FATAL("[spmpc_local_planner] matched development release contract rejected variant=%s; require main 10D solver, processed_imu/fail_closed, common epoch, delay shadow, 3-step liquid cost, common weights, disabled redundant limiters, and fail-closed command audit",
+                      variant_.name.c_str());
+            return false;
+        }
+    }
 
     std::string policy_error;
     if (!validateBackendPolicy(solver_params, variant_, policy_error)) {
@@ -542,6 +644,23 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     effective_config_.delay_odom_timeout_sec = delay_phase_params_.odom_timeout_sec;
     effective_config_.delay_history_window_sec = delay_phase_params_.history_window_sec;
     effective_config_.delay_require_complete_history = delay_phase_params_.require_complete_history ? 1.0 : 0.0;
+    effective_config_.slosh_cost_horizon_steps =
+        static_cast<double>(variant_.slosh_cost_horizon_steps);
+    effective_config_.slosh_cost_horizon_sec =
+        variant_.slosh_cost_horizon_steps < 0
+            ? -1.0
+            : static_cast<double>(variant_.slosh_cost_horizon_steps) * dt_;
+    effective_config_.slosh_cost_tail_discount =
+        variant_.slosh_cost_tail_discount;
+    effective_config_.state_timing_require_common_epoch =
+        state_timing_params_.require_common_epoch ? 1.0 : 0.0;
+    effective_config_.state_timing_max_raw_skew_sec =
+        state_timing_params_.max_raw_skew_sec;
+    effective_config_.w_contour = variant_.w_contour;
+    effective_config_.w_lag = variant_.w_lag;
+    effective_config_.w_progress = variant_.w_progress;
+    effective_config_.w_v = variant_.w_v;
+    effective_config_.w_vs = variant_.w_vs;
 
     problem_.configure(solver_params, variant_);
     if (!slosh_observers_.configure(solver_params.slosh, imu_observer_dt_sec_)) {
@@ -968,13 +1087,23 @@ void SpmpcLocalPlannerROS::publishDelayPhaseEarlyStatus(DelayPhaseStatusCode sta
     publishDelayPhaseDiagnostics(ros::Time::now(), status_code, nullptr, 0.0);
 }
 
-void SpmpcLocalPlannerROS::publishZeroCommand(const CommandInterventionDebug& intervention) {
+void SpmpcLocalPlannerROS::publishZeroCommand(
+    const CommandInterventionDebug& intervention,
+    ControlCycleAuditDebug* audit) {
     CommandInterventionDebug debug = intervention;
     debug.publish_cmd_vel = publish_cmd_vel_;
     debug.published_cmd_v = 0.0;
     debug.published_cmd_omega = 0.0;
     diagnostics_.publishCommandIntervention(debug);
     if (!publish_cmd_vel_) {
+        if (audit) {
+            audit->publish_cmd_vel = false;
+            audit->command_was_published = false;
+            audit->published_cmd_v = 0.0;
+            audit->published_cmd_omega = 0.0;
+            diagnostics_.publishControlCycleAudit(
+                *audit, problem_.referenceFrameId());
+        }
         return;
     }
     geometry_msgs::Twist cmd;
@@ -983,6 +1112,16 @@ void SpmpcLocalPlannerROS::publishZeroCommand(const CommandInterventionDebug& in
     meta.is_zero_cmd = true;
     recordPublishedCommand(cmd, stamp, meta);
     cmd_pub_.publish(cmd);
+    if (audit) {
+        audit->timing.command_publish_stamp_ns =
+            static_cast<std::int64_t>(stamp.toNSec());
+        audit->publish_cmd_vel = true;
+        audit->command_was_published = true;
+        audit->published_cmd_v = 0.0;
+        audit->published_cmd_omega = 0.0;
+        diagnostics_.publishControlCycleAudit(
+            *audit, problem_.referenceFrameId());
+    }
 }
 
 geometry_msgs::Twist SpmpcLocalPlannerROS::applySharedCommandLimits(
@@ -1036,12 +1175,20 @@ geometry_msgs::Twist SpmpcLocalPlannerROS::applySharedCommandLimits(
     return limited;
 }
 
-void SpmpcLocalPlannerROS::publishCommand(const geometry_msgs::Twist& desired,
-                                           const CommandInterventionDebug& intervention) {
+void SpmpcLocalPlannerROS::publishCommand(
+    const geometry_msgs::Twist& desired,
+    const CommandInterventionDebug& intervention,
+    ControlCycleAuditDebug* audit) {
     if (!publish_cmd_vel_) {
         CommandInterventionDebug debug = intervention;
         debug.publish_cmd_vel = false;
         diagnostics_.publishCommandIntervention(debug);
+        if (audit) {
+            audit->publish_cmd_vel = false;
+            audit->command_was_published = false;
+            diagnostics_.publishControlCycleAudit(
+                *audit, problem_.referenceFrameId());
+        }
         return;
     }
     const auto stamp = ros::Time::now();
@@ -1050,8 +1197,19 @@ void SpmpcLocalPlannerROS::publishCommand(const geometry_msgs::Twist& desired,
     bool linear_limited = false;
     bool angular_rate_limited = false;
     bool angular_accel_limited = false;
-    const auto cmd = applySharedCommandLimits(
+    auto cmd = applySharedCommandLimits(
         desired, stamp, previous, dt, linear_limited, angular_rate_limited, angular_accel_limited);
+    const bool command_contract_violation =
+        std::abs(cmd.linear.x - desired.linear.x) >
+            command_contract_params_.max_post_limit_delta_v ||
+        std::abs(cmd.angular.z - desired.angular.z) >
+            command_contract_params_.max_post_limit_delta_omega;
+    const bool contract_fail_closed = command_contract_violation &&
+        command_contract_params_.fail_closed_on_post_limit_change;
+    if (contract_fail_closed) {
+        cmd = geometry_msgs::Twist();
+        diagnostics_.publishStatus("COMMAND_EXECUTION_CONTRACT_VIOLATION");
+    }
     CommandPublishMeta meta;
     meta.is_zero_cmd = std::abs(cmd.linear.x) <= 1e-9 && std::abs(cmd.angular.z) <= 1e-9;
     meta.linear_limited = linear_limited;
@@ -1066,9 +1224,27 @@ void SpmpcLocalPlannerROS::publishCommand(const geometry_msgs::Twist& desired,
     debug.linear_limited = linear_limited;
     debug.angular_rate_limited = angular_rate_limited;
     debug.angular_accel_limited = angular_accel_limited;
+    debug.zero_due_to_command_contract = contract_fail_closed;
     debug.publish_cmd_vel = true;
     diagnostics_.publishCommandIntervention(debug);
     cmd_pub_.publish(cmd);
+    if (audit) {
+        audit->timing.command_publish_stamp_ns =
+            static_cast<std::int64_t>(stamp.toNSec());
+        audit->publish_cmd_vel = true;
+        audit->command_was_published = true;
+        audit->command_contract_violation = command_contract_violation;
+        audit->linear_limited = linear_limited;
+        audit->angular_rate_limited = angular_rate_limited;
+        audit->angular_accel_limited = angular_accel_limited;
+        audit->published_cmd_v = cmd.linear.x;
+        audit->published_cmd_omega = cmd.angular.z;
+        if (contract_fail_closed) {
+            audit->status = "COMMAND_EXECUTION_CONTRACT_VIOLATION";
+        }
+        diagnostics_.publishControlCycleAudit(
+            *audit, problem_.referenceFrameId());
+    }
 }
 
 void SpmpcLocalPlannerROS::resetTerminalSpinFailGate() {
@@ -1190,6 +1366,7 @@ void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
     last_odom_receive_stamp_ = receive_stamp;
     last_odom_ = *msg;
     have_odom_ = true;
+    appendOdomStateHistory(*msg);
 }
 
 void SpmpcLocalPlannerROS::imuCallback(const sensor_msgs::ImuConstPtr& msg) {
@@ -1286,6 +1463,14 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     // publishVariant 内容（variant code、experiment_mode）在运行期不变，已在初始化时发布一次（latched）。
     // publishEffectiveConfig 等 applyRuntimeVRef() 计算完本周期 v_ref 后再发，避免动态 v_ref 滞后一拍。
 
+    const ros::Time cycle_start = ros::Time::now();
+    ControlCycleAuditDebug cycle_audit;
+    cycle_audit.timing.cycle_id = ++next_cycle_id_;
+    cycle_audit.timing.cycle_start_stamp_ns =
+        static_cast<std::int64_t>(cycle_start.toNSec());
+    cycle_audit.variant = variant_.name;
+    cycle_audit.publish_cmd_vel = publish_cmd_vel_;
+
     if (!have_odom_) {
         resetTerminalSpinFailGate();
         resetTrackingSafetyGate();
@@ -1293,7 +1478,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoOdom);
         CommandInterventionDebug intervention;
         intervention.zero_due_to_waiting_for_odom = true;
-        publishZeroCommand(intervention);
+        cycle_audit.status = "WAITING_FOR_ODOM";
+        publishZeroCommand(intervention, &cycle_audit);
         return;
     }
     if (!problem_.hasReferencePath()) {
@@ -1303,21 +1489,12 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoReference);
         CommandInterventionDebug intervention;
         intervention.zero_due_to_waiting_for_reference = true;
-        publishZeroCommand(intervention);
+        cycle_audit.status = "WAITING_FOR_REFERENCE_PATH";
+        publishZeroCommand(intervention, &cycle_audit);
         return;
     }
 
     SolverInput input;
-    if (!robotStateFromLatest(input.robot)) {
-        resetTerminalSpinFailGate();
-        resetTrackingSafetyGate();
-        diagnostics_.publishStatus("WAITING_FOR_TF_POSE");
-        publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoTfPose);
-        CommandInterventionDebug intervention;
-        intervention.zero_due_to_waiting_for_tf = true;
-        publishZeroCommand(intervention);
-        return;
-    }
     SloshObserverHealth odom_observer_health;
     SloshObserverHealth imu_observer_health;
     double slosh_height_coeff = 0.0;
@@ -1339,10 +1516,19 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             imu_observer_health,
             static_cast<std::int64_t>(observer_selection_now.toNSec()));
     const bool solver_consumes_selected_state = variant_.slosh_enable;
-    publishSloshObserverSelectionDebug(
-        observer_selection_now,
-        observer_selection,
-        solver_consumes_selected_state);
+    cycle_audit.observer_source =
+        static_cast<std::uint8_t>(observer_selection.effective_source);
+    cycle_audit.odom_excitation = makeExcitationAudit(
+        odom_observer_health.snapshot.excitation);
+    cycle_audit.imu_excitation = makeExcitationAudit(
+        imu_observer_health.snapshot.excitation);
+    cycle_audit.timing.raw_robot_state_stamp_ns =
+        static_cast<std::int64_t>(last_odom_.header.stamp.toNSec());
+    cycle_audit.timing.raw_liquid_state_stamp_ns =
+        observer_selection.selected_state_stamp_ns;
+    cycle_audit.timing.state_alignment_required =
+        solver_consumes_selected_state &&
+        state_timing_params_.require_common_epoch;
 
     if (solver_consumes_selected_state && !observer_selection.valid) {
         resetTerminalSpinFailGate();
@@ -1362,7 +1548,13 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             observer_selection.imu_state_age_sec);
         CommandInterventionDebug intervention;
         intervention.zero_due_to_waiting_for_slosh_observer = true;
-        publishZeroCommand(intervention);
+        cycle_audit.status = selection_status;
+        publishSloshObserverSelectionDebug(
+            observer_selection_now,
+            observer_selection,
+            solver_consumes_selected_state,
+            cycle_audit.timing);
+        publishZeroCommand(intervention, &cycle_audit);
         return;
     }
     if (observer_selection.fallback_active) {
@@ -1382,6 +1574,118 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         // diagnostic state populated preserves useful paired observer evidence.
         input.slosh = odom_observer_health.snapshot.state;
     }
+
+    if (cycle_audit.timing.state_alignment_required) {
+        double raw_skew_sec = 0.0;
+        if (!stateSkewWithinContract(
+                cycle_audit.timing.raw_robot_state_stamp_ns,
+                cycle_audit.timing.raw_liquid_state_stamp_ns,
+                state_timing_params_.max_raw_skew_sec,
+                raw_skew_sec)) {
+            resetTerminalSpinFailGate();
+            resetTrackingSafetyGate();
+            cycle_audit.timing.raw_state_skew_sec = raw_skew_sec;
+            cycle_audit.timing.state_alignment_status =
+                "RAW_STATE_SKEW_CONTRACT_FAILED";
+            cycle_audit.status = "STATE_TIME_ALIGNMENT_FAILED_RAW_SKEW";
+            diagnostics_.publishStatus(cycle_audit.status);
+            publishSloshObserverSelectionDebug(
+                observer_selection_now,
+                observer_selection,
+                solver_consumes_selected_state,
+                cycle_audit.timing);
+            CommandInterventionDebug intervention;
+            intervention.zero_due_to_waiting_for_slosh_observer = true;
+            publishZeroCommand(intervention, &cycle_audit);
+            return;
+        }
+        cycle_audit.timing.raw_state_skew_sec = raw_skew_sec;
+        bool interpolated = false;
+        bool extrapolated = false;
+        std::string alignment_status;
+        const ros::Time liquid_epoch = rosTimeFromNanoseconds(
+            cycle_audit.timing.raw_liquid_state_stamp_ns);
+        if (!robotStateAtEpoch(
+                liquid_epoch,
+                input.robot,
+                interpolated,
+                extrapolated,
+                alignment_status)) {
+            resetTerminalSpinFailGate();
+            resetTrackingSafetyGate();
+            cycle_audit.timing.state_alignment_status = alignment_status;
+            cycle_audit.status =
+                "STATE_TIME_ALIGNMENT_FAILED_" + alignment_status;
+            diagnostics_.publishStatus(cycle_audit.status);
+            publishSloshObserverSelectionDebug(
+                observer_selection_now,
+                observer_selection,
+                solver_consumes_selected_state,
+                cycle_audit.timing);
+            CommandInterventionDebug intervention;
+            intervention.zero_due_to_waiting_for_tf = true;
+            publishZeroCommand(intervention, &cycle_audit);
+            return;
+        }
+        cycle_audit.timing.robot_state_stamp_ns =
+            cycle_audit.timing.raw_liquid_state_stamp_ns;
+        cycle_audit.timing.liquid_state_stamp_ns =
+            cycle_audit.timing.raw_liquid_state_stamp_ns;
+        cycle_audit.timing.solver_input_epoch_ns =
+            cycle_audit.timing.raw_liquid_state_stamp_ns;
+        cycle_audit.timing.aligned_state_skew_sec = 0.0;
+        cycle_audit.timing.state_time_aligned = true;
+        cycle_audit.timing.robot_state_interpolated = interpolated;
+        cycle_audit.timing.robot_state_extrapolated = extrapolated;
+        cycle_audit.timing.state_alignment_status = alignment_status;
+    } else {
+        if (!robotStateFromLatest(input.robot)) {
+            resetTerminalSpinFailGate();
+            resetTrackingSafetyGate();
+            diagnostics_.publishStatus("WAITING_FOR_TF_POSE");
+            publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoTfPose);
+            cycle_audit.status = "WAITING_FOR_TF_POSE";
+            cycle_audit.timing.state_alignment_status = "LATEST_TF_UNAVAILABLE";
+            publishSloshObserverSelectionDebug(
+                observer_selection_now,
+                observer_selection,
+                solver_consumes_selected_state,
+                cycle_audit.timing);
+            CommandInterventionDebug intervention;
+            intervention.zero_due_to_waiting_for_tf = true;
+            publishZeroCommand(intervention, &cycle_audit);
+            return;
+        }
+        cycle_audit.timing.robot_state_stamp_ns =
+            cycle_audit.timing.raw_robot_state_stamp_ns;
+        cycle_audit.timing.liquid_state_stamp_ns =
+            cycle_audit.timing.raw_liquid_state_stamp_ns;
+        cycle_audit.timing.solver_input_epoch_ns =
+            cycle_audit.timing.raw_robot_state_stamp_ns;
+        cycle_audit.timing.aligned_state_skew_sec =
+            cycle_audit.timing.liquid_state_stamp_ns > 0
+                ? (cycle_audit.timing.robot_state_stamp_ns -
+                   cycle_audit.timing.liquid_state_stamp_ns) * 1e-9
+                : 0.0;
+        cycle_audit.timing.raw_state_skew_sec =
+            cycle_audit.timing.raw_liquid_state_stamp_ns > 0
+                ? (cycle_audit.timing.raw_robot_state_stamp_ns -
+                   cycle_audit.timing.raw_liquid_state_stamp_ns) * 1e-9
+                : 0.0;
+        cycle_audit.timing.state_time_aligned =
+            !solver_consumes_selected_state ||
+            std::abs(cycle_audit.timing.aligned_state_skew_sec) <= 1e-6;
+        cycle_audit.timing.state_alignment_status =
+            solver_consumes_selected_state
+                ? "COMMON_EPOCH_DISABLED"
+                : "LIQUID_NOT_CONSUMED";
+    }
+    publishSloshObserverSelectionDebug(
+        observer_selection_now,
+        observer_selection,
+        solver_consumes_selected_state,
+        cycle_audit.timing);
+    input.cycle_timing = cycle_audit.timing;
     input.dt = dt_;
     input.horizon_steps = horizon_steps_;
     diagnostics_.publishRawState(input.robot, input.slosh, slosh_height_coeff);
@@ -1430,10 +1734,33 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         solve_input = application.solver_input;
         robot_delay_compensation_applied = application.robot_applied;
         liquid_delay_compensation_applied = application.liquid_applied;
+        if (application.robot_applied && application.liquid_applied) {
+            const std::int64_t predicted_epoch_ns =
+                static_cast<std::int64_t>(delay_phase_now.toNSec());
+            cycle_audit.timing.robot_state_stamp_ns = predicted_epoch_ns;
+            cycle_audit.timing.liquid_state_stamp_ns = predicted_epoch_ns;
+            cycle_audit.timing.solver_input_epoch_ns = predicted_epoch_ns;
+            cycle_audit.timing.aligned_state_skew_sec = 0.0;
+            cycle_audit.timing.state_time_aligned = true;
+            cycle_audit.timing.state_alignment_status =
+                "DELAY_PREDICTED_COMMON_EPOCH";
+        } else if (cycle_audit.timing.state_alignment_required &&
+                   application.anyApplied()) {
+            cycle_audit.timing.state_time_aligned = false;
+            cycle_audit.timing.state_alignment_status =
+                "PARTIAL_DELAY_STATE_APPLICATION_FORBIDDEN";
+            cycle_audit.status = "STATE_TIME_ALIGNMENT_FAILED_DELAY_PHASE";
+            diagnostics_.publishStatus(cycle_audit.status);
+            CommandInterventionDebug intervention;
+            intervention.zero_due_to_waiting_for_slosh_observer = true;
+            publishZeroCommand(intervention, &cycle_audit);
+            return;
+        }
         if (!odom_fresh) {
             delay_phase_status = DelayPhaseStatusCode::OdomStale;
         }
     }
+    solve_input.cycle_timing = cycle_audit.timing;
 
     diagnostics_.publishSolverInputState(
         solve_input,
@@ -1442,8 +1769,43 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         liquid_delay_compensation_applied,
         slosh_height_coeff);
 
+    if (have_previous_shifted_plan_ &&
+        previous_plan_cycle_id_ + 1 == cycle_audit.timing.cycle_id) {
+        cycle_audit.previous_shifted_plan_available = true;
+        cycle_audit.previous_plan_cycle_id = previous_plan_cycle_id_;
+        cycle_audit.previous_shifted_plan_a = previous_shifted_plan_a_;
+        cycle_audit.previous_shifted_plan_alpha =
+            previous_shifted_plan_alpha_;
+    } else if (have_previous_shifted_plan_) {
+        // A gate/failure cycle broke the one-step shift.  Comparing against
+        // that stale horizon would overstate replanning overwrite.
+        have_previous_shifted_plan_ = false;
+    }
+
+    cycle_audit.timing.solve_start_stamp_ns = static_cast<std::int64_t>(
+        ros::Time::now().toNSec());
+    solve_input.cycle_timing = cycle_audit.timing;
     SolverOutput output;
+    cycle_audit.solve_attempted = true;
     problem_.solve(solve_input, output);
+    cycle_audit.timing.solve_end_stamp_ns = static_cast<std::int64_t>(
+        ros::Time::now().toNSec());
+    cycle_audit.timing.horizon_available_stamp_ns =
+        cycle_audit.timing.solve_end_stamp_ns;
+    output.cycle_timing = cycle_audit.timing;
+    cycle_audit.solver_status = output.status;
+    cycle_audit.status = output.status;
+    cycle_audit.solver_u0_a = output.first_shot_debug.u0_a;
+    cycle_audit.solver_u0_alpha = output.first_shot_debug.u0_alpha;
+    cycle_audit.planned_ax = output.first_shot_debug.u0_a;
+    cycle_audit.planned_ay = solve_input.robot.v * solve_input.robot.omega;
+    if (cycle_audit.previous_shifted_plan_available) {
+        cycle_audit.replanned_minus_shifted_a =
+            cycle_audit.solver_u0_a - cycle_audit.previous_shifted_plan_a;
+        cycle_audit.replanned_minus_shifted_alpha =
+            cycle_audit.solver_u0_alpha -
+            cycle_audit.previous_shifted_plan_alpha;
+    }
     if (std::isfinite(output.progress_abs_s)) {
         map_vref_last_progress_abs_s_ = output.progress_abs_s;
         have_map_vref_progress_ = true;
@@ -1452,11 +1814,19 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     if (!event.last_real.isZero() && !event.current_real.isZero()) {
         spin_gate_dt = (event.current_real - event.last_real).toSec();
     }
+    const double raw_solver_cmd_v = output.first_shot_debug.success
+        ? output.first_shot_debug.cmd_v_post_clamp
+        : output.cmd_v;
+    const double raw_solver_cmd_omega = output.first_shot_debug.success
+        ? output.first_shot_debug.cmd_omega_post_clamp
+        : output.cmd_omega;
+    const double terminal_cmd_v = output.cmd_v;
+    const double terminal_cmd_omega = output.cmd_omega;
     CommandInterventionDebug intervention;
-    intervention.solver_cmd_v = output.cmd_v;
-    intervention.solver_cmd_omega = output.cmd_omega;
+    intervention.solver_cmd_v = raw_solver_cmd_v;
+    intervention.solver_cmd_omega = raw_solver_cmd_omega;
     const bool solver_success = output.success;
-    const bool terminal_spin_blocked = updateTerminalSpinFailGate(input, output, spin_gate_dt);
+    const bool terminal_spin_blocked = updateTerminalSpinFailGate(solve_input, output, spin_gate_dt);
     if (terminal_spin_blocked) {
         output.success = false;
         output.status = "TERMINAL_SPIN_FAIL";
@@ -1464,7 +1834,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         output.cmd_omega = 0.0;
     }
     std::string tracking_safety_status;
-    const bool tracking_safety_blocked = updateTrackingSafetyGate(input, output, spin_gate_dt, tracking_safety_status);
+    const bool tracking_safety_blocked = updateTrackingSafetyGate(solve_input, output, spin_gate_dt, tracking_safety_status);
     if (tracking_safety_blocked) {
         output.success = false;
         output.status = tracking_safety_status;
@@ -1477,6 +1847,22 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     intervention.zero_due_to_solver_failure = !solver_success;
     intervention.zero_due_to_terminal_spin_fail = terminal_spin_blocked;
     intervention.zero_due_to_tracking_safety = tracking_safety_blocked;
+    cycle_audit.solver_cmd_v = intervention.solver_cmd_v;
+    cycle_audit.solver_cmd_omega = intervention.solver_cmd_omega;
+    cycle_audit.terminal_cmd_v = terminal_cmd_v;
+    cycle_audit.terminal_cmd_omega = terminal_cmd_omega;
+    cycle_audit.post_gate_cmd_v = intervention.post_gate_cmd_v;
+    cycle_audit.post_gate_cmd_omega = intervention.post_gate_cmd_omega;
+    cycle_audit.solve_success = solver_success;
+    cycle_audit.command_accepted = output.success;
+    cycle_audit.terminal_phase =
+        output.terminal_diagnostics.terminal_phase;
+    cycle_audit.terminal_controller_intervened =
+        std::abs(terminal_cmd_v - raw_solver_cmd_v) > 1e-6 ||
+        std::abs(terminal_cmd_omega - raw_solver_cmd_omega) > 1e-6;
+    cycle_audit.safety_gate_intervened =
+        terminal_spin_blocked || tracking_safety_blocked;
+    cycle_audit.status = output.status;
     diagnostics_.publishStatus(output.status);
     // 诊断统一使用 solver 的实际液体输入：fixed_closed_loop 使用 rollout，
     // fixed_robot_only 则保留当前 observer 测量。
@@ -1487,9 +1873,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     {
         std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
         observer_dynamics_configured = slosh_observers_.odomConfigured();
-        const double omega_meas = last_odom_.twist.twist.angular.z;
         selected_height_m = slosh_observers_.solverHeight(
-            solve_input.slosh, omega_meas);
+            solve_input.slosh, solve_input.robot.omega);
     }
     if (observer_dynamics_configured) {
         diagnostics_.publishSloshHeight(selected_height_m);
@@ -1502,15 +1887,27 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         robot_delay_compensation_applied || liquid_delay_compensation_applied);
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
 
+    if (output.predicted_horizon.valid &&
+        output.predicted_horizon.controls.size() > 1) {
+        previous_plan_cycle_id_ = cycle_audit.timing.cycle_id;
+        previous_shifted_plan_a_ =
+            output.predicted_horizon.controls[1].a;
+        previous_shifted_plan_alpha_ =
+            output.predicted_horizon.controls[1].alpha_or_omega;
+        have_previous_shifted_plan_ = true;
+    } else {
+        have_previous_shifted_plan_ = false;
+    }
+
     if (!output.success) {
-        publishZeroCommand(intervention);
+        publishZeroCommand(intervention, &cycle_audit);
         return;
     }
 
     geometry_msgs::Twist cmd;
     cmd.linear.x = output.cmd_v;
     cmd.angular.z = output.cmd_omega;
-    publishCommand(cmd, intervention);
+    publishCommand(cmd, intervention, &cycle_audit);
 }
 
 RobotState SpmpcLocalPlannerROS::robotStateFromOdom(const nav_msgs::Odometry& odom) const {
@@ -1560,6 +1957,82 @@ bool SpmpcLocalPlannerROS::robotStateFromLatest(RobotState& state) {
                           robot_base_frame_.c_str(),
                           ex.what());
         return true;
+    }
+}
+
+void SpmpcLocalPlannerROS::appendOdomStateHistory(
+    const nav_msgs::Odometry& odom) {
+    if (odom.header.stamp.isZero()) {
+        return;
+    }
+    StampedRobotState sample;
+    sample.stamp_ns = static_cast<std::int64_t>(odom.header.stamp.toNSec());
+    sample.state = robotStateFromOdom(odom);
+    if (!odom_state_history_.empty() &&
+        sample.stamp_ns <= odom_state_history_.back().stamp_ns) {
+        // processOdomInput only admits a regression for a detected source clock
+        // reset.  A new epoch must not interpolate across that reset.
+        odom_state_history_.clear();
+    }
+    odom_state_history_.push_back(sample);
+    const std::int64_t history_ns = static_cast<std::int64_t>(
+        std::max(0.1, state_timing_params_.odom_history_sec) * 1e9);
+    while (odom_state_history_.size() > 1 &&
+           sample.stamp_ns - odom_state_history_.front().stamp_ns > history_ns) {
+        odom_state_history_.pop_front();
+    }
+}
+
+bool SpmpcLocalPlannerROS::robotStateAtEpoch(
+    const ros::Time& target_stamp,
+    RobotState& state,
+    bool& interpolated,
+    bool& extrapolated,
+    std::string& status) {
+    interpolated = false;
+    extrapolated = false;
+    status = "INVALID_TARGET";
+    if (target_stamp.isZero()) {
+        return false;
+    }
+    const auto aligned = alignRobotStateToEpoch(
+        odom_state_history_,
+        static_cast<std::int64_t>(target_stamp.toNSec()),
+        state_timing_params_.max_interpolation_gap_sec,
+        state_timing_params_.max_robot_extrapolation_sec);
+    status = aligned.status;
+    if (!aligned.valid) {
+        return false;
+    }
+    state = aligned.state;
+    interpolated = aligned.interpolated;
+    extrapolated = aligned.extrapolated;
+
+    const std::string reference_frame = problem_.referenceFrameId();
+    if (!use_tf_pose_ || reference_frame.empty() ||
+        reference_frame == last_odom_.header.frame_id) {
+        return true;
+    }
+    try {
+        const auto tf = tf_buffer_.lookupTransform(
+            reference_frame,
+            robot_base_frame_,
+            target_stamp,
+            ros::Duration(std::max(0.0, tf_timeout_sec_)));
+        state.x = tf.transform.translation.x;
+        state.y = tf.transform.translation.y;
+        state.yaw = tf2::getYaw(tf.transform.rotation);
+        return true;
+    } catch (const tf2::TransformException& ex) {
+        status = "TF_AT_COMMON_EPOCH_UNAVAILABLE";
+        ROS_WARN_THROTTLE(
+            1.0,
+            "[spmpc_local_planner] common-epoch TF unavailable %s <- %s at %.6f: %s",
+            reference_frame.c_str(),
+            robot_base_frame_.c_str(),
+            target_stamp.toSec(),
+            ex.what());
+        return false;
     }
 }
 
@@ -1836,11 +2309,19 @@ void SpmpcLocalPlannerROS::publishImuSloshObserverDebug(
 void SpmpcLocalPlannerROS::publishSloshObserverSelectionDebug(
     const ros::Time& now,
     const SloshObserverSelection& selection,
-    bool solver_consumes_selected_state) {
+    bool solver_consumes_selected_state,
+    const ControlCycleTimingDebug& cycle_timing) {
     SloshObserverSelectionDebug msg;
     msg.header.stamp = now;
     msg.header.frame_id = robot_base_frame_;
-    msg.schema_version = 1;
+    msg.schema_version = 2;
+    msg.cycle_id = cycle_timing.cycle_id;
+    msg.cycle_start_stamp =
+        rosTimeFromNanoseconds(cycle_timing.cycle_start_stamp_ns);
+    msg.raw_robot_state_stamp =
+        rosTimeFromNanoseconds(cycle_timing.raw_robot_state_stamp_ns);
+    msg.solver_input_epoch =
+        rosTimeFromNanoseconds(cycle_timing.solver_input_epoch_ns);
     msg.solver_consumes_selected_state = solver_consumes_selected_state;
     msg.configured = selection.configured;
     msg.valid = selection.valid;
@@ -1954,6 +2435,12 @@ void SpmpcLocalPlannerROS::loadVariantOverrides(const std::string& variant_name)
     pnh_.param(prefix + "w_du_a", variant_.w_du_a, variant_.w_du_a);
     pnh_.param(prefix + "w_du_vs", variant_.w_du_vs, variant_.w_du_vs);
     pnh_.param(prefix + "w_slosh", variant_.w_slosh, variant_.w_slosh);
+    pnh_.param(prefix + "slosh_cost_horizon_steps",
+               variant_.slosh_cost_horizon_steps,
+               variant_.slosh_cost_horizon_steps);
+    pnh_.param(prefix + "slosh_cost_tail_discount",
+               variant_.slosh_cost_tail_discount,
+               variant_.slosh_cost_tail_discount);
 
     if (variant_.w_alpha < 0.0) {
         variant_.w_alpha = variant_.w_smooth;

@@ -180,6 +180,24 @@ delay_phase:
   min_integration_step_sec: 0.001
   require_complete_history: false
 
+# Robot pose/twist is reconstructed at the selected liquid observer timestamp
+# before a slosh solve.  This removes the 41--57 ms mixed-epoch initial state
+# seen in the old G3/G3R2 bags.  Missing history, excessive skew, or a large
+# interpolation gap is fail-closed for slosh variants.
+state_timing:
+  require_common_epoch: true
+  max_raw_skew_sec: 0.080
+  odom_history_sec: 1.0
+  max_interpolation_gap_sec: 0.050
+  max_robot_extrapolation_sec: 0.010
+
+# The development matched runner disables redundant post-solver rate limiters
+# and enables this gate.  Legacy runners keep the gate audit-only by default.
+execution_contract:
+  fail_closed_on_post_limit_change: false
+  max_post_limit_delta_v: 0.0001
+  max_post_limit_delta_omega: 0.0001
+
 platform:
   kinematics: differential
 

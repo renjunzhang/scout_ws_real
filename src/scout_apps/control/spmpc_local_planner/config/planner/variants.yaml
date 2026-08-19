@@ -95,6 +95,53 @@ variants:
     w_smooth: 1.0
     w_slosh: 0.0
 
+  # Development-only fair pair for the next hardware confirmation.  Both
+  # variants use the same 10-state liquid solver, the same processed-IMU
+  # observer, and the same smooth/control weights.  Their only cost difference
+  # is w_slosh.  State stages 0..3 correspond to 0..100 ms at 30 Hz; later
+  # liquid cost is disabled because hardware prediction there is not trusted.
+  B_slosh_matched0:
+    slosh_enable: true
+    smooth_priority_enable: true
+    slosh_constraint_enable: false
+    primitive_mode: linear
+    w_contour: 1.0
+    w_lag: 0.2
+    w_progress: 0.2
+    w_v: 1.0
+    w_vs: 0.3
+    v_ref: 0.20
+    w_control: 0.3
+    w_accel: 0.0
+    w_smooth: 1.0
+    w_alpha: 1.0
+    w_du_a: 1.0
+    w_du_vs: 1.0
+    w_slosh: 0.0
+    slosh_cost_horizon_steps: 3
+    slosh_cost_tail_discount: 0.0
+
+  B_slosh_matched5:
+    slosh_enable: true
+    smooth_priority_enable: true
+    slosh_constraint_enable: false
+    primitive_mode: linear
+    w_contour: 1.0
+    w_lag: 0.2
+    w_progress: 0.2
+    w_v: 1.0
+    w_vs: 0.3
+    v_ref: 0.20
+    w_control: 0.3
+    w_accel: 0.0
+    w_smooth: 1.0
+    w_alpha: 1.0
+    w_du_a: 1.0
+    w_du_vs: 1.0
+    w_slosh: 5.0
+    slosh_cost_horizon_steps: 3
+    slosh_cost_tail_discount: 0.0
+
   B_accel:
     slosh_enable: false
     smooth_priority_enable: false

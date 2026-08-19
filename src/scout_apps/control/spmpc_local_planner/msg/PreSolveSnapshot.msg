@@ -6,6 +6,23 @@
 
 std_msgs/Header header
 uint32 schema_version
+uint64 cycle_id
+time cycle_start_stamp
+time raw_robot_state_stamp
+time raw_liquid_state_stamp
+time robot_state_stamp
+time liquid_state_stamp
+time solver_input_epoch
+time solve_start_stamp
+time solve_end_stamp
+time horizon_available_stamp
+float64 raw_state_skew_sec
+float64 aligned_state_skew_sec
+bool state_alignment_required
+bool state_time_aligned
+bool robot_state_interpolated
+bool robot_state_extrapolated
+string state_alignment_status
 bool valid
 string backend
 string variant
@@ -19,6 +36,9 @@ uint32 horizon_steps
 uint32 state_width
 uint32 control_width
 uint32 parameter_width
+int32 slosh_cost_horizon_steps
+float64 slosh_cost_horizon_sec
+float64 slosh_cost_tail_discount
 
 float64 robot_x
 float64 robot_y

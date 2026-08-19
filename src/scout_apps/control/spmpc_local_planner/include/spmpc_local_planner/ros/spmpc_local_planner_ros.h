@@ -7,6 +7,7 @@
 #include "spmpc_local_planner/estimation/slosh_observer_selector.h"
 #include "spmpc_local_planner/reference/reference_path_preprocessor.h"
 #include "spmpc_local_planner/ros/command_history_buffer.h"
+#include "spmpc_local_planner/ros/control_cycle_contract.h"
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
 #include "spmpc_local_planner/ros/execution_state_predictor.h"
 #include "spmpc_local_planner/ros/imu_shadow_ros_adapter.h"
@@ -22,6 +23,7 @@
 #include <tf2_ros/transform_listener.h>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -47,9 +49,11 @@ private:
     void pathCallback(const nav_msgs::PathConstPtr& msg);
     void costmapCallback(const nav_msgs::OccupancyGridConstPtr& msg);
     void controlTimerCallback(const ros::TimerEvent&);
-    void publishZeroCommand(const CommandInterventionDebug& intervention = CommandInterventionDebug());
+    void publishZeroCommand(const CommandInterventionDebug& intervention = CommandInterventionDebug(),
+                            ControlCycleAuditDebug* audit = nullptr);
     void publishCommand(const geometry_msgs::Twist& desired,
-                        const CommandInterventionDebug& intervention = CommandInterventionDebug());
+                        const CommandInterventionDebug& intervention = CommandInterventionDebug(),
+                        ControlCycleAuditDebug* audit = nullptr);
     void recordPublishedCommand(const geometry_msgs::Twist& cmd, const ros::Time& stamp, const CommandPublishMeta& meta);
     bool delayPhaseActive() const;
     bool delayPhasePredictionEnabled() const;
@@ -76,6 +80,12 @@ private:
     void resetTrackingSafetyGate();
     RobotState robotStateFromOdom(const nav_msgs::Odometry& odom) const;
     bool robotStateFromLatest(RobotState& state);
+    bool robotStateAtEpoch(const ros::Time& target_stamp,
+                           RobotState& state,
+                           bool& interpolated,
+                           bool& extrapolated,
+                           std::string& status);
+    void appendOdomStateHistory(const nav_msgs::Odometry& odom);
     bool processOdomInput(const nav_msgs::Odometry& odom,
                           const ros::Time& receive_stamp);
     void publishOdomSloshObserverDebug(const nav_msgs::Odometry& odom,
@@ -86,7 +96,8 @@ private:
     void publishSloshObserverSelectionDebug(
         const ros::Time& now,
         const SloshObserverSelection& selection,
-        bool solver_consumes_selected_state);
+        bool solver_consumes_selected_state,
+        const ControlCycleTimingDebug& cycle_timing);
     bool updateReferenceSignature(const nav_msgs::Path& path);
     ReferencePath referencePathFromMsg(const nav_msgs::Path& path) const;
     CostmapGrid costmapFromMsg(const nav_msgs::OccupancyGrid& map) const;
@@ -132,6 +143,8 @@ private:
     CommandHistoryBuffer command_history_;
     ExecutionStatePredictor execution_predictor_;
     DelayPhaseParams delay_phase_params_;
+    StateTimingParams state_timing_params_;
+    CommandExecutionContractParams command_contract_params_;
     EffectiveConfigDebug effective_config_;
     OdomTimingDebug last_odom_timing_;
     ros::Time last_odom_receive_stamp_;
@@ -141,6 +154,7 @@ private:
 
     nav_msgs::Odometry last_odom_;
     nav_msgs::Odometry prev_odom_;
+    std::deque<StampedRobotState> odom_state_history_;
     bool have_odom_ = false;
     bool have_prev_odom_ = false;
     bool have_reference_signature_ = false;
@@ -202,6 +216,11 @@ private:
     double control_frequency_ = 30.0;
     double dt_ = 1.0 / 30.0;
     int horizon_steps_ = 60;
+    std::uint64_t next_cycle_id_ = 0;
+    bool have_previous_shifted_plan_ = false;
+    std::uint64_t previous_plan_cycle_id_ = 0;
+    double previous_shifted_plan_a_ = 0.0;
+    double previous_shifted_plan_alpha_ = 0.0;
     // Declared last so the worker stops before any callback-owned state is
     // destroyed.  The explicit destructor also stops it before member teardown.
     std::unique_ptr<ros::AsyncSpinner> imu_spinner_;

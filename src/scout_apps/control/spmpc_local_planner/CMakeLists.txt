@@ -21,6 +21,7 @@ find_package(Eigen3 REQUIRED)
 
 add_message_files(
   FILES
+  ControlCycleAudit.msg
   PredictedHorizon.msg
   PreSolveSnapshot.msg
   SloshObserverDebug.msg
@@ -112,6 +113,7 @@ add_library(${PROJECT_NAME}
   src/solvers/continuous_mpcc_solver_acados.cpp
   src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
   src/ros/command_history_buffer.cpp
+  src/ros/control_cycle_contract.cpp
   src/ros/execution_state_predictor.cpp
   src/ros/imu_shadow_ros_adapter.cpp
   src/ros/diagnostics_publisher.cpp
@@ -239,6 +241,20 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_execution_state_predictor test/test_execution_state_predictor.cpp)
   if(TARGET test_execution_state_predictor)
     target_link_libraries(test_execution_state_predictor
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_control_cycle_contract test/test_control_cycle_contract.cpp)
+  if(TARGET test_control_cycle_contract)
+    target_link_libraries(test_control_cycle_contract
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_variant_config test/test_variant_config.cpp)
+  if(TARGET test_variant_config)
+    target_link_libraries(test_variant_config
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
     )

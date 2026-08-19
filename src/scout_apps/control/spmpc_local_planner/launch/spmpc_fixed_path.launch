@@ -33,6 +33,13 @@
   <arg name="delay_phase_mode" default="off" doc="off|monitor|shadow|fixed_closed_loop|fixed_robot_only; fixed_robot_only 仅预测机器人状态，保留当前液体测量"/>
   <arg name="delay_phase_linear_delay_sec" default="-1.0"/>
   <arg name="delay_phase_angular_delay_sec" default="-1.0"/>
+  <arg name="state_timing_require_common_epoch" default="true"/>
+  <arg name="state_timing_max_raw_skew_sec" default="0.080"/>
+  <arg name="state_timing_max_interpolation_gap_sec" default="0.050"/>
+  <arg name="state_timing_max_robot_extrapolation_sec" default="0.010"/>
+  <arg name="execution_contract_fail_closed_on_post_limit_change" default="false"/>
+  <arg name="execution_contract_max_post_limit_delta_v" default="0.0001"/>
+  <arg name="execution_contract_max_post_limit_delta_omega" default="0.0001"/>
   <include file="$(find spmpc_local_planner)/launch/spmpc_experiment.launch">
     <arg name="planner_variant" value="$(arg planner_variant)"/>
     <arg name="experiment_mode" value="fixed_path"/>
@@ -70,5 +77,12 @@
     <arg name="delay_phase_mode" value="$(arg delay_phase_mode)"/>
     <arg name="delay_phase_linear_delay_sec" value="$(arg delay_phase_linear_delay_sec)"/>
     <arg name="delay_phase_angular_delay_sec" value="$(arg delay_phase_angular_delay_sec)"/>
+    <arg name="state_timing_require_common_epoch" value="$(arg state_timing_require_common_epoch)"/>
+    <arg name="state_timing_max_raw_skew_sec" value="$(arg state_timing_max_raw_skew_sec)"/>
+    <arg name="state_timing_max_interpolation_gap_sec" value="$(arg state_timing_max_interpolation_gap_sec)"/>
+    <arg name="state_timing_max_robot_extrapolation_sec" value="$(arg state_timing_max_robot_extrapolation_sec)"/>
+    <arg name="execution_contract_fail_closed_on_post_limit_change" value="$(arg execution_contract_fail_closed_on_post_limit_change)"/>
+    <arg name="execution_contract_max_post_limit_delta_v" value="$(arg execution_contract_max_post_limit_delta_v)"/>
+    <arg name="execution_contract_max_post_limit_delta_omega" value="$(arg execution_contract_max_post_limit_delta_omega)"/>
   </include>
 </launch>

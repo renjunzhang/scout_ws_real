@@ -1,6 +1,10 @@
 std_msgs/Header header
 
 uint32 schema_version
+uint64 cycle_id
+time cycle_start_stamp
+time raw_robot_state_stamp
+time solver_input_epoch
 
 uint8 SOURCE_UNKNOWN=0
 uint8 SOURCE_ODOM=1

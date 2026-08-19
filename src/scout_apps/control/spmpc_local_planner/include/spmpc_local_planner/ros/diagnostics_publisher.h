@@ -4,6 +4,7 @@
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/core/variant_config.h"
 #include "spmpc_local_planner/ros/delay_phase_types.h"
+#include "spmpc_local_planner/ControlCycleAudit.h"
 #include "spmpc_local_planner/PreSolveSnapshot.h"
 #include "spmpc_local_planner/PredictedHorizon.h"
 #include "spmpc_local_planner/SloshObserverDebug.h"
@@ -33,6 +34,8 @@ public:
                                  bool liquid_delay_compensation_applied,
                                  double height_coeff);
     void publishCommandIntervention(const CommandInterventionDebug& intervention);
+    void publishControlCycleAudit(const ControlCycleAuditDebug& audit,
+                                  const std::string& frame_id);
     void publishCommandOutput(const geometry_msgs::Twist& desired,
                               const geometry_msgs::Twist& limited,
                               const geometry_msgs::Twist& previous,
@@ -101,6 +104,7 @@ private:
     ros::Publisher predicted_state_pub_;
     ros::Publisher solver_input_state_pub_;
     ros::Publisher command_intervention_pub_;
+    ros::Publisher control_cycle_audit_pub_;
     ros::Publisher cmd_output_pub_;
     ros::Publisher cmd_output_status_pub_;
     ros::Publisher delay_phase_pub_;

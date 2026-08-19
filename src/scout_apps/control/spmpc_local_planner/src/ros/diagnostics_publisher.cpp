@@ -31,6 +31,36 @@ void appendControlRow(const HorizonControlDebug& control, std::vector<double>& f
     flat.push_back(control.v_s);
 }
 
+ros::Time rosTimeFromNanoseconds(std::int64_t stamp_ns) {
+    if (stamp_ns <= 0) {
+        return ros::Time(0);
+    }
+    ros::Time stamp;
+    stamp.fromNSec(static_cast<std::uint64_t>(stamp_ns));
+    return stamp;
+}
+
+template <typename Message>
+void fillCycleTiming(const ControlCycleTimingDebug& timing, Message& msg) {
+    msg.cycle_id = timing.cycle_id;
+    msg.cycle_start_stamp = rosTimeFromNanoseconds(timing.cycle_start_stamp_ns);
+    msg.raw_robot_state_stamp = rosTimeFromNanoseconds(timing.raw_robot_state_stamp_ns);
+    msg.raw_liquid_state_stamp = rosTimeFromNanoseconds(timing.raw_liquid_state_stamp_ns);
+    msg.robot_state_stamp = rosTimeFromNanoseconds(timing.robot_state_stamp_ns);
+    msg.liquid_state_stamp = rosTimeFromNanoseconds(timing.liquid_state_stamp_ns);
+    msg.solver_input_epoch = rosTimeFromNanoseconds(timing.solver_input_epoch_ns);
+    msg.solve_start_stamp = rosTimeFromNanoseconds(timing.solve_start_stamp_ns);
+    msg.solve_end_stamp = rosTimeFromNanoseconds(timing.solve_end_stamp_ns);
+    msg.horizon_available_stamp = rosTimeFromNanoseconds(timing.horizon_available_stamp_ns);
+    msg.raw_state_skew_sec = timing.raw_state_skew_sec;
+    msg.aligned_state_skew_sec = timing.aligned_state_skew_sec;
+    msg.state_alignment_required = timing.state_alignment_required;
+    msg.state_time_aligned = timing.state_time_aligned;
+    msg.robot_state_interpolated = timing.robot_state_interpolated;
+    msg.robot_state_extrapolated = timing.robot_state_extrapolated;
+    msg.state_alignment_status = timing.state_alignment_status;
+}
+
 }  // namespace
 
 void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
@@ -75,6 +105,7 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     predicted_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/predicted_state", 1);
     solver_input_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/solver_input_state", 1);
     command_intervention_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/command_intervention", 1);
+    control_cycle_audit_pub_ = nh.advertise<ControlCycleAudit>("debug/control_cycle_audit", 10);
     cmd_output_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/cmd_vel_output", 1);
     cmd_output_status_pub_ = nh.advertise<std_msgs::String>("debug/cmd_vel_output_status", 1);
     delay_phase_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/delay_phase", 1);
@@ -111,10 +142,10 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     std_msgs::Float32MultiArray msg;
     msg.layout.dim.resize(1);
     msg.layout.dim[0].label =
-        "solver_backend_code,control_frequency,dt,horizon_steps,slosh_enable,slosh_constraint_enable,smooth_priority_enable,primitive_mode_code,v_ref,w_slosh,w_control,w_smooth,w_accel,w_alpha,w_du_a,w_du_vs,v_max,omega_max,a_max,alpha_max,shared_linear_accel_limit_enable,shared_linear_accel_max,shared_linear_accel_max_dt,shared_angular_limit_enable,shared_angular_rate_max,shared_angular_accel_max,shared_angular_accel_max_dt,container_radius,liquid_height,damping_ratio,slosh_height_ref,slosh_height_max,slosh_eta_dot_ratio,use_parabola_term,delay_phase_mode_code,delay_linear_sec,delay_angular_sec,delay_cmd_timeout_sec,delay_odom_timeout_sec,delay_history_window_sec,delay_require_complete_history";
-    msg.layout.dim[0].size = 41;
-    msg.layout.dim[0].stride = 41;
-    msg.data.resize(41, 0.0f);
+        "solver_backend_code,control_frequency,dt,horizon_steps,slosh_enable,slosh_constraint_enable,smooth_priority_enable,primitive_mode_code,v_ref,w_slosh,w_control,w_smooth,w_accel,w_alpha,w_du_a,w_du_vs,v_max,omega_max,a_max,alpha_max,shared_linear_accel_limit_enable,shared_linear_accel_max,shared_linear_accel_max_dt,shared_angular_limit_enable,shared_angular_rate_max,shared_angular_accel_max,shared_angular_accel_max_dt,container_radius,liquid_height,damping_ratio,slosh_height_ref,slosh_height_max,slosh_eta_dot_ratio,use_parabola_term,delay_phase_mode_code,delay_linear_sec,delay_angular_sec,delay_cmd_timeout_sec,delay_odom_timeout_sec,delay_history_window_sec,delay_require_complete_history,slosh_cost_horizon_steps,slosh_cost_horizon_sec,slosh_cost_tail_discount,state_timing_require_common_epoch,state_timing_max_raw_skew_sec,w_contour,w_lag,w_progress,w_v,w_vs";
+    msg.layout.dim[0].size = 51;
+    msg.layout.dim[0].stride = 51;
+    msg.data.resize(51, 0.0f);
     msg.data[0] = static_cast<float>(config.solver_backend_code);
     msg.data[1] = static_cast<float>(config.control_frequency);
     msg.data[2] = static_cast<float>(config.dt);
@@ -156,6 +187,16 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     msg.data[38] = static_cast<float>(config.delay_odom_timeout_sec);
     msg.data[39] = static_cast<float>(config.delay_history_window_sec);
     msg.data[40] = static_cast<float>(config.delay_require_complete_history);
+    msg.data[41] = static_cast<float>(config.slosh_cost_horizon_steps);
+    msg.data[42] = static_cast<float>(config.slosh_cost_horizon_sec);
+    msg.data[43] = static_cast<float>(config.slosh_cost_tail_discount);
+    msg.data[44] = static_cast<float>(config.state_timing_require_common_epoch);
+    msg.data[45] = static_cast<float>(config.state_timing_max_raw_skew_sec);
+    msg.data[46] = static_cast<float>(config.w_contour);
+    msg.data[47] = static_cast<float>(config.w_lag);
+    msg.data[48] = static_cast<float>(config.w_progress);
+    msg.data[49] = static_cast<float>(config.w_v);
+    msg.data[50] = static_cast<float>(config.w_vs);
     effective_config_pub_.publish(msg);
 }
 
@@ -242,10 +283,10 @@ void DiagnosticsPublisher::publishCommandIntervention(const CommandInterventionD
     std_msgs::Float32MultiArray msg;
     msg.layout.dim.resize(1);
     msg.layout.dim[0].label =
-        "solver_cmd_v,solver_cmd_omega,post_gate_cmd_v,post_gate_cmd_omega,published_cmd_v,published_cmd_omega,output_success,zero_due_to_solver_failure,zero_due_to_waiting_for_odom,zero_due_to_waiting_for_reference,zero_due_to_waiting_for_tf,zero_due_to_waiting_for_slosh_observer,zero_due_to_terminal_spin_fail,zero_due_to_tracking_safety,linear_limited,angular_rate_limited,angular_accel_limited,publish_cmd_vel";
-    msg.layout.dim[0].size = 18;
-    msg.layout.dim[0].stride = 18;
-    msg.data.resize(18, 0.0f);
+        "solver_cmd_v,solver_cmd_omega,post_gate_cmd_v,post_gate_cmd_omega,published_cmd_v,published_cmd_omega,output_success,zero_due_to_solver_failure,zero_due_to_waiting_for_odom,zero_due_to_waiting_for_reference,zero_due_to_waiting_for_tf,zero_due_to_waiting_for_slosh_observer,zero_due_to_terminal_spin_fail,zero_due_to_tracking_safety,zero_due_to_command_contract,linear_limited,angular_rate_limited,angular_accel_limited,publish_cmd_vel";
+    msg.layout.dim[0].size = 19;
+    msg.layout.dim[0].stride = 19;
+    msg.data.resize(19, 0.0f);
     msg.data[0] = static_cast<float>(intervention.solver_cmd_v);
     msg.data[1] = static_cast<float>(intervention.solver_cmd_omega);
     msg.data[2] = static_cast<float>(intervention.post_gate_cmd_v);
@@ -260,11 +301,89 @@ void DiagnosticsPublisher::publishCommandIntervention(const CommandInterventionD
     msg.data[11] = intervention.zero_due_to_waiting_for_slosh_observer ? 1.0f : 0.0f;
     msg.data[12] = intervention.zero_due_to_terminal_spin_fail ? 1.0f : 0.0f;
     msg.data[13] = intervention.zero_due_to_tracking_safety ? 1.0f : 0.0f;
-    msg.data[14] = intervention.linear_limited ? 1.0f : 0.0f;
-    msg.data[15] = intervention.angular_rate_limited ? 1.0f : 0.0f;
-    msg.data[16] = intervention.angular_accel_limited ? 1.0f : 0.0f;
-    msg.data[17] = intervention.publish_cmd_vel ? 1.0f : 0.0f;
+    msg.data[14] = intervention.zero_due_to_command_contract ? 1.0f : 0.0f;
+    msg.data[15] = intervention.linear_limited ? 1.0f : 0.0f;
+    msg.data[16] = intervention.angular_rate_limited ? 1.0f : 0.0f;
+    msg.data[17] = intervention.angular_accel_limited ? 1.0f : 0.0f;
+    msg.data[18] = intervention.publish_cmd_vel ? 1.0f : 0.0f;
     command_intervention_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishControlCycleAudit(
+    const ControlCycleAuditDebug& audit,
+    const std::string& frame_id) {
+    ControlCycleAudit msg;
+    msg.header.stamp = rosTimeFromNanoseconds(
+        audit.timing.command_publish_stamp_ns > 0
+            ? audit.timing.command_publish_stamp_ns
+            : audit.timing.horizon_available_stamp_ns);
+    msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
+    msg.schema_version = 1;
+    fillCycleTiming(audit.timing, msg);
+    msg.command_publish_stamp = rosTimeFromNanoseconds(
+        audit.timing.command_publish_stamp_ns);
+    msg.variant = audit.variant;
+    msg.status = audit.status;
+    msg.solver_status = audit.solver_status;
+    msg.observer_source = audit.observer_source;
+    msg.solve_attempted = audit.solve_attempted;
+    msg.solve_success = audit.solve_success;
+    msg.command_accepted = audit.command_accepted;
+    msg.publish_cmd_vel = audit.publish_cmd_vel;
+    msg.command_was_published = audit.command_was_published;
+    msg.command_contract_violation = audit.command_contract_violation;
+    msg.terminal_phase = audit.terminal_phase;
+    msg.terminal_controller_intervened =
+        audit.terminal_controller_intervened;
+    msg.safety_gate_intervened = audit.safety_gate_intervened;
+    msg.linear_limited = audit.linear_limited;
+    msg.angular_rate_limited = audit.angular_rate_limited;
+    msg.angular_accel_limited = audit.angular_accel_limited;
+    msg.solver_u0_a = audit.solver_u0_a;
+    msg.solver_u0_alpha = audit.solver_u0_alpha;
+    msg.planned_ax = audit.planned_ax;
+    msg.planned_ay = audit.planned_ay;
+    msg.solver_cmd_v = audit.solver_cmd_v;
+    msg.solver_cmd_omega = audit.solver_cmd_omega;
+    msg.terminal_cmd_v = audit.terminal_cmd_v;
+    msg.terminal_cmd_omega = audit.terminal_cmd_omega;
+    msg.post_gate_cmd_v = audit.post_gate_cmd_v;
+    msg.post_gate_cmd_omega = audit.post_gate_cmd_omega;
+    msg.published_cmd_v = audit.published_cmd_v;
+    msg.published_cmd_omega = audit.published_cmd_omega;
+    msg.previous_shifted_plan_available = audit.previous_shifted_plan_available;
+    msg.previous_plan_cycle_id = audit.previous_plan_cycle_id;
+    msg.previous_shifted_plan_a = audit.previous_shifted_plan_a;
+    msg.previous_shifted_plan_alpha = audit.previous_shifted_plan_alpha;
+    msg.replanned_minus_shifted_a = audit.replanned_minus_shifted_a;
+    msg.replanned_minus_shifted_alpha = audit.replanned_minus_shifted_alpha;
+
+    msg.odom_excitation_valid = audit.odom_excitation.valid;
+    msg.odom_measurement_stamp = rosTimeFromNanoseconds(
+        audit.odom_excitation.measurement_stamp_ns);
+    msg.odom_accel_effective_stamp = rosTimeFromNanoseconds(
+        audit.odom_excitation.accel_effective_stamp_ns);
+    msg.odom_receive_stamp = rosTimeFromNanoseconds(
+        audit.odom_excitation.receive_stamp_ns);
+    msg.odom_ax = audit.odom_excitation.ax;
+    msg.odom_ay = audit.odom_excitation.ay;
+    msg.odom_omega = audit.odom_excitation.omega;
+    msg.odom_alpha = audit.odom_excitation.alpha;
+    msg.odom_sample_dt_sec = audit.odom_excitation.sample_dt_sec;
+
+    msg.imu_excitation_valid = audit.imu_excitation.valid;
+    msg.imu_measurement_stamp = rosTimeFromNanoseconds(
+        audit.imu_excitation.measurement_stamp_ns);
+    msg.imu_accel_effective_stamp = rosTimeFromNanoseconds(
+        audit.imu_excitation.accel_effective_stamp_ns);
+    msg.imu_receive_stamp = rosTimeFromNanoseconds(
+        audit.imu_excitation.receive_stamp_ns);
+    msg.imu_ax = audit.imu_excitation.ax;
+    msg.imu_ay = audit.imu_excitation.ay;
+    msg.imu_omega = audit.imu_excitation.omega;
+    msg.imu_alpha = audit.imu_excitation.alpha;
+    msg.imu_sample_dt_sec = audit.imu_excitation.sample_dt_sec;
+    control_cycle_audit_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishCommandOutput(const geometry_msgs::Twist& desired,
@@ -941,9 +1060,11 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     const SolverOutput& output,
     const std::string& frame_id) const {
     PredictedHorizon msg;
-    msg.header.stamp = ros::Time::now();
+    msg.header.stamp = rosTimeFromNanoseconds(
+        output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 1;
+    msg.schema_version = 2;
+    fillCycleTiming(output.cycle_timing, msg);
     const auto& horizon = output.predicted_horizon;
     msg.valid = horizon.valid;
     msg.backend = horizon.backend;
@@ -953,6 +1074,11 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.control_semantics = horizon.control_semantics;
     msg.dt = horizon.dt;
     msg.horizon_steps = static_cast<uint32_t>(horizon.controls.size());
+    msg.slosh_cost_horizon_steps = horizon.slosh_cost_horizon_steps;
+    msg.slosh_cost_horizon_sec = horizon.slosh_cost_horizon_steps < 0
+        ? -1.0
+        : static_cast<double>(horizon.slosh_cost_horizon_steps) * horizon.dt;
+    msg.slosh_cost_tail_discount = horizon.slosh_cost_tail_discount;
 
     const size_t state_count = horizon.states.size();
     msg.t.reserve(state_count);
@@ -997,9 +1123,11 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     const SolverOutput& output,
     const std::string& frame_id) const {
     PreSolveSnapshot msg;
-    msg.header.stamp = ros::Time::now();
+    msg.header.stamp = rosTimeFromNanoseconds(
+        output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 1;
+    msg.schema_version = 2;
+    fillCycleTiming(output.cycle_timing, msg);
     const auto& snapshot = output.pre_solve_snapshot;
     msg.valid = snapshot.valid;
     msg.backend = snapshot.backend;
@@ -1013,6 +1141,11 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.state_width = static_cast<uint32_t>(std::max(0, snapshot.state_width));
     msg.control_width = static_cast<uint32_t>(std::max(0, snapshot.control_width));
     msg.parameter_width = static_cast<uint32_t>(std::max(0, snapshot.parameter_width));
+    msg.slosh_cost_horizon_steps = snapshot.slosh_cost_horizon_steps;
+    msg.slosh_cost_horizon_sec = snapshot.slosh_cost_horizon_steps < 0
+        ? -1.0
+        : static_cast<double>(snapshot.slosh_cost_horizon_steps) * snapshot.dt;
+    msg.slosh_cost_tail_discount = snapshot.slosh_cost_tail_discount;
     msg.robot_x = snapshot.robot.x;
     msg.robot_y = snapshot.robot.y;
     msg.robot_yaw = snapshot.robot.yaw;

@@ -293,6 +293,7 @@ record_topics=(
   # the post-record report lists which ones were actually present in the bag.
   /spmpc/debug/timing_budget
   /spmpc/debug/command_intervention
+  /spmpc/debug/control_cycle_audit
   /spmpc/debug/slosh_model_consistency
   /spmpc/debug/solver_input_state
   /spmpc/debug/raw_state
