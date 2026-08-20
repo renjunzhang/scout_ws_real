@@ -4,6 +4,9 @@ project(spmpc_local_planner)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(SPMPC_BUILD_LEGACY_BACKEND
+  "Build the RouteB direct-omega diagnostic/legacy solver backend" ON)
+
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
@@ -74,7 +77,8 @@ if(ACADOS_LIB_DIR AND EXISTS "${SPMPC_GEN_B0_DIR}/libacados_ocp_solver_spmpc_b0.
 else()
   message(STATUS "[spmpc] acados not found (ACADOS_SOURCE_DIR / generated spmpc_b0 missing); continuous backend = stub")
 endif()
-if(ACADOS_LIB_DIR AND EXISTS "${SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR}/libacados_ocp_solver_spmpc_b0_direct_omega_legacy.so")
+if(SPMPC_BUILD_LEGACY_BACKEND AND ACADOS_LIB_DIR AND
+   EXISTS "${SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR}/libacados_ocp_solver_spmpc_b0_direct_omega_legacy.so")
   set(SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY TRUE)
   if(EXISTS "${SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR}/libacados_ocp_solver_spmpc_slosh_direct_omega.so")
     set(SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA TRUE)
@@ -82,12 +86,15 @@ if(ACADOS_LIB_DIR AND EXISTS "${SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR}/libacados_
   else()
     message(STATUS "[spmpc] building continuous_mpcc_direct_omega backend (b0 only, slosh solver missing)")
   endif()
+elseif(NOT SPMPC_BUILD_LEGACY_BACKEND)
+  message(STATUS "[spmpc] RouteB direct-omega legacy backend target disabled")
 endif()
 
 set(SPMPC_PUBLIC_LIBRARIES
   ${PROJECT_NAME}
   spmpc_config
   spmpc_controller
+  spmpc_costmap
   spmpc_estimation
   spmpc_phase_rejoin
   spmpc_reference
@@ -131,6 +138,10 @@ target_include_directories(spmpc_model PRIVATE
 add_library(spmpc_config
   src/config/app_config.cpp
   src/core/variant_config.cpp
+)
+
+add_library(spmpc_costmap
+  src/core/costmap_grid.cpp
 )
 
 add_library(spmpc_controller
@@ -216,6 +227,7 @@ add_library(spmpc_solver_rollout
   src/solvers/rollout_sampling_solver.cpp
 )
 target_link_libraries(spmpc_solver_rollout
+  spmpc_costmap
   spmpc_model
   spmpc_reference
 )
@@ -249,23 +261,26 @@ target_link_libraries(spmpc_solver_acados
   ${EIGEN3_LIBRARIES}
 )
 
-# RouteB is retained for source-tree diagnostics, but it is an implementation
-# detail of the factory rather than a separately exported runtime library.
-add_library(spmpc_solver_legacy STATIC
-  src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
-)
-set_target_properties(spmpc_solver_legacy PROPERTIES
-  POSITION_INDEPENDENT_CODE ON
-)
-target_include_directories(spmpc_solver_legacy PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
-)
-target_link_libraries(spmpc_solver_legacy
-  PRIVATE
-  spmpc_model
-  spmpc_reference
-  ${EIGEN3_LIBRARIES}
-)
+if(SPMPC_BUILD_LEGACY_BACKEND)
+  # RouteB is retained for source-tree diagnostics, but it is an
+  # implementation detail of the factory rather than an exported runtime
+  # library.
+  add_library(spmpc_solver_legacy STATIC
+    src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
+  )
+  set_target_properties(spmpc_solver_legacy PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+  )
+  target_include_directories(spmpc_solver_legacy PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+  )
+  target_link_libraries(spmpc_solver_legacy
+    PRIVATE
+    spmpc_model
+    spmpc_reference
+    ${EIGEN3_LIBRARIES}
+  )
+endif()
 
 add_library(spmpc_solver_factory
   src/solvers/solver_factory.cpp
@@ -274,8 +289,12 @@ target_link_libraries(spmpc_solver_factory
   spmpc_solver_api
   spmpc_solver_rollout
   spmpc_solver_acados
-  spmpc_solver_legacy
 )
+if(SPMPC_BUILD_LEGACY_BACKEND)
+  target_compile_definitions(spmpc_solver_factory PRIVATE
+    SPMPC_BUILD_LEGACY_BACKEND)
+  target_link_libraries(spmpc_solver_factory spmpc_solver_legacy)
+endif()
 
 add_library(spmpc_ros_telemetry STATIC
   src/ros/telemetry_encoder.cpp
@@ -312,7 +331,6 @@ target_link_libraries(spmpc_ros_config
 )
 
 add_library(${PROJECT_NAME}
-  src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
   src/core/start_lock_recovery.cpp
   src/core/terminal_controller.cpp
@@ -333,6 +351,7 @@ target_link_libraries(${PROJECT_NAME}
   PUBLIC
   spmpc_config
   spmpc_controller
+  spmpc_costmap
   spmpc_estimation
   spmpc_phase_rejoin
   spmpc_reference
@@ -380,7 +399,8 @@ if(SPMPC_WITH_ACADOS)
   endif()
 endif()
 
-if(SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY)
+if(SPMPC_BUILD_LEGACY_BACKEND AND
+   SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY)
   target_compile_definitions(spmpc_solver_legacy PRIVATE SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY)
   target_include_directories(spmpc_solver_legacy PRIVATE
     ${ACADOS_SOURCE_DIR}/include
@@ -543,6 +563,16 @@ if(CATKIN_ENABLE_TESTING)
     target_link_libraries(test_backend_policy
       spmpc_solver_api
     )
+  endif()
+  catkin_add_gtest(test_solver_factory test/test_solver_factory.cpp)
+  if(TARGET test_solver_factory)
+    target_link_libraries(test_solver_factory
+      spmpc_solver_factory
+    )
+    if(SPMPC_BUILD_LEGACY_BACKEND)
+      target_compile_definitions(test_solver_factory PRIVATE
+        SPMPC_BUILD_LEGACY_BACKEND)
+    endif()
   endif()
   catkin_add_gtest(test_acados_stage_parameter_builder
     test/test_acados_stage_parameter_builder.cpp)

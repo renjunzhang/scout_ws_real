@@ -642,6 +642,10 @@ SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY
 SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
 ```
 
+RouteB legacy target默认保留用于源码树诊断；发布或主线构建可通过
+`-DSPMPC_BUILD_LEGACY_BACKEND=OFF`完全排除该target。关闭后主线acados与
+primitive后端保持可构建，若配置仍请求legacy后端则factory明确拒绝。
+
 若专用短 solver 未生成或未链接，`enforce` 会在初始化时拒绝启动，不会退回到 60 步 solver 冒充短时域方法。
 
 ### 6.2 旧 `B_*` variant
