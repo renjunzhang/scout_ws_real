@@ -22,7 +22,7 @@ VALIDATOR="${SCRIPT_DIR}/../tools/analysis/validate_g3_online_rgb_trial.py"
 ANALYZER="${SCRIPT_DIR}/../tools/analysis/analyze_g3r2_weight_screen.py"
 SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
 CAMERA_PREP="${SCRIPT_DIR}/prepare_spmpc_g3_realsense.sh"
-TIMESTAMP_GATE="${SCRIPT_DIR}/validate_realsense_timestamp_health.py"
+TIMESTAMP_GATE="${REPO_ROOT}/devel/lib/spmpc_local_planner/spmpc_realsense_timestamp_health_gate"
 
 [[ -r /opt/ros/noetic/setup.bash ]] || fail "missing ROS Noetic setup"
 # shellcheck disable=SC1091
@@ -66,7 +66,10 @@ BASELINE_BAG_SHA256="63399f5f6e80c9afe438e5dae65942c43545c4b2c54bffa866579d6a105
 BASELINE_REPORT="${BASELINE_ROOT}/DEV_G3R2_H0_C1_Bsmooth_robot_only_r01_a01_g3r2_postflight.json"
 BASELINE_REPORT_SHA256="9f645ae70b385d15935207d8b980bdd5a6ec5d1bcab2109056c5b3513a99e784"
 
-SCREEN_RELEASE_REVISION="795a0da1abfa0abe7044de16052cefaddaf34411"
+# Historical evidence below remains bound to the release that produced it.
+# New runs bind their preregistration to runtime_revision after the C++ gate
+# migration and must not reuse that historical release identity.
+SCREEN_EVIDENCE_RELEASE_REVISION="795a0da1abfa0abe7044de16052cefaddaf34411"
 FAILED_ROW03_BAG="/home/geist/slosh_bags/real/20260801_spmpc_g3r2_robot_only_weight_screen/H0/DEV_G3R2_H0_C1_W5_S10_r03_a01.bag"
 FAILED_ROW03_BAG_SHA256="52518e6d66758afedf156fe01ab7e118f6f5e390135b8b5dc80030acff031a2d"
 FAILED_ROW03_REPORT="/home/geist/slosh_bags/real/20260801_spmpc_g3r2_robot_only_weight_screen/H0/DEV_G3R2_H0_C1_W5_S10_r03_a01_g3r2_screen_postflight.json"
@@ -150,6 +153,7 @@ required_files=(
 for required_file in "${required_files[@]}"; do
   [[ -s "${required_file}" ]] || fail "missing required artifact: ${required_file}"
 done
+[[ -x "${TIMESTAMP_GATE}" ]] || fail "timestamp gate is not executable: ${TIMESTAMP_GATE}"
 
 verify_sha256() {
   local path="$1"
@@ -220,7 +224,7 @@ PY
 python3 - \
   "${FAILURE_EVIDENCE}" "${RETRY_AUTHORIZATION}" "${FAILED_ROW03_REPORT}" \
   "${FAILURE_EVIDENCE_SHA256}" "${FAILED_ROW03_BAG_SHA256}" \
-  "${FAILED_ROW03_REPORT_SHA256}" "${SCREEN_RELEASE_REVISION}" <<'PY'
+  "${FAILED_ROW03_REPORT_SHA256}" "${SCREEN_EVIDENCE_RELEASE_REVISION}" <<'PY'
 import json
 import sys
 
@@ -305,7 +309,7 @@ python3 - \
   "${METHOD_NEGATIVE_ROW04_PRE_RECORD}" "${METHOD_OUTCOME_EVIDENCE_SHA256}" \
   "${METHOD_NEGATIVE_ROW04_BAG_SHA256}" "${METHOD_NEGATIVE_ROW04_REPORT_SHA256}" \
   "${METHOD_NEGATIVE_ROW04_PRE_ZERO_SHA256}" "${METHOD_NEGATIVE_ROW04_PRE_RECORD_SHA256}" \
-  "${SCREEN_RELEASE_REVISION}" <<'PY'
+  "${SCREEN_EVIDENCE_RELEASE_REVISION}" <<'PY'
 import json
 import math
 import sys
@@ -447,7 +451,6 @@ relevant_repo_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_weight_screen_trial.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/validate_realsense_timestamp_health.py
   src/scout_apps/control/spmpc_local_planner/tools/analysis/validate_g3_online_rgb_trial.py
   src/scout_apps/control/spmpc_local_planner/tools/analysis/analyze_g3r2_weight_screen.py
   src/scout_apps/control/spmpc_local_planner/scripts/prepare_spmpc_g3_realsense.sh
@@ -486,7 +489,7 @@ fi
 online_node_sha="$(sha256sum "${ONLINE_LIQUID_NODE}" | awk '{print $1}')"
 online_detector_sha="$(sha256sum "${ONLINE_LIQUID_DETECTOR}" | awk '{print $1}')"
 online_msg_sha="$(sha256sum "${ONLINE_LIQUID_MSG}" | awk '{print $1}')"
-timestamp_gate_sha="$(sha256sum "${TIMESTAMP_GATE}" | awk '{print $1}')"
+timestamp_gate_binary_sha="$(sha256sum "${TIMESTAMP_GATE}" | awk '{print $1}')"
 
 order_contents() {
   printf '%s\n' \
@@ -543,7 +546,8 @@ RUNTIME_BINARY_BUNDLE_SHA256="$(printf '%s\n' \
   "acados_slosh_solver=${ACADOS_SLOSH_SOLVER_SHA256}" \
   "acados_runtime=${ACADOS_LIBRARY_SHA256}" \
   "hpipm_runtime=${HPIPM_LIBRARY_SHA256}" \
-  "blasfeo_runtime=${BLASFEO_LIBRARY_SHA256}" | sha256sum | awk '{print $1}')"
+  "blasfeo_runtime=${BLASFEO_LIBRARY_SHA256}" \
+  "timestamp_gate_binary=${timestamp_gate_binary_sha}" | sha256sum | awk '{print $1}')"
 
 prereg_contents() {
   printf '%s\n' \
@@ -555,7 +559,7 @@ prereg_contents() {
     "baseline_report_sha256=${BASELINE_REPORT_SHA256}" \
     "planned_candidate_units=4" \
     "replicates_per_candidate=1" \
-    "release_revision=${SCREEN_RELEASE_REVISION}" \
+    "release_revision=${runtime_revision}" \
     "source_report_sha256=${SOURCE_REPORT_SHA256}" \
     "path_sha256=${PATH_SHA256}" \
     "delay_phase_mode=fixed_robot_only" \
@@ -569,6 +573,8 @@ prereg_contents() {
     "order_sha256=${ORDER_SHA256}" \
     "outcome_window_rule_sha256=${OUTCOME_WINDOW_RULE_SHA256}" \
     "online_config_sha256=${ONLINE_CONFIG_SHA256}" \
+    "timestamp_gate_impl=cpp_executable" \
+    "timestamp_gate_sha256=${timestamp_gate_binary_sha}" \
     "runtime_binary_bundle_sha256=${RUNTIME_BINARY_BUNDLE_SHA256}" \
     "record_sec=${RECORD_SEC}" \
     "positive_candidates_only_enter_paired_confirmation=true" \
@@ -773,7 +779,8 @@ printf '%s\n' \
   "retry_authorization_sha256=${RETRY_AUTHORIZATION_SHA256}" \
   "method_outcome_evidence_sha256=${METHOD_OUTCOME_EVIDENCE_SHA256}" \
   "screen_continuation_authorization_sha256=${SCREEN_CONTINUATION_AUTHORIZATION_SHA256}" \
-  "timestamp_gate_sha256=${timestamp_gate_sha}" \
+  "timestamp_gate_impl=cpp_executable" \
+  "timestamp_gate_sha256=${timestamp_gate_binary_sha}" \
   > "${RUN_OUT_DIR}/${RUN_LABEL}_g3r2_screen_binding.env"
 
 bash "${CAMERA_PREP}"
@@ -781,7 +788,7 @@ bash "${CAMERA_PREP}"
 run_timestamp_gate() {
   local phase="$1"
   local report="${RUN_OUT_DIR}/${RUN_LABEL}_realsense_timestamp_${phase}.json"
-  python3 "${TIMESTAMP_GATE}" \
+  "${TIMESTAMP_GATE}" \
     --topic /camera/color/camera_info --samples 90 --timeout-sec 50 --settle-until-pass \
     --max-future-skew-sec 0.05 --max-p95-lag-sec 0.20 \
     --min-clock-rate-ratio 0.98 --max-clock-rate-ratio 1.02 \

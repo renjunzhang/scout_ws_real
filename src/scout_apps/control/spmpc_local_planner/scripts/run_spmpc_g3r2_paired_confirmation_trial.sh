@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Frozen three-block G3R2 paired confirmation: W5_S10 vs Bsmooth.
+# Three-block G3R2 development paired confirmation: W5_S10 vs Bsmooth.
 
 set -euo pipefail
 
@@ -29,7 +29,7 @@ VALIDATOR="${SCRIPT_DIR}/../tools/analysis/validate_g3_online_rgb_trial.py"
 ANALYZER="${SCRIPT_DIR}/../tools/analysis/analyze_g3r2_paired_confirmation.py"
 SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
 CAMERA_PREP="${SCRIPT_DIR}/prepare_spmpc_g3_realsense.sh"
-TIMESTAMP_GATE="${SCRIPT_DIR}/validate_realsense_timestamp_health.py"
+TIMESTAMP_GATE="${REPO_ROOT}/devel/lib/spmpc_local_planner/spmpc_realsense_timestamp_health_gate"
 
 G3R2C_ROW="${G3R2C_ROW:-}"
 G3R2C_ATTEMPT="${G3R2C_ATTEMPT:-01}"
@@ -125,6 +125,7 @@ required_files=(
 for required_file in "${required_files[@]}"; do
   [[ -s "${required_file}" ]] || fail "missing required artifact: ${required_file}"
 done
+[[ -x "${TIMESTAMP_GATE}" ]] || fail "timestamp gate is not executable: ${TIMESTAMP_GATE}"
 
 verify_sha256 "${PATH_FILE}" "${PATH_SHA256}" "path"
 verify_sha256 "${SOURCE_REPORT}" "${SOURCE_REPORT_SHA256}" "source report"
@@ -231,7 +232,6 @@ relevant_repo_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_paired_confirmation_trial.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/validate_realsense_timestamp_health.py
   src/scout_apps/control/spmpc_local_planner/tools/analysis/validate_g3_online_rgb_trial.py
   src/scout_apps/control/spmpc_local_planner/tools/analysis/analyze_g3r2_paired_confirmation.py
   src/scout_apps/control/spmpc_local_planner/scripts/prepare_spmpc_g3_realsense.sh
@@ -266,7 +266,7 @@ fi
 online_node_sha="$(sha256sum "${ONLINE_LIQUID_NODE}" | awk '{print $1}')"
 online_detector_sha="$(sha256sum "${ONLINE_LIQUID_DETECTOR}" | awk '{print $1}')"
 online_msg_sha="$(sha256sum "${ONLINE_LIQUID_MSG}" | awk '{print $1}')"
-timestamp_gate_sha="$(sha256sum "${TIMESTAMP_GATE}" | awk '{print $1}')"
+timestamp_gate_binary_sha="$(sha256sum "${TIMESTAMP_GATE}" | awk '{print $1}')"
 
 order_contents() {
   printf '%s\n' \
@@ -328,7 +328,8 @@ RUNTIME_BINARY_BUNDLE_SHA256="$(printf '%s\n' \
   "acados_slosh_solver=${ACADOS_SLOSH_SOLVER_SHA256}" \
   "acados_runtime=${ACADOS_LIBRARY_SHA256}" \
   "hpipm_runtime=${HPIPM_LIBRARY_SHA256}" \
-  "blasfeo_runtime=${BLASFEO_LIBRARY_SHA256}" | sha256sum | awk '{print $1}')"
+  "blasfeo_runtime=${BLASFEO_LIBRARY_SHA256}" \
+  "timestamp_gate_binary=${timestamp_gate_binary_sha}" | sha256sum | awk '{print $1}')"
 
 prereg_contents() {
   printf '%s\n' \
@@ -363,6 +364,8 @@ prereg_contents() {
     "rgb_camera_params_sha256=${RGB_CAMERA_PARAMS_SHA256}" \
     "online_config_sha256=${ONLINE_CONFIG_SHA256}" \
     "outcome_window_rule_sha256=${OUTCOME_WINDOW_RULE_SHA256}" \
+    "timestamp_gate_impl=cpp_executable" \
+    "timestamp_gate_sha256=${timestamp_gate_binary_sha}" \
     "runtime_binary_bundle_sha256=${RUNTIME_BINARY_BUNDLE_SHA256}" \
     "minimum_mean_rgb_p95_improvement_mm=0.05" \
     "minimum_mean_rgb_rms_improvement_mm=0.0" \
@@ -531,7 +534,8 @@ printf '%s\n' \
   "row=${G3R2C_ROW}" "block=${BLOCK}" "position=${POSITION}" "condition=${CONDITION}" \
   "screen_report_sha256=${SCREEN_REPORT_SHA256}" "prereg_sha256=${PREREG_SHA256}" \
   "order_sha256=${ORDER_SHA256}" "outcome_window_rule_sha256=${OUTCOME_WINDOW_RULE_SHA256}" \
-  "timestamp_gate_sha256=${timestamp_gate_sha}" \
+  "timestamp_gate_impl=cpp_executable" \
+  "timestamp_gate_sha256=${timestamp_gate_binary_sha}" \
   > "${RUN_OUT_DIR}/${RUN_LABEL}_g3r2c_binding.env"
 
 bash "${CAMERA_PREP}"
@@ -539,7 +543,7 @@ bash "${CAMERA_PREP}"
 run_timestamp_gate() {
   local phase="$1"
   local report="${RUN_OUT_DIR}/${RUN_LABEL}_realsense_timestamp_${phase}.json"
-  python3 "${TIMESTAMP_GATE}" --topic /camera/color/camera_info --samples 90 \
+  "${TIMESTAMP_GATE}" --topic /camera/color/camera_info --samples 90 \
     --timeout-sec 50 --settle-until-pass --max-future-skew-sec 0.05 \
     --max-p95-lag-sec 0.20 --min-clock-rate-ratio 0.98 --max-clock-rate-ratio 1.02 \
     --max-gap-sec 0.20 --report "${report}" || \
