@@ -4,8 +4,10 @@ project(spmpc_local_planner)
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# RouteB remains reproducible for diagnostics, but must be explicitly enabled
+# so the exported runtime factory has no generated legacy solver dependency.
 option(SPMPC_BUILD_LEGACY_BACKEND
-  "Build the RouteB direct-omega diagnostic/legacy solver backend" ON)
+  "Build the RouteB direct-omega diagnostic/legacy solver backend" OFF)
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
