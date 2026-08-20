@@ -1,7 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/phase_rejoin/types.h"
-#include "spmpc_local_planner/solver/api/solver_io.h"
+#include "spmpc_local_planner/solver/api/solver_output.h"
 
 namespace spmpc_local_planner {
 

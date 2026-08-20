@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spmpc_local_planner/solver/api/solver_io.h"
+#include "spmpc_local_planner/solver/api/solver_input.h"
 #include "spmpc_local_planner/estimation/slosh_observer_selector.h"
 #include "spmpc_local_planner/runtime/execution_prediction/command_history_buffer.h"
 #include "spmpc_local_planner/runtime/execution_prediction/execution_state_predictor.h"

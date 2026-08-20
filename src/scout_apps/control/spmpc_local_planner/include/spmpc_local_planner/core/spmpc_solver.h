@@ -1,6 +1,7 @@
 #pragma once
 
-#include "spmpc_local_planner/solver/api/solver_io.h"
+#include "spmpc_local_planner/solver/api/solver_input.h"
+#include "spmpc_local_planner/solver/api/solver_output.h"
 #include "spmpc_local_planner/config/variant_config.h"
 #include "spmpc_local_planner/reference/reference_path.h"
 #include "spmpc_local_planner/solver/api/configure_result.h"

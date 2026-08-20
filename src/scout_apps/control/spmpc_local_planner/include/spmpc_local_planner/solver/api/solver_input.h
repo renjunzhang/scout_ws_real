@@ -1,0 +1,26 @@
+#pragma once
+
+#include "spmpc_local_planner/core/costmap_grid.h"
+#include "spmpc_local_planner/domain/state.h"
+#include "spmpc_local_planner/phase_rejoin/types.h"
+#include "spmpc_local_planner/runtime/control_cycle_timing.h"
+
+#include <string>
+
+namespace spmpc_local_planner {
+
+struct SolverInput {
+    RobotState robot;
+    SloshState slosh;
+    const CostmapGrid* costmap = nullptr;
+    double dt = 1.0 / 30.0;
+    int horizon_steps = 60;
+    double min_progress_s = 0.0;
+    bool has_v_ref_current = false;
+    double v_ref_current = 0.0;
+    std::string v_ref_status = "VARIANT_FALLBACK";
+    PhaseRejoinSolverContext phase_rejoin;
+    ControlCycleTimingDebug cycle_timing;
+};
+
+}  // namespace spmpc_local_planner
