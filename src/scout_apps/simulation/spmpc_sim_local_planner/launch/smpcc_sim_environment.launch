@@ -28,6 +28,7 @@
   <arg name="yaw" default="0.0"/>
   <arg name="cmd_vel_in" default="/cmd_vel"/>
   <arg name="cmd_vel_drive" default="/cmd_vel_drive"/>
+  <arg name="cmd_guard_enable" default="true"/>
   <arg name="odom_topic" default="/odom"/>
   <arg name="publish_odom_tf" default="false"/>
   <arg name="scan_topic" default="/scan_front"/>
@@ -85,9 +86,12 @@
     <param name="publish_frequency" value="50.0"/>
   </node>
 
-  <!-- This is only an actuator-side clamp.  It subscribes to cmd_vel and
-       cannot synthesize a path or command on its own. -->
-  <node name="sim_environment_cmd_vel_guard"
+  <!-- Optional legacy actuator-side clamp.  Closed-loop controller tests that
+       already constrain acceleration inside their OCP disable this node and
+       publish directly to cmd_vel_drive, so the certified command is exactly
+       the command consumed by the robot plugin. -->
+  <node if="$(arg cmd_guard_enable)"
+        name="sim_environment_cmd_vel_guard"
         pkg="scout_mini_proxy_bringup"
         type="cmd_vel_guard.py"
         output="screen">

@@ -28,9 +28,11 @@ string artifact_path
 string contract_id
 
 uint64 current_index
+uint64 clock_index
 uint64 front_index
 uint64 terminal_index
 uint64 candidate_count
+int32 phase_lead_steps
 int32 front_steps
 int32 liquid_steps
 int32 solver_terminal_step
@@ -45,6 +47,8 @@ bool current_gate_accepted
 bool command_intervened
 bool recovery_command_used
 bool controlled_stop_used
+bool command_contract_consistent
+bool terminal_release_authorized
 float64 nominal_cmd_v
 float64 nominal_cmd_omega
 float64 solver_cmd_v

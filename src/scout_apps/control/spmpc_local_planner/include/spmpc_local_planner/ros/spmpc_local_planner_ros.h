@@ -147,6 +147,7 @@ private:
     ExecutionStatePredictor execution_predictor_;
     PhaseRejoinCoordinator phase_rejoin_coordinator_;
     PhaseRejoinParams phase_rejoin_params_;
+    PhaseRejoinRuntimeContract phase_rejoin_runtime_contract_;
     DelayPhaseParams delay_phase_params_;
     StateTimingParams state_timing_params_;
     CommandExecutionContractParams command_contract_params_;
@@ -205,6 +206,10 @@ private:
     double terminal_spin_fail_max_duration_sec_ = 2.0;
     double terminal_spin_fail_duration_sec_ = 0.0;
     bool terminal_spin_fail_latched_ = false;
+    // Once the terminal controller declares success, keep zero command until a
+    // genuinely new reference arrives.  This prevents alternating
+    // GOAL_REACHED/enforce cycles from re-exciting the liquid at the endpoint.
+    bool goal_reached_latched_ = false;
     bool tracking_safety_enable_ = true;
     bool tracking_safety_projection_enable_ = true;
     double tracking_safety_max_projection_distance_m_ = 0.50;

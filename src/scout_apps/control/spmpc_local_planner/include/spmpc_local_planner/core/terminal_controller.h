@@ -31,6 +31,11 @@ struct TerminalControllerParams {
 struct TerminalGoalInfo {
     bool valid = false;
     bool position_reached = false;
+    // A higher-level controller that owns a complete terminal maneuver may
+    // defer the generic reached latch until its tail has been validated.  The
+    // physical position/speed/omega diagnostics remain observable while the
+    // latch is inhibited.
+    bool reached_latch_allowed = true;
     double distance_to_goal = std::numeric_limits<double>::infinity();
     double remaining_s = std::numeric_limits<double>::infinity();
     double dx_robot = std::numeric_limits<double>::quiet_NaN();

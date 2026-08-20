@@ -17,6 +17,8 @@ struct TerminalDiagnostics {
     bool position_reached = false;
     bool speed_gate_reached = false;
     bool omega_gate_reached = false;
+    bool reached_latch_allowed = true;
+    bool reached_latch_blocked = false;
     bool reached = false;
     double distance_to_goal = std::numeric_limits<double>::infinity();
     double remaining_s = std::numeric_limits<double>::infinity();

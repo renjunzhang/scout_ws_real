@@ -37,7 +37,7 @@ matrix, or live-smoke admission evidence.
 `scripts/launch_sim_environment.sh` is the only environment-only entry.  It
 requires distinct, unused loopback ROS/Gazebo ports and starts the package's
 own `smpcc_sim_environment.launch`, which owns only Gazebo, the proxy robot,
-the actuator clamp, and read-only Cartographer localization.  It does not
+an optional actuator clamp, and read-only Cartographer localization.  It does not
 include the legacy proxy navigation launch.  Before launch it replaces the
 broad workspace ROS package path with an allowlist; therefore
 `spmpc_local_planner`, `spmpc_experiments`, and
@@ -46,6 +46,13 @@ environment handoff it verifies that neither a publisher on the configured
 controller command topic nor one on the configured reference-path topic has
 appeared.  A simulation-owned controller/path launch is a separate, explicit
 later operation.
+
+For controller-contract tests whose OCP already enforces the actuator bounds,
+set `CMD_GUARD_ENABLE=false`, `CMD_VEL_TOPIC=/cmd_vel_drive`, and launch the
+controller with the same `/cmd_vel_drive` output.  This removes the legacy
+post-controller rate limiter and makes the published/certified command equal
+to the command consumed by the Gazebo robot plugin.  The default remains
+`CMD_GUARD_ENABLE=true` for legacy cases.
 
 ## H0 development path publisher
 

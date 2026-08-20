@@ -23,6 +23,7 @@ bool PhaseCandidateSelector::configure(
     const PhaseCandidateSelectorParams& params) {
     const bool valid = params.backward_radius >= 0 &&
         params.forward_radius >= 0 && params.initial_forward_radius >= 0 &&
+        params.max_clock_lead_steps >= 0 &&
         std::isfinite(params.weight_position) && params.weight_position >= 0.0 &&
         std::isfinite(params.weight_yaw) && params.weight_yaw >= 0.0 &&
         std::isfinite(params.weight_velocity) && params.weight_velocity >= 0.0 &&
@@ -67,6 +68,7 @@ PhaseCandidateResult PhaseCandidateSelector::select(
     const SloshState& execution_front_slosh,
     int front_steps,
     int liquid_steps,
+    std::size_t clock_index,
     bool have_last_accepted,
     std::size_t last_accepted_index) const {
     PhaseCandidateResult result;
@@ -94,9 +96,8 @@ PhaseCandidateResult PhaseCandidateSelector::select(
         return result;
     }
 
-    const std::size_t expected = have_last_accepted
-        ? std::min(last_accepted_index + 1, max_current)
-        : 0;
+    const std::size_t expected = std::min(clock_index, max_current);
+    result.clock_index = expected;
     result.normal_shift_index = expected;
 
     std::size_t begin = 0;
@@ -105,19 +106,27 @@ PhaseCandidateResult PhaseCandidateSelector::select(
         const std::size_t backward = static_cast<std::size_t>(
             params_.backward_radius);
         begin = expected > backward ? expected - backward : 0;
-        // Never move behind the last accepted phase.  The previous index may
-        // still be reconsidered, but a global backward jump is impossible.
+        // A clock catch-up may hold the previous candidate, but a candidate is
+        // never allowed to move behind the committed phase.
         begin = std::max(begin, last_accepted_index);
-        end = std::min(max_current,
-                       expected + static_cast<std::size_t>(
-                                      params_.forward_radius));
+        const std::size_t allowed_lead = static_cast<std::size_t>(
+            std::min(params_.forward_radius, params_.max_clock_lead_steps));
+        end = std::min(max_current, expected + allowed_lead);
     } else {
         begin = 0;
-        end = std::min(max_current,
-                       static_cast<std::size_t>(
-                           params_.initial_forward_radius));
+        const std::size_t allowed_lead = static_cast<std::size_t>(
+            std::min(params_.initial_forward_radius,
+                     params_.max_clock_lead_steps));
+        end = std::min(max_current, expected + allowed_lead);
     }
-    if (begin > end || expected < begin || expected > end) {
+    // A previously committed candidate may legally be one step ahead of the
+    // clock.  When two controller ticks fall in the same artifact time bin,
+    // `begin` is then last_accepted_index == expected + 1.  That is a valid
+    // hold, not an empty window.  `end = expected + allowed_lead` already
+    // enforces the clock-lead budget, so requiring `expected` itself to lie in
+    // [begin, end] would create a one-cycle fail-closed command every time a
+    // legal +1 candidate is held.
+    if (begin > end) {
         result.status = "CANDIDATE_WINDOW_INVALID";
         return result;
     }
@@ -145,6 +154,8 @@ PhaseCandidateResult PhaseCandidateSelector::select(
 
     result.valid = true;
     result.current_index = best_current;
+    result.phase_lead_steps = static_cast<int>(best_current) -
+        static_cast<int>(expected);
     result.front_index = best_current + static_cast<std::size_t>(front_steps);
     result.terminal_index = result.front_index +
         static_cast<std::size_t>(liquid_steps);

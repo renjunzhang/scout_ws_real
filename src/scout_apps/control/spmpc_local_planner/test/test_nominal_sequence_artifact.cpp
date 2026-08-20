@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
+#include "phase_rejoin_artifact_fixture.h"
 
 #include <gtest/gtest.h>
 
@@ -50,6 +51,43 @@ std::string writeTemp(const std::string& text) {
     output << text;
     output.close();
     return path;
+}
+
+std::string replaceDataColumn(const std::string& text,
+                              std::size_t row_index,
+                              std::size_t column_index,
+                              const std::string& replacement) {
+    std::istringstream input(text);
+    std::ostringstream output;
+    std::string line;
+    bool header_seen = false;
+    std::size_t current_row = 0;
+    while (std::getline(input, line)) {
+        if (!line.empty() && line[0] != '#') {
+            if (!header_seen) {
+                header_seen = true;
+            } else {
+                if (current_row == row_index) {
+                    std::vector<std::string> columns;
+                    std::istringstream row(line);
+                    std::string value;
+                    while (std::getline(row, value, ',')) columns.push_back(value);
+                    if (column_index < columns.size()) {
+                        columns[column_index] = replacement;
+                    }
+                    std::ostringstream rebuilt;
+                    for (std::size_t i = 0; i < columns.size(); ++i) {
+                        if (i != 0) rebuilt << ',';
+                        rebuilt << columns[i];
+                    }
+                    line = rebuilt.str();
+                }
+                ++current_row;
+            }
+        }
+        output << line << '\n';
+    }
+    return output.str();
 }
 
 TEST(NominalSequenceArtifact, LoadsStrictValidArtifact) {
@@ -206,6 +244,102 @@ TEST(NominalSequenceArtifact, RejectsAccumulatingClockQuantizationDrift) {
 
     EXPECT_FALSE(result.success);
     EXPECT_EQ(result.status, "SAMPLE_PHASE_DRIFT");
+    EXPECT_FALSE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact, LoadsDynamicsConsistentV2CompleteTail) {
+    const std::string path = writeTemp(
+        spmpc_local_planner_test::completeArtifactText());
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.loadCsv(path);
+    std::remove(path.c_str());
+
+    ASSERT_TRUE(result.success) << result.status << ": " << result.detail;
+    EXPECT_EQ(artifact.metadata().schema, "phase_rejoin_empirical_v2");
+    EXPECT_TRUE(artifact.metadata().complete_terminal_tail);
+    EXPECT_EQ(artifact.metadata().terminal_zero_hold_steps, 11u);
+    EXPECT_EQ(artifact.metadata().terminal_contract,
+              "stop_settle_zero_hold_v1");
+    EXPECT_EQ(artifact.metadata().recovery_contract,
+              "nominal_command_v1");
+}
+
+TEST(NominalSequenceArtifact, RejectsV2PublishedCommandNotGeneratedByControl) {
+    std::string text = spmpc_local_planner_test::completeArtifactText();
+    text = replaceDataColumn(text, 4, 15, "0.5");
+    const std::string path = writeTemp(text);
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.loadCsv(path);
+    std::remove(path.c_str());
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "PUBLISHED_COMMAND_MISMATCH");
+    EXPECT_FALSE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact, RequiresV2RecoveryContractMetadata) {
+    std::string text = spmpc_local_planner_test::completeArtifactText();
+    const std::string metadata =
+        "# recovery_contract=nominal_command_v1\n";
+    const std::size_t position = text.find(metadata);
+    ASSERT_NE(position, std::string::npos);
+    text.erase(position, metadata.size());
+    const std::string path = writeTemp(text);
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.loadCsv(path);
+    std::remove(path.c_str());
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "MISSING_METADATA");
+    EXPECT_EQ(result.detail, "recovery_contract");
+    EXPECT_FALSE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact, RejectsUnsupportedV2RecoveryContract) {
+    std::string text = spmpc_local_planner_test::completeArtifactText();
+    const std::string original =
+        "# recovery_contract=nominal_command_v1\n";
+    const std::size_t position = text.find(original);
+    ASSERT_NE(position, std::string::npos);
+    text.replace(position, original.size(),
+                 "# recovery_contract=independent_policy_v0\n");
+    const std::string path = writeTemp(text);
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.loadCsv(path);
+    std::remove(path.c_str());
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "UNSUPPORTED_RECOVERY_CONTRACT");
+    EXPECT_FALSE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact, RejectsV2RecoveryCommandDifferentFromPublished) {
+    std::string text = spmpc_local_planner_test::completeArtifactText();
+    text = replaceDataColumn(text, 4, 17, "0.5");
+    const std::string path = writeTemp(text);
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.loadCsv(path);
+    std::remove(path.c_str());
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "RECOVERY_COMMAND_MISMATCH");
+    EXPECT_EQ(result.detail, "index 4");
+    EXPECT_FALSE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact, RejectsV2TailThatStartsBeforeCommandsAreZero) {
+    std::string text = spmpc_local_planner_test::completeArtifactText();
+    const std::string original = "# terminal_zero_hold_steps=11\n";
+    const std::size_t position = text.find(original);
+    ASSERT_NE(position, std::string::npos);
+    text.replace(position, original.size(), "# terminal_zero_hold_steps=12\n");
+    const std::string path = writeTemp(text);
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.loadCsv(path);
+    std::remove(path.c_str());
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "ZERO_HOLD_COMMAND_NONZERO");
     EXPECT_FALSE(artifact.valid());
 }
 

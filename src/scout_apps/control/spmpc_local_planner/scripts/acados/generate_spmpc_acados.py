@@ -28,6 +28,7 @@ from spmpc_acados_model import (  # noqa: E402
     export_spmpc_b0_symbols,
     export_spmpc_b0_direct_omega_legacy_symbols,
     export_spmpc_slosh_symbols,
+    export_spmpc_phase_rejoin_symbols,
     export_spmpc_slosh_direct_omega_symbols,
     PARAM_NAMES,
     PIDX,
@@ -49,6 +50,11 @@ from spmpc_acados_constraints import (  # noqa: E402
 MODELS = {
     "b0": {"export": export_spmpc_b0_symbols, "with_slosh": False},
     "slosh": {"export": export_spmpc_slosh_symbols, "with_slosh": True},
+    "phase_rejoin": {
+        "export": export_spmpc_phase_rejoin_symbols,
+        "with_slosh": True,
+        "short_phase_horizon": True,
+    },
     "b0_direct_omega_legacy": {
         "export": export_spmpc_b0_direct_omega_legacy_symbols,
         "with_slosh": False,
@@ -111,6 +117,8 @@ def load_config():
         "w_du_vs": float(b0.get("w_du_vs", b0["w_smooth"])),
         # slosh codegen 默认值（运行时由 C++ 包装层从同一套 slosh_dynamics 覆盖，§4.3）。
         "w_slosh": float(b_slosh.get("w_slosh", 5.0)),
+        "phase_rejoin_N": int(common.get("phase_rejoin", {}).get(
+            "liquid_horizon_steps", 3)),
     }
     return cfg
 
@@ -192,7 +200,7 @@ def build_check(cfg, model_key):
     print(f"  bounds: v_max={cfg['v_max']} omega_max={cfg['omega_max']} a_max={cfg['a_max']} vs_max={cfg['vs_max']}")
     print(f"  e_c_ref={cfg['e_c_ref']:.4f} e_l_ref={cfg['e_l_ref']:.4f}")
     print(f"  path-speed: w_progress={cfg['w_progress']:.4f} w_v={cfg['w_v']:.4f} w_vs={cfg['w_vs']:.4f} v_ref={cfg['v_ref']:.4f}")
-    if model_key == "slosh":
+    if model_key in ("slosh", "phase_rejoin"):
         h_expr = slosh_nonlinear_constraint_expr(sym, PIDX_SLOSH)
         if h_expr.shape != (2, 1):
             raise RuntimeError(
@@ -290,6 +298,9 @@ def main():
     args = parser.parse_args()
 
     cfg = load_config()
+    if MODELS[args.model].get("short_phase_horizon", False):
+        cfg["N"] = cfg["phase_rejoin_N"]
+        cfg["Tf"] = cfg["dt"] * cfg["N"]
     if args.check:
         build_check(cfg, args.model)
         return 0

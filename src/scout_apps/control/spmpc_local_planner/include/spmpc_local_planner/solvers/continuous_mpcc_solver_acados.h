@@ -8,6 +8,13 @@
 
 namespace spmpc_local_planner {
 
+// Compile-time capability contract for the separately generated Phase-Rejoin
+// OCP.  A positive horizon is returned only when that generated solver is
+// linked into this package; callers must not infer this from the main solver's
+// horizon.
+bool continuousMpccPhaseRejoinAvailable();
+int continuousMpccPhaseRejoinHorizonSteps();
+
 // 连续 MPCC（acados 后端，alpha-state 主线：B0 6D / slosh 10D MPCC）。
 //
 // 编译期分两种形态：
@@ -32,6 +39,10 @@ private:
     bool use_slosh_model_ = false;        // 由 variant.slosh_enable 决定接 b0(6维) 还是 slosh(10维)
 
     void* capsule_ = nullptr;             // 不透明 acados capsule（仅 SPMPC_WITH_ACADOS 下有效）
+    // Enforce uses a separately generated N=N_l solver.  Keeping a distinct
+    // capsule makes it impossible for the trusted liquid window to inherit the
+    // 60-step baseline geometry tail.
+    void* phase_capsule_ = nullptr;
     std::unique_ptr<WarmStartGenerator> warm_start_generator_;
     mutable WarmStartOutput previous_warm_start_solution_;
     mutable bool have_previous_solution_ = false;

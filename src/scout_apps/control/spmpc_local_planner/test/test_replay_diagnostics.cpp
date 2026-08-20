@@ -122,11 +122,16 @@ PhaseRejoinSolverContext makeEnforceContext() {
     context.enforce = true;
     context.empirical_gate = true;
     context.state_complete_for_certificate = false;
+    context.owns_terminal_maneuver = true;
     context.current_index = 0;
     context.front_index = 2;
     context.terminal_index = 5;
     context.front_steps = 2;
     context.liquid_steps = 3;
+    context.nominal_publish_v = 0.0;
+    context.nominal_publish_omega = 0.0;
+    context.max_residual_v = 0.08;
+    context.max_residual_omega = 0.20;
     for (int k = 0; k <= context.liquid_steps; ++k) {
         PhaseNominalStage stage;
         stage.valid = true;
@@ -143,6 +148,17 @@ PhaseRejoinSolverContext makeEnforceContext() {
 }
 
 }  // namespace
+
+TEST(ReplayDiagnostics, PhaseRejoinCapabilityReportsDedicatedFixedHorizon) {
+    const bool available = continuousMpccPhaseRejoinAvailable();
+    const int horizon = continuousMpccPhaseRejoinHorizonSteps();
+    EXPECT_EQ(available, horizon > 0);
+    if (available) {
+        EXPECT_EQ(horizon, 3);
+    } else {
+        EXPECT_EQ(horizon, 0);
+    }
+}
 
 TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     ContinuousMpccSolverAcados solver;
@@ -188,7 +204,7 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
 }
 
 #ifdef SPMPC_TEST_WITH_ACADOS_SLOSH
-TEST(ReplayDiagnostics, MonitorContextPreservesBaselineAndEnforceGateIsStageLocal) {
+TEST(ReplayDiagnostics, MonitorPreservesBaselineAndEnforceHasNoFreeTail) {
     ContinuousMpccSolverAcados solver;
     solver.configure(makeParams(), makeSloshVariant());
     const ReferencePath reference = makeStraightReference();
@@ -225,20 +241,33 @@ TEST(ReplayDiagnostics, MonitorContextPreservesBaselineAndEnforceGateIsStageLoca
     ASSERT_TRUE(solver.solve(enforce_input, reference, enforce_output))
         << enforce_output.status;
     ASSERT_EQ(enforce_output.pre_solve_snapshot.parameter_width, 55);
-    for (int stage = 0; stage <= 60; ++stage) {
-        const bool in_liquid_window = stage <= 3;
+    EXPECT_EQ(enforce_output.pre_solve_snapshot.horizon_steps, 3);
+    EXPECT_EQ(enforce_output.predicted_horizon.states.size(), 4u);
+    EXPECT_EQ(enforce_output.predicted_horizon.controls.size(), 3u);
+    EXPECT_EQ(enforce_output.pre_solve_snapshot.stage_parameters.size(),
+              4u * 55u);
+    for (int stage = 0; stage <= 3; ++stage) {
         EXPECT_DOUBLE_EQ(stageParameter(
             enforce_output.pre_solve_snapshot, stage, phase_active),
-            in_liquid_window ? 1.0 : 0.0);
+            1.0);
         EXPECT_DOUBLE_EQ(stageParameter(
             enforce_output.pre_solve_snapshot, stage, gate_active),
             stage == 3 ? 1.0 : 0.0);
     }
-    // Long geometry preview remains, while liquid cost is cut after N_l.
+    // N=N_l by construction: there is no stage 4 and no free geometry tail.
     EXPECT_DOUBLE_EQ(stageParameter(
         enforce_output.pre_solve_snapshot, 3, w_slosh_eta), 5.0);
-    EXPECT_DOUBLE_EQ(stageParameter(
-        enforce_output.pre_solve_snapshot, 4, w_slosh_eta), 0.0);
+    EXPECT_LE(std::abs(enforce_output.cmd_v -
+                       enforce_input.phase_rejoin.nominal_publish_v),
+              enforce_input.phase_rejoin.max_residual_v + 1e-7);
+    EXPECT_LE(std::abs(enforce_output.cmd_omega -
+                       enforce_input.phase_rejoin.nominal_publish_omega),
+              enforce_input.phase_rejoin.max_residual_omega + 1e-7);
+    // The generated phase OCP replaces the baseline progress/control/smooth
+    // priors with nominal-relative terms; diagnostics must report that same
+    // objective rather than stacking both formulations.
+    EXPECT_DOUBLE_EQ(enforce_output.cost.J_progress, 0.0);
+    EXPECT_DOUBLE_EQ(enforce_output.cost.J_smooth, 0.0);
 }
 
 TEST(ReplayDiagnostics, InvalidEnforceContextFailsClosedWithStableStatus) {

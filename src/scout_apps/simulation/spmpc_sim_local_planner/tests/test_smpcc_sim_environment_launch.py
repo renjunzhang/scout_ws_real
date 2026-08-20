@@ -89,6 +89,9 @@ class SimulationEnvironmentLaunchTest(unittest.TestCase):
             self._launch_nodes(ENVIRONMENT_LAUNCH),
         )
         root = ET.parse(ENVIRONMENT_LAUNCH).getroot()
+        guard = root.find("node[@name='sim_environment_cmd_vel_guard']")
+        self.assertIsNotNone(guard)
+        self.assertEqual("$(arg cmd_guard_enable)", guard.attrib.get("if"))
         includes = [item.attrib["file"] for item in root.findall("include")]
         self.assertEqual(
             ["$(find spmpc_sim_local_planner)/launch/smpcc_sim_localization.launch"],
@@ -134,6 +137,9 @@ class SimulationEnvironmentLaunchTest(unittest.TestCase):
         self.assertIn("assert_no_forbidden_nodes", text)
         self.assertIn("Cartographer setup is required for isolated localization", text)
         self.assertIn('assert_no_topic_publishers "${CMD_VEL_TOPIC}" "controller"', text)
+        self.assertIn('CMD_GUARD_ENABLE="${CMD_GUARD_ENABLE:-true}"', text)
+        self.assertIn('cmd_guard_enable:="${CMD_GUARD_ENABLE}"', text)
+        self.assertIn('CMD_GUARD_ENABLE=false requires CMD_VEL_TOPIC=', text)
         self.assertIn('assert_no_topic_publishers "${REFERENCE_PATH_TOPIC}" "path"', text)
         self.assertIn("SIM_ACADOS_LIBRARY_PATH", text)
         self.assertIn('SIM_BUILD_WORKSPACE="${SMPCC_SIM_BUILD_WORKSPACE:-${SIM_ROOT}/r8_controller_ws}"', text)

@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/ros/spmpc_local_planner_ros.h"
+#include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
 #include "spmpc_local_planner/solvers/solver_factory.h"
 #include <algorithm>
 #include <cctype>
@@ -369,6 +370,15 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("phase_rejoin/artifact_path_length_tolerance_m",
                phase_rejoin_params_.artifact_path_length_tolerance_m,
                phase_rejoin_params_.artifact_path_length_tolerance_m);
+    pnh_.param("phase_rejoin/artifact_path_geometry_tolerance_m",
+               phase_rejoin_params_.artifact_path_geometry_tolerance_m,
+               phase_rejoin_params_.artifact_path_geometry_tolerance_m);
+    pnh_.param("phase_rejoin/artifact_model_tolerance",
+               phase_rejoin_params_.artifact_model_tolerance,
+               phase_rejoin_params_.artifact_model_tolerance);
+    pnh_.param("phase_rejoin/artifact_command_tolerance",
+               phase_rejoin_params_.artifact_command_tolerance,
+               phase_rejoin_params_.artifact_command_tolerance);
     pnh_.param("phase_rejoin/allow_development_artifact_in_enforce",
                phase_rejoin_params_.allow_development_artifact_in_enforce,
                phase_rejoin_params_.allow_development_artifact_in_enforce);
@@ -387,6 +397,9 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("phase_rejoin/candidate/initial_forward_radius",
                phase_rejoin_params_.candidate.initial_forward_radius,
                phase_rejoin_params_.candidate.initial_forward_radius);
+    pnh_.param("phase_rejoin/candidate/max_clock_lead_steps",
+               phase_rejoin_params_.candidate.max_clock_lead_steps,
+               phase_rejoin_params_.candidate.max_clock_lead_steps);
     pnh_.param("phase_rejoin/candidate/weight_position",
                phase_rejoin_params_.candidate.weight_position,
                phase_rejoin_params_.candidate.weight_position);
@@ -619,6 +632,28 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     }
     solver_params.slosh = loadSloshParams();
     solver_params.slosh.dt = dt_;
+    phase_rejoin_runtime_contract_ = PhaseRejoinRuntimeContract{};
+    phase_rejoin_runtime_contract_.dt = dt_;
+    phase_rejoin_runtime_contract_.min_command_v = 0.0;
+    phase_rejoin_runtime_contract_.max_command_v = solver_params.v_max;
+    phase_rejoin_runtime_contract_.max_abs_command_omega =
+        solver_params.omega_max;
+    SloshDynamics phase_contract_dynamics;
+    phase_rejoin_runtime_contract_.liquid_model_configured =
+        phase_contract_dynamics.configure(solver_params.slosh);
+    if (phase_rejoin_runtime_contract_.liquid_model_configured) {
+        const double omega_n = phase_contract_dynamics.omegaN();
+        phase_rejoin_runtime_contract_.two_zeta_omega_n =
+            2.0 * solver_params.slosh.damping_ratio * omega_n;
+        phase_rejoin_runtime_contract_.omega_n_sq = omega_n * omega_n;
+        // SloshDynamics uses unit gains for body-frame ax and ay.
+        phase_rejoin_runtime_contract_.kappa_x = 1.0;
+        phase_rejoin_runtime_contract_.kappa_y = 1.0;
+    } else if (phase_rejoin_params_.mode != PhaseRejoinMode::Off) {
+        ROS_FATAL("[spmpc_local_planner] phase-rejoin cannot derive the "
+                  "runtime liquid-model contract");
+        return false;
+    }
     const ProcessedImuParams processed_imu_params = loadProcessedImuParams();
     slosh_risk_governor_params_ = loadSloshRiskGovernorParams();
 
@@ -678,9 +713,21 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                       "execution_contract/fail_closed_on_post_limit_change=true");
             return false;
         }
-        if (phase_rejoin_params_.liquid_horizon_steps > horizon_steps_) {
-            ROS_FATAL("[spmpc_local_planner] phase_rejoin liquid horizon "
-                      "exceeds the generated solver horizon");
+        if (!continuousMpccPhaseRejoinAvailable()) {
+            ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce requires "
+                      "the dedicated generated Phase-Rejoin acados solver; "
+                      "it was not compiled into this package");
+            return false;
+        }
+        const int phase_solver_horizon =
+            continuousMpccPhaseRejoinHorizonSteps();
+        if (phase_rejoin_params_.liquid_horizon_steps !=
+            phase_solver_horizon) {
+            ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce horizon "
+                      "contract mismatch: configured liquid_horizon_steps=%d "
+                      "but the dedicated generated solver has N=%d",
+                      phase_rejoin_params_.liquid_horizon_steps,
+                      phase_solver_horizon);
             return false;
         }
     }
@@ -1576,7 +1623,7 @@ void SpmpcLocalPlannerROS::validatePhaseRejoinReference(
     }
     std::string error;
     if (!phase_rejoin_coordinator_.validateRuntimeContract(
-            dt_, reference.length(), reference.frameId(), error)) {
+            phase_rejoin_runtime_contract_, reference, error)) {
         ROS_WARN_THROTTLE(
             1.0,
             "[spmpc_local_planner] phase-rejoin runtime contract rejected: %s "
@@ -1625,6 +1672,7 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
             resetMapVRefProgress();
             slosh_risk_governor_.reset();
             phase_rejoin_coordinator_.resetProgress();
+            goal_reached_latched_ = false;
         }
         const ReferencePath reference = referencePathFromMsg(transformed_path);
         problem_.setReferencePath(reference);
@@ -1642,6 +1690,7 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
         resetMapVRefProgress();
         slosh_risk_governor_.reset();
         phase_rejoin_coordinator_.resetProgress();
+        goal_reached_latched_ = false;
     }
     problem_.setReferencePath(reference);
     if (reference_changed || !phase_rejoin_coordinator_.contractValid()) {
@@ -1994,6 +2043,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             shadow_prediction.predicted_slosh,
             front_steps,
             horizon_steps_,
+            delay_phase_now.toSec(),
             solver_origin_at_execution_front);
     }
     solve_input.phase_rejoin = phase_preparation.solver_context;
@@ -2057,13 +2107,30 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     const double raw_solver_cmd_omega = output.first_shot_debug.success
         ? output.first_shot_debug.cmd_omega_post_clamp
         : output.cmd_omega;
+    const bool solver_success = output.success;
+    const bool reached_this_cycle =
+        output.terminal_diagnostics.reached || output.status == "GOAL_REACHED";
+    if (reached_this_cycle) {
+        goal_reached_latched_ = true;
+    }
+    if (goal_reached_latched_) {
+        output.cmd_v = 0.0;
+        output.cmd_omega = 0.0;
+        output.success = true;
+        output.status = reached_this_cycle
+            ? "GOAL_REACHED"
+            : "GOAL_REACHED_LATCHED";
+    }
     const double terminal_cmd_v = output.cmd_v;
     const double terminal_cmd_omega = output.cmd_omega;
-    const bool solver_success = output.success;
     PhaseRejoinDecision phase_decision;
     bool have_phase_decision = false;
-    const bool terminal_priority =
-        output.terminal_diagnostics.terminal_phase ||
+    // A validated phase artifact owns slowdown/settling all the way to the
+    // endpoint.  Generic terminal_phase begins at the slowdown envelope and
+    // must not silently bypass or mutate that certified command.  Priority is
+    // transferred only after the actual reached condition, where the existing
+    // zero-command latch remains the final authority.
+    const bool terminal_priority = goal_reached_latched_ ||
         output.terminal_diagnostics.reached ||
         output.status == "GOAL_REACHED";
     if (phase_rejoin_params_.mode != PhaseRejoinMode::Off) {

@@ -4,7 +4,9 @@
 #include "spmpc_local_planner/phase_rejoin/empirical_recovery_gate.h"
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
 #include "spmpc_local_planner/phase_rejoin/phase_candidate_selector.h"
+#include "spmpc_local_planner/phase_rejoin/phase_clock.h"
 #include "spmpc_local_planner/phase_rejoin/types.h"
+#include "spmpc_local_planner/reference/reference_path.h"
 
 #include <cstddef>
 #include <string>
@@ -18,9 +20,8 @@ public:
     bool setArtifact(const NominalSequenceArtifact& artifact,
                      std::string& error);
 
-    bool validateRuntimeContract(double dt,
-                                 double path_length,
-                                 const std::string& frame_id,
+    bool validateRuntimeContract(const PhaseRejoinRuntimeContract& runtime,
+                                 const ReferencePath& reference,
                                  std::string& error);
     void resetProgress();
 
@@ -28,7 +29,8 @@ public:
                                    const SloshState& execution_front_slosh,
                                    int front_steps,
                                    int solver_horizon_steps,
-                                   bool solver_origin_at_execution_front = true) const;
+                                   double phase_time_sec,
+                                   bool solver_origin_at_execution_front = true);
 
     PhaseRejoinDecision decide(const PhaseRejoinPreparation& preparation,
                                const RobotState& execution_front_robot,
@@ -49,6 +51,9 @@ public:
     bool contractValid() const { return contract_valid_; }
     bool haveAcceptedIndex() const { return have_accepted_index_; }
     std::size_t acceptedIndex() const { return accepted_index_; }
+    bool terminalReleaseAuthorized() const {
+        return terminal_release_authorized_;
+    }
 
 private:
     static PhaseNominalStage makeStage(const PhaseNominalSample& sample,
@@ -59,11 +64,13 @@ private:
     PhaseRejoinParams params_;
     NominalSequenceArtifact artifact_;
     PhaseCandidateSelector selector_;
+    PhaseClock phase_clock_;
     EmpiricalRecoveryGate gate_;
     bool configured_ = false;
     bool contract_valid_ = false;
     bool have_accepted_index_ = false;
     std::size_t accepted_index_ = 0;
+    bool terminal_release_authorized_ = false;
     std::string contract_status_ = "NOT_VALIDATED";
 };
 

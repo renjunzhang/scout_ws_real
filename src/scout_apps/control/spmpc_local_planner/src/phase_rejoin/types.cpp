@@ -15,6 +15,12 @@ std::string lowercase(std::string value) {
 
 }  // namespace
 
+bool phaseRejoinOwnsTerminalCommand(
+    const PhaseRejoinSolverContext& context) {
+    return context.active && context.enforce &&
+           context.owns_terminal_maneuver;
+}
+
 std::string phaseRejoinModeName(PhaseRejoinMode mode) {
     switch (mode) {
     case PhaseRejoinMode::Monitor:

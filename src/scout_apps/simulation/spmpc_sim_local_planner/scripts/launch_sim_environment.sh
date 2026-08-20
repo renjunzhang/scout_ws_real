@@ -274,14 +274,20 @@ SPAWN_Y="${SPAWN_Y:-0.0}"
 SPAWN_Z="${SPAWN_Z:-0.0}"
 SPAWN_YAW="${SPAWN_YAW:-0.0}"
 CMD_VEL_TOPIC="${CMD_VEL_TOPIC:-/cmd_vel}"
+CMD_VEL_DRIVE_TOPIC="${CMD_VEL_DRIVE_TOPIC:-/cmd_vel_drive}"
+CMD_GUARD_ENABLE="${CMD_GUARD_ENABLE:-true}"
 REFERENCE_PATH_TOPIC="${REFERENCE_PATH_TOPIC:-/scout/global_path_fixed}"
 MAX_ANGULAR_ACCEL="${MAX_ANGULAR_ACCEL:-1.2}"
 SMPCC_SIMULATOR_SEED="${SMPCC_SIMULATOR_SEED:-}"
 
-for boolean_name in GAZEBO_GUI HEADLESS PAUSED VERBOSE; do
+for boolean_name in GAZEBO_GUI HEADLESS PAUSED VERBOSE CMD_GUARD_ENABLE; do
   case "${!boolean_name}" in true|false|0|1) ;; *) fail "${boolean_name} must be true, false, 0, or 1";; esac
 done
 [[ "${CMD_VEL_TOPIC}" == /* ]] || fail "CMD_VEL_TOPIC must be absolute"
+[[ "${CMD_VEL_DRIVE_TOPIC}" == /* ]] || fail "CMD_VEL_DRIVE_TOPIC must be absolute"
+if [[ "${CMD_GUARD_ENABLE}" =~ ^(false|0)$ && "${CMD_VEL_TOPIC}" != "${CMD_VEL_DRIVE_TOPIC}" ]]; then
+  fail "CMD_GUARD_ENABLE=false requires CMD_VEL_TOPIC=${CMD_VEL_DRIVE_TOPIC}; the controller must publish directly to the robot plugin"
+fi
 [[ "${REFERENCE_PATH_TOPIC}" == /* ]] || fail "REFERENCE_PATH_TOPIC must be absolute"
 if [[ -n "${SMPCC_SIMULATOR_SEED}" ]]; then
   [[ "${SMPCC_SIMULATOR_SEED}" =~ ^[0-9]+$ ]] || fail "SMPCC_SIMULATOR_SEED must be a non-negative integer"
@@ -297,7 +303,8 @@ environment_command=(roslaunch spmpc_sim_local_planner smpcc_sim_environment.lau
   world_file:="${WORLD_FILE}" map_file:="${MAP_FILE}"
   gui:="${GAZEBO_GUI}" headless:="${HEADLESS}" paused:="${PAUSED}" verbose:="${VERBOSE}"
   x:="${SPAWN_X}" y:="${SPAWN_Y}" z:="${SPAWN_Z}" yaw:="${SPAWN_YAW}"
-  cmd_vel_in:="${CMD_VEL_TOPIC}" publish_odom_tf:=false
+  cmd_vel_in:="${CMD_VEL_TOPIC}" cmd_vel_drive:="${CMD_VEL_DRIVE_TOPIC}"
+  cmd_guard_enable:="${CMD_GUARD_ENABLE}" publish_odom_tf:=false
   max_angular_accel:="${MAX_ANGULAR_ACCEL}" localization_rviz:="${LOCALIZATION_RVIZ:-false}")
 if [[ -n "${SMPCC_SIMULATOR_SEED}" ]]; then
   environment_command+=(gzserver_extra_args:="--seed ${SMPCC_SIMULATOR_SEED}")

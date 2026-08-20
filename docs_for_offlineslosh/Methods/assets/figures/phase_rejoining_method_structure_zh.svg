@@ -50,7 +50,7 @@
   <title
      id="title">执行前沿对齐的相位重接残差 S-MPCC 方法结构</title>
   <desc
-     id="desc">展示离线防晃名义序列、相位索引尾段恢复对象、在线执行前沿对齐、短时域残差 S-MPCC、终端重接判据和恢复降级闭环。</desc>
+     id="desc">展示离线防晃名义序列、相位索引经验恢复对象、在线执行前沿对齐、短时域残差 S-MPCC、终端经验 gate 和失效安全闭环。</desc>
   <defs
      id="defs12">
     <style
@@ -470,7 +470,7 @@
      class="box-title"
      x="1547.5"
      y="208"
-     id="text86">相位索引尾段恢复对象</text>
+     id="text86">相位索引经验恢复对象</text>
   <text
      class="box-math"
      x="1547.5"
@@ -479,11 +479,11 @@
     <tspan
        x="1547.5"
        dy="0"
-       id="tspan88">鲁棒：F_rob(i) 与 κ_i</tspan>
+       id="tspan88">R_emp(i) 与 κ_emp(i)</tspan>
     <tspan
        x="1547.5"
        dy="27"
-       id="tspan90">经验：R_emp(i) 与 κ_emp(i)</tspan>
+       id="tspan90">扰动仿真构造，留出数据验证</tspan>
     <tspan
        class="box-text"
        x="1547.5"
@@ -663,7 +663,7 @@
      class="box-title"
      x="1610"
      y="533"
-     id="text160">终端重接判据</text>
+     id="text160">终端经验恢复门</text>
   <text
      class="box-math"
      x="1610"
@@ -672,11 +672,11 @@
     <tspan
        x="1610"
        dy="0"
-       id="tspan162">鲁棒：tube ⊆ F_rob(j_e)</tspan>
+       id="tspan162">e_(N_e|t) ∈ R_emp(j_e)</tspan>
     <tspan
        x="1610"
        dy="27"
-       id="tspan164">经验：e_e ∈ R_emp(j_e)</tspan>
+       id="tspan164">状态、命令与合同均有效</tspan>
     <tspan
        class="box-text"
        x="1610"
@@ -717,7 +717,7 @@
      class="label"
      x="1620"
      y="412"
-     id="text184">恢复集合 / 策略</text>
+     id="text184">恢复门 / 策略</text>
   <!-- 在线输出 -->
   <rect
      class="box-publish"
@@ -805,11 +805,11 @@
     <tspan
        x="875"
        dy="0"
-       id="tspan214">鲁棒：移位 tube / policy，再调用 κ_i</tspan>
+       id="tspan214">当前误差已进入对应恢复门</tspan>
     <tspan
        x="875"
        dy="27"
-       id="tspan216">经验：当前误差入 gate 后调用 κ_emp(i)</tspan>
+       id="tspan216">调用 κ_emp(i)，并经过同一发布约束</tspan>
   </text>
   <rect
      class="box-fallback"
@@ -855,7 +855,7 @@
      class="label"
      x="982"
      y="681"
-     id="text236">求解失败且备用策略仍有效</text>
+     id="text236">求解失败，且当前恢复门 / 策略有效</text>
   <path
      class="connector"
      d="M 700 955 H 580"
@@ -887,5 +887,5 @@
      class="note"
      x="900"
      y="1038"
-     id="text248">注：只有满足逐拍鲁棒包含、终端正不变与在线策略移位时才称“恢复证书 / 漏斗”；否则称“经验恢复集合 / 门”。</text>
+     id="text248">注：当前主线为经验恢复门；满足逐拍鲁棒包含、终端正不变与策略可移位后，才升级为恢复漏斗 / 证书。</text>
 </svg>

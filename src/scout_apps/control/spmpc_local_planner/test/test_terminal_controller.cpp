@@ -80,6 +80,25 @@ TEST(TerminalController, ReachedRequiresLowSpeedAndLowOmega) {
     EXPECT_TRUE(controller.reached());
 }
 
+TEST(TerminalController, HigherLevelTailCanDeferReachedLatch) {
+    TerminalController controller;
+    controller.setParams(makeParams());
+    auto goal = makeGoal(0.05);
+    goal.reached_latch_allowed = false;
+
+    const auto deferred = controller.updateAndPlan(goal, 0.0, 0.0, 0.6);
+    EXPECT_EQ(deferred.mode, "REACHED_LATCH_DEFERRED");
+    EXPECT_FALSE(controller.reached());
+    EXPECT_TRUE(controller.diagnostics().position_reached);
+    EXPECT_TRUE(controller.diagnostics().reached_latch_blocked);
+
+    goal.reached_latch_allowed = true;
+    const auto released = controller.updateAndPlan(goal, 0.0, 0.0, 0.6);
+    EXPECT_EQ(released.mode, "REACHED");
+    EXPECT_TRUE(controller.reached());
+    EXPECT_FALSE(controller.diagnostics().reached_latch_blocked);
+}
+
 TEST(TerminalController, ReachedStaysLatchedAfterVelocityNoise) {
     TerminalController controller;
     controller.setParams(makeParams());

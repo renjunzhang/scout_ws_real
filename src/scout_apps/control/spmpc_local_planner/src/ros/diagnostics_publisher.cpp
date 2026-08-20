@@ -320,7 +320,7 @@ void DiagnosticsPublisher::publishControlCycleAudit(
             ? audit.timing.command_publish_stamp_ns
             : audit.timing.horizon_available_stamp_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 1;
+    msg.schema_version = 2;
     fillCycleTiming(audit.timing, msg);
     msg.command_publish_stamp = rosTimeFromNanoseconds(
         audit.timing.command_publish_stamp_ns);
@@ -415,9 +415,11 @@ void DiagnosticsPublisher::publishPhaseRejoin(
     msg.artifact_path = debug.artifact_path;
     msg.contract_id = debug.contract_id;
     msg.current_index = static_cast<std::uint64_t>(debug.current_index);
+    msg.clock_index = static_cast<std::uint64_t>(debug.clock_index);
     msg.front_index = static_cast<std::uint64_t>(debug.front_index);
     msg.terminal_index = static_cast<std::uint64_t>(debug.terminal_index);
     msg.candidate_count = static_cast<std::uint64_t>(debug.candidate_count);
+    msg.phase_lead_steps = debug.phase_lead_steps;
     msg.front_steps = debug.front_steps;
     msg.liquid_steps = debug.liquid_steps;
     msg.solver_terminal_step = debug.solver_terminal_step;
@@ -431,6 +433,9 @@ void DiagnosticsPublisher::publishPhaseRejoin(
     msg.command_intervened = debug.command_intervened;
     msg.recovery_command_used = debug.recovery_command_used;
     msg.controlled_stop_used = debug.controlled_stop_used;
+    msg.command_contract_consistent = debug.command_contract_consistent;
+    msg.terminal_release_authorized =
+        debug.terminal_release_authorized;
     msg.nominal_cmd_v = debug.nominal_cmd_v;
     msg.nominal_cmd_omega = debug.nominal_cmd_omega;
     msg.solver_cmd_v = debug.solver_cmd_v;
@@ -844,10 +849,10 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     std_msgs::Float32MultiArray terminal;
     terminal.layout.dim.resize(1);
     terminal.layout.dim[0].label =
-        "enabled,terminal_phase,pre_terminal_phase,envelope_active,stop_pending,position_reached,speed_gate_reached,omega_gate_reached,reached,distance_to_goal,remaining_s,dx_robot,v_envelope,cmd_v_pre_clamp,cmd_v_post_clamp";
-    terminal.layout.dim[0].size = 15;
-    terminal.layout.dim[0].stride = 15;
-    terminal.data.resize(15, 0.0f);
+        "enabled,terminal_phase,pre_terminal_phase,envelope_active,stop_pending,position_reached,speed_gate_reached,omega_gate_reached,reached,distance_to_goal,remaining_s,dx_robot,v_envelope,cmd_v_pre_clamp,cmd_v_post_clamp,reached_latch_allowed,reached_latch_blocked";
+    terminal.layout.dim[0].size = 17;
+    terminal.layout.dim[0].stride = 17;
+    terminal.data.resize(17, 0.0f);
     terminal.data[0] = td.enabled ? 1.0f : 0.0f;
     terminal.data[1] = td.terminal_phase ? 1.0f : 0.0f;
     terminal.data[2] = td.pre_terminal_phase ? 1.0f : 0.0f;
@@ -863,6 +868,8 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     terminal.data[12] = static_cast<float>(td.v_envelope);
     terminal.data[13] = static_cast<float>(td.cmd_v_pre_clamp);
     terminal.data[14] = static_cast<float>(td.cmd_v_post_clamp);
+    terminal.data[15] = td.reached_latch_allowed ? 1.0f : 0.0f;
+    terminal.data[16] = td.reached_latch_blocked ? 1.0f : 0.0f;
     terminal_pub_.publish(terminal);
 
     std_msgs::String terminal_mode;

@@ -193,6 +193,9 @@ phase_rejoin:
   max_residual_omega: 0.20
   artifact_dt_tolerance_sec: 0.0001
   artifact_path_length_tolerance_m: 0.05
+  artifact_path_geometry_tolerance_m: 0.075
+  artifact_model_tolerance: 0.000001
+  artifact_command_tolerance: 0.00000001
   allow_development_artifact_in_enforce: false
   required_contract_id: ""
   required_frame_id: ""
@@ -200,6 +203,7 @@ phase_rejoin:
     backward_radius: 1
     forward_radius: 3
     initial_forward_radius: 4
+    max_clock_lead_steps: 1
     weight_position: 1.0
     weight_yaw: 0.5
     weight_velocity: 0.5

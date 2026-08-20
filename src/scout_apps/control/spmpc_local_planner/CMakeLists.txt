@@ -42,10 +42,12 @@ if(NOT ACADOS_SOURCE_DIR)
 endif()
 set(SPMPC_GEN_B0_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0)
 set(SPMPC_GEN_SLOSH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh)
+set(SPMPC_GEN_PHASE_REJOIN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_phase_rejoin)
 set(SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0_direct_omega_legacy)
 set(SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh_direct_omega)
 set(SPMPC_WITH_ACADOS FALSE)
 set(SPMPC_WITH_ACADOS_SLOSH FALSE)
+set(SPMPC_WITH_ACADOS_PHASE_REJOIN FALSE)
 set(SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY FALSE)
 set(SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA FALSE)
 set(ACADOS_LIB_DIR "")
@@ -64,6 +66,10 @@ if(ACADOS_LIB_DIR AND EXISTS "${SPMPC_GEN_B0_DIR}/libacados_ocp_solver_spmpc_b0.
     message(STATUS "[spmpc] acados found at ${ACADOS_SOURCE_DIR}; building continuous_mpcc_acados backend (b0 + slosh)")
   else()
     message(STATUS "[spmpc] acados found at ${ACADOS_SOURCE_DIR}; building continuous_mpcc_acados backend (b0 only, slosh solver missing)")
+  endif()
+  if(EXISTS "${SPMPC_GEN_PHASE_REJOIN_DIR}/libacados_ocp_solver_spmpc_phase_rejoin.so")
+    set(SPMPC_WITH_ACADOS_PHASE_REJOIN TRUE)
+    message(STATUS "[spmpc] building dedicated short-horizon phase-rejoin solver")
   endif()
 else()
   message(STATUS "[spmpc] acados not found (ACADOS_SOURCE_DIR / generated spmpc_b0 missing); continuous backend = stub")
@@ -94,6 +100,7 @@ include_directories(
 add_library(${PROJECT_NAME}
   src/phase_rejoin/types.cpp
   src/phase_rejoin/nominal_sequence_artifact.cpp
+  src/phase_rejoin/phase_clock.cpp
   src/phase_rejoin/phase_candidate_selector.cpp
   src/phase_rejoin/empirical_recovery_gate.cpp
   src/phase_rejoin/phase_rejoin_coordinator.cpp
@@ -156,6 +163,13 @@ if(SPMPC_WITH_ACADOS)
     target_include_directories(${PROJECT_NAME} PRIVATE ${SPMPC_GEN_SLOSH_DIR})
     target_link_libraries(${PROJECT_NAME}
       ${SPMPC_GEN_SLOSH_DIR}/libacados_ocp_solver_spmpc_slosh.so
+    )
+  endif()
+  if(SPMPC_WITH_ACADOS_PHASE_REJOIN)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE SPMPC_WITH_ACADOS_PHASE_REJOIN)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${SPMPC_GEN_PHASE_REJOIN_DIR})
+    target_link_libraries(${PROJECT_NAME}
+      ${SPMPC_GEN_PHASE_REJOIN_DIR}/libacados_ocp_solver_spmpc_phase_rejoin.so
     )
   endif()
 endif()

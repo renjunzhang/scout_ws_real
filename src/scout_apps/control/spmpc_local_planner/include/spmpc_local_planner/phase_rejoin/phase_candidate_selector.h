@@ -17,6 +17,7 @@ public:
                                 const SloshState& execution_front_slosh,
                                 int front_steps,
                                 int liquid_steps,
+                                std::size_t clock_index,
                                 bool have_last_accepted,
                                 std::size_t last_accepted_index) const;
 

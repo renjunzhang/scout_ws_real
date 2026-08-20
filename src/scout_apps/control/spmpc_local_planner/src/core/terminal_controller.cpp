@@ -44,6 +44,7 @@ TerminalPlan TerminalController::updateAndPlan(
     diagnostics_.position_reached = goal.position_reached;
     diagnostics_.speed_gate_reached = std::abs(current_v) <= params_.goal_reached_max_speed;
     diagnostics_.omega_gate_reached = std::abs(current_omega) <= params_.goal_reached_max_omega;
+    diagnostics_.reached_latch_allowed = goal.reached_latch_allowed;
 
     TerminalPlan plan;
     if (!params_.enable || !goal.valid) {
@@ -90,10 +91,16 @@ TerminalPlan TerminalController::updateAndPlan(
     plan.terminal_phase = terminal_phase;
     plan.pre_terminal_phase = !terminal_phase;
     plan.v_envelope = envelope;
-    if (goal.position_reached && diagnostics_.speed_gate_reached && diagnostics_.omega_gate_reached) {
+    const bool reached_condition = goal.position_reached &&
+        diagnostics_.speed_gate_reached && diagnostics_.omega_gate_reached;
+    diagnostics_.reached_latch_blocked =
+        reached_condition && !goal.reached_latch_allowed;
+    if (reached_condition && goal.reached_latch_allowed) {
         reached_latched_ = true;
         plan.mode = "REACHED";
         diagnostics_.reached = true;
+    } else if (diagnostics_.reached_latch_blocked) {
+        plan.mode = "REACHED_LATCH_DEFERRED";
     } else if (stop_pending_) {
         plan.mode = "TERMINAL_CAPTURE_STOP";
     } else if (envelope_active) {

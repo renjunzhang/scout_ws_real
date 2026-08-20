@@ -257,8 +257,16 @@ def stage_cost_expr(sym, cfg):
         _phase_rejoin_relative_cost(x, u, p, cfg)
         if sym.get("with_slosh") else 0.0
     )
-    return (j_track + j_path_speed + j_control + j_smooth + j_slosh +
-            j_phase_relative) / n_steps
+    # Phase mode replaces the baseline speed/control objective instead of
+    # stacking a zero-centred control prior on top of a nominal-centred prior.
+    # Geometry stays active, while liquid cost already switches from the origin
+    # to nominal-relative coordinates inside _slosh_cost().
+    phase_active = (
+        p[PIDX_SLOSH["phase_rejoin_active"]]
+        if sym.get("with_slosh") else 0.0
+    )
+    baseline = (1.0 - phase_active) * (j_path_speed + j_control + j_smooth)
+    return (j_track + baseline + j_slosh + j_phase_relative) / n_steps
 
 
 def terminal_cost_expr(sym, cfg):

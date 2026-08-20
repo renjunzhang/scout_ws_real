@@ -129,10 +129,14 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     goal_info.distance_to_goal = distance_to_goal;
     goal_info.dx_robot = std::cos(input.robot.yaw) * dx + std::sin(input.robot.yaw) * dy;
     goal_info.position_reached = distance_to_goal < terminal_controller_.params().goal_tolerance;
+    goal_info.reached_latch_allowed =
+        !phaseRejoinOwnsTerminalCommand(input.phase_rejoin) ||
+        input.phase_rejoin.terminal_release_authorized;
 
     const TerminalPlan terminal_plan = terminal_controller_.updateAndPlan(
         goal_info, input.robot.v, input.robot.omega, std::max(1e-6, solver_params_.a_max));
-    if (!terminal_controller_.params().enable && goal_info.position_reached) {
+    if (!terminal_controller_.params().enable && goal_info.position_reached &&
+        goal_info.reached_latch_allowed) {
         output = SolverOutput{};
         output.success = true;
         output.status = "GOAL_REACHED";
@@ -161,16 +165,20 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     guarded_input.costmap = have_costmap_ ? &costmap_ : nullptr;
     const bool ok = solver_->solve(guarded_input, reference_, output);
     if (ok && output.success) {
-        const TerminalClampOutput clamp = terminal_controller_.clampCommand(
-            output.cmd_v,
-            output.cmd_omega,
-            input.robot.v,
-            input.dt,
-            goal_info,
-            terminal_plan,
-            std::max(1e-6, solver_params_.a_max));
-        output.cmd_v = clamp.cmd_v_post;
-        output.cmd_omega = clamp.cmd_omega_post;
+        const bool phase_owns_terminal = phaseRejoinOwnsTerminalCommand(
+            guarded_input.phase_rejoin);
+        if (!phase_owns_terminal) {
+            const TerminalClampOutput clamp = terminal_controller_.clampCommand(
+                output.cmd_v,
+                output.cmd_omega,
+                input.robot.v,
+                input.dt,
+                goal_info,
+                terminal_plan,
+                std::max(1e-6, solver_params_.a_max));
+            output.cmd_v = clamp.cmd_v_post;
+            output.cmd_omega = clamp.cmd_omega_post;
+        }
         last_progress_s_ = std::max(last_progress_s_, output.progress_abs_s);
     }
     output.terminal_diagnostics = terminal_controller_.diagnostics();

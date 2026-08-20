@@ -256,6 +256,17 @@ def export_spmpc_slosh_symbols(name="spmpc_slosh"):
     }
 
 
+def export_spmpc_phase_rejoin_symbols(name="spmpc_phase_rejoin"):
+    """Dedicated short-horizon phase-rejoining model.
+
+    It intentionally shares the exact 10-state dynamics and parameter layout
+    with the main slosh model.  A different generated name/horizon prevents
+    the trusted liquid window from being followed by an unconstrained long
+    geometry tail.
+    """
+    return export_spmpc_slosh_symbols(name=name)
+
+
 def export_spmpc_slosh_direct_omega_symbols(name="spmpc_slosh_direct_omega"):
     """路 B：direct-omega + slosh（9 维）。omega 作为直接控制（u[1]），液体模态在 x[5..8]。
 
