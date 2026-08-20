@@ -86,8 +86,8 @@ test/test_phase_rejoin.cpp
 - `core/types.h`：在 `SolverInput` 中加入 `PhaseRejoinSolverContext`；
 - `delay_phase_types.h`、`execution_state_predictor.*`：双通道延迟、惯性、state age 和未来 prediction epoch，并复用既有 `SloshDynamics::stepWithDt`，避免积分步内重复配置和日志爆炸；
 - `continuous_mpcc_solver_acados.cpp`：严格校验 enforce context，逐 stage 注入 nominal 与 gate 参数；
-- `scripts/acados/spmpc_acados_{model,cost,constraints}.py`：新增名义相对代价及第二个非线性 gate；
-- `scripts/acados/generate_spmpc_acados.py`：生成前自检 inactive gate 与一半径边界；
+- `tools/codegen/acados/spmpc_acados_{model,cost,constraints}.py`：新增名义相对代价及第二个非线性 gate；
+- `tools/codegen/acados/generate_spmpc_acados.py`：生成前自检 inactive gate 与一半径边界；
 - `spmpc_local_planner_ros.*`：参数、artifact、执行前沿、coordinator 和安全门接线；
 - `diagnostics_publisher.*`：发布 `/spmpc/debug/phase_rejoin`；
 - `common.yaml`：新增默认关闭的 phase-rejoin 参数；
@@ -98,7 +98,7 @@ test/test_phase_rejoin.cpp
 acados codegen 产物按仓库既有策略由 `generated/acados/.gitignore` 忽略，本轮已在本机重新生成 slosh solver；其接口为 `SPMPC_SLOSH_NP=55`、`SPMPC_SLOSH_NH=2`。新工作区需要执行：
 
 ```bash
-python3 src/scout_apps/control/spmpc_local_planner/scripts/acados/generate_spmpc_acados.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/codegen/acados/generate_spmpc_acados.py \
   --model slosh
 ```
 
@@ -211,7 +211,7 @@ catkin_make run_tests_spmpc_local_planner -j1
 catkin_test_results build
 
 python3 -m unittest \
-  src/scout_apps/control/spmpc_local_planner/scripts/tests/test_phase_rejoin_development_artifact.py
+  src/scout_apps/control/spmpc_local_planner/test/python/test_phase_rejoin_development_artifact.py
 ```
 
 结果：

@@ -8,7 +8,8 @@ import unittest
 from pathlib import Path
 
 
-ANALYSIS_DIR = Path(__file__).resolve().parents[1] / "analysis"
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+ANALYSIS_DIR = PACKAGE_ROOT / "tools" / "analysis"
 sys.path.insert(0, str(ANALYSIS_DIR))
 MODULE_PATH = ANALYSIS_DIR / "analyze_g2s_raw_rgb_three_trial.py"
 SPEC = importlib.util.spec_from_file_location("analyze_g2s_raw_rgb_three_trial", MODULE_PATH)

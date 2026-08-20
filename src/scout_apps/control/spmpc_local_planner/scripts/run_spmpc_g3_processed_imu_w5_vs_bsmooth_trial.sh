@@ -26,8 +26,8 @@ source /opt/ros/noetic/setup.bash
 source "${REPO_ROOT}/devel/setup.bash"
 
 RUNNER="${SCRIPT_DIR}/run_spmpc_real_fixed_path_trial.sh"
-VALIDATOR="${SCRIPT_DIR}/analysis/validate_g3_online_rgb_trial.py"
-ANALYZER="${SCRIPT_DIR}/analysis/analyze_g3_w5_vs_bsmooth.py"
+VALIDATOR="${SCRIPT_DIR}/../tools/analysis/validate_g3_online_rgb_trial.py"
+ANALYZER="${SCRIPT_DIR}/../tools/analysis/analyze_g3_w5_vs_bsmooth.py"
 SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
 CAMERA_PREP="${SCRIPT_DIR}/prepare_spmpc_g3_realsense.sh"
 ONLINE_LIQUID_LAUNCH="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/launch/online_liquid_height.launch"
@@ -163,8 +163,8 @@ relevant_repo_paths=(
   "${runtime_paths[@]}"
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
   src/scout_apps/control/spmpc_local_planner/scripts/prepare_spmpc_g3_realsense.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_g3_online_rgb_trial.py
-  src/scout_apps/control/spmpc_local_planner/scripts/analysis/analyze_g3_w5_vs_bsmooth.py
+  src/scout_apps/control/spmpc_local_planner/tools/analysis/validate_g3_online_rgb_trial.py
+  src/scout_apps/control/spmpc_local_planner/tools/analysis/analyze_g3_w5_vs_bsmooth.py
 )
 if ! git -C "${REPO_ROOT}" diff --quiet -- "${relevant_repo_paths[@]}" || \
    ! git -C "${REPO_ROOT}" diff --cached --quiet -- "${relevant_repo_paths[@]}"; then

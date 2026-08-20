@@ -12,7 +12,10 @@ from pathlib import Path
 import yaml
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / "validate_spmpc_formal_freeze.py"
+SCRIPT = (
+    Path(__file__).resolve().parents[2]
+    / "scripts/validate_spmpc_formal_freeze.py"
+)
 
 
 def sha256(path: Path) -> str:

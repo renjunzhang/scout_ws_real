@@ -7,8 +7,8 @@ from pathlib import Path
 
 
 MODULE_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "analysis/analyze_g2s_source_selection.py"
+    Path(__file__).resolve().parents[2]
+    / "tools/analysis/analyze_g2s_source_selection.py"
 )
 SPEC = importlib.util.spec_from_file_location("analyze_g2s_source_selection", MODULE_PATH)
 MODULE = importlib.util.module_from_spec(SPEC)

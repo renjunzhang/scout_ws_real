@@ -23,8 +23,8 @@ fail() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ORIGINAL_WRAPPER="${SCRIPT_DIR}/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh"
 RUNNER="${SCRIPT_DIR}/run_spmpc_real_fixed_path_trial.sh"
-VALIDATOR="${SCRIPT_DIR}/analysis/validate_g3_online_rgb_trial.py"
-ANALYZER="${SCRIPT_DIR}/analysis/analyze_g3_w5_vs_bsmooth.py"
+VALIDATOR="${SCRIPT_DIR}/../tools/analysis/validate_g3_online_rgb_trial.py"
+ANALYZER="${SCRIPT_DIR}/../tools/analysis/analyze_g3_w5_vs_bsmooth.py"
 SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
 CAMERA_PREP="${SCRIPT_DIR}/prepare_spmpc_g3_realsense.sh"
 

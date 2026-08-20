@@ -23,7 +23,7 @@ Scout Mini 液体运输 anti-slosh 研究的控制层。围绕"两条并行主�
   - `continuous_mpcc_acados`：连续 MPCC,acados 求解,9 维联合状态 `[px,py,ψ,v,s,η_x,η̇_x,η_y,η̇_y]`,控制 `[a,ω,v_s]`。
 - 三层解耦：`core/`(无 ROS) / `ros/`(adapter) / `config/`(YAML 平台/容器/实验)。
 - 入口：`spmpc_fixed_path.launch`(`planner_variant:=B0|B_slosh|B_smooth|B_ours`,`solver_backend:=...`)。
-- acados 求解器由 `scripts/acados/generate_spmpc_acados.py` 生成(见安装文档)。
+- acados 求解器由 `spmpc_local_planner/tools/codegen/acados/generate_spmpc_acados.py` 生成（见安装文档）。
 
 ---
 

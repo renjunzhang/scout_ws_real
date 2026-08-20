@@ -1369,10 +1369,10 @@ $$
 
 | 方法内容 | 当前代码 |
 |---|---|
-| alpha-state / slosh 增强动力学 | `scripts/acados/spmpc_acados_model.py` |
-| contour/lag、anti-creep、控制和 slosh cost | `scripts/acados/spmpc_acados_cost.py` |
-| box constraints 和 modal hard cap | `scripts/acados/spmpc_acados_constraints.py` |
-| SQP-RTI、ERK、HPIPM codegen | `scripts/acados/generate_spmpc_acados.py` |
+| alpha-state / slosh 增强动力学 | `tools/codegen/acados/spmpc_acados_model.py` |
+| contour/lag、anti-creep、控制和 slosh cost | `tools/codegen/acados/spmpc_acados_cost.py` |
+| box constraints 和 modal hard cap | `tools/codegen/acados/spmpc_acados_constraints.py` |
+| SQP-RTI、ERK、HPIPM codegen | `tools/codegen/acados/generate_spmpc_acados.py` |
 | acados 参数注入、初值、warm start 和命令生成 | `src/solvers/continuous_mpcc_solver_acados.cpp` |
 | 液体离散模型和高度代理 | `src/dynamics/slosh_dynamics.cpp` |
 | odometry 驱动的液体状态传播 | `src/ros/spmpc_local_planner_ros.cpp` |

@@ -9,7 +9,7 @@ import unittest
 
 
 PACKAGE_ROOT = pathlib.Path(__file__).resolve().parents[2]
-ACADOS_TOOLS = PACKAGE_ROOT / "scripts" / "acados"
+ACADOS_TOOLS = PACKAGE_ROOT / "tools" / "codegen" / "acados"
 sys.path.insert(0, str(ACADOS_TOOLS))
 
 from generate_spmpc_acados import emit_cpp_manifest, load_config  # noqa: E402

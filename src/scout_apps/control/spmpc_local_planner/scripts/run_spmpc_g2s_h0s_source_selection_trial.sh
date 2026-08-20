@@ -36,7 +36,7 @@ source /opt/ros/noetic/setup.bash
 source "${REPO_ROOT}/devel/setup.bash"
 
 RUNNER="${SCRIPT_DIR}/run_spmpc_real_fixed_path_trial.sh"
-POSTFLIGHT_VALIDATOR="${SCRIPT_DIR}/analysis/validate_g2s_paired_trial.py"
+POSTFLIGHT_VALIDATOR="${SCRIPT_DIR}/../tools/analysis/validate_g2s_paired_trial.py"
 ONLINE_LIQUID_LAUNCH="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/launch/online_liquid_height.launch"
 ONLINE_LIQUID_NODE="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/scripts/online_liquid_height_node.py"
 ONLINE_LIQUID_DETECTOR="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/scripts/red_liquid_infer_from_bag.py"

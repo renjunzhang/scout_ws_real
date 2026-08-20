@@ -18,7 +18,7 @@ BAG_DIR="${BAG_DIR:-/home/geist/slosh_bags/real/${G2S_DATE}_spmpc_g2s_source_sel
 CALIBRATION="${CALIBRATION:-/home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/calibration/red_3ruler_g2s_20260731_frozen.yaml}"
 OUT_DIR="${OUT_DIR:-/home/geist/slosh_bags/real/${G2S_DATE}_spmpc_g2s_source_selection/analysis}"
 
-exec python3 "${SCRIPT_DIR}/analysis/analyze_g2s_source_selection.py" \
+exec python3 "${SCRIPT_DIR}/../tools/analysis/analyze_g2s_source_selection.py" \
   --bag-dir "${BAG_DIR}" \
   --calibration "${CALIBRATION}" \
   --out-dir "${OUT_DIR}"

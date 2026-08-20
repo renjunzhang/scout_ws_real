@@ -21,7 +21,7 @@ case "${HASH_BAGS}" in
   *) echo "[G2S raw-RGB analysis][ERR] HASH_BAGS must be true or false" >&2; exit 2 ;;
 esac
 
-exec python3 "${SCRIPT_DIR}/analysis/analyze_g2s_raw_rgb_three_trial.py" \
+exec python3 "${SCRIPT_DIR}/../tools/analysis/analyze_g2s_raw_rgb_three_trial.py" \
   --trial u01 \
     "${BAG_DIR}/DEV_G2S_H0s_C1_Bsmooth_u01_a01.bag" \
     "${RELABEL_DIR}/offline_u01_attempt03_bottom60/DEV_G2S_H0s_C1_Bsmooth_u01_a01_red_top.csv" \

@@ -10,7 +10,10 @@ from types import SimpleNamespace
 import numpy as np
 
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "analysis" / "g4_replay_from_g3.py"
+MODULE_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "tools/analysis/g4_replay_from_g3.py"
+)
 SPEC = importlib.util.spec_from_file_location("g4_replay_from_g3", MODULE_PATH)
 G4 = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = G4

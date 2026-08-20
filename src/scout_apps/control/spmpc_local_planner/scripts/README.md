@@ -1,6 +1,6 @@
-# spmpc_local_planner scripts
+# spmpc_local_planner 运行与实验脚本
 
-本目录放 SPMPC 自研 planner 的正式实物辅助、pilot/smoke、录包、离线诊断和 acados 代码生成脚本。除 `run_external_baseline_real_fixed_path_trial.sh` 外，其他脚本都服务于 `spmpc_local_planner` 本身。
+本目录只放 SPMPC 自研 planner 的实物辅助、pilot/smoke、录包和实验编排入口。离线分析已迁到 `../tools/analysis/`，acados codegen 已迁到 `../tools/codegen/acados/`，Python 回归测试位于 `../test/python/`。这些目录均不进入运行时安装空间。除 `run_external_baseline_real_fixed_path_trial.sh` 外，其他脚本都服务于 `spmpc_local_planner` 本身。
 
 当前候选协议已经升级为 `SMPCC-REAL-40-64-88-v2.0`，但尚未冻结；所有 Stage I/II formal trial 均为 `NO-GO`。本目录现有 validator、template 及若干 runner 仍带 `SMPCC-REAL-40-88-v1.0`/E2/E3 语义，旧 validator 的 PASS 不具有 v2.0 放行权。下表中的“正式链”仅表示未来完成 v2.0 升级后拟承担的角色；在只读 `freeze_manifest.yaml`、唯一 `FREEZE_ID`、新随机表、完整 G0--G6 报告链和 upgraded validator 同时存在前，任何脚本都不能直接产生 v2.0 formal 数据。其余脚本只用于开发、仿真、pilot、历史复现或诊断。
 
@@ -10,8 +10,8 @@
 | `run_spmpc_real_fixed_path_trial.sh` | SPMPC 实物单次一键 runner，支持生成或重放路径 | future v2.0 正式链；当前仅 development，未来 formal 只允许 replay |
 | `run_spmpc_g2s_h0s_source_selection_trial.sh` | 固定 H0_G2、Bsmooth、IMU READY gate 和在线 RGB stamped scalar 的单条 G2S paired unit；bag 禁止图像流 | development G2S；不进入 40/64/88 |
 | `analyze_spmpc_g2s_source_selection.sh` | 四条 G2S PASS 后的一键只读 source analyzer，自动加载 ROS/workspace 并使用冻结目录 | development source decision |
-| `analysis/validate_g2s_paired_trial.py` | 单条 G2S bag 的 motion/在线视觉质量/零图像话题/双 observer/READY/selection postflight | development fail-closed QC |
-| `analysis/analyze_g2s_source_selection.py` | 4 条同-trial paired unit 对 RGB 的 odom/IMU 决策 | development source decision；不自动签 formal release |
+| `../tools/analysis/validate_g2s_paired_trial.py` | 单条 G2S bag 的 motion/在线视觉质量/零图像话题/双 observer/READY/selection postflight | development fail-closed QC |
+| `../tools/analysis/analyze_g2s_source_selection.py` | 4 条同-trial paired unit 对 RGB 的 odom/IMU 决策 | development source decision；不自动签 formal release |
 | `summarize_spmpc_real_trial.py` | 单包/目录离线完整性、配置和 fallback 摘要 | future v2.0 即时 QC；schema 尚未升级完整 |
 | `validate_spmpc_formal_freeze.py` | 旧 v1.0 只读 freeze 校验 | **不得放行 v2.0**；必须升级后才可成为强制门控 |
 | `run_external_baseline_real_fixed_path_trial.sh` | LT-DWA、TEB、MPC 外部 baseline 的 shadow/actuated 实物运行 | 独立外部 baseline，不属于当前内部 88 单元 |
@@ -29,11 +29,11 @@
 | `analyze_spmpc_delay_phase.py` | 从 bag 诊断 command/odom 延迟和 phase 状态 | 离线诊断 |
 | `check_omega_smoke.py` | 快查停滞、角速度变化率和模型晃动峰值 | 离线 smoke 速查 |
 
-子目录用途：
+配套目录用途：
 
-- `acados/generate_spmpc_acados.py` 负责模型检查和求解器代码生成；同目录的 `spmpc_acados_model.py`、`spmpc_acados_cost.py`、`spmpc_acados_constraints.py` 是其装配模块，不单独运行；
-- `analysis/estimate_cmd_odom_delay.py` 是早期 cmd/odom 互相关与绘图工具，当前优先使用顶层 `analyze_spmpc_delay_phase.py`；
-- `tests/` 保存 summary 和正式 freeze validator 的回归测试。
+- `../tools/codegen/acados/generate_spmpc_acados.py` 负责模型检查和求解器代码生成；同目录的模型、代价和约束文件是其装配模块，不单独运行；
+- `../tools/analysis/estimate_cmd_odom_delay.py` 是早期 cmd/odom 互相关与绘图工具，当前优先使用本目录的 `analyze_spmpc_delay_phase.py`；
+- `../test/python/` 保存 analysis、summary、artifact 和 freeze validator 的回归测试。
 
 ## prepare_phase_rejoin_development_artifact.py
 
@@ -87,7 +87,7 @@ python3 src/scout_apps/control/spmpc_local_planner/scripts/prepare_phase_rejoin_
   --artifact /tmp/phase_rejoin_development_only.csv
 
 python3 -m unittest \
-  src/scout_apps/control/spmpc_local_planner/scripts/tests/test_phase_rejoin_development_artifact.py
+  src/scout_apps/control/spmpc_local_planner/test/python/test_phase_rejoin_development_artifact.py
 ```
 
 正式 OfflineSloshOCP 必须由独立求解/验证链生成同 schema 文件，并使用与本工具不同、如实反映证据等级的来源合同；不得重命名或修改本工具输出的 metadata 来冒充正式 artifact。
@@ -340,7 +340,7 @@ RealSense 仍提供 `1920x1080@30` 在线输入，G2S 使用 2026-07-31 当前�
 source /opt/ros/noetic/setup.bash
 source /home/geist/scout_ws/devel/setup.bash
 
-python3 src/scout_apps/control/spmpc_local_planner/scripts/analysis/analyze_g2s_source_selection.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/analysis/analyze_g2s_source_selection.py \
   --bag-dir /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/H0s_Bsmooth \
   --calibration /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/calibration/red_3ruler_g2s_20260731_frozen.yaml \
   --out-dir /home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/analysis
@@ -635,42 +635,42 @@ python3 src/scout_apps/control/spmpc_local_planner/scripts/check_omega_smoke.py 
 检查 CasADi 模型装配而不调用 acados：
 
 ```bash
-python3 src/scout_apps/control/spmpc_local_planner/scripts/acados/generate_spmpc_acados.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/codegen/acados/generate_spmpc_acados.py \
   --model b0 --check
 
-python3 src/scout_apps/control/spmpc_local_planner/scripts/acados/generate_spmpc_acados.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/codegen/acados/generate_spmpc_acados.py \
   --model slosh --check
 ```
 
 安装并配置 `acados_template` 后，去掉 `--check` 生成 C 代码和求解器：
 
 ```bash
-python3 src/scout_apps/control/spmpc_local_planner/scripts/acados/generate_spmpc_acados.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/codegen/acados/generate_spmpc_acados.py \
   --model slosh
 ```
 
 正式实验使用的 codegen 输出和 build log 必须先归档 hash 并进入 freeze manifest；正式采集期间禁止重新生成后继续沿用同一 `FREEZE_ID`。
 
-## analysis/estimate_cmd_odom_delay.py
+## tools/analysis/estimate_cmd_odom_delay.py
 
 早期互相关延迟估计工具，内置配置参考值 `150/220 ms`，可输出相关曲线：
 
 ```bash
-python3 src/scout_apps/control/spmpc_local_planner/scripts/analysis/estimate_cmd_odom_delay.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/analysis/estimate_cmd_odom_delay.py \
   /path/to/run01.bag /path/to/run02.bag \
   --plot --out_dir /tmp/delay_analysis
 ```
 
 新实验优先使用参数更完整、能输出 CSV 并识别更多 SPMPC 状态的 `analyze_spmpc_delay_phase.py`；本脚本保留用于复核历史分析。
 
-## tests/
+## test/python/
 
 运行本目录的全部回归测试：
 
 ```bash
 cd /home/a/scout_ws
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover \
-  -s src/scout_apps/control/spmpc_local_planner/scripts/tests \
+  -s src/scout_apps/control/spmpc_local_planner/test/python \
   -p 'test_*.py' -v
 ```
 

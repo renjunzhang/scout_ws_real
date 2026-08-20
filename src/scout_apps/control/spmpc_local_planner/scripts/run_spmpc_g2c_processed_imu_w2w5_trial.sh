@@ -22,7 +22,7 @@ source /opt/ros/noetic/setup.bash
 source "${REPO_ROOT}/devel/setup.bash"
 
 RUNNER="${SCRIPT_DIR}/run_spmpc_real_fixed_path_trial.sh"
-VALIDATOR="${SCRIPT_DIR}/analysis/validate_g2c_processed_imu_trial.py"
+VALIDATOR="${SCRIPT_DIR}/../tools/analysis/validate_g2c_processed_imu_trial.py"
 SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
 
 G2C_ROW="${G2C_ROW:-}"

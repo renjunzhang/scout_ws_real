@@ -6,7 +6,10 @@ import unittest
 from pathlib import Path
 
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "analysis" / "prepare_g5_comparators.py"
+MODULE_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "tools/analysis/prepare_g5_comparators.py"
+)
 SPEC = importlib.util.spec_from_file_location("prepare_g5_comparators", MODULE_PATH)
 G5 = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = G5

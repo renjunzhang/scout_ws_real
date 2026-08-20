@@ -206,8 +206,10 @@ config/
 └── experiments/   fixed_path / point_to_point 开发入口
 
 launch/            ROS 启动入口
-scripts/           runner、recorder、分析、artifact development 工具和测试
-scripts/acados/    acados 模型源、代价、约束与唯一 codegen 入口
+scripts/           runner、recorder 和 artifact development 入口
+tools/analysis/    只读离线分析与 postflight 工具
+tools/codegen/acados/  acados 模型源、代价、约束与唯一 codegen 入口
+test/python/       Python 工具链回归测试
 generated/acados/  本机生成的 solver；禁止手工修改
 ```
 
@@ -216,7 +218,7 @@ generated/acados/  本机生成的 solver；禁止手工修改
 ```text
 phase_rejoin core  不依赖 roscpp、ROS message 或 parameter server
 ROS adapter        负责时间戳、话题、参数、生命周期和安全链
-scripts/acados     是 generated solver 的源头
+tools/codegen/acados  是 generated solver 的源头
 generated/acados   只保存生成结果，不作为手工编辑源
 ```
 
@@ -773,14 +775,14 @@ post-solver limiter 开启时必须 fail closed on change
 
 ### 9.1 生成 solver
 
-不要手工修改 `generated/acados/`。修改 `scripts/acados/` 中的模型源后重新生成。
+不要手工修改 `generated/acados/`。修改 `tools/codegen/acados/` 中的模型源后重新生成。
 
 ```bash
 source /opt/ros/noetic/setup.bash
 source /home/a/acados_venv/bin/activate
 export ACADOS_SOURCE_DIR=/home/a/acados
 export LD_LIBRARY_PATH=/home/a/acados/lib:${LD_LIBRARY_PATH:-}
-cd /home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/acados
+cd /home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/tools/codegen/acados
 
 python3 generate_spmpc_acados.py --model b0
 python3 generate_spmpc_acados.py --model slosh
@@ -1051,9 +1053,9 @@ Python development 工具测试：
 
 ```bash
 python3 -m unittest \
-  src/scout_apps/control/spmpc_local_planner/scripts/tests/test_phase_rejoin_development_artifact.py \
-  src/scout_apps/control/spmpc_local_planner/scripts/tests/test_phase_rejoin_development_nominal.py \
-  src/scout_apps/control/spmpc_local_planner/scripts/tests/test_analyze_phase_rejoin_paired_bags.py
+  src/scout_apps/control/spmpc_local_planner/test/python/test_phase_rejoin_development_artifact.py \
+  src/scout_apps/control/spmpc_local_planner/test/python/test_phase_rejoin_development_nominal.py \
+  src/scout_apps/control/spmpc_local_planner/test/python/test_analyze_phase_rejoin_paired_bags.py
 ```
 
 2026-08-20 的 proxy 仿真和分支测试只能说明：
@@ -1095,7 +1097,7 @@ held-out gate 已经安全
 算法核心尽量与 ROS 解耦
 所有时间链使用 source timestamp
 只把最终 u_pub 写回执行历史
-generated solver 只由 scripts/acados 重新生成
+generated solver 只由 tools/codegen/acados 重新生成
 RGB 作为独立物理评价，不进入控制闭环
 未通过放行门时 fail closed，并保留 NO-GO 证据
 ```

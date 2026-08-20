@@ -261,7 +261,7 @@ src/phase_rejoin/phase_rejoin_coordinator.cpp
 - `core/types.h`：增加 phase nominal horizon 和输出诊断对象；
 - `ros/delay_phase_types.h`、`execution_state_predictor.*`：双通道采样、惯性参数和前沿 epoch；
 - `continuous_mpcc_solver_acados.cpp`：注入逐 stage nominal/gate 参数；
-- `scripts/acados/*`：增加 residual cost 和 empirical terminal gate，重新生成 slosh solver；
+- `tools/codegen/acados/*`：增加 residual cost 和 empirical terminal gate，重新生成 slosh solver；
 - `spmpc_local_planner_ros.*`：加载参数/artifact、调用 coordinator、执行安全优先级；
 - `DiagnosticsPublisher`：发布 typed phase-rejoin 诊断；
 - `common.yaml` 和 launch：增加显式开关，默认 `off`；

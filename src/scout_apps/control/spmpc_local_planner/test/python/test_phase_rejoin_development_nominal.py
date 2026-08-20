@@ -8,8 +8,8 @@ import tempfile
 import unittest
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / \
-    "generate_phase_rejoin_development_nominal.py"
+SCRIPT = Path(__file__).resolve().parents[2] / \
+    "scripts/generate_phase_rejoin_development_nominal.py"
 SPEC = importlib.util.spec_from_file_location("phase_rejoin_dev_nominal", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)

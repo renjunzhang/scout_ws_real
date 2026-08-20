@@ -8,7 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 
-ANALYSIS_DIR = Path(__file__).resolve().parents[1] / "analysis"
+PACKAGE_ROOT = Path(__file__).resolve().parents[2]
+ANALYSIS_DIR = PACKAGE_ROOT / "tools" / "analysis"
 
 
 def load_module(name):

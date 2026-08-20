@@ -18,8 +18,8 @@ fail() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNNER="${SCRIPT_DIR}/run_spmpc_real_fixed_path_trial.sh"
 FIXED_RUNNER="${SCRIPT_DIR}/run_fixed_profile_real_trial.sh"
-VALIDATOR="${SCRIPT_DIR}/analysis/validate_g5_minimal_trial.py"
-ANALYZER="${SCRIPT_DIR}/analysis/analyze_g5_minimal.py"
+VALIDATOR="${SCRIPT_DIR}/../tools/analysis/validate_g5_minimal_trial.py"
+ANALYZER="${SCRIPT_DIR}/../tools/analysis/analyze_g5_minimal.py"
 SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
 
 DATE="${DATE:-20260801}"
