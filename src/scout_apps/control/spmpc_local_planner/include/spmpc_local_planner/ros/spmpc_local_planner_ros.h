@@ -15,6 +15,7 @@
 #include "spmpc_local_planner/runtime/execution_prediction/command_history_buffer.h"
 #include "spmpc_local_planner/runtime/execution_prediction/execution_state_predictor.h"
 #include "spmpc_local_planner/runtime/state_alignment.h"
+#include "spmpc_local_planner/safety/safety_supervisor.h"
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
@@ -63,13 +64,6 @@ private:
                                       double solver_time_ms,
                                       bool closed_loop_enabled = false);
     void publishDelayPhaseEarlyStatus(DelayPhaseStatusCode status_code);
-    bool updateTerminalSpinFailGate(const SolverInput& input, const SolverOutput& output, double period_sec);
-    void resetTerminalSpinFailGate();
-    bool updateTrackingSafetyGate(const SolverInput& input,
-                                  const SolverOutput& output,
-                                  double period_sec,
-                                  std::string& failure_status);
-    void resetTrackingSafetyGate();
     RobotState robotStateFromOdom(const nav_msgs::Odometry& odom) const;
     bool robotStateFromLatest(RobotState& state);
     bool robotStateAtEpoch(const ros::Time& target_stamp,
@@ -125,6 +119,7 @@ private:
     SpmpcProblem problem_;
     AppConfig app_config_;
     CommandPipeline command_pipeline_;
+    SafetySupervisor safety_supervisor_;
     DiagnosticsPublisher diagnostics_;
     VariantConfig variant_;
     ReferencePathPreprocessor reference_preprocessor_;
@@ -192,26 +187,10 @@ private:
     double shared_cmd_angular_rate_max_ = 1.2;
     double shared_cmd_angular_accel_max_ = 1.2;
     double shared_cmd_angular_accel_max_dt_ = 0.2;
-    bool terminal_spin_fail_enable_ = true;
-    double terminal_spin_fail_omega_threshold_ = 0.20;
-    double terminal_spin_fail_max_duration_sec_ = 2.0;
-    double terminal_spin_fail_duration_sec_ = 0.0;
-    bool terminal_spin_fail_latched_ = false;
     // Once the terminal controller declares success, keep zero command until a
     // genuinely new reference arrives.  This prevents alternating
     // GOAL_REACHED/enforce cycles from re-exciting the liquid at the endpoint.
     bool goal_reached_latched_ = false;
-    bool tracking_safety_enable_ = true;
-    bool tracking_safety_projection_enable_ = true;
-    double tracking_safety_max_projection_distance_m_ = 0.50;
-    double tracking_safety_max_projection_duration_sec_ = 0.20;
-    double tracking_safety_projection_duration_sec_ = 0.0;
-    bool tracking_safety_projection_latched_ = false;
-    bool tracking_safety_spin_enable_ = true;
-    double tracking_safety_spin_omega_threshold_ = 0.50;
-    double tracking_safety_spin_max_duration_sec_ = 2.0;
-    double tracking_safety_spin_duration_sec_ = 0.0;
-    bool tracking_safety_spin_latched_ = false;
     double tf_timeout_sec_ = 0.05;
     double control_frequency_ = 30.0;
     double dt_ = 1.0 / 30.0;

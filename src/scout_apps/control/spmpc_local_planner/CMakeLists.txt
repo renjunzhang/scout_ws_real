@@ -90,6 +90,7 @@ set(SPMPC_PUBLIC_LIBRARIES
   spmpc_controller
   spmpc_reference
   spmpc_runtime
+  spmpc_safety
   spmpc_model
   spmpc_solver_api
 )
@@ -121,6 +122,10 @@ add_library(spmpc_config
 
 add_library(spmpc_controller
   src/controller/command/command_pipeline.cpp
+)
+
+add_library(spmpc_safety
+  src/safety/safety_supervisor.cpp
 )
 
 add_library(spmpc_reference
@@ -185,6 +190,7 @@ target_link_libraries(${PROJECT_NAME}
   spmpc_controller
   spmpc_reference
   spmpc_runtime
+  spmpc_safety
   spmpc_model
   spmpc_solver_api
   ${catkin_LIBRARIES}
@@ -365,6 +371,12 @@ if(CATKIN_ENABLE_TESTING)
   if(TARGET test_command_pipeline)
     target_link_libraries(test_command_pipeline
       spmpc_controller
+    )
+  endif()
+  catkin_add_gtest(test_safety_supervisor test/test_safety_supervisor.cpp)
+  if(TARGET test_safety_supervisor)
+    target_link_libraries(test_safety_supervisor
+      spmpc_safety
     )
   endif()
   if(SPMPC_WITH_ACADOS)

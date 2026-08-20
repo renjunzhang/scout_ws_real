@@ -484,22 +484,56 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("terminal/command_clamp/omega_max", solver_params.terminal.omega_clamp_max, solver_params.terminal.omega_clamp_max);
     pnh_.param("terminal/command_clamp/omega_near_goal_max", solver_params.terminal.omega_near_goal_max, solver_params.terminal.omega_near_goal_max);
     pnh_.param("terminal/command_clamp/omega_near_goal_distance", solver_params.terminal.omega_near_goal_distance, solver_params.terminal.omega_near_goal_distance);
-    pnh_.param("terminal/spin_fail/enable", terminal_spin_fail_enable_, terminal_spin_fail_enable_);
-    pnh_.param("terminal/spin_fail/omega_threshold", terminal_spin_fail_omega_threshold_, terminal_spin_fail_omega_threshold_);
-    pnh_.param("terminal/spin_fail/max_duration_sec", terminal_spin_fail_max_duration_sec_, terminal_spin_fail_max_duration_sec_);
-    terminal_spin_fail_omega_threshold_ = std::max(0.0, terminal_spin_fail_omega_threshold_);
-    terminal_spin_fail_max_duration_sec_ = std::max(0.0, terminal_spin_fail_max_duration_sec_);
-    pnh_.param("tracking_safety/enable", tracking_safety_enable_, tracking_safety_enable_);
-    pnh_.param("tracking_safety/projection/enable", tracking_safety_projection_enable_, tracking_safety_projection_enable_);
-    pnh_.param("tracking_safety/projection/max_distance_m", tracking_safety_max_projection_distance_m_, tracking_safety_max_projection_distance_m_);
-    pnh_.param("tracking_safety/projection/max_duration_sec", tracking_safety_max_projection_duration_sec_, tracking_safety_max_projection_duration_sec_);
-    pnh_.param("tracking_safety/spin_fail/enable", tracking_safety_spin_enable_, tracking_safety_spin_enable_);
-    pnh_.param("tracking_safety/spin_fail/omega_threshold", tracking_safety_spin_omega_threshold_, tracking_safety_spin_omega_threshold_);
-    pnh_.param("tracking_safety/spin_fail/max_duration_sec", tracking_safety_spin_max_duration_sec_, tracking_safety_spin_max_duration_sec_);
-    tracking_safety_max_projection_distance_m_ = std::max(0.0, tracking_safety_max_projection_distance_m_);
-    tracking_safety_max_projection_duration_sec_ = std::max(0.0, tracking_safety_max_projection_duration_sec_);
-    tracking_safety_spin_omega_threshold_ = std::max(0.0, tracking_safety_spin_omega_threshold_);
-    tracking_safety_spin_max_duration_sec_ = std::max(0.0, tracking_safety_spin_max_duration_sec_);
+    SafetySupervisorConfig safety_config;
+    safety_config.nominal_period_sec = dt_;
+    pnh_.param("terminal/spin_fail/enable",
+               safety_config.terminal_spin.enable,
+               safety_config.terminal_spin.enable);
+    pnh_.param("terminal/spin_fail/omega_threshold",
+               safety_config.terminal_spin.omega_threshold,
+               safety_config.terminal_spin.omega_threshold);
+    pnh_.param("terminal/spin_fail/max_duration_sec",
+               safety_config.terminal_spin.max_duration_sec,
+               safety_config.terminal_spin.max_duration_sec);
+    safety_config.terminal_spin.omega_threshold = std::max(
+        0.0, safety_config.terminal_spin.omega_threshold);
+    safety_config.terminal_spin.max_duration_sec = std::max(
+        0.0, safety_config.terminal_spin.max_duration_sec);
+    pnh_.param("tracking_safety/enable",
+               safety_config.tracking.enable,
+               safety_config.tracking.enable);
+    pnh_.param("tracking_safety/projection/enable",
+               safety_config.tracking.projection_enable,
+               safety_config.tracking.projection_enable);
+    pnh_.param("tracking_safety/projection/max_distance_m",
+               safety_config.tracking.max_projection_distance_m,
+               safety_config.tracking.max_projection_distance_m);
+    pnh_.param("tracking_safety/projection/max_duration_sec",
+               safety_config.tracking.max_projection_duration_sec,
+               safety_config.tracking.max_projection_duration_sec);
+    pnh_.param("tracking_safety/spin_fail/enable",
+               safety_config.tracking.spin_enable,
+               safety_config.tracking.spin_enable);
+    pnh_.param("tracking_safety/spin_fail/omega_threshold",
+               safety_config.tracking.spin_omega_threshold,
+               safety_config.tracking.spin_omega_threshold);
+    pnh_.param("tracking_safety/spin_fail/max_duration_sec",
+               safety_config.tracking.spin_max_duration_sec,
+               safety_config.tracking.spin_max_duration_sec);
+    safety_config.tracking.max_projection_distance_m = std::max(
+        0.0, safety_config.tracking.max_projection_distance_m);
+    safety_config.tracking.max_projection_duration_sec = std::max(
+        0.0, safety_config.tracking.max_projection_duration_sec);
+    safety_config.tracking.spin_omega_threshold = std::max(
+        0.0, safety_config.tracking.spin_omega_threshold);
+    safety_config.tracking.spin_max_duration_sec = std::max(
+        0.0, safety_config.tracking.spin_max_duration_sec);
+    std::string safety_error;
+    if (!safety_supervisor_.configure(safety_config, safety_error)) {
+        ROS_FATAL("[spmpc_local_planner] safety supervisor configuration failed: %s",
+                  safety_error.c_str());
+        return false;
+    }
     pnh_.param("start_lock_recovery/enable", solver_params.start_lock_recovery.enable, solver_params.start_lock_recovery.enable);
     pnh_.param("start_lock_recovery/detect_only", solver_params.start_lock_recovery.detect_only, solver_params.start_lock_recovery.detect_only);
     pnh_.param("start_lock_recovery/start_window_s", solver_params.start_lock_recovery.start_window_s, solver_params.start_lock_recovery.start_window_s);
@@ -1231,115 +1265,6 @@ void SpmpcLocalPlannerROS::publishCommand(
 }
 
 
-void SpmpcLocalPlannerROS::resetTerminalSpinFailGate() {
-    terminal_spin_fail_duration_sec_ = 0.0;
-    terminal_spin_fail_latched_ = false;
-}
-
-void SpmpcLocalPlannerROS::resetTrackingSafetyGate() {
-    tracking_safety_projection_duration_sec_ = 0.0;
-    tracking_safety_projection_latched_ = false;
-    tracking_safety_spin_duration_sec_ = 0.0;
-    tracking_safety_spin_latched_ = false;
-}
-
-bool SpmpcLocalPlannerROS::updateTerminalSpinFailGate(const SolverInput& input, const SolverOutput& output, double period_sec) {
-    if (!terminal_spin_fail_enable_) {
-        resetTerminalSpinFailGate();
-        return false;
-    }
-    const auto& terminal = output.terminal_diagnostics;
-    if (!output.success || !terminal.terminal_phase || terminal.reached) {
-        resetTerminalSpinFailGate();
-        return false;
-    }
-
-    const bool spinning = std::abs(input.robot.omega) > terminal_spin_fail_omega_threshold_ ||
-                          std::abs(output.cmd_omega) > terminal_spin_fail_omega_threshold_;
-    if (!spinning) {
-        resetTerminalSpinFailGate();
-        return false;
-    }
-
-    if (!std::isfinite(period_sec) || period_sec <= 1e-6) {
-        period_sec = dt_;
-    }
-    terminal_spin_fail_duration_sec_ += std::max(0.0, period_sec);
-    if (terminal_spin_fail_latched_ || terminal_spin_fail_duration_sec_ >= terminal_spin_fail_max_duration_sec_) {
-        terminal_spin_fail_latched_ = true;
-        return true;
-    }
-    return false;
-}
-
-bool SpmpcLocalPlannerROS::updateTrackingSafetyGate(const SolverInput& input,
-                                                    const SolverOutput& output,
-                                                    double period_sec,
-                                                    std::string& failure_status) {
-    failure_status.clear();
-    if (!tracking_safety_enable_) {
-        resetTrackingSafetyGate();
-        return false;
-    }
-    if (!std::isfinite(period_sec) || period_sec <= 1e-6) {
-        period_sec = dt_;
-    }
-    period_sec = std::max(0.0, period_sec);
-
-    const auto& terminal = output.terminal_diagnostics;
-    if (terminal.reached || output.status == "GOAL_REACHED") {
-        resetTrackingSafetyGate();
-        return false;
-    }
-    if (tracking_safety_projection_latched_) {
-        failure_status = "TRACKING_UNSAFE_PROJECTION";
-        return true;
-    }
-    if (tracking_safety_spin_latched_) {
-        failure_status = "TRACKING_SPIN_FAIL";
-        return true;
-    }
-    if (!output.success) {
-        return false;
-    }
-
-    const auto& projector = output.projector_debug;
-    const double projection_distance = projector.guarded_valid ? projector.guarded_distance : projector.raw_distance;
-    const bool projection_valid = projector.guarded_valid || projector.raw_valid;
-    const bool projection_unsafe = tracking_safety_projection_enable_ && projection_valid &&
-                                   tracking_safety_max_projection_distance_m_ > 0.0 &&
-                                   projection_distance > tracking_safety_max_projection_distance_m_;
-    if (projection_unsafe) {
-        tracking_safety_projection_duration_sec_ += period_sec;
-    } else {
-        tracking_safety_projection_duration_sec_ = 0.0;
-    }
-
-    const bool tracking_phase = !terminal.terminal_phase;
-    const bool spinning = tracking_safety_spin_enable_ && tracking_phase &&
-                          (std::abs(input.robot.omega) > tracking_safety_spin_omega_threshold_ ||
-                           std::abs(output.cmd_omega) > tracking_safety_spin_omega_threshold_);
-    if (spinning) {
-        tracking_safety_spin_duration_sec_ += period_sec;
-    } else {
-        tracking_safety_spin_duration_sec_ = 0.0;
-    }
-
-    if (tracking_safety_projection_enable_ && tracking_safety_max_projection_duration_sec_ > 0.0 &&
-        tracking_safety_projection_duration_sec_ >= tracking_safety_max_projection_duration_sec_) {
-        tracking_safety_projection_latched_ = true;
-        failure_status = "TRACKING_UNSAFE_PROJECTION";
-        return true;
-    }
-    if (tracking_safety_spin_enable_ && tracking_safety_spin_max_duration_sec_ > 0.0 &&
-        tracking_safety_spin_duration_sec_ >= tracking_safety_spin_max_duration_sec_) {
-        tracking_safety_spin_latched_ = true;
-        failure_status = "TRACKING_SPIN_FAIL";
-        return true;
-    }
-    return false;
-}
-
 void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
     const ros::Time receive_stamp = ros::Time::now();
     if (!processOdomInput(*msg, receive_stamp)) {
@@ -1448,8 +1373,7 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
         const bool reference_changed = updateReferenceSignature(
             transformed_path);
         if (reference_changed) {
-            resetTerminalSpinFailGate();
-            resetTrackingSafetyGate();
+            safety_supervisor_.reset();
             resetMapVRefProgress();
             slosh_risk_governor_.reset();
             phase_rejoin_coordinator_.resetProgress();
@@ -1466,8 +1390,7 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
     const auto reference = referencePathFromMsg(*msg);
     const bool reference_changed = updateReferenceSignature(*msg);
     if (reference_changed) {
-        resetTerminalSpinFailGate();
-        resetTrackingSafetyGate();
+        safety_supervisor_.reset();
         resetMapVRefProgress();
         slosh_risk_governor_.reset();
         phase_rejoin_coordinator_.resetProgress();
@@ -1496,8 +1419,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     cycle_audit.publish_cmd_vel = publish_cmd_vel_;
 
     if (!have_odom_) {
-        resetTerminalSpinFailGate();
-        resetTrackingSafetyGate();
+        safety_supervisor_.reset();
         diagnostics_.publishStatus("WAITING_FOR_ODOM");
         publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoOdom);
         CommandInterventionDebug intervention;
@@ -1507,8 +1429,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         return;
     }
     if (!problem_.hasReferencePath()) {
-        resetTerminalSpinFailGate();
-        resetTrackingSafetyGate();
+        safety_supervisor_.reset();
         diagnostics_.publishStatus("WAITING_FOR_REFERENCE_PATH");
         publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoReference);
         CommandInterventionDebug intervention;
@@ -1558,8 +1479,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         state_timing_params_.require_common_epoch;
 
     if (solver_consumes_selected_state && !observer_selection.valid) {
-        resetTerminalSpinFailGate();
-        resetTrackingSafetyGate();
+        safety_supervisor_.reset();
         const std::string selection_status =
             std::string("WAITING_FOR_SLOSH_OBSERVER_") +
             sloshObserverSelectionStatusName(observer_selection.status) + "_" +
@@ -1609,8 +1529,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
                 cycle_audit.timing.raw_liquid_state_stamp_ns,
                 state_timing_params_.max_raw_skew_sec,
                 raw_skew_sec)) {
-            resetTerminalSpinFailGate();
-            resetTrackingSafetyGate();
+            safety_supervisor_.reset();
             cycle_audit.timing.raw_state_skew_sec = raw_skew_sec;
             cycle_audit.timing.state_alignment_status =
                 "RAW_STATE_SKEW_CONTRACT_FAILED";
@@ -1638,8 +1557,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
                 interpolated,
                 extrapolated,
                 alignment_status)) {
-            resetTerminalSpinFailGate();
-            resetTrackingSafetyGate();
+            safety_supervisor_.reset();
             cycle_audit.timing.state_alignment_status = alignment_status;
             cycle_audit.status =
                 "STATE_TIME_ALIGNMENT_FAILED_" + alignment_status;
@@ -1667,8 +1585,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         cycle_audit.timing.state_alignment_status = alignment_status;
     } else {
         if (!robotStateFromLatest(input.robot)) {
-            resetTerminalSpinFailGate();
-            resetTrackingSafetyGate();
+            safety_supervisor_.reset();
             diagnostics_.publishStatus("WAITING_FOR_TF_POSE");
             publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoTfPose);
             cycle_audit.status = "WAITING_FOR_TF_POSE";
@@ -1947,20 +1864,32 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     CommandInterventionDebug intervention;
     intervention.solver_cmd_v = raw_solver_cmd_v;
     intervention.solver_cmd_omega = raw_solver_cmd_omega;
-    const bool terminal_spin_blocked = updateTerminalSpinFailGate(solve_input, output, spin_gate_dt);
-    if (terminal_spin_blocked) {
+    SafetySupervisorInput safety_input;
+    safety_input.robot = solve_input.robot;
+    safety_input.command.linear = output.cmd_v;
+    safety_input.command.angular = output.cmd_omega;
+    safety_input.command_accepted = output.success;
+    safety_input.status = output.status;
+    safety_input.terminal = output.terminal_diagnostics;
+    safety_input.projection.raw_valid = output.projector_debug.raw_valid;
+    safety_input.projection.raw_distance_m =
+        output.projector_debug.raw_distance;
+    safety_input.projection.guarded_valid =
+        output.projector_debug.guarded_valid;
+    safety_input.projection.guarded_distance_m =
+        output.projector_debug.guarded_distance;
+    safety_input.period_sec = spin_gate_dt;
+    const SafetySupervisorResult safety_result =
+        safety_supervisor_.step(safety_input);
+    const bool terminal_spin_blocked =
+        safety_result.terminal_spin_blocked;
+    const bool tracking_safety_blocked =
+        safety_result.tracking_safety_blocked;
+    if (safety_result.blocked) {
         output.success = false;
-        output.status = "TERMINAL_SPIN_FAIL";
-        output.cmd_v = 0.0;
-        output.cmd_omega = 0.0;
-    }
-    std::string tracking_safety_status;
-    const bool tracking_safety_blocked = updateTrackingSafetyGate(solve_input, output, spin_gate_dt, tracking_safety_status);
-    if (tracking_safety_blocked) {
-        output.success = false;
-        output.status = tracking_safety_status;
-        output.cmd_v = 0.0;
-        output.cmd_omega = 0.0;
+        output.status = safety_result.status;
+        output.cmd_v = safety_result.command.linear;
+        output.cmd_omega = safety_result.command.angular;
     }
     if (have_phase_decision && !terminal_priority &&
         !terminal_spin_blocked && !tracking_safety_blocked &&
