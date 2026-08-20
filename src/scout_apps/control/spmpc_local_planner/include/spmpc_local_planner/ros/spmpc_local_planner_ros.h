@@ -3,6 +3,7 @@
 #include "spmpc_local_planner/config/app_config.h"
 #include "spmpc_local_planner/controller/command/command_pipeline.h"
 #include "spmpc_local_planner/controller/control_cycle_engine.h"
+#include "spmpc_local_planner/controller/control_cycle_input_preparer.h"
 #include "spmpc_local_planner/core/slosh_risk_governor.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/estimation/processed_imu_pipeline.h"
@@ -126,14 +127,13 @@ private:
     ReferencePathPreprocessor reference_preprocessor_;
     ReferencePathPreprocessParams reference_preprocess_params_;
     SloshObserverBank slosh_observers_;
-    SloshObserverSelector slosh_observer_selector_;
     SloshObserverSelectorParams slosh_observer_selector_params_;
     ImuShadowRosAdapter imu_shadow_adapter_;
     SloshRiskGovernor slosh_risk_governor_;
     SloshRiskGovernorParams slosh_risk_governor_params_;
     SloshRiskGovernorOutput last_slosh_governor_output_;
     CommandHistoryBuffer command_history_;
-    ExecutionStatePredictor execution_predictor_;
+    ControlCycleInputPreparer control_input_preparer_;
     PhaseRejoinParams phase_rejoin_params_;
     PhaseRejoinRuntimeContract phase_rejoin_runtime_contract_;
     DelayPhaseParams delay_phase_params_;

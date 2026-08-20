@@ -810,7 +810,8 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     if (!slosh_observers_.configure(solver_params.slosh, imu_observer_dt_sec_)) {
         ROS_WARN("[spmpc_local_planner] slosh observer configure failed; slosh diagnostics stay zero");
     }
-    if (!slosh_observer_selector_.configure(slosh_observer_selector_params_)) {
+    if (!control_input_preparer_.configureObserver(
+            slosh_observer_selector_params_)) {
         ROS_FATAL("[spmpc_local_planner] invalid slosh_observer selector parameters");
         return false;
     }
@@ -831,7 +832,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         ROS_ERROR("[spmpc_local_planner] processed-IMU pipeline configure failed; disabling shadow");
         imu_shadow_enable_ = false;
     }
-    if (!execution_predictor_.configure(solver_params.slosh)) {
+    if (!control_input_preparer_.configurePrediction(solver_params.slosh)) {
         ROS_WARN("[spmpc_local_planner] delay_phase shadow slosh predictor configure failed; shadow slosh stays pass-through");
     }
     if (!slosh_risk_governor_.configure(solver_params.slosh, slosh_risk_governor_params_) &&
@@ -1438,7 +1439,6 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         return;
     }
 
-    SolverInput input;
     SloshObserverHealth odom_observer_health;
     SloshObserverHealth imu_observer_health;
     double slosh_height_coeff = 0.0;
@@ -1454,47 +1454,90 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         slosh_height_coeff = slosh_observers_.heightCoeff();
     }
     const ros::Time observer_selection_now = ros::Time::now();
-    const SloshObserverSelection observer_selection =
-        slosh_observer_selector_.select(
-            odom_observer_health,
-            imu_observer_health,
-            static_cast<std::int64_t>(observer_selection_now.toNSec()));
     const bool phase_rejoin_enforce =
         phase_rejoin_params_.mode == PhaseRejoinMode::Enforce;
     const bool solver_consumes_selected_state =
         variant_.slosh_enable || phase_rejoin_enforce;
+
+    ControlCycleInputRequest input_request;
+    input_request.cycle_id = cycle_audit.timing.cycle_id;
+    input_request.cycle_start_ns =
+        cycle_audit.timing.cycle_start_stamp_ns;
+    input_request.selection_time_ns = static_cast<StampNs>(
+        observer_selection_now.toNSec());
+    input_request.raw_robot_state_stamp_ns = static_cast<StampNs>(
+        last_odom_.header.stamp.toNSec());
+    input_request.last_odom_receive_ns = last_odom_receive_stamp_.isZero()
+        ? 0
+        : static_cast<StampNs>(last_odom_receive_stamp_.toNSec());
+    input_request.odom_observer = odom_observer_health;
+    input_request.imu_observer = imu_observer_health;
+    input_request.solver_consumes_selected_state =
+        solver_consumes_selected_state;
+    input_request.state_timing = state_timing_params_;
+    input_request.dt = dt_;
+    input_request.horizon_steps = horizon_steps_;
+    input_request.delay_phase = delay_phase_params_;
+    input_request.phase_rejoin_needs_prediction =
+        phaseRejoinNeedsPrediction();
+    input_request.command_history = &command_history_;
+    input_request.robot_state_lookup = [this](StampNs target_epoch_ns) {
+        RobotStateLookupResult lookup;
+        if (target_epoch_ns <= 0) {
+            lookup.valid = robotStateFromLatest(lookup.state);
+            lookup.status = lookup.valid
+                ? "LATEST"
+                : "LATEST_TF_UNAVAILABLE";
+            return lookup;
+        }
+        lookup.valid = robotStateAtEpoch(
+            rosTimeFromNanoseconds(target_epoch_ns),
+            lookup.state,
+            lookup.interpolated,
+            lookup.extrapolated,
+            lookup.status);
+        return lookup;
+    };
+
+    ControlCycleInputResult input_preparation =
+        control_input_preparer_.prepareState(input_request);
+    const SloshObserverSelection observer_selection =
+        input_preparation.observer_selection;
     cycle_audit.observer_source =
         static_cast<std::uint8_t>(observer_selection.effective_source);
     cycle_audit.odom_excitation = makeExcitationAudit(
         odom_observer_health.snapshot.excitation);
     cycle_audit.imu_excitation = makeExcitationAudit(
         imu_observer_health.snapshot.excitation);
-    cycle_audit.timing.raw_robot_state_stamp_ns =
-        static_cast<std::int64_t>(last_odom_.header.stamp.toNSec());
-    cycle_audit.timing.raw_liquid_state_stamp_ns =
-        observer_selection.selected_state_stamp_ns;
-    cycle_audit.timing.state_alignment_required =
-        solver_consumes_selected_state &&
-        state_timing_params_.require_common_epoch;
+    cycle_audit.timing = input_preparation.timing;
 
-    if (solver_consumes_selected_state && !observer_selection.valid) {
+    if (!input_preparation.ready) {
         control_cycle_engine_.resetSafety();
-        const std::string selection_status =
-            std::string("WAITING_FOR_SLOSH_OBSERVER_") +
-            sloshObserverSelectionStatusName(observer_selection.status) + "_" +
-            sloshObserverSelectionReasonName(observer_selection.reason);
-        diagnostics_.publishStatus(selection_status);
-        ROS_WARN_THROTTLE(
-            1.0,
-            "[spmpc_local_planner] fail-closed liquid observer: nominal=%s status=%s reason=%s odom_age=%.3f imu_age=%.3f",
-            sloshObserverSourceName(observer_selection.nominal_source),
-            sloshObserverSelectionStatusName(observer_selection.status),
-            sloshObserverSelectionReasonName(observer_selection.reason),
-            observer_selection.odom_state_age_sec,
-            observer_selection.imu_state_age_sec);
+        diagnostics_.publishStatus(input_preparation.status);
+        if (input_preparation.failure ==
+            ControlInputFailure::ObserverUnavailable) {
+            ROS_WARN_THROTTLE(
+                1.0,
+                "[spmpc_local_planner] fail-closed liquid observer: nominal=%s status=%s reason=%s odom_age=%.3f imu_age=%.3f",
+                sloshObserverSourceName(observer_selection.nominal_source),
+                sloshObserverSelectionStatusName(observer_selection.status),
+                sloshObserverSelectionReasonName(observer_selection.reason),
+                observer_selection.odom_state_age_sec,
+                observer_selection.imu_state_age_sec);
+        }
+        if (input_preparation.publish_early_delay_status) {
+            publishDelayPhaseEarlyStatus(
+                input_preparation.delay_phase_status);
+        }
         CommandInterventionDebug intervention;
-        intervention.zero_due_to_waiting_for_slosh_observer = true;
-        cycle_audit.status = selection_status;
+        if (input_preparation.failure ==
+                ControlInputFailure::ObserverUnavailable ||
+            input_preparation.failure == ControlInputFailure::RawStateSkew) {
+            intervention.zero_due_to_waiting_for_slosh_observer = true;
+        } else {
+            intervention.zero_due_to_waiting_for_tf = true;
+        }
+        cycle_audit.status = input_preparation.status;
         publishSloshObserverSelectionDebug(
             observer_selection_now,
             observer_selection,
@@ -1512,125 +1555,12 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             sloshObserverSelectionReasonName(observer_selection.reason),
             static_cast<unsigned long long>(observer_selection.selection_epoch));
     }
-    if (observer_selection.valid) {
-        input.slosh = observer_selection.state;
-    } else if (odom_observer_health.snapshot.configured &&
-               odom_observer_health.snapshot.valid) {
-        // A non-slosh comparator does not consume this field, but keeping its
-        // diagnostic state populated preserves useful paired observer evidence.
-        input.slosh = odom_observer_health.snapshot.state;
-    }
-
-    if (cycle_audit.timing.state_alignment_required) {
-        double raw_skew_sec = 0.0;
-        if (!stateSkewWithinContract(
-                cycle_audit.timing.raw_robot_state_stamp_ns,
-                cycle_audit.timing.raw_liquid_state_stamp_ns,
-                state_timing_params_.max_raw_skew_sec,
-                raw_skew_sec)) {
-            control_cycle_engine_.resetSafety();
-            cycle_audit.timing.raw_state_skew_sec = raw_skew_sec;
-            cycle_audit.timing.state_alignment_status =
-                "RAW_STATE_SKEW_CONTRACT_FAILED";
-            cycle_audit.status = "STATE_TIME_ALIGNMENT_FAILED_RAW_SKEW";
-            diagnostics_.publishStatus(cycle_audit.status);
-            publishSloshObserverSelectionDebug(
-                observer_selection_now,
-                observer_selection,
-                solver_consumes_selected_state,
-                cycle_audit.timing);
-            CommandInterventionDebug intervention;
-            intervention.zero_due_to_waiting_for_slosh_observer = true;
-            publishZeroCommand(intervention, &cycle_audit);
-            return;
-        }
-        cycle_audit.timing.raw_state_skew_sec = raw_skew_sec;
-        bool interpolated = false;
-        bool extrapolated = false;
-        std::string alignment_status;
-        const ros::Time liquid_epoch = rosTimeFromNanoseconds(
-            cycle_audit.timing.raw_liquid_state_stamp_ns);
-        if (!robotStateAtEpoch(
-                liquid_epoch,
-                input.robot,
-                interpolated,
-                extrapolated,
-                alignment_status)) {
-            control_cycle_engine_.resetSafety();
-            cycle_audit.timing.state_alignment_status = alignment_status;
-            cycle_audit.status =
-                "STATE_TIME_ALIGNMENT_FAILED_" + alignment_status;
-            diagnostics_.publishStatus(cycle_audit.status);
-            publishSloshObserverSelectionDebug(
-                observer_selection_now,
-                observer_selection,
-                solver_consumes_selected_state,
-                cycle_audit.timing);
-            CommandInterventionDebug intervention;
-            intervention.zero_due_to_waiting_for_tf = true;
-            publishZeroCommand(intervention, &cycle_audit);
-            return;
-        }
-        cycle_audit.timing.robot_state_stamp_ns =
-            cycle_audit.timing.raw_liquid_state_stamp_ns;
-        cycle_audit.timing.liquid_state_stamp_ns =
-            cycle_audit.timing.raw_liquid_state_stamp_ns;
-        cycle_audit.timing.solver_input_epoch_ns =
-            cycle_audit.timing.raw_liquid_state_stamp_ns;
-        cycle_audit.timing.aligned_state_skew_sec = 0.0;
-        cycle_audit.timing.state_time_aligned = true;
-        cycle_audit.timing.robot_state_interpolated = interpolated;
-        cycle_audit.timing.robot_state_extrapolated = extrapolated;
-        cycle_audit.timing.state_alignment_status = alignment_status;
-    } else {
-        if (!robotStateFromLatest(input.robot)) {
-            control_cycle_engine_.resetSafety();
-            diagnostics_.publishStatus("WAITING_FOR_TF_POSE");
-            publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoTfPose);
-            cycle_audit.status = "WAITING_FOR_TF_POSE";
-            cycle_audit.timing.state_alignment_status = "LATEST_TF_UNAVAILABLE";
-            publishSloshObserverSelectionDebug(
-                observer_selection_now,
-                observer_selection,
-                solver_consumes_selected_state,
-                cycle_audit.timing);
-            CommandInterventionDebug intervention;
-            intervention.zero_due_to_waiting_for_tf = true;
-            publishZeroCommand(intervention, &cycle_audit);
-            return;
-        }
-        cycle_audit.timing.robot_state_stamp_ns =
-            cycle_audit.timing.raw_robot_state_stamp_ns;
-        cycle_audit.timing.liquid_state_stamp_ns =
-            cycle_audit.timing.raw_liquid_state_stamp_ns;
-        cycle_audit.timing.solver_input_epoch_ns =
-            cycle_audit.timing.raw_robot_state_stamp_ns;
-        cycle_audit.timing.aligned_state_skew_sec =
-            cycle_audit.timing.liquid_state_stamp_ns > 0
-                ? (cycle_audit.timing.robot_state_stamp_ns -
-                   cycle_audit.timing.liquid_state_stamp_ns) * 1e-9
-                : 0.0;
-        cycle_audit.timing.raw_state_skew_sec =
-            cycle_audit.timing.raw_liquid_state_stamp_ns > 0
-                ? (cycle_audit.timing.raw_robot_state_stamp_ns -
-                   cycle_audit.timing.raw_liquid_state_stamp_ns) * 1e-9
-                : 0.0;
-        cycle_audit.timing.state_time_aligned =
-            !solver_consumes_selected_state ||
-            std::abs(cycle_audit.timing.aligned_state_skew_sec) <= 1e-6;
-        cycle_audit.timing.state_alignment_status =
-            solver_consumes_selected_state
-                ? "COMMON_EPOCH_DISABLED"
-                : "LIQUID_NOT_CONSUMED";
-    }
     publishSloshObserverSelectionDebug(
         observer_selection_now,
         observer_selection,
         solver_consumes_selected_state,
         cycle_audit.timing);
-    input.cycle_timing = cycle_audit.timing;
-    input.dt = dt_;
-    input.horizon_steps = horizon_steps_;
+    SolverInput input = input_preparation.raw_input;
     diagnostics_.publishRawState(input.robot, input.slosh, slosh_height_coeff);
 
     applyRuntimeVRef(input);
@@ -1645,77 +1575,37 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     diagnostics_.publishEffectiveConfig(effective_config_);
 
     const ros::Time delay_phase_now = ros::Time::now();
-    DelayPhaseStatusCode delay_phase_status = DelayPhaseStatusCode::MonitorOk;
-    ExecutionStatePrediction shadow_prediction;
-    ExecutionStatePrediction* shadow_prediction_ptr = nullptr;
-    if (delayPhasePredictionEnabled() || phaseRejoinNeedsPrediction()) {
-        DelayPhaseParams predictor_params = delay_phase_params_;
-        if (predictor_params.mode == DelayPhaseMode::Off) {
-            // Phase-rejoin shadow prediction must remain observable even when
-            // the legacy delay_phase feature itself is disabled.
-            predictor_params.mode = DelayPhaseMode::Shadow;
-        }
-        shadow_prediction = execution_predictor_.predict(
-            input.robot, input.slosh, command_history_,
-            input.cycle_timing.solver_input_epoch_ns,
-            static_cast<StampNs>(delay_phase_now.toNSec()), predictor_params);
-        delay_phase_status = shadow_prediction.status_code;
-        shadow_prediction_ptr = &shadow_prediction;
-    } else {
-        shadow_prediction.raw_robot = input.robot;
-        shadow_prediction.raw_slosh = input.slosh;
-        shadow_prediction.predicted_robot = input.robot;
-        shadow_prediction.predicted_slosh = input.slosh;
-        shadow_prediction.status_code = DelayPhaseStatusCode::Off;
+    input_preparation.raw_input = input;
+    input_preparation = control_input_preparer_.completePrediction(
+        input_request,
+        static_cast<StampNs>(delay_phase_now.toNSec()),
+        input_preparation);
+    cycle_audit.timing = input_preparation.timing;
+    if (!input_preparation.ready) {
+        control_cycle_engine_.resetSafety();
+        cycle_audit.status = input_preparation.status;
+        diagnostics_.publishStatus(cycle_audit.status);
+        CommandInterventionDebug intervention;
+        intervention.zero_due_to_waiting_for_slosh_observer = true;
+        publishZeroCommand(intervention, &cycle_audit);
+        return;
     }
+
+    const DelayPhaseStatusCode delay_phase_status =
+        input_preparation.delay_phase_status;
+    ExecutionStatePrediction shadow_prediction =
+        input_preparation.prediction;
+    ExecutionStatePrediction* shadow_prediction_ptr =
+        input_preparation.have_prediction ? &shadow_prediction : nullptr;
     diagnostics_.publishPredictedState(shadow_prediction, slosh_height_coeff);
 
-    SolverInput solve_input = input;
-    bool robot_delay_compensation_applied = false;
-    bool liquid_delay_compensation_applied = false;
-    if (delayPhaseClosedLoopEnabled() && shadow_prediction_ptr) {
-        const bool have_odom_receive = !last_odom_receive_stamp_.isZero();
-        const double odom_age_sec = have_odom_receive ? (delay_phase_now - last_odom_receive_stamp_).toSec() : -1.0;
-        const bool odom_fresh = have_odom_receive &&
-                                (!std::isfinite(delay_phase_params_.odom_timeout_sec) ||
-                                 delay_phase_params_.odom_timeout_sec <= 0.0 ||
-                                 odom_age_sec <= delay_phase_params_.odom_timeout_sec);
-        const DelayPhaseApplication application = composeDelayPhaseSolverInput(
-            input, shadow_prediction, delay_phase_params_.mode, odom_fresh);
-        solve_input = application.solver_input;
-        robot_delay_compensation_applied = application.robot_applied;
-        liquid_delay_compensation_applied = application.liquid_applied;
-        if (application.robot_applied && application.liquid_applied) {
-            const std::int64_t predicted_epoch_ns =
-                shadow_prediction.prediction_epoch_ns;
-            cycle_audit.timing.robot_state_stamp_ns = predicted_epoch_ns;
-            cycle_audit.timing.liquid_state_stamp_ns = predicted_epoch_ns;
-            cycle_audit.timing.solver_input_epoch_ns = predicted_epoch_ns;
-            cycle_audit.timing.aligned_state_skew_sec = 0.0;
-            cycle_audit.timing.state_time_aligned = true;
-            cycle_audit.timing.state_alignment_status =
-                "DELAY_PREDICTED_COMMON_EPOCH";
-        } else if (cycle_audit.timing.state_alignment_required &&
-                   application.anyApplied()) {
-            cycle_audit.timing.state_time_aligned = false;
-            cycle_audit.timing.state_alignment_status =
-                "PARTIAL_DELAY_STATE_APPLICATION_FORBIDDEN";
-            cycle_audit.status = "STATE_TIME_ALIGNMENT_FAILED_DELAY_PHASE";
-            diagnostics_.publishStatus(cycle_audit.status);
-            CommandInterventionDebug intervention;
-            intervention.zero_due_to_waiting_for_slosh_observer = true;
-            publishZeroCommand(intervention, &cycle_audit);
-            return;
-        }
-        if (!odom_fresh) {
-            delay_phase_status = DelayPhaseStatusCode::OdomStale;
-        }
-    }
-
+    SolverInput solve_input = input_preparation.solver_input;
+    const bool robot_delay_compensation_applied =
+        input_preparation.robot_delay_compensation_applied;
+    const bool liquid_delay_compensation_applied =
+        input_preparation.liquid_delay_compensation_applied;
     const bool solver_origin_at_execution_front =
-        robot_delay_compensation_applied &&
-        liquid_delay_compensation_applied;
-    solve_input.cycle_timing = cycle_audit.timing;
+        input_preparation.solver_origin_at_execution_front;
 
     if (have_previous_shifted_plan_ &&
         previous_plan_cycle_id_ + 1 == cycle_audit.timing.cycle_id) {
@@ -1737,11 +1627,6 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     if (!event.last_real.isZero() && !event.current_real.isZero()) {
         spin_gate_dt = (event.current_real - event.last_real).toSec();
     }
-    const double front_sec = std::max(
-        delay_phase_params_.linear_delay_sec,
-        delay_phase_params_.angular_delay_sec);
-    const int front_steps = static_cast<int>(std::ceil(
-        std::max(0.0, front_sec) / std::max(1e-9, dt_)));
     ControlCycleRequest engine_request;
     engine_request.cycle_id = cycle_audit.timing.cycle_id;
     engine_request.cycle_start_ns =
@@ -1755,7 +1640,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         shadow_prediction.predicted_slosh;
     engine_request.solver_origin_at_execution_front =
         solver_origin_at_execution_front;
-    engine_request.execution_front_steps = front_steps;
+    engine_request.execution_front_steps =
+        input_preparation.execution_front_steps;
     engine_request.phase_time_sec = delay_phase_now.toSec();
     engine_request.period_sec = spin_gate_dt;
     cycle_audit.solve_attempted = true;

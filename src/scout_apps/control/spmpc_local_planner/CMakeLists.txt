@@ -133,6 +133,7 @@ add_library(spmpc_config
 add_library(spmpc_controller
   src/controller/command/command_pipeline.cpp
   src/controller/control_cycle_engine.cpp
+  src/controller/control_cycle_input_preparer.cpp
 )
 
 add_library(spmpc_phase_rejoin
@@ -148,7 +149,9 @@ target_link_libraries(spmpc_phase_rejoin
 )
 
 target_link_libraries(spmpc_controller
+  spmpc_estimation
   spmpc_phase_rejoin
+  spmpc_runtime
   spmpc_safety
   spmpc_solver_api
 )
@@ -501,6 +504,13 @@ if(CATKIN_ENABLE_TESTING)
       spmpc_controller
       spmpc_phase_rejoin
       spmpc_safety
+    )
+  endif()
+  catkin_add_gtest(test_control_cycle_input_preparer
+    test/test_control_cycle_input_preparer.cpp)
+  if(TARGET test_control_cycle_input_preparer)
+    target_link_libraries(test_control_cycle_input_preparer
+      spmpc_controller
     )
   endif()
   catkin_add_gtest(test_telemetry_encoder test/test_telemetry_encoder.cpp)
