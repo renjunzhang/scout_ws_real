@@ -47,6 +47,6 @@ vision:
 analysis:
   rules: docs/实物实验注意事项/对比试验/实物对比实验/freeze/analysis_rules_v2.yaml
   rgb_validator: src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_g3_online_rgb_trial.py
-  trajectory_replay: src/scout_apps/control/spmpc_local_planner/scripts/analysis/g4_replay_from_g3.py
+  trajectory_replay: src/scout_apps/control/spmpc_local_planner/tools/analysis/g4_replay_from_g3.py
   g5_validator: src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_g5_minimal_trial.py
   formal_validator: src/scout_apps/control/spmpc_local_planner/scripts/validate_spmpc_formal_freeze_v2.py

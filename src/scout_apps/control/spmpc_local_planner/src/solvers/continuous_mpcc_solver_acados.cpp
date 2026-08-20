@@ -5,6 +5,7 @@
 #include "spmpc_local_planner/reference/progress_projector.h"
 #include "spmpc_local_planner/reference/reference_spline.h"
 #include "spmpc_local_planner/solver/acados/solution_decoder.h"
+#include "spmpc_local_planner/solver/acados/generated_solver.h"
 #include "spmpc_local_planner/solver/acados/stage_parameter_builder.h"
 #include "spmpc_local_planner/warm_start/warm_start_factory.h"
 #include "spmpc_local_planner/warm_start/warm_start_policy.h"
@@ -17,8 +18,6 @@
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
 #include "acados_solver_spmpc_phase_rejoin.h"
 #endif
-#include "acados_c/ocp_nlp_interface.h"
-
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
@@ -70,243 +69,6 @@ static_assert(SPMPC_PHASE_REJOIN_NH == kSloshNonlinearConstraintCount,
               "phase-rejoin 求解器必须包含 liquid cap 与 terminal gate");
 #endif
 
-struct B0CapsuleDeleter {
-    void operator()(spmpc_b0_solver_capsule* capsule) const {
-        if (capsule == nullptr) return;
-        spmpc_b0_acados_free(capsule);
-        spmpc_b0_acados_free_capsule(capsule);
-    }
-};
-
-#ifdef SPMPC_WITH_ACADOS_SLOSH
-struct SloshCapsuleDeleter {
-    void operator()(spmpc_slosh_solver_capsule* capsule) const {
-        if (capsule == nullptr) return;
-        spmpc_slosh_acados_free(capsule);
-        spmpc_slosh_acados_free_capsule(capsule);
-    }
-};
-#endif
-
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-struct PhaseRejoinCapsuleDeleter {
-    void operator()(spmpc_phase_rejoin_solver_capsule* capsule) const {
-        if (capsule == nullptr) return;
-        spmpc_phase_rejoin_acados_free(capsule);
-        spmpc_phase_rejoin_acados_free_capsule(capsule);
-    }
-};
-#endif
-
-// 统一封装三个生成求解器，把前缀相关调用和各自的typed capsule
-// 生命周期收敛到唯一的acados ABI边界。
-struct GenSolver {
-    enum Kind { B0, SLOSH, PHASE_REJOIN } kind = B0;
-    std::unique_ptr<spmpc_b0_solver_capsule, B0CapsuleDeleter> b0_capsule;
-#ifdef SPMPC_WITH_ACADOS_SLOSH
-    std::unique_ptr<spmpc_slosh_solver_capsule, SloshCapsuleDeleter>
-        slosh_capsule;
-#endif
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-    std::unique_ptr<
-        spmpc_phase_rejoin_solver_capsule,
-        PhaseRejoinCapsuleDeleter> phase_rejoin_capsule;
-#endif
-    int nx = 0, nu = 0, np = 0, n_horizon = 0;
-
-    GenSolver() = default;
-    GenSolver(const GenSolver&) = delete;
-    GenSolver& operator=(const GenSolver&) = delete;
-
-    void reset() {
-        b0_capsule.reset();
-#ifdef SPMPC_WITH_ACADOS_SLOSH
-        slosh_capsule.reset();
-#endif
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        phase_rejoin_capsule.reset();
-#endif
-        nx = 0;
-        nu = 0;
-        np = 0;
-        n_horizon = 0;
-    }
-
-    bool create(Kind requested_kind) {
-        reset();
-        kind = requested_kind;
-        if (kind == B0) {
-            spmpc_b0_solver_capsule* capsule =
-                spmpc_b0_acados_create_capsule();
-            if (capsule == nullptr) return false;
-            if (spmpc_b0_acados_create(capsule) != 0) {
-                spmpc_b0_acados_free_capsule(capsule);
-                return false;
-            }
-            b0_capsule.reset(capsule);
-            nx = SPMPC_B0_NX;
-            nu = SPMPC_B0_NU;
-            np = SPMPC_B0_NP;
-            n_horizon = SPMPC_B0_N;
-            return true;
-        }
-        if (kind == SLOSH) {
-#ifdef SPMPC_WITH_ACADOS_SLOSH
-            spmpc_slosh_solver_capsule* capsule =
-                spmpc_slosh_acados_create_capsule();
-            if (capsule == nullptr) return false;
-            if (spmpc_slosh_acados_create(capsule) != 0) {
-                spmpc_slosh_acados_free_capsule(capsule);
-                return false;
-            }
-            slosh_capsule.reset(capsule);
-            nx = SPMPC_SLOSH_NX;
-            nu = SPMPC_SLOSH_NU;
-            np = SPMPC_SLOSH_NP;
-            n_horizon = SPMPC_SLOSH_N;
-            return true;
-#else
-            return false;
-#endif
-        }
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        spmpc_phase_rejoin_solver_capsule* capsule =
-            spmpc_phase_rejoin_acados_create_capsule();
-        if (capsule == nullptr) return false;
-        if (spmpc_phase_rejoin_acados_create(capsule) != 0) {
-            spmpc_phase_rejoin_acados_free_capsule(capsule);
-            return false;
-        }
-        phase_rejoin_capsule.reset(capsule);
-        nx = SPMPC_PHASE_REJOIN_NX;
-        nu = SPMPC_PHASE_REJOIN_NU;
-        np = SPMPC_PHASE_REJOIN_NP;
-        n_horizon = SPMPC_PHASE_REJOIN_N;
-        return true;
-#else
-        return false;
-#endif
-    }
-
-    void update_params(int stage, double* p) {
-        if (kind == B0) {
-            spmpc_b0_acados_update_params(
-                b0_capsule.get(), stage, p, np);
-        } else if (kind == SLOSH) {
-#ifdef SPMPC_WITH_ACADOS_SLOSH
-            spmpc_slosh_acados_update_params(
-                slosh_capsule.get(), stage, p, np);
-#endif
-        } else {
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-            spmpc_phase_rejoin_acados_update_params(
-                phase_rejoin_capsule.get(), stage, p, np);
-#endif
-        }
-    }
-    int solve() {
-        if (kind == B0) {
-            return spmpc_b0_acados_solve(b0_capsule.get());
-        }
-#ifdef SPMPC_WITH_ACADOS_SLOSH
-        if (kind == SLOSH) {
-            return spmpc_slosh_acados_solve(slosh_capsule.get());
-        }
-#endif
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        if (kind == PHASE_REJOIN) {
-            return spmpc_phase_rejoin_acados_solve(
-                phase_rejoin_capsule.get());
-        }
-#endif
-        return -1;
-    }
-    ocp_nlp_config* config() {
-        if (kind == B0) {
-            return spmpc_b0_acados_get_nlp_config(b0_capsule.get());
-        }
-#ifdef SPMPC_WITH_ACADOS_SLOSH
-        if (kind == SLOSH) {
-            return spmpc_slosh_acados_get_nlp_config(slosh_capsule.get());
-        }
-#endif
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        if (kind == PHASE_REJOIN) {
-            return spmpc_phase_rejoin_acados_get_nlp_config(
-                phase_rejoin_capsule.get());
-        }
-#endif
-        return nullptr;
-    }
-    ocp_nlp_dims* dims() {
-        if (kind == B0) {
-            return spmpc_b0_acados_get_nlp_dims(b0_capsule.get());
-        }
-#ifdef SPMPC_WITH_ACADOS_SLOSH
-        if (kind == SLOSH) {
-            return spmpc_slosh_acados_get_nlp_dims(slosh_capsule.get());
-        }
-#endif
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        if (kind == PHASE_REJOIN) {
-            return spmpc_phase_rejoin_acados_get_nlp_dims(
-                phase_rejoin_capsule.get());
-        }
-#endif
-        return nullptr;
-    }
-    ocp_nlp_in* in() {
-        if (kind == B0) {
-            return spmpc_b0_acados_get_nlp_in(b0_capsule.get());
-        }
-#ifdef SPMPC_WITH_ACADOS_SLOSH
-        if (kind == SLOSH) {
-            return spmpc_slosh_acados_get_nlp_in(slosh_capsule.get());
-        }
-#endif
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        if (kind == PHASE_REJOIN) {
-            return spmpc_phase_rejoin_acados_get_nlp_in(
-                phase_rejoin_capsule.get());
-        }
-#endif
-        return nullptr;
-    }
-    ocp_nlp_out* out() {
-        if (kind == B0) {
-            return spmpc_b0_acados_get_nlp_out(b0_capsule.get());
-        }
-#ifdef SPMPC_WITH_ACADOS_SLOSH
-        if (kind == SLOSH) {
-            return spmpc_slosh_acados_get_nlp_out(slosh_capsule.get());
-        }
-#endif
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        if (kind == PHASE_REJOIN) {
-            return spmpc_phase_rejoin_acados_get_nlp_out(
-                phase_rejoin_capsule.get());
-        }
-#endif
-        return nullptr;
-    }
-    ocp_nlp_solver* solver() {
-        if (kind == B0) {
-            return spmpc_b0_acados_get_nlp_solver(b0_capsule.get());
-        }
-#ifdef SPMPC_WITH_ACADOS_SLOSH
-        if (kind == SLOSH) {
-            return spmpc_slosh_acados_get_nlp_solver(slosh_capsule.get());
-        }
-#endif
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        if (kind == PHASE_REJOIN) {
-            return spmpc_phase_rejoin_acados_get_nlp_solver(
-                phase_rejoin_capsule.get());
-        }
-#endif
-        return nullptr;
-    }
-};
 
 double clampValue(double value, double lo, double hi) {
     return std::max(lo, std::min(hi, value));
@@ -433,31 +195,25 @@ SolverBoundSummary makeGeneratedBounds() {
     return bounds;
 }
 
-void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds, double* x0) {
-    ocp_nlp_config* cfg = gen.config();
-    ocp_nlp_dims* dims = gen.dims();
-    ocp_nlp_in* nlp_in = gen.in();
-    ocp_nlp_out* nlp_out = gen.out();
-
-    ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, 0, "lbx", x0);
-    ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, 0, "ubx", x0);
+void applyRuntimeBounds(GeneratedAcadosSolver& gen,
+                        const SolverBoundSummary& bounds,
+                        double* x0) {
+    gen.setStateBounds(0, x0, x0);
 
     double lbu[3] = {bounds.a_min, bounds.alpha_min, bounds.v_s_min};
     double ubu[3] = {bounds.a_max, bounds.alpha_max, bounds.v_s_max};
-    for (int stage = 0; stage < gen.n_horizon; ++stage) {
-        ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "lbu", lbu);
-        ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "ubu", ubu);
+    for (int stage = 0; stage < gen.horizonSteps(); ++stage) {
+        gen.setControlBounds(stage, lbu, ubu);
     }
 
     double lbx[2] = {bounds.v_min, bounds.omega_min};
     double ubx[2] = {bounds.v_max, bounds.omega_max};
-    for (int stage = 1; stage <= gen.n_horizon; ++stage) {
-        ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "lbx", lbx);
-        ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "ubx", ubx);
+    for (int stage = 1; stage <= gen.horizonSteps(); ++stage) {
+        gen.setStateBounds(stage, lbx, ubx);
     }
 }
 
-bool applyPhaseResidualBounds(GenSolver& gen,
+bool applyPhaseResidualBounds(GeneratedAcadosSolver& gen,
                               const SolverBoundSummary& bounds,
                               const SolverInput& input) {
     const auto& context = input.phase_rejoin;
@@ -495,11 +251,7 @@ bool applyPhaseResidualBounds(GenSolver& gen,
     if (lbu[0] > ubu[0] + 1e-10 || lbu[1] > ubu[1] + 1e-10) {
         return false;
     }
-    ocp_nlp_constraints_model_set(
-        gen.config(), gen.dims(), gen.in(), gen.out(), 0, "lbu", lbu);
-    ocp_nlp_constraints_model_set(
-        gen.config(), gen.dims(), gen.in(), gen.out(), 0, "ubu", ubu);
-    return true;
+    return gen.setControlBounds(0, lbu, ubu);
 }
 
 double polyEval(const Eigen::Vector4d& c, double s) {
@@ -582,54 +334,46 @@ void copyWarmStartForSnapshot(const WarmStartOutput& warm_start,
     }
 }
 
-void capturePrimalGuess(GenSolver& gen,
+void capturePrimalGuess(GeneratedAcadosSolver& gen,
                         bool slosh,
                         double height_coeff,
                         std::vector<HorizonStateDebug>& states,
                         std::vector<HorizonControlDebug>& controls) {
     states.clear();
     controls.clear();
-    states.reserve(static_cast<size_t>(gen.n_horizon + 1));
-    controls.reserve(static_cast<size_t>(gen.n_horizon));
-    ocp_nlp_config* cfg = gen.config();
-    ocp_nlp_dims* dims = gen.dims();
-    ocp_nlp_out* nlp_out = gen.out();
+    states.reserve(static_cast<size_t>(gen.horizonSteps() + 1));
+    controls.reserve(static_cast<size_t>(gen.horizonSteps()));
     double x[10] = {0.0};
     double u[3] = {0.0};
-    for (int k = 0; k <= gen.n_horizon; ++k) {
+    for (int k = 0; k <= gen.horizonSteps(); ++k) {
         std::fill(x, x + 10, 0.0);
-        ocp_nlp_out_get(cfg, dims, nlp_out, k, "x", x);
+        gen.getState(k, x);
         const WarmStartState state = makeWarmStartState(x, slosh);
         const double h_modal = height_coeff * std::hypot(state.eta_x, state.eta_y);
         states.push_back(makeHorizonState(state, h_modal));
-        if (k < gen.n_horizon) {
-            ocp_nlp_out_get(cfg, dims, nlp_out, k, "u", u);
+        if (k < gen.horizonSteps()) {
+            gen.getControl(k, u);
             controls.push_back(makeHorizonControl(makeWarmStartControl(u)));
         }
     }
 }
 
-AcadosRawSolution captureRawSolution(GenSolver& gen) {
+AcadosRawSolution captureRawSolution(GeneratedAcadosSolver& gen) {
     AcadosRawSolution raw;
-    raw.horizon_steps = gen.n_horizon;
+    raw.horizon_steps = gen.horizonSteps();
     raw.states.reserve(static_cast<std::size_t>(
-        (gen.n_horizon + 1) * raw.state_width));
+        (gen.horizonSteps() + 1) * raw.state_width));
     raw.controls.reserve(static_cast<std::size_t>(
-        gen.n_horizon * raw.control_width));
-    ocp_nlp_config* config = gen.config();
-    ocp_nlp_dims* dimensions = gen.dims();
-    ocp_nlp_out* output = gen.out();
+        gen.horizonSteps() * raw.control_width));
     double state[10] = {0.0};
     double control[3] = {0.0};
-    for (int stage = 0; stage <= gen.n_horizon; ++stage) {
+    for (int stage = 0; stage <= gen.horizonSteps(); ++stage) {
         std::fill(state, state + 10, 0.0);
-        ocp_nlp_out_get(
-            config, dimensions, output, stage, "x", state);
+        gen.getState(stage, state);
         raw.states.insert(raw.states.end(), state, state + 10);
-        if (stage < gen.n_horizon) {
+        if (stage < gen.horizonSteps()) {
             std::fill(control, control + 3, 0.0);
-            ocp_nlp_out_get(
-                config, dimensions, output, stage, "u", control);
+            gen.getControl(stage, control);
             raw.controls.insert(raw.controls.end(), control, control + 3);
         }
     }
@@ -651,23 +395,22 @@ void fillAcadosControl(const WarmStartControl& control, double* u) {
     u[2] = control.v_s;
 }
 
-void setAcadosWarmStart(GenSolver& gen, const WarmStartOutput& warm_start, bool slosh) {
-    if (!warm_start.valid || warm_start.states.size() < static_cast<size_t>(gen.n_horizon + 1) ||
-        warm_start.controls.size() < static_cast<size_t>(gen.n_horizon)) {
+void setAcadosWarmStart(GeneratedAcadosSolver& gen,
+                        const WarmStartOutput& warm_start,
+                        bool slosh) {
+    if (!warm_start.valid ||
+        warm_start.states.size() < static_cast<size_t>(gen.horizonSteps() + 1) ||
+        warm_start.controls.size() < static_cast<size_t>(gen.horizonSteps())) {
         return;
     }
-    ocp_nlp_config* cfg = gen.config();
-    ocp_nlp_dims* dims = gen.dims();
-    ocp_nlp_in* nlp_in = gen.in();
-    ocp_nlp_out* nlp_out = gen.out();
     double x_guess[10];
     double u_guess[3];
-    for (int k = 0; k <= gen.n_horizon; ++k) {
+    for (int k = 0; k <= gen.horizonSteps(); ++k) {
         fillAcadosState(warm_start.states[k], slosh, x_guess);
-        ocp_nlp_out_set(cfg, dims, nlp_out, nlp_in, k, "x", x_guess);
-        if (k < gen.n_horizon) {
+        gen.setState(k, x_guess);
+        if (k < gen.horizonSteps()) {
             fillAcadosControl(warm_start.controls[k], u_guess);
-            ocp_nlp_out_set(cfg, dims, nlp_out, nlp_in, k, "u", u_guess);
+            gen.setControl(k, u_guess);
         }
     }
 }
@@ -675,11 +418,11 @@ void setAcadosWarmStart(GenSolver& gen, const WarmStartOutput& warm_start, bool 
 }  // namespace
 
 struct ContinuousMpccSolverAcados::Impl {
-    std::unique_ptr<GenSolver> primary;
+    std::unique_ptr<GeneratedAcadosSolver> primary;
     // Enforce uses a separately generated N=N_l solver.  Keeping a distinct
     // capsule makes it impossible for the trusted liquid window to inherit the
     // baseline geometry tail.
-    std::unique_ptr<GenSolver> phase_rejoin;
+    std::unique_ptr<GeneratedAcadosSolver> phase_rejoin;
 };
 
 bool continuousMpccPhaseRejoinAvailable() {
@@ -724,9 +467,12 @@ SolverConfigureResult ContinuousMpccSolverAcados::configure(
     warm_start_generator_ = makeWarmStartGenerator(params_.warm_start, params_.platform);
 
     impl_.reset(new Impl());
-    std::unique_ptr<GenSolver> gen(new GenSolver());
+    std::unique_ptr<GeneratedAcadosSolver> gen(
+        new GeneratedAcadosSolver());
     if (!gen->create(
-            use_slosh_model_ ? GenSolver::SLOSH : GenSolver::B0)) {
+            use_slosh_model_
+                ? GeneratedAcadosSolver::Kind::SLOSH
+                : GeneratedAcadosSolver::Kind::B0)) {
         SolverConfigureResult result;
         result.status = use_slosh_model_
             ? "ACADOS_SLOSH_CAPSULE_CREATE_FAILED"
@@ -736,8 +482,10 @@ SolverConfigureResult ContinuousMpccSolverAcados::configure(
     impl_->primary = std::move(gen);
     if (use_slosh_model_) {
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        std::unique_ptr<GenSolver> phase_gen(new GenSolver());
-        if (!phase_gen->create(GenSolver::PHASE_REJOIN)) {
+        std::unique_ptr<GeneratedAcadosSolver> phase_gen(
+            new GeneratedAcadosSolver());
+        if (!phase_gen->create(
+                GeneratedAcadosSolver::Kind::PHASE_REJOIN)) {
             impl_.reset(new Impl());
             SolverConfigureResult result;
             result.status = "ACADOS_PHASE_REJOIN_CAPSULE_CREATE_FAILED";
@@ -774,7 +522,7 @@ bool ContinuousMpccSolverAcados::solve(
 
     const bool phase_rejoin_requested =
         input.phase_rejoin.active && input.phase_rejoin.enforce;
-    GenSolver* gen = phase_rejoin_requested
+    GeneratedAcadosSolver* gen = phase_rejoin_requested
         ? impl_->phase_rejoin.get()
         : impl_->primary.get();
     if (gen == nullptr) {
@@ -817,7 +565,7 @@ bool ContinuousMpccSolverAcados::solve(
     output.progress_abs_s = s0;
 
     // 用求解器固化的 N（codegen 时确定），而非 input.horizon_steps，避免二者不一致导致越界。
-    const int n = gen->n_horizon;
+    const int n = gen->horizonSteps();
     const double Tf = input.dt * n;
 
     // `enforce` is the solver-side authorization bit.  An active monitor
@@ -887,7 +635,7 @@ bool ContinuousMpccSolverAcados::solve(
     snapshot.horizon_steps = n;
     snapshot.state_width = 10;
     snapshot.control_width = 3;
-    snapshot.parameter_width = gen->np;
+    snapshot.parameter_width = gen->parameterWidth();
     snapshot.slosh_cost_horizon_steps = variant_.slosh_cost_horizon_steps;
     snapshot.slosh_cost_tail_discount = variant_.slosh_cost_tail_discount;
     snapshot.robot = input.robot;
@@ -989,14 +737,17 @@ bool ContinuousMpccSolverAcados::solve(
             stage_parameters.status;
         return false;
     }
-    if (stage_parameters.parameter_width != gen->np) {
+    if (stage_parameters.parameter_width != gen->parameterWidth()) {
         output.status = "ACADOS_PARAMETER_WIDTH_MISMATCH";
         return false;
     }
     snapshot.parameter_names = stage_parameters.parameter_names;
     snapshot.stage_parameters = stage_parameters.values;
     for (int stage = 0; stage <= n; ++stage) {
-        gen->update_params(stage, stage_parameters.stageData(stage));
+        if (!gen->updateParameters(stage, stage_parameters.stageData(stage))) {
+            output.status = "ACADOS_PARAMETER_UPDATE_FAILED";
+            return false;
+        }
     }
 
     double x0[10] = {input.robot.x, input.robot.y, input.robot.yaw, input.robot.v, s0,
@@ -1077,9 +828,7 @@ bool ContinuousMpccSolverAcados::solve(
 
     const int status = gen->solve();
 
-    double time_tot = 0.0;
-    ocp_nlp_get(gen->solver(), "time_tot", &time_tot);
-    output.solver_time_ms = time_tot * 1000.0;
+    output.solver_time_ms = gen->solveTimeSec() * 1000.0;
     output.first_shot_debug.status_code = static_cast<double>(status);
     if (status != 0) {
         snapshot.solver_status = "ACADOS_SOLVE_FAILED_" + std::to_string(status);

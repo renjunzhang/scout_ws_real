@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Build the fail-closed G4 trajectory and snapshot-replay evidence from G3.
 
-The tool is deliberately offline.  It reads rosbag files directly, never
-connects to a ROS master, and never publishes a command.  The actual branch is
-replayed sequentially so the acados primal/dual iterate history is restored
-before a checkpoint is forked into actual, zero-state, and four equal-energy
-modal-phase branches.
+The tool is deliberately offline. It reads rosbag files directly, never
+connects to a ROS master, and never publishes a command. Python owns bag and
+trajectory analysis; the source-tree ``spmpc_g4_snapshot_replay`` executable
+owns generated-solver capsules, sequential iterate restoration, and checkpoint
+forks through the same C++ ABI boundary as the runtime backend.
 """
 
 from __future__ import annotations
@@ -16,9 +16,10 @@ import hashlib
 import json
 import math
 import os
-import statistics
+import shutil
+import subprocess
 import sys
-import types
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -420,63 +421,84 @@ def select_checkpoints(
     }
 
 
-def install_scipy_compatibility_shim() -> None:
-    """acados_template imports scipy.linalg only for block_diag.
+def replay_executable_path(configured: Optional[Path] = None) -> Path:
+    candidates: List[Path] = []
+    if configured is not None:
+        candidates.append(configured.expanduser())
+    environment = os.environ.get("SPMPC_G4_SNAPSHOT_REPLAY", "").strip()
+    if environment:
+        candidates.append(Path(environment).expanduser())
+    discovered = shutil.which("spmpc_g4_snapshot_replay")
+    if discovered:
+        candidates.append(Path(discovered))
+    for parent in Path(__file__).resolve().parents:
+        candidates.append(
+            parent / "devel/lib/spmpc_local_planner/spmpc_g4_snapshot_replay"
+        )
+    for candidate in candidates:
+        if candidate.is_file() and os.access(str(candidate), os.X_OK):
+            return candidate.resolve()
+    raise RuntimeError(
+        "C++ G4 replay executable is unavailable; build "
+        "spmpc_g4_snapshot_replay or set SPMPC_G4_SNAPSHOT_REPLAY"
+    )
 
-    The field machine intentionally has no SciPy package.  Snapshot replay does
-    not construct a new OCP and never calls block_diag, but acados_template
-    imports it eagerly.  A small NumPy-compatible implementation keeps this
-    read-only loader independent of a network/package installation.
-    """
 
-    if "scipy.linalg" in sys.modules:
-        return
+def linked_replay_libraries(executable: Path) -> Dict[str, Path]:
+    required = {
+        "libspmpc_g4_snapshot_replay_core.so",
+        "libspmpc_solver_acados.so",
+        "libacados_ocp_solver_spmpc_slosh.so",
+        "libacados.so",
+        "libhpipm.so",
+        "libblasfeo.so.0",
+    }
+    completed = subprocess.run(
+        ["ldd", str(executable)],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if completed.returncode != 0:
+        raise RuntimeError("cannot resolve C++ replay dependencies")
+    resolved: Dict[str, Path] = {}
+    for line in completed.stdout.splitlines():
+        fields = line.strip().split()
+        if len(fields) >= 3 and fields[0] in required and fields[1] == "=>":
+            path = Path(fields[2]).resolve()
+            if not path.is_file():
+                raise RuntimeError("linked replay library is missing: {}".format(path))
+            resolved[fields[0]] = path
+    missing = sorted(required - set(resolved))
+    if missing:
+        raise RuntimeError(
+            "C++ replay lacks required linked libraries: {}".format(",".join(missing))
+        )
+    return resolved
 
-    def block_diag(*arrays: np.ndarray) -> np.ndarray:
-        normalized = [np.atleast_2d(array) for array in arrays]
-        output = np.zeros(
-            (
-                sum(array.shape[0] for array in normalized),
-                sum(array.shape[1] for array in normalized),
+
+def validate_codegen_snapshot_contract(codegen_json: Path, snapshot: Any) -> None:
+    contract = json.loads(codegen_json.read_text(encoding="utf-8"))
+    dimensions = contract.get("dims", {})
+    generated = (
+        int(dimensions.get("N", -1)),
+        int(dimensions.get("nx", -1)),
+        int(dimensions.get("nu", -1)),
+        int(dimensions.get("np", -1)),
+    )
+    recorded = (
+        int(snapshot.horizon_steps),
+        int(snapshot.state_width),
+        int(snapshot.control_width),
+        int(snapshot.parameter_width),
+    )
+    if contract.get("name") != "spmpc_slosh" or generated != recorded:
+        raise RuntimeError(
+            "codegen/snapshot contract mismatch: generated={} recorded={}".format(
+                generated, recorded
             )
         )
-        row = 0
-        column = 0
-        for array in normalized:
-            rows, columns = array.shape
-            output[row : row + rows, column : column + columns] = array
-            row += rows
-            column += columns
-        return output
-
-    scipy = types.ModuleType("scipy")
-    linalg = types.ModuleType("scipy.linalg")
-    linalg.block_diag = block_diag  # type: ignore[attr-defined]
-    scipy.linalg = linalg  # type: ignore[attr-defined]
-    sys.modules["scipy"] = scipy
-    sys.modules["scipy.linalg"] = linalg
-
-
-def load_acados_solver(json_path: Path, acados_source_dir: Path) -> Any:
-    interface = acados_source_dir / "interfaces" / "acados_template"
-    if not interface.is_dir():
-        raise RuntimeError("acados_template interface is missing: {}".format(interface))
-    if str(interface) not in sys.path:
-        sys.path.insert(0, str(interface))
-    library = acados_source_dir / "lib"
-    os.environ["LD_LIBRARY_PATH"] = "{}:{}".format(
-        library, os.environ.get("LD_LIBRARY_PATH", "")
-    ).rstrip(":")
-    install_scipy_compatibility_shim()
-    from acados_template import AcadosOcpSolver  # pylint: disable=import-outside-toplevel
-
-    return AcadosOcpSolver(
-        None,
-        json_file=str(json_path),
-        generate=False,
-        build=False,
-        verbose=False,
-    )
 
 
 def parameter_index(snapshot: Any, name: str) -> int:
@@ -513,78 +535,191 @@ def modal_override_for_phase(
     raise RuntimeError("unknown phase direction: {}".format(direction))
 
 
-def apply_snapshot(solver: Any, snapshot: Any, modal_override: Optional[Sequence[float]] = None) -> None:
+def _float_tokens(values: Iterable[Any]) -> str:
+    return " ".join(format(float(value), ".17g") for value in values)
+
+
+def _write_vector(stream: Any, name: str, values: Iterable[Any]) -> None:
+    normalized = list(values)
+    stream.write("{} {}".format(name, len(normalized)))
+    if normalized:
+        stream.write(" " + _float_tokens(normalized))
+    stream.write("\n")
+
+
+def _checkpoint_modals(
+    snapshot: Any,
+    direction: str,
+    replay_config: Mapping[str, Any],
+) -> List[Tuple[float, float, float, float]]:
+    modals = [(0.0, 0.0, 0.0, 0.0)]
+    for phase in [float(value) for value in replay_config["phases_rad"]]:
+        modals.append(
+            modal_override_for_phase(
+                snapshot,
+                direction,
+                phase,
+                float(replay_config["constructed_phase_height_mm"]),
+                float(replay_config["slosh_height_ref_m"]),
+            )
+        )
+    return modals
+
+
+def write_replay_request(
+    path: Path,
+    pairs: Sequence[SnapshotPair],
+    checkpoints: Mapping[str, SnapshotPair],
+    replay_config: Mapping[str, Any],
+) -> None:
+    checkpoint_by_index = {
+        pair.index: direction for direction, pair in checkpoints.items()
+    }
+    final_index = max(pair.index for pair in checkpoints.values())
+    frames = [pair for pair in pairs if pair.index <= final_index]
+    direction_codes = {None: 0, "longitudinal": 1, "lateral": 2}
+    with path.open("w", encoding="utf-8") as stream:
+        stream.write("SPMPC_G4_SNAPSHOT_REPLAY_V1\n")
+        stream.write("frames {}\n".format(len(frames)))
+        for pair in frames:
+            snapshot = pair.snapshot
+            direction = checkpoint_by_index.get(pair.index)
+            stream.write("frame\n")
+            stream.write("pair_index {}\n".format(pair.index))
+            stream.write("direction {}\n".format(direction_codes[direction]))
+            stream.write(
+                "dimensions {} {} {} {}\n".format(
+                    int(snapshot.horizon_steps),
+                    int(snapshot.state_width),
+                    int(snapshot.control_width),
+                    int(snapshot.parameter_width),
+                )
+            )
+            stream.write("dt {}\n".format(format(float(snapshot.dt), ".17g")))
+            initial_state = (
+                snapshot.robot_x,
+                snapshot.robot_y,
+                snapshot.robot_yaw,
+                snapshot.robot_v,
+                snapshot.s0,
+                snapshot.robot_omega,
+                snapshot.eta_x,
+                snapshot.eta_x_dot,
+                snapshot.eta_y,
+                snapshot.eta_y_dot,
+            )
+            stream.write("initial_state " + _float_tokens(initial_state) + "\n")
+            bounds = (
+                snapshot.a_min,
+                snapshot.a_max,
+                snapshot.alpha_or_omega_min,
+                snapshot.alpha_or_omega_max,
+                snapshot.v_s_min,
+                snapshot.v_s_max,
+                snapshot.v_min,
+                snapshot.v_max,
+                snapshot.omega_min,
+                snapshot.omega_max,
+            )
+            stream.write("bounds " + _float_tokens(bounds) + "\n")
+            _write_vector(stream, "stage_parameters", snapshot.stage_parameters)
+            _write_vector(
+                stream, "initial_guess_states", snapshot.initial_guess_states
+            )
+            _write_vector(
+                stream, "initial_guess_controls", snapshot.initial_guess_controls
+            )
+            modals = (
+                _checkpoint_modals(snapshot, direction, replay_config)
+                if direction is not None
+                else []
+            )
+            stream.write("modal_overrides {}".format(len(modals)))
+            if modals:
+                stream.write(" " + _float_tokens(value for modal in modals for value in modal))
+            stream.write("\nend_frame\n")
+        stream.write("end_request\n")
+
+
+def read_replay_result(path: Path) -> Dict[str, Any]:
+    tokens = iter(path.read_text(encoding="utf-8").split())
+
+    def expect(expected: str) -> None:
+        actual = next(tokens, None)
+        if actual != expected:
+            raise RuntimeError(
+                "invalid C++ replay result: expected {!r}, got {!r}".format(
+                    expected, actual
+                )
+            )
+
+    def named(name: str, converter: Any) -> Any:
+        expect(name)
+        value = next(tokens, None)
+        if value is None:
+            raise RuntimeError("truncated C++ replay result at {}".format(name))
+        return converter(value)
+
+    def vector(name: str) -> np.ndarray:
+        count = named(name, int)
+        values = []
+        for _index in range(count):
+            value = next(tokens, None)
+            if value is None:
+                raise RuntimeError("truncated C++ replay vector {}".format(name))
+            values.append(float(value))
+        return np.asarray(values, dtype=float)
+
+    def solution() -> Dict[str, Any]:
+        status = named("solution", int)
+        states = vector("states")
+        controls = vector("controls")
+        expect("end_solution")
+        return {"status": status, "states": states, "controls": controls}
+
+    expect("SPMPC_G4_SNAPSHOT_REPLAY_RESULT_V1")
+    success = bool(named("success", int))
+    detail = named("detail", str)
+    failed_pair = named("failed_pair", int)
+    checkpoint_count = named("checkpoints", int)
+    checkpoints: Dict[int, Dict[str, Any]] = {}
+    for _index in range(checkpoint_count):
+        expect("checkpoint")
+        pair_index = named("pair_index", int)
+        direction = named("direction", int)
+        expect("actual")
+        actual = solution()
+        counterfactual_count = named("counterfactuals", int)
+        counterfactuals = [solution() for _item in range(counterfactual_count)]
+        expect("end_checkpoint")
+        if pair_index in checkpoints:
+            raise RuntimeError("duplicate checkpoint in C++ replay result")
+        checkpoints[pair_index] = {
+            "direction": direction,
+            "actual": actual,
+            "counterfactuals": counterfactuals,
+        }
+    expect("end_result")
+    if next(tokens, None) is not None:
+        raise RuntimeError("unexpected trailing C++ replay result data")
+    return {
+        "success": success,
+        "detail": detail,
+        "failed_pair": failed_pair,
+        "checkpoints": checkpoints,
+    }
+
+
+def _solver_result(solution: Mapping[str, Any], snapshot: Any) -> Dict[str, Any]:
     horizon_steps = int(snapshot.horizon_steps)
     state_width = int(snapshot.state_width)
     control_width = int(snapshot.control_width)
-    parameter_width = int(snapshot.parameter_width)
-    if (horizon_steps, state_width, control_width, parameter_width) != (60, 10, 3, 32):
-        raise RuntimeError(
-            "unsupported snapshot dimensions: N={} nx={} nu={} np={}".format(
-                horizon_steps, state_width, control_width, parameter_width
-            )
-        )
-    parameters = np.asarray(snapshot.stage_parameters, dtype=float).reshape(
-        horizon_steps + 1, parameter_width
-    )
-    states = np.asarray(snapshot.initial_guess_states, dtype=float).reshape(
+    states = np.asarray(solution["states"], dtype=float).reshape(
         horizon_steps + 1, state_width
     )
-    controls = np.asarray(snapshot.initial_guess_controls, dtype=float).reshape(
+    controls = np.asarray(solution["controls"], dtype=float).reshape(
         horizon_steps, control_width
     )
-    for stage in range(horizon_steps + 1):
-        solver.set(stage, "p", parameters[stage])
-        solver.set(stage, "x", states[stage])
-        if stage < horizon_steps:
-            solver.set(stage, "u", controls[stage])
-
-    modal = (
-        tuple(float(value) for value in modal_override)
-        if modal_override is not None
-        else (
-            float(snapshot.eta_x),
-            float(snapshot.eta_x_dot),
-            float(snapshot.eta_y),
-            float(snapshot.eta_y_dot),
-        )
-    )
-    x0 = np.asarray(
-        [
-            snapshot.robot_x,
-            snapshot.robot_y,
-            snapshot.robot_yaw,
-            snapshot.robot_v,
-            snapshot.s0,
-            snapshot.robot_omega,
-            *modal,
-        ],
-        dtype=float,
-    )
-    solver.constraints_set(0, "lbx", x0, api="new")
-    solver.constraints_set(0, "ubx", x0, api="new")
-    lower_u = np.asarray(
-        [snapshot.a_min, snapshot.alpha_or_omega_min, snapshot.v_s_min], dtype=float
-    )
-    upper_u = np.asarray(
-        [snapshot.a_max, snapshot.alpha_or_omega_max, snapshot.v_s_max], dtype=float
-    )
-    for stage in range(horizon_steps):
-        solver.constraints_set(stage, "lbu", lower_u, api="new")
-        solver.constraints_set(stage, "ubu", upper_u, api="new")
-    lower_state = np.asarray([snapshot.v_min, snapshot.omega_min], dtype=float)
-    upper_state = np.asarray([snapshot.v_max, snapshot.omega_max], dtype=float)
-    # Generated terminal stage has no idxbx entry even though the C++ wrapper's
-    # low-level call is harmless there; the Python API correctly rejects it.
-    for stage in range(1, horizon_steps):
-        solver.constraints_set(stage, "lbx", lower_state, api="new")
-        solver.constraints_set(stage, "ubx", upper_state, api="new")
-
-
-def solver_result(solver: Any, snapshot: Any) -> Dict[str, Any]:
-    horizon_steps = int(snapshot.horizon_steps)
-    states = np.asarray([solver.get(stage, "x") for stage in range(horizon_steps + 1)])
-    controls = np.asarray([solver.get(stage, "u") for stage in range(horizon_steps)])
     u0 = controls[0]
     raw_cmd = np.asarray(
         [
@@ -618,7 +753,10 @@ def branch_metrics(actual: Mapping[str, Any], candidate: Mapping[str, Any]) -> D
     state_delta = np.asarray(candidate["states"]) - np.asarray(actual["states"])
     control_delta = np.asarray(candidate["controls"]) - np.asarray(actual["controls"])
     return {
-        "u0_delta": [float(value) for value in np.asarray(candidate["u0"]) - np.asarray(actual["u0"])],
+        "u0_delta": [
+            float(value)
+            for value in np.asarray(candidate["u0"]) - np.asarray(actual["u0"])
+        ],
         "u0_linf": float(np.max(np.abs(np.asarray(candidate["u0"]) - np.asarray(actual["u0"])))),
         "raw_cmd_delta": [
             float(value)
@@ -636,111 +774,172 @@ def replay_checkpoints(
     pairs: Sequence[SnapshotPair],
     checkpoints: Mapping[str, SnapshotPair],
     replay_config: Mapping[str, Any],
-    codegen_json: Path,
-    acados_source_dir: Path,
+    replay_executable: Path,
 ) -> Tuple[Dict[str, Any], List[str]]:
     failures: List[str] = []
-    base_solver = load_acados_solver(codegen_json, acados_source_dir)
-    branch_solver = load_acados_solver(codegen_json, acados_source_dir)
-    checkpoint_by_index = {pair.index: direction for direction, pair in checkpoints.items()}
     output: Dict[str, Any] = {}
+    with tempfile.TemporaryDirectory(prefix="spmpc_g4_snapshot_replay_") as temp_dir:
+        request_path = Path(temp_dir) / "request.txt"
+        result_path = Path(temp_dir) / "result.txt"
+        write_replay_request(
+            request_path, pairs, checkpoints, replay_config
+        )
+        completed = subprocess.run(
+            [
+                str(replay_executable),
+                "--input",
+                str(request_path),
+                "--output",
+                str(result_path),
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(
+                "C++ G4 snapshot replay failed (exit {}): {}".format(
+                    completed.returncode, completed.stderr.strip()
+                )
+            )
+        replayed = read_replay_result(result_path)
 
-    for pair in pairs:
-        direction = checkpoint_by_index.get(pair.index)
-        if direction is not None:
-            base_iterate = base_solver.get_iterate()
-            actual_online_states, actual_online_controls = online_horizon_arrays(pair.horizon)
-            branches: Dict[str, Dict[str, Any]] = {}
+    if not replayed["success"]:
+        failures.append(
+            "C++ sequential replay failed at pair {}: {}".format(
+                replayed["failed_pair"], replayed["detail"]
+            )
+        )
+    direction_codes = {"longitudinal": 1, "lateral": 2}
+    phases = [float(value) for value in replay_config["phases_rad"]]
+    if not phases:
+        raise RuntimeError("replay phases_rad must not be empty")
+    for direction, pair in checkpoints.items():
+        checkpoint = replayed["checkpoints"].get(pair.index)
+        if checkpoint is None:
+            failures.append(
+                "{} checkpoint is absent from C++ replay output".format(direction)
+            )
+            continue
+        if checkpoint["direction"] != direction_codes[direction]:
+            failures.append("{} checkpoint direction code mismatch".format(direction))
+            continue
+        counterfactuals = checkpoint["counterfactuals"]
+        if len(counterfactuals) != len(phases) + 1:
+            failures.append(
+                "{} counterfactual count mismatch: {} vs {}".format(
+                    direction, len(counterfactuals), len(phases) + 1
+                )
+            )
+            continue
 
-            branch_solver.set_iterate(base_iterate)
-            apply_snapshot(branch_solver, pair.snapshot)
-            actual_status = int(branch_solver.solve())
-            actual = solver_result(branch_solver, pair.snapshot)
-            actual_state_error = float(
-                np.max(np.abs(np.asarray(actual["states"]) - actual_online_states))
+        actual_online_states, actual_online_controls = online_horizon_arrays(
+            pair.horizon
+        )
+        actual_status = int(checkpoint["actual"]["status"])
+        actual = _solver_result(checkpoint["actual"], pair.snapshot)
+        actual_state_error = float(
+            np.max(np.abs(np.asarray(actual["states"]) - actual_online_states))
+        )
+        actual_control_error = float(
+            np.max(np.abs(np.asarray(actual["controls"]) - actual_online_controls))
+        )
+        actual_u0_error = float(
+            np.max(np.abs(np.asarray(actual["u0"]) - actual_online_controls[0]))
+        )
+        if actual_status != 0:
+            failures.append(
+                "{} actual replay status={}".format(direction, actual_status)
             )
-            actual_control_error = float(
-                np.max(np.abs(np.asarray(actual["controls"]) - actual_online_controls))
+        if actual_u0_error > float(
+            replay_config["actual_first_action_abs_tolerance"]
+        ):
+            failures.append(
+                "{} actual first-action error {:.3g} exceeds tolerance".format(
+                    direction, actual_u0_error
+                )
             )
-            actual_u0_error = float(
-                np.max(np.abs(np.asarray(actual["u0"]) - actual_online_controls[0]))
+        if max(actual_state_error, actual_control_error) > float(
+            replay_config["actual_horizon_abs_tolerance"]
+        ):
+            failures.append(
+                "{} actual horizon error {:.3g} exceeds tolerance".format(
+                    direction, max(actual_state_error, actual_control_error)
+                )
             )
-            if actual_status != 0:
-                failures.append("{} actual replay status={}".format(direction, actual_status))
-            if actual_u0_error > float(replay_config["actual_first_action_abs_tolerance"]):
+
+        zero_solution = counterfactuals[0]
+        zero_status = int(zero_solution["status"])
+        zero = _solver_result(zero_solution, pair.snapshot)
+        zero_metrics = branch_metrics(actual, zero)
+        if zero_status != 0:
+            failures.append(
+                "{} zero-state replay status={}".format(direction, zero_status)
+            )
+        if max(
+            zero_metrics["u0_linf"], zero_metrics["horizon_state_linf"]
+        ) < float(replay_config["actual_zero_detect_tolerance"]):
+            failures.append(
+                "{} actual/zero branches are numerically indistinguishable".format(
+                    direction
+                )
+            )
+
+        phase_modals = _checkpoint_modals(
+            pair.snapshot, direction, replay_config
+        )[1:]
+        phase_results = []
+        for phase, modal, solution in zip(
+            phases, phase_modals, counterfactuals[1:]
+        ):
+            status = int(solution["status"])
+            result = _solver_result(solution, pair.snapshot)
+            phase_results.append((phase, modal, status, result))
+            if status != 0:
                 failures.append(
-                    "{} actual first-action error {:.3g} exceeds tolerance".format(
-                        direction, actual_u0_error
+                    "{} phase {:.6f} replay status={}".format(
+                        direction, phase, status
                     )
                 )
-            if max(actual_state_error, actual_control_error) > float(
-                replay_config["actual_horizon_abs_tolerance"]
-            ):
-                failures.append(
-                    "{} actual horizon error {:.3g} exceeds tolerance".format(
-                        direction, max(actual_state_error, actual_control_error)
-                    )
+        phase_u0 = np.asarray([item[3]["u0"] for item in phase_results])
+        phase_states = np.asarray([item[3]["states"] for item in phase_results])
+        phase_controls = np.asarray(
+            [item[3]["controls"] for item in phase_results]
+        )
+        u0_range = np.ptp(phase_u0, axis=0)
+        state_range = np.ptp(phase_states, axis=0)
+        control_range = np.ptp(phase_controls, axis=0)
+        phase_metrics = {
+            "u0_range": [float(value) for value in u0_range],
+            "u0_linf_range": float(np.max(np.abs(u0_range))),
+            "horizon_state_linf_range": float(np.max(np.abs(state_range))),
+            "horizon_control_linf_range": float(np.max(np.abs(control_range))),
+            "horizon_s_linf_range_m": float(np.max(np.abs(state_range[:, 4]))),
+            "horizon_v_linf_range_m_s": float(np.max(np.abs(state_range[:, 3]))),
+            "horizon_omega_linf_range_rad_s": float(
+                np.max(np.abs(state_range[:, 5]))
+            ),
+        }
+        phase_detected = (
+            phase_metrics["u0_linf_range"]
+            >= float(replay_config["phase_first_action_detect_tolerance"])
+            or phase_metrics["horizon_state_linf_range"]
+            >= float(replay_config["phase_horizon_detect_tolerance"])
+        )
+        if not phase_detected:
+            failures.append(
+                "{} four-phase sensitivity is below frozen tolerance".format(
+                    direction
                 )
-
-            branch_solver.set_iterate(base_iterate)
-            apply_snapshot(branch_solver, pair.snapshot, modal_override=(0.0, 0.0, 0.0, 0.0))
-            zero_status = int(branch_solver.solve())
-            zero = solver_result(branch_solver, pair.snapshot)
-            zero_metrics = branch_metrics(actual, zero)
-            if zero_status != 0:
-                failures.append("{} zero-state replay status={}".format(direction, zero_status))
-            if max(zero_metrics["u0_linf"], zero_metrics["horizon_state_linf"]) < float(
-                replay_config["actual_zero_detect_tolerance"]
-            ):
-                failures.append("{} actual/zero branches are numerically indistinguishable".format(direction))
-
-            phase_results = []
-            for phase in [float(value) for value in replay_config["phases_rad"]]:
-                modal = modal_override_for_phase(
-                    pair.snapshot,
-                    direction,
-                    phase,
-                    float(replay_config["constructed_phase_height_mm"]),
-                    float(replay_config["slosh_height_ref_m"]),
-                )
-                branch_solver.set_iterate(base_iterate)
-                apply_snapshot(branch_solver, pair.snapshot, modal_override=modal)
-                status = int(branch_solver.solve())
-                result = solver_result(branch_solver, pair.snapshot)
-                phase_results.append((phase, modal, status, result))
-                if status != 0:
-                    failures.append(
-                        "{} phase {:.6f} replay status={}".format(direction, phase, status)
-                    )
-            phase_u0 = np.asarray([result[3]["u0"] for result in phase_results])
-            phase_states = np.asarray([result[3]["states"] for result in phase_results])
-            phase_controls = np.asarray([result[3]["controls"] for result in phase_results])
-            u0_range = np.ptp(phase_u0, axis=0)
-            state_range = np.ptp(phase_states, axis=0)
-            control_range = np.ptp(phase_controls, axis=0)
-            phase_metrics = {
-                "u0_range": [float(value) for value in u0_range],
-                "u0_linf_range": float(np.max(np.abs(u0_range))),
-                "horizon_state_linf_range": float(np.max(np.abs(state_range))),
-                "horizon_control_linf_range": float(np.max(np.abs(control_range))),
-                "horizon_s_linf_range_m": float(np.max(np.abs(state_range[:, 4]))),
-                "horizon_v_linf_range_m_s": float(np.max(np.abs(state_range[:, 3]))),
-                "horizon_omega_linf_range_rad_s": float(np.max(np.abs(state_range[:, 5]))),
-            }
-            phase_detected = (
-                phase_metrics["u0_linf_range"]
-                >= float(replay_config["phase_first_action_detect_tolerance"])
-                or phase_metrics["horizon_state_linf_range"]
-                >= float(replay_config["phase_horizon_detect_tolerance"])
             )
-            if not phase_detected:
-                failures.append("{} four-phase sensitivity is below frozen tolerance".format(direction))
 
-            branches["zero_state"] = {
+        branches = {
+            "zero_state": {
                 "status": zero_status,
                 "metrics_vs_actual": zero_metrics,
-            }
-            branches["constructed_phases"] = [
+            },
+            "constructed_phases": [
                 {
                     "phase_rad": float(phase),
                     "modal_state": [float(value) for value in modal],
@@ -749,42 +948,27 @@ def replay_checkpoints(
                     "raw_cmd": [float(value) for value in result["raw_cmd"]],
                 }
                 for phase, modal, status, result in phase_results
-            ]
-            output[direction] = {
-                "pair_index": pair.index,
-                "stamp": float(pair.snapshot.header.stamp.to_sec()),
-                "sigma": float(pair.snapshot.s0 / pair.snapshot.reference_length),
-                "robot_v_m_s": float(pair.snapshot.robot_v),
-                "robot_omega_rad_s": float(pair.snapshot.robot_omega),
-                "online_u0": [float(value) for value in actual_online_controls[0]],
-                "actual_replay": {
-                    "status": actual_status,
-                    "first_action_abs_error": actual_u0_error,
-                    "horizon_state_abs_error": actual_state_error,
-                    "horizon_control_abs_error": actual_control_error,
-                    "u0": [float(value) for value in actual["u0"]],
-                    "raw_cmd": [float(value) for value in actual["raw_cmd"]],
-                },
-                "branches": branches,
-                "phase_metrics": phase_metrics,
-                "phase_sensitivity_pass": phase_detected,
-            }
-
-        apply_snapshot(base_solver, pair.snapshot)
-        status = int(base_solver.solve())
-        if status != 0:
-            failures.append("sequential actual replay failed at pair {} status={}".format(pair.index, status))
-            break
-        online_states, online_controls = online_horizon_arrays(pair.horizon)
-        base_result = solver_result(base_solver, pair.snapshot)
-        # A bag can omit an isolated diagnostic cycle even though the online
-        # solver ran it.  That temporarily changes the unrecorded dual history.
-        # Only the frozen checkpoints, which require a contiguous prehistory,
-        # are reproduction gates; an arbitrary intermediate mismatch is not
-        # converted into a false method failure here.
-
-        if len(output) == len(checkpoints) and pair.index >= max(item.index for item in checkpoints.values()):
-            break
+            ],
+        }
+        output[direction] = {
+            "pair_index": pair.index,
+            "stamp": float(pair.snapshot.header.stamp.to_sec()),
+            "sigma": float(pair.snapshot.s0 / pair.snapshot.reference_length),
+            "robot_v_m_s": float(pair.snapshot.robot_v),
+            "robot_omega_rad_s": float(pair.snapshot.robot_omega),
+            "online_u0": [float(value) for value in actual_online_controls[0]],
+            "actual_replay": {
+                "status": actual_status,
+                "first_action_abs_error": actual_u0_error,
+                "horizon_state_abs_error": actual_state_error,
+                "horizon_control_abs_error": actual_control_error,
+                "u0": [float(value) for value in actual["u0"]],
+                "raw_cmd": [float(value) for value in actual["raw_cmd"]],
+            },
+            "branches": branches,
+            "phase_metrics": phase_metrics,
+            "phase_sensitivity_pass": phase_detected,
+        }
     return output, failures
 
 
@@ -805,7 +989,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config", required=True)
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--codegen-json", required=True)
-    parser.add_argument("--acados-source-dir", default=os.environ.get("ACADOS_SOURCE_DIR", "/home/geist/acados"))
+    parser.add_argument("--replay-executable")
     parser.add_argument("--allow-incomplete-g3", action="store_true", help="tool smoke only; report remains FAIL")
     return parser.parse_args()
 
@@ -817,7 +1001,10 @@ def main() -> int:
     config_path = Path(args.config).expanduser().resolve()
     out_dir = Path(args.out_dir).expanduser().resolve()
     codegen_json = Path(args.codegen_json).expanduser().resolve()
-    acados_source_dir = Path(args.acados_source_dir).expanduser().resolve()
+    configured_replay = (
+        Path(args.replay_executable) if args.replay_executable else None
+    )
+    replay_executable = replay_executable_path(configured_replay)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     failures: List[str] = []
@@ -898,6 +1085,16 @@ def main() -> int:
         -math.inf,
         float(postflight["motion_end_sec"]),
     )
+    validate_codegen_snapshot_contract(codegen_json, pairs[0].snapshot)
+    replay_libraries = linked_replay_libraries(replay_executable)
+    linked_slosh = replay_libraries[
+        "libacados_ocp_solver_spmpc_slosh.so"
+    ]
+    if linked_slosh.parent != codegen_json.parent:
+        raise RuntimeError(
+            "codegen JSON does not belong to the generated slosh solver "
+            "linked by the C++ replay executable"
+        )
     checkpoints = select_checkpoints(pairs, config["checkpoint_selection"])
     checkpoint_identity = {
         direction: {
@@ -922,8 +1119,7 @@ def main() -> int:
         pairs,
         checkpoints,
         config["replay"],
-        codegen_json,
-        acados_source_dir,
+        replay_executable,
     )
     failures.extend(replay_failures)
 
@@ -948,6 +1144,15 @@ def main() -> int:
             "config_sha256": sha256_file(config_path),
             "codegen_json": str(codegen_json),
             "codegen_json_sha256": sha256_file(codegen_json),
+            "replay_executable": str(replay_executable),
+            "replay_executable_sha256": sha256_file(replay_executable),
+            "replay_libraries": {
+                name: {
+                    "path": str(path),
+                    "sha256": sha256_file(path),
+                }
+                for name, path in sorted(replay_libraries.items())
+            },
         },
         "trajectory": trajectory_summary,
         "trajectory_csv": str(trajectory_csv),

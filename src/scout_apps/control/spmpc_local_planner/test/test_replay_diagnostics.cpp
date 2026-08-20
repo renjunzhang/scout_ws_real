@@ -1,3 +1,4 @@
+#include "spmpc_local_planner/analysis/g4_snapshot_replay.h"
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
 #include "spmpc_parameter_manifest.h"
 
@@ -148,6 +149,48 @@ PhaseRejoinSolverContext makeEnforceContext() {
     return context;
 }
 
+analysis::G4ReplayFrame makeG4ReplayFrame(
+    const PreSolveSnapshotDebug& snapshot) {
+    analysis::G4ReplayFrame frame;
+    frame.pair_index = 0;
+    frame.direction_code = 1;
+    frame.horizon_steps = snapshot.horizon_steps;
+    frame.state_width = snapshot.state_width;
+    frame.control_width = snapshot.control_width;
+    frame.parameter_width = snapshot.parameter_width;
+    frame.dt = snapshot.dt;
+    frame.initial_state = {{
+        snapshot.robot.x,
+        snapshot.robot.y,
+        snapshot.robot.yaw,
+        snapshot.robot.v,
+        snapshot.s0,
+        snapshot.robot.omega,
+        snapshot.slosh.eta_x,
+        snapshot.slosh.eta_x_dot,
+        snapshot.slosh.eta_y,
+        snapshot.slosh.eta_y_dot,
+    }};
+    frame.runtime_bounds = snapshot.runtime_bounds;
+    frame.stage_parameters = snapshot.stage_parameters;
+    for (const HorizonStateDebug& state : snapshot.initial_guess_states) {
+        const double row[] = {
+            state.x, state.y, state.yaw, state.v, state.s, state.omega,
+            state.eta_x, state.eta_x_dot, state.eta_y, state.eta_y_dot,
+        };
+        frame.initial_guess_states.insert(
+            frame.initial_guess_states.end(), std::begin(row), std::end(row));
+    }
+    for (const HorizonControlDebug& control :
+         snapshot.initial_guess_controls) {
+        frame.initial_guess_controls.push_back(control.a);
+        frame.initial_guess_controls.push_back(control.alpha_or_omega);
+        frame.initial_guess_controls.push_back(control.v_s);
+    }
+    frame.modal_overrides.push_back({{0.0, 0.0, 0.0, 0.0}});
+    return frame;
+}
+
 }  // namespace
 
 TEST(ReplayDiagnostics, PhaseRejoinCapabilityReportsDedicatedFixedHorizon) {
@@ -225,6 +268,78 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
 }
 
 #ifdef SPMPC_TEST_WITH_ACADOS_SLOSH
+TEST(ReplayDiagnostics, G4RunnerReusesCurrentBackendAndGeneratedContract) {
+    ContinuousMpccSolverAcados solver;
+    const SolverConfigureResult configured =
+        solver.configure(makeParams(), makeSloshVariant());
+    ASSERT_TRUE(configured.success)
+        << configured.status << ": " << configured.detail;
+    const ReferencePath reference = makeStraightReference();
+    SolverInput first_input = makeInput();
+    SolverOutput first_online;
+    ASSERT_TRUE(solver.solve(first_input, reference, first_online))
+        << first_online.status;
+    ASSERT_TRUE(first_online.pre_solve_snapshot.valid);
+    ASSERT_TRUE(first_online.predicted_horizon.valid);
+    SolverInput second_input = first_input;
+    second_input.robot.x = first_online.predicted_horizon.states[1].x;
+    second_input.robot.y = first_online.predicted_horizon.states[1].y;
+    second_input.robot.yaw = first_online.predicted_horizon.states[1].yaw;
+    second_input.robot.v = first_online.predicted_horizon.states[1].v;
+    second_input.robot.omega =
+        first_online.predicted_horizon.states[1].omega;
+    SolverOutput second_online;
+    ASSERT_TRUE(solver.solve(second_input, reference, second_online))
+        << second_online.status;
+    ASSERT_TRUE(analysis::G4SnapshotReplayRunner::available());
+
+    analysis::G4ReplayFrame first_frame =
+        makeG4ReplayFrame(first_online.pre_solve_snapshot);
+    first_frame.direction_code = 0;
+    first_frame.modal_overrides.clear();
+    analysis::G4ReplayFrame second_frame =
+        makeG4ReplayFrame(second_online.pre_solve_snapshot);
+    second_frame.pair_index = 1;
+    const analysis::G4SequenceReplayResult replayed =
+        analysis::G4SnapshotReplayRunner::run({first_frame, second_frame});
+    ASSERT_TRUE(replayed.success) << replayed.detail;
+    ASSERT_EQ(replayed.checkpoints.size(), 1u);
+    const analysis::G4ReplaySolution& actual =
+        replayed.checkpoints.front().actual;
+    ASSERT_EQ(actual.status, 0);
+    ASSERT_EQ(actual.states.size(), 61u * 10u);
+    ASSERT_EQ(actual.controls.size(), 60u * 3u);
+    for (std::size_t stage = 0;
+         stage < second_online.predicted_horizon.states.size(); ++stage) {
+        const HorizonStateDebug& expected =
+            second_online.predicted_horizon.states[stage];
+        const double row[] = {
+            expected.x, expected.y, expected.yaw, expected.v, expected.s,
+            expected.omega, expected.eta_x, expected.eta_x_dot,
+            expected.eta_y, expected.eta_y_dot,
+        };
+        for (std::size_t column = 0; column < 10; ++column) {
+            EXPECT_NEAR(actual.states[stage * 10 + column], row[column], 1e-8);
+        }
+    }
+    for (std::size_t stage = 0;
+         stage < second_online.predicted_horizon.controls.size(); ++stage) {
+        const HorizonControlDebug& expected =
+            second_online.predicted_horizon.controls[stage];
+        EXPECT_NEAR(actual.controls[stage * 3], expected.a, 1e-8);
+        EXPECT_NEAR(actual.controls[stage * 3 + 1],
+                    expected.alpha_or_omega, 1e-8);
+        EXPECT_NEAR(actual.controls[stage * 3 + 2], expected.v_s, 1e-8);
+    }
+
+    analysis::G4ReplayFrame invalid = second_frame;
+    ++invalid.parameter_width;
+    const analysis::G4SequenceReplayResult rejected =
+        analysis::G4SnapshotReplayRunner::run({invalid});
+    EXPECT_FALSE(rejected.success);
+    EXPECT_EQ(rejected.detail, "GENERATED_DIMENSION_MISMATCH");
+}
+
 TEST(ReplayDiagnostics, MonitorPreservesBaselineAndEnforceHasNoFreeTail) {
     ContinuousMpccSolverAcados solver;
     const SolverConfigureResult configured =

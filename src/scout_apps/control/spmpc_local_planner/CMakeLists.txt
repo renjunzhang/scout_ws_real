@@ -265,6 +265,7 @@ target_link_libraries(spmpc_solver_parameters
 )
 
 add_library(spmpc_solver_acados
+  src/solver/acados/generated_solver.cpp
   src/solvers/continuous_mpcc_solver_acados.cpp
 )
 target_include_directories(spmpc_solver_acados PRIVATE
@@ -489,6 +490,24 @@ add_executable(spmpc_phase_rejoin_development_nominal
 target_link_libraries(spmpc_phase_rejoin_development_nominal
   PRIVATE
   spmpc_phase_rejoin
+)
+
+# Source-tree G4 evidence tool. It shares the exact generated-capsule wrapper
+# with the runtime backend and is deliberately absent from runtime install.
+add_library(spmpc_g4_snapshot_replay_core
+  src/analysis/g4_snapshot_replay.cpp
+)
+target_link_libraries(spmpc_g4_snapshot_replay_core
+  PRIVATE
+  spmpc_solver_acados
+)
+
+add_executable(spmpc_g4_snapshot_replay
+  src/tools/g4_snapshot_replay.cpp
+)
+target_link_libraries(spmpc_g4_snapshot_replay
+  PRIVATE
+  spmpc_g4_snapshot_replay_core
 )
 
 if(CATKIN_ENABLE_TESTING)
@@ -725,6 +744,7 @@ if(CATKIN_ENABLE_TESTING)
       )
       target_link_libraries(test_replay_diagnostics
         ${PROJECT_NAME}
+        spmpc_g4_snapshot_replay_core
         ${catkin_LIBRARIES}
       )
       if(SPMPC_WITH_ACADOS_SLOSH)

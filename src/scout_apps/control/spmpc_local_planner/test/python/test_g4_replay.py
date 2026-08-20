@@ -2,7 +2,9 @@
 
 import importlib.util
 import math
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -21,6 +23,63 @@ SPEC.loader.exec_module(G4)
 
 
 class G4ReplayTest(unittest.TestCase):
+    def test_cpp_bridge_rejects_stale_generated_dimensions(self):
+        try:
+            executable = G4.replay_executable_path()
+        except RuntimeError as exc:
+            self.skipTest(str(exc))
+        snapshot = SimpleNamespace(
+            horizon_steps=60,
+            state_width=10,
+            control_width=3,
+            parameter_width=32,
+            dt=1.0 / 30.0,
+            robot_x=0.0,
+            robot_y=0.0,
+            robot_yaw=0.0,
+            robot_v=0.0,
+            s0=0.0,
+            robot_omega=0.0,
+            eta_x=0.0,
+            eta_x_dot=0.0,
+            eta_y=0.0,
+            eta_y_dot=0.0,
+            a_min=-0.6,
+            a_max=0.6,
+            alpha_or_omega_min=-1.2,
+            alpha_or_omega_max=1.2,
+            v_s_min=0.0,
+            v_s_max=0.8,
+            v_min=0.0,
+            v_max=0.8,
+            omega_min=-1.2,
+            omega_max=1.2,
+            stage_parameters=[],
+            initial_guess_states=[],
+            initial_guess_controls=[],
+        )
+        pair = G4.SnapshotPair(0, snapshot, None)
+        with tempfile.TemporaryDirectory(prefix="spmpc_g4_bridge_test_") as directory:
+            request = Path(directory) / "request.txt"
+            result = Path(directory) / "result.txt"
+            G4.write_replay_request(
+                request,
+                [pair],
+                {"longitudinal": pair},
+                {"phases_rad": []},
+            )
+            completed = subprocess.run(
+                [str(executable), "--input", str(request), "--output", str(result)],
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(completed.returncode, 0, completed.stderr)
+            replayed = G4.read_replay_result(result)
+        self.assertFalse(replayed["success"])
+        self.assertEqual(replayed["detail"], "GENERATED_DIMENSION_MISMATCH")
+
     def test_continuous_projection(self):
         xy = np.asarray([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0]])
         cumulative, lengths, _ = G4.path_geometry(xy)
