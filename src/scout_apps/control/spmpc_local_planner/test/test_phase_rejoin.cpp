@@ -93,19 +93,15 @@ PhaseRejoinRuntimeContract fixtureRuntimeContract() {
     return runtime;
 }
 
-SolverOutput acceptedHorizon(std::size_t front_index, int liquid_steps) {
-    SolverOutput output;
-    output.success = true;
-    output.cmd_v = 0.40;
-    output.cmd_omega = 0.30;
-    output.predicted_horizon.valid = true;
-    for (int k = 0; k <= liquid_steps; ++k) {
-        HorizonStateDebug state;
-        state.x = 0.1 * static_cast<double>(front_index + k);
-        state.v = 0.2;
-        output.predicted_horizon.states.push_back(state);
-    }
-    return output;
+PhaseSolveView acceptedSolve(std::size_t front_index, int liquid_steps) {
+    PhaseSolveView solve;
+    solve.cmd_v = 0.40;
+    solve.cmd_omega = 0.30;
+    solve.terminal_state_available = true;
+    solve.terminal_robot.x = 0.1 * static_cast<double>(
+        front_index + static_cast<std::size_t>(liquid_steps));
+    solve.terminal_robot.v = 0.2;
+    return solve;
 }
 
 TEST(EmpiricalRecoveryGate, HandlesWrappedYawAndBoundary) {
@@ -272,13 +268,13 @@ TEST(PhaseRejoinCoordinator, MonitorEvaluatesButNeverChangesCommand) {
     EXPECT_FALSE(preparation.solver_context.stages[0].gate_active);
     EXPECT_TRUE(preparation.solver_context.stages[3].gate_active);
 
-    const SolverOutput output = acceptedHorizon(2, 3);
+    const PhaseSolveView solve = acceptedSolve(2, 3);
     const auto decision = coordinator.decide(
-        preparation, robotAt(0.2), SloshState{}, true, output);
+        preparation, robotAt(0.2), SloshState{}, true, solve);
     EXPECT_TRUE(decision.terminal_gate_accepted);
     EXPECT_FALSE(decision.command_intervened);
-    EXPECT_DOUBLE_EQ(decision.output_cmd_v, output.cmd_v);
-    EXPECT_DOUBLE_EQ(decision.output_cmd_omega, output.cmd_omega);
+    EXPECT_DOUBLE_EQ(decision.output_cmd_v, solve.cmd_v);
+    EXPECT_DOUBLE_EQ(decision.output_cmd_omega, solve.cmd_omega);
 }
 
 TEST(PhaseRejoinCoordinator, NonzeroDelayPublishesExecutionFrontCommand) {
@@ -397,26 +393,26 @@ TEST(PhaseRejoinCoordinator, EnforceRejectsOutOfContractSolverCommand) {
     EXPECT_TRUE(preparation.solver_context.active);
     EXPECT_TRUE(preparation.solver_context.enforce);
     EXPECT_TRUE(preparation.solver_context.owns_terminal_maneuver);
-    SolverOutput output = acceptedHorizon(2, 3);
+    PhaseSolveView solve = acceptedSolve(2, 3);
     auto accepted = coordinator.decide(
-        preparation, robotAt(0.2), SloshState{}, true, output);
+        preparation, robotAt(0.2), SloshState{}, true, solve);
     EXPECT_TRUE(accepted.terminal_gate_accepted);
     EXPECT_TRUE(accepted.controlled_stop_used);
     EXPECT_EQ(accepted.status,
               "ENFORCE_SOLVER_COMMAND_CONTRACT_VIOLATION");
 
-    output.cmd_v = 0.98;
-    output.cmd_omega = 0.08;
+    solve.cmd_v = 0.98;
+    solve.cmd_omega = 0.08;
     accepted = coordinator.decide(
-        preparation, robotAt(0.2), SloshState{}, true, output);
+        preparation, robotAt(0.2), SloshState{}, true, solve);
     EXPECT_TRUE(accepted.command_contract_consistent);
     EXPECT_FALSE(accepted.command_intervened);
     EXPECT_NEAR(accepted.output_cmd_v, 0.98, 1e-12);
     EXPECT_NEAR(accepted.output_cmd_omega, 0.08, 1e-12);
 
-    output.predicted_horizon.states[3].x += 10.0;
+    solve.terminal_robot.x += 10.0;
     const auto recovery = coordinator.decide(
-        preparation, robotAt(0.2), SloshState{}, true, output);
+        preparation, robotAt(0.2), SloshState{}, true, solve);
     EXPECT_FALSE(recovery.terminal_gate_accepted);
     EXPECT_TRUE(recovery.current_gate_accepted);
     EXPECT_TRUE(recovery.recovery_command_used);
@@ -425,7 +421,7 @@ TEST(PhaseRejoinCoordinator, EnforceRejectsOutOfContractSolverCommand) {
                 preparation.nominal_cmd_omega, 1e-12);
 
     const auto stop = coordinator.decide(
-        preparation, robotAt(10.0), SloshState{}, false, output);
+        preparation, robotAt(10.0), SloshState{}, false, solve);
     EXPECT_FALSE(stop.current_gate_accepted);
     EXPECT_TRUE(stop.controlled_stop_used);
     EXPECT_DOUBLE_EQ(stop.output_cmd_v, 0.0);
@@ -451,9 +447,9 @@ TEST(PhaseRejoinCoordinator, RawSolverOriginChecksTerminalAfterDelayAndLiquidSte
     EXPECT_EQ(preparation.solver_terminal_step, 5);
     EXPECT_EQ(preparation.candidate.terminal_index, 5u);
 
-    const SolverOutput output = acceptedHorizon(0, 5);
+    const PhaseSolveView solve = acceptedSolve(0, 5);
     const auto decision = coordinator.decide(
-        preparation, robotAt(0.2), SloshState{}, true, output);
+        preparation, robotAt(0.2), SloshState{}, true, solve);
     EXPECT_TRUE(decision.terminal_gate_accepted);
 }
 
@@ -466,11 +462,10 @@ TEST(PhaseRejoinCoordinator, EnforceNotReadyFailsClosed) {
 
     PhaseRejoinPreparation preparation;
     preparation.status = "EXECUTION_FRONT_NOT_APPLIED";
-    SolverOutput output;
-    output.success = true;
-    output.cmd_v = 0.3;
+    PhaseSolveView solve;
+    solve.cmd_v = 0.3;
     const auto decision = coordinator.decide(
-        preparation, RobotState{}, SloshState{}, true, output);
+        preparation, RobotState{}, SloshState{}, true, solve);
 
     EXPECT_TRUE(decision.command_intervened);
     EXPECT_TRUE(decision.controlled_stop_used);

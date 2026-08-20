@@ -346,38 +346,17 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     return preparation;
 }
 
-RobotState PhaseRejoinCoordinator::robotFromHorizon(
-    const HorizonStateDebug& state) {
-    RobotState robot;
-    robot.x = state.x;
-    robot.y = state.y;
-    robot.yaw = state.yaw;
-    robot.v = state.v;
-    robot.omega = state.omega;
-    return robot;
-}
-
-SloshState PhaseRejoinCoordinator::sloshFromHorizon(
-    const HorizonStateDebug& state) {
-    SloshState slosh;
-    slosh.eta_x = state.eta_x;
-    slosh.eta_x_dot = state.eta_x_dot;
-    slosh.eta_y = state.eta_y;
-    slosh.eta_y_dot = state.eta_y_dot;
-    return slosh;
-}
-
 PhaseRejoinDecision PhaseRejoinCoordinator::decide(
     const PhaseRejoinPreparation& preparation,
     const RobotState& execution_front_robot,
     const SloshState& execution_front_slosh,
     bool solver_success,
-    const SolverOutput& solver_output) const {
+    const PhaseSolveView& solve) const {
     PhaseRejoinDecision decision;
-    decision.solver_cmd_v = solver_output.cmd_v;
-    decision.solver_cmd_omega = solver_output.cmd_omega;
-    decision.output_cmd_v = solver_output.cmd_v;
-    decision.output_cmd_omega = solver_output.cmd_omega;
+    decision.solver_cmd_v = solve.cmd_v;
+    decision.solver_cmd_omega = solve.cmd_omega;
+    decision.output_cmd_v = solve.cmd_v;
+    decision.output_cmd_omega = solve.cmd_omega;
     if (!preparation.ready || !preparation.candidate.valid) {
         decision.status = preparation.status;
         if (params_.mode == PhaseRejoinMode::Enforce) {
@@ -402,16 +381,9 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
         *front, execution_front_robot, execution_front_slosh);
     decision.current_gate_accepted = decision.current_gate.accepted;
 
-    const int terminal_step = preparation.solver_terminal_step;
-    if (solver_output.predicted_horizon.valid && terminal_step >= 0 &&
-        static_cast<std::size_t>(terminal_step) <
-            solver_output.predicted_horizon.states.size()) {
-        const HorizonStateDebug& terminal_state =
-            solver_output.predicted_horizon.states[
-                static_cast<std::size_t>(terminal_step)];
+    if (solve.terminal_state_available) {
         decision.terminal_gate = gate_.evaluate(
-            *terminal, robotFromHorizon(terminal_state),
-            sloshFromHorizon(terminal_state));
+            *terminal, solve.terminal_robot, solve.terminal_slosh);
     } else {
         decision.terminal_gate.status = "HORIZON_UNAVAILABLE";
     }
@@ -430,9 +402,9 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
     }
 
     if (solver_success && decision.terminal_gate_accepted) {
-        decision.residual_v = solver_output.cmd_v - preparation.nominal_cmd_v;
+        decision.residual_v = solve.cmd_v - preparation.nominal_cmd_v;
         decision.residual_omega =
-            solver_output.cmd_omega - preparation.nominal_cmd_omega;
+            solve.cmd_omega - preparation.nominal_cmd_omega;
         const bool residual_consistent =
             std::abs(decision.residual_v) <= params_.max_residual_v + 1e-7 &&
             std::abs(decision.residual_omega) <=
@@ -448,8 +420,8 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
         // The successful solver command is already residual-constrained in the
         // OCP.  Never mutate a command after validating its predicted horizon.
         decision.command_contract_consistent = true;
-        decision.output_cmd_v = solver_output.cmd_v;
-        decision.output_cmd_omega = solver_output.cmd_omega;
+        decision.output_cmd_v = solve.cmd_v;
+        decision.output_cmd_omega = solve.cmd_omega;
         decision.command_intervened = false;
         decision.status = "ENFORCE_TERMINAL_ACCEPTED";
         return decision;

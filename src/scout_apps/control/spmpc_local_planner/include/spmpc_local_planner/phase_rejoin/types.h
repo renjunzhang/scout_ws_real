@@ -1,5 +1,7 @@
 #pragma once
 
+#include "spmpc_local_planner/domain/state.h"
+
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -217,6 +219,17 @@ struct PhaseRejoinPreparation {
     bool solver_origin_at_execution_front = true;
     double phase_clock_elapsed_sec = 0.0;
     std::string status = "NOT_RUN";
+};
+
+// Narrow, allocation-free view of the solver result consumed by Phase-Rejoin.
+// The controller owns conversion from backend/telemetry horizon DTOs so this
+// module depends only on domain state and never on the full SolverOutput.
+struct PhaseSolveView {
+    double cmd_v = 0.0;
+    double cmd_omega = 0.0;
+    bool terminal_state_available = false;
+    RobotState terminal_robot;
+    SloshState terminal_slosh;
 };
 
 struct PhaseRejoinDecision {

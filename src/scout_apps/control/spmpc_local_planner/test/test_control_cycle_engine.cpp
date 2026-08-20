@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "spmpc_local_planner/controller/control_cycle_engine.h"
+#include "spmpc_local_planner/controller/phase_solve_adapter.h"
 
 #include <fstream>
 #include <sstream>
@@ -64,6 +65,54 @@ std::vector<std::string> splitCsv(const std::string& line) {
         fields.push_back(field);
     }
     return fields;
+}
+
+TEST(PhaseSolveAdapterTest, PreservesCommandAndRejectsUnavailableTerminal) {
+    SolverOutput output;
+    output.cmd_v = 0.41;
+    output.cmd_omega = -0.27;
+    output.predicted_horizon.valid = true;
+    output.predicted_horizon.states.resize(1);
+
+    PhaseSolveView view = makePhaseSolveView(output, -1);
+    EXPECT_DOUBLE_EQ(0.41, view.cmd_v);
+    EXPECT_DOUBLE_EQ(-0.27, view.cmd_omega);
+    EXPECT_FALSE(view.terminal_state_available);
+
+    view = makePhaseSolveView(output, 1);
+    EXPECT_FALSE(view.terminal_state_available);
+
+    output.predicted_horizon.valid = false;
+    view = makePhaseSolveView(output, 0);
+    EXPECT_FALSE(view.terminal_state_available);
+}
+
+TEST(PhaseSolveAdapterTest, MapsCompleteTerminalDomainState) {
+    SolverOutput output;
+    output.predicted_horizon.valid = true;
+    output.predicted_horizon.states.resize(2);
+    HorizonStateDebug& terminal = output.predicted_horizon.states[1];
+    terminal.x = 1.1;
+    terminal.y = -2.2;
+    terminal.yaw = 3.3;
+    terminal.v = -4.4;
+    terminal.omega = 5.5;
+    terminal.eta_x = -6.6;
+    terminal.eta_x_dot = 7.7;
+    terminal.eta_y = -8.8;
+    terminal.eta_y_dot = 9.9;
+
+    const PhaseSolveView view = makePhaseSolveView(output, 1);
+    ASSERT_TRUE(view.terminal_state_available);
+    EXPECT_DOUBLE_EQ(1.1, view.terminal_robot.x);
+    EXPECT_DOUBLE_EQ(-2.2, view.terminal_robot.y);
+    EXPECT_DOUBLE_EQ(3.3, view.terminal_robot.yaw);
+    EXPECT_DOUBLE_EQ(-4.4, view.terminal_robot.v);
+    EXPECT_DOUBLE_EQ(5.5, view.terminal_robot.omega);
+    EXPECT_DOUBLE_EQ(-6.6, view.terminal_slosh.eta_x);
+    EXPECT_DOUBLE_EQ(7.7, view.terminal_slosh.eta_x_dot);
+    EXPECT_DOUBLE_EQ(-8.8, view.terminal_slosh.eta_y);
+    EXPECT_DOUBLE_EQ(9.9, view.terminal_slosh.eta_y_dot);
 }
 
 TEST(ControlCycleEngineTest, InvokesInjectedSolverAndReturnsSolverCommand) {

@@ -1,6 +1,5 @@
 #pragma once
 
-#include "spmpc_local_planner/solver/api/solver_io.h"
 #include "spmpc_local_planner/phase_rejoin/empirical_recovery_gate.h"
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
 #include "spmpc_local_planner/phase_rejoin/phase_candidate_selector.h"
@@ -36,7 +35,7 @@ public:
                                const RobotState& execution_front_robot,
                                const SloshState& execution_front_slosh,
                                bool solver_success,
-                               const SolverOutput& solver_output) const;
+                               const PhaseSolveView& solve) const;
 
     void commit(const PhaseRejoinPreparation& preparation,
                 const PhaseRejoinDecision& decision);
@@ -58,9 +57,6 @@ public:
 private:
     static PhaseNominalStage makeStage(const PhaseNominalSample& sample,
                                        bool gate_active);
-    static RobotState robotFromHorizon(const HorizonStateDebug& state);
-    static SloshState sloshFromHorizon(const HorizonStateDebug& state);
-
     PhaseRejoinParams params_;
     NominalSequenceArtifact artifact_;
     PhaseCandidateSelector selector_;

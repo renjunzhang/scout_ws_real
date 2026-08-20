@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/controller/control_cycle_engine.h"
+#include "spmpc_local_planner/controller/phase_solve_adapter.h"
 
 #include <cmath>
 
@@ -192,7 +193,9 @@ ControlCycleResult ControlCycleEngine::step(
                 request.execution_front_robot,
                 request.execution_front_slosh,
                 result.solver_success,
-                result.solver_output);
+                makePhaseSolveView(
+                    result.solver_output,
+                    result.phase_preparation.solver_terminal_step));
             if (phase_params_.mode == PhaseRejoinMode::Enforce) {
                 result.output.cmd_v =
                     result.phase_decision.output_cmd_v;

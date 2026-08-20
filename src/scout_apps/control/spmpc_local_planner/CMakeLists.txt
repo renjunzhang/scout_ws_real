@@ -162,6 +162,7 @@ add_library(spmpc_controller
   src/controller/control_cycle_engine.cpp
   src/controller/control_cycle_gate.cpp
   src/controller/control_cycle_input_preparer.cpp
+  src/controller/phase_solve_adapter.cpp
   src/controller/speed_reference_controller.cpp
 )
 
