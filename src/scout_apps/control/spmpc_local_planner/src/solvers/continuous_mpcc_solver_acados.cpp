@@ -4,6 +4,7 @@
 
 #include "spmpc_local_planner/reference/progress_projector.h"
 #include "spmpc_local_planner/reference/reference_spline.h"
+#include "spmpc_local_planner/solver/acados/solution_decoder.h"
 #include "spmpc_local_planner/solver/acados/stage_parameter_builder.h"
 #include "spmpc_local_planner/warm_start/warm_start_factory.h"
 #include "spmpc_local_planner/warm_start/warm_start_policy.h"
@@ -586,6 +587,33 @@ void capturePrimalGuess(GenSolver& gen,
     }
 }
 
+AcadosRawSolution captureRawSolution(GenSolver& gen) {
+    AcadosRawSolution raw;
+    raw.horizon_steps = gen.n_horizon;
+    raw.states.reserve(static_cast<std::size_t>(
+        (gen.n_horizon + 1) * raw.state_width));
+    raw.controls.reserve(static_cast<std::size_t>(
+        gen.n_horizon * raw.control_width));
+    ocp_nlp_config* config = gen.config();
+    ocp_nlp_dims* dimensions = gen.dims();
+    ocp_nlp_out* output = gen.out();
+    double state[10] = {0.0};
+    double control[3] = {0.0};
+    for (int stage = 0; stage <= gen.n_horizon; ++stage) {
+        std::fill(state, state + 10, 0.0);
+        ocp_nlp_out_get(
+            config, dimensions, output, stage, "x", state);
+        raw.states.insert(raw.states.end(), state, state + 10);
+        if (stage < gen.n_horizon) {
+            std::fill(control, control + 3, 0.0);
+            ocp_nlp_out_get(
+                config, dimensions, output, stage, "u", control);
+            raw.controls.insert(raw.controls.end(), control, control + 3);
+        }
+    }
+    return raw;
+}
+
 void fillAcadosState(const WarmStartState& state, bool slosh, double* x) {
     x[0] = state.px; x[1] = state.py; x[2] = state.theta; x[3] = state.v; x[4] = state.s;
     x[5] = state.omega;
@@ -972,9 +1000,6 @@ bool ContinuousMpccSolverAcados::solve(
         return false;
     }
 
-    ocp_nlp_config* cfg = gen->config();
-    ocp_nlp_dims* dims = gen->dims();
-    ocp_nlp_out* nlp_out = gen->out();
     if (have_previous_solution_) {
         copyWarmStartForSnapshot(
             previous_warm_start_solution_, c_h,
@@ -1043,271 +1068,47 @@ bool ContinuousMpccSolverAcados::solve(
         return false;
     }
 
-    // 读轨迹 + 诊断量（contour/lag/slosh/控制），按 §11.5 对齐 primitive。
-    const double inv_n = 1.0 / static_cast<double>(std::max(1, n));
-    output.trajectory.reserve(n + 1);
-    output.predicted_horizon.backend = "continuous_mpcc_acados";
-    output.predicted_horizon.variant = variant_.name;
-    output.predicted_horizon.slosh_enabled = slosh;
-    output.predicted_horizon.control_semantics = "alpha";
-    output.predicted_horizon.dt = input.dt;
-    output.predicted_horizon.slosh_cost_horizon_steps =
-        variant_.slosh_cost_horizon_steps;
-    output.predicted_horizon.slosh_cost_tail_discount =
-        variant_.slosh_cost_tail_discount;
-    output.predicted_horizon.states.reserve(static_cast<size_t>(n + 1));
-    output.predicted_horizon.controls.reserve(static_cast<size_t>(n));
-    std::vector<WarmStartState> solved_states;
-    solved_states.reserve(n + 1);
-    std::vector<double> heights;
-    heights.reserve(n + 1);
-    const double a_ref = std::max(0.1, params_.a_max);
-    const double omega_ref = std::max(1e-3, params_.omega_max);
-    const double alpha_ref = std::max(1e-3, params_.alpha_max);
-    const double vs_ref = std::max(0.1, params_.v_max);
-    double xk[10];
-    for (int k = 0; k <= n; ++k) {
-        ocp_nlp_out_get(cfg, dims, nlp_out, k, "x", xk);
-        TrajectoryPoint pt;
-        pt.x = xk[0]; pt.y = xk[1]; pt.yaw = xk[2]; pt.v = xk[3]; pt.s = xk[4];
-        output.trajectory.push_back(pt);
-        const WarmStartState solved_state = makeWarmStartState(xk, slosh);
-        solved_states.push_back(solved_state);
-        const double solved_h_modal = slosh ? c_h * std::hypot(solved_state.eta_x, solved_state.eta_y) : 0.0;
-        output.predicted_horizon.states.push_back(makeHorizonState(solved_state, solved_h_modal));
+    AcadosRawSolution raw_solution = captureRawSolution(*gen);
+    AcadosSolutionDecoderInput decoder_input;
+    decoder_input.raw_solution = &raw_solution;
+    decoder_input.solver_input = &input;
+    decoder_input.reference = &reference;
+    decoder_input.params = &params_;
+    decoder_input.variant = &variant_;
+    for (int index = 0; index < 4; ++index) {
+        decoder_input.reference_x_coeffs[static_cast<std::size_t>(index)] =
+            cx(index);
+        decoder_input.reference_y_coeffs[static_cast<std::size_t>(index)] =
+            cy(index);
+    }
+    decoder_input.contour_error_ref = e_c_ref;
+    decoder_input.lag_error_ref = e_l_ref;
+    decoder_input.effective_v_ref = v_ref;
+    decoder_input.height_coeff = c_h;
+    decoder_input.eta_ref = eta_ref;
+    decoder_input.eta_dot_ref = eta_dot_ref;
+    decoder_input.slosh_enabled = slosh;
+    decoder_input.have_previous_control = have_u_prev_;
+    decoder_input.previous_control = {{
+        u_prev_[0], u_prev_[1], u_prev_[2]}};
 
-        const double xref = polyEval(cx, pt.s);
-        const double yref = polyEval(cy, pt.s);
-        const double phi = std::atan2(polyDeriv(cy, pt.s), polyDeriv(cx, pt.s));
-        const double e_c = std::sin(phi) * (pt.x - xref) - std::cos(phi) * (pt.y - yref);
-        const double e_l = -std::cos(phi) * (pt.x - xref) - std::sin(phi) * (pt.y - yref);
-        // Generated stage costs are divided by N, while the terminal cost is
-        // not.  Mirror that convention so diagnostics describe the OCP that
-        // actually produced the command.
-        const double cost_scale = k < n ? inv_n : 1.0;
-        output.cost.J_contour += variant_.w_contour *
-            (e_c / e_c_ref) * (e_c / e_c_ref) * cost_scale;
-        output.cost.J_lag += variant_.w_lag *
-            (e_l / e_l_ref) * (e_l / e_l_ref) * cost_scale;
-
-        if (slosh) {
-            const double ex = xk[6], exd = xk[7], ey = xk[8], eyd = xk[9];
-            const double eta_norm = std::hypot(ex, ey);
-            const double eta_dot_norm = std::hypot(exd, eyd);
-            // Solver 预测高度保持 modal-only: h_modal = c_h·||eta||。
-            // yaw-induced parabola 项刻意不进入 solver hard-constraint/cost 诊断（见上方 solver_uses_parabola=false）。
-            const double h = c_h * eta_norm;
-            heights.push_back(h);
-            if (h > output.slosh_summary.h_peak_pred) {
-                output.slosh_summary.h_peak_pred = h;
-                output.slosh_summary.peak_k = k;
-            }
-            output.slosh_summary.eta_x_peak = std::max(output.slosh_summary.eta_x_peak, std::abs(ex));
-            output.slosh_summary.eta_y_peak = std::max(output.slosh_summary.eta_y_peak, std::abs(ey));
-            output.slosh_summary.eta_dot_norm_peak = std::max(output.slosh_summary.eta_dot_norm_peak, eta_dot_norm);
-            output.slosh_cost_monitor.eta_norm_peak = std::max(output.slosh_cost_monitor.eta_norm_peak, eta_norm);
-            output.slosh_cost_monitor.eta_dot_norm_peak = std::max(output.slosh_cost_monitor.eta_dot_norm_peak, eta_dot_norm);
-            double cost_ex = ex;
-            double cost_exd = exd;
-            double cost_ey = ey;
-            double cost_eyd = eyd;
-            if (phase_rejoin_enforce &&
-                k <= input.phase_rejoin.liquid_steps) {
-                const PhaseNominalStage& nominal =
-                    input.phase_rejoin.stages[static_cast<std::size_t>(k)];
-                cost_ex -= nominal.eta_x;
-                cost_exd -= nominal.eta_x_dot;
-                cost_ey -= nominal.eta_y;
-                cost_eyd -= nominal.eta_y_dot;
-            }
-            const double eta_cost_norm = std::hypot(cost_ex, cost_ey);
-            const double eta_dot_cost_norm = std::hypot(cost_exd, cost_eyd);
-            const double stage_scale = phase_rejoin_enforce
-                ? (k <= input.phase_rejoin.liquid_steps ? 1.0 : 0.0)
-                : sloshCostStageScale(variant_, k, n);
-            output.cost.J_slosh_eta += variant_.w_slosh * stage_scale *
-                (eta_cost_norm / eta_ref) * (eta_cost_norm / eta_ref) *
-                cost_scale;
-            output.cost.J_slosh_eta_dot += variant_.w_slosh * stage_scale *
-                params_.slosh.slosh_eta_dot_ratio *
-                (eta_dot_cost_norm / eta_dot_ref) *
-                (eta_dot_cost_norm / eta_dot_ref) * cost_scale;
-        }
+    AcadosSolutionDecodeResult decoded =
+        AcadosSolutionDecoder::decode(decoder_input, output);
+    if (!decoded.valid) {
+        output.success = false;
+        output.status = "ACADOS_SOLUTION_DECODE_FAILED_" + decoded.status;
+        snapshot.solver_status = output.status;
+        output.cmd_v = 0.0;
+        output.cmd_omega = 0.0;
+        return false;
     }
 
-    for (int k = 0; k < 3 && k < static_cast<int>(solved_states.size()); ++k) {
-        const auto& state = solved_states[k];
-        auto& head = output.local_traj_head_debug.points[k];
-        head.valid = true;
-        head.x = state.px;
-        head.y = state.py;
-        head.yaw = state.theta;
-        head.v = state.v;
-        head.omega = state.omega;
-        head.s = state.s;
-        const auto head_proj = projector.project(reference, state.px, state.py);
-        if (head_proj.valid) {
-            head.proj_s = head_proj.s;
-            head.proj_distance = head_proj.distance;
-            head.proj_signed_distance = head_proj.signed_distance;
-        }
-        const double xref = polyEval(cx, state.s);
-        const double yref = polyEval(cy, state.s);
-        const double phi = std::atan2(polyDeriv(cy, state.s), polyDeriv(cx, state.s));
-        const double dx = state.px - xref;
-        const double dy = state.py - yref;
-        head.contour_error = std::sin(phi) * dx - std::cos(phi) * dy;
-        head.lag_error = -std::cos(phi) * dx - std::sin(phi) * dy;
-        head.yaw_error = wrapAngle(state.theta - phi);
-    }
-
-    if (phase_rejoin_enforce && n <= input.phase_rejoin.liquid_steps &&
-        static_cast<std::size_t>(n) < input.phase_rejoin.stages.size()) {
-        const PhaseNominalStage& terminal_nominal =
-            input.phase_rejoin.stages[static_cast<std::size_t>(n)];
-        const double dv_nominal =
-            (solved_states[static_cast<std::size_t>(n)].v -
-             terminal_nominal.v) / vs_ref;
-        const double domega_nominal =
-            (solved_states[static_cast<std::size_t>(n)].omega -
-             terminal_nominal.omega) / omega_ref;
-        // terminal_cost_expr is not divided by N.
-        output.cost.J_v += variant_.w_v * dv_nominal * dv_nominal;
-        output.cost.J_control +=
-            variant_.w_control * domega_nominal * domega_nominal;
-    }
-    std::vector<WarmStartControl> solved_controls;
-    solved_controls.reserve(n);
-    double uk[3], u0[3] = {0, 0, 0};
-    for (int k = 0; k < n; ++k) {
-        ocp_nlp_out_get(cfg, dims, nlp_out, k, "u", uk);
-        solved_controls.push_back(makeWarmStartControl(uk));
-        output.predicted_horizon.controls.push_back(
-            makeHorizonControl(solved_controls.back()));
-        if (k == 0) { u0[0] = uk[0]; u0[1] = uk[1]; u0[2] = uk[2]; }
-        const bool phase_stage = phase_rejoin_enforce &&
-            k <= input.phase_rejoin.liquid_steps;
-        if (phase_stage) {
-            const PhaseNominalStage& nominal =
-                input.phase_rejoin.stages[static_cast<std::size_t>(k)];
-            const double dv_nominal =
-                (solved_states[k].v - nominal.v) / vs_ref;
-            const double domega_nominal =
-                (solved_states[k].omega - nominal.omega) / omega_ref;
-            const double da_nominal = (uk[0] - nominal.a) / a_ref;
-            const double dalpha_nominal =
-                (uk[1] - nominal.alpha) / alpha_ref;
-            const double dvs_nominal = (uk[2] - nominal.v_s) / vs_ref;
-            output.cost.J_v +=
-                (variant_.w_v * dv_nominal * dv_nominal +
-                 variant_.w_vs * dvs_nominal * dvs_nominal) * inv_n;
-            output.cost.J_control +=
-                ((variant_.w_control + variant_.w_accel) *
-                     da_nominal * da_nominal +
-                 variant_.w_control * domega_nominal * domega_nominal +
-                 variant_.w_alpha * dalpha_nominal * dalpha_nominal) * inv_n;
-        } else {
-            const double an = uk[0] / a_ref;                      // a (控制)
-            const double aln = uk[1] / alpha_ref;                 // alpha = omega-rate
-            const double wn = solved_states[k].omega / omega_ref;
-            output.cost.J_control +=
-                ((variant_.w_control + variant_.w_accel) * an * an +
-                 variant_.w_control * wn * wn +
-                 variant_.w_alpha * aln * aln) * inv_n;
-            output.cost.J_progress +=
-                -variant_.w_progress * (uk[2] / vs_ref) * inv_n;
-            const double vn = (solved_states[k].v - v_ref) / vs_ref;
-            const double vsn = (uk[2] - v_ref) / vs_ref;
-            output.cost.J_v +=
-                (variant_.w_v * vn * vn +
-                 variant_.w_vs * vsn * vsn) * inv_n;
-
-            // a/v_s 跨周期第一帧连续性（stage 0）；phase mode
-            // replaces this baseline prior with the nominal-relative cost.
-            if (k == 0 && have_u_prev_) {
-                const double da = (uk[0] - u_prev_[0]) / a_ref;
-                const double dvs = (uk[2] - u_prev_[2]) / vs_ref;
-                output.cost.J_smooth +=
-                    (variant_.w_du_a * da * da +
-                     variant_.w_du_vs * dvs * dvs) * inv_n;
-            }
-        }
-    }
-
-    if (!heights.empty()) {
-        std::vector<double> sorted = heights;
-        std::sort(sorted.begin(), sorted.end());
-        const size_t idx = std::min(sorted.size() - 1,
-            static_cast<size_t>(std::floor(0.95 * (sorted.size() - 1))));
-        output.slosh_summary.h_p95_pred = sorted[idx];
-    }
-    if (output.slosh_summary.hard_constraint_enable) {
-        output.slosh_summary.h_limit_margin = output.slosh_summary.h_limit - output.slosh_summary.h_peak_pred;
-    }
-    output.slosh_hard_constraint.h_peak_pred = output.slosh_summary.h_peak_pred;
-    output.slosh_hard_constraint.h_limit_margin = output.slosh_summary.h_limit_margin;
-    output.slosh_hard_constraint.peak_k = output.slosh_summary.peak_k;
-
-    const double abs_sum =
-        std::abs(output.cost.J_contour) + std::abs(output.cost.J_lag) + std::abs(output.cost.J_progress) +
-        std::abs(output.cost.J_v) + std::abs(output.cost.J_control) + std::abs(output.cost.J_smooth) +
-        std::abs(output.cost.J_terminal) + std::abs(output.cost.J_corridor) + std::abs(output.cost.J_obstacle) +
-        std::abs(output.cost.J_slosh_eta) + std::abs(output.cost.J_slosh_eta_dot);
-    const double slosh_abs = std::abs(output.cost.J_slosh_eta) + std::abs(output.cost.J_slosh_eta_dot);
-    output.slosh_cost_monitor.J_slosh_eta = output.cost.J_slosh_eta;
-    output.slosh_cost_monitor.J_slosh_eta_dot = output.cost.J_slosh_eta_dot;
-    output.slosh_cost_monitor.J_slosh_total = output.cost.J_slosh_eta + output.cost.J_slosh_eta_dot;
-    output.slosh_cost_monitor.abs_cost_sum = abs_sum;
-    output.slosh_cost_monitor.pct_slosh_total_abs_sum = abs_sum > 1e-9 ? 100.0 * slosh_abs / abs_sum : 0.0;
-    output.slosh_cost_monitor.pct_eta_in_slosh = slosh_abs > 1e-9 ? 100.0 * std::abs(output.cost.J_slosh_eta) / slosh_abs : 0.0;
-    output.slosh_cost_monitor.pct_eta_dot_in_slosh = slosh_abs > 1e-9 ? 100.0 * std::abs(output.cost.J_slosh_eta_dot) / slosh_abs : 0.0;
-
-    // u = [a, alpha, v_s]; v_s 是虚拟路径进度速度，不直接作为 /cmd_vel.linear.x。
-    // omega 是状态：下发角速度 = 实测 omega + alpha_0*dt（与 cmd_v 同口径单步积分）。
-    const double cmd_v_pre = input.robot.v + u0[0] * input.dt;
-    const double cmd_omega_pre = input.robot.omega + u0[1] * input.dt;
-    output.cmd_v = clampValue(cmd_v_pre, 0.0, params_.v_max);
-    output.cmd_omega = clampValue(cmd_omega_pre, -params_.omega_max, params_.omega_max);
-
-    output.first_shot_debug.success = true;
-    output.first_shot_debug.u0_a = u0[0];
-    output.first_shot_debug.u0_alpha = u0[1];
-    output.first_shot_debug.u0_v_s = u0[2];
-    output.first_shot_debug.cmd_v_pre_clamp = cmd_v_pre;
-    output.first_shot_debug.cmd_v_post_clamp = output.cmd_v;
-    output.first_shot_debug.cmd_omega_pre_clamp = cmd_omega_pre;
-    output.first_shot_debug.cmd_omega_post_clamp = output.cmd_omega;
-    if (solved_states.size() > 1) {
-        output.first_shot_debug.x1_v = solved_states[1].v;
-        output.first_shot_debug.x1_omega = solved_states[1].omega;
-        output.first_shot_debug.x1_s = solved_states[1].s;
-    }
-    if (solved_states.size() > 2) {
-        output.first_shot_debug.x2_v = solved_states[2].v;
-        output.first_shot_debug.x2_omega = solved_states[2].omega;
-        output.first_shot_debug.x2_s = solved_states[2].s;
-    }
-    if (solved_states.size() > 3) {
-        output.first_shot_debug.x3_v = solved_states[3].v;
-        output.first_shot_debug.x3_omega = solved_states[3].omega;
-        output.first_shot_debug.x3_s = solved_states[3].s;
-    }
-
-    u_prev_[0] = u0[0];
-    u_prev_[1] = u0[1];
-    u_prev_[2] = u0[2];
+    u_prev_[0] = decoded.first_control[0];
+    u_prev_[1] = decoded.first_control[1];
+    u_prev_[2] = decoded.first_control[2];
     have_u_prev_ = true;
-    previous_warm_start_solution_.states = solved_states;
-    previous_warm_start_solution_.controls = solved_controls;
-    previous_warm_start_solution_.valid = !solved_states.empty() && solved_controls.size() == static_cast<size_t>(n);
-    previous_warm_start_solution_.diagnostics = output.warm_start_diagnostics;
+    previous_warm_start_solution_ = std::move(decoded.solved_warm_start);
     have_previous_solution_ = previous_warm_start_solution_.valid;
-
-    output.success = true;
-    output.status = variant_.name + "_ACADOS_OK";
-    output.predicted_horizon.valid = true;
-    output.predicted_horizon.solver_status = output.status;
-    snapshot.solver_status = output.status;
     return true;
 }
 

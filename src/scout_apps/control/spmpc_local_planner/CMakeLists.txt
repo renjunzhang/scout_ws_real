@@ -220,11 +220,9 @@ target_link_libraries(spmpc_solver_rollout
   spmpc_reference
 )
 
-add_library(spmpc_solver_parameters STATIC
+add_library(spmpc_solver_parameters
+  src/solver/acados/solution_decoder.cpp
   src/solver/acados/stage_parameter_builder.cpp
-)
-set_target_properties(spmpc_solver_parameters PROPERTIES
-  POSITION_INDEPENDENT_CODE ON
 )
 target_include_directories(spmpc_solver_parameters PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
@@ -232,6 +230,7 @@ target_include_directories(spmpc_solver_parameters PRIVATE
 target_link_libraries(spmpc_solver_parameters
   PRIVATE
   spmpc_config
+  spmpc_reference
 )
 
 add_library(spmpc_solver_acados
@@ -553,6 +552,14 @@ if(CATKIN_ENABLE_TESTING)
     )
     target_link_libraries(test_acados_stage_parameter_builder
       spmpc_solver_parameters
+    )
+  endif()
+  catkin_add_gtest(test_acados_solution_decoder
+    test/test_acados_solution_decoder.cpp)
+  if(TARGET test_acados_solution_decoder)
+    target_link_libraries(test_acados_solution_decoder
+      spmpc_solver_parameters
+      spmpc_reference
     )
   endif()
   catkin_add_gtest(test_command_pipeline test/test_command_pipeline.cpp)
