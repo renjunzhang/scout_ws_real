@@ -3057,7 +3057,7 @@ set -euo pipefail
 : "${SCOUT_WS:?}"
 export FREEZE_ROOT="${SCOUT_WS}/docs/实物实验注意事项/对比试验/实物对比实验/freeze"
 export FREEZE_MANIFEST="${FREEZE_ROOT}/freeze_manifest.yaml"
-export VALIDATOR="${SCOUT_WS}/src/scout_apps/control/spmpc_local_planner/scripts/validate_spmpc_formal_freeze.py"
+export VALIDATOR="${SCOUT_WS}/src/scout_apps/control/spmpc_local_planner/tools/legacy/validate_spmpc_formal_freeze.py"
 
 test -s "${FREEZE_MANIFEST}"
 test -x "${VALIDATOR}"

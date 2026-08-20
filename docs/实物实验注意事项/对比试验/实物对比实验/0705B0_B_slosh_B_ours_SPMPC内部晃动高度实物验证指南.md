@@ -812,7 +812,7 @@ source /opt/ros/noetic/setup.bash
 source /home/geist/scout_ws/devel/setup.bash
 cd /home/geist/scout_ws
 
-python3 src/scout_apps/control/spmpc_local_planner/scripts/summarize_spmpc_real_trial.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/analysis/summarize_spmpc_real_trial.py \
   /home/geist/slosh_bags/real/${DATE}_fixed_path_compare/${ALG}/${RUN_LABEL}.bag
 ```
 

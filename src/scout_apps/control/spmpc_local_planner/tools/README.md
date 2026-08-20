@@ -2,8 +2,9 @@
 
 本目录只承载非运行时工具，不被 CMake 安装到机器人部署空间：
 
-- `analysis/`：bag/CSV 的只读分析、postflight、比较器准备和报告生成；
+- `analysis/`：bag/CSV 的只读分析、postflight、development artifact/freeze 草案准备和报告生成；
 - `codegen/acados/`：CasADi 模型、代价、约束、参数 manifest 和 acados solver 生成入口。
+- `legacy/`：仅用于旧证据复核、不得放行当前协议的历史工具。
 
 工具不得被 launch 或控制主链调用。Python 回归测试统一位于 `../test/python/`，运行方式：
 

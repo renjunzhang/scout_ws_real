@@ -28,7 +28,7 @@ source "${REPO_ROOT}/devel/setup.bash"
 RUNNER="${SCRIPT_DIR}/run_spmpc_real_fixed_path_trial.sh"
 VALIDATOR="${SCRIPT_DIR}/../tools/analysis/validate_g3_online_rgb_trial.py"
 ANALYZER="${SCRIPT_DIR}/../tools/analysis/analyze_g3_w5_vs_bsmooth.py"
-SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
+SUMMARIZER="${SCRIPT_DIR}/../tools/analysis/summarize_spmpc_real_trial.py"
 CAMERA_PREP="${SCRIPT_DIR}/prepare_spmpc_g3_realsense.sh"
 ONLINE_LIQUID_LAUNCH="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/launch/online_liquid_height.launch"
 ONLINE_LIQUID_NODE="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/scripts/online_liquid_height_node.py"
@@ -132,7 +132,7 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_experiment.sh
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/summarize_spmpc_real_trial.py
+  src/scout_apps/control/spmpc_local_planner/tools/analysis/summarize_spmpc_real_trial.py
   src/scout_apps/sensors/realsense_liquid_measurement/launch/online_liquid_height.launch
   src/scout_apps/sensors/realsense_liquid_measurement/msg/OnlineLiquidMeasurement.msg
   src/scout_apps/sensors/realsense_liquid_measurement/scripts/online_liquid_height_node.py

@@ -164,5 +164,5 @@ echo "  solver_time_ms  = ${solver_ms_end:-NA}   (30Hz 期望 <33ms)"
 echo "  bag             = ${bag}"
 echo
 echo ">>> h_peak / cost_breakdown / progress 单调性等用 analyze 脚本读 bag(权威):"
-echo "    python3 $(dirname "$0")/analyze_b0_bslosh_compare.py ${OUT_DIR} B0 B_slosh"
+echo "    python3 $(dirname "$0")/../tools/analysis/analyze_b0_bslosh_compare.py ${OUT_DIR} B0 B_slosh"
 echo "    (continuous 后端不发 primitive, analyze 中 primitive 字段显示 0 属正常)"

@@ -23,7 +23,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)"
 RUNNER="${SCRIPT_DIR}/run_spmpc_real_fixed_path_trial.sh"
 VALIDATOR="${SCRIPT_DIR}/../tools/analysis/validate_g3_online_rgb_trial.py"
-SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
+SUMMARIZER="${SCRIPT_DIR}/../tools/analysis/summarize_spmpc_real_trial.py"
 CAMERA_PREP="${SCRIPT_DIR}/prepare_spmpc_g3_realsense.sh"
 
 [[ -r /opt/ros/noetic/setup.bash ]] || fail "missing ROS Noetic setup"
@@ -177,7 +177,7 @@ relevant_repo_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_robot_only_smoke_trial.sh
   src/scout_apps/control/spmpc_local_planner/tools/analysis/validate_g3_online_rgb_trial.py
   src/scout_apps/control/spmpc_local_planner/scripts/prepare_spmpc_g3_realsense.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/summarize_spmpc_real_trial.py
+  src/scout_apps/control/spmpc_local_planner/tools/analysis/summarize_spmpc_real_trial.py
   src/scout_apps/sensors/realsense_liquid_measurement/launch/online_liquid_height.launch
   src/scout_apps/sensors/realsense_liquid_measurement/msg/OnlineLiquidMeasurement.msg
   src/scout_apps/sensors/realsense_liquid_measurement/scripts/online_liquid_height_node.py

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 SCRIPT = (
     Path(__file__).resolve().parents[2]
-    / "scripts/summarize_spmpc_real_trial.py"
+    / "tools/analysis/summarize_spmpc_real_trial.py"
 )
 SPEC = importlib.util.spec_from_file_location("summarize_spmpc_real_trial", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)

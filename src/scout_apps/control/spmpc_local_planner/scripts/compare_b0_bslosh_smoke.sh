@@ -161,4 +161,4 @@ sleep 1
 echo "[done] ${VARIANT} 完成 -> ${bag}"
 echo
 echo ">>> 两个 variant 都录完后, 运行对比分析:"
-echo "    python3 $(dirname "$0")/analyze_b0_bslosh_compare.py ${OUT_DIR} B0 B_slosh"
+echo "    python3 $(dirname "$0")/../tools/analysis/analyze_b0_bslosh_compare.py ${OUT_DIR} B0 B_slosh"

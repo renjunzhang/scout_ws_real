@@ -23,7 +23,7 @@ source "${REPO_ROOT}/devel/setup.bash"
 
 RUNNER="${SCRIPT_DIR}/run_spmpc_real_fixed_path_trial.sh"
 VALIDATOR="${SCRIPT_DIR}/../tools/analysis/validate_g2c_processed_imu_trial.py"
-SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
+SUMMARIZER="${SCRIPT_DIR}/../tools/analysis/summarize_spmpc_real_trial.py"
 
 G2C_ROW="${G2C_ROW:-}"
 G2C_ATTEMPT="${G2C_ATTEMPT:-01}"
@@ -84,7 +84,7 @@ smoke_frozen_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_experiment.sh
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/summarize_spmpc_real_trial.py
+  src/scout_apps/control/spmpc_local_planner/tools/analysis/summarize_spmpc_real_trial.py
 )
 git -C "${REPO_ROOT}" diff --quiet \
   "${PLANNER_SMOKE_BASE_REVISION}..${release_revision}" -- \

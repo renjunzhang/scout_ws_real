@@ -149,7 +149,7 @@ runtime_rules:
   strict_control_cycle_deadline_claim_enabled: false
 
 manifest_validation:
-  validator_script: src/scout_apps/control/spmpc_local_planner/scripts/validate_spmpc_formal_freeze.py
+  validator_script: src/scout_apps/control/spmpc_local_planner/tools/legacy/validate_spmpc_formal_freeze.py
   validator_script_sha256: ""
 
 gates:

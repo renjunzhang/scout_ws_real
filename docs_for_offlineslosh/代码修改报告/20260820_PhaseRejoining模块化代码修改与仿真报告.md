@@ -74,7 +74,7 @@ src/phase_rejoin/phase_rejoin_coordinator.cpp
 
 ```text
 msg/PhaseRejoinDebug.msg
-scripts/prepare_phase_rejoin_development_artifact.py
+tools/analysis/prepare_phase_rejoin_development_artifact.py
 scripts/tests/test_phase_rejoin_development_artifact.py
 test/test_nominal_sequence_artifact.cpp
 test/test_phase_rejoin.cpp

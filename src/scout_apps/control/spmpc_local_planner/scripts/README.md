@@ -17,13 +17,13 @@ SHA-256 绑定到 prereg/runtime bundle。历史 Python 实现在
 | `analyze_spmpc_g2s_source_selection.sh` | 四条 G2S PASS 后的一键只读 source analyzer，自动加载 ROS/workspace 并使用冻结目录 | development source decision |
 | `../tools/analysis/validate_g2s_paired_trial.py` | 单条 G2S bag 的 motion/在线视觉质量/零图像话题/双 observer/READY/selection postflight | development fail-closed QC |
 | `../tools/analysis/analyze_g2s_source_selection.py` | 4 条同-trial paired unit 对 RGB 的 odom/IMU 决策 | development source decision；不自动签 formal release |
-| `summarize_spmpc_real_trial.py` | 单包/目录离线完整性、配置和 fallback 摘要 | future v2.0 即时 QC；schema 尚未升级完整 |
-| `validate_spmpc_formal_freeze.py` | 旧 v1.0 只读 freeze 校验 | **不得放行 v2.0**；必须升级后才可成为强制门控 |
+| `../tools/analysis/summarize_spmpc_real_trial.py` | 单包/目录离线完整性、配置和 fallback 摘要 | future v2.0 即时 QC；schema 尚未升级完整 |
+| `../tools/legacy/validate_spmpc_formal_freeze.py` | 旧 v1.0 只读 freeze 校验 | **不得放行 v2.0**；仅用于旧证据复核 |
 | `run_external_baseline_real_fixed_path_trial.sh` | LT-DWA、TEB、MPC 外部 baseline 的 shadow/actuated 实物运行 | 独立外部 baseline，不属于当前内部 88 单元 |
 | `record_spmpc_mainline_ground_smoke.sh` | 轻量地面 smoke recorder | smoke |
 | `record_spmpc_experiment.sh` | planner 已手动启动时的备用 recorder | 手动调试 |
-| `generate_phase_rejoin_development_nominal.py` | 从 bag 提取冻结 Path 后调用 C++ 生成动力学一致 v2 artifact | **仅 development interface smoke；不是 OfflineSloshOCP 或实物正式 artifact** |
-| `prepare_phase_rejoin_development_artifact.py` | 从严格配对的 rolling horizon/audit 离线导出 phase-rejoin 接口 artifact | **仅 development interface smoke；不是 OfflineSloshOCP 或实物正式 artifact** |
+| `../tools/analysis/generate_phase_rejoin_development_nominal.py` | 从 bag 提取冻结 Path 后调用 C++ 生成动力学一致 v2 artifact | **仅 development interface smoke；不是 OfflineSloshOCP 或实物正式 artifact** |
+| `../tools/analysis/prepare_phase_rejoin_development_artifact.py` | 从严格配对的 rolling horizon/audit 离线导出 phase-rejoin 接口 artifact | **仅 development interface smoke；不是 OfflineSloshOCP 或实物正式 artifact** |
 | `run_spmpc_g4_from_g3.sh` | 从 G3 bag 提取轨迹与 snapshot，并调用真实 C++ acados backend 完成顺序/分支回放 | development G4 toolchain gate；不发送命令 |
 | `run_spmpc_short_horizon_matched_trial.sh` | 展开 launch 参数后调用 C++ preflight 校验 matched0/5 公平性与短液体窗口，再编排 development 实物采集 | development G3R3；默认不运动，需显式 `ARM_MOTION=YES` |
 | `run_continuous_real.sh` | 历史 continuous MPCC 实物一键运行 | 历史/开发，不是正式 runner |
@@ -32,17 +32,17 @@ SHA-256 绑定到 prereg/runtime bundle。历史 Python 实现在
 | `phase3_smoke.sh` | corridor/obstacle/guidance Phase 3 开发检查 | 仿真 smoke |
 | `phase4_fixed_path_run.sh` | 历史开发 Phase 4 fixed-path 实物运行 | 历史脚本；不是正式 Smooth-match P4 |
 | `sweep_w_slosh.sh` | 仿真中单值运行开发性 `w_slosh` 扫描 | 开发扫描 |
-| `sweep_w_slosh_summary.py` | 汇总开发性权重扫描 bag | 离线开发分析 |
-| `analyze_b0_bslosh_compare.py` | 对比多个 variant smoke bag | 离线开发分析 |
-| `analyze_spmpc_delay_phase.py` | 从 bag 诊断 command/odom 延迟和 phase 状态 | 离线诊断 |
-| `check_omega_smoke.py` | 快查停滞、角速度变化率和模型晃动峰值 | 离线 smoke 速查 |
+| `../tools/analysis/sweep_w_slosh_summary.py` | 汇总开发性权重扫描 bag | 离线开发分析 |
+| `../tools/analysis/analyze_b0_bslosh_compare.py` | 对比多个 variant smoke bag | 离线开发分析 |
+| `../tools/analysis/analyze_spmpc_delay_phase.py` | 从 bag 诊断 command/odom 延迟和 phase 状态 | 离线诊断 |
+| `../tools/analysis/check_omega_smoke.py` | 快查停滞、角速度变化率和模型晃动峰值 | 离线 smoke 速查 |
 
 配套目录用途：
 
 - `../tools/codegen/acados/generate_spmpc_acados.py` 负责模型检查和求解器代码生成；同目录的模型、代价和约束文件是其装配模块，不单独运行；
 - `../tools/analysis/g4_replay_from_g3.py` 只保留 rosbag 提取、轨迹统计、checkpoint 选择和报告汇总；顺序恢复完整 acados iterate、actual/zero/四相位分叉及求解全部由链接 `spmpc_solver_acados` 的 `spmpc_g4_snapshot_replay` 执行。工具会逐包校验 snapshot 与 codegen JSON 维度，并把实际加载的 wrapper、slosh generated solver、acados、HPIPM 和 BLASFEO 二进制 hash 写入报告；
 - `../tools/analysis/horizon_liquid_replay.py` 保留原有 Python dataclass/API，但液体视界、observer 和 planned-control 回放已统一调用 C++ `spmpc_analysis_replay`；运行依赖该工作区先构建 `spmpc_analysis_replay_c_api`。两个 analysis library 只服务源码树离线分析，不进入 `catkin_package` 或机器人 runtime install；
-- `../tools/analysis/estimate_cmd_odom_delay.py` 是早期 cmd/odom 互相关与绘图工具，当前优先使用本目录的 `analyze_spmpc_delay_phase.py`；
+- `../tools/analysis/estimate_cmd_odom_delay.py` 是早期 cmd/odom 互相关与绘图工具，当前优先使用同目录的 `analyze_spmpc_delay_phase.py`；
 - `../test/python/` 保存 analysis、summary、artifact 和 freeze validator 的回归测试。
 
 只构建液体回放 C ABI 的命令为：
@@ -70,13 +70,13 @@ catkin_make spmpc_short_horizon_matched_preflight -j2
 
 它直接消费 `roslaunch --dump-params` 的展开结果，拒绝缺失、重复、未知、非有限字段，以及 matched0/5 除 `w_slosh=0/5` 外的任何差异。原 Python 单元测试仍作为离线回归保留在 `../test/python/`，不再参与实物启动放行。
 
-## generate_phase_rejoin_development_nominal.py
+## tools/analysis/generate_phase_rejoin_development_nominal.py
 
 该脚本保留原有 bag CLI，只负责只读提取 `/scout/global_path_fixed` 并写入临时 `x,y` CSV。`spmpc_phase_rejoin_development_nominal` 使用与运行时 artifact loader 相同的 C++ RK4 传播和 v2 合同完成路径清洗、速度规划、液体 settling、development-only 强标记、规范化及原子写入。C++ executable 属于 source-tree 离线工具，不进入机器人 runtime install。
 
 构建后仍可沿用原 Python 命令；若已有冻结路径 CSV，也可直接调用 C++ executable。两种入口都固定输出 `development_dynamics_consistent_nominal`，不得改标为 formal/hardware/paper 证据。
 
-## prepare_phase_rejoin_development_artifact.py
+## tools/analysis/prepare_phase_rejoin_development_artifact.py
 
 该工具只为 Phase-Rejoining 的文件接口和闭环机制 smoke 准备临时输入。它从 bag 中按 `cycle_id` 一对一连接：
 
@@ -107,7 +107,7 @@ cycle_id,kappa_v,kappa_omega,r_x,r_y,r_yaw,r_v,r_omega,r_eta_x,r_eta_x_dot,r_eta
 典型导出命令：
 
 ```bash
-python3 src/scout_apps/control/spmpc_local_planner/scripts/prepare_phase_rejoin_development_artifact.py export \
+python3 src/scout_apps/control/spmpc_local_planner/tools/analysis/prepare_phase_rejoin_development_artifact.py export \
   --bag /path/to/development_proxy.bag \
   --development-parameters /path/to/operator_supplied_development_parameters.csv \
   --output /tmp/phase_rejoin_development_only.csv \
@@ -180,7 +180,7 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_ba
 - `PATH_EXPECTED_SHA256`、`PATH_ACTUAL_SHA256`、`REQUIRE_PATH_HASH`；
 - pilot 使用 `PILOT_CONDITION` 区分 `B0/Bsmooth/W1/W2/W5` 或 `S/Mminus/M0/Mplus`。
 
-recorder 只保存调用者传入的这些字段，不负责判断 block 顺序是否合法，也不签署 freeze。正式合法性由上游 protocol shell 和 `validate_spmpc_formal_freeze.py` 检查。
+recorder 只保存调用者传入的这些字段，不负责判断 block 顺序是否合法，也不签署 freeze。旧 v1.0 证据只能由 `../tools/legacy/validate_spmpc_formal_freeze.py` 复核；v2.0 validator 尚不存在，当前正式链保持 `NO-GO`。
 
 ### replay 话题 smoke 检查
 
@@ -407,7 +407,7 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/analyze_spmpc_g2s_raw_rg
 
 该报告只能放行 `run_spmpc_g2c_processed_imu_w2w5_trial.sh` 的 G2C development，不能写成正式四包 G2S PASS，也不能放行 G3 或 40/64/88。
 
-## summarize_spmpc_real_trial.py
+## tools/analysis/summarize_spmpc_real_trial.py
 
 实物 SPMPC bag 离线 summary 脚本。支持传入单个 `.bag` 或 run 目录，读取 rosbag 与 recorder / one-click sidecar，输出：
 
@@ -431,24 +431,24 @@ ${bag_stem}_summary.md
 source /opt/ros/noetic/setup.bash
 source /home/geist/scout_ws/devel/setup.bash
 
-python3 src/scout_apps/control/spmpc_local_planner/scripts/summarize_spmpc_real_trial.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/analysis/summarize_spmpc_real_trial.py \
   /home/geist/slosh_bags/real/20260704_fixed_path_compare/B_slosh/Bslosh_delay_off_run01.bag
 ```
 
-## validate_spmpc_formal_freeze.py
+## tools/legacy/validate_spmpc_formal_freeze.py
 
-正式采集前的只读、fail-closed 校验器。它不生成、不修改也不签署 manifest；只验证已经由受控流程填写并设为只读的 `freeze_manifest.yaml`。当前模板仍是 `NO-GO`，不能把模板改一个 `status` 后直接使用。
+旧 v1.0 正式证据的只读、fail-closed 复核器。它不生成、不修改也不签署 manifest；只验证已经由当时受控流程填写并设为只读的 `freeze_manifest.yaml`。它拒绝 v2.0，不能用于新采集放行。
 
 校验范围包括协议版本、10 个 gate、40 组 artifact/hash、Git clean/HEAD、方法与 stage/group/path/container 合法组合、路径和容器配置、实际 `v_ref/w_slosh`、Smooth-match 安全区间、C2 参数、`T_SETTLE` 以及本轮禁用的后续 release 功能。
 
-正式 H1/C1/B0 单元的调用形态如下；数值必须来自本次只读 manifest 和运行环境，不能照抄占位符：
+历史 H1/C1/B0 单元的复核形态如下；数值必须来自对应只读 manifest 和归档运行环境，不能照抄占位符：
 
 ```bash
 : "${CONTAINER_RADIUS:?从 manifest 载入 C1 半径}"
 : "${LIQUID_HEIGHT:?从 manifest 载入 C1 液深}"
 : "${DAMPING_RATIO:?从 manifest 载入 C1 阻尼比}"
 
-python3 src/scout_apps/control/spmpc_local_planner/scripts/validate_spmpc_formal_freeze.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/legacy/validate_spmpc_formal_freeze.py \
   --manifest docs/实物实验注意事项/对比试验/实物对比实验/freeze/freeze_manifest.yaml \
   --repo-root /home/geist/scout_ws \
   --stage S1 \
@@ -487,13 +487,13 @@ VARIANT=B_slosh OUT_DIR=/data/a/spmpc_compare \
   bash src/scout_apps/control/spmpc_local_planner/scripts/compare_b0_bslosh_smoke.sh
 ```
 
-## analyze_b0_bslosh_compare.py
+## tools/analysis/analyze_b0_bslosh_compare.py
 
 离线分析 smoke bag，比较不同 variant 的控制输出、预测晃动、cost breakdown、
 primitive 选择和 progress 单调性。
 
 ```bash
-python3 src/scout_apps/control/spmpc_local_planner/scripts/analyze_b0_bslosh_compare.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/analysis/analyze_b0_bslosh_compare.py \
   /data/a/spmpc_compare B0 B_slosh B_smooth B_ours
 ```
 
@@ -638,7 +638,7 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/verify_continuous_smoke.
 
 脚本检查 acados 库和生成物、backend/status、首末 `/cmd_vel` 与 solver time，并生成 smoke bag。它会生成临时路径，只用于仿真。
 
-## sweep_w_slosh.sh 与 sweep_w_slosh_summary.py
+## sweep_w_slosh.sh 与 tools/analysis/sweep_w_slosh_summary.py
 
 开发性仿真权重扫描。每个权重必须从相同 spawn 重新启动仿真，单值运行后统一汇总：
 
@@ -648,13 +648,13 @@ W_SLOSH=1 OUT_DIR=/data/${USER}/spmpc_wsweep \
 
 # 重启仿真后分别运行 W_SLOSH=2、5
 
-python3 src/scout_apps/control/spmpc_local_planner/scripts/sweep_w_slosh_summary.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/analysis/sweep_w_slosh_summary.py \
   /data/${USER}/spmpc_wsweep B_slosh
 ```
 
 summary 输出 observer peak/mean、命令、solver time 和 progress 单调性，用于开发诊断。正式 P3 必须按冻结的 15 单元、H0 replay、W1/W2/W5、standalone reset 和 `delta_model` 规则执行，不能用这个单次仿真 sweep 替代。
 
-## analyze_spmpc_delay_phase.py
+## tools/analysis/analyze_spmpc_delay_phase.py
 
 只读离线分析一个或多个 bag 的 command→odom 正延迟、消息间隔、solver 和 delay-phase 状态；不会发布命令或修改 bag：
 
@@ -662,7 +662,7 @@ summary 输出 observer peak/mean、命令、solver time 和 progress 单调性�
 source /opt/ros/noetic/setup.bash
 source /home/geist/scout_ws/devel/setup.bash
 
-python3 src/scout_apps/control/spmpc_local_planner/scripts/analyze_spmpc_delay_phase.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/analysis/analyze_spmpc_delay_phase.py \
   /home/geist/slosh_bags/real/20260726_spmpc_formal \
   --cmd-source spmpc_limited \
   --out-csv /tmp/spmpc_delay_summary.csv
@@ -670,12 +670,12 @@ python3 src/scout_apps/control/spmpc_local_planner/scripts/analyze_spmpc_delay_p
 
 `--cmd-source cmd_vel` 使用最终 `/cmd_vel`；`spmpc_limited` 使用 `/spmpc/debug/cmd_vel_output` 的 limited command。正 lag 表示 odom 响应晚于 command。该工具给出估计和 proxy，不把 bag 消息间隔命名为严格 control-cycle deadline miss。
 
-## check_omega_smoke.py
+## tools/analysis/check_omega_smoke.py
 
 递归扫描目录内 bag，快速报告是否停滞、`omega` 变化率 p95/max 和去除起步 2 s 后的模型晃动峰值：
 
 ```bash
-python3 src/scout_apps/control/spmpc_local_planner/scripts/check_omega_smoke.py \
+python3 src/scout_apps/control/spmpc_local_planner/tools/analysis/check_omega_smoke.py \
   /data/${USER}/spmpc_continuous
 ```
 

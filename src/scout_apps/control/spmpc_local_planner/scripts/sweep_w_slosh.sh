@@ -35,4 +35,4 @@ echo
 echo ">>> 其余值各跑一次(每次前重开仿真回起点), 例如:"
 echo "    for w in 0 1 2 3 5; do  # 每个 w 单独重开仿真后:  W_SLOSH=\$w bash $0  ; done"
 echo ">>> 全部跑完后汇总找拐点:"
-echo "    python3 ${HERE}/sweep_w_slosh_summary.py ${OUT_DIR}"
+echo "    python3 ${HERE}/../tools/analysis/sweep_w_slosh_summary.py ${OUT_DIR}"

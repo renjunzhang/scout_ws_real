@@ -14,7 +14,7 @@ import yaml
 
 SCRIPT = (
     Path(__file__).resolve().parents[2]
-    / "scripts/validate_spmpc_formal_freeze.py"
+    / "tools/legacy/validate_spmpc_formal_freeze.py"
 )
 
 
@@ -116,7 +116,9 @@ class FormalFreezeValidatorTest(unittest.TestCase):
             "recorder_warm_start_report": artifact("freeze/reports/warm_start_smoke.md"),
             "actual_zero_replay_report": artifact("freeze/reports/actual_zero_smoke.md"),
         }
-        self.validator_script = self.repo / "scripts" / "validate_spmpc_formal_freeze.py"
+        self.validator_script = (
+            self.repo / "tools" / "legacy" / "validate_spmpc_formal_freeze.py"
+        )
         self.validator_script.parent.mkdir(parents=True, exist_ok=True)
         self.validator_script.write_bytes(SCRIPT.read_bytes())
         subprocess.run(["git", "-C", str(self.repo), "add", "."], check=True)

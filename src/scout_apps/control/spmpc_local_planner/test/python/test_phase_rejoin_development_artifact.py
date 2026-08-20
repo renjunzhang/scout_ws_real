@@ -10,7 +10,7 @@ import unittest
 
 MODULE_PATH = (
     Path(__file__).resolve().parents[2]
-    / "scripts/prepare_phase_rejoin_development_artifact.py"
+    / "tools/analysis/prepare_phase_rejoin_development_artifact.py"
 )
 SPEC = importlib.util.spec_from_file_location(
     "prepare_phase_rejoin_development_artifact", MODULE_PATH
