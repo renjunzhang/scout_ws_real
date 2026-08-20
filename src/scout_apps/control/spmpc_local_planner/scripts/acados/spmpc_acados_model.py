@@ -79,7 +79,24 @@ SLOSH_EXTRA_NAMES = [
 SLOSH_HARD_EXTRA_NAMES = [
     "eta_max_sq",        # 硬约束阈值: eta_x^2 + eta_y^2 <= eta_max_sq（mainline slosh only）
 ]
-PARAM_NAMES_SLOSH = PARAM_NAMES + SLOSH_EXTRA_NAMES + SLOSH_HARD_EXTRA_NAMES
+# Phase-rejoining 只追加在 alpha-state slosh 主线，避免改动 B0 和
+# direct-omega 诊断后端的已冻结参数契约。这些参数逐 stage 注入：
+#   - phase_rejoin_active=1: 当前 stage 使用 j_f+k 的 nominal-relative 代价；
+#   - empirical_gate_active=1: 仅 k=N_l 启用 9 维经验恢复 gate。
+# gate 是 empirical development mechanism，不表示 robust funnel/certificate。
+PHASE_REJOIN_EXTRA_NAMES = [
+    "phase_rejoin_active",
+    "nom_x", "nom_y", "nom_yaw", "nom_v", "nom_omega",
+    "nom_eta_x", "nom_eta_x_dot", "nom_eta_y", "nom_eta_y_dot",
+    "nom_a", "nom_alpha", "nom_v_s",
+    "empirical_gate_active",
+    "gate_r_x", "gate_r_y", "gate_r_yaw", "gate_r_v", "gate_r_omega",
+    "gate_r_eta_x", "gate_r_eta_x_dot", "gate_r_eta_y", "gate_r_eta_y_dot",
+]
+PARAM_NAMES_SLOSH = (
+    PARAM_NAMES + SLOSH_EXTRA_NAMES + SLOSH_HARD_EXTRA_NAMES +
+    PHASE_REJOIN_EXTRA_NAMES
+)
 NP_SLOSH = len(PARAM_NAMES_SLOSH)
 PIDX_SLOSH = {name: i for i, name in enumerate(PARAM_NAMES_SLOSH)}
 

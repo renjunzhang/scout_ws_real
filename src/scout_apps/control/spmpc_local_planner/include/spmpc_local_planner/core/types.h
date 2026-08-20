@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/core/costmap_grid.h"
 #include "spmpc_local_planner/core/terminal_diagnostics.h"
+#include "spmpc_local_planner/phase_rejoin/types.h"
 #include "spmpc_local_planner/warm_start/warm_start_diagnostics.h"
 #include <cstdint>
 #include <string>
@@ -417,6 +418,7 @@ struct SolverInput {
     bool has_v_ref_current = false;
     double v_ref_current = 0.0;
     std::string v_ref_status = "VARIANT_FALLBACK";
+    PhaseRejoinSolverContext phase_rejoin;
     ControlCycleTimingDebug cycle_timing;
 };
 

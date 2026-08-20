@@ -87,6 +87,113 @@ TEST(ExecutionStatePredictor, ConstantAngularCommandPredictsYaw) {
     EXPECT_NEAR(prediction.predicted_robot.omega, 1.0, 1e-9);
 }
 
+TEST(ExecutionStatePredictor, SamplesLinearAndAngularDelayChannelsIndependently) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    history.push(sample(9.80, 0.0, 1.0));
+    history.push(sample(9.90, 1.0, 0.0));
+
+    RobotState robot;
+    SloshState slosh;
+    auto p = params(0.20);
+    p.linear_delay_sec = 0.10;
+    p.angular_delay_sec = 0.20;
+    const auto prediction = makePredictor().predict(
+        robot, slosh, history, stamp(10.0), p);
+
+    ASSERT_TRUE(prediction.valid);
+    EXPECT_TRUE(prediction.history_complete);
+    // Linear queries start at 9.90, while angular queries start at 9.80.
+    // The angular channel turns for the first 100 ms, so the forward
+    // displacement projected onto world x is slightly below 0.20 m.
+    EXPECT_NEAR(prediction.predicted_robot.x, 0.20, 1e-3);
+    EXPECT_GT(prediction.predicted_robot.y, 0.0);
+    EXPECT_NEAR(prediction.predicted_robot.yaw, 0.10, 1e-6);
+    EXPECT_NEAR(prediction.predicted_robot.v, 1.0, 1e-9);
+    EXPECT_NEAR(prediction.predicted_robot.omega, 0.0, 1e-9);
+}
+
+TEST(ExecutionStatePredictor, AppliesOptionalFirstOrderExecutionInertia) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    history.push(sample(9.80, 1.0, 0.0));
+
+    RobotState robot;
+    SloshState slosh;
+    auto p = params(0.20);
+    p.linear_time_constant_sec = 0.20;
+    const auto prediction = makePredictor().predict(
+        robot, slosh, history, stamp(10.0), p);
+
+    ASSERT_TRUE(prediction.valid);
+    EXPECT_NEAR(prediction.predicted_robot.v, 1.0 - std::exp(-1.0), 1e-9);
+    EXPECT_GT(prediction.predicted_robot.x, 0.0);
+    EXPECT_LT(prediction.predicted_robot.x, 0.20);
+}
+
+TEST(ExecutionStatePredictor, ReportsFutureExecutionFrontEpoch) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    history.push(sample(9.80, 1.0, 0.0));
+
+    const auto prediction = makePredictor().predict(
+        RobotState{}, SloshState{}, history, stamp(10.0), params(0.20));
+
+    ASSERT_TRUE(prediction.valid);
+    EXPECT_EQ(prediction.prediction_origin_epoch_ns, 10000000000LL);
+    EXPECT_EQ(prediction.prediction_epoch_ns, 10200000000LL);
+}
+
+TEST(ExecutionStatePredictor, PropagatesStateAgeBeforeExecutionFront) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    history.push(sample(9.70, 1.0, 0.0));
+
+    const auto prediction = makePredictor().predict(
+        RobotState{}, SloshState{}, history,
+        stamp(9.90), stamp(10.0), params(0.20));
+
+    ASSERT_TRUE(prediction.valid);
+    EXPECT_TRUE(prediction.history_complete);
+    EXPECT_NEAR(prediction.integrated_duration_sec, 0.30, 1e-12);
+    EXPECT_NEAR(prediction.predicted_robot.x, 0.30, 1e-6);
+    EXPECT_EQ(prediction.prediction_origin_epoch_ns, 9900000000LL);
+    EXPECT_EQ(prediction.prediction_epoch_ns, 10200000000LL);
+}
+
+TEST(ExecutionStatePredictor, RejectsStateAgeBeyondPredictionContract) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    history.push(sample(9.40, 1.0, 0.0));
+    auto p = params(0.20);
+    p.max_prediction_sec = 0.40;
+
+    const auto prediction = makePredictor().predict(
+        RobotState{}, SloshState{}, history,
+        stamp(9.50), stamp(10.0), p);
+
+    EXPECT_FALSE(prediction.valid);
+    EXPECT_EQ(prediction.status_code, DelayPhaseStatusCode::InvalidParams);
+}
+
+TEST(ExecutionStatePredictor, ZeroLeadReturnsIdentityWithoutHistory) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    auto p = params(0.0);
+    RobotState robot;
+    robot.x = 1.2;
+    robot.v = 0.3;
+
+    const auto prediction = makePredictor().predict(
+        robot, SloshState{}, history, stamp(10.0), p);
+
+    ASSERT_TRUE(prediction.valid);
+    EXPECT_TRUE(prediction.history_complete);
+    EXPECT_DOUBLE_EQ(prediction.predicted_robot.x, robot.x);
+    EXPECT_DOUBLE_EQ(prediction.predicted_robot.v, robot.v);
+    EXPECT_EQ(prediction.prediction_epoch_ns, 10000000000LL);
+}
+
 TEST(ExecutionStatePredictor, CompleteHistoryInFixedClosedLoopReportsClosedLoopOk) {
     CommandHistoryBuffer history;
     history.configure(2.0);

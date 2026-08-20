@@ -17,6 +17,13 @@ public:
                                      const ros::Time& now,
                                      const DelayPhaseParams& params) const;
 
+    ExecutionStatePrediction predict(const RobotState& raw_robot,
+                                     const SloshState& raw_slosh,
+                                     const CommandHistoryBuffer& history,
+                                     const ros::Time& state_epoch,
+                                     const ros::Time& evaluation_time,
+                                     const DelayPhaseParams& params) const;
+
 private:
     static double normalizeYaw(double yaw);
 

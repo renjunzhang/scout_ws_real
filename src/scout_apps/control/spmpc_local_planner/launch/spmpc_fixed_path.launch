@@ -33,6 +33,18 @@
   <arg name="delay_phase_mode" default="off" doc="off|monitor|shadow|fixed_closed_loop|fixed_robot_only; fixed_robot_only 仅预测机器人状态，保留当前液体测量"/>
   <arg name="delay_phase_linear_delay_sec" default="-1.0"/>
   <arg name="delay_phase_angular_delay_sec" default="-1.0"/>
+  <arg name="delay_phase_linear_time_constant_sec" default="-1.0"/>
+  <arg name="delay_phase_angular_time_constant_sec" default="-1.0"/>
+  <arg name="delay_phase_require_complete_history" default="false"/>
+  <arg name="phase_rejoin_mode" default="off"/>
+  <arg name="phase_rejoin_artifact_path" default=""/>
+  <arg name="phase_rejoin_publish_diagnostics" default="true"/>
+  <arg name="phase_rejoin_liquid_horizon_steps" default="3"/>
+  <arg name="phase_rejoin_max_residual_v" default="0.08"/>
+  <arg name="phase_rejoin_max_residual_omega" default="0.20"/>
+  <arg name="phase_rejoin_allow_development_artifact_in_enforce" default="false"/>
+  <arg name="phase_rejoin_required_contract_id" default=""/>
+  <arg name="phase_rejoin_required_frame_id" default=""/>
   <arg name="state_timing_require_common_epoch" default="true"/>
   <arg name="state_timing_max_raw_skew_sec" default="0.080"/>
   <arg name="state_timing_max_interpolation_gap_sec" default="0.050"/>
@@ -77,6 +89,18 @@
     <arg name="delay_phase_mode" value="$(arg delay_phase_mode)"/>
     <arg name="delay_phase_linear_delay_sec" value="$(arg delay_phase_linear_delay_sec)"/>
     <arg name="delay_phase_angular_delay_sec" value="$(arg delay_phase_angular_delay_sec)"/>
+    <arg name="delay_phase_linear_time_constant_sec" value="$(arg delay_phase_linear_time_constant_sec)"/>
+    <arg name="delay_phase_angular_time_constant_sec" value="$(arg delay_phase_angular_time_constant_sec)"/>
+    <arg name="delay_phase_require_complete_history" value="$(arg delay_phase_require_complete_history)"/>
+    <arg name="phase_rejoin_mode" value="$(arg phase_rejoin_mode)"/>
+    <arg name="phase_rejoin_artifact_path" value="$(arg phase_rejoin_artifact_path)"/>
+    <arg name="phase_rejoin_publish_diagnostics" value="$(arg phase_rejoin_publish_diagnostics)"/>
+    <arg name="phase_rejoin_liquid_horizon_steps" value="$(arg phase_rejoin_liquid_horizon_steps)"/>
+    <arg name="phase_rejoin_max_residual_v" value="$(arg phase_rejoin_max_residual_v)"/>
+    <arg name="phase_rejoin_max_residual_omega" value="$(arg phase_rejoin_max_residual_omega)"/>
+    <arg name="phase_rejoin_allow_development_artifact_in_enforce" value="$(arg phase_rejoin_allow_development_artifact_in_enforce)"/>
+    <arg name="phase_rejoin_required_contract_id" value="$(arg phase_rejoin_required_contract_id)"/>
+    <arg name="phase_rejoin_required_frame_id" value="$(arg phase_rejoin_required_frame_id)"/>
     <arg name="state_timing_require_common_epoch" value="$(arg state_timing_require_common_epoch)"/>
     <arg name="state_timing_max_raw_skew_sec" value="$(arg state_timing_max_raw_skew_sec)"/>
     <arg name="state_timing_max_interpolation_gap_sec" value="$(arg state_timing_max_interpolation_gap_sec)"/>

@@ -22,6 +22,7 @@ find_package(Eigen3 REQUIRED)
 add_message_files(
   FILES
   ControlCycleAudit.msg
+  PhaseRejoinDebug.msg
   PredictedHorizon.msg
   PreSolveSnapshot.msg
   SloshObserverDebug.msg
@@ -91,6 +92,11 @@ include_directories(
 )
 
 add_library(${PROJECT_NAME}
+  src/phase_rejoin/types.cpp
+  src/phase_rejoin/nominal_sequence_artifact.cpp
+  src/phase_rejoin/phase_candidate_selector.cpp
+  src/phase_rejoin/empirical_recovery_gate.cpp
+  src/phase_rejoin/phase_rejoin_coordinator.cpp
   src/core/variant_config.cpp
   src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
@@ -245,6 +251,20 @@ if(CATKIN_ENABLE_TESTING)
       ${catkin_LIBRARIES}
     )
   endif()
+  catkin_add_gtest(test_nominal_sequence_artifact test/test_nominal_sequence_artifact.cpp)
+  if(TARGET test_nominal_sequence_artifact)
+    target_link_libraries(test_nominal_sequence_artifact
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_phase_rejoin test/test_phase_rejoin.cpp)
+  if(TARGET test_phase_rejoin)
+    target_link_libraries(test_phase_rejoin
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
   catkin_add_gtest(test_control_cycle_contract test/test_control_cycle_contract.cpp)
   if(TARGET test_control_cycle_contract)
     target_link_libraries(test_control_cycle_contract
@@ -277,6 +297,11 @@ if(CATKIN_ENABLE_TESTING)
         ${PROJECT_NAME}
         ${catkin_LIBRARIES}
       )
+      if(SPMPC_WITH_ACADOS_SLOSH)
+        target_compile_definitions(test_replay_diagnostics PRIVATE
+          SPMPC_TEST_WITH_ACADOS_SLOSH
+        )
+      endif()
     endif()
   endif()
 endif()

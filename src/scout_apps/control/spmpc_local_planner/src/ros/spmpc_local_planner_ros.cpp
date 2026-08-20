@@ -312,6 +312,12 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("delay_phase/odom_timeout_sec", delay_phase_params_.odom_timeout_sec, delay_phase_params_.odom_timeout_sec);
     pnh_.param("delay_phase/linear_delay_sec", delay_phase_params_.linear_delay_sec, delay_phase_params_.linear_delay_sec);
     pnh_.param("delay_phase/angular_delay_sec", delay_phase_params_.angular_delay_sec, delay_phase_params_.angular_delay_sec);
+    pnh_.param("delay_phase/linear_time_constant_sec",
+               delay_phase_params_.linear_time_constant_sec,
+               delay_phase_params_.linear_time_constant_sec);
+    pnh_.param("delay_phase/angular_time_constant_sec",
+               delay_phase_params_.angular_time_constant_sec,
+               delay_phase_params_.angular_time_constant_sec);
     pnh_.param("delay_phase/max_prediction_sec", delay_phase_params_.max_prediction_sec, delay_phase_params_.max_prediction_sec);
     pnh_.param("delay_phase/max_integration_step_sec", delay_phase_params_.max_integration_step_sec, delay_phase_params_.max_integration_step_sec);
     pnh_.param("delay_phase/min_integration_step_sec", delay_phase_params_.min_integration_step_sec, delay_phase_params_.min_integration_step_sec);
@@ -321,6 +327,10 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     delay_phase_params_.odom_timeout_sec = std::max(0.0, delay_phase_params_.odom_timeout_sec);
     delay_phase_params_.linear_delay_sec = std::max(0.0, delay_phase_params_.linear_delay_sec);
     delay_phase_params_.angular_delay_sec = std::max(0.0, delay_phase_params_.angular_delay_sec);
+    delay_phase_params_.linear_time_constant_sec = std::max(
+        0.0, delay_phase_params_.linear_time_constant_sec);
+    delay_phase_params_.angular_time_constant_sec = std::max(
+        0.0, delay_phase_params_.angular_time_constant_sec);
     delay_phase_params_.max_prediction_sec = std::max(0.0, delay_phase_params_.max_prediction_sec);
     delay_phase_params_.max_integration_step_sec = std::max(1e-4, delay_phase_params_.max_integration_step_sec);
     delay_phase_params_.min_integration_step_sec = std::max(1e-6, delay_phase_params_.min_integration_step_sec);
@@ -328,6 +338,102 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         delay_phase_params_.min_integration_step_sec = delay_phase_params_.max_integration_step_sec;
     }
     command_history_.configure(delay_phase_params_.history_window_sec);
+
+    std::string phase_rejoin_mode = phaseRejoinModeName(
+        phase_rejoin_params_.mode);
+    pnh_.param("phase_rejoin/mode", phase_rejoin_mode, phase_rejoin_mode);
+    if (!parsePhaseRejoinMode(phase_rejoin_mode, phase_rejoin_params_.mode)) {
+        ROS_FATAL("[spmpc_local_planner] invalid phase_rejoin/mode='%s'; "
+                  "expected off|monitor|enforce",
+                  phase_rejoin_mode.c_str());
+        return false;
+    }
+    pnh_.param("phase_rejoin/publish_diagnostics",
+               phase_rejoin_publish_diagnostics_,
+               phase_rejoin_publish_diagnostics_);
+    pnh_.param("phase_rejoin/artifact_path",
+               phase_rejoin_artifact_path_,
+               phase_rejoin_artifact_path_);
+    pnh_.param("phase_rejoin/liquid_horizon_steps",
+               phase_rejoin_params_.liquid_horizon_steps,
+               phase_rejoin_params_.liquid_horizon_steps);
+    pnh_.param("phase_rejoin/max_residual_v",
+               phase_rejoin_params_.max_residual_v,
+               phase_rejoin_params_.max_residual_v);
+    pnh_.param("phase_rejoin/max_residual_omega",
+               phase_rejoin_params_.max_residual_omega,
+               phase_rejoin_params_.max_residual_omega);
+    pnh_.param("phase_rejoin/artifact_dt_tolerance_sec",
+               phase_rejoin_params_.artifact_dt_tolerance_sec,
+               phase_rejoin_params_.artifact_dt_tolerance_sec);
+    pnh_.param("phase_rejoin/artifact_path_length_tolerance_m",
+               phase_rejoin_params_.artifact_path_length_tolerance_m,
+               phase_rejoin_params_.artifact_path_length_tolerance_m);
+    pnh_.param("phase_rejoin/allow_development_artifact_in_enforce",
+               phase_rejoin_params_.allow_development_artifact_in_enforce,
+               phase_rejoin_params_.allow_development_artifact_in_enforce);
+    pnh_.param("phase_rejoin/required_contract_id",
+               phase_rejoin_params_.required_contract_id,
+               phase_rejoin_params_.required_contract_id);
+    pnh_.param("phase_rejoin/required_frame_id",
+               phase_rejoin_params_.required_frame_id,
+               phase_rejoin_params_.required_frame_id);
+    pnh_.param("phase_rejoin/candidate/backward_radius",
+               phase_rejoin_params_.candidate.backward_radius,
+               phase_rejoin_params_.candidate.backward_radius);
+    pnh_.param("phase_rejoin/candidate/forward_radius",
+               phase_rejoin_params_.candidate.forward_radius,
+               phase_rejoin_params_.candidate.forward_radius);
+    pnh_.param("phase_rejoin/candidate/initial_forward_radius",
+               phase_rejoin_params_.candidate.initial_forward_radius,
+               phase_rejoin_params_.candidate.initial_forward_radius);
+    pnh_.param("phase_rejoin/candidate/weight_position",
+               phase_rejoin_params_.candidate.weight_position,
+               phase_rejoin_params_.candidate.weight_position);
+    pnh_.param("phase_rejoin/candidate/weight_yaw",
+               phase_rejoin_params_.candidate.weight_yaw,
+               phase_rejoin_params_.candidate.weight_yaw);
+    pnh_.param("phase_rejoin/candidate/weight_velocity",
+               phase_rejoin_params_.candidate.weight_velocity,
+               phase_rejoin_params_.candidate.weight_velocity);
+    pnh_.param("phase_rejoin/candidate/weight_liquid",
+               phase_rejoin_params_.candidate.weight_liquid,
+               phase_rejoin_params_.candidate.weight_liquid);
+    std::string phase_rejoin_error;
+    if (!phase_rejoin_coordinator_.configure(
+            phase_rejoin_params_, phase_rejoin_error)) {
+        ROS_FATAL("[spmpc_local_planner] phase-rejoin configuration failed: %s",
+                  phase_rejoin_error.c_str());
+        return false;
+    }
+    if (phase_rejoin_params_.mode != PhaseRejoinMode::Off) {
+        if (phase_rejoin_artifact_path_.empty()) {
+            if (phase_rejoin_params_.mode == PhaseRejoinMode::Enforce) {
+                ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce requires "
+                          "a non-empty artifact_path");
+                return false;
+            }
+            ROS_WARN("[spmpc_local_planner] phase_rejoin monitor has no "
+                     "artifact; diagnostics will report not ready");
+        } else {
+            const NominalArtifactLoadResult load_result =
+                phase_rejoin_coordinator_.loadArtifact(
+                    phase_rejoin_artifact_path_);
+            if (!load_result.success) {
+                if (phase_rejoin_params_.mode == PhaseRejoinMode::Enforce) {
+                    ROS_FATAL("[spmpc_local_planner] phase-rejoin artifact "
+                              "load failed status=%s detail=%s",
+                              load_result.status.c_str(),
+                              load_result.detail.c_str());
+                    return false;
+                }
+                ROS_ERROR("[spmpc_local_planner] phase-rejoin monitor "
+                          "artifact load failed status=%s detail=%s",
+                          load_result.status.c_str(),
+                          load_result.detail.c_str());
+            }
+        }
+    }
     pnh_.param("state_timing/require_common_epoch",
                state_timing_params_.require_common_epoch,
                state_timing_params_.require_common_epoch);
@@ -368,6 +474,12 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         command_contract_params_.max_post_limit_delta_omega >= 0.0;
     if (!valid_state_timing || !valid_command_contract) {
         ROS_FATAL("[spmpc_local_planner] invalid state_timing/execution_contract parameters");
+        return false;
+    }
+    if (phase_rejoin_params_.mode == PhaseRejoinMode::Enforce &&
+        !state_timing_params_.require_common_epoch) {
+        ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce requires "
+                  "state_timing/require_common_epoch=true");
         return false;
     }
     pnh_.param("reference/preprocess_enable", reference_preprocess_params_.enable, reference_preprocess_params_.enable);
@@ -537,6 +649,40 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         delay_phase_params_.mode == DelayPhaseMode::FixedRobotOnly) {
         ROS_FATAL("[spmpc_local_planner] fixed_robot_only is forbidden when a slosh solver requires a common robot/liquid epoch");
         return false;
+    }
+    if (phase_rejoin_params_.mode == PhaseRejoinMode::Enforce) {
+        if (solver_params.solver_backend !=
+                kSolverBackendContinuousMpccAcados ||
+            !variant_.slosh_enable) {
+            ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce requires "
+                      "the main 10D slosh acados backend");
+            return false;
+        }
+        if (delay_phase_params_.mode != DelayPhaseMode::FixedClosedLoop) {
+            ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce requires "
+                      "delay_phase=fixed_closed_loop");
+            return false;
+        }
+        if (!delay_phase_params_.require_complete_history) {
+            ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce requires "
+                      "delay_phase/require_complete_history=true");
+            return false;
+        }
+        const bool post_solver_limiter_enabled =
+            shared_cmd_linear_accel_limit_enable_ ||
+            shared_cmd_angular_limit_enable_;
+        if (post_solver_limiter_enabled &&
+            !command_contract_params_.fail_closed_on_post_limit_change) {
+            ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce with a "
+                      "post-solver limiter requires "
+                      "execution_contract/fail_closed_on_post_limit_change=true");
+            return false;
+        }
+        if (phase_rejoin_params_.liquid_horizon_steps > horizon_steps_) {
+            ROS_FATAL("[spmpc_local_planner] phase_rejoin liquid horizon "
+                      "exceeds the generated solver horizon");
+            return false;
+        }
     }
     if (matched_development_variant && delayPhaseClosedLoopEnabled()) {
         ROS_FATAL("[spmpc_local_planner] matched short-horizon variants require delay_phase=off|monitor|shadow; command-history rollout is audit-only until validated");
@@ -719,6 +865,12 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     diagnostics_.publishSolverBackend(solver_params.solver_backend);
     diagnostics_.publishEffectiveConfig(effective_config_);
     diagnostics_.publishStatus("INITIALIZED");
+    if (phase_rejoin_publish_diagnostics_) {
+        diagnostics_.publishPhaseRejoin(
+            phase_rejoin_coordinator_.makeDebug(nullptr, nullptr),
+            ControlCycleTimingDebug{},
+            phase_rejoin_params_.required_frame_id);
+    }
 
     const double period = 1.0 / std::max(1.0, control_frequency_);
     control_timer_ = nh_.createTimer(ros::Duration(period), &SpmpcLocalPlannerROS::controlTimerCallback, this);
@@ -727,7 +879,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         imu_spinner_->start();
     }
 
-    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s imu_pipeline=%s imu_topic=%s imu_queue=%d observer_source=%s observer_fallback=%s latch_fallback=%s",
+    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s imu_pipeline=%s imu_topic=%s imu_queue=%d observer_source=%s observer_fallback=%s latch_fallback=%s phase_rejoin=%s phase_artifact=%s",
              variant_.name.c_str(),
              experiment_mode_.c_str(),
              path_topic_.c_str(),
@@ -739,7 +891,11 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
              sloshObserverSourceName(slosh_observer_selector_params_.nominal_source),
              sloshObserverFallbackPolicyName(
                  slosh_observer_selector_params_.fallback_policy),
-             boolText(slosh_observer_selector_params_.latch_fallback));
+             boolText(slosh_observer_selector_params_.latch_fallback),
+             phaseRejoinModeName(phase_rejoin_params_.mode).c_str(),
+             phase_rejoin_artifact_path_.empty()
+                 ? "<none>"
+                 : phase_rejoin_artifact_path_.c_str());
     return true;
 }
 
@@ -1409,6 +1565,32 @@ void SpmpcLocalPlannerROS::imuCallback(const sensor_msgs::ImuConstPtr& msg) {
     }
 }
 
+bool SpmpcLocalPlannerROS::phaseRejoinNeedsPrediction() const {
+    return phase_rejoin_params_.mode != PhaseRejoinMode::Off;
+}
+
+void SpmpcLocalPlannerROS::validatePhaseRejoinReference(
+    const ReferencePath& reference) {
+    if (phase_rejoin_params_.mode == PhaseRejoinMode::Off) {
+        return;
+    }
+    std::string error;
+    if (!phase_rejoin_coordinator_.validateRuntimeContract(
+            dt_, reference.length(), reference.frameId(), error)) {
+        ROS_WARN_THROTTLE(
+            1.0,
+            "[spmpc_local_planner] phase-rejoin runtime contract rejected: %s "
+            "dt=%.9f path_length=%.6f frame=%s",
+            error.c_str(), dt_, reference.length(),
+            reference.frameId().c_str());
+        return;
+    }
+    ROS_INFO("[spmpc_local_planner] phase-rejoin runtime contract accepted "
+             "dt=%.9f path_length=%.6f frame=%s contract=%s",
+             dt_, reference.length(), reference.frameId().c_str(),
+             phase_rejoin_coordinator_.artifact().metadata().contract_id.c_str());
+}
+
 void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
     if (!reference_target_frame_.empty() && msg->header.frame_id != reference_target_frame_) {
         nav_msgs::Path transformed_path;
@@ -1435,24 +1617,36 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
                               ex.what());
             return;
         }
-        if (updateReferenceSignature(transformed_path)) {
+        const bool reference_changed = updateReferenceSignature(
+            transformed_path);
+        if (reference_changed) {
             resetTerminalSpinFailGate();
             resetTrackingSafetyGate();
             resetMapVRefProgress();
             slosh_risk_governor_.reset();
+            phase_rejoin_coordinator_.resetProgress();
         }
-        problem_.setReferencePath(referencePathFromMsg(transformed_path));
+        const ReferencePath reference = referencePathFromMsg(transformed_path);
+        problem_.setReferencePath(reference);
+        if (reference_changed || !phase_rejoin_coordinator_.contractValid()) {
+            validatePhaseRejoinReference(reference);
+        }
         return;
     }
 
     const auto reference = referencePathFromMsg(*msg);
-    if (updateReferenceSignature(*msg)) {
+    const bool reference_changed = updateReferenceSignature(*msg);
+    if (reference_changed) {
         resetTerminalSpinFailGate();
         resetTrackingSafetyGate();
         resetMapVRefProgress();
         slosh_risk_governor_.reset();
+        phase_rejoin_coordinator_.resetProgress();
     }
     problem_.setReferencePath(reference);
+    if (reference_changed || !phase_rejoin_coordinator_.contractValid()) {
+        validatePhaseRejoinReference(reference);
+    }
 }
 
 void SpmpcLocalPlannerROS::costmapCallback(const nav_msgs::OccupancyGridConstPtr& msg) {
@@ -1515,7 +1709,10 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             odom_observer_health,
             imu_observer_health,
             static_cast<std::int64_t>(observer_selection_now.toNSec()));
-    const bool solver_consumes_selected_state = variant_.slosh_enable;
+    const bool phase_rejoin_enforce =
+        phase_rejoin_params_.mode == PhaseRejoinMode::Enforce;
+    const bool solver_consumes_selected_state =
+        variant_.slosh_enable || phase_rejoin_enforce;
     cycle_audit.observer_source =
         static_cast<std::uint8_t>(observer_selection.effective_source);
     cycle_audit.odom_excitation = makeExcitationAudit(
@@ -1705,9 +1902,18 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     DelayPhaseStatusCode delay_phase_status = DelayPhaseStatusCode::MonitorOk;
     ExecutionStatePrediction shadow_prediction;
     ExecutionStatePrediction* shadow_prediction_ptr = nullptr;
-    if (delayPhasePredictionEnabled()) {
+    if (delayPhasePredictionEnabled() || phaseRejoinNeedsPrediction()) {
+        DelayPhaseParams predictor_params = delay_phase_params_;
+        if (predictor_params.mode == DelayPhaseMode::Off) {
+            // Phase-rejoin shadow prediction must remain observable even when
+            // the legacy delay_phase feature itself is disabled.
+            predictor_params.mode = DelayPhaseMode::Shadow;
+        }
+        const ros::Time state_epoch = rosTimeFromNanoseconds(
+            input.cycle_timing.solver_input_epoch_ns);
         shadow_prediction = execution_predictor_.predict(
-            input.robot, input.slosh, command_history_, delay_phase_now, delay_phase_params_);
+            input.robot, input.slosh, command_history_, state_epoch,
+            delay_phase_now, predictor_params);
         delay_phase_status = shadow_prediction.status_code;
         shadow_prediction_ptr = &shadow_prediction;
     } else {
@@ -1736,7 +1942,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         liquid_delay_compensation_applied = application.liquid_applied;
         if (application.robot_applied && application.liquid_applied) {
             const std::int64_t predicted_epoch_ns =
-                static_cast<std::int64_t>(delay_phase_now.toNSec());
+                shadow_prediction.prediction_epoch_ns;
             cycle_audit.timing.robot_state_stamp_ns = predicted_epoch_ns;
             cycle_audit.timing.liquid_state_stamp_ns = predicted_epoch_ns;
             cycle_audit.timing.solver_input_epoch_ns = predicted_epoch_ns;
@@ -1760,6 +1966,37 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             delay_phase_status = DelayPhaseStatusCode::OdomStale;
         }
     }
+
+    PhaseRejoinPreparation phase_preparation;
+    const bool solver_origin_at_execution_front =
+        robot_delay_compensation_applied &&
+        liquid_delay_compensation_applied;
+    if (phase_rejoin_params_.mode == PhaseRejoinMode::Off) {
+        phase_preparation.status = "OFF";
+    } else if (!shadow_prediction.valid) {
+        phase_preparation.status = "PREDICTION_" +
+            shadow_prediction.status;
+    } else if (phase_rejoin_params_.mode == PhaseRejoinMode::Enforce &&
+               !solver_origin_at_execution_front) {
+        // An enforce solve may only start from the state represented at the
+        // physical execution front.  Partial history, stale odometry, or a
+        // failed delay guard must not silently activate a raw-state OCP with
+        // a differently indexed terminal gate.
+        phase_preparation.status = "EXECUTION_FRONT_NOT_APPLIED";
+    } else {
+        const double front_sec = std::max(
+            delay_phase_params_.linear_delay_sec,
+            delay_phase_params_.angular_delay_sec);
+        const int front_steps = static_cast<int>(std::ceil(
+            std::max(0.0, front_sec) / std::max(1e-9, dt_)));
+        phase_preparation = phase_rejoin_coordinator_.prepare(
+            shadow_prediction.predicted_robot,
+            shadow_prediction.predicted_slosh,
+            front_steps,
+            horizon_steps_,
+            solver_origin_at_execution_front);
+    }
+    solve_input.phase_rejoin = phase_preparation.solver_context;
     solve_input.cycle_timing = cycle_audit.timing;
 
     diagnostics_.publishSolverInputState(
@@ -1822,10 +2059,47 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         : output.cmd_omega;
     const double terminal_cmd_v = output.cmd_v;
     const double terminal_cmd_omega = output.cmd_omega;
+    const bool solver_success = output.success;
+    PhaseRejoinDecision phase_decision;
+    bool have_phase_decision = false;
+    const bool terminal_priority =
+        output.terminal_diagnostics.terminal_phase ||
+        output.terminal_diagnostics.reached ||
+        output.status == "GOAL_REACHED";
+    if (phase_rejoin_params_.mode != PhaseRejoinMode::Off) {
+        have_phase_decision = true;
+        if (terminal_priority) {
+            phase_decision.solver_cmd_v = output.cmd_v;
+            phase_decision.solver_cmd_omega = output.cmd_omega;
+            phase_decision.output_cmd_v = output.cmd_v;
+            phase_decision.output_cmd_omega = output.cmd_omega;
+            phase_decision.status = "BYPASSED_TERMINAL_PRIORITY";
+        } else {
+            phase_decision = phase_rejoin_coordinator_.decide(
+                phase_preparation,
+                shadow_prediction.predicted_robot,
+                shadow_prediction.predicted_slosh,
+                solver_success,
+                output);
+            if (phase_rejoin_params_.mode == PhaseRejoinMode::Enforce) {
+                output.cmd_v = phase_decision.output_cmd_v;
+                output.cmd_omega = phase_decision.output_cmd_omega;
+                output.status = phase_decision.status;
+                output.success =
+                    (solver_success &&
+                     phase_decision.terminal_gate_accepted) ||
+                    phase_decision.recovery_command_used;
+                if (phase_decision.controlled_stop_used) {
+                    output.success = false;
+                    output.cmd_v = 0.0;
+                    output.cmd_omega = 0.0;
+                }
+            }
+        }
+    }
     CommandInterventionDebug intervention;
     intervention.solver_cmd_v = raw_solver_cmd_v;
     intervention.solver_cmd_omega = raw_solver_cmd_omega;
-    const bool solver_success = output.success;
     const bool terminal_spin_blocked = updateTerminalSpinFailGate(solve_input, output, spin_gate_dt);
     if (terminal_spin_blocked) {
         output.success = false;
@@ -1840,6 +2114,13 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         output.status = tracking_safety_status;
         output.cmd_v = 0.0;
         output.cmd_omega = 0.0;
+    }
+    if (have_phase_decision && !terminal_priority &&
+        !terminal_spin_blocked && !tracking_safety_blocked &&
+        (phase_rejoin_params_.mode == PhaseRejoinMode::Monitor ||
+         output.success)) {
+        phase_rejoin_coordinator_.commit(
+            phase_preparation, phase_decision);
     }
     intervention.post_gate_cmd_v = output.cmd_v;
     intervention.post_gate_cmd_omega = output.cmd_omega;
@@ -1885,6 +2166,20 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         shadow_prediction_ptr,
         output.solver_time_ms,
         robot_delay_compensation_applied || liquid_delay_compensation_applied);
+    if (phase_rejoin_publish_diagnostics_) {
+        PhaseRejoinDebugData phase_debug =
+            phase_rejoin_coordinator_.makeDebug(
+                &phase_preparation,
+                have_phase_decision ? &phase_decision : nullptr);
+        if (terminal_spin_blocked || tracking_safety_blocked) {
+            phase_debug.status = "SAFETY_OVERRIDE_" + output.status;
+        }
+        diagnostics_.publishPhaseRejoin(
+            phase_debug,
+            cycle_audit.timing,
+            problem_.referenceFrameId(),
+            shadow_prediction_ptr);
+    }
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
 
     if (output.predicted_horizon.valid &&

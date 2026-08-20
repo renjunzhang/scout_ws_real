@@ -15,6 +15,7 @@
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -35,14 +36,24 @@ enum Param {
     TWO_ZETA_OMEGA_N, OMEGA_N_SQ, KAPPA_X, KAPPA_Y,
     ETA_REF, ETA_DOT_REF, W_SLOSH_ETA, W_SLOSH_ETA_DOT,
     ETA_MAX_SQ,
+    // Phase-rejoining empirical v1 (slosh mainline only; appended contract).
+    PHASE_REJOIN_ACTIVE,
+    NOM_X, NOM_Y, NOM_YAW, NOM_V, NOM_OMEGA,
+    NOM_ETA_X, NOM_ETA_X_DOT, NOM_ETA_Y, NOM_ETA_Y_DOT,
+    NOM_A, NOM_ALPHA, NOM_V_S,
+    EMPIRICAL_GATE_ACTIVE,
+    GATE_R_X, GATE_R_Y, GATE_R_YAW, GATE_R_V, GATE_R_OMEGA,
+    GATE_R_ETA_X, GATE_R_ETA_X_DOT, GATE_R_ETA_Y, GATE_R_ETA_Y_DOT,
     PARAM_MAX,
 };
 
 // 参数布局契约：与 scripts/acados/spmpc_acados_model.py（→生成器 NP 宏）绑死，漂移即编译失败。
 static_assert(V_REF + 1 == SPMPC_B0_NP, "B0 参数布局与生成的 spmpc_b0 求解器不一致");
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-static_assert(ETA_MAX_SQ + 1 == SPMPC_SLOSH_NP, "slosh 参数布局与生成的 spmpc_slosh 求解器不一致");
-static_assert(SPMPC_SLOSH_NH > 0, "spmpc_slosh 求解器缺少 slosh hard constraint，请重新生成 acados artifacts");
+static_assert(GATE_R_ETA_Y_DOT + 1 == SPMPC_SLOSH_NP,
+              "slosh/phase-rejoin 参数布局与生成的 spmpc_slosh 求解器不一致");
+static_assert(SPMPC_SLOSH_NH == 2,
+              "spmpc_slosh 求解器必须同时包含 slosh cap 和 empirical recovery gate");
 #endif
 
 constexpr double kDisabledEtaMaxSq = 1e12;
@@ -156,6 +167,83 @@ double clampValue(double value, double lo, double hi) {
 
 double wrapAngle(double angle) {
     return std::atan2(std::sin(angle), std::cos(angle));
+}
+
+bool finitePositive(double value) {
+    return std::isfinite(value) && value > 0.0;
+}
+
+bool validEmpiricalRadii(const EmpiricalRecoveryRadii& radii) {
+    const double values[] = {
+        radii.x, radii.y, radii.yaw, radii.v, radii.omega,
+        radii.eta_x, radii.eta_x_dot, radii.eta_y, radii.eta_y_dot,
+    };
+    for (double value : values) {
+        if (!finitePositive(value)) return false;
+    }
+    return true;
+}
+
+bool finiteNominalStage(const PhaseNominalStage& stage) {
+    const double values[] = {
+        stage.x, stage.y, stage.yaw, stage.s, stage.v, stage.omega,
+        stage.eta_x, stage.eta_x_dot, stage.eta_y, stage.eta_y_dot,
+        stage.a, stage.alpha, stage.v_s,
+    };
+    for (double value : values) {
+        if (!std::isfinite(value)) return false;
+    }
+    return true;
+}
+
+// Empty string means the enforce context is safe to inject.  The wrapper uses
+// stable status suffixes so ROS diagnostics and modification reports can
+// distinguish contract failures without parsing free-form text.
+std::string validatePhaseRejoinContext(const PhaseRejoinSolverContext& context,
+                                       int solver_horizon_steps) {
+    if (!context.active || !context.enforce) return std::string{};
+    if (!context.empirical_gate) return "EMPIRICAL_GATE_REQUIRED";
+    if (context.front_steps < 0) return "NEGATIVE_FRONT_STEPS";
+    if (context.liquid_steps <= 0 ||
+        context.liquid_steps > solver_horizon_steps) {
+        return "LIQUID_STEPS_OUT_OF_RANGE";
+    }
+    const std::size_t expected_count =
+        static_cast<std::size_t>(context.liquid_steps + 1);
+    if (context.stages.size() != expected_count) return "STAGE_COUNT";
+
+    const std::size_t front_offset =
+        static_cast<std::size_t>(context.front_steps);
+    const std::size_t liquid_offset =
+        static_cast<std::size_t>(context.liquid_steps);
+    if (context.current_index >
+        std::numeric_limits<std::size_t>::max() - front_offset ||
+        context.current_index + front_offset != context.front_index) {
+        return "FRONT_INDEX";
+    }
+    if (context.front_index >
+        std::numeric_limits<std::size_t>::max() - liquid_offset ||
+        context.front_index + liquid_offset != context.terminal_index) {
+        return "TERMINAL_INDEX";
+    }
+
+    for (std::size_t k = 0; k < context.stages.size(); ++k) {
+        const PhaseNominalStage& stage = context.stages[k];
+        const bool terminal = k == liquid_offset;
+        if (!stage.valid) return "STAGE_INVALID";
+        if (stage.gate_active != terminal) return "GATE_STAGE";
+        if (context.front_index >
+            std::numeric_limits<std::size_t>::max() - k ||
+            stage.artifact_index != context.front_index + k) {
+            return "ARTIFACT_INDEX";
+        }
+        if (!finiteNominalStage(stage)) return "NONFINITE_NOMINAL";
+        // Artifact v1 requires valid radii on every row; only the terminal row
+        // enters the NLP constraint, but validating all rows prevents a
+        // malformed monitor artifact from becoming an enforce artifact later.
+        if (!validEmpiricalRadii(stage.radii)) return "INVALID_RADIUS";
+    }
+    return std::string{};
 }
 
 SolverBoundSummary makeRuntimeBounds(const SolverParams& params) {
@@ -330,6 +418,13 @@ std::vector<std::string> parameterNames(int width) {
         "two_zeta_omega_n", "omega_n_sq", "kappa_x", "kappa_y",
         "eta_ref", "eta_dot_ref", "w_slosh_eta", "w_slosh_eta_dot",
         "eta_max_sq",
+        "phase_rejoin_active",
+        "nom_x", "nom_y", "nom_yaw", "nom_v", "nom_omega",
+        "nom_eta_x", "nom_eta_x_dot", "nom_eta_y", "nom_eta_y_dot",
+        "nom_a", "nom_alpha", "nom_v_s",
+        "empirical_gate_active",
+        "gate_r_x", "gate_r_y", "gate_r_yaw", "gate_r_v", "gate_r_omega",
+        "gate_r_eta_x", "gate_r_eta_x_dot", "gate_r_eta_y", "gate_r_eta_y_dot",
     };
     const int count = static_cast<int>(sizeof(names) / sizeof(names[0]));
     const int n = std::max(0, std::min(width, count));
@@ -673,6 +768,28 @@ bool ContinuousMpccSolverAcados::solve(
     const int n = gen->n_horizon;
     const double Tf = input.dt * n;
 
+    // `enforce` is the solver-side authorization bit.  An active monitor
+    // context is intentionally ignored so off/monitor retain the baseline OCP
+    // even if the ROS adapter forwards diagnostics by mistake.
+    if (input.phase_rejoin.enforce && !input.phase_rejoin.active) {
+        output.status = "PHASE_REJOIN_CONTEXT_INVALID_INACTIVE";
+        return false;
+    }
+    const bool phase_rejoin_enforce =
+        input.phase_rejoin.active && input.phase_rejoin.enforce;
+    if (phase_rejoin_enforce && !slosh) {
+        output.status = "PHASE_REJOIN_CONTEXT_INVALID_SLOSH_REQUIRED";
+        return false;
+    }
+    if (phase_rejoin_enforce) {
+        const std::string phase_error =
+            validatePhaseRejoinContext(input.phase_rejoin, n);
+        if (!phase_error.empty()) {
+            output.status = "PHASE_REJOIN_CONTEXT_INVALID_" + phase_error;
+            return false;
+        }
+    }
+
     ReferenceSpline spline;
     spline.build(reference);
     const double s_end = std::min(len, s0 + params_.v_max * Tf);
@@ -813,14 +930,83 @@ bool ContinuousMpccSolverAcados::solve(
         p[ETA_REF] = eta_ref;
         p[ETA_DOT_REF] = eta_dot_ref;
         p[ETA_MAX_SQ] = eta_max_sq;
+        // Safe off/monitor defaults.  An inactive empirical gate evaluates to
+        // -1 in the generated constraint, and unit radii keep the expression
+        // finite before any enforce-stage overwrite.
+        p[PHASE_REJOIN_ACTIVE] = 0.0;
+        p[EMPIRICAL_GATE_ACTIVE] = 0.0;
+        p[GATE_R_X] = 1.0;
+        p[GATE_R_Y] = 1.0;
+        p[GATE_R_YAW] = 1.0;
+        p[GATE_R_V] = 1.0;
+        p[GATE_R_OMEGA] = 1.0;
+        p[GATE_R_ETA_X] = 1.0;
+        p[GATE_R_ETA_X_DOT] = 1.0;
+        p[GATE_R_ETA_Y] = 1.0;
+        p[GATE_R_ETA_Y_DOT] = 1.0;
     }
 
     for (int stage = 0; stage <= n; ++stage) {
         if (slosh) {
-            const double stage_scale = sloshCostStageScale(variant_, stage, n);
+            // Enforce mode is deliberately dual-horizon: geometry continues to
+            // the generated N, while liquid cost/cap stop at N_l.  Because the
+            // robot dynamics do not depend on eta, the unpenalized liquid tail
+            // cannot feed back into the first action.  Off/monitor retain the
+            // variant's historical slosh-cost horizon unchanged.
+            const double stage_scale = phase_rejoin_enforce
+                ? (stage <= input.phase_rejoin.liquid_steps ? 1.0 : 0.0)
+                : sloshCostStageScale(variant_, stage, n);
             p[W_SLOSH_ETA] = variant_.w_slosh * stage_scale;
             p[W_SLOSH_ETA_DOT] = variant_.w_slosh *
                 params_.slosh.slosh_eta_dot_ratio * stage_scale;
+            p[ETA_MAX_SQ] = (phase_rejoin_enforce &&
+                             stage > input.phase_rejoin.liquid_steps)
+                ? kDisabledEtaMaxSq : eta_max_sq;
+
+            // Reset every stage first so the k=N_l activation cannot leak into
+            // k>N_l through the reused parameter buffer.
+            p[PHASE_REJOIN_ACTIVE] = 0.0;
+            p[EMPIRICAL_GATE_ACTIVE] = 0.0;
+            p[NOM_X] = 0.0; p[NOM_Y] = 0.0; p[NOM_YAW] = 0.0;
+            p[NOM_V] = 0.0; p[NOM_OMEGA] = 0.0;
+            p[NOM_ETA_X] = 0.0; p[NOM_ETA_X_DOT] = 0.0;
+            p[NOM_ETA_Y] = 0.0; p[NOM_ETA_Y_DOT] = 0.0;
+            p[NOM_A] = 0.0; p[NOM_ALPHA] = 0.0; p[NOM_V_S] = 0.0;
+            p[GATE_R_X] = 1.0; p[GATE_R_Y] = 1.0;
+            p[GATE_R_YAW] = 1.0; p[GATE_R_V] = 1.0;
+            p[GATE_R_OMEGA] = 1.0; p[GATE_R_ETA_X] = 1.0;
+            p[GATE_R_ETA_X_DOT] = 1.0; p[GATE_R_ETA_Y] = 1.0;
+            p[GATE_R_ETA_Y_DOT] = 1.0;
+
+            if (phase_rejoin_enforce &&
+                stage <= input.phase_rejoin.liquid_steps) {
+                const PhaseNominalStage& nominal =
+                    input.phase_rejoin.stages[static_cast<std::size_t>(stage)];
+                p[PHASE_REJOIN_ACTIVE] = 1.0;
+                p[NOM_X] = nominal.x;
+                p[NOM_Y] = nominal.y;
+                p[NOM_YAW] = nominal.yaw;
+                p[NOM_V] = nominal.v;
+                p[NOM_OMEGA] = nominal.omega;
+                p[NOM_ETA_X] = nominal.eta_x;
+                p[NOM_ETA_X_DOT] = nominal.eta_x_dot;
+                p[NOM_ETA_Y] = nominal.eta_y;
+                p[NOM_ETA_Y_DOT] = nominal.eta_y_dot;
+                p[NOM_A] = nominal.a;
+                p[NOM_ALPHA] = nominal.alpha;
+                p[NOM_V_S] = nominal.v_s;
+                p[GATE_R_X] = nominal.radii.x;
+                p[GATE_R_Y] = nominal.radii.y;
+                p[GATE_R_YAW] = nominal.radii.yaw;
+                p[GATE_R_V] = nominal.radii.v;
+                p[GATE_R_OMEGA] = nominal.radii.omega;
+                p[GATE_R_ETA_X] = nominal.radii.eta_x;
+                p[GATE_R_ETA_X_DOT] = nominal.radii.eta_x_dot;
+                p[GATE_R_ETA_Y] = nominal.radii.eta_y;
+                p[GATE_R_ETA_Y_DOT] = nominal.radii.eta_y_dot;
+                // Contract validation guarantees this is true only at N_l.
+                p[EMPIRICAL_GATE_ACTIVE] = nominal.gate_active ? 1.0 : 0.0;
+            }
         }
         // omega 已是状态(初值=实测 omega)，跨周期连续性由状态保证；仅 a/v_s 做第一帧连续性。
         if (stage == 0 && have_u_prev_) {
@@ -992,12 +1178,30 @@ bool ContinuousMpccSolverAcados::solve(
             output.slosh_summary.eta_dot_norm_peak = std::max(output.slosh_summary.eta_dot_norm_peak, eta_dot_norm);
             output.slosh_cost_monitor.eta_norm_peak = std::max(output.slosh_cost_monitor.eta_norm_peak, eta_norm);
             output.slosh_cost_monitor.eta_dot_norm_peak = std::max(output.slosh_cost_monitor.eta_dot_norm_peak, eta_dot_norm);
-            const double stage_scale = sloshCostStageScale(variant_, k, n);
+            double cost_ex = ex;
+            double cost_exd = exd;
+            double cost_ey = ey;
+            double cost_eyd = eyd;
+            if (phase_rejoin_enforce &&
+                k <= input.phase_rejoin.liquid_steps) {
+                const PhaseNominalStage& nominal =
+                    input.phase_rejoin.stages[static_cast<std::size_t>(k)];
+                cost_ex -= nominal.eta_x;
+                cost_exd -= nominal.eta_x_dot;
+                cost_ey -= nominal.eta_y;
+                cost_eyd -= nominal.eta_y_dot;
+            }
+            const double eta_cost_norm = std::hypot(cost_ex, cost_ey);
+            const double eta_dot_cost_norm = std::hypot(cost_exd, cost_eyd);
+            const double stage_scale = phase_rejoin_enforce
+                ? (k <= input.phase_rejoin.liquid_steps ? 1.0 : 0.0)
+                : sloshCostStageScale(variant_, k, n);
             output.cost.J_slosh_eta += variant_.w_slosh * stage_scale *
-                (eta_norm / eta_ref) * (eta_norm / eta_ref) * inv_n;
+                (eta_cost_norm / eta_ref) * (eta_cost_norm / eta_ref) * inv_n;
             output.cost.J_slosh_eta_dot += variant_.w_slosh * stage_scale *
                 params_.slosh.slosh_eta_dot_ratio *
-                (eta_dot_norm / eta_dot_ref) * (eta_dot_norm / eta_dot_ref) * inv_n;
+                (eta_dot_cost_norm / eta_dot_ref) *
+                (eta_dot_cost_norm / eta_dot_ref) * inv_n;
         }
     }
 
@@ -1050,6 +1254,28 @@ bool ContinuousMpccSolverAcados::solve(
         const double vn = (solved_states[k].v - v_ref) / vs_ref;
         const double vsn = (uk[2] - v_ref) / vs_ref;
         output.cost.J_v += (variant_.w_v * vn * vn + variant_.w_vs * vsn * vsn) * inv_n;
+
+        if (phase_rejoin_enforce &&
+            k <= input.phase_rejoin.liquid_steps) {
+            const PhaseNominalStage& nominal =
+                input.phase_rejoin.stages[static_cast<std::size_t>(k)];
+            const double dv_nominal =
+                (solved_states[k].v - nominal.v) / vs_ref;
+            const double domega_nominal =
+                (solved_states[k].omega - nominal.omega) / omega_ref;
+            const double da_nominal = (uk[0] - nominal.a) / a_ref;
+            const double dalpha_nominal =
+                (uk[1] - nominal.alpha) / alpha_ref;
+            const double dvs_nominal = (uk[2] - nominal.v_s) / vs_ref;
+            output.cost.J_v +=
+                (variant_.w_v * dv_nominal * dv_nominal +
+                 variant_.w_vs * dvs_nominal * dvs_nominal) * inv_n;
+            output.cost.J_control +=
+                ((variant_.w_control + variant_.w_accel) *
+                     da_nominal * da_nominal +
+                 variant_.w_control * domega_nominal * domega_nominal +
+                 variant_.w_alpha * dalpha_nominal * dalpha_nominal) * inv_n;
+        }
 
         // a/v_s 跨周期第一帧连续性（stage 0）；omega 连续性由状态保证，Δomega 平滑由 w_alpha(全 stage)负责。
         if (k == 0 && have_u_prev_) {

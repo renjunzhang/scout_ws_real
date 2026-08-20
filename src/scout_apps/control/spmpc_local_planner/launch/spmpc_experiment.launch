@@ -34,6 +34,18 @@
   <arg name="delay_phase_mode" default="off" doc="off|monitor|shadow|fixed_closed_loop|fixed_robot_only; fixed_robot_only 仅替换 SolverInput.robot"/>
   <arg name="delay_phase_linear_delay_sec" default="-1.0" doc="覆盖 delay_phase/linear_delay_sec; 负值时用 common.yaml"/>
   <arg name="delay_phase_angular_delay_sec" default="-1.0" doc="覆盖 delay_phase/angular_delay_sec; 负值时用 common.yaml"/>
+  <arg name="delay_phase_linear_time_constant_sec" default="-1.0" doc="覆盖线速度执行惯性时间常数; 负值时用 common.yaml"/>
+  <arg name="delay_phase_angular_time_constant_sec" default="-1.0" doc="覆盖角速度执行惯性时间常数; 负值时用 common.yaml"/>
+  <arg name="delay_phase_require_complete_history" default="false" doc="phase_rejoin=enforce 时必须显式为 true"/>
+  <arg name="phase_rejoin_mode" default="off" doc="off|monitor|enforce; 默认关闭"/>
+  <arg name="phase_rejoin_artifact_path" default=""/>
+  <arg name="phase_rejoin_publish_diagnostics" default="true"/>
+  <arg name="phase_rejoin_liquid_horizon_steps" default="3"/>
+  <arg name="phase_rejoin_max_residual_v" default="0.08"/>
+  <arg name="phase_rejoin_max_residual_omega" default="0.20"/>
+  <arg name="phase_rejoin_allow_development_artifact_in_enforce" default="false"/>
+  <arg name="phase_rejoin_required_contract_id" default=""/>
+  <arg name="phase_rejoin_required_frame_id" default=""/>
   <arg name="state_timing_require_common_epoch" default="true"/>
   <arg name="state_timing_max_raw_skew_sec" default="0.080"/>
   <arg name="state_timing_max_interpolation_gap_sec" default="0.050"/>
@@ -89,6 +101,20 @@
            if="$(eval float(arg('delay_phase_linear_delay_sec')) >= 0.0)"/>
     <param name="delay_phase/angular_delay_sec" value="$(arg delay_phase_angular_delay_sec)"
            if="$(eval float(arg('delay_phase_angular_delay_sec')) >= 0.0)"/>
+    <param name="delay_phase/linear_time_constant_sec" value="$(arg delay_phase_linear_time_constant_sec)"
+           if="$(eval float(arg('delay_phase_linear_time_constant_sec')) >= 0.0)"/>
+    <param name="delay_phase/angular_time_constant_sec" value="$(arg delay_phase_angular_time_constant_sec)"
+           if="$(eval float(arg('delay_phase_angular_time_constant_sec')) >= 0.0)"/>
+    <param name="delay_phase/require_complete_history" value="$(arg delay_phase_require_complete_history)"/>
+    <param name="phase_rejoin/mode" value="$(arg phase_rejoin_mode)"/>
+    <param name="phase_rejoin/artifact_path" value="$(arg phase_rejoin_artifact_path)"/>
+    <param name="phase_rejoin/publish_diagnostics" value="$(arg phase_rejoin_publish_diagnostics)"/>
+    <param name="phase_rejoin/liquid_horizon_steps" value="$(arg phase_rejoin_liquid_horizon_steps)"/>
+    <param name="phase_rejoin/max_residual_v" value="$(arg phase_rejoin_max_residual_v)"/>
+    <param name="phase_rejoin/max_residual_omega" value="$(arg phase_rejoin_max_residual_omega)"/>
+    <param name="phase_rejoin/allow_development_artifact_in_enforce" value="$(arg phase_rejoin_allow_development_artifact_in_enforce)"/>
+    <param name="phase_rejoin/required_contract_id" value="$(arg phase_rejoin_required_contract_id)"/>
+    <param name="phase_rejoin/required_frame_id" value="$(arg phase_rejoin_required_frame_id)"/>
     <param name="state_timing/require_common_epoch" value="$(arg state_timing_require_common_epoch)"/>
     <param name="state_timing/max_raw_skew_sec" value="$(arg state_timing_max_raw_skew_sec)"/>
     <param name="state_timing/max_interpolation_gap_sec" value="$(arg state_timing_max_interpolation_gap_sec)"/>

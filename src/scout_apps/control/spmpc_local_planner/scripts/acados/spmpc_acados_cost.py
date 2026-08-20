@@ -104,15 +104,64 @@ def _slosh_cost(x, p, pidx_slosh=PIDX_SLOSH, eta_base=6):
 
     eta_base 指定 eta 在状态向量里的起始下标：
       omega-state(10 维) -> 6；direct-omega(9 维) -> 5。
+
+    phase_rejoin_active=1 时改为相对 j_f+k 名义液体状态的偏差代价；
+    为 0 时精确保留原点模态能量代价。direct-omega 后端没有该参数，
+    因而仍保持原行为。
     """
     eta_x, eta_x_dot = x[eta_base], x[eta_base + 1]
     eta_y, eta_y_dot = x[eta_base + 2], x[eta_base + 3]
+    if "phase_rejoin_active" in pidx_slosh:
+        active = p[pidx_slosh["phase_rejoin_active"]]
+        eta_x = eta_x - active * p[pidx_slosh["nom_eta_x"]]
+        eta_x_dot = eta_x_dot - active * p[pidx_slosh["nom_eta_x_dot"]]
+        eta_y = eta_y - active * p[pidx_slosh["nom_eta_y"]]
+        eta_y_dot = eta_y_dot - active * p[pidx_slosh["nom_eta_y_dot"]]
     eta_ref = p[pidx_slosh["eta_ref"]]
     eta_dot_ref = p[pidx_slosh["eta_dot_ref"]]
     j_eta = p[pidx_slosh["w_slosh_eta"]] * (eta_x * eta_x + eta_y * eta_y) / (eta_ref * eta_ref)
     j_eta_dot = p[pidx_slosh["w_slosh_eta_dot"]] * \
         (eta_x_dot * eta_x_dot + eta_y_dot * eta_y_dot) / (eta_dot_ref * eta_dot_ref)
     return j_eta + j_eta_dot
+
+
+def _phase_rejoin_relative_cost(x, u, p, cfg):
+    """Alpha-state slosh 主线的 nominal-relative 状态/控制偏差。
+
+    该项只在 wrapper 将 phase_rejoin_active 显式设为 1 的短窗口 stage
+    生效；使用现有权重和物理尺度，不引入第二套未标定权重。
+    几何位置仍由 MPCC contour/lag 项负责；nom_x/y/yaw 仅用于
+    stage N_l 的 9 维经验 gate。
+    """
+    active = p[PIDX_SLOSH["phase_rejoin_active"]]
+    a, alpha, v_s = u[0], u[1], u[2]
+    v, omega = x[3], x[5]
+    j_state = (
+        p[PIDX_SLOSH["w_v"]] *
+        ((v - p[PIDX_SLOSH["nom_v"]]) / cfg["v_max"]) ** 2
+        + p[PIDX_SLOSH["w_omega"]] *
+        ((omega - p[PIDX_SLOSH["nom_omega"]]) / cfg["omega_max"]) ** 2
+    )
+    j_control = (
+        p[PIDX_SLOSH["w_a"]] *
+        ((a - p[PIDX_SLOSH["nom_a"]]) / cfg["a_max"]) ** 2
+        + p[PIDX_SLOSH["w_alpha"]] *
+        ((alpha - p[PIDX_SLOSH["nom_alpha"]]) / cfg["alpha_max"]) ** 2
+        + p[PIDX_SLOSH["w_vs"]] *
+        ((v_s - p[PIDX_SLOSH["nom_v_s"]]) / cfg["vs_max"]) ** 2
+    )
+    return active * (j_state + j_control)
+
+
+def _phase_rejoin_terminal_relative_cost(x, p, cfg):
+    """N_l 与整个 OCP 终端重合时的 v/omega 名义偏差项。"""
+    active = p[PIDX_SLOSH["phase_rejoin_active"]]
+    return active * (
+        p[PIDX_SLOSH["w_v"]] *
+        ((x[3] - p[PIDX_SLOSH["nom_v"]]) / cfg["v_max"]) ** 2
+        + p[PIDX_SLOSH["w_omega"]] *
+        ((x[5] - p[PIDX_SLOSH["nom_omega"]]) / cfg["omega_max"]) ** 2
+    )
 
 
 def stage_cost_expr_direct_omega_legacy(sym, cfg):
@@ -204,7 +253,12 @@ def stage_cost_expr(sym, cfg):
     )
 
     j_slosh = _slosh_cost(x, p) if sym.get("with_slosh") else 0.0
-    return (j_track + j_path_speed + j_control + j_smooth + j_slosh) / n_steps
+    j_phase_relative = (
+        _phase_rejoin_relative_cost(x, u, p, cfg)
+        if sym.get("with_slosh") else 0.0
+    )
+    return (j_track + j_path_speed + j_control + j_smooth + j_slosh +
+            j_phase_relative) / n_steps
 
 
 def terminal_cost_expr(sym, cfg):
@@ -216,4 +270,5 @@ def terminal_cost_expr(sym, cfg):
     j = _tracking_cost(x, p)
     if sym.get("with_slosh"):
         j = j + _slosh_cost(x, p)
+        j = j + _phase_rejoin_terminal_relative_cost(x, p, cfg)
     return j

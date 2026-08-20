@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 namespace spmpc_local_planner {
 namespace {
 
@@ -56,6 +58,15 @@ VariantConfig makeB0Variant() {
     return variant;
 }
 
+VariantConfig makeSloshVariant() {
+    VariantConfig variant = makeB0Variant();
+    variant.name = "B_slosh_phase_test";
+    variant.slosh_enable = true;
+    variant.slosh_constraint_enable = false;
+    variant.w_slosh = 5.0;
+    return variant;
+}
+
 SolverInput makeInput() {
     SolverInput input;
     input.robot.x = 0.0;
@@ -70,6 +81,65 @@ SolverInput makeInput() {
     input.v_ref_current = 0.20;
     input.v_ref_status = "TEST_OVERRIDE";
     return input;
+}
+
+std::size_t parameterIndex(const PreSolveSnapshotDebug& snapshot,
+                           const std::string& name) {
+    const auto it = std::find(snapshot.parameter_names.begin(),
+                              snapshot.parameter_names.end(), name);
+    EXPECT_NE(it, snapshot.parameter_names.end()) << name;
+    return static_cast<std::size_t>(
+        std::distance(snapshot.parameter_names.begin(), it));
+}
+
+double stageParameter(const PreSolveSnapshotDebug& snapshot,
+                      int stage,
+                      std::size_t parameter_index) {
+    const std::size_t offset = static_cast<std::size_t>(stage) *
+        static_cast<std::size_t>(snapshot.parameter_width) + parameter_index;
+    EXPECT_LT(offset, snapshot.stage_parameters.size());
+    return offset < snapshot.stage_parameters.size()
+        ? snapshot.stage_parameters[offset] : 0.0;
+}
+
+EmpiricalRecoveryRadii broadRadii() {
+    EmpiricalRecoveryRadii radii;
+    radii.x = 100.0;
+    radii.y = 100.0;
+    radii.yaw = 100.0;
+    radii.v = 100.0;
+    radii.omega = 100.0;
+    radii.eta_x = 100.0;
+    radii.eta_x_dot = 100.0;
+    radii.eta_y = 100.0;
+    radii.eta_y_dot = 100.0;
+    return radii;
+}
+
+PhaseRejoinSolverContext makeEnforceContext() {
+    PhaseRejoinSolverContext context;
+    context.active = true;
+    context.enforce = true;
+    context.empirical_gate = true;
+    context.state_complete_for_certificate = false;
+    context.current_index = 0;
+    context.front_index = 2;
+    context.terminal_index = 5;
+    context.front_steps = 2;
+    context.liquid_steps = 3;
+    for (int k = 0; k <= context.liquid_steps; ++k) {
+        PhaseNominalStage stage;
+        stage.valid = true;
+        stage.gate_active = k == context.liquid_steps;
+        stage.artifact_index = context.front_index +
+            static_cast<std::size_t>(k);
+        stage.s = 0.05 * static_cast<double>(k);
+        stage.v = 0.20;
+        stage.v_s = 0.20;
+        stage.radii = broadRadii();
+        context.stages.push_back(stage);
+    }
+    return context;
 }
 
 }  // namespace
@@ -116,6 +186,73 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     EXPECT_EQ(second.pre_solve_snapshot.previous_solution_states.size(), 61u);
     EXPECT_EQ(second.pre_solve_snapshot.previous_solution_controls.size(), 60u);
 }
+
+#ifdef SPMPC_TEST_WITH_ACADOS_SLOSH
+TEST(ReplayDiagnostics, MonitorContextPreservesBaselineAndEnforceGateIsStageLocal) {
+    ContinuousMpccSolverAcados solver;
+    solver.configure(makeParams(), makeSloshVariant());
+    const ReferencePath reference = makeStraightReference();
+
+    SolverInput monitor_input = makeInput();
+    monitor_input.phase_rejoin.active = true;
+    monitor_input.phase_rejoin.enforce = false;
+    monitor_input.phase_rejoin.empirical_gate = true;
+    monitor_input.phase_rejoin.liquid_steps = 3;
+    // Intentionally omit nominal stages: monitor must not alter or validate the
+    // baseline OCP parameter stream.
+    SolverOutput monitor_output;
+    ASSERT_TRUE(solver.solve(monitor_input, reference, monitor_output))
+        << monitor_output.status;
+    ASSERT_EQ(monitor_output.pre_solve_snapshot.parameter_width, 55);
+    const std::size_t phase_active = parameterIndex(
+        monitor_output.pre_solve_snapshot, "phase_rejoin_active");
+    const std::size_t gate_active = parameterIndex(
+        monitor_output.pre_solve_snapshot, "empirical_gate_active");
+    const std::size_t w_slosh_eta = parameterIndex(
+        monitor_output.pre_solve_snapshot, "w_slosh_eta");
+    for (int stage = 0; stage <= 60; ++stage) {
+        EXPECT_DOUBLE_EQ(stageParameter(
+            monitor_output.pre_solve_snapshot, stage, phase_active), 0.0);
+        EXPECT_DOUBLE_EQ(stageParameter(
+            monitor_output.pre_solve_snapshot, stage, gate_active), 0.0);
+    }
+    EXPECT_DOUBLE_EQ(stageParameter(
+        monitor_output.pre_solve_snapshot, 4, w_slosh_eta), 5.0);
+
+    SolverInput enforce_input = makeInput();
+    enforce_input.phase_rejoin = makeEnforceContext();
+    SolverOutput enforce_output;
+    ASSERT_TRUE(solver.solve(enforce_input, reference, enforce_output))
+        << enforce_output.status;
+    ASSERT_EQ(enforce_output.pre_solve_snapshot.parameter_width, 55);
+    for (int stage = 0; stage <= 60; ++stage) {
+        const bool in_liquid_window = stage <= 3;
+        EXPECT_DOUBLE_EQ(stageParameter(
+            enforce_output.pre_solve_snapshot, stage, phase_active),
+            in_liquid_window ? 1.0 : 0.0);
+        EXPECT_DOUBLE_EQ(stageParameter(
+            enforce_output.pre_solve_snapshot, stage, gate_active),
+            stage == 3 ? 1.0 : 0.0);
+    }
+    // Long geometry preview remains, while liquid cost is cut after N_l.
+    EXPECT_DOUBLE_EQ(stageParameter(
+        enforce_output.pre_solve_snapshot, 3, w_slosh_eta), 5.0);
+    EXPECT_DOUBLE_EQ(stageParameter(
+        enforce_output.pre_solve_snapshot, 4, w_slosh_eta), 0.0);
+}
+
+TEST(ReplayDiagnostics, InvalidEnforceContextFailsClosedWithStableStatus) {
+    ContinuousMpccSolverAcados solver;
+    solver.configure(makeParams(), makeSloshVariant());
+    SolverInput input = makeInput();
+    input.phase_rejoin = makeEnforceContext();
+    input.phase_rejoin.stages.pop_back();
+
+    SolverOutput output;
+    EXPECT_FALSE(solver.solve(input, makeStraightReference(), output));
+    EXPECT_EQ(output.status, "PHASE_REJOIN_CONTEXT_INVALID_STAGE_COUNT");
+}
+#endif
 
 }  // namespace spmpc_local_planner
 

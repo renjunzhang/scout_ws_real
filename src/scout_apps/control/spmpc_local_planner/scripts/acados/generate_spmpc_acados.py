@@ -43,6 +43,7 @@ from spmpc_acados_constraints import (  # noqa: E402
     set_constraints,
     set_constraints_direct_omega_legacy,
     set_constraints_slosh,
+    slosh_nonlinear_constraint_expr,
 )
 
 MODELS = {
@@ -156,6 +157,18 @@ def default_parameter_values(cfg, with_slosh, direct_omega_legacy=False):
         p[idx["w_slosh_eta_dot"]] = cfg["w_slosh"]
         if "eta_max_sq" in idx:
             p[idx["eta_max_sq"]] = 1e12
+        if "phase_rejoin_active" in idx:
+            # Off/monitor-compatible default: no nominal-relative term and no
+            # empirical gate.  Unit radii keep every inactive stage finite;
+            # enforce mode replaces the N_l radius vector from its artifact.
+            p[idx["phase_rejoin_active"]] = 0.0
+            p[idx["empirical_gate_active"]] = 0.0
+            for name in (
+                "gate_r_x", "gate_r_y", "gate_r_yaw", "gate_r_v",
+                "gate_r_omega", "gate_r_eta_x", "gate_r_eta_x_dot",
+                "gate_r_eta_y", "gate_r_eta_y_dot",
+            ):
+                p[idx[name]] = 1.0
     return p
 
 
@@ -179,6 +192,29 @@ def build_check(cfg, model_key):
     print(f"  bounds: v_max={cfg['v_max']} omega_max={cfg['omega_max']} a_max={cfg['a_max']} vs_max={cfg['vs_max']}")
     print(f"  e_c_ref={cfg['e_c_ref']:.4f} e_l_ref={cfg['e_l_ref']:.4f}")
     print(f"  path-speed: w_progress={cfg['w_progress']:.4f} w_v={cfg['w_v']:.4f} w_vs={cfg['w_vs']:.4f} v_ref={cfg['v_ref']:.4f}")
+    if model_key == "slosh":
+        h_expr = slosh_nonlinear_constraint_expr(sym, PIDX_SLOSH)
+        if h_expr.shape != (2, 1):
+            raise RuntimeError(
+                f"slosh nonlinear constraint shape must be (2, 1), got {h_expr.shape}")
+        x0 = np.zeros(sym["nx"])
+        h_fun = ca.Function("spmpc_slosh_h_check", [sym["x"], sym["p"]], [h_expr])
+        inactive = np.asarray(h_fun(x0, p_default)).reshape(-1)
+        if not np.isfinite(inactive).all() or abs(inactive[1] + 1.0) > 1e-12:
+            raise RuntimeError(
+                f"inactive empirical gate must be finite and equal -1, got {inactive[1]}")
+
+        p_active = p_default.copy()
+        p_active[PIDX_SLOSH["empirical_gate_active"]] = 1.0
+        p_active[PIDX_SLOSH["nom_x"]] = 0.0
+        boundary_x = x0.copy()
+        boundary_x[0] = p_active[PIDX_SLOSH["gate_r_x"]]
+        boundary = np.asarray(h_fun(boundary_x, p_active)).reshape(-1)
+        if not np.isfinite(boundary).all() or abs(boundary[1]) > 1e-12:
+            raise RuntimeError(
+                f"one-radius empirical gate boundary must equal 0, got {boundary[1]}")
+        print("  nonlinear h shape = (2, 1): slosh cap + stage-selective empirical gate")
+        print("  empirical gate self-check: inactive=-1, one-radius boundary=0")
 
 
 def generate(cfg, output_root, model_key):

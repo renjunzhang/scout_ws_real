@@ -106,6 +106,8 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     solver_input_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/solver_input_state", 1);
     command_intervention_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/command_intervention", 1);
     control_cycle_audit_pub_ = nh.advertise<ControlCycleAudit>("debug/control_cycle_audit", 10);
+    phase_rejoin_pub_ = nh.advertise<PhaseRejoinDebug>(
+        "debug/phase_rejoin", 10);
     cmd_output_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/cmd_vel_output", 1);
     cmd_output_status_pub_ = nh.advertise<std_msgs::String>("debug/cmd_vel_output_status", 1);
     delay_phase_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/delay_phase", 1);
@@ -384,6 +386,73 @@ void DiagnosticsPublisher::publishControlCycleAudit(
     msg.imu_alpha = audit.imu_excitation.alpha;
     msg.imu_sample_dt_sec = audit.imu_excitation.sample_dt_sec;
     control_cycle_audit_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishPhaseRejoin(
+    const PhaseRejoinDebugData& debug,
+    const ControlCycleTimingDebug& timing,
+    const std::string& frame_id,
+    const ExecutionStatePrediction* prediction) {
+    PhaseRejoinDebug msg;
+    msg.header.stamp = rosTimeFromNanoseconds(
+        timing.horizon_available_stamp_ns > 0
+            ? timing.horizon_available_stamp_ns
+            : timing.cycle_start_stamp_ns);
+    msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
+    msg.schema_version = 1;
+    msg.cycle_id = timing.cycle_id;
+    msg.mode = static_cast<std::uint8_t>(debug.mode);
+    msg.mode_name = phaseRejoinModeName(debug.mode);
+    msg.evidence_level = static_cast<std::uint8_t>(debug.evidence_level);
+    msg.evidence_level_name = phaseRejoinEvidenceLevelName(
+        debug.evidence_level);
+    msg.artifact_loaded = debug.artifact_loaded;
+    msg.contract_valid = debug.contract_valid;
+    msg.ready = debug.ready;
+    msg.empirical_gate = debug.empirical_gate;
+    msg.state_complete_for_certificate = false;
+    msg.artifact_size = static_cast<std::uint64_t>(debug.artifact_size);
+    msg.artifact_path = debug.artifact_path;
+    msg.contract_id = debug.contract_id;
+    msg.current_index = static_cast<std::uint64_t>(debug.current_index);
+    msg.front_index = static_cast<std::uint64_t>(debug.front_index);
+    msg.terminal_index = static_cast<std::uint64_t>(debug.terminal_index);
+    msg.candidate_count = static_cast<std::uint64_t>(debug.candidate_count);
+    msg.front_steps = debug.front_steps;
+    msg.liquid_steps = debug.liquid_steps;
+    msg.solver_terminal_step = debug.solver_terminal_step;
+    msg.solver_origin_at_execution_front =
+        debug.solver_origin_at_execution_front;
+    msg.candidate_score = debug.candidate_score;
+    msg.terminal_gate_metric = debug.terminal_gate_metric;
+    msg.current_gate_metric = debug.current_gate_metric;
+    msg.terminal_gate_accepted = debug.terminal_gate_accepted;
+    msg.current_gate_accepted = debug.current_gate_accepted;
+    msg.command_intervened = debug.command_intervened;
+    msg.recovery_command_used = debug.recovery_command_used;
+    msg.controlled_stop_used = debug.controlled_stop_used;
+    msg.nominal_cmd_v = debug.nominal_cmd_v;
+    msg.nominal_cmd_omega = debug.nominal_cmd_omega;
+    msg.solver_cmd_v = debug.solver_cmd_v;
+    msg.solver_cmd_omega = debug.solver_cmd_omega;
+    msg.output_cmd_v = debug.output_cmd_v;
+    msg.output_cmd_omega = debug.output_cmd_omega;
+    msg.residual_v = debug.residual_v;
+    msg.residual_omega = debug.residual_omega;
+    msg.solver_input_epoch = rosTimeFromNanoseconds(
+        timing.solver_input_epoch_ns);
+    if (prediction != nullptr) {
+        msg.prediction_valid = prediction->valid;
+        msg.prediction_origin_epoch = rosTimeFromNanoseconds(
+            prediction->prediction_origin_epoch_ns);
+        msg.prediction_epoch = rosTimeFromNanoseconds(
+            prediction->prediction_epoch_ns);
+        msg.prediction_integrated_duration_sec =
+            prediction->integrated_duration_sec;
+        msg.prediction_status = prediction->status;
+    }
+    msg.status = debug.status;
+    phase_rejoin_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishCommandOutput(const geometry_msgs::Twist& desired,

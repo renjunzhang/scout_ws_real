@@ -1,0 +1,156 @@
+#include "spmpc_local_planner/phase_rejoin/phase_candidate_selector.h"
+
+#include "spmpc_local_planner/phase_rejoin/empirical_recovery_gate.h"
+
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
+namespace spmpc_local_planner {
+namespace {
+
+double sqr(double value) {
+    return value * value;
+}
+
+double wrapAngle(double angle) {
+    return std::atan2(std::sin(angle), std::cos(angle));
+}
+
+}  // namespace
+
+bool PhaseCandidateSelector::configure(
+    const PhaseCandidateSelectorParams& params) {
+    const bool valid = params.backward_radius >= 0 &&
+        params.forward_radius >= 0 && params.initial_forward_radius >= 0 &&
+        std::isfinite(params.weight_position) && params.weight_position >= 0.0 &&
+        std::isfinite(params.weight_yaw) && params.weight_yaw >= 0.0 &&
+        std::isfinite(params.weight_velocity) && params.weight_velocity >= 0.0 &&
+        std::isfinite(params.weight_liquid) && params.weight_liquid >= 0.0;
+    if (!valid) {
+        configured_ = false;
+        return false;
+    }
+    params_ = params;
+    configured_ = true;
+    return true;
+}
+
+double PhaseCandidateSelector::score(const PhaseNominalSample& nominal,
+                                     const RobotState& robot,
+                                     const SloshState& slosh) const {
+    if (!EmpiricalRecoveryGate::validRadii(nominal.radii)) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const double position =
+        sqr((robot.x - nominal.x) / nominal.radii.x) +
+        sqr((robot.y - nominal.y) / nominal.radii.y);
+    const double yaw =
+        sqr(wrapAngle(robot.yaw - nominal.yaw) / nominal.radii.yaw);
+    const double velocity =
+        sqr((robot.v - nominal.v) / nominal.radii.v) +
+        sqr((robot.omega - nominal.omega) / nominal.radii.omega);
+    const double liquid =
+        sqr((slosh.eta_x - nominal.eta_x) / nominal.radii.eta_x) +
+        sqr((slosh.eta_x_dot - nominal.eta_x_dot) /
+            nominal.radii.eta_x_dot) +
+        sqr((slosh.eta_y - nominal.eta_y) / nominal.radii.eta_y) +
+        sqr((slosh.eta_y_dot - nominal.eta_y_dot) /
+            nominal.radii.eta_y_dot);
+    return params_.weight_position * position + params_.weight_yaw * yaw +
+           params_.weight_velocity * velocity + params_.weight_liquid * liquid;
+}
+
+PhaseCandidateResult PhaseCandidateSelector::select(
+    const NominalSequenceArtifact& artifact,
+    const RobotState& execution_front_robot,
+    const SloshState& execution_front_slosh,
+    int front_steps,
+    int liquid_steps,
+    bool have_last_accepted,
+    std::size_t last_accepted_index) const {
+    PhaseCandidateResult result;
+    if (!configured_) {
+        result.status = "NOT_CONFIGURED";
+        return result;
+    }
+    if (!artifact.valid() || artifact.empty()) {
+        result.status = "ARTIFACT_UNAVAILABLE";
+        return result;
+    }
+    if (front_steps < 0 || liquid_steps < 0) {
+        result.status = "INVALID_HORIZON";
+        return result;
+    }
+    const std::size_t required_tail = static_cast<std::size_t>(
+        front_steps + liquid_steps);
+    if (required_tail >= artifact.size()) {
+        result.status = "ARTIFACT_TOO_SHORT";
+        return result;
+    }
+    const std::size_t max_current = artifact.size() - required_tail - 1;
+    if (have_last_accepted && last_accepted_index > max_current) {
+        result.status = "LAST_INDEX_OUT_OF_RANGE";
+        return result;
+    }
+
+    const std::size_t expected = have_last_accepted
+        ? std::min(last_accepted_index + 1, max_current)
+        : 0;
+    result.normal_shift_index = expected;
+
+    std::size_t begin = 0;
+    std::size_t end = 0;
+    if (have_last_accepted) {
+        const std::size_t backward = static_cast<std::size_t>(
+            params_.backward_radius);
+        begin = expected > backward ? expected - backward : 0;
+        // Never move behind the last accepted phase.  The previous index may
+        // still be reconsidered, but a global backward jump is impossible.
+        begin = std::max(begin, last_accepted_index);
+        end = std::min(max_current,
+                       expected + static_cast<std::size_t>(
+                                      params_.forward_radius));
+    } else {
+        begin = 0;
+        end = std::min(max_current,
+                       static_cast<std::size_t>(
+                           params_.initial_forward_radius));
+    }
+    if (begin > end || expected < begin || expected > end) {
+        result.status = "CANDIDATE_WINDOW_INVALID";
+        return result;
+    }
+
+    double best_score = std::numeric_limits<double>::infinity();
+    std::size_t best_current = begin;
+    for (std::size_t current = begin; current <= end; ++current) {
+        const std::size_t front = current + static_cast<std::size_t>(front_steps);
+        const PhaseNominalSample* nominal = artifact.sample(front);
+        if (nominal == nullptr) {
+            continue;
+        }
+        ++result.candidate_count;
+        const double candidate_score = score(
+            *nominal, execution_front_robot, execution_front_slosh);
+        if (candidate_score < best_score) {
+            best_score = candidate_score;
+            best_current = current;
+        }
+    }
+    if (result.candidate_count == 0 || !std::isfinite(best_score)) {
+        result.status = "NO_FINITE_CANDIDATE";
+        return result;
+    }
+
+    result.valid = true;
+    result.current_index = best_current;
+    result.front_index = best_current + static_cast<std::size_t>(front_steps);
+    result.terminal_index = result.front_index +
+        static_cast<std::size_t>(liquid_steps);
+    result.score = best_score;
+    result.status = "OK";
+    return result;
+}
+
+}  // namespace spmpc_local_planner

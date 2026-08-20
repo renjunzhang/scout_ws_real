@@ -17,6 +17,7 @@
 | `run_external_baseline_real_fixed_path_trial.sh` | LT-DWA、TEB、MPC 外部 baseline 的 shadow/actuated 实物运行 | 独立外部 baseline，不属于当前内部 88 单元 |
 | `record_spmpc_mainline_ground_smoke.sh` | 轻量地面 smoke recorder | smoke |
 | `record_spmpc_experiment.sh` | planner 已手动启动时的备用 recorder | 手动调试 |
+| `prepare_phase_rejoin_development_artifact.py` | 从严格配对的 rolling horizon/audit 离线导出 phase-rejoin 接口 artifact | **仅 development interface smoke；不是 OfflineSloshOCP 或实物正式 artifact** |
 | `run_continuous_real.sh` | 历史 continuous MPCC 实物一键运行 | 历史/开发，不是正式 runner |
 | `compare_b0_bslosh_smoke.sh` | B0/B_slosh 等内部 variant 仿真 smoke | 仿真 smoke |
 | `verify_continuous_smoke.sh` | continuous acados 后端闭环仿真检查 | 仿真 smoke |
@@ -33,6 +34,63 @@
 - `acados/generate_spmpc_acados.py` 负责模型检查和求解器代码生成；同目录的 `spmpc_acados_model.py`、`spmpc_acados_cost.py`、`spmpc_acados_constraints.py` 是其装配模块，不单独运行；
 - `analysis/estimate_cmd_odom_delay.py` 是早期 cmd/odom 互相关与绘图工具，当前优先使用顶层 `analyze_spmpc_delay_phase.py`；
 - `tests/` 保存 summary 和正式 freeze validator 的回归测试。
+
+## prepare_phase_rejoin_development_artifact.py
+
+该工具只为 Phase-Rejoining 的文件接口和闭环机制 smoke 准备临时输入。它从 bag 中按 `cycle_id` 一对一连接：
+
+- `/spmpc/debug/predicted_horizon` 的第 0 个预测状态和第 0 个控制；
+- `/spmpc/debug/control_cycle_audit` 中同周期最终实际发布的 `published_cmd_v/omega`。
+
+所以得到的是 rolling local planner first-stage proxy，**不是** OfflineSloshOCP 输出，也不是 independently validated empirical artifact。工具把下面标记写死，不能通过命令行升级：
+
+```text
+evidence_level=development_only
+source=development_proxy_replay
+artifact_role=interface_smoke_only
+offline_slosh_ocp=false
+hardware_formal_release=false
+paper_main_result_eligible=false
+gate_evidence=none_development_input_only
+recovery_policy_evidence=none_development_input_only
+```
+
+现有 bag 不包含经过独立验证的 recovery policy 或 gate 半径。工具因此没有默认值，也不会把零命令、预测控制或样本方差悄悄包装成这些对象。调用者必须显式提供逐 `cycle_id` 的 development 参数 CSV，且所有字段都要填写：
+
+```csv
+cycle_id,kappa_v,kappa_omega,r_x,r_y,r_yaw,r_v,r_omega,r_eta_x,r_eta_x_dot,r_eta_y,r_eta_y_dot
+```
+
+这些数值仍只作为接口输入；SHA-256、来源和“无证据”标记会写入输出。缺行、重复 cycle、空值、非正半径一律失败。
+
+典型导出命令：
+
+```bash
+python3 src/scout_apps/control/spmpc_local_planner/scripts/prepare_phase_rejoin_development_artifact.py export \
+  --bag /path/to/development_proxy.bag \
+  --development-parameters /path/to/operator_supplied_development_parameters.csv \
+  --output /tmp/phase_rejoin_development_only.csv \
+  --contract-id proxy_route_config_v1 \
+  --frame-id map \
+  --dt 0.03333333333333333 \
+  --path-length 8.0 \
+  --start-cycle-id 120 \
+  --end-cycle-id 359
+```
+
+默认话题为 `/spmpc/debug/predicted_horizon` 和 `/spmpc/debug/control_cycle_audit`，可显式覆盖。导出器要求选中区间内 cycle 连续、两种消息严格一对一、共享 timing 字段一致，且 solver 成功、状态已对齐、命令确实发布、无 safety/terminal/limiter/command-contract 干预。任一条件不满足即拒绝导出；应重新选择完整的连续 development 区间，不能手工补行。
+
+输出会在原子替换前按 `NominalSequenceArtifact` 的固定表头、元数据、有限值、连续索引、采样周期、进度和正半径口径重新校验。也可单独运行：
+
+```bash
+python3 src/scout_apps/control/spmpc_local_planner/scripts/prepare_phase_rejoin_development_artifact.py validate \
+  --artifact /tmp/phase_rejoin_development_only.csv
+
+python3 -m unittest \
+  src/scout_apps/control/spmpc_local_planner/scripts/tests/test_phase_rejoin_development_artifact.py
+```
+
+正式 OfflineSloshOCP 必须由独立求解/验证链生成同 schema 文件，并使用与本工具不同、如实反映证据等级的来源合同；不得重命名或修改本工具输出的 metadata 来冒充正式 artifact。
 
 ## record_spmpc_full_rgb_bag.sh
 

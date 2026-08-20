@@ -78,3 +78,6 @@ docs/论文书写/草稿/spmpc_paper_cn/main.log
 docs/论文书写/草稿/spmpc_paper_cn/main.out
 docs/论文书写/草稿/spmpc_paper_cn/main.pdf
 docs/论文书写/草稿/spmpc_paper_cn/main.xdv
+
+# 本地防晃论文原文归档（体积较大，不纳入版本控制）
+docs_for_offlineslosh/防晃领域论文梳理/arXiv/

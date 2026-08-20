@@ -12,6 +12,55 @@ import casadi as ca
 import numpy as np
 
 
+def slosh_nonlinear_constraint_expr(sym, pidx):
+    """Return [modal-height cap, phase-indexed empirical recovery gate].
+
+    The second constraint is stage-selective through empirical_gate_active.
+    For inactive stages it evaluates to -1 (strictly feasible) instead of 0,
+    avoiding an always-active zero-Jacobian inequality.  With activation=1 it
+    is exactly the same nine-dimensional diagonal ellipsoid metric used by
+    EmpiricalRecoveryGate in C++: metric - 1 <= 0, including wrapped yaw.
+
+    This is an empirical gate only; it is not a robust invariant set or a
+    recovery certificate.
+    """
+    x = sym["x"]
+    p = sym["p"]
+
+    eta_x = x[6]
+    eta_y = x[8]
+    eta_max_sq = p[pidx["eta_max_sq"]]
+    h_slosh = eta_x * eta_x + eta_y * eta_y - eta_max_sq
+
+    active = p[pidx["empirical_gate_active"]]
+    errors = [
+        x[0] - p[pidx["nom_x"]],
+        x[1] - p[pidx["nom_y"]],
+        ca.atan2(
+            ca.sin(x[2] - p[pidx["nom_yaw"]]),
+            ca.cos(x[2] - p[pidx["nom_yaw"]])),
+        x[3] - p[pidx["nom_v"]],
+        x[5] - p[pidx["nom_omega"]],
+        x[6] - p[pidx["nom_eta_x"]],
+        x[7] - p[pidx["nom_eta_x_dot"]],
+        x[8] - p[pidx["nom_eta_y"]],
+        x[9] - p[pidx["nom_eta_y_dot"]],
+    ]
+    radius_names = [
+        "gate_r_x", "gate_r_y", "gate_r_yaw", "gate_r_v",
+        "gate_r_omega", "gate_r_eta_x", "gate_r_eta_x_dot",
+        "gate_r_eta_y", "gate_r_eta_y_dot",
+    ]
+    metric = 0.0
+    for error, radius_name in zip(errors, radius_names):
+        # Wrapper only injects active in {0,1}.  Blending the denominator keeps
+        # inactive stages finite even before their unit default radii are set.
+        radius = active * p[pidx[radius_name]] + (1.0 - active)
+        metric = metric + (error / radius) ** 2
+    h_empirical_gate = active * metric - 1.0
+    return ca.vertcat(h_slosh, h_empirical_gate)
+
+
 def set_constraints_direct_omega_legacy(ocp, cfg):
     """诊断 legacy B0：u[1]=omega 直接受限，状态只约束 v。"""
     a_max = cfg["a_max"]
@@ -54,34 +103,32 @@ def set_constraints(ocp, cfg):
 
 
 def set_constraints_slosh(ocp, cfg, pidx):
-    """Mainline alpha-state slosh: box bounds + predicted slosh-height hard cap.
+    """Mainline slosh: box bounds, height cap, and stage-selective empirical gate.
 
     约束写成 eta_x^2 + eta_y^2 - eta_max_sq <= 0，其中 eta_max_sq 是参数，
     运行时由 C++ 用 slosh_height_max / heightCoeff() 注入；非 hard variant 用大阈值禁用。
     stage 0 使用同一表达式但放宽上界，避免当前实测/估计液面已超阈值时立即不可行。
+
+    第二个非线性约束由逐 stage 参数激活；wrapper 只允许它在
+    k=N_l 为 1，其他 stage 为 0。
     """
     set_constraints(ocp, cfg)
 
-    x = ocp.model.x
-    p = ocp.model.p
-    eta_x = x[6]
-    eta_y = x[8]
-    eta_max_sq = p[pidx["eta_max_sq"]]
-    h_slosh = ca.vertcat(eta_x * eta_x + eta_y * eta_y - eta_max_sq)
-
-    ocp.model.con_h_expr = h_slosh
-    ocp.model.con_h_expr_e = h_slosh
-    ocp.model.con_h_expr_0 = h_slosh
+    sym = {"x": ocp.model.x, "p": ocp.model.p}
+    h_expr = slosh_nonlinear_constraint_expr(sym, pidx)
+    ocp.model.con_h_expr = h_expr
+    ocp.model.con_h_expr_e = h_expr
+    ocp.model.con_h_expr_0 = h_expr
 
     # h_slosh <= 0 for stages 1..N and terminal.  Keep the lower bound far below
     # the disabled-runtime value (eta_max_sq=1e12 => h_slosh≈-1e12), otherwise
     # soft-only slosh variants become infeasible even though the cap is disabled.
-    ocp.constraints.lh = np.array([-1e15])
-    ocp.constraints.uh = np.array([0.0])
-    ocp.constraints.lh_e = np.array([-1e15])
-    ocp.constraints.uh_e = np.array([0.0])
+    ocp.constraints.lh = np.array([-1e15, -1e15])
+    ocp.constraints.uh = np.array([0.0, 0.0])
+    ocp.constraints.lh_e = np.array([-1e15, -1e15])
+    ocp.constraints.uh_e = np.array([0.0, 0.0])
 
     # Do not reject a cycle solely because the measured initial slosh state already
     # violates the cap; constrain predicted future nodes instead.
-    ocp.constraints.lh_0 = np.array([-1e15])
-    ocp.constraints.uh_0 = np.array([1e15])
+    ocp.constraints.lh_0 = np.array([-1e15, -1e15])
+    ocp.constraints.uh_0 = np.array([1e15, 0.0])

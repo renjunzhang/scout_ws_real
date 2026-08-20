@@ -175,10 +175,35 @@ delay_phase:
   odom_timeout_sec: 0.5
   linear_delay_sec: 0.15
   angular_delay_sec: 0.22
+  linear_time_constant_sec: 0.0
+  angular_time_constant_sec: 0.0
   max_prediction_sec: 0.40
   max_integration_step_sec: 0.02
   min_integration_step_sec: 0.001
   require_complete_history: false
+
+# Execution-front-aligned phase rejoining.  Disabled by default.  The v1 gate
+# is empirical and deliberately reports state_complete_for_certificate=false.
+phase_rejoin:
+  mode: off                    # off | monitor | enforce
+  publish_diagnostics: true
+  artifact_path: ""
+  liquid_horizon_steps: 3
+  max_residual_v: 0.08
+  max_residual_omega: 0.20
+  artifact_dt_tolerance_sec: 0.0001
+  artifact_path_length_tolerance_m: 0.05
+  allow_development_artifact_in_enforce: false
+  required_contract_id: ""
+  required_frame_id: ""
+  candidate:
+    backward_radius: 1
+    forward_radius: 3
+    initial_forward_radius: 4
+    weight_position: 1.0
+    weight_yaw: 0.5
+    weight_velocity: 0.5
+    weight_liquid: 1.0
 
 # Robot pose/twist is reconstructed at the selected liquid observer timestamp
 # before a slosh solve.  This removes the 41--57 ms mixed-epoch initial state

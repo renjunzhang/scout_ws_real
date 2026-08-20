@@ -5,6 +5,7 @@
 #include "spmpc_local_planner/estimation/processed_imu_pipeline.h"
 #include "spmpc_local_planner/estimation/slosh_observer_bank.h"
 #include "spmpc_local_planner/estimation/slosh_observer_selector.h"
+#include "spmpc_local_planner/phase_rejoin/phase_rejoin_coordinator.h"
 #include "spmpc_local_planner/reference/reference_path_preprocessor.h"
 #include "spmpc_local_planner/ros/command_history_buffer.h"
 #include "spmpc_local_planner/ros/control_cycle_contract.h"
@@ -111,6 +112,8 @@ private:
     SloshModelParams loadSloshParams() const;
     ProcessedImuParams loadProcessedImuParams() const;
     SloshRiskGovernorParams loadSloshRiskGovernorParams() const;
+    void validatePhaseRejoinReference(const ReferencePath& reference);
+    bool phaseRejoinNeedsPrediction() const;
 
     // The processed-IMU shadow runs on a private ROS1 callback queue so its
     // filtering/matrix exponential/diagnostic publication cannot queue ahead
@@ -142,6 +145,8 @@ private:
     SloshRiskGovernorOutput last_slosh_governor_output_;
     CommandHistoryBuffer command_history_;
     ExecutionStatePredictor execution_predictor_;
+    PhaseRejoinCoordinator phase_rejoin_coordinator_;
+    PhaseRejoinParams phase_rejoin_params_;
     DelayPhaseParams delay_phase_params_;
     StateTimingParams state_timing_params_;
     CommandExecutionContractParams command_contract_params_;
@@ -179,6 +184,8 @@ private:
     std::string imu_expected_frame_ = "imu_link";
     std::string reference_target_frame_;
     std::string experiment_mode_ = "fixed_path";
+    std::string phase_rejoin_artifact_path_;
+    bool phase_rejoin_publish_diagnostics_ = true;
     bool publish_cmd_vel_ = true;
     bool imu_shadow_enable_ = false;
     bool imu_shadow_publish_diagnostics_ = true;

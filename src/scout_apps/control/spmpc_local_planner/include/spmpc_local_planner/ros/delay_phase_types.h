@@ -43,6 +43,10 @@ struct DelayPhaseParams {
     double odom_timeout_sec = 0.5;
     double linear_delay_sec = 0.15;
     double angular_delay_sec = 0.22;
+    // Optional identified first-order execution inertia after each pure-delay
+    // channel.  Zero preserves the historical pure-delay behavior.
+    double linear_time_constant_sec = 0.0;
+    double angular_time_constant_sec = 0.0;
     double max_prediction_sec = 0.40;
     double max_integration_step_sec = 0.02;
     double min_integration_step_sec = 0.001;
@@ -179,6 +183,10 @@ struct ExecutionStatePrediction {
     SloshState predicted_slosh;
     double linear_delay_sec = 0.0;
     double angular_delay_sec = 0.0;
+    double linear_time_constant_sec = 0.0;
+    double angular_time_constant_sec = 0.0;
+    std::int64_t prediction_origin_epoch_ns = 0;
+    std::int64_t prediction_epoch_ns = 0;
     double integrated_duration_sec = 0.0;
     double covered_history_sec = 0.0;
     double missing_history_sec = 0.0;
