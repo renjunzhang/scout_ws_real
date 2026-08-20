@@ -1,20 +1,18 @@
-#include "spmpc_local_planner/ros/command_history_buffer.h"
+#include "spmpc_local_planner/runtime/execution_prediction/command_history_buffer.h"
 #include <gtest/gtest.h>
 
 namespace spmpc_local_planner {
 namespace {
 
-ros::Time stamp(double sec) {
-    ros::Time t;
-    t.fromSec(sec);
-    return t;
+StampNs stamp(double sec) {
+    return secondsToNanoseconds(sec);
 }
 
 TimedCommandSample sample(double sec, double v, double omega, bool zero = false) {
     TimedCommandSample out;
-    out.stamp = stamp(sec);
-    out.cmd.linear.x = v;
-    out.cmd.angular.z = omega;
+    out.stamp_ns = stamp(sec);
+    out.command.linear = v;
+    out.command.angular = omega;
     out.meta.is_zero_cmd = zero;
     return out;
 }
@@ -30,8 +28,8 @@ TEST(CommandHistoryBuffer, StoresZeroCommandSamples) {
     TimedCommandSample got;
     ASSERT_TRUE(buffer.sampleAt(stamp(1.1), got));
     EXPECT_TRUE(got.meta.is_zero_cmd);
-    EXPECT_DOUBLE_EQ(got.cmd.linear.x, 0.0);
-    EXPECT_DOUBLE_EQ(got.cmd.angular.z, 0.0);
+    EXPECT_DOUBLE_EQ(got.command.linear, 0.0);
+    EXPECT_DOUBLE_EQ(got.command.angular, 0.0);
 }
 
 TEST(CommandHistoryBuffer, PrunesByWindowAndSamplesZoh) {
@@ -48,10 +46,10 @@ TEST(CommandHistoryBuffer, PrunesByWindowAndSamplesZoh) {
     TimedCommandSample got;
     EXPECT_FALSE(buffer.sampleAt(stamp(0.1), got));
     ASSERT_TRUE(buffer.sampleAt(stamp(0.7), got));
-    EXPECT_DOUBLE_EQ(got.cmd.linear.x, 0.5);
-    EXPECT_DOUBLE_EQ(got.cmd.angular.z, 0.1);
+    EXPECT_DOUBLE_EQ(got.command.linear, 0.5);
+    EXPECT_DOUBLE_EQ(got.command.angular, 0.1);
     ASSERT_TRUE(buffer.sampleAt(stamp(1.3), got));
-    EXPECT_DOUBLE_EQ(got.cmd.linear.x, 0.8);
+    EXPECT_DOUBLE_EQ(got.command.linear, 0.8);
 }
 
 TEST(CommandHistoryBuffer, SegmentReturnsSamplesInsideRange) {
@@ -63,8 +61,8 @@ TEST(CommandHistoryBuffer, SegmentReturnsSamplesInsideRange) {
 
     const auto segment = buffer.segment(stamp(1.2), stamp(2.0));
     ASSERT_EQ(segment.size(), 2u);
-    EXPECT_DOUBLE_EQ(segment[0].cmd.linear.x, 0.2);
-    EXPECT_DOUBLE_EQ(segment[1].cmd.linear.x, 0.3);
+    EXPECT_DOUBLE_EQ(segment[0].command.linear, 0.2);
+    EXPECT_DOUBLE_EQ(segment[1].command.linear, 0.3);
 }
 
 TEST(CommandHistoryBuffer, ClearsOnTimeRegression) {
@@ -76,7 +74,7 @@ TEST(CommandHistoryBuffer, ClearsOnTimeRegression) {
     ASSERT_EQ(buffer.size(), 1u);
     TimedCommandSample got;
     ASSERT_TRUE(buffer.sampleAt(stamp(1.1), got));
-    EXPECT_DOUBLE_EQ(got.cmd.linear.x, 0.1);
+    EXPECT_DOUBLE_EQ(got.command.linear, 0.1);
 }
 
 }  // namespace spmpc_local_planner

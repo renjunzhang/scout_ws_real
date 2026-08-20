@@ -4,7 +4,7 @@
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/core/variant_config.h"
 #include "spmpc_local_planner/phase_rejoin/types.h"
-#include "spmpc_local_planner/ros/delay_phase_types.h"
+#include "spmpc_local_planner/runtime/execution_prediction/types.h"
 #include "spmpc_local_planner/ControlCycleAudit.h"
 #include "spmpc_local_planner/PhaseRejoinDebug.h"
 #include "spmpc_local_planner/PreSolveSnapshot.h"

@@ -84,9 +84,19 @@ if(ACADOS_LIB_DIR AND EXISTS "${SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR}/libacados_
   endif()
 endif()
 
+set(SPMPC_PUBLIC_LIBRARIES
+  ${PROJECT_NAME}
+  spmpc_config
+  spmpc_controller
+  spmpc_reference
+  spmpc_runtime
+  spmpc_model
+  spmpc_solver_api
+)
+
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES ${PROJECT_NAME}
+  LIBRARIES ${SPMPC_PUBLIC_LIBRARIES}
   CATKIN_DEPENDS roscpp std_msgs sensor_msgs geometry_msgs nav_msgs message_runtime tf2 tf2_ros tf2_geometry_msgs slosh_models
   DEPENDS EIGEN3
 )
@@ -95,6 +105,45 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
+)
+
+add_library(spmpc_model
+  src/dynamics/slosh_dynamics.cpp
+)
+target_link_libraries(spmpc_model
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+
+add_library(spmpc_config
+  src/config/app_config.cpp
+)
+
+add_library(spmpc_controller
+  src/controller/command/command_pipeline.cpp
+)
+
+add_library(spmpc_reference
+  src/reference/reference_path.cpp
+  src/reference/reference_path_preprocessor.cpp
+  src/reference/progress_projector.cpp
+  src/reference/reference_spline.cpp
+  src/reference/speed_profile.cpp
+)
+
+add_library(spmpc_runtime
+  src/runtime/state_alignment.cpp
+  src/runtime/execution_prediction/command_history_buffer.cpp
+  src/runtime/execution_prediction/execution_state_predictor.cpp
+)
+target_link_libraries(spmpc_runtime
+  spmpc_model
+  ${EIGEN3_LIBRARIES}
+)
+
+add_library(spmpc_solver_api
+  src/solver/api/backend.cpp
+  src/solver/api/backend_policy.cpp
 )
 
 add_library(${PROJECT_NAME}
@@ -110,11 +159,6 @@ add_library(${PROJECT_NAME}
   src/core/slosh_risk_governor.cpp
   src/core/start_lock_recovery.cpp
   src/core/terminal_controller.cpp
-  src/reference/reference_path.cpp
-  src/reference/reference_path_preprocessor.cpp
-  src/reference/progress_projector.cpp
-  src/reference/reference_spline.cpp
-  src/dynamics/slosh_dynamics.cpp
   src/estimation/processed_imu_pipeline.cpp
   src/estimation/slosh_observer_bank.cpp
   src/estimation/slosh_observer_selector.cpp
@@ -125,10 +169,8 @@ add_library(${PROJECT_NAME}
   src/solvers/solver_factory.cpp
   src/solvers/continuous_mpcc_solver_acados.cpp
   src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
-  src/ros/command_history_buffer.cpp
-  src/ros/control_cycle_contract.cpp
-  src/ros/execution_state_predictor.cpp
   src/ros/imu_shadow_ros_adapter.cpp
+  src/ros/ros_config_loader.cpp
   src/ros/diagnostics_publisher.cpp
   src/ros/spmpc_local_planner_ros.cpp
 )
@@ -139,6 +181,12 @@ add_dependencies(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME}
+  spmpc_config
+  spmpc_controller
+  spmpc_reference
+  spmpc_runtime
+  spmpc_model
+  spmpc_solver_api
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
 )
@@ -300,6 +348,25 @@ if(CATKIN_ENABLE_TESTING)
       ${catkin_LIBRARIES}
     )
   endif()
+  catkin_add_gtest(test_speed_profile test/test_speed_profile.cpp)
+  if(TARGET test_speed_profile)
+    target_link_libraries(test_speed_profile
+      spmpc_config
+      spmpc_reference
+    )
+  endif()
+  catkin_add_gtest(test_backend_policy test/test_backend_policy.cpp)
+  if(TARGET test_backend_policy)
+    target_link_libraries(test_backend_policy
+      spmpc_solver_api
+    )
+  endif()
+  catkin_add_gtest(test_command_pipeline test/test_command_pipeline.cpp)
+  if(TARGET test_command_pipeline)
+    target_link_libraries(test_command_pipeline
+      spmpc_controller
+    )
+  endif()
   if(SPMPC_WITH_ACADOS)
     catkin_add_gtest(test_replay_diagnostics test/test_replay_diagnostics.cpp)
     if(TARGET test_replay_diagnostics)
@@ -320,7 +387,7 @@ if(CATKIN_ENABLE_TESTING)
   endif()
 endif()
 
-install(TARGETS ${PROJECT_NAME} spmpc_local_planner_node
+install(TARGETS ${SPMPC_PUBLIC_LIBRARIES} spmpc_local_planner_node
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

@@ -1,4 +1,4 @@
-#include "spmpc_local_planner/ros/control_cycle_contract.h"
+#include "spmpc_local_planner/runtime/state_alignment.h"
 
 #include <gtest/gtest.h>
 

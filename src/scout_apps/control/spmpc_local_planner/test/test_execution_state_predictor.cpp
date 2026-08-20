@@ -1,21 +1,19 @@
-#include "spmpc_local_planner/ros/execution_state_predictor.h"
+#include "spmpc_local_planner/runtime/execution_prediction/execution_state_predictor.h"
 #include <gtest/gtest.h>
 #include <cmath>
 
 namespace spmpc_local_planner {
 namespace {
 
-ros::Time stamp(double sec) {
-    ros::Time t;
-    t.fromSec(sec);
-    return t;
+StampNs stamp(double sec) {
+    return secondsToNanoseconds(sec);
 }
 
 TimedCommandSample sample(double sec, double v, double omega) {
     TimedCommandSample out;
-    out.stamp = stamp(sec);
-    out.cmd.linear.x = v;
-    out.cmd.angular.z = omega;
+    out.stamp_ns = stamp(sec);
+    out.command.linear = v;
+    out.command.angular = omega;
     return out;
 }
 

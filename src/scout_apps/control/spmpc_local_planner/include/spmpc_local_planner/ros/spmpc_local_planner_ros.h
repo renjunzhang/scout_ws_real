@@ -1,5 +1,7 @@
 #pragma once
 
+#include "spmpc_local_planner/config/app_config.h"
+#include "spmpc_local_planner/controller/command/command_pipeline.h"
 #include "spmpc_local_planner/core/slosh_risk_governor.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/estimation/processed_imu_pipeline.h"
@@ -7,11 +9,12 @@
 #include "spmpc_local_planner/estimation/slosh_observer_selector.h"
 #include "spmpc_local_planner/phase_rejoin/phase_rejoin_coordinator.h"
 #include "spmpc_local_planner/reference/reference_path_preprocessor.h"
-#include "spmpc_local_planner/ros/command_history_buffer.h"
-#include "spmpc_local_planner/ros/control_cycle_contract.h"
+#include "spmpc_local_planner/reference/speed_profile.h"
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
-#include "spmpc_local_planner/ros/execution_state_predictor.h"
 #include "spmpc_local_planner/ros/imu_shadow_ros_adapter.h"
+#include "spmpc_local_planner/runtime/execution_prediction/command_history_buffer.h"
+#include "spmpc_local_planner/runtime/execution_prediction/execution_state_predictor.h"
+#include "spmpc_local_planner/runtime/state_alignment.h"
 #include <geometry_msgs/Twist.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
@@ -31,11 +34,6 @@
 #include <vector>
 
 namespace spmpc_local_planner {
-
-struct MapVRefProfileSample {
-    double s_m = 0.0;
-    double v_ref_mps = 0.0;
-};
 
 class SpmpcLocalPlannerROS {
 public:
@@ -65,13 +63,6 @@ private:
                                       double solver_time_ms,
                                       bool closed_loop_enabled = false);
     void publishDelayPhaseEarlyStatus(DelayPhaseStatusCode status_code);
-    geometry_msgs::Twist applySharedCommandLimits(const geometry_msgs::Twist& desired,
-                                                  const ros::Time& stamp,
-                                                  geometry_msgs::Twist& previous,
-                                                  double& dt,
-                                                  bool& linear_limited,
-                                                  bool& angular_rate_limited,
-                                                  bool& angular_accel_limited);
     bool updateTerminalSpinFailGate(const SolverInput& input, const SolverOutput& output, double period_sec);
     void resetTerminalSpinFailGate();
     bool updateTrackingSafetyGate(const SolverInput& input,
@@ -104,7 +95,7 @@ private:
     CostmapGrid costmapFromMsg(const nav_msgs::OccupancyGrid& map) const;
     bool loadMapVRefProfile(const std::string& path);
     bool ensureMapVRefProfileLoaded(const std::string& path);
-    bool lookupMapVRef(double s_m, double& v_ref_mps) const;
+    bool lookupMapVRef(double progress_m, double& speed_mps) const;
     void applyRuntimeVRef(SolverInput& input);
     void applySloshRiskGovernor(SolverInput& input);
     void resetMapVRefProgress();
@@ -132,6 +123,8 @@ private:
     tf2_ros::TransformListener tf_listener_;
 
     SpmpcProblem problem_;
+    AppConfig app_config_;
+    CommandPipeline command_pipeline_;
     DiagnosticsPublisher diagnostics_;
     VariantConfig variant_;
     ReferencePathPreprocessor reference_preprocessor_;
@@ -164,9 +157,7 @@ private:
     bool have_odom_ = false;
     bool have_prev_odom_ = false;
     bool have_reference_signature_ = false;
-    std::string map_vref_profile_path_;
-    std::vector<MapVRefProfileSample> map_vref_profile_;
-    bool map_vref_profile_loaded_ = false;
+    SpeedProfile map_vref_profile_;
     double map_vref_last_progress_abs_s_ = 0.0;
     bool have_map_vref_progress_ = false;
     std::string reference_signature_frame_;
@@ -221,9 +212,6 @@ private:
     double tracking_safety_spin_max_duration_sec_ = 2.0;
     double tracking_safety_spin_duration_sec_ = 0.0;
     bool tracking_safety_spin_latched_ = false;
-    geometry_msgs::Twist last_published_cmd_;
-    ros::Time last_cmd_stamp_;
-    bool have_last_published_cmd_ = false;
     double tf_timeout_sec_ = 0.05;
     double control_frequency_ = 30.0;
     double dt_ = 1.0 / 30.0;

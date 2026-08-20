@@ -1,0 +1,7 @@
+# Characterization fixture for the historical map_vref CSV contract.
+s_m,v_ref_map_mps,comment
+2.0,0.20,late row
+0.0,0.10,start
+bad,0.50,skipped non-numeric row
+1.0,0.30,peak
+3.0,0.40,end

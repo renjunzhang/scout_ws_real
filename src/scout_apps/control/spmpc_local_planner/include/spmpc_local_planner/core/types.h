@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/core/costmap_grid.h"
 #include "spmpc_local_planner/core/terminal_diagnostics.h"
+#include "spmpc_local_planner/domain/state.h"
 #include "spmpc_local_planner/phase_rejoin/types.h"
 #include "spmpc_local_planner/warm_start/warm_start_diagnostics.h"
 #include <cstdint>
@@ -9,29 +10,6 @@
 #include <vector>
 
 namespace spmpc_local_planner {
-
-struct RobotState {
-    double x = 0.0;
-    double y = 0.0;
-    double yaw = 0.0;
-    double v = 0.0;
-    double omega = 0.0;
-};
-
-struct SloshState {
-    double eta_x = 0.0;
-    double eta_x_dot = 0.0;
-    double eta_y = 0.0;
-    double eta_y_dot = 0.0;
-};
-
-struct TrajectoryPoint {
-    double x = 0.0;
-    double y = 0.0;
-    double yaw = 0.0;
-    double v = 0.0;
-    double s = 0.0;
-};
 
 struct SloshHorizonSummary {
     double h_peak_pred = 0.0;

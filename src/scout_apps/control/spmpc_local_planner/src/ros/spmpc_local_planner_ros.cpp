@@ -1,13 +1,11 @@
 #include "spmpc_local_planner/ros/spmpc_local_planner_ros.h"
+#include "spmpc_local_planner/ros/ros_config_loader.h"
+#include "spmpc_local_planner/solver/api/backend_policy.h"
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
 #include "spmpc_local_planner/solvers/solver_factory.h"
 #include <algorithm>
-#include <cctype>
 #include <cmath>
-#include <cstdlib>
-#include <fstream>
 #include <limits>
-#include <sstream>
 #include <string>
 #include <vector>
 #include <geometry_msgs/TransformStamped.h>
@@ -40,31 +38,20 @@ double ageSeconds(std::int64_t receive_stamp_ns, std::int64_t value_stamp_ns) {
     return static_cast<double>(receive_stamp_ns - value_stamp_ns) * 1.0e-9;
 }
 
-const char* solverBackendRole(const std::string& backend) {
-    if (backend == kSolverBackendContinuousMpccAcados) {
-        return "SPMPC mainline continuous MPCC";
-    }
-    if (backend == kSolverBackendContinuousMpccDirectOmegaLegacy) {
-        return "RouteB diagnostic/legacy continuous MPCC, not mainline";
-    }
-    if (backend == kSolverBackendPrimitive) {
-        return "fallback/debug rollout sampling + cost ranking, not MPCC/mainline";
-    }
-    return "unknown";
+VelocityCommand velocityCommandFromRos(const geometry_msgs::Twist& message) {
+    VelocityCommand command;
+    command.linear = message.linear.x;
+    command.angular = message.angular.z;
+    return command;
 }
 
-int solverBackendCode(const std::string& backend) {
-    if (backend == kSolverBackendContinuousMpccAcados) {
-        return 1;
-    }
-    if (backend == kSolverBackendContinuousMpccDirectOmegaLegacy) {
-        return 2;
-    }
-    if (backend == kSolverBackendPrimitive) {
-        return 3;
-    }
-    return 0;
+geometry_msgs::Twist velocityCommandToRos(const VelocityCommand& command) {
+    geometry_msgs::Twist message;
+    message.linear.x = command.linear;
+    message.angular.z = command.angular;
+    return message;
 }
+
 
 int primitiveModeCode(const std::string& primitive_mode) {
     if (primitive_mode == "linear") {
@@ -87,126 +74,6 @@ double wrapAngle(double angle) {
     return std::atan2(std::sin(angle), std::cos(angle));
 }
 
-void appendPolicyError(std::string& reason, const std::string& message) {
-    if (!reason.empty()) {
-        reason += "; ";
-    }
-    reason += message;
-}
-
-std::string trimCopy(const std::string& value) {
-    std::size_t begin = 0;
-    while (begin < value.size() && std::isspace(static_cast<unsigned char>(value[begin]))) {
-        ++begin;
-    }
-    std::size_t end = value.size();
-    while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
-        --end;
-    }
-    return value.substr(begin, end - begin);
-}
-
-std::vector<std::string> splitCsvSimple(const std::string& line) {
-    std::vector<std::string> cells;
-    std::stringstream ss(line);
-    std::string cell;
-    while (std::getline(ss, cell, ',')) {
-        cells.push_back(trimCopy(cell));
-    }
-    return cells;
-}
-
-bool parseDoubleStrict(const std::string& text, double& value) {
-    const std::string trimmed = trimCopy(text);
-    if (trimmed.empty()) {
-        return false;
-    }
-    char* end = nullptr;
-    value = std::strtod(trimmed.c_str(), &end);
-    return end != trimmed.c_str() && *end == '\0' && std::isfinite(value);
-}
-
-int findColumn(const std::vector<std::string>& header, const std::vector<std::string>& names) {
-    for (std::size_t i = 0; i < header.size(); ++i) {
-        for (const auto& name : names) {
-            if (header[i] == name) {
-                return static_cast<int>(i);
-            }
-        }
-    }
-    return -1;
-}
-
-bool validateBackendPolicy(const SolverParams& params,
-                           const VariantConfig& variant,
-                           std::string& reason) {
-    reason.clear();
-
-    if (params.solver_backend == kSolverBackendContinuousMpccAcados) {
-        if (variant.slosh_constraint_enable && !variant.slosh_enable) {
-            appendPolicyError(reason,
-                              "slosh_constraint_enable requires slosh_enable on continuous_mpcc_acados");
-        }
-        if (params.corridor_enable) {
-            appendPolicyError(reason,
-                              "continuous_mpcc_acados does not support corridor_enable until J_corridor is implemented in the OCP");
-        }
-        if (params.obstacle_enable) {
-            appendPolicyError(reason,
-                              "continuous_mpcc_acados does not support obstacle_enable until obstacle OCP terms are implemented");
-        }
-        if (params.homotopy_enable) {
-            appendPolicyError(reason,
-                              "continuous_mpcc_acados does not support homotopy_enable until multi-candidate/homotopy SPMPC is implemented");
-        }
-        if (params.corridor_hard_bound_enable) {
-            appendPolicyError(reason,
-                              "continuous_mpcc_acados does not support corridor_hard_bound_enable yet");
-        }
-    } else if (params.solver_backend == kSolverBackendContinuousMpccDirectOmegaLegacy) {
-        if (variant.slosh_enable || variant.slosh_constraint_enable) {
-            appendPolicyError(reason,
-                              "slosh-enabled variants must use continuous_mpcc_acados mainline, not RouteB legacy backend");
-        }
-        if (params.corridor_enable) {
-            appendPolicyError(reason,
-                              "RouteB legacy backend does not support corridor_enable until J_corridor is implemented in the OCP");
-        }
-        if (params.obstacle_enable) {
-            appendPolicyError(reason,
-                              "RouteB legacy backend does not support obstacle_enable under the SPMPC mainline policy");
-        }
-        if (params.homotopy_enable) {
-            appendPolicyError(reason,
-                              "RouteB legacy backend does not support homotopy_enable under the SPMPC mainline policy");
-        }
-        if (params.corridor_hard_bound_enable) {
-            appendPolicyError(reason,
-                              "RouteB legacy backend does not support corridor_hard_bound_enable");
-        }
-    } else if (params.solver_backend == kSolverBackendPrimitive) {
-        if (variant.slosh_enable || variant.slosh_constraint_enable) {
-            appendPolicyError(reason,
-                              "primitive is fallback/debug rollout sampling only and cannot run slosh-enabled SPMPC variants");
-        }
-        if (params.obstacle_enable) {
-            appendPolicyError(reason,
-                              "primitive cannot run obstacle_enable=true under the SPMPC mainline policy");
-        }
-        if (params.homotopy_enable) {
-            appendPolicyError(reason,
-                              "primitive cannot run homotopy_enable=true under the SPMPC mainline policy");
-        }
-        if (params.corridor_hard_bound_enable) {
-            appendPolicyError(reason,
-                              "primitive cannot run corridor_hard_bound_enable=true under the SPMPC mainline policy");
-        }
-    } else {
-        appendPolicyError(reason, "unknown solver backend");
-    }
-
-    return reason.empty();
-}
 
 }  // namespace
 
@@ -222,6 +89,24 @@ SpmpcLocalPlannerROS::~SpmpcLocalPlannerROS() {
 bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     nh_ = nh;
     pnh_ = pnh;
+
+    ValidationReport app_config_report;
+    app_config_ = RosConfigLoader::load(pnh_, app_config_report);
+    for (const auto& issue : app_config_report.issues()) {
+        if (issue.severity == ValidationSeverity::Fatal) {
+            ROS_ERROR("[spmpc_local_planner] invalid config %s: %s",
+                      issue.key.c_str(), issue.message.c_str());
+        } else {
+            ROS_WARN("[spmpc_local_planner] normalized config %s: %s",
+                     issue.key.c_str(), issue.message.c_str());
+        }
+    }
+    if (!app_config_report.ok()) {
+        return false;
+    }
+    if (app_config_.map_vref.profile_enable) {
+        ensureMapVRefProfileLoaded(app_config_.map_vref.profile_path);
+    }
 
     std::string variant_name = "B0";
     pnh_.param("planner_variant", variant_name, variant_name);
@@ -540,6 +425,32 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     shared_cmd_angular_rate_max_ = std::max(0.0, shared_cmd_angular_rate_max_);
     shared_cmd_angular_accel_max_ = std::max(0.0, shared_cmd_angular_accel_max_);
     shared_cmd_angular_accel_max_dt_ = std::max(1e-3, shared_cmd_angular_accel_max_dt_);
+    CommandPipelineConfig command_pipeline_config;
+    command_pipeline_config.control_frequency = control_frequency_;
+    command_pipeline_config.linear_accel_limit_enable =
+        shared_cmd_linear_accel_limit_enable_;
+    command_pipeline_config.linear_accel_max = shared_cmd_linear_accel_max_;
+    command_pipeline_config.linear_accel_max_dt =
+        shared_cmd_linear_accel_max_dt_;
+    command_pipeline_config.angular_limit_enable =
+        shared_cmd_angular_limit_enable_;
+    command_pipeline_config.angular_rate_max = shared_cmd_angular_rate_max_;
+    command_pipeline_config.angular_accel_max = shared_cmd_angular_accel_max_;
+    command_pipeline_config.angular_accel_max_dt =
+        shared_cmd_angular_accel_max_dt_;
+    command_pipeline_config.fail_closed_on_post_limit_change =
+        command_contract_params_.fail_closed_on_post_limit_change;
+    command_pipeline_config.max_post_limit_delta_v =
+        command_contract_params_.max_post_limit_delta_v;
+    command_pipeline_config.max_post_limit_delta_omega =
+        command_contract_params_.max_post_limit_delta_omega;
+    std::string command_pipeline_error;
+    if (!command_pipeline_.configure(
+            command_pipeline_config, command_pipeline_error)) {
+        ROS_FATAL("[spmpc_local_planner] command pipeline configuration failed: %s",
+                  command_pipeline_error.c_str());
+        return false;
+    }
     pnh_.param("experiment/corridor_width", solver_params.corridor_width, solver_params.corridor_width);
     pnh_.param("experiment/corridor_enable", solver_params.corridor_enable, solver_params.corridor_enable);
     pnh_.param("experiment/corridor_hard_bound_enable",
@@ -955,168 +866,61 @@ void SpmpcLocalPlannerROS::resetMapVRefProgress() {
     have_map_vref_progress_ = false;
 }
 
+
 bool SpmpcLocalPlannerROS::loadMapVRefProfile(const std::string& path) {
-    std::ifstream in(path);
-    if (!in.is_open()) {
-        ROS_WARN("[spmpc_local_planner] map_vref profile open failed: %s", path.c_str());
+    const SpeedProfileLoadResult result = map_vref_profile_.loadCsv(path);
+    if (!result.success) {
+        ROS_WARN("[spmpc_local_planner] map_vref profile load failed "
+                 "status=%s detail=%s",
+                 result.status.c_str(), result.detail.c_str());
         return false;
     }
-
-    std::vector<MapVRefProfileSample> samples;
-    bool header_parsed = false;
-    bool have_header = false;
-    int s_col = 0;
-    int v_col = 1;
-    std::string line;
-    int line_no = 0;
-    while (std::getline(in, line)) {
-        ++line_no;
-        const std::string trimmed = trimCopy(line);
-        if (trimmed.empty() || trimmed[0] == '#') {
-            continue;
-        }
-        const auto cells = splitCsvSimple(trimmed);
-        if (cells.empty()) {
-            continue;
-        }
-
-        if (!header_parsed) {
-            double first = 0.0;
-            double second = 0.0;
-            if (cells.size() >= 2 && parseDoubleStrict(cells[0], first) && parseDoubleStrict(cells[1], second)) {
-                header_parsed = true;
-            } else {
-                have_header = true;
-                header_parsed = true;
-                s_col = findColumn(cells, {"s_m", "s", "progress_s_m"});
-                v_col = findColumn(cells, {"v_ref_map_mps", "v_ref_current_mps", "v_ref_mps", "v_safe_mps"});
-                if (s_col < 0 || v_col < 0) {
-                    ROS_WARN("[spmpc_local_planner] map_vref profile header must include s_m and v_ref_map_mps: %s", path.c_str());
-                    return false;
-                }
-                continue;
-            }
-        }
-
-        if (have_header && (static_cast<int>(cells.size()) <= std::max(s_col, v_col))) {
-            ROS_WARN("[spmpc_local_planner] map_vref profile skip short row %d in %s", line_no, path.c_str());
-            continue;
-        }
-        const int s_index = have_header ? s_col : 0;
-        const int v_index = have_header ? v_col : 1;
-        double s_m = 0.0;
-        double v_ref_mps = 0.0;
-        if (static_cast<int>(cells.size()) <= std::max(s_index, v_index) ||
-            !parseDoubleStrict(cells[s_index], s_m) ||
-            !parseDoubleStrict(cells[v_index], v_ref_mps)) {
-            ROS_WARN("[spmpc_local_planner] map_vref profile skip invalid row %d in %s", line_no, path.c_str());
-            continue;
-        }
-        if (s_m < 0.0 || v_ref_mps < 0.0) {
-            ROS_WARN("[spmpc_local_planner] map_vref profile skip negative row %d in %s", line_no, path.c_str());
-            continue;
-        }
-        samples.push_back({s_m, v_ref_mps});
-    }
-
-    if (samples.empty()) {
-        ROS_WARN("[spmpc_local_planner] map_vref profile has no valid samples: %s", path.c_str());
-        return false;
-    }
-    std::sort(samples.begin(), samples.end(), [](const auto& a, const auto& b) {
-        return a.s_m < b.s_m;
-    });
-    std::vector<MapVRefProfileSample> deduped;
-    deduped.reserve(samples.size());
-    for (const auto& sample : samples) {
-        if (!deduped.empty() && std::abs(sample.s_m - deduped.back().s_m) < 1e-9) {
-            deduped.back() = sample;
-        } else {
-            deduped.push_back(sample);
-        }
-    }
-
-    map_vref_profile_ = deduped;
-    map_vref_profile_path_ = path;
-    map_vref_profile_loaded_ = true;
-    ROS_INFO("[spmpc_local_planner] loaded map_vref profile %s with %zu samples", path.c_str(), map_vref_profile_.size());
+    ROS_INFO("[spmpc_local_planner] loaded map_vref profile %s with %zu "
+             "samples (%zu invalid rows skipped)",
+             path.c_str(), result.accepted_rows, result.skipped_rows);
     return true;
 }
 
-bool SpmpcLocalPlannerROS::ensureMapVRefProfileLoaded(const std::string& path) {
+bool SpmpcLocalPlannerROS::ensureMapVRefProfileLoaded(
+    const std::string& path) {
     if (path.empty()) {
-        map_vref_profile_loaded_ = false;
-        map_vref_profile_path_.clear();
         map_vref_profile_.clear();
         return false;
     }
-    if (map_vref_profile_loaded_ && path == map_vref_profile_path_) {
+    if (!map_vref_profile_.empty() &&
+        map_vref_profile_.sourcePath() == path) {
         return true;
     }
-    map_vref_profile_loaded_ = false;
-    map_vref_profile_.clear();
-    map_vref_profile_path_.clear();
     return loadMapVRefProfile(path);
 }
 
-bool SpmpcLocalPlannerROS::lookupMapVRef(double s_m, double& v_ref_mps) const {
-    if (map_vref_profile_.empty() || !std::isfinite(s_m)) {
-        return false;
-    }
-    if (s_m <= map_vref_profile_.front().s_m) {
-        v_ref_mps = map_vref_profile_.front().v_ref_mps;
-        return true;
-    }
-    if (s_m >= map_vref_profile_.back().s_m) {
-        v_ref_mps = map_vref_profile_.back().v_ref_mps;
-        return true;
-    }
-    const auto upper = std::lower_bound(
-        map_vref_profile_.begin(), map_vref_profile_.end(), s_m,
-        [](const MapVRefProfileSample& sample, double value) { return sample.s_m < value; });
-    if (upper == map_vref_profile_.begin() || upper == map_vref_profile_.end()) {
-        return false;
-    }
-    const auto lower = upper - 1;
-    const double ds = upper->s_m - lower->s_m;
-    if (ds <= 1e-9) {
-        v_ref_mps = upper->v_ref_mps;
-        return true;
-    }
-    const double ratio = (s_m - lower->s_m) / ds;
-    v_ref_mps = lower->v_ref_mps + ratio * (upper->v_ref_mps - lower->v_ref_mps);
-    return std::isfinite(v_ref_mps);
+bool SpmpcLocalPlannerROS::lookupMapVRef(double progress_m,
+                                         double& speed_mps) const {
+    return map_vref_profile_.lookup(progress_m, speed_mps);
 }
 
 void SpmpcLocalPlannerROS::applyRuntimeVRef(SolverInput& input) {
-    bool runtime_v_ref_enable = false;
-    double runtime_v_ref = -1.0;
-    pnh_.param("map_vref/runtime_v_ref_enable", runtime_v_ref_enable, runtime_v_ref_enable);
-    pnh_.param("map_vref/runtime_v_ref", runtime_v_ref, runtime_v_ref);
-    if (runtime_v_ref_enable && std::isfinite(runtime_v_ref) && runtime_v_ref >= 0.0) {
+    const auto& config = app_config_.map_vref;
+    if (config.runtime_override_enable) {
         input.has_v_ref_current = true;
-        input.v_ref_current = runtime_v_ref;
+        input.v_ref_current = config.runtime_override_mps;
         input.v_ref_status = "RUNTIME_OVERRIDE";
         return;
     }
 
-    bool profile_enable = false;
-    std::string profile_path;
-    double profile_lookahead_s = 0.0;
-    pnh_.param("map_vref/profile_enable", profile_enable, profile_enable);
-    pnh_.param("map_vref/profile_path", profile_path, profile_path);
-    pnh_.param("map_vref/profile_lookahead_s", profile_lookahead_s, profile_lookahead_s);
-    if (!profile_enable) {
+    if (!config.profile_enable) {
         input.v_ref_status = "VARIANT_FALLBACK";
         return;
     }
-    if (!ensureMapVRefProfileLoaded(profile_path)) {
-        input.v_ref_status = profile_path.empty() ? "PROFILE_NOT_CONFIGURED" : "PROFILE_LOAD_FAILED";
+    if (map_vref_profile_.empty()) {
+        input.v_ref_status = config.profile_path.empty()
+            ? "PROFILE_NOT_CONFIGURED"
+            : "PROFILE_LOAD_FAILED";
         return;
     }
 
     const double current_s = have_map_vref_progress_ ? map_vref_last_progress_abs_s_ : 0.0;
-    const double lookup_s = current_s + std::max(0.0, profile_lookahead_s);
+    const double lookup_s = current_s + config.profile_lookahead_m;
     double profile_v_ref = 0.0;
     if (!lookupMapVRef(lookup_s, profile_v_ref)) {
         input.v_ref_status = "PROFILE_LOOKUP_FAILED";
@@ -1169,10 +973,12 @@ void SpmpcLocalPlannerROS::recordPublishedCommand(
     const geometry_msgs::Twist& cmd,
     const ros::Time& stamp,
     const CommandPublishMeta& meta) {
-    last_published_cmd_ = cmd;
-    last_cmd_stamp_ = stamp;
-    have_last_published_cmd_ = true;
-    command_history_.push({stamp, cmd, meta});
+    TimedCommandSample sample;
+    sample.stamp_ns = static_cast<StampNs>(stamp.toNSec());
+    sample.command.linear = cmd.linear.x;
+    sample.command.angular = cmd.angular.z;
+    sample.meta = meta;
+    command_history_.push(sample);
 }
 
 void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
@@ -1199,7 +1005,10 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     const double fallback_covered_history_sec = has_any_history ? std::min(history_span_sec, required_history_sec) : 0.0;
     const double fallback_missing_history_sec =
         has_any_history ? std::max(0.0, required_history_sec - history_span_sec) : required_history_sec;
-    const double cmd_age_sec = has_any_history ? (now - command_history_.latestStamp()).toSec() : -1.0;
+    const double cmd_age_sec = has_any_history
+        ? secondsBetween(static_cast<StampNs>(now.toNSec()),
+                         command_history_.latestStampNs())
+        : -1.0;
     const bool have_odom_receive = !last_odom_receive_stamp_.isZero();
     const double odom_age_sec = have_odom_receive ? (now - last_odom_receive_stamp_).toSec() : -1.0;
     const auto status_requires_freshness = [](DelayPhaseStatusCode status) {
@@ -1293,162 +1102,134 @@ void SpmpcLocalPlannerROS::publishDelayPhaseEarlyStatus(DelayPhaseStatusCode sta
 void SpmpcLocalPlannerROS::publishZeroCommand(
     const CommandInterventionDebug& intervention,
     ControlCycleAuditDebug* audit) {
+    const ros::Time stamp = ros::Time::now();
+    CommandPipelineRequest request;
+    request.stamp_ns = static_cast<StampNs>(stamp.toNSec());
+    request.force_zero = true;
+    request.publish_enabled = publish_cmd_vel_;
+    request.source = CommandSource::FailClosed;
+    request.reason = audit && !audit->status.empty()
+        ? audit->status
+        : "FAIL_CLOSED_ZERO";
+    const CommandPipelineResult result = command_pipeline_.finalize(request);
+
     CommandInterventionDebug debug = intervention;
     debug.publish_cmd_vel = publish_cmd_vel_;
-    debug.published_cmd_v = 0.0;
-    debug.published_cmd_omega = 0.0;
+    debug.published_cmd_v = result.command_was_published
+        ? result.final_command.linear
+        : 0.0;
+    debug.published_cmd_omega = result.command_was_published
+        ? result.final_command.angular
+        : 0.0;
     diagnostics_.publishCommandIntervention(debug);
-    if (!publish_cmd_vel_) {
-        if (audit) {
-            audit->publish_cmd_vel = false;
-            audit->command_was_published = false;
-            audit->published_cmd_v = 0.0;
-            audit->published_cmd_omega = 0.0;
-            diagnostics_.publishControlCycleAudit(
-                *audit, problem_.referenceFrameId());
-        }
-        return;
+
+    if (result.command_was_published) {
+        const geometry_msgs::Twist command =
+            velocityCommandToRos(result.final_command);
+        CommandPublishMeta meta;
+        meta.is_zero_cmd = true;
+        recordPublishedCommand(command, stamp, meta);
+        cmd_pub_.publish(command);
     }
-    geometry_msgs::Twist cmd;
-    const auto stamp = ros::Time::now();
-    CommandPublishMeta meta;
-    meta.is_zero_cmd = true;
-    recordPublishedCommand(cmd, stamp, meta);
-    cmd_pub_.publish(cmd);
+
     if (audit) {
-        audit->timing.command_publish_stamp_ns =
-            static_cast<std::int64_t>(stamp.toNSec());
-        audit->publish_cmd_vel = true;
-        audit->command_was_published = true;
-        audit->published_cmd_v = 0.0;
-        audit->published_cmd_omega = 0.0;
+        audit->publish_cmd_vel = publish_cmd_vel_;
+        audit->command_was_published = result.command_was_published;
+        audit->published_cmd_v = debug.published_cmd_v;
+        audit->published_cmd_omega = debug.published_cmd_omega;
+        if (result.command_was_published) {
+            audit->timing.command_publish_stamp_ns = request.stamp_ns;
+        }
         diagnostics_.publishControlCycleAudit(
             *audit, problem_.referenceFrameId());
     }
-}
-
-geometry_msgs::Twist SpmpcLocalPlannerROS::applySharedCommandLimits(
-    const geometry_msgs::Twist& desired,
-    const ros::Time& stamp,
-    geometry_msgs::Twist& previous,
-    double& dt,
-    bool& linear_limited,
-    bool& angular_rate_limited,
-    bool& angular_accel_limited) {
-    geometry_msgs::Twist limited = desired;
-    previous = last_published_cmd_;
-    linear_limited = false;
-    angular_rate_limited = false;
-    angular_accel_limited = false;
-
-    const double nominal_dt = 1.0 / std::max(1.0, control_frequency_);
-    dt = nominal_dt;
-    if (have_last_published_cmd_ && !last_cmd_stamp_.isZero() && !stamp.isZero()) {
-        dt = (stamp - last_cmd_stamp_).toSec();
-    }
-    if (!std::isfinite(dt) || dt <= 1e-6) {
-        dt = nominal_dt;
-    }
-    const double linear_dt = std::min(dt, shared_cmd_linear_accel_max_dt_);
-    const double angular_dt = std::min(dt, shared_cmd_angular_accel_max_dt_);
-
-    if (shared_cmd_linear_accel_limit_enable_ && shared_cmd_linear_accel_max_ > 0.0) {
-        const double max_step = shared_cmd_linear_accel_max_ * linear_dt;
-        const double dv = desired.linear.x - previous.linear.x;
-        limited.linear.x = previous.linear.x + std::max(-max_step, std::min(max_step, dv));
-        linear_limited = std::abs(limited.linear.x - desired.linear.x) > 1e-6;
-    }
-
-    if (shared_cmd_angular_limit_enable_) {
-        if (shared_cmd_angular_rate_max_ > 0.0) {
-            const double before_rate = limited.angular.z;
-            limited.angular.z = std::max(-shared_cmd_angular_rate_max_,
-                                         std::min(shared_cmd_angular_rate_max_, limited.angular.z));
-            angular_rate_limited = std::abs(limited.angular.z - before_rate) > 1e-6;
-        }
-        if (shared_cmd_angular_accel_max_ > 0.0) {
-            const double max_step = shared_cmd_angular_accel_max_ * angular_dt;
-            const double dw = limited.angular.z - previous.angular.z;
-            const double before_accel = limited.angular.z;
-            limited.angular.z = previous.angular.z + std::max(-max_step, std::min(max_step, dw));
-            angular_accel_limited = std::abs(limited.angular.z - before_accel) > 1e-6;
-        }
-    }
-
-    return limited;
 }
 
 void SpmpcLocalPlannerROS::publishCommand(
     const geometry_msgs::Twist& desired,
     const CommandInterventionDebug& intervention,
     ControlCycleAuditDebug* audit) {
-    if (!publish_cmd_vel_) {
-        CommandInterventionDebug debug = intervention;
-        debug.publish_cmd_vel = false;
-        diagnostics_.publishCommandIntervention(debug);
-        if (audit) {
-            audit->publish_cmd_vel = false;
-            audit->command_was_published = false;
-            diagnostics_.publishControlCycleAudit(
-                *audit, problem_.referenceFrameId());
-        }
-        return;
+    const ros::Time stamp = ros::Time::now();
+    CommandPipelineRequest request;
+    request.stamp_ns = static_cast<StampNs>(stamp.toNSec());
+    request.desired = velocityCommandFromRos(desired);
+    request.publish_enabled = publish_cmd_vel_;
+    request.source = CommandSource::Solver;
+    request.reason = audit && !audit->status.empty()
+        ? audit->status
+        : "SOLVER_COMMAND";
+    if (intervention.zero_due_to_terminal_spin_fail ||
+        intervention.zero_due_to_tracking_safety) {
+        request.source = CommandSource::Safety;
+    } else if (audit && audit->terminal_controller_intervened) {
+        request.source = CommandSource::Terminal;
     }
-    const auto stamp = ros::Time::now();
-    geometry_msgs::Twist previous;
-    double dt = 0.0;
-    bool linear_limited = false;
-    bool angular_rate_limited = false;
-    bool angular_accel_limited = false;
-    auto cmd = applySharedCommandLimits(
-        desired, stamp, previous, dt, linear_limited, angular_rate_limited, angular_accel_limited);
-    const bool command_contract_violation =
-        std::abs(cmd.linear.x - desired.linear.x) >
-            command_contract_params_.max_post_limit_delta_v ||
-        std::abs(cmd.angular.z - desired.angular.z) >
-            command_contract_params_.max_post_limit_delta_omega;
-    const bool contract_fail_closed = command_contract_violation &&
-        command_contract_params_.fail_closed_on_post_limit_change;
-    if (contract_fail_closed) {
-        cmd = geometry_msgs::Twist();
-        diagnostics_.publishStatus("COMMAND_EXECUTION_CONTRACT_VIOLATION");
+
+    const CommandPipelineResult result = command_pipeline_.finalize(request);
+    const geometry_msgs::Twist command =
+        velocityCommandToRos(result.final_command);
+    const geometry_msgs::Twist previous =
+        velocityCommandToRos(result.previous);
+
+    if (result.decision.source == CommandSource::ExecutionContract) {
+        diagnostics_.publishStatus(result.decision.reason);
     }
-    CommandPublishMeta meta;
-    meta.is_zero_cmd = std::abs(cmd.linear.x) <= 1e-9 && std::abs(cmd.angular.z) <= 1e-9;
-    meta.linear_limited = linear_limited;
-    meta.angular_rate_limited = angular_rate_limited;
-    meta.angular_accel_limited = angular_accel_limited;
-    recordPublishedCommand(cmd, stamp, meta);
-    diagnostics_.publishCommandOutput(
-        desired, cmd, previous, dt, linear_limited, angular_rate_limited, angular_accel_limited);
+
     CommandInterventionDebug debug = intervention;
-    debug.published_cmd_v = cmd.linear.x;
-    debug.published_cmd_omega = cmd.angular.z;
-    debug.linear_limited = linear_limited;
-    debug.angular_rate_limited = angular_rate_limited;
-    debug.angular_accel_limited = angular_accel_limited;
-    debug.zero_due_to_command_contract = contract_fail_closed;
-    debug.publish_cmd_vel = true;
+    debug.publish_cmd_vel = publish_cmd_vel_;
+    debug.published_cmd_v = result.command_was_published
+        ? result.final_command.linear
+        : 0.0;
+    debug.published_cmd_omega = result.command_was_published
+        ? result.final_command.angular
+        : 0.0;
+    debug.linear_limited = result.linear_limited;
+    debug.angular_rate_limited = result.angular_rate_limited;
+    debug.angular_accel_limited = result.angular_accel_limited;
+    debug.zero_due_to_command_contract =
+        result.decision.source == CommandSource::ExecutionContract;
     diagnostics_.publishCommandIntervention(debug);
-    cmd_pub_.publish(cmd);
+
+    if (result.command_was_published) {
+        CommandPublishMeta meta;
+        meta.is_zero_cmd =
+            std::abs(result.final_command.linear) <= 1e-9 &&
+            std::abs(result.final_command.angular) <= 1e-9;
+        meta.linear_limited = result.linear_limited;
+        meta.angular_rate_limited = result.angular_rate_limited;
+        meta.angular_accel_limited = result.angular_accel_limited;
+        recordPublishedCommand(command, stamp, meta);
+        diagnostics_.publishCommandOutput(
+            desired, command, previous, result.limiter_dt_sec,
+            result.linear_limited, result.angular_rate_limited,
+            result.angular_accel_limited);
+        cmd_pub_.publish(command);
+    }
+
     if (audit) {
-        audit->timing.command_publish_stamp_ns =
-            static_cast<std::int64_t>(stamp.toNSec());
-        audit->publish_cmd_vel = true;
-        audit->command_was_published = true;
-        audit->command_contract_violation = command_contract_violation;
-        audit->linear_limited = linear_limited;
-        audit->angular_rate_limited = angular_rate_limited;
-        audit->angular_accel_limited = angular_accel_limited;
-        audit->published_cmd_v = cmd.linear.x;
-        audit->published_cmd_omega = cmd.angular.z;
-        if (contract_fail_closed) {
-            audit->status = "COMMAND_EXECUTION_CONTRACT_VIOLATION";
+        audit->publish_cmd_vel = publish_cmd_vel_;
+        audit->command_was_published = result.command_was_published;
+        if (result.command_was_published) {
+            audit->timing.command_publish_stamp_ns = request.stamp_ns;
+            audit->command_contract_violation =
+                result.command_contract_violation;
+            audit->linear_limited = result.linear_limited;
+            audit->angular_rate_limited = result.angular_rate_limited;
+            audit->angular_accel_limited = result.angular_accel_limited;
+            audit->published_cmd_v = result.final_command.linear;
+            audit->published_cmd_omega = result.final_command.angular;
+        } else {
+            audit->published_cmd_v = 0.0;
+            audit->published_cmd_omega = 0.0;
+        }
+        if (result.decision.source == CommandSource::ExecutionContract) {
+            audit->status = result.decision.reason;
         }
         diagnostics_.publishControlCycleAudit(
             *audit, problem_.referenceFrameId());
     }
 }
+
 
 void SpmpcLocalPlannerROS::resetTerminalSpinFailGate() {
     terminal_spin_fail_duration_sec_ = 0.0;
@@ -1958,11 +1739,10 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             // the legacy delay_phase feature itself is disabled.
             predictor_params.mode = DelayPhaseMode::Shadow;
         }
-        const ros::Time state_epoch = rosTimeFromNanoseconds(
-            input.cycle_timing.solver_input_epoch_ns);
         shadow_prediction = execution_predictor_.predict(
-            input.robot, input.slosh, command_history_, state_epoch,
-            delay_phase_now, predictor_params);
+            input.robot, input.slosh, command_history_,
+            input.cycle_timing.solver_input_epoch_ns,
+            static_cast<StampNs>(delay_phase_now.toNSec()), predictor_params);
         delay_phase_status = shadow_prediction.status_code;
         shadow_prediction_ptr = &shadow_prediction;
     } else {

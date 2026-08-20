@@ -1,4 +1,4 @@
-#include "spmpc_local_planner/ros/control_cycle_contract.h"
+#include "spmpc_local_planner/runtime/state_alignment.h"
 
 #include <algorithm>
 #include <cmath>
@@ -6,8 +6,6 @@
 namespace spmpc_local_planner {
 
 namespace {
-
-constexpr double kNsToSec = 1e-9;
 
 double wrapAngle(double value) {
     return std::atan2(std::sin(value), std::cos(value));
@@ -62,7 +60,7 @@ RobotStateAlignmentResult alignRobotStateToEpoch(
     }
     if (upper == history.end()) {
         const auto& last = history.back();
-        const double dt = (target_stamp_ns - last.stamp_ns) * kNsToSec;
+        const double dt = secondsBetween(target_stamp_ns, last.stamp_ns);
         if (dt < 0.0 || dt > max_extrapolation_sec) {
             out.status = "EXTRAPOLATION_LIMIT";
             return out;
@@ -81,7 +79,7 @@ RobotStateAlignmentResult alignRobotStateToEpoch(
         return out;
     }
     const auto lower = std::prev(upper);
-    const double gap = (upper->stamp_ns - lower->stamp_ns) * kNsToSec;
+    const double gap = secondsBetween(upper->stamp_ns, lower->stamp_ns);
     if (!std::isfinite(gap) || gap <= 0.0 || gap > max_interpolation_gap_sec) {
         out.status = "INTERPOLATION_GAP";
         return out;
@@ -104,7 +102,7 @@ bool stateSkewWithinContract(std::int64_t robot_stamp_ns,
         !std::isfinite(max_abs_skew_sec) || max_abs_skew_sec < 0.0) {
         return false;
     }
-    signed_skew_sec = (robot_stamp_ns - liquid_stamp_ns) * kNsToSec;
+    signed_skew_sec = secondsBetween(robot_stamp_ns, liquid_stamp_ns);
     return std::isfinite(signed_skew_sec) &&
            std::abs(signed_skew_sec) <= max_abs_skew_sec;
 }

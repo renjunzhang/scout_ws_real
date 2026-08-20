@@ -1,4 +1,4 @@
-#include "spmpc_local_planner/ros/execution_state_predictor.h"
+#include "spmpc_local_planner/runtime/execution_prediction/execution_state_predictor.h"
 
 #include <algorithm>
 #include <cmath>
@@ -13,17 +13,17 @@ bool ExecutionStatePredictor::configure(const SloshModelParams& slosh_params) {
 ExecutionStatePrediction ExecutionStatePredictor::predict(const RobotState& raw_robot,
                                                           const SloshState& raw_slosh,
                                                           const CommandHistoryBuffer& history,
-                                                          const ros::Time& now,
+                                                          StampNs now_ns,
                                                           const DelayPhaseParams& params) const {
-    return predict(raw_robot, raw_slosh, history, now, now, params);
+    return predict(raw_robot, raw_slosh, history, now_ns, now_ns, params);
 }
 
 ExecutionStatePrediction ExecutionStatePredictor::predict(
     const RobotState& raw_robot,
     const SloshState& raw_slosh,
     const CommandHistoryBuffer& history,
-    const ros::Time& state_epoch,
-    const ros::Time& evaluation_time,
+    StampNs state_epoch_ns,
+    StampNs evaluation_time_ns,
     const DelayPhaseParams& params) const {
     ExecutionStatePrediction out;
     out.raw_robot = raw_robot;
@@ -34,14 +34,12 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(
     out.angular_delay_sec = params.angular_delay_sec;
     out.linear_time_constant_sec = params.linear_time_constant_sec;
     out.angular_time_constant_sec = params.angular_time_constant_sec;
-    out.prediction_origin_epoch_ns = state_epoch.isZero()
-        ? 0
-        : static_cast<std::int64_t>(state_epoch.toNSec());
+    out.prediction_origin_epoch_ns = validStamp(state_epoch_ns) ? state_epoch_ns : 0;
     out.history_span_sec = history.spanSec();
 
-    const double state_age_sec = (evaluation_time - state_epoch).toSec();
-    const bool valid_params = !state_epoch.isZero() &&
-        !evaluation_time.isZero() && params.max_prediction_sec > 0.0 &&
+    const double state_age_sec = secondsBetween(evaluation_time_ns, state_epoch_ns);
+    const bool valid_params = validStamp(state_epoch_ns) &&
+        validStamp(evaluation_time_ns) && params.max_prediction_sec > 0.0 &&
         std::isfinite(state_age_sec) && state_age_sec >= 0.0 &&
         std::isfinite(params.linear_delay_sec) &&
         params.linear_delay_sec >= 0.0 &&
@@ -71,10 +69,7 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(
         return out;
     }
     out.integrated_duration_sec = duration;
-    const ros::Time prediction_epoch =
-        evaluation_time + ros::Duration(execution_front_sec);
-    out.prediction_epoch_ns = static_cast<std::int64_t>(
-        prediction_epoch.toNSec());
+    out.prediction_epoch_ns = addSeconds(evaluation_time_ns, execution_front_sec);
 
     if (duration <= 1e-9) {
         out.history_complete = true;
@@ -91,7 +86,7 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(
         return out;
     }
 
-    const double cmd_age = (evaluation_time - history.latestStamp()).toSec();
+    const double cmd_age = secondsBetween(evaluation_time_ns, history.latestStampNs());
     if (std::isfinite(params.cmd_timeout_sec) && params.cmd_timeout_sec > 0.0 &&
         std::isfinite(cmd_age) && cmd_age > params.cmd_timeout_sec) {
         out.status_code = DelayPhaseStatusCode::CmdStale;
@@ -103,12 +98,11 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(
     // state epoch minus the largest pure delay.  The integration itself starts
     // at state_epoch and ends at evaluation_time + d_f; do not subtract the
     // integration duration here or the state age would be counted twice.
-    const ros::Time start =
-        state_epoch - ros::Duration(execution_front_sec);
-    const ros::Time oldest = history.oldestStamp();
-    if (!oldest.isZero() && start < oldest) {
+    const StampNs start_ns = addSeconds(state_epoch_ns, -execution_front_sec);
+    const StampNs oldest_ns = history.oldestStampNs();
+    if (validStamp(oldest_ns) && start_ns < oldest_ns) {
         out.missing_history_sec = std::min(
-            duration, (oldest - start).toSec());
+            duration, secondsBetween(oldest_ns, start_ns));
     }
     out.missing_history_sec = std::max(0.0, out.missing_history_sec);
     out.covered_history_sec = std::max(0.0, duration - out.missing_history_sec);
@@ -139,20 +133,20 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(
             step = min_step;
         }
 
-        const ros::Time future_time = state_epoch + ros::Duration(elapsed);
+        const StampNs future_time_ns = addSeconds(state_epoch_ns, elapsed);
         TimedCommandSample linear_sample;
         TimedCommandSample angular_sample;
         double target_v = 0.0;
         double target_omega = 0.0;
         if (history.sampleAt(
-                future_time - ros::Duration(params.linear_delay_sec),
+                addSeconds(future_time_ns, -params.linear_delay_sec),
                 linear_sample)) {
-            target_v = linear_sample.cmd.linear.x;
+            target_v = linear_sample.command.linear;
         }
         if (history.sampleAt(
-                future_time - ros::Duration(params.angular_delay_sec),
+                addSeconds(future_time_ns, -params.angular_delay_sec),
                 angular_sample)) {
-            target_omega = angular_sample.cmd.angular.z;
+            target_omega = angular_sample.command.angular;
         }
 
         const double linear_gain = params.linear_time_constant_sec <= 1e-9

@@ -8,12 +8,6 @@
 
 namespace spmpc_local_planner {
 
-bool isKnownSolverBackend(const std::string& backend) {
-    return backend == kSolverBackendPrimitive ||
-           backend == kSolverBackendContinuousMpccAcados ||
-           backend == kSolverBackendContinuousMpccDirectOmegaLegacy;
-}
-
 std::unique_ptr<SpmpcSolver> makeSolver(const std::string& backend) {
     if (backend == kSolverBackendContinuousMpccAcados) {
         return std::unique_ptr<SpmpcSolver>(new ContinuousMpccSolverAcados());

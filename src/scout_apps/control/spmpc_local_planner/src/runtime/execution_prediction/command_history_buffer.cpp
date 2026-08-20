@@ -1,4 +1,4 @@
-#include "spmpc_local_planner/ros/command_history_buffer.h"
+#include "spmpc_local_planner/runtime/execution_prediction/command_history_buffer.h"
 
 #include <algorithm>
 #include <cmath>
@@ -18,14 +18,14 @@ void CommandHistoryBuffer::clear() {
 }
 
 void CommandHistoryBuffer::push(const TimedCommandSample& sample) {
-    if (sample.stamp.isZero()) {
+    if (!validStamp(sample.stamp_ns)) {
         return;
     }
-    if (!samples_.empty() && sample.stamp < samples_.back().stamp) {
+    if (!samples_.empty() && sample.stamp_ns < samples_.back().stamp_ns) {
         samples_.clear();
         latest_period_sec_ = 0.0;
     } else if (!samples_.empty()) {
-        latest_period_sec_ = (sample.stamp - samples_.back().stamp).toSec();
+        latest_period_sec_ = secondsBetween(sample.stamp_ns, samples_.back().stamp_ns);
         if (!std::isfinite(latest_period_sec_) || latest_period_sec_ < 0.0) {
             latest_period_sec_ = 0.0;
         }
@@ -38,31 +38,31 @@ double CommandHistoryBuffer::spanSec() const {
     if (samples_.size() < 2) {
         return 0.0;
     }
-    const double span = (samples_.back().stamp - samples_.front().stamp).toSec();
+    const double span = secondsBetween(samples_.back().stamp_ns, samples_.front().stamp_ns);
     return std::isfinite(span) && span > 0.0 ? span : 0.0;
 }
 
-ros::Time CommandHistoryBuffer::oldestStamp() const {
-    return samples_.empty() ? ros::Time() : samples_.front().stamp;
+StampNs CommandHistoryBuffer::oldestStampNs() const {
+    return samples_.empty() ? 0 : samples_.front().stamp_ns;
 }
 
-ros::Time CommandHistoryBuffer::latestStamp() const {
-    return samples_.empty() ? ros::Time() : samples_.back().stamp;
+StampNs CommandHistoryBuffer::latestStampNs() const {
+    return samples_.empty() ? 0 : samples_.back().stamp_ns;
 }
 
-bool CommandHistoryBuffer::sampleAt(const ros::Time& stamp, TimedCommandSample& sample) const {
-    if (samples_.empty() || stamp.isZero()) {
+bool CommandHistoryBuffer::sampleAt(StampNs stamp_ns, TimedCommandSample& sample) const {
+    if (samples_.empty() || !validStamp(stamp_ns)) {
         return false;
     }
-    if (stamp < samples_.front().stamp) {
+    if (stamp_ns < samples_.front().stamp_ns) {
         return false;
     }
     auto it = std::upper_bound(
         samples_.begin(),
         samples_.end(),
-        stamp,
-        [](const ros::Time& lhs, const TimedCommandSample& rhs) {
-            return lhs < rhs.stamp;
+        stamp_ns,
+        [](StampNs lhs, const TimedCommandSample& rhs) {
+            return lhs < rhs.stamp_ns;
         });
     if (it == samples_.begin()) {
         return false;
@@ -72,16 +72,16 @@ bool CommandHistoryBuffer::sampleAt(const ros::Time& stamp, TimedCommandSample& 
     return true;
 }
 
-std::vector<TimedCommandSample> CommandHistoryBuffer::segment(const ros::Time& start, const ros::Time& end) const {
+std::vector<TimedCommandSample> CommandHistoryBuffer::segment(StampNs start_ns, StampNs end_ns) const {
     std::vector<TimedCommandSample> out;
-    if (samples_.empty() || end < start) {
+    if (samples_.empty() || end_ns < start_ns) {
         return out;
     }
     for (const auto& sample : samples_) {
-        if (sample.stamp < start) {
+        if (sample.stamp_ns < start_ns) {
             continue;
         }
-        if (end < sample.stamp) {
+        if (end_ns < sample.stamp_ns) {
             break;
         }
         out.push_back(sample);
@@ -93,14 +93,13 @@ void CommandHistoryBuffer::prune() {
     if (samples_.empty()) {
         return;
     }
-    const double latest_sec = samples_.back().stamp.toSec();
     const double window_sec = std::max(0.0, window_sec_);
-    if (!std::isfinite(latest_sec) || latest_sec <= window_sec) {
+    const StampNs window_ns = secondsToNanoseconds(window_sec);
+    if (window_ns <= 0 || samples_.back().stamp_ns <= window_ns) {
         return;
     }
-    ros::Time cutoff;
-    cutoff.fromSec(latest_sec - window_sec);
-    while (samples_.size() > 1 && samples_.front().stamp < cutoff) {
+    const StampNs cutoff_ns = samples_.back().stamp_ns - window_ns;
+    while (samples_.size() > 1 && samples_.front().stamp_ns < cutoff_ns) {
         samples_.pop_front();
     }
 }
