@@ -13,7 +13,9 @@ public:
         const SolverParams& params,
         const VariantConfig& variant) override;
 
-    bool solve(const SolverInput& input, const ReferencePath& reference, SolverOutput& output) const override;
+    bool solve(const SolverInput& input,
+               const ReferencePath& reference,
+               SolverOutput& output) override;
 
 private:
     SolverOutput rolloutCandidate(

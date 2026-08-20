@@ -32,7 +32,9 @@ public:
     SolverConfigureResult configure(
         const SolverParams& params,
         const VariantConfig& variant) override;
-    bool solve(const SolverInput& input, const ReferencePath& reference, SolverOutput& output) const override;
+    bool solve(const SolverInput& input,
+               const ReferencePath& reference,
+               SolverOutput& output) override;
 
 private:
     struct Impl;
@@ -46,10 +48,10 @@ private:
     // No C ABI type, ownership flag, or raw pointer crosses this public header.
     std::unique_ptr<Impl> impl_;
     std::unique_ptr<WarmStartGenerator> warm_start_generator_;
-    mutable WarmStartOutput previous_warm_start_solution_;
-    mutable bool have_previous_solution_ = false;
-    mutable double u_prev_[3] = {0.0, 0.0, 0.0};  // 上周期 OCP 控制 [a, alpha, v_s]
-    mutable bool have_u_prev_ = false;
+    WarmStartOutput previous_warm_start_solution_;
+    bool have_previous_solution_ = false;
+    double u_prev_[3] = {0.0, 0.0, 0.0};  // 上周期 OCP 控制 [a, alpha, v_s]
+    bool have_u_prev_ = false;
 };
 
 }  // namespace spmpc_local_planner

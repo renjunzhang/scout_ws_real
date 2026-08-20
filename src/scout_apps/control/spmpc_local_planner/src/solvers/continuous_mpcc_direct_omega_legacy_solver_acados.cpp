@@ -30,110 +30,165 @@ static_assert(kSloshParameterCount == SPMPC_SLOSH_DIRECT_OMEGA_NP,
               "slosh direct-omega 参数布局与生成的求解器不一致");
 #endif
 
-// 统一封装两个生成求解器（b0 5维 / slosh 9维）。
+struct B0DirectCapsuleDeleter {
+    void operator()(
+        spmpc_b0_direct_omega_legacy_solver_capsule* capsule) const {
+        if (capsule == nullptr) return;
+        spmpc_b0_direct_omega_legacy_acados_free(capsule);
+        spmpc_b0_direct_omega_legacy_acados_free_capsule(capsule);
+    }
+};
+
+#ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
+struct SloshDirectCapsuleDeleter {
+    void operator()(spmpc_slosh_direct_omega_solver_capsule* capsule) const {
+        if (capsule == nullptr) return;
+        spmpc_slosh_direct_omega_acados_free(capsule);
+        spmpc_slosh_direct_omega_acados_free_capsule(capsule);
+    }
+};
+#endif
+
+// Legacy capsules remain isolated from the mainline backend, but use the same
+// typed ownership rule so disabling RouteB cannot hide a raw ABI lifetime.
 struct GenSolverDirect {
     enum Kind { B0, SLOSH } kind = B0;
-    void* capsule = nullptr;
+    std::unique_ptr<
+        spmpc_b0_direct_omega_legacy_solver_capsule,
+        B0DirectCapsuleDeleter> b0_capsule;
+#ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
+    std::unique_ptr<
+        spmpc_slosh_direct_omega_solver_capsule,
+        SloshDirectCapsuleDeleter> slosh_capsule;
+#endif
     int nx = 0, nu = 0, np = 0, n_horizon = 0;
 
     GenSolverDirect() = default;
-    ~GenSolverDirect() { destroy(); }
     GenSolverDirect(const GenSolverDirect&) = delete;
     GenSolverDirect& operator=(const GenSolverDirect&) = delete;
 
-    bool create(Kind k) {
-        kind = k;
-        if (k == B0) {
-            auto* c = spmpc_b0_direct_omega_legacy_acados_create_capsule();
-            if (c == nullptr || spmpc_b0_direct_omega_legacy_acados_create(c) != 0) {
-                if (c) spmpc_b0_direct_omega_legacy_acados_free_capsule(c);
-                return false;
-            }
-            capsule = c;
-            nx = SPMPC_B0_DIRECT_OMEGA_LEGACY_NX; nu = SPMPC_B0_DIRECT_OMEGA_LEGACY_NU;
-            np = SPMPC_B0_DIRECT_OMEGA_LEGACY_NP; n_horizon = SPMPC_B0_DIRECT_OMEGA_LEGACY_N;
-        } else {
+    bool create(Kind requested_kind) {
+        b0_capsule.reset();
 #ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
-            auto* c = spmpc_slosh_direct_omega_acados_create_capsule();
-            if (c == nullptr || spmpc_slosh_direct_omega_acados_create(c) != 0) {
-                if (c) spmpc_slosh_direct_omega_acados_free_capsule(c);
-                return false;
-            }
-            capsule = c;
-            nx = SPMPC_SLOSH_DIRECT_OMEGA_NX; nu = SPMPC_SLOSH_DIRECT_OMEGA_NU;
-            np = SPMPC_SLOSH_DIRECT_OMEGA_NP; n_horizon = SPMPC_SLOSH_DIRECT_OMEGA_N;
-#else
-            return false;
+        slosh_capsule.reset();
 #endif
-        }
-        return true;
-    }
-    void destroy() {
-        if (capsule == nullptr) return;
+        kind = requested_kind;
+        nx = 0;
+        nu = 0;
+        np = 0;
+        n_horizon = 0;
         if (kind == B0) {
-            spmpc_b0_direct_omega_legacy_acados_free(static_cast<spmpc_b0_direct_omega_legacy_solver_capsule*>(capsule));
-            spmpc_b0_direct_omega_legacy_acados_free_capsule(static_cast<spmpc_b0_direct_omega_legacy_solver_capsule*>(capsule));
-        } else {
-#ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
-            spmpc_slosh_direct_omega_acados_free(static_cast<spmpc_slosh_direct_omega_solver_capsule*>(capsule));
-            spmpc_slosh_direct_omega_acados_free_capsule(static_cast<spmpc_slosh_direct_omega_solver_capsule*>(capsule));
-#endif
+            spmpc_b0_direct_omega_legacy_solver_capsule* capsule =
+                spmpc_b0_direct_omega_legacy_acados_create_capsule();
+            if (capsule == nullptr) return false;
+            if (spmpc_b0_direct_omega_legacy_acados_create(capsule) != 0) {
+                spmpc_b0_direct_omega_legacy_acados_free_capsule(capsule);
+                return false;
+            }
+            b0_capsule.reset(capsule);
+            nx = SPMPC_B0_DIRECT_OMEGA_LEGACY_NX;
+            nu = SPMPC_B0_DIRECT_OMEGA_LEGACY_NU;
+            np = SPMPC_B0_DIRECT_OMEGA_LEGACY_NP;
+            n_horizon = SPMPC_B0_DIRECT_OMEGA_LEGACY_N;
+            return true;
         }
-        capsule = nullptr;
+#ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
+        spmpc_slosh_direct_omega_solver_capsule* capsule =
+            spmpc_slosh_direct_omega_acados_create_capsule();
+        if (capsule == nullptr) return false;
+        if (spmpc_slosh_direct_omega_acados_create(capsule) != 0) {
+            spmpc_slosh_direct_omega_acados_free_capsule(capsule);
+            return false;
+        }
+        slosh_capsule.reset(capsule);
+        nx = SPMPC_SLOSH_DIRECT_OMEGA_NX;
+        nu = SPMPC_SLOSH_DIRECT_OMEGA_NU;
+        np = SPMPC_SLOSH_DIRECT_OMEGA_NP;
+        n_horizon = SPMPC_SLOSH_DIRECT_OMEGA_N;
+        return true;
+#else
+        return false;
+#endif
     }
+
     void update_params(int stage, double* p) {
         if (kind == B0) {
-            spmpc_b0_direct_omega_legacy_acados_update_params(static_cast<spmpc_b0_direct_omega_legacy_solver_capsule*>(capsule), stage, p, np);
+            spmpc_b0_direct_omega_legacy_acados_update_params(
+                b0_capsule.get(), stage, p, np);
         } else {
 #ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
-            spmpc_slosh_direct_omega_acados_update_params(static_cast<spmpc_slosh_direct_omega_solver_capsule*>(capsule), stage, p, np);
+            spmpc_slosh_direct_omega_acados_update_params(
+                slosh_capsule.get(), stage, p, np);
 #endif
         }
     }
     int solve() {
-        if (kind == B0) return spmpc_b0_direct_omega_legacy_acados_solve(static_cast<spmpc_b0_direct_omega_legacy_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_direct_omega_legacy_acados_solve(
+                b0_capsule.get());
+        }
 #ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
-        return spmpc_slosh_direct_omega_acados_solve(static_cast<spmpc_slosh_direct_omega_solver_capsule*>(capsule));
+        return spmpc_slosh_direct_omega_acados_solve(slosh_capsule.get());
 #else
         return -1;
 #endif
     }
     ocp_nlp_config* config() {
-        if (kind == B0) return spmpc_b0_direct_omega_legacy_acados_get_nlp_config(static_cast<spmpc_b0_direct_omega_legacy_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_direct_omega_legacy_acados_get_nlp_config(
+                b0_capsule.get());
+        }
 #ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
-        return spmpc_slosh_direct_omega_acados_get_nlp_config(static_cast<spmpc_slosh_direct_omega_solver_capsule*>(capsule));
+        return spmpc_slosh_direct_omega_acados_get_nlp_config(
+            slosh_capsule.get());
 #else
         return nullptr;
 #endif
     }
     ocp_nlp_dims* dims() {
-        if (kind == B0) return spmpc_b0_direct_omega_legacy_acados_get_nlp_dims(static_cast<spmpc_b0_direct_omega_legacy_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_direct_omega_legacy_acados_get_nlp_dims(
+                b0_capsule.get());
+        }
 #ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
-        return spmpc_slosh_direct_omega_acados_get_nlp_dims(static_cast<spmpc_slosh_direct_omega_solver_capsule*>(capsule));
+        return spmpc_slosh_direct_omega_acados_get_nlp_dims(
+            slosh_capsule.get());
 #else
         return nullptr;
 #endif
     }
     ocp_nlp_in* in() {
-        if (kind == B0) return spmpc_b0_direct_omega_legacy_acados_get_nlp_in(static_cast<spmpc_b0_direct_omega_legacy_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_direct_omega_legacy_acados_get_nlp_in(
+                b0_capsule.get());
+        }
 #ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
-        return spmpc_slosh_direct_omega_acados_get_nlp_in(static_cast<spmpc_slosh_direct_omega_solver_capsule*>(capsule));
+        return spmpc_slosh_direct_omega_acados_get_nlp_in(
+            slosh_capsule.get());
 #else
         return nullptr;
 #endif
     }
     ocp_nlp_out* out() {
-        if (kind == B0) return spmpc_b0_direct_omega_legacy_acados_get_nlp_out(static_cast<spmpc_b0_direct_omega_legacy_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_direct_omega_legacy_acados_get_nlp_out(
+                b0_capsule.get());
+        }
 #ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
-        return spmpc_slosh_direct_omega_acados_get_nlp_out(static_cast<spmpc_slosh_direct_omega_solver_capsule*>(capsule));
+        return spmpc_slosh_direct_omega_acados_get_nlp_out(
+            slosh_capsule.get());
 #else
         return nullptr;
 #endif
     }
     ocp_nlp_solver* solver() {
-        if (kind == B0) return spmpc_b0_direct_omega_legacy_acados_get_nlp_solver(static_cast<spmpc_b0_direct_omega_legacy_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_direct_omega_legacy_acados_get_nlp_solver(
+                b0_capsule.get());
+        }
 #ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
-        return spmpc_slosh_direct_omega_acados_get_nlp_solver(static_cast<spmpc_slosh_direct_omega_solver_capsule*>(capsule));
+        return spmpc_slosh_direct_omega_acados_get_nlp_solver(
+            slosh_capsule.get());
 #else
         return nullptr;
 #endif
@@ -211,7 +266,7 @@ SolverConfigureResult ContinuousMpccDirectOmegaLegacySolverAcados::configure(
 bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
     const SolverInput& input,
     const ReferencePath& reference,
-    SolverOutput& output) const {
+    SolverOutput& output) {
     output = SolverOutput{};
     if (!impl_ || !impl_->solver) {
         output.status = "ACADOS_DIRECT_OMEGA_NOT_CREATED";
@@ -457,7 +512,7 @@ SolverConfigureResult ContinuousMpccDirectOmegaLegacySolverAcados::configure(
 bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
     const SolverInput& input,
     const ReferencePath& reference,
-    SolverOutput& output) const {
+    SolverOutput& output) {
     (void)input;
     (void)reference;
     output = SolverOutput{};

@@ -158,7 +158,7 @@ SolverConfigureResult RolloutSamplingSolver::configure(
 bool RolloutSamplingSolver::solve(
     const SolverInput& input,
     const ReferencePath& reference,
-    SolverOutput& output) const {
+    SolverOutput& output) {
     const auto t0 = std::chrono::steady_clock::now();
     output = SolverOutput{};
 

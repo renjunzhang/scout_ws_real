@@ -19,7 +19,9 @@ public:
     SolverConfigureResult configure(
         const SolverParams& params,
         const VariantConfig& variant) override;
-    bool solve(const SolverInput& input, const ReferencePath& reference, SolverOutput& output) const override;
+    bool solve(const SolverInput& input,
+               const ReferencePath& reference,
+               SolverOutput& output) override;
 
 private:
     struct Impl;
@@ -30,8 +32,8 @@ private:
     bool use_slosh_model_ = false;        // variant.slosh_enable -> 接 b0(5D) 还是 slosh(9D)
 
     std::unique_ptr<Impl> impl_;
-    mutable double u_prev_[3] = {0.0, 0.0, 0.0};  // 上周期下发控制 [a, omega, v_s]
-    mutable bool have_u_prev_ = false;
+    double u_prev_[3] = {0.0, 0.0, 0.0};  // 上周期下发控制 [a, omega, v_s]
+    bool have_u_prev_ = false;
 };
 
 }  // namespace spmpc_local_planner

@@ -47,155 +47,239 @@ static_assert(SPMPC_PHASE_REJOIN_NH == kSloshNonlinearConstraintCount,
               "phase-rejoin 求解器必须包含 liquid cap 与 terminal gate");
 #endif
 
-// 统一封装两个生成求解器（b0 6维 / slosh 10维），把前缀相关调用收敛到一处。
+struct B0CapsuleDeleter {
+    void operator()(spmpc_b0_solver_capsule* capsule) const {
+        if (capsule == nullptr) return;
+        spmpc_b0_acados_free(capsule);
+        spmpc_b0_acados_free_capsule(capsule);
+    }
+};
+
+#ifdef SPMPC_WITH_ACADOS_SLOSH
+struct SloshCapsuleDeleter {
+    void operator()(spmpc_slosh_solver_capsule* capsule) const {
+        if (capsule == nullptr) return;
+        spmpc_slosh_acados_free(capsule);
+        spmpc_slosh_acados_free_capsule(capsule);
+    }
+};
+#endif
+
+#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
+struct PhaseRejoinCapsuleDeleter {
+    void operator()(spmpc_phase_rejoin_solver_capsule* capsule) const {
+        if (capsule == nullptr) return;
+        spmpc_phase_rejoin_acados_free(capsule);
+        spmpc_phase_rejoin_acados_free_capsule(capsule);
+    }
+};
+#endif
+
+// 统一封装三个生成求解器，把前缀相关调用和各自的typed capsule
+// 生命周期收敛到唯一的acados ABI边界。
 struct GenSolver {
     enum Kind { B0, SLOSH, PHASE_REJOIN } kind = B0;
-    void* capsule = nullptr;
+    std::unique_ptr<spmpc_b0_solver_capsule, B0CapsuleDeleter> b0_capsule;
+#ifdef SPMPC_WITH_ACADOS_SLOSH
+    std::unique_ptr<spmpc_slosh_solver_capsule, SloshCapsuleDeleter>
+        slosh_capsule;
+#endif
+#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
+    std::unique_ptr<
+        spmpc_phase_rejoin_solver_capsule,
+        PhaseRejoinCapsuleDeleter> phase_rejoin_capsule;
+#endif
     int nx = 0, nu = 0, np = 0, n_horizon = 0;
 
     GenSolver() = default;
-    ~GenSolver() { destroy(); }
     GenSolver(const GenSolver&) = delete;
     GenSolver& operator=(const GenSolver&) = delete;
 
-    bool create(Kind k) {
-        kind = k;
-        if (k == B0) {
-            auto* c = spmpc_b0_acados_create_capsule();
-            if (c == nullptr || spmpc_b0_acados_create(c) != 0) {
-                if (c) spmpc_b0_acados_free_capsule(c);
-                return false;
-            }
-            capsule = c; nx = SPMPC_B0_NX; nu = SPMPC_B0_NU; np = SPMPC_B0_NP; n_horizon = SPMPC_B0_N;
-        } else if (k == SLOSH) {
+    void reset() {
+        b0_capsule.reset();
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-            auto* c = spmpc_slosh_acados_create_capsule();
-            if (c == nullptr || spmpc_slosh_acados_create(c) != 0) {
-                if (c) spmpc_slosh_acados_free_capsule(c);
-                return false;
-            }
-            capsule = c; nx = SPMPC_SLOSH_NX; nu = SPMPC_SLOSH_NU; np = SPMPC_SLOSH_NP; n_horizon = SPMPC_SLOSH_N;
-#else
-            return false;
+        slosh_capsule.reset();
 #endif
-        } else {
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-            auto* c = spmpc_phase_rejoin_acados_create_capsule();
-            if (c == nullptr || spmpc_phase_rejoin_acados_create(c) != 0) {
-                if (c) spmpc_phase_rejoin_acados_free_capsule(c);
-                return false;
-            }
-            capsule = c;
-            nx = SPMPC_PHASE_REJOIN_NX;
-            nu = SPMPC_PHASE_REJOIN_NU;
-            np = SPMPC_PHASE_REJOIN_NP;
-            n_horizon = SPMPC_PHASE_REJOIN_N;
-#else
-            return false;
+        phase_rejoin_capsule.reset();
 #endif
-        }
-        return true;
+        nx = 0;
+        nu = 0;
+        np = 0;
+        n_horizon = 0;
     }
-    void destroy() {
-        if (capsule == nullptr) return;
+
+    bool create(Kind requested_kind) {
+        reset();
+        kind = requested_kind;
         if (kind == B0) {
-            spmpc_b0_acados_free(static_cast<spmpc_b0_solver_capsule*>(capsule));
-            spmpc_b0_acados_free_capsule(static_cast<spmpc_b0_solver_capsule*>(capsule));
-        } else if (kind == SLOSH) {
+            spmpc_b0_solver_capsule* capsule =
+                spmpc_b0_acados_create_capsule();
+            if (capsule == nullptr) return false;
+            if (spmpc_b0_acados_create(capsule) != 0) {
+                spmpc_b0_acados_free_capsule(capsule);
+                return false;
+            }
+            b0_capsule.reset(capsule);
+            nx = SPMPC_B0_NX;
+            nu = SPMPC_B0_NU;
+            np = SPMPC_B0_NP;
+            n_horizon = SPMPC_B0_N;
+            return true;
+        }
+        if (kind == SLOSH) {
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-            spmpc_slosh_acados_free(static_cast<spmpc_slosh_solver_capsule*>(capsule));
-            spmpc_slosh_acados_free_capsule(static_cast<spmpc_slosh_solver_capsule*>(capsule));
-#endif
-        } else {
-#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-            spmpc_phase_rejoin_acados_free(
-                static_cast<spmpc_phase_rejoin_solver_capsule*>(capsule));
-            spmpc_phase_rejoin_acados_free_capsule(
-                static_cast<spmpc_phase_rejoin_solver_capsule*>(capsule));
+            spmpc_slosh_solver_capsule* capsule =
+                spmpc_slosh_acados_create_capsule();
+            if (capsule == nullptr) return false;
+            if (spmpc_slosh_acados_create(capsule) != 0) {
+                spmpc_slosh_acados_free_capsule(capsule);
+                return false;
+            }
+            slosh_capsule.reset(capsule);
+            nx = SPMPC_SLOSH_NX;
+            nu = SPMPC_SLOSH_NU;
+            np = SPMPC_SLOSH_NP;
+            n_horizon = SPMPC_SLOSH_N;
+            return true;
+#else
+            return false;
 #endif
         }
-        capsule = nullptr;
+#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
+        spmpc_phase_rejoin_solver_capsule* capsule =
+            spmpc_phase_rejoin_acados_create_capsule();
+        if (capsule == nullptr) return false;
+        if (spmpc_phase_rejoin_acados_create(capsule) != 0) {
+            spmpc_phase_rejoin_acados_free_capsule(capsule);
+            return false;
+        }
+        phase_rejoin_capsule.reset(capsule);
+        nx = SPMPC_PHASE_REJOIN_NX;
+        nu = SPMPC_PHASE_REJOIN_NU;
+        np = SPMPC_PHASE_REJOIN_NP;
+        n_horizon = SPMPC_PHASE_REJOIN_N;
+        return true;
+#else
+        return false;
+#endif
     }
+
     void update_params(int stage, double* p) {
         if (kind == B0) {
-            spmpc_b0_acados_update_params(static_cast<spmpc_b0_solver_capsule*>(capsule), stage, p, np);
+            spmpc_b0_acados_update_params(
+                b0_capsule.get(), stage, p, np);
         } else if (kind == SLOSH) {
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-            spmpc_slosh_acados_update_params(static_cast<spmpc_slosh_solver_capsule*>(capsule), stage, p, np);
+            spmpc_slosh_acados_update_params(
+                slosh_capsule.get(), stage, p, np);
 #endif
         } else {
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
             spmpc_phase_rejoin_acados_update_params(
-                static_cast<spmpc_phase_rejoin_solver_capsule*>(capsule),
-                stage, p, np);
+                phase_rejoin_capsule.get(), stage, p, np);
 #endif
         }
     }
     int solve() {
         if (kind == B0) {
-            return spmpc_b0_acados_solve(static_cast<spmpc_b0_solver_capsule*>(capsule));
+            return spmpc_b0_acados_solve(b0_capsule.get());
         }
 #ifdef SPMPC_WITH_ACADOS_SLOSH
         if (kind == SLOSH) {
-            return spmpc_slosh_acados_solve(
-                static_cast<spmpc_slosh_solver_capsule*>(capsule));
+            return spmpc_slosh_acados_solve(slosh_capsule.get());
         }
 #endif
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
         if (kind == PHASE_REJOIN) {
             return spmpc_phase_rejoin_acados_solve(
-                static_cast<spmpc_phase_rejoin_solver_capsule*>(capsule));
+                phase_rejoin_capsule.get());
         }
 #endif
         return -1;
     }
     ocp_nlp_config* config() {
-        if (kind == B0) return spmpc_b0_acados_get_nlp_config(static_cast<spmpc_b0_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_acados_get_nlp_config(b0_capsule.get());
+        }
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-        if (kind == SLOSH) return spmpc_slosh_acados_get_nlp_config(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+        if (kind == SLOSH) {
+            return spmpc_slosh_acados_get_nlp_config(slosh_capsule.get());
+        }
 #endif
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        if (kind == PHASE_REJOIN) return spmpc_phase_rejoin_acados_get_nlp_config(static_cast<spmpc_phase_rejoin_solver_capsule*>(capsule));
+        if (kind == PHASE_REJOIN) {
+            return spmpc_phase_rejoin_acados_get_nlp_config(
+                phase_rejoin_capsule.get());
+        }
 #endif
         return nullptr;
     }
     ocp_nlp_dims* dims() {
-        if (kind == B0) return spmpc_b0_acados_get_nlp_dims(static_cast<spmpc_b0_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_acados_get_nlp_dims(b0_capsule.get());
+        }
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-        if (kind == SLOSH) return spmpc_slosh_acados_get_nlp_dims(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+        if (kind == SLOSH) {
+            return spmpc_slosh_acados_get_nlp_dims(slosh_capsule.get());
+        }
 #endif
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        if (kind == PHASE_REJOIN) return spmpc_phase_rejoin_acados_get_nlp_dims(static_cast<spmpc_phase_rejoin_solver_capsule*>(capsule));
+        if (kind == PHASE_REJOIN) {
+            return spmpc_phase_rejoin_acados_get_nlp_dims(
+                phase_rejoin_capsule.get());
+        }
 #endif
         return nullptr;
     }
     ocp_nlp_in* in() {
-        if (kind == B0) return spmpc_b0_acados_get_nlp_in(static_cast<spmpc_b0_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_acados_get_nlp_in(b0_capsule.get());
+        }
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-        if (kind == SLOSH) return spmpc_slosh_acados_get_nlp_in(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+        if (kind == SLOSH) {
+            return spmpc_slosh_acados_get_nlp_in(slosh_capsule.get());
+        }
 #endif
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        if (kind == PHASE_REJOIN) return spmpc_phase_rejoin_acados_get_nlp_in(static_cast<spmpc_phase_rejoin_solver_capsule*>(capsule));
+        if (kind == PHASE_REJOIN) {
+            return spmpc_phase_rejoin_acados_get_nlp_in(
+                phase_rejoin_capsule.get());
+        }
 #endif
         return nullptr;
     }
     ocp_nlp_out* out() {
-        if (kind == B0) return spmpc_b0_acados_get_nlp_out(static_cast<spmpc_b0_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_acados_get_nlp_out(b0_capsule.get());
+        }
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-        if (kind == SLOSH) return spmpc_slosh_acados_get_nlp_out(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+        if (kind == SLOSH) {
+            return spmpc_slosh_acados_get_nlp_out(slosh_capsule.get());
+        }
 #endif
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        if (kind == PHASE_REJOIN) return spmpc_phase_rejoin_acados_get_nlp_out(static_cast<spmpc_phase_rejoin_solver_capsule*>(capsule));
+        if (kind == PHASE_REJOIN) {
+            return spmpc_phase_rejoin_acados_get_nlp_out(
+                phase_rejoin_capsule.get());
+        }
 #endif
         return nullptr;
     }
     ocp_nlp_solver* solver() {
-        if (kind == B0) return spmpc_b0_acados_get_nlp_solver(static_cast<spmpc_b0_solver_capsule*>(capsule));
+        if (kind == B0) {
+            return spmpc_b0_acados_get_nlp_solver(b0_capsule.get());
+        }
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-        if (kind == SLOSH) return spmpc_slosh_acados_get_nlp_solver(static_cast<spmpc_slosh_solver_capsule*>(capsule));
+        if (kind == SLOSH) {
+            return spmpc_slosh_acados_get_nlp_solver(slosh_capsule.get());
+        }
 #endif
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-        if (kind == PHASE_REJOIN) return spmpc_phase_rejoin_acados_get_nlp_solver(static_cast<spmpc_phase_rejoin_solver_capsule*>(capsule));
+        if (kind == PHASE_REJOIN) {
+            return spmpc_phase_rejoin_acados_get_nlp_solver(
+                phase_rejoin_capsule.get());
+        }
 #endif
         return nullptr;
     }
@@ -800,10 +884,16 @@ SolverConfigureResult ContinuousMpccSolverAcados::configure(
     }
     impl_->primary = std::move(gen);
     if (use_slosh_model_) {
+#ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
         std::unique_ptr<GenSolver> phase_gen(new GenSolver());
-        if (phase_gen->create(GenSolver::PHASE_REJOIN)) {
-            impl_->phase_rejoin = std::move(phase_gen);
+        if (!phase_gen->create(GenSolver::PHASE_REJOIN)) {
+            impl_.reset(new Impl());
+            SolverConfigureResult result;
+            result.status = "ACADOS_PHASE_REJOIN_CAPSULE_CREATE_FAILED";
+            return result;
         }
+        impl_->phase_rejoin = std::move(phase_gen);
+#endif
     }
     SolverConfigureResult result;
     result.success = true;
@@ -819,7 +909,7 @@ SolverConfigureResult ContinuousMpccSolverAcados::configure(
 bool ContinuousMpccSolverAcados::solve(
     const SolverInput& input,
     const ReferencePath& reference,
-    SolverOutput& output) const {
+    SolverOutput& output) {
     output = SolverOutput{};
     output.cycle_timing = input.cycle_timing;
     if (!impl_ || !impl_->primary) {
@@ -1465,7 +1555,7 @@ SolverConfigureResult ContinuousMpccSolverAcados::configure(
 bool ContinuousMpccSolverAcados::solve(
     const SolverInput& input,
     const ReferencePath& reference,
-    SolverOutput& output) const {
+    SolverOutput& output) {
     (void)reference;
     output = SolverOutput{};
     output.cycle_timing = input.cycle_timing;
