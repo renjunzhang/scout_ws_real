@@ -794,7 +794,19 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     effective_config_.w_v = variant_.w_v;
     effective_config_.w_vs = variant_.w_vs;
 
-    problem_.configure(solver_params, variant_);
+    const SolverConfigureResult solver_configure =
+        problem_.configure(solver_params, variant_);
+    if (!solver_configure.success) {
+        ROS_FATAL("[spmpc_local_planner] solver configure failed status=%s detail=%s",
+                  solver_configure.status.c_str(),
+                  solver_configure.detail.c_str());
+        return false;
+    }
+    if (!solver_configure.detail.empty()) {
+        ROS_WARN("[spmpc_local_planner] solver configure status=%s detail=%s",
+                 solver_configure.status.c_str(),
+                 solver_configure.detail.c_str());
+    }
     if (!slosh_observers_.configure(solver_params.slosh, imu_observer_dt_sec_)) {
         ROS_WARN("[spmpc_local_planner] slosh observer configure failed; slosh diagnostics stay zero");
     }

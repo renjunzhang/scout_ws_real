@@ -88,12 +88,18 @@ set(SPMPC_PUBLIC_LIBRARIES
   ${PROJECT_NAME}
   spmpc_config
   spmpc_controller
+  spmpc_estimation
   spmpc_phase_rejoin
   spmpc_reference
   spmpc_runtime
   spmpc_safety
   spmpc_model
   spmpc_solver_api
+  spmpc_solver_rollout
+  spmpc_solver_acados
+  spmpc_solver_legacy
+  spmpc_solver_factory
+  spmpc_warm_start
 )
 
 catkin_package(
@@ -105,7 +111,6 @@ catkin_package(
 
 include_directories(
   include
-  ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
 )
 
@@ -113,12 +118,17 @@ add_library(spmpc_model
   src/dynamics/slosh_dynamics.cpp
 )
 target_link_libraries(spmpc_model
+  PRIVATE
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
+)
+target_include_directories(spmpc_model PRIVATE
+  ${catkin_INCLUDE_DIRS}
 )
 
 add_library(spmpc_config
   src/config/app_config.cpp
+  src/core/variant_config.cpp
 )
 
 add_library(spmpc_controller
@@ -171,23 +181,79 @@ add_library(spmpc_solver_api
   src/solver/api/backend_policy.cpp
 )
 
+add_library(spmpc_estimation
+  src/estimation/processed_imu_pipeline.cpp
+  src/estimation/slosh_observer_bank.cpp
+  src/estimation/slosh_observer_selector.cpp
+)
+target_link_libraries(spmpc_estimation
+  spmpc_model
+  ${EIGEN3_LIBRARIES}
+)
+
+add_library(spmpc_warm_start
+  src/warm_start/diff_drive_flatness_warm_start.cpp
+  src/warm_start/mecanum_warm_start.cpp
+  src/warm_start/warm_start_factory.cpp
+)
+target_link_libraries(spmpc_warm_start
+  spmpc_model
+  spmpc_reference
+  ${EIGEN3_LIBRARIES}
+)
+
+add_library(spmpc_solver_rollout
+  src/solvers/rollout_sampling_solver.cpp
+)
+target_link_libraries(spmpc_solver_rollout
+  spmpc_model
+  spmpc_reference
+)
+
+add_library(spmpc_solver_acados
+  src/solvers/continuous_mpcc_solver_acados.cpp
+)
+target_include_directories(spmpc_solver_acados PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+)
+target_link_libraries(spmpc_solver_acados
+  PRIVATE
+  spmpc_config
+  spmpc_model
+  spmpc_reference
+  spmpc_warm_start
+  ${EIGEN3_LIBRARIES}
+)
+
+add_library(spmpc_solver_legacy
+  src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
+)
+target_include_directories(spmpc_solver_legacy PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+)
+target_link_libraries(spmpc_solver_legacy
+  PRIVATE
+  spmpc_model
+  spmpc_reference
+  ${EIGEN3_LIBRARIES}
+)
+
+add_library(spmpc_solver_factory
+  src/solvers/solver_factory.cpp
+)
+target_link_libraries(spmpc_solver_factory
+  spmpc_solver_api
+  spmpc_solver_rollout
+  spmpc_solver_acados
+  spmpc_solver_legacy
+)
+
 add_library(${PROJECT_NAME}
-  src/core/variant_config.cpp
   src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
   src/core/slosh_risk_governor.cpp
   src/core/start_lock_recovery.cpp
   src/core/terminal_controller.cpp
-  src/estimation/processed_imu_pipeline.cpp
-  src/estimation/slosh_observer_bank.cpp
-  src/estimation/slosh_observer_selector.cpp
-  src/warm_start/diff_drive_flatness_warm_start.cpp
-  src/warm_start/mecanum_warm_start.cpp
-  src/warm_start/warm_start_factory.cpp
-  src/solvers/rollout_sampling_solver.cpp
-  src/solvers/solver_factory.cpp
-  src/solvers/continuous_mpcc_solver_acados.cpp
-  src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
   src/ros/imu_shadow_ros_adapter.cpp
   src/ros/ros_config_loader.cpp
   src/ros/diagnostics_publisher.cpp
@@ -198,70 +264,78 @@ add_dependencies(${PROJECT_NAME}
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
 )
+target_include_directories(${PROJECT_NAME} PRIVATE
+  ${catkin_INCLUDE_DIRS}
+)
 
 target_link_libraries(${PROJECT_NAME}
+  PUBLIC
   spmpc_config
   spmpc_controller
+  spmpc_estimation
   spmpc_phase_rejoin
   spmpc_reference
   spmpc_runtime
   spmpc_safety
   spmpc_model
   spmpc_solver_api
+  spmpc_solver_factory
+  spmpc_warm_start
+  PRIVATE
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
 )
 
 if(SPMPC_WITH_ACADOS)
-  target_compile_definitions(${PROJECT_NAME} PRIVATE SPMPC_WITH_ACADOS)
-  target_include_directories(${PROJECT_NAME} PRIVATE
+  target_compile_definitions(spmpc_solver_acados PRIVATE SPMPC_WITH_ACADOS)
+  target_include_directories(spmpc_solver_acados PRIVATE
     ${ACADOS_SOURCE_DIR}/include
     ${ACADOS_SOURCE_DIR}/include/acados
     ${ACADOS_SOURCE_DIR}/include/blasfeo/include
     ${ACADOS_SOURCE_DIR}/include/hpipm/include
     ${SPMPC_GEN_B0_DIR}
   )
-  target_link_libraries(${PROJECT_NAME}
+  target_link_libraries(spmpc_solver_acados PRIVATE
     ${SPMPC_GEN_B0_DIR}/libacados_ocp_solver_spmpc_b0.so
     ${ACADOS_LIB_DIR}/libacados.so
     ${ACADOS_LIB_DIR}/libhpipm.so
     ${ACADOS_LIB_DIR}/libblasfeo.so
   )
   if(SPMPC_WITH_ACADOS_SLOSH)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE SPMPC_WITH_ACADOS_SLOSH)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${SPMPC_GEN_SLOSH_DIR})
-    target_link_libraries(${PROJECT_NAME}
+    target_compile_definitions(spmpc_solver_acados PRIVATE SPMPC_WITH_ACADOS_SLOSH)
+    target_include_directories(spmpc_solver_acados PRIVATE ${SPMPC_GEN_SLOSH_DIR})
+    target_link_libraries(spmpc_solver_acados PRIVATE
       ${SPMPC_GEN_SLOSH_DIR}/libacados_ocp_solver_spmpc_slosh.so
     )
   endif()
   if(SPMPC_WITH_ACADOS_PHASE_REJOIN)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE SPMPC_WITH_ACADOS_PHASE_REJOIN)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${SPMPC_GEN_PHASE_REJOIN_DIR})
-    target_link_libraries(${PROJECT_NAME}
+    target_compile_definitions(spmpc_solver_acados PRIVATE SPMPC_WITH_ACADOS_PHASE_REJOIN)
+    target_include_directories(spmpc_solver_acados PRIVATE ${SPMPC_GEN_PHASE_REJOIN_DIR})
+    target_link_libraries(spmpc_solver_acados PRIVATE
       ${SPMPC_GEN_PHASE_REJOIN_DIR}/libacados_ocp_solver_spmpc_phase_rejoin.so
     )
   endif()
 endif()
 
 if(SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY)
-  target_compile_definitions(${PROJECT_NAME} PRIVATE SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY)
-  target_include_directories(${PROJECT_NAME} PRIVATE
+  target_compile_definitions(spmpc_solver_legacy PRIVATE SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY)
+  target_include_directories(spmpc_solver_legacy PRIVATE
     ${ACADOS_SOURCE_DIR}/include
     ${ACADOS_SOURCE_DIR}/include/acados
     ${ACADOS_SOURCE_DIR}/include/blasfeo/include
     ${ACADOS_SOURCE_DIR}/include/hpipm/include
     ${SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR}
   )
-  target_link_libraries(${PROJECT_NAME}
+  target_link_libraries(spmpc_solver_legacy PRIVATE
     ${SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR}/libacados_ocp_solver_spmpc_b0_direct_omega_legacy.so
     ${ACADOS_LIB_DIR}/libacados.so
     ${ACADOS_LIB_DIR}/libhpipm.so
     ${ACADOS_LIB_DIR}/libblasfeo.so
   )
   if(SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR})
-    target_link_libraries(${PROJECT_NAME}
+    target_compile_definitions(spmpc_solver_legacy PRIVATE SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA)
+    target_include_directories(spmpc_solver_legacy PRIVATE ${SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR})
+    target_link_libraries(spmpc_solver_legacy PRIVATE
       ${SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR}/libacados_ocp_solver_spmpc_slosh_direct_omega.so
     )
   endif()
@@ -272,7 +346,11 @@ add_dependencies(spmpc_local_planner_node
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
   ${catkin_EXPORTED_TARGETS}
 )
+target_include_directories(spmpc_local_planner_node PRIVATE
+  ${catkin_INCLUDE_DIRS}
+)
 target_link_libraries(spmpc_local_planner_node
+  PRIVATE
   ${PROJECT_NAME}
   ${catkin_LIBRARIES}
 )

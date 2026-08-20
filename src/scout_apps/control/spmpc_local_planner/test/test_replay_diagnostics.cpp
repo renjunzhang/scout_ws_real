@@ -162,7 +162,10 @@ TEST(ReplayDiagnostics, PhaseRejoinCapabilityReportsDedicatedFixedHorizon) {
 
 TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     ContinuousMpccSolverAcados solver;
-    solver.configure(makeParams(), makeB0Variant());
+    const SolverConfigureResult configured =
+        solver.configure(makeParams(), makeB0Variant());
+    ASSERT_TRUE(configured.success)
+        << configured.status << ": " << configured.detail;
     const ReferencePath reference = makeStraightReference();
     SolverInput input = makeInput();
 
@@ -206,7 +209,10 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
 #ifdef SPMPC_TEST_WITH_ACADOS_SLOSH
 TEST(ReplayDiagnostics, MonitorPreservesBaselineAndEnforceHasNoFreeTail) {
     ContinuousMpccSolverAcados solver;
-    solver.configure(makeParams(), makeSloshVariant());
+    const SolverConfigureResult configured =
+        solver.configure(makeParams(), makeSloshVariant());
+    ASSERT_TRUE(configured.success)
+        << configured.status << ": " << configured.detail;
     const ReferencePath reference = makeStraightReference();
 
     SolverInput monitor_input = makeInput();
@@ -272,7 +278,10 @@ TEST(ReplayDiagnostics, MonitorPreservesBaselineAndEnforceHasNoFreeTail) {
 
 TEST(ReplayDiagnostics, InvalidEnforceContextFailsClosedWithStableStatus) {
     ContinuousMpccSolverAcados solver;
-    solver.configure(makeParams(), makeSloshVariant());
+    const SolverConfigureResult configured =
+        solver.configure(makeParams(), makeSloshVariant());
+    ASSERT_TRUE(configured.success)
+        << configured.status << ": " << configured.detail;
     SolverInput input = makeInput();
     input.phase_rejoin = makeEnforceContext();
     input.phase_rejoin.stages.pop_back();

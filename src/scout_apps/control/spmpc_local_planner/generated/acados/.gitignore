@@ -2,3 +2,6 @@
 # 生成命令、依赖版本与输出路径记录在修改日志；如需提交生成物，单独调整本策略。
 *
 !.gitignore
+# Small deterministic ABI/parameter contract consumed by the C++ wrapper.
+# Solver C sources and binaries remain ignored.
+!spmpc_parameter_manifest.h

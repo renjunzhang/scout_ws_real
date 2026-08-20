@@ -5,6 +5,7 @@
 #include "spmpc_local_planner/reference/progress_projector.h"
 #include "spmpc_local_planner/reference/reference_spline.h"
 #include "spmpc_local_planner/warm_start/warm_start_factory.h"
+#include "spmpc_parameter_manifest.h"
 
 #include "acados_solver_spmpc_b0.h"
 #ifdef SPMPC_WITH_ACADOS_SLOSH
@@ -20,48 +21,28 @@
 #include <cmath>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace spmpc_local_planner {
 namespace {
 
-// 参数索引：必须与 scripts/acados/spmpc_acados_model.py 的 PARAM_NAMES / PARAM_NAMES_SLOSH 一致。
-enum Param {
-    RX0 = 0, RX1, RX2, RX3,
-    RY0, RY1, RY2, RY3,
-    W_CONTOUR, W_LAG, W_PROGRESS,
-    W_A, W_OMEGA, W_V, W_VS, W_ALPHA,
-    W_DU_A, W_DU_VS,
-    A_PREV, VS_PREV,
-    E_C_REF, E_L_REF,
-    V_REF,
-    // 以下仅 slosh 模型（接在 B0 的 23 个之后）
-    TWO_ZETA_OMEGA_N, OMEGA_N_SQ, KAPPA_X, KAPPA_Y,
-    ETA_REF, ETA_DOT_REF, W_SLOSH_ETA, W_SLOSH_ETA_DOT,
-    ETA_MAX_SQ,
-    // Phase-rejoining empirical v1 (slosh mainline only; appended contract).
-    PHASE_REJOIN_ACTIVE,
-    NOM_X, NOM_Y, NOM_YAW, NOM_V, NOM_OMEGA,
-    NOM_ETA_X, NOM_ETA_X_DOT, NOM_ETA_Y, NOM_ETA_Y_DOT,
-    NOM_A, NOM_ALPHA, NOM_V_S,
-    EMPIRICAL_GATE_ACTIVE,
-    GATE_R_X, GATE_R_Y, GATE_R_YAW, GATE_R_V, GATE_R_OMEGA,
-    GATE_R_ETA_X, GATE_R_ETA_X_DOT, GATE_R_ETA_Y, GATE_R_ETA_Y_DOT,
-    PARAM_MAX,
-};
+using namespace acados_manifest::mainline;
 
-// 参数布局契约：与 scripts/acados/spmpc_acados_model.py（→生成器 NP 宏）绑死，漂移即编译失败。
-static_assert(V_REF + 1 == SPMPC_B0_NP, "B0 参数布局与生成的 spmpc_b0 求解器不一致");
+// The generated C++ manifest and generated acados headers must agree.  The
+// Python model is now the only handwritten parameter-layout source.
+static_assert(kB0ParameterCount == SPMPC_B0_NP,
+              "B0 parameter manifest differs from generated solver");
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-static_assert(GATE_R_ETA_Y_DOT + 1 == SPMPC_SLOSH_NP,
+static_assert(kSloshParameterCount == SPMPC_SLOSH_NP,
               "slosh/phase-rejoin 参数布局与生成的 spmpc_slosh 求解器不一致");
-static_assert(SPMPC_SLOSH_NH == 2,
+static_assert(SPMPC_SLOSH_NH == kSloshNonlinearConstraintCount,
               "spmpc_slosh 求解器必须同时包含 slosh cap 和 empirical recovery gate");
 #endif
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
-static_assert(GATE_R_ETA_Y_DOT + 1 == SPMPC_PHASE_REJOIN_NP,
+static_assert(kSloshParameterCount == SPMPC_PHASE_REJOIN_NP,
               "phase-rejoin 参数布局与生成的短时求解器不一致");
-static_assert(SPMPC_PHASE_REJOIN_NH == 2,
+static_assert(SPMPC_PHASE_REJOIN_NH == kSloshNonlinearConstraintCount,
               "phase-rejoin 求解器必须包含 liquid cap 与 terminal gate");
 #endif
 
@@ -72,6 +53,11 @@ struct GenSolver {
     enum Kind { B0, SLOSH, PHASE_REJOIN } kind = B0;
     void* capsule = nullptr;
     int nx = 0, nu = 0, np = 0, n_horizon = 0;
+
+    GenSolver() = default;
+    ~GenSolver() { destroy(); }
+    GenSolver(const GenSolver&) = delete;
+    GenSolver& operator=(const GenSolver&) = delete;
 
     bool create(Kind k) {
         kind = k;
@@ -783,6 +769,14 @@ WarmStartOutput makeConservativeWarmStart(const WarmStartInput& warm_input,
 
 }  // namespace
 
+struct ContinuousMpccSolverAcados::Impl {
+    std::unique_ptr<GenSolver> primary;
+    // Enforce uses a separately generated N=N_l solver.  Keeping a distinct
+    // capsule makes it impossible for the trusted liquid window to inherit the
+    // baseline geometry tail.
+    std::unique_ptr<GenSolver> phase_rejoin;
+};
+
 bool continuousMpccPhaseRejoinAvailable() {
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
     return true;
@@ -799,24 +793,14 @@ int continuousMpccPhaseRejoinHorizonSteps() {
 #endif
 }
 
-ContinuousMpccSolverAcados::ContinuousMpccSolverAcados() = default;
+ContinuousMpccSolverAcados::ContinuousMpccSolverAcados()
+    : impl_(new Impl()) {}
 
-ContinuousMpccSolverAcados::~ContinuousMpccSolverAcados() {
-    if (capsule_ != nullptr) {
-        auto* gen = static_cast<GenSolver*>(capsule_);
-        gen->destroy();
-        delete gen;
-        capsule_ = nullptr;
-    }
-    if (phase_capsule_ != nullptr) {
-        auto* gen = static_cast<GenSolver*>(phase_capsule_);
-        gen->destroy();
-        delete gen;
-        phase_capsule_ = nullptr;
-    }
-}
+ContinuousMpccSolverAcados::~ContinuousMpccSolverAcados() = default;
 
-void ContinuousMpccSolverAcados::configure(const SolverParams& params, const VariantConfig& variant) {
+SolverConfigureResult ContinuousMpccSolverAcados::configure(
+    const SolverParams& params,
+    const VariantConfig& variant) {
     params_ = params;
     variant_ = variant;
     use_slosh_model_ = variant.slosh_enable;
@@ -826,36 +810,40 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
     have_u_prev_ = false;
     have_previous_solution_ = false;
     previous_warm_start_solution_ = WarmStartOutput{};
-    slosh_dyn_.configure(params.slosh);
+    const bool slosh_configured = slosh_dyn_.configure(params.slosh);
+    if (use_slosh_model_ && !slosh_configured) {
+        SolverConfigureResult result;
+        result.status = "ACADOS_SLOSH_DYNAMICS_CONFIG_FAILED";
+        return result;
+    }
     warm_start_generator_ = makeWarmStartGenerator(params_.warm_start, params_.platform);
 
-    if (capsule_ != nullptr) {
-        auto* old = static_cast<GenSolver*>(capsule_);
-        old->destroy();
-        delete old;
-        capsule_ = nullptr;
+    impl_.reset(new Impl());
+    std::unique_ptr<GenSolver> gen(new GenSolver());
+    if (!gen->create(
+            use_slosh_model_ ? GenSolver::SLOSH : GenSolver::B0)) {
+        SolverConfigureResult result;
+        result.status = use_slosh_model_
+            ? "ACADOS_SLOSH_CAPSULE_CREATE_FAILED"
+            : "ACADOS_B0_CAPSULE_CREATE_FAILED";
+        return result;
     }
-    if (phase_capsule_ != nullptr) {
-        auto* old = static_cast<GenSolver*>(phase_capsule_);
-        old->destroy();
-        delete old;
-        phase_capsule_ = nullptr;
-    }
-    auto* gen = new GenSolver();
-    if (!gen->create(use_slosh_model_ ? GenSolver::SLOSH : GenSolver::B0)) {
-        delete gen;
-        capsule_ = nullptr;
-        return;
-    }
-    capsule_ = gen;
+    impl_->primary = std::move(gen);
     if (use_slosh_model_) {
-        auto* phase_gen = new GenSolver();
+        std::unique_ptr<GenSolver> phase_gen(new GenSolver());
         if (phase_gen->create(GenSolver::PHASE_REJOIN)) {
-            phase_capsule_ = phase_gen;
-        } else {
-            delete phase_gen;
+            impl_->phase_rejoin = std::move(phase_gen);
         }
     }
+    SolverConfigureResult result;
+    result.success = true;
+    result.status = "ACADOS_CONFIGURED";
+    if (use_slosh_model_ && !impl_->phase_rejoin) {
+        result.status = "ACADOS_CONFIGURED_PHASE_REJOIN_UNAVAILABLE";
+        result.detail =
+            "main slosh capsule is ready; short phase-rejoin capsule is unavailable";
+    }
+    return result;
 }
 
 bool ContinuousMpccSolverAcados::solve(
@@ -864,7 +852,7 @@ bool ContinuousMpccSolverAcados::solve(
     SolverOutput& output) const {
     output = SolverOutput{};
     output.cycle_timing = input.cycle_timing;
-    if (capsule_ == nullptr) {
+    if (!impl_ || !impl_->primary) {
         output.status = "ACADOS_NOT_CREATED";
         return false;
     }
@@ -875,9 +863,9 @@ bool ContinuousMpccSolverAcados::solve(
 
     const bool phase_rejoin_requested =
         input.phase_rejoin.active && input.phase_rejoin.enforce;
-    auto* gen = phase_rejoin_requested
-        ? static_cast<GenSolver*>(phase_capsule_)
-        : static_cast<GenSolver*>(capsule_);
+    GenSolver* gen = phase_rejoin_requested
+        ? impl_->phase_rejoin.get()
+        : impl_->primary.get();
     if (gen == nullptr) {
         output.status = "PHASE_REJOIN_SHORT_SOLVER_NOT_CREATED";
         return false;
@@ -1555,6 +1543,8 @@ bool ContinuousMpccSolverAcados::solve(
 
 namespace spmpc_local_planner {
 
+struct ContinuousMpccSolverAcados::Impl {};
+
 bool continuousMpccPhaseRejoinAvailable() {
     return false;
 }
@@ -1563,12 +1553,19 @@ int continuousMpccPhaseRejoinHorizonSteps() {
     return 0;
 }
 
-ContinuousMpccSolverAcados::ContinuousMpccSolverAcados() = default;
+ContinuousMpccSolverAcados::ContinuousMpccSolverAcados()
+    : impl_(new Impl()) {}
 ContinuousMpccSolverAcados::~ContinuousMpccSolverAcados() = default;
 
-void ContinuousMpccSolverAcados::configure(const SolverParams& params, const VariantConfig& variant) {
+SolverConfigureResult ContinuousMpccSolverAcados::configure(
+    const SolverParams& params,
+    const VariantConfig& variant) {
     params_ = params;
     variant_ = variant;
+    SolverConfigureResult result;
+    result.status = "ACADOS_NOT_IMPLEMENTED";
+    result.detail = "package was built without the generated mainline acados solver";
+    return result;
 }
 
 bool ContinuousMpccSolverAcados::solve(

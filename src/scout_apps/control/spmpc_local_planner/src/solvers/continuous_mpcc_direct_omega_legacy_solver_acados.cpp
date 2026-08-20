@@ -4,6 +4,7 @@
 
 #include "spmpc_local_planner/reference/progress_projector.h"
 #include "spmpc_local_planner/reference/reference_spline.h"
+#include "spmpc_parameter_manifest.h"
 
 #include "acados_solver_spmpc_b0_direct_omega_legacy.h"
 #ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
@@ -20,27 +21,12 @@
 namespace spmpc_local_planner {
 namespace {
 
-// 参数索引：必须与 scripts/acados/spmpc_acados_model.py 的
-// PARAM_NAMES_DIRECT_OMEGA_LEGACY（B0）/ PARAM_NAMES_SLOSH_DIRECT_OMEGA（slosh，追加 8 个）一致。
-enum ParamLegacy {
-    RX0 = 0, RX1, RX2, RX3,
-    RY0, RY1, RY2, RY3,
-    W_CONTOUR, W_LAG, W_PROGRESS,
-    W_A, W_OMEGA, W_V, W_VS,
-    W_DU_A, W_DU_OMEGA, W_DU_VS,
-    A_PREV, OMEGA_PREV, VS_PREV,
-    E_C_REF, E_L_REF,
-    V_REF,
-    // 以下仅 slosh direct-omega 模型（接在 B0 的 24 个之后）
-    TWO_ZETA_OMEGA_N, OMEGA_N_SQ, KAPPA_X, KAPPA_Y,
-    ETA_REF, ETA_DOT_REF, W_SLOSH_ETA, W_SLOSH_ETA_DOT,
-    PARAM_LEGACY_MAX,
-};
+using namespace acados_manifest::direct_omega_legacy;
 
-static_assert(V_REF + 1 == SPMPC_B0_DIRECT_OMEGA_LEGACY_NP,
+static_assert(kB0ParameterCount == SPMPC_B0_DIRECT_OMEGA_LEGACY_NP,
               "B0 direct-omega 参数布局与生成的求解器不一致");
 #ifdef SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA
-static_assert(W_SLOSH_ETA_DOT + 1 == SPMPC_SLOSH_DIRECT_OMEGA_NP,
+static_assert(kSloshParameterCount == SPMPC_SLOSH_DIRECT_OMEGA_NP,
               "slosh direct-omega 参数布局与生成的求解器不一致");
 #endif
 
@@ -49,6 +35,11 @@ struct GenSolverDirect {
     enum Kind { B0, SLOSH } kind = B0;
     void* capsule = nullptr;
     int nx = 0, nu = 0, np = 0, n_horizon = 0;
+
+    GenSolverDirect() = default;
+    ~GenSolverDirect() { destroy(); }
+    GenSolverDirect(const GenSolverDirect&) = delete;
+    GenSolverDirect& operator=(const GenSolverDirect&) = delete;
 
     bool create(Kind k) {
         kind = k;
@@ -176,39 +167,45 @@ void fitReferencePolynomials(const ReferenceSpline& spline, double s0, double s_
 
 }  // namespace
 
-ContinuousMpccDirectOmegaLegacySolverAcados::ContinuousMpccDirectOmegaLegacySolverAcados() = default;
+struct ContinuousMpccDirectOmegaLegacySolverAcados::Impl {
+    std::unique_ptr<GenSolverDirect> solver;
+};
 
-ContinuousMpccDirectOmegaLegacySolverAcados::~ContinuousMpccDirectOmegaLegacySolverAcados() {
-    if (capsule_ != nullptr) {
-        auto* gen = static_cast<GenSolverDirect*>(capsule_);
-        gen->destroy();
-        delete gen;
-        capsule_ = nullptr;
-    }
-}
+ContinuousMpccDirectOmegaLegacySolverAcados::ContinuousMpccDirectOmegaLegacySolverAcados()
+    : impl_(new Impl()) {}
 
-void ContinuousMpccDirectOmegaLegacySolverAcados::configure(
+ContinuousMpccDirectOmegaLegacySolverAcados::~ContinuousMpccDirectOmegaLegacySolverAcados() = default;
+
+SolverConfigureResult ContinuousMpccDirectOmegaLegacySolverAcados::configure(
     const SolverParams& params,
     const VariantConfig& variant) {
     params_ = params;
     variant_ = variant;
     use_slosh_model_ = variant.slosh_enable;
     have_u_prev_ = false;
-    slosh_dyn_.configure(params.slosh);
+    const bool slosh_configured = slosh_dyn_.configure(params.slosh);
+    if (use_slosh_model_ && !slosh_configured) {
+        SolverConfigureResult result;
+        result.status = "ACADOS_LEGACY_SLOSH_DYNAMICS_CONFIG_FAILED";
+        return result;
+    }
 
-    if (capsule_ != nullptr) {
-        auto* old = static_cast<GenSolverDirect*>(capsule_);
-        old->destroy();
-        delete old;
-        capsule_ = nullptr;
+    impl_.reset(new Impl());
+    impl_->solver.reset(new GenSolverDirect());
+    if (!impl_->solver->create(
+            use_slosh_model_ ? GenSolverDirect::SLOSH
+                             : GenSolverDirect::B0)) {
+        impl_->solver.reset();
+        SolverConfigureResult result;
+        result.status = use_slosh_model_
+            ? "ACADOS_LEGACY_SLOSH_CAPSULE_CREATE_FAILED"
+            : "ACADOS_LEGACY_B0_CAPSULE_CREATE_FAILED";
+        return result;
     }
-    auto* gen = new GenSolverDirect();
-    if (!gen->create(use_slosh_model_ ? GenSolverDirect::SLOSH : GenSolverDirect::B0)) {
-        delete gen;
-        capsule_ = nullptr;
-        return;
-    }
-    capsule_ = gen;
+    SolverConfigureResult result;
+    result.success = true;
+    result.status = "ACADOS_LEGACY_CONFIGURED";
+    return result;
 }
 
 bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
@@ -216,7 +213,7 @@ bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
     const ReferencePath& reference,
     SolverOutput& output) const {
     output = SolverOutput{};
-    if (capsule_ == nullptr) {
+    if (!impl_ || !impl_->solver) {
         output.status = "ACADOS_DIRECT_OMEGA_NOT_CREATED";
         return false;
     }
@@ -225,7 +222,7 @@ bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
         return false;
     }
 
-    auto* gen = static_cast<GenSolverDirect*>(capsule_);
+    GenSolverDirect* gen = impl_->solver.get();
     const bool slosh = use_slosh_model_;
 
     ProgressProjector projector;
@@ -438,16 +435,23 @@ bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
 
 namespace spmpc_local_planner {
 
-ContinuousMpccDirectOmegaLegacySolverAcados::ContinuousMpccDirectOmegaLegacySolverAcados() = default;
+struct ContinuousMpccDirectOmegaLegacySolverAcados::Impl {};
+
+ContinuousMpccDirectOmegaLegacySolverAcados::ContinuousMpccDirectOmegaLegacySolverAcados()
+    : impl_(new Impl()) {}
 ContinuousMpccDirectOmegaLegacySolverAcados::~ContinuousMpccDirectOmegaLegacySolverAcados() = default;
 
-void ContinuousMpccDirectOmegaLegacySolverAcados::configure(
+SolverConfigureResult ContinuousMpccDirectOmegaLegacySolverAcados::configure(
     const SolverParams& params,
     const VariantConfig& variant) {
     params_ = params;
     variant_ = variant;
     use_slosh_model_ = variant.slosh_enable;
     have_u_prev_ = false;
+    SolverConfigureResult result;
+    result.status = "ACADOS_LEGACY_NOT_IMPLEMENTED";
+    result.detail = "package was built without the generated legacy acados solver";
+    return result;
 }
 
 bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <exception>
 
 namespace spmpc_local_planner {
 namespace {
@@ -42,12 +43,26 @@ bool sameReferencePath(const ReferencePath& a, const ReferencePath& b) {
 
 SpmpcProblem::SpmpcProblem() = default;
 
-void SpmpcProblem::configure(const SolverParams& solver_params, const VariantConfig& variant) {
+SolverConfigureResult SpmpcProblem::configure(
+    const SolverParams& solver_params,
+    const VariantConfig& variant) {
     solver_params_ = solver_params;
     terminal_controller_.setParams(solver_params_.terminal);
     start_lock_recovery_.setParams(solver_params_.start_lock_recovery);
-    solver_ = makeSolver(solver_params_.solver_backend);
-    solver_->configure(solver_params_, variant);
+    try {
+        solver_ = makeSolver(solver_params_.solver_backend);
+    } catch (const std::exception& error) {
+        SolverConfigureResult result;
+        result.status = "SOLVER_FACTORY_FAILED";
+        result.detail = error.what();
+        return result;
+    }
+    if (!solver_) {
+        SolverConfigureResult result;
+        result.status = "SOLVER_FACTORY_RETURNED_NULL";
+        return result;
+    }
+    return solver_->configure(solver_params_, variant);
 }
 
 void SpmpcProblem::setReferencePath(const ReferencePath& reference) {

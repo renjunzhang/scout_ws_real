@@ -141,10 +141,18 @@ std::vector<std::pair<int, double>> makeGuidanceBiases(const SolverParams& param
 
 }  // namespace
 
-void RolloutSamplingSolver::configure(const SolverParams& params, const VariantConfig& variant) {
+SolverConfigureResult RolloutSamplingSolver::configure(
+    const SolverParams& params,
+    const VariantConfig& variant) {
     params_ = params;
     variant_ = variant;
-    slosh_dynamics_.configure(params_.slosh);
+    const bool slosh_configured = slosh_dynamics_.configure(params_.slosh);
+    SolverConfigureResult result;
+    result.success = !variant_.slosh_enable || slosh_configured;
+    result.status = result.success
+        ? "ROLLOUT_CONFIGURED"
+        : "ROLLOUT_SLOSH_DYNAMICS_CONFIG_FAILED";
+    return result;
 }
 
 bool RolloutSamplingSolver::solve(

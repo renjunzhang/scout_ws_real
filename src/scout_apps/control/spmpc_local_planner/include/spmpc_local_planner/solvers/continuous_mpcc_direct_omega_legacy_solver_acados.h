@@ -16,16 +16,20 @@ public:
     ContinuousMpccDirectOmegaLegacySolverAcados();
     ~ContinuousMpccDirectOmegaLegacySolverAcados() override;
 
-    void configure(const SolverParams& params, const VariantConfig& variant) override;
+    SolverConfigureResult configure(
+        const SolverParams& params,
+        const VariantConfig& variant) override;
     bool solve(const SolverInput& input, const ReferencePath& reference, SolverOutput& output) const override;
 
 private:
+    struct Impl;
+
     SolverParams params_;
     VariantConfig variant_;
     SloshDynamics slosh_dyn_;             // 与 primitive / 主线共用的液体物理核
     bool use_slosh_model_ = false;        // variant.slosh_enable -> 接 b0(5D) 还是 slosh(9D)
 
-    void* capsule_ = nullptr;
+    std::unique_ptr<Impl> impl_;
     mutable double u_prev_[3] = {0.0, 0.0, 0.0};  // 上周期下发控制 [a, omega, v_s]
     mutable bool have_u_prev_ = false;
 };

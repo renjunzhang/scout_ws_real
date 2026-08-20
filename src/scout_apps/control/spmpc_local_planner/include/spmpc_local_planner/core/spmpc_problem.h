@@ -12,7 +12,8 @@ class SpmpcProblem : public SolverSession {
 public:
     SpmpcProblem();
 
-    void configure(const SolverParams& solver_params, const VariantConfig& variant);
+    SolverConfigureResult configure(const SolverParams& solver_params,
+                                    const VariantConfig& variant);
     void setReferencePath(const ReferencePath& reference);
     void setCostmap(const CostmapGrid& costmap);
     bool hasReferencePath() const { return !reference_.empty(); }
