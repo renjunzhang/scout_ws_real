@@ -2,6 +2,11 @@
 
 本目录只放 SPMPC 自研 planner 的实物辅助、pilot/smoke、录包和实验编排入口。离线分析已迁到 `../tools/analysis/`，acados codegen 已迁到 `../tools/codegen/acados/`，Python 回归测试位于 `../test/python/`。这些目录均不进入运行时安装空间。除 `run_external_baseline_real_fixed_path_trial.sh` 外，其他脚本都服务于 `spmpc_local_planner` 本身。
 
+实物运动前的 RealSense 时间戳放行门现为 C++ executable
+`spmpc_realsense_timestamp_health_gate`。G3R2 runner 直接执行构建产物并把二进制
+SHA-256 绑定到 prereg/runtime bundle。历史 Python 实现在
+`../tools/legacy/validate_realsense_timestamp_health.py`，只用于旧报告复核，不能放行新运行。
+
 当前候选协议已经升级为 `SMPCC-REAL-40-64-88-v2.0`，但尚未冻结；所有 Stage I/II formal trial 均为 `NO-GO`。本目录现有 validator、template 及若干 runner 仍带 `SMPCC-REAL-40-88-v1.0`/E2/E3 语义，旧 validator 的 PASS 不具有 v2.0 放行权。下表中的“正式链”仅表示未来完成 v2.0 升级后拟承担的角色；在只读 `freeze_manifest.yaml`、唯一 `FREEZE_ID`、新随机表、完整 G0--G6 报告链和 upgraded validator 同时存在前，任何脚本都不能直接产生 v2.0 formal 数据。其余脚本只用于开发、仿真、pilot、历史复现或诊断。
 
 | 脚本 | 用途 | 协议角色 |

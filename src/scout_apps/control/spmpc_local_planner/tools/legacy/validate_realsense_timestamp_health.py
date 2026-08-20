@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Fail-closed pre-motion health gate for a stamped RealSense ROS topic."""
+"""Archived Python timestamp gate retained for historical report replay.
+
+Active pre-motion runners use the C++
+``spmpc_realsense_timestamp_health_gate`` executable.  This file is not a
+runtime release gate and must not be wired back into motion scripts.
+"""
 
 import argparse
 import json
