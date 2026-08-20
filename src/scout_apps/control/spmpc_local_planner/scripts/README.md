@@ -38,8 +38,16 @@ SHA-256 绑定到 prereg/runtime bundle。历史 Python 实现在
 配套目录用途：
 
 - `../tools/codegen/acados/generate_spmpc_acados.py` 负责模型检查和求解器代码生成；同目录的模型、代价和约束文件是其装配模块，不单独运行；
+- `../tools/analysis/horizon_liquid_replay.py` 保留原有 Python dataclass/API，但液体视界、observer 和 planned-control 回放已统一调用 C++ `spmpc_analysis_replay`；运行依赖该工作区先构建 `spmpc_analysis_replay_c_api`。两个 analysis library 只服务源码树离线分析，不进入 `catkin_package` 或机器人 runtime install；
 - `../tools/analysis/estimate_cmd_odom_delay.py` 是早期 cmd/odom 互相关与绘图工具，当前优先使用本目录的 `analyze_spmpc_delay_phase.py`；
 - `../test/python/` 保存 analysis、summary、artifact 和 freeze validator 的回归测试。
+
+只构建液体回放 C ABI 的命令为：
+
+```bash
+cd /home/a/scout_ws
+catkin_make spmpc_analysis_replay_c_api -j2
+```
 
 ## generate_phase_rejoin_development_nominal.py
 

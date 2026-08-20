@@ -1,61 +1,50 @@
 #!/usr/bin/env python3
-"""Pure numerical kernels for liquid-horizon and observer replay.
+"""Typed Python facade for the shared C++ liquid/observer replay core.
 
-This module intentionally has no ROS imports, filesystem access, logging, or
-global mutable state.  It provides four small, independently testable pieces:
-
-* cubic-Hermite interpolation of ``q = [eta_x, eta_x_dot, eta_y, eta_y_dot]``;
-* an exact zero-order-hold step of the forced two-axis modal oscillator;
-* strict replay of accepted observer inputs from an already-updated ``q0``;
-* high-accuracy replay of piecewise-constant planned ``a/alpha`` controls while
-  integrating ``v`` and ``omega`` continuously with RK4.
-
-The observer replay contract is deliberately explicit.  ``ObserverAnchor.q``
-is the state *after* the input identified by the anchor's ``update_count`` has
-already been consumed.  If that same sample is included as the first replay
-sample, it is recognized as one anchor echo and skipped.  It is never applied
-twice.  Subsequent samples must have strictly increasing state stamps and
-consecutive update counts within one reset epoch.
-
-All times used by the observer API are integer nanoseconds except
-``sample_dt_sec``.  This avoids losing ordering precision when ROS epoch-sized
-timestamps are converted to floating point.  Planned-horizon times are relative
-seconds and do not carry any ROS clock semantics.
+The public dataclasses and functions remain import-compatible with the former
+pure-Python implementation. Numerical propagation and contract validation are
+owned by ``spmpc_analysis_replay`` and reached through its narrow C ABI. Build
+``spmpc_analysis_replay_c_api`` before running analyses that import this module.
+Neither analysis library is part of the robot runtime installation.
 """
 
 from __future__ import annotations
 
-import bisect
-import math
+import ctypes
 from dataclasses import dataclass
+import math
+import os
+from pathlib import Path
+import shutil
 from typing import Optional, Sequence, Tuple
 
 
-DEFAULT_PLANNED_RK4_SUBSTEP_SEC = 1.0 / 300.0  # 3.333... ms
+DEFAULT_PLANNED_RK4_SUBSTEP_SEC = 1.0 / 300.0
+_ERROR_CAPACITY = 1024
 
 
 class ReplayContractError(ValueError):
-    """Raised when replay inputs violate their declared temporal contract."""
+    """Raised when the shared C++ core rejects a replay contract."""
 
 
 def _finite(name: str, value: float) -> float:
     result = float(value)
     if not math.isfinite(result):
-        raise ReplayContractError("{} must be finite".format(name))
+        raise ReplayContractError(f"{name} must be finite")
     return result
 
 
 def _nonnegative_int(name: str, value: int) -> int:
     result = int(value)
     if result < 0 or result != value:
-        raise ReplayContractError("{} must be a nonnegative integer".format(name))
+        raise ReplayContractError(f"{name} must be a nonnegative integer")
+    if result > (1 << 64) - 1:
+        raise ReplayContractError(f"{name} exceeds uint64")
     return result
 
 
 @dataclass(frozen=True)
 class ModalState:
-    """Two independent first-mode liquid coordinates and their derivatives."""
-
     eta_x: float = 0.0
     eta_x_dot: float = 0.0
     eta_y: float = 0.0
@@ -77,13 +66,6 @@ class ModalState:
 
 @dataclass(frozen=True)
 class ModalParameters:
-    """Continuous modal parameters shared by observer and planned replay.
-
-    The per-axis dynamics are
-
-    ``eta_ddot + two_zeta_omega_n * eta_dot + omega_n_sq * eta = -kappa * a``.
-    """
-
     two_zeta_omega_n: float
     omega_n_sq: float
     kappa_x: float = 1.0
@@ -100,171 +82,8 @@ class ModalParameters:
             raise ReplayContractError("omega_n_sq must be positive")
 
 
-def cubic_hermite_q(
-    left: ModalState,
-    right: ModalState,
-    tau_sec: float,
-    interval_sec: float,
-) -> ModalState:
-    """Interpolate modal position and velocity between two state nodes.
-
-    ``tau_sec`` is measured from ``left`` and must lie in the closed interval
-    ``[0, interval_sec]``.  The endpoint modal velocities are used as Hermite
-    derivatives, so both position and velocity are reproduced exactly at each
-    node.  The function does not silently clamp an out-of-range query.
-    """
-
-    duration = _finite("interval_sec", interval_sec)
-    tau = _finite("tau_sec", tau_sec)
-    if duration <= 0.0:
-        raise ReplayContractError("interval_sec must be positive")
-    tolerance = 1.0e-12 * max(1.0, duration)
-    if tau < -tolerance or tau > duration + tolerance:
-        raise ReplayContractError("tau_sec lies outside the Hermite interval")
-    tau = min(duration, max(0.0, tau))
-    s = tau / duration
-    s2 = s * s
-    s3 = s2 * s
-
-    h00 = 2.0 * s3 - 3.0 * s2 + 1.0
-    h10 = s3 - 2.0 * s2 + s
-    h01 = -2.0 * s3 + 3.0 * s2
-    h11 = s3 - s2
-    dh00 = (6.0 * s2 - 6.0 * s) / duration
-    dh10 = 3.0 * s2 - 4.0 * s + 1.0
-    dh01 = (-6.0 * s2 + 6.0 * s) / duration
-    dh11 = 3.0 * s2 - 2.0 * s
-
-    def interpolate_axis(p0: float, v0: float, p1: float, v1: float) -> Tuple[float, float]:
-        position = h00 * p0 + h10 * duration * v0 + h01 * p1 + h11 * duration * v1
-        velocity = dh00 * p0 + dh10 * v0 + dh01 * p1 + dh11 * v1
-        return position, velocity
-
-    eta_x, eta_x_dot = interpolate_axis(
-        left.eta_x, left.eta_x_dot, right.eta_x, right.eta_x_dot
-    )
-    eta_y, eta_y_dot = interpolate_axis(
-        left.eta_y, left.eta_y_dot, right.eta_y, right.eta_y_dot
-    )
-    return ModalState(eta_x, eta_x_dot, eta_y, eta_y_dot)
-
-
-def sample_cubic_hermite_nodes(
-    nodes: Sequence[ModalState], node_dt_sec: float, query_sec: float
-) -> ModalState:
-    """Sample a uniform modal-node sequence without clamping its time range."""
-
-    if not nodes:
-        raise ReplayContractError("nodes must not be empty")
-    dt = _finite("node_dt_sec", node_dt_sec)
-    query = _finite("query_sec", query_sec)
-    if dt <= 0.0:
-        raise ReplayContractError("node_dt_sec must be positive")
-    duration = float(len(nodes) - 1) * dt
-    tolerance = 1.0e-12 * max(1.0, duration)
-    if query < -tolerance or query > duration + tolerance:
-        raise ReplayContractError("query_sec lies outside the node horizon")
-    query = min(duration, max(0.0, query))
-    if len(nodes) == 1 or query == duration:
-        return nodes[-1]
-    lower = min(len(nodes) - 2, int(math.floor(query / dt)))
-    return cubic_hermite_q(nodes[lower], nodes[lower + 1], query - lower * dt, dt)
-
-
-def _homogeneous_transition(
-    duration_sec: float, damping: float, stiffness: float
-) -> Tuple[float, float, float, float]:
-    """Return exp(A*dt) for A=[[0,1],[-stiffness,-damping]]."""
-
-    duration = float(duration_sec)
-    half_damping = 0.5 * damping
-    discriminant = stiffness - half_damping * half_damping
-    scale = max(1.0, stiffness, half_damping * half_damping)
-    critical_tolerance = 1.0e-12 * scale
-
-    if discriminant > critical_tolerance:
-        omega_d = math.sqrt(discriminant)
-        decay = math.exp(-half_damping * duration)
-        cosine = math.cos(omega_d * duration)
-        sine_over_omega = math.sin(omega_d * duration) / omega_d
-        common = decay * sine_over_omega
-        cosine_term = decay * cosine
-        return (
-            cosine_term + half_damping * common,
-            common,
-            -stiffness * common,
-            cosine_term - half_damping * common,
-        )
-
-    if discriminant < -critical_tolerance:
-        rate = math.sqrt(-discriminant)
-        # This form avoids overflow from exp(-a*t)*cosh(rate*t).
-        slow = math.exp((-half_damping + rate) * duration)
-        fast = math.exp((-half_damping - rate) * duration)
-        cosine_term = 0.5 * (slow + fast)
-        sine_over_rate = 0.5 * (slow - fast) / rate
-        return (
-            cosine_term + half_damping * sine_over_rate,
-            sine_over_rate,
-            -stiffness * sine_over_rate,
-            cosine_term - half_damping * sine_over_rate,
-        )
-
-    decay = math.exp(-half_damping * duration)
-    return (
-        decay * (1.0 + half_damping * duration),
-        decay * duration,
-        -decay * stiffness * duration,
-        decay * (1.0 - half_damping * duration),
-    )
-
-
-def exact_zoh_forced_modal_step(
-    state: ModalState,
-    ax: float,
-    ay: float,
-    dt_sec: float,
-    parameters: ModalParameters,
-) -> ModalState:
-    """Advance both modal axes exactly for constant acceleration inputs.
-
-    This is the analytical zero-order-hold solution of the continuous linear
-    oscillator, not an Euler or RK approximation.  It supports underdamped,
-    critically damped, and overdamped parameters.  A zero duration returns the
-    input state unchanged.
-    """
-
-    duration = _finite("dt_sec", dt_sec)
-    input_x = _finite("ax", ax)
-    input_y = _finite("ay", ay)
-    if duration < 0.0:
-        raise ReplayContractError("dt_sec must be nonnegative")
-    if duration == 0.0:
-        return state
-
-    damping = parameters.two_zeta_omega_n
-    stiffness = parameters.omega_n_sq
-    phi11, phi12, phi21, phi22 = _homogeneous_transition(
-        duration, damping, stiffness
-    )
-
-    def advance(position: float, velocity: float, excitation: float, gain: float) -> Tuple[float, float]:
-        equilibrium = -gain * excitation / stiffness
-        shifted = position - equilibrium
-        return (
-            equilibrium + phi11 * shifted + phi12 * velocity,
-            phi21 * shifted + phi22 * velocity,
-        )
-
-    eta_x, eta_x_dot = advance(state.eta_x, state.eta_x_dot, input_x, parameters.kappa_x)
-    eta_y, eta_y_dot = advance(state.eta_y, state.eta_y_dot, input_y, parameters.kappa_y)
-    return ModalState(eta_x, eta_x_dot, eta_y, eta_y_dot)
-
-
 @dataclass(frozen=True)
 class ObserverAnchor:
-    """An accepted observer state after ``update_count`` has been consumed."""
-
     state_stamp_ns: int
     update_count: int
     reset_epoch: int
@@ -278,8 +97,6 @@ class ObserverAnchor:
 
 @dataclass(frozen=True)
 class ObserverInputSample:
-    """One accepted processed-input event as published by the observer debug path."""
-
     state_stamp_ns: int
     sample_dt_sec: float
     update_count: int
@@ -299,8 +116,6 @@ class ObserverInputSample:
 
 @dataclass(frozen=True)
 class ObserverReplayPoint:
-    """One state in an observer replay trace."""
-
     state_stamp_ns: int
     update_count: int
     reset_epoch: int
@@ -313,162 +128,13 @@ class ObserverReplayPoint:
 
 @dataclass(frozen=True)
 class ObserverReplayResult:
-    """Strict observer replay trace and contract bookkeeping."""
-
     points: Tuple[ObserverReplayPoint, ...]
     skipped_anchor_echo: bool
     epoch_reset_count: int
 
 
-def replay_observer_inputs(
-    anchor: ObserverAnchor,
-    samples: Sequence[ObserverInputSample],
-    parameters: ModalParameters,
-    *,
-    state_dt_tolerance_sec: float = 1.0e-7,
-    allow_epoch_reset: bool = False,
-) -> ObserverReplayResult:
-    """Replay accepted observer inputs exactly from an already-updated anchor.
-
-    Within an epoch this function requires all of the following:
-
-    * input order is already strictly increasing; it is never silently sorted;
-    * ``update_count`` increments by exactly one;
-    * ``state_stamp`` increments by the published ``sample_dt_sec`` within the
-      caller-selected tolerance;
-    * an optional first event equal to the anchor is skipped exactly once, so
-      the input that produced ``q0`` cannot be applied twice.
-
-    Epoch changes fail closed by default.  With ``allow_epoch_reset=True``, the
-    software reset behavior is reproduced: the modal state is cleared before
-    the first accepted input in the new epoch, whose update count must be one.
-    The gap before that event is not required to equal its sample interval.
-    """
-
-    tolerance = _finite("state_dt_tolerance_sec", state_dt_tolerance_sec)
-    if tolerance < 0.0:
-        raise ReplayContractError("state_dt_tolerance_sec must be nonnegative")
-
-    points = [
-        ObserverReplayPoint(
-            anchor.state_stamp_ns,
-            anchor.update_count,
-            anchor.reset_epoch,
-            anchor.q,
-        )
-    ]
-    current_state = anchor.q
-    current_stamp = anchor.state_stamp_ns
-    current_count = anchor.update_count
-    current_epoch = anchor.reset_epoch
-    skipped_anchor_echo = False
-    reset_count = 0
-    applied_count = 0
-
-    for sample in samples:
-        is_anchor_echo = (
-            sample.state_stamp_ns == anchor.state_stamp_ns
-            and sample.update_count == anchor.update_count
-            and sample.reset_epoch == anchor.reset_epoch
-        )
-        if is_anchor_echo:
-            if applied_count != 0 or skipped_anchor_echo:
-                raise ReplayContractError("anchor input echo appears more than once or out of order")
-            skipped_anchor_echo = True
-            continue
-
-        if sample.reset_epoch < current_epoch:
-            raise ReplayContractError("observer reset_epoch moved backwards")
-
-        epoch_changed = sample.reset_epoch != current_epoch
-        if epoch_changed:
-            if not allow_epoch_reset:
-                raise ReplayContractError("observer reset_epoch changed during strict replay")
-            if sample.update_count != 1:
-                raise ReplayContractError("first input after an epoch reset must have update_count=1")
-            if sample.state_stamp_ns <= current_stamp:
-                raise ReplayContractError("state_stamp must increase across an epoch reset")
-            current_state = ModalState.zero()
-            current_epoch = sample.reset_epoch
-            reset_count += 1
-        else:
-            if sample.update_count != current_count + 1:
-                raise ReplayContractError(
-                    "observer update_count is not consecutive: {} after {}".format(
-                        sample.update_count, current_count
-                    )
-                )
-            if sample.state_stamp_ns <= current_stamp:
-                raise ReplayContractError("observer state_stamp is not strictly increasing")
-            stamp_dt = float(sample.state_stamp_ns - current_stamp) * 1.0e-9
-            if abs(stamp_dt - sample.sample_dt_sec) > tolerance:
-                raise ReplayContractError(
-                    "sample_dt_sec does not match the state_stamp increment: "
-                    "{:.12g} vs {:.12g}".format(sample.sample_dt_sec, stamp_dt)
-                )
-
-        current_state = exact_zoh_forced_modal_step(
-            current_state, sample.ax, sample.ay, sample.sample_dt_sec, parameters
-        )
-        current_stamp = sample.state_stamp_ns
-        current_count = sample.update_count
-        current_epoch = sample.reset_epoch
-        applied_count += 1
-        points.append(
-            ObserverReplayPoint(
-                current_stamp,
-                current_count,
-                current_epoch,
-                current_state,
-                sample.sample_dt_sec,
-                sample.ax,
-                sample.ay,
-                epoch_changed,
-            )
-        )
-
-    return ObserverReplayResult(tuple(points), skipped_anchor_echo, reset_count)
-
-
-def sample_observer_replay(
-    points: Sequence[ObserverReplayPoint],
-    query_stamp_ns: int,
-    parameters: ModalParameters,
-) -> ModalState:
-    """Sample a strict observer replay at an integer-nanosecond target.
-
-    An endpoint returns its already-updated state.  Between two endpoints, the
-    input attached to the right endpoint is applied to the left state for the
-    partial interval.  This matches the online software's ZOH convention; it
-    is a software-time reconstruction, not a claim about the acceleration's
-    physical effective phase.
-    """
-
-    if not points:
-        raise ReplayContractError("points must not be empty")
-    query = _nonnegative_int("query_stamp_ns", query_stamp_ns)
-    stamps = [point.state_stamp_ns for point in points]
-    if any(right <= left for left, right in zip(stamps, stamps[1:])):
-        raise ReplayContractError("observer replay points are not strictly ordered")
-    if query < stamps[0] or query > stamps[-1]:
-        raise ReplayContractError("query_stamp_ns lies outside the observer replay")
-    index = bisect.bisect_left(stamps, query)
-    if index < len(points) and stamps[index] == query:
-        return points[index].q
-    left = points[index - 1]
-    right = points[index]
-    if right.ax is None or right.ay is None:
-        raise ReplayContractError("right replay point has no applied input")
-    partial_dt = float(query - left.state_stamp_ns) * 1.0e-9
-    return exact_zoh_forced_modal_step(
-        left.q, right.ax, right.ay, partial_dt, parameters
-    )
-
-
 @dataclass(frozen=True)
 class PlannedControl:
-    """One interval of constant longitudinal acceleration and yaw acceleration."""
-
     a: float
     alpha: float
     duration_sec: float
@@ -482,8 +148,6 @@ class PlannedControl:
 
 @dataclass(frozen=True)
 class PlannedReplayPoint:
-    """Dense robot/modal state produced by planned-control RK4 replay."""
-
     time_sec: float
     v: float
     omega: float
@@ -491,30 +155,293 @@ class PlannedReplayPoint:
     control_index: int
 
 
-def _planned_derivative(
-    state: Tuple[float, float, float, float, float, float],
-    control: PlannedControl,
-    parameters: ModalParameters,
-) -> Tuple[float, float, float, float, float, float]:
-    v, omega, eta_x, eta_x_dot, eta_y, eta_y_dot = state
-    return (
-        control.a,
-        control.alpha,
-        eta_x_dot,
-        -parameters.two_zeta_omega_n * eta_x_dot
-        - parameters.omega_n_sq * eta_x
-        - parameters.kappa_x * control.a,
-        eta_y_dot,
-        -parameters.two_zeta_omega_n * eta_y_dot
-        - parameters.omega_n_sq * eta_y
-        - parameters.kappa_y * v * omega,
+class _CModalState(ctypes.Structure):
+    _fields_ = [
+        ("eta_x", ctypes.c_double),
+        ("eta_x_dot", ctypes.c_double),
+        ("eta_y", ctypes.c_double),
+        ("eta_y_dot", ctypes.c_double),
+    ]
+
+
+class _CModalParameters(ctypes.Structure):
+    _fields_ = [
+        ("two_zeta_omega_n", ctypes.c_double),
+        ("omega_n_sq", ctypes.c_double),
+        ("kappa_x", ctypes.c_double),
+        ("kappa_y", ctypes.c_double),
+    ]
+
+
+class _CObserverAnchor(ctypes.Structure):
+    _fields_ = [
+        ("state_stamp_ns", ctypes.c_uint64),
+        ("update_count", ctypes.c_uint64),
+        ("reset_epoch", ctypes.c_uint64),
+        ("state", _CModalState),
+    ]
+
+
+class _CObserverInput(ctypes.Structure):
+    _fields_ = [
+        ("state_stamp_ns", ctypes.c_uint64),
+        ("sample_dt_sec", ctypes.c_double),
+        ("update_count", ctypes.c_uint64),
+        ("reset_epoch", ctypes.c_uint64),
+        ("ax", ctypes.c_double),
+        ("ay", ctypes.c_double),
+    ]
+
+
+class _CObserverPoint(ctypes.Structure):
+    _fields_ = [
+        ("state_stamp_ns", ctypes.c_uint64),
+        ("update_count", ctypes.c_uint64),
+        ("reset_epoch", ctypes.c_uint64),
+        ("state", _CModalState),
+        ("has_input", ctypes.c_int),
+        ("sample_dt_sec", ctypes.c_double),
+        ("ax", ctypes.c_double),
+        ("ay", ctypes.c_double),
+        ("epoch_reset_applied", ctypes.c_int),
+    ]
+
+
+class _CPlannedControl(ctypes.Structure):
+    _fields_ = [
+        ("a", ctypes.c_double),
+        ("alpha", ctypes.c_double),
+        ("duration_sec", ctypes.c_double),
+    ]
+
+
+class _CPlannedPoint(ctypes.Structure):
+    _fields_ = [
+        ("time_sec", ctypes.c_double),
+        ("v", ctypes.c_double),
+        ("omega", ctypes.c_double),
+        ("state", _CModalState),
+        ("control_index", ctypes.c_int),
+    ]
+
+
+_LIBRARY = None
+
+
+def _library_path() -> Path:
+    configured = os.environ.get("SPMPC_ANALYSIS_REPLAY_C_API", "").strip()
+    candidates = []
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    discovered = shutil.which("libspmpc_analysis_replay_c_api.so")
+    if discovered:
+        candidates.append(Path(discovered))
+    for parent in Path(__file__).resolve().parents:
+        candidates.append(parent / "devel/lib/libspmpc_analysis_replay_c_api.so")
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate.resolve()
+    raise ReplayContractError(
+        "C++ replay library is unavailable; build spmpc_analysis_replay_c_api "
+        "or set SPMPC_ANALYSIS_REPLAY_C_API"
     )
 
 
-def _add_scaled(
-    left: Tuple[float, ...], right: Tuple[float, ...], scale: float
-) -> Tuple[float, ...]:
-    return tuple(a + scale * b for a, b in zip(left, right))
+def _configure_library(library):
+    state_p = ctypes.POINTER(_CModalState)
+    params_p = ctypes.POINTER(_CModalParameters)
+    char_p = ctypes.POINTER(ctypes.c_char)
+    observer_point_p = ctypes.POINTER(_CObserverPoint)
+    planned_point_p = ctypes.POINTER(_CPlannedPoint)
+    library.spmpc_modal_cubic_hermite.argtypes = [
+        state_p, state_p, ctypes.c_double, ctypes.c_double, state_p,
+        char_p, ctypes.c_size_t,
+    ]
+    library.spmpc_modal_sample_nodes.argtypes = [
+        state_p, ctypes.c_size_t, ctypes.c_double, ctypes.c_double, state_p,
+        char_p, ctypes.c_size_t,
+    ]
+    library.spmpc_modal_exact_zoh_step.argtypes = [
+        state_p, ctypes.c_double, ctypes.c_double, ctypes.c_double, params_p,
+        state_p, char_p, ctypes.c_size_t,
+    ]
+    library.spmpc_modal_replay_observer.argtypes = [
+        ctypes.POINTER(_CObserverAnchor), ctypes.POINTER(_CObserverInput),
+        ctypes.c_size_t, params_p, ctypes.c_double, ctypes.c_int,
+        observer_point_p, ctypes.c_size_t, ctypes.POINTER(ctypes.c_size_t),
+        ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_size_t),
+        char_p, ctypes.c_size_t,
+    ]
+    library.spmpc_modal_sample_observer.argtypes = [
+        observer_point_p, ctypes.c_size_t, ctypes.c_uint64, params_p, state_p,
+        char_p, ctypes.c_size_t,
+    ]
+    library.spmpc_modal_replay_planned.argtypes = [
+        state_p, ctypes.c_double, ctypes.c_double,
+        ctypes.POINTER(_CPlannedControl), ctypes.c_size_t, params_p,
+        ctypes.c_double, planned_point_p, ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t), char_p, ctypes.c_size_t,
+    ]
+    library.spmpc_modal_sample_planned.argtypes = [
+        planned_point_p, ctypes.c_size_t, ctypes.c_double, planned_point_p,
+        char_p, ctypes.c_size_t,
+    ]
+    for name in (
+        "spmpc_modal_cubic_hermite", "spmpc_modal_sample_nodes",
+        "spmpc_modal_exact_zoh_step", "spmpc_modal_replay_observer",
+        "spmpc_modal_sample_observer", "spmpc_modal_replay_planned",
+        "spmpc_modal_sample_planned",
+    ):
+        getattr(library, name).restype = ctypes.c_int
+    return library
+
+
+def _lib():
+    global _LIBRARY
+    if _LIBRARY is None:
+        try:
+            _LIBRARY = _configure_library(ctypes.CDLL(str(_library_path())))
+        except OSError as exc:
+            raise ReplayContractError("failed to load C++ replay library") from exc
+    return _LIBRARY
+
+
+def _c_state(state: ModalState) -> _CModalState:
+    return _CModalState(*state.as_tuple())
+
+
+def _state(state: _CModalState) -> ModalState:
+    return ModalState(state.eta_x, state.eta_x_dot, state.eta_y, state.eta_y_dot)
+
+
+def _c_parameters(parameters: ModalParameters) -> _CModalParameters:
+    return _CModalParameters(
+        parameters.two_zeta_omega_n, parameters.omega_n_sq,
+        parameters.kappa_x, parameters.kappa_y,
+    )
+
+
+def _check(code: int, error) -> None:
+    if code != 0:
+        detail = error.value.decode("utf-8", errors="replace")
+        raise ReplayContractError(detail or f"C++ replay failed with code {code}")
+
+
+def cubic_hermite_q(
+    left: ModalState, right: ModalState, tau_sec: float, interval_sec: float
+) -> ModalState:
+    c_left, c_right = _c_state(left), _c_state(right)
+    output, error = _CModalState(), ctypes.create_string_buffer(_ERROR_CAPACITY)
+    code = _lib().spmpc_modal_cubic_hermite(
+        ctypes.byref(c_left), ctypes.byref(c_right), float(tau_sec),
+        float(interval_sec), ctypes.byref(output), error, len(error)
+    )
+    _check(code, error)
+    return _state(output)
+
+
+def sample_cubic_hermite_nodes(
+    nodes: Sequence[ModalState], node_dt_sec: float, query_sec: float
+) -> ModalState:
+    values = (_CModalState * len(nodes))(*(_c_state(node) for node in nodes))
+    output, error = _CModalState(), ctypes.create_string_buffer(_ERROR_CAPACITY)
+    code = _lib().spmpc_modal_sample_nodes(
+        values, len(nodes), float(node_dt_sec), float(query_sec),
+        ctypes.byref(output), error, len(error)
+    )
+    _check(code, error)
+    return _state(output)
+
+
+def exact_zoh_forced_modal_step(
+    state: ModalState,
+    ax: float,
+    ay: float,
+    dt_sec: float,
+    parameters: ModalParameters,
+) -> ModalState:
+    c_state, c_parameters = _c_state(state), _c_parameters(parameters)
+    output, error = _CModalState(), ctypes.create_string_buffer(_ERROR_CAPACITY)
+    code = _lib().spmpc_modal_exact_zoh_step(
+        ctypes.byref(c_state), float(ax), float(ay), float(dt_sec),
+        ctypes.byref(c_parameters), ctypes.byref(output), error, len(error)
+    )
+    _check(code, error)
+    return _state(output)
+
+
+def replay_observer_inputs(
+    anchor: ObserverAnchor,
+    samples: Sequence[ObserverInputSample],
+    parameters: ModalParameters,
+    *,
+    state_dt_tolerance_sec: float = 1.0e-7,
+    allow_epoch_reset: bool = False,
+) -> ObserverReplayResult:
+    c_anchor = _CObserverAnchor(
+        anchor.state_stamp_ns, anchor.update_count, anchor.reset_epoch,
+        _c_state(anchor.q),
+    )
+    inputs = (_CObserverInput * len(samples))(*(
+        _CObserverInput(
+            sample.state_stamp_ns, sample.sample_dt_sec, sample.update_count,
+            sample.reset_epoch, sample.ax, sample.ay,
+        )
+        for sample in samples
+    ))
+    output = (_CObserverPoint * (len(samples) + 1))()
+    output_count, skipped, resets = ctypes.c_size_t(), ctypes.c_int(), ctypes.c_size_t()
+    c_parameters = _c_parameters(parameters)
+    error = ctypes.create_string_buffer(_ERROR_CAPACITY)
+    code = _lib().spmpc_modal_replay_observer(
+        ctypes.byref(c_anchor), inputs, len(samples), ctypes.byref(c_parameters),
+        float(state_dt_tolerance_sec), int(bool(allow_epoch_reset)), output,
+        len(output), ctypes.byref(output_count), ctypes.byref(skipped),
+        ctypes.byref(resets), error, len(error)
+    )
+    _check(code, error)
+    points = tuple(
+        ObserverReplayPoint(
+            point.state_stamp_ns, point.update_count, point.reset_epoch,
+            _state(point.state),
+            point.sample_dt_sec if point.has_input else None,
+            point.ax if point.has_input else None,
+            point.ay if point.has_input else None,
+            bool(point.epoch_reset_applied),
+        )
+        for point in output[:output_count.value]
+    )
+    return ObserverReplayResult(points, bool(skipped.value), resets.value)
+
+
+def _c_observer_points(points: Sequence[ObserverReplayPoint]):
+    return (_CObserverPoint * len(points))(*(
+        _CObserverPoint(
+            point.state_stamp_ns, point.update_count, point.reset_epoch,
+            _c_state(point.q), int(point.ax is not None and point.ay is not None),
+            0.0 if point.sample_dt_sec is None else point.sample_dt_sec,
+            0.0 if point.ax is None else point.ax,
+            0.0 if point.ay is None else point.ay,
+            int(point.epoch_reset_applied),
+        )
+        for point in points
+    ))
+
+
+def sample_observer_replay(
+    points: Sequence[ObserverReplayPoint],
+    query_stamp_ns: int,
+    parameters: ModalParameters,
+) -> ModalState:
+    query = _nonnegative_int("query_stamp_ns", query_stamp_ns)
+    c_points, c_parameters = _c_observer_points(points), _c_parameters(parameters)
+    output, error = _CModalState(), ctypes.create_string_buffer(_ERROR_CAPACITY)
+    code = _lib().spmpc_modal_sample_observer(
+        c_points, len(points), query, ctypes.byref(c_parameters),
+        ctypes.byref(output), error, len(error)
+    )
+    _check(code, error)
+    return _state(output)
 
 
 def replay_planned_controls(
@@ -526,114 +453,69 @@ def replay_planned_controls(
     *,
     max_substep_sec: float = DEFAULT_PLANNED_RK4_SUBSTEP_SEC,
 ) -> Tuple[PlannedReplayPoint, ...]:
-    """Replay a planned horizon with continuous robot/modal RK4 dynamics.
-
-    ``a`` and ``alpha`` are constant inside each control interval.  ``v`` and
-    ``omega`` remain states and therefore change continuously; lateral modal
-    forcing is evaluated as ``v(t) * omega(t)`` at every RK4 stage.  Each
-    interval is divided into equal steps no larger than ``max_substep_sec`` and
-    ends exactly on its declared boundary.  The default maximum step is
-    3.333... ms, one tenth of the current 30 Hz OCP interval.
-
-    The returned tuple includes the initial point with ``control_index=-1`` and
-    one point after every RK4 substep.  No wall-clock or ROS timestamp is
-    inferred; ``time_sec`` is relative to the horizon origin.
-    """
-
-    v0 = _finite("initial_v", initial_v)
-    omega0 = _finite("initial_omega", initial_omega)
-    max_step = _finite("max_substep_sec", max_substep_sec)
-    if max_step <= 0.0:
-        raise ReplayContractError("max_substep_sec must be positive")
-
-    state: Tuple[float, float, float, float, float, float] = (
-        v0,
-        omega0,
-        initial_q.eta_x,
-        initial_q.eta_x_dot,
-        initial_q.eta_y,
-        initial_q.eta_y_dot,
+    c_initial, c_parameters = _c_state(initial_q), _c_parameters(parameters)
+    c_controls = (_CPlannedControl * len(controls))(*(
+        _CPlannedControl(control.a, control.alpha, control.duration_sec)
+        for control in controls
+    ))
+    required = ctypes.c_size_t()
+    error = ctypes.create_string_buffer(_ERROR_CAPACITY)
+    code = _lib().spmpc_modal_replay_planned(
+        ctypes.byref(c_initial), float(initial_v), float(initial_omega),
+        c_controls, len(controls), ctypes.byref(c_parameters),
+        float(max_substep_sec), None, 0, ctypes.byref(required), error, len(error)
     )
-    elapsed = 0.0
-    output = [PlannedReplayPoint(0.0, v0, omega0, initial_q, -1)]
+    _check(code, error)
+    output = (_CPlannedPoint * required.value)()
+    error = ctypes.create_string_buffer(_ERROR_CAPACITY)
+    code = _lib().spmpc_modal_replay_planned(
+        ctypes.byref(c_initial), float(initial_v), float(initial_omega),
+        c_controls, len(controls), ctypes.byref(c_parameters),
+        float(max_substep_sec), output, len(output), ctypes.byref(required),
+        error, len(error)
+    )
+    _check(code, error)
+    return tuple(
+        PlannedReplayPoint(
+            point.time_sec, point.v, point.omega,
+            _state(point.state), point.control_index,
+        )
+        for point in output[:required.value]
+    )
 
-    for control_index, control in enumerate(controls):
-        step_count = max(1, int(math.ceil(control.duration_sec / max_step)))
-        step = control.duration_sec / float(step_count)
-        interval_end = elapsed + control.duration_sec
-        for substep_index in range(step_count):
-            k1 = _planned_derivative(state, control, parameters)
-            k2 = _planned_derivative(_add_scaled(state, k1, 0.5 * step), control, parameters)
-            k3 = _planned_derivative(_add_scaled(state, k2, 0.5 * step), control, parameters)
-            k4 = _planned_derivative(_add_scaled(state, k3, step), control, parameters)
-            state = tuple(
-                value
-                + step
-                * (slope1 + 2.0 * slope2 + 2.0 * slope3 + slope4)
-                / 6.0
-                for value, slope1, slope2, slope3, slope4 in zip(state, k1, k2, k3, k4)
-            )
-            elapsed = (
-                interval_end
-                if substep_index + 1 == step_count
-                else elapsed + step
-            )
-            q = ModalState(state[2], state[3], state[4], state[5])
-            output.append(
-                PlannedReplayPoint(elapsed, state[0], state[1], q, control_index)
-            )
 
-    return tuple(output)
+def _c_planned_points(points: Sequence[PlannedReplayPoint]):
+    return (_CPlannedPoint * len(points))(*(
+        _CPlannedPoint(
+            point.time_sec, point.v, point.omega,
+            _c_state(point.q), point.control_index,
+        )
+        for point in points
+    ))
 
 
 def sample_planned_replay(
     points: Sequence[PlannedReplayPoint], query_sec: float
 ) -> PlannedReplayPoint:
-    """Sample a dense planned replay, using modal cubic Hermite interpolation."""
-
-    if not points:
-        raise ReplayContractError("points must not be empty")
-    query = _finite("query_sec", query_sec)
-    stamps = [point.time_sec for point in points]
-    if any(right <= left for left, right in zip(stamps, stamps[1:])):
-        raise ReplayContractError("planned replay points are not strictly ordered")
-    tolerance = 1.0e-12 * max(1.0, stamps[-1])
-    if query < stamps[0] - tolerance or query > stamps[-1] + tolerance:
-        raise ReplayContractError("query_sec lies outside the planned replay")
-    query = min(stamps[-1], max(stamps[0], query))
-    index = bisect.bisect_left(stamps, query)
-    if index < len(points) and abs(stamps[index] - query) <= tolerance:
-        return points[index]
-    left = points[index - 1]
-    right = points[index]
-    interval = right.time_sec - left.time_sec
-    weight = (query - left.time_sec) / interval
-    q = cubic_hermite_q(left.q, right.q, query - left.time_sec, interval)
+    c_points = _c_planned_points(points)
+    output, error = _CPlannedPoint(), ctypes.create_string_buffer(_ERROR_CAPACITY)
+    code = _lib().spmpc_modal_sample_planned(
+        c_points, len(points), float(query_sec), ctypes.byref(output),
+        error, len(error)
+    )
+    _check(code, error)
     return PlannedReplayPoint(
-        query,
-        left.v + weight * (right.v - left.v),
-        left.omega + weight * (right.omega - left.omega),
-        q,
-        right.control_index,
+        output.time_sec, output.v, output.omega,
+        _state(output.state), output.control_index,
     )
 
 
 __all__ = (
     "DEFAULT_PLANNED_RK4_SUBSTEP_SEC",
-    "ModalParameters",
-    "ModalState",
-    "ObserverAnchor",
-    "ObserverInputSample",
-    "ObserverReplayPoint",
-    "ObserverReplayResult",
-    "PlannedControl",
-    "PlannedReplayPoint",
-    "ReplayContractError",
-    "cubic_hermite_q",
-    "exact_zoh_forced_modal_step",
-    "replay_observer_inputs",
-    "replay_planned_controls",
-    "sample_observer_replay",
-    "sample_cubic_hermite_nodes",
-    "sample_planned_replay",
+    "ModalParameters", "ModalState", "ObserverAnchor", "ObserverInputSample",
+    "ObserverReplayPoint", "ObserverReplayResult", "PlannedControl",
+    "PlannedReplayPoint", "ReplayContractError", "cubic_hermite_q",
+    "exact_zoh_forced_modal_step", "replay_observer_inputs",
+    "replay_planned_controls", "sample_observer_replay",
+    "sample_cubic_hermite_nodes", "sample_planned_replay",
 )

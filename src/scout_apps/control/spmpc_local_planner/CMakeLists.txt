@@ -140,6 +140,22 @@ add_library(spmpc_config
   src/core/variant_config.cpp
 )
 
+# Offline replay core and its narrow C ABI are source-tree analysis tools.
+# They are intentionally omitted from catkin_package and runtime installation.
+add_library(spmpc_analysis_replay
+  src/analysis/horizon_liquid_replay.cpp
+)
+target_link_libraries(spmpc_analysis_replay
+  spmpc_phase_rejoin
+)
+
+add_library(spmpc_analysis_replay_c_api
+  src/analysis/horizon_liquid_replay_c_api.cpp
+)
+target_link_libraries(spmpc_analysis_replay_c_api
+  spmpc_analysis_replay
+)
+
 add_library(spmpc_costmap
   src/core/costmap_grid.cpp
 )
@@ -558,6 +574,13 @@ if(CATKIN_ENABLE_TESTING)
       spmpc_phase_rejoin
     )
   endif()
+  catkin_add_gtest(test_horizon_liquid_replay
+    test/test_horizon_liquid_replay.cpp)
+  if(TARGET test_horizon_liquid_replay)
+    target_link_libraries(test_horizon_liquid_replay
+      spmpc_analysis_replay
+    )
+  endif()
   catkin_add_gtest(test_phase_rejoin test/test_phase_rejoin.cpp)
   if(TARGET test_phase_rejoin)
     target_link_libraries(test_phase_rejoin
@@ -724,6 +747,7 @@ install(TARGETS
 
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  PATTERN "analysis" EXCLUDE
   PATTERN "*legacy*" EXCLUDE
 )
 
