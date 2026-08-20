@@ -87,6 +87,7 @@ void ControlCycleEngine::resetForReference() {
     phase_rejoin_.resetProgress();
     speed_reference_.resetForReference();
     goal_reached_latched_ = false;
+    have_previous_shifted_plan_ = false;
 }
 
 bool ControlCycleEngine::phaseRejoinContractValid() const {
@@ -324,6 +325,37 @@ ControlCycleResult ControlCycleEngine::step(
         result.output.first_shot_debug.u0_a;
     result.telemetry.planned_ay =
         result.solver_input.robot.v * result.solver_input.robot.omega;
+    if (have_previous_shifted_plan_ &&
+        previous_plan_cycle_id_ + 1 == request.cycle_id) {
+        result.telemetry.previous_shifted_plan_available = true;
+        result.telemetry.previous_plan_cycle_id = previous_plan_cycle_id_;
+        result.telemetry.previous_shifted_plan_a = previous_shifted_plan_a_;
+        result.telemetry.previous_shifted_plan_alpha =
+            previous_shifted_plan_alpha_;
+        result.telemetry.replanned_minus_shifted_a =
+            result.telemetry.solver_u0_a - previous_shifted_plan_a_;
+        result.telemetry.replanned_minus_shifted_alpha =
+            result.telemetry.solver_u0_alpha - previous_shifted_plan_alpha_;
+    }
+    if (result.output.predicted_horizon.valid &&
+        result.output.predicted_horizon.controls.size() > 1) {
+        previous_plan_cycle_id_ = request.cycle_id;
+        previous_shifted_plan_a_ =
+            result.output.predicted_horizon.controls[1].a;
+        previous_shifted_plan_alpha_ =
+            result.output.predicted_horizon.controls[1].alpha_or_omega;
+        have_previous_shifted_plan_ = true;
+    } else {
+        have_previous_shifted_plan_ = false;
+    }
+    result.phase_debug = makePhaseRejoinDebug(
+        &result.phase_preparation,
+        result.have_phase_decision ? &result.phase_decision : nullptr);
+    if (result.safety.terminal_spin_blocked ||
+        result.safety.tracking_safety_blocked) {
+        result.phase_debug.status =
+            "SAFETY_OVERRIDE_" + result.output.status;
+    }
     result.telemetry.solver_command = result.solver_command;
     result.telemetry.terminal_command = result.terminal_command;
     result.telemetry.post_gate_command = result.decision.command;

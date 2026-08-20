@@ -15,6 +15,7 @@ struct SpeedReferenceControllerConfig {
     std::string profile_path;
     double profile_lookahead_m = 0.0;
     double variant_v_ref = 0.0;
+    double v_max = 0.0;
     bool slosh_variant_enabled = false;
     SloshModelParams slosh_model;
     SloshRiskGovernorParams slosh_governor;
@@ -31,6 +32,8 @@ struct SpeedReferenceEvaluation {
     bool has_v_ref_current = false;
     double v_ref_current = 0.0;
     std::string v_ref_status = "NOT_CONFIGURED";
+    bool effective_v_ref_valid = false;
+    double effective_v_ref = 0.0;
     SloshRiskGovernorOutput governor;
 };
 

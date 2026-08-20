@@ -172,10 +172,6 @@ private:
     double dt_ = 1.0 / 30.0;
     int horizon_steps_ = 60;
     std::uint64_t next_cycle_id_ = 0;
-    bool have_previous_shifted_plan_ = false;
-    std::uint64_t previous_plan_cycle_id_ = 0;
-    double previous_shifted_plan_a_ = 0.0;
-    double previous_shifted_plan_alpha_ = 0.0;
     // Declared last so the worker stops before any callback-owned state is
     // destroyed.  The explicit destructor also stops it before member teardown.
     std::unique_ptr<ros::AsyncSpinner> imu_spinner_;

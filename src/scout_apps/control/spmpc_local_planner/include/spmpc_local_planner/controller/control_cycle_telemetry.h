@@ -39,6 +39,12 @@ struct ControlCycleTelemetrySnapshot {
     double solver_u0_alpha = 0.0;
     double planned_ax = 0.0;
     double planned_ay = 0.0;
+    bool previous_shifted_plan_available = false;
+    std::uint64_t previous_plan_cycle_id = 0;
+    double previous_shifted_plan_a = 0.0;
+    double previous_shifted_plan_alpha = 0.0;
+    double replanned_minus_shifted_a = 0.0;
+    double replanned_minus_shifted_alpha = 0.0;
     VelocityCommand solver_command;
     VelocityCommand terminal_command;
     VelocityCommand post_gate_command;
@@ -169,6 +175,14 @@ inline void applyControlCycleTelemetry(
     audit.solver_u0_alpha = snapshot.solver_u0_alpha;
     audit.planned_ax = snapshot.planned_ax;
     audit.planned_ay = snapshot.planned_ay;
+    audit.previous_shifted_plan_available =
+        snapshot.previous_shifted_plan_available;
+    audit.previous_plan_cycle_id = snapshot.previous_plan_cycle_id;
+    audit.previous_shifted_plan_a = snapshot.previous_shifted_plan_a;
+    audit.previous_shifted_plan_alpha = snapshot.previous_shifted_plan_alpha;
+    audit.replanned_minus_shifted_a = snapshot.replanned_minus_shifted_a;
+    audit.replanned_minus_shifted_alpha =
+        snapshot.replanned_minus_shifted_alpha;
     audit.solver_cmd_v = snapshot.solver_command.linear;
     audit.solver_cmd_omega = snapshot.solver_command.angular;
     audit.terminal_cmd_v = snapshot.terminal_command.linear;

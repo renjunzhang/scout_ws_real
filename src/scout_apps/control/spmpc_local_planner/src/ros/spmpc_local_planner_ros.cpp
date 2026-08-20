@@ -463,6 +463,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     speed_reference_config.profile_lookahead_m =
         app_config_.map_vref.profile_lookahead_m;
     speed_reference_config.variant_v_ref = variant_.v_ref;
+    speed_reference_config.v_max = solver_params.v_max;
     speed_reference_config.slosh_variant_enabled = variant_.slosh_enable;
     speed_reference_config.slosh_model = solver_params.slosh;
     speed_reference_config.slosh_governor =
@@ -1099,10 +1100,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     diagnostics_.publishSloshGovernor(speed_reference.governor);
     // effective_config_.v_ref 是本周期 solver 将看到的速度参考：runtime/profile override 优先，
     // 并按 solver v_max 做同口径 clamp。必须在发布前更新，避免 /spmpc/debug/effective_config 滞后一拍。
-    const double requested_config_v_ref = input.has_v_ref_current ? input.v_ref_current : variant_.v_ref;
-    if (std::isfinite(requested_config_v_ref)) {
-        const double v_max = std::max(0.0, effective_config_.v_max);
-        effective_config_.v_ref = std::max(0.0, std::min(v_max, requested_config_v_ref));
+    if (speed_reference.effective_v_ref_valid) {
+        effective_config_.v_ref = speed_reference.effective_v_ref;
     }
     diagnostics_.publishEffectiveConfig(effective_config_);
 
@@ -1137,19 +1136,6 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         input_preparation.liquid_delay_compensation_applied;
     const bool solver_origin_at_execution_front =
         input_preparation.solver_origin_at_execution_front;
-
-    if (have_previous_shifted_plan_ &&
-        previous_plan_cycle_id_ + 1 == cycle_audit.timing.cycle_id) {
-        cycle_audit.previous_shifted_plan_available = true;
-        cycle_audit.previous_plan_cycle_id = previous_plan_cycle_id_;
-        cycle_audit.previous_shifted_plan_a = previous_shifted_plan_a_;
-        cycle_audit.previous_shifted_plan_alpha =
-            previous_shifted_plan_alpha_;
-    } else if (have_previous_shifted_plan_) {
-        // A gate/failure cycle broke the one-step shift.  Comparing against
-        // that stale horizon would overstate replanning overwrite.
-        have_previous_shifted_plan_ = false;
-    }
 
     cycle_audit.timing.solve_start_stamp_ns = static_cast<std::int64_t>(
         ros::Time::now().toNSec());
@@ -1192,19 +1178,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         liquid_delay_compensation_applied,
         slosh_height_coeff);
     applyControlCycleTelemetry(engine_result.telemetry, cycle_audit);
-    if (cycle_audit.previous_shifted_plan_available) {
-        cycle_audit.replanned_minus_shifted_a =
-            cycle_audit.solver_u0_a - cycle_audit.previous_shifted_plan_a;
-        cycle_audit.replanned_minus_shifted_alpha =
-            cycle_audit.solver_u0_alpha -
-            cycle_audit.previous_shifted_plan_alpha;
-    }
     CommandInterventionDebug intervention =
         makeCommandInterventionDebug(engine_result.telemetry);
-    const bool terminal_spin_blocked =
-        engine_result.telemetry.terminal_spin_blocked;
-    const bool tracking_safety_blocked =
-        engine_result.telemetry.tracking_safety_blocked;
     diagnostics_.publishStatus(output.status);
     // 诊断统一使用 solver 的实际液体输入：fixed_closed_loop 使用 rollout，
     // fixed_robot_only 则保留当前 observer 测量。
@@ -1228,34 +1203,13 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         output.solver_time_ms,
         robot_delay_compensation_applied || liquid_delay_compensation_applied);
     if (phase_rejoin_publish_diagnostics_) {
-        PhaseRejoinDebugData phase_debug =
-            control_cycle_engine_.makePhaseRejoinDebug(
-                &engine_result.phase_preparation,
-                engine_result.have_phase_decision
-                    ? &engine_result.phase_decision
-                    : nullptr);
-        if (terminal_spin_blocked || tracking_safety_blocked) {
-            phase_debug.status = "SAFETY_OVERRIDE_" + output.status;
-        }
         diagnostics_.publishPhaseRejoin(
-            phase_debug,
+            engine_result.phase_debug,
             cycle_audit.timing,
             problem_.referenceFrameId(),
             shadow_prediction_ptr);
     }
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
-
-    if (output.predicted_horizon.valid &&
-        output.predicted_horizon.controls.size() > 1) {
-        previous_plan_cycle_id_ = cycle_audit.timing.cycle_id;
-        previous_shifted_plan_a_ =
-            output.predicted_horizon.controls[1].a;
-        previous_shifted_plan_alpha_ =
-            output.predicted_horizon.controls[1].alpha_or_omega;
-        have_previous_shifted_plan_ = true;
-    } else {
-        have_previous_shifted_plan_ = false;
-    }
 
     if (!output.success) {
         publishZeroCommand(intervention, &cycle_audit);

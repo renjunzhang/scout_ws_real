@@ -19,6 +19,7 @@ std::string fixturePath(const std::string& name) {
 SpeedReferenceControllerConfig baseConfig() {
     SpeedReferenceControllerConfig config;
     config.variant_v_ref = 0.25;
+    config.v_max = 0.8;
     config.slosh_governor.enable = false;
     return config;
 }
@@ -59,7 +60,26 @@ TEST(SpeedReferenceController, RuntimeOverrideHasPriorityOverProfile) {
     EXPECT_TRUE(input.has_v_ref_current);
     EXPECT_DOUBLE_EQ(input.v_ref_current, 0.18);
     EXPECT_EQ(input.v_ref_status, "RUNTIME_OVERRIDE");
+    EXPECT_TRUE(evaluation.effective_v_ref_valid);
+    EXPECT_DOUBLE_EQ(evaluation.effective_v_ref, 0.18);
     EXPECT_EQ(evaluation.governor.status, "DISABLED");
+}
+
+TEST(SpeedReferenceController, EffectiveReferenceUsesSolverClampContract) {
+    SpeedReferenceController controller;
+    SpeedReferenceControllerConfig config = baseConfig();
+    config.runtime_override_enable = true;
+    config.runtime_override_mps = 1.5;
+    config.v_max = 0.6;
+    ASSERT_TRUE(controller.configure(config).governor_configured);
+
+    SolverInput input;
+    const SpeedReferenceEvaluation evaluation =
+        controller.apply(input.robot, input.slosh, input);
+
+    EXPECT_DOUBLE_EQ(input.v_ref_current, 1.5);
+    EXPECT_TRUE(evaluation.effective_v_ref_valid);
+    EXPECT_DOUBLE_EQ(evaluation.effective_v_ref, 0.6);
 }
 
 TEST(SpeedReferenceController, ProfileUsesCommittedProgressAndResetsPerReference) {

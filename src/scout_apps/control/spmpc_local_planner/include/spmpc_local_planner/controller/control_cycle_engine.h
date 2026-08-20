@@ -44,6 +44,7 @@ struct ControlCycleResult {
 
     PhaseRejoinPreparation phase_preparation;
     PhaseRejoinDecision phase_decision;
+    PhaseRejoinDebugData phase_debug;
     bool have_phase_decision = false;
     bool terminal_priority = false;
     bool terminal_controller_intervened = false;
@@ -104,6 +105,10 @@ private:
     SpeedReferenceController speed_reference_;
     PhaseRejoinParams phase_params_;
     bool goal_reached_latched_ = false;
+    bool have_previous_shifted_plan_ = false;
+    std::uint64_t previous_plan_cycle_id_ = 0;
+    double previous_shifted_plan_a_ = 0.0;
+    double previous_shifted_plan_alpha_ = 0.0;
 };
 
 }  // namespace spmpc_local_planner

@@ -1,5 +1,6 @@
 #include "spmpc_local_planner/controller/speed_reference_controller.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace spmpc_local_planner {
@@ -87,6 +88,14 @@ SpeedReferenceEvaluation SpeedReferenceController::apply(
     evaluation.has_v_ref_current = input.has_v_ref_current;
     evaluation.v_ref_current = input.v_ref_current;
     evaluation.v_ref_status = input.v_ref_status;
+    const double requested_v_ref = input.has_v_ref_current
+        ? input.v_ref_current
+        : config_.variant_v_ref;
+    if (std::isfinite(requested_v_ref)) {
+        evaluation.effective_v_ref_valid = true;
+        evaluation.effective_v_ref = std::max(
+            0.0, std::min(std::max(0.0, config_.v_max), requested_v_ref));
+    }
     return evaluation;
 }
 

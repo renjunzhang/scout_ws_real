@@ -179,6 +179,43 @@ TEST(ControlCycleEngineTest, SolverFailureProducesFailClosedDecision) {
     EXPECT_EQ("SOLVER_FAILED", result.output.status);
 }
 
+TEST(ControlCycleEngineTest, OwnsContiguousShiftedPlanAuditState) {
+    EngineFixture fixture;
+    fixture.solver.next_output.success = true;
+    fixture.solver.next_output.status = "OK";
+    fixture.solver.next_output.first_shot_debug.u0_a = 0.4;
+    fixture.solver.next_output.first_shot_debug.u0_alpha = -0.2;
+    fixture.solver.next_output.predicted_horizon.valid = true;
+    fixture.solver.next_output.predicted_horizon.controls.resize(2);
+    fixture.solver.next_output.predicted_horizon.controls[1].a = 0.3;
+    fixture.solver.next_output.predicted_horizon.controls[1].alpha_or_omega =
+        -0.1;
+    ControlCycleRequest request = fixture.request();
+    request.cycle_id = 10;
+    ControlCycleResult result = fixture.engine.step(request);
+    EXPECT_FALSE(result.telemetry.previous_shifted_plan_available);
+
+    fixture.solver.next_output.first_shot_debug.u0_a = 0.5;
+    fixture.solver.next_output.first_shot_debug.u0_alpha = 0.2;
+    request.cycle_id = 11;
+    result = fixture.engine.step(request);
+    EXPECT_TRUE(result.telemetry.previous_shifted_plan_available);
+    EXPECT_EQ(result.telemetry.previous_plan_cycle_id, 10u);
+    EXPECT_DOUBLE_EQ(result.telemetry.previous_shifted_plan_a, 0.3);
+    EXPECT_DOUBLE_EQ(result.telemetry.previous_shifted_plan_alpha, -0.1);
+    EXPECT_DOUBLE_EQ(result.telemetry.replanned_minus_shifted_a, 0.2);
+    EXPECT_DOUBLE_EQ(result.telemetry.replanned_minus_shifted_alpha, 0.3);
+
+    request.cycle_id = 13;
+    result = fixture.engine.step(request);
+    EXPECT_FALSE(result.telemetry.previous_shifted_plan_available);
+
+    fixture.engine.resetForReference();
+    request.cycle_id = 14;
+    result = fixture.engine.step(request);
+    EXPECT_FALSE(result.telemetry.previous_shifted_plan_available);
+}
+
 TEST(ControlCycleEngineTest, OwnsFinalLimiterAndExecutionContractStage) {
     EngineFixture fixture;
     CommandPipelineConfig pipeline;
@@ -278,6 +315,8 @@ TEST(ControlCycleEngineTest, SafetyOverridesTerminalAndSolverCandidates) {
     EXPECT_EQ(CommandSource::Safety, result.decision.source);
     EXPECT_EQ("TRACKING_UNSAFE_PROJECTION", result.output.status);
     EXPECT_DOUBLE_EQ(0.0, result.output.cmd_v);
+    EXPECT_EQ(result.phase_debug.status,
+              "SAFETY_OVERRIDE_TRACKING_UNSAFE_PROJECTION");
 }
 
 TEST(ControlCycleEngineTest, PhaseOffInjectsExplicitOffSolverContext) {
