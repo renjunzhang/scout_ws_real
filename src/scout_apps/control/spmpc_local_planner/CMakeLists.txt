@@ -97,7 +97,6 @@ set(SPMPC_PUBLIC_LIBRARIES
   spmpc_solver_api
   spmpc_solver_rollout
   spmpc_solver_acados
-  spmpc_solver_legacy
   spmpc_solver_factory
   spmpc_warm_start
 )
@@ -225,8 +224,13 @@ target_link_libraries(spmpc_solver_acados
   ${EIGEN3_LIBRARIES}
 )
 
-add_library(spmpc_solver_legacy
+# RouteB is retained for source-tree diagnostics, but it is an implementation
+# detail of the factory rather than a separately exported runtime library.
+add_library(spmpc_solver_legacy STATIC
   src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
+)
+set_target_properties(spmpc_solver_legacy PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
 )
 target_include_directories(spmpc_solver_legacy PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
@@ -508,8 +512,33 @@ install(TARGETS ${SPMPC_PUBLIC_LIBRARIES} spmpc_local_planner_node
 
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+  PATTERN "*legacy*" EXCLUDE
 )
 
-install(DIRECTORY config launch scripts
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+# Runtime share is deliberately allow-listed.  Python codegen, offline analysis,
+# experiment helpers and tests remain source-tree tools and must never leak into
+# a robot/install deployment.
+install(FILES
+  config/containers/tube_default.yaml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config/containers
+)
+install(FILES
+  config/experiments/fixed_path.yaml
+  config/experiments/point_to_point.yaml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config/experiments
+)
+install(FILES
+  config/planner/common.yaml
+  config/planner/variants.yaml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config/planner
+)
+install(FILES
+  config/platforms/scout_mini.yaml
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config/platforms
+)
+install(FILES
+  launch/spmpc_experiment.launch
+  launch/spmpc_fixed_path.launch
+  launch/spmpc_point_to_point.launch
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
 )
