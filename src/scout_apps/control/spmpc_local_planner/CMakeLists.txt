@@ -190,6 +190,7 @@ add_library(spmpc_runtime
   src/runtime/state_alignment.cpp
   src/runtime/execution_prediction/command_history_buffer.cpp
   src/runtime/execution_prediction/execution_state_predictor.cpp
+  src/runtime/timestamp_health_evaluator.cpp
 )
 target_link_libraries(spmpc_runtime
   spmpc_model
@@ -438,6 +439,22 @@ target_link_libraries(spmpc_local_planner_node
   ${catkin_LIBRARIES}
 )
 
+add_executable(spmpc_realsense_timestamp_health_gate
+  src/ros/realsense_timestamp_health_gate.cpp
+)
+add_dependencies(spmpc_realsense_timestamp_health_gate
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+)
+target_include_directories(spmpc_realsense_timestamp_health_gate PRIVATE
+  ${catkin_INCLUDE_DIRS}
+)
+target_link_libraries(spmpc_realsense_timestamp_health_gate
+  PRIVATE
+  spmpc_runtime
+  ${catkin_LIBRARIES}
+)
+
 if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_app_config test/test_app_config.cpp)
   if(TARGET test_app_config)
@@ -574,6 +591,13 @@ if(CATKIN_ENABLE_TESTING)
         SPMPC_BUILD_LEGACY_BACKEND)
     endif()
   endif()
+  catkin_add_gtest(test_timestamp_health_evaluator
+    test/test_timestamp_health_evaluator.cpp)
+  if(TARGET test_timestamp_health_evaluator)
+    target_link_libraries(test_timestamp_health_evaluator
+      spmpc_runtime
+    )
+  endif()
   catkin_add_gtest(test_acados_stage_parameter_builder
     test/test_acados_stage_parameter_builder.cpp)
   if(TARGET test_acados_stage_parameter_builder)
@@ -662,7 +686,10 @@ if(CATKIN_ENABLE_TESTING)
   endif()
 endif()
 
-install(TARGETS ${SPMPC_PUBLIC_LIBRARIES} spmpc_local_planner_node
+install(TARGETS
+  ${SPMPC_PUBLIC_LIBRARIES}
+  spmpc_local_planner_node
+  spmpc_realsense_timestamp_health_gate
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
