@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spmpc_local_planner/telemetry/solver_diagnostics.h"
+#include "spmpc_local_planner/core/start_lock_recovery_diagnostics.h"
 #include <string>
 
 namespace spmpc_local_planner {

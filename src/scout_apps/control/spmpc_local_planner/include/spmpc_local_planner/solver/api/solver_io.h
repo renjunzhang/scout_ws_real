@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/core/costmap_grid.h"
+#include "spmpc_local_planner/core/start_lock_recovery_diagnostics.h"
 #include "spmpc_local_planner/core/terminal_diagnostics.h"
 #include "spmpc_local_planner/domain/state.h"
 #include "spmpc_local_planner/phase_rejoin/types.h"
