@@ -6,6 +6,7 @@
 #include "spmpc_local_planner/reference/reference_spline.h"
 #include "spmpc_local_planner/solver/acados/stage_parameter_builder.h"
 #include "spmpc_local_planner/warm_start/warm_start_factory.h"
+#include "spmpc_local_planner/warm_start/warm_start_policy.h"
 #include "spmpc_parameter_manifest.h"
 
 #include "acados_solver_spmpc_b0.h"
@@ -621,206 +622,6 @@ void setAcadosWarmStart(GenSolver& gen, const WarmStartOutput& warm_start, bool 
     }
 }
 
-WarmStartInput makeWarmStartInput(const SolverInput& input,
-                                  const ReferencePath& reference,
-                                  const ReferenceSpline& spline,
-                                  double s0,
-                                  double len,
-                                  int n,
-                                  const SolverParams& params,
-                                  const SloshDynamics& slosh_dyn,
-                                  bool have_u_prev,
-                                  const double* u_prev) {
-    WarmStartInput warm_input;
-    warm_input.robot = input.robot;
-    warm_input.slosh = input.slosh;
-    warm_input.reference = &reference;
-    warm_input.spline = &spline;
-    warm_input.horizon_steps = n;
-    warm_input.dt = input.dt;
-    warm_input.s0 = s0;
-    warm_input.reference_length = len;
-    warm_input.platform = params.platform;
-    warm_input.slosh_params = params.slosh;
-    warm_input.slosh_dynamics = &slosh_dyn;
-    warm_input.bounds.v_max = params.v_max;
-    warm_input.bounds.omega_max = params.omega_max;
-    warm_input.bounds.a_max = params.a_max;
-    warm_input.bounds.omega_rate_max = params.alpha_max;
-    warm_input.bounds.v_s_max = params.v_max;
-    warm_input.config = params.warm_start;
-    warm_input.have_previous_control = have_u_prev;
-    if (have_u_prev && u_prev != nullptr) {
-        warm_input.previous_a = u_prev[0];
-        // Legacy field; alpha-state u_prev[1] is alpha, while the flatness generator does not consume previous_omega.
-        warm_input.previous_omega = input.robot.omega;
-        warm_input.previous_v_s = u_prev[2];
-    }
-    return warm_input;
-}
-
-bool isWarmStartFinite(const WarmStartOutput& warm_start) {
-    for (const auto& state : warm_start.states) {
-        if (!std::isfinite(state.px) || !std::isfinite(state.py) || !std::isfinite(state.theta) ||
-            !std::isfinite(state.v) || !std::isfinite(state.s) || !std::isfinite(state.omega) ||
-            !std::isfinite(state.eta_x) || !std::isfinite(state.eta_x_dot) ||
-            !std::isfinite(state.eta_y) || !std::isfinite(state.eta_y_dot)) {
-            return false;
-        }
-    }
-    for (const auto& control : warm_start.controls) {
-        if (!std::isfinite(control.a) || !std::isfinite(control.alpha) || !std::isfinite(control.v_s)) {
-            return false;
-        }
-    }
-    return true;
-}
-
-void stampWarmStartMetrics(WarmStartOutput& warm_start,
-                           const SolverParams& params,
-                           const SloshDynamics& slosh_dyn,
-                           bool slosh) {
-    for (const auto& state : warm_start.states) {
-        warm_start.diagnostics.max_v = std::max(warm_start.diagnostics.max_v, std::abs(state.v));
-        warm_start.diagnostics.max_omega = std::max(warm_start.diagnostics.max_omega, std::abs(state.omega));
-        warm_start.diagnostics.max_lateral_acc = std::max(
-            warm_start.diagnostics.max_lateral_acc, std::abs(state.v * state.omega));
-        if (slosh && slosh_dyn.configured()) {
-            SloshState ss;
-            ss.eta_x = state.eta_x; ss.eta_x_dot = state.eta_x_dot;
-            ss.eta_y = state.eta_y; ss.eta_y_dot = state.eta_y_dot;
-            warm_start.diagnostics.max_slosh_height_pred = std::max(
-                warm_start.diagnostics.max_slosh_height_pred, slosh_dyn.height(ss));
-        }
-        if (state.v < -1e-9 || state.v > params.v_max + 1e-9 ||
-            std::abs(state.omega) > params.omega_max + 1e-9) {
-            ++warm_start.diagnostics.bound_violation_count;
-        }
-    }
-    for (const auto& control : warm_start.controls) {
-        warm_start.diagnostics.max_a = std::max(warm_start.diagnostics.max_a, std::abs(control.a));
-        if (std::abs(control.a) > params.a_max + 1e-9 ||
-            std::abs(control.alpha) > params.alpha_max + 1e-9 ||
-            control.v_s < -1e-9 || control.v_s > params.v_max + 1e-9) {
-            ++warm_start.diagnostics.bound_violation_count;
-        }
-    }
-}
-
-WarmStartOutput makeShiftedPreviousWarmStart(const WarmStartOutput& previous,
-                                             const SolverInput& input,
-                                             double s0,
-                                             int n,
-                                             bool slosh,
-                                             const SolverParams& params,
-                                             const SloshDynamics& slosh_dyn) {
-    WarmStartOutput out;
-    out.diagnostics.used_previous_solution = true;
-    if (!previous.valid || previous.states.size() < static_cast<size_t>(n + 1) ||
-        previous.controls.size() < static_cast<size_t>(n)) {
-        out.fallback_reason = "NO_PREVIOUS_WARM_START";
-        out.diagnostics.failure_reason = out.fallback_reason;
-        return out;
-    }
-    if (previous.states.size() > 1 && std::abs(previous.states[1].s - s0) > std::max(0.5, 5.0 * params.v_max * input.dt)) {
-        out.fallback_reason = "PREVIOUS_WARM_START_PROGRESS_JUMP";
-        out.diagnostics.failure_reason = out.fallback_reason;
-        return out;
-    }
-
-    out.states.resize(n + 1);
-    out.controls.resize(n);
-    for (int k = 0; k <= n; ++k) {
-        out.states[k] = previous.states[std::min(k + 1, n)];
-        out.states[k].v = clampValue(out.states[k].v, 0.0, params.v_max);
-    }
-    for (int k = 0; k < n; ++k) {
-        out.controls[k] = previous.controls[std::min(k + 1, n - 1)];
-        out.controls[k].a = clampValue(out.controls[k].a, -params.a_max, params.a_max);
-        out.controls[k].alpha = clampValue(out.controls[k].alpha, -params.alpha_max, params.alpha_max);
-        out.controls[k].v_s = clampValue(out.controls[k].v_s, 0.0, params.v_max);
-    }
-
-    out.states[0].px = input.robot.x;
-    out.states[0].py = input.robot.y;
-    out.states[0].theta = input.robot.yaw;
-    out.states[0].v = clampValue(input.robot.v, 0.0, params.v_max);
-    out.states[0].s = s0;
-    out.states[0].omega = input.robot.omega;
-    if (slosh) {
-        out.states[0].eta_x = input.slosh.eta_x;
-        out.states[0].eta_x_dot = input.slosh.eta_x_dot;
-        out.states[0].eta_y = input.slosh.eta_y;
-        out.states[0].eta_y_dot = input.slosh.eta_y_dot;
-    }
-
-    out.valid = isWarmStartFinite(out);
-    out.diagnostics.warm_start_valid = out.valid;
-    if (!out.valid) {
-        out.fallback_reason = "PREVIOUS_WARM_START_NONFINITE";
-        out.diagnostics.failure_reason = out.fallback_reason;
-    }
-    stampWarmStartMetrics(out, params, slosh_dyn, slosh);
-    return out;
-}
-
-WarmStartOutput makeConservativeWarmStart(const WarmStartInput& warm_input,
-                                          const SolverParams& params,
-                                          const SloshDynamics& slosh_dyn,
-                                          bool slosh) {
-    WarmStartOutput out;
-    out.diagnostics.used_fallback = true;
-    if (warm_input.spline == nullptr || warm_input.spline->empty() || warm_input.horizon_steps <= 0) {
-        out.fallback_reason = "CONSERVATIVE_FALLBACK_NO_REFERENCE";
-        out.diagnostics.failure_reason = out.fallback_reason;
-        return out;
-    }
-    const int n = warm_input.horizon_steps;
-    out.states.resize(n + 1);
-    out.controls.resize(n);
-    const double v_seed = clampValue(0.25 * params.v_max, 0.0, params.v_max);
-    const double dt = std::max(1e-3, warm_input.dt);
-    for (int k = 0; k <= n; ++k) {
-        const double s = clampValue(warm_input.s0 + v_seed * warm_input.dt * k, warm_input.s0, warm_input.reference_length);
-        const ReferenceSample ref = warm_input.spline->sample(s);
-        out.states[k].px = (k == 0) ? warm_input.robot.x : ref.x;
-        out.states[k].py = (k == 0) ? warm_input.robot.y : ref.y;
-        out.states[k].theta = (k == 0) ? warm_input.robot.yaw : ref.psi;
-        out.states[k].v = (k == 0) ? clampValue(warm_input.robot.v, 0.0, params.v_max) : v_seed;
-        out.states[k].s = (k == 0) ? warm_input.s0 : s;
-        out.states[k].omega = (k == 0) ? warm_input.robot.omega
-                                       : clampValue(ref.kappa * out.states[k].v, -params.omega_max, params.omega_max);
-        if (k < n) {
-            out.controls[k].a = clampValue((v_seed - out.states[k].v) / dt, -params.a_max, params.a_max);
-            out.controls[k].alpha = 0.0;  // 保守初值：alpha 由优化器细化
-        }
-    }
-    for (int k = 0; k < n; ++k) {
-        const double ds = out.states[k + 1].s - out.states[k].s;
-        out.controls[k].v_s = clampValue(ds / dt, 0.0, params.v_max);
-    }
-    if (slosh) {
-        SloshState slosh_state = warm_input.slosh;
-        for (int k = 0; k <= n; ++k) {
-            out.states[k].eta_x = slosh_state.eta_x;
-            out.states[k].eta_x_dot = slosh_state.eta_x_dot;
-            out.states[k].eta_y = slosh_state.eta_y;
-            out.states[k].eta_y_dot = slosh_state.eta_y_dot;
-            if (k < n && slosh_dyn.configured()) {
-                slosh_state = slosh_dyn.step(slosh_state, out.controls[k].a, out.states[k].v * out.states[k].omega, out.states[k].omega);
-            }
-        }
-    }
-    out.valid = isWarmStartFinite(out);
-    out.diagnostics.warm_start_valid = out.valid;
-    if (!out.valid) {
-        out.fallback_reason = "CONSERVATIVE_FALLBACK_NONFINITE";
-        out.diagnostics.failure_reason = out.fallback_reason;
-    }
-    stampWarmStartMetrics(out, params, slosh_dyn, slosh);
-    return out;
-}
-
 }  // namespace
 
 struct ContinuousMpccSolverAcados::Impl {
@@ -1173,50 +974,39 @@ bool ContinuousMpccSolverAcados::solve(
 
     ocp_nlp_config* cfg = gen->config();
     ocp_nlp_dims* dims = gen->dims();
-    ocp_nlp_in* nlp_in = gen->in();
     ocp_nlp_out* nlp_out = gen->out();
-    WarmStartOutput warm_start;
-    bool warm_start_applied = false;
-    const bool warm_start_requested = params_.warm_start.enable || params_.warm_start_flatness_enable;
-    snapshot.warm_start_requested = warm_start_requested;
-    snapshot.warm_start_source = "CAPSULE_REUSE";
     if (have_previous_solution_) {
         copyWarmStartForSnapshot(
             previous_warm_start_solution_, c_h,
             snapshot.previous_solution_states,
             snapshot.previous_solution_controls);
     }
-    const WarmStartInput warm_input = makeWarmStartInput(
-        input, reference, spline, s0, len, n, params_, slosh_dyn_, have_u_prev_, u_prev_);
-    if (warm_start_requested && warm_start_generator_) {
-        WarmStartDiagnostics diagnostics;
-        warm_start_generator_->generate(warm_input, warm_start, diagnostics);
-        warm_start.diagnostics = diagnostics;
-        if (warm_start.valid) {
-            setAcadosWarmStart(*gen, warm_start, slosh);
-            warm_start_applied = true;
-            snapshot.warm_start_source = warm_start.diagnostics.used_flatness ?
-                "FLATNESS_GENERATOR" : "WARM_START_GENERATOR";
-        }
+
+    WarmStartPolicyInput warm_start_input;
+    warm_start_input.solver_input = &input;
+    warm_start_input.reference = &reference;
+    warm_start_input.spline = &spline;
+    warm_start_input.params = &params_;
+    warm_start_input.slosh_dynamics = &slosh_dyn_;
+    warm_start_input.generator = warm_start_generator_.get();
+    warm_start_input.previous_solution = have_previous_solution_
+        ? &previous_warm_start_solution_ : nullptr;
+    warm_start_input.progress_s = s0;
+    warm_start_input.reference_length = len;
+    warm_start_input.horizon_steps = n;
+    warm_start_input.slosh_enabled = slosh;
+    warm_start_input.have_previous_control = have_u_prev_;
+    warm_start_input.previous_control = {{
+        u_prev_[0], u_prev_[1], u_prev_[2]}};
+    WarmStartPolicyDecision warm_start_decision =
+        WarmStartPolicy::select(warm_start_input);
+    WarmStartOutput& warm_start = warm_start_decision.warm_start;
+    if (warm_start_decision.applied) {
+        setAcadosWarmStart(*gen, warm_start, slosh);
     }
-    if (warm_start_requested && !warm_start_applied && params_.warm_start.fallback_to_previous_solution && have_previous_solution_) {
-        warm_start = makeShiftedPreviousWarmStart(
-            previous_warm_start_solution_, input, s0, n, slosh, params_, slosh_dyn_);
-        if (warm_start.valid) {
-            setAcadosWarmStart(*gen, warm_start, slosh);
-            warm_start_applied = true;
-            snapshot.warm_start_source = "SHIFTED_PREVIOUS_SOLUTION";
-        }
-    }
-    if (warm_start_requested && !warm_start_applied && params_.warm_start.fallback_to_primitive) {
-        warm_start = makeConservativeWarmStart(warm_input, params_, slosh_dyn_, slosh);
-        if (warm_start.valid) {
-            setAcadosWarmStart(*gen, warm_start, slosh);
-            warm_start_applied = true;
-            snapshot.warm_start_source = "CONSERVATIVE_FALLBACK";
-        }
-    }
-    snapshot.warm_start_applied = warm_start_applied;
+    snapshot.warm_start_requested = warm_start_decision.requested;
+    snapshot.warm_start_applied = warm_start_decision.applied;
+    snapshot.warm_start_source = warm_start_decision.source;
     output.warm_start_diagnostics = warm_start.diagnostics;
     for (int k = 0; k < 3; ++k) {
         if (warm_start.valid && k < static_cast<int>(warm_start.states.size()) &&

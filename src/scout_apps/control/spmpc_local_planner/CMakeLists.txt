@@ -204,6 +204,7 @@ add_library(spmpc_warm_start
   src/warm_start/diff_drive_flatness_warm_start.cpp
   src/warm_start/mecanum_warm_start.cpp
   src/warm_start/warm_start_factory.cpp
+  src/warm_start/warm_start_policy.cpp
 )
 target_link_libraries(spmpc_warm_start
   spmpc_model
@@ -451,6 +452,12 @@ if(CATKIN_ENABLE_TESTING)
     target_link_libraries(test_diff_drive_flatness_warm_start
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_warm_start_policy test/test_warm_start_policy.cpp)
+  if(TARGET test_warm_start_policy)
+    target_link_libraries(test_warm_start_policy
+      spmpc_warm_start
     )
   endif()
   catkin_add_gtest(test_terminal_controller test/test_terminal_controller.cpp)
