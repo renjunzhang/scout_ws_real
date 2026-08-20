@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
+#include "spmpc_parameter_manifest.h"
 
 #include <gtest/gtest.h>
 
@@ -176,10 +177,27 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     EXPECT_EQ(first.predicted_horizon.states.size(), 61u);
     EXPECT_EQ(first.predicted_horizon.controls.size(), 60u);
     EXPECT_EQ(first.predicted_horizon.control_semantics, "alpha");
+    EXPECT_DOUBLE_EQ(first.generated_bounds.a_min,
+                     -acados_manifest::generated_bounds::kAMax);
+    EXPECT_DOUBLE_EQ(first.generated_bounds.a_max,
+                     acados_manifest::generated_bounds::kAMax);
+    EXPECT_DOUBLE_EQ(first.generated_bounds.alpha_min,
+                     -acados_manifest::generated_bounds::kAlphaMax);
+    EXPECT_DOUBLE_EQ(first.generated_bounds.alpha_max,
+                     acados_manifest::generated_bounds::kAlphaMax);
+    EXPECT_DOUBLE_EQ(first.generated_bounds.v_s_max,
+                     acados_manifest::generated_bounds::kVsMax);
+    EXPECT_DOUBLE_EQ(first.generated_bounds.v_max,
+                     acados_manifest::generated_bounds::kVMax);
+    EXPECT_DOUBLE_EQ(first.generated_bounds.omega_min,
+                     -acados_manifest::generated_bounds::kOmegaMax);
+    EXPECT_DOUBLE_EQ(first.generated_bounds.omega_max,
+                     acados_manifest::generated_bounds::kOmegaMax);
 
     ASSERT_TRUE(first.pre_solve_snapshot.valid);
     EXPECT_TRUE(first.pre_solve_snapshot.primal_guess_only);
-    EXPECT_EQ(first.pre_solve_snapshot.horizon_steps, 60);
+    EXPECT_EQ(first.pre_solve_snapshot.horizon_steps,
+              acados_manifest::generated_bounds::kMainHorizonSteps);
     EXPECT_EQ(first.pre_solve_snapshot.state_width, 10);
     EXPECT_EQ(first.pre_solve_snapshot.control_width, 3);
     EXPECT_EQ(first.pre_solve_snapshot.parameter_width, 23);

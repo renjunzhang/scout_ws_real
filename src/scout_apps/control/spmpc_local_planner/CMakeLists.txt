@@ -616,6 +616,9 @@ if(CATKIN_ENABLE_TESTING)
         ${${PROJECT_NAME}_EXPORTED_TARGETS}
         ${catkin_EXPORTED_TARGETS}
       )
+      target_include_directories(test_replay_diagnostics PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+      )
       target_link_libraries(test_replay_diagnostics
         ${PROJECT_NAME}
         ${catkin_LIBRARIES}

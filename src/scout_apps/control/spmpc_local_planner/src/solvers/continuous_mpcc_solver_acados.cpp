@@ -36,15 +36,36 @@ using namespace acados_manifest::mainline;
 // Python model is now the only handwritten parameter-layout source.
 static_assert(kB0ParameterCount == SPMPC_B0_NP,
               "B0 parameter manifest differs from generated solver");
+static_assert(kB0StateCount == SPMPC_B0_NX,
+              "B0 state manifest differs from generated solver");
+static_assert(kControlCount == SPMPC_B0_NU,
+              "B0 control manifest differs from generated solver");
+static_assert(acados_manifest::generated_bounds::kMainHorizonSteps ==
+                  SPMPC_B0_N,
+              "B0 horizon manifest differs from generated solver");
 #ifdef SPMPC_WITH_ACADOS_SLOSH
 static_assert(kSloshParameterCount == SPMPC_SLOSH_NP,
               "slosh/phase-rejoin 参数布局与生成的 spmpc_slosh 求解器不一致");
+static_assert(kSloshStateCount == SPMPC_SLOSH_NX,
+              "slosh state manifest differs from generated solver");
+static_assert(kControlCount == SPMPC_SLOSH_NU,
+              "slosh control manifest differs from generated solver");
+static_assert(acados_manifest::generated_bounds::kMainHorizonSteps ==
+                  SPMPC_SLOSH_N,
+              "slosh horizon manifest differs from generated solver");
 static_assert(SPMPC_SLOSH_NH == kSloshNonlinearConstraintCount,
               "spmpc_slosh 求解器必须同时包含 slosh cap 和 empirical recovery gate");
 #endif
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
 static_assert(kSloshParameterCount == SPMPC_PHASE_REJOIN_NP,
               "phase-rejoin 参数布局与生成的短时求解器不一致");
+static_assert(kSloshStateCount == SPMPC_PHASE_REJOIN_NX,
+              "phase-rejoin state manifest differs from generated solver");
+static_assert(kControlCount == SPMPC_PHASE_REJOIN_NU,
+              "phase-rejoin control manifest differs from generated solver");
+static_assert(acados_manifest::generated_bounds::kPhaseRejoinHorizonSteps ==
+                  SPMPC_PHASE_REJOIN_N,
+              "phase-rejoin horizon manifest differs from generated solver");
 static_assert(SPMPC_PHASE_REJOIN_NH == kSloshNonlinearConstraintCount,
               "phase-rejoin 求解器必须包含 liquid cap 与 terminal gate");
 #endif
@@ -397,17 +418,18 @@ SolverBoundSummary makeRuntimeBounds(const SolverParams& params) {
 }
 
 SolverBoundSummary makeGeneratedBounds() {
+    namespace generated = acados_manifest::generated_bounds;
     SolverBoundSummary bounds;
-    bounds.a_min = -0.6;
-    bounds.a_max = 0.6;
-    bounds.alpha_min = -1.2;
-    bounds.alpha_max = 1.2;
+    bounds.a_min = -generated::kAMax;
+    bounds.a_max = generated::kAMax;
+    bounds.alpha_min = -generated::kAlphaMax;
+    bounds.alpha_max = generated::kAlphaMax;
     bounds.v_s_min = 0.0;
-    bounds.v_s_max = 0.8;
+    bounds.v_s_max = generated::kVsMax;
     bounds.v_min = 0.0;
-    bounds.v_max = 0.8;
-    bounds.omega_min = -1.2;
-    bounds.omega_max = 1.2;
+    bounds.v_max = generated::kVMax;
+    bounds.omega_min = -generated::kOmegaMax;
+    bounds.omega_max = generated::kOmegaMax;
     return bounds;
 }
 
