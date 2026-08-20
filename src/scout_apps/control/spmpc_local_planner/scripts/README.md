@@ -22,6 +22,7 @@ SHA-256 绑定到 prereg/runtime bundle。历史 Python 实现在
 | `run_external_baseline_real_fixed_path_trial.sh` | LT-DWA、TEB、MPC 外部 baseline 的 shadow/actuated 实物运行 | 独立外部 baseline，不属于当前内部 88 单元 |
 | `record_spmpc_mainline_ground_smoke.sh` | 轻量地面 smoke recorder | smoke |
 | `record_spmpc_experiment.sh` | planner 已手动启动时的备用 recorder | 手动调试 |
+| `generate_phase_rejoin_development_nominal.py` | 从 bag 提取冻结 Path 后调用 C++ 生成动力学一致 v2 artifact | **仅 development interface smoke；不是 OfflineSloshOCP 或实物正式 artifact** |
 | `prepare_phase_rejoin_development_artifact.py` | 从严格配对的 rolling horizon/audit 离线导出 phase-rejoin 接口 artifact | **仅 development interface smoke；不是 OfflineSloshOCP 或实物正式 artifact** |
 | `run_continuous_real.sh` | 历史 continuous MPCC 实物一键运行 | 历史/开发，不是正式 runner |
 | `compare_b0_bslosh_smoke.sh` | B0/B_slosh 等内部 variant 仿真 smoke | 仿真 smoke |
@@ -39,6 +40,12 @@ SHA-256 绑定到 prereg/runtime bundle。历史 Python 实现在
 - `../tools/codegen/acados/generate_spmpc_acados.py` 负责模型检查和求解器代码生成；同目录的模型、代价和约束文件是其装配模块，不单独运行；
 - `../tools/analysis/estimate_cmd_odom_delay.py` 是早期 cmd/odom 互相关与绘图工具，当前优先使用本目录的 `analyze_spmpc_delay_phase.py`；
 - `../test/python/` 保存 analysis、summary、artifact 和 freeze validator 的回归测试。
+
+## generate_phase_rejoin_development_nominal.py
+
+该脚本保留原有 bag CLI，只负责只读提取 `/scout/global_path_fixed` 并写入临时 `x,y` CSV。`spmpc_phase_rejoin_development_nominal` 使用与运行时 artifact loader 相同的 C++ RK4 传播和 v2 合同完成路径清洗、速度规划、液体 settling、development-only 强标记、规范化及原子写入。C++ executable 属于 source-tree 离线工具，不进入机器人 runtime install。
+
+构建后仍可沿用原 Python 命令；若已有冻结路径 CSV，也可直接调用 C++ executable。两种入口都固定输出 `development_dynamics_consistent_nominal`，不得改标为 formal/hardware/paper 证据。
 
 ## prepare_phase_rejoin_development_artifact.py
 

@@ -99,7 +99,7 @@ roslaunch scout_global_planner mbf_global.launch
 
 该命令启动 MBF/GlobalPlanner 的规划服务，本身不替代本包的局部控制器。正式 trial 只使用它预先生成并保存的路径，不能在运行中把 MBF 新结果热切换给 Phase-Rejoin。
 
-当前仓库中的 `generate_phase_rejoin_development_nominal.py` 只会从冻结 Path 生成动力学一致的 development 名义序列。它不是 `OfflineSloshOCP`，不能用于实物 formal release 或论文主结果。
+当前仓库中的 `generate_phase_rejoin_development_nominal.py` 只负责从 bag 提取冻结 Path；路径清洗、速度曲线、车辆/液体 RK4、终端 settling、v2 schema 校验和原子写入均由无 ROS 的 C++ `spmpc_phase_rejoin_development_nominal` 完成。生成物仍只是动力学一致的 development 名义序列，不是 `OfflineSloshOCP`，不能用于实物 formal release 或论文主结果。
 
 ### 1.2 在线：执行前沿后的有限修正
 

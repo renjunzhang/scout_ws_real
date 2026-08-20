@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
+#include "spmpc_local_planner/phase_rejoin/nominal_dynamics.h"
 
 #include <cerrno>
 #include <cmath>
@@ -22,7 +23,7 @@ const char* const kSchemaV2 = "phase_rejoin_empirical_v2";
 const char* const kTerminalContractV1 = "stop_settle_zero_hold_v1";
 const char* const kRecoveryContractV1 = "nominal_command_v1";
 
-const std::map<std::string, std::string>& developmentOnlyMetadata() {
+const std::map<std::string, std::string>& developmentProxyMetadata() {
     static const std::map<std::string, std::string> expected = {
         {"schema", kSchemaV1},
         {"evidence_level", "development_only"},
@@ -42,6 +43,25 @@ const std::map<std::string, std::string>& developmentOnlyMetadata() {
         {"row_state_semantics",
          "predicted_horizon_stage0_at_solver_input_epoch"},
         {"row_command_semantics", "same_cycle_final_published_command"},
+    };
+    return expected;
+}
+
+const std::map<std::string, std::string>& developmentNominalMetadata() {
+    static const std::map<std::string, std::string> expected = {
+        {"schema", kSchemaV2},
+        {"evidence_level", "development_only"},
+        {"source", "development_dynamics_consistent_nominal"},
+        {"artifact_role", "interface_smoke_only"},
+        {"nominal_sequence_kind",
+         "uniform_dynamics_consistent_complete_tail"},
+        {"offline_slosh_ocp", "false"},
+        {"hardware_formal_release", "false"},
+        {"paper_main_result_eligible", "false"},
+        {"gate_evidence", "none_operator_supplied_development_radii"},
+        {"recovery_policy_source",
+         "nominal_next_command_development_fallback"},
+        {"recovery_policy_evidence", "none_development_only"},
     };
     return expected;
 }
@@ -142,101 +162,6 @@ NominalArtifactLoadResult failure(const std::string& status,
     return result;
 }
 
-struct AugmentedState {
-    double x = 0.0;
-    double y = 0.0;
-    double yaw = 0.0;
-    double v = 0.0;
-    double omega = 0.0;
-    double s = 0.0;
-    double eta_x = 0.0;
-    double eta_x_dot = 0.0;
-    double eta_y = 0.0;
-    double eta_y_dot = 0.0;
-};
-
-AugmentedState addScaled(const AugmentedState& state,
-                         const AugmentedState& derivative,
-                         double scale) {
-    AugmentedState out;
-    out.x = state.x + scale * derivative.x;
-    out.y = state.y + scale * derivative.y;
-    out.yaw = state.yaw + scale * derivative.yaw;
-    out.v = state.v + scale * derivative.v;
-    out.omega = state.omega + scale * derivative.omega;
-    out.s = state.s + scale * derivative.s;
-    out.eta_x = state.eta_x + scale * derivative.eta_x;
-    out.eta_x_dot = state.eta_x_dot + scale * derivative.eta_x_dot;
-    out.eta_y = state.eta_y + scale * derivative.eta_y;
-    out.eta_y_dot = state.eta_y_dot + scale * derivative.eta_y_dot;
-    return out;
-}
-
-AugmentedState derivative(const AugmentedState& state,
-                          const PhaseNominalSample& control,
-                          const NominalArtifactMetadata& metadata) {
-    AugmentedState out;
-    out.x = state.v * std::cos(state.yaw);
-    out.y = state.v * std::sin(state.yaw);
-    out.yaw = state.omega;
-    out.v = control.a;
-    out.omega = control.alpha;
-    out.s = control.v_s;
-    out.eta_x = state.eta_x_dot;
-    out.eta_x_dot =
-        -metadata.two_zeta_omega_n * state.eta_x_dot -
-        metadata.omega_n_sq * state.eta_x -
-        metadata.kappa_x * control.a;
-    out.eta_y = state.eta_y_dot;
-    out.eta_y_dot =
-        -metadata.two_zeta_omega_n * state.eta_y_dot -
-        metadata.omega_n_sq * state.eta_y -
-        metadata.kappa_y * state.v * state.omega;
-    return out;
-}
-
-AugmentedState rk4Step(const PhaseNominalSample& sample,
-                       const NominalArtifactMetadata& metadata) {
-    AugmentedState state;
-    state.x = sample.x;
-    state.y = sample.y;
-    state.yaw = sample.yaw;
-    state.v = sample.v;
-    state.omega = sample.omega;
-    state.s = sample.s;
-    state.eta_x = sample.eta_x;
-    state.eta_x_dot = sample.eta_x_dot;
-    state.eta_y = sample.eta_y;
-    state.eta_y_dot = sample.eta_y_dot;
-
-    const double half_dt = 0.5 * metadata.dt;
-    const AugmentedState k1 = derivative(state, sample, metadata);
-    const AugmentedState k2 = derivative(
-        addScaled(state, k1, half_dt), sample, metadata);
-    const AugmentedState k3 = derivative(
-        addScaled(state, k2, half_dt), sample, metadata);
-    const AugmentedState k4 = derivative(
-        addScaled(state, k3, metadata.dt), sample, metadata);
-
-    AugmentedState out = state;
-    const double scale = metadata.dt / 6.0;
-#define SPMPC_RK4_FIELD(field) \
-    out.field += scale * (k1.field + 2.0 * k2.field + \
-                          2.0 * k3.field + k4.field)
-    SPMPC_RK4_FIELD(x);
-    SPMPC_RK4_FIELD(y);
-    SPMPC_RK4_FIELD(yaw);
-    SPMPC_RK4_FIELD(v);
-    SPMPC_RK4_FIELD(omega);
-    SPMPC_RK4_FIELD(s);
-    SPMPC_RK4_FIELD(eta_x);
-    SPMPC_RK4_FIELD(eta_x_dot);
-    SPMPC_RK4_FIELD(eta_y);
-    SPMPC_RK4_FIELD(eta_y_dot);
-#undef SPMPC_RK4_FIELD
-    return out;
-}
-
 double angleError(double lhs, double rhs) {
     return std::atan2(std::sin(lhs - rhs), std::cos(lhs - rhs));
 }
@@ -252,7 +177,8 @@ NominalArtifactLoadResult validateV2Transitions(
     for (std::size_t i = 0; i + 1 < samples.size(); ++i) {
         const PhaseNominalSample& current = samples[i];
         const PhaseNominalSample& next = samples[i + 1];
-        const AugmentedState predicted = rk4Step(current, metadata);
+        const NominalDynamicsState predicted =
+            phaseNominalRk4Step(current, metadata);
         const bool state_consistent =
             within(predicted.x, next.x, tolerance) &&
             within(predicted.y, next.y, tolerance) &&
@@ -366,6 +292,7 @@ const std::vector<std::string>& canonicalMetadataOrder() {
         "recovery_policy_evidence", "bag_sha256",
         "development_parameter_sha256", "row_state_semantics",
         "row_command_semantics",
+        "source_bag_sha256", "path_topic", "max_nominal_path_deviation_m",
         "terminal_contract", "recovery_contract", "terminal_zero_hold_steps",
         "terminal_eta_norm_max", "terminal_eta_dot_norm_max",
         "two_zeta_omega_n", "omega_n_sq", "kappa_x", "kappa_y",
@@ -511,51 +438,80 @@ NominalArtifactLoadResult NominalSequenceArtifact::validateDevelopmentOnly()
     if (!valid_) {
         return failure("ARTIFACT_NOT_LOADED", path_);
     }
-    const char* required[] = {
-        "artifact_role", "nominal_sequence_kind", "offline_slosh_ocp",
-        "hardware_formal_release", "paper_main_result_eligible",
-        "cycle_id_first", "cycle_id_last", "cycle_count", "planner_variant",
-        "gate_parameter_source", "recovery_policy_source", "gate_evidence",
-        "recovery_policy_evidence", "bag_sha256",
-        "development_parameter_sha256", "row_state_semantics",
-        "row_command_semantics",
-    };
-    for (const char* key : required) {
-        if (metadata_entries_.count(key) == 0) {
-            return failure("MISSING_DEVELOPMENT_METADATA", key);
-        }
+    const bool proxy_profile =
+        metadata_.schema == kSchemaV1 &&
+        metadata_.source == "development_proxy_replay";
+    const bool nominal_profile =
+        metadata_.schema == kSchemaV2 &&
+        metadata_.source == "development_dynamics_consistent_nominal";
+    if (!proxy_profile && !nominal_profile) {
+        return failure("UNSUPPORTED_DEVELOPMENT_PROFILE", metadata_.source);
     }
-    for (const auto& expected : developmentOnlyMetadata()) {
+    const auto& expected_metadata = proxy_profile
+        ? developmentProxyMetadata()
+        : developmentNominalMetadata();
+    for (const auto& expected : expected_metadata) {
         const auto actual = metadata_entries_.find(expected.first);
         if (actual == metadata_entries_.end() ||
             actual->second != expected.second) {
             return failure("DEVELOPMENT_METADATA_MISMATCH", expected.first);
         }
     }
-    if (!isLowercaseSha256(metadata_entries_.at("bag_sha256"))) {
-        return failure("INVALID_SHA256", "bag_sha256");
-    }
-    if (!isLowercaseSha256(
-            metadata_entries_.at("development_parameter_sha256"))) {
-        return failure("INVALID_SHA256", "development_parameter_sha256");
-    }
-    std::size_t first_cycle = 0;
-    std::size_t last_cycle = 0;
-    std::size_t cycle_count = 0;
-    if (!parsePositiveIndex(metadata_entries_.at("cycle_id_first"),
-                            first_cycle) ||
-        !parsePositiveIndex(metadata_entries_.at("cycle_id_last"),
-                            last_cycle) ||
-        !parsePositiveIndex(metadata_entries_.at("cycle_count"),
-                            cycle_count)) {
-        return failure("INVALID_CYCLE_METADATA", path_);
-    }
-    if (last_cycle < first_cycle || cycle_count != samples_.size() ||
-        last_cycle - first_cycle != cycle_count - 1) {
-        return failure("CYCLE_RANGE_MISMATCH", path_);
-    }
     if (std::abs(samples_.front().t) > 1e-12) {
         return failure("DEVELOPMENT_TIME_ORIGIN_MISMATCH", path_);
+    }
+    if (proxy_profile) {
+        const char* required[] = {
+            "cycle_id_first", "cycle_id_last", "cycle_count",
+            "planner_variant", "bag_sha256", "development_parameter_sha256",
+            "row_state_semantics", "row_command_semantics",
+        };
+        for (const char* key : required) {
+            if (metadata_entries_.count(key) == 0) {
+                return failure("MISSING_DEVELOPMENT_METADATA", key);
+            }
+        }
+        if (!isLowercaseSha256(metadata_entries_.at("bag_sha256"))) {
+            return failure("INVALID_SHA256", "bag_sha256");
+        }
+        if (!isLowercaseSha256(
+                metadata_entries_.at("development_parameter_sha256"))) {
+            return failure("INVALID_SHA256", "development_parameter_sha256");
+        }
+        std::size_t first_cycle = 0;
+        std::size_t last_cycle = 0;
+        std::size_t cycle_count = 0;
+        if (!parsePositiveIndex(metadata_entries_.at("cycle_id_first"),
+                                first_cycle) ||
+            !parsePositiveIndex(metadata_entries_.at("cycle_id_last"),
+                                last_cycle) ||
+            !parsePositiveIndex(metadata_entries_.at("cycle_count"),
+                                cycle_count)) {
+            return failure("INVALID_CYCLE_METADATA", path_);
+        }
+        if (last_cycle < first_cycle || cycle_count != samples_.size() ||
+            last_cycle - first_cycle != cycle_count - 1) {
+            return failure("CYCLE_RANGE_MISMATCH", path_);
+        }
+    } else {
+        const char* required[] = {
+            "source_bag_sha256", "path_topic", "max_nominal_path_deviation_m",
+        };
+        for (const char* key : required) {
+            if (metadata_entries_.count(key) == 0) {
+                return failure("MISSING_DEVELOPMENT_METADATA", key);
+            }
+        }
+        if (!isLowercaseSha256(metadata_entries_.at("source_bag_sha256"))) {
+            return failure("INVALID_SHA256", "source_bag_sha256");
+        }
+        double max_deviation = 0.0;
+        if (!parseDouble(metadata_entries_.at("max_nominal_path_deviation_m"),
+                         max_deviation) ||
+            max_deviation < 0.0 || max_deviation > 0.20) {
+            return failure("INVALID_PATH_DEVIATION_METADATA",
+                           "max_nominal_path_deviation_m");
+        }
     }
     NominalArtifactLoadResult result;
     result.success = true;
@@ -581,6 +537,20 @@ NominalArtifactLoadResult NominalSequenceArtifact::loadCsv(
     if (!input.is_open()) {
         return failure("OPEN_FAILED", path);
     }
+    return loadCsvStream(input, path);
+}
+
+NominalArtifactLoadResult NominalSequenceArtifact::assignValidated(
+    const std::map<std::string, std::string>& metadata,
+    const std::vector<PhaseNominalSample>& samples,
+    const std::string& source_name) {
+    std::istringstream input(canonicalCsvText(metadata, samples));
+    return loadCsvStream(input, source_name);
+}
+
+NominalArtifactLoadResult NominalSequenceArtifact::loadCsvStream(
+    std::istream& input, const std::string& path) {
+    clear();
 
     std::map<std::string, std::string> metadata;
     bool header_seen = false;

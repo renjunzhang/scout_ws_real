@@ -3,6 +3,7 @@
 #include "spmpc_local_planner/phase_rejoin/types.h"
 
 #include <cstddef>
+#include <iosfwd>
 #include <map>
 #include <string>
 #include <vector>
@@ -18,6 +19,10 @@ struct NominalArtifactLoadResult {
 class NominalSequenceArtifact {
 public:
     NominalArtifactLoadResult loadCsv(const std::string& path);
+    NominalArtifactLoadResult assignValidated(
+        const std::map<std::string, std::string>& metadata,
+        const std::vector<PhaseNominalSample>& samples,
+        const std::string& source_name = "<generated>");
     NominalArtifactLoadResult validateDevelopmentOnly() const;
     NominalArtifactLoadResult writeCanonicalCsv(const std::string& path,
                                                 bool overwrite = false) const;
@@ -37,6 +42,9 @@ public:
     const PhaseNominalSample* sample(std::size_t index) const;
 
 private:
+    NominalArtifactLoadResult loadCsvStream(std::istream& input,
+                                            const std::string& source_name);
+
     bool valid_ = false;
     std::string path_;
     NominalArtifactMetadata metadata_;

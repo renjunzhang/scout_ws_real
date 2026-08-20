@@ -154,6 +154,8 @@ add_library(spmpc_controller
 
 add_library(spmpc_phase_rejoin
   src/phase_rejoin/types.cpp
+  src/phase_rejoin/development_nominal_generator.cpp
+  src/phase_rejoin/nominal_dynamics.cpp
   src/phase_rejoin/nominal_sequence_artifact.cpp
   src/phase_rejoin/phase_clock.cpp
   src/phase_rejoin/phase_candidate_selector.cpp
@@ -465,6 +467,14 @@ target_link_libraries(spmpc_phase_rejoin_artifact_tool
   spmpc_phase_rejoin
 )
 
+add_executable(spmpc_phase_rejoin_development_nominal
+  src/tools/phase_rejoin_development_nominal.cpp
+)
+target_link_libraries(spmpc_phase_rejoin_development_nominal
+  PRIVATE
+  spmpc_phase_rejoin
+)
+
 if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_app_config test/test_app_config.cpp)
   if(TARGET test_app_config)
@@ -539,6 +549,13 @@ if(CATKIN_ENABLE_TESTING)
     target_link_libraries(test_nominal_sequence_artifact
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_development_nominal_generator
+    test/test_development_nominal_generator.cpp)
+  if(TARGET test_development_nominal_generator)
+    target_link_libraries(test_development_nominal_generator
+      spmpc_phase_rejoin
     )
   endif()
   catkin_add_gtest(test_phase_rejoin test/test_phase_rejoin.cpp)

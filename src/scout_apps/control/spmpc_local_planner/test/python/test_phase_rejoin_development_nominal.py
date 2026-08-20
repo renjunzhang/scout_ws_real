@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import csv
 import importlib.util
 import math
 from pathlib import Path
@@ -15,85 +14,77 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 
-class DevelopmentNominalTest(unittest.TestCase):
-    def setUp(self):
-        self.points = tuple(
+class DevelopmentNominalWrapperTest(unittest.TestCase):
+    def points(self):
+        return tuple(
             MODULE.Point(0.05 * index, 0.15 * math.sin(0.15 * index))
             for index in range(81)
         )
-        omega_n = 31.246035078551724
-        self.model = MODULE.LiquidModel(
-            2.0 * 0.05 * omega_n, omega_n * omega_n, 1.0, 1.0)
-        self.radii = (5.0, 5.0, 6.3, 2.0, 3.0, 0.5, 10.0, 0.5, 10.0)
 
-    def generate(self):
-        return MODULE.generate_rows(
-            points=self.points,
-            dt=1.0 / 30.0,
-            requested_speed=0.30,
-            ramp_sec=2.0,
-            lookahead=0.30,
-            heading_gain=3.0,
-            omega_max=1.0,
-            alpha_max=1.0,
-            zero_hold_sec=0.5,
-            terminal_eta_norm_max=2.0e-6,
-            terminal_eta_dot_norm_max=1.0e-4,
-            model=self.model,
-            radii=self.radii,
-        )
+    def arguments(self, output, overwrite=False):
+        argv = [
+            "--bag", "/unused/by-unit-test.bag",
+            "--output", str(output),
+            "--contract-id", "development_contract",
+            "--frame-id", "map",
+            "--dt", str(1.0 / 30.0),
+            "--cruise-speed", "0.30",
+            "--ramp-sec", "2.0",
+            "--lookahead", "0.30",
+            "--heading-gain", "3.0",
+            "--omega-max", "1.0",
+            "--alpha-max", "1.0",
+            "--omega-n", "31.246035078551724",
+            "--damping-ratio", "0.05",
+            "--kappa-x", "1.0",
+            "--kappa-y", "1.0",
+            "--zero-hold-sec", "0.5",
+            "--terminal-eta-norm-max", "2e-6",
+            "--terminal-eta-dot-norm-max", "1e-4",
+            "--gate-radii",
+            "5", "5", "6.3", "2", "3", "0.5", "10", "0.5", "10",
+        ]
+        if overwrite:
+            argv.append("--overwrite")
+        return MODULE.build_parser().parse_args(argv)
 
-    def test_generates_uniform_dynamics_consistent_complete_tail(self):
-        rows, hold_steps, deviation, path_length = self.generate()
-        self.assertGreater(len(rows), 100)
-        self.assertGreaterEqual(hold_steps, 5)
-        self.assertLess(deviation, 0.20)
-        self.assertGreater(path_length, 4.0)
-
-        for index, row in enumerate(rows):
-            self.assertEqual(row[0], index)
-            self.assertAlmostEqual(row[1], index / 30.0, places=12)
-            self.assertEqual(len(row), len(MODULE.HEADER))
-            self.assertAlmostEqual(row[17], row[15], places=12)
-            self.assertAlmostEqual(row[18], row[16], places=12)
-
-        for row in rows[-hold_steps:]:
-            for column in (6, 7, 12, 13, 14, 15, 16, 17, 18):
-                self.assertAlmostEqual(row[column], 0.0, places=12)
-            self.assertAlmostEqual(row[2], path_length, places=12)
-
-        final = rows[-1]
-        self.assertLessEqual(math.hypot(final[8], final[10]), 2.0e-6)
-        self.assertLessEqual(math.hypot(final[9], final[11]), 1.0e-4)
-
-    def test_serialization_preserves_fixed_schema_and_markers(self):
-        rows, hold_steps, deviation, path_length = self.generate()
-        metadata = (
-            ("schema", MODULE.SCHEMA),
-            ("evidence_level", MODULE.EVIDENCE_LEVEL),
-            ("source", MODULE.SOURCE),
-            ("terminal_contract", MODULE.TERMINAL_CONTRACT),
-            ("recovery_contract", MODULE.RECOVERY_CONTRACT),
-            ("terminal_zero_hold_steps", str(hold_steps)),
-        )
+    def test_wrapper_delegates_generation_validation_and_atomic_write(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "development_v2.csv"
-            MODULE.write_artifact(output, metadata, rows, overwrite=False)
+            stdout = MODULE.generate_from_points(
+                self.points(), self.arguments(output), "a" * 64
+            )
+            self.assertIn("rows=525", stdout)
             text = output.read_text(encoding="utf-8")
             self.assertIn("# schema=phase_rejoin_empirical_v2\n", text)
             self.assertIn("# evidence_level=development_only\n", text)
             self.assertIn(
-                "# recovery_contract=nominal_command_v1\n", text)
-            with output.open(encoding="utf-8", newline="") as stream:
-                reader = csv.reader(line for line in stream if not line.startswith("#"))
-                self.assertEqual(tuple(next(reader)), MODULE.HEADER)
-                self.assertEqual(sum(1 for _ in reader), len(rows))
+                "# source=development_dynamics_consistent_nominal\n", text
+            )
+            self.assertIn("# terminal_zero_hold_steps=16\n", text)
+            data_lines = [line for line in text.splitlines() if not line.startswith("#")]
+            self.assertEqual(len(data_lines), 526)
 
-    def test_rejects_implicit_or_invalid_generation_inputs(self):
-        with self.assertRaisesRegex(MODULE.GenerationError, "three distinct"):
-            MODULE.clean_points([MODULE.Point(0.0, 0.0)] * 3)
-        with self.assertRaisesRegex(MODULE.GenerationError, "ramp is too long"):
-            MODULE.speed_schedule(0.2, 0.1, 1.0, 1.0)
+            with self.assertRaisesRegex(MODULE.GenerationError, "OUTPUT_EXISTS"):
+                MODULE.generate_from_points(
+                    self.points(), self.arguments(output), "a" * 64
+                )
+            MODULE.generate_from_points(
+                self.points(), self.arguments(output, overwrite=True), "a" * 64
+            )
+
+    def test_wrapper_surfaces_cpp_fail_closed_reason(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "invalid.csv"
+            with self.assertRaisesRegex(
+                MODULE.GenerationError, "INVALID_REFERENCE_PATH"
+            ):
+                MODULE.generate_from_points(
+                    (MODULE.Point(0.0, 0.0),) * 3,
+                    self.arguments(output),
+                    "a" * 64,
+                )
+            self.assertFalse(output.exists())
 
 
 if __name__ == "__main__":
