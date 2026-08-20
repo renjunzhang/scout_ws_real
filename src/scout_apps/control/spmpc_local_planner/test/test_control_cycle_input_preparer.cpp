@@ -254,6 +254,9 @@ TEST(ControlCycleInputPreparer, FixedClosedLoopAppliesBothStatesAndTiming) {
     EXPECT_TRUE(result.solver_origin_at_execution_front);
     EXPECT_EQ(result.execution_front_steps, 10);
     EXPECT_GT(result.solver_input.robot.x, result.raw_input.robot.x);
+    EXPECT_DOUBLE_EQ(result.solver_input.dt, result.raw_input.dt);
+    EXPECT_EQ(result.solver_input.horizon_steps,
+              result.raw_input.horizon_steps);
     EXPECT_EQ(result.timing.solver_input_epoch_ns, 10200000000LL);
     EXPECT_EQ(result.timing.robot_state_stamp_ns, 10200000000LL);
     EXPECT_EQ(result.timing.liquid_state_stamp_ns, 10200000000LL);

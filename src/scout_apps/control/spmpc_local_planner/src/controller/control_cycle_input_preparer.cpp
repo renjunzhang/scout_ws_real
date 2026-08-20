@@ -222,12 +222,14 @@ ControlCycleInputResult ControlCycleInputPreparer::completePrediction(
             request.last_odom_receive_ns,
             request.delay_phase.odom_timeout_sec);
         const DelayPhaseApplication application =
-            composeDelayPhaseSolverInput(
-                result.raw_input,
+            composeDelayPhaseState(
+                result.raw_input.robot,
+                result.raw_input.slosh,
                 result.prediction,
                 request.delay_phase.mode,
                 odom_is_fresh);
-        result.solver_input = application.solver_input;
+        result.solver_input.robot = application.robot;
+        result.solver_input.slosh = application.slosh;
         result.robot_delay_compensation_applied =
             application.robot_applied;
         result.liquid_delay_compensation_applied =

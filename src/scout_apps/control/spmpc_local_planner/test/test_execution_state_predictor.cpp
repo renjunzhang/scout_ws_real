@@ -228,13 +228,14 @@ TEST(ExecutionStatePredictor, CompleteHistoryInFixedRobotOnlyReportsRobotOnlyOk)
 }
 
 TEST(DelayPhaseApplication, FixedRobotOnlyReplacesRobotButPreservesMeasuredLiquid) {
-    SolverInput raw;
-    raw.robot.x = 1.0;
-    raw.robot.y = 2.0;
-    raw.slosh.eta_x = 0.11;
-    raw.slosh.eta_x_dot = -0.22;
-    raw.slosh.eta_y = 0.33;
-    raw.slosh.eta_y_dot = -0.44;
+    RobotState raw_robot;
+    raw_robot.x = 1.0;
+    raw_robot.y = 2.0;
+    SloshState raw_slosh;
+    raw_slosh.eta_x = 0.11;
+    raw_slosh.eta_x_dot = -0.22;
+    raw_slosh.eta_y = 0.33;
+    raw_slosh.eta_y_dot = -0.44;
 
     ExecutionStatePrediction prediction;
     prediction.valid = true;
@@ -247,23 +248,25 @@ TEST(DelayPhaseApplication, FixedRobotOnlyReplacesRobotButPreservesMeasuredLiqui
     prediction.predicted_slosh.eta_y = 7.0;
     prediction.predicted_slosh.eta_y_dot = 6.0;
 
-    const auto application = composeDelayPhaseSolverInput(
-        raw, prediction, DelayPhaseMode::FixedRobotOnly, true);
+    const auto application = composeDelayPhaseState(
+        raw_robot, raw_slosh, prediction,
+        DelayPhaseMode::FixedRobotOnly, true);
 
     EXPECT_TRUE(application.robot_applied);
     EXPECT_FALSE(application.liquid_applied);
     EXPECT_TRUE(application.anyApplied());
-    EXPECT_DOUBLE_EQ(application.solver_input.robot.x, 3.0);
-    EXPECT_DOUBLE_EQ(application.solver_input.robot.y, 4.0);
-    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_x, raw.slosh.eta_x);
-    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_x_dot, raw.slosh.eta_x_dot);
-    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_y, raw.slosh.eta_y);
-    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_y_dot, raw.slosh.eta_y_dot);
+    EXPECT_DOUBLE_EQ(application.robot.x, 3.0);
+    EXPECT_DOUBLE_EQ(application.robot.y, 4.0);
+    EXPECT_DOUBLE_EQ(application.slosh.eta_x, raw_slosh.eta_x);
+    EXPECT_DOUBLE_EQ(application.slosh.eta_x_dot, raw_slosh.eta_x_dot);
+    EXPECT_DOUBLE_EQ(application.slosh.eta_y, raw_slosh.eta_y);
+    EXPECT_DOUBLE_EQ(application.slosh.eta_y_dot, raw_slosh.eta_y_dot);
 }
 
 TEST(DelayPhaseApplication, FixedClosedLoopStillReplacesRobotAndLiquid) {
-    SolverInput raw;
-    raw.slosh.eta_x = 0.11;
+    RobotState raw_robot;
+    SloshState raw_slosh;
+    raw_slosh.eta_x = 0.11;
 
     ExecutionStatePrediction prediction;
     prediction.valid = true;
@@ -272,19 +275,21 @@ TEST(DelayPhaseApplication, FixedClosedLoopStillReplacesRobotAndLiquid) {
     prediction.predicted_robot.x = 3.0;
     prediction.predicted_slosh.eta_x = 9.0;
 
-    const auto application = composeDelayPhaseSolverInput(
-        raw, prediction, DelayPhaseMode::FixedClosedLoop, true);
+    const auto application = composeDelayPhaseState(
+        raw_robot, raw_slosh, prediction,
+        DelayPhaseMode::FixedClosedLoop, true);
 
     EXPECT_TRUE(application.robot_applied);
     EXPECT_TRUE(application.liquid_applied);
-    EXPECT_DOUBLE_EQ(application.solver_input.robot.x, 3.0);
-    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_x, 9.0);
+    EXPECT_DOUBLE_EQ(application.robot.x, 3.0);
+    EXPECT_DOUBLE_EQ(application.slosh.eta_x, 9.0);
 }
 
 TEST(DelayPhaseApplication, FailedExternalGuardAppliesNeitherState) {
-    SolverInput raw;
-    raw.robot.x = 1.0;
-    raw.slosh.eta_x = 0.11;
+    RobotState raw_robot;
+    raw_robot.x = 1.0;
+    SloshState raw_slosh;
+    raw_slosh.eta_x = 0.11;
 
     ExecutionStatePrediction prediction;
     prediction.valid = true;
@@ -293,13 +298,14 @@ TEST(DelayPhaseApplication, FailedExternalGuardAppliesNeitherState) {
     prediction.predicted_robot.x = 3.0;
     prediction.predicted_slosh.eta_x = 9.0;
 
-    const auto application = composeDelayPhaseSolverInput(
-        raw, prediction, DelayPhaseMode::FixedRobotOnly, false);
+    const auto application = composeDelayPhaseState(
+        raw_robot, raw_slosh, prediction,
+        DelayPhaseMode::FixedRobotOnly, false);
 
     EXPECT_FALSE(application.robot_applied);
     EXPECT_FALSE(application.liquid_applied);
-    EXPECT_DOUBLE_EQ(application.solver_input.robot.x, raw.robot.x);
-    EXPECT_DOUBLE_EQ(application.solver_input.slosh.eta_x, raw.slosh.eta_x);
+    EXPECT_DOUBLE_EQ(application.robot.x, raw_robot.x);
+    EXPECT_DOUBLE_EQ(application.slosh.eta_x, raw_slosh.eta_x);
 }
 
 TEST(ExecutionStatePredictor, PartialHistoryIsReportedButAllowedByDefault) {

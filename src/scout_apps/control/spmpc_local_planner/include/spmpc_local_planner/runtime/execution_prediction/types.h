@@ -1,7 +1,7 @@
 #pragma once
 
-#include "spmpc_local_planner/solver/api/solver_io.h"
 #include "spmpc_local_planner/domain/command.h"
+#include "spmpc_local_planner/domain/state.h"
 #include "spmpc_local_planner/domain/time.h"
 #include <algorithm>
 #include <cctype>
@@ -107,7 +107,8 @@ struct ExecutionStatePrediction {
 };
 
 struct DelayPhaseApplication {
-    SolverInput solver_input;
+    RobotState robot;
+    SloshState slosh;
     bool robot_applied = false;
     bool liquid_applied = false;
 
@@ -260,29 +261,32 @@ inline DelayPhaseStatusCode delayPhaseReadyStatus(DelayPhaseMode mode) {
     return DelayPhaseStatusCode::ShadowOk;
 }
 
-/// Build the exact SolverInput selected by a delay mode after external
-/// freshness guards (notably odom receive age) have passed.
+/// Select the exact domain state used by a delay mode after external freshness
+/// guards (notably odom receive age) have passed.  The controller owns writing
+/// this state into its solver request boundary object.
 ///
 /// FixedClosedLoop preserves the historical behavior and replaces both robot
 /// and liquid state. FixedRobotOnly replaces only robot state; its liquid
 /// state remains byte-for-byte sourced from the current observer selection.
-inline DelayPhaseApplication composeDelayPhaseSolverInput(
-    const SolverInput& raw_input,
+inline DelayPhaseApplication composeDelayPhaseState(
+    const RobotState& raw_robot,
+    const SloshState& raw_slosh,
     const ExecutionStatePrediction& prediction,
     DelayPhaseMode mode,
     bool external_guards_passed) {
     DelayPhaseApplication out;
-    out.solver_input = raw_input;
+    out.robot = raw_robot;
+    out.slosh = raw_slosh;
     if (!external_guards_passed || !delayPhaseUsesClosedLoop(mode) ||
         !prediction.valid || !prediction.history_complete ||
         prediction.status_code != delayPhaseReadyStatus(mode)) {
         return out;
     }
 
-    out.solver_input.robot = prediction.predicted_robot;
+    out.robot = prediction.predicted_robot;
     out.robot_applied = true;
     if (mode == DelayPhaseMode::FixedClosedLoop) {
-        out.solver_input.slosh = prediction.predicted_slosh;
+        out.slosh = prediction.predicted_slosh;
         out.liquid_applied = true;
     }
     return out;
