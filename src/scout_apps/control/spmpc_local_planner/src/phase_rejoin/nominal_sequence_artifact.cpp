@@ -4,10 +4,14 @@
 #include <cmath>
 #include <cstdlib>
 #include <fstream>
+#include <iomanip>
 #include <limits>
+#include <locale>
 #include <map>
 #include <sstream>
 #include <string>
+#include <sys/stat.h>
+#include <unistd.h>
 #include <vector>
 
 namespace spmpc_local_planner {
@@ -17,6 +21,30 @@ const char* const kSchemaV1 = "phase_rejoin_empirical_v1";
 const char* const kSchemaV2 = "phase_rejoin_empirical_v2";
 const char* const kTerminalContractV1 = "stop_settle_zero_hold_v1";
 const char* const kRecoveryContractV1 = "nominal_command_v1";
+
+const std::map<std::string, std::string>& developmentOnlyMetadata() {
+    static const std::map<std::string, std::string> expected = {
+        {"schema", kSchemaV1},
+        {"evidence_level", "development_only"},
+        {"source", "development_proxy_replay"},
+        {"artifact_role", "interface_smoke_only"},
+        {"nominal_sequence_kind",
+         "rolling_local_planner_first_stage_proxy"},
+        {"offline_slosh_ocp", "false"},
+        {"hardware_formal_release", "false"},
+        {"paper_main_result_eligible", "false"},
+        {"gate_parameter_source",
+         "operator_supplied_per_cycle_development_csv"},
+        {"recovery_policy_source",
+         "operator_supplied_per_cycle_development_csv"},
+        {"gate_evidence", "none_development_input_only"},
+        {"recovery_policy_evidence", "none_development_input_only"},
+        {"row_state_semantics",
+         "predicted_horizon_stage0_at_solver_input_epoch"},
+        {"row_command_semantics", "same_cycle_final_published_command"},
+    };
+    return expected;
+}
 
 const std::vector<std::string>& expectedHeader() {
     static const std::vector<std::string> header = {
@@ -84,6 +112,19 @@ bool parseIndex(const std::string& text, std::size_t& value) {
 
 bool parsePositiveIndex(const std::string& text, std::size_t& value) {
     return parseIndex(text, value) && value > 0;
+}
+
+bool isLowercaseSha256(const std::string& value) {
+    if (value.size() != 64) {
+        return false;
+    }
+    for (char character : value) {
+        if (!((character >= '0' && character <= '9') ||
+              (character >= 'a' && character <= 'f'))) {
+            return false;
+        }
+    }
+    return true;
 }
 
 bool positiveRadii(const EmpiricalRecoveryRadii& radii) {
@@ -314,17 +355,223 @@ NominalArtifactLoadResult validateV2TerminalTail(
     return result;
 }
 
+const std::vector<std::string>& canonicalMetadataOrder() {
+    static const std::vector<std::string> order = {
+        "schema", "evidence_level", "source", "contract_id", "frame_id",
+        "dt", "path_length",
+        "artifact_role", "nominal_sequence_kind", "offline_slosh_ocp",
+        "hardware_formal_release", "paper_main_result_eligible",
+        "cycle_id_first", "cycle_id_last", "cycle_count", "planner_variant",
+        "gate_parameter_source", "recovery_policy_source", "gate_evidence",
+        "recovery_policy_evidence", "bag_sha256",
+        "development_parameter_sha256", "row_state_semantics",
+        "row_command_semantics",
+        "terminal_contract", "recovery_contract", "terminal_zero_hold_steps",
+        "terminal_eta_norm_max", "terminal_eta_dot_norm_max",
+        "two_zeta_omega_n", "omega_n_sq", "kappa_x", "kappa_y",
+        "dynamics_tolerance",
+    };
+    return order;
+}
+
+std::string canonicalCsvText(
+    const std::map<std::string, std::string>& metadata,
+    const std::vector<PhaseNominalSample>& samples) {
+    std::ostringstream out;
+    out.imbue(std::locale::classic());
+    for (const std::string& key : canonicalMetadataOrder()) {
+        const auto item = metadata.find(key);
+        if (item != metadata.end()) {
+            out << "# " << item->first << '=' << item->second << '\n';
+        }
+    }
+    for (const auto& item : metadata) {
+        bool already_written = false;
+        for (const std::string& key : canonicalMetadataOrder()) {
+            if (key == item.first) {
+                already_written = true;
+                break;
+            }
+        }
+        if (!already_written) {
+            out << "# " << item.first << '=' << item.second << '\n';
+        }
+    }
+    const std::vector<std::string>& header = expectedHeader();
+    for (std::size_t i = 0; i < header.size(); ++i) {
+        if (i != 0) {
+            out << ',';
+        }
+        out << header[i];
+    }
+    out << '\n' << std::setprecision(17);
+    for (const PhaseNominalSample& sample : samples) {
+        out << sample.index;
+        const double values[] = {
+            sample.t, sample.s, sample.x, sample.y, sample.yaw,
+            sample.v, sample.omega,
+            sample.eta_x, sample.eta_x_dot, sample.eta_y, sample.eta_y_dot,
+            sample.a, sample.alpha, sample.v_s,
+            sample.u_pub_v, sample.u_pub_omega,
+            sample.kappa_v, sample.kappa_omega,
+            sample.radii.x, sample.radii.y, sample.radii.yaw,
+            sample.radii.v, sample.radii.omega,
+            sample.radii.eta_x, sample.radii.eta_x_dot,
+            sample.radii.eta_y, sample.radii.eta_y_dot,
+        };
+        for (double value : values) {
+            out << ',' << value;
+        }
+        out << '\n';
+    }
+    return out.str();
+}
+
+NominalArtifactLoadResult writeAtomically(const std::string& path,
+                                          const std::string& contents,
+                                          bool overwrite) {
+    if (path.empty()) {
+        return failure("INVALID_OUTPUT_PATH", path);
+    }
+    struct stat output_status;
+    if (!overwrite && ::stat(path.c_str(), &output_status) == 0) {
+        return failure("OUTPUT_EXISTS", path);
+    }
+
+    std::vector<char> temporary(path.begin(), path.end());
+    const std::string suffix = ".tmp.XXXXXX";
+    temporary.insert(temporary.end(), suffix.begin(), suffix.end());
+    temporary.push_back('\0');
+    const int descriptor = ::mkstemp(temporary.data());
+    if (descriptor < 0) {
+        return failure("TEMPORARY_OPEN_FAILED", path);
+    }
+    const std::string temporary_path(temporary.data());
+    bool write_ok = true;
+    std::size_t offset = 0;
+    while (offset < contents.size()) {
+        const ssize_t count = ::write(descriptor, contents.data() + offset,
+                                      contents.size() - offset);
+        if (count <= 0) {
+            write_ok = false;
+            break;
+        }
+        offset += static_cast<std::size_t>(count);
+    }
+    if (write_ok && ::fsync(descriptor) != 0) {
+        write_ok = false;
+    }
+    if (::close(descriptor) != 0) {
+        write_ok = false;
+    }
+    if (!write_ok) {
+        ::unlink(temporary_path.c_str());
+        return failure("WRITE_FAILED", path);
+    }
+
+    bool publish_ok = false;
+    if (overwrite) {
+        publish_ok = ::rename(temporary_path.c_str(), path.c_str()) == 0;
+    } else {
+        // link+unlink gives no-overwrite publication without a check/rename race.
+        publish_ok = ::link(temporary_path.c_str(), path.c_str()) == 0;
+        if (publish_ok) {
+            ::unlink(temporary_path.c_str());
+        }
+    }
+    if (!publish_ok) {
+        const bool output_exists = !overwrite && errno == EEXIST;
+        ::unlink(temporary_path.c_str());
+        return failure(output_exists ? "OUTPUT_EXISTS" : "PUBLISH_FAILED",
+                       path);
+    }
+    NominalArtifactLoadResult result;
+    result.success = true;
+    result.status = "OK";
+    result.detail = path;
+    return result;
+}
+
 }  // namespace
 
 void NominalSequenceArtifact::clear() {
     valid_ = false;
     path_.clear();
     metadata_ = NominalArtifactMetadata{};
+    metadata_entries_.clear();
     samples_.clear();
 }
 
 const PhaseNominalSample* NominalSequenceArtifact::sample(std::size_t index) const {
     return index < samples_.size() ? &samples_[index] : nullptr;
+}
+
+NominalArtifactLoadResult NominalSequenceArtifact::validateDevelopmentOnly()
+    const {
+    if (!valid_) {
+        return failure("ARTIFACT_NOT_LOADED", path_);
+    }
+    const char* required[] = {
+        "artifact_role", "nominal_sequence_kind", "offline_slosh_ocp",
+        "hardware_formal_release", "paper_main_result_eligible",
+        "cycle_id_first", "cycle_id_last", "cycle_count", "planner_variant",
+        "gate_parameter_source", "recovery_policy_source", "gate_evidence",
+        "recovery_policy_evidence", "bag_sha256",
+        "development_parameter_sha256", "row_state_semantics",
+        "row_command_semantics",
+    };
+    for (const char* key : required) {
+        if (metadata_entries_.count(key) == 0) {
+            return failure("MISSING_DEVELOPMENT_METADATA", key);
+        }
+    }
+    for (const auto& expected : developmentOnlyMetadata()) {
+        const auto actual = metadata_entries_.find(expected.first);
+        if (actual == metadata_entries_.end() ||
+            actual->second != expected.second) {
+            return failure("DEVELOPMENT_METADATA_MISMATCH", expected.first);
+        }
+    }
+    if (!isLowercaseSha256(metadata_entries_.at("bag_sha256"))) {
+        return failure("INVALID_SHA256", "bag_sha256");
+    }
+    if (!isLowercaseSha256(
+            metadata_entries_.at("development_parameter_sha256"))) {
+        return failure("INVALID_SHA256", "development_parameter_sha256");
+    }
+    std::size_t first_cycle = 0;
+    std::size_t last_cycle = 0;
+    std::size_t cycle_count = 0;
+    if (!parsePositiveIndex(metadata_entries_.at("cycle_id_first"),
+                            first_cycle) ||
+        !parsePositiveIndex(metadata_entries_.at("cycle_id_last"),
+                            last_cycle) ||
+        !parsePositiveIndex(metadata_entries_.at("cycle_count"),
+                            cycle_count)) {
+        return failure("INVALID_CYCLE_METADATA", path_);
+    }
+    if (last_cycle < first_cycle || cycle_count != samples_.size() ||
+        last_cycle - first_cycle != cycle_count - 1) {
+        return failure("CYCLE_RANGE_MISMATCH", path_);
+    }
+    if (std::abs(samples_.front().t) > 1e-12) {
+        return failure("DEVELOPMENT_TIME_ORIGIN_MISMATCH", path_);
+    }
+    NominalArtifactLoadResult result;
+    result.success = true;
+    result.status = "OK";
+    result.detail = path_;
+    return result;
+}
+
+NominalArtifactLoadResult NominalSequenceArtifact::writeCanonicalCsv(
+    const std::string& path, bool overwrite) const {
+    if (!valid_) {
+        return failure("ARTIFACT_NOT_LOADED", path_);
+    }
+    return writeAtomically(path,
+                           canonicalCsvText(metadata_entries_, samples_),
+                           overwrite);
 }
 
 NominalArtifactLoadResult NominalSequenceArtifact::loadCsv(
@@ -568,6 +815,7 @@ NominalArtifactLoadResult NominalSequenceArtifact::loadCsv(
 
     path_ = path;
     metadata_ = parsed_metadata;
+    metadata_entries_ = metadata;
     valid_ = true;
     NominalArtifactLoadResult result;
     result.success = true;

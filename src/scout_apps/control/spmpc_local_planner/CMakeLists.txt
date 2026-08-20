@@ -455,6 +455,16 @@ target_link_libraries(spmpc_realsense_timestamp_health_gate
   ${catkin_LIBRARIES}
 )
 
+# Source-tree/offline tool: deliberately built for artifact preparation but
+# omitted from the robot runtime install allow-list below.
+add_executable(spmpc_phase_rejoin_artifact_tool
+  src/tools/phase_rejoin_artifact_tool.cpp
+)
+target_link_libraries(spmpc_phase_rejoin_artifact_tool
+  PRIVATE
+  spmpc_phase_rejoin
+)
+
 if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_app_config test/test_app_config.cpp)
   if(TARGET test_app_config)

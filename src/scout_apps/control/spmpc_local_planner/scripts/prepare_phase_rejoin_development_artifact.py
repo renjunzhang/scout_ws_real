@@ -14,6 +14,8 @@ import hashlib
 import math
 import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tempfile
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -126,21 +128,6 @@ def _cycle_id(value: object, label: str) -> int:
         raise ArtifactPreparationError(f"{label}: invalid cycle_id") from exc
     if parsed <= 0 or str(value).strip() != str(parsed):
         raise ArtifactPreparationError(f"{label}: cycle_id must be a positive integer")
-    return parsed
-
-
-def _nonnegative_index(value: object, label: str) -> int:
-    if isinstance(value, bool):
-        raise ArtifactPreparationError(f"{label}: invalid index")
-    text = str(value).strip()
-    if not text or (text.startswith("-") and text != "-0"):
-        raise ArtifactPreparationError(f"{label}: invalid index")
-    try:
-        parsed = int(text)
-    except (TypeError, ValueError) as exc:
-        raise ArtifactPreparationError(f"{label}: invalid index") from exc
-    if parsed < 0 or text != str(parsed):
-        raise ArtifactPreparationError(f"{label}: invalid index")
     return parsed
 
 
@@ -542,30 +529,78 @@ def _serialized_rows(prepared: PreparedArtifact) -> Iterable[Sequence[str]]:
         yield tuple(str(value) if isinstance(value, int) else _format_float(value) for value in row)
 
 
+def _artifact_tool_path() -> Path:
+    configured = os.environ.get("SPMPC_PHASE_REJOIN_ARTIFACT_TOOL", "").strip()
+    candidates: List[Path] = []
+    if configured:
+        candidates.append(Path(configured).expanduser())
+    executable = shutil.which("spmpc_phase_rejoin_artifact_tool")
+    if executable:
+        candidates.append(Path(executable))
+    for parent in Path(__file__).resolve().parents:
+        candidates.append(
+            parent
+            / "devel/lib/spmpc_local_planner/spmpc_phase_rejoin_artifact_tool"
+        )
+    for candidate in candidates:
+        if candidate.is_file() and os.access(str(candidate), os.X_OK):
+            return candidate.resolve()
+    raise ArtifactPreparationError(
+        "C++ artifact tool is unavailable; build spmpc_phase_rejoin_artifact_tool "
+        "or set SPMPC_PHASE_REJOIN_ARTIFACT_TOOL"
+    )
+
+
+def _run_artifact_tool(arguments: Sequence[str]) -> None:
+    command = [str(_artifact_tool_path()), *arguments]
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except OSError as exc:
+        raise ArtifactPreparationError("failed to execute C++ artifact tool") from exc
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        raise ArtifactPreparationError(
+            detail or f"C++ artifact tool failed with exit code {completed.returncode}"
+        )
+
+
+def _write_candidate_csv(path: Path, prepared: PreparedArtifact) -> None:
+    with path.open("w", encoding="utf-8", newline="") as stream:
+        for key, value in prepared.metadata.items():
+            stream.write(f"# {key}={value}\n")
+        writer = csv.writer(stream, lineterminator="\n")
+        writer.writerows(_serialized_rows(prepared))
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
 def write_artifact(path: Path, prepared: PreparedArtifact, overwrite: bool = False) -> None:
-    if path.exists() and not overwrite:
-        raise ArtifactPreparationError(f"output exists (use --overwrite): {path}")
+    """Delegate domain validation and atomic final publication to the C++ core."""
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary_name = ""
     try:
         with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
-            newline="",
             prefix=path.name + ".tmp.",
             dir=str(path.parent),
             delete=False,
         ) as stream:
             temporary_name = stream.name
-            for key, value in prepared.metadata.items():
-                stream.write(f"# {key}={value}\n")
-            writer = csv.writer(stream, lineterminator="\n")
-            writer.writerows(_serialized_rows(prepared))
-            stream.flush()
-            os.fsync(stream.fileno())
-        validate_artifact_csv(Path(temporary_name))
-        os.replace(temporary_name, path)
-        temporary_name = ""
+        _write_candidate_csv(Path(temporary_name), prepared)
+        arguments = [
+            "canonicalize",
+            "--input", temporary_name,
+            "--output", str(path),
+            "--development-only",
+        ]
+        if overwrite:
+            arguments.append("--overwrite")
+        _run_artifact_tool(arguments)
     finally:
         if temporary_name:
             try:
@@ -575,9 +610,11 @@ def write_artifact(path: Path, prepared: PreparedArtifact, overwrite: bool = Fal
 
 
 def validate_artifact_csv(path: Path) -> Mapping[str, str]:
-    """Validate the emitted CSV using the C++ loader's contract plus dev guards."""
+    """Validate through the C++ artifact core, then expose parsed metadata."""
+    _run_artifact_tool(
+        ["validate", "--artifact", str(path), "--development-only"]
+    )
     metadata: Dict[str, str] = {}
-    data_lines: List[str] = []
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError as exc:
@@ -594,97 +631,6 @@ def validate_artifact_csv(path: Path) -> Mapping[str, str]:
             if not key or not value or key in metadata:
                 raise ArtifactPreparationError(f"invalid metadata at line {line_number}")
             metadata[key] = value
-        else:
-            data_lines.append(line)
-    required_metadata = (
-        "schema", "evidence_level", "source", "contract_id", "frame_id",
-        "dt", "path_length", "artifact_role", "nominal_sequence_kind",
-        "offline_slosh_ocp", "hardware_formal_release",
-        "paper_main_result_eligible", "gate_parameter_source",
-        "recovery_policy_source", "gate_evidence", "recovery_policy_evidence",
-        "cycle_id_first", "cycle_id_last", "cycle_count", "planner_variant",
-        "bag_sha256", "development_parameter_sha256",
-        "row_state_semantics", "row_command_semantics",
-    )
-    missing = [name for name in required_metadata if name not in metadata]
-    if missing:
-        raise ArtifactPreparationError(f"missing artifact metadata: {missing}")
-    exact = {
-        "schema": SCHEMA,
-        "evidence_level": EVIDENCE_LEVEL,
-        "source": SOURCE,
-        "artifact_role": ARTIFACT_ROLE,
-        "nominal_sequence_kind": NOMINAL_SEQUENCE_KIND,
-        "offline_slosh_ocp": "false",
-        "hardware_formal_release": "false",
-        "paper_main_result_eligible": "false",
-        "gate_parameter_source": "operator_supplied_per_cycle_development_csv",
-        "recovery_policy_source": "operator_supplied_per_cycle_development_csv",
-        "gate_evidence": "none_development_input_only",
-        "recovery_policy_evidence": "none_development_input_only",
-    }
-    for key, expected in exact.items():
-        if metadata.get(key) != expected:
-            raise ArtifactPreparationError(f"{key} must be {expected}")
-    dt = _positive(metadata["dt"], "metadata dt")
-    path_length = _positive(metadata["path_length"], "metadata path_length")
-    _checked_sha256(metadata["bag_sha256"], "bag_sha256")
-    _checked_sha256(
-        metadata["development_parameter_sha256"],
-        "development_parameter_sha256",
-    )
-    first_cycle = _cycle_id(metadata["cycle_id_first"], "cycle_id_first")
-    last_cycle = _cycle_id(metadata["cycle_id_last"], "cycle_id_last")
-    cycle_count = _cycle_id(metadata["cycle_count"], "cycle_count")
-    if last_cycle < first_cycle or last_cycle - first_cycle + 1 != cycle_count:
-        raise ArtifactPreparationError("cycle range metadata is inconsistent")
-    if not data_lines:
-        raise ArtifactPreparationError("artifact has no CSV header")
-    reader = csv.reader(data_lines)
-    try:
-        header = tuple(next(reader))
-    except StopIteration as exc:
-        raise ArtifactPreparationError("artifact has no CSV header") from exc
-    if header != ARTIFACT_HEADER:
-        raise ArtifactPreparationError("artifact header mismatch")
-    previous_t: Optional[float] = None
-    previous_s: Optional[float] = None
-    count = 0
-    for line_number, row in enumerate(reader, start=2):
-        if len(row) != len(ARTIFACT_HEADER):
-            raise ArtifactPreparationError(f"artifact line {line_number}: column count")
-        index = _nonnegative_index(row[0], f"artifact line {line_number} index")
-        if index != count:
-            raise ArtifactPreparationError(f"artifact line {line_number}: non-contiguous index")
-        values = [_finite(value, f"artifact line {line_number}") for value in row[1:]]
-        t = values[0]
-        s = values[1]
-        radii = values[-9:]
-        if any(radius <= 0.0 for radius in radii):
-            raise ArtifactPreparationError(f"artifact line {line_number}: nonpositive radius")
-        if count == 0:
-            if abs(t) > 1.0e-12 or s < 0.0:
-                raise ArtifactPreparationError("artifact has negative origin")
-        else:
-            if t <= previous_t or s + 1.0e-9 < previous_s:
-                raise ArtifactPreparationError(f"artifact line {line_number}: non-monotonic")
-            period_tolerance = max(1.0e-4, 0.40 * dt) + 1.0e-9
-            if abs((t - previous_t) - dt) > period_tolerance:
-                raise ArtifactPreparationError(f"artifact line {line_number}: period mismatch")
-            phase_tolerance = max(1.0e-4, dt) + 1.0e-9
-            if abs(t - count * dt) > phase_tolerance:
-                raise ArtifactPreparationError(
-                    f"artifact line {line_number}: cumulative timing drift"
-                )
-        if s > path_length + 0.10:
-            raise ArtifactPreparationError(f"artifact line {line_number}: path length mismatch")
-        previous_t = t
-        previous_s = s
-        count += 1
-    if count < 2:
-        raise ArtifactPreparationError("artifact must contain at least two samples")
-    if count != cycle_count:
-        raise ArtifactPreparationError("cycle_count does not match artifact rows")
     return metadata
 
 

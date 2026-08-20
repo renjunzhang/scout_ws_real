@@ -85,15 +85,25 @@ python3 src/scout_apps/control/spmpc_local_planner/scripts/prepare_phase_rejoin_
 
 默认话题为 `/spmpc/debug/predicted_horizon` 和 `/spmpc/debug/control_cycle_audit`，可显式覆盖。导出器要求选中区间内 cycle 连续、两种消息严格一对一、共享 timing 字段一致，且 solver 成功、状态已对齐、命令确实发布、无 safety/terminal/limiter/command-contract 干预。任一条件不满足即拒绝导出；应重新选择完整的连续 development 区间，不能手工补行。
 
-输出会在原子替换前按 `NominalSequenceArtifact` 的固定表头、元数据、有限值、连续索引、采样周期、进度和正半径口径重新校验。也可单独运行：
+Python 只负责 rosbag 读取、`cycle_id` 配对和临时候选行构造。最终 schema、完整路径尾端、development-only 强标记、cycle 区间、SHA-256、有限值、连续索引、采样周期和正半径均由无 ROS 的 C++ `NominalSequenceArtifact` 校验；随后由 C++ CLI 规范化并原子发布最终文件。使用前需先构建 `spmpc_phase_rejoin_artifact_tool`。
+
+可直接用同一 C++ 合同校验或规范化已有候选文件：
 
 ```bash
-python3 src/scout_apps/control/spmpc_local_planner/scripts/prepare_phase_rejoin_development_artifact.py validate \
-  --artifact /tmp/phase_rejoin_development_only.csv
+devel/lib/spmpc_local_planner/spmpc_phase_rejoin_artifact_tool validate \
+  --artifact /tmp/phase_rejoin_development_only.csv \
+  --development-only
+
+devel/lib/spmpc_local_planner/spmpc_phase_rejoin_artifact_tool canonicalize \
+  --input /tmp/phase_rejoin_candidate.csv \
+  --output /tmp/phase_rejoin_development_only.csv \
+  --development-only
 
 python3 -m unittest \
   src/scout_apps/control/spmpc_local_planner/test/python/test_phase_rejoin_development_artifact.py
 ```
+
+Python 的 `validate` 子命令仍保留为兼容入口，但内部只调用上述 C++ CLI，不再维护重复的 schema validator。
 
 正式 OfflineSloshOCP 必须由独立求解/验证链生成同 schema 文件，并使用与本工具不同、如实反映证据等级的来源合同；不得重命名或修改本工具输出的 metadata 来冒充正式 artifact。
 

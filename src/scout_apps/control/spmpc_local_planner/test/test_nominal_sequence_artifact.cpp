@@ -43,6 +43,35 @@ std::string artifactText(int count = 20,
     return out.str();
 }
 
+std::string developmentArtifactText() {
+    std::string text = artifactText();
+    const std::string insertion =
+        "# artifact_role=interface_smoke_only\n"
+        "# nominal_sequence_kind=rolling_local_planner_first_stage_proxy\n"
+        "# offline_slosh_ocp=false\n"
+        "# hardware_formal_release=false\n"
+        "# paper_main_result_eligible=false\n"
+        "# cycle_id_first=10\n"
+        "# cycle_id_last=29\n"
+        "# cycle_count=20\n"
+        "# planner_variant=B_development_proxy\n"
+        "# gate_parameter_source=operator_supplied_per_cycle_development_csv\n"
+        "# recovery_policy_source=operator_supplied_per_cycle_development_csv\n"
+        "# gate_evidence=none_development_input_only\n"
+        "# recovery_policy_evidence=none_development_input_only\n"
+        "# bag_sha256=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"
+        "# development_parameter_sha256=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+        "# row_state_semantics=predicted_horizon_stage0_at_solver_input_epoch\n"
+        "# row_command_semantics=same_cycle_final_published_command\n"
+        "# custom_note=preserved_by_canonical_writer\n";
+    const std::string source = "# source=unit_test\n";
+    const std::size_t source_position = text.find(source);
+    EXPECT_NE(source_position, std::string::npos);
+    text.replace(source_position, source.size(),
+                 "# source=development_proxy_replay\n" + insertion);
+    return text;
+}
+
 std::string writeTemp(const std::string& text) {
     const std::string path = "/tmp/spmpc_phase_artifact_" +
         std::to_string(static_cast<long long>(::getpid())) + "_" +
@@ -51,6 +80,13 @@ std::string writeTemp(const std::string& text) {
     output << text;
     output.close();
     return path;
+}
+
+std::string readText(const std::string& path) {
+    std::ifstream input(path);
+    std::ostringstream contents;
+    contents << input.rdbuf();
+    return contents.str();
 }
 
 std::string replaceDataColumn(const std::string& text,
@@ -107,6 +143,98 @@ TEST(NominalSequenceArtifact, LoadsStrictValidArtifact) {
     ASSERT_NE(artifact.sample(3), nullptr);
     EXPECT_EQ(artifact.sample(3)->index, 3u);
     EXPECT_NEAR(artifact.sample(3)->s, 0.3, 1e-12);
+}
+
+TEST(NominalSequenceArtifact, PreservesAndValidatesDevelopmentMetadata) {
+    const std::string path = writeTemp(developmentArtifactText());
+    NominalSequenceArtifact artifact;
+    const auto load_result = artifact.loadCsv(path);
+    const auto development_result = artifact.validateDevelopmentOnly();
+    std::remove(path.c_str());
+
+    ASSERT_TRUE(load_result.success)
+        << load_result.status << ": " << load_result.detail;
+    EXPECT_TRUE(development_result.success)
+        << development_result.status << ": " << development_result.detail;
+    EXPECT_EQ(artifact.metadataEntries().at("cycle_id_first"), "10");
+    EXPECT_EQ(artifact.metadataEntries().at("custom_note"),
+              "preserved_by_canonical_writer");
+}
+
+TEST(NominalSequenceArtifact, RejectsDevelopmentArtifactEvidenceRelabeling) {
+    std::string text = developmentArtifactText();
+    const std::string original = "# evidence_level=development_only\n";
+    const std::size_t position = text.find(original);
+    ASSERT_NE(position, std::string::npos);
+    text.replace(position, original.size(),
+                 "# evidence_level=empirical_held_out\n");
+    const std::string path = writeTemp(text);
+    NominalSequenceArtifact artifact;
+    const auto load_result = artifact.loadCsv(path);
+    const auto development_result = artifact.validateDevelopmentOnly();
+    std::remove(path.c_str());
+
+    ASSERT_TRUE(load_result.success)
+        << load_result.status << ": " << load_result.detail;
+    EXPECT_FALSE(development_result.success);
+    EXPECT_EQ(development_result.status, "DEVELOPMENT_METADATA_MISMATCH");
+    EXPECT_EQ(development_result.detail, "evidence_level");
+}
+
+TEST(NominalSequenceArtifact, RejectsDevelopmentHashAndCycleMismatch) {
+    {
+        std::string text = developmentArtifactText();
+        const std::string hash(64, 'a');
+        text.replace(text.find(hash), hash.size(), std::string(64, 'A'));
+        const std::string path = writeTemp(text);
+        NominalSequenceArtifact artifact;
+        ASSERT_TRUE(artifact.loadCsv(path).success);
+        const auto result = artifact.validateDevelopmentOnly();
+        std::remove(path.c_str());
+        EXPECT_FALSE(result.success);
+        EXPECT_EQ(result.status, "INVALID_SHA256");
+        EXPECT_EQ(result.detail, "bag_sha256");
+    }
+    {
+        std::string text = developmentArtifactText();
+        const std::string original = "# cycle_count=20\n";
+        text.replace(text.find(original), original.size(),
+                     "# cycle_count=19\n");
+        const std::string path = writeTemp(text);
+        NominalSequenceArtifact artifact;
+        ASSERT_TRUE(artifact.loadCsv(path).success);
+        const auto result = artifact.validateDevelopmentOnly();
+        std::remove(path.c_str());
+        EXPECT_FALSE(result.success);
+        EXPECT_EQ(result.status, "CYCLE_RANGE_MISMATCH");
+    }
+}
+
+TEST(NominalSequenceArtifact, CanonicalWriterRoundTripsAllMetadata) {
+    const std::string input_path = writeTemp(developmentArtifactText());
+    const std::string output_path = input_path + ".canonical";
+    const std::string second_path = output_path + ".second";
+    NominalSequenceArtifact artifact;
+    ASSERT_TRUE(artifact.loadCsv(input_path).success);
+    const auto write_result = artifact.writeCanonicalCsv(output_path);
+    ASSERT_TRUE(write_result.success)
+        << write_result.status << ": " << write_result.detail;
+
+    NominalSequenceArtifact round_trip;
+    const auto load_result = round_trip.loadCsv(output_path);
+    ASSERT_TRUE(load_result.success)
+        << load_result.status << ": " << load_result.detail;
+    EXPECT_TRUE(round_trip.validateDevelopmentOnly().success);
+    EXPECT_EQ(round_trip.metadataEntries(), artifact.metadataEntries());
+    ASSERT_TRUE(round_trip.writeCanonicalCsv(second_path).success);
+    EXPECT_EQ(readText(output_path), readText(second_path));
+    const auto no_overwrite = artifact.writeCanonicalCsv(output_path);
+    EXPECT_FALSE(no_overwrite.success);
+    EXPECT_EQ(no_overwrite.status, "OUTPUT_EXISTS");
+
+    std::remove(input_path.c_str());
+    std::remove(output_path.c_str());
+    std::remove(second_path.c_str());
 }
 
 TEST(NominalSequenceArtifact, RejectsMissingMetadata) {

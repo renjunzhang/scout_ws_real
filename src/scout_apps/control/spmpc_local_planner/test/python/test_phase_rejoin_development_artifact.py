@@ -131,7 +131,7 @@ class DevelopmentArtifactTest(unittest.TestCase):
         self.options = MODULE.PreparationOptions(
             contract_id="development_contract",
             expected_dt=0.1,
-            path_length=2.0,
+            path_length=0.2,
             expected_frame_id="map",
         )
 
