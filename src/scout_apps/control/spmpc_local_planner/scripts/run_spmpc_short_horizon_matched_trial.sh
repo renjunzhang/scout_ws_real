@@ -19,6 +19,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)"
 RUNNER="${SCRIPT_DIR}/run_spmpc_real_fixed_path_trial.sh"
 POSTFLIGHT="${SCRIPT_DIR}/../tools/analysis/validate_short_horizon_matched_bag.py"
+PREFLIGHT_EXECUTABLE="${SPMPC_SHORT_HORIZON_MATCHED_PREFLIGHT:-${REPO_ROOT}/devel/lib/spmpc_local_planner/spmpc_short_horizon_matched_preflight}"
 PATH_FILE="/home/geist/fixed_paths/real/20260727_spmpc_development/H0/H0_G2.json"
 PATH_SHA256="578a4dd7663c2f49b4270c37755a08b2b0dc70735fb6b818da35b60a60f3990e"
 RGB_CALIBRATION_FILE="/home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/calibration/red_3ruler_g2s_20260731_relabel_frozen_v2.yaml"
@@ -56,6 +57,8 @@ done
 source /opt/ros/noetic/setup.bash
 # shellcheck disable=SC1090
 source "${REPO_ROOT}/devel/setup.bash"
+[[ -x "${PREFLIGHT_EXECUTABLE}" ]] || \
+  fail "missing C++ preflight executable; build spmpc_short_horizon_matched_preflight first"
 
 validate_launch_contract() {
   local dump expected
@@ -97,10 +100,11 @@ validate_launch_contract() {
   for expected in "${expected[@]}"; do
     grep -Fqx -- "${expected}" <<< "${dump}" || fail "launch contract missing: ${expected}"
   done
+  printf '%s\n' "${dump}" | "${PREFLIGHT_EXECUTABLE}" || \
+    fail "C++ matched-pair preflight rejected the expanded launch contract"
 }
 
 validate_launch_contract
-python3 "${SCRIPT_DIR}/tests/test_short_horizon_matched_release.py"
 if truthy "${VALIDATE_ONLY}"; then
   echo "[SHORT-HORIZON-MATCHED] validate-only PASS: row=${MATCHED_ROW} ${VARIANT}"
   exit 0

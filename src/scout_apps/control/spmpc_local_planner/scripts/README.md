@@ -25,6 +25,7 @@ SHA-256 绑定到 prereg/runtime bundle。历史 Python 实现在
 | `generate_phase_rejoin_development_nominal.py` | 从 bag 提取冻结 Path 后调用 C++ 生成动力学一致 v2 artifact | **仅 development interface smoke；不是 OfflineSloshOCP 或实物正式 artifact** |
 | `prepare_phase_rejoin_development_artifact.py` | 从严格配对的 rolling horizon/audit 离线导出 phase-rejoin 接口 artifact | **仅 development interface smoke；不是 OfflineSloshOCP 或实物正式 artifact** |
 | `run_spmpc_g4_from_g3.sh` | 从 G3 bag 提取轨迹与 snapshot，并调用真实 C++ acados backend 完成顺序/分支回放 | development G4 toolchain gate；不发送命令 |
+| `run_spmpc_short_horizon_matched_trial.sh` | 展开 launch 参数后调用 C++ preflight 校验 matched0/5 公平性与短液体窗口，再编排 development 实物采集 | development G3R3；默认不运动，需显式 `ARM_MOTION=YES` |
 | `run_continuous_real.sh` | 历史 continuous MPCC 实物一键运行 | 历史/开发，不是正式 runner |
 | `compare_b0_bslosh_smoke.sh` | B0/B_slosh 等内部 variant 仿真 smoke | 仿真 smoke |
 | `verify_continuous_smoke.sh` | continuous acados 后端闭环仿真检查 | 仿真 smoke |
@@ -59,6 +60,15 @@ catkin_make spmpc_g4_snapshot_replay -j2
 ```
 
 旧 `np=32` G4 报告及其 hash 仍是历史证据；当前 executable 只接受与本次构建的 generated manifest 一致的 snapshot（当前 slosh 合同为 `np=55`），不会用新二进制重标旧报告。
+
+短时域 matched runner 的运行前合同由源码树 C++ preflight 校验：
+
+```bash
+cd /home/a/scout_ws
+catkin_make spmpc_short_horizon_matched_preflight -j2
+```
+
+它直接消费 `roslaunch --dump-params` 的展开结果，拒绝缺失、重复、未知、非有限字段，以及 matched0/5 除 `w_slosh=0/5` 外的任何差异。原 Python 单元测试仍作为离线回归保留在 `../test/python/`，不再参与实物启动放行。
 
 ## generate_phase_rejoin_development_nominal.py
 

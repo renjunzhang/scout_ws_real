@@ -494,6 +494,27 @@ target_link_libraries(spmpc_phase_rejoin_development_nominal
   spmpc_phase_rejoin
 )
 
+# Development hardware preflight. It consumes roslaunch's expanded parameter
+# stream and remains a source-tree tool rather than a runtime package asset.
+add_library(spmpc_short_horizon_matched_preflight_core STATIC
+  src/tools/short_horizon_matched_preflight.cpp
+)
+set_target_properties(spmpc_short_horizon_matched_preflight_core PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+)
+target_link_libraries(spmpc_short_horizon_matched_preflight_core
+  PUBLIC
+  spmpc_config
+)
+
+add_executable(spmpc_short_horizon_matched_preflight
+  src/tools/short_horizon_matched_preflight_main.cpp
+)
+target_link_libraries(spmpc_short_horizon_matched_preflight
+  PRIVATE
+  spmpc_short_horizon_matched_preflight_core
+)
+
 # Source-tree G4 evidence tool. It shares the exact generated-capsule wrapper
 # with the runtime backend and is deliberately absent from runtime install.
 add_library(spmpc_g4_snapshot_replay_core
@@ -621,6 +642,13 @@ if(CATKIN_ENABLE_TESTING)
     target_link_libraries(test_variant_config
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_short_horizon_matched_preflight
+    test/test_short_horizon_matched_preflight.cpp)
+  if(TARGET test_short_horizon_matched_preflight)
+    target_link_libraries(test_short_horizon_matched_preflight
+      spmpc_short_horizon_matched_preflight_core
     )
   endif()
   catkin_add_gtest(test_slosh_risk_governor test/test_slosh_risk_governor.cpp)
@@ -770,6 +798,7 @@ install(TARGETS
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
   PATTERN "analysis" EXCLUDE
+  PATTERN "tools" EXCLUDE
   PATTERN "*legacy*" EXCLUDE
 )
 
