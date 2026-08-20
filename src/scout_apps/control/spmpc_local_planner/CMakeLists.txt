@@ -19,7 +19,6 @@ find_package(catkin REQUIRED COMPONENTS
   tf2
   tf2_ros
   tf2_geometry_msgs
-  slosh_models
 )
 
 find_package(Eigen3 REQUIRED)
@@ -115,7 +114,7 @@ set(SPMPC_PUBLIC_LIBRARIES
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${SPMPC_PUBLIC_LIBRARIES}
-  CATKIN_DEPENDS roscpp std_msgs sensor_msgs geometry_msgs nav_msgs message_runtime tf2 tf2_ros tf2_geometry_msgs slosh_models
+  CATKIN_DEPENDS roscpp std_msgs sensor_msgs geometry_msgs nav_msgs message_runtime tf2 tf2_ros tf2_geometry_msgs
   DEPENDS EIGEN3
 )
 
@@ -130,11 +129,7 @@ add_library(spmpc_model
 )
 target_link_libraries(spmpc_model
   PRIVATE
-  ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
-)
-target_include_directories(spmpc_model PRIVATE
-  ${catkin_INCLUDE_DIRS}
 )
 
 add_library(spmpc_config
@@ -656,6 +651,12 @@ if(CATKIN_ENABLE_TESTING)
     target_link_libraries(test_slosh_risk_governor
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_slosh_dynamics test/test_slosh_dynamics.cpp)
+  if(TARGET test_slosh_dynamics)
+    target_link_libraries(test_slosh_dynamics
+      spmpc_model
     )
   endif()
   catkin_add_gtest(test_speed_profile test/test_speed_profile.cpp)

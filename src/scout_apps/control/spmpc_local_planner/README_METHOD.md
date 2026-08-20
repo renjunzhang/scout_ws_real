@@ -382,7 +382,10 @@ $$
 \kappa_x=\kappa_y=1.
 $$
 
-$\omega_n$、阻尼比 $\zeta$ 和液面高度系数 $c_h$ 由共享的 `slosh_models::LiquidSloshModel` 根据容器半径、液深、液体密度、模态阶次等参数计算。论文不应再另写一套与代码不一致的经验参数。
+$\omega_n$ 和液面高度系数 $c_h$ 由纯 C++ `SloshDynamics` 按冻结的
+`LiquidSloshModel` 模态根、公式和 ZOH 运算顺序计算，阻尼比 $\zeta$ 则来自同一份
+typed config。默认一阶线性模型和高阶非线性模型均有逐位回归；论文不应再另写一套
+与代码不一致的经验参数。
 
 ### 6.2 增强状态
 

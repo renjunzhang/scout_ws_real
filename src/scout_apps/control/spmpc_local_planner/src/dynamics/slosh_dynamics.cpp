@@ -1,33 +1,97 @@
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
+
 #include <algorithm>
 #include <cmath>
-#include <slosh_models/liquid_slosh_model.h>
 #include <unsupported/Eigen/MatrixFunctions>
 
 namespace spmpc_local_planner {
 
+namespace {
+
+// Roots of J'_1(xi_1n) retained byte-for-byte from the historical
+// slosh_models::LiquidSloshModel contract.
+constexpr double kModalRoots[] = {
+    1.8412,
+    5.3314,
+    8.5363,
+    11.7060,
+    14.8636,
+};
+constexpr int kMaxModeIndex = 5;
+constexpr double kGravity = 9.81;
+
+}  // namespace
+
 bool SloshDynamics::configure(const SloshModelParams& params) {
     params_ = params;
 
-    slosh_models::LiquidSloshModel model;
-    slosh_models::LiquidSloshModel::Params p;
-    p.R = params.container_radius;
-    p.h = params.liquid_height;
-    p.rho = params.liquid_density;
-    p.dt = params.dt;
-    p.mode_index = params.mode_index;
-    p.zeta = params.damping_ratio;
-    p.use_linear_model = params.use_linear_model;
-    p.use_parabola_term = params.use_parabola_term;
-
-    if (!model.configure(p)) {
+    if (params_.container_radius <= 0.0 || params_.liquid_height <= 0.0 ||
+        params_.liquid_density <= 0.0 || params_.dt <= 1e-4 ||
+        params_.mode_index < 1 || params_.mode_index > kMaxModeIndex) {
         configured_ = false;
         return false;
     }
 
-    model.getDiscreteMatrices(Ad_, Bd_);
-    omega_n_ = model.getModalParams().omega_n;
-    height_coeff_ = model.getModalParams().height_coeff;
+    const double modal_root = kModalRoots[params_.mode_index - 1];
+    const double liquid_mass = params_.liquid_density * M_PI *
+                               params_.container_radius *
+                               params_.container_radius *
+                               params_.liquid_height;
+    const double frequency_argument = modal_root * params_.liquid_height /
+                                      params_.container_radius;
+    const double omega_sq = kGravity *
+                            (modal_root / params_.container_radius) *
+                            std::tanh(frequency_argument);
+    omega_n_ = std::sqrt(std::max(omega_sq, 0.0));
+
+    const double modal_mass_numerator =
+        2.0 * params_.container_radius * std::tanh(frequency_argument);
+    const double modal_mass_denominator =
+        modal_root * params_.liquid_height *
+        (modal_root * modal_root - 1.0);
+    const double modal_mass =
+        std::abs(modal_mass_denominator) < 1e-9
+            ? 0.0
+            : liquid_mass * modal_mass_numerator / modal_mass_denominator;
+
+    if (params_.use_linear_model) {
+        height_coeff_ =
+            (4.0 * params_.liquid_height * modal_mass) /
+            (liquid_mass * params_.container_radius);
+    } else {
+        height_coeff_ =
+            (modal_root * modal_root * params_.liquid_height * modal_mass) /
+            (liquid_mass * params_.container_radius);
+    }
+
+    Eigen::Matrix4d continuous_a = Eigen::Matrix4d::Zero();
+    const double two_zeta_omega =
+        2.0 * params_.damping_ratio * omega_n_;
+    const double natural_frequency_sq = omega_n_ * omega_n_;
+    continuous_a(0, 1) = 1.0;
+    continuous_a(1, 0) = -natural_frequency_sq;
+    continuous_a(1, 1) = -two_zeta_omega;
+    continuous_a(2, 3) = 1.0;
+    continuous_a(3, 2) = -natural_frequency_sq;
+    continuous_a(3, 3) = -two_zeta_omega;
+
+    Eigen::Matrix<double, 4, 2> continuous_b =
+        Eigen::Matrix<double, 4, 2>::Zero();
+    continuous_b(1, 0) = -1.0;
+    continuous_b(3, 1) = -1.0;
+
+    Eigen::Matrix<double, 6, 6> augmented =
+        Eigen::Matrix<double, 6, 6>::Zero();
+    augmented.block<4, 4>(0, 0) = continuous_a * params_.dt;
+    augmented.block<4, 2>(0, 4) = continuous_b * params_.dt;
+    const Eigen::Matrix<double, 6, 6> discretized = augmented.exp();
+    Ad_ = discretized.block<4, 4>(0, 0);
+    Bd_ = discretized.block<4, 2>(0, 4);
+    if (!Ad_.allFinite() || !Bd_.allFinite()) {
+        Ad_.setIdentity();
+        Bd_.setZero();
+    }
+
     configured_ = true;
     return true;
 }
