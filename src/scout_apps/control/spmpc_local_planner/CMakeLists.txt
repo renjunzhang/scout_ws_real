@@ -97,6 +97,7 @@ set(SPMPC_PUBLIC_LIBRARIES
   spmpc_model
   spmpc_solver_api
   spmpc_solver_rollout
+  spmpc_solver_parameters
   spmpc_solver_acados
   spmpc_solver_factory
   spmpc_warm_start
@@ -218,6 +219,20 @@ target_link_libraries(spmpc_solver_rollout
   spmpc_reference
 )
 
+add_library(spmpc_solver_parameters STATIC
+  src/solver/acados/stage_parameter_builder.cpp
+)
+set_target_properties(spmpc_solver_parameters PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+)
+target_include_directories(spmpc_solver_parameters PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+)
+target_link_libraries(spmpc_solver_parameters
+  PRIVATE
+  spmpc_config
+)
+
 add_library(spmpc_solver_acados
   src/solvers/continuous_mpcc_solver_acados.cpp
 )
@@ -229,6 +244,7 @@ target_link_libraries(spmpc_solver_acados
   spmpc_config
   spmpc_model
   spmpc_reference
+  spmpc_solver_parameters
   spmpc_warm_start
   ${EIGEN3_LIBRARIES}
 )
@@ -520,6 +536,16 @@ if(CATKIN_ENABLE_TESTING)
   if(TARGET test_backend_policy)
     target_link_libraries(test_backend_policy
       spmpc_solver_api
+    )
+  endif()
+  catkin_add_gtest(test_acados_stage_parameter_builder
+    test/test_acados_stage_parameter_builder.cpp)
+  if(TARGET test_acados_stage_parameter_builder)
+    target_include_directories(test_acados_stage_parameter_builder PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+    )
+    target_link_libraries(test_acados_stage_parameter_builder
+      spmpc_solver_parameters
     )
   endif()
   catkin_add_gtest(test_command_pipeline test/test_command_pipeline.cpp)

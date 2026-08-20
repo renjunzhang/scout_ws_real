@@ -4,6 +4,7 @@
 
 #include "spmpc_local_planner/reference/progress_projector.h"
 #include "spmpc_local_planner/reference/reference_spline.h"
+#include "spmpc_local_planner/solver/acados/stage_parameter_builder.h"
 #include "spmpc_local_planner/warm_start/warm_start_factory.h"
 #include "spmpc_parameter_manifest.h"
 
@@ -45,8 +46,6 @@ static_assert(kSloshParameterCount == SPMPC_PHASE_REJOIN_NP,
 static_assert(SPMPC_PHASE_REJOIN_NH == kSloshNonlinearConstraintCount,
               "phase-rejoin 求解器必须包含 liquid cap 与 terminal gate");
 #endif
-
-constexpr double kDisabledEtaMaxSq = 1e12;
 
 // 统一封装两个生成求解器（b0 6维 / slosh 10维），把前缀相关调用收敛到一处。
 struct GenSolver {
@@ -500,35 +499,6 @@ void capturePrimalGuess(GenSolver& gen,
             controls.push_back(makeHorizonControl(makeWarmStartControl(u)));
         }
     }
-}
-
-std::vector<std::string> parameterNames(int width) {
-    static const char* const names[] = {
-        "rx0", "rx1", "rx2", "rx3",
-        "ry0", "ry1", "ry2", "ry3",
-        "w_contour", "w_lag", "w_progress",
-        "w_a", "w_omega", "w_v", "w_vs", "w_alpha",
-        "w_du_a", "w_du_vs", "a_prev", "vs_prev",
-        "e_c_ref", "e_l_ref", "v_ref",
-        "two_zeta_omega_n", "omega_n_sq", "kappa_x", "kappa_y",
-        "eta_ref", "eta_dot_ref", "w_slosh_eta", "w_slosh_eta_dot",
-        "eta_max_sq",
-        "phase_rejoin_active",
-        "nom_x", "nom_y", "nom_yaw", "nom_v", "nom_omega",
-        "nom_eta_x", "nom_eta_x_dot", "nom_eta_y", "nom_eta_y_dot",
-        "nom_a", "nom_alpha", "nom_v_s",
-        "empirical_gate_active",
-        "gate_r_x", "gate_r_y", "gate_r_yaw", "gate_r_v", "gate_r_omega",
-        "gate_r_eta_x", "gate_r_eta_x_dot", "gate_r_eta_y", "gate_r_eta_y_dot",
-    };
-    const int count = static_cast<int>(sizeof(names) / sizeof(names[0]));
-    const int n = std::max(0, std::min(width, count));
-    std::vector<std::string> out;
-    out.reserve(static_cast<size_t>(n));
-    for (int i = 0; i < n; ++i) {
-        out.emplace_back(names[i]);
-    }
-    return out;
 }
 
 void fillAcadosState(const WarmStartState& state, bool slosh, double* x) {
@@ -1001,12 +971,10 @@ bool ContinuousMpccSolverAcados::solve(
         snapshot.previous_v_s = u_prev_[2];
     }
     snapshot.have_previous_solution = have_previous_solution_;
-    snapshot.parameter_names = parameterNames(gen->np);
-
     // slosh 物理：取自同一套 slosh_dynamics 核（§4.3），κ=1（与 slosh_models 的单位输入增益一致）。
     double c_h = 1.0, eta_ref = 1.0, eta_dot_ref = 1.0;
     double eta_max = 0.0;
-    double eta_max_sq = kDisabledEtaMaxSq;
+    double eta_max_sq = kAcadosDisabledEtaMaxSq;
     double h_limit = 0.0;
     double omega_n = 0.0;
     double two_zeta_omega_n = 0.0, omega_n_sq = 0.0;
@@ -1028,7 +996,7 @@ bool ContinuousMpccSolverAcados::solve(
         }
     }
     output.slosh_summary.hard_constraint_enable = (slosh && variant_.slosh_constraint_enable &&
-                                                   eta_max_sq < kDisabledEtaMaxSq);
+                                                   eta_max_sq < kAcadosDisabledEtaMaxSq);
     output.slosh_summary.h_limit = h_limit;
     output.slosh_summary.h_limit_margin = h_limit;
     output.slosh_hard_constraint.enabled = output.slosh_summary.hard_constraint_enable;
@@ -1048,120 +1016,46 @@ bool ContinuousMpccSolverAcados::solve(
     output.slosh_cost_monitor.height_coeff = c_h;
     output.slosh_cost_monitor.slosh_eta_dot_ratio = params_.slosh.slosh_eta_dot_ratio;
 
-    double p[PARAM_MAX];
-    for (int i = 0; i < PARAM_MAX; ++i) p[i] = 0.0;
-    p[RX0] = cx(0); p[RX1] = cx(1); p[RX2] = cx(2); p[RX3] = cx(3);
-    p[RY0] = cy(0); p[RY1] = cy(1); p[RY2] = cy(2); p[RY3] = cy(3);
-    p[W_CONTOUR] = variant_.w_contour;
-    p[W_LAG] = variant_.w_lag;
-    p[W_PROGRESS] = variant_.w_progress;
-    p[W_A] = variant_.w_control + variant_.w_accel;
-    p[W_OMEGA] = variant_.w_control;          // omega 现在是状态(转向幅值)
-    p[W_V] = variant_.w_v;                    // 物理速度 tracking 权重：防止 cmd_v 塌到 0
-    p[W_VS] = variant_.w_vs;                  // v_s tracking 权重：防止弯处 creep
-    p[W_ALPHA] = variant_.w_alpha;            // 转向角加速度权重(抗 chatter，所有 stage)
-    p[E_C_REF] = e_c_ref;
-    p[E_L_REF] = e_l_ref;
-    p[V_REF] = v_ref;
-    if (slosh) {
-        p[TWO_ZETA_OMEGA_N] = two_zeta_omega_n;
-        p[OMEGA_N_SQ] = omega_n_sq;
-        p[KAPPA_X] = 1.0;
-        p[KAPPA_Y] = 1.0;
-        p[ETA_REF] = eta_ref;
-        p[ETA_DOT_REF] = eta_dot_ref;
-        p[ETA_MAX_SQ] = eta_max_sq;
-        // Safe off/monitor defaults.  An inactive empirical gate evaluates to
-        // -1 in the generated constraint, and unit radii keep the expression
-        // finite before any enforce-stage overwrite.
-        p[PHASE_REJOIN_ACTIVE] = 0.0;
-        p[EMPIRICAL_GATE_ACTIVE] = 0.0;
-        p[GATE_R_X] = 1.0;
-        p[GATE_R_Y] = 1.0;
-        p[GATE_R_YAW] = 1.0;
-        p[GATE_R_V] = 1.0;
-        p[GATE_R_OMEGA] = 1.0;
-        p[GATE_R_ETA_X] = 1.0;
-        p[GATE_R_ETA_X_DOT] = 1.0;
-        p[GATE_R_ETA_Y] = 1.0;
-        p[GATE_R_ETA_Y_DOT] = 1.0;
+    AcadosStageParameterInput parameter_input;
+    parameter_input.horizon_steps = n;
+    parameter_input.slosh_enabled = slosh;
+    for (int index = 0; index < 4; ++index) {
+        parameter_input.reference_x_coeffs[static_cast<std::size_t>(index)] =
+            cx(index);
+        parameter_input.reference_y_coeffs[static_cast<std::size_t>(index)] =
+            cy(index);
     }
+    parameter_input.variant = variant_;
+    parameter_input.contour_error_ref = e_c_ref;
+    parameter_input.lag_error_ref = e_l_ref;
+    parameter_input.effective_v_ref = v_ref;
+    parameter_input.slosh.two_zeta_omega_n = two_zeta_omega_n;
+    parameter_input.slosh.omega_n_sq = omega_n_sq;
+    parameter_input.slosh.eta_ref = eta_ref;
+    parameter_input.slosh.eta_dot_ref = eta_dot_ref;
+    parameter_input.slosh.eta_max_sq = eta_max_sq;
+    parameter_input.slosh.eta_dot_weight_ratio =
+        params_.slosh.slosh_eta_dot_ratio;
+    parameter_input.have_previous_control = have_u_prev_;
+    parameter_input.previous_control = {{
+        u_prev_[0], u_prev_[1], u_prev_[2]}};
+    parameter_input.phase_rejoin = input.phase_rejoin;
 
+    AcadosStageParameterMatrix stage_parameters =
+        AcadosStageParameterBuilder::build(parameter_input);
+    if (!stage_parameters.valid) {
+        output.status = "ACADOS_PARAMETER_BUILD_FAILED_" +
+            stage_parameters.status;
+        return false;
+    }
+    if (stage_parameters.parameter_width != gen->np) {
+        output.status = "ACADOS_PARAMETER_WIDTH_MISMATCH";
+        return false;
+    }
+    snapshot.parameter_names = stage_parameters.parameter_names;
+    snapshot.stage_parameters = stage_parameters.values;
     for (int stage = 0; stage <= n; ++stage) {
-        if (slosh) {
-            // Enforce mode is deliberately dual-horizon: geometry continues to
-            // the generated N, while liquid cost/cap stop at N_l.  Because the
-            // robot dynamics do not depend on eta, the unpenalized liquid tail
-            // cannot feed back into the first action.  Off/monitor retain the
-            // variant's historical slosh-cost horizon unchanged.
-            const double stage_scale = phase_rejoin_enforce
-                ? (stage <= input.phase_rejoin.liquid_steps ? 1.0 : 0.0)
-                : sloshCostStageScale(variant_, stage, n);
-            p[W_SLOSH_ETA] = variant_.w_slosh * stage_scale;
-            p[W_SLOSH_ETA_DOT] = variant_.w_slosh *
-                params_.slosh.slosh_eta_dot_ratio * stage_scale;
-            p[ETA_MAX_SQ] = (phase_rejoin_enforce &&
-                             stage > input.phase_rejoin.liquid_steps)
-                ? kDisabledEtaMaxSq : eta_max_sq;
-
-            // Reset every stage first so the k=N_l activation cannot leak into
-            // k>N_l through the reused parameter buffer.
-            p[PHASE_REJOIN_ACTIVE] = 0.0;
-            p[EMPIRICAL_GATE_ACTIVE] = 0.0;
-            p[NOM_X] = 0.0; p[NOM_Y] = 0.0; p[NOM_YAW] = 0.0;
-            p[NOM_V] = 0.0; p[NOM_OMEGA] = 0.0;
-            p[NOM_ETA_X] = 0.0; p[NOM_ETA_X_DOT] = 0.0;
-            p[NOM_ETA_Y] = 0.0; p[NOM_ETA_Y_DOT] = 0.0;
-            p[NOM_A] = 0.0; p[NOM_ALPHA] = 0.0; p[NOM_V_S] = 0.0;
-            p[GATE_R_X] = 1.0; p[GATE_R_Y] = 1.0;
-            p[GATE_R_YAW] = 1.0; p[GATE_R_V] = 1.0;
-            p[GATE_R_OMEGA] = 1.0; p[GATE_R_ETA_X] = 1.0;
-            p[GATE_R_ETA_X_DOT] = 1.0; p[GATE_R_ETA_Y] = 1.0;
-            p[GATE_R_ETA_Y_DOT] = 1.0;
-
-            if (phase_rejoin_enforce &&
-                stage <= input.phase_rejoin.liquid_steps) {
-                const PhaseNominalStage& nominal =
-                    input.phase_rejoin.stages[static_cast<std::size_t>(stage)];
-                p[PHASE_REJOIN_ACTIVE] = 1.0;
-                p[NOM_X] = nominal.x;
-                p[NOM_Y] = nominal.y;
-                p[NOM_YAW] = nominal.yaw;
-                p[NOM_V] = nominal.v;
-                p[NOM_OMEGA] = nominal.omega;
-                p[NOM_ETA_X] = nominal.eta_x;
-                p[NOM_ETA_X_DOT] = nominal.eta_x_dot;
-                p[NOM_ETA_Y] = nominal.eta_y;
-                p[NOM_ETA_Y_DOT] = nominal.eta_y_dot;
-                p[NOM_A] = nominal.a;
-                p[NOM_ALPHA] = nominal.alpha;
-                p[NOM_V_S] = nominal.v_s;
-                p[GATE_R_X] = nominal.radii.x;
-                p[GATE_R_Y] = nominal.radii.y;
-                p[GATE_R_YAW] = nominal.radii.yaw;
-                p[GATE_R_V] = nominal.radii.v;
-                p[GATE_R_OMEGA] = nominal.radii.omega;
-                p[GATE_R_ETA_X] = nominal.radii.eta_x;
-                p[GATE_R_ETA_X_DOT] = nominal.radii.eta_x_dot;
-                p[GATE_R_ETA_Y] = nominal.radii.eta_y;
-                p[GATE_R_ETA_Y_DOT] = nominal.radii.eta_y_dot;
-                // Contract validation guarantees this is true only at N_l.
-                p[EMPIRICAL_GATE_ACTIVE] = nominal.gate_active ? 1.0 : 0.0;
-            }
-        }
-        // omega 已是状态(初值=实测 omega)，跨周期连续性由状态保证；仅 a/v_s 做第一帧连续性。
-        if (stage == 0 && have_u_prev_) {
-            p[W_DU_A] = variant_.w_du_a;
-            p[W_DU_VS] = variant_.w_du_vs;
-            p[A_PREV] = u_prev_[0];
-            p[VS_PREV] = u_prev_[2];
-        } else {
-            p[W_DU_A] = 0.0; p[W_DU_VS] = 0.0;
-            p[A_PREV] = 0.0; p[VS_PREV] = 0.0;
-        }
-        snapshot.stage_parameters.insert(
-            snapshot.stage_parameters.end(), p, p + gen->np);
-        gen->update_params(stage, p);
+        gen->update_params(stage, stage_parameters.stageData(stage));
     }
 
     double x0[10] = {input.robot.x, input.robot.y, input.robot.yaw, input.robot.v, s0,
