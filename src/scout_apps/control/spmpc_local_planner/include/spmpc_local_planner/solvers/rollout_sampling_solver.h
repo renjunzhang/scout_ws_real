@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spmpc_local_planner/core/spmpc_solver.h"
+#include "spmpc_local_planner/solver/api/solver.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include <utility>
 #include <vector>

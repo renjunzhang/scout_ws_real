@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spmpc_local_planner/core/spmpc_solver.h"
+#include "spmpc_local_planner/solver/api/solver.h"
 #include "spmpc_local_planner/core/start_lock_recovery.h"
 #include "spmpc_local_planner/core/terminal_controller.h"
 #include "spmpc_local_planner/solver/api/solver_session.h"
