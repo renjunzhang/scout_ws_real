@@ -88,6 +88,7 @@ set(SPMPC_PUBLIC_LIBRARIES
   ${PROJECT_NAME}
   spmpc_config
   spmpc_controller
+  spmpc_phase_rejoin
   spmpc_reference
   spmpc_runtime
   spmpc_safety
@@ -122,6 +123,25 @@ add_library(spmpc_config
 
 add_library(spmpc_controller
   src/controller/command/command_pipeline.cpp
+  src/controller/control_cycle_engine.cpp
+)
+
+add_library(spmpc_phase_rejoin
+  src/phase_rejoin/types.cpp
+  src/phase_rejoin/nominal_sequence_artifact.cpp
+  src/phase_rejoin/phase_clock.cpp
+  src/phase_rejoin/phase_candidate_selector.cpp
+  src/phase_rejoin/empirical_recovery_gate.cpp
+  src/phase_rejoin/phase_rejoin_coordinator.cpp
+)
+target_link_libraries(spmpc_phase_rejoin
+  spmpc_reference
+)
+
+target_link_libraries(spmpc_controller
+  spmpc_phase_rejoin
+  spmpc_safety
+  spmpc_solver_api
 )
 
 add_library(spmpc_safety
@@ -152,12 +172,6 @@ add_library(spmpc_solver_api
 )
 
 add_library(${PROJECT_NAME}
-  src/phase_rejoin/types.cpp
-  src/phase_rejoin/nominal_sequence_artifact.cpp
-  src/phase_rejoin/phase_clock.cpp
-  src/phase_rejoin/phase_candidate_selector.cpp
-  src/phase_rejoin/empirical_recovery_gate.cpp
-  src/phase_rejoin/phase_rejoin_coordinator.cpp
   src/core/variant_config.cpp
   src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
@@ -188,6 +202,7 @@ add_dependencies(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
   spmpc_config
   spmpc_controller
+  spmpc_phase_rejoin
   spmpc_reference
   spmpc_runtime
   spmpc_safety
@@ -376,6 +391,14 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_safety_supervisor test/test_safety_supervisor.cpp)
   if(TARGET test_safety_supervisor)
     target_link_libraries(test_safety_supervisor
+      spmpc_safety
+    )
+  endif()
+  catkin_add_gtest(test_control_cycle_engine test/test_control_cycle_engine.cpp)
+  if(TARGET test_control_cycle_engine)
+    target_link_libraries(test_control_cycle_engine
+      spmpc_controller
+      spmpc_phase_rejoin
       spmpc_safety
     )
   endif()

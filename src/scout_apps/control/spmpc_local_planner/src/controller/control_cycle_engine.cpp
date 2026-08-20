@@ -1,0 +1,244 @@
+#include "spmpc_local_planner/controller/control_cycle_engine.h"
+
+#include <cmath>
+
+namespace spmpc_local_planner {
+
+ControlCycleEngine::ControlCycleEngine(SolverSession& solver_session)
+    : solver_session_(solver_session) {}
+
+bool ControlCycleEngine::configurePhaseRejoin(
+    const PhaseRejoinParams& params,
+    std::string& error) {
+    if (!phase_rejoin_.configure(params, error)) {
+        return false;
+    }
+    phase_params_ = params;
+    goal_reached_latched_ = false;
+    return true;
+}
+
+NominalArtifactLoadResult ControlCycleEngine::loadPhaseRejoinArtifact(
+    const std::string& path) {
+    return phase_rejoin_.loadArtifact(path);
+}
+
+bool ControlCycleEngine::validatePhaseRejoinRuntimeContract(
+    const PhaseRejoinRuntimeContract& runtime,
+    const ReferencePath& reference,
+    std::string& error) {
+    return phase_rejoin_.validateRuntimeContract(runtime, reference, error);
+}
+
+bool ControlCycleEngine::configureSafety(
+    const SafetySupervisorConfig& config,
+    std::string& error) {
+    return safety_.configure(config, error);
+}
+
+void ControlCycleEngine::resetSafety() {
+    safety_.reset();
+}
+
+void ControlCycleEngine::resetForReference() {
+    safety_.reset();
+    phase_rejoin_.resetProgress();
+    goal_reached_latched_ = false;
+}
+
+bool ControlCycleEngine::phaseRejoinContractValid() const {
+    return phase_rejoin_.contractValid();
+}
+
+PhaseRejoinDebugData ControlCycleEngine::makePhaseRejoinDebug(
+    const PhaseRejoinPreparation* preparation,
+    const PhaseRejoinDecision* decision) const {
+    return phase_rejoin_.makeDebug(preparation, decision);
+}
+
+VelocityCommand ControlCycleEngine::rawSolverCommand(
+    const SolverOutput& output) {
+    VelocityCommand command;
+    command.linear = output.first_shot_debug.success
+        ? output.first_shot_debug.cmd_v_post_clamp
+        : output.cmd_v;
+    command.angular = output.first_shot_debug.success
+        ? output.first_shot_debug.cmd_omega_post_clamp
+        : output.cmd_omega;
+    return command;
+}
+
+TrackingProjectionView ControlCycleEngine::projectionView(
+    const ProjectorDebugSummary& projector) {
+    TrackingProjectionView view;
+    view.raw_valid = projector.raw_valid;
+    view.raw_distance_m = projector.raw_distance;
+    view.guarded_valid = projector.guarded_valid;
+    view.guarded_distance_m = projector.guarded_distance;
+    return view;
+}
+
+PhaseRejoinPreparation ControlCycleEngine::preparePhase(
+    const ControlCycleRequest& request) {
+    PhaseRejoinPreparation preparation;
+    if (phase_params_.mode == PhaseRejoinMode::Off) {
+        preparation.status = "OFF";
+    } else if (!request.prediction_valid) {
+        preparation.status = "PREDICTION_" + request.prediction_status;
+    } else if (phase_params_.mode == PhaseRejoinMode::Enforce &&
+               !request.solver_origin_at_execution_front) {
+        preparation.status = "EXECUTION_FRONT_NOT_APPLIED";
+    } else {
+        preparation = phase_rejoin_.prepare(
+            request.execution_front_robot,
+            request.execution_front_slosh,
+            request.execution_front_steps,
+            request.solver_input.horizon_steps,
+            request.phase_time_sec,
+            request.solver_origin_at_execution_front);
+    }
+    return preparation;
+}
+
+ControlCycleResult ControlCycleEngine::step(
+    const ControlCycleRequest& request) {
+    ControlCycleResult result;
+    result.solver_input = request.solver_input;
+    result.phase_preparation = preparePhase(request);
+    result.solver_input.phase_rejoin =
+        result.phase_preparation.solver_context;
+
+    result.solve_returned = solver_session_.solve(
+        result.solver_input, result.solver_output);
+    result.output = result.solver_output;
+    result.solver_success = result.output.success;
+    result.solver_command = rawSolverCommand(result.output);
+
+    const bool reached_this_cycle =
+        result.output.terminal_diagnostics.reached ||
+        result.output.status == "GOAL_REACHED";
+    if (reached_this_cycle) {
+        goal_reached_latched_ = true;
+    }
+    if (goal_reached_latched_) {
+        result.output.cmd_v = 0.0;
+        result.output.cmd_omega = 0.0;
+        result.output.success = true;
+        result.output.status = reached_this_cycle
+            ? "GOAL_REACHED"
+            : "GOAL_REACHED_LATCHED";
+    }
+    result.terminal_command.linear = result.output.cmd_v;
+    result.terminal_command.angular = result.output.cmd_omega;
+
+    result.terminal_priority = goal_reached_latched_ ||
+        result.output.terminal_diagnostics.reached ||
+        result.output.status == "GOAL_REACHED";
+    if (phase_params_.mode != PhaseRejoinMode::Off) {
+        result.have_phase_decision = true;
+        if (result.terminal_priority) {
+            result.phase_decision.solver_cmd_v = result.output.cmd_v;
+            result.phase_decision.solver_cmd_omega = result.output.cmd_omega;
+            result.phase_decision.output_cmd_v = result.output.cmd_v;
+            result.phase_decision.output_cmd_omega = result.output.cmd_omega;
+            result.phase_decision.status = "BYPASSED_TERMINAL_PRIORITY";
+        } else {
+            result.phase_decision = phase_rejoin_.decide(
+                result.phase_preparation,
+                request.execution_front_robot,
+                request.execution_front_slosh,
+                result.solver_success,
+                result.solver_output);
+            if (phase_params_.mode == PhaseRejoinMode::Enforce) {
+                result.output.cmd_v =
+                    result.phase_decision.output_cmd_v;
+                result.output.cmd_omega =
+                    result.phase_decision.output_cmd_omega;
+                result.output.status = result.phase_decision.status;
+                result.output.success =
+                    (result.solver_success &&
+                     result.phase_decision.terminal_gate_accepted) ||
+                    result.phase_decision.recovery_command_used;
+                if (result.phase_decision.controlled_stop_used) {
+                    result.output.success = false;
+                    result.output.cmd_v = 0.0;
+                    result.output.cmd_omega = 0.0;
+                }
+            }
+        }
+    }
+    result.post_phase_command.linear = result.output.cmd_v;
+    result.post_phase_command.angular = result.output.cmd_omega;
+
+    SafetySupervisorInput safety_input;
+    safety_input.robot = result.solver_input.robot;
+    safety_input.command = result.post_phase_command;
+    safety_input.command_accepted = result.output.success;
+    safety_input.status = result.output.status;
+    safety_input.terminal = result.output.terminal_diagnostics;
+    safety_input.projection = projectionView(
+        result.output.projector_debug);
+    safety_input.period_sec = request.period_sec;
+    result.safety = safety_.step(safety_input);
+    if (result.safety.blocked) {
+        result.output.success = false;
+        result.output.status = result.safety.status;
+        result.output.cmd_v = result.safety.command.linear;
+        result.output.cmd_omega = result.safety.command.angular;
+    }
+
+    if (result.have_phase_decision && !result.terminal_priority &&
+        !result.safety.blocked &&
+        (phase_params_.mode == PhaseRejoinMode::Monitor ||
+         result.output.success)) {
+        phase_rejoin_.commit(
+            result.phase_preparation, result.phase_decision);
+    }
+
+    result.terminal_controller_intervened =
+        std::abs(result.terminal_command.linear -
+                 result.solver_command.linear) > 1e-6 ||
+        std::abs(result.terminal_command.angular -
+                 result.solver_command.angular) > 1e-6;
+
+    CommandArbitrationRequest arbitration;
+    arbitration.safety.active = result.safety.blocked;
+    arbitration.safety.accepted = false;
+    arbitration.safety.command = VelocityCommand{};
+    arbitration.safety.reason = result.safety.status;
+
+    arbitration.terminal_reached.active = result.terminal_priority;
+    arbitration.terminal_reached.accepted = true;
+    arbitration.terminal_reached.command = result.terminal_command;
+    arbitration.terminal_reached.reason = result.output.status;
+
+    arbitration.phase_rejoin.active =
+        phase_params_.mode == PhaseRejoinMode::Enforce &&
+        result.have_phase_decision && !result.terminal_priority &&
+        !result.safety.blocked && result.output.success;
+    arbitration.phase_rejoin.accepted = result.output.success;
+    arbitration.phase_rejoin.command = result.post_phase_command;
+    arbitration.phase_rejoin.reason = result.output.status;
+
+    arbitration.terminal.active = result.solver_success &&
+        result.terminal_controller_intervened;
+    arbitration.terminal.accepted = result.solver_success;
+    arbitration.terminal.command = result.terminal_command;
+    arbitration.terminal.reason = result.solver_output.status;
+
+    arbitration.solver.active = result.solver_success;
+    arbitration.solver.accepted = result.solver_success;
+    // Preserve the exact command returned by the planning session even when
+    // its difference from the raw first-shot command is below the audit
+    // intervention tolerance.
+    arbitration.solver.command = result.terminal_command;
+    arbitration.solver.reason = result.solver_output.status;
+
+    result.decision = arbitrateCommand(arbitration);
+    result.output.cmd_v = result.decision.command.linear;
+    result.output.cmd_omega = result.decision.command.angular;
+    result.output.success = result.decision.accepted;
+    return result;
+}
+
+}  // namespace spmpc_local_planner

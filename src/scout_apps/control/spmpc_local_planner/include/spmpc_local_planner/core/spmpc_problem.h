@@ -3,11 +3,12 @@
 #include "spmpc_local_planner/core/spmpc_solver.h"
 #include "spmpc_local_planner/core/start_lock_recovery.h"
 #include "spmpc_local_planner/core/terminal_controller.h"
+#include "spmpc_local_planner/solver/api/solver_session.h"
 #include <memory>
 
 namespace spmpc_local_planner {
 
-class SpmpcProblem {
+class SpmpcProblem : public SolverSession {
 public:
     SpmpcProblem();
 
@@ -17,7 +18,7 @@ public:
     bool hasReferencePath() const { return !reference_.empty(); }
     const std::string& referenceFrameId() const { return reference_.frameId(); }
 
-    bool solve(const SolverInput& input, SolverOutput& output);
+    bool solve(const SolverInput& input, SolverOutput& output) override;
 
 private:
     void updateStartLockRecovery(const SolverInput& input, bool valid_output, SolverOutput& output);

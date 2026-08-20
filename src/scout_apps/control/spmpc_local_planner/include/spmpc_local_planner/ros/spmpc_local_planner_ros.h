@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/config/app_config.h"
 #include "spmpc_local_planner/controller/command/command_pipeline.h"
+#include "spmpc_local_planner/controller/control_cycle_engine.h"
 #include "spmpc_local_planner/core/slosh_risk_governor.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/estimation/processed_imu_pipeline.h"
@@ -51,7 +52,7 @@ private:
     void controlTimerCallback(const ros::TimerEvent&);
     void publishZeroCommand(const CommandInterventionDebug& intervention = CommandInterventionDebug(),
                             ControlCycleAuditDebug* audit = nullptr);
-    void publishCommand(const geometry_msgs::Twist& desired,
+    void publishCommand(const CommandDecision& decision,
                         const CommandInterventionDebug& intervention = CommandInterventionDebug(),
                         ControlCycleAuditDebug* audit = nullptr);
     void recordPublishedCommand(const geometry_msgs::Twist& cmd, const ros::Time& stamp, const CommandPublishMeta& meta);
@@ -117,9 +118,9 @@ private:
     tf2_ros::TransformListener tf_listener_;
 
     SpmpcProblem problem_;
+    ControlCycleEngine control_cycle_engine_;
     AppConfig app_config_;
     CommandPipeline command_pipeline_;
-    SafetySupervisor safety_supervisor_;
     DiagnosticsPublisher diagnostics_;
     VariantConfig variant_;
     ReferencePathPreprocessor reference_preprocessor_;
@@ -133,7 +134,6 @@ private:
     SloshRiskGovernorOutput last_slosh_governor_output_;
     CommandHistoryBuffer command_history_;
     ExecutionStatePredictor execution_predictor_;
-    PhaseRejoinCoordinator phase_rejoin_coordinator_;
     PhaseRejoinParams phase_rejoin_params_;
     PhaseRejoinRuntimeContract phase_rejoin_runtime_contract_;
     DelayPhaseParams delay_phase_params_;
@@ -187,10 +187,6 @@ private:
     double shared_cmd_angular_rate_max_ = 1.2;
     double shared_cmd_angular_accel_max_ = 1.2;
     double shared_cmd_angular_accel_max_dt_ = 0.2;
-    // Once the terminal controller declares success, keep zero command until a
-    // genuinely new reference arrives.  This prevents alternating
-    // GOAL_REACHED/enforce cycles from re-exciting the liquid at the endpoint.
-    bool goal_reached_latched_ = false;
     double tf_timeout_sec_ = 0.05;
     double control_frequency_ = 30.0;
     double dt_ = 1.0 / 30.0;

@@ -38,13 +38,6 @@ double ageSeconds(std::int64_t receive_stamp_ns, std::int64_t value_stamp_ns) {
     return static_cast<double>(receive_stamp_ns - value_stamp_ns) * 1.0e-9;
 }
 
-VelocityCommand velocityCommandFromRos(const geometry_msgs::Twist& message) {
-    VelocityCommand command;
-    command.linear = message.linear.x;
-    command.angular = message.angular.z;
-    return command;
-}
-
 geometry_msgs::Twist velocityCommandToRos(const VelocityCommand& command) {
     geometry_msgs::Twist message;
     message.linear.x = command.linear;
@@ -78,7 +71,8 @@ double wrapAngle(double angle) {
 }  // namespace
 
 SpmpcLocalPlannerROS::SpmpcLocalPlannerROS()
-    : tf_listener_(tf_buffer_) {}
+    : tf_listener_(tf_buffer_),
+      control_cycle_engine_(problem_) {}
 
 SpmpcLocalPlannerROS::~SpmpcLocalPlannerROS() {
     if (imu_spinner_) {
@@ -298,7 +292,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                phase_rejoin_params_.candidate.weight_liquid,
                phase_rejoin_params_.candidate.weight_liquid);
     std::string phase_rejoin_error;
-    if (!phase_rejoin_coordinator_.configure(
+    if (!control_cycle_engine_.configurePhaseRejoin(
             phase_rejoin_params_, phase_rejoin_error)) {
         ROS_FATAL("[spmpc_local_planner] phase-rejoin configuration failed: %s",
                   phase_rejoin_error.c_str());
@@ -315,7 +309,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                      "artifact; diagnostics will report not ready");
         } else {
             const NominalArtifactLoadResult load_result =
-                phase_rejoin_coordinator_.loadArtifact(
+                control_cycle_engine_.loadPhaseRejoinArtifact(
                     phase_rejoin_artifact_path_);
             if (!load_result.success) {
                 if (phase_rejoin_params_.mode == PhaseRejoinMode::Enforce) {
@@ -529,7 +523,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     safety_config.tracking.spin_max_duration_sec = std::max(
         0.0, safety_config.tracking.spin_max_duration_sec);
     std::string safety_error;
-    if (!safety_supervisor_.configure(safety_config, safety_error)) {
+    if (!control_cycle_engine_.configureSafety(safety_config, safety_error)) {
         ROS_FATAL("[spmpc_local_planner] safety supervisor configuration failed: %s",
                   safety_error.c_str());
         return false;
@@ -859,7 +853,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     diagnostics_.publishStatus("INITIALIZED");
     if (phase_rejoin_publish_diagnostics_) {
         diagnostics_.publishPhaseRejoin(
-            phase_rejoin_coordinator_.makeDebug(nullptr, nullptr),
+            control_cycle_engine_.makePhaseRejoinDebug(nullptr, nullptr),
             ControlCycleTimingDebug{},
             phase_rejoin_params_.required_frame_id);
     }
@@ -1180,26 +1174,20 @@ void SpmpcLocalPlannerROS::publishZeroCommand(
 }
 
 void SpmpcLocalPlannerROS::publishCommand(
-    const geometry_msgs::Twist& desired,
+    const CommandDecision& decision,
     const CommandInterventionDebug& intervention,
     ControlCycleAuditDebug* audit) {
     const ros::Time stamp = ros::Time::now();
     CommandPipelineRequest request;
     request.stamp_ns = static_cast<StampNs>(stamp.toNSec());
-    request.desired = velocityCommandFromRos(desired);
+    request.desired = decision.command;
     request.publish_enabled = publish_cmd_vel_;
-    request.source = CommandSource::Solver;
-    request.reason = audit && !audit->status.empty()
-        ? audit->status
-        : "SOLVER_COMMAND";
-    if (intervention.zero_due_to_terminal_spin_fail ||
-        intervention.zero_due_to_tracking_safety) {
-        request.source = CommandSource::Safety;
-    } else if (audit && audit->terminal_controller_intervened) {
-        request.source = CommandSource::Terminal;
-    }
+    request.source = decision.source;
+    request.reason = decision.reason;
 
     const CommandPipelineResult result = command_pipeline_.finalize(request);
+    const geometry_msgs::Twist desired =
+        velocityCommandToRos(decision.command);
     const geometry_msgs::Twist command =
         velocityCommandToRos(result.final_command);
     const geometry_msgs::Twist previous =
@@ -1328,7 +1316,7 @@ void SpmpcLocalPlannerROS::validatePhaseRejoinReference(
         return;
     }
     std::string error;
-    if (!phase_rejoin_coordinator_.validateRuntimeContract(
+    if (!control_cycle_engine_.validatePhaseRejoinRuntimeContract(
             phase_rejoin_runtime_contract_, reference, error)) {
         ROS_WARN_THROTTLE(
             1.0,
@@ -1341,7 +1329,8 @@ void SpmpcLocalPlannerROS::validatePhaseRejoinReference(
     ROS_INFO("[spmpc_local_planner] phase-rejoin runtime contract accepted "
              "dt=%.9f path_length=%.6f frame=%s contract=%s",
              dt_, reference.length(), reference.frameId().c_str(),
-             phase_rejoin_coordinator_.artifact().metadata().contract_id.c_str());
+             control_cycle_engine_.phaseRejoinCoordinator()
+                 .artifact().metadata().contract_id.c_str());
 }
 
 void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
@@ -1373,15 +1362,14 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
         const bool reference_changed = updateReferenceSignature(
             transformed_path);
         if (reference_changed) {
-            safety_supervisor_.reset();
+            control_cycle_engine_.resetForReference();
             resetMapVRefProgress();
             slosh_risk_governor_.reset();
-            phase_rejoin_coordinator_.resetProgress();
-            goal_reached_latched_ = false;
         }
         const ReferencePath reference = referencePathFromMsg(transformed_path);
         problem_.setReferencePath(reference);
-        if (reference_changed || !phase_rejoin_coordinator_.contractValid()) {
+        if (reference_changed ||
+            !control_cycle_engine_.phaseRejoinContractValid()) {
             validatePhaseRejoinReference(reference);
         }
         return;
@@ -1390,14 +1378,13 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
     const auto reference = referencePathFromMsg(*msg);
     const bool reference_changed = updateReferenceSignature(*msg);
     if (reference_changed) {
-        safety_supervisor_.reset();
+        control_cycle_engine_.resetForReference();
         resetMapVRefProgress();
         slosh_risk_governor_.reset();
-        phase_rejoin_coordinator_.resetProgress();
-        goal_reached_latched_ = false;
     }
     problem_.setReferencePath(reference);
-    if (reference_changed || !phase_rejoin_coordinator_.contractValid()) {
+    if (reference_changed ||
+        !control_cycle_engine_.phaseRejoinContractValid()) {
         validatePhaseRejoinReference(reference);
     }
 }
@@ -1419,7 +1406,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     cycle_audit.publish_cmd_vel = publish_cmd_vel_;
 
     if (!have_odom_) {
-        safety_supervisor_.reset();
+        control_cycle_engine_.resetSafety();
         diagnostics_.publishStatus("WAITING_FOR_ODOM");
         publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoOdom);
         CommandInterventionDebug intervention;
@@ -1429,7 +1416,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         return;
     }
     if (!problem_.hasReferencePath()) {
-        safety_supervisor_.reset();
+        control_cycle_engine_.resetSafety();
         diagnostics_.publishStatus("WAITING_FOR_REFERENCE_PATH");
         publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoReference);
         CommandInterventionDebug intervention;
@@ -1479,7 +1466,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         state_timing_params_.require_common_epoch;
 
     if (solver_consumes_selected_state && !observer_selection.valid) {
-        safety_supervisor_.reset();
+        control_cycle_engine_.resetSafety();
         const std::string selection_status =
             std::string("WAITING_FOR_SLOSH_OBSERVER_") +
             sloshObserverSelectionStatusName(observer_selection.status) + "_" +
@@ -1529,7 +1516,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
                 cycle_audit.timing.raw_liquid_state_stamp_ns,
                 state_timing_params_.max_raw_skew_sec,
                 raw_skew_sec)) {
-            safety_supervisor_.reset();
+            control_cycle_engine_.resetSafety();
             cycle_audit.timing.raw_state_skew_sec = raw_skew_sec;
             cycle_audit.timing.state_alignment_status =
                 "RAW_STATE_SKEW_CONTRACT_FAILED";
@@ -1557,7 +1544,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
                 interpolated,
                 extrapolated,
                 alignment_status)) {
-            safety_supervisor_.reset();
+            control_cycle_engine_.resetSafety();
             cycle_audit.timing.state_alignment_status = alignment_status;
             cycle_audit.status =
                 "STATE_TIME_ALIGNMENT_FAILED_" + alignment_status;
@@ -1585,7 +1572,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         cycle_audit.timing.state_alignment_status = alignment_status;
     } else {
         if (!robotStateFromLatest(input.robot)) {
-            safety_supervisor_.reset();
+            control_cycle_engine_.resetSafety();
             diagnostics_.publishStatus("WAITING_FOR_TF_POSE");
             publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoTfPose);
             cycle_audit.status = "WAITING_FOR_TF_POSE";
@@ -1713,45 +1700,10 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         }
     }
 
-    PhaseRejoinPreparation phase_preparation;
     const bool solver_origin_at_execution_front =
         robot_delay_compensation_applied &&
         liquid_delay_compensation_applied;
-    if (phase_rejoin_params_.mode == PhaseRejoinMode::Off) {
-        phase_preparation.status = "OFF";
-    } else if (!shadow_prediction.valid) {
-        phase_preparation.status = "PREDICTION_" +
-            shadow_prediction.status;
-    } else if (phase_rejoin_params_.mode == PhaseRejoinMode::Enforce &&
-               !solver_origin_at_execution_front) {
-        // An enforce solve may only start from the state represented at the
-        // physical execution front.  Partial history, stale odometry, or a
-        // failed delay guard must not silently activate a raw-state OCP with
-        // a differently indexed terminal gate.
-        phase_preparation.status = "EXECUTION_FRONT_NOT_APPLIED";
-    } else {
-        const double front_sec = std::max(
-            delay_phase_params_.linear_delay_sec,
-            delay_phase_params_.angular_delay_sec);
-        const int front_steps = static_cast<int>(std::ceil(
-            std::max(0.0, front_sec) / std::max(1e-9, dt_)));
-        phase_preparation = phase_rejoin_coordinator_.prepare(
-            shadow_prediction.predicted_robot,
-            shadow_prediction.predicted_slosh,
-            front_steps,
-            horizon_steps_,
-            delay_phase_now.toSec(),
-            solver_origin_at_execution_front);
-    }
-    solve_input.phase_rejoin = phase_preparation.solver_context;
     solve_input.cycle_timing = cycle_audit.timing;
-
-    diagnostics_.publishSolverInputState(
-        solve_input,
-        static_cast<std::uint8_t>(observer_selection.effective_source),
-        robot_delay_compensation_applied,
-        liquid_delay_compensation_applied,
-        slosh_height_coeff);
 
     if (have_previous_shifted_plan_ &&
         previous_plan_cycle_id_ + 1 == cycle_audit.timing.cycle_id) {
@@ -1769,15 +1721,48 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     cycle_audit.timing.solve_start_stamp_ns = static_cast<std::int64_t>(
         ros::Time::now().toNSec());
     solve_input.cycle_timing = cycle_audit.timing;
-    SolverOutput output;
+    double spin_gate_dt = dt_;
+    if (!event.last_real.isZero() && !event.current_real.isZero()) {
+        spin_gate_dt = (event.current_real - event.last_real).toSec();
+    }
+    const double front_sec = std::max(
+        delay_phase_params_.linear_delay_sec,
+        delay_phase_params_.angular_delay_sec);
+    const int front_steps = static_cast<int>(std::ceil(
+        std::max(0.0, front_sec) / std::max(1e-9, dt_)));
+    ControlCycleRequest engine_request;
+    engine_request.cycle_id = cycle_audit.timing.cycle_id;
+    engine_request.cycle_start_ns =
+        cycle_audit.timing.cycle_start_stamp_ns;
+    engine_request.solver_input = solve_input;
+    engine_request.prediction_valid = shadow_prediction.valid;
+    engine_request.prediction_status = shadow_prediction.status;
+    engine_request.execution_front_robot =
+        shadow_prediction.predicted_robot;
+    engine_request.execution_front_slosh =
+        shadow_prediction.predicted_slosh;
+    engine_request.solver_origin_at_execution_front =
+        solver_origin_at_execution_front;
+    engine_request.execution_front_steps = front_steps;
+    engine_request.phase_time_sec = delay_phase_now.toSec();
+    engine_request.period_sec = spin_gate_dt;
     cycle_audit.solve_attempted = true;
-    problem_.solve(solve_input, output);
+    ControlCycleResult engine_result =
+        control_cycle_engine_.step(engine_request);
     cycle_audit.timing.solve_end_stamp_ns = static_cast<std::int64_t>(
         ros::Time::now().toNSec());
     cycle_audit.timing.horizon_available_stamp_ns =
         cycle_audit.timing.solve_end_stamp_ns;
+    solve_input = engine_result.solver_input;
+    SolverOutput output = engine_result.output;
     output.cycle_timing = cycle_audit.timing;
-    cycle_audit.solver_status = output.status;
+    diagnostics_.publishSolverInputState(
+        solve_input,
+        static_cast<std::uint8_t>(observer_selection.effective_source),
+        robot_delay_compensation_applied,
+        liquid_delay_compensation_applied,
+        slosh_height_coeff);
+    cycle_audit.solver_status = engine_result.solver_output.status;
     cycle_audit.status = output.status;
     cycle_audit.solver_u0_a = output.first_shot_debug.u0_a;
     cycle_audit.solver_u0_alpha = output.first_shot_debug.u0_alpha;
@@ -1794,129 +1779,32 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         map_vref_last_progress_abs_s_ = output.progress_abs_s;
         have_map_vref_progress_ = true;
     }
-    double spin_gate_dt = dt_;
-    if (!event.last_real.isZero() && !event.current_real.isZero()) {
-        spin_gate_dt = (event.current_real - event.last_real).toSec();
-    }
-    const double raw_solver_cmd_v = output.first_shot_debug.success
-        ? output.first_shot_debug.cmd_v_post_clamp
-        : output.cmd_v;
-    const double raw_solver_cmd_omega = output.first_shot_debug.success
-        ? output.first_shot_debug.cmd_omega_post_clamp
-        : output.cmd_omega;
-    const bool solver_success = output.success;
-    const bool reached_this_cycle =
-        output.terminal_diagnostics.reached || output.status == "GOAL_REACHED";
-    if (reached_this_cycle) {
-        goal_reached_latched_ = true;
-    }
-    if (goal_reached_latched_) {
-        output.cmd_v = 0.0;
-        output.cmd_omega = 0.0;
-        output.success = true;
-        output.status = reached_this_cycle
-            ? "GOAL_REACHED"
-            : "GOAL_REACHED_LATCHED";
-    }
-    const double terminal_cmd_v = output.cmd_v;
-    const double terminal_cmd_omega = output.cmd_omega;
-    PhaseRejoinDecision phase_decision;
-    bool have_phase_decision = false;
-    // A validated phase artifact owns slowdown/settling all the way to the
-    // endpoint.  Generic terminal_phase begins at the slowdown envelope and
-    // must not silently bypass or mutate that certified command.  Priority is
-    // transferred only after the actual reached condition, where the existing
-    // zero-command latch remains the final authority.
-    const bool terminal_priority = goal_reached_latched_ ||
-        output.terminal_diagnostics.reached ||
-        output.status == "GOAL_REACHED";
-    if (phase_rejoin_params_.mode != PhaseRejoinMode::Off) {
-        have_phase_decision = true;
-        if (terminal_priority) {
-            phase_decision.solver_cmd_v = output.cmd_v;
-            phase_decision.solver_cmd_omega = output.cmd_omega;
-            phase_decision.output_cmd_v = output.cmd_v;
-            phase_decision.output_cmd_omega = output.cmd_omega;
-            phase_decision.status = "BYPASSED_TERMINAL_PRIORITY";
-        } else {
-            phase_decision = phase_rejoin_coordinator_.decide(
-                phase_preparation,
-                shadow_prediction.predicted_robot,
-                shadow_prediction.predicted_slosh,
-                solver_success,
-                output);
-            if (phase_rejoin_params_.mode == PhaseRejoinMode::Enforce) {
-                output.cmd_v = phase_decision.output_cmd_v;
-                output.cmd_omega = phase_decision.output_cmd_omega;
-                output.status = phase_decision.status;
-                output.success =
-                    (solver_success &&
-                     phase_decision.terminal_gate_accepted) ||
-                    phase_decision.recovery_command_used;
-                if (phase_decision.controlled_stop_used) {
-                    output.success = false;
-                    output.cmd_v = 0.0;
-                    output.cmd_omega = 0.0;
-                }
-            }
-        }
-    }
     CommandInterventionDebug intervention;
-    intervention.solver_cmd_v = raw_solver_cmd_v;
-    intervention.solver_cmd_omega = raw_solver_cmd_omega;
-    SafetySupervisorInput safety_input;
-    safety_input.robot = solve_input.robot;
-    safety_input.command.linear = output.cmd_v;
-    safety_input.command.angular = output.cmd_omega;
-    safety_input.command_accepted = output.success;
-    safety_input.status = output.status;
-    safety_input.terminal = output.terminal_diagnostics;
-    safety_input.projection.raw_valid = output.projector_debug.raw_valid;
-    safety_input.projection.raw_distance_m =
-        output.projector_debug.raw_distance;
-    safety_input.projection.guarded_valid =
-        output.projector_debug.guarded_valid;
-    safety_input.projection.guarded_distance_m =
-        output.projector_debug.guarded_distance;
-    safety_input.period_sec = spin_gate_dt;
-    const SafetySupervisorResult safety_result =
-        safety_supervisor_.step(safety_input);
+    intervention.solver_cmd_v = engine_result.solver_command.linear;
+    intervention.solver_cmd_omega = engine_result.solver_command.angular;
     const bool terminal_spin_blocked =
-        safety_result.terminal_spin_blocked;
+        engine_result.safety.terminal_spin_blocked;
     const bool tracking_safety_blocked =
-        safety_result.tracking_safety_blocked;
-    if (safety_result.blocked) {
-        output.success = false;
-        output.status = safety_result.status;
-        output.cmd_v = safety_result.command.linear;
-        output.cmd_omega = safety_result.command.angular;
-    }
-    if (have_phase_decision && !terminal_priority &&
-        !terminal_spin_blocked && !tracking_safety_blocked &&
-        (phase_rejoin_params_.mode == PhaseRejoinMode::Monitor ||
-         output.success)) {
-        phase_rejoin_coordinator_.commit(
-            phase_preparation, phase_decision);
-    }
+        engine_result.safety.tracking_safety_blocked;
     intervention.post_gate_cmd_v = output.cmd_v;
     intervention.post_gate_cmd_omega = output.cmd_omega;
     intervention.output_success = output.success;
-    intervention.zero_due_to_solver_failure = !solver_success;
+    intervention.zero_due_to_solver_failure =
+        !engine_result.solver_success;
     intervention.zero_due_to_terminal_spin_fail = terminal_spin_blocked;
     intervention.zero_due_to_tracking_safety = tracking_safety_blocked;
     cycle_audit.solver_cmd_v = intervention.solver_cmd_v;
     cycle_audit.solver_cmd_omega = intervention.solver_cmd_omega;
-    cycle_audit.terminal_cmd_v = terminal_cmd_v;
-    cycle_audit.terminal_cmd_omega = terminal_cmd_omega;
+    cycle_audit.terminal_cmd_v = engine_result.terminal_command.linear;
+    cycle_audit.terminal_cmd_omega = engine_result.terminal_command.angular;
     cycle_audit.post_gate_cmd_v = intervention.post_gate_cmd_v;
     cycle_audit.post_gate_cmd_omega = intervention.post_gate_cmd_omega;
-    cycle_audit.solve_success = solver_success;
+    cycle_audit.solve_success = engine_result.solver_success;
     cycle_audit.command_accepted = output.success;
     cycle_audit.terminal_phase =
         output.terminal_diagnostics.terminal_phase;
     cycle_audit.terminal_controller_intervened =
-        std::abs(terminal_cmd_v - raw_solver_cmd_v) > 1e-6 ||
-        std::abs(terminal_cmd_omega - raw_solver_cmd_omega) > 1e-6;
+        engine_result.terminal_controller_intervened;
     cycle_audit.safety_gate_intervened =
         terminal_spin_blocked || tracking_safety_blocked;
     cycle_audit.status = output.status;
@@ -1944,9 +1832,11 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         robot_delay_compensation_applied || liquid_delay_compensation_applied);
     if (phase_rejoin_publish_diagnostics_) {
         PhaseRejoinDebugData phase_debug =
-            phase_rejoin_coordinator_.makeDebug(
-                &phase_preparation,
-                have_phase_decision ? &phase_decision : nullptr);
+            control_cycle_engine_.makePhaseRejoinDebug(
+                &engine_result.phase_preparation,
+                engine_result.have_phase_decision
+                    ? &engine_result.phase_decision
+                    : nullptr);
         if (terminal_spin_blocked || tracking_safety_blocked) {
             phase_debug.status = "SAFETY_OVERRIDE_" + output.status;
         }
@@ -1975,10 +1865,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         return;
     }
 
-    geometry_msgs::Twist cmd;
-    cmd.linear.x = output.cmd_v;
-    cmd.angular.z = output.cmd_omega;
-    publishCommand(cmd, intervention, &cycle_audit);
+    publishCommand(engine_result.decision, intervention, &cycle_audit);
 }
 
 RobotState SpmpcLocalPlannerROS::robotStateFromOdom(const nav_msgs::Odometry& odom) const {

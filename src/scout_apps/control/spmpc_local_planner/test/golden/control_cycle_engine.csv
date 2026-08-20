@@ -1,0 +1,9 @@
+cycle_id,reset_reference,solver_success,solver_status,raw_v,raw_omega,session_v,session_omega,terminal_phase,terminal_reached,projection_valid,projection_distance,robot_omega,period_sec,expected_source,expected_success,expected_v,expected_omega,expected_status
+1,0,1,OK,0.40,0.10,0.40,0.10,0,0,0,0.00,0.00,0.10,SOLVER,1,0.40,0.10,OK
+2,0,1,TERMINAL_SLOWDOWN,0.50,0.10,0.20,0.10,1,0,0,0.00,0.00,0.10,TERMINAL,1,0.20,0.10,TERMINAL_SLOWDOWN
+3,0,1,OK,0.30,0.00,0.30,0.00,0,0,1,0.80,0.00,0.10,SOLVER,1,0.30,0.00,OK
+4,0,1,OK,0.30,0.00,0.30,0.00,0,0,1,0.80,0.00,0.10,SAFETY,0,0.00,0.00,TRACKING_UNSAFE_PROJECTION
+5,0,0,SOLVER_FAILED,0.00,0.00,0.00,0.00,0,0,1,0.10,0.00,0.10,SAFETY,0,0.00,0.00,TRACKING_UNSAFE_PROJECTION
+6,0,1,GOAL_REACHED,0.00,0.00,0.00,0.00,1,1,1,0.10,0.00,0.10,TERMINAL,1,0.00,0.00,GOAL_REACHED
+7,0,0,SOLVER_FAILED,0.00,0.00,0.00,0.00,0,0,0,0.00,0.00,0.10,TERMINAL,1,0.00,0.00,GOAL_REACHED_LATCHED
+8,1,0,SOLVER_FAILED,0.00,0.00,0.00,0.00,0,0,0,0.00,0.00,0.10,FAIL_CLOSED,0,0.00,0.00,SOLVER_FAILED
