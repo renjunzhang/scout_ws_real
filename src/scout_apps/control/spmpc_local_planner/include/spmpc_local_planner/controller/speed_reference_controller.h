@@ -1,7 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/core/slosh_risk_governor.h"
-#include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/solver/api/solver_io.h"
 #include "spmpc_local_planner/reference/speed_profile.h"
 
 #include <string>

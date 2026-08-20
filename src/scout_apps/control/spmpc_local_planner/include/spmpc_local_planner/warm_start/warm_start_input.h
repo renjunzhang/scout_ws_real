@@ -1,9 +1,10 @@
 #pragma once
 
-#include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/domain/state.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/reference/reference_path.h"
 #include "spmpc_local_planner/reference/reference_spline.h"
+
 #include <string>
 
 namespace spmpc_local_planner {

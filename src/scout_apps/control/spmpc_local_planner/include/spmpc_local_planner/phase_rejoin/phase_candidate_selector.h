@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/domain/state.h"
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
 #include "spmpc_local_planner/phase_rejoin/types.h"
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/solver/api/solver_io.h"
 
 namespace spmpc_local_planner {
 

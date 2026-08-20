@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/solver/api/solver_io.h"
 #include "spmpc_local_planner/phase_rejoin/empirical_recovery_gate.h"
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
 #include "spmpc_local_planner/phase_rejoin/phase_candidate_selector.h"

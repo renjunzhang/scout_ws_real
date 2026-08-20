@@ -3,7 +3,7 @@
 #include "spmpc_local_planner/controller/command/command_pipeline.h"
 #include "spmpc_local_planner/controller/speed_reference_controller.h"
 #include "spmpc_local_planner/controller/control_cycle_telemetry.h"
-#include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/solver/api/solver_io.h"
 #include "spmpc_local_planner/phase_rejoin/phase_rejoin_coordinator.h"
 #include "spmpc_local_planner/safety/safety_supervisor.h"
 #include "spmpc_local_planner/solver/api/solver_session.h"

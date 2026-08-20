@@ -1,6 +1,7 @@
 #pragma once
 
-#include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/domain/state.h"
+
 #include <vector>
 
 namespace spmpc_local_planner {

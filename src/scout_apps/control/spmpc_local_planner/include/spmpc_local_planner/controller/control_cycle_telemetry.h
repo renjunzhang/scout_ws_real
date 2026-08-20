@@ -1,7 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/controller/command/command_pipeline.h"
-#include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/telemetry/solver_diagnostics.h"
 #include "spmpc_local_planner/domain/time.h"
 #include "spmpc_local_planner/estimation/motion_excitation.h"
 

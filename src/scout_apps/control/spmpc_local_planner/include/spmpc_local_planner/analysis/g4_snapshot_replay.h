@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/telemetry/solver_diagnostics.h"
 
 #include <array>
 #include <string>
