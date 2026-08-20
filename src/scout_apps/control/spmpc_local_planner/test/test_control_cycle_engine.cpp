@@ -81,6 +81,54 @@ TEST(ControlCycleEngineTest, InvokesInjectedSolverAndReturnsSolverCommand) {
     EXPECT_DOUBLE_EQ(-0.1, result.decision.command.angular);
 }
 
+TEST(ControlCycleEngineTest, ProducesRosIndependentDecisionTelemetry) {
+    EngineFixture fixture;
+    fixture.solver.next_output.success = true;
+    fixture.solver.next_output.status = "OK";
+    fixture.solver.next_output.cmd_v = 0.4;
+    fixture.solver.next_output.cmd_omega = -0.1;
+    fixture.solver.next_output.first_shot_debug.u0_a = 0.25;
+    fixture.solver.next_output.first_shot_debug.u0_alpha = -0.5;
+    ControlCycleRequest request = fixture.request();
+    request.cycle_id = 42;
+    request.cycle_start_ns = 123456789;
+    request.solver_input.robot.v = 0.6;
+    request.solver_input.robot.omega = -0.2;
+
+    const ControlCycleResult result = fixture.engine.step(request);
+    const ControlCycleTelemetrySnapshot& telemetry = result.telemetry;
+    EXPECT_EQ(42u, telemetry.cycle_id);
+    EXPECT_EQ(123456789, telemetry.cycle_start_ns);
+    EXPECT_EQ("OK", telemetry.status);
+    EXPECT_EQ("OK", telemetry.solver_status);
+    EXPECT_EQ(CommandSource::Solver, telemetry.command_source);
+    EXPECT_EQ("OK", telemetry.command_reason);
+    EXPECT_TRUE(telemetry.solve_attempted);
+    EXPECT_TRUE(telemetry.solve_returned);
+    EXPECT_TRUE(telemetry.solve_success);
+    EXPECT_TRUE(telemetry.command_accepted);
+    EXPECT_DOUBLE_EQ(0.25, telemetry.solver_u0_a);
+    EXPECT_DOUBLE_EQ(-0.5, telemetry.solver_u0_alpha);
+    EXPECT_DOUBLE_EQ(-0.12, telemetry.planned_ay);
+    EXPECT_DOUBLE_EQ(0.4, telemetry.final_command.linear);
+    EXPECT_DOUBLE_EQ(-0.1, telemetry.final_command.angular);
+
+    const CommandInterventionDebug intervention =
+        makeCommandInterventionDebug(telemetry);
+    EXPECT_DOUBLE_EQ(0.4, intervention.solver_cmd_v);
+    EXPECT_DOUBLE_EQ(-0.1, intervention.post_gate_cmd_omega);
+    EXPECT_TRUE(intervention.output_success);
+    EXPECT_FALSE(intervention.zero_due_to_solver_failure);
+
+    ControlCycleAuditDebug audit;
+    applyControlCycleTelemetry(telemetry, audit);
+    EXPECT_EQ(42u, audit.timing.cycle_id);
+    EXPECT_EQ("OK", audit.status);
+    EXPECT_TRUE(audit.solve_success);
+    EXPECT_DOUBLE_EQ(0.25, audit.planned_ax);
+    EXPECT_DOUBLE_EQ(0.4, audit.post_gate_cmd_v);
+}
+
 TEST(ControlCycleEngineTest, SolverFailureProducesFailClosedDecision) {
     EngineFixture fixture;
     fixture.solver.solve_return = false;

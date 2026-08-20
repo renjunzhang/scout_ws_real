@@ -252,6 +252,24 @@ target_link_libraries(spmpc_solver_factory
   spmpc_solver_legacy
 )
 
+add_library(spmpc_ros_telemetry STATIC
+  src/ros/telemetry_encoder.cpp
+)
+set_target_properties(spmpc_ros_telemetry PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+)
+add_dependencies(spmpc_ros_telemetry
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+)
+target_include_directories(spmpc_ros_telemetry PRIVATE
+  ${catkin_INCLUDE_DIRS}
+)
+target_link_libraries(spmpc_ros_telemetry
+  PRIVATE
+  ${catkin_LIBRARIES}
+)
+
 add_library(${PROJECT_NAME}
   src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
@@ -286,6 +304,7 @@ target_link_libraries(${PROJECT_NAME}
   spmpc_solver_factory
   spmpc_warm_start
   PRIVATE
+  spmpc_ros_telemetry
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
 )
@@ -482,6 +501,20 @@ if(CATKIN_ENABLE_TESTING)
       spmpc_controller
       spmpc_phase_rejoin
       spmpc_safety
+    )
+  endif()
+  catkin_add_gtest(test_telemetry_encoder test/test_telemetry_encoder.cpp)
+  if(TARGET test_telemetry_encoder)
+    add_dependencies(test_telemetry_encoder
+      ${${PROJECT_NAME}_EXPORTED_TARGETS}
+      ${catkin_EXPORTED_TARGETS}
+    )
+    target_include_directories(test_telemetry_encoder PRIVATE
+      ${catkin_INCLUDE_DIRS}
+    )
+    target_link_libraries(test_telemetry_encoder
+      spmpc_ros_telemetry
+      ${catkin_LIBRARIES}
     )
   endif()
   if(SPMPC_WITH_ACADOS)

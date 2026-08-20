@@ -238,6 +238,51 @@ ControlCycleResult ControlCycleEngine::step(
     result.output.cmd_v = result.decision.command.linear;
     result.output.cmd_omega = result.decision.command.angular;
     result.output.success = result.decision.accepted;
+
+    // Freeze the complete controller-owned decision trace before returning to
+    // any transport adapter.  ROS may add observer/publish timing, but it no
+    // longer needs to infer solver, terminal, phase or safety interventions.
+    result.telemetry.cycle_id = request.cycle_id;
+    result.telemetry.cycle_start_ns = request.cycle_start_ns;
+    result.telemetry.status = result.output.status;
+    result.telemetry.solver_status = result.solver_output.status;
+    result.telemetry.command_reason = result.decision.reason;
+    result.telemetry.command_source = result.decision.source;
+    result.telemetry.solve_attempted = true;
+    result.telemetry.solve_returned = result.solve_returned;
+    result.telemetry.solve_success = result.solver_success;
+    result.telemetry.command_accepted = result.output.success;
+    result.telemetry.terminal_phase =
+        result.output.terminal_diagnostics.terminal_phase;
+    result.telemetry.terminal_priority = result.terminal_priority;
+    result.telemetry.terminal_controller_intervened =
+        result.terminal_controller_intervened;
+    result.telemetry.terminal_spin_blocked =
+        result.safety.terminal_spin_blocked;
+    result.telemetry.tracking_safety_blocked =
+        result.safety.tracking_safety_blocked;
+    result.telemetry.safety_gate_intervened =
+        result.telemetry.terminal_spin_blocked ||
+        result.telemetry.tracking_safety_blocked;
+    result.telemetry.phase_rejoin_evaluated = result.have_phase_decision;
+    result.telemetry.phase_rejoin_recovery_used =
+        result.have_phase_decision &&
+        result.phase_decision.recovery_command_used;
+    result.telemetry.phase_rejoin_controlled_stop_used =
+        result.have_phase_decision &&
+        result.phase_decision.controlled_stop_used;
+    result.telemetry.solver_u0_a =
+        result.output.first_shot_debug.u0_a;
+    result.telemetry.solver_u0_alpha =
+        result.output.first_shot_debug.u0_alpha;
+    result.telemetry.planned_ax =
+        result.output.first_shot_debug.u0_a;
+    result.telemetry.planned_ay =
+        result.solver_input.robot.v * result.solver_input.robot.omega;
+    result.telemetry.solver_command = result.solver_command;
+    result.telemetry.terminal_command = result.terminal_command;
+    result.telemetry.post_gate_command = result.decision.command;
+    result.telemetry.final_command = result.decision.command;
     return result;
 }
 

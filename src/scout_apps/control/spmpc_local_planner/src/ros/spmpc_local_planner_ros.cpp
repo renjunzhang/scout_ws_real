@@ -1774,12 +1774,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         robot_delay_compensation_applied,
         liquid_delay_compensation_applied,
         slosh_height_coeff);
-    cycle_audit.solver_status = engine_result.solver_output.status;
-    cycle_audit.status = output.status;
-    cycle_audit.solver_u0_a = output.first_shot_debug.u0_a;
-    cycle_audit.solver_u0_alpha = output.first_shot_debug.u0_alpha;
-    cycle_audit.planned_ax = output.first_shot_debug.u0_a;
-    cycle_audit.planned_ay = solve_input.robot.v * solve_input.robot.omega;
+    applyControlCycleTelemetry(engine_result.telemetry, cycle_audit);
     if (cycle_audit.previous_shifted_plan_available) {
         cycle_audit.replanned_minus_shifted_a =
             cycle_audit.solver_u0_a - cycle_audit.previous_shifted_plan_a;
@@ -1791,35 +1786,12 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         map_vref_last_progress_abs_s_ = output.progress_abs_s;
         have_map_vref_progress_ = true;
     }
-    CommandInterventionDebug intervention;
-    intervention.solver_cmd_v = engine_result.solver_command.linear;
-    intervention.solver_cmd_omega = engine_result.solver_command.angular;
+    CommandInterventionDebug intervention =
+        makeCommandInterventionDebug(engine_result.telemetry);
     const bool terminal_spin_blocked =
-        engine_result.safety.terminal_spin_blocked;
+        engine_result.telemetry.terminal_spin_blocked;
     const bool tracking_safety_blocked =
-        engine_result.safety.tracking_safety_blocked;
-    intervention.post_gate_cmd_v = output.cmd_v;
-    intervention.post_gate_cmd_omega = output.cmd_omega;
-    intervention.output_success = output.success;
-    intervention.zero_due_to_solver_failure =
-        !engine_result.solver_success;
-    intervention.zero_due_to_terminal_spin_fail = terminal_spin_blocked;
-    intervention.zero_due_to_tracking_safety = tracking_safety_blocked;
-    cycle_audit.solver_cmd_v = intervention.solver_cmd_v;
-    cycle_audit.solver_cmd_omega = intervention.solver_cmd_omega;
-    cycle_audit.terminal_cmd_v = engine_result.terminal_command.linear;
-    cycle_audit.terminal_cmd_omega = engine_result.terminal_command.angular;
-    cycle_audit.post_gate_cmd_v = intervention.post_gate_cmd_v;
-    cycle_audit.post_gate_cmd_omega = intervention.post_gate_cmd_omega;
-    cycle_audit.solve_success = engine_result.solver_success;
-    cycle_audit.command_accepted = output.success;
-    cycle_audit.terminal_phase =
-        output.terminal_diagnostics.terminal_phase;
-    cycle_audit.terminal_controller_intervened =
-        engine_result.terminal_controller_intervened;
-    cycle_audit.safety_gate_intervened =
-        terminal_spin_blocked || tracking_safety_blocked;
-    cycle_audit.status = output.status;
+        engine_result.telemetry.tracking_safety_blocked;
     diagnostics_.publishStatus(output.status);
     // 诊断统一使用 solver 的实际液体输入：fixed_closed_loop 使用 rollout，
     // fixed_robot_only 则保留当前 observer 测量。

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "spmpc_local_planner/controller/control_cycle_telemetry.h"
 #include "spmpc_local_planner/core/slosh_risk_governor.h"
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/core/variant_config.h"

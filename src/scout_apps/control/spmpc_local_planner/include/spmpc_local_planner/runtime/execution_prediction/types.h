@@ -3,7 +3,6 @@
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/domain/command.h"
 #include "spmpc_local_planner/domain/time.h"
-#include "spmpc_local_planner/estimation/motion_excitation.h"
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -62,28 +61,6 @@ struct CommandPublishMeta {
     bool angular_accel_limited = false;
 };
 
-struct CommandInterventionDebug {
-    double solver_cmd_v = 0.0;
-    double solver_cmd_omega = 0.0;
-    double post_gate_cmd_v = 0.0;
-    double post_gate_cmd_omega = 0.0;
-    double published_cmd_v = 0.0;
-    double published_cmd_omega = 0.0;
-    bool output_success = false;
-    bool zero_due_to_solver_failure = false;
-    bool zero_due_to_waiting_for_odom = false;
-    bool zero_due_to_waiting_for_reference = false;
-    bool zero_due_to_waiting_for_tf = false;
-    bool zero_due_to_waiting_for_slosh_observer = false;
-    bool zero_due_to_terminal_spin_fail = false;
-    bool zero_due_to_tracking_safety = false;
-    bool zero_due_to_command_contract = false;
-    bool linear_limited = false;
-    bool angular_rate_limited = false;
-    bool angular_accel_limited = false;
-    bool publish_cmd_vel = false;
-};
-
 struct StateTimingParams {
     bool require_common_epoch = true;
     double max_raw_skew_sec = 0.080;
@@ -96,75 +73,6 @@ struct CommandExecutionContractParams {
     bool fail_closed_on_post_limit_change = false;
     double max_post_limit_delta_v = 1e-4;
     double max_post_limit_delta_omega = 1e-4;
-};
-
-struct ExcitationAuditDebug {
-    bool valid = false;
-    std::int64_t measurement_stamp_ns = 0;
-    std::int64_t accel_effective_stamp_ns = 0;
-    std::int64_t receive_stamp_ns = 0;
-    double ax = 0.0;
-    double ay = 0.0;
-    double omega = 0.0;
-    double alpha = 0.0;
-    double sample_dt_sec = 0.0;
-};
-
-inline ExcitationAuditDebug makeExcitationAudit(const MotionExcitation& excitation) {
-    ExcitationAuditDebug audit;
-    audit.valid = excitation.valid;
-    audit.measurement_stamp_ns = excitation.measurement_stamp_ns;
-    audit.accel_effective_stamp_ns = excitation.accel_effective_stamp_ns;
-    audit.receive_stamp_ns = excitation.receive_stamp_ns;
-    audit.ax = excitation.ax;
-    audit.ay = excitation.ay;
-    audit.omega = excitation.omega_z;
-    audit.alpha = excitation.alpha_z;
-    audit.sample_dt_sec = excitation.sample_dt_sec;
-    return audit;
-}
-
-struct ControlCycleAuditDebug {
-    ControlCycleTimingDebug timing;
-    std::string variant;
-    std::string status = "NOT_RUN";
-    std::string solver_status = "NOT_RUN";
-    std::uint8_t observer_source = 0;
-    bool solve_attempted = false;
-    bool solve_success = false;
-    bool command_accepted = false;
-    bool publish_cmd_vel = false;
-    bool command_was_published = false;
-    bool command_contract_violation = false;
-    bool terminal_phase = false;
-    bool terminal_controller_intervened = false;
-    bool safety_gate_intervened = false;
-    bool linear_limited = false;
-    bool angular_rate_limited = false;
-    bool angular_accel_limited = false;
-
-    double solver_u0_a = 0.0;
-    double solver_u0_alpha = 0.0;
-    double planned_ax = 0.0;
-    double planned_ay = 0.0;
-    double solver_cmd_v = 0.0;
-    double solver_cmd_omega = 0.0;
-    double terminal_cmd_v = 0.0;
-    double terminal_cmd_omega = 0.0;
-    double post_gate_cmd_v = 0.0;
-    double post_gate_cmd_omega = 0.0;
-    double published_cmd_v = 0.0;
-    double published_cmd_omega = 0.0;
-
-    bool previous_shifted_plan_available = false;
-    std::uint64_t previous_plan_cycle_id = 0;
-    double previous_shifted_plan_a = 0.0;
-    double previous_shifted_plan_alpha = 0.0;
-    double replanned_minus_shifted_a = 0.0;
-    double replanned_minus_shifted_alpha = 0.0;
-
-    ExcitationAuditDebug odom_excitation;
-    ExcitationAuditDebug imu_excitation;
 };
 
 struct OdomTimingDebug {

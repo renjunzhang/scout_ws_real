@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/controller/command/command_pipeline.h"
+#include "spmpc_local_planner/controller/control_cycle_telemetry.h"
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/phase_rejoin/phase_rejoin_coordinator.h"
 #include "spmpc_local_planner/safety/safety_supervisor.h"
@@ -46,6 +47,7 @@ struct ControlCycleResult {
     bool terminal_priority = false;
     bool terminal_controller_intervened = false;
     SafetySupervisorResult safety;
+    ControlCycleTelemetrySnapshot telemetry;
 };
 
 class ControlCycleEngine {
