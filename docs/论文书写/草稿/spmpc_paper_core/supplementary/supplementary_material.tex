@@ -1,234 +1,516 @@
-% Supplementary/repository fragment. This file is intentionally not included by
-% main.tex. It records the configuration and analysis items that must be frozen
-% before formal acquisition and later exported in a form permitted by the venue.
+% Repository/supplement fragment for Phase-Rejoining Residual S-MPCC.
+% This file is intentionally not included by main.tex and is not standalone.
+% It relies on the packages and macros defined in main.tex. Every \Pending entry
+% must be replaced from one immutable release before formal acquisition.
 
-\section{Solver and Internal-\MPCC{} Configuration}
+\section{Release Status and Freeze Rule}
+
+This fragment records configuration, validation, and analysis fields for the
+target \PRSMPCC{} release. It contains no formal performance result. A
+\Pending{} entry is neither a pass nor permission to acquire confirmation data.
+The current physical \texttt{enforce} status is \NoGo{} because the unequal-delay
+causal-front blocker B0 remains open and G3 lacks a formal execution-compatibility
+set and an independent held-out gate test.
+
+One release identifier binds the Git commit, build products, runner, controller
+configuration, path and frame hashes, execution and liquid models,
+\OfflineSloshOCP{} artifact, gate objects, measurement chain, condition
+definitions, randomization, and analysis specification:
+\begin{align}
+  \text{release ID} &= \text{\Pending},\\
+  \text{freeze-manifest SHA-256} &= \text{\Pending}.
+\end{align}
+Changing any bound object creates a new release. Data from releases with
+different contracted objects are not pooled.
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{4pt}
+  \caption{G0--G4 release record. Numerical criteria and dataset identities are
+  frozen before the corresponding test is opened.}
+  \label{tab:supp_release_gates}
+  \begin{tabular}{@{}p{0.06\textwidth}p{0.53\textwidth}p{0.23\textwidth}p{0.11\textwidth}@{}}
+    \toprule
+    Gate & Required frozen evidence & Criterion/data record & Current status \\
+    \midrule
+    G0 & Causal unequal-delay front, physical/grid epoch agreement, full
+      source-to-terminal prediction, publication-delay error, first-action
+      influence, processed-IMU magnitude/phase response near the liquid-mode
+      frequency, and delay stability. & Thresholds,
+      confidence rule, and $D_{\mathrm{id,test}}$ hash \Pending & \NoGo{}: B0 open \\
+    G1 & Formal \OfflineSloshOCP{} artifact, complete motion--settle--zero-hold
+      tail, satisfied constraints, and complete contract. & Validator version,
+      report, and artifact hash \Pending & \Pending \\
+    G2 & Source-correct RGB calibration, motion-plus-tail window, valid-frame
+      rule, noise/drift audit, and minimum detectable difference. & Calibration,
+      admission thresholds, and held-out record \Pending & \Pending \\
+    G3 & Trial-separated gate fit/test, formal execution compatibility,
+      independently labeled recovery, coverage, conditional false-safe, and
+      false rejects. &
+      Dataset hashes, thresholds, and uncertainty rule \Pending & \NoGo{} \\
+    G4 & Frozen paired pilot with condition separation, tracking, RGB direction,
+      supervisor branches, recorder completeness, and postflight audit. & Pilot
+      blocks, GO/NO-GO rule, and report hash \Pending & \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\section{Execution Model, Dual Buffers, and Online Solver Freeze}
+
+Execution identification starts at the timestamp of the final published command
+$u^{\mathrm{pub}}$, not at the solver proposal. Linear and angular channels are
+identified and validated separately. The approximate values used to explain B0
+in the main text are development candidates; the formal values below remain
+\Pending{} until G0 passes.
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{4pt}
+  \caption{Execution, timing, and solver fields bound to the release.}
+  \label{tab:supp_execution_model}
+  \begin{tabular}{@{}p{0.20\textwidth}p{0.43\textwidth}p{0.29\textwidth}@{}}
+    \toprule
+    Item & Definition and required audit & Frozen record \\
+    \midrule
+    Time epochs & State source $t_s$, compute start $t_c$, estimated publication
+      $t=t_c+\widehat d_c$, realized publication, and maximum admitted state age. &
+      Clock domains, synchronization rule, $\widehat d_c$, age bound \Pending \\
+    Publication-delay error & Distribution and release bound for
+      $d_c-\widehat d_c$ under the formal runtime load. & Estimator, bound, and
+      held-out report \Pending \\
+    Linear channel & Delay $d_v$, gain, actuator/inertial state, time constant,
+      uncertainty, and speed/acceleration applicability range. & Model form,
+      parameters, units, confidence rule \Pending \\
+    Angular channel & Delay $d_\omega$, gain, actuator/inertial state, time
+      constant, uncertainty, and turn-rate/acceleration applicability range. &
+      Model form, parameters, units, confidence rule \Pending \\
+    Model selection & Pure delay, first-order, and any richer candidate compared
+      without using $D_{\mathrm{id,test}}$ for selection. & Fit/test hashes,
+      selection metric, selected model \Pending \\
+    Linear buffer $b^v$ & Ordered timestamped final linear commands covering the
+      complete admitted delay interval; overwritten commands are excluded. &
+      Capacity, interpolation/ZOH rule, completeness test, reset rule \Pending \\
+    Angular buffer $b^\omega$ & Ordered timestamped final angular commands with
+      its own delay interval and no forced equality with $b^v$. & Capacity,
+      interpolation/ZOH rule, completeness test, reset rule \Pending \\
+    Grid and horizon & $\Delta t$, $n_v=\lceil d_v/\Delta t\rceil$,
+      $n_\omega=\lceil d_\omega/\Delta t\rceil$, $n_f=\max(n_v,n_\omega)$,
+      $N_\ell$, and $N_e=n_f+N_\ell$. & Frozen numerical values and grid/epoch
+      consistency test \Pending \\
+    Full lead & $T_{\mathrm{lead}}=(t-t_s)+N_e\Delta t$, including source age,
+      computation/publication alignment, execution front, and post-front window. &
+      Nominal/range values and held-out error criterion \Pending \\
+    Liquid model & Container/fill applicability, $A_\ell$, $B_\ell$, damping,
+      modal frequency, realized excitation convention
+      $(\dot v^r,v^r\omega^r)$, and units. &
+      Parameter source, configuration hash, validity range \Pending \\
+    Residual OCP & Solver/code-generation identity, warm start, integration,
+      $q\to u^{\mathrm{sol}}\to u^{\mathrm{pred}}$ and $\Pi_{\mathrm{cmd}}$,
+      nominal-relative weights, $\mathcal Z$, local phase/progress bounds, and
+      first-command residual bounds. & Build hash, schema, weights, limits,
+      tolerances \Pending \\
+    Runtime target & Nominal 30-Hz publication target and deterministic behavior
+      for timeout, numerical failure, stale state, and invalid contract. & Budget,
+      statuses, timeout action, diagnostic schema \Pending \\
+    Publication chain & Supervisor candidate, publication gate, limiter,
+      independent safety override, final $u^{\mathrm{pub}}$, and write-back to
+      both buffers. & Ordered implementation IDs, limits, and audit tolerances
+      \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+The B0 test must demonstrate that a candidate command entering the faster channel
+before the common front remains decision-dependent in the OCP or in a strictly
+equivalent condensed bridge. A history-only fixed-front propagation does not
+satisfy this requirement. Any mismatch between a physical delay epoch and its
+grid index is reported explicitly rather than hidden by rounding.
+
+\section{OfflineSloshOCP Artifact Contract}
+
+Each frozen path owns a separate artifact. An optional path generated by MBF is
+accepted only before a trial, then frozen and assigned its own artifact; an
+artifact is never shared across different path hashes.
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{4pt}
+  \caption{Required contents of the formal \OfflineSloshOCP{} artifact.}
+  \label{tab:supp_artifact_contract}
+  \begin{tabular}{@{}p{0.20\textwidth}p{0.48\textwidth}p{0.24\textwidth}@{}}
+    \toprule
+    Contract group & Required contents & Frozen identity or result \\
+    \midrule
+    Task geometry & P-core point sequence, frame, direction, map/transform and
+      footprint references, projection rule, and SHA-256. & \Pending \\
+    Physical contract & Container geometry, fill/temperature range, mounting,
+      liquid-model parameters and applicability bounds. & \Pending \\
+    Execution contract & Unequal channel models, $b^v/b^\omega$ schemas,
+      actuator states, publication chain, grid, and source/publication convention. &
+      \Pending \\
+    Optimization contract & Robot/input/liquid constraints, objective and
+      normalizers, terminal ownership, solver/code-generation version, and
+      numerical tolerances. & \Pending \\
+    Nominal sequence & $\{\bar X_i^{\mathrm{aug}},\bar\chi_i,\bar t_i\}$ and
+      $\{\bar q_i,\bar u_i^{\mathrm{pub}}\}$ with a common phase index and units. &
+      Schema, length, time span, hash \Pending \\
+    Complete tail & Geometric arrival followed by contracted slowdown, liquid
+      settling, and verified zero-command hold; no generic terminal controller
+      may truncate this tail. & Tail rule, duration, validation \Pending \\
+    Phase objects & $\widehat{\mathcal R}^{\mathrm{emp}}_i$,
+      $\mathcal B_i^{\mathrm{exec}}$, $u_{\mathrm{rec}}(i)$, phase coverage, and
+      validity flags. & Schema and object hashes \Pending \\
+    Invalidation & Deterministic rejection on path/model/container/grid/schema or
+      hash mismatch; no silent fallback to a development object. & Contract ID,
+      validator version, rejection test \Pending \\
+    Provenance & Generator commit/build, input configuration, random seeds,
+      creation time, validation report, and immutable storage location. & \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
 
 \begin{table}[t]
   \centering
   \scriptsize
-  \caption{Numerical solver and shared execution configuration.}
-  \begin{tabular}{@{}p{0.31\columnwidth}p{0.63\columnwidth}@{}}
+  \setlength{\tabcolsep}{2pt}
+  \caption{Artifact validation report template.}
+  \label{tab:supp_artifact_validation}
+  \begin{tabular}{@{}p{0.55\columnwidth}p{0.20\columnwidth}p{0.18\columnwidth}@{}}
     \toprule
-    Item & Setting or required frozen record \\
+    Check & Criterion & Result \\
     \midrule
-    Control frequency & $30\,\mathrm{Hz}$ \\
-    Horizon & $N=60$, $T_f=2.0\,\mathrm{s}$ \\
-    NLP/QP & SQP-RTI; partial-condensing HPIPM \\
-    Integration & Four-stage ERK; one step per interval \\
-    Warm start & Enabled; immutable replay snapshot required \\
-    Solver fallback & Previous solution off; primitive fallback on \\
-    OCP limits & $v_{\max}=0.8\,\mathrm{m/s}$,
-      $|\omega|\leq1.2\,\mathrm{rad/s}$,
-      $|a|\leq0.6\,\mathrm{m/s^2}$,
-      $|\alpha|\leq1.2\,\mathrm{rad/s^2}$ \\
-    Published-command limits & Linear/angular and rate limits \Pending \\
-    Shared deployment layer & Terminal, delay, gate, limiter, fallback, and
-      zero-command configuration/hash \Pending \\
-    Intervention tolerances & $\epsilon_v$, $\epsilon_\omega$, and
-      $r_{\mathrm{int,max}}$ \Pending \\
-    Damping ratio & $\zeta$ and configuration source \Pending \\
-    Core liquid-aware extensions & Reference governor off; modal hard cap off \\
+    Robot/input/liquid constraints & \Pending & \Pending \\
+    Buffer/actuator reproduction & \Pending & \Pending \\
+    Nonphysical spike and discontinuity audit & \Pending & \Pending \\
+    Slowdown--settle--zero-hold completion & \Pending & \Pending \\
+    Terminal-owner and no-truncation test & \Pending & \Pending \\
+    Perturbed/higher-fidelity liquid response & \Pending & \Pending \\
+    Schema/hash/contract rejection tests & \Pending & \Pending \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The entries marked \Pending{} are configuration placeholders, not result
-placeholders. They are filled from the immutable release before the first formal
-trial and are never selected from formal RGB outcomes.
+\section{Gate Construction, Compatibility, and Data Separation}
 
-\begin{table*}[t]
-  \centering
-  \scriptsize
-  \caption{Weights and normalizers for the three internal \MPCC{} variants.}
-  \begin{tabular}{@{}lccccl@{}}
-    \toprule
-    Weight & Baseline & Smooth-only & \SMPCC{} & Normalizer & Role \\
-    \midrule
-    $w_c$ & \Pending & \Pending & \Pending & $e_{c,\mathrm{ref}}$ & Contour tracking \\
-    $w_l$ & \Pending & \Pending & \Pending & $e_{l,\mathrm{ref}}$ & Lag tracking \\
-    $w_p$ & \Pending & \Pending & \Pending & $v_{s,\max}$ & Progress reward \\
-    $w_v$ & \Pending & \Pending & \Pending & $v_{\max}$ & Base-speed tracking \\
-    $w_{v_s}$ & \Pending & \Pending & \Pending & $v_{s,\max}$ & Progress-speed tracking \\
-    $w_a$ & \Pending & \Pending & \Pending & $a_{\max}$ & Longitudinal control \\
-    $w_\omega$ & \Pending & \Pending & \Pending & $\omega_{\max}$ & Angular-rate regularization \\
-    $w_\alpha$ & \Pending & \Pending & \Pending & $\alpha_{\max}$ & Angular acceleration \\
-    $w_{\Delta a}$ & \Pending & \Pending & \Pending & $a_{\max}$ & Cross-cycle continuity \\
-    $w_{\Delta v_s}$ & \Pending & \Pending & \Pending & $v_{s,\max}$ & Progress continuity \\
-    $\gamma_{\mathrm{ac}}$ & $8$ & $8$ & $8$ & -- & One-sided anti-creep scale \\
-    $w_\eta$ & $0$ & $0$ & \Pending & $\eta_{\mathrm{ref}}$ & Modal displacement \\
-    $\rho_{\dot\eta}$ & -- & -- & $0.3$ & -- & Modal-velocity ratio \\
-    $w_{\dot\eta}$ & $0$ & $0$ & $\rho_{\dot\eta}w_\eta$ &
-      $\dot\eta_{\mathrm{ref}}$ & Modal velocity \\
-    \bottomrule
-  \end{tabular}
-\end{table*}
-
-Shared tracking, progress, constraint, and deployment settings are changed only
-when the comparison definition explicitly requires it. Weight candidates such
-as W1/W2/W5 are development releases, not additional formal methods. The
-candidate registry records every configuration hash, development dataset,
-screening decision, and rejection reason.
-
-\section{Comparator Freeze Records}
+The 9-D gate is evaluated only inside the execution-compatibility set. For the
+diagonal empirical representation used by the target formulation,
+\begin{equation}
+  m_i(e)=\sum_r\left(\frac{e_r}{\rho_{r,i}}\right)^2,
+  \qquad
+  m_i(e)\leq1,
+\end{equation}
+with phase radii $\rho_{r,i}=\text{\Pending}$. The joint online terminal condition also
+requires $e^{\mathrm{exec}}\in\mathcal B_i^{\mathrm{exec}}$. Samples outside
+$\mathcal B_i^{\mathrm{exec}}$ are contract rejections and are not silently
+counted as 9-D classifier errors.
 
 \begin{table*}[t]
   \centering
   \scriptsize
   \setlength{\tabcolsep}{4pt}
-  \caption{Configuration records for the two timing comparators.}
-  \begin{tabular}{@{}p{0.20\linewidth}p{0.31\linewidth}p{0.41\linewidth}@{}}
+  \caption{Mutually separated data pools. Splits are made by complete trial or
+  block, never by adjacent frames or control cycles.}
+  \label{tab:supp_data_pools}
+  \begin{tabular}{@{}p{0.25\textwidth}p{0.39\textwidth}p{0.28\textwidth}@{}}
     \toprule
-    Item & Smooth-match & Model-informed fixed-profile \\
+    Pool & Permitted use & Frozen identity and prohibition \\
     \midrule
-    Method identity & Frozen \texttt{B\_smooth} plus matched $v_{\mathrm{ref}}$ &
-      Generator/version, profile ID, and frozen-tracker backend \Pending \\
-    Development target & Completion time only; $\delta_T$ \Pending &
-      Completion-time target and allowed tolerance \Pending \\
-    Physical parameters & None & $\omega_1$, $\zeta$, container/path IDs \Pending \\
-    ZV sequence & Not applicable & Impulse amplitudes and fixed delay
-      $\Delta T$ \Pending \\
-    Allowed time tuning & One frozen speed-reference parameter &
-      One unshaped base-profile parameter \Pending \\
-    Forbidden tuning & Formal RGB or trial deletion & Time-warp of shaped profile;
-      formal RGB retuning \\
-    Profiles & Configuration hash \Pending &
-      $(C_1,H_1)$, $(C_1,L_1)$, and conditional $(C_2,H_1)$ profile hashes \Pending \\
-    Tracking/execution & Shared online \MPCC{} deployment layer &
-      Tracker, correction rule, latency, command limits, and shared downstream layer \Pending \\
-    Cost report & Online solve time & Offline generation and online tracking cost \\
+    $D_{\mathrm{id,fit}}$ & Fit execution and liquid-model candidates. & Hash and
+      trial list \Pending; no test outcome. \\
+    $D_{\mathrm{id,test}}$ & Evaluate full-lead prediction, delay stability,
+      first-action influence, and processed-IMU magnitude/phase near the
+      liquid-mode frequency. & Hash and trial list
+      \Pending; no model selection. \\
+    $D_{\mathrm{gate,fit}}$ & Generate compatible deviations, labels, phase
+      radii/objects, and stored actions. & Hash and trial list \Pending; no reuse
+      in held-out confusion matrix. \\
+    $D_{\mathrm{gate,test}}$ & Evaluate frozen compatibility and empirical gate
+      against independent recovery labels. & Hash and trial list \Pending; no
+      threshold or radius tuning. \\
+    $D_{\mathrm{dev,tune}}$ & Tune C1/C4 and trial workflow before candidate
+      freeze. & Hash and block list \Pending; development only. \\
+    $D_{\mathrm{dev,pilot}}$ & One frozen G4 GO/NO-GO pilot after tuning ends. &
+      Hash and block list \Pending; any retuning requires a new pilot. \\
+    $D_{\mathrm{main,confirm}}$ & Confirm C4 versus C0 and, conditionally, C4
+      versus C1 on P-core. & Random table and block list \Pending; formal only. \\
+    $D_{\mathrm{recovery,confirm}}$ & Evaluate A1/A2 and C3/C4 under frozen,
+      repeatable small deviations. & Random table and block list \Pending; not
+      pooled with the main-effect estimate. \\
     \bottomrule
   \end{tabular}
 \end{table*}
-
-Fixed-profile is an end-to-end prior-art-inspired comparator. Its tracking error,
-latency, and command correction are reported so that a tracker difference is not
-misdescribed as a pure runtime-memory effect. A single operating point is never
-called a Pareto frontier or a faithful reproduction of the cited source method.
-
-\section{Development Gates and Immutable Release}
 
 \begin{table*}[t]
   \centering
   \scriptsize
   \setlength{\tabcolsep}{4pt}
-  \caption{Required gates before generation of the formal release identifier.}
-  \begin{tabular}{@{}cp{0.26\linewidth}p{0.55\linewidth}@{}}
+  \caption{Gate, compatibility, and stored-action freeze template.}
+  \label{tab:supp_gate_freeze}
+  \begin{tabular}{@{}p{0.20\textwidth}p{0.48\textwidth}p{0.24\textwidth}@{}}
     \toprule
-    Gate & Purpose & Required archived evidence \\
+    Item & Required definition & Frozen record \\
     \midrule
-    G0 & Claim/comparator definition & Bounded task, five conditions, fairness variables, labels \\
-    G1 & Rotation relevance & Current versus rotation-consistent replay, thresholds, selected release \\
-    G2 & Candidate screening & W1/W2/W5 or replacement registry; safety, local timing, tracking, runtime \\
-    G3 & Independent RGB efficacy & One final candidate; exact $n_{\mathrm{dev}}$
-      (default proposal 4); $\delta_{H,\mathrm{dev}}$; success gate; no early stop \\
-    G4 & Trajectory/replay tools & $s_{\mathrm{proj}}$ extractor, $Z_1$--$Z_5$,
-      complete horizon, cloned replay, online-input-branch reproduction \\
-    G5 & Comparator fairness & Smooth-match and Fixed-profile pilot data,
-      comparable tuning budget, tracker and constraint audit \\
-    G6 & Measurement/analysis freeze & RGB, synchronization, failure, estimands,
-      random table, sample-size calculation, software/configuration hashes \\
+    Deviation sampling & Phase distribution; robot, liquid, buffer, actuator and
+      command-history perturbations; parameter disturbances; random seeds. &
+      Ranges, counts, phase coverage, generator hash \Pending \\
+    Compatibility set & Coordinates from $(b^v,b^\omega,x^a)$, phase-specific
+      bounds, uncertainty treatment, and outside-set action. &
+      $\beta^{\mathrm{exec}}_{r,i}$, coverage, object hash \Pending \\
+    Independent label & Stored action passes through the publication chain,
+      complete nominal tail resumes, constraints hold, and the frozen settling
+      rule passes using an outcome independent of the gate. & Labeler/version,
+      thresholds, audit hash \Pending \\
+    Gate fit & Representation, scaling, regularization, phase interpolation or
+      missing-phase behavior, and fit-only objective. & Algorithm, radii,
+      software/hash \Pending \\
+    Threshold selection & Fit/tuning-only rule fixed before opening
+      $D_{\mathrm{gate,test}}$. & Threshold and selection record \Pending \\
+    Phase-indexed stored action & Definition of $u_{\mathrm{rec}}(i)$, validity range, command
+      units, duration/hold rule, and invalid-action behavior. & Action object,
+      validator, hash \Pending \\
+    Held-out reporting & Compatibility rejection, gate coverage, conditional
+      false-safe, false rejects, worst phase, rejoining time, and uncertainty
+      intervals. &
+      Analysis version and criteria \Pending \\
+    Publication audit & Stored-action proposal, limiter/safety passage, actual
+      publication, and resulting buffer write-back reported separately. & Topic
+      and event schema, tolerances \Pending \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
-The final release record contains one \texttt{FREEZE\_ID}. Changing dynamics,
-weights, a comparator, path, measurement, or analysis after G6 ends that release.
-Earlier and later data are not pooled. Development RGB can select a release
-because $H_1$ remains held out, but every development batch and rejected
-candidate is retained with provenance.
+The primary held-out gate diagnostic is the conditional false-safe fraction
+\begin{equation}
+  r_{\mathrm{FS}|\mathrm{A}}
+  =\frac{N(\mathrm{gate\ accept}\cap\mathrm{recovery\ fail})}
+  {N(\mathrm{gate\ accept})},
+\end{equation}
+which estimates $P(\mathrm{recovery\ fail}\mid\mathrm{gate\ accept})$ and is
+undefined when no sample is accepted; zero coverage is then reported explicitly.
+Its estimate and interval are \Pending. False rejection, normal-operation coverage,
+compatibility-set rejection, and the worst phase are reported alongside it.
 
-\section{Experimental Metadata Freeze Checklist}
+\section{Condition, Ablation, and Experiment Freeze}
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{3.5pt}
+  \caption{Condition-specific objects that must be frozen in addition to the
+  common platform, localization, limiter, safety, admission, and termination
+  rules.}
+  \label{tab:supp_condition_freeze}
+  \begin{tabular}{@{}p{0.17\textwidth}p{0.46\textwidth}p{0.29\textwidth}@{}}
+    \toprule
+    Condition & Required identity & Frozen runner/configuration record \\
+    \midrule
+    C0 OrdinaryMPCC & Liquid-off contour/lag/progress controller; no offline
+      artifact, phase rejoining, execution terminal test, or stored action. &
+      Runner, config, build and command-topic hashes \Pending \\
+    C1 SmoothMatch & C0 plus independently frozen smoothing and one global
+      completion-time scale; no post-confirmation retuning. & Tuning pool,
+      parameter/scale, match tolerance and manipulation check \Pending \\
+    C2 OfflineReplay & Same formal artifact and downstream chain as C4; frozen
+      clock progression, $\delta u=0$, no empirical gate or stored action. &
+      Runner, artifact, clock/reset and fallback semantics \Pending \\
+    C3 ResidualNoGate & Same artifact, phase selector, delay-augmented residual
+      OCP and residual bounds as C4; joint gate and stored action disabled
+      together; solver/contract failure requests zero. & Runner, disabled-object
+      assertions, fallback and diagnostic record \Pending \\
+    C4 Full & Complete target method with joint terminal test, stored action and
+      fail-closed supervisor. & Runner, artifact/contract, gate objects, solver,
+      supervisor and publication-chain hashes \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \caption{Strict ablation freeze. Each pair changes only the named component.}
+  \label{tab:supp_ablation_freeze}
+  \begin{tabular}{@{}p{0.25\textwidth}p{0.31\textwidth}p{0.36\textwidth}@{}}
+    \toprule
+    Pair & Sole difference & Required manipulation check \\
+    \midrule
+    A0: OfflineSmoothReplay vs. C2 & Offline liquid objective disabled/enabled. &
+      Offline cost/configuration and distinct complete nominal tail \Pending \\
+    A1: PhaseAlignedNoResidual vs. C3 & Finite residual disabled/enabled. & Phase,
+      artifact and fallback equality; residual/published-command separation
+      \Pending \\
+    A2: C3 vs. C4 & Joint gate, compatibility test and stored action
+      disabled/enabled together. & Gate branch, stored-action proposal and final
+      publication separation \Pending \\
+    A3: IdealExec vs. IdentifiedExec & Idealized/identified execution model and
+      the consistent artifact. & Front/buffer prediction and, if physically
+      claimed, final-command/control separation \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\begin{table*}[t]
+  \centering
+  \scriptsize
+  \caption{Experiment matrices. No obsolete fixed-count matrix is inherited.}
+  \label{tab:supp_experiment_matrices}
+  \begin{tabular}{@{}p{0.13\textwidth}p{0.28\textwidth}p{0.31\textwidth}p{0.20\textwidth}@{}}
+    \toprule
+    Matrix & Conditions & Purpose & Frozen size/order \\
+    \midrule
+    M1 main & C0, C1, C2, C4 on P-core & Physical RGB main effect, completion-
+      time fairness, and offline-plan reference. & Blocks/random table \Pending \\
+    M2 components & Strict A0, A1 and A2 pairs & Offline liquid objective, finite
+      residual, and joint recovery mechanism. & Blocks/random table \Pending \\
+    M3 execution & A3 & Prediction effect on held-out replay/simulation; separate
+      paired control data if efficacy is claimed. & Units/order \Pending \\
+    M4a gate & Frozen C4 gate on $D_{\mathrm{gate,test}}$ & Compatibility
+      rejection and held-out confusion matrix. & Trials/phases \Pending \\
+    M4b recovery & C3 versus C4 & Failure-inclusive recovery control under small
+      preregistered repeatable deviations. & Blocks/random table \Pending \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\section{Platform, Trial, and Recorded-Signal Template}
 
 \begin{table*}[t]
   \centering
   \scriptsize
   \setlength{\tabcolsep}{4pt}
-  \caption{Apparatus, task, measurement, and analysis metadata.}
-  \label{tab:supp_experimental_setup}
-  \begin{tabular}{@{}p{0.20\linewidth}p{0.34\linewidth}p{0.38\linewidth}@{}}
+  \caption{Platform, frozen asset, and trial-admission metadata.}
+  \label{tab:supp_trial_metadata}
+  \begin{tabular}{@{}p{0.18\textwidth}p{0.48\textwidth}p{0.26\textwidth}@{}}
     \toprule
-    Item & Nominal role & Required frozen record \\
+    Item & Required record & Frozen value/hash \\
     \midrule
-    Mobile base & Scout Mini; velocity interface & Payload, center of mass, command interface \Pending \\
-    $H_1$ & High-risk prescribed path & Geometry/hash, direction, length, curvature, $Z_1$--$Z_5$ \Pending \\
-    $L_1$ & Low-risk selectivity path & Geometry/hash, risk metrics, $Z_1$--$Z_5$ \Pending \\
-    Container $C_1$ & Nominal physical configuration & Geometry, liquid, freeboard, $\omega_1$, $c_h$ \Pending \\
-    Container $C_2$ & Conditional transfer configuration & Pre-Stage-I identity, parameters, visual admission, trigger rule \Pending \\
-    RGB system & Calibrated experimental reference & Camera, frame rate, pose, ROI, extraction, uncertainty \Pending \\
-    Synchronization & RGB, odometry, command, solver/tracker & Timestamp and lag policy \Pending \\
-    Trial admission & Method-independent start & Start pose, zero command,
-      ring-down $T_{\mathrm{settle}}$, monitor/reset, maximum wait, timestamped
-      pre-motion RGB coverage; post-hoc blinded visual-start QC \Pending \\
-    Split blocks & Recovery across acquisition periods & Eligibility and resumption rule \Pending \\
-    Projection & Odometry-derived actual progress & Nearest/continuous projection,
-      guard, jump, stall, interpolation, cross-track, terminal rules \Pending \\
-    Sample size & Provisional $n=8$ & $\delta_H$, paired SD, CI/power, failure/vision allowance \Pending \\
-    Inference & Stage-specific random blocks & Random tables, gatekeeping, exact randomization support \Pending \\
-    Failure estimands & Fixed planned-unit denominator & $n_{\mathrm{pair}}/n$,
-      success margin, worst-rank/composite sensitivity \Pending \\
-    RQ4 margins & Selectivity and transfer & $L_1$ equivalence/noninferiority,
-      effect-difference, conditional $C_2$ physical--task criteria \Pending \\
+    Scout platform & Base identity, firmware, payload/center of mass, command and
+      feedback interfaces, battery and floor applicability. & \Pending \\
+    P-core path & Map, frame, point sequence, direction, length/curvature summary,
+      clearance review, projection and terminal rules. & \Pending \\
+    Optional P-MBF & Pretrial MBF generation record, then frozen point/frame/hash
+      and separate artifact; never online replanning. & \Pending \\
+    Container/fill & Geometry, mounting, liquid, fill/freeboard, temperature and
+      initial-state admission range without reusing condition IDs C0--C4. &
+      \Pending \\
+    Localization & Nokov or equivalent source pose, odometry, transforms,
+      covariance/quality admission and dropout behavior. & \Pending \\
+    Synchronization & Source clocks and measured offsets for command, pose,
+      odometry, IMU, RGB, solver, supervisor, and publication. & \Pending \\
+    Trial admission & Start pose/yaw, zero command, settling/rest rule, maximum
+      wait, state reset, buffer completeness, artifact/contract validation. &
+      \Pending \\
+    Trial termination & Arrival ownership, tail completion, zero latch, timeout,
+      obstacle/operator stop, safety event, and method failure. & \Pending \\
+    Randomization/blocking & Balance rule and metadata for date, battery,
+      temperature, fill and floor; sealed order before confirmation. & \Pending \\
+    Recorder/postflight & Required topics, source-time checks, artifact identity,
+      schema validation, failure classification, and immutable output report. &
+      \Pending \\
     \bottomrule
   \end{tabular}
 \end{table*}
-
-\section{Recorded Signal and Derived Metric Checklist}
 
 \begin{table*}[t]
   \centering
   \scriptsize
   \setlength{\tabcolsep}{4pt}
-  \caption{Synchronized records required for the formal evidence chain.}
+  \caption{Synchronized records required for each formal trial.}
   \label{tab:supp_recorded_signals}
-  \begin{tabular}{@{}p{0.16\linewidth}p{0.43\linewidth}p{0.33\linewidth}@{}}
+  \begin{tabular}{@{}p{0.17\textwidth}p{0.48\textwidth}p{0.25\textwidth}@{}}
     \toprule
-    Layer & Required record & Main use \\
+    Layer & Required signals & Main audit \\
     \midrule
-    Path (all) & Reference/hash, $\kappa(s)$ and odometry-derived
-      $s_{\mathrm{proj}}$; online conditions also record $s_{\mathrm{ocp}}$ &
-      Actual $\sigma$, $t(\sigma)$, path error; online forecast error
-      $e_s(k\mid j)$ for $k>0$ \\
-    Fixed timing (Fixed-profile) & Reference $s_{\mathrm{fp,ref}}(t)$,
-      $v_{\mathrm{fp,ref}}(s)$, $\omega_{\mathrm{fp,ref}}(s)$, profile hash &
-      Reference/prediction/execution separation \\
-    Robot & Timestamped $(x,y,\theta,v,\omega)$ odometry & Executed trajectory,
-      completion, contour error, $a_x$, $a_y$ \\
-    OCP input (online) & Robot state and immutable pre-solve context; \SMPCC{}
-      additionally records model-propagated internal modal state &
-      Online solve reproduction and \SMPCC{} cloned replay \\
-    OCP plan (online) & First action and complete $s_{\mathrm{ocp}}$, $v$,
-      $\omega$, $v_s$, $a$, and $\alpha$ horizon; \SMPCC{} additionally records
-      the modal horizon & Online plan and RQ3 mechanism evidence \\
-    Execution (all) & Raw method-native, post-gate, and published commands with flags &
-      Difference preservation and $r_{\mathrm{int}}$ \\
-    Liquid model (\SMPCC{}) & $(\eta_x,\dot\eta_x,\eta_y,\dot\eta_y)$,
-      $H_{\mathrm{modal}}$ & Internal mechanism and supporting K6 analysis \\
-    Vision (all) & Raw timestamps, $H_{\mathrm{vis}}$, calibration and quality flags &
-      Primary RGB p95, residual RMS, visual-start QC \\
-    Runtime (condition-specific) & Solve/tracking time, status, budget, fallback,
-      achieved interval &
-      ECDF, p95, miss/failure/fallback rates \\
+    Frozen identity & Release, condition, runner, path, artifact/contract, gate,
+      container/model, calibration and analysis IDs/hashes. & Cross-condition and
+      cross-trial traceability \\
+    Time/state input & $t_s,t_c,t$, source age, pose, $v,\omega,z^\ell$, local
+      projection/progress, current phase prior, and quality flags. & Admission and
+      source/publication alignment \\
+    Command history & Timestamped linear/angular $u^{\mathrm{pub}}$ samples,
+      $b^v,b^\omega$, completeness/reset flags and interpolated buffer state. &
+      Unequal-delay causal reconstruction \\
+    Phase/artifact & Candidate set, clock index, previous/selected/terminal phase,
+      nominal state/input/action, mismatch score and object validity. & Neighboring
+      monotone selection and artifact use \\
+    OCP & Initial augmented state, full predicted augmented horizon, first
+      residual, cost components, constraints, status, iterations and solve time. &
+      Reproduction, residual and terminal checks \\
+    Joint terminal & $e^{(9)}$, $m_i(e)$, $e^{\mathrm{exec}}$, compatibility
+      bounds, contract state and accept/reject reason. & Gate and compatibility
+      audit \\
+    Supervisor/publication & $u^{\mathrm{sol}}$, phase-indexed
+      $u_{\mathrm{rec}}(i)$ or zero
+      candidate, branch/reason, post-gate, post-limiter, post-safety and final
+      $u^{\mathrm{pub}}$. & Candidate-to-execution preservation \\
+    Robot/liquid mechanism & Base feedback, odometry, processed IMU, derived
+      $\dot v^r$ and $v^r\omega^r$, internal liquid state and external slosh monitor. &
+      Executed excitation and mechanism-only outcomes \\
+    RGB & Raw/source timestamps, left/center/right extraction, max-LCR, physical
+      units, validity, calibration and missing-frame flags. & Independent physical
+      outcome \\
+    Trial outcome & Motion/arrival/tail epochs, success/failure, timeout, zero
+      request, safety event, endpoint and tracking outcomes. & Fixed denominator
+      and fairness \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
-\section{Formal Experiment Matrix}
+\section{RGB Measurement and Statistical Analysis Template}
+
+The sole primary physical outcome is
+\begin{equation}
+  Y_{\mathrm{RGB}}
+  =\operatorname{P95}_{t\in\mathcal W_{\mathrm{motion+tail}}}
+  \left(\operatorname{max\text{-}LCR}_{\mathrm{RGB}}(t)\right),
+\end{equation}
+where lower is better. The definition is frozen before confirmation and cannot
+be replaced after acquisition by peak, RMS, or another more favorable summary.
 
 \begin{table*}[t]
   \centering
   \scriptsize
-  \caption{Proposed formal matrix for the provisional $n=8$ blocks.}
-  \label{tab:supp_formal_matrix}
-  \begin{tabular}{@{}lp{0.16\linewidth}p{0.40\linewidth}ccc@{}}
+  \setlength{\tabcolsep}{4pt}
+  \caption{RGB and primary-analysis freeze template.}
+  \label{tab:supp_rgb_analysis}
+  \begin{tabular}{@{}p{0.20\textwidth}p{0.46\textwidth}p{0.26\textwidth}@{}}
     \toprule
-    Stage & Configuration & Conditions & Blocks & Added & Cumulative \\
+    Item & Required definition & Frozen value/record \\
     \midrule
-    I & $C_1+H_1$ & Baseline, Smooth-only, Smooth-match,
-      Fixed-profile, \SMPCC{} & 8 & 40 & 40 \\
-    II-A & $C_1+L_1$ & Smooth-only, Fixed-profile, \SMPCC{} & 8 & 24 & 64 \\
-    II-B (conditional) & $C_2+H_1$ & Smooth-only, Fixed-profile, \SMPCC{} &
-      8 & 24 & 88 \\
+    Camera/calibration & Camera/lens, pose, frame rate/exposure, ROI, left/center/
+      right geometry, pixel-to-length calibration and repeatability. & \Pending \\
+    Source timing & Hardware/software timestamp, RGB-to-command/pose offset and
+      uncertainty, frame ordering and duplicate/drop handling. & \Pending \\
+    Primary window & Motion onset, geometric arrival, tail start/duration/end,
+      zero-hold ownership and boundary inclusivity. & \Pending \\
+    Frame validity & Occlusion, saturation, blur, extraction confidence,
+      interpolation prohibition/allowance, minimum valid coverage and trial rule. &
+      \Pending \\
+    Detectability & Noise, drift, rest distribution, repeated calibration,
+      minimum detectable difference and G2 threshold. & \Pending \\
+    SESOI & Smallest physical improvement that is both measurable and meaningful
+      relative to freeboard/task risk. & \Pending \\
+    Primary estimand & Paired C4--C0 difference in $Y_{\mathrm{RGB}}$; lower is
+      favorable. & Aggregate and effect-scale rule \Pending \\
+    Fixed sequence & Test C4 versus C0 first; only after it passes test C4 versus
+      C1 confirmatorily. & Multiplicity and decision rule \Pending \\
+    Task margins & Completion-time, contour/yaw/endpoint tracking, success,
+      timeout and safety-event non-inferiority margins. & \Pending \\
+    Sample size & Derived from SESOI, RGB detectability, independent pilot paired
+      variability, target precision/power, and failure allowance. & Blocks and
+      calculation/hash \Pending \\
+    Randomization & Complete-block condition order, generation seed, concealment,
+      split-block and resumption rules. & \Pending \\
+    Uncertainty/inference & Robust paired aggregate, interval method, raw points,
+      leave-one-block-out and any preregistered randomization test. & \Pending \\
+    Failure/missingness & Fixed planned-attempt denominator, external acquisition
+      fault definition, replacement rule, success-conditional estimate and
+      failure-penalized sensitivity. & \Pending \\
+    Secondary outcomes & RGB peak/RMS/tail RMS/settling, tracking, command motion
+      envelopes, and mechanism signals; none replaces the primary outcome. &
+      Reporting/adjustment plan \Pending \\
     \bottomrule
   \end{tabular}
 \end{table*}
@@ -236,108 +518,76 @@ candidate is retained with provenance.
 \begin{table}[t]
   \centering
   \scriptsize
-  \caption{Evidence packages and claim limits.}
-  \begin{tabular}{@{}lcl@{}}
+  \setlength{\tabcolsep}{2pt}
+  \caption{Formal result placeholders. No entry is populated before G0--G4 and
+  the frozen confirmation analysis are complete.}
+  \label{tab:supp_result_placeholders}
+  \begin{tabular}{@{}p{0.48\columnwidth}p{0.22\columnwidth}p{0.22\columnwidth}@{}}
     \toprule
-    Package & Trials & Maximum scope if all gates pass \\
+    Result & Estimate/interval & Decision \\
     \midrule
-    Core & 40 & $H_1$ physical, timing alternatives, RQ3, runtime \\
-    Two-path & 64 & Core plus reported path-feature selectivity \\
-    Conditional & 88 & Above plus limited transfer across reported containers \\
+    C4--C0 primary RGB effect & \Pending & \Pending \\
+    C4--C1 fixed-sequence RGB effect & \Pending & \Pending \\
+    Completion-time non-inferiority & \Pending & \Pending \\
+    Tracking non-inferiority & \Pending & \Pending \\
+    Failure/safety-event criterion & \Pending & \Pending \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The phase study, online-input/zero-state replay, parameter-switch replay, runtime
-analysis, and K6-style diagnostic add no physical trials. No larger formal
-package is defined. A future physical parameter-mismatch or long-horizon experiment
-requires a separate exploratory protocol and remains outside this matrix.
+\section{Runtime and Command-Integrity Template}
 
-\section{Command-Chain and Replay Audit}
-
-The command-chain archive covers all Stage~I conditions. For online \MPCC{}
-conditions, the raw layer is the solver output; for Fixed-profile, it is the
-method-native tracker command. Every record includes post-gate and published
-commands, terminal/gate/limiter/fallback flags, tracker or solver status, and
-the previous published command. The report stratifies $r_{\mathrm{int}}$,
-raw-to-published differences, tracking error, latency, and failures by condition.
-
-The RQ3 replay clones online-input and zero-state branches from the same
-immutable pre-solve snapshot. The online-input branch must reproduce solver
-status, first action, and raw command within frozen tolerances:
-\begin{table}[t]
+\begin{table*}[t]
   \centering
   \scriptsize
-  \caption{RQ3 replay reproducibility settings.}
-  \begin{tabular}{@{}p{0.30\columnwidth}p{0.64\columnwidth}@{}}
+  \setlength{\tabcolsep}{4pt}
+  \caption{Runtime, supervision, and final-command reporting template.}
+  \label{tab:supp_runtime}
+  \begin{tabular}{@{}p{0.23\textwidth}p{0.40\textwidth}p{0.29\textwidth}@{}}
     \toprule
-    Item & Frozen value or record \\
+    Metric & Definition & Formal result \\
     \midrule
-    Snapshot contents & Solver, warm start, previous solution/control, progress,
-      path/reference, deployment context \\
-    Status rule & \Pending \\
-    First-control tolerances & $\epsilon_a$, $\epsilon_\alpha$,
-      $\epsilon_{v_s}$ \Pending \\
-    Raw-command tolerances & $\epsilon_{v,\mathrm{replay}}$,
-      $\epsilon_{\omega,\mathrm{replay}}$ \Pending \\
-    Sampling rule & All valid $H_1$ cycles or frozen $Z_1$--$Z_5$ subset \Pending \\
-    Horizon export & $s_{\mathrm{ocp}}$, $v$, $\omega$, $v_s$, $a$, $\alpha$,
-      internal modal state and response \\
-    Failure handling & Omit from difference distribution; retain in replay-failure denominator \\
+    Solver time & p50, p95, maximum and distribution by C0--C4/A0--A3 where the
+      solver is active. & \Pending \\
+    Deadline misses & Fraction above the 33.3-ms design budget and longest
+      consecutive miss sequence. & \Pending \\
+    Publication rate & Achieved interval/frequency, jitter and source-to-
+      publication latency. & \Pending \\
+    Solver/numerical failure & Status-stratified count/rate and requested action;
+      retained in the trial denominator. & \Pending \\
+    State/contract failure & Stale state, incomplete buffer, phase-set empty,
+      artifact/hash invalid, gate object invalid and execution incompatibility. &
+      \Pending \\
+    Supervisor branches & Residual, stored-action and zero-request counts/rates,
+      with mutually exclusive reason codes. & \Pending \\
+    Residual behavior & First-action norm, saturation, phase/progress bounds and
+      solver-feasible but terminal-rejected rate. & \Pending \\
+    Limiter/safety rewrite & Candidate-to-final difference, intervention rate,
+      reason and condition distribution. & \Pending \\
+    Stored action & Proposal, post-limiter, post-safety and actual-publication
+      rates; no proposal is presumed executed. & \Pending \\
+    Buffer integrity & Fraction of cycles where both buffers contain the exact
+      final published histories and reproduce the logged augmented state. &
+      \Pending \\
+    Recorder/postflight & Required-topic completeness, timestamp/schema failures,
+      identity mismatches and automatic trial disposition. & \Pending \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
-Each \SMPCC{} trial yields trial-level first-action/timing summaries and the
-fraction of cycles above tolerance. Control cycles are not independent samples.
-Unless both branches pass through identical execution-layer snapshots, the
-reported quantities remain optimized differences, not counterfactual executed
-commands. The online-input state is not described as a measured physical state.
+\section{Development Provenance and Claim Boundary}
 
-\section{Development-Only Provenance}
+Development simulations, branch-coverage tests, no-motion trials, parameter
+selection, gate construction, and pilots are archived with their data role,
+release/configuration hash, date, path, container/fill, measurement version,
+selection decision, and rejection reason. They do not contribute observations
+to $D_{\mathrm{main,confirm}}$ or $D_{\mathrm{recovery,confirm}}$.
 
-Historical physical data, candidate-weight trials, rotation studies, comparator
-tuning, and efficacy pilots are development-only. Each record contains date,
-path/container, software/configuration hash, candidate label, tuning budget,
-randomization, measurement version, and its role in selection or validation.
-No development trial contributes to formal $n$.
-
-Historical batches have not yielded a stable ranking. In one same-day
-development reanalysis, the then-current \texttt{B\_slosh} release was worse
-than \texttt{B\_smooth} in RGB p95, peak, and RMS by approximately
-$32.5\%$, $26.4\%$, and $21.4\%$, respectively, despite the opposite internal
-model ranking. Older three-trial summaries with favorable values correspond to
-different, incompletely frozen provenance and are retained only in the
-repository history. This inconsistency is the reason the independent RGB
-efficacy gate cannot be replaced by $H_{\mathrm{modal}}$ screening.
-
-\section{Sensitivity, Runtime, and K6-Style Diagnostics}
-
-Supporting simulation or replay perturbations include $\omega_1$, $\zeta$,
-$c_h$, constructed internal modal state/phase, execution delay, and, if $C_2$
-is retained, correct versus incorrect container parameters. Parameter mismatch
-in replay establishes optimizer sensitivity only.
-
-Runtime tables cover all five Stage~I conditions, using solver cost for online
-\MPCC{} and separate offline-generation/online-tracking cost for Fixed-profile.
-They report median, p95, maximum, budget-overrun rate, method failures,
-fallbacks, intervention, and achieved frequency. Command total variation,
-finite-difference acceleration, direction reversal, and spectral energy are
-supporting diagnostics rather than primary trajectory outcomes.
-
-The K6-style modal--vision audit uses only planned \SMPCC{} units: 8 after
-Stage~I, 16 after Stage~II-A, and 24 after conditional Stage~II-B. A single
-analysis script, synchronization/calibration record, lag policy, failure
-denominator, and no per-trial best fit are frozen. The diagnostic compares
-nonnegative amplitude envelopes; it does not validate signed phase, true
-liquid-state observation, or rotation consistency. Visual measurement admission
-remains mandatory even if the full model-consistency analysis is not promoted to
-the main paper.
-
-\section{Optional Exploratory Diagnostics}
-
-Long-horizon propagation, physical parameter mismatch, and additional planner
-comparisons have no reserved sample size and do not change the 40/64/88 matrix.
-They are added only under a separate preregistered exploratory protocol after
-the main evidence chain is complete. Unexecuted exploratory studies do not
-appear as pending sections in the submission manuscript.
+The final evidence remains limited to frozen-path tracking in a static,
+obstacle-clear workspace, the contracted Scout execution range, the reported
+container/fill and low-order liquid-model range, and the observed empirical-gate
+coverage. Independent RGB determines physical anti-slosh performance. Internal
+liquid states, IMU and an online slosh monitor are supporting signals only. The
+stored action is phase indexed rather than a feedback recovery law, and no
+recursive-feasibility, robust-recovery, spill-free, online-obstacle-avoidance, or
+true signed-liquid-phase claim is made.

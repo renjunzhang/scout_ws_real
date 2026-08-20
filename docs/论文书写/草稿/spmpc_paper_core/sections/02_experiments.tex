@@ -1,574 +1,268 @@
 \section{Experimental Evaluation}
 \label{sec:experiments}
 
-The evaluation is organized around a prescribed-path trajectory-generation
-claim: whether an odometry-driven, model-propagated internal liquid modal state changes
-finite-horizon virtual progress and chassis motion, induces nontrivial local
-motion-timing redistribution, and improves the measured free-surface response at
-comparable task efficiency. Trajectory changes are mechanism evidence, whereas
-$H_{\mathrm{vis}}$ is physical-effect evidence; neither substitutes for the
-other. Formal outcomes are not reported in this draft because the comparator,
-method-release, measurement, and analysis gates have not yet produced an
-immutable acquisition release.
+This section defines the evidence required to evaluate the target method in \cref{sec:method}.
+It is a preregistration-oriented protocol, not a report of completed physical results.
+The current development revision has software branch evidence but has not passed all release gates; numerical performance fields therefore remain explicitly pending.
 
-\subsection{Evaluation Questions and Evidence Structure}
+\subsection{Research Questions and Scope}
 
-Four research questions order the evidence:
-\begin{itemize}
-  \item \textbf{RQ1---Physical effectiveness and trajectory redistribution:}
-  On the reported high-risk path, does \SMPCC{} reduce the calibrated visual
-  response relative to Baseline and Smooth-only \MPCC{}, preserve task
-  performance, and redistribute executed timing and longitudinal/lateral
-  excitation in path-feature-dependent segments?
-  \item \textbf{RQ2---Competing timing explanations:} Does the benefit remain
-  against completion-time-matched Smooth-only \MPCC{} and against a
-  model-informed fixed-profile condition that uses the same nominal liquid
-  parameters but no runtime model-propagated internal modal-state memory?
-  \item \textbf{RQ3---Model-state-dependent online generation and execution:}
-  Do constructed internal modal phases and the model state supplied to the
-  online solver change the complete predicted plan and optimized first action;
-  do formal \SMPCC{} plan differences survive the shared execution layer, and
-  is the OCP solved within the online budget?
-  \item \textbf{RQ4---Path-feature selectivity and limited configuration
-  transfer:} Does the frozen method avoid unnecessary conservatism on the
-  reported low-risk path, and, only if the preregistered second-container stage
-  is executed, does it satisfy the declared physical--task transfer criteria?
-\end{itemize}
-
-Let $\bm c=[v,\omega]^\top$ denote a base velocity command. The evidence chain is
-\[
-\begin{aligned}
-(\kappa,\hat{\bm x}_{r,j},\hat{\bm x}_{\ell,j})
-&\rightarrow
-\{s_{\mathrm{ocp},0:N\mid j}^{\star},
-  \bm u_{0:N-1\mid j}^{\star}\}\\
-&\rightarrow \bm c_{\mathrm{solver},j}
-\rightarrow \bm c_{\mathrm{post},j}
-\rightarrow \bm c_{\mathrm{pub},j}\\
-&\rightarrow s_{\mathrm{proj}}(t)
-\rightarrow \{a_{x,\mathrm{exec}},a_{y,\mathrm{exec}}\}\\
-&\Rightarrow \{H_{\mathrm{modal}},H_{\mathrm{vis}}\}.
-\end{aligned}
-\]
-The final branch denotes parallel model and physical responses, not a claim that
-$H_{\mathrm{modal}}$ causes $H_{\mathrm{vis}}$. Fixed-profile reference timing,
-\SMPCC{} predicted timing, and odometry-derived executed timing are retained as
-separate layers. Only published commands and measured motion connect directly
-to realized physical excitation. A replay that stops before the shared
-execution layer is interpreted only as an optimized action or timing
-difference.
-
-\subsection{Experimental Setup, Compared Conditions, and Matrix}
-
-\subsubsection{Platform, paths, containers, and trial admission}
-
-Physical trials use a Scout Mini mobile base with a cylindrical liquid container
-mounted at the base rotation center and a fixed RGB measurement camera. The
-body-fixed $x_b$ axis points forward and $y_b$ points laterally. The nominal
-container is denoted by $C_1$. A high-risk path $H_1$ contains uninterrupted
-start-up, sustained curvature, curvature reversal, exit re-acceleration, and
-terminal braking so that the propagated internal model state can influence later
-path segments. A
-low-risk path $L_1$ preserves the same task interface but reduces curvature and
-excitation; it is a selectivity condition rather than a strict statistical
-negative control. Path hashes, lengths, curvature summaries, direction, and
-$Z_1$--$Z_5$ mechanism-segment boundaries are frozen before formal outcomes.
-
-Container $C_2$ is introduced in the manuscript only if the conditional transfer
-stage is preregistered and completed. Its geometry, liquid/freeboard convention,
-model parameters, visual-measurement admission, and analysis rule are fixed
-before the first formal trial; it is never chosen after inspecting Stage~I or
-Stage~II-A outcomes.
-
-Every trial must independently satisfy the same entry rule: initial position and
-heading, zero command, a ring-down-validated minimum settling time
-$T_{\mathrm{settle}}$, a method-independent monitor when available, successful
-reset of applicable method state and the shared monitor, and a maximum waiting
-time. If no online physical-liquid monitor is available, the pre-motion rule
-uses the frozen $T_{\mathrm{settle}}$. A timestamp-audited RGB window of at
-least $2\,\mathrm{s}$ precedes first effective motion, but it does not by itself
-establish rest. A frozen, condition-blinded offline visual-start quality check
-subsequently determines measurement eligibility.
-Timeout, failed settling, acquisition failure, and split-block handling are
-preregistered so that one condition cannot contaminate the next through residual
-motion.
-
-\subsubsection{Compared conditions}
+The evaluation follows the dependency order in \cref{tab:research_questions}.
+Execution and total-lead validity are checked before physical control efficacy, and independent RGB measurement---not the internal slosh model---determines the physical result.
 
 \begin{table*}[t]
   \centering
-  \scriptsize
-  \setlength{\tabcolsep}{2.5pt}
-  \renewcommand{\arraystretch}{1.08}
-  \caption{Five comparison conditions in the high-risk core experiment.}
-  \label{tab:core_variants}
-  \begin{tabular}{@{}p{0.15\linewidth}p{0.10\linewidth}
-    >{\centering\arraybackslash}p{0.09\linewidth}
-    >{\centering\arraybackslash}p{0.12\linewidth}
-    p{0.22\linewidth}p{0.22\linewidth}@{}}
+  \caption{Research questions and decisive evidence.}
+  \label{tab:research_questions}
+  \small
+  \begin{tabular}{@{}p{0.08\textwidth}p{0.42\textwidth}p{0.43\textwidth}@{}}
     \toprule
-    Condition & Mapping & Liquid parameters & Runtime model state &
-    Timing generation & Evidence role \\
+    RQ & Question & Decisive evidence \\
     \midrule
-    Baseline \MPCC{} & \texttt{B0} & No & No &
-    Online nominal \MPCC{} & Base \MPCC{} anchor \\
-    Smooth-only \MPCC{} & \texttt{B\_smooth} & No & No &
-    Online \MPCC{} with enhanced smoothing & Test generic smoothing \\
-    Smooth-match \MPCC{} & frozen \texttt{B\_smooth} & No & No &
-    Online \MPCC{} with matched completion time & Test uniform slowdown \\
-    Model-informed fixed-profile & profile + frozen tracker & Yes & No &
-    Precomputed fixed $s_{\mathrm{fp,ref}}(t)$ and
-      $v_{\mathrm{fp,ref}}(s)$ with tracking & Test physics-aware fixed timing \\
-    \SMPCC{} & \texttt{B\_slosh} & Yes & Model-propagated &
-    Model-state-conditioned online progress and chassis motion & Proposed method \\
+    RQ1 & Are the unequal execution model, complete source-to-terminal lead, and first-action influence credible? & Held-out command--motion--liquid prediction, publication-delay error, and gate G0. \\
+    RQ2 & Does C4 reduce physical liquid motion without materially worse task performance or failures? & Independent RGB, C4 versus C0, followed by the fixed-sequence C4 versus C1 comparison. \\
+    RQ3 & What is contributed by offline liquid optimization, finite residual control, recovery admission, and the identified execution model? & Strict paired ablations A0--A3, not monotonic differences across C0--C4. \\
+    RQ4 & Does the empirical gate reject corrections independently labeled non-rejoinable and invoke the contracted fallback? & Held-out confusion matrix, actual rejoining labels, stored-action publication, and gate-outside behavior. \\
+    RQ5 & Can the complete command chain run at 30 Hz with auditable failures and overrides? & Solver/runtime distributions, typed diagnostics, publication records, and independent safety rewrites. \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
-Baseline, Smooth-only, and \SMPCC{} are the three internal variants of the common
-OCP in \cref{sec:method}. Smooth-match is a separately frozen speed-reference
-configuration of Smooth-only and is not an additional algorithmic contribution.
-The fixed-profile condition is a separate timing-generation/tracking system, so
-its comparison with \SMPCC{} is an end-to-end system comparison rather than a
-single-factor \emph{memory} ablation.
+All confirmatory trials track a path frozen before motion in a static, obstacle-clear workspace.
+The core path, denoted P-core, is selected for repeatable high excitation and is used for every principal comparison.
+An optional P-MBF path may be generated by MBF before a trial, then frozen and assigned a separate artifact; it is considered only after the P-core claims pass.
+No trial invokes online obstacle detection or replanning.
+A newly observed obstacle causes the operator or an independent safety system to terminate the trial and request zero velocity.
 
-The default fixed-profile proposal is a Hamaguchi-inspired two-impulse ZV
-fixed-path timing condition, grounded in classical input shaping and mobile-base
-liquid-transfer work \cite{A07_Singer1990,B03_Hamaguchi2004,B02_Hamaguchi2005}.
-It uses the same frozen geometry, $\omega_1$, $\zeta$, and motion limits as
-\SMPCC{}, and explicitly accounts for longitudinal excitation and
-$a_y\simeq v^2\kappa=v\omega$ on the supplied path. The impulse amplitudes and
-delay $\Delta T$ determined from $\omega_1$ and $\zeta$ remain fixed. Completion
-time is tuned only through one preregistered unshaped base-profile parameter;
-each candidate is regenerated, shaped, integrated, and checked against the
-constraints. A completed shaped profile is never time-warped. The profile is
-generated from the same zero/near-zero nominal entry assumption used by the
-physical rest gate and is not replanned from a runtime model-propagated internal
-modal state. Tracker error,
-latency, command correction, offline generation time, and online tracking cost
-are reported. Unless a separate fidelity audit is completed, this condition is
-called prior-art-inspired and not a reproduction of the cited methods.
+\subsection{Platform, Frozen Assets, and Protocol}
 
-\FloatBarrier
-\subsubsection{Pre-acquisition gates and staged matrix}
+\subsubsection{Platform and measurements}
 
-The exact development protocol is archived outside the page-limited main text,
-but formal acquisition cannot begin until the following gates pass:
-\begin{enumerate}
-  \item the bounded prescribed-path claim and all five conditions are fixed;
-  \item current and rotation-consistent liquid-dynamics candidates pass the
-  preregistered rotation-relevance decision; distinguishable differences trigger
-  a rotation-only RGB pilot before one method release is selected;
-  \item a small candidate set of weights is screened for safety, local timing,
-  tracking, and runtime without treating the internal modal response as physical
-  truth;
-  \item one final candidate passes an independent RGB efficacy pilot against
-  Smooth-only using an exact preregistered development block count (default
-  proposal $n_{\mathrm{dev}}=4$) and no early stopping;
-  \item the odometry-based trajectory extractor and immutable phase/replay tools
-  pass reproduction smoke tests;
-  \item Smooth-match and fixed-profile tuning, common constraints, tracking
-  behavior, and comparable development budgets are frozen; and
-  \item measurement, failure, randomization, estimand, and software/configuration
-  hashes are bound to one read-only release identifier.
-\end{enumerate}
-Changing a candidate, weight, comparator, or gate creates a new development
-release and a new independent efficacy check. Development trials are archived
-and never pooled with formal inference.
+The platform comprises the Scout mobile base, the contracted open container and fill condition, the final command-publication interface, and the localization and measurement chain.
+Each trial records at least:
+\begin{itemize}
+  \item solver, supervisor, limiter, safety, and final published commands with source and publication timestamps;
+  \item base feedback, odometry, processed IMU, and Nokov or equivalent source-stamped pose;
+  \item independently calibrated RealSense RGB liquid-height signals and per-frame validity;
+  \item internal liquid state, selected artifact phase, execution-front state, terminal gate metrics, execution compatibility, and solver status.
+\end{itemize}
+
+The RGB chain is the physical reference.
+The internal low-order model and external online slosh monitor are secondary mechanism measurements and are reported even when they disagree with RGB.
+Neither internal signal can replace missing or invalid RGB evidence.
+
+\subsubsection{Release freeze and data separation}
+
+Before confirmation, one release manifest freezes the Git commit and build, map and transforms, footprint, path point sequence and SHA-256, execution and liquid models, container and fill range, RGB calibration and region of interest, \OfflineSloshOCP{} artifact and contract hash, condition parameters, primary time window, stopping rules, and randomized block order.
+Changing a contracted item creates a new release and invalidates reuse of the old phase objects.
+
+The following pools are separated by complete trial or complete block, never by adjacent video frames or controller samples:
+\begin{equation}
+\begin{split}
+  &D_{\mathrm{id,fit}},\ D_{\mathrm{id,test}},\quad
+  D_{\mathrm{gate,fit}},\ D_{\mathrm{gate,test}},\\
+  &D_{\mathrm{dev,tune}},\ D_{\mathrm{dev,pilot}},\quad
+  D_{\mathrm{main,confirm}},\ D_{\mathrm{recovery,confirm}}.
+\end{split}
+\label{eq:data_pools}
+\end{equation}
+Identification test data do not select the model, gate test data do not tune radii or thresholds, and a pilot followed by any retuning is replaced by a new pilot.
+The two confirmation pools are collected only after the release is frozen.
+
+One complete trial is the statistical unit.
+Controller cycles, path samples, and video frames are repeated measurements within that trial.
+Method failures, zero requests, timeouts, solver failures, and safety interventions remain in the denominator.
+Only a preregistered external acquisition fault may trigger a replacement, and the original attempt remains in the audit log.
+
+\subsection{Comparators and Strict Ablations}
+
+\subsubsection{System-level comparison family}
+
+Table~\ref{tab:core_conditions} defines the five condition identifiers used throughout the paper; B0 is reserved for the causal-front release blocker in \cref{sec:method}.
 
 \begin{table*}[t]
   \centering
-  \scriptsize
-  \setlength{\tabcolsep}{4pt}
-  \renewcommand{\arraystretch}{1.08}
-  \caption{Proposed staged physical matrix. The displayed counts use the
-  provisional minimum $n=8$ blocks and must be renamed if the frozen sample-size
-  calculation requires another $n$.}
-  \label{tab:formal_matrix}
-  \begin{tabular}{@{}lp{0.14\linewidth}p{0.39\linewidth}ccc@{}}
+  \caption{System-level conditions. All conditions share localization, base firmware, command limiter, independent safety layer, trial admission, and termination rules.}
+  \label{tab:core_conditions}
+  \small
+  \begin{tabular}{@{}p{0.18\textwidth}p{0.76\textwidth}@{}}
     \toprule
-    Stage & Configuration & Conditions in each randomized block &
-    Blocks & Added & Cumulative \\
+    Condition & Frozen definition \\
     \midrule
-    I & $C_1+H_1$ &
-    Baseline, Smooth-only, Smooth-match, Fixed-profile, \SMPCC{} &
-    $8$ & $40$ & $40$ \\
-    II-A & $C_1+L_1$ &
-    Smooth-only, Fixed-profile, \SMPCC{} &
-    $8$ & $24$ & $64$ \\
-    II-B (conditional) & $C_2+H_1$ &
-    Smooth-only, Fixed-profile, \SMPCC{} &
-    $8$ & $24$ & $88$ \\
+    C0 OrdinaryMPCC & Contour/lag/progress MPCC without liquid state or cost, \OfflineSloshOCP{}, execution-front rejoining, or recovery gate. \\
+    C1 SmoothMatch & C0 with smoothness parameters frozen on independent development data and one global time/speed scale selected to match C4 completion time; all remaining motion envelopes are reported, not retuned. \\
+    C2 OfflineReplay & Clocked replay of the same formal offline artifact as C4, with $\delta u=0$ and without the empirical gate or stored action. \\
+    C3 ResidualNoGate & The same artifact, neighboring phase, delay-augmented nominal-relative OCP, residual bounds, and safety chain as C4, but with the empirical terminal gate, execution compatibility test, and stored action jointly disabled; every solver-feasible correction is admitted, while solver, phase-candidate, state-freshness, or contract failure requests zero. \\
+    C4 Full & The complete method: unequal-delay execution augmentation, neighboring monotone phase, bounded residual, joint terminal gate, stored action, and fail-closed supervisor. \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
-Stage~I is a randomized complete block: every condition occurs once and all four
-contrasts with \SMPCC{} share the same block-level \SMPCC{} observation.
-Stage~II-A replaces repeated basic anchoring with the two competitive timing
-conditions and tests path-feature selectivity. Stage~II-B is a conditional,
-predeclared extension rather than a result-driven container choice. Because
-Stage~II does not include Smooth-match, it supports a joint
-liquid-response--efficiency--tracking interpretation; a strict completion-time
-comparison on those configurations would require adding Smooth-match and
-recomputing the matrix.
+C0--C4 form a system-level evidence ladder, not a sequence of single-factor ablations.
+Monotonic improvement across all five conditions is neither assumed nor required.
+The sole primary comparison is C4 versus C0.
+Only if it passes is C4 versus C1 tested confirmatorily to address the slower/smoother explanation.
+C2 exposes the value of the complete nominal sequence, while C3 is reserved for recovery experiments rather than being forced into every nominal main-effect block.
 
-The provisional $n=8$ is a resource proposal, not an a priori guarantee of
-precision. Before the first formal trial, $n$ is calculated from a minimum
-meaningful visual-response effect $\delta_H$, development paired variability,
-target interval width or power, and allowances for method failure and invalid
-vision. Formal data are never used to add only favorable samples.
+\subsubsection{Strict component ablations}
 
-Stage~II opens only after the preregistered Stage~I extension gate passes. The
-gate requires traceability of all attempts, frozen RGB/synchronization admission,
-the primary Smooth-only and key Fixed-profile criteria, the Smooth-match timing
-gate, success/tracking/runtime/intervention tolerances, no single-block dominance,
-and operational trajectory, phase/replay, and execution-chain audits. Failure
-stops extension and is reported under the frozen analysis; it is not repaired by
-retuning or adding $L_1/C_2$ trials.
+Component attribution uses the paired changes in \cref{tab:ablations}.
+Every pair freezes all other controller, artifact, initial-condition, measurement, and fallback choices.
 
-\subsection{Measurements, Protocol, and Analysis}
+\begin{table*}[t]
+  \centering
+  \caption{Strict component ablations.}
+  \label{tab:ablations}
+  \small
+  \begin{tabular}{@{}p{0.24\textwidth}p{0.28\textwidth}p{0.42\textwidth}@{}}
+    \toprule
+    Pair & Sole planned difference & Supported interpretation \\
+    \midrule
+    A0: OfflineSmoothReplay vs. C2 & Offline liquid objective disabled/enabled. & Value of the complete liquid-aware offline phase schedule. \\
+    A1: PhaseAlignedNoResidual vs. C3 & Finite online residual disabled/enabled. & Independent value of residual correction around the same aligned phase. \\
+    A2: C3 vs. C4 & Joint recovery mechanism disabled/enabled. & Combined value of the empirical gate, execution compatibility, and stored action; their individual effects are not separated. \\
+    A3: IdealExec vs. IdentifiedExec & Execution model and its consistent artifact. & Value of the identified unequal-delay/actuator model. \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
 
-\subsubsection{Recorded signals and executed trajectory}
+An actual-input replay may decompose execution-model error from liquid-model error, but it does not replace a paired control experiment.
+Legacy online S-MPCC or input-shaped velocity profiles may be reported as external references; neither substitutes for C0--C4 or A0--A3.
 
-Each trial records synchronized signals at the level at which they enter the
-evidence chain:
-\begin{itemize}
-  \item the frozen path/hash, curvature $\kappa(s)$, odometry-derived progress
-  $s_{\mathrm{proj}}$, and, for online \MPCC{} conditions, OCP virtual progress
-  $s_{\mathrm{ocp}}$;
-  \item odometry $(x,y,\theta,v,\omega)$ and independently reconstructed
-  cross-track/contour error;
-  \item actual executed timing $t(\sigma)$ for
-  $\sigma=s_{\mathrm{proj}}/L$, $Z_1$--$Z_5$ traversal times, and fixed-profile
-  reference $s_{\mathrm{fp,ref}}(t)$, $v_{\mathrm{fp,ref}}(s)$, and
-  $\omega_{\mathrm{fp,ref}}(s)$;
-  \item for online \MPCC{} conditions, the complete pre-solve robot state and
-  immutable solver, warm-start, previous-control, path, reference, and
-  deployment context; for \SMPCC{}, this also includes the model-propagated
-  internal modal state;
-  \item for online \MPCC{} conditions, the optimized first action and complete
-  predicted $s_{\mathrm{ocp}}$, $v$, $\omega$, $v_s$, $a$, and $\alpha$
-  horizon; for \SMPCC{}, the complete modal horizon is also retained;
-  \item raw method-native command, post-gate command, published command, and
-  limiter/fallback/intervention flags;
-  \item for \SMPCC{}, model-propagated internal state
-  $(\eta_x,\dot\eta_x,\eta_y,\dot\eta_y)$ and $H_{\mathrm{modal}}$;
-  \item for every physical condition, calibrated $H_{\mathrm{vis}}$ and all
-  vision-quality flags; and
-  \item for online \MPCC{}, solve time/status and budget overrun; for
-  Fixed-profile, tracking time/status; and, for every condition, fallback and
-  achieved control interval.
-\end{itemize}
+\subsection{Execution, Artifact, and Gate Validation}
 
-The actual $t(\sigma)$ analysis never uses $s_{\mathrm{ocp}}$ as ground truth.
-Before formal outcomes, the odometry-to-path projection, monotonic guard,
-backtracking, projection-jump, stall, first-arrival, interpolation, cross-track,
-and terminal rules are frozen. Because
-$s_{\mathrm{ocp},0\mid j}=s_{\mathrm{proj}}(t_j)$ by initialization, their
-current-node difference is identically zero and is not reported as evidence. If
-retained, the forecast-consistency diagnostic is instead
+Formal acquisition is prohibited until every release gate in \cref{tab:release_gates} has a numerical criterion, a frozen dataset, and a declared failure action.
+
+\begin{table*}[t]
+  \centering
+  \caption{Pre-release gates and current development status. A pending entry is not evidence of a pass.}
+  \label{tab:release_gates}
+  \scriptsize
+  \begin{tabular}{@{}p{0.08\textwidth}p{0.66\textwidth}p{0.18\textwidth}@{}}
+    \toprule
+    Gate & Required evidence & Current status \\
+    \midrule
+    G0 & Resolve B0; align physical and grid front epochs; validate $T_{\mathrm{lead}}$, $d_c-\widehat d_c$, first-action sensitivity, processed-IMU magnitude/phase response near the liquid-mode frequency, and delay stability on held-out trials. & \NoGo{}: B0 open \\
+    G1 & A formal \OfflineSloshOCP{} artifact with slowdown--settle--zero-hold tail, satisfied constraints, and complete path/model/container/schema contract. & \Pending{} \\
+    G2 & Source-correct RGB with frozen motion-plus-tail window, adequate valid-frame rate, repeatable calibration, noise/drift audit, and minimum detectable difference. & \Pending{} \\
+    G3 & Trial-level fit/test separation, formal execution compatibility, coverage, conditional false-safe, false rejects, and actual rejoining under independently labeled outcomes. & \NoGo{}: no formal compatibility/test \\
+    G4 & Frozen paired pilot with separated C0--C4 commands, auditable RGB direction, tracking, supervisor branches, recorder, and postflight report. & \Pending{} \\
+    \bottomrule
+  \end{tabular}
+\end{table*}
+
+\paragraph{G0: execution and total lead.}
+Linear and angular delay, actuator time constant, gain, and applicability range are identified separately from final $u^{\mathrm{pub}}$.
+Pure-delay, first-order, and any richer candidate are compared on $D_{\mathrm{id,test}}$.
+The evaluation aligns command, Nokov/pose, odometry, IMU, and RGB source times and reports error through the full lead in \eqref{eq:total_lead}, not only the last $N_\ell\Delta t$.
+It also verifies that the candidate first action has detectable influence at the joint terminal and audits processed-IMU magnitude and phase near the approximately $4.97$-Hz liquid mode.
+
+\paragraph{G1: offline artifact.}
+P-core receives a complete formal artifact rather than a development metadata object.
+State and command constraints, terminal ownership, nonphysical spikes, and tail truncation are checked directly.
+Parameter-perturbed and higher-fidelity simulations compare A0, and actual-input replay separates execution mismatch from liquid-model mismatch.
+
+\paragraph{G2--G4: measurement, gate, and pilot.}
+RGB validity and detectability are frozen before looking at controller effects.
+The empirical gate is fit only on $D_{\mathrm{gate,fit}}$ and evaluated on $D_{\mathrm{gate,test}}$.
+C1/C4 tuning ends before $D_{\mathrm{dev,pilot}}$; that pilot decides GO/NO-GO and never enters the final performance estimate.
+No failed gate may be bypassed by widening the empirical set, enlarging residual limits, admitting a development artifact, excluding failed trials, or increasing the formal sample size.
+
+\subsection{Main Physical Evaluation}
+
+\subsubsection{Primary outcome and task constraints}
+
+The sole primary physical outcome is the trial-level 95th percentile of the independently extracted RGB max-LCR signal over a preregistered motion-plus-tail window,
 \begin{equation}
-  e_s(k\mid j)
-  =s_{\mathrm{ocp},k\mid j}^{\star}
-  -s_{\mathrm{proj}}(t_j+k\Delta t),
-  \qquad k>0,
-  \label{eq:progress_forecast_error}
-\end{equation}
-using interpolated future odometry only over valid observed horizons and frozen
-horizon/segment summaries. It never replaces actual $t(\sigma)$. Predicted
-$v_s$ describes optimizer intent and is not a measured base speed.
-
-Realized excitation is derived from synchronized odometry using the frozen
-filtering and differentiation procedure:
-\[
-  a_{x,\mathrm{exec}}\simeq\dot v_{\mathrm{odom}},
-  \qquad
-  a_{y,\mathrm{exec}}\simeq
-  v_{\mathrm{odom}}\omega_{\mathrm{odom}}.
-\]
-Predicted $a$ and $\alpha$ are used only for mechanism analysis.
-
-For frozen command tolerances $\epsilon_v$ and $\epsilon_\omega$, define
-\begin{equation}
-\begin{aligned}
-  r_{\mathrm{int}}
-  =\frac{1}{N_c}\sum_{j=1}^{N_c}
-  \mathbb I\!\big(&
-  |v_{\mathrm{pub},j}-v_{\mathrm{raw},j}|>\epsilon_v\\[-1mm]
-  &\lor
-  |\omega_{\mathrm{pub},j}-\omega_{\mathrm{raw},j}|>\epsilon_\omega
-  \big).
-\end{aligned}
-\label{eq:intervention_ratio}
-\end{equation}
-Here \emph{raw} means the solver command for the online \MPCC{} conditions and the
-method-native tracker command for Fixed-profile. If the shared layer frequently
-overrides raw differences, the physical outcome is attributed to the final
-executed trajectory rather than directly to unexecuted optimizer output.
-
-\subsubsection{Physical, task, trajectory, and runtime outcomes}
-
-$H_{\mathrm{vis}}$ is the calibrated vision-based experimental reference, not
-unconditional ground truth. $H_{\mathrm{modal}}$ is an internal nonnegative
-model response and never decides the physical winner. Camera geometry, region of
-interest, pixel-to-length calibration, extraction, filtering, missing-frame
-handling, synchronization, and uncertainty are frozen without method labels.
-
-The primary physical window and outcome are
-\begin{equation}
-\begin{aligned}
-  \mathcal W_{\mathrm{full}}
-  &=[t_{\mathrm{move}},t_{\mathrm{arrival}}],\\
-  H_{\mathrm{vis,p95}}^{\mathrm{full}}
-  &=Q_{0.95}\!\left(
-  H_{\mathrm{vis}}(t):t\in\mathcal W_{\mathrm{full}}
+  Y_{\mathrm{RGB}}
+  =\operatorname{P95}_{\,t\in\mathcal W_{\mathrm{motion+tail}}}
+  \left(
+    \operatorname{max\text{-}LCR}_{\mathrm{RGB}}(t)
   \right).
-\end{aligned}
   \label{eq:primary_rgb_outcome}
 \end{equation}
-The full window includes start-up and terminal braking. The 10\%--90\%
-progress-window p95 is a key sensitivity result, not a replacement for the
-primary outcome. Secondary outcomes are full-motion and post-arrival
-$H_{\mathrm{vis}}$ RMS, completion time, odometry-derived contour-error p95,
-and success.
+Motion onset, arrival, tail duration, invalid-frame handling, physical units, and left/center/right composition are frozen before confirmation.
+Peak, RMS, tail RMS, and settling time are secondary; the analysis cannot select whichever summary is most favorable after acquisition.
 
-The primary trajectory/mechanism quantities are actual $t(\sigma)$,
-$Z_1$--$Z_5$ traversal-time vectors, preregistered braking and re-acceleration
-features, residual after fitting a single constant speed scaling, $a_x$ RMS,
-$|a_y|$ p95, $H_{\mathrm{modal}}$, and $r_{\mathrm{int}}$. Runtime reporting
-contains solve/tracking-time median, p95, and maximum, budget-overrun rate,
-solver/tracker failure, fallback, and achieved frequency. Grid points on process
-curves and video frames are not statistical samples; one complete trial is the
-sample.
+Task and fairness outcomes include completion time; contour, yaw, and endpoint errors; success and timeout; zero requests; safety events; and the distributions of $v$, $\omega$, acceleration, angular acceleration, jerk, and command spectrum.
+Internal liquid peak/RMS/phase, residual magnitude, saturation, selected-phase jumps, gate coverage, and rejoining time are mechanism outcomes only.
 
-\subsubsection{Randomization, estimands, and failure handling}
+\subsubsection{Paired estimands and decision rule}
 
-Stage~I order follows a newly generated position-balanced five-condition random
-table; Stage~II uses independently randomized three-condition blocks. Blocks
-from different paths, containers, or dates are not linked merely because they
-share an index. The confirmatory family uses fixed sequential gatekeeping:
-\begin{enumerate}
-  \item \SMPCC{} minus Smooth-only for the primary physical effect;
-  \item only if that gate passes, \SMPCC{} minus Fixed-profile for the key
-  novelty comparison.
-\end{enumerate}
-The Smooth-match completion-time gate and the frozen success tolerance must also
-hold for the full claim. \SMPCC{} minus Baseline is secondary, and Smooth-only
-minus Baseline is a mechanism diagnostic. Claims are not rewritten around the
-observed significance pattern.
-
-For a trial-level outcome $Y$, the block contrast is
+Within each randomized block $b$, the primary paired effect is
 \begin{equation}
-  \Delta_b^{m-m'}=Y_{m,b}-Y_{m',b}.
-  \label{eq:block_difference}
+  \Delta_b^{\mathrm{C4-C0}}=Y_{b,\mathrm{C4}}-Y_{b,\mathrm{C0}},
+  \label{eq:primary_paired_effect}
 \end{equation}
-The manuscript reports raw trial points, paired lines, the mean paired
-difference, relative change, whole-block bootstrap intervals, and
-leave-one-block-out sensitivity. Exact randomization/permutation inference
-reproduces the allowed assignments of the actual five-condition randomization.
-A paired sign-flip analysis, if retained, is only a sensitivity under an
-additional symmetry assumption and is not called the exact randomization test.
-Smooth-match, Baseline, and other secondary comparisons follow a preregistered
-hierarchy or Holm adjustment.
+where lower is better.
+The trial-level paired effects, a robust aggregate, an uncertainty interval, raw points, failure denominator, and leave-one-block-out sensitivity are reported together.
+Sample size is determined from a preregistered smallest effect of interest (SESOI), RGB minimum detectable difference, and variance estimated from a pilot independent of confirmation; no historical fixed-count matrix is reused.
 
-All valid formal attempts remain in the fixed planned-unit denominator.
-Method-related solver failure, timeout, tracking failure, or safety termination
-is a method failure and is never replaced by a successful rerun. Only an
-acquisition failure unrelated to condition can be excluded and replaced within
-the same block, with both events archived. A failed offline visual-start check is
-an acquisition failure, not a retrospective method failure. Continuous outcomes
-use pairs in
-which both methods yield defined values, report $n_{\mathrm{pair}}/n$, and are
-explicitly called success-conditional paired effects. The analysis additionally
-includes a preregistered failure-penalized worst-rank or composite win--loss
-sensitivity. A performance claim requires the continuous effect and success
-noninferiority tolerance to hold together.
-Fallback events remain in the method record; whether they imply trial-level
-failure or are judged by a frozen event-rate tolerance is preregistered.
+The claim ``improves anti-slosh performance relative to C0 OrdinaryMPCC under the frozen conditions'' is unlocked only if C4 versus C0 reaches the RGB SESOI, completion time and tracking satisfy preregistered non-inferiority margins, and failures and safety events do not worsen beyond their margins.
+Only after that test passes is the analogous C4 versus C1 contrast interpreted confirmatorily under fixed-sequence gatekeeping.
+If RGB improves only by becoming materially slower, less accurate, or less reliable, the result is reported as a tradeoff rather than superiority.
 
-\subsection{RQ1: Physical Effectiveness and Trajectory Redistribution}
+The main nominal matrix contains C0, C1, C2, and C4 on P-core.
+C3 is evaluated with C4 under controlled deviations in the recovery study.
+Formal numerical results remain \Pending{} until G0--G4 pass and $D_{\mathrm{main,confirm}}$ is collected under one frozen release.
 
-RQ1 uses only the Stage~I $C_1+H_1$ randomized complete blocks. The physical
-result is reported for all five conditions, but the first primary contrast is
-\SMPCC{} minus Smooth-only. Method-wise summaries are descriptive; the
-interpretation uses paired effects, uncertainty, failure denominators, and
-leave-one-block-out behavior.
+\subsection{Component Ablations}
 
-The central process figure aligns executed curves by
-$\sigma=s_{\mathrm{proj}}/L$ and shows at minimum path curvature, actual
-$t(\sigma)$ or segment traversal time, odometry-derived $v_{\mathrm{odom}}$ and
-$\omega_{\mathrm{odom}}$, realized
-$a_x$ and $a_y$, and $H_{\mathrm{vis}}$. \SMPCC{}, Smooth-only, and
-Fixed-profile occupy the main panels; complete Baseline and Smooth-match curves
-can be archived outside the page-limited body. XY trajectories verify that the
-same prescribed geometry was executed but are not used as the primary mechanism
-argument.
+A0 tests whether the offline liquid objective adds value beyond a kinematically smooth replay under the same grid and execution model.
+A1 then tests whether a finite residual improves tracking or physical liquid response relative to phase-aligned zero residual.
+A2 evaluates the recovery mechanism jointly; it cannot attribute an effect separately to the 9-D gate, execution compatibility set, or stored action.
+A3 first compares prediction on held-out simulation or replay and, if an efficacy statement is desired, uses an independently frozen paired control experiment.
 
-Interpretation asks whether \SMPCC{} changes braking before sustained curvature
-or reversal, changes entry/reversal speed, and changes re-acceleration after the
-demanding segment. A mechanism-consistent timing--excitation--visual sequence is
-reported cautiously and is not called a formal mediation analysis. Any
-completion-time, tracking, success, or execution-intervention penalty is
-reported with the physical effect.
+For each pair, the paper reports both the intended change and a manipulation check: offline liquid cost and tail, residual norm, gate branch, buffer prediction, or published-command separation, as applicable.
+An ablation that does not produce a detectable change at the final publication interface cannot support a physical causal interpretation.
+No component claim is inferred from the ordering of C0--C4.
 
-\subsection{RQ2: Competing Timing Explanations}
+\subsection{Recovery-Gate Evaluation}
 
-Smooth-match tests uniform slowdown. Its speed reference is tuned using
-independent development data and frozen when
+Recovery success is labeled independently of the internal gate.
+In simulation, the label uses a held-out higher-fidelity outcome, true constraints, compatible execution state, and the complete tail.
+On hardware, it uses independent RGB, task and safety constraints, and a preregistered tail-settling rule.
+Evaluation of the 9-D classifier is restricted to samples inside $\mathcal B_i^{\mathrm{exec}}$; incompatible samples are rejected by contract and their rejection rate is reported separately.
+
+\begin{table}[t]
+  \centering
+  \caption{Held-out empirical-gate outcomes.}
+  \label{tab:gate_confusion}
+  \small
+  \begin{tabular}{@{}lcc@{}}
+    \toprule
+    Gate decision & Recovery succeeds & Recovery fails \\
+    \midrule
+    Accept & True accept & \textbf{False accept} \\
+    Reject & False reject & True reject \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+The primary gate diagnostic is the conditional false-safe fraction
 \begin{equation}
-  \frac{
-  |\widetilde T_{\mathrm{smooth,match}}
-  -\widetilde T_{\mathrm{S\text{-}MPCC}}|}
-  {\widetilde T_{\mathrm{S\text{-}MPCC}}}
-  \leq\delta_T,
-  \label{eq:time_matching}
+  r_{\mathrm{FS}|\mathrm{A}}
+  =\frac{N(\mathrm{gate\ accept}\ \cap\ \mathrm{recovery\ fail})}
+  {N(\mathrm{gate\ accept})},
+  \label{eq:conditional_false_safe}
 \end{equation}
-where $\delta_T$ is fixed before formal acquisition. Formal trials remain in the
-analysis even when realized time subsequently drifts outside the development
-target. Both medians in \cref{eq:time_matching} are development-set completion
-times reconstructed from $s_{\mathrm{proj}}$ under the frozen first-arrival and
-terminal rules.
+an estimate of $P(\mathrm{recovery\ fail}\mid\mathrm{gate\ accept})$ rather than the conventional false-positive rate.
+It is undefined when no sample is accepted; that case is reported together with zero coverage rather than assigned a favorable value.
+Otherwise it is reported with an uncertainty interval, not hidden inside overall accuracy.
+The paper also reports false rejects, normal-operation and per-phase coverage, the worst phase, rejoining time, and gate-outside zero requests.
+For the phase-indexed stored action $u_{\mathrm{rec}}(i)$, proposal, passage through the limiter/safety chain, and actual publication are separate rates.
+Fit rollouts never reappear in this table.
 
-Fixed-profile tests whether nominal liquid-aware timing is sufficient without
-runtime modal-state memory. Its generator, physical parameters, impulse
-sequence, one allowed base-profile tuning parameter, regenerated profile/hash,
-and tracker are frozen from development data. A single fixed operating point
-does not establish a time--response Pareto frontier. If \SMPCC{} outperforms
-Smooth-match but not Fixed-profile, the paper may still report model-state
-sensitivity in RQ3 but cannot claim an end-to-end physical advantage over fixed
-physics-aware timing. Even a favorable Fixed-profile result does not isolate the
-physical causal necessity of memory without a physical NoState ablation.
+The recovery control matrix has two parts: M4a evaluates the frozen gate on $D_{\mathrm{gate,test}}$, while M4b compares C3 and C4 on $D_{\mathrm{recovery,confirm}}$ under small preregistered pose offsets, added command delay/limits, or a repeatable short speed gate.
+Large unsafe deviations remain in simulation or replay.
+Unrepeatable manual pushing and dynamic obstacles are not formal disturbances.
 
-The RQ2 display combines paired completion-time versus
-$H_{\mathrm{vis,p95}}^{\mathrm{full}}$ observations with actual
-$t(\sigma)$, $v_{\mathrm{odom}}(\sigma)$,
-$a_{y,\mathrm{exec}}(\sigma)$, and
-$H_{\mathrm{vis}}(\sigma)$ for Smooth-match, Fixed-profile, and \SMPCC{}.
+\subsection{Runtime, Command Integrity, and Limitations}
 
-\subsection{RQ3: Model-State-Dependent Online Generation and Execution}
-\label{sec:model_state_mechanism}
+Runtime reporting includes solve-time p50/p95/maximum, the fraction exceeding $33.3$ ms, achieved publication frequency, solver failure, stale state, contract invalidation, supervisor branch, residual saturation, limiter rewrite, and safety override.
+The audit follows each proposed first action through \eqref{eq:publication_chain} and verifies that only the final $u^{\mathrm{pub}}$ updates the two delay buffers.
+Development branch coverage or no-motion tests establish wiring only; they do not establish physical efficacy.
 
-\subsubsection{Constructed internal modal-phase study}
-
-Two mechanism checkpoints are fixed before formal outcomes: one longitudinal
-checkpoint near start-up or re-acceleration and one lateral checkpoint near
-curve entry or curvature reversal. Robot state, path, container parameters, and
-modal energy are fixed; only one internal model-phase direction changes. For a
-frozen amplitude $A$, the four longitudinal states are
-\[
-\begin{aligned}
-  &[A,0,0,0]^\top,\qquad [0,\omega_1A,0,0]^\top,\\
-  &[-A,0,0,0]^\top,\qquad [0,-\omega_1A,0,0]^\top,
-\end{aligned}
-\]
-with the analogous four states in the lateral coordinate. Each solve exports
-the complete predicted $s_{\mathrm{ocp}}$, $v$, $\omega$, $v_s$, $a$,
-$\alpha$, and modal horizon and the optimized first action. Differences below
-the frozen numerical tolerance do not support phase-sensitive generation.
-Differences above it establish sensitivity to constructed internal model phase,
-not accuracy of the true signed liquid phase.
-
-\subsubsection{Online-input/zero-state replay}
-
-For a formal high-risk cycle $j$, an immutable pre-solve snapshot
-$\mathcal S_j$ is cloned into
-\begin{equation}
-\begin{aligned}
-\mathcal P_{\mathrm{online},j}
-&=\mathcal P(\hat{\bm x}_{r,j},\hat{\bm x}_{\ell,j},
-\mathrm{path}_j,\mathcal S_j),\\
-\mathcal P_{\mathrm{zero},j}
-&=\mathcal P(\hat{\bm x}_{r,j},\bm 0,
-\mathrm{path}_j,\mathcal S_j).
-\end{aligned}
-\label{eq:online_zero_replay}
-\end{equation}
-Here \emph{online} means the model-propagated internal state supplied to the
-online solver, not a measured physical liquid state. The online-input branch must reproduce
-the online solver status, first action, and raw command within frozen
-tolerances. Nonreproduced cycles are reported as replay failures.
-
-Trial-level summaries include
-$\Delta a_0$, $\Delta\alpha_0$, $\Delta v_{s,0}$, complete-horizon timing
-differences, and the fraction of cycles above numerical tolerance. Control
-cycles are not treated as independent samples. Unless both branches also pass
-through immutable copies of the shared execution layer, these quantities are
-called optimized first-action/timing differences, not counterfactual executed
-commands. The replay establishes only that the propagated internal state affects
-optimization; it does not establish true-phase accuracy or a physical benefit of
-the zero-state branch.
-
-\subsubsection{Execution preservation and real-time feasibility}
-
-Formal logs report raw, post-gate, published, and odometry-level difference
-preservation, $r_{\mathrm{int}}$, and all runtime failures. For online
-conditions, the budget-overrun rate is
-\begin{equation}
-  r_{\mathrm{miss}}
-  =\frac{1}{N_c}\sum_{j=1}^{N_c}
-  \mathbb I(T_{\mathrm{solve},j}>\Delta t).
-  \label{eq:deadline_miss_ratio}
-\end{equation}
-Fixed-profile separately reports offline generation and online tracking cost.
-Use of SQP-RTI or acados alone is not evidence of real-time feasibility. Only
-plan differences that survive the shared layer and appear in odometry can be
-connected to the executed-motion interpretation in RQ1.
-
-\subsection{RQ4: Path-Feature Selectivity and Limited Configuration Transfer}
-
-\subsubsection{Low-risk path selectivity}
-
-Stage~II-A compares Smooth-only, Fixed-profile, and \SMPCC{} on $C_1+L_1$.
-The analysis asks whether the local timing intervention observed on $H_1$
-decreases with path risk and whether \SMPCC{} avoids unnecessary completion-time,
-tracking, success, or intervention costs. Blocks from $H_1$ and $L_1$ are not
-paired across dates; the path comparison is stratified or uses a preregistered
-effect-difference analysis.
-
-Small differences on $L_1$ support selectivity only under frozen equivalence or
-noninferiority margins for completion time, tracking, success, and intervention,
-together with the declared $H_1\!\rightarrow L_1$ effect-difference rule.
-Failure to reject a conventional null is not evidence of equivalence.
-
-\subsubsection{Conditional second-container transfer}
-
-Stage~II-B is executed only if the second-container objective, $C_2$, its random
-table, and all criteria were frozen before Stage~I. \SMPCC{} updates only the
-declared physical quantities such as $\omega_{1,c}$, $c_{h,c}$,
-$\eta_{\mathrm{ref},c}$, and $\dot\eta_{\mathrm{ref},c}$; Fixed-profile is
-regenerated from the same $C_2$ parameters, while weights, $\zeta$, horizon,
-solver, path, motion limits, shared execution layer, and measurement chain remain
-fixed.
-
-Results are compared within each container and reported in physical and
-freeboard-normalized units. A limited-transfer statement requires the
-preregistered within-$C_2$ visual-effect, task-cost, success, and primary
-comparator criteria to pass. A nonsignificant container interaction does not
-establish equivalence. Parameter-switch or correct/incorrect-parameter replay
-supports optimizer sensitivity only; without a separate physical mismatch
-protocol it cannot establish the physical necessity of parameter updating.
-
-\subsection{Supporting Measurement and Model Diagnostics}
-
-Visual measurement admission is required before formal acquisition, including
-calibration repeatability, missing-frame behavior, synchronization, and
-camera-to-mode bandwidth. Modal--vision consistency is a separate supporting
-diagnostic and cannot replace the RGB physical comparison or the constructed
-phase/replay evidence.
-
-Under the proposed matrix, the \SMPCC{} population available for the supporting
-K6-style modal--vision audit grows from 8 planned units after Stage~I to 16 after
-Stage~II-A and 24 after conditional Stage~II-B. The audit uses one frozen
-analysis script, synchronization rule, lag policy, and failure denominator. It
-compares nonnegative amplitude envelopes and therefore does not validate signed
-phase or rotation consistency.
-
-Long-horizon propagation and command-regularity studies are optional exploratory
-diagnostics. They have no reserved formal sample count, do not create an
-additional research question, and do not change the 40/64/88 packages. They
-enter an archived or venue-permitted supplement only if an independent
-exploratory protocol is executed and the result materially clarifies a boundary
-of the main experiment.
-
-\FloatBarrier
+The final interpretation is bounded by the frozen path, static obstacle-clear workspace, contracted container/fill and low-order liquid-model range, identified Scout execution dynamics, and empirical gate coverage.
+The stored action is not a feedback recovery controller, and no recursive-feasibility, robust-recovery, or spill-free guarantee is made.
+At the present revision, B0, the formal offline artifact, execution compatibility, held-out gate, and C2/C3/C4 physical runners remain unresolved; physical \texttt{enforce} is therefore \NoGo{} and no positive anti-slosh result is claimed.

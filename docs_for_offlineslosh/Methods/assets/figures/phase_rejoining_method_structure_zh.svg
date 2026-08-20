@@ -50,7 +50,7 @@
   <title
      id="title">执行前沿对齐的相位重接残差 S-MPCC 方法结构</title>
   <desc
-     id="desc">展示离线防晃名义序列、相位索引经验恢复对象、在线执行前沿对齐、短时域残差 S-MPCC、终端经验 gate 和失效安全闭环。</desc>
+     id="desc">展示离线防晃名义序列、相位索引经验 gate、执行状态兼容集、双通道增广传播、残差 S-MPCC 和统一发布安全闭环。</desc>
   <defs
      id="defs12">
     <style
@@ -417,7 +417,7 @@
     <tspan
        x="857.5"
        dy="0"
-       id="tspan64">优化 u_opt 并经过发布链</tspan>
+       id="tspan64">优化 q 与发布命令序列</tspan>
     <tspan
        x="857.5"
        dy="26"
@@ -448,7 +448,7 @@
     <tspan
        x="1185"
        dy="0"
-       id="tspan76">机器人、执行器与液体状态</tspan>
+       id="tspan76">机器人、输入与液体状态</tspan>
     <tspan
        x="1185"
        dy="27"
@@ -470,7 +470,7 @@
      class="box-title"
      x="1547.5"
      y="208"
-     id="text86">相位索引经验恢复对象</text>
+     id="text86">经验 gate、执行兼容与保存动作</text>
   <text
      class="box-math"
      x="1547.5"
@@ -479,11 +479,11 @@
     <tspan
        x="1547.5"
        dy="0"
-       id="tspan88">R_emp(i) 与 κ_emp(i)</tspan>
+       id="tspan88">R_emp(i)、B_exec(i)、u_rec(i)</tspan>
     <tspan
        x="1547.5"
        dy="27"
-       id="tspan90">扰动仿真构造，留出数据验证</tspan>
+       id="tspan90">目标：扰动构造，留出数据验证</tspan>
     <tspan
        class="box-text"
        x="1547.5"
@@ -518,7 +518,7 @@
      class="label"
      x="900"
      y="356"
-     id="text106">实施前放行门 G0：总预测提前量可信，且当前新命令对恢复终端具有可检测控制作用</text>
+     id="text106">实施前 G0：双通道因果传播与栅格前沿一致，完整 lead 可信，且新命令对终端有可检测作用</text>
   <!-- 在线流程 -->
   <rect
      class="box-online"
@@ -541,11 +541,11 @@
     <tspan
        x="220"
        dy="0"
-       id="tspan112">位姿、真实 v / ω、执行器状态</tspan>
+       id="tspan112">位姿、真实 v / ω、液体内部状态</tspan>
     <tspan
        x="220"
        dy="27"
-       id="tspan114">液体内部状态与时间戳</tspan>
+       id="tspan114">source time 与当前运行时钟</tspan>
     <tspan
        x="220"
        dy="27"
@@ -563,7 +563,7 @@
      class="box-title"
      x="560"
      y="533"
-     id="text122">双通道执行前沿对齐</text>
+     id="text122">双通道 delay 增广状态</text>
   <text
      class="box-text"
      x="560"
@@ -572,15 +572,15 @@
     <tspan
        x="560"
        dy="0"
-       id="tspan124">分别传播线 / 角延迟与惯性</tspan>
+       id="tspan124">历史先将 source 状态对齐到当前</tspan>
     <tspan
        x="560"
        dy="27"
-       id="tspan126">预测真实运动和容器激励</tspan>
+       id="tspan126">b_v / b_ω 与惯性进入 OCP</tspan>
     <tspan
        x="560"
        dy="27"
-       id="tspan128">共同索引前沿 j_f = j + n_f</tspan>
+       id="tspan128">保留两通道各自的因果时序</tspan>
   </text>
   <rect
      class="box-online"
@@ -603,15 +603,15 @@
     <tspan
        x="900"
        dy="0"
-       id="tspan136">只枚举上一接受索引附近候选 j</tspan>
+       id="tspan136">以运行时钟索引为锚</tspan>
     <tspan
        x="900"
        dy="27"
-       id="tspan138">联合检查几何、命令队列与液体误差</tspan>
+       id="tspan138">当前 9 维状态归一化评分</tspan>
     <tspan
        x="900"
        dy="27"
-       id="tspan140">禁止任意时间伸缩和全局跳转</tspan>
+       id="tspan140">单调、有限 lead、禁止全局跳转</tspan>
   </text>
   <rect
      class="box-main"
@@ -625,7 +625,7 @@
      class="box-title"
      x="1260"
      y="515"
-     id="text146">短时域残差 S-MPCC</text>
+     id="text146">执行增广残差 S-MPCC</text>
   <text
      class="box-math"
      x="1260"
@@ -634,22 +634,22 @@
     <tspan
        x="1260"
        dy="0"
-       id="tspan148">u_opt = ū_opt(j+k) + δu</tspan>
+       id="tspan148">x₀ = X_t_aug，N_e = n_f + N_ℓ</tspan>
     <tspan
        class="box-text"
        x="1260"
        dy="28"
-       id="tspan150">机器人—执行器—液体耦合至 N_e</tspan>
+       id="tspan150">前沿后 N_ℓ = 3 终端检查窗口</tspan>
     <tspan
        class="box-text"
        x="1260"
        dy="27"
-       id="tspan152">几何 MPCC：轮廓 / 滞后 / 进度</tspan>
+       id="tspan152">轮廓 / 滞后 + 名义相对代价</tspan>
     <tspan
        class="box-text"
        x="1260"
        dy="27"
-       id="tspan154">长预览 Nᵣ 不增加液体盲自由控制</tspan>
+       id="tspan154">j_f = j + n_f，j_e = j_f + N_ℓ</tspan>
   </text>
   <rect
      class="box-gate"
@@ -663,7 +663,7 @@
      class="box-title"
      x="1610"
      y="533"
-     id="text160">终端经验恢复门</text>
+     id="text160">终端重接条件</text>
   <text
      class="box-math"
      x="1610"
@@ -672,16 +672,16 @@
     <tspan
        x="1610"
        dy="0"
-       id="tspan162">e_(N_e|t) ∈ R_emp(j_e)</tspan>
+       id="tspan162">e_9 ∈ R_emp(j_e)</tspan>
     <tspan
        x="1610"
        dy="27"
-       id="tspan164">状态、命令与合同均有效</tspan>
+       id="tspan164">e_exec ∈ B_exec(j_e)</tspan>
     <tspan
        class="box-text"
        x="1610"
        dy="27"
-       id="tspan166">j_e = j + n_f + N_ℓ</tspan>
+       id="tspan166">gate、执行兼容与合同有效</tspan>
   </text>
   <path
      class="connector"
@@ -717,175 +717,132 @@
      class="label"
      x="1620"
      y="412"
-     id="text184">恢复门 / 策略</text>
-  <!-- 在线输出 -->
-  <rect
-     class="box-publish"
-     x="1100"
-     y="710"
-     width="320"
-     height="90"
-     rx="12"
-     id="rect186" />
-  <text
-     class="box-title"
-     x="1260"
-     y="741"
-     id="text188">只发布第一拍</text>
-  <text
-     class="box-math"
-     x="1260"
-     y="772"
-     id="text194">
-    <tspan
-       x="1260"
-       dy="0"
-       id="tspan190">u_pub = G_pub(ū_opt(j) + δu)</tspan>
-    <tspan
-       class="box-text"
-       x="1260"
-       dy="25"
-       id="tspan192">下一周期读取真实结果并重新求解</tspan>
-  </text>
+     id="text184">gate / 保存动作</text>
+  <!-- 监督、统一发布与执行 -->
   <path
      class="connector"
-     d="M 1610 630 V 680 H 1260 V 710"
+     d="M 1610 630 V 690 H 540 V 890"
      id="path196" />
   <text
      class="label-green"
-     x="1470"
-     y="671"
-     id="text198">选择最小代价可行候选</text>
-  <!-- 执行、恢复和降级 -->
-  <rect
-     class="box-system"
-     x="250"
-     y="900"
-     width="330"
-     height="110"
-     rx="12"
-     id="rect200" />
-  <text
-     class="box-title"
-     x="415"
-     y="934"
-     id="text202">Scout 真实运动与液体响应</text>
-  <text
-     class="box-text"
-     x="415"
-     y="966"
-     id="text208">
-    <tspan
-       x="415"
-       dy="0"
-       id="tspan204">执行 v / ω，产生容器真实激励</tspan>
-    <tspan
-       x="415"
-       dy="27"
-       id="tspan206">记录 odom / IMU / RGB 独立评价</tspan>
-  </text>
+     x="1080"
+     y="681"
+     id="text198">求解、终端条件、当前兼容性与合同结果</text>
   <rect
      class="box-recovery"
-     x="700"
-     y="900"
-     width="350"
-     height="110"
+     x="250"
+     y="890"
+     width="580"
+     height="120"
      rx="12"
      id="rect210" />
   <text
      class="box-title"
-     x="875"
-     y="934"
-     id="text212">验证后可用的恢复策略</text>
+     x="540"
+     y="920"
+     id="text212">在线监督器：生成三路候选</text>
   <text
      class="box-text"
-     x="875"
-     y="966"
+     x="540"
+     y="950"
      id="text218">
     <tspan
-       x="875"
+       x="540"
        dy="0"
-       id="tspan214">当前误差已进入对应恢复门</tspan>
+       id="tspan214">终端重接条件通过 → residual 第一拍 u_sol</tspan>
     <tspan
-       x="875"
-       dy="27"
-       id="tspan216">调用 κ_emp(i)，并经过同一发布约束</tspan>
+       x="540"
+       dy="24"
+       id="tspan216">失败但当前重接条件 / 保存动作有效 → u_rec(j)</tspan>
+    <tspan
+       x="540"
+       dy="24"
+       id="tspan217">其余运行期失效 → 请求 (0,0)</tspan>
   </text>
   <rect
-     class="box-fallback"
-     x="1210"
-     y="900"
-     width="420"
-     height="110"
+     class="box-publish"
+     x="900"
+     y="890"
+     width="350"
+     height="120"
      rx="12"
-     id="rect220" />
+     id="rect186" />
   <text
      class="box-title"
-     x="1420"
-     y="934"
-     id="text222">无法重接或方法合同失效</text>
+     x="1075"
+     y="920"
+     id="text188">输出选择＋发布 / 安全链</text>
   <text
      class="box-text"
-     x="1420"
-     y="966"
-     id="text228">
+     x="1075"
+     y="958"
+     id="text194">
     <tspan
-       x="1420"
+       x="1075"
        dy="0"
-       id="tspan224">防晃减速 / 受控停车</tspan>
+       id="tspan190">G_phase,pub、limiter 与 safety override</tspan>
     <tspan
-       x="1420"
+       x="1075"
        dy="27"
-       id="tspan226">必要时重置液体状态估计并重新规划</tspan>
+       id="tspan192">记录真实 u_pub 并写回 delay buffer</tspan>
+  </text>
+  <rect
+     class="box-system"
+     x="1330"
+     y="890"
+     width="400"
+     height="120"
+     rx="12"
+     id="rect200" />
+  <text
+     class="box-title"
+     x="1530"
+     y="920"
+     id="text202">Scout 真实运动与液体响应</text>
+  <text
+     class="box-text"
+     x="1530"
+     y="958"
+     id="text208">
+    <tspan
+       x="1530"
+       dy="0"
+       id="tspan204">执行 v / ω，产生容器真实激励</tspan>
+    <tspan
+       x="1530"
+       dy="27"
+       id="tspan206">记录 odom / IMU / RGB 独立评价</tspan>
   </text>
   <path
      class="connector"
-     d="M 1260 800 V 830 H 415 V 900"
-     id="path230" />
-  <text
-     class="label"
-     x="820"
-     y="822"
-     id="text232">最终发布命令</text>
-  <path
-     class="connector"
-     d="M 1160 650 V 690 H 875 V 900"
-     id="path234" />
-  <text
-     class="label"
-     x="982"
-     y="681"
-     id="text236">求解失败，且当前恢复门 / 策略有效</text>
-  <path
-     class="connector"
-     d="M 700 955 H 580"
+     d="M 830 950 H 900"
      id="path238" />
   <path
      class="connector"
-     d="M 1730 565 H 1750 V 955 H 1630"
-     id="path240" />
+     d="M 1250 950 H 1330"
+     id="path230" />
   <text
-     class="label-red"
-     x="1685"
+     class="label"
+     x="1290"
      y="941"
-     id="text242">不可重接</text>
+     id="text232">最终 u_pub</text>
   <!-- 闭环反馈 -->
   <path
      class="feedback"
-     d="M 250.03184,954.86781 H 41.250871 V 565.12335 h 36.474528"
+     d="M 1530 1010 V 1030 H 40 V 565 H 80"
      id="path244"
      inkscape:connector-curvature="0"
      style="fill:none;stroke:#5b6b7d;stroke-width:3.10318065;stroke-linecap:square;stroke-linejoin:miter;stroke-dasharray:12.41272305, 5.17196794, 2.06878717, 5.17196794;marker-end:url(#arrow)"
-     sodipodi:nodetypes="cccc" />
+     sodipodi:nodetypes="ccccc" />
   <text
      class="label"
-     x="164.89876"
-     y="853.4718"
+     x="390"
+     y="1023"
      id="text246"
      style="font-weight:600;font-size:16px;font-family:'Noto Sans CJK SC', 'Microsoft YaHei', 'PingFang SC', sans-serif;text-anchor:middle;fill:#40516a">状态、时间戳与最终命令历史反馈</text>
   <text
      class="note"
      x="900"
-     y="1038"
-     id="text248">注：当前主线为经验恢复门；满足逐拍鲁棒包含、终端正不变与策略可移位后，才升级为恢复漏斗 / 证书。</text>
+     y="1071"
+     id="text248">注：图为论文目标；当前前沿仍有 B0，且缺执行兼容集与 held-out gate，不是恢复证书或反馈策略。</text>
 </svg>

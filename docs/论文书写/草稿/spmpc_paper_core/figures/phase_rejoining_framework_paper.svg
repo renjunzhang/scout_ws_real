@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1800" height="800" viewBox="0 0 1800 800"
+     role="img" aria-labelledby="title desc">
+  <title id="title">Phase-rejoining residual S-MPCC framework</title>
+  <desc id="desc">A concise paper framework. A geometric path and frozen models enter OfflineSloshOCP to produce a complete phase-indexed anti-slosh artifact. Online, the state estimate and published-command history are aligned with the execution front and nominal phase. A bounded residual S-MPCC is accepted only when the terminal state can rejoin the nominal tail. The selected candidate passes through the safety and publication chain before reaching the Scout and liquid system, whose measurements close the loop.</desc>
+
+  <defs>
+    <style><![CDATA[
+      .canvas {
+        fill: #ffffff;
+      }
+      .scope {
+        fill: none;
+        stroke: #7699c3;
+        stroke-width: 2.2;
+        stroke-dasharray: 12 12;
+      }
+      .box-common {
+        fill: #f5f6f7;
+        stroke: #707780;
+        stroke-width: 2.8;
+      }
+      .box-method {
+        fill: #eaf2fb;
+        stroke: #245b9e;
+        stroke-width: 3.2;
+      }
+      .box-core {
+        fill: #eaf2fb;
+        stroke: #245b9e;
+        stroke-width: 4;
+      }
+      .flow {
+        fill: none;
+        stroke: #30343b;
+        stroke-width: 3.3;
+        stroke-linecap: square;
+        stroke-linejoin: miter;
+        marker-end: url(#arrow-gray);
+      }
+      .artifact {
+        fill: none;
+        stroke: #5c83b2;
+        stroke-width: 2.8;
+        stroke-dasharray: 10 8;
+        stroke-linecap: square;
+        stroke-linejoin: miter;
+      }
+      .artifact-arrow {
+        fill: none;
+        stroke: #5c83b2;
+        stroke-width: 2.8;
+        stroke-dasharray: 10 8;
+        stroke-linecap: square;
+        stroke-linejoin: miter;
+        marker-end: url(#arrow-blue);
+      }
+      .feedback {
+        fill: none;
+        stroke: #707780;
+        stroke-width: 2.8;
+        stroke-dasharray: 11 6 2 6;
+        stroke-linecap: square;
+        stroke-linejoin: miter;
+        marker-end: url(#arrow-gray);
+      }
+      .row-label {
+        font-family: "Liberation Sans", Arial, Helvetica, sans-serif;
+        font-size: 25px;
+        font-weight: 700;
+        letter-spacing: 1.1px;
+        fill: #30343b;
+      }
+      .scope-label {
+        font-family: "Liberation Sans", Arial, Helvetica, sans-serif;
+        font-size: 21px;
+        font-weight: 700;
+        letter-spacing: 1.1px;
+        fill: #245b9e;
+      }
+      .box-title {
+        font-family: "Liberation Sans", Arial, Helvetica, sans-serif;
+        font-size: 30px;
+        font-weight: 700;
+        fill: #30343b;
+        text-anchor: middle;
+      }
+      .box-title-sm {
+        font-family: "Liberation Sans", Arial, Helvetica, sans-serif;
+        font-size: 28px;
+        font-weight: 700;
+        fill: #30343b;
+        text-anchor: middle;
+      }
+      .box-text {
+        font-family: "Liberation Sans", Arial, Helvetica, sans-serif;
+        font-size: 26px;
+        font-weight: 400;
+        fill: #5d6570;
+        text-anchor: middle;
+      }
+      .math {
+        font-family: "Liberation Sans", Arial, Helvetica, sans-serif;
+        font-size: 28px;
+        font-style: italic;
+        font-weight: 400;
+        fill: #30343b;
+        text-anchor: middle;
+      }
+      .line-label {
+        font-family: "Liberation Sans", Arial, Helvetica, sans-serif;
+        font-size: 23px;
+        font-weight: 600;
+        fill: #5d6570;
+        text-anchor: middle;
+      }
+      .artifact-label {
+        font-family: "Liberation Sans", Arial, Helvetica, sans-serif;
+        font-size: 23px;
+        font-weight: 600;
+        fill: #416a9b;
+        text-anchor: middle;
+      }
+    ]]></style>
+
+    <marker id="arrow-gray" markerWidth="10" markerHeight="10" refX="9" refY="5"
+            orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#30343b"/>
+    </marker>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="5"
+            orient="auto" markerUnits="strokeWidth">
+      <path d="M 0 0 L 10 5 L 0 10 Z" fill="#5c83b2"/>
+    </marker>
+  </defs>
+
+  <rect class="canvas" x="0" y="0" width="1800" height="800"/>
+
+  <!-- The dashed boundary separates the proposed method from task inputs and the plant. -->
+  <rect class="scope" x="330" y="34" width="1090" height="672" rx="15"/>
+  <rect class="canvas" x="350" y="22" width="265" height="27"/>
+  <text class="scope-label" x="358" y="43">PROPOSED METHOD</text>
+
+  <text class="row-label" x="42" y="76">BEFORE EXECUTION</text>
+  <text class="row-label" x="42" y="446">ONLINE · 30 Hz</text>
+
+  <!-- Before-execution planning -->
+  <rect class="box-common" x="40" y="108" width="280" height="164" rx="10"/>
+  <text class="box-title-sm" x="180" y="147">Geometric path</text>
+  <text class="box-title-sm" x="180" y="181">+ frozen models</text>
+  <text class="box-text" x="180" y="221">execution + liquid</text>
+  <text class="box-text" x="180" y="252">container + constraints</text>
+
+  <rect class="box-method" x="400" y="108" width="330" height="164" rx="10"/>
+  <text class="box-title" x="565" y="151">OfflineSloshOCP</text>
+  <text class="box-text" x="565" y="197">full anti-slosh motion</text>
+  <text class="box-text" x="565" y="234">optimized before execution</text>
+
+  <rect class="box-method" x="820" y="108" width="500" height="164" rx="10"/>
+  <text class="box-title" x="1070" y="143">Phase-indexed offline artifact</text>
+  <text class="math" x="1070" y="184">x̄(τ), ū(τ), z̄(τ)</text>
+  <text class="box-text" x="1070" y="221">complete motion–settle–hold tail</text>
+  <text class="box-text" x="1070" y="252">phase-indexed rejoin data</text>
+
+  <path class="flow" d="M 320 190 H 400"/>
+  <path class="flow" d="M 730 190 H 820"/>
+
+  <!-- The frozen artifact supplies the online alignment, residual OCP and rejoin test. -->
+  <path class="artifact" d="M 1070 272 V 359 H 500"/>
+  <path class="artifact" d="M 1070 359 H 1220"/>
+  <path class="artifact-arrow" d="M 500 359 V 482"/>
+  <path class="artifact-arrow" d="M 860 359 V 482"/>
+  <path class="artifact-arrow" d="M 1220 359 V 482"/>
+  <text class="artifact-label" x="860" y="340">frozen nominal plan and rejoin data</text>
+
+  <!-- Online feedback control -->
+  <rect class="box-common" x="40" y="482" width="280" height="168" rx="10"/>
+  <text class="box-title-sm" x="180" y="520">State estimate</text>
+  <text class="box-title-sm" x="180" y="554">+ command history</text>
+  <text class="box-text" x="180" y="598">realized motion</text>
+  <text class="box-text" x="180" y="631">liquid-state estimate</text>
+
+  <rect class="box-method" x="350" y="482" width="300" height="168" rx="10"/>
+  <text class="box-title-sm" x="500" y="524">Execution-front</text>
+  <text class="box-title-sm" x="500" y="558">+ phase alignment</text>
+  <text class="box-text" x="500" y="600">realization-aligned state</text>
+  <text class="box-text" x="500" y="632">nearby monotone phase</text>
+
+  <rect class="box-core" x="700" y="482" width="320" height="168" rx="10"/>
+  <text class="box-title-sm" x="860" y="518">Bounded residual</text>
+  <text class="box-title-sm" x="860" y="551">S-MPCC</text>
+  <text class="math" x="860" y="594">u = ū(τ) + δu</text>
+  <text class="box-text" x="860" y="630">3 steps ≈ 100 ms</text>
+
+  <rect class="box-method" x="1070" y="482" width="300" height="168" rx="10"/>
+  <text class="box-title-sm" x="1220" y="518">Joint rejoin test</text>
+  <text class="box-title-sm" x="1220" y="551">+ supervisor</text>
+  <text class="box-text" x="1220" y="593">gate + execution check</text>
+  <text class="box-text" x="1220" y="629">residual / recovery / stop</text>
+
+  <rect class="box-common" x="1470" y="482" width="290" height="168" rx="10"/>
+  <text class="box-title-sm" x="1615" y="510">Safety + publish</text>
+  <text class="box-title-sm" x="1615" y="542">Scout + liquid</text>
+  <text class="box-text" x="1615" y="578">selected candidate</text>
+  <text class="box-text" x="1615" y="608">→ final u_pub</text>
+  <text class="box-text" x="1615" y="638">→ motion + slosh</text>
+
+  <path class="flow" d="M 320 566 H 350"/>
+  <path class="flow" d="M 650 566 H 700"/>
+  <path class="flow" d="M 1020 566 H 1070"/>
+  <path class="flow" d="M 1370 566 H 1470"/>
+
+  <path class="feedback" d="M 1615 650 V 746 H 180 V 650"/>
+  <text class="line-label" x="900" y="738">state feedback and published-command history</text>
+</svg>

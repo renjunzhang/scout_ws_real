@@ -6,4 +6,5 @@
 *.log
 *.out
 *.pdf
+!figures/phase_rejoining_framework_paper.pdf
 *.synctex.gz

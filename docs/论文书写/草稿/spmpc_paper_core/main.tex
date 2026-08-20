@@ -15,18 +15,14 @@
 
 \newcommand{\SMPCC}{S-MPCC}
 \newcommand{\MPCC}{MPCC}
-\newcommand{\xr}{\bm{x}_{r}}
-\newcommand{\xl}{\bm{x}_{\ell}}
-\newcommand{\xaug}{\bm{x}}
-\newcommand{\vu}{\bm{u}}
-\newcommand{\vr}{\bm{r}}
-\newcommand{\ec}{e_{\mathrm{c}}}
-\newcommand{\el}{e_{\mathrm{l}}}
+\newcommand{\PRSMPCC}{Phase-Rejoining Residual \SMPCC}
+\newcommand{\OfflineSloshOCP}{OfflineSloshOCP}
 \newcommand{\Pending}{\textcolor{spmpcgray}{\textit{pending}}}
+\newcommand{\NoGo}{\textcolor{red!70!black}{\textsc{no-go}}}
 
 \definecolor{spmpcgray}{RGB}{90,90,90}
 
-\title{\SMPCC: Slosh-Aware Online Trajectory Generation for Prescribed-Path Liquid Transport}
+\title{Phase-Rejoining Residual \SMPCC{} for Execution-Aware Anti-Slosh Path Tracking}
 
 \author{Renjun Zhang%
 \thanks{Renjun Zhang is with the University of Science and Technology of China,
@@ -37,17 +33,17 @@ Hefei, China (e-mail: zhangrenjun@mail.ustc.edu.cn).}}
 \maketitle
 
 \begin{abstract}
-Transporting an open liquid on a mobile base requires more than suppressing command variation: the response to a candidate motion also depends on the liquid displacement, velocity, and oscillation phase already present when that motion is planned.
-This paper presents \SMPCC{}, a receding-horizon trajectory generator and controller for prescribed geometrically feasible paths.
-It augments an acceleration-level \MPCC{} with finite-horizon virtual path progress and a container-parameterized first lateral sloshing mode represented in two orthogonal directions.
-An odometry-driven model propagates an internal modal state between control cycles, and this model state conditions the next virtual-progress and chassis action; it is not a measurement of the true signed liquid phase.
-The evaluation is designed to contrast \SMPCC{} with slosh-agnostic, smooth-only, completion-time-matched, and model-informed fixed-profile conditions using calibrated vision, odometry-derived executed timing, constructed internal modal-phase studies, online-input/zero-state replay, and execution-chain and runtime audits.
-Formal outcome claims and numerical results are intentionally withheld until the preregistered release, measurement, comparator, and analysis gates have passed.
-The scope is online trajectory generation along a supplied path; global route planning, obstacle reasoning, and a formal spill-free guarantee are not claimed.
+Offline anti-slosh trajectories exploit future phase cancellation, but an online path-tracking correction can destroy that cancellation before the correction physically reaches a mobile base.
+We formulate a phase-rejoining residual slosh-aware model predictive contouring controller (\SMPCC{}), which admits an online residual correction only if the state predicted after the identified command-to-motion delays passes a phase-indexed empirical test for rejoining the complete offline anti-slosh tail.
+The controller aligns a source-stamped state to the expected command-publication time, propagates separate linear and angular command buffers and actuator dynamics, selects a neighboring monotone artifact phase, and solves a nominal-relative residual OCP through a common execution front and a short post-front residual window.
+Acceptance requires both a 9-D robot--liquid empirical gate and a hard compatibility set for the pending execution state; a supervisor otherwise selects a phase-indexed stored action or requests zero velocity through the same publication and safety chain.
+The planned evaluation uses an independent RGB max-LCR liquid-height outcome, OrdinaryMPCC and completion-time-matched controls, strict component ablations, held-out conditional false-safe analysis, and command-chain and runtime audits.
+Formal performance claims are withheld in this core draft because the unequal-delay causal-front implementation, formal offline artifact, execution-compatibility set, and held-out gate have not yet passed their release gates.
+The scope is frozen-path tracking in a static obstacle-clear workspace; online obstacle avoidance and a formal recovery guarantee are not claimed.
 \end{abstract}
 
 \begin{IEEEkeywords}
-mobile robots, open-liquid transport, liquid sloshing, model predictive contouring control, prescribed-path trajectory generation, online virtual path-progress optimization
+mobile robots, liquid sloshing, model predictive contouring control, input delay, residual control, offline--online trajectory tracking
 \end{IEEEkeywords}
 
 \input{sections/01_method}

@@ -1,113 +1,148 @@
-# S-MPCC Method-and-Experiment Core
+# Phase-Rejoining Residual S-MPCC Core
 
-This directory contains the standalone IEEE journal-style core for the S-MPCC
-method and experimental evidence chain. Its theme is prescribed-path trajectory
-generation: a finite-horizon virtual path-progress MPCC uses an odometry-driven,
-model-propagated internal liquid state to adapt chassis motion along supplied
-geometry.
+This directory is a standalone IEEE journal-style draft of the method and
+experimental core for **Phase-Rejoining Residual S-MPCC**. Its central rule is:
+an online residual correction is admitted only when the unequal-delay prediction
+remains eligible to rejoin the complete phase-indexed offline anti-slosh tail.
 
-The paper-level organization is defined by
-`../../论文组织思路/S-MPCC_当前论文组织思路.md`. The five-condition matrix in this
-core is currently a redesign proposal, not an executable acquisition protocol.
-The existing field protocol remains authoritative until the experimental design,
-matrix, analysis rules, random tables, and freeze template are synchronously
-superseded. Formal acquisition is therefore `NO-GO`; only a manifest template,
-not an immutable `freeze_manifest.yaml/FREEZE_ID`, currently exists.
+This is a target formulation and evidence plan, not a released physical result.
+The paper-level organization is maintained in
+`../../论文组织思路/S-MPCC_当前论文组织思路.md`.
 
-## Scope
+## Local and Full-Paper Numbering
 
-The core deliberately contains only:
+The standalone core intentionally omits Introduction, Related Work, and
+Conclusion. Consequently, LaTeX numbers its two included sections locally as:
 
-- `main.tex`: title, abstract, keywords, and document entry point;
-- `sections/01_method.tex`: the reproducible S-MPCC formulation;
-- `sections/02_experiments.tex`: the proposed RQ1--RQ4 evidence structure; and
-- `supplementary/supplementary_material.tex`: freeze/configuration templates and
-  supporting analyses.
+| Standalone core | File | Full-paper destination |
+| --- | --- | --- |
+| Section I | `sections/01_method.tex` | Section III, Method |
+| Section II | `sections/02_experiments.tex` | Section IV, Experimental Evaluation |
 
-Introduction, Related Work, and Conclusion are added in the full-paper tree only
-after the method release and evidence scope are known. The core does not claim
-global route planning, obstacle reasoning, true signed liquid-phase observation,
-or a formal spill-free guarantee.
+References to “Section III/IV” in planning documents describe the full paper;
+the generated core PDF correctly displays “I/II”. Do not hard-code section
+numbers in prose or figures—use LaTeX labels and references.
+
+## Contents
+
+- `main.tex`: title, abstract, shared macros, bibliography entry, and document
+  entry point;
+- `sections/01_method.tex`: offline artifact, unequal-delay alignment,
+  neighboring phase selection, residual OCP, joint terminal gate, and
+  supervisor;
+- `sections/02_experiments.tex`: RQ1--RQ5, C0--C4, A0--A3, G0--G4, RGB outcome,
+  recovery evaluation, and runtime/command-chain audit;
+- `figures/phase_rejoining_framework_paper.{svg,pdf,png}`: editable and
+  publication-ready architecture figure used by the method section; and
+- `supplementary/supplementary_material.tex`: a repository/supplement fragment
+  containing release-freeze and analysis templates.
+
+The supplementary fragment is not included by `main.tex`. It relies on the
+packages and macros in `main.tex` and must be wrapped or included by a venue-
+specific supplementary document.
+
+## Current Release Status
+
+Physical `enforce` is **NO-GO**. In particular:
+
+- **B0 / G0 is open:** the current development front predictor does not retain
+  the new-command dependence between unequal linear and angular delays and also
+  mixes the physical front epoch with its grid index;
+- **G1 is pending:** no formal OfflineSloshOCP artifact with a validated
+  motion--settle--zero-hold tail and complete contract has been frozen;
+- **G2 is pending:** the source-correct RGB motion-plus-tail measurement and its
+  detectability rules are not yet frozen;
+- **G3 is NO-GO:** the formal execution-compatibility set and independent
+  held-out gate test do not yet exist; and
+- **G4 is pending:** the frozen paired pilot and complete recorder/postflight
+  chain have not passed.
+
+Development branch coverage, no-motion tests, or internal slosh-model trends do
+not establish physical anti-slosh efficacy. No positive physical performance
+claim is made in this core.
+
+## Comparison and Ablation Identifiers
+
+The system-level conditions are:
+
+| ID | Frozen interpretation |
+| --- | --- |
+| C0 OrdinaryMPCC | Liquid-agnostic contour/lag/progress MPCC and the common downstream safety chain. |
+| C1 SmoothMatch | C0 with independently tuned smoothing and one global scale used to match C4 completion time. |
+| C2 OfflineReplay | Clocked replay of the same formal offline artifact as C4, with zero online residual. |
+| C3 ResidualNoGate | C4's aligned residual OCP with the empirical gate, execution compatibility, and stored action disabled together. |
+| C4 Full | Unequal-delay augmentation, neighboring phase, bounded residual, joint terminal gate, stored action, and fail-closed supervision. |
+
+C0--C4 are a system evidence ladder, not a sequence of single-factor changes.
+The primary comparison is C4 versus C0; only after it passes is C4 versus C1
+tested confirmatorily. The nominal main matrix uses C0, C1, C2, and C4 on the
+frozen P-core path. C3 is paired with C4 in controlled recovery experiments.
+
+Component attribution uses strict pairs:
+
+| ID | Pair | Sole planned change |
+| --- | --- | --- |
+| A0 | OfflineSmoothReplay vs. C2 | Offline liquid objective off/on. |
+| A1 | PhaseAlignedNoResidual vs. C3 | Finite online residual off/on. |
+| A2 | C3 vs. C4 | Joint gate, execution compatibility, and stored action off/on. |
+| A3 | IdealExec vs. IdentifiedExec | Idealized versus identified unequal-delay execution model and consistent artifact. |
+
+Formal sample size is not fixed in this repository draft. The obsolete fixed-
+count matrix is not used; sample size and randomization are frozen from the RGB
+minimum detectable difference, SESOI, independent pilot variability, and failure
+allowance.
+
+## Release Gates
+
+| Gate | Required evidence | Current status |
+| --- | --- | --- |
+| G0 | Causal unequal-delay front, grid-consistent epochs, complete-lead prediction, and detectable first-action influence. | **NO-GO: B0 open** |
+| G1 | Formal OfflineSloshOCP artifact and complete path/model/container/schema contract. | Pending |
+| G2 | Frozen RGB calibration, source timing, motion-plus-tail window, validity, and detectability. | Pending |
+| G3 | Trial-separated gate construction/test, execution compatibility, conditional false-safe analysis, and independent recovery labels. | **NO-GO** |
+| G4 | Frozen paired pilot, condition separation, tracking, RGB direction, supervisor branches, recorder, and postflight audit. | Pending |
+
+All five gates require numerical criteria, immutable data identities, and a
+declared failure action before formal acquisition.
 
 ## Build
 
-The normal local build is:
+Normal local build:
 
 ```bash
 cd docs/论文书写/草稿/spmpc_paper_core
 latexmk -pdf main.tex
 ```
 
-For a clean verification build that does not place generated files beside the
-source:
+Clean verification build without generated files beside the source:
 
 ```bash
-out="$(mktemp -d /tmp/spmpc-paper-build.XXXXXX)"
-latexmk -pdf -interaction=nonstopmode -halt-on-error -outdir="$out" main.tex
-rg -n 'Warning|undefined|Overfull|Underfull|Error' "$out/main.log" "$out/main.blg"
+paper_out="$(mktemp -d /tmp/spmpc-paper-build.XXXXXX)"
+latexmk -pdf -interaction=nonstopmode -halt-on-error \
+  -outdir="$paper_out" main.tex
+rg -n 'Warning|undefined|Overfull|Underfull|Error' \
+  "$paper_out/main.log" "$paper_out/main.blg"
+pdfinfo "$paper_out/main.pdf" | rg 'Pages|Page size|File size'
 ```
 
-The supplementary fragment is intentionally not included by `main.tex`; it must
-be wrapped or included separately when the venue permits supplementary material.
-
-## Current Experimental Design
-
-The proposed matrix uses a provisional minimum of eight randomized blocks:
-
-| Stage | Configuration | Conditions | Added | Cumulative |
-| --- | --- | --- | ---: | ---: |
-| I | C1 + H1 | Baseline, Smooth-only, Smooth-match, Fixed-profile, S-MPCC | 40 | 40 |
-| II-A | C1 + L1 | Smooth-only, Fixed-profile, S-MPCC | 24 | 64 |
-| II-B, conditional | C2 + H1 | Smooth-only, Fixed-profile, S-MPCC | 24 | 88 |
-
-The value `n=8` is not yet a statistical guarantee. It must be frozen from the
-minimum meaningful RGB effect, paired development variability, target
-precision/power, and method/vision failure allowance. Stage II-B is a
-preregistered conditional extension; 64 trials already form the preferred
-two-path trajectory-generation evidence package.
-
-The five high-risk conditions test four competing explanations:
-
-1. base MPCC behavior;
-2. generic smoothing;
-3. uniform slowdown at matched completion time;
-4. physics-aware fixed timing; and
-5. model-state-conditioned online progress and chassis motion.
-
-Fixed-profile is a transparent prior-art-inspired end-to-end comparator, not a
-faithful Hamaguchi or Lim reproduction and not a single-factor memory ablation.
-
-## Formal-Acquisition Gates
-
-Before any formal block, the project must complete and archive:
-
-- claim and comparator definition;
-- current-versus-rotation-consistent release selection;
-- limited weight-candidate screening;
-- an independent RGB efficacy pilot for one final candidate, with an exact
-  preregistered development block count and no early stopping;
-- the odometry-based `s_proj` trajectory extractor and immutable phase/replay
-  toolchain;
-- Smooth-match and Fixed-profile fairness/tuning records;
-- measurement, failure, estimand, sample-size, and randomization rules; and
-- one immutable software/configuration release and `FREEZE_ID`.
-
-The confirmatory order is S-MPCC versus Smooth-only, followed, only after that
-gate passes, by S-MPCC versus Fixed-profile. Exact inference follows the actual
-five-condition randomization support; paired sign-flip is only a sensitivity
-analysis. Continuous effects are explicitly success-conditional and are reported
-with `n_pair/n`, success margins, and a failure-penalized sensitivity.
+The current clean standalone build is **8 pages**. That count already covers
+only the local Sections I/II, title/abstract, and references; it excludes the
+full paper's Introduction, Related Work, and Conclusion. It is therefore a page-
+budget warning, not a submission-length target. Equations, freeze tables, and
+diagnostic detail will need deliberate movement to supplementary material or
+compression before the full manuscript is assembled.
 
 ## Evidence Boundaries
 
-Actual trajectory timing is reconstructed from odometry-derived path projection
-`s_proj`; the OCP variable `s_ocp` is never used as executed ground truth.
-`H_vis` is the calibrated experimental reference and `H_modal` is an internal
-model response. Online-input/zero-state replay tests whether the propagated
-internal state changes optimization; it does not validate the true liquid phase
-or a counterfactual physical outcome.
-
-The K6-style modal--vision population is 8/16/24 S-MPCC planned units after
-Stage I/II-A/II-B. Long-horizon propagation, physical parameter mismatch, and
-broad planner rankings are optional exploratory studies with no reserved formal
-count and no role in the 40/64/88 packages.
+- The path is frozen before motion in a static obstacle-clear workspace. MBF may
+  provide a path only before a trial; there is no online obstacle avoidance or
+  replanning claim.
+- Independent RGB max-LCR over a frozen motion-plus-tail window is the physical
+  outcome. Internal liquid state, IMU, and an online slosh monitor are mechanism
+  signals and cannot replace RGB.
+- Only final published commands update the linear and angular delay buffers.
+  Solver proposals overwritten by supervision, limiting, or safety are not
+  treated as executed inputs.
+- The phase-indexed set is empirical and the stored action is not a feedback
+  recovery policy. Recursive feasibility, robust recovery, spill-free behavior,
+  and true signed liquid-phase observation are not claimed.
