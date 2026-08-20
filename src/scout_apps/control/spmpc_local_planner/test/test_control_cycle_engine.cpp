@@ -129,6 +129,43 @@ TEST(ControlCycleEngineTest, ProducesRosIndependentDecisionTelemetry) {
     EXPECT_DOUBLE_EQ(0.4, audit.post_gate_cmd_v);
 }
 
+TEST(ControlCycleEngineTest, CommitsSolverProgressForNextSpeedReferenceCycle) {
+    EngineFixture fixture;
+    const std::string source = __FILE__;
+    const std::string marker = "/test/test_control_cycle_engine.cpp";
+    const auto offset = source.rfind(marker);
+    ASSERT_NE(offset, std::string::npos);
+
+    SpeedReferenceControllerConfig speed;
+    speed.profile_enable = true;
+    speed.profile_path = source.substr(0, offset) +
+        "/test/fixtures/speed_profile.csv";
+    speed.variant_v_ref = 0.25;
+    speed.slosh_governor.enable = false;
+    ASSERT_TRUE(
+        fixture.engine.configureSpeedReference(speed).profile_load.success);
+
+    SolverInput first_input;
+    SpeedReferenceEvaluation first =
+        fixture.engine.prepareSpeedReference(first_input);
+    EXPECT_TRUE(first.applied);
+    EXPECT_DOUBLE_EQ(first_input.v_ref_current, 0.10);
+
+    fixture.solver.next_output.success = true;
+    fixture.solver.next_output.status = "OK";
+    fixture.solver.next_output.progress_abs_s = 1.0;
+    fixture.engine.step(fixture.request());
+
+    SolverInput second_input;
+    fixture.engine.prepareSpeedReference(second_input);
+    EXPECT_DOUBLE_EQ(second_input.v_ref_current, 0.30);
+
+    fixture.engine.resetForReference();
+    SolverInput reset_input;
+    fixture.engine.prepareSpeedReference(reset_input);
+    EXPECT_DOUBLE_EQ(reset_input.v_ref_current, 0.10);
+}
+
 TEST(ControlCycleEngineTest, SolverFailureProducesFailClosedDecision) {
     EngineFixture fixture;
     fixture.solver.solve_return = false;

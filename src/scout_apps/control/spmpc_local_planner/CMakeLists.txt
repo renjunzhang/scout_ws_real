@@ -116,6 +116,7 @@ include_directories(
 
 add_library(spmpc_model
   src/dynamics/slosh_dynamics.cpp
+  src/core/slosh_risk_governor.cpp
 )
 target_link_libraries(spmpc_model
   PRIVATE
@@ -135,6 +136,7 @@ add_library(spmpc_controller
   src/controller/command/command_pipeline.cpp
   src/controller/control_cycle_engine.cpp
   src/controller/control_cycle_input_preparer.cpp
+  src/controller/speed_reference_controller.cpp
 )
 
 add_library(spmpc_phase_rejoin
@@ -151,7 +153,9 @@ target_link_libraries(spmpc_phase_rejoin
 
 target_link_libraries(spmpc_controller
   spmpc_estimation
+  spmpc_model
   spmpc_phase_rejoin
+  spmpc_reference
   spmpc_runtime
   spmpc_safety
   spmpc_solver_api
@@ -293,7 +297,6 @@ target_link_libraries(spmpc_ros_config
 add_library(${PROJECT_NAME}
   src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
-  src/core/slosh_risk_governor.cpp
   src/core/start_lock_recovery.cpp
   src/core/terminal_controller.cpp
   src/ros/imu_shadow_ros_adapter.cpp
@@ -500,6 +503,15 @@ if(CATKIN_ENABLE_TESTING)
   if(TARGET test_speed_profile)
     target_link_libraries(test_speed_profile
       spmpc_config
+      spmpc_reference
+    )
+  endif()
+  catkin_add_gtest(test_speed_reference_controller
+    test/test_speed_reference_controller.cpp)
+  if(TARGET test_speed_reference_controller)
+    target_link_libraries(test_speed_reference_controller
+      spmpc_controller
+      spmpc_model
       spmpc_reference
     )
   endif()

@@ -56,13 +56,6 @@ int primitiveModeCode(const std::string& primitive_mode) {
     return 0;
 }
 
-std::string appendVRefStatus(const std::string& current, const std::string& suffix) {
-    if (current.empty()) {
-        return suffix;
-    }
-    return current + "+" + suffix;
-}
-
 double wrapAngle(double angle) {
     return std::atan2(std::sin(angle), std::cos(angle));
 }
@@ -132,7 +125,6 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     phase_rejoin_artifact_path_ = app_config_.phase_rejoin.artifact_path;
     reference_preprocess_params_ = app_config_.reference_preprocess;
     variant_ = app_config_.variant;
-    slosh_risk_governor_params_ = app_config_.slosh_risk_governor;
 
     SolverParams solver_params = app_config_.solver;
     const ProcessedImuParams processed_imu_params =
@@ -148,9 +140,6 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     shared_cmd_angular_accel_max_dt_ = limits.angular_accel_max_dt;
     command_history_.configure(delay_phase_params_.history_window_sec);
 
-    if (app_config_.map_vref.profile_enable) {
-        ensureMapVRefProfileLoaded(app_config_.map_vref.profile_path);
-    }
     const bool imu_is_nominal =
         slosh_observer_selector_params_.nominal_source ==
         SloshObserverSource::ProcessedImu;
@@ -463,8 +452,39 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     if (!control_input_preparer_.configurePrediction(solver_params.slosh)) {
         ROS_WARN("[spmpc_local_planner] delay_phase shadow slosh predictor configure failed; shadow slosh stays pass-through");
     }
-    if (!slosh_risk_governor_.configure(solver_params.slosh, slosh_risk_governor_params_) &&
-        slosh_risk_governor_params_.enable) {
+    SpeedReferenceControllerConfig speed_reference_config;
+    speed_reference_config.runtime_override_enable =
+        app_config_.map_vref.runtime_override_enable;
+    speed_reference_config.runtime_override_mps =
+        app_config_.map_vref.runtime_override_mps;
+    speed_reference_config.profile_enable =
+        app_config_.map_vref.profile_enable;
+    speed_reference_config.profile_path = app_config_.map_vref.profile_path;
+    speed_reference_config.profile_lookahead_m =
+        app_config_.map_vref.profile_lookahead_m;
+    speed_reference_config.variant_v_ref = variant_.v_ref;
+    speed_reference_config.slosh_variant_enabled = variant_.slosh_enable;
+    speed_reference_config.slosh_model = solver_params.slosh;
+    speed_reference_config.slosh_governor =
+        app_config_.slosh_risk_governor;
+    const SpeedReferenceConfigureResult speed_reference_result =
+        control_cycle_engine_.configureSpeedReference(speed_reference_config);
+    if (speed_reference_result.profile_requested &&
+        speed_reference_result.profile_load.success) {
+        ROS_INFO("[spmpc_local_planner] loaded map_vref profile %s with %zu "
+                 "samples (%zu invalid rows skipped)",
+                 speed_reference_config.profile_path.c_str(),
+                 speed_reference_result.profile_load.accepted_rows,
+                 speed_reference_result.profile_load.skipped_rows);
+    } else if (speed_reference_result.profile_requested &&
+               !speed_reference_config.profile_path.empty()) {
+        ROS_WARN("[spmpc_local_planner] map_vref profile load failed "
+                 "status=%s detail=%s",
+                 speed_reference_result.profile_load.status.c_str(),
+                 speed_reference_result.profile_load.detail.c_str());
+    }
+    if (!speed_reference_result.governor_configured &&
+        speed_reference_config.slosh_governor.enable) {
         ROS_WARN("[spmpc_local_planner] slosh risk governor configure failed; governor will pass through v_ref");
     }
     obstacle_enable_ = solver_params.obstacle_enable;
@@ -528,102 +548,6 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
 
 void SpmpcLocalPlannerROS::spin() {
     ros::spin();
-}
-
-void SpmpcLocalPlannerROS::resetMapVRefProgress() {
-    map_vref_last_progress_abs_s_ = 0.0;
-    have_map_vref_progress_ = false;
-}
-
-
-bool SpmpcLocalPlannerROS::loadMapVRefProfile(const std::string& path) {
-    const SpeedProfileLoadResult result = map_vref_profile_.loadCsv(path);
-    if (!result.success) {
-        ROS_WARN("[spmpc_local_planner] map_vref profile load failed "
-                 "status=%s detail=%s",
-                 result.status.c_str(), result.detail.c_str());
-        return false;
-    }
-    ROS_INFO("[spmpc_local_planner] loaded map_vref profile %s with %zu "
-             "samples (%zu invalid rows skipped)",
-             path.c_str(), result.accepted_rows, result.skipped_rows);
-    return true;
-}
-
-bool SpmpcLocalPlannerROS::ensureMapVRefProfileLoaded(
-    const std::string& path) {
-    if (path.empty()) {
-        map_vref_profile_.clear();
-        return false;
-    }
-    if (!map_vref_profile_.empty() &&
-        map_vref_profile_.sourcePath() == path) {
-        return true;
-    }
-    return loadMapVRefProfile(path);
-}
-
-bool SpmpcLocalPlannerROS::lookupMapVRef(double progress_m,
-                                         double& speed_mps) const {
-    return map_vref_profile_.lookup(progress_m, speed_mps);
-}
-
-void SpmpcLocalPlannerROS::applyRuntimeVRef(SolverInput& input) {
-    const auto& config = app_config_.map_vref;
-    if (config.runtime_override_enable) {
-        input.has_v_ref_current = true;
-        input.v_ref_current = config.runtime_override_mps;
-        input.v_ref_status = "RUNTIME_OVERRIDE";
-        return;
-    }
-
-    if (!config.profile_enable) {
-        input.v_ref_status = "VARIANT_FALLBACK";
-        return;
-    }
-    if (map_vref_profile_.empty()) {
-        input.v_ref_status = config.profile_path.empty()
-            ? "PROFILE_NOT_CONFIGURED"
-            : "PROFILE_LOAD_FAILED";
-        return;
-    }
-
-    const double current_s = have_map_vref_progress_ ? map_vref_last_progress_abs_s_ : 0.0;
-    const double lookup_s = current_s + config.profile_lookahead_m;
-    double profile_v_ref = 0.0;
-    if (!lookupMapVRef(lookup_s, profile_v_ref)) {
-        input.v_ref_status = "PROFILE_LOOKUP_FAILED";
-        return;
-    }
-    input.has_v_ref_current = true;
-    input.v_ref_current = profile_v_ref;
-    input.v_ref_status = "PROFILE_LOOKUP";
-}
-
-void SpmpcLocalPlannerROS::applySloshRiskGovernor(SolverInput& input) {
-    const double nominal_v_ref = input.has_v_ref_current ? input.v_ref_current : variant_.v_ref;
-    SloshRiskGovernorInput governor_input;
-    governor_input.slosh = input.slosh;
-    governor_input.robot_v = input.robot.v;
-    governor_input.robot_omega = input.robot.omega;
-    governor_input.nominal_v_ref = nominal_v_ref;
-    governor_input.dt = input.dt;
-    governor_input.slosh_variant_enabled = variant_.slosh_enable;
-
-    last_slosh_governor_output_ = slosh_risk_governor_.update(governor_input);
-    diagnostics_.publishSloshGovernor(last_slosh_governor_output_);
-
-    if (!last_slosh_governor_output_.enabled ||
-        last_slosh_governor_output_.status == "DISABLED" ||
-        last_slosh_governor_output_.status == "NOT_SLOSH_VARIANT" ||
-        last_slosh_governor_output_.status == "INVALID_CONFIG" ||
-        !std::isfinite(last_slosh_governor_output_.governed_v_ref)) {
-        return;
-    }
-
-    input.has_v_ref_current = true;
-    input.v_ref_current = last_slosh_governor_output_.governed_v_ref;
-    input.v_ref_status = appendVRefStatus(input.v_ref_status, "SLOSH_GOVERNOR");
 }
 
 bool SpmpcLocalPlannerROS::delayPhaseActive() const {
@@ -1004,8 +928,6 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
             transformed_path);
         if (reference_changed) {
             control_cycle_engine_.resetForReference();
-            resetMapVRefProgress();
-            slosh_risk_governor_.reset();
         }
         const ReferencePath reference = referencePathFromMsg(transformed_path);
         problem_.setReferencePath(reference);
@@ -1020,8 +942,6 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
     const bool reference_changed = updateReferenceSignature(*msg);
     if (reference_changed) {
         control_cycle_engine_.resetForReference();
-        resetMapVRefProgress();
-        slosh_risk_governor_.reset();
     }
     problem_.setReferencePath(reference);
     if (reference_changed ||
@@ -1036,7 +956,7 @@ void SpmpcLocalPlannerROS::costmapCallback(const nav_msgs::OccupancyGridConstPtr
 
 void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     // publishVariant 内容（variant code、experiment_mode）在运行期不变，已在初始化时发布一次（latched）。
-    // publishEffectiveConfig 等 applyRuntimeVRef() 计算完本周期 v_ref 后再发，避免动态 v_ref 滞后一拍。
+    // effective config 在纯 C++ speed-reference 阶段完成后发布，避免动态 v_ref 滞后一拍。
 
     const ros::Time cycle_start = ros::Time::now();
     ControlCycleAuditDebug cycle_audit;
@@ -1191,8 +1111,9 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     SolverInput input = input_preparation.raw_input;
     diagnostics_.publishRawState(input.robot, input.slosh, slosh_height_coeff);
 
-    applyRuntimeVRef(input);
-    applySloshRiskGovernor(input);
+    const SpeedReferenceEvaluation speed_reference =
+        control_cycle_engine_.prepareSpeedReference(input);
+    diagnostics_.publishSloshGovernor(speed_reference.governor);
     // effective_config_.v_ref 是本周期 solver 将看到的速度参考：runtime/profile override 优先，
     // 并按 solver v_max 做同口径 clamp。必须在发布前更新，避免 /spmpc/debug/effective_config 滞后一拍。
     const double requested_config_v_ref = input.has_v_ref_current ? input.v_ref_current : variant_.v_ref;
@@ -1295,10 +1216,6 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         cycle_audit.replanned_minus_shifted_alpha =
             cycle_audit.solver_u0_alpha -
             cycle_audit.previous_shifted_plan_alpha;
-    }
-    if (std::isfinite(output.progress_abs_s)) {
-        map_vref_last_progress_abs_s_ = output.progress_abs_s;
-        have_map_vref_progress_ = true;
     }
     CommandInterventionDebug intervention =
         makeCommandInterventionDebug(engine_result.telemetry);

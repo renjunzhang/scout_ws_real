@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/controller/command/command_pipeline.h"
+#include "spmpc_local_planner/controller/speed_reference_controller.h"
 #include "spmpc_local_planner/controller/control_cycle_telemetry.h"
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/phase_rejoin/phase_rejoin_coordinator.h"
@@ -64,6 +65,9 @@ public:
         std::string& error);
     bool configureSafety(const SafetySupervisorConfig& config,
                          std::string& error);
+    SpeedReferenceConfigureResult configureSpeedReference(
+        const SpeedReferenceControllerConfig& config);
+    SpeedReferenceEvaluation prepareSpeedReference(SolverInput& input);
 
     ControlCycleResult step(const ControlCycleRequest& request);
 
@@ -87,6 +91,7 @@ private:
     SolverSession& solver_session_;
     PhaseRejoinCoordinator phase_rejoin_;
     SafetySupervisor safety_;
+    SpeedReferenceController speed_reference_;
     PhaseRejoinParams phase_params_;
     bool goal_reached_latched_ = false;
 };

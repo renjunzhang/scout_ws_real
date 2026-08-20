@@ -36,6 +36,16 @@ bool ControlCycleEngine::configureSafety(
     return safety_.configure(config, error);
 }
 
+SpeedReferenceConfigureResult ControlCycleEngine::configureSpeedReference(
+    const SpeedReferenceControllerConfig& config) {
+    return speed_reference_.configure(config);
+}
+
+SpeedReferenceEvaluation ControlCycleEngine::prepareSpeedReference(
+    SolverInput& input) {
+    return speed_reference_.apply(input.robot, input.slosh, input);
+}
+
 void ControlCycleEngine::resetSafety() {
     safety_.reset();
 }
@@ -43,6 +53,7 @@ void ControlCycleEngine::resetSafety() {
 void ControlCycleEngine::resetForReference() {
     safety_.reset();
     phase_rejoin_.resetProgress();
+    speed_reference_.resetForReference();
     goal_reached_latched_ = false;
 }
 
@@ -238,6 +249,8 @@ ControlCycleResult ControlCycleEngine::step(
     result.output.cmd_v = result.decision.command.linear;
     result.output.cmd_omega = result.decision.command.angular;
     result.output.success = result.decision.accepted;
+
+    speed_reference_.commitProgress(result.output.progress_abs_s);
 
     // Freeze the complete controller-owned decision trace before returning to
     // any transport adapter.  ROS may add observer/publish timing, but it no

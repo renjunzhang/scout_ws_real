@@ -4,14 +4,12 @@
 #include "spmpc_local_planner/controller/command/command_pipeline.h"
 #include "spmpc_local_planner/controller/control_cycle_engine.h"
 #include "spmpc_local_planner/controller/control_cycle_input_preparer.h"
-#include "spmpc_local_planner/core/slosh_risk_governor.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/estimation/processed_imu_pipeline.h"
 #include "spmpc_local_planner/estimation/slosh_observer_bank.h"
 #include "spmpc_local_planner/estimation/slosh_observer_selector.h"
 #include "spmpc_local_planner/phase_rejoin/phase_rejoin_coordinator.h"
 #include "spmpc_local_planner/reference/reference_path_preprocessor.h"
-#include "spmpc_local_planner/reference/speed_profile.h"
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
 #include "spmpc_local_planner/ros/imu_shadow_ros_adapter.h"
 #include "spmpc_local_planner/runtime/execution_prediction/command_history_buffer.h"
@@ -89,12 +87,6 @@ private:
     bool updateReferenceSignature(const nav_msgs::Path& path);
     ReferencePath referencePathFromMsg(const nav_msgs::Path& path) const;
     CostmapGrid costmapFromMsg(const nav_msgs::OccupancyGrid& map) const;
-    bool loadMapVRefProfile(const std::string& path);
-    bool ensureMapVRefProfileLoaded(const std::string& path);
-    bool lookupMapVRef(double progress_m, double& speed_mps) const;
-    void applyRuntimeVRef(SolverInput& input);
-    void applySloshRiskGovernor(SolverInput& input);
-    void resetMapVRefProgress();
     void validatePhaseRejoinReference(const ReferencePath& reference);
     bool phaseRejoinNeedsPrediction() const;
 
@@ -124,9 +116,6 @@ private:
     SloshObserverBank slosh_observers_;
     SloshObserverSelectorParams slosh_observer_selector_params_;
     ImuShadowRosAdapter imu_shadow_adapter_;
-    SloshRiskGovernor slosh_risk_governor_;
-    SloshRiskGovernorParams slosh_risk_governor_params_;
-    SloshRiskGovernorOutput last_slosh_governor_output_;
     CommandHistoryBuffer command_history_;
     ControlCycleInputPreparer control_input_preparer_;
     PhaseRejoinParams phase_rejoin_params_;
@@ -147,9 +136,6 @@ private:
     bool have_odom_ = false;
     bool have_prev_odom_ = false;
     bool have_reference_signature_ = false;
-    SpeedProfile map_vref_profile_;
-    double map_vref_last_progress_abs_s_ = 0.0;
-    bool have_map_vref_progress_ = false;
     std::string reference_signature_frame_;
     std::size_t reference_signature_size_ = 0;
     double reference_signature_start_x_ = 0.0;
