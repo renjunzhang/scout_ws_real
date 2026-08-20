@@ -82,10 +82,9 @@ SpmpcLocalPlannerROS::~SpmpcLocalPlannerROS() {
 
 bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh) {
     nh_ = nh;
-    pnh_ = pnh;
 
     ValidationReport app_config_report;
-    app_config_ = RosConfigLoader::load(pnh_, app_config_report);
+    app_config_ = RosConfigLoader::load(pnh, app_config_report);
     for (const auto& issue : app_config_report.issues()) {
         if (issue.severity == ValidationSeverity::Fatal) {
             ROS_ERROR("[spmpc_local_planner] invalid config %s: %s",
@@ -98,199 +97,63 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     if (!app_config_report.ok()) {
         return false;
     }
+
+    const auto& interface = app_config_.ros_interface;
+    experiment_mode_ = interface.experiment_mode;
+    odom_topic_ = interface.odom_topic;
+    imu_topic_ = interface.imu_topic;
+    path_topic_ = interface.reference_path_topic;
+    costmap_topic_ = interface.costmap_topic;
+    cmd_topic_ = interface.cmd_vel_topic;
+    robot_base_frame_ = interface.robot_base_frame;
+    reference_target_frame_ = interface.reference_target_frame;
+    use_tf_pose_ = interface.use_tf_pose;
+    tf_timeout_sec_ = interface.tf_timeout_sec;
+    publish_cmd_vel_ = interface.publish_cmd_vel;
+
+    imu_shadow_enable_ = app_config_.imu_shadow.enable;
+    imu_shadow_publish_diagnostics_ =
+        app_config_.imu_shadow.publish_diagnostics;
+    imu_expected_frame_ = app_config_.imu_shadow.expected_frame;
+    imu_subscriber_queue_size_ =
+        app_config_.imu_shadow.subscriber_queue_size;
+    imu_observer_dt_sec_ = app_config_.imu_shadow.observer_dt_sec;
+    slosh_observer_selector_params_ = app_config_.slosh_observer;
+
+    control_frequency_ = app_config_.control.frequency_hz;
+    dt_ = app_config_.control.dt;
+    horizon_steps_ = app_config_.control.horizon_steps;
+    delay_phase_params_ = app_config_.control.delay_phase;
+    state_timing_params_ = app_config_.control.state_timing;
+    command_contract_params_ = app_config_.control.execution_contract;
+    phase_rejoin_params_ = app_config_.phase_rejoin.params;
+    phase_rejoin_publish_diagnostics_ =
+        app_config_.phase_rejoin.publish_diagnostics;
+    phase_rejoin_artifact_path_ = app_config_.phase_rejoin.artifact_path;
+    reference_preprocess_params_ = app_config_.reference_preprocess;
+    variant_ = app_config_.variant;
+    slosh_risk_governor_params_ = app_config_.slosh_risk_governor;
+
+    SolverParams solver_params = app_config_.solver;
+    const ProcessedImuParams processed_imu_params =
+        app_config_.imu_shadow.processed;
+    const auto& limits = app_config_.shared_command_limits;
+    shared_cmd_linear_accel_limit_enable_ =
+        limits.linear_accel_limit_enable;
+    shared_cmd_linear_accel_max_ = limits.linear_accel_max;
+    shared_cmd_linear_accel_max_dt_ = limits.linear_accel_max_dt;
+    shared_cmd_angular_limit_enable_ = limits.angular_limit_enable;
+    shared_cmd_angular_rate_max_ = limits.angular_rate_max;
+    shared_cmd_angular_accel_max_ = limits.angular_accel_max;
+    shared_cmd_angular_accel_max_dt_ = limits.angular_accel_max_dt;
+    command_history_.configure(delay_phase_params_.history_window_sec);
+
     if (app_config_.map_vref.profile_enable) {
         ensureMapVRefProfileLoaded(app_config_.map_vref.profile_path);
-    }
-
-    std::string variant_name = "B0";
-    pnh_.param("planner_variant", variant_name, variant_name);
-    pnh_.param("experiment_mode", experiment_mode_, experiment_mode_);
-    pnh_.param("topics/odom", odom_topic_, odom_topic_);
-    pnh_.param("topics/imu", imu_topic_, imu_topic_);
-    pnh_.param("topics/reference_path", path_topic_, path_topic_);
-    pnh_.param("topics/costmap", costmap_topic_, costmap_topic_);
-    pnh_.param("topics/cmd_vel", cmd_topic_, cmd_topic_);
-    pnh_.param("frames/robot_base", robot_base_frame_, robot_base_frame_);
-    pnh_.param("frames/reference_target", reference_target_frame_, reference_target_frame_);
-    pnh_.param("frames/use_tf_pose", use_tf_pose_, use_tf_pose_);
-    pnh_.param("frames/tf_timeout_sec", tf_timeout_sec_, tf_timeout_sec_);
-    pnh_.param("publish_cmd_vel", publish_cmd_vel_, publish_cmd_vel_);
-    pnh_.param("imu_shadow/enable", imu_shadow_enable_, imu_shadow_enable_);
-    pnh_.param("imu_shadow/publish_diagnostics",
-               imu_shadow_publish_diagnostics_,
-               imu_shadow_publish_diagnostics_);
-    pnh_.param("imu_shadow/expected_frame", imu_expected_frame_, imu_expected_frame_);
-    pnh_.param("imu_shadow/subscriber_queue_size",
-               imu_subscriber_queue_size_,
-               imu_subscriber_queue_size_);
-    if (imu_subscriber_queue_size_ < 1 || imu_subscriber_queue_size_ > 1000) {
-        ROS_WARN("[spmpc_local_planner] invalid imu_shadow/subscriber_queue_size=%d; using 10",
-                 imu_subscriber_queue_size_);
-        imu_subscriber_queue_size_ = 10;
-    }
-    pnh_.param("imu_shadow/observer_dt_sec", imu_observer_dt_sec_, imu_observer_dt_sec_);
-    if (!std::isfinite(imu_observer_dt_sec_) || imu_observer_dt_sec_ <= 0.0) {
-        ROS_WARN("[spmpc_local_planner] invalid imu_shadow/observer_dt_sec=%.6f; using 0.02 s",
-                 imu_observer_dt_sec_);
-        imu_observer_dt_sec_ = 0.02;
-    }
-    std::string observer_source = "odom";
-    std::string observer_fallback_policy = "odom";
-    pnh_.param("slosh_observer/source", observer_source, observer_source);
-    pnh_.param("slosh_observer/fallback_policy",
-               observer_fallback_policy,
-               observer_fallback_policy);
-    pnh_.param("slosh_observer/latch_fallback",
-               slosh_observer_selector_params_.latch_fallback,
-               slosh_observer_selector_params_.latch_fallback);
-    pnh_.param("slosh_observer/max_imu_state_age_sec",
-               slosh_observer_selector_params_.max_imu_state_age_sec,
-               slosh_observer_selector_params_.max_imu_state_age_sec);
-    pnh_.param("slosh_observer/max_odom_state_age_sec",
-               slosh_observer_selector_params_.max_odom_state_age_sec,
-               slosh_observer_selector_params_.max_odom_state_age_sec);
-    pnh_.param("slosh_observer/max_future_skew_sec",
-               slosh_observer_selector_params_.max_future_skew_sec,
-               slosh_observer_selector_params_.max_future_skew_sec);
-    if (!parseSloshObserverSource(
-            observer_source, slosh_observer_selector_params_.nominal_source)) {
-        ROS_FATAL("[spmpc_local_planner] invalid slosh_observer/source='%s'; "
-                  "expected odom|processed_imu",
-                  observer_source.c_str());
-        return false;
-    }
-    if (!parseSloshObserverFallbackPolicy(
-            observer_fallback_policy,
-            slosh_observer_selector_params_.fallback_policy)) {
-        ROS_FATAL("[spmpc_local_planner] invalid slosh_observer/fallback_policy='%s'; "
-                  "expected odom|fail_closed",
-                  observer_fallback_policy.c_str());
-        return false;
     }
     const bool imu_is_nominal =
         slosh_observer_selector_params_.nominal_source ==
         SloshObserverSource::ProcessedImu;
-    if (imu_is_nominal && !imu_shadow_enable_) {
-        ROS_WARN("[spmpc_local_planner] processed_imu is the nominal liquid observer; "
-                 "forcing imu_shadow/enable=true for the processed-IMU pipeline");
-        imu_shadow_enable_ = true;
-    }
-    pnh_.param("control_frequency", control_frequency_, control_frequency_);
-    pnh_.param("dt", dt_, dt_);
-    pnh_.param("horizon_steps", horizon_steps_, horizon_steps_);
-    std::string delay_phase_mode = delayPhaseModeName(delay_phase_params_.mode);
-    pnh_.param("delay_phase/mode", delay_phase_mode, delay_phase_mode);
-    delay_phase_params_.mode = parseDelayPhaseMode(delay_phase_mode);
-    if (!isKnownDelayPhaseMode(delay_phase_mode)) {
-        ROS_WARN("[spmpc_local_planner] 未知 delay_phase/mode=\"%s\"，已静默退化为 Off。"
-                 "合法值：off / monitor / shadow / fixed_closed_loop / fixed_robot_only（及其别名）。",
-                 delay_phase_mode.c_str());
-    }
-    pnh_.param("delay_phase/publish_diagnostics", delay_phase_params_.publish_diagnostics, delay_phase_params_.publish_diagnostics);
-    pnh_.param("delay_phase/history_window_sec", delay_phase_params_.history_window_sec, delay_phase_params_.history_window_sec);
-    pnh_.param("delay_phase/cmd_timeout_sec", delay_phase_params_.cmd_timeout_sec, delay_phase_params_.cmd_timeout_sec);
-    pnh_.param("delay_phase/odom_timeout_sec", delay_phase_params_.odom_timeout_sec, delay_phase_params_.odom_timeout_sec);
-    pnh_.param("delay_phase/linear_delay_sec", delay_phase_params_.linear_delay_sec, delay_phase_params_.linear_delay_sec);
-    pnh_.param("delay_phase/angular_delay_sec", delay_phase_params_.angular_delay_sec, delay_phase_params_.angular_delay_sec);
-    pnh_.param("delay_phase/linear_time_constant_sec",
-               delay_phase_params_.linear_time_constant_sec,
-               delay_phase_params_.linear_time_constant_sec);
-    pnh_.param("delay_phase/angular_time_constant_sec",
-               delay_phase_params_.angular_time_constant_sec,
-               delay_phase_params_.angular_time_constant_sec);
-    pnh_.param("delay_phase/max_prediction_sec", delay_phase_params_.max_prediction_sec, delay_phase_params_.max_prediction_sec);
-    pnh_.param("delay_phase/max_integration_step_sec", delay_phase_params_.max_integration_step_sec, delay_phase_params_.max_integration_step_sec);
-    pnh_.param("delay_phase/min_integration_step_sec", delay_phase_params_.min_integration_step_sec, delay_phase_params_.min_integration_step_sec);
-    pnh_.param("delay_phase/require_complete_history", delay_phase_params_.require_complete_history, delay_phase_params_.require_complete_history);
-    delay_phase_params_.history_window_sec = std::max(0.1, delay_phase_params_.history_window_sec);
-    delay_phase_params_.cmd_timeout_sec = std::max(0.0, delay_phase_params_.cmd_timeout_sec);
-    delay_phase_params_.odom_timeout_sec = std::max(0.0, delay_phase_params_.odom_timeout_sec);
-    delay_phase_params_.linear_delay_sec = std::max(0.0, delay_phase_params_.linear_delay_sec);
-    delay_phase_params_.angular_delay_sec = std::max(0.0, delay_phase_params_.angular_delay_sec);
-    delay_phase_params_.linear_time_constant_sec = std::max(
-        0.0, delay_phase_params_.linear_time_constant_sec);
-    delay_phase_params_.angular_time_constant_sec = std::max(
-        0.0, delay_phase_params_.angular_time_constant_sec);
-    delay_phase_params_.max_prediction_sec = std::max(0.0, delay_phase_params_.max_prediction_sec);
-    delay_phase_params_.max_integration_step_sec = std::max(1e-4, delay_phase_params_.max_integration_step_sec);
-    delay_phase_params_.min_integration_step_sec = std::max(1e-6, delay_phase_params_.min_integration_step_sec);
-    if (delay_phase_params_.min_integration_step_sec > delay_phase_params_.max_integration_step_sec) {
-        delay_phase_params_.min_integration_step_sec = delay_phase_params_.max_integration_step_sec;
-    }
-    command_history_.configure(delay_phase_params_.history_window_sec);
-
-    std::string phase_rejoin_mode = phaseRejoinModeName(
-        phase_rejoin_params_.mode);
-    pnh_.param("phase_rejoin/mode", phase_rejoin_mode, phase_rejoin_mode);
-    if (!parsePhaseRejoinMode(phase_rejoin_mode, phase_rejoin_params_.mode)) {
-        ROS_FATAL("[spmpc_local_planner] invalid phase_rejoin/mode='%s'; "
-                  "expected off|monitor|enforce",
-                  phase_rejoin_mode.c_str());
-        return false;
-    }
-    pnh_.param("phase_rejoin/publish_diagnostics",
-               phase_rejoin_publish_diagnostics_,
-               phase_rejoin_publish_diagnostics_);
-    pnh_.param("phase_rejoin/artifact_path",
-               phase_rejoin_artifact_path_,
-               phase_rejoin_artifact_path_);
-    pnh_.param("phase_rejoin/liquid_horizon_steps",
-               phase_rejoin_params_.liquid_horizon_steps,
-               phase_rejoin_params_.liquid_horizon_steps);
-    pnh_.param("phase_rejoin/max_residual_v",
-               phase_rejoin_params_.max_residual_v,
-               phase_rejoin_params_.max_residual_v);
-    pnh_.param("phase_rejoin/max_residual_omega",
-               phase_rejoin_params_.max_residual_omega,
-               phase_rejoin_params_.max_residual_omega);
-    pnh_.param("phase_rejoin/artifact_dt_tolerance_sec",
-               phase_rejoin_params_.artifact_dt_tolerance_sec,
-               phase_rejoin_params_.artifact_dt_tolerance_sec);
-    pnh_.param("phase_rejoin/artifact_path_length_tolerance_m",
-               phase_rejoin_params_.artifact_path_length_tolerance_m,
-               phase_rejoin_params_.artifact_path_length_tolerance_m);
-    pnh_.param("phase_rejoin/artifact_path_geometry_tolerance_m",
-               phase_rejoin_params_.artifact_path_geometry_tolerance_m,
-               phase_rejoin_params_.artifact_path_geometry_tolerance_m);
-    pnh_.param("phase_rejoin/artifact_model_tolerance",
-               phase_rejoin_params_.artifact_model_tolerance,
-               phase_rejoin_params_.artifact_model_tolerance);
-    pnh_.param("phase_rejoin/artifact_command_tolerance",
-               phase_rejoin_params_.artifact_command_tolerance,
-               phase_rejoin_params_.artifact_command_tolerance);
-    pnh_.param("phase_rejoin/allow_development_artifact_in_enforce",
-               phase_rejoin_params_.allow_development_artifact_in_enforce,
-               phase_rejoin_params_.allow_development_artifact_in_enforce);
-    pnh_.param("phase_rejoin/required_contract_id",
-               phase_rejoin_params_.required_contract_id,
-               phase_rejoin_params_.required_contract_id);
-    pnh_.param("phase_rejoin/required_frame_id",
-               phase_rejoin_params_.required_frame_id,
-               phase_rejoin_params_.required_frame_id);
-    pnh_.param("phase_rejoin/candidate/backward_radius",
-               phase_rejoin_params_.candidate.backward_radius,
-               phase_rejoin_params_.candidate.backward_radius);
-    pnh_.param("phase_rejoin/candidate/forward_radius",
-               phase_rejoin_params_.candidate.forward_radius,
-               phase_rejoin_params_.candidate.forward_radius);
-    pnh_.param("phase_rejoin/candidate/initial_forward_radius",
-               phase_rejoin_params_.candidate.initial_forward_radius,
-               phase_rejoin_params_.candidate.initial_forward_radius);
-    pnh_.param("phase_rejoin/candidate/max_clock_lead_steps",
-               phase_rejoin_params_.candidate.max_clock_lead_steps,
-               phase_rejoin_params_.candidate.max_clock_lead_steps);
-    pnh_.param("phase_rejoin/candidate/weight_position",
-               phase_rejoin_params_.candidate.weight_position,
-               phase_rejoin_params_.candidate.weight_position);
-    pnh_.param("phase_rejoin/candidate/weight_yaw",
-               phase_rejoin_params_.candidate.weight_yaw,
-               phase_rejoin_params_.candidate.weight_yaw);
-    pnh_.param("phase_rejoin/candidate/weight_velocity",
-               phase_rejoin_params_.candidate.weight_velocity,
-               phase_rejoin_params_.candidate.weight_velocity);
-    pnh_.param("phase_rejoin/candidate/weight_liquid",
-               phase_rejoin_params_.candidate.weight_liquid,
-               phase_rejoin_params_.candidate.weight_liquid);
     std::string phase_rejoin_error;
     if (!control_cycle_engine_.configurePhaseRejoin(
             phase_rejoin_params_, phase_rejoin_error)) {
@@ -326,99 +189,6 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
             }
         }
     }
-    pnh_.param("state_timing/require_common_epoch",
-               state_timing_params_.require_common_epoch,
-               state_timing_params_.require_common_epoch);
-    pnh_.param("state_timing/max_raw_skew_sec",
-               state_timing_params_.max_raw_skew_sec,
-               state_timing_params_.max_raw_skew_sec);
-    pnh_.param("state_timing/odom_history_sec",
-               state_timing_params_.odom_history_sec,
-               state_timing_params_.odom_history_sec);
-    pnh_.param("state_timing/max_interpolation_gap_sec",
-               state_timing_params_.max_interpolation_gap_sec,
-               state_timing_params_.max_interpolation_gap_sec);
-    pnh_.param("state_timing/max_robot_extrapolation_sec",
-               state_timing_params_.max_robot_extrapolation_sec,
-               state_timing_params_.max_robot_extrapolation_sec);
-    pnh_.param("execution_contract/fail_closed_on_post_limit_change",
-               command_contract_params_.fail_closed_on_post_limit_change,
-               command_contract_params_.fail_closed_on_post_limit_change);
-    pnh_.param("execution_contract/max_post_limit_delta_v",
-               command_contract_params_.max_post_limit_delta_v,
-               command_contract_params_.max_post_limit_delta_v);
-    pnh_.param("execution_contract/max_post_limit_delta_omega",
-               command_contract_params_.max_post_limit_delta_omega,
-               command_contract_params_.max_post_limit_delta_omega);
-    const bool valid_state_timing =
-        std::isfinite(state_timing_params_.max_raw_skew_sec) &&
-        state_timing_params_.max_raw_skew_sec >= 0.0 &&
-        std::isfinite(state_timing_params_.odom_history_sec) &&
-        state_timing_params_.odom_history_sec > 0.0 &&
-        std::isfinite(state_timing_params_.max_interpolation_gap_sec) &&
-        state_timing_params_.max_interpolation_gap_sec > 0.0 &&
-        std::isfinite(state_timing_params_.max_robot_extrapolation_sec) &&
-        state_timing_params_.max_robot_extrapolation_sec >= 0.0;
-    const bool valid_command_contract =
-        std::isfinite(command_contract_params_.max_post_limit_delta_v) &&
-        command_contract_params_.max_post_limit_delta_v >= 0.0 &&
-        std::isfinite(command_contract_params_.max_post_limit_delta_omega) &&
-        command_contract_params_.max_post_limit_delta_omega >= 0.0;
-    if (!valid_state_timing || !valid_command_contract) {
-        ROS_FATAL("[spmpc_local_planner] invalid state_timing/execution_contract parameters");
-        return false;
-    }
-    if (phase_rejoin_params_.mode == PhaseRejoinMode::Enforce &&
-        !state_timing_params_.require_common_epoch) {
-        ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce requires "
-                  "state_timing/require_common_epoch=true");
-        return false;
-    }
-    pnh_.param("reference/preprocess_enable", reference_preprocess_params_.enable, reference_preprocess_params_.enable);
-    pnh_.param("reference/resample_spacing", reference_preprocess_params_.resample_spacing, reference_preprocess_params_.resample_spacing);
-    pnh_.param("reference/smoothing_window", reference_preprocess_params_.smoothing_window, reference_preprocess_params_.smoothing_window);
-    pnh_.param("reference/min_segment_length", reference_preprocess_params_.min_segment_length, reference_preprocess_params_.min_segment_length);
-
-    SolverParams solver_params;
-    pnh_.param("robot/v_max", solver_params.v_max, solver_params.v_max);
-    pnh_.param("robot/omega_max", solver_params.omega_max, solver_params.omega_max);
-    pnh_.param("robot/a_max", solver_params.a_max, solver_params.a_max);
-    pnh_.param("robot/alpha_max", solver_params.alpha_max, solver_params.alpha_max);
-    shared_cmd_linear_accel_max_ = solver_params.a_max;
-    shared_cmd_angular_rate_max_ = solver_params.omega_max;
-    shared_cmd_angular_accel_max_ = solver_params.alpha_max;
-    pnh_.param("platform/shared_constraints/linear_accel_limit_enable",
-               shared_cmd_linear_accel_limit_enable_,
-               shared_cmd_linear_accel_limit_enable_);
-    pnh_.param("platform/shared_constraints/linear_accel_max",
-               shared_cmd_linear_accel_max_,
-               shared_cmd_linear_accel_max_);
-    pnh_.param("platform/shared_constraints/linear_accel_max_dt",
-               shared_cmd_linear_accel_max_dt_,
-               shared_cmd_linear_accel_max_dt_);
-    pnh_.param("platform/shared_constraints/angular_limit_enable",
-               shared_cmd_angular_limit_enable_,
-               shared_cmd_angular_limit_enable_);
-    pnh_.param("platform/shared_constraints/angular_rate_max",
-               shared_cmd_angular_rate_max_,
-               shared_cmd_angular_rate_max_);
-    pnh_.param("platform/shared_constraints/angular_accel_max",
-               shared_cmd_angular_accel_max_,
-               shared_cmd_angular_accel_max_);
-    pnh_.param("platform/shared_constraints/angular_accel_max_dt",
-               shared_cmd_angular_accel_max_dt_,
-               shared_cmd_angular_accel_max_dt_);
-    shared_cmd_linear_accel_max_ = std::max(0.0, shared_cmd_linear_accel_max_);
-    shared_cmd_linear_accel_max_dt_ = std::max(1e-3, shared_cmd_linear_accel_max_dt_);
-    if (shared_cmd_angular_rate_max_ <= 0.0) {
-        shared_cmd_angular_rate_max_ = solver_params.omega_max;
-    }
-    if (shared_cmd_angular_accel_max_ <= 0.0) {
-        shared_cmd_angular_accel_max_ = solver_params.alpha_max;
-    }
-    shared_cmd_angular_rate_max_ = std::max(0.0, shared_cmd_angular_rate_max_);
-    shared_cmd_angular_accel_max_ = std::max(0.0, shared_cmd_angular_accel_max_);
-    shared_cmd_angular_accel_max_dt_ = std::max(1e-3, shared_cmd_angular_accel_max_dt_);
     CommandPipelineConfig command_pipeline_config;
     command_pipeline_config.control_frequency = control_frequency_;
     command_pipeline_config.linear_accel_limit_enable =
@@ -445,132 +215,13 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                   command_pipeline_error.c_str());
         return false;
     }
-    pnh_.param("experiment/corridor_width", solver_params.corridor_width, solver_params.corridor_width);
-    pnh_.param("experiment/corridor_enable", solver_params.corridor_enable, solver_params.corridor_enable);
-    pnh_.param("experiment/corridor_hard_bound_enable",
-               solver_params.corridor_hard_bound_enable,
-               solver_params.corridor_hard_bound_enable);
-    pnh_.param("experiment/corridor_weight", solver_params.corridor_weight, solver_params.corridor_weight);
-    pnh_.param("experiment/obstacle_enable", solver_params.obstacle_enable, solver_params.obstacle_enable);
-    pnh_.param("experiment/obstacle_weight", solver_params.obstacle_weight, solver_params.obstacle_weight);
-    pnh_.param("experiment/obstacle_influence_radius",
-               solver_params.obstacle_influence_radius,
-               solver_params.obstacle_influence_radius);
-    pnh_.param("experiment/homotopy_enable", solver_params.homotopy_enable, solver_params.homotopy_enable);
-    pnh_.param("experiment/homotopy_lateral_offset",
-               solver_params.homotopy_lateral_offset,
-               solver_params.homotopy_lateral_offset);
-    pnh_.param("reference/lookahead_distance", solver_params.lookahead_distance, solver_params.lookahead_distance);
-    pnh_.param("terminal/enable", solver_params.terminal.enable, solver_params.terminal.enable);
-    pnh_.param("terminal/goal_tolerance", solver_params.terminal.goal_tolerance, solver_params.terminal.goal_tolerance);
-    pnh_.param("terminal/goal_reached_max_speed", solver_params.terminal.goal_reached_max_speed, solver_params.terminal.goal_reached_max_speed);
-    pnh_.param("terminal/goal_reached_max_omega", solver_params.terminal.goal_reached_max_omega, solver_params.terminal.goal_reached_max_omega);
-    pnh_.param("terminal/slowdown/enable", solver_params.terminal.slowdown_enable, solver_params.terminal.slowdown_enable);
-    pnh_.param("terminal/slowdown/distance", solver_params.terminal.slowdown_distance, solver_params.terminal.slowdown_distance);
-    pnh_.param("terminal/slowdown/v_max", solver_params.terminal.slowdown_v_max, solver_params.terminal.slowdown_v_max);
-    pnh_.param("terminal/capture_stop/enable", solver_params.terminal.capture_stop_enable, solver_params.terminal.capture_stop_enable);
-    pnh_.param("terminal/capture_stop/distance", solver_params.terminal.capture_stop_distance, solver_params.terminal.capture_stop_distance);
-    pnh_.param("terminal/capture_stop/v_cap", solver_params.terminal.capture_v_cap, solver_params.terminal.capture_v_cap);
-    pnh_.param("terminal/capture_stop/goal_behind_x", solver_params.terminal.goal_behind_x, solver_params.terminal.goal_behind_x);
-    pnh_.param("terminal/command_clamp/enable", solver_params.terminal.command_clamp_enable, solver_params.terminal.command_clamp_enable);
-    pnh_.param("terminal/command_clamp/rate_limit_enable", solver_params.terminal.rate_limit_enable, solver_params.terminal.rate_limit_enable);
-    pnh_.param("terminal/command_clamp/omega_enable", solver_params.terminal.omega_clamp_enable, solver_params.terminal.omega_clamp_enable);
-    pnh_.param("terminal/command_clamp/omega_max", solver_params.terminal.omega_clamp_max, solver_params.terminal.omega_clamp_max);
-    pnh_.param("terminal/command_clamp/omega_near_goal_max", solver_params.terminal.omega_near_goal_max, solver_params.terminal.omega_near_goal_max);
-    pnh_.param("terminal/command_clamp/omega_near_goal_distance", solver_params.terminal.omega_near_goal_distance, solver_params.terminal.omega_near_goal_distance);
-    SafetySupervisorConfig safety_config;
-    safety_config.nominal_period_sec = dt_;
-    pnh_.param("terminal/spin_fail/enable",
-               safety_config.terminal_spin.enable,
-               safety_config.terminal_spin.enable);
-    pnh_.param("terminal/spin_fail/omega_threshold",
-               safety_config.terminal_spin.omega_threshold,
-               safety_config.terminal_spin.omega_threshold);
-    pnh_.param("terminal/spin_fail/max_duration_sec",
-               safety_config.terminal_spin.max_duration_sec,
-               safety_config.terminal_spin.max_duration_sec);
-    safety_config.terminal_spin.omega_threshold = std::max(
-        0.0, safety_config.terminal_spin.omega_threshold);
-    safety_config.terminal_spin.max_duration_sec = std::max(
-        0.0, safety_config.terminal_spin.max_duration_sec);
-    pnh_.param("tracking_safety/enable",
-               safety_config.tracking.enable,
-               safety_config.tracking.enable);
-    pnh_.param("tracking_safety/projection/enable",
-               safety_config.tracking.projection_enable,
-               safety_config.tracking.projection_enable);
-    pnh_.param("tracking_safety/projection/max_distance_m",
-               safety_config.tracking.max_projection_distance_m,
-               safety_config.tracking.max_projection_distance_m);
-    pnh_.param("tracking_safety/projection/max_duration_sec",
-               safety_config.tracking.max_projection_duration_sec,
-               safety_config.tracking.max_projection_duration_sec);
-    pnh_.param("tracking_safety/spin_fail/enable",
-               safety_config.tracking.spin_enable,
-               safety_config.tracking.spin_enable);
-    pnh_.param("tracking_safety/spin_fail/omega_threshold",
-               safety_config.tracking.spin_omega_threshold,
-               safety_config.tracking.spin_omega_threshold);
-    pnh_.param("tracking_safety/spin_fail/max_duration_sec",
-               safety_config.tracking.spin_max_duration_sec,
-               safety_config.tracking.spin_max_duration_sec);
-    safety_config.tracking.max_projection_distance_m = std::max(
-        0.0, safety_config.tracking.max_projection_distance_m);
-    safety_config.tracking.max_projection_duration_sec = std::max(
-        0.0, safety_config.tracking.max_projection_duration_sec);
-    safety_config.tracking.spin_omega_threshold = std::max(
-        0.0, safety_config.tracking.spin_omega_threshold);
-    safety_config.tracking.spin_max_duration_sec = std::max(
-        0.0, safety_config.tracking.spin_max_duration_sec);
+    const SafetySupervisorConfig safety_config = app_config_.safety;
     std::string safety_error;
     if (!control_cycle_engine_.configureSafety(safety_config, safety_error)) {
         ROS_FATAL("[spmpc_local_planner] safety supervisor configuration failed: %s",
                   safety_error.c_str());
         return false;
     }
-    pnh_.param("start_lock_recovery/enable", solver_params.start_lock_recovery.enable, solver_params.start_lock_recovery.enable);
-    pnh_.param("start_lock_recovery/detect_only", solver_params.start_lock_recovery.detect_only, solver_params.start_lock_recovery.detect_only);
-    pnh_.param("start_lock_recovery/start_window_s", solver_params.start_lock_recovery.start_window_s, solver_params.start_lock_recovery.start_window_s);
-    pnh_.param("start_lock_recovery/min_stall_duration_sec", solver_params.start_lock_recovery.min_stall_duration_sec, solver_params.start_lock_recovery.min_stall_duration_sec);
-    pnh_.param("start_lock_recovery/progress_epsilon_s", solver_params.start_lock_recovery.progress_epsilon_s, solver_params.start_lock_recovery.progress_epsilon_s);
-    pnh_.param("start_lock_recovery/cmd_v_small_threshold", solver_params.start_lock_recovery.cmd_v_small_threshold, solver_params.start_lock_recovery.cmd_v_small_threshold);
-    pnh_.param("start_lock_recovery/warm_start_v_s_min", solver_params.start_lock_recovery.warm_start_v_s_min, solver_params.start_lock_recovery.warm_start_v_s_min);
-    pnh_.param("start_lock_recovery/u0_v_s_max", solver_params.start_lock_recovery.u0_v_s_max, solver_params.start_lock_recovery.u0_v_s_max);
-    pnh_.param("start_lock_recovery/require_monotonic_clip", solver_params.start_lock_recovery.require_monotonic_clip, solver_params.start_lock_recovery.require_monotonic_clip);
-    pnh_.param("start_lock_recovery/max_projection_distance_m", solver_params.start_lock_recovery.max_projection_distance_m, solver_params.start_lock_recovery.max_projection_distance_m);
-    pnh_.param("platform/kinematics", solver_params.platform.kinematics, solver_params.platform.kinematics);
-    pnh_.param("acados/warm_start_flatness_enable", solver_params.warm_start_flatness_enable, solver_params.warm_start_flatness_enable);
-    pnh_.param("acados/warm_start/type", solver_params.warm_start.type, solver_params.warm_start.type);
-    pnh_.param("acados/warm_start/use_previous_solution", solver_params.warm_start.use_previous_solution, solver_params.warm_start.use_previous_solution);
-    pnh_.param("acados/warm_start/use_slosh_rollout", solver_params.warm_start.use_slosh_rollout, solver_params.warm_start.use_slosh_rollout);
-    pnh_.param("acados/warm_start/curvature_speed_limit_enable",
-               solver_params.warm_start.curvature_speed_limit_enable,
-               solver_params.warm_start.curvature_speed_limit_enable);
-    pnh_.param("acados/warm_start/max_reference_fit_error",
-               solver_params.warm_start.max_reference_fit_error,
-               solver_params.warm_start.max_reference_fit_error);
-    pnh_.param("acados/warm_start/fallback_to_previous_solution",
-               solver_params.warm_start.fallback_to_previous_solution,
-               solver_params.warm_start.fallback_to_previous_solution);
-    pnh_.param("acados/warm_start/fallback_to_primitive",
-               solver_params.warm_start.fallback_to_primitive,
-               solver_params.warm_start.fallback_to_primitive);
-    if (pnh_.hasParam("acados/warm_start/enable")) {
-        pnh_.param("acados/warm_start/enable", solver_params.warm_start.enable, solver_params.warm_start.enable);
-    } else {
-        solver_params.warm_start.enable = solver_params.warm_start_flatness_enable;
-    }
-    pnh_.param("solver_backend", solver_params.solver_backend, solver_params.solver_backend);
-    if (!isKnownSolverBackend(solver_params.solver_backend)) {
-        ROS_FATAL("[spmpc_local_planner] unknown solver_backend '%s'. Valid backends: %s, %s, %s",
-                  solver_params.solver_backend.c_str(),
-                  kSolverBackendContinuousMpccAcados,
-                  kSolverBackendContinuousMpccDirectOmegaLegacy,
-                  kSolverBackendPrimitive);
-        return false;
-    }
-    solver_params.slosh = loadSloshParams();
-    solver_params.slosh.dt = dt_;
     phase_rejoin_runtime_contract_ = PhaseRejoinRuntimeContract{};
     phase_rejoin_runtime_contract_.dt = dt_;
     phase_rejoin_runtime_contract_.min_command_v = 0.0;
@@ -591,29 +242,6 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     } else if (phase_rejoin_params_.mode != PhaseRejoinMode::Off) {
         ROS_FATAL("[spmpc_local_planner] phase-rejoin cannot derive the "
                   "runtime liquid-model contract");
-        return false;
-    }
-    const ProcessedImuParams processed_imu_params = loadProcessedImuParams();
-    slosh_risk_governor_params_ = loadSloshRiskGovernorParams();
-
-    variant_ = makeVariantConfig(variant_name);
-    if (variant_name != "B0" && variant_.name == "B0") {
-        ROS_WARN("[spmpc_local_planner] unknown planner_variant '%s'; falling back to B0", variant_name.c_str());
-    }
-    loadVariantOverrides(variant_.name);
-    if (!pnh_.hasParam("variants/" + variant_.name + "/w_contour")) {
-        ROS_WARN("[spmpc_local_planner] 未找到 variants/%s/* 参数：config/planner/variants.yaml "
-                 "可能未加载，变体权重回退到内置 B0 默认值。正式实验请用 launch 加载 variants.yaml",
-                 variant_.name.c_str());
-    }
-    if (variant_.slosh_cost_horizon_steps < -1 ||
-        !std::isfinite(variant_.slosh_cost_tail_discount) ||
-        variant_.slosh_cost_tail_discount < 0.0 ||
-        variant_.slosh_cost_tail_discount > 1.0) {
-        ROS_FATAL("[spmpc_local_planner] invalid liquid cost horizon for variant=%s: steps=%d tail=%.6f",
-                  variant_.name.c_str(),
-                  variant_.slosh_cost_horizon_steps,
-                  variant_.slosh_cost_tail_discount);
         return false;
     }
     const bool matched_development_variant =
@@ -2242,165 +1870,6 @@ CostmapGrid SpmpcLocalPlannerROS::costmapFromMsg(const nav_msgs::OccupancyGrid& 
         tf2::getYaw(map.info.origin.orientation),
         map.data);
     return costmap;
-}
-
-void SpmpcLocalPlannerROS::loadVariantOverrides(const std::string& variant_name) {
-    const std::string prefix = "variants/" + variant_name + "/";
-    pnh_.param(prefix + "slosh_enable", variant_.slosh_enable, variant_.slosh_enable);
-    pnh_.param(prefix + "smooth_priority_enable", variant_.smooth_priority_enable, variant_.smooth_priority_enable);
-    pnh_.param(prefix + "slosh_constraint_enable", variant_.slosh_constraint_enable, variant_.slosh_constraint_enable);
-    pnh_.param(prefix + "primitive_mode", variant_.primitive_mode, variant_.primitive_mode);
-    pnh_.param(prefix + "w_contour", variant_.w_contour, variant_.w_contour);
-    pnh_.param(prefix + "w_lag", variant_.w_lag, variant_.w_lag);
-    pnh_.param(prefix + "w_progress", variant_.w_progress, variant_.w_progress);
-    pnh_.param(prefix + "w_v", variant_.w_v, variant_.w_v);
-    pnh_.param(prefix + "w_vs", variant_.w_vs, variant_.w_vs);
-    pnh_.param(prefix + "v_ref", variant_.v_ref, variant_.v_ref);
-    pnh_.param(prefix + "w_control", variant_.w_control, variant_.w_control);
-    pnh_.param(prefix + "w_accel", variant_.w_accel, variant_.w_accel);
-    pnh_.param(prefix + "w_smooth", variant_.w_smooth, variant_.w_smooth);
-    pnh_.param(prefix + "w_alpha", variant_.w_alpha, variant_.w_alpha);
-    pnh_.param(prefix + "w_du_a", variant_.w_du_a, variant_.w_du_a);
-    pnh_.param(prefix + "w_du_vs", variant_.w_du_vs, variant_.w_du_vs);
-    pnh_.param(prefix + "w_slosh", variant_.w_slosh, variant_.w_slosh);
-    pnh_.param(prefix + "slosh_cost_horizon_steps",
-               variant_.slosh_cost_horizon_steps,
-               variant_.slosh_cost_horizon_steps);
-    pnh_.param(prefix + "slosh_cost_tail_discount",
-               variant_.slosh_cost_tail_discount,
-               variant_.slosh_cost_tail_discount);
-
-    if (variant_.w_alpha < 0.0) {
-        variant_.w_alpha = variant_.w_smooth;
-    }
-    if (variant_.w_du_a < 0.0) {
-        variant_.w_du_a = variant_.w_smooth;
-    }
-    if (variant_.w_du_vs < 0.0) {
-        variant_.w_du_vs = variant_.w_smooth;
-    }
-}
-
-SloshModelParams SpmpcLocalPlannerROS::loadSloshParams() const {
-    SloshModelParams params;
-    pnh_.param("slosh/container_radius", params.container_radius, params.container_radius);
-    pnh_.param("slosh/liquid_height", params.liquid_height, params.liquid_height);
-    pnh_.param("slosh/liquid_density", params.liquid_density, params.liquid_density);
-    pnh_.param("slosh/damping_ratio", params.damping_ratio, params.damping_ratio);
-    pnh_.param("slosh/mode_index", params.mode_index, params.mode_index);
-    pnh_.param("slosh/slosh_height_ref", params.slosh_height_ref, params.slosh_height_ref);
-    pnh_.param("slosh/slosh_height_max", params.slosh_height_max, params.slosh_height_max);
-    // 防呆：历史上部分 launch/yaml 误写在 container/slosh_height_max 命名空间。
-    // 若 container/slosh_height_max 存在且合法，用它覆盖并打 WARN 提示迁移。
-    {
-        double container_height_max = -1.0;
-        pnh_.param("container/slosh_height_max", container_height_max, container_height_max);
-        if (std::isfinite(container_height_max) && container_height_max > 0.0) {
-            ROS_WARN_ONCE(
-                "[spmpc_local_planner] 检测到 container/slosh_height_max=%.4f m，"
-                "正确命名空间为 slosh/slosh_height_max。"
-                "本次自动采用 container 值 (%.4f m)，请将配置迁移到 slosh/ 命名空间。",
-                container_height_max, container_height_max);
-            params.slosh_height_max = container_height_max;
-        }
-    }
-    if (!std::isfinite(params.slosh_height_max) || params.slosh_height_max <= 0.0) {
-        ROS_WARN("[spmpc_local_planner] invalid slosh/slosh_height_max=%.6f, fallback to slosh_height_ref=%.6f",
-                 params.slosh_height_max,
-                 params.slosh_height_ref);
-        params.slosh_height_max = std::max(1e-6, params.slosh_height_ref);
-    }
-    pnh_.param("slosh/slosh_eta_dot_ratio", params.slosh_eta_dot_ratio, params.slosh_eta_dot_ratio);
-    pnh_.param("slosh/use_linear_model", params.use_linear_model, params.use_linear_model);
-    pnh_.param("slosh/use_parabola_term", params.use_parabola_term, params.use_parabola_term);
-    return params;
-}
-
-ProcessedImuParams SpmpcLocalPlannerROS::loadProcessedImuParams() const {
-    ProcessedImuParams params;
-    const std::string prefix = "imu_shadow/";
-    pnh_.param(prefix + "gravity_mps2", params.gravity_mps2, params.gravity_mps2);
-    pnh_.param(prefix + "sensor_delay_sec", params.sensor_delay_sec, params.sensor_delay_sec);
-    pnh_.param(prefix + "accel_cutoff_hz", params.accel_cutoff_hz, params.accel_cutoff_hz);
-    pnh_.param(prefix + "gyro_cutoff_hz", params.gyro_cutoff_hz, params.gyro_cutoff_hz);
-    pnh_.param(prefix + "accel_phase_delay_sec",
-               params.accel_phase_delay_sec,
-               params.accel_phase_delay_sec);
-    pnh_.param(prefix + "gyro_phase_delay_sec",
-               params.gyro_phase_delay_sec,
-               params.gyro_phase_delay_sec);
-    pnh_.param(prefix + "alpha_phase_delay_sec",
-               params.alpha_phase_delay_sec,
-               params.alpha_phase_delay_sec);
-    pnh_.param(prefix + "gyro_scale", params.gyro_scale, params.gyro_scale);
-    pnh_.param(prefix + "gyro_offset_radps",
-               params.gyro_offset_radps,
-               params.gyro_offset_radps);
-    pnh_.param(prefix + "imu_to_base_yaw_rad",
-               params.imu_to_base_yaw_rad,
-               params.imu_to_base_yaw_rad);
-    pnh_.param(prefix + "lever_arm_imu_to_target_x_m",
-               params.lever_arm_imu_to_target_x_m,
-               params.lever_arm_imu_to_target_x_m);
-    pnh_.param(prefix + "lever_arm_imu_to_target_y_m",
-               params.lever_arm_imu_to_target_y_m,
-               params.lever_arm_imu_to_target_y_m);
-    pnh_.param(prefix + "bias_window_start_sec",
-               params.bias_window_start_sec,
-               params.bias_window_start_sec);
-    pnh_.param(prefix + "bias_window_end_sec",
-               params.bias_window_end_sec,
-               params.bias_window_end_sec);
-    pnh_.param(prefix + "bias_min_samples", params.bias_min_samples, params.bias_min_samples);
-    pnh_.param(prefix + "bias_max_accel_mad_mps2",
-               params.bias_max_accel_mad_mps2,
-               params.bias_max_accel_mad_mps2);
-    pnh_.param(prefix + "bias_max_gyro_p95_radps",
-               params.bias_max_gyro_p95_radps,
-               params.bias_max_gyro_p95_radps);
-    pnh_.param(prefix + "filter_warmup_sec",
-               params.filter_warmup_sec,
-               params.filter_warmup_sec);
-    pnh_.param(prefix + "max_sample_gap_sec",
-               params.max_sample_gap_sec,
-               params.max_sample_gap_sec);
-    pnh_.param(prefix + "clock_reset_threshold_sec",
-               params.clock_reset_threshold_sec,
-               params.clock_reset_threshold_sec);
-    pnh_.param(prefix + "max_receive_age_sec",
-               params.max_receive_age_sec,
-               params.max_receive_age_sec);
-    pnh_.param(prefix + "max_future_skew_sec",
-               params.max_future_skew_sec,
-               params.max_future_skew_sec);
-    pnh_.param(prefix + "quaternion_norm_min",
-               params.quaternion_norm_min,
-               params.quaternion_norm_min);
-    pnh_.param(prefix + "quaternion_norm_max",
-               params.quaternion_norm_max,
-               params.quaternion_norm_max);
-    return params;
-}
-
-SloshRiskGovernorParams SpmpcLocalPlannerROS::loadSloshRiskGovernorParams() const {
-    SloshRiskGovernorParams params;
-    pnh_.param("slosh_risk_governor/enable", params.enable, params.enable);
-    pnh_.param("slosh_risk_governor/require_slosh_variant", params.require_slosh_variant, params.require_slosh_variant);
-    pnh_.param("slosh_risk_governor/horizon_steps", params.horizon_steps, params.horizon_steps);
-    pnh_.param("slosh_risk_governor/height_limit_m", params.height_limit_m, params.height_limit_m);
-    pnh_.param("slosh_risk_governor/risk_threshold", params.risk_threshold, params.risk_threshold);
-    pnh_.param("slosh_risk_governor/release_threshold", params.release_threshold, params.release_threshold);
-    pnh_.param("slosh_risk_governor/beta_min", params.beta_min, params.beta_min);
-    pnh_.param("slosh_risk_governor/beta_grid_count", params.beta_grid_count, params.beta_grid_count);
-    pnh_.param("slosh_risk_governor/min_v_ref", params.min_v_ref, params.min_v_ref);
-    pnh_.param("slosh_risk_governor/accel_limit", params.accel_limit, params.accel_limit);
-    pnh_.param("slosh_risk_governor/omega_decay_tau", params.omega_decay_tau, params.omega_decay_tau);
-    pnh_.param("slosh_risk_governor/beta_rate_up_per_sec", params.beta_rate_up_per_sec, params.beta_rate_up_per_sec);
-    pnh_.param("slosh_risk_governor/beta_rate_down_per_sec", params.beta_rate_down_per_sec, params.beta_rate_down_per_sec);
-    pnh_.param("slosh_risk_governor/include_parabola_height",
-               params.include_parabola_height,
-               params.include_parabola_height);
-    return params;
 }
 
 }  // namespace spmpc_local_planner

@@ -95,10 +95,6 @@ private:
     void applyRuntimeVRef(SolverInput& input);
     void applySloshRiskGovernor(SolverInput& input);
     void resetMapVRefProgress();
-    void loadVariantOverrides(const std::string& variant_name);
-    SloshModelParams loadSloshParams() const;
-    ProcessedImuParams loadProcessedImuParams() const;
-    SloshRiskGovernorParams loadSloshRiskGovernorParams() const;
     void validatePhaseRejoinReference(const ReferencePath& reference);
     bool phaseRejoinNeedsPrediction() const;
 
@@ -107,7 +103,6 @@ private:
     // of the formal odom/path/control callbacks on the global queue.
     ros::CallbackQueue imu_callback_queue_;
     ros::NodeHandle nh_;
-    ros::NodeHandle pnh_;
     ros::NodeHandle imu_nh_;
     ros::Subscriber odom_sub_;
     ros::Subscriber imu_sub_;

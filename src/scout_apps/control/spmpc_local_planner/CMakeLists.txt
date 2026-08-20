@@ -91,6 +91,7 @@ set(SPMPC_PUBLIC_LIBRARIES
   spmpc_estimation
   spmpc_phase_rejoin
   spmpc_reference
+  spmpc_ros_config
   spmpc_runtime
   spmpc_safety
   spmpc_model
@@ -273,6 +274,22 @@ target_link_libraries(spmpc_ros_telemetry
   ${catkin_LIBRARIES}
 )
 
+add_library(spmpc_ros_config
+  src/ros/ros_config_loader.cpp
+)
+target_include_directories(spmpc_ros_config PRIVATE
+  ${catkin_INCLUDE_DIRS}
+)
+target_link_libraries(spmpc_ros_config
+  PUBLIC
+  spmpc_config
+  spmpc_estimation
+  spmpc_phase_rejoin
+  spmpc_solver_api
+  PRIVATE
+  ${catkin_LIBRARIES}
+)
+
 add_library(${PROJECT_NAME}
   src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
@@ -280,7 +297,6 @@ add_library(${PROJECT_NAME}
   src/core/start_lock_recovery.cpp
   src/core/terminal_controller.cpp
   src/ros/imu_shadow_ros_adapter.cpp
-  src/ros/ros_config_loader.cpp
   src/ros/diagnostics_publisher.cpp
   src/ros/spmpc_local_planner_ros.cpp
 )
@@ -307,6 +323,7 @@ target_link_libraries(${PROJECT_NAME}
   spmpc_solver_factory
   spmpc_warm_start
   PRIVATE
+  spmpc_ros_config
   spmpc_ros_telemetry
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
@@ -382,6 +399,12 @@ target_link_libraries(spmpc_local_planner_node
 )
 
 if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_app_config test/test_app_config.cpp)
+  if(TARGET test_app_config)
+    target_link_libraries(test_app_config
+      spmpc_config
+    )
+  endif()
   catkin_add_gtest(test_processed_imu_pipeline test/test_processed_imu_pipeline.cpp)
   if(TARGET test_processed_imu_pipeline)
     target_link_libraries(test_processed_imu_pipeline

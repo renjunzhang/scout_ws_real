@@ -50,6 +50,139 @@ ValidationReport validateAndNormalize(AppConfig& config) {
             "map_vref/profile_path",
             "profile is enabled without a path; cycles will report PROFILE_NOT_CONFIGURED");
     }
+
+    auto& imu = config.imu_shadow;
+    if (imu.subscriber_queue_size < 1 || imu.subscriber_queue_size > 1000) {
+        report.warning(
+            "imu_shadow/subscriber_queue_size",
+            "value outside [1, 1000] normalized to 10");
+        imu.subscriber_queue_size = 10;
+    }
+    if (!std::isfinite(imu.observer_dt_sec) || imu.observer_dt_sec <= 0.0) {
+        report.warning(
+            "imu_shadow/observer_dt_sec",
+            "non-positive or non-finite value normalized to 0.02 s");
+        imu.observer_dt_sec = 0.02;
+    }
+    if (config.slosh_observer.nominal_source ==
+            SloshObserverSource::ProcessedImu &&
+        !imu.enable) {
+        report.warning(
+            "imu_shadow/enable",
+            "forced on because processed_imu is the nominal observer");
+        imu.enable = true;
+    }
+
+    auto& delay = config.control.delay_phase;
+    delay.history_window_sec = std::max(0.1, delay.history_window_sec);
+    delay.cmd_timeout_sec = std::max(0.0, delay.cmd_timeout_sec);
+    delay.odom_timeout_sec = std::max(0.0, delay.odom_timeout_sec);
+    delay.linear_delay_sec = std::max(0.0, delay.linear_delay_sec);
+    delay.angular_delay_sec = std::max(0.0, delay.angular_delay_sec);
+    delay.linear_time_constant_sec = std::max(
+        0.0, delay.linear_time_constant_sec);
+    delay.angular_time_constant_sec = std::max(
+        0.0, delay.angular_time_constant_sec);
+    delay.max_prediction_sec = std::max(0.0, delay.max_prediction_sec);
+    delay.max_integration_step_sec = std::max(
+        1e-4, delay.max_integration_step_sec);
+    delay.min_integration_step_sec = std::max(
+        1e-6, delay.min_integration_step_sec);
+    if (delay.min_integration_step_sec > delay.max_integration_step_sec) {
+        delay.min_integration_step_sec = delay.max_integration_step_sec;
+    }
+
+    const auto& timing = config.control.state_timing;
+    const auto& contract = config.control.execution_contract;
+    const bool valid_state_timing =
+        std::isfinite(timing.max_raw_skew_sec) &&
+        timing.max_raw_skew_sec >= 0.0 &&
+        std::isfinite(timing.odom_history_sec) &&
+        timing.odom_history_sec > 0.0 &&
+        std::isfinite(timing.max_interpolation_gap_sec) &&
+        timing.max_interpolation_gap_sec > 0.0 &&
+        std::isfinite(timing.max_robot_extrapolation_sec) &&
+        timing.max_robot_extrapolation_sec >= 0.0;
+    if (!valid_state_timing) {
+        report.fatal(
+            "state_timing",
+            "invalid common-epoch skew/history/interpolation contract");
+    }
+    const bool valid_execution_contract =
+        std::isfinite(contract.max_post_limit_delta_v) &&
+        contract.max_post_limit_delta_v >= 0.0 &&
+        std::isfinite(contract.max_post_limit_delta_omega) &&
+        contract.max_post_limit_delta_omega >= 0.0;
+    if (!valid_execution_contract) {
+        report.fatal(
+            "execution_contract",
+            "post-limit command deltas must be finite and non-negative");
+    }
+    if (config.phase_rejoin.params.mode == PhaseRejoinMode::Enforce &&
+        !timing.require_common_epoch) {
+        report.fatal(
+            "state_timing/require_common_epoch",
+            "phase_rejoin/enforce requires common-epoch alignment");
+    }
+
+    auto& limits = config.shared_command_limits;
+    limits.linear_accel_max = std::max(0.0, limits.linear_accel_max);
+    limits.linear_accel_max_dt = std::max(
+        1e-3, limits.linear_accel_max_dt);
+    if (limits.angular_rate_max <= 0.0) {
+        limits.angular_rate_max = config.solver.omega_max;
+    }
+    if (limits.angular_accel_max <= 0.0) {
+        limits.angular_accel_max = config.solver.alpha_max;
+    }
+    limits.angular_rate_max = std::max(0.0, limits.angular_rate_max);
+    limits.angular_accel_max = std::max(0.0, limits.angular_accel_max);
+    limits.angular_accel_max_dt = std::max(
+        1e-3, limits.angular_accel_max_dt);
+
+    auto& safety = config.safety;
+    safety.nominal_period_sec = config.control.dt;
+    safety.terminal_spin.omega_threshold = std::max(
+        0.0, safety.terminal_spin.omega_threshold);
+    safety.terminal_spin.max_duration_sec = std::max(
+        0.0, safety.terminal_spin.max_duration_sec);
+    safety.tracking.max_projection_distance_m = std::max(
+        0.0, safety.tracking.max_projection_distance_m);
+    safety.tracking.max_projection_duration_sec = std::max(
+        0.0, safety.tracking.max_projection_duration_sec);
+    safety.tracking.spin_omega_threshold = std::max(
+        0.0, safety.tracking.spin_omega_threshold);
+    safety.tracking.spin_max_duration_sec = std::max(
+        0.0, safety.tracking.spin_max_duration_sec);
+
+    if (!std::isfinite(config.solver.slosh.slosh_height_max) ||
+        config.solver.slosh.slosh_height_max <= 0.0) {
+        report.warning(
+            "slosh/slosh_height_max",
+            "invalid maximum normalized to slosh_height_ref");
+        config.solver.slosh.slosh_height_max = std::max(
+            1e-6, config.solver.slosh.slosh_height_ref);
+    }
+    config.solver.slosh.dt = config.control.dt;
+
+    auto& variant = config.variant;
+    if (variant.w_alpha < 0.0) {
+        variant.w_alpha = variant.w_smooth;
+    }
+    if (variant.w_du_a < 0.0) {
+        variant.w_du_a = variant.w_smooth;
+    }
+    if (variant.w_du_vs < 0.0) {
+        variant.w_du_vs = variant.w_smooth;
+    }
+    if (variant.slosh_cost_horizon_steps < -1 ||
+        !std::isfinite(variant.slosh_cost_tail_discount) ||
+        variant.slosh_cost_tail_discount < 0.0 ||
+        variant.slosh_cost_tail_discount > 1.0) {
+        report.fatal(
+            "variants/" + variant.name + "/slosh_cost_horizon",
+            "steps must be >= -1 and tail discount must be in [0, 1]");
+    }
     return report;
 }
 
