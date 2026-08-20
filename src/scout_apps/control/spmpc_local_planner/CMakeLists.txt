@@ -135,6 +135,7 @@ add_library(spmpc_config
 add_library(spmpc_controller
   src/controller/command/command_pipeline.cpp
   src/controller/control_cycle_engine.cpp
+  src/controller/control_cycle_gate.cpp
   src/controller/control_cycle_input_preparer.cpp
   src/controller/speed_reference_controller.cpp
 )
@@ -539,6 +540,12 @@ if(CATKIN_ENABLE_TESTING)
       spmpc_controller
       spmpc_phase_rejoin
       spmpc_safety
+    )
+  endif()
+  catkin_add_gtest(test_control_cycle_gate test/test_control_cycle_gate.cpp)
+  if(TARGET test_control_cycle_gate)
+    target_link_libraries(test_control_cycle_gate
+      spmpc_controller
     )
   endif()
   catkin_add_gtest(test_control_cycle_input_preparer

@@ -198,7 +198,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     command_pipeline_config.max_post_limit_delta_omega =
         command_contract_params_.max_post_limit_delta_omega;
     std::string command_pipeline_error;
-    if (!command_pipeline_.configure(
+    if (!control_cycle_engine_.configureCommandPipeline(
             command_pipeline_config, command_pipeline_error)) {
         ROS_FATAL("[spmpc_local_planner] command pipeline configuration failed: %s",
                   command_pipeline_error.c_str());
@@ -696,15 +696,13 @@ void SpmpcLocalPlannerROS::publishZeroCommand(
     const CommandInterventionDebug& intervention,
     ControlCycleAuditDebug* audit) {
     const ros::Time stamp = ros::Time::now();
-    CommandPipelineRequest request;
-    request.stamp_ns = static_cast<StampNs>(stamp.toNSec());
-    request.force_zero = true;
-    request.publish_enabled = publish_cmd_vel_;
-    request.source = CommandSource::FailClosed;
-    request.reason = audit && !audit->status.empty()
+    const StampNs stamp_ns = static_cast<StampNs>(stamp.toNSec());
+    const std::string reason = audit && !audit->status.empty()
         ? audit->status
         : "FAIL_CLOSED_ZERO";
-    const CommandPipelineResult result = command_pipeline_.finalize(request);
+    const CommandPipelineResult result =
+        control_cycle_engine_.finalizeFailClosedZero(
+            stamp_ns, publish_cmd_vel_, reason);
 
     CommandInterventionDebug debug = intervention;
     debug.publish_cmd_vel = publish_cmd_vel_;
@@ -731,7 +729,7 @@ void SpmpcLocalPlannerROS::publishZeroCommand(
         audit->published_cmd_v = debug.published_cmd_v;
         audit->published_cmd_omega = debug.published_cmd_omega;
         if (result.command_was_published) {
-            audit->timing.command_publish_stamp_ns = request.stamp_ns;
+            audit->timing.command_publish_stamp_ns = stamp_ns;
         }
         diagnostics_.publishControlCycleAudit(
             *audit, problem_.referenceFrameId());
@@ -743,14 +741,10 @@ void SpmpcLocalPlannerROS::publishCommand(
     const CommandInterventionDebug& intervention,
     ControlCycleAuditDebug* audit) {
     const ros::Time stamp = ros::Time::now();
-    CommandPipelineRequest request;
-    request.stamp_ns = static_cast<StampNs>(stamp.toNSec());
-    request.desired = decision.command;
-    request.publish_enabled = publish_cmd_vel_;
-    request.source = decision.source;
-    request.reason = decision.reason;
-
-    const CommandPipelineResult result = command_pipeline_.finalize(request);
+    const StampNs stamp_ns = static_cast<StampNs>(stamp.toNSec());
+    const CommandPipelineResult result =
+        control_cycle_engine_.finalizeCommand(
+            decision, stamp_ns, publish_cmd_vel_);
     const geometry_msgs::Twist desired =
         velocityCommandToRos(decision.command);
     const geometry_msgs::Twist command =
@@ -797,7 +791,7 @@ void SpmpcLocalPlannerROS::publishCommand(
         audit->publish_cmd_vel = publish_cmd_vel_;
         audit->command_was_published = result.command_was_published;
         if (result.command_was_published) {
-            audit->timing.command_publish_stamp_ns = request.stamp_ns;
+            audit->timing.command_publish_stamp_ns = stamp_ns;
             audit->command_contract_violation =
                 result.command_contract_violation;
             audit->linear_limited = result.linear_limited;
@@ -966,24 +960,19 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     cycle_audit.variant = variant_.name;
     cycle_audit.publish_cmd_vel = publish_cmd_vel_;
 
-    if (!have_odom_) {
+    const ControlCycleGateDecision prerequisite_gate =
+        evaluateControlCyclePrerequisites(
+            have_odom_, problem_.hasReferencePath());
+    if (!prerequisite_gate.ready) {
         control_cycle_engine_.resetSafety();
-        diagnostics_.publishStatus("WAITING_FOR_ODOM");
-        publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoOdom);
-        CommandInterventionDebug intervention;
-        intervention.zero_due_to_waiting_for_odom = true;
-        cycle_audit.status = "WAITING_FOR_ODOM";
-        publishZeroCommand(intervention, &cycle_audit);
-        return;
-    }
-    if (!problem_.hasReferencePath()) {
-        control_cycle_engine_.resetSafety();
-        diagnostics_.publishStatus("WAITING_FOR_REFERENCE_PATH");
-        publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoReference);
-        CommandInterventionDebug intervention;
-        intervention.zero_due_to_waiting_for_reference = true;
-        cycle_audit.status = "WAITING_FOR_REFERENCE_PATH";
-        publishZeroCommand(intervention, &cycle_audit);
+        diagnostics_.publishStatus(prerequisite_gate.status);
+        if (prerequisite_gate.publish_early_delay_status) {
+            publishDelayPhaseEarlyStatus(
+                prerequisite_gate.delay_phase_status);
+        }
+        cycle_audit.status = prerequisite_gate.status;
+        publishZeroCommand(
+            prerequisite_gate.intervention, &cycle_audit);
         return;
     }
 
@@ -1059,9 +1048,11 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         imu_observer_health.snapshot.excitation);
     cycle_audit.timing = input_preparation.timing;
 
-    if (!input_preparation.ready) {
+    ControlCycleGateDecision input_gate =
+        evaluateControlInputGate(input_preparation);
+    if (!input_gate.ready) {
         control_cycle_engine_.resetSafety();
-        diagnostics_.publishStatus(input_preparation.status);
+        diagnostics_.publishStatus(input_gate.status);
         if (input_preparation.failure ==
             ControlInputFailure::ObserverUnavailable) {
             ROS_WARN_THROTTLE(
@@ -1073,25 +1064,17 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
                 observer_selection.odom_state_age_sec,
                 observer_selection.imu_state_age_sec);
         }
-        if (input_preparation.publish_early_delay_status) {
+        if (input_gate.publish_early_delay_status) {
             publishDelayPhaseEarlyStatus(
-                input_preparation.delay_phase_status);
+                input_gate.delay_phase_status);
         }
-        CommandInterventionDebug intervention;
-        if (input_preparation.failure ==
-                ControlInputFailure::ObserverUnavailable ||
-            input_preparation.failure == ControlInputFailure::RawStateSkew) {
-            intervention.zero_due_to_waiting_for_slosh_observer = true;
-        } else {
-            intervention.zero_due_to_waiting_for_tf = true;
-        }
-        cycle_audit.status = input_preparation.status;
+        cycle_audit.status = input_gate.status;
         publishSloshObserverSelectionDebug(
             observer_selection_now,
             observer_selection,
             solver_consumes_selected_state,
             cycle_audit.timing);
-        publishZeroCommand(intervention, &cycle_audit);
+        publishZeroCommand(input_gate.intervention, &cycle_audit);
         return;
     }
     if (observer_selection.fallback_active) {
@@ -1130,13 +1113,12 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         static_cast<StampNs>(delay_phase_now.toNSec()),
         input_preparation);
     cycle_audit.timing = input_preparation.timing;
-    if (!input_preparation.ready) {
+    input_gate = evaluateControlInputGate(input_preparation);
+    if (!input_gate.ready) {
         control_cycle_engine_.resetSafety();
-        cycle_audit.status = input_preparation.status;
+        cycle_audit.status = input_gate.status;
         diagnostics_.publishStatus(cycle_audit.status);
-        CommandInterventionDebug intervention;
-        intervention.zero_due_to_waiting_for_slosh_observer = true;
-        publishZeroCommand(intervention, &cycle_audit);
+        publishZeroCommand(input_gate.intervention, &cycle_audit);
         return;
     }
 

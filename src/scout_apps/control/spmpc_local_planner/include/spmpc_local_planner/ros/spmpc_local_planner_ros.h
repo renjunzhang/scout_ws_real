@@ -1,8 +1,8 @@
 #pragma once
 
 #include "spmpc_local_planner/config/app_config.h"
-#include "spmpc_local_planner/controller/command/command_pipeline.h"
 #include "spmpc_local_planner/controller/control_cycle_engine.h"
+#include "spmpc_local_planner/controller/control_cycle_gate.h"
 #include "spmpc_local_planner/controller/control_cycle_input_preparer.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/estimation/processed_imu_pipeline.h"
@@ -108,7 +108,6 @@ private:
     SpmpcProblem problem_;
     ControlCycleEngine control_cycle_engine_;
     AppConfig app_config_;
-    CommandPipeline command_pipeline_;
     DiagnosticsPublisher diagnostics_;
     VariantConfig variant_;
     ReferencePathPreprocessor reference_preprocessor_;

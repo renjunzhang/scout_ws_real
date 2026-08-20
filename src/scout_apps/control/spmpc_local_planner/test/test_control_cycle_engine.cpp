@@ -179,6 +179,41 @@ TEST(ControlCycleEngineTest, SolverFailureProducesFailClosedDecision) {
     EXPECT_EQ("SOLVER_FAILED", result.output.status);
 }
 
+TEST(ControlCycleEngineTest, OwnsFinalLimiterAndExecutionContractStage) {
+    EngineFixture fixture;
+    CommandPipelineConfig pipeline;
+    pipeline.control_frequency = 10.0;
+    pipeline.linear_accel_limit_enable = true;
+    pipeline.linear_accel_max = 1.0;
+    pipeline.linear_accel_max_dt = 0.2;
+    pipeline.fail_closed_on_post_limit_change = true;
+    pipeline.max_post_limit_delta_v = 1e-6;
+    ASSERT_TRUE(
+        fixture.engine.configureCommandPipeline(pipeline, fixture.error))
+        << fixture.error;
+
+    fixture.solver.next_output.success = true;
+    fixture.solver.next_output.status = "OK";
+    fixture.solver.next_output.cmd_v = 1.0;
+    const ControlCycleResult cycle = fixture.engine.step(fixture.request());
+    const CommandPipelineResult publication =
+        fixture.engine.finalizeCommand(
+            cycle.decision, secondsToNanoseconds(1.0), true);
+
+    EXPECT_TRUE(publication.linear_limited);
+    EXPECT_TRUE(publication.command_contract_violation);
+    EXPECT_EQ(publication.decision.source,
+              CommandSource::ExecutionContract);
+    EXPECT_DOUBLE_EQ(publication.final_command.linear, 0.0);
+
+    const CommandPipelineResult waiting =
+        fixture.engine.finalizeFailClosedZero(
+            secondsToNanoseconds(1.1), true, "WAITING_FOR_ODOM");
+    EXPECT_EQ(waiting.decision.source, CommandSource::FailClosed);
+    EXPECT_EQ(waiting.decision.reason, "WAITING_FOR_ODOM");
+    EXPECT_DOUBLE_EQ(waiting.final_command.linear, 0.0);
+}
+
 TEST(ControlCycleEngineTest, TerminalClampHasExplicitPriorityOverRawSolver) {
     EngineFixture fixture;
     fixture.solver.next_output.success = true;

@@ -36,6 +36,12 @@ bool ControlCycleEngine::configureSafety(
     return safety_.configure(config, error);
 }
 
+bool ControlCycleEngine::configureCommandPipeline(
+    const CommandPipelineConfig& config,
+    std::string& error) {
+    return command_pipeline_.configure(config, error);
+}
+
 SpeedReferenceConfigureResult ControlCycleEngine::configureSpeedReference(
     const SpeedReferenceControllerConfig& config) {
     return speed_reference_.configure(config);
@@ -44,6 +50,32 @@ SpeedReferenceConfigureResult ControlCycleEngine::configureSpeedReference(
 SpeedReferenceEvaluation ControlCycleEngine::prepareSpeedReference(
     SolverInput& input) {
     return speed_reference_.apply(input.robot, input.slosh, input);
+}
+
+CommandPipelineResult ControlCycleEngine::finalizeCommand(
+    const CommandDecision& decision,
+    StampNs stamp_ns,
+    bool publish_enabled) {
+    CommandPipelineRequest request;
+    request.stamp_ns = stamp_ns;
+    request.desired = decision.command;
+    request.publish_enabled = publish_enabled;
+    request.source = decision.source;
+    request.reason = decision.reason;
+    return command_pipeline_.finalize(request);
+}
+
+CommandPipelineResult ControlCycleEngine::finalizeFailClosedZero(
+    StampNs stamp_ns,
+    bool publish_enabled,
+    const std::string& reason) {
+    CommandPipelineRequest request;
+    request.stamp_ns = stamp_ns;
+    request.force_zero = true;
+    request.publish_enabled = publish_enabled;
+    request.source = CommandSource::FailClosed;
+    request.reason = reason.empty() ? "FAIL_CLOSED_ZERO" : reason;
+    return command_pipeline_.finalize(request);
 }
 
 void ControlCycleEngine::resetSafety() {

@@ -65,9 +65,18 @@ public:
         std::string& error);
     bool configureSafety(const SafetySupervisorConfig& config,
                          std::string& error);
+    bool configureCommandPipeline(const CommandPipelineConfig& config,
+                                  std::string& error);
     SpeedReferenceConfigureResult configureSpeedReference(
         const SpeedReferenceControllerConfig& config);
     SpeedReferenceEvaluation prepareSpeedReference(SolverInput& input);
+    CommandPipelineResult finalizeCommand(const CommandDecision& decision,
+                                          StampNs stamp_ns,
+                                          bool publish_enabled);
+    CommandPipelineResult finalizeFailClosedZero(
+        StampNs stamp_ns,
+        bool publish_enabled,
+        const std::string& reason);
 
     ControlCycleResult step(const ControlCycleRequest& request);
 
@@ -91,6 +100,7 @@ private:
     SolverSession& solver_session_;
     PhaseRejoinCoordinator phase_rejoin_;
     SafetySupervisor safety_;
+    CommandPipeline command_pipeline_;
     SpeedReferenceController speed_reference_;
     PhaseRejoinParams phase_params_;
     bool goal_reached_latched_ = false;
