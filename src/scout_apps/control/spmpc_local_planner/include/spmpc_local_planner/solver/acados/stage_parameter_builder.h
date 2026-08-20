@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spmpc_local_planner/core/variant_config.h"
+#include "spmpc_local_planner/config/variant_config.h"
 #include "spmpc_local_planner/phase_rejoin/types.h"
 
 #include <array>

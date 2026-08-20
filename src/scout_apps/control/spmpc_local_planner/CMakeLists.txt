@@ -134,7 +134,7 @@ target_link_libraries(spmpc_model
 
 add_library(spmpc_config
   src/config/app_config.cpp
-  src/core/variant_config.cpp
+  src/config/variant_config.cpp
 )
 
 # Offline replay core and its narrow C ABI are source-tree analysis tools.

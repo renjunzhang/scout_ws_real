@@ -1,6 +1,6 @@
 #include "spmpc_local_planner/tools/short_horizon_matched_preflight.h"
 
-#include "spmpc_local_planner/core/variant_config.h"
+#include "spmpc_local_planner/config/variant_config.h"
 
 #include <algorithm>
 #include <cerrno>

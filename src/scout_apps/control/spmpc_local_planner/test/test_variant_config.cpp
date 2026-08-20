@@ -1,4 +1,4 @@
-#include "spmpc_local_planner/core/variant_config.h"
+#include "spmpc_local_planner/config/variant_config.h"
 
 #include <gtest/gtest.h>
 
