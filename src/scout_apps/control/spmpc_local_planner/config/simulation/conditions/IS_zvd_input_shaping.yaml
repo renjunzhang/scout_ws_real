@@ -1,0 +1,21 @@
+schema: spmpc_closed_loop_trial_condition_v1
+condition_id: IS
+implementation_id: continuous_mpcc_zvd_command_shaper_30hz_v1
+implementation_complete: true
+mode: input_shaping
+offline_nominal: false
+online_residual: false
+recovery_gate: false
+execution_compatibility_gate: false
+stored_recovery_action: false
+input_shaping: true
+input_shaper:
+  type: ZVD
+  # Actual 30 Hz delays are [0,3,6] steps for the frozen controller model.
+  # The resulting discrete single-mode residual is about 0.0212.
+  max_discrete_residual: 0.03
+trial:
+  control_rate_hz: 30.0
+  max_motion_sec: 45.0
+  fixed_tail_sec: 4.0
+  publish_latency_sec: 0.01

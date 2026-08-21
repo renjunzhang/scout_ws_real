@@ -3,18 +3,31 @@
 #include "spmpc_local_planner/phase_rejoin/phase_candidate_selector.h"
 #include "spmpc_local_planner/phase_rejoin/phase_clock.h"
 #include "spmpc_local_planner/phase_rejoin/phase_rejoin_coordinator.h"
+#include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "phase_rejoin_artifact_fixture.h"
+#include "../generated/acados/spmpc_delay_augmented_phase_solver_manifest.h"
 
 #include <gtest/gtest.h>
 
 #include <cstdio>
 #include <fstream>
+#include <iomanip>
+#include <limits>
+#include <map>
 #include <sstream>
 #include <string>
 #include <unistd.h>
 
 namespace spmpc_local_planner {
 namespace {
+
+namespace augmented_manifest = delay_augmented_phase_solver_manifest;
+
+std::string preciseNumber(double value) {
+    std::ostringstream out;
+    out << std::setprecision(17) << value;
+    return out.str();
+}
 
 std::string makeArtifactFile() {
     const std::string path = "/tmp/spmpc_phase_rejoin_" +
@@ -91,6 +104,150 @@ PhaseRejoinRuntimeContract fixtureRuntimeContract() {
     runtime.max_command_v = 2.0;
     runtime.max_abs_command_omega = 3.0;
     return runtime;
+}
+
+NominalSequenceArtifact loadV3RecoveryArtifact() {
+    const BoundedTrackingRecoveryPolicyParams policy =
+        boundedTrackingRecoveryPolicyV1Params();
+    SloshModelParams slosh_params;
+    slosh_params.container_radius = augmented_manifest::kContainerRadius;
+    slosh_params.liquid_height = augmented_manifest::kLiquidHeight;
+    slosh_params.liquid_density = augmented_manifest::kLiquidDensity;
+    slosh_params.damping_ratio = augmented_manifest::kDampingRatio;
+    slosh_params.mode_index = augmented_manifest::kModeIndex;
+    slosh_params.dt = augmented_manifest::kDt;
+    slosh_params.slosh_height_ref = augmented_manifest::kSloshHeightRef;
+    slosh_params.slosh_eta_dot_ratio =
+        augmented_manifest::kSloshEtaDotRatio;
+    slosh_params.use_linear_model = true;
+    SloshDynamics slosh;
+    EXPECT_TRUE(slosh.configure(slosh_params));
+    const double omega_n = slosh.omegaN();
+
+    std::vector<PhaseNominalSample> samples(24);
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+        PhaseNominalSample& sample = samples[index];
+        sample.index = index;
+        sample.t = static_cast<double>(index) * augmented_manifest::kDt;
+        sample.s = 0.09;
+        sample.x = 0.09;
+        sample.radii.x = sample.radii.y = sample.radii.yaw = 1.0;
+        sample.radii.v = sample.radii.omega = 1.0;
+        sample.radii.eta_x = sample.radii.eta_x_dot = 1.0;
+        sample.radii.eta_y = sample.radii.eta_y_dot = 1.0;
+        sample.augmented_execution_valid = true;
+        sample.augmented_execution.valid = true;
+        sample.augmented_execution.stage_index = index;
+        sample.augmented_execution.robot.x = 0.09;
+        sample.augmented_execution.linear.pending_commands.assign(
+            augmented_manifest::kLinearBufferCount, 0.0);
+        sample.augmented_execution.angular.pending_commands.assign(
+            augmented_manifest::kAngularBufferCount, 0.0);
+        sample.execution_bounds.valid = true;
+        sample.execution_bounds.linear_actuator_output = 1.0;
+        sample.execution_bounds.angular_actuator_output = 1.0;
+        sample.execution_bounds.linear_pending_commands.assign(
+            augmented_manifest::kLinearBufferCount, 1.0);
+        sample.execution_bounds.angular_pending_commands.assign(
+            augmented_manifest::kAngularBufferCount, 1.0);
+    }
+    std::map<std::string, std::string> metadata = {
+        {"schema", "phase_rejoin_empirical_augmented_v3"},
+        {"evidence_level", "empirical_held_out"},
+        {"source", "unit_test_bounded_recovery"},
+        {"contract_id", "test_bounded_recovery_v3"},
+        {"frame_id", "map"},
+        {"dt", preciseNumber(augmented_manifest::kDt)},
+        {"path_length", "0.09"},
+        {"terminal_contract", "stop_settle_zero_hold_v1"},
+        {"recovery_contract", policy.contract_id},
+        {"recovery_policy_longitudinal_position_gain",
+         preciseNumber(policy.longitudinal_position_gain)},
+        {"recovery_policy_lateral_position_gain",
+         preciseNumber(policy.lateral_position_gain)},
+        {"recovery_policy_yaw_gain", preciseNumber(policy.yaw_gain)},
+        {"recovery_policy_linear_velocity_gain",
+         preciseNumber(policy.linear_velocity_gain)},
+        {"recovery_policy_angular_velocity_gain",
+         preciseNumber(policy.angular_velocity_gain)},
+        {"recovery_policy_max_residual_v",
+         preciseNumber(policy.max_residual_v)},
+        {"recovery_policy_max_residual_omega",
+         preciseNumber(policy.max_residual_omega)},
+        {"recovery_policy_published_linear_min",
+         preciseNumber(policy.published_linear_min)},
+        {"recovery_policy_published_linear_max",
+         preciseNumber(policy.published_linear_max)},
+        {"recovery_policy_published_angular_min",
+         preciseNumber(policy.published_angular_min)},
+        {"recovery_policy_published_angular_max",
+         preciseNumber(policy.published_angular_max)},
+        {"terminal_zero_hold_steps", "11"},
+        {"terminal_eta_norm_max", "1"},
+        {"terminal_eta_dot_norm_max", "1"},
+        {"two_zeta_omega_n", preciseNumber(
+             2.0 * slosh_params.damping_ratio * omega_n)},
+        {"omega_n_sq", preciseNumber(omega_n * omega_n)},
+        {"kappa_x", "1"}, {"kappa_y", "1"},
+        {"dynamics_tolerance", preciseNumber(
+             augmented_manifest::kPublishedConsistencyTolerance)},
+        {"execution_contract_id", augmented_manifest::kContractId},
+        {"execution_contract_hash", augmented_manifest::kContractHash},
+        {"execution_state_width",
+         std::to_string(augmented_manifest::kStateCount)},
+        {"execution_linear_buffer_count",
+         std::to_string(augmented_manifest::kLinearBufferCount)},
+        {"execution_angular_buffer_count",
+         std::to_string(augmented_manifest::kAngularBufferCount)},
+        {"parameter_schema_version",
+         std::to_string(augmented_manifest::kParameterSchemaVersion)},
+        {"parameter_schema_id", augmented_manifest::kParameterSchemaId},
+        {"parameter_schema_hash", augmented_manifest::kParameterSchemaHash},
+        {"recovery_artifact_hash", std::string(64, '0')},
+        {"execution_compatibility_contract",
+         augmented_manifest::kExecutionCompatibilityContract},
+    };
+    metadata["recovery_artifact_hash"] =
+        NominalSequenceArtifact::canonicalRecoveryArtifactHash(
+            metadata, samples);
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        metadata, samples, "<v3-bounded-recovery>");
+    EXPECT_TRUE(result.success) << result.status << ": " << result.detail;
+    return artifact;
+}
+
+PhaseRejoinRuntimeContract v3RuntimeContract() {
+    SloshModelParams params;
+    params.container_radius = augmented_manifest::kContainerRadius;
+    params.liquid_height = augmented_manifest::kLiquidHeight;
+    params.liquid_density = augmented_manifest::kLiquidDensity;
+    params.damping_ratio = augmented_manifest::kDampingRatio;
+    params.mode_index = augmented_manifest::kModeIndex;
+    params.dt = augmented_manifest::kDt;
+    params.slosh_height_ref = augmented_manifest::kSloshHeightRef;
+    params.slosh_eta_dot_ratio = augmented_manifest::kSloshEtaDotRatio;
+    params.use_linear_model = true;
+    SloshDynamics slosh;
+    EXPECT_TRUE(slosh.configure(params));
+    PhaseRejoinRuntimeContract runtime;
+    runtime.liquid_model_configured = true;
+    runtime.dt = augmented_manifest::kDt;
+    runtime.two_zeta_omega_n = 2.0 * params.damping_ratio * slosh.omegaN();
+    runtime.omega_n_sq = slosh.omegaN() * slosh.omegaN();
+    runtime.kappa_x = runtime.kappa_y = 1.0;
+    runtime.min_command_v = augmented_manifest::kLinearOutputMin;
+    runtime.max_command_v = augmented_manifest::kLinearOutputMax;
+    runtime.max_abs_command_omega = augmented_manifest::kAngularOutputMax;
+    return runtime;
+}
+
+ReferencePath v3Reference() {
+    std::vector<TrajectoryPoint> points(2);
+    points[1].x = 0.09;
+    ReferencePath reference;
+    reference.setPoints(points, "map");
+    return reference;
 }
 
 PhaseSolveView acceptedSolve(std::size_t front_index, int liquid_steps) {
@@ -306,6 +463,65 @@ TEST(PhaseRejoinCoordinator, NonzeroDelayPublishesExecutionFrontCommand) {
     EXPECT_DOUBLE_EQ(preparation.recovery_cmd_omega, front->kappa_omega);
     EXPECT_DOUBLE_EQ(preparation.solver_context.nominal_publish_v,
                      front->u_pub_v);
+}
+
+TEST(PhaseRejoinCoordinator, V3RecoveryUsesCurrentRobotTrackingError) {
+    PhaseRejoinParams params;
+    params.mode = PhaseRejoinMode::Monitor;
+    params.required_contract_id = "test_bounded_recovery_v3";
+    PhaseRejoinCoordinator coordinator;
+    std::string error;
+    ASSERT_TRUE(coordinator.configure(params, error)) << error;
+    ASSERT_TRUE(coordinator.setArtifact(loadV3RecoveryArtifact(), error))
+        << error;
+    ASSERT_TRUE(coordinator.validateRuntimeContract(
+        v3RuntimeContract(), v3Reference(), error)) << error;
+
+    RobotState observed;
+    observed.x = 0.04;
+    observed.y = -0.02;
+    observed.yaw = -0.10;
+    observed.v = -0.05;
+    observed.omega = -0.10;
+    const PhaseRejoinPreparation preparation = coordinator.prepare(
+        observed, SloshState{}, 0, 3, 10.0);
+    ASSERT_TRUE(preparation.ready) << preparation.status;
+    EXPECT_DOUBLE_EQ(preparation.nominal_cmd_v, 0.0);
+    EXPECT_NEAR(preparation.recovery_cmd_v, 0.06, 1e-12);
+    EXPECT_NEAR(preparation.recovery_cmd_omega, 0.20, 1e-12);
+}
+
+TEST(PhaseRejoinCoordinator, V3RecoveryFailsClosedOnNonfiniteRobot) {
+    PhaseRejoinParams params;
+    params.mode = PhaseRejoinMode::Monitor;
+    params.required_contract_id = "test_bounded_recovery_v3";
+    PhaseRejoinCoordinator coordinator;
+    std::string error;
+    ASSERT_TRUE(coordinator.configure(params, error)) << error;
+    ASSERT_TRUE(coordinator.setArtifact(loadV3RecoveryArtifact(), error))
+        << error;
+    ASSERT_TRUE(coordinator.validateRuntimeContract(
+        v3RuntimeContract(), v3Reference(), error)) << error;
+    RobotState observed;
+    observed.x = std::numeric_limits<double>::quiet_NaN();
+    const PhaseRejoinPreparation preparation = coordinator.prepare(
+        observed, SloshState{}, 0, 3, 10.0);
+    EXPECT_FALSE(preparation.ready);
+    EXPECT_NE(preparation.status, "MONITOR_READY");
+}
+
+TEST(PhaseRejoinCoordinator, V3BindsFrozenRecoveryBounds) {
+    PhaseRejoinParams params;
+    params.mode = PhaseRejoinMode::Monitor;
+    params.required_contract_id = "test_bounded_recovery_v3";
+    params.max_residual_v = 0.07;
+    PhaseRejoinCoordinator coordinator;
+    std::string error;
+    ASSERT_TRUE(coordinator.configure(params, error)) << error;
+    ASSERT_TRUE(coordinator.setArtifact(loadV3RecoveryArtifact(), error));
+    EXPECT_FALSE(coordinator.validateRuntimeContract(
+        v3RuntimeContract(), v3Reference(), error));
+    EXPECT_EQ(error, "RECOVERY_POLICY_RESIDUAL_BOUND_MISMATCH");
 }
 
 TEST(PhaseRejoinCoordinator, RuntimeContractBindsGeometryModelAndCommands) {

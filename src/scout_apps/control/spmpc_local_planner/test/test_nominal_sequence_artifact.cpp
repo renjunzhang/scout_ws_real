@@ -1,5 +1,6 @@
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
+#include "spmpc_local_planner/phase_rejoin/bounded_tracking_recovery_policy.h"
 #include "spmpc_local_planner/runtime/execution_prediction/execution_model.h"
 #include "../generated/acados/spmpc_delay_augmented_phase_solver_manifest.h"
 #include "phase_rejoin_artifact_fixture.h"
@@ -191,6 +192,8 @@ std::map<std::string, std::string> augmentedMetadata(
     SloshDynamics slosh;
     EXPECT_TRUE(slosh.configure(slosh_params));
     const double omega_n = slosh.omegaN();
+    const BoundedTrackingRecoveryPolicyParams policy =
+        boundedTrackingRecoveryPolicyV1Params();
     return {
         {"schema", "phase_rejoin_empirical_augmented_v3"},
         {"evidence_level", "empirical_held_out"},
@@ -200,7 +203,28 @@ std::map<std::string, std::string> augmentedMetadata(
         {"dt", preciseNumber(augmented_manifest::kDt)},
         {"path_length", preciseNumber(path_length)},
         {"terminal_contract", "stop_settle_zero_hold_v1"},
-        {"recovery_contract", "nominal_command_v1"},
+        {"recovery_contract", policy.contract_id},
+        {"recovery_policy_longitudinal_position_gain",
+         preciseNumber(policy.longitudinal_position_gain)},
+        {"recovery_policy_lateral_position_gain",
+         preciseNumber(policy.lateral_position_gain)},
+        {"recovery_policy_yaw_gain", preciseNumber(policy.yaw_gain)},
+        {"recovery_policy_linear_velocity_gain",
+         preciseNumber(policy.linear_velocity_gain)},
+        {"recovery_policy_angular_velocity_gain",
+         preciseNumber(policy.angular_velocity_gain)},
+        {"recovery_policy_max_residual_v",
+         preciseNumber(policy.max_residual_v)},
+        {"recovery_policy_max_residual_omega",
+         preciseNumber(policy.max_residual_omega)},
+        {"recovery_policy_published_linear_min",
+         preciseNumber(policy.published_linear_min)},
+        {"recovery_policy_published_linear_max",
+         preciseNumber(policy.published_linear_max)},
+        {"recovery_policy_published_angular_min",
+         preciseNumber(policy.published_angular_min)},
+        {"recovery_policy_published_angular_max",
+         preciseNumber(policy.published_angular_max)},
         {"terminal_zero_hold_steps", "11"},
         {"terminal_eta_norm_max", "1.0"},
         {"terminal_eta_dot_norm_max", "1.0"},
@@ -269,6 +293,7 @@ std::vector<PhaseNominalSample> zeroAugmentedSamples() {
         sample.augmented_execution_valid = true;
         sample.augmented_execution.valid = true;
         sample.augmented_execution.stage_index = index;
+        sample.augmented_execution.robot.x = 0.09;
         sample.augmented_execution.linear.pending_commands.assign(
             augmented_manifest::kLinearBufferCount, 0.0);
         sample.augmented_execution.angular.pending_commands.assign(
@@ -360,6 +385,132 @@ NontrivialAugmentedFixture nontrivialAugmentedFixture() {
     fixture.metadata = sealedAugmentedMetadata(
         fixture.samples, fixture.samples.back().s);
     return fixture;
+}
+
+std::map<std::string, std::string> publishZeroSettleMetadata(
+    const std::vector<PhaseNominalSample>& samples,
+    std::size_t zero_hold_steps) {
+    std::map<std::string, std::string> metadata = augmentedMetadata(
+        samples.back().s);
+    metadata["terminal_contract"] = "publish_zero_settle_hold_v2";
+    metadata["terminal_zero_hold_steps"] =
+        std::to_string(zero_hold_steps);
+    metadata["terminal_v_abs_max"] = "0.001";
+    metadata["terminal_omega_abs_max"] = "0.001";
+    metadata["terminal_linear_actuator_output_abs_max"] = "0.001";
+    metadata["terminal_angular_actuator_output_abs_max"] = "0.001";
+    metadata["terminal_linear_pending_command_abs_max"] = "1e-9";
+    metadata["terminal_angular_pending_command_abs_max"] = "1e-9";
+    metadata["recovery_artifact_hash"] =
+        NominalSequenceArtifact::canonicalRecoveryArtifactHash(
+            metadata, samples);
+    return metadata;
+}
+
+void resealAugmentedMetadata(
+    std::map<std::string, std::string>& metadata,
+    const std::vector<PhaseNominalSample>& samples) {
+    metadata["recovery_artifact_hash"] =
+        NominalSequenceArtifact::canonicalRecoveryArtifactHash(
+            metadata, samples);
+}
+
+TEST(NominalSequenceArtifact,
+     V3PublishZeroSettleTailAllowsNonzeroExecutedVelocityDuringHold) {
+    NontrivialAugmentedFixture fixture = nontrivialAugmentedFixture();
+    constexpr std::size_t hold_begin = 16;
+    ASSERT_GT(std::abs(fixture.samples[hold_begin].v), 1e-12);
+    ASSERT_DOUBLE_EQ(fixture.samples[hold_begin].a, 0.0);
+    ASSERT_DOUBLE_EQ(fixture.samples[hold_begin].u_pub_v, 0.0);
+
+    const std::map<std::string, std::string> metadata =
+        publishZeroSettleMetadata(
+            fixture.samples, fixture.samples.size() - hold_begin);
+    NominalSequenceArtifact artifact;
+    const NominalArtifactLoadResult result = artifact.assignValidated(
+        metadata, fixture.samples, "<publish-zero-settle-v3>");
+
+    ASSERT_TRUE(result.success) << result.status << ": " << result.detail;
+    EXPECT_TRUE(artifact.metadata().complete_terminal_tail);
+    EXPECT_EQ(artifact.metadata().terminal_contract,
+              "publish_zero_settle_hold_v2");
+    EXPECT_DOUBLE_EQ(artifact.metadata().terminal_v_abs_max, 0.001);
+    EXPECT_DOUBLE_EQ(
+        artifact.metadata().terminal_linear_pending_command_abs_max,
+        1e-9);
+}
+
+TEST(NominalSequenceArtifact,
+     V3LegacyTerminalContractStillRejectsNonzeroExecutedVelocityInHold) {
+    NontrivialAugmentedFixture fixture = nontrivialAugmentedFixture();
+    constexpr std::size_t hold_begin = 16;
+    std::map<std::string, std::string> metadata = augmentedMetadata(
+        fixture.samples.back().s);
+    metadata["terminal_zero_hold_steps"] = std::to_string(
+        fixture.samples.size() - hold_begin);
+    resealAugmentedMetadata(metadata, fixture.samples);
+
+    NominalSequenceArtifact artifact;
+    const NominalArtifactLoadResult result = artifact.assignValidated(
+        metadata, fixture.samples, "<legacy-zero-hold-v3>");
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "ZERO_HOLD_COMMAND_NONZERO");
+    EXPECT_EQ(result.detail, "index 16");
+}
+
+TEST(NominalSequenceArtifact,
+     V3PublishZeroSettleTailRequiresStrictTerminalMetadata) {
+    NontrivialAugmentedFixture fixture = nontrivialAugmentedFixture();
+    std::map<std::string, std::string> metadata =
+        publishZeroSettleMetadata(fixture.samples, 24);
+    metadata.erase("terminal_angular_actuator_output_abs_max");
+
+    NominalSequenceArtifact missing;
+    NominalArtifactLoadResult result = missing.assignValidated(
+        metadata, fixture.samples, "<missing-terminal-threshold>");
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "MISSING_METADATA");
+    EXPECT_EQ(result.detail,
+              "terminal_angular_actuator_output_abs_max");
+
+    metadata = publishZeroSettleMetadata(fixture.samples, 24);
+    metadata["terminal_linear_pending_command_abs_max"] = "1e-6";
+    resealAugmentedMetadata(metadata, fixture.samples);
+    NominalSequenceArtifact loose_pending;
+    result = loose_pending.assignValidated(
+        metadata, fixture.samples, "<loose-pending-threshold>");
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "INVALID_V3_TERMINAL_METADATA");
+}
+
+TEST(NominalSequenceArtifact,
+     V3PublishZeroSettleTailRejectsPendingCommandAtFinalRow) {
+    NontrivialAugmentedFixture fixture = nontrivialAugmentedFixture();
+    fixture.samples.resize(22);
+    constexpr std::size_t hold_begin = 16;
+    ASSERT_EQ(fixture.samples.size() - hold_begin, 6u);
+    ASSERT_TRUE(std::any_of(
+        fixture.samples.back().augmented_execution.angular.pending_commands.
+            begin(),
+        fixture.samples.back().augmented_execution.angular.pending_commands.
+            end(),
+        [](double value) { return std::abs(value) > 1e-9; }));
+    std::map<std::string, std::string> metadata =
+        publishZeroSettleMetadata(
+            fixture.samples, fixture.samples.size() - hold_begin);
+    metadata["terminal_v_abs_max"] = "2.0";
+    metadata["terminal_omega_abs_max"] = "2.0";
+    metadata["terminal_linear_actuator_output_abs_max"] = "2.0";
+    metadata["terminal_angular_actuator_output_abs_max"] = "2.0";
+    resealAugmentedMetadata(metadata, fixture.samples);
+
+    NominalSequenceArtifact artifact;
+    const NominalArtifactLoadResult result = artifact.assignValidated(
+        metadata, fixture.samples, "<pending-terminal-v3>");
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status,
+              "TERMINAL_ANGULAR_PENDING_COMMAND_NONZERO");
 }
 
 TEST(NominalSequenceArtifact, LoadsStrictValidArtifact) {
@@ -639,6 +790,49 @@ TEST(NominalSequenceArtifact, LoadsDynamicsConsistentV3AugmentedSequence) {
     EXPECT_EQ(artifact.metadata().execution_state_width, 22);
     EXPECT_EQ(artifact.metadata().linear_buffer_count, 5);
     EXPECT_EQ(artifact.metadata().angular_buffer_count, 7);
+    EXPECT_EQ(artifact.metadata().recovery_contract,
+              "bounded_tracking_recovery_policy_v1");
+    EXPECT_DOUBLE_EQ(
+        artifact.metadata().recovery_policy_max_residual_v, 0.08);
+}
+
+TEST(NominalSequenceArtifact, RequiresCompleteFrozenV3RecoveryPolicy) {
+    const std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    std::map<std::string, std::string> metadata =
+        sealedAugmentedMetadata(samples);
+    metadata.erase("recovery_policy_yaw_gain");
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        metadata, samples, "<v3-missing-recovery-policy-field>");
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "MISSING_METADATA");
+    EXPECT_EQ(result.detail, "recovery_policy_yaw_gain");
+}
+
+TEST(NominalSequenceArtifact, RejectsResealedV3RecoveryPolicyDrift) {
+    const std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    std::map<std::string, std::string> metadata = augmentedMetadata();
+    metadata["recovery_policy_yaw_gain"] = "1.51";
+    resealAugmentedMetadata(metadata, samples);
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        metadata, samples, "<v3-drifted-recovery-policy>");
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "V3_RECOVERY_POLICY_MISMATCH");
+    EXPECT_EQ(result.detail, "recovery_policy_yaw_gain");
+}
+
+TEST(NominalSequenceArtifact, RejectsLegacyRecoveryContractForV3) {
+    const std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    std::map<std::string, std::string> metadata = augmentedMetadata();
+    metadata["recovery_contract"] = "nominal_command_v1";
+    resealAugmentedMetadata(metadata, samples);
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        metadata, samples, "<v3-legacy-recovery-contract>");
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "UNSUPPORTED_RECOVERY_CONTRACT");
+    EXPECT_EQ(result.detail, "nominal_command_v1");
 }
 
 TEST(NominalSequenceArtifact,
@@ -888,6 +1082,26 @@ TEST(NominalSequenceArtifact, RejectsV2PublishedCommandNotGeneratedByControl) {
 
     EXPECT_FALSE(result.success);
     EXPECT_EQ(result.status, "PUBLISHED_COMMAND_MISMATCH");
+    EXPECT_FALSE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact,
+     RejectsV2PublishZeroSettleContractReservedForAugmentedV3) {
+    std::string text = spmpc_local_planner_test::completeArtifactText();
+    const std::string original =
+        "# terminal_contract=stop_settle_zero_hold_v1\n";
+    const std::size_t position = text.find(original);
+    ASSERT_NE(position, std::string::npos);
+    text.replace(position, original.size(),
+                 "# terminal_contract=publish_zero_settle_hold_v2\n");
+    const std::string path = writeTemp(text);
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.loadCsv(path);
+    std::remove(path.c_str());
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "UNSUPPORTED_TERMINAL_CONTRACT");
+    EXPECT_EQ(result.detail, "publish_zero_settle_hold_v2");
     EXPECT_FALSE(artifact.valid());
 }
 

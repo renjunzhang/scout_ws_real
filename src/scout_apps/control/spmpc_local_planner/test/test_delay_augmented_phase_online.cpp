@@ -2,6 +2,7 @@
 #include "spmpc_local_planner/controller/phase_solve_adapter.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
+#include "spmpc_local_planner/phase_rejoin/bounded_tracking_recovery_policy.h"
 #include "spmpc_local_planner/phase_rejoin/phase_rejoin_coordinator.h"
 #include "spmpc_local_planner/runtime/execution_prediction/execution_horizon_context_builder.h"
 #include "spmpc_local_planner/solver/acados/delay_augmented_phase_parameter_builder.h"
@@ -105,6 +106,8 @@ std::map<std::string, std::string> artifactMetadata(
     SloshDynamics slosh;
     EXPECT_TRUE(slosh.configure(compiled.slosh));
     const double omega_n = slosh.omegaN();
+    const BoundedTrackingRecoveryPolicyParams recovery =
+        boundedTrackingRecoveryPolicyV1Params();
     return {
         {"schema", "phase_rejoin_empirical_augmented_v3"},
         {"evidence_level", evidence},
@@ -114,7 +117,28 @@ std::map<std::string, std::string> artifactMetadata(
         {"dt", number(manifest::kDt)},
         {"path_length", "0.09"},
         {"terminal_contract", "stop_settle_zero_hold_v1"},
-        {"recovery_contract", "nominal_command_v1"},
+        {"recovery_contract", recovery.contract_id},
+        {"recovery_policy_longitudinal_position_gain",
+         number(recovery.longitudinal_position_gain)},
+        {"recovery_policy_lateral_position_gain",
+         number(recovery.lateral_position_gain)},
+        {"recovery_policy_yaw_gain", number(recovery.yaw_gain)},
+        {"recovery_policy_linear_velocity_gain",
+         number(recovery.linear_velocity_gain)},
+        {"recovery_policy_angular_velocity_gain",
+         number(recovery.angular_velocity_gain)},
+        {"recovery_policy_max_residual_v",
+         number(recovery.max_residual_v)},
+        {"recovery_policy_max_residual_omega",
+         number(recovery.max_residual_omega)},
+        {"recovery_policy_published_linear_min",
+         number(recovery.published_linear_min)},
+        {"recovery_policy_published_linear_max",
+         number(recovery.published_linear_max)},
+        {"recovery_policy_published_angular_min",
+         number(recovery.published_angular_min)},
+        {"recovery_policy_published_angular_max",
+         number(recovery.published_angular_max)},
         {"terminal_zero_hold_steps", "11"},
         {"terminal_eta_norm_max", "1.0"},
         {"terminal_eta_dot_norm_max", "1.0"},
@@ -609,7 +633,12 @@ TEST(DelayAugmentedPhaseOnline,
     ASSERT_TRUE(coordinator.validateRuntimeContract(
         runtimeContract(), shortReference(), error)) << error;
 
-    const ExecutionAugmentedState current = zeroExecution(0);
+    ExecutionAugmentedState current = zeroExecution(0);
+    // Keep this recovery-path contract test at the nominal robot pose.  A
+    // 9 cm tracking error now correctly produces a bounded feedback action,
+    // but that action exceeds the one-cycle rate limit from a zero command and
+    // belongs in the dedicated rate-rejection assertion below.
+    current.robot.x = 0.09;
     const PhaseRejoinPreparation duplicate_front_shift = coordinator.prepare(
         current.robot, current.slosh,
         manifest::kExecutionFrontSteps, manifest::kHorizonSteps,

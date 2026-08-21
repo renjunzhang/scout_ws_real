@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <string>
 
 namespace simulation = spmpc_local_planner::simulation;
@@ -121,7 +122,18 @@ TEST(IndependentScoutLiquidPlant, RejectsMislabelledDevelopmentStatus) {
     std::string error;
     config.status = "frozen_development_candidate";
     EXPECT_FALSE(simulation::validateIndependentPlantConfig(config, error));
-    EXPECT_NE(error.find("unbound development candidate"), std::string::npos);
+    EXPECT_NE(error.find("neither development nor formal"), std::string::npos);
+}
+
+TEST(IndependentScoutLiquidPlant,
+     AcceptsFormalSimulationStatusWithoutAuthorizingPhysicalUse) {
+    simulation::IndependentPlantConfig config = validConfig();
+    config.status = "formal_simulation_release";
+    std::string error;
+    EXPECT_TRUE(simulation::validateIndependentPlantConfig(config, error))
+        << error;
+    config.real_robot_enforce_allowed = true;
+    EXPECT_FALSE(simulation::validateIndependentPlantConfig(config, error));
 }
 
 TEST(IndependentScoutLiquidPlant, RejectsJitterThatCanCreateNegativeDelay) {
@@ -261,6 +273,31 @@ TEST(IndependentScoutLiquidPlant, SameSeedAndResetAreExactlyDeterministic) {
     ASSERT_TRUE(first.reset(1234, error)) << error;
     ASSERT_TRUE(runExcitation(first, error)) << error;
     expectSameState(reference, first.state());
+}
+
+TEST(IndependentScoutLiquidPlant,
+     PairedTrialResetPreservesFrozenPathPoseAndSettledDynamics) {
+    const simulation::IndependentPlantConfig config = validConfig();
+    simulation::IndependentScoutLiquidPlant plant;
+    std::string error;
+    ASSERT_TRUE(plant.configure(config, error)) << error;
+    simulation::IndependentPlantInitialPose pose;
+    pose.x = 3.4;
+    pose.y = -1.2;
+    pose.yaw = 3.0 * M_PI;
+    ASSERT_TRUE(plant.reset(91, pose, error)) << error;
+
+    const simulation::IndependentPlantState& state = plant.state();
+    EXPECT_DOUBLE_EQ(state.x, pose.x);
+    EXPECT_DOUBLE_EQ(state.y, pose.y);
+    EXPECT_NEAR(state.yaw, M_PI, 1.0e-12);
+    EXPECT_DOUBLE_EQ(state.v, 0.0);
+    EXPECT_DOUBLE_EQ(state.omega, 0.0);
+    EXPECT_DOUBLE_EQ(state.true_height_m, 0.0);
+
+    pose.x = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_FALSE(plant.reset(91, pose, error));
+    EXPECT_NE(error.find("non-finite"), std::string::npos);
 }
 
 TEST(IndependentScoutLiquidPlant, DifferentSeedChangesIndependentPlant) {

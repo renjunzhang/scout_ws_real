@@ -1,0 +1,29 @@
+schema: spmpc_closed_loop_trial_condition_v1
+condition_id: C3
+implementation_id: v3_bounded_tracking_residual_no_admission_pilot_v1
+implementation_complete: true
+mode: residual_no_gate
+offline_nominal: true
+online_residual: true
+recovery_gate: false
+execution_compatibility_gate: false
+stored_recovery_action: false
+input_shaping: false
+# Executable pilot comparator only. It is not yet the exact C4 optimizer with
+# only the terminal admission disabled and therefore cannot support the formal
+# C3/C4 causal claim.
+pilot_only: true
+formal_c3_c4_causal_comparison_ready: false
+residual_feedback:
+  longitudinal_gain: 0.8
+  lateral_gain: 1.2
+  yaw_gain: 1.5
+  velocity_gain: 0.4
+  omega_gain: 0.4
+  max_residual_v: 0.08
+  max_residual_omega: 0.20
+trial:
+  control_rate_hz: 30.0
+  max_motion_sec: 45.0
+  fixed_tail_sec: 4.0
+  publish_latency_sec: 0.01

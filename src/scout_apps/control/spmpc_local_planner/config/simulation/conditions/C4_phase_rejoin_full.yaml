@@ -1,0 +1,19 @@
+schema: spmpc_closed_loop_trial_condition_v1
+condition_id: C4
+implementation_id: delay_augmented_phase_acados_22d_v1
+implementation_complete: true
+mode: phase_rejoin_full
+offline_nominal: true
+online_residual: true
+recovery_gate: true
+execution_compatibility_gate: true
+stored_recovery_action: true
+input_shaping: false
+residual_feedback:
+  max_residual_v: 0.08
+  max_residual_omega: 0.20
+trial:
+  control_rate_hz: 30.0
+  max_motion_sec: 45.0
+  fixed_tail_sec: 4.0
+  publish_latency_sec: 0.01

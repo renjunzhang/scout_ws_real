@@ -82,6 +82,17 @@ struct IndependentPlantState {
     double measured_height_m = 0.0;
 };
 
+// Simulation-only reset image.  Formal trials use it to start every paired
+// condition from the same frozen path pose without granting the controller a
+// runtime state-injection port.  Liquid and actuator states intentionally
+// start settled; recovery perturbations must be introduced by published
+// commands or a separately declared simulation disturbance.
+struct IndependentPlantInitialPose {
+    double x = 0.0;
+    double y = 0.0;
+    double yaw = 0.0;
+};
+
 struct ScheduledChannelCommand {
     double effective_time_sec = 0.0;
     double command = 0.0;
@@ -122,6 +133,9 @@ class IndependentScoutLiquidPlant {
 public:
     bool configure(const IndependentPlantConfig& config, std::string& error);
     bool reset(std::uint32_t seed, std::string& error);
+    bool reset(std::uint32_t seed,
+               const IndependentPlantInitialPose& initial_pose,
+               std::string& error);
     bool publishCommand(double publish_time_sec,
                         const IndependentPlantCommand& command,
                         std::string& error);

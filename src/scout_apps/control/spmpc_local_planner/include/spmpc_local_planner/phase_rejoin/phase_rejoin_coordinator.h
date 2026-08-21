@@ -1,5 +1,6 @@
 #pragma once
 
+#include "spmpc_local_planner/phase_rejoin/bounded_tracking_recovery_policy.h"
 #include "spmpc_local_planner/phase_rejoin/empirical_recovery_gate.h"
 #include "spmpc_local_planner/phase_rejoin/execution_compatibility_gate.h"
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
@@ -65,6 +66,7 @@ private:
     PhaseClock phase_clock_;
     EmpiricalRecoveryGate gate_;
     ExecutionCompatibilityGate execution_gate_;
+    BoundedTrackingRecoveryPolicy recovery_policy_;
     bool configured_ = false;
     bool contract_valid_ = false;
     bool have_accepted_index_ = false;

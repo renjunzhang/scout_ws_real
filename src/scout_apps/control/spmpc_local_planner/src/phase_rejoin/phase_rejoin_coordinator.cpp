@@ -57,6 +57,15 @@ bool PhaseRejoinCoordinator::configure(const PhaseRejoinParams& params,
         error = "INVALID_PHASE_REJOIN_PARAMS";
         return false;
     }
+    std::string recovery_policy_error;
+    if (!recovery_policy_.configure(
+            boundedTrackingRecoveryPolicyV1Params(),
+            recovery_policy_error)) {
+        configured_ = false;
+        contract_valid_ = false;
+        error = "INVALID_RECOVERY_POLICY_IMAGE";
+        return false;
+    }
     params_ = params;
     configured_ = true;
     contract_valid_ = params.mode == PhaseRejoinMode::Off;
@@ -253,6 +262,15 @@ bool PhaseRejoinCoordinator::validateRuntimeContract(
             error = "LIQUID_MODEL_MISMATCH";
         }
     }
+    if (error.empty() && artifact_.metadata().schema ==
+            "phase_rejoin_empirical_augmented_v3") {
+        const BoundedTrackingRecoveryPolicyParams& policy =
+            recovery_policy_.params();
+        if (params_.max_residual_v != policy.max_residual_v ||
+            params_.max_residual_omega != policy.max_residual_omega) {
+            error = "RECOVERY_POLICY_RESIDUAL_BOUND_MISMATCH";
+        }
+    }
     if (error.empty()) {
         const double tolerance = params_.artifact_command_tolerance;
         const bool valid_bounds =
@@ -263,6 +281,17 @@ bool PhaseRejoinCoordinator::validateRuntimeContract(
             runtime.max_abs_command_omega >= 0.0;
         if (!valid_bounds) {
             error = "RUNTIME_COMMAND_BOUNDS_INVALID";
+        } else if (artifact_.metadata().schema ==
+                       "phase_rejoin_empirical_augmented_v3" &&
+                   (runtime.min_command_v !=
+                        recovery_policy_.params().published_linear_min ||
+                    runtime.max_command_v !=
+                        recovery_policy_.params().published_linear_max ||
+                    -runtime.max_abs_command_omega !=
+                        recovery_policy_.params().published_angular_min ||
+                    runtime.max_abs_command_omega !=
+                        recovery_policy_.params().published_angular_max)) {
+            error = "RECOVERY_POLICY_COMMAND_ENVELOPE_MISMATCH";
         } else {
             for (const auto& sample : artifact_.samples()) {
                 const bool within =
@@ -508,8 +537,21 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     preparation.solver_context.nominal_publish_omega = front->u_pub_omega;
     preparation.solver_context.max_residual_v = params_.max_residual_v;
     preparation.solver_context.max_residual_omega = params_.max_residual_omega;
-    preparation.recovery_cmd_v = front->kappa_v;
-    preparation.recovery_cmd_omega = front->kappa_omega;
+    if (artifact_.metadata().schema ==
+            "phase_rejoin_empirical_augmented_v3") {
+        const BoundedTrackingRecoveryPolicyResult recovery =
+            recovery_policy_.evaluate(*front, execution_front_robot);
+        if (!recovery.valid) {
+            preparation.status = recovery.status;
+            preparation.solver_context = PhaseRejoinSolverContext{};
+            return preparation;
+        }
+        preparation.recovery_cmd_v = recovery.command.linear;
+        preparation.recovery_cmd_omega = recovery.command.angular;
+    } else {
+        preparation.recovery_cmd_v = front->kappa_v;
+        preparation.recovery_cmd_omega = front->kappa_omega;
+    }
     preparation.ready = true;
     preparation.command_intervention_allowed =
         params_.mode == PhaseRejoinMode::Enforce;

@@ -1,0 +1,19 @@
+schema: spmpc_closed_loop_trial_condition_v1
+condition_id: C1
+implementation_id: continuous_mpcc_acados_smooth_match_v1
+implementation_complete: true
+mode: smooth_match_mpcc
+offline_nominal: false
+online_residual: false
+recovery_gate: false
+execution_compatibility_gate: false
+stored_recovery_action: false
+input_shaping: false
+# This remains pilot-only until completion time/RMS speed are matched on D_pilot.
+pilot_tuned_and_frozen: false
+global_time_scale: 1.0
+trial:
+  control_rate_hz: 30.0
+  max_motion_sec: 45.0
+  fixed_tail_sec: 4.0
+  publish_latency_sec: 0.01

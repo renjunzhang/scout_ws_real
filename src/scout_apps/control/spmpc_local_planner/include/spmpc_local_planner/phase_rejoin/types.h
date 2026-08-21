@@ -85,9 +85,35 @@ struct NominalArtifactMetadata {
     bool complete_terminal_tail = false;
     std::string terminal_contract;
     std::string recovery_contract;
+    // V3 repeats the complete frozen recovery-policy image in its canonical
+    // metadata.  The loader exact-matches these values against the compiled
+    // bounded_tracking_recovery_policy_v1 implementation before admitting the
+    // artifact.  V1/V2 leave them inactive and retain nominal_command_v1.
+    double recovery_policy_longitudinal_position_gain = 0.0;
+    double recovery_policy_lateral_position_gain = 0.0;
+    double recovery_policy_yaw_gain = 0.0;
+    double recovery_policy_linear_velocity_gain = 0.0;
+    double recovery_policy_angular_velocity_gain = 0.0;
+    double recovery_policy_max_residual_v = 0.0;
+    double recovery_policy_max_residual_omega = 0.0;
+    double recovery_policy_published_linear_min = 0.0;
+    double recovery_policy_published_linear_max = 0.0;
+    double recovery_policy_published_angular_min = 0.0;
+    double recovery_policy_published_angular_max = 0.0;
     std::size_t terminal_zero_hold_steps = 0;
     double terminal_eta_norm_max = 0.0;
     double terminal_eta_dot_norm_max = 0.0;
+    // V3 publish_zero_settle_hold_v2 keeps the published-command hold and
+    // physical actuator settling as distinct contracts.  The legacy
+    // stop_settle_zero_hold_v1 contract leaves these fields inactive.  A V3
+    // generator selecting the v2 contract must serialize all six thresholds
+    // below; the loader rejects a partial terminal contract.
+    double terminal_v_abs_max = 0.0;
+    double terminal_omega_abs_max = 0.0;
+    double terminal_linear_actuator_output_abs_max = 0.0;
+    double terminal_angular_actuator_output_abs_max = 0.0;
+    double terminal_linear_pending_command_abs_max = 0.0;
+    double terminal_angular_pending_command_abs_max = 0.0;
     // Continuous liquid model used to validate every discrete transition.
     double two_zeta_omega_n = 0.0;
     double omega_n_sq = 0.0;

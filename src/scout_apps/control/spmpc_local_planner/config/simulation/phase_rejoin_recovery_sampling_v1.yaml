@@ -1,0 +1,63 @@
+# Simulation-only sampling contract for the empirical Phase-Rejoin gate.
+# Values remain pilot candidates until class support and held-out behavior are
+# checked.  They do not authorize a robot release or a safety claim.
+schema: spmpc_phase_rejoin_recovery_rollout_sampling_v1
+
+scope:
+  simulation_only: true
+  external_liquid_truth_visible_to_candidate_policy: false
+  external_liquid_truth_used_for_features: false
+  external_liquid_truth_used_for_label: true
+  controller_liquid_observer_uses_motion_only: true
+
+sampling:
+  # Covers the 220 ms controller/Plant execution lead and the longest pulse.
+  warmup_steps: 12
+  published_linear_min: 0.0
+  published_linear_max: 0.8
+  published_angular_min: -1.2
+  published_angular_max: 1.2
+  maximum_candidate_residual_v: 0.08
+  maximum_candidate_residual_omega: 0.20
+
+  # Shared phase_rejoin feedback. It uses odom-like robot motion only. This is
+  # a simulation policy candidate until the same contract is bound by the
+  # nominal artifact and PhaseRejoinCoordinator.
+  recovery_policy:
+    contract_id: bounded_tracking_recovery_policy_v1
+    longitudinal_position_gain: 0.80
+    lateral_position_gain: 1.20
+    yaw_gain: 1.50
+    linear_velocity_gain: 0.40
+    angular_velocity_gain: 0.40
+    max_residual_v: 0.08
+    max_residual_omega: 0.20
+
+  # These profiles are selected before a rollout.  They are never selected
+  # from the external liquid state or from the resulting success label.
+  profiles:
+    - {profile_id: nominal, pulse_steps: 0, residual_v: 0.0, residual_omega: 0.0}
+    - {profile_id: v_pos, pulse_steps: 10, residual_v: 0.08, residual_omega: 0.0}
+    - {profile_id: v_neg, pulse_steps: 10, residual_v: -0.08, residual_omega: 0.0}
+    - {profile_id: w_pos, pulse_steps: 10, residual_v: 0.0, residual_omega: 0.20}
+    - {profile_id: w_neg, pulse_steps: 10, residual_v: 0.0, residual_omega: -0.20}
+    - {profile_id: coupled_pos, pulse_steps: 10, residual_v: 0.08, residual_omega: 0.20}
+    - {profile_id: coupled_neg, pulse_steps: 10, residual_v: -0.08, residual_omega: -0.20}
+
+# A row is recovered only if every item below passes after the stored nominal
+# tail is replayed in the independent Plant.  Pilot data may motivate a new
+# frozen version, but held_out labels must never be used to tune these values.
+label:
+  maximum_path_position_error_m: 0.25
+  maximum_path_yaw_error_rad: 0.35
+  # Pilot anti-slosh envelope: the optimized internal nominal peaks at about
+  # 2.16 mm on P2, so 2.30 mm leaves a small nominal margin while rejecting
+  # residuals that destroy the intended cancellation. This is not the 8 mm
+  # physical spill/safety limit.
+  maximum_external_height_m: 0.0023
+  terminal_position_error_m: 0.15
+  terminal_yaw_error_rad: 0.15
+  terminal_v_abs_mps: 0.03
+  terminal_omega_abs_radps: 0.05
+  terminal_external_height_m: 0.0015
+  fixed_tail_sec: 4.0

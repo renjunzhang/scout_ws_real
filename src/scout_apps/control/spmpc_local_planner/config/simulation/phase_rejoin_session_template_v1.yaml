@@ -1,0 +1,151 @@
+# Formal-simulation session template. Empty paths/hashes are intentional:
+# this file must remain NO_GO until a runner has produced and hashed every
+# referenced asset. Do not replace empty hashes with placeholders.
+schema: spmpc_formal_simulation_session_v1
+freeze_id: REPLACE_AFTER_PILOT
+status: pilot_candidate_bound
+formal_trials_started: false
+
+scope:
+  simulation_only: true
+  formal_robot_release: false
+  real_robot_enforce_allowed: false
+  plant_truth_visible_to_controller: false
+  physical_parameter_claim: false
+
+# These names mirror the future physical session where possible. Simulation
+# truth is still isolated: the controller receives odom-derived motion and its
+# own liquid observer, never the external plant liquid state.
+runtime:
+  control_rate_hz: 30.0
+  final_command_transaction: true
+  command_history_source: final_published_command
+  observer_input: plant_motion_derived_odom
+  external_liquid_truth_used_for_control: false
+  dual_channel_execution_model: true
+  expected_publish_time_model: true
+  git_commit: ""
+  source_tree_clean: false
+  compiler_id: ""
+  stl_id: ""
+  floating_point_contract: ""
+  runner: {path: "", sha256: ""}
+  executable: {path: "", sha256: ""}
+  controller_manifest: {path: "", sha256: ""}
+  artifact_validator: {path: "", sha256: ""}
+
+assets:
+  plant_config: {path: "", sha256: ""}
+  planner_config: {path: "", sha256: ""}
+  path: {path: "", sha256: ""}
+  offline_plan: {path: "", sha256: ""}
+  offline_plan_report: {path: "", sha256: ""}
+  offline_plan_generator: {path: "", sha256: ""}
+  nominal_builder: {path: "", sha256: ""}
+  phase_rejoin_artifact: {path: "", sha256: ""}
+  nominal_validation_report: {path: "", sha256: ""}
+  recovery_dataset: {path: "", sha256: ""}
+  recovery_fit_manifest: {path: "", sha256: ""}
+  recovery_radii_bounds: {path: "", sha256: ""}
+  recovery_held_out_report: {path: "", sha256: ""}
+  analysis_script: {path: "", sha256: ""}
+
+path_contract:
+  frame_id: map
+  goal_yaw_rad: 0.0
+
+measurement_contract:
+  primary_metric: external_height_q95_m
+  window: motion_plus_fixed_tail
+  fixed_tail_sec: 4.0
+  statistics_unit: complete_trial
+  physical_metric_alignment: rgb_max_lcr_motion_plus_fixed_tail
+  controller_liquid_is_truth: false
+  external_liquid_truth_used_for_control: false
+  failures_included: true
+
+# Each list is a complete-rollout partition. No seed may occur in two lists.
+# Formal trial seeds also have to match the promoted plant configuration.
+seeds:
+  locked: false
+  recovery_fit: [7101, 7102]
+  recovery_tune: [7201, 7202]
+  recovery_held_out: [7301, 7302]
+  pilot_trials: [8101, 8102]
+  formal_trials:
+    [3101, 3102, 3103, 3104, 3105, 3106, 3107, 3108,
+     3109, 3110, 3111, 3112, 3113, 3114, 3115, 3116]
+
+# Every condition requires a distinct implementation_id and a hashed config.
+# The runtime controller manifest must repeat exactly the same semantics.
+conditions:
+  C0:
+    binding_id: ordinary_mpcc_formal
+    implementation_id: ""
+    config: {path: "", sha256: ""}
+    mode: ordinary_mpcc
+    offline_nominal: false
+    online_residual: false
+    recovery_gate: false
+    execution_compatibility_gate: false
+    stored_recovery_action: false
+    input_shaping: false
+  C1:
+    binding_id: smooth_match_formal
+    implementation_id: ""
+    config: {path: "", sha256: ""}
+    mode: smooth_match_mpcc
+    offline_nominal: false
+    online_residual: false
+    recovery_gate: false
+    execution_compatibility_gate: false
+    stored_recovery_action: false
+    input_shaping: false
+    pilot_tuned_and_frozen: false
+    global_time_scale: 1.0
+  C2:
+    binding_id: offline_replay_formal
+    implementation_id: ""
+    config: {path: "", sha256: ""}
+    mode: offline_replay
+    offline_nominal: true
+    online_residual: false
+    recovery_gate: false
+    execution_compatibility_gate: false
+    stored_recovery_action: false
+    input_shaping: false
+  C3:
+    binding_id: residual_no_gate_formal
+    implementation_id: ""
+    config: {path: "", sha256: ""}
+    mode: residual_no_gate
+    offline_nominal: true
+    online_residual: true
+    recovery_gate: false
+    execution_compatibility_gate: false
+    stored_recovery_action: false
+    input_shaping: false
+  C4:
+    binding_id: phase_rejoin_full_formal
+    implementation_id: ""
+    config: {path: "", sha256: ""}
+    mode: phase_rejoin_full
+    offline_nominal: true
+    online_residual: true
+    recovery_gate: true
+    execution_compatibility_gate: true
+    stored_recovery_action: true
+    input_shaping: false
+  IS:
+    binding_id: input_shaping_formal
+    implementation_id: ""
+    config: {path: "", sha256: ""}
+    mode: input_shaping
+    offline_nominal: false
+    online_residual: false
+    recovery_gate: false
+    execution_compatibility_gate: false
+    stored_recovery_action: false
+    input_shaping: true
+    shaper: ZVD
+    single_mode_residual_test_passed: false

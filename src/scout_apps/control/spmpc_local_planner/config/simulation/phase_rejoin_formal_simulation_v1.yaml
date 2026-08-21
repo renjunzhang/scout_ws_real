@@ -1,0 +1,87 @@
+schema: spmpc_independent_simulation_config_v1
+freeze_id: SIM_PHASE_REJOIN_P2_PLANT_V1
+status: formal_simulation_release
+created_date: "2026-08-22"
+
+scope:
+  simulation_only: true
+  formal_robot_release: false
+  real_robot_enforce_allowed: false
+  result_claim_authorized: false
+  physical_parameter_claim: false
+  note: >-
+    Frozen external truth for the independent low-order simulation only.  It
+    neither identifies the final Scout nor authorizes a physical controller.
+
+provenance:
+  parameter_role: simulation_only_external_stress_truth
+  development_source_id: mocap_imu_calib/planar_r03/20260729_153448
+  source_bag_sha256: faab5c00082b185fe23729d4e957f62be7a727e31266a38f81612aefc04567c1
+  identification_schema: spmpc_planar_execution_identification_v1
+  identification_command_hold_contract: legacy_linear_interpolation_v1
+  identification_known_bias: true
+  source_limitations_acknowledged: true
+  physical_parameter_claim: false
+  corrected_tool_schema: spmpc_planar_execution_identification_v2
+  identification_report_id: planar_r03_frozen_v1/planar_r03_preliminary_identification.json
+  identification_report_sha256: 347620d78e0f05de4f9f62f1a991955afabf9a922a3ee024dfaad6fdc54033f1
+  identification_tool_sha256: 246028cd284618cf70bdad65c1647137ba67f2450adf5c431822c126da8153cd
+  runtime_verified: true
+  promotion_basis: >-
+    The same numerical plant passed deterministic reset, event-time,
+    saturation, higher-mode, smoke and eight-seed development-pilot checks.
+    Promotion freezes a simulation stress object, not corrected real-robot
+    identification.
+
+# The controller deliberately does not receive these values.  It retains the
+# compiled 22-state 150/220 ms dual-channel model, while this external Plant
+# uses the rough planar_r03 values plus inertia, gain error, jitter and noise.
+external_plant:
+  integration_dt_sec: 0.002
+  default_seed: 20260822
+  linear:
+    delay_sec: 0.102
+    time_constant_sec: 0.091
+    positive_gain: 0.925
+    negative_gain: 0.919
+    deadzone: 0.0
+    output_min: -0.8
+    output_max: 0.8
+  angular:
+    delay_sec: 0.010
+    time_constant_sec: 0.342
+    positive_gain: 1.037
+    negative_gain: 1.063
+    deadzone: 0.0
+    output_min: -1.2
+    output_max: 1.2
+  command_transport_jitter_std_sec: 0.0015
+  command_transport_jitter_limit_sec: 0.004
+  linear_process_acceleration_std_mps2: 0.030
+  angular_process_acceleration_std_radps2: 0.050
+
+  # Shifted primary mode plus an unmodelled second mode.  This is independent
+  # low-order simulation truth, not CFD/SPH or physical liquid ground truth.
+  liquid:
+    container_radius_m: 0.0185
+    liquid_height_m: 0.058
+    primary_damping_ratio: 0.042
+    primary_frequency_scale: 1.035
+    longitudinal_input_gain: 1.06
+    lateral_input_gain: 0.94
+    primary_height_scale: 1.04
+    second_mode_frequency_ratio: 1.72
+    second_mode_damping_ratio: 0.075
+    second_mode_input_gain: 0.16
+    second_mode_height_scale: 0.22
+    height_noise_std_m: 0.00002
+
+experiment:
+  control_rate_hz: 30.0
+  fixed_tail_sec: 4.0
+  smoke_seed: 1001
+  pilot_seeds: [2101, 2102, 2103, 2104, 2105, 2106, 2107, 2108]
+  reserved_formal_seeds:
+    [3101, 3102, 3103, 3104, 3105, 3106, 3107, 3108,
+     3109, 3110, 3111, 3112, 3113, 3114, 3115, 3116]
+  formal_seeds_locked: true

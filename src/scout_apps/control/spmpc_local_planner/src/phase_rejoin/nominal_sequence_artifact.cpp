@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
+#include "spmpc_local_planner/phase_rejoin/bounded_tracking_recovery_policy.h"
 #include "spmpc_local_planner/phase_rejoin/nominal_dynamics.h"
 #include "spmpc_local_planner/runtime/execution_prediction/execution_model.h"
 #include "spmpc_delay_augmented_phase_solver_manifest.h"
@@ -29,6 +30,7 @@ const char* const kSchemaV1 = "phase_rejoin_empirical_v1";
 const char* const kSchemaV2 = "phase_rejoin_empirical_v2";
 const char* const kSchemaV3 = "phase_rejoin_empirical_augmented_v3";
 const char* const kTerminalContractV1 = "stop_settle_zero_hold_v1";
+const char* const kTerminalContractV2 = "publish_zero_settle_hold_v2";
 const char* const kRecoveryContractV1 = "nominal_command_v1";
 
 const std::map<std::string, std::string>& developmentProxyMetadata() {
@@ -524,19 +526,13 @@ NominalArtifactLoadResult validateV3Transitions(
     return result;
 }
 
-NominalArtifactLoadResult validateV2RecoveryCommands(
+NominalArtifactLoadResult validateRecoveryCommandBaseline(
     const std::vector<PhaseNominalSample>& samples,
     const NominalArtifactMetadata& metadata) {
-    if (metadata.recovery_contract != kRecoveryContractV1) {
-        return failure("UNSUPPORTED_RECOVERY_CONTRACT",
-                       metadata.recovery_contract);
-    }
-
-    // V2's development recovery action is deliberately not an independent,
-    // unverified policy: it must be the same command whose one-step dynamics
-    // have already been checked as u_pub.  The CSV contract contains no
-    // robot-specific v/omega limits, so runtime command and residual bounds
-    // remain the responsibility of the solver/coordinator/publish chain.
+    // Both V2 and V3 bind kappa to the nominal published command.  V3's
+    // state-dependent recovery policy applies its bounded residual online;
+    // kappa remains the audited, dynamically checked baseline rather than a
+    // precomputed fake recovery command.
     const double tolerance = metadata.dynamics_tolerance;
     for (std::size_t i = 0; i < samples.size(); ++i) {
         const PhaseNominalSample& sample = samples[i];
@@ -550,6 +546,71 @@ NominalArtifactLoadResult validateV2RecoveryCommands(
     result.success = true;
     result.status = "OK";
     return result;
+}
+
+NominalArtifactLoadResult validateV2RecoveryCommands(
+    const std::vector<PhaseNominalSample>& samples,
+    const NominalArtifactMetadata& metadata) {
+    if (metadata.recovery_contract != kRecoveryContractV1) {
+        return failure("UNSUPPORTED_RECOVERY_CONTRACT",
+                       metadata.recovery_contract);
+    }
+    return validateRecoveryCommandBaseline(samples, metadata);
+}
+
+NominalArtifactLoadResult validateV3RecoveryPolicy(
+    const std::vector<PhaseNominalSample>& samples,
+    const NominalArtifactMetadata& metadata) {
+    const BoundedTrackingRecoveryPolicyParams frozen =
+        boundedTrackingRecoveryPolicyV1Params();
+    if (metadata.recovery_contract != frozen.contract_id) {
+        return failure("UNSUPPORTED_RECOVERY_CONTRACT",
+                       metadata.recovery_contract);
+    }
+    const struct {
+        const char* field;
+        double actual;
+        double expected;
+    } fields[] = {
+        {"recovery_policy_longitudinal_position_gain",
+         metadata.recovery_policy_longitudinal_position_gain,
+         frozen.longitudinal_position_gain},
+        {"recovery_policy_lateral_position_gain",
+         metadata.recovery_policy_lateral_position_gain,
+         frozen.lateral_position_gain},
+        {"recovery_policy_yaw_gain",
+         metadata.recovery_policy_yaw_gain, frozen.yaw_gain},
+        {"recovery_policy_linear_velocity_gain",
+         metadata.recovery_policy_linear_velocity_gain,
+         frozen.linear_velocity_gain},
+        {"recovery_policy_angular_velocity_gain",
+         metadata.recovery_policy_angular_velocity_gain,
+         frozen.angular_velocity_gain},
+        {"recovery_policy_max_residual_v",
+         metadata.recovery_policy_max_residual_v,
+         frozen.max_residual_v},
+        {"recovery_policy_max_residual_omega",
+         metadata.recovery_policy_max_residual_omega,
+         frozen.max_residual_omega},
+        {"recovery_policy_published_linear_min",
+         metadata.recovery_policy_published_linear_min,
+         frozen.published_linear_min},
+        {"recovery_policy_published_linear_max",
+         metadata.recovery_policy_published_linear_max,
+         frozen.published_linear_max},
+        {"recovery_policy_published_angular_min",
+         metadata.recovery_policy_published_angular_min,
+         frozen.published_angular_min},
+        {"recovery_policy_published_angular_max",
+         metadata.recovery_policy_published_angular_max,
+         frozen.published_angular_max},
+    };
+    for (const auto& field : fields) {
+        if (field.actual != field.expected) {
+            return failure("V3_RECOVERY_POLICY_MISMATCH", field.field);
+        }
+    }
+    return validateRecoveryCommandBaseline(samples, metadata);
 }
 
 NominalArtifactLoadResult validateV2TerminalTail(
@@ -599,6 +660,98 @@ NominalArtifactLoadResult validateV2TerminalTail(
     return result;
 }
 
+NominalArtifactLoadResult validateV3PublishZeroSettleTail(
+    const std::vector<PhaseNominalSample>& samples,
+    const NominalArtifactMetadata& metadata) {
+    if (metadata.terminal_contract != kTerminalContractV2) {
+        return failure("UNSUPPORTED_TERMINAL_CONTRACT",
+                       metadata.terminal_contract);
+    }
+    if (metadata.terminal_zero_hold_steps < 5 ||
+        metadata.terminal_zero_hold_steps >= samples.size()) {
+        return failure("INVALID_ZERO_HOLD_LENGTH",
+                       std::to_string(metadata.terminal_zero_hold_steps));
+    }
+
+    const std::size_t begin = samples.size() -
+        metadata.terminal_zero_hold_steps;
+    const double tolerance = metadata.dynamics_tolerance;
+    for (std::size_t i = begin; i < samples.size(); ++i) {
+        const PhaseNominalSample& sample = samples[i];
+        // This is a zero *published-command* hold.  The executed velocity and
+        // actuator outputs may decay throughout the hold when tau is nonzero.
+        const double zero_command_values[] = {
+            sample.a, sample.alpha, sample.v_s,
+            sample.u_pub_v, sample.u_pub_omega,
+            sample.kappa_v, sample.kappa_omega,
+        };
+        for (double value : zero_command_values) {
+            if (std::abs(value) > tolerance) {
+                return failure("ZERO_HOLD_COMMAND_NONZERO",
+                               "index " + std::to_string(i));
+            }
+        }
+        if (!within(sample.s, metadata.path_length, tolerance)) {
+            return failure("ZERO_HOLD_PROGRESS_MISMATCH",
+                           "index " + std::to_string(i));
+        }
+    }
+
+    const PhaseNominalSample& final = samples.back();
+    if (std::abs(final.v) > metadata.terminal_v_abs_max + tolerance) {
+        return failure("TERMINAL_LINEAR_VELOCITY_NOT_SETTLED",
+                       "index " + std::to_string(final.index));
+    }
+    if (std::abs(final.omega) >
+            metadata.terminal_omega_abs_max + tolerance) {
+        return failure("TERMINAL_ANGULAR_VELOCITY_NOT_SETTLED",
+                       "index " + std::to_string(final.index));
+    }
+    if (!final.augmented_execution_valid ||
+        !final.augmented_execution.valid) {
+        return failure("TERMINAL_EXECUTION_STATE_INVALID",
+                       "index " + std::to_string(final.index));
+    }
+    if (std::abs(final.augmented_execution.linear.actuator_output) >
+            metadata.terminal_linear_actuator_output_abs_max + tolerance) {
+        return failure("TERMINAL_LINEAR_ACTUATOR_NOT_SETTLED",
+                       "index " + std::to_string(final.index));
+    }
+    if (std::abs(final.augmented_execution.angular.actuator_output) >
+            metadata.terminal_angular_actuator_output_abs_max + tolerance) {
+        return failure("TERMINAL_ANGULAR_ACTUATOR_NOT_SETTLED",
+                       "index " + std::to_string(final.index));
+    }
+    for (double command :
+         final.augmented_execution.linear.pending_commands) {
+        if (std::abs(command) >
+                metadata.terminal_linear_pending_command_abs_max) {
+            return failure("TERMINAL_LINEAR_PENDING_COMMAND_NONZERO",
+                           "index " + std::to_string(final.index));
+        }
+    }
+    for (double command :
+         final.augmented_execution.angular.pending_commands) {
+        if (std::abs(command) >
+                metadata.terminal_angular_pending_command_abs_max) {
+            return failure("TERMINAL_ANGULAR_PENDING_COMMAND_NONZERO",
+                           "index " + std::to_string(final.index));
+        }
+    }
+    if (std::hypot(final.eta_x, final.eta_y) >
+            metadata.terminal_eta_norm_max + tolerance ||
+        std::hypot(final.eta_x_dot, final.eta_y_dot) >
+            metadata.terminal_eta_dot_norm_max + tolerance) {
+        return failure("TERMINAL_LIQUID_NOT_SETTLED",
+                       "index " + std::to_string(final.index));
+    }
+
+    NominalArtifactLoadResult result;
+    result.success = true;
+    result.status = "OK";
+    return result;
+}
+
 const std::vector<std::string>& canonicalMetadataOrder() {
     static const std::vector<std::string> order = {
         "schema", "evidence_level", "source", "contract_id", "frame_id",
@@ -611,8 +764,25 @@ const std::vector<std::string>& canonicalMetadataOrder() {
         "development_parameter_sha256", "row_state_semantics",
         "row_command_semantics",
         "source_bag_sha256", "path_topic", "max_nominal_path_deviation_m",
-        "terminal_contract", "recovery_contract", "terminal_zero_hold_steps",
+        "terminal_contract", "recovery_contract",
+        "recovery_policy_longitudinal_position_gain",
+        "recovery_policy_lateral_position_gain",
+        "recovery_policy_yaw_gain",
+        "recovery_policy_linear_velocity_gain",
+        "recovery_policy_angular_velocity_gain",
+        "recovery_policy_max_residual_v",
+        "recovery_policy_max_residual_omega",
+        "recovery_policy_published_linear_min",
+        "recovery_policy_published_linear_max",
+        "recovery_policy_published_angular_min",
+        "recovery_policy_published_angular_max",
+        "terminal_zero_hold_steps",
         "terminal_eta_norm_max", "terminal_eta_dot_norm_max",
+        "terminal_v_abs_max", "terminal_omega_abs_max",
+        "terminal_linear_actuator_output_abs_max",
+        "terminal_angular_actuator_output_abs_max",
+        "terminal_linear_pending_command_abs_max",
+        "terminal_angular_pending_command_abs_max",
         "two_zeta_omega_n", "omega_n_sq", "kappa_x", "kappa_y",
         "dynamics_tolerance", "execution_contract_id",
         "execution_contract_hash", "execution_state_width",
@@ -1130,6 +1300,17 @@ NominalArtifactLoadResult NominalSequenceArtifact::loadCsvStream(
     }
     if (schema_v3) {
         const char* required_v3[] = {
+            "recovery_policy_longitudinal_position_gain",
+            "recovery_policy_lateral_position_gain",
+            "recovery_policy_yaw_gain",
+            "recovery_policy_linear_velocity_gain",
+            "recovery_policy_angular_velocity_gain",
+            "recovery_policy_max_residual_v",
+            "recovery_policy_max_residual_omega",
+            "recovery_policy_published_linear_min",
+            "recovery_policy_published_linear_max",
+            "recovery_policy_published_angular_min",
+            "recovery_policy_published_angular_max",
             "execution_contract_id", "execution_contract_hash",
             "execution_state_width", "execution_linear_buffer_count",
             "execution_angular_buffer_count", "parameter_schema_version",
@@ -1140,6 +1321,21 @@ NominalArtifactLoadResult NominalSequenceArtifact::loadCsvStream(
             if (metadata.count(key) == 0) {
                 clear();
                 return failure("MISSING_METADATA", key);
+            }
+        }
+        if (metadata["terminal_contract"] == kTerminalContractV2) {
+            const char* required_terminal_v2[] = {
+                "terminal_v_abs_max", "terminal_omega_abs_max",
+                "terminal_linear_actuator_output_abs_max",
+                "terminal_angular_actuator_output_abs_max",
+                "terminal_linear_pending_command_abs_max",
+                "terminal_angular_pending_command_abs_max",
+            };
+            for (const char* key : required_terminal_v2) {
+                if (metadata.count(key) == 0) {
+                    clear();
+                    return failure("MISSING_METADATA", key);
+                }
             }
         }
     }
@@ -1201,6 +1397,45 @@ NominalArtifactLoadResult NominalSequenceArtifact::loadCsvStream(
     }
 
     if (schema_v3) {
+        const bool valid_recovery_policy_metadata =
+            parseDouble(
+                metadata["recovery_policy_longitudinal_position_gain"],
+                parsed_metadata.
+                    recovery_policy_longitudinal_position_gain) &&
+            parseDouble(
+                metadata["recovery_policy_lateral_position_gain"],
+                parsed_metadata.recovery_policy_lateral_position_gain) &&
+            parseDouble(
+                metadata["recovery_policy_yaw_gain"],
+                parsed_metadata.recovery_policy_yaw_gain) &&
+            parseDouble(
+                metadata["recovery_policy_linear_velocity_gain"],
+                parsed_metadata.recovery_policy_linear_velocity_gain) &&
+            parseDouble(
+                metadata["recovery_policy_angular_velocity_gain"],
+                parsed_metadata.recovery_policy_angular_velocity_gain) &&
+            parseDouble(
+                metadata["recovery_policy_max_residual_v"],
+                parsed_metadata.recovery_policy_max_residual_v) &&
+            parseDouble(
+                metadata["recovery_policy_max_residual_omega"],
+                parsed_metadata.recovery_policy_max_residual_omega) &&
+            parseDouble(
+                metadata["recovery_policy_published_linear_min"],
+                parsed_metadata.recovery_policy_published_linear_min) &&
+            parseDouble(
+                metadata["recovery_policy_published_linear_max"],
+                parsed_metadata.recovery_policy_published_linear_max) &&
+            parseDouble(
+                metadata["recovery_policy_published_angular_min"],
+                parsed_metadata.recovery_policy_published_angular_min) &&
+            parseDouble(
+                metadata["recovery_policy_published_angular_max"],
+                parsed_metadata.recovery_policy_published_angular_max);
+        if (!valid_recovery_policy_metadata) {
+            clear();
+            return failure("INVALID_V3_RECOVERY_POLICY_METADATA", path);
+        }
         std::size_t state_width = 0;
         std::size_t linear_count = 0;
         std::size_t angular_count = 0;
@@ -1254,6 +1489,55 @@ NominalArtifactLoadResult NominalSequenceArtifact::loadCsvStream(
         parsed_metadata.recovery_artifact_hash = verified_recovery_hash;
         parsed_metadata.execution_compatibility_contract =
             metadata["execution_compatibility_contract"];
+
+        if (parsed_metadata.terminal_contract == kTerminalContractV2) {
+            const bool valid_terminal_v2_metadata =
+                parseDouble(metadata["terminal_v_abs_max"],
+                            parsed_metadata.terminal_v_abs_max) &&
+                parseDouble(metadata["terminal_omega_abs_max"],
+                            parsed_metadata.terminal_omega_abs_max) &&
+                parseDouble(
+                    metadata["terminal_linear_actuator_output_abs_max"],
+                    parsed_metadata.
+                        terminal_linear_actuator_output_abs_max) &&
+                parseDouble(
+                    metadata["terminal_angular_actuator_output_abs_max"],
+                    parsed_metadata.
+                        terminal_angular_actuator_output_abs_max) &&
+                parseDouble(
+                    metadata["terminal_linear_pending_command_abs_max"],
+                    parsed_metadata.
+                        terminal_linear_pending_command_abs_max) &&
+                parseDouble(
+                    metadata["terminal_angular_pending_command_abs_max"],
+                    parsed_metadata.
+                        terminal_angular_pending_command_abs_max) &&
+                parsed_metadata.terminal_v_abs_max >= 0.0 &&
+                parsed_metadata.terminal_omega_abs_max >= 0.0 &&
+                parsed_metadata.
+                    terminal_linear_actuator_output_abs_max >= 0.0 &&
+                parsed_metadata.
+                    terminal_angular_actuator_output_abs_max >= 0.0 &&
+                parsed_metadata.
+                    terminal_linear_pending_command_abs_max >= 0.0 &&
+                parsed_metadata.
+                    terminal_angular_pending_command_abs_max >= 0.0 &&
+                parsed_metadata.
+                    terminal_linear_pending_command_abs_max <=
+                        parsed_metadata.dynamics_tolerance &&
+                parsed_metadata.
+                    terminal_angular_pending_command_abs_max <=
+                        parsed_metadata.dynamics_tolerance;
+            if (!valid_terminal_v2_metadata) {
+                clear();
+                return failure("INVALID_V3_TERMINAL_METADATA", path);
+            }
+        } else if (parsed_metadata.terminal_contract !=
+                   kTerminalContractV1) {
+            clear();
+            return failure("UNSUPPORTED_TERMINAL_CONTRACT",
+                           parsed_metadata.terminal_contract);
+        }
     }
 
     // The development proxy publishes /clock at 50 Hz while the controller
@@ -1321,13 +1605,15 @@ NominalArtifactLoadResult NominalSequenceArtifact::loadCsvStream(
             return transition_result;
         }
         const NominalArtifactLoadResult recovery_result =
-            validateV2RecoveryCommands(samples_, parsed_metadata);
+            validateV3RecoveryPolicy(samples_, parsed_metadata);
         if (!recovery_result.success) {
             clear();
             return recovery_result;
         }
         const NominalArtifactLoadResult terminal_result =
-            validateV2TerminalTail(samples_, parsed_metadata);
+            parsed_metadata.terminal_contract == kTerminalContractV2
+            ? validateV3PublishZeroSettleTail(samples_, parsed_metadata)
+            : validateV2TerminalTail(samples_, parsed_metadata);
         if (!terminal_result.success) {
             clear();
             return terminal_result;

@@ -219,6 +219,7 @@ add_library(spmpc_controller
 
 add_library(spmpc_phase_rejoin
   src/phase_rejoin/types.cpp
+  src/phase_rejoin/bounded_tracking_recovery_policy.cpp
   src/phase_rejoin/development_nominal_generator.cpp
   src/phase_rejoin/nominal_dynamics.cpp
   src/phase_rejoin/nominal_sequence_artifact.cpp
@@ -663,7 +664,85 @@ target_link_libraries(spmpc_independent_plant_smoke
   spmpc_independent_simulation_plant
 )
 
+# Simulation-only recovery rollout core and sampler.  They use external Plant
+# liquid truth only when assigning offline labels; neither target is installed
+# into the robot runtime.
+add_library(spmpc_phase_rejoin_recovery_rollout STATIC
+  src/simulation/phase_rejoin_recovery_rollout.cpp
+)
+target_link_libraries(spmpc_phase_rejoin_recovery_rollout
+  PUBLIC
+  spmpc_phase_rejoin
+  spmpc_independent_simulation_plant
+  PRIVATE
+  yaml-cpp
+)
+
+add_executable(spmpc_sample_phase_rejoin_recovery_rollouts
+  tools/simulation/sample_phase_rejoin_recovery_rollouts.cpp
+)
+target_include_directories(spmpc_sample_phase_rejoin_recovery_rollouts PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+)
+target_link_libraries(spmpc_sample_phase_rejoin_recovery_rollouts
+  PRIVATE
+  spmpc_phase_rejoin_recovery_rollout
+  OpenSSL::Crypto
+  yaml-cpp
+)
+
+# Unified source-tree closed-loop trial runner.  It executes all simulation
+# conditions through the production final-command transaction while keeping
+# the independent Plant's liquid truth outside every controller input.
+add_executable(spmpc_phase_rejoin_closed_loop_trial
+  tools/simulation/run_phase_rejoin_closed_loop_trial.cpp
+)
+target_include_directories(spmpc_phase_rejoin_closed_loop_trial PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+)
+target_link_libraries(spmpc_phase_rejoin_closed_loop_trial
+  PRIVATE
+  ${PROJECT_NAME}
+  spmpc_independent_simulation_plant
+  spmpc_solver_delay_augmented_acados
+  yaml-cpp
+)
+
+# Source-tree formal-simulation asset builder.  It deliberately reuses the
+# production V3 loader and the compiled execution contract, but is not part of
+# the robot runtime installation/export list.
+add_executable(spmpc_build_formal_phase_rejoin_nominal
+  tools/simulation/build_formal_phase_rejoin_nominal.cpp
+)
+target_link_libraries(spmpc_build_formal_phase_rejoin_nominal
+  PRIVATE
+  spmpc_phase_rejoin
+  spmpc_reference
+  spmpc_solver_delay_augmented_acados
+  OpenSSL::Crypto
+  yaml-cpp
+)
+
 if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_phase_rejoin_closed_loop_trial
+    test/test_phase_rejoin_closed_loop_trial.cpp
+    tools/simulation/run_phase_rejoin_closed_loop_trial.cpp)
+  if(TARGET test_phase_rejoin_closed_loop_trial)
+    target_compile_definitions(test_phase_rejoin_closed_loop_trial PRIVATE
+      SPMPC_TRIAL_RUNNER_NO_MAIN
+      "SPMPC_SIMULATION_CONFIG_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/config/simulation/phase_rejoin_development_v1.yaml\""
+      "SPMPC_SIMULATION_CONDITIONS_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/config/simulation/conditions\""
+    )
+    target_include_directories(test_phase_rejoin_closed_loop_trial PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+    )
+    target_link_libraries(test_phase_rejoin_closed_loop_trial
+      ${PROJECT_NAME}
+      spmpc_independent_simulation_plant
+      spmpc_solver_delay_augmented_acados
+      yaml-cpp
+    )
+  endif()
   catkin_add_gtest(test_independent_scout_liquid_plant
     test/test_independent_scout_liquid_plant.cpp)
   if(TARGET test_independent_scout_liquid_plant)

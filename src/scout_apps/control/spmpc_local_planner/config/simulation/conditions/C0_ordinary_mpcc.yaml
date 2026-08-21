@@ -1,0 +1,16 @@
+schema: spmpc_closed_loop_trial_condition_v1
+condition_id: C0
+implementation_id: continuous_mpcc_acados_b0_v1
+implementation_complete: true
+mode: ordinary_mpcc
+offline_nominal: false
+online_residual: false
+recovery_gate: false
+execution_compatibility_gate: false
+stored_recovery_action: false
+input_shaping: false
+trial:
+  control_rate_hz: 30.0
+  max_motion_sec: 45.0
+  fixed_tail_sec: 4.0
+  publish_latency_sec: 0.01

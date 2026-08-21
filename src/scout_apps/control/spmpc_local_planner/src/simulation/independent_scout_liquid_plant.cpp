@@ -52,8 +52,9 @@ bool validateIndependentPlantConfig(const IndependentPlantConfig& config,
         error = "unsupported independent simulation schema";
     } else if (config.freeze_id.empty()) {
         error = "simulation freeze_id is empty";
-    } else if (config.status != "development_candidate_unbound") {
-        error = "independent simulation is not an unbound development candidate";
+    } else if (config.status != "development_candidate_unbound" &&
+               config.status != "formal_simulation_release") {
+        error = "independent simulation status is neither development nor formal simulation release";
     } else if (!config.simulation_only || config.formal_robot_release ||
                config.real_robot_enforce_allowed) {
         error = "simulation config attempts to authorize a physical release";
@@ -218,9 +219,21 @@ bool IndependentScoutLiquidPlant::configure(
 bool IndependentScoutLiquidPlant::reset(
     std::uint32_t seed,
     std::string& error) {
+    return reset(seed, IndependentPlantInitialPose{}, error);
+}
+
+bool IndependentScoutLiquidPlant::reset(
+    std::uint32_t seed,
+    const IndependentPlantInitialPose& initial_pose,
+    std::string& error) {
     error.clear();
     if (!configured_) {
         error = "independent plant is not configured";
+        return false;
+    }
+    if (!finite(initial_pose.x) || !finite(initial_pose.y) ||
+        !finite(initial_pose.yaw)) {
+        error = "independent plant initial pose is non-finite";
         return false;
     }
     seedStream(linear_jitter_rng_, seed, 1u);
@@ -230,6 +243,9 @@ bool IndependentScoutLiquidPlant::reset(
     seedStream(height_noise_rng_, seed, 5u);
     state_ = IndependentPlantState{};
     state_.valid = true;
+    state_.x = initial_pose.x;
+    state_.y = initial_pose.y;
+    state_.yaw = normalizeYaw(initial_pose.yaw);
     linear_queue_.clear();
     angular_queue_.clear();
     active_linear_command_ = 0.0;
