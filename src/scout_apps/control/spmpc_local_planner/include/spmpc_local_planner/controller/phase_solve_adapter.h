@@ -8,6 +8,8 @@ namespace spmpc_local_planner {
 // Controller boundary adapter: Phase-Rejoin receives domain state only and
 // remains independent of solver and telemetry DTOs.
 PhaseSolveView makePhaseSolveView(const SolverOutput& output,
-                                  int terminal_step);
+                                  int terminal_step,
+                                  const ExecutionAugmentedState*
+                                      known_initial_execution = nullptr);
 
 }  // namespace spmpc_local_planner

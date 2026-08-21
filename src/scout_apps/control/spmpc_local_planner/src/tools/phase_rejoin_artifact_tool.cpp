@@ -116,6 +116,11 @@ int main(int argc, char** argv) {
               << spmpc_local_planner::phaseRejoinEvidenceLevelName(
                      metadata.evidence_level)
               << " source=" << metadata.source
-              << " contract_id=" << metadata.contract_id << '\n';
+              << " contract_id=" << metadata.contract_id;
+    if (!metadata.recovery_artifact_hash.empty()) {
+        std::cout << " recovery_artifact_hash="
+                  << metadata.recovery_artifact_hash;
+    }
+    std::cout << '\n';
     return 0;
 }

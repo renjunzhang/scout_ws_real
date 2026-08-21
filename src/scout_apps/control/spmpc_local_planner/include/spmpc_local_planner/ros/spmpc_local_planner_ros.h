@@ -173,6 +173,8 @@ private:
     double control_frequency_ = 30.0;
     double dt_ = 1.0 / 30.0;
     int horizon_steps_ = 60;
+    bool delay_augmented_phase_enabled_ = false;
+    std::string delay_augmented_execution_contract_hash_;
     std::uint64_t next_cycle_id_ = 0;
     // Declared last so the worker stops before any callback-owned state is
     // destroyed.  The explicit destructor also stops it before member teardown.

@@ -1,0 +1,89 @@
+schema: spmpc_independent_simulation_config_v1
+freeze_id: SIM_EXEC_PLANAR_R03_DEV_V1
+status: development_candidate_unbound
+created_date: "2026-08-21"
+
+scope:
+  simulation_only: true
+  formal_robot_release: false
+  real_robot_enforce_allowed: false
+  note: >-
+    Single-trial planar identification is sufficient only for deterministic
+    simulation development. It must never unlock physical Scout enforce.
+
+provenance:
+  development_source_id: mocap_imu_calib/planar_r03/20260729_153448
+  source_bag_sha256: faab5c00082b185fe23729d4e957f62be7a727e31266a38f81612aefc04567c1
+  identification_schema: spmpc_planar_execution_identification_v1
+  # v1 linearly interpolated discrete /cmd_vel samples. The review found that
+  # this can bias delay/tau, so these numbers remain rough simulation stress
+  # values only. The corrected v2 tool must be rerun from the source bag before
+  # any parameter promotion.
+  identification_command_hold_contract: legacy_linear_interpolation_v1
+  identification_known_bias: true
+  corrected_tool_schema: spmpc_planar_execution_identification_v2
+  identification_report_id: planar_r03_frozen_v1/planar_r03_preliminary_identification.json
+  identification_report_sha256: 347620d78e0f05de4f9f62f1a991955afabf9a922a3ee024dfaad6fdc54033f1
+  identification_tool_sha256: 246028cd284618cf70bdad65c1647137ba67f2450adf5c431822c126da8153cd
+  # The campaign records these hashes but does not reopen the source bag or
+  # identification report. They are development provenance, not a runtime
+  # formal-asset binding.
+  runtime_verified: false
+
+# Independent external plant. Execution values are rounded legacy preliminary
+# estimates from planar_r03 and are retained only to create controller/Plant
+# mismatch during simulation development. Saturations are inherited platform
+# envelopes because the bag never excited saturation; none of these values is
+# a formal identified parameter.
+external_plant:
+  integration_dt_sec: 0.002
+  default_seed: 20260821
+  linear:
+    delay_sec: 0.102
+    time_constant_sec: 0.091
+    positive_gain: 0.925
+    negative_gain: 0.919
+    deadzone: 0.0
+    output_min: -0.8
+    output_max: 0.8
+  angular:
+    delay_sec: 0.010
+    time_constant_sec: 0.342
+    positive_gain: 1.037
+    negative_gain: 1.063
+    deadzone: 0.0
+    output_min: -1.2
+    output_max: 1.2
+  command_transport_jitter_std_sec: 0.0015
+  command_transport_jitter_limit_sec: 0.004
+  # Piecewise-constant acceleration disturbances at the integration rate.
+  # These units remain finite when a delayed-command event splits a step.
+  linear_process_acceleration_std_mps2: 0.030
+  angular_process_acceleration_std_radps2: 0.050
+
+  # Deliberately differs from the controller: shifted primary parameters plus
+  # an unmodelled second lateral mode. This is an independent low-order plant,
+  # not CFD truth.
+  liquid:
+    container_radius_m: 0.0185
+    liquid_height_m: 0.058
+    primary_damping_ratio: 0.042
+    primary_frequency_scale: 1.035
+    longitudinal_input_gain: 1.06
+    lateral_input_gain: 0.94
+    primary_height_scale: 1.04
+    second_mode_frequency_ratio: 1.72
+    second_mode_damping_ratio: 0.075
+    second_mode_input_gain: 0.16
+    second_mode_height_scale: 0.22
+    height_noise_std_m: 0.00002
+
+experiment:
+  control_rate_hz: 30.0
+  fixed_tail_sec: 4.0
+  smoke_seed: 1001
+  pilot_seeds: [2101, 2102, 2103, 2104, 2105, 2106, 2107, 2108]
+  reserved_formal_seeds:
+    [3101, 3102, 3103, 3104, 3105, 3106, 3107, 3108,
+     3109, 3110, 3111, 3112, 3113, 3114, 3115, 3116]
+  formal_seeds_locked: true

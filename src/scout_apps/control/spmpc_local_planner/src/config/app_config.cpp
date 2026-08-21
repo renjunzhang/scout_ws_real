@@ -1,9 +1,25 @@
 #include "spmpc_local_planner/config/app_config.h"
+#include "spmpc_local_planner/solver/api/backend.h"
+#include "spmpc_delay_augmented_phase_solver_manifest.h"
 
 #include <algorithm>
 #include <cmath>
 
 namespace spmpc_local_planner {
+namespace {
+
+namespace augmented_manifest =
+    delay_augmented_phase_solver_manifest;
+
+bool lowercaseSha256(const std::string& value) {
+    return value.size() == 64 &&
+        std::all_of(value.begin(), value.end(), [](char character) {
+            return (character >= '0' && character <= '9') ||
+                (character >= 'a' && character <= 'f');
+        });
+}
+
+}  // namespace
 
 void ValidationReport::warning(const std::string& key,
                                const std::string& message) {
@@ -190,6 +206,77 @@ ValidationReport validateAndNormalize(AppConfig& config) {
         report.fatal(
             "variants/" + variant.name + "/slosh_cost_horizon",
             "steps must be >= -1 and tail discount must be in [0, 1]");
+    }
+    const bool augmented_backend = config.solver.solver_backend ==
+        kSolverBackendDelayAugmentedPhaseAcados;
+    if (config.solver.delay_augmented_phase.enabled != augmented_backend) {
+        report.fatal(
+            "delay_augmented_phase/enabled",
+            "must be true exactly when solver_backend=delay_augmented_phase_acados");
+    }
+    if (augmented_backend &&
+        config.phase_rejoin.params.mode != PhaseRejoinMode::Enforce) {
+        report.fatal(
+            "phase_rejoin/mode",
+            "delay_augmented_phase_acados requires enforce; monitor/off cannot publish its command");
+    }
+    if (augmented_backend && !config.control.publish_latency.enabled) {
+        report.fatal(
+            "publish_timing/enabled",
+            "delay_augmented_phase_acados requires an explicit publish epoch estimate");
+    }
+    if (augmented_backend && delay.mode != DelayPhaseMode::Off) {
+        report.fatal(
+            "delay_phase/mode",
+            "delay_augmented_phase_acados forbids a second history-only state shift");
+    }
+    if (augmented_backend && !delay.require_complete_history) {
+        report.fatal(
+            "delay_phase/require_complete_history",
+            "delay_augmented_phase_acados requires complete final-command history");
+    }
+    if (augmented_backend &&
+        (config.shared_command_limits.linear_accel_limit_enable ||
+         config.shared_command_limits.angular_limit_enable)) {
+        report.fatal(
+            "platform/shared_constraints",
+            "delay_augmented_phase_acados forbids post-solver command limiters; its OCP and recovery artifact must own the published-command envelope");
+    }
+    if (augmented_backend &&
+        (config.map_vref.runtime_override_enable ||
+         config.map_vref.profile_enable ||
+         config.slosh_risk_governor.enable)) {
+        report.fatal(
+            "speed_reference",
+            "delay_augmented_phase_acados follows the frozen phase-indexed nominal sequence and does not consume runtime v_ref/profile/governor overrides");
+    }
+    if (augmented_backend &&
+        config.phase_rejoin.params.required_contract_id.empty()) {
+        report.fatal(
+            "phase_rejoin/required_contract_id",
+            "delay_augmented_phase_acados requires an explicitly frozen nominal contract id");
+    }
+    if (augmented_backend &&
+        (!std::isfinite(config.phase_rejoin.params.max_residual_v) ||
+         !std::isfinite(config.phase_rejoin.params.max_residual_omega) ||
+         config.phase_rejoin.params.max_residual_v < 0.0 ||
+         config.phase_rejoin.params.max_residual_omega < 0.0 ||
+         config.phase_rejoin.params.max_residual_v >
+             augmented_manifest::kLinearOutputMax -
+                 augmented_manifest::kLinearOutputMin ||
+         config.phase_rejoin.params.max_residual_omega >
+             augmented_manifest::kAngularOutputMax -
+                 augmented_manifest::kAngularOutputMin)) {
+        report.fatal(
+            "phase_rejoin/residual_bounds",
+            "delay_augmented_phase_acados residual bounds must fit the compiled published-command envelope");
+    }
+    if (augmented_backend &&
+        !lowercaseSha256(config.solver.delay_augmented_phase
+                            .expected_recovery_artifact_hash)) {
+        report.fatal(
+            "delay_augmented_phase/expected_recovery_artifact_hash",
+            "a lowercase SHA-256 from a separately frozen recovery asset is required");
     }
     return report;
 }

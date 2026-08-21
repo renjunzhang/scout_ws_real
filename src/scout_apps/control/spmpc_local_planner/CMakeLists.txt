@@ -9,6 +9,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(SPMPC_BUILD_LEGACY_BACKEND
   "Build the RouteB direct-omega diagnostic/legacy solver backend" OFF)
 
+# The delay-augmented capsule is generated into a gitignored directory and is
+# not yet cryptographically bound to its checked-in manifest.  Keep it out of
+# normal/fresh-clone builds unless a developer explicitly opts in.
+option(SPMPC_BUILD_UNVERIFIED_DELAY_AUGMENTED_CAPSULE
+  "Build the development-only unverified delay-augmented capsule" OFF)
+
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
@@ -22,6 +28,8 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(Eigen3 REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(yaml-cpp REQUIRED)
 
 add_message_files(
   FILES
@@ -48,6 +56,8 @@ set(SPMPC_GEN_B0_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0)
 set(SPMPC_GEN_SLOSH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh)
 set(SPMPC_GEN_PHASE_REJOIN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_phase_rejoin)
 set(SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_delay_augmented_phase)
+set(SPMPC_DELAY_AUGMENTED_PHASE_CAPSULE_LIBRARY
+  "${SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR}/libacados_ocp_solver_spmpc_delay_augmented_phase.so")
 set(SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0_direct_omega_legacy)
 set(SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh_direct_omega)
 set(SPMPC_WITH_ACADOS FALSE)
@@ -80,10 +90,28 @@ if(ACADOS_LIB_DIR AND EXISTS "${SPMPC_GEN_B0_DIR}/libacados_ocp_solver_spmpc_b0.
 else()
   message(STATUS "[spmpc] acados not found (ACADOS_SOURCE_DIR / generated spmpc_b0 missing); continuous backend = stub")
 endif()
-if(ACADOS_LIB_DIR AND
-   EXISTS "${SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR}/libacados_ocp_solver_spmpc_delay_augmented_phase.so")
+if(SPMPC_BUILD_UNVERIFIED_DELAY_AUGMENTED_CAPSULE)
+  if(NOT ACADOS_LIB_DIR)
+    message(FATAL_ERROR
+      "[spmpc] SPMPC_BUILD_UNVERIFIED_DELAY_AUGMENTED_CAPSULE=ON requires "
+      "ACADOS_SOURCE_DIR with libacados.so")
+  endif()
+  if(NOT EXISTS "${SPMPC_DELAY_AUGMENTED_PHASE_CAPSULE_LIBRARY}")
+    message(FATAL_ERROR
+      "[spmpc] SPMPC_BUILD_UNVERIFIED_DELAY_AUGMENTED_CAPSULE=ON requires "
+      "the generated capsule at ${SPMPC_DELAY_AUGMENTED_PHASE_CAPSULE_LIBRARY}")
+  endif()
   set(SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE TRUE)
-  message(STATUS "[spmpc] building independent candidate delay-augmented DISCRETE capsule")
+  message(WARNING
+    "[spmpc] building the UNVERIFIED development-only delay-augmented "
+    "capsule; this configuration is NO-GO for a formal or robot release")
+elseif(EXISTS "${SPMPC_DELAY_AUGMENTED_PHASE_CAPSULE_LIBRARY}")
+  message(STATUS
+    "[spmpc] local delay-augmented capsule ignored; wrapper = stub "
+    "(explicit development opt-in is required)")
+else()
+  message(STATUS
+    "[spmpc] delay-augmented capsule unavailable; wrapper = stub")
 endif()
 if(SPMPC_BUILD_LEGACY_BACKEND AND ACADOS_LIB_DIR AND
    EXISTS "${SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR}/libacados_ocp_solver_spmpc_b0_direct_omega_legacy.so")
@@ -145,6 +173,9 @@ add_library(spmpc_config
   src/config/app_config.cpp
   src/config/variant_config.cpp
 )
+target_include_directories(spmpc_config PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+)
 
 # Offline replay core and its narrow C ABI are source-tree analysis tools.
 # They are intentionally omitted from catkin_package and runtime installation.
@@ -160,6 +191,16 @@ add_library(spmpc_analysis_replay_c_api
 )
 target_link_libraries(spmpc_analysis_replay_c_api
   spmpc_analysis_replay
+)
+
+# Source-tree simulation plant. It is deliberately independent of the online
+# solver libraries and omitted from the robot runtime install/export list.
+add_library(spmpc_independent_simulation_plant STATIC
+  src/simulation/independent_scout_liquid_plant.cpp
+)
+target_link_libraries(spmpc_independent_simulation_plant
+  PRIVATE
+  yaml-cpp
 )
 
 add_library(spmpc_costmap
@@ -184,10 +225,17 @@ add_library(spmpc_phase_rejoin
   src/phase_rejoin/phase_clock.cpp
   src/phase_rejoin/phase_candidate_selector.cpp
   src/phase_rejoin/empirical_recovery_gate.cpp
+  src/phase_rejoin/execution_compatibility_gate.cpp
   src/phase_rejoin/phase_rejoin_coordinator.cpp
 )
+target_include_directories(spmpc_phase_rejoin PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+)
 target_link_libraries(spmpc_phase_rejoin
+  PUBLIC
   spmpc_reference
+  PRIVATE
+  OpenSSL::Crypto
 )
 
 target_link_libraries(spmpc_controller
@@ -226,6 +274,13 @@ target_link_libraries(spmpc_runtime
   ${EIGEN3_LIBRARIES}
 )
 
+# V3 artifact admission replays the frozen execution transition through the
+# same runtime model used by the online delay-augmented path.
+target_link_libraries(spmpc_phase_rejoin
+  PUBLIC
+  spmpc_runtime
+)
+
 add_library(spmpc_solver_api
   src/solver/api/backend.cpp
   src/solver/api/backend_policy.cpp
@@ -239,13 +294,17 @@ target_link_libraries(spmpc_solver_delay_augmented
 )
 
 add_library(spmpc_solver_delay_augmented_acados
+  src/solver/acados/delay_augmented_phase_parameter_builder.cpp
   src/solver/acados/delay_augmented_phase_solver.cpp
+  src/solvers/delay_augmented_phase_online_solver.cpp
 )
 target_include_directories(spmpc_solver_delay_augmented_acados PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
 )
 target_link_libraries(spmpc_solver_delay_augmented_acados
   PRIVATE
+  spmpc_config
+  spmpc_reference
   spmpc_solver_delay_augmented
 )
 
@@ -344,6 +403,11 @@ if(SPMPC_BUILD_LEGACY_BACKEND)
 endif()
 
 if(SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE)
+  add_library(spmpc_delay_augmented_phase_capsule SHARED IMPORTED GLOBAL)
+  set_target_properties(spmpc_delay_augmented_phase_capsule PROPERTIES
+    IMPORTED_LOCATION "${SPMPC_DELAY_AUGMENTED_PHASE_CAPSULE_LIBRARY}"
+    IMPORTED_NO_SONAME TRUE
+  )
   target_compile_definitions(spmpc_solver_delay_augmented_acados PRIVATE
     SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE)
   target_include_directories(spmpc_solver_delay_augmented_acados PRIVATE
@@ -354,7 +418,7 @@ if(SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE)
     ${SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR}
   )
   target_link_libraries(spmpc_solver_delay_augmented_acados PRIVATE
-    ${SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR}/libacados_ocp_solver_spmpc_delay_augmented_phase.so
+    spmpc_delay_augmented_phase_capsule
     ${ACADOS_LIB_DIR}/libacados.so
     ${ACADOS_LIB_DIR}/libhpipm.so
     ${ACADOS_LIB_DIR}/libblasfeo.so
@@ -368,6 +432,7 @@ target_link_libraries(spmpc_solver_factory
   spmpc_solver_api
   spmpc_solver_rollout
   spmpc_solver_acados
+  spmpc_solver_delay_augmented_acados
 )
 if(SPMPC_BUILD_LEGACY_BACKEND)
   target_compile_definitions(spmpc_solver_factory PRIVATE
@@ -590,9 +655,33 @@ target_link_libraries(spmpc_g4_snapshot_replay
   spmpc_g4_snapshot_replay_core
 )
 
+add_executable(spmpc_independent_plant_smoke
+  tools/simulation/run_independent_plant_smoke.cpp
+)
+target_link_libraries(spmpc_independent_plant_smoke
+  PRIVATE
+  spmpc_independent_simulation_plant
+)
+
 if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_independent_scout_liquid_plant
+    test/test_independent_scout_liquid_plant.cpp)
+  if(TARGET test_independent_scout_liquid_plant)
+    target_compile_definitions(test_independent_scout_liquid_plant PRIVATE
+      "SPMPC_SIMULATION_CONFIG_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/config/simulation/phase_rejoin_development_v1.yaml\""
+    )
+    target_include_directories(test_independent_scout_liquid_plant PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+    )
+    target_link_libraries(test_independent_scout_liquid_plant
+      spmpc_independent_simulation_plant
+    )
+  endif()
   catkin_add_gtest(test_app_config test/test_app_config.cpp)
   if(TARGET test_app_config)
+    target_include_directories(test_app_config PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+    )
     target_link_libraries(test_app_config
       spmpc_config
     )
@@ -813,6 +902,19 @@ if(CATKIN_ENABLE_TESTING)
       spmpc_solver_delay_augmented
     )
   endif()
+  catkin_add_gtest(test_delay_augmented_phase_online
+    test/test_delay_augmented_phase_online.cpp)
+  if(TARGET test_delay_augmented_phase_online)
+    target_include_directories(
+      test_delay_augmented_phase_online PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+    )
+    target_link_libraries(test_delay_augmented_phase_online
+      ${PROJECT_NAME}
+      spmpc_solver_delay_augmented_acados
+      ${catkin_LIBRARIES}
+    )
+  endif()
   catkin_add_gtest(test_acados_stage_parameter_builder
     test/test_acados_stage_parameter_builder.cpp)
   if(TARGET test_acados_stage_parameter_builder)
@@ -918,9 +1020,18 @@ install(TARGETS
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
+# A real wrapper and its generated capsule are one install unit.  install(FILES)
+# also fails if the configured capsule disappears before installation.
+if(SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE)
+  install(FILES "${SPMPC_DELAY_AUGMENTED_PHASE_CAPSULE_LIBRARY}"
+    DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  )
+endif()
+
 install(DIRECTORY include/${PROJECT_NAME}/
   DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
   PATTERN "analysis" EXCLUDE
+  PATTERN "simulation" EXCLUDE
   PATTERN "tools" EXCLUDE
   PATTERN "*legacy*" EXCLUDE
 )

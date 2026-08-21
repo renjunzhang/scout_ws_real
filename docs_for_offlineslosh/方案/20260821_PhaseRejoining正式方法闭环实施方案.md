@@ -22,7 +22,7 @@
 1. 冻结当前可复现基线，先用测试钉住现有行为；
 2. 把最终命令收敛为唯一发布出口，发布成功后再更新 history 和相位状态；
 3. 增加 $\widehat d_c$、双通道 pending-command buffer、执行器状态和非整数延迟；
-4. 新增正式 delay-augmented Phase-Rejoin solver，并用独立执行 plant 验证因果性；
+4. 冻结可核验的 delay-augmented solver/recovery release，并用独立执行 plant 完成正式因果验证；
 5. 用 typed session、严格 preflight、运行时合同和 postflight 闭合证据链；
 6. 在 Scout 上完成执行模型、时钟、IMU/RGB 和总 lead 的 G0 标定与放行；
 7. G0 通过后生成正式 OfflineSloshOCP artifact、执行兼容集和 held-out empirical gate；
@@ -30,7 +30,7 @@
 
 旧方案记录的是 development release，不修改其历史结论。本文只描述从当前状态走到 formal-ready 的增量工作。
 
-2026-08-21 实施进度：WP0 已冻结，WP1 已闭合唯一最终命令事务；WP2A 已建立预计发布时间模型和实际 $d_c$/deadline typed audit；WP2B 已建立统一双通道执行增广参考模型，并让 history predictor 复用同一合同和传播实现；WP2C 已让同一个 typed `PublishEpochEstimate` 驱动 history prediction、PhaseClock 和 `SolverInput`，并对完整 estimate image 做周期一致性校验；WP3A 已新增 solver 专用 `ExecutionHorizonContext` 和纯 C++ `DelayAugmentedPhaseDynamics`，让当前 $q=[a,\alpha,v_s]$ 从上一真实发布命令生成新 $u^{\mathrm{pub}}$、压入双通道 buffer，并冻结 $N_e=n_f+N_\ell$ 及 physical/grid/terminal epoch；WP3B 已生成确定性 CasADi C 离散转移核，并通过随机单步、第一拍 Jacobian 和 10 步 terminal Jacobian 与 C++ 参考模型的一致性验证；WP3C 已使用同一转移生成并实际编译独立 `DISCRETE nx=22,nu=3,N=10` acados capsule，加入 published-command、robot/pending speed 和 rate 硬约束，并以严格 hash/dimension/capability gate 拒绝 formal 提前放行；WP3D 又新增严格的完整 history alignment 和 frozen `ExecutionHorizonContextBuilder`，从 source-stamped robot/liquid state、真实发布历史及有效 expected-publish estimate 构造 actuator state、双通道 pending buffer 和统一 epoch，并以 opt-in 方式写入 `SolverInput.execution_horizon`。WP3D 的 590 项 C++ / 96 项 Python 回归见 `20260821_PhaseRejoining_WP3D在线执行增广初态构造记录.md`。新 capsule 仍未加入在线 factory/config，现有默认行为不变；它也尚无 formal nominal-relative cost/parameters、terminal 9D gate/$\mathcal B^{\mathrm{exec}}$，ROS/formal session 尚未激活新 builder。默认 `publish_timing.enabled=false`，$\widehat d_c$ 尚未由标定 artifact 冻结，独立 plant 也尚未完成，因此 WP2、WP3、B0 和 formal 放行均未关闭，状态仍为 G0 NO-GO。
+2026-08-21 最新实施进度：WP0–WP3D 已建立唯一最终命令事务、预计发布时间合同、统一双通道执行模型、完整 history augmented context，以及一致的 C++/CasADi 离散动力学。当前工作树又完成 `DISCRETE nx=22,nu=3,N=10,np=64` 的 backend policy、factory、ROS 和控制周期接线，并加入 nominal-relative stage/terminal 参数、terminal 9D gate、$\mathcal B^{\mathrm{exec}}$ 与 published-command residual/rate 约束；独立 C++ Scout＋液体 plant 也已完成源码、smoke 和小规模 pilot。默认行为仍选择旧 continuous backend，delay-augmented wrapper 默认是 stub，真实 capsule 只能通过显式未验证开发开关启用；manifest 尚无可独立核验的 capsule source/binary hash。正式 nominal/recovery/held-out release、C0–C4/IS 绑定和实物 G0 均未完成，smoke/pilot 不是防晃正向证据，因此 formal 放行仍为 NO-GO。
 
 ## 1. 当前状态与剩余缺口
 
@@ -44,7 +44,7 @@
 | 9 维经验 gate | 可做分支 smoke | 保留 evaluator，重新构造正式半径和 held-out 证据 |
 | 保存恢复动作 | 已能经过现有命令链发布 | 正式 artifact 中重新生成并验证 |
 | `off/monitor/enforce` | 三种运行模式已接线 | 在 formal 合同完成前，实物 `enforce` 继续锁死 |
-| typed diagnostics/audit | 可按 `cycle_id` 连接主要信息 | 增加预计/实际发布时间、执行增广状态和 session hash |
+| typed diagnostics/audit | 已含预计/实际发布时间、执行增广状态并可按 `cycle_id` 连接 | 继续补齐单一 formal session hash 与外部 ACK |
 | S0–S4 proxy | 接口和分支已跑通 | 只作为 development 证据，不作为防晃性能证据 |
 
 ### 1.2 正式方法尚未闭合的部分
@@ -52,20 +52,20 @@
 | ID | 缺口 | 当前风险 | 完成定义 |
 | --- | --- | --- | --- |
 | IMP-01 | 最终命令出口已归一（WP1 已闭合） | receipt 目前只证明 ROS publisher 接受交付，不是 Scout CAN/底盘 ACK | 每周期只有一次 finalization 和一次 sink 调用；history、audit、相位提交与 receipt 声明的 $u^{\mathrm{pub}}$ 一致；更强 ACK 由 WP4/WP5 闭合 |
-| IMP-02 | 预计发布时间合同、统一执行参考模型和在线 typed 接线（WP2A–WP2C）已建立；有效 estimate 已统一驱动 history prediction、PhaseClock 和 `SolverInput` | 默认估计仍关闭；$\widehat d_c$ 尚未由 Scout held-out 标定 artifact/hash 冻结，当前接线仍是 history-only | 冻结 $\widehat d_c$、适用域和 hash，并由 formal session/preflight 强制绑定；当前已记录实际 $d_c$、误差和 deadline |
-| IMP-03 | WP3C 已让 $q=[a,\alpha,v_s]$ 的新 $u^{\mathrm{pub}}$ 决策依赖进入独立 acados DISCRETE optimizer 的双通道 buffer，并对积分后 $u^{\mathrm{pub}}$ 建立硬边界；WP3D 已能把完整 history augmented context 写入 typed `SolverInput` | 该 capsule 尚未由在线 factory 调用，也没有 formal stage/terminal 参数 | 本周期新命令作为求解决策量进入线/角两路 delay buffer |
-| IMP-04 | C++ 参考模型、`ExecutionHorizonContext`、CasADi 离散转移与独立 acados capsule 已统一整步/fractional delay、$n_f$ 及 physical/grid/terminal epoch；WP3D 已从真实发布序列构造两路 pending buffer 和 expected-publish 初态 | ROS/formal session 尚未激活 builder，artifact index 也尚未消费该合同 | 让同一 fractional-delay 合同同时驱动 physical epoch、solver stage 和 artifact index |
-| IMP-05 | WP3C 已生成并编译 $N_e=n_f+N_\ell$、`nx=22`、`nu=3` 的独立 acados optimizer，并以 capability gate 明确标记已实现硬约束 | formal nominal-relative cost/parameters、terminal 9D gate 和 $\mathcal B^{\mathrm{exec}}$ 尚未进入；现有在线短窗 capsule 仍未替换 | 新增专用生成物；终端同时支持 9 维 gate 和执行兼容约束 |
+| IMP-02 | 预计发布时间合同、统一执行参考模型、完整 history context 与 online typed 接线已建立 | 默认估计仍关闭；$\widehat d_c$ 尚未由 Scout held-out 标定 artifact/hash 冻结 | 冻结 $\widehat d_c$、适用域和 hash，并由 formal session/preflight 强制绑定；当前已记录实际 $d_c$、误差和 deadline |
+| IMP-03 | 本周期新 $u^{\mathrm{pub}}$ 的双通道因果依赖、factory/ROS 与 `np=64` stage/terminal 参数已接线 | 默认仍走 legacy backend；真实 capsule 只有未验证开发开关且无二进制身份 | 冻结可核验 capsule 与正式 solver/recovery release |
+| IMP-04 | physical/grid/terminal epoch、solver stage 与 augmented artifact index 已统一到同一 fractional-delay 合同 | 正式 session、参数适用域和 held-out 资产尚未冻结 | 由 immutable formal session 绑定并完成故障注入验收 |
+| IMP-05 | `nx=22,nu=3,N=10` optimizer、terminal 9D gate、$\mathcal B^{\mathrm{exec}}$ 和 residual/rate 约束已接线 | 源码能力尚无正式 capsule/recovery 身份和 C0–C4 证据 | 对冻结生成物、参数图像和终端约束做隔离交付与正式验收 |
 | IMP-06 | 没有正式 OfflineSloshOCP artifact | development CSV 不是完整离线防晃序列 | 输出运动、减速、沉降、zero-hold 完整尾段，并冻结全部合同和 hash |
-| IMP-07 | 没有 $\mathcal B_i^{\mathrm{exec}}$ | 9 维 gate 不知道 pending command 和执行器状态是否兼容 | 当前相位与 OCP 终端都检查逐相位执行状态硬边界 |
+| IMP-07 | $\mathcal B_i^{\mathrm{exec}}$ 已在当前相位与 OCP 终端接线 | 边界尚缺 held-out recovery 资产与 false-accept 证据 | 冻结逐相位执行边界并报告覆盖率、误接受和真实重接率 |
 | IMP-08 | gate 没有 held-out 证据 | development 半径不能说明真实可恢复性 | trial 级数据隔离并报告 coverage、false-accept、false-reject 和真实重接率 |
 | IMP-09 | formal runner/证据链不完整 | 关键参数散落在 launch、环境变量和大型 Shell 中 | typed session 是唯一真值；preflight、runtime ACK、recorder、postflight 全部闭合 |
-| IMP-10 | 正式仿真 plant 不独立 | 零延迟或瞬时跟随 proxy 只能证明接线 | $u^{\mathrm{pub}}$ 必须经过非零 delay、$\tau/K$、死区、饱和和独立液体 plant |
+| IMP-10 | 独立 C++ Scout＋液体 plant、smoke 与小规模 pilot 已完成 | smoke/pilot 只证明对象可运行，不是 C0–C4 方法效果 | 冻结非零 delay、$\tau/K$、死区和饱和条件，完成正式配对 campaign |
 | IMP-11 | G0 实物放行未完成 | 总 lead、第一拍灵敏度和 IMU/RGB 幅相尚未证明 | 完成 held-out 标定并给出明确 GO/NO-GO |
 
 因此，当前状态应称为：
 
-> **development simulation release；formal 实物闭环仍为 NO-GO。**
+> **development 源码接线与 smoke/pilot 已完成；formal solver/recovery release、C0–C4 和实物闭环仍为 NO-GO。**
 
 ## 2. 重构边界
 
@@ -338,7 +338,7 @@ physical_front_stamp / grid_front_stamp / terminal_stamp
 
 **目标：**解决 B0，并先在仿真中证明控制量真的经过延迟链影响联合终端。
 
-2026-08-21 的 WP3A 已完成本节第 2–4、6 项所需的纯 C++ 参考转移和 typed horizon 骨架：当前决策按 published-command rate 语义进入双通道 buffer，horizon 固定为 $N_e=n_f+N_\ell$，并有第一拍线/角因果与联合终端灵敏度测试。WP3B 又建立了 `nx=22`、`nu=3`、`N_e=10` 的确定性 CasADi C 离散转移图像，完成 128 组随机单步、第一拍 Jacobian 和 terminal Jacobian 与 C++ 参考的一致性。WP3C 已以同一转移生成和编译独立 acados DISCRETE optimizer，加入 $q$、robot/pending state 和积分后 $u^{\mathrm{pub}}$ 硬约束，并可以消费通过严格合同校验的完整 augmented initial context。WP3D 已新增 `ExecutionModel::alignPublishedHistory()` 和 frozen `ExecutionHorizonContextBuilder`：用真实 receipt 后 history 把 source-stamped robot/liquid state 对齐到 expected-publish epoch，返回 actuator output、不同基数的双通道 pending buffer，并在 estimate、history、hash、epoch 和 cardinality 全部有效时 opt-in 写入 `SolverInput`。但它仍不是 formal 在线 solver：ROS/formal session 尚未激活 builder，候选 capsule 也未进入 factory，formal nominal-relative cost/parameters、terminal 9D gate/$\mathcal B^{\mathrm{exec}}$ 和独立 plant 均未完成；capability gate 会明确拒绝 formal mask，不能据此关闭 WP3/B0。
+WP3A–WP3D 已完成纯 C++ 参考转移、typed horizon、`nx=22,N_e=10` CasADi/acados 离散动力学和完整 history augmented context。当前工作树进一步完成 `np=64` nominal-relative stage/terminal 参数、terminal 9D gate、$\mathcal B^{\mathrm{exec}}$、backend policy、factory 与 ROS 接线，并加入独立 C++ Scout＋液体 plant 的 smoke/pilot。当前仍不是 formal release：默认使用旧 backend，真实 capsule 仅可由显式未验证开发开关启用且没有 source/binary hash；正式 nominal/recovery/held-out 资产、C0–C4/IS campaign 和实物 G0 均未完成，不能用 smoke/pilot 关闭 WP3/B0。
 
 实施内容：
 

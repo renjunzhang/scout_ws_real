@@ -4,6 +4,7 @@
 #include "spmpc_local_planner/core/terminal_diagnostics.h"
 #include "spmpc_local_planner/domain/state.h"
 #include "spmpc_local_planner/runtime/control_cycle_timing.h"
+#include "spmpc_local_planner/runtime/execution_prediction/execution_augmented_state.h"
 #include "spmpc_local_planner/telemetry/solver_diagnostics.h"
 #include "spmpc_local_planner/warm_start/warm_start_diagnostics.h"
 
@@ -12,9 +13,17 @@
 
 namespace spmpc_local_planner {
 
+enum class SolverFailureKind {
+    None = 0,
+    Unclassified = 1,
+    Optimization = 2,
+    Integrity = 3,
+};
+
 struct SolverOutput {
     bool success = false;
     std::string status = "NOT_RUN";
+    SolverFailureKind failure_kind = SolverFailureKind::Unclassified;
     double cmd_v = 0.0;
     double cmd_omega = 0.0;
     double progress_s = 0.0;
@@ -42,6 +51,9 @@ struct SolverOutput {
     SloshCostMonitor slosh_cost_monitor;
     CostBreakdown cost;
     ControlCycleTimingDebug cycle_timing;
+    bool delay_augmented_execution_solution = false;
+    ExecutionAugmentedState initial_execution_state;
+    ExecutionAugmentedState terminal_execution_state;
 };
 
 }  // namespace spmpc_local_planner

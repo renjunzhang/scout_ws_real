@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/domain/state.h"
+#include "spmpc_local_planner/runtime/execution_prediction/execution_augmented_state.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -33,6 +34,17 @@ struct EmpiricalRecoveryRadii {
     double eta_y_dot = 0.0;
 };
 
+// Per-phase hard box for the execution-only part of the augmented state:
+// actuator outputs followed by the linear and angular pending-command queues.
+// Bounds are empirical artifact data, never runtime defaults.
+struct ExecutionCompatibilityBounds {
+    bool valid = false;
+    double linear_actuator_output = 0.0;
+    double angular_actuator_output = 0.0;
+    std::vector<double> linear_pending_commands;
+    std::vector<double> angular_pending_commands;
+};
+
 struct PhaseNominalSample {
     std::size_t index = 0;
     double t = 0.0;
@@ -54,6 +66,9 @@ struct PhaseNominalSample {
     double kappa_v = 0.0;
     double kappa_omega = 0.0;
     EmpiricalRecoveryRadii radii;
+    bool augmented_execution_valid = false;
+    ExecutionAugmentedState augmented_execution;
+    ExecutionCompatibilityBounds execution_bounds;
 };
 
 struct NominalArtifactMetadata {
@@ -79,6 +94,20 @@ struct NominalArtifactMetadata {
     double kappa_x = 0.0;
     double kappa_y = 0.0;
     double dynamics_tolerance = 0.0;
+    // V3 binds the complete augmented nominal and recovery interfaces used by
+    // the nx=22 online solver.  V1/V2 leave these fields inactive and cannot
+    // authorize that backend.
+    bool delay_augmented_nominal = false;
+    std::string execution_contract_id;
+    std::string execution_contract_hash;
+    int execution_state_width = 0;
+    int linear_buffer_count = 0;
+    int angular_buffer_count = 0;
+    int parameter_schema_version = 0;
+    std::string parameter_schema_id;
+    std::string parameter_schema_hash;
+    std::string recovery_artifact_hash;
+    std::string execution_compatibility_contract;
 };
 
 // One stage of the phase-indexed nominal sequence passed into the solver.
@@ -101,7 +130,51 @@ struct PhaseNominalStage {
     double a = 0.0;
     double alpha = 0.0;
     double v_s = 0.0;
+    double u_pub_v = 0.0;
+    double u_pub_omega = 0.0;
     EmpiricalRecoveryRadii radii;
+    bool augmented_execution_valid = false;
+    ExecutionAugmentedState augmented_execution;
+    ExecutionCompatibilityBounds execution_bounds;
+};
+
+struct DelayAugmentedPhaseCostWeights {
+    double position = 0.0;
+    double yaw = 0.0;
+    double progress = 0.0;
+    double v = 0.0;
+    double omega = 0.0;
+    double slosh_eta = 0.0;
+    double slosh_eta_dot = 0.0;
+    double linear_pending = 0.0;
+    double angular_pending = 0.0;
+    double acceleration = 0.0;
+    double angular_acceleration = 0.0;
+    double progress_rate = 0.0;
+};
+
+// Complete per-cycle parameter image consumed by the generated nx=22 solver.
+// `stages` contains N+1 nominal augmented states; nominal controls at stage N
+// are retained for a single canonical image even though terminal cost has no
+// control argument.
+struct DelayAugmentedPhaseSolverContext {
+    bool active = false;
+    int parameter_schema_version = 0;
+    std::string parameter_schema_id;
+    std::string parameter_schema_hash;
+    std::string recovery_artifact_hash;
+    std::string execution_compatibility_contract;
+    int state_width = 0;
+    int control_width = 0;
+    int horizon_steps = 0;
+    std::size_t current_index = 0;
+    std::size_t terminal_index = 0;
+    bool terminal_empirical_gate_bound = false;
+    bool execution_compatibility_bound = false;
+    double max_residual_v = 0.0;
+    double max_residual_omega = 0.0;
+    DelayAugmentedPhaseCostWeights weights;
+    std::vector<PhaseNominalStage> stages;
 };
 
 struct PhaseRejoinSolverContext {
@@ -130,6 +203,9 @@ struct PhaseRejoinSolverContext {
     double max_residual_v = 0.0;
     double max_residual_omega = 0.0;
     std::vector<PhaseNominalStage> stages;
+    // Present only for the explicit delay-augmented backend.  Legacy 10D
+    // solvers ignore an inactive image and retain their frozen behavior.
+    DelayAugmentedPhaseSolverContext delay_augmented;
 };
 
 // Single ownership predicate shared by SpmpcProblem and tests.  Returning true
@@ -183,6 +259,29 @@ struct PhaseRejoinRuntimeContract {
     double min_command_v = 0.0;
     double max_command_v = 0.0;
     double max_abs_command_omega = 0.0;
+    bool delay_augmented_solver_requested = false;
+    std::string execution_contract_id;
+    std::string execution_contract_hash;
+    int execution_state_width = 0;
+    int linear_buffer_count = 0;
+    int angular_buffer_count = 0;
+    int solver_control_width = 0;
+    int execution_front_steps = 0;
+    int solver_horizon_steps = 0;
+    // Hard rates of the newly published command used by the generated
+    // augmented OCP.  Recovery actions bypass the optimizer, so the
+    // coordinator independently reapplies these bounds against the trusted
+    // current pending-command tail before publication.
+    double max_published_acceleration = 0.0;
+    double max_published_angular_acceleration = 0.0;
+    int parameter_schema_version = 0;
+    std::string parameter_schema_id;
+    std::string parameter_schema_hash;
+    std::string recovery_artifact_hash;
+    std::string execution_compatibility_contract;
+    std::uint32_t solver_capabilities = 0;
+    std::uint32_t required_solver_capabilities = 0;
+    DelayAugmentedPhaseCostWeights delay_augmented_weights;
 };
 
 struct PhaseCandidateResult {
@@ -206,6 +305,13 @@ struct EmpiricalRecoveryGateResult {
     std::string status = "NOT_RUN";
 };
 
+struct ExecutionCompatibilityGateResult {
+    bool valid = false;
+    bool accepted = false;
+    double max_normalized_error = 0.0;
+    std::string status = "NOT_RUN";
+};
+
 struct PhaseRejoinPreparation {
     bool ready = false;
     bool command_intervention_allowed = false;
@@ -217,6 +323,7 @@ struct PhaseRejoinPreparation {
     double recovery_cmd_omega = 0.0;
     int solver_terminal_step = 0;
     bool solver_origin_at_execution_front = true;
+    bool solver_origin_is_execution_augmented = false;
     double phase_clock_elapsed_sec = 0.0;
     std::string status = "NOT_RUN";
 };
@@ -227,15 +334,22 @@ struct PhaseRejoinPreparation {
 struct PhaseSolveView {
     double cmd_v = 0.0;
     double cmd_omega = 0.0;
+    bool optimization_failure_recovery_eligible = false;
     bool terminal_state_available = false;
     RobotState terminal_robot;
     SloshState terminal_slosh;
+    bool current_execution_state_available = false;
+    ExecutionAugmentedState current_execution;
+    bool terminal_execution_state_available = false;
+    ExecutionAugmentedState terminal_execution;
 };
 
 struct PhaseRejoinDecision {
     bool evaluated = false;
     bool terminal_gate_accepted = false;
     bool current_gate_accepted = false;
+    bool terminal_execution_compatible = false;
+    bool current_execution_compatible = false;
     bool command_intervened = false;
     bool recovery_command_used = false;
     bool controlled_stop_used = false;
@@ -248,6 +362,8 @@ struct PhaseRejoinDecision {
     double residual_omega = 0.0;
     EmpiricalRecoveryGateResult terminal_gate;
     EmpiricalRecoveryGateResult current_gate;
+    ExecutionCompatibilityGateResult terminal_execution_gate;
+    ExecutionCompatibilityGateResult current_execution_gate;
     std::string status = "NOT_RUN";
 };
 

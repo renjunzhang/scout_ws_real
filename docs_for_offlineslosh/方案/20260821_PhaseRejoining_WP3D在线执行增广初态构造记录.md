@@ -5,6 +5,8 @@
 - 前置工作：WP3C 独立离散 acados capsule
 - 状态：代码与回归通过；formal 在线 solver 尚未放行
 
+> 后续状态说明：本文记录的是 WP3D 当时的切片边界。当前工作树随后已完成 WP4 在线 factory/backend/parameter/gate 接线；请以 `20260821_PhaseRejoining_WP4在线执行增广求解器接线记录.md` 和实际代码为准。本文第 4 节保留作为历史未完成项快照，不代表当前代码状态。
+
 ## 1. 本轮闭合的边界
 
 WP3C 的候选 capsule 已能消费完整 `ExecutionHorizonContext`，但在线侧只有 history-only robot/slosh rollout，不能提供 expected-publish epoch 的 actuator state 和双通道 pending-command buffer。本轮新增严格、无 ROS 的完整初态构造链：

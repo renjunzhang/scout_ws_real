@@ -1,10 +1,15 @@
 #include "spmpc_local_planner/phase_rejoin/phase_rejoin_coordinator.h"
 
+#include "spmpc_delay_augmented_phase_solver_manifest.h"
+
 #include <algorithm>
 #include <cmath>
 
 namespace spmpc_local_planner {
 namespace {
+
+namespace augmented_manifest =
+    delay_augmented_phase_solver_manifest;
 
 bool finiteNonnegative(double value) {
     return std::isfinite(value) && value >= 0.0;
@@ -14,6 +19,21 @@ bool normalizedNear(double actual, double expected, double tolerance) {
     return std::isfinite(actual) && std::isfinite(expected) &&
         std::abs(actual - expected) <=
             tolerance * std::max(1.0, std::abs(expected));
+}
+
+bool finiteNonnegativeWeights(
+    const DelayAugmentedPhaseCostWeights& weights) {
+    const double values[] = {
+        weights.position, weights.yaw, weights.progress, weights.v,
+        weights.omega, weights.slosh_eta, weights.slosh_eta_dot,
+        weights.linear_pending, weights.angular_pending,
+        weights.acceleration, weights.angular_acceleration,
+        weights.progress_rate,
+    };
+    for (double value : values) {
+        if (!finiteNonnegative(value)) return false;
+    }
+    return true;
 }
 
 }  // namespace
@@ -40,6 +60,7 @@ bool PhaseRejoinCoordinator::configure(const PhaseRejoinParams& params,
     params_ = params;
     configured_ = true;
     contract_valid_ = params.mode == PhaseRejoinMode::Off;
+    runtime_contract_ = PhaseRejoinRuntimeContract{};
     contract_status_ = contract_valid_ ? "OFF" : "NOT_VALIDATED";
     resetProgress();
     return true;
@@ -133,8 +154,87 @@ bool PhaseRejoinCoordinator::validateRuntimeContract(
             }
         }
     }
+    if (error.empty() && runtime.delay_augmented_solver_requested) {
+        const NominalArtifactMetadata& metadata = artifact_.metadata();
+        const bool capabilities_complete =
+            runtime.required_solver_capabilities != 0u &&
+            (runtime.solver_capabilities &
+             runtime.required_solver_capabilities) ==
+                runtime.required_solver_capabilities;
+        if (!metadata.delay_augmented_nominal) {
+            error = "AUGMENTED_NOMINAL_ARTIFACT_REQUIRED";
+        } else if (metadata.evidence_level !=
+                       PhaseRejoinEvidenceLevel::EmpiricalHeldOut) {
+            error = "FORMAL_RECOVERY_ASSET_REQUIRED";
+        } else if (metadata.execution_contract_id !=
+                       runtime.execution_contract_id ||
+                   metadata.execution_contract_hash !=
+                       runtime.execution_contract_hash) {
+            error = "EXECUTION_CONTRACT_MISMATCH";
+        } else if (metadata.execution_state_width !=
+                       runtime.execution_state_width ||
+                   metadata.linear_buffer_count !=
+                       runtime.linear_buffer_count ||
+                   metadata.angular_buffer_count !=
+                       runtime.angular_buffer_count ||
+                   runtime.solver_control_width != 3 ||
+                   runtime.execution_front_steps < 0 ||
+                   runtime.solver_horizon_steps !=
+                       runtime.execution_front_steps +
+                           params_.liquid_horizon_steps) {
+            error = "AUGMENTED_SOLVER_DIMENSION_MISMATCH";
+        } else if (!std::isfinite(
+                       runtime.max_published_acceleration) ||
+                   !std::isfinite(
+                       runtime.max_published_angular_acceleration) ||
+                   runtime.max_published_acceleration !=
+                       augmented_manifest::kAccelerationMax ||
+                   runtime.max_published_angular_acceleration !=
+                       augmented_manifest::kAngularAccelerationMax) {
+            error = "AUGMENTED_SOLVER_RATE_CONTRACT_MISMATCH";
+        } else if (params_.max_residual_v >
+                       augmented_manifest::kLinearOutputMax -
+                           augmented_manifest::kLinearOutputMin ||
+                   params_.max_residual_omega >
+                       augmented_manifest::kAngularOutputMax -
+                           augmented_manifest::kAngularOutputMin) {
+            error = "AUGMENTED_RESIDUAL_BOUND_MISMATCH";
+        } else if (metadata.parameter_schema_version !=
+                       runtime.parameter_schema_version ||
+                   metadata.parameter_schema_id !=
+                       runtime.parameter_schema_id ||
+                   metadata.parameter_schema_hash !=
+                       runtime.parameter_schema_hash) {
+            error = "PARAMETER_SCHEMA_MISMATCH";
+        } else if (runtime.recovery_artifact_hash.empty() ||
+                   metadata.recovery_artifact_hash !=
+                       runtime.recovery_artifact_hash) {
+            error = "RECOVERY_ARTIFACT_HASH_MISMATCH";
+        } else if (metadata.execution_compatibility_contract !=
+                       runtime.execution_compatibility_contract) {
+            error = "EXECUTION_COMPATIBILITY_CONTRACT_MISMATCH";
+        } else if (!capabilities_complete) {
+            error = "DELAY_AUGMENTED_CAPABILITY_MISMATCH";
+        } else if (!finiteNonnegativeWeights(
+                       runtime.delay_augmented_weights)) {
+            error = "DELAY_AUGMENTED_COST_WEIGHTS_INVALID";
+        }
+        if (error.empty()) {
+            for (const PhaseNominalSample& sample : artifact_.samples()) {
+                if (!sample.augmented_execution_valid ||
+                    !ExecutionCompatibilityGate::validBounds(
+                        sample.execution_bounds,
+                        sample.augmented_execution)) {
+                    error = "EXECUTION_COMPATIBILITY_ASSET_INVALID";
+                    break;
+                }
+            }
+        }
+    }
     if (error.empty() &&
-        artifact_.metadata().schema == "phase_rejoin_empirical_v2") {
+        (artifact_.metadata().schema == "phase_rejoin_empirical_v2" ||
+         artifact_.metadata().schema ==
+             "phase_rejoin_empirical_augmented_v3")) {
         const auto& metadata = artifact_.metadata();
         if (!runtime.liquid_model_configured) {
             error = "RUNTIME_LIQUID_MODEL_UNAVAILABLE";
@@ -186,6 +286,7 @@ bool PhaseRejoinCoordinator::validateRuntimeContract(
         return false;
     }
     contract_valid_ = true;
+    runtime_contract_ = runtime;
     contract_status_ = "OK";
     resetProgress();
     return true;
@@ -218,7 +319,12 @@ PhaseNominalStage PhaseRejoinCoordinator::makeStage(
     stage.a = sample.a;
     stage.alpha = sample.alpha;
     stage.v_s = sample.v_s;
+    stage.u_pub_v = sample.u_pub_v;
+    stage.u_pub_omega = sample.u_pub_omega;
     stage.radii = sample.radii;
+    stage.augmented_execution_valid = sample.augmented_execution_valid;
+    stage.augmented_execution = sample.augmented_execution;
+    stage.execution_bounds = sample.execution_bounds;
     return stage;
 }
 
@@ -228,7 +334,8 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     int front_steps,
     int solver_horizon_steps,
     double phase_time_sec,
-    bool solver_origin_at_execution_front) {
+    bool solver_origin_at_execution_front,
+    bool solver_origin_is_execution_augmented) {
     PhaseRejoinPreparation preparation;
     if (!configured_) {
         preparation.status = "NOT_CONFIGURED";
@@ -252,6 +359,24 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     preparation.solver_terminal_step = solver_terminal_step;
     preparation.solver_origin_at_execution_front =
         solver_origin_at_execution_front;
+    preparation.solver_origin_is_execution_augmented =
+        solver_origin_is_execution_augmented;
+    if (solver_origin_is_execution_augmented &&
+        !runtime_contract_.delay_augmented_solver_requested) {
+        preparation.status = "DELAY_AUGMENTED_RUNTIME_CONTRACT_MISSING";
+        return preparation;
+    }
+    if (solver_origin_is_execution_augmented &&
+        solver_origin_at_execution_front) {
+        preparation.status = "DELAY_AUGMENTED_ORIGIN_CONTRACT_MISMATCH";
+        return preparation;
+    }
+    if (solver_origin_is_execution_augmented &&
+        (front_steps != runtime_contract_.execution_front_steps ||
+         solver_horizon_steps != runtime_contract_.solver_horizon_steps)) {
+        preparation.status = "DELAY_AUGMENTED_HORIZON_MISMATCH";
+        return preparation;
+    }
 
     const std::size_t required_tail = static_cast<std::size_t>(
         front_steps + params_.liquid_horizon_steps);
@@ -272,7 +397,8 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
         artifact_, execution_front_robot, execution_front_slosh,
         front_steps, params_.liquid_horizon_steps,
         clock.index,
-        have_accepted_index_, accepted_index_);
+        have_accepted_index_, accepted_index_,
+        !solver_origin_is_execution_augmented);
     if (!preparation.candidate.valid) {
         preparation.status = preparation.candidate.status;
         return preparation;
@@ -322,8 +448,55 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
         preparation.solver_context.stages.push_back(makeStage(
             *sample, k == params_.liquid_horizon_steps));
     }
+    if (solver_origin_is_execution_augmented) {
+        DelayAugmentedPhaseSolverContext& augmented =
+            preparation.solver_context.delay_augmented;
+        augmented.active = true;
+        augmented.parameter_schema_version =
+            runtime_contract_.parameter_schema_version;
+        augmented.parameter_schema_id =
+            runtime_contract_.parameter_schema_id;
+        augmented.parameter_schema_hash =
+            runtime_contract_.parameter_schema_hash;
+        augmented.recovery_artifact_hash =
+            artifact_.metadata().recovery_artifact_hash;
+        augmented.execution_compatibility_contract =
+            runtime_contract_.execution_compatibility_contract;
+        augmented.state_width = runtime_contract_.execution_state_width;
+        augmented.control_width = runtime_contract_.solver_control_width;
+        augmented.horizon_steps = runtime_contract_.solver_horizon_steps;
+        augmented.current_index = preparation.candidate.current_index;
+        augmented.terminal_index = preparation.candidate.terminal_index;
+        augmented.terminal_empirical_gate_bound = true;
+        augmented.execution_compatibility_bound = true;
+        augmented.max_residual_v = params_.max_residual_v;
+        augmented.max_residual_omega = params_.max_residual_omega;
+        augmented.weights = runtime_contract_.delay_augmented_weights;
+        augmented.stages.reserve(
+            static_cast<std::size_t>(augmented.horizon_steps + 1));
+        for (int k = 0; k <= augmented.horizon_steps; ++k) {
+            const std::size_t index = augmented.current_index +
+                static_cast<std::size_t>(k);
+            const PhaseNominalSample* sample = artifact_.sample(index);
+            if (sample == nullptr || !sample->augmented_execution_valid ||
+                !ExecutionCompatibilityGate::validBounds(
+                    sample->execution_bounds,
+                    sample->augmented_execution)) {
+                preparation.status =
+                    "AUGMENTED_NOMINAL_HORIZON_INCOMPLETE";
+                preparation.solver_context = PhaseRejoinSolverContext{};
+                return preparation;
+            }
+            augmented.stages.push_back(makeStage(
+                *sample, k == augmented.horizon_steps));
+        }
+    }
+    const bool execution_augmented =
+        preparation.solver_context.delay_augmented.active;
     const PhaseNominalSample* front = artifact_.sample(
-        preparation.candidate.front_index);
+        execution_augmented
+            ? preparation.candidate.current_index
+            : preparation.candidate.front_index);
     if (front == nullptr) {
         preparation.status = "EXECUTION_FRONT_COMMAND_MISSING";
         preparation.solver_context = PhaseRejoinSolverContext{};
@@ -369,16 +542,28 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
         return decision;
     }
 
+    const bool execution_augmented =
+        preparation.solver_context.delay_augmented.active;
     const PhaseNominalSample* front = artifact_.sample(
-        preparation.candidate.front_index);
+        execution_augmented
+            ? preparation.candidate.current_index
+            : preparation.candidate.front_index);
     const PhaseNominalSample* terminal = artifact_.sample(
         preparation.candidate.terminal_index);
     if (front == nullptr || terminal == nullptr) {
         decision.status = "ARTIFACT_INDEX_MISSING";
         return decision;
     }
+    const RobotState& current_robot =
+        execution_augmented && solve.current_execution_state_available
+            ? solve.current_execution.robot
+            : execution_front_robot;
+    const SloshState& current_slosh =
+        execution_augmented && solve.current_execution_state_available
+            ? solve.current_execution.slosh
+            : execution_front_slosh;
     decision.current_gate = gate_.evaluate(
-        *front, execution_front_robot, execution_front_slosh);
+        *front, current_robot, current_slosh);
     decision.current_gate_accepted = decision.current_gate.accepted;
 
     if (solve.terminal_state_available) {
@@ -388,10 +573,39 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
         decision.terminal_gate.status = "HORIZON_UNAVAILABLE";
     }
     decision.terminal_gate_accepted = decision.terminal_gate.accepted;
+    if (execution_augmented) {
+        if (solve.current_execution_state_available) {
+            decision.current_execution_gate = execution_gate_.evaluate(
+                front->augmented_execution,
+                front->execution_bounds,
+                solve.current_execution);
+        } else {
+            decision.current_execution_gate.status =
+                "CURRENT_EXECUTION_STATE_UNAVAILABLE";
+        }
+        if (solve.terminal_execution_state_available) {
+            decision.terminal_execution_gate = execution_gate_.evaluate(
+                terminal->augmented_execution,
+                terminal->execution_bounds,
+                solve.terminal_execution);
+        } else {
+            decision.terminal_execution_gate.status =
+                "TERMINAL_EXECUTION_STATE_UNAVAILABLE";
+        }
+        decision.current_execution_compatible =
+            decision.current_execution_gate.accepted;
+        decision.terminal_execution_compatible =
+            decision.terminal_execution_gate.accepted;
+    } else {
+        decision.current_execution_compatible = true;
+        decision.terminal_execution_compatible = true;
+    }
     decision.evaluated = true;
 
     if (params_.mode == PhaseRejoinMode::Monitor) {
-        decision.status = decision.terminal_gate_accepted
+        decision.status = decision.terminal_gate_accepted &&
+                decision.current_execution_compatible &&
+                decision.terminal_execution_compatible
             ? "MONITOR_TERMINAL_ACCEPTED"
             : "MONITOR_TERMINAL_REJECTED";
         return decision;
@@ -401,7 +615,9 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
         return decision;
     }
 
-    if (solver_success && decision.terminal_gate_accepted) {
+    if (solver_success && decision.terminal_gate_accepted &&
+        decision.current_execution_compatible &&
+        decision.terminal_execution_compatible) {
         decision.residual_v = solve.cmd_v - preparation.nominal_cmd_v;
         decision.residual_omega =
             solve.cmd_omega - preparation.nominal_cmd_omega;
@@ -427,7 +643,54 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
         return decision;
     }
 
-    if (decision.current_gate_accepted) {
+    if (execution_augmented && !solver_success &&
+        !solve.optimization_failure_recovery_eligible) {
+        decision.output_cmd_v = 0.0;
+        decision.output_cmd_omega = 0.0;
+        decision.command_intervened = true;
+        decision.controlled_stop_used = true;
+        decision.status = "ENFORCE_SOLVER_INTEGRITY_FAILURE_STOP";
+        return decision;
+    }
+
+    if (decision.current_gate_accepted &&
+        decision.current_execution_compatible) {
+        if (execution_augmented) {
+            const ExecutionAugmentedState& actual =
+                solve.current_execution;
+            const bool rate_contract_available =
+                solve.current_execution_state_available && actual.valid &&
+                !actual.linear.pending_commands.empty() &&
+                !actual.angular.pending_commands.empty() &&
+                std::isfinite(runtime_contract_.dt) &&
+                runtime_contract_.dt > 0.0 &&
+                std::isfinite(
+                    runtime_contract_.max_published_acceleration) &&
+                runtime_contract_.max_published_acceleration > 0.0 &&
+                std::isfinite(
+                    runtime_contract_
+                        .max_published_angular_acceleration) &&
+                runtime_contract_.max_published_angular_acceleration > 0.0;
+            const double tolerance = params_.artifact_command_tolerance;
+            const bool rate_safe = rate_contract_available &&
+                std::abs(preparation.recovery_cmd_v -
+                         actual.linear.pending_commands.back()) <=
+                    runtime_contract_.max_published_acceleration *
+                        runtime_contract_.dt + tolerance &&
+                std::abs(preparation.recovery_cmd_omega -
+                         actual.angular.pending_commands.back()) <=
+                    runtime_contract_.max_published_angular_acceleration *
+                        runtime_contract_.dt + tolerance;
+            if (!rate_safe) {
+                decision.output_cmd_v = 0.0;
+                decision.output_cmd_omega = 0.0;
+                decision.command_intervened = true;
+                decision.controlled_stop_used = true;
+                decision.status =
+                    "ENFORCE_RECOVERY_RATE_REJECTED_STOP";
+                return decision;
+            }
+        }
         decision.output_cmd_v = preparation.recovery_cmd_v;
         decision.output_cmd_omega = preparation.recovery_cmd_omega;
         decision.command_intervened = true;
@@ -454,9 +717,14 @@ void PhaseRejoinCoordinator::commit(
     if (!preparation.ready || !preparation.candidate.valid) {
         return;
     }
+    const bool execution_compatible =
+        !preparation.solver_context.delay_augmented.active ||
+        (decision.current_execution_compatible &&
+         decision.terminal_execution_compatible);
     if (params_.mode == PhaseRejoinMode::Monitor ||
         (params_.mode == PhaseRejoinMode::Enforce &&
          decision.terminal_gate_accepted &&
+         execution_compatible &&
          decision.command_contract_consistent)) {
         accepted_index_ = preparation.candidate.current_index;
         have_accepted_index_ = true;
@@ -464,6 +732,7 @@ void PhaseRejoinCoordinator::commit(
     if (params_.mode == PhaseRejoinMode::Enforce &&
         preparation.solver_context.owns_terminal_maneuver &&
         decision.terminal_gate_accepted &&
+        execution_compatible &&
         decision.command_contract_consistent &&
         preparation.candidate.terminal_index + 1 == artifact_.size()) {
         terminal_release_authorized_ = true;

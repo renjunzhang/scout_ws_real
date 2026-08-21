@@ -289,6 +289,8 @@ ControlCycleInputResult ControlCycleInputPreparer::completePrediction(
         }
         result.solver_input.execution_horizon =
             result.execution_horizon_build.context;
+        result.solver_input.horizon_steps =
+            result.execution_horizon_build.context.horizon_steps;
         result.execution_horizon_active = true;
     }
 
@@ -365,9 +367,11 @@ ControlCycleInputResult ControlCycleInputPreparer::completePrediction(
         result.robot_delay_compensation_applied &&
         result.liquid_delay_compensation_applied;
     result.solver_input.cycle_timing = result.timing;
-    result.execution_front_steps = result.have_prediction
-        ? result.prediction.grid_execution_lead_steps
-        : 0;
+    result.execution_front_steps = result.execution_horizon_active
+        ? result.solver_input.execution_horizon.execution_front_steps
+        : (result.have_prediction
+               ? result.prediction.grid_execution_lead_steps
+               : 0);
     result.ready = true;
     result.status = "READY";
     return result;

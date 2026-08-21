@@ -1,6 +1,7 @@
 #include "spmpc_local_planner/ros/spmpc_local_planner_ros.h"
 #include "spmpc_local_planner/ros/ros_config_loader.h"
 #include "spmpc_local_planner/solver/api/backend_policy.h"
+#include "spmpc_local_planner/solver/acados/delay_augmented_phase_solver.h"
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
 #include "spmpc_local_planner/solvers/solver_factory.h"
 #include <algorithm>
@@ -127,6 +128,10 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     variant_ = app_config_.variant;
 
     SolverParams solver_params = app_config_.solver;
+    delay_augmented_phase_enabled_ =
+        solver_params.delay_augmented_phase.enabled;
+    delay_augmented_execution_contract_hash_ =
+        solver_params.delay_augmented_phase.execution_contract_hash;
     const ProcessedImuParams processed_imu_params =
         app_config_.imu_shadow.processed;
     const auto& limits = app_config_.shared_command_limits;
@@ -241,6 +246,61 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                   "runtime liquid-model contract");
         return false;
     }
+    if (delay_augmented_phase_enabled_) {
+        const DelayAugmentedPhaseCompiledContract compiled =
+            DelayAugmentedPhaseAcadosSolver::compiledContract();
+        phase_rejoin_runtime_contract_.delay_augmented_solver_requested = true;
+        phase_rejoin_runtime_contract_.execution_contract_id =
+            compiled.execution.contract_id;
+        phase_rejoin_runtime_contract_.execution_contract_hash =
+            compiled.execution.contract_hash;
+        phase_rejoin_runtime_contract_.execution_state_width =
+            compiled.state_width;
+        phase_rejoin_runtime_contract_.linear_buffer_count =
+            compiled.execution.linear.integer_delay_steps + 1;
+        phase_rejoin_runtime_contract_.angular_buffer_count =
+            compiled.execution.angular.integer_delay_steps + 1;
+        phase_rejoin_runtime_contract_.solver_control_width =
+            compiled.control_width;
+        phase_rejoin_runtime_contract_.execution_front_steps =
+            compiled.execution_front_steps;
+        phase_rejoin_runtime_contract_.solver_horizon_steps =
+            compiled.horizon_steps;
+        phase_rejoin_runtime_contract_.max_published_acceleration =
+            compiled.acceleration_max;
+        phase_rejoin_runtime_contract_
+            .max_published_angular_acceleration =
+                compiled.angular_acceleration_max;
+        phase_rejoin_runtime_contract_.parameter_schema_version =
+            compiled.parameter_schema_version;
+        phase_rejoin_runtime_contract_.parameter_schema_id =
+            compiled.parameter_schema_id;
+        phase_rejoin_runtime_contract_.parameter_schema_hash =
+            compiled.parameter_schema_hash;
+        phase_rejoin_runtime_contract_.recovery_artifact_hash =
+            solver_params.delay_augmented_phase
+                .expected_recovery_artifact_hash;
+        phase_rejoin_runtime_contract_.execution_compatibility_contract =
+            compiled.execution_compatibility_contract;
+        phase_rejoin_runtime_contract_.solver_capabilities =
+            compiled.capabilities;
+        phase_rejoin_runtime_contract_.required_solver_capabilities =
+            solver_params.delay_augmented_phase.required_capabilities;
+        auto& weights = phase_rejoin_runtime_contract_.delay_augmented_weights;
+        weights.position = variant_.w_contour;
+        weights.yaw = variant_.w_lag;
+        weights.progress = variant_.w_progress;
+        weights.v = variant_.w_v;
+        weights.omega = variant_.w_control;
+        weights.slosh_eta = variant_.w_slosh;
+        weights.slosh_eta_dot =
+            variant_.w_slosh * solver_params.slosh.slosh_eta_dot_ratio;
+        weights.linear_pending = variant_.w_v;
+        weights.angular_pending = variant_.w_control;
+        weights.acceleration = variant_.w_control + variant_.w_accel;
+        weights.angular_acceleration = variant_.w_alpha;
+        weights.progress_rate = variant_.w_vs;
+    }
     const bool matched_development_variant =
         variant_.name == "B_slosh_matched0" ||
         variant_.name == "B_slosh_matched5";
@@ -250,16 +310,36 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         return false;
     }
     if (phase_rejoin_params_.mode == PhaseRejoinMode::Enforce) {
-        if (solver_params.solver_backend !=
-                kSolverBackendContinuousMpccAcados ||
+        const bool legacy_phase_backend =
+            solver_params.solver_backend ==
+                kSolverBackendContinuousMpccAcados;
+        const bool augmented_phase_backend =
+            solver_params.solver_backend ==
+                kSolverBackendDelayAugmentedPhaseAcados &&
+            delay_augmented_phase_enabled_;
+        if ((!legacy_phase_backend && !augmented_phase_backend) ||
             !variant_.slosh_enable) {
             ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce requires "
-                      "the main 10D slosh acados backend");
+                      "an explicitly admitted slosh Phase-Rejoin backend");
             return false;
         }
-        if (delay_phase_params_.mode != DelayPhaseMode::FixedClosedLoop) {
-            ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce requires "
-                      "delay_phase=fixed_closed_loop");
+        if (legacy_phase_backend &&
+            delay_phase_params_.mode != DelayPhaseMode::FixedClosedLoop) {
+            ROS_FATAL("[spmpc_local_planner] legacy phase_rejoin/enforce "
+                      "requires delay_phase=fixed_closed_loop");
+            return false;
+        }
+        if (augmented_phase_backend &&
+            delay_phase_params_.mode != DelayPhaseMode::Off) {
+            ROS_FATAL("[spmpc_local_planner] delay-augmented Phase-Rejoin "
+                      "requires delay_phase=off to forbid a second "
+                      "history-only state shift");
+            return false;
+        }
+        if (augmented_phase_backend &&
+            !app_config_.control.publish_latency.enabled) {
+            ROS_FATAL("[spmpc_local_planner] delay-augmented Phase-Rejoin "
+                      "requires publish_timing/enabled=true");
             return false;
         }
         if (!delay_phase_params_.require_complete_history) {
@@ -277,16 +357,17 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                       "execution_contract/fail_closed_on_post_limit_change=true");
             return false;
         }
-        if (!continuousMpccPhaseRejoinAvailable()) {
+        if (legacy_phase_backend && !continuousMpccPhaseRejoinAvailable()) {
             ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce requires "
                       "the dedicated generated Phase-Rejoin acados solver; "
                       "it was not compiled into this package");
             return false;
         }
-        const int phase_solver_horizon =
-            continuousMpccPhaseRejoinHorizonSteps();
-        if (phase_rejoin_params_.liquid_horizon_steps !=
-            phase_solver_horizon) {
+        const int phase_solver_horizon = legacy_phase_backend
+            ? continuousMpccPhaseRejoinHorizonSteps()
+            : DelayAugmentedPhaseAcadosSolver::compiledContract()
+                  .liquid_horizon_steps;
+        if (phase_rejoin_params_.liquid_horizon_steps != phase_solver_horizon) {
             ROS_FATAL("[spmpc_local_planner] phase_rejoin/enforce horizon "
                       "contract mismatch: configured liquid_horizon_steps=%d "
                       "but the dedicated generated solver has N=%d",
@@ -458,7 +539,35 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         imu_shadow_enable_ = false;
     }
     if (!control_input_preparer_.configurePrediction(solver_params.slosh)) {
+        if (delay_augmented_phase_enabled_) {
+            ROS_FATAL("[spmpc_local_planner] delay-augmented execution "
+                      "builder cannot configure the liquid model");
+            return false;
+        }
         ROS_WARN("[spmpc_local_planner] delay_phase shadow slosh predictor configure failed; shadow slosh stays pass-through");
+    }
+    if (delay_augmented_phase_enabled_) {
+        const DelayAugmentedPhaseCompiledContract compiled =
+            DelayAugmentedPhaseAcadosSolver::compiledContract();
+        ExecutionHorizonBuilderConfig builder_config;
+        builder_config.command_timeout_sec =
+            delay_phase_params_.cmd_timeout_sec;
+        builder_config.max_alignment_sec =
+            delay_phase_params_.max_prediction_sec;
+        builder_config.max_integration_step_sec =
+            delay_phase_params_.max_integration_step_sec;
+        builder_config.min_integration_step_sec =
+            delay_phase_params_.min_integration_step_sec;
+        std::string execution_builder_error;
+        if (!control_input_preparer_.configureExecutionHorizon(
+                compiled.execution,
+                builder_config,
+                execution_builder_error)) {
+            ROS_FATAL("[spmpc_local_planner] delay-augmented execution "
+                      "horizon configure failed: %s",
+                      execution_builder_error.c_str());
+            return false;
+        }
     }
     SpeedReferenceControllerConfig speed_reference_config;
     speed_reference_config.runtime_override_enable =
@@ -863,7 +972,8 @@ void SpmpcLocalPlannerROS::imuCallback(const sensor_msgs::ImuConstPtr& msg) {
 }
 
 bool SpmpcLocalPlannerROS::phaseRejoinNeedsPrediction() const {
-    return phase_rejoin_params_.mode != PhaseRejoinMode::Off;
+    return !delay_augmented_phase_enabled_ &&
+        phase_rejoin_params_.mode != PhaseRejoinMode::Off;
 }
 
 void SpmpcLocalPlannerROS::validatePhaseRejoinReference(
@@ -1025,6 +1135,15 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     input_request.delay_phase = delay_phase_params_;
     input_request.phase_rejoin_needs_prediction =
         phaseRejoinNeedsPrediction();
+    input_request.execution_horizon_requested =
+        delay_augmented_phase_enabled_;
+    input_request.execution_contract_hash =
+        delay_augmented_execution_contract_hash_;
+    // SpmpcProblem owns the unique reference projection and replaces this
+    // finite placeholder with the guarded projected progress before solve.
+    input_request.execution_initial_progress_s = 0.0;
+    input_request.execution_liquid_horizon_steps =
+        phase_rejoin_params_.liquid_horizon_steps;
     input_request.command_history = &command_history_;
     input_request.robot_state_lookup = [this](StampNs target_epoch_ns) {
         RobotStateLookupResult lookup;
@@ -1102,11 +1221,21 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     SolverInput input = input_preparation.raw_input;
     diagnostics_.publishRawState(input.robot, input.slosh, slosh_height_coeff);
 
-    const SpeedReferenceEvaluation speed_reference =
-        control_cycle_engine_.prepareSpeedReference(input);
+    SpeedReferenceEvaluation speed_reference;
+    if (delay_augmented_phase_enabled_) {
+        // The nx=22 backend tracks the frozen phase-indexed nominal image and
+        // deliberately has no runtime v_ref parameter. AppConfig rejects all
+        // override/profile/governor features for this backend, so diagnostics
+        // must not imply that an unused reference reached the solver.
+        speed_reference.v_ref_status =
+            "DELAY_AUGMENTED_ARTIFACT_NOMINAL";
+    } else {
+        speed_reference =
+            control_cycle_engine_.prepareSpeedReference(input);
+    }
     diagnostics_.publishSloshGovernor(speed_reference.governor);
-    // effective_config_.v_ref 是本周期 solver 将看到的速度参考：runtime/profile override 优先，
-    // 并按 solver v_max 做同口径 clamp。必须在发布前更新，避免 /spmpc/debug/effective_config 滞后一拍。
+    // Only legacy backends consume this runtime reference. The augmented
+    // backend leaves effective_v_ref_valid=false and follows artifact nominal.
     if (speed_reference.effective_v_ref_valid) {
         effective_config_.v_ref = speed_reference.effective_v_ref;
     }

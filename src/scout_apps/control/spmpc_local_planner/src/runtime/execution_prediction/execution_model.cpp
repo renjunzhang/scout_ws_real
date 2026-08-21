@@ -383,15 +383,34 @@ ExecutionAugmentedAlignmentResult ExecutionModel::alignPublishedHistory(
         contract_.linear.integer_delay_steps + 1);
     const std::size_t angular_count = static_cast<std::size_t>(
         contract_.angular.integer_delay_steps + 1);
-    const std::size_t required_sample_count = std::max(
-        linear_count, angular_count);
-    if (samples.size() < required_sample_count) {
-        result.status = "INCOMPLETE_PENDING_COMMAND_HISTORY";
+
+    // The augmented queue is a dt-spaced, zero-order-held image at the new
+    // publication epoch.  Counting publication events is not equivalent:
+    // one missed or jittered cycle must repeat the held value instead of
+    // shifting an older event into a newer delay slot.  Exact integer delays
+    // retain one older sentinel because ExecutionModel::step() consumes slot
+    // 1 immediately; fractional delays consume slot 0 until the fractional
+    // switch inside the stage.
+    const auto pending_query_start = [target_epoch_ns, this](
+            const ExecutionChannelContract& channel) {
+        const double offset_sec = channel.fractional_delay_sec >
+                kTimeEpsilonSec
+            ? -channel.delay_sec
+            : -(channel.delay_sec + contract_.dt);
+        return addSeconds(target_epoch_ns, offset_sec);
+    };
+    const StampNs linear_pending_start = pending_query_start(
+        contract_.linear);
+    const StampNs angular_pending_start = pending_query_start(
+        contract_.angular);
+    if (!validStamp(linear_pending_start) ||
+        !validStamp(angular_pending_start)) {
+        result.status = "REQUIRED_PENDING_HISTORY_EPOCH_INVALID";
         return result;
     }
     result.oldest_required_history_epoch_ns = std::min(
         result.oldest_required_history_epoch_ns,
-        samples[samples.size() - required_sample_count].stamp_ns);
+        std::min(linear_pending_start, angular_pending_start));
 
     TimedCommandSample held_at_source;
     if (!history.sampleAt(source_epoch_ns, held_at_source)) {
@@ -495,17 +514,35 @@ ExecutionAugmentedAlignmentResult ExecutionModel::alignPublishedHistory(
         }
     }
 
-    result.state.linear.pending_commands.clear();
-    for (std::size_t index = samples.size() - linear_count;
-         index < samples.size(); ++index) {
-        result.state.linear.pending_commands.push_back(
-            samples[index].command.linear);
-    }
-    result.state.angular.pending_commands.clear();
-    for (std::size_t index = samples.size() - angular_count;
-         index < samples.size(); ++index) {
-        result.state.angular.pending_commands.push_back(
-            samples[index].command.angular);
+    const auto rebuild_pending = [
+        &history, this](StampNs query_start,
+                       std::size_t count,
+                       bool linear,
+                       std::deque<double>& pending) {
+        pending.clear();
+        for (std::size_t index = 0; index < count; ++index) {
+            const StampNs query_epoch = addSeconds(
+                query_start, static_cast<double>(index) * contract_.dt);
+            TimedCommandSample sample;
+            if (!validStamp(query_epoch) ||
+                !history.sampleAt(query_epoch, sample)) {
+                pending.clear();
+                return false;
+            }
+            pending.push_back(
+                linear ? sample.command.linear : sample.command.angular);
+        }
+        return true;
+    };
+    if (!rebuild_pending(
+            linear_pending_start, linear_count, true,
+            result.state.linear.pending_commands) ||
+        !rebuild_pending(
+            angular_pending_start, angular_count, false,
+            result.state.angular.pending_commands)) {
+        result.status = "INCOMPLETE_PENDING_COMMAND_HISTORY";
+        result.state.valid = false;
+        return result;
     }
     result.state.stage_index = 0;
     result.state.valid = true;

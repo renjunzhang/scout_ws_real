@@ -499,6 +499,41 @@ AppConfig RosConfigLoader::load(const ros::NodeHandle& private_node,
             "solver_backend",
             "unknown backend '" + solver.solver_backend + "'");
     }
+    auto& augmented = solver.delay_augmented_phase;
+    loadParam(private_node, "delay_augmented_phase/enabled",
+              augmented.enabled);
+    loadParam(private_node, "delay_augmented_phase/execution_contract_id",
+              augmented.execution_contract_id);
+    loadParam(private_node, "delay_augmented_phase/execution_contract_hash",
+              augmented.execution_contract_hash);
+    loadParam(private_node, "delay_augmented_phase/expected_state_width",
+              augmented.expected_state_width);
+    loadParam(private_node, "delay_augmented_phase/expected_control_width",
+              augmented.expected_control_width);
+    loadParam(private_node, "delay_augmented_phase/expected_horizon_steps",
+              augmented.expected_horizon_steps);
+    loadParam(private_node, "delay_augmented_phase/parameter_schema_version",
+              augmented.parameter_schema_version);
+    loadParam(private_node, "delay_augmented_phase/parameter_schema_id",
+              augmented.parameter_schema_id);
+    loadParam(private_node, "delay_augmented_phase/parameter_schema_hash",
+              augmented.parameter_schema_hash);
+    loadParam(
+        private_node,
+        "delay_augmented_phase/expected_recovery_artifact_hash",
+        augmented.expected_recovery_artifact_hash);
+    int required_capabilities = static_cast<int>(
+        augmented.required_capabilities);
+    loadParam(private_node, "delay_augmented_phase/required_capabilities",
+              required_capabilities);
+    if (required_capabilities < 0) {
+        report.fatal(
+            "delay_augmented_phase/required_capabilities",
+            "capability mask must be non-negative");
+    } else {
+        augmented.required_capabilities = static_cast<std::uint32_t>(
+            required_capabilities);
+    }
 
     loadSloshModel(private_node, config, report);
     loadRiskGovernor(private_node, config);

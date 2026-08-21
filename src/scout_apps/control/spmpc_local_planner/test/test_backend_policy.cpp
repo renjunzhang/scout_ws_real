@@ -12,6 +12,8 @@ TEST(BackendPolicy, IdentifiesStableBackendRolesAndCodes) {
     EXPECT_TRUE(isKnownSolverBackend(kSolverBackendContinuousMpccAcados));
     EXPECT_TRUE(isKnownSolverBackend(
         kSolverBackendContinuousMpccDirectOmegaLegacy));
+    EXPECT_TRUE(isKnownSolverBackend(
+        kSolverBackendDelayAugmentedPhaseAcados));
     EXPECT_TRUE(isKnownSolverBackend(kSolverBackendPrimitive));
     EXPECT_FALSE(isKnownSolverBackend("typo"));
 
@@ -19,8 +21,43 @@ TEST(BackendPolicy, IdentifiesStableBackendRolesAndCodes) {
     EXPECT_EQ(
         solverBackendCode(kSolverBackendContinuousMpccDirectOmegaLegacy), 2);
     EXPECT_EQ(solverBackendCode(kSolverBackendPrimitive), 3);
+    EXPECT_EQ(
+        solverBackendCode(kSolverBackendDelayAugmentedPhaseAcados), 4);
     EXPECT_EQ(solverBackendCode("typo"), 0);
     EXPECT_STREQ(solverBackendRole("typo"), "unknown");
+}
+
+TEST(BackendPolicy, AugmentedBackendRequiresExplicitExclusiveOptIn) {
+    SolverParams params;
+    params.solver_backend = kSolverBackendDelayAugmentedPhaseAcados;
+    VariantConfig variant;
+    variant.slosh_enable = true;
+    std::string reason;
+
+    EXPECT_FALSE(validateBackendPolicy(params, variant, reason));
+    EXPECT_NE(reason.find("explicit"), std::string::npos);
+
+    params.delay_augmented_phase.enabled = true;
+    EXPECT_TRUE(validateBackendPolicy(params, variant, reason)) << reason;
+
+    variant.slosh_constraint_enable = true;
+    EXPECT_FALSE(validateBackendPolicy(params, variant, reason));
+    EXPECT_NE(reason.find("slosh hard constraints"), std::string::npos);
+    variant.slosh_constraint_enable = false;
+
+    variant.smooth_priority_enable = true;
+    EXPECT_FALSE(validateBackendPolicy(params, variant, reason));
+    EXPECT_NE(reason.find("smooth-priority"), std::string::npos);
+    variant.smooth_priority_enable = false;
+
+    variant.slosh_cost_horizon_steps = 3;
+    EXPECT_FALSE(validateBackendPolicy(params, variant, reason));
+    EXPECT_NE(reason.find("prefix-only"), std::string::npos);
+    variant.slosh_cost_horizon_steps = -1;
+
+    params.solver_backend = kSolverBackendContinuousMpccAcados;
+    EXPECT_FALSE(validateBackendPolicy(params, variant, reason));
+    EXPECT_NE(reason.find("cannot be combined"), std::string::npos);
 }
 
 TEST(BackendPolicy, MainlineAllowsSupportedSloshVariant) {

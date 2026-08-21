@@ -150,7 +150,7 @@ TEST(ExecutionHorizonContextBuilder, RejectsDisabledPublishEstimate) {
 
 TEST(ExecutionHorizonContextBuilder, RejectsIncompleteHistory) {
     CommandHistoryBuffer history;
-    pushCommand(history, 600000000LL, 0.1);
+    pushCommand(history, 700000000LL, 0.1);
     pushCommand(history, 900000000LL, 0.4);
     const ExecutionHorizonContextBuilder builder = configuredBuilder();
 
@@ -159,7 +159,7 @@ TEST(ExecutionHorizonContextBuilder, RejectsIncompleteHistory) {
 
     EXPECT_FALSE(result.valid);
     EXPECT_EQ(result.status,
-              "EXECUTION_ALIGNMENT_INCOMPLETE_PENDING_COMMAND_HISTORY");
+              "EXECUTION_ALIGNMENT_INCOMPLETE_PHYSICAL_COMMAND_HISTORY");
 }
 
 TEST(ExecutionHorizonContextBuilder, RejectsStaleHistory) {

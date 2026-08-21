@@ -1211,7 +1211,7 @@ $$
 
 formal 增广路径不复用上述 history-only 输出。WP3D 新增 `ExecutionModel::alignPublishedHistory()`：从 common source epoch 到 $\widehat t_{\mathrm{pub}}$ 按真实已发布命令及各自延迟生效时刻传播 robot/slosh/actuator state，再按两路 `integer_delay_steps+1` 基数提取真实 pending-command 序列。`ExecutionHorizonContextBuilder` 冻结执行合同，并只在 estimate、deadline、history freshness/completeness、contract hash、epoch 和 horizon cardinality 全部有效时构造 active context；`ControlCycleInputPreparer` 仅在显式 formal request 下把它写入 `SolverInput.execution_horizon`，否则默认 inactive。
 
-此外，当 $d_v=150\,\mathrm{ms}$、$d_\omega=220\,\mathrm{ms}$ 时，本周期新线速度命令会在共同角速度前沿前约 $70\,\mathrm{ms}$ 开始作用。当前兼容 predictor 在求解前仍只使用旧命令，固定的前沿状态没有保留这段对新决策的依赖。预计发布时间的在线 typed 接线已经完成；WP3A 增加纯 C++ `DelayAugmentedPhaseDynamics`，让 $q=[a,\alpha,v_s]$ 从上一发布命令形成新 $u^{\mathrm{pub}}$、进入双通道 buffer，并按 $N_e=n_f+N_\ell$ 传播；WP3B 生成了 `nx=22,nu=3,N_e=10` 的 CasADi C 离散转移核，完成 128 组随机单步、第一拍 Jacobian 和 terminal Jacobian 与 C++ 参考转移的一致性；WP3C 又以同一转移生成和编译独立 DISCRETE acados capsule，加入 published-command、robot/pending speed 和 rate 硬约束；WP3D 再建立了上述完整 history augmented alignment 与 typed context 接线。但 ROS/formal session 尚未激活 builder，新 capsule 尚未进入在线 factory，也没有 formal nominal-relative cost/parameters、terminal 9D gate 和 $\mathcal B^{\mathrm{exec}}$；capability gate 会明确拒绝 formal 请求。因此执行增广模型和完整初态已具备独立/typed 接线，但尚未进入在线正式闭环。
+此外，当 $d_v=150\,\mathrm{ms}$、$d_\omega=220\,\mathrm{ms}$ 时，本周期新线速度命令会在共同角速度前沿前约 $70\,\mathrm{ms}$ 开始作用。legacy 兼容 predictor 在求解前仍只使用旧命令，固定前沿没有保留这段对新决策的依赖；该局限不再代表唯一在线实现。当前工作树已把 `nx=22,nu=3,N_e=10,np=64` DISCRETE 路径接入 ROS、backend policy、factory 和控制周期，并接入完整 history augmented context、nominal-relative stage/terminal 参数、terminal 9D gate 与并列 $\mathcal B^{\mathrm{exec}}$。默认配置仍选择旧 continuous backend；delay-augmented wrapper 默认是 stub，真实 capsule 只能通过显式未验证开发开关启用，且 manifest 尚无可独立核验的 capsule source/binary hash。因此源码闭环完成不等于正式 solver/recovery release 或实物适配完成。
 
 默认配置也没有启用该功能：`delay_phase.mode=off`、`phase_rejoin.mode=off`、两个时间常数为 0、`require_complete_history=false`。官方实物 runner 的非 pilot 默认关闭 delay；pilot 只显式传两个纯延迟，未传时间常数、完整历史和 Phase-Rejoin 合同参数。因此当前 runner 不能建立 formal `phase_rejoin=enforce` 实物合同。
 
@@ -1223,7 +1223,7 @@ formal 增广路径不复用上述 history-only 输出。WP3D 新增 `ExecutionM
 
 ## 11. 实时求解实现
 
-当前 acados 设置为：
+默认 continuous acados 设置为：
 
 ```text
 integrator                  ERK
@@ -1243,13 +1243,16 @@ spmpc_b0       6 states, 3 controls
 spmpc_slosh   10 states, 3 controls
 ```
 
-主线后端为：
+显式 delay-augmented 开发 backend 使用 `nx=22,nu=3,N=10,np=64` 的 DISCRETE dynamics、NONLINEAR_LS nominal-relative stage/terminal residual、Gauss-Newton Hessian 与 terminal 9D/$\mathcal B^{\mathrm{exec}}$ 约束。它不改变上述默认 continuous 配置。
+
+默认主线后端为：
 
 ```text
 continuous_mpcc_acados
 ```
 
 `continuous_mpcc_direct_omega_legacy` 只用于 RouteB 结构诊断，`primitive` 只作为早期 rollout、fallback 或附录对照，不应与当前主线方法混写。
+`delay_augmented_phase_acados` 是独立且显式启用的开发 backend，不是默认替换；没有已核验 capsule 与正式 recovery release 时不得用于 C0–C4/formal trial。
 
 当前求解边界已经拆分为：
 
@@ -1414,7 +1417,7 @@ $$
 3. modal hard cap 不等价于真实液面无溢出保证；
 4. governor 使用简化短时 rollout，不是完整鲁棒 MPC 或形式化 reference governor 安全证明；
 5. 当前主线关注给定安全路径附近的在线规划控制，不把完整动态避障和同伦推理作为贡献；
-6. 当前已有 `d_c` 预计/实测审计、统一执行参考模型、预计发布时间 typed 接线、本周期新命令进入双通道 buffer 的 C++/CasADi/acados 离散链，以及从真实 history 构造完整 expected-publish augmented context 的严格 builder；但默认估计仍关闭，ROS/formal session 未激活 builder，新 capsule 尚未进入在线 factory，formal cost/parameters 和 terminal gate 尚未完成，Scout 执行参数也未冻结，不能宣称已经适配实物；
+6. 当前已有 `d_c` 预计/实测审计、统一执行参考模型、完整 expected-publish augmented context builder，以及 `nx=22,N=10,np=64` 的 ROS/factory、nominal-relative stage/terminal 参数、terminal 9D gate 和 $\mathcal B^{\mathrm{exec}}$ 源码接线；但默认仍走旧 backend，真实 capsule 仅允许显式未验证开发构建且没有 source/binary hash，Scout 执行参数、正式 nominal/recovery/held-out release 和 C0–C4 证据也未冻结，不能宣称已经适配实物；
 7. 当前缺少独立 odom/TF watchdog、solver deadline、最终命令无条件硬包络、driver 命令超时/确认和急停制动动态合同，正式实物闭环仍是 G0 NO-GO；
 8. 当前唯一 ROS 命令事务已闭合，但 receipt 仍不是 CAN/底盘 ACK；runner 配置和路径版本也尚未形成单一 typed/epoch 合同；
 9. 实物评价必须同时报告任务时间、路径误差、命令平滑性、求解耗时和外部液面指标，避免通过停车或全程低速获得表面上的降晃结果。

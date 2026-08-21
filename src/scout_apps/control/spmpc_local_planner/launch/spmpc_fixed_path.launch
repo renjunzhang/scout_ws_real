@@ -14,7 +14,9 @@
   <arg name="cmd_vel_topic" default="/cmd_vel"/>
   <arg name="publish_cmd_vel" default="true"/>
   <arg name="reference_target_frame" default="" doc="可选: 将收到的 reference path 转到该 frame 后再求解"/>
-  <arg name="solver_backend" default="continuous_mpcc_acados" doc="continuous_mpcc_acados(mainline)|continuous_mpcc_direct_omega_legacy(RouteB diagnostic)|primitive(debug fallback)"/>
+  <arg name="solver_backend" default="continuous_mpcc_acados" doc="continuous_mpcc_acados(mainline)|delay_augmented_phase_acados(explicit development opt-in)|continuous_mpcc_direct_omega_legacy(RouteB diagnostic)|primitive(debug fallback)"/>
+  <arg name="delay_augmented_phase_enabled" default="false"/>
+  <arg name="delay_augmented_phase_expected_recovery_artifact_hash" default=""/>
   <arg name="w_slosh" default="-1.0" doc="覆盖 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
   <arg name="v_ref" default="-1.0" doc="诊断/消融用: 覆盖 v_ref; 负值时用 variants.yaml 原值"/>
   <arg name="slosh_height_max" default="-1.0" doc="覆盖 slosh/slosh_height_max(m); 负值时用 container yaml"/>
@@ -36,6 +38,8 @@
   <arg name="delay_phase_linear_time_constant_sec" default="-1.0"/>
   <arg name="delay_phase_angular_time_constant_sec" default="-1.0"/>
   <arg name="delay_phase_require_complete_history" default="false"/>
+  <arg name="publish_timing_enabled" default="false"/>
+  <arg name="publish_timing_estimated_dc_sec" default="0.0"/>
   <arg name="phase_rejoin_mode" default="off"/>
   <arg name="phase_rejoin_artifact_path" default=""/>
   <arg name="phase_rejoin_publish_diagnostics" default="true"/>
@@ -71,6 +75,8 @@
     <arg name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>
     <arg name="reference_target_frame" value="$(arg reference_target_frame)"/>
     <arg name="solver_backend" value="$(arg solver_backend)"/>
+    <arg name="delay_augmented_phase_enabled" value="$(arg delay_augmented_phase_enabled)"/>
+    <arg name="delay_augmented_phase_expected_recovery_artifact_hash" value="$(arg delay_augmented_phase_expected_recovery_artifact_hash)"/>
     <arg name="w_slosh" value="$(arg w_slosh)"/>
     <arg name="v_ref" value="$(arg v_ref)"/>
     <arg name="slosh_height_max" value="$(arg slosh_height_max)"/>
@@ -92,6 +98,8 @@
     <arg name="delay_phase_linear_time_constant_sec" value="$(arg delay_phase_linear_time_constant_sec)"/>
     <arg name="delay_phase_angular_time_constant_sec" value="$(arg delay_phase_angular_time_constant_sec)"/>
     <arg name="delay_phase_require_complete_history" value="$(arg delay_phase_require_complete_history)"/>
+    <arg name="publish_timing_enabled" value="$(arg publish_timing_enabled)"/>
+    <arg name="publish_timing_estimated_dc_sec" value="$(arg publish_timing_estimated_dc_sec)"/>
     <arg name="phase_rejoin_mode" value="$(arg phase_rejoin_mode)"/>
     <arg name="phase_rejoin_artifact_path" value="$(arg phase_rejoin_artifact_path)"/>
     <arg name="phase_rejoin_publish_diagnostics" value="$(arg phase_rejoin_publish_diagnostics)"/>

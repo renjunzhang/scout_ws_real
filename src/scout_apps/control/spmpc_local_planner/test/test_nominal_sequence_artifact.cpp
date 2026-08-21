@@ -1,10 +1,15 @@
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
+#include "spmpc_local_planner/dynamics/slosh_dynamics.h"
+#include "spmpc_local_planner/runtime/execution_prediction/execution_model.h"
+#include "../generated/acados/spmpc_delay_augmented_phase_solver_manifest.h"
 #include "phase_rejoin_artifact_fixture.h"
 
 #include <gtest/gtest.h>
 
 #include <cstdio>
 #include <fstream>
+#include <iomanip>
+#include <map>
 #include <sstream>
 #include <string>
 #include <unistd.h>
@@ -12,6 +17,8 @@
 
 namespace spmpc_local_planner {
 namespace {
+
+namespace augmented_manifest = delay_augmented_phase_solver_manifest;
 
 std::string artifactText(int count = 20,
                          bool negative_radius = false,
@@ -124,6 +131,235 @@ std::string replaceDataColumn(const std::string& text,
         output << line << '\n';
     }
     return output.str();
+}
+
+std::string preciseNumber(double value) {
+    std::ostringstream out;
+    out << std::setprecision(17) << value;
+    return out.str();
+}
+
+ExecutionModelContract augmentedExecutionContract() {
+    ExecutionModelContract contract;
+    contract.schema_version =
+        augmented_manifest::kExecutionContractSchemaVersion;
+    contract.contract_id = augmented_manifest::kContractId;
+    contract.contract_hash = augmented_manifest::kContractHash;
+    contract.dt = augmented_manifest::kDt;
+    contract.linear.delay_sec = augmented_manifest::kLinearDelaySec;
+    contract.linear.time_constant_sec =
+        augmented_manifest::kLinearTimeConstantSec;
+    contract.linear.positive_gain =
+        augmented_manifest::kLinearPositiveGain;
+    contract.linear.negative_gain =
+        augmented_manifest::kLinearNegativeGain;
+    contract.linear.deadzone = augmented_manifest::kLinearDeadzone;
+    contract.linear.output_min = augmented_manifest::kLinearOutputMin;
+    contract.linear.output_max = augmented_manifest::kLinearOutputMax;
+    contract.angular.delay_sec = augmented_manifest::kAngularDelaySec;
+    contract.angular.time_constant_sec =
+        augmented_manifest::kAngularTimeConstantSec;
+    contract.angular.positive_gain =
+        augmented_manifest::kAngularPositiveGain;
+    contract.angular.negative_gain =
+        augmented_manifest::kAngularNegativeGain;
+    contract.angular.deadzone = augmented_manifest::kAngularDeadzone;
+    contract.angular.output_min = augmented_manifest::kAngularOutputMin;
+    contract.angular.output_max = augmented_manifest::kAngularOutputMax;
+    return contract;
+}
+
+SloshModelParams augmentedSloshParams() {
+    SloshModelParams params;
+    params.container_radius = augmented_manifest::kContainerRadius;
+    params.liquid_height = augmented_manifest::kLiquidHeight;
+    params.liquid_density = augmented_manifest::kLiquidDensity;
+    params.damping_ratio = augmented_manifest::kDampingRatio;
+    params.mode_index = augmented_manifest::kModeIndex;
+    params.dt = augmented_manifest::kDt;
+    params.slosh_height_ref = augmented_manifest::kSloshHeightRef;
+    params.slosh_eta_dot_ratio =
+        augmented_manifest::kSloshEtaDotRatio;
+    params.use_linear_model = true;
+    params.use_parabola_term = false;
+    return params;
+}
+
+std::map<std::string, std::string> augmentedMetadata(
+    double path_length = 0.09) {
+    const SloshModelParams slosh_params = augmentedSloshParams();
+    SloshDynamics slosh;
+    EXPECT_TRUE(slosh.configure(slosh_params));
+    const double omega_n = slosh.omegaN();
+    return {
+        {"schema", "phase_rejoin_empirical_augmented_v3"},
+        {"evidence_level", "empirical_held_out"},
+        {"source", "unit_test_augmented_nominal"},
+        {"contract_id", "test_augmented_nominal_v3"},
+        {"frame_id", "map"},
+        {"dt", preciseNumber(augmented_manifest::kDt)},
+        {"path_length", preciseNumber(path_length)},
+        {"terminal_contract", "stop_settle_zero_hold_v1"},
+        {"recovery_contract", "nominal_command_v1"},
+        {"terminal_zero_hold_steps", "11"},
+        {"terminal_eta_norm_max", "1.0"},
+        {"terminal_eta_dot_norm_max", "1.0"},
+        {"two_zeta_omega_n", preciseNumber(
+             2.0 * slosh_params.damping_ratio * omega_n)},
+        {"omega_n_sq", preciseNumber(omega_n * omega_n)},
+        {"kappa_x", "1.0"},
+        {"kappa_y", "1.0"},
+        {"dynamics_tolerance", preciseNumber(
+            augmented_manifest::kPublishedConsistencyTolerance)},
+        {"execution_contract_id", augmented_manifest::kContractId},
+        {"execution_contract_hash", augmented_manifest::kContractHash},
+        {"execution_state_width",
+         std::to_string(augmented_manifest::kStateCount)},
+        {"execution_linear_buffer_count",
+         std::to_string(augmented_manifest::kLinearBufferCount)},
+        {"execution_angular_buffer_count",
+         std::to_string(augmented_manifest::kAngularBufferCount)},
+        {"parameter_schema_version",
+         std::to_string(augmented_manifest::kParameterSchemaVersion)},
+        {"parameter_schema_id", augmented_manifest::kParameterSchemaId},
+        {"parameter_schema_hash", augmented_manifest::kParameterSchemaHash},
+        {"recovery_artifact_hash",
+         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        {"execution_compatibility_contract",
+         augmented_manifest::kExecutionCompatibilityContract},
+    };
+}
+
+EmpiricalRecoveryRadii unitRadii() {
+    EmpiricalRecoveryRadii radii;
+    radii.x = 1.0;
+    radii.y = 1.0;
+    radii.yaw = 1.0;
+    radii.v = 1.0;
+    radii.omega = 1.0;
+    radii.eta_x = 1.0;
+    radii.eta_x_dot = 1.0;
+    radii.eta_y = 1.0;
+    radii.eta_y_dot = 1.0;
+    return radii;
+}
+
+ExecutionCompatibilityBounds unitExecutionBounds() {
+    ExecutionCompatibilityBounds bounds;
+    bounds.valid = true;
+    bounds.linear_actuator_output = 1.0;
+    bounds.angular_actuator_output = 1.0;
+    bounds.linear_pending_commands.assign(
+        augmented_manifest::kLinearBufferCount, 1.0);
+    bounds.angular_pending_commands.assign(
+        augmented_manifest::kAngularBufferCount, 1.0);
+    return bounds;
+}
+
+std::vector<PhaseNominalSample> zeroAugmentedSamples() {
+    constexpr double dt = augmented_manifest::kDt;
+    std::vector<PhaseNominalSample> samples(24);
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+        PhaseNominalSample& sample = samples[index];
+        sample.index = index;
+        sample.t = static_cast<double>(index) * dt;
+        sample.s = 0.09;
+        sample.x = 0.09;
+        sample.radii = unitRadii();
+        sample.augmented_execution_valid = true;
+        sample.augmented_execution.valid = true;
+        sample.augmented_execution.stage_index = index;
+        sample.augmented_execution.linear.pending_commands.assign(
+            augmented_manifest::kLinearBufferCount, 0.0);
+        sample.augmented_execution.angular.pending_commands.assign(
+            augmented_manifest::kAngularBufferCount, 0.0);
+        sample.execution_bounds = unitExecutionBounds();
+    }
+    return samples;
+}
+
+std::map<std::string, std::string> sealedAugmentedMetadata(
+    const std::vector<PhaseNominalSample>& samples,
+    double path_length = 0.09) {
+    std::map<std::string, std::string> metadata =
+        augmentedMetadata(path_length);
+    metadata["recovery_artifact_hash"] =
+        NominalSequenceArtifact::canonicalRecoveryArtifactHash(
+            metadata, samples);
+    return metadata;
+}
+
+struct NontrivialAugmentedFixture {
+    std::map<std::string, std::string> metadata;
+    std::vector<PhaseNominalSample> samples;
+};
+
+NontrivialAugmentedFixture nontrivialAugmentedFixture() {
+    constexpr double dt = augmented_manifest::kDt;
+    const ExecutionModelContract contract = augmentedExecutionContract();
+    const SloshModelParams slosh_params = augmentedSloshParams();
+    ExecutionModel dynamics;
+    std::string error;
+    EXPECT_TRUE(dynamics.configure(contract, slosh_params, error)) << error;
+
+    ExecutionAugmentedState state;
+    EXPECT_TRUE(dynamics.initializeHeld(
+        RobotState{}, SloshState{}, VelocityCommand{}, state, error)) << error;
+    double progress_s = 0.09;
+    NontrivialAugmentedFixture fixture;
+    fixture.samples.resize(40);
+    for (std::size_t index = 0; index < fixture.samples.size(); ++index) {
+        const double linear_step = 0.5 * dt;
+        const double angular_step = 1.0 * dt;
+        const double published_v = index < 8
+            ? static_cast<double>(index + 1) * linear_step
+            : (index < 16
+                ? static_cast<double>(15 - index) * linear_step
+                : 0.0);
+        const double published_omega = index < 8
+            ? static_cast<double>(index + 1) * angular_step
+            : (index < 16
+                ? static_cast<double>(15 - index) * angular_step
+                : 0.0);
+        PhaseNominalSample& sample = fixture.samples[index];
+        sample.index = index;
+        sample.t = static_cast<double>(index) * dt;
+        sample.s = progress_s;
+        sample.x = state.robot.x;
+        sample.y = state.robot.y;
+        sample.yaw = state.robot.yaw;
+        sample.v = state.robot.v;
+        sample.omega = state.robot.omega;
+        sample.eta_x = state.slosh.eta_x;
+        sample.eta_x_dot = state.slosh.eta_x_dot;
+        sample.eta_y = state.slosh.eta_y;
+        sample.eta_y_dot = state.slosh.eta_y_dot;
+        sample.a = (published_v -
+            state.linear.pending_commands.back()) / dt;
+        sample.alpha = (published_omega -
+            state.angular.pending_commands.back()) / dt;
+        sample.v_s = index < 16 ? 0.1 : 0.0;
+        sample.u_pub_v = published_v;
+        sample.u_pub_omega = published_omega;
+        sample.kappa_v = published_v;
+        sample.kappa_omega = published_omega;
+        sample.radii = unitRadii();
+        sample.augmented_execution_valid = true;
+        sample.augmented_execution = state;
+        sample.execution_bounds = unitExecutionBounds();
+        if (index + 1 < fixture.samples.size()) {
+            VelocityCommand published;
+            published.linear = published_v;
+            published.angular = published_omega;
+            const ExecutionStepResult result = dynamics.step(state, published);
+            EXPECT_TRUE(result.valid) << result.status;
+            state = result.state;
+            progress_s += sample.v_s * dt;
+        }
+    }
+    fixture.metadata = sealedAugmentedMetadata(
+        fixture.samples, fixture.samples.back().s);
+    return fixture;
 }
 
 TEST(NominalSequenceArtifact, LoadsStrictValidArtifact) {
@@ -390,6 +626,256 @@ TEST(NominalSequenceArtifact, LoadsDynamicsConsistentV2CompleteTail) {
               "stop_settle_zero_hold_v1");
     EXPECT_EQ(artifact.metadata().recovery_contract,
               "nominal_command_v1");
+}
+
+TEST(NominalSequenceArtifact, LoadsDynamicsConsistentV3AugmentedSequence) {
+    const std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        sealedAugmentedMetadata(samples), samples, "<v3-valid>");
+
+    ASSERT_TRUE(result.success) << result.status << ": " << result.detail;
+    EXPECT_TRUE(artifact.valid());
+    EXPECT_EQ(artifact.metadata().execution_state_width, 22);
+    EXPECT_EQ(artifact.metadata().linear_buffer_count, 5);
+    EXPECT_EQ(artifact.metadata().angular_buffer_count, 7);
+}
+
+TEST(NominalSequenceArtifact,
+     LoadsNontrivialV3SequenceFromReferenceExecutionDynamics) {
+    const NontrivialAugmentedFixture fixture =
+        nontrivialAugmentedFixture();
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        fixture.metadata, fixture.samples, "<v3-reference-dynamics>");
+
+    ASSERT_TRUE(result.success) << result.status << ": " << result.detail;
+    EXPECT_TRUE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact, RejectsV3PublishedCommandMismatch) {
+    std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    samples[4].u_pub_v = 0.1;
+    samples[4].kappa_v = 0.1;
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        sealedAugmentedMetadata(samples), samples, "<v3-bad-published>");
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "PUBLISHED_COMMAND_MISMATCH");
+    EXPECT_EQ(result.detail, "index 4");
+    EXPECT_FALSE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact,
+     RejectsV3ControlOutsideGeneratedOcpBoundsAtAdmission) {
+    std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    samples[0].a = augmented_manifest::kAccelerationMax + 0.01;
+    samples[0].u_pub_v = samples[0].a * augmented_manifest::kDt;
+    samples[0].kappa_v = samples[0].u_pub_v;
+
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        sealedAugmentedMetadata(samples), samples,
+        "<v3-out-of-bounds-control>");
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "V3_NOMINAL_CONTROL_BOUNDS_MISMATCH");
+}
+
+TEST(NominalSequenceArtifact,
+     RejectsV3ValuesTooSmallForOnlineParameterization) {
+    {
+        std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+        samples[0].radii.x =
+            0.5 * augmented_manifest::kMinimumRecoveryDenominator;
+        NominalSequenceArtifact artifact;
+        const auto result = artifact.assignValidated(
+            sealedAugmentedMetadata(samples), samples,
+            "<v3-ill-conditioned-radius>");
+        EXPECT_FALSE(result.success);
+        EXPECT_EQ(result.status, "INVALID_AUGMENTED_EXECUTION_ROW");
+    }
+    {
+        std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+        samples[0].execution_bounds.linear_actuator_output =
+            0.5 * augmented_manifest::kMinimumRecoveryDenominator;
+        NominalSequenceArtifact artifact;
+        const auto result = artifact.assignValidated(
+            sealedAugmentedMetadata(samples), samples,
+            "<v3-ill-conditioned-execution-bound>");
+        EXPECT_FALSE(result.success);
+        EXPECT_EQ(result.status, "INVALID_AUGMENTED_EXECUTION_ROW");
+    }
+}
+
+TEST(NominalSequenceArtifact,
+     RejectsV3ToleranceWiderThanOnlinePublishedCommandContract) {
+    const std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    std::map<std::string, std::string> metadata = augmentedMetadata();
+    metadata["dynamics_tolerance"] = preciseNumber(
+        2.0 * augmented_manifest::kPublishedConsistencyTolerance);
+    metadata["recovery_artifact_hash"] =
+        NominalSequenceArtifact::canonicalRecoveryArtifactHash(
+            metadata, samples);
+
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        metadata, samples, "<v3-overwide-dynamics-tolerance>");
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "INVALID_V3_METADATA_VALUE");
+}
+
+TEST(NominalSequenceArtifact,
+     RejectsV3ExecutionStateOutsideGeneratedEnvelope) {
+    std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    samples[0].augmented_execution.linear.pending_commands.front() =
+        augmented_manifest::kLinearOutputMax + 0.01;
+
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        sealedAugmentedMetadata(samples), samples,
+        "<v3-out-of-bounds-execution-state>");
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "V3_EXECUTION_STATE_BOUNDS_MISMATCH");
+}
+
+TEST(NominalSequenceArtifact,
+     RejectsNegativeProgressThatOnlineParameterizationCannotSerialize) {
+    std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    samples.front().s = 0.0;
+    for (std::size_t index = 1; index < samples.size(); ++index) {
+        samples[index].s = -5.0e-10;
+    }
+    constexpr double kPositiveDeclaredPathLength = 1.0e-10;
+
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        sealedAugmentedMetadata(samples, kPositiveDeclaredPathLength),
+        samples, "<v3-negative-progress>");
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "V3_NOMINAL_PROGRESS_BOUNDS_MISMATCH");
+}
+
+TEST(NominalSequenceArtifact,
+     RejectsTerminalPublishedCommandMismatchBeforeOnlineUse) {
+    std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    samples.back().augmented_execution.linear.pending_commands.back() =
+        0.01;
+
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        sealedAugmentedMetadata(samples), samples,
+        "<v3-terminal-published-mismatch>");
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "PUBLISHED_COMMAND_MISMATCH");
+    EXPECT_EQ(result.detail,
+              "index " + std::to_string(samples.size() - 1));
+}
+
+TEST(NominalSequenceArtifact,
+     RejectsV3DtThatDiffersFromCompiledExecutableImage) {
+    const std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    std::map<std::string, std::string> metadata = augmentedMetadata();
+    metadata["dt"] = preciseNumber(augmented_manifest::kDt + 5.0e-13);
+    metadata["recovery_artifact_hash"] =
+        NominalSequenceArtifact::canonicalRecoveryArtifactHash(
+            metadata, samples);
+
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        metadata, samples, "<v3-noncompiled-dt>");
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "V3_EXECUTION_CONTRACT_MISMATCH");
+}
+
+TEST(NominalSequenceArtifact, RejectsV3ExecutionContractMismatch) {
+    const std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    std::map<std::string, std::string> metadata = augmentedMetadata();
+    metadata["execution_contract_hash"] = std::string(64, 'b');
+    metadata["recovery_artifact_hash"] =
+        NominalSequenceArtifact::canonicalRecoveryArtifactHash(
+            metadata, samples);
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        metadata, samples, "<v3-bad-contract>");
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "V3_EXECUTION_CONTRACT_MISMATCH");
+    EXPECT_FALSE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact, RejectsV3PendingQueueShiftMismatch) {
+    std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    samples[5].augmented_execution.linear.pending_commands[1] = 0.1;
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        sealedAugmentedMetadata(samples), samples, "<v3-bad-queue>");
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "DYNAMICS_TRANSITION_MISMATCH");
+    EXPECT_EQ(result.detail, "index 4");
+    EXPECT_FALSE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact, RejectsV3ActuatorTransitionMismatch) {
+    std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    samples[5].v = 0.1;
+    samples[5].augmented_execution.linear.actuator_output = 0.1;
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        sealedAugmentedMetadata(samples), samples, "<v3-bad-actuator>");
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "DYNAMICS_TRANSITION_MISMATCH");
+    EXPECT_EQ(result.detail, "index 4");
+    EXPECT_FALSE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact, RejectsV3RobotAndSloshTransitionMismatch) {
+    for (int mutation = 0; mutation < 2; ++mutation) {
+        std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+        if (mutation == 0) {
+            samples[5].x += 0.1;
+        } else {
+            samples[5].eta_x = 0.1;
+        }
+        NominalSequenceArtifact artifact;
+        const auto result = artifact.assignValidated(
+            sealedAugmentedMetadata(samples), samples,
+            "<v3-bad-physical-state>");
+
+        EXPECT_FALSE(result.success);
+        EXPECT_EQ(result.status, "DYNAMICS_TRANSITION_MISMATCH");
+        EXPECT_EQ(result.detail, "index 4");
+        EXPECT_FALSE(artifact.valid());
+    }
+}
+
+TEST(NominalSequenceArtifact, RejectsSelfReportedV3RecoveryHash) {
+    const std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        augmentedMetadata(), samples, "<v3-self-reported-hash>");
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "RECOVERY_ARTIFACT_HASH_MISMATCH");
+    EXPECT_FALSE(artifact.valid());
+}
+
+TEST(NominalSequenceArtifact, RejectsV3PayloadTamperingAfterSeal) {
+    std::vector<PhaseNominalSample> samples = zeroAugmentedSamples();
+    const std::map<std::string, std::string> sealed_metadata =
+        sealedAugmentedMetadata(samples);
+    samples[4].radii.eta_x = 0.5;
+
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.assignValidated(
+        sealed_metadata, samples, "<v3-tampered-row>");
+
+    EXPECT_FALSE(result.success);
+    EXPECT_EQ(result.status, "RECOVERY_ARTIFACT_HASH_MISMATCH");
+    EXPECT_FALSE(artifact.valid());
 }
 
 TEST(NominalSequenceArtifact, RejectsV2PublishedCommandNotGeneratedByControl) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/phase_rejoin/empirical_recovery_gate.h"
+#include "spmpc_local_planner/phase_rejoin/execution_compatibility_gate.h"
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
 #include "spmpc_local_planner/phase_rejoin/phase_candidate_selector.h"
 #include "spmpc_local_planner/phase_rejoin/phase_clock.h"
@@ -29,7 +30,8 @@ public:
                                    int front_steps,
                                    int solver_horizon_steps,
                                    double phase_time_sec,
-                                   bool solver_origin_at_execution_front = true);
+                                   bool solver_origin_at_execution_front = true,
+                                   bool solver_origin_is_execution_augmented = false);
 
     PhaseRejoinDecision decide(const PhaseRejoinPreparation& preparation,
                                const RobotState& execution_front_robot,
@@ -62,12 +64,14 @@ private:
     PhaseCandidateSelector selector_;
     PhaseClock phase_clock_;
     EmpiricalRecoveryGate gate_;
+    ExecutionCompatibilityGate execution_gate_;
     bool configured_ = false;
     bool contract_valid_ = false;
     bool have_accepted_index_ = false;
     std::size_t accepted_index_ = 0;
     bool terminal_release_authorized_ = false;
     std::string contract_status_ = "NOT_VALIDATED";
+    PhaseRejoinRuntimeContract runtime_contract_;
 };
 
 }  // namespace spmpc_local_planner

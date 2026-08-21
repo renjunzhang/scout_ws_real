@@ -157,21 +157,42 @@ TrackingProjectionView ControlCycleEngine::projectionView(
 PhaseRejoinPreparation ControlCycleEngine::preparePhase(
     const ControlCycleRequest& request) {
     PhaseRejoinPreparation preparation;
+    const bool execution_augmented =
+        request.solver_input.execution_horizon.active;
     if (phase_params_.mode == PhaseRejoinMode::Off) {
         preparation.status = "OFF";
-    } else if (!request.prediction_valid) {
+    } else if (!execution_augmented && !request.prediction_valid) {
         preparation.status = "PREDICTION_" + request.prediction_status;
     } else if (phase_params_.mode == PhaseRejoinMode::Enforce &&
-               !request.solver_origin_at_execution_front) {
+               !request.solver_origin_at_execution_front &&
+               !execution_augmented) {
         preparation.status = "EXECUTION_FRONT_NOT_APPLIED";
     } else {
+        const RobotState& phase_robot = execution_augmented
+            ? request.solver_input.execution_horizon.initial_state.robot
+            : request.execution_front_robot;
+        const SloshState& phase_slosh = execution_augmented
+            ? request.solver_input.execution_horizon.initial_state.slosh
+            : request.execution_front_slosh;
+        const int front_steps = execution_augmented
+            ? request.solver_input.execution_horizon.execution_front_steps
+            : request.execution_front_steps;
+        const int solver_horizon = execution_augmented
+            ? request.solver_input.execution_horizon.horizon_steps
+            : request.solver_input.horizon_steps;
+        const double phase_time_sec = execution_augmented
+            ? static_cast<double>(
+                  request.solver_input.execution_horizon.initial_epoch_ns) *
+                  kSecondsPerNanosecond
+            : request.phase_time_sec;
         preparation = phase_rejoin_.prepare(
-            request.execution_front_robot,
-            request.execution_front_slosh,
-            request.execution_front_steps,
-            request.solver_input.horizon_steps,
-            request.phase_time_sec,
-            request.solver_origin_at_execution_front);
+            phase_robot,
+            phase_slosh,
+            front_steps,
+            solver_horizon,
+            phase_time_sec,
+            request.solver_origin_at_execution_front,
+            execution_augmented);
     }
     return preparation;
 }
@@ -195,12 +216,34 @@ ControlCycleResult ControlCycleEngine::step(
     applyPublishEpochEstimate(
         publish_epoch_estimate,
         result.solver_input.cycle_timing);
-    result.phase_preparation = preparePhase(request);
-    result.solver_input.phase_rejoin =
-        result.phase_preparation.solver_context;
-
-    result.solve_returned = solver_session_.solve(
-        result.solver_input, result.solver_output);
+    const bool execution_epoch_mismatch =
+        result.solver_input.execution_horizon.active &&
+        (!publish_epoch_estimate.valid ||
+         publish_epoch_estimate.expected_deadline_missed ||
+         !validStamp(
+             result.solver_input.execution_horizon.initial_epoch_ns) ||
+         result.solver_input.execution_horizon.initial_epoch_ns !=
+             publish_epoch_estimate.expected_publish_stamp_ns);
+    if (execution_epoch_mismatch) {
+        // The augmented state is meaningful only at the publication epoch it
+        // was aligned to.  Recomputing cycle timing must never silently reuse
+        // a state/buffer image from another epoch or invoke a recovery action.
+        result.phase_preparation.status =
+            "EXECUTION_HORIZON_PUBLISH_EPOCH_MISMATCH";
+        result.solver_input.phase_rejoin = PhaseRejoinSolverContext{};
+        result.solver_output.status =
+            "EXECUTION_HORIZON_PUBLISH_EPOCH_MISMATCH";
+    } else {
+        ControlCycleRequest normalized_request = request;
+        normalized_request.publish_epoch_estimate =
+            publish_epoch_estimate;
+        normalized_request.solver_input = result.solver_input;
+        result.phase_preparation = preparePhase(normalized_request);
+        result.solver_input.phase_rejoin =
+            result.phase_preparation.solver_context;
+        result.solve_returned = solver_session_.solve(
+            result.solver_input, result.solver_output);
+    }
     result.output = result.solver_output;
     result.solver_success = result.output.success;
     result.solver_command = rawSolverCommand(result.output);
@@ -225,7 +268,8 @@ ControlCycleResult ControlCycleEngine::step(
     result.terminal_priority = goal_reached_latched_ ||
         result.output.terminal_diagnostics.reached ||
         result.output.status == "GOAL_REACHED";
-    if (phase_params_.mode != PhaseRejoinMode::Off) {
+    if (!execution_epoch_mismatch &&
+        phase_params_.mode != PhaseRejoinMode::Off) {
         result.have_phase_decision = true;
         if (result.terminal_priority) {
             result.phase_decision.solver_cmd_v = result.output.cmd_v;
@@ -241,7 +285,10 @@ ControlCycleResult ControlCycleEngine::step(
                 result.solver_success,
                 makePhaseSolveView(
                     result.solver_output,
-                    result.phase_preparation.solver_terminal_step));
+                    result.phase_preparation.solver_terminal_step,
+                    request.solver_input.execution_horizon.active
+                        ? &request.solver_input.execution_horizon.initial_state
+                        : nullptr));
             if (phase_params_.mode == PhaseRejoinMode::Enforce) {
                 result.output.cmd_v =
                     result.phase_decision.output_cmd_v;
@@ -250,7 +297,9 @@ ControlCycleResult ControlCycleEngine::step(
                 result.output.status = result.phase_decision.status;
                 result.output.success =
                     (result.solver_success &&
-                     result.phase_decision.terminal_gate_accepted) ||
+                     result.phase_decision.terminal_gate_accepted &&
+                     result.phase_decision.current_execution_compatible &&
+                     result.phase_decision.terminal_execution_compatible) ||
                     result.phase_decision.recovery_command_used;
                 if (result.phase_decision.controlled_stop_used) {
                     result.output.success = false;
@@ -264,7 +313,16 @@ ControlCycleResult ControlCycleEngine::step(
     result.post_phase_command.angular = result.output.cmd_omega;
 
     SafetySupervisorInput safety_input;
-    safety_input.robot = result.solver_input.robot;
+    // Every decision after execution-horizon construction must use one epoch.
+    // The augmented solver, Phase-Rejoin gate and path projection all start at
+    // the expected publication epoch, so feeding the older source-epoch robot
+    // state to the spin latch could either miss pending rotation or reject a
+    // rotation that the aligned execution state has already settled.
+    safety_input.robot =
+        result.solver_input.execution_horizon.active &&
+            result.solver_input.execution_horizon.initial_state.valid
+        ? result.solver_input.execution_horizon.initial_state.robot
+        : result.solver_input.robot;
     safety_input.command = result.post_phase_command;
     safety_input.command_accepted = result.output.success;
     safety_input.status = result.output.status;
@@ -306,7 +364,7 @@ ControlCycleResult ControlCycleEngine::step(
     arbitration.phase_rejoin.active =
         phase_params_.mode == PhaseRejoinMode::Enforce &&
         result.have_phase_decision && !result.terminal_priority &&
-        !result.safety.blocked && result.output.success;
+        !result.safety.blocked;
     arbitration.phase_rejoin.accepted = result.output.success;
     arbitration.phase_rejoin.command = result.post_phase_command;
     arbitration.phase_rejoin.reason = result.output.status;
@@ -362,7 +420,7 @@ ControlCycleResult ControlCycleEngine::step(
         result.publication.pipeline.decision.reason;
     result.telemetry.command_source =
         result.publication.pipeline.decision.source;
-    result.telemetry.solve_attempted = true;
+    result.telemetry.solve_attempted = !execution_epoch_mismatch;
     result.telemetry.solve_returned = result.solve_returned;
     result.telemetry.solve_success = result.solver_success;
     result.telemetry.command_accepted =

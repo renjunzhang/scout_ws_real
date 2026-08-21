@@ -240,7 +240,8 @@ TEST(ExecutionModel,
     ASSERT_EQ(result.segments.size(), 3u);
 }
 
-TEST(ExecutionModel, AugmentedAlignmentRejectsIncompletePendingHistory) {
+TEST(ExecutionModel,
+     AugmentedAlignmentResamplesIrregularHistoryByTimeSlot) {
     ExecutionModelContract contract = baseContract();
     contract.linear.delay_sec = 0.15;
     contract.angular.delay_sec = 0.25;
@@ -248,7 +249,37 @@ TEST(ExecutionModel, AugmentedAlignmentRejectsIncompletePendingHistory) {
 
     CommandHistoryBuffer history;
     pushCommand(history, 600000000LL, 1.0, 10.0);
-    pushCommand(history, 900000000LL, 4.0, 40.0);
+    pushCommand(history, 700000000LL, 2.0, 20.0);
+    // The 0.8 s publication is deliberately missing.  The delay queue must
+    // repeat the 0.7 s held command, not pull the 0.6 s event forward merely
+    // to obtain the expected number of entries.
+    pushCommand(history, 900000000LL, 5.0, 50.0);
+
+    const ExecutionAugmentedAlignmentResult result =
+        model.alignPublishedHistory(
+            RobotState{}, SloshState{}, history,
+            850000000LL, 1000000000LL, 0.05, 0.001);
+
+    ASSERT_TRUE(result.valid) << result.status;
+    EXPECT_TRUE(result.history_complete);
+    ASSERT_EQ(result.state.linear.pending_commands.size(), 2u);
+    EXPECT_DOUBLE_EQ(result.state.linear.pending_commands[0], 2.0);
+    EXPECT_DOUBLE_EQ(result.state.linear.pending_commands[1], 5.0);
+    ASSERT_EQ(result.state.angular.pending_commands.size(), 3u);
+    EXPECT_DOUBLE_EQ(result.state.angular.pending_commands[0], 20.0);
+    EXPECT_DOUBLE_EQ(result.state.angular.pending_commands[1], 20.0);
+    EXPECT_DOUBLE_EQ(result.state.angular.pending_commands[2], 50.0);
+}
+
+TEST(ExecutionModel, AugmentedAlignmentRejectsMissingTimeCoverage) {
+    ExecutionModelContract contract = baseContract();
+    contract.linear.delay_sec = 0.15;
+    contract.angular.delay_sec = 0.25;
+    ExecutionModel model = configuredModel(contract);
+
+    CommandHistoryBuffer history;
+    pushCommand(history, 700000000LL, 2.0, 20.0);
+    pushCommand(history, 900000000LL, 5.0, 50.0);
 
     const ExecutionAugmentedAlignmentResult result =
         model.alignPublishedHistory(
@@ -257,7 +288,7 @@ TEST(ExecutionModel, AugmentedAlignmentRejectsIncompletePendingHistory) {
 
     EXPECT_FALSE(result.valid);
     EXPECT_FALSE(result.history_complete);
-    EXPECT_EQ(result.status, "INCOMPLETE_PENDING_COMMAND_HISTORY");
+    EXPECT_EQ(result.status, "INCOMPLETE_PHYSICAL_COMMAND_HISTORY");
 }
 
 TEST(ExecutionModel, AugmentedAlignmentRejectsTargetEpochHistory) {

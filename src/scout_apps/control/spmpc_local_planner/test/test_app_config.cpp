@@ -1,4 +1,6 @@
 #include "spmpc_local_planner/config/app_config.h"
+#include "spmpc_local_planner/solver/api/backend.h"
+#include "spmpc_delay_augmented_phase_solver_manifest.h"
 
 #include <gtest/gtest.h>
 
@@ -8,6 +10,9 @@
 
 namespace spmpc_local_planner {
 namespace {
+
+namespace augmented_manifest =
+    delay_augmented_phase_solver_manifest;
 
 bool hasIssue(const ValidationReport& report,
               ValidationSeverity severity,
@@ -165,6 +170,99 @@ TEST(AppConfig, LiquidCostHorizonContractIsFatal) {
         report,
         ValidationSeverity::Fatal,
         "variants/B_slosh/slosh_cost_horizon"));
+}
+
+TEST(AppConfig, AugmentedBackendRequiresEveryExplicitAdmissionBoundary) {
+    AppConfig config;
+    config.solver.solver_backend =
+        kSolverBackendDelayAugmentedPhaseAcados;
+    config.solver.delay_augmented_phase.enabled = true;
+    config.phase_rejoin.params.mode = PhaseRejoinMode::Enforce;
+
+    const ValidationReport missing = validateAndNormalize(config);
+    EXPECT_FALSE(missing.ok());
+    EXPECT_TRUE(hasIssue(
+        missing, ValidationSeverity::Fatal, "publish_timing/enabled"));
+    EXPECT_TRUE(hasIssue(
+        missing, ValidationSeverity::Fatal,
+        "delay_phase/require_complete_history"));
+    EXPECT_TRUE(hasIssue(
+        missing, ValidationSeverity::Fatal,
+        "phase_rejoin/required_contract_id"));
+    EXPECT_TRUE(hasIssue(
+        missing, ValidationSeverity::Fatal,
+        "delay_augmented_phase/expected_recovery_artifact_hash"));
+    EXPECT_TRUE(hasIssue(
+        missing, ValidationSeverity::Fatal,
+        "platform/shared_constraints"));
+
+    config.control.publish_latency.enabled = true;
+    config.control.delay_phase.mode = DelayPhaseMode::Off;
+    config.control.delay_phase.require_complete_history = true;
+    config.phase_rejoin.params.required_contract_id = "test_v3";
+    config.solver.delay_augmented_phase
+        .expected_recovery_artifact_hash = std::string(64, 'a');
+    config.shared_command_limits.linear_accel_limit_enable = false;
+    const ValidationReport complete = validateAndNormalize(config);
+    EXPECT_TRUE(complete.ok());
+}
+
+TEST(AppConfig, AugmentedBackendRejectsUnusedRuntimeSpeedFeatures) {
+    AppConfig config;
+    config.solver.solver_backend =
+        kSolverBackendDelayAugmentedPhaseAcados;
+    config.solver.delay_augmented_phase.enabled = true;
+    config.phase_rejoin.params.mode = PhaseRejoinMode::Enforce;
+    config.control.publish_latency.enabled = true;
+    config.control.delay_phase.require_complete_history = true;
+    config.phase_rejoin.params.required_contract_id = "test_v3";
+    config.solver.delay_augmented_phase
+        .expected_recovery_artifact_hash = std::string(64, 'a');
+    config.shared_command_limits.linear_accel_limit_enable = false;
+
+    config.map_vref.profile_enable = true;
+    EXPECT_TRUE(hasIssue(
+        validateAndNormalize(config), ValidationSeverity::Fatal,
+        "speed_reference"));
+    config.map_vref.profile_enable = false;
+    config.map_vref.runtime_override_enable = true;
+    config.map_vref.runtime_override_mps = 0.2;
+    EXPECT_TRUE(hasIssue(
+        validateAndNormalize(config), ValidationSeverity::Fatal,
+        "speed_reference"));
+    config.map_vref.runtime_override_enable = false;
+    config.slosh_risk_governor.enable = true;
+    EXPECT_TRUE(hasIssue(
+        validateAndNormalize(config), ValidationSeverity::Fatal,
+        "speed_reference"));
+}
+
+TEST(AppConfig, AugmentedResidualBoundsFitCompiledCommandEnvelope) {
+    AppConfig config;
+    config.solver.solver_backend =
+        kSolverBackendDelayAugmentedPhaseAcados;
+    config.solver.delay_augmented_phase.enabled = true;
+    config.phase_rejoin.params.mode = PhaseRejoinMode::Enforce;
+    config.control.publish_latency.enabled = true;
+    config.control.delay_phase.require_complete_history = true;
+    config.phase_rejoin.params.required_contract_id = "test_v3";
+    config.solver.delay_augmented_phase
+        .expected_recovery_artifact_hash = std::string(64, 'a');
+    config.shared_command_limits.linear_accel_limit_enable = false;
+    config.phase_rejoin.params.max_residual_v =
+        augmented_manifest::kLinearOutputMax -
+        augmented_manifest::kLinearOutputMin;
+    config.phase_rejoin.params.max_residual_omega =
+        augmented_manifest::kAngularOutputMax -
+        augmented_manifest::kAngularOutputMin;
+    EXPECT_TRUE(validateAndNormalize(config).ok());
+
+    config.phase_rejoin.params.max_residual_v += 1.0e-6;
+    const ValidationReport over_bound = validateAndNormalize(config);
+    EXPECT_FALSE(over_bound.ok());
+    EXPECT_TRUE(hasIssue(
+        over_bound, ValidationSeverity::Fatal,
+        "phase_rejoin/residual_bounds"));
 }
 
 TEST(AppConfig, NormalizationIsDeterministicAndIdempotent) {

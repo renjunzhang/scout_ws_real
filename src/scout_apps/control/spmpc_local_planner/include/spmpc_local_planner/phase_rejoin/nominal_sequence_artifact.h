@@ -18,6 +18,13 @@ struct NominalArtifactLoadResult {
 
 class NominalSequenceArtifact {
 public:
+    // SHA-256 of the canonical V3 payload.  The recovery_artifact_hash
+    // metadata entry is deliberately excluded so the digest binds the
+    // remaining metadata and every nominal/recovery row without recursion.
+    static std::string canonicalRecoveryArtifactHash(
+        const std::map<std::string, std::string>& metadata,
+        const std::vector<PhaseNominalSample>& samples);
+
     NominalArtifactLoadResult loadCsv(const std::string& path);
     NominalArtifactLoadResult assignValidated(
         const std::map<std::string, std::string>& metadata,

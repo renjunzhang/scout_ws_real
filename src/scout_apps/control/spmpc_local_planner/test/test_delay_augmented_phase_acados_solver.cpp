@@ -47,9 +47,9 @@ ExecutionHorizonContext validContext() {
     EXPECT_TRUE(dynamics.configure(generatedContract(), slosh, error))
         << error;
     RobotState robot;
-    robot.v = 0.2;
+    robot.v = 0.0;
     VelocityCommand held;
-    held.linear = 0.2;
+    held.linear = 0.0;
     DelayAugmentedPhaseState state;
     EXPECT_TRUE(dynamics.initializeHeld(
         robot, SloshState{}, held, 0.5, state, error)) << error;
@@ -60,14 +60,99 @@ ExecutionHorizonContext validContext() {
     return context;
 }
 
+DelayAugmentedPhaseSolverContext validParameterContext(
+    const ExecutionHorizonContext& execution) {
+    DelayAugmentedPhaseSolverContext context;
+    context.active = true;
+    context.parameter_schema_version = manifest::kParameterSchemaVersion;
+    context.parameter_schema_id = manifest::kParameterSchemaId;
+    context.parameter_schema_hash = manifest::kParameterSchemaHash;
+    context.recovery_artifact_hash = std::string(64, 'a');
+    context.execution_compatibility_contract =
+        manifest::kExecutionCompatibilityContract;
+    context.state_width = manifest::kStateCount;
+    context.control_width = manifest::kControlCount;
+    context.horizon_steps = manifest::kHorizonSteps;
+    context.terminal_index = manifest::kHorizonSteps;
+    context.terminal_empirical_gate_bound = true;
+    context.execution_compatibility_bound = true;
+    context.max_residual_v = 0.08;
+    context.max_residual_omega = 0.20;
+    context.weights.position = 1.0;
+    context.weights.yaw = 0.2;
+    context.weights.progress = 0.2;
+    context.weights.v = 1.0;
+    context.weights.omega = 0.1;
+    context.weights.slosh_eta = 1.0;
+    context.weights.slosh_eta_dot = 0.3;
+    context.weights.linear_pending = 1.0;
+    context.weights.angular_pending = 0.1;
+    context.weights.acceleration = 0.1;
+    context.weights.angular_acceleration = 0.1;
+    context.weights.progress_rate = 0.3;
+
+    ExecutionCompatibilityBounds bounds;
+    bounds.valid = true;
+    bounds.linear_actuator_output = 1.0;
+    bounds.angular_actuator_output = 1.0;
+    bounds.linear_pending_commands.assign(
+        static_cast<std::size_t>(manifest::kLinearBufferCount), 1.0);
+    bounds.angular_pending_commands.assign(
+        static_cast<std::size_t>(manifest::kAngularBufferCount), 1.0);
+
+    EmpiricalRecoveryRadii radii;
+    radii.x = 1.0;
+    radii.y = 1.0;
+    radii.yaw = 1.0;
+    radii.v = 1.0;
+    radii.omega = 1.0;
+    radii.eta_x = 1.0;
+    radii.eta_x_dot = 1.0;
+    radii.eta_y = 1.0;
+    radii.eta_y_dot = 1.0;
+
+    context.stages.resize(
+        static_cast<std::size_t>(manifest::kHorizonSteps + 1));
+    for (int stage_index = 0;
+         stage_index <= manifest::kHorizonSteps; ++stage_index) {
+        PhaseNominalStage& stage = context.stages[
+            static_cast<std::size_t>(stage_index)];
+        stage.valid = true;
+        stage.gate_active = stage_index == manifest::kHorizonSteps;
+        stage.artifact_index = static_cast<std::size_t>(stage_index);
+        stage.s = execution.initial_progress_s + 0.09;
+        stage.a = 0.0;
+        stage.alpha = 0.0;
+        stage.v_s = 0.0;
+        stage.u_pub_v =
+            execution.initial_state.linear.pending_commands.back();
+        stage.u_pub_omega =
+            execution.initial_state.angular.pending_commands.back();
+        stage.radii = radii;
+        stage.augmented_execution_valid = true;
+        stage.augmented_execution = execution.initial_state;
+        stage.augmented_execution.robot.x += 0.09;
+        stage.augmented_execution.stage_index =
+            static_cast<std::size_t>(stage_index);
+        stage.execution_bounds = bounds;
+    }
+    return context;
+}
+
 TEST(DelayAugmentedPhaseAcadosSolver,
-     CapabilityMaskRefusesPrematureFormalAdmission) {
-    EXPECT_EQ(kDelayAugmentedPhaseWp3cCapabilities,
+     CapabilityMaskRequiresCompleteTerminalAndExecutionContracts) {
+    const DelayAugmentedPhaseCompiledContract compiled =
+        DelayAugmentedPhaseAcadosSolver::compiledContract();
+    EXPECT_EQ(manifest::kUseLinearModel,
+              compiled.slosh.use_linear_model);
+    EXPECT_EQ(manifest::kUseParabolaTerm,
+              compiled.slosh.use_parabola_term);
+    EXPECT_EQ(kDelayAugmentedPhaseFormalCapabilities,
               DelayAugmentedPhaseAcadosSolver::compiledCapabilities());
-    EXPECT_EQ(0u,
+    EXPECT_NE(0u,
               DelayAugmentedPhaseAcadosSolver::compiledCapabilities() &
                   DELAY_AUGMENTED_TERMINAL_EMPIRICAL_GATE);
-    EXPECT_EQ(0u,
+    EXPECT_NE(0u,
               DelayAugmentedPhaseAcadosSolver::compiledCapabilities() &
                   DELAY_AUGMENTED_EXECUTION_COMPATIBILITY_SET);
 
@@ -75,8 +160,11 @@ TEST(DelayAugmentedPhaseAcadosSolver,
     std::string error;
     EXPECT_TRUE(DelayAugmentedPhaseAcadosSolver::validateContextContract(
         context, kDelayAugmentedPhaseWp3cCapabilities, error)) << error;
-    EXPECT_FALSE(DelayAugmentedPhaseAcadosSolver::validateContextContract(
+    EXPECT_TRUE(DelayAugmentedPhaseAcadosSolver::validateContextContract(
         context, kDelayAugmentedPhaseFormalCapabilities, error));
+    EXPECT_TRUE(error.empty());
+    EXPECT_FALSE(DelayAugmentedPhaseAcadosSolver::validateContextContract(
+        context, 0u, error));
     EXPECT_EQ("delay-augmented solver capability mismatch", error);
 }
 
@@ -108,20 +196,47 @@ TEST(DelayAugmentedPhaseAcadosSolver,
 }
 
 TEST(DelayAugmentedPhaseAcadosSolver,
-     IndependentCapsuleSolvesHeldFeasibleContextWhenGenerated) {
+     UnreadyCapsuleDoesNotClaimOptimizerWasInvoked) {
+    DelayAugmentedPhaseAcadosSolver solver;
+    EXPECT_EQ(-1, solver.solve());
+    const DelayAugmentedPhaseSolveDiagnostics& diagnostics =
+        solver.lastSolveDiagnostics();
+    EXPECT_FALSE(diagnostics.optimizer_invoked);
+    EXPECT_FALSE(diagnostics.evaluated);
+    EXPECT_TRUE(diagnostics.status == "CAPSULE_NOT_READY" ||
+                diagnostics.status == "CAPSULE_NOT_COMPILED");
+}
+
+TEST(DelayAugmentedPhaseAcadosSolver,
+     IndependentCapsuleSolvesStoppedFeasibleContextWhenGenerated) {
     if (!DelayAugmentedPhaseAcadosSolver::compiled()) {
         SUCCEED() << "generated candidate capsule is unavailable; stub kept";
         return;
     }
+    const ExecutionHorizonContext execution = validContext();
     DelayAugmentedPhaseAcadosSolver solver;
     std::string error;
     ASSERT_TRUE(solver.create(
-        validContext(), kDelayAugmentedPhaseWp3cCapabilities, error))
+        execution, kDelayAugmentedPhaseFormalCapabilities, error))
         << error;
+    const DelayAugmentedPhaseParameterMatrix parameters =
+        DelayAugmentedPhaseParameterBuilder::build(
+            validParameterContext(execution));
+    ASSERT_TRUE(parameters.valid) << parameters.status;
+    ASSERT_TRUE(solver.setParameterImage(parameters, error)) << error;
     EXPECT_EQ(manifest::kStateCount, solver.stateWidth());
     EXPECT_EQ(manifest::kControlCount, solver.controlWidth());
     EXPECT_EQ(manifest::kHorizonSteps, solver.horizonSteps());
-    ASSERT_EQ(0, solver.solve());
+    const int solve_status = solver.solve();
+    const DelayAugmentedPhaseSolveDiagnostics& diagnostics =
+        solver.lastSolveDiagnostics();
+    EXPECT_TRUE(diagnostics.optimizer_invoked);
+    ASSERT_EQ(0, solve_status)
+        << "qp=" << diagnostics.qp_status
+        << " stat=" << diagnostics.stationarity_residual
+        << " eq=" << diagnostics.equality_residual
+        << " ineq=" << diagnostics.inequality_residual
+        << " comp=" << diagnostics.complementarity_residual;
     EXPECT_TRUE(std::isfinite(solver.solveTimeSec()));
 
     std::array<double, manifest::kControlCount> control{};

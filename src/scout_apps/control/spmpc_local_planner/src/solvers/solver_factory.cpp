@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/solvers/rollout_sampling_solver.h"
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
+#include "spmpc_local_planner/solvers/delay_augmented_phase_online_solver.h"
 #ifdef SPMPC_BUILD_LEGACY_BACKEND
 #include "spmpc_local_planner/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.h"
 #endif
@@ -13,6 +14,10 @@ namespace spmpc_local_planner {
 std::unique_ptr<SpmpcSolver> makeSolver(const std::string& backend) {
     if (backend == kSolverBackendContinuousMpccAcados) {
         return std::unique_ptr<SpmpcSolver>(new ContinuousMpccSolverAcados());
+    }
+    if (backend == kSolverBackendDelayAugmentedPhaseAcados) {
+        return std::unique_ptr<SpmpcSolver>(
+            new DelayAugmentedPhaseOnlineSolver());
     }
     if (backend == kSolverBackendContinuousMpccDirectOmegaLegacy) {
 #ifdef SPMPC_BUILD_LEGACY_BACKEND

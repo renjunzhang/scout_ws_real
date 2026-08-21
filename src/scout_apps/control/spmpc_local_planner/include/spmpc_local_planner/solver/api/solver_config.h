@@ -6,8 +6,25 @@
 #include "spmpc_local_planner/warm_start/warm_start_input.h"
 
 #include <string>
+#include <cstdint>
 
 namespace spmpc_local_planner {
+
+struct DelayAugmentedPhaseBackendParams {
+    bool enabled = false;
+    std::string execution_contract_id;
+    std::string execution_contract_hash;
+    int expected_state_width = 0;
+    int expected_control_width = 0;
+    int expected_horizon_steps = 0;
+    int parameter_schema_version = 0;
+    std::string parameter_schema_id;
+    std::string parameter_schema_hash;
+    // Empty by default on purpose.  The online augmented backend remains
+    // NO-GO until a separately frozen recovery artifact hash is supplied.
+    std::string expected_recovery_artifact_hash;
+    std::uint32_t required_capabilities = 0;
+};
 
 struct SolverParams {
     double v_max = 0.8;
@@ -30,6 +47,7 @@ struct SolverParams {
     PlatformParams platform;
     bool warm_start_flatness_enable = false;
     std::string solver_backend = "continuous_mpcc_acados";
+    DelayAugmentedPhaseBackendParams delay_augmented_phase;
     SloshModelParams slosh;
 };
 

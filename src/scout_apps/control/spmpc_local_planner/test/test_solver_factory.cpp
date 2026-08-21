@@ -1,4 +1,6 @@
 #include "spmpc_local_planner/solvers/solver_factory.h"
+#include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
+#include "spmpc_local_planner/solvers/delay_augmented_phase_online_solver.h"
 
 #include <gtest/gtest.h>
 
@@ -9,9 +11,26 @@
 namespace spmpc_local_planner {
 namespace {
 
-TEST(SolverFactory, MainlineAndPrimitiveRemainAvailable) {
-    EXPECT_NE(makeSolver(kSolverBackendContinuousMpccAcados), nullptr);
+TEST(SolverFactory, DefaultConfigStillConstructsOriginalMainlineBackend) {
+    const SolverParams defaults;
+    EXPECT_EQ(defaults.solver_backend,
+              kSolverBackendContinuousMpccAcados);
+    EXPECT_FALSE(defaults.delay_augmented_phase.enabled);
+    std::unique_ptr<SpmpcSolver> mainline =
+        makeSolver(defaults.solver_backend);
+    EXPECT_NE(dynamic_cast<ContinuousMpccSolverAcados*>(mainline.get()),
+              nullptr);
     EXPECT_NE(makeSolver(kSolverBackendPrimitive), nullptr);
+}
+
+TEST(SolverFactory, ExplicitAugmentedBackendConstructsOnlyThe22DAdapter) {
+    std::unique_ptr<SpmpcSolver> solver =
+        makeSolver(kSolverBackendDelayAugmentedPhaseAcados);
+    EXPECT_NE(
+        dynamic_cast<DelayAugmentedPhaseOnlineSolver*>(solver.get()),
+        nullptr);
+    EXPECT_EQ(dynamic_cast<ContinuousMpccSolverAcados*>(solver.get()),
+              nullptr);
 }
 
 TEST(SolverFactory, UnknownBackendFailsClosed) {

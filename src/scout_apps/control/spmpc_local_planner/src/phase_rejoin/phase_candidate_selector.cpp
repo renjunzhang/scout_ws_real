@@ -70,7 +70,8 @@ PhaseCandidateResult PhaseCandidateSelector::select(
     int liquid_steps,
     std::size_t clock_index,
     bool have_last_accepted,
-    std::size_t last_accepted_index) const {
+    std::size_t last_accepted_index,
+    bool observation_at_execution_front) const {
     PhaseCandidateResult result;
     if (!configured_) {
         result.status = "NOT_CONFIGURED";
@@ -134,8 +135,11 @@ PhaseCandidateResult PhaseCandidateSelector::select(
     double best_score = std::numeric_limits<double>::infinity();
     std::size_t best_current = begin;
     for (std::size_t current = begin; current <= end; ++current) {
-        const std::size_t front = current + static_cast<std::size_t>(front_steps);
-        const PhaseNominalSample* nominal = artifact.sample(front);
+        const std::size_t comparison_index = current +
+            (observation_at_execution_front
+                 ? static_cast<std::size_t>(front_steps)
+                 : 0u);
+        const PhaseNominalSample* nominal = artifact.sample(comparison_index);
         if (nominal == nullptr) {
             continue;
         }

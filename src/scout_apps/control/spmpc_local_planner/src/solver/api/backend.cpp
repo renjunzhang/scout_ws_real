@@ -5,6 +5,7 @@ namespace spmpc_local_planner {
 bool isKnownSolverBackend(const std::string& backend) {
     return backend == kSolverBackendPrimitive ||
            backend == kSolverBackendContinuousMpccAcados ||
+           backend == kSolverBackendDelayAugmentedPhaseAcados ||
            backend == kSolverBackendContinuousMpccDirectOmegaLegacy;
 }
 
@@ -14,6 +15,9 @@ const char* solverBackendRole(const std::string& backend) {
     }
     if (backend == kSolverBackendContinuousMpccDirectOmegaLegacy) {
         return "RouteB diagnostic/legacy continuous MPCC, not mainline";
+    }
+    if (backend == kSolverBackendDelayAugmentedPhaseAcados) {
+        return "explicit opt-in nx=22 dual-channel execution-augmented Phase-Rejoin";
     }
     if (backend == kSolverBackendPrimitive) {
         return "fallback/debug rollout sampling + cost ranking, not MPCC/mainline";
@@ -30,6 +34,9 @@ int solverBackendCode(const std::string& backend) {
     }
     if (backend == kSolverBackendPrimitive) {
         return 3;
+    }
+    if (backend == kSolverBackendDelayAugmentedPhaseAcados) {
+        return 4;
     }
     return 0;
 }

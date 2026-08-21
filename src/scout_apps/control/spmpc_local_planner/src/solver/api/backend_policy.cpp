@@ -18,6 +18,13 @@ bool validateBackendPolicy(const SolverParams& params,
                            const VariantConfig& variant,
                            std::string& reason) {
     reason.clear();
+    if (params.delay_augmented_phase.enabled &&
+        params.solver_backend !=
+            kSolverBackendDelayAugmentedPhaseAcados) {
+        appendPolicyError(
+            reason,
+            "delay_augmented_phase/enabled cannot be combined with another backend");
+    }
 
     if (params.solver_backend == kSolverBackendContinuousMpccAcados) {
         if (variant.slosh_constraint_enable && !variant.slosh_enable) {
@@ -44,6 +51,31 @@ bool validateBackendPolicy(const SolverParams& params,
             appendPolicyError(
                 reason,
                 "continuous_mpcc_acados does not support corridor_hard_bound_enable yet");
+        }
+    } else if (params.solver_backend ==
+               kSolverBackendDelayAugmentedPhaseAcados) {
+        if (!params.delay_augmented_phase.enabled) {
+            appendPolicyError(
+                reason,
+                "delay_augmented_phase_acados requires explicit delay_augmented_phase/enabled=true");
+        }
+        if (!variant.slosh_enable) {
+            appendPolicyError(
+                reason,
+                "delay_augmented_phase_acados requires a slosh-enabled variant");
+        }
+        if (variant.slosh_constraint_enable ||
+            variant.smooth_priority_enable ||
+            variant.slosh_cost_horizon_steps >= 0) {
+            appendPolicyError(
+                reason,
+                "delay_augmented_phase_acados does not support legacy slosh hard constraints, smooth-priority, or prefix-only slosh cost");
+        }
+        if (params.corridor_enable || params.obstacle_enable ||
+            params.homotopy_enable || params.corridor_hard_bound_enable) {
+            appendPolicyError(
+                reason,
+                "delay_augmented_phase_acados does not support corridor, obstacle, or homotopy terms");
         }
     } else if (params.solver_backend ==
                kSolverBackendContinuousMpccDirectOmegaLegacy) {

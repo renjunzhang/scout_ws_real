@@ -123,8 +123,13 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         return false;
     }
 
+    const RobotState& projection_robot = input.execution_horizon.active
+        ? input.execution_horizon.initial_state.robot
+        : input.robot;
     ProgressProjector projector;
-    const auto proj = projector.project(reference_, input.robot.x, input.robot.y, last_progress_s_);
+    const auto proj = projector.project(
+        reference_, projection_robot.x, projection_robot.y,
+        last_progress_s_);
     if (!proj.valid) {
         output = SolverOutput{};
         output.status = "PROJECTION_FAILED";
@@ -135,21 +140,23 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     const double len = reference_.length();
     const double remaining_s = std::max(0.0, len - proj.s);
     const auto goal = reference_.sample(len);
-    const double dx = goal.x - input.robot.x;
-    const double dy = goal.y - input.robot.y;
+    const double dx = goal.x - projection_robot.x;
+    const double dy = goal.y - projection_robot.y;
     const double distance_to_goal = std::hypot(dx, dy);
     TerminalGoalInfo goal_info;
     goal_info.valid = true;
     goal_info.remaining_s = remaining_s;
     goal_info.distance_to_goal = distance_to_goal;
-    goal_info.dx_robot = std::cos(input.robot.yaw) * dx + std::sin(input.robot.yaw) * dy;
+    goal_info.dx_robot = std::cos(projection_robot.yaw) * dx +
+        std::sin(projection_robot.yaw) * dy;
     goal_info.position_reached = distance_to_goal < terminal_controller_.params().goal_tolerance;
     goal_info.reached_latch_allowed =
         !phaseRejoinOwnsTerminalCommand(input.phase_rejoin) ||
         input.phase_rejoin.terminal_release_authorized;
 
     const TerminalPlan terminal_plan = terminal_controller_.updateAndPlan(
-        goal_info, input.robot.v, input.robot.omega, std::max(1e-6, solver_params_.a_max));
+        goal_info, projection_robot.v, projection_robot.omega,
+        std::max(1e-6, solver_params_.a_max));
     if (!terminal_controller_.params().enable && goal_info.position_reached &&
         goal_info.reached_latch_allowed) {
         output = SolverOutput{};
@@ -178,6 +185,9 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     SolverInput guarded_input = input;
     guarded_input.min_progress_s = last_progress_s_;
     guarded_input.costmap = have_costmap_ ? &costmap_ : nullptr;
+    if (guarded_input.execution_horizon.active) {
+        guarded_input.execution_horizon.initial_progress_s = proj.s;
+    }
     const bool ok = solver_->solve(guarded_input, reference_, output);
     if (ok && output.success) {
         const bool phase_owns_terminal = phaseRejoinOwnsTerminalCommand(

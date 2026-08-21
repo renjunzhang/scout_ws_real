@@ -11,8 +11,46 @@ import casadi as ca
 STATE_BASE_WIDTH = 10
 CONTROL_WIDTH = 3
 
+WEIGHT_NAMES = (
+    "w_position",
+    "w_yaw",
+    "w_progress",
+    "w_v",
+    "w_omega",
+    "w_slosh_eta",
+    "w_slosh_eta_dot",
+    "w_linear_pending",
+    "w_angular_pending",
+    "w_a",
+    "w_alpha",
+    "w_v_s",
+)
+GATE_RADIUS_NAMES = (
+    "gate_r_x",
+    "gate_r_y",
+    "gate_r_yaw",
+    "gate_r_v",
+    "gate_r_omega",
+    "gate_r_eta_x",
+    "gate_r_eta_x_dot",
+    "gate_r_eta_y",
+    "gate_r_eta_y_dot",
+)
+
 
 def _mapped_target(command, channel):
+    # The frozen Scout contract has zero deadzone and unit directional gains.
+    # Every pending/published command is already admitted inside the channel
+    # envelope, where the C++ mapping is exactly the identity.  Returning that
+    # equivalent smooth expression avoids the zero derivative introduced by
+    # fabs/sign/if_else at a stopped command, which otherwise makes the RTI
+    # linearization unable to predict the first acceleration from rest.
+    if (
+        channel["deadzone"] <= 1e-12
+        and abs(channel["positive_gain"] - 1.0) <= 1e-12
+        and abs(channel["negative_gain"] - 1.0) <= 1e-12
+    ):
+        return command
     magnitude = ca.fabs(command)
     gain = ca.if_else(
         command >= 0.0,
@@ -42,6 +80,23 @@ def state_layout(contract):
     angular_count = contract["angular"]["integer_delay_steps"] + 1
     linear_offset = STATE_BASE_WIDTH
     angular_offset = linear_offset + linear_count
+    state_names = [
+        "x", "y", "yaw", "v", "progress_s", "omega",
+        "eta_x", "eta_x_dot", "eta_y", "eta_y_dot",
+    ]
+    state_names.extend(
+        f"linear_pending_{index}" for index in range(linear_count)
+    )
+    state_names.extend(
+        f"angular_pending_{index}" for index in range(angular_count)
+    )
+    execution_indices = [3, 5]
+    execution_indices.extend(
+        linear_offset + index for index in range(linear_count)
+    )
+    execution_indices.extend(
+        angular_offset + index for index in range(angular_count)
+    )
     return {
         "base_width": STATE_BASE_WIDTH,
         "linear_buffer_offset": linear_offset,
@@ -50,7 +105,228 @@ def state_layout(contract):
         "angular_buffer_count": angular_count,
         "state_width": angular_offset + angular_count,
         "control_width": CONTROL_WIDTH,
+        "state_names": state_names,
+        "execution_indices": execution_indices,
     }
+
+
+def parameter_layout(layout):
+    names = [f"nom_{name}" for name in layout["state_names"]]
+    nominal_state_offset = 0
+    nominal_control_offset = len(names)
+    names.extend(("nom_a", "nom_alpha", "nom_v_s"))
+    nominal_publish_offset = len(names)
+    names.extend(("nom_u_pub_v", "nom_u_pub_omega"))
+    residual_bound_offset = len(names)
+    names.extend(("max_residual_v", "max_residual_omega"))
+    weight_offset = len(names)
+    names.extend(WEIGHT_NAMES)
+    gate_radius_offset = len(names)
+    names.extend(GATE_RADIUS_NAMES)
+    execution_bound_offset = len(names)
+    names.extend(
+        f"exec_beta_{layout['state_names'][index]}"
+        for index in layout["execution_indices"]
+    )
+    return {
+        "names": names,
+        "index": {name: index for index, name in enumerate(names)},
+        "nominal_state_offset": nominal_state_offset,
+        "nominal_control_offset": nominal_control_offset,
+        "nominal_publish_offset": nominal_publish_offset,
+        "residual_bound_offset": residual_bound_offset,
+        "weight_offset": weight_offset,
+        "gate_radius_offset": gate_radius_offset,
+        "execution_bound_offset": execution_bound_offset,
+        "parameter_width": len(names),
+    }
+
+
+def published_command_constraints(published, p, parameters,
+                                  linear_min, linear_max,
+                                  angular_min, angular_max):
+    """Global command envelope plus nominal-relative residual authority.
+
+    The residual limits live in the per-stage parameter image so every frozen
+    nominal command is bound to the same stage that supplies its augmented
+    state/control target.  Two one-sided inequalities per channel avoid a
+    division by a possibly-zero authority and preserve the exact zero-residual
+    case.
+    """
+    index = parameters["index"]
+    nominal_v = p[index["nom_u_pub_v"]]
+    nominal_omega = p[index["nom_u_pub_omega"]]
+    residual_v = p[index["max_residual_v"]]
+    residual_omega = p[index["max_residual_omega"]]
+    constraints = ca.vertcat(
+        published[0],
+        published[1],
+        published[0] - nominal_v - residual_v,
+        nominal_v - published[0] - residual_v,
+        published[1] - nominal_omega - residual_omega,
+        nominal_omega - published[1] - residual_omega,
+    )
+    lower = (
+        linear_min,
+        angular_min,
+        -1.0e15,
+        -1.0e15,
+        -1.0e15,
+        -1.0e15,
+    )
+    upper = (linear_max, angular_max, 0.0, 0.0, 0.0, 0.0)
+    return constraints, lower, upper
+
+
+def nominal_relative_cost(x, q, p, layout, parameters, scales,
+                          terminal=False):
+    index = parameters["index"]
+    nominal = p[
+        parameters["nominal_state_offset"]:
+        parameters["nominal_state_offset"] + layout["state_width"]
+    ]
+    yaw_error = ca.atan2(
+        ca.sin(x[2] - nominal[2]), ca.cos(x[2] - nominal[2])
+    )
+    cost = (
+        p[index["w_position"]]
+        * ((x[0] - nominal[0]) ** 2 + (x[1] - nominal[1]) ** 2)
+        / (scales["position"] ** 2)
+        + p[index["w_yaw"]] * (yaw_error / scales["yaw"]) ** 2
+        + p[index["w_progress"]]
+        * ((x[4] - nominal[4]) / scales["progress"]) ** 2
+        + p[index["w_v"]] * ((x[3] - nominal[3]) / scales["v"]) ** 2
+        + p[index["w_omega"]]
+        * ((x[5] - nominal[5]) / scales["omega"]) ** 2
+        + p[index["w_slosh_eta"]]
+        * ((x[6] - nominal[6]) ** 2 + (x[8] - nominal[8]) ** 2)
+        / (scales["eta"] ** 2)
+        + p[index["w_slosh_eta_dot"]]
+        * ((x[7] - nominal[7]) ** 2 + (x[9] - nominal[9]) ** 2)
+        / (scales["eta_dot"] ** 2)
+    )
+    linear_slice = slice(
+        layout["linear_buffer_offset"],
+        layout["linear_buffer_offset"] + layout["linear_buffer_count"],
+    )
+    angular_slice = slice(
+        layout["angular_buffer_offset"],
+        layout["angular_buffer_offset"] + layout["angular_buffer_count"],
+    )
+    linear_error = x[linear_slice] - nominal[linear_slice]
+    angular_error = x[angular_slice] - nominal[angular_slice]
+    cost += (
+        p[index["w_linear_pending"]]
+        * ca.dot(linear_error, linear_error)
+        / (scales["v"] ** 2)
+        + p[index["w_angular_pending"]]
+        * ca.dot(angular_error, angular_error)
+        / (scales["omega"] ** 2)
+    )
+    if terminal:
+        return cost
+    nominal_q = p[
+        parameters["nominal_control_offset"]:
+        parameters["nominal_control_offset"] + CONTROL_WIDTH
+    ]
+    return cost + (
+        p[index["w_a"]] * ((q[0] - nominal_q[0]) / scales["a"]) ** 2
+        + p[index["w_alpha"]]
+        * ((q[1] - nominal_q[1]) / scales["alpha"]) ** 2
+        + p[index["w_v_s"]]
+        * ((q[2] - nominal_q[2]) / scales["v_s"]) ** 2
+    )
+
+
+def nominal_relative_residual(x, q, p, layout, parameters, scales,
+                              terminal=False):
+    """Residual form of the same weighted quadratic tracking objective.
+
+    Encoding the sum of squares as NONLINEAR_LS lets acados use a
+    Gauss-Newton Hessian.  This avoids an ill-conditioned exact Lagrangian
+    Hessian at the stopped, one-sided command boundary while preserving the
+    objective exactly up to one global constant factor.
+    """
+    index = parameters["index"]
+    nominal = p[
+        parameters["nominal_state_offset"]:
+        parameters["nominal_state_offset"] + layout["state_width"]
+    ]
+
+    def weighted(weight_name, value):
+        return ca.sqrt(p[index[weight_name]]) * value
+
+    yaw_error = ca.atan2(
+        ca.sin(x[2] - nominal[2]), ca.cos(x[2] - nominal[2])
+    )
+    residuals = [
+        weighted("w_position", (x[0] - nominal[0]) / scales["position"]),
+        weighted("w_position", (x[1] - nominal[1]) / scales["position"]),
+        weighted("w_yaw", yaw_error / scales["yaw"]),
+        weighted("w_progress", (x[4] - nominal[4]) / scales["progress"]),
+        weighted("w_v", (x[3] - nominal[3]) / scales["v"]),
+        weighted("w_omega", (x[5] - nominal[5]) / scales["omega"]),
+        weighted("w_slosh_eta", (x[6] - nominal[6]) / scales["eta"]),
+        weighted("w_slosh_eta_dot",
+                 (x[7] - nominal[7]) / scales["eta_dot"]),
+        weighted("w_slosh_eta", (x[8] - nominal[8]) / scales["eta"]),
+        weighted("w_slosh_eta_dot",
+                 (x[9] - nominal[9]) / scales["eta_dot"]),
+    ]
+    for state_index in range(
+            layout["linear_buffer_offset"],
+            layout["linear_buffer_offset"] +
+            layout["linear_buffer_count"]):
+        residuals.append(weighted(
+            "w_linear_pending",
+            (x[state_index] - nominal[state_index]) / scales["v"]))
+    for state_index in range(
+            layout["angular_buffer_offset"],
+            layout["angular_buffer_offset"] +
+            layout["angular_buffer_count"]):
+        residuals.append(weighted(
+            "w_angular_pending",
+            (x[state_index] - nominal[state_index]) / scales["omega"]))
+    if not terminal:
+        nominal_q = p[
+            parameters["nominal_control_offset"]:
+            parameters["nominal_control_offset"] + CONTROL_WIDTH
+        ]
+        residuals.extend((
+            weighted("w_a", (q[0] - nominal_q[0]) / scales["a"]),
+            weighted("w_alpha",
+                     (q[1] - nominal_q[1]) / scales["alpha"]),
+            weighted("w_v_s",
+                     (q[2] - nominal_q[2]) / scales["v_s"]),
+        ))
+    return ca.vertcat(*residuals)
+
+
+def terminal_recovery_constraints(x, p, layout, parameters):
+    index = parameters["index"]
+    nominal = p[
+        parameters["nominal_state_offset"]:
+        parameters["nominal_state_offset"] + layout["state_width"]
+    ]
+    gate_errors = (
+        x[0] - nominal[0],
+        x[1] - nominal[1],
+        ca.atan2(ca.sin(x[2] - nominal[2]), ca.cos(x[2] - nominal[2])),
+        x[3] - nominal[3],
+        x[5] - nominal[5],
+        x[6] - nominal[6],
+        x[7] - nominal[7],
+        x[8] - nominal[8],
+        x[9] - nominal[9],
+    )
+    gate_metric = 0.0
+    for error, radius_name in zip(gate_errors, GATE_RADIUS_NAMES):
+        gate_metric += (error / p[index[radius_name]]) ** 2
+    constraints = [gate_metric - 1.0]
+    for offset, state_index in enumerate(layout["execution_indices"]):
+        beta = p[parameters["execution_bound_offset"] + offset]
+        constraints.append(((x[state_index] - nominal[state_index]) / beta) ** 2 - 1.0)
+    return ca.vertcat(*constraints)
 
 
 def transition_expression(x, q, contract, layout):

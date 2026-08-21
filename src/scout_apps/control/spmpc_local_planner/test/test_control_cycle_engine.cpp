@@ -181,6 +181,25 @@ ControlCycleRequest monitorRequest(EngineFixture& fixture) {
     return request;
 }
 
+void bindActiveExecutionEpoch(EngineFixture& fixture,
+                              ControlCycleRequest& request) {
+    PublishLatencyModelConfig latency;
+    latency.enabled = true;
+    latency.estimated_dc_sec = 0.05;
+    ASSERT_TRUE(fixture.engine.configurePublishLatency(
+        latency, fixture.error)) << fixture.error;
+    CycleTimingContract timing;
+    timing.cycle_id = request.cycle_id;
+    timing.cycle_start_stamp_ns = request.cycle_start_ns;
+    timing.control_period_sec = request.control_period_sec;
+    request.publish_epoch_estimate =
+        fixture.engine.estimatePublishEpoch(timing);
+    ASSERT_TRUE(request.publish_epoch_estimate.valid);
+    request.solver_input.execution_horizon.active = true;
+    request.solver_input.execution_horizon.initial_epoch_ns =
+        request.publish_epoch_estimate.expected_publish_stamp_ns;
+}
+
 TEST(PhaseSolveAdapterTest, PreservesCommandAndRejectsUnavailableTerminal) {
     SolverOutput output;
     output.cmd_v = 0.41;
@@ -227,6 +246,47 @@ TEST(PhaseSolveAdapterTest, MapsCompleteTerminalDomainState) {
     EXPECT_DOUBLE_EQ(7.7, view.terminal_slosh.eta_x_dot);
     EXPECT_DOUBLE_EQ(-8.8, view.terminal_slosh.eta_y);
     EXPECT_DOUBLE_EQ(9.9, view.terminal_slosh.eta_y_dot);
+}
+
+TEST(PhaseSolveAdapterTest,
+     PreservesKnownInitialExecutionWhenSolverHasNoSolution) {
+    SolverOutput failed_output;
+    ExecutionAugmentedState initial;
+    initial.valid = true;
+    initial.stage_index = 7;
+    initial.robot.v = 0.31;
+    initial.linear.actuator_output = 0.31;
+    initial.robot.omega = -0.22;
+    initial.angular.actuator_output = -0.22;
+    initial.linear.pending_commands = {0.1, 0.2};
+    initial.angular.pending_commands = {-0.1, -0.2};
+
+    const PhaseSolveView view = makePhaseSolveView(
+        failed_output, 0, &initial);
+    ASSERT_TRUE(view.current_execution_state_available);
+    EXPECT_EQ(view.current_execution.stage_index, 7u);
+    EXPECT_DOUBLE_EQ(view.current_execution.robot.v, 0.31);
+    EXPECT_FALSE(view.terminal_execution_state_available);
+}
+
+TEST(PhaseSolveAdapterTest,
+     TrustedInitialExecutionOverridesConflictingSolverStageZero) {
+    SolverOutput output;
+    output.delay_augmented_execution_solution = true;
+    output.initial_execution_state.valid = true;
+    output.initial_execution_state.stage_index = 99;
+    output.initial_execution_state.robot.v = 0.79;
+
+    ExecutionAugmentedState trusted;
+    trusted.valid = true;
+    trusted.stage_index = 7;
+    trusted.robot.v = 0.31;
+
+    const PhaseSolveView view = makePhaseSolveView(output, -1, &trusted);
+
+    ASSERT_TRUE(view.current_execution_state_available);
+    EXPECT_EQ(7u, view.current_execution.stage_index);
+    EXPECT_DOUBLE_EQ(0.31, view.current_execution.robot.v);
 }
 
 TEST(ControlCycleEngineTest, InvokesInjectedSolverAndReturnsSolverCommand) {
@@ -526,6 +586,53 @@ TEST(ControlCycleEngineTest,
                   .expected_publish_stamp_ns);
 }
 
+TEST(ControlCycleEngineTest,
+     RejectsAugmentedStateAlignedToStalePublishEpoch) {
+    EngineFixture fixture;
+    PhaseRejoinParams phase;
+    phase.mode = PhaseRejoinMode::Enforce;
+    ASSERT_TRUE(fixture.engine.configurePhaseRejoin(
+        phase, fixture.error)) << fixture.error;
+    PublishLatencyModelConfig latency;
+    latency.enabled = true;
+    latency.estimated_dc_sec = 0.05;
+    ASSERT_TRUE(fixture.engine.configurePublishLatency(
+        latency, fixture.error)) << fixture.error;
+
+    ControlCycleRequest request = fixture.request();
+    request.publish_epoch_estimate.cycle.cycle_id = request.cycle_id;
+    request.publish_epoch_estimate.cycle.cycle_start_stamp_ns =
+        request.cycle_start_ns;
+    request.publish_epoch_estimate.cycle.control_period_sec =
+        request.control_period_sec;
+    request.publish_epoch_estimate.valid = true;
+    request.publish_epoch_estimate.expected_publish_stamp_ns =
+        secondsToNanoseconds(0.91) + 1;
+    request.publish_epoch_estimate.publish_deadline_stamp_ns =
+        secondsToNanoseconds(1.0);
+    request.publish_epoch_estimate.estimated_dc_sec = 0.01;
+    request.publish_epoch_estimate.status = "ESTIMATED";
+    request.solver_input.execution_horizon.active = true;
+    request.solver_input.execution_horizon.initial_epoch_ns =
+        secondsToNanoseconds(0.91);
+    request.solver_input.execution_horizon.initial_state.valid = true;
+
+    const ControlCycleResult result = fixture.engine.step(request);
+
+    EXPECT_EQ(0, fixture.solver.calls);
+    EXPECT_FALSE(result.solve_returned);
+    EXPECT_FALSE(result.telemetry.solve_attempted);
+    EXPECT_FALSE(result.have_phase_decision);
+    EXPECT_EQ("EXECUTION_HORIZON_PUBLISH_EPOCH_MISMATCH",
+              result.output.status);
+    EXPECT_EQ(CommandSource::FailClosed, result.decision.source);
+    EXPECT_DOUBLE_EQ(0.0, result.final_command.linear);
+    EXPECT_DOUBLE_EQ(0.0, result.final_command.angular);
+    EXPECT_EQ(secondsToNanoseconds(0.95),
+              result.publication.publish_timing.estimate
+                  .expected_publish_stamp_ns);
+}
+
 TEST(ControlCycleEngineTest, LimiterRewriteBlocksPhaseCommit) {
     EngineFixture fixture;
     configureMonitorPhase(fixture);
@@ -616,6 +723,91 @@ TEST(ControlCycleEngineTest, SafetyOverridesTerminalAndSolverCandidates) {
     EXPECT_DOUBLE_EQ(0.0, result.output.cmd_v);
     EXPECT_EQ(result.phase_debug.status,
               "SAFETY_OVERRIDE_TRACKING_UNSAFE_PROJECTION");
+}
+
+TEST(ControlCycleEngineTest,
+     AugmentedSafetyUsesExpectedPublishEpochAndDetectsPendingSpin) {
+    EngineFixture fixture;
+    SafetySupervisorConfig safety;
+    safety.terminal_spin.enable = false;
+    safety.tracking.projection_enable = false;
+    safety.tracking.spin_enable = true;
+    safety.tracking.spin_omega_threshold = 0.2;
+    safety.tracking.spin_max_duration_sec = 0.1;
+    ASSERT_TRUE(fixture.engine.configureSafety(safety, fixture.error))
+        << fixture.error;
+
+    fixture.solver.next_output.success = true;
+    fixture.solver.next_output.status = "OK";
+    ControlCycleRequest request = fixture.request();
+    request.solver_input.robot.omega = 0.0;
+    bindActiveExecutionEpoch(fixture, request);
+    request.solver_input.execution_horizon.initial_state.valid = true;
+    request.solver_input.execution_horizon.initial_state.robot.omega = 0.5;
+
+    const ControlCycleResult result = fixture.engine.step(request);
+    EXPECT_TRUE(result.safety.blocked);
+    EXPECT_EQ(SafetyIntervention::TrackingSpin,
+              result.safety.intervention);
+    EXPECT_EQ("TRACKING_SPIN_FAIL", result.output.status);
+}
+
+TEST(ControlCycleEngineTest,
+     AugmentedSafetyDoesNotReuseStaleSourceEpochSpin) {
+    EngineFixture fixture;
+    SafetySupervisorConfig safety;
+    safety.terminal_spin.enable = false;
+    safety.tracking.projection_enable = false;
+    safety.tracking.spin_enable = true;
+    safety.tracking.spin_omega_threshold = 0.2;
+    safety.tracking.spin_max_duration_sec = 0.1;
+    ASSERT_TRUE(fixture.engine.configureSafety(safety, fixture.error))
+        << fixture.error;
+
+    fixture.solver.next_output.success = true;
+    fixture.solver.next_output.status = "OK";
+    ControlCycleRequest request = fixture.request();
+    request.solver_input.robot.omega = 0.5;
+    bindActiveExecutionEpoch(fixture, request);
+    request.solver_input.execution_horizon.initial_state.valid = true;
+    request.solver_input.execution_horizon.initial_state.robot.omega = 0.0;
+
+    const ControlCycleResult result = fixture.engine.step(request);
+    EXPECT_FALSE(result.safety.blocked);
+    EXPECT_EQ(SafetyIntervention::None, result.safety.intervention);
+    EXPECT_TRUE(result.output.success);
+}
+
+TEST(ControlCycleEngineTest,
+     EnforceControlledStopCannotFallThroughToSuccessfulSolverCommand) {
+    EngineFixture fixture;
+    PhaseRejoinParams phase;
+    phase.mode = PhaseRejoinMode::Enforce;
+    ASSERT_TRUE(fixture.engine.configurePhaseRejoin(phase, fixture.error))
+        << fixture.error;
+    fixture.solver.next_output.success = true;
+    fixture.solver.next_output.status = "OK";
+    fixture.solver.next_output.cmd_v = 0.6;
+    fixture.solver.next_output.cmd_omega = -0.4;
+
+    ControlCycleRequest request = fixture.request();
+    request.prediction_valid = false;
+    request.prediction_status = "MISSING";
+    const ControlCycleResult result = fixture.engine.step(request);
+
+    ASSERT_TRUE(result.have_phase_decision);
+    EXPECT_TRUE(result.phase_decision.controlled_stop_used);
+    EXPECT_EQ(CommandSource::PhaseRejoin, result.decision.source);
+    EXPECT_FALSE(result.decision.accepted);
+    EXPECT_FALSE(result.output.success);
+    EXPECT_DOUBLE_EQ(0.0, result.final_command.linear);
+    EXPECT_DOUBLE_EQ(0.0, result.final_command.angular);
+    EXPECT_DOUBLE_EQ(0.0, fixture.sink.last_command.command.linear);
+    EXPECT_DOUBLE_EQ(0.0, fixture.sink.last_command.command.angular);
+    TimedCommandSample committed;
+    ASSERT_TRUE(fixture.history.sampleAt(fixture.sink.now_ns, committed));
+    EXPECT_DOUBLE_EQ(0.0, committed.command.linear);
+    EXPECT_DOUBLE_EQ(0.0, committed.command.angular);
 }
 
 TEST(ControlCycleEngineTest, PhaseOffInjectsExplicitOffSolverContext) {

@@ -15,7 +15,9 @@
   <arg name="cmd_vel_topic" default="/cmd_vel"/>
   <arg name="publish_cmd_vel" default="true"/>
   <arg name="reference_target_frame" default="" doc="可选: 将收到的 reference path 转到该 frame 后再求解"/>
-  <arg name="solver_backend" default="continuous_mpcc_acados" doc="continuous_mpcc_acados(mainline)|continuous_mpcc_direct_omega_legacy(RouteB diagnostic)|primitive(debug fallback)"/>
+  <arg name="solver_backend" default="continuous_mpcc_acados" doc="continuous_mpcc_acados(mainline)|delay_augmented_phase_acados(explicit development opt-in)|continuous_mpcc_direct_omega_legacy(RouteB diagnostic)|primitive(debug fallback)"/>
+  <arg name="delay_augmented_phase_enabled" default="false" doc="must be explicitly true with delay_augmented_phase_acados"/>
+  <arg name="delay_augmented_phase_expected_recovery_artifact_hash" default="" doc="loader-verified lowercase SHA-256 of the canonical V3 recovery payload; empty keeps NO-GO"/>
   <arg name="w_slosh" default="-1.0" doc="覆盖当前 variant 的 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
   <arg name="v_ref" default="-1.0" doc="诊断/消融用: 覆盖当前 variant 的 v_ref; 负值时用 variants.yaml 原值"/>
   <arg name="slosh_height_max" default="-1.0" doc="覆盖 slosh/slosh_height_max(m); 负值时用 container yaml"/>
@@ -37,6 +39,8 @@
   <arg name="delay_phase_linear_time_constant_sec" default="-1.0" doc="覆盖线速度执行惯性时间常数; 负值时用 common.yaml"/>
   <arg name="delay_phase_angular_time_constant_sec" default="-1.0" doc="覆盖角速度执行惯性时间常数; 负值时用 common.yaml"/>
   <arg name="delay_phase_require_complete_history" default="false" doc="phase_rejoin=enforce 时必须显式为 true"/>
+  <arg name="publish_timing_enabled" default="false" doc="explicit expected-publish epoch contract"/>
+  <arg name="publish_timing_estimated_dc_sec" default="0.0"/>
   <arg name="phase_rejoin_mode" default="off" doc="off|monitor|enforce; 默认关闭"/>
   <arg name="phase_rejoin_artifact_path" default=""/>
   <arg name="phase_rejoin_publish_diagnostics" default="true"/>
@@ -80,6 +84,8 @@
     <param name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>
     <param name="frames/reference_target" value="$(arg reference_target_frame)"/>
     <param name="solver_backend" value="$(arg solver_backend)"/>
+    <param name="delay_augmented_phase/enabled" value="$(arg delay_augmented_phase_enabled)"/>
+    <param name="delay_augmented_phase/expected_recovery_artifact_hash" value="$(arg delay_augmented_phase_expected_recovery_artifact_hash)"/>
     <param name="slosh/slosh_height_max" value="$(arg slosh_height_max)"
            if="$(eval float(arg('slosh_height_max')) >= 0.0)"/>
     <param name="platform/shared_constraints/linear_accel_limit_enable" value="$(arg shared_linear_accel_limit_enable)"/>
@@ -106,6 +112,8 @@
     <param name="delay_phase/angular_time_constant_sec" value="$(arg delay_phase_angular_time_constant_sec)"
            if="$(eval float(arg('delay_phase_angular_time_constant_sec')) >= 0.0)"/>
     <param name="delay_phase/require_complete_history" value="$(arg delay_phase_require_complete_history)"/>
+    <param name="publish_timing/enabled" value="$(arg publish_timing_enabled)"/>
+    <param name="publish_timing/estimated_dc_sec" value="$(arg publish_timing_estimated_dc_sec)"/>
     <param name="phase_rejoin/mode" value="$(arg phase_rejoin_mode)"/>
     <param name="phase_rejoin/artifact_path" value="$(arg phase_rejoin_artifact_path)"/>
     <param name="phase_rejoin/publish_diagnostics" value="$(arg phase_rejoin_publish_diagnostics)"/>

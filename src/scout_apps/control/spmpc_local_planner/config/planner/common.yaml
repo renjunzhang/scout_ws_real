@@ -5,9 +5,29 @@ publish_cmd_vel: true
 
 # solver 后端:
 #   continuous_mpcc_acados: SPMPC 主线 continuous MPCC
+#   delay_augmented_phase_acados: 显式 opt-in 的 22D 双通道执行增广 Phase-Rejoin
 #   continuous_mpcc_direct_omega_legacy: RouteB diagnostic/legacy continuous MPCC
 #   primitive: fallback/debug rollout sampling + cost ranking, not MPCC/mainline
 solver_backend: continuous_mpcc_acados
+
+# Online admission request for the generated nx=22 solver.  Keeping enabled
+# false preserves the historical 10D backend.  Every identity/dimension below
+# is compared byte-for-byte with the compiled manifest when explicitly enabled.
+delay_augmented_phase:
+  enabled: false
+  execution_contract_id: delay_augmented_phase_codegen_candidate_v1
+  execution_contract_hash: e198d2a7e0b4d8b2b530e2bfafb33871f3f9f0cb1baab12e6739b6c35191783d
+  expected_state_width: 22
+  expected_control_width: 3
+  expected_horizon_steps: 10
+  parameter_schema_version: 2
+  parameter_schema_id: delay_augmented_phase_parameter_image_v2
+  parameter_schema_hash: 898563e1655c24f399e81d000f5d816a6a9ae4eba0304eb23e5b94bf3fd8e4f3
+  # Intentionally empty: populate only with the loader-verified SHA-256 of the
+  # canonical V3 artifact payload (the hash field itself is excluded).
+  # Enabling the backend with this empty value is rejected.
+  expected_recovery_artifact_hash: ""
+  required_capabilities: 255
 
 topics:
   odom: /odom
