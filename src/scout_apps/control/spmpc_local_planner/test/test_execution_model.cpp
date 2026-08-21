@@ -168,6 +168,12 @@ TEST(ExecutionModel, RejectsInvalidContractStateAndCommand) {
     EXPECT_EQ("INVALID_EXECUTION_STEP_INPUT", invalid_state.status);
 
     state = heldState(model);
+    state.linear.actuator_output = 0.1;
+    const ExecutionStepResult mismatched_actuator = model.step(
+        state, command(0.0, 0.0));
+    EXPECT_FALSE(mismatched_actuator.valid);
+
+    state = heldState(model);
     const ExecutionStepResult invalid_command = model.step(
         state,
         command(std::numeric_limits<double>::quiet_NaN(), 0.0));

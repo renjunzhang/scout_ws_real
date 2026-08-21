@@ -367,6 +367,8 @@ bool ExecutionModel::validState(
     return state.valid && finiteState(state.robot, state.slosh) &&
         std::isfinite(state.linear.actuator_output) &&
         std::isfinite(state.angular.actuator_output) &&
+        state.robot.v == state.linear.actuator_output &&
+        state.robot.omega == state.angular.actuator_output &&
         state.linear.pending_commands.size() ==
             static_cast<std::size_t>(
                 contract_.linear.integer_delay_steps + 1) &&

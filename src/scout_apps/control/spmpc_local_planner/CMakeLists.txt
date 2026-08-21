@@ -229,6 +229,18 @@ target_link_libraries(spmpc_solver_delay_augmented
   spmpc_runtime
 )
 
+# Deterministic CasADi C image used only to prove that the future generated
+# formal solver shares the C++ transition semantics.  It is not a runtime
+# backend and is deliberately omitted from SPMPC_PUBLIC_LIBRARIES.
+add_library(spmpc_delay_augmented_phase_casadi_transition STATIC
+  generated/casadi/spmpc_delay_augmented_phase_transition.c
+)
+set_target_properties(spmpc_delay_augmented_phase_casadi_transition
+  PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(spmpc_delay_augmented_phase_casadi_transition
+  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/generated/casadi)
+target_link_libraries(spmpc_delay_augmented_phase_casadi_transition m)
+
 add_library(spmpc_estimation
   src/estimation/processed_imu_pipeline.cpp
   src/estimation/slosh_observer_bank.cpp
@@ -729,6 +741,18 @@ if(CATKIN_ENABLE_TESTING)
   if(TARGET test_delay_augmented_phase_dynamics)
     target_link_libraries(test_delay_augmented_phase_dynamics
       spmpc_solver_delay_augmented
+    )
+  endif()
+  catkin_add_gtest(test_delay_augmented_phase_codegen_consistency
+    test/test_delay_augmented_phase_codegen_consistency.cpp)
+  if(TARGET test_delay_augmented_phase_codegen_consistency)
+    target_include_directories(
+      test_delay_augmented_phase_codegen_consistency PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/generated/casadi
+    )
+    target_link_libraries(test_delay_augmented_phase_codegen_consistency
+      spmpc_solver_delay_augmented
+      spmpc_delay_augmented_phase_casadi_transition
     )
   endif()
   catkin_add_gtest(test_acados_stage_parameter_builder

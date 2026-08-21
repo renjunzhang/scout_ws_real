@@ -30,7 +30,7 @@
 
 旧方案记录的是 development release，不修改其历史结论。本文只描述从当前状态走到 formal-ready 的增量工作。
 
-2026-08-21 实施进度：WP0 已冻结，WP1 已闭合唯一最终命令事务；WP2A 已建立预计发布时间模型和实际 $d_c$/deadline typed audit；WP2B 已建立统一双通道执行增广参考模型，并让 history predictor 复用同一合同和传播实现；WP2C 已让同一个 typed `PublishEpochEstimate` 驱动 history prediction、PhaseClock 和 `SolverInput`，并对完整 estimate image 做周期一致性校验；WP3A 已新增 solver 专用 `ExecutionHorizonContext` 和纯 C++ `DelayAugmentedPhaseDynamics`，让当前 $q=[a,\alpha,v_s]$ 从上一真实发布命令生成新 $u^{\mathrm{pub}}$、压入双通道 buffer，并冻结 $N_e=n_f+N_\ell$ 及 physical/grid/terminal epoch。WP3A 的 564 项 C++ / 92 项 Python 回归见 `20260821_PhaseRejoining_WP3A执行增广求解动力学记录.md`。默认 `publish_timing.enabled=false`，$\widehat d_c$ 尚未由标定 artifact 冻结，CasADi/generated formal solver、在线 augmented context 和独立 plant 尚未完成，因此 WP2、WP3、B0 和 formal 放行均未关闭，状态仍为 G0 NO-GO。
+2026-08-21 实施进度：WP0 已冻结，WP1 已闭合唯一最终命令事务；WP2A 已建立预计发布时间模型和实际 $d_c$/deadline typed audit；WP2B 已建立统一双通道执行增广参考模型，并让 history predictor 复用同一合同和传播实现；WP2C 已让同一个 typed `PublishEpochEstimate` 驱动 history prediction、PhaseClock 和 `SolverInput`，并对完整 estimate image 做周期一致性校验；WP3A 已新增 solver 专用 `ExecutionHorizonContext` 和纯 C++ `DelayAugmentedPhaseDynamics`，让当前 $q=[a,\alpha,v_s]$ 从上一真实发布命令生成新 $u^{\mathrm{pub}}$、压入双通道 buffer，并冻结 $N_e=n_f+N_\ell$ 及 physical/grid/terminal epoch；WP3B 已生成确定性 CasADi C 离散转移核，并通过随机单步、第一拍 Jacobian 和 10 步 terminal Jacobian 与 C++ 参考模型的一致性验证。WP3B 的 572 项 C++ / 93 项 Python 回归见 `20260821_PhaseRejoining_WP3B_CasADi离散模型一致性记录.md`。该 C 转移核目前只用于一致性测试，在线 acados capsule 仍是旧 10 维短窗模型。默认 `publish_timing.enabled=false`，$\widehat d_c$ 尚未由标定 artifact 冻结，独立 augmented acados optimizer、在线 augmented initial context、terminal gate/$\mathcal B^{\mathrm{exec}}$ 和独立 plant 尚未完成，因此 WP2、WP3、B0 和 formal 放行均未关闭，状态仍为 G0 NO-GO。
 
 ## 1. 当前状态与剩余缺口
 
@@ -53,9 +53,9 @@
 | --- | --- | --- | --- |
 | IMP-01 | 最终命令出口已归一（WP1 已闭合） | receipt 目前只证明 ROS publisher 接受交付，不是 Scout CAN/底盘 ACK | 每周期只有一次 finalization 和一次 sink 调用；history、audit、相位提交与 receipt 声明的 $u^{\mathrm{pub}}$ 一致；更强 ACK 由 WP4/WP5 闭合 |
 | IMP-02 | 预计发布时间合同、统一执行参考模型和在线 typed 接线（WP2A–WP2C）已建立；有效 estimate 已统一驱动 history prediction、PhaseClock 和 `SolverInput` | 默认估计仍关闭；$\widehat d_c$ 尚未由 Scout held-out 标定 artifact/hash 冻结，当前接线仍是 history-only | 冻结 $\widehat d_c$、适用域和 hash，并由 formal session/preflight 强制绑定；当前已记录实际 $d_c$、误差和 deadline |
-| IMP-03 | WP3A 的 C++ solver 参考转移已让 $q=[a,\alpha,v_s]$ 从上一发布命令生成新 $u^{\mathrm{pub}}$ 并压入双通道 buffer | 该决策依赖尚未进入 CasADi/generated OCP 和在线 solver capsule | 本周期新命令作为求解决策量进入线/角两路 delay buffer |
-| IMP-04 | C++ 参考模型与 `ExecutionHorizonContext` 已统一整步/fractional delay、physical/grid/terminal epoch | solver/artifact 尚未消费该合同；$220\,\mathrm{ms}$ 与 $7\Delta t\approx233.3\,\mathrm{ms}$ 的差异仍未在生成物中验证 | 让同一 fractional-delay 合同同时驱动 physical epoch、solver stage 和 artifact index |
-| IMP-05 | WP3A 已建立 $N_e=n_f+N_\ell$ 的纯 C++ 离散求解动力学和 fail-closed horizon context，但没有正式 generated solver | 当前在线短窗 capsule 仍是旧 10 维模型，不能消费 execution augmented state | 新增专用生成物；终端同时支持 9 维 gate 和执行兼容约束 |
+| IMP-03 | WP3B 已让 $q=[a,\alpha,v_s]$ 的新 $u^{\mathrm{pub}}$ 决策依赖进入 CasADi 双通道 buffer，并与 C++ 参考转移逐步一致 | 该 CasADi C 核只用于测试，尚未进入独立 acados optimizer 和在线 capsule | 本周期新命令作为求解决策量进入线/角两路 delay buffer |
+| IMP-04 | C++ 参考模型、`ExecutionHorizonContext` 与 CasADi 离散转移已统一整步/fractional delay、$n_f$ 及 physical/grid/terminal epoch | online solver/artifact 尚未消费该合同，artifact index 也尚未绑定 | 让同一 fractional-delay 合同同时驱动 physical epoch、solver stage 和 artifact index |
+| IMP-05 | WP3B 已建立 $N_e=n_f+N_\ell$、`nx=22`、`nu=3` 的确定性 CasADi C 离散转移与 Jacobian 图像 | 当前在线短窗 capsule 仍是旧 10 维模型；还没有独立 acados optimizer、published-command 硬约束或 augmented terminal gate | 新增专用生成物；终端同时支持 9 维 gate 和执行兼容约束 |
 | IMP-06 | 没有正式 OfflineSloshOCP artifact | development CSV 不是完整离线防晃序列 | 输出运动、减速、沉降、zero-hold 完整尾段，并冻结全部合同和 hash |
 | IMP-07 | 没有 $\mathcal B_i^{\mathrm{exec}}$ | 9 维 gate 不知道 pending command 和执行器状态是否兼容 | 当前相位与 OCP 终端都检查逐相位执行状态硬边界 |
 | IMP-08 | gate 没有 held-out 证据 | development 半径不能说明真实可恢复性 | trial 级数据隔离并报告 coverage、false-accept、false-reject 和真实重接率 |
@@ -338,7 +338,7 @@ physical_front_stamp / grid_front_stamp / terminal_stamp
 
 **目标：**解决 B0，并先在仿真中证明控制量真的经过延迟链影响联合终端。
 
-2026-08-21 的 WP3A 已完成本节第 2–4、6 项所需的纯 C++ 参考转移和 typed horizon 骨架：当前决策按 published-command rate 语义进入双通道 buffer，horizon 固定为 $N_e=n_f+N_\ell$，并有第一拍线/角因果与联合终端灵敏度测试。它还不是 acados optimizer：generated 离散模型、在线 augmented initial state、terminal gate/$\mathcal B^{\mathrm{exec}}$、随机逐步一致性和独立 plant 均未完成，不能据此关闭 WP3/B0。
+2026-08-21 的 WP3A 已完成本节第 2–4、6 项所需的纯 C++ 参考转移和 typed horizon 骨架：当前决策按 published-command rate 语义进入双通道 buffer，horizon 固定为 $N_e=n_f+N_\ell$，并有第一拍线/角因果与联合终端灵敏度测试。WP3B 又建立了 `nx=22`、`nu=3`、`N_e=10` 的确定性 CasADi C 离散转移图像，完成 128 组随机单步、第一拍 Jacobian 和 terminal Jacobian 与 C++ 参考的一致性。该 C 核当前只用于测试，仍不是 acados optimizer：独立 generated capsule、在线 augmented initial state、published-command 硬约束、terminal gate/$\mathcal B^{\mathrm{exec}}$ 和独立 plant 均未完成，不能据此关闭 WP3/B0。
 
 实施内容：
 
