@@ -104,6 +104,7 @@ set(SPMPC_PUBLIC_LIBRARIES
   spmpc_safety
   spmpc_model
   spmpc_solver_api
+  spmpc_solver_delay_augmented
   spmpc_solver_rollout
   spmpc_solver_parameters
   spmpc_solver_acados
@@ -219,6 +220,13 @@ target_link_libraries(spmpc_runtime
 add_library(spmpc_solver_api
   src/solver/api/backend.cpp
   src/solver/api/backend_policy.cpp
+)
+
+add_library(spmpc_solver_delay_augmented
+  src/solver/delay_augmented/phase_rejoin_dynamics.cpp
+)
+target_link_libraries(spmpc_solver_delay_augmented
+  spmpc_runtime
 )
 
 add_library(spmpc_estimation
@@ -714,6 +722,13 @@ if(CATKIN_ENABLE_TESTING)
   if(TARGET test_execution_model)
     target_link_libraries(test_execution_model
       spmpc_runtime
+    )
+  endif()
+  catkin_add_gtest(test_delay_augmented_phase_dynamics
+    test/test_delay_augmented_phase_dynamics.cpp)
+  if(TARGET test_delay_augmented_phase_dynamics)
+    target_link_libraries(test_delay_augmented_phase_dynamics
+      spmpc_solver_delay_augmented
     )
   endif()
   catkin_add_gtest(test_acados_stage_parameter_builder

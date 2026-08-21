@@ -71,6 +71,7 @@ public:
     double requiredHistorySec() const;
     double executionLeadSec() const;
     int gridExecutionLeadSteps() const;
+    bool validState(const ExecutionAugmentedState& state) const;
 
     const ExecutionModelContract& contract() const { return contract_; }
     bool configured() const { return configured_; }
@@ -86,7 +87,6 @@ private:
                                     double duration_sec,
                                     double time_constant_sec);
     static double normalizeYaw(double yaw);
-    bool validState(const ExecutionAugmentedState& state) const;
     bool propagateSegment(double duration_sec,
                           double target_v,
                           double target_omega,

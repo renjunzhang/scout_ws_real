@@ -1149,7 +1149,7 @@ held-out gate 已经安全
 下一阶段不是推倒重来的大规模目录重构，而是一次中等规模、纵向贯通的**实物闭环收尾重构**。P0 按以下顺序闭合：
 
 1. **最终命令唯一出口（WP1 已完成）：**`ControlCycleEngine::step()` 现在通过 `CommandPipeline + PublicationTransaction + ICommandSink` 原子完成一次 finalization 和一次 sink 调用；成功 receipt 后才提交 limiter state/history，且 limiter 改写、contract violation、发布失败或 receipt 不一致均阻止 Phase-Rejoin commit。ROS 层只实现 sink 和消息/诊断转换，不再调用第二阶段 `finalizeCommand()`。注意这只闭合 ROS `/cmd_vel` 交付真值，尚不等于 CAN/底盘接受确认。
-2. **实物执行模型（WP2 进行中）：**WP2A 已建立独立 `PublishLatencyModel`、`CycleTimingContract`、预计/实际发布时间和 `d_c` 误差审计；WP2B 已建立统一 `ExecutionModelContract`、双通道 pending buffer、fractional delay、执行器非线性/惯性和车液传播，并让兼容 predictor 复用；WP2C 又让同一个有效 `PublishEpochEstimate` 驱动 history prediction、PhaseClock 和 `SolverInput`。默认估计仍关闭，仍需补适用工况/误差集合和 $\widehat d_c$ 标定冻结，并用 delay-augmented OCP 或严格等价 bridge 保留本周期新命令的因果作用。
+2. **实物执行模型（WP2/WP3 进行中）：**WP2A 已建立独立 `PublishLatencyModel`、`CycleTimingContract`、预计/实际发布时间和 `d_c` 误差审计；WP2B 已建立统一 `ExecutionModelContract`、双通道 pending buffer、fractional delay、执行器非线性/惯性和车液传播，并让兼容 predictor 复用；WP2C 又让同一个有效 `PublishEpochEstimate` 驱动 history prediction、PhaseClock 和 `SolverInput`；WP3A 已建立 solver 专用 `ExecutionHorizonContext` 和 `DelayAugmentedPhaseDynamics`，让当前 $q=[a,\alpha,v_s]$ 生成新 $u^{\mathrm{pub}}$ 并形成 $N_e=n_f+N_l$ 的 C++ 参考 horizon。默认估计仍关闭，适用工况/误差集合和 $\widehat d_c$ 尚未冻结，CasADi/generated solver、在线 augmented context 和独立 plant 也尚未完成。
 3. **统一实物安全出口：**在唯一最终出口无条件执行 finite、`|v|/|omega|`、线/角加速度、独立 odom/TF freshness、solver deadline，以及可验证的 driver watchdog 和停车合同。
 4. **实物 runner 配置边界：**用 typed `ExperimentSessionConfig`、C++ preflight 和 immutable manifest 取代 1235 行 Shell 中的参数真源；补齐时间常数、完整历史和 Phase-Rejoin 合同。
 5. **统一路径版本：**由 canonical processed path 生成唯一 `reference_id/reference_epoch`，并让 path、phase、goal、progress、speed reference 和 solver warm-start 在同一次版本切换中原子复位；不能继续让 ROS 的 frame/size/首尾签名和 `SpmpcProblem` 的逐点比较各自决定“路径是否变化”。
@@ -1160,9 +1160,9 @@ P0 完成后冻结架构，进入带冻结执行模型的非零延迟仿真和�
 
 ### 13.1 当前阶段基线
 
-相对 `92cd2eac` 的原 6 文件审计差异已按归属提交；WP0 又冻结了 solver 生成顺序、输入资产 hash 和 504 项 C++ / 92 项 Python 基线。WP1 在此基础上闭合唯一命令事务，并完成 518 项 C++ / 92 项 Python 回归；WP2A 增加预计发布时间合同与 schema v4 审计后完成 528 项 C++ / 92 项 Python 回归；WP2B 建立统一执行增广参考模型后完成 540 项 C++ / 92 项 Python 回归；WP2C 贯通预计发布时间与 prediction/PhaseClock/solver input 后完成 552 项 C++ / 92 项 Python 回归。对应记录见 `docs_for_offlineslosh/方案/20260821_PhaseRejoining_WP1唯一最终命令事务闭环记录.md`、`20260821_PhaseRejoining_WP2A预计发布时间合同记录.md`、`20260821_PhaseRejoining_WP2B统一执行增广模型记录.md` 和 `20260821_PhaseRejoining_WP2C预计发布时间贯通记录.md`。
+相对 `92cd2eac` 的原 6 文件审计差异已按归属提交；WP0 又冻结了 solver 生成顺序、输入资产 hash 和 504 项 C++ / 92 项 Python 基线。WP1 在此基础上闭合唯一命令事务，并完成 518 项 C++ / 92 项 Python 回归；WP2A 增加预计发布时间合同与 schema v4 审计后完成 528 项 C++ / 92 项 Python 回归；WP2B 建立统一执行增广参考模型后完成 540 项 C++ / 92 项 Python 回归；WP2C 贯通预计发布时间与 prediction/PhaseClock/solver input 后完成 552 项 C++ / 92 项 Python 回归；WP3A 建立执行增广求解动力学和 horizon 合同后完成 564 项 C++ / 92 项 Python 回归。对应记录见 `docs_for_offlineslosh/方案/20260821_PhaseRejoining_WP1唯一最终命令事务闭环记录.md`、`20260821_PhaseRejoining_WP2A预计发布时间合同记录.md`、`20260821_PhaseRejoining_WP2B统一执行增广模型记录.md`、`20260821_PhaseRejoining_WP2C预计发布时间贯通记录.md` 和 `20260821_PhaseRejoining_WP3A执行增广求解动力学记录.md`。
 
-这些结果已关闭 IMP-01，并完成 IMP-02 的时间合同、统一 C++ 执行参考模型和在线 typed 接线切片；有效 estimate 已进入 history prediction、PhaseClock 和 `SolverInput`，但默认 `publish_timing.enabled=false`，`d_hat_c` 尚未由 Scout held-out 标定 artifact/hash 冻结。当前 predictor 仍只使用旧 published history，本周期新命令和执行增广状态尚未进入 formal OCP，所以 IMP-02、整个 WP2 和 B0 仍未关闭。无条件速度硬包络、独立 odom/TF watchdog、solver deadline、driver watchdog/ACK、typed session 和路径 epoch 同样未关闭，因此 formal 状态继续为 G0 NO-GO。
+这些结果已关闭 IMP-01，并完成 IMP-02 的时间合同、统一 C++ 执行参考模型和在线 typed 接线切片；有效 estimate 已进入 history prediction、PhaseClock 和 `SolverInput`，但默认 `publish_timing.enabled=false`，`d_hat_c` 尚未由 Scout held-out 标定 artifact/hash 冻结。WP3A 已证明本周期新命令在 C++ 参考 horizon 中按双通道 delay/fractional contract 影响联合终端，但当前 predictor 仍只使用旧 published history，在线 acados capsule 仍未消费 `ExecutionHorizonContext`。所以 IMP-02、整个 WP2/WP3 和 B0 仍未关闭。无条件速度硬包络、独立 odom/TF watchdog、solver deadline、driver watchdog/ACK、typed session 和路径 epoch 同样未关闭，因此 formal 状态继续为 G0 NO-GO。
 
 长期工程原则：
 

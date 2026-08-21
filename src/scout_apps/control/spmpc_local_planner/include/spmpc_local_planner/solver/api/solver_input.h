@@ -5,6 +5,7 @@
 #include "spmpc_local_planner/phase_rejoin/types.h"
 #include "spmpc_local_planner/runtime/control_cycle_timing.h"
 #include "spmpc_local_planner/runtime/timing/publish_latency_model.h"
+#include "spmpc_local_planner/solver/api/execution_horizon_context.h"
 
 #include <string>
 
@@ -21,6 +22,7 @@ struct SolverInput {
     double v_ref_current = 0.0;
     std::string v_ref_status = "VARIANT_FALLBACK";
     PhaseRejoinSolverContext phase_rejoin;
+    ExecutionHorizonContext execution_horizon;
     PublishEpochEstimate publish_epoch_estimate;
     ControlCycleTimingDebug cycle_timing;
 };
