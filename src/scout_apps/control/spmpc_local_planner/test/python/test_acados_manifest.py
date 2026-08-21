@@ -29,6 +29,17 @@ class AcadosManifestTest(unittest.TestCase):
                 committed.read_bytes(),
                 pathlib.Path(generated_path).read_bytes())
 
+    def test_phase_rejoin_specialization_preserves_main_horizon_manifest(self):
+        config = load_config()
+        config["N"] = config["phase_rejoin_N"]
+        config["Tf"] = config["dt"] * config["N"]
+        with tempfile.TemporaryDirectory() as temporary:
+            with contextlib.redirect_stdout(io.StringIO()):
+                generated_path = emit_cpp_manifest(config, temporary)
+            generated = pathlib.Path(generated_path).read_text()
+        self.assertIn("constexpr int kMainHorizonSteps = 60;", generated)
+        self.assertIn("constexpr int kPhaseRejoinHorizonSteps = 3;", generated)
+
 
 if __name__ == "__main__":
     unittest.main()

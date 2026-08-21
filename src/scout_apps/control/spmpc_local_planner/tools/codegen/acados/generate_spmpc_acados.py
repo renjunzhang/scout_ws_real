@@ -93,6 +93,11 @@ def load_config():
     cfg = {
         "dt": dt,
         "N": n_steps,
+        # Keep the long-horizon contract immutable when a model-specific
+        # invocation temporarily specializes N for the short Phase-Rejoin
+        # solver.  The shared C++ manifest describes both horizons and must be
+        # independent of code-generation order.
+        "main_horizon_steps": n_steps,
         "Tf": dt * n_steps,
         "v_max": v_max,
         "omega_max": float(platform["omega_max"]),
@@ -252,7 +257,7 @@ constexpr double kOmegaMax = {float(cfg['omega_max']):.17g};
 constexpr double kAMax = {float(cfg['a_max']):.17g};
 constexpr double kAlphaMax = {float(cfg['alpha_max']):.17g};
 constexpr double kVsMax = {float(cfg['vs_max']):.17g};
-constexpr int kMainHorizonSteps = {int(cfg['N'])};
+constexpr int kMainHorizonSteps = {int(cfg['main_horizon_steps'])};
 constexpr int kPhaseRejoinHorizonSteps = {int(cfg['phase_rejoin_N'])};
 }}  // namespace generated_bounds
 
