@@ -32,6 +32,8 @@ TEST(AppConfig, PreservesHistoricalTypedDefaults) {
     EXPECT_DOUBLE_EQ(config.control.frequency_hz, 30.0);
     EXPECT_DOUBLE_EQ(config.control.dt, 1.0 / 30.0);
     EXPECT_EQ(config.control.horizon_steps, 60);
+    EXPECT_FALSE(config.control.publish_latency.enabled);
+    EXPECT_DOUBLE_EQ(config.control.publish_latency.estimated_dc_sec, 0.0);
     EXPECT_DOUBLE_EQ(config.solver.v_max, 0.8);
     EXPECT_DOUBLE_EQ(config.solver.omega_max, 1.2);
     EXPECT_DOUBLE_EQ(config.solver.slosh.dt, config.control.dt);
@@ -112,6 +114,17 @@ TEST(AppConfig, InvalidTimingAndExecutionContractsAreFatal) {
     EXPECT_FALSE(timing_report.ok());
     EXPECT_TRUE(hasIssue(
         timing_report, ValidationSeverity::Fatal, "state_timing"));
+
+    AppConfig publish_timing_config;
+    publish_timing_config.control.publish_latency.enabled = true;
+    publish_timing_config.control.publish_latency.estimated_dc_sec = -0.1;
+    const ValidationReport publish_timing_report =
+        validateAndNormalize(publish_timing_config);
+    EXPECT_FALSE(publish_timing_report.ok());
+    EXPECT_TRUE(hasIssue(
+        publish_timing_report,
+        ValidationSeverity::Fatal,
+        "publish_timing/estimated_dc_sec"));
 
     AppConfig execution_config;
     execution_config.control.execution_contract.max_post_limit_delta_v =

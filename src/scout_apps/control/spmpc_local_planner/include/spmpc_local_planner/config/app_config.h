@@ -7,6 +7,7 @@
 #include "spmpc_local_planner/phase_rejoin/types.h"
 #include "spmpc_local_planner/reference/reference_path_preprocessor.h"
 #include "spmpc_local_planner/runtime/execution_prediction/types.h"
+#include "spmpc_local_planner/runtime/timing/publish_latency_model.h"
 #include "spmpc_local_planner/safety/safety_supervisor.h"
 #include "spmpc_local_planner/solver/api/solver_config.h"
 
@@ -73,6 +74,7 @@ struct ControlRuntimeConfig {
     double frequency_hz = 30.0;
     double dt = 1.0 / 30.0;
     int horizon_steps = 60;
+    PublishLatencyModelConfig publish_latency;
     DelayPhaseParams delay_phase;
     StateTimingParams state_timing;
     CommandExecutionContractParams execution_contract;

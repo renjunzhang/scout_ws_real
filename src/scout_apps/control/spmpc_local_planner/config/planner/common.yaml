@@ -164,6 +164,13 @@ slosh_risk_governor:
   beta_rate_down_per_sec: 2.0
   include_parabola_height: true
 
+# Frozen solve/finalization/ROS-publication latency estimate.  Disabled by
+# default until a session-specific d_c calibration is bound.  Actual d_c and
+# deadline status are still audited while the estimate is off.
+publish_timing:
+  enabled: false
+  estimated_dc_sec: 0.0
+
 # P0/P1 delay-phase handling. Disabled by default.
 # monitor/shadow only publish diagnostics. fixed_closed_loop uses guarded predicted
 # execution state as SolverInput and falls back to raw state when guards fail.

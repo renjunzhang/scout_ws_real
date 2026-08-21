@@ -36,13 +36,28 @@ void fillCycleTiming(
         timing.solve_end_stamp_ns);
     msg.horizon_available_stamp = rosTimeFromNanoseconds(
         timing.horizon_available_stamp_ns);
+    msg.expected_publish_stamp = rosTimeFromNanoseconds(
+        timing.expected_publish_stamp_ns);
+    msg.publish_deadline_stamp = rosTimeFromNanoseconds(
+        timing.publish_deadline_stamp_ns);
+    msg.estimated_dc_sec = timing.estimated_dc_sec;
+    msg.actual_dc_sec = timing.actual_dc_sec;
+    msg.dc_error_sec = timing.dc_error_sec;
     msg.raw_state_skew_sec = timing.raw_state_skew_sec;
     msg.aligned_state_skew_sec = timing.aligned_state_skew_sec;
     msg.state_alignment_required = timing.state_alignment_required;
     msg.state_time_aligned = timing.state_time_aligned;
     msg.robot_state_interpolated = timing.robot_state_interpolated;
     msg.robot_state_extrapolated = timing.robot_state_extrapolated;
+    msg.publish_epoch_estimate_valid =
+        timing.publish_epoch_estimate_valid;
+    msg.publish_latency_observation_valid =
+        timing.publish_latency_observation_valid;
+    msg.expected_publish_deadline_missed =
+        timing.expected_publish_deadline_missed;
+    msg.publish_deadline_missed = timing.publish_deadline_missed;
     msg.state_alignment_status = timing.state_alignment_status;
+    msg.publish_timing_status = timing.publish_timing_status;
 }
 
 }  // namespace
@@ -89,7 +104,7 @@ ControlCycleAudit encodeControlCycleAudit(
             ? audit.timing.command_publish_stamp_ns
             : audit.timing.horizon_available_stamp_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 3;
+    msg.schema_version = 4;
     fillCycleTiming(audit.timing, msg);
     msg.command_publish_stamp = rosTimeFromNanoseconds(
         audit.timing.command_publish_stamp_ns);

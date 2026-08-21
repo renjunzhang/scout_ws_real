@@ -207,6 +207,7 @@ add_library(spmpc_runtime
   src/runtime/state_alignment.cpp
   src/runtime/execution_prediction/command_history_buffer.cpp
   src/runtime/execution_prediction/execution_state_predictor.cpp
+  src/runtime/timing/publish_latency_model.cpp
   src/runtime/timestamp_health_evaluator.cpp
 )
 target_link_libraries(spmpc_runtime
@@ -697,6 +698,13 @@ if(CATKIN_ENABLE_TESTING)
     test/test_timestamp_health_evaluator.cpp)
   if(TARGET test_timestamp_health_evaluator)
     target_link_libraries(test_timestamp_health_evaluator
+      spmpc_runtime
+    )
+  endif()
+  catkin_add_gtest(test_publish_latency_model
+    test/test_publish_latency_model.cpp)
+  if(TARGET test_publish_latency_model)
+    target_link_libraries(test_publish_latency_model
       spmpc_runtime
     )
   endif()

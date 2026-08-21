@@ -57,6 +57,8 @@ solver / terminal / Phase-Rejoin / safety proposed decision
 
 wire-image golden 已随 schema v3 重新冻结。分析端不得再把 proposed 或 finalized 字段当作实际执行输入；执行预测只消费成功交付 receipt 写入的 history。
 
+注：这是 WP1 当时的协议版本；后续 WP2A 为增加预计/实际发布时间字段将当前 schema 升至 v4，但不改变本节三层命令语义。
+
 ## 4. 自动化证据
 
 定向测试覆盖：

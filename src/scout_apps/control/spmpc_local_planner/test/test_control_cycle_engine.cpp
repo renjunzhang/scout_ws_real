@@ -76,9 +76,11 @@ struct EngineFixture {
     ControlCycleRequest request() {
         ControlCycleRequest request;
         request.cycle_id = 1;
+        request.cycle_start_ns = secondsToNanoseconds(0.9);
         request.solver_input.dt = 0.1;
         request.solver_input.horizon_steps = 10;
         request.period_sec = 0.1;
+        request.control_period_sec = 0.1;
         request.command_sink = &sink;
         request.command_history = &history;
         return request;
@@ -412,7 +414,8 @@ TEST(ControlCycleEngineTest, OwnsFinalLimiterAndExecutionContractStage) {
     fixture.sink.now_ns = secondsToNanoseconds(1.1);
     const CommandPublicationResult waiting =
         fixture.engine.publishFailClosedZero(
-            2, &fixture.sink, &fixture.history, true,
+            2, secondsToNanoseconds(1.0), 0.1,
+            &fixture.sink, &fixture.history, true,
             "WAITING_FOR_ODOM");
     EXPECT_EQ(waiting.pipeline.decision.source, CommandSource::FailClosed);
     EXPECT_EQ(waiting.pipeline.decision.reason, "WAITING_FOR_ODOM");
@@ -442,6 +445,37 @@ TEST(ControlCycleEngineTest, CommitsPhaseOnlyAfterConsistentReceipt) {
     EXPECT_TRUE(delivered.phase_committed);
     EXPECT_TRUE(fixture.engine.phaseRejoinCoordinator().haveAcceptedIndex());
     EXPECT_TRUE(delivered.publication.history_committed);
+}
+
+TEST(ControlCycleEngineTest, AuditsExpectedAndActualPublishEpoch) {
+    EngineFixture fixture;
+    PublishLatencyModelConfig latency;
+    latency.enabled = true;
+    latency.estimated_dc_sec = 0.05;
+    ASSERT_TRUE(fixture.engine.configurePublishLatency(
+        latency, fixture.error)) << fixture.error;
+    fixture.solver.next_output.success = true;
+    fixture.solver.next_output.status = "OK";
+    fixture.solver.next_output.cmd_v = 0.2;
+
+    ControlCycleRequest request = fixture.request();
+    fixture.sink.now_ns = secondsToNanoseconds(0.97);
+    const ControlCycleResult result = fixture.engine.step(request);
+
+    EXPECT_TRUE(result.publication.publish_timing.estimate.valid);
+    EXPECT_EQ(secondsToNanoseconds(0.95),
+              result.publication.publish_timing.estimate
+                  .expected_publish_stamp_ns);
+    EXPECT_TRUE(result.publication.publish_timing.actual_valid);
+    EXPECT_NEAR(0.07,
+                result.publication.publish_timing.actual_dc_sec,
+                1e-12);
+    EXPECT_NEAR(0.02,
+                result.publication.publish_timing.dc_error_sec,
+                1e-12);
+    EXPECT_FALSE(
+        result.publication.publish_timing.publish_deadline_missed);
+    EXPECT_TRUE(result.telemetry.publish_timing.actual_valid);
 }
 
 TEST(ControlCycleEngineTest, LimiterRewriteBlocksPhaseCommit) {

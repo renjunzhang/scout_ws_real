@@ -44,6 +44,17 @@ bool ControlCycleEngine::configureCommandPipeline(
     return command_pipeline_.configure(config, error);
 }
 
+bool ControlCycleEngine::configurePublishLatency(
+    const PublishLatencyModelConfig& config,
+    std::string& error) {
+    return publish_latency_model_.configure(config, error);
+}
+
+PublishEpochEstimate ControlCycleEngine::estimatePublishEpoch(
+    const CycleTimingContract& cycle) const {
+    return publish_latency_model_.estimate(cycle);
+}
+
 SpeedReferenceConfigureResult ControlCycleEngine::configureSpeedReference(
     const SpeedReferenceControllerConfig& config) {
     return speed_reference_.configure(config);
@@ -55,24 +66,33 @@ SpeedReferenceEvaluation ControlCycleEngine::prepareSpeedReference(
 }
 
 CommandPublicationResult ControlCycleEngine::publishDecision(
-    std::uint64_t cycle_id,
+    const PublishEpochEstimate& publish_epoch_estimate,
     const CommandDecision& decision,
     bool force_zero,
     bool publish_enabled,
     ICommandSink* sink,
     CommandHistoryBuffer* history) {
     CommandPublicationRequest request;
-    request.cycle_id = cycle_id;
+    request.cycle_id = publish_epoch_estimate.cycle.cycle_id;
     request.proposed = decision;
     request.force_zero = force_zero;
     request.publish_enabled = publish_enabled;
     request.sink = sink;
     request.history = history;
-    return publication_transaction_.execute(request);
+    CommandPublicationResult result =
+        publication_transaction_.execute(request);
+    result.publish_timing = publish_latency_model_.observe(
+        publish_epoch_estimate,
+        result.receipt.delivered
+            ? result.receipt.actual_publish_stamp_ns
+            : 0);
+    return result;
 }
 
 CommandPublicationResult ControlCycleEngine::publishFailClosedZero(
     std::uint64_t cycle_id,
+    StampNs cycle_start_ns,
+    double control_period_sec,
     ICommandSink* sink,
     CommandHistoryBuffer* history,
     bool publish_enabled,
@@ -81,8 +101,13 @@ CommandPublicationResult ControlCycleEngine::publishFailClosedZero(
     decision.source = CommandSource::FailClosed;
     decision.reason = reason.empty() ? "FAIL_CLOSED_ZERO" : reason;
     decision.accepted = false;
+    CycleTimingContract timing;
+    timing.cycle_id = cycle_id;
+    timing.cycle_start_stamp_ns = cycle_start_ns;
+    timing.control_period_sec = control_period_sec;
     return publishDecision(
-        cycle_id, decision, true, publish_enabled, sink, history);
+        publish_latency_model_.estimate(timing),
+        decision, true, publish_enabled, sink, history);
 }
 
 void ControlCycleEngine::resetSafety() {
@@ -154,6 +179,22 @@ PhaseRejoinPreparation ControlCycleEngine::preparePhase(
 ControlCycleResult ControlCycleEngine::step(
     const ControlCycleRequest& request) {
     ControlCycleResult result;
+    PublishEpochEstimate publish_epoch_estimate =
+        request.publish_epoch_estimate;
+    const bool matching_publish_epoch =
+        publish_epoch_estimate.status != "NOT_EVALUATED" &&
+        publish_epoch_estimate.cycle.cycle_id == request.cycle_id &&
+        publish_epoch_estimate.cycle.cycle_start_stamp_ns ==
+            request.cycle_start_ns &&
+        publish_epoch_estimate.cycle.control_period_sec ==
+            request.control_period_sec;
+    if (!matching_publish_epoch) {
+        CycleTimingContract timing;
+        timing.cycle_id = request.cycle_id;
+        timing.cycle_start_stamp_ns = request.cycle_start_ns;
+        timing.control_period_sec = request.control_period_sec;
+        publish_epoch_estimate = publish_latency_model_.estimate(timing);
+    }
     result.solver_input = request.solver_input;
     result.phase_preparation = preparePhase(request);
     result.solver_input.phase_rejoin =
@@ -287,7 +328,7 @@ ControlCycleResult ControlCycleEngine::step(
 
     result.decision = arbitrateCommand(arbitration);
     result.publication = publishDecision(
-        request.cycle_id,
+        publish_epoch_estimate,
         result.decision,
         !result.decision.accepted,
         request.publish_enabled,
@@ -357,6 +398,7 @@ ControlCycleResult ControlCycleEngine::step(
         result.publication.history_committed;
     result.telemetry.command_publish_stamp_ns =
         result.publication.receipt.actual_publish_stamp_ns;
+    result.telemetry.publish_timing = result.publication.publish_timing;
     result.telemetry.command_contract_violation =
         result.publication.pipeline.command_contract_violation ||
         result.publication.pipeline.finite_violation;

@@ -73,6 +73,14 @@ ValidationReport validateAndNormalize(AppConfig& config) {
         imu.enable = true;
     }
 
+    const auto& publish_latency = config.control.publish_latency;
+    if (!std::isfinite(publish_latency.estimated_dc_sec) ||
+        publish_latency.estimated_dc_sec < 0.0) {
+        report.fatal(
+            "publish_timing/estimated_dc_sec",
+            "publish latency estimate must be finite and non-negative");
+    }
+
     auto& delay = config.control.delay_phase;
     delay.history_window_sec = std::max(0.1, delay.history_window_sec);
     delay.cmd_timeout_sec = std::max(0.0, delay.cmd_timeout_sec);

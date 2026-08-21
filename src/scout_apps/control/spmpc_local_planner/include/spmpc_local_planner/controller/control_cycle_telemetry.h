@@ -4,6 +4,7 @@
 #include "spmpc_local_planner/telemetry/solver_diagnostics.h"
 #include "spmpc_local_planner/domain/time.h"
 #include "spmpc_local_planner/estimation/motion_excitation.h"
+#include "spmpc_local_planner/runtime/timing/publish_latency_model.h"
 
 #include <cstdint>
 #include <string>
@@ -44,6 +45,7 @@ struct ControlCycleTelemetrySnapshot {
     bool angular_rate_limited = false;
     bool angular_accel_limited = false;
     StampNs command_publish_stamp_ns = 0;
+    PublishLatencyObservation publish_timing;
 
     double solver_u0_a = 0.0;
     double solver_u0_alpha = 0.0;
@@ -184,6 +186,32 @@ inline CommandInterventionDebug makeCommandInterventionDebug(
     return debug;
 }
 
+inline void applyPublishEpochEstimate(
+    const PublishEpochEstimate& estimate,
+    ControlCycleTimingDebug& timing) {
+    timing.expected_publish_stamp_ns =
+        estimate.expected_publish_stamp_ns;
+    timing.publish_deadline_stamp_ns =
+        estimate.publish_deadline_stamp_ns;
+    timing.estimated_dc_sec = estimate.estimated_dc_sec;
+    timing.publish_epoch_estimate_valid = estimate.valid;
+    timing.expected_publish_deadline_missed =
+        estimate.expected_deadline_missed;
+    timing.publish_timing_status = estimate.status;
+}
+
+inline void applyPublishLatencyObservation(
+    const PublishLatencyObservation& observation,
+    ControlCycleTimingDebug& timing) {
+    applyPublishEpochEstimate(observation.estimate, timing);
+    timing.actual_dc_sec = observation.actual_dc_sec;
+    timing.dc_error_sec = observation.dc_error_sec;
+    timing.publish_latency_observation_valid = observation.actual_valid;
+    timing.publish_deadline_missed =
+        observation.publish_deadline_missed;
+    timing.publish_timing_status = observation.status;
+}
+
 inline void applyControlCycleTelemetry(
     const ControlCycleTelemetrySnapshot& snapshot,
     ControlCycleAuditDebug& audit) {
@@ -203,6 +231,7 @@ inline void applyControlCycleTelemetry(
     audit.linear_limited = snapshot.linear_limited;
     audit.angular_rate_limited = snapshot.angular_rate_limited;
     audit.angular_accel_limited = snapshot.angular_accel_limited;
+    applyPublishLatencyObservation(snapshot.publish_timing, audit.timing);
     if (snapshot.command_was_published) {
         audit.timing.command_publish_stamp_ns =
             snapshot.command_publish_stamp_ns;

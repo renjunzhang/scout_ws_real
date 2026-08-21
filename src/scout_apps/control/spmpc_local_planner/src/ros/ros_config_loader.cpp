@@ -229,6 +229,10 @@ AppConfig RosConfigLoader::load(const ros::NodeHandle& private_node,
     loadParam(private_node, "control_frequency", control.frequency_hz);
     loadParam(private_node, "dt", control.dt);
     loadParam(private_node, "horizon_steps", control.horizon_steps);
+    loadParam(private_node, "publish_timing/enabled",
+              control.publish_latency.enabled);
+    loadParam(private_node, "publish_timing/estimated_dc_sec",
+              control.publish_latency.estimated_dc_sec);
     std::string delay_mode = delayPhaseModeName(control.delay_phase.mode);
     loadParam(private_node, "delay_phase/mode", delay_mode);
     control.delay_phase.mode = parseDelayPhaseMode(delay_mode);

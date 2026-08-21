@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/controller/command/command_sink.h"
 #include "spmpc_local_planner/runtime/execution_prediction/command_history_buffer.h"
+#include "spmpc_local_planner/runtime/timing/publish_latency_model.h"
 
 #include <cstdint>
 
@@ -20,6 +21,7 @@ struct CommandPublicationResult {
     CommandPipelineResult pipeline;
     FinalCommand finalized;
     PublicationReceipt receipt;
+    PublishLatencyObservation publish_timing;
     bool receipt_consistent = false;
     bool limiter_state_committed = false;
     bool history_committed = false;

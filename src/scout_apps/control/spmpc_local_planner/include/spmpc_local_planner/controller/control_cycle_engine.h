@@ -29,6 +29,8 @@ struct ControlCycleRequest {
     int execution_front_steps = 0;
     double phase_time_sec = 0.0;
     double period_sec = 0.0;
+    double control_period_sec = 0.0;
+    PublishEpochEstimate publish_epoch_estimate;
     bool publish_enabled = true;
     ICommandSink* command_sink = nullptr;
     CommandHistoryBuffer* command_history = nullptr;
@@ -75,11 +77,18 @@ public:
                          std::string& error);
     bool configureCommandPipeline(const CommandPipelineConfig& config,
                                   std::string& error);
+    bool configurePublishLatency(
+        const PublishLatencyModelConfig& config,
+        std::string& error);
+    PublishEpochEstimate estimatePublishEpoch(
+        const CycleTimingContract& cycle) const;
     SpeedReferenceConfigureResult configureSpeedReference(
         const SpeedReferenceControllerConfig& config);
     SpeedReferenceEvaluation prepareSpeedReference(SolverInput& input);
     CommandPublicationResult publishFailClosedZero(
         std::uint64_t cycle_id,
+        StampNs cycle_start_ns,
+        double control_period_sec,
         ICommandSink* sink,
         CommandHistoryBuffer* history,
         bool publish_enabled,
@@ -104,7 +113,7 @@ private:
     static TrackingProjectionView projectionView(
         const ProjectorDebugSummary& projector);
     CommandPublicationResult publishDecision(
-        std::uint64_t cycle_id,
+        const PublishEpochEstimate& publish_epoch_estimate,
         const CommandDecision& decision,
         bool force_zero,
         bool publish_enabled,
@@ -116,6 +125,7 @@ private:
     SafetySupervisor safety_;
     CommandPipeline command_pipeline_;
     PublicationTransaction publication_transaction_;
+    PublishLatencyModel publish_latency_model_;
     SpeedReferenceController speed_reference_;
     PhaseRejoinParams phase_params_;
     bool goal_reached_latched_ = false;

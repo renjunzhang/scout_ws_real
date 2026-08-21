@@ -96,7 +96,7 @@ ROS adapter 只实现消息转换、时间获取和 sink 交付，不得在 engi
 | 参数/合同 | 当前 development 来源 | 计划中的唯一正式所有者 | 关闭工作包 |
 | --- | --- | --- | --- |
 | 最终 `u_pub` | `CommandPipeline` + `PublicationTransaction` + `ICommandSink` receipt | 同左；WP4/WP5 再增加底盘 ACK | WP1 已闭合 |
-| `d_c` 与预计发布时间 | 未建模 | `PublishLatencyModel` | WP2 |
+| `d_c` 与预计发布时间 | `PublishLatencyModel` + schema v4 audit；标定值未冻结、未接入执行预测 | `PublishLatencyModel` + calibration/session binding | WP2A 已完成接口，WP2 待闭环 |
 | `d_v/d_omega/tau/K` | YAML + launch/Shell override | `ExecutionModelContract` artifact | WP2/WP4 |
 | pending buffer/actuator state | 不完整 | `ExecutionAugmentedState` | WP2 |
 | solver horizon/stage epoch | YAML + generated manifest | formal solver execution horizon context | WP3 |
@@ -109,8 +109,8 @@ ROS adapter 只实现消息转换、时间获取和 sink 交付，不得在 engi
 
 | ID | 主模块 | 最低自动测试 | 证据/报告 | 状态 |
 | --- | --- | --- | --- | --- |
-| IMP-01 | `controller/command`, `control_cycle_engine`, ROS sink | fake sink、发布失败、limiter 改写、phase commit 时序 | cycle audit v3、wire-image、518 项 C++ 回归 | WP1 已闭合 |
-| IMP-02 | `runtime/timing` | 预计/实际发布、deadline、时钟倒退 | `d_c` 误差报告 | WP2 待做 |
+| IMP-01 | `controller/command`, `control_cycle_engine`, ROS sink | fake sink、发布失败、limiter 改写、phase commit 时序 | cycle audit v3（当前 v4 继承）、wire-image、518 项 C++ 回归 | WP1 已闭合 |
+| IMP-02 | `runtime/timing` | 预计/实际发布、deadline、时钟倒退 | schema v4 `d_c`/误差/deadline audit、528 项 C++ 回归 | WP2A 已完成；待标定冻结并接入执行预测 |
 | IMP-03 | `runtime/execution_prediction`, solver input | 第一拍线/角因果 Jacobian | B0 因果报告 | WP2/WP3 待做 |
 | IMP-04 | fractional-delay kernel | impulse、step、13.3 ms remainder | 连续事件对照 | WP2/WP3 待做 |
 | IMP-05 | formal acados solver | 随机逐步一致性、terminal epoch、deadline | solver benchmark | WP3 待做 |

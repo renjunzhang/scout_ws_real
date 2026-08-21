@@ -204,6 +204,14 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                   command_pipeline_error.c_str());
         return false;
     }
+    std::string publish_latency_error;
+    if (!control_cycle_engine_.configurePublishLatency(
+            app_config_.control.publish_latency,
+            publish_latency_error)) {
+        ROS_FATAL("[spmpc_local_planner] publish latency configuration failed: %s",
+                  publish_latency_error.c_str());
+        return false;
+    }
     const SafetySupervisorConfig safety_config = app_config_.safety;
     std::string safety_error;
     if (!control_cycle_engine_.configureSafety(safety_config, safety_error)) {
@@ -578,8 +586,8 @@ PublicationReceipt SpmpcLocalPlannerROS::publish(
         return receipt;
     }
 
-    const ros::Time stamp = ros::Time::now();
     cmd_pub_.publish(velocityCommandToRos(final_command.command));
+    const ros::Time stamp = ros::Time::now();
     receipt.delivered = true;
     receipt.actual_publish_stamp_ns =
         static_cast<StampNs>(stamp.toNSec());
@@ -714,7 +722,10 @@ void SpmpcLocalPlannerROS::publishZeroCommand(
     const std::uint64_t cycle_id = audit ? audit->timing.cycle_id : 0;
     const CommandPublicationResult result =
         control_cycle_engine_.publishFailClosedZero(
-            cycle_id, this, &command_history_, publish_cmd_vel_, reason);
+            cycle_id,
+            audit ? audit->timing.cycle_start_stamp_ns : 0,
+            dt_,
+            this, &command_history_, publish_cmd_vel_, reason);
     publishTransactionDiagnostics(result, intervention, audit);
 }
 
@@ -770,6 +781,8 @@ void SpmpcLocalPlannerROS::publishTransactionDiagnostics(
         audit->linear_limited = result.linear_limited;
         audit->angular_rate_limited = result.angular_rate_limited;
         audit->angular_accel_limited = result.angular_accel_limited;
+        applyPublishLatencyObservation(
+            publication.publish_timing, audit->timing);
         audit->published_cmd_v = debug.published_cmd_v;
         audit->published_cmd_omega = debug.published_cmd_omega;
         audit->finalized_cmd_v = result.final_command.linear;
@@ -934,6 +947,16 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         static_cast<std::int64_t>(cycle_start.toNSec());
     cycle_audit.variant = variant_.name;
     cycle_audit.publish_cmd_vel = publish_cmd_vel_;
+    CycleTimingContract cycle_timing_contract;
+    cycle_timing_contract.cycle_id = cycle_audit.timing.cycle_id;
+    cycle_timing_contract.cycle_start_stamp_ns =
+        cycle_audit.timing.cycle_start_stamp_ns;
+    cycle_timing_contract.control_period_sec = dt_;
+    const PublishEpochEstimate publish_epoch_estimate =
+        control_cycle_engine_.estimatePublishEpoch(
+            cycle_timing_contract);
+    applyPublishEpochEstimate(
+        publish_epoch_estimate, cycle_audit.timing);
 
     const ControlCycleGateDecision prerequisite_gate =
         evaluateControlCyclePrerequisites(
@@ -1135,6 +1158,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         input_preparation.execution_front_steps;
     engine_request.phase_time_sec = delay_phase_now.toSec();
     engine_request.period_sec = spin_gate_dt;
+    engine_request.control_period_sec = dt_;
+    engine_request.publish_epoch_estimate = publish_epoch_estimate;
     engine_request.publish_enabled = publish_cmd_vel_;
     engine_request.command_sink = this;
     engine_request.command_history = &command_history_;

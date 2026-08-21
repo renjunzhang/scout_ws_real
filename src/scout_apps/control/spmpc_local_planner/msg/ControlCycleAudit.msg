@@ -40,14 +40,24 @@ time solver_input_epoch
 time solve_start_stamp
 time solve_end_stamp
 time horizon_available_stamp
+time expected_publish_stamp
+time publish_deadline_stamp
 time command_publish_stamp
+float64 estimated_dc_sec
+float64 actual_dc_sec
+float64 dc_error_sec
 float64 raw_state_skew_sec
 float64 aligned_state_skew_sec
 bool state_alignment_required
 bool state_time_aligned
 bool robot_state_interpolated
 bool robot_state_extrapolated
+bool publish_epoch_estimate_valid
+bool publish_latency_observation_valid
+bool expected_publish_deadline_missed
+bool publish_deadline_missed
 string state_alignment_status
+string publish_timing_status
 
 float64 solver_u0_a
 float64 solver_u0_alpha
