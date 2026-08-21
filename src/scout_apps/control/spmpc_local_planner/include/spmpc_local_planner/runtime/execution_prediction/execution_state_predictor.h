@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/runtime/execution_prediction/command_history_buffer.h"
+#include "spmpc_local_planner/runtime/execution_prediction/execution_model.h"
 #include "spmpc_local_planner/runtime/execution_prediction/types.h"
 
 namespace spmpc_local_planner {
@@ -24,9 +25,7 @@ public:
                                      const DelayPhaseParams& params) const;
 
 private:
-    static double normalizeYaw(double yaw);
-
-    SloshDynamics slosh_dynamics_;
+    SloshModelParams slosh_params_;
     bool slosh_configured_ = false;
 };
 

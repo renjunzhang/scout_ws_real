@@ -30,7 +30,7 @@
 
 旧方案记录的是 development release，不修改其历史结论。本文只描述从当前状态走到 formal-ready 的增量工作。
 
-2026-08-21 实施进度：WP0 已冻结，WP1 已闭合唯一最终命令事务；WP2A 已建立预计发布时间模型和实际 $d_c$/deadline typed audit。WP2A 的 528 项 C++ / 92 项 Python 回归见 `20260821_PhaseRejoining_WP2A预计发布时间合同记录.md`。预计时刻尚未进入执行预测，WP2 未关闭，formal 状态仍为 NO-GO。
+2026-08-21 实施进度：WP0 已冻结，WP1 已闭合唯一最终命令事务；WP2A 已建立预计发布时间模型和实际 $d_c$/deadline typed audit；WP2B 已建立统一双通道执行增广参考模型，并让 history predictor 复用同一合同和传播实现。WP2B 的 540 项 C++ / 92 项 Python 回归见 `20260821_PhaseRejoining_WP2B统一执行增广模型记录.md`。预计时刻尚未进入执行预测，增广模型尚未进入 solver，WP2 未关闭，formal 状态仍为 NO-GO。
 
 ## 1. 当前状态与剩余缺口
 
@@ -52,9 +52,9 @@
 | ID | 缺口 | 当前风险 | 完成定义 |
 | --- | --- | --- | --- |
 | IMP-01 | 最终命令出口已归一（WP1 已闭合） | receipt 目前只证明 ROS publisher 接受交付，不是 Scout CAN/底盘 ACK | 每周期只有一次 finalization 和一次 sink 调用；history、audit、相位提交与 receipt 声明的 $u^{\mathrm{pub}}$ 一致；更强 ACK 由 WP4/WP5 闭合 |
-| IMP-02 | 预计发布时间模型/API 与逐周期 audit 已建立（WP2A） | $\widehat d_c$ 尚未由标定 artifact 冻结，$\widehat t_{\mathrm{pub}}$ 尚未进入状态对齐/执行预测 | 冻结 $\widehat d_c$ 合同，并让同一预计时刻驱动执行模型；当前已记录实际 $d_c$、误差和 deadline |
-| IMP-03 | B0 决策因果依赖缺失 | 新线速度在共同前沿前已开始作用，现有固定前沿漏掉新决策影响 | 本周期新命令作为决策量进入线/角两路 delay buffer |
-| IMP-04 | 物理前沿与栅格前沿未严格统一 | $220\,\mathrm{ms}$ 与 $7\Delta t\approx233.3\,\mathrm{ms}$ 之间约有 $13.3\,\mathrm{ms}$ 偏差 | 用整步 buffer 加 fractional-delay 统一物理时刻、stage 和 artifact 索引 |
+| IMP-02 | 预计发布时间合同（WP2A）和统一执行参考模型（WP2B）已建立 | $\widehat d_c$ 尚未由标定 artifact 冻结，$\widehat t_{\mathrm{pub}}$ 尚未进入状态对齐/执行预测 | 冻结 $\widehat d_c$ 合同，并让同一预计时刻驱动执行模型；当前已记录实际 $d_c$、误差和 deadline |
+| IMP-03 | C++ 参考模型已支持新命令压入双通道 buffer，formal solver 仍缺 B0 决策依赖 | 现有 OCP 继续从 history-only 固定前沿求解，仍漏掉新决策影响 | 本周期新命令作为求解决策量进入线/角两路 delay buffer |
+| IMP-04 | C++ 参考模型已统一整步/fractional delay，solver/artifact 索引尚未接入 | $220\,\mathrm{ms}$ 与 $7\Delta t\approx233.3\,\mathrm{ms}$ 之间约有 $13.3\,\mathrm{ms}$ 偏差 | 让同一 fractional-delay 合同同时驱动 physical epoch、solver stage 和 artifact index |
 | IMP-05 | 没有正式 delay-augmented solver | 当前短窗 solver 不能表达完整 $N_e=n_f+N_\ell$ 因果传播 | 新增专用生成物；终端同时支持 9 维 gate 和执行兼容约束 |
 | IMP-06 | 没有正式 OfflineSloshOCP artifact | development CSV 不是完整离线防晃序列 | 输出运动、减速、沉降、zero-hold 完整尾段，并冻结全部合同和 hash |
 | IMP-07 | 没有 $\mathcal B_i^{\mathrm{exec}}$ | 9 维 gate 不知道 pending command 和执行器状态是否兼容 | 当前相位与 OCP 终端都检查逐相位执行状态硬边界 |

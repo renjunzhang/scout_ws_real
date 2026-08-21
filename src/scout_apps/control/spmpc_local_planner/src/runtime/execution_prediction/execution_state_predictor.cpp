@@ -6,7 +6,11 @@
 namespace spmpc_local_planner {
 
 bool ExecutionStatePredictor::configure(const SloshModelParams& slosh_params) {
-    slosh_configured_ = slosh_dynamics_.configure(slosh_params);
+    SloshDynamics validator;
+    slosh_configured_ = validator.configure(slosh_params);
+    if (slosh_configured_) {
+        slosh_params_ = slosh_params;
+    }
     return slosh_configured_;
 }
 
@@ -38,7 +42,8 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(
     out.history_span_sec = history.spanSec();
 
     const double state_age_sec = secondsBetween(evaluation_time_ns, state_epoch_ns);
-    const bool valid_params = validStamp(state_epoch_ns) &&
+    const bool valid_params = slosh_configured_ &&
+        validStamp(state_epoch_ns) &&
         validStamp(evaluation_time_ns) && params.max_prediction_sec > 0.0 &&
         std::isfinite(state_age_sec) && state_age_sec >= 0.0 &&
         std::isfinite(params.linear_delay_sec) &&
@@ -59,8 +64,23 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(
         return out;
     }
 
-    const double execution_front_sec = std::max(
-        0.0, std::max(params.linear_delay_sec, params.angular_delay_sec));
+    ExecutionModelContract contract;
+    contract.contract_id = "delay_phase_development_history_v1";
+    contract.dt = slosh_params_.dt;
+    contract.linear.delay_sec = params.linear_delay_sec;
+    contract.linear.time_constant_sec = params.linear_time_constant_sec;
+    contract.angular.delay_sec = params.angular_delay_sec;
+    contract.angular.time_constant_sec = params.angular_time_constant_sec;
+    ExecutionModel execution_model;
+    std::string execution_model_error;
+    if (!execution_model.configure(
+            contract, slosh_params_, execution_model_error)) {
+        out.status_code = DelayPhaseStatusCode::InvalidParams;
+        out.status = delayPhaseStatusName(out.status_code);
+        return out;
+    }
+
+    const double execution_front_sec = execution_model.executionLeadSec();
     const double duration = state_age_sec + execution_front_sec;
     if (!std::isfinite(duration) ||
         duration > params.max_prediction_sec + 1e-9) {
@@ -98,7 +118,8 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(
     // state epoch minus the largest pure delay.  The integration itself starts
     // at state_epoch and ends at evaluation_time + d_f; do not subtract the
     // integration duration here or the state age would be counted twice.
-    const StampNs start_ns = addSeconds(state_epoch_ns, -execution_front_sec);
+    const StampNs start_ns = addSeconds(
+        state_epoch_ns, -execution_model.requiredHistorySec());
     const StampNs oldest_ns = history.oldestStampNs();
     if (validStamp(oldest_ns) && start_ns < oldest_ns) {
         out.missing_history_sec = std::min(
@@ -123,66 +144,18 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(
         return out;
     }
 
-    RobotState robot = raw_robot;
-    SloshState slosh = raw_slosh;
-    double prev_v = raw_robot.v;
-    double elapsed = 0.0;
-    while (elapsed < duration - 1e-9) {
-        double step = std::min(max_step, duration - elapsed);
-        if (step < min_step && duration - elapsed > min_step) {
-            step = min_step;
-        }
-
-        const StampNs future_time_ns = addSeconds(state_epoch_ns, elapsed);
-        TimedCommandSample linear_sample;
-        TimedCommandSample angular_sample;
-        double target_v = 0.0;
-        double target_omega = 0.0;
-        if (history.sampleAt(
-                addSeconds(future_time_ns, -params.linear_delay_sec),
-                linear_sample)) {
-            target_v = linear_sample.command.linear;
-        }
-        if (history.sampleAt(
-                addSeconds(future_time_ns, -params.angular_delay_sec),
-                angular_sample)) {
-            target_omega = angular_sample.command.angular;
-        }
-
-        const double linear_gain = params.linear_time_constant_sec <= 1e-9
-            ? 1.0
-            : 1.0 - std::exp(-step / params.linear_time_constant_sec);
-        const double angular_gain = params.angular_time_constant_sec <= 1e-9
-            ? 1.0
-            : 1.0 - std::exp(-step / params.angular_time_constant_sec);
-        const double v = robot.v + linear_gain * (target_v - robot.v);
-        const double omega = robot.omega +
-            angular_gain * (target_omega - robot.omega);
-        robot.x += v * std::cos(robot.yaw) * step;
-        robot.y += v * std::sin(robot.yaw) * step;
-        robot.yaw = normalizeYaw(robot.yaw + omega * step);
-        robot.v = v;
-        robot.omega = omega;
-
-        if (slosh_configured_) {
-            const double ax = (v - prev_v) / std::max(1e-6, step);
-            const double ay = v * omega;
-            SloshState next_slosh;
-            if (!slosh_dynamics_.stepWithDt(
-                    slosh, ax, ay, omega, step, next_slosh)) {
-                out.status_code = DelayPhaseStatusCode::InvalidParams;
-                out.status = delayPhaseStatusName(out.status_code);
-                return out;
-            }
-            slosh = next_slosh;
-        }
-        prev_v = v;
-
-        elapsed += step;
+    const ExecutionHistoryRolloutResult rollout =
+        execution_model.rolloutPublishedHistory(
+            raw_robot, raw_slosh, history, state_epoch_ns,
+            duration, max_step, min_step);
+    if (!rollout.valid) {
+        out.status_code = DelayPhaseStatusCode::InvalidParams;
+        out.status = delayPhaseStatusName(out.status_code);
+        return out;
     }
 
-    out.predicted_robot = robot;
-    out.predicted_slosh = slosh;
+    out.predicted_robot = rollout.robot;
+    out.predicted_slosh = rollout.slosh;
     out.valid = true;
     if (out.history_complete) {
         out.status_code = delayPhaseReadyStatus(params.mode);
@@ -191,10 +164,6 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(
     }
     out.status = delayPhaseStatusName(out.status_code);
     return out;
-}
-
-double ExecutionStatePredictor::normalizeYaw(double yaw) {
-    return std::atan2(std::sin(yaw), std::cos(yaw));
 }
 
 }  // namespace spmpc_local_planner

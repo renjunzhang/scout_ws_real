@@ -34,8 +34,9 @@ Phase-Rejoining Residual S-MPCC
 
 - `ControlCycleEngine::step()` 内的唯一最终命令事务：一次 finalization、一次 sink 调用，成功 receipt 后才提交 history 和 Phase-Rejoin progress；
 - 纯 C++ `PublishLatencyModel`：从控制周期起点生成可冻结的预计发布时间，并逐周期审计实际 `d_c`、估计误差和 deadline miss；
+- 纯 C++ `ExecutionModel`：统一双通道整步/fractional delay buffer、一阶执行器、方向增益、死区、饱和以及机器人/液体传播；
 - 最终 published command history；
-- 线速度、角速度双通道延迟和可选一阶惯性预测；
+- history-only `ExecutionStatePredictor` 已复用同一执行合同和传播实现，保留原有 partial-history/off/monitor/fixed 兼容语义；
 - source timestamp / common epoch 状态对齐；
 - odom 与 processed-IMU 液体 observer；
 - `NominalSequenceArtifact`、`PhaseClock`、有限相位候选和 9 维经验 gate；
@@ -60,14 +61,14 @@ Phase-Rejoining Residual S-MPCC
 | 实物问题 | 当前实现状态 |
 | --- | --- |
 | 最终命令历史 | 已记录限幅和安全链之后真正发布的 ROS `/cmd_vel`，不是求解器原始命令 |
-| 线/角速度延迟 | 支持 `(d_v,d_omega)` 分通道历史采样 |
-| 执行惯性 | 支持一阶 `(tau_v,tau_omega)`，但当前默认值和现有 proxy 证据均为 0 |
+| 线/角速度延迟 | 统一模型支持 `(d_v,d_omega)` 的整步 buffer 和 fractional remainder；现有 predictor 仍只采样已发布历史 |
+| 执行惯性 | 统一模型支持一阶 `(tau_v,tau_omega)`，但当前默认值和现有 proxy 证据均为 0 |
 | 共同执行前沿 | 按 `max(d_v,d_omega)` 传播机器人和液体状态 |
 | 状态时间对齐 | 已有 robot/liquid common epoch、observer 过期和时间偏差检查 |
 | 速度、加速度约束 | 已有 solver 约束、条件式发布前 limiter 和 fail-closed 接口；这不等于最终发布边界已有无条件硬包络 |
 | 求解/发布延迟 `d_c` | 已有 `t_c + d_hat_c` 固定估计合同，并记录实际 `d_c`、误差和 deadline miss；默认估计关闭，尚未驱动执行预测或 deadline gate |
 | 本周期新命令的延迟传播 | 尚未正确保留其在共同前沿之前的决策依赖 |
-| 底盘非线性 | 增益、死区、饱和、方向不对称、滑移和电量影响均未建模 |
+| 底盘非线性 | 核心合同已有正/反向增益、死区和输出饱和；尚未接入冻结配置，滑移、电量和工况有效域仍未建模 |
 | 实物参数冻结 | 尚未完成 |
 
 因此当前还缺少与 delay mode 无关的 odom/TF 过期 watchdog、求解超过 `33.3 ms` 的运行期 deadline gate、最终发布处无条件的 finite/`|v|`/`|omega|` 硬包络、Scout driver 可验证的命令超时停车及命令接受/确认链，以及急停、制动和命令丢失后的真实动态模型。这些缺口使正式实物闭环维持 **G0 NO-GO**。
@@ -333,7 +334,7 @@ chi = [px, py, yaw, v, omega,
        eta_x, eta_x_dot, eta_y, eta_y_dot]
 ```
 
-因此当前不能写成“在线 MPC 已经是 14 维或更高维执行器增广 OCP”。命令 buffer、双通道 delay 和可选一阶惯性目前由 OCP 外的 `ExecutionStatePredictor` 维护；正式 delay-augmented OCP 的最终状态维度要等执行模型和 buffer 表达冻结后再确定。
+因此当前不能写成“在线 MPC 已经是 14 维或更高维执行器增广 OCP”。`ExecutionModelContract` 和 `ExecutionAugmentedState` 已在 OCP 外建立，history predictor 也已复用同一传播实现，但现有 acados OCP 尚未包含这些 buffer 和执行器状态；正式 delay-augmented OCP 的最终状态维度要等 solver 表达冻结后再确定。
 
 变量含义：
 
@@ -591,7 +592,7 @@ V2 artifact 只有在完整 slowdown–settle–zero-hold 尾段通过 loader �
 
 ### 4.7 当前必须保留的 B0 缺口
 
-当前 `ExecutionStatePredictor` 是 history-only：先用已经发布的旧命令预测共同执行前沿，再从该前沿启动 3 步 OCP。在线/实物 `enforce` 尚不能放行，原因是：
+当前 `ExecutionStatePredictor` 虽已调用统一 `ExecutionModel`，但仍是 history-only：先用已经发布的旧命令预测共同执行前沿，再从该前沿启动 3 步 OCP。新模型消除了 runtime 对 delay、执行器和车液传播的第二套公式，并不自动给现有 OCP 恢复“本周期新决策”依赖。在线/实物 `enforce` 尚不能放行，原因是：
 
 1. 当 `d_v=150 ms`、`d_omega=220 ms` 时，新线速度决策会在共同前沿前约 `70–83 ms` 已开始作用；
 2. 当前固定前沿状态没有保留这段对“本周期新决策”的依赖；
@@ -1148,7 +1149,7 @@ held-out gate 已经安全
 下一阶段不是推倒重来的大规模目录重构，而是一次中等规模、纵向贯通的**实物闭环收尾重构**。P0 按以下顺序闭合：
 
 1. **最终命令唯一出口（WP1 已完成）：**`ControlCycleEngine::step()` 现在通过 `CommandPipeline + PublicationTransaction + ICommandSink` 原子完成一次 finalization 和一次 sink 调用；成功 receipt 后才提交 limiter state/history，且 limiter 改写、contract violation、发布失败或 receipt 不一致均阻止 Phase-Rejoin commit。ROS 层只实现 sink 和消息/诊断转换，不再调用第二阶段 `finalizeCommand()`。注意这只闭合 ROS `/cmd_vel` 交付真值，尚不等于 CAN/底盘接受确认。
-2. **实物执行模型（WP2 进行中）：**WP2A 已建立独立 `PublishLatencyModel`、`CycleTimingContract`、预计/实际发布时间和 `d_c` 误差审计；下一切片仍需建立 `ExecutionModel`，统一 `(d_v,d_omega,tau_v,tau_omega,K_v,K_omega)`、pending buffer、fractional delay、适用工况和误差集合，并用 delay-augmented OCP 或严格等价 bridge 保留本周期新命令的因果作用。
+2. **实物执行模型（WP2 进行中）：**WP2A 已建立独立 `PublishLatencyModel`、`CycleTimingContract`、预计/实际发布时间和 `d_c` 误差审计；WP2B 已建立统一 `ExecutionModelContract`、双通道 pending buffer、fractional delay、执行器非线性/惯性和车液传播，并让兼容 predictor 复用。仍需补适用工况/误差集合、预计发布时间状态对齐，并用 delay-augmented OCP 或严格等价 bridge 保留本周期新命令的因果作用。
 3. **统一实物安全出口：**在唯一最终出口无条件执行 finite、`|v|/|omega|`、线/角加速度、独立 odom/TF freshness、solver deadline，以及可验证的 driver watchdog 和停车合同。
 4. **实物 runner 配置边界：**用 typed `ExperimentSessionConfig`、C++ preflight 和 immutable manifest 取代 1235 行 Shell 中的参数真源；补齐时间常数、完整历史和 Phase-Rejoin 合同。
 5. **统一路径版本：**由 canonical processed path 生成唯一 `reference_id/reference_epoch`，并让 path、phase、goal、progress、speed reference 和 solver warm-start 在同一次版本切换中原子复位；不能继续让 ROS 的 frame/size/首尾签名和 `SpmpcProblem` 的逐点比较各自决定“路径是否变化”。
@@ -1159,9 +1160,9 @@ P0 完成后冻结架构，进入带冻结执行模型的非零延迟仿真和�
 
 ### 13.1 当前阶段基线
 
-相对 `92cd2eac` 的原 6 文件审计差异已按归属提交；WP0 又冻结了 solver 生成顺序、输入资产 hash 和 504 项 C++ / 92 项 Python 基线。WP1 在此基础上闭合唯一命令事务，并完成 518 项 C++ / 92 项 Python 回归；WP2A 增加预计发布时间合同与 schema v4 审计后完成 528 项 C++ / 92 项 Python 回归。对应记录见 `docs_for_offlineslosh/方案/20260821_PhaseRejoining_WP1唯一最终命令事务闭环记录.md` 和 `docs_for_offlineslosh/方案/20260821_PhaseRejoining_WP2A预计发布时间合同记录.md`。
+相对 `92cd2eac` 的原 6 文件审计差异已按归属提交；WP0 又冻结了 solver 生成顺序、输入资产 hash 和 504 项 C++ / 92 项 Python 基线。WP1 在此基础上闭合唯一命令事务，并完成 518 项 C++ / 92 项 Python 回归；WP2A 增加预计发布时间合同与 schema v4 审计后完成 528 项 C++ / 92 项 Python 回归；WP2B 建立统一执行增广参考模型后完成 540 项 C++ / 92 项 Python 回归。对应记录见 `docs_for_offlineslosh/方案/20260821_PhaseRejoining_WP1唯一最终命令事务闭环记录.md`、`20260821_PhaseRejoining_WP2A预计发布时间合同记录.md` 和 `20260821_PhaseRejoining_WP2B统一执行增广模型记录.md`。
 
-这些结果已关闭 IMP-01，并完成 IMP-02 的模型/API/逐周期审计切片；`d_hat_c` 尚未由标定 artifact 冻结，也尚未进入状态对齐和执行预测，所以 IMP-02 与整个 WP2 仍未关闭。双通道增广执行模型、无条件速度硬包络、独立 odom/TF watchdog、solver deadline、driver watchdog/ACK、typed session 和路径 epoch 同样未关闭，因此 formal 状态继续为 G0 NO-GO。
+这些结果已关闭 IMP-01，并完成 IMP-02 的时间合同和统一 C++ 执行参考模型切片；`d_hat_c` 尚未由标定 artifact 冻结，也尚未进入状态对齐和执行预测，所以 IMP-02 与整个 WP2 仍未关闭。delay-augmented solver、无条件速度硬包络、独立 odom/TF watchdog、solver deadline、driver watchdog/ACK、typed session 和路径 epoch 同样未关闭，因此 formal 状态继续为 G0 NO-GO。
 
 长期工程原则：
 

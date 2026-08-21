@@ -1185,7 +1185,7 @@ $$
 
 在 `fixed_closed_loop` 模式下，只有当命令历史完整、预测有效且 odometry 新鲜时，runtime 层返回的 `DelayPhaseApplication` 才同时采用预测机器人状态和预测液体状态；`ControlCycleInputPreparer` 随后把它们写入 `solver_input`。否则保持 `raw_input` 中的原始状态。这个边界保证 execution predictor 不依赖求解接口。
 
-不过当前实现仍是 history-only predictor。现在明确区分：
+当前 predictor 已改为通过纯 C++ `ExecutionModel` 回放 published-command history。`ExecutionModelContract` 统一双通道整步/fractional delay、`tau`、方向增益、死区和饱和语义，`ExecutionAugmentedState` 显式保存两路 pending buffer 与 actuator output；同一个模型再传播机器人和液体状态。这个兼容路径仍然是 history-only，不包含求解中的本周期新决策。现在明确区分：
 
 ```text
 t_c       控制周期开始时刻
@@ -1213,7 +1213,7 @@ $$
 \widehat t_{\mathrm{pub}}+\max(d_v,d_\omega).
 $$
 
-此外，当 $d_v=150\,\mathrm{ms}$、$d_\omega=220\,\mathrm{ms}$ 时，本周期新线速度命令会在共同角速度前沿前约 $70\,\mathrm{ms}$ 开始作用。当前 predictor 在求解前只使用旧命令，固定的前沿状态没有保留这段对新决策的依赖。预计发布时间模型和审计已经建立，但 $\widehat t_{\mathrm{pub}}$ 尚未进入状态对齐或 OCP；这个缺口必须由统一执行模型和 delay-augmented OCP，或严格保留相同决策依赖的凝聚 bridge 解决。
+此外，当 $d_v=150\,\mathrm{ms}$、$d_\omega=220\,\mathrm{ms}$ 时，本周期新线速度命令会在共同角速度前沿前约 $70\,\mathrm{ms}$ 开始作用。当前 predictor 在求解前只使用旧命令，固定的前沿状态没有保留这段对新决策的依赖。预计发布时间模型、执行增广参考模型和审计已经建立，但 $\widehat t_{\mathrm{pub}}$ 尚未进入状态对齐，增广状态也尚未进入 OCP；这个缺口必须由 delay-augmented OCP，或严格保留相同决策依赖的凝聚 bridge 解决。
 
 默认配置也没有启用该功能：`delay_phase.mode=off`、`phase_rejoin.mode=off`、两个时间常数为 0、`require_complete_history=false`。官方实物 runner 的非 pilot 默认关闭 delay；pilot 只显式传两个纯延迟，未传时间常数、完整历史和 Phase-Rejoin 合同参数。因此当前 runner 不能建立 formal `phase_rejoin=enforce` 实物合同。
 
@@ -1416,7 +1416,7 @@ $$
 3. modal hard cap 不等价于真实液面无溢出保证；
 4. governor 使用简化短时 rollout，不是完整鲁棒 MPC 或形式化 reference governor 安全证明；
 5. 当前主线关注给定安全路径附近的在线规划控制，不把完整动态避障和同伦推理作为贡献；
-6. 当前已有 `d_c` 预计/实测审计，但预计发布时间尚未进入执行预测；本周期新命令因果传播和 Scout 执行非线性仍未闭合，不能宣称已经适配实物；
+6. 当前已有 `d_c` 预计/实测审计及统一执行参考模型，但预计发布时间尚未进入执行预测，增广模型尚未进入 solver；本周期新命令因果传播和 Scout 执行参数冻结仍未闭合，不能宣称已经适配实物；
 7. 当前缺少独立 odom/TF watchdog、solver deadline、最终命令无条件硬包络、driver 命令超时/确认和急停制动动态合同，正式实物闭环仍是 G0 NO-GO；
 8. 当前唯一 ROS 命令事务已闭合，但 receipt 仍不是 CAN/底盘 ACK；runner 配置和路径版本也尚未形成单一 typed/epoch 合同；
 9. 实物评价必须同时报告任务时间、路径误差、命令平滑性、求解耗时和外部液面指标，避免通过停车或全程低速获得表面上的降晃结果。
@@ -1437,7 +1437,7 @@ $$
 | 液体离散模型和高度代理 | `src/dynamics/slosh_dynamics.cpp` |
 | odometry/IMU 驱动的液体状态传播 | `src/estimation/slosh_observer_bank.cpp` |
 | 预测晃液风险 governor 与周期编排 | `src/core/slosh_risk_governor.cpp`, `src/controller/speed_reference_controller.cpp` |
-| 命令历史和 delay execution-state prediction | `src/runtime/execution_prediction/command_history_buffer.cpp`, `src/runtime/execution_prediction/execution_state_predictor.cpp` |
+| 双通道执行合同、增广状态和 history prediction | `src/runtime/execution_prediction/execution_model.cpp`, `command_history_buffer.cpp`, `execution_state_predictor.cpp` |
 | 预计发布时间、实际 `d_c` 和 deadline 审计 | `src/runtime/timing/publish_latency_model.cpp`, `src/controller/control_cycle_engine.cpp` |
 | 最终命令事务、receipt 与提交时序 | `src/controller/command/command_pipeline.cpp`, `src/controller/command/publication_transaction.cpp`, `src/controller/control_cycle_engine.cpp` |
 | solver I/O 与 backend 权威接口 | `include/spmpc_local_planner/solver/api/solver_input.h`, `solver_output.h`, `solver.h` |

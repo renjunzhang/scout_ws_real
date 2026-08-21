@@ -111,6 +111,32 @@ TEST(ExecutionStatePredictor, SamplesLinearAndAngularDelayChannelsIndependently)
     EXPECT_NEAR(prediction.predicted_robot.omega, 0.0, 1e-9);
 }
 
+TEST(ExecutionStatePredictor,
+     FractionalCrossChannelDelaysPreservePublishedHistoryCausality) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    history.push(sample(9.80, 0.0, 0.0));
+    history.push(sample(9.90, 1.0, 2.0));
+
+    auto p = params(0.20);
+    p.linear_delay_sec = 0.05;
+    p.angular_delay_sec = 0.13;
+    p.max_integration_step_sec = 0.01;
+    const auto prediction = makePredictor().predict(
+        RobotState{}, SloshState{}, history, stamp(10.0), p);
+
+    ASSERT_TRUE(prediction.valid);
+    EXPECT_TRUE(prediction.history_complete);
+    EXPECT_NEAR(prediction.integrated_duration_sec, 0.13, 1e-12);
+    EXPECT_EQ(prediction.prediction_epoch_ns, 10130000000LL);
+    // The fast linear channel sees the 9.90 command for the full common-front
+    // rollout.  The slower angular channel sees it only after 30 ms.
+    EXPECT_NEAR(prediction.predicted_robot.v, 1.0, 1e-12);
+    EXPECT_NEAR(prediction.predicted_robot.omega, 2.0, 1e-12);
+    EXPECT_NEAR(prediction.predicted_robot.yaw, 0.20, 1e-9);
+    EXPECT_GT(prediction.predicted_robot.y, 0.0);
+}
+
 TEST(ExecutionStatePredictor, AppliesOptionalFirstOrderExecutionInertia) {
     CommandHistoryBuffer history;
     history.configure(2.0);
