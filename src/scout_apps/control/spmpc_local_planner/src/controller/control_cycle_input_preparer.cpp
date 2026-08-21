@@ -17,6 +17,16 @@ bool ControlCycleInputPreparer::configurePrediction(
     return execution_predictor_.configure(params);
 }
 
+bool ControlCycleInputPreparer::executionTiming(
+    const DelayPhaseParams& params,
+    double& required_history_sec,
+    double& execution_lead_sec,
+    int& grid_execution_lead_steps) const {
+    return execution_predictor_.executionTiming(
+        params, required_history_sec, execution_lead_sec,
+        grid_execution_lead_steps);
+}
+
 void ControlCycleInputPreparer::resetObserver() {
     observer_selector_.reset();
 }
@@ -48,6 +58,26 @@ ControlCycleInputResult ControlCycleInputPreparer::prepareState(
     result.timing.cycle_start_stamp_ns = request.cycle_start_ns;
     result.timing.raw_robot_state_stamp_ns =
         request.raw_robot_state_stamp_ns;
+
+    CycleTimingContract cycle;
+    cycle.cycle_id = request.cycle_id;
+    cycle.cycle_start_stamp_ns = request.cycle_start_ns;
+    cycle.control_period_sec = request.dt;
+    const bool estimate_supplied =
+        request.publish_epoch_estimate.status != "NOT_EVALUATED";
+    if (estimate_supplied && !publishEpochEstimateMatchesCycle(
+            request.publish_epoch_estimate, cycle)) {
+        result.failure = ControlInputFailure::PublishEpochContract;
+        result.status = "PUBLISH_EPOCH_CONTRACT_MISMATCH";
+        result.timing.publish_timing_status = result.status;
+        return result;
+    }
+    result.raw_input.publish_epoch_estimate =
+        request.publish_epoch_estimate;
+    if (estimate_supplied) {
+        applyPublishEpochEstimate(
+            request.publish_epoch_estimate, result.timing);
+    }
 
     result.observer_selection = observer_selector_.select(
         request.odom_observer,
@@ -190,6 +220,34 @@ ControlCycleInputResult ControlCycleInputPreparer::completePrediction(
     result.prediction.status_code = DelayPhaseStatusCode::Off;
     result.delay_phase_status = DelayPhaseStatusCode::MonitorOk;
 
+    CycleTimingContract cycle;
+    cycle.cycle_id = request.cycle_id;
+    cycle.cycle_start_stamp_ns = request.cycle_start_ns;
+    cycle.control_period_sec = request.dt;
+    const bool estimate_supplied =
+        request.publish_epoch_estimate.status != "NOT_EVALUATED";
+    if (estimate_supplied && !publishEpochEstimateMatchesCycle(
+            request.publish_epoch_estimate, cycle)) {
+        result.failure = ControlInputFailure::PublishEpochContract;
+        result.status = "PUBLISH_EPOCH_CONTRACT_MISMATCH";
+        result.timing.publish_timing_status = result.status;
+        return result;
+    }
+    result.prediction_uses_expected_publish_epoch =
+        request.publish_epoch_estimate.valid;
+    result.prediction_evaluation_epoch_ns =
+        result.prediction_uses_expected_publish_epoch
+            ? request.publish_epoch_estimate.expected_publish_stamp_ns
+            : prediction_evaluation_ns;
+    result.raw_input.publish_epoch_estimate =
+        request.publish_epoch_estimate;
+    result.solver_input.publish_epoch_estimate =
+        request.publish_epoch_estimate;
+    if (estimate_supplied) {
+        applyPublishEpochEstimate(
+            request.publish_epoch_estimate, result.timing);
+    }
+
     const bool prediction_requested =
         delayPhaseUsesPrediction(request.delay_phase.mode) ||
         request.phase_rejoin_needs_prediction;
@@ -204,7 +262,7 @@ ControlCycleInputResult ControlCycleInputPreparer::completePrediction(
                 result.raw_input.slosh,
                 *request.command_history,
                 result.raw_input.cycle_timing.solver_input_epoch_ns,
-                prediction_evaluation_ns,
+                result.prediction_evaluation_epoch_ns,
                 predictor_params);
         } else {
             result.prediction.status = "NO_COMMAND_HISTORY_PORT";
@@ -218,7 +276,7 @@ ControlCycleInputResult ControlCycleInputPreparer::completePrediction(
     if (delayPhaseUsesClosedLoop(request.delay_phase.mode) &&
         result.have_prediction) {
         const bool odom_is_fresh = odomFresh(
-            prediction_evaluation_ns,
+            result.prediction_evaluation_epoch_ns,
             request.last_odom_receive_ns,
             request.delay_phase.odom_timeout_sec);
         const DelayPhaseApplication application =
@@ -263,12 +321,9 @@ ControlCycleInputResult ControlCycleInputPreparer::completePrediction(
         result.robot_delay_compensation_applied &&
         result.liquid_delay_compensation_applied;
     result.solver_input.cycle_timing = result.timing;
-    const double front_sec = std::max(
-        request.delay_phase.linear_delay_sec,
-        request.delay_phase.angular_delay_sec);
-    result.execution_front_steps = static_cast<int>(std::ceil(
-        std::max(0.0, front_sec) /
-        std::max(1e-9, request.dt)));
+    result.execution_front_steps = result.have_prediction
+        ? result.prediction.grid_execution_lead_steps
+        : 0;
     result.ready = true;
     result.status = "READY";
     return result;

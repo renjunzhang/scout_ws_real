@@ -166,6 +166,25 @@ TEST(ExecutionStatePredictor, ReportsFutureExecutionFrontEpoch) {
     ASSERT_TRUE(prediction.valid);
     EXPECT_EQ(prediction.prediction_origin_epoch_ns, 10000000000LL);
     EXPECT_EQ(prediction.prediction_epoch_ns, 10200000000LL);
+    EXPECT_NEAR(prediction.execution_lead_sec, 0.20, 1e-12);
+    EXPECT_EQ(prediction.grid_execution_lead_steps, 10);
+}
+
+TEST(ExecutionStatePredictor, ExecutionTimingComesFromUnifiedModel) {
+    const ExecutionStatePredictor predictor = makePredictor();
+    auto p = params(0.20);
+    p.linear_delay_sec = 0.15;
+    p.angular_delay_sec = 0.22;
+    double required_history_sec = 0.0;
+    double execution_lead_sec = 0.0;
+    int grid_execution_lead_steps = 0;
+
+    ASSERT_TRUE(predictor.executionTiming(
+        p, required_history_sec, execution_lead_sec,
+        grid_execution_lead_steps));
+    EXPECT_NEAR(required_history_sec, 0.22, 1e-12);
+    EXPECT_NEAR(execution_lead_sec, 0.22, 1e-12);
+    EXPECT_EQ(grid_execution_lead_steps, 11);
 }
 
 TEST(ExecutionStatePredictor, PropagatesStateAgeBeforeExecutionFront) {

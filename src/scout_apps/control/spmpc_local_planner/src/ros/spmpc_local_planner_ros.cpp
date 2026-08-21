@@ -608,12 +608,21 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     DelayPhaseStatusCode effective_status = status_code;
     const bool has_any_history = !command_history_.empty();
     const double history_span_sec = command_history_.spanSec();
-    // has_any_history 只表示是否收到过命令；history_complete 另按补偿窗口判断。
-    // 补偿窗口与 ExecutionStatePredictor 一致：max(linear_delay, angular_delay) 且受 max_prediction_sec 限制，
-    // 不再误用 history_window_sec（它是 buffer 保留窗口，通常远大于实际补偿窗口）。
-    double required_history_sec = std::max(0.0, std::max(delay_phase_params_.linear_delay_sec,
-                                                        delay_phase_params_.angular_delay_sec));
-    required_history_sec = std::min(required_history_sec, std::max(0.0, delay_phase_params_.max_prediction_sec));
+    // has_any_history 只表示是否收到过命令；history_complete 另按统一执行模型给出的补偿窗口判断。
+    // history_window_sec 是 buffer 保留窗口，不能替代执行合同的 requiredHistorySec()。
+    double required_history_sec = 0.0;
+    double execution_lead_sec = 0.0;
+    int grid_execution_lead_steps = 0;
+    const bool execution_timing_valid =
+        control_input_preparer_.executionTiming(
+            delay_phase_params_, required_history_sec,
+            execution_lead_sec, grid_execution_lead_steps);
+    (void)execution_lead_sec;
+    (void)grid_execution_lead_steps;
+    if (!execution_timing_valid) {
+        effective_status = DelayPhaseStatusCode::InvalidParams;
+        required_history_sec = 0.0;
+    }
     const bool fallback_history_complete =
         has_any_history && (required_history_sec <= 1e-6 || history_span_sec + 1e-6 >= required_history_sec);
     const double fallback_covered_history_sec = has_any_history ? std::min(history_span_sec, required_history_sec) : 0.0;
@@ -1000,6 +1009,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         cycle_audit.timing.cycle_start_stamp_ns;
     input_request.selection_time_ns = static_cast<StampNs>(
         observer_selection_now.toNSec());
+    input_request.publish_epoch_estimate = publish_epoch_estimate;
     input_request.raw_robot_state_stamp_ns = static_cast<StampNs>(
         last_odom_.header.stamp.toNSec());
     input_request.last_odom_receive_ns = last_odom_receive_stamp_.isZero()
@@ -1156,7 +1166,10 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         solver_origin_at_execution_front;
     engine_request.execution_front_steps =
         input_preparation.execution_front_steps;
-    engine_request.phase_time_sec = delay_phase_now.toSec();
+    engine_request.phase_time_sec =
+        static_cast<double>(
+            input_preparation.prediction_evaluation_epoch_ns) *
+        kSecondsPerNanosecond;
     engine_request.period_sec = spin_gate_dt;
     engine_request.control_period_sec = dt_;
     engine_request.publish_epoch_estimate = publish_epoch_estimate;

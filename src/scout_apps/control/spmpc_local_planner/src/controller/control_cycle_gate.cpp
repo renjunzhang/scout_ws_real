@@ -40,6 +40,9 @@ ControlCycleGateDecision evaluateControlInputGate(
 
     decision.failure = ControlCycleGateFailure::InputUnavailable;
     switch (input.failure) {
+    case ControlInputFailure::PublishEpochContract:
+        decision.intervention.zero_due_to_command_contract = true;
+        break;
     case ControlInputFailure::ObserverUnavailable:
     case ControlInputFailure::RawStateSkew:
     case ControlInputFailure::PartialDelayStateApplication:

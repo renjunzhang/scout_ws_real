@@ -476,6 +476,54 @@ TEST(ControlCycleEngineTest, AuditsExpectedAndActualPublishEpoch) {
     EXPECT_FALSE(
         result.publication.publish_timing.publish_deadline_missed);
     EXPECT_TRUE(result.telemetry.publish_timing.actual_valid);
+    EXPECT_TRUE(result.solver_input.publish_epoch_estimate.valid);
+    EXPECT_EQ(secondsToNanoseconds(0.95),
+              result.solver_input.publish_epoch_estimate
+                  .expected_publish_stamp_ns);
+    EXPECT_EQ(secondsToNanoseconds(0.95),
+              fixture.solver.last_input.publish_epoch_estimate
+                  .expected_publish_stamp_ns);
+    EXPECT_EQ(secondsToNanoseconds(0.95),
+              fixture.solver.last_input.cycle_timing
+                  .expected_publish_stamp_ns);
+    EXPECT_TRUE(fixture.solver.last_input.cycle_timing
+                    .publish_epoch_estimate_valid);
+}
+
+TEST(ControlCycleEngineTest,
+     RecomputesInconsistentPublishEpochBeforeSolver) {
+    EngineFixture fixture;
+    PublishLatencyModelConfig latency;
+    latency.enabled = true;
+    latency.estimated_dc_sec = 0.05;
+    ASSERT_TRUE(fixture.engine.configurePublishLatency(
+        latency, fixture.error)) << fixture.error;
+    fixture.solver.next_output.success = true;
+    fixture.solver.next_output.status = "OK";
+
+    ControlCycleRequest request = fixture.request();
+    request.publish_epoch_estimate.cycle.cycle_id = request.cycle_id;
+    request.publish_epoch_estimate.cycle.cycle_start_stamp_ns =
+        request.cycle_start_ns;
+    request.publish_epoch_estimate.cycle.control_period_sec =
+        request.control_period_sec;
+    request.publish_epoch_estimate.valid = true;
+    request.publish_epoch_estimate.expected_publish_stamp_ns =
+        secondsToNanoseconds(0.91);
+    request.publish_epoch_estimate.publish_deadline_stamp_ns =
+        secondsToNanoseconds(1.0);
+    request.publish_epoch_estimate.estimated_dc_sec = 0.01;
+    request.publish_epoch_estimate.status = "ESTIMATED";
+    ++request.publish_epoch_estimate.expected_publish_stamp_ns;
+
+    const ControlCycleResult result = fixture.engine.step(request);
+
+    EXPECT_EQ(secondsToNanoseconds(0.95),
+              fixture.solver.last_input.publish_epoch_estimate
+                  .expected_publish_stamp_ns);
+    EXPECT_EQ(secondsToNanoseconds(0.95),
+              result.publication.publish_timing.estimate
+                  .expected_publish_stamp_ns);
 }
 
 TEST(ControlCycleEngineTest, LimiterRewriteBlocksPhaseCommit) {

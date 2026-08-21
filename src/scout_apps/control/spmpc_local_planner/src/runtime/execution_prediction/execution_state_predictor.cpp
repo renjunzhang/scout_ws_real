@@ -14,6 +14,41 @@ bool ExecutionStatePredictor::configure(const SloshModelParams& slosh_params) {
     return slosh_configured_;
 }
 
+bool ExecutionStatePredictor::configureExecutionModel(
+    const DelayPhaseParams& params,
+    ExecutionModel& model) const {
+    if (!slosh_configured_) {
+        return false;
+    }
+    ExecutionModelContract contract;
+    contract.contract_id = "delay_phase_development_history_v1";
+    contract.dt = slosh_params_.dt;
+    contract.linear.delay_sec = params.linear_delay_sec;
+    contract.linear.time_constant_sec = params.linear_time_constant_sec;
+    contract.angular.delay_sec = params.angular_delay_sec;
+    contract.angular.time_constant_sec = params.angular_time_constant_sec;
+    std::string error;
+    return model.configure(contract, slosh_params_, error);
+}
+
+bool ExecutionStatePredictor::executionTiming(
+    const DelayPhaseParams& params,
+    double& required_history_sec,
+    double& execution_lead_sec,
+    int& grid_execution_lead_steps) const {
+    required_history_sec = 0.0;
+    execution_lead_sec = 0.0;
+    grid_execution_lead_steps = 0;
+    ExecutionModel model;
+    if (!configureExecutionModel(params, model)) {
+        return false;
+    }
+    required_history_sec = model.requiredHistorySec();
+    execution_lead_sec = model.executionLeadSec();
+    grid_execution_lead_steps = model.gridExecutionLeadSteps();
+    return true;
+}
+
 ExecutionStatePrediction ExecutionStatePredictor::predict(const RobotState& raw_robot,
                                                           const SloshState& raw_slosh,
                                                           const CommandHistoryBuffer& history,
@@ -64,23 +99,17 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(
         return out;
     }
 
-    ExecutionModelContract contract;
-    contract.contract_id = "delay_phase_development_history_v1";
-    contract.dt = slosh_params_.dt;
-    contract.linear.delay_sec = params.linear_delay_sec;
-    contract.linear.time_constant_sec = params.linear_time_constant_sec;
-    contract.angular.delay_sec = params.angular_delay_sec;
-    contract.angular.time_constant_sec = params.angular_time_constant_sec;
     ExecutionModel execution_model;
-    std::string execution_model_error;
-    if (!execution_model.configure(
-            contract, slosh_params_, execution_model_error)) {
+    if (!configureExecutionModel(params, execution_model)) {
         out.status_code = DelayPhaseStatusCode::InvalidParams;
         out.status = delayPhaseStatusName(out.status_code);
         return out;
     }
 
     const double execution_front_sec = execution_model.executionLeadSec();
+    out.execution_lead_sec = execution_front_sec;
+    out.grid_execution_lead_steps =
+        execution_model.gridExecutionLeadSteps();
     const double duration = state_age_sec + execution_front_sec;
     if (!std::isfinite(duration) ||
         duration > params.max_prediction_sec + 1e-9) {

@@ -97,6 +97,8 @@ struct ExecutionStatePrediction {
     double angular_time_constant_sec = 0.0;
     std::int64_t prediction_origin_epoch_ns = 0;
     std::int64_t prediction_epoch_ns = 0;
+    double execution_lead_sec = 0.0;
+    int grid_execution_lead_steps = 0;
     double integrated_duration_sec = 0.0;
     double covered_history_sec = 0.0;
     double missing_history_sec = 0.0;

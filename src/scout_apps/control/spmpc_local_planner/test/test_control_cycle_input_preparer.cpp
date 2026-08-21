@@ -90,6 +90,23 @@ CommandHistoryBuffer completeHistory() {
     return history;
 }
 
+PublishEpochEstimate publishEstimate(
+    const ControlCycleInputRequest& request,
+    bool enabled,
+    double estimated_dc_sec) {
+    PublishLatencyModel model;
+    PublishLatencyModelConfig config;
+    config.enabled = enabled;
+    config.estimated_dc_sec = estimated_dc_sec;
+    std::string error;
+    EXPECT_TRUE(model.configure(config, error)) << error;
+    CycleTimingContract cycle;
+    cycle.cycle_id = request.cycle_id;
+    cycle.cycle_start_stamp_ns = request.cycle_start_ns;
+    cycle.control_period_sec = request.dt;
+    return model.estimate(cycle);
+}
+
 void enableClosedLoop(ControlCycleInputRequest& request,
                       CommandHistoryBuffer& history,
                       DelayPhaseMode mode = DelayPhaseMode::FixedClosedLoop) {
@@ -219,6 +236,77 @@ TEST(ControlCycleInputPreparer, PredictionOffKeepsIdentitySolverInput) {
                      result.raw_input.robot.x);
     EXPECT_FALSE(result.robot_delay_compensation_applied);
     EXPECT_FALSE(result.liquid_delay_compensation_applied);
+}
+
+TEST(ControlCycleInputPreparer,
+     ExpectedPublishEpochDrivesPredictionAndSolverInput) {
+    auto preparer = configuredPreparer();
+    auto request = baseRequest();
+    auto history = completeHistory();
+    enableClosedLoop(request, history);
+    request.publish_epoch_estimate = publishEstimate(
+        request, true, 0.04);
+
+    const auto result = preparer.prepare(request);
+
+    ASSERT_TRUE(result.ready);
+    ASSERT_TRUE(result.prediction.valid);
+    EXPECT_TRUE(result.prediction_uses_expected_publish_epoch);
+    EXPECT_EQ(result.prediction_evaluation_epoch_ns, 10020000000LL);
+    EXPECT_NEAR(result.prediction.integrated_duration_sec, 0.23, 1e-12);
+    EXPECT_EQ(result.prediction.prediction_epoch_ns, 10220000000LL);
+    EXPECT_EQ(result.execution_front_steps, 10);
+    EXPECT_EQ(
+        result.solver_input.publish_epoch_estimate
+            .expected_publish_stamp_ns,
+        10020000000LL);
+    EXPECT_EQ(result.solver_input.cycle_timing.expected_publish_stamp_ns,
+              10020000000LL);
+    EXPECT_TRUE(
+        result.solver_input.cycle_timing.publish_epoch_estimate_valid);
+}
+
+TEST(ControlCycleInputPreparer,
+     EstimateOffPreservesExplicitPredictionEvaluationEpoch) {
+    auto preparer = configuredPreparer();
+    auto request = baseRequest();
+    auto history = completeHistory();
+    enableClosedLoop(request, history);
+    request.publish_epoch_estimate = publishEstimate(
+        request, false, 0.0);
+
+    const auto result = preparer.prepare(request);
+
+    ASSERT_TRUE(result.ready);
+    ASSERT_TRUE(result.prediction.valid);
+    EXPECT_FALSE(result.prediction_uses_expected_publish_epoch);
+    EXPECT_EQ(result.prediction_evaluation_epoch_ns, kSelectionNs);
+    EXPECT_EQ(result.prediction.prediction_epoch_ns, 10200000000LL);
+    EXPECT_EQ(result.solver_input.publish_epoch_estimate.status,
+              "ESTIMATE_OFF");
+    EXPECT_EQ(result.solver_input.cycle_timing.publish_deadline_stamp_ns,
+              kSelectionNs);
+}
+
+TEST(ControlCycleInputPreparer,
+     RejectsMismatchedPublishEpochBeforeStateLookup) {
+    auto preparer = configuredPreparer();
+    auto request = baseRequest();
+    request.publish_epoch_estimate = publishEstimate(
+        request, true, 0.01);
+    request.publish_epoch_estimate.expected_publish_stamp_ns += 1;
+    bool lookup_called = false;
+    request.robot_state_lookup = [&lookup_called](StampNs) {
+        lookup_called = true;
+        return RobotStateLookupResult{};
+    };
+
+    const auto result = preparer.prepareState(request);
+
+    EXPECT_FALSE(result.ready);
+    EXPECT_EQ(result.failure, ControlInputFailure::PublishEpochContract);
+    EXPECT_EQ(result.status, "PUBLISH_EPOCH_CONTRACT_MISMATCH");
+    EXPECT_FALSE(lookup_called);
 }
 
 TEST(ControlCycleInputPreparer, StaleOdomSuppressesClosedLoopApplication) {

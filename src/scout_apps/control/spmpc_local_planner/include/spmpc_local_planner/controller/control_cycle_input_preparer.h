@@ -24,6 +24,7 @@ using RobotStateLookup =
 
 enum class ControlInputFailure {
     None,
+    PublishEpochContract,
     ObserverUnavailable,
     RawStateSkew,
     CommonEpochRobotUnavailable,
@@ -39,6 +40,7 @@ struct ControlCycleInputRequest {
     // API below so runtime v-ref/governor work remains between state lookup
     // and prediction exactly as it was before this extraction.
     StampNs prediction_evaluation_ns = 0;
+    PublishEpochEstimate publish_epoch_estimate;
     StampNs raw_robot_state_stamp_ns = 0;
     StampNs last_odom_receive_ns = 0;
     SloshObserverHealth odom_observer;
@@ -69,6 +71,8 @@ struct ControlCycleInputResult {
     bool liquid_delay_compensation_applied = false;
     bool solver_origin_at_execution_front = false;
     int execution_front_steps = 0;
+    StampNs prediction_evaluation_epoch_ns = 0;
+    bool prediction_uses_expected_publish_epoch = false;
 };
 
 // Stateful, ROS-independent front half of one control cycle.  It owns observer
@@ -78,6 +82,10 @@ class ControlCycleInputPreparer {
 public:
     bool configureObserver(const SloshObserverSelectorParams& params);
     bool configurePrediction(const SloshModelParams& params);
+    bool executionTiming(const DelayPhaseParams& params,
+                         double& required_history_sec,
+                         double& execution_lead_sec,
+                         int& grid_execution_lead_steps) const;
     void resetObserver();
 
     // Select the observer and establish the solver's raw common epoch.  This

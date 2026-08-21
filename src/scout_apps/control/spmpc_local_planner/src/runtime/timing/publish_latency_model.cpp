@@ -4,6 +4,45 @@
 
 namespace spmpc_local_planner {
 
+bool publishEpochEstimateMatchesCycle(
+    const PublishEpochEstimate& estimate,
+    const CycleTimingContract& cycle) {
+    if (estimate.status == "NOT_EVALUATED" ||
+        estimate.cycle.cycle_id != cycle.cycle_id ||
+        estimate.cycle.cycle_start_stamp_ns !=
+            cycle.cycle_start_stamp_ns ||
+        estimate.cycle.control_period_sec != cycle.control_period_sec ||
+        !validStamp(cycle.cycle_start_stamp_ns) ||
+        !std::isfinite(cycle.control_period_sec) ||
+        cycle.control_period_sec <= 0.0 ||
+        !std::isfinite(estimate.estimated_dc_sec) ||
+        estimate.estimated_dc_sec < 0.0) {
+        return false;
+    }
+
+    const StampNs expected_deadline = addSeconds(
+        cycle.cycle_start_stamp_ns, cycle.control_period_sec);
+    if (!validStamp(expected_deadline) ||
+        estimate.publish_deadline_stamp_ns != expected_deadline) {
+        return false;
+    }
+    if (!estimate.valid) {
+        return estimate.status == "ESTIMATE_OFF" &&
+            estimate.expected_publish_stamp_ns == 0 &&
+            !estimate.expected_deadline_missed;
+    }
+
+    const StampNs expected_publish = addSeconds(
+        cycle.cycle_start_stamp_ns, estimate.estimated_dc_sec);
+    const bool expected_miss = expected_publish > expected_deadline;
+    return validStamp(expected_publish) &&
+        estimate.expected_publish_stamp_ns == expected_publish &&
+        estimate.expected_deadline_missed == expected_miss &&
+        estimate.status == (expected_miss
+            ? "EXPECTED_DEADLINE_MISS"
+            : "ESTIMATED");
+}
+
 bool PublishLatencyModel::configure(
     const PublishLatencyModelConfig& config,
     std::string& error) {

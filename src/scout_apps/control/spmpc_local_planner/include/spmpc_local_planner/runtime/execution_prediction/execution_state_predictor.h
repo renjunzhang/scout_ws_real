@@ -11,6 +11,11 @@ class ExecutionStatePredictor {
 public:
     bool configure(const SloshModelParams& slosh_params);
 
+    bool executionTiming(const DelayPhaseParams& params,
+                         double& required_history_sec,
+                         double& execution_lead_sec,
+                         int& grid_execution_lead_steps) const;
+
     ExecutionStatePrediction predict(const RobotState& raw_robot,
                                      const SloshState& raw_slosh,
                                      const CommandHistoryBuffer& history,
@@ -25,6 +30,9 @@ public:
                                      const DelayPhaseParams& params) const;
 
 private:
+    bool configureExecutionModel(const DelayPhaseParams& params,
+                                 ExecutionModel& model) const;
+
     SloshModelParams slosh_params_;
     bool slosh_configured_ = false;
 };

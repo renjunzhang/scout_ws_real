@@ -186,32 +186,6 @@ inline CommandInterventionDebug makeCommandInterventionDebug(
     return debug;
 }
 
-inline void applyPublishEpochEstimate(
-    const PublishEpochEstimate& estimate,
-    ControlCycleTimingDebug& timing) {
-    timing.expected_publish_stamp_ns =
-        estimate.expected_publish_stamp_ns;
-    timing.publish_deadline_stamp_ns =
-        estimate.publish_deadline_stamp_ns;
-    timing.estimated_dc_sec = estimate.estimated_dc_sec;
-    timing.publish_epoch_estimate_valid = estimate.valid;
-    timing.expected_publish_deadline_missed =
-        estimate.expected_deadline_missed;
-    timing.publish_timing_status = estimate.status;
-}
-
-inline void applyPublishLatencyObservation(
-    const PublishLatencyObservation& observation,
-    ControlCycleTimingDebug& timing) {
-    applyPublishEpochEstimate(observation.estimate, timing);
-    timing.actual_dc_sec = observation.actual_dc_sec;
-    timing.dc_error_sec = observation.dc_error_sec;
-    timing.publish_latency_observation_valid = observation.actual_valid;
-    timing.publish_deadline_missed =
-        observation.publish_deadline_missed;
-    timing.publish_timing_status = observation.status;
-}
-
 inline void applyControlCycleTelemetry(
     const ControlCycleTelemetrySnapshot& snapshot,
     ControlCycleAuditDebug& audit) {

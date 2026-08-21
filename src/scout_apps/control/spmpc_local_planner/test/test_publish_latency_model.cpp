@@ -33,6 +33,8 @@ TEST(PublishLatencyModel, FixedEstimateUsesCycleStartAsOnlyEpoch) {
               estimate.publish_deadline_stamp_ns);
     EXPECT_FALSE(estimate.expected_deadline_missed);
     EXPECT_EQ("ESTIMATED", estimate.status);
+    EXPECT_TRUE(publishEpochEstimateMatchesCycle(
+        estimate, cycleAt(10.0, 1.0 / 30.0)));
 
     config.estimated_dc_sec = 0.05;
     ASSERT_TRUE(model.configure(config, error)) << error;
@@ -41,6 +43,33 @@ TEST(PublishLatencyModel, FixedEstimateUsesCycleStartAsOnlyEpoch) {
     EXPECT_TRUE(expected_late.valid);
     EXPECT_TRUE(expected_late.expected_deadline_missed);
     EXPECT_EQ("EXPECTED_DEADLINE_MISS", expected_late.status);
+}
+
+TEST(PublishLatencyModel, EstimateImageMustMatchItsCycleExactly) {
+    PublishLatencyModel model;
+    PublishLatencyModelConfig config;
+    config.enabled = true;
+    config.estimated_dc_sec = 0.01;
+    std::string error;
+    ASSERT_TRUE(model.configure(config, error)) << error;
+    const CycleTimingContract cycle = cycleAt(15.0, 0.02);
+    const PublishEpochEstimate estimate = model.estimate(cycle);
+    ASSERT_TRUE(publishEpochEstimateMatchesCycle(estimate, cycle));
+
+    PublishEpochEstimate mutated = estimate;
+    ++mutated.expected_publish_stamp_ns;
+    EXPECT_FALSE(publishEpochEstimateMatchesCycle(mutated, cycle));
+    mutated = estimate;
+    mutated.cycle.cycle_id += 1;
+    EXPECT_FALSE(publishEpochEstimateMatchesCycle(mutated, cycle));
+    mutated = estimate;
+    mutated.expected_deadline_missed = !estimate.expected_deadline_missed;
+    EXPECT_FALSE(publishEpochEstimateMatchesCycle(mutated, cycle));
+
+    ASSERT_TRUE(model.configure(PublishLatencyModelConfig{}, error))
+        << error;
+    const PublishEpochEstimate disabled = model.estimate(cycle);
+    EXPECT_TRUE(publishEpochEstimateMatchesCycle(disabled, cycle));
 }
 
 TEST(PublishLatencyModel, ObservationReportsActualDcErrorAndDeadline) {

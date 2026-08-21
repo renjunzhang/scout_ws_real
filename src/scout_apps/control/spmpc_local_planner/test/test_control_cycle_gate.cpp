@@ -60,6 +60,12 @@ TEST(ControlCycleGate, InputFailuresMapToStableWaitReasons) {
     EXPECT_TRUE(
         decision.intervention.zero_due_to_waiting_for_slosh_observer);
 
+    input.failure = ControlInputFailure::PublishEpochContract;
+    decision = evaluateControlInputGate(input);
+    EXPECT_TRUE(decision.intervention.zero_due_to_command_contract);
+    EXPECT_FALSE(
+        decision.intervention.zero_due_to_waiting_for_slosh_observer);
+
     input.failure = ControlInputFailure::CommonEpochRobotUnavailable;
     decision = evaluateControlInputGate(input);
     EXPECT_TRUE(decision.intervention.zero_due_to_waiting_for_tf);

@@ -181,21 +181,20 @@ ControlCycleResult ControlCycleEngine::step(
     ControlCycleResult result;
     PublishEpochEstimate publish_epoch_estimate =
         request.publish_epoch_estimate;
-    const bool matching_publish_epoch =
-        publish_epoch_estimate.status != "NOT_EVALUATED" &&
-        publish_epoch_estimate.cycle.cycle_id == request.cycle_id &&
-        publish_epoch_estimate.cycle.cycle_start_stamp_ns ==
-            request.cycle_start_ns &&
-        publish_epoch_estimate.cycle.control_period_sec ==
-            request.control_period_sec;
-    if (!matching_publish_epoch) {
-        CycleTimingContract timing;
-        timing.cycle_id = request.cycle_id;
-        timing.cycle_start_stamp_ns = request.cycle_start_ns;
-        timing.control_period_sec = request.control_period_sec;
+    CycleTimingContract timing;
+    timing.cycle_id = request.cycle_id;
+    timing.cycle_start_stamp_ns = request.cycle_start_ns;
+    timing.control_period_sec = request.control_period_sec;
+    if (!publishEpochEstimateMatchesCycle(
+            publish_epoch_estimate, timing)) {
         publish_epoch_estimate = publish_latency_model_.estimate(timing);
     }
     result.solver_input = request.solver_input;
+    result.solver_input.publish_epoch_estimate =
+        publish_epoch_estimate;
+    applyPublishEpochEstimate(
+        publish_epoch_estimate,
+        result.solver_input.cycle_timing);
     result.phase_preparation = preparePhase(request);
     result.solver_input.phase_rejoin =
         result.phase_preparation.solver_context;
