@@ -1,8 +1,9 @@
 # SPMPC 论文方法章节参考
 
-> 文档用途：为论文 Introduction、Method、Ablation 和 Discussion 提供与当前代码一致的方法口径。
-> 核对版本：2026-07-13，当前分支 `diag/lt-dwa-collision-tracking`，HEAD `d9e11cc`。
-> 代码仍是最终事实来源；若状态维度、代价、约束或 governor 发生变化，应同步更新本文档。
+> 文档用途：记录当前代码仍保留的 full-horizon online S-MPCC 基座，为历史论文 Introduction、Method、Ablation 和 Discussion 提供方法口径；当前论文目标已经转向 Phase-Rejoining，见 [`README.md`](README.md)。
+> 核对版本：2026-08-21，分支 `offline-slosh-plan-online-tracking`，重构验收提交 `92cd2eac`。
+> 数学形式仍是历史 continuous MPCC；代码路径、求解接口和运行时模块边界已按当前实现同步。代码仍是最终事实来源。
+> 实物边界：当前只能称为“实物执行感知骨架已经建立”，不能称为“已经适配实物”；正式实物闭环仍是 **G0 NO-GO**。
 
 ---
 
@@ -148,7 +149,7 @@ first optimal control [a0, alpha0, v_s0]
 [v_cmd, omega_cmd] + terminal/safety handling
 ```
 
-需要注意当前代码顺序：governor 先基于当前原始 `SolverInput` 中的机器人/液体状态调节 `v_ref_current`，随后才执行可选的 delay-phase 状态预测。因此在 `fixed_closed_loop` 模式下，governor 与内层 MPCC 可能分别使用原始状态和预测执行状态。这是当前实现事实，论文若将 governor 与延迟补偿同时作为主实验设置，应明确说明或进一步统一状态口径。
+需要注意当前代码顺序：`SpeedReferenceController` 先基于 `ControlCycleInputResult.raw_input` 中的机器人/液体状态调节 `v_ref_current`，随后 `ControlCycleInputPreparer::completePrediction()` 才应用可选的 delay-phase 状态预测并形成 `solver_input`。底层 execution predictor 自身只接触 domain state/command/time，不依赖 `SolverInput`。因此在 `fixed_closed_loop` 模式下，governor 与内层 MPCC 仍可能分别使用原始状态和预测执行状态；论文若将 governor 与延迟补偿同时作为主实验设置，应明确说明或进一步统一状态口径。
 
 ---
 
@@ -382,10 +383,7 @@ $$
 \kappa_x=\kappa_y=1.
 $$
 
-$\omega_n$ 和液面高度系数 $c_h$ 由纯 C++ `SloshDynamics` 按冻结的
-`LiquidSloshModel` 模态根、公式和 ZOH 运算顺序计算，阻尼比 $\zeta$ 则来自同一份
-typed config。默认一阶线性模型和高阶非线性模型均有逐位回归；论文不应再另写一套
-与代码不一致的经验参数。
+$\omega_n$ 和液面高度系数 $c_h$ 由纯 C++ `SloshDynamics` 直接按已冻结的模态根、公式和 ZOH 运算顺序计算，阻尼比 $\zeta$ 来自同一份 typed config。该实现保留与历史 `slosh_models::LiquidSloshModel` 合同的逐值回归，但本包已不再对 `slosh_models` 建立编译或运行依赖。论文不应另写一套与代码不一致的经验参数。
 
 ### 6.2 增强状态
 
@@ -1131,7 +1129,7 @@ $$
 \right).
 $$
 
-随后命令还可能受到 terminal controller 和安全门控影响。因此论文中的控制公式描述的是 solver 原始输出到命令的主要映射；实物实验还应说明额外命令干预是否发生。
+随后命令还可能受到 terminal controller、Phase-Rejoin supervisor、发布前 limiter 和安全门控影响。因此上述裁剪只描述 solver 原始输出到候选命令的主要映射，不能替代最终发布边界的安全合同。当前 `ControlCycleEngine::step()` 返回的是安全仲裁后的 `decision`；ROS 层随后调用 `finalizeCommand()` 完成 limiter/execution contract，再记录 history 并发布。这仍是两个阶段，不是一次控制周期原子产生唯一 `u_pub`。当前最终 `CommandPipeline` 也没有无条件检查 finite、线速度绝对值和角速度绝对值；角速度/加速度 limiter 还是配置式的。正式实物前应把最终化收回 `step()`，在唯一出口增加无条件 finite 与 `|v|/|omega|` 硬包络，并由同一结果生成审计和命令历史事件。
 
 ---
 
@@ -1147,19 +1145,23 @@ $$
 \{(t_i,v_{\mathrm{cmd},i},\omega_{\mathrm{cmd},i})\}.
 $$
 
-给定配置延迟：
+给定分通道纯延迟和可选一阶惯性：
 
 $$
-d
-=
-\min
-\left(
-\max(d_v,d_\omega),
-d_{\max}
-\right),
+d_f=\max(d_v,d_\omega),
+\qquad
+(\tau_v,\tau_\omega)\ge 0,
 $$
 
-当前 predictor 使用 $\max(d_v,d_\omega)$ 形成一个共同积分窗口，并没有分别对线速度通道和角速度通道实施两个独立的时移模型。论文应将其写成固定窗口 execution-state prediction，而不是更强的双通道精确延迟辨识与补偿。
+当前 predictor 使用 $d_f$ 形成共同积分窗口，但在每个积分时刻分别采样：
+
+$$
+v^\star(t)=\mathcal H_v(t-d_v),
+\qquad
+\omega^\star(t)=\mathcal H_\omega(t-d_\omega),
+$$
+
+再按各自的 $\tau_v,\tau_\omega$ 更新执行速度。因此代码已经有双通道历史采样和可选一阶执行惯性骨架，而不是单一 delay；但增益、死区、饱和、方向不对称、滑移和电量影响均未进入模型，时间常数也尚未辨识冻结。
 
 执行状态预测器从 $t-d$ 到 $t$ 对历史命令积分：
 
@@ -1181,7 +1183,33 @@ a_{x,j}
 a_{y,j}=v_j\omega_j.
 $$
 
-在 `fixed_closed_loop` 模式下，只有当命令历史完整、预测有效且 odometry 新鲜时，预测机器人状态和预测液体状态才替换原始 `SolverInput`；否则回退到原始状态。
+在 `fixed_closed_loop` 模式下，只有当命令历史完整、预测有效且 odometry 新鲜时，runtime 层返回的 `DelayPhaseApplication` 才同时采用预测机器人状态和预测液体状态；`ControlCycleInputPreparer` 随后把它们写入 `solver_input`。否则保持 `raw_input` 中的原始状态。这个边界保证 execution predictor 不依赖求解接口。
+
+不过当前实现仍是 history-only predictor。设：
+
+```text
+t_e    求解前调用 predictor 的 evaluation epoch
+t_pub  本周期经过 solver、安全链和 limiter 后的真实发布时间
+d_c    t_pub - t_e
+```
+
+代码当前先在 $t_e$ 用旧的 published-command history 预测到：
+
+$$
+t_e+\max(d_v,d_\omega),
+$$
+
+随后才求解并发布新命令。正式方法需要从预计发布时间出发：
+
+$$
+t_e+\widehat d_c+\max(d_v,d_\omega).
+$$
+
+此外，当 $d_v=150\,\mathrm{ms}$、$d_\omega=220\,\mathrm{ms}$ 时，本周期新线速度命令会在共同角速度前沿前约 $70\,\mathrm{ms}$ 开始作用。当前 predictor 在求解前只使用旧命令，固定的前沿状态没有保留这段对新决策的依赖。`d_c` 目前只有时间戳记录，也没有进入预测。这个缺口必须由 delay-augmented OCP 或严格保留相同决策依赖的凝聚 bridge 解决，不能只增加一个延迟参数。
+
+默认配置也没有启用该功能：`delay_phase.mode=off`、`phase_rejoin.mode=off`、两个时间常数为 0、`require_complete_history=false`。官方实物 runner 的非 pilot 默认关闭 delay；pilot 只显式传两个纯延迟，未传时间常数、完整历史和 Phase-Rejoin 合同参数。因此当前 runner 不能建立 formal `phase_rejoin=enforce` 实物合同。
+
+现有三组正向仿真也全部显式使用 $d_v=d_\omega=\tau_v=\tau_\omega=0$，对应的 Gazebo plant 收到命令后基本直接设置速度。它们只证明零延迟理想执行 proxy 下指标正向，不能证明 Scout 150–220 ms 延迟下仍然正向。
 
 论文建议把该模块写成 real-system state alignment 或 deployment compensation，并在 Discussion 中说明，而不是用它替代 SPMPC 的核心方法贡献。
 
@@ -1216,6 +1244,22 @@ continuous_mpcc_acados
 ```
 
 `continuous_mpcc_direct_omega_legacy` 只用于 RouteB 结构诊断，`primitive` 只作为早期 rollout、fallback 或附录对照，不应与当前主线方法混写。
+
+当前求解边界已经拆分为：
+
+```text
+solver/api/solver_input.h   权威 SolverInput
+solver/api/solver_output.h  权威 SolverOutput
+solver/api/solver.h         权威 SpmpcSolver backend 接口
+runtime/control_cycle_timing.h
+core/start_lock_recovery_diagnostics.h
+```
+
+`solver/api/solver_io.h` 和 `core/spmpc_solver.h` 只保留为兼容 facade。Phase-Rejoin coordinator 也不再接收整个 `SolverOutput`，而是由 controller adapter 转成只含命令和终端状态的 `PhaseSolveView`。因此 solver telemetry、执行预测和 phase 决策之间不再通过总 DTO 形成隐式依赖。
+
+当前 `/spmpc/solver_time_ms` 和周期审计会记录求解时间，但没有在求解超过一个 30 Hz 周期（`33.3 ms`）时阻止本周期命令发布的运行期 deadline gate。实物实时性不能仅凭离线日志均值放行。
+
+实物 runner 与路径版本也是部署方法的一部分。当前 1235 行 runner 仍在 Shell 中拼接大量参数，却没有传入两个执行时间常数、完整历史和 Phase-Rejoin formal 合同；目标应是 typed `ExperimentSessionConfig` 经 C++ preflight 生成 immutable manifest，Shell 只做薄启动。路径更新方面，ROS 只比较 frame、点数和首尾位置，`SpmpcProblem` 则比较处理后路径的长度和所有点；两套判定可能导致同首尾、同点数但中间形状变化时，只复位 problem 内部 progress/terminal，而遗留 controller 的 phase、goal latch、speed-reference 和 shifted-plan/warm-start 状态。正式版本必须以唯一 `reference_id/reference_epoch` 驱动整条链原子复位。
 
 ---
 
@@ -1349,9 +1393,9 @@ $$
 
 1. **Online slosh-aware local planning formulation.** We formulate open-liquid transport by a standard wheeled mobile robot as an online local planning problem with liquid dynamic memory, rather than treating slosh suppression as trajectory smoothing alone.
 2. **Slosh-augmented MPCC with predictive reference adaptation.** We develop an alpha-state MPCC that jointly optimizes path progress, executable chassis motion, command smoothness, and low-order liquid modal response, together with a lightweight finite-horizon slosh-risk governor that adapts the reference speed without modifying the inner OCP structure.
-3. **Controlled real-system evidence.** We separate liquid-state prediction from smooth-only motion generation through structured ablations and evaluate the actual liquid surface using external RGB measurements instead of relying solely on the controller's internal model proxy.
+3. **Target controlled real-system evidence.** After G0 release, we will separate liquid-state prediction from smooth-only motion generation through structured ablations and evaluate the actual liquid surface using external RGB measurements instead of relying solely on the controller's internal model proxy.
 
-若 governor 实验尚未完成或结果不足，应把第 2 点拆开：正文主贡献只保留 slosh-augmented MPCC，governor 降级为 extension 或 future work，避免代码存在但证据不足时过度宣称。
+第 3 点是目标证据表述，不是当前完成状态；在带执行模型仿真、G0 held-out 和独立 RGB 实物试验完成前，不能改为完成时或现在时。若 governor 实验尚未完成或结果不足，也应把第 2 点拆开：正文主贡献只保留 slosh-augmented MPCC，governor 降级为 extension 或 future work，避免代码存在但证据不足时过度宣称。
 
 ---
 
@@ -1364,7 +1408,10 @@ $$
 3. modal hard cap 不等价于真实液面无溢出保证；
 4. governor 使用简化短时 rollout，不是完整鲁棒 MPC 或形式化 reference governor 安全证明；
 5. 当前主线关注给定安全路径附近的在线规划控制，不把完整动态避障和同伦推理作为贡献；
-6. 实物评价必须同时报告任务时间、路径误差、命令平滑性、求解耗时和外部液面指标，避免通过停车或全程低速获得表面上的降晃结果。
+6. 当前只有执行感知骨架，`d_c`、本周期新命令因果传播和 Scout 执行非线性尚未闭合，不能宣称已经适配实物；
+7. 当前缺少独立 odom/TF watchdog、solver deadline、最终命令无条件硬包络、driver 命令超时/确认和急停制动动态合同，正式实物闭环仍是 G0 NO-GO；
+8. 当前最终命令仍在 `step()` 返回后由 ROS 层二次 finalization，runner 配置和路径版本也尚未形成单一 typed/epoch 合同；
+9. 实物评价必须同时报告任务时间、路径误差、命令平滑性、求解耗时和外部液面指标，避免通过停车或全程低速获得表面上的降晃结果。
 
 ---
 
@@ -1376,11 +1423,15 @@ $$
 | contour/lag、anti-creep、控制和 slosh cost | `tools/codegen/acados/spmpc_acados_cost.py` |
 | box constraints 和 modal hard cap | `tools/codegen/acados/spmpc_acados_constraints.py` |
 | SQP-RTI、ERK、HPIPM codegen | `tools/codegen/acados/generate_spmpc_acados.py` |
-| acados 参数注入、初值、warm start 和命令生成 | `src/solvers/continuous_mpcc_solver_acados.cpp` |
+| acados ABI/capsule | `src/solver/acados/generated_solver.cpp` |
+| acados 参数注入与结果解码 | `src/solver/acados/stage_parameter_builder.cpp`, `src/solver/acados/solution_decoder.cpp` |
+| warm-start 回退与连续 MPCC backend | `src/warm_start/warm_start_policy.cpp`, `src/solvers/continuous_mpcc_solver_acados.cpp` |
 | 液体离散模型和高度代理 | `src/dynamics/slosh_dynamics.cpp` |
-| odometry 驱动的液体状态传播 | `src/ros/spmpc_local_planner_ros.cpp` |
-| 预测晃液风险 governor | `src/core/slosh_risk_governor.cpp` |
-| 命令历史和 delay execution-state prediction | `src/ros/command_history_buffer.cpp`, `src/ros/execution_state_predictor.cpp` |
+| odometry/IMU 驱动的液体状态传播 | `src/estimation/slosh_observer_bank.cpp` |
+| 预测晃液风险 governor 与周期编排 | `src/core/slosh_risk_governor.cpp`, `src/controller/speed_reference_controller.cpp` |
+| 命令历史和 delay execution-state prediction | `src/runtime/execution_prediction/command_history_buffer.cpp`, `src/runtime/execution_prediction/execution_state_predictor.cpp` |
+| solver I/O 与 backend 权威接口 | `include/spmpc_local_planner/solver/api/solver_input.h`, `solver_output.h`, `solver.h` |
+| Phase solver 结果窄适配 | `src/controller/phase_solve_adapter.cpp`, `include/spmpc_local_planner/phase_rejoin/types.h` |
 | 主消融参数 | `config/planner/variants.yaml` |
 | 容器和液体参数 | `config/containers/tube_default.yaml` |
 | 底盘运动约束 | `config/platforms/scout_mini.yaml` |
@@ -1403,6 +1454,12 @@ $$
 - [ ] governor 最终 rate-limited beta 是否仍会重新 rollout；
 - [ ] governor 与 inner OCP 是否使用同一高度口径；
 - [ ] delay compensation 是否默认关闭、正式实验是否明确报告模式；
+- [ ] 是否把零延迟理想执行 proxy 误写成 Scout 执行延迟验收；
+- [ ] `d_c` 和本周期新命令的双通道因果传播是否已进入正式模型；
+- [ ] odom/TF watchdog、solver deadline、最终硬包络和 driver 停车/确认合同是否已独立验收；
+- [ ] `ControlCycleEngine::step()` 是否原子返回唯一 `u_pub`、审计和 history event，ROS 是否只做发布；
+- [ ] 实物 session 是否来自 typed config、C++ preflight 和 immutable manifest，而不是 Shell 参数拼接；
+- [ ] 全链是否使用同一个 `reference_id/reference_epoch` 并原子复位 phase/goal/progress/warm-start；
 - [ ] RGB 是否仍只用于外部评价而未进入闭环；
 - [ ] 当前实验是否足以支撑 governor 作为正式贡献；
 - [ ] 是否误把 Map-vref、obstacle、homotopy 或工程安全门控写成第一版核心方法。

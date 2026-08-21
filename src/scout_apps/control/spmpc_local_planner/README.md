@@ -6,7 +6,9 @@
 >
 > 2026-08-20 模块化实现与仿真记录见：[`20260820_PhaseRejoining模块化代码修改与仿真报告.md`](../../../../docs_for_offlineslosh/代码修改报告/20260820_PhaseRejoining模块化代码修改与仿真报告.md)。
 >
-> [`README_METHOD.md`](README_METHOD.md) 记录的是 2026-07 旧版 full-horizon online S-MPCC 口径，只作为历史参考，不再代表当前论文主线。
+> 2026-08-20 至 2026-08-21 的解耦实施与当前验收见：[`20260820_SPMPC局部规划器解耦与模块化重构方案.md`](../../../../docs_for_offlineslosh/代码修改报告/20260820_SPMPC局部规划器解耦与模块化重构方案.md)。
+>
+> [`README_METHOD.md`](README_METHOD.md) 记录的是仍可运行的 full-horizon online S-MPCC 基座口径，只作为历史方法参考，不再代表当前论文主线；其中代码路径和模块边界已按 2026-08-21 重构同步。
 
 `spmpc_local_planner` 是 Scout Mini 开口液体运输实验中的局部规划与控制包。当前论文目标方法已经从“在线每周期重新规划整段防晃动作”调整为：
 
@@ -25,8 +27,8 @@ Phase-Rejoining Residual S-MPCC
 | 论文目标方法 | `OfflineSloshOCP + Phase-Rejoining Residual S-MPCC` |
 | 在线算法基座 | 10 维 alpha-state slosh-aware continuous MPCC + acados SQP-RTI |
 | 默认运行行为 | `phase_rejoin.mode=off`，完全保持旧 continuous MPCC 行为 |
-| 当前 Phase-Rejoin 代码 | development simulation release：模块、合同、短求解器和监督分支已接通 |
-| 当前实物状态 | **`enforce` 仍为 NO-GO；本文档不放行 formal trial，工程检查只能使用 `off/monitor` 并遵守既有实物 SOP** |
+| 当前 Phase-Rejoin 代码 | development simulation release：`92cd2eac` 上三组冻结、**零延迟理想执行 proxy** baseline/enforce 配对通过 |
+| 当前实物状态 | **只能称为“实物执行感知骨架已经建立”；正式实物闭环仍是 G0 NO-GO。`enforce` 不得用于 Scout formal trial** |
 
 当前代码已经包含：
 
@@ -45,10 +47,29 @@ Phase-Rejoining Residual S-MPCC
 - 正式 `OfflineSloshOCP` 及其完整 formal artifact；
 - Scout 线/角双通道执行模型的最终 held-out 冻结；
 - 保留新决策依赖的 delay-augmented OCP 或严格等价 bridge；
+- `ControlCycleEngine::step()` 原子产生最终 `u_pub`、审计和命令历史事件的唯一出口；
+- 全链统一的 `reference_id/reference_epoch` 及路径切换复位合同；
 - 9 维 gate 之外的执行 buffer / 惯性状态兼容集；
 - held-out gate、false-accept 和真实恢复证据；
 - Phase-Rejoin 专用实物 runner、recorder 和 postflight；
 - 实物 `enforce` 和独立 RGB 防晃收益。
+
+当前实物执行审计必须按下表理解；“已有接口”不等于“正式实物适配完成”：
+
+| 实物问题 | 当前实现状态 |
+| --- | --- |
+| 最终命令历史 | 已记录限幅和安全链之后真正发布的 ROS `/cmd_vel`，不是求解器原始命令 |
+| 线/角速度延迟 | 支持 `(d_v,d_omega)` 分通道历史采样 |
+| 执行惯性 | 支持一阶 `(tau_v,tau_omega)`，但当前默认值和现有 proxy 证据均为 0 |
+| 共同执行前沿 | 按 `max(d_v,d_omega)` 传播机器人和液体状态 |
+| 状态时间对齐 | 已有 robot/liquid common epoch、observer 过期和时间偏差检查 |
+| 速度、加速度约束 | 已有 solver 约束、条件式发布前 limiter 和 fail-closed 接口；这不等于最终发布边界已有无条件硬包络 |
+| 求解/发布延迟 `d_c` | 已记录周期时间戳，尚未进入预测模型 |
+| 本周期新命令的延迟传播 | 尚未正确保留其在共同前沿之前的决策依赖 |
+| 底盘非线性 | 增益、死区、饱和、方向不对称、滑移和电量影响均未建模 |
+| 实物参数冻结 | 尚未完成 |
+
+因此当前还缺少与 delay mode 无关的 odom/TF 过期 watchdog、求解超过 `33.3 ms` 的运行期 deadline gate、最终发布处无条件的 finite/`|v|`/`|omega|` 硬包络、Scout driver 可验证的命令超时停车及命令接受/确认链，以及急停、制动和命令丢失后的真实动态模型。这些缺口使正式实物闭环维持 **G0 NO-GO**。
 
 当前诊断固定为：
 
@@ -172,24 +193,31 @@ Phase-Rejoin 是叠加在现有 variant 上的运行模式，不是新的 `B_*` 
 
 ```text
 include/spmpc_local_planner/
-├── core/          通用类型、SpmpcProblem、terminal、安全与 fallback
-├── reference/     ReferencePath、投影、预处理、spline 和路径进度
+├── analysis/      G4 与液体视界的纯 C++ replay API
+├── config/        AppConfig、VariantConfig 和 typed 校验
+├── controller/    ControlCycleEngine、输入准备、速度参考和统一命令链
+├── core/          SpmpcProblem、terminal/governor 等稳定组件及少量兼容 facade
+├── domain/        RobotState、SloshState、VelocityCommand 和 StampNs
 ├── dynamics/      二维低阶 SloshDynamics
 ├── estimation/    processed-IMU pipeline、observer bank 和 source selector
-├── warm_start/    差速/全向 warm start
 ├── phase_rejoin/  artifact、时钟、相位候选、经验 gate 和 coordinator
-├── solvers/       continuous MPCC、Phase-Rejoin acados wrapper 和 legacy 后端
-└── ros/           ROS I/O、命令历史、执行预测、诊断和 node wrapper
+├── reference/     ReferencePath、投影、预处理、spline 和速度曲线
+├── runtime/       状态对齐、控制周期时间和去 ROS 的执行预测
+├── safety/        SafetySupervisor
+├── solver/
+│   ├── api/       SolverInput/Output、SpmpcSolver、backend policy 和 session
+│   └── acados/    generated ABI、stage 参数构建和结果解码
+├── solvers/       continuous/rollout/legacy backend 实现与 factory
+├── telemetry/     ROS 无关的 solver diagnostics DTO
+├── warm_start/    差速/全向 warm start 与策略
+└── ros/           参数映射、消息编码、TF/话题和 node wrapper
 
 src/
-├── core/
-├── reference/
-├── dynamics/
-├── estimation/
-├── warm_start/
-├── phase_rejoin/
-├── solvers/
-└── ros/
+├── analysis/、config/、controller/、core/
+├── dynamics/、estimation/、phase_rejoin/、reference/
+├── runtime/、safety/、solver/、solvers/、warm_start/
+├── ros/           ROS adapter 与 telemetry publisher
+└── tools/         构建后的 C++ validator/replay/生成工具入口
 
 msg/
 ├── ControlCycleAudit.msg
@@ -217,12 +245,15 @@ generated/acados/  本机生成的 solver；禁止手工修改
 
 ```text
 phase_rejoin core  不依赖 roscpp、ROS message 或 parameter server
-ROS adapter        负责时间戳、话题、参数、生命周期和安全链
+runtime predictor  只依赖 domain command/state/time，不依赖 SolverInput 或 ROS
+controller         拥有求解、Phase 决策和安全仲裁；最终 limiter/history 尚待收回 step()
+ROS adapter        当前还做最终化/history/publish；收尾目标是只做类型转换和 ROS I/O
+solver/api         是求解输入、输出和 backend 抽象的权威边界
 tools/codegen/acados  是 generated solver 的源头
 generated/acados   只保存生成结果，不作为手工编辑源
 ```
 
-当前 CMake 仍以一个主要 planner library 组织这些模块；目录职责已经拆开，target 级拆分可在后续维护中进行。
+当前 CMake 已拆出 `spmpc_model/config/controller/runtime/safety/reference/phase_rejoin/solver_api/solver_acados/solver_rollout/ros_config/ros_telemetry` 等独立 target。`solver/api/solver_io.h`、`core/spmpc_solver.h` 以及部分旧 `ros/` 头仅是下游兼容 facade；生产模块直接包含窄的权威头。R7 删除兼容层尚未完成。
 
 ### 2.1 Scout Mini 尺寸与当前运动范围
 
@@ -903,7 +934,9 @@ roslaunch spmpc_local_planner spmpc_point_to_point.launch \
 
 `scripts/run_continuous_real.sh` 是旧 continuous MPCC 的历史/开发入口，不是 Phase-Rejoin formal runner。
 
-当前 `run_spmpc_real_fixed_path_trial.sh`、`record_spmpc_full_rgb_bag.sh` 和旧 postflight 也尚未完整表达 C2/C3/C4、phase artifact、双通道模型、`/spmpc/debug/phase_rejoin` 和新 freeze contract。正式实物前必须新增或升级专用 runner/recorder/postflight，不能只靠手工补几个 roslaunch 参数。
+当前 `run_spmpc_real_fixed_path_trial.sh`、`record_spmpc_full_rgb_bag.sh` 和旧 postflight 也尚未完整表达 C2/C3/C4、phase artifact、双通道模型、`/spmpc/debug/phase_rejoin` 和新 freeze contract。非 pilot 默认令 `delay_phase=off`；pilot 虽默认 `fixed_closed_loop`，但只显式传入两个纯延迟，没有传入时间常数、`require_complete_history=true` 和完整 Phase-Rejoin 合同参数。因此官方 runner 目前不能建立可放行的 `phase_rejoin=enforce` 实物合同。正式实物前必须新增或升级专用 runner/recorder/postflight，不能只靠手工补几个 roslaunch 参数。
+
+该 runner 当前有 1235 行。后续不应继续在 Shell 中复制领域默认值和放行判断；目标是用 typed `ExperimentSessionConfig` 作为单一输入，由 C++ preflight 校验并输出 immutable manifest，Shell 只负责环境准备、启动、录包、信号处理和安全停车。
 
 ---
 
@@ -1062,12 +1095,36 @@ python3 -m unittest \
   src/scout_apps/control/spmpc_local_planner/test/python/test_analyze_phase_rejoin_paired_bags.py
 ```
 
-2026-08-20 的 proxy 仿真和分支测试只能说明：
+2026-08-20 的 S0–S4 proxy 分支测试只能说明：
 
 ```text
 artifact/clock/candidate/short OCP/gate/supervisor 接线可运行
 off/monitor/enforce 的开发语义可检查
 ```
+
+2026-08-21 又在重构提交 `92cd2eac` 上，以相同地图、MBF 冻结路径、development v2 artifact 和 Gazebo seed 重跑三组 `monitor baseline / enforce`。冻结输入为：
+
+```text
+path bag SHA-256 = 3f96f56b10548e075e3cf54e67454af85407933b84e3fd0367747b23416426f2
+artifact SHA-256 = 2f73e4a3c9ed706de2f7dea414e5ac5dd29e55495f11e3ab79a94ed79a8e1ef5
+seeds              = 4220, 4221, 4222
+linear/angular delay = 0.0 / 0.0 s
+linear/angular tau   = 0.0 / 0.0 s
+evidence root       = /data/a/scout_sim_replacement/logs/
+                      phase_rejoin_refactor_92cd2eac_20260821_rerun4
+```
+
+这六次运行的 effective config 均明确为零纯延迟、零时间常数；对应的 Gazebo `stable_planar_drive_plugin` 在收到命令后直接设置平面速度，没有 Scout 的纯延迟、惯性、死区或滑移。因此它们只是**零延迟理想执行 plant 下的 development proxy**。严格窗口为首个成功、接受且实际发布的非静止命令，至首次 `GOAL_REACHED` 后 2 s。液面统一使用 `abs(value - initial_offset)`；两个通道的 RMS/P95/peak 六项均必须下降。
+
+| seed | external RMS/P95/peak | internal RMS/P95/peak | 完成时间 baseline → enforce | 结果 |
+|---:|---:|---:|---:|---:|
+| 4220 | −39.02% / −30.62% / −39.87% | −43.35% / −31.77% / −51.83% | 16.950 → 18.199 s | PASS |
+| 4221 | −39.50% / −35.79% / −42.85% | −53.47% / −49.64% / −62.99% | 16.221 → 18.199 s | PASS |
+| 4222 | −43.06% / −34.85% / −55.30% | −76.32% / −50.97% / −51.23% | 16.652 → 18.195 s | PASS |
+
+实际 `/cmd_vel_drive` 的描述性公平性统计还显示：三组 `|v|`、`|omega|`、`|a|` 的 RMS/P95/peak 均下降；`|alpha|` 的 RMS/P95 均下降，seed 4222 的 peak 例外地上升 2.27%（`1.53846 → 1.57345 rad/s²`）。平均完成时间增加 1.590 s。速度和加速度不进入既定防晃 PASS 门，但必须与液面收益一同报告，不能把收益写成没有时间/运动代价。
+
+因此当前只能写成：**`92cd2eac` 重构版本在零延迟理想执行 proxy 下的端到端防晃配对通过**。带 Scout 非零双通道延迟、惯性和执行非线性的当前 HEAD 端到端验收尚未完成；该结果也不是正式 `OfflineSloshOCP`、held-out gate、真实液体或实物 `enforce` 证据。
 
 不能据此说明：
 
@@ -1080,18 +1137,28 @@ held-out gate 已经安全
 
 ---
 
-## 13. 后续维护优先级
+## 13. 实物闭环收尾重构与冻结
 
-后续开发应按以下顺序推进，不要直接从 development `enforce` 跳到实物：
+下一阶段不是推倒重来的大规模目录重构，而是一次中等规模、纵向贯通的**实物闭环收尾重构**。P0 按以下顺序闭合：
 
-1. 用 Nokov、published `/cmd_vel`、odom 和 IMU 完成 Scout 线/角双通道执行模型辨识与 held-out 冻结；
-2. 将 history-only 前沿改成 delay-augmented OCP 或严格等价 bridge，闭合快通道新决策依赖和 epoch/index；
-3. 完成 G0 总 lead、首拍灵敏度和 processed-IMU 主频幅相验证；
-4. 实现正式 `OfflineSloshOCP`，输出完整尾段和可审计 artifact/hash；
-5. 构建执行状态兼容集、held-out 9 维 gate，并报告 false-accept；
-6. 实现 C0–C4/A0–A3 所需的独立 runtime 条件和确定性失败语义；
-7. 完成 Phase-Rejoin 专用 runner、recorder、postflight 和 formal freeze；
-8. 先做 proxy/仿真和小规模 development 配对，通过后再申请实物 `enforce`。
+1. **最终命令唯一出口：**让 `ControlCycleEngine::step()` 原子产生最终限幅后的 `u_pub`、命令审计和 history event；ROS 层只能转换并发布该结果，不能再调用第二阶段 `finalizeCommand()` 改写命令。
+2. **实物执行模型：**建立独立 C++ `ExecutionModel`，统一 `(d_v,d_omega,tau_v,tau_omega,K_v,K_omega)`、预计发布时间、`d_c`、适用工况和误差集合；用 delay-augmented OCP 或严格等价 bridge 保留本周期新命令在双通道延迟内的因果作用，集中修改 execution model、solver input 和 Phase-Rejoin。
+3. **统一实物安全出口：**在唯一最终出口无条件执行 finite、`|v|/|omega|`、线/角加速度、独立 odom/TF freshness、solver deadline，以及可验证的 driver watchdog 和停车合同。
+4. **实物 runner 配置边界：**用 typed `ExperimentSessionConfig`、C++ preflight 和 immutable manifest 取代 1235 行 Shell 中的参数真源；补齐时间常数、完整历史和 Phase-Rejoin 合同。
+5. **统一路径版本：**由 canonical processed path 生成唯一 `reference_id/reference_epoch`，并让 path、phase、goal、progress、speed reference 和 solver warm-start 在同一次版本切换中原子复位；不能继续让 ROS 的 frame/size/首尾签名和 `SpmpcProblem` 的逐点比较各自决定“路径是否变化”。
+
+以下降为 P1，不阻塞架构冻结：继续拆分 1728 行 ROS 实现、拆分 1193 行 diagnostics publisher、收紧 CMake `PUBLIC/PRIVATE`、删除兼容 facade，以及清理 README 和历史脚本。只有在实现 P0 时自然触及相关区域才顺带收敛，不能为了行数机械拆文件。
+
+P0 完成后冻结架构，进入带冻结执行模型的非零延迟仿真和实物标定；不得再以 R7 目录清理是否完成作为进入该阶段的主要判据。
+
+### 13.1 当前未提交差异的归属
+
+本轮收尾范围确定时，相对 `92cd2eac` 的工作树为 6 个文件、`+457/-58`。它们分成两个独立变更集：
+
+- 文档口径：本 README、`README_METHOD.md`、重构报告和“防晃论文的仿真到实物验证思路”；
+- 离线分析工具：`analyze_phase_rejoin_paired_bags.py` 及其测试，只增加实际发布命令的运动学统计。
+
+正式 P0 开工前应分别阶段性提交，或在 freeze manifest 中明确 owner、目的和验证结果。`92cd2eac` 的 504 项 C++/90 项 Python 结论只属于干净 HEAD；当前工作树的 Python 测试已增至 91 项并通过，但这不自动把未提交差异升级成新的冻结基线。
 
 长期工程原则：
 
