@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
+
 namespace spmpc_local_planner {
 namespace {
 
@@ -79,6 +81,9 @@ TEST(CommandPipeline, PreservesHistoricalFirstAndSubsequentRateLimitSemantics) {
     EXPECT_TRUE(first.linear_limited);
     EXPECT_TRUE(first.angular_rate_limited);
     EXPECT_TRUE(first.angular_accel_limited);
+    EXPECT_FALSE(pipeline.hasPublishedCommand());
+    ASSERT_TRUE(pipeline.commitPublished(
+        first.final_command, request.stamp_ns));
 
     request.stamp_ns = secondsToNanoseconds(1.2);
     const auto second = pipeline.finalize(request);
@@ -93,15 +98,22 @@ TEST(CommandPipeline, ForceZeroBypassesRateLimiterAndBecomesHistory) {
     CommandPipelineRequest moving;
     moving.stamp_ns = secondsToNanoseconds(1.0);
     moving.desired.linear = 1.0;
-    pipeline.finalize(moving);
+    const auto moving_result = pipeline.finalize(moving);
+    ASSERT_TRUE(pipeline.commitPublished(
+        moving_result.final_command, moving.stamp_ns));
 
     CommandPipelineRequest stop;
     stop.stamp_ns = secondsToNanoseconds(1.1);
     stop.force_zero = true;
+    stop.source = CommandSource::FailClosed;
+    stop.accepted = false;
     const auto result = pipeline.finalize(stop);
     EXPECT_DOUBLE_EQ(result.final_command.linear, 0.0);
     EXPECT_FALSE(result.linear_limited);
     EXPECT_EQ(result.decision.source, CommandSource::FailClosed);
+    EXPECT_DOUBLE_EQ(pipeline.lastPublishedCommand().linear, 0.1);
+    ASSERT_TRUE(pipeline.commitPublished(
+        result.final_command, stop.stamp_ns));
     EXPECT_DOUBLE_EQ(pipeline.lastPublishedCommand().linear, 0.0);
 }
 
@@ -119,20 +131,32 @@ TEST(CommandPipeline, ExecutionContractFailsClosedAfterLimiterChange) {
               "COMMAND_EXECUTION_CONTRACT_VIOLATION");
 }
 
-TEST(CommandPipeline, DisabledPublicationDoesNotAdvanceLimiterState) {
+TEST(CommandPipeline, FinalizationAloneDoesNotAdvanceLimiterState) {
     auto pipeline = configuredPipeline();
-    CommandPipelineRequest disabled;
-    disabled.stamp_ns = secondsToNanoseconds(1.0);
-    disabled.desired.linear = 1.0;
-    disabled.publish_enabled = false;
-    const auto skipped = pipeline.finalize(disabled);
-    EXPECT_FALSE(skipped.command_was_published);
+    CommandPipelineRequest request;
+    request.stamp_ns = secondsToNanoseconds(1.0);
+    request.desired.linear = 1.0;
+    const auto finalized = pipeline.finalize(request);
+    EXPECT_FALSE(finalized.command_was_published);
     EXPECT_FALSE(pipeline.hasPublishedCommand());
 
-    disabled.publish_enabled = true;
-    disabled.stamp_ns = secondsToNanoseconds(5.0);
-    const auto first_real = pipeline.finalize(disabled);
+    request.stamp_ns = secondsToNanoseconds(5.0);
+    const auto first_real = pipeline.finalize(request);
     EXPECT_NEAR(first_real.limiter_dt_sec, 0.1, 1e-12);
+}
+
+TEST(CommandPipeline, NonFiniteCommandFailsClosedBeforeLimiter) {
+    auto pipeline = configuredPipeline();
+    CommandPipelineRequest request;
+    request.stamp_ns = secondsToNanoseconds(1.0);
+    request.desired.linear = std::numeric_limits<double>::quiet_NaN();
+    const auto result = pipeline.finalize(request);
+
+    EXPECT_TRUE(result.finite_violation);
+    EXPECT_EQ(CommandSource::ExecutionContract, result.decision.source);
+    EXPECT_EQ("COMMAND_NONFINITE", result.decision.reason);
+    EXPECT_DOUBLE_EQ(0.0, result.final_command.linear);
+    EXPECT_DOUBLE_EQ(0.0, result.final_command.angular);
 }
 
 }  // namespace

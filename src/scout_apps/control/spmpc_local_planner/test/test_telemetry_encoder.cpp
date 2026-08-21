@@ -73,6 +73,9 @@ ControlCycleAuditDebug makeAuditFixture() {
     audit.command_accepted = false;
     audit.publish_cmd_vel = true;
     audit.command_was_published = true;
+    audit.publication_receipt_consistent = true;
+    audit.command_history_committed = true;
+    audit.phase_rejoin_committed = true;
     audit.command_contract_violation = false;
     audit.terminal_phase = true;
     audit.terminal_controller_intervened = false;
@@ -90,6 +93,8 @@ ControlCycleAuditDebug makeAuditFixture() {
     audit.terminal_cmd_omega = -8.5;
     audit.post_gate_cmd_v = 9.25;
     audit.post_gate_cmd_omega = -10.5;
+    audit.finalized_cmd_v = 10.75;
+    audit.finalized_cmd_omega = -11.5;
     audit.published_cmd_v = 11.75;
     audit.published_cmd_omega = -12.5;
     audit.previous_shifted_plan_available = true;
@@ -154,13 +159,18 @@ TEST(TelemetryEncoderTest, PreservesCommandInterventionSchema) {
 TEST(TelemetryEncoderTest, MatchesFrozenControlCycleAuditWireImage) {
     const ControlCycleAudit msg = encodeControlCycleAudit(
         makeAuditFixture(), "odom");
-    EXPECT_EQ(2u, msg.schema_version);
+    EXPECT_EQ(3u, msg.schema_version);
     EXPECT_EQ("odom", msg.header.frame_id);
     EXPECT_EQ(10000000011u, msg.header.stamp.toNSec());
     EXPECT_EQ(42u, msg.cycle_id);
     EXPECT_EQ("INTERPOLATED", msg.state_alignment_status);
     EXPECT_EQ("B_slosh", msg.variant);
     EXPECT_EQ("TRACKING_UNSAFE_PROJECTION", msg.status);
+    EXPECT_TRUE(msg.publication_receipt_consistent);
+    EXPECT_TRUE(msg.command_history_committed);
+    EXPECT_TRUE(msg.phase_rejoin_committed);
+    EXPECT_DOUBLE_EQ(10.75, msg.finalized_cmd_v);
+    EXPECT_DOUBLE_EQ(-11.5, msg.finalized_cmd_omega);
     EXPECT_DOUBLE_EQ(-24.5, msg.imu_alpha);
 
     const std::string actual = serializedHex(msg);

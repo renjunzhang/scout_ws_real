@@ -1129,7 +1129,7 @@ $$
 \right).
 $$
 
-随后命令还可能受到 terminal controller、Phase-Rejoin supervisor、发布前 limiter 和安全门控影响。因此上述裁剪只描述 solver 原始输出到候选命令的主要映射，不能替代最终发布边界的安全合同。当前 `ControlCycleEngine::step()` 返回的是安全仲裁后的 `decision`；ROS 层随后调用 `finalizeCommand()` 完成 limiter/execution contract，再记录 history 并发布。这仍是两个阶段，不是一次控制周期原子产生唯一 `u_pub`。当前最终 `CommandPipeline` 也没有无条件检查 finite、线速度绝对值和角速度绝对值；角速度/加速度 limiter 还是配置式的。正式实物前应把最终化收回 `step()`，在唯一出口增加无条件 finite 与 `|v|/|omega|` 硬包络，并由同一结果生成审计和命令历史事件。
+随后命令还可能受到 terminal controller、Phase-Rejoin supervisor、发布前 limiter 和安全门控影响。因此上述裁剪只描述 solver 原始输出到候选命令的主要映射，不能替代最终发布边界的安全合同。当前 `ControlCycleEngine::step()` 已通过 `CommandPipeline + PublicationTransaction + ICommandSink` 原子完成一次 finalization 和一次 sink 调用；只有成功且命令一致的 receipt 才允许 Phase-Rejoin commit，成功交付的 receipt 命令才写入 limiter state 和 history。ROS 层只实现 `/cmd_vel` sink 和消息/诊断转换，不再二次改写命令。`ControlCycleAudit` schema v3 分开保存 proposed、finalized 和 published 三层命令及提交状态。这里的 receipt 只表示 ROS publisher 接受交付，不是 Scout CAN/底盘 ACK；此外最终 `CommandPipeline` 虽已无条件拒绝非有限值，但仍没有无条件线速度/角速度绝对硬包络，角速度/加速度 limiter 仍是配置式的，独立 freshness/deadline/driver watchdog 也尚未闭合。
 
 ---
 
@@ -1410,7 +1410,7 @@ $$
 5. 当前主线关注给定安全路径附近的在线规划控制，不把完整动态避障和同伦推理作为贡献；
 6. 当前只有执行感知骨架，`d_c`、本周期新命令因果传播和 Scout 执行非线性尚未闭合，不能宣称已经适配实物；
 7. 当前缺少独立 odom/TF watchdog、solver deadline、最终命令无条件硬包络、driver 命令超时/确认和急停制动动态合同，正式实物闭环仍是 G0 NO-GO；
-8. 当前最终命令仍在 `step()` 返回后由 ROS 层二次 finalization，runner 配置和路径版本也尚未形成单一 typed/epoch 合同；
+8. 当前唯一 ROS 命令事务已闭合，但 receipt 仍不是 CAN/底盘 ACK；runner 配置和路径版本也尚未形成单一 typed/epoch 合同；
 9. 实物评价必须同时报告任务时间、路径误差、命令平滑性、求解耗时和外部液面指标，避免通过停车或全程低速获得表面上的降晃结果。
 
 ---
@@ -1430,6 +1430,7 @@ $$
 | odometry/IMU 驱动的液体状态传播 | `src/estimation/slosh_observer_bank.cpp` |
 | 预测晃液风险 governor 与周期编排 | `src/core/slosh_risk_governor.cpp`, `src/controller/speed_reference_controller.cpp` |
 | 命令历史和 delay execution-state prediction | `src/runtime/execution_prediction/command_history_buffer.cpp`, `src/runtime/execution_prediction/execution_state_predictor.cpp` |
+| 最终命令事务、receipt 与提交时序 | `src/controller/command/command_pipeline.cpp`, `src/controller/command/publication_transaction.cpp`, `src/controller/control_cycle_engine.cpp` |
 | solver I/O 与 backend 权威接口 | `include/spmpc_local_planner/solver/api/solver_input.h`, `solver_output.h`, `solver.h` |
 | Phase solver 结果窄适配 | `src/controller/phase_solve_adapter.cpp`, `include/spmpc_local_planner/phase_rejoin/types.h` |
 | 主消融参数 | `config/planner/variants.yaml` |

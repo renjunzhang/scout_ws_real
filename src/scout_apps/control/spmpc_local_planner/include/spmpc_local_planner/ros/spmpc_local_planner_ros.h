@@ -36,7 +36,7 @@
 
 namespace spmpc_local_planner {
 
-class SpmpcLocalPlannerROS {
+class SpmpcLocalPlannerROS : private ICommandSink {
 public:
     SpmpcLocalPlannerROS();
     ~SpmpcLocalPlannerROS();
@@ -51,10 +51,12 @@ private:
     void controlTimerCallback(const ros::TimerEvent&);
     void publishZeroCommand(const CommandInterventionDebug& intervention = CommandInterventionDebug(),
                             ControlCycleAuditDebug* audit = nullptr);
-    void publishCommand(const CommandDecision& decision,
-                        const CommandInterventionDebug& intervention = CommandInterventionDebug(),
-                        ControlCycleAuditDebug* audit = nullptr);
-    void recordPublishedCommand(const geometry_msgs::Twist& cmd, const ros::Time& stamp, const CommandPublishMeta& meta);
+    void publishTransactionDiagnostics(
+        const CommandPublicationResult& publication,
+        const CommandInterventionDebug& intervention,
+        ControlCycleAuditDebug* audit = nullptr);
+    StampNs publicationTimeNs() override;
+    PublicationReceipt publish(const FinalCommand& command) override;
     bool delayPhaseActive() const;
     bool delayPhasePredictionEnabled() const;
     bool delayPhaseClosedLoopEnabled() const;

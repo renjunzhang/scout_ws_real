@@ -63,7 +63,7 @@ struct CommandPipelineRequest {
     CommandSource source = CommandSource::Solver;
     std::string reason;
     bool force_zero = false;
-    bool publish_enabled = true;
+    bool accepted = true;
 };
 
 struct CommandPipelineResult {
@@ -75,6 +75,7 @@ struct CommandPipelineResult {
     bool linear_limited = false;
     bool angular_rate_limited = false;
     bool angular_accel_limited = false;
+    bool finite_violation = false;
     bool command_contract_violation = false;
     bool command_was_published = false;
 };
@@ -85,6 +86,7 @@ public:
     void reset();
 
     CommandPipelineResult finalize(const CommandPipelineRequest& request);
+    bool commitPublished(const VelocityCommand& command, StampNs stamp_ns);
 
     const CommandPipelineConfig& config() const { return config_; }
     bool hasPublishedCommand() const { return have_previous_; }

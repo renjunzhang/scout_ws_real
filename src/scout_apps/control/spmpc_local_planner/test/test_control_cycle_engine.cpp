@@ -2,10 +2,13 @@
 
 #include "spmpc_local_planner/controller/control_cycle_engine.h"
 #include "spmpc_local_planner/controller/phase_solve_adapter.h"
+#include "phase_rejoin_artifact_fixture.h"
 
+#include <cstdio>
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <unistd.h>
 
 namespace spmpc_local_planner {
 namespace {
@@ -25,24 +28,65 @@ public:
     SolverOutput next_output;
 };
 
+class FakeCommandSink : public ICommandSink {
+public:
+    StampNs publicationTimeNs() override {
+        return now_ns;
+    }
+
+    PublicationReceipt publish(const FinalCommand& command) override {
+        ++calls;
+        last_command = command;
+        PublicationReceipt receipt;
+        receipt.cycle_id = command.cycle_id;
+        receipt.attempted = true;
+        receipt.command = command.command;
+        if (command.publish_enabled && deliver) {
+            receipt.delivered = true;
+            receipt.actual_publish_stamp_ns = now_ns;
+            receipt.status = "FAKE_DELIVERED";
+        } else {
+            receipt.status = command.publish_enabled
+                ? "FAKE_FAILED"
+                : "PUBLISH_DISABLED";
+        }
+        return receipt;
+    }
+
+    StampNs now_ns = secondsToNanoseconds(1.0);
+    bool deliver = true;
+    int calls = 0;
+    FinalCommand last_command;
+};
+
 struct EngineFixture {
     EngineFixture() : engine(solver) {
         PhaseRejoinParams phase;
         phase.mode = PhaseRejoinMode::Off;
         EXPECT_TRUE(engine.configurePhaseRejoin(phase, error)) << error;
         EXPECT_TRUE(engine.configureSafety(safety, error)) << error;
+        CommandPipelineConfig pipeline;
+        pipeline.linear_accel_limit_enable = false;
+        pipeline.angular_limit_enable = false;
+        EXPECT_TRUE(engine.configureCommandPipeline(pipeline, error))
+            << error;
+        history.configure(2.0);
     }
 
-    ControlCycleRequest request() const {
+    ControlCycleRequest request() {
         ControlCycleRequest request;
         request.cycle_id = 1;
         request.solver_input.dt = 0.1;
         request.solver_input.horizon_steps = 10;
         request.period_sec = 0.1;
+        request.command_sink = &sink;
+        request.command_history = &history;
         return request;
     }
 
     FakeSolverSession solver;
+    FakeCommandSink sink;
+    CommandHistoryBuffer history;
     ControlCycleEngine engine;
     SafetySupervisorConfig safety;
     std::string error;
@@ -65,6 +109,74 @@ std::vector<std::string> splitCsv(const std::string& line) {
         fields.push_back(field);
     }
     return fields;
+}
+
+std::string makePhaseArtifactFile() {
+    const std::string path = "/tmp/spmpc_engine_phase_" +
+        std::to_string(static_cast<long long>(::getpid())) + ".csv";
+    std::ofstream out(path);
+    out << spmpc_local_planner_test::completeArtifactText();
+    out.close();
+    return path;
+}
+
+ReferencePath phaseFixtureReference() {
+    std::vector<TrajectoryPoint> points(2);
+    points[1].x = 3.0;
+    ReferencePath reference;
+    reference.setPoints(points, "map");
+    return reference;
+}
+
+PhaseRejoinRuntimeContract phaseFixtureRuntime() {
+    PhaseRejoinRuntimeContract runtime;
+    runtime.liquid_model_configured = true;
+    runtime.dt = 0.1;
+    runtime.two_zeta_omega_n = 0.2;
+    runtime.omega_n_sq = 4.0;
+    runtime.kappa_x = 1.0;
+    runtime.kappa_y = 1.0;
+    runtime.min_command_v = 0.0;
+    runtime.max_command_v = 2.0;
+    runtime.max_abs_command_omega = 3.0;
+    return runtime;
+}
+
+void configureMonitorPhase(EngineFixture& fixture) {
+    PhaseRejoinParams phase;
+    phase.mode = PhaseRejoinMode::Monitor;
+    phase.required_contract_id = "test_contract";
+    ASSERT_TRUE(fixture.engine.configurePhaseRejoin(phase, fixture.error))
+        << fixture.error;
+    const std::string artifact_path = makePhaseArtifactFile();
+    const NominalArtifactLoadResult loaded =
+        fixture.engine.loadPhaseRejoinArtifact(artifact_path);
+    std::remove(artifact_path.c_str());
+    ASSERT_TRUE(loaded.success) << loaded.status << ": " << loaded.detail;
+    ASSERT_TRUE(fixture.engine.validatePhaseRejoinRuntimeContract(
+        phaseFixtureRuntime(), phaseFixtureReference(), fixture.error))
+        << fixture.error;
+}
+
+void configureAcceptedMonitorSolve(EngineFixture& fixture) {
+    fixture.solver.next_output.success = true;
+    fixture.solver.next_output.status = "OK";
+    fixture.solver.next_output.cmd_v = 0.4;
+    fixture.solver.next_output.cmd_omega = 0.0;
+    fixture.solver.next_output.predicted_horizon.valid = true;
+    fixture.solver.next_output.predicted_horizon.states.resize(4);
+    fixture.solver.next_output.predicted_horizon.states[3].v = 1.0;
+}
+
+ControlCycleRequest monitorRequest(EngineFixture& fixture) {
+    ControlCycleRequest request = fixture.request();
+    request.prediction_valid = true;
+    request.prediction_status = "OK";
+    request.execution_front_robot.v = 1.0;
+    request.solver_origin_at_execution_front = true;
+    request.execution_front_steps = 0;
+    request.phase_time_sec = 1.0;
+    return request;
 }
 
 TEST(PhaseSolveAdapterTest, PreservesCommandAndRejectsUnavailableTerminal) {
@@ -161,6 +273,11 @@ TEST(ControlCycleEngineTest, ProducesRosIndependentDecisionTelemetry) {
     EXPECT_DOUBLE_EQ(-0.12, telemetry.planned_ay);
     EXPECT_DOUBLE_EQ(0.4, telemetry.final_command.linear);
     EXPECT_DOUBLE_EQ(-0.1, telemetry.final_command.angular);
+    EXPECT_TRUE(telemetry.publication_attempted);
+    EXPECT_TRUE(telemetry.command_was_published);
+    EXPECT_TRUE(telemetry.publication_receipt_consistent);
+    EXPECT_TRUE(telemetry.command_history_committed);
+    EXPECT_DOUBLE_EQ(0.4, telemetry.published_command.linear);
 
     const CommandInterventionDebug intervention =
         makeCommandInterventionDebug(telemetry);
@@ -176,6 +293,8 @@ TEST(ControlCycleEngineTest, ProducesRosIndependentDecisionTelemetry) {
     EXPECT_TRUE(audit.solve_success);
     EXPECT_DOUBLE_EQ(0.25, audit.planned_ax);
     EXPECT_DOUBLE_EQ(0.4, audit.post_gate_cmd_v);
+    EXPECT_TRUE(audit.command_was_published);
+    EXPECT_DOUBLE_EQ(0.4, audit.published_cmd_v);
 }
 
 TEST(ControlCycleEngineTest, CommitsSolverProgressForNextSpeedReferenceCycle) {
@@ -282,9 +401,7 @@ TEST(ControlCycleEngineTest, OwnsFinalLimiterAndExecutionContractStage) {
     fixture.solver.next_output.status = "OK";
     fixture.solver.next_output.cmd_v = 1.0;
     const ControlCycleResult cycle = fixture.engine.step(fixture.request());
-    const CommandPipelineResult publication =
-        fixture.engine.finalizeCommand(
-            cycle.decision, secondsToNanoseconds(1.0), true);
+    const CommandPipelineResult& publication = cycle.publication.pipeline;
 
     EXPECT_TRUE(publication.linear_limited);
     EXPECT_TRUE(publication.command_contract_violation);
@@ -292,12 +409,59 @@ TEST(ControlCycleEngineTest, OwnsFinalLimiterAndExecutionContractStage) {
               CommandSource::ExecutionContract);
     EXPECT_DOUBLE_EQ(publication.final_command.linear, 0.0);
 
-    const CommandPipelineResult waiting =
-        fixture.engine.finalizeFailClosedZero(
-            secondsToNanoseconds(1.1), true, "WAITING_FOR_ODOM");
-    EXPECT_EQ(waiting.decision.source, CommandSource::FailClosed);
-    EXPECT_EQ(waiting.decision.reason, "WAITING_FOR_ODOM");
-    EXPECT_DOUBLE_EQ(waiting.final_command.linear, 0.0);
+    fixture.sink.now_ns = secondsToNanoseconds(1.1);
+    const CommandPublicationResult waiting =
+        fixture.engine.publishFailClosedZero(
+            2, &fixture.sink, &fixture.history, true,
+            "WAITING_FOR_ODOM");
+    EXPECT_EQ(waiting.pipeline.decision.source, CommandSource::FailClosed);
+    EXPECT_EQ(waiting.pipeline.decision.reason, "WAITING_FOR_ODOM");
+    EXPECT_DOUBLE_EQ(waiting.pipeline.final_command.linear, 0.0);
+}
+
+TEST(ControlCycleEngineTest, CommitsPhaseOnlyAfterConsistentReceipt) {
+    EngineFixture fixture;
+    configureMonitorPhase(fixture);
+    configureAcceptedMonitorSolve(fixture);
+    ControlCycleRequest request = monitorRequest(fixture);
+
+    fixture.sink.deliver = false;
+    ControlCycleResult failed = fixture.engine.step(request);
+    EXPECT_EQ(1, fixture.sink.calls);
+    EXPECT_FALSE(failed.phase_committed);
+    EXPECT_FALSE(fixture.engine.phaseRejoinCoordinator().haveAcceptedIndex());
+    EXPECT_TRUE(fixture.history.empty());
+
+    fixture.sink.deliver = true;
+    fixture.sink.now_ns = secondsToNanoseconds(1.1);
+    request.cycle_id = 2;
+    request.phase_time_sec = 1.1;
+    ControlCycleResult delivered = fixture.engine.step(request);
+    EXPECT_EQ(2, fixture.sink.calls);
+    EXPECT_TRUE(delivered.publication.published());
+    EXPECT_TRUE(delivered.phase_committed);
+    EXPECT_TRUE(fixture.engine.phaseRejoinCoordinator().haveAcceptedIndex());
+    EXPECT_TRUE(delivered.publication.history_committed);
+}
+
+TEST(ControlCycleEngineTest, LimiterRewriteBlocksPhaseCommit) {
+    EngineFixture fixture;
+    configureMonitorPhase(fixture);
+    configureAcceptedMonitorSolve(fixture);
+    CommandPipelineConfig pipeline;
+    pipeline.control_frequency = 10.0;
+    pipeline.linear_accel_limit_enable = true;
+    pipeline.linear_accel_max = 1.0;
+    pipeline.linear_accel_max_dt = 0.2;
+    ASSERT_TRUE(fixture.engine.configureCommandPipeline(
+        pipeline, fixture.error)) << fixture.error;
+
+    const ControlCycleResult result = fixture.engine.step(
+        monitorRequest(fixture));
+    EXPECT_TRUE(result.publication.published());
+    EXPECT_TRUE(result.publication.pipeline.linear_limited);
+    EXPECT_FALSE(result.phase_committed);
+    EXPECT_FALSE(fixture.engine.phaseRejoinCoordinator().haveAcceptedIndex());
 }
 
 TEST(ControlCycleEngineTest, TerminalClampHasExplicitPriorityOverRawSolver) {
@@ -357,6 +521,10 @@ TEST(ControlCycleEngineTest, SafetyOverridesTerminalAndSolverCandidates) {
     solver.next_output.projector_debug.raw_distance = 0.8;
     ControlCycleRequest request;
     request.period_sec = 0.1;
+    FakeCommandSink sink;
+    CommandHistoryBuffer history;
+    request.command_sink = &sink;
+    request.command_history = &history;
     const ControlCycleResult result = engine.step(request);
 
     EXPECT_FALSE(result.output.success);
@@ -389,6 +557,12 @@ TEST(ControlCycleEngineTest, ReplaysFrozenCommandAndStatusGoldenCycles) {
     safety.tracking.spin_enable = false;
     safety.tracking.max_projection_duration_sec = 0.2;
     ASSERT_TRUE(engine.configureSafety(safety, error)) << error;
+    CommandPipelineConfig pipeline;
+    pipeline.linear_accel_limit_enable = false;
+    pipeline.angular_limit_enable = false;
+    ASSERT_TRUE(engine.configureCommandPipeline(pipeline, error)) << error;
+    FakeCommandSink sink;
+    CommandHistoryBuffer history;
 
     std::ifstream input(goldenPath());
     ASSERT_TRUE(input.is_open());
@@ -430,6 +604,10 @@ TEST(ControlCycleEngineTest, ReplaysFrozenCommandAndStatusGoldenCycles) {
         request.cycle_id = cycle_id;
         request.solver_input.robot.omega = std::stod(field[12]);
         request.period_sec = std::stod(field[13]);
+        sink.now_ns = secondsToNanoseconds(
+            1.0 + 0.1 * static_cast<double>(cycle_id));
+        request.command_sink = &sink;
+        request.command_history = &history;
         const ControlCycleResult result = engine.step(request);
 
         EXPECT_EQ(field[14], commandSourceName(result.decision.source))

@@ -109,6 +109,16 @@ CommandPipelineResult CommandPipeline::finalize(
         ? VelocityCommand{}
         : request.desired;
 
+    result.finite_violation =
+        !std::isfinite(result.final_command.linear) ||
+        !std::isfinite(result.final_command.angular);
+    if (result.finite_violation) {
+        result.final_command = VelocityCommand{};
+        result.decision.source = CommandSource::ExecutionContract;
+        result.decision.reason = "COMMAND_NONFINITE";
+        result.decision.accepted = false;
+    }
+
     const double nominal_dt = 1.0 / config_.control_frequency;
     result.limiter_dt_sec = nominal_dt;
     if (have_previous_ && validStamp(previous_stamp_ns_) &&
@@ -121,7 +131,7 @@ CommandPipelineResult CommandPipeline::finalize(
         result.limiter_dt_sec = nominal_dt;
     }
 
-    if (!request.force_zero) {
+    if (!request.force_zero && !result.finite_violation) {
         const double linear_dt = std::min(
             result.limiter_dt_sec, config_.linear_accel_max_dt);
         const double angular_dt = std::min(
@@ -172,23 +182,29 @@ CommandPipelineResult CommandPipeline::finalize(
     }
 
     if (result.decision.source != CommandSource::ExecutionContract) {
-        result.decision.source = request.force_zero
+        result.decision.source = request.source == CommandSource::None
             ? CommandSource::FailClosed
             : request.source;
         result.decision.reason = request.reason.empty()
             ? commandSourceName(result.decision.source)
             : request.reason;
-        result.decision.accepted = !request.force_zero;
+        result.decision.accepted = request.accepted && !request.force_zero;
     }
     result.decision.command = result.final_command;
-    result.command_was_published = request.publish_enabled;
-
-    if (request.publish_enabled) {
-        previous_ = result.final_command;
-        previous_stamp_ns_ = request.stamp_ns;
-        have_previous_ = true;
-    }
     return result;
+}
+
+bool CommandPipeline::commitPublished(
+    const VelocityCommand& command,
+    StampNs stamp_ns) {
+    if (!validStamp(stamp_ns) || !std::isfinite(command.linear) ||
+        !std::isfinite(command.angular)) {
+        return false;
+    }
+    previous_ = command;
+    previous_stamp_ns_ = stamp_ns;
+    have_previous_ = true;
+    return true;
 }
 
 }  // namespace spmpc_local_planner

@@ -10,9 +10,9 @@
 
 namespace spmpc_local_planner {
 
-// Pure C++ snapshot owned by ControlCycleEngine.  ROS adapters may enrich it
-// with transport timestamps, observer selection and publish/limiter outcomes,
-// but must not reconstruct solver/terminal/phase/safety decisions themselves.
+// Pure C++ snapshot owned by ControlCycleEngine.  ROS adapters may encode it
+// and add observer-source context, but publication/limiter outcomes and all
+// solver/terminal/phase/safety decisions are already final here.
 struct ControlCycleTelemetrySnapshot {
     std::uint64_t cycle_id = 0;
     StampNs cycle_start_ns = 0;
@@ -34,6 +34,16 @@ struct ControlCycleTelemetrySnapshot {
     bool phase_rejoin_evaluated = false;
     bool phase_rejoin_recovery_used = false;
     bool phase_rejoin_controlled_stop_used = false;
+    bool phase_rejoin_committed = false;
+    bool publication_attempted = false;
+    bool command_was_published = false;
+    bool publication_receipt_consistent = false;
+    bool command_history_committed = false;
+    bool command_contract_violation = false;
+    bool linear_limited = false;
+    bool angular_rate_limited = false;
+    bool angular_accel_limited = false;
+    StampNs command_publish_stamp_ns = 0;
 
     double solver_u0_a = 0.0;
     double solver_u0_alpha = 0.0;
@@ -49,6 +59,7 @@ struct ControlCycleTelemetrySnapshot {
     VelocityCommand terminal_command;
     VelocityCommand post_gate_command;
     VelocityCommand final_command;
+    VelocityCommand published_command;
 };
 
 struct CommandInterventionDebug {
@@ -111,6 +122,9 @@ struct ControlCycleAuditDebug {
     bool command_accepted = false;
     bool publish_cmd_vel = false;
     bool command_was_published = false;
+    bool publication_receipt_consistent = false;
+    bool command_history_committed = false;
+    bool phase_rejoin_committed = false;
     bool command_contract_violation = false;
     bool terminal_phase = false;
     bool terminal_controller_intervened = false;
@@ -129,6 +143,8 @@ struct ControlCycleAuditDebug {
     double terminal_cmd_omega = 0.0;
     double post_gate_cmd_v = 0.0;
     double post_gate_cmd_omega = 0.0;
+    double finalized_cmd_v = 0.0;
+    double finalized_cmd_omega = 0.0;
     double published_cmd_v = 0.0;
     double published_cmd_omega = 0.0;
 
@@ -150,10 +166,21 @@ inline CommandInterventionDebug makeCommandInterventionDebug(
     debug.solver_cmd_omega = snapshot.solver_command.angular;
     debug.post_gate_cmd_v = snapshot.post_gate_command.linear;
     debug.post_gate_cmd_omega = snapshot.post_gate_command.angular;
+    debug.published_cmd_v = snapshot.command_was_published
+        ? snapshot.published_command.linear
+        : 0.0;
+    debug.published_cmd_omega = snapshot.command_was_published
+        ? snapshot.published_command.angular
+        : 0.0;
     debug.output_success = snapshot.command_accepted;
     debug.zero_due_to_solver_failure = !snapshot.solve_success;
     debug.zero_due_to_terminal_spin_fail = snapshot.terminal_spin_blocked;
     debug.zero_due_to_tracking_safety = snapshot.tracking_safety_blocked;
+    debug.zero_due_to_command_contract =
+        snapshot.command_contract_violation;
+    debug.linear_limited = snapshot.linear_limited;
+    debug.angular_rate_limited = snapshot.angular_rate_limited;
+    debug.angular_accel_limited = snapshot.angular_accel_limited;
     return debug;
 }
 
@@ -167,6 +194,21 @@ inline void applyControlCycleTelemetry(
     audit.solve_attempted = snapshot.solve_attempted;
     audit.solve_success = snapshot.solve_success;
     audit.command_accepted = snapshot.command_accepted;
+    audit.command_was_published = snapshot.command_was_published;
+    audit.publication_receipt_consistent =
+        snapshot.publication_receipt_consistent;
+    audit.command_history_committed = snapshot.command_history_committed;
+    audit.phase_rejoin_committed = snapshot.phase_rejoin_committed;
+    audit.command_contract_violation = snapshot.command_contract_violation;
+    audit.linear_limited = snapshot.linear_limited;
+    audit.angular_rate_limited = snapshot.angular_rate_limited;
+    audit.angular_accel_limited = snapshot.angular_accel_limited;
+    if (snapshot.command_was_published) {
+        audit.timing.command_publish_stamp_ns =
+            snapshot.command_publish_stamp_ns;
+        audit.published_cmd_v = snapshot.published_command.linear;
+        audit.published_cmd_omega = snapshot.published_command.angular;
+    }
     audit.terminal_phase = snapshot.terminal_phase;
     audit.terminal_controller_intervened =
         snapshot.terminal_controller_intervened;
@@ -189,6 +231,8 @@ inline void applyControlCycleTelemetry(
     audit.terminal_cmd_omega = snapshot.terminal_command.angular;
     audit.post_gate_cmd_v = snapshot.post_gate_command.linear;
     audit.post_gate_cmd_omega = snapshot.post_gate_command.angular;
+    audit.finalized_cmd_v = snapshot.final_command.linear;
+    audit.finalized_cmd_omega = snapshot.final_command.angular;
 }
 
 }  // namespace spmpc_local_planner

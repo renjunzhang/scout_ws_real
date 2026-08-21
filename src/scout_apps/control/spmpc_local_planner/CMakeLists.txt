@@ -159,6 +159,7 @@ add_library(spmpc_costmap
 
 add_library(spmpc_controller
   src/controller/command/command_pipeline.cpp
+  src/controller/command/publication_transaction.cpp
   src/controller/control_cycle_engine.cpp
   src/controller/control_cycle_gate.cpp
   src/controller/control_cycle_input_preparer.cpp
@@ -720,6 +721,13 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_command_pipeline test/test_command_pipeline.cpp)
   if(TARGET test_command_pipeline)
     target_link_libraries(test_command_pipeline
+      spmpc_controller
+    )
+  endif()
+  catkin_add_gtest(test_publication_transaction
+    test/test_publication_transaction.cpp)
+  if(TARGET test_publication_transaction)
+    target_link_libraries(test_publication_transaction
       spmpc_controller
     )
   endif()

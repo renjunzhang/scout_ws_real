@@ -6,7 +6,8 @@
 namespace spmpc_local_planner {
 
 ControlCycleEngine::ControlCycleEngine(SolverSession& solver_session)
-    : solver_session_(solver_session) {}
+    : solver_session_(solver_session),
+      publication_transaction_(command_pipeline_) {}
 
 bool ControlCycleEngine::configurePhaseRejoin(
     const PhaseRejoinParams& params,
@@ -53,30 +54,35 @@ SpeedReferenceEvaluation ControlCycleEngine::prepareSpeedReference(
     return speed_reference_.apply(input.robot, input.slosh, input);
 }
 
-CommandPipelineResult ControlCycleEngine::finalizeCommand(
+CommandPublicationResult ControlCycleEngine::publishDecision(
+    std::uint64_t cycle_id,
     const CommandDecision& decision,
-    StampNs stamp_ns,
-    bool publish_enabled) {
-    CommandPipelineRequest request;
-    request.stamp_ns = stamp_ns;
-    request.desired = decision.command;
+    bool force_zero,
+    bool publish_enabled,
+    ICommandSink* sink,
+    CommandHistoryBuffer* history) {
+    CommandPublicationRequest request;
+    request.cycle_id = cycle_id;
+    request.proposed = decision;
+    request.force_zero = force_zero;
     request.publish_enabled = publish_enabled;
-    request.source = decision.source;
-    request.reason = decision.reason;
-    return command_pipeline_.finalize(request);
+    request.sink = sink;
+    request.history = history;
+    return publication_transaction_.execute(request);
 }
 
-CommandPipelineResult ControlCycleEngine::finalizeFailClosedZero(
-    StampNs stamp_ns,
+CommandPublicationResult ControlCycleEngine::publishFailClosedZero(
+    std::uint64_t cycle_id,
+    ICommandSink* sink,
+    CommandHistoryBuffer* history,
     bool publish_enabled,
     const std::string& reason) {
-    CommandPipelineRequest request;
-    request.stamp_ns = stamp_ns;
-    request.force_zero = true;
-    request.publish_enabled = publish_enabled;
-    request.source = CommandSource::FailClosed;
-    request.reason = reason.empty() ? "FAIL_CLOSED_ZERO" : reason;
-    return command_pipeline_.finalize(request);
+    CommandDecision decision;
+    decision.source = CommandSource::FailClosed;
+    decision.reason = reason.empty() ? "FAIL_CLOSED_ZERO" : reason;
+    decision.accepted = false;
+    return publishDecision(
+        cycle_id, decision, true, publish_enabled, sink, history);
 }
 
 void ControlCycleEngine::resetSafety() {
@@ -234,13 +240,11 @@ ControlCycleResult ControlCycleEngine::step(
         result.output.cmd_omega = result.safety.command.angular;
     }
 
-    if (result.have_phase_decision && !result.terminal_priority &&
+    const bool phase_commit_candidate =
+        result.have_phase_decision && !result.terminal_priority &&
         !result.safety.blocked &&
         (phase_params_.mode == PhaseRejoinMode::Monitor ||
-         result.output.success)) {
-        phase_rejoin_.commit(
-            result.phase_preparation, result.phase_decision);
-    }
+         result.output.success);
 
     result.terminal_controller_intervened =
         std::abs(result.terminal_command.linear -
@@ -282,9 +286,28 @@ ControlCycleResult ControlCycleEngine::step(
     arbitration.solver.reason = result.solver_output.status;
 
     result.decision = arbitrateCommand(arbitration);
-    result.output.cmd_v = result.decision.command.linear;
-    result.output.cmd_omega = result.decision.command.angular;
-    result.output.success = result.decision.accepted;
+    result.publication = publishDecision(
+        request.cycle_id,
+        result.decision,
+        !result.decision.accepted,
+        request.publish_enabled,
+        request.command_sink,
+        request.command_history);
+    result.final_command = result.publication.pipeline.final_command;
+    result.output.cmd_v = result.final_command.linear;
+    result.output.cmd_omega = result.final_command.angular;
+    result.output.success = result.publication.pipeline.decision.accepted;
+    if (result.publication.pipeline.decision.source ==
+        CommandSource::ExecutionContract) {
+        result.output.status = result.publication.pipeline.decision.reason;
+    }
+
+    if (phase_commit_candidate && result.publication.published() &&
+        !result.publication.commandWasModified()) {
+        phase_rejoin_.commit(
+            result.phase_preparation, result.phase_decision);
+        result.phase_committed = true;
+    }
 
     speed_reference_.commitProgress(result.output.progress_abs_s);
 
@@ -295,12 +318,15 @@ ControlCycleResult ControlCycleEngine::step(
     result.telemetry.cycle_start_ns = request.cycle_start_ns;
     result.telemetry.status = result.output.status;
     result.telemetry.solver_status = result.solver_output.status;
-    result.telemetry.command_reason = result.decision.reason;
-    result.telemetry.command_source = result.decision.source;
+    result.telemetry.command_reason =
+        result.publication.pipeline.decision.reason;
+    result.telemetry.command_source =
+        result.publication.pipeline.decision.source;
     result.telemetry.solve_attempted = true;
     result.telemetry.solve_returned = result.solve_returned;
     result.telemetry.solve_success = result.solver_success;
-    result.telemetry.command_accepted = result.output.success;
+    result.telemetry.command_accepted =
+        result.publication.pipeline.decision.accepted;
     result.telemetry.terminal_phase =
         result.output.terminal_diagnostics.terminal_phase;
     result.telemetry.terminal_priority = result.terminal_priority;
@@ -320,6 +346,26 @@ ControlCycleResult ControlCycleEngine::step(
     result.telemetry.phase_rejoin_controlled_stop_used =
         result.have_phase_decision &&
         result.phase_decision.controlled_stop_used;
+    result.telemetry.phase_rejoin_committed = result.phase_committed;
+    result.telemetry.publication_attempted =
+        result.publication.receipt.attempted;
+    result.telemetry.command_was_published =
+        result.publication.receipt.delivered;
+    result.telemetry.publication_receipt_consistent =
+        result.publication.receipt_consistent;
+    result.telemetry.command_history_committed =
+        result.publication.history_committed;
+    result.telemetry.command_publish_stamp_ns =
+        result.publication.receipt.actual_publish_stamp_ns;
+    result.telemetry.command_contract_violation =
+        result.publication.pipeline.command_contract_violation ||
+        result.publication.pipeline.finite_violation;
+    result.telemetry.linear_limited =
+        result.publication.pipeline.linear_limited;
+    result.telemetry.angular_rate_limited =
+        result.publication.pipeline.angular_rate_limited;
+    result.telemetry.angular_accel_limited =
+        result.publication.pipeline.angular_accel_limited;
     result.telemetry.solver_u0_a =
         result.output.first_shot_debug.u0_a;
     result.telemetry.solver_u0_alpha =
@@ -362,7 +408,11 @@ ControlCycleResult ControlCycleEngine::step(
     result.telemetry.solver_command = result.solver_command;
     result.telemetry.terminal_command = result.terminal_command;
     result.telemetry.post_gate_command = result.decision.command;
-    result.telemetry.final_command = result.decision.command;
+    result.telemetry.final_command = result.final_command;
+    if (result.publication.receipt.delivered) {
+        result.telemetry.published_command =
+            result.publication.receipt.command;
+    }
     return result;
 }
 

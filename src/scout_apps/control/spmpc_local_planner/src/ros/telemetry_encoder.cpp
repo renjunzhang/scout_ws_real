@@ -89,7 +89,7 @@ ControlCycleAudit encodeControlCycleAudit(
             ? audit.timing.command_publish_stamp_ns
             : audit.timing.horizon_available_stamp_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 2;
+    msg.schema_version = 3;
     fillCycleTiming(audit.timing, msg);
     msg.command_publish_stamp = rosTimeFromNanoseconds(
         audit.timing.command_publish_stamp_ns);
@@ -102,6 +102,10 @@ ControlCycleAudit encodeControlCycleAudit(
     msg.command_accepted = audit.command_accepted;
     msg.publish_cmd_vel = audit.publish_cmd_vel;
     msg.command_was_published = audit.command_was_published;
+    msg.publication_receipt_consistent =
+        audit.publication_receipt_consistent;
+    msg.command_history_committed = audit.command_history_committed;
+    msg.phase_rejoin_committed = audit.phase_rejoin_committed;
     msg.command_contract_violation = audit.command_contract_violation;
     msg.terminal_phase = audit.terminal_phase;
     msg.terminal_controller_intervened =
@@ -120,6 +124,8 @@ ControlCycleAudit encodeControlCycleAudit(
     msg.terminal_cmd_omega = audit.terminal_cmd_omega;
     msg.post_gate_cmd_v = audit.post_gate_cmd_v;
     msg.post_gate_cmd_omega = audit.post_gate_cmd_omega;
+    msg.finalized_cmd_v = audit.finalized_cmd_v;
+    msg.finalized_cmd_omega = audit.finalized_cmd_omega;
     msg.published_cmd_v = audit.published_cmd_v;
     msg.published_cmd_omega = audit.published_cmd_omega;
     msg.previous_shifted_plan_available =

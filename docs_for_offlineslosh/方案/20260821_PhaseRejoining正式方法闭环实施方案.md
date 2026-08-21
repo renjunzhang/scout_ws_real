@@ -30,6 +30,8 @@
 
 旧方案记录的是 development release，不修改其历史结论。本文只描述从当前状态走到 formal-ready 的增量工作。
 
+2026-08-21 实施进度：WP0 已冻结，WP1 已闭合唯一最终命令事务；对应实现、失败语义和 518 项 C++ / 92 项 Python 回归见 `20260821_PhaseRejoining_WP1唯一最终命令事务闭环记录.md`。当前开始进入 WP2，formal 状态仍为 NO-GO。
+
 ## 1. 当前状态与剩余缺口
 
 ### 1.1 已经完成、应直接复用的部分
@@ -49,7 +51,7 @@
 
 | ID | 缺口 | 当前风险 | 完成定义 |
 | --- | --- | --- | --- |
-| IMP-01 | 最终命令出口尚未完全归一 | ROS 层仍参与 finalization；相位 `commit()` 可能早于真实发布结果 | 每周期只有一次 finalization 和一次 sink 调用；history、audit、相位提交与实际 $u^{\mathrm{pub}}$ 完全一致 |
+| IMP-01 | 最终命令出口已归一（WP1 已闭合） | receipt 目前只证明 ROS publisher 接受交付，不是 Scout CAN/底盘 ACK | 每周期只有一次 finalization 和一次 sink 调用；history、audit、相位提交与 receipt 声明的 $u^{\mathrm{pub}}$ 一致；更强 ACK 由 WP4/WP5 闭合 |
 | IMP-02 | 没有正式的预计发布时间模型 | 仅知道状态源时刻，未把计算/发布延迟 $d_c$ 纳入方法 | 冻结 $\widehat d_c$ 合同，并逐周期记录实际 $d_c$ 和误差 |
 | IMP-03 | B0 决策因果依赖缺失 | 新线速度在共同前沿前已开始作用，现有固定前沿漏掉新决策影响 | 本周期新命令作为决策量进入线/角两路 delay buffer |
 | IMP-04 | 物理前沿与栅格前沿未严格统一 | $220\,\mathrm{ms}$ 与 $7\Delta t\approx233.3\,\mathrm{ms}$ 之间约有 $13.3\,\mathrm{ms}$ 偏差 | 用整步 buffer 加 fractional-delay 统一物理时刻、stage 和 artifact 索引 |

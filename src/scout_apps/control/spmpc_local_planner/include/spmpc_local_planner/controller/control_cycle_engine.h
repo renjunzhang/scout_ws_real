@@ -1,6 +1,6 @@
 #pragma once
 
-#include "spmpc_local_planner/controller/command/command_pipeline.h"
+#include "spmpc_local_planner/controller/command/publication_transaction.h"
 #include "spmpc_local_planner/controller/speed_reference_controller.h"
 #include "spmpc_local_planner/controller/control_cycle_telemetry.h"
 #include "spmpc_local_planner/solver/api/solver_input.h"
@@ -29,6 +29,9 @@ struct ControlCycleRequest {
     int execution_front_steps = 0;
     double phase_time_sec = 0.0;
     double period_sec = 0.0;
+    bool publish_enabled = true;
+    ICommandSink* command_sink = nullptr;
+    CommandHistoryBuffer* command_history = nullptr;
 };
 
 struct ControlCycleResult {
@@ -42,6 +45,9 @@ struct ControlCycleResult {
     VelocityCommand terminal_command;
     VelocityCommand post_phase_command;
     CommandDecision decision;
+    CommandPublicationResult publication;
+    VelocityCommand final_command;
+    bool phase_committed = false;
 
     PhaseRejoinPreparation phase_preparation;
     PhaseRejoinDecision phase_decision;
@@ -72,11 +78,10 @@ public:
     SpeedReferenceConfigureResult configureSpeedReference(
         const SpeedReferenceControllerConfig& config);
     SpeedReferenceEvaluation prepareSpeedReference(SolverInput& input);
-    CommandPipelineResult finalizeCommand(const CommandDecision& decision,
-                                          StampNs stamp_ns,
-                                          bool publish_enabled);
-    CommandPipelineResult finalizeFailClosedZero(
-        StampNs stamp_ns,
+    CommandPublicationResult publishFailClosedZero(
+        std::uint64_t cycle_id,
+        ICommandSink* sink,
+        CommandHistoryBuffer* history,
         bool publish_enabled,
         const std::string& reason);
 
@@ -98,11 +103,19 @@ private:
     static VelocityCommand rawSolverCommand(const SolverOutput& output);
     static TrackingProjectionView projectionView(
         const ProjectorDebugSummary& projector);
+    CommandPublicationResult publishDecision(
+        std::uint64_t cycle_id,
+        const CommandDecision& decision,
+        bool force_zero,
+        bool publish_enabled,
+        ICommandSink* sink,
+        CommandHistoryBuffer* history);
 
     SolverSession& solver_session_;
     PhaseRejoinCoordinator phase_rejoin_;
     SafetySupervisor safety_;
     CommandPipeline command_pipeline_;
+    PublicationTransaction publication_transaction_;
     SpeedReferenceController speed_reference_;
     PhaseRejoinParams phase_params_;
     bool goal_reached_latched_ = false;

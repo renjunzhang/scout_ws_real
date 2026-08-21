@@ -20,6 +20,9 @@ bool solve_success
 bool command_accepted
 bool publish_cmd_vel
 bool command_was_published
+bool publication_receipt_consistent
+bool command_history_committed
+bool phase_rejoin_committed
 bool command_contract_violation
 bool terminal_phase
 bool terminal_controller_intervened
@@ -56,6 +59,8 @@ float64 terminal_cmd_v
 float64 terminal_cmd_omega
 float64 post_gate_cmd_v
 float64 post_gate_cmd_omega
+float64 finalized_cmd_v
+float64 finalized_cmd_omega
 float64 published_cmd_v
 float64 published_cmd_omega
 

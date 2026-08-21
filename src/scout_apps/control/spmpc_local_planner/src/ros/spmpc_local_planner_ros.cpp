@@ -563,16 +563,28 @@ bool SpmpcLocalPlannerROS::delayPhaseClosedLoopEnabled() const {
     return delayPhaseUsesClosedLoop(delay_phase_params_.mode);
 }
 
-void SpmpcLocalPlannerROS::recordPublishedCommand(
-    const geometry_msgs::Twist& cmd,
-    const ros::Time& stamp,
-    const CommandPublishMeta& meta) {
-    TimedCommandSample sample;
-    sample.stamp_ns = static_cast<StampNs>(stamp.toNSec());
-    sample.command.linear = cmd.linear.x;
-    sample.command.angular = cmd.angular.z;
-    sample.meta = meta;
-    command_history_.push(sample);
+StampNs SpmpcLocalPlannerROS::publicationTimeNs() {
+    return static_cast<StampNs>(ros::Time::now().toNSec());
+}
+
+PublicationReceipt SpmpcLocalPlannerROS::publish(
+    const FinalCommand& final_command) {
+    PublicationReceipt receipt;
+    receipt.cycle_id = final_command.cycle_id;
+    receipt.attempted = true;
+    receipt.command = final_command.command;
+    if (!final_command.publish_enabled) {
+        receipt.status = "PUBLISH_DISABLED";
+        return receipt;
+    }
+
+    const ros::Time stamp = ros::Time::now();
+    cmd_pub_.publish(velocityCommandToRos(final_command.command));
+    receipt.delivered = true;
+    receipt.actual_publish_stamp_ns =
+        static_cast<StampNs>(stamp.toNSec());
+    receipt.status = "ROS_PUBLISH_ACCEPTED";
+    return receipt;
 }
 
 void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
@@ -696,60 +708,27 @@ void SpmpcLocalPlannerROS::publishDelayPhaseEarlyStatus(DelayPhaseStatusCode sta
 void SpmpcLocalPlannerROS::publishZeroCommand(
     const CommandInterventionDebug& intervention,
     ControlCycleAuditDebug* audit) {
-    const ros::Time stamp = ros::Time::now();
-    const StampNs stamp_ns = static_cast<StampNs>(stamp.toNSec());
     const std::string reason = audit && !audit->status.empty()
         ? audit->status
         : "FAIL_CLOSED_ZERO";
-    const CommandPipelineResult result =
-        control_cycle_engine_.finalizeFailClosedZero(
-            stamp_ns, publish_cmd_vel_, reason);
-
-    CommandInterventionDebug debug = intervention;
-    debug.publish_cmd_vel = publish_cmd_vel_;
-    debug.published_cmd_v = result.command_was_published
-        ? result.final_command.linear
-        : 0.0;
-    debug.published_cmd_omega = result.command_was_published
-        ? result.final_command.angular
-        : 0.0;
-    diagnostics_.publishCommandIntervention(debug);
-
-    if (result.command_was_published) {
-        const geometry_msgs::Twist command =
-            velocityCommandToRos(result.final_command);
-        CommandPublishMeta meta;
-        meta.is_zero_cmd = true;
-        recordPublishedCommand(command, stamp, meta);
-        cmd_pub_.publish(command);
-    }
-
-    if (audit) {
-        audit->publish_cmd_vel = publish_cmd_vel_;
-        audit->command_was_published = result.command_was_published;
-        audit->published_cmd_v = debug.published_cmd_v;
-        audit->published_cmd_omega = debug.published_cmd_omega;
-        if (result.command_was_published) {
-            audit->timing.command_publish_stamp_ns = stamp_ns;
-        }
-        diagnostics_.publishControlCycleAudit(
-            *audit, problem_.referenceFrameId());
-    }
+    const std::uint64_t cycle_id = audit ? audit->timing.cycle_id : 0;
+    const CommandPublicationResult result =
+        control_cycle_engine_.publishFailClosedZero(
+            cycle_id, this, &command_history_, publish_cmd_vel_, reason);
+    publishTransactionDiagnostics(result, intervention, audit);
 }
 
-void SpmpcLocalPlannerROS::publishCommand(
-    const CommandDecision& decision,
+void SpmpcLocalPlannerROS::publishTransactionDiagnostics(
+    const CommandPublicationResult& publication,
     const CommandInterventionDebug& intervention,
     ControlCycleAuditDebug* audit) {
-    const ros::Time stamp = ros::Time::now();
-    const StampNs stamp_ns = static_cast<StampNs>(stamp.toNSec());
-    const CommandPipelineResult result =
-        control_cycle_engine_.finalizeCommand(
-            decision, stamp_ns, publish_cmd_vel_);
+    const CommandPipelineResult& result = publication.pipeline;
     const geometry_msgs::Twist desired =
-        velocityCommandToRos(decision.command);
+        velocityCommandToRos(result.desired);
     const geometry_msgs::Twist command =
-        velocityCommandToRos(result.final_command);
+        velocityCommandToRos(publication.receipt.delivered
+            ? publication.receipt.command
+            : result.final_command);
     const geometry_msgs::Twist previous =
         velocityCommandToRos(result.previous);
 
@@ -759,11 +738,11 @@ void SpmpcLocalPlannerROS::publishCommand(
 
     CommandInterventionDebug debug = intervention;
     debug.publish_cmd_vel = publish_cmd_vel_;
-    debug.published_cmd_v = result.command_was_published
-        ? result.final_command.linear
+    debug.published_cmd_v = publication.receipt.delivered
+        ? publication.receipt.command.linear
         : 0.0;
-    debug.published_cmd_omega = result.command_was_published
-        ? result.final_command.angular
+    debug.published_cmd_omega = publication.receipt.delivered
+        ? publication.receipt.command.angular
         : 0.0;
     debug.linear_limited = result.linear_limited;
     debug.angular_rate_limited = result.angular_rate_limited;
@@ -772,37 +751,32 @@ void SpmpcLocalPlannerROS::publishCommand(
         result.decision.source == CommandSource::ExecutionContract;
     diagnostics_.publishCommandIntervention(debug);
 
-    if (result.command_was_published) {
-        CommandPublishMeta meta;
-        meta.is_zero_cmd =
-            std::abs(result.final_command.linear) <= 1e-9 &&
-            std::abs(result.final_command.angular) <= 1e-9;
-        meta.linear_limited = result.linear_limited;
-        meta.angular_rate_limited = result.angular_rate_limited;
-        meta.angular_accel_limited = result.angular_accel_limited;
-        recordPublishedCommand(command, stamp, meta);
+    if (publication.receipt.delivered) {
         diagnostics_.publishCommandOutput(
             desired, command, previous, result.limiter_dt_sec,
             result.linear_limited, result.angular_rate_limited,
             result.angular_accel_limited);
-        cmd_pub_.publish(command);
     }
 
     if (audit) {
         audit->publish_cmd_vel = publish_cmd_vel_;
-        audit->command_was_published = result.command_was_published;
-        if (result.command_was_published) {
-            audit->timing.command_publish_stamp_ns = stamp_ns;
-            audit->command_contract_violation =
-                result.command_contract_violation;
-            audit->linear_limited = result.linear_limited;
-            audit->angular_rate_limited = result.angular_rate_limited;
-            audit->angular_accel_limited = result.angular_accel_limited;
-            audit->published_cmd_v = result.final_command.linear;
-            audit->published_cmd_omega = result.final_command.angular;
-        } else {
-            audit->published_cmd_v = 0.0;
-            audit->published_cmd_omega = 0.0;
+        audit->command_was_published = publication.receipt.delivered;
+        audit->publication_receipt_consistent =
+            publication.receipt_consistent;
+        audit->command_history_committed =
+            publication.history_committed;
+        audit->command_contract_violation =
+            result.command_contract_violation || result.finite_violation;
+        audit->linear_limited = result.linear_limited;
+        audit->angular_rate_limited = result.angular_rate_limited;
+        audit->angular_accel_limited = result.angular_accel_limited;
+        audit->published_cmd_v = debug.published_cmd_v;
+        audit->published_cmd_omega = debug.published_cmd_omega;
+        audit->finalized_cmd_v = result.final_command.linear;
+        audit->finalized_cmd_omega = result.final_command.angular;
+        if (publication.receipt.delivered) {
+            audit->timing.command_publish_stamp_ns =
+                publication.receipt.actual_publish_stamp_ns;
         }
         if (result.decision.source == CommandSource::ExecutionContract) {
             audit->status = result.decision.reason;
@@ -1161,11 +1135,18 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         input_preparation.execution_front_steps;
     engine_request.phase_time_sec = delay_phase_now.toSec();
     engine_request.period_sec = spin_gate_dt;
+    engine_request.publish_enabled = publish_cmd_vel_;
+    engine_request.command_sink = this;
+    engine_request.command_history = &command_history_;
     cycle_audit.solve_attempted = true;
     ControlCycleResult engine_result =
         control_cycle_engine_.step(engine_request);
-    cycle_audit.timing.solve_end_stamp_ns = static_cast<std::int64_t>(
-        ros::Time::now().toNSec());
+    cycle_audit.timing.solve_end_stamp_ns =
+        engine_result.publication.finalized.finalized_stamp_ns;
+    if (cycle_audit.timing.solve_end_stamp_ns <= 0) {
+        cycle_audit.timing.solve_end_stamp_ns = static_cast<std::int64_t>(
+            ros::Time::now().toNSec());
+    }
     cycle_audit.timing.horizon_available_stamp_ns =
         cycle_audit.timing.solve_end_stamp_ns;
     solve_input = engine_result.solver_input;
@@ -1211,12 +1192,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     }
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
 
-    if (!output.success) {
-        publishZeroCommand(intervention, &cycle_audit);
-        return;
-    }
-
-    publishCommand(engine_result.decision, intervention, &cycle_audit);
+    publishTransactionDiagnostics(
+        engine_result.publication, intervention, &cycle_audit);
 }
 
 RobotState SpmpcLocalPlannerROS::robotStateFromOdom(const nav_msgs::Odometry& odom) const {

@@ -32,6 +32,7 @@ Phase-Rejoining Residual S-MPCC
 
 当前代码已经包含：
 
+- `ControlCycleEngine::step()` 内的唯一最终命令事务：一次 finalization、一次 sink 调用，成功 receipt 后才提交 history 和 Phase-Rejoin progress；
 - 最终 published command history；
 - 线速度、角速度双通道延迟和可选一阶惯性预测；
 - source timestamp / common epoch 状态对齐；
@@ -47,7 +48,6 @@ Phase-Rejoining Residual S-MPCC
 - 正式 `OfflineSloshOCP` 及其完整 formal artifact；
 - Scout 线/角双通道执行模型的最终 held-out 冻结；
 - 保留新决策依赖的 delay-augmented OCP 或严格等价 bridge；
-- `ControlCycleEngine::step()` 原子产生最终 `u_pub`、审计和命令历史事件的唯一出口；
 - 全链统一的 `reference_id/reference_epoch` 及路径切换复位合同；
 - 9 维 gate 之外的执行 buffer / 惯性状态兼容集；
 - held-out gate、false-accept 和真实恢复证据；
@@ -246,8 +246,8 @@ generated/acados/  本机生成的 solver；禁止手工修改
 ```text
 phase_rejoin core  不依赖 roscpp、ROS message 或 parameter server
 runtime predictor  只依赖 domain command/state/time，不依赖 SolverInput 或 ROS
-controller         拥有求解、Phase 决策和安全仲裁；最终 limiter/history 尚待收回 step()
-ROS adapter        当前还做最终化/history/publish；收尾目标是只做类型转换和 ROS I/O
+controller         拥有求解、Phase 决策、安全仲裁、唯一 finalization、发布事务和 receipt 后状态提交
+ROS adapter        实现 ICommandSink、ROS 类型转换和诊断发布；不再二次限幅、替换命令或写 history
 solver/api         是求解输入、输出和 backend 抽象的权威边界
 tools/codegen/acados  是 generated solver 的源头
 generated/acados   只保存生成结果，不作为手工编辑源
@@ -994,7 +994,7 @@ roslaunch spmpc_local_planner spmpc_point_to_point.launch \
 - residual、recovery、stop、terminal release 和 command contract；
 - prediction origin/epoch 和 `state_complete_for_certificate`。
 
-`ControlCycleAudit` 记录 solver 第一拍经过 terminal、phase、limiter 和 safety 后如何变成最终 published command，并保存 source/effective timestamp。分析时必须按 `cycle_id` 和显式时间戳 join，不能按 bag 到达顺序拼接。
+`ControlCycleAudit` schema v3 分别记录 proposed `post_gate_cmd_*`、finalized `finalized_cmd_*` 和 receipt 声明的 `published_cmd_*`，并保存 `publication_receipt_consistent`、`command_history_committed`、`phase_rejoin_committed` 以及 source/effective timestamp。分析时必须按 `cycle_id` 和显式时间戳 join，不能按 bag 到达顺序拼接。这里的 `command_was_published` 只表示 ROS publisher 接受交付，不是 Scout CAN/底盘 ACK；更强的实物确认合同仍属于 WP4/WP5。
 
 `PhaseRejoinDebug.output_cmd_*` 仍可能被后续 terminal-spin、tracking safety、limiter 或 command contract 改写，不是最终 `u_pub`。最终发布值应读取同一 `cycle_id` 的 `ControlCycleAudit.published_cmd_*`，并与 `/spmpc/debug/cmd_vel_output` 和 `/cmd_vel` 交叉核对。
 
@@ -1141,7 +1141,7 @@ held-out gate 已经安全
 
 下一阶段不是推倒重来的大规模目录重构，而是一次中等规模、纵向贯通的**实物闭环收尾重构**。P0 按以下顺序闭合：
 
-1. **最终命令唯一出口：**让 `ControlCycleEngine::step()` 原子产生最终限幅后的 `u_pub`、命令审计和 history event；ROS 层只能转换并发布该结果，不能再调用第二阶段 `finalizeCommand()` 改写命令。
+1. **最终命令唯一出口（WP1 已完成）：**`ControlCycleEngine::step()` 现在通过 `CommandPipeline + PublicationTransaction + ICommandSink` 原子完成一次 finalization 和一次 sink 调用；成功 receipt 后才提交 limiter state/history，且 limiter 改写、contract violation、发布失败或 receipt 不一致均阻止 Phase-Rejoin commit。ROS 层只实现 sink 和消息/诊断转换，不再调用第二阶段 `finalizeCommand()`。注意这只闭合 ROS `/cmd_vel` 交付真值，尚不等于 CAN/底盘接受确认。
 2. **实物执行模型：**建立独立 C++ `ExecutionModel`，统一 `(d_v,d_omega,tau_v,tau_omega,K_v,K_omega)`、预计发布时间、`d_c`、适用工况和误差集合；用 delay-augmented OCP 或严格等价 bridge 保留本周期新命令在双通道延迟内的因果作用，集中修改 execution model、solver input 和 Phase-Rejoin。
 3. **统一实物安全出口：**在唯一最终出口无条件执行 finite、`|v|/|omega|`、线/角加速度、独立 odom/TF freshness、solver deadline，以及可验证的 driver watchdog 和停车合同。
 4. **实物 runner 配置边界：**用 typed `ExperimentSessionConfig`、C++ preflight 和 immutable manifest 取代 1235 行 Shell 中的参数真源；补齐时间常数、完整历史和 Phase-Rejoin 合同。
@@ -1151,14 +1151,11 @@ held-out gate 已经安全
 
 P0 完成后冻结架构，进入带冻结执行模型的非零延迟仿真和实物标定；不得再以 R7 目录清理是否完成作为进入该阶段的主要判据。
 
-### 13.1 当前未提交差异的归属
+### 13.1 当前阶段基线
 
-本轮收尾范围确定时，相对 `92cd2eac` 的工作树为 6 个文件、`+457/-58`。它们分成两个独立变更集：
+相对 `92cd2eac` 的原 6 文件审计差异已按归属提交；WP0 又冻结了 solver 生成顺序、输入资产 hash 和 504 项 C++ / 92 项 Python 基线。WP1 在此基础上闭合唯一命令事务，并完成 518 项 C++ / 92 项 Python 回归。对应设计、失败语义、静态核查和测试证据见 `docs_for_offlineslosh/方案/20260821_PhaseRejoining_WP1唯一最终命令事务闭环记录.md`。
 
-- 文档口径：本 README、`README_METHOD.md`、重构报告和“防晃论文的仿真到实物验证思路”；
-- 离线分析工具：`analyze_phase_rejoin_paired_bags.py` 及其测试，只增加实际发布命令的运动学统计。
-
-正式 P0 开工前应分别阶段性提交，或在 freeze manifest 中明确 owner、目的和验证结果。`92cd2eac` 的 504 项 C++/90 项 Python 结论只属于干净 HEAD；当前工作树的 Python 测试已增至 91 项并通过，但这不自动把未提交差异升级成新的冻结基线。
+这些结果只关闭 IMP-01。预计发布时间 `d_c`、双通道增广执行模型、无条件速度硬包络、独立 odom/TF watchdog、solver deadline、driver watchdog/ACK、typed session 和路径 epoch 仍未关闭，因此 formal 状态继续为 G0 NO-GO。
 
 长期工程原则：
 

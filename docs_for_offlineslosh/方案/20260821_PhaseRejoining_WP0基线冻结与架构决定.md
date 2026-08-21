@@ -95,7 +95,7 @@ ROS adapter 只实现消息转换、时间获取和 sink 交付，不得在 engi
 
 | 参数/合同 | 当前 development 来源 | 计划中的唯一正式所有者 | 关闭工作包 |
 | --- | --- | --- | --- |
-| 最终 `u_pub` | engine decision + ROS `finalizeCommand()` | `CommandPipeline` + `ICommandSink` receipt | WP1 |
+| 最终 `u_pub` | `CommandPipeline` + `PublicationTransaction` + `ICommandSink` receipt | 同左；WP4/WP5 再增加底盘 ACK | WP1 已闭合 |
 | `d_c` 与预计发布时间 | 未建模 | `PublishLatencyModel` | WP2 |
 | `d_v/d_omega/tau/K` | YAML + launch/Shell override | `ExecutionModelContract` artifact | WP2/WP4 |
 | pending buffer/actuator state | 不完整 | `ExecutionAugmentedState` | WP2 |
@@ -109,7 +109,7 @@ ROS adapter 只实现消息转换、时间获取和 sink 交付，不得在 engi
 
 | ID | 主模块 | 最低自动测试 | 证据/报告 | 状态 |
 | --- | --- | --- | --- | --- |
-| IMP-01 | `controller/command`, `control_cycle_engine`, ROS sink | fake sink、发布失败、limiter 改写、phase commit 时序 | cycle audit/replay | WP1 待做 |
+| IMP-01 | `controller/command`, `control_cycle_engine`, ROS sink | fake sink、发布失败、limiter 改写、phase commit 时序 | cycle audit v3、wire-image、518 项 C++ 回归 | WP1 已闭合 |
 | IMP-02 | `runtime/timing` | 预计/实际发布、deadline、时钟倒退 | `d_c` 误差报告 | WP2 待做 |
 | IMP-03 | `runtime/execution_prediction`, solver input | 第一拍线/角因果 Jacobian | B0 因果报告 | WP2/WP3 待做 |
 | IMP-04 | fractional-delay kernel | impulse、step、13.3 ms remainder | 连续事件对照 | WP2/WP3 待做 |
@@ -131,4 +131,4 @@ ROS adapter 只实现消息转换、时间获取和 sink 交付，不得在 engi
 - [x] IMP-01 至 IMP-11 已映射到模块、测试、报告和工作包；
 - [x] formal 状态保持 NO-GO。
 
-因此 WP0 可以关闭，下一提交从 IMP-01 的 characterization test 开始。WP1 完成前不得删除旧 golden；若必要行为变化，必须同时保留“旧行为为何被替换”的审计记录。
+因此 WP0 已关闭。后续 WP1 已在保留旧控制行为 golden 的同时加入发布事务 characterization、receipt 失败语义和 v3 audit wire-image，并关闭 IMP-01；详细记录见 `20260821_PhaseRejoining_WP1唯一最终命令事务闭环记录.md`。
