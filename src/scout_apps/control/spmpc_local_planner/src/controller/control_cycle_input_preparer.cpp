@@ -14,7 +14,23 @@ bool ControlCycleInputPreparer::configureObserver(
 
 bool ControlCycleInputPreparer::configurePrediction(
     const SloshModelParams& params) {
-    return execution_predictor_.configure(params);
+    prediction_configured_ = execution_predictor_.configure(params);
+    if (prediction_configured_) {
+        slosh_params_ = params;
+    }
+    return prediction_configured_;
+}
+
+bool ControlCycleInputPreparer::configureExecutionHorizon(
+    const ExecutionModelContract& contract,
+    const ExecutionHorizonBuilderConfig& config,
+    std::string& error) {
+    if (!prediction_configured_) {
+        error = "slosh prediction must be configured first";
+        return false;
+    }
+    return execution_horizon_builder_.configure(
+        contract, slosh_params_, config, error);
 }
 
 bool ControlCycleInputPreparer::executionTiming(
@@ -246,6 +262,34 @@ ControlCycleInputResult ControlCycleInputPreparer::completePrediction(
     if (estimate_supplied) {
         applyPublishEpochEstimate(
             request.publish_epoch_estimate, result.timing);
+    }
+
+    if (request.execution_horizon_requested) {
+        ExecutionHorizonBuildRequest horizon_request;
+        horizon_request.source_robot = result.raw_input.robot;
+        horizon_request.source_slosh = result.raw_input.slosh;
+        horizon_request.source_epoch_ns =
+            result.raw_input.cycle_timing.solver_input_epoch_ns;
+        horizon_request.publish_epoch_estimate =
+            request.publish_epoch_estimate;
+        horizon_request.command_history = request.command_history;
+        horizon_request.expected_execution_contract_hash =
+            request.execution_contract_hash;
+        horizon_request.initial_progress_s =
+            request.execution_initial_progress_s;
+        horizon_request.liquid_horizon_steps =
+            request.execution_liquid_horizon_steps;
+        result.execution_horizon_build =
+            execution_horizon_builder_.build(horizon_request);
+        if (!result.execution_horizon_build.valid) {
+            result.failure =
+                ControlInputFailure::ExecutionHorizonContext;
+            result.status = result.execution_horizon_build.status;
+            return result;
+        }
+        result.solver_input.execution_horizon =
+            result.execution_horizon_build.context;
+        result.execution_horizon_active = true;
     }
 
     const bool prediction_requested =

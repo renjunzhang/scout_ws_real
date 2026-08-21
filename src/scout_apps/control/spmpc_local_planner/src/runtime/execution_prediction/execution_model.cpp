@@ -305,6 +305,226 @@ ExecutionHistoryRolloutResult ExecutionModel::rolloutPublishedHistory(
     return result;
 }
 
+ExecutionAugmentedAlignmentResult ExecutionModel::alignPublishedHistory(
+    const RobotState& robot,
+    const SloshState& slosh,
+    const CommandHistoryBuffer& history,
+    StampNs source_epoch_ns,
+    StampNs target_epoch_ns,
+    double max_step_sec,
+    double min_step_sec) const {
+    ExecutionAugmentedAlignmentResult result;
+    result.source_epoch_ns = source_epoch_ns;
+    result.target_epoch_ns = target_epoch_ns;
+    result.history_span_sec = history.spanSec();
+    result.latest_history_epoch_ns = history.latestStampNs();
+
+    if (!configured_ || !finiteState(robot, slosh) ||
+        !validStamp(source_epoch_ns) || !validStamp(target_epoch_ns) ||
+        target_epoch_ns < source_epoch_ns ||
+        !std::isfinite(max_step_sec) || max_step_sec <= 0.0 ||
+        !std::isfinite(min_step_sec) || min_step_sec <= 0.0 ||
+        min_step_sec > max_step_sec) {
+        result.status = "INVALID_AUGMENTED_ALIGNMENT_INPUT";
+        return result;
+    }
+    if (history.empty()) {
+        result.status = "COMMAND_HISTORY_EMPTY";
+        return result;
+    }
+    // The target is the instant immediately before this cycle's new command
+    // is published.  A sample at or after it would make that causal boundary
+    // ambiguous and is rejected instead of silently being consumed.
+    if (history.latestStampNs() >= target_epoch_ns) {
+        result.status = "COMMAND_HISTORY_NOT_BEFORE_TARGET";
+        return result;
+    }
+
+    const std::vector<TimedCommandSample> samples = history.segment(
+        history.oldestStampNs(), target_epoch_ns);
+    if (samples.empty()) {
+        result.status = "COMMAND_HISTORY_EMPTY_BEFORE_TARGET";
+        return result;
+    }
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+        if (!std::isfinite(samples[index].command.linear) ||
+            !std::isfinite(samples[index].command.angular)) {
+            result.status = "NONFINITE_COMMAND_HISTORY";
+            return result;
+        }
+        if (index > 0 &&
+            samples[index].stamp_ns <= samples[index - 1].stamp_ns) {
+            result.status = "NON_MONOTONIC_COMMAND_HISTORY";
+            return result;
+        }
+    }
+
+    const StampNs linear_query_start = addSeconds(
+        source_epoch_ns, -contract_.linear.delay_sec);
+    const StampNs angular_query_start = addSeconds(
+        source_epoch_ns, -contract_.angular.delay_sec);
+    if (!validStamp(linear_query_start) ||
+        !validStamp(angular_query_start)) {
+        result.status = "REQUIRED_HISTORY_EPOCH_INVALID";
+        return result;
+    }
+    result.oldest_required_history_epoch_ns = std::min(
+        linear_query_start, angular_query_start);
+
+    TimedCommandSample linear_source_sample;
+    TimedCommandSample angular_source_sample;
+    if (!history.sampleAt(linear_query_start, linear_source_sample) ||
+        !history.sampleAt(angular_query_start, angular_source_sample)) {
+        result.status = "INCOMPLETE_PHYSICAL_COMMAND_HISTORY";
+        return result;
+    }
+
+    const std::size_t linear_count = static_cast<std::size_t>(
+        contract_.linear.integer_delay_steps + 1);
+    const std::size_t angular_count = static_cast<std::size_t>(
+        contract_.angular.integer_delay_steps + 1);
+    const std::size_t required_sample_count = std::max(
+        linear_count, angular_count);
+    if (samples.size() < required_sample_count) {
+        result.status = "INCOMPLETE_PENDING_COMMAND_HISTORY";
+        return result;
+    }
+    result.oldest_required_history_epoch_ns = std::min(
+        result.oldest_required_history_epoch_ns,
+        samples[samples.size() - required_sample_count].stamp_ns);
+
+    TimedCommandSample held_at_source;
+    if (!history.sampleAt(source_epoch_ns, held_at_source)) {
+        result.status = "NO_HELD_COMMAND_AT_SOURCE";
+        return result;
+    }
+    std::string initialize_error;
+    if (!initializeHeld(
+            robot, slosh, held_at_source.command,
+            result.state, initialize_error)) {
+        result.status = "AUGMENTED_ALIGNMENT_INITIALIZATION_FAILED";
+        return result;
+    }
+
+    // Split propagation at every real command's delayed effective epoch as
+    // well as at the numerical integration limit.  This prevents a history
+    // transition from being averaged across one integration segment.
+    std::vector<StampNs> events = {source_epoch_ns, target_epoch_ns};
+    const auto append_channel_events = [
+        &history, source_epoch_ns, target_epoch_ns, &events](
+            double delay_sec) {
+        const StampNs query_start = addSeconds(
+            source_epoch_ns, -delay_sec);
+        const StampNs query_end = addSeconds(
+            target_epoch_ns, -delay_sec);
+        const std::vector<TimedCommandSample> channel_samples =
+            history.segment(query_start, query_end);
+        for (const TimedCommandSample& sample : channel_samples) {
+            const StampNs effective_epoch = addSeconds(
+                sample.stamp_ns, delay_sec);
+            if (effective_epoch > source_epoch_ns &&
+                effective_epoch < target_epoch_ns) {
+                events.push_back(effective_epoch);
+            }
+        }
+    };
+    append_channel_events(contract_.linear.delay_sec);
+    append_channel_events(contract_.angular.delay_sec);
+    std::sort(events.begin(), events.end());
+    events.erase(std::unique(events.begin(), events.end()), events.end());
+
+    for (std::size_t event_index = 1;
+         event_index < events.size(); ++event_index) {
+        StampNs segment_epoch_ns = events[event_index - 1];
+        const StampNs event_end_ns = events[event_index];
+        while (segment_epoch_ns < event_end_ns) {
+            const double remaining_sec = secondsBetween(
+                event_end_ns, segment_epoch_ns);
+            const double step_sec = std::min(
+                max_step_sec, remaining_sec);
+            if (!std::isfinite(step_sec) ||
+                step_sec <= kTimeEpsilonSec) {
+                result.status = "INVALID_ALIGNMENT_INTEGRATION_STEP";
+                result.state.valid = false;
+                return result;
+            }
+
+            TimedCommandSample linear_sample;
+            TimedCommandSample angular_sample;
+            if (!history.sampleAt(
+                    addSeconds(segment_epoch_ns,
+                               -contract_.linear.delay_sec),
+                    linear_sample) ||
+                !history.sampleAt(
+                    addSeconds(segment_epoch_ns,
+                               -contract_.angular.delay_sec),
+                    angular_sample)) {
+                result.status = "INCOMPLETE_HISTORY_DURING_ALIGNMENT";
+                result.state.valid = false;
+                return result;
+            }
+
+            ExecutionPropagationSegment segment;
+            if (!propagateSegment(
+                    step_sec,
+                    mappedTarget(
+                        linear_sample.command.linear,
+                        contract_.linear),
+                    mappedTarget(
+                        angular_sample.command.angular,
+                        contract_.angular),
+                    result.state,
+                    segment)) {
+                result.status = "AUGMENTED_HISTORY_PROPAGATION_FAILED";
+                result.state.valid = false;
+                return result;
+            }
+            result.segments.push_back(segment);
+            StampNs next_epoch_ns = addSeconds(
+                segment_epoch_ns, step_sec);
+            if (!validStamp(next_epoch_ns) ||
+                next_epoch_ns <= segment_epoch_ns) {
+                result.status = "ALIGNMENT_EPOCH_DID_NOT_ADVANCE";
+                result.state.valid = false;
+                return result;
+            }
+            if (next_epoch_ns > event_end_ns) {
+                next_epoch_ns = event_end_ns;
+            }
+            segment_epoch_ns = next_epoch_ns;
+        }
+    }
+
+    result.state.linear.pending_commands.clear();
+    for (std::size_t index = samples.size() - linear_count;
+         index < samples.size(); ++index) {
+        result.state.linear.pending_commands.push_back(
+            samples[index].command.linear);
+    }
+    result.state.angular.pending_commands.clear();
+    for (std::size_t index = samples.size() - angular_count;
+         index < samples.size(); ++index) {
+        result.state.angular.pending_commands.push_back(
+            samples[index].command.angular);
+    }
+    result.state.stage_index = 0;
+    result.state.valid = true;
+    if (!validState(result.state)) {
+        result.status = "INVALID_ALIGNED_AUGMENTED_STATE";
+        result.state.valid = false;
+        return result;
+    }
+
+    result.integrated_duration_sec = secondsBetween(
+        target_epoch_ns, source_epoch_ns);
+    result.command_age_sec = secondsBetween(
+        target_epoch_ns, history.latestStampNs());
+    result.history_complete = true;
+    result.valid = true;
+    result.status = "OK";
+    return result;
+}
+
 double ExecutionModel::requiredHistorySec() const {
     return configured_ ? executionLeadSec() : 0.0;
 }

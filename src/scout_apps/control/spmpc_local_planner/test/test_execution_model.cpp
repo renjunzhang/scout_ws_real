@@ -47,6 +47,16 @@ VelocityCommand command(double linear, double angular) {
     return value;
 }
 
+void pushCommand(CommandHistoryBuffer& history,
+                 StampNs stamp_ns,
+                 double linear,
+                 double angular) {
+    TimedCommandSample sample;
+    sample.stamp_ns = stamp_ns;
+    sample.command = command(linear, angular);
+    history.push(sample);
+}
+
 TEST(ExecutionModel, ResolvesPhysicalDelayIntoGridAndFractionalParts) {
     ExecutionModelContract contract = baseContract();
     contract.linear.delay_sec = 0.15;
@@ -178,6 +188,93 @@ TEST(ExecutionModel, RejectsInvalidContractStateAndCommand) {
         state,
         command(std::numeric_limits<double>::quiet_NaN(), 0.0));
     EXPECT_FALSE(invalid_command.valid);
+}
+
+TEST(ExecutionModel,
+     AlignsCompleteAugmentedStateFromRealPublishedHistory) {
+    ExecutionModelContract contract = baseContract();
+    contract.linear.delay_sec = 0.15;
+    contract.angular.delay_sec = 0.25;
+    ExecutionModel model = configuredModel(contract);
+
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    pushCommand(history, 600000000LL, 0.1, 0.1);
+    pushCommand(history, 700000000LL, 0.2, 0.2);
+    pushCommand(history, 800000000LL, 0.3, 0.3);
+    pushCommand(history, 900000000LL, 0.4, 0.4);
+
+    RobotState robot;
+    robot.v = 0.2;
+    robot.omega = 0.1;
+    const ExecutionAugmentedAlignmentResult result =
+        model.alignPublishedHistory(
+            robot, SloshState{}, history,
+            850000000LL, 1000000000LL, 0.05, 0.001);
+
+    ASSERT_TRUE(result.valid) << result.status;
+    EXPECT_TRUE(result.history_complete);
+    EXPECT_EQ(result.source_epoch_ns, 850000000LL);
+    EXPECT_EQ(result.target_epoch_ns, 1000000000LL);
+    EXPECT_NEAR(result.integrated_duration_sec, 0.15, 1e-12);
+    EXPECT_NEAR(result.command_age_sec, 0.10, 1e-12);
+    EXPECT_EQ(result.state.stage_index, 0u);
+    ASSERT_EQ(result.state.linear.pending_commands.size(), 2u);
+    EXPECT_DOUBLE_EQ(result.state.linear.pending_commands[0], 0.3);
+    EXPECT_DOUBLE_EQ(result.state.linear.pending_commands[1], 0.4);
+    ASSERT_EQ(result.state.angular.pending_commands.size(), 3u);
+    EXPECT_DOUBLE_EQ(result.state.angular.pending_commands[0], 0.2);
+    EXPECT_DOUBLE_EQ(result.state.angular.pending_commands[1], 0.3);
+    EXPECT_DOUBLE_EQ(result.state.angular.pending_commands[2], 0.4);
+    EXPECT_DOUBLE_EQ(result.state.robot.v, 0.3);
+    EXPECT_DOUBLE_EQ(result.state.robot.omega, 0.2);
+    EXPECT_DOUBLE_EQ(result.state.linear.actuator_output,
+                     result.state.robot.v);
+    EXPECT_DOUBLE_EQ(result.state.angular.actuator_output,
+                     result.state.robot.omega);
+    EXPECT_GT(std::abs(result.state.slosh.eta_x) +
+              std::abs(result.state.slosh.eta_x_dot) +
+              std::abs(result.state.slosh.eta_y) +
+              std::abs(result.state.slosh.eta_y_dot),
+              0.0);
+    ASSERT_EQ(result.segments.size(), 3u);
+}
+
+TEST(ExecutionModel, AugmentedAlignmentRejectsIncompletePendingHistory) {
+    ExecutionModelContract contract = baseContract();
+    contract.linear.delay_sec = 0.15;
+    contract.angular.delay_sec = 0.25;
+    ExecutionModel model = configuredModel(contract);
+
+    CommandHistoryBuffer history;
+    pushCommand(history, 600000000LL, 1.0, 10.0);
+    pushCommand(history, 900000000LL, 4.0, 40.0);
+
+    const ExecutionAugmentedAlignmentResult result =
+        model.alignPublishedHistory(
+            RobotState{}, SloshState{}, history,
+            850000000LL, 1000000000LL, 0.05, 0.001);
+
+    EXPECT_FALSE(result.valid);
+    EXPECT_FALSE(result.history_complete);
+    EXPECT_EQ(result.status, "INCOMPLETE_PENDING_COMMAND_HISTORY");
+}
+
+TEST(ExecutionModel, AugmentedAlignmentRejectsTargetEpochHistory) {
+    ExecutionModelContract contract = baseContract();
+    ExecutionModel model = configuredModel(contract);
+
+    CommandHistoryBuffer history;
+    pushCommand(history, 800000000LL, 1.0, 2.0);
+    pushCommand(history, 1000000000LL, 3.0, 4.0);
+
+    const ExecutionAugmentedAlignmentResult result =
+        model.alignPublishedHistory(
+            RobotState{}, SloshState{}, history,
+            900000000LL, 1000000000LL, 0.05, 0.001);
+
+    EXPECT_FALSE(result.valid);
+    EXPECT_EQ(result.status, "COMMAND_HISTORY_NOT_BEFORE_TARGET");
 }
 
 }  // namespace

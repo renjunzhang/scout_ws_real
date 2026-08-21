@@ -3,6 +3,7 @@
 #include "spmpc_local_planner/solver/api/solver_input.h"
 #include "spmpc_local_planner/estimation/slosh_observer_selector.h"
 #include "spmpc_local_planner/runtime/execution_prediction/command_history_buffer.h"
+#include "spmpc_local_planner/runtime/execution_prediction/execution_horizon_context_builder.h"
 #include "spmpc_local_planner/runtime/execution_prediction/execution_state_predictor.h"
 
 #include <cstdint>
@@ -30,6 +31,7 @@ enum class ControlInputFailure {
     CommonEpochRobotUnavailable,
     LatestRobotUnavailable,
     PartialDelayStateApplication,
+    ExecutionHorizonContext,
 };
 
 struct ControlCycleInputRequest {
@@ -51,6 +53,12 @@ struct ControlCycleInputRequest {
     int horizon_steps = 0;
     DelayPhaseParams delay_phase;
     bool phase_rejoin_needs_prediction = false;
+    // Formal delay-augmented input construction is opt-in.  Existing online
+    // development solvers leave this false and retain their current origin.
+    bool execution_horizon_requested = false;
+    std::string execution_contract_hash;
+    double execution_initial_progress_s = 0.0;
+    int execution_liquid_horizon_steps = 0;
     const CommandHistoryBuffer* command_history = nullptr;
     RobotStateLookup robot_state_lookup;
 };
@@ -73,6 +81,8 @@ struct ControlCycleInputResult {
     int execution_front_steps = 0;
     StampNs prediction_evaluation_epoch_ns = 0;
     bool prediction_uses_expected_publish_epoch = false;
+    ExecutionHorizonBuildResult execution_horizon_build;
+    bool execution_horizon_active = false;
 };
 
 // Stateful, ROS-independent front half of one control cycle.  It owns observer
@@ -82,6 +92,10 @@ class ControlCycleInputPreparer {
 public:
     bool configureObserver(const SloshObserverSelectorParams& params);
     bool configurePrediction(const SloshModelParams& params);
+    bool configureExecutionHorizon(
+        const ExecutionModelContract& contract,
+        const ExecutionHorizonBuilderConfig& config,
+        std::string& error);
     bool executionTiming(const DelayPhaseParams& params,
                          double& required_history_sec,
                          double& execution_lead_sec,
@@ -115,6 +129,9 @@ private:
 
     SloshObserverSelector observer_selector_;
     ExecutionStatePredictor execution_predictor_;
+    ExecutionHorizonContextBuilder execution_horizon_builder_;
+    SloshModelParams slosh_params_;
+    bool prediction_configured_ = false;
 };
 
 }  // namespace spmpc_local_planner

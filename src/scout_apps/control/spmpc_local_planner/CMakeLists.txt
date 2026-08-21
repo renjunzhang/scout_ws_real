@@ -215,6 +215,7 @@ add_library(spmpc_reference
 add_library(spmpc_runtime
   src/runtime/state_alignment.cpp
   src/runtime/execution_prediction/command_history_buffer.cpp
+  src/runtime/execution_prediction/execution_horizon_context_builder.cpp
   src/runtime/execution_prediction/execution_model.cpp
   src/runtime/execution_prediction/execution_state_predictor.cpp
   src/runtime/timing/publish_latency_model.cpp
@@ -771,6 +772,14 @@ if(CATKIN_ENABLE_TESTING)
   if(TARGET test_execution_model)
     target_link_libraries(test_execution_model
       spmpc_runtime
+    )
+  endif()
+  catkin_add_gtest(test_execution_horizon_context_builder
+    test/test_execution_horizon_context_builder.cpp)
+  if(TARGET test_execution_horizon_context_builder)
+    target_link_libraries(test_execution_horizon_context_builder
+      spmpc_runtime
+      spmpc_solver_delay_augmented
     )
   endif()
   catkin_add_gtest(test_delay_augmented_phase_dynamics

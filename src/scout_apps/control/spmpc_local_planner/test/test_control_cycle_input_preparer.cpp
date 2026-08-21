@@ -90,6 +90,45 @@ CommandHistoryBuffer completeHistory() {
     return history;
 }
 
+ExecutionModelContract formalExecutionContract() {
+    ExecutionModelContract contract;
+    contract.contract_id = "formal_preparer_test_v1";
+    contract.contract_hash = "formal-preparer-test-hash";
+    contract.dt = 0.02;
+    contract.linear.delay_sec = 0.03;
+    contract.angular.delay_sec = 0.05;
+    contract.linear.output_min = -1.0;
+    contract.linear.output_max = 1.0;
+    contract.angular.output_min = -1.0;
+    contract.angular.output_max = 1.0;
+    return contract;
+}
+
+CommandHistoryBuffer formalHistory() {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    for (int index = 0; index < 5; ++index) {
+        TimedCommandSample sample;
+        sample.stamp_ns = 9900000000LL +
+            static_cast<StampNs>(index) * 20000000LL;
+        sample.command.linear = 0.1 * static_cast<double>(index + 1);
+        sample.command.angular = 0.05 * static_cast<double>(index + 1);
+        history.push(sample);
+    }
+    return history;
+}
+
+void configureFormalHorizon(ControlCycleInputPreparer& preparer) {
+    ExecutionHorizonBuilderConfig config;
+    config.command_timeout_sec = 0.2;
+    config.max_alignment_sec = 0.2;
+    config.max_integration_step_sec = 0.01;
+    config.min_integration_step_sec = 0.001;
+    std::string error;
+    EXPECT_TRUE(preparer.configureExecutionHorizon(
+        formalExecutionContract(), config, error)) << error;
+}
+
 PublishEpochEstimate publishEstimate(
     const ControlCycleInputRequest& request,
     bool enabled,
@@ -236,6 +275,8 @@ TEST(ControlCycleInputPreparer, PredictionOffKeepsIdentitySolverInput) {
                      result.raw_input.robot.x);
     EXPECT_FALSE(result.robot_delay_compensation_applied);
     EXPECT_FALSE(result.liquid_delay_compensation_applied);
+    EXPECT_FALSE(result.execution_horizon_active);
+    EXPECT_FALSE(result.solver_input.execution_horizon.active);
 }
 
 TEST(ControlCycleInputPreparer,
@@ -371,6 +412,95 @@ TEST(ControlCycleInputPreparer, RejectsPartialClosedLoopStateApplication) {
               "PARTIAL_DELAY_STATE_APPLICATION_FORBIDDEN");
     EXPECT_EQ(result.status,
               "STATE_TIME_ALIGNMENT_FAILED_DELAY_PHASE");
+}
+
+TEST(ControlCycleInputPreparer,
+     ExplicitFormalRequestBuildsSolverExecutionHorizon) {
+    auto preparer = configuredPreparer();
+    configureFormalHorizon(preparer);
+    auto request = baseRequest();
+    auto history = formalHistory();
+    request.publish_epoch_estimate = publishEstimate(
+        request, true, 0.015);
+    request.command_history = &history;
+    request.execution_horizon_requested = true;
+    request.execution_contract_hash =
+        formalExecutionContract().contract_hash;
+    request.execution_initial_progress_s = 1.2;
+    request.execution_liquid_horizon_steps = 2;
+
+    const auto result = preparer.prepare(request);
+
+    ASSERT_TRUE(result.ready) << result.status;
+    ASSERT_TRUE(result.execution_horizon_build.valid)
+        << result.execution_horizon_build.status;
+    EXPECT_TRUE(result.execution_horizon_active);
+    ASSERT_TRUE(result.solver_input.execution_horizon.active);
+    EXPECT_FALSE(result.have_prediction);
+    EXPECT_EQ(result.solver_input.execution_horizon.initial_epoch_ns,
+              9995000000LL);
+    EXPECT_EQ(result.solver_input.execution_horizon.execution_front_steps,
+              3);
+    EXPECT_EQ(result.solver_input.execution_horizon.horizon_steps, 5);
+    EXPECT_EQ(
+        result.solver_input.execution_horizon.physical_front_epoch_ns,
+        10045000000LL);
+    EXPECT_EQ(result.solver_input.execution_horizon.grid_front_epoch_ns,
+              10055000000LL);
+    EXPECT_EQ(result.solver_input.execution_horizon.terminal_epoch_ns,
+              10095000000LL);
+    ASSERT_EQ(
+        result.solver_input.execution_horizon.initial_state.linear
+            .pending_commands.size(),
+        2u);
+    ASSERT_EQ(
+        result.solver_input.execution_horizon.initial_state.angular
+            .pending_commands.size(),
+        3u);
+}
+
+TEST(ControlCycleInputPreparer,
+     FormalRequestFailsClosedOnContractHashMutation) {
+    auto preparer = configuredPreparer();
+    configureFormalHorizon(preparer);
+    auto request = baseRequest();
+    auto history = formalHistory();
+    request.publish_epoch_estimate = publishEstimate(
+        request, true, 0.015);
+    request.command_history = &history;
+    request.execution_horizon_requested = true;
+    request.execution_contract_hash = "mutated-hash";
+    request.execution_liquid_horizon_steps = 2;
+
+    const auto result = preparer.prepare(request);
+
+    EXPECT_FALSE(result.ready);
+    EXPECT_EQ(result.failure,
+              ControlInputFailure::ExecutionHorizonContext);
+    EXPECT_EQ(result.status, "EXECUTION_CONTRACT_HASH_MISMATCH");
+    EXPECT_FALSE(result.solver_input.execution_horizon.active);
+}
+
+TEST(ControlCycleInputPreparer,
+     FormalRequestFailsClosedWhenPublishEstimateIsOff) {
+    auto preparer = configuredPreparer();
+    configureFormalHorizon(preparer);
+    auto request = baseRequest();
+    auto history = formalHistory();
+    request.publish_epoch_estimate = publishEstimate(
+        request, false, 0.0);
+    request.command_history = &history;
+    request.execution_horizon_requested = true;
+    request.execution_contract_hash =
+        formalExecutionContract().contract_hash;
+    request.execution_liquid_horizon_steps = 2;
+
+    const auto result = preparer.prepare(request);
+
+    EXPECT_FALSE(result.ready);
+    EXPECT_EQ(result.failure,
+              ControlInputFailure::ExecutionHorizonContext);
+    EXPECT_EQ(result.status, "INVALID_PUBLISH_EPOCH_ESTIMATE");
 }
 
 }  // namespace spmpc_local_planner

@@ -37,6 +37,7 @@ Phase-Rejoining Residual S-MPCC
 - 纯 C++ `ExecutionModel`：统一双通道整步/fractional delay buffer、一阶执行器、方向增益、死区、饱和以及机器人/液体传播；
 - 最终 published command history；
 - history-only `ExecutionStatePredictor` 已复用同一执行合同和传播实现，保留原有 partial-history/off/monitor/fixed 兼容语义；
+- 严格的 `ExecutionModel::alignPublishedHistory()` 与 frozen `ExecutionHorizonContextBuilder`：可从 source-stamped robot/liquid state、真实发布历史和有效预计发布时间构造完整 actuator/pending-buffer 初态，并以 opt-in 方式写入 `SolverInput.execution_horizon`；
 - source timestamp / common epoch 状态对齐；
 - odom 与 processed-IMU 液体 observer；
 - `NominalSequenceArtifact`、`PhaseClock`、有限相位候选和 9 维经验 gate；
@@ -51,7 +52,7 @@ Phase-Rejoining Residual S-MPCC
 
 - 正式 `OfflineSloshOCP` 及其完整 formal artifact；
 - Scout 线/角双通道执行模型的最终 held-out 冻结；
-- 保留新决策依赖的 delay-augmented OCP 或严格等价 bridge；
+- 带 formal nominal-relative cost/parameters、terminal gate 和执行兼容集的完整 delay-augmented OCP；
 - 全链统一的 `reference_id/reference_epoch` 及路径切换复位合同；
 - 9 维 gate 之外的执行 buffer / 惯性状态兼容集；
 - held-out gate、false-accept 和真实恢复证据；
@@ -69,7 +70,7 @@ Phase-Rejoining Residual S-MPCC
 | 状态时间对齐 | 已有 robot/liquid common epoch、observer 过期和时间偏差检查 |
 | 速度、加速度约束 | 已有 solver 约束、条件式发布前 limiter 和 fail-closed 接口；这不等于最终发布边界已有无条件硬包络 |
 | 求解/发布延迟 `d_c` | 已有 `t_c + d_hat_c` 固定估计合同，并记录实际 `d_c`、误差和 deadline miss；有效 estimate 已统一驱动 prediction、PhaseClock 和 `SolverInput`，但默认关闭且尚未由标定 artifact/hash 冻结，deadline 也尚未成为发布 gate |
-| 本周期新命令的延迟传播 | C++ 参考、CasADi C 转移和独立 acados OCP 已保留双通道决策因果性；新 capsule 尚未进入在线 factory/context，formal terminal gate 仍缺失 |
+| 本周期新命令的延迟传播 | C++ 参考、CasADi C 转移和独立 acados OCP 已保留双通道决策因果性；完整 history augmented context 已可构造并进入 typed `SolverInput`，但 ROS/formal session 尚未激活 builder，新 capsule 也尚未进入在线 factory，formal terminal gate 仍缺失 |
 | 底盘非线性 | 核心合同已有正/反向增益、死区和输出饱和；尚未接入冻结配置，滑移、电量和工况有效域仍未建模 |
 | 实物参数冻结 | 尚未完成 |
 
@@ -336,7 +337,7 @@ chi = [px, py, yaw, v, omega,
        eta_x, eta_x_dot, eta_y, eta_y_dot]
 ```
 
-因此当前不能写成“在线 MPC 已经是 22 维执行增广 OCP”。`ExecutionModelContract` 和 `ExecutionAugmentedState` 已在 OCP 外建立，history predictor 也已复用同一传播实现；WP3B 冻结了 `nx=22` 的 CasADi 离散转移图像，WP3C 已用它生成和编译独立 `N=10` DISCRETE acados capsule。但新 capsule 尚未进入在线 factory/config，也没有 formal nominal-relative cost/parameters、terminal 9D gate 和 $\mathcal B^{\mathrm{exec}}$；现有在线 OCP 仍是旧 10 维、`N=3` capsule。
+因此当前不能写成“在线 MPC 已经是 22 维执行增广 OCP”。`ExecutionModelContract` 和 `ExecutionAugmentedState` 已在 OCP 外建立，history predictor 也已复用同一传播实现；WP3B 冻结了 `nx=22` 的 CasADi 离散转移图像，WP3C 已用它生成和编译独立 `N=10` DISCRETE acados capsule，WP3D 又能从真实 published history 构造 expected-publish epoch 的完整 augmented context 并写入 typed `SolverInput`。但 ROS/formal session 尚未请求该 context，新 capsule 尚未进入在线 factory/config，也没有 formal nominal-relative cost/parameters、terminal 9D gate 和 $\mathcal B^{\mathrm{exec}}$；现有在线 OCP 仍是旧 10 维、`N=3` capsule。
 
 变量含义：
 
@@ -597,10 +598,10 @@ V2 artifact 只有在完整 slowdown–settle–zero-hold 尾段通过 loader �
 当前 `ExecutionStatePredictor` 虽已调用统一 `ExecutionModel`，但仍是 history-only：先用已经发布的旧命令预测共同执行前沿，再从该前沿启动 3 步 OCP。新模型消除了 runtime 对 delay、执行器和车液传播的第二套公式，并不自动给现有 OCP 恢复“本周期新决策”依赖。在线/实物 `enforce` 尚不能放行，原因是：
 
 1. 当 `d_v=150 ms`、`d_omega=220 ms` 时，新线速度决策会在共同前沿前约 `70 ms` 开始作用；该依赖已在 C++ 参考转移、与其逐步一致的 CasADi C 核和独立 DISCRETE acados capsule 中保留；
-2. 当前在线 history-only predictor 仍先构造不依赖本周期新决策的固定前沿，新 22 维 capsule 尚未进入 factory/config，所以默认在线链仍使用旧 10 维、`N=3` capsule；
-3. 物理慢通道前沿 `220 ms` 与 `7dt≈233.3 ms` 的约 `13.3 ms` 差异已在 C++/CasADi/acados contract 中区分 physical/grid epoch，但尚未与在线 history 初态和 artifact index 绑定；
+2. 当前在线 history-only predictor 仍先构造不依赖本周期新决策的固定前沿；WP3D 虽已从真实发布历史构造 expected-publish epoch 的完整 actuator/pending-buffer context 并接入 typed `SolverInput`，但 ROS/formal session 尚未请求它，新 22 维 capsule 也尚未进入 factory/config，所以默认在线链仍使用旧 10 维、`N=3` capsule；
+3. 物理慢通道前沿 `220 ms` 与 `7dt≈233.3 ms` 的约 `13.3 ms` 差异已在 C++/CasADi/acados contract 及 WP3D context epoch 中统一，但 artifact index 尚未消费该合同；
 4. 有效 `PublishEpochEstimate` 已将 predictor evaluation epoch 推进到预计发布时刻，并同时驱动 PhaseClock 和 `SolverInput`；但该功能默认关闭，$\widehat d_c$ 及其误差界尚未由 G0 held-out artifact/hash 冻结；
-5. 因此 proxy S0–S4 只能证明接口、时序和监督分支可运行，WP3B/WP3C 只能证明候选离散转移一致且独立约束 capsule 可求解；它们都不能证明在线正式因果闭环或实物防晃收益。
+5. 因此 proxy S0–S4 只能证明接口、时序和监督分支可运行，WP3B/WP3C 只能证明候选离散转移一致且独立约束 capsule 可求解，WP3D 只证明完整 history augmented context 可严格构造并进入 typed `SolverInput`；它们都不能证明在线正式因果闭环或实物防晃收益。
 
 正式版本必须改成双通道 delay-augmented OCP，或使用严格保留相同决策依赖和时间索引的凝聚 bridge，然后重新完成 G0 总 lead 验证。
 
@@ -1151,7 +1152,7 @@ held-out gate 已经安全
 下一阶段不是推倒重来的大规模目录重构，而是一次中等规模、纵向贯通的**实物闭环收尾重构**。P0 按以下顺序闭合：
 
 1. **最终命令唯一出口（WP1 已完成）：**`ControlCycleEngine::step()` 现在通过 `CommandPipeline + PublicationTransaction + ICommandSink` 原子完成一次 finalization 和一次 sink 调用；成功 receipt 后才提交 limiter state/history，且 limiter 改写、contract violation、发布失败或 receipt 不一致均阻止 Phase-Rejoin commit。ROS 层只实现 sink 和消息/诊断转换，不再调用第二阶段 `finalizeCommand()`。注意这只闭合 ROS `/cmd_vel` 交付真值，尚不等于 CAN/底盘接受确认。
-2. **实物执行模型（WP2/WP3 进行中）：**WP2A 已建立独立 `PublishLatencyModel`、`CycleTimingContract`、预计/实际发布时间和 `d_c` 误差审计；WP2B 已建立统一 `ExecutionModelContract`、双通道 pending buffer、fractional delay、执行器非线性/惯性和车液传播，并让兼容 predictor 复用；WP2C 又让同一个有效 `PublishEpochEstimate` 驱动 history prediction、PhaseClock 和 `SolverInput`；WP3A 已建立 solver 专用 `ExecutionHorizonContext` 和 `DelayAugmentedPhaseDynamics`，让当前 $q=[a,\alpha,v_s]$ 生成新 $u^{\mathrm{pub}}$ 并形成 $N_e=n_f+N_l$ 的 C++ 参考 horizon；WP3B 已冻结与该参考随机单步和 Jacobian 一致的 22 维 CasADi C 离散转移核；WP3C 已生成和编译独立 `N=10` DISCRETE acados capsule，并加入速度/rate/$u^{\mathrm{pub}}$ 硬约束与严格 capability/hash gate。默认估计仍关闭，适用工况/误差集合和 $\widehat d_c$ 尚未冻结，新 capsule 也尚未进入在线 factory/history context，formal nominal-relative cost/parameters、terminal gate/$\mathcal B^{\mathrm{exec}}$ 和独立 plant 仍未完成。
+2. **实物执行模型（WP2/WP3 进行中）：**WP2A 已建立独立 `PublishLatencyModel`、`CycleTimingContract`、预计/实际发布时间和 `d_c` 误差审计；WP2B 已建立统一 `ExecutionModelContract`、双通道 pending buffer、fractional delay、执行器非线性/惯性和车液传播，并让兼容 predictor 复用；WP2C 又让同一个有效 `PublishEpochEstimate` 驱动 history prediction、PhaseClock 和 `SolverInput`；WP3A 已建立 solver 专用 `ExecutionHorizonContext` 和 `DelayAugmentedPhaseDynamics`，让当前 $q=[a,\alpha,v_s]$ 生成新 $u^{\mathrm{pub}}$ 并形成 $N_e=n_f+N_l$ 的 C++ 参考 horizon；WP3B 已冻结与该参考随机单步和 Jacobian 一致的 22 维 CasADi C 离散转移核；WP3C 已生成和编译独立 `N=10` DISCRETE acados capsule，并加入速度/rate/$u^{\mathrm{pub}}$ 硬约束与严格 capability/hash gate；WP3D 已从真实发布历史构造 expected-publish epoch 的完整 actuator/pending-buffer 初态，并以严格 fail-closed builder 接入 typed `SolverInput`。默认估计仍关闭，适用工况/误差集合和 $\widehat d_c$ 尚未冻结，ROS/formal session 尚未激活 builder，新 capsule 也尚未进入在线 factory，formal nominal-relative cost/parameters、terminal gate/$\mathcal B^{\mathrm{exec}}$ 和独立 plant 仍未完成。
 3. **统一实物安全出口：**在唯一最终出口无条件执行 finite、`|v|/|omega|`、线/角加速度、独立 odom/TF freshness、solver deadline，以及可验证的 driver watchdog 和停车合同。
 4. **实物 runner 配置边界：**用 typed `ExperimentSessionConfig`、C++ preflight 和 immutable manifest 取代 1235 行 Shell 中的参数真源；补齐时间常数、完整历史和 Phase-Rejoin 合同。
 5. **统一路径版本：**由 canonical processed path 生成唯一 `reference_id/reference_epoch`，并让 path、phase、goal、progress、speed reference 和 solver warm-start 在同一次版本切换中原子复位；不能继续让 ROS 的 frame/size/首尾签名和 `SpmpcProblem` 的逐点比较各自决定“路径是否变化”。
@@ -1162,9 +1163,9 @@ P0 完成后冻结架构，进入带冻结执行模型的非零延迟仿真和�
 
 ### 13.1 当前阶段基线
 
-相对 `92cd2eac` 的原 6 文件审计差异已按归属提交；WP0 又冻结了 solver 生成顺序、输入资产 hash 和 504 项 C++ / 92 项 Python 基线。WP1 在此基础上闭合唯一命令事务，并完成 518 项 C++ / 92 项 Python 回归；WP2A 增加预计发布时间合同与 schema v4 审计后完成 528 项 C++ / 92 项 Python 回归；WP2B 建立统一执行增广参考模型后完成 540 项 C++ / 92 项 Python 回归；WP2C 贯通预计发布时间与 prediction/PhaseClock/solver input 后完成 552 项 C++ / 92 项 Python 回归；WP3A 建立执行增广求解动力学和 horizon 合同后完成 564 项 C++ / 92 项 Python 回归；WP3B 冻结候选 CasADi 离散转移与 C++ 参考的随机逐步/Jacobian 一致性后完成 572 项 C++ / 93 项 Python 回归；WP3C 建立独立离散 acados capsule、命令硬约束和 capability gate 后完成 578 项 C++ / 96 项 Python 回归。对应记录见 `docs_for_offlineslosh/方案/20260821_PhaseRejoining_WP1唯一最终命令事务闭环记录.md`、`20260821_PhaseRejoining_WP2A预计发布时间合同记录.md`、`20260821_PhaseRejoining_WP2B统一执行增广模型记录.md`、`20260821_PhaseRejoining_WP2C预计发布时间贯通记录.md`、`20260821_PhaseRejoining_WP3A执行增广求解动力学记录.md`、`20260821_PhaseRejoining_WP3B_CasADi离散模型一致性记录.md` 和 `20260821_PhaseRejoining_WP3C独立离散acados胶囊记录.md`。
+相对 `92cd2eac` 的原 6 文件审计差异已按归属提交；WP0 又冻结了 solver 生成顺序、输入资产 hash 和 504 项 C++ / 92 项 Python 基线。WP1 在此基础上闭合唯一命令事务，并完成 518 项 C++ / 92 项 Python 回归；WP2A 增加预计发布时间合同与 schema v4 审计后完成 528 项 C++ / 92 项 Python 回归；WP2B 建立统一执行增广参考模型后完成 540 项 C++ / 92 项 Python 回归；WP2C 贯通预计发布时间与 prediction/PhaseClock/solver input 后完成 552 项 C++ / 92 项 Python 回归；WP3A 建立执行增广求解动力学和 horizon 合同后完成 564 项 C++ / 92 项 Python 回归；WP3B 冻结候选 CasADi 离散转移与 C++ 参考的随机逐步/Jacobian 一致性后完成 572 项 C++ / 93 项 Python 回归；WP3C 建立独立离散 acados capsule、命令硬约束和 capability gate 后完成 578 项 C++ / 96 项 Python 回归；WP3D 建立完整 history augmented alignment、frozen context builder 和 typed `SolverInput` opt-in 接线后完成 590 项 C++ / 96 项 Python 回归。对应记录见 `docs_for_offlineslosh/方案/20260821_PhaseRejoining_WP1唯一最终命令事务闭环记录.md`、`20260821_PhaseRejoining_WP2A预计发布时间合同记录.md`、`20260821_PhaseRejoining_WP2B统一执行增广模型记录.md`、`20260821_PhaseRejoining_WP2C预计发布时间贯通记录.md`、`20260821_PhaseRejoining_WP3A执行增广求解动力学记录.md`、`20260821_PhaseRejoining_WP3B_CasADi离散模型一致性记录.md`、`20260821_PhaseRejoining_WP3C独立离散acados胶囊记录.md` 和 `20260821_PhaseRejoining_WP3D在线执行增广初态构造记录.md`。
 
-这些结果已关闭 IMP-01，并完成 IMP-02 的时间合同、统一 C++ 执行参考模型和在线 typed 接线切片；有效 estimate 已进入 history prediction、PhaseClock 和 `SolverInput`，但默认 `publish_timing.enabled=false`，`d_hat_c` 尚未由 Scout held-out 标定 artifact/hash 冻结。WP3A–WP3C 已证明本周期新命令在 C++ 参考 horizon、数值一致的 CasADi C 转移核和独立可求解 acados capsule 中按双通道 delay/fractional contract 传播，且新 capsule 已具备命令速度/rate 硬约束。但当前 predictor 仍只使用旧 published history，新 capsule 尚未进入在线 factory/context，formal cost/parameters 和 terminal 9D/$\mathcal B^{\mathrm{exec}}$ 也未完成；formal capability 请求会 fail closed。所以 IMP-02、整个 WP2/WP3 和 B0 仍未关闭。无条件速度硬包络、独立 odom/TF watchdog、solver deadline、driver watchdog/ACK、typed session 和路径 epoch 同样未关闭，因此 formal 状态继续为 G0 NO-GO。
+这些结果已关闭 IMP-01，并完成 IMP-02 的时间合同、统一 C++ 执行参考模型和在线 typed 接线切片；有效 estimate 已进入 history prediction、PhaseClock 和 `SolverInput`，但默认 `publish_timing.enabled=false`，`d_hat_c` 尚未由 Scout held-out 标定 artifact/hash 冻结。WP3A–WP3C 已证明本周期新命令在 C++ 参考 horizon、数值一致的 CasADi C 转移核和独立可求解 acados capsule 中按双通道 delay/fractional contract 传播，且新 capsule 已具备命令速度/rate 硬约束；WP3D 已让完整真实 history 构造出的 actuator/pending-buffer 初态进入 typed `SolverInput`，并对 estimate/history/hash/epoch/cardinality 严格失败。兼容 predictor 仍只使用旧 history，ROS/formal session 尚未激活新 builder，新 capsule 也尚未进入在线 factory，formal cost/parameters 和 terminal 9D/$\mathcal B^{\mathrm{exec}}$ 也未完成；formal capability 请求会 fail closed。所以 IMP-02、整个 WP2/WP3 和 B0 仍未关闭。无条件速度硬包络、独立 odom/TF watchdog、solver deadline、driver watchdog/ACK、typed session 和路径 epoch 同样未关闭，因此 formal 状态继续为 G0 NO-GO。
 
 长期工程原则：
 

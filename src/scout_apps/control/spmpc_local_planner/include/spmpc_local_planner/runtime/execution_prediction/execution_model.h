@@ -34,6 +34,26 @@ struct ExecutionHistoryRolloutResult {
     double integrated_duration_sec = 0.0;
 };
 
+// Complete execution state reconstructed at a future/pre-publication epoch
+// from source-stamped robot/liquid state and commands that were actually
+// published before that epoch.  Unlike ExecutionHistoryRolloutResult this
+// includes actuator outputs and both pending-command channels, so it is a
+// valid initial condition for the delay-augmented OCP.
+struct ExecutionAugmentedAlignmentResult {
+    bool valid = false;
+    std::string status = "NOT_EVALUATED";
+    ExecutionAugmentedState state;
+    StampNs source_epoch_ns = 0;
+    StampNs target_epoch_ns = 0;
+    StampNs oldest_required_history_epoch_ns = 0;
+    StampNs latest_history_epoch_ns = 0;
+    double integrated_duration_sec = 0.0;
+    double history_span_sec = 0.0;
+    double command_age_sec = 0.0;
+    bool history_complete = false;
+    std::vector<ExecutionPropagationSegment> segments;
+};
+
 // Shared discrete execution model for online prediction, formal solver
 // construction, independent plant fixtures and actual-input replay.  A stage
 // is split at each channel's fractional-delay event so the faster channel may
@@ -65,6 +85,19 @@ public:
         const CommandHistoryBuffer& history,
         StampNs start_epoch_ns,
         double duration_sec,
+        double max_step_sec,
+        double min_step_sec) const;
+
+    // Strict formal alignment path.  Missing samples never fall back to a
+    // zero command.  Pending buffers are populated from the most recent
+    // real publication sequence, with cardinality derived independently for
+    // the linear and angular delay channels.
+    ExecutionAugmentedAlignmentResult alignPublishedHistory(
+        const RobotState& robot,
+        const SloshState& slosh,
+        const CommandHistoryBuffer& history,
+        StampNs source_epoch_ns,
+        StampNs target_epoch_ns,
         double max_step_sec,
         double min_step_sec) const;
 
