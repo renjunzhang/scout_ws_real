@@ -5,3 +5,4 @@
 # Small deterministic ABI/parameter contract consumed by the C++ wrapper.
 # Solver C sources and binaries remain ignored.
 !spmpc_parameter_manifest.h
+!spmpc_delay_augmented_phase_solver_manifest.h

@@ -1209,7 +1209,7 @@ $$
 
 并在 `ControlCycleAudit` 中记录实际 $d_c$、误差和 deadline miss。默认 `publish_timing.enabled=false`，此时 estimate 无效，predictor 和 PhaseClock 保持使用显式求解前 evaluation epoch $t_e$，因此默认运行行为没有改变。$\widehat d_c$ 仍需由 Scout held-out 标定 artifact 冻结。
 
-此外，当 $d_v=150\,\mathrm{ms}$、$d_\omega=220\,\mathrm{ms}$ 时，本周期新线速度命令会在共同角速度前沿前约 $70\,\mathrm{ms}$ 开始作用。当前在线 predictor 在求解前仍只使用旧命令，固定的前沿状态没有保留这段对新决策的依赖。预计发布时间的在线 typed 接线已经完成；WP3A 也已增加纯 C++ `DelayAugmentedPhaseDynamics`，让 $q=[a,\alpha,v_s]$ 从上一发布命令形成新 $u^{\mathrm{pub}}$、进入双通道 buffer，并按 $N_e=n_f+N_\ell$ 传播。WP3B 进一步生成了 `nx=22,nu=3,N_e=10` 的 CasADi C 离散转移核，完成 128 组随机单步、第一拍 Jacobian 和 terminal Jacobian 与 C++ 参考转移的一致性。但该 C 核只用于一致性测试，执行增广状态尚未进入当前 acados OCP；缺口仍必须由独立 delay-augmented acados optimizer 及其在线 context/terminal 接线，或严格保留相同决策依赖的凝聚 bridge 解决。
+此外，当 $d_v=150\,\mathrm{ms}$、$d_\omega=220\,\mathrm{ms}$ 时，本周期新线速度命令会在共同角速度前沿前约 $70\,\mathrm{ms}$ 开始作用。当前在线 predictor 在求解前仍只使用旧命令，固定的前沿状态没有保留这段对新决策的依赖。预计发布时间的在线 typed 接线已经完成；WP3A 增加纯 C++ `DelayAugmentedPhaseDynamics`，让 $q=[a,\alpha,v_s]$ 从上一发布命令形成新 $u^{\mathrm{pub}}$、进入双通道 buffer，并按 $N_e=n_f+N_\ell$ 传播；WP3B 生成了 `nx=22,nu=3,N_e=10` 的 CasADi C 离散转移核，完成 128 组随机单步、第一拍 Jacobian 和 terminal Jacobian 与 C++ 参考转移的一致性；WP3C 又以同一转移生成和编译独立 DISCRETE acados capsule，加入 published-command、robot/pending speed 和 rate 硬约束。但新 capsule 尚未进入在线 factory/history context，也没有 formal nominal-relative cost/parameters、terminal 9D gate 和 $\mathcal B^{\mathrm{exec}}$；capability gate 会明确拒绝 formal 请求。因此执行增广模型已进入独立 optimizer，但尚未进入在线正式闭环。
 
 默认配置也没有启用该功能：`delay_phase.mode=off`、`phase_rejoin.mode=off`、两个时间常数为 0、`require_complete_history=false`。官方实物 runner 的非 pilot 默认关闭 delay；pilot 只显式传两个纯延迟，未传时间常数、完整历史和 Phase-Rejoin 合同参数。因此当前 runner 不能建立 formal `phase_rejoin=enforce` 实物合同。
 
@@ -1412,7 +1412,7 @@ $$
 3. modal hard cap 不等价于真实液面无溢出保证；
 4. governor 使用简化短时 rollout，不是完整鲁棒 MPC 或形式化 reference governor 安全证明；
 5. 当前主线关注给定安全路径附近的在线规划控制，不把完整动态避障和同伦推理作为贡献；
-6. 当前已有 `d_c` 预计/实测审计、统一执行参考模型、预计发布时间 typed 接线，以及本周期新命令进入双通道 buffer 的 C++ 参考动力学和数值一致的 CasADi C 离散转移核；但该 C 核只用于测试，默认估计仍关闭，独立 augmented acados optimizer 与在线 augmented context 尚未完成，Scout 执行参数也未冻结，不能宣称已经适配实物；
+6. 当前已有 `d_c` 预计/实测审计、统一执行参考模型、预计发布时间 typed 接线，以及本周期新命令进入双通道 buffer 的 C++ 参考动力学、数值一致的 CasADi C 转移核和独立可求解 acados capsule；但默认估计仍关闭，新 capsule 尚未进入在线 factory/context，formal cost/parameters 和 terminal gate 尚未完成，Scout 执行参数也未冻结，不能宣称已经适配实物；
 7. 当前缺少独立 odom/TF watchdog、solver deadline、最终命令无条件硬包络、driver 命令超时/确认和急停制动动态合同，正式实物闭环仍是 G0 NO-GO；
 8. 当前唯一 ROS 命令事务已闭合，但 receipt 仍不是 CAN/底盘 ACK；runner 配置和路径版本也尚未形成单一 typed/epoch 合同；
 9. 实物评价必须同时报告任务时间、路径误差、命令平滑性、求解耗时和外部液面指标，避免通过停车或全程低速获得表面上的降晃结果。
@@ -1436,6 +1436,7 @@ $$
 | 双通道执行合同、增广状态和 history prediction | `src/runtime/execution_prediction/execution_model.cpp`, `command_history_buffer.cpp`, `execution_state_predictor.cpp` |
 | delay-augmented solver horizon 参考转移 | `src/solver/delay_augmented/phase_rejoin_dynamics.cpp`, `include/spmpc_local_planner/solver/api/execution_horizon_context.h` |
 | delay-augmented CasADi 离散转移与一致性生成 | `tools/codegen/acados/spmpc_delay_augmented_phase_model.py`, `tools/codegen/acados/generate_delay_augmented_phase_transition.py`, `generated/casadi/` |
+| 独立 delay-augmented DISCRETE acados capsule 与 capability gate | `tools/codegen/acados/generate_delay_augmented_phase_acados.py`, `src/solver/acados/delay_augmented_phase_solver.cpp`, `generated/acados/spmpc_delay_augmented_phase_solver_manifest.h` |
 | 预计发布时间、实际 `d_c` 和 deadline 审计 | `src/runtime/timing/publish_latency_model.cpp`, `src/controller/control_cycle_engine.cpp` |
 | 最终命令事务、receipt 与提交时序 | `src/controller/command/command_pipeline.cpp`, `src/controller/command/publication_transaction.cpp`, `src/controller/control_cycle_engine.cpp` |
 | solver I/O 与 backend 权威接口 | `include/spmpc_local_planner/solver/api/solver_input.h`, `solver_output.h`, `solver.h` |

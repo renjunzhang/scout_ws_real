@@ -53,7 +53,7 @@ def state_layout(contract):
     }
 
 
-def _transition_expression(x, q, contract, layout):
+def transition_expression(x, q, contract, layout):
     dt = contract["dt"]
     linear = contract["linear"]
     angular = contract["angular"]
@@ -137,7 +137,7 @@ def export_transition_functions(contract):
     layout = state_layout(contract)
     x = ca.SX.sym("x", layout["state_width"])
     q = ca.SX.sym("q", CONTROL_WIDTH)
-    x_next, published = _transition_expression(x, q, contract, layout)
+    x_next, published = transition_expression(x, q, contract, layout)
     step = ca.Function(
         "spmpc_delay_augmented_phase_transition",
         [x, q],
@@ -162,7 +162,7 @@ def export_transition_functions(contract):
         stage_q = q0 if stage == 0 else q_tail[
             CONTROL_WIDTH * (stage - 1):CONTROL_WIDTH * stage
         ]
-        terminal, _ = _transition_expression(
+        terminal, _ = transition_expression(
             terminal, stage_q, contract, layout
         )
     terminal_jacobian = ca.Function(

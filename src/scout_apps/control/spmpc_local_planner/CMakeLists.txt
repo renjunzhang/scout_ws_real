@@ -47,11 +47,13 @@ endif()
 set(SPMPC_GEN_B0_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0)
 set(SPMPC_GEN_SLOSH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh)
 set(SPMPC_GEN_PHASE_REJOIN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_phase_rejoin)
+set(SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_delay_augmented_phase)
 set(SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0_direct_omega_legacy)
 set(SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh_direct_omega)
 set(SPMPC_WITH_ACADOS FALSE)
 set(SPMPC_WITH_ACADOS_SLOSH FALSE)
 set(SPMPC_WITH_ACADOS_PHASE_REJOIN FALSE)
+set(SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE FALSE)
 set(SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY FALSE)
 set(SPMPC_WITH_ACADOS_SLOSH_DIRECT_OMEGA FALSE)
 set(ACADOS_LIB_DIR "")
@@ -77,6 +79,11 @@ if(ACADOS_LIB_DIR AND EXISTS "${SPMPC_GEN_B0_DIR}/libacados_ocp_solver_spmpc_b0.
   endif()
 else()
   message(STATUS "[spmpc] acados not found (ACADOS_SOURCE_DIR / generated spmpc_b0 missing); continuous backend = stub")
+endif()
+if(ACADOS_LIB_DIR AND
+   EXISTS "${SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR}/libacados_ocp_solver_spmpc_delay_augmented_phase.so")
+  set(SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE TRUE)
+  message(STATUS "[spmpc] building independent candidate delay-augmented DISCRETE capsule")
 endif()
 if(SPMPC_BUILD_LEGACY_BACKEND AND ACADOS_LIB_DIR AND
    EXISTS "${SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR}/libacados_ocp_solver_spmpc_b0_direct_omega_legacy.so")
@@ -108,6 +115,7 @@ set(SPMPC_PUBLIC_LIBRARIES
   spmpc_solver_rollout
   spmpc_solver_parameters
   spmpc_solver_acados
+  spmpc_solver_delay_augmented_acados
   spmpc_solver_factory
   spmpc_warm_start
 )
@@ -229,6 +237,17 @@ target_link_libraries(spmpc_solver_delay_augmented
   spmpc_runtime
 )
 
+add_library(spmpc_solver_delay_augmented_acados
+  src/solver/acados/delay_augmented_phase_solver.cpp
+)
+target_include_directories(spmpc_solver_delay_augmented_acados PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+)
+target_link_libraries(spmpc_solver_delay_augmented_acados
+  PRIVATE
+  spmpc_solver_delay_augmented
+)
+
 # Deterministic CasADi C image used only to prove that the future generated
 # formal solver shares the C++ transition semantics.  It is not a runtime
 # backend and is deliberately omitted from SPMPC_PUBLIC_LIBRARIES.
@@ -320,6 +339,24 @@ if(SPMPC_BUILD_LEGACY_BACKEND)
     spmpc_model
     spmpc_reference
     ${EIGEN3_LIBRARIES}
+  )
+endif()
+
+if(SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE)
+  target_compile_definitions(spmpc_solver_delay_augmented_acados PRIVATE
+    SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE)
+  target_include_directories(spmpc_solver_delay_augmented_acados PRIVATE
+    ${ACADOS_SOURCE_DIR}/include
+    ${ACADOS_SOURCE_DIR}/include/acados
+    ${ACADOS_SOURCE_DIR}/include/blasfeo/include
+    ${ACADOS_SOURCE_DIR}/include/hpipm/include
+    ${SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR}
+  )
+  target_link_libraries(spmpc_solver_delay_augmented_acados PRIVATE
+    ${SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR}/libacados_ocp_solver_spmpc_delay_augmented_phase.so
+    ${ACADOS_LIB_DIR}/libacados.so
+    ${ACADOS_LIB_DIR}/libhpipm.so
+    ${ACADOS_LIB_DIR}/libblasfeo.so
   )
 endif()
 
@@ -753,6 +790,18 @@ if(CATKIN_ENABLE_TESTING)
     target_link_libraries(test_delay_augmented_phase_codegen_consistency
       spmpc_solver_delay_augmented
       spmpc_delay_augmented_phase_casadi_transition
+    )
+  endif()
+  catkin_add_gtest(test_delay_augmented_phase_acados_solver
+    test/test_delay_augmented_phase_acados_solver.cpp)
+  if(TARGET test_delay_augmented_phase_acados_solver)
+    target_include_directories(
+      test_delay_augmented_phase_acados_solver PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+    )
+    target_link_libraries(test_delay_augmented_phase_acados_solver
+      spmpc_solver_delay_augmented_acados
+      spmpc_solver_delay_augmented
     )
   endif()
   catkin_add_gtest(test_acados_stage_parameter_builder
