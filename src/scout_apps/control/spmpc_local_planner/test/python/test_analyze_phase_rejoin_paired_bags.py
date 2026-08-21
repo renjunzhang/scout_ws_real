@@ -62,6 +62,17 @@ def phase(cycle_id, stamp, consistent=True, lead=0, liquid_steps=3,
 
 
 def analyzed_run(external, internal, valid=True, contract_valid=True):
+    motion = {
+        key: {
+            "unit": unit, "rms": value, "p95": value, "peak": value,
+        }
+        for key, unit, value in (
+            ("linear_speed_abs", "m/s", 0.2),
+            ("angular_speed_abs", "rad/s", 0.3),
+            ("linear_accel_abs", "m/s^2", 0.4),
+            ("angular_accel_abs", "rad/s^2", 0.5),
+        )
+    }
     return {
         "height_metrics": {
             "external_slosh_height": {
@@ -73,6 +84,7 @@ def analyzed_run(external, internal, valid=True, contract_valid=True):
                 "peak_mm": internal[2],
             },
         },
+        "motion_metrics": motion,
         "window": {"completion_time_sec": 10.0},
         "path_projection_distance": {"max_m": None},
         "evidence_valid": valid,
@@ -81,6 +93,22 @@ def analyzed_run(external, internal, valid=True, contract_valid=True):
 
 
 class PhaseRejoinPairedBagAnalysisTest(unittest.TestCase):
+    def test_command_motion_metrics_include_pre_window_launch_transition(self):
+        commands = [
+            {"t": 9.9, "v": 0.0, "omega": 0.0},
+            {"t": 10.0, "v": 0.1, "omega": -0.1},
+            {"t": 10.1, "v": 0.3, "omega": 0.2},
+            {"t": 10.2, "v": 0.2, "omega": 0.0},
+        ]
+        metrics = MODULE.command_motion_metrics(
+            commands, start=10.0, goal=10.2)
+        self.assertTrue(metrics["pre_window_anchor_used"])
+        self.assertEqual(3, metrics["command_samples"])
+        self.assertEqual(3, metrics["derivative_samples"])
+        self.assertAlmostEqual(0.3, metrics["linear_speed_abs"]["peak"])
+        self.assertAlmostEqual(2.0, metrics["linear_accel_abs"]["peak"])
+        self.assertAlmostEqual(3.0, metrics["angular_accel_abs"]["peak"])
+
     def test_signal_metrics_remove_reported_pre_window_offset(self):
         series = [
             (8.5, 0.001), (9.5, 0.001),

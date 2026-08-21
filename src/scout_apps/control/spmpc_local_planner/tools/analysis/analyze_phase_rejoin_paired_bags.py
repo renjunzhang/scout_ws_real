@@ -173,6 +173,85 @@ def signal_metrics(series, start, end, scale_to_mm, native_unit,
     }
 
 
+def _absolute_metrics(values, unit):
+    magnitudes = [abs(float(value)) for value in values if finite(value)]
+    if not magnitudes:
+        raise AnalysisError("cannot summarize an empty finite motion series")
+    return {
+        "definition": "absolute magnitude",
+        "unit": unit,
+        "samples": len(magnitudes),
+        "mean": statistics.mean(magnitudes),
+        "rms": math.sqrt(
+            sum(value * value for value in magnitudes) / len(magnitudes)),
+        "p95": percentile(magnitudes, 0.95),
+        "peak": max(magnitudes),
+    }
+
+
+def command_motion_metrics(commands, start, goal):
+    """Summarize actual command speed and finite-difference acceleration.
+
+    Speed samples use the active-motion interval from the first accepted,
+    published moving command through the first goal status.  Acceleration uses
+    command-topic receive timestamps and includes the latest pre-window sample
+    as an anchor when available, so the initial launch transition is retained.
+    These are descriptive fairness metrics and do not change the slosh
+    acceptance criterion.
+    """
+    ordered = sorted(
+        ({"t": float(record["t"]),
+          "v": float(record["v"]),
+          "omega": float(record["omega"])} for record in commands
+         if finite(record.get("t")) and finite(record.get("v")) and
+         finite(record.get("omega"))),
+        key=lambda record: record["t"])
+    active = [record for record in ordered
+              if float(start) <= record["t"] <= float(goal)]
+    if len(active) < 2:
+        raise AnalysisError(
+            "actual command topic has fewer than two motion-window samples")
+
+    before = [record for record in ordered if record["t"] < float(start)]
+    anchor = before[-1] if (
+        before and float(start) - before[-1]["t"] <=
+        TOPIC_COVERAGE_TOLERANCE_SEC) else None
+    derivative_records = ([anchor] if anchor is not None else []) + active
+    linear_accel = []
+    angular_accel = []
+    skipped_nonpositive_dt = 0
+    for previous, current in zip(
+            derivative_records[:-1], derivative_records[1:]):
+        dt = current["t"] - previous["t"]
+        if dt <= 1.0e-9:
+            skipped_nonpositive_dt += 1
+            continue
+        linear_accel.append((current["v"] - previous["v"]) / dt)
+        angular_accel.append(
+            (current["omega"] - previous["omega"]) / dt)
+    if not linear_accel:
+        raise AnalysisError(
+            "actual command topic has no positive-dt acceleration samples")
+
+    return {
+        "window_definition": "first accepted moving command through first goal",
+        "start": float(start),
+        "goal": float(goal),
+        "duration_sec": float(goal) - float(start),
+        "command_samples": len(active),
+        "derivative_samples": len(linear_accel),
+        "pre_window_anchor_used": anchor is not None,
+        "skipped_nonpositive_dt": skipped_nonpositive_dt,
+        "linear_speed_abs": _absolute_metrics(
+            [record["v"] for record in active], "m/s"),
+        "angular_speed_abs": _absolute_metrics(
+            [record["omega"] for record in active], "rad/s"),
+        "linear_accel_abs": _absolute_metrics(linear_accel, "m/s^2"),
+        "angular_accel_abs": _absolute_metrics(
+            angular_accel, "rad/s^2"),
+    }
+
+
 def find_active_window(audits, statuses, commands, bag_end,
                        tail_after_goal_sec=TAIL_AFTER_GOAL_SEC):
     """Find the command/goal window from synthetic or bag-derived records."""
@@ -579,6 +658,7 @@ def analyze_run(raw, role, command_topic=DEFAULT_COMMAND_TOPIC,
         raw["external_height"], start, end, 1000.0, "m")
     internal = signal_metrics(
         raw["internal_height"], start, end, 1.0, "mm")
+    motion = command_motion_metrics(raw["commands"], start, goal)
 
     statuses = filter_records(raw["statuses"], start, end)
     audits = [record for record in raw["audits"]
@@ -699,6 +779,7 @@ def analyze_run(raw, role, command_topic=DEFAULT_COMMAND_TOPIC,
             "external_slosh_height": external,
             "internal_spmpc_slosh_height": internal,
         },
+        "motion_metrics": motion,
         "path_projection_distance": {
             "available": bool(projection),
             "sources": sorted(set(record["source"] for record in projection_records)),
@@ -745,6 +826,20 @@ def _metric_comparison(baseline, enforce):
     }
 
 
+def _descriptive_comparison(baseline, enforce, unit):
+    delta = float(enforce) - float(baseline)
+    relative = None
+    if abs(float(baseline)) > 1.0e-12:
+        relative = 100.0 * delta / float(baseline)
+    return {
+        "unit": unit,
+        "baseline": float(baseline),
+        "enforce": float(enforce),
+        "delta": delta,
+        "relative_change_percent": relative,
+    }
+
+
 def compare_runs(baseline, enforce):
     """Build the strict two-signal verdict from two analyzed runs."""
     comparisons = {}
@@ -765,6 +860,16 @@ def compare_runs(baseline, enforce):
     comparisons["internal_spmpc_slosh_height"]["all_metrics_improved"] = internal_all
     comparisons["internal_spmpc_slosh_height"]["direction"] = (
         "POSITIVE" if internal_all else "NON_POSITIVE")
+    motion_comparisons = {}
+    for quantity in (
+            "linear_speed_abs", "angular_speed_abs",
+            "linear_accel_abs", "angular_accel_abs"):
+        motion_comparisons[quantity] = {}
+        unit = baseline["motion_metrics"][quantity]["unit"]
+        for metric in ("rms", "p95", "peak"):
+            motion_comparisons[quantity][metric] = _descriptive_comparison(
+                baseline["motion_metrics"][quantity][metric],
+                enforce["motion_metrics"][quantity][metric], unit)
     checks = {
         "baseline_evidence_valid": bool(baseline.get("evidence_valid")),
         "enforce_evidence_valid": bool(enforce.get("evidence_valid")),
@@ -787,6 +892,7 @@ def compare_runs(baseline, enforce):
 
     return {
         "height": comparisons,
+        "motion": motion_comparisons,
         "completion_time": {
             "baseline_sec": baseline["window"]["completion_time_sec"],
             "enforce_sec": enforce["window"]["completion_time_sec"],
@@ -874,6 +980,25 @@ def render_summary(report):
                     metric_label, _fmt(item["baseline_mm"], 5),
                     _fmt(item["enforce_mm"], 5),
                     _fmt(item["relative_change_percent"], 2), direction))
+    lines.append("")
+
+    lines.append("实际发布命令运动学（首个有效运动命令至首次到达；仅描述，不改变验收门）")
+    for key, label in (
+            ("linear_speed_abs", "|v|"),
+            ("angular_speed_abs", "|omega|"),
+            ("linear_accel_abs", "|a|"),
+            ("angular_accel_abs", "|alpha|")):
+        metric_items = comparison["motion"][key]
+        unit = metric_items["rms"]["unit"]
+        rendered = []
+        for metric, metric_label in (
+                ("rms", "RMS"), ("p95", "P95"), ("peak", "peak")):
+            item = metric_items[metric]
+            rendered.append("{} {} -> {} ({}%)".format(
+                metric_label, _fmt(item["baseline"], 5),
+                _fmt(item["enforce"], 5),
+                _fmt(item["relative_change_percent"], 2)))
+        lines.append("  {} [{}]: {}".format(label, unit, "; ".join(rendered)))
     lines.append("")
 
     phase = enforce["phase_contract"]
