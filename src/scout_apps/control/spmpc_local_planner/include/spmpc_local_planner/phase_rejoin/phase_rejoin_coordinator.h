@@ -32,7 +32,9 @@ public:
                                    int solver_horizon_steps,
                                    double phase_time_sec,
                                    bool solver_origin_at_execution_front = true,
-                                   bool solver_origin_is_execution_augmented = false);
+                                   bool solver_origin_is_execution_augmented = false,
+                                   const ExecutionAugmentedState*
+                                       current_execution = nullptr);
 
     PhaseRejoinDecision decide(const PhaseRejoinPreparation& preparation,
                                const RobotState& execution_front_robot,

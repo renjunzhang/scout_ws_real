@@ -2,6 +2,8 @@
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/phase_rejoin/bounded_tracking_recovery_policy.h"
+#include "spmpc_local_planner/phase_rejoin/empirical_recovery_gate.h"
+#include "spmpc_local_planner/phase_rejoin/execution_compatibility_gate.h"
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
 #include "spmpc_local_planner/reference/progress_projector.h"
 #include "spmpc_local_planner/runtime/execution_prediction/execution_horizon_context_builder.h"
@@ -28,6 +30,7 @@
 #include <limits>
 #include <locale>
 #include <limits.h>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -48,7 +51,7 @@ constexpr char kConditionSchema[] =
 constexpr char kSummarySchema[] =
     "spmpc_closed_loop_trial_summary_v1";
 constexpr char kCycleSchema[] =
-    "spmpc_closed_loop_trial_cycle_v1";
+    "spmpc_closed_loop_trial_cycle_v2";
 constexpr double kRequiredControlRateHz = 30.0;
 constexpr StampNs kStampBaseNs = 10000000000LL;
 constexpr int kUsageExit = 2;
@@ -110,14 +113,24 @@ struct CycleRecord {
     SloshState observer;
     double observer_height_m = 0.0;
     bool solver_success = false;
-    std::string solver_status;
+    std::string raw_solver_status = "NOT_RUN";
+    std::string phase_status = "NOT_RUN";
+    std::string final_status = "NOT_RUN";
     bool gate_evaluated = false;
     bool terminal_gate_accepted = false;
     bool current_execution_compatible = false;
     bool terminal_execution_compatible = false;
     bool recovery_used = false;
     bool controlled_stop_used = false;
-    std::size_t phase_index = 0;
+    bool selected_phase_valid = false;
+    std::size_t clock_index = 0;
+    std::size_t candidate_window_begin_index = 0;
+    std::size_t candidate_window_end_index = 0;
+    std::size_t selected_phase_index = 0;
+    int phase_lead_steps = 0;
+    bool execution_candidate_filter_applied = false;
+    std::size_t execution_rejected_candidate_count = 0;
+    double selected_execution_max_normalized_error = 0.0;
     VelocityCommand final_command;
     CommandSource command_source = CommandSource::None;
     StampNs publish_stamp_ns = 0;
@@ -132,6 +145,58 @@ struct TrialCounters {
     std::size_t controlled_stops = 0;
     std::size_t publications = 0;
     std::size_t publication_failures = 0;
+    std::size_t execution_candidate_filter_cycles = 0;
+    std::size_t execution_rejected_candidates = 0;
+    double max_selected_execution_normalized_error = 0.0;
+    std::map<std::string, std::size_t> raw_solver_status_counts;
+    std::map<std::string, std::size_t> phase_status_counts;
+    std::map<std::string, std::size_t> final_status_counts;
+};
+
+struct SolverFailureDiagnostic {
+    bool valid = false;
+    std::uint64_t cycle_id = 0;
+    std::string raw_solver_status;
+    std::size_t clock_index = 0;
+    std::size_t candidate_window_begin_index = 0;
+    std::size_t candidate_window_end_index = 0;
+    std::size_t selected_phase_index = 0;
+    std::size_t terminal_phase_index = 0;
+    ExecutionAugmentedState initial_execution;
+    double initial_progress_s = 0.0;
+    bool warm_start_rollout_valid = false;
+    std::string warm_start_rollout_status = "NOT_RUN";
+    ExecutionAugmentedState warm_start_terminal_execution;
+    double warm_start_terminal_progress_s = 0.0;
+    int worst_execution_stage = -1;
+    double max_stage_execution_normalized_error = 0.0;
+    double min_linear_residual_margin =
+        std::numeric_limits<double>::infinity();
+    double min_angular_residual_margin =
+        std::numeric_limits<double>::infinity();
+    double min_linear_output_margin =
+        std::numeric_limits<double>::infinity();
+    double min_angular_output_margin =
+        std::numeric_limits<double>::infinity();
+    double min_acceleration_margin =
+        std::numeric_limits<double>::infinity();
+    double min_angular_acceleration_margin =
+        std::numeric_limits<double>::infinity();
+    double min_progress_rate_margin =
+        std::numeric_limits<double>::infinity();
+    bool terminal_empirical_gate_valid = false;
+    double terminal_empirical_metric = 0.0;
+    double terminal_empirical_margin = 0.0;
+    bool terminal_execution_gate_valid = false;
+    double terminal_execution_normalized_error = 0.0;
+    double terminal_execution_margin = 0.0;
+    bool solver_residuals_evaluated = false;
+    int solver_nlp_status = -1;
+    int solver_qp_status = -1;
+    double stationarity_residual = 0.0;
+    double equality_residual = 0.0;
+    double inequality_residual = 0.0;
+    double complementarity_residual = 0.0;
 };
 
 std::string jsonEscape(const std::string& text) {
@@ -1166,6 +1231,205 @@ std::string jsonNumber(double value) {
     return output.str();
 }
 
+void writeJsonStringCounts(
+    std::ofstream& output,
+    const std::map<std::string, std::size_t>& counts) {
+    output << '{';
+    bool first = true;
+    for (const auto& entry : counts) {
+        if (!first) output << ',';
+        output << "\n      \"" << jsonEscape(entry.first) << "\": "
+               << entry.second;
+        first = false;
+    }
+    if (!counts.empty()) output << '\n' << "    ";
+    output << '}';
+}
+
+std::vector<double> solverState22(
+    const ExecutionAugmentedState& execution,
+    double progress_s) {
+    std::vector<double> state;
+    state.reserve(static_cast<std::size_t>(manifest::kStateCount));
+    state.push_back(execution.robot.x);
+    state.push_back(execution.robot.y);
+    state.push_back(execution.robot.yaw);
+    state.push_back(execution.robot.v);
+    state.push_back(progress_s);
+    state.push_back(execution.robot.omega);
+    state.push_back(execution.slosh.eta_x);
+    state.push_back(execution.slosh.eta_x_dot);
+    state.push_back(execution.slosh.eta_y);
+    state.push_back(execution.slosh.eta_y_dot);
+    state.insert(state.end(),
+                 execution.linear.pending_commands.begin(),
+                 execution.linear.pending_commands.end());
+    state.insert(state.end(),
+                 execution.angular.pending_commands.begin(),
+                 execution.angular.pending_commands.end());
+    return state;
+}
+
+void writeJsonNumberArray(std::ofstream& output,
+                          const std::vector<double>& values) {
+    output << '[';
+    for (std::size_t index = 0; index < values.size(); ++index) {
+        if (index != 0) output << ", ";
+        output << jsonNumber(values[index]);
+    }
+    output << ']';
+}
+
+SolverFailureDiagnostic captureSolverFailureDiagnostic(
+    const ControlCycleResult& result,
+    const NominalSequenceArtifact& artifact) {
+    SolverFailureDiagnostic diagnostic;
+    const PhaseCandidateResult& candidate =
+        result.phase_preparation.candidate;
+    const DelayAugmentedPhaseSolverContext& phase =
+        result.phase_preparation.solver_context.delay_augmented;
+    const ExecutionHorizonContext& horizon =
+        result.solver_input.execution_horizon;
+    if (result.solver_success || !candidate.valid || !phase.active ||
+        !horizon.active || !horizon.initial_state.valid) {
+        return diagnostic;
+    }
+
+    diagnostic.valid = true;
+    diagnostic.cycle_id = result.telemetry.cycle_id;
+    diagnostic.raw_solver_status = result.solver_output.status;
+    diagnostic.clock_index = candidate.clock_index;
+    diagnostic.candidate_window_begin_index =
+        candidate.candidate_window_begin_index;
+    diagnostic.candidate_window_end_index =
+        candidate.candidate_window_end_index;
+    diagnostic.selected_phase_index = candidate.current_index;
+    diagnostic.terminal_phase_index = candidate.terminal_index;
+    diagnostic.initial_execution = horizon.initial_state;
+    diagnostic.initial_progress_s = horizon.initial_progress_s;
+
+    const PreSolveSnapshotDebug& snapshot =
+        result.solver_output.pre_solve_snapshot;
+    diagnostic.solver_residuals_evaluated =
+        snapshot.solver_residuals_evaluated;
+    diagnostic.solver_nlp_status = snapshot.solver_nlp_status;
+    diagnostic.solver_qp_status = snapshot.solver_qp_status;
+    diagnostic.stationarity_residual = snapshot.stationarity_residual;
+    diagnostic.equality_residual = snapshot.equality_residual;
+    diagnostic.inequality_residual = snapshot.inequality_residual;
+    diagnostic.complementarity_residual =
+        snapshot.complementarity_residual;
+
+    const DelayAugmentedPhaseCompiledContract compiled =
+        DelayAugmentedPhaseAcadosSolver::compiledContract();
+    DelayAugmentedPhaseDynamics dynamics;
+    std::string error;
+    if (!dynamics.configure(compiled.execution, compiled.slosh, error)) {
+        diagnostic.warm_start_rollout_status =
+            "CONFIGURATION_FAILED_" + error;
+        return diagnostic;
+    }
+    std::vector<DelayAugmentedPhaseControl> controls;
+    controls.reserve(static_cast<std::size_t>(phase.horizon_steps));
+    for (int stage = 0; stage < phase.horizon_steps; ++stage) {
+        const PhaseNominalStage& nominal =
+            phase.stages[static_cast<std::size_t>(stage)];
+        DelayAugmentedPhaseControl control;
+        control.acceleration = nominal.a;
+        control.angular_acceleration = nominal.alpha;
+        control.progress_rate = nominal.v_s;
+        controls.push_back(control);
+    }
+    const DelayAugmentedPhaseRolloutResult warm_start =
+        dynamics.rollout(horizon, controls);
+    diagnostic.warm_start_rollout_valid = warm_start.valid;
+    diagnostic.warm_start_rollout_status = warm_start.status;
+    if (!warm_start.valid || warm_start.states.size() !=
+            static_cast<std::size_t>(phase.horizon_steps + 1) ||
+        warm_start.published_commands.size() != controls.size()) {
+        return diagnostic;
+    }
+
+    const DelayAugmentedPhaseState& terminal_state =
+        warm_start.states.back();
+    diagnostic.warm_start_terminal_execution = terminal_state.execution;
+    diagnostic.warm_start_terminal_progress_s = terminal_state.progress_s;
+
+    ExecutionCompatibilityGate execution_gate;
+    for (int stage = 0; stage <= phase.horizon_steps; ++stage) {
+        const PhaseNominalStage& nominal =
+            phase.stages[static_cast<std::size_t>(stage)];
+        const ExecutionCompatibilityGateResult compatibility =
+            execution_gate.evaluate(
+                nominal.augmented_execution,
+                nominal.execution_bounds,
+                warm_start.states[static_cast<std::size_t>(stage)].execution);
+        if (compatibility.valid &&
+            compatibility.max_normalized_error >=
+                diagnostic.max_stage_execution_normalized_error) {
+            diagnostic.max_stage_execution_normalized_error =
+                compatibility.max_normalized_error;
+            diagnostic.worst_execution_stage = stage;
+        }
+        if (stage == phase.horizon_steps) {
+            diagnostic.terminal_execution_gate_valid = compatibility.valid;
+            diagnostic.terminal_execution_normalized_error =
+                compatibility.max_normalized_error;
+            diagnostic.terminal_execution_margin =
+                1.0 - compatibility.max_normalized_error;
+            continue;
+        }
+
+        const DelayAugmentedPhaseControl& control =
+            controls[static_cast<std::size_t>(stage)];
+        const VelocityCommand& published =
+            warm_start.published_commands[static_cast<std::size_t>(stage)];
+        diagnostic.min_linear_residual_margin = std::min(
+            diagnostic.min_linear_residual_margin,
+            phase.max_residual_v -
+                std::abs(published.linear - nominal.u_pub_v));
+        diagnostic.min_angular_residual_margin = std::min(
+            diagnostic.min_angular_residual_margin,
+            phase.max_residual_omega -
+                std::abs(published.angular - nominal.u_pub_omega));
+        diagnostic.min_linear_output_margin = std::min(
+            diagnostic.min_linear_output_margin,
+            std::min(
+                published.linear - manifest::kLinearOutputMin,
+                manifest::kLinearOutputMax - published.linear));
+        diagnostic.min_angular_output_margin = std::min(
+            diagnostic.min_angular_output_margin,
+            std::min(
+                published.angular - manifest::kAngularOutputMin,
+                manifest::kAngularOutputMax - published.angular));
+        diagnostic.min_acceleration_margin = std::min(
+            diagnostic.min_acceleration_margin,
+            manifest::kAccelerationMax - std::abs(control.acceleration));
+        diagnostic.min_angular_acceleration_margin = std::min(
+            diagnostic.min_angular_acceleration_margin,
+            manifest::kAngularAccelerationMax -
+                std::abs(control.angular_acceleration));
+        diagnostic.min_progress_rate_margin = std::min(
+            diagnostic.min_progress_rate_margin,
+            std::min(control.progress_rate,
+                     manifest::kProgressRateMax - control.progress_rate));
+    }
+
+    const PhaseNominalSample* terminal =
+        artifact.sample(candidate.terminal_index);
+    if (terminal != nullptr) {
+        const EmpiricalRecoveryGateResult gate =
+            EmpiricalRecoveryGate{}.evaluate(
+                *terminal,
+                terminal_state.execution.robot,
+                terminal_state.execution.slosh);
+        diagnostic.terminal_empirical_gate_valid = gate.valid;
+        diagnostic.terminal_empirical_metric = gate.metric;
+        diagnostic.terminal_empirical_margin = 1.0 - gate.metric;
+    }
+    return diagnostic;
+}
+
 bool openCycleCsv(const std::string& path, std::ofstream& output,
                   std::string& error) {
     output.open(path.c_str(), std::ios::out | std::ios::trunc);
@@ -1179,10 +1443,16 @@ bool openCycleCsv(const std::string& path, std::ofstream& output,
         << "schema,cycle_id,time_sec,window,x,y,yaw,v,omega,ax,ay,"
         << "tracking_error_m,progress_s,true_height_m,measured_height_m,"
         << "observer_height_m,observer_eta_x,observer_eta_x_dot,"
-        << "observer_eta_y,observer_eta_y_dot,solver_success,solver_status,"
+        << "observer_eta_y,observer_eta_y_dot,solver_success,"
+        << "raw_solver_status,phase_status,final_status,"
         << "gate_evaluated,terminal_gate_accepted,"
         << "current_execution_compatible,terminal_execution_compatible,"
-        << "recovery_used,controlled_stop_used,phase_index,"
+        << "recovery_used,controlled_stop_used,selected_phase_valid,"
+        << "clock_index,candidate_window_begin_index,"
+        << "candidate_window_end_index,selected_phase_index,phase_lead_steps,"
+        << "execution_candidate_filter_applied,"
+        << "execution_rejected_candidate_count,"
+        << "selected_execution_max_normalized_error,"
         << "final_cmd_v,final_cmd_omega,command_source,publish_stamp_ns,"
         << "plant_publish_time_sec,linear_effective_time_sec,"
         << "angular_effective_time_sec\n";
@@ -1204,14 +1474,24 @@ bool writeCycle(std::ofstream& output, const CycleRecord& record) {
         << record.observer.eta_x << ',' << record.observer.eta_x_dot << ','
         << record.observer.eta_y << ',' << record.observer.eta_y_dot << ','
         << (record.solver_success ? "true" : "false") << ','
-        << csvEscape(record.solver_status) << ','
+        << csvEscape(record.raw_solver_status) << ','
+        << csvEscape(record.phase_status) << ','
+        << csvEscape(record.final_status) << ','
         << (record.gate_evaluated ? "true" : "false") << ','
         << (record.terminal_gate_accepted ? "true" : "false") << ','
         << (record.current_execution_compatible ? "true" : "false") << ','
         << (record.terminal_execution_compatible ? "true" : "false") << ','
         << (record.recovery_used ? "true" : "false") << ','
         << (record.controlled_stop_used ? "true" : "false") << ','
-        << record.phase_index << ','
+        << (record.selected_phase_valid ? "true" : "false") << ','
+        << record.clock_index << ','
+        << record.candidate_window_begin_index << ','
+        << record.candidate_window_end_index << ','
+        << record.selected_phase_index << ','
+        << record.phase_lead_steps << ','
+        << (record.execution_candidate_filter_applied ? "true" : "false")
+        << ',' << record.execution_rejected_candidate_count << ','
+        << record.selected_execution_max_normalized_error << ','
         << record.final_command.linear << ','
         << record.final_command.angular << ','
         << commandSourceName(record.command_source) << ','
@@ -1229,6 +1509,7 @@ bool writeSummary(
     const IndependentPlantConfig& plant_config,
     const NominalSequenceArtifact& artifact,
     const TrialCounters& counters,
+    const SolverFailureDiagnostic& solver_failure,
     const std::vector<double>& measured_heights,
     const std::vector<double>& true_heights,
     const std::vector<double>& observer_heights,
@@ -1329,9 +1610,136 @@ bool writeSummary(
         << "    \"controlled_stops\": " << counters.controlled_stops << ",\n"
         << "    \"publications\": " << counters.publications << ",\n"
         << "    \"publication_failures\": "
-        << counters.publication_failures << "\n"
+        << counters.publication_failures << ",\n"
+        << "    \"execution_candidate_filter_cycles\": "
+        << counters.execution_candidate_filter_cycles << ",\n"
+        << "    \"execution_rejected_candidates\": "
+        << counters.execution_rejected_candidates << ",\n"
+        << "    \"max_selected_execution_normalized_error\": "
+        << counters.max_selected_execution_normalized_error << ",\n"
+        << "    \"raw_solver_status_counts\": ";
+    writeJsonStringCounts(output, counters.raw_solver_status_counts);
+    output << ",\n    \"phase_status_counts\": ";
+    writeJsonStringCounts(output, counters.phase_status_counts);
+    output << ",\n    \"final_status_counts\": ";
+    writeJsonStringCounts(output, counters.final_status_counts);
+    output << "\n"
         << "  },\n"
-        << "  \"baseline_contract\": {\n"
+        << "  \"first_solver_failure_diagnostic\": ";
+    if (!solver_failure.valid) {
+        output << "null,\n";
+    } else {
+        output << "{\n"
+            << "    \"cycle_id\": " << solver_failure.cycle_id << ",\n"
+            << "    \"raw_solver_status\": \""
+            << jsonEscape(solver_failure.raw_solver_status) << "\",\n"
+            << "    \"clock_index\": " << solver_failure.clock_index
+            << ",\n"
+            << "    \"candidate_window\": ["
+            << solver_failure.candidate_window_begin_index << ", "
+            << solver_failure.candidate_window_end_index << "],\n"
+            << "    \"selected_phase_index\": "
+            << solver_failure.selected_phase_index << ",\n"
+            << "    \"terminal_phase_index\": "
+            << solver_failure.terminal_phase_index << ",\n"
+            << "    \"state_order\": [\"x\", \"y\", \"yaw\", "
+            << "\"v\", \"s\", \"omega\", \"eta_x\", "
+            << "\"eta_x_dot\", \"eta_y\", \"eta_y_dot\", "
+            << "\"linear_q0\", \"linear_q1\", \"linear_q2\", "
+            << "\"linear_q3\", \"linear_q4\", \"angular_q0\", "
+            << "\"angular_q1\", \"angular_q2\", \"angular_q3\", "
+            << "\"angular_q4\", \"angular_q5\", \"angular_q6\"],\n"
+            << "    \"initial_state_22d\": ";
+        writeJsonNumberArray(output, solverState22(
+            solver_failure.initial_execution,
+            solver_failure.initial_progress_s));
+        output << ",\n"
+            << "    \"warm_start_rollout_valid\": "
+            << (solver_failure.warm_start_rollout_valid
+                    ? "true" : "false") << ",\n"
+            << "    \"warm_start_rollout_status\": \""
+            << jsonEscape(solver_failure.warm_start_rollout_status)
+            << "\",\n"
+            << "    \"warm_start_terminal_state_22d\": ";
+        writeJsonNumberArray(output, solverState22(
+            solver_failure.warm_start_terminal_execution,
+            solver_failure.warm_start_terminal_progress_s));
+        output << ",\n"
+            << "    \"stage_constraint_margins\": {\n"
+            << "      \"worst_execution_stage\": "
+            << solver_failure.worst_execution_stage << ",\n"
+            << "      \"max_execution_normalized_error\": "
+            << jsonNumber(
+                   solver_failure.max_stage_execution_normalized_error)
+            << ",\n"
+            << "      \"execution_margin\": "
+            << jsonNumber(
+                   1.0 - solver_failure
+                       .max_stage_execution_normalized_error) << ",\n"
+            << "      \"min_linear_residual_margin\": "
+            << jsonNumber(solver_failure.min_linear_residual_margin)
+            << ",\n"
+            << "      \"min_angular_residual_margin\": "
+            << jsonNumber(solver_failure.min_angular_residual_margin)
+            << ",\n"
+            << "      \"min_linear_output_margin\": "
+            << jsonNumber(solver_failure.min_linear_output_margin)
+            << ",\n"
+            << "      \"min_angular_output_margin\": "
+            << jsonNumber(solver_failure.min_angular_output_margin)
+            << ",\n"
+            << "      \"min_acceleration_margin\": "
+            << jsonNumber(solver_failure.min_acceleration_margin)
+            << ",\n"
+            << "      \"min_angular_acceleration_margin\": "
+            << jsonNumber(
+                   solver_failure.min_angular_acceleration_margin)
+            << ",\n"
+            << "      \"min_progress_rate_margin\": "
+            << jsonNumber(solver_failure.min_progress_rate_margin)
+            << "\n"
+            << "    },\n"
+            << "    \"terminal_constraint_margins\": {\n"
+            << "      \"empirical_gate_valid\": "
+            << (solver_failure.terminal_empirical_gate_valid
+                    ? "true" : "false") << ",\n"
+            << "      \"empirical_metric\": "
+            << jsonNumber(solver_failure.terminal_empirical_metric)
+            << ",\n"
+            << "      \"empirical_margin\": "
+            << jsonNumber(solver_failure.terminal_empirical_margin)
+            << ",\n"
+            << "      \"execution_gate_valid\": "
+            << (solver_failure.terminal_execution_gate_valid
+                    ? "true" : "false") << ",\n"
+            << "      \"execution_normalized_error\": "
+            << jsonNumber(
+                   solver_failure.terminal_execution_normalized_error)
+            << ",\n"
+            << "      \"execution_margin\": "
+            << jsonNumber(solver_failure.terminal_execution_margin)
+            << "\n"
+            << "    },\n"
+            << "    \"solver_residuals\": {\n"
+            << "      \"evaluated\": "
+            << (solver_failure.solver_residuals_evaluated
+                    ? "true" : "false") << ",\n"
+            << "      \"nlp_status\": "
+            << solver_failure.solver_nlp_status << ",\n"
+            << "      \"qp_status\": "
+            << solver_failure.solver_qp_status << ",\n"
+            << "      \"stationarity\": "
+            << jsonNumber(solver_failure.stationarity_residual) << ",\n"
+            << "      \"equality\": "
+            << jsonNumber(solver_failure.equality_residual) << ",\n"
+            << "      \"inequality\": "
+            << jsonNumber(solver_failure.inequality_residual) << ",\n"
+            << "      \"complementarity\": "
+            << jsonNumber(solver_failure.complementarity_residual) << "\n"
+            << "    }\n"
+            << "  },\n";
+    }
+    output << "  \"baseline_contract\": {\n"
         << "    \"pilot_only\": "
         << (condition.mode == TrialMode::ResidualNoGate ? "true" : "false")
         << ",\n"
@@ -1659,6 +2067,7 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     bool completed = false;
     std::string completion_reason = "MOTION_TIMEOUT";
     std::string runtime_error;
+    SolverFailureDiagnostic first_solver_failure;
     double last_motion_time_sec = 0.0;
     std::uint64_t next_cycle_id = 1;
 
@@ -1798,6 +2207,10 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         request.command_sink = &sink;
         request.command_history = &command_history;
         const ControlCycleResult result = engine.step(request);
+        if (!result.solver_success && !first_solver_failure.valid) {
+            first_solver_failure = captureSolverFailureDiagnostic(
+                result, artifact);
+        }
 
         CycleRecord record;
         record.cycle_id = next_cycle_id;
@@ -1810,7 +2223,11 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         record.observer_height_m = observer_dynamics.height(
             observer, robot.omega);
         record.solver_success = result.solver_success;
-        record.solver_status = result.output.status;
+        record.raw_solver_status = result.solver_output.status;
+        record.phase_status = result.have_phase_decision
+            ? result.phase_decision.status
+            : result.phase_preparation.status;
+        record.final_status = result.output.status;
         record.gate_evaluated = result.phase_decision.evaluated;
         record.terminal_gate_accepted =
             result.phase_decision.terminal_gate_accepted;
@@ -1821,9 +2238,29 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         record.recovery_used = result.phase_decision.recovery_command_used;
         record.controlled_stop_used =
             result.phase_decision.controlled_stop_used;
-        record.phase_index = result.phase_preparation.candidate.valid
-            ? result.phase_preparation.candidate.current_index
-            : cycle;
+        record.selected_phase_valid =
+            result.phase_preparation.candidate.valid;
+        record.clock_index =
+            result.phase_preparation.candidate.clock_index;
+        record.candidate_window_begin_index =
+            result.phase_preparation.candidate
+                .candidate_window_begin_index;
+        record.candidate_window_end_index =
+            result.phase_preparation.candidate
+                .candidate_window_end_index;
+        record.selected_phase_index =
+            result.phase_preparation.candidate.current_index;
+        record.phase_lead_steps =
+            result.phase_preparation.candidate.phase_lead_steps;
+        record.execution_candidate_filter_applied =
+            result.phase_preparation.candidate
+                .execution_compatibility_filter_applied;
+        record.execution_rejected_candidate_count =
+            result.phase_preparation.candidate
+                .execution_rejected_candidate_count;
+        record.selected_execution_max_normalized_error =
+            result.phase_preparation.candidate
+                .selected_execution_max_normalized_error;
         record.final_command = result.final_command;
         record.command_source = result.publication.pipeline.decision.source;
         record.publish_stamp_ns =
@@ -1834,6 +2271,19 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             break;
         }
         if (!result.solver_success) ++counters.solver_failures;
+        ++counters.raw_solver_status_counts[record.raw_solver_status];
+        ++counters.phase_status_counts[record.phase_status];
+        ++counters.final_status_counts[record.final_status];
+        if (record.execution_candidate_filter_applied) {
+            ++counters.execution_candidate_filter_cycles;
+            counters.execution_rejected_candidates +=
+                record.execution_rejected_candidate_count;
+            if (record.selected_phase_valid) {
+                counters.max_selected_execution_normalized_error = std::max(
+                    counters.max_selected_execution_normalized_error,
+                    record.selected_execution_max_normalized_error);
+            }
+        }
         if (record.gate_evaluated) ++counters.gate_evaluations;
         if (record.terminal_gate_accepted) ++counters.terminal_gate_accepts;
         if (record.recovery_used) ++counters.recovery_actions;
@@ -1927,7 +2377,9 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         record.observer_height_m = observer_dynamics.height(
             observer, state.omega);
         record.solver_success = false;
-        record.solver_status = "FIXED_TAIL_ZERO";
+        record.raw_solver_status = "NOT_RUN_FIXED_TAIL";
+        record.phase_status = "NOT_RUN_FIXED_TAIL";
+        record.final_status = "FIXED_TAIL_ZERO";
         record.final_command = publication.pipeline.final_command;
         record.command_source = publication.pipeline.decision.source;
         record.publish_stamp_ns = publication.receipt.actual_publish_stamp_ns;
@@ -1955,6 +2407,7 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         final_goal_error <= condition.task_success_goal_tolerance_m;
     if (!writeSummary(
             args, condition, plant_config, artifact, counters,
+            first_solver_failure,
             measured_heights, true_heights, observer_heights,
             tracking_errors, completed, task_success, completion_reason,
             last_motion_time_sec, final_goal_error, zvd,

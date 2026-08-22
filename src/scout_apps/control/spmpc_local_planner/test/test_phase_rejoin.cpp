@@ -3,6 +3,8 @@
 #include "spmpc_local_planner/phase_rejoin/phase_candidate_selector.h"
 #include "spmpc_local_planner/phase_rejoin/phase_clock.h"
 #include "spmpc_local_planner/phase_rejoin/phase_rejoin_coordinator.h"
+#include "spmpc_local_planner/solver/acados/delay_augmented_phase_solver.h"
+#include "spmpc_local_planner/solver/delay_augmented/phase_rejoin_dynamics.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "phase_rejoin_artifact_fixture.h"
 #include "../generated/acados/spmpc_delay_augmented_phase_solver_manifest.h"
@@ -217,6 +219,103 @@ NominalSequenceArtifact loadV3RecoveryArtifact() {
     return artifact;
 }
 
+NominalSequenceArtifact cycle10ExecutionArtifact() {
+    const DelayAugmentedPhaseCompiledContract compiled =
+        DelayAugmentedPhaseAcadosSolver::compiledContract();
+    DelayAugmentedPhaseDynamics dynamics;
+    std::string error;
+    EXPECT_TRUE(dynamics.configure(compiled.execution, compiled.slosh, error))
+        << error;
+    DelayAugmentedPhaseState state;
+    EXPECT_TRUE(dynamics.initializeHeld(
+        RobotState{}, SloshState{}, VelocityCommand{}, 0.09, state, error))
+        << error;
+
+    std::vector<PhaseNominalSample> samples(50);
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+        PhaseNominalSample& sample = samples[index];
+        sample.index = index;
+        sample.t = static_cast<double>(index) * compiled.execution.dt;
+        sample.s = state.progress_s;
+        sample.x = state.execution.robot.x;
+        sample.y = state.execution.robot.y;
+        sample.yaw = state.execution.robot.yaw;
+        sample.v = state.execution.robot.v;
+        sample.omega = state.execution.robot.omega;
+        sample.eta_x = state.execution.slosh.eta_x;
+        sample.eta_x_dot = state.execution.slosh.eta_x_dot;
+        sample.eta_y = state.execution.slosh.eta_y;
+        sample.eta_y_dot = state.execution.slosh.eta_y_dot;
+        sample.radii.x = sample.radii.y = sample.radii.yaw = 1.0;
+        sample.radii.v = sample.radii.omega = 1.0;
+        sample.radii.eta_x = sample.radii.eta_x_dot = 1.0;
+        sample.radii.eta_y = sample.radii.eta_y_dot = 1.0;
+        sample.augmented_execution_valid = true;
+        sample.augmented_execution = state.execution;
+        sample.execution_bounds.valid = true;
+        sample.execution_bounds.linear_actuator_output = 1.0;
+        sample.execution_bounds.angular_actuator_output = 1.0;
+        sample.execution_bounds.linear_pending_commands.assign(
+            static_cast<std::size_t>(augmented_manifest::kLinearBufferCount),
+            1.0);
+        sample.execution_bounds.angular_pending_commands.assign(
+            static_cast<std::size_t>(augmented_manifest::kAngularBufferCount),
+            1.0);
+
+        DelayAugmentedPhaseControl control;
+        if (index < 10) {
+            control.acceleration = augmented_manifest::kAccelerationMax;
+        } else if (index < 19) {
+            control.acceleration = -augmented_manifest::kAccelerationMax;
+        } else if (index == 19) {
+            constexpr double kPositiveZero = 1.0e-12;
+            control.acceleration =
+                (kPositiveZero -
+                 state.execution.linear.pending_commands.back()) /
+                compiled.execution.dt;
+        }
+        sample.a = control.acceleration;
+        sample.alpha = control.angular_acceleration;
+        sample.v_s = control.progress_rate;
+        const DelayAugmentedPhaseStepResult step =
+            dynamics.step(state, control);
+        EXPECT_TRUE(step.valid) << step.status;
+        EXPECT_GE(control.acceleration,
+                  -augmented_manifest::kAccelerationMax) << index;
+        EXPECT_LE(control.acceleration,
+                  augmented_manifest::kAccelerationMax) << index;
+        EXPECT_GE(step.published_command.linear,
+                  augmented_manifest::kLinearOutputMin) << index;
+        EXPECT_LE(step.published_command.linear,
+                  augmented_manifest::kLinearOutputMax) << index;
+        sample.u_pub_v = step.published_command.linear;
+        sample.u_pub_omega = step.published_command.angular;
+        sample.kappa_v = sample.u_pub_v;
+        sample.kappa_omega = sample.u_pub_omega;
+        state = step.state;
+    }
+    for (std::size_t index : {8u, 9u, 10u}) {
+        samples[index].execution_bounds.linear_actuator_output = 0.036;
+        samples[index].execution_bounds.linear_pending_commands.assign(
+            static_cast<std::size_t>(augmented_manifest::kLinearBufferCount),
+            0.036);
+    }
+
+    NominalSequenceArtifact base = loadV3RecoveryArtifact();
+    std::map<std::string, std::string> metadata = base.metadataEntries();
+    metadata["source"] = "unit_test_cycle_10_execution_filter";
+    metadata["path_length"] = "0.09";
+    metadata["recovery_artifact_hash"] =
+        NominalSequenceArtifact::canonicalRecoveryArtifactHash(
+            metadata, samples);
+    NominalSequenceArtifact artifact;
+    const NominalArtifactLoadResult assigned = artifact.assignValidated(
+        metadata, samples, "<cycle-10-execution-filter>");
+    EXPECT_TRUE(assigned.success)
+        << assigned.status << ": " << assigned.detail;
+    return artifact;
+}
+
 PhaseRejoinRuntimeContract v3RuntimeContract() {
     SloshModelParams params;
     params.container_radius = augmented_manifest::kContainerRadius;
@@ -397,6 +496,106 @@ TEST(PhaseCandidateSelector, HoldsCommittedOneStepLeadWithinSameClockBin) {
     ASSERT_TRUE(held.valid) << held.status;
     EXPECT_EQ(held.current_index, leading.current_index);
     EXPECT_EQ(held.phase_lead_steps, 1);
+}
+
+TEST(PhaseCandidateSelector,
+     Cycle10RejectsBestNineDimensionalPhaseByExecutionQueue) {
+    const NominalSequenceArtifact artifact = cycle10ExecutionArtifact();
+    ASSERT_TRUE(artifact.valid());
+    PhaseCandidateSelector selector;
+    PhaseCandidateSelectorParams params;
+    params.backward_radius = 1;
+    params.forward_radius = 1;
+    params.max_clock_lead_steps = 1;
+    ASSERT_TRUE(selector.configure(params));
+
+    ExecutionAugmentedState actual =
+        artifact.sample(10)->augmented_execution;
+    actual.linear.pending_commands = {
+        0.09163756, 0.11148499, 0.12603239, 0.14602129, 0.16221329};
+    const ExecutionCompatibilityGate gate;
+    const ExecutionCompatibilityGateResult phase10_gate = gate.evaluate(
+        artifact.sample(10)->augmented_execution,
+        artifact.sample(10)->execution_bounds,
+        actual);
+    ASSERT_TRUE(phase10_gate.valid);
+    EXPECT_FALSE(phase10_gate.accepted);
+    EXPECT_NEAR(phase10_gate.max_normalized_error,
+                0.03778671 / 0.036, 1e-7);
+    EXPECT_TRUE(gate.evaluate(
+        artifact.sample(9)->augmented_execution,
+        artifact.sample(9)->execution_bounds,
+        actual).accepted);
+
+    const PhaseCandidateResult nine_dimensional_only = selector.select(
+        artifact, actual.robot, actual.slosh,
+        augmented_manifest::kExecutionFrontSteps,
+        augmented_manifest::kLiquidHorizonSteps,
+        9, true, 8, false, nullptr);
+    ASSERT_TRUE(nine_dimensional_only.valid);
+    EXPECT_EQ(nine_dimensional_only.current_index, 10u);
+
+    const PhaseCandidateResult selected = selector.select(
+        artifact, actual.robot, actual.slosh,
+        augmented_manifest::kExecutionFrontSteps,
+        augmented_manifest::kLiquidHorizonSteps,
+        9, true, 8, false, &actual);
+    ASSERT_TRUE(selected.valid) << selected.status;
+    EXPECT_EQ(selected.clock_index, 9u);
+    EXPECT_EQ(selected.candidate_window_begin_index, 8u);
+    EXPECT_EQ(selected.candidate_window_end_index, 10u);
+    EXPECT_EQ(selected.candidate_count, 3u);
+    EXPECT_EQ(selected.execution_rejected_candidate_count, 2u);
+    EXPECT_EQ(selected.current_index, 9u);
+    EXPECT_EQ(selected.phase_lead_steps, 0);
+    EXPECT_LE(selected.selected_execution_max_normalized_error, 1.0);
+}
+
+TEST(PhaseCandidateSelector,
+     AllExecutionIncompatibleCandidatesReturnExplicitStatus) {
+    const NominalSequenceArtifact artifact = cycle10ExecutionArtifact();
+    ASSERT_TRUE(artifact.valid());
+    PhaseCandidateSelector selector;
+    PhaseCandidateSelectorParams params;
+    params.backward_radius = 1;
+    params.forward_radius = 1;
+    params.max_clock_lead_steps = 1;
+    ASSERT_TRUE(selector.configure(params));
+    ExecutionAugmentedState actual =
+        artifact.sample(10)->augmented_execution;
+    actual.linear.pending_commands.assign(
+        static_cast<std::size_t>(augmented_manifest::kLinearBufferCount),
+        augmented_manifest::kLinearOutputMax);
+
+    const PhaseCandidateResult selected = selector.select(
+        artifact, actual.robot, actual.slosh,
+        augmented_manifest::kExecutionFrontSteps,
+        augmented_manifest::kLiquidHorizonSteps,
+        9, true, 8, false, &actual);
+    EXPECT_FALSE(selected.valid);
+    EXPECT_EQ(selected.status, "NO_EXECUTION_COMPATIBLE_CANDIDATE");
+    EXPECT_EQ(selected.candidate_count, 3u);
+    EXPECT_EQ(selected.execution_rejected_candidate_count, 3u);
+}
+
+TEST(PhaseCandidateSelector, LegacySelectionIsUnchangedWithoutExecutionState) {
+    const NominalSequenceArtifact artifact = loadArtifact();
+    PhaseCandidateSelector selector;
+    PhaseCandidateSelectorParams params;
+    params.backward_radius = 1;
+    params.forward_radius = 2;
+    ASSERT_TRUE(selector.configure(params));
+    const PhaseCandidateResult legacy = selector.select(
+        artifact, robotAt(0.7), SloshState{}, 2, 3, 5, true, 4);
+    const PhaseCandidateResult explicit_legacy = selector.select(
+        artifact, robotAt(0.7), SloshState{}, 2, 3, 5, true, 4,
+        true, nullptr);
+    ASSERT_TRUE(legacy.valid);
+    ASSERT_TRUE(explicit_legacy.valid);
+    EXPECT_EQ(legacy.current_index, explicit_legacy.current_index);
+    EXPECT_EQ(legacy.candidate_count, explicit_legacy.candidate_count);
+    EXPECT_EQ(explicit_legacy.execution_rejected_candidate_count, 0u);
+    EXPECT_DOUBLE_EQ(legacy.score, explicit_legacy.score);
 }
 
 TEST(PhaseRejoinCoordinator, MonitorEvaluatesButNeverChangesCommand) {

@@ -74,15 +74,15 @@ ExecutionAugmentedState zeroExecution(std::size_t index) {
     return state;
 }
 
-ExecutionCompatibilityBounds unitExecutionBounds() {
+ExecutionCompatibilityBounds unitExecutionBounds(double bound = 1.0) {
     ExecutionCompatibilityBounds bounds;
     bounds.valid = true;
-    bounds.linear_actuator_output = 1.0;
-    bounds.angular_actuator_output = 1.0;
+    bounds.linear_actuator_output = bound;
+    bounds.angular_actuator_output = bound;
     bounds.linear_pending_commands.assign(
-        static_cast<std::size_t>(manifest::kLinearBufferCount), 1.0);
+        static_cast<std::size_t>(manifest::kLinearBufferCount), bound);
     bounds.angular_pending_commands.assign(
-        static_cast<std::size_t>(manifest::kAngularBufferCount), 1.0);
+        static_cast<std::size_t>(manifest::kAngularBufferCount), bound);
     return bounds;
 }
 
@@ -166,7 +166,8 @@ std::map<std::string, std::string> artifactMetadata(
     };
 }
 
-std::vector<PhaseNominalSample> zeroNominalSamples() {
+std::vector<PhaseNominalSample> zeroNominalSamples(
+    double execution_bound = 1.0) {
     std::vector<PhaseNominalSample> samples(24);
     for (std::size_t index = 0; index < samples.size(); ++index) {
         PhaseNominalSample& sample = samples[index];
@@ -177,21 +178,25 @@ std::vector<PhaseNominalSample> zeroNominalSamples() {
         sample.radii = unitRadii();
         sample.augmented_execution_valid = true;
         sample.augmented_execution = zeroExecution(index);
-        sample.execution_bounds = unitExecutionBounds();
+        sample.execution_bounds = unitExecutionBounds(execution_bound);
     }
     return samples;
 }
 
 std::string recoveryArtifactHash(
-    const std::string& evidence = "empirical_held_out") {
-    const std::vector<PhaseNominalSample> samples = zeroNominalSamples();
+    const std::string& evidence = "empirical_held_out",
+    double execution_bound = 1.0) {
+    const std::vector<PhaseNominalSample> samples =
+        zeroNominalSamples(execution_bound);
     return NominalSequenceArtifact::canonicalRecoveryArtifactHash(
         artifactMetadata(evidence), samples);
 }
 
 NominalSequenceArtifact augmentedArtifact(
-    const std::string& evidence = "empirical_held_out") {
-    const std::vector<PhaseNominalSample> samples = zeroNominalSamples();
+    const std::string& evidence = "empirical_held_out",
+    double execution_bound = 1.0) {
+    const std::vector<PhaseNominalSample> samples =
+        zeroNominalSamples(execution_bound);
     std::map<std::string, std::string> metadata = artifactMetadata(evidence);
     metadata["recovery_artifact_hash"] =
         NominalSequenceArtifact::canonicalRecoveryArtifactHash(
@@ -212,7 +217,7 @@ ReferencePath shortReference() {
     return reference;
 }
 
-PhaseRejoinRuntimeContract runtimeContract() {
+PhaseRejoinRuntimeContract runtimeContract(double execution_bound = 1.0) {
     const DelayAugmentedPhaseCompiledContract compiled = compiledContract();
     PhaseRejoinRuntimeContract runtime;
     runtime.dt = manifest::kDt;
@@ -242,7 +247,8 @@ PhaseRejoinRuntimeContract runtimeContract() {
     runtime.parameter_schema_version = compiled.parameter_schema_version;
     runtime.parameter_schema_id = compiled.parameter_schema_id;
     runtime.parameter_schema_hash = compiled.parameter_schema_hash;
-    runtime.recovery_artifact_hash = recoveryArtifactHash();
+    runtime.recovery_artifact_hash = recoveryArtifactHash(
+        "empirical_held_out", execution_bound);
     runtime.execution_compatibility_contract =
         compiled.execution_compatibility_contract;
     runtime.solver_capabilities = compiled.capabilities;
@@ -263,7 +269,7 @@ PhaseRejoinParams phaseParams() {
     return params;
 }
 
-SolverParams solverParams() {
+SolverParams solverParams(double execution_bound = 1.0) {
     const DelayAugmentedPhaseCompiledContract compiled = compiledContract();
     SolverParams params;
     params.solver_backend = kSolverBackendDelayAugmentedPhaseAcados;
@@ -288,7 +294,8 @@ SolverParams solverParams() {
     augmented.parameter_schema_version = compiled.parameter_schema_version;
     augmented.parameter_schema_id = compiled.parameter_schema_id;
     augmented.parameter_schema_hash = compiled.parameter_schema_hash;
-    augmented.expected_recovery_artifact_hash = recoveryArtifactHash();
+    augmented.expected_recovery_artifact_hash = recoveryArtifactHash(
+        "empirical_held_out", execution_bound);
     augmented.required_capabilities =
         kDelayAugmentedPhaseFormalCapabilities;
     return params;
@@ -376,15 +383,32 @@ public:
     FinalCommand last;
 };
 
+class CountingSolverSession : public SolverSession {
+public:
+    explicit CountingSolverSession(SolverSession& delegate)
+        : delegate_(delegate) {}
+
+    bool solve(const SolverInput& input, SolverOutput& output) override {
+        ++calls;
+        return delegate_.solve(input, output);
+    }
+
+    int calls = 0;
+
+private:
+    SolverSession& delegate_;
+};
+
 struct OnlineCycleFixture {
-    OnlineCycleFixture() : engine(problem) {
+    explicit OnlineCycleFixture(double execution_bound = 1.0)
+        : solver_session(problem), engine(solver_session) {
         for (double stamp :
              {9.60, 9.65, 9.70, 9.75, 9.80, 9.85, 9.90, 9.95}) {
             pushZero(history, stamp);
         }
         history.configure(2.0);
         const SolverConfigureResult configured = problem.configure(
-            solverParams(), augmentedVariant());
+            solverParams(execution_bound), augmentedVariant());
         EXPECT_TRUE(configured.success)
             << configured.status << ": " << configured.detail;
         reference = shortReference();
@@ -393,7 +417,7 @@ struct OnlineCycleFixture {
         std::string error;
         EXPECT_TRUE(engine.configurePhaseRejoin(phaseParams(), error))
             << error;
-        artifact = augmentedArtifact();
+        artifact = augmentedArtifact("empirical_held_out", execution_bound);
         artifact_path = "/tmp/spmpc_augmented_online_" +
             std::to_string(static_cast<long long>(::getpid())) + ".csv";
         const NominalArtifactLoadResult write =
@@ -403,7 +427,7 @@ struct OnlineCycleFixture {
             engine.loadPhaseRejoinArtifact(artifact_path);
         EXPECT_TRUE(load.success) << load.status << ": " << load.detail;
         EXPECT_TRUE(engine.validatePhaseRejoinRuntimeContract(
-            runtimeContract(), reference, error)) << error;
+            runtimeContract(execution_bound), reference, error)) << error;
 
         SafetySupervisorConfig safety;
         safety.terminal_spin.enable = false;
@@ -445,6 +469,7 @@ struct OnlineCycleFixture {
     }
 
     SpmpcProblem problem;
+    CountingSolverSession solver_session;
     ControlCycleEngine engine;
     ReferencePath reference;
     NominalSequenceArtifact artifact;
@@ -506,6 +531,36 @@ TEST(DelayAugmentedPhaseOnline,
     EXPECT_EQ(committed.stamp_ns, fixture.sink.now_ns);
     EXPECT_DOUBLE_EQ(committed.command.linear, result.final_command.linear);
     EXPECT_DOUBLE_EQ(committed.command.angular, result.final_command.angular);
+}
+
+TEST(DelayAugmentedPhaseOnline,
+     NoCompatibleCandidateFailsClosedBeforeSolverInvocation) {
+    OnlineCycleFixture fixture(0.01);
+    ControlCycleRequest request = fixture.request();
+    request.solver_input.execution_horizon.initial_state.linear
+        .pending_commands.assign(
+            static_cast<std::size_t>(manifest::kLinearBufferCount), 0.02);
+
+    const ControlCycleResult result = fixture.engine.step(request);
+
+    EXPECT_EQ(fixture.solver_session.calls, 0);
+    EXPECT_FALSE(result.solve_returned);
+    EXPECT_FALSE(result.solver_success);
+    EXPECT_FALSE(result.telemetry.solve_attempted);
+    EXPECT_EQ(result.phase_preparation.status,
+              "NO_EXECUTION_COMPATIBLE_CANDIDATE");
+    EXPECT_EQ(result.solver_output.status,
+              "NOT_RUN_NO_EXECUTION_COMPATIBLE_CANDIDATE");
+    EXPECT_EQ(result.phase_decision.status,
+              "ENFORCE_NOT_READY_STOP_NO_EXECUTION_COMPATIBLE_CANDIDATE");
+    EXPECT_EQ(result.output.status, result.phase_decision.status);
+    EXPECT_EQ(result.telemetry.solver_status, result.solver_output.status);
+    EXPECT_EQ(result.telemetry.status, result.output.status);
+    EXPECT_TRUE(result.phase_decision.controlled_stop_used);
+    EXPECT_EQ(result.decision.source, CommandSource::PhaseRejoin);
+    EXPECT_FALSE(result.decision.accepted);
+    EXPECT_DOUBLE_EQ(result.final_command.linear, 0.0);
+    EXPECT_DOUBLE_EQ(result.final_command.angular, 0.0);
 }
 
 TEST(DelayAugmentedPhaseOnline,
@@ -650,7 +705,7 @@ TEST(DelayAugmentedPhaseOnline,
     const auto preparation = coordinator.prepare(
         current.robot, current.slosh,
         manifest::kExecutionFrontSteps, manifest::kHorizonSteps,
-        10.0, false, true);
+        10.0, false, true, &current);
     ASSERT_TRUE(preparation.ready) << preparation.status;
     PhaseSolveView solve;
     solve.current_execution_state_available = true;
@@ -825,11 +880,11 @@ TEST(DelayAugmentedPhaseOnline,
     ASSERT_TRUE(coordinator.prepare(
         current.robot, current.slosh,
         manifest::kExecutionFrontSteps, manifest::kHorizonSteps,
-        10.0, false, true).ready);
+        10.0, false, true, &current).ready);
     const PhaseRejoinPreparation regressed_phase = coordinator.prepare(
         current.robot, current.slosh,
         manifest::kExecutionFrontSteps, manifest::kHorizonSteps,
-        9.0, false, true);
+        9.0, false, true, &current);
     EXPECT_FALSE(regressed_phase.ready);
     EXPECT_EQ(regressed_phase.status, "CLOCK_REGRESSION");
 }

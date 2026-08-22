@@ -39,6 +39,14 @@ std::string number(double value) {
     return output.str();
 }
 
+std::vector<std::string> splitCsv(const std::string& line) {
+    std::vector<std::string> fields;
+    std::istringstream input(line);
+    std::string field;
+    while (std::getline(input, field, ',')) fields.push_back(field);
+    return fields;
+}
+
 spmpc_local_planner::EmpiricalRecoveryRadii unitRadii() {
     spmpc_local_planner::EmpiricalRecoveryRadii radii;
     radii.x = 1.0;
@@ -355,6 +363,42 @@ TEST_F(TrialRunnerTest,
     EXPECT_GT(summary["controller_audit"]["publications"].as<int>(), 0);
     EXPECT_EQ(summary["controller_audit"]["publication_failures"].as<int>(),
               0);
+    EXPECT_GT(summary["controller_audit"]
+                     ["execution_candidate_filter_cycles"].as<int>(), 0);
+    EXPECT_TRUE(summary["controller_audit"]
+                       ["raw_solver_status_counts"].IsMap());
+    EXPECT_TRUE(summary["controller_audit"]
+                       ["phase_status_counts"].IsMap());
+    EXPECT_TRUE(summary["controller_audit"]
+                       ["final_status_counts"].IsMap());
+
+    std::ifstream cycles(cycle_);
+    ASSERT_TRUE(cycles.is_open());
+    std::string header_line;
+    std::string first_cycle_line;
+    ASSERT_TRUE(static_cast<bool>(std::getline(cycles, header_line)));
+    ASSERT_TRUE(static_cast<bool>(std::getline(cycles, first_cycle_line)));
+    const std::vector<std::string> header = splitCsv(header_line);
+    const std::vector<std::string> first = splitCsv(first_cycle_line);
+    ASSERT_EQ(header.size(), first.size());
+    std::map<std::string, std::size_t> column;
+    for (std::size_t index = 0; index < header.size(); ++index) {
+        column[header[index]] = index;
+    }
+    ASSERT_EQ(column.count("raw_solver_status"), 1u);
+    ASSERT_EQ(column.count("phase_status"), 1u);
+    ASSERT_EQ(column.count("final_status"), 1u);
+    ASSERT_EQ(column.count("clock_index"), 1u);
+    ASSERT_EQ(column.count("candidate_window_begin_index"), 1u);
+    ASSERT_EQ(column.count("candidate_window_end_index"), 1u);
+    ASSERT_EQ(column.count("selected_phase_index"), 1u);
+    ASSERT_EQ(column.count("phase_lead_steps"), 1u);
+    ASSERT_EQ(column.count("execution_rejected_candidate_count"), 1u);
+    ASSERT_EQ(column.count("selected_execution_max_normalized_error"), 1u);
+    EXPECT_NE(first[column["raw_solver_status"]],
+              first[column["phase_status"]]);
+    EXPECT_EQ(first[column["phase_status"]],
+              first[column["final_status"]]);
 }
 
 TEST_F(TrialRunnerTest,

@@ -20,7 +20,9 @@ public:
                                 std::size_t clock_index,
                                 bool have_last_accepted,
                                 std::size_t last_accepted_index,
-                                bool observation_at_execution_front = true) const;
+                                bool observation_at_execution_front = true,
+                                const ExecutionAugmentedState*
+                                    current_execution = nullptr) const;
 
     const PhaseCandidateSelectorParams& params() const { return params_; }
 

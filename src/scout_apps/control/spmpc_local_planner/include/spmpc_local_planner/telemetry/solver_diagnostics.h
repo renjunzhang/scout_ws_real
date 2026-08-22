@@ -234,6 +234,13 @@ struct PreSolveSnapshotDebug {
     bool warm_start_requested = false;
     bool warm_start_applied = false;
     std::string warm_start_source = "CAPSULE_REUSE";
+    bool solver_residuals_evaluated = false;
+    int solver_nlp_status = -1;
+    int solver_qp_status = -1;
+    double stationarity_residual = 0.0;
+    double equality_residual = 0.0;
+    double inequality_residual = 0.0;
+    double complementarity_residual = 0.0;
     SolverBoundSummary runtime_bounds;
     std::vector<std::string> parameter_names;
     std::vector<double> stage_parameters;

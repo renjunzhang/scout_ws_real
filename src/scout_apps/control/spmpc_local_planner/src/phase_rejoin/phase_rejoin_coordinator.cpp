@@ -364,7 +364,8 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     int solver_horizon_steps,
     double phase_time_sec,
     bool solver_origin_at_execution_front,
-    bool solver_origin_is_execution_augmented) {
+    bool solver_origin_is_execution_augmented,
+    const ExecutionAugmentedState* current_execution) {
     PhaseRejoinPreparation preparation;
     if (!configured_) {
         preparation.status = "NOT_CONFIGURED";
@@ -406,6 +407,11 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
         preparation.status = "DELAY_AUGMENTED_HORIZON_MISMATCH";
         return preparation;
     }
+    if (solver_origin_is_execution_augmented &&
+        (current_execution == nullptr || !current_execution->valid)) {
+        preparation.status = "EXECUTION_AUGMENTED_STATE_UNAVAILABLE";
+        return preparation;
+    }
 
     const std::size_t required_tail = static_cast<std::size_t>(
         front_steps + params_.liquid_horizon_steps);
@@ -427,7 +433,8 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
         front_steps, params_.liquid_horizon_steps,
         clock.index,
         have_accepted_index_, accepted_index_,
-        !solver_origin_is_execution_augmented);
+        !solver_origin_is_execution_augmented,
+        solver_origin_is_execution_augmented ? current_execution : nullptr);
     if (!preparation.candidate.valid) {
         preparation.status = preparation.candidate.status;
         return preparation;

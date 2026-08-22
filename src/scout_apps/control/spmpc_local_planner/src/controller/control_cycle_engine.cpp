@@ -192,7 +192,10 @@ PhaseRejoinPreparation ControlCycleEngine::preparePhase(
             solver_horizon,
             phase_time_sec,
             request.solver_origin_at_execution_front,
-            execution_augmented);
+            execution_augmented,
+            execution_augmented
+                ? &request.solver_input.execution_horizon.initial_state
+                : nullptr);
     }
     return preparation;
 }
@@ -224,6 +227,7 @@ ControlCycleResult ControlCycleEngine::step(
              result.solver_input.execution_horizon.initial_epoch_ns) ||
          result.solver_input.execution_horizon.initial_epoch_ns !=
              publish_epoch_estimate.expected_publish_stamp_ns);
+    bool solver_invocation_allowed = !execution_epoch_mismatch;
     if (execution_epoch_mismatch) {
         // The augmented state is meaningful only at the publication epoch it
         // was aligned to.  Recomputing cycle timing must never silently reuse
@@ -241,8 +245,18 @@ ControlCycleResult ControlCycleEngine::step(
         result.phase_preparation = preparePhase(normalized_request);
         result.solver_input.phase_rejoin =
             result.phase_preparation.solver_context;
-        result.solve_returned = solver_session_.solve(
-            result.solver_input, result.solver_output);
+        const bool no_execution_compatible_candidate =
+            result.solver_input.execution_horizon.active &&
+            result.phase_preparation.status ==
+                "NO_EXECUTION_COMPATIBLE_CANDIDATE";
+        if (no_execution_compatible_candidate) {
+            solver_invocation_allowed = false;
+            result.solver_output.status =
+                "NOT_RUN_NO_EXECUTION_COMPATIBLE_CANDIDATE";
+        } else {
+            result.solve_returned = solver_session_.solve(
+                result.solver_input, result.solver_output);
+        }
     }
     result.output = result.solver_output;
     result.solver_success = result.output.success;
@@ -420,7 +434,7 @@ ControlCycleResult ControlCycleEngine::step(
         result.publication.pipeline.decision.reason;
     result.telemetry.command_source =
         result.publication.pipeline.decision.source;
-    result.telemetry.solve_attempted = !execution_epoch_mismatch;
+    result.telemetry.solve_attempted = solver_invocation_allowed;
     result.telemetry.solve_returned = result.solve_returned;
     result.telemetry.solve_success = result.solver_success;
     result.telemetry.command_accepted =

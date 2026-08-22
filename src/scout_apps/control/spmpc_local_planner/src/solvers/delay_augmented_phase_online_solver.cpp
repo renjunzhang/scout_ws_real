@@ -284,9 +284,21 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
     output.pre_solve_snapshot.parameter_width = manifest::kParameterCount;
     output.pre_solve_snapshot.parameter_names = parameters.parameter_names;
     output.pre_solve_snapshot.stage_parameters = parameters.values;
+    const DelayAugmentedPhaseSolveDiagnostics& diagnostics =
+        capsule_.lastSolveDiagnostics();
+    output.pre_solve_snapshot.solver_residuals_evaluated =
+        diagnostics.evaluated;
+    output.pre_solve_snapshot.solver_nlp_status = diagnostics.nlp_status;
+    output.pre_solve_snapshot.solver_qp_status = diagnostics.qp_status;
+    output.pre_solve_snapshot.stationarity_residual =
+        diagnostics.stationarity_residual;
+    output.pre_solve_snapshot.equality_residual =
+        diagnostics.equality_residual;
+    output.pre_solve_snapshot.inequality_residual =
+        diagnostics.inequality_residual;
+    output.pre_solve_snapshot.complementarity_residual =
+        diagnostics.complementarity_residual;
     if (status != 0) {
-        const DelayAugmentedPhaseSolveDiagnostics& diagnostics =
-            capsule_.lastSolveDiagnostics();
         output.failure_kind = diagnostics.optimizer_invoked
             ? SolverFailureKind::Optimization
             : SolverFailureKind::Integrity;

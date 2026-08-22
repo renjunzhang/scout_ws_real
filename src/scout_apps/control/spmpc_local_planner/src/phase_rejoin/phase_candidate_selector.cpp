@@ -1,6 +1,7 @@
 #include "spmpc_local_planner/phase_rejoin/phase_candidate_selector.h"
 
 #include "spmpc_local_planner/phase_rejoin/empirical_recovery_gate.h"
+#include "spmpc_local_planner/phase_rejoin/execution_compatibility_gate.h"
 
 #include <algorithm>
 #include <cmath>
@@ -71,7 +72,8 @@ PhaseCandidateResult PhaseCandidateSelector::select(
     std::size_t clock_index,
     bool have_last_accepted,
     std::size_t last_accepted_index,
-    bool observation_at_execution_front) const {
+    bool observation_at_execution_front,
+    const ExecutionAugmentedState* current_execution) const {
     PhaseCandidateResult result;
     if (!configured_) {
         result.status = "NOT_CONFIGURED";
@@ -100,6 +102,8 @@ PhaseCandidateResult PhaseCandidateSelector::select(
     const std::size_t expected = std::min(clock_index, max_current);
     result.clock_index = expected;
     result.normal_shift_index = expected;
+    result.execution_compatibility_filter_applied =
+        current_execution != nullptr;
 
     std::size_t begin = 0;
     std::size_t end = 0;
@@ -131,9 +135,13 @@ PhaseCandidateResult PhaseCandidateSelector::select(
         result.status = "CANDIDATE_WINDOW_INVALID";
         return result;
     }
+    result.candidate_window_begin_index = begin;
+    result.candidate_window_end_index = end;
 
     double best_score = std::numeric_limits<double>::infinity();
+    double best_execution_error = 0.0;
     std::size_t best_current = begin;
+    ExecutionCompatibilityGate execution_gate;
     for (std::size_t current = begin; current <= end; ++current) {
         const std::size_t comparison_index = current +
             (observation_at_execution_front
@@ -144,12 +152,39 @@ PhaseCandidateResult PhaseCandidateSelector::select(
             continue;
         }
         ++result.candidate_count;
+        double candidate_execution_error = 0.0;
+        if (current_execution != nullptr) {
+            const PhaseNominalSample* execution_nominal =
+                artifact.sample(current);
+            ExecutionCompatibilityGateResult execution_compatibility;
+            if (execution_nominal != nullptr &&
+                execution_nominal->augmented_execution_valid) {
+                execution_compatibility = execution_gate.evaluate(
+                    execution_nominal->augmented_execution,
+                    execution_nominal->execution_bounds,
+                    *current_execution);
+            }
+            if (!execution_compatibility.accepted) {
+                ++result.execution_rejected_candidate_count;
+                continue;
+            }
+            candidate_execution_error =
+                execution_compatibility.max_normalized_error;
+        }
         const double candidate_score = score(
             *nominal, execution_front_robot, execution_front_slosh);
         if (candidate_score < best_score) {
             best_score = candidate_score;
             best_current = current;
+            if (current_execution != nullptr) {
+                best_execution_error = candidate_execution_error;
+            }
         }
+    }
+    if (current_execution != nullptr && result.candidate_count > 0 &&
+        result.execution_rejected_candidate_count == result.candidate_count) {
+        result.status = "NO_EXECUTION_COMPATIBLE_CANDIDATE";
+        return result;
     }
     if (result.candidate_count == 0 || !std::isfinite(best_score)) {
         result.status = "NO_FINITE_CANDIDATE";
@@ -164,6 +199,7 @@ PhaseCandidateResult PhaseCandidateSelector::select(
     result.terminal_index = result.front_index +
         static_cast<std::size_t>(liquid_steps);
     result.score = best_score;
+    result.selected_execution_max_normalized_error = best_execution_error;
     result.status = "OK";
     return result;
 }

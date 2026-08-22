@@ -797,6 +797,11 @@ TEST(ControlCycleEngineTest,
 
     ASSERT_TRUE(result.have_phase_decision);
     EXPECT_TRUE(result.phase_decision.controlled_stop_used);
+    EXPECT_EQ(result.solver_output.status, "OK");
+    EXPECT_EQ(result.telemetry.solver_status, "OK");
+    EXPECT_EQ(result.output.status, result.phase_decision.status);
+    EXPECT_EQ(result.telemetry.status, result.output.status);
+    EXPECT_NE(result.solver_output.status, result.phase_decision.status);
     EXPECT_EQ(CommandSource::PhaseRejoin, result.decision.source);
     EXPECT_FALSE(result.decision.accepted);
     EXPECT_FALSE(result.output.success);

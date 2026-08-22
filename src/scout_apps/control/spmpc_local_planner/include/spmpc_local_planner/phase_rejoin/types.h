@@ -317,9 +317,14 @@ struct PhaseCandidateResult {
     std::size_t front_index = 0;
     std::size_t terminal_index = 0;
     std::size_t normal_shift_index = 0;
+    std::size_t candidate_window_begin_index = 0;
+    std::size_t candidate_window_end_index = 0;
     std::size_t candidate_count = 0;
+    bool execution_compatibility_filter_applied = false;
+    std::size_t execution_rejected_candidate_count = 0;
     int phase_lead_steps = 0;
     double score = 0.0;
+    double selected_execution_max_normalized_error = 0.0;
     std::string status = "NOT_RUN";
 };
 

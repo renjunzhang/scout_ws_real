@@ -705,6 +705,7 @@ target_link_libraries(spmpc_phase_rejoin_closed_loop_trial
   PRIVATE
   ${PROJECT_NAME}
   spmpc_independent_simulation_plant
+  spmpc_solver_delay_augmented
   spmpc_solver_delay_augmented_acados
   yaml-cpp
 )
@@ -755,6 +756,7 @@ if(CATKIN_ENABLE_TESTING)
     target_link_libraries(test_phase_rejoin_closed_loop_trial
       ${PROJECT_NAME}
       spmpc_independent_simulation_plant
+      spmpc_solver_delay_augmented
       spmpc_solver_delay_augmented_acados
       yaml-cpp
     )
@@ -868,6 +870,7 @@ if(CATKIN_ENABLE_TESTING)
   if(TARGET test_phase_rejoin)
     target_link_libraries(test_phase_rejoin
       ${PROJECT_NAME}
+      spmpc_solver_delay_augmented
       ${catkin_LIBRARIES}
     )
   endif()
