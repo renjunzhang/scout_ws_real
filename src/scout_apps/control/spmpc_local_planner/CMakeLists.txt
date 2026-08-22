@@ -236,6 +236,7 @@ add_library(spmpc_phase_rejoin
   src/phase_rejoin/phase_candidate_selector.cpp
   src/phase_rejoin/empirical_recovery_gate.cpp
   src/phase_rejoin/execution_compatibility_gate.cpp
+  src/phase_rejoin/execution_horizon_compatibility_gate.cpp
   src/phase_rejoin/phase_rejoin_coordinator.cpp
 )
 target_include_directories(spmpc_phase_rejoin PRIVATE

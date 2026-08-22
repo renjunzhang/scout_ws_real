@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/phase_rejoin/empirical_recovery_gate.h"
+#include "spmpc_local_planner/phase_rejoin/execution_horizon_compatibility_gate.h"
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
 #include "spmpc_local_planner/phase_rejoin/phase_candidate_selector.h"
 #include "spmpc_local_planner/phase_rejoin/phase_clock.h"
@@ -346,6 +347,80 @@ NominalSequenceArtifact cycle10ExecutionArtifact() {
     return artifact;
 }
 
+NominalSequenceArtifact tailExecutionTransitionArtifact(
+    std::size_t narrow_start) {
+    const NominalSequenceArtifact base = loadV3RecoveryArtifact();
+    std::vector<PhaseNominalSample> samples = base.samples();
+    while (samples.size() < 30) {
+        PhaseNominalSample sample = samples.back();
+        sample.index = samples.size();
+        sample.t = static_cast<double>(sample.index) *
+            augmented_manifest::kDt;
+        sample.augmented_execution.stage_index = sample.index;
+        samples.push_back(sample);
+    }
+    for (std::size_t index = 0; index < samples.size(); ++index) {
+        samples[index].radii.x = index == 14 ? 1.0 :
+            (index == 13 ? 0.01 : 0.001);
+        if (index >= narrow_start) {
+            samples[index].execution_bounds.angular_pending_commands.assign(
+                static_cast<std::size_t>(
+                    augmented_manifest::kAngularBufferCount),
+                8.0e-4);
+        }
+    }
+    std::map<std::string, std::string> metadata = base.metadataEntries();
+    metadata["source"] = "unit_test_tail_execution_transition";
+    metadata["recovery_artifact_hash"] =
+        NominalSequenceArtifact::canonicalRecoveryArtifactHash(
+            metadata, samples);
+    NominalSequenceArtifact artifact;
+    const NominalArtifactLoadResult assigned = artifact.assignValidated(
+        metadata, samples, "<tail-execution-transition>");
+    EXPECT_TRUE(assigned.success)
+        << assigned.status << ": " << assigned.detail;
+    return artifact;
+}
+
+ExecutionHorizonContext executionHorizonAt(
+    const ExecutionAugmentedState& initial) {
+    const DelayAugmentedPhaseCompiledContract compiled =
+        DelayAugmentedPhaseAcadosSolver::compiledContract();
+    ExecutionHorizonContext horizon;
+    horizon.active = true;
+    horizon.contract = compiled.execution;
+    horizon.initial_state = initial;
+    horizon.initial_epoch_ns = secondsToNanoseconds(10.0);
+    horizon.execution_front_steps = augmented_manifest::kExecutionFrontSteps;
+    horizon.liquid_horizon_steps = augmented_manifest::kLiquidHorizonSteps;
+    horizon.horizon_steps = augmented_manifest::kHorizonSteps;
+    horizon.physical_front_epoch_ns = addSeconds(
+        horizon.initial_epoch_ns,
+        std::max(compiled.execution.linear.delay_sec,
+                 compiled.execution.angular.delay_sec));
+    horizon.grid_front_epoch_ns = addSeconds(
+        horizon.initial_epoch_ns,
+        augmented_manifest::kExecutionFrontSteps *
+            augmented_manifest::kDt);
+    horizon.terminal_epoch_ns = addSeconds(
+        horizon.initial_epoch_ns,
+        augmented_manifest::kHorizonSteps * augmented_manifest::kDt);
+    return horizon;
+}
+
+ExecutionHorizonCompatibilityParams executionHorizonFilterParams() {
+    const DelayAugmentedPhaseCompiledContract compiled =
+        DelayAugmentedPhaseAcadosSolver::compiledContract();
+    ExecutionHorizonCompatibilityParams params;
+    params.max_residual_v = 0.08;
+    params.max_residual_omega = 0.20;
+    params.max_published_acceleration = compiled.acceleration_max;
+    params.max_published_angular_acceleration =
+        compiled.angular_acceleration_max;
+    params.slosh_model = compiled.slosh;
+    return params;
+}
+
 PhaseRejoinRuntimeContract v3RuntimeContract() {
     SloshModelParams params;
     params.container_radius = augmented_manifest::kContainerRadius;
@@ -361,6 +436,7 @@ PhaseRejoinRuntimeContract v3RuntimeContract() {
     EXPECT_TRUE(slosh.configure(params));
     PhaseRejoinRuntimeContract runtime;
     runtime.liquid_model_configured = true;
+    runtime.slosh_model = params;
     runtime.dt = augmented_manifest::kDt;
     runtime.two_zeta_omega_n = 2.0 * params.damping_ratio * slosh.omegaN();
     runtime.omega_n_sq = slosh.omegaN() * slosh.omegaN();
@@ -636,6 +712,87 @@ TEST(PhaseCandidateSelector,
     EXPECT_EQ(selected.status, "NO_EXECUTION_COMPATIBLE_CANDIDATE");
     EXPECT_EQ(selected.candidate_count, 3u);
     EXPECT_EQ(selected.execution_rejected_candidate_count, 3u);
+}
+
+TEST(PhaseCandidateSelector,
+     FullHorizonRejectsTailPhaseWhoseImmutableQueueCannotEnterBexec) {
+    const NominalSequenceArtifact artifact =
+        tailExecutionTransitionArtifact(20);
+    ASSERT_TRUE(artifact.valid());
+    ExecutionAugmentedState actual =
+        artifact.sample(14)->augmented_execution;
+    actual.robot.x = 0.001;
+    actual.angular.pending_commands.assign(
+        static_cast<std::size_t>(
+            augmented_manifest::kAngularBufferCount),
+        0.001);
+    const ExecutionHorizonContext horizon = executionHorizonAt(actual);
+    const ExecutionHorizonCompatibilityParams horizon_params =
+        executionHorizonFilterParams();
+
+    ExecutionHorizonCompatibilityGate gate;
+    const ExecutionHorizonCompatibilityResult phase14 = gate.evaluate(
+        artifact, 14, horizon, horizon_params);
+    ASSERT_TRUE(phase14.valid) << phase14.status;
+    EXPECT_FALSE(phase14.accepted);
+    EXPECT_EQ(
+        phase14.status,
+        "ANGULAR_IMMUTABLE_PENDING_QUEUE_OUTSIDE_B_EXEC");
+    const ExecutionHorizonCompatibilityResult phase13 = gate.evaluate(
+        artifact, 13, horizon, horizon_params);
+    ASSERT_TRUE(phase13.valid) << phase13.status;
+    EXPECT_TRUE(phase13.accepted) << phase13.status;
+
+    PhaseCandidateSelector selector;
+    PhaseCandidateSelectorParams selector_params;
+    selector_params.backward_radius = 2;
+    selector_params.forward_radius = 0;
+    selector_params.max_clock_lead_steps = 0;
+    ASSERT_TRUE(selector.configure(selector_params));
+    const PhaseCandidateResult selected = selector.select(
+        artifact, actual.robot, actual.slosh,
+        augmented_manifest::kExecutionFrontSteps,
+        augmented_manifest::kLiquidHorizonSteps,
+        14, true, 12, false, &actual, &horizon, &horizon_params);
+    ASSERT_TRUE(selected.valid) << selected.status;
+    EXPECT_TRUE(selected.execution_horizon_filter_applied);
+    EXPECT_EQ(selected.current_index, 13u);
+    EXPECT_EQ(selected.execution_horizon_rejected_candidate_count, 1u);
+    ASSERT_EQ(selected.execution_candidate_audits.size(), 3u);
+    EXPECT_FALSE(selected.execution_candidate_audits.back().horizon_accepted);
+}
+
+TEST(PhaseCandidateSelector,
+     AllHorizonIncompatibleCandidatesFailBeforeSolverSelection) {
+    const NominalSequenceArtifact artifact =
+        tailExecutionTransitionArtifact(18);
+    ExecutionAugmentedState actual =
+        artifact.sample(14)->augmented_execution;
+    actual.angular.pending_commands.assign(
+        static_cast<std::size_t>(
+            augmented_manifest::kAngularBufferCount),
+        0.001);
+    const ExecutionHorizonContext horizon = executionHorizonAt(actual);
+    const ExecutionHorizonCompatibilityParams horizon_params =
+        executionHorizonFilterParams();
+    PhaseCandidateSelector selector;
+    PhaseCandidateSelectorParams selector_params;
+    selector_params.backward_radius = 2;
+    selector_params.forward_radius = 0;
+    selector_params.max_clock_lead_steps = 0;
+    ASSERT_TRUE(selector.configure(selector_params));
+
+    const PhaseCandidateResult selected = selector.select(
+        artifact, actual.robot, actual.slosh,
+        augmented_manifest::kExecutionFrontSteps,
+        augmented_manifest::kLiquidHorizonSteps,
+        14, true, 12, false, &actual, &horizon, &horizon_params);
+    EXPECT_FALSE(selected.valid);
+    EXPECT_EQ(
+        selected.status,
+        "NO_EXECUTION_HORIZON_COMPATIBLE_CANDIDATE");
+    EXPECT_EQ(selected.candidate_count, 3u);
+    EXPECT_EQ(selected.execution_horizon_rejected_candidate_count, 3u);
 }
 
 TEST(PhaseCandidateSelector, LegacySelectionIsUnchangedWithoutExecutionState) {

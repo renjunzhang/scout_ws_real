@@ -74,6 +74,30 @@ ExecutionAugmentedState zeroExecution(std::size_t index) {
     return state;
 }
 
+ExecutionHorizonContext horizonFromExecution(
+    const ExecutionAugmentedState& execution) {
+    const DelayAugmentedPhaseCompiledContract compiled = compiledContract();
+    ExecutionHorizonContext horizon;
+    horizon.active = true;
+    horizon.contract = compiled.execution;
+    horizon.initial_state = execution;
+    horizon.initial_epoch_ns = secondsToNanoseconds(10.0);
+    horizon.execution_front_steps = manifest::kExecutionFrontSteps;
+    horizon.liquid_horizon_steps = manifest::kLiquidHorizonSteps;
+    horizon.horizon_steps = manifest::kHorizonSteps;
+    horizon.physical_front_epoch_ns = addSeconds(
+        horizon.initial_epoch_ns,
+        std::max(compiled.execution.linear.delay_sec,
+                 compiled.execution.angular.delay_sec));
+    horizon.grid_front_epoch_ns = addSeconds(
+        horizon.initial_epoch_ns,
+        manifest::kExecutionFrontSteps * manifest::kDt);
+    horizon.terminal_epoch_ns = addSeconds(
+        horizon.initial_epoch_ns,
+        manifest::kHorizonSteps * manifest::kDt);
+    return horizon;
+}
+
 ExecutionCompatibilityBounds unitExecutionBounds(double bound = 1.0) {
     ExecutionCompatibilityBounds bounds;
     bounds.valid = true;
@@ -221,6 +245,7 @@ PhaseRejoinRuntimeContract runtimeContract(double execution_bound = 1.0) {
     const DelayAugmentedPhaseCompiledContract compiled = compiledContract();
     PhaseRejoinRuntimeContract runtime;
     runtime.dt = manifest::kDt;
+    runtime.slosh_model = compiled.slosh;
     runtime.min_command_v = manifest::kLinearOutputMin;
     runtime.max_command_v = manifest::kLinearOutputMax;
     runtime.max_abs_command_omega = manifest::kAngularOutputMax;
@@ -702,10 +727,12 @@ TEST(DelayAugmentedPhaseOnline,
     EXPECT_EQ(duplicate_front_shift.status,
               "DELAY_AUGMENTED_ORIGIN_CONTRACT_MISMATCH");
 
+    const ExecutionHorizonContext current_horizon =
+        horizonFromExecution(current);
     const auto preparation = coordinator.prepare(
         current.robot, current.slosh,
         manifest::kExecutionFrontSteps, manifest::kHorizonSteps,
-        10.0, false, true, &current);
+        10.0, false, true, &current, &current_horizon);
     ASSERT_TRUE(preparation.ready) << preparation.status;
     PhaseSolveView solve;
     solve.current_execution_state_available = true;
@@ -883,14 +910,16 @@ TEST(DelayAugmentedPhaseOnline,
     ASSERT_TRUE(coordinator.validateRuntimeContract(
         runtimeContract(), shortReference(), error)) << error;
     const ExecutionAugmentedState current = zeroExecution(0);
+    const ExecutionHorizonContext current_horizon =
+        horizonFromExecution(current);
     ASSERT_TRUE(coordinator.prepare(
         current.robot, current.slosh,
         manifest::kExecutionFrontSteps, manifest::kHorizonSteps,
-        10.0, false, true, &current).ready);
+        10.0, false, true, &current, &current_horizon).ready);
     const PhaseRejoinPreparation regressed_phase = coordinator.prepare(
         current.robot, current.slosh,
         manifest::kExecutionFrontSteps, manifest::kHorizonSteps,
-        9.0, false, true, &current);
+        9.0, false, true, &current, &current_horizon);
     EXPECT_FALSE(regressed_phase.ready);
     EXPECT_EQ(regressed_phase.status, "CLOCK_REGRESSION");
 }

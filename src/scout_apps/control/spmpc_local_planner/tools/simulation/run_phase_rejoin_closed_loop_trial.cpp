@@ -133,6 +133,9 @@ struct CycleRecord {
     bool execution_candidate_filter_applied = false;
     std::size_t execution_rejected_candidate_count = 0;
     double selected_execution_max_normalized_error = 0.0;
+    bool execution_horizon_filter_applied = false;
+    std::size_t execution_horizon_rejected_candidate_count = 0;
+    double selected_execution_horizon_max_normalized_error = 0.0;
     double acados_solve_time_ms = 0.0;
     double backend_wall_time_ms = 0.0;
     VelocityCommand final_command;
@@ -152,6 +155,9 @@ struct TrialCounters {
     std::size_t execution_candidate_filter_cycles = 0;
     std::size_t execution_rejected_candidates = 0;
     double max_selected_execution_normalized_error = 0.0;
+    std::size_t execution_horizon_filter_cycles = 0;
+    std::size_t execution_horizon_rejected_candidates = 0;
+    double max_selected_execution_horizon_normalized_error = 0.0;
     std::vector<double> acados_solve_times_ms;
     std::vector<double> backend_wall_times_ms;
     std::size_t kkt_residual_samples = 0;
@@ -1066,6 +1072,7 @@ PhaseRejoinRuntimeContract phaseRuntimeContract(
         DelayAugmentedPhaseAcadosSolver::compiledContract();
     PhaseRejoinRuntimeContract runtime;
     runtime.dt = compiled.execution.dt;
+    runtime.slosh_model = solver.slosh;
     runtime.min_command_v = manifest::kLinearOutputMin;
     runtime.max_command_v = manifest::kLinearOutputMax;
     runtime.max_abs_command_omega = manifest::kAngularOutputMax;
@@ -1550,6 +1557,9 @@ bool openCycleCsv(const std::string& path, std::ofstream& output,
         << "execution_candidate_filter_applied,"
         << "execution_rejected_candidate_count,"
         << "selected_execution_max_normalized_error,"
+        << "execution_horizon_filter_applied,"
+        << "execution_horizon_rejected_candidate_count,"
+        << "selected_execution_horizon_max_normalized_error,"
         << "acados_solve_time_ms,backend_wall_time_ms,"
         << "final_cmd_v,final_cmd_omega,command_source,publish_stamp_ns,"
         << "plant_publish_time_sec,linear_effective_time_sec,"
@@ -1590,6 +1600,9 @@ bool writeCycle(std::ofstream& output, const CycleRecord& record) {
         << (record.execution_candidate_filter_applied ? "true" : "false")
         << ',' << record.execution_rejected_candidate_count << ','
         << record.selected_execution_max_normalized_error << ','
+        << (record.execution_horizon_filter_applied ? "true" : "false")
+        << ',' << record.execution_horizon_rejected_candidate_count << ','
+        << record.selected_execution_horizon_max_normalized_error << ','
         << record.acados_solve_time_ms << ','
         << record.backend_wall_time_ms << ','
         << record.final_command.linear << ','
@@ -1796,6 +1809,12 @@ bool writeSummary(
         << counters.execution_rejected_candidates << ",\n"
         << "    \"max_selected_execution_normalized_error\": "
         << counters.max_selected_execution_normalized_error << ",\n"
+        << "    \"execution_horizon_filter_cycles\": "
+        << counters.execution_horizon_filter_cycles << ",\n"
+        << "    \"execution_horizon_rejected_candidates\": "
+        << counters.execution_horizon_rejected_candidates << ",\n"
+        << "    \"max_selected_execution_horizon_normalized_error\": "
+        << counters.max_selected_execution_horizon_normalized_error << ",\n"
         << "    \"raw_solver_status_counts\": ";
     writeJsonStringCounts(output, counters.raw_solver_status_counts);
     output << ",\n    \"phase_status_counts\": ";
@@ -1839,7 +1858,26 @@ bool writeSummary(
                 << ", \"nominal\": " << jsonNumber(audit.nominal)
                 << ", \"bound\": " << jsonNumber(audit.bound)
                 << ", \"status\": \"" << jsonEscape(audit.status)
-                << "\"}";
+                << "\", \"horizon_valid\": "
+                << (audit.horizon_valid ? "true" : "false")
+                << ", \"horizon_accepted\": "
+                << (audit.horizon_accepted ? "true" : "false")
+                << ", \"horizon_max_error_stage\": "
+                << audit.horizon_max_error_stage
+                << ", \"horizon_max_normalized_error\": "
+                << jsonNumber(audit.horizon_max_normalized_error)
+                << ", \"horizon_max_error_name\": \""
+                << jsonEscape(audit.horizon_max_error_name)
+                << "\", \"horizon_max_error_index\": "
+                << audit.horizon_max_error_index
+                << ", \"horizon_actual\": "
+                << jsonNumber(audit.horizon_actual)
+                << ", \"horizon_nominal\": "
+                << jsonNumber(audit.horizon_nominal)
+                << ", \"horizon_bound\": "
+                << jsonNumber(audit.horizon_bound)
+                << ", \"horizon_status\": \""
+                << jsonEscape(audit.horizon_status) << "\"}";
         }
         if (!solver_failure.execution_candidate_audits.empty()) {
             output << '\n' << "    ";
@@ -2669,6 +2707,15 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         record.selected_execution_max_normalized_error =
             result.phase_preparation.candidate
                 .selected_execution_max_normalized_error;
+        record.execution_horizon_filter_applied =
+            result.phase_preparation.candidate
+                .execution_horizon_filter_applied;
+        record.execution_horizon_rejected_candidate_count =
+            result.phase_preparation.candidate
+                .execution_horizon_rejected_candidate_count;
+        record.selected_execution_horizon_max_normalized_error =
+            result.phase_preparation.candidate
+                .selected_execution_horizon_max_normalized_error;
         const PreSolveSnapshotDebug& solver_snapshot =
             result.solver_output.pre_solve_snapshot;
         if (solver_snapshot.backend ==
@@ -2738,6 +2785,19 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
                 counters.max_selected_execution_normalized_error = std::max(
                     counters.max_selected_execution_normalized_error,
                     record.selected_execution_max_normalized_error);
+            }
+        }
+        if (record.execution_horizon_filter_applied) {
+            ++counters.execution_horizon_filter_cycles;
+            counters.execution_horizon_rejected_candidates +=
+                record.execution_horizon_rejected_candidate_count;
+            if (record.selected_phase_valid) {
+                counters.max_selected_execution_horizon_normalized_error =
+                    std::max(
+                        counters
+                            .max_selected_execution_horizon_normalized_error,
+                        record
+                            .selected_execution_horizon_max_normalized_error);
             }
         }
         if (record.gate_evaluated) ++counters.gate_evaluations;

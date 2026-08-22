@@ -195,6 +195,9 @@ PhaseRejoinPreparation ControlCycleEngine::preparePhase(
             execution_augmented,
             execution_augmented
                 ? &request.solver_input.execution_horizon.initial_state
+                : nullptr,
+            execution_augmented
+                ? &request.solver_input.execution_horizon
                 : nullptr);
     }
     return preparation;

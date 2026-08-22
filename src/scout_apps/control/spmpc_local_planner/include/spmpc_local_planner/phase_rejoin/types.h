@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/domain/state.h"
+#include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/runtime/execution_prediction/execution_augmented_state.h"
 
 #include <cstddef>
@@ -286,6 +287,7 @@ struct PhaseRejoinParams {
 // liquid dynamics, or command bounds.
 struct PhaseRejoinRuntimeContract {
     bool liquid_model_configured = false;
+    SloshModelParams slosh_model;
     double dt = 0.0;
     double two_zeta_omega_n = 0.0;
     double omega_n_sq = 0.0;
@@ -331,9 +333,12 @@ struct PhaseCandidateResult {
     std::size_t candidate_count = 0;
     bool execution_compatibility_filter_applied = false;
     std::size_t execution_rejected_candidate_count = 0;
+    bool execution_horizon_filter_applied = false;
+    std::size_t execution_horizon_rejected_candidate_count = 0;
     int phase_lead_steps = 0;
     double score = 0.0;
     double selected_execution_max_normalized_error = 0.0;
+    double selected_execution_horizon_max_normalized_error = 0.0;
     struct ExecutionCandidateAudit {
         std::size_t phase_index = 0;
         bool valid = false;
@@ -345,6 +350,16 @@ struct PhaseCandidateResult {
         double nominal = 0.0;
         double bound = 0.0;
         std::string status = "NOT_RUN";
+        bool horizon_valid = false;
+        bool horizon_accepted = false;
+        std::size_t horizon_max_error_stage = 0;
+        double horizon_max_normalized_error = 0.0;
+        std::string horizon_max_error_name = "NONE";
+        int horizon_max_error_index = -1;
+        double horizon_actual = 0.0;
+        double horizon_nominal = 0.0;
+        double horizon_bound = 0.0;
+        std::string horizon_status = "NOT_RUN";
     };
     std::vector<ExecutionCandidateAudit> execution_candidate_audits;
     std::string status = "NOT_RUN";

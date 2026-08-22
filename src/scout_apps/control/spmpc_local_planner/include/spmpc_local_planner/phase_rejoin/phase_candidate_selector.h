@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/domain/state.h"
+#include "spmpc_local_planner/phase_rejoin/execution_horizon_compatibility_gate.h"
 #include "spmpc_local_planner/phase_rejoin/nominal_sequence_artifact.h"
 #include "spmpc_local_planner/phase_rejoin/types.h"
 
@@ -22,7 +23,11 @@ public:
                                 std::size_t last_accepted_index,
                                 bool observation_at_execution_front = true,
                                 const ExecutionAugmentedState*
-                                    current_execution = nullptr) const;
+                                    current_execution = nullptr,
+                                const ExecutionHorizonContext*
+                                    execution_horizon = nullptr,
+                                const ExecutionHorizonCompatibilityParams*
+                                    horizon_filter_params = nullptr) const;
 
     const PhaseCandidateSelectorParams& params() const { return params_; }
 

@@ -34,7 +34,9 @@ public:
                                    bool solver_origin_at_execution_front = true,
                                    bool solver_origin_is_execution_augmented = false,
                                    const ExecutionAugmentedState*
-                                       current_execution = nullptr);
+                                       current_execution = nullptr,
+                                   const ExecutionHorizonContext*
+                                       execution_horizon = nullptr);
 
     PhaseRejoinDecision decide(const PhaseRejoinPreparation& preparation,
                                const RobotState& execution_front_robot,

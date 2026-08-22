@@ -384,23 +384,6 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
     }
     output.pre_solve_snapshot.solution_constraint_audit = solution_audit;
     if (status != 0) {
-        // TEMP diagnostic: separate state vs control stationarity.
-        for (int stage = 0; stage <= manifest::kHorizonSteps; ++stage) {
-            std::vector<double> stat;
-            if (!capsule_.perStageStationarity(stage, stat)) continue;
-            double state_max = 0.0, ctrl_max = 0.0;
-            int state_idx = -1, ctrl_idx = -1;
-            for (std::size_t i = 0; i < stat.size(); ++i) {
-                double a = std::fabs(stat[i]);
-                if (i < static_cast<std::size_t>(manifest::kStateCount)) {
-                    if (a > state_max) { state_max = a; state_idx = static_cast<int>(i); }
-                } else {
-                    if (a > ctrl_max) { ctrl_max = a; ctrl_idx = static_cast<int>(i); }
-                }
-            }
-            std::fprintf(stderr, "[stage=%d] state_max=%.6e @%d  ctrl_max=%.6e @%d\n",
-                         stage, state_max, state_idx, ctrl_max, ctrl_idx);
-        }
         output.failure_kind = diagnostics.optimizer_invoked
             ? SolverFailureKind::Optimization
             : SolverFailureKind::Integrity;

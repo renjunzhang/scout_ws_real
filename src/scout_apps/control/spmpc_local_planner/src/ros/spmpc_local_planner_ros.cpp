@@ -226,6 +226,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     }
     phase_rejoin_runtime_contract_ = PhaseRejoinRuntimeContract{};
     phase_rejoin_runtime_contract_.dt = dt_;
+    phase_rejoin_runtime_contract_.slosh_model = solver_params.slosh;
     phase_rejoin_runtime_contract_.min_command_v = 0.0;
     phase_rejoin_runtime_contract_.max_command_v = solver_params.v_max;
     phase_rejoin_runtime_contract_.max_abs_command_omega =

@@ -73,7 +73,9 @@ PhaseCandidateResult PhaseCandidateSelector::select(
     bool have_last_accepted,
     std::size_t last_accepted_index,
     bool observation_at_execution_front,
-    const ExecutionAugmentedState* current_execution) const {
+    const ExecutionAugmentedState* current_execution,
+    const ExecutionHorizonContext* execution_horizon,
+    const ExecutionHorizonCompatibilityParams* horizon_filter_params) const {
     PhaseCandidateResult result;
     if (!configured_) {
         result.status = "NOT_CONFIGURED";
@@ -104,6 +106,8 @@ PhaseCandidateResult PhaseCandidateSelector::select(
     result.normal_shift_index = expected;
     result.execution_compatibility_filter_applied =
         current_execution != nullptr;
+    result.execution_horizon_filter_applied =
+        execution_horizon != nullptr && horizon_filter_params != nullptr;
 
     std::size_t begin = 0;
     std::size_t end = 0;
@@ -140,8 +144,10 @@ PhaseCandidateResult PhaseCandidateSelector::select(
 
     double best_score = std::numeric_limits<double>::infinity();
     double best_execution_error = 0.0;
+    double best_horizon_execution_error = 0.0;
     std::size_t best_current = begin;
     ExecutionCompatibilityGate execution_gate;
+    ExecutionHorizonCompatibilityGate horizon_gate;
     for (std::size_t current = begin; current <= end; ++current) {
         const std::size_t comparison_index = current +
             (observation_at_execution_front
@@ -176,13 +182,37 @@ PhaseCandidateResult PhaseCandidateSelector::select(
             audit.nominal = execution_compatibility.nominal;
             audit.bound = execution_compatibility.bound;
             audit.status = execution_compatibility.status;
-            result.execution_candidate_audits.push_back(audit);
             if (!execution_compatibility.accepted) {
                 ++result.execution_rejected_candidate_count;
+                result.execution_candidate_audits.push_back(audit);
                 continue;
             }
             candidate_execution_error =
                 execution_compatibility.max_normalized_error;
+            if (result.execution_horizon_filter_applied) {
+                const ExecutionHorizonCompatibilityResult horizon =
+                    horizon_gate.evaluate(
+                        artifact, current, *execution_horizon,
+                        *horizon_filter_params);
+                audit.horizon_valid = horizon.valid;
+                audit.horizon_accepted = horizon.accepted;
+                audit.horizon_max_error_stage = horizon.max_error_stage;
+                audit.horizon_max_normalized_error =
+                    horizon.max_normalized_error;
+                audit.horizon_max_error_name = horizon.max_error_name;
+                audit.horizon_max_error_index = horizon.max_error_index;
+                audit.horizon_actual = horizon.actual;
+                audit.horizon_nominal = horizon.nominal;
+                audit.horizon_bound = horizon.bound;
+                audit.horizon_status = horizon.status;
+                if (!horizon.accepted) {
+                    ++result.execution_rejected_candidate_count;
+                    ++result.execution_horizon_rejected_candidate_count;
+                    result.execution_candidate_audits.push_back(audit);
+                    continue;
+                }
+            }
+            result.execution_candidate_audits.push_back(audit);
         }
         const double candidate_score = score(
             *nominal, execution_front_robot, execution_front_slosh);
@@ -191,12 +221,19 @@ PhaseCandidateResult PhaseCandidateSelector::select(
             best_current = current;
             if (current_execution != nullptr) {
                 best_execution_error = candidate_execution_error;
+                if (result.execution_horizon_filter_applied) {
+                    best_horizon_execution_error = result
+                        .execution_candidate_audits.back()
+                        .horizon_max_normalized_error;
+                }
             }
         }
     }
     if (current_execution != nullptr && result.candidate_count > 0 &&
         result.execution_rejected_candidate_count == result.candidate_count) {
-        result.status = "NO_EXECUTION_COMPATIBLE_CANDIDATE";
+        result.status = result.execution_horizon_rejected_candidate_count > 0
+            ? "NO_EXECUTION_HORIZON_COMPATIBLE_CANDIDATE"
+            : "NO_EXECUTION_COMPATIBLE_CANDIDATE";
         return result;
     }
     if (result.candidate_count == 0 || !std::isfinite(best_score)) {
@@ -213,6 +250,8 @@ PhaseCandidateResult PhaseCandidateSelector::select(
         static_cast<std::size_t>(liquid_steps);
     result.score = best_score;
     result.selected_execution_max_normalized_error = best_execution_error;
+    result.selected_execution_horizon_max_normalized_error =
+        best_horizon_execution_error;
     result.status = "OK";
     return result;
 }

@@ -365,7 +365,8 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     double phase_time_sec,
     bool solver_origin_at_execution_front,
     bool solver_origin_is_execution_augmented,
-    const ExecutionAugmentedState* current_execution) {
+    const ExecutionAugmentedState* current_execution,
+    const ExecutionHorizonContext* execution_horizon) {
     PhaseRejoinPreparation preparation;
     if (!configured_) {
         preparation.status = "NOT_CONFIGURED";
@@ -412,6 +413,12 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
         preparation.status = "EXECUTION_AUGMENTED_STATE_UNAVAILABLE";
         return preparation;
     }
+    if (solver_origin_is_execution_augmented &&
+        (execution_horizon == nullptr || !execution_horizon->active ||
+         execution_horizon->horizon_steps != solver_horizon_steps)) {
+        preparation.status = "EXECUTION_HORIZON_CONTEXT_UNAVAILABLE";
+        return preparation;
+    }
 
     const std::size_t required_tail = static_cast<std::size_t>(
         front_steps + params_.liquid_horizon_steps);
@@ -428,13 +435,23 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     }
     preparation.phase_clock_elapsed_sec = clock.elapsed_sec;
 
+    ExecutionHorizonCompatibilityParams horizon_filter;
+    horizon_filter.max_residual_v = params_.max_residual_v;
+    horizon_filter.max_residual_omega = params_.max_residual_omega;
+    horizon_filter.max_published_acceleration =
+        runtime_contract_.max_published_acceleration;
+    horizon_filter.max_published_angular_acceleration =
+        runtime_contract_.max_published_angular_acceleration;
+    horizon_filter.slosh_model = runtime_contract_.slosh_model;
     preparation.candidate = selector_.select(
         artifact_, execution_front_robot, execution_front_slosh,
         front_steps, params_.liquid_horizon_steps,
         clock.index,
         have_accepted_index_, accepted_index_,
         !solver_origin_is_execution_augmented,
-        solver_origin_is_execution_augmented ? current_execution : nullptr);
+        solver_origin_is_execution_augmented ? current_execution : nullptr,
+        solver_origin_is_execution_augmented ? execution_horizon : nullptr,
+        solver_origin_is_execution_augmented ? &horizon_filter : nullptr);
     if (!preparation.candidate.valid) {
         preparation.status = preparation.candidate.status;
         return preparation;
