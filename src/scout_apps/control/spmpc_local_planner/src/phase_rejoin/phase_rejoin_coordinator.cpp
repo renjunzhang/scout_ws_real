@@ -454,7 +454,8 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     preparation.solver_context.active = true;
     preparation.solver_context.enforce =
         params_.mode == PhaseRejoinMode::Enforce;
-    preparation.solver_context.empirical_gate = true;
+    preparation.solver_context.empirical_gate =
+        params_.empirical_gate_enforced;
     preparation.solver_context.state_complete_for_certificate = false;
     preparation.solver_context.owns_terminal_maneuver =
         params_.mode == PhaseRejoinMode::Enforce &&
@@ -504,6 +505,8 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
         augmented.current_index = preparation.candidate.current_index;
         augmented.terminal_index = preparation.candidate.terminal_index;
         augmented.terminal_empirical_gate_bound = true;
+        augmented.terminal_empirical_gate_enforced =
+            params_.empirical_gate_enforced;
         augmented.execution_compatibility_bound = true;
         augmented.max_residual_v = params_.max_residual_v;
         augmented.max_residual_omega = params_.max_residual_omega;
@@ -664,7 +667,14 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
         return decision;
     }
 
-    if (solver_success && decision.terminal_gate_accepted &&
+    const bool terminal_empirical_admitted =
+        !params_.empirical_gate_enforced ||
+        decision.terminal_gate_accepted;
+    const bool current_empirical_admitted =
+        !params_.empirical_gate_enforced ||
+        decision.current_gate_accepted;
+
+    if (solver_success && terminal_empirical_admitted &&
         decision.current_execution_compatible &&
         decision.terminal_execution_compatible) {
         decision.residual_v = solve.cmd_v - preparation.nominal_cmd_v;
@@ -688,7 +698,11 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
         decision.output_cmd_v = solve.cmd_v;
         decision.output_cmd_omega = solve.cmd_omega;
         decision.command_intervened = false;
-        decision.status = "ENFORCE_TERMINAL_ACCEPTED";
+        decision.status = params_.empirical_gate_enforced
+            ? "ENFORCE_TERMINAL_ACCEPTED"
+            : (decision.terminal_gate_accepted
+                ? "ENFORCE_GATE_MONITOR_ACCEPTED"
+                : "ENFORCE_GATE_MONITOR_REJECTED_COMMAND_ACCEPTED");
         return decision;
     }
 
@@ -702,7 +716,7 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
         return decision;
     }
 
-    if (decision.current_gate_accepted &&
+    if (current_empirical_admitted &&
         decision.current_execution_compatible) {
         if (execution_augmented) {
             const ExecutionAugmentedState& actual =
@@ -788,9 +802,12 @@ void PhaseRejoinCoordinator::commit(
         !preparation.solver_context.delay_augmented.active ||
         (decision.current_execution_compatible &&
          decision.terminal_execution_compatible);
+    const bool terminal_empirical_admitted =
+        !params_.empirical_gate_enforced ||
+        decision.terminal_gate_accepted;
     if (params_.mode == PhaseRejoinMode::Monitor ||
         (params_.mode == PhaseRejoinMode::Enforce &&
-         decision.terminal_gate_accepted &&
+         terminal_empirical_admitted &&
          execution_compatible &&
          decision.command_contract_consistent)) {
         accepted_index_ = preparation.candidate.current_index;
@@ -798,7 +815,7 @@ void PhaseRejoinCoordinator::commit(
     }
     if (params_.mode == PhaseRejoinMode::Enforce &&
         preparation.solver_context.owns_terminal_maneuver &&
-        decision.terminal_gate_accepted &&
+        terminal_empirical_admitted &&
         execution_compatible &&
         decision.command_contract_consistent &&
         preparation.candidate.terminal_index + 1 == artifact_.size()) {
@@ -815,6 +832,7 @@ PhaseRejoinDebugData PhaseRejoinCoordinator::makeDebug(
     debug.contract_valid = contract_valid_;
     debug.artifact_size = artifact_.size();
     debug.empirical_gate = artifact_.valid();
+    debug.empirical_gate_enforced = params_.empirical_gate_enforced;
     debug.state_complete_for_certificate = false;
     debug.status = contract_status_;
     debug.terminal_release_authorized = terminal_release_authorized_;

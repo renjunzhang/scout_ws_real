@@ -729,6 +729,32 @@ bool DelayAugmentedPhaseAcadosSolver::setParameterImage(
 #endif
 }
 
+bool DelayAugmentedPhaseAcadosSolver::setTerminalEmpiricalGateEnforced(
+    bool enforced, std::string& error) {
+    error.clear();
+#ifdef SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE
+    if (!ready()) {
+        error = "delay-augmented capsule is not ready";
+        return false;
+    }
+    std::array<double, manifest::kTerminalRecoveryConstraintCount> upper{};
+    // Constraint 0 is the empirical ellipsoid.  The remaining entries are
+    // the frozen two-sided B_exec constraints and always retain upper=0.
+    // A finite inactive upper is used instead of changing V3 radii, so the
+    // exact same parameter image remains bound in C3 and C4.
+    upper[0] = enforced ? 0.0 : 1.0e15;
+    ocp_nlp_constraints_model_set(
+        impl_->capsule->config(), impl_->capsule->dims(),
+        impl_->capsule->input(), impl_->capsule->output(),
+        manifest::kHorizonSteps, "uh", upper.data());
+    return true;
+#else
+    (void)enforced;
+    error = "delay-augmented acados capsule is not compiled";
+    return false;
+#endif
+}
+
 bool DelayAugmentedPhaseAcadosSolver::ready() const {
 #ifdef SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE
     return static_cast<bool>(impl_->capsule);
@@ -1025,7 +1051,8 @@ DelayAugmentedPhaseAcadosSolver::auditTrajectory(
     const ExecutionHorizonContext& context,
     const DelayAugmentedPhaseParameterMatrix& parameters,
     const std::vector<double>& states,
-    const std::vector<double>& controls) {
+    const std::vector<double>& controls,
+    bool terminal_empirical_gate_enforced) {
     DelayAugmentedPhaseConstraintAudit audit;
     audit.tolerance = manifest::kMaxInequalityResidual;
     const std::size_t expected_states = static_cast<std::size_t>(
@@ -1231,12 +1258,16 @@ DelayAugmentedPhaseAcadosSolver::auditTrajectory(
     DelayAugmentedPhaseNamedConstraintDiagnostics empirical;
     empirical.stage = manifest::kHorizonSteps;
     empirical.index = 0;
-    empirical.name = "terminal_empirical_9d_ellipsoid";
+    empirical.name = terminal_empirical_gate_enforced
+        ? "terminal_empirical_9d_ellipsoid"
+        : "terminal_empirical_9d_ellipsoid_monitor_only";
     empirical.value = empirical_metric - 1.0;
     empirical.lower = -1.0e15;
-    empirical.upper = 0.0;
+    empirical.upper = terminal_empirical_gate_enforced ? 0.0 : 1.0e15;
     empirical.normalized_error = std::sqrt(empirical_metric);
-    empirical.violation = audit.terminal_empirical_violation;
+    empirical.violation = terminal_empirical_gate_enforced
+        ? audit.terminal_empirical_violation
+        : 0.0;
     update_max(empirical);
 
     for (int index = 0; index < manifest::kExecutionBoundCount; ++index) {

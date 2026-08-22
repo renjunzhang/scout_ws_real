@@ -87,8 +87,8 @@ CONDITION_SEMANTICS = {
         "offline_nominal": True,
         "online_residual": True,
         "recovery_gate": False,
-        "execution_compatibility_gate": False,
-        "stored_recovery_action": False,
+        "execution_compatibility_gate": True,
+        "stored_recovery_action": True,
         "input_shaping": False,
     },
     "C4": {

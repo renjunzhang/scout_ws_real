@@ -261,6 +261,14 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
         output.status = "DELAY_AUGMENTED_PARAMETER_UPDATE_FAILED_" + error;
         return false;
     }
+    if (!capsule_.setTerminalEmpiricalGateEnforced(
+            input.phase_rejoin.delay_augmented
+                .terminal_empirical_gate_enforced,
+            error)) {
+        output.status =
+            "DELAY_AUGMENTED_EMPIRICAL_GATE_MODE_FAILED_" + error;
+        return false;
+    }
     std::vector<DelayAugmentedPhaseControl> nominal_controls;
     nominal_controls.reserve(manifest::kHorizonSteps);
     for (int stage = 0; stage < manifest::kHorizonSteps; ++stage) {
@@ -294,7 +302,9 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
             warm_start_states, warm_start_controls)) {
         warm_start_audit = DelayAugmentedPhaseAcadosSolver::auditTrajectory(
             input.execution_horizon, parameters,
-            warm_start_states, warm_start_controls);
+            warm_start_states, warm_start_controls,
+            input.phase_rejoin.delay_augmented
+                .terminal_empirical_gate_enforced);
     }
     if (!warm_start_audit.evaluated) {
         output.status = "DELAY_AUGMENTED_WARM_START_AUDIT_FAILED_" +
@@ -368,7 +378,9 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
             raw_solution_states, raw_solution_controls)) {
         solution_audit = DelayAugmentedPhaseAcadosSolver::auditTrajectory(
             input.execution_horizon, parameters,
-            raw_solution_states, raw_solution_controls);
+            raw_solution_states, raw_solution_controls,
+            input.phase_rejoin.delay_augmented
+                .terminal_empirical_gate_enforced);
     }
     output.pre_solve_snapshot.solution_constraint_audit = solution_audit;
     if (status != 0) {

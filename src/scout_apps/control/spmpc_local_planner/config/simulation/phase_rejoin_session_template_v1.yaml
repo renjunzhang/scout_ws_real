@@ -122,9 +122,11 @@ conditions:
     offline_nominal: true
     online_residual: true
     recovery_gate: false
-    execution_compatibility_gate: false
-    stored_recovery_action: false
+    execution_compatibility_gate: true
+    stored_recovery_action: true
     input_shaping: false
+    empirical_gate_monitor_only: true
+    exact_c4_optimizer_match: true
   C4:
     binding_id: phase_rejoin_full_formal
     implementation_id: ""

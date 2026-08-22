@@ -122,6 +122,8 @@ public:
     bool setParameterImage(
         const DelayAugmentedPhaseParameterMatrix& parameters,
         std::string& error);
+    bool setTerminalEmpiricalGateEnforced(
+        bool enforced, std::string& error);
     bool getState(int stage, double* state) const;
     bool getControl(int stage, double* control) const;
     bool captureTrajectory(
@@ -143,7 +145,8 @@ public:
         const ExecutionHorizonContext& context,
         const DelayAugmentedPhaseParameterMatrix& parameters,
         const std::vector<double>& states,
-        const std::vector<double>& controls);
+        const std::vector<double>& controls,
+        bool terminal_empirical_gate_enforced = true);
     int solve();
     double solveTimeSec() const;
     const DelayAugmentedPhaseSolveDiagnostics& lastSolveDiagnostics() const;

@@ -1,25 +1,19 @@
 schema: spmpc_closed_loop_trial_condition_v1
 condition_id: C3
-implementation_id: v3_bounded_tracking_residual_no_admission_pilot_v1
+implementation_id: delay_augmented_phase_acados_22d_empirical_monitor_v1
 implementation_complete: true
 mode: residual_no_gate
 offline_nominal: true
 online_residual: true
 recovery_gate: false
-execution_compatibility_gate: false
-stored_recovery_action: false
+execution_compatibility_gate: true
+stored_recovery_action: true
 input_shaping: false
-# Executable pilot comparator only. It is not yet the exact C4 optimizer with
-# only the terminal admission disabled and therefore cannot support the formal
-# C3/C4 causal claim.
-pilot_only: true
-formal_c3_c4_causal_comparison_ready: false
+# Strict C3 shares C4's 22D Full SQP, V3, B_exec, recovery action and final
+# command transaction. The empirical terminal gate remains monitor-only.
+pilot_only: false
+formal_c3_c4_causal_comparison_ready: true
 residual_feedback:
-  longitudinal_gain: 0.8
-  lateral_gain: 1.2
-  yaw_gain: 1.5
-  velocity_gain: 0.4
-  omega_gain: 0.4
   max_residual_v: 0.08
   max_residual_omega: 0.20
 trial:

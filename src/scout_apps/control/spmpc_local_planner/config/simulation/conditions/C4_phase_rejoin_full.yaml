@@ -9,6 +9,8 @@ recovery_gate: true
 execution_compatibility_gate: true
 stored_recovery_action: true
 input_shaping: false
+pilot_only: false
+formal_c3_c4_causal_comparison_ready: true
 residual_feedback:
   max_residual_v: 0.08
   max_residual_omega: 0.20

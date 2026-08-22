@@ -903,6 +903,49 @@ TEST(PhaseRejoinCoordinator, EnforceRejectsOutOfContractSolverCommand) {
     EXPECT_DOUBLE_EQ(stop.output_cmd_omega, 0.0);
 }
 
+TEST(PhaseRejoinCoordinator,
+     StrictC3MonitorsRejectedEmpiricalGateWithoutChangingCommand) {
+    PhaseRejoinParams params;
+    params.mode = PhaseRejoinMode::Enforce;
+    params.empirical_gate_enforced = false;
+    params.liquid_horizon_steps = 3;
+    params.max_residual_v = 0.05;
+    params.max_residual_omega = 0.10;
+    params.allow_development_artifact_in_enforce = true;
+    params.required_contract_id = "test_contract";
+    PhaseRejoinCoordinator coordinator;
+    std::string error;
+    ASSERT_TRUE(coordinator.configure(params, error)) << error;
+    ASSERT_TRUE(coordinator.setArtifact(loadArtifact(), error)) << error;
+    ASSERT_TRUE(coordinator.validateRuntimeContract(
+        fixtureRuntimeContract(), fixtureReference(), error)) << error;
+
+    const PhaseRejoinPreparation preparation = coordinator.prepare(
+        robotAt(0.2), SloshState{}, 2, 10, 1.0);
+    ASSERT_TRUE(preparation.ready) << preparation.status;
+    EXPECT_FALSE(preparation.solver_context.empirical_gate);
+    EXPECT_FALSE(preparation.solver_context.delay_augmented.active);
+
+    PhaseSolveView solve = acceptedSolve(2, 3);
+    solve.cmd_v = 0.98;
+    solve.cmd_omega = 0.08;
+    solve.terminal_robot.x += 10.0;
+    const PhaseRejoinDecision decision = coordinator.decide(
+        preparation, robotAt(0.2), SloshState{}, true, solve);
+    EXPECT_TRUE(decision.evaluated);
+    EXPECT_FALSE(decision.terminal_gate_accepted);
+    EXPECT_TRUE(decision.current_execution_compatible);
+    EXPECT_TRUE(decision.terminal_execution_compatible);
+    EXPECT_TRUE(decision.command_contract_consistent);
+    EXPECT_FALSE(decision.command_intervened);
+    EXPECT_FALSE(decision.recovery_command_used);
+    EXPECT_FALSE(decision.controlled_stop_used);
+    EXPECT_DOUBLE_EQ(decision.output_cmd_v, solve.cmd_v);
+    EXPECT_DOUBLE_EQ(decision.output_cmd_omega, solve.cmd_omega);
+    EXPECT_EQ(decision.status,
+              "ENFORCE_GATE_MONITOR_REJECTED_COMMAND_ACCEPTED");
+}
+
 TEST(PhaseRejoinCoordinator, RawSolverOriginChecksTerminalAfterDelayAndLiquidSteps) {
     PhaseRejoinParams params;
     params.mode = PhaseRejoinMode::Monitor;

@@ -196,6 +196,11 @@ struct DelayAugmentedPhaseSolverContext {
     std::size_t current_index = 0;
     std::size_t terminal_index = 0;
     bool terminal_empirical_gate_bound = false;
+    // C3 and C4 bind the same V3 radii and use the same generated 22D
+    // capsule.  C4 enforces the terminal empirical inequality; strict C3
+    // keeps the same metric as monitor-only evidence while disabling its
+    // effect on the NLP and coordinator admission decision.
+    bool terminal_empirical_gate_enforced = true;
     bool execution_compatibility_bound = false;
     double max_residual_v = 0.0;
     double max_residual_omega = 0.0;
@@ -256,6 +261,10 @@ struct PhaseCandidateSelectorParams {
 
 struct PhaseRejoinParams {
     PhaseRejoinMode mode = PhaseRejoinMode::Off;
+    // This is the only formal C3/C4 ablation switch.  It never disables
+    // B_exec, phase selection, residual authority, recovery action, or the
+    // final-command transaction.
+    bool empirical_gate_enforced = true;
     PhaseCandidateSelectorParams candidate;
     int liquid_horizon_steps = 3;
     double max_residual_v = 0.08;
@@ -425,6 +434,7 @@ struct PhaseRejoinDebugData {
     bool contract_valid = false;
     bool ready = false;
     bool empirical_gate = false;
+    bool empirical_gate_enforced = false;
     bool state_complete_for_certificate = false;
     std::size_t artifact_size = 0;
     std::size_t current_index = 0;

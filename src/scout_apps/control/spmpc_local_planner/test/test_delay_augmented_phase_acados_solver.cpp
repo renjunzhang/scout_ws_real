@@ -272,6 +272,52 @@ TEST(DelayAugmentedPhaseAcadosSolver,
     EXPECT_LE(control[2], manifest::kProgressRateMax + 1e-9);
 }
 
+TEST(DelayAugmentedPhaseAcadosSolver,
+     MonitorOnlyEmpiricalGateKeepsRadiiButDoesNotRejectTrajectory) {
+    if (!DelayAugmentedPhaseAcadosSolver::compiled()) {
+        GTEST_SKIP() << "generated capsule is unavailable";
+    }
+    const ExecutionHorizonContext execution = validContext();
+    DelayAugmentedPhaseSolverContext parameter_context =
+        validParameterContext(execution);
+    // The terminal target is 9 cm ahead while the stopped delay queue and
+    // short horizon cannot enter this deliberately tiny empirical radius.
+    parameter_context.stages.back().radii.x = 1.0e-6;
+    parameter_context.terminal_empirical_gate_enforced = false;
+    const DelayAugmentedPhaseParameterMatrix parameters =
+        DelayAugmentedPhaseParameterBuilder::build(parameter_context);
+    ASSERT_TRUE(parameters.valid) << parameters.status;
+
+    DelayAugmentedPhaseAcadosSolver solver;
+    std::string error;
+    ASSERT_TRUE(solver.create(
+        execution, kDelayAugmentedPhaseFormalCapabilities, error)) << error;
+    ASSERT_TRUE(solver.setParameterImage(parameters, error)) << error;
+    ASSERT_TRUE(solver.setTerminalEmpiricalGateEnforced(false, error))
+        << error;
+    ASSERT_EQ(0, solver.solve())
+        << diagnosticText(solver.lastSolveDiagnostics());
+
+    std::vector<double> states;
+    std::vector<double> controls;
+    ASSERT_TRUE(solver.captureTrajectory(states, controls));
+    const DelayAugmentedPhaseConstraintAudit monitor_audit =
+        DelayAugmentedPhaseAcadosSolver::auditTrajectory(
+            execution, parameters, states, controls, false);
+    ASSERT_TRUE(monitor_audit.evaluated) << monitor_audit.status;
+    EXPECT_TRUE(monitor_audit.passed) << monitor_audit.max_violation_name;
+    EXPECT_GT(monitor_audit.terminal_empirical_metric, 1.0);
+    EXPECT_GT(monitor_audit.terminal_empirical_violation, 0.0);
+
+    const DelayAugmentedPhaseConstraintAudit enforce_audit =
+        DelayAugmentedPhaseAcadosSolver::auditTrajectory(
+            execution, parameters, states, controls, true);
+    ASSERT_TRUE(enforce_audit.evaluated) << enforce_audit.status;
+    EXPECT_FALSE(enforce_audit.passed);
+    EXPECT_EQ(enforce_audit.max_violation_name,
+              "terminal_empirical_9d_ellipsoid");
+}
+
 }  // namespace
 }  // namespace spmpc_local_planner
 

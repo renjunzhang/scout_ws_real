@@ -249,6 +249,34 @@ protected:
             << "execution_compatibility_gate: true\n"
             << "stored_recovery_action: true\n"
             << "input_shaping: false\n"
+            << "pilot_only: false\n"
+            << "formal_c3_c4_causal_comparison_ready: true\n"
+            << "residual_feedback:\n"
+            << "  max_residual_v: 0.08\n"
+            << "  max_residual_omega: 0.20\n"
+            << "trial:\n"
+            << "  control_rate_hz: 30.0\n"
+            << "  max_motion_sec: 2.0\n"
+            << "  fixed_tail_sec: 4.0\n"
+            << "  publish_latency_sec: 0.01\n";
+    }
+
+    void writeC3Condition() {
+        std::ofstream output(condition_);
+        output
+            << "schema: spmpc_closed_loop_trial_condition_v1\n"
+            << "condition_id: C3\n"
+            << "implementation_id: test_delay_augmented_c3_v1\n"
+            << "implementation_complete: true\n"
+            << "mode: residual_no_gate\n"
+            << "offline_nominal: true\n"
+            << "online_residual: true\n"
+            << "recovery_gate: false\n"
+            << "execution_compatibility_gate: true\n"
+            << "stored_recovery_action: true\n"
+            << "input_shaping: false\n"
+            << "pilot_only: false\n"
+            << "formal_c3_c4_causal_comparison_ready: true\n"
             << "residual_feedback:\n"
             << "  max_residual_v: 0.08\n"
             << "  max_residual_omega: 0.20\n"
@@ -327,17 +355,31 @@ TEST_F(TrialRunnerTest,
 }
 
 TEST_F(TrialRunnerTest,
-       C3RunsWithoutGateButIsExplicitlyPilotOnly) {
-    writeCondition("C3", "residual_no_gate", "test_c3_pilot_v1",
-                   true, true);
+       C3UsesC4FullSqpWithEmpiricalGateMonitorOnly) {
+    if (!spmpc_local_planner::DelayAugmentedPhaseAcadosSolver::compiled()) {
+        GTEST_SKIP() << "delay-augmented development capsule is not enabled";
+    }
+    writeC3Condition();
     ASSERT_EQ(run(), 0);
     const YAML::Node summary = YAML::LoadFile(summary_);
-    EXPECT_TRUE(summary["baseline_contract"]["pilot_only"].as<bool>());
-    EXPECT_FALSE(summary["baseline_contract"]
-                        ["formal_c3_c4_causal_comparison_ready"].as<bool>());
+    EXPECT_FALSE(summary["baseline_contract"]["pilot_only"].as<bool>());
+    EXPECT_TRUE(summary["baseline_contract"]
+                       ["formal_c3_c4_causal_comparison_ready"].as<bool>());
     EXPECT_TRUE(summary["baseline_contract"]
                        ["c3_does_not_widen_gate_radii"].as<bool>());
-    EXPECT_EQ(summary["controller_audit"]["gate_evaluations"].as<int>(), 0);
+    EXPECT_TRUE(summary["baseline_contract"]
+                       ["c3_empirical_gate_monitor_only"].as<bool>());
+    EXPECT_TRUE(summary["baseline_contract"]
+                       ["c3_exact_c4_optimizer_match"].as<bool>());
+    EXPECT_FALSE(summary["baseline_contract"]
+                        ["c3_gate_disabled_by_separate_controller"].as<bool>());
+    EXPECT_GT(summary["controller_audit"]["gate_evaluations"].as<int>(), 0);
+    EXPECT_GT(summary["controller_audit"]
+                     ["execution_candidate_filter_cycles"].as<int>(), 0);
+    EXPECT_EQ(summary["solver_runtime"]["solver_id"].as<std::string>(),
+              manifest::kSolverId);
+    EXPECT_EQ(summary["solver_runtime"]["solver_config_hash"].as<std::string>(),
+              manifest::kSolverConfigHash);
 }
 
 TEST_F(TrialRunnerTest,

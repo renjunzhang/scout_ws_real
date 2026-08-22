@@ -87,6 +87,8 @@ struct ConditionConfig {
     double publish_latency_sec = 0.01;
     double smooth_global_time_scale = 1.0;
     bool pilot_tuned_and_frozen = false;
+    bool pilot_only = false;
+    bool formal_c3_c4_causal_comparison_ready = false;
     double residual_longitudinal_gain = 0.8;
     double residual_lateral_gain = 1.2;
     double residual_yaw_gain = 1.5;
@@ -499,6 +501,8 @@ ExpectedSemantics expectedSemantics(TrialMode mode) {
     } else if (mode == TrialMode::ResidualNoGate) {
         out.offline_nominal = true;
         out.online_residual = true;
+        out.execution_compatibility_gate = true;
+        out.stored_recovery_action = true;
     } else if (mode == TrialMode::PhaseRejoinFull) {
         out.offline_nominal = true;
         out.online_residual = true;
@@ -565,6 +569,9 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
                        config.smooth_global_time_scale);
         optionalScalar(root, "pilot_tuned_and_frozen",
                        config.pilot_tuned_and_frozen);
+        optionalScalar(root, "pilot_only", config.pilot_only);
+        optionalScalar(root, "formal_c3_c4_causal_comparison_ready",
+                       config.formal_c3_c4_causal_comparison_ready);
         const YAML::Node residual = root["residual_feedback"];
         optionalScalar(residual, "longitudinal_gain",
                        config.residual_longitudinal_gain);
@@ -627,24 +634,11 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
                 return false;
             }
         }
-        if (config.mode == TrialMode::ResidualNoGate) {
-            const BoundedTrackingRecoveryPolicyParams frozen =
-                boundedTrackingRecoveryPolicyV1Params();
-            const bool exact =
-                config.residual_longitudinal_gain ==
-                    frozen.longitudinal_position_gain &&
-                config.residual_lateral_gain ==
-                    frozen.lateral_position_gain &&
-                config.residual_yaw_gain == frozen.yaw_gain &&
-                config.residual_velocity_gain ==
-                    frozen.linear_velocity_gain &&
-                config.residual_omega_gain ==
-                    frozen.angular_velocity_gain &&
-                config.max_residual_v == frozen.max_residual_v &&
-                config.max_residual_omega == frozen.max_residual_omega;
-            if (!exact) {
-                error = "C3 residual policy differs from frozen "
-                    "bounded_tracking_recovery_policy_v1";
+        if (config.mode == TrialMode::ResidualNoGate ||
+            config.mode == TrialMode::PhaseRejoinFull) {
+            if (config.pilot_only ||
+                !config.formal_c3_c4_causal_comparison_ready) {
+                error = "C3/C4 strict causal comparison contract is not frozen";
                 return false;
             }
         }
@@ -830,102 +824,6 @@ public:
 
 private:
     const NominalSequenceArtifact& artifact_;
-    std::size_t cycle_ = 0;
-};
-
-// C3 is intentionally not a C4 solver with enlarged recovery radii.  It is a
-// separate, causal bounded-residual controller around the same frozen V3
-// sequence.  It consumes the same execution-horizon state and publishes
-// through the same transaction, but never evaluates or calls a recovery gate.
-class ResidualNoGateSession final : public SolverSession {
-public:
-    ResidualNoGateSession(const NominalSequenceArtifact& artifact,
-                          const ConditionConfig& config)
-        : artifact_(artifact) {
-        BoundedTrackingRecoveryPolicyParams params =
-            boundedTrackingRecoveryPolicyV1Params();
-        // The condition repeats the frozen numerical image so an experiment
-        // cannot silently relabel a different feedback law as C3.
-        params.longitudinal_position_gain =
-            config.residual_longitudinal_gain;
-        params.lateral_position_gain = config.residual_lateral_gain;
-        params.yaw_gain = config.residual_yaw_gain;
-        params.linear_velocity_gain = config.residual_velocity_gain;
-        params.angular_velocity_gain = config.residual_omega_gain;
-        params.max_residual_v = config.max_residual_v;
-        params.max_residual_omega = config.max_residual_omega;
-        configured_ = policy_.configure(params, configure_error_);
-    }
-
-    void setCycle(std::size_t cycle) { cycle_ = cycle; }
-
-    bool solve(const SolverInput& input, SolverOutput& output) override {
-        output = SolverOutput{};
-        output.failure_kind = SolverFailureKind::Integrity;
-        output.cycle_timing = input.cycle_timing;
-        if (!artifact_.valid() || artifact_.empty()) {
-            output.status = "RESIDUAL_NOGATE_ARTIFACT_UNAVAILABLE";
-            return false;
-        }
-        if (!configured_) {
-            output.status = "RESIDUAL_NOGATE_POLICY_REJECTED_" +
-                configure_error_;
-            return false;
-        }
-        if (!input.execution_horizon.active ||
-            !input.execution_horizon.initial_state.valid) {
-            output.status = "RESIDUAL_NOGATE_EXECUTION_HORIZON_REQUIRED";
-            return false;
-        }
-        if (cycle_ >= artifact_.size()) {
-            output.success = true;
-            output.failure_kind = SolverFailureKind::None;
-            output.status = "GOAL_REACHED";
-            output.progress_abs_s = artifact_.metadata().path_length;
-            output.progress_s = 1.0;
-            return true;
-        }
-        const PhaseNominalSample* nominal = artifact_.sample(cycle_);
-        if (nominal == nullptr) {
-            output.status = "RESIDUAL_NOGATE_SAMPLE_MISSING";
-            return false;
-        }
-        const RobotState& robot = input.execution_horizon.initial_state.robot;
-        const BoundedTrackingRecoveryPolicyResult policy =
-            policy_.evaluate(*nominal, robot);
-        if (!policy.valid) {
-            output.status = "RESIDUAL_NOGATE_POLICY_FAILED_" + policy.status;
-            return false;
-        }
-        output.success = true;
-        output.failure_kind = SolverFailureKind::None;
-        output.status =
-            "SHARED_BOUNDED_TRACKING_RESIDUAL_NO_RECOVERY_ADMISSION";
-        output.cmd_v = policy.command.linear;
-        output.cmd_omega = policy.command.angular;
-        output.progress_abs_s = nominal->s;
-        output.progress_s = artifact_.metadata().path_length > 1e-12
-            ? nominal->s / artifact_.metadata().path_length
-            : 0.0;
-        output.projector_debug.raw_valid = true;
-        output.projector_debug.guarded_valid = true;
-        output.projector_debug.raw_s = nominal->s;
-        output.projector_debug.guarded_s = nominal->s;
-        output.projector_debug.raw_distance = std::hypot(
-            nominal->x - robot.x, nominal->y - robot.y);
-        output.projector_debug.guarded_distance =
-            output.projector_debug.raw_distance;
-        output.delay_augmented_execution_solution = false;
-        output.initial_execution_state =
-            input.execution_horizon.initial_state;
-        return true;
-    }
-
-private:
-    const NominalSequenceArtifact& artifact_;
-    BoundedTrackingRecoveryPolicy policy_;
-    bool configured_ = false;
-    std::string configure_error_;
     std::size_t cycle_ = 0;
 };
 
@@ -2052,16 +1950,24 @@ bool writeSummary(
     }
     output << "  \"baseline_contract\": {\n"
         << "    \"pilot_only\": "
-        << (condition.mode == TrialMode::ResidualNoGate ? "true" : "false")
+        << (condition.pilot_only ? "true" : "false")
         << ",\n"
         << "    \"c1_pilot_tuned_and_frozen\": "
         << (condition.pilot_tuned_and_frozen ? "true" : "false") << ",\n"
-        << "    \"formal_c3_c4_causal_comparison_ready\": false,\n"
+        << "    \"formal_c3_c4_causal_comparison_ready\": "
+        << (condition.formal_c3_c4_causal_comparison_ready
+                ? "true" : "false") << ",\n"
         << "    \"c3_gate_disabled_by_separate_controller\": "
-        << (condition.mode == TrialMode::ResidualNoGate ? "true" : "false")
+        << "false"
         << ",\n"
         << "    \"c3_does_not_widen_gate_radii\": true,\n"
-        << "    \"c3_exact_c4_optimizer_match\": false,\n"
+        << "    \"c3_empirical_gate_monitor_only\": "
+        << (condition.mode == TrialMode::ResidualNoGate
+                ? "true" : "false") << ",\n"
+        << "    \"c3_exact_c4_optimizer_match\": "
+        << ((condition.mode == TrialMode::ResidualNoGate ||
+             condition.mode == TrialMode::PhaseRejoinFull)
+                ? "true" : "false") << ",\n"
         << "    \"is_zvd_delay_steps\": ["
         << zvd.delay_steps[0] << ", " << zvd.delay_steps[1] << ", "
         << zvd.delay_steps[2] << "],\n"
@@ -2220,7 +2126,6 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     SolverParams solver = commonSolverParams();
     std::unique_ptr<SpmpcProblem> production_problem;
     std::unique_ptr<OfflineReplaySession> replay_session;
-    std::unique_ptr<ResidualNoGateSession> residual_session;
     std::unique_ptr<ZvdInputShapingSession> shaping_session;
     SolverSession* solver_session = nullptr;
 
@@ -2242,12 +2147,10 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     } else if (condition.mode == TrialMode::OfflineReplay) {
         replay_session.reset(new OfflineReplaySession(artifact));
         solver_session = replay_session.get();
-    } else if (condition.mode == TrialMode::ResidualNoGate) {
-        residual_session.reset(new ResidualNoGateSession(artifact, condition));
-        solver_session = residual_session.get();
-    } else if (condition.mode == TrialMode::PhaseRejoinFull) {
+    } else if (condition.mode == TrialMode::ResidualNoGate ||
+               condition.mode == TrialMode::PhaseRejoinFull) {
         if (!DelayAugmentedPhaseAcadosSolver::compiled()) {
-            std::cerr << "ERROR: C4 requires the explicitly enabled 22D "
+            std::cerr << "ERROR: C3/C4 require the explicitly enabled 22D "
                       << "delay-augmented capsule\n";
             cleanup_temporary();
             return kConfigurationExit;
@@ -2257,7 +2160,8 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         const SolverConfigureResult configured =
             production_problem->configure(solver, variant);
         if (!configured.success) {
-            std::cerr << "ERROR: C4 solver rejected: " << configured.status
+            std::cerr << "ERROR: C3/C4 solver rejected: "
+                      << configured.status
                       << ": " << configured.detail << '\n';
             cleanup_temporary();
             return kConfigurationExit;
@@ -2304,8 +2208,11 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     }
     PhaseRejoinParams phase_params;
     phase_params.mode = PhaseRejoinMode::Off;
-    if (condition.mode == TrialMode::PhaseRejoinFull) {
+    if (condition.mode == TrialMode::ResidualNoGate ||
+        condition.mode == TrialMode::PhaseRejoinFull) {
         phase_params.mode = PhaseRejoinMode::Enforce;
+        phase_params.empirical_gate_enforced =
+            condition.mode == TrialMode::PhaseRejoinFull;
         phase_params.liquid_horizon_steps = compiled.liquid_horizon_steps;
         phase_params.max_residual_v = condition.max_residual_v;
         phase_params.max_residual_omega = condition.max_residual_omega;
@@ -2319,13 +2226,14 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         cleanup_temporary();
         return kConfigurationExit;
     }
-    if (condition.mode == TrialMode::PhaseRejoinFull) {
+    if (condition.mode == TrialMode::ResidualNoGate ||
+        condition.mode == TrialMode::PhaseRejoinFull) {
         const NominalArtifactLoadResult loaded =
             engine.loadPhaseRejoinArtifact(args.artifact_path);
         if (!loaded.success || !engine.validatePhaseRejoinRuntimeContract(
                 phaseRuntimeContract(solver, variant, artifact),
                 path.reference, error)) {
-            std::cerr << "ERROR: C4 runtime/artifact contract rejected: "
+            std::cerr << "ERROR: C3/C4 runtime/artifact contract rejected: "
                       << (loaded.success ? error : loaded.status) << '\n';
             cleanup_temporary();
             return kConfigurationExit;
@@ -2486,8 +2394,6 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         }
 
         if (replay_session) replay_session->setCycle(cycle);
-        if (residual_session) residual_session->setCycle(cycle);
-
         const double plant_publish_time_sec =
             secondsBetween(estimate.expected_publish_stamp_ns, kStampBaseNs);
         sink.arm(plant_publish_time_sec,
@@ -2661,14 +2567,14 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             completion_reason = "CONTROLLED_STOP";
             break;
         }
-        if ((condition.mode == TrialMode::OfflineReplay ||
-             condition.mode == TrialMode::ResidualNoGate) &&
+        if (condition.mode == TrialMode::OfflineReplay &&
             cycle + 1 >= artifact.size()) {
             completed = true;
             completion_reason = "ARTIFACT_TAIL_COMPLETE";
             break;
         }
-        if (condition.mode == TrialMode::PhaseRejoinFull &&
+        if ((condition.mode == TrialMode::ResidualNoGate ||
+             condition.mode == TrialMode::PhaseRejoinFull) &&
             result.phase_debug.terminal_release_authorized) {
             completed = true;
             completion_reason = "PHASE_TAIL_RELEASED";
