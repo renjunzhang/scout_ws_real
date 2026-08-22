@@ -668,6 +668,7 @@ target_link_libraries(spmpc_independent_plant_smoke
 # liquid truth only when assigning offline labels; neither target is installed
 # into the robot runtime.
 add_library(spmpc_phase_rejoin_recovery_rollout STATIC
+  src/simulation/exclusive_output_pair.cpp
   src/simulation/phase_rejoin_recovery_rollout.cpp
 )
 target_link_libraries(spmpc_phase_rejoin_recovery_rollout
@@ -724,6 +725,21 @@ target_link_libraries(spmpc_build_formal_phase_rejoin_nominal
 )
 
 if(CATKIN_ENABLE_TESTING)
+  catkin_add_gtest(test_phase_rejoin_recovery_rollout
+    test/test_phase_rejoin_recovery_rollout.cpp)
+  if(TARGET test_phase_rejoin_recovery_rollout)
+    target_compile_definitions(test_phase_rejoin_recovery_rollout PRIVATE
+      "SPMPC_FORMAL_SIMULATION_CONFIG_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/config/simulation/phase_rejoin_formal_simulation_v1.yaml\""
+      "SPMPC_RECOVERY_SAMPLING_CONFIG_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/config/simulation/phase_rejoin_recovery_sampling_v1.yaml\""
+    )
+    target_include_directories(test_phase_rejoin_recovery_rollout PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+    )
+    target_link_libraries(test_phase_rejoin_recovery_rollout
+      spmpc_phase_rejoin_recovery_rollout
+      yaml-cpp
+    )
+  endif()
   catkin_add_gtest(test_phase_rejoin_closed_loop_trial
     test/test_phase_rejoin_closed_loop_trial.cpp
     tools/simulation/run_phase_rejoin_closed_loop_trial.cpp)

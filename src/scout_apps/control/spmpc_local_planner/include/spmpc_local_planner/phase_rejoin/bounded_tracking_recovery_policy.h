@@ -39,6 +39,27 @@ struct BoundedTrackingRecoveryPolicyResult {
     VelocityCommand command;
 };
 
+// Final publication transaction shared by the offline rollout sampler and
+// the production coordinator.  The frozen v1 feedback above produces a
+// desired command; this transaction makes that command executable under the
+// same published-command rate contract used by the 22D solver.  It has no
+// liquid-state input.
+struct BoundedTrackingRecoveryCommandTransaction {
+    bool valid = false;
+    bool rate_limited = false;
+    std::string status = "NOT_RUN";
+    VelocityCommand command;
+};
+
+BoundedTrackingRecoveryCommandTransaction
+applyBoundedTrackingRecoveryCommandTransaction(
+    const VelocityCommand& desired_command,
+    const VelocityCommand& previous_published_command,
+    double maximum_published_acceleration,
+    double maximum_published_angular_acceleration,
+    double dt,
+    const BoundedTrackingRecoveryPolicyParams& policy_params);
+
 // The v1 numerical policy is code-frozen.  YAML/artifact metadata may repeat
 // it for auditability, but loaders must exact-match this image.  Any numerical
 // change requires a new contract ID/version.

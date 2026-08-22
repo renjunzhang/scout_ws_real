@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/runtime/execution_prediction/execution_model.h"
+#include "spmpc_local_planner/simulation/exclusive_output_pair.h"
 #include "spmpc_local_planner/simulation/phase_rejoin_recovery_rollout.h"
 #include "spmpc_delay_augmented_phase_solver_manifest.h"
 
@@ -64,65 +65,6 @@ struct PathStart {
     double yaw = 0.0;
     double length_m = 0.0;
     std::size_t pose_count = 0;
-};
-
-class ExclusiveOutputFile {
-public:
-    ~ExclusiveOutputFile() {
-        if (fd_ >= 0) ::close(fd_);
-        if (!preserved_ && !path_.empty()) ::unlink(path_.c_str());
-    }
-
-    bool reserve(const std::string& path, std::string& error) {
-        fd_ = ::open(path.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0644);
-        if (fd_ < 0) {
-            error = errno == EEXIST
-                ? "output already exists; refusing to overwrite: " + path
-                : "cannot create output " + path + ": " +
-                    std::strerror(errno);
-            return false;
-        }
-        path_ = path;
-        return true;
-    }
-
-    bool writeAndCommit(const std::string& contents, std::string& error) {
-        std::size_t offset = 0;
-        while (offset < contents.size()) {
-            const ssize_t count = ::write(
-                fd_, contents.data() + offset, contents.size() - offset);
-            if (count < 0) {
-                if (errno == EINTR) continue;
-                error = "cannot write output " + path_ + ": " +
-                    std::strerror(errno);
-                return false;
-            }
-            if (count == 0) {
-                error = "zero-length output write: " + path_;
-                return false;
-            }
-            offset += static_cast<std::size_t>(count);
-        }
-        if (::fsync(fd_) != 0) {
-            error = "cannot fsync output " + path_ + ": " +
-                std::strerror(errno);
-            return false;
-        }
-        if (::close(fd_) != 0) {
-            fd_ = -1;
-            error = "cannot close output " + path_ + ": " +
-                std::strerror(errno);
-            return false;
-        }
-        fd_ = -1;
-        preserved_ = true;
-        return true;
-    }
-
-private:
-    int fd_ = -1;
-    std::string path_;
-    bool preserved_ = false;
 };
 
 std::string trim(const std::string& value) {
@@ -697,6 +639,14 @@ int main(int argc, char** argv) {
             args.sampling_config, sampling_config, error)) {
         return usage("sampling config rejected: " + error);
     }
+    if (sampling_config.maximum_published_acceleration !=
+            manifest::kAccelerationMax ||
+        sampling_config.maximum_published_angular_acceleration !=
+            manifest::kAngularAccelerationMax) {
+        return usage(
+            "sampling publication-rate contract does not exact-match "
+            "the compiled 22D execution contract");
+    }
     std::vector<spmpc::PhaseNominalSample> nominal_samples;
     double nominal_dt = 0.0;
     if (!buildNominalProjection(
@@ -716,12 +666,11 @@ int main(int argc, char** argv) {
         args.split, args.seed, args.phase_begin, phase_end);
     if (!sampled.valid) return usage("sampling failed: " + sampled.status);
 
-    ExclusiveOutputFile dataset;
-    ExclusiveOutputFile audit;
-    if (!dataset.reserve(args.dataset_output, error) ||
-        !audit.reserve(args.audit_output, error) ||
-        !dataset.writeAndCommit(datasetCsv(sampled.rows), error) ||
-        !audit.writeAndCommit(auditCsv(sampled.audits), error)) {
+    simulation::ExclusiveOutputPair outputs;
+    if (!outputs.stage(
+            args.dataset_output, datasetCsv(sampled.rows),
+            args.audit_output, auditCsv(sampled.audits), error) ||
+        !outputs.commit(error)) {
         std::cerr << "ERROR: " << error << '\n';
         return 3;
     }

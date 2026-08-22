@@ -19,6 +19,10 @@ sampling:
   published_angular_max: 1.2
   maximum_candidate_residual_v: 0.08
   maximum_candidate_residual_omega: 0.20
+  # Exact published-command rate limits shared with the generated 22D
+  # execution contract and the production coordinator transaction.
+  maximum_published_acceleration: 0.60
+  maximum_published_angular_acceleration: 1.20
 
   # Shared phase_rejoin feedback. It uses odom-like robot motion only. This is
   # a simulation policy candidate until the same contract is bound by the

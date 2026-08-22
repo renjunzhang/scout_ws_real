@@ -689,15 +689,20 @@ TEST(DelayAugmentedPhaseOnline,
     const PhaseSolveView rate_mismatched_view = makePhaseSolveView(
         failed_output, preparation.solver_terminal_step,
         &rate_mismatched);
-    const PhaseRejoinDecision rejected_recovery = coordinator.decide(
+    const PhaseRejoinDecision rate_limited_recovery = coordinator.decide(
         preparation, RobotState{}, SloshState{}, false,
         rate_mismatched_view);
-    EXPECT_TRUE(rejected_recovery.current_execution_compatible);
-    EXPECT_FALSE(rejected_recovery.recovery_command_used);
-    EXPECT_TRUE(rejected_recovery.controlled_stop_used);
-    EXPECT_DOUBLE_EQ(rejected_recovery.output_cmd_v, 0.0);
-    EXPECT_EQ(rejected_recovery.status,
-              "ENFORCE_RECOVERY_RATE_REJECTED_STOP");
+    EXPECT_TRUE(rate_limited_recovery.current_execution_compatible);
+    EXPECT_TRUE(rate_limited_recovery.recovery_command_used);
+    EXPECT_FALSE(rate_limited_recovery.controlled_stop_used);
+    EXPECT_NEAR(
+        rate_limited_recovery.output_cmd_v,
+        rate_mismatched.linear.pending_commands.back() -
+            manifest::kAccelerationMax * manifest::kDt,
+        1.0e-12);
+    EXPECT_EQ(
+        rate_limited_recovery.status,
+        "ENFORCE_SOLVER_FAILED_RECOVERY_RATE_LIMITED");
 
     solve.current_execution.linear.pending_commands.front() = 2.0;
     const PhaseRejoinDecision bad_current = coordinator.decide(

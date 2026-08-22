@@ -713,23 +713,41 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
                     runtime_contract_
                         .max_published_angular_acceleration) &&
                 runtime_contract_.max_published_angular_acceleration > 0.0;
-            const double tolerance = params_.artifact_command_tolerance;
-            const bool rate_safe = rate_contract_available &&
-                std::abs(preparation.recovery_cmd_v -
-                         actual.linear.pending_commands.back()) <=
-                    runtime_contract_.max_published_acceleration *
-                        runtime_contract_.dt + tolerance &&
-                std::abs(preparation.recovery_cmd_omega -
-                         actual.angular.pending_commands.back()) <=
-                    runtime_contract_.max_published_angular_acceleration *
-                        runtime_contract_.dt + tolerance;
-            if (!rate_safe) {
+            VelocityCommand desired_recovery;
+            desired_recovery.linear = preparation.recovery_cmd_v;
+            desired_recovery.angular = preparation.recovery_cmd_omega;
+            VelocityCommand previous_published;
+            if (rate_contract_available) {
+                previous_published.linear =
+                    actual.linear.pending_commands.back();
+                previous_published.angular =
+                    actual.angular.pending_commands.back();
+            }
+            const BoundedTrackingRecoveryCommandTransaction transaction =
+                rate_contract_available
+                ? applyBoundedTrackingRecoveryCommandTransaction(
+                    desired_recovery, previous_published,
+                    runtime_contract_.max_published_acceleration,
+                    runtime_contract_.max_published_angular_acceleration,
+                    runtime_contract_.dt, recovery_policy_.params())
+                : BoundedTrackingRecoveryCommandTransaction{};
+            if (!transaction.valid) {
                 decision.output_cmd_v = 0.0;
                 decision.output_cmd_omega = 0.0;
                 decision.command_intervened = true;
                 decision.controlled_stop_used = true;
                 decision.status =
-                    "ENFORCE_RECOVERY_RATE_REJECTED_STOP";
+                    "ENFORCE_RECOVERY_RATE_CONTRACT_UNAVAILABLE_STOP";
+                return decision;
+            }
+            decision.output_cmd_v = transaction.command.linear;
+            decision.output_cmd_omega = transaction.command.angular;
+            decision.command_intervened = true;
+            decision.recovery_command_used = true;
+            if (transaction.rate_limited) {
+                decision.status = solver_success
+                    ? "ENFORCE_TERMINAL_REJECTED_RECOVERY_RATE_LIMITED"
+                    : "ENFORCE_SOLVER_FAILED_RECOVERY_RATE_LIMITED";
                 return decision;
             }
         }

@@ -1,0 +1,54 @@
+# Simulation-only sampling contract for executable recovery perturbations.
+# Compared with v1, pulse magnitudes are unchanged and every publication is
+# still constrained by the compiled 22D rate contract.  A full-phase pilot
+# showed that 30-cycle pulses still produced no negative labels, so the
+# bounded development excitation is frozen at 90 cycles.
+schema: spmpc_phase_rejoin_recovery_rollout_sampling_v1
+
+scope:
+  simulation_only: true
+  external_liquid_truth_visible_to_candidate_policy: false
+  external_liquid_truth_used_for_features: false
+  external_liquid_truth_used_for_label: true
+  controller_liquid_observer_uses_motion_only: true
+
+sampling:
+  warmup_steps: 90
+  published_linear_min: 0.0
+  published_linear_max: 0.8
+  published_angular_min: -1.2
+  published_angular_max: 1.2
+  maximum_candidate_residual_v: 0.08
+  maximum_candidate_residual_omega: 0.20
+  maximum_published_acceleration: 0.60
+  maximum_published_angular_acceleration: 1.20
+
+  recovery_policy:
+    contract_id: bounded_tracking_recovery_policy_v1
+    longitudinal_position_gain: 0.80
+    lateral_position_gain: 1.20
+    yaw_gain: 1.50
+    linear_velocity_gain: 0.40
+    angular_velocity_gain: 0.40
+    max_residual_v: 0.08
+    max_residual_omega: 0.20
+
+  profiles:
+    - {profile_id: nominal, pulse_steps: 0, residual_v: 0.0, residual_omega: 0.0}
+    - {profile_id: v_pos_90, pulse_steps: 90, residual_v: 0.08, residual_omega: 0.0}
+    - {profile_id: v_neg_90, pulse_steps: 90, residual_v: -0.08, residual_omega: 0.0}
+    - {profile_id: w_pos_90, pulse_steps: 90, residual_v: 0.0, residual_omega: 0.20}
+    - {profile_id: w_neg_90, pulse_steps: 90, residual_v: 0.0, residual_omega: -0.20}
+    - {profile_id: coupled_pos_90, pulse_steps: 90, residual_v: 0.08, residual_omega: 0.20}
+    - {profile_id: coupled_neg_90, pulse_steps: 90, residual_v: -0.08, residual_omega: -0.20}
+
+label:
+  maximum_path_position_error_m: 0.25
+  maximum_path_yaw_error_rad: 0.35
+  maximum_external_height_m: 0.0023
+  terminal_position_error_m: 0.15
+  terminal_yaw_error_rad: 0.15
+  terminal_v_abs_mps: 0.03
+  terminal_omega_abs_radps: 0.05
+  terminal_external_height_m: 0.0015
+  fixed_tail_sec: 4.0

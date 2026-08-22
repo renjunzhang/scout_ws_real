@@ -51,6 +51,8 @@ struct RecoveryRolloutSamplingConfig {
     double published_angular_max = 0.0;
     double maximum_candidate_residual_v = 0.0;
     double maximum_candidate_residual_omega = 0.0;
+    double maximum_published_acceleration = 0.0;
+    double maximum_published_angular_acceleration = 0.0;
     BoundedTrackingRecoveryPolicyParams recovery_policy;
     RecoveryRolloutLabelContract label;
     std::vector<RecoveryExcitationProfile> profiles;

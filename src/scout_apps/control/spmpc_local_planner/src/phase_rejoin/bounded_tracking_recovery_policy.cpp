@@ -39,6 +39,72 @@ BoundedTrackingRecoveryPolicyParams boundedTrackingRecoveryPolicyV1Params() {
     return params;
 }
 
+BoundedTrackingRecoveryCommandTransaction
+applyBoundedTrackingRecoveryCommandTransaction(
+    const VelocityCommand& desired_command,
+    const VelocityCommand& previous_published_command,
+    double maximum_published_acceleration,
+    double maximum_published_angular_acceleration,
+    double dt,
+    const BoundedTrackingRecoveryPolicyParams& policy_params) {
+    BoundedTrackingRecoveryCommandTransaction transaction;
+    const double values[] = {
+        desired_command.linear,
+        desired_command.angular,
+        previous_published_command.linear,
+        previous_published_command.angular,
+        maximum_published_acceleration,
+        maximum_published_angular_acceleration,
+        dt,
+    };
+    if (std::any_of(
+            std::begin(values), std::end(values),
+            [](double value) { return !finite(value); }) ||
+        maximum_published_acceleration <= 0.0 ||
+        maximum_published_angular_acceleration <= 0.0 || dt <= 0.0 ||
+        previous_published_command.linear <
+            policy_params.published_linear_min - 1.0e-9 ||
+        previous_published_command.linear >
+            policy_params.published_linear_max + 1.0e-9 ||
+        previous_published_command.angular <
+            policy_params.published_angular_min - 1.0e-9 ||
+        previous_published_command.angular >
+            policy_params.published_angular_max + 1.0e-9) {
+        transaction.status = "INVALID_RECOVERY_COMMAND_TRANSACTION_INPUT";
+        return transaction;
+    }
+
+    const double maximum_delta_v = maximum_published_acceleration * dt;
+    const double maximum_delta_omega =
+        maximum_published_angular_acceleration * dt;
+    const double linear_lower = std::max(
+        policy_params.published_linear_min,
+        previous_published_command.linear - maximum_delta_v);
+    const double linear_upper = std::min(
+        policy_params.published_linear_max,
+        previous_published_command.linear + maximum_delta_v);
+    const double angular_lower = std::max(
+        policy_params.published_angular_min,
+        previous_published_command.angular - maximum_delta_omega);
+    const double angular_upper = std::min(
+        policy_params.published_angular_max,
+        previous_published_command.angular + maximum_delta_omega);
+    transaction.command.linear = clamp(
+        desired_command.linear, linear_lower, linear_upper);
+    transaction.command.angular = clamp(
+        desired_command.angular, angular_lower, angular_upper);
+    transaction.rate_limited =
+        std::abs(transaction.command.linear - desired_command.linear) >
+            1.0e-12 ||
+        std::abs(transaction.command.angular - desired_command.angular) >
+            1.0e-12;
+    transaction.valid = true;
+    transaction.status = transaction.rate_limited
+        ? "RECOVERY_COMMAND_RATE_LIMITED"
+        : "RECOVERY_COMMAND_ACCEPTED";
+    return transaction;
+}
+
 bool validateBoundedTrackingRecoveryPolicyParams(
     const BoundedTrackingRecoveryPolicyParams& params,
     std::string& error) {

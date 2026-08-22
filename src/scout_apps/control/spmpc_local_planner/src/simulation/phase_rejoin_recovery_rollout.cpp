@@ -191,7 +191,7 @@ RobotState observedRobot(const IndependentPlantState& state) {
     return robot;
 }
 
-bool trackingRecoveryCommand(
+bool trackingRecoveryDesiredCommand(
     const BoundedTrackingRecoveryPolicy& policy,
     const PhaseNominalSample& nominal,
     const IndependentPlantState& observed,
@@ -207,6 +207,54 @@ bool trackingRecoveryCommand(
     command.linear = evaluated.command.linear;
     command.angular = evaluated.command.angular;
     return true;
+}
+
+bool applyRecoveryCommandTransaction(
+    const RecoveryRolloutSamplingConfig& config,
+    double dt,
+    const RuntimeState& runtime,
+    const IndependentPlantCommand& desired,
+    IndependentPlantCommand& command,
+    std::string& error) {
+    if (runtime.linear_pending.empty() || runtime.angular_pending.empty()) {
+        error = "recovery command history is unavailable";
+        return false;
+    }
+    VelocityCommand desired_command;
+    desired_command.linear = desired.linear;
+    desired_command.angular = desired.angular;
+    VelocityCommand previous_published;
+    previous_published.linear = runtime.linear_pending.back();
+    previous_published.angular = runtime.angular_pending.back();
+    const BoundedTrackingRecoveryCommandTransaction transaction =
+        applyBoundedTrackingRecoveryCommandTransaction(
+            desired_command, previous_published,
+            config.maximum_published_acceleration,
+            config.maximum_published_angular_acceleration,
+            dt, config.recovery_policy);
+    if (!transaction.valid) {
+        error = "recovery command transaction failed: " +
+            transaction.status;
+        return false;
+    }
+    command.linear = transaction.command.linear;
+    command.angular = transaction.command.angular;
+    return true;
+}
+
+bool trackingRecoveryCommand(
+    const BoundedTrackingRecoveryPolicy& policy,
+    const PhaseNominalSample& nominal,
+    const RuntimeState& runtime,
+    const RecoveryRolloutSamplingConfig& config,
+    double dt,
+    IndependentPlantCommand& command,
+    std::string& error) {
+    IndependentPlantCommand desired;
+    return trackingRecoveryDesiredCommand(
+               policy, nominal, runtime.plant.state(), desired, error) &&
+        applyRecoveryCommandTransaction(
+               config, dt, runtime, desired, command, error);
 }
 
 bool validNominalSample(const PhaseNominalSample& sample,
@@ -310,8 +358,13 @@ bool validateRecoveryRolloutSamplingConfig(
                !finite(config.maximum_candidate_residual_v) ||
                config.maximum_candidate_residual_v < 0.0 ||
                !finite(config.maximum_candidate_residual_omega) ||
-               config.maximum_candidate_residual_omega < 0.0) {
+        config.maximum_candidate_residual_omega < 0.0) {
         error = "invalid recovery sampling command envelope";
+    } else if (!finite(config.maximum_published_acceleration) ||
+               config.maximum_published_acceleration <= 0.0 ||
+               !finite(config.maximum_published_angular_acceleration) ||
+               config.maximum_published_angular_acceleration <= 0.0) {
+        error = "invalid recovery publication-rate contract";
     }
     if (error.empty() && !validateBoundedTrackingRecoveryPolicyParams(
             config.recovery_policy, error)) {
@@ -452,6 +505,13 @@ bool loadRecoveryRolloutSamplingConfig(
                             config.maximum_candidate_residual_v, error) ||
             !requiredScalar(sampling, "maximum_candidate_residual_omega",
                             config.maximum_candidate_residual_omega, error)) {
+            return false;
+        }
+        if (!requiredScalar(sampling, "maximum_published_acceleration",
+                            config.maximum_published_acceleration, error) ||
+            !requiredScalar(
+                sampling, "maximum_published_angular_acceleration",
+                config.maximum_published_angular_acceleration, error)) {
             return false;
         }
         const YAML::Node policy = sampling["recovery_policy"];
@@ -658,7 +718,8 @@ PhaseRejoinRecoveryRolloutSampler::sampleSeed(
         IndependentPlantCommand tracked;
         if (!trackingRecoveryCommand(
                 recovery_policy, nominal_samples_[phase],
-                baseline.plant.state(), tracked, error)) {
+                baseline, sampling_config_, nominal_dt_sec_, tracked,
+                error)) {
             result.status = "NOMINAL_TRACKING_POLICY_FAILED: " + error;
             return result;
         }
@@ -696,7 +757,7 @@ PhaseRejoinRecoveryRolloutSampler::sampleSeed(
                 if (stage >= 0) {
                     const PhaseNominalSample& stage_nominal =
                         nominal_samples_[static_cast<std::size_t>(stage)];
-                    if (!trackingRecoveryCommand(
+                    if (!trackingRecoveryDesiredCommand(
                             recovery_policy, stage_nominal,
                             runtime.plant.state(), command, error)) {
                         rollout_failed = true;
@@ -727,8 +788,15 @@ PhaseRejoinRecoveryRolloutSampler::sampleSeed(
                     command.angular,
                     sampling_config_.published_angular_min,
                     sampling_config_.published_angular_max);
+                IndependentPlantCommand executable_command;
+                if (!applyRecoveryCommandTransaction(
+                        sampling_config_, nominal_dt_sec_, runtime,
+                        command, executable_command, error)) {
+                    rollout_failed = true;
+                    break;
+                }
                 if (!publishAndAdvance(
-                        runtime, command,
+                        runtime, executable_command,
                         stageTimeSec(stage + 1, warmup_steps,
                                      nominal_dt_sec_, nominal_samples_),
                         observer, plant_config_.integration_dt_sec,
@@ -810,8 +878,8 @@ PhaseRejoinRecoveryRolloutSampler::sampleSeed(
                 };
                 IndependentPlantCommand recovery_command;
                 if (!trackingRecoveryCommand(
-                        recovery_policy, from, runtime.plant.state(),
-                        recovery_command, error)) {
+                        recovery_policy, from, runtime, sampling_config_,
+                        nominal_dt_sec_, recovery_command, error)) {
                     rollout_failed = true;
                     break;
                 }
@@ -852,8 +920,9 @@ PhaseRejoinRecoveryRolloutSampler::sampleSeed(
                 };
                 IndependentPlantCommand final_command;
                 if (!trackingRecoveryCommand(
-                        recovery_policy, final_nominal,
-                        runtime.plant.state(), final_command, error)) {
+                        recovery_policy, final_nominal, runtime,
+                        sampling_config_, nominal_dt_sec_, final_command,
+                        error)) {
                     rollout_failed = true;
                     break;
                 }

@@ -626,7 +626,10 @@ def run_pipeline(
             "held-out dataset only"
         ),
         "safety_certificate": False,
+        "simulation_only": True,
         "formal_robot_release": False,
+        "physical_parameter_claim": False,
+        "source_limitations_acknowledged": True,
         "held_out_evaluation_count": 1,
         "held_out_influenced_fit": False,
         "held_out_influenced_tuning": False,
@@ -721,7 +724,10 @@ def build_manifest(
         ),
         "safety_certificate": False,
         "robust_invariant_set": False,
+        "simulation_only": True,
         "formal_robot_release": False,
+        "physical_parameter_claim": False,
+        "source_limitations_acknowledged": True,
         "physical_enforce_authorized": False,
         "input": {
             "path": str(input_path.resolve()),
@@ -898,7 +904,13 @@ def verify_manifest(path: Path) -> Mapping[str, Any]:
         or report.get("status") != held_out.get("status")
         or report.get("held_out_evaluation_count") != 1
         or report.get("safety_certificate") is not False
+        or report.get("simulation_only") is not True
+        or report.get("physical_parameter_claim") is not False
+        or report.get("source_limitations_acknowledged") is not True
         or manifest.get("safety_certificate") is not False
+        or manifest.get("simulation_only") is not True
+        or manifest.get("physical_parameter_claim") is not False
+        or manifest.get("source_limitations_acknowledged") is not True
     ):
         raise RecoveryFitError("held-out report contract mismatch")
     return manifest

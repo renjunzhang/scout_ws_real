@@ -665,7 +665,10 @@ bool verifyRecoveryBundle(const Arguments& args,
             !yamlString(manifest, "status", status) ||
             status != "EMPIRICAL_HELD_OUT_PASS" ||
             manifest["safety_certificate"].as<bool>() ||
+            !manifest["simulation_only"].as<bool>() ||
             manifest["formal_robot_release"].as<bool>() ||
+            manifest["physical_parameter_claim"].as<bool>() ||
+            !manifest["source_limitations_acknowledged"].as<bool>() ||
             manifest["physical_enforce_authorized"].as<bool>()) {
             error = "recovery fit manifest did not pass";
             return false;
@@ -674,7 +677,10 @@ bool verifyRecoveryBundle(const Arguments& args,
             schema != kHeldOutReportSchema ||
             !yamlString(report, "status", status) || status != "PASS" ||
             report["safety_certificate"].as<bool>() ||
+            !report["simulation_only"].as<bool>() ||
             report["formal_robot_release"].as<bool>() ||
+            report["physical_parameter_claim"].as<bool>() ||
+            !report["source_limitations_acknowledged"].as<bool>() ||
             report["held_out_influenced_fit"].as<bool>() ||
             report["held_out_influenced_tuning"].as<bool>() ||
             report["held_out_evaluation_count"].as<std::size_t>() != 1) {

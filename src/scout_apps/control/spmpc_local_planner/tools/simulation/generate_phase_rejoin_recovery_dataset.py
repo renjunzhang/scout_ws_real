@@ -104,11 +104,12 @@ def load_session_seeds(path: Path) -> Mapping[str, Tuple[int, ...]]:
         or scope.get("formal_robot_release") is not False
         or scope.get("real_robot_enforce_allowed") is not False
         or scope.get("plant_truth_visible_to_controller") is not False
+        or scope.get("physical_parameter_claim") is not False
     ):
         raise DatasetGenerationError("formal simulation session scope is unsafe")
     raw_seeds = session.get("seeds")
-    if not isinstance(raw_seeds, dict):
-        raise DatasetGenerationError("session seeds mapping is missing")
+    if not isinstance(raw_seeds, dict) or raw_seeds.get("locked") is not True:
+        raise DatasetGenerationError("session recovery seeds are not locked")
     owners: Dict[int, str] = {}
     result: Dict[str, Tuple[int, ...]] = {}
     for split in SPLITS:
@@ -131,6 +132,34 @@ def load_session_seeds(path: Path) -> Mapping[str, Tuple[int, ...]]:
             owners[seed] = split
         result[split] = seeds
     return result
+
+
+def load_frozen_plant_identity(path: Path) -> Mapping[str, str]:
+    config = _load_yaml(path)
+    scope = config.get("scope")
+    provenance = config.get("provenance")
+    if (
+        config.get("schema") != "spmpc_independent_simulation_config_v1"
+        or config.get("status") != "formal_simulation_release"
+        or not isinstance(config.get("freeze_id"), str)
+        or not config["freeze_id"]
+        or not isinstance(scope, dict)
+        or scope.get("simulation_only") is not True
+        or scope.get("formal_robot_release") is not False
+        or scope.get("real_robot_enforce_allowed") is not False
+        or scope.get("result_claim_authorized") is not False
+        or scope.get("physical_parameter_claim") is not False
+        or not isinstance(provenance, dict)
+        or provenance.get("source_limitations_acknowledged") is not True
+        or provenance.get("physical_parameter_claim") is not False
+    ):
+        raise DatasetGenerationError(
+            "Plant is not a frozen simulation-only, non-physical parameter image"
+        )
+    return {
+        "freeze_id": config["freeze_id"],
+        "status": config["status"],
+    }
 
 
 def load_profile_count(path: Path) -> int:
@@ -230,19 +259,70 @@ def _json_bytes(value: Any) -> bytes:
     return (json.dumps(value, indent=2, sort_keys=True) + "\n").encode("utf-8")
 
 
-def _write_exclusive(path: Path, contents: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+def _write_all(descriptor: int, contents: bytes) -> None:
+    offset = 0
+    while offset < len(contents):
+        count = os.write(descriptor, contents[offset:])
+        if count <= 0:
+            raise OSError("zero-length output write")
+        offset += count
+    os.fsync(descriptor)
+
+
+def _publish_exclusive_bundle(outputs: Sequence[Tuple[Path, bytes]]) -> None:
+    """Durably stage a bundle, then publish every member without overwrite.
+
+    Hard-link publication gives every target an exclusive create operation.
+    If any link or directory sync fails, all targets created by this call are
+    removed; pre-existing targets are never removed.  Temporary files live in
+    each target directory so publication does not cross filesystems.
+    """
+    if not outputs:
+        raise DatasetGenerationError("output bundle is empty")
+    resolved = [path.resolve(strict=False) for path, _ in outputs]
+    if len(set(resolved)) != len(resolved):
+        raise DatasetGenerationError("output bundle paths alias")
+    for path in resolved:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    if any(path.exists() for path in resolved):
+        raise DatasetGenerationError("an output already exists")
+
+    staged: List[Path] = []
+    published: List[Path] = []
     try:
-        offset = 0
-        while offset < len(contents):
-            count = os.write(descriptor, contents[offset:])
-            if count <= 0:
-                raise OSError("zero-length output write")
-            offset += count
-        os.fsync(descriptor)
+        for path, (_, contents) in zip(resolved, outputs):
+            descriptor, temporary = tempfile.mkstemp(
+                prefix=".{}.tmp.".format(path.name), dir=str(path.parent)
+            )
+            temporary_path = Path(temporary)
+            staged.append(temporary_path)
+            try:
+                os.fchmod(descriptor, 0o644)
+                _write_all(descriptor, contents)
+            finally:
+                os.close(descriptor)
+        for temporary_path, path in zip(staged, resolved):
+            os.link(str(temporary_path), str(path))
+            published.append(path)
+        for parent in sorted({path.parent for path in resolved}, key=str):
+            descriptor = os.open(str(parent), os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                os.fsync(descriptor)
+            finally:
+                os.close(descriptor)
+    except Exception:
+        for path in reversed(published):
+            try:
+                path.unlink()
+            except OSError:
+                pass
+        raise
     finally:
-        os.close(descriptor)
+        for path in staged:
+            try:
+                path.unlink()
+            except OSError:
+                pass
 
 
 def generate(args: argparse.Namespace) -> Mapping[str, Any]:
@@ -269,6 +349,7 @@ def generate(args: argparse.Namespace) -> Mapping[str, Any]:
         raise DatasetGenerationError("an output already exists")
 
     seeds = load_session_seeds(args.session)
+    plant_identity = load_frozen_plant_identity(args.plant_config)
     profile_count = load_profile_count(args.sampling_config)
     dataset_rows: List[Mapping[str, str]] = []
     audit_rows: List[Mapping[str, str]] = []
@@ -369,12 +450,15 @@ def generate(args: argparse.Namespace) -> Mapping[str, Any]:
         "status": "PILOT_DATASET",
         "simulation_only": True,
         "formal_robot_release": False,
+        "physical_parameter_claim": False,
+        "source_limitations_acknowledged": True,
         "paper_main_result_eligible": False,
         "nominal_source": "offline_plan_replayed_with_compiled_22d_transition",
         "candidate_policy_reads_external_liquid_truth": False,
         "features_use_external_liquid_truth": False,
         "label_uses_external_liquid_truth": True,
         "synthetic_labels": False,
+        "plant": plant_identity,
         "parallel_invocations": 1,
         "phase_range": {
             "begin": args.phase_begin,
@@ -406,22 +490,13 @@ def generate(args: argparse.Namespace) -> Mapping[str, Any]:
         "invocations": invocations,
     }
     manifest_contents = _json_bytes(manifest)
-    created: List[Path] = []
-    try:
-        for path, contents in (
+    _publish_exclusive_bundle(
+        (
             (args.output, dataset_contents),
             (args.audit_output, audit_contents),
             (args.manifest_output, manifest_contents),
-        ):
-            _write_exclusive(path, contents)
-            created.append(path)
-    except Exception:
-        for path in created:
-            try:
-                path.unlink()
-            except OSError:
-                pass
-        raise
+        )
+    )
     return manifest
 
 
