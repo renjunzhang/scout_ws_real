@@ -226,7 +226,7 @@ res_stat_i (i=0..N-1) = cost_grad_i - dyn_adj_i - ineq_adj_i
 >
 > ① `pi`（dynamics 伴随，`out->pi`，长度 22）在 stage 0..9 全部精确 0.0（`argmax=-1`）；`lam`（inequality 伴随，长度 `2*ni`）非零，stage 1/2 最大 `3.3e-3`，终端约 `1.3e-7`。见 `test_delay_augmented_phase_kkt_snapshot.cpp` 的 `perStagePi/perStageLam` dump。
 >
-> ② terminal `res_stat[0] = -1.586413e-2`，与 `w_x·(x_N−nom_x)/scale_x = 1.0·(−2.379620e-3)/0.15 = −1.586413e-2` 逐位相等（factor 是 `/scale`，与 acados NLS 实测一致，不是 `/scale²`）。
+> ② terminal 逐分量独立分解（§7.2，新增 `test_delay_augmented_phase_kkt_decomposition.cpp`）：`res_stat_N[k] = cost_grad_N[k] − ineq_adj_N[k]`。其中 `cost_grad_N[k]=w_state(k)·(x_N[k]−nom[k])/scale_k`，`ineq_adj_N[k]` 仅在 14 个 terminal execution-bound 索引 `{3,5}∪pending(10..21)` 上非零（gate/execution 约束的 `(∇h)ᵀλ`）。8 个非 exec-bound base state（x,y,yaw,progress,eta_x/dot,eta_y/dot）上 `ineq_adj_N≡0`、`res_stat==cost_grad` 逐位吻合（单/双精度舍入内，相对 ~8e-6）。terminal `res_stat[0] = -1.586413e-2`，即 `w_x·(x_N−nom_x)/scale_x = 1.0·(−2.379620e-3)/0.15 = −1.586413e-2`（factor 是 `/scale`，不是 `/scale²`；`pi=0` 使 `dyn_adj=0`）。
 >
 > ③ cond_N 判别：把 `qp_solver_cond_N` 从 `N=10` 降到 `5` 重 codegen 并重放，`pi` 变为在 stage 0/2/4/6/8 非零（`8.3e-4…5.7e-3`，奇 stage 仍 0）。证明 costate 确由 QP 求出，满 condensing（cond_N=N=10）时只未写回 `out->pi` —— 这是 condensing 表示层现象，非 QP 真零对偶。**但此项与 terminal 站定性无关**（terminal 无 dynamics）。
 >
