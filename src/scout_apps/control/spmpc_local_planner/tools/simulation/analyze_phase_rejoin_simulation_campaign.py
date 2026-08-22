@@ -10,9 +10,9 @@ discarded.
 
 Pilot output is an exploratory readiness report only.  Formal output can say
 PASS only when every summary is bound to the explicitly supplied frozen
-session hash, a non-zero pre-registered effect threshold is supplied, no trial
-failed, and the frozen paired-median rules pass.  This script does not turn a
-pilot campaign into publishable evidence.
+session hash, all 16 pre-registered paired blocks are present, no trial failed,
+and the frozen paired-bootstrap effect and task contracts pass.  This script
+does not turn a pilot campaign into publishable evidence.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ import json
 import math
 import os
 from pathlib import Path
+import random
 import statistics
 import sys
 import tempfile
@@ -31,7 +32,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
 SUMMARY_SCHEMA = "spmpc_closed_loop_trial_summary_v1"
-ANALYSIS_SCHEMA = "spmpc_phase_rejoin_simulation_campaign_analysis_v1"
+ANALYSIS_SCHEMA = "spmpc_phase_rejoin_simulation_campaign_analysis_v2"
 REQUIRED_CONDITIONS = ("C0", "C1", "C2", "C3", "C4", "IS")
 EXPECTED_MODES = {
     "C0": "ordinary_mpcc",
@@ -42,7 +43,13 @@ EXPECTED_MODES = {
     "IS": "input_shaping",
 }
 COMPARATORS = ("C0", "C1", "C3")
-MIN_FORMAL_PAIRED_SEEDS = 3
+FORMAL_PAIRED_BLOCKS = 16
+FORMAL_SEEDS = tuple(range(3101, 3117))
+MINIMUM_MEANINGFUL_DIFFERENCE_M = 0.0005
+BOOTSTRAP_REPLICATES = 10000
+BOOTSTRAP_SEED = 20260822
+COMPLETION_TIME_NONINFERIORITY_RELATIVE = 0.10
+TRACKING_Q95_NONINFERIORITY_M = 0.05
 MAX_UINT32 = (1 << 32) - 1
 
 
@@ -128,17 +135,25 @@ def _validate_status(root: Mapping[str, Any], trial: Mapping[str, Any], label: s
         "RUNTIME_ERROR",
     ):
         raise CampaignError("{}.status is invalid".format(label))
-    completed = _exact_bool(trial.get("completed"), "{}.trial.completed".format(label))
+    sequence_completed = _exact_bool(
+        trial.get("sequence_completed"),
+        "{}.trial.sequence_completed".format(label),
+    )
+    task_success = _exact_bool(
+        trial.get("task_success"), "{}.trial.task_success".format(label)
+    )
     runtime_error = trial.get("runtime_error")
     if not isinstance(runtime_error, str):
         raise CampaignError("{}.trial.runtime_error must be a string".format(label))
-    if status == "TRIAL_COMPLETE" and (not completed or runtime_error):
+    if status == "TRIAL_COMPLETE" and (
+        not sequence_completed or not task_success or runtime_error
+    ):
         raise CampaignError("{} has inconsistent successful status".format(label))
-    if status == "TRIAL_COMPLETE_WITH_FAILURE" and (completed or runtime_error):
+    if status == "TRIAL_COMPLETE_WITH_FAILURE" and (task_success or runtime_error):
         raise CampaignError("{} has inconsistent failed status".format(label))
-    if status == "RUNTIME_ERROR" and (completed or not runtime_error):
+    if status == "RUNTIME_ERROR" and (task_success or not runtime_error):
         raise CampaignError("{} has inconsistent runtime-error status".format(label))
-    return status == "TRIAL_COMPLETE" and completed
+    return status == "TRIAL_COMPLETE" and sequence_completed and task_success
 
 
 def _validate_truth_isolation(root: Mapping[str, Any], label: str) -> None:
@@ -225,13 +240,27 @@ def _validate_summary(
     _validate_truth_isolation(root, label)
     trial = _required_mapping(root, "trial", "{}.trial".format(label))
     success = _validate_status(root, trial, label)
-    _finite_number(trial.get("motion_end_sec"), "{}.trial.motion_end_sec".format(label), 0.0)
+    completion_time_sec = _finite_number(
+        trial.get("motion_end_sec"),
+        "{}.trial.motion_end_sec".format(label),
+        0.0,
+    )
+    if completion_time_sec <= 0.0:
+        raise CampaignError("{} completion time must be non-zero".format(label))
     fixed_tail_sec = _finite_number(
         trial.get("fixed_tail_sec"), "{}.trial.fixed_tail_sec".format(label), 0.0
     )
     if fixed_tail_sec <= 0.0:
         raise CampaignError("{} fixed tail must be non-zero".format(label))
     primary_value_m, sample_count = _validate_primary_metric(root, label)
+    secondary = _required_mapping(
+        root, "secondary_metrics", "{}.secondary_metrics".format(label)
+    )
+    tracking_q95_m = _finite_number(
+        secondary.get("tracking_q95_m"),
+        "{}.secondary_metrics.tracking_q95_m".format(label),
+        0.0,
+    )
 
     plant_freeze_id = _nonempty_string(
         root.get("plant_freeze_id"), "{}.plant_freeze_id".format(label)
@@ -268,6 +297,8 @@ def _validate_summary(
         "failure_retained": not success,
         "primary_value_m": primary_value_m,
         "primary_sample_count": sample_count,
+        "completion_time_sec": completion_time_sec,
+        "tracking_q95_m": tracking_q95_m,
         "fixed_tail_sec": fixed_tail_sec,
         "plant_freeze_id": plant_freeze_id,
         "artifact_contract_id": artifact_contract_id,
@@ -279,6 +310,40 @@ def _median(values: Sequence[float]) -> float:
     if not values:
         raise CampaignError("cannot compute a median from an empty trial set")
     return float(statistics.median(values))
+
+
+def _nearest_rank(values: Sequence[float], probability: float) -> float:
+    if not values:
+        raise CampaignError("cannot compute a quantile from an empty sample")
+    ordered = sorted(float(value) for value in values)
+    rank = max(1, int(math.ceil(probability * len(ordered))))
+    return ordered[min(rank - 1, len(ordered) - 1)]
+
+
+def _paired_bootstrap_mean_interval(
+    values: Sequence[float], seed_offset: int
+) -> Dict[str, Any]:
+    if not values:
+        raise CampaignError("cannot bootstrap an empty paired sample")
+    numbers = [float(value) for value in values]
+    generator = random.Random(BOOTSTRAP_SEED + seed_offset)
+    estimates = []
+    for _ in range(BOOTSTRAP_REPLICATES):
+        estimates.append(
+            statistics.fmean(
+                numbers[generator.randrange(len(numbers))]
+                for _ in range(len(numbers))
+            )
+        )
+    return {
+        "estimator": "paired_mean",
+        "method": "percentile_bootstrap_95pct",
+        "replicates": BOOTSTRAP_REPLICATES,
+        "rng_seed": BOOTSTRAP_SEED + seed_offset,
+        "estimate": statistics.fmean(numbers),
+        "lower": _nearest_rank(estimates, 0.025),
+        "upper": _nearest_rank(estimates, 0.975),
+    }
 
 
 def _condition_summary(records: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -320,6 +385,20 @@ def _paired_comparison(
             }
         )
     differences = [float(pair["difference_m"]) for pair in pairs]
+    comparison_offset = COMPARATORS.index(comparator)
+    completion_relative = [
+        (
+            float(by_key[(seed, "C4")]["completion_time_sec"])
+            - float(by_key[(seed, comparator)]["completion_time_sec"])
+        )
+        / float(by_key[(seed, comparator)]["completion_time_sec"])
+        for seed in seeds
+    ]
+    tracking_differences = [
+        float(by_key[(seed, "C4")]["tracking_q95_m"])
+        - float(by_key[(seed, comparator)]["tracking_q95_m"])
+        for seed in seeds
+    ]
     return {
         "definition": "C4_minus_{}".format(comparator),
         "lower_is_better": True,
@@ -331,6 +410,19 @@ def _paired_comparison(
         "equal_count": sum(value == 0.0 for value in differences),
         "c4_higher_count": sum(value > 0.0 for value in differences),
         "median_difference_m": _median(differences),
+        "mean_difference_m": statistics.fmean(differences),
+        "primary_paired_bootstrap_95pct":
+            _paired_bootstrap_mean_interval(
+                differences, 100 + comparison_offset
+            ),
+        "completion_time_relative_paired_bootstrap_95pct":
+            _paired_bootstrap_mean_interval(
+                completion_relative, 200 + comparison_offset
+            ),
+        "tracking_q95_difference_paired_bootstrap_95pct":
+            _paired_bootstrap_mean_interval(
+                tracking_differences, 300 + comparison_offset
+            ),
         "pairs": pairs,
     }
 
@@ -363,6 +455,15 @@ def analyze_campaign(
             raise CampaignError("formal analysis requires --frozen-session-sha256")
         if threshold is None:
             raise CampaignError("formal analysis requires --preregistered-min-effect-m")
+        if not math.isclose(
+            threshold,
+            MINIMUM_MEANINGFUL_DIFFERENCE_M,
+            rel_tol=0.0,
+            abs_tol=1.0e-12,
+        ):
+            raise CampaignError(
+                "formal minimum effect differs from frozen session contract"
+            )
 
     excluded = excluded_output.resolve() if excluded_output is not None else None
     paths = sorted(
@@ -444,8 +545,8 @@ def analyze_campaign(
         development_gaps = ["pilot_data_cannot_authorize_a_formal_claim"]
         if failed_trials:
             development_gaps.append("failed_trials_are_present_and_retained")
-        if len(seeds) < MIN_FORMAL_PAIRED_SEEDS:
-            development_gaps.append("formal_minimum_paired_seed_count_not_met")
+        if tuple(seeds) != FORMAL_SEEDS:
+            development_gaps.append("formal_paired_block_count_not_met")
         if not c3_c4_causal_ready:
             development_gaps.append("c3_c4_causal_contract_not_ready")
         decision = {
@@ -464,16 +565,40 @@ def analyze_campaign(
     else:
         assert threshold is not None
         checks = {
-            "minimum_paired_seed_count": len(seeds) >= MIN_FORMAL_PAIRED_SEEDS,
+            "exact_formal_paired_block_count":
+                tuple(seeds) == FORMAL_SEEDS,
             "no_failed_trials": not failed_trials,
             "c4_vs_c0_preregistered_effect": (
-                comparisons["C4_minus_C0"]["median_difference_m"] <= -threshold
+                comparisons["C4_minus_C0"]
+                ["primary_paired_bootstrap_95pct"]["upper"] <= -threshold
             ),
             "c4_vs_c1_preregistered_effect": (
-                comparisons["C4_minus_C1"]["median_difference_m"] <= -threshold
+                comparisons["C4_minus_C1"]
+                ["primary_paired_bootstrap_95pct"]["upper"] <= -threshold
             ),
             "c4_vs_c3_preregistered_effect": (
-                comparisons["C4_minus_C3"]["median_difference_m"] <= -threshold
+                comparisons["C4_minus_C3"]
+                ["primary_paired_bootstrap_95pct"]["upper"] <= -threshold
+            ),
+            "c4_vs_c0_completion_time_noninferior": (
+                comparisons["C4_minus_C0"]
+                ["completion_time_relative_paired_bootstrap_95pct"]["upper"]
+                <= COMPLETION_TIME_NONINFERIORITY_RELATIVE
+            ),
+            "c4_vs_c1_completion_time_noninferior": (
+                comparisons["C4_minus_C1"]
+                ["completion_time_relative_paired_bootstrap_95pct"]["upper"]
+                <= COMPLETION_TIME_NONINFERIORITY_RELATIVE
+            ),
+            "c4_vs_c0_tracking_q95_noninferior": (
+                comparisons["C4_minus_C0"]
+                ["tracking_q95_difference_paired_bootstrap_95pct"]["upper"]
+                <= TRACKING_Q95_NONINFERIORITY_M
+            ),
+            "c4_vs_c1_tracking_q95_noninferior": (
+                comparisons["C4_minus_C1"]
+                ["tracking_q95_difference_paired_bootstrap_95pct"]["upper"]
+                <= TRACKING_Q95_NONINFERIORITY_M
             ),
             "c3_c4_causal_contract_ready": c3_c4_causal_ready,
         }
@@ -489,10 +614,15 @@ def analyze_campaign(
             ),
             "interpretation": "frozen_formal_paired_trial_result",
             "preregistered_rule": (
-                "median(C4-comparator) <= -preregistered_min_effect_m; "
-                "C0, C1, and causal C3 comparisons must all pass"
+                "upper95(paired-bootstrap mean(C4-comparator)) <= "
+                "-preregistered_min_effect_m; C0, C1, and causal C3 "
+                "comparisons plus C0/C1 task noninferiority must pass"
             ),
             "preregistered_min_effect_m": threshold,
+            "completion_time_noninferiority_relative":
+                COMPLETION_TIME_NONINFERIORITY_RELATIVE,
+            "tracking_q95_noninferiority_m":
+                TRACKING_Q95_NONINFERIORITY_M,
             "checks": checks,
             "failed_trials_retained": len(failed_trials),
         }
@@ -501,6 +631,8 @@ def analyze_campaign(
         "schema": ANALYSIS_SCHEMA,
         "stage": stage,
         "analysis_unit": "paired_complete_trial_by_seed",
+        "formal_paired_blocks": FORMAL_PAIRED_BLOCKS,
+        "formal_seeds": list(FORMAL_SEEDS),
         "cycle_samples_used_as_independent_observations": False,
         "primary_metric": {
             "name": "external_measured_height_q95_m",

@@ -468,6 +468,8 @@ def _validate_measurement_contract(session: Dict[str, Any],
     numeric_contract = {
         "minimum_meaningful_difference_m": 0.0005,
         "formal_paired_blocks": 16,
+        "bootstrap_replicates": 10000,
+        "bootstrap_seed": 20260822,
         "completion_time_noninferiority_relative": 0.10,
         "tracking_q95_noninferiority_m": 0.05,
     }
@@ -479,11 +481,19 @@ def _validate_measurement_contract(session: Dict[str, Any],
             reasons.append("measurement contract {} is invalid".format(key))
     string_contract = {
         "paired_interval": "paired_bootstrap_95pct",
+        "paired_estimator": "paired_mean",
         "failed_trial_rule": "retain_and_count_as_failure",
         "replacement_rule":
             "infrastructure_failure_only_same_seed_condition",
     }
     for key, expected_value in string_contract.items():
+        if measurement.get(key) != expected_value:
+            reasons.append("measurement contract {} is invalid".format(key))
+    list_contract = {
+        "primary_comparators": ["C0", "C1", "C3"],
+        "task_noninferiority_comparators": ["C0", "C1"],
+    }
+    for key, expected_value in list_contract.items():
         if measurement.get(key) != expected_value:
             reasons.append("measurement contract {} is invalid".format(key))
 

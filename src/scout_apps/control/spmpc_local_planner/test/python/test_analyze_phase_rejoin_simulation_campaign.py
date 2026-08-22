@@ -37,6 +37,7 @@ VALUES = {
     "IS": 0.0035,
 }
 SESSION_HASH = "a" * 64
+FORMAL_SEEDS = tuple(range(3101, 3117))
 
 
 def trial_summary(seed, condition, formal=False, causal_ready=False):
@@ -66,7 +67,8 @@ def trial_summary(seed, condition, formal=False, causal_ready=False):
             "motion_end_sec": 8.0,
             "fixed_tail_sec": 4.0,
             "publish_latency_sec": 0.01,
-            "completed": True,
+            "sequence_completed": True,
+            "task_success": True,
             "completion_reason": "goal_reached",
             "runtime_error": "",
         },
@@ -78,7 +80,9 @@ def trial_summary(seed, condition, formal=False, causal_ready=False):
             "sample_count": 360,
             "value_m": VALUES[condition] + seed * 1.0e-6,
         },
-        "secondary_metrics": {},
+        "secondary_metrics": {
+            "tracking_q95_m": 0.02,
+        },
         "controller_audit": {},
         "baseline_contract": {
             "formal_c3_c4_causal_comparison_ready": causal_ready,
@@ -136,7 +140,8 @@ class SimulationCampaignAnalysisTest(unittest.TestCase):
 
         def fail(value):
             value["status"] = "TRIAL_COMPLETE_WITH_FAILURE"
-            value["trial"]["completed"] = False
+            value["trial"]["sequence_completed"] = False
+            value["trial"]["task_success"] = False
             value["trial"]["completion_reason"] = "goal_timeout"
 
         self.rewrite(11, "C4", fail)
@@ -214,9 +219,23 @@ class SimulationCampaignAnalysisTest(unittest.TestCase):
                 preregistered_min_effect_m=0.0005,
             )
 
+    def test_formal_rejects_effect_threshold_different_from_session(self):
+        self.write_campaign(
+            seeds=FORMAL_SEEDS, formal=True, causal_ready=True
+        )
+        with self.assertRaisesRegex(
+            ANALYSIS.CampaignError, "differs from frozen session"
+        ):
+            ANALYSIS.analyze_campaign(
+                self.root,
+                "formal",
+                frozen_session_sha256=SESSION_HASH,
+                preregistered_min_effect_m=0.0004,
+            )
+
     def test_formal_pass_requires_effects_and_causal_c3_contract(self):
         self.write_campaign(
-            seeds=(11, 12, 13), formal=True, causal_ready=True
+            seeds=FORMAL_SEEDS, formal=True, causal_ready=True
         )
         report = ANALYSIS.analyze_campaign(
             self.root,
@@ -232,7 +251,7 @@ class SimulationCampaignAnalysisTest(unittest.TestCase):
 
     def test_formal_pilot_only_c3_contract_forces_fail(self):
         self.write_campaign(
-            seeds=(11, 12, 13), formal=True, causal_ready=False
+            seeds=FORMAL_SEEDS, formal=True, causal_ready=False
         )
         report = ANALYSIS.analyze_campaign(
             self.root,
@@ -244,6 +263,44 @@ class SimulationCampaignAnalysisTest(unittest.TestCase):
         self.assertFalse(report["decision"]["paper_claim_authorized"])
         self.assertFalse(
             report["decision"]["checks"]["c3_c4_causal_contract_ready"]
+        )
+
+    def test_formal_requires_exactly_sixteen_paired_blocks(self):
+        self.write_campaign(
+            seeds=FORMAL_SEEDS[:-1], formal=True, causal_ready=True
+        )
+        report = ANALYSIS.analyze_campaign(
+            self.root,
+            "formal",
+            frozen_session_sha256=SESSION_HASH,
+            preregistered_min_effect_m=0.0005,
+        )
+        self.assertEqual(report["decision"]["status"], "FAIL")
+        self.assertFalse(
+            report["decision"]["checks"]["exact_formal_paired_block_count"]
+        )
+
+    def test_formal_task_noninferiority_uses_paired_upper_bound(self):
+        seeds = FORMAL_SEEDS
+        self.write_campaign(seeds=seeds, formal=True, causal_ready=True)
+        for seed in seeds:
+            self.rewrite(
+                seed,
+                "C4",
+                lambda value: value["trial"].__setitem__(
+                    "motion_end_sec", 9.0
+                ),
+            )
+        report = ANALYSIS.analyze_campaign(
+            self.root,
+            "formal",
+            frozen_session_sha256=SESSION_HASH,
+            preregistered_min_effect_m=0.0005,
+        )
+        self.assertEqual(report["decision"]["status"], "FAIL")
+        self.assertFalse(
+            report["decision"]["checks"]
+            ["c4_vs_c1_completion_time_noninferior"]
         )
 
     def test_create_new_output_is_not_overwritten(self):
