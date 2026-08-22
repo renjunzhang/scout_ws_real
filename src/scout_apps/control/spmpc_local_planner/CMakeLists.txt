@@ -1044,6 +1044,23 @@ if(CATKIN_ENABLE_TESTING)
       spmpc_solver_delay_augmented
     )
   endif()
+  catkin_add_gtest(test_delay_augmented_phase_kkt_decomposition
+    test/test_delay_augmented_phase_kkt_decomposition.cpp
+    test/support/delay_augmented_phase_kkt_snapshot.cpp
+    test/support/delay_augmented_phase_snapshot_runner.cpp)
+  if(TARGET test_delay_augmented_phase_kkt_decomposition)
+    target_include_directories(test_delay_augmented_phase_kkt_decomposition PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+      ${CMAKE_CURRENT_SOURCE_DIR}/test
+    )
+    target_compile_definitions(test_delay_augmented_phase_kkt_decomposition PRIVATE
+      SPMPC_TEST_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures"
+    )
+    target_link_libraries(test_delay_augmented_phase_kkt_decomposition
+      spmpc_solver_delay_augmented_acados
+      spmpc_solver_delay_augmented
+    )
+  endif()
   catkin_add_gtest(test_delay_augmented_phase_online
     test/test_delay_augmented_phase_online.cpp)
   if(TARGET test_delay_augmented_phase_online)
