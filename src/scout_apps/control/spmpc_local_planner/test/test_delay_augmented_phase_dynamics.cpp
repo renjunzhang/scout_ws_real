@@ -121,6 +121,24 @@ TEST(DelayAugmentedPhaseDynamics,
 }
 
 TEST(DelayAugmentedPhaseDynamics,
+     SolverInternalYawRemainsContinuousAcrossWrappedPiBoundary) {
+    const DelayAugmentedPhaseDynamics dynamics = configuredDynamics();
+    DelayAugmentedPhaseState initial = heldState(
+        dynamics, 0.0, 1.0, 0.0, 1.0);
+    initial.execution.robot.yaw = 3.13;
+
+    const DelayAugmentedPhaseStepResult result = dynamics.step(
+        initial, control(0.0, 0.0));
+
+    ASSERT_TRUE(result.valid) << result.status;
+    EXPECT_GT(result.state.execution.robot.yaw, 3.14159265358979323846);
+    EXPECT_NEAR(3.23, result.state.execution.robot.yaw, 1e-12);
+    EXPECT_NEAR(
+        std::cos(3.23),
+        std::cos(result.state.execution.robot.yaw), 1e-12);
+}
+
+TEST(DelayAugmentedPhaseDynamics,
      FirstDecisionRespectsDistinctFractionalChannelDelays) {
     const DelayAugmentedPhaseDynamics dynamics = configuredDynamics();
     DelayAugmentedPhaseState state = heldState(dynamics);

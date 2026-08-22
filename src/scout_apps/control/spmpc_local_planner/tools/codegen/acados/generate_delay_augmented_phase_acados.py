@@ -40,7 +40,7 @@ DEFAULT_OUTPUT = PACKAGE_ROOT / "generated" / "acados"
 MODEL_NAME = "spmpc_delay_augmented_phase"
 RTI_MODEL_NAME = "spmpc_delay_augmented_phase_rti"
 SOLVER_CAPABILITY_SCHEMA_VERSION = 3
-SOLVER_ID = "delay_augmented_phase_acados_full_sqp_funnel_bexec_path_qp1e9_v4"
+SOLVER_ID = "delay_augmented_phase_acados_full_sqp_funnel_inner_gate_bexec_v5"
 RTI_SOLVER_ID = "delay_augmented_phase_acados_rti_reference_bexec_path_v3"
 STAGE_EXECUTION_CONSTRAINT_FORM = "phase_indexed_full_execution_box_v1"
 TERMINAL_EXECUTION_CONSTRAINT_FORM = "parameter_affine_two_sided_box_v1"
@@ -54,6 +54,12 @@ FULL_SQP_QP_TOLERANCE = 1.0e-9
 RTI_REFERENCE_QP_TOLERANCE = 1.0e-6
 MAX_CAUSAL_STATE_ERROR = 1.0e-6
 MAX_SQP_ITERATIONS = 20
+# acados admits a converged inequality with up to tol_ineq numerical
+# violation, while the production coordinator intentionally evaluates the
+# frozen empirical gate at its exact boundary.  Tighten only the solver-side
+# image so a status=0 trajectory remains strictly inside the unchanged gate
+# when independently replayed and audited.
+TERMINAL_EMPIRICAL_NUMERICAL_INNER_MARGIN = 1.0e-5
 MIN_RECOVERY_DENOMINATOR = 1.0e-9
 PUBLISHED_CONSISTENCY_TOLERANCE = 1.0e-9
 
@@ -121,6 +127,9 @@ def _solver_config(model_name, solver_id, nlp_solver_type,
             TERMINAL_EXECUTION_CONSTRAINT_FORM,
         "stage_execution_constraint_form":
             STAGE_EXECUTION_CONSTRAINT_FORM,
+        "solver_yaw_coordinate": "continuous_lifted_v1",
+        "terminal_empirical_numerical_inner_margin":
+            TERMINAL_EMPIRICAL_NUMERICAL_INNER_MARGIN,
         # The non-dimensional variable basis is part of solver semantics and
         # must be folded into the config hash so any scale change is detectable.
         "scale_x": [float(v) for v in scale_x],
@@ -303,6 +312,8 @@ def load_solver_spec():
         "max_complementarity_residual":
             MAX_COMPLEMENTARITY_RESIDUAL,
         "max_causal_state_error": MAX_CAUSAL_STATE_ERROR,
+        "terminal_empirical_numerical_inner_margin":
+            TERMINAL_EMPIRICAL_NUMERICAL_INNER_MARGIN,
         "state_bound_count": 0,
     }
 
@@ -390,7 +401,8 @@ def build_symbolic_spec(spec):
     )
     (terminal_constraints, terminal_lower, terminal_upper) = (
         terminal_recovery_constraints(
-            x_physical, p, layout, spec["parameters"]
+            x_physical, p, layout, spec["parameters"],
+            spec["terminal_empirical_numerical_inner_margin"]
         )
     )
 
@@ -492,6 +504,7 @@ constexpr const char kTerminalGateContract[] = "{spec['terminal_gate_contract']}
 constexpr const char kExecutionCompatibilityContract[] = "{spec['execution_compatibility_contract']}";
 constexpr const char kStageExecutionConstraintForm[] = "{spec['stage_execution_constraint_form']}";
 constexpr const char kTerminalExecutionConstraintForm[] = "{spec['terminal_execution_constraint_form']}";
+constexpr const char kSolverYawCoordinate[] = "continuous_lifted_v1";
 constexpr int kParameterCount = {spec['parameters']['parameter_width']};
 constexpr int kNominalStateOffset = {spec['parameters']['nominal_state_offset']};
 constexpr int kNominalControlOffset = {spec['parameters']['nominal_control_offset']};
@@ -550,6 +563,7 @@ constexpr double kMaxEqualityResidual = {_cpp_float(spec['max_equality_residual'
 constexpr double kMaxInequalityResidual = {_cpp_float(spec['max_inequality_residual'])};
 constexpr double kMaxComplementarityResidual = {_cpp_float(spec['max_complementarity_residual'])};
 constexpr double kMaxCausalStateError = {_cpp_float(spec['max_causal_state_error'])};
+constexpr double kTerminalEmpiricalNumericalInnerMargin = {_cpp_float(spec['terminal_empirical_numerical_inner_margin'])};
 constexpr double kMinimumRecoveryDenominator = {_cpp_float(MIN_RECOVERY_DENOMINATOR)};
 constexpr double kPublishedConsistencyTolerance = {_cpp_float(PUBLISHED_CONSISTENCY_TOLERANCE)};
 constexpr double kPositionScale = {_cpp_float(spec['cost_scales']['position'])};

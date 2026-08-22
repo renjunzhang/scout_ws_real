@@ -742,7 +742,9 @@ bool DelayAugmentedPhaseAcadosSolver::setTerminalEmpiricalGateEnforced(
     // the frozen two-sided B_exec constraints and always retain upper=0.
     // A finite inactive upper is used instead of changing V3 radii, so the
     // exact same parameter image remains bound in C3 and C4.
-    upper[0] = enforced ? 0.0 : 1.0e15;
+    upper[0] = enforced
+        ? -manifest::kTerminalEmpiricalNumericalInnerMargin
+        : 1.0e15;
     ocp_nlp_constraints_model_set(
         impl_->capsule->config(), impl_->capsule->dims(),
         impl_->capsule->input(), impl_->capsule->output(),
@@ -1253,8 +1255,11 @@ DelayAugmentedPhaseAcadosSolver::auditTrajectory(
         empirical_metric += (error / radius) * (error / radius);
     }
     audit.terminal_empirical_metric = empirical_metric;
-    audit.terminal_empirical_violation = std::max(0.0,
-        empirical_metric - 1.0);
+    // Preserve violation relative to the frozen production gate for reporting.
+    // The named constraint below separately audits the solver's stricter
+    // numerical inner boundary when enforcement is active.
+    audit.terminal_empirical_violation = std::max(
+        0.0, empirical_metric - 1.0);
     DelayAugmentedPhaseNamedConstraintDiagnostics empirical;
     empirical.stage = manifest::kHorizonSteps;
     empirical.index = 0;
@@ -1263,10 +1268,15 @@ DelayAugmentedPhaseAcadosSolver::auditTrajectory(
         : "terminal_empirical_9d_ellipsoid_monitor_only";
     empirical.value = empirical_metric - 1.0;
     empirical.lower = -1.0e15;
-    empirical.upper = terminal_empirical_gate_enforced ? 0.0 : 1.0e15;
+    empirical.upper = terminal_empirical_gate_enforced
+        ? -manifest::kTerminalEmpiricalNumericalInnerMargin
+        : 1.0e15;
     empirical.normalized_error = std::sqrt(empirical_metric);
     empirical.violation = terminal_empirical_gate_enforced
-        ? audit.terminal_empirical_violation
+        ? std::max(
+              0.0,
+              empirical_metric -
+                  (1.0 - manifest::kTerminalEmpiricalNumericalInnerMargin))
         : 0.0;
     update_max(empirical);
 

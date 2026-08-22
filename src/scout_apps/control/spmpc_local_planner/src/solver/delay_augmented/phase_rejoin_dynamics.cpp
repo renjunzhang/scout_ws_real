@@ -34,6 +34,15 @@ bool finiteControl(const DelayAugmentedPhaseControl& control) {
         std::isfinite(control.progress_rate);
 }
 
+double wrapAngle(double angle) {
+    return std::atan2(std::sin(angle), std::cos(angle));
+}
+
+double unwrapAngleAfter(double previous_unwrapped, double next_wrapped) {
+    const double previous_wrapped = wrapAngle(previous_unwrapped);
+    return previous_unwrapped + wrapAngle(next_wrapped - previous_wrapped);
+}
+
 bool validHorizonCardinality(int front_steps,
                              int liquid_steps,
                              int horizon_steps) {
@@ -199,6 +208,14 @@ DelayAugmentedPhaseStepResult DelayAugmentedPhaseDynamics::step(
         return result;
     }
     result.state.execution = execution.state;
+    // The generic execution model publishes a wrapped robot yaw.  Inside the
+    // multiple-shooting OCP that coordinate creates a discontinuous dynamics
+    // equality at +/-pi and can strand SQP exactly on the branch cut.  Preserve
+    // the same physical pose while lifting yaw to the continuous branch that
+    // follows the previous horizon state.  Costs and empirical gates continue
+    // to use wrapped angle differences.
+    result.state.execution.robot.yaw = unwrapAngleAfter(
+        state.execution.robot.yaw, execution.state.robot.yaw);
     result.state.progress_s = state.progress_s + control.progress_rate * dt;
     if (!std::isfinite(result.state.progress_s)) {
         result.status = "NONFINITE_PROGRESS_STATE";

@@ -329,7 +329,8 @@ def nominal_relative_residual(x, q, p, layout, parameters, scales,
     return ca.vertcat(*residuals)
 
 
-def terminal_recovery_constraints(x, p, layout, parameters):
+def terminal_recovery_constraints(
+        x, p, layout, parameters, empirical_numerical_inner_margin=0.0):
     index = parameters["index"]
     nominal = p[
         parameters["nominal_state_offset"]:
@@ -351,7 +352,7 @@ def terminal_recovery_constraints(x, p, layout, parameters):
         gate_metric += (error / p[index[radius_name]]) ** 2
     constraints = [gate_metric - 1.0]
     lower = [-1.0e15]
-    upper = [0.0]
+    upper = [-empirical_numerical_inner_margin]
     for offset, state_index in enumerate(layout["execution_indices"]):
         beta = p[parameters["execution_bound_offset"] + offset]
         error = x[state_index] - nominal[state_index]
@@ -425,10 +426,11 @@ def transition_expression(x, q, contract, layout):
         )
         px = px + output_v * ca.cos(yaw) * duration
         py = py + output_v * ca.sin(yaw) * duration
-        yaw = ca.atan2(
-            ca.sin(yaw + output_omega * duration),
-            ca.cos(yaw + output_omega * duration),
-        )
+        # Use a continuous lifted yaw inside the OCP.  Trigonometric pose
+        # propagation is invariant to 2*pi, while wrapping the dynamics state
+        # itself creates a non-smooth multiple-shooting equality at +/-pi.
+        # Nominal-relative cost and the empirical gate still wrap yaw error.
+        yaw = yaw + output_omega * duration
         acceleration_x = (output_v - previous_v) / duration
         acceleration_y = output_v * output_omega
         matrices = contract["slosh_segment_matrices"][segment_index]

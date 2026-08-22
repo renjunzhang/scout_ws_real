@@ -219,6 +219,33 @@ struct SolverFailureDiagnostic {
     PreSolveSnapshotDebug solver_snapshot;
 };
 
+struct CoordinatorStopDiagnostic {
+    bool valid = false;
+    std::uint64_t cycle_id = 0;
+    std::string raw_solver_status;
+    std::string phase_status;
+    std::size_t clock_index = 0;
+    std::size_t selected_phase_index = 0;
+    std::size_t terminal_phase_index = 0;
+    ExecutionAugmentedState causal_terminal_execution;
+    bool solver_terminal_audit_evaluated = false;
+    bool solver_terminal_audit_passed = false;
+    double solver_terminal_empirical_metric = 0.0;
+    double solver_terminal_empirical_violation = 0.0;
+    bool coordinator_terminal_gate_valid = false;
+    bool coordinator_terminal_gate_accepted = false;
+    double coordinator_terminal_empirical_metric = 0.0;
+    double coordinator_terminal_max_normalized_error = 0.0;
+    bool coordinator_current_gate_valid = false;
+    bool coordinator_current_gate_accepted = false;
+    double coordinator_current_empirical_metric = 0.0;
+    bool current_execution_compatible = false;
+    double current_execution_max_normalized_error = 0.0;
+    bool terminal_execution_compatible = false;
+    double terminal_execution_max_normalized_error = 0.0;
+    PreSolveSnapshotDebug solver_snapshot;
+};
+
 std::string jsonEscape(const std::string& text) {
     std::ostringstream out;
     for (const char character : text) {
@@ -1446,6 +1473,60 @@ SolverFailureDiagnostic captureSolverFailureDiagnostic(
     return diagnostic;
 }
 
+CoordinatorStopDiagnostic captureCoordinatorStopDiagnostic(
+    const ControlCycleResult& result) {
+    CoordinatorStopDiagnostic diagnostic;
+    if (!result.solver_success || !result.have_phase_decision ||
+        !result.phase_decision.controlled_stop_used) {
+        return diagnostic;
+    }
+    diagnostic.valid = true;
+    diagnostic.cycle_id = result.telemetry.cycle_id;
+    diagnostic.raw_solver_status = result.solver_output.status;
+    diagnostic.phase_status = result.phase_decision.status;
+    diagnostic.clock_index =
+        result.phase_preparation.candidate.clock_index;
+    diagnostic.selected_phase_index =
+        result.phase_preparation.candidate.current_index;
+    diagnostic.terminal_phase_index =
+        result.phase_preparation.candidate.terminal_index;
+    diagnostic.causal_terminal_execution =
+        result.solver_output.terminal_execution_state;
+    diagnostic.solver_snapshot = result.solver_output.pre_solve_snapshot;
+    const DelayAugmentedPhaseConstraintAudit& solver_audit =
+        diagnostic.solver_snapshot.solution_constraint_audit;
+    diagnostic.solver_terminal_audit_evaluated = solver_audit.evaluated;
+    diagnostic.solver_terminal_audit_passed = solver_audit.passed;
+    diagnostic.solver_terminal_empirical_metric =
+        solver_audit.terminal_empirical_metric;
+    diagnostic.solver_terminal_empirical_violation =
+        solver_audit.terminal_empirical_violation;
+
+    const PhaseRejoinDecision& decision = result.phase_decision;
+    diagnostic.coordinator_terminal_gate_valid =
+        decision.terminal_gate.valid;
+    diagnostic.coordinator_terminal_gate_accepted =
+        decision.terminal_gate_accepted;
+    diagnostic.coordinator_terminal_empirical_metric =
+        decision.terminal_gate.metric;
+    diagnostic.coordinator_terminal_max_normalized_error =
+        decision.terminal_gate.max_normalized_error;
+    diagnostic.coordinator_current_gate_valid = decision.current_gate.valid;
+    diagnostic.coordinator_current_gate_accepted =
+        decision.current_gate_accepted;
+    diagnostic.coordinator_current_empirical_metric =
+        decision.current_gate.metric;
+    diagnostic.current_execution_compatible =
+        decision.current_execution_compatible;
+    diagnostic.current_execution_max_normalized_error =
+        decision.current_execution_gate.max_normalized_error;
+    diagnostic.terminal_execution_compatible =
+        decision.terminal_execution_compatible;
+    diagnostic.terminal_execution_max_normalized_error =
+        decision.terminal_execution_gate.max_normalized_error;
+    return diagnostic;
+}
+
 bool openCycleCsv(const std::string& path, std::ofstream& output,
                   std::string& error) {
     output.open(path.c_str(), std::ios::out | std::ios::trunc);
@@ -1529,6 +1610,7 @@ bool writeSummary(
     const NominalSequenceArtifact& artifact,
     const TrialCounters& counters,
     const SolverFailureDiagnostic& solver_failure,
+    const CoordinatorStopDiagnostic& coordinator_stop,
     const std::vector<double>& measured_heights,
     const std::vector<double>& true_heights,
     const std::vector<double>& observer_heights,
@@ -1949,6 +2031,109 @@ bool writeSummary(
         output << "\n"
             << "  },\n";
     }
+    output << "  \"first_coordinator_stop_diagnostic\": ";
+    if (!coordinator_stop.valid) {
+        output << "null,\n";
+    } else {
+        output << "{\n"
+            << "    \"cycle_id\": " << coordinator_stop.cycle_id << ",\n"
+            << "    \"raw_solver_status\": \""
+            << jsonEscape(coordinator_stop.raw_solver_status) << "\",\n"
+            << "    \"phase_status\": \""
+            << jsonEscape(coordinator_stop.phase_status) << "\",\n"
+            << "    \"clock_index\": " << coordinator_stop.clock_index
+            << ",\n"
+            << "    \"selected_phase_index\": "
+            << coordinator_stop.selected_phase_index << ",\n"
+            << "    \"terminal_phase_index\": "
+            << coordinator_stop.terminal_phase_index << ",\n"
+            << "    \"causal_terminal_state_22d\": ";
+        writeJsonNumberArray(output, solverState22(
+            coordinator_stop.causal_terminal_execution, 0.0));
+        output << ",\n"
+            << "    \"solver_terminal_audit\": {\n"
+            << "      \"evaluated\": "
+            << (coordinator_stop.solver_terminal_audit_evaluated
+                    ? "true" : "false") << ",\n"
+            << "      \"passed\": "
+            << (coordinator_stop.solver_terminal_audit_passed
+                    ? "true" : "false") << ",\n"
+            << "      \"empirical_metric\": "
+            << jsonNumber(coordinator_stop.solver_terminal_empirical_metric)
+            << ",\n"
+            << "      \"empirical_violation\": "
+            << jsonNumber(
+                   coordinator_stop.solver_terminal_empirical_violation)
+            << "\n"
+            << "    },\n"
+            << "    \"coordinator_terminal_gate\": {\n"
+            << "      \"valid\": "
+            << (coordinator_stop.coordinator_terminal_gate_valid
+                    ? "true" : "false") << ",\n"
+            << "      \"accepted\": "
+            << (coordinator_stop.coordinator_terminal_gate_accepted
+                    ? "true" : "false") << ",\n"
+            << "      \"metric\": "
+            << jsonNumber(
+                   coordinator_stop.coordinator_terminal_empirical_metric)
+            << ",\n"
+            << "      \"max_normalized_error\": "
+            << jsonNumber(coordinator_stop
+                              .coordinator_terminal_max_normalized_error)
+            << "\n"
+            << "    },\n"
+            << "    \"coordinator_current_gate\": {\n"
+            << "      \"valid\": "
+            << (coordinator_stop.coordinator_current_gate_valid
+                    ? "true" : "false") << ",\n"
+            << "      \"accepted\": "
+            << (coordinator_stop.coordinator_current_gate_accepted
+                    ? "true" : "false") << ",\n"
+            << "      \"metric\": "
+            << jsonNumber(
+                   coordinator_stop.coordinator_current_empirical_metric)
+            << "\n"
+            << "    },\n"
+            << "    \"execution_gates\": {\n"
+            << "      \"current_compatible\": "
+            << (coordinator_stop.current_execution_compatible
+                    ? "true" : "false") << ",\n"
+            << "      \"current_max_normalized_error\": "
+            << jsonNumber(
+                   coordinator_stop.current_execution_max_normalized_error)
+            << ",\n"
+            << "      \"terminal_compatible\": "
+            << (coordinator_stop.terminal_execution_compatible
+                    ? "true" : "false") << ",\n"
+            << "      \"terminal_max_normalized_error\": "
+            << jsonNumber(
+                   coordinator_stop.terminal_execution_max_normalized_error)
+            << "\n"
+            << "    },\n"
+            << "    \"solver_residuals\": {\n"
+            << "      \"nlp_status\": "
+            << coordinator_stop.solver_snapshot.solver_nlp_status << ",\n"
+            << "      \"qp_status\": "
+            << coordinator_stop.solver_snapshot.solver_qp_status << ",\n"
+            << "      \"stationarity\": "
+            << jsonNumber(
+                   coordinator_stop.solver_snapshot.stationarity_residual)
+            << ",\n"
+            << "      \"equality\": "
+            << jsonNumber(
+                   coordinator_stop.solver_snapshot.equality_residual)
+            << ",\n"
+            << "      \"inequality\": "
+            << jsonNumber(
+                   coordinator_stop.solver_snapshot.inequality_residual)
+            << ",\n"
+            << "      \"complementarity\": "
+            << jsonNumber(coordinator_stop.solver_snapshot
+                              .complementarity_residual)
+            << "\n"
+            << "    }\n"
+            << "  },\n";
+    }
     output << "  \"baseline_contract\": {\n"
         << "    \"pilot_only\": "
         << (condition.pilot_only ? "true" : "false")
@@ -2288,6 +2473,7 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     std::string completion_reason = "MOTION_TIMEOUT";
     std::string runtime_error;
     SolverFailureDiagnostic first_solver_failure;
+    CoordinatorStopDiagnostic first_coordinator_stop;
     double last_motion_time_sec = 0.0;
     std::uint64_t next_cycle_id = 1;
 
@@ -2428,6 +2614,10 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         if (!result.solver_success && !first_solver_failure.valid) {
             first_solver_failure = captureSolverFailureDiagnostic(
                 result, artifact);
+        }
+        if (result.phase_decision.controlled_stop_used &&
+            result.solver_success && !first_coordinator_stop.valid) {
+            first_coordinator_stop = captureCoordinatorStopDiagnostic(result);
         }
 
         CycleRecord record;
@@ -2673,7 +2863,7 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         final_goal_error <= condition.task_success_goal_tolerance_m;
     if (!writeSummary(
             args, condition, plant_config, artifact, counters,
-            first_solver_failure,
+            first_solver_failure, first_coordinator_stop,
             measured_heights, true_heights, observer_heights,
             tracking_errors, completed, task_success, completion_reason,
             last_motion_time_sec, final_goal_error, zvd,

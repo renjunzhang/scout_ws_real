@@ -47,6 +47,12 @@ class DelayAugmentedPhaseAcadosCodegenTest(unittest.TestCase):
         self.assertEqual(0, len(symbolic["idxbx"]))
         self.assertEqual([0, 1, 2], symbolic["idxbu"].tolist())
         self.assertEqual([], symbolic["idxbx"].tolist())
+        self.assertEqual(
+            -spec["terminal_empirical_numerical_inner_margin"],
+            symbolic["terminal_upper"][0])
+        self.assertGreater(
+            spec["terminal_empirical_numerical_inner_margin"],
+            spec["solver_config"]["tol_ineq"])
 
         published = ca.Function(
             "candidate_published_command_check",
