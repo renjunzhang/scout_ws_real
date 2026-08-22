@@ -1,6 +1,6 @@
 schema: spmpc_closed_loop_trial_condition_v1
 condition_id: C1
-implementation_id: continuous_mpcc_acados_smooth_match_v1
+implementation_id: continuous_mpcc_acados_smooth_match_v2
 implementation_complete: true
 mode: smooth_match_mpcc
 offline_nominal: false
@@ -13,7 +13,22 @@ input_shaping: false
 # completion-reliable candidate. No external or observer liquid metric may
 # enter the eventual selection.
 pilot_tuned_and_frozen: false
-global_time_scale: 1.0
+global_time_scale: 0.78
+continuous_controller:
+  variant_id: B_smooth
+  smooth_priority_enable: true
+  w_contour: 1.0
+  w_lag: 0.2
+  w_progress: 0.2
+  w_v: 1.0
+  w_vs: 0.3
+  v_ref: 0.25
+  w_control: 0.1
+  w_accel: 0.0
+  w_smooth: 0.0
+  w_alpha: 0.0
+  w_du_a: 0.0
+  w_du_vs: 0.0
 trial:
   control_rate_hz: 30.0
   max_motion_sec: 45.0

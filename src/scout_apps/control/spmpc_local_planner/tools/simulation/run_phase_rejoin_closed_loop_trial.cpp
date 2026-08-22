@@ -86,6 +86,8 @@ struct ConditionConfig {
     double fixed_tail_sec = 4.0;
     double publish_latency_sec = 0.01;
     double smooth_global_time_scale = 1.0;
+    VariantConfig continuous_variant;
+    bool continuous_variant_bound = false;
     bool pilot_tuned_and_frozen = false;
     bool pilot_only = false;
     bool formal_c3_c4_causal_comparison_ready = false;
@@ -605,6 +607,66 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
         optionalScalar(root, "pilot_only", config.pilot_only);
         optionalScalar(root, "formal_c3_c4_causal_comparison_ready",
                        config.formal_c3_c4_causal_comparison_ready);
+        const bool continuous_mode =
+            config.mode == TrialMode::OrdinaryMpcc ||
+            config.mode == TrialMode::SmoothMatchMpcc ||
+            config.mode == TrialMode::InputShaping;
+        if (continuous_mode) {
+            const YAML::Node controller = root["continuous_controller"];
+            std::string variant_id;
+            bool smooth_priority_enable = false;
+            if (!controller ||
+                !requiredScalar(controller, "variant_id", variant_id,
+                                error) ||
+                !requiredScalar(controller, "smooth_priority_enable",
+                                smooth_priority_enable, error) ||
+                !requiredScalar(controller, "w_contour",
+                                config.continuous_variant.w_contour, error) ||
+                !requiredScalar(controller, "w_lag",
+                                config.continuous_variant.w_lag, error) ||
+                !requiredScalar(controller, "w_progress",
+                                config.continuous_variant.w_progress, error) ||
+                !requiredScalar(controller, "w_v",
+                                config.continuous_variant.w_v, error) ||
+                !requiredScalar(controller, "w_vs",
+                                config.continuous_variant.w_vs, error) ||
+                !requiredScalar(controller, "v_ref",
+                                config.continuous_variant.v_ref, error) ||
+                !requiredScalar(controller, "w_control",
+                                config.continuous_variant.w_control, error) ||
+                !requiredScalar(controller, "w_accel",
+                                config.continuous_variant.w_accel, error) ||
+                !requiredScalar(controller, "w_smooth",
+                                config.continuous_variant.w_smooth, error) ||
+                !requiredScalar(controller, "w_alpha",
+                                config.continuous_variant.w_alpha, error) ||
+                !requiredScalar(controller, "w_du_a",
+                                config.continuous_variant.w_du_a, error) ||
+                !requiredScalar(controller, "w_du_vs",
+                                config.continuous_variant.w_du_vs, error)) {
+                if (error.empty()) {
+                    error = "continuous controller contract is missing";
+                }
+                return false;
+            }
+            const std::string expected_variant =
+                config.mode == TrialMode::SmoothMatchMpcc
+                    ? "B_smooth" : "B0";
+            const bool expected_smooth =
+                config.mode == TrialMode::SmoothMatchMpcc;
+            if (variant_id != expected_variant ||
+                smooth_priority_enable != expected_smooth) {
+                error = "continuous controller variant/mode mismatch";
+                return false;
+            }
+            config.continuous_variant.name = variant_id;
+            config.continuous_variant.smooth_priority_enable =
+                smooth_priority_enable;
+            config.continuous_variant.slosh_enable = false;
+            config.continuous_variant.slosh_constraint_enable = false;
+            config.continuous_variant.w_slosh = 0.0;
+            config.continuous_variant_bound = true;
+        }
         const YAML::Node residual = root["residual_feedback"];
         optionalScalar(residual, "longitudinal_gain",
                        config.residual_longitudinal_gain);
@@ -637,6 +699,31 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
             !finite(config.smooth_global_time_scale) ||
             config.smooth_global_time_scale < 0.5 ||
             config.smooth_global_time_scale > 2.0 ||
+            (continuous_mode &&
+             (!finite(config.continuous_variant.w_contour) ||
+              config.continuous_variant.w_contour < 0.0 ||
+              !finite(config.continuous_variant.w_lag) ||
+              config.continuous_variant.w_lag < 0.0 ||
+              !finite(config.continuous_variant.w_progress) ||
+              config.continuous_variant.w_progress < 0.0 ||
+              !finite(config.continuous_variant.w_v) ||
+              config.continuous_variant.w_v < 0.0 ||
+              !finite(config.continuous_variant.w_vs) ||
+              config.continuous_variant.w_vs < 0.0 ||
+              !finite(config.continuous_variant.v_ref) ||
+              config.continuous_variant.v_ref <= 0.0 ||
+              !finite(config.continuous_variant.w_control) ||
+              config.continuous_variant.w_control < 0.0 ||
+              !finite(config.continuous_variant.w_accel) ||
+              config.continuous_variant.w_accel < 0.0 ||
+              !finite(config.continuous_variant.w_smooth) ||
+              config.continuous_variant.w_smooth < 0.0 ||
+              !finite(config.continuous_variant.w_alpha) ||
+              config.continuous_variant.w_alpha < 0.0 ||
+              !finite(config.continuous_variant.w_du_a) ||
+              config.continuous_variant.w_du_a < 0.0 ||
+              !finite(config.continuous_variant.w_du_vs) ||
+              config.continuous_variant.w_du_vs < 0.0)) ||
             !finite(config.max_residual_v) || config.max_residual_v < 0.0 ||
             !finite(config.max_residual_omega) ||
             config.max_residual_omega < 0.0 ||
@@ -967,11 +1054,10 @@ private:
 VariantConfig controllerVariant(TrialMode mode,
                                 const ConditionConfig& condition) {
     if (mode == TrialMode::OrdinaryMpcc ||
-        mode == TrialMode::InputShaping) {
-        return makeVariantConfig("B0");
-    }
-    if (mode == TrialMode::SmoothMatchMpcc) {
-        VariantConfig variant = makeVariantConfig("B_smooth");
+        mode == TrialMode::InputShaping ||
+        mode == TrialMode::SmoothMatchMpcc) {
+        VariantConfig variant = condition.continuous_variant;
+        if (mode != TrialMode::SmoothMatchMpcc) return variant;
         variant.v_ref /= condition.smooth_global_time_scale;
         return variant;
     }
@@ -1628,6 +1714,9 @@ bool writeSummary(
     const std::vector<double>& true_heights,
     const std::vector<double>& observer_heights,
     const std::vector<double>& tracking_errors,
+    const std::vector<double>& motion_speeds,
+    const std::vector<double>& motion_accelerations,
+    const std::vector<double>& motion_jerks,
     bool sequence_completed,
     bool task_success,
     const std::string& completion_reason,
@@ -1740,6 +1829,49 @@ bool writeSummary(
         << jsonNumber(nearestRankQuantile(tracking_errors, 0.95)) << ",\n"
         << "    \"final_goal_error_m\": "
         << jsonNumber(final_goal_error_m) << "\n"
+        << "  },\n"
+        << "  \"motion_metrics\": {\n"
+        << "    \"statistics_unit\": \"motion_cycle\",\n"
+        << "    \"quantile_method\": \"nearest_rank\",\n"
+        << "    \"speed_sample_count\": " << motion_speeds.size()
+        << ",\n"
+        << "    \"speed_rms_mps\": " << jsonNumber(rms(motion_speeds))
+        << ",\n"
+        << "    \"speed_q50_mps\": "
+        << jsonNumber(nearestRankQuantile(motion_speeds, 0.50)) << ",\n"
+        << "    \"speed_q95_mps\": "
+        << jsonNumber(nearestRankQuantile(motion_speeds, 0.95)) << ",\n"
+        << "    \"speed_q99_mps\": "
+        << jsonNumber(nearestRankQuantile(motion_speeds, 0.99)) << ",\n"
+        << "    \"speed_max_mps\": "
+        << jsonNumber(nearestRankQuantile(motion_speeds, 1.0)) << ",\n"
+        << "    \"acceleration_sample_count\": "
+        << motion_accelerations.size() << ",\n"
+        << "    \"acceleration_rms_mps2\": "
+        << jsonNumber(rms(motion_accelerations)) << ",\n"
+        << "    \"acceleration_q50_mps2\": "
+        << jsonNumber(nearestRankQuantile(motion_accelerations, 0.50))
+        << ",\n"
+        << "    \"acceleration_q95_mps2\": "
+        << jsonNumber(nearestRankQuantile(motion_accelerations, 0.95))
+        << ",\n"
+        << "    \"acceleration_q99_mps2\": "
+        << jsonNumber(nearestRankQuantile(motion_accelerations, 0.99))
+        << ",\n"
+        << "    \"acceleration_max_mps2\": "
+        << jsonNumber(nearestRankQuantile(motion_accelerations, 1.0))
+        << ",\n"
+        << "    \"jerk_sample_count\": " << motion_jerks.size() << ",\n"
+        << "    \"jerk_rms_mps3\": " << jsonNumber(rms(motion_jerks))
+        << ",\n"
+        << "    \"jerk_q50_mps3\": "
+        << jsonNumber(nearestRankQuantile(motion_jerks, 0.50)) << ",\n"
+        << "    \"jerk_q95_mps3\": "
+        << jsonNumber(nearestRankQuantile(motion_jerks, 0.95)) << ",\n"
+        << "    \"jerk_q99_mps3\": "
+        << jsonNumber(nearestRankQuantile(motion_jerks, 0.99)) << ",\n"
+        << "    \"jerk_max_mps3\": "
+        << jsonNumber(nearestRankQuantile(motion_jerks, 1.0)) << "\n"
         << "  },\n"
         << "  \"solver_runtime\": {\n"
         << "    \"statistics_unit\": \"optimizer_invocation\",\n"
@@ -2178,6 +2310,37 @@ bool writeSummary(
         << ",\n"
         << "    \"c1_pilot_tuned_and_frozen\": "
         << (condition.pilot_tuned_and_frozen ? "true" : "false") << ",\n"
+        << "    \"continuous_variant_bound\": "
+        << (condition.continuous_variant_bound ? "true" : "false")
+        << ",\n"
+        << "    \"continuous_variant_id\": \""
+        << jsonEscape(condition.continuous_variant.name) << "\",\n"
+        << "    \"continuous_global_time_scale\": "
+        << jsonNumber(condition.smooth_global_time_scale) << ",\n"
+        << "    \"continuous_weights\": {"
+        << "\"w_contour\":"
+        << jsonNumber(condition.continuous_variant.w_contour)
+        << ",\"w_lag\":"
+        << jsonNumber(condition.continuous_variant.w_lag)
+        << ",\"w_progress\":"
+        << jsonNumber(condition.continuous_variant.w_progress)
+        << ",\"w_v\":" << jsonNumber(condition.continuous_variant.w_v)
+        << ",\"w_vs\":" << jsonNumber(condition.continuous_variant.w_vs)
+        << ",\"v_ref\":"
+        << jsonNumber(condition.continuous_variant.v_ref)
+        << ",\"w_control\":"
+        << jsonNumber(condition.continuous_variant.w_control)
+        << ",\"w_accel\":"
+        << jsonNumber(condition.continuous_variant.w_accel)
+        << ",\"w_smooth\":"
+        << jsonNumber(condition.continuous_variant.w_smooth)
+        << ",\"w_alpha\":"
+        << jsonNumber(condition.continuous_variant.w_alpha)
+        << ",\"w_du_a\":"
+        << jsonNumber(condition.continuous_variant.w_du_a)
+        << ",\"w_du_vs\":"
+        << jsonNumber(condition.continuous_variant.w_du_vs)
+        << "},\n"
         << "    \"formal_c3_c4_causal_comparison_ready\": "
         << (condition.formal_c3_c4_causal_comparison_ready
                 ? "true" : "false") << ",\n"
@@ -2348,6 +2511,14 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
 
     const VariantConfig variant = controllerVariant(condition.mode, condition);
     SolverParams solver = commonSolverParams();
+    // C0/C1/IS must complete the same physical point-to-point task as C4.
+    // C2/C3/C4 keep the clamp disabled because their validated nominal tail
+    // owns the terminal maneuver; continuous MPCC baselines need the generic
+    // terminal controller to avoid driving through the goal indefinitely.
+    solver.terminal.command_clamp_enable =
+        condition.mode == TrialMode::OrdinaryMpcc ||
+        condition.mode == TrialMode::SmoothMatchMpcc ||
+        condition.mode == TrialMode::InputShaping;
     std::unique_ptr<SpmpcProblem> production_problem;
     std::unique_ptr<OfflineReplaySession> replay_session;
     std::unique_ptr<ZvdInputShapingSession> shaping_session;
@@ -2505,6 +2676,12 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     std::vector<double> true_heights;
     std::vector<double> observer_heights;
     std::vector<double> tracking_errors;
+    std::vector<double> motion_speeds;
+    std::vector<double> motion_accelerations;
+    std::vector<double> motion_jerks;
+    bool have_previous_motion_acceleration = false;
+    double previous_motion_acceleration_x = 0.0;
+    double previous_motion_acceleration_y = 0.0;
     TrialCounters counters;
     ProgressProjector projector;
     bool completed = false;
@@ -2538,7 +2715,24 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         measured_heights.push_back(record.plant.measured_height_m);
         true_heights.push_back(record.plant.true_height_m);
         observer_heights.push_back(record.observer_height_m);
-        if (motion) tracking_errors.push_back(record.tracking_error_m);
+        if (motion) {
+            tracking_errors.push_back(record.tracking_error_m);
+            motion_speeds.push_back(std::abs(record.plant.v));
+            motion_accelerations.push_back(std::hypot(
+                record.plant.acceleration,
+                record.plant.lateral_acceleration));
+            if (have_previous_motion_acceleration) {
+                motion_jerks.push_back(std::hypot(
+                    record.plant.acceleration -
+                        previous_motion_acceleration_x,
+                    record.plant.lateral_acceleration -
+                        previous_motion_acceleration_y) / dt);
+            }
+            previous_motion_acceleration_x = record.plant.acceleration;
+            previous_motion_acceleration_y =
+                record.plant.lateral_acceleration;
+            have_previous_motion_acceleration = true;
+        }
         return true;
     };
 
@@ -2925,7 +3119,8 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             args, condition, plant_config, artifact, counters,
             first_solver_failure, first_coordinator_stop,
             measured_heights, true_heights, observer_heights,
-            tracking_errors, completed, task_success, completion_reason,
+            tracking_errors, motion_speeds, motion_accelerations, motion_jerks,
+            completed, task_success, completion_reason,
             last_motion_time_sec, final_goal_error, zvd,
             runtime_error, error)) {
         std::cerr << "ERROR: " << error << '\n';

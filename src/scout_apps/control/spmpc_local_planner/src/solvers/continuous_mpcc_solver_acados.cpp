@@ -78,6 +78,11 @@ double wrapAngle(double angle) {
     return std::atan2(std::sin(angle), std::cos(angle));
 }
 
+double unwrapAngleNear(double reference_unwrapped, double angle) {
+    return reference_unwrapped +
+        wrapAngle(angle - wrapAngle(reference_unwrapped));
+}
+
 bool finitePositive(double value) {
     return std::isfinite(value) && value > 0.0;
 }
@@ -600,6 +605,31 @@ bool ContinuousMpccSolverAcados::solve(
     const double ref0_x = polyEval(cx, s0);
     const double ref0_y = polyEval(cy, s0);
     const double ref0_yaw = std::atan2(polyDeriv(cy, s0), polyDeriv(cx, s0));
+    // The Plant/odometry yaw is wrapped to [-pi, pi], whereas the alpha-state
+    // OCP integrates yaw as a continuous coordinate.  Feeding the wrapped
+    // measurement directly into a capsule whose shifted primal remains on the
+    // neighbouring branch creates an artificial 2*pi stage-0 discontinuity.
+    // SQP_RTI can then turn the long way around or stall at a bend.  Lift the
+    // measured angle onto the previous solution branch when that solution is
+    // still progress-compatible; otherwise use the local path tangent as the
+    // branch anchor.  This changes no physical pose because all model motion
+    // terms are periodic in yaw.
+    double yaw_anchor = ref0_yaw;
+    if (have_previous_solution_ &&
+        previous_warm_start_solution_.states.size() > 1u) {
+        const WarmStartState& shifted_anchor =
+            previous_warm_start_solution_.states[1];
+        const double max_progress_gap = std::max(
+            0.5, 5.0 * params_.v_max * input.dt);
+        if (std::isfinite(shifted_anchor.theta) &&
+            std::isfinite(shifted_anchor.s) &&
+            std::abs(shifted_anchor.s - s0) <= max_progress_gap) {
+            yaw_anchor = shifted_anchor.theta;
+        }
+    }
+    SolverInput continuous_input = input;
+    continuous_input.robot.yaw = unwrapAngleNear(
+        yaw_anchor, input.robot.yaw);
     const double dx0 = input.robot.x - ref0_x;
     const double dy0 = input.robot.y - ref0_y;
     output.stage0_reference_debug.s0 = s0;
@@ -609,8 +639,9 @@ bool ContinuousMpccSolverAcados::solve(
     output.stage0_reference_debug.ref_kappa = ref0.kappa;
     output.stage0_reference_debug.robot_x = input.robot.x;
     output.stage0_reference_debug.robot_y = input.robot.y;
-    output.stage0_reference_debug.robot_yaw = input.robot.yaw;
-    output.stage0_reference_debug.yaw_error = wrapAngle(input.robot.yaw - ref0_yaw);
+    output.stage0_reference_debug.robot_yaw = continuous_input.robot.yaw;
+    output.stage0_reference_debug.yaw_error = wrapAngle(
+        continuous_input.robot.yaw - ref0_yaw);
     output.stage0_reference_debug.contour_error = std::sin(ref0_yaw) * dx0 - std::cos(ref0_yaw) * dy0;
     output.stage0_reference_debug.lag_error = -std::cos(ref0_yaw) * dx0 - std::sin(ref0_yaw) * dy0;
 
@@ -638,7 +669,7 @@ bool ContinuousMpccSolverAcados::solve(
     snapshot.parameter_width = gen->parameterWidth();
     snapshot.slosh_cost_horizon_steps = variant_.slosh_cost_horizon_steps;
     snapshot.slosh_cost_tail_discount = variant_.slosh_cost_tail_discount;
-    snapshot.robot = input.robot;
+    snapshot.robot = continuous_input.robot;
     snapshot.slosh = input.slosh;
     snapshot.min_progress_s = input.min_progress_s;
     snapshot.reference_length = len;
@@ -750,8 +781,14 @@ bool ContinuousMpccSolverAcados::solve(
         }
     }
 
-    double x0[10] = {input.robot.x, input.robot.y, input.robot.yaw, input.robot.v, s0,
-                     input.robot.omega, 0, 0, 0, 0};
+    double x0[10] = {
+        continuous_input.robot.x,
+        continuous_input.robot.y,
+        continuous_input.robot.yaw,
+        continuous_input.robot.v,
+        s0,
+        continuous_input.robot.omega,
+        0, 0, 0, 0};
     if (slosh) {
         x0[6] = input.slosh.eta_x;
         x0[7] = input.slosh.eta_x_dot;
@@ -781,7 +818,7 @@ bool ContinuousMpccSolverAcados::solve(
     }
 
     WarmStartPolicyInput warm_start_input;
-    warm_start_input.solver_input = &input;
+    warm_start_input.solver_input = &continuous_input;
     warm_start_input.reference = &reference;
     warm_start_input.spline = &spline;
     warm_start_input.params = &params_;
@@ -842,7 +879,7 @@ bool ContinuousMpccSolverAcados::solve(
     AcadosRawSolution raw_solution = captureRawSolution(*gen);
     AcadosSolutionDecoderInput decoder_input;
     decoder_input.raw_solution = &raw_solution;
-    decoder_input.solver_input = &input;
+    decoder_input.solver_input = &continuous_input;
     decoder_input.reference = &reference;
     decoder_input.params = &params_;
     decoder_input.variant = &variant_;

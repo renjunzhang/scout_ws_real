@@ -227,7 +227,30 @@ protected:
             << "recovery_gate: false\n"
             << "execution_compatibility_gate: false\n"
             << "stored_recovery_action: false\n"
-            << "input_shaping: false\n"
+            << "input_shaping: false\n";
+        if (mode == "ordinary_mpcc" || mode == "smooth_match_mpcc") {
+            output
+                << "continuous_controller:\n"
+                << "  variant_id: "
+                << (mode == "smooth_match_mpcc" ? "B_smooth" : "B0")
+                << "\n"
+                << "  smooth_priority_enable: "
+                << (mode == "smooth_match_mpcc" ? "true" : "false")
+                << "\n"
+                << "  w_contour: 1.0\n"
+                << "  w_lag: 0.2\n"
+                << "  w_progress: 0.2\n"
+                << "  w_v: 1.0\n"
+                << "  w_vs: 0.3\n"
+                << "  v_ref: 0.25\n"
+                << "  w_control: 0.1\n"
+                << "  w_accel: 0.0\n"
+                << "  w_smooth: 0.1\n"
+                << "  w_alpha: 0.1\n"
+                << "  w_du_a: 0.1\n"
+                << "  w_du_vs: 0.1\n";
+        }
+        output
             << "trial:\n"
             << "  control_rate_hz: 30.0\n"
             << "  max_motion_sec: " << max_motion_sec << "\n"
@@ -301,6 +324,21 @@ protected:
             << "execution_compatibility_gate: false\n"
             << "stored_recovery_action: false\n"
             << "input_shaping: true\n"
+            << "continuous_controller:\n"
+            << "  variant_id: B0\n"
+            << "  smooth_priority_enable: false\n"
+            << "  w_contour: 1.0\n"
+            << "  w_lag: 0.2\n"
+            << "  w_progress: 0.2\n"
+            << "  w_v: 1.0\n"
+            << "  w_vs: 0.3\n"
+            << "  v_ref: 0.25\n"
+            << "  w_control: 0.1\n"
+            << "  w_accel: 0.0\n"
+            << "  w_smooth: 0.1\n"
+            << "  w_alpha: 0.1\n"
+            << "  w_du_a: 0.1\n"
+            << "  w_du_vs: 0.1\n"
             << "input_shaper:\n"
             << "  max_discrete_residual: 0.03\n"
             << "trial:\n"

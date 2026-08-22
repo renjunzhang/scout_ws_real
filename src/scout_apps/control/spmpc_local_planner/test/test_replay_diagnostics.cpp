@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <cmath>
 
 namespace spmpc_local_planner {
 namespace {
@@ -265,6 +266,52 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     EXPECT_TRUE(second.pre_solve_snapshot.have_previous_solution);
     EXPECT_EQ(second.pre_solve_snapshot.previous_solution_states.size(), 61u);
     EXPECT_EQ(second.pre_solve_snapshot.previous_solution_controls.size(), 60u);
+}
+
+TEST(ReplayDiagnostics, LiftsWrappedYawOntoShiftedSolutionBranch) {
+    ContinuousMpccSolverAcados solver;
+    const SolverConfigureResult configured =
+        solver.configure(makeParams(), makeB0Variant());
+    ASSERT_TRUE(configured.success)
+        << configured.status << ": " << configured.detail;
+    const ReferencePath reference = makeStraightReference();
+    SolverInput first_input = makeInput();
+    first_input.robot.yaw = -3.13;
+    first_input.robot.omega = -0.50;
+
+    SolverOutput first;
+    ASSERT_TRUE(solver.solve(first_input, reference, first)) << first.status;
+    ASSERT_TRUE(first.success);
+    ASSERT_GT(first.predicted_horizon.states.size(), 1u);
+    const HorizonStateDebug& predicted_next =
+        first.predicted_horizon.states[1];
+    ASSERT_LT(predicted_next.yaw, -M_PI);
+
+    SolverInput second_input = first_input;
+    second_input.robot.x = predicted_next.x;
+    second_input.robot.y = predicted_next.y;
+    second_input.robot.yaw = std::atan2(
+        std::sin(predicted_next.yaw), std::cos(predicted_next.yaw));
+    second_input.robot.v = predicted_next.v;
+    second_input.robot.omega = predicted_next.omega;
+    ASSERT_GT(second_input.robot.yaw, 0.0);
+
+    SolverOutput second;
+    ASSERT_TRUE(solver.solve(second_input, reference, second)) << second.status;
+    ASSERT_TRUE(second.success);
+    ASSERT_TRUE(second.pre_solve_snapshot.valid);
+    ASSERT_TRUE(second.pre_solve_snapshot.have_previous_solution);
+    EXPECT_LT(second.pre_solve_snapshot.robot.yaw, -M_PI);
+    EXPECT_NEAR(
+        std::atan2(std::sin(second.pre_solve_snapshot.robot.yaw),
+                   std::cos(second.pre_solve_snapshot.robot.yaw)),
+        second_input.robot.yaw,
+        1e-12);
+    ASSERT_FALSE(second.pre_solve_snapshot.initial_guess_states.empty());
+    EXPECT_NEAR(
+        second.pre_solve_snapshot.initial_guess_states.front().yaw,
+        second.pre_solve_snapshot.robot.yaw,
+        1e-12);
 }
 
 #ifdef SPMPC_TEST_WITH_ACADOS_SLOSH
