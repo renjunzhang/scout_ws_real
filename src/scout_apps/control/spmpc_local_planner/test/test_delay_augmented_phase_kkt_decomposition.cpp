@@ -1,21 +1,17 @@
 // Copyright 2026. Offline slosh Phase-Rejoin development.
 //
-// §7.2 independent KKT decomposition.  acados does not expose cost_grad /
-// dyn_adj / ineq_adj through the public C interface, so this test recomputes
-// the scalar terminal cost gradient from the (recoverable) physical solution
-// state, the nominal tracked by the parameter image, the frozen cost weights
-// and the per-index scale, then verifies it component-by-component against
-// acados's `res_stat` at the terminal stage using
+// Independent terminal KKT decomposition for the fixed seed-8601 cycle-2
+// snapshot.  The terminal state has no outgoing dynamics interval, but it is
+// constrained by the incoming interval N-1.  In acados's sign convention:
 //
-//     res_stat_N[k] = cost_grad_N[k] - ineq_adj_N[k]
-//     cost_grad_N[k] = w_state(k) * (x_N[k] - nom_N[k]) / scale_state(k)
+//   res_stat_N = cost_grad_N - pi[N-1] - ineq_adj_N
+//   ineq_adj_N = J_h^T (lam_lower - lam_upper)
 //
-// where dyn_adj_N is absent (terminal stage has no dynamics) and ineq_adj_N is
-// non-zero only on the 14 terminal execution-bound indices {3,5} ∪ pending.
-// The dynamics costate `pi` is separately shown (by the snapshot test) to be
-// exactly zero under full condensing, so `dyn_adj = (∇g)ᵀ π = 0` at every
-// interior stage as well.
+// The nonlinear terminal constraints are the empirical 9D ellipsoid followed
+// by the 14 execution-bound squares.  All derivatives below are independently
+// recomputed in physical units and mapped to the scaled OCP variable basis.
 
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -35,7 +31,6 @@ namespace {
 
 namespace manifest = delay_augmented_phase_solver_manifest;
 
-// Per-index state scale, mirroring the solver's delayAugmentedStateScale().
 double stateScale(int index) {
     if (index == 0 || index == 1) return manifest::kPositionScale;
     if (index == 2) return manifest::kYawScale;
@@ -46,194 +41,225 @@ double stateScale(int index) {
     if (index == 7 || index == 9) return manifest::kEtaDotScale;
     if (index >= manifest::kLinearBufferOffset &&
         index < manifest::kLinearBufferOffset +
-                 manifest::kLinearBufferCount) {
+                    manifest::kLinearBufferCount) {
         return manifest::kVelocityScale;
     }
     return manifest::kAngularVelocityScale;
 }
 
-// Maps a state index to the offset (0..11) within the 12-entry weight block,
-// matching codegen cost assembly: base states take their own channel weight,
-// linear pending shares w_linear_pending and angular pending shares
-// w_angular_pending.
 int stateWeightOffset(int index) {
     switch (index) {
-        case 0: return 0;  // w_position (x)
-        case 1: return 0;  // w_position (y)
-        case 2: return 1;  // w_yaw
-        case 3: return 3;  // w_v
-        case 4: return 2;  // w_progress
-        case 5: return 4;  // w_omega
-        case 6: return 5;  // w_slosh_eta   (eta_x)
-        case 8: return 5;  // w_slosh_eta   (eta_y)
-        case 7: return 6;  // w_slosh_eta_dot (eta_x_dot)
-        case 9: return 6;  // w_slosh_eta_dot (eta_y_dot)
+        case 0: case 1: return 0;
+        case 2: return 1;
+        case 4: return 2;
+        case 3: return 3;
+        case 5: return 4;
+        case 6: case 8: return 5;
+        case 7: case 9: return 6;
         default: break;
     }
     if (index >= manifest::kLinearBufferOffset &&
         index < manifest::kLinearBufferOffset +
-                 manifest::kLinearBufferCount) {
-        return 7;  // w_linear_pending
+                    manifest::kLinearBufferCount) {
+        return 7;
     }
     if (index >= manifest::kAngularBufferOffset &&
         index < manifest::kAngularBufferOffset +
-                 manifest::kAngularBufferCount) {
-        return 8;  // w_angular_pending
+                    manifest::kAngularBufferCount) {
+        return 8;
     }
     return -1;
 }
 
-TEST(DelayAugmentedPhaseKktDecomposition,
-     TerminalResStatEqualsRecomputedCostGradientElementWise) {
-    // Load the same committed cycle-2 snapshot fixture and replay the scaled
-    // FullSqp capsule to convergence (NLP_STATUS_2).
-    std::string text;
-    {
-        std::ifstream in(
-#ifdef SPMPC_TEST_FIXTURE_DIR
-            std::string(SPMPC_TEST_FIXTURE_DIR) +
-                "/seed8601_cycle2_diagnostic.json"
-#else
-            ""
-#endif
-        );
-        std::ostringstream ss; ss << in.rdbuf(); text = ss.str();
-    }
-    if (text.empty()) GTEST_SKIP() << "fixture not available";
-
-    test_support::SnapshotJson json;
-    std::string parse_error;
-    ASSERT_TRUE(test_support::SnapshotJson::parse(text, json, parse_error))
-        << parse_error;
-    test_support::DelayAugmentedPhaseSnapshot snapshot;
-    ASSERT_TRUE(test_support::loadSnapshot(json, snapshot)) << snapshot.status;
-
-    DelayAugmentedPhaseAcadosSolver solver(
-        DelayAugmentedPhaseAcadosBackend::FullSqp);
-    std::string error;
-    ASSERT_TRUE(solver.create(
-        snapshot.context, kDelayAugmentedPhaseFormalCapabilities, error))
-        << error;
-    ASSERT_TRUE(solver.setParameterImage(snapshot.parameters, error))
-        << error;
-    ASSERT_TRUE(solver.setCausalWarmStart(
-        snapshot.context, snapshot.nominal_controls, error))
-        << error;
-    ASSERT_EQ(2, solver.solve());  // NLP_STATUS_2
-
-    const int stage = manifest::kHorizonSteps;  // terminal stage N
-    const double* param = snapshot.parameters.stageData(stage);
-    const double* weights = param + manifest::kWeightOffset;  // 12-entry block
-
-    std::vector<double> res_stat;
-    ASSERT_TRUE(solver.perStageStationarity(stage, res_stat));
-    ASSERT_EQ(static_cast<std::size_t>(manifest::kStateCount), res_stat.size());
-
-    double xN[manifest::kStateCount];
-    ASSERT_TRUE(solver.getState(stage, xN));  // physical units
-
-    // The terminal stage has no dynamics (dyn_adj_N = 0), so the identity is
-    //   res_stat_N[k] = cost_grad_N[k] - ineq_adj_N[k].
-    // ineq_adj_N[k] is non-zero only where a terminal inequality is active:
-    // the terminal recovery gate and 14 execution bounds.  The execution bounds
-    // cover state indices {3, 5} ∪ pending(10..21); the remaining base states
-    // have no terminal inequality, so ineq_adj_N[k] = 0 exactly there.
-    int matched_base = 0;
-    for (int k = 0; k < manifest::kStateCount; ++k) {
-        const int w = stateWeightOffset(k);
-        ASSERT_GE(w, 0) << "state index " << k << " has no weight mapping";
-        const double nom = param[manifest::kNominalStateOffset + k];
-        const double weight = weights[w];
-        const double scale = stateScale(k);
-        const double cost_grad = weight * (xN[k] - nom) / scale;
-        const bool execution_bound =
-            (k == 3) || (k == 5) ||
-            (k >= manifest::kLinearBufferOffset &&
-             k < manifest::kLinearBufferOffset +
-                 manifest::kLinearBufferCount) ||
-            (k >= manifest::kAngularBufferOffset &&
-             k < manifest::kAngularBufferOffset +
-                 manifest::kAngularBufferCount);
-        if (!execution_bound) {
-            // No terminal inequality on this index => res_stat == cost_grad
-            // up to single(blasfeo/HPIPM) vs double(C++ recompute) roundoff.
-            // The tolerance is RELATIVE to the value magnitude because the
-            // eta_dot channel (scale 0.0859) amplifies float roundoff; the
-            // observed worst base-state relative error is ~8e-6, so 1e-4 is a
-            // safe margin while still rejecting any true logic error.
-            const double& expected = cost_grad;
-            const double& actual = res_stat[static_cast<std::size_t>(k)];
-            const double rel_tol = 1e-4;
-            const double abs_tol = rel_tol * std::max(1.0, std::fabs(expected));
-            EXPECT_NEAR(actual, expected, abs_tol)
-                << "base-state terminal res_stat[" << k
-                << "] != recomputed cost_grad (dyn_adj=0, ineq=0)";
-            matched_base +=
-                std::fabs(actual - expected) <= abs_tol ? 1 : 0;
-        } else {
-            // ineq_adj present on execution-bound indices; the residual is the
-            // remaining (small) slack manager contribution, not a tight bound
-            // violation: verify it stays finite and small relative to the x
-            // residual floor.
-            const double ineq_adj =
-                cost_grad - res_stat[static_cast<std::size_t>(k)];
-            EXPECT_TRUE(std::isfinite(ineq_adj));
-        }
-    }
-    EXPECT_EQ(8, matched_base)
-        << "only the 8 non-execution-bound base states (x,y,yaw,progress,"
-           "eta_x/dot,eta_y/dot) have ineq_adj_N == 0";
+double wrappedAngle(double value) {
+    return std::atan2(std::sin(value), std::cos(value));
 }
 
-TEST(DelayAugmentedPhaseKktDecomposition, DynamicsAdjointVanishesWithZeroCostate) {
-    // Under full condensing (qp_solver_cond_N == N == 10) acados leaves
-    // out->pi == 0, so dyn_adj == (∇g)ᵀ π == 0 for every interior stage; this is
-    // a representation property, not a genuine zero costate (see §7 notes: the
-    // same QP produces non-zero pi when cond_N is reduced to 5).
-    std::string text;
-    {
-        std::ifstream in(
+bool loadCycle2Snapshot(test_support::DelayAugmentedPhaseSnapshot& snapshot,
+                        std::string& error) {
+    std::ifstream in(
 #ifdef SPMPC_TEST_FIXTURE_DIR
-            std::string(SPMPC_TEST_FIXTURE_DIR) +
-                "/seed8601_cycle2_diagnostic.json"
+        std::string(SPMPC_TEST_FIXTURE_DIR) +
+            "/seed8601_cycle2_diagnostic.json"
 #else
-            ""
+        ""
 #endif
-        );
-        std::ostringstream ss; ss << in.rdbuf(); text = ss.str();
+    );
+    std::ostringstream stream;
+    stream << in.rdbuf();
+    if (stream.str().empty()) {
+        error = "fixture not available";
+        return false;
     }
-    if (text.empty()) GTEST_SKIP() << "fixture not available";
-
     test_support::SnapshotJson json;
-    std::string parse_error;
-    ASSERT_TRUE(test_support::SnapshotJson::parse(text, json, parse_error))
-        << parse_error;
+    if (!test_support::SnapshotJson::parse(stream.str(), json, error)) {
+        return false;
+    }
+    if (!test_support::loadSnapshot(json, snapshot)) {
+        error = snapshot.status;
+        return false;
+    }
+    return true;
+}
+
+int solveSnapshot(const test_support::DelayAugmentedPhaseSnapshot& snapshot,
+                  DelayAugmentedPhaseAcadosSolver& solver,
+                  std::string& error) {
+    if (!solver.create(snapshot.context,
+                       kDelayAugmentedPhaseFormalCapabilities, error) ||
+        !solver.setParameterImage(snapshot.parameters, error) ||
+        !solver.setCausalWarmStart(snapshot.context,
+                                   snapshot.nominal_controls, error)) {
+        return -999;
+    }
+    return solver.solve();
+}
+
+TEST(DelayAugmentedPhaseKktDecomposition,
+     TerminalIncludesIncomingCostateAndAllNonlinearConstraints) {
     test_support::DelayAugmentedPhaseSnapshot snapshot;
-    ASSERT_TRUE(test_support::loadSnapshot(json, snapshot)) << snapshot.status;
+    std::string error;
+    ASSERT_TRUE(loadCycle2Snapshot(snapshot, error)) << error;
 
     DelayAugmentedPhaseAcadosSolver solver(
         DelayAugmentedPhaseAcadosBackend::FullSqp);
-    std::string error;
-    ASSERT_TRUE(solver.create(
-        snapshot.context, kDelayAugmentedPhaseFormalCapabilities, error))
-        << error;
-    ASSERT_TRUE(solver.setParameterImage(snapshot.parameters, error))
-        << error;
-    ASSERT_TRUE(solver.setCausalWarmStart(
-        snapshot.context, snapshot.nominal_controls, error))
-        << error;
-    ASSERT_EQ(2, solver.solve());
+    const int status = solveSnapshot(snapshot, solver, error);
+    ASSERT_NE(-999, status) << error;
 
-    // pi is exactly zero for every interior stage under full condensing.
+    const int terminal = manifest::kHorizonSteps;
+    std::vector<double> res_stat;
+    std::vector<double> incoming_pi;
+    std::vector<double> lam;
+    ASSERT_TRUE(solver.perStageStationarity(terminal, res_stat));
+    ASSERT_TRUE(solver.perStagePi(terminal - 1, incoming_pi));
+    ASSERT_TRUE(solver.perStageLam(terminal, lam));
+    ASSERT_EQ(static_cast<std::size_t>(manifest::kStateCount),
+              res_stat.size());
+    ASSERT_EQ(static_cast<std::size_t>(manifest::kStateCount),
+              incoming_pi.size());
+    ASSERT_EQ(static_cast<std::size_t>(
+                  2 * manifest::kTerminalRecoveryConstraintCount),
+              lam.size());
+
+    double state[manifest::kStateCount];
+    ASSERT_TRUE(solver.getState(terminal, state));
+    const double* parameter = snapshot.parameters.stageData(terminal);
+    const double* weights = parameter + manifest::kWeightOffset;
+    const int gate_indices[manifest::kGateRadiusCount] = {
+        0, 1, 2, 3, 5, 6, 7, 8, 9};
+    const int execution_indices[manifest::kExecutionBoundCount] = {
+        3, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+
+    double max_decomposition_error = 0.0;
+    int max_error_index = -1;
+    double max_residual = 0.0;
+    int max_residual_index = -1;
+    double max_cost_grad = 0.0;
+    double max_incoming_pi = 0.0;
+    double max_ineq_adj = 0.0;
+    for (int index = 0; index < manifest::kStateCount; ++index) {
+        const int weight_offset = stateWeightOffset(index);
+        ASSERT_GE(weight_offset, 0);
+        double physical_error = state[index] -
+            parameter[manifest::kNominalStateOffset + index];
+        if (index == 2) physical_error = wrappedAngle(physical_error);
+        const double scale = stateScale(index);
+        const double cost_grad =
+            weights[weight_offset] * physical_error / scale;
+
+        double ineq_adj = 0.0;
+        for (int gate = 0; gate < manifest::kGateRadiusCount; ++gate) {
+            if (gate_indices[gate] != index) continue;
+            const double radius =
+                parameter[manifest::kGateRadiusOffset + gate];
+            const double signed_multiplier =
+                lam[0] -
+                lam[manifest::kTerminalRecoveryConstraintCount];
+            const double gradient_scaled =
+                2.0 * physical_error * scale / (radius * radius);
+            ineq_adj += gradient_scaled * signed_multiplier;
+        }
+        for (int bound = 0;
+             bound < manifest::kExecutionBoundCount; ++bound) {
+            if (execution_indices[bound] != index) continue;
+            const int constraint = 1 + bound;
+            const double beta =
+                parameter[manifest::kExecutionBoundOffset + bound];
+            const double signed_multiplier =
+                lam[constraint] -
+                lam[manifest::kTerminalRecoveryConstraintCount +
+                    constraint];
+            const double gradient_scaled =
+                2.0 * physical_error * scale / (beta * beta);
+            ineq_adj += gradient_scaled * signed_multiplier;
+        }
+
+        const double expected = cost_grad - incoming_pi[index] - ineq_adj;
+        if (std::fabs(res_stat[static_cast<std::size_t>(index)]) >
+            std::fabs(max_residual)) {
+            max_residual = res_stat[static_cast<std::size_t>(index)];
+            max_residual_index = index;
+            max_cost_grad = cost_grad;
+            max_incoming_pi = incoming_pi[index];
+            max_ineq_adj = ineq_adj;
+        }
+        const double decomposition_error =
+            std::fabs(res_stat[static_cast<std::size_t>(index)] - expected);
+        if (decomposition_error > max_decomposition_error) {
+            max_decomposition_error = decomposition_error;
+            max_error_index = index;
+        }
+        EXPECT_NEAR(res_stat[static_cast<std::size_t>(index)], expected,
+                    1.0e-9)
+            << "terminal index=" << index
+            << " cost_grad=" << cost_grad
+            << " incoming_pi=" << incoming_pi[index]
+            << " ineq_adj=" << ineq_adj;
+    }
+    EXPECT_LE(max_decomposition_error, 1.0e-9)
+        << "maximum independent decomposition error at index "
+        << max_error_index;
+    const DelayAugmentedPhaseSolveDiagnostics& diagnostics =
+        solver.lastSolveDiagnostics();
+    EXPECT_EQ(0, status)
+        << "Full SQP did not satisfy the frozen KKT contract: stat="
+        << diagnostics.stationarity_residual
+        << " eq=" << diagnostics.equality_residual
+        << " ineq=" << diagnostics.inequality_residual
+        << " comp=" << diagnostics.complementarity_residual
+        << " sqp_iter=" << diagnostics.sqp_iterations
+        << " step=" << diagnostics.step_length
+        << " terminal_max_index=" << max_residual_index
+        << " terminal_residual=" << max_residual
+        << " cost_grad=" << max_cost_grad
+        << " incoming_pi=" << max_incoming_pi
+        << " ineq_adj=" << max_ineq_adj;
+}
+
+TEST(DelayAugmentedPhaseKktDecomposition,
+     BalanceBackendRecoversEveryDynamicsCostate) {
+    test_support::DelayAugmentedPhaseSnapshot snapshot;
+    std::string error;
+    ASSERT_TRUE(loadCycle2Snapshot(snapshot, error)) << error;
+
+    DelayAugmentedPhaseAcadosSolver solver(
+        DelayAugmentedPhaseAcadosBackend::FullSqp);
+    const int status = solveSnapshot(snapshot, solver, error);
+    ASSERT_NE(-999, status) << error;
+    EXPECT_STREQ("BALANCE", manifest::kHpipmMode);
+    EXPECT_STREQ("FUNNEL_L1PEN_LINESEARCH", manifest::kGlobalization);
+    EXPECT_EQ(1, manifest::kGlobalizationFullStepDual);
+    EXPECT_EQ(0, manifest::kGlobalizationUseSecondOrderCorrection);
+    EXPECT_STREQ("SPEED_ABS", manifest::kRtiReferenceHpipmMode);
+
     for (int stage = 0; stage < manifest::kHorizonSteps; ++stage) {
         std::vector<double> pi;
         ASSERT_TRUE(solver.perStagePi(stage, pi));
         ASSERT_EQ(static_cast<std::size_t>(manifest::kStateCount), pi.size());
-        for (std::size_t i = 0; i < pi.size(); ++i) {
-            EXPECT_EQ(0.0, pi[i])
-                << "pi at stage " << stage << " index " << i
-                << " is non-zero under full condensing";
-        }
+        double norm = 0.0;
+        for (double value : pi) norm = std::max(norm, std::fabs(value));
+        EXPECT_GT(norm, 1.0e-12)
+            << "missing equality costate at dynamics stage " << stage;
     }
 }
 

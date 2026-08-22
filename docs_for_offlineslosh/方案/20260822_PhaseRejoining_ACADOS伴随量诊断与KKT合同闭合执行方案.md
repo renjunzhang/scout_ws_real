@@ -5,7 +5,7 @@
 - 分支：`offline-slosh-plan-online-tracking`
 - 当前 HEAD：`92882dc5 阶段性修复：闭合重接候选的执行兼容筛选`
 - 任务性质：仿真第 3 阶段的单 seed development 闭环诊断与修复
-- 当前结论：**无量纲变量缩放已把 stationarity 从 2.20009 降到 0.015864，但完整 SQP 仍未满足四项 KKT 合同；是否存在伴随量 `pi` 更新或评价问题尚未由持久证据证明。**
+- 当前结论：**无量纲变量缩放已完成；Full SQP 使用 `SPEED_ABS` 导致 equality costate `pi` 缺失的工程缺陷已定位并通过 `BALANCE` 修复。同一 cycle 2 快照 stationarity 从 0.015864 降至 4.275e-5，但 20 次内仍未达到 1e-6，因此完整 KKT 合同继续 NO-GO。**
 
 > 使用方式：新 agent 应完整阅读本文后再执行。本文不是“继续调参”的授权，而是一个严格限定范围的诊断、修复和验收合同。
 
@@ -193,11 +193,11 @@ seed: 8601
 在 terminal stage 必须逐分量验证当前版本的符号约定：
 
 ```text
-res_stat_N            = cost_grad_N - ineq_adj_N          (terminal 无 dynamics，dyn_adj_N 不存在，等价于零)
+res_stat_N            = cost_grad_N - incoming_pi[N-1] - ineq_adj_N
 res_stat_i (i=0..N-1) = cost_grad_i - dyn_adj_i - ineq_adj_i
 ```
 
-具体到 acados 的内存语义（`ocp_nlp_res_compute`，`ocp_nlp_common.c:3652`）：`dyn_adj` 的 `blasfeo_daxpy` 在长度 `nu[i]+nx[i]` 上执行，terminal `nu[N]=nx[N]=0`，所以 `dyn_adj_N` 是零长度向量，**不是「有待确定的 `dyn_adj_N`」**。因此 §7.1 记录的 `pi[0:N-1]` 与 terminal 无 `pi[N]` 是一致的，不冲突。
+具体到 acados 的内存语义：terminal 先将本段 `dyn_adj` 清零，但随后把 stage `N-1` dynamics adjoint 尾部的 `pi[N-1]` 加到 terminal 的 22 维状态分量。terminal 只有 `nu[N]=0`，`nx[N]=22`，不能把“没有 outgoing dynamics”误写成“没有 incoming costate”。
 
 执行者必须额外注意的维度约定（与读接口无关，是「独立分解」的固有错位）：
 
@@ -218,21 +218,15 @@ res_stat_i (i=0..N-1) = cost_grad_i - dyn_adj_i - ineq_adj_i
 3. **QP 与 NLP dual 都近零**：检查离散 dynamics Jacobian、QP dual读取方式和生成模型的 adjoint接口；不能直接给 `pi` 填经验值。
 4. **dual、Jacobian 和独立分解全部一致，stationarity 仍为 0.0159**：这是完整 SQP 的真实未收敛，立即报告具体分量和迭代轨迹；不要通过新指标宣布成功。
 
-> **§7 实测记录（cycle 2，缩放基，完整 SQP，20 迭代 NLP_STATUS_2）**
+> **§7 实测纠正记录（cycle 2，2026-08-22）**
 >
-> 结论：进入 **§7.3 分支 4**（dual、Jacobian、独立分解全部一致，stationarity 为一个真实收敛的跟踪残差）。
+> 原“分支 4、真实 terminal 跟踪残差”判定无效。根因是 codegen 对 Full SQP 显式选择 `HPIPM SPEED_ABS`；该模式从上游 HPIPM 2020 年实现起就设置 `comp_dual_sol_eq=0`，所以 QP 不产生 dynamics equality costate。`qp_solver_cond_N=N=10` 在 partial-condensing 语义中是“不做 condensing”，不是“满 condensing”；降到 5 后出现偶 stage 非零、奇 stage 为零，只是长度 2 block 的内部 costate 被回代、block 边界 costate仍缺失。
 >
-> 证据链条：
+> Full SQP 已改为 `HPIPM BALANCE`，RTI reference 保持 `SPEED_ABS`，没有修改 OCP、权重、半径、B_exec 或资产。新 Full SQP config hash 为 `930a3b05749b7708cab1a58fc3331ea99e28402e0fe0a4548e84f0e0d62dbef2`；同一快照上 stage 0..9 的 `pi` 全部非零，证明 QP→NLP→dynamics adjoint 链已恢复。
 >
-> ① `pi`（dynamics 伴随，`out->pi`，长度 22）在 stage 0..9 全部精确 0.0（`argmax=-1`）；`lam`（inequality 伴随，长度 `2*ni`）非零，stage 1/2 最大 `3.3e-3`，终端约 `1.3e-7`。见 `test_delay_augmented_phase_kkt_snapshot.cpp` 的 `perStagePi/perStageLam` dump。
+> 修复后 terminal x 的 cost gradient `-1.5833e-2` 被 incoming `pi[9]` 正确抵消，`res_stat_N[x]` 降至约 `-4.2e-6`，因此 `-2.38 mm` 跟踪误差本身从来不是 KKT 违反的证明。新的最大项为 terminal `eta_x_dot`（index 7）：`cost_grad=-4.5166448e-3`、`incoming_pi=-4.4738975e-3`、`ineq_adj=3.9132e-9`，独立 C++ 分解得到 `res_stat=-4.2751176e-5`，与 acados 逐分量一致。
 >
-> ② terminal 逐分量独立分解（§7.2，新增 `test_delay_augmented_phase_kkt_decomposition.cpp`）：`res_stat_N[k] = cost_grad_N[k] − ineq_adj_N[k]`。其中 `cost_grad_N[k]=w_state(k)·(x_N[k]−nom[k])/scale_k`，`ineq_adj_N[k]` 仅在 14 个 terminal execution-bound 索引 `{3,5}∪pending(10..21)` 上非零（gate/execution 约束的 `(∇h)ᵀλ`）。8 个非 exec-bound base state（x,y,yaw,progress,eta_x/dot,eta_y/dot）上 `ineq_adj_N≡0`、`res_stat==cost_grad` 逐位吻合（单/双精度舍入内，相对 ~8e-6）。terminal `res_stat[0] = -1.586413e-2`，即 `w_x·(x_N−nom_x)/scale_x = 1.0·(−2.379620e-3)/0.15 = −1.586413e-2`（factor 是 `/scale`，不是 `/scale²`；`pi=0` 使 `dyn_adj=0`）。
->
-> ③ cond_N 判别：把 `qp_solver_cond_N` 从 `N=10` 降到 `5` 重 codegen 并重放，`pi` 变为在 stage 0/2/4/6/8 非零（`8.3e-4…5.7e-3`，奇 stage 仍 0）。证明 costate 确由 QP 求出，满 condensing（cond_N=N=10）时只未写回 `out->pi` —— 这是 condensing 表示层现象，非 QP 真零对偶。**但此项与 terminal 站定性无关**（terminal 无 dynamics）。
->
-> ④ 满 condensing 恢复后把 max_iter 从 20 → 60 重 codegen：`stationarity = 0.015867` vs 二十迭代 `0.015864`（几乎不变），terminal x 误差仍 `-2.38mm`。**证明 terminal 0.01586 是收敛后的真实固定点，不是迭代数不足的未收敛。**
->
-> 最终判定：terminal stage 的站定性残差 = terminal x 跟踪代价梯度，由 terminal x 与 nominal 之间 `-2.380mm` 的 x 位置误差直接导致，是几何上真实存在的跟踪残差；后续按 §13/§16 评估 GO/NO-GO，而不是通过新指标或「补 pi」伪修复宣告满足。
+> 当前仍为 `NLP_STATUS_2`：stationarity `4.2751e-5`、equality `5.13e-11`、inequality `0`、complementarity `6.85e-7`。第 1 步后 stationarity 为 `1.316e-4`，随后 `alpha=0.057648` 单调下降，但 20 次内未达到 `1e-6`。按 §14 停止：**缺失 π 的工程缺陷已修复，完整 KKT 合同仍是新的 NO-GO；不得据此运行 seed 8601 两次闭环或改成功定义。**
 
 
 ## 8. 第三阶段：允许的结构性修复

@@ -7,6 +7,8 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <cstdlib>
 #include <sstream>
@@ -28,7 +30,9 @@ bool readWholeFile(const std::string& path, std::string& out) {
 
 // The §6 regression snapshot: a minimized summary.json fragment containing
 // only the first_solver_failure_diagnostic slice for seed 8601 cycle 2.
-// This is the scaled-backend failure whose stationarity was 0.0158641.
+// This is the scaled SPEED_ABS-backend failure whose stationarity was
+// 0.0158641.  It is now replayed through the equality-dual-capable Full SQP
+// backend as a regression for the missing-costate defect.
 
 TEST(DelayAugmentedPhaseKktSnapshot, LoadsAndReconstructsCycle2) {
     // Prefer an explicit snapshot path (full /data evidence); otherwise use
@@ -80,71 +84,77 @@ TEST(DelayAugmentedPhaseKktSnapshot, LoadsAndReconstructsCycle2) {
     const DelayAugmentedPhaseSolveDiagnostics& diagnostics =
         solver.lastSolveDiagnostics();
 
-    // The snapshot's own solver identity must match what we replay.
-    EXPECT_EQ(manifest::kSolverId, snapshot.solver_id);
-    EXPECT_EQ(manifest::kSolverConfigHash, snapshot.solver_config_hash);
+    // Preserve the old snapshot identity as provenance.  The OCP inputs are
+    // unchanged, but the solver configuration hash must change because the
+    // Full SQP backend now computes equality duals using HPIPM BALANCE.
+    EXPECT_EQ("delay_augmented_phase_acados_full_sqp_v1",
+              snapshot.solver_id);
+    EXPECT_NE(manifest::kSolverId, snapshot.solver_id);
+    EXPECT_EQ("b072018aef371773e4fdee5f20fe3660f2511a8ce89cc95787a84f67e8532db5",
+              snapshot.solver_config_hash);
+    EXPECT_NE(manifest::kSolverConfigHash, snapshot.solver_config_hash);
+    EXPECT_STREQ("BALANCE", manifest::kHpipmMode);
+    EXPECT_STREQ("FUNNEL_L1PEN_LINESEARCH", manifest::kGlobalization);
+    EXPECT_EQ(1, manifest::kGlobalizationFullStepDual);
+    EXPECT_EQ(0, manifest::kGlobalizationUseSecondOrderCorrection);
 
-    // The scaled backend reproduces NLP_STATUS_2 with stationarity 0.0158641.
-    EXPECT_EQ(2, status)
+    int max_stage = -1;
+    int max_index = -1;
+    double max_component = 0.0;
+    for (int stage = 0; stage <= manifest::kHorizonSteps; ++stage) {
+        std::vector<double> values;
+        ASSERT_TRUE(solver.perStageStationarity(stage, values));
+        for (std::size_t index = 0; index < values.size(); ++index) {
+            if (std::fabs(values[index]) > std::fabs(max_component)) {
+                max_component = values[index];
+                max_stage = stage;
+                max_index = static_cast<int>(index);
+            }
+        }
+    }
+    std::ostringstream iteration_trace;
+    for (const DelayAugmentedPhaseIterationDiagnostics& iteration :
+         diagnostics.iterations) {
+        iteration_trace << " [" << iteration.iteration
+            << ":stat=" << iteration.stationarity
+            << ",eq=" << iteration.equality
+            << ",ineq=" << iteration.inequality
+            << ",comp=" << iteration.complementarity
+            << ",alpha=" << iteration.step_length << "]";
+    }
+
+    EXPECT_EQ(0, status)
         << "nlp_status=" << diagnostics.nlp_status
         << " qp_status=" << diagnostics.qp_status
         << " stat=" << diagnostics.stationarity_residual
         << " eq=" << diagnostics.equality_residual
         << " ineq=" << diagnostics.inequality_residual
-        << " comp=" << diagnostics.complementarity_residual;
-    EXPECT_NEAR(snapshot.expected_stationarity,
-               diagnostics.stationarity_residual, 1e-9)
-        << "stationarity drift from snapshot";
-    EXPECT_NEAR(snapshot.expected_complementarity,
-               diagnostics.complementarity_residual, 1e-9);
+        << " comp=" << diagnostics.complementarity_residual
+        << " max_component=" << max_component
+        << " at stage=" << max_stage << " index=" << max_index
+        << " iterations=" << iteration_trace.str();
+    EXPECT_LE(diagnostics.stationarity_residual,
+              manifest::kMaxStationarityResidual)
+        << "max_component=" << max_component
+        << " at stage=" << max_stage << " index=" << max_index;
+    EXPECT_LE(diagnostics.equality_residual,
+              manifest::kMaxEqualityResidual);
+    EXPECT_LE(diagnostics.inequality_residual,
+              manifest::kMaxInequalityResidual);
+    EXPECT_LE(diagnostics.complementarity_residual,
+              manifest::kMaxComplementarityResidual);
 
-    // §7 diagnostic: dump the NLP dual (pi/lam) decompositions at the failed
-    // cycle-2 snapshot to localize the four-branch root cause.
+    // Every dynamics interval must carry a recovered equality costate.  This
+    // specifically rejects the former SPEED_ABS all-zero out->pi behavior.
     for (int stage = 0; stage < manifest::kHorizonSteps; ++stage) {
         std::vector<double> pi;
-        if (!solver.perStagePi(stage, pi)) continue;
+        ASSERT_TRUE(solver.perStagePi(stage, pi));
+        ASSERT_EQ(static_cast<std::size_t>(manifest::kStateCount), pi.size());
         double pi_norm = 0.0;
-        int pi_argmax = -1;
-        for (std::size_t i = 0; i < pi.size(); ++i) {
-            const double a = std::fabs(pi[i]);
-            if (a > pi_norm) { pi_norm = a; pi_argmax = static_cast<int>(i); }
+        for (double value : pi) {
+            pi_norm = std::max(pi_norm, std::fabs(value));
         }
-        std::fprintf(stderr, "[pi stage=%d] dim=%zu norm_inf=%.6e argmax@%d\n",
-                     stage, pi.size(), pi_norm, pi_argmax);
-    }
-    for (int stage = 0; stage <= manifest::kHorizonSteps; ++stage) {
-        std::vector<double> lam;
-        if (!solver.perStageLam(stage, lam)) continue;
-        double lam_norm = 0.0;
-        int lam_argmax = -1;
-        for (std::size_t i = 0; i < lam.size(); ++i) {
-            const double a = std::fabs(lam[i]);
-            if (a > lam_norm) { lam_norm = a; lam_argmax = static_cast<int>(i); }
-        }
-        std::fprintf(stderr, "[lam stage=%d] dim=%zu norm_inf=%.6e argmax@%d\n",
-                     stage, lam.size(), lam_norm, lam_argmax);
-    }
-
-    // §7.2 independent decomposition: terminal cost_grad vs res_stat factor.
-    {
-        const int terminal = manifest::kHorizonSteps;
-        std::vector<double> rs;
-        if (solver.perStageStationarity(terminal, rs) && rs.size() >= 1) {
-            double xN[22];
-            solver.getState(terminal, xN);
-            const double* term_param =
-                snapshot.parameters.stageData(terminal);
-            const double nom_x = term_param[0];   // nom_x at terminal
-            const double w_x   = term_param[29];   // w[0] at terminal
-            const double err   = xN[0] - nom_x;
-            std::fprintf(stderr, "\n[decomp term] res_stat[0]=%.6e xN0=%.8f nom_x0=%.8f err=%.8f w0=%.3f\n",
-                         rs[0], xN[0], nom_x, err, w_x);
-            // candidate gradients (position scale = 0.15 fixed)
-            std::fprintf(stderr, "  w*err/scale   = %.6e\n", w_x * err / 0.15);
-            std::fprintf(stderr, "  w*err/scale^2 = %.6e\n", w_x * err / (0.15*0.15));
-            std::fprintf(stderr, "  w*err         = %.6e\n", w_x * err);
-            std::fprintf(stderr, "  err/scale     = %.6e\n", err / 0.15);
-        }
+        EXPECT_GT(pi_norm, 1.0e-12) << "zero pi at dynamics stage " << stage;
     }
 }
 

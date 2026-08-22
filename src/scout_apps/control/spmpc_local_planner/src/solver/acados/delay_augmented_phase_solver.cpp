@@ -1165,6 +1165,39 @@ DelayAugmentedPhaseAcadosSolver::auditTrajectory(
                 ? std::abs(published_omega - nominal_omega) /
                     residual_omega
                 : std::abs(published_omega - nominal_omega));
+        const double next_linear_beta = parameter[
+            manifest::kExecutionBoundOffset + 2 +
+            manifest::kLinearBufferCount - 1];
+        const double next_angular_beta = parameter[
+            manifest::kExecutionBoundOffset + 2 +
+            manifest::kLinearBufferCount +
+            manifest::kAngularBufferCount - 1];
+        append_bound(
+            audit.stage_constraints, stage, 6,
+            "published_linear_next_execution_upper",
+            published_v - nominal_v - next_linear_beta,
+            -1.0e15, 0.0,
+            std::abs(published_v - nominal_v) / next_linear_beta);
+        append_bound(
+            audit.stage_constraints, stage, 7,
+            "published_linear_next_execution_lower",
+            nominal_v - published_v - next_linear_beta,
+            -1.0e15, 0.0,
+            std::abs(published_v - nominal_v) / next_linear_beta);
+        append_bound(
+            audit.stage_constraints, stage, 8,
+            "published_angular_next_execution_upper",
+            published_omega - nominal_omega - next_angular_beta,
+            -1.0e15, 0.0,
+            std::abs(published_omega - nominal_omega) /
+                next_angular_beta);
+        append_bound(
+            audit.stage_constraints, stage, 9,
+            "published_angular_next_execution_lower",
+            nominal_omega - published_omega - next_angular_beta,
+            -1.0e15, 0.0,
+            std::abs(published_omega - nominal_omega) /
+                next_angular_beta);
     }
 
     const double* terminal = states.data() + static_cast<std::size_t>(

@@ -39,7 +39,7 @@ DEFAULT_OUTPUT = PACKAGE_ROOT / "generated" / "acados"
 MODEL_NAME = "spmpc_delay_augmented_phase"
 RTI_MODEL_NAME = "spmpc_delay_augmented_phase_rti"
 SOLVER_CAPABILITY_SCHEMA_VERSION = 3
-SOLVER_ID = "delay_augmented_phase_acados_full_sqp_v1"
+SOLVER_ID = "delay_augmented_phase_acados_full_sqp_funnel_bexec_v1"
 RTI_SOLVER_ID = "delay_augmented_phase_acados_rti_reference_v1"
 PARAMETER_SCHEMA_VERSION = 2
 PARAMETER_SCHEMA_ID = "delay_augmented_phase_parameter_image_v2"
@@ -77,14 +77,20 @@ FORMAL_REQUIRED_CAPABILITIES = (
 
 
 def _solver_config(model_name, solver_id, nlp_solver_type,
-                   globalization, max_iterations, scale_x, scale_u):
+                   globalization, hpipm_mode, full_step_dual,
+                   use_second_order_correction, max_iterations,
+                   scale_x, scale_u):
     semantic = {
         "model_name": model_name,
         "solver_id": solver_id,
         "nlp_solver_type": nlp_solver_type,
         "integrator_type": "DISCRETE",
         "qp_solver": "PARTIAL_CONDENSING_HPIPM",
-        "hpipm_mode": "SPEED_ABS",
+        # Full SQP uses the NLP equality multipliers to evaluate the complete
+        # KKT stationarity residual.  HPIPM's SPEED_ABS mode deliberately sets
+        # comp_dual_sol_eq=0, so it is only suitable for the RTI reference that
+        # does not claim a converged full-NLP KKT certificate.
+        "hpipm_mode": hpipm_mode,
         "qp_solver_iter_max": 100,
         "tol_stat": MAX_STATIONARITY_RESIDUAL,
         "tol_eq": MAX_EQUALITY_RESIDUAL,
@@ -92,6 +98,9 @@ def _solver_config(model_name, solver_id, nlp_solver_type,
         "tol_comp": MAX_COMPLEMENTARITY_RESIDUAL,
         "max_iterations": max_iterations,
         "globalization": globalization,
+        "globalization_full_step_dual": full_step_dual,
+        "globalization_use_second_order_correction": (
+            use_second_order_correction),
         "hessian_approx": "GAUSS_NEWTON",
         "regularize_method": "PROJECT",
         "levenberg_marquardt": 1.0e-3,
@@ -218,7 +227,10 @@ def load_solver_spec():
         MODEL_NAME,
         SOLVER_ID,
         "SQP",
-        "MERIT_BACKTRACKING",
+        "FUNNEL_L1PEN_LINESEARCH",
+        "BALANCE",
+        1,
+        0,
         MAX_SQP_ITERATIONS,
         scale_x,
         scale_u,
@@ -228,6 +240,9 @@ def load_solver_spec():
         RTI_SOLVER_ID,
         "SQP_RTI",
         "FIXED_STEP",
+        "SPEED_ABS",
+        0,
+        0,
         1,
         scale_x,
         scale_u,
@@ -315,6 +330,7 @@ def build_symbolic_spec(spec):
         published_command_constraints(
             published,
             p,
+            layout,
             spec["parameters"],
             contract["linear"]["output_min"],
             contract["linear"]["output_max"],
@@ -410,11 +426,17 @@ constexpr const char kSolverId[] = "{spec['solver_id']}";
 constexpr const char kModelName[] = "{spec['model_name']}";
 constexpr const char kNlpSolverType[] = "{spec['solver_config']['nlp_solver_type']}";
 constexpr const char kGlobalization[] = "{spec['solver_config']['globalization']}";
+constexpr const char kHpipmMode[] = "{spec['solver_config']['hpipm_mode']}";
+constexpr int kGlobalizationFullStepDual = {spec['solver_config']['globalization_full_step_dual']};
+constexpr int kGlobalizationUseSecondOrderCorrection = {spec['solver_config']['globalization_use_second_order_correction']};
 constexpr const char kSolverConfigHash[] = "{spec['solver_config']['config_hash']}";
 constexpr int kMaxSqpIterations = {spec['solver_config']['max_iterations']};
 constexpr const char kRtiReferenceSolverId[] = "{spec['rti_solver_config']['solver_id']}";
 constexpr const char kRtiReferenceModelName[] = "{spec['rti_solver_config']['model_name']}";
 constexpr const char kRtiReferenceNlpSolverType[] = "{spec['rti_solver_config']['nlp_solver_type']}";
+constexpr const char kRtiReferenceHpipmMode[] = "{spec['rti_solver_config']['hpipm_mode']}";
+constexpr int kRtiReferenceGlobalizationFullStepDual = {spec['rti_solver_config']['globalization_full_step_dual']};
+constexpr int kRtiReferenceGlobalizationUseSecondOrderCorrection = {spec['rti_solver_config']['globalization_use_second_order_correction']};
 constexpr const char kRtiReferenceSolverConfigHash[] = "{spec['rti_solver_config']['config_hash']}";
 constexpr const char kIntegratorType[] = "DISCRETE";
 constexpr int kExecutionContractSchemaVersion = {contract['schema_version']};
@@ -450,7 +472,7 @@ constexpr int kStateBoundCount = {spec['state_bound_count']};
 constexpr int kInitialStateBoundCount = {layout['state_width']};
 constexpr int kTerminalStateBoundCount = kStateBoundCount;
 constexpr int kControlBoundCount = {layout['control_width']};
-constexpr int kPublishedCommandConstraintCount = 6;
+constexpr int kPublishedCommandConstraintCount = 10;
 constexpr int kTerminalPublishedCommandConstraintCount = 0;
 constexpr int kTerminalRecoveryConstraintCount = {1 + len(layout['execution_indices'])};
 constexpr double kDt = {_cpp_float(contract['dt'])};
@@ -624,6 +646,10 @@ def build_ocp(spec, solver_config=None):
     ocp.solver_options.nlp_solver_max_iter = solver_config[
         "max_iterations"]
     ocp.solver_options.globalization = solver_config["globalization"]
+    ocp.solver_options.globalization_full_step_dual = solver_config[
+        "globalization_full_step_dual"]
+    ocp.solver_options.globalization_use_SOC = solver_config[
+        "globalization_use_second_order_correction"]
     return ocp
 
 
@@ -657,7 +683,7 @@ def check():
         raise RuntimeError("delay-augmented discrete state width mismatch")
     if symbolic["published"].shape != (2, 1):
         raise RuntimeError("published-command constraint width mismatch")
-    if symbolic["stage_constraints"].shape != (6, 1):
+    if symbolic["stage_constraints"].shape != (10, 1):
         raise RuntimeError("published residual constraint width mismatch")
     if symbolic["terminal_constraints"].shape != (
             1 + len(spec["layout"]["execution_indices"]), 1):
@@ -673,7 +699,7 @@ def check():
         f"N={spec['contract']['horizon_steps']}",
         f"np={spec['parameters']['parameter_width']}",
         f"nbx={len(symbolic['idxbx'])}",
-        "nh=6",
+        "nh=10",
         f"capabilities=0x{spec['capabilities']:x}",
         f"execution_hash={spec['contract']['contract_hash']}",
         f"parameter_hash={spec['parameter_schema_hash']}",

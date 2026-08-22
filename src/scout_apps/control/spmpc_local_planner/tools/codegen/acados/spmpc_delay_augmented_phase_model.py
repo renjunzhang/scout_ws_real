@@ -142,7 +142,7 @@ def parameter_layout(layout):
     }
 
 
-def published_command_constraints(published, p, parameters,
+def published_command_constraints(published, p, layout, parameters,
                                   linear_min, linear_max,
                                   angular_min, angular_max):
     """Global command envelope plus nominal-relative residual authority.
@@ -158,6 +158,19 @@ def published_command_constraints(published, p, parameters,
     nominal_omega = p[index["nom_u_pub_omega"]]
     residual_v = p[index["max_residual_v"]]
     residual_omega = p[index["max_residual_omega"]]
+    # The newly published command becomes the tail of the next execution
+    # queue.  Bind it to the same frozen B_exec radius used by the next-cycle
+    # candidate gate; otherwise a residual-authority-feasible command can
+    # strand the monotone selector with no compatible successor.
+    linear_tail_bound_offset = 2 + layout["linear_buffer_count"] - 1
+    angular_tail_bound_offset = (
+        2 + layout["linear_buffer_count"]
+        + layout["angular_buffer_count"] - 1
+    )
+    next_linear_beta = p[
+        parameters["execution_bound_offset"] + linear_tail_bound_offset]
+    next_angular_beta = p[
+        parameters["execution_bound_offset"] + angular_tail_bound_offset]
     constraints = ca.vertcat(
         published[0],
         published[1],
@@ -165,6 +178,10 @@ def published_command_constraints(published, p, parameters,
         nominal_v - published[0] - residual_v,
         published[1] - nominal_omega - residual_omega,
         nominal_omega - published[1] - residual_omega,
+        published[0] - nominal_v - next_linear_beta,
+        nominal_v - published[0] - next_linear_beta,
+        published[1] - nominal_omega - next_angular_beta,
+        nominal_omega - published[1] - next_angular_beta,
     )
     lower = (
         linear_min,
@@ -173,8 +190,16 @@ def published_command_constraints(published, p, parameters,
         -1.0e15,
         -1.0e15,
         -1.0e15,
+        -1.0e15,
+        -1.0e15,
+        -1.0e15,
+        -1.0e15,
     )
-    upper = (linear_max, angular_max, 0.0, 0.0, 0.0, 0.0)
+    upper = (
+        linear_max, angular_max,
+        0.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 0.0,
+    )
     return constraints, lower, upper
 
 

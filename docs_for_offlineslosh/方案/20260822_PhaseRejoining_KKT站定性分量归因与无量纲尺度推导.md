@@ -1,7 +1,7 @@
 # Phase-Rejoining KKT 站定性分量归因与无量纲尺度推导
 
 - 日期：2026-08-22
-- 状态：Accepted（诊断证据，未改代码）
+- 状态：Partially superseded（尺度分析保留；terminal/costate 结论已纠正）
 - 对应证据：`/data/a/spmpc_exec_identification/phase_rejoin_seed8601_sqp_probe_20260822.S9cifq/summary.json`
 - 涉及对象：完整 SQP backend `delay_augmented_phase_acados_full_sqp_v1`（配置 hash `f5d67f20…72a85`）
 
@@ -12,8 +12,8 @@
 - stationarity 的**最大分量**是 `eta_x` 状态（state index 6），stage 5 处 `|cost_grad|=125.40`；第二名仍是 `eta_x`（stage 8，108.44）。
 - 四个 slosh 通道（`eta_x/eta_x_dot/eta_y/eta_y_dot`，index 6–9）合计贡献了**全部 |cost_grad| 之和的 99.32%**。
 - 尺度来源是代价函数里 `(η−η_nom)/η_scale` 的 `1/η_scale²` 因子：`η_scale=0.00275037`，使 η 通道的 Gauss–Newton Hessian 对角元 `2·w/scale² = 2.645×10⁵`，比最弱的 `w_omega/angular_pending` 通道（`0.1389`）大 **1.9×10⁶ 倍**。
-- 因此 `res_stat` 是跨量纲的裸 KKT 站定性（acados `ocp_nlp_res_compute` 直接对 `cost_grad − dyn_adj − ineq_adj` 取 inf-norm，无归一化），用固定 `1e-6` 绝对阈值判定一个条件数 1.9×10⁶ 的问题，本身就是不可达的。
-- 站定性 2.20 只占最大 cost-grad 分量 125.40 的 **1.75%**，说明解在相对意义上已接近 KKT 点；真正的障碍是 Hessian 病态导致的 merit backtracking 自第 2 次迭代起固定 `α=0.057648` 并缓慢回涨 stationarity，而不是存在尚未满足的 primal 硬约束（独立 C++ 审计全部具名约束违反量为 0）。
+- 原始量纲确实使 `res_stat` 条件很差，无量纲变量缩放是有效的结构性修复；但不能据 cost gradient 与 raw residual 的比例断言 `1e-6` 合同不可达，因为完整 KKT 还必须包含 dynamics costate 与 inequality adjoint。
+- 后续复核发现 Full SQP 使用 `HPIPM SPEED_ABS`，该模式关闭 equality dual 计算，导致 `pi=0` 和 terminal `dyn_adj` 缺项。改为 `BALANCE` 后 stationarity 进一步由 0.015864 降到 4.275e-5，证明原“真实 terminal 跟踪残差”归因不成立；当前剩余问题是 20 次 line-search SQP 尚未达到冻结阈值。
 
 ## 2. 分量归因（stage × 变量 × 梯度项）
 
@@ -83,32 +83,25 @@ it=2..20 stat 2.177→2.199 step=0.057648（固定小步，stationarity 缓慢�
 - 真实 seed 8601 重放：cycle 2 的 stationarity 由 **2.20009 → 0.015864**（约 139 倍），equality 2.09e-12、inequality 0、complementarity 2.58e-6。
 - 但 **仍以 `NLP_STATUS_2` 停住**：iteration 1 全步后 stationarity 固定在 ~1.59e-2，iteration 2–20 的 `alpha` 恒为 `0.7^8=0.057648`（MERIT_BACKTRACKING 每步退 8 次到 alpha_min 附近），complementarity 由 6.7e-7 缓慢涨到 2.5e-6。
 
-## 6. 剩余的第二个问题（本轮未解决）
+## 6. 伴随量复核纠正与剩余 NO-GO
 
-无量纲缩放把「eta 尺度失衡」这个主根因修掉后，暴露出第二个、**与缩放和 Hessian 近似都无关**的问题：SQP 的 merit 线搜索从第 2 次迭代起拒绝 QP 步、`alpha` 卡在 `alpha_min` 附近，stationarity 停在 ~1.6e-2 不再下降。已排除：
+原分析把“terminal 没有 outgoing dynamics”误解成“terminal 没有 dynamics adjoint”，从而漏掉了上一段动力学约束对 `x_N` 的 incoming `pi[N-1]`。正确公式是：
 
-- Hessian 近似：`GAUSS_NEWTON` 与 `EXACT` 行为逐字节一致（都不是根因）；
-- 结构退化：reduced Hessian 条件数 9.36、无近零特征值；
-- 变量尺度：已无量纲化。
+```text
+res_stat_N = cost_grad_N - incoming_pi[N-1] - ineq_adj_N
+```
 
-### 6.1 逐 stage 定位结果（`ocp_nlp_get_at_stage(..., "res_stat", ...)`）
+进一步追踪确认，Full SQP codegen 原来显式选择 `HPIPM SPEED_ABS`；上游该模式设置 `comp_dual_sol_eq=0`，所以 `out->pi` 全零不是最优性结论，而是求解器没有计算 equality dual。`qp_solver_cond_N=N` 在 partial-condensing 中表示不做 condensing；此前把它称为“满 condensing 表示层现象”同样错误。
 
-真实 seed 8601 的失败周期（缩放后）逐 stage 最大 stationarity 分量：
+Full SQP 改为 `HPIPM BALANCE`、RTI reference 保持 `SPEED_ABS` 后，同一 cycle 2 快照得到：
 
-| stage | max\|res_stat\| | 变量（idx） |
-| --- | --- | --- |
-| 0–9 | 1.0e-3 … 5.7e-3 | 分散（x/eta_x_dot/linear_q 等） |
-| **10（terminal）** | **1.5867e-2** | **idx=0 = x 位置** |
+- stage 0..9 的 `pi` 全部非零；
+- terminal x 的 cost gradient 约 `-1.583e-2` 被 incoming `pi[9]` 抵消，x residual 降至约 `-4.2e-6`；
+- 新最大项是 terminal `eta_x_dot`（index 7）：`cost_grad=-4.5166448e-3`、`incoming_pi=-4.4738975e-3`、`ineq_adj=3.9132e-9`、`res_stat=-4.2751176e-5`；
+- 独立 C++ 按 empirical 9D gate 与 14 项 execution bounds 的完整 Jacobian/lam 重算，与 acados terminal 22 个分量在 `1e-9` 内一致；
+- 四项 residual 为 stationarity `4.2751e-5`、equality `5.13e-11`、inequality `0`、complementarity `6.85e-7`，仍为 20 次上限 `NLP_STATUS_2`。
 
-标量 stationarity 1.586e-2 **完全由 terminal 阶段的 x 位置贡献**，其余 stage 均 ≤5.7e-3。
-
-terminal 的 `res_stat` 与 terminal 代价梯度一致：acados 的 NONLINEAR_LS 代价为 `0.5·‖y‖²`（`ocp_nlp_cost_nls.c`），terminal 残差 `y_e=√w·(x−nom)/scale`，故 `res_stat_N[idx=0]=w_position·(x_N−nom_x)/scale`。实测 terminal x 误差 −2.380e-3 m，`w_position=1`、`scale=0.15`，得 `1.0·(−2.380e-3)/0.15 = −1.5867e-2`，与 acados 报出的 `res_stat` **逐位吻合**。也就是说：terminal 的 `res_stat` 就是 terminal 跟踪误差的（未与被 dynamics 伴随量抵消的）代价梯度，而不是一个无量纲 KKT 残差。
-
-### 6.2 结论：这不是线搜索问题，是 terminal 残差度量问题
-
-- `MERIT_BACKTRACKING` 与 `FUNNEL_L1PEN_LINESEARCH` 收敛到**同一个 stationarity 地板 1.5867e-2**（FUNNEL 只是全步、8 次迭代就停，MERIT 是 20 次 + `alpha=0.7^8`）；说明线搜索不是根因。
-- 要让 `res_stat ≤ 1e-6`，terminal x 跟踪误差需 ≤ `1e-6·0.15/1.0 = 1.5e-7 m`（0.15 µm），对一个 0.15 m 尺度、多目标权衡的跟踪问题而言是**机器精度级要求**，并非「求解器没收敛」。
-- 因此符合 goal 一.5 的判定：**acados 原始 `res_stat`（至少 terminal 阶段）不适合作为跨量纲完整性指标**。后续方向是建立无量纲 KKT 合同：把 stationarity 按其变量尺度（或 terminal 代价梯度尺度）归一化后再与 `1e-6` 比较，同时继续原样记录 raw residual。分量归因、尺度推导已在本节完成；还差「紧阈值解稳定性对照」与最终合同定义。
+迭代 1 将 stationarity 从 `6.882e-2` 降到 `1.316e-4`；iteration 2 起 `alpha=0.057648`，stationarity 单调下降，但 20 次内只到 `4.275e-5`。因此尺度修复和 equality-dual 修复均有效，当前剩余项是**冻结 20 次 Full SQP 未达到 1e-6**，不是 terminal 跟踪误差需要趋近零，也不能通过删除 terminal cost、放宽 residual 或改 gate 解决。
 
 ## 7. 边界
 

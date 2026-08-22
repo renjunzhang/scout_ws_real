@@ -325,6 +325,19 @@ struct PhaseCandidateResult {
     int phase_lead_steps = 0;
     double score = 0.0;
     double selected_execution_max_normalized_error = 0.0;
+    struct ExecutionCandidateAudit {
+        std::size_t phase_index = 0;
+        bool valid = false;
+        bool accepted = false;
+        double max_normalized_error = 0.0;
+        std::string max_error_name = "NONE";
+        int max_error_index = -1;
+        double actual = 0.0;
+        double nominal = 0.0;
+        double bound = 0.0;
+        std::string status = "NOT_RUN";
+    };
+    std::vector<ExecutionCandidateAudit> execution_candidate_audits;
     std::string status = "NOT_RUN";
 };
 
@@ -340,6 +353,11 @@ struct ExecutionCompatibilityGateResult {
     bool valid = false;
     bool accepted = false;
     double max_normalized_error = 0.0;
+    std::string max_error_name = "NONE";
+    int max_error_index = -1;
+    double actual = 0.0;
+    double nominal = 0.0;
+    double bound = 0.0;
     std::string status = "NOT_RUN";
 };
 

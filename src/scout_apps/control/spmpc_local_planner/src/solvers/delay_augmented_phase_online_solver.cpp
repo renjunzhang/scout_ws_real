@@ -296,9 +296,21 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
             input.execution_horizon, parameters,
             warm_start_states, warm_start_controls);
     }
-    if (!warm_start_audit.evaluated || !warm_start_audit.passed) {
-        output.status = "DELAY_AUGMENTED_WARM_START_CONSTRAINT_FAILED_" +
+    if (!warm_start_audit.evaluated) {
+        output.status = "DELAY_AUGMENTED_WARM_START_AUDIT_FAILED_" +
             warm_start_audit.status;
+        return false;
+    }
+    // A full SQP correctness backend may legitimately start from a primal
+    // guess that violates an inequality and repair it.  The warm-start audit
+    // is evidence, not the final admission gate.  Causal inconsistency is
+    // different: it means the supplied multiple-shooting trajectory does not
+    // represent the frozen 22D dynamics and must still fail closed before the
+    // optimizer is invoked.
+    if (warm_start_audit.max_causal_state_error >
+            manifest::kMaxCausalStateError) {
+        output.status =
+            "DELAY_AUGMENTED_WARM_START_CAUSAL_CONSISTENCY_FAILED";
         return false;
     }
 

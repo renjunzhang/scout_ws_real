@@ -17,8 +17,18 @@ bool finiteValue(double value) {
 void accumulate(double actual,
                 double nominal,
                 double bound,
-                double& maximum) {
-    maximum = std::max(maximum, std::abs(actual - nominal) / bound);
+                const char* name,
+                int index,
+                ExecutionCompatibilityGateResult& result) {
+    const double normalized = std::abs(actual - nominal) / bound;
+    if (normalized > result.max_normalized_error) {
+        result.max_normalized_error = normalized;
+        result.max_error_name = name;
+        result.max_error_index = index;
+        result.actual = actual;
+        result.nominal = nominal;
+        result.bound = bound;
+    }
 }
 
 }  // namespace
@@ -66,11 +76,11 @@ ExecutionCompatibilityGateResult ExecutionCompatibilityGate::evaluate(
     accumulate(actual.linear.actuator_output,
                nominal.linear.actuator_output,
                bounds.linear_actuator_output,
-               result.max_normalized_error);
+               "linear_actuator_output", -1, result);
     accumulate(actual.angular.actuator_output,
                nominal.angular.actuator_output,
                bounds.angular_actuator_output,
-               result.max_normalized_error);
+               "angular_actuator_output", -1, result);
     for (std::size_t index = 0;
          index < actual.linear.pending_commands.size(); ++index) {
         const double value = actual.linear.pending_commands[index];
@@ -81,7 +91,8 @@ ExecutionCompatibilityGateResult ExecutionCompatibilityGate::evaluate(
         accumulate(value,
                    nominal.linear.pending_commands[index],
                    bounds.linear_pending_commands[index],
-                   result.max_normalized_error);
+                   "linear_pending_command", static_cast<int>(index),
+                   result);
     }
     for (std::size_t index = 0;
          index < actual.angular.pending_commands.size(); ++index) {
@@ -93,7 +104,8 @@ ExecutionCompatibilityGateResult ExecutionCompatibilityGate::evaluate(
         accumulate(value,
                    nominal.angular.pending_commands[index],
                    bounds.angular_pending_commands[index],
-                   result.max_normalized_error);
+                   "angular_pending_command", static_cast<int>(index),
+                   result);
     }
     result.valid = std::isfinite(result.max_normalized_error);
     result.accepted = result.valid &&

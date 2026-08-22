@@ -5,6 +5,17 @@
 
 namespace spmpc_local_planner {
 
+namespace {
+
+// Runtime timestamps are quantized to integer nanoseconds while nominal
+// artifact timestamps are stored as decimal seconds.  At an exact phase
+// boundary the two representations can therefore differ by less than one
+// nanosecond.  Apply this tolerance only to the lookup key: the reported
+// elapsed/artifact times remain the unmodified audit values.
+constexpr double kArtifactLookupToleranceSec = 1e-9;
+
+}  // namespace
+
 void PhaseClock::reset() {
     initialized_ = false;
     runtime_origin_sec_ = 0.0;
@@ -41,9 +52,11 @@ PhaseClockResult PhaseClock::update(
     result.artifact_time_sec = artifact_origin_sec_ + result.elapsed_sec;
 
     const auto& samples = artifact.samples();
+    const double lookup_time_sec =
+        result.artifact_time_sec + kArtifactLookupToleranceSec;
     const auto upper = std::upper_bound(
         samples.begin(), samples.begin() + static_cast<std::ptrdiff_t>(max_index + 1),
-        result.artifact_time_sec,
+        lookup_time_sec,
         [](double value, const PhaseNominalSample& sample) {
             return value < sample.t;
         });

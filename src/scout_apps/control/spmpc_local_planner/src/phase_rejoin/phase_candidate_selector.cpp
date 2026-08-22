@@ -164,6 +164,19 @@ PhaseCandidateResult PhaseCandidateSelector::select(
                     execution_nominal->execution_bounds,
                     *current_execution);
             }
+            PhaseCandidateResult::ExecutionCandidateAudit audit;
+            audit.phase_index = current;
+            audit.valid = execution_compatibility.valid;
+            audit.accepted = execution_compatibility.accepted;
+            audit.max_normalized_error =
+                execution_compatibility.max_normalized_error;
+            audit.max_error_name = execution_compatibility.max_error_name;
+            audit.max_error_index = execution_compatibility.max_error_index;
+            audit.actual = execution_compatibility.actual;
+            audit.nominal = execution_compatibility.nominal;
+            audit.bound = execution_compatibility.bound;
+            audit.status = execution_compatibility.status;
+            result.execution_candidate_audits.push_back(audit);
             if (!execution_compatibility.accepted) {
                 ++result.execution_rejected_candidate_count;
                 continue;

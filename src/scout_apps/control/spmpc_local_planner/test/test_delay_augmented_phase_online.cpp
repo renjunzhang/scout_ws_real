@@ -833,6 +833,12 @@ TEST(DelayAugmentedPhaseOnline,
     SolverOutput output;
     ASSERT_TRUE(solver.solve(input, fixture.reference, output))
         << output.status;
+    EXPECT_TRUE(output.pre_solve_snapshot.warm_start_constraint_audit.evaluated);
+    EXPECT_FALSE(output.pre_solve_snapshot.warm_start_constraint_audit.passed);
+    EXPECT_GT(output.pre_solve_snapshot.warm_start_constraint_audit.max_violation,
+              output.pre_solve_snapshot.warm_start_constraint_audit.tolerance);
+    EXPECT_TRUE(output.pre_solve_snapshot.solution_constraint_audit.evaluated);
+    EXPECT_TRUE(output.pre_solve_snapshot.solution_constraint_audit.passed);
     EXPECT_LE(std::abs(output.cmd_v), 0.005 + 1.0e-6);
     EXPECT_LE(std::abs(output.cmd_omega), 1.0e-6);
 }

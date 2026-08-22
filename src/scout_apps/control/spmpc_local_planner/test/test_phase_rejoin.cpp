@@ -76,6 +76,36 @@ NominalSequenceArtifact loadLegacyArtifact() {
     return artifact;
 }
 
+NominalSequenceArtifact loadNanosecondQuantizedClockArtifact() {
+    const std::string path = "/tmp/spmpc_phase_clock_quantized_" +
+        std::to_string(static_cast<long long>(::getpid())) + ".csv";
+    std::ofstream out(path);
+    out << std::setprecision(17)
+        << "# schema=phase_rejoin_empirical_v1\n"
+        << "# evidence_level=development_only\n"
+        << "# source=phase_clock_quantization_unit_test\n"
+        << "# contract_id=test_clock_quantization_contract\n"
+        << "# frame_id=map\n"
+        << "# dt=0.0333333333\n"
+        << "# path_length=0.3\n"
+        << "index,t,s,x,y,yaw,v,omega,eta_x,eta_x_dot,eta_y,eta_y_dot,"
+        << "a,alpha,v_s,u_pub_v,u_pub_omega,kappa_v,kappa_omega,"
+        << "r_x,r_y,r_yaw,r_v,r_omega,r_eta_x,r_eta_x_dot,r_eta_y,r_eta_y_dot\n";
+    for (int index = 0; index < 10; ++index) {
+        const double time = 0.0333333333 * static_cast<double>(index);
+        const double position = 0.0333333333 * static_cast<double>(index);
+        out << index << ',' << time << ',' << position << ',' << position
+            << ",0,0,1,0,0,0,0,0,0,0,1,1,0,1,0,"
+            << "5,5,5,5,5,5,5,5,5\n";
+    }
+    out.close();
+    NominalSequenceArtifact artifact;
+    const auto result = artifact.loadCsv(path);
+    std::remove(path.c_str());
+    EXPECT_TRUE(result.success) << result.status << ": " << result.detail;
+    return artifact;
+}
+
 RobotState robotAt(double x) {
     RobotState robot;
     robot.x = x;
@@ -444,6 +474,36 @@ TEST(PhaseClock, UsesAbsoluteTimeAndRejectsRegression) {
     const auto regressed = clock.update(artifact, 10.34, 25);
     EXPECT_FALSE(regressed.valid);
     EXPECT_EQ(regressed.status, "CLOCK_REGRESSION");
+}
+
+TEST(PhaseClock, DoesNotSkipAfterIntegerNanosecondQuantization) {
+    const NominalSequenceArtifact artifact =
+        loadNanosecondQuantizedClockArtifact();
+    ASSERT_TRUE(artifact.valid());
+    PhaseClock clock;
+
+    // The runtime clock is quantized to integer nanoseconds.  In particular,
+    // 10.043333333 - 10.010000000 is 0.3 ns before the decimal artifact
+    // boundary at 0.0333333333 s.  It must still map to phase 1 rather than
+    // generating the pathological 0,0,2 clock sequence.
+    const double runtime_times[] = {
+        10.010000000,
+        10.043333333,
+        10.076666667,
+        10.110000000,
+        10.143333333,
+    };
+    for (std::size_t expected = 0;
+         expected < sizeof(runtime_times) / sizeof(runtime_times[0]);
+         ++expected) {
+        const PhaseClockResult result =
+            clock.update(artifact, runtime_times[expected], artifact.size() - 1);
+        ASSERT_TRUE(result.valid) << result.status;
+        EXPECT_EQ(result.index, expected)
+            << "runtime_time_sec=" << std::setprecision(17)
+            << runtime_times[expected]
+            << " artifact_time_sec=" << result.artifact_time_sec;
+    }
 }
 
 TEST(PhaseCandidateSelector, CannotAccumulateLeadBeyondClockBudget) {

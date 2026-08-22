@@ -160,6 +160,9 @@ struct SolverFailureDiagnostic {
     std::size_t clock_index = 0;
     std::size_t candidate_window_begin_index = 0;
     std::size_t candidate_window_end_index = 0;
+    std::string candidate_status = "NOT_RUN";
+    std::vector<PhaseCandidateResult::ExecutionCandidateAudit>
+        execution_candidate_audits;
     std::size_t selected_phase_index = 0;
     std::size_t terminal_phase_index = 0;
     ExecutionAugmentedState initial_execution;
@@ -1379,8 +1382,8 @@ SolverFailureDiagnostic captureSolverFailureDiagnostic(
         result.phase_preparation.solver_context.delay_augmented;
     const ExecutionHorizonContext& horizon =
         result.solver_input.execution_horizon;
-    if (result.solver_success || !candidate.valid || !phase.active ||
-        !horizon.active || !horizon.initial_state.valid) {
+    if (result.solver_success || !horizon.active ||
+        !horizon.initial_state.valid) {
         return diagnostic;
     }
 
@@ -1392,10 +1395,20 @@ SolverFailureDiagnostic captureSolverFailureDiagnostic(
         candidate.candidate_window_begin_index;
     diagnostic.candidate_window_end_index =
         candidate.candidate_window_end_index;
+    diagnostic.candidate_status = candidate.status;
+    diagnostic.execution_candidate_audits =
+        candidate.execution_candidate_audits;
     diagnostic.selected_phase_index = candidate.current_index;
     diagnostic.terminal_phase_index = candidate.terminal_index;
     diagnostic.initial_execution = horizon.initial_state;
     diagnostic.initial_progress_s = horizon.initial_progress_s;
+
+    // A pre-solver candidate failure has no phase parameter image or warm
+    // start.  Preserve the complete current 22D state and the per-candidate
+    // B_exec audit above, then stop before the solver-specific diagnostics.
+    if (!candidate.valid || !phase.active) {
+        return diagnostic;
+    }
 
     const PreSolveSnapshotDebug& snapshot =
         result.solver_output.pre_solve_snapshot;
@@ -1728,6 +1741,34 @@ bool writeSummary(
             << "    \"candidate_window\": ["
             << solver_failure.candidate_window_begin_index << ", "
             << solver_failure.candidate_window_end_index << "],\n"
+            << "    \"candidate_status\": \""
+            << jsonEscape(solver_failure.candidate_status) << "\",\n"
+            << "    \"execution_candidate_audits\": [";
+        for (std::size_t index = 0;
+             index < solver_failure.execution_candidate_audits.size();
+             ++index) {
+            if (index != 0) output << ',';
+            const auto& audit =
+                solver_failure.execution_candidate_audits[index];
+            output << "\n      {\"phase_index\": " << audit.phase_index
+                << ", \"valid\": " << (audit.valid ? "true" : "false")
+                << ", \"accepted\": "
+                << (audit.accepted ? "true" : "false")
+                << ", \"max_normalized_error\": "
+                << jsonNumber(audit.max_normalized_error)
+                << ", \"max_error_name\": \""
+                << jsonEscape(audit.max_error_name)
+                << "\", \"max_error_index\": " << audit.max_error_index
+                << ", \"actual\": " << jsonNumber(audit.actual)
+                << ", \"nominal\": " << jsonNumber(audit.nominal)
+                << ", \"bound\": " << jsonNumber(audit.bound)
+                << ", \"status\": \"" << jsonEscape(audit.status)
+                << "\"}";
+        }
+        if (!solver_failure.execution_candidate_audits.empty()) {
+            output << '\n' << "    ";
+        }
+        output << "],\n"
             << "    \"selected_phase_index\": "
             << solver_failure.selected_phase_index << ",\n"
             << "    \"terminal_phase_index\": "
