@@ -24,6 +24,7 @@ from generate_delay_augmented_phase_acados import (  # noqa: E402
     emit_solver_manifest,
     load_solver_spec,
     main,
+    state_scaling_vectors,
 )
 
 
@@ -33,10 +34,13 @@ class DelayAugmentedPhaseAcadosCodegenTest(unittest.TestCase):
         symbolic = build_symbolic_spec(spec)
         layout = spec["layout"]
         contract = spec["contract"]
+        scale_x, scale_u = state_scaling_vectors(spec)
 
         self.assertEqual((22, 1), symbolic["x_next"].shape)
         self.assertEqual((2, 1), symbolic["published"].shape)
-        self.assertEqual((6, 1), symbolic["stage_constraints"].shape)
+        self.assertEqual(
+            (6 + 2 * len(layout["execution_indices"]), 1),
+            symbolic["stage_constraints"].shape)
         self.assertEqual(10, contract["horizon_steps"])
         self.assertTrue(spec["use_linear_model"])
         self.assertFalse(spec["use_parabola_term"])
@@ -49,17 +53,19 @@ class DelayAugmentedPhaseAcadosCodegenTest(unittest.TestCase):
             [symbolic["x"], symbolic["q"]],
             [symbolic["published"]],
         )
-        state = np.zeros(layout["state_width"])
-        state[layout["linear_buffer_offset"]
-              + layout["linear_buffer_count"] - 1] = 0.2
-        state[layout["angular_buffer_offset"]
-              + layout["angular_buffer_count"] - 1] = -0.1
-        control = np.array([0.3, -0.6, 0.2])
+        state_physical = np.zeros(layout["state_width"])
+        state_physical[layout["linear_buffer_offset"]
+                       + layout["linear_buffer_count"] - 1] = 0.2
+        state_physical[layout["angular_buffer_offset"]
+                       + layout["angular_buffer_count"] - 1] = -0.1
+        control_physical = np.array([0.3, -0.6, 0.2])
+        state = state_physical / scale_x
+        control = control_physical / scale_u
         actual = np.asarray(published(state, control)).reshape(-1)
         self.assertAlmostEqual(
-            0.2 + contract["dt"] * control[0], actual[0])
+            0.2 + contract["dt"] * control_physical[0], actual[0])
         self.assertAlmostEqual(
-            -0.1 + contract["dt"] * control[1], actual[1])
+            -0.1 + contract["dt"] * control_physical[1], actual[1])
 
         image = np.zeros(spec["parameters"]["parameter_width"])
         names = spec["parameters"]["names"]
@@ -67,6 +73,8 @@ class DelayAugmentedPhaseAcadosCodegenTest(unittest.TestCase):
         image[names.index("nom_u_pub_omega")] = actual[1]
         image[names.index("max_residual_v")] = 0.01
         image[names.index("max_residual_omega")] = 0.02
+        image[:layout["state_width"]] = state_physical
+        image[spec["parameters"]["execution_bound_offset"]:] = 0.5
         constrained = ca.Function(
             "candidate_published_residual_check",
             [symbolic["x"], symbolic["q"], symbolic["p"]],
@@ -74,7 +82,30 @@ class DelayAugmentedPhaseAcadosCodegenTest(unittest.TestCase):
         )
         values = np.asarray(constrained(state, control, image)).reshape(-1)
         np.testing.assert_allclose(
-            values[2:], [-0.01, -0.01, -0.02, -0.02], atol=1e-12)
+            values[2:6], [-0.01, -0.01, -0.02, -0.02], atol=1e-12)
+        np.testing.assert_allclose(values[6:], -0.5, atol=1e-12)
+
+        # Reproduce the stopped-tail failure mode: a command that was valid
+        # when published has shifted to angular_pending_3 while the phase-
+        # indexed radius has tightened.  The path constraint must expose the
+        # exact named component before the command can strand the selector.
+        shifted = np.zeros(layout["state_width"])
+        shifted_index = layout["angular_buffer_offset"] + 3
+        shifted[shifted_index] = 0.00105380837
+        shifted_image = np.zeros(spec["parameters"]["parameter_width"])
+        shifted_image[names.index("max_residual_v")] = 1.0
+        shifted_image[names.index("max_residual_omega")] = 1.0
+        shifted_image[spec["parameters"]["execution_bound_offset"]:] = 0.09
+        shifted_bound = layout["execution_indices"].index(shifted_index)
+        shifted_image[
+            spec["parameters"]["execution_bound_offset"] + shifted_bound
+        ] = 0.000719077435
+        shifted_values = np.asarray(constrained(
+            shifted / scale_x, np.zeros(layout["control_width"]),
+            shifted_image)).reshape(-1)
+        upper = 6 + 2 * shifted_bound
+        self.assertGreater(shifted_values[upper], 0.0)
+        self.assertLess(shifted_values[upper + 1], 0.0)
 
     def test_capability_mask_requires_terminal_and_execution_contracts(self):
         self.assertEqual(WP3C_CAPABILITIES,
@@ -99,6 +130,7 @@ class DelayAugmentedPhaseAcadosCodegenTest(unittest.TestCase):
         layout = spec["layout"]
         parameters = spec["parameters"]
         names = parameters["names"]
+        scale_x, scale_u = state_scaling_vectors(spec)
         self.assertEqual(64, parameters["parameter_width"])
         self.assertEqual(22, parameters["nominal_control_offset"])
         self.assertEqual(25, parameters["nominal_publish_offset"])
@@ -145,12 +177,15 @@ class DelayAugmentedPhaseAcadosCodegenTest(unittest.TestCase):
         image[parameters["execution_bound_offset"]:] = 1.0
 
         self.assertAlmostEqual(
-            0.0, float(stage_cost(nominal, nominal_q, image)))
+            0.0, float(stage_cost(
+                nominal / scale_x, nominal_q / scale_u, image)))
         self.assertAlmostEqual(
-            0.0, float(terminal_cost(nominal, nominal_q + 1.0, image)))
+            0.0, float(terminal_cost(
+                nominal / scale_x, (nominal_q + 1.0) / scale_u, image)))
         np.testing.assert_allclose(
-            np.asarray(terminal_constraints(nominal, image)).reshape(-1),
-            -np.ones(1 + len(layout["execution_indices"])),
+            np.asarray(terminal_constraints(
+                nominal / scale_x, image)).reshape(-1),
+            -np.ones(1 + 2 * len(layout["execution_indices"])),
         )
 
         actual = nominal.copy()
@@ -171,7 +206,8 @@ class DelayAugmentedPhaseAcadosCodegenTest(unittest.TestCase):
             + 0.04 ** 2 / scales["v_s"] ** 2
         )
         self.assertAlmostEqual(
-            manual, float(stage_cost(actual, control, image)), places=11)
+            manual, float(stage_cost(
+                actual / scale_x, control / scale_u, image)), places=11)
 
     def test_committed_solver_manifest_is_deterministic(self):
         committed = (

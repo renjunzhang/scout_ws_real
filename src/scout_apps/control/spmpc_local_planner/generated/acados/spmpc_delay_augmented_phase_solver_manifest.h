@@ -8,22 +8,26 @@ namespace spmpc_local_planner {
 namespace delay_augmented_phase_solver_manifest {
 
 constexpr int kCapabilitySchemaVersion = 3;
-constexpr const char kSolverId[] = "delay_augmented_phase_acados_full_sqp_funnel_bexec_v1";
+constexpr const char kSolverId[] = "delay_augmented_phase_acados_full_sqp_funnel_bexec_path_qp1e9_v4";
 constexpr const char kModelName[] = "spmpc_delay_augmented_phase";
 constexpr const char kNlpSolverType[] = "SQP";
 constexpr const char kGlobalization[] = "FUNNEL_L1PEN_LINESEARCH";
 constexpr const char kHpipmMode[] = "BALANCE";
 constexpr int kGlobalizationFullStepDual = 1;
 constexpr int kGlobalizationUseSecondOrderCorrection = 0;
-constexpr const char kSolverConfigHash[] = "de6c582f6f695f4832e86e5f3c7dda4fb515c6be8738f55f9537110020ed116c";
+constexpr const char kSolverConfigHash[] = "340f38d007e11d3553d639ec24a376ba3f38c614954596931d6efbbfc5550841";
 constexpr int kMaxSqpIterations = 20;
-constexpr const char kRtiReferenceSolverId[] = "delay_augmented_phase_acados_rti_reference_v1";
+constexpr double kQpStationarityTolerance = 1.0000000000000001e-09;
+constexpr double kQpEqualityTolerance = 1.0000000000000001e-09;
+constexpr double kQpInequalityTolerance = 1.0000000000000001e-09;
+constexpr double kQpComplementarityTolerance = 1.0000000000000001e-09;
+constexpr const char kRtiReferenceSolverId[] = "delay_augmented_phase_acados_rti_reference_bexec_path_v3";
 constexpr const char kRtiReferenceModelName[] = "spmpc_delay_augmented_phase_rti";
 constexpr const char kRtiReferenceNlpSolverType[] = "SQP_RTI";
 constexpr const char kRtiReferenceHpipmMode[] = "SPEED_ABS";
 constexpr int kRtiReferenceGlobalizationFullStepDual = 0;
 constexpr int kRtiReferenceGlobalizationUseSecondOrderCorrection = 0;
-constexpr const char kRtiReferenceSolverConfigHash[] = "e4b3e4a4dc8602496e6972f62c369b4cf9eda9fb35a6b56bd4b4b5c9abad83b5";
+constexpr const char kRtiReferenceSolverConfigHash[] = "93dd59a54d9944275ae43abb41fd25fcee4e03b778fe379d67486cac6c7a3a8f";
 constexpr const char kIntegratorType[] = "DISCRETE";
 constexpr int kExecutionContractSchemaVersion = 1;
 constexpr const char kContractId[] = "delay_augmented_phase_codegen_candidate_v1";
@@ -36,6 +40,8 @@ constexpr const char kParameterSchemaHash[] = "898563e1655c24f399e81d000f5d816a6
 constexpr const char kCostContract[] = "nominal_relative_augmented_nls_v2";
 constexpr const char kTerminalGateContract[] = "phase_indexed_empirical_9d_ellipsoid_v1";
 constexpr const char kExecutionCompatibilityContract[] = "phase_indexed_execution_box_v1";
+constexpr const char kStageExecutionConstraintForm[] = "phase_indexed_full_execution_box_v1";
+constexpr const char kTerminalExecutionConstraintForm[] = "parameter_affine_two_sided_box_v1";
 constexpr int kParameterCount = 64;
 constexpr int kNominalStateOffset = 0;
 constexpr int kNominalControlOffset = 22;
@@ -58,9 +64,15 @@ constexpr int kStateBoundCount = 0;
 constexpr int kInitialStateBoundCount = 22;
 constexpr int kTerminalStateBoundCount = kStateBoundCount;
 constexpr int kControlBoundCount = 3;
-constexpr int kPublishedCommandConstraintCount = 10;
+constexpr int kPublishedCommandConstraintCount = 6;
+constexpr int kStageExecutionConstraintCount = 28;
+constexpr int kStageConstraintCount =
+    kPublishedCommandConstraintCount + kStageExecutionConstraintCount;
 constexpr int kTerminalPublishedCommandConstraintCount = 0;
-constexpr int kTerminalRecoveryConstraintCount = 15;
+constexpr int kTerminalEmpiricalConstraintCount = 1;
+constexpr int kTerminalExecutionConstraintCount = 28;
+constexpr int kTerminalRecoveryConstraintCount =
+    kTerminalEmpiricalConstraintCount + kTerminalExecutionConstraintCount;
 constexpr double kDt = 0.033333333299999997;
 constexpr double kLinearDelaySec = 0.14999999999999999;
 constexpr double kAngularDelaySec = 0.22;

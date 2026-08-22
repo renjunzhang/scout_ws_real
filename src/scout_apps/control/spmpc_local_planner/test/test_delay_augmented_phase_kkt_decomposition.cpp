@@ -7,9 +7,10 @@
 //   res_stat_N = cost_grad_N - pi[N-1] - ineq_adj_N
 //   ineq_adj_N = J_h^T (lam_lower - lam_upper)
 //
-// The nonlinear terminal constraints are the empirical 9D ellipsoid followed
-// by the 14 execution-bound squares.  All derivatives below are independently
-// recomputed in physical units and mapped to the scaled OCP variable basis.
+// The terminal constraints are the empirical 9D ellipsoid followed by two
+// parameter-affine inequalities for each of the 14 execution-bound boxes.
+// All derivatives below are independently recomputed in physical units and
+// mapped to the scaled OCP variable basis.
 
 #include <algorithm>
 #include <cmath>
@@ -140,6 +141,11 @@ TEST(DelayAugmentedPhaseKktDecomposition,
     ASSERT_EQ(static_cast<std::size_t>(
                   2 * manifest::kTerminalRecoveryConstraintCount),
               lam.size());
+    EXPECT_STREQ("parameter_affine_two_sided_box_v1",
+                 manifest::kTerminalExecutionConstraintForm);
+    EXPECT_EQ(1, manifest::kTerminalEmpiricalConstraintCount);
+    EXPECT_EQ(2 * manifest::kExecutionBoundCount,
+              manifest::kTerminalExecutionConstraintCount);
 
     double state[manifest::kStateCount];
     ASSERT_TRUE(solver.getState(terminal, state));
@@ -182,16 +188,34 @@ TEST(DelayAugmentedPhaseKktDecomposition,
         for (int bound = 0;
              bound < manifest::kExecutionBoundCount; ++bound) {
             if (execution_indices[bound] != index) continue;
-            const int constraint = 1 + bound;
+            const int upper_constraint = 1 + 2 * bound;
+            const int lower_constraint = upper_constraint + 1;
             const double beta =
                 parameter[manifest::kExecutionBoundOffset + bound];
-            const double signed_multiplier =
-                lam[constraint] -
+            ASSERT_GT(beta, 0.0);
+            const double upper_signed_multiplier =
+                lam[upper_constraint] -
                 lam[manifest::kTerminalRecoveryConstraintCount +
-                    constraint];
-            const double gradient_scaled =
-                2.0 * physical_error * scale / (beta * beta);
-            ineq_adj += gradient_scaled * signed_multiplier;
+                    upper_constraint];
+            const double lower_signed_multiplier =
+                lam[lower_constraint] -
+                lam[manifest::kTerminalRecoveryConstraintCount +
+                    lower_constraint];
+            ineq_adj +=
+                scale * upper_signed_multiplier -
+                scale * lower_signed_multiplier;
+
+            const bool old_square_form_accepted =
+                (physical_error * physical_error) / (beta * beta) <=
+                1.0 + manifest::kMaxInequalityResidual;
+            const bool affine_box_form_accepted =
+                physical_error - beta <=
+                    manifest::kMaxInequalityResidual &&
+                -physical_error - beta <=
+                    manifest::kMaxInequalityResidual;
+            EXPECT_EQ(old_square_form_accepted, affine_box_form_accepted)
+                << "execution bound=" << bound
+                << " state index=" << index;
         }
 
         const double expected = cost_grad - incoming_pi[index] - ineq_adj;
@@ -251,6 +275,22 @@ TEST(DelayAugmentedPhaseKktDecomposition,
     EXPECT_EQ(1, manifest::kGlobalizationFullStepDual);
     EXPECT_EQ(0, manifest::kGlobalizationUseSecondOrderCorrection);
     EXPECT_STREQ("SPEED_ABS", manifest::kRtiReferenceHpipmMode);
+    EXPECT_STREQ("phase_indexed_full_execution_box_v1",
+                 manifest::kStageExecutionConstraintForm);
+    EXPECT_EQ(6, manifest::kPublishedCommandConstraintCount);
+    EXPECT_EQ(2 * manifest::kExecutionBoundCount,
+              manifest::kStageExecutionConstraintCount);
+    EXPECT_EQ(manifest::kPublishedCommandConstraintCount +
+                  manifest::kStageExecutionConstraintCount,
+              manifest::kStageConstraintCount);
+    EXPECT_LT(manifest::kQpStationarityTolerance,
+              manifest::kMaxStationarityResidual);
+    EXPECT_LT(manifest::kQpEqualityTolerance,
+              manifest::kMaxEqualityResidual);
+    EXPECT_LT(manifest::kQpInequalityTolerance,
+              manifest::kMaxInequalityResidual);
+    EXPECT_LT(manifest::kQpComplementarityTolerance,
+              manifest::kMaxComplementarityResidual);
 
     for (int stage = 0; stage < manifest::kHorizonSteps; ++stage) {
         std::vector<double> pi;

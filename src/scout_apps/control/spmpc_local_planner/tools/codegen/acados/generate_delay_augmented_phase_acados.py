@@ -24,6 +24,7 @@ from generate_delay_augmented_phase_transition import load_contract
 from spmpc_delay_augmented_phase_model import (
     GATE_RADIUS_NAMES,
     WEIGHT_NAMES,
+    execution_box_constraints,
     nominal_relative_cost,
     nominal_relative_residual,
     parameter_layout,
@@ -39,14 +40,18 @@ DEFAULT_OUTPUT = PACKAGE_ROOT / "generated" / "acados"
 MODEL_NAME = "spmpc_delay_augmented_phase"
 RTI_MODEL_NAME = "spmpc_delay_augmented_phase_rti"
 SOLVER_CAPABILITY_SCHEMA_VERSION = 3
-SOLVER_ID = "delay_augmented_phase_acados_full_sqp_funnel_bexec_v1"
-RTI_SOLVER_ID = "delay_augmented_phase_acados_rti_reference_v1"
+SOLVER_ID = "delay_augmented_phase_acados_full_sqp_funnel_bexec_path_qp1e9_v4"
+RTI_SOLVER_ID = "delay_augmented_phase_acados_rti_reference_bexec_path_v3"
+STAGE_EXECUTION_CONSTRAINT_FORM = "phase_indexed_full_execution_box_v1"
+TERMINAL_EXECUTION_CONSTRAINT_FORM = "parameter_affine_two_sided_box_v1"
 PARAMETER_SCHEMA_VERSION = 2
 PARAMETER_SCHEMA_ID = "delay_augmented_phase_parameter_image_v2"
 MAX_STATIONARITY_RESIDUAL = 1.0e-6
 MAX_EQUALITY_RESIDUAL = 1.0e-6
 MAX_INEQUALITY_RESIDUAL = 1.0e-6
 MAX_COMPLEMENTARITY_RESIDUAL = 1.0e-6
+FULL_SQP_QP_TOLERANCE = 1.0e-9
+RTI_REFERENCE_QP_TOLERANCE = 1.0e-6
 MAX_CAUSAL_STATE_ERROR = 1.0e-6
 MAX_SQP_ITERATIONS = 20
 MIN_RECOVERY_DENOMINATOR = 1.0e-9
@@ -79,7 +84,7 @@ FORMAL_REQUIRED_CAPABILITIES = (
 def _solver_config(model_name, solver_id, nlp_solver_type,
                    globalization, hpipm_mode, full_step_dual,
                    use_second_order_correction, max_iterations,
-                   scale_x, scale_u):
+                   qp_tolerance, scale_x, scale_u):
     semantic = {
         "model_name": model_name,
         "solver_id": solver_id,
@@ -92,6 +97,14 @@ def _solver_config(model_name, solver_id, nlp_solver_type,
         # does not claim a converged full-NLP KKT certificate.
         "hpipm_mode": hpipm_mode,
         "qp_solver_iter_max": 100,
+        # The full-SQP subproblem must be solved materially more accurately
+        # than the outer 1e-6 NLP acceptance contract.  Reusing the NLP
+        # tolerance here leaves no error budget after costate/Jacobian
+        # propagation and creates a deterministic stationarity floor.
+        "qp_tol_stat": qp_tolerance,
+        "qp_tol_eq": qp_tolerance,
+        "qp_tol_ineq": qp_tolerance,
+        "qp_tol_comp": qp_tolerance,
         "tol_stat": MAX_STATIONARITY_RESIDUAL,
         "tol_eq": MAX_EQUALITY_RESIDUAL,
         "tol_ineq": MAX_INEQUALITY_RESIDUAL,
@@ -104,6 +117,10 @@ def _solver_config(model_name, solver_id, nlp_solver_type,
         "hessian_approx": "GAUSS_NEWTON",
         "regularize_method": "PROJECT",
         "levenberg_marquardt": 1.0e-3,
+        "terminal_execution_constraint_form":
+            TERMINAL_EXECUTION_CONSTRAINT_FORM,
+        "stage_execution_constraint_form":
+            STAGE_EXECUTION_CONSTRAINT_FORM,
         # The non-dimensional variable basis is part of solver semantics and
         # must be folded into the config hash so any scale change is detectable.
         "scale_x": [float(v) for v in scale_x],
@@ -232,6 +249,7 @@ def load_solver_spec():
         1,
         0,
         MAX_SQP_ITERATIONS,
+        FULL_SQP_QP_TOLERANCE,
         scale_x,
         scale_u,
     )
@@ -244,6 +262,7 @@ def load_solver_spec():
         0,
         0,
         1,
+        RTI_REFERENCE_QP_TOLERANCE,
         scale_x,
         scale_u,
     )
@@ -266,6 +285,10 @@ def load_solver_spec():
         "execution_compatibility_contract": parameter_semantic[
             "execution_compatibility_contract"
         ],
+        "terminal_execution_constraint_form":
+            TERMINAL_EXECUTION_CONSTRAINT_FORM,
+        "stage_execution_constraint_form":
+            STAGE_EXECUTION_CONSTRAINT_FORM,
         "cost_scales": cost_scales,
         "slosh_height_ref": float(slosh["slosh_height_ref"]),
         "slosh_eta_dot_ratio": float(slosh["slosh_eta_dot_ratio"]),
@@ -326,7 +349,7 @@ def build_symbolic_spec(spec):
     x_next_physical, published = transition_expression(
         x_physical, q_physical, contract, layout)
     x_next = x_next_physical / scale_x_sx
-    stage_constraints, stage_lower, stage_upper = (
+    published_constraints, published_lower, published_upper = (
         published_command_constraints(
             published,
             p,
@@ -338,6 +361,15 @@ def build_symbolic_spec(spec):
             contract["angular"]["output_max"],
         )
     )
+    execution_constraints, execution_lower, execution_upper = (
+        execution_box_constraints(
+            x_physical, p, layout, spec["parameters"]
+        )
+    )
+    stage_constraints = ca.vertcat(
+        published_constraints, execution_constraints)
+    stage_lower = published_lower + execution_lower
+    stage_upper = published_upper + execution_upper
     stage_cost = nominal_relative_cost(
         x_physical, q_physical, p, layout, spec["parameters"],
         spec["cost_scales"]
@@ -356,8 +388,10 @@ def build_symbolic_spec(spec):
         spec["cost_scales"],
         terminal=True,
     )
-    terminal_constraints = terminal_recovery_constraints(
-        x_physical, p, layout, spec["parameters"]
+    (terminal_constraints, terminal_lower, terminal_upper) = (
+        terminal_recovery_constraints(
+            x_physical, p, layout, spec["parameters"]
+        )
     )
 
     # No path-stage box is needed for actuator outputs or pending queues.
@@ -383,6 +417,8 @@ def build_symbolic_spec(spec):
         "stage_residual": stage_residual,
         "terminal_residual": terminal_residual,
         "terminal_constraints": terminal_constraints,
+        "terminal_lower": terminal_lower,
+        "terminal_upper": terminal_upper,
         "idxbu": np.array([0, 1, 2], dtype=int),
         "lbu": np.array(
             [-spec["a_max"] / scale_u[0],
@@ -431,6 +467,10 @@ constexpr int kGlobalizationFullStepDual = {spec['solver_config']['globalization
 constexpr int kGlobalizationUseSecondOrderCorrection = {spec['solver_config']['globalization_use_second_order_correction']};
 constexpr const char kSolverConfigHash[] = "{spec['solver_config']['config_hash']}";
 constexpr int kMaxSqpIterations = {spec['solver_config']['max_iterations']};
+constexpr double kQpStationarityTolerance = {_cpp_float(spec['solver_config']['qp_tol_stat'])};
+constexpr double kQpEqualityTolerance = {_cpp_float(spec['solver_config']['qp_tol_eq'])};
+constexpr double kQpInequalityTolerance = {_cpp_float(spec['solver_config']['qp_tol_ineq'])};
+constexpr double kQpComplementarityTolerance = {_cpp_float(spec['solver_config']['qp_tol_comp'])};
 constexpr const char kRtiReferenceSolverId[] = "{spec['rti_solver_config']['solver_id']}";
 constexpr const char kRtiReferenceModelName[] = "{spec['rti_solver_config']['model_name']}";
 constexpr const char kRtiReferenceNlpSolverType[] = "{spec['rti_solver_config']['nlp_solver_type']}";
@@ -450,6 +490,8 @@ constexpr const char kParameterSchemaHash[] = "{spec['parameter_schema_hash']}";
 constexpr const char kCostContract[] = "{spec['cost_contract']}";
 constexpr const char kTerminalGateContract[] = "{spec['terminal_gate_contract']}";
 constexpr const char kExecutionCompatibilityContract[] = "{spec['execution_compatibility_contract']}";
+constexpr const char kStageExecutionConstraintForm[] = "{spec['stage_execution_constraint_form']}";
+constexpr const char kTerminalExecutionConstraintForm[] = "{spec['terminal_execution_constraint_form']}";
 constexpr int kParameterCount = {spec['parameters']['parameter_width']};
 constexpr int kNominalStateOffset = {spec['parameters']['nominal_state_offset']};
 constexpr int kNominalControlOffset = {spec['parameters']['nominal_control_offset']};
@@ -472,9 +514,15 @@ constexpr int kStateBoundCount = {spec['state_bound_count']};
 constexpr int kInitialStateBoundCount = {layout['state_width']};
 constexpr int kTerminalStateBoundCount = kStateBoundCount;
 constexpr int kControlBoundCount = {layout['control_width']};
-constexpr int kPublishedCommandConstraintCount = 10;
+constexpr int kPublishedCommandConstraintCount = 6;
+constexpr int kStageExecutionConstraintCount = {2 * len(layout['execution_indices'])};
+constexpr int kStageConstraintCount =
+    kPublishedCommandConstraintCount + kStageExecutionConstraintCount;
 constexpr int kTerminalPublishedCommandConstraintCount = 0;
-constexpr int kTerminalRecoveryConstraintCount = {1 + len(layout['execution_indices'])};
+constexpr int kTerminalEmpiricalConstraintCount = 1;
+constexpr int kTerminalExecutionConstraintCount = {2 * len(layout['execution_indices'])};
+constexpr int kTerminalRecoveryConstraintCount =
+    kTerminalEmpiricalConstraintCount + kTerminalExecutionConstraintCount;
 constexpr double kDt = {_cpp_float(contract['dt'])};
 constexpr double kLinearDelaySec = {_cpp_float(contract['linear']['delay_sec'])};
 constexpr double kAngularDelaySec = {_cpp_float(contract['angular']['delay_sec'])};
@@ -611,28 +659,38 @@ def build_ocp(spec, solver_config=None):
     ocp.constraints.x0 = np.zeros(spec["layout"]["state_width"])
     ocp.model.con_h_expr = symbolic["stage_constraints"]
     ocp.model.con_h_expr_0 = symbolic["stage_constraints"]
+    stage_count = int(symbolic["stage_constraints"].shape[0])
+    if (len(symbolic["lh"]) != stage_count or
+            len(symbolic["uh"]) != stage_count):
+        raise RuntimeError("stage constraint bound width drifted")
     ocp.constraints.lh = symbolic["lh"]
     ocp.constraints.uh = symbolic["uh"]
     ocp.constraints.lh_0 = symbolic["lh"]
     ocp.constraints.uh_0 = symbolic["uh"]
     ocp.model.con_h_expr_e = symbolic["terminal_constraints"]
     terminal_count = int(symbolic["terminal_constraints"].shape[0])
-    # These are genuinely one-sided upper constraints.  acados masks a bound
-    # whose magnitude exceeds ACADOS_INFTY before passing the QP to HPIPM; a
-    # finite mathematical minimum such as -1 would instead create a redundant,
-    # zero-gradient active lower constraint at the nominal terminal state.
-    ocp.constraints.lh_e = np.full(terminal_count, -1.0e15)
-    ocp.constraints.uh_e = np.zeros(terminal_count)
+    if (len(symbolic["terminal_lower"]) != terminal_count or
+            len(symbolic["terminal_upper"]) != terminal_count):
+        raise RuntimeError("terminal constraint bound width drifted")
+    # Every terminal expression is a genuine one-sided upper constraint.
+    # The empirical ellipsoid remains nonlinear.  Each scalar B_exec box is
+    # represented by two parameter-affine inequalities, preserving the exact
+    # frozen beta without the 1/beta Jacobian amplification of a normalized
+    # square.
+    ocp.constraints.lh_e = np.asarray(
+        symbolic["terminal_lower"], dtype=float)
+    ocp.constraints.uh_e = np.asarray(
+        symbolic["terminal_upper"], dtype=float)
 
     ocp.solver_options.integrator_type = solver_config["integrator_type"]
     ocp.solver_options.qp_solver = solver_config["qp_solver"]
     ocp.solver_options.hpipm_mode = solver_config["hpipm_mode"]
     ocp.solver_options.qp_solver_iter_max = solver_config[
         "qp_solver_iter_max"]
-    ocp.solver_options.qp_solver_tol_stat = solver_config["tol_stat"]
-    ocp.solver_options.qp_solver_tol_eq = solver_config["tol_eq"]
-    ocp.solver_options.qp_solver_tol_ineq = solver_config["tol_ineq"]
-    ocp.solver_options.qp_solver_tol_comp = solver_config["tol_comp"]
+    ocp.solver_options.qp_solver_tol_stat = solver_config["qp_tol_stat"]
+    ocp.solver_options.qp_solver_tol_eq = solver_config["qp_tol_eq"]
+    ocp.solver_options.qp_solver_tol_ineq = solver_config["qp_tol_ineq"]
+    ocp.solver_options.qp_solver_tol_comp = solver_config["qp_tol_comp"]
     ocp.solver_options.hessian_approx = solver_config["hessian_approx"]
     ocp.solver_options.regularize_method = solver_config[
         "regularize_method"]
@@ -683,10 +741,12 @@ def check():
         raise RuntimeError("delay-augmented discrete state width mismatch")
     if symbolic["published"].shape != (2, 1):
         raise RuntimeError("published-command constraint width mismatch")
-    if symbolic["stage_constraints"].shape != (10, 1):
-        raise RuntimeError("published residual constraint width mismatch")
+    stage_constraint_count = 6 + 2 * len(
+        spec["layout"]["execution_indices"])
+    if symbolic["stage_constraints"].shape != (stage_constraint_count, 1):
+        raise RuntimeError("stage constraint width mismatch")
     if symbolic["terminal_constraints"].shape != (
-            1 + len(spec["layout"]["execution_indices"]), 1):
+            1 + 2 * len(spec["layout"]["execution_indices"]), 1):
         raise RuntimeError("terminal recovery constraint width mismatch")
     if len(symbolic["idxbx"]) != spec["state_bound_count"]:
         raise RuntimeError("derived-state bound contract mismatch")
@@ -699,7 +759,7 @@ def check():
         f"N={spec['contract']['horizon_steps']}",
         f"np={spec['parameters']['parameter_width']}",
         f"nbx={len(symbolic['idxbx'])}",
-        "nh=10",
+        f"nh={stage_constraint_count}",
         f"capabilities=0x{spec['capabilities']:x}",
         f"execution_hash={spec['contract']['contract_hash']}",
         f"parameter_hash={spec['parameter_schema_hash']}",

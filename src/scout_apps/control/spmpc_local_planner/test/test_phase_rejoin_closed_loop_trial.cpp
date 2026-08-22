@@ -371,6 +371,40 @@ TEST_F(TrialRunnerTest,
                        ["phase_status_counts"].IsMap());
     EXPECT_TRUE(summary["controller_audit"]
                        ["final_status_counts"].IsMap());
+    EXPECT_GT(summary["solver_runtime"]["sample_count"].as<int>(), 0);
+    EXPECT_EQ(summary["solver_runtime"]["solver_id"].as<std::string>(),
+              manifest::kSolverId);
+    EXPECT_EQ(summary["solver_runtime"]
+                     ["nlp_solver_type"].as<std::string>(), "SQP");
+    EXPECT_EQ(summary["solver_runtime"]
+                     ["solver_config_hash"].as<std::string>(),
+              manifest::kSolverConfigHash);
+    EXPECT_GT(summary["solver_runtime"]
+                     ["backend_wall_p50_ms"].as<double>(), 0.0);
+    EXPECT_LE(summary["solver_runtime"]
+                     ["backend_wall_p99_ms"].as<double>(),
+              summary["solver_runtime"]
+                     ["backend_wall_max_ms"].as<double>());
+    EXPECT_NEAR(summary["solver_runtime"]
+                       ["control_budget_ms"].as<double>(),
+                1000.0 / 30.0, 1.0e-12);
+    EXPECT_EQ(summary["solver_runtime"]
+                     ["kkt_residual_sample_count"].as<int>(),
+              summary["solver_runtime"]["sample_count"].as<int>());
+    EXPECT_TRUE(summary["solver_runtime"]
+                       ["kkt_contract_passed"].as<bool>());
+    EXPECT_LE(summary["solver_runtime"]
+                     ["max_stationarity_residual"].as<double>(),
+              manifest::kMaxStationarityResidual);
+    EXPECT_LE(summary["solver_runtime"]
+                     ["max_equality_residual"].as<double>(),
+              manifest::kMaxEqualityResidual);
+    EXPECT_LE(summary["solver_runtime"]
+                     ["max_inequality_residual"].as<double>(),
+              manifest::kMaxInequalityResidual);
+    EXPECT_LE(summary["solver_runtime"]
+                     ["max_complementarity_residual"].as<double>(),
+              manifest::kMaxComplementarityResidual);
 
     std::ifstream cycles(cycle_);
     ASSERT_TRUE(cycles.is_open());
@@ -395,6 +429,10 @@ TEST_F(TrialRunnerTest,
     ASSERT_EQ(column.count("phase_lead_steps"), 1u);
     ASSERT_EQ(column.count("execution_rejected_candidate_count"), 1u);
     ASSERT_EQ(column.count("selected_execution_max_normalized_error"), 1u);
+    ASSERT_EQ(column.count("acados_solve_time_ms"), 1u);
+    ASSERT_EQ(column.count("backend_wall_time_ms"), 1u);
+    EXPECT_GT(std::stod(first[column["acados_solve_time_ms"]]), 0.0);
+    EXPECT_GT(std::stod(first[column["backend_wall_time_ms"]]), 0.0);
     EXPECT_NE(first[column["raw_solver_status"]],
               first[column["phase_status"]]);
     EXPECT_EQ(first[column["phase_status"]],

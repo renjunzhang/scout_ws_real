@@ -158,19 +158,6 @@ def published_command_constraints(published, p, layout, parameters,
     nominal_omega = p[index["nom_u_pub_omega"]]
     residual_v = p[index["max_residual_v"]]
     residual_omega = p[index["max_residual_omega"]]
-    # The newly published command becomes the tail of the next execution
-    # queue.  Bind it to the same frozen B_exec radius used by the next-cycle
-    # candidate gate; otherwise a residual-authority-feasible command can
-    # strand the monotone selector with no compatible successor.
-    linear_tail_bound_offset = 2 + layout["linear_buffer_count"] - 1
-    angular_tail_bound_offset = (
-        2 + layout["linear_buffer_count"]
-        + layout["angular_buffer_count"] - 1
-    )
-    next_linear_beta = p[
-        parameters["execution_bound_offset"] + linear_tail_bound_offset]
-    next_angular_beta = p[
-        parameters["execution_bound_offset"] + angular_tail_bound_offset]
     constraints = ca.vertcat(
         published[0],
         published[1],
@@ -178,10 +165,6 @@ def published_command_constraints(published, p, layout, parameters,
         nominal_v - published[0] - residual_v,
         published[1] - nominal_omega - residual_omega,
         nominal_omega - published[1] - residual_omega,
-        published[0] - nominal_v - next_linear_beta,
-        nominal_v - published[0] - next_linear_beta,
-        published[1] - nominal_omega - next_angular_beta,
-        nominal_omega - published[1] - next_angular_beta,
     )
     lower = (
         linear_min,
@@ -190,17 +173,36 @@ def published_command_constraints(published, p, layout, parameters,
         -1.0e15,
         -1.0e15,
         -1.0e15,
-        -1.0e15,
-        -1.0e15,
-        -1.0e15,
-        -1.0e15,
     )
     upper = (
         linear_max, angular_max,
         0.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 0.0,
     )
     return constraints, lower, upper
+
+
+def execution_box_constraints(x, p, layout, parameters):
+    """Phase-indexed B_exec path invariant in affine two-sided form.
+
+    Constraining only the newly published queue tail is insufficient because
+    that command subsequently shifts through queue positions whose frozen
+    radii can tighten with phase.  Bind every execution component of every
+    predicted state to the nominal/radius image of that same stage.
+    """
+    nominal = p[
+        parameters["nominal_state_offset"]:
+        parameters["nominal_state_offset"] + layout["state_width"]
+    ]
+    constraints = []
+    lower = []
+    upper = []
+    for offset, state_index in enumerate(layout["execution_indices"]):
+        beta = p[parameters["execution_bound_offset"] + offset]
+        error = x[state_index] - nominal[state_index]
+        constraints.extend((error - beta, -error - beta))
+        lower.extend((-1.0e15, -1.0e15))
+        upper.extend((0.0, 0.0))
+    return ca.vertcat(*constraints), tuple(lower), tuple(upper)
 
 
 def nominal_relative_cost(x, q, p, layout, parameters, scales,
@@ -348,10 +350,26 @@ def terminal_recovery_constraints(x, p, layout, parameters):
     for error, radius_name in zip(gate_errors, GATE_RADIUS_NAMES):
         gate_metric += (error / p[index[radius_name]]) ** 2
     constraints = [gate_metric - 1.0]
+    lower = [-1.0e15]
+    upper = [0.0]
     for offset, state_index in enumerate(layout["execution_indices"]):
         beta = p[parameters["execution_bound_offset"] + offset]
-        constraints.append(((x[state_index] - nominal[state_index]) / beta) ** 2 - 1.0)
-    return ca.vertcat(*constraints)
+        error = x[state_index] - nominal[state_index]
+        # B_exec is a one-dimensional box for every execution component.
+        # Keep beta in the affine expression rather than normalizing/squaring
+        # by a potentially tiny terminal radius.  The feasible set is exactly
+        # unchanged:
+        #
+        #   error - beta <= 0  and  -error - beta <= 0
+        #       iff |error| <= beta.
+        #
+        # In the scaled OCP basis the two Jacobians are +/- state_scale,
+        # independent of beta.  This prevents harmless interior-point dual
+        # noise from being amplified by O(1 / beta) near the stopped tail.
+        constraints.extend((error - beta, -error - beta))
+        lower.extend((-1.0e15, -1.0e15))
+        upper.extend((0.0, 0.0))
+    return ca.vertcat(*constraints), tuple(lower), tuple(upper)
 
 
 def transition_expression(x, q, contract, layout):

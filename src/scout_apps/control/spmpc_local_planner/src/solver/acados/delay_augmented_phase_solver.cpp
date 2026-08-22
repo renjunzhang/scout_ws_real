@@ -630,9 +630,9 @@ bool DelayAugmentedPhaseAcadosSolver::create(
         "generated capsule control-bound contract drifted");
     static_assert(
         SPMPC_DELAY_AUGMENTED_PHASE_NH ==
-            manifest::kPublishedCommandConstraintCount &&
+            manifest::kStageConstraintCount &&
         SPMPC_DELAY_AUGMENTED_PHASE_NH0 ==
-            manifest::kPublishedCommandConstraintCount &&
+            manifest::kStageConstraintCount &&
         SPMPC_DELAY_AUGMENTED_PHASE_NHN ==
             manifest::kTerminalRecoveryConstraintCount,
         "generated capsule terminal recovery constraint drifted");
@@ -650,9 +650,9 @@ bool DelayAugmentedPhaseAcadosSolver::create(
         SPMPC_DELAY_AUGMENTED_PHASE_RTI_NBU ==
             manifest::kControlBoundCount &&
         SPMPC_DELAY_AUGMENTED_PHASE_RTI_NH ==
-            manifest::kPublishedCommandConstraintCount &&
+            manifest::kStageConstraintCount &&
         SPMPC_DELAY_AUGMENTED_PHASE_RTI_NH0 ==
-            manifest::kPublishedCommandConstraintCount &&
+            manifest::kStageConstraintCount &&
         SPMPC_DELAY_AUGMENTED_PHASE_RTI_NHN ==
             manifest::kTerminalRecoveryConstraintCount,
         "generated RTI reference capsule contract drifted");
@@ -1069,6 +1069,25 @@ DelayAugmentedPhaseAcadosSolver::auditTrajectory(
 
     std::vector<DelayAugmentedPhaseControl> decoded_controls;
     decoded_controls.reserve(manifest::kHorizonSteps);
+    const int execution_indices[manifest::kExecutionBoundCount] = {
+        3, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+    const char* execution_component_names[
+        manifest::kExecutionBoundCount] = {
+        "linear_output",
+        "angular_output",
+        "linear_pending_0",
+        "linear_pending_1",
+        "linear_pending_2",
+        "linear_pending_3",
+        "linear_pending_4",
+        "angular_pending_0",
+        "angular_pending_1",
+        "angular_pending_2",
+        "angular_pending_3",
+        "angular_pending_4",
+        "angular_pending_5",
+        "angular_pending_6",
+    };
     for (int stage = 0; stage < manifest::kHorizonSteps; ++stage) {
         const double* state = states.data() + static_cast<std::size_t>(
             stage * manifest::kStateCount);
@@ -1165,39 +1184,29 @@ DelayAugmentedPhaseAcadosSolver::auditTrajectory(
                 ? std::abs(published_omega - nominal_omega) /
                     residual_omega
                 : std::abs(published_omega - nominal_omega));
-        const double next_linear_beta = parameter[
-            manifest::kExecutionBoundOffset + 2 +
-            manifest::kLinearBufferCount - 1];
-        const double next_angular_beta = parameter[
-            manifest::kExecutionBoundOffset + 2 +
-            manifest::kLinearBufferCount +
-            manifest::kAngularBufferCount - 1];
-        append_bound(
-            audit.stage_constraints, stage, 6,
-            "published_linear_next_execution_upper",
-            published_v - nominal_v - next_linear_beta,
-            -1.0e15, 0.0,
-            std::abs(published_v - nominal_v) / next_linear_beta);
-        append_bound(
-            audit.stage_constraints, stage, 7,
-            "published_linear_next_execution_lower",
-            nominal_v - published_v - next_linear_beta,
-            -1.0e15, 0.0,
-            std::abs(published_v - nominal_v) / next_linear_beta);
-        append_bound(
-            audit.stage_constraints, stage, 8,
-            "published_angular_next_execution_upper",
-            published_omega - nominal_omega - next_angular_beta,
-            -1.0e15, 0.0,
-            std::abs(published_omega - nominal_omega) /
-                next_angular_beta);
-        append_bound(
-            audit.stage_constraints, stage, 9,
-            "published_angular_next_execution_lower",
-            nominal_omega - published_omega - next_angular_beta,
-            -1.0e15, 0.0,
-            std::abs(published_omega - nominal_omega) /
-                next_angular_beta);
+        for (int bound = 0;
+             bound < manifest::kExecutionBoundCount; ++bound) {
+            const int state_index = execution_indices[bound];
+            const double nominal = parameter[
+                manifest::kNominalStateOffset + state_index];
+            const double beta = parameter[
+                manifest::kExecutionBoundOffset + bound];
+            const double error_value = state[state_index] - nominal;
+            const int upper_index =
+                manifest::kPublishedCommandConstraintCount + 2 * bound;
+            const int lower_index = upper_index + 1;
+            const double normalized = std::abs(error_value) / beta;
+            const std::string prefix = std::string("stage_exec_") +
+                execution_component_names[bound];
+            append_bound(
+                audit.stage_constraints, stage, upper_index,
+                prefix + "_upper", error_value - beta,
+                -1.0e15, 0.0, normalized);
+            append_bound(
+                audit.stage_constraints, stage, lower_index,
+                prefix + "_lower", -error_value - beta,
+                -1.0e15, 0.0, normalized);
+        }
     }
 
     const double* terminal = states.data() + static_cast<std::size_t>(
@@ -1230,24 +1239,6 @@ DelayAugmentedPhaseAcadosSolver::auditTrajectory(
     empirical.violation = audit.terminal_empirical_violation;
     update_max(empirical);
 
-    const int execution_indices[manifest::kExecutionBoundCount] = {
-        3, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
-    const char* execution_names[manifest::kExecutionBoundCount] = {
-        "terminal_exec_linear_output",
-        "terminal_exec_angular_output",
-        "terminal_exec_linear_pending_0",
-        "terminal_exec_linear_pending_1",
-        "terminal_exec_linear_pending_2",
-        "terminal_exec_linear_pending_3",
-        "terminal_exec_linear_pending_4",
-        "terminal_exec_angular_pending_0",
-        "terminal_exec_angular_pending_1",
-        "terminal_exec_angular_pending_2",
-        "terminal_exec_angular_pending_3",
-        "terminal_exec_angular_pending_4",
-        "terminal_exec_angular_pending_5",
-        "terminal_exec_angular_pending_6",
-    };
     for (int index = 0; index < manifest::kExecutionBoundCount; ++index) {
         const int state_index = execution_indices[index];
         const double beta = terminal_parameter[
@@ -1258,7 +1249,9 @@ DelayAugmentedPhaseAcadosSolver::auditTrajectory(
         append_bound(
             audit.terminal_execution_constraints,
             manifest::kHorizonSteps, index + 1,
-            execution_names[index], normalized * normalized - 1.0,
+            std::string("terminal_exec_") +
+                execution_component_names[index],
+            normalized * normalized - 1.0,
             -1.0e15, 0.0, normalized);
     }
 

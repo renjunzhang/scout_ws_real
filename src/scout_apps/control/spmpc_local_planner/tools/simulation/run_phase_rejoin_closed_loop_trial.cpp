@@ -131,6 +131,8 @@ struct CycleRecord {
     bool execution_candidate_filter_applied = false;
     std::size_t execution_rejected_candidate_count = 0;
     double selected_execution_max_normalized_error = 0.0;
+    double acados_solve_time_ms = 0.0;
+    double backend_wall_time_ms = 0.0;
     VelocityCommand final_command;
     CommandSource command_source = CommandSource::None;
     StampNs publish_stamp_ns = 0;
@@ -148,6 +150,18 @@ struct TrialCounters {
     std::size_t execution_candidate_filter_cycles = 0;
     std::size_t execution_rejected_candidates = 0;
     double max_selected_execution_normalized_error = 0.0;
+    std::vector<double> acados_solve_times_ms;
+    std::vector<double> backend_wall_times_ms;
+    std::size_t kkt_residual_samples = 0;
+    double max_stationarity_residual = 0.0;
+    double max_equality_residual = 0.0;
+    double max_inequality_residual = 0.0;
+    double max_complementarity_residual = 0.0;
+    int max_sqp_iterations = 0;
+    int max_qp_iterations = 0;
+    std::string solver_id;
+    std::string nlp_solver_type;
+    std::string solver_config_hash;
     std::map<std::string, std::size_t> raw_solver_status_counts;
     std::map<std::string, std::size_t> phase_status_counts;
     std::map<std::string, std::size_t> final_status_counts;
@@ -1556,6 +1570,7 @@ bool openCycleCsv(const std::string& path, std::ofstream& output,
         << "execution_candidate_filter_applied,"
         << "execution_rejected_candidate_count,"
         << "selected_execution_max_normalized_error,"
+        << "acados_solve_time_ms,backend_wall_time_ms,"
         << "final_cmd_v,final_cmd_omega,command_source,publish_stamp_ns,"
         << "plant_publish_time_sec,linear_effective_time_sec,"
         << "angular_effective_time_sec\n";
@@ -1595,6 +1610,8 @@ bool writeCycle(std::ofstream& output, const CycleRecord& record) {
         << (record.execution_candidate_filter_applied ? "true" : "false")
         << ',' << record.execution_rejected_candidate_count << ','
         << record.selected_execution_max_normalized_error << ','
+        << record.acados_solve_time_ms << ','
+        << record.backend_wall_time_ms << ','
         << record.final_command.linear << ','
         << record.final_command.angular << ','
         << commandSourceName(record.command_source) << ','
@@ -1638,6 +1655,32 @@ bool writeSummary(
     const std::string status = !runtime_ok
         ? "RUNTIME_ERROR"
         : (task_success ? "TRIAL_COMPLETE" : "TRIAL_COMPLETE_WITH_FAILURE");
+    const double backend_budget_ms = 1000.0 / condition.control_rate_hz;
+    const std::size_t backend_deadline_misses =
+        static_cast<std::size_t>(std::count_if(
+            counters.backend_wall_times_ms.begin(),
+            counters.backend_wall_times_ms.end(),
+            [backend_budget_ms](double value) {
+                return value > backend_budget_ms;
+            }));
+    const double max_backend_wall_time_ms =
+        counters.backend_wall_times_ms.empty()
+            ? std::numeric_limits<double>::quiet_NaN()
+            : *std::max_element(
+                  counters.backend_wall_times_ms.begin(),
+                  counters.backend_wall_times_ms.end());
+    const bool kkt_contract_passed =
+        !counters.backend_wall_times_ms.empty() &&
+        counters.kkt_residual_samples ==
+            counters.backend_wall_times_ms.size() &&
+        counters.max_stationarity_residual <=
+            manifest::kMaxStationarityResidual &&
+        counters.max_equality_residual <=
+            manifest::kMaxEqualityResidual &&
+        counters.max_inequality_residual <=
+            manifest::kMaxInequalityResidual &&
+        counters.max_complementarity_residual <=
+            manifest::kMaxComplementarityResidual;
     output << "{\n"
         << "  \"schema\": \"" << kSummarySchema << "\",\n"
         << "  \"status\": \"" << status << "\",\n"
@@ -1703,6 +1746,58 @@ bool writeSummary(
         << jsonNumber(nearestRankQuantile(tracking_errors, 0.95)) << ",\n"
         << "    \"final_goal_error_m\": "
         << jsonNumber(final_goal_error_m) << "\n"
+        << "  },\n"
+        << "  \"solver_runtime\": {\n"
+        << "    \"statistics_unit\": \"optimizer_invocation\",\n"
+        << "    \"backend\": \""
+        << (counters.solver_id.empty()
+                ? "NOT_RECORDED"
+                : kSolverBackendDelayAugmentedPhaseAcados)
+        << "\",\n"
+        << "    \"solver_id\": \""
+        << jsonEscape(counters.solver_id) << "\",\n"
+        << "    \"nlp_solver_type\": \""
+        << jsonEscape(counters.nlp_solver_type) << "\",\n"
+        << "    \"solver_config_hash\": \""
+        << jsonEscape(counters.solver_config_hash) << "\",\n"
+        << "    \"sample_count\": "
+        << counters.backend_wall_times_ms.size() << ",\n"
+        << "    \"acados_solve_p50_ms\": "
+        << jsonNumber(nearestRankQuantile(
+               counters.acados_solve_times_ms, 0.50)) << ",\n"
+        << "    \"backend_wall_p50_ms\": "
+        << jsonNumber(nearestRankQuantile(
+               counters.backend_wall_times_ms, 0.50)) << ",\n"
+        << "    \"backend_wall_p95_ms\": "
+        << jsonNumber(nearestRankQuantile(
+               counters.backend_wall_times_ms, 0.95)) << ",\n"
+        << "    \"backend_wall_p99_ms\": "
+        << jsonNumber(nearestRankQuantile(
+               counters.backend_wall_times_ms, 0.99)) << ",\n"
+        << "    \"backend_wall_max_ms\": "
+        << jsonNumber(max_backend_wall_time_ms) << ",\n"
+        << "    \"control_budget_ms\": "
+        << backend_budget_ms << ",\n"
+        << "    \"deadline_misses\": "
+        << backend_deadline_misses << ",\n"
+        << "    \"kkt_residual_sample_count\": "
+        << counters.kkt_residual_samples << ",\n"
+        << "    \"kkt_contract_passed\": "
+        << (kkt_contract_passed ? "true" : "false") << ",\n"
+        << "    \"kkt_contract_tolerance\": "
+        << manifest::kMaxStationarityResidual << ",\n"
+        << "    \"max_stationarity_residual\": "
+        << counters.max_stationarity_residual << ",\n"
+        << "    \"max_equality_residual\": "
+        << counters.max_equality_residual << ",\n"
+        << "    \"max_inequality_residual\": "
+        << counters.max_inequality_residual << ",\n"
+        << "    \"max_complementarity_residual\": "
+        << counters.max_complementarity_residual << ",\n"
+        << "    \"max_sqp_iterations\": "
+        << counters.max_sqp_iterations << ",\n"
+        << "    \"max_qp_iterations\": "
+        << counters.max_qp_iterations << "\n"
         << "  },\n"
         << "  \"controller_audit\": {\n"
         << "    \"solver_failures\": " << counters.solver_failures << ",\n"
@@ -2477,6 +2572,19 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         record.selected_execution_max_normalized_error =
             result.phase_preparation.candidate
                 .selected_execution_max_normalized_error;
+        const PreSolveSnapshotDebug& solver_snapshot =
+            result.solver_output.pre_solve_snapshot;
+        if (solver_snapshot.backend ==
+                kSolverBackendDelayAugmentedPhaseAcados &&
+            finite(solver_snapshot.acados_solve_time_ms) &&
+            finite(solver_snapshot.backend_wall_time_ms) &&
+            solver_snapshot.acados_solve_time_ms >= 0.0 &&
+            solver_snapshot.backend_wall_time_ms > 0.0) {
+            record.acados_solve_time_ms =
+                solver_snapshot.acados_solve_time_ms;
+            record.backend_wall_time_ms =
+                solver_snapshot.backend_wall_time_ms;
+        }
         record.final_command = result.final_command;
         record.command_source = result.publication.pipeline.decision.source;
         record.publish_stamp_ns =
@@ -2487,6 +2595,41 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             break;
         }
         if (!result.solver_success) ++counters.solver_failures;
+        if (record.backend_wall_time_ms > 0.0) {
+            counters.solver_id = solver_snapshot.solver_id;
+            counters.nlp_solver_type = solver_snapshot.nlp_solver_type;
+            counters.solver_config_hash =
+                solver_snapshot.solver_config_hash;
+            counters.acados_solve_times_ms.push_back(
+                record.acados_solve_time_ms);
+            counters.backend_wall_times_ms.push_back(
+                record.backend_wall_time_ms);
+        }
+        if (solver_snapshot.solver_residuals_evaluated &&
+            finite(solver_snapshot.stationarity_residual) &&
+            finite(solver_snapshot.equality_residual) &&
+            finite(solver_snapshot.inequality_residual) &&
+            finite(solver_snapshot.complementarity_residual)) {
+            ++counters.kkt_residual_samples;
+            counters.max_stationarity_residual = std::max(
+                counters.max_stationarity_residual,
+                solver_snapshot.stationarity_residual);
+            counters.max_equality_residual = std::max(
+                counters.max_equality_residual,
+                solver_snapshot.equality_residual);
+            counters.max_inequality_residual = std::max(
+                counters.max_inequality_residual,
+                solver_snapshot.inequality_residual);
+            counters.max_complementarity_residual = std::max(
+                counters.max_complementarity_residual,
+                solver_snapshot.complementarity_residual);
+            counters.max_sqp_iterations = std::max(
+                counters.max_sqp_iterations,
+                solver_snapshot.solver_sqp_iterations);
+            counters.max_qp_iterations = std::max(
+                counters.max_qp_iterations,
+                solver_snapshot.solver_qp_iterations);
+        }
         ++counters.raw_solver_status_counts[record.raw_solver_status];
         ++counters.phase_status_counts[record.phase_status];
         ++counters.final_status_counts[record.final_status];
