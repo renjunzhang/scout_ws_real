@@ -53,6 +53,7 @@ REQUIRED_SESSION_ASSETS = (
     "recovery_radii_bounds",
     "recovery_held_out_report",
     "analysis_script",
+    "formal_order",
 )
 CONDITION_SEMANTICS = {
     "C0": {
@@ -464,6 +465,84 @@ def _validate_measurement_contract(session: Dict[str, Any],
     tail = measurement.get("fixed_tail_sec")
     if not _finite_number(tail) or float(tail) <= 0.0:
         reasons.append("measurement fixed tail is invalid")
+    numeric_contract = {
+        "minimum_meaningful_difference_m": 0.0005,
+        "formal_paired_blocks": 16,
+        "completion_time_noninferiority_relative": 0.10,
+        "tracking_q95_noninferiority_m": 0.05,
+    }
+    for key, expected_value in numeric_contract.items():
+        actual = measurement.get(key)
+        if (not _finite_number(actual) or
+                not math.isclose(float(actual), expected_value,
+                                 rel_tol=0.0, abs_tol=1.0e-12)):
+            reasons.append("measurement contract {} is invalid".format(key))
+    string_contract = {
+        "paired_interval": "paired_bootstrap_95pct",
+        "failed_trial_rule": "retain_and_count_as_failure",
+        "replacement_rule":
+            "infrastructure_failure_only_same_seed_condition",
+    }
+    for key, expected_value in string_contract.items():
+        if measurement.get(key) != expected_value:
+            reasons.append("measurement contract {} is invalid".format(key))
+
+
+def _validate_formal_order(path: Optional[Path], formal_seeds: List[int],
+                           reasons: List[str]) -> None:
+    if path is None:
+        return
+    expected_conditions = set(REQUIRED_CONDITIONS)
+    try:
+        with path.open("r", encoding="utf-8", newline="") as stream:
+            reader = csv.DictReader(stream)
+            rows = list(reader)
+            columns = tuple(reader.fieldnames or ())
+    except OSError as error:
+        reasons.append("formal order cannot be read: {}".format(error))
+        return
+    if columns != ("schema", "block", "seed", "position", "condition"):
+        reasons.append("formal order columns are invalid")
+        return
+    by_seed: Dict[int, List[Tuple[int, str]]] = {}
+    for row in rows:
+        try:
+            block = int(row["block"])
+            seed = int(row["seed"])
+            position = int(row["position"])
+            condition = row["condition"]
+        except (KeyError, TypeError, ValueError):
+            reasons.append("formal order row is invalid")
+            return
+        if (row.get("schema") != "spmpc_phase_rejoin_formal_order_v1" or
+                block < 1 or position < 1 or position > 6 or
+                condition not in expected_conditions):
+            reasons.append("formal order row contract is invalid")
+            return
+        by_seed.setdefault(seed, []).append((position, condition))
+    if list(by_seed) != formal_seeds:
+        reasons.append("formal order seeds differ from frozen session")
+        return
+    position_counts = {
+        condition: {position: 0 for position in range(1, 7)}
+        for condition in REQUIRED_CONDITIONS
+    }
+    for block, seed in enumerate(formal_seeds, start=1):
+        entries = by_seed.get(seed, [])
+        if (len(entries) != 6 or
+                {position for position, _ in entries} != set(range(1, 7)) or
+                {condition for _, condition in entries} !=
+                    expected_conditions):
+            reasons.append("formal order block {} is incomplete".format(block))
+            return
+        for position, condition in entries:
+            position_counts[condition][position] += 1
+    for condition, counts in position_counts.items():
+        values = list(counts.values())
+        if max(values) - min(values) > 1:
+            reasons.append(
+                "formal order position balance is invalid for {}".format(
+                    condition))
 
 
 def _validate_runtime_contract(
@@ -1318,6 +1397,9 @@ def audit_formal_session(
     _validate_artifact_recovery_binding(
         asset_paths.get("phase_rejoin_artifact"),
         asset_paths.get("recovery_radii_bounds"), reasons)
+    _validate_formal_order(
+        asset_paths.get("formal_order"),
+        seed_groups.get("formal_trials", []), reasons)
 
     planner_path = asset_paths.get("planner_config")
     if planner_path is not None:

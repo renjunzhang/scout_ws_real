@@ -9,7 +9,9 @@ recovery_gate: false
 execution_compatibility_gate: false
 stored_recovery_action: false
 input_shaping: false
-# This remains pilot-only until completion time/RMS speed are matched on D_pilot.
+# Still NO-GO: the 2026-08-22 task-only development pilot did not produce a
+# completion-reliable candidate. No external or observer liquid metric may
+# enter the eventual selection.
 pilot_tuned_and_frozen: false
 global_time_scale: 1.0
 trial:

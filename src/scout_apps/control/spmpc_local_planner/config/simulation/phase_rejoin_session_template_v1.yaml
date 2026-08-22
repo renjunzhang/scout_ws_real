@@ -49,6 +49,7 @@ assets:
   recovery_radii_bounds: {path: "", sha256: ""}
   recovery_held_out_report: {path: "", sha256: ""}
   analysis_script: {path: "", sha256: ""}
+  formal_order: {path: "", sha256: ""}
 
 path_contract:
   frame_id: map
@@ -63,15 +64,22 @@ measurement_contract:
   controller_liquid_is_truth: false
   external_liquid_truth_used_for_control: false
   failures_included: true
+  minimum_meaningful_difference_m: 0.0005
+  paired_interval: paired_bootstrap_95pct
+  formal_paired_blocks: 16
+  completion_time_noninferiority_relative: 0.10
+  tracking_q95_noninferiority_m: 0.05
+  failed_trial_rule: retain_and_count_as_failure
+  replacement_rule: infrastructure_failure_only_same_seed_condition
 
 # Each list is a complete-rollout partition. No seed may occur in two lists.
 # Formal trial seeds also have to match the promoted plant configuration.
 seeds:
-  locked: false
-  recovery_fit: [7101, 7102]
-  recovery_tune: [7201, 7202]
-  recovery_held_out: [7301, 7302]
-  pilot_trials: [8101, 8102]
+  locked: true
+  recovery_fit: [8301, 8302]
+  recovery_tune: [8401, 8402]
+  recovery_held_out: [8501, 8502]
+  pilot_trials: [8601, 8701, 8702, 8703, 8704, 8705, 8801, 8802, 8803]
   formal_trials:
     [3101, 3102, 3103, 3104, 3105, 3106, 3107, 3108,
      3109, 3110, 3111, 3112, 3113, 3114, 3115, 3116]
@@ -150,4 +158,4 @@ conditions:
     stored_recovery_action: false
     input_shaping: true
     shaper: ZVD
-    single_mode_residual_test_passed: false
+    single_mode_residual_test_passed: true

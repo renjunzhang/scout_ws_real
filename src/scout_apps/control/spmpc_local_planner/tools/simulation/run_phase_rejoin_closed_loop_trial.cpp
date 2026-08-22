@@ -602,7 +602,8 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
             config.task_success_goal_tolerance_m <= 0.0 ||
             config.task_success_goal_tolerance_m > 1.0 ||
             !finite(config.smooth_global_time_scale) ||
-            config.smooth_global_time_scale < 1.0 ||
+            config.smooth_global_time_scale < 0.5 ||
+            config.smooth_global_time_scale > 2.0 ||
             !finite(config.max_residual_v) || config.max_residual_v < 0.0 ||
             !finite(config.max_residual_omega) ||
             config.max_residual_omega < 0.0 ||

@@ -66,6 +66,21 @@ class IndependentPlantCampaignTest(unittest.TestCase):
         analysis = root / "analyze.sh"
         analysis.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         analysis.chmod(0o755)
+        formal_order = root / "formal_order.csv"
+        with formal_order.open("w", encoding="utf-8", newline="") as stream:
+            writer = csv.writer(stream)
+            writer.writerow(("schema", "block", "seed", "position",
+                             "condition"))
+            orders = (
+                ("C0", "C1", "IS", "C2", "C4", "C3"),
+                ("C1", "C2", "C0", "C3", "IS", "C4"),
+            )
+            for block, seed in enumerate(formal_seeds, start=1):
+                for position, condition in enumerate(
+                        orders[(block - 1) % len(orders)], start=1):
+                    writer.writerow((
+                        "spmpc_phase_rejoin_formal_order_v1", block, seed,
+                        position, condition))
         offline_plan_generator = root / "generate_offline_slosh_ocp_plan.py"
         offline_plan_generator.write_text(
             "#!/usr/bin/env python3\nraise SystemExit(0)\n", encoding="utf-8")
@@ -467,6 +482,7 @@ class IndependentPlantCampaignTest(unittest.TestCase):
                 "recovery_radii_bounds": cls.reference(recovery_radii),
                 "recovery_held_out_report": cls.reference(held_out_report),
                 "analysis_script": cls.reference(analysis),
+                "formal_order": cls.reference(formal_order),
             },
             "path_contract": {"frame_id": "map", "goal_yaw_rad": 0.0},
             "measurement_contract": {
@@ -479,6 +495,14 @@ class IndependentPlantCampaignTest(unittest.TestCase):
                 "external_liquid_truth_used_for_control": False,
                 "failures_included": True,
                 "fixed_tail_sec": 4.0,
+                "minimum_meaningful_difference_m": 0.0005,
+                "paired_interval": "paired_bootstrap_95pct",
+                "formal_paired_blocks": 16,
+                "completion_time_noninferiority_relative": 0.10,
+                "tracking_q95_noninferiority_m": 0.05,
+                "failed_trial_rule": "retain_and_count_as_failure",
+                "replacement_rule":
+                    "infrastructure_failure_only_same_seed_condition",
             },
             "seeds": {
                 "locked": True,
@@ -710,7 +734,7 @@ class IndependentPlantCampaignTest(unittest.TestCase):
         reasons = CAMPAIGN.formal_no_go_reasons(
             session, SESSION_TEMPLATE_PATH)
         self.assertIn("session is only a pilot candidate", reasons)
-        self.assertIn("seed partitions are not locked", reasons)
+        self.assertIn("C1 smooth-match pilot freeze is absent", reasons)
         self.assertTrue(any("path is absent" in reason for reason in reasons))
 
     def test_missing_file_and_fake_hash_cannot_become_ready(self):
