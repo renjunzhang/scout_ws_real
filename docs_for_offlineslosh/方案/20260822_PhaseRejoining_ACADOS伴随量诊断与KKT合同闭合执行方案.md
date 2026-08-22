@@ -218,6 +218,23 @@ res_stat_i (i=0..N-1) = cost_grad_i - dyn_adj_i - ineq_adj_i
 3. **QP 与 NLP dual 都近零**：检查离散 dynamics Jacobian、QP dual读取方式和生成模型的 adjoint接口；不能直接给 `pi` 填经验值。
 4. **dual、Jacobian 和独立分解全部一致，stationarity 仍为 0.0159**：这是完整 SQP 的真实未收敛，立即报告具体分量和迭代轨迹；不要通过新指标宣布成功。
 
+> **§7 实测记录（cycle 2，缩放基，完整 SQP，20 迭代 NLP_STATUS_2）**
+>
+> 结论：进入 **§7.3 分支 4**（dual、Jacobian、独立分解全部一致，stationarity 为一个真实收敛的跟踪残差）。
+>
+> 证据链条：
+>
+> ① `pi`（dynamics 伴随，`out->pi`，长度 22）在 stage 0..9 全部精确 0.0（`argmax=-1`）；`lam`（inequality 伴随，长度 `2*ni`）非零，stage 1/2 最大 `3.3e-3`，终端约 `1.3e-7`。见 `test_delay_augmented_phase_kkt_snapshot.cpp` 的 `perStagePi/perStageLam` dump。
+>
+> ② terminal `res_stat[0] = -1.586413e-2`，与 `w_x·(x_N−nom_x)/scale_x = 1.0·(−2.379620e-3)/0.15 = −1.586413e-2` 逐位相等（factor 是 `/scale`，与 acados NLS 实测一致，不是 `/scale²`）。
+>
+> ③ cond_N 判别：把 `qp_solver_cond_N` 从 `N=10` 降到 `5` 重 codegen 并重放，`pi` 变为在 stage 0/2/4/6/8 非零（`8.3e-4…5.7e-3`，奇 stage 仍 0）。证明 costate 确由 QP 求出，满 condensing（cond_N=N=10）时只未写回 `out->pi` —— 这是 condensing 表示层现象，非 QP 真零对偶。**但此项与 terminal 站定性无关**（terminal 无 dynamics）。
+>
+> ④ 满 condensing 恢复后把 max_iter 从 20 → 60 重 codegen：`stationarity = 0.015867` vs 二十迭代 `0.015864`（几乎不变），terminal x 误差仍 `-2.38mm`。**证明 terminal 0.01586 是收敛后的真实固定点，不是迭代数不足的未收敛。**
+>
+> 最终判定：terminal stage 的站定性残差 = terminal x 跟踪代价梯度，由 terminal x 与 nominal 之间 `-2.380mm` 的 x 位置误差直接导致，是几何上真实存在的跟踪残差；后续按 §13/§16 评估 GO/NO-GO，而不是通过新指标或「补 pi」伪修复宣告满足。
+
+
 ## 8. 第三阶段：允许的结构性修复
 
 只有第二阶段证据指向明确实现错误时才可修改。
