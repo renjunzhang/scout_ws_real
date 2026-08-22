@@ -8,8 +8,16 @@ namespace spmpc_local_planner {
 namespace delay_augmented_phase_solver_manifest {
 
 constexpr int kCapabilitySchemaVersion = 3;
-constexpr const char kSolverId[] = "delay_augmented_phase_acados_online_v2";
+constexpr const char kSolverId[] = "delay_augmented_phase_acados_full_sqp_v1";
 constexpr const char kModelName[] = "spmpc_delay_augmented_phase";
+constexpr const char kNlpSolverType[] = "SQP";
+constexpr const char kGlobalization[] = "MERIT_BACKTRACKING";
+constexpr const char kSolverConfigHash[] = "b072018aef371773e4fdee5f20fe3660f2511a8ce89cc95787a84f67e8532db5";
+constexpr int kMaxSqpIterations = 20;
+constexpr const char kRtiReferenceSolverId[] = "delay_augmented_phase_acados_rti_reference_v1";
+constexpr const char kRtiReferenceModelName[] = "spmpc_delay_augmented_phase_rti";
+constexpr const char kRtiReferenceNlpSolverType[] = "SQP_RTI";
+constexpr const char kRtiReferenceSolverConfigHash[] = "d11da9d02d6a21242877b7c1ea4f4cfa1328fbcd95e4cfab873722b76e82d9a3";
 constexpr const char kIntegratorType[] = "DISCRETE";
 constexpr int kExecutionContractSchemaVersion = 1;
 constexpr const char kContractId[] = "delay_augmented_phase_codegen_candidate_v1";
@@ -69,8 +77,10 @@ constexpr double kAngularOutputMax = 1.2;
 constexpr double kAccelerationMax = 0.59999999999999998;
 constexpr double kAngularAccelerationMax = 1.2;
 constexpr double kProgressRateMax = 0.80000000000000004;
+constexpr double kMaxStationarityResidual = 9.9999999999999995e-07;
 constexpr double kMaxEqualityResidual = 9.9999999999999995e-07;
 constexpr double kMaxInequalityResidual = 9.9999999999999995e-07;
+constexpr double kMaxComplementarityResidual = 9.9999999999999995e-07;
 constexpr double kMaxCausalStateError = 9.9999999999999995e-07;
 constexpr double kMinimumRecoveryDenominator = 1.0000000000000001e-09;
 constexpr double kPublishedConsistencyTolerance = 1.0000000000000001e-09;

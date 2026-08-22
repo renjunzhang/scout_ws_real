@@ -5,12 +5,14 @@
 #ifdef SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE
 #include "acados_c/ocp_nlp_interface.h"
 #include "acados_solver_spmpc_delay_augmented_phase.h"
+#include "acados_solver_spmpc_delay_augmented_phase_rti.h"
 #endif
 
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 namespace spmpc_local_planner {
 namespace {
@@ -162,6 +164,78 @@ std::array<double, manifest::kStateCount> serializeInitialState(
     return state;
 }
 
+// Dimensionless OCP basis.  acados optimizes in scaled variables
+// xs = x / scale_x, us = u / scale_u so the KKT system is well-conditioned;
+// the capsule boundary below converts between physical and scaled units.
+// The per-index mapping must match the codegen state_scaling_vectors()
+// channel-by-channel: base states use their own scale, the linear pending
+// queue uses the v scale, and the angular pending queue uses the omega scale.
+double delayAugmentedStateScale(int index) {
+    if (index == 0 || index == 1) return manifest::kPositionScale;
+    if (index == 2) return manifest::kYawScale;
+    if (index == 3) return manifest::kVelocityScale;
+    if (index == 4) return manifest::kProgressScale;
+    if (index == 5) return manifest::kAngularVelocityScale;
+    if (index == 6 || index == 8) return manifest::kEtaScale;
+    if (index == 7 || index == 9) return manifest::kEtaDotScale;
+    if (index >= manifest::kLinearBufferOffset &&
+        index < manifest::kLinearBufferOffset +
+                 manifest::kLinearBufferCount) {
+        return manifest::kVelocityScale;
+    }
+    return manifest::kAngularVelocityScale;
+}
+
+double delayAugmentedControlScale(int index) {
+    if (index == 0) return manifest::kAccelerationScale;
+    if (index == 1) return manifest::kAngularAccelerationScale;
+    return manifest::kProgressRateScale;
+}
+
+std::array<double, manifest::kStateCount> scaleStateToOcp(
+    const std::array<double, manifest::kStateCount>& physical) {
+    std::array<double, manifest::kStateCount> scaled{};
+    for (int index = 0; index < manifest::kStateCount; ++index) {
+        scaled[static_cast<std::size_t>(index)] =
+            physical[static_cast<std::size_t>(index)] /
+            delayAugmentedStateScale(index);
+    }
+    return scaled;
+}
+
+std::array<double, manifest::kStateCount> unscaleStateFromOcp(
+    const std::array<double, manifest::kStateCount>& scaled) {
+    std::array<double, manifest::kStateCount> physical{};
+    for (int index = 0; index < manifest::kStateCount; ++index) {
+        physical[static_cast<std::size_t>(index)] =
+            scaled[static_cast<std::size_t>(index)] *
+            delayAugmentedStateScale(index);
+    }
+    return physical;
+}
+
+std::array<double, manifest::kControlCount> scaleControlToOcp(
+    const std::array<double, manifest::kControlCount>& physical) {
+    std::array<double, manifest::kControlCount> scaled{};
+    for (int index = 0; index < manifest::kControlCount; ++index) {
+        scaled[static_cast<std::size_t>(index)] =
+            physical[static_cast<std::size_t>(index)] /
+            delayAugmentedControlScale(index);
+    }
+    return scaled;
+}
+
+std::array<double, manifest::kControlCount> unscaleControlFromOcp(
+    const std::array<double, manifest::kControlCount>& scaled) {
+    std::array<double, manifest::kControlCount> physical{};
+    for (int index = 0; index < manifest::kControlCount; ++index) {
+        physical[static_cast<std::size_t>(index)] =
+            scaled[static_cast<std::size_t>(index)] *
+            delayAugmentedControlScale(index);
+    }
+    return physical;
+}
+
 std::array<double, manifest::kStateCount> serializeState(
     const DelayAugmentedPhaseState& phase_state) {
     std::array<double, manifest::kStateCount> state{};
@@ -222,17 +296,163 @@ bool validDecodedState(
     return true;
 }
 
+double wrappedAngle(double value) {
+    return std::atan2(std::sin(value), std::cos(value));
+}
+
+#ifdef SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE
+class GeneratedCapsule {
+public:
+    virtual ~GeneratedCapsule() = default;
+    virtual bool create() = 0;
+    virtual void reset() = 0;
+    virtual int updateParameters(int stage, double* values, int count) = 0;
+    virtual int solve() = 0;
+    virtual ocp_nlp_config* config() const = 0;
+    virtual ocp_nlp_dims* dims() const = 0;
+    virtual ocp_nlp_in* input() const = 0;
+    virtual ocp_nlp_out* output() const = 0;
+    virtual ocp_nlp_solver* solver() const = 0;
+};
+
+struct FullSqpCapsuleTraits {
+    using Capsule = spmpc_delay_augmented_phase_solver_capsule;
+    static Capsule* allocate() {
+        return spmpc_delay_augmented_phase_acados_create_capsule();
+    }
+    static int create(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_acados_create(capsule);
+    }
+    static int free(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_acados_free(capsule);
+    }
+    static int release(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_acados_free_capsule(capsule);
+    }
+    static int update(Capsule* capsule, int stage, double* values,
+                      int count) {
+        return spmpc_delay_augmented_phase_acados_update_params(
+            capsule, stage, values, count);
+    }
+    static int solve(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_acados_solve(capsule);
+    }
+    static ocp_nlp_config* config(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_acados_get_nlp_config(capsule);
+    }
+    static ocp_nlp_dims* dims(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_acados_get_nlp_dims(capsule);
+    }
+    static ocp_nlp_in* input(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_acados_get_nlp_in(capsule);
+    }
+    static ocp_nlp_out* output(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_acados_get_nlp_out(capsule);
+    }
+    static ocp_nlp_solver* solver(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_acados_get_nlp_solver(capsule);
+    }
+};
+
+struct RtiCapsuleTraits {
+    using Capsule = spmpc_delay_augmented_phase_rti_solver_capsule;
+    static Capsule* allocate() {
+        return spmpc_delay_augmented_phase_rti_acados_create_capsule();
+    }
+    static int create(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_rti_acados_create(capsule);
+    }
+    static int free(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_rti_acados_free(capsule);
+    }
+    static int release(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_rti_acados_free_capsule(capsule);
+    }
+    static int update(Capsule* capsule, int stage, double* values,
+                      int count) {
+        return spmpc_delay_augmented_phase_rti_acados_update_params(
+            capsule, stage, values, count);
+    }
+    static int solve(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_rti_acados_solve(capsule);
+    }
+    static ocp_nlp_config* config(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_rti_acados_get_nlp_config(capsule);
+    }
+    static ocp_nlp_dims* dims(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_rti_acados_get_nlp_dims(capsule);
+    }
+    static ocp_nlp_in* input(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_rti_acados_get_nlp_in(capsule);
+    }
+    static ocp_nlp_out* output(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_rti_acados_get_nlp_out(capsule);
+    }
+    static ocp_nlp_solver* solver(Capsule* capsule) {
+        return spmpc_delay_augmented_phase_rti_acados_get_nlp_solver(capsule);
+    }
+};
+
+template <typename Traits>
+class GeneratedCapsuleAdapter final : public GeneratedCapsule {
+public:
+    ~GeneratedCapsuleAdapter() override { reset(); }
+
+    bool create() override {
+        reset();
+        capsule_ = Traits::allocate();
+        if (capsule_ == nullptr || Traits::create(capsule_) != 0) {
+            reset();
+            return false;
+        }
+        return true;
+    }
+
+    void reset() override {
+        if (capsule_ != nullptr) {
+            Traits::free(capsule_);
+            Traits::release(capsule_);
+            capsule_ = nullptr;
+        }
+    }
+
+    int updateParameters(int stage, double* values, int count) override {
+        return Traits::update(capsule_, stage, values, count);
+    }
+    int solve() override { return Traits::solve(capsule_); }
+    ocp_nlp_config* config() const override {
+        return Traits::config(capsule_);
+    }
+    ocp_nlp_dims* dims() const override {
+        return Traits::dims(capsule_);
+    }
+    ocp_nlp_in* input() const override {
+        return Traits::input(capsule_);
+    }
+    ocp_nlp_out* output() const override {
+        return Traits::output(capsule_);
+    }
+    ocp_nlp_solver* solver() const override {
+        return Traits::solver(capsule_);
+    }
+
+private:
+    typename Traits::Capsule* capsule_ = nullptr;
+};
+#endif
+
 }  // namespace
 
 struct DelayAugmentedPhaseAcadosSolver::Impl {
     DelayAugmentedPhaseSolveDiagnostics diagnostics;
 #ifdef SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE
-    spmpc_delay_augmented_phase_solver_capsule* capsule = nullptr;
+    std::unique_ptr<GeneratedCapsule> capsule;
 #endif
 };
 
-DelayAugmentedPhaseAcadosSolver::DelayAugmentedPhaseAcadosSolver()
-    : impl_(new Impl()) {}
+DelayAugmentedPhaseAcadosSolver::DelayAugmentedPhaseAcadosSolver(
+    DelayAugmentedPhaseAcadosBackend backend)
+    : backend_(backend), impl_(new Impl()) {}
 
 DelayAugmentedPhaseAcadosSolver::~DelayAugmentedPhaseAcadosSolver() {
     reset();
@@ -301,6 +521,10 @@ DelayAugmentedPhaseAcadosSolver::compiledContract() {
     compiled.angular_acceleration_max =
         manifest::kAngularAccelerationMax;
     compiled.progress_rate_max = manifest::kProgressRateMax;
+    compiled.solver_id = manifest::kSolverId;
+    compiled.nlp_solver_type = manifest::kNlpSolverType;
+    compiled.globalization = manifest::kGlobalization;
+    compiled.solver_config_hash = manifest::kSolverConfigHash;
     return compiled;
 }
 
@@ -367,11 +591,7 @@ bool DelayAugmentedPhaseAcadosSolver::compiled() {
 void DelayAugmentedPhaseAcadosSolver::reset() {
     impl_->diagnostics = DelayAugmentedPhaseSolveDiagnostics{};
 #ifdef SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE
-    if (impl_->capsule != nullptr) {
-        spmpc_delay_augmented_phase_acados_free(impl_->capsule);
-        spmpc_delay_augmented_phase_acados_free_capsule(impl_->capsule);
-        impl_->capsule = nullptr;
-    }
+    impl_->capsule.reset();
 #endif
 }
 
@@ -416,28 +636,46 @@ bool DelayAugmentedPhaseAcadosSolver::create(
         SPMPC_DELAY_AUGMENTED_PHASE_NHN ==
             manifest::kTerminalRecoveryConstraintCount,
         "generated capsule terminal recovery constraint drifted");
+    static_assert(
+        SPMPC_DELAY_AUGMENTED_PHASE_RTI_NX == manifest::kStateCount &&
+        SPMPC_DELAY_AUGMENTED_PHASE_RTI_NU == manifest::kControlCount &&
+        SPMPC_DELAY_AUGMENTED_PHASE_RTI_N == manifest::kHorizonSteps &&
+        SPMPC_DELAY_AUGMENTED_PHASE_RTI_NP == manifest::kParameterCount &&
+        SPMPC_DELAY_AUGMENTED_PHASE_RTI_NBX ==
+            manifest::kStateBoundCount &&
+        SPMPC_DELAY_AUGMENTED_PHASE_RTI_NBX0 ==
+            manifest::kInitialStateBoundCount &&
+        SPMPC_DELAY_AUGMENTED_PHASE_RTI_NBXN ==
+            manifest::kTerminalStateBoundCount &&
+        SPMPC_DELAY_AUGMENTED_PHASE_RTI_NBU ==
+            manifest::kControlBoundCount &&
+        SPMPC_DELAY_AUGMENTED_PHASE_RTI_NH ==
+            manifest::kPublishedCommandConstraintCount &&
+        SPMPC_DELAY_AUGMENTED_PHASE_RTI_NH0 ==
+            manifest::kPublishedCommandConstraintCount &&
+        SPMPC_DELAY_AUGMENTED_PHASE_RTI_NHN ==
+            manifest::kTerminalRecoveryConstraintCount,
+        "generated RTI reference capsule contract drifted");
 
-    impl_->capsule =
-        spmpc_delay_augmented_phase_acados_create_capsule();
-    if (impl_->capsule == nullptr ||
-        spmpc_delay_augmented_phase_acados_create(impl_->capsule) != 0) {
-        if (impl_->capsule != nullptr) {
-            spmpc_delay_augmented_phase_acados_free_capsule(impl_->capsule);
-            impl_->capsule = nullptr;
-        }
+    if (backend_ == DelayAugmentedPhaseAcadosBackend::RtiReference) {
+        impl_->capsule.reset(
+            new GeneratedCapsuleAdapter<RtiCapsuleTraits>());
+    } else {
+        impl_->capsule.reset(
+            new GeneratedCapsuleAdapter<FullSqpCapsuleTraits>());
+    }
+    if (!impl_->capsule->create()) {
+        impl_->capsule.reset();
         error = "failed to create delay-augmented acados capsule";
         return false;
     }
 
-    const auto initial = serializeInitialState(context);
-    ocp_nlp_config* config =
-        spmpc_delay_augmented_phase_acados_get_nlp_config(impl_->capsule);
-    ocp_nlp_dims* dims =
-        spmpc_delay_augmented_phase_acados_get_nlp_dims(impl_->capsule);
-    ocp_nlp_in* input =
-        spmpc_delay_augmented_phase_acados_get_nlp_in(impl_->capsule);
-    ocp_nlp_out* output =
-        spmpc_delay_augmented_phase_acados_get_nlp_out(impl_->capsule);
+    const auto initial_physical = serializeInitialState(context);
+    const auto initial = scaleStateToOcp(initial_physical);
+    ocp_nlp_config* config = impl_->capsule->config();
+    ocp_nlp_dims* dims = impl_->capsule->dims();
+    ocp_nlp_in* input = impl_->capsule->input();
+    ocp_nlp_out* output = impl_->capsule->output();
     ocp_nlp_constraints_model_set(
         config, dims, input, output, 0, "lbx",
         const_cast<double*>(initial.data()));
@@ -474,8 +712,7 @@ bool DelayAugmentedPhaseAcadosSolver::setParameterImage(
     for (int stage = 0; stage <= manifest::kHorizonSteps; ++stage) {
         const double* data = parameters.stageData(stage);
         if (data == nullptr ||
-            spmpc_delay_augmented_phase_acados_update_params(
-                impl_->capsule,
+            impl_->capsule->updateParameters(
                 stage,
                 const_cast<double*>(data),
                 manifest::kParameterCount) != 0) {
@@ -494,7 +731,7 @@ bool DelayAugmentedPhaseAcadosSolver::setParameterImage(
 
 bool DelayAugmentedPhaseAcadosSolver::ready() const {
 #ifdef SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE
-    return impl_->capsule != nullptr;
+    return static_cast<bool>(impl_->capsule);
 #else
     return false;
 #endif
@@ -519,12 +756,17 @@ bool DelayAugmentedPhaseAcadosSolver::setControlGuess(
         stage >= manifest::kHorizonSteps) {
         return false;
     }
+    std::array<double, manifest::kControlCount> physical{};
+    for (int index = 0; index < manifest::kControlCount; ++index) {
+        physical[static_cast<std::size_t>(index)] = control[index];
+    }
+    const auto scaled = scaleControlToOcp(physical);
     ocp_nlp_out_set(
-        spmpc_delay_augmented_phase_acados_get_nlp_config(impl_->capsule),
-        spmpc_delay_augmented_phase_acados_get_nlp_dims(impl_->capsule),
-        spmpc_delay_augmented_phase_acados_get_nlp_out(impl_->capsule),
-        spmpc_delay_augmented_phase_acados_get_nlp_in(impl_->capsule),
-        stage, "u", const_cast<double*>(control));
+        impl_->capsule->config(),
+        impl_->capsule->dims(),
+        impl_->capsule->output(),
+        impl_->capsule->input(),
+        stage, "u", const_cast<double*>(scaled.data()));
     return true;
 #else
     (void)stage;
@@ -578,28 +820,26 @@ bool DelayAugmentedPhaseAcadosSolver::setCausalWarmStart(
         return false;
     }
 
-    ocp_nlp_config* config =
-        spmpc_delay_augmented_phase_acados_get_nlp_config(impl_->capsule);
-    ocp_nlp_dims* dims =
-        spmpc_delay_augmented_phase_acados_get_nlp_dims(impl_->capsule);
-    ocp_nlp_in* input =
-        spmpc_delay_augmented_phase_acados_get_nlp_in(impl_->capsule);
-    ocp_nlp_out* output =
-        spmpc_delay_augmented_phase_acados_get_nlp_out(impl_->capsule);
+    ocp_nlp_config* config = impl_->capsule->config();
+    ocp_nlp_dims* dims = impl_->capsule->dims();
+    ocp_nlp_in* input = impl_->capsule->input();
+    ocp_nlp_out* output = impl_->capsule->output();
     for (int stage = 0; stage <= manifest::kHorizonSteps; ++stage) {
-        const auto state = serializeState(
+        const auto state_physical = serializeState(
             rollout.states[static_cast<std::size_t>(stage)]);
+        const auto state = scaleStateToOcp(state_physical);
         ocp_nlp_out_set(
             config, dims, output, input, stage, "x",
             const_cast<double*>(state.data()));
         if (stage < manifest::kHorizonSteps) {
             const DelayAugmentedPhaseControl& control = controls[
                 static_cast<std::size_t>(stage)];
-            const std::array<double, manifest::kControlCount> raw = {{
+            const std::array<double, manifest::kControlCount> raw_physical = {{
                 control.acceleration,
                 control.angular_acceleration,
                 control.progress_rate,
             }};
+            const auto raw = scaleControlToOcp(raw_physical);
             ocp_nlp_out_set(
                 config, dims, output, input, stage, "u",
                 const_cast<double*>(raw.data()));
@@ -622,10 +862,13 @@ bool DelayAugmentedPhaseAcadosSolver::getState(
         return false;
     }
     ocp_nlp_out_get(
-        spmpc_delay_augmented_phase_acados_get_nlp_config(impl_->capsule),
-        spmpc_delay_augmented_phase_acados_get_nlp_dims(impl_->capsule),
-        spmpc_delay_augmented_phase_acados_get_nlp_out(impl_->capsule),
+        impl_->capsule->config(),
+        impl_->capsule->dims(),
+        impl_->capsule->output(),
         stage, "x", state);
+    for (int index = 0; index < manifest::kStateCount; ++index) {
+        state[index] *= delayAugmentedStateScale(index);
+    }
     return true;
 #else
     (void)stage;
@@ -642,16 +885,391 @@ bool DelayAugmentedPhaseAcadosSolver::getControl(
         return false;
     }
     ocp_nlp_out_get(
-        spmpc_delay_augmented_phase_acados_get_nlp_config(impl_->capsule),
-        spmpc_delay_augmented_phase_acados_get_nlp_dims(impl_->capsule),
-        spmpc_delay_augmented_phase_acados_get_nlp_out(impl_->capsule),
+        impl_->capsule->config(),
+        impl_->capsule->dims(),
+        impl_->capsule->output(),
         stage, "u", control);
+    for (int index = 0; index < manifest::kControlCount; ++index) {
+        control[index] *= delayAugmentedControlScale(index);
+    }
     return true;
 #else
     (void)stage;
     (void)control;
     return false;
 #endif
+}
+
+bool DelayAugmentedPhaseAcadosSolver::captureTrajectory(
+    std::vector<double>& states,
+    std::vector<double>& controls) const {
+    states.clear();
+    controls.clear();
+    if (!ready()) return false;
+    states.resize(static_cast<std::size_t>(
+        (manifest::kHorizonSteps + 1) * manifest::kStateCount));
+    controls.resize(static_cast<std::size_t>(
+        manifest::kHorizonSteps * manifest::kControlCount));
+    for (int stage = 0; stage <= manifest::kHorizonSteps; ++stage) {
+        if (!getState(
+                stage,
+                states.data() + static_cast<std::size_t>(
+                    stage * manifest::kStateCount))) {
+            states.clear();
+            controls.clear();
+            return false;
+        }
+        if (stage < manifest::kHorizonSteps &&
+            !getControl(
+                stage,
+                controls.data() + static_cast<std::size_t>(
+                    stage * manifest::kControlCount))) {
+            states.clear();
+            controls.clear();
+            return false;
+        }
+    }
+    return true;
+}
+
+bool DelayAugmentedPhaseAcadosSolver::evaluateCurrentResiduals(
+    DelayAugmentedPhaseResidualDiagnostics& diagnostics) const {
+    diagnostics = DelayAugmentedPhaseResidualDiagnostics{};
+#ifdef SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE
+    if (!ready()) return false;
+    ocp_nlp_solver* solver = impl_->capsule->solver();
+    ocp_nlp_eval_residuals(
+        solver, impl_->capsule->input(), impl_->capsule->output());
+    ocp_nlp_get(solver, "res_stat", &diagnostics.stationarity);
+    ocp_nlp_get(solver, "res_eq", &diagnostics.equality);
+    ocp_nlp_get(solver, "res_ineq", &diagnostics.inequality);
+    ocp_nlp_get(solver, "res_comp", &diagnostics.complementarity);
+    diagnostics.evaluated =
+        std::isfinite(diagnostics.stationarity) &&
+        std::isfinite(diagnostics.equality) &&
+        std::isfinite(diagnostics.inequality) &&
+        std::isfinite(diagnostics.complementarity);
+    return diagnostics.evaluated;
+#else
+    return false;
+#endif
+}
+
+bool DelayAugmentedPhaseAcadosSolver::perStageStationarity(
+    int stage, std::vector<double>& values) const {
+    values.clear();
+#ifdef SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE
+    if (!ready() || stage < 0 || stage > manifest::kHorizonSteps) {
+        return false;
+    }
+    const int width = manifest::kStateCount +
+        (stage < manifest::kHorizonSteps ? manifest::kControlCount : 0);
+    values.resize(static_cast<std::size_t>(width), 0.0);
+    ocp_nlp_get_at_stage(
+        impl_->capsule->solver(), stage, "res_stat", values.data());
+    return true;
+#else
+    (void)stage;
+    return false;
+#endif
+}
+
+bool DelayAugmentedPhaseAcadosSolver::perStagePi(
+    int stage, std::vector<double>& values) const {
+    values.clear();
+#ifdef SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE
+    // pi lives per stage for the dynamics between stage and stage+1, so it is
+    // only defined for stage < N (no dynamics enters the terminal node).
+    if (!ready() || stage < 0 || stage >= manifest::kHorizonSteps) {
+        return false;
+    }
+    const int width = ocp_nlp_dims_get_from_attr(
+        impl_->capsule->config(), impl_->capsule->dims(),
+        impl_->capsule->output(), stage, "pi");
+    if (width <= 0) return false;
+    values.resize(static_cast<std::size_t>(width), 0.0);
+    ocp_nlp_out_get(
+        impl_->capsule->config(), impl_->capsule->dims(),
+        impl_->capsule->output(), stage, "pi", values.data());
+    return true;
+#else
+    (void)stage;
+    return false;
+#endif
+}
+
+bool DelayAugmentedPhaseAcadosSolver::perStageLam(
+    int stage, std::vector<double>& values) const {
+    values.clear();
+#ifdef SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE
+    if (!ready() || stage < 0 || stage > manifest::kHorizonSteps) {
+        return false;
+    }
+    const int width = ocp_nlp_dims_get_from_attr(
+        impl_->capsule->config(), impl_->capsule->dims(),
+        impl_->capsule->output(), stage, "lam");
+    if (width <= 0) return false;
+    values.resize(static_cast<std::size_t>(width), 0.0);
+    ocp_nlp_out_get(
+        impl_->capsule->config(), impl_->capsule->dims(),
+        impl_->capsule->output(), stage, "lam", values.data());
+    return true;
+#else
+    (void)stage;
+    return false;
+#endif
+}
+
+DelayAugmentedPhaseConstraintAudit
+DelayAugmentedPhaseAcadosSolver::auditTrajectory(
+    const ExecutionHorizonContext& context,
+    const DelayAugmentedPhaseParameterMatrix& parameters,
+    const std::vector<double>& states,
+    const std::vector<double>& controls) {
+    DelayAugmentedPhaseConstraintAudit audit;
+    audit.tolerance = manifest::kMaxInequalityResidual;
+    const std::size_t expected_states = static_cast<std::size_t>(
+        (manifest::kHorizonSteps + 1) * manifest::kStateCount);
+    const std::size_t expected_controls = static_cast<std::size_t>(
+        manifest::kHorizonSteps * manifest::kControlCount);
+    if (!parameters.hasCanonicalShape() ||
+        states.size() != expected_states ||
+        controls.size() != expected_controls) {
+        audit.status = "TRAJECTORY_SHAPE_MISMATCH";
+        return audit;
+    }
+
+    const auto update_max = [&audit](
+        const DelayAugmentedPhaseNamedConstraintDiagnostics& item) {
+        if (item.violation > audit.max_violation) {
+            audit.max_violation = item.violation;
+            audit.max_violation_stage = item.stage;
+            audit.max_violation_index = item.index;
+            audit.max_violation_name = item.name;
+            audit.max_violation_value = item.value;
+        }
+    };
+    const auto append_bound = [&update_max](
+        std::vector<DelayAugmentedPhaseNamedConstraintDiagnostics>& output,
+        int stage, int index, const std::string& name, double value,
+        double lower, double upper, double normalized_error) {
+        DelayAugmentedPhaseNamedConstraintDiagnostics item;
+        item.stage = stage;
+        item.index = index;
+        item.name = name;
+        item.value = value;
+        item.lower = lower;
+        item.upper = upper;
+        item.normalized_error = normalized_error;
+        item.violation = std::max(
+            0.0, std::max(lower - value, value - upper));
+        output.push_back(item);
+        update_max(item);
+    };
+
+    std::vector<DelayAugmentedPhaseControl> decoded_controls;
+    decoded_controls.reserve(manifest::kHorizonSteps);
+    for (int stage = 0; stage < manifest::kHorizonSteps; ++stage) {
+        const double* state = states.data() + static_cast<std::size_t>(
+            stage * manifest::kStateCount);
+        const double* control = controls.data() + static_cast<std::size_t>(
+            stage * manifest::kControlCount);
+        const double* parameter = parameters.stageData(stage);
+        if (!std::all_of(
+                state, state + manifest::kStateCount,
+                [](double value) { return std::isfinite(value); }) ||
+            !std::all_of(
+                control, control + manifest::kControlCount,
+                [](double value) { return std::isfinite(value); })) {
+            audit.status = "NONFINITE_TRAJECTORY";
+            return audit;
+        }
+        DelayAugmentedPhaseControl decoded;
+        decoded.acceleration = control[0];
+        decoded.angular_acceleration = control[1];
+        decoded.progress_rate = control[2];
+        decoded_controls.push_back(decoded);
+        append_bound(
+            audit.control_constraints, stage, 0, "acceleration",
+            control[0], -manifest::kAccelerationMax,
+            manifest::kAccelerationMax,
+            std::abs(control[0]) / manifest::kAccelerationMax);
+        append_bound(
+            audit.control_constraints, stage, 1,
+            "angular_acceleration", control[1],
+            -manifest::kAngularAccelerationMax,
+            manifest::kAngularAccelerationMax,
+            std::abs(control[1]) / manifest::kAngularAccelerationMax);
+        append_bound(
+            audit.control_constraints, stage, 2, "progress_rate",
+            control[2], 0.0, manifest::kProgressRateMax,
+            control[2] / manifest::kProgressRateMax);
+
+        const double published_v =
+            state[manifest::kLinearBufferOffset +
+                  manifest::kLinearBufferCount - 1] +
+            control[0] * manifest::kDt;
+        const double published_omega =
+            state[manifest::kAngularBufferOffset +
+                  manifest::kAngularBufferCount - 1] +
+            control[1] * manifest::kDt;
+        const double nominal_v =
+            parameter[manifest::kNominalPublishOffset];
+        const double nominal_omega =
+            parameter[manifest::kNominalPublishOffset + 1];
+        const double residual_v =
+            parameter[manifest::kResidualBoundOffset];
+        const double residual_omega =
+            parameter[manifest::kResidualBoundOffset + 1];
+        append_bound(
+            audit.stage_constraints, stage, 0,
+            "published_linear_envelope", published_v,
+            manifest::kLinearOutputMin, manifest::kLinearOutputMax,
+            0.0);
+        append_bound(
+            audit.stage_constraints, stage, 1,
+            "published_angular_envelope", published_omega,
+            manifest::kAngularOutputMin, manifest::kAngularOutputMax,
+            0.0);
+        append_bound(
+            audit.stage_constraints, stage, 2,
+            "published_linear_residual_upper",
+            published_v - nominal_v - residual_v,
+            -1.0e15, 0.0,
+            residual_v > 0.0
+                ? std::abs(published_v - nominal_v) / residual_v
+                : std::abs(published_v - nominal_v));
+        append_bound(
+            audit.stage_constraints, stage, 3,
+            "published_linear_residual_lower",
+            nominal_v - published_v - residual_v,
+            -1.0e15, 0.0,
+            residual_v > 0.0
+                ? std::abs(published_v - nominal_v) / residual_v
+                : std::abs(published_v - nominal_v));
+        append_bound(
+            audit.stage_constraints, stage, 4,
+            "published_angular_residual_upper",
+            published_omega - nominal_omega - residual_omega,
+            -1.0e15, 0.0,
+            residual_omega > 0.0
+                ? std::abs(published_omega - nominal_omega) /
+                    residual_omega
+                : std::abs(published_omega - nominal_omega));
+        append_bound(
+            audit.stage_constraints, stage, 5,
+            "published_angular_residual_lower",
+            nominal_omega - published_omega - residual_omega,
+            -1.0e15, 0.0,
+            residual_omega > 0.0
+                ? std::abs(published_omega - nominal_omega) /
+                    residual_omega
+                : std::abs(published_omega - nominal_omega));
+    }
+
+    const double* terminal = states.data() + static_cast<std::size_t>(
+        manifest::kHorizonSteps * manifest::kStateCount);
+    const double* terminal_parameter =
+        parameters.stageData(manifest::kHorizonSteps);
+    const int gate_indices[manifest::kGateRadiusCount] = {
+        0, 1, 2, 3, 5, 6, 7, 8, 9};
+    double empirical_metric = 0.0;
+    for (int index = 0; index < manifest::kGateRadiusCount; ++index) {
+        const int state_index = gate_indices[index];
+        double error = terminal[state_index] -
+            terminal_parameter[manifest::kNominalStateOffset + state_index];
+        if (state_index == 2) error = wrappedAngle(error);
+        const double radius = terminal_parameter[
+            manifest::kGateRadiusOffset + index];
+        empirical_metric += (error / radius) * (error / radius);
+    }
+    audit.terminal_empirical_metric = empirical_metric;
+    audit.terminal_empirical_violation = std::max(0.0,
+        empirical_metric - 1.0);
+    DelayAugmentedPhaseNamedConstraintDiagnostics empirical;
+    empirical.stage = manifest::kHorizonSteps;
+    empirical.index = 0;
+    empirical.name = "terminal_empirical_9d_ellipsoid";
+    empirical.value = empirical_metric - 1.0;
+    empirical.lower = -1.0e15;
+    empirical.upper = 0.0;
+    empirical.normalized_error = std::sqrt(empirical_metric);
+    empirical.violation = audit.terminal_empirical_violation;
+    update_max(empirical);
+
+    const int execution_indices[manifest::kExecutionBoundCount] = {
+        3, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+    const char* execution_names[manifest::kExecutionBoundCount] = {
+        "terminal_exec_linear_output",
+        "terminal_exec_angular_output",
+        "terminal_exec_linear_pending_0",
+        "terminal_exec_linear_pending_1",
+        "terminal_exec_linear_pending_2",
+        "terminal_exec_linear_pending_3",
+        "terminal_exec_linear_pending_4",
+        "terminal_exec_angular_pending_0",
+        "terminal_exec_angular_pending_1",
+        "terminal_exec_angular_pending_2",
+        "terminal_exec_angular_pending_3",
+        "terminal_exec_angular_pending_4",
+        "terminal_exec_angular_pending_5",
+        "terminal_exec_angular_pending_6",
+    };
+    for (int index = 0; index < manifest::kExecutionBoundCount; ++index) {
+        const int state_index = execution_indices[index];
+        const double beta = terminal_parameter[
+            manifest::kExecutionBoundOffset + index];
+        const double error = terminal[state_index] - terminal_parameter[
+            manifest::kNominalStateOffset + state_index];
+        const double normalized = std::abs(error) / beta;
+        append_bound(
+            audit.terminal_execution_constraints,
+            manifest::kHorizonSteps, index + 1,
+            execution_names[index], normalized * normalized - 1.0,
+            -1.0e15, 0.0, normalized);
+    }
+
+    DelayAugmentedPhaseDynamics dynamics;
+    const DelayAugmentedPhaseCompiledContract compiled = compiledContract();
+    std::string error;
+    if (!dynamics.configure(compiled.execution, compiled.slosh, error)) {
+        audit.status = "CAUSAL_MODEL_REJECTED_" + error;
+        return audit;
+    }
+    const DelayAugmentedPhaseRolloutResult rollout =
+        dynamics.rollout(context, decoded_controls);
+    if (!rollout.valid || rollout.states.size() !=
+            static_cast<std::size_t>(manifest::kHorizonSteps + 1)) {
+        audit.status = "CAUSAL_ROLLOUT_FAILED_" + rollout.status;
+        return audit;
+    }
+    for (int stage = 0; stage <= manifest::kHorizonSteps; ++stage) {
+        const auto causal = serializeState(
+            rollout.states[static_cast<std::size_t>(stage)]);
+        const double* raw = states.data() + static_cast<std::size_t>(
+            stage * manifest::kStateCount);
+        for (int index = 0; index < manifest::kStateCount; ++index) {
+            const double error_value = std::abs(
+                raw[index] - causal[static_cast<std::size_t>(index)]);
+            if (error_value > audit.max_causal_state_error) {
+                audit.max_causal_state_error = error_value;
+                audit.max_causal_state_error_stage = stage;
+                audit.max_causal_state_error_index = index;
+            }
+        }
+    }
+    if (audit.max_causal_state_error > audit.max_violation) {
+        audit.max_violation = audit.max_causal_state_error;
+        audit.max_violation_stage = audit.max_causal_state_error_stage;
+        audit.max_violation_index = audit.max_causal_state_error_index;
+        audit.max_violation_name = "causal_dynamics_state_error";
+        audit.max_violation_value = audit.max_causal_state_error;
+    }
+    audit.evaluated = true;
+    audit.passed = audit.max_violation <= audit.tolerance &&
+        audit.max_causal_state_error <= manifest::kMaxCausalStateError;
+    audit.status = audit.passed ? "OK" : "CONSTRAINT_VIOLATION";
+    return audit;
 }
 
 int DelayAugmentedPhaseAcadosSolver::solve() {
@@ -662,22 +1280,13 @@ int DelayAugmentedPhaseAcadosSolver::solve() {
         return -1;
     }
     impl_->diagnostics.optimizer_invoked = true;
-    const int status =
-        spmpc_delay_augmented_phase_acados_solve(impl_->capsule);
+    const int status = impl_->capsule->solve();
     impl_->diagnostics.nlp_status = status;
-    if (status != 0) {
-        impl_->diagnostics.status = "NLP_STATUS_" +
-            std::to_string(status);
-        return status;
-    }
-
-    ocp_nlp_solver* solver =
-        spmpc_delay_augmented_phase_acados_get_nlp_solver(impl_->capsule);
-    ocp_nlp_in* input =
-        spmpc_delay_augmented_phase_acados_get_nlp_in(impl_->capsule);
-    ocp_nlp_out* output =
-        spmpc_delay_augmented_phase_acados_get_nlp_out(impl_->capsule);
+    ocp_nlp_solver* solver = impl_->capsule->solver();
+    ocp_nlp_in* input = impl_->capsule->input();
+    ocp_nlp_out* output = impl_->capsule->output();
     ocp_nlp_eval_residuals(solver, input, output);
+    ocp_nlp_eval_cost(solver, input, output);
     ocp_nlp_get(solver, "qp_status", &impl_->diagnostics.qp_status);
     ocp_nlp_get(solver, "res_stat",
                 &impl_->diagnostics.stationarity_residual);
@@ -687,9 +1296,60 @@ int DelayAugmentedPhaseAcadosSolver::solve() {
                 &impl_->diagnostics.inequality_residual);
     ocp_nlp_get(solver, "res_comp",
                 &impl_->diagnostics.complementarity_residual);
+    ocp_nlp_get(solver, "sqp_iter", &impl_->diagnostics.sqp_iterations);
+    ocp_nlp_get(solver, "qp_iter", &impl_->diagnostics.qp_iterations);
+    ocp_nlp_get(solver, "cost_value", &impl_->diagnostics.cost);
     impl_->diagnostics.evaluated = true;
+
+    int stat_n = 0;
+    int stat_m = 0;
+    ocp_nlp_get(solver, "stat_n", &stat_n);
+    ocp_nlp_get(solver, "stat_m", &stat_m);
+    const int row_count = std::max(
+        0, std::min(stat_m, impl_->diagnostics.sqp_iterations + 1));
+    if (stat_n > 0 && row_count > 0) {
+        std::vector<double> statistics(static_cast<std::size_t>(
+            (stat_n + 1) * row_count), 0.0);
+        ocp_nlp_get(solver, "statistics", statistics.data());
+        for (int row = 0; row < row_count; ++row) {
+            DelayAugmentedPhaseIterationDiagnostics iteration;
+            iteration.iteration = row;
+            if (backend_ ==
+                    DelayAugmentedPhaseAcadosBackend::FullSqp &&
+                stat_n >= 7) {
+                iteration.stationarity = statistics[static_cast<std::size_t>(
+                    row + row_count * 1)];
+                iteration.equality = statistics[static_cast<std::size_t>(
+                    row + row_count * 2)];
+                iteration.inequality = statistics[static_cast<std::size_t>(
+                    row + row_count * 3)];
+                iteration.complementarity = statistics[
+                    static_cast<std::size_t>(row + row_count * 4)];
+                iteration.qp_status = static_cast<int>(statistics[
+                    static_cast<std::size_t>(row + row_count * 5)]);
+                iteration.qp_iterations = static_cast<int>(statistics[
+                    static_cast<std::size_t>(row + row_count * 6)]);
+                iteration.step_length = statistics[
+                    static_cast<std::size_t>(row + row_count * 7)];
+            } else if (stat_n >= 2) {
+                iteration.qp_status = static_cast<int>(statistics[
+                    static_cast<std::size_t>(row + row_count * 1)]);
+                iteration.qp_iterations = static_cast<int>(statistics[
+                    static_cast<std::size_t>(row + row_count * 2)]);
+                iteration.step_length = 1.0;
+            }
+            impl_->diagnostics.iterations.push_back(iteration);
+        }
+        impl_->diagnostics.step_length =
+            impl_->diagnostics.iterations.back().step_length;
+    }
     impl_->diagnostics.residual_admitted =
         residualsAdmissible(impl_->diagnostics);
+    if (status != 0) {
+        impl_->diagnostics.status = "NLP_STATUS_" +
+            std::to_string(status);
+        return status;
+    }
     impl_->diagnostics.status = impl_->diagnostics.residual_admitted
         ? "OK" : "RESIDUAL_REJECTED";
     return impl_->diagnostics.residual_admitted ? 0 : -2;
@@ -713,10 +1373,14 @@ bool DelayAugmentedPhaseAcadosSolver::residualsAdmissible(
         std::isfinite(diagnostics.equality_residual) &&
         std::isfinite(diagnostics.inequality_residual) &&
         std::isfinite(diagnostics.complementarity_residual) &&
+        diagnostics.stationarity_residual <=
+            manifest::kMaxStationarityResidual &&
         diagnostics.equality_residual <=
             manifest::kMaxEqualityResidual &&
         diagnostics.inequality_residual <=
-            manifest::kMaxInequalityResidual;
+            manifest::kMaxInequalityResidual &&
+        diagnostics.complementarity_residual <=
+            manifest::kMaxComplementarityResidual;
 }
 
 bool DelayAugmentedPhaseAcadosSolver::causalRollout(
@@ -814,7 +1478,7 @@ double DelayAugmentedPhaseAcadosSolver::solveTimeSec() const {
     if (!ready()) return 0.0;
     double solve_time = 0.0;
     ocp_nlp_get(
-        spmpc_delay_augmented_phase_acados_get_nlp_solver(impl_->capsule),
+        impl_->capsule->solver(),
         "time_tot", &solve_time);
     return solve_time;
 #else

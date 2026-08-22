@@ -6,6 +6,7 @@
 #include "spmpc_delay_augmented_phase_solver_manifest.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <string>
 
@@ -123,6 +124,21 @@ bool phaseResidualsAdmissible(
     return true;
 }
 
+class BackendWallTimer {
+public:
+    explicit BackendWallTimer(SolverOutput& output)
+        : output_(output), begin_(std::chrono::steady_clock::now()) {}
+    ~BackendWallTimer() {
+        const auto elapsed = std::chrono::steady_clock::now() - begin_;
+        output_.pre_solve_snapshot.backend_wall_time_ms =
+            std::chrono::duration<double, std::milli>(elapsed).count();
+    }
+
+private:
+    SolverOutput& output_;
+    std::chrono::steady_clock::time_point begin_;
+};
+
 }  // namespace
 
 SolverConfigureResult DelayAugmentedPhaseOnlineSolver::configure(
@@ -192,6 +208,7 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
     const ReferencePath& reference,
     SolverOutput& output) {
     output = SolverOutput{};
+    BackendWallTimer backend_wall_timer(output);
     // Every early return in this explicit backend is a contract/integrity
     // rejection unless the numerical optimizer itself is reached and fails.
     // Phase-Rejoin may use stored recovery only for that latter class.
@@ -268,11 +285,32 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
         return false;
     }
 
+    DelayAugmentedPhaseResidualDiagnostics warm_start_residuals;
+    capsule_.evaluateCurrentResiduals(warm_start_residuals);
+    std::vector<double> warm_start_states;
+    std::vector<double> warm_start_controls;
+    DelayAugmentedPhaseConstraintAudit warm_start_audit;
+    if (capsule_.captureTrajectory(
+            warm_start_states, warm_start_controls)) {
+        warm_start_audit = DelayAugmentedPhaseAcadosSolver::auditTrajectory(
+            input.execution_horizon, parameters,
+            warm_start_states, warm_start_controls);
+    }
+    if (!warm_start_audit.evaluated || !warm_start_audit.passed) {
+        output.status = "DELAY_AUGMENTED_WARM_START_CONSTRAINT_FAILED_" +
+            warm_start_audit.status;
+        return false;
+    }
+
     const int status = capsule_.solve();
     output.solver_time_ms = capsule_.solveTimeSec() * 1000.0;
     output.pre_solve_snapshot.valid = true;
     output.pre_solve_snapshot.backend =
         kSolverBackendDelayAugmentedPhaseAcados;
+    output.pre_solve_snapshot.solver_id = manifest::kSolverId;
+    output.pre_solve_snapshot.nlp_solver_type = manifest::kNlpSolverType;
+    output.pre_solve_snapshot.solver_config_hash =
+        manifest::kSolverConfigHash;
     output.pre_solve_snapshot.variant = variant_.name;
     output.pre_solve_snapshot.slosh_enabled = true;
     output.pre_solve_snapshot.control_semantics =
@@ -284,6 +322,10 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
     output.pre_solve_snapshot.parameter_width = manifest::kParameterCount;
     output.pre_solve_snapshot.parameter_names = parameters.parameter_names;
     output.pre_solve_snapshot.stage_parameters = parameters.values;
+    output.pre_solve_snapshot.warm_start_residuals =
+        warm_start_residuals;
+    output.pre_solve_snapshot.warm_start_constraint_audit =
+        warm_start_audit;
     const DelayAugmentedPhaseSolveDiagnostics& diagnostics =
         capsule_.lastSolveDiagnostics();
     output.pre_solve_snapshot.solver_residuals_evaluated =
@@ -298,12 +340,64 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
         diagnostics.inequality_residual;
     output.pre_solve_snapshot.complementarity_residual =
         diagnostics.complementarity_residual;
+    output.pre_solve_snapshot.solver_sqp_iterations =
+        diagnostics.sqp_iterations;
+    output.pre_solve_snapshot.solver_qp_iterations =
+        diagnostics.qp_iterations;
+    output.pre_solve_snapshot.solver_step_length = diagnostics.step_length;
+    output.pre_solve_snapshot.solver_cost = diagnostics.cost;
+    output.pre_solve_snapshot.acados_solve_time_ms = output.solver_time_ms;
+    output.pre_solve_snapshot.solver_iterations = diagnostics.iterations;
+
+    std::vector<double> raw_solution_states;
+    std::vector<double> raw_solution_controls;
+    DelayAugmentedPhaseConstraintAudit solution_audit;
+    if (capsule_.captureTrajectory(
+            raw_solution_states, raw_solution_controls)) {
+        solution_audit = DelayAugmentedPhaseAcadosSolver::auditTrajectory(
+            input.execution_horizon, parameters,
+            raw_solution_states, raw_solution_controls);
+    }
+    output.pre_solve_snapshot.solution_constraint_audit = solution_audit;
     if (status != 0) {
+        // TEMP diagnostic: separate state vs control stationarity.
+        for (int stage = 0; stage <= manifest::kHorizonSteps; ++stage) {
+            std::vector<double> stat;
+            if (!capsule_.perStageStationarity(stage, stat)) continue;
+            double state_max = 0.0, ctrl_max = 0.0;
+            int state_idx = -1, ctrl_idx = -1;
+            for (std::size_t i = 0; i < stat.size(); ++i) {
+                double a = std::fabs(stat[i]);
+                if (i < static_cast<std::size_t>(manifest::kStateCount)) {
+                    if (a > state_max) { state_max = a; state_idx = static_cast<int>(i); }
+                } else {
+                    if (a > ctrl_max) { ctrl_max = a; ctrl_idx = static_cast<int>(i); }
+                }
+            }
+            std::fprintf(stderr, "[stage=%d] state_max=%.6e @%d  ctrl_max=%.6e @%d\n",
+                         stage, state_max, state_idx, ctrl_max, ctrl_idx);
+        }
         output.failure_kind = diagnostics.optimizer_invoked
             ? SolverFailureKind::Optimization
             : SolverFailureKind::Integrity;
         output.status = "DELAY_AUGMENTED_ACADOS_SOLVE_FAILED_" +
             std::to_string(status) + "_" + diagnostics.status;
+        output.pre_solve_snapshot.failed_raw_solution_states =
+            std::move(raw_solution_states);
+        output.pre_solve_snapshot.failed_raw_solution_controls =
+            std::move(raw_solution_controls);
+        output.pre_solve_snapshot.solver_status = output.status;
+        return false;
+    }
+    if (!solution_audit.evaluated || !solution_audit.passed) {
+        output.failure_kind = SolverFailureKind::Integrity;
+        output.status =
+            "DELAY_AUGMENTED_INDEPENDENT_CONSTRAINT_AUDIT_FAILED_" +
+            solution_audit.status;
+        output.pre_solve_snapshot.failed_raw_solution_states =
+            std::move(raw_solution_states);
+        output.pre_solve_snapshot.failed_raw_solution_controls =
+            std::move(raw_solution_controls);
         output.pre_solve_snapshot.solver_status = output.status;
         return false;
     }

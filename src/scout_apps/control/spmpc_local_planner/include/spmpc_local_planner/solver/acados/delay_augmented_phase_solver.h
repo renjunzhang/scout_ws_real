@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/solver/api/execution_horizon_context.h"
+#include "spmpc_local_planner/solver/acados/delay_augmented_phase_diagnostics.h"
 #include "spmpc_local_planner/solver/acados/delay_augmented_phase_parameter_builder.h"
 #include "spmpc_local_planner/solver/delay_augmented/phase_rejoin_dynamics.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
@@ -8,6 +9,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace spmpc_local_planner {
 
@@ -51,6 +53,15 @@ struct DelayAugmentedPhaseCompiledContract {
     double acceleration_max = 0.0;
     double angular_acceleration_max = 0.0;
     double progress_rate_max = 0.0;
+    std::string solver_id;
+    std::string nlp_solver_type;
+    std::string globalization;
+    std::string solver_config_hash;
+};
+
+enum class DelayAugmentedPhaseAcadosBackend {
+    FullSqp,
+    RtiReference,
 };
 
 struct DelayAugmentedPhaseSolveDiagnostics {
@@ -63,6 +74,11 @@ struct DelayAugmentedPhaseSolveDiagnostics {
     double equality_residual = 0.0;
     double inequality_residual = 0.0;
     double complementarity_residual = 0.0;
+    int sqp_iterations = -1;
+    int qp_iterations = -1;
+    double step_length = 0.0;
+    double cost = 0.0;
+    std::vector<DelayAugmentedPhaseIterationDiagnostics> iterations;
     std::string status = "NOT_EVALUATED";
 };
 
@@ -72,7 +88,9 @@ struct DelayAugmentedPhaseSolveDiagnostics {
 // an acados capsule.
 class DelayAugmentedPhaseAcadosSolver {
 public:
-    DelayAugmentedPhaseAcadosSolver();
+    explicit DelayAugmentedPhaseAcadosSolver(
+        DelayAugmentedPhaseAcadosBackend backend =
+            DelayAugmentedPhaseAcadosBackend::FullSqp);
     ~DelayAugmentedPhaseAcadosSolver();
     DelayAugmentedPhaseAcadosSolver(
         const DelayAugmentedPhaseAcadosSolver&) = delete;
@@ -106,6 +124,26 @@ public:
         std::string& error);
     bool getState(int stage, double* state) const;
     bool getControl(int stage, double* control) const;
+    bool captureTrajectory(
+        std::vector<double>& states,
+        std::vector<double>& controls) const;
+    bool evaluateCurrentResiduals(
+        DelayAugmentedPhaseResidualDiagnostics& diagnostics) const;
+    // Per-stage KKT stationarity vector (length nx[stage]+nu[stage], scaled
+    // OCP basis).  Diagnostic only: localizes which stage/variable keeps the
+    // scalar inf-norm stationarity above the frozen threshold.
+    bool perStageStationarity(int stage, std::vector<double>& values) const;
+    // Read the NLP dynamics adjoint `pi` (out->pi) for one stage.  Length is
+    // nx[stage+1] (stage < N); the terminal stage has no pi entry.
+    bool perStagePi(int stage, std::vector<double>& values) const;
+    // Read the NLP inequality multiplier `lam` (out->lam) for one stage.
+    // Length is 2*ni[stage] (box double-bounds + generic h).
+    bool perStageLam(int stage, std::vector<double>& values) const;
+    static DelayAugmentedPhaseConstraintAudit auditTrajectory(
+        const ExecutionHorizonContext& context,
+        const DelayAugmentedPhaseParameterMatrix& parameters,
+        const std::vector<double>& states,
+        const std::vector<double>& controls);
     int solve();
     double solveTimeSec() const;
     const DelayAugmentedPhaseSolveDiagnostics& lastSolveDiagnostics() const;
@@ -117,6 +155,7 @@ public:
         std::string& error) const;
 
 private:
+    DelayAugmentedPhaseAcadosBackend backend_;
     struct Impl;
     std::unique_ptr<Impl> impl_;
 };

@@ -97,6 +97,55 @@ TEST(DelayAugmentedPhaseKktSnapshot, LoadsAndReconstructsCycle2) {
         << "stationarity drift from snapshot";
     EXPECT_NEAR(snapshot.expected_complementarity,
                diagnostics.complementarity_residual, 1e-9);
+
+    // §7 diagnostic: dump the NLP dual (pi/lam) decompositions at the failed
+    // cycle-2 snapshot to localize the four-branch root cause.
+    for (int stage = 0; stage < manifest::kHorizonSteps; ++stage) {
+        std::vector<double> pi;
+        if (!solver.perStagePi(stage, pi)) continue;
+        double pi_norm = 0.0;
+        int pi_argmax = -1;
+        for (std::size_t i = 0; i < pi.size(); ++i) {
+            const double a = std::fabs(pi[i]);
+            if (a > pi_norm) { pi_norm = a; pi_argmax = static_cast<int>(i); }
+        }
+        std::fprintf(stderr, "[pi stage=%d] dim=%zu norm_inf=%.6e argmax@%d\n",
+                     stage, pi.size(), pi_norm, pi_argmax);
+    }
+    for (int stage = 0; stage <= manifest::kHorizonSteps; ++stage) {
+        std::vector<double> lam;
+        if (!solver.perStageLam(stage, lam)) continue;
+        double lam_norm = 0.0;
+        int lam_argmax = -1;
+        for (std::size_t i = 0; i < lam.size(); ++i) {
+            const double a = std::fabs(lam[i]);
+            if (a > lam_norm) { lam_norm = a; lam_argmax = static_cast<int>(i); }
+        }
+        std::fprintf(stderr, "[lam stage=%d] dim=%zu norm_inf=%.6e argmax@%d\n",
+                     stage, lam.size(), lam_norm, lam_argmax);
+    }
+
+    // §7.2 independent decomposition: terminal cost_grad vs res_stat factor.
+    {
+        const int terminal = manifest::kHorizonSteps;
+        std::vector<double> rs;
+        if (solver.perStageStationarity(terminal, rs) && rs.size() >= 1) {
+            double xN[22];
+            solver.getState(terminal, xN);
+            const double* term_param =
+                snapshot.parameters.stageData(terminal);
+            const double nom_x = term_param[0];   // nom_x at terminal
+            const double w_x   = term_param[29];   // w[0] at terminal
+            const double err   = xN[0] - nom_x;
+            std::fprintf(stderr, "\n[decomp term] res_stat[0]=%.6e xN0=%.8f nom_x0=%.8f err=%.8f w0=%.3f\n",
+                         rs[0], xN[0], nom_x, err, w_x);
+            // candidate gradients (position scale = 0.15 fixed)
+            std::fprintf(stderr, "  w*err/scale   = %.6e\n", w_x * err / 0.15);
+            std::fprintf(stderr, "  w*err/scale^2 = %.6e\n", w_x * err / (0.15*0.15));
+            std::fprintf(stderr, "  w*err         = %.6e\n", w_x * err);
+            std::fprintf(stderr, "  err/scale     = %.6e\n", err / 0.15);
+        }
+    }
 }
 
 }  // namespace

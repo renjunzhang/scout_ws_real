@@ -56,8 +56,11 @@ set(SPMPC_GEN_B0_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0)
 set(SPMPC_GEN_SLOSH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh)
 set(SPMPC_GEN_PHASE_REJOIN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_phase_rejoin)
 set(SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_delay_augmented_phase)
+set(SPMPC_GEN_DELAY_AUGMENTED_PHASE_RTI_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_delay_augmented_phase_rti)
 set(SPMPC_DELAY_AUGMENTED_PHASE_CAPSULE_LIBRARY
   "${SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR}/libacados_ocp_solver_spmpc_delay_augmented_phase.so")
+set(SPMPC_DELAY_AUGMENTED_PHASE_RTI_CAPSULE_LIBRARY
+  "${SPMPC_GEN_DELAY_AUGMENTED_PHASE_RTI_DIR}/libacados_ocp_solver_spmpc_delay_augmented_phase_rti.so")
 set(SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0_direct_omega_legacy)
 set(SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh_direct_omega)
 set(SPMPC_WITH_ACADOS FALSE)
@@ -100,6 +103,12 @@ if(SPMPC_BUILD_UNVERIFIED_DELAY_AUGMENTED_CAPSULE)
     message(FATAL_ERROR
       "[spmpc] SPMPC_BUILD_UNVERIFIED_DELAY_AUGMENTED_CAPSULE=ON requires "
       "the generated capsule at ${SPMPC_DELAY_AUGMENTED_PHASE_CAPSULE_LIBRARY}")
+  endif()
+  if(NOT EXISTS "${SPMPC_DELAY_AUGMENTED_PHASE_RTI_CAPSULE_LIBRARY}")
+    message(FATAL_ERROR
+      "[spmpc] SPMPC_BUILD_UNVERIFIED_DELAY_AUGMENTED_CAPSULE=ON requires "
+      "the generated RTI reference capsule at "
+      "${SPMPC_DELAY_AUGMENTED_PHASE_RTI_CAPSULE_LIBRARY}")
   endif()
   set(SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE TRUE)
   message(WARNING
@@ -409,6 +418,11 @@ if(SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE)
     IMPORTED_LOCATION "${SPMPC_DELAY_AUGMENTED_PHASE_CAPSULE_LIBRARY}"
     IMPORTED_NO_SONAME TRUE
   )
+  add_library(spmpc_delay_augmented_phase_rti_capsule SHARED IMPORTED GLOBAL)
+  set_target_properties(spmpc_delay_augmented_phase_rti_capsule PROPERTIES
+    IMPORTED_LOCATION "${SPMPC_DELAY_AUGMENTED_PHASE_RTI_CAPSULE_LIBRARY}"
+    IMPORTED_NO_SONAME TRUE
+  )
   target_compile_definitions(spmpc_solver_delay_augmented_acados PRIVATE
     SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE)
   target_include_directories(spmpc_solver_delay_augmented_acados PRIVATE
@@ -417,9 +431,11 @@ if(SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE)
     ${ACADOS_SOURCE_DIR}/include/blasfeo/include
     ${ACADOS_SOURCE_DIR}/include/hpipm/include
     ${SPMPC_GEN_DELAY_AUGMENTED_PHASE_DIR}
+    ${SPMPC_GEN_DELAY_AUGMENTED_PHASE_RTI_DIR}
   )
   target_link_libraries(spmpc_solver_delay_augmented_acados PRIVATE
     spmpc_delay_augmented_phase_capsule
+    spmpc_delay_augmented_phase_rti_capsule
     ${ACADOS_LIB_DIR}/libacados.so
     ${ACADOS_LIB_DIR}/libhpipm.so
     ${ACADOS_LIB_DIR}/libblasfeo.so
@@ -1017,6 +1033,17 @@ if(CATKIN_ENABLE_TESTING)
       spmpc_solver_delay_augmented
     )
   endif()
+  catkin_add_gtest(test_delay_augmented_phase_scaling
+    test/test_delay_augmented_phase_scaling.cpp)
+  if(TARGET test_delay_augmented_phase_scaling)
+    target_include_directories(test_delay_augmented_phase_scaling PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+    )
+    target_link_libraries(test_delay_augmented_phase_scaling
+      spmpc_solver_delay_augmented_acados
+      spmpc_solver_delay_augmented
+    )
+  endif()
   catkin_add_gtest(test_delay_augmented_phase_online
     test/test_delay_augmented_phase_online.cpp)
   if(TARGET test_delay_augmented_phase_online)
@@ -1138,7 +1165,9 @@ install(TARGETS
 # A real wrapper and its generated capsule are one install unit.  install(FILES)
 # also fails if the configured capsule disappears before installation.
 if(SPMPC_WITH_ACADOS_DELAY_AUGMENTED_PHASE)
-  install(FILES "${SPMPC_DELAY_AUGMENTED_PHASE_CAPSULE_LIBRARY}"
+  install(FILES
+    "${SPMPC_DELAY_AUGMENTED_PHASE_CAPSULE_LIBRARY}"
+    "${SPMPC_DELAY_AUGMENTED_PHASE_RTI_CAPSULE_LIBRARY}"
     DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   )
 endif()

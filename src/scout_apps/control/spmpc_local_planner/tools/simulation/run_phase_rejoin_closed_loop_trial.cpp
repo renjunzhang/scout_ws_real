@@ -197,6 +197,7 @@ struct SolverFailureDiagnostic {
     double equality_residual = 0.0;
     double inequality_residual = 0.0;
     double complementarity_residual = 0.0;
+    PreSolveSnapshotDebug solver_snapshot;
 };
 
 std::string jsonEscape(const std::string& text) {
@@ -1280,6 +1281,94 @@ void writeJsonNumberArray(std::ofstream& output,
     output << ']';
 }
 
+void writeConstraintDiagnostics(
+    std::ofstream& output,
+    const std::vector<DelayAugmentedPhaseNamedConstraintDiagnostics>&
+        constraints) {
+    output << '[';
+    for (std::size_t index = 0; index < constraints.size(); ++index) {
+        if (index != 0) output << ',';
+        const auto& item = constraints[index];
+        output << "\n        {\"stage\": " << item.stage
+            << ", \"index\": " << item.index
+            << ", \"name\": \"" << jsonEscape(item.name)
+            << "\", \"value\": " << jsonNumber(item.value)
+            << ", \"lower\": " << jsonNumber(item.lower)
+            << ", \"upper\": " << jsonNumber(item.upper)
+            << ", \"normalized_error\": "
+            << jsonNumber(item.normalized_error)
+            << ", \"violation\": " << jsonNumber(item.violation)
+            << '}';
+    }
+    if (!constraints.empty()) output << '\n' << "      ";
+    output << ']';
+}
+
+void writeConstraintAudit(
+    std::ofstream& output,
+    const DelayAugmentedPhaseConstraintAudit& audit) {
+    output << "{\n"
+        << "      \"evaluated\": "
+        << (audit.evaluated ? "true" : "false") << ",\n"
+        << "      \"passed\": "
+        << (audit.passed ? "true" : "false") << ",\n"
+        << "      \"status\": \"" << jsonEscape(audit.status)
+        << "\",\n"
+        << "      \"tolerance\": " << jsonNumber(audit.tolerance)
+        << ",\n"
+        << "      \"terminal_empirical_metric\": "
+        << jsonNumber(audit.terminal_empirical_metric) << ",\n"
+        << "      \"terminal_empirical_violation\": "
+        << jsonNumber(audit.terminal_empirical_violation) << ",\n"
+        << "      \"max_causal_state_error\": "
+        << jsonNumber(audit.max_causal_state_error) << ",\n"
+        << "      \"max_causal_state_error_stage\": "
+        << audit.max_causal_state_error_stage << ",\n"
+        << "      \"max_causal_state_error_index\": "
+        << audit.max_causal_state_error_index << ",\n"
+        << "      \"max_violation_stage\": "
+        << audit.max_violation_stage << ",\n"
+        << "      \"max_violation_index\": "
+        << audit.max_violation_index << ",\n"
+        << "      \"max_violation_name\": \""
+        << jsonEscape(audit.max_violation_name) << "\",\n"
+        << "      \"max_violation_value\": "
+        << jsonNumber(audit.max_violation_value) << ",\n"
+        << "      \"max_violation\": "
+        << jsonNumber(audit.max_violation) << ",\n"
+        << "      \"stage_constraints\": ";
+    writeConstraintDiagnostics(output, audit.stage_constraints);
+    output << ",\n      \"control_constraints\": ";
+    writeConstraintDiagnostics(output, audit.control_constraints);
+    output << ",\n      \"terminal_execution_constraints\": ";
+    writeConstraintDiagnostics(
+        output, audit.terminal_execution_constraints);
+    output << "\n    }";
+}
+
+void writeIterationDiagnostics(
+    std::ofstream& output,
+    const std::vector<DelayAugmentedPhaseIterationDiagnostics>& iterations) {
+    output << '[';
+    for (std::size_t index = 0; index < iterations.size(); ++index) {
+        if (index != 0) output << ',';
+        const auto& item = iterations[index];
+        output << "\n        {\"iteration\": " << item.iteration
+            << ", \"stationarity\": "
+            << jsonNumber(item.stationarity)
+            << ", \"equality\": " << jsonNumber(item.equality)
+            << ", \"inequality\": " << jsonNumber(item.inequality)
+            << ", \"complementarity\": "
+            << jsonNumber(item.complementarity)
+            << ", \"qp_status\": " << item.qp_status
+            << ", \"qp_iterations\": " << item.qp_iterations
+            << ", \"step_length\": "
+            << jsonNumber(item.step_length) << '}';
+    }
+    if (!iterations.empty()) output << '\n' << "      ";
+    output << ']';
+}
+
 SolverFailureDiagnostic captureSolverFailureDiagnostic(
     const ControlCycleResult& result,
     const NominalSequenceArtifact& artifact) {
@@ -1310,6 +1399,7 @@ SolverFailureDiagnostic captureSolverFailureDiagnostic(
 
     const PreSolveSnapshotDebug& snapshot =
         result.solver_output.pre_solve_snapshot;
+    diagnostic.solver_snapshot = snapshot;
     diagnostic.solver_residuals_evaluated =
         snapshot.solver_residuals_evaluated;
     diagnostic.solver_nlp_status = snapshot.solver_nlp_status;
@@ -1736,7 +1826,92 @@ bool writeSummary(
             << jsonNumber(solver_failure.inequality_residual) << ",\n"
             << "      \"complementarity\": "
             << jsonNumber(solver_failure.complementarity_residual) << "\n"
-            << "    }\n"
+            << "    },\n"
+            << "    \"solver_backend_contract\": {\n"
+            << "      \"solver_id\": \""
+            << jsonEscape(solver_failure.solver_snapshot.solver_id)
+            << "\",\n"
+            << "      \"nlp_solver_type\": \""
+            << jsonEscape(
+                   solver_failure.solver_snapshot.nlp_solver_type)
+            << "\",\n"
+            << "      \"solver_config_hash\": \""
+            << jsonEscape(
+                   solver_failure.solver_snapshot.solver_config_hash)
+            << "\",\n"
+            << "      \"sqp_iterations\": "
+            << solver_failure.solver_snapshot.solver_sqp_iterations
+            << ",\n"
+            << "      \"qp_iterations\": "
+            << solver_failure.solver_snapshot.solver_qp_iterations
+            << ",\n"
+            << "      \"step_length\": "
+            << jsonNumber(
+                   solver_failure.solver_snapshot.solver_step_length)
+            << ",\n"
+            << "      \"cost\": "
+            << jsonNumber(solver_failure.solver_snapshot.solver_cost)
+            << ",\n"
+            << "      \"acados_solve_time_ms\": "
+            << jsonNumber(
+                   solver_failure.solver_snapshot.acados_solve_time_ms)
+            << ",\n"
+            << "      \"backend_wall_time_ms\": "
+            << jsonNumber(
+                   solver_failure.solver_snapshot.backend_wall_time_ms)
+            << "\n"
+            << "    },\n"
+            << "    \"warm_start_residuals\": {\n"
+            << "      \"evaluated\": "
+            << (solver_failure.solver_snapshot.warm_start_residuals.evaluated
+                    ? "true" : "false") << ",\n"
+            << "      \"stationarity\": "
+            << jsonNumber(solver_failure.solver_snapshot
+                              .warm_start_residuals.stationarity)
+            << ",\n"
+            << "      \"equality\": "
+            << jsonNumber(solver_failure.solver_snapshot
+                              .warm_start_residuals.equality)
+            << ",\n"
+            << "      \"inequality\": "
+            << jsonNumber(solver_failure.solver_snapshot
+                              .warm_start_residuals.inequality)
+            << ",\n"
+            << "      \"complementarity\": "
+            << jsonNumber(solver_failure.solver_snapshot
+                              .warm_start_residuals.complementarity)
+            << "\n"
+            << "    },\n"
+            << "    \"solver_iterations\": ";
+        writeIterationDiagnostics(
+            output, solver_failure.solver_snapshot.solver_iterations);
+        output << ",\n"
+            << "    \"parameter_width\": "
+            << solver_failure.solver_snapshot.parameter_width << ",\n"
+            << "    \"stage_parameters\": ";
+        writeJsonNumberArray(
+            output, solver_failure.solver_snapshot.stage_parameters);
+        output << ",\n"
+            << "    \"failed_raw_solution_states\": ";
+        writeJsonNumberArray(
+            output,
+            solver_failure.solver_snapshot.failed_raw_solution_states);
+        output << ",\n"
+            << "    \"failed_raw_solution_controls\": ";
+        writeJsonNumberArray(
+            output,
+            solver_failure.solver_snapshot.failed_raw_solution_controls);
+        output << ",\n"
+            << "    \"warm_start_constraint_audit\": ";
+        writeConstraintAudit(
+            output,
+            solver_failure.solver_snapshot.warm_start_constraint_audit);
+        output << ",\n"
+            << "    \"solution_constraint_audit\": ";
+        writeConstraintAudit(
+            output,
+            solver_failure.solver_snapshot.solution_constraint_audit);
+        output << "\n"
             << "  },\n";
     }
     output << "  \"baseline_contract\": {\n"

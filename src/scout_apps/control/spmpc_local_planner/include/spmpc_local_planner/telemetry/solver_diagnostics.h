@@ -1,5 +1,7 @@
 #pragma once
 
+#include "spmpc_local_planner/solver/acados/delay_augmented_phase_diagnostics.h"
+
 #include "spmpc_local_planner/core/start_lock_recovery_diagnostics.h"
 #include "spmpc_local_planner/domain/state.h"
 #include "spmpc_local_planner/runtime/control_cycle_timing.h"
@@ -202,6 +204,9 @@ struct PreSolveSnapshotDebug {
     std::string backend;
     std::string variant;
     std::string solver_status = "NOT_RUN";
+    std::string solver_id;
+    std::string nlp_solver_type;
+    std::string solver_config_hash;
     bool slosh_enabled = false;
     // Current implementation captures the full primal x/u guess but not acados dual variables.
     bool primal_guess_only = true;
@@ -241,6 +246,20 @@ struct PreSolveSnapshotDebug {
     double equality_residual = 0.0;
     double inequality_residual = 0.0;
     double complementarity_residual = 0.0;
+    DelayAugmentedPhaseResidualDiagnostics warm_start_residuals;
+    DelayAugmentedPhaseConstraintAudit warm_start_constraint_audit;
+    DelayAugmentedPhaseConstraintAudit solution_constraint_audit;
+    int solver_sqp_iterations = -1;
+    int solver_qp_iterations = -1;
+    double solver_step_length = 0.0;
+    double solver_cost = 0.0;
+    double acados_solve_time_ms = 0.0;
+    double backend_wall_time_ms = 0.0;
+    std::vector<DelayAugmentedPhaseIterationDiagnostics>
+        solver_iterations;
+    // Populated only when a solve fails, so normal telemetry stays bounded.
+    std::vector<double> failed_raw_solution_states;
+    std::vector<double> failed_raw_solution_controls;
     SolverBoundSummary runtime_bounds;
     std::vector<std::string> parameter_names;
     std::vector<double> stage_parameters;

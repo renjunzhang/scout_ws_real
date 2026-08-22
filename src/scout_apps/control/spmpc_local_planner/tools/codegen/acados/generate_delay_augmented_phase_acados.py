@@ -37,13 +37,18 @@ from spmpc_delay_augmented_phase_model import (
 PACKAGE_ROOT = pathlib.Path(__file__).resolve().parents[3]
 DEFAULT_OUTPUT = PACKAGE_ROOT / "generated" / "acados"
 MODEL_NAME = "spmpc_delay_augmented_phase"
+RTI_MODEL_NAME = "spmpc_delay_augmented_phase_rti"
 SOLVER_CAPABILITY_SCHEMA_VERSION = 3
-SOLVER_ID = "delay_augmented_phase_acados_online_v2"
+SOLVER_ID = "delay_augmented_phase_acados_full_sqp_v1"
+RTI_SOLVER_ID = "delay_augmented_phase_acados_rti_reference_v1"
 PARAMETER_SCHEMA_VERSION = 2
 PARAMETER_SCHEMA_ID = "delay_augmented_phase_parameter_image_v2"
+MAX_STATIONARITY_RESIDUAL = 1.0e-6
 MAX_EQUALITY_RESIDUAL = 1.0e-6
 MAX_INEQUALITY_RESIDUAL = 1.0e-6
+MAX_COMPLEMENTARITY_RESIDUAL = 1.0e-6
 MAX_CAUSAL_STATE_ERROR = 1.0e-6
+MAX_SQP_ITERATIONS = 20
 MIN_RECOVERY_DENOMINATOR = 1.0e-9
 PUBLISHED_CONSISTENCY_TOLERANCE = 1.0e-9
 
@@ -69,6 +74,41 @@ FORMAL_REQUIRED_CAPABILITIES = (
     | CAP_EXECUTION_COMPATIBILITY_SET
     | CAP_PUBLISHED_RESIDUAL_BOUNDS
 )
+
+
+def _solver_config(model_name, solver_id, nlp_solver_type,
+                   globalization, max_iterations, scale_x, scale_u):
+    semantic = {
+        "model_name": model_name,
+        "solver_id": solver_id,
+        "nlp_solver_type": nlp_solver_type,
+        "integrator_type": "DISCRETE",
+        "qp_solver": "PARTIAL_CONDENSING_HPIPM",
+        "hpipm_mode": "SPEED_ABS",
+        "qp_solver_iter_max": 100,
+        "tol_stat": MAX_STATIONARITY_RESIDUAL,
+        "tol_eq": MAX_EQUALITY_RESIDUAL,
+        "tol_ineq": MAX_INEQUALITY_RESIDUAL,
+        "tol_comp": MAX_COMPLEMENTARITY_RESIDUAL,
+        "max_iterations": max_iterations,
+        "globalization": globalization,
+        "hessian_approx": "GAUSS_NEWTON",
+        "regularize_method": "PROJECT",
+        "levenberg_marquardt": 1.0e-3,
+        # The non-dimensional variable basis is part of solver semantics and
+        # must be folded into the config hash so any scale change is detectable.
+        "scale_x": [float(v) for v in scale_x],
+        "scale_u": [float(v) for v in scale_u],
+    }
+    semantic["config_hash"] = hashlib.sha256(
+        json.dumps(
+            semantic,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    ).hexdigest()
+    return semantic
 
 
 def _load_yaml(relative_path):
@@ -161,9 +201,42 @@ def load_solver_spec():
             allow_nan=False,
         ).encode("utf-8")
     ).hexdigest()
+    # Per-index scale vectors, mirroring state_scaling_vectors(spec), so the
+    # solver config hash can bind the non-dimensional basis.
+    scale_x = (
+        [
+            cost_scales["position"], cost_scales["position"], cost_scales["yaw"],
+            cost_scales["v"], cost_scales["progress"], cost_scales["omega"],
+            cost_scales["eta"], cost_scales["eta_dot"],
+            cost_scales["eta"], cost_scales["eta_dot"],
+        ]
+        + [cost_scales["v"]] * layout["linear_buffer_count"]
+        + [cost_scales["omega"]] * layout["angular_buffer_count"]
+    )
+    scale_u = [cost_scales["a"], cost_scales["alpha"], cost_scales["v_s"]]
+    full_sqp = _solver_config(
+        MODEL_NAME,
+        SOLVER_ID,
+        "SQP",
+        "MERIT_BACKTRACKING",
+        MAX_SQP_ITERATIONS,
+        scale_x,
+        scale_u,
+    )
+    rti_reference = _solver_config(
+        RTI_MODEL_NAME,
+        RTI_SOLVER_ID,
+        "SQP_RTI",
+        "FIXED_STEP",
+        1,
+        scale_x,
+        scale_u,
+    )
     return {
         "model_name": MODEL_NAME,
         "solver_id": SOLVER_ID,
+        "solver_config": full_sqp,
+        "rti_solver_config": rti_reference,
         "capability_schema_version": SOLVER_CAPABILITY_SCHEMA_VERSION,
         "capabilities": FORMAL_REQUIRED_CAPABILITIES,
         "formal_required_capabilities": FORMAL_REQUIRED_CAPABILITIES,
@@ -186,20 +259,58 @@ def load_solver_spec():
         "a_max": float(platform["a_max"]),
         "alpha_max": float(platform.get("alpha_max", 1.2)),
         "vs_max": float(platform["v_max"]),
+        "max_stationarity_residual": MAX_STATIONARITY_RESIDUAL,
         "max_equality_residual": MAX_EQUALITY_RESIDUAL,
         "max_inequality_residual": MAX_INEQUALITY_RESIDUAL,
+        "max_complementarity_residual":
+            MAX_COMPLEMENTARITY_RESIDUAL,
         "max_causal_state_error": MAX_CAUSAL_STATE_ERROR,
         "state_bound_count": 0,
     }
 
 
+def state_scaling_vectors(spec):
+    """Per-index state/control scaling for the dimensionless OCP basis.
+
+    acados optimizes in scaled variables xs = x / scale_x, us = u / scale_u,
+    so the per-channel Gauss-Newton Hessian diagonal becomes ~2*w instead of
+    2*w/scale^2.  The mapping must match nominal_relative_cost/residual
+    channel-by-channel: base states use their own scale, the linear pending
+    queue uses the v scale, and the angular pending queue uses the omega
+    scale.
+    """
+    layout = spec["layout"]
+    scales = spec["cost_scales"]
+    base = [
+        scales["position"], scales["position"], scales["yaw"],
+        scales["v"], scales["progress"], scales["omega"],
+        scales["eta"], scales["eta_dot"], scales["eta"], scales["eta_dot"],
+    ]
+    scale_x = (
+        base
+        + [scales["v"]] * layout["linear_buffer_count"]
+        + [scales["omega"]] * layout["angular_buffer_count"]
+    )
+    scale_u = [scales["a"], scales["alpha"], scales["v_s"]]
+    return np.array(scale_x, dtype=float), np.array(scale_u, dtype=float)
+
+
 def build_symbolic_spec(spec):
     contract = spec["contract"]
     layout = spec["layout"]
+    scale_x, scale_u = state_scaling_vectors(spec)
+    scale_x_sx = ca.SX(scale_x)
+    scale_u_sx = ca.SX(scale_u)
     x = ca.SX.sym("x", layout["state_width"])
     q = ca.SX.sym("q", layout["control_width"])
     p = ca.SX.sym("p", spec["parameters"]["parameter_width"])
-    x_next, published = transition_expression(x, q, contract, layout)
+    # Recover physical variables for the (unchanged) transition, cost and
+    # constraint expressions; only the OCP variable basis is rescaled.
+    x_physical = x * scale_x_sx
+    q_physical = q * scale_u_sx
+    x_next_physical, published = transition_expression(
+        x_physical, q_physical, contract, layout)
+    x_next = x_next_physical / scale_x_sx
     stage_constraints, stage_lower, stage_upper = (
         published_command_constraints(
             published,
@@ -212,21 +323,25 @@ def build_symbolic_spec(spec):
         )
     )
     stage_cost = nominal_relative_cost(
-        x, q, p, layout, spec["parameters"], spec["cost_scales"]
+        x_physical, q_physical, p, layout, spec["parameters"],
+        spec["cost_scales"]
     )
     terminal_cost = nominal_relative_cost(
-        x, q, p, layout, spec["parameters"], spec["cost_scales"],
+        x_physical, q_physical, p, layout, spec["parameters"],
+        spec["cost_scales"],
         terminal=True,
     )
     stage_residual = nominal_relative_residual(
-        x, q, p, layout, spec["parameters"], spec["cost_scales"]
+        x_physical, q_physical, p, layout, spec["parameters"],
+        spec["cost_scales"]
     )
     terminal_residual = nominal_relative_residual(
-        x, q, p, layout, spec["parameters"], spec["cost_scales"],
+        x_physical, q_physical, p, layout, spec["parameters"],
+        spec["cost_scales"],
         terminal=True,
     )
     terminal_constraints = terminal_recovery_constraints(
-        x, p, layout, spec["parameters"]
+        x_physical, p, layout, spec["parameters"]
     )
 
     # No path-stage box is needed for actuator outputs or pending queues.
@@ -254,9 +369,15 @@ def build_symbolic_spec(spec):
         "terminal_constraints": terminal_constraints,
         "idxbu": np.array([0, 1, 2], dtype=int),
         "lbu": np.array(
-            [-spec["a_max"], -spec["alpha_max"], 0.0]),
+            [-spec["a_max"] / scale_u[0],
+             -spec["alpha_max"] / scale_u[1],
+             0.0]),
         "ubu": np.array(
-            [spec["a_max"], spec["alpha_max"], spec["vs_max"]]),
+            [spec["a_max"] / scale_u[0],
+             spec["alpha_max"] / scale_u[1],
+             spec["vs_max"] / scale_u[2]]),
+        "scale_x": scale_x,
+        "scale_u": scale_u,
         "idxbx": np.array(state_indices, dtype=int),
         "lbx": np.array(state_lower),
         "ubx": np.array(state_upper),
@@ -287,6 +408,14 @@ namespace delay_augmented_phase_solver_manifest {{
 constexpr int kCapabilitySchemaVersion = {spec['capability_schema_version']};
 constexpr const char kSolverId[] = "{spec['solver_id']}";
 constexpr const char kModelName[] = "{spec['model_name']}";
+constexpr const char kNlpSolverType[] = "{spec['solver_config']['nlp_solver_type']}";
+constexpr const char kGlobalization[] = "{spec['solver_config']['globalization']}";
+constexpr const char kSolverConfigHash[] = "{spec['solver_config']['config_hash']}";
+constexpr int kMaxSqpIterations = {spec['solver_config']['max_iterations']};
+constexpr const char kRtiReferenceSolverId[] = "{spec['rti_solver_config']['solver_id']}";
+constexpr const char kRtiReferenceModelName[] = "{spec['rti_solver_config']['model_name']}";
+constexpr const char kRtiReferenceNlpSolverType[] = "{spec['rti_solver_config']['nlp_solver_type']}";
+constexpr const char kRtiReferenceSolverConfigHash[] = "{spec['rti_solver_config']['config_hash']}";
 constexpr const char kIntegratorType[] = "DISCRETE";
 constexpr int kExecutionContractSchemaVersion = {contract['schema_version']};
 constexpr const char kContractId[] = "{contract['contract_id']}";
@@ -346,8 +475,10 @@ constexpr double kAngularOutputMax = {_cpp_float(contract['angular']['output_max
 constexpr double kAccelerationMax = {_cpp_float(spec['a_max'])};
 constexpr double kAngularAccelerationMax = {_cpp_float(spec['alpha_max'])};
 constexpr double kProgressRateMax = {_cpp_float(spec['vs_max'])};
+constexpr double kMaxStationarityResidual = {_cpp_float(spec['max_stationarity_residual'])};
 constexpr double kMaxEqualityResidual = {_cpp_float(spec['max_equality_residual'])};
 constexpr double kMaxInequalityResidual = {_cpp_float(spec['max_inequality_residual'])};
+constexpr double kMaxComplementarityResidual = {_cpp_float(spec['max_complementarity_residual'])};
 constexpr double kMaxCausalStateError = {_cpp_float(spec['max_causal_state_error'])};
 constexpr double kMinimumRecoveryDenominator = {_cpp_float(MIN_RECOVERY_DENOMINATOR)};
 constexpr double kPublishedConsistencyTolerance = {_cpp_float(PUBLISHED_CONSISTENCY_TOLERANCE)};
@@ -407,11 +538,13 @@ def _import_acados_template():
         raise
 
 
-def build_ocp(spec):
+def build_ocp(spec, solver_config=None):
     AcadosModel, AcadosOcp, _ = _import_acados_template()
+    if solver_config is None:
+        solver_config = spec["solver_config"]
     symbolic = build_symbolic_spec(spec)
     model = AcadosModel()
-    model.name = MODEL_NAME
+    model.name = solver_config["model_name"]
     model.x = symbolic["x"]
     model.u = symbolic["q"]
     model.p = symbolic["p"]
@@ -469,20 +602,28 @@ def build_ocp(spec):
     ocp.constraints.lh_e = np.full(terminal_count, -1.0e15)
     ocp.constraints.uh_e = np.zeros(terminal_count)
 
-    ocp.solver_options.integrator_type = "DISCRETE"
-    ocp.solver_options.qp_solver = "PARTIAL_CONDENSING_HPIPM"
-    ocp.solver_options.hpipm_mode = "SPEED_ABS"
-    ocp.solver_options.qp_solver_iter_max = 100
-    ocp.solver_options.qp_solver_tol_stat = MAX_EQUALITY_RESIDUAL
-    ocp.solver_options.qp_solver_tol_eq = MAX_EQUALITY_RESIDUAL
-    ocp.solver_options.qp_solver_tol_ineq = MAX_INEQUALITY_RESIDUAL
-    ocp.solver_options.qp_solver_tol_comp = MAX_INEQUALITY_RESIDUAL
-    ocp.solver_options.hessian_approx = "GAUSS_NEWTON"
-    ocp.solver_options.regularize_method = "PROJECT"
-    ocp.solver_options.levenberg_marquardt = 1.0e-3
-    ocp.solver_options.nlp_solver_type = "SQP_RTI"
-    ocp.solver_options.tol_eq = spec["max_equality_residual"]
-    ocp.solver_options.tol_ineq = spec["max_inequality_residual"]
+    ocp.solver_options.integrator_type = solver_config["integrator_type"]
+    ocp.solver_options.qp_solver = solver_config["qp_solver"]
+    ocp.solver_options.hpipm_mode = solver_config["hpipm_mode"]
+    ocp.solver_options.qp_solver_iter_max = solver_config[
+        "qp_solver_iter_max"]
+    ocp.solver_options.qp_solver_tol_stat = solver_config["tol_stat"]
+    ocp.solver_options.qp_solver_tol_eq = solver_config["tol_eq"]
+    ocp.solver_options.qp_solver_tol_ineq = solver_config["tol_ineq"]
+    ocp.solver_options.qp_solver_tol_comp = solver_config["tol_comp"]
+    ocp.solver_options.hessian_approx = solver_config["hessian_approx"]
+    ocp.solver_options.regularize_method = solver_config[
+        "regularize_method"]
+    ocp.solver_options.levenberg_marquardt = solver_config[
+        "levenberg_marquardt"]
+    ocp.solver_options.nlp_solver_type = solver_config["nlp_solver_type"]
+    ocp.solver_options.nlp_solver_tol_stat = solver_config["tol_stat"]
+    ocp.solver_options.nlp_solver_tol_eq = solver_config["tol_eq"]
+    ocp.solver_options.nlp_solver_tol_ineq = solver_config["tol_ineq"]
+    ocp.solver_options.nlp_solver_tol_comp = solver_config["tol_comp"]
+    ocp.solver_options.nlp_solver_max_iter = solver_config[
+        "max_iterations"]
+    ocp.solver_options.globalization = solver_config["globalization"]
     return ocp
 
 
@@ -491,15 +632,22 @@ def generate(output_root, build=True):
     output_root = pathlib.Path(output_root).resolve()
     spec = load_solver_spec()
     manifest = emit_solver_manifest(spec, output_root)
-    ocp = build_ocp(spec)
-    export_dir = output_root / MODEL_NAME
-    export_dir.mkdir(parents=True, exist_ok=True)
-    ocp.code_gen_opts.code_export_directory = str(export_dir)
-    json_path = export_dir / f"acados_ocp_{MODEL_NAME}.json"
-    AcadosOcpSolver.generate(ocp, json_file=str(json_path), verbose=True)
-    if build:
-        AcadosOcpSolver.build(str(export_dir), with_cython=False, verbose=True)
-    return manifest, json_path
+    json_paths = []
+    for solver_config in (
+            spec["solver_config"], spec["rti_solver_config"]):
+        ocp = build_ocp(spec, solver_config)
+        model_name = solver_config["model_name"]
+        export_dir = output_root / model_name
+        export_dir.mkdir(parents=True, exist_ok=True)
+        ocp.code_gen_opts.code_export_directory = str(export_dir)
+        json_path = export_dir / f"acados_ocp_{model_name}.json"
+        AcadosOcpSolver.generate(
+            ocp, json_file=str(json_path), verbose=True)
+        if build:
+            AcadosOcpSolver.build(
+                str(export_dir), with_cython=False, verbose=True)
+        json_paths.append(json_path)
+    return (manifest, *json_paths)
 
 
 def check():
@@ -529,6 +677,8 @@ def check():
         f"capabilities=0x{spec['capabilities']:x}",
         f"execution_hash={spec['contract']['contract_hash']}",
         f"parameter_hash={spec['parameter_schema_hash']}",
+        f"solver_config_hash={spec['solver_config']['config_hash']}",
+        f"rti_config_hash={spec['rti_solver_config']['config_hash']}",
     )
 
 

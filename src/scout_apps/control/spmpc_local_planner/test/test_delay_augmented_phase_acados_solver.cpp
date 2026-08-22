@@ -7,12 +7,38 @@
 
 #include <array>
 #include <cmath>
+#include <sstream>
 #include <string>
 
 namespace spmpc_local_planner {
 namespace {
 
 namespace manifest = delay_augmented_phase_solver_manifest;
+
+std::string diagnosticText(
+    const DelayAugmentedPhaseSolveDiagnostics& diagnostics) {
+    std::ostringstream output;
+    output << "nlp=" << diagnostics.nlp_status
+           << " qp=" << diagnostics.qp_status
+           << " sqp_iter=" << diagnostics.sqp_iterations
+           << " qp_iter=" << diagnostics.qp_iterations
+           << " stat=" << diagnostics.stationarity_residual
+           << " eq=" << diagnostics.equality_residual
+           << " ineq=" << diagnostics.inequality_residual
+           << " comp=" << diagnostics.complementarity_residual
+           << " cost=" << diagnostics.cost;
+    for (const auto& iteration : diagnostics.iterations) {
+        output << "\niter=" << iteration.iteration
+               << " stat=" << iteration.stationarity
+               << " eq=" << iteration.equality
+               << " ineq=" << iteration.inequality
+               << " comp=" << iteration.complementarity
+               << " qp=" << iteration.qp_status
+               << " qp_iter=" << iteration.qp_iterations
+               << " alpha=" << iteration.step_length;
+    }
+    return output.str();
+}
 
 ExecutionModelContract generatedContract() {
     ExecutionModelContract contract;
@@ -231,12 +257,7 @@ TEST(DelayAugmentedPhaseAcadosSolver,
     const DelayAugmentedPhaseSolveDiagnostics& diagnostics =
         solver.lastSolveDiagnostics();
     EXPECT_TRUE(diagnostics.optimizer_invoked);
-    ASSERT_EQ(0, solve_status)
-        << "qp=" << diagnostics.qp_status
-        << " stat=" << diagnostics.stationarity_residual
-        << " eq=" << diagnostics.equality_residual
-        << " ineq=" << diagnostics.inequality_residual
-        << " comp=" << diagnostics.complementarity_residual;
+    ASSERT_EQ(0, solve_status) << diagnosticText(diagnostics);
     EXPECT_TRUE(std::isfinite(solver.solveTimeSec()));
 
     std::array<double, manifest::kControlCount> control{};
