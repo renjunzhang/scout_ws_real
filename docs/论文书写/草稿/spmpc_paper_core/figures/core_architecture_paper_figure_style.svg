@@ -66,7 +66,7 @@
 
   <rect class="box-model" x="445" y="151" width="330" height="104" rx="12"/>
   <text class="box-title" x="610" y="184">Execution--liquid model</text>
-  <text class="box-text" x="610" y="214">dual delays and actuator lags</text>
+  <text class="box-text" x="610" y="214">current: unequal pure delays</text>
   <text class="box-text" x="610" y="239">u_pub → motion → slosh state</text>
 
   <rect class="box-offline" x="835" y="151" width="300" height="104" rx="12"/>
@@ -124,7 +124,7 @@
   <text class="box-title-sm" x="1152.5" y="498">Dual-channel delay-augmented</text>
   <text class="box-title-sm" x="1152.5" y="526">residual MPC</text>
   <text class="box-text-sm" x="1152.5" y="558">N = 10 = 7 + 3; post-front ≈ 100 ms</text>
-  <text class="box-text-sm" x="1152.5" y="586">buffers / lags remain decision-dependent</text>
+  <text class="box-text-sm" x="1152.5" y="586">delay buffers remain decision-dependent</text>
   <text class="box-text-sm" x="1152.5" y="613">all-stage B_exec; bounded residual</text>
 
   <rect class="box-gate" x="1370" y="465" width="355" height="165" rx="12"/>

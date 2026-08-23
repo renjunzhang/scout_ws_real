@@ -4,11 +4,10 @@
 The evidence is organized in two layers that must not be conflated.  Layer~S
 is a frozen, controller-blind independent-plant simulation campaign over
 C0--C4 and an input-shaping reference.  Layer~H is a later Scout hardware
-campaign with independently calibrated RGB liquid measurement.  The most
-recent pre-revision Layer~S freeze passed an asset and readiness audit but has
-not been executed; the source changes documented here require a new freeze and
-audit.  Layer~H has not started.  Consequently, this section defines estimands
-and release criteria but reports no positive anti-slosh performance claim.
+campaign with independently calibrated RGB liquid measurement.  At the current
+revision, none of the 96 formal simulation trials has run and Layer~H has not
+started.  This section therefore fixes the comparisons and analysis rules but
+reports no anti-slosh performance result.
 
 \subsection{Research Questions and Claim Boundary}
 
@@ -27,8 +26,8 @@ states never substitute for an independent evaluation signal.
     RQ & Question & Decisive evidence \\
     \midrule
     RQ1 & Does the implemented controller propagate the unequal pending-command delays causally and preserve command-history integrity? & Frozen solver identity, KKT and independent causal audits, source/publication timestamps, and Layer~S runtime records. \\
-    RQ2 & Under an independent plant, does C4 reduce liquid-height response without unacceptable task degradation? & Frozen paired C4--C0 and C4--C1 trial-level contrasts in Layer~S. \\
-    RQ3 & Does enforcing the empirical 9-D gate add value beyond the otherwise identical delay-augmented controller? & The causal C4--C3 contrast; C3 retains the same 22-D solver, full-horizon execution set, recovery feedback, and command transaction. \\
+    RQ2 & Under an independent plant, does C4 reduce liquid-height response without unacceptable task degradation? & C4--C0 as the frozen trial-level primary, followed conditionally by the C4--C1 fairness contrast in Layer~S. \\
+    RQ3 & Does enforcing the empirical 9-D gate add value beyond the otherwise identical delay-augmented controller? & The paired C4--C3 effect together with gate activation, recovery, zero-request, and failure outcomes; C3 retains the same 22-D solver, full-horizon execution set, recovery feedback, and final-command chain. \\
     RQ4 & Does the empirical gate reject independently labeled non-rejoinable states without hiding failures through zero coverage? & Held-out confusion matrix, denominator-specific Wilson intervals for false accept and conditional false safe, recovered-sample coverage, and recovery outcomes. \\
     RQ5 & Do the simulation findings transfer to the Scout platform and a real liquid? & Hardware execution identification, shadow-mode acceptance, and an independently calibrated RGB outcome in Layer~H. \\
     \bottomrule
@@ -44,28 +43,13 @@ signals only.
 
 \subsection{Frozen Assets, Data Separation, and Trial Unit}
 
-\subsubsection{Most recent pre-revision formal-simulation freeze}
-
-The most recent completed V3 simulation freeze is bound to Git commit
-\texttt{7775dd68}.  Its session manifest freezes the executable and compiler
-identity, solver and execution contracts, P2 path and hash, parameterised
-offline plan, V3 phase-rejoin artifact, recovery fit and held-out records,
-six condition files, independent-plant runner, analysis script, sixteen
-formal seeds, and the exact 96-trial order.  The corresponding readiness
-report has status \texttt{READY\_NOT\_EXECUTED}, an empty reason list, and
-explicitly records that formal trials have not started.  This means only that
-the immutable
-asset chain for that commit is internally consistent.  The formal runner additionally
-requires a human-authored approval bound to the session hash; that approval
-has not been issued and none of the 96 trials has run.  Because the source
-changes in this revision are not part of commit \texttt{7775dd68}, that
-readiness report does not qualify the revised implementation; a new clean
-commit, build, session, readiness report, and human approval are required.
-
-The freeze is explicitly simulation-only: it is not a formal robot release,
-does not authorize real-robot enforcement, and does not establish physical
-parameter validity.  A source or asset change creates a new freeze and
-readiness report rather than reusing the current status.
+Before Layer~S begins, we freeze the independent plant, path, V3 artifact, six
+condition configurations, seeds, interleaved run order, primary outcome,
+failure handling, and paired analysis.  The same frozen release is used for all
+96 trials.  Any method or analysis change requires a new release before data
+collection; formal outcomes are never used to retune the controller, gate,
+plant, or thresholds.  This simulation freeze neither authorizes physical
+execution nor establishes physical parameter validity.
 
 \subsubsection{Separated data pools}
 
@@ -85,12 +69,18 @@ Identification test data do not select the execution model.  Gate fit data
 estimate the base radii and bounds, gate tune data select only one global
 shrinkage, and the held-out gate pool is opened once for evaluation and changes
 neither the gate nor feedback gains.  Any retuning after a pilot requires a new
-pilot and release.  One complete run is the statistical unit.
+pilot and release.  The formal results are not used for method retuning. One
+complete run is the statistical unit.
 Controller cycles, path samples, plant integration steps, and video frames are
-repeated measurements within that run.  Solver failures, zero requests,
-timeouts, and safety interventions remain in the denominator.  Only a frozen
-infrastructure-failure rule may replace a run, and the original attempt
-remains in the audit log.
+repeated measurements within that run. Failures remain in the denominator; an
+incomplete window is not imputed, making its affected effect non-estimable.
+Failure gates
+are contrast-specific: a method failure in C4 or C0 affects the primary
+C4--C0 claim; a C1 failure affects the conditional fairness claim; and a C3
+failure affects the nominal mechanism contrast.  A C2 or IS failure remains a
+reported outcome but cannot by itself veto C4--C0.  Only a frozen
+infrastructure-failure rule may replace a run, and both the original attempt
+and its disposition remain in the trial log.
 
 \subsection{Conditions and Identifiable Contrasts}
 
@@ -112,9 +102,9 @@ not described as MPCC.
     Condition & Frozen definition \\
     \midrule
     C0 OrdinaryMPCC & Contour/lag/progress MPCC without liquid prediction, the offline artifact, phase rejoining, or recovery admission. \\
-    C1 SmoothMatchMPCC & C0 with smoothing settings and \texttt{global\_time\_scale=1.0} independently frozen from task/motion outcomes only; completion time is reported, not claimed to be exactly matched to C4. \\
+    C1 SmoothMPCC & C0 with smoothing settings and \texttt{global\_time\_scale=1.0} independently frozen from task/motion outcomes only; completion time is reported, not claimed to be exactly matched to C4.  The paper-facing name is SmoothMPCC; the legacy engineering mode/file identifiers remain \texttt{smooth\_match\_mpcc} and \texttt{C1\_smooth\_match\_mpcc.yaml}. \\
     C2 OfflineReplay & Clocked replay of the same final-command nominal artifact used by C4, with zero online residual and without empirical or execution-gate intervention. \\
-    C3 ResidualNoGate & The same artifact, phase selector, ten-stage 22-D Full SQP solver, published residual limits, full-horizon $\mathcal B^{\mathrm{exec}}$, bounded recovery feedback, failure semantics, and final command transaction as C4.  The 9-D empirical metric is computed and logged but is monitor-only in both optimization and supervision. \\
+    C3 GateMonitorPR-RMPC & The same artifact, phase selector, ten-stage 22-D Full SQP solver, published residual limits, full-horizon $\mathcal B^{\mathrm{exec}}$, bounded recovery feedback, failure semantics, and final command transaction as C4.  The 9-D empirical metric is computed and logged but is monitor-only in both optimization and supervision.  The legacy engineering mode/file identifiers remain \texttt{residual\_no\_gate} and \texttt{C3\_residual\_no\_gate.yaml}. \\
     C4 PhaseRejoinResidual & The complete method in \cref{sec:method}: unequal-delay execution augmentation, neighboring monotone phase, bounded residual, path-wise $\mathcal B^{\mathrm{exec}}$, terminal empirical admission for the residual, current empirical admission for recovery, bounded recovery feedback, and fail-closed supervisor. \\
     IS ZVD & A frozen single-mode zero-vibration-derivative input-shaping reference using the ordinary online tracking stack; it is an external method reference, not a component of C4. \\
     \bottomrule
@@ -122,9 +112,14 @@ not described as MPCC.
 \end{table*}
 
 The sixteen locked seeds are crossed with all six conditions, yielding 96
-trial-level outcomes in a frozen interleaved order.  C4 is evaluated against
-C0, C1, and C3 on the same seeds.  C2 and IS provide useful descriptive
-context but do not create a single-factor decomposition of C4.
+trial-level outcomes in a pre-generated interleaved order that is fixed before
+the first formal run.  C4 is evaluated against C0, C1, and C3 on the same
+seeds, but the three contrasts
+have different inferential roles: C4--C0 is the sole preregistered primary;
+C4--C1 is the fixed-sequence secondary fairness comparison; and C4--C3 is the
+gate-enforcement ablation.  The latter two do not veto the C4--C0 result. C2
+and IS are summarized as descriptive references without a hard decision rule
+or component attribution.
 
 \subsubsection{Supported and unsupported attribution}
 
@@ -140,10 +135,10 @@ C4--C3 pair is a strict component ablation in the current formal matrix.
     \toprule
     Contrast & Controlled interpretation & Claim boundary \\
     \midrule
-    P0: C4 vs. C0 & Proposed system versus an ordinary geometric MPCC. & Overall system efficacy; no individual component attribution. \\
-    P1: C4 vs. C1 & Proposed system versus an independently frozen smoother MPCC. & Tests whether a liquid benefit is explained only by slower or smoother motion. \\
-    P2: C4 vs. C3 & Empirical-gate enforcement enabled versus monitor-only. & Causal contribution of the 9-D empirical admission rule, because the solver, $\mathcal B^{\mathrm{exec}}$, feedback recovery, and command chain are identical. \\
-    D0: C2 and IS & Offline replay and input shaping as descriptive references. & No isolated offline-objective, residual, or execution-model claim from these non-paired system differences. \\
+    P0: C4 vs. C0 & Proposed system versus an ordinary geometric MPCC. & Sole preregistered primary for overall system efficacy; no individual component attribution. \\
+    P1: C4 vs. C1 & Proposed system versus an independently frozen smoother MPCC. & Fixed-sequence secondary comparison. A favorable result weakens the generic slower/smoother explanation, but C1 is not an exact time-and-smoothness match. \\
+    P2: C4 vs. C3 & Empirical-gate enforcement enabled versus monitor-only. & Paired gate-enforcement effect, interpreted together with activation, recovery, zero requests, and failures. \\
+    D0: C2 and IS & Offline replay and input shaping as descriptive references. & Condition-level system references only; no hard-decision or component-attribution role. \\
     \bottomrule
   \end{tabular}
 \end{table*}
@@ -156,40 +151,13 @@ used as component evidence.
 
 \subsection{Layer S: Independent-Plant Formal Simulation}
 
-\subsubsection{Readiness and execution boundary}
+\subsubsection{Execution boundary}
 
-Table~\ref{tab:release_gates} separates completed source/asset checks from
-work that has not occurred.  ``Ready'' is not a performance result.
-
-\begin{table*}[t]
-  \centering
-  \caption{Two-layer evidence gates at the current revision.}
-  \label{tab:release_gates}
-  \scriptsize
-  \begin{tabular}{@{}p{0.09\textwidth}p{0.65\textwidth}p{0.18\textwidth}@{}}
-    \toprule
-    Gate & Required evidence & Current status \\
-    \midrule
-    S0 & Hash-bound clean commit, executable/build identity, 22-D Full SQP solver identity, expected-publication model, and final-command history contract. & Pre-revision ready; new freeze required \\
-    S1 & Frozen path, parameterised offline plan, complete V3 artifact, recovery fit/held-out assets, condition files, and matching hashes. & Pre-revision ready; new freeze required \\
-    S2 & Independent plant with truth hidden from the controller, frozen metric/window, failure retention, and trial-level analysis. & Pre-revision ready; new freeze required \\
-    S3 & Exact C3/C4 causal contract: empirical monitor-only versus enforce while Full SQP, $\mathcal B^{\mathrm{exec}}$, feedback recovery, and publication transaction match. & Pre-revision ready; new freeze required \\
-    S4 & Session-hash-specific human approval followed by the immutable 96-trial order and preregistered analysis. & \Pending{}; approval absent, 0/96 run \\
-    \midrule
-    H0 & Scout command-to-motion identification and stability from final publication timestamps; distinction between ROS receipt and physical CAN execution. & \Pending{}; not started \\
-    H1 & Source-correct RGB, Nokov/pose, IMU, calibration, detectability, and frozen motion-plus-tail window. & \Pending{}; not started \\
-    H2 & No-motion and shadow-mode command-chain audit with safety rewrite and phase-commit checks. & \Pending{}; not started \\
-    H3 & Human-approved, randomized physical confirmation with failures retained. & \Pending{}; not started \\
-    \bottomrule
-  \end{tabular}
-\end{table*}
-
-The formal runner refuses to start unless the readiness report still matches
-the session hash and a human approval authorizes exactly the sixteen locked
-seeds.  It then executes the 96 rows sequentially without opportunistic retry.
-The pre-revision \texttt{READY\_NOT\_EXECUTED} record therefore establishes
-reproducibility and eligibility only for commit \texttt{7775dd68}; it supplies
-no C4--comparator effect estimate and does not authorize the revised source.
+Before the first formal run, a clean build must pass the controller tests and a
+single readiness check must confirm the frozen path, plant, six condition
+identities, seeds, order, and analysis settings.  The campaign then executes
+the 96 rows without opportunistic retry or result-driven parameter changes.
+This checklist is an execution prerequisite, not an experimental result.
 
 \subsubsection{Primary simulation outcome and decision rule}
 
@@ -207,21 +175,34 @@ tracking 95th percentile, success/failure, zero requests, recovery use,
 solver integrity, and command rewrites are retained alongside the liquid
 metric.
 
-For comparator $c\in\{\mathrm{C0},\mathrm{C1},\mathrm{C3}\}$, the paired
-effect is
+For a declared comparator $c$, the paired effect is
 \begin{equation}
   \Delta_b^{\mathrm{C4}-c}
   =Y^{\mathrm{sim}}_{b,\mathrm{C4}}-Y^{\mathrm{sim}}_{b,c},
   \label{eq:primary_paired_effect}
 \end{equation}
-where lower is better.  The frozen analysis reports the paired mean and a
-paired-bootstrap 95\% interval using 10,000 replicates.  Its minimum meaningful
-difference is 0.5 mm.  A positive independent-simulation claim is authorized
-only if the upper interval endpoint for every C4--C0, C4--C1, and C4--C3
-liquid-height contrast is at most $-0.5$ mm, while C4 remains within the frozen
-10\% completion-time and 0.05-m tracking non-inferiority margins against C0
-and C1.  Failed trials remain counted.  Because no formal trial has run, all
-effect estimates and decision fields are \Pending{}.
+where lower is better.  The analysis reports the paired mean and a
+paired-bootstrap 95\% interval using 10,000 replicates.  The sole preregistered
+primary comparison is C4--C0.  It passes only if its upper interval endpoint is
+at most $-0.5$ mm, C4 satisfies the 10\% completion-time and 0.05-m tracking
+non-inferiority margins against C0, and none of the C4/C0 trials has a method
+failure.  A method failure is a task/runtime failure, solver failure,
+controlled stop, publication/history failure, fail-closed zero request, or---for
+C3/C4---a missing or failed KKT audit.  Only after that comparison passes is
+C4--C1 tested with the same
+liquid outcome and its C1-specific task/failure criteria. A favorable C4--C1
+result shows that the benefit persists relative to an independently tuned
+smoother MPCC and weakens the generic slower/smoother explanation; it does not
+exclude that explanation because C1 is not an exact match. Failure of C4--C1
+does not reverse a supported C4--C0 result. C4--C3 is reported with its
+interval, gate-activation count, recovery,
+zero-request, and failure outcomes, but it is not subjected automatically to
+the C4--C0 0.5-mm threshold and does not veto overall efficacy. Its gate-effect
+interpretation is correspondingly weak when the gate rarely activates.
+
+The choice of sixteen blocks and the 0.5-mm margin lacks a prospective power or
+precision justification and is reported as a limitation. Because no formal
+trial has run, all effect estimates and decision fields are \Pending{}.
 
 \subsubsection{Gate and recovery diagnostics}
 
@@ -278,11 +259,13 @@ arbitration, execution-contract finalization, sink receipt/history, and
 conditional phase commit are separate rates.  Fit rollouts never reappear as
 held-out observations.
 
-The C4--C3 formal contrast complements the classifier table.  C3 logs the same
+The nominal C4--C3 contrast complements the classifier table.  C3 logs the same
 empirical metric but does not enforce it, whereas both conditions retain the
-same 14-D execution sets and recovery policy.  A C4--C3 difference can
-therefore be attributed to empirical-gate enforcement, but it cannot convert
-the empirical set into a formal recovery certificate.
+same 14-D execution sets and recovery policy.  Conditional on gate activation,
+a C4--C3 difference can therefore be attributed to empirical-gate enforcement,
+but a nominal path with few or no gate interventions cannot identify broad
+recovery value.  This contrast does not convert the empirical set into a formal
+recovery certificate.
 
 \subsubsection{Runtime and command integrity}
 
@@ -293,9 +276,9 @@ phase-candidate rejection, supervisor branch, residual saturation, recovery
 rate limiting, safety rewrite, and final publication receipt.  Every proposed
 first command is traced through \eqref{eq:publication_chain}.  Only the final
 $u^{\mathrm{pub}}$ may update $b^v$ and $b^\omega$, and a rewritten command
-must not commit the proposed phase.  Development unit tests or microbenchmarks
-establish wiring and timing plausibility only; the formal runtime table remains
-pending until the 96-trial campaign is executed.
+must not commit the proposed phase. Development unit tests or microbenchmarks establish
+wiring and timing plausibility only; the formal runtime table remains pending
+until the 96-trial campaign is executed.
 
 \subsection{Layer H: Planned Scout and Physical-Liquid Validation}
 
@@ -317,7 +300,8 @@ difference; and exercise no-motion then shadow-mode operation.  Shadow mode
 must show correct candidate selection, full-horizon execution checks,
 residual/recovery/zero branching, safety rewrites, history updates, and phase
 commit behavior without allowing the candidate command to drive the base.
-Only a new human-approved hardware manifest may enable physical enforcement.
+Physical enforcement additionally requires an explicit, separately reviewed
+hardware release.
 
 Each physical trial records at least:
 \begin{itemize}
@@ -351,19 +335,20 @@ motion/command envelopes are simultaneous fairness outcomes.
 The hardware sample size, randomized block order, smallest effect of interest,
 and non-inferiority margins remain \Pending{} until RGB detectability and an
 independent pilot are available.  Simulation effect sizes are not substituted
-for physical variance.  A physical superiority claim requires an RGB benefit
-that clears the preregistered effect threshold while task performance,
-failures, and safety satisfy their margins.  An improvement obtained only by
-becoming materially slower, less accurate, or less reliable is reported as a
-tradeoff.
+for physical variance.  The physical decision uses the same logical fixed
+sequence: C4--C0 is primary, and C4--C1 is tested only after it passes to
+assess whether the benefit persists against the smoother baseline. Each layer uses only the task/failure
+criteria belonging to that contrast.  A physical superiority claim requires
+an RGB benefit that clears the preregistered effect threshold while task
+performance, failures, and safety satisfy their margins.  An improvement
+obtained only by becoming materially slower, less accurate, or less reliable
+is reported as a tradeoff.
 
 \subsection{Limitations of the Available Evidence}
 
-The current source supports an implemented-method claim, while the historical
-\texttt{READY\_NOT\_EXECUTED} evidence applies only to the pre-revision
-\texttt{7775dd68} freeze.  Neither supports a formal independent-plant effect,
-because the 96 trials and their analysis do not yet exist.  They support no
-real-robot efficacy claim, because
+The current source implements the method but does not yet support a formal
+independent-plant effect, because the 96 trials and their analysis do not yet
+exist.  It supports no real-robot efficacy claim, because
 hardware G0 identification, shadow operation, RGB/Nokov/IMU calibration, and
 physical confirmation have not started.
 

@@ -2,24 +2,24 @@
 """Analyze one paired Phase-Rejoining simulation campaign at trial level.
 
 The input directory must contain exactly one
-``spmpc_closed_loop_trial_summary_v1`` JSON document for every
+``spmpc_closed_loop_trial_summary_v2`` JSON document for every
 ``(seed, condition)`` pair in C0--C4 and IS.  Cycle logs are deliberately not
 accepted: the independent motion-plus-fixed-tail trial is the statistical
 unit.  Failed trials stay in the paired data and can never be silently
 discarded.
 
-Pilot output is an exploratory readiness report only.  Formal output can say
-PASS only when every summary is bound to the explicitly supplied frozen
-session hash, all 16 pre-registered paired blocks are present, no trial failed,
-and the frozen paired-bootstrap effect and task contracts pass.  This script
-does not turn a pilot campaign into publishable evidence.
+Pilot output is exploratory only.  Formal output keeps three claims separate:
+the C4--C0 primary system effect, the fixed-sequence C4--C1 fairness/effect
+check, and the C4--C3 gate ablation estimate.  Only the primary claim controls
+the overall formal decision; the later checks are reported without silently
+vetoing it.  This script does not turn a pilot campaign into publishable
+evidence.
 """
 
 from __future__ import annotations
 
 import argparse
 import errno
-import hashlib
 import json
 import math
 import os
@@ -31,8 +31,8 @@ import tempfile
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 
-SUMMARY_SCHEMA = "spmpc_closed_loop_trial_summary_v1"
-ANALYSIS_SCHEMA = "spmpc_phase_rejoin_simulation_campaign_analysis_v2"
+SUMMARY_SCHEMA = "spmpc_closed_loop_trial_summary_v2"
+ANALYSIS_SCHEMA = "spmpc_phase_rejoin_simulation_campaign_analysis_v3"
 REQUIRED_CONDITIONS = ("C0", "C1", "C2", "C3", "C4", "IS")
 EXPECTED_MODES = {
     "C0": "ordinary_mpcc",
@@ -51,18 +51,35 @@ BOOTSTRAP_SEED = 20260822
 COMPLETION_TIME_NONINFERIORITY_RELATIVE = 0.10
 TRACKING_Q95_NONINFERIORITY_M = 0.05
 MAX_UINT32 = (1 << 32) - 1
+AUDIT_COUNTER_FIELDS = (
+    "solver_failures",
+    "gate_evaluations",
+    "current_gate_evaluations",
+    "current_gate_accepts",
+    "terminal_gate_evaluations",
+    "terminal_gate_accepts",
+    "recovery_actions",
+    "controlled_stops",
+    "publications",
+    "publication_failures",
+    "phase_commits",
+    "receipt_inconsistent_cycles",
+    "history_not_committed_cycles",
+    "command_modified_cycles",
+    "zero_requests",
+)
+METHOD_FAILURE_COUNTER_FIELDS = (
+    "solver_failures",
+    "controlled_stops",
+    "publication_failures",
+    "receipt_inconsistent_cycles",
+    "history_not_committed_cycles",
+    "zero_requests",
+)
 
 
 class CampaignError(ValueError):
     """A campaign violates the frozen trial-level analysis contract."""
-
-
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def _sha256_text(value: Any) -> bool:
@@ -118,6 +135,12 @@ def _finite_number(value: Any, label: str, minimum: Optional[float] = None) -> f
     if minimum is not None and number < minimum:
         raise CampaignError("{} must be >= {}".format(label, minimum))
     return number
+
+
+def _nonnegative_int(value: Any, label: str) -> int:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise CampaignError("{} must be a non-negative integer".format(label))
+    return value
 
 
 def _required_mapping(owner: Mapping[str, Any], key: str, label: str) -> Dict[str, Any]:
@@ -185,27 +208,48 @@ def _validate_truth_isolation(root: Mapping[str, Any], label: str) -> None:
         )
 
 
-def _validate_primary_metric(root: Mapping[str, Any], label: str) -> Tuple[float, int]:
+def _validate_primary_metric(
+    root: Mapping[str, Any], label: str, runtime_failed: bool
+) -> Tuple[Optional[float], int, bool]:
     metric = _required_mapping(root, "primary_metric", "{}.primary_metric".format(label))
     if metric.get("name") != "external_measured_height_q95_m":
         raise CampaignError("{} does not use external measured liquid height".format(label))
-    if metric.get("window") != "motion_plus_fixed_tail":
-        raise CampaignError("{} does not use the motion-plus-fixed-tail window".format(label))
-    if metric.get("statistics_unit") != "complete_trial":
-        raise CampaignError(
-            "{} attempts to use a non-trial statistical unit".format(label)
-        )
     if metric.get("quantile_method") != "nearest_rank":
         raise CampaignError("{} primary quantile method changed".format(label))
     sample_count = metric.get("sample_count")
     if (
         isinstance(sample_count, bool)
         or not isinstance(sample_count, int)
-        or sample_count <= 0
+        or sample_count < 0
     ):
+        raise CampaignError("{} has an invalid primary sample count".format(label))
+    if runtime_failed:
+        if (metric.get("window") != "incomplete_runtime_error" or
+                metric.get("statistics_unit") !=
+                "failed_trial_incomplete_window" or
+                metric.get("window_complete") is not False):
+            raise CampaignError(
+                "{} runtime failure falsely claims a complete window".format(
+                    label)
+            )
+        if metric.get("value_m") is not None:
+            raise CampaignError(
+                "{} incomplete runtime window must not publish an effect value".format(
+                    label)
+            )
+        return None, sample_count, False
+    if metric.get("window") != "motion_plus_fixed_tail":
+        raise CampaignError("{} does not use the motion-plus-fixed-tail window".format(label))
+    if (metric.get("statistics_unit") != "complete_trial" or
+            metric.get("window_complete") is not True):
+        raise CampaignError(
+            "{} attempts to use an incomplete/non-trial statistical unit".format(
+                label)
+        )
+    if sample_count <= 0:
         raise CampaignError("{} has no primary-window samples".format(label))
     value = _finite_number(metric.get("value_m"), "{}.primary_metric.value_m".format(label), 0.0)
-    return value, sample_count
+    return value, sample_count, True
 
 
 def _validate_summary(
@@ -237,30 +281,97 @@ def _validate_summary(
     ):
         raise CampaignError("{}.seed is not a uint32".format(label))
 
+    formal_trials_started = _exact_bool(
+        root.get("formal_trials_started"),
+        "{}.formal_trials_started".format(label),
+    )
+    development_pilot_only = _exact_bool(
+        root.get("development_pilot_only"),
+        "{}.development_pilot_only".format(label),
+    )
+    if stage == "formal":
+        if not formal_trials_started or development_pilot_only:
+            raise CampaignError("{} is not a formal trial summary".format(label))
+    elif formal_trials_started or not development_pilot_only:
+        raise CampaignError("{} is not a development/pilot summary".format(label))
+
     _validate_truth_isolation(root, label)
     trial = _required_mapping(root, "trial", "{}.trial".format(label))
-    success = _validate_status(root, trial, label)
+    task_success = _validate_status(root, trial, label)
+    runtime_failed = root.get("status") == "RUNTIME_ERROR"
     completion_time_sec = _finite_number(
         trial.get("motion_end_sec"),
         "{}.trial.motion_end_sec".format(label),
         0.0,
     )
-    if completion_time_sec <= 0.0:
+    if not runtime_failed and completion_time_sec <= 0.0:
         raise CampaignError("{} completion time must be non-zero".format(label))
     fixed_tail_sec = _finite_number(
         trial.get("fixed_tail_sec"), "{}.trial.fixed_tail_sec".format(label), 0.0
     )
     if fixed_tail_sec <= 0.0:
         raise CampaignError("{} fixed tail must be non-zero".format(label))
-    primary_value_m, sample_count = _validate_primary_metric(root, label)
+    primary_value_m, sample_count, primary_window_complete = \
+        _validate_primary_metric(root, label, runtime_failed)
     secondary = _required_mapping(
         root, "secondary_metrics", "{}.secondary_metrics".format(label)
     )
-    tracking_q95_m = _finite_number(
-        secondary.get("tracking_q95_m"),
-        "{}.secondary_metrics.tracking_q95_m".format(label),
-        0.0,
+    if runtime_failed:
+        if secondary.get("tracking_q95_m") is not None:
+            raise CampaignError(
+                "{} incomplete runtime window must not publish tracking q95".format(
+                    label)
+            )
+        tracking_q95_m: Optional[float] = None
+    else:
+        tracking_q95_m = _finite_number(
+            secondary.get("tracking_q95_m"),
+            "{}.secondary_metrics.tracking_q95_m".format(label),
+            0.0,
+        )
+
+    controller_audit = _required_mapping(
+        root, "controller_audit", "{}.controller_audit".format(label)
     )
+    audit_counts = {
+        field: _nonnegative_int(
+            controller_audit.get(field),
+            "{}.controller_audit.{}".format(label, field),
+        )
+        for field in AUDIT_COUNTER_FIELDS
+    }
+    if audit_counts["current_gate_accepts"] > audit_counts["current_gate_evaluations"]:
+        raise CampaignError("{} current gate accepts exceed evaluations".format(label))
+    if audit_counts["terminal_gate_accepts"] > audit_counts["terminal_gate_evaluations"]:
+        raise CampaignError("{} terminal gate accepts exceed evaluations".format(label))
+
+    solver_runtime = _required_mapping(
+        root, "solver_runtime", "{}.solver_runtime".format(label)
+    )
+    solver_sample_count = _nonnegative_int(
+        solver_runtime.get("sample_count"),
+        "{}.solver_runtime.sample_count".format(label),
+    )
+    deadline_misses = _nonnegative_int(
+        solver_runtime.get("deadline_misses"),
+        "{}.solver_runtime.deadline_misses".format(label),
+    )
+    kkt_contract_passed = _exact_bool(
+        solver_runtime.get("kkt_contract_passed"),
+        "{}.solver_runtime.kkt_contract_passed".format(label),
+    )
+
+    method_failure_reasons = [
+        field for field in METHOD_FAILURE_COUNTER_FIELDS
+        if audit_counts[field] > 0
+    ]
+    if not task_success:
+        method_failure_reasons.insert(0, "task_or_runtime_failure")
+    if condition in ("C3", "C4") and (
+        solver_sample_count == 0 or not kkt_contract_passed
+    ):
+        method_failure_reasons.append("solver_kkt_contract")
+    completed_successfully = task_success and not method_failure_reasons
 
     plant_freeze_id = _nonempty_string(
         root.get("plant_freeze_id"), "{}.plant_freeze_id".format(label)
@@ -287,22 +398,30 @@ def _validate_summary(
 
     return {
         "source_file": path.name,
-        "source_sha256": _sha256_file(path),
         "condition_id": condition,
         "mode": EXPECTED_MODES[condition],
         "implementation_id": implementation_id,
         "seed": seed,
         "status": root["status"],
-        "completed_successfully": success,
-        "failure_retained": not success,
+        "task_completed_successfully": task_success,
+        "completed_successfully": completed_successfully,
+        "failure_retained": not completed_successfully,
+        "method_failure_reasons": method_failure_reasons,
         "primary_value_m": primary_value_m,
         "primary_sample_count": sample_count,
+        "primary_window_complete": primary_window_complete,
         "completion_time_sec": completion_time_sec,
         "tracking_q95_m": tracking_q95_m,
         "fixed_tail_sec": fixed_tail_sec,
         "plant_freeze_id": plant_freeze_id,
         "artifact_contract_id": artifact_contract_id,
         "c3_c4_causal_ready": c3_c4_causal_ready,
+        "controller_audit": audit_counts,
+        "solver_runtime": {
+            "sample_count": solver_sample_count,
+            "deadline_misses": deadline_misses,
+            "kkt_contract_passed": kkt_contract_passed,
+        },
     }
 
 
@@ -336,6 +455,7 @@ def _paired_bootstrap_mean_interval(
             )
         )
     return {
+        "estimable": True,
         "estimator": "paired_mean",
         "method": "percentile_bootstrap_95pct",
         "replicates": BOOTSTRAP_REPLICATES,
@@ -346,17 +466,70 @@ def _paired_bootstrap_mean_interval(
     }
 
 
+def _paired_interval_or_unavailable(
+    values: Sequence[Optional[float]], seed_offset: int
+) -> Dict[str, Any]:
+    unavailable = sum(value is None for value in values)
+    if unavailable:
+        return {
+            "estimable": False,
+            "status": "NOT_ESTIMABLE_INCOMPLETE_FAILED_TRIAL",
+            "estimator": "paired_mean",
+            "method": "percentile_bootstrap_95pct",
+            "replicates": BOOTSTRAP_REPLICATES,
+            "rng_seed": BOOTSTRAP_SEED + seed_offset,
+            "estimate": None,
+            "lower": None,
+            "upper": None,
+            "estimable_pair_count": len(values) - unavailable,
+            "unavailable_pair_count": unavailable,
+            "incomplete_pairs_dropped_or_imputed": False,
+        }
+    return _paired_bootstrap_mean_interval(
+        [float(value) for value in values if value is not None], seed_offset
+    )
+
+
+def _interval_upper_at_most(interval: Mapping[str, Any], limit: float) -> bool:
+    upper = interval.get("upper")
+    return (
+        interval.get("estimable") is True and
+        isinstance(upper, (int, float)) and
+        not isinstance(upper, bool) and
+        math.isfinite(float(upper)) and
+        float(upper) <= limit
+    )
+
+
 def _condition_summary(records: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
-    values = [float(record["primary_value_m"]) for record in records]
+    values = [
+        float(record["primary_value_m"])
+        for record in records
+        if record["primary_value_m"] is not None
+    ]
     failed = sum(not bool(record["completed_successfully"]) for record in records)
+    audit_totals = {
+        field: sum(
+            int(record["controller_audit"][field]) for record in records
+        )
+        for field in AUDIT_COUNTER_FIELDS
+    }
     return {
         "trial_count": len(records),
         "successful_trial_count": len(records) - failed,
         "failed_trial_count": failed,
         "failure_inclusive": True,
-        "primary_metric_median_m": _median(values),
-        "primary_metric_min_m": min(values),
-        "primary_metric_max_m": max(values),
+        "primary_metric_summary_scope": "complete_windows_only_no_imputation",
+        "primary_metric_estimable_trial_count": len(values),
+        "primary_metric_unavailable_trial_count": len(records) - len(values),
+        "primary_metric_median_m": _median(values) if values else None,
+        "primary_metric_min_m": min(values) if values else None,
+        "primary_metric_max_m": max(values) if values else None,
+        "controller_audit_totals": audit_totals,
+        "solver_deadline_misses": sum(
+            int(record["solver_runtime"]["deadline_misses"])
+            for record in records
+        ),
     }
 
 
@@ -369,8 +542,35 @@ def _paired_comparison(
     for seed in seeds:
         c4 = by_key[(seed, "C4")]
         baseline = by_key[(seed, comparator)]
-        difference = float(c4["primary_value_m"]) - float(
-            baseline["primary_value_m"]
+        primary_estimable = (
+            c4["primary_value_m"] is not None and
+            baseline["primary_value_m"] is not None
+        )
+        difference = (
+            float(c4["primary_value_m"])
+            - float(baseline["primary_value_m"])
+            if primary_estimable else None
+        )
+        completion_estimable = (
+            bool(c4["primary_window_complete"]) and
+            bool(baseline["primary_window_complete"]) and
+            float(c4["completion_time_sec"]) > 0.0 and
+            float(baseline["completion_time_sec"]) > 0.0
+        )
+        completion_relative = (
+            (float(c4["completion_time_sec"])
+             - float(baseline["completion_time_sec"]))
+            / float(baseline["completion_time_sec"])
+            if completion_estimable else None
+        )
+        tracking_estimable = (
+            c4["tracking_q95_m"] is not None and
+            baseline["tracking_q95_m"] is not None
+        )
+        tracking_difference = (
+            float(c4["tracking_q95_m"])
+            - float(baseline["tracking_q95_m"])
+            if tracking_estimable else None
         )
         pairs.append(
             {
@@ -378,49 +578,66 @@ def _paired_comparison(
                 "c4_value_m": c4["primary_value_m"],
                 "comparator_value_m": baseline["primary_value_m"],
                 "difference_m": difference,
+                "primary_effect_estimable": primary_estimable,
+                "completion_effect_estimable": completion_estimable,
+                "tracking_effect_estimable": tracking_estimable,
+                "completion_time_relative": completion_relative,
+                "tracking_q95_difference_m": tracking_difference,
                 "failure_retained": (
                     not bool(c4["completed_successfully"])
                     or not bool(baseline["completed_successfully"])
                 ),
             }
         )
-    differences = [float(pair["difference_m"]) for pair in pairs]
+    differences = [pair["difference_m"] for pair in pairs]
     comparison_offset = COMPARATORS.index(comparator)
-    completion_relative = [
-        (
-            float(by_key[(seed, "C4")]["completion_time_sec"])
-            - float(by_key[(seed, comparator)]["completion_time_sec"])
-        )
-        / float(by_key[(seed, comparator)]["completion_time_sec"])
-        for seed in seeds
+    all_primary_estimable = all(value is not None for value in differences)
+    numeric_differences = [
+        float(value) for value in differences if value is not None
     ]
-    tracking_differences = [
-        float(by_key[(seed, "C4")]["tracking_q95_m"])
-        - float(by_key[(seed, comparator)]["tracking_q95_m"])
-        for seed in seeds
-    ]
+    completion_relative = [pair["completion_time_relative"] for pair in pairs]
+    tracking_differences = [pair["tracking_q95_difference_m"] for pair in pairs]
     return {
         "definition": "C4_minus_{}".format(comparator),
         "lower_is_better": True,
         "pairing_key": "seed",
         "statistics_unit": "paired_complete_trial",
         "pair_count": len(pairs),
+        "primary_effect_estimable_pair_count": len(numeric_differences),
+        "primary_effect_unavailable_pair_count":
+            len(pairs) - len(numeric_differences),
+        "complete_grid_effect_estimable": all_primary_estimable,
+        "incomplete_pairs_dropped_or_imputed": False,
         "failed_pair_count": sum(bool(pair["failure_retained"]) for pair in pairs),
-        "c4_lower_count": sum(value < 0.0 for value in differences),
-        "equal_count": sum(value == 0.0 for value in differences),
-        "c4_higher_count": sum(value > 0.0 for value in differences),
-        "median_difference_m": _median(differences),
-        "mean_difference_m": statistics.fmean(differences),
+        "c4_lower_count": (
+            sum(value < 0.0 for value in numeric_differences)
+            if all_primary_estimable else None
+        ),
+        "equal_count": (
+            sum(value == 0.0 for value in numeric_differences)
+            if all_primary_estimable else None
+        ),
+        "c4_higher_count": (
+            sum(value > 0.0 for value in numeric_differences)
+            if all_primary_estimable else None
+        ),
+        "median_difference_m": (
+            _median(numeric_differences) if all_primary_estimable else None
+        ),
+        "mean_difference_m": (
+            statistics.fmean(numeric_differences)
+            if all_primary_estimable else None
+        ),
         "primary_paired_bootstrap_95pct":
-            _paired_bootstrap_mean_interval(
+            _paired_interval_or_unavailable(
                 differences, 100 + comparison_offset
             ),
         "completion_time_relative_paired_bootstrap_95pct":
-            _paired_bootstrap_mean_interval(
+            _paired_interval_or_unavailable(
                 completion_relative, 200 + comparison_offset
             ),
         "tracking_q95_difference_paired_bootstrap_95pct":
-            _paired_bootstrap_mean_interval(
+            _paired_interval_or_unavailable(
                 tracking_differences, 300 + comparison_offset
             ),
         "pairs": pairs,
@@ -553,7 +770,6 @@ def analyze_campaign(
             "status": "PILOT_READY_FOR_DEVELOPMENT_REVIEW",
             "paper_claim_authorized": False,
             "formal_pass": False,
-            "claim_scope": "none",
             "interpretation": "exploratory_pilot_only",
             "failed_trials_retained": len(failed_trials),
             "development_gaps": development_gaps,
@@ -564,65 +780,72 @@ def analyze_campaign(
         }
     else:
         assert threshold is not None
-        checks = {
-            "exact_formal_paired_block_count":
-                tuple(seeds) == FORMAL_SEEDS,
-            "no_failed_trials": not failed_trials,
-            "c4_vs_c0_preregistered_effect": (
+        exact_formal_grid = tuple(seeds) == FORMAL_SEEDS
+        primary_checks = {
+            "exact_formal_paired_block_count": exact_formal_grid,
+            "c4_vs_c0_no_failed_pairs":
+                comparisons["C4_minus_C0"]["failed_pair_count"] == 0,
+            "c4_vs_c0_preregistered_effect": _interval_upper_at_most(
                 comparisons["C4_minus_C0"]
-                ["primary_paired_bootstrap_95pct"]["upper"] <= -threshold
+                ["primary_paired_bootstrap_95pct"], -threshold
             ),
-            "c4_vs_c1_preregistered_effect": (
-                comparisons["C4_minus_C1"]
-                ["primary_paired_bootstrap_95pct"]["upper"] <= -threshold
-            ),
-            "c4_vs_c3_preregistered_effect": (
-                comparisons["C4_minus_C3"]
-                ["primary_paired_bootstrap_95pct"]["upper"] <= -threshold
-            ),
-            "c4_vs_c0_completion_time_noninferior": (
+            "c4_vs_c0_completion_time_noninferior": _interval_upper_at_most(
                 comparisons["C4_minus_C0"]
-                ["completion_time_relative_paired_bootstrap_95pct"]["upper"]
-                <= COMPLETION_TIME_NONINFERIORITY_RELATIVE
+                ["completion_time_relative_paired_bootstrap_95pct"],
+                COMPLETION_TIME_NONINFERIORITY_RELATIVE
             ),
-            "c4_vs_c1_completion_time_noninferior": (
-                comparisons["C4_minus_C1"]
-                ["completion_time_relative_paired_bootstrap_95pct"]["upper"]
-                <= COMPLETION_TIME_NONINFERIORITY_RELATIVE
-            ),
-            "c4_vs_c0_tracking_q95_noninferior": (
+            "c4_vs_c0_tracking_q95_noninferior": _interval_upper_at_most(
                 comparisons["C4_minus_C0"]
-                ["tracking_q95_difference_paired_bootstrap_95pct"]["upper"]
-                <= TRACKING_Q95_NONINFERIORITY_M
+                ["tracking_q95_difference_paired_bootstrap_95pct"],
+                TRACKING_Q95_NONINFERIORITY_M
             ),
-            "c4_vs_c1_tracking_q95_noninferior": (
-                comparisons["C4_minus_C1"]
-                ["tracking_q95_difference_paired_bootstrap_95pct"]["upper"]
-                <= TRACKING_Q95_NONINFERIORITY_M
-            ),
-            "c3_c4_causal_contract_ready": c3_c4_causal_ready,
         }
-        formal_pass = all(checks.values())
-        decision = {
-            "status": "PASS" if formal_pass else "FAIL",
-            "paper_claim_authorized": formal_pass,
-            "formal_pass": formal_pass,
-            "claim_scope": (
-                "independent_simulation_campaign_only"
-                if formal_pass
-                else "none"
+        primary_pass = all(primary_checks.values())
+        fairness_checks = {
+            "c4_vs_c1_no_failed_pairs":
+                comparisons["C4_minus_C1"]["failed_pair_count"] == 0,
+            "c4_vs_c1_preregistered_effect": _interval_upper_at_most(
+                comparisons["C4_minus_C1"]
+                ["primary_paired_bootstrap_95pct"], -threshold
             ),
+            "c4_vs_c1_completion_time_noninferior": _interval_upper_at_most(
+                comparisons["C4_minus_C1"]
+                ["completion_time_relative_paired_bootstrap_95pct"],
+                COMPLETION_TIME_NONINFERIORITY_RELATIVE
+            ),
+            "c4_vs_c1_tracking_q95_noninferior": _interval_upper_at_most(
+                comparisons["C4_minus_C1"]
+                ["tracking_q95_difference_paired_bootstrap_95pct"],
+                TRACKING_Q95_NONINFERIORITY_M
+            ),
+        }
+        fairness_pass = primary_pass and all(fairness_checks.values())
+        checks = dict(primary_checks)
+        checks.update(fairness_checks)
+        checks["c3_c4_causal_contract_ready"] = c3_c4_causal_ready
+        decision = {
+            "status": "PASS" if primary_pass else "FAIL",
+            "paper_claim_authorized": primary_pass,
+            "formal_pass": primary_pass,
             "interpretation": "frozen_formal_paired_trial_result",
             "preregistered_rule": (
-                "upper95(paired-bootstrap mean(C4-comparator)) <= "
-                "-preregistered_min_effect_m; C0, C1, and causal C3 "
-                "comparisons plus C0/C1 task noninferiority must pass"
+                "C4-C0 is primary; C4-C1 is evaluated second and cannot "
+                "veto the primary result; C4-C3 is an unthresholded, "
+                "separately reported gate-ablation estimate"
             ),
             "preregistered_min_effect_m": threshold,
+            "pair_failure_rule": "zero_method_failed_pairs",
             "completion_time_noninferiority_relative":
                 COMPLETION_TIME_NONINFERIORITY_RELATIVE,
             "tracking_q95_noninferiority_m":
                 TRACKING_Q95_NONINFERIORITY_M,
+            "c1_secondary_evaluated": primary_pass,
+            "c1_secondary_pass": fairness_pass if primary_pass else None,
+            "c3_ablation_reported": exact_formal_grid,
+            "c3_ablation_effect_estimable":
+                comparisons["C4_minus_C3"]["complete_grid_effect_estimable"],
+            "c3_ablation_causal_contract_ready": c3_c4_causal_ready,
+            "c3_ablation_minimum_effect_threshold_applied": False,
             "checks": checks,
             "failed_trials_retained": len(failed_trials),
         }

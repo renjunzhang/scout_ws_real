@@ -539,12 +539,15 @@ TEST(ControlCycleEngineTest,
         monitorRequest(fixture));
 
     EXPECT_EQ(1, fixture.solver.calls);
+    EXPECT_TRUE(result.phase_decision.command_intervened);
     EXPECT_TRUE(result.phase_decision.recovery_command_used);
     EXPECT_TRUE(result.publication.published());
     EXPECT_TRUE(result.output.success);
     EXPECT_FALSE(result.phase_committed);
     EXPECT_FALSE(result.telemetry.phase_rejoin_committed);
     EXPECT_FALSE(fixture.engine.phaseRejoinCoordinator().haveAcceptedIndex());
+    EXPECT_FALSE(
+        fixture.engine.phaseRejoinCoordinator().terminalReleaseAuthorized());
 }
 
 TEST(ControlCycleEngineTest,
@@ -864,6 +867,7 @@ TEST(ControlCycleEngineTest,
     const ControlCycleResult result = fixture.engine.step(request);
 
     ASSERT_TRUE(result.have_phase_decision);
+    EXPECT_TRUE(result.phase_decision.command_intervened);
     EXPECT_TRUE(result.phase_decision.controlled_stop_used);
     EXPECT_EQ(result.solver_output.status, "OK");
     EXPECT_EQ(result.telemetry.solver_status, "OK");
@@ -873,6 +877,9 @@ TEST(ControlCycleEngineTest,
     EXPECT_EQ(CommandSource::PhaseRejoin, result.decision.source);
     EXPECT_FALSE(result.decision.accepted);
     EXPECT_FALSE(result.output.success);
+    EXPECT_FALSE(result.phase_committed);
+    EXPECT_FALSE(result.telemetry.phase_rejoin_committed);
+    EXPECT_FALSE(fixture.engine.phaseRejoinCoordinator().haveAcceptedIndex());
     EXPECT_DOUBLE_EQ(0.0, result.final_command.linear);
     EXPECT_DOUBLE_EQ(0.0, result.final_command.angular);
     EXPECT_DOUBLE_EQ(0.0, fixture.sink.last_command.command.linear);

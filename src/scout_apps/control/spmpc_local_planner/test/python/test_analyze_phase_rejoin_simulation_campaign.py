@@ -42,7 +42,7 @@ FORMAL_SEEDS = tuple(range(3101, 3117))
 
 def trial_summary(seed, condition, formal=False, causal_ready=False):
     summary = {
-        "schema": "spmpc_closed_loop_trial_summary_v1",
+        "schema": "spmpc_closed_loop_trial_summary_v2",
         "status": "TRIAL_COMPLETE",
         "implementation_complete": True,
         "condition_id": condition,
@@ -50,6 +50,8 @@ def trial_summary(seed, condition, formal=False, causal_ready=False):
         "implementation_id": "implementation_{}".format(condition),
         "seed": seed,
         "simulation_only": True,
+        "formal_trials_started": formal,
+        "development_pilot_only": not formal,
         "formal_robot_release": False,
         "physical_parameter_claim": False,
         "preliminary_planar_r03_parameters_only": True,
@@ -76,6 +78,7 @@ def trial_summary(seed, condition, formal=False, causal_ready=False):
             "name": "external_measured_height_q95_m",
             "window": "motion_plus_fixed_tail",
             "statistics_unit": "complete_trial",
+            "window_complete": True,
             "quantile_method": "nearest_rank",
             "sample_count": 360,
             "value_m": VALUES[condition] + seed * 1.0e-6,
@@ -83,7 +86,36 @@ def trial_summary(seed, condition, formal=False, causal_ready=False):
         "secondary_metrics": {
             "tracking_q95_m": 0.02,
         },
-        "controller_audit": {},
+        "solver_runtime": {
+            "sample_count": 100,
+            "deadline_misses": 0,
+            "kkt_contract_passed": True,
+        },
+        "controller_audit": {
+            "solver_failures": 0,
+            "gate_evaluations": 100 if condition in ("C3", "C4") else 0,
+            "current_gate_evaluations": (
+                100 if condition in ("C3", "C4") else 0
+            ),
+            "current_gate_accepts": (
+                100 if condition in ("C3", "C4") else 0
+            ),
+            "terminal_gate_evaluations": (
+                100 if condition in ("C3", "C4") else 0
+            ),
+            "terminal_gate_accepts": (
+                100 if condition in ("C3", "C4") else 0
+            ),
+            "recovery_actions": 0,
+            "controlled_stops": 0,
+            "publications": 220,
+            "publication_failures": 0,
+            "phase_commits": 100 if condition in ("C3", "C4") else 0,
+            "receipt_inconsistent_cycles": 0,
+            "history_not_committed_cycles": 0,
+            "command_modified_cycles": 0,
+            "zero_requests": 0,
+        },
         "baseline_contract": {
             "formal_c3_c4_causal_comparison_ready": causal_ready,
             "c3_exact_c4_optimizer_match": causal_ready,
@@ -204,7 +236,14 @@ class SimulationCampaignAnalysisTest(unittest.TestCase):
             ANALYSIS.analyze_campaign(self.root, "pilot")
 
     def test_formal_requires_hash_threshold_and_summary_binding(self):
-        self.write_campaign(seeds=(11, 12, 13))
+        self.write_campaign(seeds=(11, 12, 13), formal=True)
+        for seed in (11, 12, 13):
+            for condition in MODES:
+                self.rewrite(
+                    seed,
+                    condition,
+                    lambda value: value.pop("frozen_session_sha256"),
+                )
         with self.assertRaisesRegex(ANALYSIS.CampaignError, "requires --frozen"):
             ANALYSIS.analyze_campaign(self.root, "formal")
         with self.assertRaisesRegex(ANALYSIS.CampaignError, "requires --preregistered"):
@@ -212,6 +251,28 @@ class SimulationCampaignAnalysisTest(unittest.TestCase):
                 self.root, "formal", frozen_session_sha256=SESSION_HASH
             )
         with self.assertRaisesRegex(ANALYSIS.CampaignError, "not bound"):
+            ANALYSIS.analyze_campaign(
+                self.root,
+                "formal",
+                frozen_session_sha256=SESSION_HASH,
+                preregistered_min_effect_m=0.0005,
+            )
+
+    def test_development_summary_cannot_be_analyzed_as_formal(self):
+        self.write_campaign(
+            seeds=FORMAL_SEEDS, formal=True, causal_ready=True
+        )
+        self.rewrite(
+            FORMAL_SEEDS[0],
+            "C4",
+            lambda value: (
+                value.__setitem__("formal_trials_started", False),
+                value.__setitem__("development_pilot_only", True),
+            ),
+        )
+        with self.assertRaisesRegex(
+            ANALYSIS.CampaignError, "not a formal trial summary"
+        ):
             ANALYSIS.analyze_campaign(
                 self.root,
                 "formal",
@@ -233,7 +294,7 @@ class SimulationCampaignAnalysisTest(unittest.TestCase):
                 preregistered_min_effect_m=0.0004,
             )
 
-    def test_formal_pass_requires_effects_and_causal_c3_contract(self):
+    def test_formal_pass_reports_primary_secondary_and_gate_ablation(self):
         self.write_campaign(
             seeds=FORMAL_SEEDS, formal=True, causal_ready=True
         )
@@ -248,8 +309,15 @@ class SimulationCampaignAnalysisTest(unittest.TestCase):
         self.assertTrue(
             report["decision"]["checks"]["c3_c4_causal_contract_ready"]
         )
+        self.assertTrue(report["decision"]["c1_secondary_evaluated"])
+        self.assertTrue(report["decision"]["c1_secondary_pass"])
+        self.assertTrue(report["decision"]["c3_ablation_reported"])
+        self.assertFalse(
+            report["decision"]
+            ["c3_ablation_minimum_effect_threshold_applied"]
+        )
 
-    def test_formal_pilot_only_c3_contract_forces_fail(self):
+    def test_noncausal_c3_only_makes_gate_ablation_not_estimable(self):
         self.write_campaign(
             seeds=FORMAL_SEEDS, formal=True, causal_ready=False
         )
@@ -259,10 +327,164 @@ class SimulationCampaignAnalysisTest(unittest.TestCase):
             frozen_session_sha256=SESSION_HASH,
             preregistered_min_effect_m=0.0005,
         )
-        self.assertEqual(report["decision"]["status"], "FAIL")
-        self.assertFalse(report["decision"]["paper_claim_authorized"])
+        self.assertEqual(report["decision"]["status"], "PASS")
+        self.assertTrue(report["decision"]["paper_claim_authorized"])
         self.assertFalse(
             report["decision"]["checks"]["c3_c4_causal_contract_ready"]
+        )
+        self.assertFalse(
+            report["decision"]["c3_ablation_causal_contract_ready"]
+        )
+
+    def test_null_c3_effect_does_not_veto_primary(self):
+        self.write_campaign(
+            seeds=FORMAL_SEEDS, formal=True, causal_ready=True
+        )
+        for seed in FORMAL_SEEDS:
+            self.rewrite(
+                seed,
+                "C3",
+                lambda value: value["primary_metric"].__setitem__(
+                    "value_m", VALUES["C4"] + seed * 1.0e-6
+                ),
+            )
+        report = ANALYSIS.analyze_campaign(
+            self.root,
+            "formal",
+            frozen_session_sha256=SESSION_HASH,
+            preregistered_min_effect_m=0.0005,
+        )
+        self.assertEqual(report["decision"]["status"], "PASS")
+        self.assertFalse(
+            report["decision"]
+            ["c3_ablation_minimum_effect_threshold_applied"]
+        )
+
+    def test_c1_fairness_failure_does_not_veto_primary(self):
+        self.write_campaign(
+            seeds=FORMAL_SEEDS, formal=True, causal_ready=True
+        )
+        for seed in FORMAL_SEEDS:
+            self.rewrite(
+                seed,
+                "C1",
+                lambda value: value["primary_metric"].__setitem__(
+                    "value_m", VALUES["C4"] + seed * 1.0e-6
+                ),
+            )
+        report = ANALYSIS.analyze_campaign(
+            self.root,
+            "formal",
+            frozen_session_sha256=SESSION_HASH,
+            preregistered_min_effect_m=0.0005,
+        )
+        self.assertEqual(report["decision"]["status"], "PASS")
+        self.assertTrue(report["decision"]["c1_secondary_evaluated"])
+        self.assertFalse(report["decision"]["c1_secondary_pass"])
+
+    def test_solver_failure_is_retained_and_fails_primary(self):
+        self.write_campaign(
+            seeds=FORMAL_SEEDS, formal=True, causal_ready=True
+        )
+        self.rewrite(
+            FORMAL_SEEDS[0],
+            "C4",
+            lambda value: value["controller_audit"].__setitem__(
+                "solver_failures", 1
+            ),
+        )
+        report = ANALYSIS.analyze_campaign(
+            self.root,
+            "formal",
+            frozen_session_sha256=SESSION_HASH,
+            preregistered_min_effect_m=0.0005,
+        )
+        self.assertEqual(report["decision"]["status"], "FAIL")
+        self.assertEqual(report["campaign"]["failed_trial_count"], 1)
+        self.assertEqual(
+            report["paired_comparisons"]["C4_minus_C0"]
+            ["failed_pair_count"],
+            1,
+        )
+        failed_record = next(
+            record for record in report["trial_records"]
+            if record["seed"] == FORMAL_SEEDS[0]
+            and record["condition_id"] == "C4"
+        )
+        self.assertIn("solver_failures", failed_record["method_failure_reasons"])
+
+    def test_runtime_error_without_complete_window_is_retained_and_not_imputed(self):
+        self.write_campaign(
+            seeds=FORMAL_SEEDS, formal=True, causal_ready=True
+        )
+
+        def runtime_fail(value):
+            value["status"] = "RUNTIME_ERROR"
+            value["trial"]["sequence_completed"] = False
+            value["trial"]["task_success"] = False
+            value["trial"]["motion_end_sec"] = 0.0
+            value["trial"]["runtime_error"] = "publish epoch estimate rejected"
+            value["primary_metric"]["window"] = "incomplete_runtime_error"
+            value["primary_metric"]["statistics_unit"] = \
+                "failed_trial_incomplete_window"
+            value["primary_metric"]["window_complete"] = False
+            value["primary_metric"]["sample_count"] = 0
+            value["primary_metric"]["value_m"] = None
+            value["secondary_metrics"]["tracking_q95_m"] = None
+            value["solver_runtime"]["sample_count"] = 0
+            value["solver_runtime"]["kkt_contract_passed"] = False
+
+        self.rewrite(FORMAL_SEEDS[0], "C4", runtime_fail)
+        report = ANALYSIS.analyze_campaign(
+            self.root,
+            "formal",
+            frozen_session_sha256=SESSION_HASH,
+            preregistered_min_effect_m=0.0005,
+        )
+        self.assertEqual(report["decision"]["status"], "FAIL")
+        self.assertEqual(report["campaign"]["failed_trial_count"], 1)
+        comparison = report["paired_comparisons"]["C4_minus_C0"]
+        self.assertEqual(comparison["pair_count"], len(FORMAL_SEEDS))
+        self.assertEqual(comparison["failed_pair_count"], 1)
+        self.assertEqual(comparison["primary_effect_unavailable_pair_count"], 1)
+        self.assertFalse(comparison["complete_grid_effect_estimable"])
+        interval = comparison["primary_paired_bootstrap_95pct"]
+        self.assertFalse(interval["estimable"])
+        self.assertIsNone(interval["estimate"])
+        self.assertFalse(interval["incomplete_pairs_dropped_or_imputed"])
+        self.assertEqual(
+            report["condition_summaries"]["C4"]
+            ["primary_metric_unavailable_trial_count"],
+            1,
+        )
+
+    def test_c3_failure_is_reported_but_does_not_veto_primary(self):
+        self.write_campaign(
+            seeds=FORMAL_SEEDS, formal=True, causal_ready=True
+        )
+        self.rewrite(
+            FORMAL_SEEDS[0],
+            "C3",
+            lambda value: value["controller_audit"].__setitem__(
+                "controlled_stops", 1
+            ),
+        )
+        report = ANALYSIS.analyze_campaign(
+            self.root,
+            "formal",
+            frozen_session_sha256=SESSION_HASH,
+            preregistered_min_effect_m=0.0005,
+        )
+        self.assertEqual(report["decision"]["status"], "PASS")
+        self.assertEqual(
+            report["paired_comparisons"]["C4_minus_C3"]
+            ["failed_pair_count"],
+            1,
+        )
+        self.assertEqual(
+            report["condition_summaries"]["C3"]
+            ["controller_audit_totals"]["controlled_stops"],
+            1,
         )
 
     def test_formal_requires_exactly_sixteen_paired_blocks(self):

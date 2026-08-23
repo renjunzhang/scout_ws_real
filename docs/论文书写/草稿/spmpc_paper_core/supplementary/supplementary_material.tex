@@ -8,13 +8,15 @@
 This fragment records configuration, validation, and analysis fields for the
 target Phase-Rejoining Residual MPC release. It contains no formal performance
 result. A \Pending{} entry is neither a pass nor permission to acquire
-confirmation data. The most recent pre-revision formal-simulation session,
-bound to commit \texttt{7775dd68}, reports
+confirmation data. The immediately preceding clean pre-review
+formal-simulation session, bound to commit \texttt{3e0dafd8}, reports
 \texttt{READY\_NOT\_EXECUTED} and
 \texttt{formal\_trials\_started=false}. This means only that its hash-bound
-assets passed automated readiness checks; it does not qualify the revised
-source, and no formal C0--C4/IS trial was executed. Human authorization is not
-recorded here, and physical qualification and experiments have not started.
+assets passed automated readiness checks. No human approval was issued and no
+formal C0--C4/IS trial was executed. The comparison and analysis corrections
+in the present revision are not bound to that session, so they require a new
+clean commit, build, formal session, readiness report, and approval. Physical
+qualification and experiments have not started.
 
 One release identifier binds the Git commit, build products, runner, controller
 configuration, path and frame hashes, execution and liquid models,
@@ -182,7 +184,7 @@ artifact is never shared across different path hashes.
       report/scales hashes, phase coverage, and validity flags. & Dataset
       generator, seed partitions, fitting invocation, and analysis software
       \Pending \\
-    Invalidation/provenance & Any direct-field mismatch invalidates the artifact;
+    Invalidation & Any direct-field mismatch invalidates the artifact;
       the artifact bytes receive an immutable hash. & Git commit, full
       configurations, executable hashes, storage path, and session manifest;
       changing any of these creates a new session \Pending \\
@@ -271,6 +273,34 @@ conditioned away.
   \end{tabular}
 \end{table*}
 
+The nominal Layer~S matrix crosses sixteen locked blocks with C0--C4 and IS in
+a 96-row Williams-derived order.  The six base sequences are repeated
+$3,3,3,3,2,2$ times; each condition consequently appears two or three times in
+each position and each directed carryover also occurs two or three times.  The
+order is therefore approximately, rather than exactly, balanced. Paths, seeds,
+conditions, outcome definitions, and analysis code are fixed before formal
+acquisition, and formal outcomes are not used for retuning.
+
+The Layer~S hierarchy is fixed as follows. C4--C0 is the sole preregistered
+primary comparison. C4--C1 is its fixed-sequence secondary fairness comparison;
+a favorable result shows persistence against an independently tuned smoother
+MPCC and weakens, but cannot eliminate, the generic slower/smoother explanation.
+C4--C3 reports the paired gate-enforcement effect together with activation,
+recovery, zero-request, and failure outcomes, and does not veto C4--C0. C2 and
+IS are retained as descriptive system references rather than additional hard
+decisions or component attributions.
+
+Failure retention is contrast-specific.  A C4 or C0 method failure enters the
+primary decision, a C1 failure enters the conditional fairness decision, and a
+C3 failure enters the nominal mechanism report.  C2 or IS failure is always
+reported but cannot by itself reject C4--C0.  Only a preregistered external
+infrastructure/acquisition fault may be replaced, with both the original
+attempt and its disposition retained in the trial log.
+
+The sixteen-block count and 0.5-mm margin lack a prospective power or precision
+justification and are therefore an explicit limitation; the physical sample
+size remains a separate calculation based on RGB calibration and pilot data.
+
 \begin{table*}[t]
   \centering
   \scriptsize
@@ -355,18 +385,23 @@ rejection, and the worst phase are reported alongside it.
       artifact, phase rejoining, execution compatibility, empirical gate, or
       frozen recovery feedback. &
       Runner, config, build and command-topic hashes \Pending \\
-    C1 SmoothMatch & C0 plus independently task-only-tuned and frozen smoothing
+    C1 SmoothMPCC & C0 plus independently task-only-tuned and frozen smoothing
       settings with \texttt{global\_time\_scale=1.0}; no liquid-informed or
-      post-confirmation retuning, and no exact C4 time-match claim. & Tuning
-      pool, parameter/scale, task-time envelope and manipulation check \Pending \\
+      post-confirmation retuning, and no exact C4 time-match claim.  The legacy
+      engineering mode and file identifiers are
+      \texttt{smooth\_match\_mpcc} and
+      \texttt{C1\_smooth\_match\_mpcc.yaml}. & Tuning pool,
+      parameter/scale, task-time envelope and manipulation check \Pending \\
     C2 OfflineReplay & Same frozen artifact and downstream chain as C4; frozen
       clock progression, $\delta u=0$, no empirical gate or online recovery
       feedback. &
       Runner, artifact, clock/reset and fallback semantics \Pending \\
-    C3 ResidualNoGate & Same artifact, phase selector, delay-augmented residual
+    C3 GateMonitorPR-RMPC & Same artifact, phase selector, delay-augmented residual
       OCP, full-horizon $\mathcal B^{\mathrm{exec}}$, residual bounds, frozen
       recovery feedback, safety chain, and publication transaction as C4; the
-      9-D empirical gate is monitor-only. & Runner, monitor-only assertion,
+      9-D empirical gate is monitor-only.  The legacy engineering mode/file
+      identifiers are \texttt{residual\_no\_gate} and
+      \texttt{C3\_residual\_no\_gate.yaml}. & Runner, monitor-only assertion,
       fallback and diagnostic record \Pending \\
     C4 Full & C3 with the terminal 9-D empirical gate enforced for residual
       admission and the current-phase 9-D gate enforced for recovery admission. &
@@ -629,7 +664,7 @@ be replaced after acquisition by peak, RMS, or another more favorable summary.
   \end{tabular}
 \end{table*}
 
-\section{Development Provenance and Claim Boundary}
+\section{Development Status and Evidence Boundary}
 
 Development simulations, branch-coverage tests, no-motion trials, parameter
 selection, gate construction, and pilots are archived with their data role,
@@ -637,10 +672,12 @@ release/configuration hash, date, path, container/fill, measurement version,
 selection decision, and rejection reason. They do not contribute observations
 to $D_{\mathrm{main,confirm}}$ or $D_{\mathrm{recovery,confirm}}$.
 
-The pre-revision formal-simulation assets bound to commit \texttt{7775dd68}
-reached only \texttt{READY\_NOT\_EXECUTED}; revised source requires a new
-freeze and audit. All formal result cells above therefore remain \Pending{},
-and physical experiments have not started. Any future evidence is
+The clean pre-review formal-simulation assets bound to commit
+\texttt{3e0dafd8} reached only \texttt{READY\_NOT\_EXECUTED}, with no approval
+and 0/96 formal trials. The present protocol and analysis revision requires a
+new freeze and audit. All formal
+result cells above therefore remain \Pending{}, and physical experiments have
+not started. Any future evidence is
 limited to frozen-path tracking in a static, obstacle-clear workspace, the
 contracted Scout execution range, the reported container/fill and low-order
 liquid-model range, and the observed empirical-gate coverage. Independent RGB

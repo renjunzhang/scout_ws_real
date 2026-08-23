@@ -483,14 +483,21 @@ def _validate_measurement_contract(session: Dict[str, Any],
         "paired_interval": "paired_bootstrap_95pct",
         "paired_estimator": "paired_mean",
         "failed_trial_rule": "retain_and_count_as_failure",
+        "pair_failure_rule": "zero_method_failed_pairs",
         "replacement_rule":
             "infrastructure_failure_only_same_seed_condition",
     }
     for key, expected_value in string_contract.items():
         if measurement.get(key) != expected_value:
             reasons.append("measurement contract {} is invalid".format(key))
+    if measurement.get("gate_ablation_uses_primary_margin") is not False:
+        reasons.append(
+            "measurement contract gate_ablation_uses_primary_margin is invalid"
+        )
     list_contract = {
-        "primary_comparators": ["C0", "C1", "C3"],
+        "primary_comparators": ["C0"],
+        "fixed_sequence_secondary_comparators": ["C1"],
+        "gate_ablation_comparators": ["C3"],
         "task_noninferiority_comparators": ["C0", "C1"],
     }
     for key, expected_value in list_contract.items():
@@ -618,6 +625,7 @@ def _validate_condition_bindings(
         reasons.append("controller manifest condition table is absent")
         manifest_conditions = {}
     implementation_ids = set()
+    c3_c4_residual_bounds: Dict[str, Tuple[float, float]] = {}
     for name in REQUIRED_CONDITIONS:
         binding = conditions.get(name)
         if not isinstance(binding, dict):
@@ -632,7 +640,7 @@ def _validate_condition_bindings(
             reasons.append("condition implementation_id is not unique")
         else:
             implementation_ids.add(implementation_id)
-        _artifact_reference(
+        config_path = _artifact_reference(
             binding, "config", session_path, reasons, inventory,
             inventory_key="condition.{}.config".format(name))
         expected = CONDITION_SEMANTICS[name]
@@ -648,6 +656,63 @@ def _validate_condition_bindings(
                 binding.get("shaper") not in ("ZV", "ZVD") or
                 binding.get("single_mode_residual_test_passed") is not True):
             reasons.append("IS shaper validation is absent")
+        if config_path is not None:
+            try:
+                config = load_yaml(config_path)
+            except (OSError, ValueError, yaml.YAMLError) as error:
+                reasons.append("{} condition config cannot be parsed: {}".format(
+                    name, error))
+                config = {}
+            if (config.get("schema") !=
+                    "spmpc_closed_loop_trial_condition_v1"):
+                reasons.append("{} condition config schema is invalid".format(
+                    name))
+            if config.get("condition_id") != name:
+                reasons.append("{} condition config identity is invalid".format(
+                    name))
+            if config.get("implementation_id") != implementation_id:
+                reasons.append(
+                    "{} condition config implementation_id differs".format(
+                        name))
+            if config.get("implementation_complete") is not True:
+                reasons.append("{} condition config is incomplete".format(name))
+            for key, value in expected.items():
+                if config.get(key) != value:
+                    reasons.append(
+                        "{} config semantic {} is invalid".format(name, key))
+            if name == "C1" and (
+                    config.get("pilot_tuned_and_frozen") !=
+                        binding.get("pilot_tuned_and_frozen") or
+                    config.get("global_time_scale") !=
+                        binding.get("global_time_scale")):
+                reasons.append("C1 config differs from frozen tuning binding")
+            if name in ("C3", "C4"):
+                if config.get("pilot_only") is not False:
+                    reasons.append(
+                        "{} config is still pilot-only".format(name))
+                if (config.get("formal_c3_c4_causal_comparison_ready")
+                        is not True):
+                    reasons.append(
+                        "{} strict causal comparison is not frozen".format(
+                            name))
+                residual = config.get("residual_feedback")
+                max_v = residual.get("max_residual_v") \
+                    if isinstance(residual, dict) else None
+                max_omega = residual.get("max_residual_omega") \
+                    if isinstance(residual, dict) else None
+                if (not _finite_number(max_v) or float(max_v) < 0.0 or
+                        not _finite_number(max_omega) or
+                        float(max_omega) < 0.0):
+                    reasons.append(
+                        "{} residual authority is invalid".format(name))
+                else:
+                    c3_c4_residual_bounds[name] = (
+                        float(max_v), float(max_omega))
+            if name == "IS":
+                shaper = config.get("input_shaper")
+                if (not isinstance(shaper, dict) or
+                        shaper.get("type") != binding.get("shaper")):
+                    reasons.append("IS config shaper differs from binding")
         manifest_binding = manifest_conditions.get(name)
         if not isinstance(manifest_binding, dict):
             reasons.append("controller manifest does not implement {}".format(
@@ -660,6 +725,9 @@ def _validate_condition_bindings(
             if manifest_binding.get(key) != value:
                 reasons.append(
                     "{} manifest semantic {} is invalid".format(name, key))
+    if (set(c3_c4_residual_bounds) == {"C3", "C4"} and
+            c3_c4_residual_bounds["C3"] != c3_c4_residual_bounds["C4"]):
+        reasons.append("C3/C4 residual authority differs")
 
 
 def _validate_controller_manifest(
@@ -1674,7 +1742,7 @@ def main(argv: Sequence[str]) -> int:
             if reasons:
                 print("formal simulation NO-GO: " + "; ".join(reasons))
                 return 4
-            print("formal session is hash-bound and ready; this audit command "
+            print("formal session is frozen and ready; this audit command "
                   "does not execute C0-C4")
             return 5
 

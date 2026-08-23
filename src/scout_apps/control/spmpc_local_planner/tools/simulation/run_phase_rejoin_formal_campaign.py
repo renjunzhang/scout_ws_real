@@ -25,6 +25,7 @@ REQUIRED_CONDITIONS = ("C0", "C1", "C2", "C3", "C4", "IS")
 APPROVAL_SCHEMA = "spmpc_formal_simulation_human_approval_v1"
 READINESS_SCHEMA = "spmpc_formal_simulation_readiness_v2"
 MANIFEST_SCHEMA = "spmpc_phase_rejoin_formal_campaign_v1"
+SUMMARY_SCHEMA = "spmpc_closed_loop_trial_summary_v2"
 ALLOWED_OUTPUT_ROOT = Path("/data/a/spmpc_exec_identification")
 
 
@@ -158,6 +159,76 @@ def _write_manifest(path: Path, manifest: Dict[str, Any]) -> None:
     os.replace(str(temporary), str(path))
 
 
+class TrialInfrastructureFailure(RuntimeError):
+    """A trial process did not leave a complete, readable evidence pair."""
+
+
+class TrialSummaryContractFailure(RuntimeError):
+    """A zero-exit trial wrote a summary outside the frozen contract."""
+
+
+def _trial_record(
+        entry: Dict[str, Any], cycle_path: Path, summary_path: Path,
+        session_sha256: str, process_returncode: int) -> Dict[str, Any]:
+    try:
+        summary = _load_json(summary_path)
+    except (OSError, RuntimeError, json.JSONDecodeError) as error:
+        raise TrialInfrastructureFailure(
+            "trial process left no readable summary: {}".format(error)) \
+            from error
+
+    trial = summary.get("trial")
+    status = summary.get("status")
+    task_success = trial.get("task_success") if isinstance(trial, dict) \
+        else None
+    sequence_completed = trial.get("sequence_completed") \
+        if isinstance(trial, dict) else None
+    runtime_error = trial.get("runtime_error") \
+        if isinstance(trial, dict) else None
+    status_consistent = (
+        status == "TRIAL_COMPLETE" and sequence_completed is True and
+        task_success is True and runtime_error == "" and
+        process_returncode == 0) or (
+        status == "TRIAL_COMPLETE_WITH_FAILURE" and
+        task_success is False and runtime_error == "" and
+        process_returncode == 0) or (
+        status == "RUNTIME_ERROR" and task_success is False and
+        isinstance(runtime_error, str) and bool(runtime_error) and
+        process_returncode != 0)
+    if (summary.get("schema") != SUMMARY_SCHEMA or
+            summary.get("seed") != entry["seed"] or
+            summary.get("condition_id") != entry["condition"] or
+            summary.get("formal_trials_started") is not True or
+            summary.get("development_pilot_only") is not False or
+            summary.get("frozen_session_sha256") != session_sha256 or
+            not isinstance(sequence_completed, bool) or
+            not status_consistent):
+        error = "formal trial summary contract failed"
+        if process_returncode != 0:
+            raise TrialInfrastructureFailure(
+                "trial process failed without a valid summary")
+        raise TrialSummaryContractFailure(error)
+
+    try:
+        cycle_sha256 = _sha256_file(cycle_path)
+        summary_sha256 = _sha256_file(summary_path)
+    except OSError as error:
+        raise TrialInfrastructureFailure(
+            "formal trial evidence is incomplete: {}".format(error)) from error
+
+    record = dict(entry)
+    record.update({
+        "cycle_csv": str(cycle_path),
+        "cycle_csv_sha256": cycle_sha256,
+        "summary_json": str(summary_path),
+        "summary_json_sha256": summary_sha256,
+        "process_returncode": process_returncode,
+        "task_success": task_success,
+        "status": status,
+    })
+    return record
+
+
 def _clean_commit_matches(session: Dict[str, Any]) -> None:
     runtime = session.get("runtime", {})
     expected = runtime.get("git_commit")
@@ -269,35 +340,38 @@ def execute(
             "--summary-json", str(summary_path),
             "--frozen-session-sha256", session_sha256,
         ]
-        completed = subprocess.run(
-            command, check=False, text=True,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if completed.returncode != 0:
+        try:
+            completed = subprocess.run(
+                command, check=False, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except OSError as error:
+            manifest["status"] = "STOPPED_INFRASTRUCTURE_FAILURE"
+            manifest["failed_command"] = command
+            manifest["infrastructure_failure"] = str(error)
+            _write_manifest(manifest_path, manifest)
+            raise RuntimeError(
+                "formal trial process could not start; no retry allowed") \
+                from error
+        try:
+            record = _trial_record(
+                entry, cycle_path, summary_path, session_sha256,
+                completed.returncode)
+        except TrialInfrastructureFailure as error:
             manifest["status"] = "STOPPED_INFRASTRUCTURE_FAILURE"
             manifest["failed_command"] = command
             manifest["failed_returncode"] = completed.returncode
             manifest["failed_stdout"] = completed.stdout
             manifest["failed_stderr"] = completed.stderr
+            manifest["infrastructure_failure"] = str(error)
             _write_manifest(manifest_path, manifest)
-            raise RuntimeError("formal trial process failed; no retry allowed")
-        summary = _load_json(summary_path)
-        if (summary.get("seed") != entry["seed"] or
-                summary.get("condition_id") != entry["condition"] or
-                summary.get("formal_trials_started") is not True or
-                summary.get("development_pilot_only") is not False or
-                summary.get("frozen_session_sha256") != session_sha256):
+            raise RuntimeError(
+                "formal trial left no valid evidence; no retry allowed") \
+                from error
+        except TrialSummaryContractFailure as error:
             manifest["status"] = "STOPPED_SUMMARY_CONTRACT_FAILURE"
+            manifest["summary_contract_failure"] = str(error)
             _write_manifest(manifest_path, manifest)
-            raise RuntimeError("formal trial summary contract failed")
-        record = dict(entry)
-        record.update({
-            "cycle_csv": str(cycle_path),
-            "cycle_csv_sha256": _sha256_file(cycle_path),
-            "summary_json": str(summary_path),
-            "summary_json_sha256": _sha256_file(summary_path),
-            "task_success": summary.get("trial", {}).get("task_success"),
-            "status": summary.get("status"),
-        })
+            raise RuntimeError(str(error)) from error
         manifest["trials"].append(record)
         manifest["completed_trial_count"] = len(manifest["trials"])
         _write_manifest(manifest_path, manifest)

@@ -110,7 +110,7 @@ $$
 
 其中 $\bar x_i^{\mathrm{aug}}\in\mathbb R^{22}$ 是完整延迟增广名义状态，$\bar q_i$ 是 published-command-rate 输入，$\bar u_i^{\mathrm{pub}}$ 是名义发布命令，$\bar\kappa_i$ 提供恢复反馈的名义命令中心，$\rho_i\in\mathbb R^9_{>0}$ 是经验 gate 半径，$\beta_i\in\mathbb R^{14}_{>0}$ 是执行兼容边界。
 
-artifact 的文件头直接绑定路径 hash／坐标系、$\Delta t$、执行合同及 hash、低阶液体模型系数、状态和参数 schema、完整减速—沉降—零命令尾段、recovery policy、recovery dataset／fit report／scales hash、$\rho_i$ 和 $\beta_i$。容器与 fill、生成脚本、完整配置、可执行文件和 Git commit 则由更外层的 formal session manifest 绑定，不能冒充 artifact 自身的 header 字段。任一 artifact 直接绑定项改变必须重新生成 artifact；任一 session 绑定项改变必须重新物化 session 和相应证据。
+artifact 身份固定路径与坐标系、$\Delta t$、执行与低阶液体模型、状态/参数 schema、完整减速—沉降—零命令尾段、recovery policy 以及 $\rho_i$、$\beta_i$ 的定义。容器与 fill、生成/运行软件、六个 condition 配置和可执行文件在正式实验前另行冻结。任一方法定义改变都必须重新生成 artifact 并重新冻结实验；Methods 不展开逐文件 hash 或 session manifest 的工程细节。
 
 ### 2.3 冻结的有界恢复反馈
 
@@ -293,20 +293,44 @@ $$
 
 因此第一拍 residual 约束必须作用在 $b^v_{4,0}+a_0^{\mathrm{pub}}\Delta t$ 和 $b^\omega_{6,0}+\alpha_0^{\mathrm{pub}}\Delta t$ 上，不能写成 $v^r_0+a_0\Delta t$、$\omega^r_0+\alpha_0\Delta t$。
 
-两路命令分别按 integer/fractional delay 在每个离散步内分段作用。平面运动和内部液体模型满足
+两路命令分别按 integer/fractional delay 在每个离散步内分段作用。设线、角 fractional event 与步长终点的排序并集为
 
 $$
-\dot p_x=v^r\cos\psi,\qquad
-\dot p_y=v^r\sin\psi,\qquad
-\dot\psi=\omega^r,
+0=\tau_0<\tau_1<\cdots<\tau_L=\Delta t,
+\qquad \delta_h=\tau_{h+1}-\tau_h.
 $$
 
+对于分段 $h$ 和通道 $r\in\{v,\omega\}$，令 $y_v=v^r$、$y_\omega=\omega^r$，$\mu_r(\widetilde u_{r,h})$ 表示冻结的增益—死区—饱和映射。代码使用如下分段末端输出：
+
 $$
-\dot z^\ell=A_\ell z^\ell+B_\ell
-\begin{bmatrix}\dot v^r\\v^r\omega^r\end{bmatrix}.
+y_{r,h+1}=
+\begin{cases}
+\mu_r(\widetilde u_{r,h}), & \tau_r^{a}=0,\\
+\mu_r(\widetilde u_{r,h})+
+e^{-\delta_h/\tau_r^{a}}
+\bigl(y_{r,h}-\mu_r(\widetilde u_{r,h})\bigr),
+& \tau_r^{a}>0.
+\end{cases}
 $$
 
-当前冻结 controller contract 的两路 time constant 均为 0、正负方向增益均为 1、deadzone 均为 0，因此在线模型实际退化为带输出边界的双通道纯运输延迟。实现保留了一般一阶执行通道 schema，但 Methods 不应暗示当前在线求解器使用了非零执行器惯性；正式仿真的 independent plant 可保留非零 time constant，作为刻意的模型失配。
+随后以该末端输出执行位姿更新，并以分段平均纵向加速度和末端横向加速度作为 ZOH 液体输入：
+
+$$
+\begin{aligned}
+p_{x,h+1}&=p_{x,h}+\delta_h v^r_{h+1}\cos\psi_h,\\
+p_{y,h+1}&=p_{y,h}+\delta_h v^r_{h+1}\sin\psi_h,\\
+\psi_{h+1}&=\operatorname{wrap}(\psi_h+\delta_h\omega^r_{h+1}),\\
+a_{x,h}&=\frac{v^r_{h+1}-v^r_h}{\delta_h},
+\qquad a_{y,h}=v^r_{h+1}\omega^r_{h+1},\\
+z^\ell_{h+1}&=A_{\ell,d}(\delta_h)z^\ell_h+
+B_{\ell,d}(\delta_h)
+\begin{bmatrix}a_{x,h}\\a_{y,h}\end{bmatrix}.
+\end{aligned}
+$$
+
+$A_{\ell,d},B_{\ell,d}$ 由低阶液体连续模型的矩阵指数精确 ZOH 离散化得到；位姿则是实现中明确的分段末端 Euler 更新。所有 event segment 依次复合后再移动 pending queue，得到 $F_{\mathrm{exec}\text{-}\ell}$。因此文稿不将该转移表述为对连续位姿—执行器方程的精确积分；当 $\tau_r^a=0$ 时，$a_{x,h}$ 是代码中的有限差分分段平均量，不声称命令跳变处存在经典导数。
+
+当前冻结 controller contract 的两路 $\tau_r^a$ 均为 0、正负方向增益均为 1、deadzone 均为 0，因此在线模型实际退化为带输出边界的双通道纯运输延迟。实现保留了一般一阶执行通道 schema，但 Methods 不应暗示当前在线求解器使用了非零执行器惯性；正式仿真的 independent plant 可保留非零 time constant，作为刻意的模型失配。
 
 求解器内部 yaw 使用 continuous lift 保持动力学光滑，代价和 gate 的 yaw 误差仍使用 wrapped difference。
 
@@ -327,7 +351,7 @@ $$
 N=n_f+N_\ell=10,
 $$
 
-终端位于预计发布时刻后约 $333.3\,\mathrm{ms}$，也就是共同栅格化执行前沿后约 $100\,\mathrm{ms}$。这 10 步全部由决策相关的 22 维动力学连续传播；前 7 步是显式执行延迟传播，不是 history-only 固定前沿，也不是额外的自由液体 preview。
+终端位于预计发布时刻后约 $333.3\,\mathrm{ms}$，也就是共同栅格化执行前沿后约 $100\,\mathrm{ms}$。这 10 步全部由决策相关的 22 维离散转移传播；前 7 步是显式执行延迟传播，不是 history-only 固定前沿，也不是额外的自由液体 preview。
 
 ## 4. III-D：相位候选选择与完整时域资格检查
 
@@ -345,7 +369,32 @@ $$
 
 ### 4.2 先检查执行可行性，再做 9 维评分
 
-对每个候选 $j$，先要求当前执行状态满足 $\mathcal B_j^{\mathrm{exec}}$。随后分别在线、角通道上构造一条完整 $N$ 步因果命令 witness：每个未来发布命令必须同时满足全局命令范围、名义 residual 范围、相邻发布速率限制，以及该命令以后移入 pending queue 各位置时对应的逐相位 $\mathcal B_{j+k}^{\mathrm{exec}}$。witness 经执行模型 rollout 后，还必须在 $k=0,\ldots,N$ 的每一拍通过执行兼容检查。
+对每个候选 $j$，先要求当前执行状态满足 $\mathcal B_j^{\mathrm{exec}}$。为了使“完整时域可执行”是闭合定义，令 $u^{\mathrm{pub}}_{r,-1}=b^r_{\mathrm{tail}}$ 为当前 pending queue 尾项，并定义发布命令 witness 集
+
+$$
+\begin{aligned}
+\mathcal W_j(\widehat X)=\bigl\{U={}&(u^{\mathrm{pub}}_0,\ldots,u^{\mathrm{pub}}_{N-1}):\\
+&u^{\min}_r\le u^{\mathrm{pub}}_{r,k}\le u^{\max}_r,\\
+&|u^{\mathrm{pub}}_{r,k}-\bar u^{\mathrm{pub}}_{r,j+k}|\le\Delta u_r,\\
+&|u^{\mathrm{pub}}_{r,k}-u^{\mathrm{pub}}_{r,k-1}|
+\le \dot u_r^{\max}\Delta t,\\
+&X^w_{0|j}=\widehat X,\quad
+X^w_{k+1|j}=F_{\mathrm{pub}}(X^w_{k|j},u^{\mathrm{pub}}_k),\\
+&x^{\mathrm{exec}}(X^w_{k|j})-
+\bar x^{\mathrm{exec}}_{j+k}\in\mathcal B^{\mathrm{exec}}_{j+k},
+\quad k=0{:}N,\\
+&r\in\{v,\omega\},\quad k=0{:}N-1
+\text{ for the command and transition constraints}
+\bigr\}.
+\end{aligned}
+$$
+
+$F_{\mathrm{pub}}$ 是将命令直接追加到两路 queue 后执行上述分段转移与 queue shift 的同一模型。因此当命令在后续步中移入 pending queue 的每一位置时，它都必须落入对应相位的 $\mathcal B^{\mathrm{exec}}$。实现分通道求解一维区间链，再对合成的二维 witness 做因果 rollout 复核。候选资格集为
+
+$$
+\mathcal I_{\mathrm{eligible}}=
+\{j\in\mathcal I_{\mathrm{clock}}:\exists U\in\mathcal W_j(\widehat X)\}.
+$$
 
 只有通过上述 current＋full-horizon 资格过滤的候选，才用 9 维归一化误差评分
 
@@ -504,12 +553,12 @@ acados 返回后还要独立执行：
 
 ### 6.2 C3/C4 的唯一消融差异
 
-C3 与 C4 共用同一 22 维 Full SQP、同一 V3 artifact、同一 residual authority、同一全时域 $\mathcal B^{\mathrm{exec}}$、同一 recovery policy 和同一最终发布事务。唯一差异是：
+C3 与 C4 共用同一 22 维 Full SQP、同一 V3 artifact、同一 residual authority、同一全时域 $\mathcal B^{\mathrm{exec}}$、同一 recovery policy 和同一最终发布事务。唯一差异是对同一 9 维 empirical gate metric 采用 **enforce** 还是 **monitor-only**，且该差异同时作用于两个 admission 位置：
 
-- C4：terminal empirical gate 是 NLP 硬约束和 coordinator admission 条件；
-- C3：同一 gate metric 仅 monitor，不影响 NLP 和 coordinator admission。
+- C4：在 terminal residual admission 中将 gate 作为 NLP 硬约束并在求解后复核；在 recovery admission 中还必须通过 current empirical gate；
+- C3：在 terminal 和 current 两处都计算、记录同一 metric，但不用它拒绝 residual 或 recovery。
 
-因此 C3 应称 **residual MPC without empirical terminal-gate enforcement**，不能写成“完全没有 recovery/B_exec 的普通 residual controller”。
+因此 C3 在论文中的显示名统一为 **GateMonitorPR-RMPC**（residual MPC with empirical-gate monitoring only）。`residual_no_gate` 只是为兼容已冻结 runner/config 保留的 legacy mode 字符串；它不表示 $\mathcal B^{\mathrm{exec}}$、recovery 或整个 empirical metric 被关闭。C3 不应称为“terminal-gate-only ablation”，也不能写成“完全没有 recovery/$\mathcal B^{\mathrm{exec}}$ 的普通 residual controller”。
 
 ### 6.3 唯一最终命令出口
 
@@ -530,15 +579,15 @@ C3 与 C4 共用同一 22 维 Full SQP、同一 V3 artifact、同一 residual au
 
 ## 7. 写作与证据边界
 
-### 7.1 截至 2026-08-23 的状态
+### 7.1 截至 2026-08-24 的状态
 
 | 层级 | 当前可说 | 当前不可说 |
 | --- | --- | --- |
 | 方法实现 | 22 维 decision-dependent delay-augmented OCP、完整预测域 $\mathcal B^{\mathrm{exec}}$、held-out empirical gate、冻结 recovery feedback、Full SQP/KKT/causal audit 和唯一发布事务已形成 development 闭环 | 不得继续写旧 B0/history-only、缺失 $\mathcal B^{\mathrm{exec}}$ 或固定 recovery action |
-| 正式仿真资格 | commit `7775dd68` 对应的 hash-bound session 审计为 `READY_NOT_EXECUTED`，且 `formal_trials_started=false` | readiness 不是 C4 防晃正向结果；正式 C0–C4/IS 96 trials 尚未执行 |
+| 正式仿真资格 | 路径、Plant、六条件、seeds、运行顺序和统计口径均已有冻结入口 | 正式 trials 执行数仍为 0/96；本轮必要的控制逻辑与统计修改完成后需重新冻结一次 |
 | 实物资格 | 代码接口和标定清单存在 | Scout/Nokov/IMU/RGB 的 G0、shadow、真实参数冻结和正式实物实验均未开始，real-robot enforce 仍为 NO-GO |
 
-本轮文档或工程修改完成后，旧 session 不能自动授权新版本。必须在新的 clean commit 上重新构建、重新物化 hash-bound session、重新达到 `READY_NOT_EXECUTED`，再由人工 approval 精确绑定新的 session SHA-256。
+本轮修改完成后只做一次新的 clean build、配置冻结和 readiness 检查，然后直接进入正式仿真；不再继续扩展平台合同，也不根据正式结果回调参数。
 
 ### 7.2 论文中的术语替换表
 

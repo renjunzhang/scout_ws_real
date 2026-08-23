@@ -822,11 +822,16 @@ bool PhaseRejoinCoordinator::commit(
     const bool terminal_empirical_admitted =
         !params_.empirical_gate_enforced ||
         decision.terminal_gate_accepted;
+    const bool residual_command_admitted =
+        !decision.command_intervened &&
+        !decision.recovery_command_used &&
+        !decision.controlled_stop_used;
     const bool phase_admitted =
-        params_.mode == PhaseRejoinMode::Monitor ||
-        (params_.mode == PhaseRejoinMode::Enforce &&
-         terminal_empirical_admitted && execution_compatible &&
-         decision.command_contract_consistent);
+        residual_command_admitted &&
+        (params_.mode == PhaseRejoinMode::Monitor ||
+         (params_.mode == PhaseRejoinMode::Enforce &&
+          terminal_empirical_admitted && execution_compatible &&
+          decision.command_contract_consistent));
     if (phase_admitted) {
         accepted_index_ = preparation.candidate.current_index;
         have_accepted_index_ = true;
@@ -835,6 +840,7 @@ bool PhaseRejoinCoordinator::commit(
         preparation.solver_context.owns_terminal_maneuver &&
         terminal_empirical_admitted &&
         execution_compatible &&
+        residual_command_admitted &&
         decision.command_contract_consistent &&
         preparation.candidate.terminal_index + 1 == artifact_.size()) {
         terminal_release_authorized_ = true;

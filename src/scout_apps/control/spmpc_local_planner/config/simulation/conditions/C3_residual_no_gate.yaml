@@ -9,8 +9,10 @@ recovery_gate: false
 execution_compatibility_gate: true
 stored_recovery_action: true
 input_shaping: false
-# Strict C3 shares C4's 22D Full SQP, V3, B_exec, recovery action and final
-# command transaction. The empirical terminal gate remains monitor-only.
+# Strict C3 shares C4's 22D Full SQP, V3, B_exec, frozen bounded recovery
+# feedback and final command transaction. The legacy stored_recovery_action
+# key means that the V3 recovery path is enabled; it is not a fixed action.
+# The empirical terminal/current gate remains monitor-only.
 pilot_only: false
 formal_c3_c4_causal_comparison_ready: true
 residual_feedback:

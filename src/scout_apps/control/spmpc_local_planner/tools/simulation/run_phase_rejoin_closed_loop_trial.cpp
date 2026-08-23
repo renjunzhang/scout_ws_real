@@ -49,9 +49,9 @@ namespace manifest = delay_augmented_phase_solver_manifest;
 constexpr char kConditionSchema[] =
     "spmpc_closed_loop_trial_condition_v1";
 constexpr char kSummarySchema[] =
-    "spmpc_closed_loop_trial_summary_v1";
+    "spmpc_closed_loop_trial_summary_v2";
 constexpr char kCycleSchema[] =
-    "spmpc_closed_loop_trial_cycle_v2";
+    "spmpc_closed_loop_trial_cycle_v3";
 constexpr double kRequiredControlRateHz = 30.0;
 constexpr StampNs kStampBaseNs = 10000000000LL;
 constexpr int kUsageExit = 2;
@@ -126,11 +126,23 @@ struct CycleRecord {
     std::string phase_status = "NOT_RUN";
     std::string final_status = "NOT_RUN";
     bool gate_evaluated = false;
+    bool current_gate_valid = false;
+    bool current_gate_accepted = false;
+    double current_gate_metric = 0.0;
+    double current_gate_margin = 0.0;
+    bool terminal_gate_valid = false;
     bool terminal_gate_accepted = false;
+    double terminal_gate_metric = 0.0;
+    double terminal_gate_margin = 0.0;
     bool current_execution_compatible = false;
     bool terminal_execution_compatible = false;
     bool recovery_used = false;
     bool controlled_stop_used = false;
+    bool phase_committed = false;
+    bool receipt_consistent = false;
+    bool history_committed = false;
+    bool command_modified = false;
+    bool zero_request = false;
     bool selected_phase_valid = false;
     std::size_t clock_index = 0;
     std::size_t candidate_window_begin_index = 0;
@@ -154,11 +166,19 @@ struct CycleRecord {
 struct TrialCounters {
     std::size_t solver_failures = 0;
     std::size_t gate_evaluations = 0;
+    std::size_t current_gate_evaluations = 0;
+    std::size_t current_gate_accepts = 0;
+    std::size_t terminal_gate_evaluations = 0;
     std::size_t terminal_gate_accepts = 0;
     std::size_t recovery_actions = 0;
     std::size_t controlled_stops = 0;
     std::size_t publications = 0;
     std::size_t publication_failures = 0;
+    std::size_t phase_commits = 0;
+    std::size_t receipt_inconsistent_cycles = 0;
+    std::size_t history_not_committed_cycles = 0;
+    std::size_t command_modified_cycles = 0;
+    std::size_t zero_requests = 0;
     std::size_t execution_candidate_filter_cycles = 0;
     std::size_t execution_rejected_candidates = 0;
     double max_selected_execution_normalized_error = 0.0;
@@ -1712,9 +1732,13 @@ bool openCycleCsv(const std::string& path, std::ofstream& output,
         << "observer_height_m,observer_eta_x,observer_eta_x_dot,"
         << "observer_eta_y,observer_eta_y_dot,solver_success,"
         << "raw_solver_status,phase_status,final_status,"
-        << "gate_evaluated,terminal_gate_accepted,"
+        << "gate_evaluated,current_gate_valid,current_gate_accepted,"
+        << "current_gate_metric,current_gate_margin,terminal_gate_valid,"
+        << "terminal_gate_accepted,terminal_gate_metric,terminal_gate_margin,"
         << "current_execution_compatible,terminal_execution_compatible,"
-        << "recovery_used,controlled_stop_used,selected_phase_valid,"
+        << "recovery_used,controlled_stop_used,phase_committed,"
+        << "receipt_consistent,history_committed,command_modified,"
+        << "zero_request,selected_phase_valid,"
         << "clock_index,candidate_window_begin_index,"
         << "candidate_window_end_index,selected_phase_index,phase_lead_steps,"
         << "execution_candidate_filter_applied,"
@@ -1749,11 +1773,23 @@ bool writeCycle(std::ofstream& output, const CycleRecord& record) {
         << csvEscape(record.phase_status) << ','
         << csvEscape(record.final_status) << ','
         << (record.gate_evaluated ? "true" : "false") << ','
+        << (record.current_gate_valid ? "true" : "false") << ','
+        << (record.current_gate_accepted ? "true" : "false") << ','
+        << record.current_gate_metric << ','
+        << record.current_gate_margin << ','
+        << (record.terminal_gate_valid ? "true" : "false") << ','
         << (record.terminal_gate_accepted ? "true" : "false") << ','
+        << record.terminal_gate_metric << ','
+        << record.terminal_gate_margin << ','
         << (record.current_execution_compatible ? "true" : "false") << ','
         << (record.terminal_execution_compatible ? "true" : "false") << ','
         << (record.recovery_used ? "true" : "false") << ','
         << (record.controlled_stop_used ? "true" : "false") << ','
+        << (record.phase_committed ? "true" : "false") << ','
+        << (record.receipt_consistent ? "true" : "false") << ','
+        << (record.history_committed ? "true" : "false") << ','
+        << (record.command_modified ? "true" : "false") << ','
+        << (record.zero_request ? "true" : "false") << ','
         << (record.selected_phase_valid ? "true" : "false") << ','
         << record.clock_index << ','
         << record.candidate_window_begin_index << ','
@@ -1885,7 +1921,8 @@ bool writeSummary(
         << (sequence_completed ? "true" : "false") << ",\n"
         << "    \"task_success\": " << (task_success ? "true" : "false")
         << ",\n"
-        << "    \"failures_included_in_primary_metric\": true,\n"
+        << "    \"failures_included_in_primary_metric\": "
+        << (runtime_ok ? "true" : "false") << ",\n"
         << "    \"completion_reason\": \""
         << jsonEscape(completion_reason) << "\",\n"
         << "    \"runtime_error\": \""
@@ -1893,12 +1930,26 @@ bool writeSummary(
         << "  },\n"
         << "  \"primary_metric\": {\n"
         << "    \"name\": \"external_measured_height_q95_m\",\n"
-        << "    \"window\": \"motion_plus_fixed_tail\",\n"
-        << "    \"statistics_unit\": \"complete_trial\",\n"
+        << "    \"window\": \""
+        << (runtime_ok
+                ? "motion_plus_fixed_tail"
+                : "incomplete_runtime_error")
+        << "\",\n"
+        << "    \"statistics_unit\": \""
+        << (runtime_ok
+                ? "complete_trial"
+                : "failed_trial_incomplete_window")
+        << "\",\n"
+        << "    \"window_complete\": "
+        << (runtime_ok ? "true" : "false") << ",\n"
         << "    \"quantile_method\": \"nearest_rank\",\n"
         << "    \"sample_count\": " << measured_heights.size() << ",\n"
         << "    \"value_m\": "
-        << jsonNumber(nearestRankQuantile(measured_heights, 0.95)) << "\n"
+        << jsonNumber(
+               runtime_ok
+                   ? nearestRankQuantile(measured_heights, 0.95)
+                   : std::numeric_limits<double>::quiet_NaN())
+        << "\n"
         << "  },\n"
         << "  \"secondary_metrics\": {\n"
         << "    \"external_true_height_q95_m\": "
@@ -1908,7 +1959,11 @@ bool writeSummary(
         << "    \"tracking_rms_m\": "
         << jsonNumber(rms(tracking_errors)) << ",\n"
         << "    \"tracking_q95_m\": "
-        << jsonNumber(nearestRankQuantile(tracking_errors, 0.95)) << ",\n"
+        << jsonNumber(
+               runtime_ok
+                   ? nearestRankQuantile(tracking_errors, 0.95)
+                   : std::numeric_limits<double>::quiet_NaN())
+        << ",\n"
         << "    \"final_goal_error_m\": "
         << jsonNumber(final_goal_error_m) << "\n"
         << "  },\n"
@@ -2010,6 +2065,12 @@ bool writeSummary(
         << "  \"controller_audit\": {\n"
         << "    \"solver_failures\": " << counters.solver_failures << ",\n"
         << "    \"gate_evaluations\": " << counters.gate_evaluations << ",\n"
+        << "    \"current_gate_evaluations\": "
+        << counters.current_gate_evaluations << ",\n"
+        << "    \"current_gate_accepts\": "
+        << counters.current_gate_accepts << ",\n"
+        << "    \"terminal_gate_evaluations\": "
+        << counters.terminal_gate_evaluations << ",\n"
         << "    \"terminal_gate_accepts\": "
         << counters.terminal_gate_accepts << ",\n"
         << "    \"recovery_actions\": " << counters.recovery_actions << ",\n"
@@ -2017,6 +2078,15 @@ bool writeSummary(
         << "    \"publications\": " << counters.publications << ",\n"
         << "    \"publication_failures\": "
         << counters.publication_failures << ",\n"
+        << "    \"phase_commits\": " << counters.phase_commits << ",\n"
+        << "    \"receipt_inconsistent_cycles\": "
+        << counters.receipt_inconsistent_cycles << ",\n"
+        << "    \"history_not_committed_cycles\": "
+        << counters.history_not_committed_cycles << ",\n"
+        << "    \"command_modified_cycles\": "
+        << counters.command_modified_cycles << ",\n"
+        << "    \"zero_requests\": "
+        << counters.zero_requests << ",\n"
         << "    \"execution_candidate_filter_cycles\": "
         << counters.execution_candidate_filter_cycles << ",\n"
         << "    \"execution_rejected_candidates\": "
@@ -2979,8 +3049,22 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             : result.phase_preparation.status;
         record.final_status = result.output.status;
         record.gate_evaluated = result.phase_decision.evaluated;
+        record.current_gate_valid = result.phase_decision.current_gate.valid;
+        record.current_gate_accepted =
+            result.phase_decision.current_gate_accepted;
+        record.current_gate_metric = result.phase_decision.current_gate.metric;
+        if (record.current_gate_valid) {
+            record.current_gate_margin = 1.0 - record.current_gate_metric;
+        }
+        record.terminal_gate_valid =
+            result.phase_decision.terminal_gate.valid;
         record.terminal_gate_accepted =
             result.phase_decision.terminal_gate_accepted;
+        record.terminal_gate_metric =
+            result.phase_decision.terminal_gate.metric;
+        if (record.terminal_gate_valid) {
+            record.terminal_gate_margin = 1.0 - record.terminal_gate_metric;
+        }
         record.current_execution_compatible =
             result.phase_decision.current_execution_compatible;
         record.terminal_execution_compatible =
@@ -2988,6 +3072,16 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         record.recovery_used = result.phase_decision.recovery_command_used;
         record.controlled_stop_used =
             result.phase_decision.controlled_stop_used;
+        record.phase_committed = result.phase_committed;
+        record.receipt_consistent = result.publication.receipt_consistent;
+        record.history_committed = result.publication.history_committed;
+        record.command_modified = result.publication.commandWasModified();
+        // This is the request presented to the publication transaction, not
+        // a magnitude test on its final output.  A rejected supervisor or
+        // fail-closed decision is published with force_zero=true, whereas an
+        // accepted terminal command may legitimately have a numeric value of
+        // zero without being a fail-closed request.
+        record.zero_request = !result.decision.accepted;
         record.selected_phase_valid =
             result.phase_preparation.candidate.valid;
         record.clock_index =
@@ -3105,9 +3199,21 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             }
         }
         if (record.gate_evaluated) ++counters.gate_evaluations;
+        if (record.current_gate_valid) ++counters.current_gate_evaluations;
+        if (record.current_gate_accepted) ++counters.current_gate_accepts;
+        if (record.terminal_gate_valid) ++counters.terminal_gate_evaluations;
         if (record.terminal_gate_accepted) ++counters.terminal_gate_accepts;
         if (record.recovery_used) ++counters.recovery_actions;
         if (record.controlled_stop_used) ++counters.controlled_stops;
+        if (record.phase_committed) ++counters.phase_commits;
+        if (!record.receipt_consistent) {
+            ++counters.receipt_inconsistent_cycles;
+        }
+        if (!record.history_committed) {
+            ++counters.history_not_committed_cycles;
+        }
+        if (record.command_modified) ++counters.command_modified_cycles;
+        if (record.zero_request) ++counters.zero_requests;
         if (result.publication.published()) ++counters.publications;
         else ++counters.publication_failures;
         last_motion_time_sec = time_sec;
@@ -3202,12 +3308,25 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         record.final_status = "FIXED_TAIL_ZERO";
         record.final_command = publication.pipeline.final_command;
         record.command_source = publication.pipeline.decision.source;
+        record.receipt_consistent = publication.receipt_consistent;
+        record.history_committed = publication.history_committed;
+        record.command_modified = publication.commandWasModified();
+        // The fixed post-motion settling tail is part of the trial protocol,
+        // not an online supervisor/fail-closed intervention.
+        record.zero_request = false;
         record.publish_stamp_ns = publication.receipt.actual_publish_stamp_ns;
         record.plant_publish = sink.lastPlantReceipt();
         if (!appendRecord(record, false)) {
             runtime_error = "tail CSV write failed";
             break;
         }
+        if (!record.receipt_consistent) {
+            ++counters.receipt_inconsistent_cycles;
+        }
+        if (!record.history_committed) {
+            ++counters.history_not_committed_cycles;
+        }
+        if (record.command_modified) ++counters.command_modified_cycles;
         if (publication.published()) ++counters.publications;
         else {
             ++counters.publication_failures;

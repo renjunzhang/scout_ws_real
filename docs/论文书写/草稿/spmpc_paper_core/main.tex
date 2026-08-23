@@ -32,11 +32,11 @@ Hefei, China (e-mail: zhangrenjun@mail.ustc.edu.cn).}}
 \begin{abstract}
 Offline anti-slosh trajectories exploit future phase cancellation, but an online path-tracking correction can destroy that cancellation before the correction physically reaches a mobile base.
 We formulate \PRRMPC{}, a nominal-relative controller that preserves the phase-indexed tail of a delay-aware offline speed-profile artifact while permitting bounded online corrections.
-From a common expected publication epoch, the controller propagates separate linear and angular command buffers and actuator dynamics in a 22-D execution-augmented state, selects one neighboring monotone artifact phase, and optimizes published-command rates over the complete prediction horizon.
+From a common expected publication epoch, the controller propagates separate linear and angular command buffers through the current release's unequal pure transport delays in a 22-D execution-augmented state, selects one neighboring monotone artifact phase, and optimizes published-command rates over the complete prediction horizon.
 Admission requires current and horizon-wide compatibility with a phase-indexed execution set and a terminal 9-D robot--liquid empirical gate.
 If an otherwise eligible solve cannot be admitted because optimization fails or the terminal admission check rejects it, the supervisor may apply a frozen bounded recovery feedback law; integrity or contract failures request zero velocity through the same safety and receipt-backed publication transaction.
 The preregistered evaluation compares the method with OrdinaryMPCC, an independently frozen smooth-tracking comparator, offline replay, and a gate-monitor ablation using an independent liquid-height outcome, held-out recovery analysis, task-time non-inferiority, and command-chain and runtime audits.
-The formal simulation campaign and the physical experiment have not begun; source changes in this revision require a new hash-bound simulation freeze before execution, so no positive performance result is claimed here.
+The formal simulation campaign and the physical experiment have not begun, so no positive performance result is claimed here.
 The scope is frozen-path tracking in a static obstacle-clear workspace; online obstacle avoidance and a formal recovery guarantee are not claimed.
 \end{abstract}
 

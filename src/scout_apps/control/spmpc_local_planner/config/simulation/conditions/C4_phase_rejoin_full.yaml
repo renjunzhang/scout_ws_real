@@ -9,6 +9,9 @@ recovery_gate: true
 execution_compatibility_gate: true
 stored_recovery_action: true
 input_shaping: false
+# The legacy stored_recovery_action key means that the V3 recovery path is
+# enabled. Runtime recovery is the frozen bounded state-feedback policy, not a
+# per-phase fixed action.
 pilot_only: false
 formal_c3_c4_causal_comparison_ready: true
 residual_feedback:

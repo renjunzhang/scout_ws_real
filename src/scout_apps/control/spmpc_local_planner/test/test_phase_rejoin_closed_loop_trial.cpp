@@ -395,6 +395,8 @@ TEST_F(TrialRunnerTest,
     writeCondition("C2", "offline_replay", "test_c2_v1", true, false);
     ASSERT_EQ(run(), 0);
     const YAML::Node summary = YAML::LoadFile(summary_);
+    EXPECT_EQ(summary["schema"].as<std::string>(),
+              "spmpc_closed_loop_trial_summary_v2");
     EXPECT_EQ(summary["status"].as<std::string>(), "TRIAL_COMPLETE");
     EXPECT_TRUE(summary["implementation_complete"].as<bool>());
     EXPECT_FALSE(summary["physical_parameter_claim"].as<bool>());
@@ -402,6 +404,7 @@ TEST_F(TrialRunnerTest,
     EXPECT_FALSE(summary["external_liquid_truth_used_for_control"].as<bool>());
     EXPECT_EQ(summary["primary_metric"]["window"].as<std::string>(),
               "motion_plus_fixed_tail");
+    EXPECT_TRUE(summary["primary_metric"]["window_complete"].as<bool>());
     EXPECT_GT(summary["primary_metric"]["sample_count"].as<int>(), 100);
     EXPECT_GE(summary["primary_metric"]["value_m"].as<double>(), 0.0);
     struct stat before;
@@ -553,12 +556,98 @@ TEST_F(TrialRunnerTest,
     ASSERT_EQ(column.count("selected_execution_max_normalized_error"), 1u);
     ASSERT_EQ(column.count("acados_solve_time_ms"), 1u);
     ASSERT_EQ(column.count("backend_wall_time_ms"), 1u);
+    ASSERT_EQ(column.count("current_gate_valid"), 1u);
+    ASSERT_EQ(column.count("current_gate_accepted"), 1u);
+    ASSERT_EQ(column.count("current_gate_metric"), 1u);
+    ASSERT_EQ(column.count("current_gate_margin"), 1u);
+    ASSERT_EQ(column.count("terminal_gate_valid"), 1u);
+    ASSERT_EQ(column.count("terminal_gate_metric"), 1u);
+    ASSERT_EQ(column.count("terminal_gate_margin"), 1u);
+    ASSERT_EQ(column.count("phase_committed"), 1u);
+    ASSERT_EQ(column.count("receipt_consistent"), 1u);
+    ASSERT_EQ(column.count("history_committed"), 1u);
+    ASSERT_EQ(column.count("command_modified"), 1u);
+    ASSERT_EQ(column.count("zero_request"), 1u);
+    EXPECT_EQ(first[column["schema"]],
+              "spmpc_closed_loop_trial_cycle_v3");
     EXPECT_GT(std::stod(first[column["acados_solve_time_ms"]]), 0.0);
     EXPECT_GT(std::stod(first[column["backend_wall_time_ms"]]), 0.0);
     EXPECT_NE(first[column["raw_solver_status"]],
               first[column["phase_status"]]);
     EXPECT_EQ(first[column["phase_status"]],
               first[column["final_status"]]);
+
+    std::vector<std::vector<std::string>> cycle_rows{first};
+    std::string cycle_line;
+    while (std::getline(cycles, cycle_line)) {
+        cycle_rows.push_back(splitCsv(cycle_line));
+    }
+    std::map<std::string, int> recomputed = {
+        {"solver_failures", 0}, {"gate_evaluations", 0},
+        {"current_gate_evaluations", 0}, {"current_gate_accepts", 0},
+        {"terminal_gate_evaluations", 0}, {"terminal_gate_accepts", 0},
+        {"recovery_actions", 0}, {"controlled_stops", 0},
+        {"phase_commits", 0}, {"publications", 0},
+        {"publication_failures", 0}, {"receipt_inconsistent_cycles", 0},
+        {"history_not_committed_cycles", 0},
+        {"command_modified_cycles", 0}, {"zero_requests", 0},
+    };
+    int fixed_tail_cycles = 0;
+    for (const auto& fields : cycle_rows) {
+        ASSERT_EQ(fields.size(), header.size());
+        const bool motion = fields[column["window"]] == "motion";
+        if (!motion) ++fixed_tail_cycles;
+        const auto isTrue = [&](const char* name) {
+            return fields[column[name]] == "true";
+        };
+        if (motion && !isTrue("solver_success")) {
+            ++recomputed["solver_failures"];
+        }
+        if (motion && isTrue("gate_evaluated")) {
+            ++recomputed["gate_evaluations"];
+        }
+        if (motion && isTrue("current_gate_valid")) {
+            ++recomputed["current_gate_evaluations"];
+        }
+        if (motion && isTrue("current_gate_accepted")) {
+            ++recomputed["current_gate_accepts"];
+        }
+        if (motion && isTrue("terminal_gate_valid")) {
+            ++recomputed["terminal_gate_evaluations"];
+        }
+        if (motion && isTrue("terminal_gate_accepted")) {
+            ++recomputed["terminal_gate_accepts"];
+        }
+        if (motion && isTrue("recovery_used")) {
+            ++recomputed["recovery_actions"];
+        }
+        if (motion && isTrue("controlled_stop_used")) {
+            ++recomputed["controlled_stops"];
+        }
+        if (motion && isTrue("phase_committed")) {
+            ++recomputed["phase_commits"];
+        }
+        if (isTrue("receipt_consistent")) ++recomputed["publications"];
+        else {
+            ++recomputed["publication_failures"];
+            ++recomputed["receipt_inconsistent_cycles"];
+        }
+        if (!isTrue("history_committed")) {
+            ++recomputed["history_not_committed_cycles"];
+        }
+        if (isTrue("command_modified")) {
+            ++recomputed["command_modified_cycles"];
+        }
+        if (isTrue("zero_request")) {
+            ++recomputed["zero_requests"];
+            EXPECT_TRUE(motion);
+        }
+    }
+    EXPECT_GT(fixed_tail_cycles, 0);
+    for (const auto& entry : recomputed) {
+        EXPECT_EQ(summary["controller_audit"][entry.first].as<int>(),
+                  entry.second) << entry.first;
+    }
 }
 
 TEST_F(TrialRunnerTest,
@@ -567,6 +656,7 @@ TEST_F(TrialRunnerTest,
     ASSERT_EQ(run(), 0);
     const YAML::Node summary = YAML::LoadFile(summary_);
     EXPECT_EQ(summary["controller_audit"]["solver_failures"].as<int>(), 0);
+    EXPECT_EQ(summary["controller_audit"]["zero_requests"].as<int>(), 0);
     EXPECT_GT(summary["controller_audit"]["publications"].as<int>(), 0);
 }
 

@@ -87,6 +87,82 @@ class FormalCampaignContractTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "sequence is invalid"):
                 FORMAL._formal_order(order)
 
+    @staticmethod
+    def _write_trial_outputs(root, status, task_success):
+        cycle = root / "cycles.csv"
+        summary = root / "summary.json"
+        cycle.write_text("schema,cycle_id\ncycle_v3,0\n", encoding="utf-8")
+        summary.write_text(json.dumps({
+            "schema": FORMAL.SUMMARY_SCHEMA,
+            "status": status,
+            "seed": 3101,
+            "condition_id": "C4",
+            "formal_trials_started": True,
+            "development_pilot_only": False,
+            "frozen_session_sha256": "e" * 64,
+            "trial": {
+                "sequence_completed": status != "RUNTIME_ERROR",
+                "task_success": task_success,
+                "runtime_error": "solver failed"
+                    if status == "RUNTIME_ERROR" else "",
+            },
+        }), encoding="utf-8")
+        return cycle, summary
+
+    def test_nonzero_runtime_error_summary_is_retained(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cycle, summary = self._write_trial_outputs(
+                root, "RUNTIME_ERROR", False)
+            record = FORMAL._trial_record(
+                {"block": 1, "seed": 3101, "position": 1,
+                 "condition": "C4"},
+                cycle, summary, "e" * 64, process_returncode=3)
+            self.assertEqual(record["status"], "RUNTIME_ERROR")
+            self.assertFalse(record["task_success"])
+            self.assertEqual(record["process_returncode"], 3)
+
+    def test_complete_with_failure_summary_is_retained(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cycle, summary = self._write_trial_outputs(
+                root, "TRIAL_COMPLETE_WITH_FAILURE", False)
+            record = FORMAL._trial_record(
+                {"block": 1, "seed": 3101, "position": 1,
+                 "condition": "C4"},
+                cycle, summary, "e" * 64, process_returncode=0)
+            self.assertEqual(
+                record["status"], "TRIAL_COMPLETE_WITH_FAILURE")
+            self.assertFalse(record["task_success"])
+            self.assertEqual(record["process_returncode"], 0)
+
+    def test_nonzero_complete_with_failure_summary_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cycle, summary = self._write_trial_outputs(
+                root, "TRIAL_COMPLETE_WITH_FAILURE", False)
+            with self.assertRaisesRegex(
+                    FORMAL.TrialInfrastructureFailure,
+                    "failed without a valid summary"):
+                FORMAL._trial_record(
+                    {"block": 1, "seed": 3101, "position": 1,
+                     "condition": "C4"},
+                    cycle, summary, "e" * 64, process_returncode=7)
+
+    def test_nonzero_exit_without_valid_summary_is_infrastructure_failure(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            cycle = root / "cycles.csv"
+            cycle.write_text("schema,cycle_id\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                    FORMAL.TrialInfrastructureFailure,
+                    "no readable summary"):
+                FORMAL._trial_record(
+                    {"block": 1, "seed": 3101, "position": 1,
+                     "condition": "C4"},
+                    cycle, root / "missing.json", "e" * 64,
+                    process_returncode=3)
+
     def test_missing_approval_leaves_no_formal_output(self):
         fake_auditor = SimpleNamespace(
             require_formal_session_schema=lambda session: None,

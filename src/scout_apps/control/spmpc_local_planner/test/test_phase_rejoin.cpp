@@ -1003,6 +1003,62 @@ TEST(PhaseRejoinCoordinator, ReleasesGenericReachedOnlyAfterFinalAcceptedWindow)
     EXPECT_FALSE(coordinator.terminalReleaseAuthorized());
 }
 
+TEST(PhaseRejoinCoordinator,
+     CommitExplicitlyRejectsRecoveryStopAndAnyCommandIntervention) {
+    PhaseRejoinParams params;
+    params.mode = PhaseRejoinMode::Enforce;
+    params.allow_development_artifact_in_enforce = true;
+    params.required_contract_id = "test_contract";
+    PhaseRejoinCoordinator coordinator;
+    std::string error;
+    ASSERT_TRUE(coordinator.configure(params, error)) << error;
+    ASSERT_TRUE(coordinator.setArtifact(loadArtifact(), error)) << error;
+    ASSERT_TRUE(coordinator.validateRuntimeContract(
+        fixtureRuntimeContract(), fixtureReference(), error)) << error;
+
+    PhaseRejoinPreparation preparation;
+    preparation.ready = true;
+    preparation.candidate.valid = true;
+    preparation.candidate.current_index = coordinator.artifact().size() - 4;
+    preparation.candidate.terminal_index = coordinator.artifact().size() - 1;
+    preparation.solver_context.owns_terminal_maneuver = true;
+
+    PhaseRejoinDecision nominal;
+    nominal.terminal_gate_accepted = true;
+    nominal.command_contract_consistent = true;
+
+    PhaseRejoinDecision recovery = nominal;
+    recovery.command_intervened = true;
+    recovery.recovery_command_used = true;
+    EXPECT_FALSE(coordinator.commit(preparation, recovery));
+    EXPECT_FALSE(coordinator.haveAcceptedIndex());
+    EXPECT_FALSE(coordinator.terminalReleaseAuthorized());
+
+    PhaseRejoinDecision stop = nominal;
+    stop.command_intervened = true;
+    stop.controlled_stop_used = true;
+    EXPECT_FALSE(coordinator.commit(preparation, stop));
+    EXPECT_FALSE(coordinator.haveAcceptedIndex());
+    EXPECT_FALSE(coordinator.terminalReleaseAuthorized());
+
+    PhaseRejoinDecision other_intervention = nominal;
+    other_intervention.command_intervened = true;
+    EXPECT_FALSE(coordinator.commit(preparation, other_intervention));
+    EXPECT_FALSE(coordinator.haveAcceptedIndex());
+    EXPECT_FALSE(coordinator.terminalReleaseAuthorized());
+
+    // Guard against future inconsistent flag combinations: either explicit
+    // recovery/stop bit is independently sufficient to refuse the commit.
+    recovery.command_intervened = false;
+    EXPECT_FALSE(coordinator.commit(preparation, recovery));
+    stop.command_intervened = false;
+    EXPECT_FALSE(coordinator.commit(preparation, stop));
+
+    EXPECT_TRUE(coordinator.commit(preparation, nominal));
+    EXPECT_TRUE(coordinator.haveAcceptedIndex());
+    EXPECT_TRUE(coordinator.terminalReleaseAuthorized());
+}
+
 TEST(PhaseRejoinCoordinator, EnforceRejectsOutOfContractSolverCommand) {
     PhaseRejoinParams params;
     params.mode = PhaseRejoinMode::Enforce;

@@ -71,11 +71,15 @@ measurement_contract:
   bootstrap_replicates: 10000
   bootstrap_seed: 20260822
   formal_paired_blocks: 16
-  primary_comparators: [C0, C1, C3]
+  primary_comparators: [C0]
+  fixed_sequence_secondary_comparators: [C1]
+  gate_ablation_comparators: [C3]
+  gate_ablation_uses_primary_margin: false
   task_noninferiority_comparators: [C0, C1]
   completion_time_noninferiority_relative: 0.10
   tracking_q95_noninferiority_m: 0.05
   failed_trial_rule: retain_and_count_as_failure
+  pair_failure_rule: zero_method_failed_pairs
   replacement_rule: infrastructure_failure_only_same_seed_condition
 
 # Each list is a complete-rollout partition. No seed may occur in two lists.

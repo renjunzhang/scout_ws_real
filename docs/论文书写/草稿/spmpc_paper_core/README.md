@@ -57,14 +57,12 @@ evidence only.
 
 | Evidence layer | Current status | What it establishes |
 | --- | --- | --- |
-| Development implementation and simulation | Completed for the revised implementation under development checks | The controller paths and evidence plumbing run; the revised worktree is not yet a frozen formal release or a comparative performance result. |
-| Most recent pre-revision formal-simulation asset audit | **`READY_NOT_EXECUTED`**, with `formal_trials_started=false` | The session bound to commit `7775dd68` passed automated readiness checks and is eligible for human review only; it does not qualify the revised worktree. |
-| Formal C0--C4 campaign | **Not executed** | No confirmatory anti-slosh, task-performance, noninferiority, or ablation result exists yet. |
+| Development implementation and simulation | Completed for the pre-review implementation under development checks | The controller paths and evidence plumbing run; this is not a comparative performance result. |
+| Formal C0--C4 campaign | **Not executed** | No preregistered anti-slosh, task-performance, noninferiority, or ablation result exists yet. |
 | Physical qualification and experiments | **Not started** | No physical efficacy, robustness, or deployment claim is available. |
 
-`READY_NOT_EXECUTED` is not a performance PASS and does not authorize a formal
-campaign by itself. Development branch coverage, internal liquid-state trends,
-and automated readiness cannot establish physical anti-slosh efficacy.
+Development branch coverage, internal liquid-state trends, and readiness checks
+cannot establish physical anti-slosh efficacy.
 
 ## Comparison and Ablation Identifiers
 
@@ -73,15 +71,22 @@ The system-level conditions are:
 | ID | Frozen interpretation |
 | --- | --- |
 | C0 OrdinaryMPCC | Liquid-agnostic contour/lag/progress MPCC and the common downstream safety chain. |
-| C1 SmoothMatch | C0 with independently task-only-tuned and frozen smoothing settings plus the frozen `global_time_scale=1.0`; completion time is reported as a fairness outcome, not claimed to be exactly matched to C4. |
+| C1 SmoothMPCC | C0 with independently task-only-tuned and frozen smoothing settings plus the frozen `global_time_scale=1.0`; completion time is reported as a fairness outcome, not claimed to be exactly matched to C4. The paper-facing name is SmoothMPCC; legacy engineering identifiers remain `smooth_match_mpcc` and `C1_smooth_match_mpcc.yaml`. |
 | C2 OfflineReplay | Clocked replay of the same frozen offline artifact as C4, with zero online residual. |
-| C3 ResidualNoGate | The same execution-aware residual MPC, phase selector, full-horizon execution compatibility, frozen recovery feedback, safety chain, and publication transaction as C4; only the 9-D empirical gate is monitor-only. |
+| C3 GateMonitorPR-RMPC | The same execution-aware residual MPC, phase selector, full-horizon execution compatibility, frozen recovery feedback, safety chain, and publication transaction as C4; only the 9-D empirical gate is monitor-only. The paper-facing name avoids implying that execution compatibility or recovery is absent; legacy engineering identifiers remain `residual_no_gate` and `C3_residual_no_gate.yaml`. |
 | C4 Full | C3 with the 9-D empirical gate enforced in the OCP/terminal residual admission and in current-state recovery admission. |
 
 C0--C4 are a system evidence ladder, not a sequence of single-factor changes.
-The frozen simulation analysis reports paired C4 contrasts against C0, C1, and
-C3; C2 and IS are descriptive references.  Of these, only C3--C4 is a strict
-single-factor ablation, because it changes empirical-gate enforcement alone.
+The three paired C4 contrasts have distinct roles. C4--C0 is the sole
+preregistered primary contrast. C4--C1 is the fixed-sequence secondary fairness
+comparison: because C1 is independently tuned rather than exactly matched in
+time and smoothness, a favorable result weakens---but cannot eliminate---the
+generic slower/smoother alternative explanation. C4--C3 reports the paired
+effect of changing the 9-D empirical gate from monitor-only to enforced,
+together with gate activation, recovery, zero requests, and failures; it does
+not veto the C4--C0 result. C2 and IS are descriptive references reported in
+one secondary benchmark table. Of these pairs, only C3--C4 is structurally
+single-factor.
 
 Only A2 below is instantiated in the current 96-trial matrix.  The other
 component-attribution designs would require separately frozen strict pairs:
@@ -94,29 +99,21 @@ component-attribution designs would require separately frozen strict pairs:
 | A3 | IdealExec vs. IdentifiedExec | Idealized versus identified unequal-delay execution model and consistent artifact. |
 
 The formal simulation contract freezes sixteen seeds crossed with all six
-conditions (C0--C4 and IS), for 96 trials in an immutable balanced order.  This
-simulation count must not be confused with the later hardware sample size,
-which remains pending until RGB calibration, SESOI selection, independent
-pilot variability, and the failure allowance are available.
+conditions (C0--C4 and IS), for 96 trials in a pre-generated interleaved order.
+Paths, seeds, condition files, order, outcome definitions, and
+analysis code are frozen before acquisition, and formal results are not used to
+retune the methods. The sixteen-block count and 0.5-mm margin do not yet have a
+prospective power or precision justification; this is reported as a study
+limitation rather than introduced as a new release asset. The simulation count
+must not be confused with the later hardware sample size.
 
-## Release Gates
+## Next Execution Step
 
-The formal-simulation readiness audit and the physical release gates are
-separate.  The pre-revision session bound to `7775dd68` reached
-`READY_NOT_EXECUTED`, and its formal trials remain unstarted.  Because the
-source has since changed, the revised implementation requires a new clean
-commit, clean rebuild, hash-bound session, readiness report, and human approval.
-The physical G0 and all later hardware gates have not begun.  A future formal
-or physical result still requires its preregistered numerical criteria,
-immutable data identities, human authorization where required, and declared
-failure actions.
-
-| Gate | Required transition | Current status |
-| --- | --- | --- |
-| Formal simulation readiness | Hash-bound executable, solver, condition, artifact, and analysis assets pass the automated audit. | Pre-revision `7775dd68`: **`READY_NOT_EXECUTED`**; revised source: new freeze required. |
-| Formal campaign authorization | Human approval is bound to the exact readiness/session identity. | Not recorded; formal trials not executed. |
-| Physical G0 | Hardware timing, sensing, command-history provenance, and shadow-mode prerequisites are established. | Not started. |
-| Later physical gates | RGB calibration, pilot, randomized acquisition, recorder, and postflight audit satisfy their frozen criteria. | Not started. |
+After this necessary control/statistics patch is committed, run one clean build
+and readiness check to confirm the path, plant, six conditions, seeds, order,
+and analysis settings.  Human review then precedes the 96-trial campaign.  No
+new platform contract or result-driven retuning is added at this stage.  The
+physical qualification remains a later, separate activity.
 
 ## Build
 
@@ -138,10 +135,10 @@ rg -n 'Warning|undefined|Overfull|Underfull|Error' \
 pdfinfo "$paper_out/main.pdf" | rg 'Pages|Page size|File size'
 ```
 
-The current clean standalone build is **9 pages**. That count already covers
-only the local Sections I/II, title/abstract, and references; it excludes the
+The current clean standalone build is **9 pages**. That count covers the local
+Method and Experiments sections, title/abstract, and references; it excludes the
 full paper's Introduction, Related Work, and Conclusion. It is therefore a page-
-budget warning, not a submission-length target. Equations, freeze tables, and
+budget warning, not a submission-length target. Equations and
 diagnostic detail will need deliberate movement to supplementary material or
 compression before the full manuscript is assembled.
 

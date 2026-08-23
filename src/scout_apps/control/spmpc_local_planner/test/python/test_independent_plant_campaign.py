@@ -389,14 +389,43 @@ class IndependentPlantCampaignTest(unittest.TestCase):
 
         conditions = {}
         manifest_conditions = {}
+        shared_trial = {
+            "control_rate_hz": 30.0,
+            "max_motion_sec": 45.0,
+            "fixed_tail_sec": 4.0,
+            "publish_latency_sec": 0.01,
+        }
         for name in CAMPAIGN.REQUIRED_CONDITIONS:
             implementation_id = "closed_loop_{}_v1".format(name.lower())
             config_path = root / "condition_{}.yaml".format(name.lower())
-            cls.write_yaml(config_path, {
-                "schema": "spmpc_simulation_condition_v1",
-                "condition": name,
+            condition_config = {
+                "schema": "spmpc_closed_loop_trial_condition_v1",
+                "condition_id": name,
                 "implementation_id": implementation_id,
-            })
+                "implementation_complete": True,
+                **CAMPAIGN.CONDITION_SEMANTICS[name],
+                "trial": copy.deepcopy(shared_trial),
+            }
+            if name == "C1":
+                condition_config.update({
+                    "pilot_tuned_and_frozen": True,
+                    "global_time_scale": 0.95,
+                })
+            if name in ("C3", "C4"):
+                condition_config.update({
+                    "pilot_only": False,
+                    "formal_c3_c4_causal_comparison_ready": True,
+                    "residual_feedback": {
+                        "max_residual_v": 0.08,
+                        "max_residual_omega": 0.20,
+                    },
+                })
+            if name == "IS":
+                condition_config["input_shaper"] = {
+                    "type": "ZVD",
+                    "max_discrete_residual": 0.03,
+                }
+            cls.write_yaml(config_path, condition_config)
             binding = {
                 "binding_id": "formal_{}".format(name.lower()),
                 "implementation_id": implementation_id,
@@ -412,6 +441,11 @@ class IndependentPlantCampaignTest(unittest.TestCase):
                 binding.update({
                     "shaper": "ZVD",
                     "single_mode_residual_test_passed": True,
+                })
+            if name == "C3":
+                binding.update({
+                    "empirical_gate_monitor_only": True,
+                    "exact_c4_optimizer_match": True,
                 })
             conditions[name] = binding
             manifest_binding = {
@@ -509,11 +543,15 @@ class IndependentPlantCampaignTest(unittest.TestCase):
                 "bootstrap_replicates": 10000,
                 "bootstrap_seed": 20260822,
                 "formal_paired_blocks": 16,
-                "primary_comparators": ["C0", "C1", "C3"],
+                "primary_comparators": ["C0"],
+                "fixed_sequence_secondary_comparators": ["C1"],
+                "gate_ablation_comparators": ["C3"],
+                "gate_ablation_uses_primary_margin": False,
                 "task_noninferiority_comparators": ["C0", "C1"],
                 "completion_time_noninferiority_relative": 0.10,
                 "tracking_q95_noninferiority_m": 0.05,
                 "failed_trial_rule": "retain_and_count_as_failure",
+                "pair_failure_rule": "zero_method_failed_pairs",
                 "replacement_rule":
                     "infrastructure_failure_only_same_seed_condition",
             },
@@ -790,6 +828,32 @@ class IndependentPlantCampaignTest(unittest.TestCase):
             reasons = CAMPAIGN.formal_no_go_reasons(session, session_path)
             self.assertTrue(any("overlaps" in reason for reason in reasons))
             self.assertIn("C3 semantic recovery_gate is invalid", reasons)
+
+    def test_c3_c4_strict_pair_contract_is_audited(self):
+        with tempfile.TemporaryDirectory() as directory:
+            session_path, session = self.create_frozen_session(directory)
+            c3_path = Path(session["conditions"]["C3"]["config"]["path"])
+            c3 = CAMPAIGN.load_yaml(c3_path)
+            c3["pilot_only"] = True
+            c3["formal_c3_c4_causal_comparison_ready"] = False
+            self.write_yaml(c3_path, c3)
+            session["conditions"]["C3"]["config"] = self.reference(c3_path)
+            self.write_yaml(session_path, session)
+            reasons = CAMPAIGN.formal_no_go_reasons(session, session_path)
+            self.assertIn("C3 config is still pilot-only", reasons)
+            self.assertIn(
+                "C3 strict causal comparison is not frozen", reasons)
+
+        with tempfile.TemporaryDirectory() as directory:
+            session_path, session = self.create_frozen_session(directory)
+            c4_path = Path(session["conditions"]["C4"]["config"]["path"])
+            c4 = CAMPAIGN.load_yaml(c4_path)
+            c4["residual_feedback"]["max_residual_v"] = 0.09
+            self.write_yaml(c4_path, c4)
+            session["conditions"]["C4"]["config"] = self.reference(c4_path)
+            self.write_yaml(session_path, session)
+            reasons = CAMPAIGN.formal_no_go_reasons(session, session_path)
+            self.assertIn("C3/C4 residual authority differs", reasons)
 
     def test_two_row_self_hashed_v3_is_rejected_by_bound_validator(self):
         with tempfile.TemporaryDirectory() as directory:
