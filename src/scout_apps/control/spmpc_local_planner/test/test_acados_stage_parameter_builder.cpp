@@ -37,6 +37,10 @@ AcadosStageParameterInput makeInput(bool slosh_enabled, int horizon_steps) {
     input.variant.w_contour = 9.0;
     input.variant.w_lag = 10.0;
     input.variant.w_progress = 11.0;
+    input.variant.w_heading = 11.1;
+    input.variant.w_progress_coupling = 11.2;
+    input.variant.w_yaw_rate_tracking = 11.3;
+    input.variant.heading_feedback_gain = 11.4;
     input.variant.w_control = 12.0;
     input.variant.w_accel = 0.5;
     input.variant.w_v = 13.0;
@@ -65,6 +69,10 @@ std::vector<double> expectedCommon(
     expected[W_CONTOUR] = input.variant.w_contour;
     expected[W_LAG] = input.variant.w_lag;
     expected[W_PROGRESS] = input.variant.w_progress;
+    expected[W_HEADING] = input.variant.w_heading;
+    expected[W_PROGRESS_COUPLING] = input.variant.w_progress_coupling;
+    expected[W_YAW_RATE_TRACKING] = input.variant.w_yaw_rate_tracking;
+    expected[HEADING_FEEDBACK_GAIN] = input.variant.heading_feedback_gain;
     expected[W_A] = input.variant.w_control + input.variant.w_accel;
     expected[W_OMEGA] = input.variant.w_control;
     expected[W_V] = input.variant.w_v;

@@ -268,6 +268,15 @@ double polyDeriv(const Eigen::Vector4d& c, double s) {
 
 void fitReferencePolynomials(const ReferenceSpline& spline, double s0, double s_end,
                              Eigen::Vector4d& cx, Eigen::Vector4d& cy) {
+    const double requested_span = std::max(0.0, s_end - s0);
+    if (requested_span < 0.20) {
+        const ReferenceSample reference = spline.sample(s0);
+        const double tangent_x = std::cos(reference.psi);
+        const double tangent_y = std::sin(reference.psi);
+        cx << reference.x - tangent_x * s0, tangent_x, 0.0, 0.0;
+        cy << reference.y - tangent_y * s0, tangent_y, 0.0, 0.0;
+        return;
+    }
     const int m = 12;
     Eigen::MatrixXd A(m, 4);
     Eigen::VectorXd bx(m), by(m);

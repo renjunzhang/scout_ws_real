@@ -626,6 +626,17 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
                                 config.continuous_variant.w_lag, error) ||
                 !requiredScalar(controller, "w_progress",
                                 config.continuous_variant.w_progress, error) ||
+                !requiredScalar(controller, "w_heading",
+                                config.continuous_variant.w_heading, error) ||
+                !requiredScalar(controller, "w_progress_coupling",
+                                config.continuous_variant.w_progress_coupling,
+                                error) ||
+                !requiredScalar(controller, "w_yaw_rate_tracking",
+                                config.continuous_variant.w_yaw_rate_tracking,
+                                error) ||
+                !requiredScalar(controller, "heading_feedback_gain",
+                                config.continuous_variant.heading_feedback_gain,
+                                error) ||
                 !requiredScalar(controller, "w_v",
                                 config.continuous_variant.w_v, error) ||
                 !requiredScalar(controller, "w_vs",
@@ -706,6 +717,14 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
               config.continuous_variant.w_lag < 0.0 ||
               !finite(config.continuous_variant.w_progress) ||
               config.continuous_variant.w_progress < 0.0 ||
+              !finite(config.continuous_variant.w_heading) ||
+              config.continuous_variant.w_heading < 0.0 ||
+              !finite(config.continuous_variant.w_progress_coupling) ||
+              config.continuous_variant.w_progress_coupling < 0.0 ||
+              !finite(config.continuous_variant.w_yaw_rate_tracking) ||
+              config.continuous_variant.w_yaw_rate_tracking < 0.0 ||
+              !finite(config.continuous_variant.heading_feedback_gain) ||
+              config.continuous_variant.heading_feedback_gain < 0.0 ||
               !finite(config.continuous_variant.w_v) ||
               config.continuous_variant.w_v < 0.0 ||
               !finite(config.continuous_variant.w_vs) ||
@@ -2324,6 +2343,14 @@ bool writeSummary(
         << jsonNumber(condition.continuous_variant.w_lag)
         << ",\"w_progress\":"
         << jsonNumber(condition.continuous_variant.w_progress)
+        << ",\"w_heading\":"
+        << jsonNumber(condition.continuous_variant.w_heading)
+        << ",\"w_progress_coupling\":"
+        << jsonNumber(condition.continuous_variant.w_progress_coupling)
+        << ",\"w_yaw_rate_tracking\":"
+        << jsonNumber(condition.continuous_variant.w_yaw_rate_tracking)
+        << ",\"heading_feedback_gain\":"
+        << jsonNumber(condition.continuous_variant.heading_feedback_gain)
         << ",\"w_v\":" << jsonNumber(condition.continuous_variant.w_v)
         << ",\"w_vs\":" << jsonNumber(condition.continuous_variant.w_vs)
         << ",\"v_ref\":"

@@ -172,6 +172,28 @@ TEST(AppConfig, LiquidCostHorizonContractIsFatal) {
         "variants/B_slosh/slosh_cost_horizon"));
 }
 
+TEST(AppConfig, HeadingProgressContractRejectsInvalidValues) {
+    AppConfig config;
+    config.variant.name = "B_smooth";
+    config.variant.w_heading =
+        std::numeric_limits<double>::quiet_NaN();
+
+    const ValidationReport non_finite = validateAndNormalize(config);
+
+    EXPECT_FALSE(non_finite.ok());
+    EXPECT_TRUE(hasIssue(
+        non_finite, ValidationSeverity::Fatal,
+        "variants/B_smooth/heading_progress"));
+
+    config.variant.w_heading = 1.0;
+    config.variant.w_progress_coupling = -1.0;
+    const ValidationReport negative = validateAndNormalize(config);
+    EXPECT_FALSE(negative.ok());
+    EXPECT_TRUE(hasIssue(
+        negative, ValidationSeverity::Fatal,
+        "variants/B_smooth/heading_progress"));
+}
+
 TEST(AppConfig, AugmentedBackendRequiresEveryExplicitAdmissionBoundary) {
     AppConfig config;
     config.solver.solver_backend =

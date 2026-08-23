@@ -36,6 +36,8 @@ PARAM_NAMES = [
     "rx0", "rx1", "rx2", "rx3",   # x_ref(s) = rx0 + rx1 s + rx2 s^2 + rx3 s^3
     "ry0", "ry1", "ry2", "ry3",   # y_ref(s) = ry0 + ry1 s + ry2 s^2 + ry3 s^3
     "w_contour", "w_lag", "w_progress",   # 跟踪 / 进度权重（运行时可调，变体切换用）
+    "w_heading", "w_progress_coupling", "w_yaw_rate_tracking",
+    "heading_feedback_gain",                # C1 航向—进度闭环；其余条件显式置零
     "w_a", "w_omega", "w_v", "w_vs", "w_alpha",  # 幅值/速度: a / omega / v / v_s / alpha
     "w_du_a", "w_du_vs",                  # 控制变化率（仅 stage 0 置非零 -> a/v_s 跨周期第一帧连续性）
     "a_prev", "vs_prev",                  # 上一控制周期实际下发的 a / v_s（§4.5）

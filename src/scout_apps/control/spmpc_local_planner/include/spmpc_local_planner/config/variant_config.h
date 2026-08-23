@@ -14,6 +14,12 @@ struct VariantConfig {
     double w_contour = 1.0;
     double w_lag = 0.2;
     double w_progress = 0.2;
+    // Explicit C1 heading-progress feedback contract.  Zero preserves the
+    // historical C0/IS and liquid-controller objectives.
+    double w_heading = 0.0;
+    double w_progress_coupling = 0.0;
+    double w_yaw_rate_tracking = 0.0;
+    double heading_feedback_gain = 0.0;
     double w_v = 1.0;
     double w_vs = 0.3;
     double v_ref = 0.25;

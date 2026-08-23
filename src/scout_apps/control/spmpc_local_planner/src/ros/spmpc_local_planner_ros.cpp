@@ -500,6 +500,13 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     effective_config_.w_progress = variant_.w_progress;
     effective_config_.w_v = variant_.w_v;
     effective_config_.w_vs = variant_.w_vs;
+    effective_config_.w_heading = variant_.w_heading;
+    effective_config_.w_progress_coupling =
+        variant_.w_progress_coupling;
+    effective_config_.w_yaw_rate_tracking =
+        variant_.w_yaw_rate_tracking;
+    effective_config_.heading_feedback_gain =
+        variant_.heading_feedback_gain;
 
     const SolverConfigureResult solver_configure =
         problem_.configure(solver_params, variant_);

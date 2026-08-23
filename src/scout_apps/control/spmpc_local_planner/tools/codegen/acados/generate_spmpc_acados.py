@@ -113,6 +113,13 @@ def load_config():
         "w_contour": float(b0["w_contour"]),
         "w_lag": float(b0["w_lag"]),
         "w_progress": float(b0["w_progress"]),
+        "w_heading": float(b0.get("w_heading", 0.0)),
+        "w_progress_coupling": float(
+            b0.get("w_progress_coupling", 0.0)),
+        "w_yaw_rate_tracking": float(
+            b0.get("w_yaw_rate_tracking", 0.0)),
+        "heading_feedback_gain": float(
+            b0.get("heading_feedback_gain", 0.0)),
         "w_v": float(b0.get("w_v", 1.0)),
         "w_vs": float(b0.get("w_vs", 0.3)),
         "v_ref": float(b0.get("v_ref", 0.25)),
@@ -143,6 +150,11 @@ def default_parameter_values(cfg, with_slosh, direct_omega_legacy=False):
     p[idx["w_contour"]] = cfg["w_contour"]
     p[idx["w_lag"]] = cfg["w_lag"]
     p[idx["w_progress"]] = cfg["w_progress"]
+    if "w_heading" in idx:
+        p[idx["w_heading"]] = cfg["w_heading"]
+        p[idx["w_progress_coupling"]] = cfg["w_progress_coupling"]
+        p[idx["w_yaw_rate_tracking"]] = cfg["w_yaw_rate_tracking"]
+        p[idx["heading_feedback_gain"]] = cfg["heading_feedback_gain"]
     p[idx["w_a"]] = cfg["w_control"]
     p[idx["w_omega"]] = cfg["w_control"]
     p[idx["w_v"]] = cfg["w_v"]

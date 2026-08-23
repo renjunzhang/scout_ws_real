@@ -35,6 +35,10 @@ void setCommonParameters(const AcadosStageParameterInput& input,
     parameters[W_CONTOUR] = input.variant.w_contour;
     parameters[W_LAG] = input.variant.w_lag;
     parameters[W_PROGRESS] = input.variant.w_progress;
+    parameters[W_HEADING] = input.variant.w_heading;
+    parameters[W_PROGRESS_COUPLING] = input.variant.w_progress_coupling;
+    parameters[W_YAW_RATE_TRACKING] = input.variant.w_yaw_rate_tracking;
+    parameters[HEADING_FEEDBACK_GAIN] = input.variant.heading_feedback_gain;
     parameters[W_A] = input.variant.w_control + input.variant.w_accel;
     parameters[W_OMEGA] = input.variant.w_control;
     parameters[W_V] = input.variant.w_v;

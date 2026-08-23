@@ -199,6 +199,20 @@ ValidationReport validateAndNormalize(AppConfig& config) {
     if (variant.w_du_vs < 0.0) {
         variant.w_du_vs = variant.w_smooth;
     }
+    const double heading_progress_values[] = {
+        variant.w_heading,
+        variant.w_progress_coupling,
+        variant.w_yaw_rate_tracking,
+        variant.heading_feedback_gain,
+    };
+    for (double value : heading_progress_values) {
+        if (!std::isfinite(value) || value < 0.0) {
+            report.fatal(
+                "variants/" + variant.name + "/heading_progress",
+                "weights and feedback gain must be finite and non-negative");
+            break;
+        }
+    }
     if (variant.slosh_cost_horizon_steps < -1 ||
         !std::isfinite(variant.slosh_cost_tail_discount) ||
         variant.slosh_cost_tail_discount < 0.0 ||

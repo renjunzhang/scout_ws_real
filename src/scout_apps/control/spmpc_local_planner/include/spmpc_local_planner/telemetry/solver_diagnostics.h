@@ -150,6 +150,10 @@ struct EffectiveConfigDebug {
     double w_progress = 0.0;
     double w_v = 0.0;
     double w_vs = 0.0;
+    double w_heading = 0.0;
+    double w_progress_coupling = 0.0;
+    double w_yaw_rate_tracking = 0.0;
+    double heading_feedback_gain = 0.0;
 };
 
 struct SolverBoundSummary {

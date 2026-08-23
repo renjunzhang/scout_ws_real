@@ -61,6 +61,10 @@ bool matchedVariantCommonConfigEqual(const VariantConfig& lhs,
            same(lhs.w_contour, rhs.w_contour) &&
            same(lhs.w_lag, rhs.w_lag) &&
            same(lhs.w_progress, rhs.w_progress) &&
+           same(lhs.w_heading, rhs.w_heading) &&
+           same(lhs.w_progress_coupling, rhs.w_progress_coupling) &&
+           same(lhs.w_yaw_rate_tracking, rhs.w_yaw_rate_tracking) &&
+           same(lhs.heading_feedback_gain, rhs.heading_feedback_gain) &&
            same(lhs.w_v, rhs.w_v) &&
            same(lhs.w_vs, rhs.w_vs) &&
            same(lhs.v_ref, rhs.v_ref) &&

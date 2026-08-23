@@ -9,26 +9,31 @@ recovery_gate: false
 execution_compatibility_gate: false
 stored_recovery_action: false
 input_shaping: false
-# Still NO-GO: the 2026-08-22 task-only development pilot did not produce a
-# completion-reliable candidate. No external or observer liquid metric may
-# enter the eventual selection.
+# The heading-progress structure has passed the independent straight/arc/S
+# regression. P2 seed 8801 reaches the position gate but does not settle below
+# the frozen speed gate by 45 s, so the pilot remains deliberately unfrozen.
+# No liquid metric entered tuning.
 pilot_tuned_and_frozen: false
-global_time_scale: 0.78
+global_time_scale: 1.0
 continuous_controller:
   variant_id: B_smooth
   smooth_priority_enable: true
   w_contour: 1.0
   w_lag: 0.2
-  w_progress: 0.2
+  w_progress: 1.4
+  w_heading: 1.0
+  w_progress_coupling: 20.0
+  w_yaw_rate_tracking: 15.0
+  heading_feedback_gain: 4.0
   w_v: 1.0
   w_vs: 0.3
-  v_ref: 0.25
-  w_control: 0.1
+  v_ref: 0.30
+  w_control: 0.5
   w_accel: 0.0
-  w_smooth: 0.0
-  w_alpha: 0.0
-  w_du_a: 0.0
-  w_du_vs: 0.0
+  w_smooth: 1.0
+  w_alpha: 1.0
+  w_du_a: 1.0
+  w_du_vs: 1.0
 trial:
   control_rate_hz: 30.0
   max_motion_sec: 45.0

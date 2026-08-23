@@ -16,9 +16,9 @@ from spmpc_acados_model import (
 )
 
 
-def _reference_terms(x, p, pidx=PIDX):
-    """返回 (x_ref, y_ref, phi_ref)：参考点与参考切向，均为 s 的函数。"""
-    s = x[4]
+def _reference_geometry(x, p, pidx=PIDX, progress=None):
+    """返回参考点、切向及 d(phi_ref)/ds，均为进度 s 的函数。"""
+    s = x[4] if progress is None else progress
     rx = [p[pidx["rx0"]], p[pidx["rx1"]], p[pidx["rx2"]], p[pidx["rx3"]]]
     ry = [p[pidx["ry0"]], p[pidx["ry1"]], p[pidx["ry2"]], p[pidx["ry3"]]]
 
@@ -26,14 +26,24 @@ def _reference_terms(x, p, pidx=PIDX):
     y_ref = ry[0] + ry[1] * s + ry[2] * s * s + ry[3] * s * s * s
     dx_ref = rx[1] + 2.0 * rx[2] * s + 3.0 * rx[3] * s * s
     dy_ref = ry[1] + 2.0 * ry[2] * s + 3.0 * ry[3] * s * s
+    ddx_ref = 2.0 * rx[2] + 6.0 * rx[3] * s
+    ddy_ref = 2.0 * ry[2] + 6.0 * ry[3] * s
     phi_ref = ca.atan2(dy_ref, dx_ref)
+    tangent_sq = dx_ref * dx_ref + dy_ref * dy_ref + 1e-6
+    phi_s = (dx_ref * ddy_ref - dy_ref * ddx_ref) / tangent_sq
+    return x_ref, y_ref, phi_ref, phi_s
+
+
+def _reference_terms(x, p, pidx=PIDX):
+    """兼容现有调用：返回参考点与参考切向。"""
+    x_ref, y_ref, phi_ref, _ = _reference_geometry(x, p, pidx)
     return x_ref, y_ref, phi_ref
 
 
 def _tracking_cost(x, p, pidx=PIDX):
-    """contour + lag 跟踪代价（无量纲化）。"""
-    px, py = x[0], x[1]
-    x_ref, y_ref, phi_ref = _reference_terms(x, p, pidx)
+    """contour + lag + periodic heading 跟踪代价（无量纲化）。"""
+    px, py, theta = x[0], x[1], x[2]
+    x_ref, y_ref, phi_ref, _ = _reference_geometry(x, p, pidx)
 
     # Liniger contour/lag 投影
     e_contour = ca.sin(phi_ref) * (px - x_ref) - ca.cos(phi_ref) * (py - y_ref)
@@ -43,7 +53,10 @@ def _tracking_cost(x, p, pidx=PIDX):
     e_l_ref = p[pidx["e_l_ref"]]
     j_contour = p[pidx["w_contour"]] * (e_contour / e_c_ref) ** 2
     j_lag = p[pidx["w_lag"]] * (e_lag / e_l_ref) ** 2
-    return j_contour + j_lag
+    j_heading = (
+        p[pidx["w_heading"]] * (1.0 - ca.cos(theta - phi_ref))
+        if "w_heading" in pidx else 0.0)
+    return j_contour + j_lag + j_heading
 
 
 def _curvature_limited_vref(x, p, cfg, pidx=PIDX):
@@ -235,6 +248,20 @@ def stage_cost_expr(sym, cfg):
     j_track = _tracking_cost(x, p)
     j_path_speed = _path_speed_cost(x, u, p, cfg, curvature_aware=True, anticreep=True)  # 曲率v_ref + 非对称anti-creep
 
+    # 航向—进度闭环的开发原型：虚拟进度不能脱离车体切向速度独自前进，
+    # 角速度也应跟踪参考切向随 s 的变化率，而不是在弯道仍被拉向零。
+    _, _, phi_ref, _ = _reference_geometry(x, p)
+    heading_error = x[2] - phi_ref
+    tangent_speed = x[3] * ca.cos(heading_error)
+    j_progress_coupling = p[PIDX["w_progress_coupling"]] * (
+        (v_s - tangent_speed) / vs_max) ** 2
+    _, _, _, phi_s = _reference_geometry(x, p)
+    omega_ref = (
+        phi_s * v_s
+        - p[PIDX["heading_feedback_gain"]] * ca.sin(heading_error))
+    j_yaw_rate_tracking = p[PIDX["w_yaw_rate_tracking"]] * (
+        (omega - omega_ref) / omega_max) ** 2
+
     # 幅值：a 是控制，omega 是状态(转向幅值)，alpha 是转向角加速度控制；v_s 单独由 path-speed 项处理。
     # w_alpha 在所有 stage 生效 -> horizon 内 Δomega 平滑，直接抑制直道甩舵 chattering。
     j_control = (
@@ -265,7 +292,9 @@ def stage_cost_expr(sym, cfg):
         p[PIDX_SLOSH["phase_rejoin_active"]]
         if sym.get("with_slosh") else 0.0
     )
-    baseline = (1.0 - phase_active) * (j_path_speed + j_control + j_smooth)
+    baseline = (1.0 - phase_active) * (
+        j_path_speed + j_progress_coupling + j_yaw_rate_tracking
+        + j_control + j_smooth)
     return (j_track + baseline + j_slosh + j_phase_relative) / n_steps
 
 

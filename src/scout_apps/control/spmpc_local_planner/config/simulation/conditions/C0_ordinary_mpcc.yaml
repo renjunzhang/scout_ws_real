@@ -15,6 +15,10 @@ continuous_controller:
   w_contour: 1.0
   w_lag: 0.2
   w_progress: 0.2
+  w_heading: 0.0
+  w_progress_coupling: 0.0
+  w_yaw_rate_tracking: 0.0
+  heading_feedback_gain: 0.0
   w_v: 1.0
   w_vs: 0.3
   v_ref: 0.25

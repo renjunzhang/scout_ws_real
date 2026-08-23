@@ -45,6 +45,28 @@ TEST(VariantConfig, MatchedPairMayDifferOnlyInSloshWeight) {
     EXPECT_FALSE(matchedVariantCommonConfigEqual(matched0, matched5));
 }
 
+TEST(VariantConfig, MatchedPairMustShareHeadingProgressContract) {
+    VariantConfig lhs;
+    lhs.w_heading = 1.0;
+    lhs.w_progress_coupling = 0.5;
+    lhs.w_yaw_rate_tracking = 15.0;
+    lhs.heading_feedback_gain = 4.0;
+    VariantConfig rhs = lhs;
+    EXPECT_TRUE(matchedVariantCommonConfigEqual(lhs, rhs));
+
+    rhs.w_heading += 1.0;
+    EXPECT_FALSE(matchedVariantCommonConfigEqual(lhs, rhs));
+    rhs = lhs;
+    rhs.w_progress_coupling += 1.0;
+    EXPECT_FALSE(matchedVariantCommonConfigEqual(lhs, rhs));
+    rhs = lhs;
+    rhs.w_yaw_rate_tracking += 1.0;
+    EXPECT_FALSE(matchedVariantCommonConfigEqual(lhs, rhs));
+    rhs = lhs;
+    rhs.heading_feedback_gain += 1.0;
+    EXPECT_FALSE(matchedVariantCommonConfigEqual(lhs, rhs));
+}
+
 TEST(VariantConfig, RecognizesDevelopmentMatchedNames) {
     EXPECT_EQ(makeVariantConfig("B_slosh_matched0").name,
               "B_slosh_matched0");

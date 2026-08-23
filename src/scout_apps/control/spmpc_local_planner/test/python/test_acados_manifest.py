@@ -40,6 +40,22 @@ class AcadosManifestTest(unittest.TestCase):
         self.assertIn("constexpr int kMainHorizonSteps = 60;", generated)
         self.assertIn("constexpr int kPhaseRejoinHorizonSteps = 3;", generated)
 
+    def test_heading_progress_parameters_are_mainline_only(self):
+        config = load_config()
+        with tempfile.TemporaryDirectory() as temporary:
+            with contextlib.redirect_stdout(io.StringIO()):
+                generated_path = emit_cpp_manifest(config, temporary)
+            generated = pathlib.Path(generated_path).read_text()
+        mainline, legacy = generated.split(
+            "namespace direct_omega_legacy {", maxsplit=1)
+        for name in (
+                "W_HEADING", "W_PROGRESS_COUPLING",
+                "W_YAW_RATE_TRACKING", "HEADING_FEEDBACK_GAIN"):
+            self.assertIn(name, mainline)
+            self.assertNotIn(name, legacy)
+        self.assertIn("constexpr int kB0ParameterCount = 27;", mainline)
+        self.assertIn("constexpr int kB0ParameterCount = 24;", legacy)
+
 
 if __name__ == "__main__":
     unittest.main()

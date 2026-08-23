@@ -141,6 +141,13 @@ void loadVariant(const ros::NodeHandle& node,
     loadParam(node, prefix + "w_contour", variant.w_contour);
     loadParam(node, prefix + "w_lag", variant.w_lag);
     loadParam(node, prefix + "w_progress", variant.w_progress);
+    loadParam(node, prefix + "w_heading", variant.w_heading);
+    loadParam(node, prefix + "w_progress_coupling",
+              variant.w_progress_coupling);
+    loadParam(node, prefix + "w_yaw_rate_tracking",
+              variant.w_yaw_rate_tracking);
+    loadParam(node, prefix + "heading_feedback_gain",
+              variant.heading_feedback_gain);
     loadParam(node, prefix + "w_v", variant.w_v);
     loadParam(node, prefix + "w_vs", variant.w_vs);
     loadParam(node, prefix + "v_ref", variant.v_ref);

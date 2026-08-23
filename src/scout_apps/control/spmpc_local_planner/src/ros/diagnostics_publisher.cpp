@@ -145,10 +145,10 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     std_msgs::Float32MultiArray msg;
     msg.layout.dim.resize(1);
     msg.layout.dim[0].label =
-        "solver_backend_code,control_frequency,dt,horizon_steps,slosh_enable,slosh_constraint_enable,smooth_priority_enable,primitive_mode_code,v_ref,w_slosh,w_control,w_smooth,w_accel,w_alpha,w_du_a,w_du_vs,v_max,omega_max,a_max,alpha_max,shared_linear_accel_limit_enable,shared_linear_accel_max,shared_linear_accel_max_dt,shared_angular_limit_enable,shared_angular_rate_max,shared_angular_accel_max,shared_angular_accel_max_dt,container_radius,liquid_height,damping_ratio,slosh_height_ref,slosh_height_max,slosh_eta_dot_ratio,use_parabola_term,delay_phase_mode_code,delay_linear_sec,delay_angular_sec,delay_cmd_timeout_sec,delay_odom_timeout_sec,delay_history_window_sec,delay_require_complete_history,slosh_cost_horizon_steps,slosh_cost_horizon_sec,slosh_cost_tail_discount,state_timing_require_common_epoch,state_timing_max_raw_skew_sec,w_contour,w_lag,w_progress,w_v,w_vs";
-    msg.layout.dim[0].size = 51;
-    msg.layout.dim[0].stride = 51;
-    msg.data.resize(51, 0.0f);
+        "solver_backend_code,control_frequency,dt,horizon_steps,slosh_enable,slosh_constraint_enable,smooth_priority_enable,primitive_mode_code,v_ref,w_slosh,w_control,w_smooth,w_accel,w_alpha,w_du_a,w_du_vs,v_max,omega_max,a_max,alpha_max,shared_linear_accel_limit_enable,shared_linear_accel_max,shared_linear_accel_max_dt,shared_angular_limit_enable,shared_angular_rate_max,shared_angular_accel_max,shared_angular_accel_max_dt,container_radius,liquid_height,damping_ratio,slosh_height_ref,slosh_height_max,slosh_eta_dot_ratio,use_parabola_term,delay_phase_mode_code,delay_linear_sec,delay_angular_sec,delay_cmd_timeout_sec,delay_odom_timeout_sec,delay_history_window_sec,delay_require_complete_history,slosh_cost_horizon_steps,slosh_cost_horizon_sec,slosh_cost_tail_discount,state_timing_require_common_epoch,state_timing_max_raw_skew_sec,w_contour,w_lag,w_progress,w_v,w_vs,w_heading,w_progress_coupling,w_yaw_rate_tracking,heading_feedback_gain";
+    msg.layout.dim[0].size = 55;
+    msg.layout.dim[0].stride = 55;
+    msg.data.resize(55, 0.0f);
     msg.data[0] = static_cast<float>(config.solver_backend_code);
     msg.data[1] = static_cast<float>(config.control_frequency);
     msg.data[2] = static_cast<float>(config.dt);
@@ -200,6 +200,10 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     msg.data[48] = static_cast<float>(config.w_progress);
     msg.data[49] = static_cast<float>(config.w_v);
     msg.data[50] = static_cast<float>(config.w_vs);
+    msg.data[51] = static_cast<float>(config.w_heading);
+    msg.data[52] = static_cast<float>(config.w_progress_coupling);
+    msg.data[53] = static_cast<float>(config.w_yaw_rate_tracking);
+    msg.data[54] = static_cast<float>(config.heading_feedback_gain);
     effective_config_pub_.publish(msg);
 }
 
