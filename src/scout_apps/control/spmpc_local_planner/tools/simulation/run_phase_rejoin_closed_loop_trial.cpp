@@ -74,6 +74,7 @@ struct Arguments {
     std::string condition_path;
     std::string cycle_csv_path;
     std::string summary_json_path;
+    std::string frozen_session_sha256;
     std::uint32_t seed = 0;
 };
 
@@ -338,6 +339,14 @@ bool parseUint32(const std::string& text, std::uint32_t& value) {
     }
 }
 
+bool lowercaseSha256(const std::string& text) {
+    return text.size() == 64u &&
+        std::all_of(text.begin(), text.end(), [](char character) {
+            return (character >= '0' && character <= '9') ||
+                (character >= 'a' && character <= 'f');
+        });
+}
+
 bool parseArguments(int argc, char** argv, Arguments& args,
                     std::string& error) {
     error.clear();
@@ -358,6 +367,13 @@ bool parseArguments(int argc, char** argv, Arguments& args,
         else if (key == "--condition") args.condition_path = value;
         else if (key == "--cycle-csv") args.cycle_csv_path = value;
         else if (key == "--summary-json") args.summary_json_path = value;
+        else if (key == "--frozen-session-sha256") {
+            args.frozen_session_sha256 = value;
+            if (!lowercaseSha256(value)) {
+                error = "invalid --frozen-session-sha256";
+                return false;
+            }
+        }
         else if (key == "--seed") {
             if (!parseUint32(value, args.seed)) {
                 error = "invalid --seed";
@@ -383,7 +399,8 @@ void printUsage(std::ostream& output) {
         << "usage: spmpc_phase_rejoin_closed_loop_trial "
         << "--plant PLANT.yaml --path PATH.json --artifact V3.csv "
         << "--condition CONDITION.yaml --seed N "
-        << "--cycle-csv CYCLES.csv --summary-json SUMMARY.json\n";
+        << "--cycle-csv CYCLES.csv --summary-json SUMMARY.json "
+        << "[--frozen-session-sha256 SHA256]\n";
 }
 
 bool canonicalExistingPath(const std::string& path,
@@ -1824,6 +1841,7 @@ bool writeSummary(
             manifest::kMaxInequalityResidual &&
         counters.max_complementarity_residual <=
             manifest::kMaxComplementarityResidual;
+    const bool formal_trial = !args.frozen_session_sha256.empty();
     output << "{\n"
         << "  \"schema\": \"" << kSummarySchema << "\",\n"
         << "  \"status\": \"" << status << "\",\n"
@@ -1835,8 +1853,12 @@ bool writeSummary(
         << jsonEscape(condition.implementation_id) << "\",\n"
         << "  \"seed\": " << args.seed << ",\n"
         << "  \"simulation_only\": true,\n"
-        << "  \"formal_trials_started\": false,\n"
-        << "  \"development_pilot_only\": true,\n"
+        << "  \"formal_trials_started\": "
+        << (formal_trial ? "true" : "false") << ",\n"
+        << "  \"development_pilot_only\": "
+        << (formal_trial ? "false" : "true") << ",\n"
+        << "  \"frozen_session_sha256\": \""
+        << jsonEscape(args.frozen_session_sha256) << "\",\n"
         << "  \"formal_robot_release\": false,\n"
         << "  \"physical_parameter_claim\": false,\n"
         << "  \"preliminary_planar_r03_parameters_only\": true,\n"

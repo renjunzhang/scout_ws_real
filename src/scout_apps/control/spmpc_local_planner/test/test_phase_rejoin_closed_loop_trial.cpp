@@ -364,13 +364,17 @@ protected:
             << "  publish_latency_sec: 0.01\n";
     }
 
-    int run() {
+    int run(const std::string& frozen_session_sha256 = std::string()) {
         std::vector<std::string> values = {
             "trial", "--plant", SPMPC_SIMULATION_CONFIG_PATH,
             "--path", path_, "--artifact", artifact_,
             "--condition", condition_, "--seed", "1234",
             "--cycle-csv", cycle_, "--summary-json", summary_,
         };
+        if (!frozen_session_sha256.empty()) {
+            values.push_back("--frozen-session-sha256");
+            values.push_back(frozen_session_sha256);
+        }
         std::vector<char*> argv;
         for (std::string& value : values) argv.push_back(&value[0]);
         return spmpc_local_planner::simulation::closed_loop_trial::
@@ -406,6 +410,28 @@ TEST_F(TrialRunnerTest,
     struct stat after;
     ASSERT_EQ(::stat(summary_.c_str(), &after), 0);
     EXPECT_EQ(before.st_size, after.st_size);
+}
+
+TEST_F(TrialRunnerTest,
+       FormalInvocationBindsSummaryToReviewedSessionHash) {
+    writeCondition("C2", "offline_replay", "test_c2_formal_v1", true,
+                   false);
+    const std::string session_hash(64u, 'a');
+    ASSERT_EQ(run(session_hash), 0);
+    const YAML::Node summary = YAML::LoadFile(summary_);
+    EXPECT_TRUE(summary["formal_trials_started"].as<bool>());
+    EXPECT_FALSE(summary["development_pilot_only"].as<bool>());
+    EXPECT_EQ(summary["frozen_session_sha256"].as<std::string>(),
+              session_hash);
+}
+
+TEST_F(TrialRunnerTest, RejectsMalformedFormalSessionHash) {
+    writeCondition("C2", "offline_replay", "test_c2_formal_v1", true,
+                   false);
+    EXPECT_EQ(run("not-a-sha256"), 2);
+    struct stat info;
+    EXPECT_NE(::stat(cycle_.c_str(), &info), 0);
+    EXPECT_NE(::stat(summary_.c_str(), &info), 0);
 }
 
 TEST_F(TrialRunnerTest,
