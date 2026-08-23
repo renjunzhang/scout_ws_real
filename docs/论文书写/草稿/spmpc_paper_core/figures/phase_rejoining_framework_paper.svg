@@ -2,8 +2,8 @@
 <svg xmlns="http://www.w3.org/2000/svg"
      width="1800" height="800" viewBox="0 0 1800 800"
      role="img" aria-labelledby="title desc">
-  <title id="title">Phase-rejoining residual S-MPCC framework</title>
-  <desc id="desc">A concise paper framework. A geometric path and frozen models enter OfflineSloshOCP to produce a complete phase-indexed anti-slosh artifact. Online, the state estimate and published-command history are aligned with the execution front and nominal phase. A bounded residual S-MPCC is accepted only when the terminal state can rejoin the nominal tail. The selected candidate passes through the safety and publication chain before reaching the Scout and liquid system, whose measurements close the loop.</desc>
+  <title id="title">Phase-rejoining residual MPC framework</title>
+  <desc id="desc">A concise paper framework. A geometric path and frozen models enter a path-indexed speed-profile optimization with delay-aware rollout, producing a complete 22-dimensional nominal artifact with a 9-dimensional empirical gate, a 14-dimensional execution-compatibility set, and bounded recovery feedback. Online, the source-stamped state and transport-receipt command history are aligned to the expected publication epoch. One nearby monotone phase is selected, then one ten-stage residual MPC problem is solved. Full-horizon execution compatibility and the terminal empirical gate admit the residual, while the current empirical gate admits recovery; safety evaluation, priority arbitration, execution-contract finalization, receipt history, and conditional phase commit form the publication chain.</desc>
 
   <defs>
     <style><![CDATA[
@@ -152,15 +152,15 @@
   <text class="box-text" x="180" y="252">container + constraints</text>
 
   <rect class="box-method" x="400" y="108" width="330" height="164" rx="10"/>
-  <text class="box-title" x="565" y="151">OfflineSloshOCP</text>
-  <text class="box-text" x="565" y="197">full anti-slosh motion</text>
-  <text class="box-text" x="565" y="234">optimized before execution</text>
+  <text class="box-title-sm" x="565" y="151">Speed-profile search</text>
+  <text class="box-text" x="565" y="197">8 path-indexed scale knots</text>
+  <text class="box-text" x="565" y="234">delay-aware rollout + audit</text>
 
   <rect class="box-method" x="820" y="108" width="500" height="164" rx="10"/>
   <text class="box-title" x="1070" y="143">Phase-indexed offline artifact</text>
-  <text class="math" x="1070" y="184">x̄(τ), ū(τ), z̄(τ)</text>
-  <text class="box-text" x="1070" y="221">complete motion–settle–hold tail</text>
-  <text class="box-text" x="1070" y="252">phase-indexed rejoin data</text>
+  <text class="box-text" x="1070" y="184">22-D nominal + inputs</text>
+  <text class="box-text" x="1070" y="221">9-D gate · 14-D B_exec</text>
+  <text class="box-text" x="1070" y="252">feedback · settle–hold tail</text>
 
   <path class="flow" d="M 320 190 H 400"/>
   <path class="flow" d="M 730 190 H 820"/>
@@ -171,39 +171,39 @@
   <path class="artifact-arrow" d="M 500 359 V 482"/>
   <path class="artifact-arrow" d="M 860 359 V 482"/>
   <path class="artifact-arrow" d="M 1220 359 V 482"/>
-  <text class="artifact-label" x="860" y="340">frozen nominal plan and rejoin data</text>
+  <text class="artifact-label" x="860" y="340">frozen nominal, gates, B_exec and recovery feedback</text>
 
   <!-- Online feedback control -->
   <rect class="box-common" x="40" y="482" width="280" height="168" rx="10"/>
-  <text class="box-title-sm" x="180" y="520">State estimate</text>
-  <text class="box-title-sm" x="180" y="554">+ command history</text>
-  <text class="box-text" x="180" y="598">realized motion</text>
-  <text class="box-text" x="180" y="631">liquid-state estimate</text>
+  <text class="box-title-sm" x="180" y="520">Timestamped state</text>
+  <text class="box-title-sm" x="180" y="554">+ receipt history</text>
+  <text class="box-text" x="180" y="598">robot + liquid estimate</text>
+  <text class="box-text" x="180" y="631">delivered commands</text>
 
   <rect class="box-method" x="350" y="482" width="300" height="168" rx="10"/>
-  <text class="box-title-sm" x="500" y="524">Execution-front</text>
-  <text class="box-title-sm" x="500" y="558">+ phase alignment</text>
-  <text class="box-text" x="500" y="600">realization-aligned state</text>
-  <text class="box-text" x="500" y="632">nearby monotone phase</text>
+  <text class="box-title-sm" x="500" y="524">Publication-epoch</text>
+  <text class="box-title-sm" x="500" y="558">alignment + phase</text>
+  <text class="box-text" x="500" y="600">22-D aligned state</text>
+  <text class="box-text" x="500" y="632">phase + causal witness</text>
 
   <rect class="box-core" x="700" y="482" width="320" height="168" rx="10"/>
-  <text class="box-title-sm" x="860" y="518">Bounded residual</text>
-  <text class="box-title-sm" x="860" y="551">S-MPCC</text>
-  <text class="math" x="860" y="594">u = ū(τ) + δu</text>
-  <text class="box-text" x="860" y="630">3 steps ≈ 100 ms</text>
+  <text class="box-title-sm" x="860" y="518">10-stage 22-D</text>
+  <text class="box-title-sm" x="860" y="551">residual MPC</text>
+  <text class="math" x="860" y="594">N = 10 = 7 + 3</text>
+  <text class="box-text" x="860" y="630">published-rate input</text>
 
   <rect class="box-method" x="1070" y="482" width="300" height="168" rx="10"/>
-  <text class="box-title-sm" x="1220" y="518">Joint rejoin test</text>
+  <text class="box-title-sm" x="1220" y="518">B_exec + gate audit</text>
   <text class="box-title-sm" x="1220" y="551">+ supervisor</text>
-  <text class="box-text" x="1220" y="593">gate + execution check</text>
-  <text class="box-text" x="1220" y="629">residual / recovery / stop</text>
+  <text class="box-text" x="1220" y="593">terminal gate → residual</text>
+  <text class="box-text" x="1220" y="629">current gate → recovery / stop</text>
 
   <rect class="box-common" x="1470" y="482" width="290" height="168" rx="10"/>
-  <text class="box-title-sm" x="1615" y="510">Safety + publish</text>
-  <text class="box-title-sm" x="1615" y="542">Scout + liquid</text>
-  <text class="box-text" x="1615" y="578">selected candidate</text>
-  <text class="box-text" x="1615" y="608">→ final u_pub</text>
-  <text class="box-text" x="1615" y="638">→ motion + slosh</text>
+  <text class="box-title-sm" x="1615" y="510">Safety → arbitration</text>
+  <text class="box-title-sm" x="1615" y="542">Final publication</text>
+  <text class="box-text" x="1615" y="578">execution finalizer</text>
+  <text class="box-text" x="1615" y="608">sink receipt → history</text>
+  <text class="box-text" x="1615" y="638">guarded phase commit</text>
 
   <path class="flow" d="M 320 566 H 350"/>
   <path class="flow" d="M 650 566 H 700"/>
@@ -211,5 +211,5 @@
   <path class="flow" d="M 1370 566 H 1470"/>
 
   <path class="feedback" d="M 1615 650 V 746 H 180 V 650"/>
-  <text class="line-label" x="900" y="738">state feedback and published-command history</text>
+  <text class="line-label" x="900" y="738">source-stamped state and transport-receipt command history</text>
 </svg>

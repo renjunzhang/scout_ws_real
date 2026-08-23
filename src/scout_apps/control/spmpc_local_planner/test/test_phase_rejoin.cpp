@@ -991,7 +991,7 @@ TEST(PhaseRejoinCoordinator, ReleasesGenericReachedOnlyAfterFinalAcceptedWindow)
     PhaseRejoinDecision decision;
     decision.terminal_gate_accepted = true;
     decision.command_contract_consistent = true;
-    coordinator.commit(preparation, decision);
+    EXPECT_TRUE(coordinator.commit(preparation, decision));
     EXPECT_TRUE(coordinator.terminalReleaseAuthorized());
 
     const auto next = coordinator.prepare(

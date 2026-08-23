@@ -40,7 +40,7 @@ constexpr char kPlanSchema[] = "spmpc_offline_slosh_ocp_plan_v1";
 constexpr char kFitManifestSchema[] =
     "spmpc_phase_rejoin_recovery_fit_manifest_v1";
 constexpr char kHeldOutReportSchema[] =
-    "spmpc_phase_rejoin_recovery_held_out_report_v1";
+    "spmpc_phase_rejoin_recovery_held_out_report_v2";
 constexpr char kRecoveryDatasetSchema[] =
     "spmpc_phase_rejoin_recovery_dataset_v1";
 constexpr char kRecoveryScalesSchema[] =

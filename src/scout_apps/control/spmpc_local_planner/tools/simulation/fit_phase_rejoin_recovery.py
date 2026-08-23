@@ -30,7 +30,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 SCHEMA = "spmpc_phase_rejoin_recovery_dataset_v1"
 MANIFEST_SCHEMA = "spmpc_phase_rejoin_recovery_fit_manifest_v1"
-REPORT_SCHEMA = "spmpc_phase_rejoin_recovery_held_out_report_v1"
+REPORT_SCHEMA = "spmpc_phase_rejoin_recovery_held_out_report_v2"
 SCALE_SCHEMA = "spmpc_phase_rejoin_recovery_scales_v1"
 
 SPLITS = ("fit", "tune", "held_out")
@@ -506,9 +506,14 @@ def _confusion_metrics(
         false_accept, unrecovered_count, options.confidence
     )
     accepted_count = true_accept + false_accept
-    false_safe_among_accepted = (
-        false_accept / float(accepted_count) if accepted_count else 0.0
-    )
+    false_safe_defined = accepted_count > 0
+    false_safe_among_accepted = None
+    false_safe_interval: Tuple[Optional[float], Optional[float]] = (None, None)
+    if false_safe_defined:
+        false_safe_among_accepted = false_accept / float(accepted_count)
+        false_safe_interval = _wilson_interval(
+            false_accept, accepted_count, options.confidence
+        )
     return {
         "sample_count": len(rows),
         "recovered_count": recovered_count,
@@ -523,7 +528,11 @@ def _confusion_metrics(
         "false_accept_rate": false_accept_rate,
         "false_accept_wilson_lower": false_accept_interval[0],
         "false_accept_wilson_upper": false_accept_interval[1],
+        "accepted_count": accepted_count,
+        "false_safe_among_accepted_defined": false_safe_defined,
         "false_safe_among_accepted": false_safe_among_accepted,
+        "false_safe_among_accepted_wilson_lower": false_safe_interval[0],
+        "false_safe_among_accepted_wilson_upper": false_safe_interval[1],
         "admission_rate": accepted_count / float(len(rows)),
         "state_gate_admission_rate": state_accept_count / float(len(rows)),
         "execution_gate_admission_rate": execution_accept_count / float(len(rows)),

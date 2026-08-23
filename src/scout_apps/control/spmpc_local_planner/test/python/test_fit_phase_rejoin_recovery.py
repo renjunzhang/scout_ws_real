@@ -176,6 +176,17 @@ class PhaseRejoinRecoveryFitTest(unittest.TestCase):
             self.assertEqual(report["held_out_evaluation_count"], 1)
             self.assertIs(report["held_out_influenced_fit"], False)
             self.assertIs(report["held_out_influenced_tuning"], False)
+            global_metrics = report["evaluation"]["global"]
+            self.assertGreater(global_metrics["accepted_count"], 0)
+            self.assertIs(
+                global_metrics["false_safe_among_accepted_defined"], True
+            )
+            self.assertIsNotNone(
+                global_metrics["false_safe_among_accepted_wilson_lower"]
+            )
+            self.assertIsNotNone(
+                global_metrics["false_safe_among_accepted_wilson_upper"]
+            )
             self.assertEqual(
                 manifest["compiled_contract"][
                     "execution_compatibility_contract"
@@ -339,6 +350,39 @@ class PhaseRejoinRecoveryFitTest(unittest.TestCase):
             )
             FITTER.verify_manifest(no_go_output / "manifest.json")
             self.assert_no_safety_claim(no_go_manifest, no_go_report)
+
+    def test_zero_accepted_reports_conditional_false_safe_as_undefined(self):
+        rows = self.make_rows()
+        for row in rows:
+            if row["split"] == "held_out":
+                for name in FITTER.ERROR_COLUMNS:
+                    row[name] = "1.0"
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            input_path = root / "zero_accepted.csv"
+            output_path = root / "evidence"
+            self.write_rows(input_path, rows)
+
+            return_code, _, stderr = self.run_fit(input_path, output_path)
+            self.assertEqual(return_code, 4, stderr)
+            report = json.loads(
+                (output_path / "held_out_report.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            metrics = report["evaluation"]["global"]
+            self.assertEqual(metrics["accepted_count"], 0)
+            self.assertIs(
+                metrics["false_safe_among_accepted_defined"], False
+            )
+            self.assertIsNone(metrics["false_safe_among_accepted"])
+            self.assertIsNone(
+                metrics["false_safe_among_accepted_wilson_lower"]
+            )
+            self.assertIsNone(
+                metrics["false_safe_among_accepted_wilson_upper"]
+            )
 
     def test_existing_output_directory_is_rejected_without_overwrite(self):
         with tempfile.TemporaryDirectory() as directory:

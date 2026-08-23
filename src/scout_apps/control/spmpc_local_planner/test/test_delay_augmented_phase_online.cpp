@@ -589,6 +589,38 @@ TEST(DelayAugmentedPhaseOnline,
 }
 
 TEST(DelayAugmentedPhaseOnline,
+     NoHorizonCompatibleCandidateFailsClosedBeforeSolverInvocation) {
+    OnlineCycleFixture fixture;
+    ControlCycleRequest request = fixture.request();
+    // This tail is inside the current B_exec, but cannot reach the nominal
+    // published-command interval within one frozen rate step.  The complete
+    // causal horizon filter must therefore reject it before the OCP runs.
+    request.solver_input.execution_horizon.initial_state.linear
+        .pending_commands.back() = 0.5;
+
+    const ControlCycleResult result = fixture.engine.step(request);
+
+    EXPECT_EQ(fixture.solver_session.calls, 0);
+    EXPECT_FALSE(result.solve_returned);
+    EXPECT_FALSE(result.solver_success);
+    EXPECT_FALSE(result.telemetry.solve_attempted);
+    EXPECT_EQ(result.phase_preparation.status,
+              "NO_EXECUTION_HORIZON_COMPATIBLE_CANDIDATE");
+    EXPECT_EQ(result.solver_output.status,
+              "NOT_RUN_NO_EXECUTION_HORIZON_COMPATIBLE_CANDIDATE");
+    EXPECT_EQ(
+        result.phase_decision.status,
+        "ENFORCE_NOT_READY_STOP_"
+        "NO_EXECUTION_HORIZON_COMPATIBLE_CANDIDATE");
+    EXPECT_EQ(result.telemetry.solver_status, result.solver_output.status);
+    EXPECT_TRUE(result.phase_decision.controlled_stop_used);
+    EXPECT_EQ(result.decision.source, CommandSource::PhaseRejoin);
+    EXPECT_FALSE(result.decision.accepted);
+    EXPECT_DOUBLE_EQ(result.final_command.linear, 0.0);
+    EXPECT_DOUBLE_EQ(result.final_command.angular, 0.0);
+}
+
+TEST(DelayAugmentedPhaseOnline,
      ParameterImageMatchesManifestAndMutationsFailClosed) {
     if (!DelayAugmentedPhaseAcadosSolver::compiled()) {
         GTEST_SKIP() << "delay-augmented generated capsule is unavailable";

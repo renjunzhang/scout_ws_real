@@ -1,4 +1,4 @@
-% Repository/supplement fragment for Phase-Rejoining Residual S-MPCC.
+% Repository/supplement fragment for Phase-Rejoining Residual MPC.
 % This file is intentionally not included by main.tex and is not standalone.
 % It relies on the packages and macros defined in main.tex. Every \Pending entry
 % must be replaced from one immutable release before formal acquisition.
@@ -6,15 +6,20 @@
 \section{Release Status and Freeze Rule}
 
 This fragment records configuration, validation, and analysis fields for the
-target \PRSMPCC{} release. It contains no formal performance result. A
-\Pending{} entry is neither a pass nor permission to acquire confirmation data.
-The current physical \texttt{enforce} status is \NoGo{} because the unequal-delay
-causal-front blocker B0 remains open and G3 lacks a formal execution-compatibility
-set and an independent held-out gate test.
+target Phase-Rejoining Residual MPC release. It contains no formal performance
+result. A \Pending{} entry is neither a pass nor permission to acquire
+confirmation data. The most recent pre-revision formal-simulation session,
+bound to commit \texttt{7775dd68}, reports
+\texttt{READY\_NOT\_EXECUTED} and
+\texttt{formal\_trials\_started=false}. This means only that its hash-bound
+assets passed automated readiness checks; it does not qualify the revised
+source, and no formal C0--C4/IS trial was executed. Human authorization is not
+recorded here, and physical qualification and experiments have not started.
 
 One release identifier binds the Git commit, build products, runner, controller
 configuration, path and frame hashes, execution and liquid models,
-\OfflineSloshOCP{} artifact, gate objects, measurement chain, condition
+parameterized offline speed-profile artifact, gate objects, frozen recovery
+feedback contract, measurement chain, condition
 definitions, randomization, and analysis specification:
 \begin{align}
   \text{release ID} &= \text{\Pending},\\
@@ -27,31 +32,34 @@ different contracted objects are not pooled.
   \centering
   \scriptsize
   \setlength{\tabcolsep}{4pt}
-  \caption{G0--G4 release record. Numerical criteria and dataset identities are
-  frozen before the corresponding test is opened.}
+  \caption{Physical G0--G4 release template. Numerical criteria and dataset
+  identities are frozen before the corresponding hardware test is opened; no
+  physical gate has started.}
   \label{tab:supp_release_gates}
   \begin{tabular}{@{}p{0.06\textwidth}p{0.53\textwidth}p{0.23\textwidth}p{0.11\textwidth}@{}}
     \toprule
     Gate & Required frozen evidence & Criterion/data record & Current status \\
     \midrule
-    G0 & Causal unequal-delay front, physical/grid epoch agreement, full
+    G0 & Hardware validation of the causal unequal-delay front, physical/grid
+      epoch agreement, full
       source-to-terminal prediction, publication-delay error, first-action
       influence, processed-IMU magnitude/phase response near the liquid-mode
       frequency, and delay stability. & Thresholds,
-      confidence rule, and $D_{\mathrm{id,test}}$ hash \Pending & \NoGo{}: B0 open \\
-    G1 & Formal \OfflineSloshOCP{} artifact, complete motion--settle--zero-hold
+      confidence rule, and $D_{\mathrm{id,test}}$ hash \Pending & Not started \\
+    G1 & Hardware-bound parameterized speed-profile artifact, complete
+      motion--settle--zero-hold
       tail, satisfied constraints, and complete contract. & Validator version,
-      report, and artifact hash \Pending & \Pending \\
+      report, and artifact hash \Pending & Not started \\
     G2 & Source-correct RGB calibration, motion-plus-tail window, valid-frame
       rule, noise/drift audit, and minimum detectable difference. & Calibration,
-      admission thresholds, and held-out record \Pending & \Pending \\
-    G3 & Trial-separated gate fit/test, formal execution compatibility,
+      admission thresholds, and held-out record \Pending & Not started \\
+    G3 & Trial-separated gate fit/tune/held-out pools, hardware-domain execution compatibility,
       independently labeled recovery, coverage, conditional false-safe, and
       false rejects. &
-      Dataset hashes, thresholds, and uncertainty rule \Pending & \NoGo{} \\
+      Dataset hashes, thresholds, and uncertainty rule \Pending & Not started \\
     G4 & Frozen paired pilot with condition separation, tracking, RGB direction,
       supervisor branches, recorder completeness, and postflight audit. & Pilot
-      blocks, GO/NO-GO rule, and report hash \Pending & \Pending \\
+      blocks, GO/NO-GO rule, and report hash \Pending & Not started \\
     \bottomrule
   \end{tabular}
 \end{table*}
@@ -60,9 +68,17 @@ different contracted objects are not pooled.
 
 Execution identification starts at the timestamp of the final published command
 $u^{\mathrm{pub}}$, not at the solver proposal. Linear and angular channels are
-identified and validated separately. The approximate values used to explain B0
-in the main text are development candidates; the formal values below remain
-\Pending{} until G0 passes.
+identified and validated separately. The implemented solver state is
+\begin{equation}
+X^{\mathrm{aug}}=
+\operatorname{col}(p_x,p_y,\psi,v^r,s,\omega^r,z^\ell,b^v,b^\omega)
+\in\mathbb R^{22},
+\end{equation}
+with five linear and seven angular pending-command entries. The 14-D execution
+substate is $x^{\mathrm{exec}}=\operatorname{col}(v^r,\omega^r,b^v,b^\omega)$.
+This source-level contract is implemented and development-tested; the physical
+identification records and acceptance thresholds below remain \Pending{} until
+the corresponding hardware gate is run.
 
 \begin{table*}[t]
   \centering
@@ -97,8 +113,9 @@ in the main text are development candidates; the formal values below remain
       interpolation/ZOH rule, completeness test, reset rule \Pending \\
     Grid and horizon & $\Delta t$, $n_v=\lceil d_v/\Delta t\rceil$,
       $n_\omega=\lceil d_\omega/\Delta t\rceil$, $n_f=\max(n_v,n_\omega)$,
-      $N_\ell$, and $N_e=n_f+N_\ell$. & Frozen numerical values and grid/epoch
-      consistency test \Pending \\
+      and $N_e=n_f+N_\ell$. The implemented image uses
+      $(n_b^v,n_b^\omega)=(5,7)$ and $N_e=10=7+3$. & Frozen physical values and
+      grid/epoch consistency test \Pending \\
     Full lead & $T_{\mathrm{lead}}=(t-t_s)+N_e\Delta t$, including source age,
       computation/publication alignment, execution front, and post-front window. &
       Nominal/range values and held-out error criterion \Pending \\
@@ -106,29 +123,34 @@ in the main text are development candidates; the formal values below remain
       modal frequency, realized excitation convention
       $(\dot v^r,v^r\omega^r)$, and units. &
       Parameter source, configuration hash, validity range \Pending \\
-    Residual OCP & Solver/code-generation identity, warm start, integration,
-      $q\to u^{\mathrm{sol}}\to u^{\mathrm{pred}}$ and $\Pi_{\mathrm{cmd}}$,
-      nominal-relative weights, $\mathcal Z$, local phase/progress bounds, and
-      first-command residual bounds. & Build hash, schema, weights, limits,
+    Residual OCP & Ten-stage 22-D state and 3-D published-command-rate input;
+      solver/code-generation identity, Full SQP with funnel globalization, warm
+      start, integration, $q\to u^{\mathrm{pred}}$, nominal-relative weights,
+      input/published-command bounds, local progress bounds, residual bounds,
+      path-wise $\mathcal B^{\mathrm{exec}}$, terminal empirical gate, KKT audit,
+      and independent causal rollout. & Build hash, schema, weights, limits,
       tolerances \Pending \\
     Runtime target & Nominal 30-Hz publication target and deterministic behavior
       for timeout, numerical failure, stale state, and invalid contract. & Budget,
       statuses, timeout action, diagnostic schema \Pending \\
-    Publication chain & Supervisor candidate, publication gate, limiter,
-      independent safety override, final $u^{\mathrm{pub}}$, and write-back to
-      both buffers. & Ordered implementation IDs, limits, and audit tolerances
+    Publication chain & Terminal/phase supervisor candidate, safety evaluation,
+      prioritized arbitration, execution-contract finalization of
+      $u^{\mathrm{final}}$, sink receipt, delivered-command history, and
+      conditional phase commit. & Ordered
+      implementation IDs, limits, and audit tolerances
       \Pending \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
-The B0 test must demonstrate that a candidate command entering the faster channel
-before the common front remains decision-dependent in the OCP or in a strictly
-equivalent condensed bridge. A history-only fixed-front propagation does not
-satisfy this requirement. Any mismatch between a physical delay epoch and its
-grid index is reported explicitly rather than hidden by rounding.
+The source-level causal-front blocker is closed: candidate commands entering the
+faster channel before the common front remain decision-dependent in the 22-D OCP,
+including fractional-delay event propagation. A history-only fixed-front
+propagation would not satisfy the contract. Physical delay validity, publication
+timing, and first-action influence remain separate hardware qualification tests;
+any physical/grid epoch mismatch is reported rather than hidden by rounding.
 
-\section{OfflineSloshOCP Artifact Contract}
+\section{Parameterized Offline Artifact Contract}
 
 Each frozen path owns a separate artifact. An optional path generated by MBF is
 accepted only before a trial, then frozen and assigned its own artifact; an
@@ -138,39 +160,39 @@ artifact is never shared across different path hashes.
   \centering
   \scriptsize
   \setlength{\tabcolsep}{4pt}
-  \caption{Required contents of the formal \OfflineSloshOCP{} artifact.}
+  \caption{Direct artifact bindings and complementary formal-session bindings.}
   \label{tab:supp_artifact_contract}
-  \begin{tabular}{@{}p{0.20\textwidth}p{0.48\textwidth}p{0.24\textwidth}@{}}
+  \begin{tabular}{@{}p{0.18\textwidth}p{0.43\textwidth}p{0.31\textwidth}@{}}
     \toprule
-    Contract group & Required contents & Frozen identity or result \\
+    Contract group & Bound directly by the artifact & Bound by the outer formal session \\
     \midrule
-    Task geometry & P-core point sequence, frame, direction, map/transform and
-      footprint references, projection rule, and SHA-256. & \Pending \\
-    Physical contract & Container geometry, fill/temperature range, mounting,
-      liquid-model parameters and applicability bounds. & \Pending \\
-    Execution contract & Unequal channel models, $b^v/b^\omega$ schemas,
-      actuator states, publication chain, grid, and source/publication convention. &
+    Task geometry & Path SHA-256 and frame; phase-indexed nominal geometry. &
+      Full path file, map/transform, direction, projection, footprint, and
+      runner bindings \Pending \\
+    Model and timing & Time grid, execution-contract identity/hash, low-order
+      liquid coefficients, and state/parameter schemas. & Container/fill,
+      identification inputs, applicability ranges, and complete configuration
       \Pending \\
-    Optimization contract & Robot/input/liquid constraints, objective and
-      normalizers, terminal ownership, solver/code-generation version, and
-      numerical tolerances. & \Pending \\
-    Nominal sequence & $\{\bar X_i^{\mathrm{aug}},\bar\chi_i,\bar t_i\}$ and
-      $\{\bar q_i,\bar u_i^{\mathrm{pub}}\}$ with a common phase index and units. &
-      Schema, length, time span, hash \Pending \\
-    Complete tail & Geometric arrival followed by contracted slowdown, liquid
-      settling, and verified zero-command hold; no generic terminal controller
-      may truncate this tail. & Tail rule, duration, validation \Pending \\
+    Nominal sequence & $\{\bar X_i^{\mathrm{aug}},\bar\chi_i,\bar t_i\}$,
+      $\{\bar q_i,\bar u_i^{\mathrm{pub}},\bar\kappa_i\}$, common phase index,
+      units, and complete slowdown--settle--zero-hold tail. & Generator and
+      runner software/executables, build identity, and validation tools \Pending \\
     Phase objects & $\widehat{\mathcal R}^{\mathrm{emp}}_i$,
-      $\mathcal B_i^{\mathrm{exec}}$, $u_{\mathrm{rec}}(i)$, phase coverage, and
-      validity flags. & Schema and object hashes \Pending \\
-    Invalidation & Deterministic rejection on path/model/container/grid/schema or
-      hash mismatch; no silent fallback to a development object. & Contract ID,
-      validator version, rejection test \Pending \\
-    Provenance & Generator commit/build, input configuration, random seeds,
-      creation time, validation report, and immutable storage location. & \Pending \\
+      $\mathcal B_i^{\mathrm{exec}}$, recovery policy, recovery dataset/fit
+      report/scales hashes, phase coverage, and validity flags. & Dataset
+      generator, seed partitions, fitting invocation, and analysis software
+      \Pending \\
+    Invalidation/provenance & Any direct-field mismatch invalidates the artifact;
+      the artifact bytes receive an immutable hash. & Git commit, full
+      configurations, executable hashes, storage path, and session manifest;
+      changing any of these creates a new session \Pending \\
     \bottomrule
   \end{tabular}
 \end{table*}
+
+An outer-session binding must not be reported as an artifact-header field.
+Changing a direct field requires artifact regeneration; changing only an outer
+binding still requires a newly materialized formal session and evidence audit.
 
 \begin{table}[t]
   \centering
@@ -195,17 +217,20 @@ artifact is never shared across different path hashes.
 
 \section{Gate Construction, Compatibility, and Data Separation}
 
-The 9-D gate is evaluated only inside the execution-compatibility set. For the
-diagonal empirical representation used by the target formulation,
+The fitting tool evaluates the 9-D ellipsoid and 14-D execution box separately
+and defines joint acceptance as their conjunction.  For the diagonal empirical
+representation used by the target formulation,
 \begin{equation}
   m_i(e)=\sum_r\left(\frac{e_r}{\rho_{r,i}}\right)^2,
   \qquad
   m_i(e)\leq1,
 \end{equation}
-with phase radii $\rho_{r,i}=\text{\Pending}$. The joint online terminal condition also
-requires $e^{\mathrm{exec}}\in\mathcal B_i^{\mathrm{exec}}$. Samples outside
-$\mathcal B_i^{\mathrm{exec}}$ are contract rejections and are not silently
-counted as 9-D classifier errors.
+with phase radii $\rho_{r,i}=\text{\Pending}$.  Online residual admission also
+requires $e^{\mathrm{exec}}\in\mathcal B_i^{\mathrm{exec}}$ throughout the
+horizon.  Held-out confusion metrics use the joint acceptance decision;
+separate state-gate and execution-box admission rates expose which component
+rejected a sample, so outside-box samples are neither discarded nor silently
+conditioned away.
 
 \begin{table*}[t]
   \centering
@@ -224,12 +249,15 @@ counted as 9-D classifier errors.
       first-action influence, and processed-IMU magnitude/phase near the
       liquid-mode frequency. & Hash and trial list
       \Pending; no model selection. \\
-    $D_{\mathrm{gate,fit}}$ & Generate compatible deviations, labels, phase
-      radii/objects, and stored actions. & Hash and trial list \Pending; no reuse
-      in held-out confusion matrix. \\
-    $D_{\mathrm{gate,test}}$ & Evaluate frozen compatibility and empirical gate
+    $D_{\mathrm{gate,fit}}$ & Estimate 9-D base radii and 14-D base bounds from
+      independently labeled recovered complete rollouts under the frozen
+      recovery feedback. & Hash and trial list \Pending; no tune/held-out use. \\
+    $D_{\mathrm{gate,tune}}$ & Select only one global shrinkage using the frozen
+      false-accept and recovered-coverage criteria. & Hash and trial list
+      \Pending; no base-scale or feedback-gain changes. \\
+    $D_{\mathrm{gate,held}}$ & Open once to evaluate the frozen joint gate
       against independent recovery labels. & Hash and trial list \Pending; no
-      threshold or radius tuning. \\
+      threshold, radius, bound, shrinkage, or feedback tuning. \\
     $D_{\mathrm{dev,tune}}$ & Tune C1/C4 and trial workflow before candidate
       freeze. & Hash and block list \Pending; development only. \\
     $D_{\mathrm{dev,pilot}}$ & One frozen G4 GO/NO-GO pilot after tuning ends. &
@@ -247,7 +275,7 @@ counted as 9-D classifier errors.
   \centering
   \scriptsize
   \setlength{\tabcolsep}{4pt}
-  \caption{Gate, compatibility, and stored-action freeze template.}
+  \caption{Gate, compatibility, and frozen-recovery-feedback template.}
   \label{tab:supp_gate_freeze}
   \begin{tabular}{@{}p{0.20\textwidth}p{0.48\textwidth}p{0.24\textwidth}@{}}
     \toprule
@@ -256,42 +284,58 @@ counted as 9-D classifier errors.
     Deviation sampling & Phase distribution; robot, liquid, buffer, actuator and
       command-history perturbations; parameter disturbances; random seeds. &
       Ranges, counts, phase coverage, generator hash \Pending \\
-    Compatibility set & Coordinates from $(b^v,b^\omega,x^a)$, phase-specific
+    Compatibility set & Coordinates
+      $\operatorname{col}(v^r,\omega^r,b^v,b^\omega)$, phase-specific
       bounds, uncertainty treatment, and outside-set action. &
       $\beta^{\mathrm{exec}}_{r,i}$, coverage, object hash \Pending \\
-    Independent label & Stored action passes through the publication chain,
-      complete nominal tail resumes, constraints hold, and the frozen settling
-      rule passes using an outcome independent of the gate. & Labeler/version,
+    Independent label & The frozen recovery feedback passes through its
+      rate-reachable transaction and the complete recovery--tail rollout.  The
+      label conjoins path position/yaw, independent-plant maximum liquid height,
+      and terminal pose, speed, yaw-rate, and liquid-height thresholds; neither
+      gate nor $\mathcal B^{\mathrm{exec}}$ is a label input. & Labeler/version,
       thresholds, audit hash \Pending \\
     Gate fit & Representation, scaling, regularization, phase interpolation or
       missing-phase behavior, and fit-only objective. & Algorithm, radii,
       software/hash \Pending \\
     Threshold selection & Fit/tuning-only rule fixed before opening
-      $D_{\mathrm{gate,test}}$. & Threshold and selection record \Pending \\
-    Phase-indexed stored action & Definition of $u_{\mathrm{rec}}(i)$, validity range, command
-      units, duration/hold rule, and invalid-action behavior. & Action object,
+      $D_{\mathrm{gate,held}}$. & Threshold and selection record \Pending \\
+    Frozen bounded recovery feedback & Definition of $\kappa_i(e_r)$, robot
+      error coordinates, gains, residual and command bounds, validity range,
+      rate-reachable transaction, and invalid-policy behavior. & Policy object,
       validator, hash \Pending \\
-    Held-out reporting & Compatibility rejection, gate coverage, conditional
-      false-safe, false rejects, worst phase, rejoining time, and uncertainty
-      intervals. &
+    Held-out reporting & Compatibility rejection, recovered-sample coverage,
+      false-accept/unrecovered and conditional false-safe Wilson intervals,
+      false rejects, worst phase, and rejoining time. &
       Analysis version and criteria \Pending \\
-    Publication audit & Stored-action proposal, limiter/safety passage, actual
-      publication, and resulting buffer write-back reported separately. & Topic
-      and event schema, tolerances \Pending \\
+    Publication audit & Recovery-feedback proposal, rate transaction, safety
+      evaluation, prioritized arbitration, execution finalization, sink receipt,
+      and resulting buffer write-back reported separately. & Topic and event schema,
+      tolerances \Pending \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
-The primary held-out gate diagnostic is the conditional false-safe fraction
+The frozen selection diagnostic is the false-accept rate among independently
+labeled unrecovered samples,
+\begin{equation}
+  r_{\mathrm{FA}|\neg\mathrm{R}}
+  =\frac{\mathrm{FA}}{\mathrm{FA}+\mathrm{TR}},
+\end{equation}
+whose Wilson upper bound is checked against the frozen limit.  Recovered-sample
+coverage $\mathrm{TA}/(\mathrm{TA}+\mathrm{FR})$ is accompanied by a separate
+Wilson interval.  The conditional false-safe diagnostic uses a different
+denominator,
 \begin{equation}
   r_{\mathrm{FS}|\mathrm{A}}
-  =\frac{N(\mathrm{gate\ accept}\cap\mathrm{recovery\ fail})}
-  {N(\mathrm{gate\ accept})},
+  =\frac{\mathrm{FA}}{\mathrm{TA}+\mathrm{FA}},
 \end{equation}
 which estimates $P(\mathrm{recovery\ fail}\mid\mathrm{gate\ accept})$ and is
-undefined when no sample is accepted; zero coverage is then reported explicitly.
-Its estimate and interval are \Pending. False rejection, normal-operation coverage,
-compatibility-set rejection, and the worst phase are reported alongside it.
+reported with a Wilson interval computed from that accepted-sample denominator.
+The preceding Wilson interval cannot be reused for this ratio.  It is
+mathematically undefined when no sample is accepted; the tool then records a
+false \texttt{defined} flag and null estimate/interval along with the zero
+accepted count.  False rejection, compatibility-set
+rejection, and the worst phase are reported alongside it.
 
 \section{Condition, Ablation, and Experiment Freeze}
 
@@ -300,7 +344,7 @@ compatibility-set rejection, and the worst phase are reported alongside it.
   \scriptsize
   \setlength{\tabcolsep}{3.5pt}
   \caption{Condition-specific objects that must be frozen in addition to the
-  common platform, localization, limiter, safety, admission, and termination
+  common platform, localization, execution contract, safety, admission, and termination
   rules.}
   \label{tab:supp_condition_freeze}
   \begin{tabular}{@{}p{0.17\textwidth}p{0.46\textwidth}p{0.29\textwidth}@{}}
@@ -308,20 +352,25 @@ compatibility-set rejection, and the worst phase are reported alongside it.
     Condition & Required identity & Frozen runner/configuration record \\
     \midrule
     C0 OrdinaryMPCC & Liquid-off contour/lag/progress controller; no offline
-      artifact, phase rejoining, execution terminal test, or stored action. &
+      artifact, phase rejoining, execution compatibility, empirical gate, or
+      frozen recovery feedback. &
       Runner, config, build and command-topic hashes \Pending \\
-    C1 SmoothMatch & C0 plus independently frozen smoothing and one global
-      completion-time scale; no post-confirmation retuning. & Tuning pool,
-      parameter/scale, match tolerance and manipulation check \Pending \\
-    C2 OfflineReplay & Same formal artifact and downstream chain as C4; frozen
-      clock progression, $\delta u=0$, no empirical gate or stored action. &
+    C1 SmoothMatch & C0 plus independently task-only-tuned and frozen smoothing
+      settings with \texttt{global\_time\_scale=1.0}; no liquid-informed or
+      post-confirmation retuning, and no exact C4 time-match claim. & Tuning
+      pool, parameter/scale, task-time envelope and manipulation check \Pending \\
+    C2 OfflineReplay & Same frozen artifact and downstream chain as C4; frozen
+      clock progression, $\delta u=0$, no empirical gate or online recovery
+      feedback. &
       Runner, artifact, clock/reset and fallback semantics \Pending \\
     C3 ResidualNoGate & Same artifact, phase selector, delay-augmented residual
-      OCP and residual bounds as C4; joint gate and stored action disabled
-      together; solver/contract failure requests zero. & Runner, disabled-object
-      assertions, fallback and diagnostic record \Pending \\
-    C4 Full & Complete target method with joint terminal test, stored action and
-      fail-closed supervisor. & Runner, artifact/contract, gate objects, solver,
+      OCP, full-horizon $\mathcal B^{\mathrm{exec}}$, residual bounds, frozen
+      recovery feedback, safety chain, and publication transaction as C4; the
+      9-D empirical gate is monitor-only. & Runner, monitor-only assertion,
+      fallback and diagnostic record \Pending \\
+    C4 Full & C3 with the terminal 9-D empirical gate enforced for residual
+      admission and the current-phase 9-D gate enforced for recovery admission. &
+      Runner, artifact/contract, gate objects, solver,
       supervisor and publication-chain hashes \Pending \\
     \bottomrule
   \end{tabular}
@@ -341,9 +390,9 @@ compatibility-set rejection, and the worst phase are reported alongside it.
     A1: PhaseAlignedNoResidual vs. C3 & Finite residual disabled/enabled. & Phase,
       artifact and fallback equality; residual/published-command separation
       \Pending \\
-    A2: C3 vs. C4 & Joint gate, compatibility test and stored action
-      disabled/enabled together. & Gate branch, stored-action proposal and final
-      publication separation \Pending \\
+    A2: C3 vs. C4 & The same 9-D empirical gate monitored/enforced. & Equality
+      of artifact, 22-D solver, full-horizon execution compatibility, recovery
+      feedback, safety, and publication objects; gate-mode assertion \Pending \\
     A3: IdealExec vs. IdentifiedExec & Idealized/identified execution model and
       the consistent artifact. & Front/buffer prediction and, if physically
       claimed, final-command/control separation \Pending \\
@@ -354,7 +403,8 @@ compatibility-set rejection, and the worst phase are reported alongside it.
 \begin{table*}[t]
   \centering
   \scriptsize
-  \caption{Experiment matrices. No obsolete fixed-count matrix is inherited.}
+  \caption{Hardware experiment matrices. No obsolete physical fixed-count
+  matrix is inherited.}
   \label{tab:supp_experiment_matrices}
   \begin{tabular}{@{}p{0.13\textwidth}p{0.28\textwidth}p{0.31\textwidth}p{0.20\textwidth}@{}}
     \toprule
@@ -363,10 +413,10 @@ compatibility-set rejection, and the worst phase are reported alongside it.
     M1 main & C0, C1, C2, C4 on P-core & Physical RGB main effect, completion-
       time fairness, and offline-plan reference. & Blocks/random table \Pending \\
     M2 components & Strict A0, A1 and A2 pairs & Offline liquid objective, finite
-      residual, and joint recovery mechanism. & Blocks/random table \Pending \\
+      residual, and empirical-gate enforcement. & Blocks/random table \Pending \\
     M3 execution & A3 & Prediction effect on held-out replay/simulation; separate
       paired control data if efficacy is claimed. & Units/order \Pending \\
-    M4a gate & Frozen C4 gate on $D_{\mathrm{gate,test}}$ & Compatibility
+    M4a gate & Frozen C4 gate on $D_{\mathrm{gate,held}}$ & Compatibility
       rejection and held-out confusion matrix. & Trials/phases \Pending \\
     M4b recovery & C3 versus C4 & Failure-inclusive recovery control under small
       preregistered repeatable deviations. & Blocks/random table \Pending \\
@@ -433,17 +483,18 @@ compatibility-set rejection, and the worst phase are reported alongside it.
       $b^v,b^\omega$, completeness/reset flags and interpolated buffer state. &
       Unequal-delay causal reconstruction \\
     Phase/artifact & Candidate set, clock index, previous/selected/terminal phase,
-      nominal state/input/action, mismatch score and object validity. & Neighboring
-      monotone selection and artifact use \\
+      nominal state/input, recovery-feedback proposal, mismatch score and object
+      validity. & Neighboring monotone selection and artifact use \\
     OCP & Initial augmented state, full predicted augmented horizon, first
       residual, cost components, constraints, status, iterations and solve time. &
       Reproduction, residual and terminal checks \\
     Joint terminal & $e^{(9)}$, $m_i(e)$, $e^{\mathrm{exec}}$, compatibility
       bounds, contract state and accept/reject reason. & Gate and compatibility
       audit \\
-    Supervisor/publication & $u^{\mathrm{sol}}$, phase-indexed
-      $u_{\mathrm{rec}}(i)$ or zero
-      candidate, branch/reason, post-gate, post-limiter, post-safety and final
+    Supervisor/publication & $u^{\mathrm{sol}}$,
+      $\kappa_i(e_r)$ after the frozen rate-reachable transaction, or zero
+      candidate; branch/reason, post-safety, post-priority-arbitration,
+      execution-finalized and final
       $u^{\mathrm{pub}}$. & Candidate-to-execution preservation \\
     Robot/liquid mechanism & Base feedback, odometry, processed IMU, derived
       $\dot v^r$ and $v^r\omega^r$, internal liquid state and external slosh monitor. &
@@ -519,8 +570,9 @@ be replaced after acquisition by peak, RMS, or another more favorable summary.
   \centering
   \scriptsize
   \setlength{\tabcolsep}{2pt}
-  \caption{Formal result placeholders. No entry is populated before G0--G4 and
-  the frozen confirmation analysis are complete.}
+  \caption{Formal result placeholders. No entry is populated before the exact
+  formal session is authorized, executed, and audited. Physical entries remain
+  unavailable until the separate hardware gates are complete.}
   \label{tab:supp_result_placeholders}
   \begin{tabular}{@{}p{0.48\columnwidth}p{0.22\columnwidth}p{0.22\columnwidth}@{}}
     \toprule
@@ -558,14 +610,16 @@ be replaced after acquisition by peak, RMS, or another more favorable summary.
     State/contract failure & Stale state, incomplete buffer, phase-set empty,
       artifact/hash invalid, gate object invalid and execution incompatibility. &
       \Pending \\
-    Supervisor branches & Residual, stored-action and zero-request counts/rates,
-      with mutually exclusive reason codes. & \Pending \\
+    Supervisor branches & Residual, frozen-feedback recovery, and zero-request
+      counts/rates, with mutually exclusive reason codes. & \Pending \\
     Residual behavior & First-action norm, saturation, phase/progress bounds and
       solver-feasible but terminal-rejected rate. & \Pending \\
-    Limiter/safety rewrite & Candidate-to-final difference, intervention rate,
+    Contract/safety rewrite & Candidate-to-final difference, intervention rate,
       reason and condition distribution. & \Pending \\
-    Stored action & Proposal, post-limiter, post-safety and actual-publication
-      rates; no proposal is presumed executed. & \Pending \\
+    Recovery feedback & Policy proposal, post-rate-transaction, post-safety,
+      post-priority-arbitration, execution-finalized, and actual-publication
+      rates; no proposal is presumed
+      executed. & \Pending \\
     Buffer integrity & Fraction of cycles where both buffers contain the exact
       final published histories and reproduce the logged augmented state. &
       \Pending \\
@@ -583,11 +637,15 @@ release/configuration hash, date, path, container/fill, measurement version,
 selection decision, and rejection reason. They do not contribute observations
 to $D_{\mathrm{main,confirm}}$ or $D_{\mathrm{recovery,confirm}}$.
 
-The final evidence remains limited to frozen-path tracking in a static,
-obstacle-clear workspace, the contracted Scout execution range, the reported
-container/fill and low-order liquid-model range, and the observed empirical-gate
-coverage. Independent RGB determines physical anti-slosh performance. Internal
-liquid states, IMU and an online slosh monitor are supporting signals only. The
-stored action is phase indexed rather than a feedback recovery law, and no
-recursive-feasibility, robust-recovery, spill-free, online-obstacle-avoidance, or
-true signed-liquid-phase claim is made.
+The pre-revision formal-simulation assets bound to commit \texttt{7775dd68}
+reached only \texttt{READY\_NOT\_EXECUTED}; revised source requires a new
+freeze and audit. All formal result cells above therefore remain \Pending{},
+and physical experiments have not started. Any future evidence is
+limited to frozen-path tracking in a static, obstacle-clear workspace, the
+contracted Scout execution range, the reported container/fill and low-order
+liquid-model range, and the observed empirical-gate coverage. Independent RGB
+determines physical anti-slosh performance. Internal liquid states, IMU and an
+online slosh monitor are supporting signals only. The frozen bounded recovery
+feedback is an empirical policy, not a certified funnel; no recursive-
+feasibility, robust-recovery, spill-free, online-obstacle-avoidance, or true
+signed-liquid-phase claim is made.

@@ -809,11 +809,11 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
     return decision;
 }
 
-void PhaseRejoinCoordinator::commit(
+bool PhaseRejoinCoordinator::commit(
     const PhaseRejoinPreparation& preparation,
     const PhaseRejoinDecision& decision) {
     if (!preparation.ready || !preparation.candidate.valid) {
-        return;
+        return false;
     }
     const bool execution_compatible =
         !preparation.solver_context.delay_augmented.active ||
@@ -822,11 +822,12 @@ void PhaseRejoinCoordinator::commit(
     const bool terminal_empirical_admitted =
         !params_.empirical_gate_enforced ||
         decision.terminal_gate_accepted;
-    if (params_.mode == PhaseRejoinMode::Monitor ||
+    const bool phase_admitted =
+        params_.mode == PhaseRejoinMode::Monitor ||
         (params_.mode == PhaseRejoinMode::Enforce &&
-         terminal_empirical_admitted &&
-         execution_compatible &&
-         decision.command_contract_consistent)) {
+         terminal_empirical_admitted && execution_compatible &&
+         decision.command_contract_consistent);
+    if (phase_admitted) {
         accepted_index_ = preparation.candidate.current_index;
         have_accepted_index_ = true;
     }
@@ -838,6 +839,7 @@ void PhaseRejoinCoordinator::commit(
         preparation.candidate.terminal_index + 1 == artifact_.size()) {
         terminal_release_authorized_ = true;
     }
+    return phase_admitted;
 }
 
 PhaseRejoinDebugData PhaseRejoinCoordinator::makeDebug(

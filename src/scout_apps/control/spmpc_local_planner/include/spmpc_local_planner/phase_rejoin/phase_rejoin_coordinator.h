@@ -44,7 +44,10 @@ public:
                                bool solver_success,
                                const PhaseSolveView& solve) const;
 
-    void commit(const PhaseRejoinPreparation& preparation,
+    // Returns true only when this decision is admitted and the selected phase
+    // is committed.  A published recovery/stop command may still reach this
+    // method, but must not be reported as a phase commit.
+    bool commit(const PhaseRejoinPreparation& preparation,
                 const PhaseRejoinDecision& decision);
 
     PhaseRejoinDebugData makeDebug(

@@ -160,6 +160,25 @@ void configureMonitorPhase(EngineFixture& fixture) {
         << fixture.error;
 }
 
+void configureEnforcePhase(EngineFixture& fixture,
+                           bool empirical_gate_enforced = true) {
+    PhaseRejoinParams phase;
+    phase.mode = PhaseRejoinMode::Enforce;
+    phase.empirical_gate_enforced = empirical_gate_enforced;
+    phase.allow_development_artifact_in_enforce = true;
+    phase.required_contract_id = "test_contract";
+    ASSERT_TRUE(fixture.engine.configurePhaseRejoin(phase, fixture.error))
+        << fixture.error;
+    const std::string artifact_path = makePhaseArtifactFile();
+    const NominalArtifactLoadResult loaded =
+        fixture.engine.loadPhaseRejoinArtifact(artifact_path);
+    std::remove(artifact_path.c_str());
+    ASSERT_TRUE(loaded.success) << loaded.status << ": " << loaded.detail;
+    ASSERT_TRUE(fixture.engine.validatePhaseRejoinRuntimeContract(
+        phaseFixtureRuntime(), phaseFixtureReference(), fixture.error))
+        << fixture.error;
+}
+
 void configureAcceptedMonitorSolve(EngineFixture& fixture) {
     fixture.solver.next_output.success = true;
     fixture.solver.next_output.status = "OK";
@@ -505,6 +524,55 @@ TEST(ControlCycleEngineTest, CommitsPhaseOnlyAfterConsistentReceipt) {
     EXPECT_TRUE(delivered.phase_committed);
     EXPECT_TRUE(fixture.engine.phaseRejoinCoordinator().haveAcceptedIndex());
     EXPECT_TRUE(delivered.publication.history_committed);
+}
+
+TEST(ControlCycleEngineTest,
+     PublishedRecoveryDoesNotReportOrAdvancePhaseCommit) {
+    EngineFixture fixture;
+    configureEnforcePhase(fixture);
+    fixture.solver.next_output.success = false;
+    fixture.solver.next_output.status = "SQP_FAILED";
+    fixture.solver.next_output.failure_kind =
+        SolverFailureKind::Optimization;
+
+    const ControlCycleResult result = fixture.engine.step(
+        monitorRequest(fixture));
+
+    EXPECT_EQ(1, fixture.solver.calls);
+    EXPECT_TRUE(result.phase_decision.recovery_command_used);
+    EXPECT_TRUE(result.publication.published());
+    EXPECT_TRUE(result.output.success);
+    EXPECT_FALSE(result.phase_committed);
+    EXPECT_FALSE(result.telemetry.phase_rejoin_committed);
+    EXPECT_FALSE(fixture.engine.phaseRejoinCoordinator().haveAcceptedIndex());
+}
+
+TEST(ControlCycleEngineTest,
+     StrictC3PublishesAndCommitsWhenEmpiricalMonitorRejects) {
+    EngineFixture fixture;
+    configureEnforcePhase(fixture, false);
+    fixture.solver.next_output.success = true;
+    fixture.solver.next_output.status = "OK";
+    fixture.solver.next_output.cmd_v = 1.0;
+    fixture.solver.next_output.cmd_omega = 0.0;
+    fixture.solver.next_output.predicted_horizon.valid = true;
+    fixture.solver.next_output.predicted_horizon.states.resize(4);
+    fixture.solver.next_output.predicted_horizon.states[3].x = 100.0;
+    fixture.solver.next_output.predicted_horizon.states[3].v = 1.0;
+
+    const ControlCycleResult result = fixture.engine.step(
+        monitorRequest(fixture));
+
+    EXPECT_FALSE(result.phase_decision.terminal_gate_accepted);
+    EXPECT_EQ(result.phase_decision.status,
+              "ENFORCE_GATE_MONITOR_REJECTED_COMMAND_ACCEPTED");
+    EXPECT_TRUE(result.output.success);
+    EXPECT_TRUE(result.decision.accepted);
+    EXPECT_EQ(result.decision.source, CommandSource::PhaseRejoin);
+    EXPECT_TRUE(result.publication.published());
+    EXPECT_DOUBLE_EQ(result.final_command.linear, 1.0);
+    EXPECT_TRUE(result.phase_committed);
+    EXPECT_TRUE(result.telemetry.phase_rejoin_committed);
 }
 
 TEST(ControlCycleEngineTest, AuditsExpectedAndActualPublishEpoch) {

@@ -13,16 +13,13 @@
 \usepackage{cite}
 \usepackage[nameinlink,capitalize]{cleveref}
 
-\newcommand{\SMPCC}{S-MPCC}
-\newcommand{\MPCC}{MPCC}
-\newcommand{\PRSMPCC}{Phase-Rejoining Residual \SMPCC}
-\newcommand{\OfflineSloshOCP}{OfflineSloshOCP}
+\newcommand{\PRRMPC}{Phase-Rejoining Residual MPC}
 \newcommand{\Pending}{\textcolor{spmpcgray}{\textit{pending}}}
 \newcommand{\NoGo}{\textcolor{red!70!black}{\textsc{no-go}}}
 
 \definecolor{spmpcgray}{RGB}{90,90,90}
 
-\title{Phase-Rejoining Residual \SMPCC{} for Execution-Aware Anti-Slosh Path Tracking}
+\title{Execution-Aware Phase-Rejoining Residual MPC for Slosh-Sensitive Mobile Transport}
 
 \author{Renjun Zhang%
 \thanks{Renjun Zhang is with the University of Science and Technology of China,
@@ -34,16 +31,17 @@ Hefei, China (e-mail: zhangrenjun@mail.ustc.edu.cn).}}
 
 \begin{abstract}
 Offline anti-slosh trajectories exploit future phase cancellation, but an online path-tracking correction can destroy that cancellation before the correction physically reaches a mobile base.
-We formulate a phase-rejoining residual slosh-aware model predictive contouring controller (\SMPCC{}), which admits an online residual correction only if the state predicted after the identified command-to-motion delays passes a phase-indexed empirical test for rejoining the complete offline anti-slosh tail.
-The controller aligns a source-stamped state to the expected command-publication time, propagates separate linear and angular command buffers and actuator dynamics, selects a neighboring monotone artifact phase, and solves a nominal-relative residual OCP through a common execution front and a short post-front residual window.
-Acceptance requires both a 9-D robot--liquid empirical gate and a hard compatibility set for the pending execution state; a supervisor otherwise selects a phase-indexed stored action or requests zero velocity through the same publication and safety chain.
-The planned evaluation uses an independent RGB max-LCR liquid-height outcome, OrdinaryMPCC and completion-time-matched controls, strict component ablations, held-out conditional false-safe analysis, and command-chain and runtime audits.
-Formal performance claims are withheld in this core draft because the unequal-delay causal-front implementation, formal offline artifact, execution-compatibility set, and held-out gate have not yet passed their release gates.
+We formulate \PRRMPC{}, a nominal-relative controller that preserves the phase-indexed tail of a delay-aware offline speed-profile artifact while permitting bounded online corrections.
+From a common expected publication epoch, the controller propagates separate linear and angular command buffers and actuator dynamics in a 22-D execution-augmented state, selects one neighboring monotone artifact phase, and optimizes published-command rates over the complete prediction horizon.
+Admission requires current and horizon-wide compatibility with a phase-indexed execution set and a terminal 9-D robot--liquid empirical gate.
+If an otherwise eligible solve cannot be admitted because optimization fails or the terminal admission check rejects it, the supervisor may apply a frozen bounded recovery feedback law; integrity or contract failures request zero velocity through the same safety and receipt-backed publication transaction.
+The preregistered evaluation compares the method with OrdinaryMPCC, an independently frozen smooth-tracking comparator, offline replay, and a gate-monitor ablation using an independent liquid-height outcome, held-out recovery analysis, task-time non-inferiority, and command-chain and runtime audits.
+The formal simulation campaign and the physical experiment have not begun; source changes in this revision require a new hash-bound simulation freeze before execution, so no positive performance result is claimed here.
 The scope is frozen-path tracking in a static obstacle-clear workspace; online obstacle avoidance and a formal recovery guarantee are not claimed.
 \end{abstract}
 
 \begin{IEEEkeywords}
-mobile robots, liquid sloshing, model predictive contouring control, input delay, residual control, offline--online trajectory tracking
+mobile robots, liquid sloshing, model predictive control, phase rejoining, execution delay, residual control
 \end{IEEEkeywords}
 
 \input{sections/01_method}

@@ -2,8 +2,8 @@
 <svg xmlns="http://www.w3.org/2000/svg"
      width="1800" height="1000" viewBox="0 0 1800 1000"
      role="img" aria-labelledby="title desc">
-  <title id="title">Execution-front-aligned phase-rejoining residual S-MPCC architecture</title>
-  <desc id="desc">OfflineSloshOCP produces a frozen phase-indexed artifact. Online source and publication alignment, monotone neighboring phase selection, a dual-channel delay-augmented residual OCP, an empirical terminal gate intersected with execution compatibility, and a three-branch supervisor feed one unified publication and safety chain.</desc>
+  <title id="title">Execution-front-aligned phase-rejoining residual MPC architecture</title>
+  <desc id="desc">A parameterized speed-profile search produces a frozen phase-indexed artifact. Online source and publication alignment, execution-compatible neighboring phase selection, a dual-channel delay-augmented residual OCP with full-horizon execution constraints, an empirical terminal gate, and a three-branch supervisor feed safety evaluation, priority arbitration, execution-contract finalization, a sink receipt and delivered-command history, and conditional phase commit.</desc>
 
   <defs>
     <style><![CDATA[
@@ -52,7 +52,7 @@
   </defs>
 
   <rect class="canvas" x="0" y="0" width="1800" height="1000"/>
-  <text class="figure-title" x="900" y="48">Execution-Front-Aligned Phase-Rejoining Residual S-MPCC</text>
+  <text class="figure-title" x="900" y="48">Execution-Front-Aligned Phase-Rejoining Residual MPC</text>
 
   <!-- Offline preparation -->
   <rect class="lane-offline" x="30" y="72" width="1740" height="278" rx="14"/>
@@ -70,15 +70,15 @@
   <text class="box-text" x="610" y="239">u_pub → motion → slosh state</text>
 
   <rect class="box-offline" x="835" y="151" width="300" height="104" rx="12"/>
-  <text class="box-title" x="985" y="184">OfflineSloshOCP</text>
-  <text class="box-text" x="985" y="214">optimize motion and publication</text>
-  <text class="box-text" x="985" y="239">full motion--settle--zero-hold tail</text>
+  <text class="box-title" x="985" y="184">Speed-profile search</text>
+  <text class="box-text" x="985" y="214">8 path-indexed scale knots</text>
+  <text class="box-text" x="985" y="239">delay rollout; settle--hold tail</text>
 
   <rect class="box-offline" x="1195" y="141" width="500" height="124" rx="12"/>
-  <text class="box-title" x="1445" y="174">OfflineSloshOCP artifact</text>
+  <text class="box-title" x="1445" y="174">Phase-indexed offline artifact</text>
   <text class="box-text" x="1445" y="204">phase-indexed nominal augmented sequence</text>
   <text class="box-text" x="1445" y="231">9-D empirical gate R_emp(i) and B_exec(i)</text>
-  <text class="box-text" x="1445" y="256">stored recovery action u_rec(i)</text>
+  <text class="box-text" x="1445" y="256">bounded recovery feedback κ_i(e_r)</text>
 
   <path class="flow" d="M 385 203 H 445"/>
   <path class="flow" d="M 775 203 H 835"/>
@@ -100,39 +100,39 @@
   <path class="artifact-arrow" d="M 805 446 V 475"/>
   <path class="artifact-arrow" d="M 1153 446 V 475"/>
   <path class="artifact-arrow" d="M 1548 446 V 475"/>
-  <text class="label" x="1110" y="435">frozen model, nominal sequence, gate, compatibility and stored action</text>
+  <text class="label" x="1110" y="435">frozen model, nominal sequence, gate, compatibility and recovery policy</text>
 
   <rect class="box-online" x="60" y="475" width="275" height="145" rx="12"/>
   <text class="box-title-sm" x="197.5" y="506">Source-stamped state</text>
-  <text class="box-title-sm" x="197.5" y="533">+ published history</text>
-  <text class="box-text-sm" x="197.5" y="565">pose, v / ω, liquid state</text>
-  <text class="box-text-sm" x="197.5" y="592">source t_s; u_pub delay history</text>
+  <text class="box-title-sm" x="197.5" y="533">+ receipt history</text>
+  <text class="box-text-sm" x="197.5" y="565">pose, realized v / ω, liquid</text>
+  <text class="box-text-sm" x="197.5" y="592">t_s; delivered commands</text>
 
   <rect class="box-online" x="370" y="475" width="270" height="145" rx="12"/>
   <text class="box-title-sm" x="505" y="506">Source / publication</text>
   <text class="box-title-sm" x="505" y="533">alignment</text>
-  <text class="box-text-sm" x="505" y="565">align t_s → estimated publish t</text>
-  <text class="box-text-sm" x="505" y="592">u_pub history; dual causality</text>
+  <text class="box-text-sm" x="505" y="565">t_s → publish epoch</text>
+  <text class="box-text-sm" x="505" y="592">receipt history; dual delays</text>
 
   <rect class="box-online" x="675" y="475" width="260" height="145" rx="12"/>
   <text class="box-title-sm" x="805" y="506">Neighbor monotone</text>
   <text class="box-title-sm" x="805" y="533">phase selection</text>
-  <text class="box-text-sm" x="805" y="565">clock-local candidate indices</text>
-  <text class="box-text-sm" x="805" y="592">monotone; no global jumps</text>
+  <text class="box-text-sm" x="805" y="565">local monotone candidates</text>
+  <text class="box-text-sm" x="805" y="592">current + horizon B_exec</text>
 
   <rect class="box-main" x="970" y="465" width="365" height="165" rx="12"/>
   <text class="box-title-sm" x="1152.5" y="498">Dual-channel delay-augmented</text>
-  <text class="box-title-sm" x="1152.5" y="526">residual S-MPCC</text>
-  <text class="box-text-sm" x="1152.5" y="558">N_e = n_f + N_l; post-front N_l ≈ 100 ms</text>
-  <text class="box-text-sm" x="1152.5" y="586">channel buffers / lags remain in the OCP</text>
-  <text class="box-text-sm" x="1152.5" y="613">bounded nominal-relative first action</text>
+  <text class="box-title-sm" x="1152.5" y="526">residual MPC</text>
+  <text class="box-text-sm" x="1152.5" y="558">N = 10 = 7 + 3; post-front ≈ 100 ms</text>
+  <text class="box-text-sm" x="1152.5" y="586">buffers / lags remain decision-dependent</text>
+  <text class="box-text-sm" x="1152.5" y="613">all-stage B_exec; bounded residual</text>
 
   <rect class="box-gate" x="1370" y="465" width="355" height="165" rx="12"/>
-  <text class="box-title-sm" x="1547.5" y="498">Joint terminal rejoin test</text>
+  <text class="box-title-sm" x="1547.5" y="498">Terminal empirical rejoin test</text>
   <text class="box-text-sm" x="1547.5" y="535">9-D empirical gate:</text>
   <text class="box-text-sm" x="1547.5" y="560">e_9 ∈ R_emp(j_e)</text>
-  <text class="box-text-sm" x="1547.5" y="587">execution compatibility:</text>
-  <text class="box-text-sm" x="1547.5" y="612">e_exec ∈ B_exec(j_e); valid contract</text>
+  <text class="box-text-sm" x="1547.5" y="587">terminal execution check:</text>
+  <text class="box-text-sm" x="1547.5" y="612">e_exec,N ∈ B_exec(j_e)</text>
 
   <path class="flow" d="M 335 548 H 370"/>
   <path class="flow" d="M 640 548 H 675"/>
@@ -145,19 +145,19 @@
   <text class="tag-text" x="145" y="769">EXECUTION</text>
 
   <path class="flow" d="M 1548 630 V 755 H 515 V 790"/>
-  <text class="label-green" x="1070" y="746">solver, joint-terminal and current-contract result</text>
+  <text class="label-green" x="1070" y="746">solver, all-stage, terminal and contract audit</text>
 
   <rect class="box-supervisor" x="190" y="790" width="650" height="130" rx="12"/>
   <text class="box-title" x="515" y="821">Supervisor: three candidate branches</text>
   <text class="box-text-sm" x="515" y="851"><tspan class="branch-pass">PASS:</tspan><tspan dx="6">joint test → residual first action u_sol</tspan></text>
-  <text class="box-text-sm" x="515" y="878"><tspan class="branch-recover">RECOVER:</tspan><tspan dx="6">current gate / action valid → u_rec(j)</tspan></text>
+  <text class="box-text-sm" x="515" y="878"><tspan class="branch-recover">RECOVER:</tspan><tspan dx="6">eligible failure / reject → κ_j(e_r)</tspan></text>
   <text class="box-text-sm" x="515" y="905"><tspan class="branch-stop">FAIL CLOSED:</tspan><tspan dx="6">stale / incompatible / invalid → request (0,0)</tspan></text>
 
   <rect class="box-publish" x="930" y="790" width="330" height="130" rx="12"/>
   <text class="box-title-sm" x="1095" y="821">Unified publication chain</text>
-  <text class="box-text-sm" x="1095" y="851">publication gate → limiter → safety</text>
-  <text class="box-text-sm" x="1095" y="878">publish and log final u_pub</text>
-  <text class="box-text-sm" x="1095" y="905">write back to both delay buffers</text>
+  <text class="box-text-sm" x="1095" y="851">safety evaluation → priority arbitration</text>
+  <text class="box-text-sm" x="1095" y="878">execution finalizer → sink receipt</text>
+  <text class="box-text-sm" x="1095" y="905">receipt history; guarded phase commit</text>
 
   <rect class="box-plant" x="1370" y="790" width="360" height="130" rx="12"/>
   <text class="box-title" x="1550" y="821">Scout base + liquid</text>
@@ -170,5 +170,5 @@
   <text class="label" x="1315" y="842">final u_pub</text>
 
   <path class="feedback" d="M 1550 920 V 950 H 42 V 548 H 60"/>
-  <text class="label" x="650" y="943">source-stamped motion feedback and final published-command history</text>
+  <text class="label" x="650" y="943">source-stamped motion feedback and transport-receipt command history</text>
 </svg>

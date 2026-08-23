@@ -250,12 +250,14 @@ ControlCycleResult ControlCycleEngine::step(
             result.phase_preparation.solver_context;
         const bool no_execution_compatible_candidate =
             result.solver_input.execution_horizon.active &&
-            result.phase_preparation.status ==
-                "NO_EXECUTION_COMPATIBLE_CANDIDATE";
+            (result.phase_preparation.status ==
+                 "NO_EXECUTION_COMPATIBLE_CANDIDATE" ||
+             result.phase_preparation.status ==
+                 "NO_EXECUTION_HORIZON_COMPATIBLE_CANDIDATE");
         if (no_execution_compatible_candidate) {
             solver_invocation_allowed = false;
             result.solver_output.status =
-                "NOT_RUN_NO_EXECUTION_COMPATIBLE_CANDIDATE";
+                "NOT_RUN_" + result.phase_preparation.status;
         } else {
             result.solve_returned = solver_session_.solve(
                 result.solver_input, result.solver_output);
@@ -312,11 +314,15 @@ ControlCycleResult ControlCycleEngine::step(
                 result.output.cmd_omega =
                     result.phase_decision.output_cmd_omega;
                 result.output.status = result.phase_decision.status;
+                const bool terminal_empirical_admitted =
+                    !phase_params_.empirical_gate_enforced ||
+                    result.phase_decision.terminal_gate_accepted;
                 result.output.success =
                     (result.solver_success &&
-                     result.phase_decision.terminal_gate_accepted &&
+                     terminal_empirical_admitted &&
                      result.phase_decision.current_execution_compatible &&
-                     result.phase_decision.terminal_execution_compatible) ||
+                     result.phase_decision.terminal_execution_compatible &&
+                     result.phase_decision.command_contract_consistent) ||
                     result.phase_decision.recovery_command_used;
                 if (result.phase_decision.controlled_stop_used) {
                     result.output.success = false;
@@ -419,9 +425,8 @@ ControlCycleResult ControlCycleEngine::step(
 
     if (phase_commit_candidate && result.publication.published() &&
         !result.publication.commandWasModified()) {
-        phase_rejoin_.commit(
+        result.phase_committed = phase_rejoin_.commit(
             result.phase_preparation, result.phase_decision);
-        result.phase_committed = true;
     }
 
     speed_reference_.commitProgress(result.output.progress_abs_s);
