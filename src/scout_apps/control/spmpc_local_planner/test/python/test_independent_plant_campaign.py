@@ -60,6 +60,11 @@ class IndependentPlantCampaignTest(unittest.TestCase):
         runner = root / "runner.sh"
         runner.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         runner.chmod(0o755)
+        readiness_auditor = root / "readiness_auditor.py"
+        readiness_auditor.write_text(
+            "#!/usr/bin/env python3\nraise SystemExit(0)\n",
+            encoding="utf-8")
+        readiness_auditor.chmod(0o755)
         executable = root / "closed_loop_runner"
         executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
         executable.chmod(0o755)
@@ -422,6 +427,8 @@ class IndependentPlantCampaignTest(unittest.TestCase):
             "git_commit": git_commit,
             "source_tree_clean": True,
             "runner_sha256": CAMPAIGN.sha256_file(runner),
+            "readiness_auditor_sha256":
+                CAMPAIGN.sha256_file(readiness_auditor),
             "executable_sha256": CAMPAIGN.sha256_file(executable),
             "artifact_validator_sha256":
                 CAMPAIGN.sha256_file(artifact_validator),
@@ -462,6 +469,7 @@ class IndependentPlantCampaignTest(unittest.TestCase):
                 "stl_id": "libstdc++-test",
                 "floating_point_contract": "ieee754-double-test",
                 "runner": cls.reference(runner),
+                "readiness_auditor": cls.reference(readiness_auditor),
                 "executable": cls.reference(executable),
                 "controller_manifest": cls.reference(controller_manifest),
                 "artifact_validator": cls.reference(artifact_validator),
@@ -760,6 +768,17 @@ class IndependentPlantCampaignTest(unittest.TestCase):
             self.write_yaml(session_path, session)
             reasons = CAMPAIGN.formal_no_go_reasons(session, session_path)
             self.assertIn("path SHA-256 mismatch", reasons)
+
+    def test_changed_readiness_auditor_cannot_remain_ready(self):
+        with tempfile.TemporaryDirectory() as directory:
+            session_path, session = self.create_frozen_session(directory)
+            auditor = Path(
+                session["runtime"]["readiness_auditor"]["path"])
+            auditor.write_text(
+                "#!/usr/bin/env python3\nraise SystemExit(99)\n",
+                encoding="utf-8")
+            reasons = CAMPAIGN.formal_no_go_reasons(session, session_path)
+            self.assertIn("readiness auditor SHA-256 mismatch", reasons)
 
     def test_seed_overlap_and_condition_semantic_drift_are_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

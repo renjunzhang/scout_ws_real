@@ -561,6 +561,7 @@ def _validate_runtime_contract(
     runtime = session.get("runtime")
     resolved: Dict[str, Optional[Path]] = {
         "runner": None,
+        "readiness_auditor": None,
         "executable": None,
         "controller_manifest": None,
         "artifact_validator": None,
@@ -594,7 +595,9 @@ def _validate_runtime_contract(
     for key in resolved:
         resolved[key] = _artifact_reference(
             runtime, key, session_path, reasons, inventory,
-            executable=(key in ("runner", "executable", "artifact_validator")),
+            executable=(key in (
+                "runner", "readiness_auditor", "executable",
+                "artifact_validator")),
             inventory_key="runtime." + key)
     return resolved
 
@@ -677,6 +680,7 @@ def _validate_controller_manifest(
         reasons.append("controller manifest git provenance is inconsistent")
     executable_path = runtime_paths.get("executable")
     runner_path = runtime_paths.get("runner")
+    readiness_auditor_path = runtime_paths.get("readiness_auditor")
     artifact_validator_path = runtime_paths.get("artifact_validator")
     if (executable_path is not None and
             manifest.get("executable_sha256") != sha256_file(executable_path)):
@@ -684,6 +688,11 @@ def _validate_controller_manifest(
     if (runner_path is not None and
             manifest.get("runner_sha256") != sha256_file(runner_path)):
         reasons.append("controller manifest runner hash is inconsistent")
+    if (readiness_auditor_path is not None and
+            manifest.get("readiness_auditor_sha256") !=
+            sha256_file(readiness_auditor_path)):
+        reasons.append(
+            "controller manifest readiness auditor hash is inconsistent")
     if (artifact_validator_path is not None and
             manifest.get("artifact_validator_sha256") !=
             sha256_file(artifact_validator_path)):

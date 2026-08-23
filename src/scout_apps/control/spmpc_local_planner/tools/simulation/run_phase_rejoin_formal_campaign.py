@@ -8,6 +8,7 @@ approval file, then follows the frozen order sequentially without retries.
 
 import argparse
 import csv
+import hashlib
 import importlib.util
 import json
 import os
@@ -38,6 +39,14 @@ def _load_auditor():
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def _load_json(path: Path) -> Dict[str, Any]:
@@ -87,8 +96,7 @@ def validate_approval(approval: Dict[str, Any], session_sha256: str) -> None:
 
 
 def _resolve_reference(
-        owner: Dict[str, Any], key: str, session_path: Path,
-        auditor) -> Path:
+        owner: Dict[str, Any], key: str, session_path: Path) -> Path:
     reference = owner.get(key)
     if not isinstance(reference, dict):
         raise RuntimeError("session reference is absent: {}".format(key))
@@ -100,7 +108,7 @@ def _resolve_reference(
         path = session_path.parent / path
     path = path.resolve()
     if (not path.is_file() or
-            reference.get("sha256") != auditor.sha256_file(path)):
+            reference.get("sha256") != _sha256_file(path)):
         raise RuntimeError("session reference changed: {}".format(key))
     return path
 
@@ -167,7 +175,6 @@ def _clean_commit_matches(session: Dict[str, Any]) -> None:
 def execute(
         session_path: Path, readiness_path: Path, approval_path: Path,
         output_dir: Path) -> int:
-    auditor = _load_auditor()
     session_path = session_path.resolve()
     readiness_path = readiness_path.resolve()
     approval_path = approval_path.resolve()
@@ -179,30 +186,44 @@ def execute(
         raise RuntimeError("formal output already exists")
 
     session = _load_yaml(session_path)
+    session_sha256 = _sha256_file(session_path)
+    validate_readiness(
+        _load_json(readiness_path), session_path, session_sha256)
+    validate_approval(_load_json(approval_path), session_sha256)
+
+    runtime = session.get("runtime")
+    if not isinstance(runtime, dict):
+        raise RuntimeError("frozen runtime contract is absent")
+    frozen_runner = _resolve_reference(runtime, "runner", session_path)
+    frozen_auditor = _resolve_reference(
+        runtime, "readiness_auditor", session_path)
+    if frozen_runner != Path(__file__).resolve():
+        raise RuntimeError("invoke the formal runner frozen by the session")
+    adjacent_auditor = (
+        Path(__file__).resolve().parent /
+        "run_independent_plant_campaign.py").resolve()
+    if frozen_auditor != adjacent_auditor:
+        raise RuntimeError("frozen readiness auditor is not adjacent to runner")
+
+    auditor = _load_auditor()
     auditor.require_formal_session_schema(session)
-    session_sha256 = auditor.sha256_file(session_path)
     reasons, _ = auditor.audit_formal_session(session, session_path)
     if reasons:
         raise RuntimeError("formal session is NO-GO: {}".format(
             "; ".join(reasons)))
-    validate_readiness(
-        _load_json(readiness_path), session_path, session_sha256)
-    validate_approval(_load_json(approval_path), session_sha256)
     _clean_commit_matches(session)
 
-    runtime = session["runtime"]
     assets = session["assets"]
-    executable = _resolve_reference(
-        runtime, "executable", session_path, auditor)
-    plant = _resolve_reference(assets, "plant_config", session_path, auditor)
-    path = _resolve_reference(assets, "path", session_path, auditor)
+    executable = _resolve_reference(runtime, "executable", session_path)
+    plant = _resolve_reference(assets, "plant_config", session_path)
+    path = _resolve_reference(assets, "path", session_path)
     artifact = _resolve_reference(
-        assets, "phase_rejoin_artifact", session_path, auditor)
+        assets, "phase_rejoin_artifact", session_path)
     order_path = _resolve_reference(
-        assets, "formal_order", session_path, auditor)
+        assets, "formal_order", session_path)
     condition_paths = {
         name: _resolve_reference(
-            session["conditions"][name], "config", session_path, auditor)
+            session["conditions"][name], "config", session_path)
         for name in REQUIRED_CONDITIONS
     }
     order = _formal_order(order_path)
@@ -220,9 +241,9 @@ def execute(
         "frozen_session": str(session_path),
         "frozen_session_sha256": session_sha256,
         "readiness_report": str(readiness_path),
-        "readiness_report_sha256": auditor.sha256_file(readiness_path),
+        "readiness_report_sha256": _sha256_file(readiness_path),
         "human_approval": str(approval_path),
-        "human_approval_sha256": auditor.sha256_file(approval_path),
+        "human_approval_sha256": _sha256_file(approval_path),
         "retry_policy": "none",
         "replacement_policy":
             "infrastructure_failure_only_same_seed_condition",
@@ -271,16 +292,16 @@ def execute(
         record = dict(entry)
         record.update({
             "cycle_csv": str(cycle_path),
-            "cycle_csv_sha256": auditor.sha256_file(cycle_path),
+            "cycle_csv_sha256": _sha256_file(cycle_path),
             "summary_json": str(summary_path),
-            "summary_json_sha256": auditor.sha256_file(summary_path),
+            "summary_json_sha256": _sha256_file(summary_path),
             "task_success": summary.get("trial", {}).get("task_success"),
             "status": summary.get("status"),
         })
         manifest["trials"].append(record)
         manifest["completed_trial_count"] = len(manifest["trials"])
         _write_manifest(manifest_path, manifest)
-        if auditor.sha256_file(session_path) != session_sha256:
+        if _sha256_file(session_path) != session_sha256:
             manifest["status"] = "STOPPED_SESSION_CHANGED"
             _write_manifest(manifest_path, manifest)
             raise RuntimeError("frozen session changed during campaign")

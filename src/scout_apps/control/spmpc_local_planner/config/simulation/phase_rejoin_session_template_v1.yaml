@@ -30,6 +30,7 @@ runtime:
   stl_id: ""
   floating_point_contract: ""
   runner: {path: "", sha256: ""}
+  readiness_auditor: {path: "", sha256: ""}
   executable: {path: "", sha256: ""}
   controller_manifest: {path: "", sha256: ""}
   artifact_validator: {path: "", sha256: ""}

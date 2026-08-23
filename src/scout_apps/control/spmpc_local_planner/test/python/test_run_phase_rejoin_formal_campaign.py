@@ -88,10 +88,8 @@ class FormalCampaignContractTest(unittest.TestCase):
                 FORMAL._formal_order(order)
 
     def test_missing_approval_leaves_no_formal_output(self):
-        digest = "e" * 64
         fake_auditor = SimpleNamespace(
             require_formal_session_schema=lambda session: None,
-            sha256_file=lambda path: digest,
             audit_formal_session=lambda session, path: ([], {}),
         )
         with tempfile.TemporaryDirectory() as temporary:
@@ -101,6 +99,7 @@ class FormalCampaignContractTest(unittest.TestCase):
             approval = root / "approval.json"
             output = root / "formal_output"
             session.write_text("schema: test\n", encoding="utf-8")
+            digest = FORMAL._sha256_file(session)
             readiness.write_text(json.dumps({
                 "schema": FORMAL.READINESS_SCHEMA,
                 "status": "READY_NOT_EXECUTED",
