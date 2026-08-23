@@ -83,6 +83,7 @@ public:
     const TerminalDiagnostics& diagnostics() const { return diagnostics_; }
 
 private:
+    double computeSlowdownEnvelope(const TerminalGoalInfo& goal) const;
     double computeVelocityEnvelope(const TerminalGoalInfo& goal, double a_brake) const;
 
     TerminalControllerParams params_;

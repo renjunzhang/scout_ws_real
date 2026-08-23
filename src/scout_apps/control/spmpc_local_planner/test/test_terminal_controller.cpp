@@ -69,6 +69,34 @@ TEST(TerminalController, CaptureStopLatches) {
     EXPECT_EQ(plan.mode, "TERMINAL_CAPTURE_STOP");
 }
 
+TEST(TerminalController, CaptureStopNeverRelaxesSlowdownEnvelope) {
+    TerminalController controller;
+    auto params = makeParams();
+    params.goal_tolerance = 0.15;
+    params.slowdown_distance = 1.20;
+    params.slowdown_v_max = 0.18;
+    params.capture_stop_distance = 0.70;
+    params.capture_v_cap = 0.30;
+    controller.setParams(params);
+
+    const auto just_outside_capture = makeGoal(0.71);
+    const auto slowdown = controller.updateAndPlan(
+        just_outside_capture, 0.2, 0.0, 0.6);
+    ASSERT_FALSE(slowdown.stop_pending);
+    ASSERT_TRUE(std::isfinite(slowdown.v_envelope));
+
+    const auto just_inside_capture = makeGoal(0.69);
+    const auto capture = controller.updateAndPlan(
+        just_inside_capture, 0.2, 0.0, 0.6);
+    ASSERT_TRUE(capture.stop_pending);
+    const double expected_slowdown_cap = params.slowdown_v_max *
+        ((just_inside_capture.distance_to_goal - params.goal_tolerance) /
+         (params.slowdown_distance - params.goal_tolerance));
+    EXPECT_NEAR(capture.v_envelope, expected_slowdown_cap, 1e-12);
+    EXPECT_LT(capture.v_envelope, params.capture_v_cap);
+    EXPECT_LT(capture.v_envelope, slowdown.v_envelope);
+}
+
 TEST(TerminalController, ReachedRequiresLowSpeedAndLowOmega) {
     TerminalController controller;
     controller.setParams(makeParams());

@@ -170,26 +170,48 @@ TerminalClampOutput TerminalController::clampCommand(
     return out;
 }
 
-double TerminalController::computeVelocityEnvelope(const TerminalGoalInfo& goal, double a_brake) const {
-    if (!params_.enable || !goal.valid) {
-        return std::numeric_limits<double>::infinity();
-    }
-    if (stop_pending_) {
-        const double brake_dist = std::max(0.0, goal.distance_to_goal - params_.goal_tolerance);
-        const double brake_cap = std::sqrt(std::max(0.0, 2.0 * std::max(1e-6, a_brake) * brake_dist));
-        return std::min(std::max(0.0, params_.capture_v_cap), brake_cap);
-    }
-    if (params_.capture_stop_enable && goal.distance_to_goal <= params_.capture_stop_distance) {
-        return std::max(0.0, params_.capture_v_cap);
-    }
-    if (!params_.slowdown_enable || goal.distance_to_goal > params_.slowdown_distance) {
+double TerminalController::computeSlowdownEnvelope(
+    const TerminalGoalInfo& goal) const {
+    if (!params_.enable || !goal.valid || !params_.slowdown_enable ||
+        goal.distance_to_goal > params_.slowdown_distance) {
         return std::numeric_limits<double>::infinity();
     }
 
-    const double denom = std::max(1e-6, params_.slowdown_distance - params_.goal_tolerance);
-    const double ratio = clampValue((goal.distance_to_goal - params_.goal_tolerance) / denom, 0.0, 1.0);
-    const double cap = std::max(0.0, params_.slowdown_v_max) * std::max(0.2, ratio);
-    return cap;
+    const double denom = std::max(
+        1e-6, params_.slowdown_distance - params_.goal_tolerance);
+    const double ratio = clampValue(
+        (goal.distance_to_goal - params_.goal_tolerance) / denom,
+        0.0, 1.0);
+    return std::max(0.0, params_.slowdown_v_max) *
+        std::max(0.2, ratio);
+}
+
+double TerminalController::computeVelocityEnvelope(
+    const TerminalGoalInfo& goal,
+    double a_brake) const {
+    if (!params_.enable || !goal.valid) {
+        return std::numeric_limits<double>::infinity();
+    }
+
+    const double slowdown_cap = computeSlowdownEnvelope(goal);
+    if (stop_pending_) {
+        const double brake_dist = std::max(
+            0.0, goal.distance_to_goal - params_.goal_tolerance);
+        const double brake_cap = std::sqrt(std::max(
+            0.0, 2.0 * std::max(1e-6, a_brake) * brake_dist));
+        // Entering capture-stop must never relax an envelope already imposed
+        // by terminal slowdown.  The old discontinuity could lower a command
+        // to the slowdown cap and then raise it back to capture_v_cap on the
+        // next cycle, causing a near-goal re-acceleration.
+        return std::min(
+            std::min(std::max(0.0, params_.capture_v_cap), brake_cap),
+            slowdown_cap);
+    }
+    if (params_.capture_stop_enable && goal.distance_to_goal <= params_.capture_stop_distance) {
+        return std::min(
+            std::max(0.0, params_.capture_v_cap), slowdown_cap);
+    }
+    return slowdown_cap;
 }
 
 }  // namespace spmpc_local_planner

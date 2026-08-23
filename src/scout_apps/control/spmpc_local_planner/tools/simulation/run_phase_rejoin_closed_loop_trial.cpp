@@ -91,6 +91,10 @@ struct ConditionConfig {
     bool pilot_tuned_and_frozen = false;
     bool pilot_only = false;
     bool formal_c3_c4_causal_comparison_ready = false;
+    double terminal_slowdown_distance_m = 0.80;
+    double terminal_slowdown_v_max_mps = 0.18;
+    double terminal_capture_distance_m = 0.50;
+    double terminal_capture_v_cap_mps = 0.18;
     double residual_longitudinal_gain = 0.8;
     double residual_lateral_gain = 1.2;
     double residual_yaw_gain = 1.5;
@@ -677,6 +681,28 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
             config.continuous_variant.slosh_constraint_enable = false;
             config.continuous_variant.w_slosh = 0.0;
             config.continuous_variant_bound = true;
+
+            if (config.mode == TrialMode::SmoothMatchMpcc) {
+                const YAML::Node terminal = root["terminal_controller"];
+                if (!terminal ||
+                    !requiredScalar(
+                        terminal, "slowdown_distance_m",
+                        config.terminal_slowdown_distance_m, error) ||
+                    !requiredScalar(
+                        terminal, "slowdown_v_max_mps",
+                        config.terminal_slowdown_v_max_mps, error) ||
+                    !requiredScalar(
+                        terminal, "capture_distance_m",
+                        config.terminal_capture_distance_m, error) ||
+                    !requiredScalar(
+                        terminal, "capture_v_cap_mps",
+                        config.terminal_capture_v_cap_mps, error)) {
+                    if (error.empty()) {
+                        error = "C1 terminal controller contract is missing";
+                    }
+                    return false;
+                }
+            }
         }
         const YAML::Node residual = root["residual_feedback"];
         optionalScalar(residual, "longitudinal_gain",
@@ -710,6 +736,21 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
             !finite(config.smooth_global_time_scale) ||
             config.smooth_global_time_scale < 0.5 ||
             config.smooth_global_time_scale > 2.0 ||
+            (config.mode == TrialMode::SmoothMatchMpcc &&
+             (!finite(config.terminal_slowdown_distance_m) ||
+              config.terminal_slowdown_distance_m <= 0.08 ||
+              config.terminal_slowdown_distance_m > 3.0 ||
+              !finite(config.terminal_slowdown_v_max_mps) ||
+              config.terminal_slowdown_v_max_mps <= 0.0 ||
+              config.terminal_slowdown_v_max_mps > manifest::kLinearOutputMax ||
+              !finite(config.terminal_capture_distance_m) ||
+              config.terminal_capture_distance_m <= 0.08 ||
+              config.terminal_capture_distance_m >
+                  config.terminal_slowdown_distance_m ||
+              !finite(config.terminal_capture_v_cap_mps) ||
+              config.terminal_capture_v_cap_mps <= 0.0 ||
+              config.terminal_capture_v_cap_mps >
+                  manifest::kLinearOutputMax)) ||
             (continuous_mode &&
              (!finite(config.continuous_variant.w_contour) ||
               config.continuous_variant.w_contour < 0.0 ||
@@ -2368,6 +2409,16 @@ bool writeSummary(
         << ",\"w_du_vs\":"
         << jsonNumber(condition.continuous_variant.w_du_vs)
         << "},\n"
+        << "    \"continuous_terminal_controller\": {"
+        << "\"slowdown_distance_m\":"
+        << jsonNumber(condition.terminal_slowdown_distance_m)
+        << ",\"slowdown_v_max_mps\":"
+        << jsonNumber(condition.terminal_slowdown_v_max_mps)
+        << ",\"capture_distance_m\":"
+        << jsonNumber(condition.terminal_capture_distance_m)
+        << ",\"capture_v_cap_mps\":"
+        << jsonNumber(condition.terminal_capture_v_cap_mps)
+        << "},\n"
         << "    \"formal_c3_c4_causal_comparison_ready\": "
         << (condition.formal_c3_c4_causal_comparison_ready
                 ? "true" : "false") << ",\n"
@@ -2546,6 +2597,16 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         condition.mode == TrialMode::OrdinaryMpcc ||
         condition.mode == TrialMode::SmoothMatchMpcc ||
         condition.mode == TrialMode::InputShaping;
+    if (condition.mode == TrialMode::SmoothMatchMpcc) {
+        solver.terminal.slowdown_distance =
+            condition.terminal_slowdown_distance_m;
+        solver.terminal.slowdown_v_max =
+            condition.terminal_slowdown_v_max_mps;
+        solver.terminal.capture_stop_distance =
+            condition.terminal_capture_distance_m;
+        solver.terminal.capture_v_cap =
+            condition.terminal_capture_v_cap_mps;
+    }
     std::unique_ptr<SpmpcProblem> production_problem;
     std::unique_ptr<OfflineReplaySession> replay_session;
     std::unique_ptr<ZvdInputShapingSession> shaping_session;

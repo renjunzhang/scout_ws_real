@@ -229,6 +229,14 @@ protected:
             << "stored_recovery_action: false\n"
             << "input_shaping: false\n";
         if (mode == "ordinary_mpcc" || mode == "smooth_match_mpcc") {
+            if (mode == "smooth_match_mpcc") {
+                output
+                    << "terminal_controller:\n"
+                    << "  slowdown_distance_m: 0.80\n"
+                    << "  slowdown_v_max_mps: 0.40\n"
+                    << "  capture_distance_m: 0.50\n"
+                    << "  capture_v_cap_mps: 0.40\n";
+            }
             output
                 << "continuous_controller:\n"
                 << "  variant_id: "

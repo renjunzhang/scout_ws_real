@@ -244,9 +244,14 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
               acados_manifest::generated_bounds::kMainHorizonSteps);
     EXPECT_EQ(first.pre_solve_snapshot.state_width, 10);
     EXPECT_EQ(first.pre_solve_snapshot.control_width, 3);
-    EXPECT_EQ(first.pre_solve_snapshot.parameter_width, 23);
-    EXPECT_EQ(first.pre_solve_snapshot.parameter_names.size(), 23u);
-    EXPECT_EQ(first.pre_solve_snapshot.stage_parameters.size(), 61u * 23u);
+    EXPECT_EQ(first.pre_solve_snapshot.parameter_width,
+              acados_manifest::mainline::kB0ParameterCount);
+    EXPECT_EQ(first.pre_solve_snapshot.parameter_names.size(),
+              static_cast<std::size_t>(
+                  acados_manifest::mainline::kB0ParameterCount));
+    EXPECT_EQ(first.pre_solve_snapshot.stage_parameters.size(),
+              61u * static_cast<std::size_t>(
+                  acados_manifest::mainline::kB0ParameterCount));
     EXPECT_EQ(first.pre_solve_snapshot.initial_guess_states.size(), 61u);
     EXPECT_EQ(first.pre_solve_snapshot.initial_guess_controls.size(), 60u);
     EXPECT_FALSE(first.pre_solve_snapshot.have_previous_solution);
@@ -405,7 +410,8 @@ TEST(ReplayDiagnostics, MonitorPreservesBaselineAndEnforceHasNoFreeTail) {
     SolverOutput monitor_output;
     ASSERT_TRUE(solver.solve(monitor_input, reference, monitor_output))
         << monitor_output.status;
-    ASSERT_EQ(monitor_output.pre_solve_snapshot.parameter_width, 55);
+    ASSERT_EQ(monitor_output.pre_solve_snapshot.parameter_width,
+              acados_manifest::mainline::kSloshParameterCount);
     const std::size_t phase_active = parameterIndex(
         monitor_output.pre_solve_snapshot, "phase_rejoin_active");
     const std::size_t gate_active = parameterIndex(
@@ -426,12 +432,14 @@ TEST(ReplayDiagnostics, MonitorPreservesBaselineAndEnforceHasNoFreeTail) {
     SolverOutput enforce_output;
     ASSERT_TRUE(solver.solve(enforce_input, reference, enforce_output))
         << enforce_output.status;
-    ASSERT_EQ(enforce_output.pre_solve_snapshot.parameter_width, 55);
+    ASSERT_EQ(enforce_output.pre_solve_snapshot.parameter_width,
+              acados_manifest::mainline::kSloshParameterCount);
     EXPECT_EQ(enforce_output.pre_solve_snapshot.horizon_steps, 3);
     EXPECT_EQ(enforce_output.predicted_horizon.states.size(), 4u);
     EXPECT_EQ(enforce_output.predicted_horizon.controls.size(), 3u);
     EXPECT_EQ(enforce_output.pre_solve_snapshot.stage_parameters.size(),
-              4u * 55u);
+              4u * static_cast<std::size_t>(
+                  acados_manifest::mainline::kSloshParameterCount));
     for (int stage = 0; stage <= 3; ++stage) {
         EXPECT_DOUBLE_EQ(stageParameter(
             enforce_output.pre_solve_snapshot, stage, phase_active),
