@@ -129,6 +129,47 @@ TEST(SafetySupervisorTest, TrackingSpinIsDisabledInTerminalPhase) {
     EXPECT_EQ(SafetyIntervention::TrackingSpin, result.intervention);
 }
 
+TEST(SafetySupervisorTest, SustainedMovingTurnIsNotTrackingSpin) {
+    SafetySupervisorConfig config;
+    config.terminal_spin.enable = false;
+    config.tracking.projection_enable = false;
+    config.tracking.spin_omega_threshold = 0.8;
+    config.tracking.spin_max_linear_speed_mps = 0.05;
+    config.tracking.spin_max_duration_sec = 0.2;
+    SafetySupervisor supervisor = configuredSupervisor(config);
+
+    SafetySupervisorInput input = acceptedTrackingInput();
+    input.robot.v = 0.20;
+    input.robot.omega = 1.0;
+    input.command.angular = 1.0;
+    for (int cycle = 0; cycle < 10; ++cycle) {
+        const SafetySupervisorResult result = supervisor.step(input);
+        EXPECT_FALSE(result.blocked);
+        EXPECT_FALSE(result.tracking_spin_latched);
+        EXPECT_DOUBLE_EQ(0.0, result.tracking_spin_duration_sec);
+    }
+}
+
+TEST(SafetySupervisorTest, SustainedInPlaceRotationLatchesTrackingSpin) {
+    SafetySupervisorConfig config;
+    config.terminal_spin.enable = false;
+    config.tracking.projection_enable = false;
+    config.tracking.spin_omega_threshold = 0.8;
+    config.tracking.spin_max_linear_speed_mps = 0.05;
+    config.tracking.spin_max_duration_sec = 0.2;
+    SafetySupervisor supervisor = configuredSupervisor(config);
+
+    SafetySupervisorInput input = acceptedTrackingInput();
+    input.robot.v = 0.01;
+    input.robot.omega = 1.0;
+    input.command.angular = 1.0;
+    EXPECT_FALSE(supervisor.step(input).blocked);
+    const SafetySupervisorResult result = supervisor.step(input);
+    EXPECT_TRUE(result.blocked);
+    EXPECT_TRUE(result.tracking_spin_latched);
+    EXPECT_EQ(SafetyIntervention::TrackingSpin, result.intervention);
+}
+
 TEST(SafetySupervisorTest, ExistingTrackingLatchSurvivesFailedCommands) {
     SafetySupervisorConfig config;
     config.terminal_spin.enable = false;

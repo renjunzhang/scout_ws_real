@@ -21,6 +21,11 @@ struct TrackingSafetyConfig {
     double max_projection_duration_sec = 0.20;
     bool spin_enable = true;
     double spin_omega_threshold = 0.50;
+    // A tracking spin is an in-place rotation, not simply a sustained turn.
+    // Require the measured translational speed to remain below this bound so
+    // curved-path motion cannot latch the fail-closed stop on angular rate
+    // alone.
+    double spin_max_linear_speed_mps = 0.05;
     double spin_max_duration_sec = 2.0;
 };
 

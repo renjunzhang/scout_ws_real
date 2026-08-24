@@ -453,6 +453,8 @@ AppConfig RosConfigLoader::load(const ros::NodeHandle& private_node,
               safety.tracking.spin_enable);
     loadParam(private_node, "tracking_safety/spin_fail/omega_threshold",
               safety.tracking.spin_omega_threshold);
+    loadParam(private_node, "tracking_safety/spin_fail/max_linear_speed_mps",
+              safety.tracking.spin_max_linear_speed_mps);
     loadParam(private_node, "tracking_safety/spin_fail/max_duration_sec",
               safety.tracking.spin_max_duration_sec);
 

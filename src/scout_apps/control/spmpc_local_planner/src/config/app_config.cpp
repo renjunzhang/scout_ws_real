@@ -176,6 +176,8 @@ ValidationReport validateAndNormalize(AppConfig& config) {
         0.0, safety.tracking.max_projection_duration_sec);
     safety.tracking.spin_omega_threshold = std::max(
         0.0, safety.tracking.spin_omega_threshold);
+    safety.tracking.spin_max_linear_speed_mps = std::max(
+        0.0, safety.tracking.spin_max_linear_speed_mps);
     safety.tracking.spin_max_duration_sec = std::max(
         0.0, safety.tracking.spin_max_duration_sec);
 

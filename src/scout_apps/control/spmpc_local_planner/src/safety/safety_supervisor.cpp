@@ -35,6 +35,8 @@ bool SafetySupervisor::configure(const SafetySupervisorConfig& config,
         config.tracking.max_projection_duration_sec >= 0.0 &&
         std::isfinite(config.tracking.spin_omega_threshold) &&
         config.tracking.spin_omega_threshold >= 0.0 &&
+        std::isfinite(config.tracking.spin_max_linear_speed_mps) &&
+        config.tracking.spin_max_linear_speed_mps >= 0.0 &&
         std::isfinite(config.tracking.spin_max_duration_sec) &&
         config.tracking.spin_max_duration_sec >= 0.0;
     if (!valid) {
@@ -137,7 +139,11 @@ SafetyIntervention SafetySupervisor::updateTracking(
     }
 
     const bool tracking_phase = !input.terminal.terminal_phase;
+    const bool translating_slowly =
+        std::abs(input.robot.v) <=
+            config_.tracking.spin_max_linear_speed_mps;
     const bool spinning = config_.tracking.spin_enable && tracking_phase &&
+        translating_slowly &&
         (std::abs(input.robot.omega) >
              config_.tracking.spin_omega_threshold ||
          std::abs(command.angular) >
