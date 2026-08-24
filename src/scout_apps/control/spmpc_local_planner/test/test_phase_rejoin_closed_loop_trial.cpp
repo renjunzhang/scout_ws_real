@@ -365,11 +365,16 @@ protected:
             << "  publish_latency_sec: 0.01\n";
     }
 
-    int run(const std::string& frozen_session_sha256 = std::string()) {
+    int run(
+        const std::string& frozen_session_sha256 = std::string(),
+        const std::string& condition_path = std::string()) {
+        const std::string selected_condition = condition_path.empty()
+            ? condition_
+            : condition_path;
         std::vector<std::string> values = {
             "trial", "--plant", SPMPC_SIMULATION_CONFIG_PATH,
             "--path", path_, "--artifact", artifact_,
-            "--condition", condition_, "--seed", "1234",
+            "--condition", selected_condition, "--seed", "1234",
             "--cycle-csv", cycle_, "--summary-json", summary_,
         };
         if (!frozen_session_sha256.empty()) {
@@ -414,6 +419,62 @@ TEST_F(TrialRunnerTest,
     struct stat after;
     ASSERT_EQ(::stat(summary_.c_str(), &after), 0);
     EXPECT_EQ(before.st_size, after.st_size);
+}
+
+TEST_F(TrialRunnerTest,
+       BoundedTrackingDevelopmentRunsFrozenPolicyWithoutSolverOrGates) {
+    const std::string condition_path =
+        std::string(SPMPC_SIMULATION_CONDITIONS_DIR) +
+        "/BT_bounded_tracking_development.yaml";
+    EXPECT_EQ(run(std::string(64u, 'a'), condition_path), 3);
+    ASSERT_EQ(run(std::string(), condition_path), 0);
+    const YAML::Node summary = YAML::LoadFile(summary_);
+    EXPECT_EQ(summary["condition_id"].as<std::string>(), "BT");
+    EXPECT_EQ(summary["mode"].as<std::string>(), "bounded_tracking");
+    EXPECT_EQ(summary["implementation_id"].as<std::string>(),
+              "bounded_tracking_development_v1");
+    EXPECT_FALSE(summary["formal_trials_started"].as<bool>());
+    EXPECT_TRUE(summary["development_pilot_only"].as<bool>());
+    EXPECT_TRUE(summary["baseline_contract"]["pilot_only"].as<bool>());
+    EXPECT_TRUE(summary["trial"]["sequence_completed"].as<bool>());
+    EXPECT_TRUE(summary["trial"]["task_success"].as<bool>());
+    EXPECT_EQ(summary["trial"]["completion_reason"].as<std::string>(),
+              "ARTIFACT_TAIL_COMPLETE");
+    EXPECT_EQ(summary["controller_audit"]["solver_failures"].as<int>(), 0);
+    EXPECT_EQ(summary["controller_audit"]["gate_evaluations"].as<int>(), 0);
+    EXPECT_EQ(summary["controller_audit"]
+                     ["execution_candidate_filter_cycles"].as<int>(), 0);
+    EXPECT_EQ(summary["controller_audit"]["recovery_actions"].as<int>(), 0);
+    EXPECT_EQ(summary["controller_audit"]["controlled_stops"].as<int>(), 0);
+    EXPECT_EQ(summary["controller_audit"]["zero_requests"].as<int>(), 0);
+    EXPECT_EQ(summary["controller_audit"]
+                     ["receipt_inconsistent_cycles"].as<int>(), 0);
+    EXPECT_EQ(summary["controller_audit"]
+                     ["history_not_committed_cycles"].as<int>(), 0);
+    EXPECT_GT(summary["controller_audit"]["publications"].as<int>(), 0);
+    EXPECT_EQ(summary["controller_audit"]["publication_failures"].as<int>(),
+              0);
+    EXPECT_EQ(summary["solver_runtime"]["sample_count"].as<int>(), 0);
+
+    std::ifstream cycles(cycle_);
+    ASSERT_TRUE(cycles.is_open());
+    std::string header_line;
+    std::string first_cycle_line;
+    ASSERT_TRUE(static_cast<bool>(std::getline(cycles, header_line)));
+    ASSERT_TRUE(static_cast<bool>(std::getline(cycles, first_cycle_line)));
+    const std::vector<std::string> header = splitCsv(header_line);
+    const std::vector<std::string> first = splitCsv(first_cycle_line);
+    ASSERT_EQ(header.size(), first.size());
+    std::map<std::string, std::size_t> column;
+    for (std::size_t index = 0; index < header.size(); ++index) {
+        column[header[index]] = index;
+    }
+    EXPECT_EQ(first[column["raw_solver_status"]],
+              "BT_BOUNDED_TRACKING_RATE_LIMITED");
+    EXPECT_LE(std::abs(std::stod(first[column["final_cmd_v"]])),
+              manifest::kAccelerationMax * manifest::kDt + 1.0e-12);
+    EXPECT_LE(std::abs(std::stod(first[column["final_cmd_omega"]])),
+              manifest::kAngularAccelerationMax * manifest::kDt + 1.0e-12);
 }
 
 TEST_F(TrialRunnerTest,

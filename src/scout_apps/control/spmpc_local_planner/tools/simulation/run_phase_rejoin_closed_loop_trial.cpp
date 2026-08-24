@@ -65,6 +65,7 @@ enum class TrialMode {
     ResidualNoGate,
     PhaseRejoinFull,
     InputShaping,
+    BoundedTracking,
 };
 
 struct Arguments {
@@ -329,6 +330,7 @@ std::string modeName(TrialMode mode) {
     case TrialMode::ResidualNoGate: return "residual_no_gate";
     case TrialMode::PhaseRejoinFull: return "phase_rejoin_full";
     case TrialMode::InputShaping: return "input_shaping";
+    case TrialMode::BoundedTracking: return "bounded_tracking";
     }
     return "unknown";
 }
@@ -340,6 +342,7 @@ bool parseMode(const std::string& text, TrialMode& mode) {
     else if (text == "residual_no_gate") mode = TrialMode::ResidualNoGate;
     else if (text == "phase_rejoin_full") mode = TrialMode::PhaseRejoinFull;
     else if (text == "input_shaping") mode = TrialMode::InputShaping;
+    else if (text == "bounded_tracking") mode = TrialMode::BoundedTracking;
     else return false;
     return true;
 }
@@ -587,6 +590,9 @@ ExpectedSemantics expectedSemantics(TrialMode mode) {
         out.stored_recovery_action = true;
     } else if (mode == TrialMode::InputShaping) {
         out.input_shaping = true;
+    } else if (mode == TrialMode::BoundedTracking) {
+        out.offline_nominal = true;
+        out.online_residual = true;
     }
     return out;
 }
@@ -622,7 +628,9 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
         }
         const std::string expected_id = config.mode == TrialMode::InputShaping
             ? "IS"
-            : "C" + std::to_string(static_cast<int>(config.mode));
+            : (config.mode == TrialMode::BoundedTracking
+                ? "BT"
+                : "C" + std::to_string(static_cast<int>(config.mode)));
         if (config.condition_id != expected_id) {
             error = "condition_id/mode mismatch";
             return false;
@@ -863,6 +871,25 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
                 error = "C3/C4 strict causal comparison contract is not frozen";
                 return false;
             }
+        } else if (config.mode == TrialMode::BoundedTracking) {
+            std::string policy_contract_id;
+            if (!config.pilot_only ||
+                config.formal_c3_c4_causal_comparison_ready ||
+                config.implementation_id !=
+                    "bounded_tracking_development_v1") {
+                error = "BT must remain the development-only v1 prototype";
+                return false;
+            }
+            if (!requiredScalar(
+                    root, "bounded_tracking_policy_contract_id",
+                    policy_contract_id, error) ||
+                policy_contract_id !=
+                    boundedTrackingRecoveryPolicyV1Params().contract_id) {
+                if (error.empty()) {
+                    error = "BT policy contract differs from code-frozen v1";
+                }
+                return false;
+            }
         }
     } catch (const std::exception& exception) {
         error = std::string("cannot load condition: ") + exception.what();
@@ -997,8 +1024,17 @@ private:
 
 class OfflineReplaySession final : public SolverSession {
 public:
-    explicit OfflineReplaySession(const NominalSequenceArtifact& artifact)
-        : artifact_(artifact) {}
+    explicit OfflineReplaySession(
+        const NominalSequenceArtifact& artifact,
+        bool bounded_tracking = false)
+        : artifact_(artifact),
+          bounded_tracking_(bounded_tracking) {
+        if (bounded_tracking_) {
+            std::string error;
+            policy_configured_ = policy_.configure(
+                boundedTrackingRecoveryPolicyV1Params(), error);
+        }
+    }
 
     void setCycle(std::size_t cycle) { cycle_ = cycle; }
 
@@ -1024,10 +1060,54 @@ public:
             output.failure_kind = SolverFailureKind::Integrity;
             return false;
         }
+        const RobotState* controller_robot = &input.robot;
+        if (bounded_tracking_) {
+            const ExecutionHorizonContext& horizon =
+                input.execution_horizon;
+            if (!policy_configured_ || !horizon.active ||
+                !horizon.initial_state.valid ||
+                horizon.initial_state.linear.pending_commands.empty() ||
+                horizon.initial_state.angular.pending_commands.empty()) {
+                output.status = "BT_EXECUTION_HORIZON_UNAVAILABLE";
+                output.failure_kind = SolverFailureKind::Integrity;
+                return false;
+            }
+            controller_robot = &horizon.initial_state.robot;
+            const BoundedTrackingRecoveryPolicyResult desired =
+                policy_.evaluate(*sample, *controller_robot);
+            if (!desired.valid) {
+                output.status = "BT_POLICY_FAILED_" + desired.status;
+                output.failure_kind = SolverFailureKind::Integrity;
+                return false;
+            }
+            VelocityCommand previous_published;
+            previous_published.linear =
+                horizon.initial_state.linear.pending_commands.back();
+            previous_published.angular =
+                horizon.initial_state.angular.pending_commands.back();
+            const BoundedTrackingRecoveryCommandTransaction transaction =
+                applyBoundedTrackingRecoveryCommandTransaction(
+                    desired.command, previous_published,
+                    manifest::kAccelerationMax,
+                    manifest::kAngularAccelerationMax,
+                    horizon.contract.dt, policy_.params());
+            if (!transaction.valid) {
+                output.status = "BT_COMMAND_TRANSACTION_FAILED_" +
+                    transaction.status;
+                output.failure_kind = SolverFailureKind::Integrity;
+                return false;
+            }
+            output.cmd_v = transaction.command.linear;
+            output.cmd_omega = transaction.command.angular;
+            output.status = transaction.rate_limited
+                ? "BT_BOUNDED_TRACKING_RATE_LIMITED"
+                : "BT_BOUNDED_TRACKING_COMMAND_ACCEPTED";
+        } else {
+            output.status = "OFFLINE_V3_FINAL_COMMAND_REPLAY";
+            output.cmd_v = sample->u_pub_v;
+            output.cmd_omega = sample->u_pub_omega;
+        }
         output.success = true;
-        output.status = "OFFLINE_V3_FINAL_COMMAND_REPLAY";
-        output.cmd_v = sample->u_pub_v;
-        output.cmd_omega = sample->u_pub_omega;
         output.progress_abs_s = sample->s;
         output.progress_s = artifact_.metadata().path_length > 1e-12
             ? sample->s / artifact_.metadata().path_length
@@ -1037,8 +1117,8 @@ public:
         output.projector_debug.raw_s = sample->s;
         output.projector_debug.guarded_s = sample->s;
         output.projector_debug.raw_distance =
-            std::hypot(input.robot.x - sample->x,
-                       input.robot.y - sample->y);
+            std::hypot(controller_robot->x - sample->x,
+                       controller_robot->y - sample->y);
         output.projector_debug.guarded_distance =
             output.projector_debug.raw_distance;
         return true;
@@ -1046,6 +1126,9 @@ public:
 
 private:
     const NominalSequenceArtifact& artifact_;
+    BoundedTrackingRecoveryPolicy policy_;
+    bool bounded_tracking_ = false;
+    bool policy_configured_ = false;
     std::size_t cycle_ = 0;
 };
 
@@ -1160,6 +1243,11 @@ VariantConfig controllerVariant(TrialMode mode,
         VariantConfig variant = condition.continuous_variant;
         if (mode != TrialMode::SmoothMatchMpcc) return variant;
         variant.v_ref /= condition.smooth_global_time_scale;
+        return variant;
+    }
+    if (mode == TrialMode::BoundedTracking) {
+        VariantConfig variant;
+        variant.name = "BT_bounded_tracking_development_v1";
         return variant;
     }
     VariantConfig variant;
@@ -1305,7 +1393,7 @@ PhaseRejoinRuntimeContract phaseRuntimeContract(
 CommandPipelineConfig commandPipelineConfig(double control_rate_hz) {
     CommandPipelineConfig config;
     config.control_frequency = control_rate_hz;
-    // All six implementations own their command-rate envelope before the
+    // Every implementation owns its command-rate envelope before the
     // final transaction.  A second limiter would invalidate either the OCP
     // prediction or the offline replay and is therefore disabled uniformly.
     config.linear_accel_limit_enable = false;
@@ -2585,6 +2673,13 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         cleanup_temporary();
         return kConfigurationExit;
     }
+    if (condition.mode == TrialMode::BoundedTracking &&
+        !args.frozen_session_sha256.empty()) {
+        std::cerr << "ERROR: BT is development-only and cannot start a "
+                  << "formal trial\n";
+        cleanup_temporary();
+        return kConfigurationExit;
+    }
 
     IndependentPlantConfig plant_config;
     if (!loadIndependentPlantConfig(args.plant_path, plant_config, error)) {
@@ -2637,6 +2732,7 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         return kConfigurationExit;
     }
     if (condition.mode == TrialMode::OfflineReplay ||
+        condition.mode == TrialMode::BoundedTracking ||
         condition.mode == TrialMode::ResidualNoGate ||
         condition.mode == TrialMode::PhaseRejoinFull) {
         const PhaseNominalSample* final_sample =
@@ -2724,8 +2820,10 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         }
         production_problem->setReferencePath(path.reference);
         solver_session = production_problem.get();
-    } else if (condition.mode == TrialMode::OfflineReplay) {
-        replay_session.reset(new OfflineReplaySession(artifact));
+    } else if (condition.mode == TrialMode::OfflineReplay ||
+               condition.mode == TrialMode::BoundedTracking) {
+        replay_session.reset(new OfflineReplaySession(
+            artifact, condition.mode == TrialMode::BoundedTracking));
         solver_session = replay_session.get();
     } else if (condition.mode == TrialMode::ResidualNoGate ||
                condition.mode == TrialMode::PhaseRejoinFull) {
@@ -2822,6 +2920,7 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
 
     ExecutionHorizonContextBuilder execution_builder;
     const bool execution_horizon_required =
+        condition.mode == TrialMode::BoundedTracking ||
         condition.mode == TrialMode::ResidualNoGate ||
         condition.mode == TrialMode::PhaseRejoinFull;
     if (execution_horizon_required) {
@@ -3233,7 +3332,8 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             completion_reason = "CONTROLLED_STOP";
             break;
         }
-        if (condition.mode == TrialMode::OfflineReplay &&
+        if ((condition.mode == TrialMode::OfflineReplay ||
+             condition.mode == TrialMode::BoundedTracking) &&
             cycle + 1 >= artifact.size()) {
             completed = true;
             completion_reason = "ARTIFACT_TAIL_COMPLETE";
