@@ -13,6 +13,7 @@ ACADOS_TOOLS = PACKAGE_ROOT / "tools" / "codegen" / "acados"
 sys.path.insert(0, str(ACADOS_TOOLS))
 
 from generate_spmpc_acados import emit_cpp_manifest, load_config  # noqa: E402
+from spmpc_acados_model import PARAM_NAMES_SLOSH, PIDX_SLOSH  # noqa: E402
 
 
 class AcadosManifestTest(unittest.TestCase):
@@ -55,6 +56,19 @@ class AcadosManifestTest(unittest.TestCase):
             self.assertNotIn(name, legacy)
         self.assertIn("constexpr int kB0ParameterCount = 27;", mainline)
         self.assertIn("constexpr int kB0ParameterCount = 24;", legacy)
+
+    def test_bt_extension_preserves_phase_prefix_and_exact_dimensions(self):
+        self.assertEqual(PIDX_SLOSH["gate_r_eta_y_dot"], 58)
+        self.assertEqual(PIDX_SLOSH["bt_reference_active"], 59)
+        self.assertEqual(PIDX_SLOSH["nom_s"], 60)
+        self.assertEqual(PIDX_SLOSH["bt_phase_half_width"], 61)
+        self.assertEqual(len(PARAM_NAMES_SLOSH), 62)
+        committed = (
+            PACKAGE_ROOT / "generated" / "acados" /
+            "spmpc_parameter_manifest.h").read_text()
+        self.assertIn("constexpr int kSloshParameterCount = 62;", committed)
+        self.assertIn(
+            "constexpr int kSloshNonlinearConstraintCount = 3;", committed)
 
 
 if __name__ == "__main__":

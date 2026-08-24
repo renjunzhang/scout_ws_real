@@ -13,6 +13,7 @@
 #include "spmpc_local_planner/config/variant_config.h"
 
 #include "spmpc_delay_augmented_phase_solver_manifest.h"
+#include "spmpc_parameter_manifest.h"
 
 #include <yaml-cpp/yaml.h>
 
@@ -66,6 +67,24 @@ enum class TrialMode {
     PhaseRejoinFull,
     InputShaping,
     BoundedTracking,
+    SmpccBtMonitor,
+    SmpccBtDirect,
+};
+
+enum class GoNoGoDisturbanceKind {
+    None,
+    InitialPose,
+    ShortLinearSpeedCap,
+};
+
+struct GoNoGoDisturbanceConfig {
+    std::string id = "NONE";
+    GoNoGoDisturbanceKind kind = GoNoGoDisturbanceKind::None;
+    double initial_lateral_offset_m = 0.0;
+    double initial_yaw_offset_rad = 0.0;
+    std::size_t speed_cap_begin_index = 0;
+    std::size_t speed_cap_cycle_count = 0;
+    double linear_speed_cap_mps = 0.0;
 };
 
 struct Arguments {
@@ -111,6 +130,13 @@ struct ConditionConfig {
     double max_residual_omega = 0.20;
     double zvd_max_discrete_residual = 0.05;
     double task_success_goal_tolerance_m = 0.20;
+    // One-shot S-MPCC/BT Go/No-Go contract.  These values are frozen in the
+    // development condition YAML before paired liquid results are inspected.
+    double bt_progress_radius_m = 0.10;
+    double correction_deadzone_v_mps = 0.01;
+    double correction_deadzone_omega_radps = 0.02;
+    double minimum_effective_correction_fraction = 0.10;
+    GoNoGoDisturbanceConfig disturbance;
 };
 
 struct PathAsset {
@@ -125,6 +151,24 @@ struct CycleRecord {
     IndependentPlantState plant;
     double tracking_error_m = 0.0;
     double progress_s = 0.0;
+    bool timed_reference_valid = false;
+    std::size_t timed_reference_index = 0;
+    double timed_reference_t_sec = 0.0;
+    double timed_reference_x = 0.0;
+    double timed_reference_y = 0.0;
+    double timed_reference_yaw = 0.0;
+    double timed_reference_s = 0.0;
+    double timed_reference_v = 0.0;
+    double timed_reference_omega = 0.0;
+    double timed_reference_position_error_m = 0.0;
+    double timed_reference_longitudinal_error_m = 0.0;
+    double timed_reference_left_error_m = 0.0;
+    double timed_reference_yaw_error_rad = 0.0;
+    double timed_reference_progress_error_m = 0.0;
+    bool execution_aligned_state_valid = false;
+    double execution_aligned_x = 0.0;
+    double execution_aligned_y = 0.0;
+    double execution_aligned_yaw = 0.0;
     SloshState observer;
     double observer_height_m = 0.0;
     bool solver_success = false;
@@ -174,6 +218,34 @@ struct CycleRecord {
     CommandSource command_source = CommandSource::None;
     StampNs publish_stamp_ns = 0;
     IndependentPlantPublishReceipt plant_publish;
+    bool command_disturbance_active = false;
+    bool command_disturbance_modified = false;
+    double pre_disturbance_cmd_v = 0.0;
+    double pre_disturbance_cmd_omega = 0.0;
+    bool bt_timed_reference_active = false;
+    bool bt_reference_motion_active = false;
+    bool smpcc_monitor_only = false;
+    bool smpcc_candidate_attempted = false;
+    bool smpcc_candidate_success = false;
+    std::string smpcc_candidate_status = "NOT_RUN";
+    double smpcc_candidate_solve_time_ms = 0.0;
+    std::size_t bt_reference_index = 0;
+    std::size_t bt_reference_padded_stages = 0;
+    double bt_counterfactual_cmd_v = 0.0;
+    double bt_counterfactual_cmd_omega = 0.0;
+    double bt_progress_abs_s = 0.0;
+    bool bt_projector_raw_valid = false;
+    bool bt_projector_guarded_valid = false;
+    double bt_projector_raw_s = 0.0;
+    double bt_projector_guarded_s = 0.0;
+    double bt_projector_raw_distance_m = 0.0;
+    double bt_projector_guarded_distance_m = 0.0;
+    double smpcc_candidate_cmd_v = 0.0;
+    double smpcc_candidate_cmd_omega = 0.0;
+    double candidate_delta_v_mps = 0.0;
+    double candidate_delta_omega_radps = 0.0;
+    bool correction_eligible = false;
+    bool effective_correction = false;
 };
 
 struct TrialCounters {
@@ -219,6 +291,17 @@ struct TrialCounters {
     std::map<std::string, std::size_t> final_status_counts;
     std::map<std::string, std::size_t> successor_action_counts;
     std::map<std::string, std::size_t> tail_state_counts;
+    std::size_t disturbance_active_cycles = 0;
+    std::size_t disturbance_modified_cycles = 0;
+    std::size_t bt_timed_reference_cycles = 0;
+    std::size_t bt_reference_padded_stage_count = 0;
+    std::size_t smpcc_candidate_attempts = 0;
+    std::size_t smpcc_candidate_failures = 0;
+    std::map<std::string, std::size_t> smpcc_candidate_status_counts;
+    std::size_t correction_eligible_cycles = 0;
+    std::size_t effective_correction_cycles = 0;
+    double max_abs_candidate_delta_v = 0.0;
+    double max_abs_candidate_delta_omega = 0.0;
 };
 
 struct SolverFailureDiagnostic {
@@ -349,6 +432,8 @@ std::string modeName(TrialMode mode) {
     case TrialMode::PhaseRejoinFull: return "phase_rejoin_full";
     case TrialMode::InputShaping: return "input_shaping";
     case TrialMode::BoundedTracking: return "bounded_tracking";
+    case TrialMode::SmpccBtMonitor: return "smpcc_bt_monitor";
+    case TrialMode::SmpccBtDirect: return "smpcc_bt_direct";
     }
     return "unknown";
 }
@@ -361,6 +446,8 @@ bool parseMode(const std::string& text, TrialMode& mode) {
     else if (text == "phase_rejoin_full") mode = TrialMode::PhaseRejoinFull;
     else if (text == "input_shaping") mode = TrialMode::InputShaping;
     else if (text == "bounded_tracking") mode = TrialMode::BoundedTracking;
+    else if (text == "smpcc_bt_monitor") mode = TrialMode::SmpccBtMonitor;
+    else if (text == "smpcc_bt_direct") mode = TrialMode::SmpccBtDirect;
     else return false;
     return true;
 }
@@ -611,6 +698,12 @@ ExpectedSemantics expectedSemantics(TrialMode mode) {
     } else if (mode == TrialMode::BoundedTracking) {
         out.offline_nominal = true;
         out.online_residual = true;
+    } else if (mode == TrialMode::SmpccBtMonitor ||
+               mode == TrialMode::SmpccBtDirect) {
+        out.offline_nominal = true;
+        // The old S-MPCC publishes a complete command candidate.  It is not a
+        // residual on BT and must not be labelled as such in the evidence.
+        out.online_residual = false;
     }
     return out;
 }
@@ -644,11 +737,22 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
             error = "unknown condition mode " + mode;
             return false;
         }
-        const std::string expected_id = config.mode == TrialMode::InputShaping
-            ? "IS"
-            : (config.mode == TrialMode::BoundedTracking
-                ? "BT"
-                : "C" + std::to_string(static_cast<int>(config.mode)));
+        std::string expected_id;
+        switch (config.mode) {
+        case TrialMode::OrdinaryMpcc: expected_id = "C0"; break;
+        case TrialMode::SmoothMatchMpcc: expected_id = "C1"; break;
+        case TrialMode::OfflineReplay: expected_id = "C2"; break;
+        case TrialMode::ResidualNoGate: expected_id = "C3"; break;
+        case TrialMode::PhaseRejoinFull: expected_id = "C4"; break;
+        case TrialMode::InputShaping: expected_id = "IS"; break;
+        case TrialMode::BoundedTracking: expected_id = "BT"; break;
+        case TrialMode::SmpccBtMonitor:
+            expected_id = "G-SMPCC-BT-MONITOR";
+            break;
+        case TrialMode::SmpccBtDirect:
+            expected_id = "G-SMPCC-BT";
+            break;
+        }
         if (config.condition_id != expected_id) {
             error = "condition_id/mode mismatch";
             return false;
@@ -690,7 +794,9 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
         const bool continuous_mode =
             config.mode == TrialMode::OrdinaryMpcc ||
             config.mode == TrialMode::SmoothMatchMpcc ||
-            config.mode == TrialMode::InputShaping;
+            config.mode == TrialMode::InputShaping ||
+            config.mode == TrialMode::SmpccBtMonitor ||
+            config.mode == TrialMode::SmpccBtDirect;
         if (continuous_mode) {
             const YAML::Node controller = root["continuous_controller"];
             std::string variant_id;
@@ -740,9 +846,13 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
                 }
                 return false;
             }
-            const std::string expected_variant =
-                config.mode == TrialMode::SmoothMatchMpcc
-                    ? "B_smooth" : "B0";
+            const bool smpcc_bt_mode =
+                config.mode == TrialMode::SmpccBtMonitor ||
+                config.mode == TrialMode::SmpccBtDirect;
+            const std::string expected_variant = smpcc_bt_mode
+                ? "G_SMPCC_BT_V1"
+                : (config.mode == TrialMode::SmoothMatchMpcc
+                    ? "B_smooth" : "B0");
             const bool expected_smooth =
                 config.mode == TrialMode::SmoothMatchMpcc;
             if (variant_id != expected_variant ||
@@ -753,9 +863,16 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
             config.continuous_variant.name = variant_id;
             config.continuous_variant.smooth_priority_enable =
                 smooth_priority_enable;
-            config.continuous_variant.slosh_enable = false;
+            config.continuous_variant.slosh_enable = smpcc_bt_mode;
             config.continuous_variant.slosh_constraint_enable = false;
             config.continuous_variant.w_slosh = 0.0;
+            if (smpcc_bt_mode) {
+                if (!requiredScalar(controller, "w_slosh",
+                                    config.continuous_variant.w_slosh,
+                                    error)) {
+                    return false;
+                }
+            }
             config.continuous_variant_bound = true;
 
             if (config.mode == TrialMode::OrdinaryMpcc ||
@@ -800,6 +917,69 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
         const YAML::Node shaper = root["input_shaper"];
         optionalScalar(shaper, "max_discrete_residual",
                        config.zvd_max_discrete_residual);
+        const bool smpcc_bt_mode =
+            config.mode == TrialMode::SmpccBtMonitor ||
+            config.mode == TrialMode::SmpccBtDirect;
+        if (smpcc_bt_mode) {
+            const YAML::Node tracking = root["bt_timed_tracking"];
+            if (!tracking ||
+                !requiredScalar(tracking, "progress_radius_m",
+                                config.bt_progress_radius_m, error) ||
+                !requiredScalar(tracking, "correction_deadzone_v_mps",
+                                config.correction_deadzone_v_mps, error) ||
+                !requiredScalar(
+                    tracking, "correction_deadzone_omega_radps",
+                    config.correction_deadzone_omega_radps, error) ||
+                !requiredScalar(
+                    tracking, "minimum_effective_correction_fraction",
+                    config.minimum_effective_correction_fraction, error)) {
+                if (error.empty()) {
+                    error = "BT timed-tracking contract is missing";
+                }
+                return false;
+            }
+        }
+
+        const YAML::Node disturbance = root["disturbance"];
+        if (disturbance) {
+            std::string kind;
+            if (!requiredScalar(disturbance, "id",
+                                config.disturbance.id, error) ||
+                !requiredScalar(disturbance, "kind", kind, error)) {
+                return false;
+            }
+            if (kind == "none") {
+                config.disturbance.kind = GoNoGoDisturbanceKind::None;
+            } else if (kind == "initial_pose") {
+                config.disturbance.kind =
+                    GoNoGoDisturbanceKind::InitialPose;
+                if (!requiredScalar(
+                        disturbance, "lateral_offset_m",
+                        config.disturbance.initial_lateral_offset_m, error) ||
+                    !requiredScalar(
+                        disturbance, "yaw_offset_rad",
+                        config.disturbance.initial_yaw_offset_rad, error)) {
+                    return false;
+                }
+            } else if (kind == "short_linear_speed_cap") {
+                config.disturbance.kind =
+                    GoNoGoDisturbanceKind::ShortLinearSpeedCap;
+                if (!requiredScalar(
+                        disturbance, "begin_artifact_index",
+                        config.disturbance.speed_cap_begin_index, error) ||
+                    !requiredScalar(
+                        disturbance, "cycle_count",
+                        config.disturbance.speed_cap_cycle_count, error) ||
+                    !requiredScalar(
+                        disturbance, "linear_cap_mps",
+                        config.disturbance.linear_speed_cap_mps, error)) {
+                    return false;
+                }
+            } else {
+                error = "unknown Go/No-Go disturbance kind " + kind;
+                return false;
+            }
+        }
         if (!finite(config.control_rate_hz) ||
             std::abs(config.control_rate_hz - kRequiredControlRateHz) > 1e-12 ||
             !finite(config.max_motion_sec) || config.max_motion_sec <= 0.0 ||
@@ -870,8 +1050,81 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
             !finite(config.zvd_max_discrete_residual) ||
             config.zvd_max_discrete_residual < 0.0 ||
             config.zvd_max_discrete_residual > 1.0 ||
-            config.max_consecutive_phase_holds < 0) {
+            config.max_consecutive_phase_holds < 0 ||
+            !finite(config.bt_progress_radius_m) ||
+            config.bt_progress_radius_m <= 0.0 ||
+            !finite(config.correction_deadzone_v_mps) ||
+            config.correction_deadzone_v_mps < 0.0 ||
+            !finite(config.correction_deadzone_omega_radps) ||
+            config.correction_deadzone_omega_radps < 0.0 ||
+            !finite(config.minimum_effective_correction_fraction) ||
+            config.minimum_effective_correction_fraction < 0.0 ||
+            config.minimum_effective_correction_fraction > 1.0) {
             error = "condition numeric contract rejected";
+            return false;
+        }
+        const auto same = [](double lhs, double rhs) {
+            return std::abs(lhs - rhs) <= 1e-12;
+        };
+        if (smpcc_bt_mode &&
+            (!config.pilot_only ||
+             config.formal_c3_c4_causal_comparison_ready ||
+             !same(config.bt_progress_radius_m, 0.10) ||
+             !same(config.correction_deadzone_v_mps, 0.01) ||
+             !same(config.correction_deadzone_omega_radps, 0.02) ||
+             !same(config.minimum_effective_correction_fraction, 0.10) ||
+             !same(config.continuous_variant.w_contour, 1.0) ||
+             !same(config.continuous_variant.w_lag, 0.2) ||
+             !same(config.continuous_variant.w_progress, 0.2) ||
+             !same(config.continuous_variant.w_heading, 0.0) ||
+             !same(config.continuous_variant.w_progress_coupling, 0.0) ||
+             !same(config.continuous_variant.w_yaw_rate_tracking, 0.0) ||
+             !same(config.continuous_variant.heading_feedback_gain, 0.0) ||
+             !same(config.continuous_variant.w_v, 1.0) ||
+             !same(config.continuous_variant.w_vs, 0.3) ||
+             !same(config.continuous_variant.v_ref, 0.25) ||
+             !same(config.continuous_variant.w_control, 0.1) ||
+             !same(config.continuous_variant.w_accel, 0.0) ||
+             !same(config.continuous_variant.w_smooth, 0.1) ||
+             !same(config.continuous_variant.w_alpha, 0.1) ||
+             !same(config.continuous_variant.w_du_a, 0.1) ||
+             !same(config.continuous_variant.w_du_vs, 0.1) ||
+             !same(config.continuous_variant.w_slosh, 5.0))) {
+            error = "S-MPCC-BT one-shot weights/thresholds differ from the "
+                    "code-frozen Go/No-Go contract";
+            return false;
+        }
+
+        const bool go_no_go_mode =
+            config.mode == TrialMode::BoundedTracking || smpcc_bt_mode;
+        if (!go_no_go_mode && disturbance) {
+            error = "Go/No-Go disturbance is restricted to BT/S-MPCC-BT";
+            return false;
+        }
+        if (config.disturbance.kind == GoNoGoDisturbanceKind::InitialPose &&
+            (config.disturbance.id != "D1_INITIAL_POSE" ||
+             !same(config.disturbance.initial_lateral_offset_m, 0.050) ||
+             !same(config.disturbance.initial_yaw_offset_rad, 0.100))) {
+            error = "D1 initial-pose disturbance differs from the freeze";
+            return false;
+        }
+        if (config.disturbance.kind ==
+                GoNoGoDisturbanceKind::ShortLinearSpeedCap &&
+            (config.disturbance.id != "D2_SHORT_LINEAR_SPEED_CAP" ||
+             config.disturbance.speed_cap_begin_index != 750u ||
+             config.disturbance.speed_cap_cycle_count != 10u ||
+             !same(config.disturbance.linear_speed_cap_mps, 0.320))) {
+            error = "D2 short speed-cap disturbance differs from the freeze";
+            return false;
+        }
+        if (config.disturbance.kind == GoNoGoDisturbanceKind::None &&
+            config.disturbance.id != "NONE") {
+            error = "none disturbance must use id NONE";
+            return false;
+        }
+        if (smpcc_bt_mode &&
+            config.disturbance.kind == GoNoGoDisturbanceKind::None) {
+            error = "S-MPCC-BT Go/No-Go requires frozen D1 or D2";
             return false;
         }
         const ExpectedSemantics expected = expectedSemantics(config.mode);
@@ -933,6 +1186,15 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
                 if (error.empty()) {
                     error = "BT policy contract differs from code-frozen v1";
                 }
+                return false;
+            }
+        } else if (smpcc_bt_mode) {
+            const std::string expected_implementation =
+                config.mode == TrialMode::SmpccBtMonitor
+                    ? "continuous_smpcc_bt_timed_monitor_v1"
+                    : "continuous_smpcc_bt_timed_direct_v1";
+            if (config.implementation_id != expected_implementation) {
+                error = "S-MPCC-BT implementation identity mismatch";
                 return false;
             }
         }
@@ -1177,6 +1439,249 @@ private:
     std::size_t cycle_ = 0;
 };
 
+struct SmpccBtCycleAudit {
+    bool reference_active = false;
+    bool monitor_only = false;
+    bool candidate_attempted = false;
+    bool candidate_success = false;
+    bool reference_motion_active = false;
+    std::size_t reference_index = 0;
+    std::size_t padded_stage_count = 0;
+    double bt_cmd_v = 0.0;
+    double bt_cmd_omega = 0.0;
+    double candidate_cmd_v = 0.0;
+    double candidate_cmd_omega = 0.0;
+    std::string candidate_status = "NOT_RUN";
+    double candidate_solve_time_ms = 0.0;
+    double bt_progress_abs_s = 0.0;
+    ProjectorDebugSummary bt_projector_debug;
+};
+
+bool evaluateBtCounterfactual(
+    BoundedTrackingRecoveryPolicy& policy,
+    const PhaseNominalSample& sample,
+    const SolverInput& input,
+    SolverOutput& output) {
+    output = SolverOutput{};
+    output.failure_kind = SolverFailureKind::None;
+    output.cycle_timing = input.cycle_timing;
+    const ExecutionHorizonContext& horizon = input.execution_horizon;
+    if (!horizon.active || !horizon.initial_state.valid ||
+        horizon.initial_state.linear.pending_commands.empty() ||
+        horizon.initial_state.angular.pending_commands.empty()) {
+        output.status = "BT_EXECUTION_HORIZON_UNAVAILABLE";
+        output.failure_kind = SolverFailureKind::Integrity;
+        return false;
+    }
+    const BoundedTrackingRecoveryPolicyResult desired =
+        policy.evaluate(sample, horizon.initial_state.robot);
+    if (!desired.valid) {
+        output.status = "BT_POLICY_FAILED_" + desired.status;
+        output.failure_kind = SolverFailureKind::Integrity;
+        return false;
+    }
+    VelocityCommand previous_published;
+    previous_published.linear =
+        horizon.initial_state.linear.pending_commands.back();
+    previous_published.angular =
+        horizon.initial_state.angular.pending_commands.back();
+    const BoundedTrackingRecoveryCommandTransaction transaction =
+        applyBoundedTrackingRecoveryCommandTransaction(
+            desired.command, previous_published,
+            manifest::kAccelerationMax,
+            manifest::kAngularAccelerationMax,
+            horizon.contract.dt, policy.params());
+    if (!transaction.valid) {
+        output.status = "BT_COMMAND_TRANSACTION_FAILED_" +
+            transaction.status;
+        output.failure_kind = SolverFailureKind::Integrity;
+        return false;
+    }
+    output.cmd_v = transaction.command.linear;
+    output.cmd_omega = transaction.command.angular;
+    output.success = true;
+    output.status = transaction.rate_limited
+        ? "BT_BOUNDED_TRACKING_RATE_LIMITED"
+        : "BT_BOUNDED_TRACKING_COMMAND_ACCEPTED";
+    output.progress_abs_s = sample.s;
+    output.progress_s = 0.0;
+    output.projector_debug.raw_valid = true;
+    output.projector_debug.guarded_valid = true;
+    output.projector_debug.raw_s = sample.s;
+    output.projector_debug.guarded_s = sample.s;
+    output.projector_debug.raw_distance = std::hypot(
+        horizon.initial_state.robot.x - sample.x,
+        horizon.initial_state.robot.y - sample.y);
+    output.projector_debug.guarded_distance =
+        output.projector_debug.raw_distance;
+    return true;
+}
+
+class SmpccBtSession final : public SolverSession {
+public:
+    SmpccBtSession(SpmpcProblem& problem,
+                   const NominalSequenceArtifact& artifact,
+                   bool monitor_only,
+                   double phase_half_width_m)
+        : problem_(problem),
+          artifact_(artifact),
+          monitor_only_(monitor_only),
+          phase_half_width_m_(phase_half_width_m) {
+        std::string error;
+        policy_configured_ = policy_.configure(
+            boundedTrackingRecoveryPolicyV1Params(), error);
+    }
+
+    const SmpccBtCycleAudit& lastAudit() const { return last_audit_; }
+    void setCycle(std::size_t cycle) { cycle_ = cycle; }
+
+    bool solve(const SolverInput& input, SolverOutput& output) override {
+        last_audit_ = SmpccBtCycleAudit{};
+        last_audit_.monitor_only = monitor_only_;
+        if (!policy_configured_ || !artifact_.valid() || artifact_.empty() ||
+            !input.execution_horizon.active ||
+            !input.execution_horizon.initial_state.valid ||
+            !finite(phase_half_width_m_) || phase_half_width_m_ <= 0.0) {
+            output = SolverOutput{};
+            output.status = "SMPCC_BT_REFERENCE_CONTEXT_UNAVAILABLE";
+            output.failure_kind = SolverFailureKind::Integrity;
+            return false;
+        }
+        if (cycle_ >= artifact_.size()) {
+            output = SolverOutput{};
+            output.status = "SMPCC_BT_CLOCK_OUT_OF_RANGE";
+            output.failure_kind = SolverFailureKind::Integrity;
+            return false;
+        }
+
+        constexpr int kContinuousHorizonSteps =
+            acados_manifest::generated_bounds::kMainHorizonSteps;
+        SolverInput timed_input = input;
+        timed_input.horizon_steps = kContinuousHorizonSteps;
+        timed_input.min_progress_s = 0.0;
+        BtTimedReferenceContext& reference =
+            timed_input.bt_timed_reference;
+        reference = BtTimedReferenceContext{};
+        reference.active = true;
+        reference.contract_id = kBtTimedReferenceContractId;
+        reference.artifact_contract_id = artifact_.metadata().contract_id;
+        reference.horizon_steps = kContinuousHorizonSteps;
+        reference.current_index = cycle_;
+        reference.artifact_terminal_index = artifact_.size() - 1u;
+        reference.phase_half_width_m = phase_half_width_m_;
+        reference.complete_artifact_clock =
+            artifact_.metadata().complete_terminal_tail &&
+            artifact_.metadata().terminal_zero_hold_steps >=
+                static_cast<std::size_t>(kContinuousHorizonSteps + 1);
+        reference.stages.reserve(
+            static_cast<std::size_t>(kContinuousHorizonSteps + 1));
+        double yaw_anchor =
+            input.execution_horizon.initial_state.robot.yaw;
+        for (int stage = 0; stage <= kContinuousHorizonSteps; ++stage) {
+            const std::size_t requested_index = cycle_ +
+                static_cast<std::size_t>(stage);
+            const std::size_t index = std::min(
+                requested_index, reference.artifact_terminal_index);
+            if (requested_index > reference.artifact_terminal_index) {
+                ++reference.padded_stage_count;
+            }
+            const PhaseNominalSample* sample = artifact_.sample(index);
+            if (sample == nullptr) {
+                output = SolverOutput{};
+                output.status = "SMPCC_BT_REFERENCE_SAMPLE_MISSING";
+                output.failure_kind = SolverFailureKind::Integrity;
+                return false;
+            }
+            BtTimedReferenceStage nominal;
+            nominal.valid = true;
+            nominal.artifact_index = index;
+            nominal.x = sample->x;
+            nominal.y = sample->y;
+            nominal.yaw = yaw_anchor + std::atan2(
+                std::sin(sample->yaw - yaw_anchor),
+                std::cos(sample->yaw - yaw_anchor));
+            yaw_anchor = nominal.yaw;
+            nominal.s = sample->s;
+            nominal.v = sample->v;
+            nominal.omega = sample->omega;
+            nominal.eta_x = sample->eta_x;
+            nominal.eta_x_dot = sample->eta_x_dot;
+            nominal.eta_y = sample->eta_y;
+            nominal.eta_y_dot = sample->eta_y_dot;
+            nominal.a = sample->a;
+            nominal.alpha = sample->alpha;
+            nominal.v_s = sample->v_s;
+            nominal.u_pub_v = sample->u_pub_v;
+            nominal.u_pub_omega = sample->u_pub_omega;
+            reference.stages.push_back(nominal);
+        }
+        if (!reference.complete_artifact_clock) {
+            output = SolverOutput{};
+            output.status = "SMPCC_BT_COMPLETE_ARTIFACT_CLOCK_REQUIRED";
+            output.failure_kind = SolverFailureKind::Integrity;
+            return false;
+        }
+
+        const PhaseNominalSample* current = artifact_.sample(cycle_);
+        SolverOutput bt_output;
+        if (current == nullptr ||
+            !evaluateBtCounterfactual(
+                policy_, *current, timed_input, bt_output)) {
+            output = bt_output;
+            if (output.status.empty()) {
+                output.status = "SMPCC_BT_COUNTERFACTUAL_FAILED";
+            }
+            return false;
+        }
+
+        last_audit_.reference_active = true;
+        last_audit_.reference_motion_active =
+            std::abs(input.execution_horizon.initial_state.robot.v) > 0.03 ||
+            std::abs(input.execution_horizon.initial_state.robot.omega) >
+                0.03;
+        last_audit_.reference_index = cycle_;
+        last_audit_.padded_stage_count = reference.padded_stage_count;
+        last_audit_.bt_cmd_v = bt_output.cmd_v;
+        last_audit_.bt_cmd_omega = bt_output.cmd_omega;
+        last_audit_.bt_progress_abs_s = bt_output.progress_abs_s;
+        last_audit_.bt_projector_debug = bt_output.projector_debug;
+        last_audit_.candidate_attempted = true;
+        SolverOutput candidate;
+        const bool candidate_ok = problem_.solve(timed_input, candidate);
+        last_audit_.candidate_success = candidate_ok && candidate.success;
+        last_audit_.candidate_status = candidate.status;
+        last_audit_.candidate_solve_time_ms = candidate.solver_time_ms;
+        last_audit_.candidate_cmd_v = candidate.cmd_v;
+        last_audit_.candidate_cmd_omega = candidate.cmd_omega;
+        if (!monitor_only_) {
+            output = candidate;
+            return candidate_ok;
+        }
+
+        output = bt_output;
+        // Preserve optimizer diagnostics in monitor mode while the command and
+        // success contract remain those of BT.  A failed candidate is an audit
+        // event, not permission to stop or alter the Plant.
+        output.pre_solve_snapshot = candidate.pre_solve_snapshot;
+        output.predicted_horizon = candidate.predicted_horizon;
+        output.solver_time_ms = candidate.solver_time_ms;
+        output.status = "SMPCC_BT_MONITOR_BT_PUBLISHED_" + candidate.status;
+        output.success = true;
+        output.failure_kind = SolverFailureKind::None;
+        return true;
+    }
+
+private:
+    SpmpcProblem& problem_;
+    const NominalSequenceArtifact& artifact_;
+    bool monitor_only_ = false;
+    double phase_half_width_m_ = 0.0;
+    BoundedTrackingRecoveryPolicy policy_;
+    bool policy_configured_ = false;
+    std::size_t cycle_ = 0;
+    SmpccBtCycleAudit last_audit_;
+};
+
 struct ZvdAudit {
     bool valid = false;
     double weights[3] = {1.0, 0.0, 0.0};
@@ -1284,7 +1789,9 @@ VariantConfig controllerVariant(TrialMode mode,
                                 const ConditionConfig& condition) {
     if (mode == TrialMode::OrdinaryMpcc ||
         mode == TrialMode::InputShaping ||
-        mode == TrialMode::SmoothMatchMpcc) {
+        mode == TrialMode::SmoothMatchMpcc ||
+        mode == TrialMode::SmpccBtMonitor ||
+        mode == TrialMode::SmpccBtDirect) {
         VariantConfig variant = condition.continuous_variant;
         if (mode != TrialMode::SmoothMatchMpcc) return variant;
         variant.v_ref /= condition.smooth_global_time_scale;
@@ -1867,6 +2374,16 @@ bool openCycleCsv(const std::string& path, std::ofstream& output,
     output
         << "schema,cycle_id,time_sec,window,x,y,yaw,v,omega,ax,ay,"
         << "tracking_error_m,progress_s,true_height_m,measured_height_m,"
+        << "timed_reference_valid,timed_reference_index,"
+        << "timed_reference_t_sec,timed_reference_x,timed_reference_y,"
+        << "timed_reference_yaw,timed_reference_s,timed_reference_v,"
+        << "timed_reference_omega,timed_reference_position_error_m,"
+        << "timed_reference_longitudinal_error_m,"
+        << "timed_reference_left_error_m,"
+        << "timed_reference_yaw_error_rad,"
+        << "timed_reference_progress_error_m,"
+        << "execution_aligned_state_valid,execution_aligned_x,"
+        << "execution_aligned_y,execution_aligned_yaw,"
         << "observer_height_m,observer_eta_x,observer_eta_x_dot,"
         << "observer_eta_y,observer_eta_y_dot,solver_success,"
         << "solve_attempted,"
@@ -1889,6 +2406,22 @@ bool openCycleCsv(const std::string& path, std::ofstream& output,
         << "execution_horizon_rejected_candidate_count,"
         << "selected_execution_horizon_max_normalized_error,"
         << "acados_solve_time_ms,backend_wall_time_ms,"
+        << "command_disturbance_active,command_disturbance_modified,"
+        << "pre_disturbance_cmd_v,"
+        << "pre_disturbance_cmd_omega,bt_timed_reference_active,"
+        << "bt_reference_motion_active,"
+        << "smpcc_monitor_only,smpcc_candidate_attempted,"
+        << "smpcc_candidate_success,smpcc_candidate_status,"
+        << "smpcc_candidate_solve_time_ms,bt_reference_index,"
+        << "bt_reference_padded_stages,bt_counterfactual_cmd_v,"
+        << "bt_counterfactual_cmd_omega,bt_progress_abs_s,"
+        << "bt_projector_raw_valid,bt_projector_guarded_valid,"
+        << "bt_projector_raw_s,bt_projector_guarded_s,"
+        << "bt_projector_raw_distance_m,"
+        << "bt_projector_guarded_distance_m,smpcc_candidate_cmd_v,"
+        << "smpcc_candidate_cmd_omega,candidate_delta_v_mps,"
+        << "candidate_delta_omega_radps,correction_eligible,"
+        << "effective_correction,"
         << "final_cmd_v,final_cmd_omega,command_source,publish_stamp_ns,"
         << "plant_publish_time_sec,linear_effective_time_sec,"
         << "angular_effective_time_sec\n";
@@ -1906,6 +2439,24 @@ bool writeCycle(std::ofstream& output, const CycleRecord& record) {
         << record.tracking_error_m << ',' << record.progress_s << ','
         << record.plant.true_height_m << ','
         << record.plant.measured_height_m << ','
+        << (record.timed_reference_valid ? "true" : "false") << ','
+        << record.timed_reference_index << ','
+        << record.timed_reference_t_sec << ','
+        << record.timed_reference_x << ','
+        << record.timed_reference_y << ','
+        << record.timed_reference_yaw << ','
+        << record.timed_reference_s << ','
+        << record.timed_reference_v << ','
+        << record.timed_reference_omega << ','
+        << record.timed_reference_position_error_m << ','
+        << record.timed_reference_longitudinal_error_m << ','
+        << record.timed_reference_left_error_m << ','
+        << record.timed_reference_yaw_error_rad << ','
+        << record.timed_reference_progress_error_m << ','
+        << (record.execution_aligned_state_valid ? "true" : "false") << ','
+        << record.execution_aligned_x << ','
+        << record.execution_aligned_y << ','
+        << record.execution_aligned_yaw << ','
         << record.observer_height_m << ','
         << record.observer.eta_x << ',' << record.observer.eta_x_dot << ','
         << record.observer.eta_y << ',' << record.observer.eta_y_dot << ','
@@ -1952,6 +2503,34 @@ bool writeCycle(std::ofstream& output, const CycleRecord& record) {
         << record.selected_execution_horizon_max_normalized_error << ','
         << record.acados_solve_time_ms << ','
         << record.backend_wall_time_ms << ','
+        << (record.command_disturbance_active ? "true" : "false") << ','
+        << (record.command_disturbance_modified ? "true" : "false") << ','
+        << record.pre_disturbance_cmd_v << ','
+        << record.pre_disturbance_cmd_omega << ','
+        << (record.bt_timed_reference_active ? "true" : "false") << ','
+        << (record.bt_reference_motion_active ? "true" : "false") << ','
+        << (record.smpcc_monitor_only ? "true" : "false") << ','
+        << (record.smpcc_candidate_attempted ? "true" : "false") << ','
+        << (record.smpcc_candidate_success ? "true" : "false") << ','
+        << csvEscape(record.smpcc_candidate_status) << ','
+        << record.smpcc_candidate_solve_time_ms << ','
+        << record.bt_reference_index << ','
+        << record.bt_reference_padded_stages << ','
+        << record.bt_counterfactual_cmd_v << ','
+        << record.bt_counterfactual_cmd_omega << ','
+        << record.bt_progress_abs_s << ','
+        << (record.bt_projector_raw_valid ? "true" : "false") << ','
+        << (record.bt_projector_guarded_valid ? "true" : "false") << ','
+        << record.bt_projector_raw_s << ','
+        << record.bt_projector_guarded_s << ','
+        << record.bt_projector_raw_distance_m << ','
+        << record.bt_projector_guarded_distance_m << ','
+        << record.smpcc_candidate_cmd_v << ','
+        << record.smpcc_candidate_cmd_omega << ','
+        << record.candidate_delta_v_mps << ','
+        << record.candidate_delta_omega_radps << ','
+        << (record.correction_eligible ? "true" : "false") << ','
+        << (record.effective_correction ? "true" : "false") << ','
         << record.final_command.linear << ','
         << record.final_command.angular << ','
         << commandSourceName(record.command_source) << ','
@@ -1972,9 +2551,16 @@ bool writeSummary(
     const SolverFailureDiagnostic& solver_failure,
     const CoordinatorStopDiagnostic& coordinator_stop,
     const std::vector<double>& measured_heights,
+    const std::vector<double>& motion_measured_heights,
+    const std::vector<double>& fixed_tail_measured_heights,
     const std::vector<double>& true_heights,
     const std::vector<double>& observer_heights,
     const std::vector<double>& tracking_errors,
+    const std::vector<double>& timed_reference_position_errors,
+    const std::vector<double>& timed_reference_abs_longitudinal_errors,
+    const std::vector<double>& timed_reference_abs_left_errors,
+    const std::vector<double>& timed_reference_abs_yaw_errors,
+    const std::vector<double>& timed_reference_abs_progress_errors,
     const std::vector<double>& motion_speeds,
     const std::vector<double>& motion_accelerations,
     const std::vector<double>& motion_jerks,
@@ -1983,6 +2569,9 @@ bool writeSummary(
     const std::string& completion_reason,
     double motion_end_sec,
     double final_goal_error_m,
+    double final_goal_yaw_error_rad,
+    double first_goal_tolerance_sec,
+    double first_settled_goal_sec,
     const ZvdAudit& zvd,
     const std::string& runtime_error,
     std::string& error) {
@@ -2064,9 +2653,67 @@ bool writeSummary(
         << jsonEscape(plant_config.freeze_id) << "\",\n"
         << "  \"artifact_contract_id\": \""
         << jsonEscape(artifact.metadata().contract_id) << "\",\n"
+        << "  \"go_no_go_disturbance\": {\n"
+        << "    \"id\": \"" << jsonEscape(condition.disturbance.id)
+        << "\",\n"
+        << "    \"initial_lateral_offset_m\": "
+        << jsonNumber(condition.disturbance.initial_lateral_offset_m)
+        << ",\n"
+        << "    \"initial_yaw_offset_rad\": "
+        << jsonNumber(condition.disturbance.initial_yaw_offset_rad) << ",\n"
+        << "    \"speed_cap_begin_index\": "
+        << condition.disturbance.speed_cap_begin_index << ",\n"
+        << "    \"speed_cap_cycle_count\": "
+        << condition.disturbance.speed_cap_cycle_count << ",\n"
+        << "    \"linear_speed_cap_mps\": "
+        << jsonNumber(condition.disturbance.linear_speed_cap_mps) << "\n"
+        << "  },\n"
+        << "  \"smpcc_bt_go_no_go_audit\": {\n"
+        << "    \"bt_progress_radius_m\": "
+        << jsonNumber(condition.bt_progress_radius_m) << ",\n"
+        << "    \"correction_deadzone_v_mps\": "
+        << jsonNumber(condition.correction_deadzone_v_mps) << ",\n"
+        << "    \"correction_deadzone_omega_radps\": "
+        << jsonNumber(condition.correction_deadzone_omega_radps) << ",\n"
+        << "    \"minimum_effective_correction_fraction\": "
+        << jsonNumber(condition.minimum_effective_correction_fraction)
+        << ",\n"
+        << "    \"disturbance_active_cycles\": "
+        << counters.disturbance_active_cycles << ",\n"
+        << "    \"disturbance_modified_cycles\": "
+        << counters.disturbance_modified_cycles << ",\n"
+        << "    \"bt_timed_reference_cycles\": "
+        << counters.bt_timed_reference_cycles << ",\n"
+        << "    \"bt_reference_padded_stage_count\": "
+        << counters.bt_reference_padded_stage_count << ",\n"
+        << "    \"candidate_attempts\": "
+        << counters.smpcc_candidate_attempts << ",\n"
+        << "    \"candidate_failures\": "
+        << counters.smpcc_candidate_failures << ",\n"
+        << "    \"candidate_status_counts\": ";
+    writeJsonStringCounts(output, counters.smpcc_candidate_status_counts);
+    output << ",\n"
+        << "    \"correction_eligible_cycles\": "
+        << counters.correction_eligible_cycles << ",\n"
+        << "    \"effective_correction_cycles\": "
+        << counters.effective_correction_cycles << ",\n"
+        << "    \"effective_correction_fraction\": "
+        << jsonNumber(counters.correction_eligible_cycles > 0u
+               ? static_cast<double>(counters.effective_correction_cycles) /
+                     static_cast<double>(counters.correction_eligible_cycles)
+               : std::numeric_limits<double>::quiet_NaN()) << ",\n"
+        << "    \"max_abs_candidate_delta_v_mps\": "
+        << jsonNumber(counters.max_abs_candidate_delta_v) << ",\n"
+        << "    \"max_abs_candidate_delta_omega_radps\": "
+        << jsonNumber(counters.max_abs_candidate_delta_omega) << "\n"
+        << "  },\n"
         << "  \"trial\": {\n"
         << "    \"control_rate_hz\": " << condition.control_rate_hz << ",\n"
         << "    \"motion_end_sec\": " << motion_end_sec << ",\n"
+        << "    \"first_goal_tolerance_sec\": "
+        << jsonNumber(first_goal_tolerance_sec) << ",\n"
+        << "    \"first_settled_goal_sec\": "
+        << jsonNumber(first_settled_goal_sec) << ",\n"
         << "    \"fixed_tail_sec\": " << condition.fixed_tail_sec << ",\n"
         << "    \"publish_latency_sec\": "
         << condition.publish_latency_sec << ",\n"
@@ -2109,6 +2756,12 @@ bool writeSummary(
         << jsonNumber(nearestRankQuantile(true_heights, 0.95)) << ",\n"
         << "    \"internal_observer_height_q95_m\": "
         << jsonNumber(nearestRankQuantile(observer_heights, 0.95)) << ",\n"
+        << "    \"external_measured_height_motion_q95_m\": "
+        << jsonNumber(nearestRankQuantile(
+               motion_measured_heights, 0.95)) << ",\n"
+        << "    \"external_measured_height_fixed_tail_q95_m\": "
+        << jsonNumber(nearestRankQuantile(
+               fixed_tail_measured_heights, 0.95)) << ",\n"
         << "    \"tracking_rms_m\": "
         << jsonNumber(rms(tracking_errors)) << ",\n"
         << "    \"tracking_q95_m\": "
@@ -2117,8 +2770,50 @@ bool writeSummary(
                    ? nearestRankQuantile(tracking_errors, 0.95)
                    : std::numeric_limits<double>::quiet_NaN())
         << ",\n"
+        << "    \"tracking_max_m\": "
+        << jsonNumber(nearestRankQuantile(tracking_errors, 1.0)) << ",\n"
+        << "    \"timed_reference_sample_count\": "
+        << timed_reference_position_errors.size() << ",\n"
+        << "    \"timed_reference_position_rms_m\": "
+        << jsonNumber(rms(timed_reference_position_errors)) << ",\n"
+        << "    \"timed_reference_position_q95_m\": "
+        << jsonNumber(
+               runtime_ok
+                   ? nearestRankQuantile(
+                         timed_reference_position_errors, 0.95)
+                   : std::numeric_limits<double>::quiet_NaN())
+        << ",\n"
+        << "    \"timed_reference_position_max_m\": "
+        << jsonNumber(nearestRankQuantile(
+               timed_reference_position_errors, 1.0)) << ",\n"
+        << "    \"timed_reference_abs_longitudinal_error_q95_m\": "
+        << jsonNumber(nearestRankQuantile(
+               timed_reference_abs_longitudinal_errors, 0.95)) << ",\n"
+        << "    \"timed_reference_abs_longitudinal_error_max_m\": "
+        << jsonNumber(nearestRankQuantile(
+               timed_reference_abs_longitudinal_errors, 1.0)) << ",\n"
+        << "    \"timed_reference_abs_left_error_q95_m\": "
+        << jsonNumber(nearestRankQuantile(
+               timed_reference_abs_left_errors, 0.95)) << ",\n"
+        << "    \"timed_reference_abs_left_error_max_m\": "
+        << jsonNumber(nearestRankQuantile(
+               timed_reference_abs_left_errors, 1.0)) << ",\n"
+        << "    \"timed_reference_abs_yaw_error_q95_rad\": "
+        << jsonNumber(nearestRankQuantile(
+               timed_reference_abs_yaw_errors, 0.95)) << ",\n"
+        << "    \"timed_reference_abs_yaw_error_max_rad\": "
+        << jsonNumber(nearestRankQuantile(
+               timed_reference_abs_yaw_errors, 1.0)) << ",\n"
+        << "    \"timed_reference_abs_progress_error_q95_m\": "
+        << jsonNumber(nearestRankQuantile(
+               timed_reference_abs_progress_errors, 0.95)) << ",\n"
+        << "    \"timed_reference_abs_progress_error_max_m\": "
+        << jsonNumber(nearestRankQuantile(
+               timed_reference_abs_progress_errors, 1.0)) << ",\n"
         << "    \"final_goal_error_m\": "
-        << jsonNumber(final_goal_error_m) << "\n"
+        << jsonNumber(final_goal_error_m) << ",\n"
+        << "    \"final_goal_yaw_error_rad\": "
+        << jsonNumber(final_goal_yaw_error_rad) << "\n"
         << "  },\n"
         << "  \"motion_metrics\": {\n"
         << "    \"statistics_unit\": \"motion_cycle\",\n"
@@ -2168,7 +2863,10 @@ bool writeSummary(
         << "    \"backend\": \""
         << (counters.solver_id.empty()
                 ? "NOT_RECORDED"
-                : kSolverBackendDelayAugmentedPhaseAcados)
+                : ((condition.mode == TrialMode::SmpccBtMonitor ||
+                    condition.mode == TrialMode::SmpccBtDirect)
+                    ? kSolverBackendContinuousMpccAcados
+                    : kSolverBackendDelayAugmentedPhaseAcados))
         << "\",\n"
         << "    \"solver_id\": \""
         << jsonEscape(counters.solver_id) << "\",\n"
@@ -2665,6 +3363,8 @@ bool writeSummary(
         << jsonNumber(condition.continuous_variant.w_du_a)
         << ",\"w_du_vs\":"
         << jsonNumber(condition.continuous_variant.w_du_vs)
+        << ",\"w_slosh\":"
+        << jsonNumber(condition.continuous_variant.w_slosh)
         << "},\n"
         << "    \"continuous_terminal_controller\": {"
         << "\"slowdown_distance_m\":"
@@ -2758,6 +3458,14 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         cleanup_temporary();
         return kConfigurationExit;
     }
+    if ((condition.mode == TrialMode::SmpccBtMonitor ||
+         condition.mode == TrialMode::SmpccBtDirect) &&
+        !args.frozen_session_sha256.empty()) {
+        std::cerr << "ERROR: S-MPCC-BT Go/No-Go is development-only and "
+                  << "cannot start a formal trial\n";
+        cleanup_temporary();
+        return kConfigurationExit;
+    }
     if (condition.tail_commit_phase_rejoining &&
         !args.frozen_session_sha256.empty()) {
         std::cerr << "ERROR: 15D Tail-Commit candidate is development-only "
@@ -2816,8 +3524,21 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         cleanup_temporary();
         return kConfigurationExit;
     }
+    if ((condition.mode == TrialMode::SmpccBtMonitor ||
+         condition.mode == TrialMode::SmpccBtDirect) &&
+        (!artifact.metadata().complete_terminal_tail ||
+         artifact.metadata().terminal_zero_hold_steps <
+             static_cast<std::size_t>(
+                 acados_manifest::generated_bounds::kMainHorizonSteps + 1))) {
+        std::cerr << "ERROR: S-MPCC-BT requires a validated complete artifact "
+                  << "clock with at least N+1 terminal zero-hold rows\n";
+        cleanup_temporary();
+        return kConfigurationExit;
+    }
     if (condition.mode == TrialMode::OfflineReplay ||
         condition.mode == TrialMode::BoundedTracking ||
+        condition.mode == TrialMode::SmpccBtMonitor ||
+        condition.mode == TrialMode::SmpccBtDirect ||
         condition.mode == TrialMode::ResidualNoGate ||
         condition.mode == TrialMode::PhaseRejoinFull) {
         const PhaseNominalSample* final_sample =
@@ -2856,8 +3577,22 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     }
 
     IndependentScoutLiquidPlant plant;
+    IndependentPlantInitialPose trial_initial_pose = path.initial_pose;
+    if (condition.disturbance.kind ==
+            GoNoGoDisturbanceKind::InitialPose) {
+        // Positive lateral offset is the path-frame left normal.  This keeps
+        // D1 invariant to the world-frame orientation of the frozen path.
+        trial_initial_pose.x +=
+            -std::sin(path.initial_pose.yaw) *
+            condition.disturbance.initial_lateral_offset_m;
+        trial_initial_pose.y +=
+            std::cos(path.initial_pose.yaw) *
+            condition.disturbance.initial_lateral_offset_m;
+        trial_initial_pose.yaw +=
+            condition.disturbance.initial_yaw_offset_rad;
+    }
     if (!plant.configure(plant_config, error) ||
-        !plant.reset(args.seed, path.initial_pose, error)) {
+        !plant.reset(args.seed, trial_initial_pose, error)) {
         std::cerr << "ERROR: independent Plant initialization failed: "
                   << error << '\n';
         cleanup_temporary();
@@ -2887,6 +3622,7 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     }
     std::unique_ptr<SpmpcProblem> production_problem;
     std::unique_ptr<OfflineReplaySession> replay_session;
+    std::unique_ptr<SmpccBtSession> smpcc_bt_session;
     std::unique_ptr<ZvdInputShapingSession> shaping_session;
     SolverSession* solver_session = nullptr;
 
@@ -2910,6 +3646,25 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         replay_session.reset(new OfflineReplaySession(
             artifact, condition.mode == TrialMode::BoundedTracking));
         solver_session = replay_session.get();
+    } else if (condition.mode == TrialMode::SmpccBtMonitor ||
+               condition.mode == TrialMode::SmpccBtDirect) {
+        solver.solver_backend = kSolverBackendContinuousMpccAcados;
+        production_problem.reset(new SpmpcProblem());
+        const SolverConfigureResult configured =
+            production_problem->configure(solver, variant);
+        if (!configured.success) {
+            std::cerr << "ERROR: S-MPCC-BT continuous solver unavailable: "
+                      << configured.status << ": " << configured.detail
+                      << '\n';
+            cleanup_temporary();
+            return kConfigurationExit;
+        }
+        production_problem->setReferencePath(path.reference);
+        smpcc_bt_session.reset(new SmpccBtSession(
+            *production_problem, artifact,
+            condition.mode == TrialMode::SmpccBtMonitor,
+            condition.bt_progress_radius_m));
+        solver_session = smpcc_bt_session.get();
     } else if (condition.mode == TrialMode::ResidualNoGate ||
                condition.mode == TrialMode::PhaseRejoinFull) {
         if (!DelayAugmentedPhaseAcadosSolver::compiled()) {
@@ -2951,7 +3706,6 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         cleanup_temporary();
         return kConfigurationExit;
     }
-
     ControlCycleEngine engine(*solver_session);
     if (!engine.configureCommandPipeline(
             commandPipelineConfig(condition.control_rate_hz), error) ||
@@ -3014,6 +3768,8 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     ExecutionHorizonContextBuilder execution_builder;
     const bool execution_horizon_required =
         condition.mode == TrialMode::BoundedTracking ||
+        condition.mode == TrialMode::SmpccBtMonitor ||
+        condition.mode == TrialMode::SmpccBtDirect ||
         condition.mode == TrialMode::ResidualNoGate ||
         condition.mode == TrialMode::PhaseRejoinFull;
     if (execution_horizon_required) {
@@ -3050,9 +3806,16 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     }
 
     std::vector<double> measured_heights;
+    std::vector<double> motion_measured_heights;
+    std::vector<double> fixed_tail_measured_heights;
     std::vector<double> true_heights;
     std::vector<double> observer_heights;
     std::vector<double> tracking_errors;
+    std::vector<double> timed_reference_position_errors;
+    std::vector<double> timed_reference_abs_longitudinal_errors;
+    std::vector<double> timed_reference_abs_left_errors;
+    std::vector<double> timed_reference_abs_yaw_errors;
+    std::vector<double> timed_reference_abs_progress_errors;
     std::vector<double> motion_speeds;
     std::vector<double> motion_accelerations;
     std::vector<double> motion_jerks;
@@ -3067,6 +3830,12 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     SolverFailureDiagnostic first_solver_failure;
     CoordinatorStopDiagnostic first_coordinator_stop;
     double last_motion_time_sec = 0.0;
+    double first_goal_tolerance_sec =
+        std::numeric_limits<double>::quiet_NaN();
+    double first_settled_goal_sec =
+        std::numeric_limits<double>::quiet_NaN();
+    const TrajectoryPoint goal =
+        path.reference.sample(path.reference.length());
     std::uint64_t next_cycle_id = 1;
 
     const auto updateObserverAfterAdvance = [&]() -> bool {
@@ -3090,10 +3859,29 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
                                   bool motion) -> bool {
         if (!writeCycle(cycle_output, record)) return false;
         measured_heights.push_back(record.plant.measured_height_m);
+        if (motion) {
+            motion_measured_heights.push_back(
+                record.plant.measured_height_m);
+        } else {
+            fixed_tail_measured_heights.push_back(
+                record.plant.measured_height_m);
+        }
         true_heights.push_back(record.plant.true_height_m);
         observer_heights.push_back(record.observer_height_m);
         if (motion) {
             tracking_errors.push_back(record.tracking_error_m);
+            if (record.timed_reference_valid) {
+                timed_reference_position_errors.push_back(
+                    record.timed_reference_position_error_m);
+                timed_reference_abs_longitudinal_errors.push_back(std::abs(
+                    record.timed_reference_longitudinal_error_m));
+                timed_reference_abs_left_errors.push_back(std::abs(
+                    record.timed_reference_left_error_m));
+                timed_reference_abs_yaw_errors.push_back(std::abs(
+                    record.timed_reference_yaw_error_rad));
+                timed_reference_abs_progress_errors.push_back(std::abs(
+                    record.timed_reference_progress_error_m));
+            }
             motion_speeds.push_back(std::abs(record.plant.v));
             motion_accelerations.push_back(std::hypot(
                 record.plant.acceleration,
@@ -3125,10 +3913,34 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             break;
         }
         const IndependentPlantState state = plant.state();
+        const double current_goal_error = std::hypot(
+            state.x - goal.x, state.y - goal.y);
+        if (!finite(first_goal_tolerance_sec) &&
+            current_goal_error <=
+                condition.task_success_goal_tolerance_m) {
+            first_goal_tolerance_sec = time_sec;
+        }
+        if (!finite(first_settled_goal_sec) &&
+            current_goal_error <=
+                condition.task_success_goal_tolerance_m &&
+            std::abs(state.v) <= solver.terminal.goal_reached_max_speed &&
+            std::abs(state.omega) <=
+                solver.terminal.goal_reached_max_omega) {
+            first_settled_goal_sec = time_sec;
+        }
         const ProgressProjection projection = projector.project(
             path.reference, state.x, state.y);
         if (!projection.valid) {
             runtime_error = "tracking projection failed";
+            break;
+        }
+        const PhaseNominalSample* timed_reference = artifact.sample(cycle);
+        const bool timed_reference_required =
+            condition.mode == TrialMode::BoundedTracking ||
+            condition.mode == TrialMode::SmpccBtMonitor ||
+            condition.mode == TrialMode::SmpccBtDirect;
+        if (timed_reference_required && timed_reference == nullptr) {
+            runtime_error = "timed reference sample missing";
             break;
         }
         RobotState robot;
@@ -3188,8 +4000,20 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             }
             solver_input.execution_horizon = built.context;
         }
+        ProgressProjection execution_aligned_projection = projection;
+        if (solver_input.execution_horizon.active) {
+            const RobotState& aligned_robot =
+                solver_input.execution_horizon.initial_state.robot;
+            execution_aligned_projection = projector.project(
+                path.reference, aligned_robot.x, aligned_robot.y);
+            if (!execution_aligned_projection.valid) {
+                runtime_error = "execution-aligned tracking projection failed";
+                break;
+            }
+        }
 
         if (replay_session) replay_session->setCycle(cycle);
+        if (smpcc_bt_session) smpcc_bt_session->setCycle(cycle);
         const double plant_publish_time_sec =
             secondsBetween(estimate.expected_publish_stamp_ns, kStampBaseNs);
         sink.arm(plant_publish_time_sec,
@@ -3209,7 +4033,9 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             request.execution_front_robot = robot;
             request.execution_front_slosh = observer;
         }
-        request.solver_origin_at_execution_front = false;
+        request.solver_origin_at_execution_front =
+            condition.mode == TrialMode::SmpccBtMonitor ||
+            condition.mode == TrialMode::SmpccBtDirect;
         request.execution_front_steps = compiled.execution_front_steps;
         request.phase_time_sec = static_cast<double>(
             estimate.expected_publish_stamp_ns) * kSecondsPerNanosecond;
@@ -3219,6 +4045,16 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         request.publish_enabled = true;
         request.command_sink = &sink;
         request.command_history = &command_history;
+        if (condition.disturbance.kind ==
+                GoNoGoDisturbanceKind::ShortLinearSpeedCap &&
+            cycle >= condition.disturbance.speed_cap_begin_index &&
+            cycle < condition.disturbance.speed_cap_begin_index +
+                condition.disturbance.speed_cap_cycle_count) {
+            request.pre_publication_linear_cap.active = true;
+            request.pre_publication_linear_cap.max_linear =
+                condition.disturbance.linear_speed_cap_mps;
+            request.pre_publication_linear_cap.id = condition.disturbance.id;
+        }
         const ControlCycleResult result = engine.step(request);
         if (result.telemetry.solve_attempted && !result.solver_success &&
             !first_solver_failure.valid) {
@@ -3237,6 +4073,42 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         record.plant = state;
         record.tracking_error_m = projection.distance;
         record.progress_s = projection.s;
+        if (timed_reference != nullptr) {
+            record.timed_reference_valid = true;
+            record.timed_reference_index = timed_reference->index;
+            record.timed_reference_t_sec = timed_reference->t;
+            record.timed_reference_x = timed_reference->x;
+            record.timed_reference_y = timed_reference->y;
+            record.timed_reference_yaw = timed_reference->yaw;
+            record.timed_reference_s = timed_reference->s;
+            record.timed_reference_v = timed_reference->v;
+            record.timed_reference_omega = timed_reference->omega;
+            const double timed_dx = state.x - timed_reference->x;
+            const double timed_dy = state.y - timed_reference->y;
+            const double timed_cos = std::cos(timed_reference->yaw);
+            const double timed_sin = std::sin(timed_reference->yaw);
+            record.timed_reference_position_error_m =
+                std::hypot(timed_dx, timed_dy);
+            // Signed observed-minus-reference errors in the reference Frenet
+            // frame.  Positive left error points along the path left normal.
+            record.timed_reference_longitudinal_error_m =
+                timed_cos * timed_dx + timed_sin * timed_dy;
+            record.timed_reference_left_error_m =
+                -timed_sin * timed_dx + timed_cos * timed_dy;
+            record.timed_reference_yaw_error_rad = std::atan2(
+                std::sin(state.yaw - timed_reference->yaw),
+                std::cos(state.yaw - timed_reference->yaw));
+            record.timed_reference_progress_error_m =
+                projection.s - timed_reference->s;
+        }
+        if (solver_input.execution_horizon.active) {
+            const RobotState& aligned_robot =
+                solver_input.execution_horizon.initial_state.robot;
+            record.execution_aligned_state_valid = true;
+            record.execution_aligned_x = aligned_robot.x;
+            record.execution_aligned_y = aligned_robot.y;
+            record.execution_aligned_yaw = aligned_robot.yaw;
+        }
         record.observer = observer;
         record.observer_height_m = observer_dynamics.height(
             observer, robot.omega);
@@ -3334,12 +4206,102 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
                 solver_snapshot.acados_solve_time_ms;
             record.backend_wall_time_ms =
                 solver_snapshot.backend_wall_time_ms;
+        } else if (smpcc_bt_session &&
+                   finite(result.solver_output.solver_time_ms) &&
+                   result.solver_output.solver_time_ms > 0.0) {
+            record.acados_solve_time_ms =
+                result.solver_output.solver_time_ms;
+            // The legacy wrapper exposes capsule solve time but not a separate
+            // backend wall timer.  Record the available value under an
+            // explicit continuous solver identity; do not claim it includes
+            // runner/session overhead.
+            record.backend_wall_time_ms =
+                result.solver_output.solver_time_ms;
         }
         record.final_command = result.final_command;
         record.command_source = result.publication.pipeline.decision.source;
         record.publish_stamp_ns =
             result.publication.receipt.actual_publish_stamp_ns;
         record.plant_publish = sink.lastPlantReceipt();
+        record.command_disturbance_active =
+            result.publication.linear_cap_active;
+        record.command_disturbance_modified =
+            result.publication.linear_cap_modified;
+        record.pre_disturbance_cmd_v =
+            result.publication.pre_publication_stage_command.linear;
+        record.pre_disturbance_cmd_omega =
+            result.publication.pre_publication_stage_command.angular;
+        if (condition.mode == TrialMode::BoundedTracking) {
+            record.bt_reference_index = cycle;
+            record.bt_counterfactual_cmd_v = result.solver_output.cmd_v;
+            record.bt_counterfactual_cmd_omega =
+                result.solver_output.cmd_omega;
+            record.bt_progress_abs_s = result.solver_output.progress_abs_s;
+            record.bt_projector_raw_valid =
+                execution_aligned_projection.valid;
+            record.bt_projector_guarded_valid =
+                execution_aligned_projection.valid;
+            record.bt_projector_raw_s = execution_aligned_projection.s;
+            record.bt_projector_guarded_s = execution_aligned_projection.s;
+            record.bt_projector_raw_distance_m =
+                execution_aligned_projection.distance;
+            record.bt_projector_guarded_distance_m =
+                execution_aligned_projection.distance;
+        }
+        if (smpcc_bt_session) {
+            const SmpccBtCycleAudit& smpcc_audit =
+                smpcc_bt_session->lastAudit();
+            record.bt_timed_reference_active =
+                smpcc_audit.reference_active;
+            record.bt_reference_motion_active =
+                smpcc_audit.reference_motion_active;
+            record.smpcc_monitor_only = smpcc_audit.monitor_only;
+            record.smpcc_candidate_attempted =
+                smpcc_audit.candidate_attempted;
+            record.smpcc_candidate_success =
+                smpcc_audit.candidate_success;
+            record.smpcc_candidate_status = smpcc_audit.candidate_status;
+            record.smpcc_candidate_solve_time_ms =
+                smpcc_audit.candidate_solve_time_ms;
+            record.bt_reference_index = smpcc_audit.reference_index;
+            record.bt_reference_padded_stages =
+                smpcc_audit.padded_stage_count;
+            record.bt_counterfactual_cmd_v = smpcc_audit.bt_cmd_v;
+            record.bt_counterfactual_cmd_omega = smpcc_audit.bt_cmd_omega;
+            record.bt_progress_abs_s = smpcc_audit.bt_progress_abs_s;
+            record.bt_projector_raw_valid =
+                execution_aligned_projection.valid;
+            record.bt_projector_guarded_valid =
+                execution_aligned_projection.valid;
+            record.bt_projector_raw_s = execution_aligned_projection.s;
+            record.bt_projector_guarded_s = execution_aligned_projection.s;
+            record.bt_projector_raw_distance_m =
+                execution_aligned_projection.distance;
+            record.bt_projector_guarded_distance_m =
+                execution_aligned_projection.distance;
+            record.smpcc_candidate_cmd_v = smpcc_audit.candidate_cmd_v;
+            record.smpcc_candidate_cmd_omega =
+                smpcc_audit.candidate_cmd_omega;
+            const double compared_v = record.smpcc_monitor_only
+                ? record.smpcc_candidate_cmd_v
+                : record.pre_disturbance_cmd_v;
+            const double compared_omega = record.smpcc_monitor_only
+                ? record.smpcc_candidate_cmd_omega
+                : record.pre_disturbance_cmd_omega;
+            record.candidate_delta_v_mps =
+                compared_v - record.bt_counterfactual_cmd_v;
+            record.candidate_delta_omega_radps =
+                compared_omega - record.bt_counterfactual_cmd_omega;
+            record.correction_eligible =
+                record.smpcc_candidate_success &&
+                record.bt_reference_motion_active;
+            record.effective_correction =
+                record.correction_eligible &&
+                (std::abs(record.candidate_delta_v_mps) >
+                     condition.correction_deadzone_v_mps ||
+                 std::abs(record.candidate_delta_omega_radps) >
+                     condition.correction_deadzone_omega_radps);
+        }
         if (!appendRecord(record, true)) {
             runtime_error = "cycle CSV write failed";
             break;
@@ -3347,15 +4309,54 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         if (record.solve_attempted && !result.solver_success) {
             ++counters.solver_failures;
         }
+        if (record.command_disturbance_active) {
+            ++counters.disturbance_active_cycles;
+        }
+        if (record.command_disturbance_modified) {
+            ++counters.disturbance_modified_cycles;
+        }
+        if (record.bt_timed_reference_active) {
+            ++counters.bt_timed_reference_cycles;
+            counters.bt_reference_padded_stage_count +=
+                record.bt_reference_padded_stages;
+        }
+        if (record.smpcc_candidate_attempted) {
+            ++counters.smpcc_candidate_attempts;
+            ++counters.smpcc_candidate_status_counts[
+                record.smpcc_candidate_status];
+            if (!record.smpcc_candidate_success) {
+                ++counters.smpcc_candidate_failures;
+            } else if (record.correction_eligible) {
+                ++counters.correction_eligible_cycles;
+                const double delta_v =
+                    std::abs(record.candidate_delta_v_mps);
+                const double delta_omega =
+                    std::abs(record.candidate_delta_omega_radps);
+                counters.max_abs_candidate_delta_v = std::max(
+                    counters.max_abs_candidate_delta_v, delta_v);
+                counters.max_abs_candidate_delta_omega = std::max(
+                    counters.max_abs_candidate_delta_omega, delta_omega);
+                if (record.effective_correction) {
+                    ++counters.effective_correction_cycles;
+                }
+            }
+        }
         if (record.tail_command_used) ++counters.tail_command_count;
         if (record.tail_commit) ++counters.tail_commit_transitions;
         if (record.tail_release) ++counters.tail_release_transitions;
         if (record.tail_abort) ++counters.tail_abort_transitions;
         if (record.backend_wall_time_ms > 0.0) {
-            counters.solver_id = solver_snapshot.solver_id;
-            counters.nlp_solver_type = solver_snapshot.nlp_solver_type;
-            counters.solver_config_hash =
-                solver_snapshot.solver_config_hash;
+            if (smpcc_bt_session) {
+                counters.solver_id = "spmpc_slosh_n60_bt_timed_v1";
+                counters.nlp_solver_type = "SQP_RTI";
+                counters.solver_config_hash =
+                    "LOCAL_GENERATED_CAPSULE_MANIFEST_BOUND";
+            } else {
+                counters.solver_id = solver_snapshot.solver_id;
+                counters.nlp_solver_type = solver_snapshot.nlp_solver_type;
+                counters.solver_config_hash =
+                    solver_snapshot.solver_config_hash;
+            }
             counters.acados_solve_times_ms.push_back(
                 record.acados_solve_time_ms);
             counters.backend_wall_times_ms.push_back(
@@ -3445,7 +4446,9 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             break;
         }
         if ((condition.mode == TrialMode::OfflineReplay ||
-             condition.mode == TrialMode::BoundedTracking) &&
+             condition.mode == TrialMode::BoundedTracking ||
+             condition.mode == TrialMode::SmpccBtMonitor ||
+             condition.mode == TrialMode::SmpccBtDirect) &&
             cycle + 1 >= artifact.size()) {
             completed = true;
             completion_reason = "ARTIFACT_TAIL_COMPLETE";
@@ -3558,18 +4561,28 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     cycle_output.close();
 
     const IndependentPlantState final_state = plant.state();
-    const TrajectoryPoint goal = path.reference.sample(path.reference.length());
     const double final_goal_error = std::hypot(
         final_state.x - goal.x, final_state.y - goal.y);
+    const double final_goal_yaw_error = std::abs(std::atan2(
+        std::sin(final_state.yaw - goal.yaw),
+        std::cos(final_state.yaw - goal.yaw)));
     const bool task_success = completed && runtime_error.empty() &&
         final_goal_error <= condition.task_success_goal_tolerance_m;
     if (!writeSummary(
             args, condition, plant_config, artifact, counters,
             first_solver_failure, first_coordinator_stop,
-            measured_heights, true_heights, observer_heights,
-            tracking_errors, motion_speeds, motion_accelerations, motion_jerks,
+            measured_heights, motion_measured_heights,
+            fixed_tail_measured_heights,
+            true_heights, observer_heights,
+            tracking_errors, timed_reference_position_errors,
+            timed_reference_abs_longitudinal_errors,
+            timed_reference_abs_left_errors,
+            timed_reference_abs_yaw_errors,
+            timed_reference_abs_progress_errors, motion_speeds,
+            motion_accelerations, motion_jerks,
             completed, task_success, completion_reason,
-            last_motion_time_sec, final_goal_error, zvd,
+            last_motion_time_sec, final_goal_error, final_goal_yaw_error,
+            first_goal_tolerance_sec, first_settled_goal_sec, zvd,
             runtime_error, error)) {
         std::cerr << "ERROR: " << error << '\n';
         cleanup_temporary();

@@ -3,12 +3,27 @@
 #include "spmpc_parameter_manifest.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 
 namespace spmpc_local_planner {
 namespace {
 
 using namespace acados_manifest::mainline;
+
+bool validBtTimedReferenceStage(const BtTimedReferenceStage& stage) {
+    if (!stage.valid) return false;
+    const double values[] = {
+        stage.x, stage.y, stage.yaw, stage.s, stage.v, stage.omega,
+        stage.eta_x, stage.eta_x_dot, stage.eta_y, stage.eta_y_dot,
+        stage.a, stage.alpha, stage.v_s, stage.u_pub_v,
+        stage.u_pub_omega,
+    };
+    for (double value : values) {
+        if (!std::isfinite(value)) return false;
+    }
+    return true;
+}
 
 std::vector<std::string> parameterNames(int width) {
     const int available = static_cast<int>(
@@ -93,6 +108,30 @@ void resetPhaseStageParameters(std::vector<double>& parameters) {
     parameters[GATE_R_ETA_X_DOT] = 1.0;
     parameters[GATE_R_ETA_Y] = 1.0;
     parameters[GATE_R_ETA_Y_DOT] = 1.0;
+    parameters[BT_REFERENCE_ACTIVE] = 0.0;
+    parameters[NOM_S] = 0.0;
+    parameters[BT_PHASE_HALF_WIDTH] = 1.0;
+}
+
+void setBtTimedReferenceParameters(
+    const BtTimedReferenceStage& nominal,
+    double phase_half_width_m,
+    std::vector<double>& parameters) {
+    parameters[BT_REFERENCE_ACTIVE] = 1.0;
+    parameters[NOM_X] = nominal.x;
+    parameters[NOM_Y] = nominal.y;
+    parameters[NOM_YAW] = nominal.yaw;
+    parameters[NOM_S] = nominal.s;
+    parameters[NOM_V] = nominal.v;
+    parameters[NOM_OMEGA] = nominal.omega;
+    parameters[NOM_ETA_X] = nominal.eta_x;
+    parameters[NOM_ETA_X_DOT] = nominal.eta_x_dot;
+    parameters[NOM_ETA_Y] = nominal.eta_y;
+    parameters[NOM_ETA_Y_DOT] = nominal.eta_y_dot;
+    parameters[NOM_A] = nominal.a;
+    parameters[NOM_ALPHA] = nominal.alpha;
+    parameters[NOM_V_S] = nominal.v_s;
+    parameters[BT_PHASE_HALF_WIDTH] = phase_half_width_m;
 }
 
 void setPhaseNominalParameters(const PhaseNominalStage& nominal,
@@ -160,8 +199,17 @@ AcadosStageParameterMatrix AcadosStageParameterBuilder::build(
 
     const bool phase_rejoin_enforce =
         input.phase_rejoin.active && input.phase_rejoin.enforce;
+    const bool bt_reference_active = input.bt_timed_reference.active;
+    if (phase_rejoin_enforce && bt_reference_active) {
+        output.status = "PHASE_REJOIN_AND_BT_REFERENCE_MUTUALLY_EXCLUSIVE";
+        return output;
+    }
     if (phase_rejoin_enforce && !input.slosh_enabled) {
         output.status = "PHASE_REJOIN_REQUIRES_SLOSH";
+        return output;
+    }
+    if (bt_reference_active && !input.slosh_enabled) {
+        output.status = "BT_REFERENCE_REQUIRES_SLOSH";
         return output;
     }
     if (phase_rejoin_enforce &&
@@ -170,6 +218,24 @@ AcadosStageParameterMatrix AcadosStageParameterBuilder::build(
          input.phase_rejoin.stages.size() != static_cast<std::size_t>(
              input.phase_rejoin.liquid_steps + 1))) {
         output.status = "PHASE_REJOIN_STAGE_COUNT";
+        return output;
+    }
+    if (bt_reference_active &&
+        (input.bt_timed_reference.horizon_steps != input.horizon_steps ||
+         !std::isfinite(
+             input.bt_timed_reference.phase_half_width_m) ||
+         input.bt_timed_reference.phase_half_width_m <= 0.0 ||
+         input.bt_timed_reference.stages.size() !=
+             static_cast<std::size_t>(input.horizon_steps + 1))) {
+        output.status = "BT_REFERENCE_STAGE_CONTRACT";
+        return output;
+    }
+    if (bt_reference_active &&
+        !std::all_of(
+            input.bt_timed_reference.stages.begin(),
+            input.bt_timed_reference.stages.end(),
+            validBtTimedReferenceStage)) {
+        output.status = "BT_REFERENCE_STAGE_INVALID";
         return output;
     }
 
@@ -189,10 +255,12 @@ AcadosStageParameterMatrix AcadosStageParameterBuilder::build(
 
     for (int stage = 0; stage <= input.horizon_steps; ++stage) {
         if (input.slosh_enabled) {
-            const double stage_scale = phase_rejoin_enforce
-                ? (stage <= input.phase_rejoin.liquid_steps ? 1.0 : 0.0)
-                : sloshCostStageScale(
-                    input.variant, stage, input.horizon_steps);
+            const double stage_scale = bt_reference_active
+                ? 1.0
+                : (phase_rejoin_enforce
+                    ? (stage <= input.phase_rejoin.liquid_steps ? 1.0 : 0.0)
+                    : sloshCostStageScale(
+                        input.variant, stage, input.horizon_steps));
             parameters[W_SLOSH_ETA] =
                 input.variant.w_slosh * stage_scale;
             parameters[W_SLOSH_ETA_DOT] =
@@ -210,6 +278,12 @@ AcadosStageParameterMatrix AcadosStageParameterBuilder::build(
                 setPhaseNominalParameters(
                     input.phase_rejoin.stages[
                         static_cast<std::size_t>(stage)],
+                    parameters);
+            } else if (bt_reference_active) {
+                setBtTimedReferenceParameters(
+                    input.bt_timed_reference.stages[
+                        static_cast<std::size_t>(stage)],
+                    input.bt_timed_reference.phase_half_width_m,
                     parameters);
             }
         }

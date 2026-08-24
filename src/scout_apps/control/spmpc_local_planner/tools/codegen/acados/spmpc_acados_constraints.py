@@ -13,7 +13,7 @@ import numpy as np
 
 
 def slosh_nonlinear_constraint_expr(sym, pidx):
-    """Return [modal-height cap, phase-indexed empirical recovery gate].
+    """Return [modal cap, empirical gate, independent BT phase window].
 
     The second constraint is stage-selective through empirical_gate_active.
     For inactive stages it evaluates to -1 (strictly feasible) instead of 0,
@@ -58,7 +58,16 @@ def slosh_nonlinear_constraint_expr(sym, pidx):
         radius = active * p[pidx[radius_name]] + (1.0 - active)
         metric = metric + (error / radius) ** 2
     h_empirical_gate = active * metric - 1.0
-    return ca.vertcat(h_slosh, h_empirical_gate)
+
+    bt_active = p[pidx["bt_reference_active"]]
+    half_width = (
+        bt_active * p[pidx["bt_phase_half_width"]]
+        + (1.0 - bt_active))
+    progress_error = (x[4] - p[pidx["nom_s"]]) / half_width
+    # Inactive evaluates to -1 with a finite denominator.  Active is the hard
+    # |s-nom_s| <= phase_half_width contract for the full BT clock.
+    h_bt_phase_window = bt_active * progress_error ** 2 - 1.0
+    return ca.vertcat(h_slosh, h_empirical_gate, h_bt_phase_window)
 
 
 def set_constraints_direct_omega_legacy(ocp, cfg):
@@ -123,12 +132,12 @@ def set_constraints_slosh(ocp, cfg, pidx):
     # h_slosh <= 0 for stages 1..N and terminal.  Keep the lower bound far below
     # the disabled-runtime value (eta_max_sq=1e12 => h_slosh≈-1e12), otherwise
     # soft-only slosh variants become infeasible even though the cap is disabled.
-    ocp.constraints.lh = np.array([-1e15, -1e15])
-    ocp.constraints.uh = np.array([0.0, 0.0])
-    ocp.constraints.lh_e = np.array([-1e15, -1e15])
-    ocp.constraints.uh_e = np.array([0.0, 0.0])
+    ocp.constraints.lh = np.array([-1e15, -1e15, -1e15])
+    ocp.constraints.uh = np.array([0.0, 0.0, 0.0])
+    ocp.constraints.lh_e = np.array([-1e15, -1e15, -1e15])
+    ocp.constraints.uh_e = np.array([0.0, 0.0, 0.0])
 
     # Do not reject a cycle solely because the measured initial slosh state already
     # violates the cap; constrain predicted future nodes instead.
-    ocp.constraints.lh_0 = np.array([-1e15, -1e15])
-    ocp.constraints.uh_0 = np.array([1e15, 0.0])
+    ocp.constraints.lh_0 = np.array([-1e15, -1e15, -1e15])
+    ocp.constraints.uh_0 = np.array([1e15, 0.0, 0.0])

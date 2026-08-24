@@ -95,7 +95,8 @@ CommandPublicationResult ControlCycleEngine::publishDecision(
     bool force_zero,
     bool publish_enabled,
     ICommandSink* sink,
-    CommandHistoryBuffer* history) {
+    CommandHistoryBuffer* history,
+    const PrePublicationLinearCap& linear_cap) {
     CommandPublicationRequest request;
     request.cycle_id = publish_epoch_estimate.cycle.cycle_id;
     request.proposed = decision;
@@ -103,6 +104,7 @@ CommandPublicationResult ControlCycleEngine::publishDecision(
     request.publish_enabled = publish_enabled;
     request.sink = sink;
     request.history = history;
+    request.linear_cap = linear_cap;
     CommandPublicationResult result =
         publication_transaction_.execute(request);
     result.publish_timing = publish_latency_model_.observe(
@@ -535,7 +537,8 @@ ControlCycleResult ControlCycleEngine::step(
         !result.decision.accepted,
         request.publish_enabled,
         request.command_sink,
-        request.command_history);
+        request.command_history,
+        request.pre_publication_linear_cap);
     result.final_command = result.publication.pipeline.final_command;
     result.output.cmd_v = result.final_command.linear;
     result.output.cmd_omega = result.final_command.angular;

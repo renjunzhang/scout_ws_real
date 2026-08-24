@@ -195,6 +195,9 @@ def default_parameter_values(cfg, with_slosh, direct_omega_legacy=False):
                 "gate_r_eta_y", "gate_r_eta_y_dot",
             ):
                 p[idx[name]] = 1.0
+            p[idx["bt_reference_active"]] = 0.0
+            p[idx["nom_s"]] = 0.0
+            p[idx["bt_phase_half_width"]] = 1.0
     return p
 
 
@@ -247,7 +250,7 @@ constexpr int kSloshParameterCount = {len(PARAM_NAMES_SLOSH)};
 constexpr int kB0StateCount = 6;
 constexpr int kSloshStateCount = 10;
 constexpr int kControlCount = 3;
-constexpr int kSloshNonlinearConstraintCount = 2;
+constexpr int kSloshNonlinearConstraintCount = 3;
 {mainline_names}
 }}  // namespace mainline
 
@@ -305,9 +308,9 @@ def build_check(cfg, model_key):
     print(f"  path-speed: w_progress={cfg['w_progress']:.4f} w_v={cfg['w_v']:.4f} w_vs={cfg['w_vs']:.4f} v_ref={cfg['v_ref']:.4f}")
     if model_key in ("slosh", "phase_rejoin"):
         h_expr = slosh_nonlinear_constraint_expr(sym, PIDX_SLOSH)
-        if h_expr.shape != (2, 1):
+        if h_expr.shape != (3, 1):
             raise RuntimeError(
-                f"slosh nonlinear constraint shape must be (2, 1), got {h_expr.shape}")
+                f"slosh nonlinear constraint shape must be (3, 1), got {h_expr.shape}")
         x0 = np.zeros(sym["nx"])
         h_fun = ca.Function("spmpc_slosh_h_check", [sym["x"], sym["p"]], [h_expr])
         inactive = np.asarray(h_fun(x0, p_default)).reshape(-1)
@@ -324,8 +327,30 @@ def build_check(cfg, model_key):
         if not np.isfinite(boundary).all() or abs(boundary[1]) > 1e-12:
             raise RuntimeError(
                 f"one-radius empirical gate boundary must equal 0, got {boundary[1]}")
-        print("  nonlinear h shape = (2, 1): slosh cap + stage-selective empirical gate")
-        print("  empirical gate self-check: inactive=-1, one-radius boundary=0")
+        if abs(inactive[2] + 1.0) > 1e-12:
+            raise RuntimeError(
+                f"inactive BT phase window must equal -1, got {inactive[2]}")
+        p_bt = p_default.copy()
+        p_bt[PIDX_SLOSH["bt_reference_active"]] = 1.0
+        p_bt[PIDX_SLOSH["nom_s"]] = 0.25
+        p_bt[PIDX_SLOSH["bt_phase_half_width"]] = 0.10
+        bt_boundary_x = x0.copy()
+        bt_boundary_x[4] = 0.35
+        bt_boundary = np.asarray(
+            h_fun(bt_boundary_x, p_bt)).reshape(-1)
+        bt_outside_x = x0.copy()
+        bt_outside_x[4] = 0.36
+        bt_outside = np.asarray(
+            h_fun(bt_outside_x, p_bt)).reshape(-1)
+        if (not np.isfinite(bt_boundary).all() or
+                abs(bt_boundary[2]) > 1e-12 or
+                not np.isfinite(bt_outside).all() or
+                bt_outside[2] <= 0.0):
+            raise RuntimeError(
+                "BT phase window must be zero at its boundary and positive "
+                "outside")
+        print("  nonlinear h shape = (3, 1): slosh cap + empirical gate + BT phase window")
+        print("  gate self-check: inactive=-1, active boundaries=0, BT outside>0")
 
 
 def generate(cfg, output_root, model_key):

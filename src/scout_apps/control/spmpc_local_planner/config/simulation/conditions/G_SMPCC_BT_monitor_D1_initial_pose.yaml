@@ -1,0 +1,48 @@
+schema: spmpc_closed_loop_trial_condition_v1
+condition_id: G-SMPCC-BT-MONITOR
+implementation_id: continuous_smpcc_bt_timed_monitor_v1
+implementation_complete: true
+mode: smpcc_bt_monitor
+offline_nominal: true
+online_residual: false
+recovery_gate: false
+execution_compatibility_gate: false
+stored_recovery_action: false
+input_shaping: false
+pilot_only: true
+formal_c3_c4_causal_comparison_ready: false
+continuous_controller:
+  variant_id: G_SMPCC_BT_V1
+  smooth_priority_enable: false
+  w_contour: 1.0
+  w_lag: 0.2
+  w_progress: 0.2
+  w_heading: 0.0
+  w_progress_coupling: 0.0
+  w_yaw_rate_tracking: 0.0
+  heading_feedback_gain: 0.0
+  w_v: 1.0
+  w_vs: 0.3
+  v_ref: 0.25
+  w_control: 0.1
+  w_accel: 0.0
+  w_smooth: 0.1
+  w_alpha: 0.1
+  w_du_a: 0.1
+  w_du_vs: 0.1
+  w_slosh: 5.0
+bt_timed_tracking:
+  progress_radius_m: 0.10
+  correction_deadzone_v_mps: 0.01
+  correction_deadzone_omega_radps: 0.02
+  minimum_effective_correction_fraction: 0.10
+disturbance:
+  id: D1_INITIAL_POSE
+  kind: initial_pose
+  lateral_offset_m: 0.050
+  yaw_offset_rad: 0.100
+trial:
+  control_rate_hz: 30.0
+  max_motion_sec: 45.0
+  fixed_tail_sec: 4.0
+  publish_latency_sec: 0.01

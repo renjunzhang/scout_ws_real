@@ -5,8 +5,19 @@
 #include "spmpc_local_planner/runtime/timing/publish_latency_model.h"
 
 #include <cstdint>
+#include <string>
 
 namespace spmpc_local_planner {
+
+// Optional shared execution disturbance/limiter stage.  It is applied inside
+// the unique publication transaction after the ordinary command pipeline and
+// before FinalCommand/sink publication, so receipt, limiter state and history
+// all observe the same actually published command.
+struct PrePublicationLinearCap {
+    bool active = false;
+    double max_linear = 0.0;
+    std::string id;
+};
 
 struct CommandPublicationRequest {
     std::uint64_t cycle_id = 0;
@@ -15,6 +26,7 @@ struct CommandPublicationRequest {
     bool publish_enabled = true;
     ICommandSink* sink = nullptr;
     CommandHistoryBuffer* history = nullptr;
+    PrePublicationLinearCap linear_cap;
 };
 
 struct CommandPublicationResult {
@@ -25,6 +37,10 @@ struct CommandPublicationResult {
     bool receipt_consistent = false;
     bool limiter_state_committed = false;
     bool history_committed = false;
+    VelocityCommand pre_publication_stage_command;
+    bool linear_cap_active = false;
+    bool linear_cap_modified = false;
+    std::string linear_cap_id;
 
     bool published() const {
         return receipt.delivered && receipt_consistent;
@@ -33,7 +49,7 @@ struct CommandPublicationResult {
     bool commandWasModified() const {
         return pipeline.linear_limited || pipeline.angular_rate_limited ||
             pipeline.angular_accel_limited ||
-            pipeline.command_contract_violation;
+            pipeline.command_contract_violation || linear_cap_modified;
     }
 };
 

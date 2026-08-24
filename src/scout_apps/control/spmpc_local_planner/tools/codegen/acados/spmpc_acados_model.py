@@ -95,9 +95,18 @@ PHASE_REJOIN_EXTRA_NAMES = [
     "gate_r_x", "gate_r_y", "gate_r_yaw", "gate_r_v", "gate_r_omega",
     "gate_r_eta_x", "gate_r_eta_x_dot", "gate_r_eta_y", "gate_r_eta_y_dot",
 ]
+# Independent full-clock BT reference used only by the one-shot old-S-MPCC
+# Go/No-Go.  Appending these fields preserves every frozen Phase-Rejoin index.
+# The nominal pose/state/control fields above are shared as data slots, but the
+# activation and phase-window semantics remain completely independent.
+BT_TIMED_REFERENCE_EXTRA_NAMES = [
+    "bt_reference_active",
+    "nom_s",
+    "bt_phase_half_width",
+]
 PARAM_NAMES_SLOSH = (
     PARAM_NAMES + SLOSH_EXTRA_NAMES + SLOSH_HARD_EXTRA_NAMES +
-    PHASE_REJOIN_EXTRA_NAMES
+    PHASE_REJOIN_EXTRA_NAMES + BT_TIMED_REFERENCE_EXTRA_NAMES
 )
 NP_SLOSH = len(PARAM_NAMES_SLOSH)
 PIDX_SLOSH = {name: i for i, name in enumerate(PARAM_NAMES_SLOSH)}

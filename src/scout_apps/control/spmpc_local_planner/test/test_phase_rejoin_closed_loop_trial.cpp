@@ -892,6 +892,53 @@ TEST(PhaseRejoinClosedLoopConditionAssets,
 }
 
 TEST(PhaseRejoinClosedLoopConditionAssets,
+     SmpccBtAssetsMatchTheOneShotFrozenContract) {
+    const std::vector<std::string> files = {
+        "G_SMPCC_BT_monitor_D1_initial_pose.yaml",
+        "G_SMPCC_BT_monitor_D2_short_speed_cap.yaml",
+        "G_SMPCC_BT_direct_D1_initial_pose.yaml",
+        "G_SMPCC_BT_direct_D2_short_speed_cap.yaml",
+    };
+    const std::string root = SPMPC_SIMULATION_CONDITIONS_DIR;
+    for (const std::string& file : files) {
+        const YAML::Node condition = YAML::LoadFile(root + "/" + file);
+        ASSERT_TRUE(condition["pilot_only"].as<bool>()) << file;
+        EXPECT_FALSE(condition["formal_c3_c4_causal_comparison_ready"]
+                         .as<bool>()) << file;
+        EXPECT_TRUE(condition["offline_nominal"].as<bool>()) << file;
+        EXPECT_FALSE(condition["online_residual"].as<bool>()) << file;
+        EXPECT_FALSE(condition["recovery_gate"].as<bool>()) << file;
+        EXPECT_FALSE(condition["stored_recovery_action"].as<bool>())
+            << file;
+        const YAML::Node controller = condition["continuous_controller"];
+        EXPECT_EQ(controller["variant_id"].as<std::string>(),
+                  "G_SMPCC_BT_V1") << file;
+        EXPECT_FALSE(controller["smooth_priority_enable"].as<bool>())
+            << file;
+        EXPECT_DOUBLE_EQ(controller["w_contour"].as<double>(), 1.0);
+        EXPECT_DOUBLE_EQ(controller["w_lag"].as<double>(), 0.2);
+        EXPECT_DOUBLE_EQ(controller["w_progress"].as<double>(), 0.2);
+        EXPECT_DOUBLE_EQ(controller["w_heading"].as<double>(), 0.0);
+        EXPECT_DOUBLE_EQ(controller["w_control"].as<double>(), 0.1);
+        EXPECT_DOUBLE_EQ(controller["w_smooth"].as<double>(), 0.1);
+        EXPECT_DOUBLE_EQ(controller["w_alpha"].as<double>(), 0.1);
+        EXPECT_DOUBLE_EQ(controller["w_du_a"].as<double>(), 0.1);
+        EXPECT_DOUBLE_EQ(controller["w_du_vs"].as<double>(), 0.1);
+        EXPECT_DOUBLE_EQ(controller["w_slosh"].as<double>(), 5.0);
+        const YAML::Node tracking = condition["bt_timed_tracking"];
+        EXPECT_DOUBLE_EQ(tracking["progress_radius_m"].as<double>(), 0.10);
+        EXPECT_DOUBLE_EQ(
+            tracking["correction_deadzone_v_mps"].as<double>(), 0.01);
+        EXPECT_DOUBLE_EQ(
+            tracking["correction_deadzone_omega_radps"].as<double>(),
+            0.02);
+        EXPECT_DOUBLE_EQ(
+            tracking["minimum_effective_correction_fraction"].as<double>(),
+            0.10);
+    }
+}
+
+TEST(PhaseRejoinClosedLoopConditionAssets,
      FifteenDTailCommitAssetIsSeparateDevelopmentOnlyC4Candidate) {
     const std::string root = SPMPC_SIMULATION_CONDITIONS_DIR;
     const YAML::Node formal = YAML::LoadFile(

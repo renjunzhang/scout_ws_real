@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 
 #include <cstddef>
+#include <limits>
 #include <vector>
 
 namespace spmpc_local_planner {
@@ -102,6 +103,52 @@ void setExpectedSloshBase(const AcadosStageParameterInput& input,
     expected[GATE_R_ETA_X_DOT] = 1.0;
     expected[GATE_R_ETA_Y] = 1.0;
     expected[GATE_R_ETA_Y_DOT] = 1.0;
+    // The inactive BT phase constraint uses a finite unit denominator so its
+    // generated expression evaluates to -1 instead of dividing by zero.
+    expected[BT_REFERENCE_ACTIVE] = 0.0;
+    expected[NOM_S] = 0.0;
+    expected[BT_PHASE_HALF_WIDTH] = 1.0;
+}
+
+BtTimedReferenceStage makeBtTimedStage(int stage) {
+    const double base = static_cast<double>(stage * 20);
+    BtTimedReferenceStage nominal;
+    nominal.valid = true;
+    nominal.artifact_index = static_cast<std::size_t>(100 + stage);
+    nominal.x = base + 1.0;
+    nominal.y = base + 2.0;
+    nominal.yaw = base + 3.0;
+    nominal.s = base + 4.0;
+    nominal.v = base + 5.0;
+    nominal.omega = base + 6.0;
+    nominal.eta_x = base + 7.0;
+    nominal.eta_x_dot = base + 8.0;
+    nominal.eta_y = base + 9.0;
+    nominal.eta_y_dot = base + 10.0;
+    nominal.a = base + 11.0;
+    nominal.alpha = base + 12.0;
+    nominal.v_s = base + 13.0;
+    return nominal;
+}
+
+void setExpectedBtTimedNominal(const BtTimedReferenceStage& nominal,
+                               double phase_half_width_m,
+                               std::vector<double>& expected) {
+    expected[BT_REFERENCE_ACTIVE] = 1.0;
+    expected[NOM_X] = nominal.x;
+    expected[NOM_Y] = nominal.y;
+    expected[NOM_YAW] = nominal.yaw;
+    expected[NOM_S] = nominal.s;
+    expected[NOM_V] = nominal.v;
+    expected[NOM_OMEGA] = nominal.omega;
+    expected[NOM_ETA_X] = nominal.eta_x;
+    expected[NOM_ETA_X_DOT] = nominal.eta_x_dot;
+    expected[NOM_ETA_Y] = nominal.eta_y;
+    expected[NOM_ETA_Y_DOT] = nominal.eta_y_dot;
+    expected[NOM_A] = nominal.a;
+    expected[NOM_ALPHA] = nominal.alpha;
+    expected[NOM_V_S] = nominal.v_s;
+    expected[BT_PHASE_HALF_WIDTH] = phase_half_width_m;
 }
 
 PhaseNominalStage makeNominalStage(int stage, bool gate_active) {
@@ -280,6 +327,108 @@ TEST(AcadosStageParameterBuilder,
     EXPECT_FALSE(matrix.valid);
     EXPECT_EQ(matrix.status, "PHASE_REJOIN_STAGE_COUNT");
     EXPECT_TRUE(matrix.values.empty());
+}
+
+TEST(AcadosStageParameterBuilder,
+     BtTimedReferenceInjectsEveryFullClockStageIndependentlyOfPhaseRejoin) {
+    AcadosStageParameterInput input = makeInput(true, 3);
+    input.variant.w_slosh = 6.0;
+    input.slosh.eta_dot_weight_ratio = 0.5;
+    input.bt_timed_reference.active = true;
+    input.bt_timed_reference.horizon_steps = input.horizon_steps;
+    input.bt_timed_reference.phase_half_width_m = 0.10;
+    for (int stage = 0; stage <= input.horizon_steps; ++stage) {
+        input.bt_timed_reference.stages.push_back(
+            makeBtTimedStage(stage));
+    }
+
+    const AcadosStageParameterMatrix matrix =
+        AcadosStageParameterBuilder::build(input);
+
+    ASSERT_TRUE(matrix.valid) << matrix.status;
+    for (int stage = 0; stage <= input.horizon_steps; ++stage) {
+        std::vector<double> expected = expectedCommon(
+            input, kSloshParameterCount);
+        setExpectedSloshBase(input, expected);
+        expected[W_SLOSH_ETA] = input.variant.w_slosh;
+        expected[W_SLOSH_ETA_DOT] =
+            input.variant.w_slosh * input.slosh.eta_dot_weight_ratio;
+        setExpectedBtTimedNominal(
+            input.bt_timed_reference.stages[
+                static_cast<std::size_t>(stage)],
+            input.bt_timed_reference.phase_half_width_m,
+            expected);
+        expectStageEquals(matrix, stage, expected);
+    }
+}
+
+TEST(AcadosStageParameterBuilder,
+     RejectsBtTimedReferenceCombinedWithEnforcedPhaseRejoin) {
+    AcadosStageParameterInput input = makeInput(true, 3);
+    input.phase_rejoin.active = true;
+    input.phase_rejoin.enforce = true;
+    input.bt_timed_reference.active = true;
+
+    const AcadosStageParameterMatrix matrix =
+        AcadosStageParameterBuilder::build(input);
+
+    EXPECT_FALSE(matrix.valid);
+    EXPECT_EQ(matrix.status,
+              "PHASE_REJOIN_AND_BT_REFERENCE_MUTUALLY_EXCLUSIVE");
+    EXPECT_TRUE(matrix.values.empty());
+}
+
+TEST(AcadosStageParameterBuilder, RejectsBtTimedReferenceWithoutSlosh) {
+    AcadosStageParameterInput input = makeInput(false, 1);
+    input.bt_timed_reference.active = true;
+
+    const AcadosStageParameterMatrix matrix =
+        AcadosStageParameterBuilder::build(input);
+
+    EXPECT_FALSE(matrix.valid);
+    EXPECT_EQ(matrix.status, "BT_REFERENCE_REQUIRES_SLOSH");
+    EXPECT_TRUE(matrix.values.empty());
+}
+
+TEST(AcadosStageParameterBuilder,
+     RejectsBtTimedReferenceHorizonCardinalityMismatch) {
+    AcadosStageParameterInput input = makeInput(true, 2);
+    input.bt_timed_reference.active = true;
+    input.bt_timed_reference.horizon_steps = input.horizon_steps;
+    input.bt_timed_reference.phase_half_width_m = 0.10;
+    input.bt_timed_reference.stages.push_back(makeBtTimedStage(0));
+    input.bt_timed_reference.stages.push_back(makeBtTimedStage(1));
+
+    const AcadosStageParameterMatrix matrix =
+        AcadosStageParameterBuilder::build(input);
+
+    EXPECT_FALSE(matrix.valid);
+    EXPECT_EQ(matrix.status, "BT_REFERENCE_STAGE_CONTRACT");
+    EXPECT_TRUE(matrix.values.empty());
+}
+
+TEST(AcadosStageParameterBuilder,
+     RejectsNonfiniteBtReferenceBeforeCapsuleUpdate) {
+    AcadosStageParameterInput input = makeInput(true, 1);
+    input.bt_timed_reference.active = true;
+    input.bt_timed_reference.horizon_steps = input.horizon_steps;
+    input.bt_timed_reference.phase_half_width_m = 0.10;
+    input.bt_timed_reference.stages.push_back(makeBtTimedStage(0));
+    input.bt_timed_reference.stages.push_back(makeBtTimedStage(1));
+    input.bt_timed_reference.stages.back().s =
+        std::numeric_limits<double>::quiet_NaN();
+
+    AcadosStageParameterMatrix matrix =
+        AcadosStageParameterBuilder::build(input);
+    EXPECT_FALSE(matrix.valid);
+    EXPECT_EQ(matrix.status, "BT_REFERENCE_STAGE_INVALID");
+
+    input.bt_timed_reference.stages.back() = makeBtTimedStage(1);
+    input.bt_timed_reference.phase_half_width_m =
+        std::numeric_limits<double>::quiet_NaN();
+    matrix = AcadosStageParameterBuilder::build(input);
+    EXPECT_FALSE(matrix.valid);
+    EXPECT_EQ(matrix.status, "BT_REFERENCE_STAGE_CONTRACT");
 }
 
 }  // namespace

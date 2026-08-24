@@ -67,14 +67,17 @@ enum ParameterIndex : int {
     GATE_R_ETA_X_DOT = 56,
     GATE_R_ETA_Y = 57,
     GATE_R_ETA_Y_DOT = 58,
-    PARAM_MAX = 59,
+    BT_REFERENCE_ACTIVE = 59,
+    NOM_S = 60,
+    BT_PHASE_HALF_WIDTH = 61,
+    PARAM_MAX = 62,
 };
 constexpr int kB0ParameterCount = 27;
-constexpr int kSloshParameterCount = 59;
+constexpr int kSloshParameterCount = 62;
 constexpr int kB0StateCount = 6;
 constexpr int kSloshStateCount = 10;
 constexpr int kControlCount = 3;
-constexpr int kSloshNonlinearConstraintCount = 2;
+constexpr int kSloshNonlinearConstraintCount = 3;
 constexpr const char* kParameterNames[] = {
     "rx0",
     "rx1",
@@ -134,7 +137,10 @@ constexpr const char* kParameterNames[] = {
     "gate_r_eta_x",
     "gate_r_eta_x_dot",
     "gate_r_eta_y",
-    "gate_r_eta_y_dot"
+    "gate_r_eta_y_dot",
+    "bt_reference_active",
+    "nom_s",
+    "bt_phase_half_width"
 };
 }  // namespace mainline
 

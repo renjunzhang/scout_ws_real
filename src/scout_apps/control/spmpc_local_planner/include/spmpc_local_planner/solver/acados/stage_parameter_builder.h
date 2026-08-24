@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/config/variant_config.h"
 #include "spmpc_local_planner/phase_rejoin/types.h"
+#include "spmpc_local_planner/solver/api/bt_timed_reference_context.h"
 
 #include <array>
 #include <string>
@@ -37,6 +38,7 @@ struct AcadosStageParameterInput {
     bool have_previous_control = false;
     std::array<double, 3> previous_control{{0.0, 0.0, 0.0}};
     PhaseRejoinSolverContext phase_rejoin;
+    BtTimedReferenceContext bt_timed_reference;
 };
 
 struct AcadosStageParameterMatrix {

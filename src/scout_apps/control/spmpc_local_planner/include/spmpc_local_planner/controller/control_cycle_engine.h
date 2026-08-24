@@ -37,6 +37,7 @@ struct ControlCycleRequest {
     // Required when Tail-Commit is enabled because every accepted tail
     // command must become the next cycle's execution-model history.
     CommandHistoryBuffer* command_history = nullptr;
+    PrePublicationLinearCap pre_publication_linear_cap;
 };
 
 struct ControlCycleResult {
@@ -128,7 +129,9 @@ private:
         bool force_zero,
         bool publish_enabled,
         ICommandSink* sink,
-        CommandHistoryBuffer* history);
+        CommandHistoryBuffer* history,
+        const PrePublicationLinearCap& linear_cap =
+            PrePublicationLinearCap{});
 
     SolverSession& solver_session_;
     PhaseRejoinCoordinator phase_rejoin_;

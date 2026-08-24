@@ -1,5 +1,6 @@
 #include "spmpc_local_planner/controller/command/publication_transaction.h"
 
+#include <algorithm>
 #include <cmath>
 
 namespace spmpc_local_planner {
@@ -43,6 +44,29 @@ CommandPublicationResult PublicationTransaction::execute(
     pipeline_request.force_zero = request.force_zero;
     pipeline_request.accepted = request.proposed.accepted;
     result.pipeline = pipeline_.finalize(pipeline_request);
+    result.pre_publication_stage_command = result.pipeline.final_command;
+    result.linear_cap_active = request.linear_cap.active;
+    result.linear_cap_id = request.linear_cap.id;
+    if (request.linear_cap.active) {
+        if (!std::isfinite(request.linear_cap.max_linear) ||
+            request.linear_cap.max_linear < 0.0) {
+            result.pipeline.final_command = VelocityCommand{};
+            result.pipeline.decision.command = VelocityCommand{};
+            result.pipeline.decision.source = CommandSource::ExecutionContract;
+            result.pipeline.decision.reason =
+                "PRE_PUBLICATION_LINEAR_CAP_INVALID";
+            result.pipeline.decision.accepted = false;
+            result.pipeline.command_contract_violation = true;
+        } else {
+            const double capped_linear = std::min(
+                result.pipeline.final_command.linear,
+                request.linear_cap.max_linear);
+            result.linear_cap_modified =
+                capped_linear != result.pipeline.final_command.linear;
+            result.pipeline.final_command.linear = capped_linear;
+            result.pipeline.decision.command = result.pipeline.final_command;
+        }
+    }
 
     result.finalized.cycle_id = request.cycle_id;
     result.finalized.finalized_stamp_ns = pipeline_request.stamp_ns;

@@ -126,10 +126,18 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     const RobotState& projection_robot = input.execution_horizon.active
         ? input.execution_horizon.initial_state.robot
         : input.robot;
+    const bool bt_timed_reference_active = input.bt_timed_reference.active;
+    if (bt_timed_reference_active &&
+        input.bt_timed_reference.stages.empty()) {
+        output = SolverOutput{};
+        output.status = "BT_REFERENCE_CONTEXT_EMPTY";
+        updateStartLockRecovery(input, false, output);
+        return false;
+    }
     ProgressProjector projector;
     const auto proj = projector.project(
         reference_, projection_robot.x, projection_robot.y,
-        last_progress_s_);
+        bt_timed_reference_active ? 0.0 : last_progress_s_);
     if (!proj.valid) {
         output = SolverOutput{};
         output.status = "PROJECTION_FAILED";
@@ -138,7 +146,10 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     }
 
     const double len = reference_.length();
-    const double remaining_s = std::max(0.0, len - proj.s);
+    const double progress_s = bt_timed_reference_active
+        ? input.bt_timed_reference.stages.front().s
+        : proj.s;
+    const double remaining_s = std::max(0.0, len - progress_s);
     const auto goal = reference_.sample(len);
     const double dx = goal.x - projection_robot.x;
     const double dy = goal.y - projection_robot.y;
@@ -151,8 +162,10 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         std::sin(projection_robot.yaw) * dy;
     goal_info.position_reached = distance_to_goal < terminal_controller_.params().goal_tolerance;
     goal_info.reached_latch_allowed =
-        !phaseRejoinOwnsTerminalCommand(input.phase_rejoin) ||
-        input.phase_rejoin.terminal_release_authorized;
+        ((!phaseRejoinOwnsTerminalCommand(input.phase_rejoin) ||
+          input.phase_rejoin.terminal_release_authorized) &&
+         !btTimedReferenceOwnsTerminalCommand(
+             input.bt_timed_reference));
 
     const TerminalPlan terminal_plan = terminal_controller_.updateAndPlan(
         goal_info, projection_robot.v, projection_robot.omega,
@@ -162,8 +175,8 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         output = SolverOutput{};
         output.success = true;
         output.status = "GOAL_REACHED";
-        output.progress_s = len > 1e-6 ? proj.s / len : 0.0;
-        output.progress_abs_s = proj.s;
+        output.progress_s = len > 1e-6 ? progress_s / len : 0.0;
+        output.progress_abs_s = progress_s;
         output.terminal_diagnostics = terminal_controller_.diagnostics();
         updateStartLockRecovery(input, true, output);
         return true;
@@ -172,8 +185,8 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         output = SolverOutput{};
         output.success = true;
         output.status = "GOAL_REACHED";
-        output.progress_s = len > 1e-6 ? proj.s / len : 0.0;
-        output.progress_abs_s = proj.s;
+        output.progress_s = len > 1e-6 ? progress_s / len : 0.0;
+        output.progress_abs_s = progress_s;
         output.cmd_v = 0.0;
         output.cmd_omega = 0.0;
         output.terminal_diagnostics = terminal_controller_.diagnostics();
@@ -186,13 +199,16 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     guarded_input.min_progress_s = last_progress_s_;
     guarded_input.costmap = have_costmap_ ? &costmap_ : nullptr;
     if (guarded_input.execution_horizon.active) {
-        guarded_input.execution_horizon.initial_progress_s = proj.s;
+        guarded_input.execution_horizon.initial_progress_s = progress_s;
     }
     const bool ok = solver_->solve(guarded_input, reference_, output);
     if (ok && output.success) {
         const bool phase_owns_terminal = phaseRejoinOwnsTerminalCommand(
             guarded_input.phase_rejoin);
-        if (!phase_owns_terminal) {
+        const bool bt_reference_owns_terminal =
+            btTimedReferenceOwnsTerminalCommand(
+                guarded_input.bt_timed_reference);
+        if (!phase_owns_terminal && !bt_reference_owns_terminal) {
             const TerminalClampOutput clamp = terminal_controller_.clampCommand(
                 output.cmd_v,
                 output.cmd_omega,

@@ -53,7 +53,7 @@ static_assert(acados_manifest::generated_bounds::kMainHorizonSteps ==
                   SPMPC_SLOSH_N,
               "slosh horizon manifest differs from generated solver");
 static_assert(SPMPC_SLOSH_NH == kSloshNonlinearConstraintCount,
-              "spmpc_slosh 求解器必须同时包含 slosh cap 和 empirical recovery gate");
+              "spmpc_slosh nonlinear-constraint manifest mismatch");
 #endif
 #ifdef SPMPC_WITH_ACADOS_PHASE_REJOIN
 static_assert(kSloshParameterCount == SPMPC_PHASE_REJOIN_NP,
@@ -66,7 +66,7 @@ static_assert(acados_manifest::generated_bounds::kPhaseRejoinHorizonSteps ==
                   SPMPC_PHASE_REJOIN_N,
               "phase-rejoin horizon manifest differs from generated solver");
 static_assert(SPMPC_PHASE_REJOIN_NH == kSloshNonlinearConstraintCount,
-              "phase-rejoin 求解器必须包含 liquid cap 与 terminal gate");
+              "phase-rejoin nonlinear-constraint manifest mismatch");
 #endif
 
 
@@ -108,6 +108,59 @@ bool finiteNominalStage(const PhaseNominalStage& stage) {
         if (!std::isfinite(value)) return false;
     }
     return true;
+}
+
+bool finiteBtTimedStage(const BtTimedReferenceStage& stage) {
+    const double values[] = {
+        stage.x, stage.y, stage.yaw, stage.s, stage.v, stage.omega,
+        stage.eta_x, stage.eta_x_dot, stage.eta_y, stage.eta_y_dot,
+        stage.a, stage.alpha, stage.v_s, stage.u_pub_v,
+        stage.u_pub_omega,
+    };
+    for (double value : values) {
+        if (!std::isfinite(value)) return false;
+    }
+    return true;
+}
+
+std::string validateBtTimedReferenceContext(
+    const BtTimedReferenceContext& context,
+    const ExecutionHorizonContext& execution_horizon,
+    int solver_horizon_steps) {
+    if (!context.active) return std::string{};
+    if (context.contract_id != kBtTimedReferenceContractId) {
+        return "CONTRACT_ID";
+    }
+    if (context.artifact_contract_id.empty() ||
+        !context.complete_artifact_clock) {
+        return "ARTIFACT_CONTRACT";
+    }
+    if (!execution_horizon.active ||
+        !execution_horizon.initial_state.valid) {
+        return "EXECUTION_HORIZON";
+    }
+    if (context.horizon_steps != solver_horizon_steps ||
+        context.stages.size() !=
+            static_cast<std::size_t>(solver_horizon_steps + 1)) {
+        return "HORIZON";
+    }
+    if (!finitePositive(context.phase_half_width_m)) {
+        return "PHASE_HALF_WIDTH";
+    }
+    for (std::size_t stage_index = 0;
+         stage_index < context.stages.size(); ++stage_index) {
+        const BtTimedReferenceStage& stage = context.stages[stage_index];
+        if (!stage.valid || !finiteBtTimedStage(stage)) {
+            return "STAGE_INVALID";
+        }
+        const std::size_t expected = std::min(
+            context.artifact_terminal_index,
+            context.current_index + stage_index);
+        if (stage.artifact_index != expected) {
+            return "ARTIFACT_INDEX";
+        }
+    }
+    return std::string{};
 }
 
 // Empty string means the enforce context is safe to inject.  The wrapper uses
@@ -429,6 +482,86 @@ void setAcadosWarmStart(GeneratedAcadosSolver& gen,
     }
 }
 
+WarmStartOutput makeBtTimedReferenceWarmStart(
+    const BtTimedReferenceContext& reference,
+    const SolverInput& input,
+    const SolverParams& params) {
+    WarmStartOutput output;
+    if (!reference.active || reference.horizon_steps <= 0 ||
+        reference.stages.size() != static_cast<std::size_t>(
+            reference.horizon_steps + 1)) {
+        output.fallback_reason = "BT_TIMED_REFERENCE_INVALID";
+        output.diagnostics.failure_reason = output.fallback_reason;
+        return output;
+    }
+    output.states.resize(reference.stages.size());
+    output.controls.resize(static_cast<std::size_t>(
+        reference.horizon_steps));
+    for (int stage = 0; stage <= reference.horizon_steps; ++stage) {
+        const BtTimedReferenceStage& nominal =
+            reference.stages[static_cast<std::size_t>(stage)];
+        WarmStartState& state =
+            output.states[static_cast<std::size_t>(stage)];
+        state.px = nominal.x;
+        state.py = nominal.y;
+        state.theta = nominal.yaw;
+        state.v = nominal.v;
+        state.s = nominal.s;
+        state.omega = nominal.omega;
+        state.eta_x = nominal.eta_x;
+        state.eta_x_dot = nominal.eta_x_dot;
+        state.eta_y = nominal.eta_y;
+        state.eta_y_dot = nominal.eta_y_dot;
+        // Stage zero is fixed by the execution-aligned physical estimate.  Its
+        // progress coordinate remains the frozen BT clock value enforced by
+        // the independent phase window.
+        if (stage == 0) {
+            state.px = input.robot.x;
+            state.py = input.robot.y;
+            state.theta = input.robot.yaw;
+            state.v = input.robot.v;
+            state.omega = input.robot.omega;
+            state.eta_x = input.slosh.eta_x;
+            state.eta_x_dot = input.slosh.eta_x_dot;
+            state.eta_y = input.slosh.eta_y;
+            state.eta_y_dot = input.slosh.eta_y_dot;
+        }
+        output.diagnostics.max_v = std::max(
+            output.diagnostics.max_v, std::abs(state.v));
+        output.diagnostics.max_omega = std::max(
+            output.diagnostics.max_omega, std::abs(state.omega));
+        output.diagnostics.max_lateral_acc = std::max(
+            output.diagnostics.max_lateral_acc,
+            std::abs(state.v * state.omega));
+        if (state.v < -1e-9 || state.v > params.v_max + 1e-9 ||
+            std::abs(state.omega) > params.omega_max + 1e-9) {
+            ++output.diagnostics.bound_violation_count;
+        }
+        if (stage < reference.horizon_steps) {
+            WarmStartControl& control =
+                output.controls[static_cast<std::size_t>(stage)];
+            control.a = nominal.a;
+            control.alpha = nominal.alpha;
+            control.v_s = nominal.v_s;
+            output.diagnostics.max_a = std::max(
+                output.diagnostics.max_a, std::abs(control.a));
+            if (std::abs(control.a) > params.a_max + 1e-9 ||
+                std::abs(control.alpha) > params.alpha_max + 1e-9 ||
+                control.v_s < -1e-9 ||
+                control.v_s > params.v_max + 1e-9) {
+                ++output.diagnostics.bound_violation_count;
+            }
+        }
+    }
+    output.valid = output.diagnostics.bound_violation_count == 0;
+    output.diagnostics.warm_start_valid = output.valid;
+    if (!output.valid) {
+        output.fallback_reason = "BT_TIMED_REFERENCE_BOUND_VIOLATION";
+        output.diagnostics.failure_reason = output.fallback_reason;
+    }
+    return output;
+}
+
 }  // namespace
 
 struct ContinuousMpccSolverAcados::Impl {
@@ -545,9 +678,36 @@ bool ContinuousMpccSolverAcados::solve(
     }
     const bool slosh = use_slosh_model_;
 
+    const bool bt_reference_active = input.bt_timed_reference.active;
+    if (bt_reference_active && phase_rejoin_requested) {
+        output.status = "BT_REFERENCE_AND_PHASE_REJOIN_MUTUALLY_EXCLUSIVE";
+        return false;
+    }
+    if (bt_reference_active && !slosh) {
+        output.status = "BT_REFERENCE_REQUIRES_SLOSH";
+        return false;
+    }
+    const std::string bt_reference_error =
+        validateBtTimedReferenceContext(
+            input.bt_timed_reference, input.execution_horizon,
+            gen->horizonSteps());
+    if (!bt_reference_error.empty()) {
+        output.status = "BT_REFERENCE_CONTEXT_INVALID_" +
+            bt_reference_error;
+        return false;
+    }
+    const RobotState& solve_robot = bt_reference_active
+        ? input.execution_horizon.initial_state.robot
+        : input.robot;
+    const SloshState& solve_slosh = bt_reference_active
+        ? input.execution_horizon.initial_state.slosh
+        : input.slosh;
+
     ProgressProjector projector;
-    const auto raw_proj = projector.project(reference, input.robot.x, input.robot.y);
-    const auto proj = projector.project(reference, input.robot.x, input.robot.y, input.min_progress_s);
+    const auto raw_proj = projector.project(
+        reference, solve_robot.x, solve_robot.y);
+    const auto proj = projector.project(
+        reference, solve_robot.x, solve_robot.y, input.min_progress_s);
     output.projector_debug.min_progress_s = input.min_progress_s;
     if (raw_proj.valid) {
         output.projector_debug.raw_valid = true;
@@ -574,7 +734,9 @@ bool ContinuousMpccSolverAcados::solve(
     }
 
     const double len = reference.length();
-    const double s0 = proj.s;
+    const double s0 = bt_reference_active
+        ? input.bt_timed_reference.stages.front().s
+        : proj.s;
     output.progress_s = len > 1e-6 ? s0 / len : 0.0;
     output.progress_abs_s = s0;
 
@@ -637,17 +799,20 @@ bool ContinuousMpccSolverAcados::solve(
         }
     }
     SolverInput continuous_input = input;
+    continuous_input.robot = solve_robot;
+    continuous_input.slosh = solve_slosh;
+    continuous_input.min_progress_s = s0;
     continuous_input.robot.yaw = unwrapAngleNear(
-        yaw_anchor, input.robot.yaw);
-    const double dx0 = input.robot.x - ref0_x;
-    const double dy0 = input.robot.y - ref0_y;
+        yaw_anchor, solve_robot.yaw);
+    const double dx0 = solve_robot.x - ref0_x;
+    const double dy0 = solve_robot.y - ref0_y;
     output.stage0_reference_debug.s0 = s0;
     output.stage0_reference_debug.ref_x = ref0_x;
     output.stage0_reference_debug.ref_y = ref0_y;
     output.stage0_reference_debug.ref_yaw = ref0_yaw;
     output.stage0_reference_debug.ref_kappa = ref0.kappa;
-    output.stage0_reference_debug.robot_x = input.robot.x;
-    output.stage0_reference_debug.robot_y = input.robot.y;
+    output.stage0_reference_debug.robot_x = solve_robot.x;
+    output.stage0_reference_debug.robot_y = solve_robot.y;
     output.stage0_reference_debug.robot_yaw = continuous_input.robot.yaw;
     output.stage0_reference_debug.yaw_error = wrapAngle(
         continuous_input.robot.yaw - ref0_yaw);
@@ -679,7 +844,7 @@ bool ContinuousMpccSolverAcados::solve(
     snapshot.slosh_cost_horizon_steps = variant_.slosh_cost_horizon_steps;
     snapshot.slosh_cost_tail_discount = variant_.slosh_cost_tail_discount;
     snapshot.robot = continuous_input.robot;
-    snapshot.slosh = input.slosh;
+    snapshot.slosh = solve_slosh;
     snapshot.min_progress_s = input.min_progress_s;
     snapshot.reference_length = len;
     snapshot.s0 = s0;
@@ -769,6 +934,7 @@ bool ContinuousMpccSolverAcados::solve(
     parameter_input.previous_control = {{
         u_prev_[0], u_prev_[1], u_prev_[2]}};
     parameter_input.phase_rejoin = input.phase_rejoin;
+    parameter_input.bt_timed_reference = input.bt_timed_reference;
 
     AcadosStageParameterMatrix stage_parameters =
         AcadosStageParameterBuilder::build(parameter_input);
@@ -799,18 +965,18 @@ bool ContinuousMpccSolverAcados::solve(
         continuous_input.robot.omega,
         0, 0, 0, 0};
     if (slosh) {
-        x0[6] = input.slosh.eta_x;
-        x0[7] = input.slosh.eta_x_dot;
-        x0[8] = input.slosh.eta_y;
-        x0[9] = input.slosh.eta_y_dot;
+        x0[6] = solve_slosh.eta_x;
+        x0[7] = solve_slosh.eta_x_dot;
+        x0[8] = solve_slosh.eta_y;
+        x0[9] = solve_slosh.eta_y_dot;
     }
     output.runtime_bounds = makeRuntimeBounds(params_);
     snapshot.runtime_bounds = output.runtime_bounds;
     output.generated_bounds = makeGeneratedBounds();
     output.first_shot_debug.progress_s = output.progress_s;
     output.first_shot_debug.progress_abs_s = output.progress_abs_s;
-    output.first_shot_debug.x0_v = input.robot.v;
-    output.first_shot_debug.x0_omega = input.robot.omega;
+    output.first_shot_debug.x0_v = solve_robot.v;
+    output.first_shot_debug.x0_omega = solve_robot.omega;
     output.first_shot_debug.x0_s = s0;
 
     applyRuntimeBounds(*gen, output.runtime_bounds, x0);
@@ -842,8 +1008,19 @@ bool ContinuousMpccSolverAcados::solve(
     warm_start_input.have_previous_control = have_u_prev_;
     warm_start_input.previous_control = {{
         u_prev_[0], u_prev_[1], u_prev_[2]}};
-    WarmStartPolicyDecision warm_start_decision =
-        WarmStartPolicy::select(warm_start_input);
+    WarmStartPolicyDecision warm_start_decision;
+    if (bt_reference_active) {
+        warm_start_decision.requested = true;
+        warm_start_decision.warm_start = makeBtTimedReferenceWarmStart(
+            input.bt_timed_reference, continuous_input, params_);
+        warm_start_decision.applied =
+            warm_start_decision.warm_start.valid;
+        warm_start_decision.source = "BT_TIMED_REFERENCE";
+        warm_start_decision.status = warm_start_decision.applied
+            ? "APPLIED" : "NO_VALID_WARM_START";
+    } else {
+        warm_start_decision = WarmStartPolicy::select(warm_start_input);
+    }
     WarmStartOutput& warm_start = warm_start_decision.warm_start;
     if (warm_start_decision.applied) {
         setAcadosWarmStart(*gen, warm_start, slosh);

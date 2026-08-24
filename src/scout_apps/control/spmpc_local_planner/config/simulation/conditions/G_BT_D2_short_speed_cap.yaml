@@ -1,0 +1,25 @@
+schema: spmpc_closed_loop_trial_condition_v1
+condition_id: BT
+implementation_id: bounded_tracking_development_v1
+implementation_complete: true
+mode: bounded_tracking
+offline_nominal: true
+online_residual: true
+recovery_gate: false
+execution_compatibility_gate: false
+stored_recovery_action: false
+input_shaping: false
+pilot_only: true
+formal_c3_c4_causal_comparison_ready: false
+bounded_tracking_policy_contract_id: bounded_tracking_recovery_policy_v1
+disturbance:
+  id: D2_SHORT_LINEAR_SPEED_CAP
+  kind: short_linear_speed_cap
+  begin_artifact_index: 750
+  cycle_count: 10
+  linear_cap_mps: 0.320
+trial:
+  control_rate_hz: 30.0
+  max_motion_sec: 45.0
+  fixed_tail_sec: 4.0
+  publish_latency_sec: 0.01

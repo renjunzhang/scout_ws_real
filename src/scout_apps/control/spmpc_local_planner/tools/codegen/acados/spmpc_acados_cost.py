@@ -125,7 +125,9 @@ def _slosh_cost(x, p, pidx_slosh=PIDX_SLOSH, eta_base=6):
     eta_x, eta_x_dot = x[eta_base], x[eta_base + 1]
     eta_y, eta_y_dot = x[eta_base + 2], x[eta_base + 3]
     if "phase_rejoin_active" in pidx_slosh:
-        active = p[pidx_slosh["phase_rejoin_active"]]
+        active = (
+            p[pidx_slosh["phase_rejoin_active"]]
+            + p[pidx_slosh["bt_reference_active"]])
         eta_x = eta_x - active * p[pidx_slosh["nom_eta_x"]]
         eta_x_dot = eta_x_dot - active * p[pidx_slosh["nom_eta_x_dot"]]
         eta_y = eta_y - active * p[pidx_slosh["nom_eta_y"]]
@@ -175,6 +177,45 @@ def _phase_rejoin_terminal_relative_cost(x, p, cfg):
         + p[PIDX_SLOSH["w_omega"]] *
         ((x[5] - p[PIDX_SLOSH["nom_omega"]]) / cfg["omega_max"]) ** 2
     )
+
+
+def _bt_timed_pose_progress_cost(x, p):
+    """Direct pose/progress tracking against the frozen BT clock."""
+    active = p[PIDX_SLOSH["bt_reference_active"]]
+    dx = (x[0] - p[PIDX_SLOSH["nom_x"]]) / p[PIDX_SLOSH["e_c_ref"]]
+    dy = (x[1] - p[PIDX_SLOSH["nom_y"]]) / p[PIDX_SLOSH["e_c_ref"]]
+    yaw_error = x[2] - p[PIDX_SLOSH["nom_yaw"]]
+    ds = ((x[4] - p[PIDX_SLOSH["nom_s"]]) /
+          p[PIDX_SLOSH["bt_phase_half_width"]])
+    return active * (
+        p[PIDX_SLOSH["w_contour"]] * (dx * dx + dy * dy)
+        + p[PIDX_SLOSH["w_lag"]] * (1.0 - ca.cos(yaw_error))
+        + p[PIDX_SLOSH["w_progress"]] * ds * ds)
+
+
+def _bt_timed_state_control_cost(x, u, p, cfg):
+    """Robot-state and complete-control tracking for the BT reference."""
+    active = p[PIDX_SLOSH["bt_reference_active"]]
+    return active * (
+        p[PIDX_SLOSH["w_v"]] *
+        ((x[3] - p[PIDX_SLOSH["nom_v"]]) / cfg["v_max"]) ** 2
+        + p[PIDX_SLOSH["w_omega"]] *
+        ((x[5] - p[PIDX_SLOSH["nom_omega"]]) / cfg["omega_max"]) ** 2
+        + p[PIDX_SLOSH["w_a"]] *
+        ((u[0] - p[PIDX_SLOSH["nom_a"]]) / cfg["a_max"]) ** 2
+        + p[PIDX_SLOSH["w_alpha"]] *
+        ((u[1] - p[PIDX_SLOSH["nom_alpha"]]) / cfg["alpha_max"]) ** 2
+        + p[PIDX_SLOSH["w_vs"]] *
+        ((u[2] - p[PIDX_SLOSH["nom_v_s"]]) / cfg["vs_max"]) ** 2)
+
+
+def _bt_timed_terminal_state_cost(x, p, cfg):
+    active = p[PIDX_SLOSH["bt_reference_active"]]
+    return active * (
+        p[PIDX_SLOSH["w_v"]] *
+        ((x[3] - p[PIDX_SLOSH["nom_v"]]) / cfg["v_max"]) ** 2
+        + p[PIDX_SLOSH["w_omega"]] *
+        ((x[5] - p[PIDX_SLOSH["nom_omega"]]) / cfg["omega_max"]) ** 2)
 
 
 def stage_cost_expr_direct_omega_legacy(sym, cfg):
@@ -245,7 +286,12 @@ def stage_cost_expr(sym, cfg):
     alpha_max = cfg["alpha_max"]
     n_steps = float(cfg["N"])
 
-    j_track = _tracking_cost(x, p)
+    bt_active = (
+        p[PIDX_SLOSH["bt_reference_active"]]
+        if sym.get("with_slosh") else 0.0)
+    j_track = ((1.0 - bt_active) * _tracking_cost(x, p)
+               + (_bt_timed_pose_progress_cost(x, p)
+                  if sym.get("with_slosh") else 0.0))
     j_path_speed = _path_speed_cost(x, u, p, cfg, curvature_aware=True, anticreep=True)  # 曲率v_ref + 非对称anti-creep
 
     # 航向—进度闭环的开发原型：虚拟进度不能脱离车体切向速度独自前进，
@@ -284,6 +330,9 @@ def stage_cost_expr(sym, cfg):
         _phase_rejoin_relative_cost(x, u, p, cfg)
         if sym.get("with_slosh") else 0.0
     )
+    j_bt_relative = (
+        _bt_timed_state_control_cost(x, u, p, cfg)
+        if sym.get("with_slosh") else 0.0)
     # Phase mode replaces the baseline speed/control objective instead of
     # stacking a zero-centred control prior on top of a nominal-centred prior.
     # Geometry stays active, while liquid cost already switches from the origin
@@ -292,10 +341,12 @@ def stage_cost_expr(sym, cfg):
         p[PIDX_SLOSH["phase_rejoin_active"]]
         if sym.get("with_slosh") else 0.0
     )
-    baseline = (1.0 - phase_active) * (
+    baseline = (1.0 - phase_active) * (1.0 - bt_active) * (
         j_path_speed + j_progress_coupling + j_yaw_rate_tracking
         + j_control + j_smooth)
-    return (j_track + baseline + j_slosh + j_phase_relative) / n_steps
+    bt_smooth = bt_active * j_smooth
+    return (j_track + baseline + j_slosh + j_phase_relative
+            + j_bt_relative + bt_smooth) / n_steps
 
 
 def terminal_cost_expr(sym, cfg):
@@ -304,8 +355,14 @@ def terminal_cost_expr(sym, cfg):
         return terminal_cost_expr_direct_omega_legacy(sym, cfg)
     x = sym["x"]
     p = sym["p"]
-    j = _tracking_cost(x, p)
+    bt_active = (
+        p[PIDX_SLOSH["bt_reference_active"]]
+        if sym.get("with_slosh") else 0.0)
+    j = ((1.0 - bt_active) * _tracking_cost(x, p)
+         + (_bt_timed_pose_progress_cost(x, p)
+            if sym.get("with_slosh") else 0.0))
     if sym.get("with_slosh"):
         j = j + _slosh_cost(x, p)
         j = j + _phase_rejoin_terminal_relative_cost(x, p, cfg)
+        j = j + _bt_timed_terminal_state_cost(x, p, cfg)
     return j
