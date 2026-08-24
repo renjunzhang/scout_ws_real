@@ -719,7 +719,8 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
             config.continuous_variant.w_slosh = 0.0;
             config.continuous_variant_bound = true;
 
-            if (config.mode == TrialMode::SmoothMatchMpcc) {
+            if (config.mode == TrialMode::OrdinaryMpcc ||
+                config.mode == TrialMode::SmoothMatchMpcc) {
                 const YAML::Node terminal = root["terminal_controller"];
                 if (!terminal ||
                     !requiredScalar(
@@ -735,7 +736,9 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
                         terminal, "capture_v_cap_mps",
                         config.terminal_capture_v_cap_mps, error)) {
                     if (error.empty()) {
-                        error = "C1 terminal controller contract is missing";
+                        error =
+                            "continuous MPCC terminal controller contract "
+                            "is missing";
                     }
                     return false;
                 }
@@ -773,7 +776,8 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
             !finite(config.smooth_global_time_scale) ||
             config.smooth_global_time_scale < 0.5 ||
             config.smooth_global_time_scale > 2.0 ||
-            (config.mode == TrialMode::SmoothMatchMpcc &&
+            ((config.mode == TrialMode::OrdinaryMpcc ||
+              config.mode == TrialMode::SmoothMatchMpcc) &&
              (!finite(config.terminal_slowdown_distance_m) ||
               config.terminal_slowdown_distance_m <= 0.08 ||
               config.terminal_slowdown_distance_m > 3.0 ||
@@ -2689,7 +2693,8 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         condition.mode == TrialMode::OrdinaryMpcc ||
         condition.mode == TrialMode::SmoothMatchMpcc ||
         condition.mode == TrialMode::InputShaping;
-    if (condition.mode == TrialMode::SmoothMatchMpcc) {
+    if (condition.mode == TrialMode::OrdinaryMpcc ||
+        condition.mode == TrialMode::SmoothMatchMpcc) {
         solver.terminal.slowdown_distance =
             condition.terminal_slowdown_distance_m;
         solver.terminal.slowdown_v_max =

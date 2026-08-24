@@ -1,6 +1,6 @@
 schema: spmpc_closed_loop_trial_condition_v1
 condition_id: C0
-implementation_id: continuous_mpcc_acados_b0_v2
+implementation_id: continuous_mpcc_acados_b0_task_parity_v3
 implementation_complete: true
 mode: ordinary_mpcc
 offline_nominal: false
@@ -9,19 +9,24 @@ recovery_gate: false
 execution_compatibility_gate: false
 stored_recovery_action: false
 input_shaping: false
+terminal_controller:
+  slowdown_distance_m: 0.60
+  slowdown_v_max_mps: 0.80
+  capture_distance_m: 0.50
+  capture_v_cap_mps: 0.80
 continuous_controller:
   variant_id: B0
   smooth_priority_enable: false
   w_contour: 1.0
   w_lag: 0.2
-  w_progress: 0.2
-  w_heading: 0.0
-  w_progress_coupling: 0.0
-  w_yaw_rate_tracking: 0.0
-  heading_feedback_gain: 0.0
+  w_progress: 1.4
+  w_heading: 1.0
+  w_progress_coupling: 20.0
+  w_yaw_rate_tracking: 15.0
+  heading_feedback_gain: 4.0
   w_v: 1.0
   w_vs: 0.3
-  v_ref: 0.25
+  v_ref: 0.32
   w_control: 0.1
   w_accel: 0.0
   w_smooth: 0.1

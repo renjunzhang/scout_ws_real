@@ -214,7 +214,8 @@ protected:
                         const std::string& implementation,
                         bool offline,
                         bool residual,
-                        double max_motion_sec = 2.0) {
+                        double max_motion_sec = 2.0,
+                        bool include_terminal_controller = true) {
         std::ofstream output(condition_);
         output
             << "schema: spmpc_closed_loop_trial_condition_v1\n"
@@ -229,7 +230,7 @@ protected:
             << "stored_recovery_action: false\n"
             << "input_shaping: false\n";
         if (mode == "ordinary_mpcc" || mode == "smooth_match_mpcc") {
-            if (mode == "smooth_match_mpcc") {
+            if (include_terminal_controller) {
                 output
                     << "terminal_controller:\n"
                     << "  slowdown_distance_m: 0.80\n"
@@ -658,6 +659,21 @@ TEST_F(TrialRunnerTest,
     EXPECT_EQ(summary["controller_audit"]["solver_failures"].as<int>(), 0);
     EXPECT_EQ(summary["controller_audit"]["zero_requests"].as<int>(), 0);
     EXPECT_GT(summary["controller_audit"]["publications"].as<int>(), 0);
+    const YAML::Node terminal =
+        summary["baseline_contract"]["continuous_terminal_controller"];
+    EXPECT_DOUBLE_EQ(terminal["slowdown_distance_m"].as<double>(), 0.80);
+    EXPECT_DOUBLE_EQ(terminal["slowdown_v_max_mps"].as<double>(), 0.40);
+    EXPECT_DOUBLE_EQ(terminal["capture_distance_m"].as<double>(), 0.50);
+    EXPECT_DOUBLE_EQ(terminal["capture_v_cap_mps"].as<double>(), 0.40);
+}
+
+TEST_F(TrialRunnerTest, C0RejectsMissingTerminalControllerContract) {
+    writeCondition("C0", "ordinary_mpcc", "test_c0_missing_terminal_v1",
+                   false, false, 2.0, false);
+    EXPECT_EQ(run(), 3);
+    struct stat info;
+    EXPECT_NE(::stat(cycle_.c_str(), &info), 0);
+    EXPECT_NE(::stat(summary_.c_str(), &info), 0);
 }
 
 TEST_F(TrialRunnerTest,
@@ -696,6 +712,43 @@ TEST(PhaseRejoinClosedLoopConditionAssets,
         EXPECT_TRUE(implementations.emplace(id, implementation).second);
     }
     EXPECT_EQ(implementations.size(), 6u);
+}
+
+TEST(PhaseRejoinClosedLoopConditionAssets,
+     C0SharesC1TaskGuidanceAndTerminalButRetainsOrdinaryPenalties) {
+    const std::string root = SPMPC_SIMULATION_CONDITIONS_DIR;
+    const YAML::Node c0 = YAML::LoadFile(root + "/C0_ordinary_mpcc.yaml");
+    const YAML::Node c1 =
+        YAML::LoadFile(root + "/C1_smooth_match_mpcc.yaml");
+    EXPECT_EQ(c0["implementation_id"].as<std::string>(),
+              "continuous_mpcc_acados_b0_task_parity_v3");
+
+    for (const char* field : {
+             "w_progress", "w_heading", "w_progress_coupling",
+             "w_yaw_rate_tracking", "heading_feedback_gain", "v_ref"}) {
+        EXPECT_DOUBLE_EQ(c0["continuous_controller"][field].as<double>(),
+                         c1["continuous_controller"][field].as<double>())
+            << field;
+    }
+    for (const char* field : {
+             "slowdown_distance_m", "slowdown_v_max_mps",
+             "capture_distance_m", "capture_v_cap_mps"}) {
+        EXPECT_DOUBLE_EQ(c0["terminal_controller"][field].as<double>(),
+                         c1["terminal_controller"][field].as<double>())
+            << field;
+    }
+
+    EXPECT_EQ(c0["continuous_controller"]["variant_id"].as<std::string>(),
+              "B0");
+    EXPECT_FALSE(c0["continuous_controller"]
+                        ["smooth_priority_enable"].as<bool>());
+    for (const char* penalty : {
+             "w_contour", "w_lag", "w_v", "w_vs", "w_control",
+             "w_accel", "w_smooth", "w_alpha", "w_du_a", "w_du_vs"}) {
+        EXPECT_DOUBLE_EQ(c0["continuous_controller"][penalty].as<double>(),
+                         c1["continuous_controller"][penalty].as<double>())
+            << penalty;
+    }
 }
 
 }  // namespace
